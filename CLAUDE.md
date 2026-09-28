@@ -35,16 +35,22 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 5. `prototype/gmc-network-prototype.html` —— 实际代码，单文件，直接搜索关键词定位（比如搜 `consultStatus`、`settlementBatches`）
 
 ## 已知的代码 vs 文档差距
-- ~~原型里案件状态徽章目前只有 booked/consult/travel/local/closed/cancelled 几档粗粒度状态~~ —— 2026-09-28 已同步：booked/consult/travel/local/closed/cancelled 仍然是内部 stage/Tab 分组键（Tab 是 UI 分组，不等于状态本身，见 `business-rules.md`），但 `caseStatusBadge`/`caseStatusSub` 现在会在 `consult` 这一档里再细分显示 待选项目/等待面诊/面诊已排期/面诊中/报告待递交/已出报告/项目已选择，`cancelled`/`closed` 档已经能正确区分"已取消（全退）"和"已结案（部分退）"（用 `closeNote` 判断）。
-  - ~~之前实现时做了两个未在文档里明写的判断（视频面诊通话结束直接进"已出报告"、"已付款"不作为独立停留状态）~~ —— 2026-09-29 Notion 已确认，两条都被推翻，按下面新逻辑改了：
-    1. **视频面诊通话结束后先进入"面诊已结束"**（新增 `consultStatus:'video_awaiting_report'`），查看报告按钮置灰；室长上传后（复用 `markReportUploaded()`）才变成"已出报告"。和书面路径的"报告待递交"是两个独立的等待态，只是终点都汇到"已出报告"。
-    2. **"已付款"是可停留的独立状态**（徽章用 sage 色区分），`deriveCaseStage` 现在会检查施术链里是否已经有项目被标记完成，没有就停在"已付款"，不会一结算就直接跳进"赴韩施术中/本地管理中"。
-  - 【待确认】上面第2条里"什么时候算真正转入施术中"业务方还没最终拍板，原型暂时用"施术链里有没有任意一项已经被标记完成"当判断依据（`deriveCaseStage` 里的 `started` 变量），这是我按"原型里唯一能改变项目状态的操作就是这个"想的临时方案，不是"第一个项目开始"的准确实现（因为原型没有区分"开始"和"完成"两个状态），等业务方给出更明确定义（比如要不要加一个单独的"开始施术"动作）再改。
-  - 新增了 `projectsSelected` 字段承接"项目已选择"这个真实会停留的中间态（选完项目点"确认所选项目"后锁定选择、等待结算，和之前"选完就直接弹窗付款"的一步走不一样）；"不面诊"分支（`needsConsult===false`）之前会一直卡在"接待中"徽章不动，现在 `deriveCaseStage` 加了 `c.projectsEnabled` 兜底，会正确显示"待选项目"→"项目已选择"。
-- Reservation ID（6位数字+REV）这一层完全还没有实现，原型目前只有 Case ID（案件基础资料确认时生成，英文+6位数字）。
+- ~~booked/consult/travel/local/closed/cancelled 粗粒度状态 + 视频面诊/已付款判断的历次修订~~ —— 2026-09-29"案件流程对齐"整体重写，之前几轮关于 `consultStatus`（`written_pending`/`video_awaiting_report`）、`projectsSelected`/"项目已选择"、"已付款用 started 变量猜开始时机"的实现判断全部作废，改用下面这套：
+  1. `consultStatus` 出报告前的等待态视频/书面统一合并成 `'awaiting_report'`（"等待报告"），不再区分视频/书面两个不同状态名。
+  2. 新增 `projectsEnabled→projectsSelected→scheduleStatus(pending/rejected/无=直接生成)→projectsLocked(待付款)→settlementDone(已付款)→arrivedAtHospital(赴韩施术中/本地管理中)` 这条完整链路，对应 Notion 的"项目确认中→待确认施术时间→待付款→已付款→已到医院"。**"已付款"转施术中的触发时机已经确认为"已到医院"（`markArrivedAtHospital()`），不再是待确认项。**
+  3. 终态改成 `cancelReason`（预约取消/面诊取消/全额退款，对应"已取消"tab）+ `closeNote`（null/部分退/仅出报告，对应"已结案"tab）两个字段分别判定，废弃了旧的"已取消预约/已取消（全退）"两个独立终态名。
+  4. 退款从"按结算批次"整批处理改成 `cancelProcedureItem()` 按单个项目处理。
+  5. 新增二次面诊子流程 `c.secondConsult`（增加面诊-付款后 / 再次面诊 共用），不影响案件主状态，"再次面诊"改成结案前随时可用（不再要求"还没结算"）。
+  详细状态机见 `docs/case-management-flow.md`（已同步改写，不是增量修订）。
+- 【待办，非本轮范围】术后管理阶段的"事件"机制（症状上报→紧急视频复诊→…）原型完全没做。
+- Reservation ID：2026-09-29 已实现——预约来访（工作台日历新客人/老客人）生成新案件时会生成 `reservationId`（6位数字+REV），Case ID 生成前显示这个。**待确认**：Case ID 生成后 Reservation ID 要不要保留为历史字段，还没拍板（Case ID 生成前显示 Reservation ID 这条本身已确认，不受影响）。
 - 结算的具体预付比例（原型里硬编码 `KR_DEPOSIT_RATE = 0.3`）只是演示占位数字，不是业务方拍板的数字——业务方还在确认中，改这个数字之前不要当成已确认的需求。
-- 【待确认】`客户管理`列表里"当前面诊·施术进度"这一列，2026-09-28 改成了实时读该客户名下未结案/未取消案件的 `caseStatusBadge`（没有案件时才落回手填的兜底文案）。这是我按"这一列的表头本来就叫这个名字，应该和案件状态一起动"这个理解做的实现判断，不是业务方明确拍过板的规则，改动/回退前先确认。
-- 【待确认】`docs/conversation-video-flow.md` 说案件专属对话房只在"主动发起过对话"的案件才存在；但代码里面诊相关的自动通知（`markConsultPaid`/`skipToVideoConsult`/`skipToWrittenConsult`）实际推送到的是 `main` 全员房间，不是案件专属房间——这个和文档字面对不上，属于代码 vs 文档的既有差距，不是我这轮改的，只是这轮加案例数据时顺带发现，还没找你确认该以哪边为准。
+- 【待确认】`客户管理`列表里"当前面诊·施术进度"这一列实时读该客户名下未结案/未取消案件的 `caseStatusBadge`（没有案件时才落回手填的兜底文案）。这是我按"这一列的表头本来就叫这个名字，应该和案件状态一起动"这个理解做的实现判断，不是业务方明确拍过板的规则，改动/回退前先确认。
+- ~~案件专属对话房只在"主动发起过对话"的案件才存在，但代码里面诊自动通知推送到 main 全员房间~~ —— 面诊自动通知推送到 main 房间这部分本来就和"案件房建房入口"是两回事（一个是面诊需求通知，一个是案件房什么时候出现），2026-09-29 已经把案件房的建房规则改对（`sendFloatMsg()` 发第一条消息才建房，`openFloatingChat()` 不再顺手建空房），这条差距已解决。
+- 【TODO，2026-09-29 新增，Notion IN-VIDE-01/Conversation Flow 里有但原型没做】
+  1. "引用消息到案件对话房"：在其他房间把消息引用到某案件，该消息应该出现在案件房里，原型没做这个跨房引用功能。
+  2. 对话房"成员"管理界面：规则上是"院长+全部印尼室长+全部韩国室长"，原型只在"发起视频"参与人弹窗里体现了候选名单，房间本身没有可查看/管理成员的界面。
+  3. 已有案件内的到访（术后管理、本地项目到店）应该走什么流程还没定，本轮只实现了"预约来访开新案件"这一条路径，见 `docs/open-questions.md` 第3条。
 - 【待确认】`案例库`页面 2026-09-29 从"新标签页独立小窗口"改成了站内 `nav('in-library')` 页面（原来的弹窗装不下分类树/角色切换/编辑这套交互）。里面还有几处我自己的实现判断，没有业务方拍过板：
   1. "院长"这一档第3级节点只在原型加载时从 `DIRECTOR_LIST`（预约改期用的院长下拉源）复制一次种子数据，之后完全独立维护，不双向同步。
   2. 卡片上"点院长名跳转"实现成把顶部三级筛选自动定位到 赴韩施术 > 院长 > 该院长节点，不是单独开一个院长详情页。
@@ -66,6 +72,11 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - 2026-09-29（第三轮）：重做了`案例库`页面——1/2级分类固定（赴韩施术>院长/部位，印尼管理>问题/产品）、3级起可增删改（`LIB_NODES` 扁平表+`parentId`，不写死层数），案例挂节点 id、多选、演示用角色切换（印尼室长/韩国室长·院长）决定新建案例来源和两个分支各自的编辑权限，新增/编辑表单（术前/术后照片+每张术后照片必选恢复时间、院长单选、分类多选），节点删除/批量改标签支持"改到别的节点"或"移除标签"两种处理。原有8个示例案例保留并归到"赴韩施术"。判断点见上面"已知差距"。
 - 2026-09-29（第四轮）：按 Notion 已确认的两点改回了 `endVideoConsult`/`deriveCaseStage`：视频面诊结束先进"面诊已结束"（新 `consultStatus:'video_awaiting_report'`），室长上传报告后才是"已出报告"；"已付款"改回可停留的独立状态（新增 demo 案例 `dinda` 覆盖这一状态）。具体判断见上面"已知差距"。
 - 2026-09-29（第五轮）：`项目库`从弹窗改成站内页面（`nav('in-projectlibrary')`），数据结构换成 `{id,origin,name,price,categoryId,active}`，加了单层分类（每组一套，增删改+按分类筛选）、非活性化/重新启用/删除（在用中不可删）、演示用角色权限（复用案例库那个角色开关，改名成两处共用的 `DEMO_ROLE`）、三种币种显示切换（`FX_RATES`/`formatCurrency`/`displayAmount`）。案件里选项目/结算/退款/Timeline 全部改成读快照（`toggleProject` 选中时把 `{projectId,name,price,currency,origin,categoryId}` 拷贝进 `recommended`/`procedureItems`，删掉了所有"按项目名回查 `PROJECT_LIBRARY`"的代码），两种币种任何地方都不再相加、一律分行显示。面诊预填项目换成"鼻综合（假体+鼻尖）+切开双眼皮"，`KR_DEPOSIT_RATE`/`案件状态判定`（`deriveCaseStage`）/`案例库`（除角色变量改名）都没有动。15 个 demo 案例的项目引用和金额也跟着换成新项目库数据（用户已确认）。具体判断点见上面"已知差距"。
+- 2026-09-29（第六轮，"案件流程对齐"+"工作台预约"整体重写）：
+  1. **案件状态机整体重写**：`deriveCaseStage`/`caseStatusBadge`/`caseStatusSub` 按 Notion 当天版 Case Management Flow 重新实现（主线待访问→接待中→[面诊]→项目确认中→待确认施术时间→待付款→已付款→已到医院→赴韩施术中/本地管理中→已结案），终态改成 `cancelReason`+`closeNote` 两个字段，新增字段 `visibleToKR`/`scheduleStatus`/`schedulePrimary`/`scheduleBackup`/`scheduleConfirmedTime`/`arrivedAtHospital`/`secondConsult`/`reservationId`/`reportUploadedBy`。案件头部按钮改成"发起对话"+按阶段的"增加面诊"/"再次面诊"（`renderCaseHeaderActions`），删掉了旧的"发起视频"。项目/结算/退款整套重写：`confirmProjectSelection→scheduleFormHtml/submitSchedule/simulateKrScheduleConfirm/simulateKrScheduleReject/cannotCoordinateSchedule→generateSettlementBatch(待付款)→settleProjects/confirmSettlementPayment(已付款)→markArrivedAtHospital`，退款改成 `cancelProcedureItem()` 按单个项目处理。二次面诊新增 `c.secondConsult` 子流程（`secondConsultTabHtml` 等一整套函数），不碰案件主状态。15 个 demo 案例全部迁移到新字段（详见 `docs/case-management-flow.md`，已整篇重写不是增量）。
+  2. **对话房建房规则修正**：`openFloatingChat()` 不再顺手创建空的 `CHAT_DATA[roomId]`，改成 `sendFloatMsg()` 发第一条消息时才建房，符合"只在主动发起过对话的案件才存在"。新增"对话工具栏发起视频"的参与人选择弹窗（`openChatVideoParticipantModal`）。
+  3. **工作台预约（④，IN-DASH-01）从零实现**：日历新增"预约来访"事件类型（`WEEK_EVENTS` 的 `type:'reservation'`，点击进案件页，客户到访后变暗标"已到访"，`markArrived()` 联动）；新增"预约占位"（`RESERVATION_PLACEHOLDERS`，15分钟倒计时、超时自动消失、可再次发送/取消、"模拟客户填写完成"演示按钮转正式预约）；预约空档弹窗老客人模式（下拉选客人+选院长，直接生成 Reservation ID）、新客人模式（手机号+短信编辑框，链接自动插入不可删，"保存为默认"选项）；`generateReservationId()`/`createReservationCase()` 生成新案件（状态"待访问"）；图例"来韩施术"改"赴韩施术"。月历"OFF文字/X项目"统计原型里本来就是这么做的（不是圆点），未改动。**"客户改时间通知室长"用一个演示函数 `simulateCustomerReschedule()` 实现（写消息中心，`EXTRA_NOTIFICATIONS`），不是客户端真实触发。**
+  3个文档（`case-management-flow.md`/`business-rules.md`/`conversation-video-flow.md`）已按 Notion 当天版整篇同步；`open-questions.md` 更新了已解决/新增待定项。具体实现判断和未做完的部分见上面"已知差距"。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
 - 涉及业务规则的改动，先对一遍 Domain Knowledge / Open Questions 有没有冲突，有冲突要先问，不要悄悄按自己理解改
