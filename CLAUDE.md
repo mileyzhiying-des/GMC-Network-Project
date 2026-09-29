@@ -62,6 +62,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   3. 原来15个 demo 案例（`ayu/fajar/nadia/dinda/rizky/rina/wulan/lina`）里引用的项目名，按用户"需要，修改"的答复，全部换成了新项目库里的真实项目（不是保留旧名字当"历史快照"处理），价格、批次金额、Timeline 文案跟着重新算过。
   4. `FX_RATES` 是纯前端写死常量（已按要求加了 `TODO: 接入实时汇率API` 注释），没有接任何真实汇率源。
   - 上面"已付款"那条【待确认】（`deriveCaseStage` 用"是否有项目被标记完成"代替"开始施术"）这一轮没有改，还是待业务方给准确定义。
+- 【待办，2026-09-29（第七轮）新增】`caseStatusSub(c)` 里 `paid_waiting_kr`/`video_scheduled` 对应的细节文案（"已缴费，等待Kr室长/院长回复"、"面诊时间已确认"）这一轮没有跟着改，现在文字上和新拆出来的两个主状态名"等待确认面诊时间"/"等待面诊"不完全对齐。用户当次任务明确说了这次不改，先留着，下次涉及这块再顺手同步。
 
 （某项差距在代码里补齐后，把对应条目从这里删掉或改写，让这个列表始终和代码现状一致。）
 
@@ -77,6 +78,12 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   2. **对话房建房规则修正**：`openFloatingChat()` 不再顺手创建空的 `CHAT_DATA[roomId]`，改成 `sendFloatMsg()` 发第一条消息时才建房，符合"只在主动发起过对话的案件才存在"。新增"对话工具栏发起视频"的参与人选择弹窗（`openChatVideoParticipantModal`）。
   3. **工作台预约（④，IN-DASH-01）从零实现**：日历新增"预约来访"事件类型（`WEEK_EVENTS` 的 `type:'reservation'`，点击进案件页，客户到访后变暗标"已到访"，`markArrived()` 联动）；新增"预约占位"（`RESERVATION_PLACEHOLDERS`，15分钟倒计时、超时自动消失、可再次发送/取消、"模拟客户填写完成"演示按钮转正式预约）；预约空档弹窗老客人模式（下拉选客人+选院长，直接生成 Reservation ID）、新客人模式（手机号+短信编辑框，链接自动插入不可删，"保存为默认"选项）；`generateReservationId()`/`createReservationCase()` 生成新案件（状态"待访问"）；图例"来韩施术"改"赴韩施术"。月历"OFF文字/X项目"统计原型里本来就是这么做的（不是圆点），未改动。**"客户改时间通知室长"用一个演示函数 `simulateCustomerReschedule()` 实现（写消息中心，`EXTRA_NOTIFICATIONS`），不是客户端真实触发。**
   3个文档（`case-management-flow.md`/`business-rules.md`/`conversation-video-flow.md`）已按 Notion 当天版整篇同步；`open-questions.md` 更新了已解决/新增待定项。具体实现判断和未做完的部分见上面"已知差距"。
+- 2026-09-29（第七轮，基础资料"取消接待" + 面诊主状态细分）：
+  1. **基础资料 tab（接待中）**：苦恼/希望预期/面诊需求三项label加红色 `*`（沿用原有的必填校验，未改校验逻辑本身）；`materialsCardHtml()` 新增"取消接待"按钮，只在生成 Case ID 之前出现。新增 `#cancel-intake-overlay` 弹窗 + `openCancelIntakeModal()`/`closeCancelIntakeModal()`/`confirmCancelIntake()`：确认取消后丢弃本轮草稿（`metaviewStatus`/`photoUploaded`/`videoUploaded`/`concern`/`expectation`/`needsConsult` 复位成初始值），`subState` 回 `'waiting'`（案件回到"待访问"），联动把 `WEEK_EVENTS` 里对应预约来访事件的 `arrived` 改回 `false`，Timeline 记一条"取消接待"事件。
+  2. **面诊主状态机细分**：`consultStatus==='paid_waiting_kr'` 从原来落到默认分支的"等待面诊"拆出来，`caseStatusBadge` 新增独立分支显示"等待确认面诊时间"；`video_scheduled` 的 badge label 从"面诊已排期"改成"等待面诊"（现在专指"视频面诊时间已确定"）。`awaiting_payment`（等待缴纳面诊费）分支完全没动，它现在走的是 `caseStatusBadge` 里没有专门分支时的默认兜底值，显示还是"等待面诊"这个词（和新的 `video_scheduled` badge 文字巧合相同，但代码分支是分开的，互不影响）。
+  3. **面诊 tab 交互**：`paid_waiting_kr` 分支文案改成"等待韩国室长确认面诊形式与时间"，原来两个演示按钮（模拟院长视频面诊/模拟院长回复书面建议）合并成一个"演示：模拟KR室长回复"，点开新增的 `#kr-reply-overlay` 弹窗二选一，选项通过 `prompt()` 输入时间/预计时间（默认值沿用原来写死的 `09.22 14:00`/`2 小时`）后调用参数化后的 `skipToVideoConsult(time)`/`skipToWrittenConsult(eta)`。`video_scheduled` 分支新增"演示：模拟院长视频面诊"快捷按钮 `simulateDirectorVideoConsult()`，跳过手动进入通话直接走完视频面诊全程。二次面诊 `secondConsultTabHtml()` 的 `video_scheduled` 分支同样加了快捷按钮 `simulateSecondConsultVideoDone()`。
+  4. **重构去重**：把 `endVideoConsult()` 里"生成AI记录+转等待报告"这段逻辑分别抽成 `finishVideoConsult(c)`（主面诊）和 `finishSecondConsultVideo(c)`（二次面诊），新的快捷演示按钮和真实的通话结束流程共用同一套逻辑，行为完全一致。
+  5. `docs/case-management-flow.md` 分支4同步改写（补上"等待缴纳面诊费"节点，"等待面诊"/"等待确认面诊时间"改成新拆法，旧"面诊已排期"标注已废弃），并新增"取消接待"小节（区别于分支1的"取消预约"）。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
 - 涉及业务规则的改动，先对一遍 Domain Knowledge / Open Questions 有没有冲突，有冲突要先问，不要悄悄按自己理解改

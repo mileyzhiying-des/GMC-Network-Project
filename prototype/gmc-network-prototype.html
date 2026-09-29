@@ -802,6 +802,35 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 取消接待确认 MODAL（2026-09-29 新增，基础资料tab · Case ID生成前） ============ -->
+<div class="modal-overlay" id="cancel-intake-overlay" onclick="if(event.target===this) closeCancelIntakeModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">确认取消吗？</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeCancelIntakeModal()">✕</span>
+    </div>
+    <div style="font-size:13px;color:var(--slate2);margin-bottom:18px;">取消后内容不保存。</div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeCancelIntakeModal()">继续填写</button>
+      <button class="btn-primary" style="flex:1;background:#C1454A;" onclick="confirmCancelIntake()">确认取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ KR室长回复 MODAL（演示：模拟KR室长回复，选面诊形式） ============ -->
+<div class="modal-overlay" id="kr-reply-overlay" onclick="if(event.target===this) closeKrReplyModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR室长回复</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrReplyModal()">✕</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn-primary" onclick="krReplyChooseVideo()">① 视频面诊 + 面诊时间</button>
+      <button class="btn-outline" onclick="krReplyChooseWritten()">② 书面面诊 + 报告预计时间</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ INVITE Kr室长 MODAL（不含院长，只选室长） ============ -->
 <div class="modal-overlay" id="invite-kr-overlay" onclick="if(event.target===this) closeInviteKrModal()">
   <div class="modal-box">
@@ -1755,7 +1784,8 @@ function caseStatusBadge(c){
     if(c.projectsLocked) return ['var(--terracotta-bg)','var(--terracotta)','待付款']; /* 结算单已生成（本地项目直接生成，赴韩项目KR确认时间后生成），等待标记付款 */
     if(c.scheduleStatus==='pending' || c.scheduleStatus==='rejected') return ['var(--terracotta-bg)','var(--terracotta)','待确认施术时间'];
     if(c.projectsSelected || c.projectsEnabled) return ['var(--terracotta-bg)','var(--terracotta)','项目确认中'];
-    if(c.consultStatus==='video_scheduled') return ['var(--terracotta-bg)','var(--terracotta)','面诊已排期'];
+    if(c.consultStatus==='paid_waiting_kr') return ['var(--terracotta-bg)','var(--terracotta)','等待确认面诊时间'];
+    if(c.consultStatus==='video_scheduled') return ['var(--terracotta-bg)','var(--terracotta)','等待面诊'];
     if(c.consultStatus==='video_in_progress') return ['var(--terracotta-bg)','var(--terracotta)','面诊进行中'];
     if(c.consultStatus==='awaiting_report') return ['var(--terracotta-bg)','var(--terracotta)','等待报告'];
     if(c.consultStatus==='report_ready') return ['var(--terracotta-bg)','var(--terracotta)','已出报告'];
@@ -2085,6 +2115,43 @@ function enterVideoConsult(){
   closeVideoTargetModal();
   nav('video-consult');
 }
+/* 面诊结束的共用逻辑（真实走 endVideoConsult() 通话页/演示走 simulateDirectorVideoConsult() 快捷按钮都调这个），
+   2026-09-29 新增：从 endVideoConsult() 里抽出来，避免两处重复维护同一段"生成AI记录+转等待报告"逻辑 */
+function finishVideoConsult(c){
+  c.consultStatus = 'awaiting_report';
+  c.consultFiles = c.consultFiles || [];
+  c.consultFiles.unshift({label:'院长面诊视频'});
+  c.consultFiles.unshift({label:'院长面诊文本（AI生成，仅供参考）'});
+  c.videoSummary = c.videoSummary || '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
+  logCaseEvent(c, 'Dewi', '面诊已结束（已生成AI记录+保存视频），等待室长上传面诊报告');
+  buildCaseLog(c);
+  postCaseRoomFile(c.id, '김민석 원장', 'var(--slate2)', '김', '院长面诊文本（AI生成，仅供参考）+ 院长面诊视频');
+}
+/* "等待面诊"状态下的演示快捷按钮：跳过手动进入通话，直接走完视频面诊全程，落到"等待报告" */
+function simulateDirectorVideoConsult(){
+  var c = getCurrentCase(); if(!c || c.consultMethod!=='video' || c.consultStatus!=='video_scheduled') return;
+  c.consultStatus = 'video_in_progress';
+  logCaseEvent(c, 'Dewi', '进入视频面诊');
+  buildCaseLog(c);
+  finishVideoConsult(c);
+  renderCaseStatusBar(c);
+  renderCaseBody(c);
+}
+/* 二次面诊结束的共用逻辑，供 endVideoConsult() 和 simulateSecondConsultVideoDone() 演示按钮共用 */
+function finishSecondConsultVideo(c){
+  c.secondConsult.status = 'awaiting_report';
+  logCaseEvent(c, 'Dewi', '二次面诊已结束，等待"有无变动"确认');
+  buildCaseLog(c);
+  postCaseRoomFile(c.id, '김민석 원장', 'var(--slate2)', '김', '二次面诊文本（AI生成，仅供参考）+ 二次面诊视频');
+}
+function simulateSecondConsultVideoDone(){
+  var c = getCurrentCase(); if(!c || !c.secondConsult || c.secondConsult.status!=='video_scheduled') return;
+  c.secondConsult.status = 'video_in_progress';
+  logCaseEvent(c, 'Dewi', '进入二次面诊');
+  buildCaseLog(c);
+  finishSecondConsultVideo(c);
+  renderCaseBody(c);
+}
 var KR_COORDINATORS = ['이서연', '박준혁'];
 function openInviteKrModal(){
   document.getElementById('invite-kr-list').innerHTML = KR_COORDINATORS.map(function(name, i){
@@ -2108,14 +2175,7 @@ function endVideoConsult(){
     if(c && c.consultMethod==='video'){
       /* 2026-09-29 Notion 再次更新："面诊已结束"只是 Timeline 事件，不是停留状态；
          通话一结束就自动转"等待报告"（和书面路径共用同一个状态名，出报告前统一叫"等待报告"） */
-      c.consultStatus = 'awaiting_report';
-      c.consultFiles = c.consultFiles || [];
-      c.consultFiles.unshift({label:'院长面诊视频'});
-      c.consultFiles.unshift({label:'院长面诊文本（AI生成，仅供参考）'});
-      c.videoSummary = c.videoSummary || '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
-      logCaseEvent(c, 'Dewi', '面诊已结束（已生成AI记录+保存视频），等待室长上传面诊报告');
-      buildCaseLog(c);
-      postCaseRoomFile(c.id, '김민석 원장', 'var(--slate2)', '김', '院长面诊文本（AI生成，仅供参考）+ 院长面诊视频');
+      finishVideoConsult(c);
       touchedCase = c;
     }
     VIDEO_CONTEXT_CASE_ID = null;
@@ -2123,10 +2183,7 @@ function endVideoConsult(){
   if(SECOND_CONSULT_CONTEXT_CASE_ID){
     var cSecond = CASE_ITEMS.filter(function(x){ return x.id===SECOND_CONSULT_CONTEXT_CASE_ID; })[0];
     if(cSecond && cSecond.secondConsult){
-      cSecond.secondConsult.status = 'awaiting_report';
-      logCaseEvent(cSecond, 'Dewi', '二次面诊已结束，等待"有无变动"确认');
-      buildCaseLog(cSecond);
-      postCaseRoomFile(cSecond.id, '김민석 원장', 'var(--slate2)', '김', '二次面诊文本（AI生成，仅供参考）+ 二次面诊视频');
+      finishSecondConsultVideo(cSecond);
       touchedCase = cSecond;
     }
     SECOND_CONSULT_CONTEXT_CASE_ID = null;
@@ -2260,6 +2317,33 @@ function markArrived(){
   buildCaseLog(c);
   renderCaseBody(c);
 }
+/* 取消接待（2026-09-29 新增）：只在生成 Case ID 之前（materialsCardHtml 渲染期间）可用，
+   丢弃本次填写的全部草稿，案件回到"待访问"，日历上对应的预约来访恢复原色去掉"已到访" */
+function openCancelIntakeModal(){
+  document.getElementById('cancel-intake-overlay').classList.add('open');
+}
+function closeCancelIntakeModal(){
+  document.getElementById('cancel-intake-overlay').classList.remove('open');
+}
+function confirmCancelIntake(){
+  var c = getCurrentCase(); if(!c) return;
+  closeCancelIntakeModal();
+  c.subState = 'waiting';
+  c.metaviewStatus = 'idle';
+  c.photoUploaded = false;
+  c.videoUploaded = false;
+  c.concern = '';
+  c.expectation = '';
+  c.needsConsult = null;
+  c.materialsError = '';
+  var ev = WEEK_EVENTS.filter(function(e){ return e.type==='reservation' && e.caseId===c.id; })[0];
+  if(ev) ev.arrived = false;
+  updateCaseStage(c);
+  logCaseEvent(c, 'Dewi', '取消接待，案件回到待访问');
+  buildCaseLog(c);
+  renderCaseStatusBar(c);
+  renderCaseBody(c);
+}
 
 /* ---- 确认前：合并的材料卡（메타뷰/照片/视频/苦恼/希望预期/面诊需求 → 确认） ---- */
 function materialsCardHtml(c){
@@ -2279,10 +2363,10 @@ function materialsCardHtml(c){
     '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
     '<div class="case-field-row"><span class="fk">上传照片 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="font-size:13px;">'+photoText+'</div><div style="font-size:11px;color:var(--muted);margin-top:3px;">规格：白底正面照，1200×1600px</div></div></div>'+
     '<div class="case-field-row"><span class="fk">上传视频 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+videoText+'</div></div>'+
-    '<div class="case-field-row"><span class="fk">苦恼</span><input type="text" id="cf-concern" placeholder="客人本次的苦恼…" value="'+(c.concern||'')+'" oninput="saveMaterialsDraft(\'concern\',this.value)"></div>'+
-    '<div class="case-field-row"><span class="fk">希望预期</span><input type="text" id="cf-expectation" placeholder="客人希望达到的效果…" value="'+(c.expectation||'')+'" oninput="saveMaterialsDraft(\'expectation\',this.value)"></div>'+
-    '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求</span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
-    '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-primary" onclick="confirmMaterials()">确认</button></div>'+
+    '<div class="case-field-row"><span class="fk">苦恼 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-concern" placeholder="客人本次的苦恼…" value="'+(c.concern||'')+'" oninput="saveMaterialsDraft(\'concern\',this.value)"></div>'+
+    '<div class="case-field-row"><span class="fk">希望预期 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-expectation" placeholder="客人希望达到的效果…" value="'+(c.expectation||'')+'" oninput="saveMaterialsDraft(\'expectation\',this.value)"></div>'+
+    '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
+    '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div>'+
     '</div>';
 }
 function saveMaterialsDraft(field, val){
@@ -2456,20 +2540,22 @@ function consultTabHtml(c){
   }
   if(c.consultStatus==='paid_waiting_kr'){
     return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">✓ 面诊费已支付</div>'+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">已在 Main 对话群自动通知面诊需求，等待 '+c.director+' 或Kr室长回复 —— 韩国那边会决定用视频面诊还是书面建议</div>'+
+      '<div class="info-heading" style="margin-bottom:8px;">等待确认面诊时间</div>'+
+      '<div style="font-size:12px;color:var(--sage);font-weight:700;margin-bottom:6px;">✓ 面诊费已支付</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认面诊形式与时间</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-outline" onclick="openFloatingChat(\'main\')">查看 Main 对话 →</button>'+
-      '<button class="btn-ghost" onclick="skipToVideoConsult()">演示：模拟院长视频面诊</button>'+
-      '<button class="btn-ghost" onclick="skipToWrittenConsult()">演示：模拟院长回复书面建议</button>'+
+      '<button class="btn-ghost" onclick="openKrReplyModal()">演示：模拟KR室长回复</button>'+
       '</div></div>';
   }
   if(c.consultMethod==='video' && c.consultStatus==='video_scheduled'){
     return '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">✓ 面诊时间已确认</div>'+
       '<div class="card" style="padding:14px 16px;margin-bottom:14px;cursor:pointer;" onclick="openFloatingChat(\'main\')">Kr室长　'+c.consultScheduledTime+' 可以进行（剩余 50 分钟）</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-primary" onclick="enterVideoConsult()">进入面诊</button>'+
-      '</div>';
+      '<button class="btn-ghost" onclick="simulateDirectorVideoConsult()">演示：模拟院长视频面诊</button>'+
+      '</div></div>';
   }
   if(c.consultMethod==='video' && c.consultStatus==='video_in_progress'){
     return '<div class="card" style="padding:22px 24px;">'+
@@ -3021,10 +3107,27 @@ function sendMainAnnouncement(text){
   if(CURRENT_ROOM==='main') renderFloatMessages();
 }
 
-/* ---- 韩国那边的回应：演示用，二选一（时间 或 书面建议），真实场景由韩国侧界面触发 ---- */
-function skipToVideoConsult(){
+/* ---- 韩国那边的回应：演示用，通过"模拟KR室长回复"弹窗二选一（视频面诊+时间 或 书面面诊+预计时间），真实场景由韩国侧界面触发 ---- */
+function openKrReplyModal(){
   var c = getCurrentCase(); if(!c || c.consultStatus!=='paid_waiting_kr') return;
-  var time = '09.22 14:00';
+  document.getElementById('kr-reply-overlay').classList.add('open');
+}
+function closeKrReplyModal(){ document.getElementById('kr-reply-overlay').classList.remove('open'); }
+function krReplyChooseVideo(){
+  var time = prompt('面诊时间（演示用，直接填时间文本）', '09.22 14:00');
+  if(time===null) return;
+  closeKrReplyModal();
+  skipToVideoConsult(time.trim());
+}
+function krReplyChooseWritten(){
+  var eta = prompt('预计报告时间（演示用，例如"2 小时"）', '2 小时');
+  if(eta===null) return;
+  closeKrReplyModal();
+  skipToWrittenConsult(eta.trim());
+}
+function skipToVideoConsult(time){
+  var c = getCurrentCase(); if(!c || c.consultStatus!=='paid_waiting_kr') return;
+  time = time || '09.22 14:00';
   if(!CHAT_DATA['main']) CHAT_DATA['main'] = [];
   CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'好的，帮您安排在 '+time+'，已经和院长确认过了，走视频面诊。', time:nowTime()});
   CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', kind:'card', card:{name:c.name, project:'面诊', time:time}, orig:'[面诊预约] '+c.name+' · '+time, time:nowTime()});
@@ -3043,8 +3146,9 @@ function skipToVideoConsult(){
     showToast('面诊即将开始', cc.name+' 的面诊将在 15 分钟后开始（'+cc.consultScheduledTime+'）', function(){ openCaseDetail(cc.id); });
   }, 6000);
 }
-function skipToWrittenConsult(){
+function skipToWrittenConsult(eta){
   var c = getCurrentCase(); if(!c || c.consultStatus!=='paid_waiting_kr') return;
+  eta = eta || '2 小时';
   var advice = '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
   if(!CHAT_DATA['main']) CHAT_DATA['main'] = [];
   CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'김민석 원장', color:'var(--slate2)', init:'김', orig:'不用视频了，我直接给个书面建议：'+advice, time:nowTime()});
@@ -3053,7 +3157,7 @@ function skipToWrittenConsult(){
   c.consultStatus = 'awaiting_report';
   c.writtenAdvice = advice;
   c.videoSummary = advice;
-  c.writtenEta = '2 小时';
+  c.writtenEta = eta;
   logCaseEvent(c, '김민석 원장', '给出书面面诊结论，预计 '+c.writtenEta+'内提交正式报告');
   buildCaseLog(c);
   renderCaseStatusBar(c);
@@ -4049,8 +4153,10 @@ function secondConsultTabHtml(c){
     return '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">✓ 二次面诊时间已确认</div>'+
       '<div class="card" style="padding:14px 16px;margin-bottom:14px;">Kr室长　'+sc.scheduledTime+' 可以进行</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-primary" onclick="secondConsultEnter()">进入面诊</button>'+
-      '</div>';
+      '<button class="btn-ghost" onclick="simulateSecondConsultVideoDone()">演示：模拟院长视频面诊</button>'+
+      '</div></div>';
   }
   if(sc.status==='video_in_progress'){
     return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:8px;">二次面诊进行中</div>'+
