@@ -1533,6 +1533,7 @@ function makeCase(o){
     secondConsult:o.secondConsult||null, /* 二次面诊子流程，独立于主状态，见 requestAnotherConsult()/addConsultAfterPayment() */
     projectsEnabled:!!o.projectsEnabled, projectsExpanded:false, projectsSelected:!!o.projectsSelected, projectsLocked:!!o.projectsLocked,
     projectOriginFilter:o.projectOriginFilter||'KR', recommended:o.recommended||[],
+    directorRecommendation:o.directorRecommendation||null, /* 2026-09-29：院长推荐清单，只读展示用，不再自动写进 recommended，见 applyDirectorPlan() */
     /* 施术预约（2026-09-29 新增）：只有选进的项目里有赴韩项目时才会走排期这一步 */
     scheduleStatus:o.scheduleStatus||null, /* null | 'pending'（待KR确认）| 'rejected'（KR说两个时间都不行）| 'confirmed' */
     schedulePrimary:o.schedulePrimary||'', scheduleBackup:o.scheduleBackup||'', scheduleConfirmedTime:o.scheduleConfirmedTime||'',
@@ -1609,7 +1610,7 @@ var CASE_ITEMS = [
     concern:'皮肤暗沉、细纹', expectation:'希望肤质透亮', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     consultMethod:'video', consultScheduledTime:'09.19 11:00', videoSummary:'面部凹陷、细纹较明显，建议先做自体脂肪移植改善轮廓，再评估面部拉皮。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
-    projectsEnabled:true, recommended:[{name:'自体脂肪移植（全脸）', origin:'KR'},{name:'面部拉皮', origin:'KR'}],
+    projectsEnabled:true, directorRecommendation:{round:1, doctorName:'김민석 원장', date:'2026-09-19', items:[{name:'自体脂肪移植（全脸）', type:'KR', price:4500000},{name:'面部拉皮', type:'KR', price:12000000}]},
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-11 09:00'},
       {stage:'面诊安排', actor:'김민석 원장', action:'视频面诊结束，已出具面诊报告', dt:'2026-09-19 11:20'}
@@ -1621,6 +1622,7 @@ var CASE_ITEMS = [
     consultMethod:'video', consultScheduledTime:'09.20 14:00', videoSummary:'建议先做假体隆鼻改善鼻基底，再评估鼻翼缩小。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsSelected:true, recommended:[{name:'假体隆鼻', origin:'KR'},{name:'鼻翼缩小', origin:'KR'}],
+    directorRecommendation:{round:1, doctorName:'김민석 원장', date:'2026-09-20', items:[{name:'假体隆鼻', type:'KR', price:2500000},{name:'鼻翼缩小', type:'KR', price:1500000}]},
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-10 09:00'},
       {stage:'面诊安排', actor:'김민석 원장', action:'视频面诊结束，已出具面诊报告', dt:'2026-09-20 14:20'},
@@ -2239,17 +2241,19 @@ function markReportUploaded(){
   renderCaseStatusBar(c);
   renderCaseBody(c);
 }
-function defaultRecommendedSnapshot(){
-  /* 面诊报告出来后自动预填的项目（要求8），同样按快照存，不挂项目库引用 */
-  return ['鼻综合（假体+鼻尖）','切开双眼皮'].map(function(name){
+/* 院长推荐清单（2026-09-29 改）：只读展示用，不再自动写进 c.recommended（要求"全部由室长自由勾选"），
+   格式是 {name, type:'KR'|'IN', price}，不挂项目库id引用，和项目库改价/改名互不影响。
+   具体项目名单不是业务方指定的演示数据，见 CLAUDE.md TODO(待确认) */
+function defaultRecommendationItems(){
+  return ['鼻综合（假体+鼻尖）','切开双眼皮','好莱坞焕肤 1次'].map(function(name){
     var p = PROJECT_LIBRARY.filter(function(x){ return x.name===name; })[0];
     if(!p) return null;
-    return {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId};
+    return {name:p.name, type:p.origin, price:p.price};
   }).filter(Boolean);
 }
 function applyDirectorPlan(c){
-  /* 院长方案：报告出来的同时给出带价格的推荐项目，自动进入项目列表tab */
-  c.recommended = c.recommended && c.recommended.length ? c.recommended : defaultRecommendedSnapshot();
+  /* 院长方案：报告出来的同时给出院长推荐清单（只读），不再自动预勾选到已选列表，改由室长自己勾选 */
+  c.directorRecommendation = {round:c.consultRound||1, doctorName:c.director, date:nowFullDt().split(' ')[0], items:defaultRecommendationItems()};
   c.projectsEnabled = true;
   c.projectOriginFilter = 'KR';
 }
@@ -2648,6 +2652,47 @@ function selectedTotalsHtml(selected){
   if(inTotal) lines.push('<div style="display:flex;justify-content:space-between;"><span>本地项目合计</span><span>'+displayAmount(inTotal,'IN',CASE_DISPLAY_CCY_IN)+'</span></div>');
   return '<div style="padding-top:14px;margin-top:10px;border-top:1px solid var(--border);font-size:13px;font-weight:700;display:flex;flex-direction:column;gap:4px;">'+(lines.join('')||'<div>合计 —</div>')+'</div>';
 }
+/* 院长推荐项目（2026-09-29 新增）：只读卡片，只在"项目确认中"的选择界面（非追加项目）顶部出现，
+   不面诊/还没出报告/已经结算（进了批次只读视图）都不显示 */
+function directorRecommendationCardHtml(c){
+  var r = c.directorRecommendation; if(!r || !r.items.length) return '';
+  function row(it){
+    var ccy = it.type==='KR' ? CASE_DISPLAY_CCY_KR : CASE_DISPLAY_CCY_IN;
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+'</span><span style="font-size:13px;font-weight:700;">'+displayAmount(it.price, it.type, ccy)+'</span></div>';
+  }
+  var krItems = r.items.filter(function(it){ return it.type==='KR'; });
+  var inItems = r.items.filter(function(it){ return it.type==='IN'; });
+  var krBlock = krItems.length ? '<div style="margin-top:8px;"><div style="font-size:11px;font-weight:700;color:var(--terracotta);margin-bottom:4px;">赴韩项目</div>'+krItems.map(row).join('')+'</div>' : '';
+  var inBlock = inItems.length ? '<div style="margin-top:8px;"><div style="font-size:11px;font-weight:700;color:var(--sage);margin-bottom:4px;">本地项目</div>'+inItems.map(row).join('')+'</div>' : '';
+  return '<div class="card" style="padding:18px 24px;margin-bottom:16px;">'+
+    '<div style="font-size:12px;font-weight:700;color:var(--slate2);">院长推荐项目 · 第'+r.round+'次面诊 · '+r.doctorName+' · '+r.date+'</div>'+
+    krBlock+inBlock+
+    '</div>';
+}
+function isDirectorRecommended(c, p){
+  var r = c.directorRecommendation;
+  return !!(r && r.items.some(function(it){ return it.name===p.name && it.type===p.origin; }));
+}
+/* "已选择"按赴韩/本地分两组渲染，各自小计，没选的组整个不显示，不出两组相加的总计 */
+function selectedGroupedHtml(selected){
+  function row(it){
+    var ccy = it.origin==='KR' ? CASE_DISPLAY_CCY_KR : CASE_DISPLAY_CCY_IN;
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+'</span><span style="font-size:13px;font-weight:700;margin-right:12px;">'+displayAmount(it.price, it.origin, ccy)+'</span><span class="fa"><a href="#" class="info-link" onclick="toggleProject(\''+it.projectId+'\');return false;">移除</a></span></div>';
+  }
+  function group(items, label, color, origin){
+    if(!items.length) return '';
+    var total = items.reduce(function(s,it){ return s+it.price; }, 0);
+    var ccy = origin==='KR' ? CASE_DISPLAY_CCY_KR : CASE_DISPLAY_CCY_IN;
+    return '<div style="margin-bottom:14px;">'+
+      '<div style="font-size:11px;font-weight:700;color:'+color+';margin-bottom:4px;">'+label+'</div>'+
+      items.map(row).join('')+
+      '<div style="display:flex;justify-content:space-between;padding-top:8px;margin-top:4px;border-top:1px solid var(--border);font-size:13px;font-weight:700;"><span>小计</span><span>'+displayAmount(total, origin, ccy)+'</span></div>'+
+      '</div>';
+  }
+  var html = group(selected.filter(function(it){ return it.origin==='KR'; }), '赴韩项目', 'var(--terracotta)', 'KR')
+    + group(selected.filter(function(it){ return it.origin==='IN'; }), '本地项目', 'var(--sage)', 'IN');
+  return html || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">尚未选择项目</div>';
+}
 /* 分支2/主线：已出报告 → 项目已选择 → 已付款，"项目已选择"是选完项目、点了"确认所选项目"之后、正式结算收款之前的独立等待态，
    即使离开案件详情页再回来，案件也应该还停在这一档，而不是退回选择界面或直接跳到已付款 */
 function projectSelectedSummaryHtml(c){
@@ -2810,14 +2855,11 @@ function projectPickerHtml(c, isAddition){
   var pickerCcy = originFilter==='KR' ? CASE_DISPLAY_CCY_KR : CASE_DISPLAY_CCY_IN;
   var leftRows = catalog.map(function(p){
     var checked = selected.some(function(it){ return it.projectId===p.id; });
+    var recTag = isDirectorRecommended(c, p) ? ' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;padding:2px 6px;font-weight:700;">院长推荐</span>' : '';
     return '<label style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
       '<input type="checkbox" onchange="toggleProject(\''+p.id+'\')" '+(checked?'checked':'')+'>'+
-      '<span style="flex-grow:1;">'+p.name+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
+      '<span style="flex-grow:1;">'+p.name+recTag+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>';
-  var rightRows = selected.map(function(it){
-    var ccy = it.origin==='KR' ? CASE_DISPLAY_CCY_KR : CASE_DISPLAY_CCY_IN;
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+'</span><span style="font-size:13px;font-weight:700;margin-right:12px;">'+displayAmount(it.price, it.origin, ccy)+'</span><span class="fa"><a href="#" class="info-link" onclick="toggleProject(\''+it.projectId+'\');return false;">移除</a></span></div>';
-  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">尚未选择项目</div>';
   var expandBtn = '<span style="cursor:pointer;font-size:12px;color:var(--slate);" onclick="toggleProjectsExpand()">'+(c.projectsExpanded?'⮡ 收起':'⮢ 展开满屏')+'</span>';
   var subTabs = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">'+
     '<span class="chip'+(originFilter==='IN'?' active':'')+'" onclick="setProjectOrigin(\'IN\')">本地项目</span>'+
@@ -2830,14 +2872,15 @@ function projectPickerHtml(c, isAddition){
   var wrapOpen = isAddition
     ? '<div class="project-card'+(c.projectsExpanded?' expanded':'')+'" style="border-top:1px dashed var(--border);padding-top:18px;margin-top:4px;">'
     : '<div class="card project-card'+(c.projectsExpanded?' expanded':'')+'" style="padding:22px 24px;">';
-  return wrapOpen+
+  /* 院长推荐卡片只在"项目确认中"首次选择界面出现，追加项目（结算后的独立流程）不显示 */
+  var recCard = isAddition ? '' : directorRecommendationCardHtml(c);
+  return recCard+wrapOpen+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="info-heading">'+(isAddition?'追加项目':'推荐管理项目')+'</div>'+expandBtn+(isAddition?'<span style="cursor:pointer;font-size:12px;color:var(--slate);margin-left:10px;" onclick="cancelAddMore()">取消追加</span>':'')+'</div>'+
     '<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px;">'+
     '<div>'+subTabs+
     '<input type="text" placeholder="搜索项目…" value="'+(c.projectSearch||'')+'" oninput="setProjectSearch(this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;">'+
     leftRows+'</div>'+
-    '<div style="border-left:1px solid var(--border2);padding-left:24px;"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+rightRows+
-    selectedTotalsHtml(selected)+
+    '<div style="border-left:1px solid var(--border2);padding-left:24px;"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+selectedGroupedHtml(selected)+
     settleBtn+'</div>'+
     '</div></div>';
 }
@@ -4200,6 +4243,14 @@ function secondConsultEnter(){
   buildCaseLog(c);
   nav('video-consult');
 }
+/* 二次面诊出了新报告用的推荐清单：同样是演示数据，不是业务方指定的项目名单，见 CLAUDE.md TODO(待确认) */
+function secondRoundRecommendationItems(){
+  return ['假体隆鼻','切开双眼皮','Onda提升 60kj'].map(function(name){
+    var p = PROJECT_LIBRARY.filter(function(x){ return x.name===name; })[0];
+    if(!p) return null;
+    return {name:p.name, type:p.origin, price:p.price};
+  }).filter(Boolean);
+}
 function secondConsultChanged(hasChange){
   var c = getCurrentCase(); if(!c || !c.secondConsult) return;
   if(hasChange){
@@ -4207,6 +4258,8 @@ function secondConsultChanged(hasChange){
     c.consultFiles = c.consultFiles || [];
     c.consultFiles.unshift({label:'二次面诊报告'});
     c.reportUploadedBy = c.director;
+    /* 用最新报告的推荐覆盖 directorRecommendation，round 取当前面诊轮次 */
+    c.directorRecommendation = {round:c.consultRound||1, doctorName:c.director, date:nowFullDt().split(' ')[0], items:secondRoundRecommendationItems()};
     logCaseEvent(c, c.director, '二次面诊有变动，出具新报告（覆盖原方案）');
   } else {
     logCaseEvent(c, c.director, '二次面诊无变动，维持原报告和项目');

@@ -63,6 +63,10 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   4. `FX_RATES` 是纯前端写死常量（已按要求加了 `TODO: 接入实时汇率API` 注释），没有接任何真实汇率源。
   - 上面"已付款"那条【待确认】（`deriveCaseStage` 用"是否有项目被标记完成"代替"开始施术"）这一轮没有改，还是待业务方给准确定义。
 - 【待办，2026-09-29（第七轮）新增】`caseStatusSub(c)` 里 `paid_waiting_kr`/`video_scheduled` 对应的细节文案（"已缴费，等待Kr室长/院长回复"、"面诊时间已确认"）这一轮没有跟着改，现在文字上和新拆出来的两个主状态名"等待确认面诊时间"/"等待面诊"不完全对齐。用户当次任务明确说了这次不改，先留着，下次涉及这块再顺手同步。
+- 【待确认，2026-09-29（第八轮）新增】"项目列表tab：院长推荐+已选分组"重写引入了 `c.directorRecommendation = {round,doctorName,date,items:[{name,type,price}]}`，里面几处是我的判断，不是业务方指定：
+  1. 首次出报告（`applyDirectorPlan`）和二次面诊有变动（`secondConsultChanged(true)`）用的两套演示推荐清单——`defaultRecommendationItems()`（鼻综合+切开双眼皮+好莱坞焕肤1次）、`secondRoundRecommendationItems()`（假体隆鼻+切开双眼皮+Onda提升60kj）——具体项目名单都是我编的demo数据，凑够"赴韩+本地都要有"这条要求。
+  2. "院长推荐"只读卡片只在项目确认中的**首次选择**界面（`projectPickerHtml(c,false)`）顶部出现，"追加项目"（结算后，`isAddition===true`）不显示——这是我对需求里"位置：项目列表tab最上方，在项目库和已选列表的上面"这句话的场景判断，因为追加项目是结算后另开的一条独立流程。
+  3. "已选择"分组（赴韩/本地两组各自小计）只改了两栏picker布局（`projectPickerHtml`），没有动单栏的"项目已选择"汇总视图（`projectSelectedSummaryHtml`，`c.projectsSelected===true` 之后看到的那个），因为需求原文提到"项目库"和"右侧"，对应的就是两栏布局，这个汇总视图不在范围里，它现在的 `selectedTotalsHtml` 本来就是分行显示不相加，维持现状。
 
 （某项差距在代码里补齐后，把对应条目从这里删掉或改写，让这个列表始终和代码现状一致。）
 
@@ -84,6 +88,14 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   3. **面诊 tab 交互**：`paid_waiting_kr` 分支文案改成"等待韩国室长确认面诊形式与时间"，原来两个演示按钮（模拟院长视频面诊/模拟院长回复书面建议）合并成一个"演示：模拟KR室长回复"，点开新增的 `#kr-reply-overlay` 弹窗二选一，选项通过 `prompt()` 输入时间/预计时间（默认值沿用原来写死的 `09.22 14:00`/`2 小时`）后调用参数化后的 `skipToVideoConsult(time)`/`skipToWrittenConsult(eta)`。`video_scheduled` 分支新增"演示：模拟院长视频面诊"快捷按钮 `simulateDirectorVideoConsult()`，跳过手动进入通话直接走完视频面诊全程。二次面诊 `secondConsultTabHtml()` 的 `video_scheduled` 分支同样加了快捷按钮 `simulateSecondConsultVideoDone()`。
   4. **重构去重**：把 `endVideoConsult()` 里"生成AI记录+转等待报告"这段逻辑分别抽成 `finishVideoConsult(c)`（主面诊）和 `finishSecondConsultVideo(c)`（二次面诊），新的快捷演示按钮和真实的通话结束流程共用同一套逻辑，行为完全一致。
   5. `docs/case-management-flow.md` 分支4同步改写（补上"等待缴纳面诊费"节点，"等待面诊"/"等待确认面诊时间"改成新拆法，旧"面诊已排期"标注已废弃），并新增"取消接待"小节（区别于分支1的"取消预约"）。
+- 2026-09-29（第八轮，项目列表tab：院长推荐 + 已选分组）：
+  1. **取消自动预勾选**：`applyDirectorPlan(c)` 不再把推荐项目塞进 `c.recommended`，改成生成只读的 `c.directorRecommendation`；`defaultRecommendedSnapshot()` 改名重写成 `defaultRecommendationItems()`，输出 `{name,type,price}` 格式，不挂项目库id引用。`projectsEnabled` 照常置 `true`。
+  2. **顶部只读卡片**：新增 `directorRecommendationCardHtml(c)`，标题"院长推荐项目·第N次面诊·院长·日期"，赴韩/本地分两组，纯展示无交互；只在 `projectPickerHtml(c,false)`（首次选择界面）顶部插入，`isAddition`（追加项目）不显示。
+  3. **项目库标注**：新增 `isDirectorRecommended(c,p)`（按项目名+来源比对），`projectPickerHtml` 左侧项目库每行命中就加"院长推荐"小标签，赴韩/本地两个tab都生效，不影响勾选。
+  4. **已选分组**：新增 `selectedGroupedHtml(selected)` 替换掉原来的 `rightRows`+`selectedTotalsHtml`，右侧"已选择"按赴韩/本地分两组各自小计渲染，没选的组整个隐藏，不出两组相加的总计；"确认所选项目"按钮和结算逻辑未动。
+  5. **二次面诊联动**：`secondConsultChanged(true)`（有变动）新增用最新报告的推荐覆盖 `c.directorRecommendation`，`round` 取 `c.consultRound||1`，新增 `secondRoundRecommendationItems()` 演示清单。
+  6. demo案例 `ayu` 的 `recommended` 清空为 `[]`（体现不再自动预选），改用 `directorRecommendation` 存原来的两个推荐项目；`fajar`（项目已选择态）的 `recommended` 保留不变，额外补了 `directorRecommendation`，方便"修改所选项目"退回picker时标签还在。
+  判断点见上面"已知差距"。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
 - 涉及业务规则的改动，先对一遍 Domain Knowledge / Open Questions 有没有冲突，有冲突要先问，不要悄悄按自己理解改
