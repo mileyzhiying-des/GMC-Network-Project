@@ -63,10 +63,16 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   4. `FX_RATES` 是纯前端写死常量（已按要求加了 `TODO: 接入实时汇率API` 注释），没有接任何真实汇率源。
   - 上面"已付款"那条【待确认】（`deriveCaseStage` 用"是否有项目被标记完成"代替"开始施术"）这一轮没有改，还是待业务方给准确定义。
 - 【待办，2026-09-29（第七轮）新增】`caseStatusSub(c)` 里 `paid_waiting_kr`/`video_scheduled` 对应的细节文案（"已缴费，等待Kr室长/院长回复"、"面诊时间已确认"）这一轮没有跟着改，现在文字上和新拆出来的两个主状态名"等待确认面诊时间"/"等待面诊"不完全对齐。用户当次任务明确说了这次不改，先留着，下次涉及这块再顺手同步。
-- 【待确认，2026-09-29（第八轮）新增】"项目列表tab：院长推荐+已选分组"重写引入了 `c.directorRecommendation = {round,doctorName,date,items:[{name,type,price}]}`，里面几处是我的判断，不是业务方指定：
-  1. 首次出报告（`applyDirectorPlan`）和二次面诊有变动（`secondConsultChanged(true)`）用的两套演示推荐清单——`defaultRecommendationItems()`（鼻综合+切开双眼皮+好莱坞焕肤1次）、`secondRoundRecommendationItems()`（假体隆鼻+切开双眼皮+Onda提升60kj）——具体项目名单都是我编的demo数据，凑够"赴韩+本地都要有"这条要求。
-  2. "院长推荐"只读卡片只在项目确认中的**首次选择**界面（`projectPickerHtml(c,false)`）顶部出现，"追加项目"（结算后，`isAddition===true`）不显示——这是我对需求里"位置：项目列表tab最上方，在项目库和已选列表的上面"这句话的场景判断，因为追加项目是结算后另开的一条独立流程。
-  3. "已选择"分组（赴韩/本地两组各自小计）只改了两栏picker布局（`projectPickerHtml`），没有动单栏的"项目已选择"汇总视图（`projectSelectedSummaryHtml`，`c.projectsSelected===true` 之后看到的那个），因为需求原文提到"项目库"和"右侧"，对应的就是两栏布局，这个汇总视图不在范围里，它现在的 `selectedTotalsHtml` 本来就是分行显示不相加，维持现状。
+- ~~【第八轮】"项目列表tab：院长推荐+已选分组"（`c.directorRecommendation`、只读推荐卡片、项目库"院长推荐"标签）~~ —— 2026-09-29（第九轮）"项目列表/赴韩施术/本地管理重构（以本指令为准）"指令明确废止了这份指令，已把 `directorRecommendation`/`directorRecommendationCardHtml`/`isDirectorRecommended`/`defaultRecommendationItems`/`secondRoundRecommendationItems` 整套代码移除；"不自动预勾选"这条保留，改由新的 `krScope`（赴韩可选范围）机制承接，见下面第九轮条目。
+- 【待确认，2026-09-29（第九轮）新增】"项目列表/赴韩施术/本地管理重构"里几处是我的实现判断，不是业务方指定：
+  1. 首次出报告（`applyDirectorPlan`）用的演示 krScope 项目清单（`defaultKrScopeItems()`：鼻综合+切开双眼皮+颧骨缩小，颧骨缩小带"不可与下颌角同时做"这条演示备注）是我编的demo数据，不是业务方给的清单。
+  2. "施术日期"用简化月历（`krDateCalendarGridHtml()`，只选日期，参考现有预约改期弹窗视觉，未开放日期置灰不可点），不是下拉框——这是我对需求文字的实现选择。
+  3. "确认后修改日期→KR室长无法确认新日期"这一步，我按"等同无法协调"实现（`simulateKrScheduleChangeReject()`→`cannotCoordinateKrSchedule()`）：取消这次排期涉及的**全部**未完成赴韩项目并退定金。需求原文写的是"取消该项目"（单数），但案件的施术日期是整案共用一套（`c.krSchedule` 挂在案件上），单数复数对不上，需要确认这个粒度——已记入 `docs/open-questions.md` 第3条。
+  4. 两种项目都有的案件，"本地项目照常推进，不需要等赴韩排期"——我理解成本地管理tab本身独立于赴韩排期状态直接可用（`localManagementTabHtml` 不看 `krSchedule`），但案件列表的顶层归类（`deriveCaseStage` 的 stage 桶）在赴韩项目"已到医院"之前，还是维持和原来一样先留在 `'consult'` 桶里，不单独因为本地已经在推进就提前归到 `'local'` 桶。只有案件里压根没有赴韩项目（纯本地）才会一付款直接归 `'local'` 桶。
+  5. "意向项目"选择器交互用一个新弹窗（多选chip+KR/IN切换，参考项目库选择器样式），不是下拉框。
+  6. 本地管理到店事件复用日历现有的 `type:'post'`（术后管理）而不是新开一个事件类型，加 `caseId`/`itemIndex` 使其可点击跳转到对应案件的本地管理tab。
+  7. `KR_DEPOSIT_RATE` 沿用现有0.3，不改（这个本来就是待确认项，这轮没碰）。
+  8. "仅出报告"终态现在没有任何操作会触发了（排期挪到付款后，原来"付款前排期失败且无本地项目"这条路径不存在了）——已记入 `docs/open-questions.md` 第4条，代码里字段/badge文案先留着没删。
 
 （某项差距在代码里补齐后，把对应条目从这里删掉或改写，让这个列表始终和代码现状一致。）
 
@@ -95,6 +101,19 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   4. **已选分组**：新增 `selectedGroupedHtml(selected)` 替换掉原来的 `rightRows`+`selectedTotalsHtml`，右侧"已选择"按赴韩/本地分两组各自小计渲染，没选的组整个隐藏，不出两组相加的总计；"确认所选项目"按钮和结算逻辑未动。
   5. **二次面诊联动**：`secondConsultChanged(true)`（有变动）新增用最新报告的推荐覆盖 `c.directorRecommendation`，`round` 取 `c.consultRound||1`，新增 `secondRoundRecommendationItems()` 演示清单。
   6. demo案例 `ayu` 的 `recommended` 清空为 `[]`（体现不再自动预选），改用 `directorRecommendation` 存原来的两个推荐项目；`fajar`（项目已选择态）的 `recommended` 保留不变，额外补了 `directorRecommendation`，方便"修改所选项目"退回picker时标签还在。
+  判断点见上面"已知差距"。
+  > ⚠️ 本轮整份被第九轮废止：`directorRecommendation` 相关代码已全部移除，`fajar` 也已改成"待付款"demo案例，不再是"项目已选择"（这个中间态本身已经不存在了）。
+- 2026-09-29（第九轮，"项目列表/赴韩施术/本地管理重构（以本指令为准）"，废止第八轮"院长推荐"整份指令 + 旧排期规则）：
+  1. **取消自动预勾选（换机制）**：不再用"院长推荐只读卡片"，改成 `c.krScope = {items:[{name,price,note}], overallNote, updatedAt}`（KR室长整理的赴韩可选范围，`applyDirectorPlan` 出报告时写演示数据，新增 `simulateKrScopeUpdate()` 演示按钮可随时加项目）。项目列表"赴韩项目"子tab只显示 `krScope.items`，没有krScope显示空状态引导（不面诊案件带"增加面诊"按钮）；"本地项目"子tab不受限，照常显示完整项目库。
+  2. **基础资料新增两个字段**：`materialsCardHtml` 在"希望预期"下面加"意向项目"（必填，新增 `#intention-project-overlay` 多选弹窗，KR/IN都能选）+"预算"（选填，Rp区间）；`confirmMaterials` 校验加入意向项目必填；`basicTabHtml`/面诊资料tab（新增 `consultIntentionCardHtml`）只读展示这两项。
+  3. **已选择/结算区重写**：新函数 `settlementBigCardHtml(c, items, removable)`（一张大卡包"赴韩项目"/"本地项目"两张二级卡，各自显示合计/定金/全款+备注栏）取代旧的 `selectedGroupedHtml`/`directorRecommendationCardHtml`/批次展示；新增 `noteFieldHtml`/`saveCaseNote` 存 `c.noteKR`/`c.noteIN`/`c.noteOverall` 三个备注；金额一律用固定币种 `formatCurrency`，不再走 `displayAmount`+币种切换——顺带修了"本地项目显示≈¥"那个bug。
+  4. **主状态机重写**：`confirmProjectSelection` 确认后不管有没有赴韩项目，统一立即 `generateSettlementBatch`（不再判断hasKR），删除了 `scheduleFormHtml`/`submitSchedule`/`simulateKrScheduleConfirm`/`simulateKrScheduleReject`/`cannotCoordinateSchedule`/`c.scheduleStatus`等旧字段；`deriveCaseStage`/`caseStatusBadge`/`caseStatusSub` 按新顺序重写（有赴韩项目：已付款后进`krSchedule`细分状态"递交施术日期→待确认施术时间→等待施术"，"已到医院"才转`travel`；纯本地：付款后直接`local`，不用等"已到医院"）。
+  5. **tab拆分**：`caseTabsHtml`/`caseTabContentHtml` 把旧的"施术"拆成"赴韩施术"（`krProcedureTabHtml`，有赴韩项目才显示）和"本地管理"（`localManagementTabHtml`，有本地项目才显示），删除了 `procedureTabHtml`/`toggleProcSelect`/`batchMarkDone`/`editProcItem`/`moveProcItem`。
+  6. **赴韩施术tab**：新增 `krDateCalendarGridHtml()`（简化月历，只选日期，`KR_OPEN_DATES` 演示白名单，未开放置灰）、`submitKrScheduleDate`/`simulateKrScheduleConfirmNew`/`simulateKrScheduleRejectNew`/`startKrScheduleChange`/`submitKrScheduleChangeDate`/`simulateKrScheduleChangeConfirm`/`simulateKrScheduleChangeReject`/`requestCannotCoordinate`/`cannotCoordinateKrSchedule`（取消未完成赴韩项目退定金，有本地项目转本地管理，没有则已取消全额退款）；`markArrivedAtHospital` 改成只在 `krSchedule.status==='confirmed'` 才可用。
+  7. **本地管理tab**：新增 `scheduleLocalVisit`/`advanceLocalVisit`（进度 待预约到店→已预约到店→已到店→管理中→完成），联动 `WEEK_EVENTS`（复用 `type:'post'`，加 `caseId`/`itemIndex`，日历点击新增 `openCaseFromCalendar()` 跳转），不生成新Reservation ID/新案件（`docs/open-questions.md` 第3条已解决）。
+  8. **加项修复**：`addMoreProjects` 的赴韩侧同样只能从 `krScope` 选；顺带修了一个潜在bug——旧代码"结算追加项目/交定金"直接调 `settleProjects()`，但追加选的项目从没进过 `procedureItems`/`settlementBatches`，永远找不到待付款批次，新增 `confirmAddition()` 先补一步 `generateSettlementBatch` 再打开付款弹窗。
+  9. demo案例迁移：`ayu`/`fajar` 改用 `krScope`（`fajar` 从"项目已选择"改成"待付款"，因为这个中间态不存在了）；`nadia`/`dinda`/`rizky`/`rina`/`wulan`/`lina` 的 `activeCaseTab` 从 `'procedure'` 改成 `'kr'`/`'local'`（按各自有没有对应项目分配）；`dinda` 新增 `krSchedule:{status:'pending',...}` 演示"待确认施术时间"这一档。
+  10. `docs/case-management-flow.md` 主线/施术日期规则/分支8/分支9 同步重写（旧内容标注已废弃保留），`docs/open-questions.md` 解决第3条、新增第3、4条待确认。
   判断点见上面"已知差距"。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
