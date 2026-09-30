@@ -1508,6 +1508,17 @@ function useHolding(name, itemName, caseId, date, qty, tag){
   }
   return qty-left; /* 实际扣掉的次数 */
 }
+/* 这次使用会扣到哪些购买批次（FIFO，与 useHolding 一致），返回购买案件 id 列表；用于"使用术后管理项目时自动关联原案件" */
+function holdingSourceCaseIds(h, qty){
+  var ids = [], left = qty;
+  h.batches.slice().sort(function(a,b){ return a.date<b.date?-1:1; }).forEach(function(b){
+    if(left<=0) return;
+    var avail = b.bought-b.used; if(avail<=0) return;
+    if(ids.indexOf(b.caseId)<0) ids.push(b.caseId);
+    left -= Math.min(avail,left);
+  });
+  return ids;
+}
 /* 归还持有（2026-09-30）：管理取消时，把本案件（同一 tag：main=案件本身 / lm=本地管理）未做的次数退回对应批次，不是退款 */
 function returnHolding(name, itemName, caseId, qty, tag){
   var h = (CLIENT_HOLDINGS[name]||[]).filter(function(x){ return x.itemName===itemName; })[0];
@@ -1777,6 +1788,8 @@ function makeCase(o){
     financeResult:null, /* 无收入/仅面诊费/有项目收入/全额退款，由 updateCaseStage→financeResultOf 现算 */
     /* 本地流程（§3）的案件级状态：持有项目使用后进入管理进行中；localMgmt 是同日插做的"本地管理"tab，字段同名（见 ctxOf） */
     mgmtUses:o.mgmtUses||[], mgmtActive:!!o.mgmtActive, mgmtDone:!!o.mgmtDone, mgmtStatus:o.mgmtStatus||null, mgmtCancelling:false,
+    linkedCase:o.linkedCase||null, /* 2026-09-30 §6：关联之前案件 {caseId, reason:复诊/术后管理/延续既往面诊, auto?} */
+    linkedFiles:o.linkedFiles||[], manualAttachments:o.manualAttachments||[], materialsDate:o.materialsDate||null, /* §7 附件 */
     localAsk:!!o.localAsk, /* 赴韩项目"无法协调"退款后，询问是否做本地管理 */
     localMgmt:o.localMgmt||null,
     entryChoicePending:!!o.entryChoicePending, projectEntryMode:o.projectEntryMode||null, /* 不面诊/面诊取消后"持有项目使用"vs"新增项目"的入口选择 */
@@ -1951,6 +1964,13 @@ var CASE_ITEMS = [
       {stage:'面诊安排', actor:'Dewi', action:'本地项目已转入客户持有：Genesis焕肤（Clarity II）1次 x1', dt:'2026-08-20 09:00'},
       {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"自体脂肪移植（全脸）"施术', dt:'2026-08-25 10:00'},
       {stage:'赴韩施术', actor:'김민석 원장', action:'KR标记"施术完成"，案件已结案', dt:'2026-08-27 09:00'}
+    ]}),
+
+  /* 接待中（演示"关联之前案件"）：Rina 之前有已结案的赴韩案件 A000010，这次再来，基础资料里可关联并看到"可能与 A000010 相关" */
+  makeCase({id:'rina2', name:'Rina Marlina', subState:'arrived', reservationId:'482917REV', updated:'刚刚',
+    logEntries:[
+      {stage:'预约到店', actor:'Dewi', action:'老客人预约来访，选定院长 김민석 원장', dt:'2026-09-18 09:00'},
+      {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:'2026-09-18 09:30'}
     ]}),
 
   /* 已结案 + 有退款：分支6——赴韩项目里一个取消退定金，另一个完成后案件结案（2026-09-29 第十轮改用赴韩项目演示，
@@ -2242,7 +2262,7 @@ function openCaseDetail(id){
   if(!c) return;
   CURRENT_CASE_ID = id;
   document.getElementById('case-title').textContent = c.name + ' · Case' + (c.caseNo ? ' · '+c.caseNo : (c.reservationId ? ' · '+c.reservationId : ''));
-  document.getElementById('case-subtitle').textContent = '对接院长：'+c.director;
+  renderCaseSubtitle(c);
   document.getElementById('case-chat-actions').style.display = c.caseNo ? 'flex' : 'none';
   closeVideoTargetModal();
   renderCaseStatusBar(c);
@@ -2406,7 +2426,7 @@ function confirmReschedule(){
   logCaseEvent(c, 'Dewi', '修改预约为 '+c.visitDate+' '+c.visitTime+'，院长：'+c.director);
   buildCaseLog(c);
   if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id){
-    document.getElementById('case-subtitle').textContent = '对接院长：'+c.director;
+    renderCaseSubtitle(c);
   }
   showToast('预约已修改', c.name+' · '+c.visitDate+' '+c.visitTime+' · '+c.director, null);
 }
@@ -2482,8 +2502,8 @@ function enterVideoConsult(){
 function finishVideoConsult(c){
   c.consultStatus = 'awaiting_report';
   c.consultFiles = c.consultFiles || [];
-  c.consultFiles.unshift({label:'院长面诊视频'});
-  c.consultFiles.unshift({label:'院长面诊文本（AI生成，仅供参考）'});
+  c.consultFiles.unshift({label:'院长面诊视频',date:attDate()});
+  c.consultFiles.unshift({label:'院长面诊文本（AI生成，仅供参考）',date:attDate()});
   c.videoSummary = c.videoSummary || '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
   logCaseEvent(c, 'Dewi', '面诊已结束（已生成AI记录+保存视频），等待室长上传面诊报告');
   buildCaseLog(c);
@@ -2554,8 +2574,8 @@ function endVideoConsult(){
     var c2 = CASE_ITEMS.filter(function(x){ return x.id===INVITE_KR_CONTEXT_CASE_ID; })[0];
     if(c2){
       c2.consultFiles = c2.consultFiles || [];
-      c2.consultFiles.unshift({label:'室长面诊视频'});
-      c2.consultFiles.unshift({label:'室长面诊文本（AI生成，仅供参考）'});
+      c2.consultFiles.unshift({label:'室长面诊视频',date:attDate()});
+      c2.consultFiles.unshift({label:'室长面诊文本（AI生成，仅供参考）',date:attDate()});
       c2.krVideoInvited = true;
       logCaseEvent(c2, '系统', '室长视频沟通结束，已生成AI转写稿附件');
       buildCaseLog(c2);
@@ -2569,8 +2589,8 @@ function endVideoConsult(){
     if(c3){
       c3.consultFiles = c3.consultFiles || [];
       var seq = c3.consultFiles.filter(function(f){ return f.label.indexOf('视频通话录像')>-1; }).length + 1;
-      c3.consultFiles.unshift({label:'视频通话录像 #'+seq});
-      c3.consultFiles.unshift({label:'视频通话文本 #'+seq+'（AI生成，仅供参考）'});
+      c3.consultFiles.unshift({label:'视频通话录像 #'+seq,date:attDate()});
+      c3.consultFiles.unshift({label:'视频通话文本 #'+seq+'（AI生成，仅供参考）',date:attDate()});
       logCaseEvent(c3, '系统', '对话内视频通话结束，已生成AI转写稿附件');
       buildCaseLog(c3);
       postCaseRoomFile(c3.id, 'Dewi', 'var(--terracotta)', 'D', '视频通话文本 #'+seq+'（AI生成，仅供参考）+ 视频通话录像 #'+seq);
@@ -2594,7 +2614,7 @@ function markReportUploaded(){
   c.consultStatus = 'report_ready';
   c.reportUploadedBy = c.director;
   c.consultFiles = c.consultFiles || [];
-  c.consultFiles.unshift({label:'面诊报告'});
+  c.consultFiles.unshift({label:'面诊报告',date:attDate()});
   applyDirectorPlan(c);
   logCaseEvent(c, c.director, '提交面诊报告，已出报告');
   buildCaseLog(c);
@@ -2733,6 +2753,79 @@ function confirmCancelIntake(){
 }
 
 /* ---- 确认前：合并的材料卡（메타뷰/照片/视频/苦恼/希望预期/面诊需求 → 确认） ---- */
+/* ---- 关联之前案件（§6，2026-09-30） ---- */
+var LINK_REASONS = ['复诊','术后管理','延续既往面诊'];
+function renderCaseSubtitle(c){
+  var el = document.getElementById('case-subtitle'); if(!el) return;
+  var html = '对接院长：'+c.director;
+  if(c.linkedCase && c.linkedCase.caseId){
+    var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
+    html += ' · 关联：<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
+  }
+  el.innerHTML = html;
+}
+function clientPriorCases(c){
+  return CASE_ITEMS.filter(function(x){ return x.name===c.name && x.id!==c.id && x.caseNo; });
+}
+/* 系统提示"可能与 XX 相关"：客户有最近结案的赴韩案件，或还有没用完的术后管理项目 */
+function linkSuggestionHtml(c){
+  var tips = [];
+  var lastKr = clientPriorCases(c).filter(function(x){ return x.stage==='closed' && x.krProcedureDone; }).pop();
+  if(lastKr) tips.push(lastKr.caseNo+'（最近结案的赴韩案件）');
+  clientHoldingsSorted(c.name).forEach(function(h){
+    if(h.category!=='术后管理') return;
+    var b = h.batches.filter(function(x){ return x.bought-x.used>0; })[0];
+    if(b){ var t = caseNoLabel(b.caseId)+'（还有未用完的术后管理项目：'+h.itemName+'）'; if(tips.indexOf(t)<0) tips.push(t); }
+  });
+  if(!tips.length) return '';
+  return '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">可能与 '+tips.join('、')+' 相关</div>';
+}
+function setLinkedCase(caseId){
+  var c = getCurrentCase(); if(!c) return;
+  c.linkedCase = caseId ? {caseId:caseId, reason:(c.linkedCase&&c.linkedCase.reason)||''} : null;
+  renderCaseBody(c);
+}
+function setLinkReason(reason){
+  var c = getCurrentCase(); if(!c || !c.linkedCase) return;
+  c.linkedCase.reason = reason;
+  renderCaseBody(c);
+}
+function linkRowHtml(c){
+  var prior = clientPriorCases(c);
+  var opts = '<option value="">（不关联）</option>'+prior.map(function(x){
+    return '<option value="'+x.id+'"'+(c.linkedCase&&c.linkedCase.caseId===x.id?' selected':'')+'>'+x.caseNo+' · '+caseStatusBadge(x)[2].split(' · ')[0]+'</option>';
+  }).join('');
+  var reasonSel = (c.linkedCase && c.linkedCase.caseId)
+    ? '<select onchange="setLinkReason(this.value)" style="margin-left:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">选择关联原因 *</option>'+
+      LINK_REASONS.map(function(r){ return '<option'+(c.linkedCase.reason===r?' selected':'')+'>'+r+'</option>'; }).join('')+'</select>' : '';
+  return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">关联之前案件</span><div style="flex-grow:1;">'+
+    '<select onchange="setLinkedCase(this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"'+(prior.length?'':' disabled')+'>'+opts+'</select>'+reasonSel+
+    (prior.length?'':'<span style="font-size:11px;color:var(--muted);margin-left:8px;">该客户没有以前的案件</span>')+
+    linkSuggestionHtml(c)+'</div></div>';
+}
+/* 确认基础资料时落实关联：复诊/延续既往面诊 → 把原案件的面诊报告复制进新案件附件 */
+function applyCaseLink(c){
+  if(!c.linkedCase || !c.linkedCase.caseId) { c.linkedCase = null; return; }
+  var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
+  logCaseEvent(c, 'Dewi', '关联之前案件 '+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'（'+c.linkedCase.reason+'）');
+  if(src && (c.linkedCase.reason==='复诊' || c.linkedCase.reason==='延续既往面诊')){
+    (src.consultFiles||[]).filter(function(f){ return f.label.indexOf('面诊报告')>-1; }).forEach(function(f){
+      c.linkedFiles.push({label:f.label+'（来自 '+src.caseNo+'）', date:attDate()});
+    });
+  }
+  renderCaseSubtitle(c);
+}
+/* 被关联案件里显示"后续关联案件"列表 */
+function relatedCasesHtml(c){
+  var followers = CASE_ITEMS.filter(function(x){ return x.linkedCase && x.linkedCase.caseId===c.id; });
+  if(!followers.length) return '';
+  return '<div class="card" style="padding:14px 24px;margin-top:12px;"><div class="info-heading" style="margin-bottom:8px;font-size:12px;">后续关联案件</div>'+
+    followers.map(function(x){
+      var b = caseStatusBadge(x);
+      return '<div class="case-field-row"><a href="#" class="info-link" onclick="openCaseDetail(\''+x.id+'\');return false;" style="flex-grow:1;">'+(x.caseNo||x.reservationId||x.id)+'</a>'+
+        '<span style="font-size:12px;color:var(--slate2);margin-right:10px;">'+x.linkedCase.reason+(x.linkedCase.auto?'（自动关联）':'')+'</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span></div>';
+    }).join('')+'</div>';
+}
 function materialsCardHtml(c){
   var metaviewText = c.metaviewStatus==='ready'
     ? '<span style="font-weight:700;color:var(--sage);">已检测到</span> <a href="#" class="info-link">查看报告 ↗</a>'
@@ -2751,6 +2844,7 @@ function materialsCardHtml(c){
   }).join('');
 
   return '<div class="card" style="padding:22px 24px;">'+
+    linkRowHtml(c)+
     '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
     '<div class="case-field-row"><span class="fk">上传照片 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="font-size:13px;">'+photoText+'</div><div style="font-size:11px;color:var(--muted);margin-top:3px;">规格：白底正面照，1200×1600px</div></div></div>'+
     '<div class="case-field-row"><span class="fk">上传视频 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+videoText+'</div></div>'+
@@ -2861,6 +2955,7 @@ function confirmMaterials(){
   if(!expectationVal) missing.push('希望预期');
   if(!(c.intentionProjects||[]).length) missing.push('意向项目');
   if(c.needsConsult!==true && c.needsConsult!==false) missing.push('面诊需求');
+  if(c.linkedCase && c.linkedCase.caseId && !c.linkedCase.reason) missing.push('关联原因');
   if(missing.length){
     c.materialsError = '还差 '+missing.join('、')+' 未完成，这几项是必填的';
     renderCaseBody(c);
@@ -2870,7 +2965,9 @@ function confirmMaterials(){
   c.expectation = expectationVal;
   c.materialsError = '';
   c.materialsConfirmed = true;
+  c.materialsDate = nowFullDt().split(' ')[0];
   c.caseNo = c.caseNo || generateCaseNo();
+  applyCaseLink(c);
   document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
   document.getElementById('case-chat-actions').style.display = 'flex';
   if(c.needsConsult===true){
@@ -2912,18 +3009,47 @@ function caseTabsHtml(c){
   if(c.localMgmt){
     tabs += '<span class="tab'+(c.activeCaseTab==='localmgmt'?' active':'')+'" onclick="switchCaseTab(\'localmgmt\')">本地管理</span>';
   }
-  if((c.consultFiles||[]).length){
+  if(c.caseNo){
     tabs += '<span class="tab'+(c.activeCaseTab==='attachments'?' active':'')+'" onclick="switchCaseTab(\'attachments\')">附件</span>';
   }
   return '<div class="tabs" style="margin-bottom:4px;">'+tabs+'</div>';
 }
+/* ---- 附件 tab（§7，2026-09-30）：生成 Case ID 之后出现；基础资料里的 메타뷰/照片/视频、关联案件带出的报告、手动上传、面诊阶段产生的文件统一放这里 ---- */
+function attDate(){ return nowFullDt().split(' ')[0].slice(2); } /* YY-MM-DD */
+function caseBaseDate(c){
+  var d = c.materialsDate || ((c.logEntries && c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : nowFullDt().split(' ')[0]);
+  return d.slice(2);
+}
+function caseAttachments(c){
+  var base = caseBaseDate(c), list = [];
+  if(c.metaviewStatus==='ready') list.push({src:'基础资料', label:'메타뷰 检测报告', date:base});
+  if(c.photoUploaded) list.push({src:'基础资料', label:'照片', date:base});
+  if(c.videoUploaded) list.push({src:'基础资料', label:'视频', date:base});
+  (c.linkedFiles||[]).forEach(function(f){ list.push({src:'基础资料', label:f.label, date:f.date||base}); });
+  (c.manualAttachments||[]).forEach(function(f){ list.push({src:f.src||'基础资料', label:f.label, date:f.date||base}); });
+  (c.consultFiles||[]).forEach(function(f){ list.push({src:'面诊资料', label:f.label, date:f.date||base}); });
+  return list;
+}
 function attachmentsTabHtml(c){
-  var files = c.consultFiles || [];
-  if(!files.length) return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">附件</div><div style="font-size:12px;color:var(--muted);">暂无附件</div></div>';
+  var files = caseAttachments(c);
   var rows = files.map(function(f){
-    return '<div class="case-field-row"><a href="#" class="info-link" style="text-decoration:underline;flex-grow:1;">'+f.label+'</a><span class="fa" style="gap:12px;"><span style="cursor:pointer;">⬇</span><span style="cursor:pointer;">👁</span></span></div>';
-  }).join('');
-  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">附件</div>'+rows+'</div>';
+    var tagBg = f.src==='面诊资料' ? 'var(--terracotta-bg)' : 'var(--blue-bg)';
+    var tagFg = f.src==='面诊资料' ? 'var(--terracotta)' : 'var(--blue)';
+    return '<div class="case-field-row"><span class="status-pill" style="background:'+tagBg+';color:'+tagFg+';font-size:10px;margin-right:8px;">'+f.src+'</span>'+
+      '<span style="flex-grow:1;font-size:13px;">'+f.label+'</span>'+
+      '<span style="font-size:12px;color:var(--muted);margin-right:14px;">'+f.date+'</span>'+
+      '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">下载</a><a href="#" class="info-link" onclick="return false;">查看</a></span></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无附件</div>';
+  return '<div class="card" style="padding:22px 24px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div class="info-heading">附件</div>'+
+    '<button class="btn-ghost" onclick="mockUploadAttachment()">+ 上传附件</button></div>'+rows+'</div>';
+}
+function mockUploadAttachment(){
+  var c = getCurrentCase(); if(!c) return;
+  c.manualAttachments = c.manualAttachments || [];
+  c.manualAttachments.push({label:'补充附件 '+(c.manualAttachments.length+1)+'.pdf', src: c.consultRequested ? '面诊资料' : '基础资料', date:attDate()});
+  logCaseEvent(c, 'Dewi', '上传了附件');
+  buildCaseLog(c);
+  renderCaseBody(c);
 }
 function consultIntentionCardHtml(c){
   return '<div class="card" style="padding:14px 24px;margin-bottom:12px;"><div class="info-heading" style="margin-bottom:8px;font-size:12px;">意向项目 / 预算（KR可见）</div>'+intentionInfoHtml(c)+'</div>';
@@ -2934,8 +3060,8 @@ function caseTabContentHtml(c){
   if(c.activeCaseTab==='projects' && c.projectsEnabled) return localRefundNoteHtml(c)+projectListTabHtml(c);
   if(c.activeCaseTab==='kr' && c.settlementDone && (c.procedureItems||[]).some(function(it){ return it.origin==='KR'; })) return krProcedureTabHtml(c);
   if(c.activeCaseTab==='localmgmt' && c.localMgmt) return localMgmtTabHtml(c);
-  if(c.activeCaseTab==='attachments' && (c.consultFiles||[]).length) return attachmentsTabHtml(c);
-  return basicTabHtml(c);
+  if(c.activeCaseTab==='attachments' && c.caseNo) return attachmentsTabHtml(c);
+  return basicTabHtml(c)+relatedCasesHtml(c);
 }
 
 /* 基础资料 tab：确认过的资料只读展示，各行带 查看/再上传 或 查看/修正 */
@@ -2943,9 +3069,6 @@ function basicTabHtml(c){
   var metaviewText = c.metaviewStatus==='ready' ? '已检测到' : '待检测';
   var consultLabel = c.needsConsult===true ? '面诊' : '不需要面诊';
   return '<div class="card" style="padding:4px 24px;">'+
-    '<div class="case-field-row"><span class="fk">메타뷰</span><span style="flex-grow:1;font-size:13px;">'+metaviewText+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="simulateMetaviewReady();return false;">再上传</a></span></div>'+
-    '<div class="case-field-row"><span class="fk">照片</span><span style="flex-grow:1;font-size:13px;">已上传</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="mockUpload(\'photo\');return false;">再上传</a></span></div>'+
-    '<div class="case-field-row"><span class="fk">视频</span><span style="flex-grow:1;font-size:13px;">已上传</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="mockUpload(\'video\');return false;">再上传</a></span></div>'+
     '<div class="case-field-row"><span class="fk">苦恼</span><span style="flex-grow:1;font-size:13px;">'+(c.concern||'—')+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="editConcernField(\'concern\');return false;">修正</a></span></div>'+
     '<div class="case-field-row"><span class="fk">期望</span><span style="flex-grow:1;font-size:13px;">'+(c.expectation||'—')+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="editConcernField(\'expectation\');return false;">修正</a></span></div>'+
     intentionInfoHtml(c)+
@@ -3258,7 +3381,12 @@ function submitHoldingsUse(scope){
     if(!checkEl || !checkEl.checked) return;
     var qty = parseInt(document.getElementById('hold-qty-'+scope+'-'+i).value, 10) || 0;
     if(qty<=0) return;
+    var srcIds = holdingSourceCaseIds(h, qty);
     var actual = useHolding(c.name, h.itemName, c.id, today, qty, scope);
+    if(actual>0 && h.category==='术后管理' && !c.linkedCase){
+      var srcId = srcIds.filter(function(id){ return id!==c.id; })[0];
+      if(srcId){ c.linkedCase = {caseId:srcId, reason:'术后管理', auto:true}; logCaseEvent(c, '系统', '使用了 '+caseNoLabel(srcId)+' 的术后管理项目，自动关联该案件'); renderCaseSubtitle(c); }
+    }
     if(actual>0){
       ctx.mgmtUses = ctx.mgmtUses || [];
       ctx.mgmtUses.push({itemName:h.itemName, qty:actual, date:today});
@@ -5238,7 +5366,7 @@ function secondConsultChanged(hasChange){
   if(hasChange){
     c.videoSummary = '二次面诊：方案有调整，建议追加评估其他部位。';
     c.consultFiles = c.consultFiles || [];
-    c.consultFiles.unshift({label:'二次面诊报告'});
+    c.consultFiles.unshift({label:'二次面诊报告',date:attDate()});
     c.reportUploadedBy = c.director;
     /* TODO(待确认)：二次面诊出新报告要不要也跟着刷新 krScope（赴韩可选范围），这轮指令没提到，先不动，
        需要更新的话现在有 simulateKrScopeUpdate() 可以手动往里加项目 */
