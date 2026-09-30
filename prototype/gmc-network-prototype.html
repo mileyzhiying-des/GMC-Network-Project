@@ -854,6 +854,41 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 退款 MODAL（2026-09-30：取代 confirm()，退款原因必填） ============ -->
+<div class="modal-overlay" id="refund-overlay" onclick="if(event.target===this) closeRefundModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">退款</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRefundModal()">✕</span>
+    </div>
+    <div id="refund-items" style="margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeRefundModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmRefund()">确认退款</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 模拟KR标记无法施术 MODAL（2026-09-30 演示） ============ -->
+<div class="modal-overlay" id="kr-unable-overlay" onclick="if(event.target===this) closeKrUnableModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记无法施术</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrUnableModal()">✕</span>
+    </div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">勾选无法施术的项目</div>
+    <div id="kr-unable-items" style="margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="kr-unable-reason" rows="3" placeholder="请填写无法施术的原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeKrUnableModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="submitKrUnable()">确认标记</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ INVITE Kr室长 MODAL（不含院长，只选室长） ============ -->
 <div class="modal-overlay" id="invite-kr-overlay" onclick="if(event.target===this) closeInviteKrModal()">
   <div class="modal-box">
@@ -3180,21 +3215,77 @@ function addMoreProjects(){
 function cancelProcedureItem(i){
   var c = getCurrentCase(); if(!c) return;
   var it = c.procedureItems[i]; if(!it || it.done || it.origin!=='KR') return;
-  var refund = Math.round(it.price*KR_DEPOSIT_RATE);
-  if(!confirm('取消项目"'+it.name+'"并退款 '+formatCurrency(refund,'KRW')+' 吗？（赴韩项目只退已收的预付金）')) return;
-  c.procedureItems.splice(i,1);
-  c.hadPartialCancel = true;
-  logCaseEvent(c, 'Dewi', '取消项目"'+it.name+'"，退款 '+formatCurrency(refund,'KRW'));
+  openRefundModal([it]);
+}
+/* 退款弹窗（2026-09-30）：退款原因必填，部分退/全部退都要填；items 为要退的赴韩项目对象（按引用） */
+var REFUND_PENDING_ITEMS = [];
+function openRefundModal(items){
+  REFUND_PENDING_ITEMS = items;
+  document.getElementById('refund-items').innerHTML = items.map(function(it){
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+'</span><span style="font-size:13px;font-weight:700;">退 '+formatCurrency(Math.round(it.price*KR_DEPOSIT_RATE),'KRW')+'</span></div>';
+  }).join('')+'<div style="font-size:11px;color:var(--muted);margin-top:6px;">赴韩项目只退已收的预付金</div>';
+  document.getElementById('refund-reason').value = '';
+  document.getElementById('refund-overlay').classList.add('open');
+}
+function closeRefundModal(){ document.getElementById('refund-overlay').classList.remove('open'); }
+function confirmRefund(){
+  var c = getCurrentCase(); if(!c) return;
+  var reason = document.getElementById('refund-reason').value.trim();
+  if(!reason){ alert('请填写退款原因'); return; }
+  REFUND_PENDING_ITEMS.forEach(function(it){
+    var idx = c.procedureItems.indexOf(it); if(idx<0) return;
+    var refund = Math.round(it.price*KR_DEPOSIT_RATE);
+    c.procedureItems.splice(idx,1);
+    c.hadPartialCancel = true;
+    logCaseEvent(c, 'Dewi', '取消项目"'+it.name+'"，退款 '+formatCurrency(refund,'KRW')+'，退款原因：'+reason);
+  });
+  REFUND_PENDING_ITEMS = [];
+  closeRefundModal();
   var remaining = c.procedureItems;
   if(!remaining.some(function(x){ return x.origin==='KR'; })) c.krSchedule = null; /* 没有赴韩项目了，清掉排期，赴韩施术tab自然跟着隐藏 */
   if(remaining.length===0){
     c.cancelReason = '全额退款';
     logCaseEvent(c, 'Dewi', '全部项目均已取消退款，案件转为已取消（全额退款）');
   }
+  /* KR标记无法施术的提示：已退款的项目从中移除，处理完就清掉 */
+  if(c.krUnable){
+    c.krUnable.items = c.krUnable.items.filter(function(n){ return remaining.some(function(x){ return x.name===n; }); });
+    if(!c.krUnable.items.length) c.krUnable = null;
+  }
   updateCaseStage(c);
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
+}
+/* 演示：模拟KR标记无法施术（2026-09-30）——勾选项目+填原因，只在赴韩施术tab顶部提示，不改案件状态 */
+function simulateKrMarkUnable(){
+  var c = getCurrentCase(); if(!c) return;
+  var krItems = (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.done; });
+  if(!krItems.length){ alert('没有可标记的未完成赴韩项目'); return; }
+  document.getElementById('kr-unable-items').innerHTML = krItems.map(function(it,k){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;"><input type="checkbox" class="kr-unable-cb" value="'+it.name.replace(/"/g,'&quot;')+'"> '+it.name+'</label>';
+  }).join('');
+  document.getElementById('kr-unable-reason').value = '';
+  document.getElementById('kr-unable-overlay').classList.add('open');
+}
+function closeKrUnableModal(){ document.getElementById('kr-unable-overlay').classList.remove('open'); }
+function submitKrUnable(){
+  var c = getCurrentCase(); if(!c) return;
+  var names = Array.prototype.slice.call(document.querySelectorAll('.kr-unable-cb')).filter(function(x){ return x.checked; }).map(function(x){ return x.value; });
+  var reason = document.getElementById('kr-unable-reason').value.trim();
+  if(!names.length){ alert('请至少勾选一个项目'); return; }
+  if(!reason){ alert('请填写原因'); return; }
+  c.krUnable = {items:names, reason:reason, at:nowFullDt()};
+  logCaseEvent(c, '김민석 원장', 'KR标记无法施术：'+names.join('、')+'；原因：'+reason);
+  closeKrUnableModal();
+  buildCaseLog(c);
+  renderCaseBody(c);
+}
+function openKrUnableRefund(){
+  var c = getCurrentCase(); if(!c || !c.krUnable) return;
+  var items = (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.done && c.krUnable.items.indexOf(it.name)>-1; });
+  if(!items.length){ c.krUnable = null; renderCaseBody(c); return; }
+  openRefundModal(items);
 }
 /* "已到医院"：等待施术→赴韩施术中的触发点，只在赴韩施术tab里 krSchedule 已确认时可用（2026-09-29 改） */
 /* 选中/取消项目时把项目库当时的名字/价格/来源复制一份存进案件（快照）；
@@ -3611,7 +3702,13 @@ function krProcedureTabHtml(c){
         '<span class="status-pill" style="background:'+(it.done?'var(--sage-bg)':'var(--terracotta-bg)')+';color:'+(it.done?'var(--sage)':'var(--terracotta)')+';">'+(it.done?'已完成':'未完成')+'</span></div>';
     }).join('')+
     '</div>';
-  return '<div class="card" style="padding:22px 24px;">'+body+itemsHtml+'</div>';
+  var unableBanner = c.krUnable
+    ? '<div style="background:#FBEDEA;border:1px solid #C1454A;border-radius:10px;padding:12px 14px;margin-bottom:16px;"><div style="font-size:13px;font-weight:700;color:#C1454A;">KR已标记无法施术，请处理退款</div>'+
+      '<div style="font-size:12px;color:var(--slate2);margin-top:4px;">项目：'+c.krUnable.items.join('、')+'　原因：'+c.krUnable.reason+'</div>'+
+      '<button class="btn-primary" style="margin-top:10px;" onclick="openKrUnableRefund()">处理退款</button></div>'
+    : '';
+  var unableBtn = (ks && ks.status==='confirmed' && !c.visitClosed) ? '<div style="margin-top:12px;"><button class="btn-ghost" onclick="simulateKrMarkUnable()">演示：模拟KR标记无法施术</button></div>' : '';
+  return '<div class="card" style="padding:22px 24px;">'+unableBanner+body+itemsHtml+unableBtn+'</div>';
 }
 function simulateKrProjectSwap(){
   var c = getCurrentCase(); if(!c) return;

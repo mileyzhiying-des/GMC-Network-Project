@@ -73,6 +73,10 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   6. ~~本地管理到店事件复用日历 `type:'post'`~~ —— 2026-09-30 第十轮已按明确指令废止："不再使用'术后管理'事件类型"，改走"预约来访"开新案件，这条判断随旧实现一起作废。
   7. `KR_DEPOSIT_RATE` 沿用现有0.3，不改（这个本来就是待确认项，一直没碰）。
   8. "仅出报告"终态仍然没有活的触发路径——`docs/open-questions.md` 第3条持续待确认。
+- 【待确认，2026-09-30（第十一轮）新增】"退款原因+模拟KR标记无法施术"里几处是我的实现判断：
+  1. 原型原本没有退款弹窗（用 `confirm()`），我新建了 `#refund-overlay`，退款原因必填、写入 Timeline，不存独立字段；入口有两个：结算区"取消退款"链接、赴韩施术tab顶部提示的"处理退款"。
+  2. `c.krUnable={items,reason,at}` 是我新加的字段；无法施术项目只能从未完成的赴韩项目里选；演示按钮在 `krSchedule.status==='confirmed'` 且未结案时显示；标记不改案件主状态，退款处理完自动清掉。
+  3. "无法协调"（`cannotCoordinateKrSchedule`）没加退款原因，指令未提。
 - 【待确认，2026-09-30（第十轮）新增】"持有项目/案件结案/赴韩施术调整"指令里几处是我的实现判断，不是业务方指定：
   1. 术后管理演示项目（术后消肿护理1次/术后疤痕修复护理1次）及价格是我编的demo数据；"模拟KR补加术后管理项目"固定选项目库里第一个可用的术后管理项目，这个"选哪个"的逻辑也是我的判断——已记入 `docs/open-questions.md` 第5条。
   2. "术后管理"项目虽然归类本地项目，但选购限制我实现成和赴韩项目一样"只能从krScope里选"，且和赴韩项目共用同一个 `krScope.items` 数组（按 `categoryId` 区分二者），不是分开两个字段存——这是我对数据结构的选择，不是业务方指定的存储方式。
@@ -137,6 +141,8 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   11. demo案例大改：`yuni` 补 `entryChoicePending`+`projectEntryMode:'new'`；`nadia`/`dinda` 补 `krSchedule`/`krBalancePaid`；`rizky` 从"本地管理中"改成"管理进行中"（待用持有项目，procedureItems清空，改用`CLIENT_HOLDINGS`种子数据）；`rina` 补齐KR字段+挪本地项目到持有种子；`wulan` 从本地项目部分退款改写成赴韩项目部分退款演示。新增 `seedDemoHoldings()` 给 `rizky`/`rina` 写持有种子数据。
   12. `docs/case-management-flow.md`/`docs/business-rules.md` 按 Notion 当天版整篇重写，`docs/open-questions.md` 解决第3条（改期粒度）、新增第4、5条待确认，之前"已有案件内到访"那条已解决记录追加了"后来被第十轮废止重做"的说明。
   判断点见上面"已知差距"。
+
+- 2026-09-30（第十一轮，退款原因+模拟KR标记无法施术）：新增退款弹窗（`openRefundModal`/`confirmRefund`，退款原因必填，取代 `confirm()`）；新增演示按钮"模拟KR标记无法施术"（`simulateKrMarkUnable`/`submitKrUnable`/`openKrUnableRefund`），赴韩施术tab顶部显示"KR已标记无法施术，请处理退款"；部分退其余照常、全退转已取消（全额退款）；未新增"术前评估"状态。判断点见上面"已知差距"。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
 - 涉及业务规则的改动，先对一遍 Domain Knowledge / Open Questions 有没有冲突，有冲突要先问，不要悄悄按自己理解改
