@@ -457,6 +457,22 @@ input,textarea,select{font-family:inherit;}
   </div>
 </section>
 
+<!-- ============ IN: DIRECTOR DETAIL (院长详情，从案例库卡片点院长名进入) ============ -->
+<section class="page in-shell" id="in-director" data-page="library" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar" style="justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a></div>
+    </div>
+    <div class="content">
+      <div id="director-detail-name" style="font-size:22px;font-weight:700;margin-bottom:14px;"></div>
+      <div class="card" style="padding:4px 24px;" id="director-detail-info"></div>
+      <div style="font-size:14px;font-weight:700;margin:22px 0 12px;">名下案例</div>
+      <div id="director-detail-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;"></div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ IN: PROJECT LIBRARY (项目库) ============ -->
 <section class="page in-shell" id="in-projectlibrary" data-page="projects" style="display:none;">
   <div class="sidebar-slot"></div>
@@ -1665,7 +1681,10 @@ function confirmHoldingRefund(){
 }
 /* 本院项目记录（2026-09-29 第十轮新增）：本地项目读CLIENT_HOLDINGS，赴韩项目读各案件procedureItems；
    按项目名分组，每个项目可展开看购买批次，批次里再看每次使用的案件+日期 */
+var PROJ_HIST_NAME = null, PROJ_HIST_TAB = {};
+function setProjHistTab(gi, tab){ PROJ_HIST_TAB[gi] = tab; renderProjectHistory(PROJ_HIST_NAME); var el = document.getElementById('proj-hist-'+gi); if(el) el.style.display='block'; }
 function renderProjectHistory(name){
+  PROJ_HIST_NAME = name;
   var el = document.getElementById('project-history-list');
   if(!el) return;
   var groups = {};
@@ -1688,13 +1707,20 @@ function renderProjectHistory(name){
       var cc = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
       return cc && cc.caseNo ? cc.caseNo : caseId;
     }
+    /* 2026-09-30：每个项目展开后用 tab 切换「购买批次」和「使用明细」，不再默认全部展开 */
+    var tab = PROJ_HIST_TAB[gi] || 'batches';
     var batchRows = g.batches.map(function(b){
       var usedText = g.origin==='KR' ? (b.used>0?'已完成 1/1':'未完成 0/1') : ('已用 '+b.used+'/'+b.bought);
-      var usagesHtml = b.usages.length ? '<div style="margin-left:16px;margin-top:4px;">'+b.usages.map(function(u){
-        return '<div style="font-size:11px;color:var(--muted);">↳ '+u.date+' · <a href="#" class="info-link" onclick="openCaseDetail(\''+u.caseId+'\');return false;">'+caseLabel(u.caseId)+'</a> · 用了 '+u.qty+'次</div>';
-      }).join('')+'</div>' : '';
-      return '<div style="padding:6px 0;font-size:12px;">'+b.date+' · 购买 <a href="#" class="info-link" onclick="openCaseDetail(\''+b.caseId+'\');return false;">'+caseLabel(b.caseId)+'</a> · '+usedText+(b.refund?' · <span style="color:var(--terracotta);font-weight:700;">已退款 '+formatCurrency(b.refund.amount,'IDR')+'（'+b.refund.reason+'）</span>':'')+usagesHtml+'</div>';
+      return '<div style="padding:6px 0;font-size:12px;">'+b.date+' · 购买 <a href="#" class="info-link" onclick="openCaseDetail(\''+b.caseId+'\');return false;">'+caseLabel(b.caseId)+'</a> · '+usedText+(b.refund?' · <span style="color:var(--terracotta);font-weight:700;">已退款 '+formatCurrency(b.refund.amount,'IDR')+'（'+b.refund.reason+'，整批作废）</span>':'')+'</div>';
     }).join('');
+    var usageRows = [];
+    g.batches.forEach(function(b){ b.usages.forEach(function(u){ usageRows.push(u); }); });
+    usageRows.sort(function(a,b){ return a.date<b.date?-1:1; });
+    var usageHtml = usageRows.map(function(u){
+      return '<div style="padding:6px 0;font-size:12px;">'+u.date+' · <a href="#" class="info-link" onclick="openCaseDetail(\''+u.caseId+'\');return false;">'+caseLabel(u.caseId)+'</a> · 用了 '+u.qty+' 次</div>';
+    }).join('') || '<div style="font-size:12px;color:var(--muted);padding:6px 0;">暂无使用记录</div>';
+    var tabsHtml = '<div style="display:flex;gap:8px;margin:6px 0;"><span class="chip'+(tab==='batches'?' active':'')+'" onclick="setProjHistTab('+gi+',\'batches\')">购买批次</span><span class="chip'+(tab==='usages'?' active':'')+'" onclick="setProjHistTab('+gi+',\'usages\')">使用明细</span></div>';
+    batchRows = tabsHtml + (tab==='batches' ? batchRows : usageHtml);
     return '<div class="field-row" style="flex-direction:column;align-items:flex-start;">'+
       '<div style="display:flex;width:100%;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleProjHistory('+gi+')"><span class="fk">'+n+'</span><span style="font-size:11px;color:var(--slate);">'+g.batches.length+' 批 ▾</span></div>'+
       '<div id="proj-hist-'+gi+'" style="display:none;width:100%;">'+batchRows+'</div>'+
@@ -4019,14 +4045,20 @@ function krScheduleMonthShift(dir){
   KR_SCHED_VIEW_MONTH = new Date(KR_SCHED_VIEW_MONTH.getFullYear(), KR_SCHED_VIEW_MONTH.getMonth()+dir, 1);
   var c = getCurrentCase(); if(c) renderCaseBody(c);
 }
-function pickKrDate(field, y, m, d){
+/* 合并月历（2026-09-30）：首选和备选共用一个月历——第一次点击是首选，第二次点击是备选（不同颜色），再点一次已选日期取消；
+   pf/bf 是存放首选/备选的字段名（首次递交：primary/backup；修改日期：changePrimary/changeBackup） */
+function pickKrDate(pf, bf, y, m, d){
   var dateStr = fmtDateYMD(y,m,d);
   if(KR_OPEN_DATES.indexOf(dateStr)===-1) return; /* 未开放的日期不可选 */
   var c = getCurrentCase(); if(!c) return;
-  ensureKrScheduleDraft(c)[field] = dateStr;
+  var ks = ensureKrScheduleDraft(c);
+  if(ks[pf]===dateStr) ks[pf] = '';
+  else if(ks[bf]===dateStr) ks[bf] = '';
+  else if(!ks[pf]) ks[pf] = dateStr;
+  else ks[bf] = dateStr; /* 已有首选：点击第二个日期是备选；备选已有时再点别的日期会替换备选 */
   renderCaseBody(c);
 }
-function krDateCalendarGridHtml(field, selectedValue){
+function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
   var y = KR_SCHED_VIEW_MONTH.getFullYear(), m = KR_SCHED_VIEW_MONTH.getMonth();
   var firstDow = new Date(y,m,1).getDay();
   var daysInMonth = new Date(y,m+1,0).getDate();
@@ -4034,18 +4066,19 @@ function krDateCalendarGridHtml(field, selectedValue){
   for(var i=0;i<firstDow;i++) cells.push(null);
   for(var d=1; d<=daysInMonth; d++) cells.push(d);
   var dowLabels = ['日','一','二','三','四','五','六'];
-  return '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:12px;">'+
-    dowLabels.map(function(w){ return '<div style="color:var(--muted);padding:4px 0;">'+w+'</div>'; }).join('')+
+  var legend = '<div style="display:flex;gap:12px;font-size:11px;color:var(--slate2);margin-bottom:6px;"><span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--navy);margin-right:4px;"></span>首选'+(primaryVal?'：'+primaryVal:'')+'</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--terracotta);margin-right:4px;"></span>备选（选填）'+(backupVal?'：'+backupVal:'')+'</span></div>';
+  return legend+'<div style="max-width:280px;display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:11px;">'+
+    dowLabels.map(function(w){ return '<div style="color:var(--muted);padding:2px 0;">'+w+'</div>'; }).join('')+
     cells.map(function(d){
       if(!d) return '<div></div>';
       var dateStr = fmtDateYMD(y,m,d);
       var open = KR_OPEN_DATES.indexOf(dateStr)>-1;
-      var selected = dateStr===selectedValue;
-      var style = 'padding:8px 0;border-radius:8px;';
+      var style = 'padding:5px 0;border-radius:6px;';
       if(!open) style += 'color:var(--dim);';
-      else if(selected) style += 'background:var(--navy);color:#fff;font-weight:700;cursor:pointer;';
+      else if(dateStr===primaryVal) style += 'background:var(--navy);color:#fff;font-weight:700;cursor:pointer;';
+      else if(dateStr===backupVal) style += 'background:var(--terracotta);color:#fff;font-weight:700;cursor:pointer;';
       else style += 'color:var(--navy);cursor:pointer;background:var(--sage-bg);';
-      var onclick = open ? ' onclick="pickKrDate(\''+field+'\','+y+','+m+','+d+')"' : '';
+      var onclick = open ? ' onclick="pickKrDate(\''+pf+'\',\''+bf+'\','+y+','+m+','+d+')"' : '';
       return '<div style="'+style+'"'+onclick+'>'+d+'</div>';
     }).join('')+
     '</div>';
@@ -4209,10 +4242,8 @@ function krProcedureTabHtml(c){
     body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">只能选择KR室长已开放的日期（浅色为未开放）</div>'+
       monthNav+
-      '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">首选日期'+(ks.primary?'：'+ks.primary:'')+'</div>'+
-      krDateCalendarGridHtml('primary', ks.primary)+
-      '<div style="font-size:12px;font-weight:700;margin:14px 0 6px;">备选日期（选填）'+(ks.backup?'：'+ks.backup:'')+'</div>'+
-      krDateCalendarGridHtml('backup', ks.backup)+
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">第一次点击选首选，第二次点击选备选，再点一次已选日期取消选择</div>'+
+      krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+
       '<button class="btn-primary" style="width:100%;margin-top:16px;" onclick="submitKrScheduleDate()">递交施术日期</button>';
   } else if(ks.status==='pending'){
     body = '<div class="info-heading" style="margin-bottom:8px;">待确认施术时间</div>'+
@@ -4245,10 +4276,8 @@ function krProcedureTabHtml(c){
       body = '<div class="info-heading" style="margin-bottom:8px;">修改施术日期</div>'+
         '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">原定 '+ks.confirmedDate+' '+ks.confirmedTime+'，请选择新的日期</div>'+
         monthNav+
-        '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">新首选日期'+(ks.changePrimary?'：'+ks.changePrimary:'')+'</div>'+
-        krDateCalendarGridHtml('changePrimary', ks.changePrimary)+
-        '<div style="font-size:12px;font-weight:700;margin:14px 0 6px;">新备选日期（选填）'+(ks.changeBackup?'：'+ks.changeBackup:'')+'</div>'+
-        krDateCalendarGridHtml('changeBackup', ks.changeBackup)+
+        '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">第一次点击选新首选，第二次点击选新备选，再点一次已选日期取消选择</div>'+
+        krDateCalendarGridHtml('changePrimary','changeBackup', ks.changePrimary, ks.changeBackup)+
         '<div style="display:flex;gap:10px;margin-top:16px;">'+
         '<button class="btn-primary" style="flex-grow:1;" onclick="submitKrScheduleChangeDate()">提交新日期</button>'+
         '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button>'+
@@ -4463,16 +4492,24 @@ var LIB_NODES = {
   'local-issue':{id:'local-issue', label:'问题', parentId:'local', fixed:true},
   'local-product':{id:'local-product', label:'产品', parentId:'local', fixed:true}
 };
-/* 【判断】"院长"这一档节点只从 DIRECTOR_LIST（预约改期用的院长下拉）复制一次种子数据，
-   之后完全独立维护——这边改名/删除不会影响预约改期用的那份，反过来也不会。是否要做成两边联动，待你确认。 */
+/* 院长节点（2026-09-30）：直接读 DIRECTOR_LIST，不各自维护（院长名单以后由韩国端维护），节点在案例库里不可改名/删除 */
+function syncDirectorNodes(){
+  var keep = {};
+  DIRECTOR_LIST.forEach(function(n){ keep['dir:'+n] = true; });
+  Object.keys(LIB_NODES).forEach(function(id){ if(LIB_NODES[id].isDirectorNode && !keep[id]) delete LIB_NODES[id]; });
+  DIRECTOR_LIST.forEach(function(n){
+    var id = 'dir:'+n;
+    if(!LIB_NODES[id]) LIB_NODES[id] = {id:id, label:n, parentId:'travel-director', fixed:true, isDirectorNode:true};
+    else LIB_NODES[id].label = n;
+  });
+}
 var LIB_PART_IDS = {};
 ['鼻子','眼睛','额头','下巴','颧骨','颞骨','下颌线/下颌角','皮肤管理','身体'].forEach(function(name){
   LIB_PART_IDS[name] = addLibNode(name, 'travel-part');
 });
 var LIB_DIRECTOR_IDS = {};
-DIRECTOR_LIST.forEach(function(name){
-  LIB_DIRECTOR_IDS[name] = addLibNode(name, 'travel-director', {isDirectorNode:true});
-});
+DIRECTOR_LIST.forEach(function(name){ LIB_DIRECTOR_IDS[name] = 'dir:'+name; });
+syncDirectorNodes();
 /* 问题/产品初始为空，业务方还没给种子数据 */
 
 var LIB_CASE_SEQ = 1;
@@ -4580,8 +4617,11 @@ function renderLibNodeActionModal(){
   var a = LIB_NODE_ACTION; if(!a) return;
   var node = LIB_NODES[a.sourceId];
   var affected = LIB_CASES.filter(function(c){ return (c.tagIds||[]).indexOf(a.sourceId)>-1; });
-  /* 【判断】目标节点只能在同一个第2级分类下选（比如"部位"只能改到别的"部位"），不支持跨类目合并 */
-  var siblings = nodeChildren(node.parentId).filter(function(n){ return n.id!==a.sourceId; });
+  /* 2026-09-30：支持跨类目合并——目标可以是同一来源（赴韩施术/印尼管理）下任意其他类目的节点（如"问题"→"产品"），不含院长节点 */
+  var srcRoot = nodeRootSource(a.sourceId);
+  var siblings = Object.keys(LIB_NODES).map(function(id){ return LIB_NODES[id]; }).filter(function(n){
+    return n.id!==a.sourceId && !n.fixed && !n.isDirectorNode && nodeRootSource(n.id)===srcRoot;
+  });
   document.getElementById('lib-node-action-title').textContent = (a.mode==='delete'?'删除节点 · ':'批量更改标签 · ')+node.label;
   var html = '<div style="font-size:12px;color:var(--slate2);margin-bottom:14px;">"'+node.label+'"名下有 '+affected.length+' 个案例</div>';
   if(a.mode==='delete'){
@@ -4594,7 +4634,8 @@ function renderLibNodeActionModal(){
     html += '<div style="font-size:12px;color:var(--slate2);margin-bottom:8px;">选择目标节点：</div>'+
       '<div style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow:auto;margin-bottom:16px;">'+
       (siblings.length ? siblings.map(function(n){
-        return '<button class="'+(a.targetId===n.id?'btn-primary':'btn-outline')+'" style="text-align:left;" onclick="setLibNodeActionTarget(\''+n.id+'\')">'+n.label+'</button>';
+        var catLabel = LIB_NODES[n.parentId] ? LIB_NODES[n.parentId].label+' · ' : '';
+        return '<button class="'+(a.targetId===n.id?'btn-primary':'btn-outline')+'" style="text-align:left;" onclick="setLibNodeActionTarget(\''+n.id+'\')">'+catLabel+n.label+'</button>';
       }).join('') : '<div style="font-size:12px;color:var(--muted);">没有其他可选节点，请先新增一个再回来操作</div>')+
       '</div>';
   }
@@ -4636,7 +4677,7 @@ function renderLibFilters(){
 
   if(LIB_FILTER.l2!=='all'){
     var l3Options = nodeChildren(LIB_FILTER.l2);
-    var canEditL3 = libCanEdit(nodeRootSource(LIB_FILTER.l2));
+    var canEditL3 = libCanEdit(nodeRootSource(LIB_FILTER.l2)) && LIB_FILTER.l2!=='travel-director'; /* 院长节点由 DIRECTOR_LIST 决定，这里不可编辑 */
     var l3Html = '<span class="chip'+(LIB_FILTER.l3==='all'?' active':'')+'" onclick="setLibFilter(3,\'all\')">全部</span>'+
       l3Options.map(function(n){
         var mgmt = canEditL3
@@ -4677,10 +4718,10 @@ function libCardHtml(c){
   if(c.source==='travel'){
     var dName = libDirectorName(c);
     directorRow = dName
-      ? '<div style="font-size:11px;color:var(--slate2);cursor:pointer;" onclick="filterLibByDirector(\''+c.directorNodeId+'\')">院长：<span style="text-decoration:underline;">'+dName+'</span></div>'
+      ? '<div style="font-size:11px;color:var(--slate2);cursor:pointer;" onclick="openDirectorDetail(\''+c.directorNodeId+'\')">院长：<span style="text-decoration:underline;">'+dName+'</span></div>'
       : '<div style="font-size:11px;color:var(--muted);">院长：-</div>';
   }
-  var editBtn = libCanEdit(c.source) ? '<a href="#" class="info-link" onclick="openLibCaseModal(\''+c.id+'\');return false;">编辑</a>' : '';
+  var editBtn = libCanEdit(c.source) ? '<span style="display:flex;gap:10px;"><a href="#" class="info-link" onclick="openLibCaseModal(\''+c.id+'\');return false;">编辑</a><a href="#" class="info-link" style="color:#C1454A;" onclick="deleteLibCase(\''+c.id+'\');return false;">删除</a></span>' : '';
   return '<div class="card" style="overflow:hidden;">'+imgHtml+
     '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:5px;">'+
     '<b style="font-size:13px;">'+c.title+'</b>'+
@@ -4690,12 +4731,43 @@ function libCardHtml(c){
     '<span class="status-pill" style="background:'+srcColor[0]+';color:'+srcColor[1]+';">'+srcLabel+'</span>'+editBtn+
     '</div></div></div>';
 }
+/* 案例删除（2026-09-30）：删除前二次确认 */
+function deleteLibCase(id){
+  var c = LIB_CASES.filter(function(x){ return x.id===id; })[0]; if(!c || !libCanEdit(c.source)) return;
+  if(!confirm('确认删除案例"'+c.title+'"？删除后不可恢复。')) return;
+  LIB_CASES = LIB_CASES.filter(function(x){ return x.id!==id; });
+  renderLibrary();
+  if(CURRENT_PAGE_ID==='in-director') renderDirectorDetail();
+}
+/* 院长详情页（2026-09-30，基础版）：院长基本信息 + 这位院长名下的案例列表；信息全部由已有数据统计得出，没有另编内容 */
+var DIRECTOR_DETAIL_NODE = null;
+function openDirectorDetail(nodeId){
+  DIRECTOR_DETAIL_NODE = nodeId;
+  renderDirectorDetail();
+  nav('in-director');
+}
+function renderDirectorDetail(){
+  var n = LIB_NODES[DIRECTOR_DETAIL_NODE]; if(!n) return;
+  var cases = LIB_CASES.filter(function(c){ return c.directorNodeId===n.id; });
+  var parts = {};
+  cases.forEach(function(c){ (c.tagIds||[]).forEach(function(t){ if(LIB_NODES[t] && LIB_NODES[t].parentId==='travel-part') parts[LIB_NODES[t].label] = (parts[LIB_NODES[t].label]||0)+1; }); });
+  var caseCount = CASE_ITEMS.filter(function(c){ return c.director===n.label; }).length;
+  document.getElementById('director-detail-name').textContent = n.label;
+  document.getElementById('director-detail-info').innerHTML =
+    '<div class="field-row"><span class="fk">姓名</span><span class="fv">'+n.label+'</span></div>'+
+    '<div class="field-row"><span class="fk">职称</span><span class="fv">院长</span></div>'+
+    '<div class="field-row"><span class="fk">案例库案例数</span><span class="fv">'+cases.length+'</span></div>'+
+    '<div class="field-row"><span class="fk">对接案件数</span><span class="fv">'+caseCount+'</span></div>'+
+    '<div class="field-row" style="border-bottom:none;"><span class="fk">擅长部位（按案例统计）</span><span class="fv">'+(Object.keys(parts).map(function(k){ return '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);margin-right:4px;">'+k+' × '+parts[k]+'</span>'; }).join('') || '—')+'</span></div>';
+  document.getElementById('director-detail-grid').innerHTML = cases.length ? cases.map(libCardHtml).join('') : '<div style="grid-column:1/-1;font-size:12px;color:var(--muted);padding:20px 4px;">这位院长名下暂无案例</div>';
+}
 function renderLibGrid(){
   var el = document.getElementById('lib-grid'); if(!el) return;
   var items = LIB_CASES.filter(caseMatchesFilter);
   el.innerHTML = items.length ? items.map(libCardHtml).join('') : '<div style="grid-column:1/-1;font-size:12px;color:var(--muted);padding:20px 4px;">没有符合条件的案例</div>';
 }
 function renderLibrary(){
+  syncDirectorNodes();
   var sel = document.getElementById('lib-role-select'); if(sel) sel.value = DEMO_ROLE;
   var addBtn = document.getElementById('lib-add-btn');
   if(addBtn) addBtn.textContent = DEMO_ROLE==='in' ? '+ 新增案例（印尼管理）' : '+ 新增案例（赴韩施术）';
