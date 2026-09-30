@@ -779,7 +779,7 @@ input,textarea,select{font-family:inherit;}
       </div>
       <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
         <span style="cursor:pointer;" onclick="toggleFloatSearch()">🔍</span>
-        <span style="cursor:pointer;" onclick="alert('菜单：查看成员 / 静音通知 / 导出记录（原型示例）')">☰</span>
+        <span style="cursor:pointer;" title="成员" onclick="openRoomMembers()">☰</span>
         <span style="cursor:pointer;" onclick="closeFloat()">✕</span>
       </div>
     </div>
@@ -941,6 +941,34 @@ input,textarea,select{font-family:inherit;}
       <button class="btn-outline" style="flex:1;" onclick="closeWaiveFeeModal()">取消</button>
       <button class="btn-primary" style="flex:1;" onclick="confirmWaiveFee()">确认免除</button>
     </div>
+  </div>
+</div>
+
+<!-- ============ 引用消息到案件 MODAL（2026-09-30，Conversation & Video Flow 入口3） ============ -->
+<div class="modal-overlay" id="quote-overlay" onclick="if(event.target===this) closeQuoteModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">引用到案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeQuoteModal()">✕</span>
+    </div>
+    <div id="quote-preview" style="font-size:12px;color:var(--slate2);background:var(--border2);border-radius:8px;padding:8px 10px;margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">选择案件（只能选已有 Case ID 的案件）</div>
+    <div id="quote-case-list" style="max-height:220px;overflow:auto;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeQuoteModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmQuote()">确认引用</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 对话房成员 MODAL（2026-09-30） ============ -->
+<div class="modal-overlay" id="room-members-overlay" onclick="if(event.target===this) closeRoomMembers()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;" id="room-members-title">成员</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRoomMembers()">✕</span>
+    </div>
+    <div id="room-members-body"></div>
   </div>
 </div>
 
@@ -5577,24 +5605,97 @@ function renderFloatMessages(){
   var msgs = CHAT_DATA[CURRENT_ROOM] || [];
   var html = '';
   var lastDay = null;
-  msgs.forEach(function(m){
+  msgs.forEach(function(m,i){
     if(q && (m.orig||'').toLowerCase().indexOf(q)===-1) return;
     if(m.day !== lastDay){ html += '<div class="day-divider">'+m.day+'</div>'; lastDay = m.day; }
-    if(m.kind==='card'){
+    var qLink = CURRENT_ROOM.indexOf('case-')===0 ? '' : ' <a href="#" class="info-link" style="font-size:10px;" onclick="openQuoteModal('+i+');return false;">引用到案件</a>';
+    if(m.kind==='quote'){
+      /* 被引用的消息在案件房里显示为「发言人：YY-MM-DD HH:MM 「来源房间」 "内容"」 */
+      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me" style="background:var(--border2);color:var(--slate2);border-left:3px solid var(--terracotta);">'+m.speaker+'：'+m.srcDt+' 「'+m.srcRoom+'」 "'+m.orig+'"</div><span class="bubble-trans" style="text-align:right;">引用于 '+m.time+'</span></div></div>';
+    } else if(m.kind==='card'){
       var cardHtml = '<div class="chat-card"><div class="chat-card-title">'+m.card.project+'预约</div>'+
         '<div class="chat-card-row"><span>姓名</span><b>'+m.card.name+'</b></div>'+
         '<div class="chat-card-row"><span>项目</span><b>'+m.card.project+'</b></div>'+
         '<div class="chat-card-row"><span>预约时间</span><b>'+m.card.time+'</b></div></div>';
       html += '<div class="bubble-row them"><span class="bubble-avt" style="background:'+m.color+';">'+m.init+'</span><div class="bubble-col"><span class="bubble-name">'+m.name+'</span>'+cardHtml+'<span class="bubble-trans">'+m.time+'</span></div></div>';
     } else if(m.from==='me'){
-      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+m.orig+'</div><span class="bubble-trans" style="text-align:right;">'+m.time+'</span></div></div>';
+      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+m.orig+'</div><span class="bubble-trans" style="text-align:right;">'+m.time+qLink+'</span></div></div>';
     } else {
       html += '<div class="bubble-row them"><span class="bubble-avt" style="background:'+m.color+';">'+m.init+'</span><div class="bubble-col"><span class="bubble-name">'+m.name+'</span><div class="bubble them">'+m.orig+'</div>'+
-        (m.trans ? '<span class="bubble-trans">译：'+m.trans+'</span>' : '')+'<span class="bubble-trans">'+m.time+'</span></div></div>';
+        (m.trans ? '<span class="bubble-trans">译：'+m.trans+'</span>' : '')+'<span class="bubble-trans">'+m.time+qLink+'</span></div></div>';
     }
   });
   document.getElementById('float-body').innerHTML = html;
   var body = document.getElementById('float-body'); body.scrollTop = body.scrollHeight;
+}
+/* ---- 引用消息到案件（2026-09-30）：在非案件房里把一条消息引用到某个案件，消息进入案件对话房；案件原本没有房的，引用后也会出现在"案件"分类里 ---- */
+var QUOTE_PENDING = null;
+function quoteDt(m){
+  var mm = (m.day||'').match(/(\d+)\D+(\d+)\D+(\d+)/);
+  var d = mm ? (mm[1].slice(-2)+'-'+(mm[2].length<2?'0':'')+mm[2]+'-'+(mm[3].length<2?'0':'')+mm[3]) : '00-00-00';
+  return d+' '+(m.time||'00:00');
+}
+function openQuoteModal(idx){
+  var m = (CHAT_DATA[CURRENT_ROOM]||[])[idx]; if(!m) return;
+  var speaker = m.from==='me' ? 'Dewi' : (m.name||'');
+  var roomName = (roomById(CURRENT_ROOM)||{}).name || CURRENT_ROOM;
+  QUOTE_PENDING = {speaker:speaker, srcDt:quoteDt(m), srcRoom:roomName, orig:m.orig||'', caseId:null};
+  document.getElementById('quote-preview').textContent = speaker+'：'+QUOTE_PENDING.srcDt+' 「'+roomName+'」 "'+QUOTE_PENDING.orig+'"';
+  renderQuoteCaseList();
+  document.getElementById('quote-overlay').classList.add('open');
+}
+function renderQuoteCaseList(){
+  document.getElementById('quote-case-list').innerHTML = CASE_ITEMS.filter(function(c){ return c.caseNo; }).map(function(c){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:13px;cursor:pointer;"><input type="radio" name="quote-case" value="'+c.id+'" onchange="QUOTE_PENDING.caseId=this.value"> '+c.name+' · '+c.caseNo+'</label>';
+  }).join('');
+}
+function closeQuoteModal(){ document.getElementById('quote-overlay').classList.remove('open'); QUOTE_PENDING = null; }
+function confirmQuote(){
+  var q = QUOTE_PENDING; if(!q) return;
+  if(!q.caseId){ alert('请选择要引用到的案件'); return; }
+  var roomId = getCaseRoomId(q.caseId);
+  if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = []; /* 原本没有对话房的案件，引用后也会出现在"案件"分类里 */
+  CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'me', kind:'quote', speaker:q.speaker, srcDt:q.srcDt, srcRoom:q.srcRoom, orig:q.orig, time:nowTime()});
+  var c = CASE_ITEMS.filter(function(x){ return x.id===q.caseId; })[0];
+  if(c){ logCaseEvent(c, 'Dewi', '从「'+q.srcRoom+'」引用了一条消息到案件对话房'); }
+  closeQuoteModal();
+  renderDrawerList();
+  showToast('已引用到案件', (c?c.name:'')+' 的案件对话房已收到这条消息', function(){ openCaseRoom(q.caseId); });
+}
+/* ---- 对话房成员（2026-09-30）：案件房成员=客人选择的院长+全部印尼室长+全部韩国室长（案件中途可能换人，院长可更换） ---- */
+var IN_COORDINATORS = ['Dewi','Rina'];
+function openRoomMembers(){
+  var roomId = CURRENT_ROOM, r = roomById(roomId) || {name:roomId};
+  document.getElementById('room-members-title').textContent = '成员 · '+r.name;
+  var html = '';
+  function group(label, names, extra){
+    return '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:10px 0 4px;">'+label+'</div>'+
+      names.map(function(n){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+n+'</span>'+(extra&&extra[n]||'')+'</div>'; }).join('');
+  }
+  if(roomId.indexOf('case-')===0){
+    var c = CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0];
+    if(c){
+      var dirSel = '<select onchange="changeRoomDirector(this.value)" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'+DIRECTOR_LIST.map(function(d){ return '<option'+(d===c.director?' selected':'')+'>'+d+'</option>'; }).join('')+'</select>';
+      html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:0 0 4px;">院长（客人选择的院长，案件中途可更换）</div><div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+c.director+'</span>'+dirSel+'</div>';
+      html += group('印尼室长（全部）', IN_COORDINATORS.map(function(n){ return n+' · 印尼室长'; }));
+      html += group('韩国室长（全部）', KR_COORDINATORS.map(function(n){ return n+' 실장 · 韩国室长'; }));
+    }
+  } else if(roomId==='main'){
+    html += group('院长', DIRECTOR_LIST)+group('印尼室长', IN_COORDINATORS)+group('韩国室长', KR_COORDINATORS);
+  } else {
+    html += group('成员', ['Dewi（我）', r.name]);
+  }
+  document.getElementById('room-members-body').innerHTML = html;
+  document.getElementById('room-members-overlay').classList.add('open');
+}
+function closeRoomMembers(){ document.getElementById('room-members-overlay').classList.remove('open'); }
+function changeRoomDirector(name){
+  if(CURRENT_ROOM.indexOf('case-')!==0) return;
+  var c = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_ROOM.slice(5); })[0]; if(!c || c.director===name) return;
+  var old = c.director; c.director = name;
+  logCaseEvent(c, 'Dewi', '案件对话房更换院长：'+old+' → '+name);
+  if(CURRENT_CASE_ID===c.id){ renderCaseSubtitle(c); buildCaseLog(c); renderCaseBody(c); }
+  openRoomMembers();
 }
 function nowTime(){ var d = new Date(); return (d.getHours()<10?'0':'')+d.getHours()+':'+(d.getMinutes()<10?'0':'')+d.getMinutes(); }
 function sendFloatMsg(){
