@@ -42,7 +42,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   4. 退款从"按结算批次"整批处理改成 `cancelProcedureItem()` 按单个项目处理。
   5. 新增二次面诊子流程 `c.secondConsult`（增加面诊-付款后 / 再次面诊 共用），不影响案件主状态，"再次面诊"改成结案前随时可用（不再要求"还没结算"）。
   详细状态机见 `docs/case-management-flow.md`（已同步改写，不是增量修订）。
-- 【待办，非本轮范围】术后管理阶段的"事件"机制（症状上报→紧急视频复诊→…）原型完全没做。
+- ~~术后管理阶段的"事件"机制（症状上报→紧急视频复诊→…）~~ —— 2026-09-30（第十轮）Notion 已明确废止这条规则：赴韩案件施术完成即结案，术后出现并发症改走"新建案件→面诊（免面诊费）→正常流程"，不再需要嵌套在原案件里的"事件"机制，这条差距不用补了。
 - Reservation ID：2026-09-29 已实现——预约来访（工作台日历新客人/老客人）生成新案件时会生成 `reservationId`（6位数字+REV），Case ID 生成前显示这个。**待确认**：Case ID 生成后 Reservation ID 要不要保留为历史字段，还没拍板（Case ID 生成前显示 Reservation ID 这条本身已确认，不受影响）。
 - 结算的具体预付比例（原型里硬编码 `KR_DEPOSIT_RATE = 0.3`）只是演示占位数字，不是业务方拍板的数字——业务方还在确认中，改这个数字之前不要当成已确认的需求。
 - 【待确认】`客户管理`列表里"当前面诊·施术进度"这一列实时读该客户名下未结案/未取消案件的 `caseStatusBadge`（没有案件时才落回手填的兜底文案）。这是我按"这一列的表头本来就叫这个名字，应该和案件状态一起动"这个理解做的实现判断，不是业务方明确拍过板的规则，改动/回退前先确认。
@@ -50,7 +50,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - 【TODO，2026-09-29 新增，Notion IN-VIDE-01/Conversation Flow 里有但原型没做】
   1. "引用消息到案件对话房"：在其他房间把消息引用到某案件，该消息应该出现在案件房里，原型没做这个跨房引用功能。
   2. 对话房"成员"管理界面：规则上是"院长+全部印尼室长+全部韩国室长"，原型只在"发起视频"参与人弹窗里体现了候选名单，房间本身没有可查看/管理成员的界面。
-  3. 已有案件内的到访（术后管理、本地项目到店）应该走什么流程还没定，本轮只实现了"预约来访开新案件"这一条路径，见 `docs/open-questions.md` 第3条。
+  3. ~~已有案件内的到访（术后管理、本地项目到店）应该走什么流程还没定~~ —— 2026-09-30（第十轮）已解决：不开特殊的案件内到访流程，术后到店/使用持有项目统一走"预约来访"开新案件，见 `docs/open-questions.md`"已解决"部分。
 - 【待确认】`案例库`页面 2026-09-29 从"新标签页独立小窗口"改成了站内 `nav('in-library')` 页面（原来的弹窗装不下分类树/角色切换/编辑这套交互）。里面还有几处我自己的实现判断，没有业务方拍过板：
   1. "院长"这一档第3级节点只在原型加载时从 `DIRECTOR_LIST`（预约改期用的院长下拉源）复制一次种子数据，之后完全独立维护，不双向同步。
   2. 卡片上"点院长名跳转"实现成把顶部三级筛选自动定位到 赴韩施术 > 院长 > 该院长节点，不是单独开一个院长详情页。
@@ -64,15 +64,22 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   - 上面"已付款"那条【待确认】（`deriveCaseStage` 用"是否有项目被标记完成"代替"开始施术"）这一轮没有改，还是待业务方给准确定义。
 - 【待办，2026-09-29（第七轮）新增】`caseStatusSub(c)` 里 `paid_waiting_kr`/`video_scheduled` 对应的细节文案（"已缴费，等待Kr室长/院长回复"、"面诊时间已确认"）这一轮没有跟着改，现在文字上和新拆出来的两个主状态名"等待确认面诊时间"/"等待面诊"不完全对齐。用户当次任务明确说了这次不改，先留着，下次涉及这块再顺手同步。
 - ~~【第八轮】"项目列表tab：院长推荐+已选分组"（`c.directorRecommendation`、只读推荐卡片、项目库"院长推荐"标签）~~ —— 2026-09-29（第九轮）"项目列表/赴韩施术/本地管理重构（以本指令为准）"指令明确废止了这份指令，已把 `directorRecommendation`/`directorRecommendationCardHtml`/`isDirectorRecommended`/`defaultRecommendationItems`/`secondRoundRecommendationItems` 整套代码移除；"不自动预勾选"这条保留，改由新的 `krScope`（赴韩可选范围）机制承接，见下面第九轮条目。
-- 【待确认，2026-09-29（第九轮）新增】"项目列表/赴韩施术/本地管理重构"里几处是我的实现判断，不是业务方指定：
-  1. 首次出报告（`applyDirectorPlan`）用的演示 krScope 项目清单（`defaultKrScopeItems()`：鼻综合+切开双眼皮+颧骨缩小，颧骨缩小带"不可与下颌角同时做"这条演示备注）是我编的demo数据，不是业务方给的清单。
-  2. "施术日期"用简化月历（`krDateCalendarGridHtml()`，只选日期，参考现有预约改期弹窗视觉，未开放日期置灰不可点），不是下拉框——这是我对需求文字的实现选择。
-  3. "确认后修改日期→KR室长无法确认新日期"这一步，我按"等同无法协调"实现（`simulateKrScheduleChangeReject()`→`cannotCoordinateKrSchedule()`）：取消这次排期涉及的**全部**未完成赴韩项目并退定金。需求原文写的是"取消该项目"（单数），但案件的施术日期是整案共用一套（`c.krSchedule` 挂在案件上），单数复数对不上，需要确认这个粒度——已记入 `docs/open-questions.md` 第3条。
-  4. 两种项目都有的案件，"本地项目照常推进，不需要等赴韩排期"——我理解成本地管理tab本身独立于赴韩排期状态直接可用（`localManagementTabHtml` 不看 `krSchedule`），但案件列表的顶层归类（`deriveCaseStage` 的 stage 桶）在赴韩项目"已到医院"之前，还是维持和原来一样先留在 `'consult'` 桶里，不单独因为本地已经在推进就提前归到 `'local'` 桶。只有案件里压根没有赴韩项目（纯本地）才会一付款直接归 `'local'` 桶。
-  5. "意向项目"选择器交互用一个新弹窗（多选chip+KR/IN切换，参考项目库选择器样式），不是下拉框。
-  6. 本地管理到店事件复用日历现有的 `type:'post'`（术后管理）而不是新开一个事件类型，加 `caseId`/`itemIndex` 使其可点击跳转到对应案件的本地管理tab。
-  7. `KR_DEPOSIT_RATE` 沿用现有0.3，不改（这个本来就是待确认项，这轮没碰）。
-  8. "仅出报告"终态现在没有任何操作会触发了（排期挪到付款后，原来"付款前排期失败且无本地项目"这条路径不存在了）——已记入 `docs/open-questions.md` 第4条，代码里字段/badge文案先留着没删。
+- 【第九轮判断点，2026-09-30 第十轮部分改写】"项目列表/赴韩施术/本地管理重构"里几处是我的实现判断：
+  1. 首次出报告（`applyDirectorPlan`）用的演示 krScope 项目清单是我编的demo数据，不是业务方给的清单（第十轮沿用这个做法，只是清单内容变了，见下面第十轮条目）。
+  2. "施术日期"用简化月历（`krDateCalendarGridHtml()`，只选日期，未开放日期置灰不可点），不是下拉框——这是我对需求文字的实现选择，第十轮沿用。
+  3. ~~"确认后修改日期→KR室长无法确认新日期"按"等同无法协调"实现~~ —— 2026-09-30 第十轮已按用户明确指令改正：KR排不上新日期**不自动取消**，回到可重新选日期状态、原日期继续有效，只有手动点"无法协调"才真正取消退定金，`docs/open-questions.md` 对应条目已移到"已解决"。
+  4. ~~两种项目都有的案件，本地管理tab独立于赴韩排期状态~~ —— 2026-09-30 第十轮"本地管理"tab整个取消，本地项目结算后直接转客户持有，这条判断随旧实现一起作废，见下面第十轮条目。
+  5. "意向项目"选择器交互用一个新弹窗（多选chip+KR/IN切换），不是下拉框——沿用。
+  6. ~~本地管理到店事件复用日历 `type:'post'`~~ —— 2026-09-30 第十轮已按明确指令废止："不再使用'术后管理'事件类型"，改走"预约来访"开新案件，这条判断随旧实现一起作废。
+  7. `KR_DEPOSIT_RATE` 沿用现有0.3，不改（这个本来就是待确认项，一直没碰）。
+  8. "仅出报告"终态仍然没有活的触发路径——`docs/open-questions.md` 第3条持续待确认。
+- 【待确认，2026-09-30（第十轮）新增】"持有项目/案件结案/赴韩施术调整"指令里几处是我的实现判断，不是业务方指定：
+  1. 术后管理演示项目（术后消肿护理1次/术后疤痕修复护理1次）及价格是我编的demo数据；"模拟KR补加术后管理项目"固定选项目库里第一个可用的术后管理项目，这个"选哪个"的逻辑也是我的判断——已记入 `docs/open-questions.md` 第5条。
+  2. "术后管理"项目虽然归类本地项目，但选购限制我实现成和赴韩项目一样"只能从krScope里选"，且和赴韩项目共用同一个 `krScope.items` 数组（按 `categoryId` 区分二者），不是分开两个字段存——这是我对数据结构的选择，不是业务方指定的存储方式。
+  3. "已选择/结算区"的本地项目卡片里，"持有 X 次"目前只是信息提示（告诉室长客人已经有多少），不会在选购这一步直接联动抵扣——真正的抵扣只发生在"持有项目使用"这个独立界面。这是我对"项目名后面显示持有X次"这句话的场景判断：选购新项目和消耗已有持有是两个分开的动作，不在同一步里混合处理。
+  4. 持有项目"使用它的案件或项目被取消时，次数退回持有"这条规则只实现了正向的"使用即扣"，没有对应的撤销/退回UI——已记入 `docs/open-questions.md` 第4条。
+  5. 客户详情"本院项目记录"点开某个项目的某一购买批次，"已用"明细目前默认展开显示（不是点了才展开），这是简化的演示交互，不是业务方明确要求的点击行为。
+  6. demo案例大幅改写：`rizky` 从"本地管理中还有未完成本地项目"（这个概念已经不存在）改成"管理进行中，待用持有项目"；`rina` 补了 `krSchedule`/`krBalancePaid` 并把已完成的本地项目挪到 `CLIENT_HOLDINGS` 种子数据里；`wulan` 从"本地项目部分退款"（本地项目现在不能退）改成"赴韩项目取消一个、完成一个"的部分退演示。
 
 （某项差距在代码里补齐后，把对应条目从这里删掉或改写，让这个列表始终和代码现状一致。）
 
@@ -114,6 +121,21 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   8. **加项修复**：`addMoreProjects` 的赴韩侧同样只能从 `krScope` 选；顺带修了一个潜在bug——旧代码"结算追加项目/交定金"直接调 `settleProjects()`，但追加选的项目从没进过 `procedureItems`/`settlementBatches`，永远找不到待付款批次，新增 `confirmAddition()` 先补一步 `generateSettlementBatch` 再打开付款弹窗。
   9. demo案例迁移：`ayu`/`fajar` 改用 `krScope`（`fajar` 从"项目已选择"改成"待付款"，因为这个中间态不存在了）；`nadia`/`dinda`/`rizky`/`rina`/`wulan`/`lina` 的 `activeCaseTab` 从 `'procedure'` 改成 `'kr'`/`'local'`（按各自有没有对应项目分配）；`dinda` 新增 `krSchedule:{status:'pending',...}` 演示"待确认施术时间"这一档。
   10. `docs/case-management-flow.md` 主线/施术日期规则/分支8/分支9 同步重写（旧内容标注已废弃保留），`docs/open-questions.md` 解决第3条、新增第3、4条待确认。
+  判断点见上面"已知差距"。
+  > ⚠️ 本轮第5/6条（"本地管理"tab、日历联动）已被第十轮废止并整个删除；第7条（`markArrivedAtHospital`）已改成KR端演示按钮，不再是IN端按钮。
+- 2026-09-30（第十轮，"持有项目/案件结案/赴韩施术调整"，废止第九轮第6节"标记已到医院"+第7节"本地管理tab"整节）：
+  1. **持有项目体系新增**：`CLIENT_HOLDINGS`（按客户姓名存 `{itemName,category,batches:[{caseId,date,bought,used,usages}],krCollected}`）+ `grantHolding()`/`useHolding()`（FIFO扣减）/`holdingRemaining()`/`holdingTotal()`/`clientHoldingsSorted()`（术后管理置顶）。`confirmSettlementPayment()` 结算后把批次里的本地项目（含术后管理）立即 `grantHolding` 并从 `c.procedureItems` 移除，不再进入案件进程；只有KR项目继续留在 `procedureItems`。
+  2. **案件结案改用 `visitClosed`**：新字段 `c.visitClosed`/`c.krBalancePaid`/`c.hadPartialCancel`；`deriveCaseStage` 大幅简化——`visitClosed` 直接判 `closed`；有KR项目：`settlementDone` 未到医院前在 `consult` 桶，到医院后在 `travel` 桶，KR标记"施术完成"才 `visitClosed`；纯本地：`settlementDone` 后直接 `local` 桶（"管理进行中"，`CASE_TABS`/`CASE_STAGE_BADGE` 同步改名），付款后不再需要判断项目"是否都done"。
+  3. **KR三步操作改端上演示**：新增 `simulateKrMarkArrived()`/`simulateKrMarkBalancePaid()`/`simulateKrMarkProcedureDone()`（施术完成直接 `visitClosed=true`，`closeNote` 按 `hadPartialCancel` 判定"已结案"还是"已结案（部分退）"），删除了IN端的 `markArrivedAtHospital()`按钮；新增 `simulateKrAddPostCare()`（模拟KR补加术后管理项目，直接 `grantHolding` 标 `krCollected:true`）。
+  4. **修改日期规则改正**：新增 `cancelKrScheduleChange()`（取消修改，回到confirmed原日期不变）；`simulateKrScheduleChangeReject()` 改成不自动取消——回到 `change_pending` 可重新选日期的状态（`changeSubmitted=false`），原 `confirmedDate` 不变；"无法协调"独立成 `requestCannotCoordinate()`，只有手动点这个才真正取消。`cannotCoordinateKrSchedule()` 简化：本地项目已经不在 `procedureItems` 上，取消完KR项目后必然清空，直接判"已取消（全额退款）"，删掉了原来"有本地项目就转本地管理"的死分支。
+  5. **月历默认月份修复**：新增 `nearestOpenMonth()`，首次递交时锚定"最近的可选月份"（`confirmSettlementPayment`/`simulateKrScheduleRejectNew` 里设置），修改日期时锚定"原定日期所在月份"（`startKrScheduleChange`/`simulateKrScheduleChangeReject` 里设置），不再依赖 `KR_SCHED_VIEW_MONTH` 这个全局变量翻页后停留的位置；`KR_OPEN_DATES` 扩到9/10/11三个月。
+  6. **本地项目结算细节**：`toggleProject`/`setInItemField` 给本地项目加 `qty`/`discountPct`/`itemNote`；`computeBatchBreakdown`/`inLineTotal`/`settlementItemRow` 按个数×折扣算总价，同时显示原价划线价；已持有的项目在项目库行/结算行都加"持有X次"提示（仅展示，不在选购这步联动扣减，见已知差距）；`cancelProcedureItem` 改成只对KR项目生效（本地项目结算后已经不在 `procedureItems` 上，也不允许退款）。
+  7. **术后管理分类+krScope扩权**：`PROJECT_CATEGORIES`新增"术后管理"（`POST_CARE_CAT_ID`），`PROJECT_LIBRARY`加2个演示项目；`projectPickerHtml` 的本地tab拆成"术后管理"（复用 `krScope`，按 `categoryId===POST_CARE_CAT_ID` 过滤）+ "其他本地项目"（不受限）两块；赴韩tab的 `krScope` 取用同步加 `origin==='KR'` 过滤，避免术后管理项目混进赴韩列表。
+  8. **不面诊/面诊取消入口改造**：新增 `c.entryChoicePending`/`c.projectEntryMode`，`confirmMaterials`/`afterConsultCancelChoice(true)` 触发后先显示 `localEntryChoiceHtml()`（"持有项目使用"/"新增项目"二选一），新增 `holdingsUseTabHtml()`/`submitHoldingsUse()`/`notUseThisTime()`/`closeVisit()`（结案时复位 `entryChoicePending`，避免结案后再看这个tab又弹回持有界面）；`projectListTabHtml` 的分支顺序调整为"持有项目使用优先于已选择/结算只读视图"。
+  9. **客户详情页新增两块**：`renderClientHoldings()`（持有项目卡片，只列剩余>0，术后管理置顶，没有持有项目不显示）、`renderProjectHistory()`+`toggleProjHistory()`（医美史·本院项目记录，按项目分组，展开看购买批次+使用明细，点CaseID跳转案件；本地项目读`CLIENT_HOLDINGS`，赴韩项目读各案件`procedureItems`）。
+  10. **日历还原**：删除 `localManagementTabHtml`/`scheduleLocalVisit`/`advanceLocalVisit`/`openCaseFromCalendar`/`VISIT_STAGE_LABEL`，`buildWeekGrid` 里 `type:'post'` 的 `caseId`/点击跳转逻辑还原成纯装饰（不再联动案件）。
+  11. demo案例大改：`yuni` 补 `entryChoicePending`+`projectEntryMode:'new'`；`nadia`/`dinda` 补 `krSchedule`/`krBalancePaid`；`rizky` 从"本地管理中"改成"管理进行中"（待用持有项目，procedureItems清空，改用`CLIENT_HOLDINGS`种子数据）；`rina` 补齐KR字段+挪本地项目到持有种子；`wulan` 从本地项目部分退款改写成赴韩项目部分退款演示。新增 `seedDemoHoldings()` 给 `rizky`/`rina` 写持有种子数据。
+  12. `docs/case-management-flow.md`/`docs/business-rules.md` 按 Notion 当天版整篇重写，`docs/open-questions.md` 解决第3条（改期粒度）、新增第4、5条待确认，之前"已有案件内到访"那条已解决记录追加了"后来被第十轮废止重做"的说明。
   判断点见上面"已知差距"。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
