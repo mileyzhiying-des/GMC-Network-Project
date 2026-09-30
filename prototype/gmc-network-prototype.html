@@ -1393,8 +1393,7 @@ var DIRECTOR_LIST = ['김민석 원장', '이수진 원장'];
 var RESV_SEQ = 480215;
 function generateReservationId(){ return String(RESV_SEQ++) + 'REV'; }
 /* 老客人（下拉选客人+选院长）或"模拟客户填写完成"占位转正式：生成 Reservation ID、开新案件（状态"待访问"），
-   不经过占位；这里只做"开新案件"的预约来访——已有案件内的到访（术后管理/本地项目到店）不走这条，
-   那部分规则还没定，见 TODO(待确认) */
+   不经过占位；这里只做"开新案件"的预约来访——术后到店/使用持有项目也一律走这条开新案件（第十轮已确认） */
 function createReservationCase(name, director, dow, time, phone){
   var dayIndex = DOW_CN.indexOf(dow);
   var reservationId = generateReservationId();
@@ -2736,7 +2735,7 @@ function markReportUploaded(){
 }
 /* 赴韩项目可选范围（2026-09-29 重写，"项目列表/赴韩施术/本地管理重构"指令）：
    由KR室长直接整理（不经过院长），出报告时写入演示数据，格式 {name,price,note}，不挂项目库id引用。
-   演示用的具体项目名单+备注不是业务方指定的，见 CLAUDE.md TODO(待确认) */
+   演示用的具体项目名单+备注不是业务方指定的（用户确认继续当演示数据） */
 function defaultKrScopeItems(){
   return [
     {name:'鼻综合（假体+鼻尖）', note:''},
