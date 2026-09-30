@@ -38,7 +38,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - ~~booked/consult/travel/local/closed/cancelled 粗粒度状态 + 视频面诊/已付款判断的历次修订~~ —— 2026-09-29"案件流程对齐"整体重写，之前几轮关于 `consultStatus`（`written_pending`/`video_awaiting_report`）、`projectsSelected`/"项目已选择"、"已付款用 started 变量猜开始时机"的实现判断全部作废，改用下面这套：
   1. `consultStatus` 出报告前的等待态视频/书面统一合并成 `'awaiting_report'`（"等待报告"），不再区分视频/书面两个不同状态名。
   2. 新增 `projectsEnabled→projectsSelected→scheduleStatus(pending/rejected/无=直接生成)→projectsLocked(待付款)→settlementDone(已付款)→arrivedAtHospital(赴韩施术中/本地管理中)` 这条完整链路，对应 Notion 的"项目确认中→待确认施术时间→待付款→已付款→已到医院"。**"已付款"转施术中的触发时机已经确认为"已到医院"（`markArrivedAtHospital()`），不再是待确认项。**
-  3. 终态改成 `cancelReason`（预约取消/面诊取消/全额退款，对应"已取消"tab）+ `closeNote`（null/部分退/仅出报告，对应"已结案"tab）两个字段分别判定，废弃了旧的"已取消预约/已取消（全退）"两个独立终态名。
+  3. ~~终态改成 `cancelReason`+`closeNote` 两个字段分别判定~~ —— ⚠️ 2026-09-30（第十一轮）整体废止：终态只剩 已结案/仅出报告/已取消（`closeNote`、`hadPartialCancel`、"全额退款"原因全部删除），结局由 `computeOutcome()` 按"客人得到了什么"推算，退款入 `financeResult`/`refunds`，见下面第十一轮条目。
   4. 退款从"按结算批次"整批处理改成 `cancelProcedureItem()` 按单个项目处理。
   5. 新增二次面诊子流程 `c.secondConsult`（增加面诊-付款后 / 再次面诊 共用），不影响案件主状态，"再次面诊"改成结案前随时可用（不再要求"还没结算"）。
   详细状态机见 `docs/case-management-flow.md`（已同步改写，不是增量修订）。
@@ -77,6 +77,16 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   1. 原型原本没有退款弹窗（用 `confirm()`），我新建了 `#refund-overlay`，退款原因必填、写入 Timeline，不存独立字段；入口有两个：结算区"取消退款"链接、赴韩施术tab顶部提示的"处理退款"。
   2. `c.krUnable={items,reason,at}` 是我新加的字段；无法施术项目只能从未完成的赴韩项目里选；演示按钮在 `krSchedule.status==='confirmed'` 且未结案时显示；标记不改案件主状态，退款处理完自动清掉。
   3. "无法协调"（`cannotCoordinateKrSchedule`）没加退款原因，指令未提。
+- 【待确认，2026-09-30（第十一轮）新增】"结案规则/案件关系/附件"指令里几处是我的实现判断（详见 `docs/open-questions.md` 第6条）：
+  1. 已付款但还没决定是否使用持有项目的案件，暂放"面诊安排"tab（旧规则"管理进行中"已废止，新规则没指定）。
+  2. `financeResult` 判定口径：项目收入=已付款批次的赴韩定金+本地全款（赴韩部分扣退款）；面诊费按"已缴费"推断，没有"面诊费免除"字段。
+  3. 客户详情本地项目退款后：未使用次数是否作废、是否计入案件财务结果，指令没说，都没动。持有项目卡片仍只列剩余>0的项目，全部用完的批次不能再退款。
+  4. "+添加本地管理"里的选购是简化版（无折扣/备注，结算后直接转持有，不走主结算单）。
+  5. 基础资料里 메타뷰/照片/视频 移到附件tab后没有保留"再上传/修正"；面诊tab原有内联附件块还在（和附件tab重复）；手动上传附件归"基础资料/面诊资料"按"是否已申请面诊"决定。
+  6. 关联案件：一个案件只能关联一个之前案件；手动关联后不被术后管理自动关联覆盖；下拉只列有 Case ID 的以前案件。
+  7. "无法协调"退款沿用同一个退款弹窗（金额手动+原因必填）；退款金额默认预填预付金作参考，可改成任意数字包括0。
+  8. 新增演示案例：`rina2`（演示关联）、`hana`（已取消·管理取消）、`tari`（已取消·未购买未使用）；`lina` 改成"仅出报告·全额退款"，`wulan` 改成"已结案+有退款"，`rizky` 改成管理进行中。
+  9. Notion"进入终态时关联的后续预约全部自动取消"这条联动原型没有实现。
 - 【待确认，2026-09-30（第十轮）新增】"持有项目/案件结案/赴韩施术调整"指令里几处是我的实现判断，不是业务方指定：
   1. 术后管理演示项目（术后消肿护理1次/术后疤痕修复护理1次）及价格是我编的demo数据；"模拟KR补加术后管理项目"固定选项目库里第一个可用的术后管理项目，这个"选哪个"的逻辑也是我的判断——已记入 `docs/open-questions.md` 第5条。
   2. "术后管理"项目虽然归类本地项目，但选购限制我实现成和赴韩项目一样"只能从krScope里选"，且和赴韩项目共用同一个 `krScope.items` 数组（按 `categoryId` 区分二者），不是分开两个字段存——这是我对数据结构的选择，不是业务方指定的存储方式。
@@ -143,6 +153,11 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   判断点见上面"已知差距"。
 
 - 2026-09-30（第十一轮，退款原因+模拟KR标记无法施术）：新增退款弹窗（`openRefundModal`/`confirmRefund`，退款原因必填，取代 `confirm()`）；新增演示按钮"模拟KR标记无法施术"（`simulateKrMarkUnable`/`submitKrUnable`/`openKrUnableRefund`），赴韩施术tab顶部显示"KR已标记无法施术，请处理退款"；部分退其余照常、全退转已取消（全额退款）；未新增"术前评估"状态。判断点见上面"已知差距"。
+- 2026-09-30（第十一轮，"结案规则/案件关系/附件（以本指令为准）"，分A/B/C三个提交）：
+  1. **A 结局模型**：终态改3种（已结案/仅出报告/已取消），`computeOutcome()`/`finishCase()`/`financeResultOf()`/`financeLabel()`/`terminalBadge()`，`cancelReason` 取值改为 预约取消/面诊取消/管理取消/未购买未使用；新增 `financeResult`/`refunds`/`krProcedureDone`；列表tab改8个+"有退款"筛选；赴韩退款金额改手动填写，全退→仅出报告，部分退→已结案，"无法协调"也走退款弹窗并追问"是否做本地管理"（`localAsk`）；本地流程按07 flow改成"使用→管理进行中→管理完成/管理取消（归还持有，不是退款）"，新增 `mgmtUses/mgmtActive/mgmtDone/mgmtStatus`、`returnHolding()`、"本次不购买"。删除：`closeNote`、`hadPartialCancel`、`cancelReason:'全额退款'`、`closeVisit()`、`cannotCoordinateKrSchedule()`。
+  2. **B 本地退款+本地管理**：客户详情"持有项目"卡片按批次加「退款」（`openHoldingRefundModal`/`confirmHoldingRefund`，金额+原因必填，`batch.refund`），"本院项目记录"和购买案件只读显示"已退款 X"；案件头部「+ 添加本地管理」→"本地管理"tab（`c.localMgmt`，`scope='lm'` 复用 A 的使用/管理进行中组件），状态栏小标签"本地管理进行中"，购买和使用算进结局。
+  3. **C 关联+附件**：基础资料"关联之前案件"+关联原因（`c.linkedCase`）、标题下"关联：A000010（复诊）"、被关联案件"后续关联案件"、复诊/延续既往面诊自动带入报告（`c.linkedFiles`）、"可能与 XX 相关"提示、使用术后管理项目自动关联；附件tab（`caseAttachments()`）生成 Case ID 后出现，统一显示基础资料/面诊资料文件，格式 [来源] 文件名 YY-MM-DD 下载 查看。
+  4. `docs/` 三份文档同步改写（旧规则标"已废弃"），`docs/open-questions.md` 新增第6条待确认清单。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
 - 涉及业务规则的改动，先对一遍 Domain Knowledge / Open Questions 有没有冲突，有冲突要先问，不要悄悄按自己理解改
