@@ -45,8 +45,9 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - ~~术后管理阶段的"事件"机制（症状上报→紧急视频复诊→…）~~ —— 2026-09-30（第十轮）Notion 已明确废止这条规则：赴韩案件施术完成即结案，术后出现并发症改走"新建案件→面诊（免面诊费）→正常流程"，不再需要嵌套在原案件里的"事件"机制，这条差距不用补了。
 - ~~术后管理阶段的"事件"机制~~ —— 2026-09-30 Notion 已废止（赴韩案件施术完成即结案，术后并发症走新建案件），不用补。
 - ~~已有案件内的到访应该走什么流程~~ —— 已解决：术后到店/使用持有项目统一走"预约来访"开新案件。
-- 【待确认·冲突，2026-09-30 第十二轮】用户指令第6条"取消 Reservation ID，预约时直接生成 Case ID（客户提交预约/室长代替预约时生成；取消的预约也保留 Case ID；发起对话/+添加本地管理/增加面诊改以'基础资料确认'为条件；取消接待在确认前显示；关联下拉只列基础资料已确认的案件）"与 Notion 现状冲突（Notion Case Management Flow / Status Dictionary / Conversation & Video Flow 当前仍写"基础资料确认时生成 Case ID、确认后才显示发起对话"，Reservation ID 仍是待访问阶段的 ID）。按工作规则2，**这一条暂未执行**，等用户确认是否已在 Notion 更新或"以本指令为准"。
-- 【待确认，第32条待定】已付款但还没决定是否使用持有项目的案件，暂放"面诊安排"tab（旧规则"管理进行中"已废止，新规则没指定），用户另行答复。
+- 【待执行，冲突已消除】（2026-09-30 08:37 Notion 状态总表已写"待访问：预约生成 Case ID"，与用户第6条一致，仅待用户确认开工）用户指令第6条"取消 Reservation ID，预约时直接生成 Case ID（客户提交预约/室长代替预约时生成；取消的预约也保留 Case ID；发起对话/+添加本地管理/增加面诊改以'基础资料确认'为条件；取消接待在确认前显示；关联下拉只列基础资料已确认的案件）"与 Notion 现状冲突（Notion Case Management Flow / Status Dictionary / Conversation & Video Flow 当前仍写"基础资料确认时生成 Case ID、确认后才显示发起对话"，Reservation ID 仍是待访问阶段的 ID）。按工作规则2，**这一条暂未执行**，等用户确认是否已在 Notion 更新或"以本指令为准"。
+- ~~第32条~~ —— 2026-09-30 已解决：按 Notion 状态总表，本地案件进入"选择项目"状态（是否持有/使用/选购/付款都在其中），使用后进入"本地管理"，都在"本地管理"tab。
+- 【待确认，2026-09-30 状态总表新增】总表没有的瞬时态/显示口径："面诊已取消"（等待回答是否做本地项目）暂沿用；赴韩项目全退后等待"是否做本地管理"期间暂显示"已付款"；"已更换"标签以 `replacedBy` 判断；列表财务列收入不扣退款、退款单独一行；"最近一次有操作的案件"按 Timeline 最后一条时间判断。详见 `docs/open-questions.md` 第4条。
 - 结算的具体预付比例（`KR_DEPOSIT_RATE = 0.3`）只是演示占位数字，用户确认"维持0.3，业务那边还没确认"——改这个数字之前不要当成已确认的需求；退款弹窗只拿它当"参考预付金"。
 - 演示数据（用户确认继续当演示数据，不是业务方清单）：`krScope` 项目清单/备注、术后管理两个演示项目及价格、`PROJECT_CATEGORIES` 分类名（先维持）、`FX_RATES` 写死汇率（维持，暂不接实时汇率API）。
 - 【待确认，第十二轮新增的我的实现判断】
@@ -135,6 +136,12 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   2. **E 案例库等**：`syncDirectorNodes()` 让院长节点直读 `DIRECTOR_LIST`（节点 id 改为 `dir:<名字>`，不可改名/删除）；院长详情页 `#in-director`（`openDirectorDetail`/`renderDirectorDetail`）；批量更改标签支持跨类目合并；`deleteLibCase()` 案例删除（二次确认）；施术日期首选/备选合并为一个月历（`pickKrDate(pf,bf,...)`，首选深蓝/备选橙，点已选日期取消，月历缩小）；本院项目记录"已用"明细改 tab 切换（`setProjHistTab`）。
   3. **F 对话房**：`openQuoteModal`/`confirmQuote`（引用到案件，显示"发言人：YY-MM-DD HH:MM 「来源房间」 "内容"」，原本没有房的案件引用后出现在"案件"分类）；`openRoomMembers()`（☰ 按钮，成员=院长+全部印尼室长+全部韩国室长，案件房可更换院长）。
   4. 删除 `createReservationCase` 上方过期注释；删除CLAUDE.md里过期的"`deriveCaseStage` 用'是否有项目被标记完成'代替'开始施术'"待确认条目。
+- 2026-09-30（第十三轮，"状态整理（第32条答复，以本指令为准）"，按 Notion Status Dictionary 顶部状态总表）：
+  1. **状态推算重写**：`deriveCaseStage`/`caseStatusLabel`/`caseStatusSub` 按总表——面诊费在"接待中"缴纳/免除（`awaiting_payment` 期间归 booked，缴费/免除后 `updateCaseStage`）；"已出报告"不再是状态（`reportReady` 直接显示"项目确认中"，只留 Timeline 事件）；已付款未递交日期=已付款（面诊安排），递交后=待确认施术时间/等待施术（赴韩施术tab），"已到医院"=赴韩施术；改期待确认期间主状态仍为"等待施术"；本地案件 `isLocalCase()`（不面诊/`localTrack`）走"选择项目"→"本地管理"（`mgmtActive`），"管理进行中"全部更名"本地管理"；"赴韩施术中/赴韩中"改名"赴韩施术"。
+  2. **颜色/tab**：`STAGE_COLORS` 按总表（米/黄/蓝/绿/灰/棕/灰），`caseStatusBadge` 只显示主状态或结局（终态不再带财务/取消原因后缀，取消原因和财务移到案件页状态栏）。
+  3. **案件列表**：新增"状态 正常/非正常"列（`caseAbnormalTags()`：时间变更待确认/KR已标记无法施术/已更换）、财务独立一列（`financeCellHtml()`：结果+收入+退款）、面诊/赴韩案件本地管理进行中时状态旁加小标签。
+  4. **客户列表**：状态和财务都取"最近一次有操作的案件"（`clientLatestCase()`，按 Timeline 最后时间），新增财务列；取代第十二轮"列出所有未结案案件"。
+  5. 删除旧逻辑：`caseStatusBadge` 里"已出报告/等待缴纳面诊费/递交施术日期/待确认是否做本地管理"徽章分支、`clientCaseStatus` 的多案件 pills。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
 - 涉及业务规则的改动，先对一遍 Domain Knowledge / Open Questions 有没有冲突，有冲突要先问，不要悄悄按自己理解改
