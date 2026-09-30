@@ -1915,6 +1915,7 @@ function makeCase(o){
     linkedFiles:o.linkedFiles||[], manualAttachments:o.manualAttachments||[], materialsDate:o.materialsDate||null, /* §7 附件 */
     consultFeeWaived:o.consultFeeWaived||null, /* 面诊费免除（2026-09-30）：{reason, note}，免除时财务结果按无收入判断 */
     localTrack:!!o.localTrack, /* 2026-09-30：本地案件标记（面诊取消后做本地项目 / 无法协调后做本地管理），用于状态推算：选择项目→本地管理 */
+    consultHistory:o.consultHistory||[], consultTabRound:null, /* 2026-09-30：已结束的二次面诊轮次 [{fee,changed,at}]，面诊tab里"第N次"切换用 */
     localAsk:!!o.localAsk, /* 赴韩项目"无法协调"退款后，询问是否做本地管理 */
     localMgmt:o.localMgmt||null,
     entryChoicePending:!!o.entryChoicePending, projectEntryMode:o.projectEntryMode||null, /* 不面诊/面诊取消后"持有项目使用"vs"新增项目"的入口选择 */
@@ -3219,7 +3220,7 @@ function switchCaseTab(tab){
 }
 function caseTabsHtml(c){
   var tabs = '<span class="tab'+(c.activeCaseTab==='basic'?' active':'')+'" onclick="switchCaseTab(\'basic\')">基础资料</span>';
-  if(c.consultRequested || c.secondConsult){
+  if(c.consultRequested || c.secondConsult || (c.consultHistory||[]).length){
     tabs += '<span class="tab'+(c.activeCaseTab==='consult'?' active':'')+'" onclick="switchCaseTab(\'consult\')">面诊资料</span>';
   }
   if(c.projectsEnabled){
@@ -3279,8 +3280,7 @@ function consultIntentionCardHtml(c){
   return '<div class="card" style="padding:14px 24px;margin-bottom:12px;"><div class="info-heading" style="margin-bottom:8px;font-size:12px;">意向项目 / 预算（KR可见）</div>'+intentionInfoHtml(c)+'</div>';
 }
 function caseTabContentHtml(c){
-  if(c.activeCaseTab==='consult' && c.secondConsult) return consultIntentionCardHtml(c)+secondConsultTabHtml(c);
-  if(c.activeCaseTab==='consult' && c.consultRequested) return consultIntentionCardHtml(c)+consultTabHtml(c);
+  if(c.activeCaseTab==='consult' && (c.consultRequested || c.secondConsult || (c.consultHistory||[]).length)) return consultIntentionCardHtml(c)+consultRoundsHtml(c);
   if(c.activeCaseTab==='projects' && c.projectsEnabled) return localRefundNoteHtml(c)+projectListTabHtml(c);
   if(c.activeCaseTab==='kr' && c.settlementDone && krAllItems(c).length>0) return krProcedureTabHtml(c);
   if(c.activeCaseTab==='localmgmt' && c.localMgmt) return localMgmtTabHtml(c);
@@ -3315,6 +3315,7 @@ function addConsult(){
   c.visibleToKR = true; /* 点了增加面诊，案件对韩国侧从此可见 */
   if(c.settlementDone){
     c.secondConsult = {status:'awaiting_payment', method:null, scheduledTime:'', writtenEta:'', changed:null};
+    c.consultTabRound = null;
     c.activeCaseTab = 'consult';
     logCaseEvent(c, 'Dewi', '发起"增加面诊"（已付款后的子流程，不改变案件主状态）');
   } else {
@@ -3331,73 +3332,111 @@ function addConsult(){
 }
 
 /* 面诊资料 tab：按 consultStatus 分支渲染 */
+/* ---- 面诊资料 tab（总览第3、4节，2026-09-30）：每一轮面诊各有一张面诊费卡（待缴费/已缴费/已免除/已取消）+ 小状态行；
+   面诊2次以上才出现"第1次/第2次"切换，默认打开最新一次；二次面诊不改变案件主状态 ---- */
+var CONSULT_FEE_COLORS = {'待缴费':['#FBF0C9','#8F6F0C'], '已缴费':['var(--sage-bg)','var(--sage)'], '已免除':['var(--blue-bg)','var(--blue)'], '已取消':['#EDEAE2','var(--muted)']};
+function consultFeeStatusMain(c){
+  if(c.consultStatus==='awaiting_payment') return '待缴费';
+  if(c.consultStatus==='cancelled') return '已取消';
+  return c.consultFeeWaived ? '已免除' : '已缴费';
+}
+function consultFeeCardHtml(status, extraText, actionsHtml){
+  var col = CONSULT_FEE_COLORS[status];
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border2);">'+
+    '<span style="font-size:13px;font-weight:700;">面诊费</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+status+'</span>'+
+    (extraText ? '<span style="font-size:11px;color:var(--muted);">'+extraText+'</span>' : '')+
+    (actionsHtml ? '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">'+actionsHtml+'</span>' : '')+'</div>';
+}
+function consultRoundSubItems(c){
+  var items = [];
+  if(c.consultStatus==='awaiting_payment') items.push({kind:'Waiting', text:'待缴费'});
+  else if(c.consultStatus==='paid_waiting_kr') items.push({kind:'Waiting', text:'待确认面诊时间'});
+  else if(c.consultStatus==='video_scheduled') items.push({kind:'Success', text:'面诊时间已确认 '+c.consultScheduledTime+'（剩余 50 分钟）'});
+  else if(c.consultStatus==='awaiting_report') items.push({kind:'Waiting', text: c.consultMethod==='written' && c.writtenEta ? '预计 '+c.writtenEta+' 内提交' : '等待室长提交报告'});
+  else if(c.consultStatus==='report_ready') items.push({kind:'Success', text:'报告已出'});
+  return items;
+}
 function consultTabHtml(c){
+  var fee = consultFeeStatusMain(c);
+  var waiverText = c.consultFeeWaived ? '原因：'+c.consultFeeWaived.reason : '';
+  var sub = subStatusRowHtml(consultRoundSubItems(c));
+  var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(c.consultStatus==='awaiting_payment'){
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;">等待缴纳面诊费</div>'+
-      '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="markConsultPaid()">已缴费</button><button class="btn-outline" onclick="openWaiveFeeModal()">免除面诊费</button><button class="btn-outline" onclick="cancelConsult()">面诊取消</button></div>'+
-      '</div>';
+    return wrap(consultFeeCardHtml(fee, '', '<button class="btn-primary" onclick="markConsultPaid()">已缴费</button><button class="btn-outline" onclick="openWaiveFeeModal()">免除面诊费</button><button class="btn-outline" onclick="cancelConsult()">面诊取消</button>')+sub);
   }
   if(c.consultStatus==='cancelled'){
-    /* 2026-09-29 分支3更新：面诊取消要问"是否做本地项目"，不再是简单的"重新面诊申请"按钮 */
-    return '<div class="card" style="padding:22px 24px;">'+
+    /* 2026-09-29 分支3：面诊取消要问"是否做本地项目"；面诊费卡=已取消（只作记录，不影响后续） */
+    return wrap(consultFeeCardHtml(fee, '只作记录，不影响后续；面诊费由当地自行处理', '')+
       '<div class="info-heading" style="margin-bottom:8px;">面诊已取消</div>'+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">面诊费由当地自行处理，系统只记录状态</div>'+
       '<div style="display:flex;gap:10px;">'+
       '<button class="btn-primary" onclick="afterConsultCancelChoice(true)">是，做本地项目</button>'+
       '<button class="btn-outline" onclick="afterConsultCancelChoice(false)">否，取消案件</button>'+
-      '</div></div>';
+      '</div>');
   }
+  var feeCard = consultFeeCardHtml(fee, waiverText, '');
   if(c.consultStatus==='paid_waiting_kr'){
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;">等待确认面诊时间</div>'+
-      '<div style="font-size:12px;color:var(--sage);font-weight:700;margin-bottom:6px;">'+(c.consultFeeWaived ? '✓ 面诊费已免除（'+c.consultFeeWaived.reason+'）' : '✓ 面诊费已支付')+'</div>'+
+    return wrap(feeCard+sub+
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认面诊形式与时间</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-outline" onclick="openFloatingChat(\'main\')">查看 Main 对话 →</button>'+
       '<button class="btn-ghost" onclick="openKrReplyModal()">演示：模拟KR室长回复</button>'+
-      '</div></div>';
+      '</div>');
   }
   if(c.consultMethod==='video' && c.consultStatus==='video_scheduled'){
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">✓ 面诊时间已确认</div>'+
-      '<div class="card" style="padding:14px 16px;margin-bottom:14px;cursor:pointer;" onclick="openFloatingChat(\'main\')">Kr室长　'+c.consultScheduledTime+' 可以进行（剩余 50 分钟）</div>'+
+    return wrap(feeCard+sub+
+      '<div class="card" style="padding:14px 16px;margin-bottom:14px;cursor:pointer;" onclick="openFloatingChat(\'main\')">Kr室长　'+c.consultScheduledTime+' 可以进行</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-primary" onclick="enterVideoConsult()">进入面诊</button>'+
       '<button class="btn-ghost" onclick="simulateDirectorVideoConsult()">演示：模拟院长视频面诊</button>'+
-      '</div></div>';
+      '</div>');
   }
   if(c.consultMethod==='video' && c.consultStatus==='video_in_progress'){
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">✓ 面诊费已支付</div>'+
+    return wrap(feeCard+
       '<div style="font-size:14px;font-weight:700;margin-bottom:10px;">面诊进行中</div>'+
       '<div class="card" style="padding:12px 16px;background:var(--terracotta-bg);">院长　|　视频面诊进行中</div>'+
-      '<button class="btn-outline" style="margin-top:14px;" onclick="nav(\'video-consult\')">回到通话 →</button>'+
-      '</div>';
+      '<button class="btn-outline" style="margin-top:14px;" onclick="nav(\'video-consult\')">回到通话 →</button>');
   }
   if(c.consultStatus==='awaiting_report'){
-    /* 视频、书面两条路径出报告前统一叫"等待报告"（原"报告待递交""面诊已结束等待上传"都并入这一个状态） */
-    var etaText = c.consultMethod==='written' && c.writtenEta ? ('，预计 '+c.writtenEta+' 内提交正式面诊报告') : '';
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;">✓ 等待报告</div>'+
-      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">'+c.director+' 已给出面诊结论'+etaText+'</div>'+
+    return wrap(feeCard+sub+
+      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">'+c.director+' 已给出面诊结论</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>查看报告 →</button>'+
       '<button class="btn-ghost" onclick="markReportUploaded()">演示：模拟室长已提交报告</button>'+
-      '</div></div>';
+      '</div>');
   }
   if(c.consultStatus==='report_ready'){
-    /* 2026-09-29：邀请室长视频不再限次，报告状态文字不再随之变化，标题固定"已出报告" */
-    var title = '✓ 已出报告';
-    var reportBtn = '<button class="btn-primary" onclick="openReportModal()">查看报告 →</button>';
-    var inviteBtn = '<button class="btn-outline" onclick="openInviteKrModal()">邀请室长视频</button>';
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">'+title+'</div>'+
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+reportBtn+inviteBtn+'</div>'+
-      '<div style="font-size:11px;color:var(--muted);margin-top:12px;">面诊阶段产生的文件统一在「附件」tab 查看</div>'+
-      '</div>';
+    return wrap(feeCard+sub+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openReportModal()">查看报告 →</button><button class="btn-outline" onclick="openInviteKrModal()">邀请室长视频</button></div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:12px;">面诊阶段产生的文件统一在「附件」tab 查看</div>');
   }
   return '';
+}
+/* 面诊轮次：第1次（主面诊）+ 已结束的二次面诊 + 进行中的二次面诊 */
+function consultRoundsList(c){
+  var rounds = [];
+  if(c.consultRequested) rounds.push({kind:'main'});
+  (c.consultHistory||[]).forEach(function(h){ rounds.push({kind:'hist', h:h}); });
+  if(c.secondConsult) rounds.push({kind:'current'});
+  return rounds;
+}
+function setConsultRound(i){ var c = getCurrentCase(); if(!c) return; c.consultTabRound = i; renderCaseBody(c); }
+function consultRoundsHtml(c){
+  var rounds = consultRoundsList(c);
+  if(!rounds.length) return '';
+  var idx = c.consultTabRound; if(!idx || idx>rounds.length) idx = rounds.length; /* 默认打开最新一次 */
+  var tabs = rounds.length>=2
+    ? '<div style="display:flex;gap:8px;margin-bottom:12px;">'+rounds.map(function(r,i){
+        return '<span class="chip'+(i+1===idx?' active':'')+'" onclick="setConsultRound('+(i+1)+')">第'+(i+1)+'次</span>';
+      }).join('')+'</div>' : '';
+  var r = rounds[idx-1], body;
+  if(r.kind==='main') body = consultTabHtml(c);
+  else if(r.kind==='current') body = secondConsultTabHtml(c);
+  else {
+    var col = CONSULT_FEE_COLORS[r.h.fee] || CONSULT_FEE_COLORS['已缴费'];
+    body = '<div class="card" style="padding:22px 24px;">'+consultFeeCardHtml(r.h.fee, '', '')+
+      '<div style="font-size:13px;color:var(--slate2);">'+(r.h.fee==='已取消' ? '本次面诊已取消（只作记录）' : (r.h.changed ? '面诊结束：有变动，已出新报告（覆盖原方案）' : '面诊结束：无变动，维持原报告和项目'))+'　'+(r.h.at||'')+'</div></div>';
+  }
+  return tabs+body;
 }
 /* ---- 已选择/结算区（2026-09-29 重写，"项目列表/赴韩施术/本地管理重构"指令）：
    一张大卡包两张二级卡（赴韩/本地），互不相加；三个备注栏 noteKR/noteIN/noteOverall 贯穿
@@ -5694,6 +5733,7 @@ function requestAnotherConsult(){
   if(!confirm('确认再次申请面诊吗？（收费路径，需要重新缴纳一次面诊费；免费商议走案件对话，不用这个按钮）')) return;
   c.consultRound = (c.consultRound||1) + 1;
   c.secondConsult = {status:'awaiting_payment', method:null, scheduledTime:'', changed:null};
+  c.consultTabRound = null;
   logCaseEvent(c, 'Dewi', '发起第 '+c.consultRound+' 轮"再次面诊"（子流程，案件主状态不变）');
   buildCaseLog(c);
   renderChatCaseChip();
@@ -5709,38 +5749,33 @@ function requestAnotherConsult(){
    无→不出新报告，直接结束子流程，回到原来的报告/项目状态。全程不改变案件主状态。 */
 function secondConsultTabHtml(c){
   var sc = c.secondConsult; if(!sc) return '';
+  var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(sc.status==='awaiting_payment'){
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;">二次面诊 · 等待缴纳面诊费</div>'+
-      '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="secondConsultPaid()">已缴费</button><button class="btn-outline" onclick="secondConsultCancel()">取消本次</button></div>'+
-      '</div>';
+    return wrap(consultFeeCardHtml('待缴费','', '<button class="btn-primary" onclick="secondConsultPaid()">已缴费</button><button class="btn-outline" onclick="secondConsultCancel()">取消本次</button>')+
+      subStatusRowHtml([{kind:'Waiting', text:'待缴费'}]));
   }
+  var feeCard = consultFeeCardHtml('已缴费','','');
   if(sc.status==='paid_waiting_kr'){
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">✓ 二次面诊费已支付</div>'+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">已在案件对话房通知，等待 Kr室长/院长安排第二次面诊时间（二次面诊一律走视频）</div>'+
-      '<button class="btn-ghost" onclick="secondConsultScheduled()">演示：模拟Kr室长已安排时间</button>'+
-      '</div>';
+    return wrap(feeCard+subStatusRowHtml([{kind:'Waiting', text:'待确认面诊时间'}])+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">已在案件对话房通知，等待 Kr室长/院长安排面诊时间（二次面诊一律走视频）</div>'+
+      '<button class="btn-ghost" onclick="secondConsultScheduled()">演示：模拟Kr室长已安排时间</button>');
   }
   if(sc.status==='video_scheduled'){
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">✓ 二次面诊时间已确认</div>'+
+    return wrap(feeCard+subStatusRowHtml([{kind:'Success', text:'面诊时间已确认 '+sc.scheduledTime}])+
       '<div class="card" style="padding:14px 16px;margin-bottom:14px;">Kr室长　'+sc.scheduledTime+' 可以进行</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-primary" onclick="secondConsultEnter()">进入面诊</button>'+
       '<button class="btn-ghost" onclick="simulateSecondConsultVideoDone()">演示：模拟院长视频面诊</button>'+
-      '</div></div>';
+      '</div>');
   }
   if(sc.status==='video_in_progress'){
-    return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:8px;">二次面诊进行中</div>'+
-      '<button class="btn-outline" onclick="nav(\'video-consult\')">回到通话 →</button></div>';
+    return wrap(feeCard+'<div style="font-size:14px;font-weight:700;margin-bottom:10px;">面诊进行中</div>'+
+      '<button class="btn-outline" onclick="nav(\'video-consult\')">回到通话 →</button>');
   }
   if(sc.status==='awaiting_report'){
-    return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:8px;">✓ 二次面诊已结束</div>'+
-      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">有无变动？有变动才会出新报告，覆盖原方案；没有变动就维持原来的报告和项目</div>'+
-      '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="secondConsultChanged(true)">有变动</button><button class="btn-outline" onclick="secondConsultChanged(false)">无变动</button></div>'+
-      '</div>';
+    return wrap(feeCard+subStatusRowHtml([{kind:'Waiting', text:'面诊已结束，请确认有无变动'}])+
+      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">有变动才会出新报告（KR室长同时给出新的可选范围），覆盖原方案；没有变动就维持原来的报告和项目</div>'+
+      '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="secondConsultChanged(true)">有变动</button><button class="btn-outline" onclick="secondConsultChanged(false)">无变动</button></div>');
   }
   return '';
 }
@@ -5753,6 +5788,9 @@ function secondConsultPaid(){
 function secondConsultCancel(){
   var c = getCurrentCase(); if(!c || !c.secondConsult) return;
   if(!confirm('取消本次二次面诊申请？')) return;
+  c.consultHistory = c.consultHistory || [];
+  c.consultHistory.push({fee:(c.secondConsult.status==='awaiting_payment' ? '已取消' : '已取消'), changed:null, at:nowFullDt().split(' ')[0]});
+  c.consultTabRound = null;
   c.secondConsult = null;
   logCaseEvent(c, 'Dewi', '取消本次二次面诊申请');
   buildCaseLog(c); renderCaseBody(c);
@@ -5786,6 +5824,9 @@ function secondConsultChanged(hasChange){
   } else {
     logCaseEvent(c, c.krCoordinator, '二次面诊无变动，维持原报告和项目');
   }
+  c.consultHistory = c.consultHistory || [];
+  c.consultHistory.push({fee:'已缴费', changed:!!hasChange, at:nowFullDt().split(' ')[0]});
+  c.consultTabRound = null;
   c.secondConsult = null;
   buildCaseLog(c);
   renderCaseStatusBar(c);
