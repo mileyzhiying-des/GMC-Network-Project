@@ -3728,54 +3728,63 @@ function noPurchaseThisTime(){
   finishCase(c, '未购买未使用');
 }
 /* 本地管理面板：管理完成 / 管理取消（部分或全部，未做的次数归还持有，不是退款） */
+/* ---- 本地管理项目行（LocalItem，总览第9节，2026-09-30）：进行中 / 已完成 / 已取消（次数归还，不是退款）；
+   可以逐个勾选标完成或取消；「管理完成」「管理取消」保留为批量快捷键（作用于全部进行中的项目）；
+   全部项目标完后这一次本地管理结束：本地案件按08规则自动判结局；面诊/赴韩案件里的"本地管理进行中"小标签消失 ---- */
+var LOCAL_ITEM_COLORS = {'进行中':['#FBF0C9','#8F6F0C'], '已完成':['var(--sage-bg)','var(--sage)'], '已取消':['#EDEAE2','var(--muted)']};
+function localItemStatus(u){ return u.status==='done' ? '已完成' : u.status==='cancelled' ? '已取消' : '进行中'; }
 function mgmtActiveHtml(c, scope){
   var ctx = ctxOf(c, scope);
-  var cancelling = !!ctx.mgmtCancelling;
   var rows = (ctx.mgmtUses||[]).map(function(u,i){
-    var cancelInput = cancelling
-      ? '<span style="font-size:12px;margin-left:10px;">取消 <input type="number" min="0" max="'+u.qty+'" value="0" id="mgmt-cancel-'+scope+'-'+i+'" style="width:54px;padding:3px 5px;border:1px solid var(--border);border-radius:6px;font-size:12px;"> 次</span>' : '';
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次</span>'+cancelInput+'</div>';
+    var st = localItemStatus(u), col = LOCAL_ITEM_COLORS[st];
+    var cb = st==='进行中' ? '<input type="checkbox" class="mgmt-cb-'+scope+'" value="'+i+'" style="margin-right:8px;">' : '';
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+(st==='已取消'?'text-decoration:line-through;color:var(--muted);':'')+'">'+cb+u.itemName+'</span>'+
+      '<span style="font-size:12px;color:var(--slate2);margin-right:10px;">使用 '+u.qty+' 次</span>'+
+      '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+st+'</span></div>';
   }).join('');
-  var btns = cancelling
-    ? '<div style="font-size:11px;color:var(--terracotta);margin:8px 0;">未做的次数会归还到客户持有项目，<b>不是退款</b>。</div>'+
-      '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex-grow:1;" onclick="submitMgmtCancel(\''+scope+'\')">确认管理取消</button><button class="btn-outline" onclick="cancelMgmtCancelling(\''+scope+'\')">返回</button></div>'
-    : '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-primary" style="flex-grow:1;" onclick="mgmtComplete(\''+scope+'\')">管理完成</button><button class="btn-outline" style="flex-grow:1;" onclick="startMgmtCancel(\''+scope+'\')">管理取消</button></div>';
+  var btns = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">'+
+    '<button class="btn-outline" onclick="markMgmtRows(\''+scope+'\',\'done\',false)">标记所选完成</button>'+
+    '<button class="btn-outline" onclick="markMgmtRows(\''+scope+'\',\'cancelled\',false)">标记所选取消</button>'+
+    '<button class="btn-primary" style="margin-left:auto;" onclick="mgmtComplete(\''+scope+'\')">管理完成</button>'+
+    '<button class="btn-outline" onclick="startMgmtCancel(\''+scope+'\')">管理取消</button></div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-top:8px;">勾选后可逐个标完成或取消；「管理完成 / 管理取消」是对全部进行中项目的批量快捷键。取消的次数归还到客户持有项目，<b>不是退款</b>。</div>';
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理</div>'+rows+btns+'</div>';
 }
-function startMgmtCancel(scope){ var c=getCurrentCase(); if(!c) return; ctxOf(c,scope).mgmtCancelling = true; renderCaseBody(c); }
-function cancelMgmtCancelling(scope){ var c=getCurrentCase(); if(!c) return; ctxOf(c,scope).mgmtCancelling = false; renderCaseBody(c); }
-function mgmtComplete(scope){
+/* 标记项目行：action 'done' / 'cancelled'；all=true 时作用于全部进行中的项目，否则作用于勾选的 */
+function markMgmtRows(scope, action, all){
   var c = getCurrentCase(); if(!c) return;
-  var ctx = ctxOf(c, scope);
-  if(!confirm('确认管理已完成？')) return;
-  ctx.mgmtDone = true; ctx.mgmtActive = false; ctx.mgmtStatus = 'done';
-  logCaseEvent(c, 'Dewi', (scope==='lm'?'本地管理：':'')+'管理完成');
-  if(scope==='lm') return afterLmFinished(c);
-  finishCase(c);
-}
-function submitMgmtCancel(scope){
-  var c = getCurrentCase(); if(!c) return;
-  var ctx = ctxOf(c, scope);
-  var total = 0, cancelled = 0;
-  (ctx.mgmtUses||[]).forEach(function(u,i){
-    total += u.qty;
-    var el = document.getElementById('mgmt-cancel-'+scope+'-'+i);
-    var q = Math.min(u.qty, Math.max(0, parseInt(el && el.value, 10) || 0));
-    u.cancelQty = q;
-    cancelled += q;
+  var ctx = ctxOf(c, scope); if(!ctx) return;
+  var uses = ctx.mgmtUses||[];
+  var idxs = all
+    ? uses.map(function(u,i){ return localItemStatus(u)==='进行中' ? i : -1; }).filter(function(i){ return i>-1; })
+    : Array.prototype.slice.call(document.querySelectorAll('.mgmt-cb-'+scope)).filter(function(cb){ return cb.checked; }).map(function(cb){ return parseInt(cb.value,10); });
+  if(!idxs.length){ alert('请先勾选要标记的项目'); return; }
+  var returned = 0, names = [];
+  idxs.forEach(function(i){
+    var u = uses[i]; if(!u || localItemStatus(u)!=='进行中') return;
+    names.push(u.itemName);
+    if(action==='done'){ u.status = 'done'; }
+    else { u.status = 'cancelled'; u.cancelQty = u.qty; returnHolding(c.name, u.itemName, c.id, u.qty, scope); returned += u.qty; } /* 次数归还持有，不是退款 */
   });
-  if(cancelled<=0){ alert('请填写要取消的次数'); return; }
-  (ctx.mgmtUses||[]).forEach(function(u){
-    if(u.cancelQty>0) returnHolding(c.name, u.itemName, c.id, u.cancelQty, scope);
-  });
-  var all = cancelled>=total;
-  ctx.mgmtStatus = all ? 'cancelled_all' : 'cancelled_partial';
-  ctx.mgmtDone = !all; /* 部分取消：做了一部分，算完成了管理；全部取消：没完成 */
+  logCaseEvent(c, 'Dewi', (scope==='lm'?'本地管理：':'')+(action==='done'?'标记完成：':'标记取消（次数已归还持有，不是退款）：')+names.join('、'));
+  if(returned>0) alert('已归还 '+returned+' 次到客户持有项目（这不是退款）');
+  if(uses.some(function(u){ return localItemStatus(u)==='进行中'; })){ buildCaseLog(c); renderCaseBody(c); return; }
+  /* 全部项目都标完：这一次本地管理结束 */
+  var anyDone = uses.some(function(u){ return u.status==='done'; });
+  var anyCancelled = uses.some(function(u){ return u.status==='cancelled'; });
+  ctx.mgmtDone = anyDone;
+  ctx.mgmtStatus = !anyCancelled ? 'done' : (anyDone ? 'cancelled_partial' : 'cancelled_all');
   ctx.mgmtActive = false; ctx.mgmtCancelling = false;
-  logCaseEvent(c, 'Dewi', (scope==='lm'?'本地管理：':'')+'管理取消（'+(all?'全部':'部分')+'）：'+cancelled+'次已归还持有项目（不是退款）');
-  alert('已归还 '+cancelled+' 次到客户持有项目（这不是退款）');
   if(scope==='lm') return afterLmFinished(c);
   finishCase(c, '管理取消');
+}
+function mgmtComplete(scope){
+  if(!confirm('确认全部进行中的项目都已完成？')) return;
+  markMgmtRows(scope, 'done', true);
+}
+function startMgmtCancel(scope){
+  if(!confirm('确认取消全部进行中的项目？未做的次数会归还持有项目（不是退款）。')) return;
+  markMgmtRows(scope, 'cancelled', true);
 }
 /* 购买案件里只读显示本地项目的"已退款 X"（退款本身只能在客户详情"持有项目"卡片操作，2026-09-30） */
 function localRefundNoteHtml(c){
