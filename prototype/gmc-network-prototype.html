@@ -885,10 +885,45 @@ input,textarea,select{font-family:inherit;}
     <input type="number" min="0" id="holding-refund-amount" placeholder="请输入退款金额" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
     <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
     <textarea id="holding-refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">退款记录挂在这一批购买上，不改变任何案件的结局。</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">按批次退款：这一批的次数将全部作废（不能只退其中几次）；退款记录挂在这一批购买上，不改变任何案件的结局。</div>
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button class="btn-outline" style="flex:1;" onclick="closeHoldingRefundModal()">取消</button>
       <button class="btn-primary" style="flex:1;" onclick="confirmHoldingRefund()">确认退款</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 模拟KR补加术后管理项目 MODAL（2026-09-30：从术后管理分类里选） ============ -->
+<div class="modal-overlay" id="postcare-overlay" onclick="if(event.target===this) closePostCareModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR补加术后管理项目</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareModal()">✕</span>
+    </div>
+    <div id="postcare-list" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;margin-top:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closePostCareModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmPostCare()">确认补加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 免除面诊费 MODAL（2026-09-30，Notion 09-30） ============ -->
+<div class="modal-overlay" id="waive-fee-overlay" onclick="if(event.target===this) closeWaiveFeeModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">免除面诊费</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeWaiveFeeModal()">✕</span>
+    </div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">免除原因 <span style="color:#C1454A;">*</span></div>
+    <select id="waive-fee-reason" onchange="document.getElementById('waive-fee-note').style.display = this.value==='其他' ? 'block':'none'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;">
+      <option value="">请选择</option><option>前次面诊补充</option><option>术后复查</option><option>延续既往面诊</option><option>其他</option>
+    </select>
+    <input type="text" id="waive-fee-note" placeholder="其他（请注明）" style="display:none;width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">免除后面诊照正常流程：等待确认面诊时间 → 由KR室长决定视频或书面。</div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeWaiveFeeModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmWaiveFee()">确认免除</button>
     </div>
   </div>
 </div>
@@ -1245,8 +1280,8 @@ function buildWeekGrid(){
       var chips = evs.map(function(e){
         /* 2026-09-29 第十轮：不再使用"术后管理"事件类型，术后到店/使用持有项目统一走"预约来访"开新案件，
            这里不再需要 type:'post' 的 caseId 联动，纯装饰用的旧 post 演示数据（无caseId）保留原样 */
-        var dim = (e.type==='reservation' && e.arrived) ? 'opacity:.5;' : '';
-        var label = e.type==='reservation' ? ('预约来访｜'+e.name+(e.arrived?'（已到访）':'')) : (TYPE_LABEL[e.type]+'｜'+e.name);
+        var dim = (e.type==='reservation' && (e.arrived||e.cancelled)) ? 'opacity:.5;' : '';
+        var label = e.type==='reservation' ? ('预约来访｜'+e.name+(e.arrived?'（已到访）':'')+(e.cancelled?'（已取消）':'')) : (TYPE_LABEL[e.type]+'｜'+e.name);
         var onclick = e.type==='reservation'
           ? (e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)')
           : 'openClientDetail(\''+e.name+'\',\'in-dashboard\')';
@@ -1481,8 +1516,8 @@ var CLIENTS = [
    结构：{itemName, category, batches:[{caseId,date,bought,used,usages:[{caseId,date,qty}]}], krCollected} */
 var CLIENT_HOLDINGS = {};
 function getClientHoldings(name){ return CLIENT_HOLDINGS[name] || []; }
-function holdingRemaining(h){ return h.batches.reduce(function(s,b){ return s+(b.bought-b.used); }, 0); }
-function holdingTotal(h){ return h.batches.reduce(function(s,b){ return s+b.bought; }, 0); }
+function holdingRemaining(h){ return h.batches.reduce(function(s,b){ return b.voided ? s : s+(b.bought-b.used); }, 0); } /* 已退款的批次整批作废，不计入 */
+function holdingTotal(h){ return h.batches.reduce(function(s,b){ return b.voided ? s : s+b.bought; }, 0); }
 /* 结算/KR代收 时调用：给客户新增一批持有 */
 function grantHolding(name, itemName, category, caseId, date, qty, krCollected){
   CLIENT_HOLDINGS[name] = CLIENT_HOLDINGS[name] || [];
@@ -1499,7 +1534,7 @@ function useHolding(name, itemName, caseId, date, qty, tag){
   h.batches.sort(function(a,b){ return a.date<b.date?-1:1; });
   for(var i=0;i<h.batches.length && left>0;i++){
     var b = h.batches[i];
-    var avail = b.bought - b.used;
+    var avail = b.voided ? 0 : b.bought - b.used;
     if(avail<=0) continue;
     var take = Math.min(avail, left);
     b.used += take;
@@ -1513,7 +1548,7 @@ function holdingSourceCaseIds(h, qty){
   var ids = [], left = qty;
   h.batches.slice().sort(function(a,b){ return a.date<b.date?-1:1; }).forEach(function(b){
     if(left<=0) return;
-    var avail = b.bought-b.used; if(avail<=0) return;
+    var avail = b.voided ? 0 : b.bought-b.used; if(avail<=0) return;
     if(ids.indexOf(b.caseId)<0) ids.push(b.caseId);
     left -= Math.min(avail,left);
   });
@@ -1543,17 +1578,19 @@ function buildClients(){ renderClientRows(); }
 function clientCaseStatus(entry){
   var name = entry[0];
   var cases = CASE_ITEMS.filter(function(c){ return c.name===name; });
-  if(!cases.length) return {label:entry[1], bg:entry[4], fg:entry[5]};
+  if(!cases.length) return {pills:[{label:entry[1], bg:entry[4], fg:entry[5]}], more:''};
   var active = cases.filter(function(c){ return !isEnded(c); });
-  var target = active.length ? active[active.length-1] : cases[cases.length-1];
-  var b = caseStatusBadge(target);
-  return {label:b[2], bg:b[0], fg:b[1]};
+  /* 2026-09-30：客户可能同时有多个进行中的案件——列出全部未结案案件的状态；超过2个时显示"最新1个 + 共N个"；都结案了就显示最近一个终态 */
+  var shown = active.length ? active : [cases[cases.length-1]];
+  var more = '';
+  if(active.length>2){ shown = [active[active.length-1]]; more = '共 '+active.length+' 个'; }
+  return {pills: shown.map(function(c){ var b = caseStatusBadge(c); return {label:b[2], bg:b[0], fg:b[1]}; }), more:more};
 }
 function renderClientRows(){
   document.getElementById('client-rows').innerHTML = CLIENTS.map(function(c){
     var s = clientCaseStatus(c);
     return '<div class="trow"><b style="font-size:13px;cursor:pointer;" onclick="openClientDetail(\''+c[0]+'\',\'in-clients\')">'+c[0]+'</b>'+
-      '<span class="status-pill" style="background:'+s.bg+';color:'+s.fg+';">'+s.label+'</span>'+
+      '<span style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">'+s.pills.map(function(pl){ return '<span class="status-pill" style="background:'+pl.bg+';color:'+pl.fg+';">'+pl.label+'</span>'; }).join('')+(s.more?'<span style="font-size:11px;color:var(--muted);">'+s.more+'</span>':'')+'</span>'+
       '<span style="font-size:12px;">'+c[2]+'</span><span style="font-size:12px;color:var(--muted);">'+c[3]+'</span>'+
       '<a href="#" onclick="openClientDetail(\''+c[0]+'\',\'in-clients\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
   }).join('');
@@ -1590,7 +1627,8 @@ function renderClientHoldings(name){
       (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'');
     var batchRows = h.batches.map(function(b,bi){
       var right = b.refund
-        ? '<span style="color:var(--terracotta);font-weight:700;">已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>'
+        ? '<span style="color:var(--terracotta);font-weight:700;">已退款 '+formatCurrency(b.refund.amount,'IDR')+'（整批作废）</span>'
+        : b.used>0 ? '<span style="color:var(--muted);">已使用，不可退款</span>'
         : '<a href="#" class="info-link" onclick="openHoldingRefundModal(\''+name.replace(/'/g,"\\'")+'\','+JSON.stringify(h.itemName).replace(/"/g,'&quot;')+','+bi+');return false;">退款</a>';
       return '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--slate2);padding:3px 0 3px 12px;">'+
         '<span>'+b.date+' · 购买 '+caseNoLabel(b.caseId)+' · 购买 '+b.bought+' 次，已用 '+b.used+'</span>'+right+'</div>';
@@ -1601,7 +1639,7 @@ function renderClientHoldings(name){
 var HOLDING_REFUND_CTX = null;
 function openHoldingRefundModal(name, itemName, batchIdx){
   var h = (CLIENT_HOLDINGS[name]||[]).filter(function(x){ return x.itemName===itemName; })[0]; if(!h) return;
-  var b = h.batches[batchIdx]; if(!b || b.refund) return;
+  var b = h.batches[batchIdx]; if(!b || b.refund || b.used>0) return; /* 只有完全没用过的批次才能退款 */
   HOLDING_REFUND_CTX = {name:name, itemName:itemName, batchIdx:batchIdx};
   document.getElementById('holding-refund-info').innerHTML = '<b>'+itemName+'</b><br><span style="color:var(--slate2);font-size:12px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 购买 '+b.bought+' 次，已用 '+b.used+' 次</span>';
   document.getElementById('holding-refund-amount').value = '';
@@ -1617,7 +1655,8 @@ function confirmHoldingRefund(){
   var reason = document.getElementById('holding-refund-reason').value.trim();
   if(!reason){ alert('请填写退款原因'); return; }
   var h = (CLIENT_HOLDINGS[ctx.name]||[]).filter(function(x){ return x.itemName===ctx.itemName; })[0]; if(!h) return;
-  var b = h.batches[ctx.batchIdx]; if(!b) return;
+  var b = h.batches[ctx.batchIdx]; if(!b || b.used>0) return;
+  b.voided = true; /* 这一批的次数全部作废 */
   b.refund = {amount:amount, currency:'IDR', reason:reason, date:nowFullDt().split(' ')[0]}; /* 退款记录挂在这一批上；不改变任何案件的结局 */
   HOLDING_REFUND_CTX = null;
   closeHoldingRefundModal();
@@ -1769,7 +1808,7 @@ function makeCase(o){
     consultRequested:!!o.consultRequested, consultStatus:o.consultStatus||null, consultMethod:o.consultMethod||null,
     consultScheduledTime:o.consultScheduledTime||'', writtenAdvice:o.writtenAdvice||'', writtenEta:o.writtenEta||'',
     videoSummary:o.videoSummary||'', consultFiles:o.consultFiles||[], reportReady:!!o.reportReady, consultRound:o.consultRound||0, krVideoInvited:!!o.krVideoInvited,
-    reportUploadedBy:o.reportUploadedBy||'', /* 2026-09-29：邀请室长视频候选人理论上只列"上传过报告的室长"，原型里报告固定是院长上传，这个字段先留着，见汇报里的 TODO */
+    reportUploadedBy:o.reportUploadedBy||(o.reportReady ? (o.krCoordinator||'이서연 실장') : ''), /* 2026-09-30：报告由KR室长上传（Notion），邀请室长视频的候选人只列上传过报告的室长 */
     /* 2026-09-29 新状态机：visibleToKR 默认跟着"是否需要面诊"走，不面诊案件默认对韩国侧不可见，点"增加面诊"后才变 true */
     visibleToKR: o.visibleToKR!==undefined ? !!o.visibleToKR : (o.needsConsult===true),
     secondConsult:o.secondConsult||null, /* 二次面诊子流程，独立于主状态，见 requestAnotherConsult()/addConsultAfterPayment() */
@@ -1790,6 +1829,7 @@ function makeCase(o){
     mgmtUses:o.mgmtUses||[], mgmtActive:!!o.mgmtActive, mgmtDone:!!o.mgmtDone, mgmtStatus:o.mgmtStatus||null, mgmtCancelling:false,
     linkedCase:o.linkedCase||null, /* 2026-09-30 §6：关联之前案件 {caseId, reason:复诊/术后管理/延续既往面诊, auto?} */
     linkedFiles:o.linkedFiles||[], manualAttachments:o.manualAttachments||[], materialsDate:o.materialsDate||null, /* §7 附件 */
+    consultFeeWaived:o.consultFeeWaived||null, /* 面诊费免除（2026-09-30）：{reason, note}，免除时财务结果按无收入判断 */
     localAsk:!!o.localAsk, /* 赴韩项目"无法协调"退款后，询问是否做本地管理 */
     localMgmt:o.localMgmt||null,
     entryChoicePending:!!o.entryChoicePending, projectEntryMode:o.projectEntryMode||null, /* 不面诊/面诊取消后"持有项目使用"vs"新增项目"的入口选择 */
@@ -2058,7 +2098,7 @@ var CASE_TABS = [
    Tab 分组键，不是状态本身（Status Dictionary 原话），新状态机的"项目确认中/待确认施术时间/待付款/
    已付款"都还在"consult"这个桶（对应"面诊安排"tab），这点没有变。变的是桶内部的细分状态和终态规则。 */
 var CASE_STAGE_BADGE = {
-  travel:['var(--sage-bg)','var(--sage)','赴韩中'],
+  travel:['var(--sage-bg)','var(--sage)','赴韩施术中'],
   local:['var(--blue-bg)','var(--blue)','管理进行中'] /* 2026-09-29 第十轮：纯本地已付款、待用持有项目 */
 };
 /* ============ 结局模型（2026-09-30）：终态只有 已结案 / 仅出报告 / 已取消，由系统在案件结束时推算 ============
@@ -2084,6 +2124,7 @@ function financePaid(c){
   return {kr:kr, inn:inn};
 }
 function consultFeePaid(c){
+  if(c.consultFeeWaived) return false; /* 免除面诊费：不算收入 */
   return c.reportReady || ['paid_waiting_kr','video_scheduled','video_in_progress','awaiting_report','report_ready'].indexOf(c.consultStatus)>-1;
 }
 /* 财务结果：无收入 / 仅面诊费 / 有项目收入 / 全额退款（独立于结局）。
@@ -2108,6 +2149,17 @@ function financeLabel(c){
   return t;
 }
 /* 案件结束的唯一出口：标记结束、推算结局、写 cancelReason（只有结局是已取消才有），再刷新界面 */
+/* 进入终态时，该客户名下还没到店的后续预约（待访问）全部自动取消（Notion；"关联"口径是我的判断：同一客户的待访问案件，见待确认清单） */
+function cancelFollowUpReservations(c){
+  CASE_ITEMS.filter(function(x){ return x.id!==c.id && x.name===c.name && x.stage==='booked' && x.subState==='waiting'; }).forEach(function(x){
+    x.subState = 'cancelled'; x.cancelReason = '关联案件已结束，预约自动取消';
+    x.logEntries = x.logEntries || [];
+    x.logEntries.push({stage:'预约到店', actor:'系统', action:'关联案件 '+(c.caseNo||c.id)+' 已进入终态，后续预约自动取消', dt:nowFullDt()});
+    updateCaseStage(x);
+    WEEK_EVENTS.forEach(function(ev){ if(ev.caseId===x.id) ev.cancelled = true; });
+    logCaseEvent(c, '系统', '后续预约自动取消：'+(x.reservationId||x.id));
+  });
+}
 function finishCase(c, cancelReasonIfCancelled){
   c.visitClosed = true;
   c.entryChoicePending = false; c.mgmtActive = false; c.mgmtCancelling = false; c.localAsk = false;
@@ -2116,6 +2168,7 @@ function finishCase(c, cancelReasonIfCancelled){
   c.cancelReason = out==='cancelled' ? (cancelReasonIfCancelled || '未购买未使用') : null;
   updateCaseStage(c);
   logCaseEvent(c, '系统', '案件结束：'+terminalBadge(c)[2]);
+  cancelFollowUpReservations(c);
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -2152,6 +2205,7 @@ function caseStatusBadge(c){
     if(c.consultStatus==='paid_waiting_kr') return ['var(--terracotta-bg)','var(--terracotta)','等待确认面诊时间'];
     if(c.consultStatus==='video_scheduled') return ['var(--terracotta-bg)','var(--terracotta)','等待面诊'];
     if(c.consultStatus==='video_in_progress') return ['var(--terracotta-bg)','var(--terracotta)','面诊进行中'];
+    if(c.consultStatus==='awaiting_payment') return ['var(--terracotta-bg)','var(--terracotta)','等待缴纳面诊费'];
     if(c.consultStatus==='awaiting_report') return ['var(--terracotta-bg)','var(--terracotta)','等待报告'];
     if(c.consultStatus==='report_ready') return ['var(--terracotta-bg)','var(--terracotta)','已出报告'];
     if(c.consultStatus==='cancelled') return ['var(--terracotta-bg)','var(--terracotta)','面诊已取消'];
@@ -2177,23 +2231,23 @@ function caseStatusSub(c){
     }
     if(c.settlementDone){
       var ks = c.krSchedule;
-      if(ks && ks.status==='confirmed') return 'Kr室长已确认施术日期 '+ks.confirmedDate+' '+ks.confirmedTime+'，等待"已到医院"';
-      if(ks && ks.status==='change_pending') return '正在申请修改施术日期，等待Kr室长确认';
-      if(ks && ks.status==='pending') return '已提交施术日期（首选 '+(ks.primary||'—')+(ks.backup?'／备选 '+ks.backup:'')+'），等待Kr室长确认';
-      return '已付款，请递交赴韩施术日期';
+      if(ks && ks.status==='confirmed') return '等待施术（Kr室长已确认 '+ks.confirmedDate+' '+ks.confirmedTime+'，等待"已到医院"）';
+      if(ks && ks.status==='change_pending') return '待确认施术时间（申请修改施术日期，等待Kr室长确认）';
+      if(ks && ks.status==='pending') return '待确认施术时间（已提交施术日期，首选 '+(ks.primary||'—')+(ks.backup?'／备选 '+ks.backup:'')+'），等待Kr室长确认';
+      return '递交施术日期（已付款，请递交赴韩施术日期）';
     }
-    if(c.projectsLocked) return '已生成结算单，等待付款';
-    if(c.projectsEnabled) return c.needsConsult===false ? '不需要面诊，正在确认管理项目' : '方案已出，正在确认管理项目';
+    if(c.projectsLocked) return '待付款（已生成结算单）';
+    if(c.projectsEnabled) return c.needsConsult===false ? '项目确认中（不需要面诊）' : '项目确认中（已出报告）';
     if(c.consultStatus==='awaiting_payment') return '等待缴纳面诊费';
-    if(c.consultStatus==='paid_waiting_kr') return '已缴费，等待Kr室长/院长回复';
-    if(c.consultStatus==='video_scheduled') return '面诊时间已确认';
+    if(c.consultStatus==='paid_waiting_kr') return '等待确认面诊时间（等待Kr室长确认面诊形式与时间）';
+    if(c.consultStatus==='video_scheduled') return '等待面诊（面诊时间已确认）';
     if(c.consultStatus==='video_in_progress') return '面诊进行中';
-    if(c.consultStatus==='awaiting_report') return '面诊已结束，等待室长上传报告';
-    if(c.consultStatus==='report_ready') return '方案已出';
+    if(c.consultStatus==='awaiting_report') return '等待报告（等待室长上传正式报告）';
+    if(c.consultStatus==='report_ready') return '已出报告';
     if(c.consultStatus==='cancelled') return '面诊已取消，等待确认是否做本地项目';
     return '面诊中';
   }
-  if(c.stage==='travel') return '赴韩项目施术中';
+  if(c.stage==='travel') return '赴韩施术中';
   if(c.stage==='local') return '已使用持有项目，管理进行中（管理完成 / 管理取消）';
   return c.sub || '';
 }
@@ -2323,6 +2377,7 @@ function confirmCancel(){
   c.subState = 'cancelled';
   c.cancelReason = CANCEL_REASON;
   updateCaseStage(c);
+  cancelFollowUpReservations(c);
   closeCancelModal();
   renderCaseStatusBar(c);
   logCaseEvent(c, 'Dewi', '取消该客人的到店预约（原因：'+CANCEL_REASON+'）');
@@ -2536,7 +2591,11 @@ function simulateSecondConsultVideoDone(){
 }
 var KR_COORDINATORS = ['이서연', '박준혁'];
 function openInviteKrModal(){
-  document.getElementById('invite-kr-list').innerHTML = KR_COORDINATORS.map(function(name, i){
+  var c0 = getCurrentCase();
+  /* 只列上传过报告的KR室长（Notion：选择上传了报告的室长） */
+  var cands = KR_COORDINATORS.filter(function(n){ return c0 && (c0.reportUploadedBy||'').indexOf(n)>-1; });
+  if(!cands.length){ alert('没有找到上传报告的室长'); return; }
+  document.getElementById('invite-kr-list').innerHTML = cands.map(function(name, i){
     return '<button class="'+(i===0?'btn-primary':'btn-outline')+'" onclick="inviteKrVideo(\'' + name + '\')">' + name + '</button>';
   }).join('');
   document.getElementById('invite-kr-overlay').classList.add('open');
@@ -2612,11 +2671,11 @@ function markReportUploaded(){
   if(!c || c.consultStatus!=='awaiting_report') return;
   c.reportReady = true;
   c.consultStatus = 'report_ready';
-  c.reportUploadedBy = c.director;
+  c.reportUploadedBy = c.krCoordinator;
   c.consultFiles = c.consultFiles || [];
   c.consultFiles.unshift({label:'面诊报告',date:attDate()});
   applyDirectorPlan(c);
-  logCaseEvent(c, c.director, '提交面诊报告，已出报告');
+  logCaseEvent(c, c.krCoordinator, '提交面诊报告，已出报告');
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -2633,6 +2692,12 @@ function defaultKrScopeItems(){
     var p = PROJECT_LIBRARY.filter(function(y){ return y.name===x.name; })[0];
     return p ? {name:p.name, price:p.price, note:x.note} : null;
   }).filter(Boolean);
+}
+function secondRoundKrScopeItems(c){
+  var items = ((c.krScope && c.krScope.items) || defaultKrScopeItems()).slice();
+  var extra = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && p.categoryId!==POST_CARE_CAT_ID && !items.some(function(it){ return it.name===p.name; }); })[0];
+  if(extra) items.push({name:extra.name, price:extra.price, note:'二次面诊后新增'});
+  return items;
 }
 function applyDirectorPlan(c){
   /* 出报告同时，KR室长给出赴韩可选项目范围，不再自动预勾选到已选列表，改由IN室长自由勾选 */
@@ -3041,13 +3106,14 @@ function attachmentsTabHtml(c){
       '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">下载</a><a href="#" class="info-link" onclick="return false;">查看</a></span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无附件</div>';
   return '<div class="card" style="padding:22px 24px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div class="info-heading">附件</div>'+
-    '<button class="btn-ghost" onclick="mockUploadAttachment()">+ 上传附件</button></div>'+rows+'</div>';
+    '<span style="display:flex;gap:8px;align-items:center;"><select id="att-cat" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"><option>基础资料</option><option>面诊资料</option></select><button class="btn-ghost" onclick="mockUploadAttachment()">+ 上传附件</button></span></div>'+rows+'</div>';
 }
 function mockUploadAttachment(){
   var c = getCurrentCase(); if(!c) return;
   c.manualAttachments = c.manualAttachments || [];
-  c.manualAttachments.push({label:'补充附件 '+(c.manualAttachments.length+1)+'.pdf', src: c.consultRequested ? '面诊资料' : '基础资料', date:attDate()});
-  logCaseEvent(c, 'Dewi', '上传了附件');
+  var cat = (document.getElementById('att-cat')||{}).value || '基础资料';
+  c.manualAttachments.push({label:'补充附件 '+(c.manualAttachments.length+1)+'.pdf', src:cat, date:attDate()});
+  logCaseEvent(c, 'Dewi', '上传了附件（'+cat+'）');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -3111,7 +3177,7 @@ function consultTabHtml(c){
   if(c.consultStatus==='awaiting_payment'){
     return '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:8px;">等待缴纳面诊费</div>'+
-      '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="markConsultPaid()">已缴费</button><button class="btn-outline" onclick="cancelConsult()">面诊取消</button></div>'+
+      '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="markConsultPaid()">已缴费</button><button class="btn-outline" onclick="openWaiveFeeModal()">免除面诊费</button><button class="btn-outline" onclick="cancelConsult()">面诊取消</button></div>'+
       '</div>';
   }
   if(c.consultStatus==='cancelled'){
@@ -3127,7 +3193,7 @@ function consultTabHtml(c){
   if(c.consultStatus==='paid_waiting_kr'){
     return '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:8px;">等待确认面诊时间</div>'+
-      '<div style="font-size:12px;color:var(--sage);font-weight:700;margin-bottom:6px;">✓ 面诊费已支付</div>'+
+      '<div style="font-size:12px;color:var(--sage);font-weight:700;margin-bottom:6px;">'+(c.consultFeeWaived ? '✓ 面诊费已免除（'+c.consultFeeWaived.reason+'）' : '✓ 面诊费已支付')+'</div>'+
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认面诊形式与时间</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-outline" onclick="openFloatingChat(\'main\')">查看 Main 对话 →</button>'+
@@ -3167,17 +3233,10 @@ function consultTabHtml(c){
     var title = '✓ 已出报告';
     var reportBtn = '<button class="btn-primary" onclick="openReportModal()">查看报告 →</button>';
     var inviteBtn = '<button class="btn-outline" onclick="openInviteKrModal()">邀请室长视频</button>';
-    var filesHtml = (c.consultFiles||[]).length
-      ? '<div style="border-top:1px solid var(--border2);margin-top:18px;padding-top:14px;">'+
-        '<div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">附件</div>'+
-        c.consultFiles.map(function(f){
-          return '<div class="case-field-row"><a href="#" class="info-link" style="text-decoration:underline;flex-grow:1;">'+f.label+'</a><span class="fa" style="gap:12px;"><span style="cursor:pointer;">⬇</span><span style="cursor:pointer;">👁</span></span></div>';
-        }).join('')+'</div>'
-      : '';
     return '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:8px;color:var(--sage);">'+title+'</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+reportBtn+inviteBtn+'</div>'+
-      filesHtml+
+      '<div style="font-size:11px;color:var(--muted);margin-top:12px;">面诊阶段产生的文件统一在「附件」tab 查看</div>'+
       '</div>';
   }
   return '';
@@ -3413,6 +3472,13 @@ function notUseThisTime(scope){
   buildCaseLog(c);
   renderCaseBody(c);
 }
+/* 已出报告后，客人决定不做项目（不赴韩也不做本地）：二次确认 → 按结局推算（没买本地项目 → 仅出报告） */
+function noProjectForClient(){
+  var c = getCurrentCase(); if(!c) return;
+  if(!confirm('确认客人不做任何项目？案件将按结局结束（仅出报告）。')) return;
+  logCaseEvent(c, 'Dewi', '客人不做项目');
+  finishCase(c, '未购买未使用');
+}
 /* 新增项目里"本次不购买"：判断本 case 是否有购买——有→已结案，无→已取消（未购买未使用） */
 function noPurchaseThisTime(){
   var c = getCurrentCase(); if(!c) return;
@@ -3526,18 +3592,32 @@ function localMgmtTabHtml(c){
 function lmBuyHtml(c){
   var lm = c.localMgmt;
   var list = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; });
+  var total = 0;
   var rows = list.map(function(p){
-    var q = lm.pick[p.id]||0;
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+p.name+'</span><span style="font-size:12px;color:var(--slate2);margin-right:10px;">'+formatCurrency(p.price,'IDR')+'</span>'+
-      '<input type="number" min="0" value="'+q+'" onchange="lmPick(\''+p.id+'\',this.value)" style="width:56px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;"> 次</div>';
+    var pk = lm.pick[p.id] || {qty:0, pct:100, note:''};
+    var line = Math.round(p.price*pk.qty*pk.pct/100);
+    total += line;
+    var inputs = pk.qty>0
+      ? ' × <input type="number" min="1" max="100" value="'+pk.pct+'" onchange="lmPickField(\''+p.id+'\',\'pct\',this.value)" style="width:48px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:center;">% ＝ <b>'+formatCurrency(line,'IDR')+'</b>'
+      : '';
+    var noteRow = pk.qty>0 ? '<div class="case-field-row" style="border-top:none;padding-top:0;padding-bottom:10px;"><input type="text" placeholder="备注（选填）" value="'+(pk.note||'').replace(/"/g,'&quot;')+'" onchange="lmPickField(\''+p.id+'\',\'note\',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;"></div>' : '';
+    return '<div class="case-field-row" style="flex-wrap:wrap;gap:6px;"><span style="flex-grow:1;font-size:13px;">'+p.name+'</span><span style="font-size:12px;color:var(--slate2);">'+formatCurrency(p.price,'IDR')+'</span>'+
+      '<span style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="number" min="0" value="'+pk.qty+'" onchange="lmPickField(\''+p.id+'\',\'qty\',this.value)" style="width:46px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:center;"> 次'+inputs+'</span></div>'+noteRow;
   }).join('');
-  var total = 0; list.forEach(function(p){ total += (lm.pick[p.id]||0)*p.price; });
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理：新增项目</div>'+rows+
     '<div style="text-align:right;font-size:13px;font-weight:700;margin:12px 0;">合计 '+formatCurrency(total,'IDR')+'</div>'+
     '<div style="display:flex;gap:10px;">'+(total>0?'<button class="btn-primary" style="flex:1;" onclick="lmSettle()">结算付款</button>':'')+
     '<button class="btn-outline" style="flex:1;" onclick="lmNoBuy()">本次不购买</button></div></div>';
 }
-function lmPick(id, v){ var c=getCurrentCase(); if(!c||!c.localMgmt) return; c.localMgmt.pick[id] = Math.max(0, parseInt(v,10)||0); renderCaseBody(c); }
+function lmPickField(id, field, v){
+  var c = getCurrentCase(); if(!c||!c.localMgmt) return;
+  var pk = c.localMgmt.pick[id] || {qty:0, pct:100, note:''};
+  if(field==='qty') pk.qty = Math.max(0, parseInt(v,10)||0);
+  else if(field==='pct') pk.pct = Math.min(100, Math.max(1, parseInt(v,10)||100));
+  else pk.note = v;
+  c.localMgmt.pick[id] = pk;
+  renderCaseBody(c);
+}
 function lmNoBuy(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
   logCaseEvent(c, 'Dewi', '本地管理：本次不购买项目');
@@ -3547,15 +3627,16 @@ function lmSettle(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
   var lm = c.localMgmt, items = [], total = 0, today = nowFullDt().split(' ')[0];
   PROJECT_LIBRARY.forEach(function(p){
-    var q = lm.pick[p.id]||0; if(q<=0) return;
-    items.push({name:p.name, qty:q, price:p.price}); total += q*p.price;
-    grantHolding(c.name, p.name, '本地', c.id, today, q, false);
+    var pk = lm.pick[p.id]; if(!pk || pk.qty<=0) return;
+    var line = Math.round(p.price*pk.qty*pk.pct/100);
+    items.push({name:p.name, qty:pk.qty, price:p.price, discountPct:pk.pct, itemNote:pk.note||'', lineTotal:line}); total += line;
+    grantHolding(c.name, p.name, '本地', c.id, today, pk.qty, false);
   });
   if(!items.length) return;
   lm.batches.push({id:'L'+(lm.batches.length+1), items:items, inTotal:total, time:nowFullDt()});
   lm.pick = {};
   lm.step = 'afterBuyUse'; /* 结算后：是否使用？ */
-  logCaseEvent(c, 'Dewi', '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+' ×'+i.qty; }).join('、')+'），已转客户持有');
+  logCaseEvent(c, 'Dewi', '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+' ×'+i.qty+(i.discountPct<100?'（'+i.discountPct+'折）':''); }).join('、')+'），已转客户持有');
   updateCaseStage(c); buildCaseLog(c); renderCaseBody(c);
 }
 /* 项目确认中（2026-09-29 重写）：确认后不管有没有赴韩项目，都直接生成结算单进入"待付款"；
@@ -3668,6 +3749,7 @@ function projectPickerHtml(c, isAddition){
     '</div>';
   var settleBtn = selected.length ? '<button class="btn-primary" style="width:100%;margin-top:14px;" onclick="'+(isAddition?'confirmAddition()">结算追加项目 / 交定金':'confirmProjectSelection()">确认所选项目')+'</button>' : '';
   var noBuyBtn = (!isAddition && c.entryChoicePending && c.projectEntryMode==='new') ? '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="noPurchaseThisTime()">本次不购买</button>' : '';
+  var noProjectBtn = (!isAddition && c.reportReady && !c.entryChoicePending && !c.settlementDone) ? '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="noProjectForClient()">客人不做项目</button>' : '';
   var wrapOpen = isAddition
     ? '<div class="project-card'+(c.projectsExpanded?' expanded':'')+'" style="border-top:1px dashed var(--border);padding-top:18px;margin-top:4px;">'
     : '<div class="card project-card'+(c.projectsExpanded?' expanded':'')+'" style="padding:22px 24px;">';
@@ -3678,7 +3760,7 @@ function projectPickerHtml(c, isAddition){
     '<input type="text" placeholder="搜索项目…" value="'+(c.projectSearch||'')+'" oninput="setProjectSearch(this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;">'+
     leftRows+'</div>'+
     '<div style="border-left:1px solid var(--border2);padding-left:24px;"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+settlementBigCardHtml(c, selected, true)+
-    settleBtn+noBuyBtn+'</div>'+
+    settleBtn+noBuyBtn+noProjectBtn+'</div>'+
     '</div></div>';
 }
 function cancelAddMore(){
@@ -4095,15 +4177,25 @@ function simulateKrMarkProcedureDone(){
   logCaseEvent(c, '김민석 원장', 'KR标记"施术完成"');
   finishCase(c);
 }
-/* 演示按钮：模拟KR补加术后管理项目——直接进客户持有，标"KR代收"，印尼不再付款（2026-09-29 第十轮新增） */
+/* 演示按钮：模拟KR补加术后管理项目——弹窗从术后管理分类里选，直接进客户持有，标"KR代收"，印尼不再付款 */
 function simulateKrAddPostCare(){
   var c = getCurrentCase(); if(!c) return;
   var candidates = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.categoryId===POST_CARE_CAT_ID && p.active; });
   if(!candidates.length){ alert('演示：项目库里没有可补加的术后管理项目'); return; }
-  var pick = candidates[0];
+  document.getElementById('postcare-list').innerHTML = candidates.map(function(p,i){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;"><input type="radio" name="postcare-pick" value="'+p.id+'"'+(i===0?' checked':'')+'> '+p.name+'</label>';
+  }).join('');
+  document.getElementById('postcare-overlay').classList.add('open');
+}
+function closePostCareModal(){ document.getElementById('postcare-overlay').classList.remove('open'); }
+function confirmPostCare(){
+  var c = getCurrentCase(); if(!c) return;
+  var picked = document.querySelector('input[name="postcare-pick"]:checked'); if(!picked) return;
+  var pick = projById(picked.value); if(!pick) return;
   var today = nowFullDt().split(' ')[0];
   grantHolding(c.name, pick.name, '术后管理', c.id, today, 1, true);
   logCaseEvent(c, '김민석 원장', 'KR代收补加术后管理项目："'+pick.name+'"，已计入客户持有');
+  closePostCareModal();
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -4217,6 +4309,27 @@ function markConsultPaid(){
   logCaseEvent(c, '客人', '完成面诊费支付，已在Main对话群自动通知');
   buildCaseLog(c);
   sendMainAnnouncement(c.name+' 想要面诊，请输入可以面诊的时间（现在 / 具体几点）');
+  renderCaseStatusBar(c);
+  renderCaseBody(c);
+}
+function openWaiveFeeModal(){
+  document.getElementById('waive-fee-reason').value = '';
+  document.getElementById('waive-fee-note').value = ''; document.getElementById('waive-fee-note').style.display = 'none';
+  document.getElementById('waive-fee-overlay').classList.add('open');
+}
+function closeWaiveFeeModal(){ document.getElementById('waive-fee-overlay').classList.remove('open'); }
+function confirmWaiveFee(){
+  var c = getCurrentCase(); if(!c) return;
+  var reason = document.getElementById('waive-fee-reason').value;
+  var note = document.getElementById('waive-fee-note').value.trim();
+  if(!reason){ alert('请选择免除原因'); return; }
+  if(reason==='其他' && !note){ alert('请注明原因'); return; }
+  c.consultFeeWaived = {reason: reason==='其他' ? '其他：'+note : reason, note:note};
+  closeWaiveFeeModal();
+  c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：等待确认面诊时间 */
+  logCaseEvent(c, 'Dewi', '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
+  buildCaseLog(c);
+  sendMainAnnouncement(c.name+' 想要面诊（已免除面诊费），请输入可以面诊的时间（现在 / 具体几点）');
   renderCaseStatusBar(c);
   renderCaseBody(c);
 }
@@ -5367,12 +5480,12 @@ function secondConsultChanged(hasChange){
     c.videoSummary = '二次面诊：方案有调整，建议追加评估其他部位。';
     c.consultFiles = c.consultFiles || [];
     c.consultFiles.unshift({label:'二次面诊报告',date:attDate()});
-    c.reportUploadedBy = c.director;
-    /* TODO(待确认)：二次面诊出新报告要不要也跟着刷新 krScope（赴韩可选范围），这轮指令没提到，先不动，
-       需要更新的话现在有 simulateKrScopeUpdate() 可以手动往里加项目 */
-    logCaseEvent(c, c.director, '二次面诊有变动，出具新报告（覆盖原方案）');
+    c.reportUploadedBy = c.krCoordinator;
+    /* 2026-09-30：二次面诊"有变动"出新报告时，KR室长随新报告给出新的可选范围，自动覆盖 krScope（演示数据：原范围 + 再加一个赴韩项目） */
+    c.krScope = {items:secondRoundKrScopeItems(c), overallNote:'二次面诊后更新的可选范围，具体术式最终以到院评估为准', updatedAt:nowFullDt()};
+    logCaseEvent(c, c.krCoordinator, '二次面诊有变动，出具新报告（覆盖原方案），并更新赴韩可选范围');
   } else {
-    logCaseEvent(c, c.director, '二次面诊无变动，维持原报告和项目');
+    logCaseEvent(c, c.krCoordinator, '二次面诊无变动，维持原报告和项目');
   }
   c.secondConsult = null;
   buildCaseLog(c);
