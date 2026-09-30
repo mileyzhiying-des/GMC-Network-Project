@@ -47,6 +47,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - ~~已有案件内的到访应该走什么流程~~ —— 已解决：术后到店/使用持有项目统一走"预约来访"开新案件。
 - 【待执行，冲突已消除】（2026-09-30 08:37 Notion 状态总表已写"待访问：预约生成 Case ID"，与用户第6条一致，仅待用户确认开工）用户指令第6条"取消 Reservation ID，预约时直接生成 Case ID（客户提交预约/室长代替预约时生成；取消的预约也保留 Case ID；发起对话/+添加本地管理/增加面诊改以'基础资料确认'为条件；取消接待在确认前显示；关联下拉只列基础资料已确认的案件）"与 Notion 现状冲突（Notion Case Management Flow / Status Dictionary / Conversation & Video Flow 当前仍写"基础资料确认时生成 Case ID、确认后才显示发起对话"，Reservation ID 仍是待访问阶段的 ID）。按工作规则2，**这一条暂未执行**，等用户确认是否已在 Notion 更新或"以本指令为准"。
 - ~~第32条~~ —— 2026-09-30 已解决：按 Notion 状态总表，本地案件进入"选择项目"状态（是否持有/使用/选购/付款都在其中），使用后进入"本地管理"，都在"本地管理"tab。
+- 【待确认，2026-09-30 第十四轮新增（状态机总览落地的我的实现判断）】详见 `docs/open-questions.md` 第5条：面诊已取消的显示、赴韩项目全退后问本地管理期间的主状态（暂留项目确认中）、面诊案件只买本地项目后的归属（暂归选择项目）、Draft/视频等待报告的小状态文字、付清尾款演示按钮保留但不再是完成前置、已更换项目仍需KR标完成、本地管理行整行完成/取消、二次面诊取消会留"已取消"轮次、持有项目卡片显示全部项目。
 - 【待确认，2026-09-30 状态总表新增】总表没有的瞬时态/显示口径："面诊已取消"（等待回答是否做本地项目）暂沿用；赴韩项目全退后等待"是否做本地管理"期间暂显示"已付款"；"已更换"标签以 `replacedBy` 判断；列表财务列收入不扣退款、退款单独一行；"最近一次有操作的案件"按 Timeline 最后一条时间判断。详见 `docs/open-questions.md` 第4条。
 - 结算的具体预付比例（`KR_DEPOSIT_RATE = 0.3`）只是演示占位数字，用户确认"维持0.3，业务那边还没确认"——改这个数字之前不要当成已确认的需求；退款弹窗只拿它当"参考预付金"。
 - 演示数据（用户确认继续当演示数据，不是业务方清单）：`krScope` 项目清单/备注、术后管理两个演示项目及价格、`PROJECT_CATEGORIES` 分类名（先维持）、`FX_RATES` 写死汇率（维持，暂不接实时汇率API）。
@@ -142,6 +143,14 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
   3. **案件列表**：新增"状态 正常/非正常"列（`caseAbnormalTags()`：时间变更待确认/KR已标记无法施术/已更换）、财务独立一列（`financeCellHtml()`：结果+收入+退款）、面诊/赴韩案件本地管理进行中时状态旁加小标签。
   4. **客户列表**：状态和财务都取"最近一次有操作的案件"（`clientLatestCase()`，按 Timeline 最后时间），新增财务列；取代第十二轮"列出所有未结案案件"。
   5. 删除旧逻辑：`caseStatusBadge` 里"已出报告/等待缴纳面诊费/递交施术日期/待确认是否做本地管理"徽章分支、`clientCaseStatus` 的多案件 pills。
+- 2026-09-30（第十四轮，"状态机总览落地（以本指令为准）"，按 Notion「状态机总览 State Machines」，取代第十三轮状态总表里冲突的部分），分 H1–H5 五个提交：
+  1. **H1 状态与赴韩**：主状态改两层（大状态 14 个：待访问/接待中/面诊预约/等待面诊/面诊进行中/等待报告/项目确认中/施术预约/赴韩施术/选择项目/本地管理/仅出报告/已结案/已取消；`caseStatusLabel`），颜色独立属性 Tone（`TONE_COLORS`/`STATE_TONE`/`toneColors`）；小状态统一组件 `subStatusRowHtml`（Success/Waiting/Warning）+ `caseSubStatusItems`；删除大状态"等待确认面诊时间/待付款/已付款/待确认施术时间/等待施术"；施术日期卡片（`scheduleState`：Draft/Pending/Confirmed/Changing/Arrived）为案件主状态单一来源，删除 `arrivedAtHospital` 字段（已到医院=`krSchedule.status==='arrived'`，`isArrived`）；赴韩项目取消后不删、标 `cancelled`，行状态 未开始/已完成/已取消/已更换（`krItemStatus`），`krActiveItems`/`krNotStartedItems`；项目列表tab改结算单列表（`settlementCardsHtml`，待付款/已付款/部分退款/全额退款，新的在上，`batchStatusLabel`），结算单上「取消项目」（`openCancelItems`，已到医院后隐藏）；退款弹窗支持勾选项目（`refundRecalc`）；`afterKrItemsChanged` 统一判断：还有未开始→继续，全部完成/取消→有完成的自动判结局，全取消→弹窗问是否做本地管理（`#local-ask-overlay`）；演示按钮「模拟KR标记完成」（`simulateKrMarkDone`/`submitKrMarkDone`，逐个勾选或全部）；项目黄色小标签 `krItemFlags`。
+  2. **H2 面诊资料tab**：面诊费卡四种状态（`consultFeeCardHtml`：待缴费/已缴费/已免除/已取消）、面诊≥2次出现"第N次"切换（`consultRoundsList`/`consultRoundsHtml`，`c.consultHistory`，默认最新一次）、小状态行。
+  3. **H3 本地管理tab**：项目行 进行中/已完成/已取消（`markMgmtRows`），逐个勾选或批量快捷键「管理完成/管理取消」，全部标完自动结束（本地案件判结局，面诊/赴韩案件里小标签消失）。
+  4. **H4 客户详情**：持有项目按项目汇总可展开批次（`holdingsAllSorted`/`toggleHoldExpand`），批次状态 未使用/部分使用/已用完/已取消（已退款），只有"未使用"显示「退款」；排版修复（退款按钮与文字分开、项目名不折行）。
+  5. **H5 列表辅助标签**：CancelReason 只在已取消时显示；Health/LocalBadge/Finance 沿用。
+  6. 删除旧逻辑：`arrivedAtHospital`、`cancelProcedureItem`、`unpaidBatchesHtml` 的使用、`submitMgmtCancel`/`cancelMgmtCancelling`（按次数部分取消）、`simulateKrMarkProcedureDone`、面诊tab的"等待缴纳面诊费/已出报告"标题式状态。
+  7. 教训：`region()` 补丁的结束标记必须落在被替换函数紧邻的下一处；补丁后对比函数清单（一次 H2 补丁误吞大段代码，已回滚重做）。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
 - 涉及业务规则的改动，先对一遍 Domain Knowledge / Open Questions 有没有冲突，有冲突要先问，不要悄悄按自己理解改
