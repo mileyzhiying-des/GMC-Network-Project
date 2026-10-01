@@ -1377,6 +1377,7 @@ var WEEK_EVENTS = [
   {dayIndex:4, time:'15:00', name:'Kevin Tan', type:'video'},
   {dayIndex:5, time:'10:00', name:'Siti Rahma', type:'post'},
   {dayIndex:0, time:'09:30', name:'Siti Rahayu', type:'reservation', caseId:'siti', arrived:false},
+  {dayIndex:1, time:'11:00', name:'Ayu Lestari', type:'reservation', caseId:'ayu2', arrived:false},
   {dayIndex:2, time:'10:30', name:'Reza Firmansyah', type:'reservation', caseId:null, arrived:true} /* 示例：已到访变暗 */
 ];
 var WK_HOURS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30'];
@@ -2074,7 +2075,7 @@ function makeCase(o){
     consultHistory:o.consultHistory||[], consultTabRound:null, /* 2026-09-30：已结束的二次面诊轮次 [{fee,changed,at}]，面诊tab里"第N次"切换用 */
     newBeautyHistory:o.newBeautyHistory||'', needsConsultTouched:false, /* 2026-10-01 延续既往面诊：基础资料新增医美史 / 室长是否手动选过面诊需求 */
     reportDate:o.reportDate||null, contJudged:false, reuseAfterConsult:false,
-    settleTab:null, /* 项目列表tab里结算单2级tab当前选中的序号，null=最新一张 */
+    settleTab:null, continueNew:false, /* 项目列表tab里结算单2级tab当前选中的序号，null=最新一张 */
     localAsk:!!o.localAsk, /* 赴韩项目"无法协调"退款后，询问是否做本地管理 */
     localMgmt:o.localMgmt||null,
     entryChoicePending:!!o.entryChoicePending, projectEntryMode:o.projectEntryMode||null, /* 不面诊/面诊取消后"持有项目使用"vs"新增项目"的入口选择 */
@@ -2088,6 +2089,10 @@ var CASE_ITEMS = [
   makeCase({id:'siti', name:'Siti Rahayu', caseNo:'A000017', updated:'刚刚',
     basic:{gender:'女', dob:'1992-03-08', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
     logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-18 09:05'}]}),
+
+  /* 演示（到访接续）：Ayu Lestari 已有进行中案件 ayu（项目确认中），这条是她新的预约来访（待访问） */
+  makeCase({id:'ayu2', name:'Ayu Lestari', caseNo:'A000021', updated:'刚刚',
+    logEntries:[{stage:'预约到店', actor:'Dewi', action:'老客人预约来访，选定院长 김민석 원장', dt:'2026-09-18 09:10'}]}),
 
   /* 接待中：客人已到店，메타뷰/照片/视频/苦恼/希望预期还没确认完，所以还没生成 Case ID */
   makeCase({id:'andi', name:'Andi Wijaya', subState:'arrived', caseNo:'A000018', updated:'昨天',
@@ -2322,7 +2327,7 @@ var CASE_ITEMS = [
     ]})
 ];
 CASE_ITEMS.forEach(updateCaseStage);
-var CASE_NO_SEQ = 21;
+var CASE_NO_SEQ = 22;
 function generateCaseNo(){
   var n = 'A' + String(CASE_NO_SEQ).padStart(6,'0');
   CASE_NO_SEQ++;
@@ -3183,6 +3188,39 @@ function renderCaseBody(c){
 }
 /* "客户到访"不是一个独立状态——点"到访"后直接进入"接待中"（c.subState='arrived'）；
    同时日历上对应的预约来访事件变暗并标"已到访"（2026-09-29 新增） */
+/* 到访接续（2026-10-01 完整指令十）：接待中、基础资料确认前，客户有其他进行中（非终态、已到访）的案件时，
+   基础资料tab顶部提示可接续到原案件；接续 → 本案件作废（从 CASE_ITEMS 移除，编号空掉不留痕），日历预约改挂到原案件 */
+function ongoingCasesOf(c){
+  return CASE_ITEMS.filter(function(x){ return x.name===c.name && x.id!==c.id && !isEnded(x) && x.subState!=='waiting' && x.subState!=='cancelled'; });
+}
+function resumeBannerHtml(c){
+  if(c.materialsConfirmed || c.continueNew) return '';
+  var list = ongoingCasesOf(c); if(!list.length) return '';
+  return '<div style="background:#FFF6E5;border:1px solid #F0D9A8;border-radius:10px;padding:12px 14px;margin-bottom:14px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:13px;font-weight:700;">该客户还有进行中的案件，是否接续到原案件？</div>'+
+    '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="continueNewVisit()">继续新案件</button></div>'+
+    list.map(function(x){
+      var lastDt = (x.logEntries && x.logEntries.length) ? x.logEntries[x.logEntries.length-1].dt : '—';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid #F0D9A8;font-size:12px;">'+
+        '<span>'+x.caseNo+' · '+caseStatusBadge(x)[2].split(' · ')[0]+' · 最近更新 '+lastDt+'</span>'+
+        '<button class="btn-primary" style="padding:4px 12px;font-size:11px;" onclick="resumeVisit(\''+x.id+'\')">接续</button></div>';
+    }).join('')+'</div>';
+}
+function continueNewVisit(){
+  var c = getCurrentCase(); if(!c) return;
+  c.continueNew = true; renderCaseBody(c);
+}
+function resumeVisit(targetId){
+  var c = getCurrentCase(); if(!c || c.materialsConfirmed) return;
+  var t = CASE_ITEMS.filter(function(x){ return x.id===targetId; })[0]; if(!t) return;
+  if(!confirm('接续到原案件 '+t.caseNo+'？本次新案件 '+c.caseNo+' 将作废（不留记录）。')) return;
+  WEEK_EVENTS.forEach(function(ev){ if(ev.type==='reservation' && ev.caseId===c.id){ ev.caseId = t.id; ev.arrived = true; ev.cancelled = false; } });
+  CASE_ITEMS.splice(CASE_ITEMS.indexOf(c), 1);
+  logCaseEvent(t, 'Dewi', '接续到访「Dewi」 '+nowFullDt());
+  CASE_RETURN.length = 0;
+  if(typeof buildCaseTabs==='function'){ buildCaseTabs(); renderCaseRows(); }
+  openCaseDetail(t.id, true);
+}
 function markArrived(){
   var c = getCurrentCase(); if(!c) return;
   c.subState = 'arrived';
@@ -3378,6 +3416,7 @@ function materialsCardHtml(c){
   }).join('');
 
   return '<div class="card" style="padding:22px 24px;">'+
+    resumeBannerHtml(c)+
     linkRowHtml(c)+
     '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
     '<div class="case-field-row"><span class="fk">上传照片 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="font-size:13px;">'+photoText+'</div><div style="font-size:11px;color:var(--muted);margin-top:3px;">规格：白底正面照，1200×1600px</div></div></div>'+
@@ -3757,7 +3796,7 @@ function consultRoundSubItems(c){
 }
 /* 面诊费表单（2026-10-01）：待缴费时可选"已缴费 / 免除面诊费"；关联原因是复诊/术后管理/延续既往面诊时默认预选"免除面诊费"+对应原因，室长可改，原因仍必填 */
 var WAIVE_REASON_BY_LINK = {'复诊':'复诊', '延续既往面诊':'延续既往面诊'}; /* 2026-10-01 修正：术后管理不预选免除（术后管理不面诊，不会出现面诊费卡片）；下拉里其他选项保持不变 */
-var WAIVE_REASONS = ['复诊','术后管理','延续既往面诊','前次面诊补充','术后复查','其他']; /* 在 Notion 原4项基础上补了 复诊/术后管理（待写入 Notion） */
+var WAIVE_REASONS = ['前次面诊补充','复诊','延续既往面诊','其他']; /* 2026-10-01 完整指令七：术后复查改名复诊；术后管理不面诊，不在免除原因里 */
 function feeDraft(c){
   if(!c.feeDraft){
     var l = c.linkedCase, ci = continuationInfo(c);
