@@ -857,6 +857,200 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 退款 MODAL（2026-09-30：取代 confirm()，退款原因必填） ============ -->
+<div class="modal-overlay" id="refund-overlay" onclick="if(event.target===this) closeRefundModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">退款</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRefundModal()">✕</span>
+    </div>
+    <div id="refund-items" style="margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（₩，手动填写） <span style="color:#C1454A;">*</span></div>
+    <input type="number" min="0" id="refund-amount" placeholder="请输入本次退款总额（可为 0）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeRefundModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmRefund()">确认退款</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 本地项目退款 MODAL（2026-09-30：客户详情"持有项目"卡片，按购买批次退款，金额+原因必填） ============ -->
+<div class="modal-overlay" id="holding-refund-overlay" onclick="if(event.target===this) closeHoldingRefundModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">本地项目退款</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeHoldingRefundModal()">✕</span>
+    </div>
+    <div id="holding-refund-info" style="font-size:13px;margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（Rp） <span style="color:#C1454A;">*</span></div>
+    <input type="number" min="0" id="holding-refund-amount" placeholder="请输入退款金额" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="holding-refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">按批次退款：这一批的次数将全部作废（不能只退其中几次）；退款记录挂在这一批购买上，不改变任何案件的结局。</div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeHoldingRefundModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmHoldingRefund()">确认退款</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 模拟KR补加术后管理项目 MODAL（2026-09-30：从术后管理分类里选） ============ -->
+<div class="modal-overlay" id="postcare-overlay" onclick="if(event.target===this) closePostCareModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR补加术后管理项目</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareModal()">✕</span>
+    </div>
+    <div id="postcare-list" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;margin-top:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closePostCareModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmPostCare()">确认补加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 免除面诊费 MODAL（2026-09-30，Notion 09-30） ============ -->
+<div class="modal-overlay" id="waive-fee-overlay" onclick="if(event.target===this) closeWaiveFeeModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">免除面诊费</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeWaiveFeeModal()">✕</span>
+    </div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">免除原因 <span style="color:#C1454A;">*</span></div>
+    <select id="waive-fee-reason" onchange="document.getElementById('waive-fee-note').style.display = this.value==='其他' ? 'block':'none'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;">
+      <option value="">请选择</option><option>前次面诊补充</option><option>术后复查</option><option>延续既往面诊</option><option>其他</option>
+    </select>
+    <input type="text" id="waive-fee-note" placeholder="其他（请注明）" style="display:none;width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">免除后面诊照正常流程：等待确认面诊时间 → 由KR室长决定视频或书面。</div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeWaiveFeeModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmWaiveFee()">确认免除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 引用消息到案件 MODAL（2026-09-30，Conversation & Video Flow 入口3） ============ -->
+<div class="modal-overlay" id="quote-overlay" onclick="if(event.target===this) closeQuoteModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">引用到案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeQuoteModal()">✕</span>
+    </div>
+    <div id="quote-preview" style="font-size:12px;color:var(--slate2);background:var(--border2);border-radius:8px;padding:8px 10px;margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">选择案件（只能选已有 Case ID 的案件）</div>
+    <div id="quote-case-list" style="max-height:220px;overflow:auto;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeQuoteModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmQuote()">确认引用</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 对话房成员 MODAL（2026-09-30） ============ -->
+<div class="modal-overlay" id="room-members-overlay" onclick="if(event.target===this) closeRoomMembers()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;" id="room-members-title">成员</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRoomMembers()">✕</span>
+    </div>
+    <div id="room-members-body"></div>
+  </div>
+</div>
+
+<!-- ============ 模拟KR标记完成 MODAL（2026-09-30：逐个勾选或一次全部完成） ============ -->
+<div class="modal-overlay" id="kr-done-overlay" onclick="if(event.target===this) closeKrDoneModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记完成</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrDoneModal()">✕</span>
+    </div>
+    <div id="kr-done-items" style="margin-bottom:12px;"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">所有赴韩项目都是已完成或已取消后，系统自动判断案件结局。</div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="submitKrMarkDone(false)">标记所选完成</button>
+      <button class="btn-primary" style="flex:1;" onclick="submitKrMarkDone(true)">全部标完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 是否做本地管理 MODAL（2026-09-30：赴韩项目全部取消退款后询问） ============ -->
+<div class="modal-overlay" id="local-ask-overlay">
+  <div class="modal-box">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px;">赴韩项目已全部取消并退款</div>
+    <div style="font-size:13px;color:var(--slate2);margin-bottom:16px;">客人要不要做本地管理？（是 → 在同一个案件里走本地流程；否 → 仅出报告）</div>
+    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localAskAnswer(true)">是，做本地管理</button><button class="btn-outline" style="flex:1;" onclick="localAskAnswer(false)">否</button></div>
+  </div>
+</div>
+
+<!-- ============ 面诊取消后：是否做本地项目 MODAL（2026-10-01，IN-CASE-01） ============ -->
+<div class="modal-overlay" id="consult-cancel-overlay">
+  <div class="modal-box">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px;">面诊已取消</div>
+    <div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">是否做本地项目？</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px;">是 → 主状态"选择项目"，转本地管理；否 → 已取消（面诊取消）。面诊费记为"已取消"，只作记录。</div>
+    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="afterConsultCancelChoice(true)">是，做本地项目</button><button class="btn-outline" style="flex:1;" onclick="afterConsultCancelChoice(false)">否</button></div>
+  </div>
+</div>
+
+<!-- ============ 模拟KR判断能否施术 MODAL（2026-10-01，06 在韩国） ============ -->
+<div class="modal-overlay" id="kr-judge-overlay" onclick="if(event.target===this) closeKrJudgeModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR判断能否施术</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrJudgeModal()">✕</span>
+    </div>
+    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="ok" checked> 能施术，项目没变动 → 付清尾款 → 各项目标完成 → 已结案</label>
+    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="changed"> 能施术，但项目有变动（部分不能做 / 更换）→ 尾款按实际项目重算，多退少补</label>
+    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="cannot"> 不能施术 → KR 在韩重新预约，或退定金（全部退回 / 不退）→ 仅出报告</label>
+    <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" style="flex:1;" onclick="closeKrJudgeModal()">取消</button><button class="btn-primary" style="flex:1;" onclick="submitKrJudge()">确认</button></div>
+  </div>
+</div>
+
+<!-- ============ KR确认术后管理项目（标注进行时间） MODAL（2026-10-01） ============ -->
+<div class="modal-overlay" id="postcare-confirm-overlay" onclick="if(event.target===this) closePostCareConfirm()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：KR确认术后管理项目</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareConfirm()">✕</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">施术完成时 KR 确认术后管理项目（可修改）并标注每项的进行时间，如"术后第7天"；使用时按进行时间排序。</div>
+    <div id="postcare-confirm-list" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="closePostCareConfirm()">取消</button><button class="btn-primary" style="flex:1;" onclick="submitPostCareConfirm()">确认</button></div>
+  </div>
+</div>
+
+<!-- ============ 基础资料缺必填项提示 MODAL（2026-10-01，IN-CASE-01：缺必填项时弹 popup） ============ -->
+<div class="modal-overlay" id="materials-missing-overlay" onclick="if(event.target===this) closeMaterialsMissing()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">还有必填项没填</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeMaterialsMissing()">✕</span>
+    </div>
+    <div id="materials-missing-list" style="font-size:13px;color:var(--slate2);line-height:1.9;margin-bottom:14px;"></div>
+    <button class="btn-primary" style="width:100%;" onclick="closeMaterialsMissing()">知道了</button>
+  </div>
+</div>
+
+<!-- ============ 模拟KR标记无法施术 MODAL（2026-09-30 演示） ============ -->
+<div class="modal-overlay" id="kr-unable-overlay" onclick="if(event.target===this) closeKrUnableModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记无法施术</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrUnableModal()">✕</span>
+    </div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">勾选无法施术的项目</div>
+    <div id="kr-unable-items" style="margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="kr-unable-reason" rows="3" placeholder="请填写无法施术的原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeKrUnableModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="submitKrUnable()">确认标记</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ INVITE Kr室长 MODAL（不含院长，只选室长） ============ -->
 <div class="modal-overlay" id="invite-kr-overlay" onclick="if(event.target===this) closeInviteKrModal()">
   <div class="modal-box">
@@ -2348,7 +2542,7 @@ function caseSubStatusItems(c){
     else if(inFlow && c.consultStatus==='written_in_progress') items.push({kind:'Waiting', text:'书面面诊中'});
     else if(inFlow && c.consultStatus==='awaiting_report') items.push({kind:'Waiting', text:'等待室长提交报告'}); /* 只有视频路径会进入等待报告 */
     else if(c.projectsEnabled || c.reportReady){
-      if(c.reportReady) items.push({kind:'Success', text:'报告已出'});
+      if(c.reportReady) items.push({kind:'Success', text: c.reuseReport ? '沿用之前报告（'+c.reuseReport.caseNo+'）' : '报告已出'});
       if(c.projectsLocked && !c.settlementDone) items.push({kind:'Waiting', text:'待付款'});
     }
   } else if(c.stage==='travel'){
@@ -3118,6 +3312,7 @@ function materialsCardHtml(c){
   var needsConsultBody = '<div style="display:flex;gap:10px;">'+
     '<button class="'+(c.needsConsult===true?'btn-primary':'btn-outline')+'" onclick="setNeedsConsult(true)">'+(c.needsConsult===true?'✅ ':'')+'面诊</button>'+
     '<button class="'+(c.needsConsult===false?'btn-primary':'btn-outline')+'" onclick="setNeedsConsult(false)">'+(c.needsConsult===false?'✅ ':'')+'不面诊</button>'+
+    (reusableReportSrc(c) ? '<button class="'+(c.needsConsult==='reuse'?'btn-primary':'btn-outline')+'" onclick="setNeedsConsult(\'reuse\')">'+(c.needsConsult==='reuse'?'✅ ':'')+'沿用之前报告</button>' : '')+
     '</div>';
 
   var intentionChips = (c.intentionProjects||[]).map(function(it,idx){
@@ -3201,6 +3396,13 @@ function intentionInfoHtml(c){
   return '<div class="case-field-row"><span class="fk">意向项目</span><div style="flex-grow:1;font-size:13px;">'+chips+(c.intentionNote?'<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+c.intentionNote+'</div>':'')+'</div></div>'+
     '<div class="case-field-row"><span class="fk">预算</span><span style="flex-grow:1;font-size:13px;">'+budgetText+'</span></div>';
 }
+/* 关联原因=延续既往面诊 且被关联案件有面诊报告时，面诊需求从"面诊/不面诊"变成三选一：面诊 / 不面诊 / 沿用之前报告 */
+function reusableReportSrc(c){
+  var l = c.linkedCase;
+  if(!l || !l.caseId || l.reason!=='延续既往面诊') return null;
+  var src = CASE_ITEMS.filter(function(x){ return x.id===l.caseId; })[0];
+  return (src && src.reportReady) ? src : null;
+}
 function setNeedsConsult(val){
   var c=getCurrentCase(); if(!c) return;
   c.needsConsult = val;
@@ -3226,6 +3428,32 @@ function simulateMetaviewReady(){
   }, 1200);
 }
 function closeMaterialsMissing(){ document.getElementById('materials-missing-overlay').classList.remove('open'); }
+/* 沿用之前报告：面诊资料tab显示旧报告（只读，标注"沿用自 A000xxx"）；项目列表按旧报告的方案预填（价格按现在的项目库重新取）；
+   之后流程（付款→施术预约…）同普通面诊案件；旧案件（如仅出报告）保持终态不变，只在它的关联案件tab里出现反向记录 */
+function applyReuseReport(c){
+  var src = reusableReportSrc(c); if(!src) return;
+  c.needsConsult = true;
+  c.consultRequested = true;
+  c.reportReady = true;
+  c.consultStatus = 'report_ready';
+  c.consultMethod = src.consultMethod || 'video';
+  c.videoSummary = src.videoSummary || '';
+  c.reportUploadedBy = src.reportUploadedBy || '';
+  c.reuseReport = {fromId:src.id, caseNo:src.caseNo, date:caseFirstDate(src)};
+  /* 旧报告的方案：旧案件的赴韩项目名（不含已更换的原项目）；没有就取它的可选范围；价格按现在的项目库重新取 */
+  var names = [];
+  krAllItems(src).forEach(function(it){ if(!it.swapped && names.indexOf(it.name)<0) names.push(it.name); });
+  if(!names.length && src.krScope) src.krScope.items.forEach(function(it){ if(names.indexOf(it.name)<0) names.push(it.name); });
+  var scopeNames = names.slice();
+  if(src.krScope) src.krScope.items.forEach(function(it){ if(scopeNames.indexOf(it.name)<0) scopeNames.push(it.name); });
+  var lib = function(n){ return PROJECT_LIBRARY.filter(function(p){ return p.name===n && p.active && p.origin==='KR'; })[0]; };
+  c.krScope = {items: scopeNames.map(function(n){ var p = lib(n); return p ? {name:p.name, price:p.price, note:''} : null; }).filter(Boolean), overallNote:'沿用自 '+src.caseNo+' 的方案（价格按现在的项目库）', updatedAt:nowFullDt()};
+  c.recommended = names.map(function(n){ var p = lib(n); return p ? {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId} : null; }).filter(Boolean);
+  c.projectsEnabled = true;
+  c.projectOriginFilter = 'KR';
+  c.activeCaseTab = 'projects';
+  logCaseEvent(c, 'Dewi', '沿用之前报告（'+src.caseNo+'）：不产生面诊费，直接进入项目确认中；项目列表按旧报告方案预填 '+c.recommended.length+' 项（价格按现在的项目库）');
+}
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var concernVal = document.getElementById('cf-concern').value.trim();
@@ -3237,7 +3465,7 @@ function confirmMaterials(){
   if(!concernVal) missing.push('苦恼');
   if(!expectationVal) missing.push('希望预期');
   if(!(c.intentionProjects||[]).length) missing.push('意向项目');
-  if(c.needsConsult!==true && c.needsConsult!==false) missing.push('面诊需求');
+  if(c.needsConsult!==true && c.needsConsult!==false && !(c.needsConsult==='reuse' && reusableReportSrc(c))) missing.push('面诊需求');
   if(c.linkedCase && c.linkedCase.caseId && !c.linkedCase.reason) missing.push('关联原因');
   if(missing.length){
     c.materialsError = '';
@@ -3253,7 +3481,9 @@ function confirmMaterials(){
   applyCaseLink(c); /* Case ID 已在预约时生成，这里不再生成 */
   document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
   document.getElementById('case-chat-actions').style.display = 'flex';
-  if(c.needsConsult===true){
+  if(c.needsConsult==='reuse'){
+    applyReuseReport(c); /* 沿用之前报告：不产生面诊费卡片，直接进入"项目确认中" */
+  } else if(c.needsConsult===true){
     /* 选了面诊，直接进面诊资料tab走缴费，不需要再多点一次"面诊申请" */
     c.consultRequested = true;
     c.consultStatus = 'awaiting_payment';
@@ -3266,7 +3496,7 @@ function confirmMaterials(){
   }
   updateCaseStage(c);
   renderCaseStatusBar(c);
-  logCaseEvent(c, 'Dewi', '确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：'+(c.needsConsult?'面诊':'不面诊'));
+  logCaseEvent(c, 'Dewi', '确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：'+(c.reuseReport ? '沿用之前报告（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊')));
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -3368,7 +3598,7 @@ function caseTabContentHtml(c){
 /* 基础资料 tab：确认过的资料只读展示，各行带 查看/再上传 或 查看/修正 */
 function basicTabHtml(c){
   var metaviewText = c.metaviewStatus==='ready' ? '已检测到' : '待检测';
-  var consultLabel = c.needsConsult===true ? '面诊' : '不需要面诊';
+  var consultLabel = c.reuseReport ? '沿用之前报告（'+c.reuseReport.caseNo+'）' : (c.needsConsult===true ? '面诊' : '不需要面诊');
   return '<div class="card" style="padding:4px 24px;">'+
     '<div class="case-field-row"><span class="fk">苦恼</span><span style="flex-grow:1;font-size:13px;">'+(c.concern||'—')+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="editConcernField(\'concern\');return false;">修正</a></span></div>'+
     '<div class="case-field-row"><span class="fk">期望</span><span style="flex-grow:1;font-size:13px;">'+(c.expectation||'—')+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="editConcernField(\'expectation\');return false;">修正</a></span></div>'+
@@ -3472,7 +3702,18 @@ function confirmConsultFee(){
   if(d.reason==='其他' && !(d.note||'').trim()){ alert('请注明原因'); return; }
   applyWaiveFee(c, d.reason, (d.note||'').trim());
 }
+function reuseReportHtml(c){
+  var r = c.reuseReport;
+  return '<div class="card" style="padding:22px 24px;">'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">沿用自 '+r.caseNo+'</span><span style="font-size:11px;color:var(--muted);">只读 · 旧报告日期 '+r.date+' · 没有面诊费</span></div>'+
+    subStatusRowHtml([{kind:'Success', text:'沿用之前报告'}])+
+    '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;line-height:1.7;">'+(c.videoSummary||'（旧报告没有摘要）')+'</div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openReportModal()">查看报告 →</button>'+
+    '<button class="btn-outline" onclick="openCaseDetail(\''+r.fromId+'\')">查看原案件 →</button></div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-top:12px;">原案件保持终态不变；报告文件已带入「附件」tab</div></div>';
+}
 function consultTabHtml(c){
+  if(c.reuseReport) return reuseReportHtml(c);
   var fee = consultFeeStatusMain(c);
   var waiverText = c.consultFeeWaived ? '原因：'+c.consultFeeWaived.reason : '';
   var sub = subStatusRowHtml(consultRoundSubItems(c));
