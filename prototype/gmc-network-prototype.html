@@ -2957,13 +2957,13 @@ function simulateDirectorVideoConsult(){
 }
 /* 二次面诊结束的共用逻辑，供 endVideoConsult() 和 simulateSecondConsultVideoDone() 演示按钮共用 */
 function finishSecondConsultVideo(c){
-  c.secondConsult.status = 'awaiting_report';
-  logCaseEvent(c, 'Dewi', '二次面诊已结束，等待"有无变动"确认');
+  c.secondConsult.status = 'judge';
+  logCaseEvent(c, 'Dewi', '二次面诊已结束，等待院长判断有无变动');
   buildCaseLog(c);
   postCaseRoomFile(c.id, '김민석 원장', 'var(--slate2)', '김', '二次面诊文本（AI生成，仅供参考）+ 二次面诊视频');
 }
 function simulateSecondConsultVideoDone(){
-  var c = getCurrentCase(); if(!c || !c.secondConsult || c.secondConsult.status!=='video_scheduled') return;
+  var c = getCurrentCase(); if(!c || !c.secondConsult || c.secondConsult.status!=='video_scheduled' || c.secondConsult.method!=='video') return;
   c.secondConsult.status = 'video_in_progress';
   logCaseEvent(c, 'Dewi', '进入二次面诊');
   buildCaseLog(c);
@@ -6452,8 +6452,8 @@ function requestAnotherConsult(){
   showToast('已发起再次面诊', c.name+' 第 '+c.consultRound+' 轮面诊等待缴费', function(){ openCaseDetail(c.id); });
 }
 /* ---- 二次面诊子流程（增加面诊-付款后 / 再次面诊 共用同一套 c.secondConsult 状态）----
-   二次面诊一律视频面诊；结束后问"有无变动"：有→等待报告→已出报告（覆盖原报告，触发新一轮项目预填）；
-   无→不出新报告，直接结束子流程，回到原来的报告/项目状态。全程不改变案件主状态。 */
+   2026-10-01 修正：二次面诊和主面诊一样，由KR室长选视频/书面；结束后（视频结束 / 书面进行中）院长判断"有无变动"：
+   无变动→本轮直接结束，维持原报告/项目；有变动→视频：等待报告→室长上传新报告；书面：直接出新报告（覆盖原报告，触发新一轮项目预填）。全程不改变案件主状态。 */
 function secondConsultTabHtml(c){
   var sc = c.secondConsult; if(!sc) return '';
   var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
@@ -6464,27 +6464,63 @@ function secondConsultTabHtml(c){
   var feeCard = consultFeeCardHtml('已缴费','','');
   if(sc.status==='paid_waiting_kr'){
     return wrap(feeCard+subStatusRowHtml([{kind:'Waiting', text:'待确认面诊时间'}])+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">已在案件对话房通知，等待 Kr室长/院长安排面诊时间（二次面诊一律走视频）</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">已在案件对话房通知，等待 Kr室长/院长安排面诊时间，并选择视频或书面</div>'+
       '<button class="btn-ghost" onclick="secondConsultScheduled()">演示：模拟Kr室长已安排时间</button>');
   }
   if(sc.status==='video_scheduled'){
-    return wrap(feeCard+subStatusRowHtml([{kind:'Success', text:'面诊时间已确认 '+sc.scheduledTime}])+
+    if(!sc.method){
+      return wrap(feeCard+subStatusRowHtml([{kind:'Success', text:'面诊时间已确认 '+sc.scheduledTime}])+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待 KR室长选择面诊形式（视频 / 书面）</div>'+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-ghost" onclick="secondChooseMethod(\'video\')">演示：模拟KR选择视频</button><button class="btn-ghost" onclick="secondChooseMethod(\'written\')">演示：模拟KR选择书面</button></div>');
+    }
+    return wrap(feeCard+subStatusRowHtml([{kind:'Success', text:'面诊时间已确认 '+sc.scheduledTime+'（视频）'}])+
       '<div class="card" style="padding:14px 16px;margin-bottom:14px;">Kr室长　'+sc.scheduledTime+' 可以进行</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-primary" onclick="secondConsultEnter()">进入面诊</button>'+
       '<button class="btn-ghost" onclick="simulateSecondConsultVideoDone()">演示：模拟院长视频面诊</button>'+
       '</div>');
   }
+  if(sc.status==='written_in_progress'){
+    return wrap(feeCard+subStatusRowHtml([{kind:'Waiting', text:'书面面诊中'}])+
+      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">院长书面答复中。判断相对原报告有无变动：无变动→本轮结束；有变动→直接出新报告</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-ghost" onclick="secondConsultJudge(false)">演示：模拟院长判断：无变动</button><button class="btn-ghost" onclick="secondConsultJudge(true)">演示：模拟院长判断：有变动</button></div>');
+  }
+  if(sc.status==='judge'){
+    return wrap(feeCard+subStatusRowHtml([{kind:'Waiting', text:'待院长判断有无变动'}])+
+      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">视频面诊已结束。无变动→本轮结束，维持原报告和项目；有变动→等待室长上传新报告</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-ghost" onclick="secondConsultJudge(false)">演示：模拟院长判断：无变动</button><button class="btn-ghost" onclick="secondConsultJudge(true)">演示：模拟院长判断：有变动</button></div>');
+  }
   if(sc.status==='video_in_progress'){
     return wrap(feeCard+'<div style="font-size:14px;font-weight:700;margin-bottom:10px;">面诊进行中</div>'+
       '<button class="btn-outline" onclick="nav(\'video-consult\')">回到通话 →</button>');
   }
   if(sc.status==='awaiting_report'){
-    return wrap(feeCard+subStatusRowHtml([{kind:'Waiting', text:'面诊已结束，请确认有无变动'}])+
-      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">有变动才会出新报告（KR室长同时给出新的可选范围），覆盖原方案；没有变动就维持原来的报告和项目</div>'+
-      '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="secondConsultChanged(true)">有变动</button><button class="btn-outline" onclick="secondConsultChanged(false)">无变动</button></div>');
+    return wrap(feeCard+subStatusRowHtml([{kind:'Waiting', text:'等待室长提交报告'}])+
+      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">院长判断有变动：室长上传新报告（KR室长同时给出新的可选范围），覆盖原方案</div>'+
+      '<button class="btn-ghost" onclick="secondConsultChanged(true)">演示：模拟室长上传新报告</button>');
   }
   return '';
+}
+function secondChooseMethod(kind){
+  var c = getCurrentCase(); if(!c || !c.secondConsult || c.secondConsult.status!=='video_scheduled' || c.secondConsult.method) return;
+  c.secondConsult.method = kind;
+  if(kind==='written'){
+    c.secondConsult.status = 'written_in_progress';
+    logCaseEvent(c, '이서연', 'KR室长选择书面面诊');
+  } else {
+    logCaseEvent(c, '이서연', 'KR室长选择视频面诊');
+  }
+  buildCaseLog(c); renderCaseBody(c);
+}
+/* 二次面诊"有无变动"：无变动→本轮结束；有变动→书面直接出新报告，视频先等报告 */
+function secondConsultJudge(changed){
+  var c = getCurrentCase(); if(!c || !c.secondConsult) return;
+  var sc = c.secondConsult;
+  if(sc.status!=='judge' && sc.status!=='written_in_progress') return;
+  logCaseEvent(c, '김민석 원장', '院长判断：'+(changed ? '有变动' : '无变动'));
+  if(!changed || sc.method==='written'){ secondConsultChanged(!!changed); return; }
+  sc.status = 'awaiting_report';
+  buildCaseLog(c); renderCaseBody(c);
 }
 function secondConsultPaid(){
   var c = getCurrentCase(); if(!c || !c.secondConsult || c.secondConsult.status!=='awaiting_payment') return;
@@ -6511,7 +6547,7 @@ function secondConsultScheduled(){
 }
 var SECOND_CONSULT_CONTEXT_CASE_ID = null;
 function secondConsultEnter(){
-  var c = getCurrentCase(); if(!c || !c.secondConsult) return;
+  var c = getCurrentCase(); if(!c || !c.secondConsult || c.secondConsult.method!=='video') return;
   c.secondConsult.status = 'video_in_progress';
   SECOND_CONSULT_CONTEXT_CASE_ID = c.id;
   logCaseEvent(c, 'Dewi', '进入二次面诊');
@@ -6525,6 +6561,7 @@ function secondConsultChanged(hasChange){
     c.consultFiles = c.consultFiles || [];
     c.consultFiles.unshift({label:'二次面诊报告',date:attDate()});
     c.reportUploadedBy = c.krCoordinator;
+    c.reportDate = nowFullDt().split(' ')[0];
     /* 2026-09-30：二次面诊"有变动"出新报告时，KR室长随新报告给出新的可选范围，自动覆盖 krScope（演示数据：原范围 + 再加一个赴韩项目） */
     c.krScope = {items:secondRoundKrScopeItems(c), overallNote:'二次面诊后更新的可选范围，具体术式最终以到院评估为准', updatedAt:nowFullDt()};
     logCaseEvent(c, c.krCoordinator, '二次面诊有变动，出具新报告（覆盖原方案），并更新赴韩可选范围');
