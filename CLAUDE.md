@@ -39,10 +39,10 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 ## 已知的代码 vs 文档差距
 （2026-10-01 重写。原型已按 Notion 现行版 + 用户当天的口头确认对齐；对齐记录见 `docs/prototype-vs-notion-gaps.md`；"已确认、待写入 Notion"的规则和我的实现判断见 `docs/open-questions.md` 第 1b 节和第 2 节。某项补齐后，从这里和对应文档里一并删掉。）
 
-**已确认、但 Notion 里还没有（以用户指令/本文件为准，等用户写入 Notion）**：结算单2级tab+汇总行；更换项目另开新结算单；尾款公式（实际项目合计 −（定金合计 − 到院前已退））；小状态文字；面诊流程修正（KR确认时间→等待面诊→到时间KR选视频/书面）；免除原因6项并按关联原因预选；作废术后管理批次显示"随案件退款"；关联案件tab；延续既往面诊可沿用旧报告。
+**已确认、但 Notion 里还没有（以用户指令/本文件为准，等用户写入 Notion）**：结算单2级tab+汇总行；更换项目另开新结算单；尾款公式（实际项目合计 −（定金合计 − 到院前已退））；小状态文字；面诊流程修正（KR确认时间→等待面诊→到时间KR选视频/书面）；免除原因6项（预选仅 复诊→复诊、延续既往面诊→延续既往面诊）；关联案件tab；延续既往面诊改造（超1个月锁定付费、新增医美史提示、面诊后有无变动）；二次面诊有无变动；无法协调后的结局。（"随案件退款"和自动作废术后管理已撤回。）
 
 **仍然存在的差距 / 待确认**
-1. 二次面诊：用户写"流程同上"，但 Glossary 写一律视频；原型二次面诊仍是"KR安排时间→进入面诊→有无变动"，没有改成到时间 KR 选视频/书面（待确认）。
+1. ~~二次面诊仍是视频~~ —— 2026-10-01 已改：二次面诊同样由KR选视频/书面，两条路径都有"有无变动"（无变动本轮结束；有变动视频等报告、书面直接出新报告）。
 2. IN 侧发生的"更换项目"没有演示入口；术后管理"KR确认（可变更）"只做了标注进行时间。
 3. 客户详情"基础信息"是全局静态演示数据（"修改"只改显示并在客户 Timeline 记"修正"）。
 4. Notion 现行待确认（业务方未拍板）：赴韩定金比例（用户确认维持，`KR_DEPOSIT_RATE=0.3` 只是演示占位）；KR 代收术后管理项目的对账方式；赴韩取消时定金未退部分归属。
@@ -70,6 +70,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - 第十五、十六轮（2026-10-01）：Notion 整理后重新对照 → 差距清单 1–12 全部改完（Case ID 提前+功能开关、本地案件 tab 结构、面诊取消时机、本地管理继续选购、到院后判断流程、术后管理、室长商谈、列表行内按钮、未到店等）。
 - 第十七轮（2026-10-01，一→七，每部分各一次提交）：**一** 结算单2级tab（`setSettleTab`/`settlementCardsHtml`）+汇总行（`settlementSummaryHtml`）+更换项目另开新结算单（`noDeposit`）；**二** 尾款公式（`krBalanceInfo`：`effDeposit = 定金合计 − 到院前已退`，退款记录 `afterArrival`）；**三** 小状态文字；**四** 面诊流程修正（`simulateKrConfirmConsultTime`/`krChooseConsultMethod`/`written_in_progress`，书面路径直接出报告，删除付费后两个演示按钮）；**五** 免除原因6项（`WAIVE_REASONS`）+"随案件退款"；**六** 关联案件tab（`relatedTabHtml`，`CASE_RETURN` 返回栈）；**七** 延续既往面诊沿用旧报告（`reusableReportSrc`/`applyReuseReport`/`reuseReportHtml`，`c.reuseReport`）。
 - 自测：FigJam Happy Path A（16步）视频路径 + 书面路径、B（7步）、延续既往面诊→沿用之前报告、复诊关联→原案件关联案件tab、未到店、到院后部分不能做/不能施术（重新预约/退定金）、更换项目（结算单tab+汇总）都跑过，每步检查大/小状态；全案件全tab渲染无报错。
+- 第十八轮（2026-10-01 修正，一→五各一次提交）：**一** 免除原因预选只剩复诊/延续既往面诊；**二** 撤回无法协调自动作废术后管理+删"随案件退款"；**三** 赴韩项目全取消后的结局（保留/全退、是否做/增加本地项目，`localPurchasedBatches`/`caseHasPurchase`/`localKeepChoice`）；**四** 延续既往面诊改造（`continuationInfo`/`reportOverMonth`/`onNewHistoryChanged`/`simulateDirectorJudge`/`judge_pending`，新字段 `reportDate`/`newBeautyHistory`/`contJudged`/`reuseAfterConsult`）；**五** 二次面诊有无变动两条路径（`secondChooseMethod`/`secondConsultJudge`，状态 `written_in_progress`/`judge`/`awaiting_report`）。自测：延续（1个月内沿用/1个月内免除面诊视频·书面各有无变动/超期锁定/新增医美史提示）、无法协调三种结局、二次面诊书面·视频各有/无变动，每步查大状态、小状态和结局。
 - 教训：补丁用 `region(start,end)` 替换时结束标记必须紧邻；**第四部分的补丁曾误删一整段弹窗 HTML**，已恢复；现在 `/tmp/check.sh` 除了函数清单还检查 DOM id 是否缺失。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
