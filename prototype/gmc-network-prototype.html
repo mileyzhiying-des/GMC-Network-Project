@@ -1415,18 +1415,16 @@ function calToday(){ WEEK_OFFSET=0; DAY_OFFSET=0; renderCalendar(); }
 
 /* ================= dashboard: 预约来访 + 预约占位（2026-09-29 新增，IN-DASH-01） ================= */
 var DIRECTOR_LIST = ['김민석 원장', '이수진 원장'];
-var RESV_SEQ = 480215;
-function generateReservationId(){ return String(RESV_SEQ++) + 'REV'; }
-/* 老客人（下拉选客人+选院长）或"模拟客户填写完成"占位转正式：生成 Reservation ID、开新案件（状态"待访问"），
+/* 老客人（下拉选客人+选院长）或"模拟客户填写完成"占位转正式：生成 Case ID（2026-10-01：取消 Reservation ID，预约时直接生成）、开新案件（状态"待访问"），
    不经过占位；这里只做"开新案件"的预约来访——术后到店/使用持有项目也一律走这条开新案件（第十轮已确认） */
 function createReservationCase(name, director, dow, time, phone){
   var dayIndex = DOW_CN.indexOf(dow);
-  var reservationId = generateReservationId();
+  var caseNo = generateCaseNo();
   var id = 'r'+Date.now();
   var c = makeCase({id:id, name:name, director:director||DIRECTOR_LIST[0], updated:'刚刚',
     basic:{gender:'—', dob:'—', contact:phone||'—', history:'无'},
-    logEntries:[{stage:'预约到店', actor:phone?'客人':'Dewi', action:(phone?'官网/短信链接自助预约成功':'室长代替预约')+'，生成 Reservation ID '+reservationId, dt:nowFullDt()}]});
-  c.reservationId = reservationId;
+    logEntries:[{stage:'预约到店', actor:phone?'客人':'Dewi', action:(phone?'官网/短信链接自助预约成功':'室长代替预约')+'，生成 Case ID '+caseNo, dt:nowFullDt()}]});
+  c.caseNo = caseNo;
   CASE_ITEMS.unshift(c);
   updateCaseStage(c);
   WEEK_EVENTS.push({dayIndex:dayIndex, time:time, name:name, type:'reservation', caseId:id, arrived:false});
@@ -1456,7 +1454,7 @@ function renderAddSlotBody(){
     var directorOptions = DIRECTOR_LIST.map(function(d){ return '<option>'+d+'</option>'; }).join('');
     body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client">'+clientOptions+'</select></div>'+
       '<div class="field" style="margin-bottom:16px;"><label>确认院长</label><select id="add-slot-director">'+directorOptions+'</select></div>'+
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Reservation ID，进入"待访问"</div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
     var link = 'https://gmc.link/'+Math.random().toString(36).slice(2,8);
@@ -1475,7 +1473,7 @@ function confirmAddSlotExisting(){
   closeAddSlotModal();
   createReservationCase(name, director, ADD_SLOT_CONTEXT.dow, ADD_SLOT_CONTEXT.time, null);
   renderCalendar();
-  showToast('预约已生成', name+' · '+director+' · 周'+ADD_SLOT_CONTEXT.dow+' '+ADD_SLOT_CONTEXT.time+'，已生成 Reservation ID', null);
+  showToast('预约已生成', name+' · '+director+' · 周'+ADD_SLOT_CONTEXT.dow+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
 }
 var PLACEHOLDER_SEQ = 1;
 var RESERVATION_PLACEHOLDERS = [];
@@ -1541,7 +1539,7 @@ function simulateCustomerFilledPlaceholder(id){
   closeAddSlotModal();
   var c = createReservationCase('新客户 '+p.phone.slice(-4), null, p.dow, p.time, p.phone);
   renderCalendar();
-  showToast('客户已完成预约', c.name+' · Reservation '+c.reservationId+'，周'+p.dow+' '+p.time, function(){ openCaseDetail(c.id); });
+  showToast('客户已完成预约', c.name+' · Case ID '+c.caseNo+'，周'+p.dow+' '+p.time, function(){ openCaseDetail(c.id); });
 }
 /* 客户在链接里自行改时间：事件移到新时间，并通知室长（消息中心）——演示按钮，真实版由客户端触发 */
 var EXTRA_NOTIFICATIONS = [];
@@ -1911,7 +1909,7 @@ function submitNewClient(){
    案件真实的 stage 永远由 deriveCaseStage() 现算，这里不手填 stage，数组建好后统一 forEach(updateCaseStage) 一遍。 */
 function makeCase(o){
   return {
-    id:o.id, name:o.name, subState:o.subState||'waiting', reservationId:o.reservationId||null,
+    id:o.id, name:o.name, subState:o.subState||'waiting',
     director:o.director||'김민석 원장', krCoordinator:o.krCoordinator||'이서연 실장', updated:o.updated||'刚刚', caseNo:o.caseNo||null,
     basic:o.basic||{gender:'女', dob:'1990-01-01', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
     materialsConfirmed:!!o.materialsConfirmed, photoUploaded:!!o.materialsConfirmed, videoUploaded:!!o.materialsConfirmed,
@@ -1954,12 +1952,12 @@ function makeCase(o){
   };
 }
 var CASE_ITEMS = [
-  makeCase({id:'siti', name:'Siti Rahayu', updated:'刚刚',
+  makeCase({id:'siti', name:'Siti Rahayu', caseNo:'A000017', updated:'刚刚',
     basic:{gender:'女', dob:'1992-03-08', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
     logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-18 09:05'}]}),
 
   /* 接待中：客人已到店，메타뷰/照片/视频/苦恼/希望预期还没确认完，所以还没生成 Case ID */
-  makeCase({id:'andi', name:'Andi Wijaya', subState:'arrived', updated:'昨天',
+  makeCase({id:'andi', name:'Andi Wijaya', subState:'arrived', caseNo:'A000018', updated:'昨天',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-17 10:00'},
       {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:'2026-09-17 10:30'}
@@ -2121,7 +2119,7 @@ var CASE_ITEMS = [
     ]}),
 
   /* 接待中（演示"关联之前案件"）：Rina 之前有已结案的赴韩案件 A000010，这次再来，基础资料里可关联并看到"可能与 A000010 相关" */
-  makeCase({id:'rina2', name:'Rina Marlina', subState:'arrived', reservationId:'482917REV', updated:'刚刚',
+  makeCase({id:'rina2', name:'Rina Marlina', subState:'arrived', caseNo:'A000019', updated:'刚刚',
     logEntries:[
       {stage:'预约到店', actor:'Dewi', action:'老客人预约来访，选定院长 김민석 원장', dt:'2026-09-18 09:00'},
       {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:'2026-09-18 09:30'}
@@ -2150,7 +2148,7 @@ var CASE_ITEMS = [
     ]}),
 
   /* 已取消预约：分支1——待访问阶段直接终止，资料保留，没有走到基础资料确认，所以没有 Case ID */
-  makeCase({id:'agus', name:'Agus Salim', subState:'cancelled', cancelReason:'预约取消', updated:'4 天前',
+  makeCase({id:'agus', name:'Agus Salim', subState:'cancelled', caseNo:'A000020', cancelReason:'预约取消', updated:'4 天前',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-19 09:00'},
       {stage:'预约到店', actor:'Dewi', action:'取消预约，原因：联系不上客人', dt:'2026-09-19 18:00'}
@@ -2191,7 +2189,7 @@ var CASE_ITEMS = [
     ]})
 ];
 CASE_ITEMS.forEach(updateCaseStage);
-var CASE_NO_SEQ = 17;
+var CASE_NO_SEQ = 21;
 function generateCaseNo(){
   var n = 'A' + String(CASE_NO_SEQ).padStart(6,'0');
   CASE_NO_SEQ++;
@@ -2271,7 +2269,7 @@ function cancelFollowUpReservations(c){
     x.logEntries.push({stage:'预约到店', actor:'系统', action:'关联案件 '+(c.caseNo||c.id)+' 已进入终态，后续预约自动取消', dt:nowFullDt()});
     updateCaseStage(x);
     WEEK_EVENTS.forEach(function(ev){ if(ev.caseId===x.id) ev.cancelled = true; });
-    logCaseEvent(c, '系统', '后续预约自动取消：'+(x.reservationId||x.id));
+    logCaseEvent(c, '系统', '后续预约自动取消：'+(x.caseNo||x.id));
   });
 }
 function finishCase(c, cancelReasonIfCancelled){
@@ -2500,9 +2498,9 @@ function openCaseDetail(id){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0];
   if(!c) return;
   CURRENT_CASE_ID = id;
-  document.getElementById('case-title').textContent = c.name + ' · Case' + (c.caseNo ? ' · '+c.caseNo : (c.reservationId ? ' · '+c.reservationId : ''));
+  document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
   renderCaseSubtitle(c);
-  document.getElementById('case-chat-actions').style.display = c.caseNo ? 'flex' : 'none';
+  document.getElementById('case-chat-actions').style.display = c.materialsConfirmed ? 'flex' : 'none'; /* 发起对话等按钮：基础资料确认后才显示 */
   closeVideoTargetModal();
   renderCaseStatusBar(c);
   buildCaseLog(c);
@@ -2528,8 +2526,8 @@ function renderCaseStatusBar(c){
    其他阶段只有"发起对话"。"发起对话"本身继续沿用原规则：生成 Case ID 后才显示 */
 function renderCaseHeaderActions(c){
   var el = document.getElementById('case-chat-actions'); if(!el) return;
-  el.style.display = c.caseNo ? 'flex' : 'none';
-  if(!c.caseNo){ el.innerHTML=''; return; }
+  el.style.display = c.materialsConfirmed ? 'flex' : 'none';
+  if(!c.materialsConfirmed){ el.innerHTML=''; return; }
   var stageBtn = '';
   var notEnded = !isEnded(c);
   if(notEnded && c.needsConsult===false && !c.consultRequested && !c.secondConsult){
@@ -3017,7 +3015,7 @@ function renderCaseSubtitle(c){
   el.innerHTML = html;
 }
 function clientPriorCases(c){
-  return CASE_ITEMS.filter(function(x){ return x.name===c.name && x.id!==c.id && x.caseNo; });
+  return CASE_ITEMS.filter(function(x){ return x.name===c.name && x.id!==c.id && x.materialsConfirmed; }); /* 关联下拉只列基础资料已确认的案件 */
 }
 /* 系统提示"可能与 XX 相关"：客户有最近结案的赴韩案件，或还有没用完的术后管理项目 */
 function linkSuggestionHtml(c){
@@ -3074,7 +3072,7 @@ function relatedCasesHtml(c){
   return '<div class="card" style="padding:14px 24px;margin-top:12px;"><div class="info-heading" style="margin-bottom:8px;font-size:12px;">后续关联案件</div>'+
     followers.map(function(x){
       var b = caseStatusBadge(x);
-      return '<div class="case-field-row"><a href="#" class="info-link" onclick="openCaseDetail(\''+x.id+'\');return false;" style="flex-grow:1;">'+(x.caseNo||x.reservationId||x.id)+'</a>'+
+      return '<div class="case-field-row"><a href="#" class="info-link" onclick="openCaseDetail(\''+x.id+'\');return false;" style="flex-grow:1;">'+(x.caseNo||x.id)+'</a>'+
         '<span style="font-size:12px;color:var(--slate2);margin-right:10px;">'+x.linkedCase.reason+(x.linkedCase.auto?'（自动关联）':'')+'</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span></div>';
     }).join('')+'</div>';
 }
@@ -3218,8 +3216,7 @@ function confirmMaterials(){
   c.materialsError = '';
   c.materialsConfirmed = true;
   c.materialsDate = nowFullDt().split(' ')[0];
-  c.caseNo = c.caseNo || generateCaseNo();
-  applyCaseLink(c);
+  applyCaseLink(c); /* Case ID 已在预约时生成，这里不再生成 */
   document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
   document.getElementById('case-chat-actions').style.display = 'flex';
   if(c.needsConsult===true){
@@ -3261,7 +3258,7 @@ function caseTabsHtml(c){
   if(c.localMgmt){
     tabs += '<span class="tab'+(c.activeCaseTab==='localmgmt'?' active':'')+'" onclick="switchCaseTab(\'localmgmt\')">本地管理</span>';
   }
-  if(c.caseNo){
+  if(c.materialsConfirmed){
     tabs += '<span class="tab'+(c.activeCaseTab==='attachments'?' active':'')+'" onclick="switchCaseTab(\'attachments\')">附件</span>';
   }
   return '<div class="tabs" style="margin-bottom:4px;">'+tabs+'</div>';
@@ -3312,7 +3309,7 @@ function caseTabContentHtml(c){
   if(c.activeCaseTab==='projects' && c.projectsEnabled) return localRefundNoteHtml(c)+projectListTabHtml(c);
   if(c.activeCaseTab==='kr' && c.settlementDone && krAllItems(c).length>0) return krProcedureTabHtml(c);
   if(c.activeCaseTab==='localmgmt' && c.localMgmt) return localMgmtTabHtml(c);
-  if(c.activeCaseTab==='attachments' && c.caseNo) return attachmentsTabHtml(c);
+  if(c.activeCaseTab==='attachments' && c.materialsConfirmed) return attachmentsTabHtml(c);
   return basicTabHtml(c)+relatedCasesHtml(c);
 }
 
@@ -5573,7 +5570,7 @@ var STAFF_ROSTER = [
   {id:'rina', name:'Rina · 印尼室长'}
 ];
 function openNewCaseChatModal(){
-  var eligible = CASE_ITEMS.filter(function(c){ return !!c.caseNo; });
+  var eligible = CASE_ITEMS.filter(function(c){ return !!c.materialsConfirmed; }); /* 只能选基础资料已确认的案件 */
   document.getElementById('new-case-chat-list').innerHTML = eligible.map(function(c){
     var existing = CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id));
     return '<button class="btn-outline" style="text-align:left;display:flex;justify-content:space-between;" onclick="confirmNewCaseChat(\''+c.id+'\')"><span>'+c.name+' · '+c.caseNo+'</span>'+(existing?'<span style="font-size:11px;color:var(--muted);">已有对话</span>':'')+'</button>';
@@ -5645,7 +5642,7 @@ function renderDrawerList(){
     items.forEach(function(c){
       var b = caseStatusBadge(c);
       html += '<div class="chat-card" onclick="openCaseRoom(\''+c.id+'\')"><span class="sq-avt" style="background:var(--terracotta);">'+c.name.charAt(0).toUpperCase()+'</span>'+
-        '<div style="flex-grow:1;"><div style="font-size:13px;font-weight:700;">'+c.name+'</div><div style="font-size:11px;color:var(--muted);">Case：'+(c.caseNo||'未生成')+'</div></div>'+
+        '<div style="flex-grow:1;"><div style="font-size:13px;font-weight:700;">'+c.name+'</div><div style="font-size:11px;color:var(--muted);">Case：'+c.caseNo+'</div></div>'+
         '<div style="text-align:right;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span><div style="font-size:11px;color:var(--muted);margin-top:4px;">'+c.updated+'</div></div></div>';
     });
     if(!items.length) html += '<div style="font-size:12px;color:var(--muted);padding:16px 4px;">没有匹配的案件</div>';
@@ -5922,7 +5919,7 @@ function openQuoteModal(idx){
   document.getElementById('quote-overlay').classList.add('open');
 }
 function renderQuoteCaseList(){
-  document.getElementById('quote-case-list').innerHTML = CASE_ITEMS.filter(function(c){ return c.caseNo; }).map(function(c){
+  document.getElementById('quote-case-list').innerHTML = CASE_ITEMS.filter(function(c){ return c.materialsConfirmed; }).map(function(c){
     return '<label style="display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:13px;cursor:pointer;"><input type="radio" name="quote-case" value="'+c.id+'" onchange="QUOTE_PENDING.caseId=this.value"> '+c.name+' · '+c.caseNo+'</label>';
   }).join('');
 }
