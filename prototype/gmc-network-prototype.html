@@ -857,214 +857,6 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
-<!-- ============ KR室长回复 MODAL（演示：模拟KR室长回复，选面诊形式） ============ -->
-<div class="modal-overlay" id="kr-reply-overlay" onclick="if(event.target===this) closeKrReplyModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR室长回复</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrReplyModal()">✕</span>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <button class="btn-primary" onclick="krReplyChooseVideo()">① 视频面诊 + 面诊时间</button>
-      <button class="btn-outline" onclick="krReplyChooseWritten()">② 书面面诊 + 报告预计时间</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ 退款 MODAL（2026-09-30：取代 confirm()，退款原因必填） ============ -->
-<div class="modal-overlay" id="refund-overlay" onclick="if(event.target===this) closeRefundModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">退款</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeRefundModal()">✕</span>
-    </div>
-    <div id="refund-items" style="margin-bottom:12px;"></div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（₩，手动填写） <span style="color:#C1454A;">*</span></div>
-    <input type="number" min="0" id="refund-amount" placeholder="请输入本次退款总额（可为 0）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
-    <textarea id="refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="display:flex;gap:10px;margin-top:16px;">
-      <button class="btn-outline" style="flex:1;" onclick="closeRefundModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="confirmRefund()">确认退款</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ 本地项目退款 MODAL（2026-09-30：客户详情"持有项目"卡片，按购买批次退款，金额+原因必填） ============ -->
-<div class="modal-overlay" id="holding-refund-overlay" onclick="if(event.target===this) closeHoldingRefundModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">本地项目退款</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeHoldingRefundModal()">✕</span>
-    </div>
-    <div id="holding-refund-info" style="font-size:13px;margin-bottom:12px;"></div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（Rp） <span style="color:#C1454A;">*</span></div>
-    <input type="number" min="0" id="holding-refund-amount" placeholder="请输入退款金额" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
-    <textarea id="holding-refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">按批次退款：这一批的次数将全部作废（不能只退其中几次）；退款记录挂在这一批购买上，不改变任何案件的结局。</div>
-    <div style="display:flex;gap:10px;margin-top:16px;">
-      <button class="btn-outline" style="flex:1;" onclick="closeHoldingRefundModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="confirmHoldingRefund()">确认退款</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ 模拟KR补加术后管理项目 MODAL（2026-09-30：从术后管理分类里选） ============ -->
-<div class="modal-overlay" id="postcare-overlay" onclick="if(event.target===this) closePostCareModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR补加术后管理项目</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareModal()">✕</span>
-    </div>
-    <div id="postcare-list" style="margin-bottom:12px;"></div>
-    <div style="display:flex;gap:10px;margin-top:10px;">
-      <button class="btn-outline" style="flex:1;" onclick="closePostCareModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="confirmPostCare()">确认补加</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ 免除面诊费 MODAL（2026-09-30，Notion 09-30） ============ -->
-<div class="modal-overlay" id="waive-fee-overlay" onclick="if(event.target===this) closeWaiveFeeModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">免除面诊费</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeWaiveFeeModal()">✕</span>
-    </div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">免除原因 <span style="color:#C1454A;">*</span></div>
-    <select id="waive-fee-reason" onchange="document.getElementById('waive-fee-note').style.display = this.value==='其他' ? 'block':'none'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;">
-      <option value="">请选择</option><option>前次面诊补充</option><option>术后复查</option><option>延续既往面诊</option><option>其他</option>
-    </select>
-    <input type="text" id="waive-fee-note" placeholder="其他（请注明）" style="display:none;width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">免除后面诊照正常流程：等待确认面诊时间 → 由KR室长决定视频或书面。</div>
-    <div style="display:flex;gap:10px;margin-top:16px;">
-      <button class="btn-outline" style="flex:1;" onclick="closeWaiveFeeModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="confirmWaiveFee()">确认免除</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ 引用消息到案件 MODAL（2026-09-30，Conversation & Video Flow 入口3） ============ -->
-<div class="modal-overlay" id="quote-overlay" onclick="if(event.target===this) closeQuoteModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">引用到案件</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeQuoteModal()">✕</span>
-    </div>
-    <div id="quote-preview" style="font-size:12px;color:var(--slate2);background:var(--border2);border-radius:8px;padding:8px 10px;margin-bottom:12px;"></div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">选择案件（只能选已有 Case ID 的案件）</div>
-    <div id="quote-case-list" style="max-height:220px;overflow:auto;margin-bottom:12px;"></div>
-    <div style="display:flex;gap:10px;">
-      <button class="btn-outline" style="flex:1;" onclick="closeQuoteModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="confirmQuote()">确认引用</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ 对话房成员 MODAL（2026-09-30） ============ -->
-<div class="modal-overlay" id="room-members-overlay" onclick="if(event.target===this) closeRoomMembers()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;" id="room-members-title">成员</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeRoomMembers()">✕</span>
-    </div>
-    <div id="room-members-body"></div>
-  </div>
-</div>
-
-<!-- ============ 模拟KR标记完成 MODAL（2026-09-30：逐个勾选或一次全部完成） ============ -->
-<div class="modal-overlay" id="kr-done-overlay" onclick="if(event.target===this) closeKrDoneModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记完成</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrDoneModal()">✕</span>
-    </div>
-    <div id="kr-done-items" style="margin-bottom:12px;"></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">所有赴韩项目都是已完成或已取消后，系统自动判断案件结局。</div>
-    <div style="display:flex;gap:10px;">
-      <button class="btn-outline" style="flex:1;" onclick="submitKrMarkDone(false)">标记所选完成</button>
-      <button class="btn-primary" style="flex:1;" onclick="submitKrMarkDone(true)">全部标完成</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ 是否做本地管理 MODAL（2026-09-30：赴韩项目全部取消退款后询问） ============ -->
-<div class="modal-overlay" id="local-ask-overlay">
-  <div class="modal-box">
-    <div style="font-size:15px;font-weight:700;margin-bottom:10px;">赴韩项目已全部取消并退款</div>
-    <div style="font-size:13px;color:var(--slate2);margin-bottom:16px;">客人要不要做本地管理？（是 → 在同一个案件里走本地流程；否 → 仅出报告）</div>
-    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localAskAnswer(true)">是，做本地管理</button><button class="btn-outline" style="flex:1;" onclick="localAskAnswer(false)">否</button></div>
-  </div>
-</div>
-
-<!-- ============ 面诊取消后：是否做本地项目 MODAL（2026-10-01，IN-CASE-01） ============ -->
-<div class="modal-overlay" id="consult-cancel-overlay">
-  <div class="modal-box">
-    <div style="font-size:15px;font-weight:700;margin-bottom:10px;">面诊已取消</div>
-    <div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">是否做本地项目？</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:16px;">是 → 主状态"选择项目"，转本地管理；否 → 已取消（面诊取消）。面诊费记为"已取消"，只作记录。</div>
-    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="afterConsultCancelChoice(true)">是，做本地项目</button><button class="btn-outline" style="flex:1;" onclick="afterConsultCancelChoice(false)">否</button></div>
-  </div>
-</div>
-
-<!-- ============ 模拟KR判断能否施术 MODAL（2026-10-01，06 在韩国） ============ -->
-<div class="modal-overlay" id="kr-judge-overlay" onclick="if(event.target===this) closeKrJudgeModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR判断能否施术</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrJudgeModal()">✕</span>
-    </div>
-    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="ok" checked> 能施术，项目没变动 → 付清尾款 → 各项目标完成 → 已结案</label>
-    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="changed"> 能施术，但项目有变动（部分不能做 / 更换）→ 尾款按实际项目重算，多退少补</label>
-    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="cannot"> 不能施术 → KR 在韩重新预约，或退定金（全部退回 / 不退）→ 仅出报告</label>
-    <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" style="flex:1;" onclick="closeKrJudgeModal()">取消</button><button class="btn-primary" style="flex:1;" onclick="submitKrJudge()">确认</button></div>
-  </div>
-</div>
-
-<!-- ============ KR确认术后管理项目（标注进行时间） MODAL（2026-10-01） ============ -->
-<div class="modal-overlay" id="postcare-confirm-overlay" onclick="if(event.target===this) closePostCareConfirm()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：KR确认术后管理项目</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareConfirm()">✕</span>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">施术完成时 KR 确认术后管理项目（可修改）并标注每项的进行时间，如"术后第7天"；使用时按进行时间排序。</div>
-    <div id="postcare-confirm-list" style="margin-bottom:12px;"></div>
-    <div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="closePostCareConfirm()">取消</button><button class="btn-primary" style="flex:1;" onclick="submitPostCareConfirm()">确认</button></div>
-  </div>
-</div>
-
-<!-- ============ 基础资料缺必填项提示 MODAL（2026-10-01，IN-CASE-01：缺必填项时弹 popup） ============ -->
-<div class="modal-overlay" id="materials-missing-overlay" onclick="if(event.target===this) closeMaterialsMissing()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <span style="font-size:15px;font-weight:700;">还有必填项没填</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeMaterialsMissing()">✕</span>
-    </div>
-    <div id="materials-missing-list" style="font-size:13px;color:var(--slate2);line-height:1.9;margin-bottom:14px;"></div>
-    <button class="btn-primary" style="width:100%;" onclick="closeMaterialsMissing()">知道了</button>
-  </div>
-</div>
-
-<!-- ============ 模拟KR标记无法施术 MODAL（2026-09-30 演示） ============ -->
-<div class="modal-overlay" id="kr-unable-overlay" onclick="if(event.target===this) closeKrUnableModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记无法施术</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrUnableModal()">✕</span>
-    </div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">勾选无法施术的项目</div>
-    <div id="kr-unable-items" style="margin-bottom:12px;"></div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">原因 <span style="color:#C1454A;">*</span></div>
-    <textarea id="kr-unable-reason" rows="3" placeholder="请填写无法施术的原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="display:flex;gap:10px;margin-top:16px;">
-      <button class="btn-outline" style="flex:1;" onclick="closeKrUnableModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="submitKrUnable()">确认标记</button>
-    </div>
-  </div>
-</div>
-
 <!-- ============ INVITE Kr室长 MODAL（不含院长，只选室长） ============ -->
 <div class="modal-overlay" id="invite-kr-overlay" onclick="if(event.target===this) closeInviteKrModal()">
   <div class="modal-box">
@@ -2101,7 +1893,7 @@ var CASE_ITEMS = [
   /* 面诊已排期：Kr室长已回复具体时间，走视频面诊，等待进入 */
   makeCase({id:'putri', name:'Putri Wulandari', subState:'arrived', materialsConfirmed:true, caseNo:'A000003', updated:'3 天前',
     concern:'法令纹加深', expectation:'希望改善法令纹', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'video_scheduled',
-    consultMethod:'video', consultScheduledTime:'09.24 10:00',
+    consultMethod:null, consultScheduledTime:'09.24 10:00',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-14 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:'2026-09-14 10:00'},
@@ -2121,10 +1913,10 @@ var CASE_ITEMS = [
   /* 报告待递交：院长选了书面路径，已给出结论，正式报告还没提交 */
   makeCase({id:'budi', name:'Budi Santoso', subState:'arrived', materialsConfirmed:true, caseNo:'A000005', updated:'3 天前',
     concern:'轮廓松弛', expectation:'希望紧致轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report',
-    consultMethod:'written', writtenEta:'2 小时', writtenAdvice:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。', videoSummary:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。',
+    consultMethod:'video', consultScheduledTime:'09.20 09:00', writtenAdvice:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。', videoSummary:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-12 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'给出书面面诊结论，预计 2 小时内提交正式报告', dt:'2026-09-20 09:30'}
+      {stage:'面诊安排', actor:'Dewi', action:'视频面诊已结束（AI记录+录像），等待室长上传报告', dt:'2026-09-20 09:30'}
     ]}),
 
   /* 已出报告：报告已出，正在待客人/室长选管理项目 */
@@ -3023,16 +2815,18 @@ function endVideoConsult(){
   }
 }
 function markReportUploaded(){
-  /* 视频、书面两条路径出报告前统一叫"等待报告"，这一步是室长上传/提交正式报告，转成"已出报告" */
+  /* 视频路径：等待报告 → 室长上传报告；书面路径：书面面诊中 → 模拟室长提交报告（内容=院长书面报告+室长整理）→ 直接出报告，不经过等待报告 */
   var c = getCurrentCase();
-  if(!c || c.consultStatus!=='awaiting_report') return;
+  if(!c || (c.consultStatus!=='awaiting_report' && c.consultStatus!=='written_in_progress')) return;
+  var written = c.consultStatus==='written_in_progress';
   c.reportReady = true;
   c.consultStatus = 'report_ready';
   c.reportUploadedBy = c.krCoordinator;
+  if(written) c.videoSummary = '院长书面报告：'+(c.writtenAdvice||'')+'　室长整理：已按院长意见整理项目范围与注意事项。';
   c.consultFiles = c.consultFiles || [];
-  c.consultFiles.unshift({label:'面诊报告',date:attDate()});
+  c.consultFiles.unshift({label: written ? '面诊报告（院长书面报告 + 室长整理）' : '面诊报告', date:attDate()});
   applyDirectorPlan(c);
-  logCaseEvent(c, c.krCoordinator, '提交面诊报告，已出报告');
+  logCaseEvent(c, c.krCoordinator, written ? '提交面诊报告（院长书面报告 + 室长整理），直接出报告' : '提交面诊报告，已出报告');
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -3625,30 +3419,41 @@ function consultTabHtml(c){
   var feeCard = consultFeeCardHtml(fee, waiverText, '');
   if(c.consultStatus==='paid_waiting_kr'){
     return wrap(feeCard+sub+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认面诊形式与时间</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认面诊时间（面诊形式——视频/书面——到时间由 KR 决定）</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-outline" onclick="openFloatingChat(\'main\')">查看 Main 对话 →</button>'+
       '<button class="btn-outline" onclick="cancelConsult()">面诊取消</button>'+
-      '<button class="btn-ghost" onclick="openKrReplyModal()">演示：模拟KR室长回复</button>'+
+      '<button class="btn-ghost" onclick="simulateKrConfirmConsultTime()">演示：模拟KR确认面诊时间</button>'+
       '</div>');
   }
-  if(c.consultMethod==='video' && c.consultStatus==='video_scheduled'){
+  if(c.consultStatus==='video_scheduled'){
+    /* 等待面诊：显示已确认的时间和倒计时；到时间后由 KR 选视频/书面（演示用两个按钮模拟，到时间 KR 没操作系统不处理） */
+    var choose = !c.consultMethod
+      ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">到面诊时间后，由 KR 选择视频或书面面诊：</div>'+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-outline" onclick="cancelConsult()">面诊取消</button>'+
+        '<button class="btn-ghost" onclick="krChooseConsultMethod(\'video\')">演示：模拟KR选择视频</button>'+
+        '<button class="btn-ghost" onclick="krChooseConsultMethod(\'written\')">演示：模拟KR选择书面</button></div>'
+      : '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
+        '<button class="btn-primary" onclick="enterVideoConsult()">进入面诊</button>'+
+        '<button class="btn-outline" onclick="cancelConsult()">面诊取消</button>'+
+        '<button class="btn-ghost" onclick="simulateDirectorVideoConsult()">演示：模拟院长视频面诊</button></div>';
     return wrap(feeCard+sub+
-      '<div class="card" style="padding:14px 16px;margin-bottom:14px;cursor:pointer;" onclick="openFloatingChat(\'main\')">Kr室长　'+c.consultScheduledTime+' 可以进行</div>'+
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
-      '<button class="btn-primary" onclick="enterVideoConsult()">进入面诊</button>'+
-      '<button class="btn-outline" onclick="cancelConsult()">面诊取消</button>'+
-      '<button class="btn-ghost" onclick="simulateDirectorVideoConsult()">演示：模拟院长视频面诊</button>'+
-      '</div>');
+      '<div class="card" style="padding:14px 16px;margin-bottom:14px;cursor:pointer;" onclick="openFloatingChat(\'main\')">面诊时间　'+c.consultScheduledTime+'（剩余 50 分钟）'+(c.consultMethod==='video'?'　· KR已选择视频面诊':'')+'</div>'+choose);
   }
   if(c.consultMethod==='video' && c.consultStatus==='video_in_progress'){
     return wrap(feeCard+subStatusRowHtml([{kind:'Waiting', text:'通话中'}])+
       '<div class="card" style="padding:12px 16px;background:var(--terracotta-bg);">院长　|　视频面诊进行中</div>'+
       '<button class="btn-outline" style="margin-top:14px;" onclick="nav(\'video-consult\')">回到通话 →</button>');
   }
+  if(c.consultStatus==='written_in_progress'){
+    /* 书面路径：院长选择书面面诊 → 面诊进行中（书面面诊中）→ 模拟室长提交报告 → 直接出报告（不经过等待报告） */
+    return wrap(feeCard+sub+
+      '<div class="card" style="padding:12px 16px;background:var(--terracotta-bg);margin-bottom:14px;">院长选择了书面面诊，正在书面面诊中</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-ghost" onclick="markReportUploaded()">演示：模拟室长提交报告（院长书面报告 + 室长整理）</button></div>');
+  }
   if(c.consultStatus==='awaiting_report'){
     return wrap(feeCard+sub+
-      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">'+c.director+' 已给出面诊结论</div>'+
+      '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">视频面诊已结束，等待室长上传报告</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>查看报告 →</button>'+
       '<button class="btn-ghost" onclick="markReportUploaded()">演示：模拟室长已提交报告</button>'+
@@ -5096,62 +4901,58 @@ function sendMainAnnouncement(text){
   if(CURRENT_ROOM==='main') renderFloatMessages();
 }
 
-/* ---- 韩国那边的回应：演示用，通过"模拟KR室长回复"弹窗二选一（视频面诊+时间 或 书面面诊+预计时间），真实场景由韩国侧界面触发 ---- */
-function openKrReplyModal(){
+/* ---- 韩国那边的回应（2026-10-01 面诊流程修正）：付面诊费后 → 待确认面诊时间 → KR 确认时间（不区分视频/书面）→ 等待面诊；
+   到面诊时间后 KR 选择视频或书面（演示用两个按钮模拟；到时间 KR 没操作的情况系统不处理）：
+   视频 → IN 端出现"进入面诊" → 面诊进行中（通话中）→ 结束通话 → 等待报告（等待室长提交报告）→ 室长上传报告 → 项目确认中
+   书面 → IN 端立刻收到提醒"院长选择书面面诊" → 面诊进行中（书面面诊中）→ 模拟室长提交报告 → 直接出报告 → 项目确认中（不经过等待报告） ---- */
+function simulateKrConfirmConsultTime(){
   var c = getCurrentCase(); if(!c || c.consultStatus!=='paid_waiting_kr') return;
-  document.getElementById('kr-reply-overlay').classList.add('open');
-}
-function closeKrReplyModal(){ document.getElementById('kr-reply-overlay').classList.remove('open'); }
-function krReplyChooseVideo(){
-  var time = prompt('面诊时间（演示用，直接填时间文本）', '09.22 14:00');
+  var time = prompt('KR 确认的面诊时间（演示用，直接填时间文本）', '09.22 14:00');
   if(time===null) return;
-  closeKrReplyModal();
   skipToVideoConsult(time.trim());
 }
-function krReplyChooseWritten(){
-  var eta = prompt('预计报告时间（演示用，例如"2 小时"）', '2 小时');
-  if(eta===null) return;
-  closeKrReplyModal();
-  skipToWrittenConsult(eta.trim());
-}
-function skipToVideoConsult(time){
+function skipToVideoConsult(time){ /* 函数名沿用：现在只是"KR确认面诊时间"，不再区分视频/书面 */
   var c = getCurrentCase(); if(!c || c.consultStatus!=='paid_waiting_kr') return;
   time = time || '09.22 14:00';
   if(!CHAT_DATA['main']) CHAT_DATA['main'] = [];
-  CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'好的，帮您安排在 '+time+'，已经和院长确认过了，走视频面诊。', time:nowTime()});
-  CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', kind:'card', card:{name:c.name, project:'面诊', time:time}, orig:'[面诊预约] '+c.name+' · '+time, time:nowTime()});
+  CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'好的，帮您安排在 '+time+'，已经和院长确认过了；具体视频还是书面，到时间由院长决定。', time:nowTime()});
+  CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', kind:'card', card:{name:c.name, project:'面诊', time:time}, orig:'[面诊预约] '+c.name+' '+time, time:nowTime()});
   if(CURRENT_ROOM==='main') renderFloatMessages();
-  c.consultMethod = 'video';
-  c.consultStatus = 'video_scheduled';
+  c.consultMethod = null; /* 面诊方式到时间由 KR 决定 */
+  c.consultStatus = 'video_scheduled'; /* 状态id沿用，对应大状态"等待面诊" */
   c.consultScheduledTime = time;
-  logCaseEvent(c, '이서연', '在Main对话群确认面诊时间：'+time+'（视频面诊）');
+  updateCaseStage(c);
+  logCaseEvent(c, '이서연', 'KR确认面诊时间：'+time+'（面诊形式到时间由KR决定）');
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
-  notifyConsultUpdate(c, 'Kr室长已回复面诊时间', c.name+' · '+c.director+' · '+time);
+  notifyConsultUpdate(c, 'Kr室长已确认面诊时间', c.name+' · '+c.director+' · '+time);
   setTimeout(function(){
     var cc = CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0];
     if(!cc || cc.consultStatus!=='video_scheduled') return;
     showToast('面诊即将开始', cc.name+' 的面诊将在 15 分钟后开始（'+cc.consultScheduledTime+'）', function(){ openCaseDetail(cc.id); });
   }, 6000);
 }
-function skipToWrittenConsult(eta){
-  var c = getCurrentCase(); if(!c || c.consultStatus!=='paid_waiting_kr') return;
-  eta = eta || '2 小时';
-  var advice = '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
-  if(!CHAT_DATA['main']) CHAT_DATA['main'] = [];
-  CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'김민석 원장', color:'var(--slate2)', init:'김', orig:'不用视频了，我直接给个书面建议：'+advice, time:nowTime()});
-  if(CURRENT_ROOM==='main') renderFloatMessages();
-  c.consultMethod = 'written';
-  c.consultStatus = 'awaiting_report';
-  c.writtenAdvice = advice;
-  c.videoSummary = advice;
-  c.writtenEta = eta;
-  logCaseEvent(c, '김민석 원장', '给出书面面诊结论，预计 '+c.writtenEta+'内提交正式报告');
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
-  notifyConsultUpdate(c, '面诊信息已更新', c.director+' 已给出书面面诊建议');
+function krChooseConsultMethod(kind){
+  var c = getCurrentCase(); if(!c || c.consultStatus!=='video_scheduled' || c.consultMethod) return;
+  if(kind==='video'){
+    c.consultMethod = 'video';
+    logCaseEvent(c, '김민석 원장', '院长选择视频面诊：IN端可以进入面诊');
+    buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+    notifyConsultUpdate(c, '院长选择视频面诊', c.name+' · 可以进入面诊了');
+  } else {
+    var advice = '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
+    if(!CHAT_DATA['main']) CHAT_DATA['main'] = [];
+    CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'김민석 원장', color:'var(--slate2)', init:'김', orig:'不用视频了，我直接给书面面诊：'+advice, time:nowTime()});
+    if(CURRENT_ROOM==='main') renderFloatMessages();
+    c.consultMethod = 'written';
+    c.writtenAdvice = advice;
+    c.consultStatus = 'written_in_progress'; /* 大状态：面诊进行中；小状态：书面面诊中 */
+    updateCaseStage(c);
+    logCaseEvent(c, '김민석 원장', '院长选择书面面诊：面诊进行中（书面面诊中）');
+    buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+    showToast('院长选择书面面诊', c.name+' · '+c.director+' 选择书面面诊，面诊进行中（书面面诊中）', function(){ openCaseDetail(c.id); }); /* IN 端立刻收到提醒 */
+  }
 }
 function notifyConsultUpdate(c, title, text){
   var chatOpen = document.getElementById('chat-float-overlay').classList.contains('open') && CURRENT_ROOM==='main';
