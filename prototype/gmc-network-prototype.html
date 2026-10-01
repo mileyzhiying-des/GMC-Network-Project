@@ -1025,8 +1025,13 @@ function nav(id){
   NAV_STACK.push(CURRENT_PAGE_ID);
   showPage(id);
 }
+var CASE_RETURN = []; /* 案件页内跳转到另一个案件时，记下来源案件，goBack() 回到它 */
 function goBack(){
   var prev = NAV_STACK.pop();
+  if(prev==='in-casedetail' && CURRENT_PAGE_ID==='in-casedetail' && CASE_RETURN.length){
+    openCaseDetail(CASE_RETURN.pop(), true); /* 返回来源案件（不再入栈） */
+    return;
+  }
   showPage(prev || 'main');
 }
 function showPage(id){
@@ -2447,9 +2452,12 @@ var VIDEO_CONTEXT_CASE_ID = null;
 var INVITE_KR_CONTEXT_CASE_ID = null;
 var CHAT_VIDEO_CONTEXT_CASE_ID = null;
 function getCurrentCase(){ return CASE_ITEMS.filter(function(x){ return x.id===CURRENT_CASE_ID; })[0]; }
-function openCaseDetail(id){
+function openCaseDetail(id, noPush){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0];
   if(!c) return;
+  if(!noPush && CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID && CURRENT_CASE_ID!==id){
+    CASE_RETURN.push(CURRENT_CASE_ID); NAV_STACK.push('in-casedetail'); /* 案件页 → 另一个案件页 */
+  }
   CURRENT_CASE_ID = id;
   document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
   renderCaseSubtitle(c);
@@ -3031,16 +3039,73 @@ function applyCaseLink(c){
   }
   renderCaseSubtitle(c);
 }
-/* 被关联案件里显示"后续关联案件"列表 */
-function relatedCasesHtml(c){
-  var followers = CASE_ITEMS.filter(function(x){ return x.linkedCase && x.linkedCase.caseId===c.id; });
-  if(!followers.length) return '';
-  return '<div class="card" style="padding:14px 24px;margin-top:12px;"><div class="info-heading" style="margin-bottom:8px;font-size:12px;">后续关联案件</div>'+
-    followers.map(function(x){
-      var b = caseStatusBadge(x);
-      return '<div class="case-field-row"><a href="#" class="info-link" onclick="openCaseDetail(\''+x.id+'\');return false;" style="flex-grow:1;">'+(x.caseNo||x.id)+'</a>'+
-        '<span style="font-size:12px;color:var(--slate2);margin-right:10px;">'+x.linkedCase.reason+(x.linkedCase.auto?'（自动关联，对KR只读可见）':'')+'</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span></div>';
-    }).join('')+'</div>';
+/* ---- 关联案件tab（2026-10-01）：之前关联（本案件关联了谁）/ 后续关联（谁关联了本案件，系统自动生成）；
+   每条：Case ID / 关联原因 / 日期 / 当前大状态；可展开看被关联案件的只读摘要，最下方［查看完整案件］。
+   完全只读：原案件即使已是终态也照样显示；不改变原案件的状态、财务、结局，原案件 Timeline 不新增记录。适用所有关联原因 ---- */
+function caseFirstDate(x){ return (x.logEntries && x.logEntries[0]) ? x.logEntries[0].dt.split(' ')[0] : '—'; }
+function caseProjectNames(x){
+  var kr = krAllItems(x).map(function(it){ return it.name+'（'+krItemStatus(it)+'）'; });
+  var loc = [];
+  getClientHoldings(x.name).forEach(function(h){ h.batches.forEach(function(b){ if(b.caseId===x.id && !b.voided) loc.push(h.itemName+' ×'+b.bought); }); });
+  var all = kr.concat(loc);
+  return all.length ? all.join('、') : '—';
+}
+function postCareUsesOf(f){
+  var uses = (f.mgmtUses||[]).concat((f.localMgmt && f.localMgmt.mgmtUses) || []);
+  var cat = {}; getClientHoldings(f.name).forEach(function(h){ cat[h.itemName] = h.category; });
+  var seen = {};
+  return uses.filter(function(u){ return cat[u.itemName]==='术后管理'; }).map(function(u){
+    seen[u.itemName] = (seen[u.itemName]||0) + 1;
+    return u.itemName+' · 第'+seen[u.itemName]+'次使用 · '+localItemStatus(u);
+  });
+}
+function relatedSummaryHtml(c, other, reason, follower, origin){
+  var row = function(k, v){ return '<div style="display:flex;gap:10px;font-size:12px;padding:3px 0;"><span style="color:var(--muted);min-width:96px;">'+k+'</span><span style="flex:1;color:var(--slate2);">'+v+'</span></div>'; };
+  var statusTxt = caseStatusBadge(other)[2];
+  var html = '';
+  if(reason==='复诊'){
+    html += row('日期', caseFirstDate(other))+row('面诊结论 / 报告摘要', other.reportReady ? (other.videoSummary||'已出报告') : '没有面诊报告')+row('使用的项目', caseProjectNames(other))+row('当前状态', statusTxt);
+  } else if(reason==='术后管理'){
+    if(other===follower){
+      var uses = postCareUsesOf(follower);
+      html += row('使用的术后管理项目', uses.length ? uses.join('<br>') : '尚未使用')+row('当前状态', statusTxt);
+    } else {
+      var pcs = postCareBatchesOf(origin).map(function(x){ return x.h.itemName+' ×'+x.b.bought+(x.b.schedule?'（'+x.b.schedule+'）':'')+' · 已用 '+x.b.used+'/'+x.b.bought; });
+      html += row('提供的术后管理项目', pcs.length ? pcs.join('<br>') : '—')+row('使用情况', '见后续关联案件')+row('当前状态', statusTxt);
+    }
+  } else { /* 延续既往面诊 */
+    if(other===follower){
+      html += row('沿用的报告', follower.reuseReport ? '沿用自 '+origin.caseNo+' 的面诊报告' : '没有沿用（重新面诊；原报告已带入附件）')+row('选了哪些项目', caseProjectNames(follower))+row('当前状态', statusTxt);
+    } else {
+      html += row('面诊报告', other.reportReady ? (other.videoSummary||'已出报告') : '没有面诊报告')+row('选了哪些项目', caseProjectNames(other))+row('当前状态', statusTxt);
+    }
+  }
+  return html;
+}
+var REL_OPEN = {};
+function toggleRelExpand(key){ REL_OPEN[key] = !REL_OPEN[key]; var c = getCurrentCase(); if(c) renderCaseBody(c); }
+function relatedEntryHtml(c, other, link, follower, origin, key){
+  var b = caseStatusBadge(other), open = !!REL_OPEN[key];
+  var head = '<div style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 0;" onclick="toggleRelExpand(\''+key+'\')">'+
+    '<span style="font-size:13px;font-weight:700;min-width:84px;">'+other.caseNo+'</span>'+
+    '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+link.reason+(link.auto?'（自动）':'')+'</span>'+
+    '<span style="font-size:12px;color:var(--muted);flex:1;">'+caseFirstDate(other)+'</span>'+
+    '<span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span><span style="font-size:11px;color:var(--slate);">'+(open?'▴':'▾')+'</span></div>';
+  var body = open ? '<div style="background:var(--border2);border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+relatedSummaryHtml(c, other, link.reason, follower, origin)+
+    '<div style="margin-top:8px;"><a href="#" class="info-link" onclick="openCaseDetail(\''+other.id+'\');return false;">查看完整案件 →</a></div></div>' : '';
+  return '<div style="border-bottom:1px solid var(--border2);">'+head+body+'</div>';
+}
+function relatedTabHtml(c){
+  var before = '', after = '';
+  if(c.linkedCase && c.linkedCase.caseId){
+    var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
+    if(src) before = relatedEntryHtml(c, src, c.linkedCase, c, src, 'b-'+src.id);
+  }
+  relatedFollowers(c).forEach(function(f){ after += relatedEntryHtml(c, f, f.linkedCase, f, c, 'a-'+f.id); });
+  var empty = '<div style="font-size:12px;color:var(--muted);padding:10px 0;">—</div>';
+  return '<div class="card" style="padding:18px 24px;"><div class="info-heading" style="margin-bottom:6px;">之前关联 <span style="font-weight:400;font-size:11px;color:var(--muted);">本案件关联了谁</span></div>'+(before||empty)+
+    '<div class="info-heading" style="margin:16px 0 6px;">后续关联 <span style="font-weight:400;font-size:11px;color:var(--muted);">谁关联了本案件（系统自动生成）</span></div>'+(after||empty)+
+    '<div style="font-size:11px;color:var(--muted);margin-top:12px;">只读：不改变被关联案件的状态、财务、结局，也不会在它的 Timeline 里新增记录。</div></div>';
 }
 function materialsCardHtml(c){
   var metaviewText = c.metaviewStatus==='ready'
@@ -3215,10 +3280,13 @@ function switchCaseTab(tab){
 /* Tab 出现时机（IN-CASE-01）：项目列表=面诊案件报告出来后；本地管理=本地案件确认后，或面诊/赴韩案件点"+添加本地管理"后 */
 function showProjectsTab(c){ return !!c.projectsEnabled && (!isLocalCase(c) || !!c.reportReady); }
 function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt; }
+function relatedFollowers(c){ return CASE_ITEMS.filter(function(x){ return x.linkedCase && x.linkedCase.caseId===c.id; }); }
+function showRelatedTab(c){ return !!(c.linkedCase && c.linkedCase.caseId) || relatedFollowers(c).length>0; }
 function normalizeCaseTab(c){
   var t = c.activeCaseTab;
   if(t==='projects' && !showProjectsTab(c)) c.activeCaseTab = showLocalTab(c) ? 'localmgmt' : 'basic';
   else if(t==='localmgmt' && !showLocalTab(c)) c.activeCaseTab = showProjectsTab(c) ? 'projects' : 'basic';
+  else if(t==='related' && !showRelatedTab(c)) c.activeCaseTab = 'basic';
 }
 function caseTabsHtml(c){
   normalizeCaseTab(c);
@@ -3235,6 +3303,9 @@ function caseTabsHtml(c){
   }
   if(showLocalTab(c)){
     tabs += '<span class="tab'+(c.activeCaseTab==='localmgmt'?' active':'')+'" onclick="switchCaseTab(\'localmgmt\')">本地管理</span>';
+  }
+  if(showRelatedTab(c)){
+    tabs += '<span class="tab'+(c.activeCaseTab==='related'?' active':'')+'" onclick="switchCaseTab(\'related\')">关联案件</span>';
   }
   if(c.materialsConfirmed){
     tabs += '<span class="tab'+(c.activeCaseTab==='attachments'?' active':'')+'" onclick="switchCaseTab(\'attachments\')">附件</span>';
@@ -3289,8 +3360,9 @@ function caseTabContentHtml(c){
   if(c.activeCaseTab==='kr' && c.settlementDone && krAllItems(c).length>0) return krProcedureTabHtml(c);
   if(c.activeCaseTab==='localmgmt' && isLocalCase(c)) return projectListTabHtml(c, true); /* 本地案件：选择项目→本地管理的完整流程（07） */
   if(c.activeCaseTab==='localmgmt' && c.localMgmt) return localMgmtTabHtml(c);
+  if(c.activeCaseTab==='related' && showRelatedTab(c)) return relatedTabHtml(c);
   if(c.activeCaseTab==='attachments' && c.materialsConfirmed) return attachmentsTabHtml(c);
-  return basicTabHtml(c)+relatedCasesHtml(c);
+  return basicTabHtml(c);
 }
 
 /* 基础资料 tab：确认过的资料只读展示，各行带 查看/再上传 或 查看/修正 */
