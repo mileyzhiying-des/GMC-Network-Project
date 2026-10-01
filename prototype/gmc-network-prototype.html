@@ -4417,7 +4417,7 @@ function confirmRefund(){
   var hadKr = chosen.some(function(it){ return it.cancelled; });
   if(mode0==='diffRefund'){ (c.settlementBatches||[]).forEach(function(b){ if(b.krDeposit>0) batchIds.push(b.id); }); }
   c.refunds = c.refunds || [];
-  c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:nowFullDt().split(' ')[0], items:names, batchIds:batchIds});
+  c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:nowFullDt().split(' ')[0], items:names, batchIds:batchIds, afterArrival:!!c.hasArrived});
   logCaseEvent(c, 'Dewi', (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，退款 ')+formatCurrency(amount,'KRW')+'，退款原因：'+reason+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];
   closeRefundModal();
@@ -4456,11 +4456,15 @@ function afterKrItemsChanged(c){
    ① 能施术·项目没变动 → 付清尾款 → 各项目标完成 → 已结案
    ② 能施术·项目有变动（部分不能做 / 更换）→ 不能做的标"无法施术"（项目→已取消）→ 尾款按实际项目重算（定金先抵，多退少补；需退差额时 IN 按 KR 判断的金额走退款弹窗）→ 可选改施术时间（回到施术时间已确认）→ 施术完成 → 已结案
    ③ 不能施术 → KR 在韩重新预约（回到施术时间已确认，再标已到医院）/ 退定金（全部退回或不退）→ IN 退款 → 仅出报告 */
+/* 尾款公式（2026-10-01 确认）：尾款 = 实际做的项目合计 −（定金合计 − 到医院前已退金额）；到医院之后不单独退款，差额在尾款里多退少补。
+   到医院前在结算单［取消项目］退过的金额（refunds 里 afterArrival 不为真）从定金里扣掉一次，且被取消的项目不在"实际项目合计"里——不重复扣减。 */
 function krBalanceInfo(c){
   var deposit = 0;
   (c.settlementBatches||[]).forEach(function(b){ if(b.status==='active') deposit += b.krDeposit||0; });
-  var total = krActiveItems(c).reduce(function(sum,it){ return sum + (it.price||0); }, 0); /* 实际要做的项目合计 */
-  return {deposit:deposit, total:total, diff:total-deposit}; /* diff>0 补尾款；diff<0 退差额 */
+  var preRefund = (c.refunds||[]).filter(function(r){ return !r.afterArrival && (r.currency||'KRW')==='KRW'; }).reduce(function(sum,r){ return sum + (r.amount||0); }, 0);
+  var effDeposit = deposit - preRefund; /* 仍留在诊所、可抵尾款的定金 */
+  var total = krActiveItems(c).reduce(function(sum,it){ return sum + (it.price||0); }, 0); /* 实际要做的项目合计（不含已取消/已更换） */
+  return {deposit:deposit, preRefund:preRefund, effDeposit:effDeposit, total:total, diff:total-effDeposit}; /* diff>0 补尾款；diff<0 退差额 */
 }
 function krArrivedOpsHtml(c){
   var j = c.krJudge, btn = function(label, fn, cls){ return '<button class="'+(cls||'btn-ghost')+'" onclick="'+fn+'">'+label+'</button>'; };
@@ -4473,7 +4477,7 @@ function krArrivedOpsHtml(c){
       (!c.krBalancePaid ? btn('演示：模拟KR标记付清尾款（尾款 '+formatCurrency(info.diff,'KRW')+'）','simulateKrMarkBalancePaid()','btn-primary')
         : '<div style="font-size:12px;color:var(--sage);font-weight:700;margin-bottom:8px;">✓ 已付清尾款</div>'+btn('演示：模拟KR标记完成','simulateKrMarkDone()','btn-primary'));
   } else if(j.result==='changed'){
-    var calc = '实际项目合计 '+formatCurrency(info.total,'KRW')+'；定金 '+formatCurrency(info.deposit,'KRW')+' 先抵 → '+(info.diff>0 ? '需补尾款 '+formatCurrency(info.diff,'KRW') : info.diff<0 ? '需退差额 '+formatCurrency(-info.diff,'KRW') : '刚好抵平');
+    var calc = '实际项目合计 '+formatCurrency(info.total,'KRW')+'；定金合计 '+formatCurrency(info.deposit,'KRW')+(info.preRefund>0 ? '，减去到院前已退 '+formatCurrency(info.preRefund,'KRW') : '')+' = '+formatCurrency(info.effDeposit,'KRW')+' 先抵 → '+(info.diff>0 ? '需补尾款 '+formatCurrency(info.diff,'KRW') : info.diff<0 ? '需退差额 '+formatCurrency(-info.diff,'KRW') : '刚好抵平');
     inner = note('KR判断：能施术，但项目有变动')+'<div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">'+calc+'</div>'+
       (!j.settled
         ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+btn('演示：模拟KR标记无法施术项目','simulateKrMarkUnable()')+btn('演示：模拟韩国更换项目','simulateKrProjectSwap()')+btn('演示：结算尾款（定金先抵，多退少补）','settleKrBalance()','btn-primary')+'</div>'
@@ -4528,7 +4532,7 @@ function settleKrBalance(){
   var info = krBalanceInfo(c);
   if(info.diff<0){ openRefundModal([], 'diffRefund', false, -info.diff); return; }
   c.krBalancePaid = true; c.krJudge.settled = true;
-  logCaseEvent(c, '김민석 원장', 'KR结算尾款：实际项目合计 '+formatCurrency(info.total,'KRW')+'，定金 '+formatCurrency(info.deposit,'KRW')+' 先抵，补尾款 '+formatCurrency(info.diff,'KRW'));
+  logCaseEvent(c, '김민석 원장', 'KR结算尾款：实际项目合计 '+formatCurrency(info.total,'KRW')+'，可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'（定金合计 '+formatCurrency(info.deposit,'KRW')+' − 到院前已退 '+formatCurrency(info.preRefund,'KRW')+'），补尾款 '+formatCurrency(info.diff,'KRW'));
   buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 /* KR 在韩重新预约施术时间：回到"施术时间已确认"（新时间），客人再到医院时 KR 重新标记已到医院；IN 不能改 */
@@ -4548,7 +4552,7 @@ function krReschedule(clearJudge){
 /* 不能施术 → 退定金（全部退回 / 不退，由KR判断）→ IN 按KR判断在退款弹窗里操作 → 仅出报告 */
 function krRefundDeposit(kind){
   var c = getCurrentCase(); if(!c || !c.krJudge || c.krJudge.result!=='cannot') return;
-  var amount = kind==='all' ? krBalanceInfo(c).deposit : 0;
+  var amount = kind==='all' ? Math.max(0, krBalanceInfo(c).effDeposit) : 0; /* 全部退回=还留在诊所的定金 */
   openRefundModal(krNotStartedItems(c), 'krCannot', false, amount);
 }
 /* 选中/取消项目时把项目库当时的名字/价格/来源复制一份存进案件（快照）；
