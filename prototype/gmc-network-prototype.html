@@ -1965,7 +1965,7 @@ var CASE_ITEMS = [
 
   /* 待选项目：分支2"不面诊"——基础资料确认时选了不面诊，Case ID 已生成，正在选管理项目、还没点"确认所选项目" */
   makeCase({id:'yuni', name:'Yuni Kartika', subState:'arrived', materialsConfirmed:true, caseNo:'A000001', updated:'2 小时前',
-    concern:'皮肤暗沉、毛孔粗大', expectation:'希望肤色均匀、毛孔细致', needsConsult:false, activeCaseTab:'projects', projectsEnabled:true, projectOriginFilter:'IN',
+    concern:'皮肤暗沉、毛孔粗大', expectation:'希望肤色均匀、毛孔细致', needsConsult:false, activeCaseTab:'localmgmt', projectsEnabled:true, projectOriginFilter:'IN',
     entryChoicePending:true, projectEntryMode:'new', /* 2026-09-29 第十轮：不面诊后先经过入口选择，这里演示已经点了"新增项目" */
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-16 09:00'},
@@ -2083,7 +2083,7 @@ var CASE_ITEMS = [
 
   /* 本地管理（2026-09-30 改）：纯本地案件，已使用持有项目、管理尚未完成/取消；原"已付款待使用"不再是本地管理 */
   makeCase({id:'rizky', name:'Rizky Hidayat', subState:'arrived', materialsConfirmed:true, caseNo:'A000009', updated:'今天',
-    concern:'术后恢复期护理', expectation:'希望恢复期更舒适', needsConsult:false, activeCaseTab:'projects',
+    concern:'术后恢复期护理', expectation:'希望恢复期更舒适', needsConsult:false, activeCaseTab:'localmgmt',
     projectsEnabled:true, projectsLocked:true, settlementDone:true,
     mgmtActive:true, mgmtUses:[{itemName:'好莱坞焕肤 1次', qty:1, date:'2026-09-15'}],
     procedureItems:[],
@@ -2173,7 +2173,7 @@ var CASE_ITEMS = [
 
   /* 已取消（管理取消）：不面诊案件使用持有项目后，管理全部取消、本次无购买，未做次数已归还持有 */
   makeCase({id:'hana', name:'Hana Permana', subState:'arrived', materialsConfirmed:true, caseNo:'A000015', updated:'3 天前',
-    concern:'术后恢复', expectation:'希望恢复期舒适', needsConsult:false, activeCaseTab:'projects', visitClosed:true, cancelReason:'管理取消', mgmtStatus:'cancelled_all',
+    concern:'术后恢复', expectation:'希望恢复期舒适', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'管理取消', mgmtStatus:'cancelled_all',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-20 09:00'},
       {stage:'面诊安排', actor:'Dewi', action:'使用了术后消肿护理 1次 1次，剩余1次', dt:'2026-09-20 10:00'},
@@ -2182,7 +2182,7 @@ var CASE_ITEMS = [
 
   /* 已取消（未购买未使用）：不面诊案件，本次既没购买也没使用 */
   makeCase({id:'tari', name:'Tari Wibowo', subState:'arrived', materialsConfirmed:true, caseNo:'A000016', updated:'2 天前',
-    concern:'皮肤暗沉', expectation:'了解项目', needsConsult:false, activeCaseTab:'projects', visitClosed:true, cancelReason:'未购买未使用',
+    concern:'皮肤暗沉', expectation:'了解项目', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'未购买未使用',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-21 09:00'},
       {stage:'面诊安排', actor:'Dewi', action:'本次不购买项目，案件已取消（未购买未使用）', dt:'2026-09-21 10:00'}
@@ -2537,7 +2537,7 @@ function renderCaseHeaderActions(c){
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
   var lmBtn = '';
-  if(notEnded && !c.localMgmt && (c.consultRequested || c.secondConsult || c.needsConsult===true)){
+  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.secondConsult || c.needsConsult===true)){
     lmBtn = '<button class="btn-outline" onclick="addLocalMgmt()">+ 添加本地管理</button>';
   }
   el.innerHTML = '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' + lmBtn + stageBtn;
@@ -3225,10 +3225,10 @@ function confirmMaterials(){
     c.consultStatus = 'awaiting_payment';
     c.activeCaseTab = 'consult';
   } else {
-    /* 选了不面诊，进项目列表tab先给"持有项目使用/新增项目"两个入口（2026-09-29 第十轮） */
+    /* 选了不面诊 → 主状态"选择项目"，自动打开本地管理tab，先给"持有项目使用/新增项目"两个入口（IN-CASE-01） */
     c.projectsEnabled = true;
     c.entryChoicePending = true;
-    c.activeCaseTab = 'projects';
+    c.activeCaseTab = 'localmgmt';
   }
   updateCaseStage(c);
   renderCaseStatusBar(c);
@@ -3243,19 +3243,28 @@ function switchCaseTab(tab){
   c.activeCaseTab = tab;
   renderCaseBody(c);
 }
+/* Tab 出现时机（IN-CASE-01）：项目列表=面诊案件报告出来后；本地管理=本地案件确认后，或面诊/赴韩案件点"+添加本地管理"后 */
+function showProjectsTab(c){ return !!c.projectsEnabled && (!isLocalCase(c) || !!c.reportReady); }
+function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt; }
+function normalizeCaseTab(c){
+  var t = c.activeCaseTab;
+  if(t==='projects' && !showProjectsTab(c)) c.activeCaseTab = showLocalTab(c) ? 'localmgmt' : 'basic';
+  else if(t==='localmgmt' && !showLocalTab(c)) c.activeCaseTab = showProjectsTab(c) ? 'projects' : 'basic';
+}
 function caseTabsHtml(c){
+  normalizeCaseTab(c);
   var tabs = '<span class="tab'+(c.activeCaseTab==='basic'?' active':'')+'" onclick="switchCaseTab(\'basic\')">基础资料</span>';
   if(c.consultRequested || c.secondConsult || (c.consultHistory||[]).length){
     tabs += '<span class="tab'+(c.activeCaseTab==='consult'?' active':'')+'" onclick="switchCaseTab(\'consult\')">面诊资料</span>';
   }
-  if(c.projectsEnabled){
+  if(showProjectsTab(c)){
     tabs += '<span class="tab'+(c.activeCaseTab==='projects'?' active':'')+'" onclick="switchCaseTab(\'projects\')">项目列表</span>';
   }
   var hasKRItems = c.settlementDone && krAllItems(c).length>0;
   if(hasKRItems){
     tabs += '<span class="tab'+(c.activeCaseTab==='kr'?' active':'')+'" onclick="switchCaseTab(\'kr\')">赴韩施术</span>';
   }
-  if(c.localMgmt){
+  if(showLocalTab(c)){
     tabs += '<span class="tab'+(c.activeCaseTab==='localmgmt'?' active':'')+'" onclick="switchCaseTab(\'localmgmt\')">本地管理</span>';
   }
   if(c.materialsConfirmed){
@@ -3306,8 +3315,10 @@ function consultIntentionCardHtml(c){
 }
 function caseTabContentHtml(c){
   if(c.activeCaseTab==='consult' && (c.consultRequested || c.secondConsult || (c.consultHistory||[]).length)) return consultIntentionCardHtml(c)+consultRoundsHtml(c);
-  if(c.activeCaseTab==='projects' && c.projectsEnabled) return localRefundNoteHtml(c)+projectListTabHtml(c);
+  normalizeCaseTab(c);
+  if(c.activeCaseTab==='projects' && showProjectsTab(c)) return localRefundNoteHtml(c)+projectListTabHtml(c, false);
   if(c.activeCaseTab==='kr' && c.settlementDone && krAllItems(c).length>0) return krProcedureTabHtml(c);
+  if(c.activeCaseTab==='localmgmt' && isLocalCase(c)) return localRefundNoteHtml(c)+projectListTabHtml(c, true); /* 本地案件：选择项目→本地管理的完整流程（07） */
   if(c.activeCaseTab==='localmgmt' && c.localMgmt) return localMgmtTabHtml(c);
   if(c.activeCaseTab==='attachments' && c.materialsConfirmed) return attachmentsTabHtml(c);
   return basicTabHtml(c)+relatedCasesHtml(c);
@@ -3606,7 +3617,13 @@ function unpaidBatchesHtml(c){
   }).join('')+'</div>';
 }
 /* ---- 项目列表 tab ---- */
-function projectListTabHtml(c){
+function projectListTabHtml(c, inLocalTab){
+  /* 面诊案件只买本地项目后，本地流程（是否使用/本地管理）在"本地管理"tab里进行，这里只看结算单 */
+  if(!inLocalTab && isLocalCase(c) && c.reportReady){
+    return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">结算单</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">本地项目已转客户持有；使用/本地管理请在「本地管理」tab 进行</div>'+
+      settlementCardsHtml(c)+'</div>';
+  }
   /* 纯本地案件结算后必须先过一遍"持有项目使用/本次不使用"，这一步优先于"已选择/结算"只读视图；
      案件一旦结束（finishCase 会把 entryChoicePending 复位）之后再看这个tab才落回只读的结算视图 */
   if(c.localAsk) return localAskHtml(c);
@@ -3644,7 +3661,7 @@ function localAskAnswer(yes){
   logCaseEvent(c, 'Dewi', '客人要做本地管理，在本案件内继续走本地流程');
   c.localTrack = true;
   c.entryChoicePending = true; c.projectEntryMode = null;
-  c.projectsLocked = false; c.recommended = []; c.projectOriginFilter = 'IN'; c.activeCaseTab = 'projects';
+  c.projectsLocked = false; c.recommended = []; c.projectOriginFilter = 'IN'; c.activeCaseTab = 'localmgmt';
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 /* 不面诊/面诊取消后的入口选择（2026-09-29 第十轮新增，IN-CASE-01） */
@@ -3721,7 +3738,7 @@ function submitHoldingsUse(scope){
   });
   if(!used.length){ alert('请至少勾选一项持有项目'); return; }
   ctx.mgmtActive = true; ctx.mgmtDone = false; ctx.mgmtStatus = null;
-  if(scope==='main'){ c.entryChoicePending = false; c.activeCaseTab = 'projects'; }
+  if(scope==='main'){ c.entryChoicePending = false; c.activeCaseTab = isLocalCase(c) ? 'localmgmt' : 'projects'; }
   else { ctx.step = 'active'; }
   updateCaseStage(c);
   buildCaseLog(c);
@@ -4269,7 +4286,7 @@ function confirmSettlementPayment(){
     /* 纯本地：结算后必须过一遍"持有项目使用/本次不使用"才能结案，即使刚买的项目也要在这一步决定用不用 */
     c.entryChoicePending = true;
     c.projectEntryMode = 'holdings';
-    c.activeCaseTab = 'projects';
+    c.activeCaseTab = isLocalCase(c) ? 'localmgmt' : 'projects'; /* 本地案件的流程在本地管理tab里 */
   }
   updateCaseStage(c);
   closeSettleModal();
@@ -4678,7 +4695,7 @@ function afterConsultCancelChoice(doLocal){
     c.projectsEnabled = true;
     c.localTrack = true;
     c.entryChoicePending = true;
-    c.activeCaseTab = 'projects';
+    c.activeCaseTab = 'localmgmt';
     logCaseEvent(c, 'Dewi', '面诊取消，改做本地项目，进入选择项目');
   } else {
     logCaseEvent(c, 'Dewi', '面诊取消，不做本地项目');
