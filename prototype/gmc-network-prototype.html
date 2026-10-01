@@ -2056,6 +2056,7 @@ function makeCase(o){
     consultFeeWaived:o.consultFeeWaived||null, /* 面诊费免除（2026-09-30）：{reason, note}，免除时财务结果按无收入判断 */
     localTrack:!!o.localTrack, /* 2026-09-30：本地案件标记（面诊取消后做本地项目 / 无法协调后做本地管理），用于状态推算：选择项目→本地管理 */
     consultHistory:o.consultHistory||[], consultTabRound:null, /* 2026-09-30：已结束的二次面诊轮次 [{fee,changed,at}]，面诊tab里"第N次"切换用 */
+    settleTab:null, /* 项目列表tab里结算单2级tab当前选中的序号，null=最新一张 */
     localAsk:!!o.localAsk, /* 赴韩项目"无法协调"退款后，询问是否做本地管理 */
     localMgmt:o.localMgmt||null,
     entryChoicePending:!!o.entryChoicePending, projectEntryMode:o.projectEntryMode||null, /* 不面诊/面诊取消后"持有项目使用"vs"新增项目"的入口选择 */
@@ -3739,7 +3740,8 @@ function settlementCardHtml(c, b){
     }).join('');
   }
   var amounts = [];
-  if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（合计 '+formatCurrency(b.krTotal,'KRW')+'）');
+  if(b.noDeposit) amounts.push('更换项目（'+(b.swapOf||'')+'→）：不收定金，金额 '+formatCurrency(b.krTotal,'KRW')+' 直接计入尾款');
+  else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（合计 '+formatCurrency(b.krTotal,'KRW')+'）');
   if(b.inTotal) amounts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
   var refunds = (c.refunds||[]).filter(function(r){ return (r.batchIds||[]).indexOf(b.id)>-1; }).map(function(r){
     return '<div style="font-size:12px;color:var(--terracotta);margin-top:4px;">退款 '+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+'）</div>';
@@ -3753,10 +3755,26 @@ function settlementCardHtml(c, b){
     (rows || '<div style="font-size:12px;color:var(--muted);">（项目明细略）</div>')+
     '<div style="font-size:12px;color:var(--slate2);margin-top:8px;">'+amounts.join('　')+'</div>'+refunds+actions+'</div>';
 }
+/* 汇总行（2026-10-01）：项目合计 / 已收定金 / 已退金额 / 应付尾款，跨所有结算单计算（赴韩=韩元，本地=印尼盾，不相加） */
+function settlementSummaryHtml(c){
+  var info = krBalanceInfo(c), ref = refundSum(c), pd = financePaid(c);
+  var hasKr = krAllItems(c).length>0;
+  var totalTxt = (hasKr ? formatCurrency(info.total,'KRW') : '') + ((hasKr && pd.inn>0) ? ' ＋ ' : '') + (pd.inn>0 ? formatCurrency(pd.inn,'IDR') : '') || '—';
+  var balTxt = !krActiveItems(c).length ? '—' : c.krBalancePaid ? '已结清' : (info.diff>=0 ? formatCurrency(info.diff,'KRW') : '应退 '+formatCurrency(-info.diff,'KRW'));
+  var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
+  return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
+    cell('项目合计', totalTxt)+cell('已收定金', hasKr ? formatCurrency(info.deposit,'KRW') : '—')+cell('已退金额', ref>0 ? formatCurrency(ref,'KRW') : '—')+cell('应付尾款', balTxt)+'</div>';
+}
+function setSettleTab(i){ var c = getCurrentCase(); if(!c) return; c.settleTab = i; renderCaseBody(c); }
 function settlementCardsHtml(c){
-  var bs = (c.settlementBatches||[]).slice().reverse(); /* 新的在上面 */
-  return bs.map(function(b){ return settlementCardHtml(c, b); }).join('') ||
-    '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">尚无结算单</div>';
+  var bs = c.settlementBatches || [];
+  if(!bs.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">尚无结算单</div>';
+  var idx = c.settleTab; if(idx===null || idx===undefined || idx<0 || idx>=bs.length) idx = bs.length-1; /* 默认打开最新一张 */
+  var tabs = bs.length>=2
+    ? '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'+bs.map(function(b,i){
+        return '<span class="chip'+(i===idx?' active':'')+'" onclick="setSettleTab('+i+')">第'+(i+1)+'张</span>';
+      }).join('')+'</div>' : '';
+  return settlementSummaryHtml(c)+tabs+settlementCardHtml(c, bs[idx]);
 }
 function settlementItemRow(c, it, removable){
   var strike = it.done ? 'text-decoration:line-through;color:var(--muted);' : '';
@@ -4219,6 +4237,7 @@ function generateSettlementBatch(c){
   c.settlementBatches.push({id:batchId, orderedBy:'Dewi', settledBy:'客人', time:nowFullDt(), status:'unpaid',
     krTotal:b.krTotal, krDeposit:b.krDeposit, krBalance:b.krBalance, inTotal:b.inTotal});
   c.procedureItems = (c.procedureItems||[]).concat(newItems);
+  c.settleTab = null; /* 新结算单：默认打开最新一张 */
   c.recommended = [];
   c.addingMore = false;
   c.projectsLocked = true;
@@ -4982,8 +5001,12 @@ function simulateKrProjectSwap(){
     : PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && p.name!==target.name && !krAllItems(c).some(function(it){ return it.name===p.name; }); })[0];
   if(!alt) return;
   target.swapped = true; target.replacedBy = alt.name; /* 原项目：已更换（最终状态，原项目名划线 + 更换为XX） */
-  c.procedureItems.push({projectId:alt.id, name:alt.name, price:alt.price, currency:currencyOf(alt.origin), origin:'KR', categoryId:alt.categoryId, done:false, batchId:target.batchId, swappedFrom:target.name}); /* 加项 */
-  logCaseEvent(c, '김민석 원장', '更换项目："'+target.name+'" → "'+alt.name+'"（加项 + 原项目更换，差额并入尾款多退少补）');
+  var newId = 'B' + ((c.settlementBatches||[]).length + 1);
+  /* 新项目另开一张新结算单（新tab）：到院之后的更换不收定金，金额直接计入尾款 */
+  c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:alt.price, krDeposit:0, krBalance:alt.price, inTotal:0, noDeposit:true, swapOf:target.name});
+  c.procedureItems.push({projectId:alt.id, name:alt.name, price:alt.price, currency:currencyOf(alt.origin), origin:'KR', categoryId:alt.categoryId, done:false, batchId:newId, swappedFrom:target.name}); /* 加项 */
+  c.settleTab = null;
+  logCaseEvent(c, '김민석 원장', '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
   buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 function markConsultPaid(){
