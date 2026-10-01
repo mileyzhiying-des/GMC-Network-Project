@@ -978,9 +978,34 @@ input,textarea,select{font-family:inherit;}
 <!-- ============ 是否做本地管理 MODAL（2026-09-30：赴韩项目全部取消退款后询问） ============ -->
 <div class="modal-overlay" id="local-ask-overlay">
   <div class="modal-box">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px;" id="local-ask-title">赴韩项目已全部取消并退款</div>
+    <div style="font-size:13px;color:var(--slate2);margin-bottom:16px;" id="local-ask-text"></div>
+    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localAskAnswer(true)">是</button><button class="btn-outline" style="flex:1;" onclick="localAskAnswer(false)">否</button></div>
+  </div>
+</div>
+
+<!-- ============ 赴韩项目全部取消后：案件里的本地项目/术后管理 保留还是全部退款 MODAL（2026-10-01） ============ -->
+<div class="modal-overlay" id="local-keep-overlay">
+  <div class="modal-box">
     <div style="font-size:15px;font-weight:700;margin-bottom:10px;">赴韩项目已全部取消并退款</div>
-    <div style="font-size:13px;color:var(--slate2);margin-bottom:16px;">客人要不要做本地管理？（是 → 在同一个案件里走本地流程；否 → 仅出报告）</div>
-    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localAskAnswer(true)">是，做本地管理</button><button class="btn-outline" style="flex:1;" onclick="localAskAnswer(false)">否</button></div>
+    <div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">这个案件里还有本地项目 / 术后管理项目：</div>
+    <div id="local-keep-list" style="font-size:12px;color:var(--slate2);margin-bottom:10px;"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">由室长决定：保留（之后问是否做本地项目），或按持有批次规则整批退款（金额 + 原因必填，只有没用过的批次可退）。</div>
+    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localKeepChoice('keep')">保留</button><button class="btn-outline" style="flex:1;" onclick="localKeepChoice('refund')">全部退款</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="local-refund-all-overlay">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">本地项目 / 术后管理 全部退款</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeLocalRefundAll()">✕</span>
+    </div>
+    <div id="local-refund-all-rows" style="margin-bottom:10px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="local-refund-all-reason" rows="2" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">整批退款、整批作废；用过的批次不能退（保留）。退完且本次没有购买 → 仅出报告。</div>
+    <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" style="flex:1;" onclick="closeLocalRefundAll()">返回</button><button class="btn-primary" style="flex:1;" onclick="confirmLocalRefundAll()">确认退款</button></div>
   </div>
 </div>
 
@@ -1655,7 +1680,7 @@ function grantHolding(name, itemName, category, caseId, date, qty, krCollected){
   var h = CLIENT_HOLDINGS[name].filter(function(x){ return x.itemName===itemName; })[0];
   if(!h){ h = {itemName:itemName, category:category, batches:[], krCollected:!!krCollected}; CLIENT_HOLDINGS[name].push(h); }
   if(krCollected) h.krCollected = true;
-  h.batches.push({caseId:caseId, date:date, bought:qty, used:0, usages:[]});
+  h.batches.push({caseId:caseId, date:date, bought:qty, used:0, usages:[], kr:!!krCollected});
 }
 /* 使用持有：先扣最早购买的那一批，跨批次自动结转；记 usages 供客户详情页展开显示 */
 function useHolding(name, itemName, caseId, date, qty, tag){
@@ -2324,7 +2349,15 @@ var CASE_STAGE_BADGE = {
 function isEnded(c){ return c.stage==='closed' || c.stage==='reportonly' || c.stage==='cancelled'; }
 function isLocalCtxWorkDone(ctx){ return !!ctx && (!!ctx.mgmtDone || ((ctx.mgmtUses||[]).length>0 && ctx.mgmtStatus!=='cancelled_all')); }
 /* 本 case 是否有发生购买：主流程里已付款的本地项目批次，或同日"本地管理"里的购买 */
+function localPurchasedBatches(c){ /* 本案件买的本地项目/术后管理批次（不含KR代收、不含已作废/已退款） */
+  var out = [];
+  getClientHoldings(c.name).forEach(function(h){ h.batches.forEach(function(b){ if(b.caseId===c.id && !b.kr && !b.voided && !b.refund) out.push({h:h, b:b}); }); });
+  return out;
+}
 function caseHasPurchase(c){
+  var any = false, live = false;
+  getClientHoldings(c.name).forEach(function(h){ h.batches.forEach(function(b){ if(b.caseId===c.id && !b.kr){ any = true; if(!b.voided && !b.refund) live = true; } }); });
+  if(any) return live; /* 买过但已全退 → 视为没有购买 */
   var main = (c.settlementBatches||[]).some(function(b){ return b.status==='active' && b.inTotal>0; });
   var lm = !!c.localMgmt && (c.localMgmt.batches||[]).length>0;
   return main || lm;
@@ -2534,7 +2567,7 @@ function caseSubStatusItems(c){
   var items = [];
   if(c.stage==='consult'){
     var inFlow = c.consultRequested && !c.reportReady;
-    if(c.localAsk) items.push({kind:'Warning', text:'赴韩项目已全部取消并退款，请确认客人是否做本地管理'});
+    if(c.localAsk) items.push({kind:'Warning', text: c.localAsk==='keep' ? '赴韩项目已全部取消并退款，请室长决定保留或全部退款本地项目/术后管理' : '赴韩项目已全部取消并退款，请确认是否做/增加本地项目'});
     else if(inFlow && c.consultStatus==='awaiting_payment') items.push({kind:'Waiting', text:'待缴费'});
     else if(inFlow && c.consultStatus==='paid_waiting_kr') items.push({kind:'Waiting', text:'待确认面诊时间'});
     else if(inFlow && c.consultStatus==='video_scheduled') items.push({kind:'Success', text:'面诊时间已确认 '+c.consultScheduledTime});
@@ -3999,17 +4032,23 @@ function projectListTabHtml(c, inLocalTab){
 }
 /* 无法协调、赴韩项目全退后：问客人要不要做本地管理（2026-09-30）：要→同一案件接着走本地流程（从"是否持有项目"开始），不要→按结局推算 */
 function localAskHtml(c){
+  if(c.localAsk==='keep'){
+    return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:10px;">赴韩项目已全部取消并退款</div>'+
+      '<div style="font-size:13px;color:var(--slate2);margin-bottom:12px;">案件里还有本地项目/术后管理：保留，还是全部退款？</div>'+
+      '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="openLocalKeepModal(getCurrentCase())">选择保留 / 全部退款</button></div></div>';
+  }
+  var hasLocal = localPurchasedBatches(c).length>0;
   return '<div class="card" style="padding:22px 24px;">'+
     '<div class="info-heading" style="margin-bottom:10px;">赴韩项目已全部取消并退款</div>'+
-    '<div style="font-size:13px;color:var(--slate2);margin-bottom:16px;">客人要不要做本地管理？</div>'+
-    '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localAskAnswer(true)">要，做本地管理</button><button class="btn-outline" style="flex:1;" onclick="localAskAnswer(false)">不要</button></div></div>';
+    '<div style="font-size:13px;color:var(--slate2);margin-bottom:16px;">'+(hasLocal?'是否做本地项目？':'是否增加本地项目？')+'</div>'+
+    '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localAskAnswer(true)">是</button><button class="btn-outline" style="flex:1;" onclick="localAskAnswer(false)">否</button></div></div>';
 }
 function localAskAnswer(yes){
   var c = getCurrentCase(); if(!c || !c.localAsk) return;
   document.getElementById('local-ask-overlay').classList.remove('open');
   c.localAsk = false;
-  if(!yes){ logCaseEvent(c, 'Dewi', '客人不做本地管理'); finishCase(c, '未购买未使用'); return; }
-  logCaseEvent(c, 'Dewi', '客人要做本地管理，在本案件内继续走本地流程');
+  if(!yes){ logCaseEvent(c, 'Dewi', '客人不做/不增加本地项目'); finishCase(c, '未购买未使用'); return; } /* 有购买→已结案；没有→仅出报告 */
+  logCaseEvent(c, 'Dewi', '客人要做/增加本地项目，在本案件内继续走本地流程');
   c.localTrack = true;
   c.entryChoicePending = true; c.projectEntryMode = null;
   c.projectsLocked = false; c.recommended = []; c.projectOriginFilter = 'IN'; c.activeCaseTab = 'localmgmt';
@@ -4562,13 +4601,65 @@ function afterKrItemsChanged(c){
     finishCase(c);
     return;
   }
-  /* 全部赴韩项目都已取消 */
+  /* 全部赴韩项目都已取消：
+     - 案件里有本地项目/术后管理 → 室长选择保留（再问"是否做本地项目"：是→本地管理；否→已结案）或全部退款（→仅出报告）
+     - 案件里没有 → 问"是否增加本地项目"：是→选购付款后进本地管理；否→仅出报告
+     通用规则：不做本地→仅出报告的前提是本次没有购买本地项目（或已全退），有购买则为已结案（computeOutcome 统一判断） */
   c.krSchedule = null;
-  c.localAsk = true;
+  var hasLocal = localPurchasedBatches(c).length>0;
+  c.localAsk = hasLocal ? 'keep' : true;
   c.activeCaseTab = 'projects';
-  logCaseEvent(c, 'Dewi', '赴韩项目已全部取消并退款，询问客人是否做本地管理');
+  logCaseEvent(c, 'Dewi', hasLocal ? '赴韩项目已全部取消并退款；案件里有本地项目/术后管理，请室长决定保留或全部退款' : '赴韩项目已全部取消并退款，询问是否增加本地项目');
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  if(hasLocal) openLocalKeepModal(c); else openLocalAskModal(c);
+}
+function openLocalAskModal(c){
+  var hasLocal = localPurchasedBatches(c).length>0;
+  document.getElementById('local-ask-title').textContent = hasLocal ? '是否做本地项目？' : '是否增加本地项目？';
+  document.getElementById('local-ask-text').textContent = hasLocal
+    ? '已保留本案件的本地项目/术后管理。是 → 同一案件进入本地管理；否 → 已结案（本次有购买）'
+    : '赴韩项目已全部取消。是 → 选购付款后进入本地管理；否 → 仅出报告（本次没有购买）';
   document.getElementById('local-ask-overlay').classList.add('open');
+}
+function openLocalKeepModal(c){
+  document.getElementById('local-keep-list').innerHTML = localPurchasedBatches(c).map(function(x){
+    return '· '+x.h.itemName+' ×'+x.b.bought+(x.h.category==='术后管理'?'（术后管理）':'')+(x.b.used>0?'　已用 '+x.b.used+' 次（不可退）':'');
+  }).join('<br>');
+  document.getElementById('local-keep-overlay').classList.add('open');
+}
+function localKeepChoice(kind){
+  var c = getCurrentCase(); if(!c || !c.localAsk) return;
+  document.getElementById('local-keep-overlay').classList.remove('open');
+  if(kind==='keep'){
+    c.localAsk = true;
+    logCaseEvent(c, 'Dewi', '室长选择保留本案件的本地项目/术后管理');
+    buildCaseLog(c);
+    openLocalAskModal(c);
+    return;
+  }
+  var rows = localPurchasedBatches(c).filter(function(x){ return x.b.used===0; });
+  if(!rows.length){ alert('这些批次都用过了，不能退款，只能保留'); c.localAsk = true; openLocalAskModal(c); return; }
+  window.__LOCAL_REFUND_ROWS = rows;
+  document.getElementById('local-refund-all-rows').innerHTML = rows.map(function(x,i){
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+x.h.itemName+' ×'+x.b.bought+'</span><span style="font-size:12px;">Rp <input type="number" min="0" id="lra-'+i+'" placeholder="金额" style="width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></span></div>';
+  }).join('');
+  document.getElementById('local-refund-all-reason').value = '';
+  document.getElementById('local-refund-all-overlay').classList.add('open');
+}
+function closeLocalRefundAll(){ document.getElementById('local-refund-all-overlay').classList.remove('open'); var c = getCurrentCase(); if(c && c.localAsk==='keep') openLocalKeepModal(c); }
+function confirmLocalRefundAll(){
+  var c = getCurrentCase(); if(!c) return;
+  var rows = window.__LOCAL_REFUND_ROWS || [];
+  var reason = document.getElementById('local-refund-all-reason').value.trim();
+  var amounts = rows.map(function(x,i){ var raw = document.getElementById('lra-'+i).value.trim(); return raw==='' ? NaN : Number(raw); });
+  if(amounts.some(function(a){ return isNaN(a) || a<0; })){ alert('请填写每个批次的退款金额（数字，可为 0）'); return; }
+  if(!reason){ alert('请填写退款原因'); return; }
+  var today = nowFullDt().split(' ')[0], names = [];
+  rows.forEach(function(x,i){ x.b.voided = true; x.b.refund = {amount:amounts[i], currency:'IDR', reason:reason, date:today}; names.push(x.h.itemName+' ×'+x.b.bought); });
+  document.getElementById('local-refund-all-overlay').classList.remove('open');
+  logCaseEvent(c, 'Dewi', '室长选择全部退款：整批退款 '+names.join('、')+'；退款原因：'+reason);
+  c.localAsk = false;
+  finishCase(c, '未购买未使用'); /* 本次没有购买（或已全退）→ 仅出报告；还有用过的批次保留则为已结案 */
 }
 /* ---- 06 在韩国（2026-10-01，KR 的操作全部用演示按钮模拟）----
    已到医院 → 「模拟KR判断能否施术」三个结果：
