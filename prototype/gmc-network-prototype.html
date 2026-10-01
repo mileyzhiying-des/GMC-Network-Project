@@ -2513,7 +2513,7 @@ function caseStatusLabel(c){
     var inFlow = c.consultRequested && !c.reportReady;
     if(inFlow && (c.consultStatus==='awaiting_payment' || c.consultStatus==='paid_waiting_kr')) return '面诊预约'; /* 小状态：待缴费 → 待确认面诊时间 */
     if(inFlow && c.consultStatus==='video_scheduled') return '等待面诊';
-    if(inFlow && c.consultStatus==='video_in_progress') return '面诊进行中';
+    if(inFlow && (c.consultStatus==='video_in_progress' || c.consultStatus==='written_in_progress')) return '面诊进行中';
     if(inFlow && c.consultStatus==='awaiting_report') return '等待报告';
     if(c.projectsEnabled || c.reportReady) return '项目确认中'; /* 含待付款（小状态）；"已出报告"只是 Timeline 事件 */
     if(c.consultStatus==='cancelled') return '面诊已取消';
@@ -2547,7 +2547,9 @@ function caseSubStatusItems(c){
     else if(inFlow && c.consultStatus==='awaiting_payment') items.push({kind:'Waiting', text:'待缴费'});
     else if(inFlow && c.consultStatus==='paid_waiting_kr') items.push({kind:'Waiting', text:'待确认面诊时间'});
     else if(inFlow && c.consultStatus==='video_scheduled') items.push({kind:'Success', text:'面诊时间已确认 '+c.consultScheduledTime});
-    else if(inFlow && c.consultStatus==='awaiting_report') items.push({kind:'Waiting', text: c.consultMethod==='written' && c.writtenEta ? '预计 '+c.writtenEta+' 内提交' : '等待室长提交报告'}); /* TODO(待确认)：视频路径没有预计时间，暂用"等待室长提交报告" */
+    else if(inFlow && c.consultStatus==='video_in_progress') items.push({kind:'Waiting', text:'通话中'});
+    else if(inFlow && c.consultStatus==='written_in_progress') items.push({kind:'Waiting', text:'书面面诊中'});
+    else if(inFlow && c.consultStatus==='awaiting_report') items.push({kind:'Waiting', text:'等待室长提交报告'}); /* 只有视频路径会进入等待报告 */
     else if(c.projectsEnabled || c.reportReady){
       if(c.reportReady) items.push({kind:'Success', text:'报告已出'});
       if(c.projectsLocked && !c.settlementDone) items.push({kind:'Waiting', text:'待付款'});
@@ -3562,7 +3564,8 @@ function consultRoundSubItems(c){
   else if(c.consultStatus==='paid_waiting_kr') items.push({kind:'Waiting', text:'待确认面诊时间'});
   else if(c.consultStatus==='video_scheduled') items.push({kind:'Success', text:'面诊时间已确认 '+c.consultScheduledTime+'（剩余 50 分钟）'});
   else if(c.consultStatus==='video_in_progress') items.push({kind:'Waiting', text:'通话中'});
-  else if(c.consultStatus==='awaiting_report') items.push({kind:'Waiting', text: c.consultMethod==='written' && c.writtenEta ? '预计 '+c.writtenEta+' 内提交' : '等待室长提交报告'});
+  else if(c.consultStatus==='written_in_progress') items.push({kind:'Waiting', text:'书面面诊中'});
+  else if(c.consultStatus==='awaiting_report') items.push({kind:'Waiting', text:'等待室长提交报告'});
   else if(c.consultStatus==='report_ready') items.push({kind:'Success', text:'报告已出'});
   return items;
 }
