@@ -1299,28 +1299,11 @@ var TODAY_DATE = new Date(2026,8,18); // 2026-09-18, Thursday
 var CAL_MODE = 'week';
 var WEEK_OFFSET = 0;
 var DAY_OFFSET = 0;
-/* ⚠️ 已废弃：图例"来韩施术" —— 2026-09-29 统一改为"赴韩施术"，见对应Change Request */
-var TYPE_COLOR = {travel:'var(--terracotta)', post:'var(--blue)', other:'var(--purple)', reservation:'var(--navy)'};
-var TYPE_BG = {travel:'var(--terracotta-bg)', post:'var(--blue-bg)', other:'var(--purple-bg)', reservation:'#E4E8ED'};
-var TYPE_LABEL = {travel:'赴韩施术', post:'术后管理', other:'其他', reservation:'预约来访'};
-/* dayIndex: 0=周一 … 6=周日, repeats on whichever week是显示的（demo数据，不绑定某个绝对日期）。
-   type==='reservation' 的事件额外带 caseId（点击进对应案件页）和 arrived（客户到店后变暗+标"已到访"） */
-var WEEK_EVENTS = [
-  {dayIndex:0, time:'11:00', name:'Maya Putri', type:'post'},
-  {dayIndex:3, time:'11:00', name:'Andi Wijaya', type:'travel'},
-  {dayIndex:5, time:'10:00', name:'Siti Rahma', type:'post'},
-  {dayIndex:0, time:'09:30', name:'Siti Rahayu', type:'reservation', caseId:'siti', arrived:false},
-  {dayIndex:1, time:'11:00', name:'Ayu Lestari', type:'reservation', caseId:'ayu2', arrived:false},
-  {dayIndex:2, time:'10:30', name:'Reza Firmansyah', type:'reservation', caseId:null, arrived:true} /* 示例：已到访变暗 */
-];
+/* 日历事件类型（2026-10-02·六）：预约来访 / 预约占位 / 赴韩施术；删除"视频沟通""术后管理""其他" */
+var TYPE_COLOR = {reservation:'var(--navy)', placeholder:'var(--slate)', travel:'var(--terracotta)'};
+var TYPE_BG = {reservation:'#E4E8ED', placeholder:'#F4F6F8', travel:'var(--terracotta-bg)'};
+var TYPE_LABEL = {reservation:'预约来访', placeholder:'预约占位', travel:'赴韩施术'};
 var WK_HOURS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30'];
-var CAL_WEEKS = [ /* static month-view demo grid: count = 当天项目数, off = 当天休息的院长/室长 */
-  [{n:30,dim:1},{n:31,dim:1},{n:1},{n:2},{n:3},{n:4},{n:5}],
-  [{n:6},{n:7},{n:8},{n:9},{n:10},{n:11},{n:12}],
-  [{n:13},{n:14},{n:15,count:2},{n:16,count:1},{n:17,count:3},{n:18,off:['김민석 원장']},{n:19,count:1}],
-  [{n:20,count:1},{n:21,off:['이서연 실장']},{n:22,count:2},{n:23,count:3},{n:24,count:1},{n:25,count:1},{n:26,count:2}],
-  [{n:27},{n:28},{n:29,count:1},{n:30,count:2},{n:1,dim:1,count:1},{n:2,dim:1,count:3},{n:3,dim:1,count:1}]
-];
 function getWeekStart(offset){
   var d = new Date(TODAY_DATE);
   var wd = d.getDay(); // 0=Sun..6=Sat
@@ -1329,70 +1312,108 @@ function getWeekStart(offset){
   return d;
 }
 function sameDate(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function dowOfDate(ds){ var d = new Date(ds+'T00:00:00'); var wd = d.getDay(); return wd===0 ? 6 : wd-1; }
+function dateLabel(ds){ var d = new Date(ds+'T00:00:00'); return (d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]; }
+function slotOf(time){ var h = time.slice(0,2), m = parseInt(time.slice(3),10); return h+':'+(m>=30?'30':'00'); }
+/* 接续作废的预约：本案件作废后，这条预约来访改挂到原案件（显示"已到访"） */
+var RESUMED_VISITS = [];
+/* 预约占位的历史记录（失效/取消的占位），供"预约历史记录"页用 */
+var PLACEHOLDER_HISTORY = [{id:'phx1', phone:'+62 812-3300-0099', date:'2026-09-17', time:'13:00', status:'占位失效'}];
+/* 日历事件：全部从案件数据实时算出来（一份数据，其他页面和日历不会各说各的）：
+   预约来访 = 每个案件的 visitDate/visitTime；赴韩施术 = 案件里已确认的施术日期；预约占位 = RESERVATION_PLACEHOLDERS */
+function visitStateOf(c){
+  if(c.subState==='cancelled') return c.noShow ? '未到店' : '预约取消';
+  if(c.subState==='arrived' || c.hasArrived) return '已到访';
+  return '待访问';
+}
+function calendarEvents(){
+  var evs = [];
+  CASE_ITEMS.forEach(function(c){
+    if(c.visitDate && c.visitTime) evs.push({kind:'reservation', date:c.visitDate, time:c.visitTime, name:c.name, caseId:c.id, purpose:c.visitPurpose, vstate:visitStateOf(c), ended:isEnded(c)});
+    var ks = c.krSchedule;
+    if(ks && ks.confirmedDate && (ks.status==='confirmed' || ks.status==='arrived' || ks.status==='change_pending'))
+      evs.push({kind:'travel', date:ks.confirmedDate, time:(ks.confirmedTime||'14:00'), name:c.name, caseId:c.id, ended:isEnded(c)});
+  });
+  RESUMED_VISITS.forEach(function(r){ evs.push({kind:'reservation', date:r.date, time:r.time, name:r.name, caseId:r.caseId, purpose:r.purpose, vstate:'已到访', ended:false}); });
+  RESERVATION_PLACEHOLDERS.forEach(function(ph){ evs.push({kind:'placeholder', date:ph.date, time:ph.time, name:ph.phone, phId:ph.id, purpose:ph.purpose}); });
+  return evs;
+}
+function eventChipHtml(e){
+  var now = demoNow();
+  var when = new Date(e.date+'T'+e.time+':00');
+  var past = (when < now);
+  var grey = past && e.kind!=='placeholder' ? 'opacity:.5;filter:grayscale(1);' : '';
+  var label, onclick, extra = '';
+  if(e.kind==='reservation'){
+    label = '预约来访 ｜ '+(e.purpose||'')+' ｜ '+e.name;
+    if(e.vstate==='已到访') label += '（已到访）';
+    if(e.vstate==='未到店') label = '<s>'+label+'</s> 未到店';
+    if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
+    if(e.vstate==='待访问' && past){
+      var left = when.getTime() + 30*60000 - now.getTime();
+      if(left > 0){ grey = ''; extra = ' <b data-visit-countdown="'+when.getTime()+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; }
+    }
+    onclick = e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)';
+  } else if(e.kind==='travel'){
+    label = '赴韩施术 ｜ '+e.name;
+    if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
+    onclick = 'openCaseDetail(\''+e.caseId+'\')';
+  } else {
+    var ph = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===e.phId; })[0];
+    label = '预约占位 ｜ '+e.name+' <span data-ph-countdown="'+e.phId+'">'+(ph?placeholderCountdownText(ph):'')+'</span>';
+    onclick = 'openPlaceholderModal(\''+e.phId+'\')';
+  }
+  var dashed = e.kind==='placeholder' ? 'border-style:dashed;' : '';
+  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'">'+label+extra+'</div>';
+}
 function buildWeekGrid(){
   var start = getWeekStart(WEEK_OFFSET);
   var days = [];
   for(var i=0;i<7;i++){ var dd=new Date(start); dd.setDate(start.getDate()+i); days.push(dd); }
+  var evs = calendarEvents().filter(function(e){ return !(e.kind==='reservation' && e.vstate==='预约取消'); }); /* 预约取消的事件从日历消失 */
   var html = '<div class="wk-corner"></div>';
   days.forEach(function(dd,i){
     var isToday = sameDate(dd, TODAY_DATE);
     html += '<div class="wk-head'+(isToday?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[i]+'</div>';
   });
   WK_HOURS.forEach(function(hr){
-    var rowEvents = WEEK_EVENTS.filter(function(e){ return e.time===hr && !e.cancelled; }); /* 预约取消的事件从日历消失 */
-    var rowPlaceholders = RESERVATION_PLACEHOLDERS.filter(function(p){ return p.time===hr; });
-    var isEmpty = rowEvents.length===0 && rowPlaceholders.length===0;
-    html += '<div class="wk-time'+(isEmpty?' empty':'')+'">'+hr+'</div>';
+    var rowEvs = evs.filter(function(e){ return slotOf(e.time)===hr; });
+    html += '<div class="wk-time'+(rowEvs.length?'':' empty')+'">'+hr+'</div>';
     for(var d=0; d<7; d++){
-      var evs = rowEvents.filter(function(e){ return e.dayIndex===d; });
-      var phs = rowPlaceholders.filter(function(p){ return p.dow===DOW_CN[d]; });
-      var chips = evs.map(function(e){
-        /* 2026-09-29 第十轮：不再使用"术后管理"事件类型，术后到店/使用持有项目统一走"预约来访"开新案件，
-           这里不再需要 type:'post' 的 caseId 联动，纯装饰用的旧 post 演示数据（无caseId）保留原样 */
-        var dim = (e.type==='reservation' && (e.arrived||e.noShow)) ? 'opacity:.5;' : '';
-        var label = e.type==='reservation' ? ('预约来访｜'+e.name+(e.arrived?'（已到访）':'')+(e.noShow?'（<s>未到店</s>）':'')) : (TYPE_LABEL[e.type]+'｜'+e.name);
-        if(e.type==='reservation' && e.noShow) label = '<s>预约来访｜'+e.name+'</s> 未到店'; /* 未到店：保留在原位，删除线 */
-        var onclick = e.type==='reservation'
-          ? (e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)')
-          : 'openClientDetail(\''+e.name+'\',\'in-dashboard\')';
-        return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.type]+' · '+e.name+'" style="'+dim+'border-color:'+TYPE_COLOR[e.type]+';background:'+TYPE_BG[e.type]+';" onclick="'+onclick+'">'+label+'</div>';
-      }).join('');
-      var phChips = phs.map(function(p){
-        return '<div class="event-chip" style="opacity:.55;border-style:dashed;border-color:var(--navy);background:#E4E8ED;" onclick="openPlaceholderModal(\''+p.id+'\')">已占位｜'+p.phone+' <span data-ph-countdown="'+p.id+'">'+placeholderCountdownText(p)+'</span></div>';
-      }).join('');
-      var allChips = chips + phChips;
-      var slotClick = allChips ? '' : ' onclick="openAddSlotModal(\''+DOW_CN[d]+'\',\''+hr+'\')" title="点击预约这个空档"';
-      html += '<div class="wk-cell'+(isEmpty?' empty':'')+(allChips?'':' wk-cell-open')+'"'+slotClick+'>'+allChips+'</div>';
+      var ds = dateStr(days[d]);
+      var cell = rowEvs.filter(function(e){ return e.date===ds; });
+      var chips = cell.map(eventChipHtml).join('');
+      var slotClick = cell.length ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
+      html += '<div class="wk-cell'+(cell.length?'':' wk-cell-open')+'"'+slotClick+'>'+chips+'</div>';
     }
   });
   document.getElementById('wk-grid').innerHTML = html;
 }
 function buildMonthGrid(){
   var grid = document.getElementById('cal-grid');
+  var evs = calendarEvents().filter(function(e){ return !(e.kind==='reservation' && e.vstate==='预约取消'); });
+  var first = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth(), 1);
+  var startPad = first.getDay(); /* 周日=0，月历从周日开始 */
   var html = '';
-  CAL_WEEKS.forEach(function(week){
-    week.forEach(function(d){
-      var color = d.dim ? 'var(--dim)' : 'var(--navy)';
-      var extra = '';
-      if(d.off && d.off.length){
-        extra = '<div style="font-size:10px;font-weight:700;color:var(--terracotta);">'+d.off.join('、')+' OFF</div>';
-      } else if(d.count){
-        extra = '<div style="font-size:12px;font-weight:700;color:var(--slate2);">'+d.count+' 项目</div>';
-      }
-      html += '<div class="cal-cell" onclick="setCalMode(\'week\')" title="点击进入周视图"><span style="color:'+color+'">'+d.n+'</span>'+extra+'</div>';
-    });
-  });
+  var cur = new Date(first); cur.setDate(1-startPad);
+  for(var i=0;i<42;i++){
+    var ds = dateStr(cur), inMonth = cur.getMonth()===first.getMonth();
+    var n = evs.filter(function(e){ return e.date===ds; }).length;
+    var extra = n ? '<div style="font-size:12px;font-weight:700;color:var(--slate2);">'+n+' 项日程</div>' : '';
+    html += '<div class="cal-cell" onclick="setCalMode(\'week\')" title="点击进入周视图"><span style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'">'+cur.getDate()+'</span>'+extra+'</div>';
+    cur.setDate(cur.getDate()+1);
+  }
   grid.innerHTML = html;
 }
 function buildDayGrid(){
   var d = new Date(TODAY_DATE); d.setDate(d.getDate()+DAY_OFFSET);
-  var wd = d.getDay(); var dayIndex = (wd===0?6:wd-1);
-  var evs = WEEK_EVENTS.filter(function(e){ return e.dayIndex===dayIndex; });
-  var html = '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">'+(d.getMonth()+1)+'月'+d.getDate()+'日 周'+DOW_CN[dayIndex]+'</div>';
+  var ds = dateStr(d);
+  var evs = calendarEvents().filter(function(e){ return e.date===ds && !(e.kind==='reservation' && e.vstate==='预约取消'); });
+  var html = '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">'+(d.getMonth()+1)+'月'+d.getDate()+'日 周'+DOW_CN[dowOfDate(ds)]+'</div>';
   if(evs.length===0){ html += '<div style="font-size:12px;color:var(--muted);">当日暂无排期</div>'; }
   else{
     evs.slice().sort(function(a,b){return a.time.localeCompare(b.time);}).forEach(function(e){
-      html += '<div class="schedule-row" onclick="openClientDetail(\''+e.name+'\',\'in-dashboard\')"><span class="schedule-time">'+e.time+'</span><span class="dotmark" style="background:'+TYPE_COLOR[e.type]+';"></span><span style="font-size:13px;">'+e.name+' · '+TYPE_LABEL[e.type]+'</span></div>';
+      html += '<div class="schedule-row" onclick="'+(e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)')+'"><span class="schedule-time">'+e.time+'</span><span class="dotmark" style="background:'+TYPE_COLOR[e.kind]+';"></span><span style="font-size:13px;">'+e.name+' · '+TYPE_LABEL[e.kind]+(e.purpose?' · '+e.purpose:'')+'</span></div>';
     });
   }
   document.getElementById('day-detail').innerHTML = html;
@@ -1421,32 +1442,34 @@ var DIRECTOR_LIST = DIRECTOR_INFO.filter(function(d){ return d.active; }).map(fu
 function isDirectorActive(name){ return DIRECTOR_LIST.indexOf(name)>-1; }
 /* 老客人（下拉选客人+选院长）或"模拟客户填写完成"占位转正式：生成 Case ID（2026-10-01：取消 Reservation ID，预约时直接生成）、开新案件（状态"待访问"），
    不经过占位；这里只做"开新案件"的预约来访——术后到店/使用持有项目也一律走这条开新案件（第十轮已确认） */
-function createReservationCase(name, director, dow, time, phone){
-  var dayIndex = DOW_CN.indexOf(dow);
+function createReservationCase(name, director, date, time, phone, purpose){
   var caseNo = generateCaseNo();
-  var id = 'r'+Date.now();
-  var c = makeCase({id:id, name:name, director:null, updated:'刚刚', /* 2026-10-02：预约不选院长，面诊案件在基础资料里选 */
+  var id = 'r'+Date.now()+Math.floor(Math.random()*1000);
+  var c = makeCase({id:id, name:name, director:null, updated:'刚刚', visitDate:date, visitTime:time, visitPurpose:purpose||'面诊商谈', /* 2026-10-02：预约不选院长，面诊案件在基础资料里选 */
     basic:{gender:'—', dob:'—', contact:phone||'—', history:'无'},
     logEntries:[{stage:'预约到店', actor:phone?'客人':'Dewi', action:(phone?'官网/短信链接自助预约成功':'室长代替预约')+'，生成 Case ID '+caseNo, dt:nowFullDt()}]});
   c.caseNo = caseNo;
   CASE_ITEMS.unshift(c);
   updateCaseStage(c);
-  WEEK_EVENTS.push({dayIndex:dayIndex, time:time, name:name, type:'reservation', caseId:id, arrived:false});
   if(!CLIENTS.some(function(x){ return x[0]===name; })) CLIENTS.unshift([name,'资料录入','Dewi','刚刚','#E4E8ED','var(--slate2)']);
   return c;
 }
 var ADD_SLOT_CONTEXT = null;
 var ADD_SLOT_MODE = 'existing';
+var VISIT_PURPOSES = ['面诊商谈','皮肤商谈','术后管理','复诊','皮肤管理']; /* 来访目的：不影响流程；接待时目的是术后管理/复诊 → 基础资料提示"要不要关联之前的案件" */
 var DEFAULT_SMS_TEMPLATE = '您好，这里是GMC Network，麻烦点击链接填写基础信息，完成后即视为预约成功：';
-function openAddSlotModal(dow, time){
-  ADD_SLOT_CONTEXT = {dow:dow, time:time};
+function openAddSlotModal(date, time){
+  ADD_SLOT_CONTEXT = {date:date, time:time};
   ADD_SLOT_MODE = 'existing';
-  document.getElementById('add-slot-title').textContent = '预约空档 · 周'+dow+' '+time;
+  document.getElementById('add-slot-title').textContent = '预约空档 · '+dateLabel(date)+' '+time;
   renderAddSlotBody();
   document.getElementById('add-slot-overlay').classList.add('open');
 }
 function closeAddSlotModal(){ document.getElementById('add-slot-overlay').classList.remove('open'); }
 function setAddSlotMode(mode){ ADD_SLOT_MODE = mode; renderAddSlotBody(); }
+function purposeSelectHtml(id){
+  return '<div class="field" style="margin-bottom:12px;"><label>来访目的</label><select id="'+id+'">'+VISIT_PURPOSES.map(function(x){ return '<option>'+x+'</option>'; }).join('')+'</select></div>';
+}
 function renderAddSlotBody(){
   var modeTabs = '<div style="display:flex;gap:8px;margin-bottom:16px;">'+
     '<span class="chip'+(ADD_SLOT_MODE==='existing'?' active':'')+'" onclick="setAddSlotMode(\'existing\')">老客人</span>'+
@@ -1456,11 +1479,13 @@ function renderAddSlotBody(){
   if(ADD_SLOT_MODE==='existing'){
     var clientOptions = CLIENTS.map(function(c){ return '<option>'+c[0]+'</option>'; }).join('');
     body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client">'+clientOptions+'</select></div>'+
+      purposeSelectHtml('add-slot-purpose')+
       '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
     var link = 'https://gmc.link/'+Math.random().toString(36).slice(2,8);
     body = '<div class="field" style="margin-bottom:12px;"><label>客人手机号</label><input type="text" id="add-slot-phone" placeholder="+62 812-xxxx-xxxx"></div>'+
+      purposeSelectHtml('add-slot-purpose')+
       '<div class="field" style="margin-bottom:8px;"><label>短信内容</label><textarea id="add-slot-sms" rows="3" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+DEFAULT_SMS_TEMPLATE+'</textarea></div>'+
       '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">链接自动插入，不可删除：<b>'+link+'</b></div>'+
       '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate2);margin-bottom:14px;"><input type="checkbox" id="add-slot-save-default"> 保存为默认模板（只勾选才会覆盖默认，不勾只对本次生效）</label>'+
@@ -1471,35 +1496,39 @@ function renderAddSlotBody(){
 }
 function confirmAddSlotExisting(){
   var name = document.getElementById('add-slot-client').value;
+  var purpose = document.getElementById('add-slot-purpose').value;
   closeAddSlotModal();
-  createReservationCase(name, null, ADD_SLOT_CONTEXT.dow, ADD_SLOT_CONTEXT.time, null);
+  createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose);
   renderCalendar();
-  showToast('预约已生成', name+' · 周'+ADD_SLOT_CONTEXT.dow+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
+  showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
 }
 var PLACEHOLDER_SEQ = 1;
-var RESERVATION_PLACEHOLDERS = [];
+var RESERVATION_PLACEHOLDERS = [
+  {id:'ph0', date:'2026-09-18', time:'14:00', phone:'+62 812-5555-0101', link:'https://gmc.link/demo01', smsText:DEFAULT_SMS_TEMPLATE, purpose:'面诊商谈', expiresAt:Date.now()+15*60000} /* 演示：占位中 */
+];
 function confirmAddSlotNew(link){
   var phone = document.getElementById('add-slot-phone').value.trim();
   if(!phone){ alert('请输入手机号'); return; }
   var smsBody = document.getElementById('add-slot-sms').value;
+  var purpose = document.getElementById('add-slot-purpose').value;
   if(document.getElementById('add-slot-save-default').checked) DEFAULT_SMS_TEMPLATE = smsBody;
-  var ph = {id:'ph'+(PLACEHOLDER_SEQ++), dow:ADD_SLOT_CONTEXT.dow, time:ADD_SLOT_CONTEXT.time, phone:phone, link:link,
-    smsText:smsBody, expiresAt:Date.now()+15*60000};
+  var ph = {id:'ph'+(PLACEHOLDER_SEQ++), date:ADD_SLOT_CONTEXT.date, time:ADD_SLOT_CONTEXT.time, phone:phone, link:link,
+    smsText:smsBody, purpose:purpose, expiresAt:Date.now()+15*60000};
   RESERVATION_PLACEHOLDERS.push(ph);
   closeAddSlotModal();
   renderCalendar();
-  showToast('链接已发送', phone+' · 周'+ADD_SLOT_CONTEXT.dow+' '+ADD_SLOT_CONTEXT.time+' 已占位（15分钟内有效）', function(){ openPlaceholderModal(ph.id); });
+  showToast('链接已发送', phone+' · '+dateLabel(ph.date)+' '+ph.time+' 已占位（15分钟内有效）', function(){ openPlaceholderModal(ph.id); });
 }
 function placeholderCountdownText(p){
   var remain = Math.max(0, p.expiresAt - Date.now());
   var m = Math.floor(remain/60000), s = Math.floor((remain%60000)/1000);
   return '-'+(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
 }
-/* 每秒扫一遍占位倒计时：更新页面上的倒计时文字；超时的直接从数组里移除，时段自动空出 */
+/* 每秒扫一遍占位倒计时：更新页面上的倒计时文字；超时的从占位里移除（时段自动空出），记入预约历史"占位失效" */
 setInterval(function(){
   var changed = false;
   RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(p){
-    if(Date.now() >= p.expiresAt){ changed = true; return false; }
+    if(Date.now() >= p.expiresAt){ changed = true; PLACEHOLDER_HISTORY.push({id:p.id, phone:p.phone, date:p.date, time:p.time, status:'占位失效'}); return false; }
     return true;
   });
   if(changed && CAL_MODE==='week') buildWeekGrid();
@@ -1507,24 +1536,30 @@ setInterval(function(){
     var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===el.getAttribute('data-ph-countdown'); })[0];
     if(p) el.textContent = placeholderCountdownText(p);
   });
+  document.querySelectorAll('[data-visit-countdown]').forEach(function(el){
+    var left = parseInt(el.getAttribute('data-visit-countdown'),10) + 30*60000 - demoNow().getTime();
+    el.textContent = left>0 ? Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒' : '已超时';
+  });
 }, 1000);
 var PLACEHOLDER_MODAL_ID = null;
 /* 客户在链接里改选其他空闲时间：原占位释放，改占新时间（周四休诊不可选；不占用已有事件/占位的格子） */
 function simulateSlotChange(id){
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
-  var cur = DOW_CN.indexOf(p.dow);
+  var ws = new Date(p.date+'T00:00:00'); ws.setDate(ws.getDate() - dowOfDate(p.date));
+  var evs = calendarEvents();
   for(var d=0; d<7; d++){
     if(d===3) continue; /* 周四休诊 */
+    var dd = new Date(ws); dd.setDate(ws.getDate()+d); var ds = dateStr(dd);
+    if(new Date(ds+'T23:59:00') < demoNow()) continue;
     for(var i=0;i<WK_HOURS.length;i++){
       var hr = WK_HOURS[i];
-      if(d===cur && hr===p.time) continue;
-      var busy = WEEK_EVENTS.some(function(e){ return e.dayIndex===d && e.time===hr && !e.cancelled; }) ||
-        RESERVATION_PLACEHOLDERS.some(function(x){ return x.id!==id && x.dow===DOW_CN[d] && x.time===hr; });
-      if(!busy){
-        var old = '周'+p.dow+' '+p.time;
-        p.dow = DOW_CN[d]; p.time = hr;
+      if(ds===p.date && hr===p.time) continue;
+      var busy = evs.some(function(e){ return e.date===ds && slotOf(e.time)===hr && e.phId!==id; });
+      if(!busy && new Date(ds+'T'+hr+':00') > demoNow()){
+        var old = dateLabel(p.date)+' '+p.time;
+        p.date = ds; p.time = hr;
         closeAddSlotModal(); buildWeekGrid();
-        showToast('占位已改到新时间', old+' 已释放，改占 周'+p.dow+' '+p.time, null);
+        showToast('占位已改到新时间', old+' 已释放，改占 '+dateLabel(p.date)+' '+p.time, null);
         return;
       }
     }
@@ -1534,9 +1569,10 @@ function simulateSlotChange(id){
 function openPlaceholderModal(id){
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
   PLACEHOLDER_MODAL_ID = id;
-  document.getElementById('add-slot-title').textContent = '预约占位 · 周'+p.dow+' '+p.time;
+  document.getElementById('add-slot-title').textContent = '预约占位 · '+dateLabel(p.date)+' '+p.time;
   document.getElementById('add-slot-body').innerHTML =
     '<div class="case-field-row"><span class="fk">手机号</span><span style="flex-grow:1;font-size:13px;">'+p.phone+'</span></div>'+
+    '<div class="case-field-row"><span class="fk">来访目的</span><span style="flex-grow:1;font-size:13px;">'+(p.purpose||'')+'</span></div>'+
     '<div class="case-field-row"><span class="fk">倒计时</span><span style="flex-grow:1;font-size:13px;" data-ph-countdown="'+p.id+'">'+placeholderCountdownText(p)+'</span></div>'+
     '<div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">'+
     '<button class="btn-outline" onclick="resendPlaceholderLink(\''+p.id+'\')">再次发送链接（倒计时重新计时）</button>'+
@@ -1553,6 +1589,8 @@ function resendPlaceholderLink(id){
   openPlaceholderModal(id);
 }
 function cancelPlaceholder(id){
+  var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0];
+  if(p) PLACEHOLDER_HISTORY.push({id:p.id, phone:p.phone, date:p.date, time:p.time, status:'占位失效'}); /* 取消占位记为占位失效 */
   RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==id; });
   closeAddSlotModal();
   renderCalendar();
@@ -1561,21 +1599,22 @@ function simulateCustomerFilledPlaceholder(id){
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
   RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==id; });
   closeAddSlotModal();
-  var c = createReservationCase('新客户 '+p.phone.slice(-4), null, p.dow, p.time, p.phone);
+  var c = createReservationCase('新客户 '+p.phone.slice(-4), null, p.date, p.time, p.phone, p.purpose);
   renderCalendar();
-  showToast('客户已完成预约', c.name+' · Case ID '+c.caseNo+'，周'+p.dow+' '+p.time, function(){ openCaseDetail(c.id); });
+  showToast('客户已完成预约', c.name+' · Case ID '+c.caseNo+'，'+dateLabel(p.date)+' '+p.time, function(){ openCaseDetail(c.id); });
 }
-/* 客户在链接里自行改时间：事件移到新时间，并通知室长（消息中心）——演示按钮，真实版由客户端触发 */
+/* 客户在链接里自行改时间：案件的预约时间改掉，并通知室长（消息中心）——演示按钮，真实版由客户端触发 */
 var EXTRA_NOTIFICATIONS = [];
 function simulateCustomerReschedule(caseId, newDow, newTime){
-  var ev = WEEK_EVENTS.filter(function(e){ return e.type==='reservation' && e.caseId===caseId; })[0]; if(!ev) return;
-  var oldDow = DOW_CN[ev.dayIndex], oldTime = ev.time;
-  ev.dayIndex = DOW_CN.indexOf(newDow); ev.time = newTime;
-  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
-  EXTRA_NOTIFICATIONS.unshift([(c?c.name:caseId)+' 自行把预约时间从 周'+oldDow+' '+oldTime+' 改到 周'+newDow+' '+newTime, '刚刚', 1]);
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c || !c.visitDate) return;
+  var oldLabel = dateLabel(c.visitDate)+' '+c.visitTime;
+  var ws = new Date(c.visitDate+'T00:00:00'); ws.setDate(ws.getDate() - dowOfDate(c.visitDate));
+  ws.setDate(ws.getDate()+DOW_CN.indexOf(newDow));
+  c.visitDate = dateStr(ws); c.visitTime = newTime;
+  EXTRA_NOTIFICATIONS.unshift([c.name+' 自行把预约时间从 '+oldLabel+' 改到 '+dateLabel(c.visitDate)+' '+newTime, '刚刚', 1]);
   buildNotifications();
   if(CAL_MODE==='week') buildWeekGrid();
-  showToast('客户已改时间', (c?c.name:caseId)+' 改到 周'+newDow+' '+newTime, function(){ nav('in-notifications'); });
+  showToast('客户已改时间', c.name+' 改到 '+dateLabel(c.visitDate)+' '+newTime, function(){ nav('in-notifications'); });
 }
 
 /* ================= clients ================= */
@@ -1600,7 +1639,8 @@ var CLIENTS = [
   ['Agus Salim','资料录入','Rina','4 天前','#E4E8ED','var(--slate2)'],
   ['Lina Kusuma','资料录入','Dewi','6 天前','#E4E8ED','var(--slate2)'],
   ['Hana Permana','资料录入','Rina','3 天前','#E4E8ED','var(--slate2)'],
-  ['Tari Wibowo','资料录入','Rina','2 天前','#E4E8ED','var(--slate2)']
+  ['Tari Wibowo','资料录入','Rina','2 天前','#E4E8ED','var(--slate2)'],
+  ['Bayu Aditya','资料录入','Dewi','昨天','#E4E8ED','var(--slate2)']
 ];
 /* 客户持有项目（2026-09-29 新增）：按客户姓名存，结算后本地项目（含术后管理）全部转入这里，不进入案件进程。
    结构：{itemName, category, batches:[{caseId,date,bought,used,usages:[{caseId,date,qty}]}], krCollected} */
@@ -1975,6 +2015,7 @@ function makeCase(o){
   return {
     id:o.id, name:o.name, subState:o.subState||'waiting',
     inCoordinator:o.inCoordinator||'Dewi', krInRoom:!!o.krInRoom, chatArchive:null, /* 2026-10-02：负责该案件的IN室长 / KR室长是否已进入案件对话房 / 结案后整理的对话记录 */
+    visitDate:o.visitDate||null, visitTime:o.visitTime||null, visitPurpose:o.visitPurpose||'面诊商谈', /* 2026-10-02：日历、案件列表、预约历史都从案件这份数据算 */
     reportEta:o.reportEta||null, reportOverdue:!!o.reportOverdue, /* 2026-10-02：KR确认的预计出报告时间 / 已超时提醒 */
     director:(o.director!==undefined ? o.director : ((o.consultRequested || o.needsConsult===true) ? '김민석 원장' : null)), /* 2026-10-02：本地案件没有院长 */ krCoordinator:o.krCoordinator||'이서연 실장', updated:o.updated||'刚刚', caseNo:o.caseNo||null,
     basic:o.basic||{gender:'女', dob:'1990-01-01', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
@@ -2217,6 +2258,11 @@ var CASE_ITEMS = [
     ]}),
 
   /* 已取消预约：分支1——待访问阶段直接终止，资料保留，没有走到基础资料确认，所以没有 Case ID */
+  makeCase({id:'bayu', name:'Bayu Aditya', subState:'cancelled', cancelReason:'未到店', caseNo:'A000022', updated:'昨天',
+    logEntries:[
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-17 09:00'},
+      {stage:'预约到店', actor:'系统', action:'过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）', dt:'2026-09-17 10:30'}
+    ]}),
   makeCase({id:'agus', name:'Agus Salim', subState:'cancelled', caseNo:'A000020', cancelReason:'预约取消', updated:'4 天前',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-19 09:00'},
@@ -2258,7 +2304,18 @@ var CASE_ITEMS = [
     ]})
 ];
 CASE_ITEMS.forEach(updateCaseStage);
-var CASE_NO_SEQ = 22;
+var CASE_NO_SEQ = 23;
+/* ---- 演示数据：每个案件一条预约来访（日期/时间/目的）——日历每个事件都对应案件列表里的一个案件（2026-10-02·一） ---- */
+var DEMO_VISITS = {
+  siti:['2026-09-18','10:45','面诊商谈'], ayu2:['2026-09-18','15:00','复诊'], andi:['2026-09-18','09:30','面诊商谈'], rina2:['2026-09-18','10:00','复诊'],
+  yuni:['2026-09-16','09:30','皮肤商谈'], maya:['2026-09-16','14:00','面诊商谈'], putri:['2026-09-14','10:00','面诊商谈'], dedi:['2026-09-15','10:30','面诊商谈'],
+  budi:['2026-09-15','14:30','面诊商谈'], ayu:['2026-09-16','11:00','皮肤商谈'], fajar:['2026-09-17','09:30','面诊商谈'], nadia:['2026-09-14','14:00','面诊商谈'],
+  dinda:['2026-09-17','14:00','面诊商谈'], rizky:['2026-09-17','11:00','皮肤管理'], rina:['2026-09-14','09:30','面诊商谈'], wulan:['2026-09-15','09:30','面诊商谈'],
+  agus:['2026-09-19','10:00','面诊商谈'], lina:['2026-09-15','16:00','面诊商谈'], hana:['2026-09-17','15:30','术后管理'], tari:['2026-09-17','16:00','皮肤管理'],
+  bayu:['2026-09-17','10:00','面诊商谈']
+};
+CASE_ITEMS.forEach(function(c){ var v = DEMO_VISITS[c.id]; if(v){ c.visitDate = v[0]; c.visitTime = v[1]; c.visitPurpose = v[2]; } });
+CASE_ITEMS.filter(function(c){ return c.id==='bayu'; }).forEach(function(c){ c.noShow = true; });
 function generateCaseNo(){
   var n = 'A' + String(CASE_NO_SEQ).padStart(6,'0');
   CASE_NO_SEQ++;
@@ -2345,7 +2402,6 @@ function cancelFollowUpReservations(c){
     x.logEntries = x.logEntries || [];
     x.logEntries.push({stage:'预约到店', actor:'系统', action:'关联案件 '+(c.caseNo||c.id)+' 已进入终态，后续预约自动取消', dt:nowFullDt()});
     updateCaseStage(x);
-    WEEK_EVENTS.forEach(function(ev){ if(ev.caseId===x.id) ev.cancelled = true; });
     logCaseEvent(c, '系统', '后续预约自动取消：'+(x.caseNo||x.id));
   });
 }
@@ -2411,7 +2467,6 @@ function markNoShow(caseId, auto){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
   if(!c || c.stage!=='booked' || c.subState!=='waiting') return false;
   c.subState = 'cancelled'; c.noShow = true; c.cancelReason = '未到店';
-  WEEK_EVENTS.forEach(function(ev){ if(ev.caseId===c.id) ev.noShow = true; });
   updateCaseStage(c);
   c.logEntries = c.logEntries || [];
   c.logEntries.push({stage:'预约到店', actor: auto ? '系统' : 'Dewi', action: auto ? '过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）' : '手动标记未到店：已取消（未到店）', dt:nowFullDt()});
@@ -2424,6 +2479,7 @@ function rowMarkNoShow(caseId){
 }
 /* 演示按钮「模拟时间超过30分钟」：对所有"待访问"案件按过了预约时间30分钟处理 */
 function simulateTimePass30(){
+  DEMO_SHIFT_MS += 31*60000; /* 演示时钟往后拨 31 分钟 */
   var n = 0;
   CASE_ITEMS.slice().forEach(function(c){ if(markNoShow(c.id, true)) n++; });
   renderCaseRows(); buildWeekGrid();
@@ -2681,7 +2737,6 @@ function confirmCancel(){
   c.cancelReason = CANCEL_REASON;
   updateCaseStage(c);
   cancelFollowUpReservations(c);
-  WEEK_EVENTS.forEach(function(ev){ if(ev.caseId===c.id) ev.cancelled = true; }); /* 预约取消：日历事件消失 */
   closeCancelModal();
   renderCaseStatusBar(c);
   logCaseEvent(c, 'Dewi', '取消该客人的到店预约（原因：'+CANCEL_REASON+'）');
@@ -2793,7 +2848,22 @@ function logLine(e){
     : e.action;
   return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+e.stage+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+e.actor+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+e.dt+'</span></div>';
 }
-function nowFullDt(){ return '2026-09-18 ' + nowTime(); }
+/* 演示数据版本号（2026-10-02·一）：设定/备忘等存在 localStorage 里的东西带版本号，版本不符时自动重置；案件等演示数据在内存里，刷新即重置 */
+var DEMO_DATA_VERSION = 3;
+(function(){
+  try{
+    if(localStorage.getItem('gmc_demo_ver') !== String(DEMO_DATA_VERSION)){
+      Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); });
+      localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
+    }
+  }catch(e){}
+})();
+var DEMO_LOAD_TS = Date.now();
+var DEMO_SHIFT_MS = 0; /* 演示按钮"模拟时间超过30分钟"会把演示时钟往后拨 */
+function demoNow(){ return new Date(new Date(2026,8,18,11,0).getTime() + (Date.now()-DEMO_LOAD_TS) + DEMO_SHIFT_MS); }
+function pad2(n){ return (n<10?'0':'')+n; }
+function dateStr(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function nowFullDt(){ var d = demoNow(); return dateStr(d)+' '+pad2(d.getHours())+':'+pad2(d.getMinutes()); }
 /* 对话工具栏"发起视频"参与人popup（2026-09-29 新增，IN-VIDE-01 入口①）：
    候选人固定为印尼室长+韩国室长（院长不在呼叫名单里，可自愿加入，2026-10-02），默认全选，可取消勾选 */
 var CHAT_VIDEO_PARTICIPANT_CASE_ID = null;
@@ -3163,7 +3233,7 @@ function resumeVisit(targetId){
   var c = getCurrentCase(); if(!c || c.materialsConfirmed) return;
   var t = CASE_ITEMS.filter(function(x){ return x.id===targetId; })[0]; if(!t) return;
   if(!confirm('接续到原案件 '+t.caseNo+'？本次新案件 '+c.caseNo+' 将作废（不留记录）。')) return;
-  WEEK_EVENTS.forEach(function(ev){ if(ev.type==='reservation' && ev.caseId===c.id){ ev.caseId = t.id; ev.arrived = true; ev.cancelled = false; } });
+  RESUMED_VISITS.push({name:c.name, date:c.visitDate, time:c.visitTime, purpose:c.visitPurpose, caseId:t.id, origCaseNo:t.caseNo, voidedCaseNo:c.caseNo}); /* 日历上这条预约来访改挂到原案件，显示已到访 */
   CASE_ITEMS.splice(CASE_ITEMS.indexOf(c), 1);
   logCaseEvent(t, 'Dewi', '接续到访「Dewi」 '+nowFullDt());
   CASE_RETURN.length = 0;
@@ -3173,8 +3243,6 @@ function resumeVisit(targetId){
 function markArrived(){
   var c = getCurrentCase(); if(!c) return;
   c.subState = 'arrived';
-  var ev = WEEK_EVENTS.filter(function(e){ return e.type==='reservation' && e.caseId===c.id; })[0];
-  if(ev) ev.arrived = true;
   renderCaseStatusBar(c);
   logCaseEvent(c, 'Dewi', '标记客人已到店');
   buildCaseLog(c);
@@ -3203,8 +3271,6 @@ function confirmCancelIntake(){
   c.budgetMax = null;
   c.needsConsult = null;
   c.materialsError = '';
-  var ev = WEEK_EVENTS.filter(function(e){ return e.type==='reservation' && e.caseId===c.id; })[0];
-  if(ev) ev.arrived = false;
   updateCaseStage(c);
   logCaseEvent(c, 'Dewi', '取消接待，案件回到待访问');
   buildCaseLog(c);
@@ -6744,7 +6810,7 @@ function openRoomMembers(){
   document.getElementById('room-members-overlay').classList.add('open');
 }
 function closeRoomMembers(){ document.getElementById('room-members-overlay').classList.remove('open'); }
-function nowTime(){ var d = new Date(); return (d.getHours()<10?'0':'')+d.getHours()+':'+(d.getMinutes()<10?'0':'')+d.getMinutes(); }
+function nowTime(){ var d = demoNow(); return pad2(d.getHours())+':'+pad2(d.getMinutes()); }
 function sendFloatMsg(){
   var input = document.getElementById('float-input-box');
   var val = input.value.trim();
