@@ -2058,7 +2058,7 @@ function renderClientHoldings(name){
         ? '<a href="#" class="info-link" style="white-space:nowrap;" onclick="openHoldingRefundByIdx('+gi+','+bi+');return false;">退款</a>'
         : (b.refund ? '<span style="font-size:11px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '');
       return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 8px 14px;border-top:1px dashed var(--border2);">'+
-        '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+'<br>购买 '+b.bought+' 次，已用 '+b.used+' 次'+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
+        '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
         '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';white-space:nowrap;">'+st+'</span>'+
         '<span style="min-width:84px;text-align:right;">'+action+'</span></div>';
     }).join('') : '';
@@ -5892,7 +5892,7 @@ function libRenderCases(){
     return true;
   });
   var sel = function(k, opts, cur, label){ return '<select onchange="setLibFilterVal(\''+k+'\',this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;"><option value="all">'+label+'：全部</option>'+opts.map(function(o){ return '<option value="'+o.v+'"'+(cur===o.v?' selected':'')+'>'+o.l+'</option>'; }).join('')+'</select>'; };
-  var dirs = Array.from(new Set(all.map(function(c){ return c.director; }).filter(Boolean))).map(function(d){ return {v:d, l:d}; });
+  var dirs = DIRECTOR_LIST.map(function(d){ return {v:d, l:d}; }); /* 院长筛选的数据来自 KR 院长名单（Notion IN-SHOW-01） */
   var filters = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">'+
     (isTravel ? sel('director', dirs, f.director, '院长') : sel('problem', Object.keys(LIB_PROBLEMS).map(function(id){ return {v:id, l:LIB_PROBLEMS[id].label}; }), f.problem, '问题'))+
     sel('recovery', RECOVERY_OPTIONS.filter(function(r){ return r!=='自定义'; }).map(function(r){ return {v:r, l:r}; }), f.recovery, '恢复时间')+
@@ -5906,8 +5906,22 @@ function renderLibrary(){
   if(addBtn) addBtn.textContent = DEMO_ROLE==='in' ? '+ 新增案例（印尼管理）' : '+ 新增案例（赴韩施术）';
   var toggle = '<div class="cal-switch"><span class="'+(LIB_VIEW==='part'?'active':'')+'" onclick="setLibView(\'part\')">按部位</span><span class="'+(LIB_VIEW==='method'?'active':'')+'" onclick="setLibView(\'method\')">按施术 / 管理</span></div>';
   var f = document.getElementById('lib-filters');
-  if(f) f.innerHTML = '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'+toggle+libCrumbsHtml()+'</div>';
+  var searchBox = '<input type="text" id="lib-search" placeholder="搜索案例标题" value="'+LIB_SEARCH.replace(/"/g,'&quot;')+'" oninput="libSearchInput(this.value)" style="width:200px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;">';
+  if(f) f.innerHTML = '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'+toggle+searchBox+(LIB_SEARCH ? '' : libCrumbsHtml())+'</div>';
   main.style.display = 'block'; main.style.marginTop = '22px';
+  renderLibMain();
+}
+/* 首页顶部搜索（案例标题，Notion IN-SHOW-01）：有关键词时显示全部匹配案例（跨部位/项目），清空后回到原来的层级 */
+var LIB_SEARCH = '';
+function libSearchInput(v){ LIB_SEARCH = v; var cr = document.querySelector('#lib-filters > div'); renderLibMain(); }
+function renderLibMain(){
+  var main = document.getElementById('lib-grid'); if(!main) return;
+  if(LIB_SEARCH.trim()){
+    var q = LIB_SEARCH.trim().toLowerCase();
+    var hits = LIB_CASES.filter(function(c){ return [c.title,(c.names||{}).ko,(c.names||{}).id].some(function(t){ return (t||'').toLowerCase().indexOf(q)>-1; }); });
+    main.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">搜索"'+LIB_SEARCH.trim()+'"：'+hits.length+' 个案例</div><div style="'+LIB_GRID_CSS+'">'+(hits.map(libCaseCardHtml).join('') || '<div style="font-size:12px;color:var(--muted);">没有匹配的案例</div>')+'</div>';
+    return;
+  }
   var lv = LIB_STATE.level;
   main.innerHTML = lv==='home' ? libRenderHome() : (lv==='projects' ? libRenderProjects() : (lv==='cases' ? libRenderCases() : libRenderDetail()));
 }
@@ -5963,7 +5977,7 @@ function libRenderDetail(){
     '<div class="info-heading" style="margin-bottom:8px;">术前照片</div><div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">'+before+'</div>'+
     '<div class="info-heading" style="margin-bottom:8px;">术后照片 <span style="font-weight:400;font-size:11px;color:var(--muted);">按恢复时间排序</span></div><div style="display:flex;gap:12px;flex-wrap:wrap;">'+after+'</div>'+cmpHtml+
     '<div class="info-heading" style="margin:18px 0 8px;">同意书 <span style="font-weight:400;font-size:11px;color:var(--muted);">只有室长看得到</span></div>'+
-    '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">📄 '+(c.consent&&c.consent.file||'—')+'</span><span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">查看</a><a href="#" class="info-link" onclick="return false;">下载</a></span></div>'+
+    '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">📄 '+(c.consent&&c.consent.file||'—')+'</span><span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">预览</a><a href="#" class="info-link" onclick="return false;">下载</a></span></div>'+
     '<div class="info-heading" style="margin:18px 0 8px;">记录</div>'+
     '<div style="font-size:12px;color:var(--slate2);line-height:1.9;">上传人：'+(c.uploader||'—')+'　上传时间：'+(c.uploadedAt||'—')+'<br>最后修改：'+(c.editedBy ? c.editedBy+'　'+c.editedAt : '—')+'</div></div>';
 }
@@ -6153,8 +6167,8 @@ function saveLibCase(){
     LIB_CASES.unshift(c);
   }
   closeLibCaseModal();
-  if(LIB_STATE.level==='detail') LIB_STATE.caseId = c.id;
-  renderLibrary();
+  LIB_SEARCH = '';
+  libOpenCase(c.id); /* 保存 → 案例详情页（Notion IN-SHOW-01） */
 }
 
 /* ---- 问题标签管理（印尼管理案例，手动维护：新增 / 改名 / 删除；删除时还有案例可批量改挂到另一个问题或移除标签） ---- */
@@ -6397,10 +6411,10 @@ function renderProjLibrary(){
   renderProjLibTabs();
   renderProjLibFilters();
   renderProjLibGrid();
-  /* ［＋新增项目］：本地项目 tab 显示（IN 室长可用）；演示角色切到 KR 室长时赴韩项目 tab 也显示（否则 KR 室长无法新增赴韩项目） */
+  /* ［＋新增项目］：只在"本地项目"tab 显示（Notion IN-SRVC-01，2026-10-02）；KR 室长新增赴韩项目要等韩国侧页面（KRC）建好 */
   var add = document.getElementById('projlib-add-btn');
   if(add){
-    var show = (PROJLIB_TAB==='IN') || (PROJLIB_TAB==='KR' && DEMO_ROLE==='kr');
+    var show = (PROJLIB_TAB==='IN');
     add.style.display = show ? 'inline-block' : 'none';
     add.disabled = !libCanEdit(PROJLIB_TAB==='KR' ? 'travel' : 'local');
     add.style.opacity = add.disabled ? '.4' : '1';
