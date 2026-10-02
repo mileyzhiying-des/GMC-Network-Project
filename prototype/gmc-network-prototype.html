@@ -6259,6 +6259,19 @@ var PROJECT_LIBRARY = [
   useHolding('Rizky Hidayat', '好莱坞焕肤 1次', 'rizky', '2026-09-15', 1, 'main'); /* rizky 本地管理：已使用1次 */
 })();
 
+/* 演示数据（2026-10-02·五）：非活性化的项目 + 部分使用的持有批次，用来对应项目库的使用情况/删除规则
+   - Genesis焕肤：非活性化，但 Rizky 手上还有 1 个未用批次 → 删除按钮置灰
+   - 巴西式脱毛 + 焕肤护理：非活性化，完全没有在用 → 可以删除
+   - 鼻修复（赴韩）：非活性化，没有在用 → 可以删除
+   - 好莱坞焕肤：Rizky 买2次、用1次（部分使用）→ 客户详情可退款剩余1次 */
+(function seedProjectLibraryDemo(){
+  function byName(n){ return PROJECT_LIBRARY.filter(function(x){ return x.name===n; })[0]; }
+  ['Genesis焕肤（Clarity II）1次','巴西式脱毛 + 焕肤护理','鼻修复'].forEach(function(n){ var q = byName(n); if(q) q.active = false; });
+  var h = (CLIENT_HOLDINGS['Rizky Hidayat']||[]).filter(function(x){ return x.itemName==='好莱坞焕肤 1次'; })[0];
+  if(h && h.batches[0] && h.batches[0].bought===1){ h.batches[0].bought = 2; } /* 买2用1：部分使用 */
+  /* 各语言名称：演示翻译 */
+  PROJECT_LIBRARY.forEach(function(q){ q.names = {zh:q.name, ko:demoTranslate(q.name,'zh','ko'), id:demoTranslate(q.name,'zh','id')}; });
+})();
 var FX_RATES = { KRW_IDR:11.8, KRW_CNY:0.0052, IDR_CNY:0.00044 };
 function convertCurrency(amount, from, to){
   if(from===to) return amount;
