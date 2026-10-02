@@ -1211,6 +1211,24 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 案例库：照片放大 / 展示模式（2026-10-02） ============ -->
+<div class="modal-overlay" id="lib-viewer-overlay" style="z-index:95;" onclick="if(event.target===this) closeLibViewer()">
+  <div class="modal-box" style="width:min(720px,92vw);text-align:center;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><span id="lib-viewer-cap" style="font-size:13px;font-weight:700;"></span><span style="cursor:pointer;color:var(--slate);" onclick="closeLibViewer()">✕</span></div>
+    <div id="lib-viewer-body"></div>
+  </div>
+</div>
+<div id="lib-present-overlay" style="display:none;position:fixed;inset:0;background:#0D1420;z-index:99;flex-direction:column;align-items:center;justify-content:center;color:#fff;">
+  <span style="position:absolute;top:20px;right:28px;font-size:22px;cursor:pointer;" onclick="closeLibPresent()" title="关闭（Esc）">✕</span>
+  <div id="lib-present-cap" style="font-size:16px;font-weight:700;margin-bottom:14px;"></div>
+  <div style="display:flex;align-items:center;gap:24px;">
+    <span style="font-size:34px;cursor:pointer;user-select:none;" onclick="libPresentMove(-1)">‹</span>
+    <div id="lib-present-body" style="width:min(70vw,720px);height:min(70vh,520px);"></div>
+    <span style="font-size:34px;cursor:pointer;user-select:none;" onclick="libPresentMove(1)">›</span>
+  </div>
+  <div id="lib-present-count" style="margin-top:14px;font-size:12px;color:#9AA6B2;"></div>
+</div>
+
 <!-- ============ NEW CASE CHAT MODAL ============ -->
 <div class="modal-overlay" id="new-case-chat-overlay" onclick="if(event.target===this) closeNewCaseChatModal()">
   <div class="modal-box">
@@ -5905,13 +5923,280 @@ function renderDirectorDetail(){
     '<div class="field-row" style="border-bottom:none;"><span class="fk">对接案件数</span><span class="fv">'+caseCount+'</span></div>';
   document.getElementById('director-detail-grid').innerHTML = cases.length ? cases.map(libCaseCardHtml).join('') : '<div style="grid-column:1/-1;font-size:12px;color:var(--muted);padding:20px 4px;">这位院长名下暂无案例</div>';
 }
-/* ---- 案例详情 / 编辑 / 问题管理：见后续补丁 ---- */
-function libRenderDetail(){ return ''; }
-function openLibCaseModal(){}
-function closeLibCaseModal(){}
-function openLibProblemModal(){}
-function closeLibNodeActionModal(){}
-function deleteLibCase(){}
+/* ---- 案例详情页（页内跳转，2026-10-02） ---- */
+function libFindCase(id){ return LIB_CASES.filter(function(x){ return x.id===id; })[0]; }
+function libToggleCompare(key){
+  var cmp = LIB_STATE.compare, i = cmp.indexOf(key);
+  if(i>-1) cmp.splice(i,1); else { cmp.push(key); if(cmp.length>2) cmp.shift(); }
+  renderLibrary();
+}
+function libPhotoByKey(c, key){
+  if(key.charAt(0)==='b') return {ph:(c.beforePhotos||[])[+key.slice(1)], cap:'术前 '+(+key.slice(1)+1)};
+  var a = sortedAfter(c)[+key.slice(1)]; return {ph:a, cap:'术后 · '+(a?recoveryText(a):'')};
+}
+function libThumbHtml(c, key){
+  var o = libPhotoByKey(c, key), on = LIB_STATE.compare.indexOf(key)>-1;
+  return '<div style="width:130px;"><div style="cursor:zoom-in;'+(on?'outline:3px solid var(--terracotta);border-radius:10px;':'')+'" onclick="openLibViewer(\''+key+'\')">'+libPhotoBox(o.ph,'130px','110px',o.cap)+'</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:11px;"><span>'+o.cap+'</span><label style="cursor:pointer;color:var(--slate2);"><input type="checkbox" '+(on?'checked ':'')+'onchange="libToggleCompare(\''+key+'\')"> 对比</label></div></div>';
+}
+function libRenderDetail(){
+  var c = libFindCase(LIB_STATE.caseId); if(!c) return '<div style="font-size:12px;color:var(--muted);">案例不存在（可能已删除）</div>';
+  var srcLabel = c.source==='travel' ? '医院案例' : '印尼案例';
+  var srcColor = c.source==='travel' ? ['var(--sage-bg)','var(--sage)'] : ['var(--terracotta-bg)','var(--terracotta)'];
+  var projLinks = (c.projectIds||[]).map(function(id){ var pr = projById(id); return pr ? '<a href="#" class="info-link" onclick="libOpenProject(\''+id+'\');return false;">'+pr.name+(pr.active?'':'（已非活性）')+'</a>' : ''; }).join('、');
+  var dirHtml = c.source==='travel' ? (libDirectorClickable(c) ? '<a href="#" class="info-link" onclick="openDirectorDetail(\''+c.director+'\');return false;">'+c.director+'</a>' : '<span style="color:var(--muted);">-</span>') : '';
+  var tags = (c.problemIds||[]).map(function(id){ return LIB_PROBLEMS[id] ? '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+LIB_PROBLEMS[id].label+'</span>' : ''; }).join(' ');
+  var before = (c.beforePhotos||[]).map(function(_,i){ return libThumbHtml(c,'b'+i); }).join('') || '<span style="font-size:12px;color:var(--muted);">没有术前照片</span>';
+  var after = sortedAfter(c).map(function(_,i){ return libThumbHtml(c,'a'+i); }).join('');
+  var cmp = LIB_STATE.compare;
+  var cmpHtml = cmp.length===2 ? '<div style="margin:14px 0;padding:14px;background:var(--border2);border-radius:12px;"><div style="font-size:12px;font-weight:700;margin-bottom:8px;">左右对比</div><div style="display:flex;gap:14px;flex-wrap:wrap;">'+
+    cmp.map(function(k){ var o = libPhotoByKey(c,k); return '<div style="flex:1;min-width:200px;">'+libPhotoBox(o.ph,'100%','220px',o.cap)+'<div style="text-align:center;font-size:12px;margin-top:4px;">'+o.cap+'</div></div>'; }).join('')+'</div></div>'
+    : '<div style="font-size:11px;color:var(--muted);margin-top:8px;">勾选两张照片的"对比"可以左右对比；点照片放大。</div>';
+  var actions = '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openLibPresent()">展示模式</button>'+
+    (libCanEdit(c.source) ? '<button class="btn-outline" onclick="openLibCaseModal(\''+c.id+'\')">编辑</button><button class="btn-outline" style="color:#C1454A;" onclick="deleteLibCase(\''+c.id+'\')">删除</button>' : '')+'</div>';
+  return '<div class="card" style="padding:22px 26px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px;"><div><div style="font-size:20px;font-weight:700;margin-bottom:8px;">'+c.title+'</div>'+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;"><span class="status-pill" style="background:'+srcColor[0]+';color:'+srcColor[1]+';">'+srcLabel+'</span>'+
+    (c.source==='travel' ? '<span>院长：'+dirHtml+'</span>' : '')+'<span>项目：'+(projLinks||'—')+'</span>'+(tags ? '<span>问题：'+tags+'</span>' : '')+'</div></div>'+actions+'</div>'+
+    '<div class="info-heading" style="margin-bottom:8px;">术前照片</div><div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">'+before+'</div>'+
+    '<div class="info-heading" style="margin-bottom:8px;">术后照片 <span style="font-weight:400;font-size:11px;color:var(--muted);">按恢复时间排序</span></div><div style="display:flex;gap:12px;flex-wrap:wrap;">'+after+'</div>'+cmpHtml+
+    '<div class="info-heading" style="margin:18px 0 8px;">同意书 <span style="font-weight:400;font-size:11px;color:var(--muted);">只有室长看得到</span></div>'+
+    '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">📄 '+(c.consent&&c.consent.file||'—')+'</span><span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">查看</a><a href="#" class="info-link" onclick="return false;">下载</a></span></div>'+
+    '<div class="info-heading" style="margin:18px 0 8px;">记录</div>'+
+    '<div style="font-size:12px;color:var(--slate2);line-height:1.9;">上传人：'+(c.uploader||'—')+'　上传时间：'+(c.uploadedAt||'—')+'<br>最后修改：'+(c.editedBy ? c.editedBy+'　'+c.editedAt : '—')+'</div></div>';
+}
+function deleteLibCase(id){
+  var c = libFindCase(id); if(!c || !libCanEdit(c.source)) return;
+  if(!confirm('确认删除案例"'+c.title+'"？删除后不可恢复。')) return;
+  LIB_CASES = LIB_CASES.filter(function(x){ return x.id!==id; });
+  if(CURRENT_PAGE_ID==='in-director') renderDirectorDetail();
+  if(LIB_STATE.level==='detail') LIB_STATE.level = 'cases';
+  renderLibrary();
+}
+var LIB_VIEW_KEY = null;
+function openLibViewer(key){
+  var c = libFindCase(LIB_STATE.caseId); if(!c) return;
+  var o = libPhotoByKey(c, key);
+  document.getElementById('lib-viewer-cap').textContent = c.title+' · '+o.cap;
+  document.getElementById('lib-viewer-body').innerHTML = libPhotoBox(o.ph,'100%','min(60vh,460px)',o.cap);
+  document.getElementById('lib-viewer-overlay').classList.add('open');
+}
+function closeLibViewer(){ document.getElementById('lib-viewer-overlay').classList.remove('open'); }
+/* 展示模式：全屏只显示照片对比（术前、各恢复时间的术后照片，可左右切换），隐藏同意书、上传人、编辑按钮等内部信息；Esc 或关闭回到详情页 */
+var LIB_PRESENT = {slides:[], idx:0};
+function openLibPresent(){
+  var c = libFindCase(LIB_STATE.caseId); if(!c) return;
+  var slides = (c.beforePhotos||[]).map(function(ph,i){ return {ph:ph, cap:'术前'+((c.beforePhotos.length>1)?' '+(i+1):'')}; }).concat(sortedAfter(c).map(function(ph){ return {ph:ph, cap:'术后 · '+recoveryText(ph)}; }));
+  if(!slides.length){ alert('这个案例没有照片'); return; }
+  LIB_PRESENT = {slides:slides, idx:0};
+  renderLibPresent();
+  document.getElementById('lib-present-overlay').style.display = 'flex';
+}
+function renderLibPresent(){
+  var sl = LIB_PRESENT.slides[LIB_PRESENT.idx];
+  document.getElementById('lib-present-cap').textContent = sl.cap;
+  document.getElementById('lib-present-body').innerHTML = libPhotoBox(sl.ph,'100%','100%',sl.cap);
+  document.getElementById('lib-present-count').textContent = (LIB_PRESENT.idx+1)+' / '+LIB_PRESENT.slides.length+'　← → 切换，Esc 退出';
+}
+function libPresentMove(d){ var n = LIB_PRESENT.slides.length; LIB_PRESENT.idx = (LIB_PRESENT.idx+d+n)%n; renderLibPresent(); }
+function closeLibPresent(){ document.getElementById('lib-present-overlay').style.display = 'none'; }
+document.addEventListener('keydown', function(e){
+  var pres = document.getElementById('lib-present-overlay');
+  if(pres && pres.style.display==='flex'){
+    if(e.key==='Escape') closeLibPresent();
+    else if(e.key==='ArrowLeft') libPresentMove(-1);
+    else if(e.key==='ArrowRight') libPresentMove(1);
+  } else if(e.key==='Escape'){ var v = document.getElementById('lib-viewer-overlay'); if(v) v.classList.remove('open'); }
+});
+
+/* ---- 新增 / 编辑案例（2026-10-02·五） ----
+   字段：标题（必填，只填一种语言，其他语言 AI 翻译可改，演示翻译）、项目（必选多选）、院长（赴韩才有）、问题（印尼才有，多选）、术前照片（选填）、术后照片（至少一张，每张必选恢复时间）；
+   照片同意（必填两项）：勾选"该客人已签署案例库照片同意书" + 上传手写签名的同意书文件（jpg/png/pdf）；缺任一项［保存］不可点。 */
+var LIB_EDIT = null;
+function openLibCaseModal(caseId){
+  if(caseId){
+    var c = libFindCase(caseId); if(!c || !libCanEdit(c.source)) return;
+    LIB_EDIT = JSON.parse(JSON.stringify(c));
+    LIB_EDIT.names = LIB_EDIT.names || {zh:c.title, ko:'', id:''};
+    LIB_EDIT.consent = LIB_EDIT.consent || {signed:false, file:''};
+  } else {
+    LIB_EDIT = {id:null, title:'', names:{zh:'',ko:'',id:''}, source: DEMO_ROLE==='kr' ? 'travel' : 'local', projectIds:[], director:null, problemIds:[], beforePhotos:[], afterPhotos:[], consent:{signed:false, file:''}};
+  }
+  renderLibCaseModal();
+  document.getElementById('lib-case-overlay').classList.add('open');
+}
+function closeLibCaseModal(){ document.getElementById('lib-case-overlay').classList.remove('open'); LIB_EDIT = null; }
+function libEditMissing(){
+  var c = LIB_EDIT, m = [];
+  if(!['zh','ko','id'].some(function(k){ return (c.names[k]||'').trim(); })) m.push('标题');
+  if(!(c.projectIds||[]).length) m.push('项目（至少选一个）');
+  var ap = c.afterPhotos||[];
+  if(!ap.length) m.push('至少一张术后照片');
+  else if(ap.some(function(p){ return !p.recovery || (p.recovery==='自定义' && !p.recoveryCustom); })) m.push('每张术后照片都要选恢复时间');
+  if(!c.consent.signed) m.push('勾选"已签署照片同意书"');
+  if(!c.consent.file) m.push('上传手写同意书文件');
+  return m;
+}
+function libEditName(k, v){ LIB_EDIT.names[k] = v; }
+function libEditAiFill(){
+  var n = LIB_EDIT.names, from = ['zh','ko','id'].filter(function(k){ return (n[k]||'').trim(); })[0];
+  if(!from){ alert('请至少填一种语言的标题'); return; }
+  ['zh','ko','id'].forEach(function(k){ if(!(n[k]||'').trim()) n[k] = demoTranslate(n[from].trim(), from, k); });
+  renderLibCaseModal();
+}
+function libToggleProject(id){
+  var a = LIB_EDIT.projectIds, i = a.indexOf(id);
+  if(i>-1) a.splice(i,1); else a.push(id);
+  renderLibCaseModal();
+}
+function libToggleProblem(id){
+  var a = LIB_EDIT.problemIds, i = a.indexOf(id);
+  if(i>-1) a.splice(i,1); else a.push(id);
+  renderLibCaseModal();
+}
+function libEditDirector(v){ LIB_EDIT.director = v || null; }
+function libAddDemoPhoto(kind){
+  var color = ['#D9CFC1','#CFD9D3','#D3CFD9','#D9D2CF'][Math.floor(Math.random()*4)];
+  if(kind==='before') LIB_EDIT.beforePhotos.push({url:'', color:color}); else LIB_EDIT.afterPhotos.push({url:'', color:color, recovery:''});
+  renderLibCaseModal();
+}
+function libTriggerFileInput(kind){
+  var input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+  input.onchange = function(e){ libHandleFiles(e.target.files, kind); };
+  input.click();
+}
+function libHandleFiles(files, kind){
+  var arr = Array.prototype.slice.call(files || []); if(!arr.length) return;
+  var remaining = arr.length;
+  arr.forEach(function(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      if(kind==='before') LIB_EDIT.beforePhotos.push({url:e.target.result}); else LIB_EDIT.afterPhotos.push({url:e.target.result, recovery:''});
+      if(--remaining===0) renderLibCaseModal();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function libRemovePhoto(kind, i){ (kind==='before' ? LIB_EDIT.beforePhotos : LIB_EDIT.afterPhotos).splice(i,1); renderLibCaseModal(); }
+function libSetRecovery(i, v){ LIB_EDIT.afterPhotos[i].recovery = v; if(v!=='自定义') LIB_EDIT.afterPhotos[i].recoveryCustom = ''; renderLibCaseModal(); }
+function libSetRecoveryCustom(i, v){ LIB_EDIT.afterPhotos[i].recoveryCustom = v; }
+function libSetConsentSigned(v){ LIB_EDIT.consent.signed = !!v; renderLibCaseModal(); }
+function libPickConsentFile(){
+  var input = document.createElement('input'); input.type = 'file'; input.accept = '.jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf';
+  input.onchange = function(e){ var f = e.target.files[0]; if(f){ LIB_EDIT.consent.file = f.name; renderLibCaseModal(); } };
+  input.click();
+}
+function libUseDemoConsent(){ LIB_EDIT.consent.file = 'consent-demo-signed.pdf'; renderLibCaseModal(); }
+function libPhotoThumbEditHtml(p, kind, i){
+  var w = kind==='after' ? 100 : 64;
+  return '<div style="position:relative;width:'+w+'px;"><div style="position:relative;width:'+w+'px;height:64px;">'+libPhotoBox(p, w+'px', '64px', kind==='after'?'术后':'术前')+
+    '<span style="position:absolute;top:-6px;right:-6px;background:#C1454A;color:#fff;border-radius:999px;width:18px;height:18px;font-size:11px;line-height:18px;text-align:center;cursor:pointer;" onclick="libRemovePhoto(\''+kind+'\','+i+')">✕</span></div>'+
+    (kind==='after' ? '<select style="width:100%;margin-top:4px;font-size:11px;padding:3px;" onchange="libSetRecovery('+i+',this.value)"><option value="">选择恢复时间</option>'+
+      RECOVERY_OPTIONS.map(function(r){ return '<option value="'+r+'"'+(p.recovery===r?' selected':'')+'>'+r+'</option>'; }).join('')+'</select>'+
+      (p.recovery==='自定义' ? '<input type="text" placeholder="自定义恢复时间" value="'+(p.recoveryCustom||'')+'" oninput="libSetRecoveryCustom('+i+',this.value)" style="width:100%;margin-top:4px;font-size:11px;padding:3px;box-sizing:border-box;">' : '') : '')+'</div>';
+}
+function renderLibCaseModal(){
+  var c = LIB_EDIT; if(!c) return;
+  document.getElementById('lib-case-modal-title').textContent = c.id ? '编辑案例' : '新增案例';
+  var isTravel = c.source==='travel';
+  var srcLabel = isTravel ? '赴韩施术（医院案例，只有 KR 室长维护）' : '印尼管理（印尼案例）';
+  var origin = isTravel ? 'KR' : 'IN';
+  var projGroups = projLibCategories(origin).map(function(cat){
+    var ps = PROJECT_LIBRARY.filter(function(pr){ return pr.categoryId===cat.id && (pr.active || c.projectIds.indexOf(pr.id)>-1); });
+    if(!ps.length) return '';
+    return '<div style="margin-bottom:8px;"><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">'+cat.label+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      ps.map(function(pr){ return '<span class="chip'+(c.projectIds.indexOf(pr.id)>-1?' active':'')+'" onclick="libToggleProject(\''+pr.id+'\')">'+pr.name+(pr.active?'':'（已非活性）')+'</span>'; }).join('')+'</div></div>';
+  }).join('');
+  var dirOptions = '<option value=""'+(!c.director?' selected':'')+'>-</option>'+DIRECTOR_LIST.map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+
+    ((c.director && !isDirectorActive(c.director)) ? '<option selected value="'+c.director+'">'+c.director+'（已停用，显示为"-"）</option>' : '');
+  var n = c.names;
+  var nameInp = function(k, label){ return '<div class="case-field-row"><span class="fk">'+label+'</span><input type="text" value="'+(n[k]||'').replace(/"/g,'&quot;')+'" oninput="libEditName(\''+k+'\',this.value)" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'; };
+  var missing = libEditMissing();
+  document.getElementById('lib-case-body').innerHTML =
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">来源：'+srcLabel+'（按当前演示角色自动决定）</div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">标题 <span style="color:var(--terracotta);">*</span> <span style="font-weight:400;color:var(--muted);">只填一种语言，其他语言 AI 翻译，可手动修改</span></div>'+
+    nameInp('zh','中文')+nameInp('ko','한국어')+nameInp('id','Bahasa Indonesia')+
+    '<div style="margin:6px 0 12px;"><button class="btn-ghost" style="font-size:11px;" onclick="libEditAiFill()">AI 翻译补全（演示）</button></div>'+
+    '<div style="margin:6px 0 10px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">项目 <span style="color:var(--terracotta);">*</span> <span style="font-weight:400;color:var(--muted);">来自项目库（'+(isTravel?'赴韩项目':'本地项目')+'），可多选；部位/分类由项目自动带出</span></div>'+projGroups+'</div>'+
+    (isTravel ? '<div class="case-field-row"><span class="fk">院长</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="libEditDirector(this.value)">'+dirOptions+'</select></div>' : '')+
+    (!isTravel ? '<div style="margin:10px 0;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">问题（可多选）</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      Object.keys(LIB_PROBLEMS).map(function(id){ return '<span class="chip'+(c.problemIds.indexOf(id)>-1?' active':'')+'" onclick="libToggleProblem(\''+id+'\')">'+LIB_PROBLEMS[id].label+'</span>'; }).join('')+
+      '<span class="chip" onclick="openLibProblemModal()">管理问题标签</span></div></div>' : '')+
+    '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">术前照片</span><div style="flex-grow:1;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+
+      (c.beforePhotos||[]).map(function(ph,i){ return libPhotoThumbEditHtml(ph,'before',i); }).join('')+
+      '<button class="btn-ghost" onclick="libTriggerFileInput(\'before\')">+ 上传</button><button class="btn-ghost" onclick="libAddDemoPhoto(\'before\')">+ 演示照片</button></div></div>'+
+    '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">术后照片 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;">'+
+      (c.afterPhotos||[]).map(function(ph,i){ return libPhotoThumbEditHtml(ph,'after',i); }).join('')+
+      '<button class="btn-ghost" onclick="libTriggerFileInput(\'after\')">+ 上传</button><button class="btn-ghost" onclick="libAddDemoPhoto(\'after\')">+ 演示照片</button></div></div>'+
+    '<div style="margin:14px 0 6px;padding:12px 14px;background:var(--border2);border-radius:10px;"><div style="font-size:12px;font-weight:700;margin-bottom:8px;">照片同意（必填两项）</div>'+
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px;"><input type="checkbox" '+(c.consent.signed?'checked ':'')+'onchange="libSetConsentSigned(this.checked)"> 该客人已签署案例库照片同意书</label>'+
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;">手写签名同意书（jpg / png / pdf）：<span style="color:'+(c.consent.file?'var(--sage)':'var(--muted)')+';">'+(c.consent.file ? '📄 '+c.consent.file : '未上传')+'</span>'+
+      '<button class="btn-ghost" onclick="libPickConsentFile()">上传文件</button><button class="btn-ghost" onclick="libUseDemoConsent()">使用演示同意书</button></div></div>'+
+    (missing.length ? '<div class="error-text" style="display:block;margin:10px 0;">还差：'+missing.join('、')+'</div>' : '')+
+    '<button class="btn-primary" style="width:100%;margin-top:6px;'+(missing.length?'opacity:.4;cursor:not-allowed;':'')+'" '+(missing.length?'disabled ':'')+'onclick="saveLibCase()">保存</button>';
+}
+function saveLibCase(){
+  var c = LIB_EDIT; if(!c) return;
+  if(libEditMissing().length) return; /* 缺任一项［保存］不可点 */
+  var from = ['zh','ko','id'].filter(function(k){ return (c.names[k]||'').trim(); })[0];
+  ['zh','ko','id'].forEach(function(k){ if(!(c.names[k]||'').trim()) c.names[k] = demoTranslate(c.names[from].trim(), from, k); });
+  c.title = c.names.zh.trim();
+  var me = DEMO_ROLE==='kr' ? '이서연（KR室长）' : 'Dewi';
+  if(c.id){
+    c.editedBy = me; c.editedAt = nowFullDt();
+    var idx = LIB_CASES.findIndex(function(x){ return x.id===c.id; });
+    if(idx>-1) LIB_CASES[idx] = c;
+  } else {
+    c.id = newLibCaseId(); c.uploader = me; c.uploadedAt = nowFullDt(); c.editedBy = null; c.editedAt = null;
+    LIB_CASES.unshift(c);
+  }
+  closeLibCaseModal();
+  if(LIB_STATE.level==='detail') LIB_STATE.caseId = c.id;
+  renderLibrary();
+}
+
+/* ---- 问题标签管理（印尼管理案例，手动维护：新增 / 改名 / 删除；删除时还有案例可批量改挂到另一个问题或移除标签） ---- */
+var LIB_PROB_DEL = null;
+function openLibProblemModal(){
+  if(!libCanEdit('local')){ alert('问题标签由 IN 室长维护'); return; }
+  LIB_PROB_DEL = null; renderLibProblemModal();
+  document.getElementById('lib-node-action-overlay').classList.add('open');
+}
+function closeLibNodeActionModal(){ document.getElementById('lib-node-action-overlay').classList.remove('open'); LIB_PROB_DEL = null; if(LIB_EDIT) renderLibCaseModal(); renderLibrary(); }
+function libProblemCount(id){ return LIB_CASES.filter(function(c){ return (c.problemIds||[]).indexOf(id)>-1; }).length; }
+function renderLibProblemModal(){
+  document.getElementById('lib-node-action-title').textContent = '管理问题标签';
+  var d = LIB_PROB_DEL, html;
+  if(d){
+    var src = LIB_PROBLEMS[d.id], others = Object.keys(LIB_PROBLEMS).filter(function(k){ return k!==d.id; });
+    html = '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">"'+src.label+'"名下还有 '+libProblemCount(d.id)+' 个案例，怎么处理？</div>'+
+      '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"><button class="'+(d.choice==='reassign'?'btn-primary':'btn-outline')+'" style="text-align:left;" onclick="LIB_PROB_DEL.choice=\'reassign\';renderLibProblemModal()">批量改挂到另一个问题</button>'+
+      '<button class="'+(d.choice==='unlabel'?'btn-primary':'btn-outline')+'" style="text-align:left;" onclick="LIB_PROB_DEL.choice=\'unlabel\';LIB_PROB_DEL.target=null;renderLibProblemModal()">移除标签</button></div>'+
+      (d.choice==='reassign' ? '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">'+(others.map(function(k){ return '<button class="'+(d.target===k?'btn-primary':'btn-outline')+'" style="text-align:left;" onclick="LIB_PROB_DEL.target=\''+k+'\';renderLibProblemModal()">'+LIB_PROBLEMS[k].label+'</button>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">没有其他问题可选</div>')+'</div>' : '')+
+      '<button class="btn-primary" style="width:100%;" onclick="confirmLibProblemDelete()">确认删除</button>';
+  } else {
+    html = Object.keys(LIB_PROBLEMS).map(function(id){
+      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+LIB_PROBLEMS[id].label+' <span style="font-size:11px;color:var(--muted);">'+libProblemCount(id)+' 个案例</span></span><span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="renameLibProblem(\''+id+'\');return false;">改名</a><a href="#" class="info-link" style="color:#C1454A;" onclick="deleteLibProblem(\''+id+'\');return false;">删除</a></span></div>';
+    }).join('')+'<div style="margin-top:12px;"><button class="btn-ghost" onclick="addLibProblemUI()">＋ 新增问题</button></div>';
+  }
+  document.getElementById('lib-node-action-body').innerHTML = html;
+}
+function addLibProblemUI(){ var n = prompt('新增问题名称'); if(!n || !n.trim()) return; addLibProblem(n.trim()); renderLibProblemModal(); }
+function renameLibProblem(id){ var n = prompt('修改名称', LIB_PROBLEMS[id].label); if(n===null || !n.trim()) return; LIB_PROBLEMS[id].label = n.trim(); renderLibProblemModal(); }
+function deleteLibProblem(id){
+  if(!libProblemCount(id)){ if(confirm('确认删除问题"'+LIB_PROBLEMS[id].label+'"？')){ delete LIB_PROBLEMS[id]; renderLibProblemModal(); } return; }
+  LIB_PROB_DEL = {id:id, choice:'reassign', target:null}; renderLibProblemModal();
+}
+function confirmLibProblemDelete(){
+  var d = LIB_PROB_DEL; if(!d) return;
+  if(d.choice==='reassign' && !d.target){ alert('请先选择要改挂到的问题'); return; }
+  LIB_CASES.forEach(function(c){
+    var i = (c.problemIds||[]).indexOf(d.id); if(i<0) return;
+    c.problemIds.splice(i,1);
+    if(d.choice==='reassign' && c.problemIds.indexOf(d.target)<0) c.problemIds.push(d.target);
+  });
+  delete LIB_PROBLEMS[d.id];
+  LIB_PROB_DEL = null; renderLibProblemModal();
+}
 
 /* ================= project library (项目库) =================
    来源(origin)决定币种：KR=韩元(KRW)，IN=印尼盾(IDR)，不单独存币种字段。
