@@ -223,7 +223,7 @@ input,textarea,select{font-family:inherit;}
 .mac-bar{background:#EDEAE2;padding:10px 16px;display:flex;align-items:center;}
 .mac-dots span{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:7px;}
 .mac-url{flex-grow:1;text-align:center;font-size:11px;color:var(--slate);background:var(--white);border-radius:6px;padding:4px 10px;margin-right:44px;}
-.float-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);}
+.float-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:relative;}
 .float-head .l{display:flex;align-items:center;gap:10px;}
 .float-search{display:none;padding:10px 18px;border-bottom:1px solid var(--border);}
 .float-search.open{display:block;}
@@ -706,15 +706,17 @@ input,textarea,select{font-family:inherit;}
     <div class="float-head">
       <div class="l">
         <span class="sq-avt" id="float-avt" style="width:34px;height:34px;border-radius:10px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;">D</span>
-        <div><div id="float-name" style="font-size:14px;font-weight:700;">이서연 · 韩国室长</div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 Siti Rahayu 的面诊安排</div></div>
+        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">이서연 · 韩国室长</span> <span style="font-size:11px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 Siti Rahayu 的面诊安排</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
         <span style="cursor:pointer;" title="对话中的文件" onclick="openRoomFiles()">📁</span>
         <span style="cursor:pointer;" title="搜索" onclick="toggleFloatSearch()">🔍</span>
-        <span style="cursor:pointer;" title="成员" onclick="openRoomMembers()">👤</span>
+        <span id="float-mute-btn" style="cursor:pointer;" title="对自己关闭这个房间的提醒（被@照样提醒）" onclick="toggleMuteRoom()">🔕</span>
         <span style="cursor:pointer;" onclick="closeFloat()">✕</span>
       </div>
+      <div id="float-members-dd" style="display:none;position:absolute;top:100%;left:12px;z-index:8;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(27,38,53,.16);padding:8px 14px 12px;min-width:280px;max-height:340px;overflow:auto;"></div>
     </div>
+    <div id="float-demo-bar" style="display:flex;gap:8px;padding:6px 18px;border-bottom:1px solid var(--border2);background:#FAF8F3;"></div>
     <div class="float-search" id="float-search"><input type="text" id="float-search-input" placeholder="在对话中搜索…" oninput="renderFloatMessages()"></div>
     <div id="chat-case-chip" style="display:none;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--terracotta-bg);"></div>
     <div class="float-body" id="float-body"></div>
@@ -5492,7 +5494,8 @@ function simulateReportTimeout(){
   showToast('已超过预计出报告时间', c.name+' 的报告还没提交', function(){ openCaseDetail(c.id); });
 }
 function notifyConsultUpdate(c, title, text){
-  if(!shouldPushToMe(c)) return; /* 只给负责该案件的IN室长推播；院长完全不推播 */
+  if(!shouldPushToMe(c)) return; /* 推播对象见 pushTargets()；院长完全不推播 */
+  if(MUTED_ROOMS[getCaseRoomId(c.id)]) return; /* 🔕：对自己关闭了这个房间的提醒 */
   var chatOpen = document.getElementById('chat-float-overlay').classList.contains('open') && CURRENT_ROOM==='main';
   if(!chatOpen){
     showToast(title, text, function(){ openFloatingChat('main'); });
@@ -6476,7 +6479,40 @@ function caseRoomMembers(c){
   var kr = caseHasKrSide(c);
   return {inn:IN_COORDINATORS.slice(), kr: kr ? KR_COORDINATORS.slice() : [], director: (kr && c.director) ? c.director : null};
 }
-function shouldPushToMe(c){ return (c.inCoordinator||'Dewi')==='Dewi'; } /* 演示视角：当前登录的是 Dewi（IN室长） */
+/* ---- 备忘 / OFF 数据（2026-10-02·七）：IN 室长的 OFF 从"新增 memo"来；KR 院长/KR 室长的 OFF 用演示数据代替（KR 端功能） ----
+   {id, date, type:'备忘'|'OFF', scope:'公开'|'私人', role:'IN室长'|'KR室长'|'KR院长'(OFF 用), person:(OFF 的人), author, text} */
+var DEMO_MEMOS = [
+  {id:'m1', date:'2026-09-18', type:'OFF', scope:'公开', role:'KR院长', person:'이수진 원장', author:'KR（演示）', text:''},
+  {id:'m2', date:'2026-09-18', type:'OFF', scope:'公开', role:'KR室长', person:'이서연', author:'KR（演示）', text:''},
+  {id:'m3', date:'2026-09-19', type:'OFF', scope:'公开', role:'IN室长', person:'Rina', author:'Rina', text:''},
+  {id:'m4', date:'2026-09-21', type:'OFF', scope:'公开', role:'KR院长', person:'김민석 원장', author:'KR（演示）', text:''},
+  {id:'m5', date:'2026-09-18', type:'备忘', scope:'公开', author:'Dewi', text:'下午整理持有项目对账'},
+  {id:'m6', date:'2026-09-17', type:'备忘', scope:'私人', author:'Dewi', text:'给 Rizky 回电（私人）'}
+];
+var CAL_MEMOS = (function(){ try{ var v = JSON.parse(localStorage.getItem('gmc_memos')||'null'); if(v) return v; }catch(e){} return DEMO_MEMOS.map(function(m){ return Object.assign({}, m); }); })();
+function saveMemos(){ try{ localStorage.setItem('gmc_memos', JSON.stringify(CAL_MEMOS)); }catch(e){} }
+function offNameKey(n){ return String(n||'').split(' ')[0]; }
+function isOffOn(name, date){ var k = offNameKey(name); return CAL_MEMOS.some(function(m){ return m.type==='OFF' && m.date===date && offNameKey(m.person)===k; }); }
+/* 推播对象（2026-10-02·三）：这个案件所有操作过的室长（只发给当天上班的）；操作过的都 OFF → 改发给同一边当天上班的所有室长；被 @ 的人一定收到 */
+function caseOperators(c){
+  var inn = [], kr = [];
+  (c.logEntries||[]).forEach(function(l){
+    var a = String(l.actor||'');
+    if(IN_COORDINATORS.indexOf(a)>-1){ if(inn.indexOf(a)<0) inn.push(a); }
+    else { var k = offNameKey(a); if(KR_COORDINATORS.indexOf(k)>-1 && kr.indexOf(k)<0) kr.push(k); }
+  });
+  if(!inn.length && c.inCoordinator) inn.push(c.inCoordinator);
+  return {inn:inn, kr:kr};
+}
+function pushTargets(c){
+  var today = nowFullDt().split(' ')[0], ops = caseOperators(c);
+  var pick = function(opsList, all){
+    var work = opsList.filter(function(n){ return !isOffOn(n, today); });
+    return work.length ? work : all.filter(function(n){ return !isOffOn(n, today); });
+  };
+  return {inn: pick(ops.inn, IN_COORDINATORS), kr: (ops.kr.length || caseHasKrSide(c)) ? pick(ops.kr, KR_COORDINATORS) : []};
+}
+function shouldPushToMe(c){ return pushTargets(c).inn.indexOf('Dewi')>-1; } /* 演示视角：当前登录的是 Dewi（IN室长） */
 function roomSysMsg(text){ return {day:'2026년 9월 18일', from:'sys', kind:'sys', orig:text, time:nowTime()}; }
 /* 点［发起对话］/新建案件对话时才建房（有房间之后才出现在抽屉里）；建房时IN室长进入房间 */
 function ensureCaseRoom(c){
@@ -6679,6 +6715,8 @@ function openFloatingChat(roomId, subtitleOverride, caseId){
   ATTACHED_CASE_ID = caseId || (isCaseRoom ? roomId.slice(5) : null);
   renderChatCaseChip();
   renderFloatToolbar();
+  renderMuteBtn(); renderFloatDemoBar();
+  var dd0 = document.getElementById('float-members-dd'); if(dd0) dd0.style.display = 'none';
   REF_CHIP = null; renderRefChip(); closeSuggest();
   /* 2026-09-29：案件房只在真正发过消息之后才"存在"（出现在案件对话列表里），
      所以这里只是打开来看，不能顺手把 CHAT_DATA[roomId] 建出来——建房动作在 sendFloatMsg() 里，
@@ -6779,35 +6817,74 @@ function confirmQuote(){
 }
 /* ---- 对话房成员（2026-09-30）：案件房成员=客人选择的院长+全部印尼室长+全部韩国室长（案件中途可能换人，院长可更换） ---- */
 var IN_COORDINATORS = ['Dewi','Rina'];
-function openRoomMembers(){
+/* 成员下拉（2026-10-02 增量·三）：点击房间名称 ▾ 显示成员；院长标"静音"，OFF 的人标"今日 OFF"（取代原来的 👤 成员 icon） */
+function memberRowsHtml(){
   var roomId = CURRENT_ROOM, r = roomById(roomId) || {name:roomId};
-  document.getElementById('room-members-title').textContent = '成员 · '+r.name;
+  var today = nowFullDt().split(' ')[0];
+  var mute = '<span class="status-pill" style="background:#EDEAE2;color:var(--muted);font-size:10px;margin-left:6px;">静音</span>';
+  var offTag = function(n){ return isOffOn(n, today) ? '<span class="status-pill" style="background:#FBE9E7;color:#C1454A;font-size:10px;margin-left:6px;">今日 OFF</span>' : ''; };
+  var row = function(label, key, extra){ return '<div style="display:flex;align-items:center;padding:5px 0;font-size:13px;"><span>'+label+'</span>'+offTag(key)+(extra||'')+'</div>'; };
+  var head = function(t){ return '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:10px 0 2px;">'+t+'</div>'; };
   var html = '';
-  function group(label, names, extra){
-    return '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:10px 0 4px;">'+label+'</div>'+
-      names.map(function(n){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+n+'</span>'+(extra&&extra[n]||'')+'</div>'; }).join('');
-  }
-  var mute = '<span class="status-pill" style="background:#EDEAE2;color:var(--muted);font-size:10px;">静音</span>'; /* 院长旁边标"静音"：不推播、不提醒、不显示未读 */
   if(roomId.indexOf('case-')===0){
     var c = CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0];
     if(c){
       var m = caseRoomMembers(c);
-      html += group('印尼室长（全部）', m.inn.map(function(n){ return n+' · 印尼室长'; }));
+      html += head('印尼室长（全部）') + m.inn.map(function(n){ return row(n+' · 印尼室长', n); }).join('');
       if(m.kr.length){
-        var presence = {}; m.kr.forEach(function(n){ var nm = n+' 실장 · 韩国室长'; presence[nm] = '<span style="font-size:11px;color:'+(c.krInRoom && krEnterRoomName(c)===n ? 'var(--sage)' : 'var(--muted)')+';">'+(c.krInRoom && krEnterRoomName(c)===n ? '已进入' : '未进入')+'</span>'; });
-        html += group('韩国室长（全部）', m.kr.map(function(n){ return n+' 실장 · 韩国室长'; }), presence);
+        html += head('韩国室长（全部）') + m.kr.map(function(n){
+          var inRoom = c.krInRoom && krEnterRoomName(c)===n;
+          return row(n+' 실장 · 韩国室长', n, '<span style="font-size:11px;margin-left:6px;color:'+(inRoom?'var(--sage)':'var(--muted)')+';">'+(inRoom?'已进入':'未进入')+'</span>');
+        }).join('');
       }
-      if(m.director){ var ex = {}; ex[m.director+' · 院长'] = mute; html += group('院长（选定院长，选定后不能更换）', [m.director+' · 院长'], ex); }
-      if(!m.kr.length) html += '<div style="font-size:11px;color:var(--muted);margin-top:12px;">这个案件没有面诊：只有印尼室长。点"增加面诊"并缴费后，韩国室长和院长才会加入。</div>';
+      if(m.director) html += head('院长（选定院长，选定后不能更换）') + row(m.director+' · 院长', m.director, mute);
+      if(!m.kr.length) html += '<div style="font-size:11px;color:var(--muted);margin-top:10px;">这个案件没有面诊：只有印尼室长。点"增加面诊"并缴费后，韩国室长和院长才会加入。</div>';
     }
   } else if(roomId==='main'){
-    var exm = {}; DIRECTOR_LIST.forEach(function(d){ exm[d] = mute; });
-    html += group('院长', DIRECTOR_LIST, exm)+group('印尼室长', IN_COORDINATORS)+group('韩国室长', KR_COORDINATORS);
+    html += head('院长') + DIRECTOR_LIST.map(function(d){ return row(d, d, mute); }).join('') +
+      head('印尼室长') + IN_COORDINATORS.map(function(n){ return row(n, n); }).join('') +
+      head('韩国室长') + KR_COORDINATORS.map(function(n){ return row(n, n); }).join('');
   } else {
-    html += group('成员', ['Dewi（我）', r.name]);
+    html += head('成员') + row('Dewi（我）', 'Dewi') + row(r.name, r.name.split(' ')[0]);
   }
-  document.getElementById('room-members-body').innerHTML = html;
-  document.getElementById('room-members-overlay').classList.add('open');
+  return html;
+}
+function toggleMembersDropdown(){
+  var dd = document.getElementById('float-members-dd');
+  if(dd.style.display==='block'){ dd.style.display = 'none'; return; }
+  dd.innerHTML = memberRowsHtml();
+  dd.style.display = 'block';
+}
+/* 🔕（2026-10-02）：对自己关闭这个房间的提醒，可再打开；被 @ 照样提醒 */
+var MUTED_ROOMS = {};
+function toggleMuteRoom(){
+  MUTED_ROOMS[CURRENT_ROOM] = !MUTED_ROOMS[CURRENT_ROOM];
+  renderMuteBtn();
+  showToast(MUTED_ROOMS[CURRENT_ROOM] ? '已关闭这个房间的提醒' : '已重新打开这个房间的提醒', MUTED_ROOMS[CURRENT_ROOM] ? '新消息不再提醒；被 @ 的消息照样提醒' : '新消息会正常提醒', null);
+}
+function renderMuteBtn(){
+  var b = document.getElementById('float-mute-btn'); if(!b) return;
+  b.style.background = MUTED_ROOMS[CURRENT_ROOM] ? '#FBE9E7' : 'transparent';
+  b.style.borderRadius = '8px'; b.style.padding = '0 4px';
+  b.title = MUTED_ROOMS[CURRENT_ROOM] ? '已关闭这个房间的提醒，点击再打开（被@照样提醒）' : '对自己关闭这个房间的提醒（被@照样提醒）';
+}
+function renderFloatDemoBar(){
+  var el = document.getElementById('float-demo-bar'); if(!el) return;
+  el.innerHTML = '<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="simulateIncomingMsg(false)">演示：模拟新消息</button><button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="simulateIncomingMsg(true)">演示：模拟有人@我</button>';
+}
+/* 演示：别人发来一条消息。新消息按推播规则 + 🔕 决定是否弹提醒；@我 一定提醒（包括静音、不负责的案件） */
+function simulateIncomingMsg(atMe){
+  var roomId = CURRENT_ROOM;
+  var isCase = roomId.indexOf('case-')===0;
+  var cc = isCase ? CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0] : null;
+  var who = (isCase && cc && caseHasKrSide(cc)) ? krEnterRoomName(cc) : '이서연';
+  if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = [];
+  CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@Dewi ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime()});
+  renderFloatMessages();
+  var muted = !!MUTED_ROOMS[roomId];
+  var pushOk = isCase ? shouldPushToMe(cc) : true; /* 案件房：只给操作过的当班室长；职员房：直接提醒 */
+  if(atMe) showToast('你被 '+who+' @ 了', '被@一定提醒（即使已🔕或不负责这个案件）', null);
+  else if(!muted && pushOk) showToast('新消息 · '+((roomById(roomId)||{}).name||roomId), who+'：（演示）有新消息', null);
 }
 function closeRoomMembers(){ document.getElementById('room-members-overlay').classList.remove('open'); }
 function nowTime(){ var d = demoNow(); return pad2(d.getHours())+':'+pad2(d.getMinutes()); }
