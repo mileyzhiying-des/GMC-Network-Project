@@ -474,7 +474,7 @@ input,textarea,select{font-family:inherit;}
               <option value="kr">韩国室长（院长不维护）</option>
             </select>
           </div>
-          <button class="btn-primary" onclick="openProjNewModal()">+ 新增项目</button>
+          <button class="btn-primary" id="projlib-add-btn" onclick="openProjNewModal()">+ 新增项目</button>
         </div>
       </div>
       <div id="projlib-filters" style="margin-top:14px;"></div>
@@ -1196,6 +1196,18 @@ input,textarea,select{font-family:inherit;}
       <span style="cursor:pointer;color:var(--slate);" onclick="closeMemoModal()">✕</span>
     </div>
     <div id="memo-body"></div>
+  </div>
+</div>
+
+<!-- ============ 管理分类 MODAL（2026-10-02，项目库） ============ -->
+<div class="modal-overlay" id="projcat-overlay" style="z-index:70;" onclick="if(event.target===this) closeProjCatModal()">
+  <div class="modal-box" style="width:400px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span id="projcat-title" style="font-size:15px;font-weight:700;">管理分类</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeProjCatModal()">✕</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">分类下还有项目（包括已非活性化的）不能删除；IN 室长只能管理本地项目的分类。</div>
+    <div id="projcat-body"></div>
   </div>
 </div>
 
@@ -6278,7 +6290,7 @@ var CASE_DISPLAY_CCY_KR = 'KRW', CASE_DISPLAY_CCY_IN = 'IDR'; // 案件详情页
 
 /* 项目是否"在用"：有引用它的案件还没到终态（已完结/已取消预约/已取消(全退)/已结案(部分退)——
    这四个终态在代码里都归到 stage==='closed' 或 stage==='cancelled'），在用的项目不能删除，只能非活性化 */
-function isProjectInUse(projectId){
+function isProjectInUse(projectId){ /* 旧版只看案件；新版见 projDeleteBlockReason()（案件+客人持有批次） */
   return CASE_ITEMS.some(function(c){
     if(isEnded(c)) return false;
     return (c.procedureItems||[]).some(function(it){ return it.projectId===projectId; })
@@ -6299,34 +6311,38 @@ function setProjDisplayCcy(origin, ccy){
 function projLibCategories(origin){
   return Object.keys(PROJECT_CATEGORIES).filter(function(id){ return PROJECT_CATEGORIES[id].origin===origin; }).map(function(id){ return PROJECT_CATEGORIES[id]; });
 }
+var PROJLIB_Q = '';
 function renderProjLibrary(){
   var sel = document.getElementById('projlib-role-select'); if(sel) sel.value = DEMO_ROLE;
   renderProjLibTabs();
   renderProjLibFilters();
   renderProjLibGrid();
+  /* ［＋新增项目］：本地项目 tab 显示（IN 室长可用）；演示角色切到 KR 室长时赴韩项目 tab 也显示（否则 KR 室长无法新增赴韩项目） */
+  var add = document.getElementById('projlib-add-btn');
+  if(add){
+    var show = (PROJLIB_TAB==='IN') || (PROJLIB_TAB==='KR' && DEMO_ROLE==='kr');
+    add.style.display = show ? 'inline-block' : 'none';
+    add.disabled = !libCanEdit(PROJLIB_TAB==='KR' ? 'travel' : 'local');
+    add.style.opacity = add.disabled ? '.4' : '1';
+    add.title = add.disabled ? '本地项目由 IN 室长维护，当前演示角色不能新增' : '';
+  }
 }
 function renderProjLibTabs(){
   var el = document.getElementById('projlib-tabs'); if(!el) return;
-  var tabs = [{k:'KR', label:'赴韩项目'}, {k:'IN', label:'本地项目'}, {k:'inactive', label:'非活性化'}];
+  var tabs = [{k:'KR', label:'赴韩项目'+(DEMO_ROLE==='in'?'（只读）':'')}, {k:'IN', label:'本地项目'}, {k:'inactive', label:'非活性化'}];
   el.innerHTML = tabs.map(function(t){
     return '<span class="tab'+(PROJLIB_TAB===t.k?' active':'')+'" onclick="setProjLibTab(\''+t.k+'\')">'+t.label+'</span>';
   }).join('');
 }
 function renderProjLibFilters(){
   var el = document.getElementById('projlib-filters'); if(!el) return;
-  if(PROJLIB_TAB==='inactive'){ el.innerHTML = ''; return; }
+  var search = '<input type="text" id="projlib-search" placeholder="搜索项目名称" value="'+PROJLIB_Q.replace(/"/g,'&quot;')+'" oninput="PROJLIB_Q=this.value;renderProjLibGrid();" style="width:220px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;">';
+  if(PROJLIB_TAB==='inactive'){ el.innerHTML = '<div style="display:flex;gap:10px;align-items:center;">'+search+'</div>'; return; }
   var origin = PROJLIB_TAB;
   var cats = projLibCategories(origin);
   var canEdit = libCanEdit(origin==='KR' ? 'travel' : 'local');
   var chips = '<span class="chip'+(PROJLIB_CAT_FILTER==='all'?' active':'')+'" onclick="setProjLibCatFilter(\'all\')">全部</span>'+
-    cats.map(function(cat){
-      var mgmt = canEdit ? (
-        ' <span style="cursor:pointer;" title="改名" onclick="event.stopPropagation();renameProjCategory(\''+cat.id+'\')">✎</span>'+
-        ' <span style="cursor:pointer;" title="删除" onclick="event.stopPropagation();deleteProjCategory(\''+cat.id+'\')">🗑</span>'
-      ) : '';
-      return '<span class="chip'+(PROJLIB_CAT_FILTER===cat.id?' active':'')+'" onclick="setProjLibCatFilter(\''+cat.id+'\')">'+cat.label+mgmt+'</span>';
-    }).join('') +
-    (canEdit ? '<span class="chip" onclick="addProjCategoryUI(\''+origin+'\')">+ 新增分类</span>' : '');
+    cats.map(function(cat){ return '<span class="chip'+(PROJLIB_CAT_FILTER===cat.id?' active':'')+'" onclick="setProjLibCatFilter(\''+cat.id+'\')">'+cat.label+'</span>'; }).join('');
   var ccyOptions = origin==='KR' ? ['KRW','IDR','CNY'] : ['IDR','CNY'];
   var curCcy = origin==='KR' ? PROJ_DISPLAY_CCY_KR : PROJ_DISPLAY_CCY_IN;
   var ccySwitch = '<select onchange="setProjDisplayCcy(\''+origin+'\',this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;">'+
@@ -6335,20 +6351,36 @@ function renderProjLibFilters(){
       return '<option value="'+c+'"'+(curCcy===c?' selected':'')+'>'+label+'</option>';
     }).join('')+'</select>';
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+chips+'</div>'+ccySwitch+'</div>';
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+search+chips+'</div>'+
+    '<div style="display:flex;gap:10px;align-items:center;">'+ccySwitch+
+    '<button class="btn-outline" style="padding:6px 12px;font-size:12px;'+(canEdit?'':'opacity:.4;cursor:not-allowed;')+'" '+(canEdit?'':'disabled title="这一组的分类由 '+(origin==='KR'?'KR 室长':'IN 室长')+' 管理"')+' onclick="openProjCatModal(\''+origin+'\')">管理分类</button></div></div>';
+}
+/* ［管理分类］弹窗 */
+var PROJCAT_ORIGIN = null;
+function openProjCatModal(origin){ PROJCAT_ORIGIN = origin; renderProjCatModal(); document.getElementById('projcat-overlay').classList.add('open'); }
+function closeProjCatModal(){ document.getElementById('projcat-overlay').classList.remove('open'); }
+function renderProjCatModal(){
+  var origin = PROJCAT_ORIGIN; if(!origin) return;
+  document.getElementById('projcat-title').textContent = '管理分类 · '+(origin==='KR'?'赴韩项目':'本地项目');
+  document.getElementById('projcat-body').innerHTML = projLibCategories(origin).map(function(cat){
+    var n = PROJECT_LIBRARY.filter(function(p){ return p.categoryId===cat.id; }).length;
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+cat.label+' <span style="font-size:11px;color:var(--muted);">'+n+' 个项目</span></span>'+
+      '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="renameProjCategory(\''+cat.id+'\');return false;">改名</a>'+
+      (n ? '<span style="color:var(--muted);cursor:not-allowed;" title="分类下还有项目（包括非活性化的），不能删除">删除</span>' : '<a href="#" class="info-link" onclick="deleteProjCategory(\''+cat.id+'\');return false;">删除</a>')+'</span></div>';
+  }).join('')+'<div style="margin-top:12px;"><button class="btn-ghost" onclick="addProjCategoryUI(\''+origin+'\')">＋ 新增分类</button></div>';
 }
 function addProjCategoryUI(origin){
   var name = prompt('新增分类名称');
   if(!name || !name.trim()) return;
   addProjCategory(name.trim(), origin);
-  renderProjLibrary();
+  renderProjLibrary(); renderProjCatModal();
 }
 function renameProjCategory(id){
   var cat = PROJECT_CATEGORIES[id]; if(!cat) return;
   var name = prompt('修改分类名称', cat.label);
   if(name===null || !name.trim()) return;
   cat.label = name.trim();
-  renderProjLibrary();
+  renderProjLibrary(); renderProjCatModal();
 }
 function deleteProjCategory(id){
   var hasItems = PROJECT_LIBRARY.some(function(p){ return p.categoryId===id; });
@@ -6356,51 +6388,87 @@ function deleteProjCategory(id){
   if(!confirm('确认删除这个分类？')) return;
   delete PROJECT_CATEGORIES[id];
   if(PROJLIB_CAT_FILTER===id) PROJLIB_CAT_FILTER = 'all';
-  renderProjLibrary();
+  renderProjLibrary(); renderProjCatModal();
+}
+/* 使用情况（从案件数据和客户持有数据计算）：进行中案件=还没到终态且引用了这个项目（快照 projectId）；持有中批次=客户持有批次里剩余次数>0 的批次（按项目名称匹配） */
+function projectUsage(p){
+  var cases = CASE_ITEMS.filter(function(c){
+    if(isEnded(c)) return false;
+    return (c.procedureItems||[]).some(function(it){ return it.projectId===p.id; }) || (c.recommended||[]).some(function(it){ return it.projectId===p.id; });
+  }).length;
+  var batches = 0;
+  Object.keys(CLIENT_HOLDINGS).forEach(function(nm){
+    CLIENT_HOLDINGS[nm].forEach(function(h){
+      if(h.itemName!==p.name) return;
+      h.batches.forEach(function(b){ if(!b.voided && (b.bought-b.used)>0) batches++; });
+    });
+  });
+  return {cases:cases, batches:batches};
+}
+function projLibHeadHtml(){
+  return '<div class="case-field-row" style="font-size:11px;color:var(--muted);font-weight:700;"><span style="flex-grow:1;">项目名称</span><span style="width:90px;">分类</span><span style="width:130px;text-align:right;">价格</span><span style="width:190px;text-align:right;">使用情况</span><span style="width:150px;text-align:right;">操作</span></div>';
 }
 function renderProjLibGrid(){
   var el = document.getElementById('projlib-grid'); if(!el) return;
+  var q = (PROJLIB_Q||'').toLowerCase();
+  var match = function(p){ return !q || p.name.toLowerCase().indexOf(q)>-1 || ((p.names||{}).ko||'').toLowerCase().indexOf(q)>-1 || ((p.names||{}).id||'').toLowerCase().indexOf(q)>-1; };
   if(PROJLIB_TAB==='inactive'){
-    var inactive = PROJECT_LIBRARY.filter(function(p){ return !p.active; });
+    var inactive = PROJECT_LIBRARY.filter(function(p){ return !p.active && match(p); });
     var groups = [{origin:'KR', label:'赴韩项目'}, {origin:'IN', label:'本地项目'}];
     el.innerHTML = groups.map(function(g){
       var items = inactive.filter(function(p){ return p.origin===g.origin; });
       if(!items.length) return '';
       return '<div style="margin-bottom:18px;"><div class="info-heading" style="margin-bottom:8px;">'+g.label+'</div>'+
-        '<div class="card" style="padding:4px 20px;">'+items.map(projLibRowHtml).join('')+'</div></div>';
+        '<div class="card" style="padding:4px 20px;">'+projLibHeadHtml()+items.map(projLibRowHtml).join('')+'</div></div>';
     }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有已非活性化的项目</div>';
     return;
   }
   var origin = PROJLIB_TAB;
-  var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active; });
+  var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active && match(p); });
   if(PROJLIB_CAT_FILTER!=='all') items = items.filter(function(p){ return p.categoryId===PROJLIB_CAT_FILTER; });
-  el.innerHTML = '<div class="card" style="padding:4px 20px;">'+
+  el.innerHTML = '<div class="card" style="padding:4px 20px;">'+projLibHeadHtml()+
     (items.length ? items.map(projLibRowHtml).join('') : '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有符合条件的项目</div>')+
     '</div>';
+}
+function projDeleteBlockReason(p){
+  var u = projectUsage(p), r = [];
+  if(u.cases) r.push('还有 '+u.cases+' 个进行中的案件引用它');
+  if(u.batches) r.push('还有 '+u.batches+' 个客人持有中的批次（剩余次数>0）');
+  return r.join('；');
 }
 function projLibRowHtml(p){
   var canEdit = libCanEdit(p.origin==='KR' ? 'travel' : 'local');
   var cat = PROJECT_CATEGORIES[p.categoryId];
+  var u = projectUsage(p);
   var actions = '';
   if(canEdit){
     if(p.active){
       actions = '<a href="#" class="info-link" onclick="openProjEditModal(\''+p.id+'\');return false;">编辑</a>'+
         '<a href="#" class="info-link" onclick="deactivateProj(\''+p.id+'\');return false;">非活性化</a>';
     } else {
-      var inUse = isProjectInUse(p.id);
+      var why = projDeleteBlockReason(p);
       actions = '<a href="#" class="info-link" onclick="reactivateProj(\''+p.id+'\');return false;">重新启用</a>'+
-        (inUse
-          ? '<span style="font-size:14px;color:var(--muted);cursor:not-allowed;" title="还有案件在使用此项目，无法删除">🗑</span>'
-          : '<span style="font-size:14px;color:var(--slate);cursor:pointer;" onclick="deleteProj(\''+p.id+'\')" title="删除">🗑</span>');
+        (why
+          ? '<span style="font-size:12px;color:var(--muted);cursor:not-allowed;" title="'+why+'，无法删除">删除</span>'
+          : '<a href="#" class="info-link" style="color:#C1454A;" onclick="deleteProj(\''+p.id+'\');return false;">删除</a>');
     }
+  } else {
+    actions = '<span style="font-size:11px;color:var(--dim);">只读</span>';
   }
-  return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+p.name+'</span>'+
+  var native = currencyOf(p.origin);
+  var disp = p.origin==='KR' ? PROJ_DISPLAY_CCY_KR : PROJ_DISPLAY_CCY_IN;
+  var priceHtml = '<span style="font-size:13px;font-weight:700;">'+displayAmount(p.price, p.origin, disp)+'</span>'+
+    (disp!==native ? '<div style="font-size:10px;color:var(--muted);font-weight:400;">原价 '+formatCurrency(p.price, native)+'</div>' : '');
+  var nm = p.names ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;">'+(p.names.ko||'')+' · '+(p.names.id||'')+'</div>' : '';
+  return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+p.name+nm+'</span>'+
     '<span style="font-size:11px;color:var(--muted);width:90px;">'+(cat?cat.label:'—')+'</span>'+
-    '<span style="font-size:13px;font-weight:700;width:120px;text-align:right;">'+displayAmount(p.price, p.origin, p.origin==='KR'?PROJ_DISPLAY_CCY_KR:PROJ_DISPLAY_CCY_IN)+'</span>'+
-    '<span class="fa" style="gap:12px;">'+actions+'</span></div>';
+    '<span style="width:130px;text-align:right;">'+priceHtml+'</span>'+
+    '<span style="font-size:11px;color:var(--slate2);width:190px;text-align:right;">进行中案件 '+u.cases+' 个 · 持有中批次 '+u.batches+' 个</span>'+
+    '<span class="fa" style="gap:12px;width:150px;justify-content:flex-end;">'+actions+'</span></div>';
 }
 function deactivateProj(id){
   var p = projById(id); if(!p) return;
+  if(!confirm('非活性化"'+p.name+'"？之后案件的项目选择里不再出现；已选进案件的、客人已持有的批次照常。')) return;
   p.active = false;
   renderProjLibrary();
 }
@@ -6410,8 +6478,9 @@ function reactivateProj(id){
   renderProjLibrary();
 }
 function deleteProj(id){
-  if(isProjectInUse(id)) return;
-  if(!confirm('确认从项目库彻底删除这个项目？已结束案件里的历史记录不受影响。')) return;
+  var p0 = projById(id); if(!p0 || p0.active) return; /* 只有非活性化的才能删 */
+  var why = projDeleteBlockReason(p0); if(why){ alert('不能删除：'+why); return; }
+  if(!confirm('确认从项目库彻底删除"'+p0.name+'"？已结束案件里的历史记录和客人已持有的批次不受影响（快照）。')) return;
   PROJECT_LIBRARY = PROJECT_LIBRARY.filter(function(p){ return p.id!==id; });
   renderProjLibrary();
 }
@@ -6419,23 +6488,47 @@ function deleteProj(id){
 var PROJ_EDIT = null;
 function openProjNewModal(){
   var origin = DEMO_ROLE==='kr' ? 'KR' : 'IN';
-  PROJ_EDIT = {id:null, name:'', price:'', origin:origin, categoryId:(projLibCategories(origin)[0]||{}).id||''};
+  PROJ_EDIT = {id:null, name:'', names:{zh:'',ko:'',id:''}, price:'', origin:origin, categoryId:(projLibCategories(origin)[0]||{}).id||''};
   renderProjEditModal();
   document.getElementById('proj-edit-overlay').classList.add('open');
 }
 function openProjEditModal(id){
   var p = projById(id); if(!p) return;
-  PROJ_EDIT = Object.assign({}, p);
+  PROJ_EDIT = Object.assign({}, p); PROJ_EDIT.names = p.names ? Object.assign({}, p.names) : {zh:p.name, ko:'', id:''};
   renderProjEditModal();
   document.getElementById('proj-edit-overlay').classList.add('open');
 }
 function closeProjEditModal(){ document.getElementById('proj-edit-overlay').classList.remove('open'); PROJ_EDIT = null; }
+/* 项目名称（2026-10-02）：只填一种语言，其他语言（韩/印尼/中）用 AI 翻译，室长可以修改。原型用演示翻译（在原文后加语言标记），不是真实翻译 */
+var LANG_LABEL = {zh:'中文', ko:'한국어', id:'Bahasa Indonesia'};
+function demoTranslate(text, from, to){
+  if(!text) return '';
+  var base = text.replace(/（한국어）|（中文）| \(Indonesia\)$/g,'');
+  return to==='ko' ? base+'（한국어）' : (to==='id' ? base+' (Indonesia)' : '（中文）'+base);
+}
+function ensureProjNames(p){
+  p.names = p.names || {zh:p.name||'', ko:'', id:''};
+  return p.names;
+}
+function projAiFillNames(){
+  var p = PROJ_EDIT; if(!p) return;
+  var n = ensureProjNames(p);
+  var from = ['zh','ko','id'].filter(function(k){ return (n[k]||'').trim(); })[0];
+  if(!from){ alert('请至少填一种语言的名称'); return; }
+  ['zh','ko','id'].forEach(function(k){ if(!(n[k]||'').trim()) n[k] = demoTranslate(n[from].trim(), from, k); });
+  renderProjEditModal();
+}
+function setProjName(lang, v){ ensureProjNames(PROJ_EDIT)[lang] = v; }
 function renderProjEditModal(){
   var p = PROJ_EDIT; if(!p) return;
   document.getElementById('proj-edit-title').textContent = (p.id ? '编辑项目' : '新增项目') + (p.origin==='KR' ? '（赴韩项目）' : '（本地项目）');
   var cats = projLibCategories(p.origin);
+  var n = ensureProjNames(p);
+  var inp = function(lang){ return '<div class="case-field-row"><span class="fk">'+LANG_LABEL[lang]+'</span><input type="text" value="'+(n[lang]||'').replace(/"/g,'&quot;')+'" oninput="setProjName(\''+lang+'\',this.value)" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'; };
   document.getElementById('proj-edit-body').innerHTML =
-    '<div class="case-field-row"><span class="fk">项目名称</span><input id="proj-edit-name" type="text" value="'+(p.name||'').replace(/"/g,'&quot;')+'" oninput="PROJ_EDIT.name=this.value" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">项目名称 <span style="color:#C1454A;">*</span> <span style="font-weight:400;color:var(--muted);">只填一种语言，其他语言用 AI 翻译，可手动修改</span></div>'+
+    inp('zh')+inp('ko')+inp('id')+
+    '<div style="margin:6px 0 10px;"><button class="btn-ghost" style="font-size:11px;" onclick="projAiFillNames()">AI 翻译补全（演示）</button></div>'+
     '<div class="case-field-row"><span class="fk">价格（'+currencyOf(p.origin)+' 原价）</span><input id="proj-edit-price" type="number" value="'+(p.price===''?'':p.price)+'" oninput="PROJ_EDIT.price=this.value" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'+
     '<div class="case-field-row"><span class="fk">分类</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="PROJ_EDIT.categoryId=this.value">'+
       cats.map(function(c){ return '<option value="'+c.id+'"'+(p.categoryId===c.id?' selected':'')+'>'+c.label+'</option>'; }).join('')+
@@ -6447,7 +6540,8 @@ function saveProj(){
   var p = PROJ_EDIT; if(!p) return;
   var price = Number(p.price);
   var missing = [];
-  if(!p.name || !p.name.trim()) missing.push('项目名称');
+  var nm0 = ensureProjNames(p);
+  if(!['zh','ko','id'].some(function(k){ return (nm0[k]||'').trim(); })) missing.push('项目名称');
   if(!p.price || isNaN(price) || price<0) missing.push('价格');
   if(!p.categoryId) missing.push('分类');
   if(missing.length){
@@ -6455,7 +6549,9 @@ function saveProj(){
     renderProjEditModal();
     return;
   }
-  p.name = p.name.trim();
+  var fromLang = ['zh','ko','id'].filter(function(k){ return (p.names[k]||'').trim(); })[0];
+  ['zh','ko','id'].forEach(function(k){ if(!(p.names[k]||'').trim()) p.names[k] = demoTranslate(p.names[fromLang].trim(), fromLang, k); }); /* 没填的语言保存时自动翻译补全 */
+  p.name = p.names.zh.trim(); /* 列表和案件里显示中文名；案件里存的是快照 */
   p.price = Math.round(price);
   p.errorMsg = '';
   if(p.id){
