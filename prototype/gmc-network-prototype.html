@@ -704,7 +704,7 @@ input,textarea,select{font-family:inherit;}
 <!-- ============ VIDEO CONSULT ============ -->
 <section class="page" id="video-consult" style="display:none;">
   <div class="vc-top">
-    <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:#9AA6B2;">← 返回</a><span style="width:1px;height:14px;background:#2A3344;"></span><span style="font-size:14px;font-weight:700;">视频沟通 · Siti Rahayu</span></div>
+    <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:#9AA6B2;">← 返回</a><span style="width:1px;height:14px;background:#2A3344;"></span><span style="font-size:14px;font-weight:700;">视频沟通 · Siti Rahayu</span><span style="font-size:11px;color:#9AA6B2;border:1px solid #2A3344;border-radius:10px;padding:2px 8px;">院长可加入</span></div>
     <div style="display:flex;align-items:center;gap:12px;">
       <span id="rec-label" style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;color:#E05A50;"><span id="rec-dot" style="width:8px;height:8px;border-radius:50%;background:#E05A50;"></span>录制中</span>
       <span style="font-size:12px;color:#9AA6B2;">00:14:32</span>
@@ -2837,13 +2837,13 @@ function logLine(e){
 }
 function nowFullDt(){ return '2026-09-18 ' + nowTime(); }
 /* 对话工具栏"发起视频"参与人popup（2026-09-29 新增，IN-VIDE-01 入口①）：
-   候选人固定为该案件的院长+印尼室长+韩国室长（对话房成员），默认全选，可取消勾选 */
+   候选人固定为印尼室长+韩国室长（院长不在呼叫名单里，可自愿加入，2026-10-02），默认全选，可取消勾选 */
 var CHAT_VIDEO_PARTICIPANT_CASE_ID = null;
 var CHAT_VIDEO_PARTICIPANTS_SELECTED = [];
 function openChatVideoParticipantModal(caseId){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
   CHAT_VIDEO_PARTICIPANT_CASE_ID = caseId;
-  var candidates = [c.director, 'Dewi（印尼室长）', c.krCoordinator];
+  var candidates = IN_COORDINATORS.map(function(n){ return n+'（印尼室长）'; }).concat([c.krCoordinator]); /* 2026-10-02：参与人只有IN/KR室长；院长不在呼叫名单里，但可以自愿加入 */
   CHAT_VIDEO_PARTICIPANTS_SELECTED = candidates.slice();
   renderChatVideoParticipantList(candidates);
   document.getElementById('chat-video-participant-overlay').classList.add('open');
@@ -2879,8 +2879,8 @@ function buildCaseLog(c){
 var KR_COORDINATORS = ['이서연', '박준혁'];
 /* 室长商谈（2026-10-01）：入口①案件对话房里发起（工具栏🧑‍⚕️）；入口②报告卡片[邀请室长商谈]快捷入口——点击后进入案件对话房再选室长发起视频（同一个功能） */
 function consultTalkShortcut(){
+  /* 2026-10-02：报告卡［邀请室长商谈］→ 直接打开视频画面（不经过对话房），只能选上传报告的KR室长 */
   var c = getCurrentCase(); if(!c) return;
-  openCaseRoom(c.id);
   openInviteKrModal();
 }
 function openInviteKrModal(){
@@ -6403,8 +6403,9 @@ function renderChatCaseChip(){
   el.innerHTML = '<span style="font-size:11px;">📎</span><span style="font-size:11px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>'+demo;
 }
 function postCaseRoomFile(caseId, actorName, actorColor, actorInit, label){
-  var roomId = getCaseRoomId(caseId);
-  if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = [];
+  var cc = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
+  if(!cc || !caseRoomEligible(cc)) return; /* 不符合建房条件（或已结案）的案件没有房间可推送 */
+  var roomId = ensureCaseRoom(cc); /* 通话结束：AI文本+录像进附件，同时给房间推送一条消息（房间没建就按规则建） */
   CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:actorName, color:actorColor, init:actorInit, orig:'已生成文件：'+label, time:nowTime()});
   if(CURRENT_ROOM===roomId) renderFloatMessages();
 }
