@@ -1104,9 +1104,6 @@ input,textarea,select{font-family:inherit;}
       <div id="reschedule-cal-grid" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-top:6px;"></div>
     </div>
     <div style="width:340px;padding:26px;">
-      <div style="margin-bottom:16px;"><label style="display:block;font-size:12px;color:var(--slate);margin-bottom:6px;">确认院长</label>
-        <select id="reschedule-director" onchange="setRescheduleDirector(this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></select>
-      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
         <span style="cursor:pointer;color:var(--slate);font-size:13px;" onclick="rescheduleDayShift(-1)">‹</span>
         <span id="reschedule-day-label" style="font-size:14px;font-weight:700;"></span>
@@ -1458,14 +1455,17 @@ function calNext(){ if(CAL_MODE==='week') WEEK_OFFSET++; else if(CAL_MODE==='day
 function calToday(){ WEEK_OFFSET=0; DAY_OFFSET=0; renderCalendar(); }
 
 /* ================= dashboard: 预约来访 + 预约占位（2026-09-29 新增，IN-DASH-01） ================= */
-var DIRECTOR_LIST = ['김민석 원장', '이수진 원장'];
+/* KR 院长名单（演示数据，以后由韩国端维护）：active=false 为停用，停用的不显示在选项里（2026-10-02） */
+var DIRECTOR_INFO = [{name:'김민석 원장', active:true}, {name:'이수진 원장', active:true}, {name:'박지훈 원장', active:false}];
+var DIRECTOR_LIST = DIRECTOR_INFO.filter(function(d){ return d.active; }).map(function(d){ return d.name; }); /* 只含启用的院长（案例库院长节点、选项都读这个） */
+function isDirectorActive(name){ return DIRECTOR_LIST.indexOf(name)>-1; }
 /* 老客人（下拉选客人+选院长）或"模拟客户填写完成"占位转正式：生成 Case ID（2026-10-01：取消 Reservation ID，预约时直接生成）、开新案件（状态"待访问"），
    不经过占位；这里只做"开新案件"的预约来访——术后到店/使用持有项目也一律走这条开新案件（第十轮已确认） */
 function createReservationCase(name, director, dow, time, phone){
   var dayIndex = DOW_CN.indexOf(dow);
   var caseNo = generateCaseNo();
   var id = 'r'+Date.now();
-  var c = makeCase({id:id, name:name, director:director||DIRECTOR_LIST[0], updated:'刚刚',
+  var c = makeCase({id:id, name:name, director:null, updated:'刚刚', /* 2026-10-02：预约不选院长，面诊案件在基础资料里选 */
     basic:{gender:'—', dob:'—', contact:phone||'—', history:'无'},
     logEntries:[{stage:'预约到店', actor:phone?'客人':'Dewi', action:(phone?'官网/短信链接自助预约成功':'室长代替预约')+'，生成 Case ID '+caseNo, dt:nowFullDt()}]});
   c.caseNo = caseNo;
@@ -1495,9 +1495,7 @@ function renderAddSlotBody(){
   var body;
   if(ADD_SLOT_MODE==='existing'){
     var clientOptions = CLIENTS.map(function(c){ return '<option>'+c[0]+'</option>'; }).join('');
-    var directorOptions = DIRECTOR_LIST.map(function(d){ return '<option>'+d+'</option>'; }).join('');
     body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client">'+clientOptions+'</select></div>'+
-      '<div class="field" style="margin-bottom:16px;"><label>确认院长</label><select id="add-slot-director">'+directorOptions+'</select></div>'+
       '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
@@ -1513,11 +1511,10 @@ function renderAddSlotBody(){
 }
 function confirmAddSlotExisting(){
   var name = document.getElementById('add-slot-client').value;
-  var director = document.getElementById('add-slot-director').value;
   closeAddSlotModal();
-  createReservationCase(name, director, ADD_SLOT_CONTEXT.dow, ADD_SLOT_CONTEXT.time, null);
+  createReservationCase(name, null, ADD_SLOT_CONTEXT.dow, ADD_SLOT_CONTEXT.time, null);
   renderCalendar();
-  showToast('预约已生成', name+' · '+director+' · 周'+ADD_SLOT_CONTEXT.dow+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
+  showToast('预约已生成', name+' · 周'+ADD_SLOT_CONTEXT.dow+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
 }
 var PLACEHOLDER_SEQ = 1;
 var RESERVATION_PLACEHOLDERS = [];
@@ -2018,7 +2015,7 @@ function makeCase(o){
   return {
     id:o.id, name:o.name, subState:o.subState||'waiting',
     reportEta:o.reportEta||null, reportOverdue:!!o.reportOverdue, /* 2026-10-02：KR确认的预计出报告时间 / 已超时提醒 */
-    director:o.director||'김민석 원장', krCoordinator:o.krCoordinator||'이서연 실장', updated:o.updated||'刚刚', caseNo:o.caseNo||null,
+    director:(o.director!==undefined ? o.director : ((o.consultRequested || o.needsConsult===true) ? '김민석 원장' : null)), /* 2026-10-02：本地案件没有院长 */ krCoordinator:o.krCoordinator||'이서연 실장', updated:o.updated||'刚刚', caseNo:o.caseNo||null,
     basic:o.basic||{gender:'女', dob:'1990-01-01', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
     materialsConfirmed:!!o.materialsConfirmed, photoUploaded:!!o.materialsConfirmed, videoUploaded:!!o.materialsConfirmed,
     concern:o.concern||'', expectation:o.expectation||'', metaviewStatus:o.materialsConfirmed?'ready':'idle',
@@ -2063,16 +2060,16 @@ function makeCase(o){
 var CASE_ITEMS = [
   makeCase({id:'siti', name:'Siti Rahayu', caseNo:'A000017', updated:'刚刚',
     basic:{gender:'女', dob:'1992-03-08', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
-    logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-18 09:05'}]}),
+    logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-18 09:05'}]}),
 
   /* 演示（到访接续）：Ayu Lestari 已有进行中案件 ayu（项目确认中），这条是她新的预约来访（待访问） */
   makeCase({id:'ayu2', name:'Ayu Lestari', caseNo:'A000021', updated:'刚刚',
-    logEntries:[{stage:'预约到店', actor:'Dewi', action:'老客人预约来访，选定院长 김민석 원장', dt:'2026-09-18 09:10'}]}),
+    logEntries:[{stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:'2026-09-18 09:10'}]}),
 
   /* 接待中：客人已到店，메타뷰/照片/视频/苦恼/希望预期还没确认完，所以还没生成 Case ID */
   makeCase({id:'andi', name:'Andi Wijaya', subState:'arrived', caseNo:'A000018', updated:'昨天',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-17 10:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-17 10:00'},
       {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:'2026-09-17 10:30'}
     ]}),
 
@@ -2081,7 +2078,7 @@ var CASE_ITEMS = [
     concern:'皮肤暗沉、毛孔粗大', expectation:'希望肤色均匀、毛孔细致', needsConsult:false, activeCaseTab:'localmgmt', projectsEnabled:true, projectOriginFilter:'IN',
     entryChoicePending:true, projectEntryMode:'new', /* 2026-09-29 第十轮：不面诊后先经过入口选择，这里演示已经点了"新增项目" */
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-16 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-16 09:00'},
       {stage:'预约到店', actor:'Dewi', action:'标记客人已到店', dt:'2026-09-16 09:20'},
       {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:'2026-09-16 09:35'}
     ]}),
@@ -2090,7 +2087,7 @@ var CASE_ITEMS = [
   makeCase({id:'maya', name:'Maya Putri', subState:'arrived', materialsConfirmed:true, caseNo:'A000002', updated:'昨天',
     concern:'轮廓线条不明显', expectation:'想要更立体的轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'paid_waiting_kr',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-16 14:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-16 14:00'},
       {stage:'预约到店', actor:'Dewi', action:'标记客人已到店', dt:'2026-09-16 14:20'},
       {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：面诊', dt:'2026-09-16 14:35'},
       {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:'2026-09-16 14:40'}
@@ -2100,7 +2097,7 @@ var CASE_ITEMS = [
   makeCase({id:'putri', name:'Putri Wulandari', subState:'arrived', materialsConfirmed:true, caseNo:'A000003', updated:'3 天前',
     concern:'法令纹加深', expectation:'希望改善法令纹', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:'2026-09-20 14:00',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-14 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-14 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:'2026-09-14 10:00'},
       {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：2026-09-20 14:00', dt:'2026-09-14 16:00'}
     ]}),
@@ -2109,7 +2106,7 @@ var CASE_ITEMS = [
   makeCase({id:'dedi', name:'Dedi Prasetyo', subState:'arrived', materialsConfirmed:true, caseNo:'A000004', updated:'刚刚',
     concern:'苹果肌塌陷', expectation:'希望恢复饱满', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:'2026-09-18 08:00', reportOverdue:true,
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-13 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-13 09:00'},
       {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：2026-09-18 08:00', dt:'2026-09-13 11:00'},
       {stage:'面诊安排', actor:'系统', action:'已超过预计出报告时间，报告还没提交（仅提醒，状态不变）', dt:'2026-09-18 08:05'}
     ]}),
@@ -2119,7 +2116,7 @@ var CASE_ITEMS = [
     concern:'轮廓松弛', expectation:'希望紧致轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:'2026-09-20 11:00',
     consultMethod:'video', writtenAdvice:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。', videoSummary:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-12 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-12 09:00'},
       {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：2026-09-20 11:00', dt:'2026-09-18 09:30'}
     ]}),
 
@@ -2130,7 +2127,7 @@ var CASE_ITEMS = [
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, krScope:{items:[{name:'自体脂肪移植（全脸）', price:4500000, note:''},{name:'面部拉皮', price:12000000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:'2026-09-19 11:20'},
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-11 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-11 09:00'},
       {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:'2026-09-19 11:20'}
     ]}),
 
@@ -2148,7 +2145,7 @@ var CASE_ITEMS = [
     settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-21 10:00', status:'unpaid',
       krTotal:4000000, krDeposit:1200000, krBalance:2800000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-10 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-10 09:00'},
       {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:'2026-09-20 14:20'},
       {stage:'面诊安排', actor:'Dewi', action:'确认所选管理项目：假体隆鼻、鼻翼缩小', dt:'2026-09-21 10:00'}
     ]}),
@@ -2167,7 +2164,7 @@ var CASE_ITEMS = [
     settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-20 11:00', status:'active',
       krTotal:12000000, krDeposit:3600000, krBalance:8400000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-05 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-05 09:00'},
       {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:'2026-09-19 10:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩3,600,000），项目清单已锁定', dt:'2026-09-20 11:00'},
       {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"下巴假体 / 颏成形"施术，"颧骨缩小"待安排', dt:'2026-09-22 16:00'}
@@ -2187,7 +2184,7 @@ var CASE_ITEMS = [
     settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-23 10:00', status:'active',
       krTotal:16500000, krDeposit:4950000, krBalance:11550000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-08 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-08 09:00'},
       {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:'2026-09-21 10:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩4,950,000），项目清单已锁定', dt:'2026-09-23 10:00'}
     ]}),
@@ -2201,7 +2198,7 @@ var CASE_ITEMS = [
     settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-15 09:00', status:'active',
       krTotal:0, krDeposit:0, krBalance:0, inTotal:860000}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-01 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-01 09:00'},
       {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:'2026-09-15 08:50'},
       {stage:'面诊安排', actor:'Dewi', action:'选择"新增项目"', dt:'2026-09-15 08:55'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：本地全款 Rp 860.000），项目清单已锁定', dt:'2026-09-15 09:00'},
@@ -2210,7 +2207,7 @@ var CASE_ITEMS = [
     ]}),
 
   /* 已结案：赴韩行程施术完成即结案（2026-09-29 第十轮：本地项目已转客户持有，不再算在这个案件的完成条件里） */
-  makeCase({id:'rina', reportDate:'2026-08-12', name:'Rina Marlina', subState:'arrived', materialsConfirmed:true, caseNo:'A000010', updated:'1 周前',
+  makeCase({id:'rina', director:'박지훈 원장', reportDate:'2026-08-12', name:'Rina Marlina', subState:'arrived', materialsConfirmed:true, caseNo:'A000010', updated:'1 周前',
     concern:'整体抗老', expectation:'希望延缓衰老迹象', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     consultMethod:'video', videoSummary:'建议自体脂肪移植打底，配合本地焕肤护理维持效果。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
@@ -2222,7 +2219,7 @@ var CASE_ITEMS = [
     settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-08-20 09:00', status:'active',
       krTotal:4500000, krDeposit:1350000, krBalance:3150000, inTotal:540000}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-08-10 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-08-10 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩1,350,000、本地全款 Rp 540.000），项目清单已锁定', dt:'2026-08-20 09:00'},
       {stage:'面诊安排', actor:'Dewi', action:'本地项目已转入客户持有：Genesis焕肤（Clarity II）1次 x1', dt:'2026-08-20 09:00'},
       {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"自体脂肪移植（全脸）"施术', dt:'2026-08-25 10:00'},
@@ -2232,7 +2229,7 @@ var CASE_ITEMS = [
   /* 接待中（演示"关联之前案件"）：Rina 之前有已结案的赴韩案件 A000010，这次再来，基础资料里可关联并看到"可能与 A000010 相关" */
   makeCase({id:'rina2', name:'Rina Marlina', subState:'arrived', caseNo:'A000019', updated:'刚刚',
     logEntries:[
-      {stage:'预约到店', actor:'Dewi', action:'老客人预约来访，选定院长 김민석 원장', dt:'2026-09-18 09:00'},
+      {stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:'2026-09-18 09:00'},
       {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:'2026-09-18 09:30'}
     ]}),
 
@@ -2251,7 +2248,7 @@ var CASE_ITEMS = [
     settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-08 09:00', status:'active',
       krTotal:17000000, krDeposit:5100000, krBalance:11900000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-01 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-01 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩5,100,000），项目清单已锁定', dt:'2026-09-08 09:00'},
       {stage:'赴韩施术', actor:'Dewi', action:'取消项目"颧骨缩小"，退款 ₩2,400,000，退款原因：客人检查后决定不做颧骨缩小', dt:'2026-09-11 09:00'},
       {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"下颌角整形"施术', dt:'2026-09-13 11:00'},
@@ -2261,7 +2258,7 @@ var CASE_ITEMS = [
   /* 已取消预约：分支1——待访问阶段直接终止，资料保留，没有走到基础资料确认，所以没有 Case ID */
   makeCase({id:'agus', name:'Agus Salim', subState:'cancelled', caseNo:'A000020', cancelReason:'预约取消', updated:'4 天前',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-19 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-19 09:00'},
       {stage:'预约到店', actor:'Dewi', action:'取消预约，原因：联系不上客人', dt:'2026-09-19 18:00'}
     ]}),
 
@@ -2276,7 +2273,7 @@ var CASE_ITEMS = [
     settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-10 09:00', status:'active',
       krTotal:1000000, krDeposit:300000, krBalance:700000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-04 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-04 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩300,000），项目清单已锁定', dt:'2026-09-10 09:00'},
       {stage:'赴韩施术', actor:'Dewi', action:'取消项目"提眉手术"，退款 ₩300,000，退款原因：客人因个人原因取消赴韩行程', dt:'2026-09-12 09:00'},
       {stage:'赴韩施术', actor:'Dewi', action:'全部赴韩项目均已取消退款，案件结束：仅出报告', dt:'2026-09-12 09:05'}
@@ -2286,7 +2283,7 @@ var CASE_ITEMS = [
   makeCase({id:'hana', name:'Hana Permana', subState:'arrived', materialsConfirmed:true, caseNo:'A000015', updated:'3 天前',
     concern:'术后恢复', expectation:'希望恢复期舒适', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'管理取消', mgmtStatus:'cancelled_all',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-20 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-20 09:00'},
       {stage:'面诊安排', actor:'Dewi', action:'使用了术后消肿护理 1次 1次，剩余1次', dt:'2026-09-20 10:00'},
       {stage:'本地管理', actor:'Dewi', action:'管理取消（全部）：1次已归还持有项目（不是退款）；本次无购买，案件已取消（管理取消）', dt:'2026-09-20 10:30'}
     ]}),
@@ -2295,7 +2292,7 @@ var CASE_ITEMS = [
   makeCase({id:'tari', name:'Tari Wibowo', subState:'arrived', materialsConfirmed:true, caseNo:'A000016', updated:'2 天前',
     concern:'皮肤暗沉', expectation:'了解项目', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'未购买未使用',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功，选定院长 김민석 원장', dt:'2026-09-21 09:00'},
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-21 09:00'},
       {stage:'面诊安排', actor:'Dewi', action:'本次不购买项目，案件已取消（未购买未使用）', dt:'2026-09-21 10:00'}
     ]})
 ];
@@ -2642,7 +2639,7 @@ function renderCaseRows(){
       '<span style="font-size:12px;color:var(--slate2);">'+c.caseNo+'</span>'+
       '<span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+lmTag+(c.stage==='cancelled' ? '<div style="font-size:11px;color:var(--muted);margin-top:3px;">'+endReasonText(c)+'</div>' : '')+rowBtns+'</span>'+
       '<span>'+abnormal+'</span><span>'+financeCellHtml(c)+'</span>'+
-      '<span style="font-size:12px;">'+c.director+'</span><span style="font-size:12px;">'+(c.krCoordinator||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
+      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(c.krCoordinator||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
       '<a href="#" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
   }).join('');
 }
@@ -2737,20 +2734,15 @@ var RESCHED_CASE_ID = null;
 var RESCHED_VIEW_MONTH = null; /* Date, first of the shown month */
 var RESCHED_SELECTED_DATE = null; /* Date */
 var RESCHED_SELECTED_TIME = null;
-var RESCHED_DIRECTOR = null;
 var RESCHED_UNAVAILABLE = ['10:00','12:00','18:00','19:30','20:00'];
 var RESCHED_AM = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30'];
 var RESCHED_PM = ['15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00','20:30','21:00','21:30'];
 function openRescheduleModal(){
   var c = getCurrentCase(); if(!c) return;
   RESCHED_CASE_ID = c.id;
-  RESCHED_DIRECTOR = c.director;
   RESCHED_SELECTED_DATE = c.visitDate ? new Date(c.visitDate) : new Date(2026,6,4);
   RESCHED_SELECTED_TIME = c.visitTime || '15:00';
   RESCHED_VIEW_MONTH = new Date(RESCHED_SELECTED_DATE.getFullYear(), RESCHED_SELECTED_DATE.getMonth(), 1);
-  document.getElementById('reschedule-director').innerHTML = DIRECTOR_LIST.map(function(d){
-    return '<option'+(d===RESCHED_DIRECTOR?' selected':'')+'>'+d+'</option>';
-  }).join('');
   renderRescheduleCalendar();
   renderRescheduleTimePanel();
   document.getElementById('reschedule-overlay').classList.add('open');
@@ -2771,7 +2763,6 @@ function pickRescheduleDate(y,m,d){
   renderRescheduleCalendar();
   renderRescheduleTimePanel();
 }
-function setRescheduleDirector(v){ RESCHED_DIRECTOR = v; }
 function isRescheduleDateDisabled(d){
   return d.getDay()===4; /* 每周星期四休诊 */
 }
@@ -2824,15 +2815,14 @@ function confirmReschedule(){
   var y = RESCHED_SELECTED_DATE.getFullYear(), m = RESCHED_SELECTED_DATE.getMonth()+1, d = RESCHED_SELECTED_DATE.getDate();
   c.visitDate = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
   c.visitTime = RESCHED_SELECTED_TIME;
-  c.director = RESCHED_DIRECTOR;
   closeRescheduleModal();
-  logCaseEvent(c, 'Dewi', '修改预约为 '+c.visitDate+' '+c.visitTime+'，院长：'+c.director);
+  logCaseEvent(c, 'Dewi', '修改预约为 '+c.visitDate+' '+c.visitTime+'');
   buildCaseLog(c);
   if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id){
     renderCaseSubtitle(c);
   }
   if(CURRENT_PAGE_ID==='in-cases') renderCaseRows();
-  showToast('预约已修改', c.name+' · '+c.visitDate+' '+c.visitTime+' · '+c.director, null);
+  showToast('预约已修改', c.name+' · '+c.visitDate+' '+c.visitTime, null);
 }
 
 /* ---- Timeline format: 进程名/具体做了什么/谁/00-00-00 00:00 ---- */
@@ -3023,7 +3013,7 @@ function reportModalContent(c){
   return '<div style="font-size:11px;color:var(--muted);margin-bottom:22px;">2026-09-18</div>'+
     '<div style="font-size:13px;line-height:1.9;color:var(--navy);margin-bottom:32px;">尊敬的 '+c.name+'：<br><br>'+body+'<br><br>如有任何疑问，欢迎随时联系。</div>'+
     '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:6px;">'+
-    '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+c.director+'</span>'+
+    '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+(c.director||'')+'</span>'+
     '<span style="font-size:11px;color:var(--muted);">主诊院长</span></div>'+
     '<button class="btn-primary" style="width:100%;margin-top:22px;" onclick="closeReportModal();switchCaseTab(\'projects\')">查看方案 →</button>';
 }
@@ -3039,7 +3029,7 @@ function openCaseInfoDrawer(){
   var c = getCurrentCase(); if(!c) return;
   document.getElementById('peek-name').textContent = '姓名：'+c.name;
   document.getElementById('peek-contact').textContent = '联系方式：'+c.basic.contact;
-  document.getElementById('peek-director').textContent = '对接院长：'+c.director;
+  document.getElementById('peek-director').textContent = '对接院长：'+(c.director||'—');
   document.getElementById('peek-viewall').onclick = function(){ closeCaseInfoDrawer(); openClientDetail(c.name, 'in-cases'); return false; };
   document.getElementById('peek-overlay').classList.add('open');
   document.getElementById('case-info-drawer').classList.add('open');
@@ -3150,10 +3140,10 @@ function confirmCancelIntake(){
 var LINK_REASONS = ['复诊','术后管理','延续既往面诊'];
 function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;
-  var html = '对接院长：'+c.director;
+  var html = c.director ? '对接院长：'+c.director : '';
   if(c.linkedCase && c.linkedCase.caseId){
     var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
-    html += ' · 关联：<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
+    html += (html ? ' · ' : '')+'关联：<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
   }
   el.innerHTML = html;
 }
@@ -3281,6 +3271,7 @@ function relatedTabHtml(c){
     '<div style="font-size:11px;color:var(--muted);margin-top:12px;">只读：不改变被关联案件的状态、财务、结局，也不会在它的 Timeline 里新增记录。</div></div>';
 }
 function materialsCardHtml(c){
+  syncDirectorChoice(c);
   var metaviewText = c.metaviewStatus==='ready'
     ? '<span style="font-weight:700;color:var(--sage);">已检测到</span> <a href="#" class="info-link">查看报告 ↗</a>'
     : c.metaviewStatus==='checking'
@@ -3321,6 +3312,7 @@ function materialsCardHtml(c){
     '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return f.label; }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>'+
     (ci0 ? '<div class="case-field-row"><span class="fk">新增医美史（选填）</span><input type="text" id="cf-new-history" placeholder="本次新增的医美史（例如：2个月前做了XX）" value="'+(c.newBeautyHistory||'').replace(/"/g,'&quot;')+'" oninput="saveMaterialsDraft(\'newBeautyHistory\',this.value)" onchange="onNewHistoryChanged()"></div>' : '')+
     '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
+    directorRowHtml(c)+
     '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div>'+
     '</div>';
 }
@@ -3411,6 +3403,31 @@ function onNewHistoryChanged(){
   c.feeDraft = null;
   renderCaseBody(c);
 }
+/* 院长（2026-10-02）：选"面诊"才出现，必选；选项只含启用的院长；复诊/延续既往面诊 → 默认带出原案件院长并锁定，原院长停用时才解锁可改选；
+   确认后写入案件的对接院长，选定后不能更换（没有更换院长按钮）；不面诊的本地案件没有院长 */
+function directorLockInfo(c){
+  var l = c.linkedCase; if(!l || !l.caseId || (l.reason!=='复诊' && l.reason!=='延续既往面诊')) return null;
+  var src = CASE_ITEMS.filter(function(x){ return x.id===l.caseId; })[0];
+  if(!src || !src.director || !isDirectorActive(src.director)) return null;
+  return {name:src.director, caseNo:src.caseNo, reason:l.reason};
+}
+function syncDirectorChoice(c){
+  if(c.materialsConfirmed) return;
+  var lk = directorLockInfo(c);
+  if(c.needsConsult===true && lk) c.director = lk.name;
+  else if(c.needsConsult!==true) c.director = null;
+  else if(c.director && !isDirectorActive(c.director)) c.director = null;
+}
+function setCaseDirector(v){ var c = getCurrentCase(); if(!c) return; c.director = v || null; renderCaseBody(c); }
+function directorRowHtml(c){
+  if(c.needsConsult!==true) return '';
+  var lk = directorLockInfo(c);
+  var sel = '<select '+(lk?'disabled ':'')+'onchange="setCaseDirector(this.value)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;'+(lk?'background:var(--sand);color:var(--muted);':'')+'"><option value="">请选择院长</option>'+
+    DIRECTOR_LIST.map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+'</select>';
+  var hint = lk ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">🔒 关联"'+lk.reason+'"（'+lk.caseNo+'）：已锁定原院长；原院长停用时才可改选</div>'
+    : ((c.linkedCase && c.linkedCase.caseId && (c.linkedCase.reason==='复诊'||c.linkedCase.reason==='延续既往面诊')) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">原案件的院长已停用，请重新选择院长</div>' : '<div style="font-size:11px;color:var(--muted);margin-top:6px;">确认后不能更换</div>');
+  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+sel+hint+'</div></div>';
+}
 function setNeedsConsult(val){
   var c=getCurrentCase(); if(!c) return;
   var ci = continuationInfo(c);
@@ -3446,6 +3463,7 @@ function applyReuseReport(c){
   var src = reportSrcOf(c); if(!src) return;
   c.needsConsult = true;
   c.consultRequested = true;
+  c.director = src.director || c.director; /* 沿用原报告：院长沿用原案件的 */
   c.reportReady = true;
   c.consultStatus = 'report_ready';
   c.consultMethod = src.consultMethod || 'video';
@@ -3481,6 +3499,8 @@ function confirmMaterials(){
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
   if(c.needsConsult!==true && c.needsConsult!==false && !(c.needsConsult==='reuse' && reusableReportSrc(c))) missing.push('面诊需求');
   if(c.linkedCase && c.linkedCase.caseId && !c.linkedCase.reason) missing.push('关联原因');
+  syncDirectorChoice(c);
+  if(c.needsConsult===true && !c.director) missing.push('院长');
   if(missing.length){
     c.materialsError = '';
     document.getElementById('materials-missing-list').innerHTML = missing.map(function(x){ return '· '+x; }).join('<br>');
@@ -5256,7 +5276,7 @@ function krConfirmReportEta(eta, c){
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
-  notifyConsultUpdate(c, 'Kr室长已确认预计出报告时间', c.name+' · '+c.director+' · '+eta);
+  notifyConsultUpdate(c, 'Kr室长已确认预计出报告时间', c.name+(c.director ? ' · '+c.director : '')+' · '+eta);
 }
 /* 演示：超过预计时间还没出报告——小状态变橘色"已超过预计时间"，只提醒，状态不变 */
 function simulateReportTimeout(){
@@ -6357,9 +6377,7 @@ function openRoomMembers(){
   if(roomId.indexOf('case-')===0){
     var c = CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0];
     if(c){
-      var dInfo = directorChangeInfo(c);
-      var dirSel = '<select '+(dInfo.ok?'':'disabled title="'+dInfo.why+'" ')+'onchange="changeRoomDirector(this.value)" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'+DIRECTOR_LIST.map(function(d){ return '<option'+(d===c.director?' selected':'')+'>'+d+'</option>'; }).join('')+'</select>';
-      html += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:0 0 4px;">院长（客人选择的院长，出报告之前可更换）</div><div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+c.director+'</span>'+dirSel+'</div>'+(dInfo.ok ? '' : '<div style="font-size:11px;color:var(--muted);margin:2px 0 6px;">'+dInfo.why+'</div>');
+      html += c.director ? '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:0 0 4px;">院长（选定后不能更换）</div><div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+c.director+'</span></div>' : '';
       html += group('印尼室长（全部）', IN_COORDINATORS.map(function(n){ return n+' · 印尼室长'; }));
       html += group('韩国室长（全部）', KR_COORDINATORS.map(function(n){ return n+' 실장 · 韩国室长'; }));
     }
@@ -6372,25 +6390,6 @@ function openRoomMembers(){
   document.getElementById('room-members-overlay').classList.add('open');
 }
 function closeRoomMembers(){ document.getElementById('room-members-overlay').classList.remove('open'); }
-/* 更换院长（2026-10-02 面诊改版）：只在出报告之前可换；关联原因是复诊/延续既往面诊时锁定原院长（原院长停用——不在院长名单里——时可改） */
-function directorChangeInfo(c){
-  if(c.reportReady || c.reuseReport) return {ok:false, why:'已出报告，不能再更换院长'};
-  var l = c.linkedCase;
-  if(l && l.caseId && (l.reason==='复诊' || l.reason==='延续既往面诊')){
-    var src = CASE_ITEMS.filter(function(x){ return x.id===l.caseId; })[0];
-    if(src && DIRECTOR_LIST.indexOf(src.director)>-1) return {ok:false, why:'关联"'+l.reason+'"：锁定原院长 '+src.director+'（原院长停用时可改）'};
-  }
-  return {ok:true, why:''};
-}
-function changeRoomDirector(name){
-  if(CURRENT_ROOM.indexOf('case-')!==0) return;
-  var c = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_ROOM.slice(5); })[0]; if(!c || c.director===name) return;
-  if(!directorChangeInfo(c).ok) return;
-  var old = c.director; c.director = name;
-  logCaseEvent(c, 'Dewi', '案件对话房更换院长：'+old+' → '+name);
-  if(CURRENT_CASE_ID===c.id){ renderCaseSubtitle(c); buildCaseLog(c); renderCaseBody(c); }
-  openRoomMembers();
-}
 function nowTime(){ var d = new Date(); return (d.getHours()<10?'0':'')+d.getHours()+':'+(d.getMinutes()<10?'0':'')+d.getMinutes(); }
 function sendFloatMsg(){
   var input = document.getElementById('float-input-box');
