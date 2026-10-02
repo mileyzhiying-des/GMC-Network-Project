@@ -778,25 +778,16 @@ input,textarea,select{font-family:inherit;}
         <div><div id="float-name" style="font-size:14px;font-weight:700;">이서연 · 韩国室长</div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 Siti Rahayu 的面诊安排</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
-        <span style="cursor:pointer;" onclick="toggleFloatSearch()">🔍</span>
-        <span style="cursor:pointer;" title="成员" onclick="openRoomMembers()">☰</span>
+        <span style="cursor:pointer;" title="对话中的文件" onclick="openRoomFiles()">📁</span>
+        <span style="cursor:pointer;" title="搜索" onclick="toggleFloatSearch()">🔍</span>
+        <span style="cursor:pointer;" title="成员" onclick="openRoomMembers()">👤</span>
         <span style="cursor:pointer;" onclick="closeFloat()">✕</span>
       </div>
     </div>
     <div class="float-search" id="float-search"><input type="text" id="float-search-input" placeholder="在对话中搜索…" oninput="renderFloatMessages()"></div>
     <div id="chat-case-chip" style="display:none;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--terracotta-bg);"></div>
     <div class="float-body" id="float-body"></div>
-    <div class="float-toolbar">
-      <span title="传文件" onclick="toolbarAction('file')">📎</span>
-      <span title="发起视频" onclick="toolbarAction('video')">🎥</span>
-      <span title="室长商谈（已出报告后，邀请上传报告的KR室长视频）" onclick="toolbarAction('talk')">🧑‍⚕️</span>
-      <span title="传图片" onclick="toolbarAction('image')">🖼️</span>
-      <span title="关联案件" onclick="toolbarAction('case')">🔗</span>
-      <span title="调取 timeline" onclick="toolbarAction('timeline')">📋</span>
-      <span title="文件库" onclick="toolbarAction('lib')">📁</span>
-      <span title="预约" onclick="toolbarAction('book')">📅</span>
-      <span title="原型演示：模拟Kr室长在此确认预计出报告时间" onclick="toolbarAction('krtime')">🕐</span>
-    </div>
+    <div class="float-toolbar" id="float-toolbar"></div>
     <div class="float-input">
       <input type="text" id="float-input-box" placeholder="输入消息…" onkeydown="if(event.key==='Enter')sendFloatMsg();">
       <button class="send-btn" onclick="sendFloatMsg()">➤</button>
@@ -1168,6 +1159,17 @@ input,textarea,select{font-family:inherit;}
       <span style="cursor:pointer;color:var(--slate);" onclick="closeProjEditModal()">✕</span>
     </div>
     <div id="proj-edit-body"></div>
+  </div>
+</div>
+
+<!-- ============ 对话中的文件 MODAL（2026-10-02，📁） ============ -->
+<div class="modal-overlay" id="room-files-overlay" style="z-index:70;" onclick="if(event.target===this) closeRoomFiles()">
+  <div class="modal-box" style="width:420px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span id="room-files-title" style="font-size:15px;font-weight:700;">对话中的文件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRoomFiles()">✕</span>
+    </div>
+    <div id="room-files-body"></div>
   </div>
 </div>
 
@@ -6283,7 +6285,59 @@ function ensureCaseRoom(c){
   }
   return roomId;
 }
-function renderFloatToolbar(){ /* 工具栏按房间类型动态生成（三） */ }
+/* 输入框工具栏（2026-10-02）：职员间对话（Main、1:1、自建群）= [＋][提及案件]；案件对话房 = [＋][🎥 视频通话][提及案件]；
+   删除：邀请室长视频、调取 timeline、预约、演示用时钟、原来单独的传文件/传图片（合并进［＋］）、文件库（改成标题栏 📁） */
+function roomVideoEnabled(c){ return !!c && caseHasKrSide(c) && !!c.krInRoom; }
+function renderFloatToolbar(){
+  var el = document.getElementById('float-toolbar'); if(!el) return;
+  var isCase = CURRENT_ROOM.indexOf('case-')===0;
+  var btn = function(label, fn, extra, title){ return '<button class="btn-outline" style="padding:5px 12px;font-size:12px;'+(extra||'')+'"'+(title?' title="'+title+'"':'')+' onclick="'+fn+'">'+label+'</button>'; };
+  var html = '<span style="position:relative;display:inline-block;">'+btn('＋','toggleAttachMenu()','','上传')+
+    '<div id="attach-menu" style="display:none;position:absolute;bottom:36px;left:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 18px rgba(27,38,53,.15);min-width:96px;z-index:5;overflow:hidden;">'+
+    ['文件','照片','视频'].map(function(t){ return '<div style="padding:9px 14px;font-size:13px;cursor:pointer;" onclick="sendRoomFile(\''+t+'\')">'+t+'</div>'; }).join('')+'</div></span>';
+  if(isCase){
+    var c = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_ROOM.slice(5); })[0];
+    var en = roomVideoEnabled(c);
+    html += btn('🎥 视频通话', en ? 'toolbarVideo()' : 'toolbarVideoBlocked()', en ? '' : 'opacity:.4;cursor:not-allowed;',
+      en ? '发起视频通话' : (c && caseHasKrSide(c) ? 'KR室长进入房间后才可用' : '这个案件没有KR室长（不面诊），视频通话不可用'));
+  }
+  html += btn('提及案件', 'openMentionCase()');
+  el.innerHTML = html;
+}
+function openMentionCase(){ /* 提及案件（五） */ }
+function toggleAttachMenu(){
+  var m = document.getElementById('attach-menu'); if(!m) return;
+  m.style.display = m.style.display==='block' ? 'none' : 'block';
+}
+function toolbarVideo(){
+  if(!ATTACHED_CASE_ID){ alert('这个对话没有关联案件'); return; }
+  openChatVideoParticipantModal(ATTACHED_CASE_ID);
+}
+function toolbarVideoBlocked(){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0];
+  alert(c && caseHasKrSide(c) ? 'KR室长进入房间后，视频通话才可用' : '这个案件没有面诊，房间里没有KR室长，视频通话不可用');
+}
+var ROOM_FILE_SEQ = 1;
+function sendRoomFile(type){
+  var m = document.getElementById('attach-menu'); if(m) m.style.display = 'none';
+  var ext = {'文件':'pdf', '照片':'jpg', '视频':'mp4'}[type];
+  var fname = {'文件':'document', '照片':'photo', '视频':'video'}[type]+'-'+(ROOM_FILE_SEQ++)+'.'+ext; /* 三个都是上传；视频 = 上传视频文件 */
+  if(!CHAT_DATA[CURRENT_ROOM]) CHAT_DATA[CURRENT_ROOM] = [];
+  CHAT_DATA[CURRENT_ROOM].push({day:'2026년 9월 18일', from:'me', kind:'file', fileType:type, fname:fname, orig:'['+type+'] '+fname, time:nowTime()});
+  renderFloatMessages();
+}
+function openRoomFiles(){
+  var msgs = (CHAT_DATA[CURRENT_ROOM]||[]).filter(function(m){ return m.kind==='file'; });
+  var r = roomById(CURRENT_ROOM) || {name:CURRENT_ROOM};
+  document.getElementById('room-files-title').textContent = '对话中的文件 · '+r.name;
+  document.getElementById('room-files-body').innerHTML = msgs.map(function(m){
+    var icon = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
+    return '<div class="case-field-row"><span style="font-size:18px;margin-right:8px;">'+icon+'</span><span style="flex-grow:1;font-size:13px;">'+m.fname+'<div style="font-size:11px;color:var(--muted);">'+(m.from==='me'?'Dewi':(m.name||''))+' · '+m.day+' '+m.time+'</div></span>'+
+      '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">预览</a><a href="#" class="info-link" onclick="return false;">下载</a></span></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 2px;">这个房间里还没有发过文件、照片、视频</div>';
+  document.getElementById('room-files-overlay').classList.add('open');
+}
+function closeRoomFiles(){ document.getElementById('room-files-overlay').classList.remove('open'); }
 function krEnterRoomName(c){ return (c.krCoordinator||KR_COORDINATORS[0]).split(' ')[0]; }
 /* 演示：KR室长进入/离开案件对话房（进入前 🎥 灰色不可用，进入后可用） */
 function simulateKrEnterRoom(){
@@ -6326,6 +6380,7 @@ function openFloatingChat(roomId, subtitleOverride, caseId){
   document.getElementById('float-sub').textContent = isCaseRoom ? '本案件专属对话（院长/室长/印尼室长）' : (subtitleOverride ? ('关于 '+subtitleOverride+' 的沟通') : (roomId==='main' ? '院长 · 韩国室长 · 印尼室长 全员群聊 · 支持 @提及' : '内部沟通'));
   ATTACHED_CASE_ID = caseId || (isCaseRoom ? roomId.slice(5) : null);
   renderChatCaseChip();
+  renderFloatToolbar();
   /* 2026-09-29：案件房只在真正发过消息之后才"存在"（出现在案件对话列表里），
      所以这里只是打开来看，不能顺手把 CHAT_DATA[roomId] 建出来——建房动作在 sendFloatMsg() 里，
      发第一条消息那一刻才真正创建 */
@@ -6364,7 +6419,10 @@ function renderFloatMessages(){
     if(q && (m.orig||'').toLowerCase().indexOf(q)===-1) return;
     if(m.day !== lastDay){ html += '<div class="day-divider">'+m.day+'</div>'; lastDay = m.day; }
     var qLink = CURRENT_ROOM.indexOf('case-')===0 ? '' : ' <a href="#" class="info-link" style="font-size:10px;" onclick="openQuoteModal('+i+');return false;">引用到案件</a>';
-    if(m.kind==='sys'){
+    if(m.kind==='file'){
+      var fic = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
+      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+fic+' '+m.fname+'</div><span class="bubble-trans" style="text-align:right;">'+m.time+qLink+'</span></div></div>';
+    } else if(m.kind==='sys'){
       html += '<div style="text-align:center;font-size:11px;color:var(--muted);margin:8px 0;">'+m.orig+'</div>';
     } else if(m.kind==='quote'){
       /* 被引用的消息在案件房里显示为「发言人：YY-MM-DD HH:MM 「来源房间」 "内容"」 */
@@ -6464,36 +6522,6 @@ function sendFloatMsg(){
   renderFloatMessages();
   if(isNewCaseRoom) renderDrawerList(); /* 发的第一条消息让这个案件房正式"出现"在案件对话分类里 */
 }
-function toolbarAction(kind){
-  if(kind==='book'){ showBookingPanel(); return; }
-  if(kind==='talk'){
-    var tc = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0];
-    if(!tc || !tc.reportReady || isEnded(tc)){ alert('室长商谈只在已出报告（项目确认中）之后、结案之前可用，且只能邀请上传了报告的KR室长'); return; }
-    CURRENT_CASE_ID = tc.id;
-    openInviteKrModal();
-    return;
-  }
-  if(kind==='video'){
-    if(!ATTACHED_CASE_ID){ alert('这个对话没有关联案件，无法在这里发起视频（视频需要关联到具体案件才能自动生成文件）'); return; }
-    openChatVideoParticipantModal(ATTACHED_CASE_ID);
-    return;
-  }
-  if(kind==='krtime'){
-    var c = CASE_ITEMS.filter(function(x){ return x.id==='siti'; })[0];
-    if(c && c.consultStatus==='paid_waiting_kr'){ krConfirmReportEta('2026-09-20 14:00', c); }
-    else { alert('该案件当前没有在等待Kr室长确认预计出报告时间的面诊申请'); }
-    return;
-  }
-  var notes = {
-    file:'📎 已上传文件 intake-form.pdf',
-    image:'🖼️ 已发送 1 张图片',
-    case:'🔗 已关联案件：Siti Rahayu（点击可跳转案件管理）',
-    timeline:'📋 已调取 Siti Rahayu 的 timeline',
-    lib:'📁 已插入文件库素材：下颌线轮廓案例'
-  };
-  CHAT_DATA[CURRENT_ROOM].push({day:'2026년 9월 18일', from:'me', orig:notes[kind], time:nowTime()});
-  renderFloatMessages();
-}
 function showToast(title, text, onClickFn){
   var wrap = document.getElementById('toast-stack');
   var el = document.createElement('div');
@@ -6511,24 +6539,6 @@ function showToast(title, text, onClickFn){
   wrap.appendChild(el);
   setTimeout(function(){ if(el.parentNode) el.remove(); }, 10000);
 }
-function showBookingPanel(){
-  var body = document.getElementById('float-body');
-  body.innerHTML = '<div class="booking-panel">'+
-    '<b style="font-size:13px;">直接预约</b>'+
-    '<div class="field"><label>类型</label><select id="book-type"><option>视频沟通</option><option>来韩现场面诊</option><option>施术</option></select></div>'+
-    '<div class="field"><label>日期</label><input type="date" id="book-date" value="2026-09-25"></div>'+
-    '<div class="field"><label>时间</label><input type="time" id="book-time" value="14:00"></div>'+
-    '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="confirmBooking()">确认预约</button><button class="btn-outline" onclick="renderFloatMessages()">取消</button></div>'+
-    '</div>';
-}
-function confirmBooking(){
-  var type = document.getElementById('book-type').value;
-  var date = document.getElementById('book-date').value;
-  var time = document.getElementById('book-time').value;
-  CHAT_DATA[CURRENT_ROOM].push({day:'2026년 9월 18일', from:'me', orig:'📅 已预约 '+date+' '+time+' '+type, time:nowTime()});
-  renderFloatMessages();
-}
-
 /* ================= video consult recording ================= */
 var RECORDING = true;
 function toggleRec(){
