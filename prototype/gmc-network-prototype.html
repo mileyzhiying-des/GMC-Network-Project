@@ -1336,19 +1336,12 @@ document.addEventListener('DOMContentLoaded', function(){
     var tSlot = shell.querySelector('.topbar-slot');
     if(tSlot) tSlot.innerHTML = buildTopbar(TITLES[page] || '');
   });
-  buildWeekGrid();
-  tickCountdown();
-  buildClients();
-  buildCaseTabs();
-  renderCaseRows();
-  renderLibrary();
-  renderProjLibrary();
-  buildNotifications();
-  addHistoryRow('超声刀轮廓提升','2026-01-15','无','本院');
-  addHistoryRow('水光针','2024-05-02','轻微淤青，已恢复','外部');
-  buildHistoryList();
-  buildDetailLog();
-  metaviewSimulate();
+  /* 初始化防护（2026-10-02）：每个模块各自 try/catch，一个地方出错只在 console 记录，不让整个页面停下来 */
+  [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications]].forEach(function(m){
+    try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); }
+  });
+  try{ addHistoryRow('超声刀轮廓提升','2026-01-15','无','本院'); addHistoryRow('水光针','2024-05-02','轻微淤青，已恢复','外部'); buildHistoryList(); }catch(e){ console.error('[初始化失败] 医美史', e); }
+  [['客户详情Timeline',buildDetailLog],['메타뷰演示',metaviewSimulate]].forEach(function(m){ try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); } });
 });
 
 
