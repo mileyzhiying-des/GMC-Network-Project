@@ -1186,6 +1186,17 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 对话记录（文本）MODAL（2026-10-02，结案后附件里查看） ============ -->
+<div class="modal-overlay" id="chat-archive-overlay" style="z-index:70;" onclick="if(event.target===this) closeChatArchive()">
+  <div class="modal-box" style="width:480px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">对话记录（文本）</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeChatArchive()">✕</span>
+    </div>
+    <pre id="chat-archive-text" style="white-space:pre-wrap;font-family:inherit;font-size:12px;line-height:1.7;color:var(--slate2);margin:0;"></pre>
+  </div>
+</div>
+
 <!-- ============ NEW CASE CHAT MODAL ============ -->
 <div class="modal-overlay" id="new-case-chat-overlay" onclick="if(event.target===this) closeNewCaseChatModal()">
   <div class="modal-box">
@@ -2614,7 +2625,7 @@ function deriveCaseStage(c){
   if(c.consultRequested) return 'consult'; /* 面诊预约 / 等待报告 */
   return 'booked';
 }
-function updateCaseStage(c){ c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); }
+function updateCaseStage(c){ c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c); }
 var CASE_PROGRESS_ORDER = ['booked','consult','travel','local','closed'];
 var CASE_TAB_FILTER = 'all';
 var CASE_REFUND_FILTER = false; /* 2026-09-30："有退款"筛选，和tab叠加使用 */
@@ -3605,6 +3616,34 @@ function caseBaseDate(c){
   var d = c.materialsDate || ((c.logEntries && c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : nowFullDt().split(' ')[0]);
   return d.slice(2);
 }
+/* ---- 案件终态（2026-10-02·六）：对话房整理进附件（对话记录（文本）+ 📁 里文件的链接，不复制文件；录像和AI文本本来就在面诊资料附件里），然后删除房间，
+   对话抽屉里不再出现；作废的案件没有房间 ---- */
+function archiveCaseRoom(c){
+  if(typeof CHAT_DATA==='undefined') return;
+  var roomId = getCaseRoomId(c.id);
+  if(!CHAT_DATA.hasOwnProperty(roomId)) return;
+  var msgs = CHAT_DATA[roomId];
+  var lines = msgs.map(function(m){
+    var who = m.kind==='sys' ? '系统' : (m.from==='me' ? 'Dewi' : (m.name||''));
+    return '['+m.day+' '+m.time+'] '+who+'：'+(m.kind==='quote' ? '（引用）'+m.speaker+'：'+m.orig : (m.orig||''));
+  });
+  var files = msgs.filter(function(m){ return m.kind==='file'; }).map(function(m){ return m.fname; });
+  c.chatArchive = {text:lines.join('\n'), files:files, date:attDate()};
+  delete CHAT_DATA[roomId];
+  if(CURRENT_ROOM===roomId && document.getElementById('chat-float-overlay')) closeFloat();
+  logCaseEvent(c, '系统', '案件结束：对话房已整理进附件（对话记录+文件链接）并删除');
+  try{ if(document.getElementById('drawer-list')) renderDrawerList(); }catch(e){}
+}
+function retentionLabel(f){
+  if(f.retention) return f.retention;
+  return /录像|AI生成|对话记录|视频通话/.test(f.label) ? '结案后 3 年' : '最后就诊起 25 年'; /* 对话记录/录像/AI文本=结案后3年；报告、基础资料等病历类=最后就诊起25年（只显示，不做真正的删除机制） */
+}
+function openChatArchive(caseId){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c || !c.chatArchive) return;
+  document.getElementById('chat-archive-text').textContent = c.chatArchive.text || '（空）';
+  document.getElementById('chat-archive-overlay').classList.add('open');
+}
+function closeChatArchive(){ document.getElementById('chat-archive-overlay').classList.remove('open'); }
 function caseAttachments(c){
   var base = caseBaseDate(c), list = [];
   if(c.metaviewStatus==='ready') list.push({src:'基础资料', label:'메타뷰 检测报告', date:base});
@@ -3613,6 +3652,10 @@ function caseAttachments(c){
   (c.linkedFiles||[]).forEach(function(f){ list.push({src:'基础资料', label:f.label, date:f.date||base}); });
   (c.manualAttachments||[]).forEach(function(f){ list.push({src:f.src||'基础资料', label:f.label, date:f.date||base}); });
   (c.consultFiles||[]).forEach(function(f){ list.push({src:'面诊资料', label:f.label, date:f.date||base}); });
+  if(c.chatArchive){
+    list.push({src:'对话', label:'对话记录（文本）', date:c.chatArchive.date||base, chatLog:true});
+    c.chatArchive.files.forEach(function(fn){ list.push({src:'对话', label:'对话文件链接：'+fn, date:c.chatArchive.date||base, retention:'结案后 3 年'}); });
+  }
   return list;
 }
 function attachmentsTabHtml(c){
@@ -3622,8 +3665,9 @@ function attachmentsTabHtml(c){
     var tagFg = f.src==='面诊资料' ? 'var(--terracotta)' : 'var(--blue)';
     return '<div class="case-field-row"><span class="status-pill" style="background:'+tagBg+';color:'+tagFg+';font-size:10px;margin-right:8px;">'+f.src+'</span>'+
       '<span style="flex-grow:1;font-size:13px;">'+f.label+'</span>'+
+      '<span class="status-pill" style="background:#EDEAE2;color:var(--muted);font-size:10px;margin-right:10px;">保存期限：'+retentionLabel(f)+'</span>'+
       '<span style="font-size:12px;color:var(--muted);margin-right:14px;">'+f.date+'</span>'+
-      '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">下载</a><a href="#" class="info-link" onclick="return false;">查看</a></span></div>';
+      '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">下载</a><a href="#" class="info-link" onclick="'+(f.chatLog ? 'openChatArchive(\''+c.id+'\');return false;' : 'return false;')+'">查看</a></span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无附件</div>';
   return '<div class="card" style="padding:22px 24px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><div class="info-heading">附件</div>'+
     '<span style="display:flex;gap:8px;align-items:center;"><select id="att-cat" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"><option>基础资料</option><option>面诊资料</option></select><button class="btn-ghost" onclick="mockUploadAttachment()">+ 上传附件</button></span></div>'+rows+'</div>';
@@ -3680,6 +3724,7 @@ function addConsult(){
   c.consultRequested = true;
   c.consultStatus = 'awaiting_payment';
   c.activeCaseTab = 'consult';
+  var lk0 = directorLockInfo(c); if(lk0) c.director = lk0.name; /* 关联复诊/延续既往面诊：锁定原院长；否则缴费前在面诊费卡里选院长 */
   updateCaseStage(c);
   logCaseEvent(c, 'Dewi', '发起"增加面诊"（面诊费在面诊资料tab缴纳或免除）');
   renderCaseStatusBar(c);
@@ -3742,6 +3787,13 @@ function feeDraft(c){
   }
   return c.feeDraft;
 }
+function setConsultDirector(v){ var c = getCurrentCase(); if(!c) return; c.director = v || null; renderCaseBody(c); }
+function consultDirectorPickHtml(c){
+  if(c.director) return '';
+  return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--terracotta-bg);border-radius:10px;font-size:13px;">院长 <span style="color:var(--terracotta);">*</span> '+
+    '<select onchange="setConsultDirector(this.value)" style="margin-left:8px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">请选择院长</option>'+
+    DIRECTOR_LIST.map(function(x){ return '<option>'+x+'</option>'; }).join('')+'</select><span style="font-size:11px;color:var(--muted);margin-left:8px;">缴费前必选，选定后不能更换</span></div>';
+}
 function consultFeeFormHtml(c){
   var d = feeDraft(c);
   var reasons = WAIVE_REASONS;
@@ -3754,7 +3806,7 @@ function consultFeeFormHtml(c){
   var waiveRadio = d.locked
     ? '<div style="font-size:12px;color:#C1454A;padding:4px 0;">'+d.hint+'</div>'
     : '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;"><input type="radio" name="fee-mode" '+(d.mode==='waive'?'checked':'')+' onchange="setFeeMode(\'waive\')"> 免除面诊费</label>'+waiveBlock;
-  return '<div style="margin-bottom:12px;">'+
+  return consultDirectorPickHtml(c)+'<div style="margin-bottom:12px;">'+
     '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;"><input type="radio" name="fee-mode" '+(d.mode==='paid'?'checked':'')+' onchange="setFeeMode(\'paid\')"> 已缴费</label>'+waiveRadio+
     ((!d.locked && d.hint) ? '<div style="font-size:11px;color:var(--terracotta);margin:2px 0 4px 24px;">'+d.hint+'</div>' : '')+
     '<div style="display:flex;gap:10px;margin-top:10px;"><button class="btn-primary" onclick="confirmConsultFee()">确认</button><button class="btn-outline" onclick="cancelConsult()">面诊取消</button></div></div>';
@@ -3764,6 +3816,7 @@ function setFeeReason(v){ var c=getCurrentCase(); if(!c) return; var d=feeDraft(
 function setFeeNote(v){ var c=getCurrentCase(); if(!c) return; feeDraft(c).note=v; }
 function confirmConsultFee(){
   var c = getCurrentCase(); if(!c) return;
+  if(!c.director){ alert('请先选择院长'); return; }
   var d = feeDraft(c);
   if(d.locked && d.mode==='waive'){ alert('距原案件报告日期已超过1个月，不能免除面诊费'); return; }
   if(d.mode==='paid'){ markConsultPaid(); return; }
@@ -6430,7 +6483,7 @@ function openFloatingChat(roomId, subtitleOverride, caseId){
   document.getElementById('float-avt').textContent = r.init;
   document.getElementById('float-name').textContent = r.name;
   var isCaseRoom = roomId.indexOf('case-')===0;
-  document.getElementById('float-sub').textContent = isCaseRoom ? '本案件专属对话（院长/室长/印尼室长）' : (subtitleOverride ? ('关于 '+subtitleOverride+' 的沟通') : (roomId==='main' ? '院长 · 韩国室长 · 印尼室长 全员群聊 · 支持 @提及' : '内部沟通'));
+  document.getElementById('float-sub').textContent = isCaseRoom ? '本案件专属对话' : (subtitleOverride ? ('关于 '+subtitleOverride+' 的沟通') : (roomId==='main' ? '院长 · 韩国室长 · 印尼室长 全员群聊 · 支持 @提及' : '内部沟通'));
   ATTACHED_CASE_ID = caseId || (isCaseRoom ? roomId.slice(5) : null);
   renderChatCaseChip();
   renderFloatToolbar();
@@ -6599,6 +6652,12 @@ function showToast(title, text, onClickFn){
   wrap.appendChild(el);
   setTimeout(function(){ if(el.parentNode) el.remove(); }, 10000);
 }
+/* 初始化（2026-10-02）：已是终态的案件整理对话房进附件并删除；仍在进行的演示房间里，KR室长视为已进入 */
+CASE_ITEMS.forEach(function(c){
+  if(isEnded(c)) archiveCaseRoom(c);
+  else if(CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id)) && caseHasKrSide(c)) c.krInRoom = true;
+});
+
 /* ================= video consult recording ================= */
 var RECORDING = true;
 function toggleRec(){
