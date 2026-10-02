@@ -1284,7 +1284,7 @@ function buildSidebar(activePage){
     var inner = SIDEBAR_COLLAPSED
       ? '<span class="nav-icon">'+item.icon+'</span>'
       : '<span class="dot"></span><span>'+item.label+'</span>';
-    var onclick = item.action ? (item.action+';return false;') : ('nav(\''+item.id+'\');return false;');
+    var onclick = item.action ? (item.action+';return false;') : ((item.id==='in-library' || item.id==='in-projectlibrary') ? ('openSidebarPage(\''+item.id+'\');return false;') : ('nav(\''+item.id+'\');return false;'));
     return '<a class="nav-item'+active+'" href="#" title="'+item.label+'" onclick="'+onclick+'">'+inner+'</a>';
   }).join('');
   var toggleGlyph = SIDEBAR_COLLAPSED ? '»' : '«';
@@ -1299,6 +1299,12 @@ function buildTopRightIcons(){
 }
 function buildTopbar(title){
   return '<div class="topbar"><span class="title">'+title+'</span>'+buildTopRightIcons()+'</div>';
+}
+/* 页面打开方式（2026-10-02·三）：在案件页里打开案例库 / 项目库 → 新标签页（?page=...）；不在案件里 → 页内跳转。
+   这两个页面的入口只有侧边栏的［案例库］［项目库］两项（每个 in-shell 页面共用同一个侧边栏） */
+function openSidebarPage(id){
+  if(CURRENT_PAGE_ID==='in-casedetail'){ window.open(location.pathname+'?page='+id, '_blank'); return; }
+  nav(id);
 }
 function toggleSidebar(){
   SIDEBAR_COLLAPSED = !SIDEBAR_COLLAPSED;
@@ -6738,6 +6744,22 @@ function showToast(title, text, onClickFn){
 CASE_ITEMS.forEach(function(c){
   if(isEnded(c)) archiveCaseRoom(c);
   else if(CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id)) && caseHasKrSide(c)) c.krInRoom = true;
+});
+
+/* 新标签页打开时按地址参数进入：?case=A000xxx（&chat=open 自动展开对话窗口；&tab=attachments 打开附件tab）、?page=in-library / in-projectlibrary。
+   注意：原型数据在内存里，新标签页是一份全新的演示数据，不含当前标签页里新建的案件 */
+document.addEventListener('DOMContentLoaded', function(){
+  var q = new URLSearchParams(location.search), cs = q.get('case'), pg = q.get('page');
+  if(!cs && !pg) return;
+  nav('in-dashboard');
+  if(pg && document.getElementById(pg)) nav(pg);
+  if(cs){
+    var c = CASE_ITEMS.filter(function(x){ return x.caseNo===cs || x.id===cs; })[0];
+    if(!c){ alert('这个标签页的演示数据里找不到案件 '+cs+'（原型数据在内存里，不跨标签页共享）'); return; }
+    openCaseDetail(c.id);
+    if(q.get('tab')){ c.activeCaseTab = q.get('tab'); renderCaseBody(c); }
+    if(q.get('chat')==='open') openCaseRoom(c.id);
+  }
 });
 
 /* ================= video consult recording ================= */
