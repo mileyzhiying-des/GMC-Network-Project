@@ -1576,14 +1576,13 @@ function calendarEvents(){
   });
   RESUMED_VISITS.forEach(function(r){ evs.push({kind:'reservation', date:r.date, time:r.time, name:r.name, caseId:r.caseId, purpose:r.purpose, vstate:'已到访', ended:false}); });
   RESERVATION_PLACEHOLDERS.forEach(function(ph){ evs.push({kind:'placeholder', date:ph.date, time:ph.time, name:ph.phone, phId:ph.id, purpose:ph.purpose}); });
-  PLACEHOLDER_HISTORY.forEach(function(ph){ if(new Date(ph.date+'T'+ph.time+':00') < demoNow()) evs.push({kind:'placeholder', expired:true, date:ph.date, time:ph.time, name:ph.phone, phId:ph.id, purpose:ph.purpose}); }); /* 已过去的占位失效记录：灰色块，可点开看记录 */
   return evs;
 }
 function eventChipHtml(e){
   var now = demoNow();
   var when = new Date(e.date+'T'+e.time+':00');
   var past = (when < now);
-  var grey = (past && e.kind!=='placeholder') || e.expired ? 'opacity:.5;filter:grayscale(1);' : ''; /* 只有已过去 / 已结束的事件块是灰色，灰色块照样可以点开 */
+  var grey = (past && e.kind!=='placeholder') ? 'opacity:.5;filter:grayscale(1);' : ''; /* 只有已过去 / 已结束的事件块是灰色，灰色块照样可以点开；超时/取消的占位从日历消失（在预约历史记录里看） */
   var l1, l2, onclick;
   if(e.kind==='reservation'){
     l1 = e.vstate==='未到店' ? '<s>'+e.name+'</s>' : e.name;
@@ -1598,9 +1597,6 @@ function eventChipHtml(e){
     l1 = e.name; l2 = '赴韩施术';
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     onclick = 'openCaseDetail(\''+e.caseId+'\')';
-  } else if(e.expired){
-    l1 = e.name; l2 = '占位失效';
-    onclick = 'openPlaceholderRecord(\''+e.phId+'\')';
   } else {
     var ph = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===e.phId; })[0];
     l1 = e.name; l2 = (e.purpose||'占位')+' <span data-ph-countdown="'+e.phId+'">'+(ph?placeholderCountdownText(ph):'')+'</span>';
@@ -1817,18 +1813,6 @@ function simulateSlotChange(id){
     }
   }
   alert('本周没有空闲时段');
-}
-/* 占位记录（已失效/已过去的占位块点开）：时间、链接发送对象、状态 */
-function openPlaceholderRecord(id){
-  var h = PLACEHOLDER_HISTORY.filter(function(x){ return x.id===id; })[0]; if(!h) return;
-  document.getElementById('add-slot-title').textContent = '占位记录 · '+dateLabel(h.date)+' '+h.time;
-  document.getElementById('add-slot-body').innerHTML =
-    '<div class="case-field-row"><span class="fk">时间</span><span style="flex-grow:1;font-size:13px;">'+h.date+' '+h.time+'</span></div>'+
-    '<div class="case-field-row"><span class="fk">链接发送对象</span><span style="flex-grow:1;font-size:13px;">'+h.phone+'</span></div>'+
-    '<div class="case-field-row"><span class="fk">来访目的</span><span style="flex-grow:1;font-size:13px;">'+(h.purpose||'—')+'</span></div>'+
-    '<div class="case-field-row"><span class="fk">链接</span><span style="flex-grow:1;font-size:13px;">'+(h.link||'—')+'</span></div>'+
-    '<div class="case-field-row"><span class="fk">状态</span><span style="flex-grow:1;font-size:13px;"><span class="status-pill" style="background:#EDEAE2;color:var(--muted);">'+h.status+'</span>（超时或取消，没有生成案件）</span></div>';
-  document.getElementById('add-slot-overlay').classList.add('open');
 }
 function openPlaceholderModal(id){
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
