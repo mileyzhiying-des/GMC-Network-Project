@@ -117,14 +117,13 @@ input,textarea,select{font-family:inherit;}
 .wk-time{font-size:10px;color:var(--muted);text-align:right;padding:8px 6px 0 0;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);}
 .wk-time.empty{color:var(--dim);font-size:9px;padding-top:5px;}
 .wk-cell{min-height:56px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);padding:6px;display:flex;align-items:stretch;gap:4px;}
-.wk-cell.wk-past.wk-cell-open{cursor:not-allowed;}
-.wk-cell.wk-past:hover{background:#E6E3DC;}
+.wk-cell.wk-past.wk-cell-open{cursor:default;}
 .wk-cell.wk-now{box-shadow:inset 0 0 0 2px var(--terracotta);}
 .wk-time.wk-now{color:var(--terracotta);font-weight:700;}
 .wk-time .kr{display:block;font-size:9px;color:var(--dim);margin-top:2px;}
 .wk-cell-open{cursor:pointer;}
 .wk-cell-open:hover{background:#FADADD;}
-.wk-cell.wk-past.wk-cell-open:hover{background:#E6E3DC;}
+.wk-cell.wk-past.wk-cell-open:hover{background:transparent;} /* 过去的时段：白底、hover 不变色、不能点 */
 .wk-cell.empty{min-height:22px;padding:2px 6px;}
 .event-chip{border-radius:6px;padding:4px 7px;font-size:11px;line-height:1.4;border-left:4px solid;cursor:pointer;overflow:hidden;flex:1 1 0;min-width:0;}
 .event-chip .l1{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -1559,7 +1558,7 @@ function slotOf(time){ var h = time.slice(0,2), m = parseInt(time.slice(3),10); 
 /* 接续作废的预约：本案件作废后，这条预约来访改挂到原案件（显示"已到访"） */
 var RESUMED_VISITS = [];
 /* 预约占位的历史记录（失效/取消的占位），供"预约历史记录"页用 */
-var PLACEHOLDER_HISTORY = [{id:'phx1', phone:'+62 812-3300-0099', date:'2026-09-17', time:'13:00', status:'占位失效'}];
+var PLACEHOLDER_HISTORY = [{id:'phx1', phone:'+62 812-3300-0099', date:'2026-09-17', time:'13:00', status:'占位失效', link:'https://gmc.link/old01', purpose:'面诊商谈'}];
 /* 日历事件：全部从案件数据实时算出来（一份数据，其他页面和日历不会各说各的）：
    预约来访 = 每个案件的 visitDate/visitTime；赴韩施术 = 案件里已确认的施术日期；预约占位 = RESERVATION_PLACEHOLDERS */
 function visitStateOf(c){
@@ -1577,13 +1576,14 @@ function calendarEvents(){
   });
   RESUMED_VISITS.forEach(function(r){ evs.push({kind:'reservation', date:r.date, time:r.time, name:r.name, caseId:r.caseId, purpose:r.purpose, vstate:'已到访', ended:false}); });
   RESERVATION_PLACEHOLDERS.forEach(function(ph){ evs.push({kind:'placeholder', date:ph.date, time:ph.time, name:ph.phone, phId:ph.id, purpose:ph.purpose}); });
+  PLACEHOLDER_HISTORY.forEach(function(ph){ if(new Date(ph.date+'T'+ph.time+':00') < demoNow()) evs.push({kind:'placeholder', expired:true, date:ph.date, time:ph.time, name:ph.phone, phId:ph.id, purpose:ph.purpose}); }); /* 已过去的占位失效记录：灰色块，可点开看记录 */
   return evs;
 }
 function eventChipHtml(e){
   var now = demoNow();
   var when = new Date(e.date+'T'+e.time+':00');
   var past = (when < now);
-  var grey = past && e.kind!=='placeholder' ? 'opacity:.5;filter:grayscale(1);' : ''; /* 只有已过去 / 已结束的事件块是灰色 */
+  var grey = (past && e.kind!=='placeholder') || e.expired ? 'opacity:.5;filter:grayscale(1);' : ''; /* 只有已过去 / 已结束的事件块是灰色，灰色块照样可以点开 */
   var l1, l2, onclick;
   if(e.kind==='reservation'){
     l1 = e.vstate==='未到店' ? '<s>'+e.name+'</s>' : e.name;
@@ -1598,6 +1598,9 @@ function eventChipHtml(e){
     l1 = e.name; l2 = '赴韩施术';
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     onclick = 'openCaseDetail(\''+e.caseId+'\')';
+  } else if(e.expired){
+    l1 = e.name; l2 = '占位失效';
+    onclick = 'openPlaceholderRecord(\''+e.phId+'\')';
   } else {
     var ph = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===e.phId; })[0];
     l1 = e.name; l2 = (e.purpose||'占位')+' <span data-ph-countdown="'+e.phId+'">'+(ph?placeholderCountdownText(ph):'')+'</span>';
@@ -1777,7 +1780,7 @@ function placeholderCountdownText(p){
 setInterval(function(){
   var changed = false;
   RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(p){
-    if(Date.now() >= p.expiresAt){ changed = true; PLACEHOLDER_HISTORY.push({id:p.id, phone:p.phone, date:p.date, time:p.time, status:'占位失效'}); return false; }
+    if(Date.now() >= p.expiresAt){ changed = true; PLACEHOLDER_HISTORY.push({id:p.id, phone:p.phone, date:p.date, time:p.time, status:'占位失效', link:p.link, purpose:p.purpose}); return false; }
     return true;
   });
   if(changed && CAL_MODE==='week') buildWeekGrid();
@@ -1815,6 +1818,18 @@ function simulateSlotChange(id){
   }
   alert('本周没有空闲时段');
 }
+/* 占位记录（已失效/已过去的占位块点开）：时间、链接发送对象、状态 */
+function openPlaceholderRecord(id){
+  var h = PLACEHOLDER_HISTORY.filter(function(x){ return x.id===id; })[0]; if(!h) return;
+  document.getElementById('add-slot-title').textContent = '占位记录 · '+dateLabel(h.date)+' '+h.time;
+  document.getElementById('add-slot-body').innerHTML =
+    '<div class="case-field-row"><span class="fk">时间</span><span style="flex-grow:1;font-size:13px;">'+h.date+' '+h.time+'</span></div>'+
+    '<div class="case-field-row"><span class="fk">链接发送对象</span><span style="flex-grow:1;font-size:13px;">'+h.phone+'</span></div>'+
+    '<div class="case-field-row"><span class="fk">来访目的</span><span style="flex-grow:1;font-size:13px;">'+(h.purpose||'—')+'</span></div>'+
+    '<div class="case-field-row"><span class="fk">链接</span><span style="flex-grow:1;font-size:13px;">'+(h.link||'—')+'</span></div>'+
+    '<div class="case-field-row"><span class="fk">状态</span><span style="flex-grow:1;font-size:13px;"><span class="status-pill" style="background:#EDEAE2;color:var(--muted);">'+h.status+'</span>（超时或取消，没有生成案件）</span></div>';
+  document.getElementById('add-slot-overlay').classList.add('open');
+}
 function openPlaceholderModal(id){
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
   PLACEHOLDER_MODAL_ID = id;
@@ -1839,7 +1854,7 @@ function resendPlaceholderLink(id){
 }
 function cancelPlaceholder(id){
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0];
-  if(p) PLACEHOLDER_HISTORY.push({id:p.id, phone:p.phone, date:p.date, time:p.time, status:'占位失效'}); /* 取消占位记为占位失效 */
+  if(p) PLACEHOLDER_HISTORY.push({id:p.id, phone:p.phone, date:p.date, time:p.time, status:'占位失效', link:p.link, purpose:p.purpose}); /* 取消占位记为占位失效 */
   RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==id; });
   closeAddSlotModal();
   renderCalendar();
