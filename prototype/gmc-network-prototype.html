@@ -111,6 +111,7 @@ input,textarea,select{font-family:inherit;}
 .wk-grid{display:grid;grid-template-columns:64px repeat(7,minmax(0,1fr));border-top:1px solid var(--border2);border-left:1px solid var(--border2);}
 .wk-head{padding:8px 4px;text-align:center;font-size:11px;color:var(--slate2);border-right:1px solid var(--border2);border-bottom:1px solid var(--border);background:var(--white);position:sticky;top:0;z-index:2;}
 .wk-head.today{color:#fff;background:var(--navy);font-weight:700;}
+.wk-memo{position:sticky;top:31px;z-index:2;background:#FAF8F3;border-right:1px solid var(--border2);border-bottom:1px solid var(--border);padding:4px 6px;font-size:10px;line-height:1.5;min-height:26px;}
 .wk-corner{border-right:1px solid var(--border2);border-bottom:1px solid var(--border);background:var(--white);position:sticky;top:0;z-index:2;}
 .wk-time{font-size:10px;color:var(--muted);text-align:right;padding:8px 6px 0 0;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);}
 .wk-time.empty{color:var(--dim);font-size:9px;padding-top:5px;}
@@ -336,6 +337,8 @@ input,textarea,select{font-family:inherit;}
 
       <div class="card" id="dash-call-card" style="display:none;"></div>
 
+      <div class="card" id="dash-today" style="padding:16px 22px;"></div>
+
       <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">
         <div class="cal-toolbar">
           <div class="cal-legend">
@@ -349,6 +352,7 @@ input,textarea,select{font-family:inherit;}
               <span id="cal-sw-week" class="active" onclick="setCalMode('week')">周</span>
               <span id="cal-sw-day" onclick="setCalMode('day')">日</span>
             </div>
+            <button class="cal-nav-btn" onclick="openMemoModal()" title="新增备忘 / OFF">＋ memo</button>
             <button class="cal-nav-btn" onclick="openCalSettings()" title="设定：诊所时区">⚙ 时区 <span id="cal-tz-label">WIB</span></button>
             <div class="cal-nav">
               <button class="cal-nav-btn" onclick="calPrev()">‹</button>
@@ -1159,6 +1163,17 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 新增 memo MODAL（2026-10-02·七） ============ -->
+<div class="modal-overlay" id="memo-overlay" style="z-index:70;" onclick="if(event.target===this) closeMemoModal()">
+  <div class="modal-box" style="width:380px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">新增 memo</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeMemoModal()">✕</span>
+    </div>
+    <div id="memo-body"></div>
+  </div>
+</div>
+
 <!-- ============ NEW CASE CHAT MODAL ============ -->
 <div class="modal-overlay" id="new-case-chat-overlay" onclick="if(event.target===this) closeNewCaseChatModal()">
   <div class="modal-box">
@@ -1350,6 +1365,62 @@ function setClinicTz(k){
   CLINIC_TZ = k; try{ localStorage.setItem('gmc_tz', k); }catch(e){}
   applyTzSetting(); openCalSettings(); renderCalendar();
 }
+/* ---- 今日区块 + 固定栏 memo + OFF（2026-10-02·七） ----
+   "早上好"下面固定"今日"区块：最上面是今天的 OFF（KR 院长 / KR 室长 / IN 室长），下面是今日行程（时间 · 人名 · 类型）；
+   周视图 9:00 上面的固定栏每天一格，显示当天 OFF 和 memo；新增 memo：选日期、类型（备忘/OFF）、公开/私人，OFF 固定公开，显示作者；IN 室长的 OFF 就是从这里来 */
+var ME_NAME = 'Dewi';
+function memosOn(date){ return CAL_MEMOS.filter(function(m){ return m.date===date && (m.scope==='公开' || m.author===ME_NAME); }); }
+function renderTodayBlock(){
+  var el = document.getElementById('dash-today'); if(!el) return;
+  var today = nowFullDt().split(' ')[0];
+  var offs = CAL_MEMOS.filter(function(m){ return m.type==='OFF' && m.date===today; });
+  var grp = function(role){ var n = offs.filter(function(m){ return m.role===role; }).map(function(m){ return m.person; }); return '<span style="margin-right:18px;"><span style="color:var(--muted);">'+role+'</span> '+(n.length ? '<b style="color:#C1454A;">'+n.join('、')+'</b>' : '<span style="color:var(--dim);">无</span>')+'</span>'; };
+  var evs = calendarEvents().filter(function(e){ return e.date===today && !(e.kind==='reservation' && e.vstate==='预约取消'); }).sort(function(a,b){ return a.time.localeCompare(b.time); });
+  var memos = memosOn(today).filter(function(m){ return m.type==='备忘'; });
+  el.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">今日 <span style="font-weight:400;color:var(--muted);font-size:11px;">'+dateLabel(today)+'</span></div>'+
+    '<div style="font-size:12px;margin-bottom:10px;"><b>OFF</b>　'+grp('KR院长')+grp('KR室长')+grp('IN室长')+'</div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">今日行程</div>'+
+    (evs.length ? evs.map(function(e){ return '<div class="schedule-row" style="cursor:pointer;" onclick="'+(e.caseId?'openCaseDetail(\''+e.caseId+'\')':'void(0)')+'"><span class="schedule-time">'+e.time+'</span><span class="dotmark" style="background:'+TYPE_COLOR[e.kind]+';"></span><span style="font-size:13px;">'+e.name+' · '+TYPE_LABEL[e.kind]+(e.purpose?' · '+e.purpose:'')+(e.vstate && e.vstate!=='待访问' ? '（'+e.vstate+'）' : '')+'</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);">今天没有行程</div>')+
+    (memos.length ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;">'+memos.map(function(m){ return '📝 '+m.text+'（'+m.author+(m.scope==='私人'?' · 私人':'')+'）'; }).join('　')+'</div>' : '');
+}
+function memoCellHtml(ds){
+  return memosOn(ds).map(function(m){
+    return m.type==='OFF'
+      ? '<div style="color:#C1454A;font-weight:700;">OFF · '+m.person+'</div>'
+      : '<div style="color:var(--slate2);">📝 '+m.text+' <span style="color:var(--muted);">'+m.author+(m.scope==='私人'?' · 私人':'')+'</span></div>';
+  }).join('');
+}
+var MEMO_DRAFT = null;
+function openMemoModal(){
+  MEMO_DRAFT = {date:nowFullDt().split(' ')[0], type:'备忘', scope:'公开', text:''};
+  renderMemoBody();
+  document.getElementById('memo-overlay').classList.add('open');
+}
+function closeMemoModal(){ document.getElementById('memo-overlay').classList.remove('open'); }
+function memoSet(k, v){
+  if(k==='text'){ MEMO_DRAFT.text = v; return; }
+  MEMO_DRAFT[k] = v;
+  if(MEMO_DRAFT.type==='OFF') MEMO_DRAFT.scope = '公开'; /* 类型=OFF 时固定为公开 */
+  renderMemoBody();
+}
+function renderMemoBody(){
+  var d = MEMO_DRAFT, isOff = d.type==='OFF';
+  var radio = function(name, val, label, checked, disabled){ return '<label style="margin-right:14px;font-size:13px;'+(disabled?'color:var(--dim);':'')+'"><input type="radio" name="'+name+'" '+(checked?'checked ':'')+(disabled?'disabled ':'')+'onchange="memoSet(\''+name+'\',\''+val+'\')"> '+label+'</label>'; };
+  document.getElementById('memo-body').innerHTML =
+    '<div class="field" style="margin-bottom:12px;"><label>日期</label><input type="date" value="'+d.date+'" onchange="memoSet(\'date\',this.value)"></div>'+
+    '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">类型</div>'+radio('type','备忘','备忘',d.type==='备忘')+radio('type','OFF','OFF',d.type==='OFF')+'</div>'+
+    '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">可见范围</div>'+radio('scope','公开','公开',d.scope==='公开')+radio('scope','私人','私人',d.scope==='私人',isOff)+(isOff?'<span style="font-size:11px;color:var(--muted);">OFF 固定公开</span>':'')+'</div>'+
+    '<div class="field" style="margin-bottom:12px;"><label>'+(isOff?'备注（选填）':'内容')+'</label><input type="text" value="'+(d.text||'').replace(/"/g,'&quot;')+'" oninput="memoSet(\'text\',this.value)" placeholder="'+(isOff?'例如：年假':'备忘内容')+'"></div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">作者：'+ME_NAME+(isOff?'（IN 室长的 OFF 从这里登记）':'')+'</div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="saveMemoDraft()">保存</button>';
+}
+function saveMemoDraft(){
+  var d = MEMO_DRAFT; if(!d.date){ alert('请选择日期'); return; }
+  if(d.type==='备忘' && !(d.text||'').trim()){ alert('请填写备忘内容'); return; }
+  CAL_MEMOS.push({id:'m'+Date.now(), date:d.date, type:d.type, scope:d.type==='OFF' ? '公开' : d.scope, role:d.type==='OFF' ? 'IN室长' : undefined, person:d.type==='OFF' ? ME_NAME : undefined, author:ME_NAME, text:(d.text||'').trim()});
+  saveMemos(); closeMemoModal(); renderCalendar();
+  showToast('已保存', d.type==='OFF' ? ME_NAME+' '+d.date+' OFF（公开）' : '备忘已保存（'+d.scope+'）', null);
+}
 function getWeekStart(offset){
   var d = new Date(TODAY_DATE);
   var wd = d.getDay(); // 0=Sun..6=Sat
@@ -1422,6 +1493,8 @@ function buildWeekGrid(){
     var isToday = sameDate(dd, TODAY_DATE);
     html += '<div class="wk-head'+(isToday?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[i]+'</div>';
   });
+  html += '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div>';
+  days.forEach(function(dd){ html += '<div class="wk-memo">'+memoCellHtml(dateStr(dd))+'</div>'; });
   WK_HOURS.forEach(function(hr){
     var rowEvs = evs.filter(function(e){ return slotOf(e.time)===hr; });
     html += '<div class="wk-time'+(rowEvs.length?'':' empty')+'">'+hr+'<span class="kr">KR '+krTimeOf(hr)+'</span></div>';
@@ -1446,7 +1519,8 @@ function buildMonthGrid(){
   for(var i=0;i<42;i++){
     var ds = dateStr(cur), inMonth = cur.getMonth()===first.getMonth();
     var n = evs.filter(function(e){ return e.date===ds; }).length;
-    var extra = n ? '<div style="font-size:12px;font-weight:700;color:var(--slate2);">'+n+' 项日程</div>' : '';
+    var offs = CAL_MEMOS.filter(function(m){ return m.type==='OFF' && m.date===ds; }).map(function(m){ return m.person; });
+    var extra = (offs.length ? '<div style="font-size:10px;font-weight:700;color:var(--terracotta);">'+offs.join('、')+' OFF</div>' : '')+(n ? '<div style="font-size:12px;font-weight:700;color:var(--slate2);">'+n+' 项日程</div>' : '');
     html += '<div class="cal-cell" onclick="setCalMode(\'week\')" title="点击进入周视图"><span style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'">'+cur.getDate()+'</span>'+extra+'</div>';
     cur.setDate(cur.getDate()+1);
   }
@@ -1474,6 +1548,7 @@ function setCalMode(mode){
   renderCalendar();
 }
 function renderCalendar(){
+  renderTodayBlock();
   if(CAL_MODE==='week') buildWeekGrid();
   else if(CAL_MODE==='month') buildMonthGrid();
   else buildDayGrid();
