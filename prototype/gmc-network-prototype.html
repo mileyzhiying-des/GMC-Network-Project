@@ -107,7 +107,8 @@ input,textarea,select{font-family:inherit;}
 .cal-cell:hover{background:#FBF8F2;}
 .cal-dow{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center;font-size:11px;color:var(--muted);}
 .dotmark{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:2px;flex-shrink:0;}
-.wk-scroll{height:calc(100vh - 260px);min-height:420px;overflow-y:auto;border-bottom:1px solid var(--border2);}
+.wk-scroll{height:calc(100vh - 300px);min-height:420px;overflow-y:auto;border-bottom:1px solid var(--border2);}
+#cal-month-view .cal-grid{height:calc(100vh - 316px);min-height:400px;grid-template-rows:repeat(6,1fr);}
 .wk-grid{display:grid;grid-template-columns:64px repeat(7,minmax(0,1fr));border-top:1px solid var(--border2);border-left:1px solid var(--border2);}
 .wk-head{padding:8px 4px;text-align:center;font-size:11px;color:var(--slate2);border-right:1px solid var(--border2);border-bottom:1px solid var(--border);background:var(--white);position:sticky;top:0;z-index:2;}
 .wk-head.today{color:#fff;background:var(--navy);font-weight:700;}
@@ -116,14 +117,18 @@ input,textarea,select{font-family:inherit;}
 .wk-time{font-size:10px;color:var(--muted);text-align:right;padding:8px 6px 0 0;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);}
 .wk-time.empty{color:var(--dim);font-size:9px;padding-top:5px;}
 .wk-cell{min-height:56px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);padding:6px;display:flex;align-items:stretch;gap:4px;}
-.wk-cell.wk-past{background:#F3F1EC;}
 .wk-cell.wk-past.wk-cell-open{cursor:not-allowed;}
-.wk-cell.wk-past.wk-cell-open:hover{background:#F3F1EC;}
+.wk-cell.wk-past:hover{background:#E6E3DC;}
+.wk-cell.wk-now{box-shadow:inset 0 0 0 2px var(--terracotta);}
+.wk-time.wk-now{color:var(--terracotta);font-weight:700;}
 .wk-time .kr{display:block;font-size:9px;color:var(--dim);margin-top:2px;}
 .wk-cell-open{cursor:pointer;}
-.wk-cell-open:hover{background:var(--terracotta-bg);}
+.wk-cell-open:hover{background:#FADADD;}
+.wk-cell.wk-past.wk-cell-open:hover{background:#E6E3DC;}
 .wk-cell.empty{min-height:22px;padding:2px 6px;}
-.event-chip{border-radius:6px;padding:5px 7px;font-size:11px;line-height:1.5;border-left:3px solid;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 0;min-width:0;}
+.event-chip{border-radius:6px;padding:4px 7px;font-size:11px;line-height:1.4;border-left:4px solid;cursor:pointer;overflow:hidden;flex:1 1 0;min-width:0;}
+.event-chip .l1{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.event-chip .l2{font-size:10px;color:var(--slate2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .schedule-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border2);cursor:pointer;}
 .schedule-row:last-child{border-bottom:none;}
 .schedule-time{font-size:12px;font-weight:700;color:var(--slate2);width:44px;flex-shrink:0;}
@@ -335,9 +340,9 @@ input,textarea,select{font-family:inherit;}
         </div>
       </div>
 
-      <div class="card" id="dash-call-card" style="display:none;"></div>
+      <div id="dash-off-row" style="display:none;font-size:13px;margin-top:-8px;"></div>
 
-      <div class="card" id="dash-today" style="padding:16px 22px;"></div>
+      <div class="card" id="dash-call-card" style="display:none;"></div>
 
       <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">
         <div class="cal-toolbar">
@@ -393,7 +398,6 @@ input,textarea,select{font-family:inherit;}
     <div class="content">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <input type="text" placeholder="搜索客户姓名" style="width:260px;padding:10px 14px;border:1px solid var(--border);border-radius:9px;font-size:13px;">
-        <a class="btn-primary" href="#" onclick="nav('in-newclient');return false;">+ 新建客户档案</a>
       </div>
       <div class="card" style="padding:4px 20px;">
         <div class="trow head" style="grid-template-columns:1.4fr 1.2fr 1.3fr 0.9fr 0.9fr auto;"><span>客户姓名</span><span>当前进度</span><span>财务</span><span>建档室长</span><span>更新时间</span><span></span></div>
@@ -1229,6 +1233,18 @@ input,textarea,select{font-family:inherit;}
   <div id="lib-present-count" style="margin-top:14px;font-size:12px;color:#9AA6B2;"></div>
 </div>
 
+<!-- ============ 客人自己填资料表单（2026-10-02·三，同预约链接表单；提交后生成预约和客户档案） ============ -->
+<div class="modal-overlay" id="guest-form-overlay" style="z-index:80;">
+  <div class="modal-box" style="width:420px;max-height:88vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:15px;font-weight:700;">预约资料（客人自己填写）</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeGuestForm()">✕</span>
+    </div>
+    <div id="guest-form-sub" style="font-size:11px;color:var(--muted);margin-bottom:12px;"></div>
+    <div id="guest-form-body"></div>
+  </div>
+</div>
+
 <!-- ============ NEW CASE CHAT MODAL ============ -->
 <div class="modal-overlay" id="new-case-chat-overlay" onclick="if(event.target===this) closeNewCaseChatModal()">
   <div class="modal-box">
@@ -1418,18 +1434,15 @@ function setClinicTz(k){
    周视图 9:00 上面的固定栏每天一格，显示当天 OFF 和 memo；新增 memo：选日期、类型（备忘/OFF）、公开/私人，OFF 固定公开，显示作者；IN 室长的 OFF 就是从这里来 */
 var ME_NAME = 'Dewi';
 function memosOn(date){ return CAL_MEMOS.filter(function(m){ return m.date===date && (m.scope==='公开' || m.author===ME_NAME); }); }
-function renderTodayBlock(){
-  var el = document.getElementById('dash-today'); if(!el) return;
+/* "早上好"下面直接一行：今日 OFF：院长、KR 室长、IN 室长的名字；没有人 OFF 就不显示（2026-10-02 深夜；原来的"今日"区块含今日行程列表已删除） */
+function renderTodayOff(){
+  var el = document.getElementById('dash-off-row'); if(!el) return;
   var today = nowFullDt().split(' ')[0];
   var offs = CAL_MEMOS.filter(function(m){ return m.type==='OFF' && m.date===today; });
-  var grp = function(role){ var n = offs.filter(function(m){ return m.role===role; }).map(function(m){ return m.person; }); return '<span style="margin-right:18px;"><span style="color:var(--muted);">'+role+'</span> '+(n.length ? '<b style="color:#C1454A;">'+n.join('、')+'</b>' : '<span style="color:var(--dim);">无</span>')+'</span>'; };
-  var evs = calendarEvents().filter(function(e){ return e.date===today && !(e.kind==='reservation' && e.vstate==='预约取消'); }).sort(function(a,b){ return a.time.localeCompare(b.time); });
-  var memos = memosOn(today).filter(function(m){ return m.type==='备忘'; });
-  el.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">今日 <span style="font-weight:400;color:var(--muted);font-size:11px;">'+dateLabel(today)+'</span></div>'+
-    '<div style="font-size:12px;margin-bottom:10px;"><b>OFF</b>　'+grp('KR院长')+grp('KR室长')+grp('IN室长')+'</div>'+
-    '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">今日行程</div>'+
-    (evs.length ? evs.map(function(e){ return '<div class="schedule-row" style="cursor:pointer;" onclick="'+(e.caseId?'openCaseDetail(\''+e.caseId+'\')':'void(0)')+'"><span class="schedule-time">'+e.time+'</span><span class="dotmark" style="background:'+TYPE_COLOR[e.kind]+';"></span><span style="font-size:13px;">'+e.name+' · '+TYPE_LABEL[e.kind]+(e.purpose?' · '+e.purpose:'')+(e.vstate && e.vstate!=='待访问' ? '（'+e.vstate+'）' : '')+'</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);">今天没有行程</div>')+
-    (memos.length ? '<div style="font-size:11px;color:var(--muted);margin-top:8px;">'+memos.map(function(m){ return '📝 '+m.text+'（'+m.author+(m.scope==='私人'?' · 私人':'')+'）'; }).join('　')+'</div>' : '');
+  if(!offs.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  var grp = function(role){ var n = offs.filter(function(m){ return m.role===role; }).map(function(m){ return m.person; }); return n.length ? '<span style="margin-right:16px;"><span style="color:var(--muted);">'+role+'</span> <b style="color:#C1454A;">'+n.join('、')+'</b></span>' : ''; };
+  el.style.display = 'block';
+  el.innerHTML = '<b>今日 OFF：</b>'+grp('KR院长')+grp('KR室长')+grp('IN室长');
 }
 function memoCellHtml(ds){
   return memosOn(ds).map(function(m){
@@ -1498,7 +1511,7 @@ function buildKrWeekGrid(){
   var html = '<div class="wk-corner"></div>';
   days.forEach(function(dd,i){
     var ds = dateStr(dd), open = KR_OPEN_DATES.indexOf(ds)>-1;
-    html += '<div class="wk-head'+(sameDate(dd, TODAY_DATE)?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[i]+(open?'<br><span style="font-size:9px;color:var(--sage);font-weight:700;">施术开放</span>':'')+'</div>';
+    html += '<div class="wk-head'+(sameDate(dd, TODAY_DATE)?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(open?'<br><span style="font-size:9px;color:var(--sage);font-weight:700;">施术开放</span>':'')+'</div>';
   });
   var dirEvs = KR_DIRECTOR_SCHEDULE[KR_DIRECTOR] || [];
   WK_HOURS.forEach(function(hr){
@@ -1531,13 +1544,14 @@ function renderResvHistory(){
     return '<div class="trow" style="grid-template-columns:1.4fr 1fr 1.2fr 1fr;'+(r.caseId?'cursor:pointer;':'')+'"'+(r.caseId?' onclick="openCaseDetail(\''+r.caseId+'\')"':'')+'><span style="font-size:13px;">'+r.name+'</span><span style="font-size:12px;">'+(r.caseNo||'-')+'</span><span style="font-size:12px;">'+r.date+' '+r.time+'</span><span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+r.type+'</span></span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 2px;">没有匹配的记录</div>';
 }
+var CAL_WEEK_FULL = false, CAL_ANCHOR = null; /* 直接进工作台：今天在第一栏往后排7天；从月视图点某一周进来：完整一周（周一到周日） */
 function getWeekStart(offset){
-  var d = new Date(TODAY_DATE);
-  var wd = d.getDay(); // 0=Sun..6=Sat
-  var mondayDiff = (wd===0 ? -6 : 1-wd);
-  d.setDate(d.getDate()+mondayDiff+offset*7);
+  var d = new Date(CAL_WEEK_FULL && CAL_ANCHOR ? CAL_ANCHOR : TODAY_DATE);
+  if(CAL_WEEK_FULL){ var wd = d.getDay(); d.setDate(d.getDate() + (wd===0 ? -6 : 1-wd)); } /* 周一 */
+  d.setDate(d.getDate()+offset*7);
   return d;
 }
+function openWeekOf(ds){ CAL_WEEK_FULL = true; CAL_ANCHOR = new Date(ds+'T00:00:00'); WEEK_OFFSET = 0; setCalMode('week'); }
 function sameDate(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
 function dowOfDate(ds){ var d = new Date(ds+'T00:00:00'); var wd = d.getDay(); return wd===0 ? 6 : wd-1; }
 function dateLabel(ds){ var d = new Date(ds+'T00:00:00'); return (d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]; }
@@ -1569,29 +1583,28 @@ function eventChipHtml(e){
   var now = demoNow();
   var when = new Date(e.date+'T'+e.time+':00');
   var past = (when < now);
-  var grey = past && e.kind!=='placeholder' ? 'opacity:.5;filter:grayscale(1);' : '';
-  var label, onclick, extra = '';
+  var grey = past && e.kind!=='placeholder' ? 'opacity:.5;filter:grayscale(1);' : ''; /* 只有已过去 / 已结束的事件块是灰色 */
+  var l1, l2, onclick;
   if(e.kind==='reservation'){
-    label = '预约来访 ｜ '+(e.purpose||'')+' ｜ '+e.name;
-    if(e.vstate==='已到访') label += '（已到访）';
-    if(e.vstate==='未到店') label = '<s>'+label+'</s> 未到店';
+    l1 = e.vstate==='未到店' ? '<s>'+e.name+'</s>' : e.name;
+    l2 = (e.purpose||'')+(e.vstate==='已到访' ? '（已到访）' : '')+(e.vstate==='未到店' ? ' 未到店' : '');
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     if(e.vstate==='待访问' && past){
       var left = when.getTime() + 30*60000 - now.getTime();
-      if(left > 0){ grey = ''; extra = ' <b data-visit-countdown="'+when.getTime()+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; }
+      if(left > 0){ grey = ''; l2 += ' <b data-visit-countdown="'+when.getTime()+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; } /* 30 分钟内未到访：保持亮色+倒计时 */
     }
     onclick = e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)';
   } else if(e.kind==='travel'){
-    label = '赴韩施术 ｜ '+e.name;
+    l1 = e.name; l2 = '赴韩施术';
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     onclick = 'openCaseDetail(\''+e.caseId+'\')';
   } else {
     var ph = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===e.phId; })[0];
-    label = '预约占位 ｜ '+e.name+' <span data-ph-countdown="'+e.phId+'">'+(ph?placeholderCountdownText(ph):'')+'</span>';
+    l1 = e.name; l2 = (e.purpose||'占位')+' <span data-ph-countdown="'+e.phId+'">'+(ph?placeholderCountdownText(ph):'')+'</span>';
     onclick = 'openPlaceholderModal(\''+e.phId+'\')';
   }
   var dashed = e.kind==='placeholder' ? 'border-style:dashed;' : '';
-  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'">'+label+extra+'</div>';
+  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+(e.purpose?' · '+e.purpose:'')+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'"><div class="l1">'+l1+'</div><div class="l2">'+l2+'</div></div>';
 }
 function buildWeekGrid(){
   if(CAL_VIEW==='kr'){ buildKrWeekGrid(); return; }
@@ -1602,20 +1615,22 @@ function buildWeekGrid(){
   var html = '<div class="wk-corner"></div>';
   days.forEach(function(dd,i){
     var isToday = sameDate(dd, TODAY_DATE);
-    html += '<div class="wk-head'+(isToday?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[i]+'</div>';
+    html += '<div class="wk-head'+(isToday?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(dateStr(dd))]+'</div>';
   });
   html += '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div>';
   days.forEach(function(dd){ html += '<div class="wk-memo">'+memoCellHtml(dateStr(dd))+'</div>'; });
   WK_HOURS.forEach(function(hr){
     var rowEvs = evs.filter(function(e){ return slotOf(e.time)===hr; });
-    html += '<div class="wk-time'+(rowEvs.length?'':' empty')+'">'+hr+'<span class="kr">KR '+krTimeOf(hr)+'</span></div>';
+    var nowD = demoNow(), nowSlot = pad2(nowD.getHours())+':'+(nowD.getMinutes()>=30?'30':'00');
+    html += '<div class="wk-time'+(rowEvs.length?'':' empty')+(hr===nowSlot?' wk-now':'')+'">'+hr+'<span class="kr">KR '+krTimeOf(hr)+'</span></div>';
     for(var d=0; d<7; d++){
       var ds = dateStr(days[d]);
       var cell = rowEvs.filter(function(e){ return e.date===ds; });
       var chips = cell.map(eventChipHtml).join('');
-      var pastSlot = new Date(ds+'T'+hr+':00') < demoNow(); /* 今天过去的时段灰掉，不能再新增预约 */
+      var pastSlot = new Date(new Date(ds+'T'+hr+':00').getTime()+30*60000) <= demoNow(); /* 已经结束的时段不能约（hover 灰）；当前时段可以约（客人直接到店） */
       var slotClick = (cell.length || pastSlot) ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
-      html += '<div class="wk-cell'+(cell.length?'':' wk-cell-open')+(pastSlot?' wk-past':'')+'"'+slotClick+'>'+chips+'</div>';
+      var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
+      html += '<div class="wk-cell'+(cell.length?'':' wk-cell-open')+(pastSlot?' wk-past':'')+(isNow?' wk-now':'')+'"'+slotClick+'>'+chips+'</div>';
     }
   });
   document.getElementById('wk-grid').innerHTML = html;
@@ -1632,7 +1647,7 @@ function buildMonthGrid(){
     var n = evs.filter(function(e){ return e.date===ds; }).length;
     var offs = CAL_MEMOS.filter(function(m){ return m.type==='OFF' && m.date===ds; }).map(function(m){ return m.person; });
     var extra = (offs.length ? '<div style="font-size:10px;font-weight:700;color:var(--terracotta);">'+offs.join('、')+' OFF</div>' : '')+(n ? '<div style="font-size:12px;font-weight:700;color:var(--slate2);">'+n+' 项日程</div>' : '');
-    html += '<div class="cal-cell" onclick="setCalMode(\'week\')" title="点击进入周视图"><span style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'">'+cur.getDate()+'</span>'+extra+'</div>';
+    html += '<div class="cal-cell" onclick="openWeekOf(\''+ds+'\')" title="点击进入这一周的周视图"><span style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'">'+cur.getDate()+'</span>'+extra+'</div>';
     cur.setDate(cur.getDate()+1);
   }
   grid.innerHTML = html;
@@ -1659,14 +1674,14 @@ function setCalMode(mode){
   renderCalendar();
 }
 function renderCalendar(){
-  renderTodayBlock();
+  renderTodayOff();
   if(CAL_MODE==='week') buildWeekGrid();
   else if(CAL_MODE==='month') buildMonthGrid();
   else buildDayGrid();
 }
 function calPrev(){ if(CAL_MODE==='week') WEEK_OFFSET--; else if(CAL_MODE==='day') DAY_OFFSET--; renderCalendar(); }
 function calNext(){ if(CAL_MODE==='week') WEEK_OFFSET++; else if(CAL_MODE==='day') DAY_OFFSET++; renderCalendar(); }
-function calToday(){ WEEK_OFFSET=0; DAY_OFFSET=0; renderCalendar(); }
+function calToday(){ WEEK_OFFSET=0; DAY_OFFSET=0; CAL_WEEK_FULL=false; CAL_ANCHOR=null; renderCalendar(); } /* 回今天：今天在第一栏 */
 
 /* ================= dashboard: 预约来访 + 预约占位（2026-09-29 新增，IN-DASH-01） ================= */
 /* KR 院长名单（演示数据，以后由韩国端维护）：active=false 为停用，停用的不显示在选项里（2026-10-02） */
@@ -1723,7 +1738,8 @@ function renderAddSlotBody(){
       '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">链接自动插入，不可删除：<b>'+link+'</b></div>'+
       '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate2);margin-bottom:14px;"><input type="checkbox" id="add-slot-save-default"> 保存为默认模板（只勾选才会覆盖默认，不勾只对本次生效）</label>'+
       '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">发送后所选时段出现15分钟"预约占位"，客户在链接里填写完成后转为正式预约</div>'+
-      '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotNew(\''+link+'\')">发送链接</button>';
+      '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotNew(\''+link+'\')">发送链接</button>'+
+      '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="openGuestFormFromSlot()">演示：客人现场自己填资料（同预约链接表单）</button>';
   }
   document.getElementById('add-slot-body').innerHTML = modeTabs + body;
 }
@@ -1828,7 +1844,53 @@ function cancelPlaceholder(id){
   closeAddSlotModal();
   renderCalendar();
 }
+/* 客人自己填资料（演示，同预约链接表单）：姓名、手机号、性别、出生日期、病史/医美史、轻量同意勾选（必勾）；提交 → 生成预约（待访问）+ 客户档案 */
+var GUEST_FORM = null;
+function openGuestFormFromSlot(){
+  var phoneEl = document.getElementById('add-slot-phone'), purEl = document.getElementById('add-slot-purpose');
+  openGuestForm({date:ADD_SLOT_CONTEXT.date, time:ADD_SLOT_CONTEXT.time, phone:phoneEl?phoneEl.value.trim():'', purpose:purEl?purEl.value:'面诊商谈', phId:null});
+}
+function openGuestForm(ctx){
+  closeAddSlotModal();
+  GUEST_FORM = Object.assign({name:'', gender:'女', dob:'', history:'', consent:false, err:''}, ctx);
+  renderGuestForm();
+  document.getElementById('guest-form-overlay').classList.add('open');
+}
+function closeGuestForm(){ document.getElementById('guest-form-overlay').classList.remove('open'); GUEST_FORM = null; }
+function guestSet(k, v){ GUEST_FORM[k] = v; if(k==='consent') renderGuestForm(); }
+function renderGuestForm(){
+  var g = GUEST_FORM; if(!g) return;
+  document.getElementById('guest-form-sub').textContent = '预约时间：'+dateLabel(g.date)+' '+g.time+'　来访目的：'+g.purpose;
+  var inp = function(label, k, type, ph){ return '<div class="field" style="margin-bottom:10px;"><label>'+label+'</label><input type="'+(type||'text')+'" value="'+(g[k]||'').replace(/"/g,'&quot;')+'" placeholder="'+(ph||'')+'" oninput="guestSet(\''+k+'\',this.value)"></div>'; };
+  document.getElementById('guest-form-body').innerHTML =
+    inp('姓名 *','name','text','请输入姓名')+inp('手机号 *','phone','text','+62 812-xxxx-xxxx')+
+    '<div class="field" style="margin-bottom:10px;"><label>性别</label><select onchange="guestSet(\'gender\',this.value)"><option'+(g.gender==='女'?' selected':'')+'>女</option><option'+(g.gender==='男'?' selected':'')+'>男</option></select></div>'+
+    inp('出生日期','dob','date')+
+    '<div class="field" style="margin-bottom:10px;"><label>病史 / 过敏史 / 过往医美史</label><textarea rows="2" oninput="guestSet(\'history\',this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+(g.history||'')+'</textarea></div>'+
+    '<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer;"><input type="checkbox" '+(g.consent?'checked ':'')+'onchange="guestSet(\'consent\',this.checked)"> 我同意提供以上资料用于预约和接待（轻量同意，必勾）</label>'+
+    (g.err ? '<div class="error-text" style="display:block;margin-bottom:8px;">'+g.err+'</div>' : '')+
+    '<button class="btn-primary" style="width:100%;" onclick="submitGuestForm()">提交预约</button>';
+}
+function submitGuestForm(){
+  var g = GUEST_FORM; if(!g) return;
+  var miss = [];
+  if(!(g.name||'').trim()) miss.push('姓名');
+  if(!(g.phone||'').trim()) miss.push('手机号');
+  if(!g.consent) miss.push('同意勾选');
+  if(miss.length){ g.err = '还差：'+miss.join('、'); renderGuestForm(); return; }
+  if(g.phId) RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==g.phId; }); /* 占位转正式预约 */
+  var c = createReservationCase(g.name.trim(), null, g.date, g.time, g.phone.trim(), g.purpose);
+  c.basic = {gender:g.gender, dob:g.dob||'—', contact:g.phone.trim(), history:(g.history||'').trim()||'无'};
+  var row = CLIENTS.filter(function(x){ return x[0]===c.name; })[0]; if(row) row[2] = '客人自助'; /* 建档：客户自助预约 */
+  closeGuestForm(); renderCalendar();
+  if(typeof buildClients==='function') buildClients();
+  if(typeof renderCaseRows==='function') renderCaseRows();
+  showToast('预约和客户档案已生成', c.name+' · Case ID '+c.caseNo+' · '+dateLabel(g.date)+' '+g.time+'，客人到店后点［已到店］', function(){ openCaseDetail(c.id); });
+}
 function simulateCustomerFilledPlaceholder(id){
+  var ph0 = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0];
+  if(ph0){ openGuestForm({date:ph0.date, time:ph0.time, phone:ph0.phone, purpose:ph0.purpose||'面诊商谈', phId:id}); return; } /* 演示：客人在链接里填写 → 同一个表单 */
+  return;
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
   RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==id; });
   closeAddSlotModal();
