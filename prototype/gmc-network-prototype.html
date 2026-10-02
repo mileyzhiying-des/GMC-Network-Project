@@ -830,11 +830,11 @@ input,textarea,select{font-family:inherit;}
       <span style="cursor:pointer;color:var(--slate);" onclick="closeHoldingRefundModal()">✕</span>
     </div>
     <div id="holding-refund-info" style="font-size:13px;margin-bottom:12px;"></div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（Rp） <span style="color:#C1454A;">*</span></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（Rp，可为 0） <span style="color:#C1454A;">*</span></div>
     <input type="number" min="0" id="holding-refund-amount" placeholder="请输入退款金额" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
     <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
     <textarea id="holding-refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">按批次退款：这一批的次数将全部作废（不能只退其中几次）；退款记录挂在这一批购买上，不改变任何案件的结局。</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">按批次退款：只要还有剩余次数（未使用、部分使用）就能退；退款后这一批作废、剩余次数归零（已用过的次数保留为历史）；退款记录挂在这一批购买上，不改变任何案件的结局。</div>
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button class="btn-outline" style="flex:1;" onclick="closeHoldingRefundModal()">取消</button>
       <button class="btn-primary" style="flex:1;" onclick="confirmHoldingRefund()">确认退款</button>
@@ -1995,7 +1995,7 @@ function openClientDetail(name, from){
   nav('in-clientdetail');
 }
 /* 持有项目卡片（HoldingBatch，总览第10节，2026-09-30）：按项目汇总显示，每个项目可展开看到各个批次；
-   批次状态：未使用 / 部分使用 / 已用完 / 已取消（已退款）；只有"未使用"的批次显示「退款」按钮（金额+原因必填，整批作废）；
+   批次状态：未使用 / 部分使用 / 已用完 / 已取消（已退款）；2026-10-02 改：只要批次还有剩余次数（未使用、部分使用）就显示「退款」（金额手填可为0，原因必填，退款后该批次作废、剩余次数归零）；已用完的没有退款按钮；
    项目名、批次信息和退款按钮分开排版（按钮不再和文字黏在一起、项目名不折行） */
 var HOLD_CARD_NAME = null, HOLD_EXPAND = {};
 function holdingsAllSorted(name){
@@ -2036,7 +2036,7 @@ function renderClientHoldings(name){
     var open = !!HOLD_EXPAND[gi];
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
-      var action = st==='未使用'
+      var action = (st==='未使用' || st==='部分使用')
         ? '<a href="#" class="info-link" style="white-space:nowrap;" onclick="openHoldingRefundByIdx('+gi+','+bi+');return false;">退款</a>'
         : (b.refund ? '<span style="font-size:11px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '');
       return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 8px 14px;border-top:1px dashed var(--border2);">'+
@@ -2054,9 +2054,9 @@ function renderClientHoldings(name){
 var HOLDING_REFUND_CTX = null;
 function openHoldingRefundModal(name, itemName, batchIdx){
   var h = (CLIENT_HOLDINGS[name]||[]).filter(function(x){ return x.itemName===itemName; })[0]; if(!h) return;
-  var b = h.batches[batchIdx]; if(!b || b.refund || b.used>0) return; /* 只有完全没用过的批次才能退款 */
+  var b = h.batches[batchIdx]; if(!b || b.refund || b.voided || (b.bought-b.used)<=0) return; /* 还有剩余次数（未使用/部分使用）才能退款；已用完的不能 */
   HOLDING_REFUND_CTX = {name:name, itemName:itemName, batchIdx:batchIdx};
-  document.getElementById('holding-refund-info').innerHTML = '<b>'+itemName+'</b><br><span style="color:var(--slate2);font-size:12px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 购买 '+b.bought+' 次，已用 '+b.used+' 次</span>';
+  document.getElementById('holding-refund-info').innerHTML = '<b>'+itemName+'</b><br><span style="color:var(--slate2);font-size:12px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 购买 '+b.bought+' 次，已用 '+b.used+' 次，<b>剩余 '+(b.bought-b.used)+' 次将作废</b></span>';
   document.getElementById('holding-refund-amount').value = '';
   document.getElementById('holding-refund-reason').value = '';
   document.getElementById('holding-refund-overlay').classList.add('open');
@@ -2070,8 +2070,9 @@ function confirmHoldingRefund(){
   var reason = document.getElementById('holding-refund-reason').value.trim();
   if(!reason){ alert('请填写退款原因'); return; }
   var h = (CLIENT_HOLDINGS[ctx.name]||[]).filter(function(x){ return x.itemName===ctx.itemName; })[0]; if(!h) return;
-  var b = h.batches[ctx.batchIdx]; if(!b || b.used>0) return;
-  b.voided = true; /* 这一批的次数全部作废 */
+  var b = h.batches[ctx.batchIdx]; if(!b || b.voided || (b.bought-b.used)<=0) return;
+  b.voidedRemaining = b.bought-b.used; /* 作废的剩余次数（已用的次数保留作历史） */
+  b.voided = true; /* 这一批作废，剩余次数归零 */
   b.refund = {amount:amount, currency:'IDR', reason:reason, date:nowFullDt().split(' ')[0]}; /* 退款记录挂在这一批上；不改变任何案件的结局 */
   HOLDING_REFUND_CTX = null;
   closeHoldingRefundModal();
