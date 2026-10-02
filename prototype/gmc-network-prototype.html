@@ -1173,6 +1173,19 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 提及案件 MODAL（2026-10-02，原"关联案件"🔗改名） ============ -->
+<div class="modal-overlay" id="mention-case-overlay" style="z-index:70;" onclick="if(event.target===this) closeMentionCase()">
+  <div class="modal-box" style="width:420px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:15px;font-weight:700;">提及案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeMentionCase()">✕</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">只是在对话里附上案件卡片，不会写入案件；基础资料还没确认的案件也可以提及</div>
+    <div id="mention-case-list" style="margin-bottom:14px;"></div>
+    <button class="btn-primary" style="width:100%;" onclick="sendMention()">发送</button>
+  </div>
+</div>
+
 <!-- ============ NEW CASE CHAT MODAL ============ -->
 <div class="modal-overlay" id="new-case-chat-overlay" onclick="if(event.target===this) closeNewCaseChatModal()">
   <div class="modal-box">
@@ -3258,8 +3271,15 @@ function relatedEntryHtml(c, other, link, follower, origin, key){
     '<span style="font-size:12px;color:var(--muted);flex:1;">'+caseFirstDate(other)+'</span>'+
     '<span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span><span style="font-size:11px;color:var(--slate);">'+(open?'▴':'▾')+'</span></div>';
   var body = open ? '<div style="background:var(--border2);border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+relatedSummaryHtml(c, other, link.reason, follower, origin)+
-    '<div style="margin-top:8px;"><a href="#" class="info-link" onclick="openCaseDetail(\''+other.id+'\');return false;">查看完整案件 →</a></div></div>' : '';
+    '<div style="margin-top:8px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="viewRelatedCase(\''+other.id+'\')">查看案件</button><span style="font-size:11px;color:var(--muted);margin-left:8px;">'+(isEnded(other) ? '已终态：打开附件里的"对话记录（文本）"' : '进行中：在案件里打开对话')+'</span></div></div>' : '';
   return '<div style="border-bottom:1px solid var(--border2);">'+head+body+'</div>';
+}
+/* 关联案件tab的［查看案件］（2026-10-02）：打开那个案件；进行中 → 在案件里打开对话；已终态 → 打开附件里的"对话记录（文本）" */
+function viewRelatedCase(id){
+  var o = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!o) return;
+  openCaseDetail(id);
+  if(isEnded(o)){ o.activeCaseTab = 'attachments'; renderCaseBody(o); }
+  else if(caseRoomEligible(o)){ openCaseRoom(id); }
 }
 function relatedTabHtml(c){
   var before = '', after = '';
@@ -6304,7 +6324,40 @@ function renderFloatToolbar(){
   html += btn('提及案件', 'openMentionCase()');
   el.innerHTML = html;
 }
-function openMentionCase(){ /* 提及案件（五） */ }
+/* ---- 提及案件（2026-10-02，原 🔗 关联案件，改名避免和案件页「关联案件」tab混淆） ----
+   附上案件卡片；候选包含基础资料还没确认的案件；卡片下面：进行中 → ［查看案件］［转到案件对话］（没有房间：符合建房条件就直接开，不符合只显示［查看案件］）；终态 → 只有［查看案件］ */
+var MENTION_PICK = null;
+function openMentionCase(){
+  MENTION_PICK = null;
+  document.getElementById('mention-case-list').innerHTML = CASE_ITEMS.map(function(c){
+    var b = caseStatusBadge(c);
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:13px;cursor:pointer;"><input type="radio" name="mention-case" value="'+c.id+'" onchange="MENTION_PICK=this.value"> '+c.name+' · '+(c.caseNo||'')+' <span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';font-size:10px;">'+b[2]+'</span></label>';
+  }).join('');
+  document.getElementById('mention-case-overlay').classList.add('open');
+}
+function closeMentionCase(){ document.getElementById('mention-case-overlay').classList.remove('open'); }
+function sendMention(){
+  if(!MENTION_PICK){ alert('请选择要提及的案件'); return; }
+  var c = CASE_ITEMS.filter(function(x){ return x.id===MENTION_PICK; })[0]; if(!c) return;
+  if(!CHAT_DATA[CURRENT_ROOM]) CHAT_DATA[CURRENT_ROOM] = [];
+  CHAT_DATA[CURRENT_ROOM].push({day:'2026년 9월 18일', from:'me', kind:'mention', caseId:c.id, orig:'[提及案件] '+c.name+' '+(c.caseNo||''), time:nowTime()});
+  closeMentionCase();
+  renderFloatMessages();
+}
+function mentionCardHtml(m){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===m.caseId; })[0];
+  if(!c) return '<div class="bubble me">[提及案件] 该案件已不存在</div>';
+  var b = caseStatusBadge(c), ended = isEnded(c);
+  var hasRoom = CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id));
+  var btns = '<button class="btn-outline" style="padding:4px 10px;font-size:11px;" onclick="viewMentionedCase(\''+c.id+'\')">查看案件</button>';
+  if(!ended && (hasRoom || caseRoomEligible(c))) btns += '<button class="btn-primary" style="padding:4px 10px;font-size:11px;" onclick="gotoCaseChat(\''+c.id+'\')">转到案件对话</button>';
+  return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 12px;min-width:210px;">'+
+    '<div style="font-size:13px;font-weight:700;">'+c.name+' <span style="font-weight:400;color:var(--muted);">· '+(c.caseNo||'')+'</span></div>'+
+    '<div style="margin:6px 0 8px;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span></div>'+
+    '<div style="display:flex;gap:8px;">'+btns+'</div></div>';
+}
+function viewMentionedCase(caseId){ closeFloat(); openCaseDetail(caseId); }
+function gotoCaseChat(caseId){ openCaseRoom(caseId); }
 function toggleAttachMenu(){
   var m = document.getElementById('attach-menu'); if(!m) return;
   m.style.display = m.style.display==='block' ? 'none' : 'block';
@@ -6420,7 +6473,9 @@ function renderFloatMessages(){
     if(q && (m.orig||'').toLowerCase().indexOf(q)===-1) return;
     if(m.day !== lastDay){ html += '<div class="day-divider">'+m.day+'</div>'; lastDay = m.day; }
     var qLink = CURRENT_ROOM.indexOf('case-')===0 ? '' : ' <a href="#" class="info-link" style="font-size:10px;" onclick="openQuoteModal('+i+');return false;">引用到案件</a>';
-    if(m.kind==='file'){
+    if(m.kind==='mention'){
+      html += '<div class="bubble-row me"><div class="bubble-col">'+mentionCardHtml(m)+'<span class="bubble-trans" style="text-align:right;">'+m.time+qLink+'</span></div></div>';
+    } else if(m.kind==='file'){
       var fic = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
       html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+fic+' '+m.fname+'</div><span class="bubble-trans" style="text-align:right;">'+m.time+qLink+'</span></div></div>';
     } else if(m.kind==='sys'){
@@ -6461,7 +6516,7 @@ function openQuoteModal(idx){
   document.getElementById('quote-overlay').classList.add('open');
 }
 function renderQuoteCaseList(){
-  document.getElementById('quote-case-list').innerHTML = CASE_ITEMS.filter(function(c){ return c.materialsConfirmed; }).map(function(c){
+  document.getElementById('quote-case-list').innerHTML = CASE_ITEMS.filter(function(c){ return c.materialsConfirmed && !isEnded(c); }).map(function(c){
     return '<label style="display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:13px;cursor:pointer;"><input type="radio" name="quote-case" value="'+c.id+'" onchange="QUOTE_PENDING.caseId=this.value"> '+c.name+' · '+c.caseNo+'</label>';
   }).join('');
 }
@@ -6470,7 +6525,11 @@ function confirmQuote(){
   var q = QUOTE_PENDING; if(!q) return;
   if(!q.caseId){ alert('请选择要引用到的案件'); return; }
   var roomId = getCaseRoomId(q.caseId);
-  if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = []; /* 原本没有对话房的案件，引用后也会出现在"案件"分类里 */
+  var qc = CASE_ITEMS.filter(function(x){ return x.id===q.caseId; })[0];
+  if(!CHAT_DATA.hasOwnProperty(roomId)){
+    if(!qc || !caseRoomEligible(qc)){ alert('这个案件还不符合建房条件（面诊案件缴费或免除后才能建房），暂时不能引用'); return; }
+    ensureCaseRoom(qc); /* 被引用的案件还没有房间且符合建房条件 → 生成房间 */
+  }
   CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'me', kind:'quote', speaker:q.speaker, srcDt:q.srcDt, srcRoom:q.srcRoom, orig:q.orig, time:nowTime()});
   var c = CASE_ITEMS.filter(function(x){ return x.id===q.caseId; })[0];
   if(c){ logCaseEvent(c, 'Dewi', '从「'+q.srcRoom+'」引用了一条消息到案件对话房'); }
