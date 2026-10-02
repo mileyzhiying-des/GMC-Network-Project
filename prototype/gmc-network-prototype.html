@@ -335,7 +335,6 @@ input,textarea,select{font-family:inherit;}
       <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">
         <div class="cal-toolbar">
           <div class="cal-legend">
-            <span><span class="dotmark" style="background:var(--sage);"></span>视频沟通</span>
             <span><span class="dotmark" style="background:var(--terracotta);"></span>来韩施术</span>
             <span><span class="dotmark" style="background:var(--blue);"></span>术后管理</span>
             <span><span class="dotmark" style="background:var(--purple);"></span>其他</span>
@@ -1301,17 +1300,14 @@ var CAL_MODE = 'week';
 var WEEK_OFFSET = 0;
 var DAY_OFFSET = 0;
 /* ⚠️ 已废弃：图例"来韩施术" —— 2026-09-29 统一改为"赴韩施术"，见对应Change Request */
-var TYPE_COLOR = {video:'var(--sage)', travel:'var(--terracotta)', post:'var(--blue)', other:'var(--purple)', reservation:'var(--navy)'};
-var TYPE_BG = {video:'var(--sage-bg)', travel:'var(--terracotta-bg)', post:'var(--blue-bg)', other:'var(--purple-bg)', reservation:'#E4E8ED'};
-var TYPE_LABEL = {video:'视频沟通', travel:'赴韩施术', post:'术后管理', other:'其他', reservation:'预约来访'};
+var TYPE_COLOR = {travel:'var(--terracotta)', post:'var(--blue)', other:'var(--purple)', reservation:'var(--navy)'};
+var TYPE_BG = {travel:'var(--terracotta-bg)', post:'var(--blue-bg)', other:'var(--purple-bg)', reservation:'#E4E8ED'};
+var TYPE_LABEL = {travel:'赴韩施术', post:'术后管理', other:'其他', reservation:'预约来访'};
 /* dayIndex: 0=周一 … 6=周日, repeats on whichever week是显示的（demo数据，不绑定某个绝对日期）。
    type==='reservation' 的事件额外带 caseId（点击进对应案件页）和 arrived（客户到店后变暗+标"已到访"） */
 var WEEK_EVENTS = [
   {dayIndex:0, time:'11:00', name:'Maya Putri', type:'post'},
-  {dayIndex:1, time:'14:00', name:'Lina Marlina', type:'video'},
   {dayIndex:3, time:'11:00', name:'Andi Wijaya', type:'travel'},
-  {dayIndex:3, time:'14:00', name:'Putri Wulandari', type:'video'},
-  {dayIndex:4, time:'15:00', name:'Kevin Tan', type:'video'},
   {dayIndex:5, time:'10:00', name:'Siti Rahma', type:'post'},
   {dayIndex:0, time:'09:30', name:'Siti Rahayu', type:'reservation', caseId:'siti', arrived:false},
   {dayIndex:1, time:'11:00', name:'Ayu Lestari', type:'reservation', caseId:'ayu2', arrived:false},
