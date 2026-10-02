@@ -301,7 +301,7 @@ input,textarea,select{font-family:inherit;}
         <span style="font-size:13px;font-weight:700;color:var(--terracotta);">进入工作台 →</span>
       </div>
     </div>
-    <a href="#" onclick="nav('video-consult');return false;" style="font-size:13px;color:var(--slate);border-bottom:1px solid var(--border);padding-bottom:2px;">查看视频沟通界面示例 →</a>
+    <a href="#" onclick="startDemoCall();return false;" style="font-size:13px;color:var(--slate);border-bottom:1px solid var(--border);padding-bottom:2px;">查看视频沟通界面示例 →</a>
   </div>
   <div class="landing-footer">
     <b>标准流程</b><span>|</span>
@@ -330,36 +330,7 @@ input,textarea,select{font-family:inherit;}
         </div>
       </div>
 
-      <div class="card">
-        <div class="consult-body">
-          <div>
-            <div class="consult-time">14:00</div>
-            <div class="consult-duration">预计时长 60分钟</div>
-          </div>
-          <div style="width:1px;align-self:stretch;background:var(--border2);"></div>
-          <div style="display:flex;align-items:center;gap:12px;">
-            <span class="avatar" style="width:38px;height:38px;background:var(--terracotta);">P</span>
-            <div>
-              <div style="font-size:14px;font-weight:700;">Putri Wulandari</div>
-              <div style="font-size:11px;color:var(--muted);">女 · 28岁 · 印尼</div>
-            </div>
-          </div>
-          <div style="width:1px;align-self:stretch;background:var(--border2);"></div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);">韩国室长</div>
-            <div style="font-size:13px;font-weight:700;">Kr Lee</div>
-          </div>
-          <div style="width:1px;align-self:stretch;background:var(--border2);"></div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);">⏱ 距离开始</div>
-            <div id="consult-countdown" style="font-size:16px;font-weight:700;">2小时13分钟</div>
-          </div>
-          <div style="margin-left:auto;display:flex;flex-direction:column;gap:8px;">
-            <a class="btn-primary" href="#" onclick="nav('video-consult');return false;" style="padding:9px 18px;">🎥 进入会议</a>
-            <a class="btn-outline" href="#" onclick="openCaseDetail('siti');return false;" style="padding:9px 18px;">查看案件</a>
-          </div>
-        </div>
-      </div>
+      <div class="card" id="dash-call-card" style="display:none;"></div>
 
       <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">
         <div class="cal-toolbar">
@@ -702,46 +673,7 @@ input,textarea,select{font-family:inherit;}
 </section>
 
 <!-- ============ VIDEO CONSULT ============ -->
-<section class="page" id="video-consult" style="display:none;">
-  <div class="vc-top">
-    <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:#9AA6B2;">← 返回</a><span style="width:1px;height:14px;background:#2A3344;"></span><span style="font-size:14px;font-weight:700;">视频沟通 · Siti Rahayu</span><span style="font-size:11px;color:#9AA6B2;border:1px solid #2A3344;border-radius:10px;padding:2px 8px;">院长可加入</span></div>
-    <div style="display:flex;align-items:center;gap:12px;">
-      <span id="rec-label" style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;color:#E05A50;"><span id="rec-dot" style="width:8px;height:8px;border-radius:50%;background:#E05A50;"></span>录制中</span>
-      <span style="font-size:12px;color:#9AA6B2;">00:14:32</span>
-    </div>
-  </div>
-  <div class="vc-body">
-    <div class="vc-main">
-      <div class="vc-grid">
-        <div class="vc-tile" style="grid-column:span 2;">
-          <span class="vc-label">김민석 원장 · 서울</span>
-          <div class="vc-avt" style="width:96px;height:96px;background:#3B4A5A;font-size:26px;">김</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:14px;">
-          <div class="vc-tile" style="flex-grow:1;"><span class="vc-label">Siti Rahayu · 客户</span><div class="vc-avt" style="width:60px;height:60px;background:var(--terracotta);font-size:17px;">S</div></div>
-          <div class="vc-tile" style="flex-grow:1;"><span class="vc-label">Dewi · 印尼室长（翻译）</span><div class="vc-avt" style="width:60px;height:60px;background:var(--sage);font-size:17px;">D</div></div>
-        </div>
-      </div>
-      <div class="vc-controls">
-        <span class="vc-btn">🎤</span><span class="vc-btn">📷</span>
-        <span class="vc-btn" id="rec-btn" onclick="toggleRec()" style="background:#C1454A;">⏺</span>
-        <span class="vc-btn">💬</span>
-        <a href="#" onclick="endVideoConsult();return false;" style="width:118px;height:44px;border-radius:22px;background:#C1454A;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;">结束通话</a>
-      </div>
-    </div>
-    <div class="vc-side">
-      <span style="font-size:12px;font-weight:700;color:#9AA6B2;text-transform:uppercase;">对话 &amp; 备注</span>
-      <div style="display:flex;flex-direction:column;gap:10px;flex-grow:1;">
-        <div class="msg" style="background:#1B2333;color:#E5E9EE;padding:10px 14px;border-radius:12px;">김민석 원장：请问客户希望改善的下颌线程度大概是怎样的？</div>
-        <div class="msg" style="background:#2A3344;color:#E5E9EE;align-self:flex-end;padding:10px 14px;border-radius:12px;">Dewi：客户提到主要在意侧面轮廓松弛，可以看一下补充照片。</div>
-        <div class="msg" style="background:#1B2333;color:#E5E9EE;padding:10px 14px;border-radius:12px;">김민석 원장：明白，建议先做超声刀评估，眼部部分下次到院详细检查。</div>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <input type="text" style="flex-grow:1;padding:10px 12px;border-radius:10px;border:1px solid #2A3344;background:#1B2333;color:#E5E9EE;font-size:13px;">
-        <span class="send-btn">➤</span>
-      </div>
-    </div>
-  </div>
+<section class="page" id="video-consult" style="display:none;"><div id="vc-root" style="display:flex;flex-direction:column;min-height:100vh;"></div>
 </section>
 
 </div>
@@ -1198,6 +1130,17 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 来电 MODAL（2026-10-02，被呼叫方：铃声 + 加入/拒绝） ============ -->
+<div class="modal-overlay" id="incoming-call-overlay" style="z-index:90;">
+  <div class="modal-box" style="width:340px;text-align:center;">
+    <div style="font-size:34px;margin-bottom:6px;">🔔</div>
+    <div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:6px;">铃声响起…</div>
+    <div id="incoming-call-title" style="font-size:15px;font-weight:700;margin-bottom:4px;"></div>
+    <div id="incoming-call-sub" style="font-size:12px;color:var(--muted);margin-bottom:18px;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="declineIncomingCall()">拒绝</button><button class="btn-primary" style="flex:1;" onclick="acceptIncomingCall()">加入</button></div>
+  </div>
+</div>
+
 <!-- ============ NEW CASE CHAT MODAL ============ -->
 <div class="modal-overlay" id="new-case-chat-overlay" onclick="if(event.target===this) closeNewCaseChatModal()">
   <div class="modal-box">
@@ -1350,18 +1293,6 @@ document.addEventListener('DOMContentLoaded', function(){
   metaviewSimulate();
 });
 
-/* ================= dashboard: countdown ================= */
-var CONSULT_TARGET = Date.now() + (2*3600000 + 13*60000);
-function tickCountdown(){
-  var diff = CONSULT_TARGET - Date.now();
-  var el = document.getElementById('consult-countdown');
-  if(!el) return;
-  if(diff <= 0){ el.textContent = '即将开始'; return; }
-  var h = Math.floor(diff/3600000);
-  var m = Math.floor((diff%3600000)/60000);
-  el.textContent = h+'小时'+m+'分钟';
-}
-setInterval(tickCountdown, 1000);
 
 /* ================= dashboard: calendar (month / week / day) ================= */
 var DOW_CN = ['一','二','三','四','五','六','日'];
@@ -2892,9 +2823,8 @@ function toggleChatVideoParticipant(name){
 function closeChatVideoParticipantModal(){ document.getElementById('chat-video-participant-overlay').classList.remove('open'); }
 function confirmChatVideoParticipants(){
   if(!CHAT_VIDEO_PARTICIPANTS_SELECTED.length){ alert('请至少选择一位参与人'); return; }
-  CHAT_VIDEO_CONTEXT_CASE_ID = CHAT_VIDEO_PARTICIPANT_CASE_ID;
   closeChatVideoParticipantModal();
-  nav('video-consult');
+  startCall('chat', CHAT_VIDEO_PARTICIPANT_CASE_ID, CHAT_VIDEO_PARTICIPANTS_SELECTED.slice()); /* 不预约，点了直接呼叫 */
 }
 function stageLogLabel(c){
   var t = CASE_TABS.filter(function(x){ return x.key===c.stage; })[0];
@@ -2924,17 +2854,132 @@ function openInviteKrModal(){
   }).join('');
   document.getElementById('invite-kr-overlay').classList.add('open');
 }
+/* ================= 视频通话（2026-10-02 增量·四，室长视频；不预约，点了直接呼叫） =================
+   参与人=两边室长（客人用 IN 室长的画面），院长不在呼叫名单里但可自愿加入（画面显示"院长可加入"）；
+   顶部半透明工具栏（静音 / 共享屏幕 / 结束并归档），两边室长都能共享屏幕；下方"AI 实时转录"（人名+原文+译文，手动输入用圆角框标出并翻译）；"录制中"提示；
+   任一室长按［结束并归档］，或所有人离开超过10分钟自动结束并归档（演示按钮模拟）；离开后可从对话抽屉红卡片 / 工作台卡片重新加入，结束后两者消失 */
+var VIDEO_CALL = {active:false, kind:null, caseId:null, participants:[], status:'idle', shareBy:null, muted:false, startedAt:0, transcript:[]};
+function callTitle(){ var c = VIDEO_CALL.caseId ? CASE_ITEMS.filter(function(x){ return x.id===VIDEO_CALL.caseId; })[0] : null; return c ? c.name : '演示'; }
+function startCall(kind, caseId, participants){
+  VIDEO_CALL = {active:true, kind:kind, caseId:caseId, participants:participants, status:'ringing', shareBy:null, muted:false, startedAt:Date.now(), transcript:[]};
+  INVITE_KR_CONTEXT_CASE_ID = (kind==='talk') ? caseId : null;
+  CHAT_VIDEO_CONTEXT_CASE_ID = (kind==='chat') ? caseId : null;
+  renderDashCallCard();
+  nav('video-consult');
+  renderVideoPage();
+}
+function startDemoCall(){ startCall('demo', null, ['Dewi（印尼室长）', '이서연 실장（韩国室长）']); VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); }
+function seedTranscript(){
+  VIDEO_CALL.transcript = [
+    {name:'Dewi', orig:'您好，我们先确认一下客人的情况。', trans:'안녕하세요, 고객 상황부터 확인하겠습니다.'},
+    {name:'이서연', orig:'네, 사진은 확인했습니다.', trans:'好的，照片已经确认过了。'}
+  ];
+}
+function simulatePeerJoin(){ if(VIDEO_CALL.status!=='ringing') return; VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); }
+function simulatePeerDecline(){
+  if(VIDEO_CALL.status!=='ringing') return;
+  VIDEO_CALL.active = false; INVITE_KR_CONTEXT_CASE_ID = null; CHAT_VIDEO_CONTEXT_CASE_ID = null;
+  renderDashCallCard(); try{ renderDrawerList(); }catch(e){}
+  showToast('对方拒绝了通话', callTitle()+' 的视频通话没有接通', null);
+  goBack();
+}
+function leaveCall(){ goBack(); } /* 离开/断线：通话仍在进行，可从抽屉红卡片/工作台卡片重新加入 */
+function rejoinCall(){ if(!VIDEO_CALL.active) return; nav('video-consult'); renderVideoPage(); }
+function toggleMute(){ VIDEO_CALL.muted = !VIDEO_CALL.muted; renderVideoPage(); }
+function toggleShare(who){ VIDEO_CALL.shareBy = (VIDEO_CALL.shareBy===who) ? null : who; renderVideoPage(); }
+function simulateAllLeft10min(){ if(!VIDEO_CALL.active) return; showToast('所有人离开超过10分钟', '通话已自动结束并归档', null); endVideoConsult(); }
+function sendCallManual(){
+  var i = document.getElementById('vc-manual'); var v = i ? i.value.trim() : ''; if(!v) return;
+  VIDEO_CALL.transcript.push({name:'Dewi', orig:v, trans:'（演示译文）'+v, manual:true});
+  renderVideoPage();
+}
+function callInitial(n){ return n.replace(/（.*$/,'').replace(/ 실장.*$/,'').charAt(0).toUpperCase(); }
+function renderVideoPage(){
+  var root = document.getElementById('vc-root'); if(!root) return;
+  var v = VIDEO_CALL, ringing = v.status==='ringing';
+  var tiles = v.participants.map(function(n, i){
+    var isIn = n.indexOf('印尼')>-1;
+    var joined = isIn || !ringing;
+    var sharing = v.shareBy && ((v.shareBy==='me' && isIn && n.indexOf('Dewi')>-1) || (v.shareBy==='peer' && !isIn));
+    return '<div class="vc-tile" style="min-height:150px;'+(sharing?'outline:2px solid var(--sage);':'')+'"><span class="vc-label">'+n+'</span>'+
+      '<div class="vc-avt" style="width:64px;height:64px;font-size:18px;background:'+(isIn?'var(--sage)':'#3B4A5A')+';opacity:'+(joined?1:.45)+';">'+callInitial(n)+'</div>'+
+      '<div style="font-size:11px;color:#9AA6B2;">'+(joined ? (sharing ? '🖥 正在共享屏幕' : (isIn && n.indexOf('Dewi')>-1 ? '客人在场，共用此画面' : '已加入')) : '呼叫中… 铃声响起')+'</div></div>';
+  }).join('');
+  var abbr = v.participants.map(function(n){ return '<span class="vc-avt" style="width:26px;height:26px;font-size:11px;background:#3B4A5A;border:2px solid #111826;margin-right:-6px;" title="'+n+'">'+callInitial(n)+'</span>'; }).join('');
+  var tr = (v.transcript||[]).map(function(t){
+    return t.manual
+      ? '<div style="align-self:flex-end;border:1px solid #3B4A5A;border-radius:12px;padding:8px 12px;max-width:80%;"><b style="font-size:11px;color:#9AA6B2;">'+t.name+'（手动输入）</b><div style="font-size:13px;">'+t.orig+'</div><div style="font-size:12px;color:#9AA6B2;">译：'+t.trans+'</div></div>'
+      : '<div><b style="font-size:11px;color:#9AA6B2;">'+t.name+'</b><div style="font-size:13px;">'+t.orig+'</div><div style="font-size:12px;color:#9AA6B2;">译：'+t.trans+'</div></div>';
+  }).join('') || '<div style="font-size:12px;color:#6B7A8D;">'+(ringing ? '等待对方加入…' : '开始说话后，这里显示 AI 实时转录')+'</div>';
+  var demo = ringing
+    ? '<button class="btn-ghost" onclick="simulatePeerJoin()">演示：模拟对方加入</button><button class="btn-ghost" onclick="simulatePeerDecline()">演示：模拟对方拒绝</button>'
+    : '<button class="btn-ghost" onclick="toggleShare(\'peer\')">演示：模拟对方'+(v.shareBy==='peer'?'停止':'')+'共享屏幕</button><button class="btn-ghost" onclick="simulateAllLeft10min()">演示：模拟所有人离开超过10分钟</button><button class="btn-ghost" onclick="leaveCall()">演示：模拟断线（稍后重新加入）</button>';
+  root.innerHTML =
+    '<div style="position:relative;background:rgba(17,24,38,.85);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2A3344;">'+
+      '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-flex;padding-left:6px;">'+abbr+'</span>'+
+        '<span style="font-size:14px;font-weight:700;">'+callTitle()+' · 视频沟通</span>'+
+        '<span style="font-size:11px;color:#9AA6B2;border:1px solid #2A3344;border-radius:10px;padding:2px 8px;">院长可加入</span>'+
+        '<span style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;color:#E05A50;"><span style="width:8px;height:8px;border-radius:50%;background:#E05A50;"></span>录制中</span></div>'+
+      '<div style="display:flex;align-items:center;gap:12px;"><span id="vc-timer" style="font-size:12px;color:#9AA6B2;">00:00:00</span>'+
+        '<span class="vc-btn" title="静音" onclick="toggleMute()" style="'+(v.muted?'background:#C1454A;':'')+'">'+(v.muted?'🔇':'🎤')+'</span>'+
+        '<span class="vc-btn" title="共享屏幕" onclick="toggleShare(\'me\')" style="'+(v.shareBy==='me'?'background:var(--sage);':'')+'">🖥</span>'+
+        '<a href="#" onclick="endVideoConsult();return false;" style="height:40px;padding:0 18px;border-radius:20px;background:#C1454A;display:flex;align-items:center;color:#fff;font-size:13px;font-weight:700;">结束并归档</a></div>'+
+    '</div>'+
+    '<div style="flex-grow:1;padding:22px;display:flex;flex-direction:column;gap:14px;">'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">'+tiles+'</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+demo+'</div>'+
+      '<div style="background:#0D1420;border:1px solid #2A3344;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;max-height:280px;">'+
+        '<span style="font-size:12px;font-weight:700;color:#9AA6B2;">AI 实时转录</span>'+
+        '<div style="display:flex;flex-direction:column;gap:10px;overflow:auto;">'+tr+'</div>'+
+        '<div style="display:flex;gap:8px;"><input type="text" id="vc-manual" placeholder="手动输入内容（会被翻译）" onkeydown="if(event.key===\'Enter\')sendCallManual()" style="flex-grow:1;padding:10px 12px;border-radius:10px;border:1px solid #2A3344;background:#1B2333;color:#E5E9EE;font-size:13px;"><span class="send-btn" onclick="sendCallManual()">➤</span></div>'+
+      '</div>'+
+    '</div>';
+}
+setInterval(function(){
+  var el = document.getElementById('vc-timer'); if(!el || !VIDEO_CALL.active) return;
+  var sec = Math.floor((Date.now()-VIDEO_CALL.startedAt)/1000), pad = function(n){ return (n<10?'0':'')+n; };
+  el.textContent = pad(Math.floor(sec/3600))+':'+pad(Math.floor(sec%3600/60))+':'+pad(sec%60);
+}, 1000);
+/* 工作台顶部卡片：只在通话进行中出现（没有通话时不显示） */
+function renderDashCallCard(){
+  var el = document.getElementById('dash-call-card'); if(!el) return;
+  if(!VIDEO_CALL.active){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = '<div class="consult-body"><span style="font-size:22px;">🎥</span><div><div style="font-size:14px;font-weight:700;">'+callTitle()+' · 视频沟通 进行中</div><div style="font-size:11px;color:var(--muted);">'+VIDEO_CALL.participants.join('、')+'</div></div>'+
+    '<div style="margin-left:auto;"><a class="btn-primary" href="#" onclick="rejoinCall();return false;" style="padding:9px 18px;">🎥 进入会议</a></div></div>';
+}
+/* 来电（被呼叫方）：铃声 + 加入/拒绝；演示用案件对话房里的"模拟KR室长来电"按钮触发 */
+var INCOMING_CALL = null;
+function simulateIncomingCall(){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0]; if(!c || !c.krInRoom || VIDEO_CALL.active) return;
+  INCOMING_CALL = {caseId:c.id};
+  document.getElementById('incoming-call-title').textContent = krEnterRoomName(c)+' 室长呼叫你';
+  document.getElementById('incoming-call-sub').textContent = c.name+' · '+(c.caseNo||'')+' · 视频沟通';
+  document.getElementById('incoming-call-overlay').classList.add('open');
+}
+function acceptIncomingCall(){
+  document.getElementById('incoming-call-overlay').classList.remove('open');
+  if(!INCOMING_CALL) return;
+  var c = CASE_ITEMS.filter(function(x){ return x.id===INCOMING_CALL.caseId; })[0];
+  startCall('chat', INCOMING_CALL.caseId, ['Dewi（印尼室长）', (c ? c.krCoordinator : '이서연 실장')]);
+  VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); INCOMING_CALL = null;
+}
+function declineIncomingCall(){
+  document.getElementById('incoming-call-overlay').classList.remove('open');
+  INCOMING_CALL = null;
+  showToast('已拒绝来电', '你拒绝了视频通话', null);
+}
 function closeInviteKrModal(){
   document.getElementById('invite-kr-overlay').classList.remove('open');
 }
 function inviteKrVideo(name){
   /* 邀请室长视频是临时加开的一次沟通，不改变 consultStatus，但结束后要给该案件附上一份AI转写稿文件 */
-  INVITE_KR_CONTEXT_CASE_ID = CURRENT_CASE_ID;
   closeInviteKrModal();
-  nav('video-consult');
+  startCall('talk', CURRENT_CASE_ID, ['Dewi（印尼室长）', name+' 실장（韩国室长）']); /* 室长商谈：直接呼叫上传报告的KR室长 */
 }
 function endVideoConsult(){
   var touchedCase = null;
+  VIDEO_CALL.active = false; /* 通话结束后，对话抽屉的红卡片和工作台卡片都消失 */
   if(INVITE_KR_CONTEXT_CASE_ID){
     var c2 = CASE_ITEMS.filter(function(x){ return x.id===INVITE_KR_CONTEXT_CASE_ID; })[0];
     if(c2){
@@ -2963,6 +3008,8 @@ function endVideoConsult(){
     }
     CHAT_VIDEO_CONTEXT_CASE_ID = null;
   }
+  renderDashCallCard();
+  try{ renderDrawerList(); }catch(e){}
   goBack();
   /* goBack() 切换页面之后 CURRENT_PAGE_ID 才会变成 in-casedetail，
      所以刷新DOM必须放在 goBack() 之后，不然条件永远判断在还是video-consult页时，界面看起来"没反应" */
@@ -6175,7 +6222,7 @@ function buildNotifications(){
 }
 
 /* ================= chat drawer ================= */
-var ACTIVE_CALL = {active:true, label:'Siti Rahayu · 视频沟通 进行中'};
+
 var ROOMS = [
   {id:'main', name:'Main · 全员', isMain:true, color:'var(--slate2)', init:'G', date:'今天 09:20'},
   {id:'kr-lee', name:'이서연 · 韩国室长', color:'var(--sage)', init:'이', date:'今天 14:02'},
@@ -6263,8 +6310,9 @@ function toggleDrawerSearch(){
 function renderDrawerList(){
   var q = (document.getElementById('drawer-search-input').value || '').toLowerCase();
   var html = '';
-  if(ACTIVE_CALL.active && (!q || ACTIVE_CALL.label.toLowerCase().indexOf(q)>-1)){
-    html += '<div class="chat-card urgent" onclick="closeDrawer();nav(\'video-consult\');"><span class="sq-avt" style="background:#C1454A;">●</span><div><div style="font-size:13px;font-weight:700;color:#C1454A;">'+ACTIVE_CALL.label+'</div><div style="font-size:11px;color:var(--slate);">点击重新加入视频通话</div></div></div>';
+  var callLabel = VIDEO_CALL.active ? callTitle()+' · 视频沟通 进行中，点击重新加入' : '';
+  if(VIDEO_CALL.active && (!q || callLabel.toLowerCase().indexOf(q)>-1)){
+    html += '<div class="chat-card urgent" onclick="closeDrawer();rejoinCall();"><span class="sq-avt" style="background:#C1454A;">●</span><div><div style="font-size:13px;font-weight:700;color:#C1454A;">'+callLabel+'</div><div style="font-size:11px;color:var(--slate);">点击重新加入视频通话</div></div></div>';
   }
   if(DRAWER_TAB==='case'){
     var items = CASE_ITEMS.filter(function(c){ return CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id)); })
@@ -6588,6 +6636,7 @@ function renderChatCaseChip(){
     demo = c.krInRoom
       ? '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateKrLeaveRoom()">演示：模拟KR室长离开房间</button>'
       : '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateKrEnterRoom()">演示：模拟KR室长进入房间</button>';
+    if(c.krInRoom) demo += '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateIncomingCall()">演示：模拟KR室长来电</button>';
   }
   el.innerHTML = '<span style="font-size:11px;">📎</span><span style="font-size:11px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>'+demo;
 }
@@ -6761,15 +6810,6 @@ document.addEventListener('DOMContentLoaded', function(){
     if(q.get('chat')==='open') openCaseRoom(c.id);
   }
 });
-
-/* ================= video consult recording ================= */
-var RECORDING = true;
-function toggleRec(){
-  RECORDING = !RECORDING;
-  document.getElementById('rec-label').innerHTML = (RECORDING? '<span id="rec-dot" style="width:8px;height:8px;border-radius:50%;background:#E05A50;"></span>录制中' : '<span id="rec-dot" style="width:8px;height:8px;border-radius:50%;background:#6B7A8D;"></span>未录制');
-  document.getElementById('rec-label').style.color = RECORDING ? '#E05A50' : '#9AA6B2';
-  document.getElementById('rec-btn').style.background = RECORDING ? '#C1454A' : '#2A3344';
-}
 
 </script>
 </body>
