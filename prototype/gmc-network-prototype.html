@@ -2014,6 +2014,7 @@ function submitNewClient(){
 function makeCase(o){
   return {
     id:o.id, name:o.name, subState:o.subState||'waiting',
+    inCoordinator:o.inCoordinator||'Dewi', krInRoom:!!o.krInRoom, chatArchive:null, /* 2026-10-02：负责该案件的IN室长 / KR室长是否已进入案件对话房 / 结案后整理的对话记录 */
     reportEta:o.reportEta||null, reportOverdue:!!o.reportOverdue, /* 2026-10-02：KR确认的预计出报告时间 / 已超时提醒 */
     director:(o.director!==undefined ? o.director : ((o.consultRequested || o.needsConsult===true) ? '김민석 원장' : null)), /* 2026-10-02：本地案件没有院长 */ krCoordinator:o.krCoordinator||'이서연 실장', updated:o.updated||'刚刚', caseNo:o.caseNo||null,
     basic:o.basic||{gender:'女', dob:'1990-01-01', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
@@ -2227,7 +2228,7 @@ var CASE_ITEMS = [
     ]}),
 
   /* 接待中（演示"关联之前案件"）：Rina 之前有已结案的赴韩案件 A000010，这次再来，基础资料里可关联并看到"可能与 A000010 相关" */
-  makeCase({id:'rina2', name:'Rina Marlina', subState:'arrived', caseNo:'A000019', updated:'刚刚',
+  makeCase({id:'rina2', inCoordinator:'Rina', name:'Rina Marlina', subState:'arrived', caseNo:'A000019', updated:'刚刚',
     logEntries:[
       {stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:'2026-09-18 09:00'},
       {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:'2026-09-18 09:30'}
@@ -2697,7 +2698,7 @@ function renderCaseHeaderActions(c){
   if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true)){
     lmBtn = '<button class="btn-outline" onclick="addLocalMgmt()">+ 添加本地管理</button>';
   }
-  el.innerHTML = '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' + lmBtn + stageBtn;
+  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' : '') + lmBtn + stageBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
 }
 var CANCEL_REASON = '';
 function openCancelModal(){
@@ -5190,7 +5191,7 @@ function markConsultPaid(){
   c.consultStatus = 'paid_waiting_kr';
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
   logCaseEvent(c, '客人', '完成面诊费支付，已在Main对话群自动通知');
-  buildCaseLog(c);
+  buildCaseLog(c); renderCaseHeaderActions(c);
   sendMainAnnouncement(c.name+' 想要面诊，请输入可以面诊的时间（现在 / 具体几点）');
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -5206,7 +5207,7 @@ function applyWaiveFee(c, reason, note){
   c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：待确认报告时间 */
   updateCaseStage(c);
   logCaseEvent(c, 'Dewi', '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
-  buildCaseLog(c);
+  buildCaseLog(c); renderCaseHeaderActions(c);
   sendMainAnnouncement(c.name+' 想要面诊（已免除面诊费），请输入可以面诊的时间（现在 / 具体几点）');
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -5222,7 +5223,7 @@ function confirmWaiveFee(){
   c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：待确认报告时间 */
   updateCaseStage(c);
   logCaseEvent(c, 'Dewi', '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
-  buildCaseLog(c);
+  buildCaseLog(c); renderCaseHeaderActions(c);
   sendMainAnnouncement(c.name+' 想要面诊（已免除面诊费），请输入可以面诊的时间（现在 / 具体几点）');
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -5289,6 +5290,7 @@ function simulateReportTimeout(){
   showToast('已超过预计出报告时间', c.name+' 的报告还没提交', function(){ openCaseDetail(c.id); });
 }
 function notifyConsultUpdate(c, title, text){
+  if(!shouldPushToMe(c)) return; /* 只给负责该案件的IN室长推播；院长完全不推播 */
   var chatOpen = document.getElementById('chat-float-overlay').classList.contains('open') && CURRENT_ROOM==='main';
   if(!chatOpen){
     showToast(title, text, function(){ openFloatingChat('main'); });
@@ -6105,11 +6107,11 @@ var STAFF_ROSTER = [
   {id:'rina', name:'Rina · 印尼室长'}
 ];
 function openNewCaseChatModal(){
-  var eligible = CASE_ITEMS.filter(function(c){ return !!c.materialsConfirmed; }); /* 只能选基础资料已确认的案件 */
+  var eligible = CASE_ITEMS.filter(caseRoomEligible); /* 只列符合建房条件的案件（不面诊=基础资料确认后；面诊=缴费/免除后） */
   document.getElementById('new-case-chat-list').innerHTML = eligible.map(function(c){
     var existing = CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id));
     return '<button class="btn-outline" style="text-align:left;display:flex;justify-content:space-between;" onclick="confirmNewCaseChat(\''+c.id+'\')"><span>'+c.name+' · '+c.caseNo+'</span>'+(existing?'<span style="font-size:11px;color:var(--muted);">已有对话</span>':'')+'</button>';
-  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:10px 4px;">还没有已确认基础资料的案件，暂时无法新建案件对话</div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:10px 4px;">还没有符合建房条件的案件，暂时无法新建案件对话</div>';
   document.getElementById('new-case-chat-overlay').classList.add('open');
 }
 function closeNewCaseChatModal(){ document.getElementById('new-case-chat-overlay').classList.remove('open'); }
@@ -6255,6 +6257,49 @@ var CHAT_DATA = {
   ]
 };
 function getCaseRoomId(caseId){ return 'case-'+caseId; }
+/* ---- 案件对话房规则（2026-10-02 选院长+对话合并版·二） ----
+   建房条件：不面诊 = 基础资料确认后；面诊 = 缴费（或免除）后；之前完全不显示［发起对话］和"+新建案件对话"候选；终态案件没有房间。
+   成员：不面诊 = 全部IN室长；面诊 = 全部IN室长 + 全部KR室长 + 选定院长（不面诊案件点"增加面诊"并缴费后，KR室长和院长才加入）。
+   推播/toast/未读：只给"负责该案件的IN室长"和"确认报告时间或上传报告的KR室长"；其他室长是成员但不推播；院长完全不推播、不提醒、不显示未读。 */
+function caseRoomEligible(c){
+  if(!c || !c.materialsConfirmed || isEnded(c)) return false;
+  if(c.consultRequested && c.consultStatus==='awaiting_payment') return false; /* 面诊案件缴费（或免除）后才能建房 */
+  return true;
+}
+function caseHasKrSide(c){
+  return !!c.consultRequested && c.consultStatus!=='awaiting_payment' && c.consultStatus!=='cancelled';
+}
+function caseRoomMembers(c){
+  var kr = caseHasKrSide(c);
+  return {inn:IN_COORDINATORS.slice(), kr: kr ? KR_COORDINATORS.slice() : [], director: (kr && c.director) ? c.director : null};
+}
+function shouldPushToMe(c){ return (c.inCoordinator||'Dewi')==='Dewi'; } /* 演示视角：当前登录的是 Dewi（IN室长） */
+function roomSysMsg(text){ return {day:'2026년 9월 18일', from:'sys', kind:'sys', orig:text, time:nowTime()}; }
+/* 点［发起对话］/新建案件对话时才建房（有房间之后才出现在抽屉里）；建房时IN室长进入房间 */
+function ensureCaseRoom(c){
+  var roomId = getCaseRoomId(c.id);
+  if(!CHAT_DATA.hasOwnProperty(roomId)){
+    CHAT_DATA[roomId] = IN_COORDINATORS.map(function(n){ return roomSysMsg(n+' 进入房间'); });
+  }
+  return roomId;
+}
+function renderFloatToolbar(){ /* 工具栏按房间类型动态生成（三） */ }
+function krEnterRoomName(c){ return (c.krCoordinator||KR_COORDINATORS[0]).split(' ')[0]; }
+/* 演示：KR室长进入/离开案件对话房（进入前 🎥 灰色不可用，进入后可用） */
+function simulateKrEnterRoom(){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0];
+  if(!c || !caseHasKrSide(c) || c.krInRoom) return;
+  c.krInRoom = true;
+  CHAT_DATA[getCaseRoomId(c.id)].push(roomSysMsg(krEnterRoomName(c)+' 进入房间'));
+  renderFloatMessages(); renderFloatToolbar(); renderChatCaseChip();
+}
+function simulateKrLeaveRoom(){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0];
+  if(!c || !c.krInRoom) return;
+  c.krInRoom = false;
+  CHAT_DATA[getCaseRoomId(c.id)].push(roomSysMsg(krEnterRoomName(c)+' 离开房间'));
+  renderFloatMessages(); renderFloatToolbar(); renderChatCaseChip();
+}
 function roomById(id){
   if(id && id.indexOf('case-')===0){
     var caseId = id.slice(5);
@@ -6265,6 +6310,8 @@ function roomById(id){
 }
 function openCaseRoom(caseId){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  if(!caseRoomEligible(c)){ alert(isEnded(c) ? '案件已结束，对话房已整理进附件' : (c.consultRequested ? '面诊案件缴费（或免除面诊费）后才能开对话房' : '基础资料确认后才能开对话房')); return; }
+  ensureCaseRoom(c);
   openFloatingChat(getCaseRoomId(caseId), null, caseId);
 }
 var ATTACHED_CASE_ID = null;
@@ -6291,8 +6338,14 @@ function renderChatCaseChip(){
   var c = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0];
   if(!c){ el.style.display='none'; return; }
   el.style.display='flex';
-  el.innerHTML = '<span style="font-size:11px;">📎</span><span style="font-size:11px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>'+
-''; /* 2026-10-02：一个案件只面诊一次 */
+  var isRoom = CURRENT_ROOM.indexOf('case-')===0 && CURRENT_ROOM===getCaseRoomId(c.id);
+  var demo = '';
+  if(isRoom && caseHasKrSide(c)){
+    demo = c.krInRoom
+      ? '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateKrLeaveRoom()">演示：模拟KR室长离开房间</button>'
+      : '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateKrEnterRoom()">演示：模拟KR室长进入房间</button>';
+  }
+  el.innerHTML = '<span style="font-size:11px;">📎</span><span style="font-size:11px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>'+demo;
 }
 function postCaseRoomFile(caseId, actorName, actorColor, actorInit, label){
   var roomId = getCaseRoomId(caseId);
@@ -6311,7 +6364,9 @@ function renderFloatMessages(){
     if(q && (m.orig||'').toLowerCase().indexOf(q)===-1) return;
     if(m.day !== lastDay){ html += '<div class="day-divider">'+m.day+'</div>'; lastDay = m.day; }
     var qLink = CURRENT_ROOM.indexOf('case-')===0 ? '' : ' <a href="#" class="info-link" style="font-size:10px;" onclick="openQuoteModal('+i+');return false;">引用到案件</a>';
-    if(m.kind==='quote'){
+    if(m.kind==='sys'){
+      html += '<div style="text-align:center;font-size:11px;color:var(--muted);margin:8px 0;">'+m.orig+'</div>';
+    } else if(m.kind==='quote'){
       /* 被引用的消息在案件房里显示为「发言人：YY-MM-DD HH:MM 「来源房间」 "内容"」 */
       html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me" style="background:var(--border2);color:var(--slate2);border-left:3px solid var(--terracotta);">'+m.speaker+'：'+m.srcDt+' 「'+m.srcRoom+'」 "'+m.orig+'"</div><span class="bubble-trans" style="text-align:right;">引用于 '+m.time+'</span></div></div>';
     } else if(m.kind==='card'){
@@ -6374,15 +6429,22 @@ function openRoomMembers(){
     return '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:10px 0 4px;">'+label+'</div>'+
       names.map(function(n){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+n+'</span>'+(extra&&extra[n]||'')+'</div>'; }).join('');
   }
+  var mute = '<span class="status-pill" style="background:#EDEAE2;color:var(--muted);font-size:10px;">静音</span>'; /* 院长旁边标"静音"：不推播、不提醒、不显示未读 */
   if(roomId.indexOf('case-')===0){
     var c = CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0];
     if(c){
-      html += c.director ? '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:0 0 4px;">院长（选定后不能更换）</div><div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+c.director+'</span></div>' : '';
-      html += group('印尼室长（全部）', IN_COORDINATORS.map(function(n){ return n+' · 印尼室长'; }));
-      html += group('韩国室长（全部）', KR_COORDINATORS.map(function(n){ return n+' 실장 · 韩国室长'; }));
+      var m = caseRoomMembers(c);
+      html += group('印尼室长（全部）', m.inn.map(function(n){ return n+' · 印尼室长'; }));
+      if(m.kr.length){
+        var presence = {}; m.kr.forEach(function(n){ var nm = n+' 실장 · 韩国室长'; presence[nm] = '<span style="font-size:11px;color:'+(c.krInRoom && krEnterRoomName(c)===n ? 'var(--sage)' : 'var(--muted)')+';">'+(c.krInRoom && krEnterRoomName(c)===n ? '已进入' : '未进入')+'</span>'; });
+        html += group('韩国室长（全部）', m.kr.map(function(n){ return n+' 실장 · 韩国室长'; }), presence);
+      }
+      if(m.director){ var ex = {}; ex[m.director+' · 院长'] = mute; html += group('院长（选定院长，选定后不能更换）', [m.director+' · 院长'], ex); }
+      if(!m.kr.length) html += '<div style="font-size:11px;color:var(--muted);margin-top:12px;">这个案件没有面诊：只有印尼室长。点"增加面诊"并缴费后，韩国室长和院长才会加入。</div>';
     }
   } else if(roomId==='main'){
-    html += group('院长', DIRECTOR_LIST)+group('印尼室长', IN_COORDINATORS)+group('韩国室长', KR_COORDINATORS);
+    var exm = {}; DIRECTOR_LIST.forEach(function(d){ exm[d] = mute; });
+    html += group('院长', DIRECTOR_LIST, exm)+group('印尼室长', IN_COORDINATORS)+group('韩国室长', KR_COORDINATORS);
   } else {
     html += group('成员', ['Dewi（我）', r.name]);
   }
