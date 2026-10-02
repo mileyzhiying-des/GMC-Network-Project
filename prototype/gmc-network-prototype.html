@@ -4816,6 +4816,9 @@ function confirmAddition(){
   settleProjects();
 }
 /* 在项目库查看：新标签页打开项目库（案件里点进来都开新标签页） */
+/* 查看相关案例：新标签页打开该项目的案例列表（?page=in-library&project=ID） */
+function openProjectCasesNewTab(pid){ window.open(location.pathname+'?page=in-library&project='+pid, '_blank'); }
+function projCasesLinkHtml(pid){ return ' <a href="#" class="info-link" style="font-size:11px;white-space:nowrap;" onclick="event.stopPropagation();event.preventDefault();openProjectCasesNewTab(\''+pid+'\');return false;">查看相关案例 ↗</a>'; }
 function openProjectLibNewTab(){ window.open(location.pathname+'?page=in-projectlibrary', '_blank'); }
 function caseCcySwitchHtml(origin){
   var opts = origin==='KR' ? ['KRW','IDR','CNY'] : ['IDR','CNY'];
@@ -4855,7 +4858,7 @@ function projectPickerHtml(c, isAddition){
         var noteHtml = p.krNote ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+p.krNote+'</div>' : '';
         return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
           '<input type="checkbox" onchange="toggleProject(\''+p.id+'\')" '+(checked?'checked':'')+' style="margin-top:2px;">'+
-          '<span style="flex-grow:1;">'+p.name+noteHtml+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
+          '<span style="flex-grow:1;">'+p.name+projCasesLinkHtml(p.id)+noteHtml+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
       }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>');
     }
     leftRows += '<button class="btn-ghost" style="margin-top:10px;font-size:11px;" onclick="simulateKrScopeUpdate()">演示：模拟KR室长更新可选项目</button>';
@@ -4867,7 +4870,7 @@ function projectPickerHtml(c, isAddition){
       var heldTag = held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '';
       return '<label style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
         '<input type="checkbox" onchange="toggleProject(\''+p.id+'\')" '+(checked?'checked':'')+'>'+
-        '<span style="flex-grow:1;">'+p.name+heldTag+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
+        '<span style="flex-grow:1;">'+p.name+heldTag+projCasesLinkHtml(p.id)+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
     }
     var normalCatalog = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; });
     if(q) normalCatalog = normalCatalog.filter(function(p){ return p.name.toLowerCase().indexOf(q)>-1; });
@@ -6480,7 +6483,7 @@ function projectUsage(p){
       h.batches.forEach(function(b){ if(!b.voided && (b.bought-b.used)>0) batches++; });
     });
   });
-  return {cases:cases, batches:batches};
+  return {cases:cases, batches:batches, libCases:libCasesOfProject(p.id).length}; /* 案例库案例也算在用 */
 }
 function projLibHeadHtml(){
   return '<div class="case-field-row" style="font-size:11px;color:var(--muted);font-weight:700;"><span style="flex-grow:1;">项目名称</span><span style="width:90px;">分类</span><span style="width:130px;text-align:right;">价格</span><span style="width:190px;text-align:right;">使用情况</span><span style="width:150px;text-align:right;">操作</span></div>';
@@ -6511,6 +6514,7 @@ function projDeleteBlockReason(p){
   var u = projectUsage(p), r = [];
   if(u.cases) r.push('还有 '+u.cases+' 个进行中的案件引用它');
   if(u.batches) r.push('还有 '+u.batches+' 个客人持有中的批次（剩余次数>0）');
+  if(u.libCases) r.push('还有 '+u.libCases+' 个案例库案例挂在这个项目上');
   return r.join('；');
 }
 function projLibRowHtml(p){
@@ -6540,7 +6544,7 @@ function projLibRowHtml(p){
   return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+p.name+nm+'</span>'+
     '<span style="font-size:11px;color:var(--muted);width:90px;">'+(cat?cat.label:'—')+'</span>'+
     '<span style="width:130px;text-align:right;">'+priceHtml+'</span>'+
-    '<span style="font-size:11px;color:var(--slate2);width:190px;text-align:right;">进行中案件 '+u.cases+' 个 · 持有中批次 '+u.batches+' 个</span>'+
+    '<span style="font-size:11px;color:var(--slate2);width:190px;text-align:right;">进行中案件 '+u.cases+' 个 · 持有中批次 '+u.batches+' 个 · 案例 '+u.libCases+' 个</span>'+
     '<span class="fa" style="gap:12px;width:150px;justify-content:flex-end;">'+actions+'</span></div>';
 }
 function deactivateProj(id){
