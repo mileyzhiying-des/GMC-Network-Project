@@ -4796,6 +4796,8 @@ function confirmAddition(){
   generateSettlementBatch(c);
   settleProjects();
 }
+/* 在项目库查看：新标签页打开项目库（案件里点进来都开新标签页） */
+function openProjectLibNewTab(){ window.open(location.pathname+'?page=in-projectlibrary', '_blank'); }
 function caseCcySwitchHtml(origin){
   var opts = origin==='KR' ? ['KRW','IDR','CNY'] : ['IDR','CNY'];
   var cur = origin==='KR' ? CASE_DISPLAY_CCY_KR : CASE_DISPLAY_CCY_IN;
@@ -4869,6 +4871,7 @@ function projectPickerHtml(c, isAddition){
     '<span class="chip'+(originFilter==='IN'?' active':'')+'" onclick="setProjectOrigin(\'IN\')">本地项目</span>'+
     '<span class="chip'+(originFilter==='KR'?' active':'')+'" onclick="setProjectOrigin(\'KR\')">赴韩项目</span>'+
     caseCcySwitchHtml(originFilter)+
+    '<a href="#" class="info-link" style="font-size:12px;" onclick="openProjectLibNewTab();return false;">在项目库查看 ↗</a>'+
     '</div>';
   var settleBtn = selected.length ? '<button class="btn-primary" style="width:100%;margin-top:14px;" onclick="'+(isAddition?'confirmAddition()">结算追加项目 / 交定金':'confirmProjectSelection()">结算')+'</button>' : '';
   var noBuyBtn = (!isAddition && c.entryChoicePending && c.projectEntryMode==='new') ? '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="noPurchaseThisTime()">本次不购买</button>' : '';
