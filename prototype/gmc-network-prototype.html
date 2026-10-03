@@ -492,7 +492,7 @@ input,textarea,select{font-family:inherit;}
   <div class="main-col">
     <div class="topbar" style="justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
     </div>
     <div class="content">
 
@@ -561,7 +561,7 @@ input,textarea,select{font-family:inherit;}
   <div class="main-col">
     <div class="topbar" style="justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a><span style="width:1px;height:16px;background:var(--border);"></span><span class="title">新建客户档案</span></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
     </div>
     <div class="content" style="max-width:760px;">
 
@@ -640,7 +640,7 @@ input,textarea,select{font-family:inherit;}
   <div class="main-col">
     <div class="topbar" style="justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
     </div>
     <div class="content">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -700,7 +700,7 @@ input,textarea,select{font-family:inherit;}
   <div class="main-col">
     <div class="topbar" style="justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a><span style="width:1px;height:16px;background:var(--border);"></span><span class="title">上次项目史</span></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
     </div>
     <div class="content" style="max-width:760px;">
       <div class="card" style="padding:6px 22px;">
@@ -750,7 +750,7 @@ input,textarea,select{font-family:inherit;}
     <div class="float-head">
       <div class="l">
         <span class="sq-avt" id="float-avt" style="width:34px;height:34px;border-radius:10px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;">D</span>
-        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">이서연 · 韩国室长</span> <span style="font-size:11px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 Siti Rahayu 的面诊安排</div></div>
+        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">이서연 · 韩国室长</span> <span id="float-open-case" style="display:none;font-size:13px;color:var(--blue);font-weight:700;" title="新标签页打开案件页">↗</span> <span style="font-size:11px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 Siti Rahayu 的面诊安排</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
         <span style="cursor:pointer;" title="对话中的文件" onclick="openRoomFiles()">📁</span>
@@ -1354,7 +1354,7 @@ function buildSidebar(activePage){
 }
 function buildTopRightIcons(){
   return '<div class="actions">'+
-    '<button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button>'+
+    '<button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button>'+
     '<button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button>'+
     '<span class="avatar">D</span></div>';
 }
@@ -1397,7 +1397,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if(tSlot) tSlot.innerHTML = buildTopbar(TITLES[page] || '');
   });
   /* 初始化防护（2026-10-02）：每个模块各自 try/catch，一个地方出错只在 console 记录，不让整个页面停下来 */
-  [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications]].forEach(function(m){
+  [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['对话未读',updateChatBadge]].forEach(function(m){
     try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); }
   });
   try{ addHistoryRow('超声刀轮廓提升','2026-01-15','无','本院'); addHistoryRow('水光针','2024-05-02','轻微淤青，已恢复','外部'); buildHistoryList(); }catch(e){ console.error('[初始化失败] 医美史', e); }
@@ -6893,11 +6893,10 @@ var STAFF_ROSTER = [
   {id:'rina', name:'Rina · 印尼室长'}
 ];
 function openNewCaseChatModal(){
-  var eligible = CASE_ITEMS.filter(caseRoomEligible); /* 只列符合建房条件的案件（不面诊=基础资料确认后；面诊=缴费/免除后） */
+  var eligible = CASE_ITEMS.filter(function(c){ return caseRoomEligible(c) && !isEnded(c) && !CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id)); }); /* 符合建房条件、不是终态、还没有房间的案件 */
   document.getElementById('new-case-chat-list').innerHTML = eligible.map(function(c){
-    var existing = CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id));
-    return '<button class="btn-outline" style="text-align:left;display:flex;justify-content:space-between;" onclick="confirmNewCaseChat(\''+c.id+'\')"><span>'+c.name+' · '+c.caseNo+'</span>'+(existing?'<span style="font-size:11px;color:var(--muted);">已有对话</span>':'')+'</button>';
-  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:10px 4px;">还没有符合建房条件的案件，暂时无法新建案件对话</div>';
+    return '<button class="btn-outline" style="text-align:left;" onclick="confirmNewCaseChat(\''+c.id+'\')">'+c.name+' · '+c.caseNo+'</button>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:10px 4px;">没有可以新建对话的案件（符合建房条件、不是终态、还没有房间的案件才会出现在这里）</div>';
   document.getElementById('new-case-chat-overlay').classList.add('open');
 }
 function closeNewCaseChatModal(){ document.getElementById('new-case-chat-overlay').classList.remove('open'); }
@@ -6957,31 +6956,48 @@ function renderDrawerList(){
   var q = (document.getElementById('drawer-search-input').value || '').toLowerCase();
   var html = '';
   var callLabel = VIDEO_CALL.active ? callTitle()+' · 视频沟通 进行中，点击重新加入' : '';
-  if(VIDEO_CALL.active && (!q || callLabel.toLowerCase().indexOf(q)>-1)){
+  if(VIDEO_CALL.active && (!q || callLabel.toLowerCase().indexOf(q)>-1)){ /* 置顶①：进行中的视频红卡片 */
     html += '<div class="chat-card urgent" onclick="closeDrawer();rejoinCall();"><span class="sq-avt" style="background:#C1454A;">●</span><div><div style="font-size:13px;font-weight:700;color:#C1454A;">'+callLabel+'</div><div style="font-size:11px;color:var(--slate);">点击重新加入视频通话</div></div></div>';
   }
+  var unreadDot = function(id){ var u = ROOM_UNREAD[id]||0; return u ? '<span class="badge" style="position:static;width:auto;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:inline-flex;margin-left:6px;">'+u+'</span>' : ''; };
   if(DRAWER_TAB==='case'){
     var items = CASE_ITEMS.filter(function(c){ return CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id)); })
-      .filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || (c.caseNo && c.caseNo.toLowerCase().indexOf(q)>-1); });
+      .filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || (c.caseNo && c.caseNo.toLowerCase().indexOf(q)>-1); })
+      .sort(function(a,b){ return roomLastKey(getCaseRoomId(b.id)) - roomLastKey(getCaseRoomId(a.id)); }); /* 其他房间按最新消息排序 */
     items.forEach(function(c){
-      var b = caseStatusBadge(c);
+      var b = caseStatusBadge(c), rid = getCaseRoomId(c.id);
       html += '<div class="chat-card" onclick="openCaseRoom(\''+c.id+'\')"><span class="sq-avt" style="background:var(--terracotta);">'+c.name.charAt(0).toUpperCase()+'</span>'+
-        '<div style="flex-grow:1;"><div style="font-size:13px;font-weight:700;">'+c.name+'</div><div style="font-size:11px;color:var(--muted);">Case：'+c.caseNo+'</div></div>'+
-        '<div style="text-align:right;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span><div style="font-size:11px;color:var(--muted);margin-top:4px;">'+c.updated+'</div></div></div>';
+        '<div style="flex-grow:1;"><div style="font-size:13px;font-weight:700;">'+c.name+unreadDot(rid)+'</div><div style="font-size:11px;color:var(--muted);">Case：'+c.caseNo+'</div></div>'+
+        '<div style="text-align:right;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2].split(' · ')[0]+'</span><div style="font-size:11px;color:var(--muted);margin-top:4px;">'+((CHAT_DATA[rid]||[]).slice(-1)[0]||{}).time+'</div></div></div>';
     });
     if(!items.length) html += '<div style="font-size:12px;color:var(--muted);padding:16px 4px;">没有匹配的案件</div>';
   } else {
-    ROOMS.forEach(function(r){
-      if(q && r.name.toLowerCase().indexOf(q)===-1) return;
+    var rooms = ROOMS.filter(function(r){ return !q || r.name.toLowerCase().indexOf(q)>-1; });
+    rooms.sort(function(a,b){ if(a.isMain!==b.isMain) return a.isMain ? -1 : 1; return roomLastKey(b.id)-roomLastKey(a.id); }); /* 置顶②：Main 全员群；其他按最新消息排序 */
+    rooms.forEach(function(r){
       var pin = r.isMain ? '<span class="pin-icon">📌</span>' : '';
-      html += '<div class="chat-card" onclick="openFloatingChat(\''+r.id+'\')"><span class="sq-avt" style="background:'+r.color+';">'+r.init+'</span><div><div style="font-size:13px;font-weight:700;">'+pin+r.name+'</div><div style="font-size:11px;color:var(--muted);">'+r.date+'</div></div></div>';
+      var last = (CHAT_DATA[r.id]||[]).slice(-1)[0];
+      html += '<div class="chat-card" onclick="openFloatingChat(\''+r.id+'\')"><span class="sq-avt" style="background:'+r.color+';">'+r.init+'</span><div><div style="font-size:13px;font-weight:700;">'+pin+r.name+unreadDot(r.id)+'</div><div style="font-size:11px;color:var(--muted);">'+(last ? last.day+' '+last.time : r.date)+'</div></div></div>';
     });
   }
   document.getElementById('drawer-list').innerHTML = html;
+  updateChatBadge();
 }
-
 /* ================= floating chat window ================= */
 var CURRENT_ROOM = 'kr-lee';
+/* ---- 对话未读（2026-10-03，IN-CHAT-01）：顶部 💬 显示当前用户所在房间的未读消息数，**不含 @**（@ 在通知中心）；打开房间清零；院长账号不显示未读 ---- */
+var ROOM_UNREAD = {'kr-lee':2, 'main':1, 'case-dedi':1}; /* 演示 */
+function totalUnread(){ var t = 0; Object.keys(ROOM_UNREAD).forEach(function(k){ if(CHAT_DATA.hasOwnProperty(k)) t += ROOM_UNREAD[k]||0; }); return t; }
+function updateChatBadge(){
+  var u = totalUnread();
+  document.querySelectorAll('.chat-badge').forEach(function(b){ b.textContent = u>99 ? '99+' : u; b.style.display = u ? 'flex' : 'none'; });
+}
+/* 抽屉排序：房间最新一条消息的时间（day + time）→ 可比较的数字 */
+function roomLastKey(roomId){
+  var msgs = CHAT_DATA[roomId] || []; if(!msgs.length) return 0;
+  var m = msgs[msgs.length-1], mm = (m.day||'').match(/(\d+)\D+(\d+)\D+(\d+)/), t = (m.time||'00:00').split(':');
+  return mm ? ((+mm[1])*1e8 + (+mm[2])*1e6 + (+mm[3])*1e4 + (+t[0])*100 + (+t[1])) : 0;
+}
 var CHAT_DATA = {
   'kr-lee':[
     {day:'2026년 9월 17일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'Siti Rahayu 자료 검토 부탁드립니다.', trans:'Siti Rahayu 的材料麻烦帮忙看一下。', time:'14:00'},
@@ -7286,11 +7302,15 @@ function openCaseRoom(caseId){
 var ATTACHED_CASE_ID = null;
 function openFloatingChat(roomId, subtitleOverride, caseId){
   closeDrawer();
+  if(ROOM_UNREAD[roomId]){ ROOM_UNREAD[roomId] = 0; updateChatBadge(); }
   CURRENT_ROOM = roomId;
   var r = roomById(roomId) || {name:roomId, color:'var(--slate2)', init:'?'};
   document.getElementById('float-avt').style.background = r.color;
   document.getElementById('float-avt').textContent = r.init;
   document.getElementById('float-name').textContent = r.name;
+  var oc = document.getElementById('float-open-case');
+  if(roomId.indexOf('case-')===0){ oc.style.display = 'inline'; oc.onclick = function(e){ e.stopPropagation(); openCaseNewTab(roomId.slice(5)); }; } /* ↗ 新标签页打开案件页 */
+  else { oc.style.display = 'none'; oc.onclick = null; }
   var isCaseRoom = roomId.indexOf('case-')===0;
   document.getElementById('float-sub').textContent = isCaseRoom ? '本案件专属对话' : (subtitleOverride ? ('关于 '+subtitleOverride+' 的沟通') : (roomId==='main' ? '院长 · 韩国室长 · 印尼室长 全员群聊 · 支持 @提及' : '内部沟通'));
   ATTACHED_CASE_ID = caseId || (isCaseRoom ? roomId.slice(5) : null);
@@ -7462,6 +7482,8 @@ function simulateIncomingMsg(atMe){
   if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = [];
   CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@Dewi ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime()});
   renderFloatMessages();
+  var roomOpen = document.getElementById('chat-float-overlay').classList.contains('open') && CURRENT_ROOM===roomId;
+  if(!atMe && !roomOpen){ ROOM_UNREAD[roomId] = (ROOM_UNREAD[roomId]||0)+1; updateChatBadge(); try{ if(document.getElementById('chat-drawer').classList.contains('open')) renderDrawerList(); }catch(e){} } /* 未读不含 @ */
   var muted = !!MUTED_ROOMS[roomId];
   var pushOk = isCase ? shouldPushToMe(cc) : true; /* 案件房：只给操作过的当班室长；职员房：直接提醒 */
   if(atMe) pushNotif('对话', who+' 在「'+((roomById(roomId)||{}).name||roomId)+'」里 @ 了你', {caseId:(isCase&&cc)?cc.id:null, names:[ME_NAME], link:{kind:'mention', roomId:roomId, msgIdx:CHAT_DATA[roomId].length-1}}); /* 被@一定提醒（即使已🔕或不负责这个案件），进通知中心并弹 toast */
