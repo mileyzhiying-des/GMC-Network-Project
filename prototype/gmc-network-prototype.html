@@ -2926,7 +2926,8 @@ function deriveCaseStage(c){
   if(c.consultRequested) return 'consult'; /* 面诊预约 / 等待报告 */
   return 'booked';
 }
-function updateCaseStage(c){ c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c); }
+function updateCaseStage(c){ c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c);
+  var fo = (typeof document!=='undefined') && document.getElementById('chat-float-overlay'); if(fo && fo.classList.contains('open') && typeof renderFloatMessages==='function'){ try{ renderFloatMessages(); }catch(e){} } }
 var CASE_PROGRESS_ORDER = ['booked','consult','travel','local','closed'];
 var CASE_TAB_FILTER = 'all';
 var CASE_REFUND_FILTER = false; /* 2026-09-30："有退款"筛选，和tab叠加使用 */
@@ -5725,7 +5726,6 @@ function markConsultPaid(){
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
   logCaseEvent(c, '客人', '完成面诊费支付，已在Main对话群自动通知');
   buildCaseLog(c); renderCaseHeaderActions(c);
-  sendMainAnnouncement(c.name+' 想要面诊，请输入可以面诊的时间（现在 / 具体几点）');
   renderCaseStatusBar(c);
   renderCaseBody(c);
 }
@@ -5741,7 +5741,6 @@ function applyWaiveFee(c, reason, note){
   updateCaseStage(c);
   logCaseEvent(c, 'Dewi', '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
   buildCaseLog(c); renderCaseHeaderActions(c);
-  sendMainAnnouncement(c.name+' 想要面诊（已免除面诊费），请输入可以面诊的时间（现在 / 具体几点）');
   renderCaseStatusBar(c);
   renderCaseBody(c);
 }
@@ -5757,7 +5756,6 @@ function confirmWaiveFee(){
   updateCaseStage(c);
   logCaseEvent(c, 'Dewi', '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
   buildCaseLog(c); renderCaseHeaderActions(c);
-  sendMainAnnouncement(c.name+' 想要面诊（已免除面诊费），请输入可以面诊的时间（现在 / 具体几点）');
   renderCaseStatusBar(c);
   renderCaseBody(c);
 }
@@ -5777,12 +5775,6 @@ function cancelConsult(){
   buildCaseLog(c);
   renderCaseBody(c);
 }
-function sendMainAnnouncement(text){
-  if(!CHAT_DATA['main']) CHAT_DATA['main'] = [];
-  CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'me', orig:text, time:nowTime()});
-  if(CURRENT_ROOM==='main') renderFloatMessages();
-}
-
 /* ---- 韩国那边的回应（2026-10-02 面诊改版）：面诊只有一种——院长看资料口述，KR室长整理提交报告，院长不参与视频。
    付面诊费 → 待确认报告时间（面诊预约）→ KR确认预计出报告时间 → 等待报告（预计X出报告+倒计时；超时只提醒）→ KR室长提交报告 → 项目确认中 ---- */
 function simulateKrConfirmReportEta(){
@@ -5799,9 +5791,6 @@ function simulateKrConfirmReportEta(){
 function krConfirmReportEta(eta, c){
   c = c || getCurrentCase();
   if(!c || c.consultStatus!=='paid_waiting_kr') return;
-  if(!CHAT_DATA['main']) CHAT_DATA['main'] = [];
-  CHAT_DATA['main'].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'好的，已经和院长确认过资料，预计 '+eta+' 提交 '+c.name+' 的面诊报告。', time:nowTime()});
-  if(CURRENT_ROOM==='main') renderFloatMessages();
   c.reportEta = eta;
   c.reportOverdue = false;
   c.consultStatus = 'awaiting_report';
@@ -7217,8 +7206,9 @@ function deliverRefQuote(c, q){
 }
 function refBarHtml(caseId){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return '';
-  var ended = isEnded(c);
+  var ended = isEnded(c), b = caseStatusBadge(c); /* 显示案件"现在的"大状态（渲染时实时读，案件推进后跟着变），样式同案件列表 */
   return '<div style="margin-top:4px;background:#EDEAE2;border-radius:10px;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--slate2);">📄 引用案件 '+(c.caseNo||c.name)+
+    ' · <span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2].split(' · ')[0]+'</span>'+
     ' <a href="#" class="info-link" style="color:var(--blue);" onclick="openCaseNewTab(\''+c.id+'\');return false;">查看案件</a>'+
     (ended ? '' : '<button class="btn-outline" style="padding:2px 10px;font-size:11px;background:#fff;" onclick="openCaseChatNewTab(\''+c.id+'\')">转到案件对话</button>')+'</div>';
 }
@@ -7345,7 +7335,7 @@ function postCaseRoomFile(caseId, actorName, actorColor, actorInit, label){
   var cc = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
   if(!cc || !caseRoomEligible(cc)) return; /* 不符合建房条件（或已结案）的案件没有房间可推送 */
   var roomId = ensureCaseRoom(cc); /* 通话结束：AI文本+录像进附件，同时给房间推送一条消息（房间没建就按规则建） */
-  CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:actorName, color:actorColor, init:actorInit, orig:'已生成文件：'+label, time:nowTime()});
+  CHAT_DATA[roomId].push(roomSysMsg('AI 文本与录像已存入附件')); /* 视频结束的系统消息（案件状态变化不发进对话房，看通知中心和案件 Timeline） */
   if(CURRENT_ROOM===roomId) renderFloatMessages();
 }
 function closeFloat(){ document.getElementById('chat-float-overlay').classList.remove('open'); }
@@ -7369,16 +7359,10 @@ function renderFloatMessages(){
       /* 被引用的消息在案件房里显示为「发言人 ｜ 来源房间 ↗」+ 原文 + 译文；点来源房间打开那个房间并定位到这条消息 */
       var srcHtml = m.srcRoomId ? '<a href="#" class="info-link" onclick="gotoQuoteSource(\''+m.srcRoomId+'\','+m.srcIdx+');return false;">'+m.srcRoom+' ↗</a>' : m.srcRoom;
       html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me" style="background:var(--border2);color:var(--slate2);border-left:3px solid var(--terracotta);"><div style="font-size:11px;font-weight:700;margin-bottom:4px;">'+m.speaker+' ｜ '+srcHtml+'</div>'+m.orig+(m.trans ? '<div style="font-size:11px;color:var(--muted);margin-top:4px;">译：'+m.trans+'</div>' : '')+'</div><span class="bubble-trans" style="text-align:right;">引用于 '+m.time+'</span></div></div>';
-    } else if(m.kind==='card'){
-      var cardHtml = '<div class="chat-card"><div class="chat-card-title">'+m.card.project+'预约</div>'+
-        '<div class="chat-card-row"><span>姓名</span><b>'+m.card.name+'</b></div>'+
-        '<div class="chat-card-row"><span>项目</span><b>'+m.card.project+'</b></div>'+
-        '<div class="chat-card-row"><span>预约时间</span><b>'+m.card.time+'</b></div></div>';
-      html += '<div class="bubble-row them"><span class="bubble-avt" style="background:'+m.color+';">'+m.init+'</span><div class="bubble-col"><span class="bubble-name">'+m.name+'</span>'+cardHtml+'<span class="bubble-trans">'+m.time+'</span></div></div>';
     } else if(m.from==='me'){
       html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+m.orig+'</div>'+(m.refCaseId ? refBarHtml(m.refCaseId) : '')+'<span class="bubble-trans" style="text-align:right;">'+m.time+qLink+'</span></div></div>';
     } else {
-      html += '<div class="bubble-row them"><span class="bubble-avt" style="background:'+m.color+';">'+m.init+'</span><div class="bubble-col"><span class="bubble-name">'+m.name+'</span><div class="bubble them">'+m.orig+'</div>'+
+      html += '<div class="bubble-row them"><span class="bubble-avt" style="background:'+m.color+';">'+m.init+'</span><div class="bubble-col"><span class="bubble-name">'+m.name+'</span><div class="bubble them"'+(((m.orig||'').indexOf('@'+ME_NAME)>-1) ? ' style="background:#FFF1B8;box-shadow:0 0 0 2px #F0D56B;"' : '')+'>'+m.orig+'</div>'+
         (m.trans ? '<span class="bubble-trans">译：'+m.trans+'</span>' : '')+'<span class="bubble-trans">'+m.time+qLink+'</span></div></div>';
     }
   });
