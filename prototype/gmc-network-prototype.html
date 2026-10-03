@@ -6862,7 +6862,8 @@ var ROOMS = [
   {id:'main', name:'Main · 全员', isMain:true, color:'var(--slate2)', init:'G', date:'今天 09:20'},
   {id:'kr-lee', name:'이서연 · 韩国室长', color:'var(--sage)', init:'이', date:'今天 14:02'},
   {id:'director-kim', name:'김민석 · 院长', color:'var(--slate2)', init:'김', date:'昨天'},
-  {id:'rina', name:'Rina · 印尼室长', color:'var(--terracotta)', init:'R', date:'2 天前'}
+  {id:'rina', name:'Rina · 印尼室长', color:'var(--terracotta)', init:'R', date:'2 天前'},
+  {id:'grp-이서연-rina', name:'이서연、Rina', color:'var(--blue)', init:'G', date:'今天'}
 ];
 var DRAWER_TAB = 'staff';
 function setDrawerTab(tab){
@@ -6991,11 +6992,18 @@ var CHAT_DATA = {
   'kr-lee':[
     {day:'2026년 9월 17일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'Siti Rahayu 자료 검토 부탁드립니다.', trans:'Siti Rahayu 的材料麻烦帮忙看一下。', time:'14:00'},
     {day:'2026년 9월 17일', from:'me', orig:'好的，我这边帮您确认，院长看完资料后会出报告。', time:'14:05'},
-    {day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'면담 시간은 09.20 14:00 KST로 확정됐습니다.', trans:'预计出报告时间已确认为 09.20 14:00（KST）。', time:'09:12'}
+    {day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'면담 시간은 09.20 14:00 KST로 확정됐습니다.', trans:'预计出报告时间已确认为 09.20 14:00（KST）。', time:'09:12'},
+    {day:'2026년 9월 18일', from:'me', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20', refCaseId:'ayu'},
+    {day:'2026년 9월 18일', from:'me', orig:'Lina 之前的报告可以当参考。', trans:'Lina 님의 이전 리포트를 참고하세요.', time:'10:25', refCaseId:'lina'}
   ],
   'main':[
     {day:'2026년 9월 18일', from:'them', name:'김민석 원장', color:'var(--slate2)', init:'김', orig:'이번 주 신규 케이스 3건 검토 예정입니다.', trans:'本周有 3 个新案件待审核。', time:'09:00'},
-    {day:'2026년 9월 18일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Budi Santoso 案件资料补充中，晚点提交。', time:'09:20'}
+    {day:'2026년 9월 18일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Budi Santoso 案件资料补充中，晚点提交。', time:'09:20'},
+    {day:'2026년 9월 18일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'@Dewi 下午的持有项目对账麻烦你过来一下。', trans:'（演示译文）', time:'09:40'}
+  ],
+  'grp-이서연-rina':[
+    {day:'2026년 9월 18일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'这周 KR 那边的开放日期都排满了吗？', trans:'이번 주 KR 쪽 개방 일정이 다 찼나요?', time:'10:05'},
+    {day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'아직 21일, 22일이 비어 있습니다.', trans:'21 日、22 日还有空位。', time:'10:12'}
   ],
   'director-kim':[
     {day:'2026년 9월 17일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Siti Rahayu 자료 잘 받았습니다, 검토하겠습니다.', trans:'Siti Rahayu 的材料已收到，我会审核。', time:'11:40'}
@@ -7007,46 +7015,48 @@ var CHAT_DATA = {
   /* 案件专属房间：只给已经生成 Case ID 的案件开（见 docs/conversation-video-flow.md"只有主动发起过对话的案件才会存在"），
      每个案例配一条和它当前状态对得上的对话记录，这样"对话"抽屉的"案件"分类点进去看到的内容和案件详情页是一致的 */
   'case-yuni':[
-    {day:'2026년 9월 16일', from:'me', orig:'Yuni Kartika 不需要面诊，资料已确认，直接进项目列表', time:'09:40'}
+    {day:'2026년 9월 16일', from:'me', orig:'客人想先看一下术后管理的价格，我整理了项目单发给她。', trans:'고객이 시술 후 관리 가격부터 보고 싶어 해서 항목표를 보냈습니다.', time:'09:40'}
   ],
   'case-maya':[
-    {day:'2026년 9월 16일', from:'me', orig:'Maya Putri 想要面诊，面诊费已缴纳', time:'14:40'},
+    {day:'2026년 9월 16일', from:'me', orig:'客人想知道大概多久能出报告。', trans:'고객이 리포트가 언제쯤 나오는지 궁금해합니다.', time:'14:40'},
     {day:'2026년 9월 16일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'수신했습니다, 원장님께 전달하겠습니다.', trans:'已收到，会转达给院长。', time:'15:10'}
   ],
   'case-putri':[
-    {day:'2026년 9월 14일', from:'them', name:'이서연', color:'var(--sage)', init:'이', kind:'card', card:{name:'Putri Wulandari', project:'面诊', time:'09.24 14:00'}, orig:'[面诊预约] Putri Wulandari · 09.24 14:00', time:'16:00'}
+    {day:'2026년 9월 14일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'자료 확인했습니다. 원장님과 함께 검토 중입니다.', trans:'资料已确认，正在和院长一起看。', time:'16:05'}
   ],
   'case-dedi':[
-    {day:'2026년 9월 23일', from:'me', orig:'Dedi Prasetyo 的面诊报告已超过预计时间', time:'15:00'}
+    {day:'2026년 9월 18일', from:'me', orig:'客人在问报告什么时候能好，我先回复她还在等。', trans:'고객이 리포트 일정을 물어 아직 기다리는 중이라고 답했습니다.', time:'09:10'}
   ],
   'case-budi':[
-    {day:'2026년 9월 20일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'윤곽 이완은 중등도입니다. 초음파 리프팅 먼저 평가하시죠.', trans:'轮廓松弛属中度，建议先做超声刀评估。', time:'09:30'}
+    {day:'2026년 9월 20일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'윤곽 이완은 중등도입니다. 초음파 리프팅 먼저 평가하시죠.', trans:'轮廓松弛属中度，建议先评估超声刀。', time:'09:30'}
   ],
   'case-ayu':[
-    {day:'2026년 9월 19일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Ayu Lestari 리포트 발송했습니다.', trans:'Ayu Lestari 的面诊报告已发送。', time:'11:20'}
+    {day:'2026년 9월 19일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Ayu Lestari 리포트 발송했습니다.', trans:'Ayu Lestari 的面诊报告已发送。', time:'11:20'},
+    {day:'2026년 9월 18일', from:'me', kind:'quote', speaker:'Dewi', srcRoomId:'kr-lee', srcRoom:'이서연 · 韩国室长', srcIdx:3, srcDt:'26-09-18 10:20', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20'} /* 从其他房间引用进来 */
   ],
   'case-fajar':[
-    {day:'2026년 9월 21일', from:'me', orig:'Fajar Nugroho 已确认所选管理项目：假体隆鼻、鼻翼缩小，等结算', time:'10:00'}
+    {day:'2026년 9월 21일', from:'me', orig:'客人说想再对比一下鼻翼缩小的价格，稍后回复。', trans:'고객이 콧볼 축소 가격을 다시 비교해 보겠다고 했습니다.', time:'10:00'}
   ],
   'case-dinda':[
-    {day:'2026년 9월 23일', from:'me', orig:'Dinda Anggraini 项目付款已完成，批次 B1 等待安排施术时间', time:'10:05'}
+    {day:'2026년 9월 23일', from:'me', orig:'客人问施术日期怎么选，我发了日历说明。', trans:'고객이 시술 날짜 선택 방법을 물어 달력 안내를 보냈습니다.', time:'10:05'}
   ],
   'case-nadia':[
-    {day:'2026년 9월 20일', from:'me', orig:'Nadia Permata 项目付款已完成，批次 B1 等待赴韩施术', time:'11:00'},
-    {day:'2026년 9월 22일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'턱 보형물 시술 완료했습니다, 광대축소술은 다음 주 예정입니다.', trans:'下巴假体已完成，颧骨缩小预计下周安排。', time:'16:10'}
+    {day:'2026년 9월 20일', from:'me', orig:'客人已经到首尔了，酒店信息我发给 KR 室长。', trans:'고객이 서울에 도착했고 호텔 정보를 KR 실장님께 보냅니다.', time:'11:00'},
+    {day:'2026년 9월 22일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'턱 보형물 시술 완료했습니다, 광대축소술은 다음 주 예정입니다.', trans:'下巴假体已完成，颧骨缩小下周进行。', time:'14:00'}
   ],
   'case-rizky':[
     {day:'2026년 9월 19일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Rizky 的赴韩项目已经全部完成，本地这边还剩一项', time:'09:30'}
   ],
   'case-rina':[
-    {day:'2026년 8월 27일', from:'me', orig:'Rina Marlina 全部项目已完成，案件结案', time:'09:00'}
+    {day:'2026년 8월 27일', from:'me', orig:'客人对结果很满意，之后回来做护理再约。', trans:'고객이 결과에 매우 만족하며 이후 관리는 다시 예약하겠다고 했습니다.', time:'09:00'}
   ],
   'case-wulan':[
-    {day:'2026년 9월 13일', from:'me', orig:'Wulan Sari 批次 B1 部分取消已退款，剩余项目也处理完了，案件转已结案（部分退）', time:'09:05'}
+    {day:'2026년 9월 13일', from:'me', orig:'客人反馈恢复得不错。', trans:'고객이 회복이 좋다고 했습니다.', time:'09:05'}
   ],
   'case-lina':[
-    {day:'2026년 9월 12일', from:'me', orig:'Lina Kusuma 批次 B1 全额退款，案件转仅出报告（财务：全额退款）', time:'09:05'}
+    {day:'2026년 9월 12일', from:'me', orig:'报告已经发给客人了，她想再考虑一下。', trans:'리포트를 고객에게 보냈고 조금 더 고민해 보겠다고 합니다.', time:'09:05'}
   ]
+
 };
 function getCaseRoomId(caseId){ return 'case-'+caseId; }
 /* ---- 案件对话房规则（2026-10-02 选院长+对话合并版·二） ----
