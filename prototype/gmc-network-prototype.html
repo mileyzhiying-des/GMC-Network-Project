@@ -492,7 +492,7 @@ input,textarea,select{font-family:inherit;}
   <div class="main-col">
     <div class="topbar" style="justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="nav('in-notifications')" aria-label="通知">🔔<span class="badge">3</span></button><span class="avatar">D</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
     </div>
     <div class="content">
 
@@ -522,9 +522,16 @@ input,textarea,select{font-family:inherit;}
   <div class="sidebar-slot"></div>
   <div class="main-col">
     <div class="topbar-slot"></div>
-    <div class="content" style="max-width:760px;">
-      <div><div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">今天</div><div class="card" style="padding:2px 18px;" id="notif-today"></div></div>
-      <div><div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">更早</div><div class="card" style="padding:2px 18px;" id="notif-earlier"></div></div>
+    <div class="content" style="max-width:820px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div id="notif-filters" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        <button class="btn-outline" style="padding:6px 12px;font-size:12px;" onclick="markAllNotifRead()">全部标为已读</button>
+      </div>
+      <div class="card" style="padding:2px 18px;" id="notif-list"></div>
+      <div style="font-size:11px;color:var(--muted);">通知保留 90 天；一般对话消息不进通知中心，被 @ 才进；收件人按通知规则（案件事件 = 操作过且当天上班的室长）。</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="font-size:10px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
+        <button class="btn-ghost" onclick="demoNotif('report')">报告已出</button><button class="btn-ghost" onclick="demoNotif('missed')">未接来电</button><button class="btn-ghost" onclick="demoNotif('at')">被 @</button>
+        <button class="btn-ghost" onclick="demoNotif('system')">系统更新</button><button class="btn-ghost" onclick="demoNotif('noshow')">未到店</button><button class="btn-ghost" onclick="demoNotif('schedule')">KR确认施术时间</button><button class="btn-ghost" onclick="demoNotif('other')">只有 Rina 操作过的案件事件（我不会收到）</button></div>
     </div>
   </div>
 </section>
@@ -554,7 +561,7 @@ input,textarea,select{font-family:inherit;}
   <div class="main-col">
     <div class="topbar" style="justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a><span style="width:1px;height:16px;background:var(--border);"></span><span class="title">新建客户档案</span></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="nav('in-notifications')" aria-label="通知">🔔<span class="badge">3</span></button><span class="avatar">D</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
     </div>
     <div class="content" style="max-width:760px;">
 
@@ -633,7 +640,7 @@ input,textarea,select{font-family:inherit;}
   <div class="main-col">
     <div class="topbar" style="justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="nav('in-notifications')" aria-label="通知">🔔<span class="badge">3</span></button><span class="avatar">D</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
     </div>
     <div class="content">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -693,7 +700,7 @@ input,textarea,select{font-family:inherit;}
   <div class="main-col">
     <div class="topbar" style="justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a><span style="width:1px;height:16px;background:var(--border);"></span><span class="title">上次项目史</span></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="nav('in-notifications')" aria-label="通知">🔔<span class="badge">3</span></button><span class="avatar">D</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
     </div>
     <div class="content" style="max-width:760px;">
       <div class="card" style="padding:6px 22px;">
@@ -1244,6 +1251,14 @@ input,textarea,select{font-family:inherit;}
   </div>
 </div>
 
+<!-- ============ 通知详情（系统更新） ============ -->
+<div class="modal-overlay" id="notif-detail-overlay" style="z-index:85;" onclick="if(event.target===this) closeNotifDetail()">
+  <div class="modal-box" style="width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span id="notif-detail-title" style="font-size:15px;font-weight:700;">系统更新</span><span style="cursor:pointer;color:var(--slate);" onclick="closeNotifDetail()">✕</span></div>
+    <div id="notif-detail-body" style="font-size:13px;line-height:1.8;"></div>
+  </div>
+</div>
+
 <!-- ============ NEW CASE CHAT MODAL ============ -->
 <div class="modal-overlay" id="new-case-chat-overlay" onclick="if(event.target===this) closeNewCaseChatModal()">
   <div class="modal-box">
@@ -1340,7 +1355,7 @@ function buildSidebar(activePage){
 function buildTopRightIcons(){
   return '<div class="actions">'+
     '<button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬</button>'+
-    '<button class="icon-btn" onclick="nav(\'in-notifications\')" aria-label="通知">🔔<span class="badge">3</span></button>'+
+    '<button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button>'+
     '<span class="avatar">D</span></div>';
 }
 function buildTopbar(title){
@@ -1776,6 +1791,7 @@ function placeholderCountdownText(p){
 setInterval(function(){
   var changed = false;
   RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(p){
+    if(!p.warned && p.expiresAt-Date.now() <= 5*60000 && p.expiresAt-Date.now() > 0){ p.warned = true; pushNotif('预约','预约占位快过期（剩 5 分钟）：'+p.phone+' '+dateLabel(p.date)+' '+p.time, {names:workingIN()}); }
     if(Date.now() >= p.expiresAt){ changed = true; PLACEHOLDER_HISTORY.push({id:p.id, phone:p.phone, date:p.date, time:p.time, status:'占位失效', link:p.link, purpose:p.purpose}); return false; }
     return true;
   });
@@ -1784,6 +1800,7 @@ setInterval(function(){
     var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===el.getAttribute('data-ph-countdown'); })[0];
     if(p) el.textContent = placeholderCountdownText(p);
   });
+  CASE_ITEMS.forEach(function(c){ if(c.consultStatus==='awaiting_report' && !c.overdueNotified && reportOverdueNow(c)){ c.overdueNotified = true; pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+(c.reportEta||'—')+'）', {caseId:c.id}); } });
   document.querySelectorAll('[data-visit-countdown]').forEach(function(el){
     var left = parseInt(el.getAttribute('data-visit-countdown'),10) + 30*60000 - demoNow().getTime();
     el.textContent = left>0 ? Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒' : '已超时';
@@ -1832,7 +1849,7 @@ function openPlaceholderModal(id){
 }
 function resendPlaceholderLink(id){
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
-  p.expiresAt = Date.now()+15*60000;
+  p.expiresAt = Date.now()+15*60000; p.warned = false;
   showToast('链接已重新发送', p.phone+' 倒计时已重置', null);
   openPlaceholderModal(id);
 }
@@ -1884,7 +1901,7 @@ function submitGuestForm(){
   closeGuestForm(); renderCalendar();
   if(typeof buildClients==='function') buildClients();
   if(typeof renderCaseRows==='function') renderCaseRows();
-  showToast('预约和客户档案已生成', c.name+' · Case ID '+c.caseNo+' · '+dateLabel(g.date)+' '+g.time+'，客人到店后点［已到店］', function(){ openCaseDetail(c.id); });
+  pushNotif('预约', (g.phId ? '预约占位的客人填完资料：' : '客人自助预约提交：')+c.name+'（'+c.caseNo+'）'+dateLabel(g.date)+' '+g.time, {caseId:c.id, names:workingIN()});
 }
 function simulateCustomerFilledPlaceholder(id){
   var ph0 = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0];
@@ -1898,17 +1915,14 @@ function simulateCustomerFilledPlaceholder(id){
   showToast('客户已完成预约', c.name+' · Case ID '+c.caseNo+'，'+dateLabel(p.date)+' '+p.time, function(){ openCaseDetail(c.id); });
 }
 /* 客户在链接里自行改时间：案件的预约时间改掉，并通知室长（消息中心）——演示按钮，真实版由客户端触发 */
-var EXTRA_NOTIFICATIONS = [];
 function simulateCustomerReschedule(caseId, newDow, newTime){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c || !c.visitDate) return;
   var oldLabel = dateLabel(c.visitDate)+' '+c.visitTime;
   var ws = new Date(c.visitDate+'T00:00:00'); ws.setDate(ws.getDate() - dowOfDate(c.visitDate));
   ws.setDate(ws.getDate()+DOW_CN.indexOf(newDow));
   c.visitDate = dateStr(ws); c.visitTime = newTime;
-  EXTRA_NOTIFICATIONS.unshift([c.name+' 自行把预约时间从 '+oldLabel+' 改到 '+dateLabel(c.visitDate)+' '+newTime, '刚刚', 1]);
-  buildNotifications();
   if(CAL_MODE==='week') buildWeekGrid();
-  showToast('客户已改时间', c.name+' 改到 '+dateLabel(c.visitDate)+' '+newTime, function(){ nav('in-notifications'); });
+  pushNotif('预约', c.name+' 自行把预约时间从 '+oldLabel+' 改到 '+dateLabel(c.visitDate)+' '+newTime, {caseId:c.id});
 }
 
 /* ================= clients ================= */
@@ -2709,6 +2723,7 @@ function finishCase(c, cancelReasonIfCancelled){
   updateCaseStage(c);
   logCaseEvent(c, '系统', '案件结束：'+terminalBadge(c)[2]+(c.stage==='cancelled' ? '（'+endReasonText(c)+'）' : ''));
   cancelFollowUpReservations(c);
+  if(c.stage==='closed' && c.hasArrived && krAllItems(c).some(function(it){ return it.done; })) pushNotif('赴韩施术','施术完成，案件已结案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -2763,6 +2778,7 @@ function markNoShow(caseId, auto){
   if(!c || c.stage!=='booked' || c.subState!=='waiting') return false;
   c.subState = 'cancelled'; c.noShow = true; c.cancelReason = '未到店';
   updateCaseStage(c);
+  if(auto) pushNotif('预约','未到店（自动判定）：'+c.name+' 过预约时间30分钟未到店，已取消', {caseId:c.id});
   c.logEntries = c.logEntries || [];
   c.logEntries.push({stage:'预约到店', actor: auto ? '系统' : 'Dewi', action: auto ? '过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）' : '手动标记未到店：已取消（未到店）', dt:nowFullDt()});
   return true;
@@ -3328,6 +3344,10 @@ function acceptIncomingCall(){
   startCall('chat', INCOMING_CALL.caseId, ['Dewi（印尼室长）', (c ? c.krCoordinator : '이서연 실장')]);
   VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); INCOMING_CALL = null;
 }
+function simulateMissedCall(){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0]; if(!c) return;
+  pushNotif('视频','未接来电：'+krEnterRoomName(c)+' 呼叫了 '+c.name+' 的案件视频', {caseId:c.id, link:{kind:'caseRoom'}});
+}
 function declineIncomingCall(){
   document.getElementById('incoming-call-overlay').classList.remove('open');
   INCOMING_CALL = null;
@@ -3415,6 +3435,7 @@ function markReportUploaded(){
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
+  pushNotif('面诊','报告已出：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
 }
 /* 赴韩项目可选范围（2026-09-29 重写，"项目列表/赴韩施术/本地管理重构"指令）：
    由KR室长直接整理（不经过院长），出报告时写入演示数据，格式 {name,price,note}，不挂项目库id引用。
@@ -4580,6 +4601,7 @@ function submitPostCareConfirm(){
     if(v){ x.b.schedule = v; names.push(x.h.itemName+'（'+v+'）'); }
   });
   logCaseEvent(c, '김민석 원장', 'KR确认术后管理项目并标注进行时间：'+names.join('、'));
+  pushNotif('赴韩施术','KR 确认术后管理项目：'+c.name+'（'+names.join('、')+'）', {caseId:c.id});
   closePostCareConfirm(); buildCaseLog(c); renderCaseBody(c);
 }
 /* ---- 本地流程组件（§3，2026-09-30）：不面诊案件 与 "+添加本地管理"tab 共用。
@@ -5203,6 +5225,7 @@ function submitKrUnable(){
   if(names.length>=pending.length){ alert('至少要保留一个能做的项目；全部不能做请选"不能施术"'); return; }
   pending.forEach(function(it){ if(names.indexOf(it.name)>-1){ it.cancelled = true; it.unable = true; it.unableReason = reason; } });
   logCaseEvent(c, '김민석 원장', 'KR标记无法施术：'+names.join('、')+'（项目→已取消）；原因：'+reason);
+  pushNotif('赴韩施术','KR 标记无法施术：'+c.name+'（'+names.join('、')+'）', {caseId:c.id});
   closeKrUnableModal();
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
@@ -5440,6 +5463,7 @@ function simulateKrScheduleConfirmNew(which){
   c.krSchedule.confirmedDate = date;
   c.krSchedule.confirmedTime = '14:00';
   logCaseEvent(c, '이서연', 'Kr室长确认施术日期：'+date+' 14:00');
+  pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+date+' 14:00', {caseId:c.id});
   updateCaseStage(c);
   buildCaseLog(c);
   renderCaseStatusBar(c);
@@ -5531,6 +5555,7 @@ function simulateKrMarkArrived(){
   c.hasArrived = true; /* 到过医院：之后IN不能再改日期/取消项目（即使KR在韩重新预约回到"施术时间已确认"） */
   updateCaseStage(c);
   logCaseEvent(c, '김민석 원장', 'KR标记"已到医院"');
+  pushNotif('赴韩施术','客人已到医院：'+c.name, {caseId:c.id});
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -5691,6 +5716,7 @@ function simulateKrProjectSwap(){
   c.procedureItems.push({projectId:alt.id, name:alt.name, price:alt.price, currency:currencyOf(alt.origin), origin:'KR', categoryId:alt.categoryId, done:false, batchId:newId, swappedFrom:target.name}); /* 加项 */
   c.settleTab = null;
   logCaseEvent(c, '김민석 원장', '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
+  pushNotif('赴韩施术','KR 更换项目：'+c.name+'（'+target.name+' → '+alt.name+'）', {caseId:c.id});
   buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 function markConsultPaid(){
@@ -5784,7 +5810,7 @@ function krConfirmReportEta(eta, c){
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
-  notifyConsultUpdate(c, 'Kr室长已确认预计出报告时间', c.name+(c.director ? ' · '+c.director : '')+' · '+eta);
+  pushNotif('面诊','KR 确认预计出报告时间：'+c.name+' '+eta, {caseId:c.id});
 }
 /* 演示：超过预计时间还没出报告——小状态变橘色"已超过预计时间"，只提醒，状态不变 */
 function simulateReportTimeout(){
@@ -5794,22 +5820,8 @@ function simulateReportTimeout(){
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
-  showToast('已超过预计出报告时间', c.name+' 的报告还没提交', function(){ openCaseDetail(c.id); });
+  pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+(c.reportEta||'—')+'）', {caseId:c.id});
 }
-function notifyConsultUpdate(c, title, text){
-  if(!shouldPushToMe(c)) return; /* 推播对象见 pushTargets()；院长完全不推播 */
-  if(MUTED_ROOMS[getCaseRoomId(c.id)]) return; /* 🔕：对自己关闭了这个房间的提醒 */
-  var chatOpen = document.getElementById('chat-float-overlay').classList.contains('open') && CURRENT_ROOM==='main';
-  if(!chatOpen){
-    showToast(title, text, function(){ openFloatingChat('main'); });
-  }
-  var onThisCase = (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id);
-  if(!onThisCase){
-    showToast('面诊信息已更新', c.name+' 的面诊信息有更新', function(){ openCaseDetail(c.id); });
-  }
-}
-
-
 /* ================= case library (案例库 · 2026-10-02 重写，取代院长/部位/问题/产品节点结构) =================
    案例必须挂在"项目"上（必选、可多选），项目来自项目库：赴韩施术的案例选赴韩项目，印尼管理的案例选本地项目；部位/分类由项目所属的项目库分类自动带出。
    "院长"：赴韩案例从 KR 院长名单选（或"-"），不在名单上（停用/离职）显示"-"（不可点击）。"问题"：印尼管理案例的标签，手动维护，可多选。
@@ -6722,26 +6734,138 @@ function saveProj(){
   renderProjLibrary();
 }
 
-/* ================= notifications ================= */
-function buildNotifications(){
-  var today = EXTRA_NOTIFICATIONS.concat([
-    ['김민석 원장 已审核 Siti Rahayu 材料，选择分支 A：视频问诊','10 分钟前',1],
-    ['메타뷰 已自动同步 Maya Putri 的皮肤检测数据','1 小时前',1],
-    ['Putri Wulandari 的面诊报告预计 09.20 14:00 提交','2 小时前',1]
-  ]);
-  var earlier = [
-    ['韩国室长 이서연 确认 Andi Wijaya 预计出报告时间为 09.23 11:00','昨天',0],
-    ['Siti Rahayu 的来韩行程与机票信息已由 GMC 确认','昨天',0],
-    ['系统提醒：Budi Santoso 的材料已提交超过 24 小时','2 天前',0]
-  ];
-  function render(arr){
-    return arr.map(function(n){
-      return '<div class="nrow"><span class="ndot" style="background:'+(n[2]?'var(--terracotta)':'transparent')+';"></span><div><div style="font-size:13px;font-weight:'+(n[2]?'700':'500')+';">'+n[0]+'</div><div style="font-size:11px;color:var(--muted);">'+n[1]+'</div></div></div>';
-    }).join('');
-  }
-  document.getElementById('notif-today').innerHTML = render(today);
-  document.getElementById('notif-earlier').innerHTML = render(earlier);
+/* ================= 通知中心（2026-10-03，Notion Notification Center / IN-NOTI-01） =================
+   通知数据：类型(cat)、内容、Case ID、时间、收件人、已读状态；事件发生时自动生成，全部弹 toast；保留 90 天。
+   收件人：案件事件 = 这个案件所有操作过、当天上班的室长（都 OFF 改发当天上班的所有 IN 室长，同 pushTargets）；被 @ = 被 @ 的人；系统更新 = 所有 IN 室长。
+   一般对话消息不进通知中心（对话有自己的未读数），被 @ 进通知中心并弹 toast，对话那边不另外为 @ 亮红点。 */
+var NOTIF_SEQ = 0;
+var NOTIF_CATS = ['预约','面诊','赴韩施术','视频','对话','系统'];
+var NOTIF_ICON = {'预约':'📅','面诊':'🩺','赴韩施术':'✈️','视频':'🎥','对话':'💬','系统':'⚙️'};
+var NOTIFS = [];
+var NOTIF_FILTER = '全部';
+function notifMine(n){ return n.recipients.indexOf(ME_NAME)>-1; }
+function notifAlive(n){ return (new Date(nowFullDt().replace(' ','T')+':00') - new Date(n.ts.replace(' ','T')+':00')) <= 90*86400000; } /* 90 天后自动清除 */
+function myNotifs(){ return NOTIFS.filter(function(n){ return notifMine(n) && notifAlive(n); }); }
+function unreadCount(){ return myNotifs().filter(function(n){ return !n.read[ME_NAME]; }).length; }
+function updateBell(){
+  var u = unreadCount();
+  document.querySelectorAll('.bell-badge').forEach(function(b){ b.textContent = u>99 ? '99+' : u; b.style.display = u ? 'flex' : 'none'; });
 }
+function workingIN(){ var today = nowFullDt().split(' ')[0]; return IN_COORDINATORS.filter(function(n){ return !isOffOn(n, today); }); }
+/* 生成通知：自动算收件人，收件人里有我就弹 toast（点 toast = 点这条通知） */
+function pushNotif(cat, text, opts){
+  opts = opts || {};
+  var c = opts.caseId ? CASE_ITEMS.filter(function(x){ return x.id===opts.caseId; })[0] : null;
+  var rec;
+  if(opts.names) rec = opts.names.slice();
+  else if(c){ var t = pushTargets(c); rec = t.inn.concat(t.kr); }
+  else rec = workingIN();
+  var n = {id:'n'+(++NOTIF_SEQ), cat:cat, text:text, caseId:opts.caseId||null, ts:opts.ts||nowFullDt(), recipients:rec, read:{}, link:opts.link||(c?{kind:'case'}:{kind:'none'}), detail:opts.detail||null};
+  if(opts.read) n.read[ME_NAME] = true;
+  NOTIFS.unshift(n);
+  updateBell();
+  if(CURRENT_PAGE_ID==='in-notifications') renderNotifPage();
+  if(!opts.silent && notifMine(n)) showToast(NOTIF_ICON[cat]+' '+cat, text, function(){ openNotif(n.id, 'toast'); });
+  return n;
+}
+function closeBellDropdown(){ var d = document.getElementById('bell-dd'); if(d) d.remove(); }
+function toggleBellDropdown(ev){
+  if(ev) ev.stopPropagation();
+  if(document.getElementById('bell-dd')){ closeBellDropdown(); return; }
+  var btn = ev && ev.currentTarget, r = btn ? btn.getBoundingClientRect() : {bottom:56, right:window.innerWidth-24};
+  var list = myNotifs().sort(function(a,b){ return b.ts.localeCompare(a.ts); }).slice(0,6);
+  var d = document.createElement('div');
+  d.id = 'bell-dd';
+  d.style.cssText = 'position:fixed;top:'+(r.bottom+8)+'px;right:'+Math.max(12, window.innerWidth-r.right-10)+'px;width:340px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.16);z-index:75;overflow:hidden;';
+  d.onclick = function(e){ e.stopPropagation(); };
+  d.innerHTML = '<div style="padding:10px 14px;font-size:12px;font-weight:700;border-bottom:1px solid var(--border2);">最近通知</div>'+
+    (list.length ? list.map(function(n){
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'bell\')"><span>'+NOTIF_ICON[n.cat]+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(n.read[ME_NAME]?'500':'700')+';">'+n.text+'</div><div style="font-size:10px;color:var(--muted);">'+n.ts+'</div></div>'+(n.read[ME_NAME]?'':'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>')+'</div>';
+    }).join('') : '<div style="padding:14px;font-size:12px;color:var(--muted);">没有通知</div>')+
+    '<div style="padding:10px 14px;text-align:center;"><a href="#" class="info-link" onclick="closeBellDropdown();nav(\'in-notifications\');return false;">查看全部</a></div>';
+  document.body.appendChild(d);
+}
+document.addEventListener('click', function(){ closeBellDropdown(); });
+/* 点通知：标为已读并打开对应内容；通知中心页里点 = 页内跳转；正在某个案件里从铃铛/toast 点 = 新标签页 */
+function openNotif(id, src){
+  var n = NOTIFS.filter(function(x){ return x.id===id; })[0]; if(!n) return;
+  n.read[ME_NAME] = true; updateBell(); closeBellDropdown();
+  if(CURRENT_PAGE_ID==='in-notifications') renderNotifPage();
+  var newTab = (src!=='page' && CURRENT_PAGE_ID==='in-casedetail');
+  var k = n.link.kind;
+  if(k==='system'){ openNotifDetail(n); return; }
+  if(k==='mention'){
+    if(n.caseId && newTab){ openCaseNewTab(n.caseId, '&chat=open'); return; }
+    gotoQuoteSource(n.link.roomId, n.link.msgIdx); return; /* 被 @ → 打开该对话并定位到消息 */
+  }
+  if(k==='caseRoom'){
+    if(newTab) openCaseNewTab(n.caseId, '&chat=open'); else openCaseRoom(n.caseId);
+    return;
+  }
+  if(n.caseId){ if(newTab) openCaseNewTab(n.caseId); else openCaseDetail(n.caseId); }
+}
+function openNotifDetail(n){
+  var d = n.detail || {title:'诊所设定更新', changes:[n.text], effective:''};
+  document.getElementById('notif-detail-title').textContent = d.title;
+  document.getElementById('notif-detail-body').innerHTML = '<div style="margin-bottom:6px;"><b>改了什么</b></div>'+d.changes.map(function(x){ return '<div>• '+x+'</div>'; }).join('')+(d.effective ? '<div style="margin-top:10px;"><b>何时生效</b>　'+d.effective+'</div>' : '')+'<div style="margin-top:10px;font-size:11px;color:var(--muted);">发布于 '+n.ts+'；诊所所有 IN 室长都会收到，当时没上线的下次登录时弹出。</div>';
+  document.getElementById('notif-detail-overlay').classList.add('open');
+}
+function closeNotifDetail(){ document.getElementById('notif-detail-overlay').classList.remove('open'); }
+function setNotifFilter(f){ NOTIF_FILTER = f; renderNotifPage(); }
+function notifFiltered(){
+  var list = myNotifs().sort(function(a,b){ return b.ts.localeCompare(a.ts); });
+  if(NOTIF_FILTER==='未读') return list.filter(function(n){ return !n.read[ME_NAME]; });
+  if(NOTIF_CATS.indexOf(NOTIF_FILTER)>-1) return list.filter(function(n){ return n.cat===NOTIF_FILTER; });
+  return list;
+}
+function markAllNotifRead(){ notifFiltered().forEach(function(n){ n.read[ME_NAME] = true; }); updateBell(); renderNotifPage(); } /* 当前筛选下的通知全部标为已读 */
+function renderNotifPage(){
+  var f = document.getElementById('notif-filters'), l = document.getElementById('notif-list'); if(!f || !l) return;
+  f.innerHTML = ['全部','未读'].concat(NOTIF_CATS).map(function(x){ return '<span class="chip'+(NOTIF_FILTER===x?' active':'')+'" onclick="setNotifFilter(\''+x+'\')">'+x+(x==='未读' ? ' '+unreadCount() : '')+'</span>'; }).join('');
+  var list = notifFiltered();
+  l.innerHTML = list.map(function(n){
+    var c = n.caseId ? CASE_ITEMS.filter(function(x){ return x.id===n.caseId; })[0] : null, un = !n.read[ME_NAME];
+    return '<div class="nrow" style="cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'page\')"><span class="ndot" style="background:'+(un?'var(--terracotta)':'transparent')+';"></span><span style="font-size:18px;margin-right:4px;">'+NOTIF_ICON[n.cat]+'</span>'+
+      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(un?'700':'500')+';">'+n.text+'</div><div style="font-size:11px;color:var(--muted);">'+n.cat+(c&&c.caseNo ? ' · '+c.caseNo : '')+' · '+n.ts+' · 收件：'+n.recipients.join('、')+'</div></div>'+
+      '<span class="status-pill" style="background:'+(un?'var(--terracotta-bg)':'var(--border2)')+';color:'+(un?'var(--terracotta)':'var(--muted)')+';">'+(un?'未读':'已读')+'</span></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:16px 2px;">没有通知</div>';
+}
+function buildNotifications(){ renderNotifPage(); updateBell(); }
+/* 演示按钮：触发几个事件，确认会弹 toast、进通知中心、收件人正确 */
+function demoNotif(kind){
+  var ayu = CASE_ITEMS.filter(function(x){ return x.id==='ayu'; })[0];
+  if(kind==='report') pushNotif('面诊','报告已出：'+ayu.name+'（'+ayu.caseNo+'），已进入项目确认中', {caseId:'ayu'});
+  else if(kind==='missed') pushNotif('视频','未接来电：이서연 呼叫了 '+ayu.name+' 的案件视频', {caseId:'ayu', link:{kind:'caseRoom'}});
+  else if(kind==='at'){
+    ensureCaseRoom(ayu); var roomId = getCaseRoomId('ayu');
+    CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'@Dewi 这位客人的报告我已经补充了，请看一下。', trans:'（演示译文）', time:nowTime()});
+    pushNotif('对话','이서연 在「'+ayu.name+' · '+ayu.caseNo+'」里 @ 了你', {caseId:'ayu', names:[ME_NAME], link:{kind:'mention', roomId:roomId, msgIdx:CHAT_DATA[roomId].length-1}});
+  }
+  else if(kind==='system') pushNotif('系统','诊所管理账号更新了设定：面诊费 300,000 → 350,000 印尼盾，2026-10-03 起生效', {names:IN_COORDINATORS, link:{kind:'system'}, detail:{title:'面诊费调整', changes:['面诊费 300,000 → 350,000 印尼盾'], effective:'2026-10-03 起'}});
+  else if(kind==='noshow') pushNotif('预约','未到店（自动判定）：Bayu Aditya 过预约时间30分钟未到店，已取消', {caseId:'bayu'});
+  else if(kind==='schedule') pushNotif('赴韩施术','KR 确认施术时间：Nadia Permata 2026-09-20 14:00', {caseId:'nadia'});
+  else if(kind==='other') pushNotif('面诊','报告已出：Andi Wijaya（这个案件只有 Rina 操作过 → 只发给 Rina）', {caseId:'andi'});
+}
+/* 演示通知（各分类至少一条，含已读/未读） */
+(function seedNotifs(){
+  function add(cat, text, caseId, ts, read, link, detail, names){
+    var n = {id:'n'+(++NOTIF_SEQ), cat:cat, text:text, caseId:caseId, ts:ts, recipients:names||['Dewi'], read:read?{Dewi:true}:{}, link:link||(caseId?{kind:'case'}:{kind:'none'}), detail:detail||null};
+    NOTIFS.push(n);
+  }
+  add('预约','客人自助预约提交：Siti Rahayu（A000017）','siti','2026-09-18 09:05',false);
+  add('预约','未到店（自动判定）：Bayu Aditya 过预约时间30分钟未到店，已取消','bayu','2026-09-17 10:31',true);
+  add('预约','预约占位快过期（剩 5 分钟）：+62 812-3300-0099','','2026-09-17 12:55',true,{kind:'none'});
+  add('面诊','KR 确认预计出报告时间：Putri Wulandari 2026-09-20 14:00','putri','2026-09-14 16:00',true);
+  add('面诊','等待报告超过预计时间：Dedi Prasetyo（预计 2026-09-18 08:00）','dedi','2026-09-18 08:05',false);
+  add('面诊','报告已出：Ayu Lestari（A000006）','ayu','2026-09-16 11:20',true);
+  add('赴韩施术','KR 确认施术时间：Nadia Permata 2026-09-20 14:00','nadia','2026-09-15 10:00',true);
+  add('赴韩施术','客人已到医院：Nadia Permata','nadia','2026-09-17 09:30',false);
+  add('视频','未接来电：이서연 呼叫了 Ayu Lestari 的案件视频','ayu','2026-09-17 15:20',false,{kind:'caseRoom'});
+  add('对话','이서연 在「Ayu Lestari · A000006」里 @ 了你','ayu','2026-09-16 13:10',true,{kind:'mention', roomId:'case-ayu', msgIdx:0});
+  add('系统','诊所管理账号更新了设定：营业时间 09:00–18:00 → 09:00–19:00，2026-09-20 起生效','','2026-09-16 08:00',true,{kind:'system'},{title:'营业时间调整', changes:['营业时间 09:00–18:00 → 09:00–19:00'], effective:'2026-09-20 起'},['Dewi','Rina']);
+})();
+/* 日历上"等待报告超过预计时间"自动提醒用的标记：dedi 演示案件已经提醒过 */
+CASE_ITEMS.filter(function(c){ return c.id==='dedi'; }).forEach(function(c){ c.overdueNotified = true; });
 
 /* ================= chat drawer ================= */
 
@@ -7193,7 +7317,7 @@ function renderChatCaseChip(){
     demo = c.krInRoom
       ? '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateKrLeaveRoom()">演示：模拟KR室长离开房间</button>'
       : '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateKrEnterRoom()">演示：模拟KR室长进入房间</button>';
-    if(c.krInRoom) demo += '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateIncomingCall()">演示：模拟KR室长来电</button>';
+    if(c.krInRoom) demo += '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateIncomingCall()">演示：模拟KR室长来电</button><button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateMissedCall()">演示：模拟未接来电</button>';
   }
   el.innerHTML = '<span style="font-size:11px;">📎</span><span style="font-size:11px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>'+demo;
 }
@@ -7340,7 +7464,7 @@ function simulateIncomingMsg(atMe){
   renderFloatMessages();
   var muted = !!MUTED_ROOMS[roomId];
   var pushOk = isCase ? shouldPushToMe(cc) : true; /* 案件房：只给操作过的当班室长；职员房：直接提醒 */
-  if(atMe) showToast('你被 '+who+' @ 了', '被@一定提醒（即使已🔕或不负责这个案件）', null);
+  if(atMe) pushNotif('对话', who+' 在「'+((roomById(roomId)||{}).name||roomId)+'」里 @ 了你', {caseId:(isCase&&cc)?cc.id:null, names:[ME_NAME], link:{kind:'mention', roomId:roomId, msgIdx:CHAT_DATA[roomId].length-1}}); /* 被@一定提醒（即使已🔕或不负责这个案件），进通知中心并弹 toast */
   else if(!muted && pushOk) showToast('新消息 · '+((roomById(roomId)||{}).name||roomId), who+'：（演示）有新消息', null);
 }
 function closeRoomMembers(){ document.getElementById('room-members-overlay').classList.remove('open'); }
@@ -7382,8 +7506,9 @@ function showToast(title, text, onClickFn){
   closeBtn.addEventListener('click', function(e){ e.stopPropagation(); if(el.parentNode) el.remove(); });
   el.appendChild(body);
   el.appendChild(closeBtn);
+  while(wrap.children.length>=4) wrap.removeChild(wrap.firstChild); /* 叠放最多 4 个，不挡住主要操作区域 */
   wrap.appendChild(el);
-  setTimeout(function(){ if(el.parentNode) el.remove(); }, 10000);
+  setTimeout(function(){ if(el.parentNode) el.remove(); }, 6000);
 }
 /* 初始化（2026-10-02）：已是终态的案件整理对话房进附件并删除；仍在进行的演示房间里，KR室长视为已进入 */
 CASE_ITEMS.forEach(function(c){
