@@ -2904,12 +2904,23 @@ function caseStatusSub(c){
    "案件=一次到店或一次赴韩行程"——本地项目结算后立即转客户持有，不再挂在案件进程里；
    项目确认中→待付款→已付款→[有赴韩项目：递交施术日期→待确认施术时间→等待施术→(已到医院)赴韩施术中→(KR标记施术完成)已结案]
                     →[纯本地：本地管理(待用持有项目)→(使用/本次不使用)已结案] */
+/* 不面诊的案件（含已买本地项目）后来"增加面诊"（2026-10-05）：主状态进入面诊预约 → … → 报告出来后项目确认中（选赴韩项目）；
+   已买的本地项目照常可以使用（"本地管理"tab 继续），列表显示"本地管理进行中"小标签（同"+添加本地管理"）；点击后案件对 KR 可见 */
+function hasAfterReportBatch(c){ return (c.settlementBatches||[]).some(function(b){ return b.afterReport && b.status==='active'; }); }
+function consultCarryStage(c){
+  if(!c.addedConsultAfterLocal || c.visitClosed) return false;
+  if(c.consultRequested && !c.reportReady && ['awaiting_payment','paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) return true;
+  return !!c.reportReady && !hasAfterReportBatch(c); /* 出报告后到选完项目付款前：项目确认中 */
+}
+function localCarried(c){ return !!c.addedConsultAfterLocal && !isEnded(c); }
+function localMgmtTagOn(c){ return !isEnded(c) && ((c.localMgmt && c.localMgmt.active) || (localCarried(c) && (c.mgmtActive || c.settlementDone))); }
 function deriveCaseStage(c){
   if(c.subState==='cancelled') return 'cancelled'; /* 分支1：预约阶段直接取消 */
   if(c.visitClosed){ /* 案件结束：结局由 computeOutcome 推算（已结案/仅出报告/已取消） */
     var out = computeOutcome(c);
     return out==='closed' ? 'closed' : out==='reportonly' ? 'reportonly' : 'cancelled';
   }
+  if(consultCarryStage(c)) return 'consult';
   if(c.mgmtActive) return 'local'; /* 使用项目后进入"本地管理" */
   if(c.settlementDone && krActiveItems(c).length>0) return 'travel'; /* 付款完成 → 施术预约；之后读施术日期卡片（Draft/Pending=施术预约，其余=赴韩施术） */
   if(isLocalCase(c)) return 'local'; /* 选择项目（是否持有/使用/选购/付款都在这个状态内） */
@@ -2944,7 +2955,7 @@ function renderCaseRows(){
   }
   document.getElementById('case-rows').innerHTML = items.map(function(c){
     var b = caseStatusBadge(c);
-    var lmTag = (c.localMgmt && c.localMgmt.active && !isEnded(c)) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '';
+    var lmTag = localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '';
     var tags = caseAbnormalTags(c);
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
     var abnormal = tags.length
@@ -2997,7 +3008,7 @@ function renderCaseStatusBar(c){
   document.getElementById('case-status-bar').innerHTML =
     '<div class="card" style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'+
     '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--slate);">当前状态</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
-    ((c.localMgmt && c.localMgmt.active && !isEnded(c)) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:11px;">本地管理进行中</span>' : '')+
+    (localMgmtTagOn(c) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:11px;">本地管理进行中</span>' : '')+
     (c.visibleToKR ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:11px;" title="韩国侧可见（不面诊案件点增加面诊后、或使用术后管理项目关联后）">KR可见</span>' : '')+
     (isEnded(c) ? '<span style="font-size:11px;color:var(--slate2);">'+(c.stage==='cancelled' ? '取消原因：'+endReasonText(c)+'　' : '')+financeLabel(c)+'</span>' : '')+
     caseAbnormalTags(c).map(function(t){ return '<span class="status-pill" style="background:#F6DCDC;color:#C1454A;font-size:11px;">'+t+'</span>'; }).join('')+'</div>'+
@@ -3012,7 +3023,7 @@ function renderCaseHeaderActions(c){
   if(!c.materialsConfirmed){ el.innerHTML=''; return; }
   var stageBtn = '';
   var notEnded = !isEnded(c);
-  if(notEnded && c.needsConsult===false && !c.consultRequested && !c.settlementDone){
+  if(notEnded && c.needsConsult===false && !c.consultRequested){
     stageBtn = '<button class="btn-outline" onclick="addConsult()">增加面诊</button>';
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
@@ -4015,7 +4026,7 @@ function switchCaseTab(tab){
 }
 /* Tab 出现时机（IN-CASE-01）：项目列表=面诊案件报告出来后；本地管理=本地案件确认后，或面诊/赴韩案件点"+添加本地管理"后 */
 function showProjectsTab(c){ return !!c.projectsEnabled && (!isLocalCase(c) || !!c.reportReady); }
-function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt; }
+function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c); }
 function relatedFollowers(c){ return CASE_ITEMS.filter(function(x){ return x.linkedCase && x.linkedCase.caseId===c.id; }); }
 function showRelatedTab(c){ return !!(c.linkedCase && c.linkedCase.caseId) || relatedFollowers(c).length>0; }
 function normalizeCaseTab(c){
@@ -4127,7 +4138,7 @@ function caseTabContentHtml(c){
   normalizeCaseTab(c);
   if(c.activeCaseTab==='projects' && showProjectsTab(c)) return projectListTabHtml(c, false);
   if(c.activeCaseTab==='kr' && c.settlementDone && krAllItems(c).length>0) return krProcedureTabHtml(c);
-  if(c.activeCaseTab==='localmgmt' && isLocalCase(c)) return projectListTabHtml(c, true); /* 本地案件：选择项目→本地管理的完整流程（07） */
+  if(c.activeCaseTab==='localmgmt' && (isLocalCase(c) || localCarried(c))) return projectListTabHtml(c, true); /* 本地案件：选择项目→本地管理的完整流程（07） */
   if(c.activeCaseTab==='localmgmt' && c.localMgmt) return localMgmtTabHtml(c);
   if(c.activeCaseTab==='related' && showRelatedTab(c)) return relatedTabHtml(c);
   if(c.activeCaseTab==='attachments' && c.materialsConfirmed) return attachmentsTabHtml(c);
@@ -4153,11 +4164,12 @@ function editConcernField(field){
   c[field] = val;
   renderCaseBody(c);
 }
-/* 案件头部"增加面诊"按钮：只在"选了不面诊"且还没面诊过的案件上出现；一个案件只面诊一次，
-   已付款后不再提供（主状态不能回退）。点击 → 面诊费在面诊资料tab缴纳或免除，主状态进入面诊预约 */
+/* 案件头部"增加面诊"按钮：只在"选了不面诊"且还没面诊过的案件上出现，付款前、付款后都显示（2026-10-05）；一个案件只面诊一次。
+   点击 → 面诊费在面诊资料tab缴纳或免除，主状态进入面诊预约（已买的本地项目照常使用），案件对 KR 可见 */
 function addConsult(){
   var c = getCurrentCase(); if(!c) return;
   c.visibleToKR = true; /* 点了增加面诊，案件对韩国侧从此可见 */
+  if(c.settlementDone || c.mgmtActive) c.addedConsultAfterLocal = true; /* 付款后增加面诊：已买的本地项目照常使用 */
   c.needsConsult = true;
   c.consultRequested = true;
   c.consultStatus = 'awaiting_payment';
@@ -4872,7 +4884,7 @@ function generateSettlementBatch(c){
   var b = computeBatchBreakdown(c.recommended);
   var newItems = c.recommended.map(function(it){ return Object.assign({}, it, {done:false, batchId:batchId}); });
   c.settlementBatches = c.settlementBatches || [];
-  c.settlementBatches.push({id:batchId, orderedBy:'Dewi', settledBy:'客人', time:nowFullDt(), status:'unpaid',
+  c.settlementBatches.push({id:batchId, afterReport:!!c.reportReady, orderedBy:'Dewi', settledBy:'客人', time:nowFullDt(), status:'unpaid',
     krTotal:b.krTotal, krDeposit:b.krDeposit, krBalance:b.krBalance, inTotal:b.inTotal});
   c.procedureItems = (c.procedureItems||[]).concat(newItems);
   c.settleTab = null; /* 新结算单：默认打开最新一张 */
@@ -4917,7 +4929,7 @@ function projectPickerHtml(c, isAddition){
     /* 赴韩项目只显示KR室长整理的可选范围（krScope），不是完整项目库；没有krScope时给空状态引导 */
     var scope = c.krScope;
     if(!scope || !scope.items.length){
-      var addConsultBtn = (c.needsConsult===false && !c.consultRequested && !c.settlementDone)
+      var addConsultBtn = (c.needsConsult===false && !c.consultRequested)
         ? '<button class="btn-outline" style="margin-top:10px;" onclick="addConsult()">增加面诊</button>' : '';
       leftRows = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">需先完成面诊，由韩国室长给出可选项目</div>'+addConsultBtn;
     } else {
