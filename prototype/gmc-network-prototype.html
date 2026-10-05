@@ -555,85 +555,6 @@ input,textarea,select{font-family:inherit;}
   </div>
 </section>
 
-<!-- ============ IN: NEW CLIENT FORM ============ -->
-<section class="page in-shell" id="in-newclient" data-page="clients" style="display:none;">
-  <div class="sidebar-slot"></div>
-  <div class="main-col">
-    <div class="topbar" style="justify-content:space-between;">
-      <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a><span style="width:1px;height:16px;background:var(--border);"></span><span class="title">新建客户档案</span></div>
-      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
-    </div>
-    <div class="content" style="max-width:760px;">
-
-      <div style="display:flex;flex-direction:column;gap:14px;">
-        <span class="section-title">基本信息</span>
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;">
-          <div class="field"><label>姓名</label><input type="text" id="nc-name" value="Rina Marlina"></div>
-          <div class="field"><label>性别</label><select><option>女</option><option>男</option></select></div>
-          <div class="field"><label>出生日期</label><input type="date" value="1990-04-12"></div>
-          <div class="field"><label>联系方式</label><input type="text" value="+62 812-xxxx-xxxx"></div>
-        </div>
-        <div style="display:grid;grid-template-columns:1.3fr auto auto;gap:12px;align-items:end;">
-          <div class="field"><label>护照号码</label><input type="text" placeholder="A1234567"></div>
-          <button class="btn-ghost">上传 PDF</button>
-          <button class="btn-ghost">拍照读取</button>
-        </div>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:14px;">
-        <span class="section-title">医美史</span>
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <span style="font-size:12px;color:var(--muted);">项目 / 时间（自动算距今多久）/ 不良记录</span>
-          <button class="btn-ghost" onclick="addHistoryRow()">+ 添加</button>
-        </div>
-        <div id="history-rows"></div>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <span class="section-title">基础病史和过敏史</span>
-        <textarea rows="2" placeholder="如：无 / 青霉素过敏 / 高血压病史"></textarea>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <span class="section-title">基础고민</span>
-        <textarea rows="3" placeholder="客户希望改善的部位与诉求，自由填写">脸部轮廓松弛明显，希望改善下颌线，同时咨询眼部年轻化方案。</textarea>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <span class="section-title">메타뷰资料</span>
-        <div class="card" style="padding:16px 18px;" id="metaview-box">
-          <div class="status-line"><span class="status-dot" id="mv-dot" style="background:var(--terracotta);"></span><span id="mv-text">检测中…</span></div>
-        </div>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <span class="section-title">隐私协议</span>
-        <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:12px;">
-          <div class="status-line"><span class="status-dot" id="privacy-dot" style="background:var(--dim);"></span><span id="privacy-text">尚未签署</span></div>
-          <div style="display:flex;gap:10px;">
-            <button class="btn-ghost" onclick="signPrivacy()">上传 PDF</button>
-            <button class="btn-ghost" onclick="signPrivacy()">拍照读取</button>
-          </div>
-        </div>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <span class="section-title">系统字段</span>
-        <div style="font-size:12px;color:var(--slate);">建档人：Dewi ・ 建档时间：2026-09-18 14:32（自动生成）</div>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:10px;padding-top:8px;">
-        <span class="error-text" id="nc-error">请先完成隐私协议签署与메타뷰检测后再提交。</span>
-        <div style="display:flex;gap:12px;">
-          <button class="btn-primary" onclick="submitNewClient()">保存客户档案</button>
-          <a class="btn-outline" href="#" onclick="nav('in-clients');return false;">取消</a>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
 <!-- ============ IN: CLIENT DETAIL ============ -->
 <section class="page in-shell" id="in-clientdetail" data-page="clients" style="display:none;">
   <div class="sidebar-slot"></div>
@@ -868,25 +789,6 @@ input,textarea,select{font-family:inherit;}
 </div>
 
 <!-- ============ 免除面诊费 MODAL（2026-09-30，Notion 09-30） ============ -->
-<div class="modal-overlay" id="waive-fee-overlay" onclick="if(event.target===this) closeWaiveFeeModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">免除面诊费</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeWaiveFeeModal()">✕</span>
-    </div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">免除原因 <span style="color:#C1454A;">*</span></div>
-    <select id="waive-fee-reason" onchange="document.getElementById('waive-fee-note').style.display = this.value==='其他' ? 'block':'none'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;">
-      <option value="">请选择</option><option>复诊</option><option>延续既往面诊</option><option>其他</option>
-    </select>
-    <input type="text" id="waive-fee-note" placeholder="其他（请注明）" style="display:none;width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">免除后面诊照正常流程：待确认报告时间 → KR室长提交报告。</div>
-    <div style="display:flex;gap:10px;margin-top:16px;">
-      <button class="btn-outline" style="flex:1;" onclick="closeWaiveFeeModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="confirmWaiveFee()">确认免除</button>
-    </div>
-  </div>
-</div>
-
 <!-- ============ 引用消息到案件 MODAL（2026-09-30，Conversation & Video Flow 入口3） ============ -->
 <div class="modal-overlay" id="quote-overlay" onclick="if(event.target===this) closeQuoteModal()">
   <div class="modal-box">
@@ -1400,8 +1302,8 @@ document.addEventListener('DOMContentLoaded', function(){
   [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['对话未读',updateChatBadge]].forEach(function(m){
     try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); }
   });
-  try{ addHistoryRow('超声刀轮廓提升','2026-01-15','无','本院'); addHistoryRow('水光针','2024-05-02','轻微淤青，已恢复','外部'); buildHistoryList(); }catch(e){ console.error('[初始化失败] 医美史', e); }
-  [['客户详情Timeline',buildDetailLog],['메타뷰演示',metaviewSimulate]].forEach(function(m){ try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); } });
+  try{ buildHistoryList(); }catch(e){ console.error('[初始化失败] 医美史', e); }
+  [['客户详情Timeline',buildDetailLog]].forEach(function(m){ try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); } });
 });
 
 
@@ -2280,57 +2182,6 @@ function buildDetailLog(){
   document.getElementById('detail-log').innerHTML = log.map(logLine).join('');
 }
 
-/* ================= new client form ================= */
-function calcAgo(dateStr){
-  if(!dateStr) return '';
-  var d = new Date(dateStr);
-  var now = new Date('2026-09-18');
-  var months = (now.getFullYear()-d.getFullYear())*12 + (now.getMonth()-d.getMonth());
-  if(isNaN(months)) return '';
-  if(months<12) return '距今约 '+months+' 个月';
-  return '距今约 '+Math.floor(months/12)+' 年';
-}
-function updateAgo(el){
-  var span = el.nextElementSibling;
-  if(span) span.textContent = calcAgo(el.value);
-}
-function historyRowHtml(project, date, bad, origin){
-  return '<div class="history-row">'+
-    '<input type="text" placeholder="项目名称" value="'+(project||'')+'" style="flex:1.3;">'+
-    '<input type="date" value="'+(date||'')+'" oninput="updateAgo(this)" style="flex:1;">'+
-    '<span class="ago-label">'+calcAgo(date)+'</span>'+
-    '<input type="text" placeholder="不良记录（如有）" value="'+(bad||'')+'" style="flex:1.2;">'+
-    '<select style="width:82px;"><option'+(origin==='本院'?' selected':'')+'>本院</option><option'+(origin==='外部'?' selected':'')+'>外部</option></select>'+
-    '</div>';
-}
-function addHistoryRow(project, date, bad, origin){
-  document.getElementById('history-rows').insertAdjacentHTML('beforeend', historyRowHtml(project,date,bad,origin));
-}
-function metaviewSimulate(){
-  setTimeout(function(){
-    document.getElementById('mv-dot').style.background = 'var(--sage)';
-    document.getElementById('mv-text').innerHTML = '已检测到 · <a href="#" style="font-weight:700;">查看报告 →</a>';
-    window.METAVIEW_READY = true;
-  }, 2200);
-}
-function signPrivacy(){
-  document.getElementById('privacy-dot').style.background = 'var(--sage)';
-  document.getElementById('privacy-text').textContent = '已签署';
-  window.PRIVACY_SIGNED = true;
-}
-function submitNewClient(){
-  var err = document.getElementById('nc-error');
-  if(!window.PRIVACY_SIGNED || !window.METAVIEW_READY){
-    err.style.display = 'block';
-    return;
-  }
-  err.style.display = 'none';
-  var name = document.getElementById('nc-name').value || '新客户';
-  CLIENTS.unshift([name,'资料录入','Dewi','刚刚','#E4E8ED','var(--slate2)']);
-  renderClientRows();
-  nav('in-clients');
-}
-
 /* ================= case management ================= */
 /* makeCase()：每个「案件状态」demo案例共用的默认骨架，只需要在 overrides 里写和默认值不一样的字段。
    案件真实的 stage 永远由 deriveCaseStage() 现算，这里不手填 stage，数组建好后统一 forEach(updateCaseStage) 一遍。 */
@@ -2345,9 +2196,8 @@ function makeCase(o){
     materialsConfirmed:!!o.materialsConfirmed, photoUploaded:!!o.materialsConfirmed, videoUploaded:!!o.materialsConfirmed,
     concern:o.concern||'', expectation:o.expectation||'', metaviewStatus:o.materialsConfirmed?'ready':'idle',
     needsConsult: o.needsConsult===undefined ? null : o.needsConsult, activeCaseTab:o.activeCaseTab||'basic',
-    consultRequested:!!o.consultRequested, consultStatus:o.consultStatus||null, consultMethod:o.consultMethod||null,
-    consultScheduledTime:o.consultScheduledTime||'', writtenAdvice:o.writtenAdvice||'', writtenEta:o.writtenEta||'',
-    videoSummary:o.videoSummary||'', consultFiles:o.consultFiles||[], reportReady:!!o.reportReady, consultRound:o.consultRound||0, krVideoInvited:!!o.krVideoInvited,
+    consultRequested:!!o.consultRequested, consultStatus:o.consultStatus||null,
+    videoSummary:o.videoSummary||'', consultFiles:o.consultFiles||[], reportReady:!!o.reportReady, krVideoInvited:!!o.krVideoInvited,
     reportUploadedBy:o.reportUploadedBy||(o.reportReady ? (o.krCoordinator||'이서연 실장') : ''), /* 2026-09-30：报告由KR室长上传（Notion），邀请室长视频的候选人只列上传过报告的室长 */
     /* 2026-09-29 新状态机：visibleToKR 默认跟着"是否需要面诊"走，不面诊案件默认对韩国侧不可见，点"增加面诊"后才变 true */
     visibleToKR: o.visibleToKR!==undefined ? !!o.visibleToKR : (o.needsConsult===true),
@@ -2439,7 +2289,7 @@ var CASE_ITEMS = [
   /* 等待报告：预计时间未到 */
   makeCase({id:'budi', name:'Budi Santoso', subState:'arrived', materialsConfirmed:true, caseNo:'A000005', updated:'3 天前',
     concern:'轮廓松弛', expectation:'希望紧致轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:'2026-09-20 11:00',
-    consultMethod:'video', writtenAdvice:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。', videoSummary:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。',
+    videoSummary:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-12 09:00'},
       {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：2026-09-20 11:00', dt:'2026-09-18 09:30'}
@@ -2448,7 +2298,7 @@ var CASE_ITEMS = [
   /* 已出报告：报告已出，正在待客人/室长选管理项目 */
   makeCase({id:'ayu', reportDate:'2026-09-10', name:'Ayu Lestari', subState:'arrived', materialsConfirmed:true, caseNo:'A000006', updated:'昨天',
     concern:'皮肤暗沉、细纹', expectation:'希望肤质透亮', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
-    consultMethod:'video', consultScheduledTime:'09.19 11:00', videoSummary:'面部凹陷、细纹较明显，建议先做自体脂肪移植改善轮廓，再评估面部拉皮。',
+    videoSummary:'面部凹陷、细纹较明显，建议先做自体脂肪移植改善轮廓，再评估面部拉皮。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, krScope:{items:[{name:'自体脂肪移植（全脸）', price:4500000, note:''},{name:'面部拉皮', price:12000000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:'2026-09-19 11:20'},
     logEntries:[
@@ -2459,7 +2309,7 @@ var CASE_ITEMS = [
   /* 待付款：已确认所选管理项目、生成结算单，等待付款 */
   makeCase({id:'fajar', name:'Fajar Nugroho', subState:'arrived', materialsConfirmed:true, caseNo:'A000007', updated:'2 小时前',
     concern:'鼻基底低平', expectation:'希望鼻型更立体', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
-    consultMethod:'video', consultScheduledTime:'09.20 14:00', videoSummary:'建议先做假体隆鼻改善鼻基底，再评估鼻翼缩小。',
+    videoSummary:'建议先做假体隆鼻改善鼻基底，再评估鼻翼缩小。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true,
     krScope:{items:[{name:'假体隆鼻', price:2500000, note:''},{name:'鼻翼缩小', price:1500000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:'2026-09-20 14:20'},
@@ -2478,7 +2328,7 @@ var CASE_ITEMS = [
   /* 赴韩施术中：已付款，韩国项目里还有未完成的 */
   makeCase({id:'nadia', name:'Nadia Permata', subState:'arrived', materialsConfirmed:true, caseNo:'A000008', updated:'今天',
     concern:'轮廓松弛、法令纹', expectation:'希望紧致提升', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
-    consultMethod:'video', videoSummary:'建议颧骨缩小+下巴假体联合方案改善轮廓。',
+    videoSummary:'建议颧骨缩小+下巴假体联合方案改善轮廓。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true,
     krSchedule:{status:'confirmed', confirmedDate:'2026-09-20', confirmedTime:'10:00', primary:'2026-09-20', backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
@@ -2498,7 +2348,7 @@ var CASE_ITEMS = [
   /* 待确认施术时间：已付款，已递交施术日期，正等Kr室长确认（2026-09-29 改用krSchedule细分状态演示） */
   makeCase({id:'dinda', name:'Dinda Anggraini', subState:'arrived', materialsConfirmed:true, caseNo:'A000013', updated:'刚刚',
     concern:'轮廓松弛', expectation:'希望紧致提升', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
-    consultMethod:'video', videoSummary:'建议面部拉皮+自体脂肪移植联合方案。',
+    videoSummary:'建议面部拉皮+自体脂肪移植联合方案。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true,
     krSchedule:{status:'pending', primary:'2026-10-05', backup:'2026-10-06', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
@@ -2534,7 +2384,7 @@ var CASE_ITEMS = [
   /* 已结案：赴韩行程施术完成即结案（2026-09-29 第十轮：本地项目已转客户持有，不再算在这个案件的完成条件里） */
   makeCase({id:'rina', director:'박지훈 원장', reportDate:'2026-08-12', name:'Rina Marlina', subState:'arrived', materialsConfirmed:true, caseNo:'A000010', updated:'1 周前',
     concern:'整体抗老', expectation:'希望延缓衰老迹象', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
-    consultMethod:'video', videoSummary:'建议自体脂肪移植打底，配合本地焕肤护理维持效果。',
+    videoSummary:'建议自体脂肪移植打底，配合本地焕肤护理维持效果。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true, visitClosed:true, krProcedureDone:true,
     krSchedule:{status:'confirmed', confirmedDate:'2026-08-25', confirmedTime:'10:00', primary:'2026-08-25', backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
@@ -2562,7 +2412,7 @@ var CASE_ITEMS = [
      本地项目现在不能退款，"部分退"这个终态只能从赴韩项目取消这条路径触发了） */
   makeCase({id:'wulan', name:'Wulan Sari', subState:'arrived', materialsConfirmed:true, caseNo:'A000011', updated:'5 天前',
     concern:'轮廓不对称', expectation:'希望改善轮廓线条', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
-    consultMethod:'video', videoSummary:'建议下颌角整形+颧骨缩小联合方案改善轮廓。',
+    videoSummary:'建议下颌角整形+颧骨缩小联合方案改善轮廓。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     krScope:{items:[{name:'下颌角整形', price:9000000, note:''},{name:'颧骨缩小', price:8000000, note:'不可与下颌角同时做'}], overallNote:'具体术式最终以到院评估为准', updatedAt:'2026-09-08 09:00'},
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true, visitClosed:true,
@@ -2595,7 +2445,7 @@ var CASE_ITEMS = [
   /* 仅出报告（2026-09-30）：分支6——赴韩项目全部取消并退款、没做本地项目，客人只拿到了面诊报告；财务结果=全额退款 */
   makeCase({id:'lina', reportDate:'2026-09-05', name:'Lina Kusuma', materialsConfirmed:true, caseNo:'A000012', updated:'6 天前',
     concern:'眼部松弛', expectation:'希望眼周更年轻', needsConsult:true, activeCaseTab:'basic', consultRequested:true, consultStatus:'report_ready', reportReady:true,
-    consultMethod:'video', videoSummary:'建议提眉联合上睑整形。',
+    videoSummary:'建议提眉联合上睑整形。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, visitClosed:true,
     refunds:[{amount:300000, currency:'KRW', reason:'客人因个人原因取消赴韩行程', date:'2026-09-12', items:['提眉手术'], batchIds:['B1']}],
@@ -3497,7 +3347,7 @@ function simulateKrScopeUpdate(){
 
 /* ---- 查看报告：格式化的报告视图，底部"查看方案"跳转项目列表 ---- */
 function reportModalContent(c){
-  var body = c.consultMethod==='written' ? c.writtenAdvice : c.videoSummary;
+  var body = c.videoSummary;
   return '<div style="font-size:11px;color:var(--muted);margin-bottom:22px;">2026-09-18</div>'+
     '<div style="font-size:13px;line-height:1.9;color:var(--navy);margin-bottom:32px;">尊敬的 '+c.name+'：<br><br>'+body+'<br><br>如有任何疑问，欢迎随时联系。</div>'+
     '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:6px;">'+
@@ -3969,7 +3819,6 @@ function applyReuseReport(c){
   c.director = src.director || c.director; /* 沿用原报告：院长沿用原案件的 */
   c.reportReady = true;
   c.consultStatus = 'report_ready';
-  c.consultMethod = src.consultMethod || 'video';
   c.videoSummary = src.videoSummary || '';
   c.reportUploadedBy = src.reportUploadedBy || '';
   c.reuseReport = {fromId:src.id, caseNo:src.caseNo, date:reportDateOf(src)};
@@ -4166,10 +4015,31 @@ function caseTabContentHtml(c){
 }
 
 /* 基础资料 tab：确认过的资料只读展示，各行带 查看/再上传 或 查看/修正 */
+/* 基础资料确认后，메타뷰 / 照片 / 视频 仍在基础资料 tab 显示（附件里也看得到），每一栏保留［补充上传］：只能新增，不能删除原文件；
+   补传的文件同时进附件（分类"基础资料"），Timeline 记录谁、什么时候补了什么（2026-10-05） */
+var SUPP_LABEL = {metaview:'메타뷰 检测报告', photo:'照片', video:'视频'};
+function suppRowHtml(c, kind, label, has){
+  var extra = (c.suppUploads && c.suppUploads[kind]) || [];
+  return '<div class="case-field-row"><span class="fk">'+label+'</span><span style="flex-grow:1;font-size:13px;">'+(has ? '<span style="color:var(--sage);font-weight:700;">✓ 已有</span>' : '<span style="color:var(--muted);">暂无</span>')+
+    (extra.length ? '　<span style="font-size:11px;color:var(--slate2);">补充 '+extra.length+' 个：'+extra.map(function(f){ return f.name; }).join('、')+'</span>' : '')+
+    '</span><span class="fa"><a href="#" class="info-link" onclick="return false;">查看</a><a href="#" class="info-link" onclick="supplementUpload(\''+kind+'\');return false;">补充上传</a></span></div>';
+}
+function supplementUpload(kind){
+  var c = getCurrentCase(); if(!c) return;
+  c.suppUploads = c.suppUploads || {metaview:[], photo:[], video:[]};
+  var n = c.suppUploads[kind].length + 1, ext = {metaview:'pdf', photo:'jpg', video:'mp4'}[kind];
+  var name = '补充'+SUPP_LABEL[kind].replace('检测报告','')+' '+n+'.'+ext;
+  c.suppUploads[kind].push({name:name, by:'Dewi', at:nowFullDt()}); /* 只能新增，不能删除原文件 */
+  c.manualAttachments = c.manualAttachments || [];
+  c.manualAttachments.push({label:name, src:'基础资料', date:attDate()}); /* 同时进附件（分类"基础资料"） */
+  logCaseEvent(c, 'Dewi', '补充上传'+SUPP_LABEL[kind]+'：'+name);
+  buildCaseLog(c); renderCaseBody(c);
+}
 function basicTabHtml(c){
   var metaviewText = c.metaviewStatus==='ready' ? '已检测到' : '待检测';
   var consultLabel = c.reuseReport ? '沿用之前报告（'+c.reuseReport.caseNo+'）' : (c.needsConsult===true ? '面诊' : '不需要面诊');
   return '<div class="card" style="padding:4px 24px;">'+
+    suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+suppRowHtml(c,'photo','照片',c.photoUploaded)+suppRowHtml(c,'video','视频',c.videoUploaded)+
     '<div class="case-field-row"><span class="fk">苦恼</span><span style="flex-grow:1;font-size:13px;">'+(c.concern||'—')+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="editConcernField(\'concern\');return false;">修正</a></span></div>'+
     '<div class="case-field-row"><span class="fk">期望</span><span style="flex-grow:1;font-size:13px;">'+(c.expectation||'—')+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="editConcernField(\'expectation\');return false;">修正</a></span></div>'+
     intentionInfoHtml(c)+
@@ -4235,7 +4105,7 @@ function reportWaitSubItems(c){
   if(reportOverdueNow(c)) return [{kind:'Warning', text:'已超过预计时间（预计 '+(c.reportEta||'—')+' 出报告，报告还没提交）'}];
   return [{kind:'Success', text:'预计 '+(c.reportEta||'—')+' 出报告（'+reportRemainingText(c)+'）'}];
 }
-function consultRoundSubItems(c){
+function consultSubItems(c){
   var items = [];
   if(c.consultStatus==='awaiting_payment') items.push({kind:'Waiting', text:'待缴费'});
   else if(c.consultStatus==='paid_waiting_kr') items.push({kind:'Waiting', text:'待确认报告时间'});
@@ -4308,7 +4178,7 @@ function consultTabHtml(c){
   if(c.reuseReport) return reuseReportHtml(c);
   var fee = consultFeeStatusMain(c);
   var waiverText = c.consultFeeWaived ? '原因：'+c.consultFeeWaived.reason : '';
-  var sub = subStatusRowHtml(consultRoundSubItems(c));
+  var sub = subStatusRowHtml(consultSubItems(c));
   var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(c.consultStatus==='awaiting_payment'){
     return wrap(consultFeeCardHtml(fee, '', '')+consultFeeFormHtml(c)+sub);
@@ -5752,29 +5622,8 @@ function markConsultPaid(){
   renderCaseStatusBar(c);
   renderCaseBody(c);
 }
-function openWaiveFeeModal(){
-  document.getElementById('waive-fee-reason').value = '';
-  document.getElementById('waive-fee-note').value = ''; document.getElementById('waive-fee-note').style.display = 'none';
-  document.getElementById('waive-fee-overlay').classList.add('open');
-}
-function closeWaiveFeeModal(){ document.getElementById('waive-fee-overlay').classList.remove('open'); }
 function applyWaiveFee(c, reason, note){
   c.consultFeeWaived = {reason: reason==='其他' ? '其他：'+note : reason, note:note};
-  c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：待确认报告时间 */
-  updateCaseStage(c);
-  logCaseEvent(c, 'Dewi', '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
-  buildCaseLog(c); renderCaseHeaderActions(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
-}
-function confirmWaiveFee(){
-  var c = getCurrentCase(); if(!c) return;
-  var reason = document.getElementById('waive-fee-reason').value;
-  var note = document.getElementById('waive-fee-note').value.trim();
-  if(!reason){ alert('请选择免除原因'); return; }
-  if(reason==='其他' && !note){ alert('请注明原因'); return; }
-  c.consultFeeWaived = {reason: reason==='其他' ? '其他：'+note : reason, note:note};
-  closeWaiveFeeModal();
   c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：待确认报告时间 */
   updateCaseStage(c);
   logCaseEvent(c, 'Dewi', '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
