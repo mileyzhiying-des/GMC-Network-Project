@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
-/* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4） ---- */
-var DEMO_DATA_VERSION = 4;
+/* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据，升到 5） ---- */
+var DEMO_DATA_VERSION = 5;
 (function(){
   try{
     if(localStorage.getItem('gmc_demo_ver') !== String(DEMO_DATA_VERSION)){
@@ -49,7 +49,41 @@ function setClinicTz(k){
 /* ---- 今日区块 + 固定栏 memo + OFF（2026-10-02·七） ----
    "早上好"下面固定"今日"区块：最上面是今天的 OFF（KR 院长 / KR 室长 / IN 室长），下面是今日行程（时间 · 人名 · 类型）；
    周视图 9:00 上面的固定栏每天一格，显示当天 OFF 和 memo；新增 memo：选日期、类型（备忘/OFF）、公开/私人，OFF 固定公开，显示作者；IN 室长的 OFF 就是从这里来 */
-var ME_NAME = 'Dewi';
+/* ================= 账号（2026-10-05·二） =================
+   席位：基础 3 个（OWN 院长、A1 管理者、A2 一般室长）+ 加购账号（A3 起，只能一般室长）。
+   status：active 使用中 / pending 待激活（还没人设密码）/ disabled 已停用（取消加购后）。
+   演示密码 = 账号编号小写 + 123（OWN → own123，A1 → a1123）；待激活账号没有密码，激活时用手机验证码（登录/激活在第三部分做）。
+   history：这个账号编号上的变更历史（激活、重置密码、停用…）；操作人以"当时的姓名 + 编号"记录，之后账号换了新的人，旧记录仍显示"Rina（A2）"。 */
+var ACCOUNT_ROLES = {owner:'院长（Owner）', manager:'室长（管理者）', general:'一般室长'};
+var ACCOUNT_STATUS = {active:'使用中', pending:'待激活', disabled:'已停用'};
+var BASIC_SEATS = 3;
+var ACCOUNTS = [
+  {id:'OWN', role:'owner',   seat:'basic', name:'Hartono', position:'院长',   phone:'+62 811-0000-0001', status:'active',   password:'own123', idPhoto:'身份证照片', createdAt:'2026-08-01 09:00', activatedAt:'2026-08-01 09:30', history:[{ts:'2026-08-01 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Hartono（OWN）'}]},
+  {id:'A1',  role:'manager', seat:'basic', name:'Dewi',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  idPhoto:'身份证照片', createdAt:'2026-08-01 09:10', activatedAt:'2026-08-01 10:00', history:[{ts:'2026-08-01 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'Dewi（A1）'}]},
+  {id:'A2',  role:'general', seat:'basic', name:'Rina',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  idPhoto:'身份证照片', createdAt:'2026-08-01 09:20', activatedAt:'2026-08-02 09:00', history:[{ts:'2026-08-02 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Rina（A2）'}]},
+  {id:'A3',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     idPhoto:'',           createdAt:'2026-09-16 14:00', activatedAt:'',                 history:[{ts:'2026-09-16 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'Dewi（A1）'}]},
+  {id:'A4',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  idPhoto:'身份证照片', createdAt:'2026-08-20 11:00', activatedAt:'2026-08-21 09:00', disabledAt:'2026-09-10 17:00', history:[{ts:'2026-08-21 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:'2026-09-10 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]}
+];
+var ACCOUNT_SEQ = 4; /* 下一个加购账号编号 = 'A'+(ACCOUNT_SEQ+1) */
+/* 操作日志（owner/管理者在"操作日志"页看；第八部分做页面）：时间、操作账号 + 当时的姓名、内容、类型 */
+var ACCOUNT_LOG = [
+  {id:'log1', ts:'2026-09-16 14:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购账号 A3（一般室长）'},
+  {id:'log2', ts:'2026-09-10 17:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'取消加购账号 A4（Sari）'}
+];
+/* 当前登录的账号：存在 sessionStorage（每个标签页各自登录，互不影响）；没有登录信息时（第三部分做登录之前）演示默认 A1 */
+function currentAccountId(){
+  var id = null;
+  try{ id = sessionStorage.getItem('gmc_acct'); }catch(e){}
+  var a = id ? ACCOUNTS.filter(function(x){ return x.id===id && x.status==='active'; })[0] : null;
+  return a ? a.id : 'A1';
+}
+function currentAccount(){ return accountById(currentAccountId()); }
+var ME_NAME = (currentAccount() || {name:'Dewi'}).name || 'Dewi';
+/* 写操作日志：当前账号 + 当时的姓名 */
+function logOp(type, text){
+  var a = currentAccount() || {id:'?', name:''};
+  ACCOUNT_LOG.unshift({id:'log'+Date.now()+Math.floor(Math.random()*1000), ts:nowFullDt(), accountId:a.id, name:a.name, type:type, text:text});
+}
 
 function memosOn(date){ return CAL_MEMOS.filter(function(m){ return m.date===date && (m.scope==='公开' || m.author===ME_NAME); }); }
 
@@ -976,7 +1010,7 @@ function logLine(e){
   var action = e.kind==='case'
     ? '<a href="#" onclick="openCaseDetail(\''+e.caseId+'\');return false;" style="color:var(--navy);font-weight:700;">'+e.action+' →</a>'
     : e.action;
-  return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+e.stage+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+e.actor+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+e.dt+'</span></div>';
+  return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+e.stage+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+actorDisplay(e)+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+e.dt+'</span></div>';
 }
 
 var DEMO_LOAD_TS = Date.now();
@@ -987,7 +1021,7 @@ function nowFullDt(){ var d = demoNow(); return dateStr(d)+' '+pad2(d.getHours()
 
 function logCaseEvent(c, actor, action){
   c.logEntries = c.logEntries || [];
-  c.logEntries.push({stage: stageLogLabel(c), actor: actor, action: action, dt: nowFullDt()});
+  c.logEntries.push({stage: stageLogLabel(c), actor: actor, actorId: (actor===ME_NAME ? currentAccountId() : undefined), action: action, dt: nowFullDt()});
 }
 
 var KR_COORDINATORS = ['이서연', '박준혁'];

@@ -355,3 +355,22 @@ function pushTargets(c){
   };
   return {inn: pick(ops.inn, IN_COORDINATORS), kr: (ops.kr.length || caseHasKrSide(c)) ? pick(ops.kr, KR_COORDINATORS) : []};
 }
+
+/* ================= 账号辅助（2026-10-05·二） ================= */
+function accountById(id){ return ACCOUNTS.filter(function(a){ return a.id===id; })[0] || null; }
+/* 显示用："Rina（A2）" */
+function accountLabel(id){ var a = accountById(id); return a ? (a.name||'（待激活）')+'（'+a.id+'）' : String(id); }
+/* 旧演示数据里的操作人只写了名字（Dewi / Rina）：按当时的账号编号显示，不跟随账号后来换人 */
+var LEGACY_STAFF_ID = {Dewi:'A1', Rina:'A2'};
+/* 日志条目的操作人显示：新条目带 actorId；旧条目按名字查 */
+function actorDisplay(entry){
+  var n = String(entry.actor||''), id = entry.actorId || LEGACY_STAFF_ID[n];
+  return id ? n+'（'+id+'）' : n;
+}
+function staffLabel(name){ var id = LEGACY_STAFF_ID[name]; return id ? name+'（'+id+'）' : name; }
+/* 席位概况：基础 3 + 加购；使用中/待激活占用席位，已停用不占 */
+function seatSummary(){
+  var used = function(seat){ return ACCOUNTS.filter(function(a){ return a.seat===seat && a.status!=='disabled'; }).length; };
+  var addonBought = ACCOUNTS.filter(function(a){ return a.seat==='addon' && a.status!=='disabled'; }).length;
+  return {basicTotal:BASIC_SEATS, basicUsed:used('basic'), addonTotal:addonBought, addonUsed:ACCOUNTS.filter(function(a){ return a.seat==='addon' && a.status==='active'; }).length, addonPending:ACCOUNTS.filter(function(a){ return a.seat==='addon' && a.status==='pending'; }).length};
+}
