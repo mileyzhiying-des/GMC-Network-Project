@@ -2705,15 +2705,7 @@ function financeLabel(c){
 }
 /* 案件结束的唯一出口：标记结束、推算结局、写 cancelReason（只有结局是已取消才有），再刷新界面 */
 /* 进入终态时，该客户名下还没到店的后续预约（待访问）全部自动取消（Notion；"关联"口径是我的判断：同一客户的待访问案件，见待确认清单） */
-function cancelFollowUpReservations(c){
-  CASE_ITEMS.filter(function(x){ return x.id!==c.id && x.name===c.name && x.stage==='booked' && x.subState==='waiting'; }).forEach(function(x){
-    x.subState = 'cancelled'; x.cancelReason = '关联案件已结束，预约自动取消';
-    x.logEntries = x.logEntries || [];
-    x.logEntries.push({stage:'预约到店', actor:'系统', action:'关联案件 '+(c.caseNo||c.id)+' 已进入终态，后续预约自动取消', dt:nowFullDt()});
-    updateCaseStage(x);
-    logCaseEvent(c, '系统', '后续预约自动取消：'+(x.caseNo||x.id));
-  });
-}
+/* 2026-10-05：已删除 cancelFollowUpReservations——一个案件结束不影响同一客人的其他预约 */
 function finishCase(c, cancelReasonIfCancelled){
   c.visitClosed = true;
   c.entryChoicePending = false; c.mgmtActive = false; c.mgmtCancelling = false; c.localAsk = false;
@@ -2722,7 +2714,6 @@ function finishCase(c, cancelReasonIfCancelled){
   c.cancelReason = out==='cancelled' ? (cancelReasonIfCancelled || '未购买未使用') : null;
   updateCaseStage(c);
   logCaseEvent(c, '系统', '案件结束：'+terminalBadge(c)[2]+(c.stage==='cancelled' ? '（'+endReasonText(c)+'）' : ''));
-  cancelFollowUpReservations(c);
   if(c.stage==='closed' && c.hasArrived && krAllItems(c).some(function(it){ return it.done; })) pushNotif('赴韩施术','施术完成，案件已结案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   buildCaseLog(c);
   renderCaseStatusBar(c);
@@ -2772,7 +2763,7 @@ function endReasonText(c){
 /* ---- 未到店 No Show（2026-10-01）：待访问过了预约时间30分钟还没点"到访" → 系统自动判定为 已取消（未到店）；
    室长也可在列表行/案件页提前手动标记；不能撤回，客人后来才到就重新预约（新案件）；
    日历事件保留在原位显示删除线"未到店"（预约取消的事件才会消失）；
-   TODO(待确认)：未到店不触发"终态时自动取消同一客户的其他待访问预约" ---- */
+   （2026-10-05：案件结束不再自动取消同一客户的其他预约，未到店同理） ---- */
 function markNoShow(caseId, auto){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
   if(!c || c.stage!=='booked' || c.subState!=='waiting') return false;
@@ -3051,7 +3042,6 @@ function confirmCancel(){
   c.subState = 'cancelled';
   c.cancelReason = CANCEL_REASON;
   updateCaseStage(c);
-  cancelFollowUpReservations(c);
   closeCancelModal();
   renderCaseStatusBar(c);
   logCaseEvent(c, 'Dewi', '取消该客人的到店预约（原因：'+CANCEL_REASON+'）');
