@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GMC Network · 预约</title>
+<link rel="stylesheet" href="/shared/app.css">
+</head>
+<body>
+<div id="app">
+
+<section class="page active" style="display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:28px 16px;gap:16px;background:var(--bg,#F4F6F9);">
+  <div><span class="logo">GMC Network</span><span class="logo-sub">预约登记</span></div>
+  <div class="modal-box" style="width:420px;max-width:100%;">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">请填写预约资料</div>
+    <div id="guest-form-sub" style="font-size:12px;color:var(--slate);margin-bottom:12px;"></div>
+    <div id="guest-form-body"></div>
+  </div>
+  <div id="booking-done" style="display:none;max-width:420px;text-align:center;line-height:1.8;">
+    <div style="font-size:18px;font-weight:700;margin-bottom:6px;">✅ 预约已提交</div>
+    <div style="color:var(--slate2);font-size:13px;">室长会在工作台里看到您的预约。（演示：已写入共享数据，印尼室长端的其他标签页会立刻看到。）</div>
+  </div>
+  <a href="/login.html" style="font-size:12px;color:var(--slate);">返回登录页</a>
+</section>
+</div>
+<div id="toast-stack"></div>
+<script src="/shared/rules.js"></script>
+<script src="/shared/ui.js"></script>
+<script src="/shared/data.js"></script>
+<script src="/shared/store.js"></script>
+<script>
+/* 客户自助填写预约表单：复用 ui.js 里的客人表单（同 IN 端「客人现场自己填资料」）。
+   地址参数：?date=2026-09-19&time=10:00&purpose=面诊商谈&phone=+62...&ph=占位ID（预约占位链接带的参数；没带就用演示默认值） */
+(function(){
+  var q = new URLSearchParams(location.search);
+  var ph = q.get('ph') ? RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===q.get('ph'); })[0] : null;
+  var d = ph ? ph.date : (q.get('date') || dateStr(demoNow()));
+  var t = ph ? ph.time : (q.get('time') || '10:00');
+  GUEST_FORM = Object.assign({name:'', gender:'女', dob:'', history:'', consent:false, err:''},
+    {date:d, time:t, phone:ph ? ph.phone : (q.get('phone')||''), purpose:ph ? (ph.purpose||'面诊商谈') : (q.get('purpose')||'面诊商谈'), phId:ph ? ph.id : null});
+  renderGuestForm();
+  /* 这个页面里没有弹窗外壳：提交成功后显示"已提交"，并立即存档让其他标签页同步 */
+  closeGuestForm = function(){ GUEST_FORM = null; document.getElementById('guest-form-body').parentNode.style.display = 'none'; document.getElementById('booking-done').style.display = 'block'; };
+  var origSubmit = submitGuestForm;
+  submitGuestForm = function(){ origSubmit(); Store.save(); };
+})();
+</script>
+</body>
+</html>

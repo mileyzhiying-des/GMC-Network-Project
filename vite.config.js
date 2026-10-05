@@ -19,14 +19,23 @@ const keepCurrentPage = {
   },
 };
 
+// 共享脚本是 classic script（全局函数/变量，不是 ES module），Vite 不会打包它们：构建时原样复制到 dist/shared/
+const copySharedScripts = {
+  name: 'gmc-copy-shared',
+  apply: 'build',
+  closeBundle() {
+    fs.cpSync(path.join(rootDir, 'prototype', 'shared'), path.join(rootDir, 'dist', 'shared'), { recursive: true });
+  },
+};
+
 export default defineConfig({
   root: path.join(rootDir, 'prototype'),
-  plugins: [keepCurrentPage],
+  plugins: [keepCurrentPage, copySharedScripts],
   build: {
     outDir: path.join(rootDir, 'dist'),
     emptyOutDir: true,
     rollupOptions: {
-      input: path.join(rootDir, 'prototype', 'gmc-network-prototype.html'),
+      input: ['login', 'in', 'owner', 'kr', 'booking'].map((n) => path.join(rootDir, 'prototype', n + '.html')),
     },
   },
 });

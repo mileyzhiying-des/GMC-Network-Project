@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GMC Network · 印尼室长端</title>
+<link rel="stylesheet" href="/shared/app.css">
+</head>
+<body>
+<div id="app">
+
+<!-- ============ IN: DASHBOARD ============ -->
+<section class="page in-shell active" id="in-dashboard" data-page="dashboard" style="display:flex;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content">
+
+      <div class="dash-top">
+        <div class="dash-greet">
+          <h1>早上好，Dewi</h1>
+        </div>
+        <div class="dash-meta">
+          <div class="date">2026年9月18日（周五）</div>
+          <div class="weather" id="dash-weather">☁ 雅加达 31℃</div>
+        </div>
+      </div>
+
+      <div id="dash-off-row" style="display:none;font-size:13px;margin-top:-8px;"></div>
+
+      <div class="card" id="dash-call-card" style="display:none;"></div>
+
+      <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">
+        <div class="cal-toolbar">
+          <div class="cal-legend">
+            <span><span class="dotmark" style="background:var(--navy);"></span>预约来访</span>
+            <span><span class="dotmark" style="background:var(--slate);"></span>预约占位</span>
+            <span><span class="dotmark" style="background:var(--terracotta);"></span>赴韩施术</span>
+          </div>
+          <div class="cal-switch" style="margin-left:6px;">
+            <span id="cal-view-in" class="active" onclick="setCalView('in')">本院日程</span>
+            <span id="cal-view-kr" onclick="setCalView('kr')">KR 医院日程</span>
+          </div>
+          <select id="kr-dir-sel" onchange="KR_DIRECTOR=this.value;renderCalendar();" style="display:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;"></select>
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div class="cal-switch">
+              <span id="cal-sw-month" onclick="setCalMode('month')">月</span>
+              <span id="cal-sw-week" class="active" onclick="setCalMode('week')">周</span>
+              <span id="cal-sw-day" onclick="setCalMode('day')">日</span>
+            </div>
+            <button class="cal-nav-btn" onclick="nav('in-resvhistory');renderResvHistory();" title="预约历史记录">预约历史记录</button>
+            <button class="cal-nav-btn" onclick="openMemoModal()" title="新增备忘 / OFF">＋ memo</button>
+            <button class="cal-nav-btn" onclick="openCalSettings()" title="设定：诊所时区">⚙ 时区 <span id="cal-tz-label">WIB</span></button>
+            <div class="cal-nav">
+              <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+              <button class="cal-nav-btn cal-nav-today" onclick="calToday()">今天</button>
+              <button class="cal-nav-btn" onclick="calNext()">›</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="cal-week-view">
+          <div class="wk-scroll"><div class="wk-grid" id="wk-grid"></div></div>
+        </div>
+        <div id="cal-month-view" style="display:none;">
+          <div class="cal-dow"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+        <div id="cal-day-view" style="display:none;">
+          <div id="day-detail"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============ IN: CLIENTS ============ -->
+<section class="page in-shell" id="in-clients" data-page="clients" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <input type="text" placeholder="搜索客户姓名" style="width:260px;padding:10px 14px;border:1px solid var(--border);border-radius:9px;font-size:13px;">
+      </div>
+      <div class="card" style="padding:4px 20px;">
+        <div class="trow head" style="grid-template-columns:1.4fr 1.2fr 1.3fr 0.9fr 0.9fr auto;"><span>客户姓名</span><span>当前进度</span><span>财务</span><span>建档室长</span><span>更新时间</span><span></span></div>
+        <div id="client-rows"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: CASES (tabbed list) ============ -->
+<section class="page in-shell" id="in-cases" data-page="cases" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div class="tabs" id="case-tabs" style="flex:1;"></div><label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" id="only-mine" onchange="CASE_ONLY_MINE=this.checked;renderCaseRows();"> 仅看我的</label><button class="btn-ghost" onclick="simulateTimePass30()" title="原型演示：所有待访问案件按'过了预约时间30分钟还没点到访'处理">演示：模拟时间超过30分钟</button></div>
+      <div class="card" style="padding:4px 20px;">
+        <div class="trow head" style="grid-template-columns:1.1fr 0.8fr 1.5fr 0.6fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr auto;"><span>客户姓名</span><span>Case ID</span><span>当前状态</span><span>状态</span><span>财务</span><span>对接院长</span><span>IN 室长</span><span>KR 室长</span><span>更新时间</span><span></span></div>
+        <div id="case-rows"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: CASE LIBRARY (案例库) ============ -->
+<section class="page in-shell" id="in-library" data-page="library" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;">
+        <div id="lib-filters" style="display:flex;flex-direction:column;gap:10px;flex-grow:1;min-width:280px;"></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:10px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
+            <select id="lib-role-select" onchange="setDemoRole(this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;">
+              <option value="in">印尼室长</option>
+              <option value="kr">韩国室长 · 院长</option>
+            </select>
+          </div>
+          <button class="btn-primary" id="lib-add-btn" onclick="openLibCaseModal(null)">+ 新增案例</button>
+        </div>
+      </div>
+      <div id="lib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:22px;"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: DIRECTOR DETAIL (院长详情，从案例库卡片点院长名进入) ============ -->
+<section class="page in-shell" id="in-director" data-page="library" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar" style="justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a></div>
+    </div>
+    <div class="content">
+      <div id="director-detail-name" style="font-size:22px;font-weight:700;margin-bottom:14px;"></div>
+      <div class="card" style="padding:4px 24px;" id="director-detail-info"></div>
+      <div style="font-size:14px;font-weight:700;margin:22px 0 12px;">名下案例</div>
+      <div id="director-detail-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: PROJECT LIBRARY (项目库) ============ -->
+<section class="page in-shell" id="in-projectlibrary" data-page="projects" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+        <div class="tabs" id="projlib-tabs"></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:10px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
+            <select id="projlib-role-select" onchange="setDemoRole(this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;">
+              <option value="in">印尼室长</option>
+              <option value="kr">韩国室长（院长不维护）</option>
+            </select>
+          </div>
+          <button class="btn-primary" id="projlib-add-btn" onclick="openProjNewModal()">+ 新增项目</button>
+        </div>
+      </div>
+      <div id="projlib-filters" style="margin-top:14px;"></div>
+      <div id="projlib-grid" style="margin-top:14px;"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: CASE DETAIL ============ -->
+<section class="page in-shell" id="in-casedetail" data-page="cases" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar" style="justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
+    </div>
+    <div class="content">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <span id="case-title" onclick="openCaseInfoDrawer()" style="font-size:20px;font-weight:700;cursor:pointer;border-bottom:1px dashed var(--border);">Siti Rahayu · Case</span>
+          <div id="case-subtitle" style="font-size:12px;color:var(--muted);margin-top:4px;">对接院长：김민석 원장</div>
+        </div>
+        <div id="case-chat-actions" style="display:none;gap:10px;"></div>
+      </div>
+
+      <div id="case-status-bar"></div>
+
+      <div id="case-body" style="display:none;flex-direction:column;gap:20px;"></div>
+
+      <div>
+        <div class="info-heading" style="margin-bottom:10px;">Timeline</div>
+        <div class="card" style="padding:6px 20px;" id="case-log"></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: NOTIFICATIONS ============ -->
+<section class="page in-shell" id="in-notifications" data-page="notifications" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content" style="max-width:820px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div id="notif-filters" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        <button class="btn-outline" style="padding:6px 12px;font-size:12px;" onclick="markAllNotifRead()">全部标为已读</button>
+      </div>
+      <div class="card" style="padding:2px 18px;" id="notif-list"></div>
+      <div style="font-size:11px;color:var(--muted);">通知保留 90 天；一般对话消息不进通知中心，被 @ 才进；收件人按通知规则（案件事件 = 操作过且当天上班的室长）。</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="font-size:10px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
+        <button class="btn-ghost" onclick="demoNotif('report')">报告已出</button><button class="btn-ghost" onclick="demoNotif('missed')">未接来电</button><button class="btn-ghost" onclick="demoNotif('at')">被 @</button>
+        <button class="btn-ghost" onclick="demoNotif('system')">系统更新</button><button class="btn-ghost" onclick="demoNotif('noshow')">未到店</button><button class="btn-ghost" onclick="demoNotif('schedule')">KR确认施术时间</button><button class="btn-ghost" onclick="demoNotif('other')">只有 Rina 操作过的案件事件（我不会收到）</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: 预约历史记录（2026-10-02·八） ============ -->
+<section class="page in-shell" id="in-resvhistory" data-page="dashboard" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <div style="display:flex;align-items:center;gap:12px;"><button class="btn-outline" onclick="goBack()">← 返回工作台</button><span style="font-size:16px;font-weight:700;">预约历史记录</span></div>
+        <input type="text" id="resv-search" placeholder="搜索人名" oninput="renderResvHistory()" style="width:240px;padding:10px 14px;border:1px solid var(--border);border-radius:9px;font-size:13px;">
+      </div>
+      <div class="card" style="padding:4px 20px;">
+        <div class="trow head" style="grid-template-columns:1.4fr 1fr 1.2fr 1fr;"><span>人名</span><span>Case ID</span><span>预约时间</span><span>类型</span></div>
+        <div id="resv-rows"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);">类型：预约占位 / 占位失效 / 待访问 / 已到访 / 未到店 / 预约取消；占位类没有 Case ID（显示"-"）；预约取消保留原 Case ID；接续到访的显示原案件 ID、类型"已到访"。点有 Case ID 的行进入案件页。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: CLIENT DETAIL ============ -->
+<section class="page in-shell" id="in-clientdetail" data-page="clients" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar" style="justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
+    </div>
+    <div class="content">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div id="detail-name" style="font-size:22px;font-weight:700;">Siti Rahayu</div>
+        </div>
+        <button class="btn-primary" onclick="openFloatingChat('kr-lee', document.getElementById('detail-name').textContent)">发起内部对话</button>
+      </div>
+
+      <div class="info-stack">
+
+        <div>
+          <div class="info-heading" style="margin-bottom:10px;">正在进行案件</div>
+          <div class="card" style="padding:4px 20px;" id="detail-cases"></div>
+        </div>
+
+        <div id="detail-holdings-block" style="display:none;">
+          <div class="info-heading" style="margin-bottom:10px;">持有项目</div>
+          <div class="card" style="padding:4px 20px;" id="detail-holdings"></div>
+        </div>
+
+        <div>
+          <div class="info-heading" style="margin-bottom:10px;">基础信息</div>
+          <div class="card" style="padding:2px 20px;">
+            <div class="field-row"><span class="fk">姓名</span><span class="fv" id="detail-profile-name">Siti Rahayu</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
+            <div class="field-row"><span class="fk">特别备注</span><span class="fv" style="font-weight:400;color:var(--slate2);">无</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
+            <div class="field-row"><span class="fk">性别 / 出生年月</span><span class="fv">女 · 1992年03月</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
+            <div class="field-row"><span class="fk">基础病史和过敏史</span><span class="fv" style="font-weight:400;">无</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
+            <div class="field-row"><span class="fk">护照信息</span><span class="fv">已登记<span class="sub">拍照上传 · 2026-08-20</span></span><span class="fa"><a href="#" class="info-link">查看扫描件 ↗</a><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
+            <div class="field-row"><span class="fk">联系方式</span><span class="fv">WhatsApp +62 812-xxxx-xxxx</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
+            <div class="field-row"><span class="fk">隐私协议</span><span class="fv">已签署<span class="sub">2026-08-20</span></span><span class="fa"><a href="#" class="info-link">查看签字文档 ↗</a></span></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="info-heading" style="margin-bottom:10px;">医美史 · 案件记录</div>
+          <div class="info-stack" style="gap:10px;" id="history-list"></div>
+        </div>
+
+        <div>
+          <div class="info-heading" style="margin-bottom:10px;">医美史 · 本院项目记录</div>
+          <div class="card" style="padding:4px 20px;" id="project-history-list"></div>
+        </div>
+
+        <div>
+          <div class="info-heading" style="margin-bottom:10px;">Timeline</div>
+          <div class="card" style="padding:6px 20px;" id="detail-log"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN: LAST CASE HISTORY (read-only) ============ -->
+<section class="page in-shell" id="in-lastcase" data-page="clients" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar" style="justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:16px;"><a href="#" onclick="goBack();return false;" style="font-size:13px;color:var(--slate);">← 返回</a><span style="width:1px;height:16px;background:var(--border);"></span><span class="title">上次项目史</span></div>
+      <div class="actions"><button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button><button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button><span class="avatar">D</span></div>
+    </div>
+    <div class="content" style="max-width:760px;">
+      <div class="card" style="padding:6px 22px;">
+        <div class="detail-row"><span class="k">고민</span><span class="v">面部轮廓松弛，下颌线不清晰</span></div>
+        <div class="detail-row"><span class="k">메타뷰资料</span><span class="v">已检测 <a href="#" style="font-weight:700;">查看报告 →</a></span></div>
+        <div class="detail-row"><span class="k">进行项目 &amp; 院长</span><span class="v">超声刀轮廓提升 · 김민석 원장</span></div>
+        <div class="detail-row"><span class="k">收费</span><span class="v">₩ 2,800,000</span></div>
+        <div class="detail-row"><span class="k">Timeline</span><span class="v">2026-01-10 资料提交 → 01-13 院长审核 → 01-15 施术完成</span></div>
+        <div class="detail-row" style="border-bottom:none;"><span class="k">视频 / 录音 / AI 文稿</span><span class="v"><a href="#" style="font-weight:700;">查看记录 →</a></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIDEO CONSULT ============ -->
+<section class="page" id="video-consult" style="display:none;"><div id="vc-root" style="display:flex;flex-direction:column;min-height:100vh;"></div>
+</section>
+
+</div>
+
+<!-- ============ CHAT DRAWER ============ -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="chat-drawer" id="chat-drawer">
+  <div class="drawer-head">
+    <span style="font-size:15px;font-weight:700;">对话</span>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span style="cursor:pointer;font-size:15px;" onclick="toggleDrawerSearch()">🔍</span>
+      <span style="cursor:pointer;font-size:15px;" onclick="closeDrawer()">✕</span>
+    </div>
+  </div>
+  <div style="display:flex;border-bottom:1px solid var(--border2);">
+    <div id="drawer-tab-staff" onclick="setDrawerTab('staff')" style="flex:1;text-align:center;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer;">职员间</div>
+    <div id="drawer-tab-case" onclick="setDrawerTab('case')" style="flex:1;text-align:center;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer;">案件</div>
+  </div>
+  <div class="drawer-search-wrap" id="drawer-search-wrap"><input type="text" id="drawer-search-input" placeholder="搜索对话…" oninput="renderDrawerList()"></div>
+  <div class="drawer-list" id="drawer-list"></div>
+  <div class="drawer-foot"><button class="btn-primary" id="drawer-foot-btn" style="width:100%;" onclick="drawerFootAction()">+ 新建职员对话</button></div>
+</div>
+
+<!-- ============ FLOATING CHAT WINDOW ============ -->
+<div class="chat-float-overlay" id="chat-float-overlay">
+  <div class="chat-float">
+    <div class="mac-bar">
+      <div class="mac-dots"><span style="background:#EF6A5F;"></span><span style="background:#F5BD4F;"></span><span style="background:#61C454;"></span></div>
+      <div class="mac-url">🌐 gmc.network</div>
+    </div>
+    <div class="float-head">
+      <div class="l">
+        <span class="sq-avt" id="float-avt" style="width:34px;height:34px;border-radius:10px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;">D</span>
+        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">이서연 · 韩国室长</span> <span id="float-open-case" style="display:none;font-size:13px;color:var(--blue);font-weight:700;" title="新标签页打开案件页">↗</span> <span style="font-size:11px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 Siti Rahayu 的面诊安排</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
+        <span style="cursor:pointer;" title="对话中的文件" onclick="openRoomFiles()">📁</span>
+        <span style="cursor:pointer;" title="搜索" onclick="toggleFloatSearch()">🔍</span>
+        <span id="float-mute-btn" style="cursor:pointer;" title="对自己关闭这个房间的提醒（被@照样提醒）" onclick="toggleMuteRoom()">🔕</span>
+        <span style="cursor:pointer;" onclick="closeFloat()">✕</span>
+      </div>
+      <div id="float-members-dd" style="display:none;position:absolute;top:100%;left:12px;z-index:8;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(27,38,53,.16);padding:8px 14px 12px;min-width:280px;max-height:340px;overflow:auto;"></div>
+    </div>
+    <div id="float-demo-bar" style="display:flex;gap:8px;padding:6px 18px;border-bottom:1px solid var(--border2);background:#FAF8F3;"></div>
+    <div class="float-search" id="float-search"><input type="text" id="float-search-input" placeholder="在对话中搜索…" oninput="renderFloatMessages()"></div>
+    <div id="chat-case-chip" style="display:none;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--terracotta-bg);"></div>
+    <div class="float-body" id="float-body"></div>
+    <div class="float-toolbar" id="float-toolbar"></div>
+    <div id="float-ref-chip" style="display:none;align-items:center;gap:8px;padding:8px 18px;border-top:1px solid var(--border);background:var(--white);"></div>
+    <div id="float-suggest" style="display:none;max-height:170px;overflow:auto;border-top:1px solid var(--border);background:#fff;"></div>
+    <div class="float-input">
+      <input type="text" id="float-input-box" placeholder="输入消息…（@ 选人，# 选案件）" oninput="floatInput()" onkeydown="floatKey(event)">
+      <button class="send-btn" onclick="sendFloatMsg()">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CASE INFO PEEK DRAWER ============ -->
+<div class="peek-overlay" id="peek-overlay" onclick="closeCaseInfoDrawer()"></div>
+<div class="peek-drawer" id="case-info-drawer">
+  <a href="#" id="peek-viewall" class="btn-outline" style="text-align:center;">查看全部 ↗</a>
+  <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--slate2);">
+    <div id="peek-name">姓名：—</div>
+    <div id="peek-contact">联系方式：—</div>
+    <div id="peek-director">对接院长：—</div>
+  </div>
+</div>
+
+<!-- ============ 意向项目选择 MODAL（2026-09-29 新增，基础资料tab） ============ -->
+<div class="modal-overlay" id="intention-project-overlay" onclick="if(event.target===this) closeIntentionPickerModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">选择意向项目</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeIntentionPickerModal()">✕</span>
+    </div>
+    <div id="intention-picker-tabs" style="display:flex;gap:8px;margin-bottom:12px;"></div>
+    <div id="intention-picker-list" style="max-height:360px;overflow-y:auto;"></div>
+    <button class="btn-primary" style="width:100%;margin-top:14px;" onclick="closeIntentionPickerModal()">完成</button>
+  </div>
+</div>
+
+<!-- ============ 取消接待确认 MODAL（2026-09-29 新增，基础资料tab · Case ID生成前） ============ -->
+<div class="modal-overlay" id="cancel-intake-overlay" onclick="if(event.target===this) closeCancelIntakeModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">确认取消吗？</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeCancelIntakeModal()">✕</span>
+    </div>
+    <div style="font-size:13px;color:var(--slate2);margin-bottom:18px;">取消后内容不保存。</div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeCancelIntakeModal()">继续填写</button>
+      <button class="btn-primary" style="flex:1;background:#C1454A;" onclick="confirmCancelIntake()">确认取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 退款 MODAL（2026-09-30：取代 confirm()，退款原因必填） ============ -->
+<div class="modal-overlay" id="refund-overlay" onclick="if(event.target===this) closeRefundModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">退款</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRefundModal()">✕</span>
+    </div>
+    <div id="refund-items" style="margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（₩，手动填写） <span style="color:#C1454A;">*</span></div>
+    <input type="number" min="0" id="refund-amount" placeholder="请输入本次退款总额（可为 0）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeRefundModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmRefund()">确认退款</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 本地项目退款 MODAL（2026-09-30：客户详情"持有项目"卡片，按购买批次退款，金额+原因必填） ============ -->
+<div class="modal-overlay" id="holding-refund-overlay" onclick="if(event.target===this) closeHoldingRefundModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">本地项目退款</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeHoldingRefundModal()">✕</span>
+    </div>
+    <div id="holding-refund-info" style="font-size:13px;margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（Rp，可为 0） <span style="color:#C1454A;">*</span></div>
+    <input type="number" min="0" id="holding-refund-amount" placeholder="请输入退款金额" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="holding-refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">按批次退款：只要还有剩余次数（未使用、部分使用）就能退；退款后这一批作废、剩余次数归零（已用过的次数保留为历史）；退款记录挂在这一批购买上，不改变任何案件的结局。</div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeHoldingRefundModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmHoldingRefund()">确认退款</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 模拟KR补加术后管理项目 MODAL（2026-09-30：从术后管理分类里选） ============ -->
+<div class="modal-overlay" id="postcare-overlay" onclick="if(event.target===this) closePostCareModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR补加术后管理项目</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareModal()">✕</span>
+    </div>
+    <div id="postcare-list" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;margin-top:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closePostCareModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmPostCare()">确认补加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 免除面诊费 MODAL（2026-09-30，Notion 09-30） ============ -->
+<!-- ============ 引用消息到案件 MODAL（2026-09-30，Conversation & Video Flow 入口3） ============ -->
+<div class="modal-overlay" id="quote-overlay" onclick="if(event.target===this) closeQuoteModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">引用到案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeQuoteModal()">✕</span>
+    </div>
+    <div id="quote-preview" style="font-size:12px;color:var(--slate2);background:var(--border2);border-radius:8px;padding:8px 10px;margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">选择案件（只能选已有 Case ID 的案件）</div>
+    <div id="quote-case-list" style="max-height:220px;overflow:auto;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeQuoteModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmQuote()">确认引用</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 对话房成员 MODAL（2026-09-30） ============ -->
+<div class="modal-overlay" id="room-members-overlay" onclick="if(event.target===this) closeRoomMembers()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;" id="room-members-title">成员</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRoomMembers()">✕</span>
+    </div>
+    <div id="room-members-body"></div>
+  </div>
+</div>
+
+<!-- ============ 模拟KR标记完成 MODAL（2026-09-30：逐个勾选或一次全部完成） ============ -->
+<div class="modal-overlay" id="kr-done-overlay" onclick="if(event.target===this) closeKrDoneModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记完成</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrDoneModal()">✕</span>
+    </div>
+    <div id="kr-done-items" style="margin-bottom:12px;"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">所有赴韩项目都是已完成或已取消后，系统自动判断案件结局。</div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="submitKrMarkDone(false)">标记所选完成</button>
+      <button class="btn-primary" style="flex:1;" onclick="submitKrMarkDone(true)">全部标完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 是否做本地管理 MODAL（2026-09-30：赴韩项目全部取消退款后询问） ============ -->
+<div class="modal-overlay" id="local-ask-overlay">
+  <div class="modal-box">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px;" id="local-ask-title">赴韩项目已全部取消并退款</div>
+    <div style="font-size:13px;color:var(--slate2);margin-bottom:16px;" id="local-ask-text"></div>
+    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localAskAnswer(true)">是</button><button class="btn-outline" style="flex:1;" onclick="localAskAnswer(false)">否</button></div>
+  </div>
+</div>
+
+<!-- ============ 赴韩项目全部取消后：案件里的本地项目/术后管理 保留还是全部退款 MODAL（2026-10-01） ============ -->
+<div class="modal-overlay" id="local-keep-overlay">
+  <div class="modal-box">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px;">赴韩项目已全部取消并退款</div>
+    <div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">这个案件里还有本地项目 / 术后管理项目：</div>
+    <div id="local-keep-list" style="font-size:12px;color:var(--slate2);margin-bottom:10px;"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">由室长决定：保留（之后问是否做本地项目），或按持有批次规则整批退款（金额 + 原因必填，只有没用过的批次可退）。</div>
+    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localKeepChoice('keep')">保留</button><button class="btn-outline" style="flex:1;" onclick="localKeepChoice('refund')">全部退款</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="local-refund-all-overlay">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">本地项目 / 术后管理 全部退款</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeLocalRefundAll()">✕</span>
+    </div>
+    <div id="local-refund-all-rows" style="margin-bottom:10px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="local-refund-all-reason" rows="2" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">整批退款、整批作废；用过的批次不能退（保留）。退完且本次没有购买 → 仅出报告。</div>
+    <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" style="flex:1;" onclick="closeLocalRefundAll()">返回</button><button class="btn-primary" style="flex:1;" onclick="confirmLocalRefundAll()">确认退款</button></div>
+  </div>
+</div>
+
+<!-- ============ 模拟KR判断能否施术 MODAL（2026-10-01，06 在韩国） ============ -->
+<div class="modal-overlay" id="kr-judge-overlay" onclick="if(event.target===this) closeKrJudgeModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR判断能否施术</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrJudgeModal()">✕</span>
+    </div>
+    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="ok" checked> 能施术，项目没变动 → 付清尾款 → 各项目标完成 → 已结案</label>
+    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="changed"> 能施术，但项目有变动（部分不能做 / 更换）→ 尾款按实际项目重算，多退少补</label>
+    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="cannot"> 不能施术 → KR 在韩重新预约，或退定金（全部退回 / 不退）→ 仅出报告</label>
+    <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" style="flex:1;" onclick="closeKrJudgeModal()">取消</button><button class="btn-primary" style="flex:1;" onclick="submitKrJudge()">确认</button></div>
+  </div>
+</div>
+
+<!-- ============ KR确认术后管理项目（标注进行时间） MODAL（2026-10-01） ============ -->
+<div class="modal-overlay" id="postcare-confirm-overlay" onclick="if(event.target===this) closePostCareConfirm()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：KR确认术后管理项目</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareConfirm()">✕</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">施术完成时 KR 确认术后管理项目（可修改）并标注每项的进行时间，如"术后第7天"；使用时按进行时间排序。</div>
+    <div id="postcare-confirm-list" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="closePostCareConfirm()">取消</button><button class="btn-primary" style="flex:1;" onclick="submitPostCareConfirm()">确认</button></div>
+  </div>
+</div>
+
+<!-- ============ 基础资料缺必填项提示 MODAL（2026-10-01，IN-CASE-01：缺必填项时弹 popup） ============ -->
+<div class="modal-overlay" id="materials-missing-overlay" onclick="if(event.target===this) closeMaterialsMissing()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">还有必填项没填</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeMaterialsMissing()">✕</span>
+    </div>
+    <div id="materials-missing-list" style="font-size:13px;color:var(--slate2);line-height:1.9;margin-bottom:14px;"></div>
+    <button class="btn-primary" style="width:100%;" onclick="closeMaterialsMissing()">知道了</button>
+  </div>
+</div>
+
+<!-- ============ 模拟KR标记无法施术 MODAL（2026-09-30 演示） ============ -->
+<div class="modal-overlay" id="kr-unable-overlay" onclick="if(event.target===this) closeKrUnableModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记无法施术</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrUnableModal()">✕</span>
+    </div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">勾选无法施术的项目</div>
+    <div id="kr-unable-items" style="margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">原因 <span style="color:#C1454A;">*</span></div>
+    <textarea id="kr-unable-reason" rows="3" placeholder="请填写无法施术的原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeKrUnableModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="submitKrUnable()">确认标记</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ INVITE Kr室长 MODAL（不含院长，只选室长） ============ -->
+<div class="modal-overlay" id="invite-kr-overlay" onclick="if(event.target===this) closeInviteKrModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">选择室长</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeInviteKrModal()">✕</span>
+    </div>
+    <div id="invite-kr-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- ============ CHAT-VIDEO PARTICIPANT PICKER (2026-09-29 新增，IN-VIDE-01 入口①) ============ -->
+<div class="modal-overlay" id="chat-video-participant-overlay" onclick="if(event.target===this) closeChatVideoParticipantModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">发起视频 · 选择参与人</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeChatVideoParticipantModal()">✕</span>
+    </div>
+    <div id="chat-video-participant-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;"></div>
+    <button class="btn-primary" style="width:100%;" onclick="confirmChatVideoParticipants()">开始视频</button>
+  </div>
+</div>
+
+<!-- ============ CANCEL APPOINTMENT MODAL ============ -->
+<div class="modal-overlay" id="cancel-overlay" onclick="if(event.target===this) closeCancelModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">取消预约 · 选择原因</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeCancelModal()">✕</span>
+    </div>
+    <div id="cancel-reason-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;"></div>
+    <button class="btn-primary" style="width:100%;background:#C1454A;" onclick="confirmCancel()">确认取消</button>
+  </div>
+</div>
+
+<!-- ============ RESCHEDULE MODAL ============ -->
+<div class="modal-overlay" id="reschedule-overlay" onclick="if(event.target===this) closeRescheduleModal()">
+  <div class="modal-box" style="width:820px;max-width:92vw;padding:0;display:flex;">
+    <div style="flex:1;padding:26px;border-right:1px solid var(--border2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <span style="font-size:15px;font-weight:700;">可预约日期</span>
+        <span style="cursor:pointer;color:var(--slate);" onclick="closeRescheduleModal()">✕</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <span style="cursor:pointer;color:var(--slate);font-size:13px;" onclick="rescheduleMonthShift(-1)">‹</span>
+        <span id="reschedule-month-label" style="font-size:16px;font-weight:700;"></span>
+        <span style="cursor:pointer;color:var(--slate);font-size:13px;" onclick="rescheduleMonthShift(1)">›</span>
+      </div>
+      <div class="cal-dow"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+      <div id="reschedule-cal-grid" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-top:6px;"></div>
+    </div>
+    <div style="width:340px;padding:26px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <span style="cursor:pointer;color:var(--slate);font-size:13px;" onclick="rescheduleDayShift(-1)">‹</span>
+        <span id="reschedule-day-label" style="font-size:14px;font-weight:700;"></span>
+        <span style="cursor:pointer;color:var(--slate);font-size:13px;" onclick="rescheduleDayShift(1)">›</span>
+      </div>
+      <div id="reschedule-slots"></div>
+      <div style="font-size:11px;color:var(--muted);margin:14px 0;">定期休诊：每周星期四，公休日</div>
+      <button class="btn-primary" style="width:100%;" onclick="confirmReschedule()">预约</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ADD SLOT MODAL (dashboard week view) ============ -->
+<div class="modal-overlay" id="add-slot-overlay" onclick="if(event.target===this) closeAddSlotModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;" id="add-slot-title">预约空档</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeAddSlotModal()">✕</span>
+    </div>
+    <div id="add-slot-body"></div>
+  </div>
+</div>
+
+<!-- ============ SETTLEMENT PAYMENT MODAL ============ -->
+<div class="modal-overlay" id="settle-overlay" onclick="if(event.target===this) closeSettleModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">确认付款</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeSettleModal()">✕</span>
+    </div>
+    <div id="settle-breakdown" style="display:flex;flex-direction:column;gap:14px;"></div>
+  </div>
+</div>
+
+<!-- ============ LIBRARY: CASE FORM MODAL ============ -->
+<div class="modal-overlay" id="lib-case-overlay" onclick="if(event.target===this) closeLibCaseModal()">
+  <div class="modal-box" style="width:640px;max-width:92vw;max-height:88vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span id="lib-case-modal-title" style="font-size:15px;font-weight:700;">新增案例</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeLibCaseModal()">✕</span>
+    </div>
+    <div id="lib-case-body"></div>
+  </div>
+</div>
+
+<!-- ============ LIBRARY: NODE DELETE / BATCH MOVE MODAL ============ -->
+<div class="modal-overlay" id="lib-node-action-overlay" onclick="if(event.target===this) closeLibNodeActionModal()">
+  <div class="modal-box" style="width:400px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span id="lib-node-action-title" style="font-size:15px;font-weight:700;">批量更改标签</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeLibNodeActionModal()">✕</span>
+    </div>
+    <div id="lib-node-action-body"></div>
+  </div>
+</div>
+
+<!-- ============ PROJECT LIBRARY: NEW/EDIT PROJECT MODAL ============ -->
+<div class="modal-overlay" id="proj-edit-overlay" onclick="if(event.target===this) closeProjEditModal()">
+  <div class="modal-box" style="width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span id="proj-edit-title" style="font-size:15px;font-weight:700;">新增项目</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeProjEditModal()">✕</span>
+    </div>
+    <div id="proj-edit-body"></div>
+  </div>
+</div>
+
+<!-- ============ 对话中的文件 MODAL（2026-10-02，📁） ============ -->
+<div class="modal-overlay" id="room-files-overlay" style="z-index:70;" onclick="if(event.target===this) closeRoomFiles()">
+  <div class="modal-box" style="width:420px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span id="room-files-title" style="font-size:15px;font-weight:700;">对话中的文件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRoomFiles()">✕</span>
+    </div>
+    <div id="room-files-body"></div>
+  </div>
+</div>
+
+<!-- ============ 引用案件 MODAL（2026-10-02，选案件后 chip 挂在输入框上） ============ -->
+<div class="modal-overlay" id="mention-case-overlay" style="z-index:70;" onclick="if(event.target===this) closeMentionCase()">
+  <div class="modal-box" style="width:420px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:15px;font-weight:700;">引用案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeMentionCase()">✕</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">选一个案件，案件 chip 会挂在输入框上方；写内容、发送后，这条消息会写入该案件（终态案件只挂不写入）。基础资料还没确认的案件也可以选</div>
+    <div id="mention-case-list" style="margin-bottom:6px;"></div>
+  </div>
+</div>
+
+<!-- ============ 对话记录（文本）MODAL（2026-10-02，结案后附件里查看） ============ -->
+<div class="modal-overlay" id="chat-archive-overlay" style="z-index:70;" onclick="if(event.target===this) closeChatArchive()">
+  <div class="modal-box" style="width:480px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">对话记录（文本）</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeChatArchive()">✕</span>
+    </div>
+    <pre id="chat-archive-text" style="white-space:pre-wrap;font-family:inherit;font-size:12px;line-height:1.7;color:var(--slate2);margin:0;"></pre>
+  </div>
+</div>
+
+<!-- ============ 来电 MODAL（2026-10-02，被呼叫方：铃声 + 加入/拒绝） ============ -->
+<div class="modal-overlay" id="incoming-call-overlay" style="z-index:90;">
+  <div class="modal-box" style="width:340px;text-align:center;">
+    <div style="font-size:34px;margin-bottom:6px;">🔔</div>
+    <div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:6px;">铃声响起…</div>
+    <div id="incoming-call-title" style="font-size:15px;font-weight:700;margin-bottom:4px;"></div>
+    <div id="incoming-call-sub" style="font-size:12px;color:var(--muted);margin-bottom:18px;"></div>
+    <div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="declineIncomingCall()">拒绝</button><button class="btn-primary" style="flex:1;" onclick="acceptIncomingCall()">加入</button></div>
+  </div>
+</div>
+
+<!-- ============ 日历设定 MODAL（2026-10-02，诊所时区） ============ -->
+<div class="modal-overlay" id="cal-settings-overlay" style="z-index:70;" onclick="if(event.target===this) closeCalSettings()">
+  <div class="modal-box" style="width:360px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">设定 · 诊所时区</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeCalSettings()">✕</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">日历的时间按诊所所在时区显示（默认 WIB），下面一行小字显示 KR 时间；时差不写死，随这里的设定计算；右上角天气显示诊所所在城市。</div>
+    <div id="cal-settings-body"></div>
+  </div>
+</div>
+
+<!-- ============ 新增 memo MODAL（2026-10-02·七） ============ -->
+<div class="modal-overlay" id="memo-overlay" style="z-index:70;" onclick="if(event.target===this) closeMemoModal()">
+  <div class="modal-box" style="width:380px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-size:15px;font-weight:700;">新增 memo</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeMemoModal()">✕</span>
+    </div>
+    <div id="memo-body"></div>
+  </div>
+</div>
+
+<!-- ============ 管理分类 MODAL（2026-10-02，项目库） ============ -->
+<div class="modal-overlay" id="projcat-overlay" style="z-index:70;" onclick="if(event.target===this) closeProjCatModal()">
+  <div class="modal-box" style="width:400px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span id="projcat-title" style="font-size:15px;font-weight:700;">管理分类</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeProjCatModal()">✕</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">分类下还有项目（包括已非活性化的）不能删除；IN 室长只能管理本地项目的分类。</div>
+    <div id="projcat-body"></div>
+  </div>
+</div>
+
+<!-- ============ 案例库：照片放大 / 展示模式（2026-10-02） ============ -->
+<div class="modal-overlay" id="lib-viewer-overlay" style="z-index:95;" onclick="if(event.target===this) closeLibViewer()">
+  <div class="modal-box" style="width:min(720px,92vw);text-align:center;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><span id="lib-viewer-cap" style="font-size:13px;font-weight:700;"></span><span style="cursor:pointer;color:var(--slate);" onclick="closeLibViewer()">✕</span></div>
+    <div id="lib-viewer-body"></div>
+  </div>
+</div>
+<div id="lib-present-overlay" style="display:none;position:fixed;inset:0;background:#0D1420;z-index:99;flex-direction:column;align-items:center;justify-content:center;color:#fff;">
+  <span style="position:absolute;top:20px;right:28px;font-size:22px;cursor:pointer;" onclick="closeLibPresent()" title="关闭（Esc）">✕</span>
+  <div id="lib-present-cap" style="font-size:16px;font-weight:700;margin-bottom:14px;"></div>
+  <div style="display:flex;align-items:center;gap:24px;">
+    <span style="font-size:34px;cursor:pointer;user-select:none;" onclick="libPresentMove(-1)">‹</span>
+    <div id="lib-present-body" style="width:min(70vw,720px);height:min(70vh,520px);"></div>
+    <span style="font-size:34px;cursor:pointer;user-select:none;" onclick="libPresentMove(1)">›</span>
+  </div>
+  <div id="lib-present-count" style="margin-top:14px;font-size:12px;color:#9AA6B2;"></div>
+</div>
+
+<!-- ============ 客人自己填资料表单（2026-10-02·三，同预约链接表单；提交后生成预约和客户档案） ============ -->
+<div class="modal-overlay" id="guest-form-overlay" style="z-index:80;">
+  <div class="modal-box" style="width:420px;max-height:88vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:15px;font-weight:700;">预约资料（客人自己填写）</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeGuestForm()">✕</span>
+    </div>
+    <div id="guest-form-sub" style="font-size:11px;color:var(--muted);margin-bottom:12px;"></div>
+    <div id="guest-form-body"></div>
+  </div>
+</div>
+
+<!-- ============ 通知详情（系统更新） ============ -->
+<div class="modal-overlay" id="notif-detail-overlay" style="z-index:85;" onclick="if(event.target===this) closeNotifDetail()">
+  <div class="modal-box" style="width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span id="notif-detail-title" style="font-size:15px;font-weight:700;">系统更新</span><span style="cursor:pointer;color:var(--slate);" onclick="closeNotifDetail()">✕</span></div>
+    <div id="notif-detail-body" style="font-size:13px;line-height:1.8;"></div>
+  </div>
+</div>
+
+<!-- ============ NEW CASE CHAT MODAL ============ -->
+<div class="modal-overlay" id="new-case-chat-overlay" onclick="if(event.target===this) closeNewCaseChatModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">新建案件对话 · 选择案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeNewCaseChatModal()">✕</span>
+    </div>
+    <div id="new-case-chat-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- ============ NEW STAFF CHAT MODAL ============ -->
+<div class="modal-overlay" id="new-staff-chat-overlay" onclick="if(event.target===this) closeNewStaffChatModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span style="font-size:15px;font-weight:700;">新建职员对话 · 选择同事</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeNewStaffChatModal()">✕</span>
+    </div>
+    <div id="new-staff-chat-list" style="margin-bottom:16px;"></div>
+    <button class="btn-primary" style="width:100%;" onclick="confirmNewStaffChat()">确认</button>
+  </div>
+</div>
+
+<!-- ============ REPORT VIEW MODAL ============ -->
+<div class="modal-overlay" id="report-overlay" onclick="if(event.target===this) closeReportModal()">
+  <div class="modal-box" style="width:420px;max-height:80vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:15px;font-weight:700;">面诊报告</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeReportModal()">✕</span>
+    </div>
+    <div id="report-body"></div>
+  </div>
+</div>
+
+<!-- ============ TOAST NOTIFICATIONS ============ -->
+<div id="toast-stack"></div>
+
+<script src="/shared/rules.js"></script>
+<script src="/shared/ui.js"></script>
+<script src="/shared/data.js"></script>
+<script src="/shared/store.js"></script>
+<script src="/shared/boot-in.js"></script>
+</body>
+</html>

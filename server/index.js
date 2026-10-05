@@ -17,8 +17,8 @@ const httpServer = http.createServer(app);
 app.use(express.json());
 app.use('/api', apiRouter);
 
-// The prototype is a single page; send the site root to it
-app.get('/', (req, res) => res.redirect('/gmc-network-prototype.html'));
+// The prototype is multi-page (login.html / in.html / owner.html / kr.html / booking.html); send the site root to the login page
+app.get('/', (req, res) => res.redirect('/login.html'));
 
 // The prototype has no favicon; answer the browser's automatic request quietly
 app.get('/favicon.ico', (req, res) => res.status(204).end());

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GMC Network · 登录</title>
+<link rel="stylesheet" href="/shared/app.css">
+</head>
+<body>
+<div id="app">
+
+<section class="page active" id="main" style="display:flex;">
+  <div class="landing-header">
+    <div><span class="logo">GMC Network</span><span class="logo-sub">跨境医美协作平台</span></div>
+    <span style="font-size:13px;color:var(--slate);">Indonesia · Korea · Broker 三方协作系统</span>
+  </div>
+  <div class="landing-body">
+    <div>
+      <h1>选择您的登录角色</h1>
+      <p>GMC 作为独立第三方仲介，连接印尼合作诊所与韩国医院 —— 为跨境医美客户提供从面谈、面诊到施术、术后管理的全流程协作系统。（登录/激活流程在第二部分实现，现在先按角色直接进入）</p>
+    </div>
+    <div class="role-cards" style="grid-template-columns:1fr;max-width:360px;margin:0 auto;">
+      <a class="role-card" href="/in.html" style="text-decoration:none;color:inherit;">
+        <div class="role-badge" style="background:var(--terracotta-bg);color:var(--terracotta);">ID</div>
+        <div><div style="font-size:17px;font-weight:700;">印尼室长</div><div style="font-size:12px;color:var(--muted);">Indonesia Coordinator</div></div>
+        <p style="margin:0;font-size:13px;color:var(--slate2);line-height:1.6;">客户信息录入 · 메타뷰上传 · 案例展示 · 面诊材料准备</p>
+        <span style="font-size:13px;font-weight:700;color:var(--terracotta);">进入工作台 →</span>
+      </a>
+      <a class="role-card" href="/owner.html" style="text-decoration:none;color:inherit;">
+        <div class="role-badge" style="background:var(--blue-bg,#E8EEF7);color:var(--blue);">OW</div>
+        <div><div style="font-size:17px;font-weight:700;">诊所院长（Owner）</div><div style="font-size:12px;color:var(--muted);">Clinic Owner</div></div>
+        <span style="font-size:13px;font-weight:700;color:var(--blue);">进入（占位页）→</span>
+      </a>
+      <a class="role-card" href="/kr.html" style="text-decoration:none;color:inherit;">
+        <div class="role-badge" style="background:#EEE;color:var(--slate);">KR</div>
+        <div><div style="font-size:17px;font-weight:700;">韩国室长</div><div style="font-size:12px;color:var(--muted);">Korea Coordinator</div></div>
+        <span style="font-size:13px;font-weight:700;color:var(--slate);">进入（占位页）→</span>
+      </a>
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;">
+      <a href="/in.html?demo=call" style="font-size:13px;color:var(--slate);border-bottom:1px solid var(--border);padding-bottom:2px;">查看视频沟通界面示例 →</a>
+      <a href="/booking.html" style="font-size:13px;color:var(--slate);border-bottom:1px solid var(--border);padding-bottom:2px;">客户自助预约表单（演示）→</a>
+      <a href="#" onclick="if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。')) resetDemoData(); return false;" style="font-size:13px;color:var(--slate);border-bottom:1px solid var(--border);padding-bottom:2px;">重置演示数据</a>
+    </div>
+  </div>
+  <div class="landing-footer">
+    <b>标准流程</b><span>|</span>
+    <span>① 印尼前台收集资料</span><span style="color:var(--terracotta);">→</span>
+    <span>② 院长审核材料</span><span style="color:var(--terracotta);">→</span>
+    <span>③ 视频问诊 / 直接定案 / 来韩施术</span><span style="color:var(--terracotta);">→</span>
+    <span>④ 施术与术后管理</span>
+  </div>
+</section>
+</div>
+<script>
+/* 登录页不加载演示数据，只需要"重置演示数据"：清掉所有 gmc_ 开头的存档（其他已打开的标签页会收到通知并刷新） */
+function resetDemoData(){
+  try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
+  alert('演示数据已重置，下次进入各页面时会重新生成。');
+}
+</script>
+</body>
+</html>

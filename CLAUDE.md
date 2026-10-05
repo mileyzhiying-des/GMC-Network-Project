@@ -86,6 +86,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - 第二十七轮（2026-10-03 通知中心，docs 1j）：`NOTIFS` 通知数据 + `pushNotif()`（自动算收件人、弹 toast）+ 铃铛下拉 `toggleBellDropdown` + 通知中心页（筛选/全部标已读/点通知打开 `openNotif`，页内/新标签页规则）+ 系统更新详情；事件钩子挂在 `krConfirmReportEta`/`markReportUploaded`/`simulateReportTimeout`+每秒超时检查/`markNoShow(auto)`/`submitGuestForm`/占位剩5分钟/KR 确认施术时间/已到医院/无法施术/更换项目/术后管理确认/`finishCase`/被@/未接来电；删除旧的 `notifyConsultUpdate`（KR 回复面诊时间/面诊信息已更新/面诊前15分钟提醒）。toast 叠放最多 4 个、6 秒消失。\n- **localStorage 提醒**：设定和 memo 存在 localStorage（版本号 `DEMO_DATA_VERSION`），自测时如果登记过"Dewi OFF"，推播/通知收件人会改成 Rina，测试前先清掉 `gmc_memos`。
 - 第二十八轮（2026-10-03 对话页面结构，docs 1k）：💬 未读数不含@（`ROOM_UNREAD`/`updateChatBadge`）、抽屉排序 `roomLastKey`、新建案件对话候选无房间、案件房标题 ↗、引用 chip 显示当前大状态（`refBarHtml`，`updateCaseStage` 会刷新打开着的窗口）、案件状态变化不发进对话房（删 `sendMainAnnouncement`/KR 回复消息/结构化卡片，视频结束只发系统消息）、@ 自己高亮；案件房种子消息改成普通沟通内容。
 - 第二十九轮（2026-10-05 收尾，TODO 盘点答复 + 清理，docs 1l）：**一** 删除 `cancelFollowUpReservations`（案件结束不再自动取消同客人其他预约）；**二** 不面诊案件付款后也可［增加面诊］（`addedConsultAfterLocal`/`consultCarryStage`/`localMgmtTagOn`，主状态→面诊预约→…→项目确认中，本地项目照常使用）；**三** 持有批次退款记在购买案件（`holdingRefunds`/`hasRefundMark`，两边 Timeline，仅办理退款=取消原因 `refundVisit`）；**四** 到医院后更换项目的新结算单状态"计入尾款"；**五** 基础资料［补充上传］（`supplementUpload`）；**六** 清理死代码（in-newclient、旧免除面诊费弹窗、二次面诊/视频书面遗留字段）；**七** 文档清理（open-questions 1c–1f 标已写入 Notion、已被取代的内容标已作废、第2节 #3 #16 #17 #21 已解决，本文件"已知差距"重写）。
+- 第三十轮（2026-10-05 结构拆分·一，账号与设定指令的第一部分；二→八等用户检查后再做）：把单文件原型拆成 `prototype/shared/`（`rules.js` 规则层、`ui.js` 界面层、`data.js` 数据层、`store.js` 存档与多标签页同步、`boot-in.js` IN 端启动、`app.css`）+ 入口页 `login.html`（暂为按角色进入的占位登录页）/`in.html`（IN 端全部页面）/`owner.html`、`kr.html`（占位）/`booking.html`（客户自助预约表单，参数 `?date=&time=&phone=&purpose=&ph=`）；旧的 `gmc-network-prototype.html` 已删除（git 历史里还在）。功能和拆分前完全一致（函数清单 638 个一个没少，只多了 `refreshView`/`resetDemoData`，并删掉一个重复定义的 `toggleAttachMenu`）。数据存 localStorage（`gmc_state`，带版本号 `DEMO_DATA_VERSION`=4），刷新不再重置；多标签页实时同步；超容量提示"演示数据过大，已重置"；真实上传图片只在内存。新增 `start.command` 一键启动，`dev/check.sh` 取代 `/tmp/check.sh`。
 - 教训：补丁用 `region(start,end)` 替换时结束标记必须紧邻；**第四部分的补丁曾误删一整段弹窗 HTML**，已恢复；现在 `/tmp/check.sh` 除了函数清单还检查 DOM id 是否缺失。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
@@ -167,3 +168,30 @@ vite.config.js                         Vite 配置
 - `npm start` 用 Express 在 `PORT`（默认 3000）上提供 `dist/`，访问根路径会跳转到原型。
 - `Dockerfile` 用容器构建和运行同样的内容。
 - `dist/` 是纯静态文件，也可以直接放到任何静态托管（Nginx、Netlify、Vercel、S3 等）。
+
+
+---
+
+## 结构拆分（2026-10-05，追加；以下取代文档里"单文件原型"的说法，旧文字保留作历史）
+
+**文件结构**（原来写 `prototype/gmc-network-prototype.html` 的地方，现在对应下面这些文件；按函数名/变量名搜索即可，在 `prototype/shared/` 下全局搜）：
+```
+prototype/login.html      登录页（第二部分做真正的登录/激活；现在是按角色直接进入的占位页 + 重置演示数据）
+prototype/in.html         印尼室长端：全部页面（工作台/客户/案件/案例库/项目库/通知/对话/视频…）的 HTML
+prototype/owner.html      院长端（占位）        prototype/kr.html  韩国室长端（占位）
+prototype/booking.html    客户自助预约表单（复用 ui.js 的 renderGuestForm / data.js 的 submitGuestForm）
+prototype/shared/rules.js 规则层：状态推导、结局、资格判断、日期格式化等不碰界面的函数
+prototype/shared/ui.js    界面层：页面切换、渲染、弹窗、toast、对话浮窗、日历；界面状态变量；refreshView()
+prototype/shared/data.js  数据层：所有演示数据数组 + 读写函数 + 种子数据；开头是演示数据版本号检查
+prototype/shared/store.js 存档（PERSIST_VARS 列出的全局变量 ⇄ localStorage 的 gmc_state）+ 多标签页同步 + resetDemoData()
+prototype/shared/boot-in.js  IN 端专用启动脚本（初始化渲染、定时器、全局监听）
+prototype/shared/app.css  共用样式
+```
+- 都是 classic script（全局函数/变量，不是 ES module），加载顺序固定：`rules.js → ui.js → data.js → store.js →（in.html 再加）boot-in.js`。新加全局变量如果要跨刷新保存，必须加进 `store.js` 的 `PERSIST_VARS`；只放界面状态的变量（当前页、筛选条件、弹窗上下文）不要加。
+- **分层并不绝对纯**：少数 `data.js`/`rules.js` 里的函数在数据变化后会调用刷新函数（如 `pushNotif` → `updateBell`），暂不再拆；`booking.html` 等没有对应元素的页面里这些调用会静默跳过。
+- **分类是按函数体自动判断的**（碰 `document.`/`alert`/`innerHTML` 等或名字以 render/build/open/close/show/toggle 开头 → ui；名字像 derive/is/can/caseStatus… → rules；其余 → data）。新函数放哪个文件，参照这条。
+- 页面不能再双击 html 打开（共享脚本用绝对路径 `/shared/…`），必须用本地服务器：**双击 `start.command`**（第一次自动 `npm install`，再启动 `npm run dev` 并打开浏览器到 http://localhost:3000/login.html）。第一次要先装 Node.js（https://nodejs.org，LTS）。README 里也写了。
+- `npm run build` 把五个入口页打包到 `dist/`，`shared/` 原样复制到 `dist/shared/`（`vite.config.js` 里的 `gmc-copy-shared` 插件）；`server/index.js` 的根路径跳转到 `/login.html`。
+- 存档规则：每次点击/输入/选择后 60ms 内、以及每 2 秒，如果数据有变化就存档；其他标签页收到 `storage` 事件后重读数据并 `refreshView()`；页面离开时再存一次。容量超限（约 5MB，`QuotaExceeded`）时：console.warn + 画面顶部红色提示"演示数据过大，已重置"，清掉存档，这个页面之后不再存档（刷新页面恢复演示数据）。真实上传的图片（data: 地址）只放内存，存档里是 `@img:编号`，刷新后不再显示。
+- **自测补充**：提交前改跑 `bash dev/check.sh`（函数清单对比 `prototype/shared/*.js` 与 HEAD、语法、DOM id 缺失；`add-slot-purpose`、`bell-dd` 是动态生成的 id，属正常）；多标签页同步用两个标签页验证（一个改数据，另一个不刷新就能看到）；改完后冷启动检查用 `in.html`。
+- 演示账号/密码（第二部分才会做，约定：密码 = 账号编号小写 + `123`，例如 A1 → `a1123`）。
