@@ -2167,6 +2167,20 @@ function confirmHoldingRefund(){
   b.voidedRemaining = b.bought-b.used; /* 作废的剩余次数（已用的次数保留作历史） */
   b.voided = true; /* 这一批作废，剩余次数归零 */
   b.refund = {amount:amount, currency:'IDR', reason:reason, date:nowFullDt().split(' ')[0]}; /* 退款记录挂在这一批上；不改变任何案件的结局 */
+  var pc = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0];
+  if(pc){
+    pc.holdingRefunds = pc.holdingRefunds || [];
+    pc.holdingRefunds.push({itemName:ctx.itemName, amount:amount, reason:reason, date:b.refund.date, qty:b.voidedRemaining||0});
+    logCaseEvent(pc, 'Dewi', '客户详情办理持有批次退款：'+ctx.itemName+'（剩余 '+(b.voidedRemaining||0)+' 次作废），退款 '+formatCurrency(amount,'IDR')+'，原因：'+reason+'；退款记在本案件，结局不变');
+  }
+  /* 本次到访的案件（客人现在到访、还没结束的那个）：记一笔"本次到访办理了退款"；如果这次没有其他购买或使用，结案时结局=已取消（仅办理退款） */
+  var vc = CASE_ITEMS.filter(function(x){ return x.name===ctx.name && x.id!==b.caseId && !isEnded(x) && x.subState==='arrived' && !x.visitClosed; })[0];
+  if(vc){
+    vc.refundVisit = {fromCaseId:b.caseId, itemName:ctx.itemName, amount:amount};
+    logCaseEvent(vc, 'Dewi', '本次到访办理持有批次退款：'+ctx.itemName+'，退款 '+formatCurrency(amount,'IDR')+'（记在购买案件 '+(pc?pc.caseNo:b.caseId)+' 上）');
+    buildCaseLog && vc.id===CURRENT_CASE_ID && buildCaseLog(vc);
+  }
+  if(pc && pc.id===CURRENT_CASE_ID) buildCaseLog(pc);
   HOLDING_REFUND_CTX = null;
   closeHoldingRefundModal();
   renderClientHoldings(ctx.name);
@@ -2672,6 +2686,9 @@ function computeOutcome(c){
   return c.reportReady ? 'reportonly' : 'cancelled';
 }
 function refundSum(c){ return (c.refunds||[]).reduce(function(sum,r){ return sum+(r.amount||0); }, 0); }
+/* 客户详情的持有批次退款，记在"当初购买这个批次的案件"上（2026-10-05）：该案件财务显示"有退款"（财务结果其他标签、结局都不变），两边 Timeline 互相注明 */
+function holdingRefundSum(c){ return (c.holdingRefunds||[]).reduce(function(sum,r){ return sum+(r.amount||0); }, 0); }
+function hasRefundMark(c){ return refundSum(c)>0 || (c.holdingRefunds||[]).length>0 || c.cancelReason==='仅办理退款'; } /* 案件列表"有退款"筛选：含持有批次退款、仅办理退款 */
 function financePaid(c){
   var kr=0, inn=0;
   (c.settlementBatches||[]).forEach(function(b){ if(b.status==='active'){ kr += b.krDeposit||0; inn += b.inTotal||0; } });
@@ -2711,7 +2728,7 @@ function finishCase(c, cancelReasonIfCancelled){
   c.entryChoicePending = false; c.mgmtActive = false; c.mgmtCancelling = false; c.localAsk = false;
   if(c.localMgmt){ c.localMgmt.active = false; c.localMgmt.mgmtCancelling = false; }
   var out = computeOutcome(c);
-  c.cancelReason = out==='cancelled' ? (cancelReasonIfCancelled || '未购买未使用') : null;
+  c.cancelReason = out==='cancelled' ? (c.refundVisit ? '仅办理退款' : (cancelReasonIfCancelled || '未购买未使用')) : null; /* 这次到访只办了退款、没有其他购买或使用 → 已取消（仅办理退款） */
   updateCaseStage(c);
   logCaseEvent(c, '系统', '案件结束：'+terminalBadge(c)[2]+(c.stage==='cancelled' ? '（'+endReasonText(c)+'）' : ''));
   if(c.stage==='closed' && c.hasArrived && krAllItems(c).some(function(it){ return it.done; })) pushNotif('赴韩施术','施术完成，案件已结案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
@@ -2819,7 +2836,9 @@ function financeCellHtml(c){
   if(pd.inn>0) income.push(formatCurrency(pd.inn,'IDR'));
   return '<div style="font-size:12px;font-weight:700;">'+f+'</div>'+
     (income.length ? '<div style="font-size:11px;color:var(--slate2);">收入 '+income.join(' + ')+'</div>' : '')+
-    (ref>0 ? '<div style="font-size:11px;color:var(--terracotta);">退款 '+formatCurrency(ref,'KRW')+'</div>' : '');
+    (ref>0 ? '<div style="font-size:11px;color:var(--terracotta);">退款 '+formatCurrency(ref,'KRW')+'</div>' : '')+
+    ((c.holdingRefunds||[]).length ? '<div style="font-size:11px;color:var(--terracotta);" title="客户详情里持有批次的退款，记在当初购买的案件上">有退款 '+formatCurrency(holdingRefundSum(c),'IDR')+'（持有批次）</div>' : '')+
+    (c.cancelReason==='仅办理退款' ? '<div style="font-size:11px;color:var(--terracotta);">有退款（本次到访只办理退款）</div>' : '');
 }
 function caseStatusBadge(c){
   var t = terminalBadge(c); if(t) return t;
@@ -2886,6 +2905,7 @@ function caseStatusSub(c){
   if(c.stage==='cancelled'){
     if(c.subState==='cancelled') return '客人取消到店，资料已保留';
     if(c.cancelReason==='管理取消') return '管理全部取消，本次无购买；未做次数已归还持有（不是退款）';
+    if(c.cancelReason==='仅办理退款') return '本次到访只办理了持有批次退款，没有其他购买或使用';
     return '本次既没购买也没使用';
   }
   if(c.stage==='booked'){
@@ -2947,7 +2967,7 @@ function filterCases(key){
 var CASE_ONLY_MINE = false;
 function renderCaseRows(){
   var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return c.stage===CASE_TAB_FILTER; });
-  if(CASE_REFUND_FILTER) items = items.filter(function(c){ return refundSum(c)>0; });
+  if(CASE_REFUND_FILTER) items = items.filter(hasRefundMark);
   if(CASE_ONLY_MINE) items = items.filter(function(c){ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }); /* 仅看我的：只显示我操作过的案件 */
   if(items.length===0){
     document.getElementById('case-rows').innerHTML = '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">该分类下暂无案件（其余阶段的界面还没设计，先把预约到店这一段做完）</div>';
@@ -4367,11 +4387,12 @@ function batchStatusLabel(c, b){
   var cancelled = krs.filter(function(it){ return it.cancelled; });
   if(cancelled.length && cancelled.length===krs.length && !(b.inTotal>0)) return '全额退款';
   if(cancelled.length) return '部分退款';
+  if(b.noDeposit) return '计入尾款'; /* 到医院后更换项目的新结算单：不收定金，金额计入尾款（2026-10-05，不再显示"已付款"） */
   return '已付款';
 }
 function settlementCardHtml(c, b){
   var st = batchStatusLabel(c, b);
-  var pc = {'待付款':['#FBF0C9','#8F6F0C'], '已付款':['var(--sage-bg)','var(--sage)'], '部分退款':['var(--terracotta-bg)','var(--terracotta)'], '全额退款':['#EDEAE2','var(--muted)']}[st];
+  var pc = {'待付款':['#FBF0C9','#8F6F0C'], '已付款':['var(--sage-bg)','var(--sage)'], '计入尾款':['var(--blue-bg)','var(--blue)'], '部分退款':['var(--terracotta-bg)','var(--terracotta)'], '全额退款':['#EDEAE2','var(--muted)']}[st];
   var krs = krAllItems(c).filter(function(it){ return it.batchId===b.id; });
   var rows = krs.map(function(it){
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+'</span><span style="font-size:12px;color:var(--slate2);">'+(it.price?formatCurrency(it.price,'KRW'):'')+' · '+krItemStatus(it)+'</span></div>';
