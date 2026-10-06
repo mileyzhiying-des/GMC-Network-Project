@@ -498,14 +498,14 @@ function renderClientProfile(name){
   var cons = (c.consents||[]).slice(-1)[0];
   var consHtml = cons ? '已签署<span class="sub">个人资料收集同意 + 健康资料处理同意 · 同意书 '+aEscC(cons.version)+' · '+aEscC(cons.ts)+' · '+aEscC(cons.source)+'</span>' : '<span style="color:var(--muted);">未登记</span><span class="sub">到店后由室长当面签署正式同意书</span>';
   el.innerHTML = row('姓名', aEscC(c.name), 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+
-    row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+row('过往医美史（客人自报）', aEscC(c.beautyHistory||'—'), 'beautyHistory', 1)+
+    row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+
     row('护照信息', aEscC(c.passport.text)+(c.passport.date?'<span class="sub">'+aEscC(c.passport.date)+'</span>':''), 'passport')+
     row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+
     '<div class="field-row"><span class="fk">隐私协议</span><span class="fv">'+consHtml+'</span><span class="fa"></span></div>';
 }
 function aEscC(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 var CLIENT_FIELD_DEF = {
-  name:{label:'姓名', kind:'text'}, beautyHistory:{label:'过往医美史', kind:'area'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
+  name:{label:'姓名', kind:'text'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
   gender:{label:'性别 / 出生日期', kind:'gender'}, passport:{label:'护照信息', kind:'text'}, phone:{label:'联系方式（手机号）', kind:'text'}
 };
 function openClientEdit(name, field){
@@ -746,21 +746,60 @@ function renderClientCases(name){
   }).join('');
 }
 
+/* 医美史记录列表（客户详情"医美史 · 案件记录"和案件基础资料共用）：年月 · 项目 · 来源 +"本次新增"标记 */
+function beautyListHtml(cl){
+  var rs = beautyRecordsOf(cl).slice().sort(function(a,b){ return (b.year*100+b.month)-(a.year*100+a.month); });
+  if(!rs.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">暂无医美史记录</div>';
+  return rs.map(function(r){
+    var isNew = beautyRecordIsNew(r);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:13px;flex-wrap:wrap;"><span style="color:var(--slate2);width:78px;flex-shrink:0;">'+beautyYm(r)+'</span><span style="flex:1;min-width:0;font-weight:700;">'+aEscC(r.project)+'</span>'+
+      (isNew ? '<span class="status-pill" style="background:var(--terracotta);color:#fff;font-weight:700;">本次新增</span>' : '')+
+      '<span style="font-size:11px;color:var(--muted);">'+aEscC(r.source)+'</span></div>';
+  }).join('');
+}
+/* 案件基础资料里的"医美史"一行：列出客户的医美史（本次新增有明显标记）+ ［＋补登］（来源"室长登记"，记为这个案件的本次新增） */
+function caseBeautyRowHtml(c){
+  var cl = clientByName(c.name);
+  return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:2px;">医美史</span><div style="flex-grow:1;">'+(cl ? beautyListHtml(cl) : '')+
+    '<button class="btn-ghost" style="margin-top:8px;padding:4px 10px;font-size:12px;" onclick="openBeautyAdd(\''+c.id+'\')">＋ 补登医美史</button>'+
+    '<div style="font-size:11px;color:var(--muted);margin-top:6px;">客人在预约页新增的标"本次新增"，到店时请和客人确认；确认基础资料后标记消失。</div></div></div>';
+}
+var BEAUTY_ADD_CASE = null;
+function openBeautyAdd(caseId){
+  BEAUTY_ADD_CASE = caseId || null;
+  var ov = document.getElementById('beauty-add-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'beauty-add-overlay'; ov.style.zIndex = 90; ov.onclick = function(e){ if(e.target===ov) closeBeautyAdd(); }; document.body.appendChild(ov); }
+  var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;';
+  ov.innerHTML = '<div class="modal-box" style="width:400px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">补登医美史（来源：室长登记）</div>'+
+    '<div class="field" style="margin-bottom:10px;"><label>时间（年 + 月）</label><input id="ba-ym" type="month" max="'+dateStr(demoNow()).slice(0,7)+'" style="'+inp+'"></div>'+
+    '<div class="field"><label>项目</label><input id="ba-project" type="text" list="ba-project-list" placeholder="从项目库选，或自由输入" style="'+inp+'"><datalist id="ba-project-list">'+projectNameOptions().map(function(n){ return '<option value="'+aEscC(n)+'">'; }).join('')+'</datalist></div>'+
+    '<div id="ba-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="closeBeautyAdd()">取消</button><button class="btn-primary" onclick="saveBeautyAdd()">保存</button></div></div>';
+  ov.classList.add('open');
+}
+function closeBeautyAdd(){ var ov = document.getElementById('beauty-add-overlay'); if(ov) ov.classList.remove('open'); }
+function saveBeautyAdd(){
+  var ym = document.getElementById('ba-ym').value, project = document.getElementById('ba-project').value.trim(), err = document.getElementById('ba-err');
+  var c = BEAUTY_ADD_CASE ? CASE_ITEMS.filter(function(x){ return x.id===BEAUTY_ADD_CASE; })[0] : null;
+  var name = c ? c.name : document.getElementById('detail-name').textContent, cl = clientByName(name);
+  if(!ym || !project){ err.textContent = '时间（年 + 月）和项目都要填'; err.style.display = 'block'; return; }
+  if(!cl) return;
+  addBeautyRecord(cl, {year:+ym.slice(0,4), month:+ym.slice(5,7), project:project, source:'室长登记', newCaseId:c ? c.id : null});
+  cl.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'补登医美史：'+ym+' '+project, dt:nowFullDt(), kind:'plain'});
+  closeBeautyAdd(); buildHistoryList(name); renderClientTimeline(name);
+  if(c){ if(typeof continuationInfo==='function' && continuationInfo(c)) onNewHistoryChanged(); else renderCaseBody(c); }
+}
 function buildHistoryList(name){
-  var records = [
-    {project:'热玛吉5代，超声刀3代，肉毒，玻尿酸', date:D(-557), origin:'客人自报', bad:'无'},
-    {project:'玻尿酸填充（苹果肌）', date:D(-1235), origin:'客人自报', bad:'轻微淤青，已恢复'}
-  ];
+  var cl = name ? clientByName(name) : null;
+  var records = cl ? '<div class="info-card"><div style="padding:2px 0;">'+beautyListHtml(cl)+'</div></div>' : '';
+  var addBtn = document.getElementById('beauty-add-btn'); if(addBtn) addBtn.style.display = cl ? '' : 'none';
   var own = name ? CASE_ITEMS.filter(function(c){ return c.name===name; }).map(function(c){
     var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : '—';
     var bd = caseStatusBadge(c);
     return '<div class="info-card"><div class="info-card-row"><div style="min-width:0;"><div class="value"><a href="#" class="info-link" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-weight:700;">'+c.caseNo+'</a> · 本院案件</div><div class="sub">'+first+'</div></div>'+
       '<span class="status-pill" style="background:'+bd[0]+';color:'+bd[1]+';">'+bd[2]+'</span></div></div>';
   }).join('') : '';
-  var selfHtml = records.map(function(r){
-    return '<div class="info-card"><div class="info-card-row"><div style="min-width:0;overflow:hidden;"><div class="value" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+r.project+'">'+r.project+'</div><div class="sub">'+r.date+' · '+r.origin+' · 不良反应：'+r.bad+'</div></div></div></div>';
-  }).join('');
-  document.getElementById('history-list').innerHTML = own + selfHtml;
+  document.getElementById('history-list').innerHTML = records + own;
 }
 
 function buildDetailLog(){

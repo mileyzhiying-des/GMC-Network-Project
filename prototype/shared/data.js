@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 10;
+var DEMO_DATA_VERSION = 11;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06） */
 var ACCOUNT_STRUCT_VERSION = 2;
 var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_SEQ', 'ACCOUNT_LOG', 'PURCHASE_REQ', 'CLINIC_SETTINGS'];
@@ -284,7 +284,7 @@ function clientPhoneOf(name){ var c = clientByName(name); return c && c.phone ? 
 function addClient(o){
   var ts = nowFullDt();
   var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), name:o.name, gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
-    passport:{text:'未登记', date:''}, consents:o.consent ? [o.consent] : [], createdBy:o.createdBy||actingName(), updated:'刚刚',
+    passport:{text:'未登记', date:''}, beautyRecords:[], consents:o.consent ? [o.consent] : [], createdBy:o.createdBy||actingName(), updated:'刚刚',
     fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'},
     timeline:[{stage:'建档', actor:o.createdBy||actingName(), actorId:(o.createdBy&&o.createdBy!==actingName()) ? undefined : currentAccountId(), action:'建档 · '+(o.source||'室长建档'), dt:ts, kind:'plain'}]};
   CLIENTS.unshift(c);
@@ -295,6 +295,26 @@ function caseBasic(c){
   var cl = clientByName(c.name), b = c.basic || {};
   return {gender:cl ? cl.gender : (b.gender||'—'), dob:cl ? (cl.dob||'—') : (b.dob||'—'), contact:cl ? (cl.phone||'—') : (b.contact||'—'), history:cl ? (cl.history||'无') : (b.history||'无')};
 }
+
+/* ---- 医美史（结构化，2026-10-06）：客户档案里一笔一笔的记录 {id, year, month, project, source:'客人自填'|'室长登记', addedAt, newCaseId} ----
+   newCaseId：老客人在预约页新增（或室长在案件基础资料里补登）时记下那个案件，用来标"本次新增"；室长确认基础资料后标记自动消失 */
+function beautyRecordsOf(cl){ return (cl && cl.beautyRecords) || []; }
+function addBeautyRecord(cl, o){
+  cl.beautyRecords = cl.beautyRecords || [];
+  var r = {id:'br'+Date.now()+Math.floor(Math.random()*1000), year:o.year, month:o.month, project:o.project, source:o.source||'室长登记', addedAt:nowFullDt(), newCaseId:o.newCaseId||null};
+  cl.beautyRecords.push(r); cl.updated = '刚刚';
+  return r;
+}
+function beautyYm(r){ return r.year+'年'+r.month+'月'; }
+/* "本次新增"标记：该案件还没结束、基础资料还没确认，才显示 */
+function beautyRecordIsNew(r){
+  if(!r.newCaseId) return false;
+  var c = CASE_ITEMS.filter(function(x){ return x.id===r.newCaseId; })[0];
+  return !!c && !isEnded(c) && !c.materialsConfirmed;
+}
+/* 这个案件"本次新增"的医美史（延续既往面诊判断"有新增医美史"读它；不看标记是否还显示） */
+function newBeautyRecordsOf(c){ return beautyRecordsOf(clientByName(c.name)).filter(function(r){ return r.newCaseId===c.id; }); }
+function projectNameOptions(){ return PROJECT_LIBRARY.filter(function(p){ return p.active!==false; }).map(function(p){ return p.name; }); }
 
 /* ================= 客户自助预约（2026-10-06·B；页面是 booking.html + shared/booking.js，规则和数据都在这里） ================= */
 /* ---- 短信（演示：不真的发，全部记在 SMS_LOG；模板读诊所设定，验证码格式固定） ---- */
@@ -357,7 +377,7 @@ function findPlaceholder(id){
 }
 
 /* ---- 提交自助预约（booking.html 第 7 步）：建客户档案（新客人）/ 更新老客人资料、记同意书、建预约案件、占位转预约、通知 IN、发确认短信 ----
-   f：{entry:'web'|'link'|'walkin', phId, date, time, phone, name, gender, dob, history, beautyHistory, purpose, note, rebookFrom(取消后重新预约的原案件 id)} */
+   f：{entry:'web'|'link'|'walkin', phId, date, time, phone, name, gender, dob, history, beauty[{ym:'2024-03', project}], purpose, note, rebookFrom(取消后重新预约的原案件 id)} */
 function submitSelfBooking(f){
   if(f.entry==='walkin'){ var cs = currentSlotNow(); f.date = cs.date; f.time = cs.time; }
   else { var why = slotBlockReason(f.date, f.time, f.phId); if(why) return {ok:false, reason:why}; }
@@ -365,7 +385,6 @@ function submitSelfBooking(f){
   var cl = clientByPhone(f.phone), isNew = !cl;
   if(isNew){
     cl = addClient({name:f.name, phone:f.phone, gender:f.gender, dob:f.dob, history:(f.history||'').trim()||'无', createdBy:'客人自助', source:'客户自助预约建档', consent:consent});
-    cl.beautyHistory = (f.beautyHistory||'').trim();
   } else {
     /* 老客人资料有变化由室长到店接待时修改，预约页不提供修改：这里只记同意书（版本更新过才会重新勾选），不改客户档案 */
     if(f.consentGiven) cl.consents.push(consent);
@@ -374,6 +393,8 @@ function submitSelfBooking(f){
   if(f.phId) RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==f.phId; }); /* 占位转为预约来访 */
   var c = createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose);
   c.visitNote = (f.note||'').trim(); c.bookEntry = f.entry; c.remindSent = false;
+  /* 医美史（结构化）：年月 + 项目 + 来源"客人自填"；老客人新增的标"本次新增"（到店时室长在基础资料里看得到并确认；延续既往面诊的"有新增医美史"读它） */
+  (f.beauty||[]).forEach(function(b){ if(b && b.ym && b.project) addBeautyRecord(cl, {year:+b.ym.slice(0,4), month:+b.ym.slice(5,7), project:b.project, source:'客人自填', newCaseId:isNew ? null : c.id}); });
   if(f.entry==='walkin') c.logEntries[0].action = '到店自己填资料（平板/手机）预约成功，生成 Case ID '+c.caseNo;
   else if(f.entry==='link') c.logEntries[0].action = '客人通过预约链接填完资料，预约成功，生成 Case ID '+c.caseNo;
   var when = dateLabel(f.date)+' '+f.time, tail = '：'+cl.name+'（'+c.caseNo+'）'+when+(c.visitNote ? ' · '+c.visitNote : '');
@@ -489,14 +510,14 @@ function simulateCustomerReschedule(caseId, newDow, newTime){
    fallback {label,bg,fg}（没有案件时客户列表"当前进度"的兜底状态）、timeline 客户级 Timeline（建档 / 基础信息修改，案件开始/结案由案件算出，见 renderClientTimeline）。
    有案件时"当前面诊·施术进度"这一列实时读对应 CASE_ITEMS 的徽章——见 clientCaseStatus()。 */
 var CLIENTS = [
-  {id:'cl1', name:'Siti Rahayu', gender:'女', dob:'1992-03-08', phone:'+62 000-0000-0001', note:'无', history:'对青霉素过敏；无慢性病', beautyHistory:'2023 年做过玻尿酸填充（苹果肌）；2024 年做过水光针', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'},{stage:'基础信息修改', actor:'Dewi', action:'补录护照信息、确认医美史', dt:D(-16)+' 11:15', kind:'plain'}]},
+  {id:'cl1', name:'Siti Rahayu', gender:'女', dob:'1992-03-08', phone:'+62 000-0000-0001', note:'无', beautyRecords:[{id:'brs1', year:2023, month:5, project:'玻尿酸填充（苹果肌）', source:'客人自填', addedAt:D(-17)+' 10:02', newCaseId:null},{id:'brs2', year:2024, month:8, project:'水光针', source:'客人自填', addedAt:D(-18)+' 10:02', newCaseId:null}], history:'对青霉素过敏；无慢性病', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'},{stage:'基础信息修改', actor:'Dewi', action:'补录护照信息、确认医美史', dt:D(-16)+' 11:15', kind:'plain'}]},
   {id:'cl2', name:'Andi Wijaya', gender:'男', dob:'1987-06-10', phone:'+62 812-3000-0002', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
   {id:'cl3', name:'Yuni Kartika', gender:'女', dob:'1990-11-17', phone:'+62 812-3000-0003', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
   {id:'cl4', name:'Maya Putri', gender:'女', dob:'1993-04-24', phone:'+62 812-3000-0004', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
   {id:'cl5', name:'Putri Wulandari', gender:'女', dob:'1996-09-06', phone:'+62 812-3000-0005', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
   {id:'cl6', name:'Dedi Prasetyo', gender:'男', dob:'1999-02-13', phone:'+62 812-3000-0006', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
   {id:'cl7', name:'Budi Santoso', gender:'男', dob:'1985-07-20', phone:'+62 812-3000-0007', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[], createdBy:'Rina', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
-  {id:'cl8', name:'Ayu Lestari', gender:'女', dob:'1988-12-27', phone:'+62 000-0000-0002', note:'无', history:'轻度哮喘；对海鲜过敏', beautyHistory:'2022 年做过热玛吉；2025 年做过肉毒（下颌线）', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v0.9', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl8', name:'Ayu Lestari', gender:'女', dob:'1988-12-27', phone:'+62 000-0000-0002', note:'无', beautyRecords:[{id:'bra1', year:2022, month:3, project:'热玛吉', source:'客人自填', addedAt:D(-17)+' 10:02', newCaseId:null},{id:'bra2', year:2025, month:6, project:'肉毒（下颌线）', source:'客人自填', addedAt:D(-18)+' 10:02', newCaseId:null}], history:'轻度哮喘；对海鲜过敏', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v0.9', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
   {id:'cl9', name:'Fajar Nugroho', gender:'男', dob:'1991-05-09', phone:'+62 812-3000-0009', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
   {id:'cl10', name:'Dinda Anggraini', gender:'女', dob:'1994-10-16', phone:'+62 812-3000-0010', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'刚刚', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
   {id:'cl11', name:'Nadia Permata', gender:'女', dob:'1997-03-23', phone:'+62 812-3000-0011', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'今天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
@@ -655,7 +676,7 @@ function makeCase(o){
     linkedFiles:o.linkedFiles||[], manualAttachments:o.manualAttachments||[], materialsDate:o.materialsDate||null, /* §7 附件 */
     consultFeeWaived:o.consultFeeWaived||null, /* 面诊费免除（2026-09-30）：{reason, note}，免除时财务结果按无收入判断 */
     localTrack:!!o.localTrack, /* 2026-09-30：本地案件标记（面诊取消后做本地项目 / 无法协调后做本地管理），用于状态推算：选择项目→本地管理 */
-    newBeautyHistory:o.newBeautyHistory||'', needsConsultTouched:false, /* 2026-10-01 延续既往面诊：基础资料新增医美史 / 室长是否手动选过面诊需求 */
+    needsConsultTouched:false, /* 2026-10-01 延续既往面诊：基础资料新增医美史 / 室长是否手动选过面诊需求 */
     reportDate:o.reportDate||null, contJudged:false, reuseAfterConsult:false,
     settleTab:null, continueNew:false, /* 项目列表tab里结算单2级tab当前选中的序号，null=最新一张 */
     localAsk:!!o.localAsk, /* 赴韩项目"无法协调"退款后，询问是否做本地管理 */
@@ -1628,7 +1649,7 @@ function materialsCardHtml(c){
       '<span style="font-size:12px;color:var(--muted);">Rp</span><input type="number" id="cf-budget-max" placeholder="最高" value="'+(c.budgetMax||'')+'" style="width:120px;" oninput="saveBudgetDraft(\'budgetMax\',this.value)">'+
       '</div></div>'+
     '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return f.label; }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>'+
-    (ci0 ? '<div class="case-field-row"><span class="fk">新增医美史（选填）</span><input type="text" id="cf-new-history" placeholder="本次新增的医美史（例如：2个月前做了XX）" value="'+(c.newBeautyHistory||'').replace(/"/g,'&quot;')+'" oninput="saveMaterialsDraft(\'newBeautyHistory\',this.value)" onchange="onNewHistoryChanged()"></div>' : '')+
+    caseBeautyRowHtml(c)+
     '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
     directorRowHtml(c)+
     '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div>'+
@@ -1684,14 +1705,14 @@ function reportOverMonth(src){
 
 function continuationInfo(c){
   var src = reportSrcOf(c); if(!src) return null;
-  return {src:src, overdue:reportOverMonth(src), reportDate:reportDateOf(src), newHistory:!!(c.newBeautyHistory && c.newBeautyHistory.trim())};
+  return {src:src, overdue:reportOverMonth(src), reportDate:reportDateOf(src), newHistory:newBeautyRecordsOf(c).length>0};
 }
 
 function onNewHistoryChanged(){
   var c = getCurrentCase(); if(!c) return;
   var i = continuationInfo(c);
   if(i && !i.overdue && !c.needsConsultTouched){ /* 有新增医美史：默认面诊（付费），室长可以改 */
-    c.needsConsult = c.newBeautyHistory.trim() ? true : null;
+    c.needsConsult = i.newHistory ? true : null;
   }
   c.feeDraft = null;
   renderCaseBody(c);

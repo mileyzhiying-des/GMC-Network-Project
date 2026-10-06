@@ -22,7 +22,7 @@ function bkInit(){
   var q = new URLSearchParams(location.search), lang = null;
   try{ lang = localStorage.getItem('gmc_book_lang'); }catch(e){}
   BOOK_LANG = (q.get('lang')==='zh' || q.get('lang')==='id') ? q.get('lang') : (lang==='zh' ? 'zh' : 'id');
-  BK = {entry:'web', step:0, f:{date:'', time:'', phone:'', name:'', gender:'女', dob:'', history:'', beautyHistory:'', purpose:'面诊商谈', note:'', c1:false, c2:false, phId:null, rebookFrom:null},
+  BK = {entry:'web', step:0, f:{date:'', time:'', phone:'', name:'', gender:'女', dob:'', history:'', beauty:[], purpose:'面诊商谈', note:'', c1:false, c2:false, phId:null, rebookFrom:null},
         err:'', otp:null, verified:false, phoneLocked:false, client:null, mismatch:false, done:null, dayPick:null, view:null};
   if(q.get('view')){ BK.entry = 'view'; BK.view = {caseNo:q.get('view'), stage:'phone'}; }
   else if(q.get('walkin')){
@@ -38,7 +38,7 @@ function bkInit(){
 }
 function bkSetLang(l){ BOOK_LANG = l; try{ localStorage.setItem('gmc_book_lang', l); }catch(e){} bkRender(); }
 
-function bkRender(){
+function bkRender(keepScroll){
   var root = document.getElementById('bk-root'); if(!root) return;
   document.documentElement.lang = BOOK_LANG;
   document.getElementById('bk-sub').textContent = bt('brand.sub');
@@ -46,7 +46,7 @@ function bkRender(){
   if(BK.entry==='view' && typeof bkRenderView === 'function') root.innerHTML = bkRenderView();
   else if(BK.done && typeof bkRenderDone === 'function') root.innerHTML = bkRenderDone();
   else root.innerHTML = bkRenderStep();
-  window.scrollTo(0, 0);
+  if(!keepScroll) window.scrollTo(0, 0);
 }
 
 /* ---- 步骤框架 ---- */
@@ -66,6 +66,10 @@ function bkFrame(titleKey, bodyHtml){
 function bkGo(i){ BK.step = i; BK.err = ''; bkRender(); }
 function bkNextStep(){ var i = BK.step + 1; while(i < BK_STEPS.length && bkSkipStep(BK_STEPS[i])) i++; bkGo(i); }
 function bkPrevStep(){ var i = BK.step - 1; while(i > 0 && bkSkipStep(BK_STEPS[i])) i--; if(i<0) i = 0; bkGo(i); }
+/* 固定在画面底部的操作栏（手机版面）：错误提示 + 按钮一行 */
+function bkFooter(err, buttonsHtml){
+  return '<div class="bk-footer">'+(err ? '<div class="bk-err" style="margin:0 0 8px;">'+bkH(err)+'</div>' : '')+'<div class="bk-footer-row">'+buttonsHtml+'</div></div>';
+}
 function bkNav(nextHandler, showBack){
   return (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+
     '<button class="bk-btn" onclick="'+nextHandler+'">'+bt(nextHandler==='bkSubmit()' ? 'btn.submit' : 'btn.next')+'</button>'+
@@ -144,7 +148,7 @@ function bkVerify(){
 /* 手机号找老客人：有 → 第 3、5 步自动带出资料；没有 → 新客人 */
 function bkLoadClient(){
   var cl = clientByPhone(BK.f.phone); BK.client = cl;
-  if(cl){ var f = BK.f; f.phone = cl.phone; f.name = cl.name; f.gender = cl.gender==='男' ? '男' : '女'; f.dob = cl.dob||''; f.history = cl.history==='无' ? '' : (cl.history||''); f.beautyHistory = cl.beautyHistory||''; }
+  if(cl){ var f = BK.f; f.phone = cl.phone; f.name = cl.name; f.gender = cl.gender==='男' ? '男' : '女'; f.dob = cl.dob||''; f.history = cl.history==='无' ? '' : (cl.history||''); }
 }
 
 /* ---- 第 3 步：个人资料（新客人填姓名/性别/出生日期；老客人自动带出，确认即可；姓名和已登记的不同 → 问是不是本人） ---- */
@@ -171,7 +175,7 @@ function bkMismatch(isMe){
   if(isMe){ BK.mismatchOk = true; BK.mismatch = false; bkLoadClient(); BK.err = ''; return bkNextStep(); } /* 是本人：带出登记的资料 */
   /* 不是本人：请改用其他手机号，重新验证 */
   BK.mismatch = false; BK.mismatchOk = false; BK.verified = false; BK.client = null; BK.otp = null; BK.phoneLocked = false;
-  BK.f.phone = ''; BK.f.name = ''; BK.f.dob = ''; BK.f.history = ''; BK.f.beautyHistory = '';
+  BK.f.phone = ''; BK.f.name = ''; BK.f.dob = ''; BK.f.history = ''; BK.f.beauty = [];
   BK.step = BK_STEPS.indexOf('phone'); BK.err = bt('phone.other'); bkRender();
 }
 
@@ -189,9 +193,42 @@ function bkStepHealth(){
   return bkFrame('s.health', bkField(bt('health.history'), '<textarea rows="4" placeholder="'+bkH(bt('health.ph'))+'" oninput="bkSet(\'history\',this.value)">'+bkH(f.history)+'</textarea>')+bkNav('bkNextStep()', true));
 }
 
-/* ---- 医美史（可跳过，新老客人都有；一笔一行，见下面"医美史"部分） ---- */
+/* ---- 医美史（可跳过，新老客人都有）：一笔一行 = 时间（年 + 月，手机原生选择器）+ 项目（从项目库选或自由输入）；［＋增加医美史］往下加一行并自动捲到新行；老客人上方先列出已登记的（只读） ---- */
+var BK_BR_SEQ = 1;
+function bkBeautyRows(){ return BK.f.beauty || (BK.f.beauty = []); }
 function bkStepBeauty(){
-  return bkFrame('s.beauty', '<div class="bk-info">'+bt('beauty.hint')+'</div>'+bkNav('bkNextStep()', true));
+  var cl = BK.client, rows = bkBeautyRows(), cur = dateStr(demoNow()).slice(0,7);
+  var reg = '';
+  if(cl && beautyRecordsOf(cl).length){
+    reg = '<div class="bk-sub" style="margin-bottom:6px;"><b>'+bt('beauty.registered')+'</b></div><div class="bk-info" style="margin-bottom:14px;">'+
+      beautyRecordsOf(cl).slice().sort(function(a,b){ return (b.year*100+b.month)-(a.year*100+a.month); }).map(function(r){ return '<div style="padding:3px 0;">'+r.year+'-'+pad2(r.month)+' · <b>'+bkH(r.project)+'</b></div>'; }).join('')+'</div>';
+  }
+  var rowHtml = rows.map(function(r, i){
+    return '<div class="bk-br" id="bk-br-'+r.id+'"><div class="bk-br-head"><span>#'+(i+1)+'</span><button type="button" class="bk-x" aria-label="delete" onclick="bkDelBeauty('+i+')">✕</button></div>'+
+      bkField(bt('beauty.when'), '<input type="month" value="'+bkH(r.ym)+'" max="'+cur+'" onchange="bkBeautySet('+i+',\'ym\',this.value)">')+
+      bkField(bt('beauty.project'), '<input type="text" list="bk-proj-list" value="'+bkH(r.project)+'" placeholder="'+bkH(bt('beauty.projectPh'))+'" oninput="bkBeautySet('+i+',\'project\',this.value)">')+'</div>';
+  }).join('');
+  return bkFrame('s.beauty', '<div class="bk-info">'+bt('beauty.hint')+'</div>'+reg+rowHtml+
+    '<datalist id="bk-proj-list">'+projectNameOptions().map(function(n){ return '<option value="'+bkH(n)+'">'; }).join('')+'</datalist>'+
+    '<button type="button" class="bk-btn ghost" style="margin-top:0;" onclick="bkAddBeauty()">'+bt('beauty.add')+'</button>'+
+    bkFooter(BK.err, '<button class="bk-btn ghost" onclick="bkBeautySkip()">'+bt('beauty.skip')+'</button><button class="bk-btn" onclick="bkBeautyNext()">'+bt('btn.next')+'</button>', true));
+}
+function bkBeautySet(i, k, v){ var r = bkBeautyRows()[i]; if(r) r[k] = v; }
+function bkAddBeauty(){
+  var rows = bkBeautyRows(), id = 'n'+(BK_BR_SEQ++); rows.push({id:id, ym:'', project:''}); BK.err = ''; bkRender(true);
+  var el = document.getElementById('bk-br-'+id); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); /* 自动捲到新的那一行 */
+}
+function bkDelBeauty(i){ bkBeautyRows().splice(i, 1); BK.err = ''; bkRender(true); }
+function bkBeautySkip(){ BK.f.beauty = []; BK.err = ''; bkNextStep(); }
+function bkBeautyNext(){
+  var rows = bkBeautyRows().filter(function(r){ return (r.ym||'') || (r.project||'').trim(); }); /* 整行没填的直接丢掉 */
+  var cur = dateStr(demoNow()).slice(0,7);
+  for(var i=0;i<rows.length;i++){
+    if(!rows[i].ym || !(rows[i].project||'').trim()){ BK.f.beauty = rows; BK.err = bt('beauty.err'); return bkRender(true); }
+    if(rows[i].ym > cur){ BK.f.beauty = rows; BK.err = bt('beauty.errFuture'); return bkRender(true); }
+  }
+  rows.forEach(function(r){ r.project = r.project.trim(); });
+  BK.f.beauty = rows; BK.err = ''; bkNextStep();
 }
 
 /* ---- 第 6 步：同意（隐私政策 + 两项必勾；记录同意书版本 + 时间） ---- */
@@ -212,13 +249,13 @@ function bkConsentNext(){
 /* ---- 第 7 步：确认并提交 ---- */
 function bkStepConfirm(){
   var f = BK.f, row = function(k, v){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(v)+'</span></div>'; };
-  return bkFrame('s.confirm', row('sum.time', bkTimeText(f.date, f.time))+(BK.client ? '<div class="bk-row"><span>'+bt('sum.name')+'</span><span style="text-align:right;">'+bkH(f.name)+'<br><small style="color:var(--muted);">'+bt('sum.nameNote')+'</small></span></div>' : row('sum.name', f.name))+row('sum.phone', f.phone)+row('sum.purpose', bt('purpose.'+f.purpose))+(f.note ? row('sum.note', f.note) : '')+
+  return bkFrame('s.confirm', row('sum.time', bkTimeText(f.date, f.time))+(BK.client ? '<div class="bk-row"><span>'+bt('sum.name')+'</span><span style="text-align:right;">'+bkH(f.name)+'<br><small style="color:var(--muted);">'+bt('sum.nameNote')+'</small></span></div>' : row('sum.name', f.name))+row('sum.phone', f.phone)+row('sum.purpose', bt('purpose.'+f.purpose))+(f.note ? row('sum.note', f.note) : '')+((f.beauty||[]).length ? row('sum.beauty', bt('sum.beautyN', {n:f.beauty.length})) : '')+
     '<div style="height:12px;"></div>'+bkNav('bkSubmit()', true));
 }
 function bkSubmit(){
   var f = BK.f, old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
   var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, gender:f.gender, dob:f.dob,
-    history:f.history, beautyHistory:f.beautyHistory, purpose:f.purpose, note:f.note, rebookFrom:old ? old.id : null});
+    history:f.history, beauty:f.beauty, purpose:f.purpose, note:f.note, rebookFrom:old ? old.id : null});
   if(!res.ok){ BK.err = bt('time.taken'); BK.f.time = ''; if(BK.entry!=='walkin') BK.step = 0; return bkRender(); }
   Store.save(); BK.done = res; bkRender();
 }
