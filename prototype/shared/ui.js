@@ -18,6 +18,7 @@ function openAdminPage(key, isRefresh){
   var body = document.getElementById('admin-body');
   if(ADMIN_RENDER[key]) ADMIN_RENDER[key](body, isRefresh);
   else body.innerHTML = '<div class="card" style="padding:28px;color:var(--slate2);line-height:1.8;">「'+p.label+'」页面在后续部分实现。</div>';
+  if(typeof adminBanner === 'function') body.insertAdjacentHTML('afterbegin', adminBanner());
   if(CURRENT_PAGE_ID !== 'in-admin') NAV_STACK.push(CURRENT_PAGE_ID);
   showPage('in-admin');
 }

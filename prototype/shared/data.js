@@ -114,12 +114,13 @@ var ACCOUNTS = [
   {id:'A4',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:D(-29)+' 11:00', activatedAt:D(-28)+' 09:00', disabledAt:D(-8)+' 17:00', history:[{ts:D(-28)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:D(-8)+' 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]},
   {id:'A5',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]}
 ];
+var PURCHASE_REQ = null; /* 管理者加购"管理者账号"时发给老板的验证码：{code, by, qty, exp(毫秒时间戳), used}；演示：老板登录后在页面顶部看到 */
 var ACCOUNT_SEQ = 5; /* 下一个加购账号编号 = 'A'+(ACCOUNT_SEQ+1) */
 /* 操作日志（owner/管理者在"操作日志"页看；第八部分做页面）：时间、操作账号 + 当时的姓名、内容、类型 */
 var ACCOUNT_LOG = [
-  {id:'log1', ts:D(-2)+' 14:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购账号 A3（一般室长）'},
-  {id:'log2', ts:D(-8)+' 17:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'取消加购账号 A4（Sari）'},
-  {id:'log3', ts:D(-1)+' 10:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购管理者账号 A5（老板验证码确认）'}
+  {id:'log1', ts:D(-2)+' 14:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'购买', target:'A3', text:'购买加购账号 A3（一般室长）'},
+  {id:'log2', ts:D(-8)+' 17:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'退订', target:'A4', text:'退订加购账号 A4（Sari）'},
+  {id:'log3', ts:D(-1)+' 10:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'购买', target:'A5', text:'购买加购管理者账号 A5（老板验证码确认）'}
 ];
 /* 当前登录的账号：存在 sessionStorage 的 gmc_acct（每个标签页各自登录，互不影响）；没登录、账号被停用/被重置成待激活，都返回 null */
 function currentAccountId(){
@@ -139,9 +140,9 @@ function syncInCoordinators(){
   IN_COORDINATORS.length = 0; Array.prototype.push.apply(IN_COORDINATORS, names);
 }
 /* 写操作日志：当前账号 + 当时的姓名 */
-function logOp(type, text){
+function logOp(type, text, sub, target){ /* type：账号管理 / 设定变更 / 其他；sub：购买 / 退订 / 重设 / 激活；target：被操作的账号编号（账号详情里看"该账号的 log"） */
   var a = currentAccount() || {id:'?', name:''};
-  ACCOUNT_LOG.unshift({id:'log'+Date.now()+Math.floor(Math.random()*1000), ts:nowFullDt(), accountId:a.id, name:a.name, type:type, text:text});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now()+Math.floor(Math.random()*1000), ts:nowFullDt(), accountId:a.id, name:a.name, type:type, sub:sub||'', target:target||'', text:text});
 }
 
 function memosOn(date){ return CAL_MEMOS.filter(function(m){ return m.date===date && (m.scope==='公开' || m.author===ME_NAME); }); }

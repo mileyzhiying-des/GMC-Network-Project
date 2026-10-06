@@ -204,3 +204,153 @@ function saveClinicSettings(){
   openAdminPage('clinic', true);
   showToast('诊所设定已保存', '已立即生效，并通知所有室长', null);
 }
+
+/* ================= 账号管理（老板、管理者；IN-SETT-01 第 3 节，A6） ================= */
+var ROLE_SHORT = {owner:'老板', manager:'管理者', general:'一般室长'};
+var STATUS_STYLE = {active:['使用中','var(--sage-bg)','var(--sage)'], pending:['待激活','#FBF0C9','#8F6F0C'], disabled:['已停用','#EDEAE2','var(--muted)']};
+var ACCOUNT_PRICE_TEXT = '价格待定'; /* Notion：价格、计费周期待代表确认 */
+function acctStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span class="status-pill" style="background:'+s[1]+';color:'+s[2]+';">'+s[0]+'</span>'; }
+
+/* 老板顶部横幅：管理者申请加购管理者账号时，验证码演示在老板的页面里显示 */
+function adminBanner(){
+  var a = currentAccount(), r = PURCHASE_REQ;
+  if(!a || a.role!=='owner' || !r || r.used || Date.now() > r.exp) return '';
+  return '<div style="background:#FBF0C9;color:#8F6F0C;border-radius:10px;padding:12px 16px;font-size:13px;line-height:1.7;">🔐 <b>验证码（演示）</b>：'+aEsc(accountLabel(r.by))+' 申请加购 '+r.qty+' 个管理者账号，需要你确认。验证码 <b style="font-size:16px;letter-spacing:2px;">'+r.code+'</b>（'+Math.max(1, Math.round((r.exp-Date.now())/60000))+' 分钟内有效），请告诉对方。真实版会发到老板的手机/通知。</div>';
+}
+
+function acctRowsHtml(){
+  var me = currentAccount();
+  var order = {owner:0, manager:1, general:2};
+  var list = ACCOUNTS.slice().sort(function(x,y){ return (order[x.role]-order[y.role]) || (x.id==='OWN' ? -1 : y.id==='OWN' ? 1 : parseInt(x.id.slice(1),10)-parseInt(y.id.slice(1),10)); });
+  var head = '<div class="trow head" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;"><span>账号 ID</span><span>类型</span><span>当前使用人</span><span>席位</span><span>状态</span></div>';
+  return head + list.map(function(a){
+    var who = a.status==='pending' ? '<span style="color:var(--muted);">（还没有使用人）</span>' :
+      '<span style="display:inline-flex;align-items:center;gap:10px;">'+acctPhotoHtml(a, 30)+'<span><b>'+aEsc(a.name)+'</b><span style="color:var(--muted);font-size:11px;margin-left:6px;">'+aEsc(a.position||'')+'</span></span></span>';
+    return '<div class="trow" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;cursor:pointer;" onclick="openAcctDetail(\''+a.id+'\')"><span><b>'+a.id+'</b>'+(a.id===me.id?'<span style="font-size:10px;color:var(--navy);margin-left:6px;">我</span>':'')+'</span><span>'+ROLE_SHORT[a.role]+'</span><span>'+who+'</span><span>'+(a.seat==='basic'?'基础':'加购')+'</span><span>'+acctStatusPill(a)+'</span></div>';
+  }).join('');
+}
+ADMIN_RENDER.accounts = function(el){
+  var cnt = function(role, seat){ return ACCOUNTS.filter(function(a){ return a.role===role && a.seat===seat && a.status!=='disabled'; }).length; };
+  var addonMgr = cnt('manager','addon'), addonGen = cnt('general','addon'), pend = ACCOUNTS.filter(function(a){ return a.status==='pending'; }).length;
+  var stat = function(label, big, sub){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:150px;"><div style="font-size:11px;color:var(--muted);">'+label+'</div><div style="font-size:22px;font-weight:700;margin:4px 0;">'+big+'</div><div style="font-size:11px;color:var(--slate2);">'+sub+'</div></div>'; };
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('账号管理')+'</div>'+
+    '<button class="btn-primary" onclick="openBuyAccounts()">＋ 加购账号</button></div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+
+      stat('基本席位', '3 个', '老板 1 · 管理者 1 · 一般室长 1（不能退订）')+
+      stat('加购管理者', addonMgr+' 个', ACCOUNT_PRICE_TEXT)+
+      stat('加购一般室长', addonGen+' 个', ACCOUNT_PRICE_TEXT)+
+      stat('待激活', pend+' 个', '已购买/已重设，等使用人激活')+
+    '</div>'+
+    '<div class="card" style="padding:4px 20px;">'+acctRowsHtml()+'</div>'+
+    '<div style="font-size:11px;color:var(--muted);line-height:1.7;">点一行看使用人历史和该账号的操作记录。重设密码：账号变"待激活"，原使用人立即登出，下一位在登录页用"首次激活"接手（自己填手机号、设密码、填姓名/职位/证件照）；只能重设，不能替别人设密码。退订只对加购账号，立即停用，之前的记录保留。</div>';
+};
+
+/* ---- 通用弹窗（账号详情、确认、加购共用一个壳） ---- */
+function acctModal(html){
+  var ov = document.getElementById('acct-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'acct-overlay'; ov.style.zIndex = 90; ov.onclick = function(e){ if(e.target===ov) closeAcctModal(); }; document.body.appendChild(ov); }
+  ov.innerHTML = html; ov.classList.add('open');
+}
+function closeAcctModal(){ var ov = document.getElementById('acct-overlay'); if(ov) ov.classList.remove('open'); }
+function acctCanReset(a){ var me = currentAccount(); return !!(me && a.status==='active' && a.role!=='owner' && a.id!==me.id); }
+function acctCanUnsub(a){ var me = currentAccount(); return !!(me && a.seat==='addon' && a.status!=='disabled' && a.id!==me.id); }
+
+function openAcctDetail(id){
+  var a = accountById(id); if(!a) return;
+  var hist = (a.history||[]).slice().reverse().map(function(h){ return '<div style="padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;line-height:1.6;"><span style="color:var(--muted);">'+h.ts+'</span>　<b>'+aEsc(h.type)+'</b>　'+aEsc(h.text)+'<span style="color:var(--muted);">　—— '+aEsc(h.by||'')+'</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无</div>';
+  var logs = ACCOUNT_LOG.filter(function(l){ return l.target===id; }).map(function(l){ return '<div style="padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;line-height:1.6;"><span style="color:var(--muted);">'+l.ts+'</span>　'+aEsc(l.text)+'<span style="color:var(--muted);">　—— '+aEsc(l.name||'')+'（'+aEsc(l.accountId)+'）</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无</div>';
+  var btns = (acctCanReset(a) ? '<button class="btn-outline" onclick="confirmResetAcct(\''+id+'\')">重设密码</button>' : '')+
+    (a.seat==='addon' && acctCanUnsub(a) ? '<button class="btn-outline" style="color:#C1454A;border-color:#C1454A;" onclick="confirmUnsubAcct(\''+id+'\')">退订</button>' : '');
+  acctModal('<div class="modal-box" style="width:560px;max-height:84vh;overflow-y:auto;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">账号 '+id+' · '+ROLE_SHORT[a.role]+'</span><span style="cursor:pointer;color:var(--slate);" onclick="closeAcctModal()">✕</span></div>'+
+    '<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">'+(a.status==='pending'?'':acctPhotoHtml(a, 52))+'<div style="font-size:13px;line-height:1.8;">'+(a.status==='pending'?'<span style="color:var(--muted);">（还没有使用人）</span>':'<b>'+aEsc(a.name)+'</b> · '+aEsc(a.position||'—')+'<br>手机 '+aEsc(a.phone||'—'))+'<br>'+acctStatusPill(a)+'　'+(a.seat==='basic'?'基础席位（不能退订）':'加购账号')+'</div></div>'+
+    '<div style="font-size:13px;font-weight:700;margin:6px 0;">使用人历史</div>'+hist+
+    '<div style="font-size:13px;font-weight:700;margin:14px 0 6px;">该账号的操作记录</div>'+logs+
+    '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">'+btns+'<button class="btn-primary" onclick="closeAcctModal()">关闭</button></div></div>');
+}
+
+function acctConfirm(title, text, okLabel, okJs, danger){
+  acctModal('<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">'+title+'</div><div style="font-size:13px;line-height:1.8;margin-bottom:16px;">'+text+'</div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-outline" onclick="closeAcctModal()">取消</button><button class="btn-primary" style="'+(danger?'background:#C1454A;':'')+'" onclick="'+okJs+'">'+okLabel+'</button></div></div>');
+}
+function confirmResetAcct(id){
+  var a = accountById(id); if(!a || !acctCanReset(a)) return;
+  acctConfirm('重设密码', '账号 <b>'+id+'</b>（当前使用人 <b>'+aEsc(a.name)+'</b>）将变成「待激活」，原使用人<b>立即登出</b>；下一位使用人需要在登录页用「首次激活」接手。确定重设吗？', '确定重设', 'doResetAcct(\''+id+'\')');
+}
+function doResetAcct(id){
+  var a = accountById(id); if(!a || !acctCanReset(a)) return;
+  var me = currentAccount(), old = a.name, ts = nowFullDt();
+  a.history.push({ts:ts, type:'重设', text:'重设密码：原使用人 '+old+' 立即登出，账号变待激活', by:accountLabel(me.id)});
+  a.status = 'pending'; a.password = null; a.name = ''; a.position = ''; a.photo = ''; a.phone = ''; a.activatedAt = '';
+  logOp('账号管理', accountLabel(me.id)+' 重设了账号 '+id+' 的密码（原使用人 '+old+'）', '重设', id);
+  syncInCoordinators();
+  closeAcctModal(); openAdminPage('accounts', true);
+  showToast('已重设 '+id, '账号变为待激活，原使用人已登出', null);
+}
+function confirmUnsubAcct(id){
+  var a = accountById(id); if(!a || !acctCanUnsub(a)) return;
+  var who = a.status==='pending' ? '（还没有使用人）' : '（当前使用人 <b>'+aEsc(a.name)+'</b>）';
+  acctConfirm('退订账号', '<b>'+id+'</b>'+who+'会立刻无法登录，确定退订吗？之前的记录会保留。', '确定退订', 'doUnsubAcct(\''+id+'\')', true);
+}
+function doUnsubAcct(id){
+  var a = accountById(id); if(!a || !acctCanUnsub(a)) return;
+  var me = currentAccount(), old = a.name, ts = nowFullDt();
+  a.history.push({ts:ts, type:'退订', text:'退订加购账号'+(old?'（使用人 '+old+'）':''), by:accountLabel(me.id)});
+  a.status = 'disabled'; a.disabledAt = ts;
+  logOp('账号管理', accountLabel(me.id)+' 退订了加购账号 '+id+(old?'（'+old+'）':''), '退订', id);
+  syncInCoordinators();
+  closeAcctModal(); openAdminPage('accounts', true);
+  showToast('已退订 '+id, '账号已停用，记录保留', null);
+}
+
+/* ---- 加购：选类型和数量 →（管理者加购管理者账号：先要老板验证码）→ 演示付款 → 生成新账号（待激活） ---- */
+var BUY = {role:'general', qty:1, step:'pick', err:''};
+function openBuyAccounts(){ BUY = {role:'general', qty:1, step:'pick', err:''}; renderBuy(); }
+function buyNeedsOwnerCode(){ var me = currentAccount(); return BUY.role==='manager' && me && me.role!=='owner'; }
+function renderBuy(){
+  var err = BUY.err ? '<div class="error-text" style="display:block;margin-bottom:10px;">'+BUY.err+'</div>' : '', body = '';
+  if(BUY.step==='pick'){
+    body = '<div class="field" style="margin-bottom:12px;"><label>账号类型</label><select onchange="BUY.role=this.value;renderBuy()" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="general"'+(BUY.role==='general'?' selected':'')+'>一般室长账号</option><option value="manager"'+(BUY.role==='manager'?' selected':'')+'>管理者账号</option></select></div>'+
+      '<div class="field" style="margin-bottom:12px;"><label>数量</label><input type="number" min="1" max="10" value="'+BUY.qty+'" oninput="BUY.qty=parseInt(this.value,10)||0" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'+
+      '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">单价：'+ACCOUNT_PRICE_TEXT+'（演示付款，不收真实款项）。'+(buyNeedsOwnerCode()?'<br><b>管理者加购管理者账号，需要老板确认：</b>点下一步后验证码会发给老板，你输入老板告诉你的验证码后才能付款。':'')+'</div>'+
+      err+'<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-outline" onclick="closeAcctModal()">取消</button><button class="btn-primary" onclick="buyNext()">'+(buyNeedsOwnerCode()?'下一步：发验证码给老板':'下一步：付款')+'</button></div>';
+  } else if(BUY.step==='code'){
+    body = '<div style="font-size:13px;line-height:1.8;margin-bottom:12px;">验证码已发给老板（演示：老板登录后在页面顶部看到验证码；另一个标签页用老板账号 OWN 登录即可）。请输入老板告诉你的 6 位验证码。</div>'+
+      '<div class="field" style="margin-bottom:12px;"><input id="buy-code" type="text" maxlength="6" placeholder="6 位验证码" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;letter-spacing:3px;"></div>'+
+      err+'<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-outline" onclick="closeAcctModal()">取消</button><button class="btn-outline" onclick="buyNext(true)">重新发送</button><button class="btn-primary" onclick="buyVerify()">验证</button></div>';
+  } else {
+    body = '<div style="font-size:13px;line-height:1.8;margin-bottom:12px;">购买 <b>'+BUY.qty+'</b> 个'+(BUY.role==='manager'?'管理者':'一般室长')+'账号，单价'+ACCOUNT_PRICE_TEXT+'。<br>付款后生成新账号编号（待激活），把编号交给使用人，让 TA 在登录页点「首次激活」。</div>'+
+      '<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-outline" onclick="closeAcctModal()">取消</button><button class="btn-primary" onclick="buyPay()">演示付款</button></div>';
+  }
+  acctModal('<div class="modal-box" style="width:440px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">加购账号</span><span style="cursor:pointer;color:var(--slate);" onclick="closeAcctModal()">✕</span></div>'+body+'</div>');
+}
+function buyNext(resend){
+  if(!(BUY.qty>=1 && BUY.qty<=10)){ BUY.err = '数量请填 1～10'; return renderBuy(); }
+  BUY.err = '';
+  if(buyNeedsOwnerCode()){
+    var me = currentAccount();
+    PURCHASE_REQ = {code:String(100000+Math.floor(Math.random()*900000)), by:me.id, qty:BUY.qty, exp:Date.now()+10*60000, used:false};
+    var owner = ACCOUNTS.filter(function(x){ return x.role==='owner' && x.name; })[0];
+    pushNotif('系统', accountLabel(me.id)+' 申请加购 '+BUY.qty+' 个管理者账号，验证码 '+PURCHASE_REQ.code+'（10 分钟内有效）', {names:owner?[owner.name]:[], silent:true, link:{kind:'system'}});
+    BUY.step = 'code'; if(resend) showToast('验证码已重新发送', '给老板', null);
+  } else BUY.step = 'pay';
+  renderBuy();
+}
+function buyVerify(){
+  var r = PURCHASE_REQ, c = (document.getElementById('buy-code')||{}).value||'';
+  if(!r || r.used || Date.now() > r.exp){ BUY.err = '验证码已过期，请重新发送'; return renderBuy(); }
+  if(c.trim() !== r.code){ BUY.err = '验证码不对'; return renderBuy(); }
+  r.used = true; BUY.err = ''; BUY.step = 'pay'; renderBuy();
+}
+function buyPay(){
+  var me = currentAccount(), ids = [], ts = nowFullDt(), roleName = BUY.role==='manager' ? '管理者' : '一般室长';
+  for(var i=0;i<BUY.qty;i++){
+    var id = 'A'+(++ACCOUNT_SEQ);
+    ACCOUNTS.push({id:id, role:BUY.role, seat:'addon', name:'', position:'', phone:'', status:'pending', password:null, photo:'', createdAt:ts, activatedAt:'',
+      history:[{ts:ts, type:'购买', text:'加购账号 '+id+'（'+roleName+'）'+(BUY.role==='manager' && me.role!=='owner' ? '，老板验证码确认' : '')+'，待激活', by:accountLabel(me.id)}]});
+    logOp('账号管理', accountLabel(me.id)+' 购买了加购'+roleName+'账号 '+id+(BUY.role==='manager' && me.role!=='owner' ? '（老板验证码确认）' : ''), '购买', id);
+    ids.push(id);
+  }
+  closeAcctModal(); openAdminPage('accounts', true);
+  showToast('购买成功', ids.join('、')+' 待激活：把编号交给使用人，在登录页「首次激活」', null);
+}

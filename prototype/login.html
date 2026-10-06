@@ -74,7 +74,7 @@ function doLogin(){
 function sendOtp(a){
   OTP = {id:a.id, code:String(100000+Math.floor(Math.random()*900000)), exp:Date.now()+5*60*1000};
 }
-function otpBox(a){ return '<div class="otp-demo">演示：验证码已"发送"到 '+a.phone+'，真实版会通过短信发送。<br>验证码：<b>'+OTP.code+'</b>（5 分钟内有效）</div>'; }
+function otpBox(a){ return '<div class="otp-demo">演示：验证码已"发送"到 '+(FLOW.phone||a.phone)+'，真实版会通过短信发送。<br>验证码：<b>'+OTP.code+'</b>（5 分钟内有效）</div>'; }
 function checkOtp(id, code){
   if(!OTP || OTP.id!==id) return '请先获取验证码';
   if(Date.now()>OTP.exp) return '验证码已过期，请重新获取';
@@ -95,8 +95,10 @@ function activate1(){
   if(!a) return viewActivate1('账号编号不存在');
   if(a.status==='active') return viewActivate1('账号 '+a.id+' 已经激活，请直接登录');
   if(a.status==='disabled') return viewActivate1('账号 '+a.id+' 已停用，不能激活');
-  if(normPhone($('f-phone').value)!==normPhone(a.phone)) return viewActivate1('手机号和登记的不一致');
-  sendOtp(a); FLOW = {id:a.id}; viewActivate2();
+  var ph = $('f-phone').value.trim();
+  if(a.phone){ if(normPhone(ph)!==normPhone(a.phone)) return viewActivate1('手机号和登记的不一致'); }
+  else if(normPhone(ph).length < 8) return viewActivate1('请输入你自己的手机号（用来收验证码）'); /* 新购买/重设后的账号没有登记手机：接手的人自己填 */
+  sendOtp(a); FLOW = {id:a.id, phone:a.phone ? '' : ph}; viewActivate2();
 }
 function viewActivate2(msg){
   var a = accountById(FLOW.id);
@@ -133,8 +135,9 @@ function activate3(){
   if(dup) return viewActivate3('这个姓名已经被账号 '+dup.id+' 使用，请换一个（对话里靠姓名区分）', keep);
   var a = accountById(FLOW.id), ts = nowFullDt();
   a.password = keep.pw; a.name = keep.name; a.position = keep.pos; a.photo = ACT_PHOTO; a.status = 'active'; a.activatedAt = ts;
+  if(!a.phone && FLOW.phone) a.phone = FLOW.phone;
   a.history.push({ts:ts, type:'激活', text:'账号激活，设置了登录密码和资料（姓名、职位、证件照）', by:keep.name+'（'+a.id+'）'});
-  ACCOUNT_LOG.unshift({id:'log'+Date.now(), ts:ts, accountId:a.id, name:a.name, type:'账号管理', text:'激活账号 '+a.id+'（'+a.name+'）'});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now(), ts:ts, accountId:a.id, name:a.name, type:'账号管理', sub:'激活', target:a.id, text:'激活账号 '+a.id+'（'+a.name+'）'});
   syncInCoordinators(); Store.save(); OTP = null;
   enterApp(a);
 }
@@ -177,7 +180,7 @@ function forgot3(){
   var a = accountById(FLOW.id), ts = nowFullDt();
   a.password = pw;
   a.history.push({ts:ts, type:'忘记密码', text:'本人通过手机验证码重设了密码', by:a.name+'（'+a.id+'）'});
-  ACCOUNT_LOG.unshift({id:'log'+Date.now(), ts:ts, accountId:a.id, name:a.name, type:'账号管理', text:a.id+'（'+a.name+'）通过忘记密码重设了密码'});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now(), ts:ts, accountId:a.id, name:a.name, type:'账号管理', sub:'重设', target:a.id, text:a.id+'（'+a.name+'）通过忘记密码重设了密码'});
   Store.save(); OTP = null;
   viewLogin('', '密码已重设，请用新密码登录');
 }
