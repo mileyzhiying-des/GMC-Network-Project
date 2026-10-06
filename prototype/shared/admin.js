@@ -66,7 +66,7 @@ function saveProfile(){
   var name = document.getElementById('pf-name').value.trim(), pos = document.getElementById('pf-pos').value, phone = document.getElementById('pf-phone').value.trim();
   if(!name){ profileErr('pf-err', '姓名不能为空'); return; }
   if(!phone){ profileErr('pf-err', '手机号不能为空'); return; }
-  if(ACCOUNTS.some(function(x){ return x.id!==a.id && x.status!=='disabled' && (x.name||'').toLowerCase()===name.toLowerCase(); })){ profileErr('pf-err', '已有同名的使用人，请加上区分（对话和推播靠姓名区分）'); return; }
+  if(clinicAccounts().some(function(x){ return x.id!==a.id && x.status!=='disabled' && (x.name||'').toLowerCase()===name.toLowerCase(); })){ profileErr('pf-err', '已有同名的使用人，请加上区分（对话和推播靠姓名区分）'); return; }
   var ch = [];
   if(name!==a.name) ch.push('姓名 '+a.name+' → '+name);
   if(pos!==a.position) ch.push('职位 '+(a.position||'—')+' → '+pos);
@@ -115,7 +115,10 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
   var dow = [1,2,3,4,5,6,0].map(function(i){ return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(d.closedDow.indexOf(i)>-1?'checked ':'')+'onchange="clinicToggleDow('+i+',this.checked)"> '+t(DOW_NAMES[i])+'</label>'; }).join('');
   var sms = Object.keys(SMS_KIND_LABELS).map(function(k){
     return aField(SMS_KIND_LABELS[k], '<textarea rows="3" data-k="sms.'+k+'" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.sms[k])+'</textarea>'); }).join('');
-  var directors = DIRECTOR_INFO.map(function(x){ return aEsc(x.name)+(x.active?'':'（'+t('已停用')+'）'); }).join('、');
+  var hospBlock = linkedHospitals().map(function(h){
+    var ds = hospitalDirectors(h.id).map(function(x){ return aEsc(x.name)+(x.active?'':'（'+t('已停用')+'）'); }).join('、');
+    return '<div style="font-size:13px;line-height:2;padding:6px 0;border-bottom:1px solid var(--border2);"><b>'+t('韩国医院')+'：</b>'+aEsc(h.name.ko)+' / '+aEsc(h.name.en)+'<br><b>'+t('韩国室长')+'：</b>'+hospitalCoordinators(h.id).map(aEsc).join('、')+'<br><b>'+t('院长名单')+'：</b>'+ds+'</div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);">（本诊所还没有对接的医院）</div>';
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('诊所设定')+'</div>'+
     '<div style="font-size:11px;color:var(--muted);">'+(CLINIC_SETTINGS.updatedAt ? '最后修改：'+aEsc(CLINIC_SETTINGS.updatedBy)+'　'+CLINIC_SETTINGS.updatedAt : '')+'</div></div>'+
     aSection(t('诊所资料'),
@@ -138,7 +141,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
       '客户自助预约页的「同意」步骤显示这里的隐私政策，并记录同意书版本 + 时间。');
   el.insertAdjacentHTML('beforeend',
     aSection(t('合作医院（只读）'),
-      '<div style="font-size:13px;line-height:2;"><b>'+t('韩国医院')+'：</b>'+aEsc(KR_HOSPITAL_NAME)+'<br><b>'+t('韩国室长')+'：</b>'+KR_COORDINATORS.map(aEsc).join('、')+'<br><b>'+t('院长名单')+'：</b>'+directors+'</div>', '来源：韩国端维护，这里只读。')+
+      hospBlock, '来源：韩国端维护，这里只读；只列出本诊所对接的医院。')+
     '<div id="clinic-err" class="error-text" style="display:none;"></div>'+
     '<div style="display:flex;gap:10px;align-items:center;"><button class="btn-primary" onclick="saveClinicSettings()">'+t('保存设定')+'</button><button class="btn-outline" onclick="clinicDraftFresh();openAdminPage(\'clinic\',true)">'+t('取消')+'</button>'+
     '<span style="font-size:11px;color:var(--muted);">'+t('保存后立即生效，并通知所有室长')+'</span></div>');
@@ -221,7 +224,7 @@ function adminBanner(){
 function acctRowsHtml(){
   var me = currentAccount();
   var order = {owner:0, manager:1, general:2};
-  var list = ACCOUNTS.slice().sort(function(x,y){ return (order[x.role]-order[y.role]) || (x.id==='OWN' ? -1 : y.id==='OWN' ? 1 : parseInt(x.id.slice(1),10)-parseInt(y.id.slice(1),10)); });
+  var list = clinicAccounts().slice().sort(function(x,y){ return (order[x.role]-order[y.role]) || (x.id==='OWN' ? -1 : y.id==='OWN' ? 1 : parseInt(x.id.slice(1),10)-parseInt(y.id.slice(1),10)); });
   var head = '<div class="trow head" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;"><span>账号 ID</span><span>类型</span><span>当前使用人</span><span>席位</span><span>状态</span></div>';
   return head + list.map(function(a){
     var who = a.status==='pending' ? '<span style="color:var(--muted);">（还没有使用人）</span>' :
@@ -230,8 +233,8 @@ function acctRowsHtml(){
   }).join('');
 }
 ADMIN_RENDER.accounts = function(el){
-  var cnt = function(role, seat){ return ACCOUNTS.filter(function(a){ return a.role===role && a.seat===seat && a.status!=='disabled'; }).length; };
-  var addonMgr = cnt('manager','addon'), addonGen = cnt('general','addon'), pend = ACCOUNTS.filter(function(a){ return a.status==='pending'; }).length;
+  var cnt = function(role, seat){ return clinicAccounts().filter(function(a){ return a.role===role && a.seat===seat && a.status!=='disabled'; }).length; };
+  var addonMgr = cnt('manager','addon'), addonGen = cnt('general','addon'), pend = clinicAccounts().filter(function(a){ return a.status==='pending'; }).length;
   var stat = function(label, big, sub){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:150px;"><div style="font-size:11px;color:var(--muted);">'+label+'</div><div style="font-size:22px;font-weight:700;margin:4px 0;">'+big+'</div><div style="font-size:11px;color:var(--slate2);">'+sub+'</div></div>'; };
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('账号管理')+'</div>'+
     '<button class="btn-primary" onclick="openBuyAccounts()">＋ 加购账号</button></div>'+
@@ -306,7 +309,8 @@ function doUnsubAcct(id){
 /* ---- 加购：选类型和数量 →（管理者加购管理者账号：先要老板验证码）→ 演示付款 → 生成新账号（待激活） ---- */
 var BUY = {role:'general', qty:1, step:'pick', err:''};
 function openBuyAccounts(){ BUY = {role:'general', qty:1, step:'pick', err:''}; renderBuy(); }
-function buyNeedsOwnerCode(){ var me = currentAccount(); return BUY.role==='manager' && me && me.role!=='owner'; }
+/* 管理者加购管理者账号要老板验证码；这家诊所没有老板账号（例如 C2）时没人可发，就不要求验证码（我的判断） */
+function buyNeedsOwnerCode(){ var me = currentAccount(); return BUY.role==='manager' && me && me.role!=='owner' && clinicAccounts().some(function(x){ return x.role==='owner' && x.status==='active'; }); }
 function renderBuy(){
   var err = BUY.err ? '<div class="error-text" style="display:block;margin-bottom:10px;">'+BUY.err+'</div>' : '', body = '';
   if(BUY.step==='pick'){
@@ -330,7 +334,7 @@ function buyNext(resend){
   if(buyNeedsOwnerCode()){
     var me = currentAccount();
     PURCHASE_REQ = {code:String(100000+Math.floor(Math.random()*900000)), by:me.id, qty:BUY.qty, exp:Date.now()+10*60000, used:false};
-    var owner = ACCOUNTS.filter(function(x){ return x.role==='owner' && x.name; })[0];
+    var owner = clinicAccounts().filter(function(x){ return x.role==='owner' && x.name; })[0];
     pushNotif('系统', accountLabel(me.id)+' 申请加购 '+BUY.qty+' 个管理者账号，验证码 '+PURCHASE_REQ.code+'（10 分钟内有效）', {names:owner?[owner.name]:[], silent:true, link:{kind:'system'}});
     BUY.step = 'code'; if(resend) showToast('验证码已重新发送', '给老板', null);
   } else BUY.step = 'pay';
@@ -345,8 +349,8 @@ function buyVerify(){
 function buyPay(){
   var me = currentAccount(), ids = [], ts = nowFullDt(), roleName = BUY.role==='manager' ? '管理者' : '一般室长';
   for(var i=0;i<BUY.qty;i++){
-    var id = 'A'+(++ACCOUNT_SEQ);
-    ACCOUNTS.push({id:id, role:BUY.role, seat:'addon', name:'', position:'', phone:'', status:'pending', password:null, photo:'', createdAt:ts, activatedAt:'',
+    var id = clinicAccountPrefix()+(++ACCOUNT_SEQ);
+    ACCOUNTS.push({id:id, clinicId:CURRENT_CLINIC_ID, role:BUY.role, seat:'addon', name:'', position:'', phone:'', status:'pending', password:null, photo:'', createdAt:ts, activatedAt:'',
       history:[{ts:ts, type:'购买', text:'加购账号 '+id+'（'+roleName+'）'+(BUY.role==='manager' && me.role!=='owner' ? '，老板验证码确认' : '')+'，待激活', by:accountLabel(me.id)}]});
     logOp('账号管理', accountLabel(me.id)+' 购买了加购'+roleName+'账号 '+id+(BUY.role==='manager' && me.role!=='owner' ? '（老板验证码确认）' : ''), '购买', id);
     ids.push(id);
@@ -409,6 +413,7 @@ function oplogSet(k, v){ OPLOG_FILTER[k] = v; if(k==='cat') OPLOG_FILTER.sub = '
 ADMIN_RENDER.oplog = function(el){
   var f = OPLOG_FILTER;
   var rows = ACCOUNT_LOG.filter(function(l){
+    if((l.clinicId||'C1') !== CURRENT_CLINIC_ID) return false; /* 只看本诊所的操作日志 */
     if(f.cat!=='all' && oplogCat(l)!==f.cat) return false;
     if(f.cat==='account' && f.sub!=='all' && oplogSub(l)!==f.sub) return false;
     var d = String(l.ts||'').slice(0,10);

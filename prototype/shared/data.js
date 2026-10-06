@@ -1,27 +1,35 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 12;
-/* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06） */
-var ACCOUNT_STRUCT_VERSION = 2;
-var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_SEQ', 'ACCOUNT_LOG', 'PURCHASE_REQ', 'CLINIC_SETTINGS'];
+var DEMO_DATA_VERSION = 13;
+/* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
+var ACCOUNT_STRUCT_VERSION = 3;
+/* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
+var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_LOG'];                      /* 全局部分里保留的 */
+var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ']; /* 每个诊所分区里保留的 */
 (function(){
   try{
     /* 演示数据版本号变了：清掉业务演示资料（案件、客户、预约…）重新生成，但保留账号资料（密码、使用人、使用人历史、操作日志）和诊所设定；
        账号/设定结构变了（ACCOUNT_STRUCT_VERSION）或手动"重置演示数据"时才全部重置。日期是相对今天写的，不需要每天重置。 */
     var verOk = localStorage.getItem('gmc_demo_ver') === String(DEMO_DATA_VERSION);
     if(!verOk){
-      var structOk = localStorage.getItem('gmc_struct_ver') === String(ACCOUNT_STRUCT_VERSION), kept = null;
+      var structOk = localStorage.getItem('gmc_struct_ver') === String(ACCOUNT_STRUCT_VERSION), keptG = null, keptC = {};
       if(structOk){
         try{
           var st = JSON.parse(localStorage.getItem('gmc_state') || 'null');
-          if(st && st.vars){ kept = {}; KEEP_ON_VERSION_RESET.forEach(function(n){ if(st.vars.hasOwnProperty(n)) kept[n] = st.vars[n]; }); }
-        }catch(e){ kept = null; }
+          if(st && st.vars){ keptG = {}; KEEP_ON_VERSION_RESET.forEach(function(n){ if(st.vars.hasOwnProperty(n)) keptG[n] = st.vars[n]; }); }
+          Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_clinic_')===0; }).forEach(function(k){
+            var p = JSON.parse(localStorage.getItem(k) || 'null'), o = {};
+            if(p && p.vars){ KEEP_CLINIC_ON_VERSION_RESET.forEach(function(n){ if(p.vars.hasOwnProperty(n)) o[n] = p.vars[n]; }); keptC[k] = o; }
+          });
+        }catch(e){ keptG = null; keptC = {}; }
       }
       Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); });
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
       localStorage.setItem('gmc_struct_ver', String(ACCOUNT_STRUCT_VERSION));
-      if(kept) localStorage.setItem('gmc_state', JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), vars:kept}));
+      /* 保留下来的只是一部分变量；其余变量由 store.js 启动时按种子补齐（见 Store.init） */
+      if(keptG) localStorage.setItem('gmc_state', JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), partial:true, vars:keptG}));
+      Object.keys(keptC).forEach(function(k){ localStorage.setItem(k, JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), partial:true, vars:keptC[k]})); });
     }
   }catch(e){}
 })();
@@ -54,7 +62,8 @@ var KR_TZ_OFF = 9;
    时区 tz 原来是 CLINIC_TZ + localStorage('gmc_tz')，现在搬到这里，CLINIC_TZ 只是它的镜像（applyClinicSettings 同步）。
    赴韩定金比例不在这里（GMC 统一设定）。 */
 var SLOT_MIN = 30; /* 时段长度（分钟），固定 30（我的判断：设定里不提供修改） */
-var CLINIC_SETTINGS = {
+function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分区里）；o 可覆盖名称、地址等 */
+ var s = {
   name:'GMC 合作诊所（雅加达）', address:'Jl. Jenderal Sudirman Kav. 52, Jakarta Selatan', phone:'+62 21 5550 1234', city:'雅加达', tz:'WIB',
   openTime:'09:00', closeTime:'17:00',   /* 营业时间（日历显示的行） */
   bookFrom:'09:00', bookTo:'16:30',      /* 可预约时段：第一个 / 最后一个可约的开始时间 */
@@ -73,9 +82,43 @@ var CLINIC_SETTINGS = {
   privacyVersion:'v1.0',
   privacyPolicy:'本诊所仅为办理预约、接待和医美咨询收集您的个人资料与健康资料，并按《隐私/数据跨境使用授权同意书》约定处理；您可随时要求查看、更正或删除。',
   updatedAt:'', updatedBy:''
-};
+ };
+ s.sms = Object.assign({}, s.sms); s.closedDow = s.closedDow.slice();
+ return Object.assign(s, o||{});
+}
+var CLINIC_SETTINGS = defaultClinicSettings();
 var CLINIC_TZ = CLINIC_SETTINGS.tz;
-var KR_HOSPITAL_NAME = '首尔 GMC 合作医院（演示）'; /* 合作医院（只读，来源：KR 端维护） */
+
+/* ================= 多诊所 × 多医院（2026-10-06，KR 端系列 1/5） =================
+   诊所（印尼）和医院（韩国）是多对多：CLINIC_HOSPITALS 记对接关系。
+   - 按诊所分区存档（客户、案件、预约/占位、对话、通知、诊所设定、本地项目、印尼案例…），IN 账号只看得到自己诊所的分区（见 store.js）；
+   - 按医院归属的数据放在 HOSPITAL_DATA[医院ID]（院长名单、KR 室长、赴韩项目、开放施术日期、KR 日程、赴韩案例），KR 端（之后）和各对接诊所共用。 */
+var HOSPITALS = [
+  {id:'H1', name:{ko:'서울 소수 성형외과', en:'Seoul Sosu Plastic Surgery'}, address:'서울특별시 강남구 압구정로 100', tz:'KST'},
+  {id:'H2', name:{ko:'강남 뷰티의원', en:'Gangnam Beauty Clinic'}, address:'서울특별시 강남구 논현로 508', tz:'KST'}
+];
+var CLINICS = [
+  {id:'C1', name:'GMC 合作诊所（雅加达）', accountPrefix:'A'},
+  {id:'C2', name:'泗水合作诊所（Surabaya）', accountPrefix:'B'}
+];
+var CLINIC_HOSPITALS = [ /* 对接关系（多对多）：C1 对接 H1、H2；C2 只对接 H1 */
+  {clinicId:'C1', hospitalId:'H1'}, {clinicId:'C1', hospitalId:'H2'}, {clinicId:'C2', hospitalId:'H1'}
+];
+/* HOSPITAL_DATA[hid]：{directors:[{id,name,active}], coordinators:[姓名], openDates:{院长名:[日期]}, directorSchedule:{院长名:[块]}, coordSchedule:[块], projects:[赴韩项目], libCases:[赴韩案例]}
+   （初始值在 data.js 末尾的 initHospitalData() 用上面的老种子变量生成；projects / libCases 在存档时由 PROJECT_LIBRARY / LIB_CASES 的合成数组拆回来，见 store.js） */
+var HOSPITAL_DATA = {};
+var CURRENT_CLINIC_ID = 'C1'; /* 当前页面所属诊所；在下面 currentAccount() 定义之后由 resolveClinicId() 重新计算 */
+function clinicById(id){ return CLINICS.filter(function(c){ return c.id===id; })[0] || null; }
+function hospitalById(id){ return HOSPITALS.filter(function(h){ return h.id===id; })[0] || null; }
+function hospitalName(id, lang){ var h = hospitalById(id); return h ? (h.name[lang||'ko'] || h.name.ko) : '—'; }
+function linkedHospitalIds(clinicId){ return CLINIC_HOSPITALS.filter(function(r){ return r.clinicId===(clinicId||CURRENT_CLINIC_ID); }).map(function(r){ return r.hospitalId; }); }
+function linkedHospitals(clinicId){ return linkedHospitalIds(clinicId).map(hospitalById).filter(Boolean); }
+function hospitalLinked(hid, clinicId){ return linkedHospitalIds(clinicId).indexOf(hid) > -1; }
+function hospitalDirectors(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.directors : []; }
+function hospitalDirectorNames(hid){ return hospitalDirectors(hid).filter(function(d){ return d.active; }).map(function(d){ return d.name; }); } /* 启用的院长（停用的不出现在选项里） */
+function hospitalCoordinators(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.coordinators : []; }
+function hospitalOpenDates(hid, director){ var h = HOSPITAL_DATA[hid]; return (h && h.openDates && h.openDates[director]) || []; }
+function hospitalOfDirector(name){ for(var k in HOSPITAL_DATA){ if(hospitalDirectors(k).some(function(d){ return d.name===name; })) return k; } return null; }
 
 function timeToMin(t){ return parseInt(t.slice(0,2),10)*60 + parseInt(t.slice(3),10); }
 function minToTime(m){ return pad2(Math.floor(m/60))+':'+pad2(m%60); }
@@ -119,20 +162,22 @@ var ACCOUNT_ROLES = {owner:'老板（诊所管理账号）', manager:'室长（�
 var ACCOUNT_STATUS = {active:'使用中', pending:'待激活', disabled:'已停用'};
 var BASIC_SEATS = 3;
 var ACCOUNTS = [
-  {id:'OWN', role:'owner',   seat:'basic', name:'Hartono', position:'老板',   phone:'+62 811-0000-0001', status:'active',   password:'own123', photo:'证件照', createdAt:D(-48)+' 09:00', activatedAt:D(-48)+' 09:30', history:[{ts:D(-48)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Hartono（OWN）'}]},
-  {id:'A1',  role:'manager', seat:'basic', name:'Dewi',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  photo:'证件照', createdAt:D(-48)+' 09:10', activatedAt:D(-48)+' 10:00', history:[{ts:D(-48)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'Dewi（A1）'}]},
-  {id:'A2',  role:'general', seat:'basic', name:'Rina',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  photo:'证件照', createdAt:D(-48)+' 09:20', activatedAt:D(-47)+' 09:00', history:[{ts:D(-47)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Rina（A2）'}]},
-  {id:'A3',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     photo:'',           createdAt:D(-2)+' 14:00', activatedAt:'',                 history:[{ts:D(-2)+' 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'Dewi（A1）'}]},
-  {id:'A4',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:D(-29)+' 11:00', activatedAt:D(-28)+' 09:00', disabledAt:D(-8)+' 17:00', history:[{ts:D(-28)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:D(-8)+' 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]},
-  {id:'A5',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]}
+  {id:'OWN', clinicId:'C1', role:'owner',   seat:'basic', name:'Hartono', position:'老板',   phone:'+62 811-0000-0001', status:'active',   password:'own123', photo:'证件照', createdAt:D(-48)+' 09:00', activatedAt:D(-48)+' 09:30', history:[{ts:D(-48)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Hartono（OWN）'}]},
+  {id:'A1', clinicId:'C1',  role:'manager', seat:'basic', name:'Dewi',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  photo:'证件照', createdAt:D(-48)+' 09:10', activatedAt:D(-48)+' 10:00', history:[{ts:D(-48)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'Dewi（A1）'}]},
+  {id:'A2', clinicId:'C1',  role:'general', seat:'basic', name:'Rina',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  photo:'证件照', createdAt:D(-48)+' 09:20', activatedAt:D(-47)+' 09:00', history:[{ts:D(-47)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Rina（A2）'}]},
+  {id:'A3', clinicId:'C1',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     photo:'',           createdAt:D(-2)+' 14:00', activatedAt:'',                 history:[{ts:D(-2)+' 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'Dewi（A1）'}]},
+  {id:'A4', clinicId:'C1',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:D(-29)+' 11:00', activatedAt:D(-28)+' 09:00', disabledAt:D(-8)+' 17:00', history:[{ts:D(-28)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:D(-8)+' 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]},
+  {id:'A5', clinicId:'C1',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]},
+  {id:'B1', clinicId:'C2', role:'manager', seat:'basic', name:'Citra', position:'室长', phone:'+62 811-0000-0011', status:'active', password:'b1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Citra（B1）'}]},
+  {id:'B2', clinicId:'C2', role:'general', seat:'basic', name:'Bagas', position:'前台室长', phone:'+62 811-0000-0012', status:'active', password:'b2123', photo:'证件照', createdAt:D(-30)+' 09:10', activatedAt:D(-29)+' 09:00', history:[{ts:D(-29)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Bagas（B2）'}]}
 ];
 var PURCHASE_REQ = null; /* 管理者加购"管理者账号"时发给老板的验证码：{code, by, qty, exp(毫秒时间戳), used}；演示：老板登录后在页面顶部看到 */
-var ACCOUNT_SEQ = 5; /* 下一个加购账号编号 = 'A'+(ACCOUNT_SEQ+1) */
+var ACCOUNT_SEQ = 5; /* 本诊所下一个加购账号编号 = 诊所账号前缀 + (ACCOUNT_SEQ+1)；每家诊所各一份（存在诊所分区里；C1 前缀 A，C2 前缀 B） */
 /* 操作日志（owner/管理者在"操作日志"页看；第八部分做页面）：时间、操作账号 + 当时的姓名、内容、类型 */
 var ACCOUNT_LOG = [
-  {id:'log1', ts:D(-2)+' 14:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'购买', target:'A3', text:'购买加购账号 A3（一般室长）'},
-  {id:'log2', ts:D(-8)+' 17:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'退订', target:'A4', text:'退订加购账号 A4（Sari）'},
-  {id:'log3', ts:D(-1)+' 10:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'购买', target:'A5', text:'购买加购管理者账号 A5（老板验证码确认）'}
+  {id:'log1', clinicId:'C1', ts:D(-2)+' 14:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'购买', target:'A3', text:'购买加购账号 A3（一般室长）'},
+  {id:'log2', clinicId:'C1', ts:D(-8)+' 17:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'退订', target:'A4', text:'退订加购账号 A4（Sari）'},
+  {id:'log3', clinicId:'C1', ts:D(-1)+' 10:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'购买', target:'A5', text:'购买加购管理者账号 A5（老板验证码确认）'}
 ];
 /* 当前登录的账号：存在 sessionStorage 的 gmc_acct（每个标签页各自登录，互不影响）；没登录、账号被停用/被重置成待激活，都返回 null */
 function currentAccountId(){
@@ -143,18 +188,21 @@ function currentAccountId(){
 }
 function currentAccount(){ return accountById(currentAccountId()); }
 var ME_NAME = (currentAccount() || {name:''}).name || '';
+var PAGE_CLINIC_ID = resolveClinicId(); /* 这个页面所属的诊所：登录账号的诊所；客户预约页看地址里的 ?clinic=（原型不带默认 C1）；登录页没有 = null */
+CURRENT_CLINIC_ID = 'C1'; /* 演示数据种子一律按 C1 生成；种子跑完后（本文件末尾）才改成 PAGE_CLINIC_ID */
 /* 演示数据种子（SEEDING=true，data.js 末尾置 false）里的"当前操作人"固定写 Dewi，不随打开页面的账号变化；运行时 = 当前登录的人 */
 var SEEDING = true;
-function actingName(){ return SEEDING ? 'Dewi' : ME_NAME; }
+var SEED_ACTOR = 'Dewi'; /* 种子数据里的"当前操作人"（C1 = Dewi；生成其他诊所的种子时临时改成那家诊所的室长） */
+function actingName(){ return SEEDING ? SEED_ACTOR : ME_NAME; }
 /* IN 室长名单 = 使用中的非老板账号的姓名（账号被停用/重置/激活后重新计算） */
 function syncInCoordinators(){
-  var names = ACCOUNTS.filter(function(a){ return a.role!=='owner' && a.status==='active' && a.name; }).map(function(a){ return a.name; });
+  var names = clinicAccounts().filter(function(a){ return a.role!=='owner' && a.status==='active' && a.name; }).map(function(a){ return a.name; });
   IN_COORDINATORS.length = 0; Array.prototype.push.apply(IN_COORDINATORS, names);
 }
 /* 写操作日志：当前账号 + 当时的姓名 */
 function logOp(type, text, sub, target){ /* type：账号管理 / 设定变更 / 其他；sub：购买 / 退订 / 重设 / 激活；target：被操作的账号编号（账号详情里看"该账号的 log"） */
   var a = currentAccount() || {id:'?', name:''};
-  ACCOUNT_LOG.unshift({id:'log'+Date.now()+Math.floor(Math.random()*1000), ts:nowFullDt(), accountId:a.id, name:a.name, type:type, sub:sub||'', target:target||'', text:text});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now()+Math.floor(Math.random()*1000), clinicId:(a.clinicId||CURRENT_CLINIC_ID), ts:nowFullDt(), accountId:a.id, name:a.name, type:type, sub:sub||'', target:target||'', text:text});
 }
 
 function memosOn(date){ return CAL_MEMOS.filter(function(m){ return m.date===date && (m.scope==='公开' || m.author===ME_NAME); }); }
@@ -283,7 +331,7 @@ function clientPhoneOf(name){ var c = clientByName(name); return c && c.phone ? 
 /* 新建客户档案：写"建档"到客户 Timeline；consent 可选 {version, ts, source} */
 function addClient(o){
   var ts = nowFullDt();
-  var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), name:o.name, gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
+  var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), clinicId:CURRENT_CLINIC_ID, name:o.name, gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
     passport:{text:'未登记', date:''}, beautyRecords:[], consents:o.consent ? [o.consent] : [], createdBy:o.createdBy||actingName(), updated:'刚刚',
     fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'},
     timeline:[{stage:'建档', actor:o.createdBy||actingName(), actorId:(o.createdBy&&o.createdBy!==actingName()) ? undefined : currentAccountId(), action:'建档 · '+(o.source||'室长建档'), dt:ts, kind:'plain'}]};
@@ -324,7 +372,7 @@ var SMS_LOG = [];   /* {id, ts, to, kind, text, caseId} */
 var SMS_SEQ = 1;
 var SMS_KIND_NAMES = {code:'验证码', link:'预约链接', confirm:'预约确认', remind:'预约提醒', cancel:'预约取消'};
 var SMS_CODE_FORMAT = '【GMC Network】Kode verifikasi / 验证码：{code}（5 menit / 5 分钟内有效）。Jangan beritahu siapa pun / 请勿告诉他人。';
-function bookingUrl(params){ return location.origin + '/booking.html?' + new URLSearchParams(params).toString(); }
+function bookingUrl(params){ return location.origin + '/booking.html?' + new URLSearchParams(Object.assign({clinic:CURRENT_CLINIC_ID}, params)).toString(); } /* 链接必须带诊所（?clinic=）；原型不带默认 C1，正式版没带应显示错误 */
 function caseViewUrl(c){ return bookingUrl({view:c.caseNo}); }
 function logSms(kind, to, text, caseId){
   var s = {id:'sms'+(SMS_SEQ++), ts:nowFullDt(), to:to, kind:kind, text:text, caseId:caseId||null};
@@ -645,7 +693,7 @@ function caseNoLabel(caseId){
    案件真实的 stage 永远由 deriveCaseStage() 现算，这里不手填 stage，数组建好后统一 forEach(updateCaseStage) 一遍。 */
 function makeCase(o){
   return {
-    id:o.id, name:o.name, subState:o.subState||'waiting',
+    id:o.id, clinicId:o.clinicId||CURRENT_CLINIC_ID, hospitalId:o.hospitalId||null, name:o.name, subState:o.subState||'waiting', /* clinicId=所属诊所；hospitalId=选面诊时选的医院（没选面诊为 null） */
     inCoordinator:o.inCoordinator||actingName(), krInRoom:!!o.krInRoom, chatArchive:null, /* 2026-10-02：负责该案件的IN室长 / KR室长是否已进入案件对话房 / 结案后整理的对话记录 */
     visitDate:o.visitDate||null, visitTime:o.visitTime||null, visitPurpose:o.visitPurpose||'面诊商谈', /* 2026-10-02：日历、案件列表、预约历史都从案件这份数据算 */
     reportEta:o.reportEta||null, reportOverdue:!!o.reportOverdue, /* 2026-10-02：KR确认的预计出报告时间 / 已超时提醒 */
@@ -3307,6 +3355,7 @@ function saveLibCase(){
     if(idx>-1) LIB_CASES[idx] = c;
   } else {
     c.id = newLibCaseId(); c.uploader = me; c.uploadedAt = nowFullDt(); c.editedBy = null; c.editedAt = null;
+    if(c.source==='local') c.clinicId = CURRENT_CLINIC_ID; else c.hospitalId = c.hospitalId || 'H1'; /* 归属：印尼案例属于本诊所，赴韩案例属于医院 */
     LIB_CASES.unshift(c);
   }
   closeLibCaseModal();
@@ -3347,8 +3396,11 @@ var PROJ_SEQ = 1;
 
 function newProjId(){ return 'p'+(PROJ_SEQ++); }
 
-function makeProj(name, price, origin, catLabel){
-  return {id:newProjId(), name:name, price:price, origin:origin, categoryId:PCAT[catLabel], active:true};
+function makeProj(name, price, origin, catLabel, hospitalId){
+  /* 归属：本地项目（IN）属于诊所 clinicId；赴韩项目（KR）属于医院 hospitalId（演示数据默认 H1） */
+  var p = {id:newProjId(), name:name, price:price, origin:origin, categoryId:PCAT[catLabel], active:true};
+  if(origin==='KR') p.hospitalId = hospitalId || 'H1'; else p.clinicId = CURRENT_CLINIC_ID;
+  return p;
 }
 
 var PROJECT_LIBRARY = [
@@ -3446,7 +3498,7 @@ var PROJECT_LIBRARY = [
   function photo(rec, custom){ return {url:'', color:colors[(ci++)%colors.length], recovery:rec, recoveryCustom:custom||''}; }
   function mk(title, source, projNames, director, problems, recs, day){
     var id = newLibCaseId();
-    LIB_CASES.push({id:id, title:title, names:{zh:title, ko:demoTranslate(title,'zh','ko'), id:demoTranslate(title,'zh','id')}, source:source,
+    LIB_CASES.push({id:id, clinicId:(source==='local' ? CURRENT_CLINIC_ID : undefined), hospitalId:(source==='travel' ? 'H1' : undefined), title:title, names:{zh:title, ko:demoTranslate(title,'zh','ko'), id:demoTranslate(title,'zh','id')}, source:source,
       projectIds:projNames.map(pid).filter(Boolean), director:director, problemIds:(problems||[]).map(function(l){ return LIB_PROBLEM_IDS[l]; }),
       beforePhotos:[{url:'', color:'#E6DDD0'}, {url:'', color:'#E1D8CB'}], afterPhotos:recs.map(function(r){ return photo(r); }),
       consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:(source==='travel'?'이서연（KR室长）':actingName()), uploadedAt:'2026-09-'+day+' 10:00',
@@ -3612,6 +3664,7 @@ function saveProj(){
   } else {
     p.id = newProjId();
     p.active = true;
+    if(p.origin==='KR') p.hospitalId = p.hospitalId || 'H1'; else p.clinicId = CURRENT_CLINIC_ID; /* 归属：IN 项目属于本诊所，KR 项目属于医院 */
     PROJECT_LIBRARY.push(p);
   }
   closeProjEditModal();
@@ -3992,5 +4045,83 @@ CASE_ITEMS.forEach(function(c){
 
 /* 种子数据全部跑完：之后的操作人 = 当前登录的人；IN 室长名单按账号重算 */
 SEEDING = false;
+initHospitalData();
+normalizeSeeds();
+CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */
+bindHospitalShim();
 syncInCoordinators();
 applyClinicSettings();
+
+/* ================= 多诊所 × 多医院：种子整理（2026-10-06，KR 端系列 1/5） ================= */
+var GLOBAL_VAR_NAMES = ['DEMO_SHIFT_MS', 'HOSPITALS', 'CLINICS', 'CLINIC_HOSPITALS', 'HOSPITAL_DATA', 'ACCOUNTS', 'ACCOUNT_LOG', 'CASE_NO_SEQ', 'PROJCAT_SEQ', 'PROJECT_CATEGORIES', 'PCAT', 'PROJ_SEQ', 'LIB_CASE_SEQ'];
+var CLINIC_VAR_NAMES = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ', 'RESUMED_VISITS', 'PLACEHOLDER_HISTORY', 'PLACEHOLDER_SEQ', 'RESERVATION_PLACEHOLDERS',
+  'CLIENTS', 'CLIENT_HOLDINGS', 'CASE_ITEMS', 'NOTIF_SEQ', 'NOTIFS', 'ROOMS', 'STAFF_ROSTER', 'ROOM_UNREAD', 'CHAT_DATA', 'MUTED_ROOMS', 'ROOM_FILE_SEQ', 'CAL_MEMOS', 'SMS_LOG', 'SMS_SEQ',
+  'LIB_PROBLEM_SEQ', 'LIB_PROBLEMS', 'LIB_PROBLEM_IDS', 'PROJECT_LIBRARY', 'LIB_CASES'];
+/* PROJECT_LIBRARY / LIB_CASES 在内存里是"合成数组"：本诊所的 IN 项 + 对接医院的 KR 项；存档时按 hospitalId 拆回医院（store.js 的 viewSplit） */
+
+function dayList(arr){ return arr.map(function(n){ return D(n); }); }
+/* 医院资料（H1 沿用原来的种子变量；H2 是新医院，赴韩项目和案例见"五、演示数据"） */
+function initHospitalData(){
+  HOSPITAL_DATA = {
+    H1:{
+      directors: DIRECTOR_INFO.map(function(d, i){ return {id:'H1-D'+(i+1), name:d.name, active:d.active}; }),
+      coordinators: KR_COORDINATORS.slice(),
+      openDates: {'김민석 원장': KR_OPEN_DATES.slice(), '이수진 원장': dayList([2,3,4,5,11,12,18,19,25,26,32,33,39,40]), '박지훈 원장': []},
+      directorSchedule: KR_DIRECTOR_SCHEDULE, coordSchedule: KR_COORD_SCHEDULE, projects:[], libCases:[]
+    },
+    H2:{
+      directors: [{id:'H2-D1', name:'박서윤 원장', active:true}, {id:'H2-D2', name:'최지호 원장', active:true}, {id:'H2-D3', name:'한도윤 원장', active:false}],
+      coordinators: ['정하늘', '최민준'],
+      openDates: {'박서윤 원장': dayList([1,3,4,8,9,15,16,22,23,29,30,36]), '최지호 원장': dayList([2,3,5,6,12,13,19,20,26,27,33]), '한도윤 원장': []},
+      directorSchedule: {'박서윤 원장':[{date:D(0), time:'10:00', title:'手术'}, {date:D(0), time:'10:30', title:'手术'}], '최지호 원장':[{date:D(1), time:'14:00', title:'面诊'}], '한도윤 원장':[]},
+      coordSchedule: [{date:D(0), time:'09:30', title:'정하늘：与 IN 室长对接'}, {date:D(1), time:'11:00', title:'최민준：报告提交'}], projects:[], libCases:[]
+    }
+  };
+}
+/* 老的全局名字（DIRECTOR_INFO / DIRECTOR_LIST / KR_COORDINATORS / KR_OPEN_DATES / KR_DIRECTOR_SCHEDULE / KR_COORD_SCHEDULE）暂时指向 H1 的数据，
+   让还没按医院改写的 IN 端代码继续工作；二、三、四部分改完后这个过渡层会删除。每次读档后重新绑定。 */
+function bindHospitalShim(){
+  var h = HOSPITAL_DATA.H1; if(!h) return;
+  DIRECTOR_INFO = h.directors; DIRECTOR_LIST = h.directors.filter(function(d){ return d.active; }).map(function(d){ return d.name; });
+  KR_COORDINATORS = h.coordinators; KR_OPEN_DATES = (h.openDates[h.directors[0].name] || []);
+  KR_DIRECTOR_SCHEDULE = h.directorSchedule; KR_COORD_SCHEDULE = h.coordSchedule;
+}
+/* 把合成数组（种子全在里面）拆开：KR 项目/案例归医院，IN 的留在诊所里；然后按本诊所对接的医院重新合成 */
+function buildClinicViews(inProjects, inCases){
+  var hs = linkedHospitalIds(CURRENT_CLINIC_ID), pp = inProjects.slice(), cc = inCases.slice();
+  hs.forEach(function(h){ var d = HOSPITAL_DATA[h]; if(d){ pp = pp.concat(d.projects || []); cc = cc.concat(d.libCases || []); } });
+  PROJECT_LIBRARY.length = 0; Array.prototype.push.apply(PROJECT_LIBRARY, pp);
+  LIB_CASES.length = 0; Array.prototype.push.apply(LIB_CASES, cc);
+}
+function normalizeSeeds(){
+  CLIENTS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; });
+  CASE_ITEMS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; if(c.director && !c.hospitalId) c.hospitalId = 'H1'; });
+  var inP = [], inC = [];
+  PROJECT_LIBRARY.forEach(function(p){ if(p.origin==='KR'){ var h = HOSPITAL_DATA[p.hospitalId||'H1']; (h.projects = h.projects || []).push(p); } else { if(!p.clinicId) p.clinicId = 'C1'; inP.push(p); } });
+  LIB_CASES.forEach(function(c){ if(c.source==='travel'){ var h = HOSPITAL_DATA[c.hospitalId||'H1']; (h.libCases = h.libCases || []).push(c); } else { if(!c.clinicId) c.clinicId = 'C1'; inC.push(c); } });
+  buildClinicViews(inP, inC);
+}
+/* 其他诊所的全新分区（C2）：空白 + 少量演示资料（见"五、演示数据"）；种子函数写的是全局变量，所以临时把全局变量切成这份新分区 */
+function emptyClinicVars(cid){
+  var cl = clinicById(cid), main = JSON.parse(JSON.stringify(ROOMS.filter(function(r){ return r.isMain; })[0] || {id:'main', name:'Main · 全员', isMain:true, color:'var(--slate2)', init:'G', date:'今天'}));
+  return {
+    CLINIC_SETTINGS: defaultClinicSettings({name:cl.name, address:'Jl. Basuki Rahmat No. 21, Surabaya', phone:'+62 31 5550 7788', city:'泗水'}),
+    PURCHASE_REQ:null, ACCOUNT_SEQ:2, RESUMED_VISITS:[], PLACEHOLDER_HISTORY:[], PLACEHOLDER_SEQ:1, RESERVATION_PLACEHOLDERS:[],
+    CLIENTS:[], CLIENT_HOLDINGS:{}, CASE_ITEMS:[], NOTIF_SEQ:0, NOTIFS:[], ROOMS:[main], STAFF_ROSTER:[], ROOM_UNREAD:{}, CHAT_DATA:{main:[]}, MUTED_ROOMS:{}, ROOM_FILE_SEQ:1,
+    CAL_MEMOS:[], SMS_LOG:[], SMS_SEQ:1, LIB_PROBLEM_SEQ:LIB_PROBLEM_SEQ, LIB_PROBLEMS:JSON.parse(JSON.stringify(LIB_PROBLEMS)), LIB_PROBLEM_IDS:JSON.parse(JSON.stringify(LIB_PROBLEM_IDS)),
+    PROJECT_LIBRARY:[], LIB_CASES:[]
+  };
+}
+function seedClinicDemo(cid){ /* 其他诊所的演示资料（客户、案件、本地项目…）：五、演示数据 里补 */ }
+function buildClinicSeed(cid){
+  var vars = emptyClinicVars(cid), saved = {}, keepClinic = CURRENT_CLINIC_ID, keepSeeding = SEEDING, keepActor = SEED_ACTOR, keepIn = IN_COORDINATORS.slice();
+  CLINIC_VAR_NAMES.forEach(function(n){ saved[n] = window[n]; window[n] = vars[n]; });
+  CURRENT_CLINIC_ID = cid; SEEDING = true; SEED_ACTOR = (clinicAccounts(cid).filter(function(a){ return a.role==='manager' && a.name; })[0] || {name:'Dewi'}).name;
+  var out = {};
+  try{ syncInCoordinators(); seedClinicDemo(cid); }catch(e){ console.error('[种子] '+cid, e); }
+  CLINIC_VAR_NAMES.forEach(function(n){ out[n] = window[n]; });
+  CLINIC_VAR_NAMES.forEach(function(n){ window[n] = saved[n]; });
+  CURRENT_CLINIC_ID = keepClinic; SEEDING = keepSeeding; SEED_ACTOR = keepActor;
+  IN_COORDINATORS.length = 0; Array.prototype.push.apply(IN_COORDINATORS, keepIn);
+  return out;
+}

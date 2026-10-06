@@ -138,13 +138,13 @@ function activate3(){
   if(!keep.name) return viewActivate3('请填写姓名', keep);
   if(!keep.pos) return viewActivate3('请填写职位', keep);
   if(!ACT_PHOTO) return viewActivate3('请上传证件照', keep);
-  var dup = ACCOUNTS.filter(function(x){ return x.id!==FLOW.id && x.status!=='disabled' && String(x.name||'').toLowerCase()===keep.name.toLowerCase(); })[0];
+  var dup = clinicAccounts(accountById(FLOW.id).clinicId||'C1').filter(function(x){ return x.id!==FLOW.id && x.status!=='disabled' && String(x.name||'').toLowerCase()===keep.name.toLowerCase(); })[0];
   if(dup) return viewActivate3('这个姓名已经被账号 '+dup.id+' 使用，请换一个（对话里靠姓名区分）', keep);
   var a = accountById(FLOW.id), ts = nowFullDt();
   a.password = keep.pw; a.name = keep.name; a.position = keep.pos; a.photo = ACT_PHOTO; a.status = 'active'; a.activatedAt = ts;
   if(!a.phone && FLOW.phone) a.phone = FLOW.phone;
   a.history.push({ts:ts, type:'激活', text:'账号激活，设置了登录密码和资料（姓名、职位、证件照）', by:keep.name+'（'+a.id+'）'});
-  ACCOUNT_LOG.unshift({id:'log'+Date.now(), ts:ts, accountId:a.id, name:a.name, type:'账号管理', sub:'激活', target:a.id, text:'激活账号 '+a.id+'（'+a.name+'）'});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now(), clinicId:(a.clinicId||'C1'), ts:ts, accountId:a.id, name:a.name, type:'账号管理', sub:'激活', target:a.id, text:'激活账号 '+a.id+'（'+a.name+'）'});
   syncInCoordinators(); Store.save(); OTP = null;
   enterApp(a);
 }
@@ -187,7 +187,7 @@ function forgot3(){
   var a = accountById(FLOW.id), ts = nowFullDt();
   a.password = pw;
   a.history.push({ts:ts, type:'忘记密码', text:'本人通过手机验证码重设了密码', by:a.name+'（'+a.id+'）'});
-  ACCOUNT_LOG.unshift({id:'log'+Date.now(), ts:ts, accountId:a.id, name:a.name, type:'账号管理', sub:'重设', target:a.id, text:a.id+'（'+a.name+'）通过忘记密码重设了密码'});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now(), clinicId:(a.clinicId||'C1'), ts:ts, accountId:a.id, name:a.name, type:'账号管理', sub:'重设', target:a.id, text:a.id+'（'+a.name+'）通过忘记密码重设了密码'});
   Store.save(); OTP = null;
   viewLogin('', '密码已重设，请用新密码登录');
 }

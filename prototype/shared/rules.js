@@ -404,6 +404,17 @@ function canDo(perm, acct){
 function homeUrl(acct){ var a = acct || currentAccount(); return (a && a.role==='owner') ? '/owner.html' : '/in.html'; }
 
 /* ================= 账号辅助（2026-10-05·二） ================= */
+/* 当前页面所属诊所：booking.html 看地址 ?clinic=（正式版必须带诊所，没带应显示错误；原型不带默认 C1）；IN/老板端 = 登录账号的诊所；没登录（登录页）= null */
+function resolveClinicId(){
+  try{
+    if(/booking\.html$/.test(location.pathname)){ var q = new URLSearchParams(location.search).get('clinic'); return q || 'C1'; }
+  }catch(e){}
+  var a = (typeof currentAccount === 'function') ? currentAccount() : null;
+  return a ? (a.clinicId || 'C1') : null;
+}
+/* 本诊所的账号（账号管理、席位、重名检查、IN 室长名单都只看自己诊所） */
+function clinicAccounts(clinicId){ var c = clinicId || CURRENT_CLINIC_ID; return ACCOUNTS.filter(function(a){ return (a.clinicId||'C1')===c; }); }
+function clinicAccountPrefix(clinicId){ var c = clinicById(clinicId || CURRENT_CLINIC_ID); return c ? c.accountPrefix : 'A'; }
 function accountById(id){ return ACCOUNTS.filter(function(a){ return a.id===id; })[0] || null; }
 /* 显示用："Rina（A2）" */
 function accountLabel(id){ var a = accountById(id); return a ? (a.name||'（待激活）')+'（'+a.id+'）' : String(id); }
@@ -417,7 +428,7 @@ function actorDisplay(entry){
 function staffLabel(name){ var id = LEGACY_STAFF_ID[name]; return id ? name+'（'+id+'）' : name; }
 /* 席位概况：基础 3 + 加购；使用中/待激活占用席位，已停用不占 */
 function seatSummary(){
-  var used = function(seat){ return ACCOUNTS.filter(function(a){ return a.seat===seat && a.status!=='disabled'; }).length; };
-  var addonBought = ACCOUNTS.filter(function(a){ return a.seat==='addon' && a.status!=='disabled'; }).length;
-  return {basicTotal:BASIC_SEATS, basicUsed:used('basic'), addonTotal:addonBought, addonUsed:ACCOUNTS.filter(function(a){ return a.seat==='addon' && a.status==='active'; }).length, addonPending:ACCOUNTS.filter(function(a){ return a.seat==='addon' && a.status==='pending'; }).length};
+  var used = function(seat){ return clinicAccounts().filter(function(a){ return a.seat===seat && a.status!=='disabled'; }).length; };
+  var addonBought = clinicAccounts().filter(function(a){ return a.seat==='addon' && a.status!=='disabled'; }).length;
+  return {basicTotal:BASIC_SEATS, basicUsed:used('basic'), addonTotal:addonBought, addonUsed:clinicAccounts().filter(function(a){ return a.seat==='addon' && a.status==='active'; }).length, addonPending:clinicAccounts().filter(function(a){ return a.seat==='addon' && a.status==='pending'; }).length};
 }
