@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 14;
+var DEMO_DATA_VERSION = 15;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 3;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -3432,7 +3432,8 @@ var PROJCAT_SEQ = 1;
 
 function newProjCatId(){ return 'pc'+(PROJCAT_SEQ++); }
 
-var PROJECT_CATEGORIES = {};
+var PROJECT_CATEGORIES = {}; /* 内存里的合成对象：本诊所自己的本地项目分类 + 全系统标准部位（KR_CATEGORIES）；存档时按 origin 拆开 */
+var KR_CATEGORIES = {};   /* 赴韩项目的分类 = 全系统共用的一套标准部位（案例库"按部位"才能把不同医院的项目放在一起）；本地项目的分类各诊所各自一份（存在诊所分区里） */
 
 function addProjCategory(label, origin){
   var id = newProjCatId();
@@ -4133,11 +4134,11 @@ syncInCoordinators();
 applyClinicSettings();
 
 /* ================= 多诊所 × 多医院：种子整理（2026-10-06，KR 端系列 1/5） ================= */
-var GLOBAL_VAR_NAMES = ['DEMO_SHIFT_MS', 'HOSPITALS', 'CLINICS', 'CLINIC_HOSPITALS', 'HOSPITAL_DATA', 'ACCOUNTS', 'ACCOUNT_LOG', 'CASE_NO_SEQ', 'PROJCAT_SEQ', 'PROJECT_CATEGORIES', 'PCAT', 'PROJ_SEQ', 'LIB_CASE_SEQ'];
+var GLOBAL_VAR_NAMES = ['DEMO_SHIFT_MS', 'HOSPITALS', 'CLINICS', 'CLINIC_HOSPITALS', 'HOSPITAL_DATA', 'ACCOUNTS', 'ACCOUNT_LOG', 'CASE_NO_SEQ', 'PROJCAT_SEQ', 'KR_CATEGORIES', 'PROJ_SEQ', 'LIB_CASE_SEQ'];
 var CLINIC_VAR_NAMES = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ', 'RESUMED_VISITS', 'PLACEHOLDER_HISTORY', 'PLACEHOLDER_SEQ', 'RESERVATION_PLACEHOLDERS',
   'CLIENTS', 'CLIENT_HOLDINGS', 'CASE_ITEMS', 'NOTIF_SEQ', 'NOTIFS', 'ROOMS', 'STAFF_ROSTER', 'ROOM_UNREAD', 'CHAT_DATA', 'MUTED_ROOMS', 'ROOM_FILE_SEQ', 'CAL_MEMOS', 'SMS_LOG', 'SMS_SEQ',
-  'LIB_PROBLEM_SEQ', 'LIB_PROBLEMS', 'LIB_PROBLEM_IDS', 'PROJECT_LIBRARY', 'LIB_CASES'];
-/* PROJECT_LIBRARY / LIB_CASES 在内存里是"合成数组"：本诊所的 IN 项 + 对接医院的 KR 项；存档时按 hospitalId 拆回医院（store.js 的 viewSplit） */
+  'LIB_PROBLEM_SEQ', 'LIB_PROBLEMS', 'LIB_PROBLEM_IDS', 'PROJECT_CATEGORIES', 'PROJECT_LIBRARY', 'LIB_CASES'];
+/* PROJECT_LIBRARY / LIB_CASES / PROJECT_CATEGORIES 在内存里是"合成"的（本诊所的 + 对接医院 / 标准部位的）；PCAT（分类名→id）由分类重建，不存档：本诊所的 IN 项 + 对接医院的 KR 项；存档时按 hospitalId 拆回医院（store.js 的 viewSplit） */
 
 function dayList(arr){ return arr.map(function(n){ return D(n); }); }
 /* 医院资料（H1 沿用原来的种子变量；H2 是新医院，赴韩项目和案例见"五、演示数据"） */
@@ -4160,7 +4161,14 @@ function initHospitalData(){
 }
 /* 老的种子变量（DIRECTOR_INFO / KR_COORDINATORS / KR_OPEN_DATES / KR_DIRECTOR_SCHEDULE / KR_COORD_SCHEDULE）只在生成 HOSPITAL_DATA.H1 时用一次；运行时一律读 HOSPITAL_DATA（hospitalDirectors / hospitalCoordinators / hospitalOpenDates 等）。 */
 /* 把合成数组（种子全在里面）拆开：KR 项目/案例归医院，IN 的留在诊所里；然后按本诊所对接的医院重新合成 */
-function buildClinicViews(inProjects, inCases){
+function buildClinicViews(inProjects, inCases, inCats){
+  if(inCats){ /* 分类：本诊所的本地分类 + 全系统标准部位；PCAT（分类名→id）跟着重建 */
+    Object.keys(PROJECT_CATEGORIES).forEach(function(k){ delete PROJECT_CATEGORIES[k]; });
+    Object.keys(inCats).forEach(function(k){ PROJECT_CATEGORIES[k] = inCats[k]; });
+    Object.keys(KR_CATEGORIES).forEach(function(k){ PROJECT_CATEGORIES[k] = KR_CATEGORIES[k]; });
+    Object.keys(PCAT).forEach(function(k){ delete PCAT[k]; });
+    Object.keys(PROJECT_CATEGORIES).forEach(function(k){ PCAT[PROJECT_CATEGORIES[k].label] = k; });
+  }
   var hs = linkedHospitalIds(CURRENT_CLINIC_ID), pp = inProjects.slice(), cc = inCases.slice();
   hs.forEach(function(h){ var d = HOSPITAL_DATA[h]; if(d){ pp = pp.concat(d.projects || []); cc = cc.concat(d.libCases || []); } });
   PROJECT_LIBRARY.length = 0; Array.prototype.push.apply(PROJECT_LIBRARY, pp);
@@ -4196,6 +4204,9 @@ function moveSeedCaseToH2(caseId, director){
   var rk = 'case-'+caseId; if(CHAT_DATA[rk]) CHAT_DATA[rk] = swap(CHAT_DATA[rk]);
 }
 function normalizeSeeds(){
+  /* 分类：赴韩的标准部位归全局，本地的留在诊所里（C1 种子） */
+  var inCats = {};
+  Object.keys(PROJECT_CATEGORIES).forEach(function(k){ var c = PROJECT_CATEGORIES[k]; if(c.origin==='KR') KR_CATEGORIES[k] = c; else inCats[k] = c; });
   seedHospitalH2();
   [['budi','박서윤 원장'], ['dinda','최지호 원장'], ['wulan','박서윤 원장'], ['lina','박서윤 원장']].forEach(function(r){ moveSeedCaseToH2(r[0], r[1]); });
   /* 对话：原来的 Main 全员群 = C1×H1；再加 C1×H2；同事名单按对接医院重建 */
@@ -4218,7 +4229,7 @@ function normalizeSeeds(){
   var inP = [], inC = [];
   PROJECT_LIBRARY.forEach(function(p){ if(p.origin==='KR'){ var h = HOSPITAL_DATA[p.hospitalId||'H1']; (h.projects = h.projects || []).push(p); } else { if(!p.clinicId) p.clinicId = 'C1'; inP.push(p); } });
   LIB_CASES.forEach(function(c){ if(c.source==='travel'){ var h = HOSPITAL_DATA[c.hospitalId||'H1']; (h.libCases = h.libCases || []).push(c); } else { if(!c.clinicId) c.clinicId = 'C1'; inC.push(c); } });
-  buildClinicViews(inP, inC);
+  buildClinicViews(inP, inC, inCats);
 }
 /* 其他诊所的全新分区（C2）：空白 + 少量演示资料（见"五、演示数据"）；种子函数写的是全局变量，所以临时把全局变量切成这份新分区 */
 function emptyClinicVars(cid){
@@ -4228,6 +4239,7 @@ function emptyClinicVars(cid){
     PURCHASE_REQ:null, ACCOUNT_SEQ:2, RESUMED_VISITS:[], PLACEHOLDER_HISTORY:[], PLACEHOLDER_SEQ:1, RESERVATION_PLACEHOLDERS:[],
     CLIENTS:[], CLIENT_HOLDINGS:{}, CASE_ITEMS:[], NOTIF_SEQ:0, NOTIFS:[], ROOMS:linkedHospitalIds(cid).map(function(h){ var m = JSON.parse(JSON.stringify(main)); m.id = mainRoomId(h); m.hospitalId = h; m.name = 'Main · '+hospitalName(h,'ko'); return m; }), STAFF_ROSTER:buildStaffRoster(cid), ROOM_UNREAD:{}, CHAT_DATA:linkedHospitalIds(cid).reduce(function(o, h){ o[mainRoomId(h)] = []; return o; }, {}), MUTED_ROOMS:{}, ROOM_FILE_SEQ:1,
     CAL_MEMOS:[], SMS_LOG:[], SMS_SEQ:1, LIB_PROBLEM_SEQ:LIB_PROBLEM_SEQ, LIB_PROBLEMS:JSON.parse(JSON.stringify(LIB_PROBLEMS)), LIB_PROBLEM_IDS:JSON.parse(JSON.stringify(LIB_PROBLEM_IDS)),
+    PROJECT_CATEGORIES:Object.keys(PROJECT_CATEGORIES).filter(function(k){ return PROJECT_CATEGORIES[k].origin==='IN'; }).reduce(function(o,k){ o[k] = JSON.parse(JSON.stringify(PROJECT_CATEGORIES[k])); return o; }, {}), /* 新诊所的本地分类：先复制一份标准的，之后各自管理 */
     PROJECT_LIBRARY:[], LIB_CASES:[]
   };
 }

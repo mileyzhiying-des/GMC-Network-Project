@@ -45,10 +45,13 @@ var Store = (function(){
     PROJECT_LIBRARY.forEach(function(p){ if(p.origin==='KR'){ var h = p.hospitalId || 'H1'; (byHP[h] = byHP[h] || []).push(p); } else inP.push(p); });
     LIB_CASES.forEach(function(c){ if(c.source==='travel'){ var h = c.hospitalId || 'H1'; (byHC[h] = byHC[h] || []).push(c); } else inC.push(c); });
     linkedHospitalIds(CURRENT_CLINIC_ID).forEach(function(h){ if(HOSPITAL_DATA[h]){ HOSPITAL_DATA[h].projects = byHP[h] || []; HOSPITAL_DATA[h].libCases = byHC[h] || []; } });
-    return {PROJECT_LIBRARY:inP, LIB_CASES:inC};
+    var inCats = {}, krCats = {};
+    Object.keys(PROJECT_CATEGORIES).forEach(function(k){ var c = PROJECT_CATEGORIES[k]; if(c.origin==='KR') krCats[k] = c; else inCats[k] = c; });
+    Object.keys(KR_CATEGORIES).forEach(function(k){ delete KR_CATEGORIES[k]; }); Object.keys(krCats).forEach(function(k){ KR_CATEGORIES[k] = krCats[k]; });
+    return {PROJECT_LIBRARY:inP, LIB_CASES:inC, PROJECT_CATEGORIES:inCats};
   }
   function snapshotG(){ return JSON.stringify(pick(GLOBAL_VAR_NAMES), replacer); }
-  function clinicVarsObj(split){ var o = pick(CLINIC_VAR_NAMES); if(split){ o.PROJECT_LIBRARY = split.PROJECT_LIBRARY; o.LIB_CASES = split.LIB_CASES; } return o; }
+  function clinicVarsObj(split){ var o = pick(CLINIC_VAR_NAMES); if(split){ o.PROJECT_LIBRARY = split.PROJECT_LIBRARY; o.LIB_CASES = split.LIB_CASES; o.PROJECT_CATEGORIES = split.PROJECT_CATEGORIES; } return o; }
   function wrap(vars){ return JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), vars:vars}, replacer); }
   function snapshot(){ /* 返回 {g, c}：全局部分和本诊所分区的 JSON（c 为 null 表示这个页面没有诊所） */
     var cid = pageClinic(), split = cid ? viewSplit() : null;
@@ -65,8 +68,8 @@ var Store = (function(){
   function loadClinic(cid){
     var st = readRaw(keyC(cid));
     if(!st || String(st.ver) !== String(DEMO_DATA_VERSION) || !st.vars || st.partial || !st.vars.CASE_ITEMS) return false;
-    CLINIC_VAR_NAMES.forEach(function(n){ if(n!=='PROJECT_LIBRARY' && n!=='LIB_CASES' && st.vars.hasOwnProperty(n)) assignInPlace(n, st.vars[n]); });
-    buildClinicViews(st.vars.PROJECT_LIBRARY || [], st.vars.LIB_CASES || []);
+    CLINIC_VAR_NAMES.forEach(function(n){ if(n!=='PROJECT_LIBRARY' && n!=='LIB_CASES' && n!=='PROJECT_CATEGORIES' && st.vars.hasOwnProperty(n)) assignInPlace(n, st.vars[n]); });
+    buildClinicViews(st.vars.PROJECT_LIBRARY || [], st.vars.LIB_CASES || [], st.vars.PROJECT_CATEGORIES || {});
     return true;
   }
   function afterLoad(){
@@ -165,7 +168,8 @@ var Store = (function(){
     if(e.key === KEY_G && e.newValue){
       if(loadGlobal()){
         if(cid){ /* 医院资料变了：合成数组按新的医院资料重建（IN 项保持不变） */
-          buildClinicViews(PROJECT_LIBRARY.filter(function(p){ return p.origin!=='KR'; }), LIB_CASES.filter(function(c){ return c.source!=='travel'; }));
+          var inCats = {}; Object.keys(PROJECT_CATEGORIES).forEach(function(k){ if(PROJECT_CATEGORIES[k].origin!=='KR') inCats[k] = PROJECT_CATEGORIES[k]; });
+          buildClinicViews(PROJECT_LIBRARY.filter(function(p){ return p.origin!=='KR'; }), LIB_CASES.filter(function(c){ return c.source!=='travel'; }), inCats);
         }
         afterLoad();
         if(window.GUARD_ROLES && !guardPage(window.GUARD_ROLES)) return; /* 本账号被停用/重置：回登录页 */
