@@ -217,7 +217,17 @@ function bkAddBeauty(){
   var el = document.getElementById('bk-br-'+id); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); /* 自动捲到新的那一行 */
 }
 function bkDelBeauty(i){ bkBeautyRows().splice(i, 1); BK.err = ''; bkRender(true); }
-function bkBeautySkip(){ BK.f.beauty = []; BK.err = ''; bkNextStep(); }
+/* ［跳过］：还没填任何一笔 → 直接跳过；已经填了 → 先确认"已填写的医美史不会保存"，确定才清空跳过 */
+function bkBeautyHasInput(){ return bkBeautyRows().some(function(r){ return (r.ym||'') || (r.project||'').trim(); }); }
+function bkBeautySkip(){
+  if(!bkBeautyHasInput()) return bkBeautySkipNow();
+  var ov = document.createElement('div'); ov.id = 'bk-skip-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(27,38,53,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:20px 18px;width:100%;max-width:448px;box-sizing:border-box;"><div style="font-size:15px;line-height:1.7;margin-bottom:16px;">'+bt('beauty.skipQ')+'</div>'+
+    '<button type="button" class="bk-btn" onclick="bkBeautySkipNow()">'+bt('beauty.skipYes')+'</button><button type="button" class="bk-btn ghost" style="width:100%;flex:none;" onclick="bkCloseSkip()">'+bt('beauty.skipNo')+'</button></div>';
+  document.body.appendChild(ov);
+}
+function bkCloseSkip(){ var ov = document.getElementById('bk-skip-ov'); if(ov) ov.remove(); }
+function bkBeautySkipNow(){ bkCloseSkip(); BK.f.beauty = []; BK.err = ''; bkNextStep(); }
 function bkBeautyNext(){
   var rows = bkBeautyRows().filter(function(r){ return (r.ym||'') || (r.project||'').trim(); }); /* 整行没填的直接丢掉 */
   var cur = dateStr(demoNow()).slice(0,7);

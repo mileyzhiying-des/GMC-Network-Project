@@ -747,6 +747,10 @@ function renderClientCases(name){
 }
 
 /* 医美史记录列表（客户详情"医美史 · 案件记录"和案件基础资料共用）：年月 · 项目 · 来源 +"本次新增"标记 */
+function beautyMetaText(r){
+  var c = r.caseId ? CASE_ITEMS.filter(function(x){ return x.id===r.caseId; })[0] : null;
+  return aEscC(r.source)+' · 登记 '+aEscC((r.addedAt||'').slice(0,10)||'—')+' · 案件 '+(c ? aEscC(c.caseNo) : '—')+(r.by ? ' · '+aEscC(r.by) : '');
+}
 function beautyListHtml(cl){
   var rs = beautyRecordsOf(cl).slice().sort(function(a,b){ return (b.year*100+b.month)-(a.year*100+a.month); });
   if(!rs.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">暂无医美史记录</div>';
@@ -754,7 +758,7 @@ function beautyListHtml(cl){
     var isNew = beautyRecordIsNew(r);
     return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:13px;flex-wrap:wrap;"><span style="color:var(--slate2);width:78px;flex-shrink:0;">'+beautyYm(r)+'</span><span style="flex:1;min-width:0;font-weight:700;">'+aEscC(r.project)+'</span>'+
       (isNew ? '<span class="status-pill" style="background:var(--terracotta);color:#fff;font-weight:700;">本次新增</span>' : '')+
-      '<span style="font-size:11px;color:var(--muted);">'+aEscC(r.source)+'</span></div>';
+      '<span style="flex-basis:100%;font-size:11px;color:var(--muted);padding-left:86px;">'+beautyMetaText(r)+'</span></div>'; /* 来源信息永久保留，显示在小字里 */
   }).join('');
 }
 /* 案件基础资料里的"医美史"一行：列出客户的医美史（本次新增有明显标记）+ ［＋补登］（来源"室长登记"，记为这个案件的本次新增） */
@@ -784,7 +788,7 @@ function saveBeautyAdd(){
   var name = c ? c.name : document.getElementById('detail-name').textContent, cl = clientByName(name);
   if(!ym || !project){ err.textContent = '时间（年 + 月）和项目都要填'; err.style.display = 'block'; return; }
   if(!cl) return;
-  addBeautyRecord(cl, {year:+ym.slice(0,4), month:+ym.slice(5,7), project:project, source:'室长登记', newCaseId:c ? c.id : null});
+  addBeautyRecord(cl, {year:+ym.slice(0,4), month:+ym.slice(5,7), project:project, source:'室长登记', caseId:c ? c.id : null, newCaseId:c ? c.id : null});
   cl.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'补登医美史：'+ym+' '+project, dt:nowFullDt(), kind:'plain'});
   closeBeautyAdd(); buildHistoryList(name); renderClientTimeline(name);
   if(c){ if(typeof continuationInfo==='function' && continuationInfo(c)) onNewHistoryChanged(); else renderCaseBody(c); }
