@@ -79,3 +79,116 @@ function i18nStart(){
   obs.observe(document.body, {childList:true, subtree:true});
   i18nWalk(document.body);
 }
+
+/* ================= 客户自助预约页（booking.html）词典：只有印尼文 / 中文，两种都完整（2026-10-06·B1） =================
+   bt('key', {var:值}) 取当前预约页语言的文字；变量写成 {name} 这样。 */
+var BOOK_LANG = 'id';
+var BOOK_DICT = {
+  'brand.sub':   {id:'Reservasi online', zh:'在线预约'},
+  'lang.id':     {id:'Bahasa Indonesia', zh:'Bahasa Indonesia'},
+  'lang.zh':     {id:'中文', zh:'中文'},
+  'step.of':     {id:'Langkah {n} dari {total}', zh:'第 {n} 步，共 {total} 步'},
+  'btn.next':    {id:'Lanjut', zh:'下一步'},
+  'btn.back':    {id:'Kembali', zh:'返回'},
+  'btn.confirm': {id:'Konfirmasi', zh:'确认'},
+  'tz':          {id:'Waktu setempat klinik ({tz})', zh:'诊所当地时间（{tz}）'},
+  'entry.walkin':{id:'Check-in mandiri: waktu kunjungan = sekarang ({time})', zh:'到店自己填：预约时间 = 现在（{time}）'},
+  'entry.link':  {id:'Waktu dari tautan: {time}', zh:'链接里的预约时间：{time}'},
+  'entry.change':{id:'Ubah waktu', zh:'改选时间'},
+  /* 1 选时间 */
+  's.time':      {id:'Pilih tanggal & waktu', zh:'选择日期和时间'},
+  'time.hint':   {id:'Jam praktik {open}–{close}. Slot yang penuh tidak dapat dipilih.', zh:'营业时间 {open}–{close}，已满的时段不能选。'},
+  'time.full':   {id:'Penuh', zh:'已满'},
+  'time.closed': {id:'Libur', zh:'休诊'},
+  'time.lunch':  {id:'Istirahat', zh:'午休'},
+  'time.none':   {id:'Tidak ada slot tersedia pada hari ini.', zh:'这一天没有可约的时段。'},
+  'time.pick':   {id:'Pilih satu slot waktu.', zh:'请选择一个时段。'},
+  'time.chosen': {id:'Dipilih: {time}', zh:'已选：{time}'},
+  'time.taken':  {id:'Slot ini baru saja penuh. Silakan pilih waktu lain.', zh:'这个时段刚刚被约满了，请重新选择时间。'},
+  /* 2 验证手机 */
+  's.phone':     {id:'Verifikasi nomor ponsel', zh:'验证手机号'},
+  'phone.label': {id:'Nomor ponsel', zh:'手机号'},
+  'phone.locked':{id:'Nomor dari tautan reservasi', zh:'来自预约链接的手机号'},
+  'phone.send':  {id:'Kirim kode verifikasi', zh:'发送验证码'},
+  'phone.demo':  {id:'Demo: kode dikirim ke {phone}. Kode Anda: {code}', zh:'演示：验证码已发送到 {phone}，验证码：{code}'},
+  'phone.code':  {id:'Kode verifikasi (6 digit)', zh:'验证码（6 位）'},
+  'phone.verify':{id:'Verifikasi', zh:'验证'},
+  'phone.resend':{id:'Kirim ulang kode', zh:'重新发送验证码'},
+  'phone.bad':   {id:'Masukkan nomor ponsel yang valid.', zh:'请输入有效的手机号。'},
+  'code.bad':    {id:'Kode salah.', zh:'验证码不对。'},
+  'code.expired':{id:'Kode kedaluwarsa. Kirim ulang kode.', zh:'验证码已过期，请重新发送。'},
+  'code.first':  {id:'Kirim kode verifikasi terlebih dahulu.', zh:'请先获取验证码。'},
+  'phone.other': {id:'Silakan gunakan nomor ponsel lain.', zh:'请改用其他手机号。'},
+  /* 3 个人资料 */
+  's.profile':   {id:'Data diri', zh:'个人资料'},
+  'profile.back':{id:'Data Anda sudah tersimpan. Periksa lalu konfirmasi.', zh:'已带出您登记过的资料，请确认。'},
+  'profile.name':{id:'Nama lengkap', zh:'姓名'},
+  'profile.gender':{id:'Jenis kelamin', zh:'性别'},
+  'gender.f':    {id:'Perempuan', zh:'女'},
+  'gender.m':    {id:'Laki-laki', zh:'男'},
+  'profile.dob': {id:'Tanggal lahir', zh:'出生日期'},
+  'profile.errName':{id:'Nama wajib diisi.', zh:'请填写姓名。'},
+  'profile.errDob':{id:'Tanggal lahir wajib diisi.', zh:'请填写出生日期。'},
+  'mismatch.q':  {id:'Nomor ini sudah terdaftar atas nama {reg}. Apakah itu Anda?', zh:'这个手机号已登记为 {reg}，是本人吗？'},
+  'mismatch.yes':{id:'Ya, itu saya', zh:'是，本人'},
+  'mismatch.no': {id:'Bukan, gunakan nomor lain', zh:'不是，换一个手机号'},
+  /* 4 来访目的 */
+  's.purpose':   {id:'Tujuan kunjungan', zh:'来访目的'},
+  'purpose.面诊商谈':{id:'Konsultasi tindakan', zh:'面诊商谈'},
+  'purpose.皮肤商谈':{id:'Konsultasi kulit', zh:'皮肤商谈'},
+  'purpose.术后管理':{id:'Perawatan pasca tindakan', zh:'术后管理'},
+  'purpose.复诊':{id:'Kontrol ulang', zh:'复诊'},
+  'purpose.皮肤管理':{id:'Perawatan kulit', zh:'皮肤管理'},
+  'purpose.note':{id:'Hal yang ingin dikonsultasikan (opsional)', zh:'想咨询的内容（选填）'},
+  /* 5 健康资料 */
+  's.health':    {id:'Data kesehatan', zh:'健康资料'},
+  'health.prev': {id:'Ini isian Anda sebelumnya. Ubah jika ada perubahan.', zh:'这是您上次填写的内容，有变化再修改。'},
+  'health.history':{id:'Riwayat penyakit / alergi', zh:'病史 / 过敏史'},
+  'health.beauty':{id:'Riwayat tindakan estetik sebelumnya', zh:'过往医美史'},
+  'health.ph':   {id:'Tulis "tidak ada" jika tidak ada', zh:'没有请写"无"'},
+  /* 6 同意 */
+  's.consent':   {id:'Persetujuan', zh:'同意'},
+  'consent.policy':{id:'Kebijakan privasi (versi {v})', zh:'隐私政策（版本 {v}）'},
+  'consent.c1':  {id:'Saya menyetujui pengumpulan data pribadi saya.', zh:'我同意收集我的个人资料。'},
+  'consent.c2':  {id:'Saya menyetujui pemrosesan data kesehatan saya.', zh:'我同意处理我的健康资料。'},
+  'consent.err': {id:'Kedua persetujuan wajib dicentang.', zh:'两项同意都必须勾选。'},
+  'consent.note':{id:'Surat persetujuan resmi (privasi / transfer data lintas negara) akan ditandatangani langsung di klinik.', zh:'正式《隐私/数据跨境使用授权同意书》到店后当面签署。'},
+  /* 7 确认 */
+  's.confirm':   {id:'Konfirmasi & kirim', zh:'确认并提交'},
+  'sum.time':    {id:'Waktu', zh:'预约时间'},
+  'sum.name':    {id:'Nama', zh:'姓名'},
+  'sum.phone':   {id:'Ponsel', zh:'手机号'},
+  'sum.purpose': {id:'Tujuan', zh:'来访目的'},
+  'sum.note':    {id:'Catatan', zh:'咨询内容'},
+  'btn.submit':  {id:'Kirim reservasi', zh:'提交预约'},
+  /* 8 完成 */
+  'done.title':  {id:'Reservasi berhasil!', zh:'预约成功！'},
+  'done.walkin': {id:'Terima kasih. Silakan lapor ke resepsionis; staf akan mendaftarkan kedatangan Anda.', zh:'谢谢。请告知前台，工作人员会为您登记到店。'},
+  'done.case':   {id:'Nomor kasus', zh:'案件编号'},
+  'done.addr':   {id:'Alamat klinik', zh:'诊所地址'},
+  'done.tel':    {id:'Telepon', zh:'电话'},
+  'done.sms':    {id:'SMS konfirmasi telah dikirim (demo):', zh:'已发送确认短信（演示）：'},
+  'done.manage': {id:'Lihat / batalkan reservasi', zh:'查看 / 取消预约'},
+  /* 查看 / 取消 / 重新预约 */
+  'view.title':  {id:'Reservasi Anda', zh:'您的预约'},
+  'view.verify': {id:'Verifikasi nomor ponsel Anda untuk melihat reservasi.', zh:'验证手机号后查看预约。'},
+  'view.notfound':{id:'Reservasi tidak ditemukan.', zh:'找不到这个预约。'},
+  'view.mismatch':{id:'Nomor ponsel tidak sesuai dengan reservasi ini.', zh:'手机号和这个预约不符。'},
+  'view.status.waiting':{id:'Menunggu kunjungan', zh:'待到店'},
+  'view.status.arrived':{id:'Sudah hadir', zh:'已到店'},
+  'view.status.cancelled':{id:'Dibatalkan', zh:'已取消'},
+  'view.status.noshow':{id:'Tidak hadir', zh:'未到店'},
+  'view.cancel': {id:'Batalkan reservasi', zh:'取消预约'},
+  'view.cancelQ':{id:'Batalkan reservasi ini?', zh:'确定取消这个预约吗？'},
+  'view.cancelT':{id:'Anda dapat membatalkan kapan saja sebelum jam reservasi.', zh:'预约时间前都可以取消。'},
+  'view.cancelYes':{id:'Ya, batalkan', zh:'确定取消'},
+  'view.cancelNo':{id:'Tidak', zh:'不取消'},
+  'view.cancelled':{id:'Reservasi telah dibatalkan. SMS pembatalan dikirim (demo).', zh:'预约已取消，已发送取消短信（演示）。'},
+  'view.cant':   {id:'Reservasi ini tidak dapat dibatalkan lagi.', zh:'这个预约已经不能取消了。'},
+  'view.rebook': {id:'Buat reservasi baru', zh:'重新预约'},
+  'view.rebookHint':{id:'Data Anda akan terisi otomatis.', zh:'您的资料会自动带入。'}
+};
+function bt(key, vars){
+  var e = BOOK_DICT[key], s = e ? (e[BOOK_LANG] || e.zh) : key;
+  return s.replace(/\{(\w+)\}/g, function(m, k){ return vars && vars[k]!==undefined ? vars[k] : m; });
+}

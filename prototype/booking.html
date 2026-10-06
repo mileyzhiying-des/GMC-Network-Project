@@ -1,49 +1,63 @@
 <!doctype html>
-<html lang="zh">
+<html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GMC Network · 预约</title>
+<title>GMC Network · Reservasi / 预约</title>
 <link rel="stylesheet" href="/shared/app.css">
+<style>
+  body{background:var(--bg,#F4F6F9);}
+  .bk-wrap{max-width:480px;margin:0 auto;padding:16px 16px 40px;min-height:100vh;display:flex;flex-direction:column;gap:14px;}
+  .bk-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .bk-lang{display:inline-flex;border:1px solid var(--border);border-radius:999px;overflow:hidden;background:#fff;}
+  .bk-lang button{border:0;background:transparent;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--slate2);font-family:inherit;}
+  .bk-lang button.on{background:var(--navy);color:#fff;font-weight:700;}
+  .bk-card{background:#fff;border-radius:16px;padding:20px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .bk-title{font-size:17px;font-weight:700;margin-bottom:4px;}
+  .bk-sub{font-size:12px;color:var(--slate2);line-height:1.6;margin-bottom:14px;}
+  .bk-step{font-size:11px;color:var(--muted);margin-bottom:6px;}
+  .bk-bar{height:4px;background:var(--border2);border-radius:4px;margin-bottom:14px;overflow:hidden;}
+  .bk-bar span{display:block;height:100%;background:var(--navy);}
+  .bk-days{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;}
+  .bk-day{flex:0 0 auto;min-width:58px;padding:8px 6px;border:1px solid var(--border);border-radius:12px;text-align:center;font-size:12px;cursor:pointer;background:#fff;}
+  .bk-day b{display:block;font-size:16px;}
+  .bk-day.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .bk-day.off{background:var(--border2);color:var(--dim);cursor:default;}
+  .bk-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .bk-slot{padding:11px 4px;border:1px solid var(--border);border-radius:10px;text-align:center;font-size:13px;cursor:pointer;background:#fff;}
+  .bk-slot.on{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:700;}
+  .bk-slot.off{background:var(--border2);color:var(--dim);cursor:default;}
+  .bk-slot small{display:block;font-size:10px;}
+  .bk-field{margin-bottom:12px;}
+  .bk-field label{display:block;font-size:12px;color:var(--slate2);margin-bottom:5px;}
+  .bk-field input[type=text],.bk-field input[type=tel],.bk-field input[type=date],.bk-field select,.bk-field textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;box-sizing:border-box;}
+  .bk-btn{width:100%;padding:14px;border:0;border-radius:12px;background:var(--navy);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;}
+  .bk-btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--border);margin-top:8px;font-weight:400;}
+  .bk-btn.danger{background:#C1454A;}
+  .bk-btn:disabled{opacity:.4;cursor:default;}
+  .bk-err{color:#C1454A;font-size:12px;margin:0 0 10px;line-height:1.6;}
+  .bk-info{background:var(--border2);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.7;color:var(--slate2);margin-bottom:12px;}
+  .bk-demo{background:#FBF0C9;color:#8F6F0C;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.7;margin-bottom:12px;}
+  .bk-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border2);font-size:13px;}
+  .bk-row span:first-child{color:var(--muted);flex-shrink:0;}
+  .bk-radio{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;font-size:14px;cursor:pointer;background:#fff;}
+  .bk-radio.on{border-color:var(--navy);background:#F1F4F8;font-weight:700;}
+  .bk-check{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.6;margin-bottom:10px;cursor:pointer;}
+  .bk-sms{background:#F1F4F8;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.7;color:var(--slate2);white-space:pre-wrap;word-break:break-all;}
+</style>
 </head>
 <body>
-<div id="app">
-
-<section class="page active" style="display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:28px 16px;gap:16px;background:var(--bg,#F4F6F9);">
-  <div><span class="logo">GMC Network</span><span class="logo-sub">预约登记</span></div>
-  <div class="modal-box" style="width:420px;max-width:100%;">
-    <div style="font-size:16px;font-weight:700;margin-bottom:4px;">请填写预约资料</div>
-    <div id="guest-form-sub" style="font-size:12px;color:var(--slate);margin-bottom:12px;"></div>
-    <div id="guest-form-body"></div>
-  </div>
-  <div id="booking-done" style="display:none;max-width:420px;text-align:center;line-height:1.8;">
-    <div style="font-size:18px;font-weight:700;margin-bottom:6px;">✅ 预约已提交</div>
-    <div style="color:var(--slate2);font-size:13px;">室长会在工作台里看到您的预约。（演示：已写入共享数据，印尼室长端的其他标签页会立刻看到。）</div>
-  </div>
-  <a href="/login.html" style="font-size:12px;color:var(--slate);">返回登录页</a>
-</section>
+<div class="bk-wrap">
+  <div class="bk-head"><div><span class="logo">GMC Network</span> <span class="logo-sub" id="bk-sub"></span></div>
+    <div class="bk-lang"><button id="lang-id" onclick="bkSetLang('id')">Bahasa Indonesia</button><button id="lang-zh" onclick="bkSetLang('zh')">中文</button></div></div>
+  <div id="bk-root"></div>
 </div>
 <div id="toast-stack"></div>
 <script src="/shared/rules.js"></script>
+<script src="/shared/i18n.js"></script>
 <script src="/shared/ui.js"></script>
 <script src="/shared/data.js"></script>
 <script src="/shared/store.js"></script>
-<script>
-/* 客户自助填写预约表单：复用 ui.js 里的客人表单（同 IN 端「客人现场自己填资料」）。
-   地址参数：?date=2026-09-19&time=10:00&purpose=面诊商谈&phone=+62...&ph=占位ID（预约占位链接带的参数；没带就用演示默认值） */
-(function(){
-  var q = new URLSearchParams(location.search);
-  var ph = q.get('ph') ? RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===q.get('ph'); })[0] : null;
-  var d = ph ? ph.date : (q.get('date') || dateStr(demoNow()));
-  var t = ph ? ph.time : (q.get('time') || '10:00');
-  GUEST_FORM = Object.assign({name:'', gender:'女', dob:'', history:'', consent:false, err:''},
-    {date:d, time:t, phone:ph ? ph.phone : (q.get('phone')||''), purpose:ph ? (ph.purpose||'面诊商谈') : (q.get('purpose')||'面诊商谈'), phId:ph ? ph.id : null});
-  renderGuestForm();
-  /* 这个页面里没有弹窗外壳：提交成功后显示"已提交"，并立即存档让其他标签页同步 */
-  closeGuestForm = function(){ GUEST_FORM = null; document.getElementById('guest-form-body').parentNode.style.display = 'none'; document.getElementById('booking-done').style.display = 'block'; };
-  var origSubmit = submitGuestForm;
-  submitGuestForm = function(){ origSubmit(); Store.save(); };
-})();
-</script>
+<script src="/shared/booking.js"></script>
 </body>
 </html>

@@ -296,6 +296,124 @@ function caseBasic(c){
   return {gender:cl ? cl.gender : (b.gender||'—'), dob:cl ? (cl.dob||'—') : (b.dob||'—'), contact:cl ? (cl.phone||'—') : (b.contact||'—'), history:cl ? (cl.history||'无') : (b.history||'无')};
 }
 
+/* ================= 客户自助预约（2026-10-06·B；页面是 booking.html + shared/booking.js，规则和数据都在这里） ================= */
+/* ---- 短信（演示：不真的发，全部记在 SMS_LOG；模板读诊所设定，验证码格式固定） ---- */
+var SMS_LOG = [];   /* {id, ts, to, kind, text, caseId} */
+var SMS_SEQ = 1;
+var SMS_KIND_NAMES = {code:'验证码', link:'预约链接', confirm:'预约确认', remind:'预约提醒', cancel:'预约取消'};
+var SMS_CODE_FORMAT = '【GMC Network】Kode verifikasi / 验证码：{code}（5 menit / 5 分钟内有效）。Jangan beritahu siapa pun / 请勿告诉他人。';
+function bookingUrl(params){ return location.origin + '/booking.html?' + new URLSearchParams(params).toString(); }
+function caseViewUrl(c){ return bookingUrl({view:c.caseNo}); }
+function logSms(kind, to, text, caseId){
+  var s = {id:'sms'+(SMS_SEQ++), ts:nowFullDt(), to:to, kind:kind, text:text, caseId:caseId||null};
+  SMS_LOG.unshift(s);
+  if(SMS_LOG.length > 300) SMS_LOG.length = 300;
+  return s;
+}
+/* 按类型发短信：code 用固定格式，其余读诊所设定的模板 */
+function sendSms(kind, to, vars, caseId){
+  var tpl = kind==='code' ? SMS_CODE_FORMAT : CLINIC_SETTINGS.sms[kind];
+  var text = smsFill(tpl, Object.assign({clinic:CLINIC_SETTINGS.name, address:CLINIC_SETTINGS.address, phone:CLINIC_SETTINGS.phone}, vars||{}));
+  return logSms(kind, to, text, caseId);
+}
+function smsVarsOfCase(c){ return {name:c.name, time:c.visitDate+' '+c.visitTime, url:caseViewUrl(c)}; }
+
+/* ---- 时段：每个时段的预约数达到诊所设定的上限就不能再选 ---- */
+function slotBookingCount(date, time, excludePhId){
+  var slot = slotOf(time), n = 0;
+  CASE_ITEMS.forEach(function(c){
+    if(c.visitDate===date && c.visitTime && slotOf(c.visitTime)===slot){ var v = visitStateOf(c); if(v!=='预约取消' && v!=='未到店') n++; }
+  });
+  RESERVATION_PLACEHOLDERS.forEach(function(ph){ if(ph.date===date && slotOf(ph.time)===slot && ph.id!==excludePhId) n++; });
+  return n;
+}
+/* 返回 '' = 可约；否则是不可约的原因：closed 休诊 / lunch 午休 / outside 不在可预约时段 / past 已过 / full 额满 */
+function slotBlockReason(date, time, excludePhId){
+  var d = new Date(date+'T00:00:00');
+  if(isRescheduleDateDisabled(d)) return 'closed';
+  if(slotIsLunch(time)) return 'lunch';
+  if(!slotBookable(time)) return 'outside';
+  if(new Date(date+'T'+time+':00') <= demoNow()) return 'past';
+  if(slotBookingCount(date, time, excludePhId) >= CLINIC_SETTINGS.slotCapacity) return 'full';
+  return '';
+}
+/* 当前时段（到店自己填：时间 = 现在，取整到 30 分钟） */
+function currentSlotNow(){ var d = demoNow(); return {date:dateStr(d), time:pad2(d.getHours())+':'+(d.getMinutes()>=30?'30':'00')}; }
+
+/* ---- 找占位（链接里的 ph 参数）：还在 → 活的；超时了 → 在历史里，链接仍有效（第 1 步时间可改选） ---- */
+function findPlaceholder(id){
+  var live = RESERVATION_PLACEHOLDERS.filter(function(p){ return p.id===id; })[0];
+  if(live) return {ph:live, live:true};
+  var old = PLACEHOLDER_HISTORY.filter(function(p){ return p.id===id; })[0];
+  return old ? {ph:old, live:false} : null;
+}
+
+/* ---- 提交自助预约（booking.html 第 7 步）：建客户档案（新客人）/ 更新老客人资料、记同意书、建预约案件、占位转预约、通知 IN、发确认短信 ----
+   f：{entry:'web'|'link'|'walkin', phId, date, time, phone, name, gender, dob, history, beautyHistory, purpose, note, rebookFrom(取消后重新预约的原案件 id)} */
+function submitSelfBooking(f){
+  if(f.entry==='walkin'){ var cs = currentSlotNow(); f.date = cs.date; f.time = cs.time; }
+  else { var why = slotBlockReason(f.date, f.time, f.phId); if(why) return {ok:false, reason:why}; }
+  var consent = {version:CLINIC_SETTINGS.privacyVersion, ts:nowFullDt(), source:'客户自助预约'};
+  var cl = clientByPhone(f.phone), isNew = !cl;
+  if(isNew){
+    cl = addClient({name:f.name, phone:f.phone, gender:f.gender, dob:f.dob, history:(f.history||'').trim()||'无', createdBy:'客人自助', source:'客户自助预约建档', consent:consent});
+    cl.beautyHistory = (f.beautyHistory||'').trim();
+  } else {
+    var ch = [];
+    if(f.gender && f.gender!==cl.gender){ ch.push('性别 '+cl.gender+' → '+f.gender); cl.gender = f.gender; }
+    if(f.dob && f.dob!==cl.dob){ ch.push('出生日期 '+(cl.dob||'—')+' → '+f.dob); cl.dob = f.dob; }
+    var h = (f.history||'').trim() || '无'; if(h!==cl.history){ ch.push('病史/过敏史 '+cl.history+' → '+h); cl.history = h; }
+    var bh = (f.beautyHistory||'').trim(); if(bh!==(cl.beautyHistory||'')){ ch.push('过往医美史已更新'); cl.beautyHistory = bh; }
+    cl.consents.push(consent);
+    if(ch.length) cl.timeline.push({stage:'基础信息修改', actor:'客人', action:'客人在预约时更新：'+ch.join('；'), dt:nowFullDt(), kind:'plain'});
+    cl.updated = '刚刚';
+  }
+  if(f.phId) RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==f.phId; }); /* 占位转为预约来访 */
+  var c = createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose);
+  c.visitNote = (f.note||'').trim(); c.bookEntry = f.entry; c.remindSent = false;
+  if(f.entry==='walkin') c.logEntries[0].action = '到店自己填资料（平板/手机）预约成功，生成 Case ID '+c.caseNo;
+  else if(f.entry==='link') c.logEntries[0].action = '客人通过预约链接填完资料，预约成功，生成 Case ID '+c.caseNo;
+  var when = dateLabel(f.date)+' '+f.time, tail = '：'+cl.name+'（'+c.caseNo+'）'+when+(c.visitNote ? ' · '+c.visitNote : '');
+  var old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
+  if(old && old.cancelNotifId){
+    /* 取消后马上重新预约：把"客人取消预约"那条通知收回，只留一条合并的"客人改约" */
+    NOTIFS = NOTIFS.filter(function(n){ return n.id!==old.cancelNotifId; }); old.cancelNotifId = null;
+    pushNotif('预约', '客人改约：'+cl.name+' 原 '+dateLabel(old.visitDate)+' '+old.visitTime+' → 新 '+when+'（'+c.caseNo+'）', {caseId:c.id, names:workingIN()});
+  } else if(f.entry==='walkin') pushNotif('预约', '客人到店自己填完资料'+tail+'，请在客人到店后点［已到店］', {caseId:c.id, names:workingIN()});
+  else if(f.phId) pushNotif('预约', '占位客人填完资料'+tail, {caseId:c.id, names:workingIN()});
+  else pushNotif('预约', '客人自助预约提交'+tail, {caseId:c.id, names:workingIN()});
+  sendSms('confirm', f.phone, smsVarsOfCase(c), c.id);
+  return {ok:true, c:c, client:cl, isNew:isNew};
+}
+
+/* ---- 客人自己取消预约（booking.html?view=）：预约时间前都可以取消，没有截止时间 ---- */
+function customerCanCancel(c){ return c.stage==='booked' && c.subState==='waiting' && !!c.visitDate && new Date(c.visitDate+'T'+c.visitTime+':00') > demoNow(); }
+function customerCancelCase(caseId){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
+  if(!c || !customerCanCancel(c)) return {ok:false};
+  c.subState = 'cancelled'; c.cancelReason = '预约取消';
+  updateCaseStage(c);
+  logCaseEvent(c, '客人', '客人自行取消预约（原 '+c.visitDate+' '+c.visitTime+'）');
+  var n = pushNotif('预约', '客人取消预约：'+c.name+'（'+c.caseNo+'）原 '+dateLabel(c.visitDate)+' '+c.visitTime, {caseId:c.id, names:workingIN()});
+  c.cancelNotifId = n.id; c.cancelledAt = Date.now();
+  sendSms('cancel', clientPhoneOf(c.name), smsVarsOfCase(c), c.id);
+  return {ok:true, c:c};
+}
+
+/* ---- 提醒短信：按诊所设定的"预约前 N 小时"自动发（演示用演示时钟判断）；force=true 是演示按钮：立刻发给所有还没发过的待访问预约 ---- */
+function checkReminders(force){
+  var now = demoNow().getTime(), n = 0;
+  CASE_ITEMS.forEach(function(c){
+    if(c.remindSent || c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime) return;
+    var t = new Date(c.visitDate+'T'+c.visitTime+':00').getTime();
+    if(t <= now) return;
+    if(!force && now < t - CLINIC_SETTINGS.remindBeforeHours*3600000) return;
+    var to = clientPhoneOf(c.name); if(!to) return;
+    sendSms('remind', to, smsVarsOfCase(c), c.id); c.remindSent = true; n++;
+  });
+  return n;
+}
+
 /* ================= dashboard: 预约来访 + 预约占位（2026-09-29 新增，IN-DASH-01） ================= */
 /* KR 院长名单（演示数据，以后由韩国端维护）：active=false 为停用，停用的不显示在选项里（2026-10-02） */
 var DIRECTOR_INFO = [{name:'김민석 원장', active:true}, {name:'이수진 원장', active:true}, {name:'박지훈 원장', active:false}];
