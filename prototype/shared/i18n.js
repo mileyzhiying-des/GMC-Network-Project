@@ -158,6 +158,7 @@ var BOOK_DICT = {
   's.confirm':   {id:'Konfirmasi & kirim', zh:'确认并提交'},
   'sum.time':    {id:'Waktu', zh:'预约时间'},
   'sum.name':    {id:'Nama', zh:'姓名'},
+  'sum.nameNote':{id:'Jika data berubah, beri tahu koordinator saat tiba di klinik.', zh:'资料有变化请到店时告诉室长'},
   'sum.phone':   {id:'Ponsel', zh:'手机号'},
   'sum.purpose': {id:'Tujuan', zh:'来访目的'},
   'sum.note':    {id:'Catatan', zh:'咨询内容'},

@@ -48,10 +48,10 @@ function bkRender(){
 }
 
 /* ---- 步骤框架 ---- */
-/* 老客人已签过当前版本的同意书 → 跳过"同意"这一步；同意书版本更新过的（或新客人）才要勾选 */
+/* 老客人（手机验证后认出）：跳过"个人资料"和"健康资料"（有变化由室长到店时修改）；已签过当前版本的同意书 → 也跳过"同意"；同意书版本更新过的（或新客人）才要勾选 */
 function bkLastConsent(){ var cl = BK.client; return cl ? (cl.consents||[]).slice(-1)[0] || null : null; }
 function bkNeedConsent(){ var last = bkLastConsent(); return !last || last.version !== CLINIC_SETTINGS.privacyVersion; }
-function bkSkipStep(s){ return (s==='time' && BK.entry==='walkin') || (s==='phone' && BK.verified) || (s==='consent' && !bkNeedConsent()); }
+function bkSkipStep(s){ return (s==='time' && BK.entry==='walkin') || (s==='phone' && BK.verified) || ((s==='profile' || s==='health') && !!BK.client) || (s==='consent' && !bkNeedConsent()); }
 function bkStepList(){ return BK_STEPS.filter(function(s){ return !bkSkipStep(s); }); }
 function bkFrame(titleKey, bodyHtml){
   var list = bkStepList(), cur = list.indexOf(BK_STEPS[BK.step]);
@@ -208,7 +208,7 @@ function bkConsentNext(){
 /* ---- 第 7 步：确认并提交 ---- */
 function bkStepConfirm(){
   var f = BK.f, row = function(k, v){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(v)+'</span></div>'; };
-  return bkFrame('s.confirm', row('sum.time', bkTimeText(f.date, f.time))+row('sum.name', f.name)+row('sum.phone', f.phone)+row('sum.purpose', bt('purpose.'+f.purpose))+(f.note ? row('sum.note', f.note) : '')+
+  return bkFrame('s.confirm', row('sum.time', bkTimeText(f.date, f.time))+(BK.client ? '<div class="bk-row"><span>'+bt('sum.name')+'</span><span style="text-align:right;">'+bkH(f.name)+'<br><small style="color:var(--muted);">'+bt('sum.nameNote')+'</small></span></div>' : row('sum.name', f.name))+row('sum.phone', f.phone)+row('sum.purpose', bt('purpose.'+f.purpose))+(f.note ? row('sum.note', f.note) : '')+
     '<div style="height:12px;"></div>'+bkNav('bkSubmit()', true));
 }
 function bkSubmit(){
