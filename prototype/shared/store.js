@@ -5,7 +5,7 @@
    - 超出 localStorage 容量（约 5MB）时：不报错、不卡住，console.warn + 画面上提示"演示数据过大，已重置"，之后这个页面不再存档。
    加载顺序：rules.js → ui.js → data.js → store.js →（in.html 再加 boot-in.js） */
 var PERSIST_VARS = [
-  'CLINIC_TZ', 'DEMO_SHIFT_MS',
+  'CLINIC_SETTINGS', 'DEMO_SHIFT_MS',
   'RESUMED_VISITS', 'PLACEHOLDER_HISTORY', 'PLACEHOLDER_SEQ', 'RESERVATION_PLACEHOLDERS',
   'CLIENTS', 'CLIENT_HOLDINGS', 'CLIENT_FIX_LOG',
   'CASE_ITEMS', 'CASE_NO_SEQ',
@@ -58,6 +58,7 @@ var Store = (function(){
       PERSIST_VARS.forEach(function(n){ if(st.vars.hasOwnProperty(n)) assignInPlace(n, st.vars[n]); });
       lastJson = snapshotVars();
       if(typeof syncInCoordinators === 'function') syncInCoordinators(); /* IN 室长名单由账号算出，不存档 */
+      if(typeof applyClinicSettings === 'function') applyClinicSettings(); /* 日历行/时区等由诊所设定派生，不存档 */
       return true;
     }catch(e){ console.warn('[存档] 读取失败，使用演示数据', e); return false; }
   }

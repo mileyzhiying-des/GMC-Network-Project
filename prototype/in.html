@@ -51,7 +51,7 @@
             </div>
             <button class="cal-nav-btn" onclick="nav('in-resvhistory');renderResvHistory();" title="预约历史记录">预约历史记录</button>
             <button class="cal-nav-btn" onclick="openMemoModal()" title="新增备忘 / OFF">＋ memo</button>
-            <button class="cal-nav-btn" onclick="openCalSettings()" title="设定：诊所时区">⚙ 时区 <span id="cal-tz-label">WIB</span></button>
+            <button class="cal-nav-btn" onclick="openCalSettings()" title="诊所时区（在「诊所设定」里修改）">⚙ 时区 <span id="cal-tz-label">WIB</span></button>
             <div class="cal-nav">
               <button class="cal-nav-btn" onclick="calPrev()">‹</button>
               <button class="cal-nav-btn cal-nav-today" onclick="calToday()">今天</button>
@@ -771,18 +771,6 @@
   </div>
 </div>
 
-<!-- ============ 日历设定 MODAL（2026-10-02，诊所时区） ============ -->
-<div class="modal-overlay" id="cal-settings-overlay" style="z-index:70;" onclick="if(event.target===this) closeCalSettings()">
-  <div class="modal-box" style="width:360px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <span style="font-size:15px;font-weight:700;">设定 · 诊所时区</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeCalSettings()">✕</span>
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">日历的时间按诊所所在时区显示（默认 WIB），下面一行小字显示 KR 时间；时差不写死，随这里的设定计算；右上角天气显示诊所所在城市。</div>
-    <div id="cal-settings-body"></div>
-  </div>
-</div>
-
 <!-- ============ 新增 memo MODAL（2026-10-02·七） ============ -->
 <div class="modal-overlay" id="memo-overlay" style="z-index:70;" onclick="if(event.target===this) closeMemoModal()">
   <div class="modal-box" style="width:380px;">
@@ -882,9 +870,11 @@
 <div id="toast-stack"></div>
 
 <script src="/shared/rules.js"></script>
+<script src="/shared/i18n.js"></script>
 <script src="/shared/ui.js"></script>
 <script src="/shared/data.js"></script>
 <script src="/shared/store.js"></script>
+<script src="/shared/admin.js"></script>
 <script>
 /* 登录守卫：没登录回登录页；老板账号去老板端。通过后才加载 IN 端启动脚本 */
 window.GUARD_ROLES = ['manager', 'general'];

@@ -3,6 +3,7 @@
 
 
 document.addEventListener('DOMContentLoaded', function(){
+  try{ i18nStart(); }catch(e){ console.error('[初始化失败] 多语言', e); }
   document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
   document.querySelectorAll('.in-shell').forEach(function(shell){
     var page = shell.dataset.page;
@@ -34,7 +35,7 @@ setInterval(function(){
   });
   CASE_ITEMS.forEach(function(c){ if(c.consultStatus==='awaiting_report' && !c.overdueNotified && reportOverdueNow(c)){ c.overdueNotified = true; pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+(c.reportEta||'—')+'）', {caseId:c.id}); } });
   document.querySelectorAll('[data-visit-countdown]').forEach(function(el){
-    var left = parseInt(el.getAttribute('data-visit-countdown'),10) + 30*60000 - demoNow().getTime();
+    var left = parseInt(el.getAttribute('data-visit-countdown'),10) + noShowMs() - demoNow().getTime();
     el.textContent = left>0 ? Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒' : '已超时';
   });
 }, 1000);

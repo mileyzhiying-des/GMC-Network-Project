@@ -28,14 +28,64 @@ var TYPE_BG = {reservation:'#E4E8ED', placeholder:'#F4F6F8', travel:'var(--terra
 
 var TYPE_LABEL = {reservation:'预约来访', placeholder:'预约占位', travel:'赴韩施术'};
 
-var WK_HOURS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30'];
+/* 日历行（诊所营业时间生成，见 applyClinicSettings）；KR 医院日程是韩国那边的时间，用固定的 KR_WK_HOURS */
+var WK_HOURS = [];
+var KR_WK_HOURS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30'];
 
 /* 诊所时区（设定，默认 WIB，可切换 WITA / WIT）；KR 固定 UTC+9。时差由设定算出，不写死 */
 var TZ_OPTIONS = {WIB:{off:7, city:'雅加达', temp:31}, WITA:{off:8, city:'登巴萨（巴厘岛）', temp:30}, WIT:{off:9, city:'查亚普拉', temp:29}};
 
 var KR_TZ_OFF = 9;
 
-var CLINIC_TZ = (function(){ try{ var v = localStorage.getItem('gmc_tz'); if(v && TZ_OPTIONS[v]) return v; }catch(e){} return 'WIB'; })();
+/* ================= 诊所设定（2026-10-06·A5，Notion Accounts & Settings 第 5 节；老板/管理者在"诊所设定"页改） =================
+   所有"诊所可调"的值都放这里，日历、预约占位、未到店判定、面诊费卡、短信、客户自助预约页都读它；不再写死。
+   时区 tz 原来是 CLINIC_TZ + localStorage('gmc_tz')，现在搬到这里，CLINIC_TZ 只是它的镜像（applyClinicSettings 同步）。
+   赴韩定金比例不在这里（GMC 统一设定）。 */
+var SLOT_MIN = 30; /* 时段长度（分钟），固定 30（我的判断：设定里不提供修改） */
+var CLINIC_SETTINGS = {
+  name:'GMC 合作诊所（雅加达）', address:'Jl. Jenderal Sudirman Kav. 52, Jakarta Selatan', phone:'+62 21 5550 1234', city:'雅加达', tz:'WIB',
+  openTime:'09:00', closeTime:'17:00',   /* 营业时间（日历显示的行） */
+  bookFrom:'09:00', bookTo:'16:30',      /* 可预约时段：第一个 / 最后一个可约的开始时间 */
+  lunchFrom:'14:00', lunchTo:'15:00',    /* 午休：不可预约 */
+  closedDow:[4],                         /* 休诊日（0=周日…6=周六），默认周四 */
+  holdMinutes:15, noShowMinutes:30,      /* 预约占位倒计时 / 未到店判定 */
+  consultFee:300000,                     /* 面诊费（印尼盾） */
+  slotCapacity:2,                        /* 每个时段的预约上限（客户自助预约用） */
+  remindBeforeHours:24,                  /* 提醒短信：预约开始前几小时发送 */
+  sms:{
+    link:'您好，这里是GMC Network，麻烦点击链接填写基础信息，完成后即视为预约成功：',
+    confirm:'【{clinic}】{name}，您已预约 {time}。地址：{address}，电话：{phone}。查看/取消预约：{url}',
+    remind:'【{clinic}】{name}，提醒您 {time} 的预约。地址：{address}。查看/取消预约：{url}',
+    cancel:'【{clinic}】{name}，您 {time} 的预约已取消。如需重新预约：{url}'
+  },
+  privacyVersion:'v1.0',
+  privacyPolicy:'本诊所仅为办理预约、接待和医美咨询收集您的个人资料与健康资料，并按《隐私/数据跨境使用授权同意书》约定处理；您可随时要求查看、更正或删除。',
+  updatedAt:'', updatedBy:''
+};
+var CLINIC_TZ = CLINIC_SETTINGS.tz;
+var KR_HOSPITAL_NAME = '首尔 GMC 合作医院（演示）'; /* 合作医院（只读，来源：KR 端维护） */
+
+function timeToMin(t){ return parseInt(t.slice(0,2),10)*60 + parseInt(t.slice(3),10); }
+function minToTime(m){ return pad2(Math.floor(m/60))+':'+pad2(m%60); }
+function slotsBetween(a, b){ var r = []; for(var m = timeToMin(a); m < timeToMin(b); m += SLOT_MIN) r.push(minToTime(m)); return r; }
+function slotIsLunch(t){ var m = timeToMin(t); return m >= timeToMin(CLINIC_SETTINGS.lunchFrom) && m < timeToMin(CLINIC_SETTINGS.lunchTo); }
+function slotBookable(t){ var m = timeToMin(t); return m >= timeToMin(CLINIC_SETTINGS.bookFrom) && m <= timeToMin(CLINIC_SETTINGS.bookTo) && !slotIsLunch(t); }
+function holdMs(){ return CLINIC_SETTINGS.holdMinutes*60000; }
+function noShowMs(){ return CLINIC_SETTINGS.noShowMinutes*60000; }
+function fmtRp(n){ return 'Rp '+Number(n||0).toLocaleString('en-US'); }
+/* 短信模板填值：{clinic} {name} {time} {address} {phone} {url} {code} */
+function smsFill(tpl, v){ return String(tpl||'').replace(/\{(\w+)\}/g, function(s, k){ return v && v[k]!==undefined ? v[k] : s; }); }
+/* 设定变化后同步各处的派生值：时区镜像、日历行、改约弹窗的上午/下午时段、默认短信 */
+function applyClinicSettings(){
+  var s = CLINIC_SETTINGS;
+  if(!TZ_OPTIONS[s.tz]) s.tz = 'WIB';
+  CLINIC_TZ = s.tz;
+  WK_HOURS = slotsBetween(s.openTime, s.closeTime);
+  RESCHED_AM = slotsBetween(s.bookFrom, s.lunchFrom).filter(slotBookable);
+  RESCHED_PM = slotsBetween(s.lunchTo, minToTime(timeToMin(s.bookTo)+SLOT_MIN)).filter(slotBookable);
+  DEFAULT_SMS_TEMPLATE = s.sms.link;
+  if(typeof applyTzSetting === 'function') applyTzSetting();
+}
 
 function krTimeOf(hr){ /* 诊所时间 hr('HH:mm') → KR 时间 */
   var diff = KR_TZ_OFF - TZ_OPTIONS[CLINIC_TZ].off;
@@ -44,10 +94,6 @@ function krTimeOf(hr){ /* 诊所时间 hr('HH:mm') → KR 时间 */
   return pad2(Math.floor(t/60))+':'+pad2(t%60);
 }
 
-function setClinicTz(k){
-  CLINIC_TZ = k; try{ localStorage.setItem('gmc_tz', k); }catch(e){}
-  applyTzSetting(); openCalSettings(); renderCalendar();
-}
 
 /* ---- 今日区块 + 固定栏 memo + OFF（2026-10-02·七） ----
    "早上好"下面固定"今日"区块：最上面是今天的 OFF（KR 院长 / KR 室长 / IN 室长），下面是今日行程（时间 · 人名 · 类型）；
@@ -126,7 +172,7 @@ var KR_COORD_SCHEDULE = [
 
 var KR_DIRECTOR_SCHEDULE = (function(){
   var m = {'김민석 원장':[], '이수진 원장':[]};
-  WK_HOURS.forEach(function(h){ if(h!=='13:00' && h!=='16:00') m['김민석 원장'].push({date:D(0), time:h, title:h<'12:00'?'手术':'面诊/手术'}); }); /* 当天几乎满档 */
+  KR_WK_HOURS.forEach(function(h){ if(h!=='13:00' && h!=='16:00') m['김민석 원장'].push({date:D(0), time:h, title:h<'12:00'?'手术':'面诊/手术'}); }); /* 当天几乎满档 */
   m['김민석 원장'].push({date:D(-1), time:'10:00', title:'面诊'}, {date:D(-1), time:'14:00', title:'手术'}, {date:D(1), time:'09:00', title:'手术'});
   m['이수진 원장'].push({date:D(0), time:'11:00', title:'面诊'}, {date:D(-1), time:'15:00', title:'手术'}, {date:D(1), time:'10:30', title:'面诊'});
   return m;
@@ -191,7 +237,7 @@ function eventChipHtml(e){
     l2 = (e.purpose||'')+(e.vstate==='已到访' ? '（已到访）' : '')+(e.vstate==='未到店' ? ' 未到店' : '');
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     if(e.vstate==='待访问' && past){
-      var left = when.getTime() + 30*60000 - now.getTime();
+      var left = when.getTime() + noShowMs() - now.getTime();
       if(left > 0){ grey = ''; l2 += ' <b data-visit-countdown="'+when.getTime()+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; } /* 30 分钟内未到访：保持亮色+倒计时 */
     }
     onclick = e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)';
@@ -238,7 +284,7 @@ function createReservationCase(name, director, date, time, phone, purpose){
 
 var VISIT_PURPOSES = ['面诊商谈','皮肤商谈','术后管理','复诊','皮肤管理'];
  /* 来访目的：不影响流程；接待时目的是术后管理/复诊 → 基础资料提示"要不要关联之前的案件" */
-var DEFAULT_SMS_TEMPLATE = '您好，这里是GMC Network，麻烦点击链接填写基础信息，完成后即视为预约成功：';
+var DEFAULT_SMS_TEMPLATE = ''; /* 预约链接短信模板：来自诊所设定（applyClinicSettings 同步） */
 
 function setAddSlotMode(mode){ ADD_SLOT_MODE = mode; renderAddSlotBody(); }
 
@@ -249,7 +295,7 @@ function purposeSelectHtml(id){
 var PLACEHOLDER_SEQ = 1;
 
 var RESERVATION_PLACEHOLDERS = [
-  {id:'ph0', date:D(0), time:'14:00', phone:'+62 812-5555-0101', link:'https://gmc.link/demo01', smsText:DEFAULT_SMS_TEMPLATE, purpose:'面诊商谈', expiresAt:Date.now()+15*60000} /* 演示：占位中 */
+  {id:'ph0', date:D(0), time:'14:00', phone:'+62 812-5555-0101', link:'https://gmc.link/demo01', smsText:CLINIC_SETTINGS.sms.link, purpose:'面诊商谈', expiresAt:Date.now()+15*60000} /* 演示：占位中（种子固定 15 分钟） */
 ];
 
 function placeholderCountdownText(p){
@@ -991,9 +1037,9 @@ function pickCancelReason(r){ CANCEL_REASON = r; renderCancelReasons(); }
 
 var RESCHED_UNAVAILABLE = ['10:00','12:00','18:00','19:30','20:00'];
 
-var RESCHED_AM = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30'];
+var RESCHED_AM = []; /* 由诊所设定生成（applyClinicSettings） */
 
-var RESCHED_PM = ['15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00','20:30','21:00','21:30'];
+var RESCHED_PM = [];
 
 function rescheduleMonthShift(dir){
   RESCHED_VIEW_MONTH = new Date(RESCHED_VIEW_MONTH.getFullYear(), RESCHED_VIEW_MONTH.getMonth()+dir, 1);
@@ -1751,7 +1797,7 @@ function consultFeeStatusMain(c){
 function consultFeeCardHtml(status, extraText, actionsHtml){
   var col = CONSULT_FEE_COLORS[status];
   return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border2);">'+
-    '<span style="font-size:13px;font-weight:700;">面诊费</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+status+'</span>'+
+    '<span style="font-size:13px;font-weight:700;">面诊费</span><span style="font-size:12px;color:var(--slate2);">'+fmtRp(CLINIC_SETTINGS.consultFee)+'</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+status+'</span>'+
     (extraText ? '<span style="font-size:11px;color:var(--muted);">'+extraText+'</span>' : '')+
     (actionsHtml ? '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">'+actionsHtml+'</span>' : '')+'</div>';
 }
@@ -3419,6 +3465,9 @@ var NOTIF_ICON = {'预约':'📅','面诊':'🩺','赴韩施术':'✈️','视�
 
 var NOTIFS = [];
 
+/* 个人设定里的通知开关（关闭推播后不再弹出右下角提示，通知中心仍记录） */
+function notifyPushOn(){ var a = currentAccount(); return !(a && a.notify && a.notify.push===false); }
+function notifySoundOn(){ var a = currentAccount(); return !(a && a.notify && a.notify.sound===false); }
 function notifMine(n){ return n.recipients.indexOf(ME_NAME)>-1; }
 
 function notifAlive(n){ return (new Date(nowFullDt().replace(' ','T')+':00') - new Date(n.ts.replace(' ','T')+':00')) <= 90*86400000; }
@@ -3778,3 +3827,4 @@ CASE_ITEMS.forEach(function(c){
 /* 种子数据全部跑完：之后的操作人 = 当前登录的人；IN 室长名单按账号重算 */
 SEEDING = false;
 syncInCoordinators();
+applyClinicSettings();

@@ -116,6 +116,7 @@ input,textarea,select{font-family:inherit;}
 .wk-time .kr{display:block;font-size:9px;color:var(--dim);margin-top:2px;}
 .wk-cell-open{cursor:pointer;}
 .wk-cell-open:hover{background:#FADADD;}
+.wk-cell.wk-lunch,.wk-cell.wk-lunch.wk-cell-open:hover{background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);cursor:default;} /* 午休（诊所设定）：斜纹、不能点 */
 .wk-cell.wk-past.wk-cell-open:hover{background:transparent;} /* 过去的时段：白底、hover 不变色、不能点 */
 .wk-cell.empty{min-height:22px;padding:2px 6px;}
 .event-chip{border-radius:6px;padding:4px 7px;font-size:11px;line-height:1.4;border-left:4px solid;cursor:pointer;overflow:hidden;flex:1 1 0;min-width:0;}

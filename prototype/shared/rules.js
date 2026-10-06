@@ -119,7 +119,7 @@ function deriveCaseStage(c){
 }
 
 function isRescheduleDateDisabled(d){
-  return d.getDay()===4; /* 每周星期四休诊 */
+  return CLINIC_SETTINGS.closedDow.indexOf(d.getDay()) > -1; /* 休诊日读诊所设定（默认周四） */
 }
  /* 演示按钮"模拟时间超过30分钟"会把演示时钟往后拨 */
 /* 演示时钟 = 电脑当前时间 + 演示按钮往后拨的毫秒数（2026-10-06 起不再固定在 2026-09-18 11:00） */
@@ -374,7 +374,8 @@ var ADMIN_PAGES = [
   {key:'bizdata',  label:'经营数据', icon:'数', perm:'bizdata'},
   {key:'accounts', label:'账号管理', icon:'账', perm:'accounts'},
   {key:'clinic',   label:'诊所设定', icon:'设', perm:'clinic'},
-  {key:'oplog',    label:'操作日志', icon:'志', perm:'oplog'}
+  {key:'oplog',    label:'操作日志', icon:'志', perm:'oplog'},
+  {key:'personal', label:'个人设定', icon:'个', perm:'personal', hidden:true} /* 不在侧边栏，从头像菜单进入 */
 ];
 function canDo(perm, acct){
   var a = acct || currentAccount();

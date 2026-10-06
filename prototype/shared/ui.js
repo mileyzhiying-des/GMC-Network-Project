@@ -8,7 +8,7 @@ var CURRENT_PAGE_ID = 'in-dashboard';
 /* 管理类页面（经营数据/账号管理/诊所设定/操作日志）：各页的渲染函数在 ADMIN_RENDER[key] 里登记（第五～八部分）；没权限 → 导回自己的首页 */
 var ADMIN_RENDER = {};
 var ADMIN_KEY = null;
-function openAdminPage(key){
+function openAdminPage(key, isRefresh){
   var p = ADMIN_PAGES.filter(function(x){ return x.key===key; })[0];
   if(!p || !canDo(p.perm)){ location.replace(homeUrl()); return; }
   var el = document.getElementById('in-admin'); if(!el) return;
@@ -16,12 +16,12 @@ function openAdminPage(key){
   el.dataset.page = 'admin-'+key;
   var tSlot = el.querySelector('.topbar-slot'); if(tSlot) tSlot.innerHTML = buildTopbar(p.label);
   var body = document.getElementById('admin-body');
-  if(ADMIN_RENDER[key]) ADMIN_RENDER[key](body);
+  if(ADMIN_RENDER[key]) ADMIN_RENDER[key](body, isRefresh);
   else body.innerHTML = '<div class="card" style="padding:28px;color:var(--slate2);line-height:1.8;">「'+p.label+'」页面在后续部分实现。</div>';
   if(CURRENT_PAGE_ID !== 'in-admin') NAV_STACK.push(CURRENT_PAGE_ID);
   showPage('in-admin');
 }
-function refreshAdminPage(){ if(CURRENT_PAGE_ID==='in-admin' && ADMIN_KEY) openAdminPage(ADMIN_KEY); }
+function refreshAdminPage(){ if(CURRENT_PAGE_ID==='in-admin' && ADMIN_KEY) openAdminPage(ADMIN_KEY, true); }
 
 function nav(id){
   if(id !== 'in-admin' && !canDo('work')){ location.replace(homeUrl()); return; } /* 没有日常工作权限的账号不能进工作类页面 */
@@ -82,7 +82,7 @@ function buildSidebar(activePage){
     var onclick = item.action ? (item.action+';return false;') : ((item.id==='in-library' || item.id==='in-projectlibrary') ? ('openSidebarPage(\''+item.id+'\');return false;') : ('nav(\''+item.id+'\');return false;'));
     return '<a class="nav-item'+active+'" href="#" title="'+item.label+'" onclick="'+onclick+'">'+inner+'</a>';
   }).join('');
-  var adminItems = ADMIN_PAGES.filter(function(p){ return canDo(p.perm); });
+  var adminItems = ADMIN_PAGES.filter(function(p){ return !p.hidden && canDo(p.perm); });
   if(adminItems.length){
     navHtml += (SIDEBAR_COLLAPSED || !navItems.length ? '' : '<div style="font-size:11px;color:var(--muted);padding:14px 14px 4px;">诊所管理</div>') + adminItems.map(function(p){
       var active = ('admin-'+p.key) === activePage ? ' active' : '';
@@ -145,19 +145,12 @@ var DAY_OFFSET = 0;
 function applyTzSetting(){
   var o = TZ_OPTIONS[CLINIC_TZ];
   var dd = document.getElementById('dash-date'); if(dd){ var t = demoNow(); dd.textContent = t.getFullYear()+'年'+(t.getMonth()+1)+'月'+t.getDate()+'日（周'+DOW_CN[dowOfDate(dateStr(t))]+'）'; } /* 今天的日期取电脑日期 */
-  var w = document.getElementById('dash-weather'); if(w) w.textContent = '☁ '+o.city+' '+o.temp+'℃';
+  var w = document.getElementById('dash-weather'); if(w) w.textContent = '☁ '+(CLINIC_SETTINGS.city||o.city)+' '+o.temp+'℃';
   var l = document.getElementById('cal-tz-label'); if(l) l.textContent = CLINIC_TZ;
 }
 
-function openCalSettings(){
-  document.getElementById('cal-settings-body').innerHTML = Object.keys(TZ_OPTIONS).map(function(k){
-    var o = TZ_OPTIONS[k];
-    return '<label style="display:flex;align-items:center;gap:10px;padding:8px 2px;font-size:13px;cursor:pointer;"><input type="radio" name="clinic-tz" '+(CLINIC_TZ===k?'checked':'')+' onchange="setClinicTz(\''+k+'\')"> '+k+'（UTC+'+o.off+'）· '+o.city+'<span style="color:var(--muted);font-size:11px;">　与 KR 差 '+(KR_TZ_OFF-o.off)+' 小时</span></label>';
-  }).join('');
-  document.getElementById('cal-settings-overlay').classList.add('open');
-}
-
-function closeCalSettings(){ document.getElementById('cal-settings-overlay').classList.remove('open'); }
+/* 日历右上角的时区按钮：时区已搬到「诊所设定」（老板/管理者）；一般室长只看不改 */
+function openCalSettings(){ if(canDo('clinic')) openAdminPage('clinic'); }
 
 /* "早上好"下面直接一行：今日 OFF：院长、KR 室长、IN 室长的名字；没有人 OFF 就不显示（2026-10-02 深夜；原来的"今日"区块含今日行程列表已删除） */
 function renderTodayOff(){
@@ -268,9 +261,9 @@ function buildWeekGrid(){
       var cell = rowEvs.filter(function(e){ return e.date===ds; });
       var chips = cell.map(eventChipHtml).join('');
       var pastSlot = new Date(new Date(ds+'T'+hr+':00').getTime()+30*60000) <= demoNow(); /* 已经结束的时段不能约（hover 灰）；当前时段可以约（客人直接到店） */
-      var slotClick = (cell.length || pastSlot) ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
+      var slotClick = (cell.length || pastSlot || !slotBookable(hr)) ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
       var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
-      html += '<div class="wk-cell'+(cell.length?'':' wk-cell-open')+(pastSlot?' wk-past':'')+(isNow?' wk-now':'')+'"'+slotClick+'>'+chips+'</div>';
+      html += '<div class="wk-cell'+(cell.length?'':' wk-cell-open')+(pastSlot?' wk-past':'')+(slotIsLunch(hr)?' wk-lunch':'')+(isNow?' wk-now':'')+'"'+slotClick+'>'+chips+'</div>';
     }
   });
   document.getElementById('wk-grid').innerHTML = html;
@@ -357,7 +350,7 @@ function renderAddSlotBody(){
       '<div class="field" style="margin-bottom:8px;"><label>短信内容</label><textarea id="add-slot-sms" rows="3" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+DEFAULT_SMS_TEMPLATE+'</textarea></div>'+
       '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">链接自动插入，不可删除：<b>'+link+'</b></div>'+
       '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate2);margin-bottom:14px;"><input type="checkbox" id="add-slot-save-default"> 保存为默认模板（只勾选才会覆盖默认，不勾只对本次生效）</label>'+
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">发送后所选时段出现15分钟"预约占位"，客户在链接里填写完成后转为正式预约</div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">发送后所选时段出现'+CLINIC_SETTINGS.holdMinutes+'分钟"预约占位"，客户在链接里填写完成后转为正式预约</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotNew(\''+link+'\')">发送链接</button>'+
       '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="openGuestFormFromSlot()">演示：客人现场自己填资料（同预约链接表单）</button>';
   }
@@ -378,13 +371,13 @@ function confirmAddSlotNew(link){
   if(!phone){ alert('请输入手机号'); return; }
   var smsBody = document.getElementById('add-slot-sms').value;
   var purpose = document.getElementById('add-slot-purpose').value;
-  if(document.getElementById('add-slot-save-default').checked) DEFAULT_SMS_TEMPLATE = smsBody;
+  if(document.getElementById('add-slot-save-default').checked && canDo('clinic')){ CLINIC_SETTINGS.sms.link = smsBody; applyClinicSettings(); } /* 默认模板属于诊所设定：只有管理者能改 */
   var ph = {id:'ph'+(PLACEHOLDER_SEQ++), date:ADD_SLOT_CONTEXT.date, time:ADD_SLOT_CONTEXT.time, phone:phone, link:link,
-    smsText:smsBody, purpose:purpose, expiresAt:Date.now()+15*60000};
+    smsText:smsBody, purpose:purpose, expiresAt:Date.now()+holdMs()};
   RESERVATION_PLACEHOLDERS.push(ph);
   closeAddSlotModal();
   renderCalendar();
-  showToast('链接已发送', phone+' · '+dateLabel(ph.date)+' '+ph.time+' 已占位（15分钟内有效）', function(){ openPlaceholderModal(ph.id); });
+  showToast('链接已发送', phone+' · '+dateLabel(ph.date)+' '+ph.time+' 已占位（'+CLINIC_SETTINGS.holdMinutes+'分钟内有效）', function(){ openPlaceholderModal(ph.id); });
 }
 
 var PLACEHOLDER_MODAL_ID = null;
@@ -401,6 +394,7 @@ function simulateSlotChange(id){
     for(var i=0;i<WK_HOURS.length;i++){
       var hr = WK_HOURS[i];
       if(ds===p.date && hr===p.time) continue;
+      if(!slotBookable(hr)) continue;
       var busy = evs.some(function(e){ return e.date===ds && slotOf(e.time)===hr && e.phId!==id; });
       if(!busy && new Date(ds+'T'+hr+':00') > demoNow()){
         var old = dateLabel(p.date)+' '+p.time;
@@ -433,7 +427,7 @@ function openPlaceholderModal(id){
 
 function resendPlaceholderLink(id){
   var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
-  p.expiresAt = Date.now()+15*60000; p.warned = false;
+  p.expiresAt = Date.now()+holdMs(); p.warned = false;
   showToast('链接已重新发送', p.phone+' 倒计时已重置', null);
   openPlaceholderModal(id);
 }
@@ -741,7 +735,7 @@ function rowMarkNoShow(caseId){
 
 /* 演示按钮「模拟时间超过30分钟」：对所有"待访问"案件按过了预约时间30分钟处理 */
 function simulateTimePass30(){
-  DEMO_SHIFT_MS += 31*60000; /* 演示时钟往后拨 31 分钟 */
+  DEMO_SHIFT_MS += noShowMs()+60000; /* 演示时钟往后拨「未到店判定时间 + 1 分钟」 */
   var n = 0;
   CASE_ITEMS.slice().forEach(function(c){ if(markNoShow(c.id, true)) n++; });
   renderCaseRows(); buildWeekGrid();
@@ -955,7 +949,7 @@ function renderRescheduleTimePanel(){
   }
   var amGrid = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">'+RESCHED_AM.map(slotBtn).join('')+'</div>';
   var pmGrid = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;">'+RESCHED_PM.map(slotBtn).join('')+'</div>';
-  var lunchDivider = '<div style="text-align:center;font-size:11px;color:var(--terracotta);margin:12px 0;">午休 14:00～15:00</div>';
+  var lunchDivider = '<div style="text-align:center;font-size:11px;color:var(--terracotta);margin:12px 0;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
   document.getElementById('reschedule-slots').innerHTML = amGrid + lunchDivider + pmGrid;
 }
 
@@ -2380,7 +2374,7 @@ function pushNotif(cat, text, opts){
   NOTIFS.unshift(n);
   updateBell();
   if(CURRENT_PAGE_ID==='in-notifications') renderNotifPage();
-  if(!opts.silent && notifMine(n)) showToast(NOTIF_ICON[cat]+' '+cat, text, function(){ openNotif(n.id, 'toast'); });
+  if(!opts.silent && notifMine(n) && notifyPushOn()) showToast(NOTIF_ICON[cat]+' '+cat, text, function(){ openNotif(n.id, 'toast'); });
   return n;
 }
 
@@ -2841,7 +2835,7 @@ function simulateIncomingMsg(atMe){
   var muted = !!MUTED_ROOMS[roomId];
   var pushOk = isCase ? shouldPushToMe(cc) : true; /* 案件房：只给操作过的当班室长；职员房：直接提醒 */
   if(atMe) pushNotif('对话', who+' 在「'+((roomById(roomId)||{}).name||roomId)+'」里 @ 了你', {caseId:(isCase&&cc)?cc.id:null, names:[ME_NAME], link:{kind:'mention', roomId:roomId, msgIdx:CHAT_DATA[roomId].length-1}}); /* 被@一定提醒（即使已🔕或不负责这个案件），进通知中心并弹 toast */
-  else if(!muted && pushOk) showToast('新消息 · '+((roomById(roomId)||{}).name||roomId), who+'：（演示）有新消息', null);
+  else if(!muted && pushOk && notifyPushOn()) showToast('新消息 · '+((roomById(roomId)||{}).name||roomId), who+'：（演示）有新消息', null);
 }
 
 function closeRoomMembers(){ document.getElementById('room-members-overlay').classList.remove('open'); }
@@ -2933,21 +2927,9 @@ function toggleAvatarMenu(e){
   m.style.cssText = 'position:fixed;top:'+(r.bottom+8)+'px;right:'+Math.max(12, window.innerWidth-r.right)+'px;z-index:80;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);min-width:200px;overflow:hidden;';
   var item = function(label, fn){ return '<div style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background=\'var(--border2)\'" onmouseout="this.style.background=\'\'" onclick="closeAvatarMenu();'+fn+'">'+label+'</div>'; };
   m.innerHTML = '<div style="padding:12px 16px;border-bottom:1px solid var(--border2);"><div style="font-size:13px;font-weight:700;">'+accountLabel(a.id)+'</div><div style="font-size:11px;color:var(--muted);">'+ACCOUNT_ROLES[a.role]+(a.position?' · '+a.position:'')+'</div></div>'+
-    item('个人设置', 'openProfileCard()')+item('切换账号', 'switchAccount()')+item('退出登录', 'logout()');
+    item('个人设置', 'openAdminPage(\'personal\')')+item('切换账号', 'switchAccount()')+item('退出登录', 'logout()');
   m.onclick = function(ev){ ev.stopPropagation(); };
   document.body.appendChild(m);
-}
-/* 个人资料卡（只读；个人设置页在第五部分做，到时替换这里） */
-function openProfileCard(){
-  var a = currentAccount(); if(!a) return;
-  var ov = document.getElementById('profile-overlay');
-  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'profile-overlay'; ov.onclick = function(e){ if(e.target===ov) ov.classList.remove('open'); }; document.body.appendChild(ov); }
-  var row = function(k, v){ return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2);font-size:13px;"><span style="color:var(--muted);">'+k+'</span><span>'+v+'</span></div>'; };
-  ov.innerHTML = '<div class="modal-box"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">个人资料</div>'+
-    row('账号', accountLabel(a.id))+row('角色', ACCOUNT_ROLES[a.role])+row('席位', a.seat==='basic'?'基础席位':'加购账号')+row('职位', a.position||'—')+row('手机', a.phone||'—')+row('证件照', a.photo ? '已上传' : '—')+
-    '<div style="font-size:11px;color:var(--muted);margin:10px 0;">个人设置（修改资料、语言、通知、密码）在后续部分实现。</div>'+
-    '<button class="btn-primary" style="width:100%;" onclick="document.getElementById(\'profile-overlay\').classList.remove(\'open\')">关闭</button></div>';
-  ov.classList.add('open');
 }
 /* 退出/切换：只清当前标签页的登录信息，其他标签页不受影响 */
 function logout(){ try{ sessionStorage.removeItem('gmc_acct'); }catch(e){} location.href = '/login.html'; }
