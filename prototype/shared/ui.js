@@ -253,8 +253,14 @@ function buildWeekGrid(){
   });
   html += '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div>';
   days.forEach(function(dd){ html += '<div class="wk-memo">'+memoCellHtml(dateStr(dd))+'</div>'; });
+  var lunchBarDone = false;
   WK_HOURS.forEach(function(hr){
     var rowEvs = evs.filter(function(e){ return slotOf(e.time)===hr; });
+    if(slotIsLunch(hr)){
+      /* 午休：一条窄横条（读诊所设定）；午休时段里本周有日程的才另外显示那一行，没有就不占高度 */
+      if(!lunchBarDone){ html += '<div class="wk-lunchbar">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>'; lunchBarDone = true; }
+      if(!rowEvs.some(function(e){ return days.some(function(dd){ return dateStr(dd)===e.date; }); })) return;
+    }
     var nowD = demoNow(), nowSlot = pad2(nowD.getHours())+':'+(nowD.getMinutes()>=30?'30':'00');
     html += '<div class="wk-time'+(rowEvs.length?'':' empty')+(hr===nowSlot?' wk-now':'')+'">'+hr+'<span class="kr">KR '+krTimeOf(hr)+'</span></div>';
     for(var d=0; d<7; d++){
