@@ -35,6 +35,7 @@
   <div class="demo-box">
     <b>演示账号</b>（密码 = 账号编号小写 + <code>123</code>）：<code>OWN</code> 老板 · <code>A1</code> Dewi 管理者 · <code>A2</code> Rina 一般室长 · <code>A5</code> Putri 管理者（加购）<br>
     <b>诊所 C2（泗水，只对接医院 H1）</b>：<code>B1</code> Citra 管理者（<code>b1123</code>）· <code>B2</code> Bagas 一般室长（<code>b2123</code>）——看不到 C1 的任何资料；C1 = OWN / A1 / A2 / A3 / A4 / A5。<br>
+    <b>KR 医院端</b>（登录后进 kr.html；代表院长进 owner.html）：<b>H1 서울 소수</b>：<code>KO1</code> 박소현 代表院长（<code>ko1123</code>）· <code>KM1</code> 이서연 管理者（<code>km1123</code>）· <code>KC1</code> 박준혁 室长（<code>kc1123</code>）· <code>KD1</code> 김민석 院长（<code>kd1123</code>）；<b>H2 강남</b>：<code>KM2</code> 정하늘 管理者（<code>km2123</code>）· <code>KC2</code> 최민준 室长（<code>kc2123</code>）<br>
     <code>A3</code> 一般室长（加购）尚未激活：点"首次激活"，手机号 <code>+62 811-0000-0004</code>，验证码会显示在屏幕上；<code>A4</code> 已停用。<br>
     <a href="#" onclick="if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。')) resetDemoData(); return false;">重置演示数据</a>
   </div>
@@ -57,7 +58,7 @@ function show(html){ $('login-card').innerHTML = html; }
 function errBox(msg){ return msg ? '<div class="error-text" style="display:block;margin-bottom:10px;">'+msg+'</div>' : ''; }
 function enterApp(a){
   try{ sessionStorage.setItem('gmc_acct', a.id); }catch(e){}
-  location.href = a.role==='owner' ? '/owner.html' : '/in.html';
+  location.href = homeUrl(a); /* IN 老板/KR 代表院长 → owner.html；KR 室长/管理者/院长 → kr.html；其他 → in.html */
 }
 
 /* ---- 登录 ---- */

@@ -3,18 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GMC Network · 韩国室长端</title>
+<title>GMC Network · 韩国医院端</title>
 <link rel="stylesheet" href="/shared/app.css">
 </head>
 <body>
+<script>try{ if(!sessionStorage.getItem("gmc_acct")) location.replace("/login.html"); }catch(e){}</script>
 <div id="app">
 
-<section class="page active" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px;text-align:center;padding:24px;">
-  <div><span class="logo">GMC Network</span><span class="logo-sub">跨境医美协作平台</span></div>
-  <h1 style="margin:0;">韩国室长端</h1>
-  <p style="max-width:420px;color:var(--slate2);line-height:1.7;margin:0;">占位页：韩国室长端尚未制作，目前只有印尼室长端。</p>
-  <a class="btn-outline" href="/login.html" style="text-decoration:none;">返回登录页</a>
+<!-- KR 医院端（2026-10-06，KR 端系列 2/5）：大盘、案件列表、案件详情骨架、通知中心；管理类页面（医院设定、账号管理…）共用 #in-admin 壳 -->
+<section class="page in-shell active" id="kr-dashboard" data-page="krdash" style="display:flex;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krdash-body"></div></div>
 </section>
+
+<section class="page in-shell" id="kr-cases" data-page="krcases" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krcases-body"></div></div>
+</section>
+
+<section class="page in-shell" id="kr-casedetail" data-page="krcases" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krcase-body"></div></div>
+</section>
+
+<section class="page in-shell" id="kr-notifications" data-page="krnotifs" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krnotifs-body" style="max-width:820px;"></div></div>
+</section>
+
+<section class="page in-shell" id="in-admin" data-page="admin" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="admin-body" style="max-width:1000px;"></div></div>
+</section>
+
 </div>
+<div id="toast-stack"></div>
+<script src="/shared/rules.js"></script>
+<script src="/shared/i18n.js"></script>
+<script src="/shared/ui.js"></script>
+<script src="/shared/data.js"></script>
+<script src="/shared/store.js"></script>
+<script src="/shared/admin.js"></script>
+<script src="/shared/kr.js"></script>
+<script>
+window.GUARD_ROLES = ['kr_manager', 'kr_general', 'kr_director'];
+if(guardPage(window.GUARD_ROLES)){
+  document.addEventListener('DOMContentLoaded', function(){ try{ krBoot(); }catch(e){ console.error('[初始化失败] KR 端', e); } });
+  document.addEventListener('click', closeAvatarMenu);
+}
+</script>
 </body>
 </html>

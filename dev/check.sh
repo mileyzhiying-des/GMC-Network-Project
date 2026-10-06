@@ -2,7 +2,7 @@
 # 提交前检查（2026-10-05 拆分后版本）：函数清单对比、JS 语法、DOM id 缺失
 # 用法：bash dev/check.sh            （和 HEAD 里的 shared/*.js 对比函数清单）
 cd "$(dirname "$0")/.." || exit 1
-FILES="rules i18n ui data store admin boot-in"
+FILES="rules i18n ui data store admin kr boot-in"
 : > /tmp/before.txt; : > /tmp/after.txt
 for f in $FILES; do
   git show HEAD:prototype/shared/$f.js 2>/dev/null | grep -o "^function [A-Za-z0-9_]*" >> /tmp/before.txt

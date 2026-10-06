@@ -26,10 +26,10 @@ function openAdminPage(key, isRefresh){
   var el = document.getElementById('in-admin'); if(!el) return;
   ADMIN_KEY = key;
   el.dataset.page = 'admin-'+key;
-  var tSlot = el.querySelector('.topbar-slot'); if(tSlot) tSlot.innerHTML = buildTopbar(p.label);
+  var tSlot = el.querySelector('.topbar-slot'); if(tSlot) tSlot.innerHTML = buildTopbar(adminPageLabel(p));
   var body = document.getElementById('admin-body');
   if(ADMIN_RENDER[key]) ADMIN_RENDER[key](body, isRefresh);
-  else body.innerHTML = '<div class="card" style="padding:28px;color:var(--slate2);line-height:1.8;">「'+p.label+'」页面在后续部分实现。</div>';
+  else body.innerHTML = '<div class="card" style="padding:28px;color:var(--slate2);line-height:1.8;">「'+adminPageLabel(p)+'」页面在后续部分实现。</div>';
   if(typeof adminBanner === 'function') body.insertAdjacentHTML('afterbegin', adminBanner());
   if(CURRENT_PAGE_ID !== 'in-admin') NAV_STACK.push(CURRENT_PAGE_ID);
   showPage('in-admin');
@@ -37,10 +37,11 @@ function openAdminPage(key, isRefresh){
 function refreshAdminPage(){ if(CURRENT_PAGE_ID==='in-admin' && ADMIN_KEY) openAdminPage(ADMIN_KEY, true); }
 
 function nav(id){
-  if(id !== 'in-admin' && !canDo('work')){ location.replace(homeUrl()); return; } /* 没有日常工作权限的账号不能进工作类页面 */
+  if(id !== 'in-admin' && !canDo('work') && !isKrAccount()){ location.replace(homeUrl()); return; } /* KR 账号的页面权限在 kr.js 里判断 */ /* 没有日常工作权限的账号不能进工作类页面 */
   if(id === 'in-admin'){ openAdminPage(ADMIN_KEY || 'bizdata'); return; }
   if(id === CURRENT_PAGE_ID) return;
   NAV_STACK.push(CURRENT_PAGE_ID);
+  if(isKrAccount() && typeof krRenderPage==='function') krRenderPage(id); /* KR 页面先渲染内容 */
   showPage(id);
 }
 
@@ -83,6 +84,7 @@ ADMIN_PAGES.forEach(function(p){ TITLES['admin-'+p.key] = p.label; });
 
 
 function buildSidebar(activePage){
+  if(isKrAccount() && typeof buildKrSidebar==='function') return buildKrSidebar(activePage); /* KR 医院账号用 KR 的侧边栏（kr.js） */
   var brand = SIDEBAR_COLLAPSED
     ? '<div class="brand collapsed-brand"><span class="logo-sq">G</span></div>'
     : '<div class="brand"><b>GMC Network</b><span>'+accountRoleShort()+' · '+ME_NAME+'</span></div>';
@@ -116,6 +118,7 @@ function buildTopRightIcons(){
 }
 
 function buildTopbar(title){
+  if(isKrAccount() && typeof buildKrTopbar==='function') return buildKrTopbar(title);
   return '<div class="topbar"><span class="title">'+title+'</span>'+buildTopRightIcons()+'</div>';
 }
 
@@ -3030,7 +3033,7 @@ function msgView(m){
   var n = m.sender||'Dewi';
   return Object.assign({}, m, {from:'them', notMine:true, name:n, color:'var(--terracotta)', init:n.charAt(0).toUpperCase()});
 }
-function accountRoleShort(){ var a = currentAccount(); return a ? ({owner:'老板', manager:'管理者', general:'室长'}[a.role]||'室长') : '室长'; }
+function accountRoleShort(){ var a = currentAccount(); return a ? ({owner:'老板', manager:'管理者', general:'室长', kr_owner:'代表院长', kr_manager:'管理者', kr_general:'室长', kr_director:'院长'}[a.role]||'室长') : '室长'; }
 
 /* 头像菜单：个人设置 / 切换账号 / 退出登录 */
 function closeAvatarMenu(){ var m = document.getElementById('avatar-menu'); if(m) m.remove(); }

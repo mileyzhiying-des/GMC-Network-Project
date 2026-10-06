@@ -413,7 +413,7 @@ function oplogSet(k, v){ OPLOG_FILTER[k] = v; if(k==='cat') OPLOG_FILTER.sub = '
 ADMIN_RENDER.oplog = function(el){
   var f = OPLOG_FILTER;
   var rows = ACCOUNT_LOG.filter(function(l){
-    if((l.clinicId||'C1') !== CURRENT_CLINIC_ID) return false; /* 只看本诊所的操作日志 */
+    if(isKrAccount() ? l.hospitalId !== krHospitalIdOfMe() : (l.hospitalId || (l.clinicId||'C1') !== CURRENT_CLINIC_ID)) return false; /* 只看本诊所 / 本医院的操作日志 */
     if(f.cat!=='all' && oplogCat(l)!==f.cat) return false;
     if(f.cat==='account' && f.sub!=='all' && oplogSub(l)!==f.sub) return false;
     var d = String(l.ts||'').slice(0,10);

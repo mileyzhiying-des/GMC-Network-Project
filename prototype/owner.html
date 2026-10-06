@@ -25,8 +25,9 @@
 <script src="/shared/data.js"></script>
 <script src="/shared/store.js"></script>
 <script src="/shared/admin.js"></script>
+<script src="/shared/kr.js"></script>
 <script>
-window.GUARD_ROLES = ['owner'];
+window.GUARD_ROLES = ['owner', 'kr_owner'];
 if(guardPage(window.GUARD_ROLES)){
   document.addEventListener('DOMContentLoaded', function(){
     try{ i18nStart(); }catch(e){ console.error('[初始化失败] 多语言', e); }

@@ -1,9 +1,9 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 15;
+var DEMO_DATA_VERSION = 16;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
-var ACCOUNT_STRUCT_VERSION = 3;
+var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
 var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_LOG'];                      /* 全局部分里保留的 */
 var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ']; /* 每个诊所分区里保留的 */
@@ -158,7 +158,7 @@ function krTimeOf(hr){ /* 诊所时间 hr('HH:mm') → KR 时间 */
    status：active 使用中 / pending 待激活（还没人设密码）/ disabled 已停用（取消加购后）。
    演示密码 = 账号编号小写 + 123（OWN → own123，A1 → a1123）；待激活账号没有密码，激活时用手机验证码（登录/激活在第三部分做）。
    history：这个账号编号上的变更历史（激活、重置密码、停用…）；操作人以"当时的姓名 + 编号"记录，之后账号换了新的人，旧记录仍显示"Rina（A2）"。 */
-var ACCOUNT_ROLES = {owner:'老板（诊所管理账号）', manager:'室长（管理者）', general:'一般室长'};
+var ACCOUNT_ROLES = {owner:'老板（诊所管理账号）', manager:'室长（管理者）', general:'一般室长', kr_owner:'代表院长（医院管理账号）', kr_manager:'KR 管理者（室长）', kr_general:'KR 室长', kr_director:'院长'};
 var ACCOUNT_STATUS = {active:'使用中', pending:'待激活', disabled:'已停用'};
 var BASIC_SEATS = 3;
 var ACCOUNTS = [
@@ -170,6 +170,14 @@ var ACCOUNTS = [
   {id:'A5', clinicId:'C1',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]},
   {id:'B1', clinicId:'C2', role:'manager', seat:'basic', name:'Citra', position:'室长', phone:'+62 811-0000-0011', status:'active', password:'b1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Citra（B1）'}]},
   {id:'B2', clinicId:'C2', role:'general', seat:'basic', name:'Bagas', position:'前台室长', phone:'+62 811-0000-0012', status:'active', password:'b2123', photo:'证件照', createdAt:D(-30)+' 09:10', activatedAt:D(-29)+' 09:00', history:[{ts:D(-29)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Bagas（B2）'}]}
+,
+  /* KR 医院账号（2026-10-06）：编号 K+角色字母（O 代表院长 / M 管理者 / C 室长 / D 院长）+医院序号，和 IN 的 OWN、A 开头、B 开头编号不冲突；密码 = 编号小写 + 123 */
+  {id:'KO1', hospitalId:'H1', role:'kr_owner',    seat:'basic', name:'박소현',   position:'代表院长', phone:'+82 10-0000-0001', status:'active', password:'ko1123', photo:'证件照', createdAt:D(-60)+' 09:00', activatedAt:D(-60)+' 09:30', history:[{ts:D(-60)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'박소현（KO1）'}]},
+  {id:'KM1', hospitalId:'H1', role:'kr_manager',  seat:'basic', name:'이서연',   position:'室长',     phone:'+82 10-0000-0002', status:'active', password:'km1123', photo:'证件照', createdAt:D(-60)+' 09:10', activatedAt:D(-60)+' 10:00', history:[{ts:D(-60)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'이서연（KM1）'}]},
+  {id:'KC1', hospitalId:'H1', role:'kr_general',  seat:'basic', name:'박준혁',   position:'室长',     phone:'+82 10-0000-0003', status:'active', password:'kc1123', photo:'证件照', createdAt:D(-60)+' 09:20', activatedAt:D(-59)+' 09:00', history:[{ts:D(-59)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'박준혁（KC1）'}]},
+  {id:'KD1', hospitalId:'H1', role:'kr_director', seat:'addon', name:'김민석 원장', position:'院长',   phone:'+82 10-0000-0004', status:'active', password:'kd1123', photo:'证件照', createdAt:D(-40)+' 09:00', activatedAt:D(-40)+' 09:30', history:[{ts:D(-40)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'김민석 원장（KD1）'}]},
+  {id:'KM2', hospitalId:'H2', role:'kr_manager',  seat:'basic', name:'정하늘',   position:'室长',     phone:'+82 10-0000-0011', status:'active', password:'km2123', photo:'证件照', createdAt:D(-50)+' 09:10', activatedAt:D(-50)+' 10:00', history:[{ts:D(-50)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'정하늘（KM2）'}]},
+  {id:'KC2', hospitalId:'H2', role:'kr_general',  seat:'basic', name:'최민준',   position:'室长',     phone:'+82 10-0000-0012', status:'active', password:'kc2123', photo:'证件照', createdAt:D(-50)+' 09:20', activatedAt:D(-49)+' 09:00', history:[{ts:D(-49)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'최민준（KC2）'}]}
 ];
 var PURCHASE_REQ = null; /* 管理者加购"管理者账号"时发给老板的验证码：{code, by, qty, exp(毫秒时间戳), used}；演示：老板登录后在页面顶部看到 */
 var ACCOUNT_SEQ = 5; /* 本诊所下一个加购账号编号 = 诊所账号前缀 + (ACCOUNT_SEQ+1)；每家诊所各一份（存在诊所分区里；C1 前缀 A，C2 前缀 B） */
@@ -202,7 +210,7 @@ function syncInCoordinators(){
 /* 写操作日志：当前账号 + 当时的姓名 */
 function logOp(type, text, sub, target){ /* type：账号管理 / 设定变更 / 其他；sub：购买 / 退订 / 重设 / 激活；target：被操作的账号编号（账号详情里看"该账号的 log"） */
   var a = currentAccount() || {id:'?', name:''};
-  ACCOUNT_LOG.unshift({id:'log'+Date.now()+Math.floor(Math.random()*1000), clinicId:(a.clinicId||CURRENT_CLINIC_ID), ts:nowFullDt(), accountId:a.id, name:a.name, type:type, sub:sub||'', target:target||'', text:text});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now()+Math.floor(Math.random()*1000), clinicId:(a.hospitalId ? null : (a.clinicId||CURRENT_CLINIC_ID)), hospitalId:(a.hospitalId||null), ts:nowFullDt(), accountId:a.id, name:a.name, type:type, sub:sub||'', target:target||'', text:text});
 }
 
 function memosOn(date){ return CAL_MEMOS.filter(function(m){ return m.date===date && (m.scope==='公开' || m.author===ME_NAME); }); }

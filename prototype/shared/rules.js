@@ -383,16 +383,22 @@ function phoneInputGet(id){
    work=处理客人和案件（工作台/客户/案件/案例库/项目库/通知/对话）；bizdata=经营数据；accounts=账号管理；clinic=诊所设定；oplog=操作日志；personal=个人设定。
    老板：只有管理类（看汇总，看不到个别客人和案件）；管理者：全部；一般室长：work + personal。没有权限的入口完全不显示。 */
 var ROLE_PERMS = {
-  owner:   {work:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true},
-  manager: {work:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true},
-  general: {work:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true}
+  owner:   {work:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true,  smslog:true},
+  manager: {work:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true,  smslog:true},
+  general: {work:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true,  smslog:false},
+  /* KR 医院账号（2026-10-06，Notion Accounts & Settings 第 7 节）：krwork = 处理案件（确认报告时间、上传报告、施术相关）；krview = 看所有案件；krviewOwn = 只看自己负责的；
+     krsched = 日程/OFF；kropen = 开放施术日期；krdoctors = 院长名单/停用；krlib = 赴韩项目库、案例库；bizdata/accounts/clinic（= 医院设定）/oplog = 管理类。 */
+  kr_owner:    {work:false, krwork:false, krview:false, krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
+  kr_manager:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
+  kr_general:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:false, krlib:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false},
+  kr_director: {work:false, krwork:false, krview:false, krviewOwn:true,  krsched:'own', kropen:false, krdoctors:false, krlib:false, bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false}
 };
 /* 管理类页面（侧边栏"诊所管理"组；老板端的全部导航）。key 同时是 ?page=admin-xxx 的后缀 */
 var ADMIN_PAGES = [
   {key:'bizdata',  label:'经营数据', icon:'数', perm:'bizdata'},
   {key:'accounts', label:'账号管理', icon:'账', perm:'accounts'},
   {key:'clinic',   label:'诊所设定', icon:'设', perm:'clinic'},
-  {key:'smslog',   label:'短信发送记录', icon:'短', perm:'clinic'}, /* 演示短信集中在这里，老板/管理者在诊所设定旁边看到 */
+  {key:'smslog',   label:'短信发送记录', icon:'短', perm:'smslog'}, /* 演示短信集中在这里，老板/管理者在诊所设定旁边看到 */
   {key:'oplog',    label:'操作日志', icon:'志', perm:'oplog'},
   {key:'personal', label:'个人设定', icon:'个', perm:'personal', hidden:true} /* 不在侧边栏，从头像菜单进入 */
 ];
@@ -401,7 +407,18 @@ function canDo(perm, acct){
   return !!(a && a.status==='active' && ROLE_PERMS[a.role] && ROLE_PERMS[a.role][perm]);
 }
 /* 自己的首页：能做日常工作的去 in.html，否则（老板）去 owner.html */
-function homeUrl(acct){ var a = acct || currentAccount(); return (a && a.role==='owner') ? '/owner.html' : '/in.html'; }
+function homeUrl(acct){
+  var a = acct || currentAccount();
+  if(a && (a.role==='owner' || a.role==='kr_owner')) return '/owner.html';   /* 老板端：IN 老板 = 诊所营运；KR 代表院长 = 医院营运 */
+  if(a && a.role.indexOf('kr_')===0) return '/kr.html';                      /* KR 室长 / 管理者 / 院长 */
+  return '/in.html';
+}
+/* KR 医院账号（带 hospitalId，没有 clinicId） */
+function isKrAccount(acct){ var a = acct || currentAccount(); return !!(a && a.hospitalId); }
+function krHospitalIdOfMe(){ var a = currentAccount(); return a && a.hospitalId ? a.hospitalId : null; }
+function hospitalAccounts(hid){ return ACCOUNTS.filter(function(a){ return a.hospitalId===hid; }); }
+/* 管理类页面的标题：KR 的"诊所设定"叫"医院设定" */
+function adminPageLabel(p){ return (p.key==='clinic' && isKrAccount()) ? '医院设定' : p.label; }
 
 /* ================= 账号辅助（2026-10-05·二） ================= */
 /* 当前页面所属诊所：booking.html 看地址 ?clinic=（正式版必须带诊所，没带应显示错误；原型不带默认 C1）；IN/老板端 = 登录账号的诊所；没登录（登录页）= null */
@@ -410,10 +427,11 @@ function resolveClinicId(){
     if(/booking\.html$/.test(location.pathname)){ var q = new URLSearchParams(location.search).get('clinic'); return q || 'C1'; }
   }catch(e){}
   var a = (typeof currentAccount === 'function') ? currentAccount() : null;
+  if(a && a.hospitalId) return null; /* KR 医院账号没有诊所分区：跨诊所数据用 Store.readClinic / withClinic 读 */
   return a ? (a.clinicId || 'C1') : null;
 }
 /* 本诊所的账号（账号管理、席位、重名检查、IN 室长名单都只看自己诊所） */
-function clinicAccounts(clinicId){ var c = clinicId || CURRENT_CLINIC_ID; return ACCOUNTS.filter(function(a){ return (a.clinicId||'C1')===c; }); }
+function clinicAccounts(clinicId){ var c = clinicId || CURRENT_CLINIC_ID; return ACCOUNTS.filter(function(a){ return !a.hospitalId && (a.clinicId||'C1')===c; }); } /* KR 医院账号不属于任何诊所 */
 function clinicAccountPrefix(clinicId){ var c = clinicById(clinicId || CURRENT_CLINIC_ID); return c ? c.accountPrefix : 'A'; }
 function accountById(id){ return ACCOUNTS.filter(function(a){ return a.id===id; })[0] || null; }
 /* 显示用："Rina（A2）" */
