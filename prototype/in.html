@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/shared/app.css">
 </head>
 <body>
+<script>try{ if(!sessionStorage.getItem("gmc_acct")) location.replace("/login.html"); }catch(e){}</script>
 <div id="app">
 
 <!-- ============ IN: DASHBOARD ============ -->
@@ -18,7 +19,7 @@
 
       <div class="dash-top">
         <div class="dash-greet">
-          <h1>早上好，Dewi</h1>
+          <h1>早上好，<span class="me-name"></span></h1>
         </div>
         <div class="dash-meta">
           <div class="date">2026年9月18日（周五）</div>
@@ -117,13 +118,6 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;">
         <div id="lib-filters" style="display:flex;flex-direction:column;gap:10px;flex-grow:1;min-width:280px;"></div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:10px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
-            <select id="lib-role-select" onchange="setDemoRole(this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;">
-              <option value="in">印尼室长</option>
-              <option value="kr">韩国室长 · 院长</option>
-            </select>
-          </div>
           <button class="btn-primary" id="lib-add-btn" onclick="openLibCaseModal(null)">+ 新增案例</button>
         </div>
       </div>
@@ -157,13 +151,6 @@
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
         <div class="tabs" id="projlib-tabs"></div>
         <div style="display:flex;align-items:center;gap:10px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:10px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
-            <select id="projlib-role-select" onchange="setDemoRole(this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;">
-              <option value="in">印尼室长</option>
-              <option value="kr">韩国室长（院长不维护）</option>
-            </select>
-          </div>
           <button class="btn-primary" id="projlib-add-btn" onclick="openProjNewModal()">+ 新增项目</button>
         </div>
       </div>
@@ -889,6 +876,10 @@
 <script src="/shared/ui.js"></script>
 <script src="/shared/data.js"></script>
 <script src="/shared/store.js"></script>
-<script src="/shared/boot-in.js"></script>
+<script>
+/* 登录守卫：没登录回登录页；老板账号去老板端。通过后才加载 IN 端启动脚本 */
+window.GUARD_ROLES = ['manager', 'general'];
+if(guardPage(window.GUARD_ROLES)) document.write('<script src="/shared/boot-in.js"><\/script>');
+</script>
 </body>
 </html>

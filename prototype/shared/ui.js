@@ -51,7 +51,7 @@ var TITLES = {dashboard:'工作台', clients:'客户管理', cases:'案件管理
 function buildSidebar(activePage){
   var brand = SIDEBAR_COLLAPSED
     ? '<div class="brand collapsed-brand"><span class="logo-sq">G</span></div>'
-    : '<div class="brand"><b>GMC Network</b><span>印尼室长 · Dewi</span></div>';
+    : '<div class="brand"><b>GMC Network</b><span>'+accountRoleShort()+' · '+ME_NAME+'</span></div>';
   var navHtml = IN_NAV.map(function(item){
     var active = item.key === activePage ? ' active' : '';
     var inner = SIDEBAR_COLLAPSED
@@ -69,7 +69,7 @@ function buildTopRightIcons(){
   return '<div class="actions">'+
     '<button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button>'+
     '<button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button>'+
-    '<span class="avatar">D</span></div>';
+    '<span class="avatar" style="cursor:pointer;" onclick="toggleAvatarMenu(event)" title="'+ME_NAME+'">'+((ME_NAME||'?').charAt(0).toUpperCase())+'</span></div>';
 }
 
 function buildTopbar(title){
@@ -586,13 +586,13 @@ function confirmHoldingRefund(){
   if(pc){
     pc.holdingRefunds = pc.holdingRefunds || [];
     pc.holdingRefunds.push({itemName:ctx.itemName, amount:amount, reason:reason, date:b.refund.date, qty:b.voidedRemaining||0});
-    logCaseEvent(pc, 'Dewi', '客户详情办理持有批次退款：'+ctx.itemName+'（剩余 '+(b.voidedRemaining||0)+' 次作废），退款 '+formatCurrency(amount,'IDR')+'，原因：'+reason+'；退款记在本案件，结局不变');
+    logCaseEvent(pc, ME_NAME, '客户详情办理持有批次退款：'+ctx.itemName+'（剩余 '+(b.voidedRemaining||0)+' 次作废），退款 '+formatCurrency(amount,'IDR')+'，原因：'+reason+'；退款记在本案件，结局不变');
   }
   /* 本次到访的案件（客人现在到访、还没结束的那个）：记一笔"本次到访办理了退款"；如果这次没有其他购买或使用，结案时结局=已取消（仅办理退款） */
   var vc = CASE_ITEMS.filter(function(x){ return x.name===ctx.name && x.id!==b.caseId && !isEnded(x) && x.subState==='arrived' && !x.visitClosed; })[0];
   if(vc){
     vc.refundVisit = {fromCaseId:b.caseId, itemName:ctx.itemName, amount:amount};
-    logCaseEvent(vc, 'Dewi', '本次到访办理持有批次退款：'+ctx.itemName+'，退款 '+formatCurrency(amount,'IDR')+'（记在购买案件 '+(pc?pc.caseNo:b.caseId)+' 上）');
+    logCaseEvent(vc, ME_NAME, '本次到访办理持有批次退款：'+ctx.itemName+'，退款 '+formatCurrency(amount,'IDR')+'（记在购买案件 '+(pc?pc.caseNo:b.caseId)+' 上）');
     buildCaseLog && vc.id===CURRENT_CASE_ID && buildCaseLog(vc);
   }
   if(pc && pc.id===CURRENT_CASE_ID) buildCaseLog(pc);
@@ -855,7 +855,7 @@ function confirmCancel(){
   updateCaseStage(c);
   closeCancelModal();
   renderCaseStatusBar(c);
-  logCaseEvent(c, 'Dewi', '取消该客人的到店预约（原因：'+CANCEL_REASON+'）');
+  logCaseEvent(c, ME_NAME, '取消该客人的到店预约（原因：'+CANCEL_REASON+'）');
   buildCaseLog(c);
   renderCaseBody(c);
   if(CURRENT_PAGE_ID==='in-cases') renderCaseRows();
@@ -934,7 +934,7 @@ function confirmReschedule(){
   c.visitDate = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
   c.visitTime = RESCHED_SELECTED_TIME;
   closeRescheduleModal();
-  logCaseEvent(c, 'Dewi', '修改预约为 '+c.visitDate+' '+c.visitTime+'');
+  logCaseEvent(c, ME_NAME, '修改预约为 '+c.visitDate+' '+c.visitTime+'');
   buildCaseLog(c);
   if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id){
     renderCaseSubtitle(c);
@@ -1015,7 +1015,7 @@ function simulateAllLeft10min(){ if(!VIDEO_CALL.active) return; showToast('所�
 
 function sendCallManual(){
   var i = document.getElementById('vc-manual'); var v = i ? i.value.trim() : ''; if(!v) return;
-  VIDEO_CALL.transcript.push({name:'Dewi', orig:v, trans:'（演示译文）'+v, manual:true});
+  VIDEO_CALL.transcript.push({name:ME_NAME, orig:v, trans:'（演示译文）'+v, manual:true});
   renderVideoPage();
 }
 
@@ -1025,10 +1025,10 @@ function renderVideoPage(){
   var tiles = v.participants.map(function(n, i){
     var isIn = n.indexOf('印尼')>-1;
     var joined = isIn || !ringing;
-    var sharing = v.shareBy && ((v.shareBy==='me' && isIn && n.indexOf('Dewi')>-1) || (v.shareBy==='peer' && !isIn));
+    var sharing = v.shareBy && ((v.shareBy==='me' && isIn && n.indexOf(ME_NAME)>-1) || (v.shareBy==='peer' && !isIn));
     return '<div class="vc-tile" style="min-height:150px;'+(sharing?'outline:2px solid var(--sage);':'')+'"><span class="vc-label">'+n+'</span>'+
       '<div class="vc-avt" style="width:64px;height:64px;font-size:18px;background:'+(isIn?'var(--sage)':'#3B4A5A')+';opacity:'+(joined?1:.45)+';">'+callInitial(n)+'</div>'+
-      '<div style="font-size:11px;color:#9AA6B2;">'+(joined ? (sharing ? '🖥 正在共享屏幕' : (isIn && n.indexOf('Dewi')>-1 ? '客人在场，共用此画面' : '已加入')) : '呼叫中… 铃声响起')+'</div></div>';
+      '<div style="font-size:11px;color:#9AA6B2;">'+(joined ? (sharing ? '🖥 正在共享屏幕' : (isIn && n.indexOf(ME_NAME)>-1 ? '客人在场，共用此画面' : '已加入')) : '呼叫中… 铃声响起')+'</div></div>';
   }).join('');
   var abbr = v.participants.map(function(n){ return '<span class="vc-avt" style="width:26px;height:26px;font-size:11px;background:#3B4A5A;border:2px solid #111826;margin-right:-6px;" title="'+n+'">'+callInitial(n)+'</span>'; }).join('');
   var tr = (v.transcript||[]).map(function(t){
@@ -1085,7 +1085,7 @@ function acceptIncomingCall(){
   document.getElementById('incoming-call-overlay').classList.remove('open');
   if(!INCOMING_CALL) return;
   var c = CASE_ITEMS.filter(function(x){ return x.id===INCOMING_CALL.caseId; })[0];
-  startCall('chat', INCOMING_CALL.caseId, ['Dewi（印尼室长）', (c ? c.krCoordinator : '이서연 실장')]);
+  startCall('chat', INCOMING_CALL.caseId, [ME_NAME+'（印尼室长）', (c ? c.krCoordinator : '이서연 실장')]);
   VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); INCOMING_CALL = null;
 }
 
@@ -1168,7 +1168,7 @@ function resumeVisit(targetId){
   if(!confirm('接续到原案件 '+t.caseNo+'？本次新案件 '+c.caseNo+' 将作废（不留记录）。')) return;
   RESUMED_VISITS.push({name:c.name, date:c.visitDate, time:c.visitTime, purpose:c.visitPurpose, caseId:t.id, origCaseNo:t.caseNo, voidedCaseNo:c.caseNo}); /* 日历上这条预约来访改挂到原案件，显示已到访 */
   CASE_ITEMS.splice(CASE_ITEMS.indexOf(c), 1);
-  logCaseEvent(t, 'Dewi', '接续到访「Dewi」 '+nowFullDt());
+  logCaseEvent(t, ME_NAME, '接续到访「'+ME_NAME+'」 '+nowFullDt());
   CASE_RETURN.length = 0;
   if(typeof buildCaseTabs==='function'){ buildCaseTabs(); renderCaseRows(); }
   openCaseDetail(t.id, true);
@@ -1313,7 +1313,7 @@ function confirmMaterials(){
   }
   updateCaseStage(c);
   renderCaseStatusBar(c);
-  logCaseEvent(c, 'Dewi', '确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：'+(c.reuseReport ? '沿用之前报告（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊')));
+  logCaseEvent(c, ME_NAME, '确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：'+(c.reuseReport ? '沿用之前报告（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊')));
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -1333,7 +1333,7 @@ function archiveCaseRoom(c){
   if(!CHAT_DATA.hasOwnProperty(roomId)) return;
   var msgs = CHAT_DATA[roomId];
   var lines = msgs.map(function(m){
-    var who = m.kind==='sys' ? '系统' : (m.from==='me' ? 'Dewi' : (m.name||''));
+    var who = m.kind==='sys' ? '系统' : msgSender(m);
     return '['+m.day+' '+m.time+'] '+who+'：'+(m.kind==='quote' ? '（引用）'+m.speaker+'：'+m.orig : (m.orig||''));
   });
   var files = msgs.filter(function(m){ return m.kind==='file'; }).map(function(m){ return m.fname; });
@@ -1357,7 +1357,7 @@ function mockUploadAttachment(){
   c.manualAttachments = c.manualAttachments || [];
   var cat = (document.getElementById('att-cat')||{}).value || '基础资料';
   c.manualAttachments.push({label:'补充附件 '+(c.manualAttachments.length+1)+'.pdf', src:cat, date:attDate()});
-  logCaseEvent(c, 'Dewi', '上传了附件（'+cat+'）');
+  logCaseEvent(c, ME_NAME, '上传了附件（'+cat+'）');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -1386,8 +1386,8 @@ function localAskAnswer(yes){
   var c = getCurrentCase(); if(!c || !c.localAsk) return;
   document.getElementById('local-ask-overlay').classList.remove('open');
   c.localAsk = false;
-  if(!yes){ logCaseEvent(c, 'Dewi', '客人不做/不增加本地项目'); finishCase(c, '未购买未使用'); return; } /* 有购买→已结案；没有→仅出报告 */
-  logCaseEvent(c, 'Dewi', '客人要做/增加本地项目，在本案件内继续走本地流程');
+  if(!yes){ logCaseEvent(c, ME_NAME, '客人不做/不增加本地项目'); finishCase(c, '未购买未使用'); return; } /* 有购买→已结案；没有→仅出报告 */
+  logCaseEvent(c, ME_NAME, '客人要做/增加本地项目，在本案件内继续走本地流程');
   c.localTrack = true;
   c.entryChoicePending = true; c.projectEntryMode = null;
   c.projectsLocked = false; c.recommended = []; c.projectOriginFilter = 'IN'; c.activeCaseTab = 'localmgmt';
@@ -1441,7 +1441,7 @@ function submitHoldingsUse(scope){
     if(actual>0){
       ctx.mgmtUses = ctx.mgmtUses || [];
       ctx.mgmtUses.push({itemName:h.itemName, qty:actual, date:today});
-      logCaseEvent(c, 'Dewi', (scope==='lm'?'本地管理：':'')+'使用了'+h.itemName+' '+actual+'次，剩余'+holdingRemaining(h)+'次');
+      logCaseEvent(c, ME_NAME, (scope==='lm'?'本地管理：':'')+'使用了'+h.itemName+' '+actual+'次，剩余'+holdingRemaining(h)+'次');
       used.push(h.itemName);
     }
   });
@@ -1459,7 +1459,7 @@ function submitHoldingsUse(scope){
 function noProjectForClient(){
   var c = getCurrentCase(); if(!c) return;
   if(!confirm('确认客人不做任何项目？案件将按结局结束（仅出报告）。')) return;
-  logCaseEvent(c, 'Dewi', '客人不做项目');
+  logCaseEvent(c, ME_NAME, '客人不做项目');
   finishCase(c, '未购买未使用');
 }
 
@@ -1467,7 +1467,7 @@ function noProjectForClient(){
 function noPurchaseThisTime(){
   var c = getCurrentCase(); if(!c) return;
   if(!confirm('确认本次不购买项目？')) return;
-  logCaseEvent(c, 'Dewi', '本次不购买项目');
+  logCaseEvent(c, ME_NAME, '本次不购买项目');
   finishCase(c, '未购买未使用');
 }
 
@@ -1487,7 +1487,7 @@ function markMgmtRows(scope, action, all){
     if(action==='done'){ u.status = 'done'; }
     else { u.status = 'cancelled'; u.cancelQty = u.qty; returnHolding(c.name, u.itemName, c.id, u.qty, scope); returned += u.qty; } /* 次数归还持有，不是退款 */
   });
-  logCaseEvent(c, 'Dewi', (scope==='lm'?'本地管理：':'')+(action==='done'?'标记完成：':'标记取消（次数已归还持有，不是退款）：')+names.join('、'));
+  logCaseEvent(c, ME_NAME, (scope==='lm'?'本地管理：':'')+(action==='done'?'标记完成：':'标记取消（次数已归还持有，不是退款）：')+names.join('、'));
   if(returned>0) alert('已归还 '+returned+' 次到客户持有项目（这不是退款）');
   if(uses.some(function(u){ return localItemStatus(u)==='进行中'; })){ buildCaseLog(c); renderCaseBody(c); return; }
   /* 全部项目都标完：这一次本地管理结束 */
@@ -1585,7 +1585,7 @@ function confirmRefund(){
   if(mode0==='diffRefund'){ (c.settlementBatches||[]).forEach(function(b){ if(b.krDeposit>0) batchIds.push(b.id); }); }
   c.refunds = c.refunds || [];
   c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:nowFullDt().split(' ')[0], items:names, batchIds:batchIds, afterArrival:!!c.hasArrived});
-  logCaseEvent(c, 'Dewi', (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，退款 ')+formatCurrency(amount,'KRW')+'，退款原因：'+reason+(c.hasArrived ? '（金额按KR室长判断）' : ''));
+  logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，退款 ')+formatCurrency(amount,'KRW')+'，退款原因：'+reason+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];
   closeRefundModal();
   if(mode0==='diffRefund'){ /* 尾款多退少补：退差额后视为尾款已结清 */
@@ -1621,7 +1621,7 @@ function localKeepChoice(kind){
   document.getElementById('local-keep-overlay').classList.remove('open');
   if(kind==='keep'){
     c.localAsk = true;
-    logCaseEvent(c, 'Dewi', '室长选择保留本案件的本地项目/术后管理');
+    logCaseEvent(c, ME_NAME, '室长选择保留本案件的本地项目/术后管理');
     buildCaseLog(c);
     openLocalAskModal(c);
     return;
@@ -1648,7 +1648,7 @@ function confirmLocalRefundAll(){
   var today = nowFullDt().split(' ')[0], names = [];
   rows.forEach(function(x,i){ x.b.voided = true; x.b.refund = {amount:amounts[i], currency:'IDR', reason:reason, date:today}; names.push(x.h.itemName+' ×'+x.b.bought); });
   document.getElementById('local-refund-all-overlay').classList.remove('open');
-  logCaseEvent(c, 'Dewi', '室长选择全部退款：整批退款 '+names.join('、')+'；退款原因：'+reason);
+  logCaseEvent(c, ME_NAME, '室长选择全部退款：整批退款 '+names.join('、')+'；退款原因：'+reason);
   c.localAsk = false;
   finishCase(c, '未购买未使用'); /* 本次没有购买（或已全退）→ 仅出报告；还有用过的批次保留则为已结案 */
 }
@@ -1770,7 +1770,7 @@ function submitKrScheduleDate(){
   var ks = ensureKrScheduleDraft(c);
   if(!ks.primary){ alert('至少选择首选日期'); return; }
   ks.status = 'pending';
-  logCaseEvent(c, 'Dewi', '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'），等待Kr室长确认');
+  logCaseEvent(c, ME_NAME, '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'），等待Kr室长确认');
   updateCaseStage(c);
   buildCaseLog(c);
   renderCaseStatusBar(c);
@@ -1781,7 +1781,7 @@ function submitKrScheduleChangeDate(){
   var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='change_pending') return;
   if(!c.krSchedule.changePrimary){ alert('至少选择新的首选日期'); return; }
   c.krSchedule.changeSubmitted = true;
-  logCaseEvent(c, 'Dewi', '提交新施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'），等待Kr室长确认');
+  logCaseEvent(c, ME_NAME, '提交新施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'），等待Kr室长确认');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -1872,7 +1872,7 @@ function cancelConsult(){
   c.localTrack = true;
   c.entryChoicePending = true;
   c.activeCaseTab = 'localmgmt';
-  logCaseEvent(c, 'Dewi', '面诊取消（面诊费已取消），主状态进入选择项目，自动打开本地管理');
+  logCaseEvent(c, ME_NAME, '面诊取消（面诊费已取消），主状态进入选择项目，自动打开本地管理');
   updateCaseStage(c);
   renderCaseStatusBar(c);
   buildCaseLog(c);
@@ -2635,7 +2635,7 @@ function sendRoomFile(type){
   var ext = {'文件':'pdf', '照片':'jpg', '视频':'mp4'}[type];
   var fname = {'文件':'document', '照片':'photo', '视频':'video'}[type]+'-'+(ROOM_FILE_SEQ++)+'.'+ext; /* 三个都是上传；视频 = 上传视频文件 */
   if(!CHAT_DATA[CURRENT_ROOM]) CHAT_DATA[CURRENT_ROOM] = [];
-  CHAT_DATA[CURRENT_ROOM].push({day:'2026년 9월 18일', from:'me', kind:'file', fileType:type, fname:fname, orig:'['+type+'] '+fname, time:nowTime()});
+  CHAT_DATA[CURRENT_ROOM].push({day:'2026년 9월 18일', from:'me', sender:ME_NAME, kind:'file', fileType:type, fname:fname, orig:'['+type+'] '+fname, time:nowTime()});
   renderFloatMessages();
 }
 
@@ -2714,12 +2714,13 @@ function renderFloatMessages(){
   var msgs = CHAT_DATA[CURRENT_ROOM] || [];
   var html = '';
   var lastDay = null;
-  msgs.forEach(function(m,i){
+  msgs.forEach(function(m0,i){
+    var m = msgView(m0); /* 别的室长发的消息显示成"对方"气泡，名字保留发送当时的 */
     if(q && (m.orig||'').toLowerCase().indexOf(q)===-1) return;
     if(m.day !== lastDay){ html += '<div class="day-divider">'+m.day+'</div>'; lastDay = m.day; }
     var qLink = CURRENT_ROOM.indexOf('case-')===0 ? '' : ' <a href="#" class="info-link" style="font-size:10px;" onclick="openQuoteModal('+i+');return false;">引用到案件</a>';
     html += '<span id="msg-'+i+'"></span>';
-    if(m.kind==='file'){
+    if(m.kind==='file' && !m.notMine){
       var fic = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
       html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+fic+' '+m.fname+'</div><span class="bubble-trans" style="text-align:right;">'+m.time+qLink+'</span></div></div>';
     } else if(m.kind==='sys'){
@@ -2744,7 +2745,7 @@ var QUOTE_PENDING = null;
 
 function openQuoteModal(idx){
   var m = (CHAT_DATA[CURRENT_ROOM]||[])[idx]; if(!m) return;
-  var speaker = m.from==='me' ? 'Dewi' : (m.name||'');
+  var speaker = msgSender(m);
   var roomName = (roomById(CURRENT_ROOM)||{}).name || CURRENT_ROOM;
   QUOTE_PENDING = {day:m.day, speaker:speaker, srcDt:quoteDt(m), srcRoom:roomName, srcRoomId:CURRENT_ROOM, srcIdx:idx, trans:m.trans||'', orig:m.orig||'', caseId:null};
   document.getElementById('quote-preview').textContent = speaker+'：'+QUOTE_PENDING.srcDt+' 「'+roomName+'」 "'+QUOTE_PENDING.orig+'"';
@@ -2802,7 +2803,7 @@ function simulateIncomingMsg(atMe){
   var cc = isCase ? CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0] : null;
   var who = (isCase && cc && caseHasKrSide(cc)) ? krEnterRoomName(cc) : '이서연';
   if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = [];
-  CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@Dewi ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime()});
+  CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@'+ME_NAME+' ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime()});
   renderFloatMessages();
   var roomOpen = document.getElementById('chat-float-overlay').classList.contains('open') && CURRENT_ROOM===roomId;
   if(!atMe && !roomOpen){ ROOM_UNREAD[roomId] = (ROOM_UNREAD[roomId]||0)+1; updateChatBadge(); try{ if(document.getElementById('chat-drawer').classList.contains('open')) renderDrawerList(); }catch(e){} } /* 未读不含 @ */
@@ -2820,7 +2821,7 @@ function sendFloatMsg(){
   if(!val) return;
   var isNewCaseRoom = CURRENT_ROOM.indexOf('case-')===0 && !CHAT_DATA.hasOwnProperty(CURRENT_ROOM);
   if(!CHAT_DATA[CURRENT_ROOM]) CHAT_DATA[CURRENT_ROOM] = [];
-  var msg = {day:'2026년 9월 18일', from:'me', orig:val, trans:'（演示译文）'+val, time:nowTime()};
+  var msg = {day:'2026년 9월 18일', from:'me', sender:ME_NAME, orig:val, trans:'（演示译文）'+val, time:nowTime()};
   if(REF_CHIP) msg.refCaseId = REF_CHIP;
   CHAT_DATA[CURRENT_ROOM].push(msg);
   var srcIdx = CHAT_DATA[CURRENT_ROOM].length-1;
@@ -2828,7 +2829,7 @@ function sendFloatMsg(){
     var rc = CASE_ITEMS.filter(function(x){ return x.id===REF_CHIP; })[0];
     var roomName = (roomById(CURRENT_ROOM)||{}).name || CURRENT_ROOM;
     if(rc && !(CURRENT_ROOM===getCaseRoomId(rc.id))){ /* 在案件自己的房里引用自己，不重复写入 */
-      deliverRefQuote(rc, {day:msg.day, speaker:'Dewi', srcRoomId:CURRENT_ROOM, srcRoom:roomName, srcIdx:srcIdx, srcDt:quoteDt(msg), orig:val, trans:msg.trans});
+      deliverRefQuote(rc, {day:msg.day, speaker:ME_NAME, srcRoomId:CURRENT_ROOM, srcRoom:roomName, srcIdx:srcIdx, srcDt:quoteDt(msg), orig:val, trans:msg.trans});
     }
     REF_CHIP = null; renderRefChip();
   }
@@ -2877,3 +2878,45 @@ function refreshView(){
     if(fl && fl.classList.contains('open') && CURRENT_ROOM) renderFloatMessages();
   }catch(e){}
 }
+
+/* ================= 登录身份相关界面（2026-10-05·三） ================= */
+/* 对话消息发送人：from:'me' 的消息带 sender（发送当时的姓名）；旧演示消息没有 sender，视为 Dewi 发的 */
+function msgIsMine(m){ return m.from==='me' && (m.sender||'Dewi')===ME_NAME; }
+function msgSender(m){ return m.from==='me' ? (m.sender||'Dewi') : (m.name||''); }
+function msgView(m){
+  if(m.from!=='me' || m.kind==='quote' || msgIsMine(m)) return m;
+  var n = m.sender||'Dewi';
+  return Object.assign({}, m, {from:'them', notMine:true, name:n, color:'var(--terracotta)', init:n.charAt(0).toUpperCase()});
+}
+function accountRoleShort(){ var a = currentAccount(); return a ? ({owner:'老板', manager:'管理者', general:'室长'}[a.role]||'室长') : '室长'; }
+
+/* 头像菜单：个人设置 / 切换账号 / 退出登录 */
+function closeAvatarMenu(){ var m = document.getElementById('avatar-menu'); if(m) m.remove(); }
+function toggleAvatarMenu(e){
+  if(e) e.stopPropagation();
+  if(document.getElementById('avatar-menu')){ closeAvatarMenu(); return; }
+  var a = currentAccount(); if(!a) return;
+  var r = e.currentTarget.getBoundingClientRect();
+  var m = document.createElement('div'); m.id = 'avatar-menu';
+  m.style.cssText = 'position:fixed;top:'+(r.bottom+8)+'px;right:'+Math.max(12, window.innerWidth-r.right)+'px;z-index:80;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);min-width:200px;overflow:hidden;';
+  var item = function(label, fn){ return '<div style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background=\'var(--border2)\'" onmouseout="this.style.background=\'\'" onclick="closeAvatarMenu();'+fn+'">'+label+'</div>'; };
+  m.innerHTML = '<div style="padding:12px 16px;border-bottom:1px solid var(--border2);"><div style="font-size:13px;font-weight:700;">'+accountLabel(a.id)+'</div><div style="font-size:11px;color:var(--muted);">'+ACCOUNT_ROLES[a.role]+(a.position?' · '+a.position:'')+'</div></div>'+
+    item('个人设置', 'openProfileCard()')+item('切换账号', 'switchAccount()')+item('退出登录', 'logout()');
+  m.onclick = function(ev){ ev.stopPropagation(); };
+  document.body.appendChild(m);
+}
+/* 个人资料卡（只读；个人设置页在第五部分做，到时替换这里） */
+function openProfileCard(){
+  var a = currentAccount(); if(!a) return;
+  var ov = document.getElementById('profile-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'profile-overlay'; ov.onclick = function(e){ if(e.target===ov) ov.classList.remove('open'); }; document.body.appendChild(ov); }
+  var row = function(k, v){ return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2);font-size:13px;"><span style="color:var(--muted);">'+k+'</span><span>'+v+'</span></div>'; };
+  ov.innerHTML = '<div class="modal-box"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">个人资料</div>'+
+    row('账号', accountLabel(a.id))+row('角色', ACCOUNT_ROLES[a.role])+row('席位', a.seat==='basic'?'基础席位':'加购账号')+row('职位', a.position||'—')+row('手机', a.phone||'—')+row('证件照', a.photo ? '已上传' : '—')+
+    '<div style="font-size:11px;color:var(--muted);margin:10px 0;">个人设置（修改资料、语言、通知、密码）在后续部分实现。</div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="document.getElementById(\'profile-overlay\').classList.remove(\'open\')">关闭</button></div>';
+  ov.classList.add('open');
+}
+/* 退出/切换：只清当前标签页的登录信息，其他标签页不受影响 */
+function logout(){ try{ sessionStorage.removeItem('gmc_acct'); }catch(e){} location.href = '/login.html'; }
+function switchAccount(){ try{ sessionStorage.removeItem('gmc_acct'); }catch(e){} location.href = '/login.html?switch=1'; }

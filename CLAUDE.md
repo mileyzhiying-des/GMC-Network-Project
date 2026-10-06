@@ -40,15 +40,15 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 （2026-10-05 第二十九轮按现状重写：只留还真的存在的差距。业务规则已全部写进 Notion；我自己的实现判断在 `docs/open-questions.md` 第 2 节和各轮小节里，标"待确认"的才需要业务方看。）
 
 **仍然存在的差距 / 待确认**
-1. **赴韩项目的 KR 端维护**：韩国侧页面（KRC/KRD）没建，赴韩项目新增/翻译录入没有入口；原型里"演示用"角色切到 KR 室长时赴韩 tab 仍有［编辑］［非活性化］等操作，用来演示"KR 室长维护"，Notion IN-SRVC-01 写"赴韩项目没有操作"，要不要去掉待业务方定。
+1. **赴韩项目的 KR 端维护**：韩国侧页面（KRC/KRD）没建，赴韩项目新增/翻译录入没有入口；原型里"演示用"角色下拉已在第三部分删除，所以不再演示 KR 室长维护（Notion IN-SRVC-01 写"赴韩项目没有操作"，一致）。
 2. **Notion 待业务方拍板**：赴韩定金比例（`KR_DEPOSIT_RATE=0.3` 只是演示占位，用户确认维持）；KR 代收术后管理项目的对账方式；赴韩取消时定金没退的部分归印尼诊所还是韩国医院。
 3. **只有演示、没接真实服务**：即时汇率（`FX_RATES` 写死）、AI 翻译（演示翻译）、视频通话/来电铃声/即时转录/录像、AI 转写（见 `docs/conversation-video-flow.md` 的 Integrations & APIs 背景，方案 A/B 待选）。
-4. **数据只在浏览器内存里**：刷新重置；新标签页是另一份演示数据（需要后端/共享存储，下一轮"结构拆分"要解决）；设定和 memo 存 localStorage（带版本号 `DEMO_DATA_VERSION`）。
+4. **数据在浏览器 localStorage 里**（第三十轮起，多标签页同步；没有后端，换浏览器/清缓存就没了；真实上传图片只在内存）；设定和 memo 同样带版本号 `DEMO_DATA_VERSION`。
 5. **没做的页面/字段**：院长端（只记在 docs）、KR 端页面、客人公开预约页面（只有"客人自己填资料"演示表单）、客户详情隐私协议的"同意书版本 + 签署时间"字段、客户详情"基础信息"是全局静态演示数据。
 6. **通知**：系统更新的"没上线的人下次登录弹出"没做离线队列；"未接来电"没有真实超时判断；通知 90 天清除只是显示时过滤。
 7. **对话**：抽屉 🔍 只搜房间名；未读数只有演示数据 + "模拟新消息"会增加。
 8. **术后管理**："KR 确认（可变更）"只做了标注进行时间，没做改项目/改次数；IN 侧的"更换项目"没有演示入口（只有 KR 发起）。
-9. **账号/权限/设定/经营数据/操作 log**：还没做（下一轮指令）；目前只有"演示用"角色切换（案例库、项目库共用）。
+9. **账号/权限/设定/经营数据/操作 log**：账号数据、登录/激活/忘记密码、头像菜单已做（第三十二轮）；权限控制、设定页、账号管理页、经营数据、操作日志页待做（指令第四～八部分）。
 
 **旧名称已清理**（对照表见 `docs/case-management-flow.md` 末尾）：Reservation ID、等待确认面诊时间/等待缴纳面诊费（主状态）、待付款/已付款/待确认施术时间/等待施术（大状态）、赴韩施术中、管理进行中、已出报告（状态）、AI整理中、邀请室长视频、等待面诊、面诊进行中、视频/书面面诊、二次面诊、再次面诊、提及案件、"预计 X 内提交"。
 
@@ -87,7 +87,8 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - 第二十八轮（2026-10-03 对话页面结构，docs 1k）：💬 未读数不含@（`ROOM_UNREAD`/`updateChatBadge`）、抽屉排序 `roomLastKey`、新建案件对话候选无房间、案件房标题 ↗、引用 chip 显示当前大状态（`refBarHtml`，`updateCaseStage` 会刷新打开着的窗口）、案件状态变化不发进对话房（删 `sendMainAnnouncement`/KR 回复消息/结构化卡片，视频结束只发系统消息）、@ 自己高亮；案件房种子消息改成普通沟通内容。
 - 第二十九轮（2026-10-05 收尾，TODO 盘点答复 + 清理，docs 1l）：**一** 删除 `cancelFollowUpReservations`（案件结束不再自动取消同客人其他预约）；**二** 不面诊案件付款后也可［增加面诊］（`addedConsultAfterLocal`/`consultCarryStage`/`localMgmtTagOn`，主状态→面诊预约→…→项目确认中，本地项目照常使用）；**三** 持有批次退款记在购买案件（`holdingRefunds`/`hasRefundMark`，两边 Timeline，仅办理退款=取消原因 `refundVisit`）；**四** 到医院后更换项目的新结算单状态"计入尾款"；**五** 基础资料［补充上传］（`supplementUpload`）；**六** 清理死代码（in-newclient、旧免除面诊费弹窗、二次面诊/视频书面遗留字段）；**七** 文档清理（open-questions 1c–1f 标已写入 Notion、已被取代的内容标已作废、第2节 #3 #16 #17 #21 已解决，本文件"已知差距"重写）。
 - 第三十轮（2026-10-05 结构拆分·一，账号与设定指令的第一部分；二→八等用户检查后再做）：把单文件原型拆成 `prototype/shared/`（`rules.js` 规则层、`ui.js` 界面层、`data.js` 数据层、`store.js` 存档与多标签页同步、`boot-in.js` IN 端启动、`app.css`）+ 入口页 `login.html`（暂为按角色进入的占位登录页）/`in.html`（IN 端全部页面）/`owner.html`、`kr.html`（占位）/`booking.html`（客户自助预约表单，参数 `?date=&time=&phone=&purpose=&ph=`）；旧的 `gmc-network-prototype.html` 已删除（git 历史里还在）。功能和拆分前完全一致（函数清单 638 个一个没少，只多了 `refreshView`/`resetDemoData`，并删掉一个重复定义的 `toggleAttachMenu`）。数据存 localStorage（`gmc_state`，带版本号 `DEMO_DATA_VERSION`=4），刷新不再重置；多标签页实时同步；超容量提示"演示数据过大，已重置"；真实上传图片只在内存。新增 `start.command` 一键启动，`dev/check.sh` 取代 `/tmp/check.sh`。
-- 第三十一轮（2026-10-05 账号与设定·二 账号数据与演示账号，`docs/accounts-settings.md`）：`ACCOUNTS`（OWN/A1 Dewi 管理者/A2 Rina 一般/A3 待激活加购/A4 已停用加购）、`ACCOUNT_LOG`、`currentAccountId()`（sessionStorage）、`accountLabel`/`actorDisplay`/`staffLabel`/`seatSummary`/`logOp`；Timeline 和案件列表 IN 室长列显示"Rina（A2）"，新记录带 `actorId`；数据版本号 5。演示密码 = 编号小写 + 123（own123/a1123/a2123/a4123）。三～八待做。
+- 第三十一轮（2026-10-05 账号与设定·二 账号数据与演示账号）：`ACCOUNTS`（OWN 老板/A1 Dewi 管理者/A2 Rina 一般/A3 待激活加购/A4 已停用加购/A5 Putri 加购管理者）、`ACCOUNT_LOG`、`currentAccountId()`（sessionStorage）、`accountLabel`/`actorDisplay`/`staffLabel`/`seatSummary`/`logOp`；Timeline 和案件列表 IN 室长列显示"Rina（A2）"，新记录带 `actorId`。用词：**OWN = 老板（诊所管理账号）**，院长 = 韩国医院医生；激活上传**证件照**（字段 `photo`），不收集身份证。
+- 第三十二轮（2026-10-06 账号与设定·三 登录与激活，`docs/accounts-settings.md`）：`login.html` 登录/首次激活（手机验证码显示在屏幕上 → 设密码+姓名+职位+证件照）/忘记密码；sessionStorage 登录、`guardPage()` 守卫（in.html 只许管理者/一般室长，owner.html 只许老板）；头像菜单（个人设置只读资料卡/切换账号/退出登录）；删除案例库/项目库的"演示用角色"下拉；`ME_NAME` 跟登录账号走，种子外的写死 Dewi 全部改成 `actingName()`/`ME_NAME`；对话消息带 `sender`；`IN_COORDINATORS` 由账号算出；数据版本 6。演示密码 = 编号小写 + 123（own123/a1123/a2123/a4123/a5123）。四～八待做。
 - 教训：补丁用 `region(start,end)` 替换时结束标记必须紧邻；**第四部分的补丁曾误删一整段弹窗 HTML**，已恢复；现在 `/tmp/check.sh` 除了函数清单还检查 DOM id 是否缺失。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
@@ -177,9 +178,9 @@ vite.config.js                         Vite 配置
 
 **文件结构**（原来写 `prototype/gmc-network-prototype.html` 的地方，现在对应下面这些文件；按函数名/变量名搜索即可，在 `prototype/shared/` 下全局搜）：
 ```
-prototype/login.html      登录页（第二部分做真正的登录/激活；现在是按角色直接进入的占位页 + 重置演示数据）
+prototype/login.html      登录页（2026-10-05·三已做：登录/首次激活/忘记密码；演示账号和重置演示数据在页脚）
 prototype/in.html         印尼室长端：全部页面（工作台/客户/案件/案例库/项目库/通知/对话/视频…）的 HTML
-prototype/owner.html      院长端（占位）        prototype/kr.html  韩国室长端（占位）
+prototype/owner.html      老板端（诊所管理账号 OWN；占位）        prototype/kr.html  韩国室长端（占位）
 prototype/booking.html    客户自助预约表单（复用 ui.js 的 renderGuestForm / data.js 的 submitGuestForm）
 prototype/shared/rules.js 规则层：状态推导、结局、资格判断、日期格式化等不碰界面的函数
 prototype/shared/ui.js    界面层：页面切换、渲染、弹窗、toast、对话浮窗、日历；界面状态变量；refreshView()
@@ -195,4 +196,4 @@ prototype/shared/app.css  共用样式
 - `npm run build` 把五个入口页打包到 `dist/`，`shared/` 原样复制到 `dist/shared/`（`vite.config.js` 里的 `gmc-copy-shared` 插件）；`server/index.js` 的根路径跳转到 `/login.html`。
 - 存档规则：每次点击/输入/选择后 60ms 内、以及每 2 秒，如果数据有变化就存档；其他标签页收到 `storage` 事件后重读数据并 `refreshView()`；页面离开时再存一次。容量超限（约 5MB，`QuotaExceeded`）时：console.warn + 画面顶部红色提示"演示数据过大，已重置"，清掉存档，这个页面之后不再存档（刷新页面恢复演示数据）。真实上传的图片（data: 地址）只放内存，存档里是 `@img:编号`，刷新后不再显示。
 - **自测补充**：提交前改跑 `bash dev/check.sh`（函数清单对比 `prototype/shared/*.js` 与 HEAD、语法、DOM id 缺失；`add-slot-purpose`、`bell-dd` 是动态生成的 id，属正常）；多标签页同步用两个标签页验证（一个改数据，另一个不刷新就能看到）；改完后冷启动检查用 `in.html`。
-- 演示账号/密码（第二部分才会做，约定：密码 = 账号编号小写 + `123`，例如 A1 → `a1123`）。
+- 演示账号/密码（已做，见 `docs/accounts-settings.md`）：密码 = 账号编号小写 + `123`，例如 A1 → `a1123`；A3 待激活（手机 +62 811-0000-0004，验证码显示在屏幕上）；A4 已停用。登录入口 `/login.html`；每个标签页各自登录（sessionStorage），可同时登不同账号测多人。**自测时先登录再测**（in.html 没登录会跳回登录页）。

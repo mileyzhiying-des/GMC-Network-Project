@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
-/* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据，升到 5） ---- */
-var DEMO_DATA_VERSION = 5;
+/* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
+var DEMO_DATA_VERSION = 6;
 (function(){
   try{
     if(localStorage.getItem('gmc_demo_ver') !== String(DEMO_DATA_VERSION)){
@@ -50,35 +50,45 @@ function setClinicTz(k){
    "早上好"下面固定"今日"区块：最上面是今天的 OFF（KR 院长 / KR 室长 / IN 室长），下面是今日行程（时间 · 人名 · 类型）；
    周视图 9:00 上面的固定栏每天一格，显示当天 OFF 和 memo；新增 memo：选日期、类型（备忘/OFF）、公开/私人，OFF 固定公开，显示作者；IN 室长的 OFF 就是从这里来 */
 /* ================= 账号（2026-10-05·二） =================
-   席位：基础 3 个（OWN 院长、A1 管理者、A2 一般室长）+ 加购账号（A3 起，只能一般室长）。
+   席位：基础 3 个（OWN 老板、A1 管理者、A2 一般室长）+ 加购账号（A3 起顺序编号；一般室长和管理者都可以加购，单独定价，可以有多个）。
    status：active 使用中 / pending 待激活（还没人设密码）/ disabled 已停用（取消加购后）。
    演示密码 = 账号编号小写 + 123（OWN → own123，A1 → a1123）；待激活账号没有密码，激活时用手机验证码（登录/激活在第三部分做）。
    history：这个账号编号上的变更历史（激活、重置密码、停用…）；操作人以"当时的姓名 + 编号"记录，之后账号换了新的人，旧记录仍显示"Rina（A2）"。 */
-var ACCOUNT_ROLES = {owner:'院长（Owner）', manager:'室长（管理者）', general:'一般室长'};
+var ACCOUNT_ROLES = {owner:'老板（诊所管理账号）', manager:'室长（管理者）', general:'一般室长'};
 var ACCOUNT_STATUS = {active:'使用中', pending:'待激活', disabled:'已停用'};
 var BASIC_SEATS = 3;
 var ACCOUNTS = [
-  {id:'OWN', role:'owner',   seat:'basic', name:'Hartono', position:'院长',   phone:'+62 811-0000-0001', status:'active',   password:'own123', idPhoto:'身份证照片', createdAt:'2026-08-01 09:00', activatedAt:'2026-08-01 09:30', history:[{ts:'2026-08-01 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Hartono（OWN）'}]},
-  {id:'A1',  role:'manager', seat:'basic', name:'Dewi',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  idPhoto:'身份证照片', createdAt:'2026-08-01 09:10', activatedAt:'2026-08-01 10:00', history:[{ts:'2026-08-01 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'Dewi（A1）'}]},
-  {id:'A2',  role:'general', seat:'basic', name:'Rina',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  idPhoto:'身份证照片', createdAt:'2026-08-01 09:20', activatedAt:'2026-08-02 09:00', history:[{ts:'2026-08-02 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Rina（A2）'}]},
-  {id:'A3',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     idPhoto:'',           createdAt:'2026-09-16 14:00', activatedAt:'',                 history:[{ts:'2026-09-16 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'Dewi（A1）'}]},
-  {id:'A4',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  idPhoto:'身份证照片', createdAt:'2026-08-20 11:00', activatedAt:'2026-08-21 09:00', disabledAt:'2026-09-10 17:00', history:[{ts:'2026-08-21 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:'2026-09-10 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]}
+  {id:'OWN', role:'owner',   seat:'basic', name:'Hartono', position:'老板',   phone:'+62 811-0000-0001', status:'active',   password:'own123', photo:'证件照', createdAt:'2026-08-01 09:00', activatedAt:'2026-08-01 09:30', history:[{ts:'2026-08-01 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Hartono（OWN）'}]},
+  {id:'A1',  role:'manager', seat:'basic', name:'Dewi',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  photo:'证件照', createdAt:'2026-08-01 09:10', activatedAt:'2026-08-01 10:00', history:[{ts:'2026-08-01 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'Dewi（A1）'}]},
+  {id:'A2',  role:'general', seat:'basic', name:'Rina',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  photo:'证件照', createdAt:'2026-08-01 09:20', activatedAt:'2026-08-02 09:00', history:[{ts:'2026-08-02 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Rina（A2）'}]},
+  {id:'A3',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     photo:'',           createdAt:'2026-09-16 14:00', activatedAt:'',                 history:[{ts:'2026-09-16 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'Dewi（A1）'}]},
+  {id:'A4',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:'2026-08-20 11:00', activatedAt:'2026-08-21 09:00', disabledAt:'2026-09-10 17:00', history:[{ts:'2026-08-21 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:'2026-09-10 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]},
+  {id:'A5',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:'2026-09-17 10:00', activatedAt:'2026-09-17 11:00', history:[{ts:'2026-09-17 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:'2026-09-17 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]}
 ];
-var ACCOUNT_SEQ = 4; /* 下一个加购账号编号 = 'A'+(ACCOUNT_SEQ+1) */
+var ACCOUNT_SEQ = 5; /* 下一个加购账号编号 = 'A'+(ACCOUNT_SEQ+1) */
 /* 操作日志（owner/管理者在"操作日志"页看；第八部分做页面）：时间、操作账号 + 当时的姓名、内容、类型 */
 var ACCOUNT_LOG = [
   {id:'log1', ts:'2026-09-16 14:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购账号 A3（一般室长）'},
-  {id:'log2', ts:'2026-09-10 17:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'取消加购账号 A4（Sari）'}
+  {id:'log2', ts:'2026-09-10 17:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'取消加购账号 A4（Sari）'},
+  {id:'log3', ts:'2026-09-17 10:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购管理者账号 A5（老板验证码确认）'}
 ];
-/* 当前登录的账号：存在 sessionStorage（每个标签页各自登录，互不影响）；没有登录信息时（第三部分做登录之前）演示默认 A1 */
+/* 当前登录的账号：存在 sessionStorage 的 gmc_acct（每个标签页各自登录，互不影响）；没登录、账号被停用/被重置成待激活，都返回 null */
 function currentAccountId(){
   var id = null;
   try{ id = sessionStorage.getItem('gmc_acct'); }catch(e){}
   var a = id ? ACCOUNTS.filter(function(x){ return x.id===id && x.status==='active'; })[0] : null;
-  return a ? a.id : 'A1';
+  return a ? a.id : null;
 }
 function currentAccount(){ return accountById(currentAccountId()); }
-var ME_NAME = (currentAccount() || {name:'Dewi'}).name || 'Dewi';
+var ME_NAME = (currentAccount() || {name:''}).name || '';
+/* 演示数据种子（SEEDING=true，data.js 末尾置 false）里的"当前操作人"固定写 Dewi，不随打开页面的账号变化；运行时 = 当前登录的人 */
+var SEEDING = true;
+function actingName(){ return SEEDING ? 'Dewi' : ME_NAME; }
+/* IN 室长名单 = 使用中的非老板账号的姓名（账号被停用/重置/激活后重新计算） */
+function syncInCoordinators(){
+  var names = ACCOUNTS.filter(function(a){ return a.role!=='owner' && a.status==='active' && a.name; }).map(function(a){ return a.name; });
+  IN_COORDINATORS.length = 0; Array.prototype.push.apply(IN_COORDINATORS, names);
+}
 /* 写操作日志：当前账号 + 当时的姓名 */
 function logOp(type, text){
   var a = currentAccount() || {id:'?', name:''};
@@ -215,11 +225,11 @@ function createReservationCase(name, director, date, time, phone, purpose){
   var id = 'r'+Date.now()+Math.floor(Math.random()*1000);
   var c = makeCase({id:id, name:name, director:null, updated:'刚刚', visitDate:date, visitTime:time, visitPurpose:purpose||'面诊商谈', /* 2026-10-02：预约不选院长，面诊案件在基础资料里选 */
     basic:{gender:'—', dob:'—', contact:phone||'—', history:'无'},
-    logEntries:[{stage:'预约到店', actor:phone?'客人':'Dewi', action:(phone?'官网/短信链接自助预约成功':'室长代替预约')+'，生成 Case ID '+caseNo, dt:nowFullDt()}]});
+    logEntries:[{stage:'预约到店', actor:phone?'客人':actingName(), action:(phone?'官网/短信链接自助预约成功':'室长代替预约')+'，生成 Case ID '+caseNo, dt:nowFullDt()}]});
   c.caseNo = caseNo;
   CASE_ITEMS.unshift(c);
   updateCaseStage(c);
-  if(!CLIENTS.some(function(x){ return x[0]===name; })) CLIENTS.unshift([name,'资料录入','Dewi','刚刚','#E4E8ED','var(--slate2)']);
+  if(!CLIENTS.some(function(x){ return x[0]===name; })) CLIENTS.unshift([name,'资料录入',actingName(),'刚刚','#E4E8ED','var(--slate2)']);
   return c;
 }
 
@@ -422,7 +432,7 @@ function caseNoLabel(caseId){
 function makeCase(o){
   return {
     id:o.id, name:o.name, subState:o.subState||'waiting',
-    inCoordinator:o.inCoordinator||'Dewi', krInRoom:!!o.krInRoom, chatArchive:null, /* 2026-10-02：负责该案件的IN室长 / KR室长是否已进入案件对话房 / 结案后整理的对话记录 */
+    inCoordinator:o.inCoordinator||actingName(), krInRoom:!!o.krInRoom, chatArchive:null, /* 2026-10-02：负责该案件的IN室长 / KR室长是否已进入案件对话房 / 结案后整理的对话记录 */
     visitDate:o.visitDate||null, visitTime:o.visitTime||null, visitPurpose:o.visitPurpose||'面诊商谈', /* 2026-10-02：日历、案件列表、预约历史都从案件这份数据算 */
     reportEta:o.reportEta||null, reportOverdue:!!o.reportOverdue, /* 2026-10-02：KR确认的预计出报告时间 / 已超时提醒 */
     director:(o.director!==undefined ? o.director : ((o.consultRequested || o.needsConsult===true) ? '김민석 원장' : null)), /* 2026-10-02：本地案件没有院长 */ krCoordinator:o.krCoordinator||'이서연 실장', updated:o.updated||'刚刚', caseNo:o.caseNo||null,
@@ -874,7 +884,7 @@ function markNoShow(caseId, auto){
   updateCaseStage(c);
   if(auto) pushNotif('预约','未到店（自动判定）：'+c.name+' 过预约时间30分钟未到店，已取消', {caseId:c.id});
   c.logEntries = c.logEntries || [];
-  c.logEntries.push({stage:'预约到店', actor: auto ? '系统' : 'Dewi', action: auto ? '过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）' : '手动标记未到店：已取消（未到店）', dt:nowFullDt()});
+  c.logEntries.push({stage:'预约到店', actor: auto ? '系统' : actingName(), action: auto ? '过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）' : '手动标记未到店：已取消（未到店）', dt:nowFullDt()});
   return true;
 }
 
@@ -1044,7 +1054,7 @@ function startCall(kind, caseId, participants){
   renderVideoPage();
 }
 
-function startDemoCall(){ startCall('demo', null, ['Dewi（印尼室长）', '이서연 실장（韩国室长）']); VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); }
+function startDemoCall(){ startCall('demo', null, [ME_NAME+'（印尼室长）', '이서연 실장（韩国室长）']); VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); }
 
 function seedTranscript(){
   VIDEO_CALL.transcript = [
@@ -1069,7 +1079,7 @@ function simulateMissedCall(){
 function inviteKrVideo(name){
   /* 邀请室长视频是临时加开的一次沟通，不改变 consultStatus，但结束后要给该案件附上一份AI转写稿文件 */
   closeInviteKrModal();
-  startCall('talk', CURRENT_CASE_ID, ['Dewi（印尼室长）', name+' 실장（韩国室长）']); /* 室长商谈：直接呼叫上传报告的KR室长 */
+  startCall('talk', CURRENT_CASE_ID, [ME_NAME+'（印尼室长）', name+' 실장（韩国室长）']); /* 室长商谈：直接呼叫上传报告的KR室长 */
 }
 
 function endVideoConsult(){
@@ -1098,7 +1108,7 @@ function endVideoConsult(){
       c3.consultFiles.unshift({label:'视频通话文本 #'+seq+'（AI生成，仅供参考）',date:attDate()});
       logCaseEvent(c3, '系统', '对话内视频通话结束，已生成AI转写稿附件');
       buildCaseLog(c3);
-      postCaseRoomFile(c3.id, 'Dewi', 'var(--terracotta)', 'D', '视频通话文本 #'+seq+'（AI生成，仅供参考）+ 视频通话录像 #'+seq);
+      postCaseRoomFile(c3.id, ME_NAME, 'var(--terracotta)', ME_NAME.charAt(0).toUpperCase(), '视频通话文本 #'+seq+'（AI生成，仅供参考）+ 视频通话录像 #'+seq);
       touchedCase = c3;
     }
     CHAT_VIDEO_CONTEXT_CASE_ID = null;
@@ -1215,7 +1225,7 @@ function markArrived(){
   var c = getCurrentCase(); if(!c) return;
   c.subState = 'arrived';
   renderCaseStatusBar(c);
-  logCaseEvent(c, 'Dewi', '标记客人已到店');
+  logCaseEvent(c, actingName(), '标记客人已到店');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -1236,7 +1246,7 @@ function confirmCancelIntake(){
   c.needsConsult = null;
   c.materialsError = '';
   updateCaseStage(c);
-  logCaseEvent(c, 'Dewi', '取消接待，案件回到待访问');
+  logCaseEvent(c, actingName(), '取消接待，案件回到待访问');
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -1296,7 +1306,7 @@ function linkRowHtml(c){
 function applyCaseLink(c){
   if(!c.linkedCase || !c.linkedCase.caseId) { c.linkedCase = null; return; }
   var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
-  logCaseEvent(c, 'Dewi', '关联之前案件 '+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'（'+c.linkedCase.reason+'）');
+  logCaseEvent(c, actingName(), '关联之前案件 '+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'（'+c.linkedCase.reason+'）');
   if(src && (c.linkedCase.reason==='复诊' || c.linkedCase.reason==='延续既往面诊') && DIRECTOR_LIST.indexOf(src.director)>-1 && c.director!==src.director){
     logCaseEvent(c, '系统', '关联'+c.linkedCase.reason+'：院长锁定为原院长 '+src.director+'（原：'+c.director+'）');
     c.director = src.director;
@@ -1567,7 +1577,7 @@ function applyReuseReport(c){
   c.projectsEnabled = true;
   c.projectOriginFilter = 'KR';
   c.activeCaseTab = 'projects';
-  logCaseEvent(c, 'Dewi', (c.reuseAfterConsult ? '面诊后院长判断无变动，沿用原报告（' : '沿用原报告（')+src.caseNo+'）：'+(c.reuseAfterConsult ? '' : '不产生面诊费，')+'直接进入项目确认中，不经过等待报告；项目列表按原方案预填 '+c.recommended.length+' 项（价格按现在的项目库）');
+  logCaseEvent(c, actingName(), (c.reuseAfterConsult ? '面诊后院长判断无变动，沿用原报告（' : '沿用原报告（')+src.caseNo+'）：'+(c.reuseAfterConsult ? '' : '不产生面诊费，')+'直接进入项目确认中，不经过等待报告；项目列表按原方案预填 '+c.recommended.length+' 项（价格按现在的项目库）');
 }
 
 
@@ -1689,10 +1699,10 @@ function supplementUpload(kind){
   c.suppUploads = c.suppUploads || {metaview:[], photo:[], video:[]};
   var n = c.suppUploads[kind].length + 1, ext = {metaview:'pdf', photo:'jpg', video:'mp4'}[kind];
   var name = '补充'+SUPP_LABEL[kind].replace('检测报告','')+' '+n+'.'+ext;
-  c.suppUploads[kind].push({name:name, by:'Dewi', at:nowFullDt()}); /* 只能新增，不能删除原文件 */
+  c.suppUploads[kind].push({name:name, by:actingName(), at:nowFullDt()}); /* 只能新增，不能删除原文件 */
   c.manualAttachments = c.manualAttachments || [];
   c.manualAttachments.push({label:name, src:'基础资料', date:attDate()}); /* 同时进附件（分类"基础资料"） */
-  logCaseEvent(c, 'Dewi', '补充上传'+SUPP_LABEL[kind]+'：'+name);
+  logCaseEvent(c, actingName(), '补充上传'+SUPP_LABEL[kind]+'：'+name);
   buildCaseLog(c); renderCaseBody(c);
 }
 
@@ -1720,7 +1730,7 @@ function addConsult(){
   c.activeCaseTab = 'consult';
   var lk0 = directorLockInfo(c); if(lk0) c.director = lk0.name; /* 关联复诊/延续既往面诊：锁定原院长；否则缴费前在面诊费卡里选院长 */
   updateCaseStage(c);
-  logCaseEvent(c, 'Dewi', '发起"增加面诊"（面诊费在面诊资料tab缴纳或免除）');
+  logCaseEvent(c, actingName(), '发起"增加面诊"（面诊费在面诊资料tab缴纳或免除）');
   renderCaseStatusBar(c);
   buildCaseLog(c);
   renderCaseBody(c);
@@ -2003,7 +2013,7 @@ function localEntryChoiceHtml(c){
 function chooseProjectEntryMode(mode){
   var c = getCurrentCase(); if(!c) return;
   c.projectEntryMode = mode;
-  logCaseEvent(c, 'Dewi', mode==='holdings' ? '选择"持有项目使用"' : '选择"新增项目"');
+  logCaseEvent(c, actingName(), mode==='holdings' ? '选择"持有项目使用"' : '选择"新增项目"');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -2070,7 +2080,7 @@ function notUseThisTime(scope){
   var ctx0 = ctxOf(c, scope);
   if(ctx0 && ctx0.mgmtActive){ ctx0.addUse = false; renderCaseBody(c); return; } /* 本地管理进行中：只是不再追加使用 */
   if(scope==='lm') return lmNotUse(c);
-  logCaseEvent(c, 'Dewi', '本次不使用任何持有项目');
+  logCaseEvent(c, actingName(), '本次不使用任何持有项目');
   if(caseHasPurchase(c)){ finishCase(c); return; }
   c.projectEntryMode = 'new'; /* 是否选购？ */
   buildCaseLog(c);
@@ -2134,20 +2144,20 @@ function addLocalMgmt(){
   var c = getCurrentCase(); if(!c || c.localMgmt || isEnded(c)) return;
   c.localMgmt = {active:true, ended:false, step:'entry', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
   c.activeCaseTab = 'localmgmt';
-  logCaseEvent(c, 'Dewi', '添加本地管理（同日插做本地项目，案件主状态不变）');
+  logCaseEvent(c, actingName(), '添加本地管理（同日插做本地项目，案件主状态不变）');
   buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 
 function afterLmFinished(c){
   var lm = c.localMgmt; if(!lm) return;
   lm.active = false; lm.ended = true; lm.mgmtActive = false;
-  logCaseEvent(c, 'Dewi', '本地管理结束');
+  logCaseEvent(c, actingName(), '本地管理结束');
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 
 function lmNotUse(c){
   var lm = c.localMgmt; if(!lm) return;
-  logCaseEvent(c, 'Dewi', '本地管理：本次不使用任何持有项目');
+  logCaseEvent(c, actingName(), '本地管理：本次不使用任何持有项目');
   if(lm.batches.length){ afterLmFinished(c); return; } /* 已经购买过 → 本地管理结束 */
   lm.step = 'buy'; /* 还没购买 → 是否选购 */
   buildCaseLog(c); renderCaseBody(c);
@@ -2208,7 +2218,7 @@ function lmPickField(id, field, v){
 function lmNoBuy(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
   if(c.localMgmt.mgmtActive){ c.localMgmt.addBuy = false; renderCaseBody(c); return; } /* 本地管理进行中：只收起选购 */
-  logCaseEvent(c, 'Dewi', '本地管理：本次不购买项目');
+  logCaseEvent(c, actingName(), '本地管理：本次不购买项目');
   afterLmFinished(c);
 }
 
@@ -2226,7 +2236,7 @@ function lmSettle(){
   lm.pick = {};
   if(lm.mgmtActive){ lm.addBuy = false; lm.addUse = true; } /* 本地管理进行中追加购买：付款后问是否继续使用 */
   else lm.step = 'afterBuyUse'; /* 结算后：是否使用？ */
-  logCaseEvent(c, 'Dewi', '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+' ×'+i.qty+(i.discountPct<100?'（'+i.discountPct+'折）':''); }).join('、')+'），已转客户持有');
+  logCaseEvent(c, actingName(), '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+' ×'+i.qty+(i.discountPct<100?'（'+i.discountPct+'折）':''); }).join('、')+'），已转客户持有');
   updateCaseStage(c); buildCaseLog(c); renderCaseBody(c);
 }
 
@@ -2234,7 +2244,7 @@ function lmSettle(){
    施术日期改到付款之后才走（见 krProcedureTabHtml），不再是结算前的门槛 */
 function confirmProjectSelection(){
   var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return;
-  logCaseEvent(c, 'Dewi', '确认所选管理项目：'+c.recommended.map(function(it){ return it.name; }).join('、'));
+  logCaseEvent(c, actingName(), '确认所选管理项目：'+c.recommended.map(function(it){ return it.name; }).join('、'));
   generateSettlementBatch(c);
   updateCaseStage(c);
   renderCaseStatusBar(c);
@@ -2249,14 +2259,14 @@ function generateSettlementBatch(c){
   var b = computeBatchBreakdown(c.recommended);
   var newItems = c.recommended.map(function(it){ return Object.assign({}, it, {done:false, batchId:batchId}); });
   c.settlementBatches = c.settlementBatches || [];
-  c.settlementBatches.push({id:batchId, afterReport:!!c.reportReady, orderedBy:'Dewi', settledBy:'客人', time:nowFullDt(), status:'unpaid',
+  c.settlementBatches.push({id:batchId, afterReport:!!c.reportReady, orderedBy:actingName(), settledBy:'客人', time:nowFullDt(), status:'unpaid',
     krTotal:b.krTotal, krDeposit:b.krDeposit, krBalance:b.krBalance, inTotal:b.inTotal});
   c.procedureItems = (c.procedureItems||[]).concat(newItems);
   c.settleTab = null; /* 新结算单：默认打开最新一张 */
   c.recommended = [];
   c.addingMore = false;
   c.projectsLocked = true;
-  logCaseEvent(c, 'Dewi', '已生成结算单（批次 '+batchId+'），等待付款');
+  logCaseEvent(c, actingName(), '已生成结算单（批次 '+batchId+'），等待付款');
 }
 
 /* 追加项目确认：先补一步生成结算单，再打开付款弹窗（旧代码这里直接调 settleProjects()，
@@ -2397,7 +2407,7 @@ function afterKrItemsChanged(c){
   var hasLocal = localPurchasedBatches(c).length>0;
   c.localAsk = hasLocal ? 'keep' : true;
   c.activeCaseTab = 'projects';
-  logCaseEvent(c, 'Dewi', hasLocal ? '赴韩项目已全部取消并退款；案件里有本地项目/术后管理，请室长决定保留或全部退款' : '赴韩项目已全部取消并退款，询问是否增加本地项目');
+  logCaseEvent(c, actingName(), hasLocal ? '赴韩项目已全部取消并退款；案件里有本地项目/术后管理，请室长决定保留或全部退款' : '赴韩项目已全部取消并退款，询问是否增加本地项目');
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
   if(hasLocal) openLocalKeepModal(c); else openLocalAskModal(c);
 }
@@ -2487,7 +2497,7 @@ function confirmSettlementPayment(){
   if(batch.krDeposit) payLog.push('赴韩预付金 '+formatCurrency(batch.krDeposit,'KRW'));
   if(batch.inTotal) payLog.push('本地全款 '+formatCurrency(batch.inTotal,'IDR'));
   logCaseEvent(c, '客人', '完成项目付款（批次 '+batch.id+'：'+payLog.join('、')+'），项目清单已锁定');
-  if(batchInItems.length) logCaseEvent(c, 'Dewi', '本地项目已转入客户持有：'+batchInItems.map(function(it){ return it.name+' x'+(it.qty||1); }).join('、'));
+  if(batchInItems.length) logCaseEvent(c, actingName(), '本地项目已转入客户持有：'+batchInItems.map(function(it){ return it.name+' x'+(it.qty||1); }).join('、'));
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -2596,7 +2606,7 @@ function startKrScheduleChange(){
   c.krSchedule.changePrimary = '';
   c.krSchedule.changeBackup = '';
   c.krSchedule.changeSubmitted = false;
-  logCaseEvent(c, 'Dewi', '申请修改施术日期');
+  logCaseEvent(c, actingName(), '申请修改施术日期');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -2608,7 +2618,7 @@ function cancelKrScheduleChange(){
   c.krSchedule.changePrimary = '';
   c.krSchedule.changeBackup = '';
   c.krSchedule.changeSubmitted = false;
-  logCaseEvent(c, 'Dewi', '取消修改施术日期，原日期 '+c.krSchedule.confirmedDate+' 继续有效');
+  logCaseEvent(c, actingName(), '取消修改施术日期，原日期 '+c.krSchedule.confirmedDate+' 继续有效');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -2767,7 +2777,7 @@ function applyWaiveFee(c, reason, note){
   c.consultFeeWaived = {reason: reason==='其他' ? '其他：'+note : reason, note:note};
   c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：待确认报告时间 */
   updateCaseStage(c);
-  logCaseEvent(c, 'Dewi', '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
+  logCaseEvent(c, actingName(), '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
   buildCaseLog(c); renderCaseHeaderActions(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -3077,7 +3087,7 @@ function saveLibCase(){
   var from = ['zh','ko','id'].filter(function(k){ return (c.names[k]||'').trim(); })[0];
   ['zh','ko','id'].forEach(function(k){ if(!(c.names[k]||'').trim()) c.names[k] = demoTranslate(c.names[from].trim(), from, k); });
   c.title = c.names.zh.trim();
-  var me = DEMO_ROLE==='kr' ? '이서연（KR室长）' : 'Dewi';
+  var me = DEMO_ROLE==='kr' ? '이서연（KR室长）' : ME_NAME;
   if(c.id){
     c.editedBy = me; c.editedAt = nowFullDt();
     var idx = LIB_CASES.findIndex(function(x){ return x.id===c.id; });
@@ -3226,7 +3236,7 @@ var PROJECT_LIBRARY = [
     LIB_CASES.push({id:id, title:title, names:{zh:title, ko:demoTranslate(title,'zh','ko'), id:demoTranslate(title,'zh','id')}, source:source,
       projectIds:projNames.map(pid).filter(Boolean), director:director, problemIds:(problems||[]).map(function(l){ return LIB_PROBLEM_IDS[l]; }),
       beforePhotos:[{url:'', color:'#E6DDD0'}, {url:'', color:'#E1D8CB'}], afterPhotos:recs.map(function(r){ return photo(r); }),
-      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:(source==='travel'?'이서연（KR室长）':'Dewi'), uploadedAt:'2026-09-'+day+' 10:00',
+      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:(source==='travel'?'이서연（KR室长）':actingName()), uploadedAt:'2026-09-'+day+' 10:00',
       editedBy:null, editedAt:null});
   }
   mk('切开双眼皮 · 自然平行型','travel',['切开双眼皮'],'김민석 원장',[],['1周','1个月','3个月'],'16');
@@ -3611,7 +3621,7 @@ function caseOperators(c, strict){
   return {inn:inn, kr:kr};
 }
 
-function shouldPushToMe(c){ return pushTargets(c).inn.indexOf('Dewi')>-1; }
+function shouldPushToMe(c){ return pushTargets(c).inn.indexOf(ME_NAME)>-1; }
  /* 演示视角：当前登录的是 Dewi（IN室长） */
 function roomSysMsg(text){ return {day:'2026년 9월 18일', from:'sys', kind:'sys', orig:text, time:nowTime()}; }
 
@@ -3640,7 +3650,7 @@ function atCandidates(){
     if(c){ var m = caseRoomMembers(c); return m.inn.concat(m.kr).concat(m.director ? [m.director] : []); }
   }
   if(CURRENT_ROOM==='main') return IN_COORDINATORS.concat(KR_COORDINATORS).concat(DIRECTOR_LIST);
-  var r = roomById(CURRENT_ROOM); return ['Dewi'].concat(r ? [r.name.split(' ')[0]] : []);
+  var r = roomById(CURRENT_ROOM); return [ME_NAME].concat(r ? [r.name.split(' ')[0]] : []);
 }
 
 function floatKey(e){
@@ -3652,15 +3662,15 @@ function floatKey(e){
 function deliverRefQuote(c, q){
   if(!c || isEnded(c)) return 'skip';
   var roomId = getCaseRoomId(c.id);
-  var msg = {day:q.day, from:'me', kind:'quote', speaker:q.speaker, srcRoomId:q.srcRoomId, srcRoom:q.srcRoom, srcIdx:q.srcIdx, srcDt:q.srcDt, orig:q.orig, trans:q.trans||'', time:nowTime()};
+  var msg = {day:q.day, from:'me', sender:ME_NAME, kind:'quote', speaker:q.speaker, srcRoomId:q.srcRoomId, srcRoom:q.srcRoom, srcIdx:q.srcIdx, srcDt:q.srcDt, orig:q.orig, trans:q.trans||'', time:nowTime()};
   if(CHAT_DATA.hasOwnProperty(roomId)){ CHAT_DATA[roomId].push(msg); }
   else if(caseRoomEligible(c)){ ensureCaseRoom(c); CHAT_DATA[roomId].push(msg); }
   else {
     c.pendingQuotes = c.pendingQuotes || []; c.pendingQuotes.push(msg);
-    logCaseEvent(c, 'Dewi', '引用消息（来自「'+q.srcRoom+'」）：'+q.orig+'——案件还没到建房条件，房间建立后带进房间');
+    logCaseEvent(c, actingName(), '引用消息（来自「'+q.srcRoom+'」）：'+q.orig+'——案件还没到建房条件，房间建立后带进房间');
     return 'pending';
   }
-  logCaseEvent(c, 'Dewi', '从「'+q.srcRoom+'」引用了一条消息到案件对话房');
+  logCaseEvent(c, actingName(), '从「'+q.srcRoom+'」引用了一条消息到案件对话房');
   return 'room';
 }
 
@@ -3748,7 +3758,7 @@ function memberRowsHtml(){
       head('印尼室长') + IN_COORDINATORS.map(function(n){ return row(n, n); }).join('') +
       head('韩国室长') + KR_COORDINATORS.map(function(n){ return row(n, n); }).join('');
   } else {
-    html += head('成员') + row('Dewi（我）', 'Dewi') + row(r.name, r.name.split(' ')[0]);
+    html += head('成员') + row(ME_NAME+'（我）', ME_NAME) + row(r.name, r.name.split(' ')[0]);
   }
   return html;
 }
@@ -3763,3 +3773,7 @@ CASE_ITEMS.forEach(function(c){
   if(isEnded(c)) archiveCaseRoom(c);
   else if(CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id)) && caseHasKrSide(c)) c.krInRoom = true;
 });
+
+/* 种子数据全部跑完：之后的操作人 = 当前登录的人；IN 室长名单按账号重算 */
+SEEDING = false;
+syncInCoordinators();

@@ -13,7 +13,7 @@ var PERSIST_VARS = [
   'PROJCAT_SEQ', 'PROJECT_CATEGORIES', 'PCAT', 'PROJ_SEQ', 'PROJECT_LIBRARY',
   'NOTIF_SEQ', 'NOTIFS',
   'ROOMS', 'STAFF_ROSTER', 'ROOM_UNREAD', 'CHAT_DATA', 'MUTED_ROOMS', 'ROOM_FILE_SEQ',
-  'CAL_MEMOS', 'DIRECTOR_LIST', 'IN_COORDINATORS',
+  'CAL_MEMOS', 'DIRECTOR_LIST',
   'ACCOUNTS', 'ACCOUNT_SEQ', 'ACCOUNT_LOG'
 ];
 
@@ -57,6 +57,7 @@ var Store = (function(){
       if(!st || String(st.ver) !== String(DEMO_DATA_VERSION) || !st.vars) return false;
       PERSIST_VARS.forEach(function(n){ if(st.vars.hasOwnProperty(n)) assignInPlace(n, st.vars[n]); });
       lastJson = snapshotVars();
+      if(typeof syncInCoordinators === 'function') syncInCoordinators(); /* IN 室长名单由账号算出，不存档 */
       return true;
     }catch(e){ console.warn('[存档] 读取失败，使用演示数据', e); return false; }
   }
@@ -90,7 +91,10 @@ var Store = (function(){
   /* 其他标签页存了新数据：重读 + 重画 */
   window.addEventListener('storage', function(e){
     if(e.key === KEY && e.newValue){
-      if(load() && typeof refreshView === 'function') refreshView();
+      if(load()){
+        if(window.GUARD_ROLES && !guardPage(window.GUARD_ROLES)) return; /* 本账号被停用/重置：回登录页 */
+        if(typeof refreshView === 'function') refreshView();
+      }
     } else if(e.key === null || (e.key === 'gmc_demo_ver')){ /* 别的标签页重置了演示数据 → 本页也刷新 */
       location.reload();
     }
@@ -110,4 +114,12 @@ var Store = (function(){
 function resetDemoData(){
   try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   location.reload();
+}
+
+/* 页面守卫（2026-10-05·三）：没登录 → 登录页；角色不对 → 回自己的首页。roles = 允许进入的角色列表 */
+function guardPage(roles){
+  var a = currentAccount();
+  if(!a){ location.replace('/login.html'); return false; }
+  if(roles.indexOf(a.role) < 0){ location.replace(a.role==='owner' ? '/owner.html' : '/in.html'); return false; }
+  return true;
 }

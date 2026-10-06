@@ -3,6 +3,7 @@
 
 
 document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
   document.querySelectorAll('.in-shell').forEach(function(shell){
     var page = shell.dataset.page;
     var sSlot = shell.querySelector('.sidebar-slot');
@@ -79,3 +80,6 @@ document.addEventListener('DOMContentLoaded', function(){
 document.addEventListener('DOMContentLoaded', function(){
   if(new URLSearchParams(location.search).get('demo')==='call') startDemoCall();
 });
+
+/* 点页面其他地方，关闭头像菜单 */
+document.addEventListener('click', function(){ closeAvatarMenu(); });

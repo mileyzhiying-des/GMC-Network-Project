@@ -5,58 +5,187 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GMC Network · 登录</title>
 <link rel="stylesheet" href="/shared/app.css">
+<style>
+.login-card{width:380px;max-width:100%;background:var(--white);border:1px solid var(--border);border-radius:16px;padding:26px;box-shadow:0 12px 40px rgba(0,0,0,.08);}
+.login-card h2{margin:0 0 4px;font-size:18px;}
+.login-card .sub{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;}
+.login-card .field{margin-bottom:12px;}
+.login-links{display:flex;justify-content:space-between;margin-top:14px;font-size:12px;}
+.login-links a{color:var(--slate);cursor:pointer;border-bottom:1px solid var(--border);}
+.otp-demo{background:#FFF8E0;border:1px dashed #E0C060;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.6;margin-bottom:12px;}
+.otp-demo b{font-size:16px;letter-spacing:3px;}
+.ok-text{color:var(--sage);font-size:12px;margin-bottom:10px;}
+.demo-box{width:380px;max-width:100%;font-size:11px;color:var(--slate2);line-height:1.8;}
+.demo-box code{background:var(--border2);padding:1px 5px;border-radius:4px;}
+</style>
 </head>
 <body>
 <div id="app">
-
-<section class="page active" id="main" style="display:flex;">
-  <div class="landing-header">
-    <div><span class="logo">GMC Network</span><span class="logo-sub">跨境医美协作平台</span></div>
-    <span style="font-size:13px;color:var(--slate);">Indonesia · Korea · Broker 三方协作系统</span>
-  </div>
-  <div class="landing-body">
-    <div>
-      <h1>选择您的登录角色</h1>
-      <p>GMC 作为独立第三方仲介，连接印尼合作诊所与韩国医院 —— 为跨境医美客户提供从面谈、面诊到施术、术后管理的全流程协作系统。（登录/激活流程在第二部分实现，现在先按角色直接进入）</p>
-    </div>
-    <div class="role-cards" style="grid-template-columns:1fr;max-width:360px;margin:0 auto;">
-      <a class="role-card" href="/in.html" style="text-decoration:none;color:inherit;">
-        <div class="role-badge" style="background:var(--terracotta-bg);color:var(--terracotta);">ID</div>
-        <div><div style="font-size:17px;font-weight:700;">印尼室长</div><div style="font-size:12px;color:var(--muted);">Indonesia Coordinator</div></div>
-        <p style="margin:0;font-size:13px;color:var(--slate2);line-height:1.6;">客户信息录入 · 메타뷰上传 · 案例展示 · 面诊材料准备</p>
-        <span style="font-size:13px;font-weight:700;color:var(--terracotta);">进入工作台 →</span>
-      </a>
-      <a class="role-card" href="/owner.html" style="text-decoration:none;color:inherit;">
-        <div class="role-badge" style="background:var(--blue-bg,#E8EEF7);color:var(--blue);">OW</div>
-        <div><div style="font-size:17px;font-weight:700;">诊所院长（Owner）</div><div style="font-size:12px;color:var(--muted);">Clinic Owner</div></div>
-        <span style="font-size:13px;font-weight:700;color:var(--blue);">进入（占位页）→</span>
-      </a>
-      <a class="role-card" href="/kr.html" style="text-decoration:none;color:inherit;">
-        <div class="role-badge" style="background:#EEE;color:var(--slate);">KR</div>
-        <div><div style="font-size:17px;font-weight:700;">韩国室长</div><div style="font-size:12px;color:var(--muted);">Korea Coordinator</div></div>
-        <span style="font-size:13px;font-weight:700;color:var(--slate);">进入（占位页）→</span>
-      </a>
-    </div>
-    <div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;">
-      <a href="/in.html?demo=call" style="font-size:13px;color:var(--slate);border-bottom:1px solid var(--border);padding-bottom:2px;">查看视频沟通界面示例 →</a>
-      <a href="/booking.html" style="font-size:13px;color:var(--slate);border-bottom:1px solid var(--border);padding-bottom:2px;">客户自助预约表单（演示）→</a>
-      <a href="#" onclick="if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。')) resetDemoData(); return false;" style="font-size:13px;color:var(--slate);border-bottom:1px solid var(--border);padding-bottom:2px;">重置演示数据</a>
-    </div>
-  </div>
-  <div class="landing-footer">
-    <b>标准流程</b><span>|</span>
-    <span>① 印尼前台收集资料</span><span style="color:var(--terracotta);">→</span>
-    <span>② 院长审核材料</span><span style="color:var(--terracotta);">→</span>
-    <span>③ 视频问诊 / 直接定案 / 来韩施术</span><span style="color:var(--terracotta);">→</span>
-    <span>④ 施术与术后管理</span>
+<section class="page active" id="main" style="display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:36px 16px;gap:18px;background:var(--bg,#F4F6F9);">
+  <div><span class="logo">GMC Network</span><span class="logo-sub">跨境医美协作平台</span></div>
+  <div class="login-card" id="login-card"></div>
+  <div class="demo-box">
+    <b>演示账号</b>（密码 = 账号编号小写 + <code>123</code>）：<code>OWN</code> 老板 · <code>A1</code> Dewi 管理者 · <code>A2</code> Rina 一般室长 · <code>A5</code> Putri 管理者（加购）<br>
+    <code>A3</code> 一般室长（加购）尚未激活：点"首次激活"，手机号 <code>+62 811-0000-0004</code>，验证码会显示在屏幕上；<code>A4</code> 已停用。<br>
+    <a href="/booking.html">客户自助预约表单（演示）</a> ·
+    <a href="#" onclick="if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。')) resetDemoData(); return false;">重置演示数据</a>
   </div>
 </section>
 </div>
+<div id="toast-stack"></div>
+<script src="/shared/rules.js"></script>
+<script src="/shared/ui.js"></script>
+<script src="/shared/data.js"></script>
+<script src="/shared/store.js"></script>
 <script>
-/* 登录页不加载演示数据，只需要"重置演示数据"：清掉所有 gmc_ 开头的存档（其他已打开的标签页会收到通知并刷新） */
+/* 登录 / 首次激活 / 忘记密码（2026-10-05·三）。登录信息存在 sessionStorage（每个标签页各自登录）。
+   验证码是演示：直接显示在屏幕上，真实版由短信发送。 */
+var OTP = null;      /* {id, code, exp}：当前发出的验证码，只放内存 */
+var FLOW = {};       /* 当前流程里已通过验证的账号 id 等 */
+function $(id){ return document.getElementById(id); }
+function normPhone(p){ return String(p||'').replace(/[^0-9]/g,''); }
+function findAcct(raw){ var id = String(raw||'').trim().toUpperCase(); return ACCOUNTS.filter(function(a){ return a.id===id; })[0] || null; }
+function show(html){ $('login-card').innerHTML = html; }
+function errBox(msg){ return msg ? '<div class="error-text" style="display:block;margin-bottom:10px;">'+msg+'</div>' : ''; }
+function enterApp(a){
+  try{ sessionStorage.setItem('gmc_acct', a.id); }catch(e){}
+  location.href = a.role==='owner' ? '/owner.html' : '/in.html';
+}
+
+/* ---- 登录 ---- */
+function viewLogin(msg, ok){
+  show('<h2>登录</h2><div class="sub">请输入账号编号和密码</div>'+
+    (ok ? '<div class="ok-text">'+ok+'</div>' : '')+errBox(msg)+
+    '<div class="field"><label>账号编号</label><input id="f-id" type="text" placeholder="例如 A1" autocomplete="username"></div>'+
+    '<div class="field"><label>密码</label><input id="f-pw" type="password" placeholder="密码" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')doLogin()"></div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="doLogin()">登录</button>'+
+    '<div class="login-links"><a onclick="viewActivate1()">首次激活</a><a onclick="viewForgot1()">忘记密码</a></div>');
+}
+function doLogin(){
+  var a = findAcct($('f-id').value), pw = $('f-pw').value;
+  if(!a) return viewLogin('账号编号不存在');
+  if(a.status==='pending') return viewLogin('账号 '+a.id+' 还没有激活，请点下面的"首次激活"');
+  if(a.status==='disabled') return viewLogin('账号 '+a.id+' 已停用，请联系老板');
+  if(!a.password || a.password!==pw) return viewLogin('密码不对');
+  enterApp(a);
+}
+
+/* ---- 验证码（演示：显示在屏幕上） ---- */
+function sendOtp(a){
+  OTP = {id:a.id, code:String(100000+Math.floor(Math.random()*900000)), exp:Date.now()+5*60*1000};
+}
+function otpBox(a){ return '<div class="otp-demo">演示：验证码已"发送"到 '+a.phone+'，真实版会通过短信发送。<br>验证码：<b>'+OTP.code+'</b>（5 分钟内有效）</div>'; }
+function checkOtp(id, code){
+  if(!OTP || OTP.id!==id) return '请先获取验证码';
+  if(Date.now()>OTP.exp) return '验证码已过期，请重新获取';
+  if(String(code).trim()!==OTP.code) return '验证码不对';
+  return '';
+}
+
+/* ---- 首次激活：账号+手机 → 验证码 → 设置密码和资料 ---- */
+function viewActivate1(msg){
+  show('<h2>首次激活</h2><div class="sub">输入老板/管理者分配给你的账号编号，和登记的手机号</div>'+errBox(msg)+
+    '<div class="field"><label>账号编号</label><input id="f-id" type="text" placeholder="例如 A3"></div>'+
+    '<div class="field"><label>手机号</label><input id="f-phone" type="text" placeholder="+62 8xx-xxxx-xxxx"></div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="activate1()">获取验证码</button>'+
+    '<div class="login-links"><a onclick="viewLogin()">返回登录</a><span></span></div>');
+}
+function activate1(){
+  var a = findAcct($('f-id').value);
+  if(!a) return viewActivate1('账号编号不存在');
+  if(a.status==='active') return viewActivate1('账号 '+a.id+' 已经激活，请直接登录');
+  if(a.status==='disabled') return viewActivate1('账号 '+a.id+' 已停用，不能激活');
+  if(normPhone($('f-phone').value)!==normPhone(a.phone)) return viewActivate1('手机号和登记的不一致');
+  sendOtp(a); FLOW = {id:a.id}; viewActivate2();
+}
+function viewActivate2(msg){
+  var a = accountById(FLOW.id);
+  show('<h2>输入验证码</h2><div class="sub">账号 '+a.id+'</div>'+otpBox(a)+errBox(msg)+
+    '<div class="field"><label>6 位验证码</label><input id="f-code" type="text" maxlength="6" onkeydown="if(event.key===\'Enter\')activate2()"></div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="activate2()">下一步</button>'+
+    '<div class="login-links"><a onclick="activate1Resend()">重新获取验证码</a><a onclick="viewLogin()">返回登录</a></div>');
+}
+function activate1Resend(){ sendOtp(accountById(FLOW.id)); viewActivate2(); }
+function activate2(){ var e = checkOtp(FLOW.id, $('f-code').value); if(e) return viewActivate2(e); FLOW.verified = true; viewActivate3(); }
+var ACT_PHOTO = '';
+function viewActivate3(msg, keep){
+  keep = keep || {};
+  show('<h2>设置密码和资料</h2><div class="sub">账号 '+FLOW.id+' · '+ACCOUNT_ROLES[accountById(FLOW.id).role]+'</div>'+errBox(msg)+
+    '<div class="field"><label>登录密码（至少 6 位）</label><input id="f-pw" type="password" value="'+(keep.pw||'')+'"></div>'+
+    '<div class="field"><label>再输一遍密码</label><input id="f-pw2" type="password" value="'+(keep.pw2||'')+'"></div>'+
+    '<div class="field"><label>姓名</label><input id="f-name" type="text" value="'+(keep.name||'')+'" placeholder="对话和记录里显示的名字"></div>'+
+    '<div class="field"><label>职位</label><input id="f-pos" type="text" value="'+(keep.pos||'')+'" placeholder="例如 前台室长"></div>'+
+    '<div class="field"><label>证件照（一寸/二寸大头照，用作头像）</label><input id="f-photo" type="file" accept="image/*" onchange="pickPhoto(this)"><div id="f-photo-hint" style="font-size:11px;color:var(--muted);margin-top:4px;">'+(ACT_PHOTO?'已选择':'请选择一张照片')+'</div></div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="activate3()">完成激活</button>');
+}
+function pickPhoto(inp){
+  var f = inp.files && inp.files[0]; if(!f) return;
+  var r = new FileReader(); r.onload = function(e){ ACT_PHOTO = e.target.result; $('f-photo-hint').textContent = '已选择：'+f.name; }; r.readAsDataURL(f);
+}
+function activate3(){
+  var keep = {pw:$('f-pw').value, pw2:$('f-pw2').value, name:$('f-name').value.trim(), pos:$('f-pos').value.trim()};
+  if(keep.pw.length<6) return viewActivate3('密码至少 6 位', keep);
+  if(keep.pw!==keep.pw2) return viewActivate3('两次密码不一致', keep);
+  if(!keep.name) return viewActivate3('请填写姓名', keep);
+  if(!keep.pos) return viewActivate3('请填写职位', keep);
+  if(!ACT_PHOTO) return viewActivate3('请上传证件照', keep);
+  var dup = ACCOUNTS.filter(function(x){ return x.id!==FLOW.id && x.status!=='disabled' && String(x.name||'').toLowerCase()===keep.name.toLowerCase(); })[0];
+  if(dup) return viewActivate3('这个姓名已经被账号 '+dup.id+' 使用，请换一个（对话里靠姓名区分）', keep);
+  var a = accountById(FLOW.id), ts = nowFullDt();
+  a.password = keep.pw; a.name = keep.name; a.position = keep.pos; a.photo = ACT_PHOTO; a.status = 'active'; a.activatedAt = ts;
+  a.history.push({ts:ts, type:'激活', text:'账号激活，设置了登录密码和资料（姓名、职位、证件照）', by:keep.name+'（'+a.id+'）'});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now(), ts:ts, accountId:a.id, name:a.name, type:'账号管理', text:'激活账号 '+a.id+'（'+a.name+'）'});
+  syncInCoordinators(); Store.save(); OTP = null;
+  enterApp(a);
+}
+
+/* ---- 忘记密码：账号+手机 → 验证码 → 新密码 ---- */
+function viewForgot1(msg){
+  show('<h2>忘记密码</h2><div class="sub">输入账号编号和登记的手机号，用验证码重设密码</div>'+errBox(msg)+
+    '<div class="field"><label>账号编号</label><input id="f-id" type="text"></div>'+
+    '<div class="field"><label>手机号</label><input id="f-phone" type="text" placeholder="+62 8xx-xxxx-xxxx"></div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="forgot1()">获取验证码</button>'+
+    '<div class="login-links"><a onclick="viewLogin()">返回登录</a><span></span></div>');
+}
+function forgot1(){
+  var a = findAcct($('f-id').value);
+  if(!a) return viewForgot1('账号编号不存在');
+  if(a.status==='pending') return viewForgot1('账号 '+a.id+' 还没有激活，请用"首次激活"');
+  if(a.status==='disabled') return viewForgot1('账号 '+a.id+' 已停用');
+  if(normPhone($('f-phone').value)!==normPhone(a.phone)) return viewForgot1('手机号和登记的不一致');
+  sendOtp(a); FLOW = {id:a.id}; viewForgot2();
+}
+function viewForgot2(msg){
+  var a = accountById(FLOW.id);
+  show('<h2>输入验证码</h2><div class="sub">账号 '+a.id+'</div>'+otpBox(a)+errBox(msg)+
+    '<div class="field"><label>6 位验证码</label><input id="f-code" type="text" maxlength="6" onkeydown="if(event.key===\'Enter\')forgot2()"></div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="forgot2()">下一步</button>'+
+    '<div class="login-links"><a onclick="forgotResend()">重新获取验证码</a><a onclick="viewLogin()">返回登录</a></div>');
+}
+function forgotResend(){ sendOtp(accountById(FLOW.id)); viewForgot2(); }
+function forgot2(){ var e = checkOtp(FLOW.id, $('f-code').value); if(e) return viewForgot2(e); viewForgot3(); }
+function viewForgot3(msg){
+  show('<h2>设置新密码</h2><div class="sub">账号 '+FLOW.id+'</div>'+errBox(msg)+
+    '<div class="field"><label>新密码（至少 6 位）</label><input id="f-pw" type="password"></div>'+
+    '<div class="field"><label>再输一遍</label><input id="f-pw2" type="password" onkeydown="if(event.key===\'Enter\')forgot3()"></div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="forgot3()">保存新密码</button>');
+}
+function forgot3(){
+  var pw = $('f-pw').value;
+  if(pw.length<6) return viewForgot3('密码至少 6 位');
+  if(pw!==$('f-pw2').value) return viewForgot3('两次密码不一致');
+  var a = accountById(FLOW.id), ts = nowFullDt();
+  a.password = pw;
+  a.history.push({ts:ts, type:'忘记密码', text:'本人通过手机验证码重设了密码', by:a.name+'（'+a.id+'）'});
+  ACCOUNT_LOG.unshift({id:'log'+Date.now(), ts:ts, accountId:a.id, name:a.name, type:'账号管理', text:a.id+'（'+a.name+'）通过忘记密码重设了密码'});
+  Store.save(); OTP = null;
+  viewLogin('', '密码已重设，请用新密码登录');
+}
+viewLogin(new URLSearchParams(location.search).get('switch') ? '' : '', new URLSearchParams(location.search).get('switch') ? '已退出当前账号，请登录另一个账号' : '');
+/* 其他标签页重置演示数据后，本页的账号数据也要刷新 */
 function resetDemoData(){
   try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
-  alert('演示数据已重置，下次进入各页面时会重新生成。');
+  location.reload();
 }
 </script>
 </body>

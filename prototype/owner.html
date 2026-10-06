@@ -3,18 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GMC Network · 院长端</title>
+<title>GMC Network · 老板端</title>
 <link rel="stylesheet" href="/shared/app.css">
 </head>
 <body>
+<script>try{ if(!sessionStorage.getItem("gmc_acct")) location.replace("/login.html"); }catch(e){}</script>
 <div id="app">
-
-<section class="page active" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px;text-align:center;padding:24px;">
-  <div><span class="logo">GMC Network</span><span class="logo-sub">跨境医美协作平台</span></div>
-  <h1 style="margin:0;">诊所院长端（Owner）</h1>
-  <p style="max-width:420px;color:var(--slate2);line-height:1.7;margin:0;">占位页：院长端的业务数据、账号管理、诊所设定、操作日志在后续部分实现。</p>
-  <a class="btn-outline" href="/login.html" style="text-decoration:none;">返回登录页</a>
+<section class="page active" style="display:flex;flex-direction:column;min-height:100vh;">
+  <div class="topbar" style="position:static;"><span class="title">GMC Network · 老板端</span><div id="owner-actions"></div></div>
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px;">
+    <h1 style="margin:0;">老板（诊所管理账号）</h1>
+    <p style="max-width:460px;color:var(--slate2);line-height:1.7;margin:0;">你好，<b class="me-name"></b>。老板端的经营数据、账号管理、诊所设定、操作日志在后续部分实现。</p>
+  </div>
 </section>
 </div>
+<div id="toast-stack"></div>
+<script src="/shared/rules.js"></script>
+<script src="/shared/ui.js"></script>
+<script src="/shared/data.js"></script>
+<script src="/shared/store.js"></script>
+<script>
+window.GUARD_ROLES = ['owner'];
+if(guardPage(window.GUARD_ROLES)){
+  document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
+  document.getElementById('owner-actions').innerHTML = '<div class="actions">'+
+    '<span class="avatar" style="cursor:pointer;" onclick="toggleAvatarMenu(event)" title="'+ME_NAME+'">'+ME_NAME.charAt(0).toUpperCase()+'</span></div>';
+  document.addEventListener('click', closeAvatarMenu);
+}
+</script>
 </body>
 </html>
