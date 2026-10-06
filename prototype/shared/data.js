@@ -319,16 +319,20 @@ function sendSms(kind, to, vars, caseId){
 function smsVarsOfCase(c){ return {name:c.name, time:c.visitDate+' '+c.visitTime, url:caseViewUrl(c)}; }
 
 /* ---- 时段：每个时段的预约数达到诊所设定的上限就不能再选 ---- */
-function slotBookingCount(date, time, excludePhId){
+function slotBookingCount(date, time, excludePhId, excludeCaseId){
   var slot = slotOf(time), n = 0;
   CASE_ITEMS.forEach(function(c){
-    if(c.visitDate===date && c.visitTime && slotOf(c.visitTime)===slot){ var v = visitStateOf(c); if(v!=='预约取消' && v!=='未到店') n++; }
+    if(c.id!==excludeCaseId && c.visitDate===date && c.visitTime && slotOf(c.visitTime)===slot){ var v = visitStateOf(c); if(v!=='预约取消' && v!=='未到店') n++; }
   });
   RESERVATION_PLACEHOLDERS.forEach(function(ph){ if(ph.date===date && slotOf(ph.time)===slot && ph.id!==excludePhId) n++; });
   return n;
 }
-/* 返回 '' = 可约；否则是不可约的原因：closed 休诊 / lunch 午休 / outside 不在可预约时段 / past 已过 / full 额满 */
-function slotBlockReason(date, time, excludePhId){
+/* 所有选预约时间的地方共用这一套规则（IN 端预约修改、工作台代约、预约占位、booking.html），以演示时钟 demoNow() 为准：
+   返回 '' = 可约；否则是不可约的原因：past 已经过去（灰色无文字）/ full 额满（灰色 + "已满"）/ closed 休诊 / lunch 午休 / outside 不在可预约时段。
+   excludePhId：室长发的占位自己占着的时段；excludeCaseId：正在改约的案件自己（不算它自己占的名额） */
+function dateIsPast(ds){ return ds < dateStr(demoNow()); }
+function slotIsPast(date, time){ return new Date(date+'T'+time+':00').getTime() + SLOT_MIN*60000 <= demoNow().getTime(); } /* 时段已结束；现在所在的时段还能选 */
+function slotBlockReason(date, time, excludePhId, excludeCaseId){
   var d = new Date(date+'T00:00:00');
   /* 室长发的占位本身占着的时段：就算在午休/可预约时段之外也认（室长特意留的），只检查是否已过、是否约满 */
   var own = excludePhId ? findPlaceholder(excludePhId) : null, ownSlot = !!own && own.ph.date===date && slotOf(own.ph.time)===slotOf(time);
@@ -337,8 +341,8 @@ function slotBlockReason(date, time, excludePhId){
     if(slotIsLunch(time)) return 'lunch';
     if(!slotBookable(time)) return 'outside';
   }
-  if(new Date(date+'T'+time+':00') <= demoNow()) return 'past';
-  if(slotBookingCount(date, time, excludePhId) >= CLINIC_SETTINGS.slotCapacity) return 'full';
+  if(slotIsPast(date, time)) return 'past';
+  if(slotBookingCount(date, time, excludePhId, excludeCaseId) >= CLINIC_SETTINGS.slotCapacity) return 'full';
   return '';
 }
 /* 当前时段（到店自己填：时间 = 现在，取整到 30 分钟） */
@@ -1173,7 +1177,6 @@ function getCurrentCase(){ return CASE_ITEMS.filter(function(x){ return x.id===C
 
 function pickCancelReason(r){ CANCEL_REASON = r; renderCancelReasons(); }
 
-var RESCHED_UNAVAILABLE = ['10:00','12:00','18:00','19:30','20:00'];
 
 var RESCHED_AM = []; /* 由诊所设定生成（applyClinicSettings） */
 
@@ -1185,6 +1188,8 @@ function rescheduleMonthShift(dir){
 }
 
 function rescheduleDayShift(dir){
+  var nxt = new Date(RESCHED_SELECTED_DATE.getFullYear(), RESCHED_SELECTED_DATE.getMonth(), RESCHED_SELECTED_DATE.getDate()+dir);
+  if(dateIsPast(dateStr(nxt))) return; /* 今天之前的日期不能选 */
   RESCHED_SELECTED_DATE = new Date(RESCHED_SELECTED_DATE.getFullYear(), RESCHED_SELECTED_DATE.getMonth(), RESCHED_SELECTED_DATE.getDate()+dir);
   RESCHED_VIEW_MONTH = new Date(RESCHED_SELECTED_DATE.getFullYear(), RESCHED_SELECTED_DATE.getMonth(), 1);
   renderRescheduleCalendar();
@@ -1192,12 +1197,12 @@ function rescheduleDayShift(dir){
 }
 
 function pickRescheduleDate(y,m,d){
+  if(dateIsPast(dateStr(new Date(y,m,d)))) return;
   RESCHED_SELECTED_DATE = new Date(y,m,d);
   renderRescheduleCalendar();
   renderRescheduleTimePanel();
 }
 
-function slotUnavailable(time){ return RESCHED_UNAVAILABLE.indexOf(time)>-1; }
 
 function pickRescheduleTime(t){ RESCHED_SELECTED_TIME = t; renderRescheduleTimePanel(); }
 

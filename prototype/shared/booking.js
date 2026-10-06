@@ -88,8 +88,7 @@ function bkStepTime(){
   }).join('');
   var slotHtml = slotsBetween(CLINIC_SETTINGS.bookFrom, minToTime(timeToMin(CLINIC_SETTINGS.bookTo)+SLOT_MIN)).map(function(t){
     var why = slotBlockReason(pick, t, BK.f.phId), on = (BK.f.date===pick && BK.f.time===t);
-    if(why==='past') return '';
-    var tag = why==='full' ? bt('time.full') : why==='lunch' ? bt('time.lunch') : '';
+    var tag = why==='full' ? bt('time.full') : why==='lunch' ? bt('time.lunch') : ''; /* 已过去：灰色没有文字；额满：灰色 + 已满 */
     return '<div class="bk-slot'+(on?' on':'')+(why?' off':'')+'"'+(why?'':' onclick="bkPickSlot(\''+pick+'\',\''+t+'\')"')+'>'+t+(tag?'<small>'+tag+'</small>':'')+'</div>';
   }).join('');
   var chosen = BK.f.time ? '<div class="bk-info">'+bt('time.chosen', {time:bkTimeText(BK.f.date, BK.f.time)})+'</div>' : '';

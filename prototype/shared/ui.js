@@ -261,11 +261,12 @@ function buildWeekGrid(){
       var ds = dateStr(days[d]);
       var cell = rowEvs.filter(function(e){ return e.date===ds; });
       var chips = cell.map(eventChipHtml).join('');
-      var pastSlot = new Date(new Date(ds+'T'+hr+':00').getTime()+30*60000) <= demoNow(); /* 已经结束的时段不能约（hover 灰）；当前时段可以约（客人直接到店） */
-      var closedDay = isRescheduleDateDisabled(days[d]); /* 休诊日（诊所设定）整列不能约 */
-      var slotClick = (cell.length || pastSlot || closedDay || !slotBookable(hr)) ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
+      var why = slotBlockReason(ds, hr); /* 和预约修改、占位、预约页同一套规则：past 已过 / full 额满 / closed 休诊 / lunch 午休 */
+      var pastSlot = why==='past', closedDay = why==='closed', fullSlot = why==='full';
+      var slotClick = why ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
       var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
-      html += '<div class="wk-cell'+(cell.length?'':' wk-cell-open')+(pastSlot?' wk-past':'')+((slotIsLunch(hr)||closedDay)?' wk-lunch':'')+(isNow?' wk-now':'')+'"'+slotClick+'>'+chips+'</div>';
+      var fullTag = fullSlot ? '<div style="font-size:10px;color:var(--muted);text-align:right;">已满</div>' : '';
+      html += '<div class="wk-cell'+(why?'':' wk-cell-open')+(pastSlot?' wk-past':'')+((why==='lunch'||closedDay)?' wk-lunch':'')+(fullSlot?' wk-full':'')+(isNow?' wk-now':'')+'"'+slotClick+'>'+chips+fullTag+'</div>';
     }
   });
   document.getElementById('wk-grid').innerHTML = html;
@@ -398,9 +399,8 @@ function simulateSlotChange(id){
     for(var i=0;i<WK_HOURS.length;i++){
       var hr = WK_HOURS[i];
       if(ds===p.date && hr===p.time) continue;
-      if(!slotBookable(hr)) continue;
       var busy = evs.some(function(e){ return e.date===ds && slotOf(e.time)===hr && e.phId!==id; });
-      if(!busy && new Date(ds+'T'+hr+':00') > demoNow()){
+      if(!busy && !slotBlockReason(ds, hr, id)){
         var old = dateLabel(p.date)+' '+p.time;
         p.date = ds; p.time = hr;
         closeAddSlotModal(); buildWeekGrid();
@@ -929,8 +929,14 @@ var RESCHED_SELECTED_TIME = null;
 function openRescheduleModal(){
   var c = getCurrentCase(); if(!c) return;
   RESCHED_CASE_ID = c.id;
-  RESCHED_SELECTED_DATE = c.visitDate ? new Date(c.visitDate) : new Date(TODAY_DATE);
-  RESCHED_SELECTED_TIME = c.visitTime || '15:00';
+  RESCHED_SELECTED_DATE = c.visitDate ? new Date(c.visitDate+'T00:00:00') : new Date(demoNow().getFullYear(), demoNow().getMonth(), demoNow().getDate());
+  RESCHED_SELECTED_TIME = c.visitTime || '';
+  /* 原预约时间已经过去（例如未到店后想改约）：一样只能选现在之后的时间 → 从今天起找第一个开诊日，不预选时间 */
+  if(!c.visitDate || slotIsPast(c.visitDate, c.visitTime||'00:00')){
+    var dd = new Date(demoNow().getFullYear(), demoNow().getMonth(), demoNow().getDate()), guard = 0;
+    while(isRescheduleDateDisabled(dd) && guard++ < 14) dd.setDate(dd.getDate()+1);
+    RESCHED_SELECTED_DATE = dd; RESCHED_SELECTED_TIME = '';
+  }
   RESCHED_VIEW_MONTH = new Date(RESCHED_SELECTED_DATE.getFullYear(), RESCHED_SELECTED_DATE.getMonth(), 1);
   renderRescheduleCalendar();
   renderRescheduleTimePanel();
@@ -952,7 +958,7 @@ function renderRescheduleCalendar(){
   document.getElementById('reschedule-cal-grid').innerHTML = cells.map(function(c){
     if(c.dim) return '<div style="padding:10px 0;text-align:center;font-size:13px;color:var(--dim);">'+c.n+'</div>';
     var dObj = new Date(c.y,c.m,c.n);
-    var disabled = isRescheduleDateDisabled(dObj);
+    var disabled = isRescheduleDateDisabled(dObj) || dateIsPast(dateStr(dObj)); /* 休诊日、今天之前的日期：灰色不能点 */
     var selected = RESCHED_SELECTED_DATE && dObj.toDateString()===RESCHED_SELECTED_DATE.toDateString();
     var style = 'padding:10px 0;text-align:center;font-size:13px;border-radius:50%;margin:2px auto;width:34px;';
     if(disabled) style += 'color:var(--dim);';
@@ -968,14 +974,14 @@ function renderRescheduleTimePanel(){
   var dow = ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
   document.getElementById('reschedule-day-label').textContent = (d.getMonth()+1)+'/'+d.getDate()+' '+dow;
   function slotBtn(t){
-    var off = slotUnavailable(t);
-    var selected = t===RESCHED_SELECTED_TIME;
+    var why = slotBlockReason(dateStr(d), t, null, RESCHED_CASE_ID), off = !!why; /* past 已过：灰色无文字；full 额满：灰色 + 已满 */
+    var selected = t===RESCHED_SELECTED_TIME && !off;
     var style = 'padding:10px 6px;text-align:center;font-size:12px;border-radius:8px;';
     if(off) style += 'background:var(--border2);color:var(--dim);';
     else if(selected) style += 'background:var(--navy);color:#fff;font-weight:700;cursor:pointer;';
     else style += 'background:var(--white);border:1px solid var(--border);color:var(--navy);cursor:pointer;';
     var onclick = off ? '' : ' onclick="pickRescheduleTime(\''+t+'\')"';
-    return '<div style="'+style+'"'+onclick+'>'+t+'</div>';
+    return '<div style="'+style+'"'+onclick+'>'+t+(why==='full' ? '<br><span style="font-size:10px;">已满</span>' : '')+'</div>';
   }
   var amGrid = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">'+RESCHED_AM.map(slotBtn).join('')+'</div>';
   var pmGrid = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;">'+RESCHED_PM.map(slotBtn).join('')+'</div>';
@@ -986,6 +992,7 @@ function renderRescheduleTimePanel(){
 
 function confirmReschedule(){
   var c = CASE_ITEMS.filter(function(x){ return x.id===RESCHED_CASE_ID; })[0]; if(!c) return;
+  if(!RESCHED_SELECTED_TIME || slotBlockReason(dateStr(RESCHED_SELECTED_DATE), RESCHED_SELECTED_TIME, null, c.id)){ alert('请选择一个可约的时段（已过去、已满、休诊、午休的时间不能选）'); return; }
   var y = RESCHED_SELECTED_DATE.getFullYear(), m = RESCHED_SELECTED_DATE.getMonth()+1, d = RESCHED_SELECTED_DATE.getDate();
   c.visitDate = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
   c.visitTime = RESCHED_SELECTED_TIME;
