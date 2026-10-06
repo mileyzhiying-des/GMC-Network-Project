@@ -353,6 +353,7 @@ function krEtaBlock(c, change){
 var KR_ETA_EDIT = false;
 function krSetEtaEdit(v){ KR_ETA_EDIT = v; krRenderCaseDetail(); }
 function krDoEta(change){
+  if(!krCan()) return; /* 院长不能确认/修改时间 */
   var d = document.getElementById('kr-eta-d').value, tm = document.getElementById('kr-eta-t').value;
   if(!d || !tm){ alert('请填日期和时间'); return; }
   var eta = d+' '+tm;
@@ -374,8 +375,8 @@ function krTabConsult(c){
   if(c.consultStatus==='paid_waiting_kr') return head+krEtaBlock(c, false);
   if(c.consultStatus==='awaiting_report'){
     out = head+krEtaStatusBlock(c)+(KR_ETA_EDIT ? krEtaBlock(c, true) : '');
-    if(typeof krRecordBlock==='function') out += krRecordBlock(c);
-    return out;
+    if(isContinuationConsult(c)) return out+krJudgeBlock(c); /* 延续既往面诊：先判断有无变动 */
+    return out+krRecordBlock(c);
   }
   if(c.consultStatus==='report_ready') return head+krCardBox('报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(c.reportUploadedBy||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
   return head;
@@ -614,6 +615,7 @@ function krAiDraftText(c, text){
   return '[면담 소견 요약]\n고객: '+c.name+' ('+c.caseNo+')\n고민: '+(c.concern||'—')+'\n기대: '+(c.expectation||'—')+'\n\n[원장 소견]\n'+text+'\n\n[권장 시술]\n- （실장이 가능 범위에서 선택）\n\n[주의사항]\n- 시술 전후 주의사항은 상담 시 안내 예정\n\n※ 데모용 템플릿 초안입니다. 실제 서비스에서는 LLM이 정리합니다.';
 }
 function krMakeDraft(){
+  var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!c0 || !krCanRecord(c0.c)) return;
   var txt = krSaveTranscript(); if(!txt) return;
   Store.withClinic(KR_CASE.clinicId, function(){
     var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0], v = krVault(KR_CASE.clinicId, KR_CASE.id, true);
@@ -687,6 +689,7 @@ function krSubmitBlock(c){
     '<div style="margin-top:16px;"><button class="btn-primary" onclick="krSubmitReport()">提交报告</button></div>');
 }
 function krSubmitReport(){
+  if(!krCan()) return; /* 院长不能提交 */
   var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!c0) return;
   var text = (KR_SUB.text||'').trim(); if(!text){ alert('报告内容不能为空'); return; }
   var cand = krScopeCandidates(KR_CASE.clinicId), items = [];
@@ -700,4 +703,38 @@ function krSubmitReport(){
   var ok = krMut(function(c){ return coreSubmitReport(c, rep, ME_NAME); });
   KR_SUB = {caseKey:'', text:null, pick:{}, notes:{}, overall:'', files:[]}; KR_REC.caseKey = '';
   Store.touch(); krRefreshAll();
+}
+
+
+/* ---------- 四、延续既往面诊与补加可选项目 ---------- */
+function krJudgeBlock(c){
+  var info = continuationInfo(c), can = krCan() || (currentAccount().role==='kr_director' && krIsMyCase(c));
+  return krCardBox('延续既往面诊：判断有无变动',
+    '<div style="font-size:13px;color:var(--slate2);margin-bottom:10px;">相对原报告，院长判断有无变动？无变动 → 沿用原报告，IN 直接进入项目确认中；有变动 → 走录入面诊 → 草稿 → 提交新报告。</div>'+
+    (can ? '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="krJudge(false)">无变动</button><button class="btn-outline" onclick="krJudge(true)">有变动</button></div>' : krEmpty('你的账号不能判断这个案件')));
+}
+function krJudge(changed){
+  var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!c0 || !(krCan() || (currentAccount().role==='kr_director' && krIsMyCase(c0.c)))) return;
+  if(!confirm(changed ? '确认：有变动？之后需要录入面诊并提交新报告。' : '确认：无变动？将沿用原报告，IN 直接进入项目确认中。')) return;
+  krMut(function(c){ return coreJudgeContinuation(c, changed, ME_NAME); });
+}
+/* 项目确认中：已提交的报告和可选范围 + ［补加可选项目］（只增不减；院长不能补加） */
+function krAfterBlock(c){
+  var items = (c.krScope && c.krScope.items) || [];
+  var list = items.length ? items.map(function(it){ return '<div class="case-field-row" style="font-size:13px;"><span style="flex:1;">'+krEsc(it.name)+(it.note?' <span style="color:var(--muted);font-size:11px;">'+krEsc(it.note)+'</span>':'')+'</span><span style="color:var(--slate2);">'+(it.price!==undefined ? (isLocalProjectName(it.name) ? fmtRp(it.price) : formatCurrency(it.price,'KRW')) : '')+'</span></div>'; }).join('') : krEmpty('没有可选范围');
+  var addable = '';
+  if(krCan() && c.stage==='consult' && c.reportReady){
+    var cand = krScopeCandidates(KR_CASE.clinicId), have = items.map(function(it){ return it.name; });
+    var opts = cand.kr.filter(function(p){ return have.indexOf(p.name)<0; }).map(function(p){ return '<option value="kr|'+krEsc(p.name)+'">赴韩 · '+krEsc(p.name)+'</option>'; }).concat(cand.post.filter(function(p){ return have.indexOf(p.name)<0; }).map(function(p){ return '<option value="in|'+krEsc(p.name)+'">术后管理 · '+krEsc(p.name)+'</option>'; })).join('');
+    addable = opts ? '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;"><select id="kr-add-sel" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;">'+opts+'</select><input id="kr-add-note" placeholder="备注" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;"><button class="btn-primary" onclick="krAddScope()">补加可选项目</button></div><div style="font-size:11px;color:var(--muted);margin-top:6px;">只能新增，不能删除；要拿掉某个项目，请在对话里和 IN 室长商量。</div>' : krEmpty('项目库里的项目都已经在可选范围内了');
+  }
+  return krCardBox('可选范围（项目确认中）', list+addable);
+}
+function isLocalProjectName(name){ return PROJECT_LIBRARY.some(function(p){ return p.name===name && p.origin==='IN'; }); }
+function krAddScope(){
+  if(!krCan()) return; /* 院长不能补加 */
+  var sel = document.getElementById('kr-add-sel'); if(!sel || !sel.value) return;
+  var parts = sel.value.split('|'), name = parts.slice(1).join('|'), note = (document.getElementById('kr-add-note').value||'').trim();
+  var cand = krScopeCandidates(KR_CASE.clinicId), p = (parts[0]==='kr' ? cand.kr : cand.post).filter(function(x){ return x.name===name; })[0]; if(!p) return;
+  krMut(function(c){ return coreAddScopeItem(c, {name:p.name, price:p.price, note:note}, ME_NAME); });
 }

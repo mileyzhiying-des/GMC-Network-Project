@@ -1398,19 +1398,39 @@ function endVideoConsult(){
 /* 延续既往面诊的"有无变动"（2026-10-02 面诊改版）：走面诊时进入等待报告后，演示按钮"模拟院长判断：无变动 / 有变动"：
    无变动 → 沿用原报告（面诊资料tab显示原报告，标注"沿用自 A000xxx"，项目列表按原方案预填）→ 项目确认中；
    有变动 → 仍在等待报告，由"模拟KR室长提交报告"出新报告 → 项目确认中。没有视频/书面分支 */
-function simulateDirectorJudge(changed){
-  var c = getCurrentCase();
-  if(!c || c.consultStatus!=='awaiting_report' || !isContinuationConsult(c)) return;
+/* 延续既往面诊判断有无变动（KR 室长按院长的判断操作，或院长自己，KR-CASE-01）：
+   无变动 → 沿用原报告（面诊资料沿用自 A000xxx，项目列表按原方案预填）→ 项目确认中；有变动 → 仍在等待报告，走录入/提交流程出新报告 */
+function coreJudgeContinuation(c, changed, by){
+  if(!c || c.consultStatus!=='awaiting_report' || !isContinuationConsult(c)) return false;
   c.contJudged = true;
   if(!changed){
     c.reuseAfterConsult = true;
-    logCaseEvent(c, krDirName(c), '院长判断：无变动');
+    logCaseEvent(c, by, '院长判断：无变动（由KR端确认）');
     applyReuseReport(c);
-    buildCaseLog(c); updateCaseStage(c); renderCaseStatusBar(c); renderCaseBody(c);
-    return;
+    updateCaseStage(c);
+    pushNotif('面诊','延续既往面诊判断无变动，沿用原报告：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
+  } else {
+    logCaseEvent(c, by, '院长判断：有变动（由KR室长提交新报告）');
+    pushNotif('面诊','延续既往面诊判断有变动，KR 将提交新报告：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   }
-  logCaseEvent(c, krDirName(c), '院长判断：有变动（由KR室长提交新报告）');
-  buildCaseLog(c); renderCaseBody(c);
+  return true;
+}
+/* IN 端演示按钮（第六部分删除）还在用的包装 */
+function simulateDirectorJudge(changed){
+  var c = getCurrentCase(); if(!c) return;
+  if(!coreJudgeContinuation(c, changed, krDirName(c))) return;
+  buildCaseLog(c); updateCaseStage(c); renderCaseStatusBar(c); renderCaseBody(c);
+}
+
+/* 项目确认中：KR 室长补加可选项目（只能新增，不能删除；要拿掉在对话里和 IN 室长商量）。item = {name, price, note} */
+function coreAddScopeItem(c, item, by){
+  if(!c || !c.reportReady || c.stage!=='consult' || !c.krScope) return false;
+  if(c.krScope.items.some(function(it){ return it.name===item.name; })) return false;
+  c.krScope.items.push({name:item.name, price:item.price, note:item.note||''});
+  c.krScope.updatedAt = nowFullDt();
+  logCaseEvent(c, by, 'KR室长补加可选项目："'+item.name+'"');
+  pushNotif('面诊','KR 补加了可选项目：'+c.name+'（'+item.name+'）', {caseId:c.id});
+  return true;
 }
 
 /* 提交最终报告（KR 室长 / 管理者，KR-CASE-01 第 3 节）：rep = {original:韩文原文, zh:演示翻译, items:[{name,price,note}]（赴韩项目 + 术后管理项目的可选范围）, overallNote, files:[附件名]}
