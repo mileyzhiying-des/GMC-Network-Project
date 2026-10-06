@@ -9,6 +9,31 @@ function krHospitalName(){ var h = krHospital(); return h ? h.name.ko : ''; }
 /* 本医院对接的诊所 */
 function krClinics(){ return CLINIC_HOSPITALS.filter(function(r){ return r.hospitalId===krHospitalIdOfMe(); }).map(function(r){ return clinicById(r.clinicId); }).filter(Boolean); }
 
+/* ---------- 跨诊所读取（二）：KR 端的案件来自各对接诊所的分区 ---------- */
+/* 本医院看得到的全部案件（选了本医院 且 已缴面诊费/免除）：每行带来源诊所、状态徽章、小状态、遮罩后的联系方式。
+   用 Store.withClinic 借用 IN 端的状态函数，行里只放算好的值 + 案件对象引用（只读，不要改） */
+function krAllCases(){
+  var hid = krHospitalIdOfMe(), me = currentAccount(), rows = [];
+  krClinics().forEach(function(cl){
+    Store.withClinic(cl.id, function(){
+      CASE_ITEMS.forEach(function(c){
+        if(!krCaseVisible(c, hid)) return;
+        if(me && me.role==='kr_director' && c.director !== me.name + ' 원장' && c.director !== me.name) return; /* 院长只看自己的案件 */
+        var badge = caseStatusBadge(c);
+        rows.push({clinicId:cl.id, clinicName:cl.name, id:c.id, caseNo:c.caseNo, name:c.name, director:c.director||'', krCoordinator:c.krCoordinator||'',
+          updated:c.updated||'', badge:badge, label:badge[2], subItems:caseSubStatusItems(c), phoneMasked:maskPhone(clientPhoneOf(c.name)), c:c});
+      });
+    });
+  });
+  return rows;
+}
+function krFindCase(clinicId, id){ return krAllCases().filter(function(r){ return r.clinicId===clinicId && r.id===id; })[0] || null; }
+/* 其他标签页（IN 端缴费等）改了数据 → 重画当前 KR 页面和角标 */
+function krRefreshAll(){
+  try{ if(CURRENT_PAGE_ID==='in-admin') refreshAdminPage(); else if(/^kr-/.test(CURRENT_PAGE_ID)) krRenderPage(CURRENT_PAGE_ID); }catch(e){ console.error('[KR 刷新]', e); }
+  try{ if(typeof krUpdateBadges==='function') krUpdateBadges(); }catch(e){}
+}
+
 /* ---------- 页面与导航 ---------- */
 /* 侧边栏：大盘 / 案件列表 / 通知中心（院长只有大盘）；管理类（经营数据、账号管理、医院设定、操作日志）有权限才出现；代表院长只有管理类 */
 function krNavItems(){

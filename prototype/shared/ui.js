@@ -3006,6 +3006,7 @@ function showToast(title, text, onClickFn){
    其他标签页改了共享数据（localStorage）后，当前标签页重读数据，再调用这个函数把"现在能看到的东西"重画一遍。
    每个模块各自 try/catch，页面里没有的元素（比如 booking.html）直接跳过。 */
 function refreshView(){
+  if(isKrAccount()){ if(typeof krRefreshAll==='function') krRefreshAll(); return; } /* KR 端自己重画 */
   [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['预约历史',renderResvHistory],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
     try{ if(typeof m[1]==='function') m[1](); }catch(e){}
   });

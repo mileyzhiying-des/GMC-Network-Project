@@ -4260,7 +4260,7 @@ function seedClinicDemo(cid){
   mkClient('Yoga Pratama', '+62 811-2000-0002', '男', '1988-02-03', 4);
   mkClient('Lia Anggara', '+62 811-2000-0003', '女', '1995-11-22', 8);
   var c1 = createReservationCase('Maria Gunawan', null, D(1), '10:30', '+62 811-2000-0001', '面诊商谈');
-  var c2 = createReservationCase('Yoga Pratama', null, D(0), '09:30', '+62 811-2000-0002', '面诊商谈'); c2.subState = 'arrived'; c2.needsConsult = true; c2.hospitalId = 'H1'; c2.director = '이수진 원장'; updateCaseStage(c2);
+  var c2 = createReservationCase('Yoga Pratama', null, D(0), '09:30', '+62 811-2000-0002', '面诊商谈'); c2.subState = 'arrived'; c2.needsConsult = true; c2.hospitalId = 'H1'; c2.director = '이수진 원장'; c2.materialsConfirmed = true; c2.concern = '眼睛想变大一点'; c2.expectation = '自然的双眼皮'; c2.consultRequested = true; c2.consultStatus = 'paid_waiting_kr'; /* 已缴面诊费 → KR 端看得到（KR 端系列 2/5 演示） */ updateCaseStage(c2);
   var c3 = createReservationCase('Lia Anggara', null, D(-2), '14:00', '+62 811-2000-0003', '皮肤商谈'); c3.subState = 'cancelled'; c3.cancelReason = '预约取消'; updateCaseStage(c3);
   [['玻尿酸填充 1cc（泗水）', 780000, '填充'], ['水光注射 2cc（泗水）', 1500000, '水光'], ['好莱坞焕肤 1次（泗水）', 300000, '去除色素'], ['黄金微针 1次（泗水）', 1800000, '黄金微针']].forEach(function(r){
     var p = makeProj(r[0], r[1], 'IN', r[2]); p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')}; PROJECT_LIBRARY.push(p);

@@ -450,3 +450,17 @@ function seatSummary(){
   var addonBought = clinicAccounts().filter(function(a){ return a.seat==='addon' && a.status!=='disabled'; }).length;
   return {basicTotal:BASIC_SEATS, basicUsed:used('basic'), addonTotal:addonBought, addonUsed:clinicAccounts().filter(function(a){ return a.seat==='addon' && a.status==='active'; }).length, addonPending:clinicAccounts().filter(function(a){ return a.seat==='addon' && a.status==='pending'; }).length};
 }
+
+
+/* ---------- KR 端用的共用规则（2026-10-06，KR 端系列 2/5） ---------- */
+/* 手机号遮罩：KR 端所有位置都不显示客人的真实联系方式，只留国家码 → +62 000-****-****（真实联系方式由印尼室长处理） */
+function maskPhone(p){
+  var m = String(p||'').match(/^\s*(\+\d{1,4})/);
+  return (m ? m[1] : '+--') + ' 000-****-****';
+}
+/* KR 端能看到的案件：选了本医院，且面诊费已缴或已免除（KR 在客人缴费后才看得到案件；未缴费 / 不面诊的本地案件 / 选了别家医院的都看不到） */
+function krCaseVisible(c, hid){
+  if(!c || c.hospitalId !== hid) return false;
+  if(c.consultFeeWaived || c.reportReady || c.reuseReport) return true;
+  return !!c.consultRequested && ['paid_waiting_kr','awaiting_report','report_ready'].indexOf(c.consultStatus) > -1;
+}

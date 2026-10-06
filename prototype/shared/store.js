@@ -161,6 +161,19 @@ var Store = (function(){
     try{ writeKey(keyC(cid), JSON.stringify(p, replacer)); return true; }catch(e){ console.warn('[存档] 跨诊所写入失败', e); return false; }
   }
 
+  /* 临时把某家诊所的分区数据换进全局变量里执行 fn（KR 端借用 IN 端的状态/显示函数渲染别家诊所的案件）；执行完立刻还原，fn 里不要改数据 */
+  function withClinic(cid, fn){
+    var vars = readClinic(cid); if(!vars) return undefined;
+    var saved = {}, keepCid = CURRENT_CLINIC_ID;
+    CLINIC_VAR_NAMES.forEach(function(n){
+      if(n==='PROJECT_LIBRARY' || n==='LIB_CASES' || n==='PROJECT_CATEGORIES') return; /* 这三个是"诊所+医院"合成数组，KR 端用全局的 */
+      if(vars.hasOwnProperty(n)){ saved[n] = window[n]; window[n] = vars[n]; }
+    });
+    CURRENT_CLINIC_ID = cid;
+    try{ return fn(vars); }
+    finally{ Object.keys(saved).forEach(function(n){ window[n] = saved[n]; }); CURRENT_CLINIC_ID = keepCid; }
+  }
+
   /* 其他标签页存了新数据：只重读和自己相关的部分 + 重画 */
   window.addEventListener('storage', function(e){
     if(e.key === null || e.key === 'gmc_demo_ver'){ location.reload(); return; } /* 别的标签页重置了演示数据 → 本页也刷新 */
@@ -175,6 +188,8 @@ var Store = (function(){
         if(window.GUARD_ROLES && !guardPage(window.GUARD_ROLES)) return; /* 本账号被停用/重置：回登录页 */
         if(typeof refreshView === 'function') refreshView();
       }
+    } else if(!cid && e.key && e.key.indexOf('gmc_clinic_')===0 && e.newValue){ /* KR 页面没有自己的诊所：任何对接诊所的分区变了都要重画 */
+      if(typeof krRefreshAll === 'function') krRefreshAll();
     } else if(cid && e.key === keyC(cid) && e.newValue){
       if(loadClinic(cid)){ afterLoad(); if(typeof refreshView === 'function') refreshView(); }
     }
@@ -190,7 +205,7 @@ var Store = (function(){
     try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
     init(); load();
   }
-  return {save:save, load:load, touch:touch, readClinic:readClinic, updateClinic:updateClinic, isDisabled:function(){ return disabled; }};
+  return {save:save, load:load, touch:touch, readClinic:readClinic, updateClinic:updateClinic, withClinic:withClinic, isDisabled:function(){ return disabled; }};
 })();
 
 /* 重置演示数据：清掉所有 gmc_ 开头的存档，其他标签页收到通知后也会刷新 */
