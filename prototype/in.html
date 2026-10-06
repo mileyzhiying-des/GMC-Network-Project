@@ -449,20 +449,6 @@
   </div>
 </div>
 
-<!-- ============ 模拟KR补加术后管理项目 MODAL（2026-09-30：从术后管理分类里选） ============ -->
-<div class="modal-overlay" id="postcare-overlay" onclick="if(event.target===this) closePostCareModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR补加术后管理项目</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareModal()">✕</span>
-    </div>
-    <div id="postcare-list" style="margin-bottom:12px;"></div>
-    <div style="display:flex;gap:10px;margin-top:10px;">
-      <button class="btn-outline" style="flex:1;" onclick="closePostCareModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="confirmPostCare()">确认补加</button>
-    </div>
-  </div>
-</div>
 
 <!-- ============ 免除面诊费 MODAL（2026-09-30，Notion 09-30） ============ -->
 <!-- ============ 引用消息到案件 MODAL（2026-09-30，Conversation & Video Flow 入口3） ============ -->
@@ -493,21 +479,6 @@
   </div>
 </div>
 
-<!-- ============ 模拟KR标记完成 MODAL（2026-09-30：逐个勾选或一次全部完成） ============ -->
-<div class="modal-overlay" id="kr-done-overlay" onclick="if(event.target===this) closeKrDoneModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记完成</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrDoneModal()">✕</span>
-    </div>
-    <div id="kr-done-items" style="margin-bottom:12px;"></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">所有赴韩项目都是已完成或已取消后，系统自动判断案件结局。</div>
-    <div style="display:flex;gap:10px;">
-      <button class="btn-outline" style="flex:1;" onclick="submitKrMarkDone(false)">标记所选完成</button>
-      <button class="btn-primary" style="flex:1;" onclick="submitKrMarkDone(true)">全部标完成</button>
-    </div>
-  </div>
-</div>
 
 <!-- ============ 是否做本地管理 MODAL（2026-09-30：赴韩项目全部取消退款后询问） ============ -->
 <div class="modal-overlay" id="local-ask-overlay">
@@ -543,32 +514,7 @@
   </div>
 </div>
 
-<!-- ============ 模拟KR判断能否施术 MODAL（2026-10-01，06 在韩国） ============ -->
-<div class="modal-overlay" id="kr-judge-overlay" onclick="if(event.target===this) closeKrJudgeModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR判断能否施术</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrJudgeModal()">✕</span>
-    </div>
-    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="ok" checked> 能施术，项目没变动 → 付清尾款 → 各项目标完成 → 已结案</label>
-    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="changed"> 能施术，但项目有变动（部分不能做 / 更换）→ 尾款按实际项目重算，多退少补</label>
-    <label style="display:flex;gap:8px;padding:8px 0;font-size:13px;"><input type="radio" name="kr-judge" value="cannot"> 不能施术 → KR 在韩重新预约，或退定金（全部退回 / 不退）→ 仅出报告</label>
-    <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" style="flex:1;" onclick="closeKrJudgeModal()">取消</button><button class="btn-primary" style="flex:1;" onclick="submitKrJudge()">确认</button></div>
-  </div>
-</div>
 
-<!-- ============ KR确认术后管理项目（标注进行时间） MODAL（2026-10-01） ============ -->
-<div class="modal-overlay" id="postcare-confirm-overlay" onclick="if(event.target===this) closePostCareConfirm()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：KR确认术后管理项目</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closePostCareConfirm()">✕</span>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">施术完成时 KR 确认术后管理项目（可修改）并标注每项的进行时间，如"术后第7天"；使用时按进行时间排序。</div>
-    <div id="postcare-confirm-list" style="margin-bottom:12px;"></div>
-    <div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="closePostCareConfirm()">取消</button><button class="btn-primary" style="flex:1;" onclick="submitPostCareConfirm()">确认</button></div>
-  </div>
-</div>
 
 <!-- ============ 基础资料缺必填项提示 MODAL（2026-10-01，IN-CASE-01：缺必填项时弹 popup） ============ -->
 <div class="modal-overlay" id="materials-missing-overlay" onclick="if(event.target===this) closeMaterialsMissing()">
@@ -582,23 +528,6 @@
   </div>
 </div>
 
-<!-- ============ 模拟KR标记无法施术 MODAL（2026-09-30 演示） ============ -->
-<div class="modal-overlay" id="kr-unable-overlay" onclick="if(event.target===this) closeKrUnableModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">演示：模拟KR标记无法施术</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeKrUnableModal()">✕</span>
-    </div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">勾选无法施术的项目</div>
-    <div id="kr-unable-items" style="margin-bottom:12px;"></div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">原因 <span style="color:#C1454A;">*</span></div>
-    <textarea id="kr-unable-reason" rows="3" placeholder="请填写无法施术的原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="display:flex;gap:10px;margin-top:16px;">
-      <button class="btn-outline" style="flex:1;" onclick="closeKrUnableModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="submitKrUnable()">确认标记</button>
-    </div>
-  </div>
-</div>
 
 <!-- ============ INVITE Kr室长 MODAL（不含院长，只选室长） ============ -->
 <div class="modal-overlay" id="invite-kr-overlay" onclick="if(event.target===this) closeInviteKrModal()">

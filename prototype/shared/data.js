@@ -2725,29 +2725,26 @@ function afterKrItemsChanged(c){
 }
 
 function krArrivedOpsHtml(c){
-  var j = c.krJudge, btn = function(label, fn, cls){ return '<button class="'+(cls||'btn-ghost')+'" onclick="'+fn+'">'+label+'</button>'; };
+  var j = c.krJudge, btn = function(label, fn, cls){ return '<button class="'+(cls||'btn-outline')+'" onclick="'+fn+'">'+label+'</button>'; };
   var note = function(t){ return '<div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">'+t+'</div>'; };
+  var wait = function(t){ return '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">'+t+'</div>'; };
   var inner = '', info = krBalanceInfo(c);
   if(!j){
-    inner = btn('演示：模拟KR判断能否施术','simulateKrJudge()','btn-primary')+btn('演示：模拟KR补加术后管理项目','simulateKrAddPostCare()')+btn('演示：模拟KR确认术后管理项目','simulateKrConfirmPostCare()');
+    inner = wait('等待 KR 室长判断能否施术（到院后的判断、调整、尾款、子项进行全部由 KR 端操作，这里只显示结果）');
   } else if(j.result==='ok'){
-    inner = note('KR判断：能施术，项目没变动')+
-      (!c.krBalancePaid ? btn('演示：模拟KR标记付清尾款（尾款 '+formatCurrency(info.diff,'KRW')+'）','simulateKrMarkBalancePaid()','btn-primary')
-        : '<div style="font-size:12px;color:var(--sage);font-weight:700;margin-bottom:8px;">✓ 已付清尾款</div>'+btn('演示：模拟KR标记完成','simulateKrMarkDone()','btn-primary'));
+    inner = note('KR判断：能施术，项目没变动')+(c.krBalancePaid ? '<div style="font-size:12px;color:var(--sage);font-weight:700;">✓ 已付清尾款，行程已确认；在韩 timeline 的子项由 KR 逐个标完成，在韩国的子项全部完成后案件结案</div>' : wait('等待 KR 确认行程并标记付清尾款（尾款 '+formatCurrency(info.diff,'KRW')+'）'));
   } else if(j.result==='changed'){
-    var calc = '实际项目合计 '+formatCurrency(info.total,'KRW')+'；定金合计 '+formatCurrency(info.deposit,'KRW')+(info.preRefund>0 ? '，减去到院前已退 '+formatCurrency(info.preRefund,'KRW') : '')+' = '+formatCurrency(info.effDeposit,'KRW')+' 先抵 → '+(info.diff>0 ? '需补尾款 '+formatCurrency(info.diff,'KRW') : info.diff<0 ? '需退差额 '+formatCurrency(-info.diff,'KRW') : '刚好抵平');
+    var calc = '实际项目合计 '+formatCurrency(info.total,'KRW')+'；定金合计 '+formatCurrency(info.deposit,'KRW')+(info.preRefund>0 ? '，减去到院前已退 '+formatCurrency(info.preRefund,'KRW') : '')+' = 可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'；'+(info.diff>=0 ? '尾款 ' : '应退差额 ')+formatCurrency(Math.abs(info.diff),'KRW');
     inner = note('KR判断：能施术，但项目有变动')+'<div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">'+calc+'</div>'+
-      (!j.settled
-        ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+btn('演示：模拟KR标记无法施术项目','simulateKrMarkUnable()')+btn('演示：模拟韩国更换项目','simulateKrProjectSwap()')+btn('演示：结算尾款（定金先抵，多退少补）','settleKrBalance()','btn-primary')+'</div>'
-        : '<div style="font-size:12px;color:var(--sage);font-weight:700;margin-bottom:8px;">✓ 尾款已结清（按实际项目重算）</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+btn('演示：KR改施术时间（可选）','krReschedule(false)')+btn('演示：模拟KR标记完成','simulateKrMarkDone()','btn-primary')+'</div>');
+      (c.krBalancePaid ? '<div style="font-size:12px;color:var(--sage);font-weight:700;">✓ 尾款已结清（按实际项目重算）；在韩 timeline 的子项由 KR 逐个标完成</div>'
+        : (j.refundDue ? btn('按 KR 判断退尾款差额 '+formatCurrency(j.refundDue,'KRW'),'settleKrBalance()','btn-primary') : wait('等待 KR 调整项目并结算尾款')));
   } else { /* cannot */
-    inner = note('KR判断：不能施术')+'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-      btn('演示：KR在韩重新预约施术时间','krReschedule(true)')+btn('演示：退定金（全部退回）','krRefundDeposit(\'all\')','btn-primary')+btn('演示：退定金（不退）','krRefundDeposit(\'none\')')+'</div>';
+    inner = note('KR判断：不能施术')+(j.refundKind
+      ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+btn('按 KR 判断退定金（'+(j.refundKind==='all' ? '全部退回' : '不退')+'）','krRefundDeposit(\''+j.refundKind+'\')','btn-primary')+'</div>'
+      : wait('等待 KR 判断：在韩国重新预约施术时间，或退定金（全部退回 / 不退）'));
   }
-  return '<div style="border-top:1px solid var(--border2);padding-top:14px;"><div style="font-size:11px;color:var(--muted);margin-bottom:8px;">到院后的判断、尾款、项目完成均由KR端操作，这里只显示结果（原型用演示按钮模拟）</div>'+inner+'</div>';
+  return '<div style="border-top:1px solid var(--border2);padding-top:14px;">'+inner+'</div>';
 }
-
-/* 不能施术 → 退定金（全部退回 / 不退，由KR判断）→ IN 按KR判断在退款弹窗里操作 → 仅出报告 */
 function krRefundDeposit(kind){
   var c = getCurrentCase(); if(!c || !c.krJudge || c.krJudge.result!=='cannot') return;
   var amount = kind==='all' ? Math.max(0, krBalanceInfo(c).effDeposit) : 0; /* 全部退回=还留在诊所的定金 */
@@ -2914,33 +2911,6 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
 }
 
 /* 演示按钮：模拟KR室长确认/无法安排施术日期 */
-function simulateKrScheduleConfirmNew(which){
-  var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='pending') return;
-  var date = c.krSchedule[which]; if(!date) return;
-  c.krSchedule.status = 'confirmed';
-  c.krSchedule.confirmedDate = date;
-  c.krSchedule.confirmedTime = '14:00';
-  logCaseEvent(c, krCoordShort(c), 'Kr室长确认施术日期：'+date+' 14:00');
-  pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+date+' 14:00', {caseId:c.id});
-  updateCaseStage(c);
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
-}
-
-function simulateKrScheduleRejectNew(){
-  var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='pending') return;
-  c.krSchedule.status = null;
-  c.krSchedule.primary = '';
-  c.krSchedule.backup = '';
-  KR_SCHED_VIEW_MONTH = nearestOpenMonth(TODAY_DATE, caseOpenDates(getCurrentCase()));
-  logCaseEvent(c, krCoordShort(c), 'Kr室长回复：两个日期都无法安排，请重新选择');
-  updateCaseStage(c);
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
-}
-
 /* ---- KR 端施术预约操作（2026-10-06，KR-CASE-02 第 3 节）：不碰界面，KR 页面在 Store.mutateClinic 里调用 ----
    krSchedule 新增字段：address（到院地址）、rejectNote（KR 无法安排的原因，IN 重新选日期时显示）；confirmedTime = 到院时间 */
 /* 确认施术时间后自动在该院长日程加一个"施术"块（关联案件、来源诊所）；时间或地址调整时同步（KR-SCHD-01） */
@@ -3263,57 +3233,10 @@ function cancelKrScheduleChange(){
   renderCaseBody(c);
 }
 
-function simulateKrScheduleChangeConfirm(which){
-  var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='change_pending') return;
-  var date = c.krSchedule[which]; if(!date) return;
-  c.krSchedule.status = 'confirmed';
-  c.krSchedule.confirmedDate = date;
-  c.krSchedule.confirmedTime = '14:00';
-  c.krSchedule.changePrimary=''; c.krSchedule.changeBackup=''; c.krSchedule.changeSubmitted=false;
-  logCaseEvent(c, krCoordShort(c), 'Kr室长确认新施术日期：'+date+' 14:00');
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
-}
-
 /* KR排不上不自动取消（2026-09-29 第十轮改正）：回到可重新选日期的状态，原确认日期继续有效，
    界面显示"时间变更待确认"（即 change_pending 状态本身）；只有IN室长手动点"无法协调"才真正取消退定金 */
-function simulateKrScheduleChangeReject(){
-  var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='change_pending') return;
-  var orig = new Date(c.krSchedule.confirmedDate);
-  KR_SCHED_VIEW_MONTH = new Date(orig.getFullYear(), orig.getMonth(), 1);
-  c.krSchedule.changePrimary = '';
-  c.krSchedule.changeBackup = '';
-  c.krSchedule.changeSubmitted = false;
-  logCaseEvent(c, krCoordShort(c), 'Kr室长回复：新日期无法安排，请重新选择（原日期 '+c.krSchedule.confirmedDate+' 继续有效）');
-  buildCaseLog(c);
-  renderCaseBody(c);
-}
-
 /* KR端三步操作（2026-09-29 第十轮改）：已到医院/付清尾款/施术完成 都由KR端操作，IN端只显示状态，
    原型里用演示按钮模拟；施术完成即案件结案（"案件=一次赴韩行程"） */
-function simulateKrMarkArrived(){
-  var c = getCurrentCase(); if(!c || !c.settlementDone || isArrived(c)) return;
-  if(!c.krSchedule || c.krSchedule.status!=='confirmed') return;
-  c.krSchedule.status = 'arrived'; /* 已到医院 = 施术日期卡片的 Arrived 状态（单一数据源） */
-  c.hasArrived = true; /* 到过医院：之后IN不能再改日期/取消项目（即使KR在韩重新预约回到"施术时间已确认"） */
-  updateCaseStage(c);
-  logCaseEvent(c, krDirName(c), 'KR标记"已到医院"');
-  pushNotif('赴韩施术','客人已到医院：'+c.name, {caseId:c.id});
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
-}
-
-function simulateKrMarkBalancePaid(){
-  var c = getCurrentCase(); if(!c || !isArrived(c) || c.krBalancePaid || !c.krJudge || c.krJudge.result!=='ok') return;
-  c.krBalancePaid = true;
-  logCaseEvent(c, krDirName(c), 'KR标记"付清尾款"');
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
-}
-
 function krProcedureTabHtml(c){
   var sub = c.krSubTab || 'main';
   var tabsHtml = c.settlementDone ? '<div style="display:flex;gap:8px;margin-bottom:12px;"><span class="chip'+(sub==='main'?' active':'')+'" onclick="setKrSubTab(\'main\')">施术日期与项目</span><span class="chip'+(sub==='timeline'?' active':'')+'" onclick="setKrSubTab(\'timeline\')">在韩 timeline'+((c.subItems||[]).length?'（'+c.subItems.length+'）':'')+'</span></div>' : '';
@@ -3341,11 +3264,7 @@ function krProcedureTabMain(c, tabsHtml){
     } else if(st==='Pending'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
         '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待Kr室长确认</div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn-ghost" onclick="simulateKrScheduleConfirmNew(\'primary\')">演示：模拟KR室长确认首选</button>'+
-        (ks.backup?'<button class="btn-ghost" onclick="simulateKrScheduleConfirmNew(\'backup\')">演示：模拟KR室长确认备选</button>':'')+
-        '<button class="btn-ghost" onclick="simulateKrScheduleRejectNew()">演示：模拟KR室长无法安排</button>'+
-        '</div>';
+        '<div style="font-size:12px;color:var(--muted);">等待 KR 室长选定日期、填到院时间和地址（或回复无法安排）</div>';
     } else if(st==='Confirmed'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
         '<div class="card" style="padding:14px 16px;margin-bottom:14px;">施术日期 '+ks.confirmedDate+'，到院时间 '+ks.confirmedTime+(ks.address?'，地址：'+ks.address:'')+'，请转告客人'+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+
@@ -3356,8 +3275,7 @@ function krProcedureTabMain(c, tabsHtml){
             '<button class="btn-outline" onclick="requestCannotCoordinate()">无法协调</button>'+
             '</div>'+
             (!canModify ? '<div style="font-size:11px;color:var(--terracotta);margin-bottom:10px;">施术前2周内不可修改日期</div>' : ''))+
-        '<div style="border-top:1px solid var(--border2);padding-top:14px;"><div style="font-size:11px;color:var(--muted);margin-bottom:8px;">已到医院 / 付清尾款 / 项目完成 均由KR端操作，这里只显示状态（原型用演示按钮模拟）</div>'+
-        '<button class="btn-ghost" onclick="simulateKrMarkArrived()">演示：模拟KR标记已到医院</button></div>';
+        '<div style="border-top:1px solid var(--border2);padding-top:14px;font-size:12px;color:var(--muted);">已到医院 / 付清尾款 / 子项完成均由 KR 端操作，这里只显示状态；KR 同一天内可调整到院时间和地址（会通知你）</div>';
     } else if(st==='Changing'){
       if(!ks.changeSubmitted){
         body = '<div class="info-heading" style="margin-bottom:8px;">修改施术日期</div>'+
@@ -3372,11 +3290,7 @@ function krProcedureTabMain(c, tabsHtml){
       } else {
         body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
           '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">原定 '+ks.confirmedDate+' '+ks.confirmedTime+'，已提交新首选 '+ks.changePrimary+(ks.changeBackup?'　新备选 '+ks.changeBackup:'')+'，等待Kr室长确认（原日期继续有效）</div>'+
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
-          '<button class="btn-ghost" onclick="simulateKrScheduleChangeConfirm(\'changePrimary\')">演示：模拟KR确认新首选</button>'+
-          (ks.changeBackup?'<button class="btn-ghost" onclick="simulateKrScheduleChangeConfirm(\'changeBackup\')">演示：模拟KR确认新备选</button>':'')+
-          '<button class="btn-ghost" onclick="simulateKrScheduleChangeReject()">演示：模拟KR无法确认</button>'+
-          '</div>'+
+          '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">等待 KR 室长确认新时间（或回复无法安排，原日期继续有效）</div>'+
           '<div style="display:flex;gap:10px;">'+
           '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button>'+
           '<button class="btn-outline" onclick="requestCannotCoordinate()">无法协调</button>'+
@@ -3393,7 +3307,7 @@ function krProcedureTabMain(c, tabsHtml){
   /* 赴韩项目行（KRItem）：未开始 / 已完成 / 已取消 / 已更换（原项目名划线），IN 端只读；项目上的黄色小标签 = ItemFlag */
   var pillStyle = {'未开始':['var(--terracotta-bg)','var(--terracotta)'], '已完成':['var(--sage-bg)','var(--sage)'], '已取消':['#EDEAE2','var(--muted)'], '已更换':['var(--blue-bg)','var(--blue)']};
   var itemsHtml = '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border2);">'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:12px;font-weight:700;color:var(--terracotta);">赴韩项目（韩国那边施术，印尼只读，无法操作）</div>'+(c.krJudge && c.krJudge.result==='changed' && !c.visitClosed ? '<span style="cursor:pointer;font-size:11px;color:var(--slate);" onclick="simulateKrProjectSwap()">演示：模拟韩国更换项目</span>' : '')+'</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:12px;font-weight:700;color:var(--terracotta);">赴韩项目（韩国那边施术，印尼只读，无法操作）</div>'+'</div>'+
     krAllItems(c).map(function(it){
       var stText = krItemStatus(it), pc = pillStyle[stText];
       var nameHtml = it.replacedBy

@@ -273,12 +273,9 @@ function krBalanceInfo(c){
 
 /* 结算尾款：实际项目合计 − 定金（先抵）；补尾款（KR在韩国收）或退差额（IN 按 KR 判断的金额走退款弹窗） */
 function settleKrBalance(){
-  var c = getCurrentCase(); if(!c || !c.krJudge || c.krJudge.result!=='changed' || c.krJudge.settled) return;
-  var info = krBalanceInfo(c);
-  if(info.diff<0){ openRefundModal([], 'diffRefund', false, -info.diff); return; }
-  c.krBalancePaid = true; c.krJudge.settled = true;
-  logCaseEvent(c, krDirName(c), 'KR结算尾款：实际项目合计 '+formatCurrency(info.total,'KRW')+'，可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'（定金合计 '+formatCurrency(info.deposit,'KRW')+' − 到院前已退 '+formatCurrency(info.preRefund,'KRW')+'），补尾款 '+formatCurrency(info.diff,'KRW'));
-  buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  /* 尾款多退少补：定金多了，金额由 KR 判断（krJudge.refundDue），IN 室长按这个金额在系统里退差额；退款后视为尾款已结清 */
+  var c = getCurrentCase(); if(!c || !c.krJudge || c.krJudge.result!=='changed' || c.krJudge.settled || !c.krJudge.refundDue) return;
+  openRefundModal([], 'diffRefund', false, c.krJudge.refundDue);
 }
  /* 赴韩项目收预付金比例，演示先用30%，具体比例待业务确认 */
 /* items 现在是快照数组（自带 price/origin），不用再回查项目库；本地项目按个数+折扣算总价（2026-09-29 第十轮新增） */

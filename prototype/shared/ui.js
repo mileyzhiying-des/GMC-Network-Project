@@ -1516,32 +1516,6 @@ function localAskAnswer(yes){
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 
-/* 演示：KR 在施术完成时确认术后管理项目并标注进行时间 */
-function simulateKrConfirmPostCare(){
-  var c = getCurrentCase(); if(!c || c.visitClosed) return;
-  var list = postCareBatchesOf(c);
-  if(!list.length){ alert('本案件没有术后管理项目（可先用"模拟KR补加术后管理项目"）'); return; }
-  document.getElementById('postcare-confirm-list').innerHTML = list.map(function(x,i){
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+x.h.itemName+' ×'+x.b.bought+(x.h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'')+'</span>'+
-      '<input type="text" id="pcs-'+i+'" value="'+(x.b.schedule||'术后第7天')+'" style="width:110px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></div>';
-  }).join('');
-  document.getElementById('postcare-confirm-overlay').classList.add('open');
-}
-
-function closePostCareConfirm(){ document.getElementById('postcare-confirm-overlay').classList.remove('open'); }
-
-function submitPostCareConfirm(){
-  var c = getCurrentCase(); if(!c) return;
-  var list = postCareBatchesOf(c), names = [];
-  list.forEach(function(x,i){
-    var el = document.getElementById('pcs-'+i); var v = el ? el.value.trim() : '';
-    if(v){ x.b.schedule = v; names.push(x.h.itemName+'（'+v+'）'); }
-  });
-  logCaseEvent(c, krDirName(c), 'KR确认术后管理项目并标注进行时间：'+names.join('、'));
-  pushNotif('赴韩施术','KR 确认术后管理项目：'+c.name+'（'+names.join('、')+'）', {caseId:c.id});
-  closePostCareConfirm(); buildCaseLog(c); renderCaseBody(c);
-}
-
 /* 使用：勾选+填次数→从最早批次扣→记Timeline→进入"本地管理"（不再直接结案） */
 function submitHoldingsUse(scope){
   var c = getCurrentCase(); if(!c) return;
@@ -1775,66 +1749,8 @@ function confirmLocalRefundAll(){
   finishCase(c, '未购买未使用'); /* 本次没有购买（或已全退）→ 仅出报告；还有用过的批次保留则为已结案 */
 }
 
-function simulateKrJudge(){
-  var c = getCurrentCase(); if(!c || !c.hasArrived || c.visitClosed || c.krJudge) return;
-  document.getElementById('kr-judge-overlay').classList.add('open');
-}
-
-function closeKrJudgeModal(){ document.getElementById('kr-judge-overlay').classList.remove('open'); }
-
-function submitKrJudge(){
-  var c = getCurrentCase(); if(!c) return;
-  var pick = document.querySelector('input[name="kr-judge"]:checked'); if(!pick) return;
-  closeKrJudgeModal();
-  c.krJudge = {result:pick.value, settled:false};
-  logCaseEvent(c, krDirName(c), 'KR判断：'+({ok:'能施术，项目没变动', changed:'能施术，但项目有变动', cannot:'不能施术'}[pick.value]));
-  buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
-}
-
 /* 标记无法施术（只在"项目有变动"时用）：选中的未开始项目 → 已取消（unable）；不能全部标，全部不能做属于"不能施术" */
-function simulateKrMarkUnable(){
-  var c = getCurrentCase(); if(!c) return;
-  var krItems = krNotStartedItems(c);
-  if(krItems.length<2){ alert('至少要保留一个能做的项目；全部不能做请选"不能施术"'); return; }
-  document.getElementById('kr-unable-items').innerHTML = krItems.map(function(it){
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;"><input type="checkbox" class="kr-unable-cb" value="'+it.name.replace(/"/g,'&quot;')+'"> '+it.name+'</label>';
-  }).join('');
-  document.getElementById('kr-unable-reason').value = '';
-  document.getElementById('kr-unable-overlay').classList.add('open');
-}
-
-function closeKrUnableModal(){ document.getElementById('kr-unable-overlay').classList.remove('open'); }
-
-function submitKrUnable(){
-  var c = getCurrentCase(); if(!c) return;
-  var names = Array.prototype.slice.call(document.querySelectorAll('.kr-unable-cb')).filter(function(x){ return x.checked; }).map(function(x){ return x.value; });
-  var reason = document.getElementById('kr-unable-reason').value.trim();
-  if(!names.length){ alert('请至少勾选一个项目'); return; }
-  if(!reason){ alert('请填写原因'); return; }
-  var pending = krNotStartedItems(c);
-  if(names.length>=pending.length){ alert('至少要保留一个能做的项目；全部不能做请选"不能施术"'); return; }
-  pending.forEach(function(it){ if(names.indexOf(it.name)>-1){ it.cancelled = true; it.unable = true; it.unableReason = reason; } });
-  logCaseEvent(c, krDirName(c), 'KR标记无法施术：'+names.join('、')+'（项目→已取消）；原因：'+reason);
-  pushNotif('赴韩施术','KR 标记无法施术：'+c.name+'（'+names.join('、')+'）', {caseId:c.id});
-  closeKrUnableModal();
-  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
-}
-
 /* KR 在韩重新预约施术时间：回到"施术时间已确认"（新时间），客人再到医院时 KR 重新标记已到医院；IN 不能改 */
-function krReschedule(clearJudge){
-  var c = getCurrentCase(); if(!c || !c.krSchedule || !isArrived(c)) return;
-  var ks = c.krSchedule;
-  var od = caseOpenDates(c), def = od.filter(function(d){ return d>ks.confirmedDate; })[0] || od[0];
-  var v = prompt('KR 在韩国重新预约：请输入新的施术日期（KR 已开放，例如 '+def+'）', def);
-  if(v===null) return;
-  v = v.trim();
-  if(od.indexOf(v)===-1){ alert('该日期 KR 未开放（'+c.director+'）'); return; }
-  ks.status = 'confirmed'; ks.confirmedDate = v; ks.confirmedTime = '14:00';
-  if(clearJudge) c.krJudge = null; /* 不能施术→重新预约：之后到院重新判断 */
-  logCaseEvent(c, krDirName(c), 'KR在韩国重新预约施术时间：'+v+' 14:00（回到施术时间已确认，IN端显示更改时间）');
-  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
-}
-
 /* 选中/取消项目时把项目库当时的名字/价格/来源复制一份存进案件（快照）；
    之后项目库改价、改名、非活性化、删除都不会影响已经选进案件的这份拷贝（要求7） */
 function toggleProject(projectId){
@@ -1929,75 +1845,7 @@ function requestCannotCoordinate(){
 }
 
 /* 演示按钮「模拟KR标记完成」（2026-09-30）：逐个勾选项目标完成，或一次全部标完成；所有赴韩项目都已完成/已取消后系统自动判断结局 */
-function simulateKrMarkDone(){
-  var c = getCurrentCase(); if(!c || !isArrived(c) || c.visitClosed || !c.krJudge || !c.krBalancePaid) return; /* 先判断能否施术、付清尾款，才能标完成 */
-  var items = krNotStartedItems(c);
-  if(!items.length) return;
-  document.getElementById('kr-done-items').innerHTML = items.map(function(it,i){
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;"><input type="checkbox" class="kr-done-cb" value="'+i+'"> '+it.name+(it.replacedBy?'（更换为 '+it.replacedBy+'）':'')+'</label>';
-  }).join('');
-  document.getElementById('kr-done-overlay').classList.add('open');
-}
-
-function closeKrDoneModal(){ document.getElementById('kr-done-overlay').classList.remove('open'); }
-
-function submitKrMarkDone(all){
-  var c = getCurrentCase(); if(!c) return;
-  var items = krNotStartedItems(c);
-  var picked = all ? items : Array.prototype.slice.call(document.querySelectorAll('.kr-done-cb')).filter(function(cb){ return cb.checked; }).map(function(cb){ return items[parseInt(cb.value,10)]; });
-  if(!picked.length){ alert('请至少勾选一个项目'); return; }
-  picked.forEach(function(it){ it.done = true; });
-  logCaseEvent(c, krDirName(c), 'KR标记完成：'+picked.map(function(it){ return it.name; }).join('、'));
-  closeKrDoneModal();
-  afterKrItemsChanged(c);
-}
-
 /* 演示按钮：模拟KR补加术后管理项目——弹窗从术后管理分类里选，直接进客户持有，标"KR代收"，印尼不再付款 */
-function simulateKrAddPostCare(){
-  var c = getCurrentCase(); if(!c) return;
-  var candidates = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.categoryId===POST_CARE_CAT_ID && p.active; });
-  if(!candidates.length){ alert('演示：项目库里没有可补加的术后管理项目'); return; }
-  document.getElementById('postcare-list').innerHTML = candidates.map(function(p,i){
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;"><input type="radio" name="postcare-pick" value="'+p.id+'"'+(i===0?' checked':'')+'> '+p.name+'</label>';
-  }).join('');
-  document.getElementById('postcare-overlay').classList.add('open');
-}
-
-function closePostCareModal(){ document.getElementById('postcare-overlay').classList.remove('open'); }
-
-function confirmPostCare(){
-  var c = getCurrentCase(); if(!c) return;
-  var picked = document.querySelector('input[name="postcare-pick"]:checked'); if(!picked) return;
-  var pick = projById(picked.value); if(!pick) return;
-  var today = nowFullDt().split(' ')[0];
-  grantHolding(c.name, pick.name, '术后管理', c.id, today, 1, true);
-  logCaseEvent(c, krDirName(c), 'KR代收补加术后管理项目："'+pick.name+'"，已计入客户持有');
-  closePostCareModal();
-  buildCaseLog(c);
-  renderCaseBody(c);
-}
-
-function simulateKrProjectSwap(){
-  var c = getCurrentCase(); if(!c || !c.krJudge || c.krJudge.result!=='changed' || c.krJudge.settled) return;
-  var candidates = krNotStartedItems(c);
-  if(!candidates.length){ alert('没有可更换的未开始赴韩项目'); return; }
-  /* 固定演示"鼻综合（假体+鼻尖）→假体隆鼻"这一对；没有该项目时换成另一个启用中的赴韩项目 */
-  var target = candidates.filter(function(it){ return it.name==='鼻综合（假体+鼻尖）'; })[0] || candidates[0];
-  var alt = target.name==='鼻综合（假体+鼻尖）'
-    ? PROJECT_LIBRARY.filter(function(p){ return p.name==='假体隆鼻' && p.active && p.origin==='KR' && (!c.hospitalId || p.hospitalId===c.hospitalId); })[0]
-    : PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && (!c.hospitalId || p.hospitalId===c.hospitalId) && p.name!==target.name && !krAllItems(c).some(function(it){ return it.name===p.name; }); })[0];
-  if(!alt) return;
-  target.swapped = true; target.replacedBy = alt.name; /* 原项目：已更换（最终状态，原项目名划线 + 更换为XX） */
-  var newId = 'B' + ((c.settlementBatches||[]).length + 1);
-  /* 新项目另开一张新结算单（新tab）：到院之后的更换不收定金，金额直接计入尾款 */
-  c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:alt.price, krDeposit:0, krBalance:alt.price, inTotal:0, noDeposit:true, swapOf:target.name});
-  c.procedureItems.push({projectId:alt.id, name:alt.name, price:alt.price, currency:currencyOf(alt.origin), origin:'KR', categoryId:alt.categoryId, done:false, batchId:newId, swappedFrom:target.name}); /* 加项 */
-  c.settleTab = null;
-  logCaseEvent(c, krDirName(c), '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
-  pushNotif('赴韩施术','KR 更换项目：'+c.name+'（'+target.name+' → '+alt.name+'）', {caseId:c.id});
-  buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
-}
-
 function cancelConsult(){
   var c = getCurrentCase(); if(!c || !canCancelConsult(c)) return;
   if(!confirm('确认取消本次面诊？取消后面诊费记为"已取消"，主状态变为"选择项目"，自动打开本地管理。')) return;
