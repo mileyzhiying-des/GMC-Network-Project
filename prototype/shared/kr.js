@@ -21,7 +21,7 @@ function krAllCases(){
         if(me && me.role==='kr_director' && c.director !== me.name + ' 원장' && c.director !== me.name) return; /* 院长只看自己的案件 */
         var badge = caseStatusBadge(c);
         rows.push({clinicId:cl.id, clinicName:cl.name, id:c.id, caseNo:c.caseNo, name:c.name, director:c.director||'', krCoordinator:c.krCoordinator||'',
-          updated:c.updated||'', postPending:postCareBatchesOf(c).filter(function(x){ return !x.b.schedule && (x.b.bought-x.b.used)>0; }).length, badge:badge, label:badge[2], subItems:caseSubStatusItems(c), phoneMasked:maskPhone(clientPhoneOf(c.name)), c:c});
+          updated:c.updated||'', noTimeline:!!(c.settlementDone && krActiveItems(c).length && !(c.subItems||[]).length && !isEnded(c)), subToday:(c.subItems||[]).filter(function(s){ return s.date===krToday() && !s.done; }).length, badge:badge, label:badge[2], subItems:caseSubStatusItems(c), phoneMasked:maskPhone(clientPhoneOf(c.name)), c:c});
       });
     });
   });
@@ -131,7 +131,8 @@ var KR_CARDS = [
   {key:'sched',    label:'待确认施术时间', tip:'客人提交了施术日期，等 KR 确认', test:function(r){ return r.c.stage==='travel' && scheduleState(r.c)==='Pending'; }},
   {key:'change',   label:'改期待确认', tip:'客人申请改期，等 KR 确认', test:function(r){ return r.c.stage==='travel' && scheduleState(r.c)==='Changing'; }},
   {key:'today',    label:'今天到院', tip:'施术日期是今天的客人', test:function(r){ var ks = r.c.krSchedule; return !!ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===krToday(); }},
-  {key:'postcare', label:'术后管理待确认', tip:'术后管理项目的进行时间还没确认', test:function(r){ return r.postPending>0; }}
+  {key:'timeline', label:'timeline 待整理', tip:'已付定金、还没有整理在韩 timeline', test:function(r){ return r.noTimeline; }},
+  {key:'subtoday', label:'今日在韩子项', tip:'今天要做的在韩子项（还没完成）', test:function(r){ return r.subToday>0; }}
 ];
 function krCardRows(card, rows){ return rows.filter(card.test); }
 /* 点卡片 → 案件列表（带筛选）；案件列表在第四部分 */
@@ -236,6 +237,8 @@ function krKeyTime(r){
   var c = r.c;
   if(c.consultStatus==='paid_waiting_kr') return '待确认报告时间';
   if(c.consultStatus==='awaiting_report') return '预计 '+(c.reportEta||'—')+(reportOverdueNow(c)?'（已超时）':'');
+  var nextSub = (c.subItems||[]).filter(function(s){ return !s.done; })[0];
+  if(nextSub && c.krBalancePaid) return '下一项 '+nextSub.date+' '+nextSub.content;
   var ks = c.krSchedule;
   if(ks && ks.confirmedDate) return '施术 '+ks.confirmedDate+(ks.confirmedTime?' '+ks.confirmedTime:'');
   if(ks && ks.primary) return '希望 '+ks.primary;
@@ -252,6 +255,7 @@ function krUrgency(r){
   if(d[4].test(r)) return 4;
   if(d[0].test(r)) return 5;
   if(d[5].test(r)) return 6;
+  if(d[6].test(r)) return 7;
   return 9;
 }
 function krSubHtml(items){
