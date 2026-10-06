@@ -1413,24 +1413,35 @@ function simulateDirectorJudge(changed){
   buildCaseLog(c); renderCaseBody(c);
 }
 
-function markReportUploaded(){
-  /* 等待报告 → KR室长提交报告（院长口述 + 室长整理）→ Timeline 记"已出报告"→ 项目确认中（附可选范围） */
-  var c = getCurrentCase();
-  if(!c || c.consultStatus!=='awaiting_report') return;
+/* 提交最终报告（KR 室长 / 管理者，KR-CASE-01 第 3 节）：rep = {original:韩文原文, zh:演示翻译, items:[{name,price,note}]（赴韩项目 + 术后管理项目的可选范围）, overallNote, files:[附件名]}
+   报告语言：存原文（c.reportKo）；IN 端显示翻译（c.videoSummary），可切换看原文。不碰界面，KR 页面在 Store.mutateClinic 里调用 */
+function coreSubmitReport(c, rep, by){
+  if(!c || c.consultStatus!=='awaiting_report') return false;
   syncKrCoordinator(c);
   c.reportReady = true;
   c.consultStatus = 'report_ready';
   c.reportDate = nowFullDt().split(' ')[0];
-  c.reportUploadedBy = c.krCoordinator;
-  c.videoSummary = c.videoSummary || '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
+  c.reportUploadedBy = by + ' 실장';
+  c.reportKo = rep.original;
+  c.videoSummary = rep.zh;
   c.consultFiles = c.consultFiles || [];
+  (rep.files||[]).slice().reverse().forEach(function(f){ c.consultFiles.unshift({label:f, date:attDate()}); });
   c.consultFiles.unshift({label:'面诊报告（院长口述 + 室长整理）', date:attDate()});
-  applyDirectorPlan(c);
-  logCaseEvent(c, c.krCoordinator, 'KR室长提交面诊报告，已出报告');
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
+  c.krScope = {items:rep.items, overallNote:rep.overallNote||'', updatedAt:nowFullDt()};
+  c.projectsEnabled = true;
+  c.projectOriginFilter = 'KR';
+  logCaseEvent(c, by, 'KR室长提交面诊报告，已出报告');
+  updateCaseStage(c);
   pushNotif('面诊','报告已出：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
+  return true;
+}
+/* IN 端演示按钮（第六部分删除）还在用的包装 */
+function markReportUploaded(){
+  var c = getCurrentCase(); if(!c || c.consultStatus!=='awaiting_report') return;
+  syncKrCoordinator(c);
+  var txt = '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
+  coreSubmitReport(c, {original:txt, zh:txt, items:defaultKrScopeItems(c), overallNote:'具体术式最终以到院评估为准', files:[]}, krCoordShort(c));
+  buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 
 /* 赴韩项目可选范围（2026-09-29 重写，"项目列表/赴韩施术/本地管理重构"指令）：
@@ -1457,15 +1468,19 @@ function applyDirectorPlan(c){
 
 
 /* ---- 查看报告：格式化的报告视图，底部"查看方案"跳转项目列表 ---- */
+var REPORT_SHOW_ORIG = false; /* 报告弹窗：false = 翻译，true = 韩文原文 */
 function reportModalContent(c){
-  var body = c.videoSummary;
-  return '<div style="font-size:11px;color:var(--muted);margin-bottom:22px;">'+D(0)+'</div>'+
-    '<div style="font-size:13px;line-height:1.9;color:var(--navy);margin-bottom:32px;">尊敬的 '+c.name+'：<br><br>'+body+'<br><br>如有任何疑问，欢迎随时联系。</div>'+
+  var hasOrig = !!c.reportKo, showOrig = REPORT_SHOW_ORIG && hasOrig;
+  var body = String(showOrig ? c.reportKo : c.videoSummary).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>');
+  var toggle = hasOrig ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><span style="font-size:11px;color:var(--muted);">'+(showOrig ? '韩文原文' : '中文翻译（演示翻译，正式版由 AI 翻译）')+'</span><button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="toggleReportOrig()">'+(showOrig ? '看翻译' : '看原文')+'</button></div>' : '';
+  return '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">'+(c.reportDate||D(0))+'</div>'+toggle+
+    '<div style="font-size:13px;line-height:1.9;color:var(--navy);margin-bottom:32px;">'+(showOrig ? '' : '尊敬的 '+c.name+'：<br><br>')+body+(showOrig ? '' : '<br><br>如有任何疑问，欢迎随时联系。')+'</div>'+
     '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:6px;">'+
     '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+(c.director||'')+'</span>'+
     '<span style="font-size:11px;color:var(--muted);">主诊院长</span></div>'+
     '<button class="btn-primary" style="width:100%;margin-top:22px;" onclick="closeReportModal();switchCaseTab(\'projects\')">查看方案 →</button>';
 }
+function toggleReportOrig(){ REPORT_SHOW_ORIG = !REPORT_SHOW_ORIG; var c = getCurrentCase(); if(c) document.getElementById('report-body').innerHTML = reportModalContent(c); }
 
 /* "客户到访"不是一个独立状态——点"到访"后直接进入"接待中"（c.subState='arrived'）；
    同时日历上对应的预约来访事件变暗并标"已到访"（2026-09-29 新增） */

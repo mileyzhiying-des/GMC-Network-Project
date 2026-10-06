@@ -647,3 +647,57 @@ function krRecordBlock(c){
     '<div style="font-size:11px;color:var(--muted);margin-top:6px;">演示：草稿由固定模板生成，正式版接 LLM。原始录音、转写、草稿和修改过程都进「KR 专用附件仓库」。</div>');
   return box+krVaultHtml(c)+(typeof krSubmitBlock==='function' && canDo('krwork') ? krSubmitBlock(c) : '');
 }
+
+
+/* ---------- 三、提交最终报告（只有 KR 室长 / 管理者） ---------- */
+var KR_SUB = {caseKey:'', text:null, pick:{}, notes:{}, overall:'', files:[]};
+function krSubReset(c){
+  if(KR_SUB.caseKey !== krRecKey()) KR_SUB = {caseKey:krRecKey(), text:null, pick:{}, notes:{}, overall:'', files:[]};
+  if(KR_SUB.text===null){ var v = krVault(KR_CASE.clinicId, KR_CASE.id, false); KR_SUB.text = v.drafts.length ? v.drafts[v.drafts.length-1].text : ''; }
+}
+/* 本医院赴韩项目（项目库）+ 来源诊所本地项目库的"术后管理"分类 */
+function krScopeCandidates(clinicId){
+  var hid = krHospitalIdOfMe();
+  var kr = ((HOSPITAL_DATA[hid]||{}).projects||[]).filter(function(p){ return p.active; });
+  var v = Store.readClinic(clinicId) || {}, cat = null;
+  Object.keys(v.PROJECT_CATEGORIES||{}).forEach(function(k){ if(v.PROJECT_CATEGORIES[k].label==='术后管理') cat = k; });
+  var post = (v.PROJECT_LIBRARY||[]).filter(function(p){ return p.origin==='IN' && p.active && cat && p.categoryId===cat; });
+  return {kr:kr, post:post};
+}
+function krSubSet(k, v){ KR_SUB[k] = v; }
+function krPickToggle(name, on){ KR_SUB.pick[name] = on; }
+function krNoteSet(name, v){ KR_SUB.notes[name] = v; }
+function krAddFile(){ var i = document.getElementById('kr-file-name'); if(!i || !i.value.trim()) return; KR_SUB.files.push(i.value.trim()); krRenderCaseDetail(); }
+function krDelFile(i){ KR_SUB.files.splice(i, 1); krRenderCaseDetail(); }
+var KR_ZH_MAP = [['[면담 소견 요약]','【面诊意见摘要】'],['고객:','客户：'],['고민:','苦恼：'],['기대:','期望：'],['[원장 소견]','【院长意见】'],['[권장 시술]','【建议项目】'],['[주의사항]','【注意事项】'],['- 시술 전후 주의사항은 상담 시 안내 예정','- 术前术后注意事项将在咨询时说明'],['※ 데모용 템플릿 초안입니다. 실제 서비스에서는 LLM이 정리합니다.','※ 演示用模板草稿，正式版由 LLM 整理。'],['（실장이 가능 범위에서 선택）','（由室长在可选范围内选择）']];
+/* 演示翻译：只翻模板里的固定词，院长口述的正文原样保留并标注（正式版接 AI 翻译） */
+function krDemoZh(text){ var o = text; KR_ZH_MAP.forEach(function(m){ o = o.split(m[0]).join(m[1]); }); return o + '\n\n（演示翻译：只翻译了模板固定词，正文为韩文原文；正式版由 AI 翻译）'; }
+function krSubmitBlock(c){
+  krSubReset(c);
+  var cand = krScopeCandidates(KR_CASE.clinicId);
+  var row = function(p, kind){ var on = !!KR_SUB.pick[p.name]; return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px;"><label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="krPickToggle(\''+krEsc(p.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(p.name)+' <span style="color:var(--muted);font-size:11px;">'+(kind==='kr' ? formatCurrency(p.price,'KRW') : fmtRp(p.price))+'</span></label><input placeholder="备注" value="'+krEsc(KR_SUB.notes[p.name]||'')+'" oninput="krNoteSet(\''+krEsc(p.name).replace(/'/g,'')+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;"></div>'; };
+  return krCardBox('提交最终报告（KR 室长整理，院长不能提交）',
+    '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">报告内容（韩文原文；可在 AI 草稿基础上调整）</div>'+
+    '<textarea oninput="krSubSet(\'text\',this.value)" placeholder="还没有草稿：请先在上面录入面诊并生成 AI 草稿，或直接在这里写" style="width:100%;min-height:170px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.text)+'</textarea>'+
+    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">赴韩项目可选范围（本医院项目库）</div>'+(cand.kr.map(function(p){ return row(p,'kr'); }).join('') || krEmpty('本医院项目库没有项目'))+
+    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">术后管理项目（来源诊所本地项目库「术后管理」分类）</div>'+(cand.post.map(function(p){ return row(p,'in'); }).join('') || krEmpty('来源诊所没有术后管理项目'))+
+    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">整体备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;">'+
+    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">附件</div>'+KR_SUB.files.map(function(f,i){ return '<div style="font-size:12px;padding:3px 0;">📎 '+krEsc(f)+' <a href="#" onclick="krDelFile('+i+');return false;">移除</a></div>'; }).join('')+
+    '<div style="display:flex;gap:8px;margin-top:4px;"><input id="kr-file-name" placeholder="附件名称（演示：只记名称，不上传真实文件）" style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;"><button class="btn-outline" onclick="krAddFile()">添加</button></div>'+
+    '<div style="margin-top:16px;"><button class="btn-primary" onclick="krSubmitReport()">提交报告</button></div>');
+}
+function krSubmitReport(){
+  var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!c0) return;
+  var text = (KR_SUB.text||'').trim(); if(!text){ alert('报告内容不能为空'); return; }
+  var cand = krScopeCandidates(KR_CASE.clinicId), items = [];
+  cand.kr.concat(cand.post).forEach(function(p){ if(KR_SUB.pick[p.name]) items.push({name:p.name, price:p.price, note:(KR_SUB.notes[p.name]||'').trim()}); });
+  if(!items.length){ alert('请至少勾选一个可选项目（赴韩项目或术后管理项目）'); return; }
+  if(!confirm('提交后 IN 端会变成"项目确认中"，并收到"报告已出"通知。确认提交？')) return;
+  var v = krVault(KR_CASE.clinicId, KR_CASE.id, true), last = v.drafts.length ? v.drafts[v.drafts.length-1].text : '';
+  if(text !== last){ v.drafts.push({id:'dr'+Date.now(), ts:nowFullDt(), by:ME_NAME, source:'KR 室长调整稿', text:text}); krVaultLog(v, '室长调整草稿（最终报告）'); }
+  krVaultLog(v, '提交最终报告');
+  var rep = {original:text, zh:krDemoZh(text), items:items, overallNote:(KR_SUB.overall||'').trim(), files:KR_SUB.files.slice()};
+  var ok = krMut(function(c){ return coreSubmitReport(c, rep, ME_NAME); });
+  KR_SUB = {caseKey:'', text:null, pick:{}, notes:{}, overall:'', files:[]}; KR_REC.caseKey = '';
+  Store.touch(); krRefreshAll();
+}
