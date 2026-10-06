@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 13;
+var DEMO_DATA_VERSION = 14;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 3;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -1396,12 +1396,12 @@ function simulateDirectorJudge(changed){
   c.contJudged = true;
   if(!changed){
     c.reuseAfterConsult = true;
-    logCaseEvent(c, '김민석 원장', '院长判断：无变动');
+    logCaseEvent(c, krDirName(c), '院长判断：无变动');
     applyReuseReport(c);
     buildCaseLog(c); updateCaseStage(c); renderCaseStatusBar(c); renderCaseBody(c);
     return;
   }
-  logCaseEvent(c, '김민석 원장', '院长判断：有变动（由KR室长提交新报告）');
+  logCaseEvent(c, krDirName(c), '院长判断：有变动（由KR室长提交新报告）');
   buildCaseLog(c); renderCaseBody(c);
 }
 
@@ -1409,6 +1409,7 @@ function markReportUploaded(){
   /* 等待报告 → KR室长提交报告（院长口述 + 室长整理）→ Timeline 记"已出报告"→ 项目确认中（附可选范围） */
   var c = getCurrentCase();
   if(!c || c.consultStatus!=='awaiting_report') return;
+  syncKrCoordinator(c);
   c.reportReady = true;
   c.consultStatus = 'report_ready';
   c.reportDate = nowFullDt().split(' ')[0];
@@ -1427,20 +1428,21 @@ function markReportUploaded(){
 /* 赴韩项目可选范围（2026-09-29 重写，"项目列表/赴韩施术/本地管理重构"指令）：
    由KR室长直接整理（不经过院长），出报告时写入演示数据，格式 {name,price,note}，不挂项目库id引用。
    演示用的具体项目名单+备注不是业务方指定的（用户确认继续当演示数据） */
-function defaultKrScopeItems(){
+function defaultKrScopeItems(c){ /* 价格取该案件所选医院的赴韩项目 */
+  var hid = c && c.hospitalId;
   return [
     {name:'鼻综合（假体+鼻尖）', note:''},
     {name:'切开双眼皮', note:''},
     {name:'颧骨缩小', note:'不可与下颌角同时做'}
   ].map(function(x){
-    var p = PROJECT_LIBRARY.filter(function(y){ return y.name===x.name; })[0];
+    var p = PROJECT_LIBRARY.filter(function(y){ return y.name===x.name && y.origin==='KR' && (!hid || y.hospitalId===hid); })[0];
     return p ? {name:p.name, price:p.price, note:x.note} : null;
   }).filter(Boolean);
 }
 
 function applyDirectorPlan(c){
   /* 出报告同时，KR室长给出赴韩可选项目范围，不再自动预勾选到已选列表，改由IN室长自由勾选 */
-  c.krScope = {items:defaultKrScopeItems(), overallNote:'具体术式最终以到院评估为准', updatedAt:nowFullDt()};
+  c.krScope = {items:defaultKrScopeItems(c), overallNote:'具体术式最终以到院评估为准', updatedAt:nowFullDt()};
   c.projectsEnabled = true;
   c.projectOriginFilter = 'KR';
 }
@@ -1803,6 +1805,7 @@ function syncDirectorChoice(c){
   if(c.materialsConfirmed) return;
   if(c.needsConsult!==true){ c.director = null; c.hospitalId = null; return; }
   var hid = caseHospitalId(c); if(hid) c.hospitalId = hid;
+  if(c.hospitalId) syncKrCoordinator(c);
   var lk = directorLockInfo(c);
   if(lk && (!c.hospitalId || lk.hospitalId===c.hospitalId)) c.director = lk.name;
   else if(c.director && (!c.hospitalId || hospitalDirectorNames(c.hospitalId).indexOf(c.director)<0)) c.director = null;
@@ -1812,6 +1815,7 @@ function setCaseHospital(v){
   var c = getCurrentCase(); if(!c) return;
   c.hospitalId = v || null;
   if(!c.hospitalId || hospitalDirectorNames(c.hospitalId).indexOf(c.director)<0) c.director = null; /* 换医院后，院长要在新医院里重选 */
+  if(c.hospitalId) syncKrCoordinator(c); /* KR 室长跟着医院换 */
   renderCaseBody(c);
 }
 function setCaseDirector(v){ var c = getCurrentCase(); if(!c) return; c.director = v || null; renderCaseBody(c); }
@@ -1875,7 +1879,7 @@ function applyReuseReport(c){
   if(!names.length && src.krScope) src.krScope.items.forEach(function(it){ if(names.indexOf(it.name)<0) names.push(it.name); });
   var scopeNames = names.slice();
   if(src.krScope) src.krScope.items.forEach(function(it){ if(scopeNames.indexOf(it.name)<0) scopeNames.push(it.name); });
-  var lib = function(n){ return PROJECT_LIBRARY.filter(function(p){ return p.name===n && p.active && p.origin==='KR'; })[0]; };
+  var lib = function(n){ return PROJECT_LIBRARY.filter(function(p){ return p.name===n && p.active && p.origin==='KR' && (!c.hospitalId || p.hospitalId===c.hospitalId); })[0]; };
   c.krScope = {items: scopeNames.map(function(n){ var p = lib(n); return p ? {name:p.name, price:p.price, note:''} : null; }).filter(Boolean), overallNote:'沿用自 '+src.caseNo+' 的方案（价格按现在的项目库）', updatedAt:nowFullDt()};
   c.recommended = names.map(function(n){ var p = lib(n); return p ? {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId} : null; }).filter(Boolean);
   c.projectsEnabled = true;
@@ -2883,7 +2887,7 @@ function simulateKrScheduleConfirmNew(which){
   c.krSchedule.status = 'confirmed';
   c.krSchedule.confirmedDate = date;
   c.krSchedule.confirmedTime = '14:00';
-  logCaseEvent(c, '이서연', 'Kr室长确认施术日期：'+date+' 14:00');
+  logCaseEvent(c, krCoordShort(c), 'Kr室长确认施术日期：'+date+' 14:00');
   pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+date+' 14:00', {caseId:c.id});
   updateCaseStage(c);
   buildCaseLog(c);
@@ -2897,7 +2901,7 @@ function simulateKrScheduleRejectNew(){
   c.krSchedule.primary = '';
   c.krSchedule.backup = '';
   KR_SCHED_VIEW_MONTH = nearestOpenMonth(TODAY_DATE, caseOpenDates(getCurrentCase()));
-  logCaseEvent(c, '이서연', 'Kr室长回复：两个日期都无法安排，请重新选择');
+  logCaseEvent(c, krCoordShort(c), 'Kr室长回复：两个日期都无法安排，请重新选择');
   updateCaseStage(c);
   buildCaseLog(c);
   renderCaseStatusBar(c);
@@ -2938,7 +2942,7 @@ function simulateKrScheduleChangeConfirm(which){
   c.krSchedule.confirmedDate = date;
   c.krSchedule.confirmedTime = '14:00';
   c.krSchedule.changePrimary=''; c.krSchedule.changeBackup=''; c.krSchedule.changeSubmitted=false;
-  logCaseEvent(c, '이서연', 'Kr室长确认新施术日期：'+date+' 14:00');
+  logCaseEvent(c, krCoordShort(c), 'Kr室长确认新施术日期：'+date+' 14:00');
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -2953,7 +2957,7 @@ function simulateKrScheduleChangeReject(){
   c.krSchedule.changePrimary = '';
   c.krSchedule.changeBackup = '';
   c.krSchedule.changeSubmitted = false;
-  logCaseEvent(c, '이서연', 'Kr室长回复：新日期无法安排，请重新选择（原日期 '+c.krSchedule.confirmedDate+' 继续有效）');
+  logCaseEvent(c, krCoordShort(c), 'Kr室长回复：新日期无法安排，请重新选择（原日期 '+c.krSchedule.confirmedDate+' 继续有效）');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -2966,7 +2970,7 @@ function simulateKrMarkArrived(){
   c.krSchedule.status = 'arrived'; /* 已到医院 = 施术日期卡片的 Arrived 状态（单一数据源） */
   c.hasArrived = true; /* 到过医院：之后IN不能再改日期/取消项目（即使KR在韩重新预约回到"施术时间已确认"） */
   updateCaseStage(c);
-  logCaseEvent(c, '김민석 원장', 'KR标记"已到医院"');
+  logCaseEvent(c, krDirName(c), 'KR标记"已到医院"');
   pushNotif('赴韩施术','客人已到医院：'+c.name, {caseId:c.id});
   buildCaseLog(c);
   renderCaseStatusBar(c);
@@ -2976,7 +2980,7 @@ function simulateKrMarkArrived(){
 function simulateKrMarkBalancePaid(){
   var c = getCurrentCase(); if(!c || !isArrived(c) || c.krBalancePaid || !c.krJudge || c.krJudge.result!=='ok') return;
   c.krBalancePaid = true;
-  logCaseEvent(c, '김민석 원장', 'KR标记"付清尾款"');
+  logCaseEvent(c, krDirName(c), 'KR标记"付清尾款"');
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -3094,11 +3098,12 @@ function applyWaiveFee(c, reason, note){
 function krConfirmReportEta(eta, c){
   c = c || getCurrentCase();
   if(!c || c.consultStatus!=='paid_waiting_kr') return;
+  syncKrCoordinator(c);
   c.reportEta = eta;
   c.reportOverdue = false;
   c.consultStatus = 'awaiting_report';
   updateCaseStage(c);
-  logCaseEvent(c, '이서연', 'KR确认预计出报告时间：'+eta);
+  logCaseEvent(c, krCoordShort(c), 'KR确认预计出报告时间：'+eta);
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
@@ -3914,6 +3919,10 @@ function isMainRoom(id){ return /^main(-|$)/.test(String(id||'')); }
 function mainRoomId(hid){ return 'main-'+hid; }
 function mainRoomHospital(id){ return String(id).indexOf('main-')===0 ? String(id).slice(5) : null; }
 function caseKrHospital(c){ return caseHospitalId(c) || linkedHospitalIds(c.clinicId)[0] || null; } /* 案件的 KR 一侧是哪家医院（没选时只对接一家就是那家） */
+/* "演示：模拟KR…"按钮写进案件 Timeline 的 KR 操作人：用该案件所选医院的室长/院长（不再写死 H1 的人） */
+function krCoordShort(c){ return (c && c.krCoordinator ? c.krCoordinator.split(' ')[0] : null) || krCoordinatorsOf(c)[0] || '이서연'; }
+function krDirName(c){ return (c && c.director) || hospitalDirectorNames(caseKrHospital(c))[0] || '김민석 원장'; }
+function syncKrCoordinator(c){ var hs = hospitalCoordinators(caseKrHospital(c)); if(hs.length && (!c.krCoordinator || hs.indexOf(c.krCoordinator.split(' ')[0])<0)) c.krCoordinator = hs[0]+' 실장'; }
 function krCoordinatorsOf(c){ return hospitalCoordinators(caseKrHospital(c)).slice(); }
 function allKrCoordinatorNames(){ var out = []; Object.keys(HOSPITAL_DATA).forEach(function(h){ out = out.concat(HOSPITAL_DATA[h].coordinators || []); }); return out; } /* 认操作人用：所有医院的 KR 室长 */
 /* 同事名单（新建对话房选人）：本诊所的 IN 室长 + 对接医院的 KR 室长、院长 */
@@ -4157,7 +4166,38 @@ function buildClinicViews(inProjects, inCases){
   PROJECT_LIBRARY.length = 0; Array.prototype.push.apply(PROJECT_LIBRARY, pp);
   LIB_CASES.length = 0; Array.prototype.push.apply(LIB_CASES, cc);
 }
+/* H2（강남 뷰티의원）的赴韩项目和案例；C1 的几个案件改成属于 H2（名字按 H2 的人换掉） */
+function seedHospitalH2(){
+  [['切开双眼皮',2200000,'眼部'],['埋线双眼皮',1200000,'眼部'],['双眼皮修复',3500000,'眼部'],['假体隆鼻',3000000,'鼻部'],['鼻综合（假体+鼻尖）',5800000,'鼻部'],
+   ['颧骨缩小',8500000,'轮廓'],['下颌角整形',9500000,'轮廓'],['面部提升线雕',6000000,'面部年轻化'],['自体脂肪移植（全脸）',5000000,'面部年轻化']].forEach(function(r){
+    var p = makeProj(r[0], r[1], 'KR', r[2], 'H2');
+    p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')};
+    PROJECT_LIBRARY.push(p);
+  });
+  var pid = function(n){ var q = PROJECT_LIBRARY.filter(function(x){ return x.name===n && x.hospitalId==='H2'; })[0]; return q ? q.id : null; };
+  var colors = ['#D9CFC1','#CFD9D3','#D3CFD9'], ci = 0;
+  var mk = function(title, projNames, director, recs, day){
+    var id = newLibCaseId();
+    LIB_CASES.push({id:id, hospitalId:'H2', title:title, names:{zh:title, ko:demoTranslate(title,'zh','ko'), id:demoTranslate(title,'zh','id')}, source:'travel',
+      projectIds:projNames.map(pid).filter(Boolean), director:director, problemIds:[],
+      beforePhotos:[{url:'', color:'#E6DDD0'}], afterPhotos:recs.map(function(r){ return {url:'', color:colors[(ci++)%colors.length], recovery:r, recoveryCustom:''}; }),
+      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:'정하늘（KR室长）', uploadedAt:D(-day)+' 10:00', editedBy:null, editedAt:null});
+  };
+  mk('切开双眼皮 · 自然型（강남）', ['切开双眼皮'], '박서윤 원장', ['1周','1个月'], 12);
+  mk('假体隆鼻 · 侧面线条（강남）', ['假体隆鼻'], '최지호 원장', ['1个月','3个月'], 10);
+  mk('颧骨缩小 · 脸型改善（강남）', ['颧骨缩小'], '한도윤 원장', ['3个月'], 8); /* 한도윤 已停用 → 院长显示"-" */
+}
+function moveSeedCaseToH2(caseId, director){
+  var H2_NAME_MAP = [['김민석 원장','박서윤 원장'], ['이수진 원장','최지호 원장'], ['박지훈 원장','한도윤 원장'], ['김민석','박서윤'], ['이수진','최지호'], ['박지훈','한도윤'], ['이서연','정하늘'], ['박준혁','최민준']];
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  var swap = function(o){ var j = JSON.stringify(o); H2_NAME_MAP.forEach(function(m){ j = j.split(m[0]).join(m[1]); }); return JSON.parse(j); };
+  var nc = swap(c); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, nc);
+  c.hospitalId = 'H2'; if(director) c.director = director;
+  var rk = 'case-'+caseId; if(CHAT_DATA[rk]) CHAT_DATA[rk] = swap(CHAT_DATA[rk]);
+}
 function normalizeSeeds(){
+  seedHospitalH2();
+  [['budi','박서윤 원장'], ['dinda','최지호 원장'], ['wulan','박서윤 원장'], ['lina','박서윤 원장']].forEach(function(r){ moveSeedCaseToH2(r[0], r[1]); });
   /* 对话：原来的 Main 全员群 = C1×H1；再加 C1×H2；同事名单按对接医院重建 */
   (function(){
     var m = ROOMS.filter(function(r){ return r.id==='main'; })[0];
@@ -4191,7 +4231,25 @@ function emptyClinicVars(cid){
     PROJECT_LIBRARY:[], LIB_CASES:[]
   };
 }
-function seedClinicDemo(cid){ /* 其他诊所的演示资料（客户、案件、本地项目…）：五、演示数据 里补 */ }
+/* 其他诊所的演示资料（C2：泗水合作诊所，只对接 H1）：几个客户和案件 + 自己的本地项目和一个印尼案例，用来验证诊所之间完全隔开 */
+function seedClinicDemo(cid){
+  if(cid !== 'C2') return;
+  var cons = function(d){ return {version:'v1.0', ts:D(-d)+' 10:00', source:'客户自助预约'}; };
+  var mkClient = function(name, phone, g, dob, d){ var cl = addClient({name:name, phone:phone, gender:g, dob:dob, createdBy:'客人自助', source:'客户自助预约建档', consent:cons(d)}); return cl; };
+  mkClient('Maria Gunawan', '+62 811-2000-0001', '女', '1991-07-14', 5);
+  mkClient('Yoga Pratama', '+62 811-2000-0002', '男', '1988-02-03', 4);
+  mkClient('Lia Anggara', '+62 811-2000-0003', '女', '1995-11-22', 8);
+  var c1 = createReservationCase('Maria Gunawan', null, D(1), '10:30', '+62 811-2000-0001', '面诊商谈');
+  var c2 = createReservationCase('Yoga Pratama', null, D(0), '09:30', '+62 811-2000-0002', '面诊商谈'); c2.subState = 'arrived'; c2.needsConsult = true; c2.hospitalId = 'H1'; c2.director = '이수진 원장'; updateCaseStage(c2);
+  var c3 = createReservationCase('Lia Anggara', null, D(-2), '14:00', '+62 811-2000-0003', '皮肤商谈'); c3.subState = 'cancelled'; c3.cancelReason = '预约取消'; updateCaseStage(c3);
+  [['玻尿酸填充 1cc（泗水）', 780000, '填充'], ['水光注射 2cc（泗水）', 1500000, '水光'], ['好莱坞焕肤 1次（泗水）', 300000, '去除色素'], ['黄金微针 1次（泗水）', 1800000, '黄金微针']].forEach(function(r){
+    var p = makeProj(r[0], r[1], 'IN', r[2]); p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')}; PROJECT_LIBRARY.push(p);
+  });
+  var lp = PROJECT_LIBRARY.filter(function(x){ return x.origin==='IN'; })[1], lid = newLibCaseId();
+  LIB_CASES.push({id:lid, clinicId:'C2', title:'水光注射 · 肤质改善（泗水）', names:{zh:'水光注射 · 肤质改善（泗水）', ko:demoTranslate('水光注射 · 肤质改善（泗水）','zh','ko'), id:demoTranslate('水光注射 · 肤质改善（泗水）','zh','id')}, source:'local',
+    projectIds:[lp.id], director:null, problemIds:[], beforePhotos:[{url:'', color:'#E6DDD0'}], afterPhotos:[{url:'', color:'#D9CFC1', recovery:'1个月', recoveryCustom:''}],
+    consent:{signed:true, file:'consent-'+lid+'.pdf'}, uploader:'Citra', uploadedAt:D(-6)+' 10:00', editedBy:null, editedAt:null});
+}
 function buildClinicSeed(cid){
   var vars = emptyClinicVars(cid), saved = {}, keepClinic = CURRENT_CLINIC_ID, keepSeeding = SEEDING, keepActor = SEED_ACTOR, keepIn = IN_COORDINATORS.slice();
   CLINIC_VAR_NAMES.forEach(function(n){ saved[n] = window[n]; window[n] = vars[n]; });

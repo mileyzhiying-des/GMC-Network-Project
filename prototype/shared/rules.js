@@ -277,7 +277,7 @@ function settleKrBalance(){
   var info = krBalanceInfo(c);
   if(info.diff<0){ openRefundModal([], 'diffRefund', false, -info.diff); return; }
   c.krBalancePaid = true; c.krJudge.settled = true;
-  logCaseEvent(c, '김민석 원장', 'KR结算尾款：实际项目合计 '+formatCurrency(info.total,'KRW')+'，可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'（定金合计 '+formatCurrency(info.deposit,'KRW')+' − 到院前已退 '+formatCurrency(info.preRefund,'KRW')+'），补尾款 '+formatCurrency(info.diff,'KRW'));
+  logCaseEvent(c, krDirName(c), 'KR结算尾款：实际项目合计 '+formatCurrency(info.total,'KRW')+'，可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'（定金合计 '+formatCurrency(info.deposit,'KRW')+' − 到院前已退 '+formatCurrency(info.preRefund,'KRW')+'），补尾款 '+formatCurrency(info.diff,'KRW'));
   buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
  /* 赴韩项目收预付金比例，演示先用30%，具体比例待业务确认 */

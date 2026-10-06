@@ -1246,7 +1246,7 @@ function simulateKrScopeUpdate(){
   var pick = candidates[0];
   c.krScope.items.push({name:pick.name, price:pick.price, note:noteMap[pick.name]||''});
   c.krScope.updatedAt = nowFullDt();
-  logCaseEvent(c, '이서연', 'KR室长更新赴韩可选项目：新增"'+pick.name+'"');
+  logCaseEvent(c, krCoordShort(c), 'KR室长更新赴韩可选项目：新增"'+pick.name+'"');
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -1551,7 +1551,7 @@ function submitPostCareConfirm(){
     var el = document.getElementById('pcs-'+i); var v = el ? el.value.trim() : '';
     if(v){ x.b.schedule = v; names.push(x.h.itemName+'（'+v+'）'); }
   });
-  logCaseEvent(c, '김민석 원장', 'KR确认术后管理项目并标注进行时间：'+names.join('、'));
+  logCaseEvent(c, krDirName(c), 'KR确认术后管理项目并标注进行时间：'+names.join('、'));
   pushNotif('赴韩施术','KR 确认术后管理项目：'+c.name+'（'+names.join('、')+'）', {caseId:c.id});
   closePostCareConfirm(); buildCaseLog(c); renderCaseBody(c);
 }
@@ -1801,7 +1801,7 @@ function submitKrJudge(){
   var pick = document.querySelector('input[name="kr-judge"]:checked'); if(!pick) return;
   closeKrJudgeModal();
   c.krJudge = {result:pick.value, settled:false};
-  logCaseEvent(c, '김민석 원장', 'KR判断：'+({ok:'能施术，项目没变动', changed:'能施术，但项目有变动', cannot:'不能施术'}[pick.value]));
+  logCaseEvent(c, krDirName(c), 'KR判断：'+({ok:'能施术，项目没变动', changed:'能施术，但项目有变动', cannot:'不能施术'}[pick.value]));
   buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 
@@ -1828,7 +1828,7 @@ function submitKrUnable(){
   var pending = krNotStartedItems(c);
   if(names.length>=pending.length){ alert('至少要保留一个能做的项目；全部不能做请选"不能施术"'); return; }
   pending.forEach(function(it){ if(names.indexOf(it.name)>-1){ it.cancelled = true; it.unable = true; it.unableReason = reason; } });
-  logCaseEvent(c, '김민석 원장', 'KR标记无法施术：'+names.join('、')+'（项目→已取消）；原因：'+reason);
+  logCaseEvent(c, krDirName(c), 'KR标记无法施术：'+names.join('、')+'（项目→已取消）；原因：'+reason);
   pushNotif('赴韩施术','KR 标记无法施术：'+c.name+'（'+names.join('、')+'）', {caseId:c.id});
   closeKrUnableModal();
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
@@ -1845,7 +1845,7 @@ function krReschedule(clearJudge){
   if(od.indexOf(v)===-1){ alert('该日期 KR 未开放（'+c.director+'）'); return; }
   ks.status = 'confirmed'; ks.confirmedDate = v; ks.confirmedTime = '14:00';
   if(clearJudge) c.krJudge = null; /* 不能施术→重新预约：之后到院重新判断 */
-  logCaseEvent(c, '김민석 원장', 'KR在韩国重新预约施术时间：'+v+' 14:00（回到施术时间已确认，IN端显示更改时间）');
+  logCaseEvent(c, krDirName(c), 'KR在韩国重新预约施术时间：'+v+' 14:00（回到施术时间已确认，IN端显示更改时间）');
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 
@@ -1949,7 +1949,7 @@ function submitKrMarkDone(all){
   var picked = all ? items : Array.prototype.slice.call(document.querySelectorAll('.kr-done-cb')).filter(function(cb){ return cb.checked; }).map(function(cb){ return items[parseInt(cb.value,10)]; });
   if(!picked.length){ alert('请至少勾选一个项目'); return; }
   picked.forEach(function(it){ it.done = true; });
-  logCaseEvent(c, '김민석 원장', 'KR标记完成：'+picked.map(function(it){ return it.name; }).join('、'));
+  logCaseEvent(c, krDirName(c), 'KR标记完成：'+picked.map(function(it){ return it.name; }).join('、'));
   closeKrDoneModal();
   afterKrItemsChanged(c);
 }
@@ -1973,7 +1973,7 @@ function confirmPostCare(){
   var pick = projById(picked.value); if(!pick) return;
   var today = nowFullDt().split(' ')[0];
   grantHolding(c.name, pick.name, '术后管理', c.id, today, 1, true);
-  logCaseEvent(c, '김민석 원장', 'KR代收补加术后管理项目："'+pick.name+'"，已计入客户持有');
+  logCaseEvent(c, krDirName(c), 'KR代收补加术后管理项目："'+pick.name+'"，已计入客户持有');
   closePostCareModal();
   buildCaseLog(c);
   renderCaseBody(c);
@@ -1986,8 +1986,8 @@ function simulateKrProjectSwap(){
   /* 固定演示"鼻综合（假体+鼻尖）→假体隆鼻"这一对；没有该项目时换成另一个启用中的赴韩项目 */
   var target = candidates.filter(function(it){ return it.name==='鼻综合（假体+鼻尖）'; })[0] || candidates[0];
   var alt = target.name==='鼻综合（假体+鼻尖）'
-    ? PROJECT_LIBRARY.filter(function(p){ return p.name==='假体隆鼻' && p.active; })[0]
-    : PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && p.name!==target.name && !krAllItems(c).some(function(it){ return it.name===p.name; }); })[0];
+    ? PROJECT_LIBRARY.filter(function(p){ return p.name==='假体隆鼻' && p.active && p.origin==='KR' && (!c.hospitalId || p.hospitalId===c.hospitalId); })[0]
+    : PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && (!c.hospitalId || p.hospitalId===c.hospitalId) && p.name!==target.name && !krAllItems(c).some(function(it){ return it.name===p.name; }); })[0];
   if(!alt) return;
   target.swapped = true; target.replacedBy = alt.name; /* 原项目：已更换（最终状态，原项目名划线 + 更换为XX） */
   var newId = 'B' + ((c.settlementBatches||[]).length + 1);
@@ -1995,7 +1995,7 @@ function simulateKrProjectSwap(){
   c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:alt.price, krDeposit:0, krBalance:alt.price, inTotal:0, noDeposit:true, swapOf:target.name});
   c.procedureItems.push({projectId:alt.id, name:alt.name, price:alt.price, currency:currencyOf(alt.origin), origin:'KR', categoryId:alt.categoryId, done:false, batchId:newId, swappedFrom:target.name}); /* 加项 */
   c.settleTab = null;
-  logCaseEvent(c, '김민석 원장', '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
+  logCaseEvent(c, krDirName(c), '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
   pushNotif('赴韩施术','KR 更换项目：'+c.name+'（'+target.name+' → '+alt.name+'）', {caseId:c.id});
   buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
