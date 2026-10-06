@@ -374,6 +374,7 @@ var ADMIN_PAGES = [
   {key:'bizdata',  label:'经营数据', icon:'数', perm:'bizdata'},
   {key:'accounts', label:'账号管理', icon:'账', perm:'accounts'},
   {key:'clinic',   label:'诊所设定', icon:'设', perm:'clinic'},
+  {key:'smslog',   label:'短信发送记录', icon:'短', perm:'clinic'}, /* 演示短信集中在这里，老板/管理者在诊所设定旁边看到 */
   {key:'oplog',    label:'操作日志', icon:'志', perm:'oplog'},
   {key:'personal', label:'个人设定', icon:'个', perm:'personal', hidden:true} /* 不在侧边栏，从头像菜单进入 */
 ];

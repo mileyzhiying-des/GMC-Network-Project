@@ -346,7 +346,7 @@ function renderAddSlotBody(){
       '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
-    var link = 'https://gmc.link/'+Math.random().toString(36).slice(2,8);
+    var link = bookingUrl({ph:'ph'+PLACEHOLDER_SEQ});
     body = '<div class="field" style="margin-bottom:12px;"><label>客人手机号</label><input type="text" id="add-slot-phone" placeholder="+62 812-xxxx-xxxx"></div>'+
       purposeSelectHtml('add-slot-purpose')+
       '<div class="field" style="margin-bottom:8px;"><label>短信内容</label><textarea id="add-slot-sms" rows="3" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+DEFAULT_SMS_TEMPLATE+'</textarea></div>'+
@@ -374,8 +374,10 @@ function confirmAddSlotNew(link){
   var smsBody = document.getElementById('add-slot-sms').value;
   var purpose = document.getElementById('add-slot-purpose').value;
   if(document.getElementById('add-slot-save-default').checked && canDo('clinic')){ CLINIC_SETTINGS.sms.link = smsBody; applyClinicSettings(); } /* 默认模板属于诊所设定：只有管理者能改 */
-  var ph = {id:'ph'+(PLACEHOLDER_SEQ++), date:ADD_SLOT_CONTEXT.date, time:ADD_SLOT_CONTEXT.time, phone:phone, link:link,
+  var phId = 'ph'+(PLACEHOLDER_SEQ++); link = bookingUrl({ph:phId}); /* 真实的客户自助预约页链接，超时后仍有效 */
+  var ph = {id:phId, date:ADD_SLOT_CONTEXT.date, time:ADD_SLOT_CONTEXT.time, phone:phone, link:link,
     smsText:smsBody, purpose:purpose, expiresAt:Date.now()+holdMs()};
+  logSms('link', phone, smsBody+' '+link, null);
   RESERVATION_PLACEHOLDERS.push(ph);
   closeAddSlotModal();
   renderCalendar();

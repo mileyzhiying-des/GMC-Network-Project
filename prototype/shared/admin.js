@@ -432,3 +432,29 @@ ADMIN_RENDER.oplog = function(el){
     (tableRows || '<div style="padding:18px 0;font-size:12px;color:var(--muted);">没有符合条件的记录</div>')+'</div>'+
     '<div style="font-size:11px;color:var(--muted);">共 '+rows.length+' 条。姓名是操作当时的使用人；账号以后换了人，这里仍显示当时的名字。</div>';
 };
+
+
+/* ================= 短信发送记录（老板、管理者，在诊所设定旁边；B4） =================
+   所有演示短信（验证码 / 预约链接 / 确认 / 提醒 / 取消）都记在 SMS_LOG，方便检查"发了什么、发给谁"。 */
+var SMSLOG_KIND = 'all';
+function smslogSet(k){ SMSLOG_KIND = k; openAdminPage('smslog', true); }
+function smslogRemindNow(){
+  var n = checkReminders(true);
+  showToast(n ? '已发送 '+n+' 条提醒短信' : '没有需要发送的提醒', n ? '演示：立刻触发（正常情况下按诊所设定的发送时间自动发）' : '待访问预约都已发过提醒，或预约时间已过', null);
+  openAdminPage('smslog', true);
+}
+ADMIN_RENDER.smslog = function(el){
+  var rows = SMS_LOG.filter(function(s){ return SMSLOG_KIND==='all' || s.kind===SMSLOG_KIND; });
+  var chip = function(label, active, js){ return '<span class="chip'+(active?' active':'')+'" onclick="'+js+'">'+label+'</span>'; };
+  var chips = chip('全部', SMSLOG_KIND==='all', 'smslogSet(\'all\')')+Object.keys(SMS_KIND_NAMES).map(function(k){ return chip(SMS_KIND_NAMES[k], SMSLOG_KIND===k, 'smslogSet(\''+k+'\')'); }).join('');
+  var caseNo = function(id){ var c = id ? CASE_ITEMS.filter(function(x){ return x.id===id; })[0] : null; return c ? c.caseNo : '—'; };
+  var tr = rows.map(function(s){
+    return '<div class="trow" style="grid-template-columns:1.1fr 1.2fr 0.8fr 0.8fr 4fr;align-items:flex-start;"><span style="color:var(--slate2);">'+aEsc(s.ts)+'</span><span>'+aEsc(s.to||'—')+'</span><span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+aEsc(SMS_KIND_NAMES[s.kind]||s.kind)+'</span></span><span>'+aEsc(caseNo(s.caseId))+'</span><span style="line-height:1.6;word-break:break-all;">'+aEsc(s.text)+'</span></div>';
+  }).join('');
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('短信发送记录')+'</div>'+
+    '<button class="btn-outline" onclick="smslogRemindNow()">演示：立即发送提醒短信</button></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+chips+'</div>'+
+    '<div class="card" style="padding:4px 20px;"><div class="trow head" style="grid-template-columns:1.1fr 1.2fr 0.8fr 0.8fr 4fr;"><span>时间</span><span>发给</span><span>类型</span><span>Case ID</span><span>内容</span></div>'+
+    (tr || '<div style="padding:18px 0;font-size:12px;color:var(--muted);">还没有短信</div>')+'</div>'+
+    '<div style="font-size:11px;color:var(--muted);line-height:1.7;">共 '+rows.length+' 条（最多保留最近 300 条）。演示：短信没有真的发出。验证码格式固定；预约链接 / 确认 / 提醒 / 取消的模板在「诊所设定」里编辑。提醒短信按诊所设定的"预约开始前 '+CLINIC_SETTINGS.remindBeforeHours+' 小时"自动发送（演示时钟判断，IN 端页面打开时每 10 秒检查一次）。</div>';
+};

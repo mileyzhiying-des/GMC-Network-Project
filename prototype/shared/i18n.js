@@ -39,7 +39,7 @@ var I18N_ROWS = [
   ['短信模板','문자 템플릿','Templat SMS'], ['预约链接','예약 링크','Tautan reservasi'], ['预约确认','예약 확인','Konfirmasi reservasi'],
   ['预约提醒','예약 알림','Pengingat reservasi'], ['预约取消','예약 취소','Pembatalan reservasi'],
   ['使用政策与同意书','이용 정책 및 동의서','Kebijakan & Persetujuan'], ['同意书版本','동의서 버전','Versi persetujuan'], ['隐私政策','개인정보 처리방침','Kebijakan privasi'],
-  ['合作医院（只读）','협력 병원(읽기 전용)','Rumah sakit mitra (hanya baca)'], ['韩国医院','한국 병원','RS Korea'], ['韩国室长','한국 실장','Koordinator Korea'],
+  ['短信发送记录','문자 발송 기록','Riwayat SMS'], ['合作医院（只读）','협력 병원(읽기 전용)','Rumah sakit mitra (hanya baca)'], ['韩国医院','한국 병원','RS Korea'], ['韩国室长','한국 실장','Koordinator Korea'],
   ['院长名单','원장 명단','Daftar Direktur'], ['已停用','비활성','Nonaktif'], ['保存设定','설정 저장','Simpan pengaturan'],
   ['保存后立即生效，并通知所有室长','저장 즉시 적용되며 모든 실장에게 알림이 갑니다','Berlaku segera dan semua koordinator diberi tahu'],
   ['周日','일','Min'], ['周一','월','Sen'], ['周二','화','Sel'], ['周三','수','Rab'], ['周四','목','Kam'], ['周五','금','Jum'], ['周六','토','Sab']

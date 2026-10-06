@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', function(){
   [['客户详情Timeline',buildDetailLog]].forEach(function(m){ try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); } });
 });
 
+/* 提醒短信：按诊所设定的"预约前 N 小时"自动发（演示时钟判断）；启动时先查一次，之后每 10 秒查一次 */
+try{ checkReminders(); }catch(e){ console.error('[初始化失败] 提醒短信', e); }
+setInterval(function(){ try{ if(checkReminders()>0 && typeof refreshAdminPage==='function') refreshAdminPage(); }catch(e){} }, 10000);
+
 /* 每秒扫一遍占位倒计时：更新页面上的倒计时文字；超时的从占位里移除（时段自动空出），记入预约历史"占位失效" */
 setInterval(function(){
   var changed = false;
