@@ -2,14 +2,26 @@
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
 var DEMO_DATA_VERSION = 6;
+/* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06） */
+var ACCOUNT_STRUCT_VERSION = 1;
+var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_SEQ', 'ACCOUNT_LOG', 'PURCHASE_REQ', 'CLINIC_SETTINGS'];
 (function(){
   try{
-    /* 版本不符，或"演示数据生成的那天"不是今天（演示日期都是相对生成当天算的）→ 清空重新生成 */
-    var todayKey = dateStr(new Date());
-    if(localStorage.getItem('gmc_demo_ver') !== String(DEMO_DATA_VERSION) || localStorage.getItem('gmc_demo_day') !== todayKey){
+    /* 演示数据版本号变了：清掉业务演示资料（案件、客户、预约…）重新生成，但保留账号资料（密码、使用人、使用人历史、操作日志）和诊所设定；
+       账号/设定结构变了（ACCOUNT_STRUCT_VERSION）或手动"重置演示数据"时才全部重置。日期是相对今天写的，不需要每天重置。 */
+    var verOk = localStorage.getItem('gmc_demo_ver') === String(DEMO_DATA_VERSION);
+    if(!verOk){
+      var structOk = localStorage.getItem('gmc_struct_ver') === String(ACCOUNT_STRUCT_VERSION), kept = null;
+      if(structOk){
+        try{
+          var st = JSON.parse(localStorage.getItem('gmc_state') || 'null');
+          if(st && st.vars){ kept = {}; KEEP_ON_VERSION_RESET.forEach(function(n){ if(st.vars.hasOwnProperty(n)) kept[n] = st.vars[n]; }); }
+        }catch(e){ kept = null; }
+      }
       Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); });
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
-      localStorage.setItem('gmc_demo_day', todayKey);
+      localStorage.setItem('gmc_struct_ver', String(ACCOUNT_STRUCT_VERSION));
+      if(kept) localStorage.setItem('gmc_state', JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), vars:kept}));
     }
   }catch(e){}
 })();
