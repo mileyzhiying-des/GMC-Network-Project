@@ -1686,6 +1686,7 @@ function confirmRefund(){
   closeRefundModal();
   if(mode0==='diffRefund'){ /* 尾款多退少补：退差额后视为尾款已结清 */
     c.krBalancePaid = true; if(c.krJudge) c.krJudge.settled = true;
+    if(finalizeInnCare(c).length){ logCaseEvent(c, actingName(), '行程已确认：术后管理印尼部分 '+formatCurrency(c.innCare.total,'IDR')+' 待收款'); pushNotif('赴韩施术','尾款已结清、行程已确认：'+c.name+'，印尼部分术后管理待收款', {caseId:c.id, silent:true}); }
     buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
     return;
   }

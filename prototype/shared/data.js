@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 19;
+var DEMO_DATA_VERSION = 20;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -817,7 +817,7 @@ var CASE_ITEMS = [
     concern:'皮肤暗沉、细纹', expectation:'希望肤质透亮', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'面部凹陷、细纹较明显，建议先做自体脂肪移植改善轮廓，再评估面部拉皮。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
-    projectsEnabled:true, krScope:{items:[{name:'自体脂肪移植（全脸）', price:4500000, note:''},{name:'面部拉皮', price:12000000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(1)+' 11:20'},
+    projectsEnabled:true, krScope:{items:[{name:'自体脂肪移植（全脸）', price:4500000, note:'', stay:'10天', anesthesia:{type:'sleep', label:'睡眠麻醉', note:''}, postcare:[{name:'术后消肿管理', price:150000, times:5, place:'either', day:'第3天', innName:'术后消肿护理 1次', innPrice:450000, inTimes:0}]},{name:'面部拉皮', price:12000000, note:'', stay:'14天', anesthesia:{type:'general', label:'全身麻醉', note:'全麻需空腹 8 小时'}, postcare:[{name:'术后复诊检查', price:80000, times:2, place:'KR', day:'第2天', innName:'', innPrice:0, inTimes:0}]}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(1)+' 11:20'},
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-7)+' 09:00'},
       {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 11:20'}
@@ -829,7 +829,7 @@ var CASE_ITEMS = [
     videoSummary:'建议先做假体隆鼻改善鼻基底，再评估鼻翼缩小。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true,
-    krScope:{items:[{name:'假体隆鼻', price:2500000, note:''},{name:'鼻翼缩小', price:1500000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(2)+' 14:20'},
+    krScope:{items:[{name:'假体隆鼻', price:2500000, note:'', stay:'7天', anesthesia:{type:'sleep', label:'睡眠麻醉', note:'需空腹 6 小时'}, postcare:[{name:'术后消肿管理', price:150000, times:5, place:'either', day:'第3天', innName:'术后消肿护理 1次', innPrice:450000, inTimes:0},{name:'拆线', price:50000, times:1, place:'KR', day:'第7天', innName:'', innPrice:0, inTimes:0}]},{name:'鼻翼缩小', price:1500000, note:'', stay:'5天', anesthesia:{type:'local', label:'局部麻醉', note:''}, postcare:[{name:'拆线', price:50000, times:1, place:'KR', day:'第7天', innName:'', innPrice:0, inTimes:0}]}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(2)+' 14:20'},
     procedureItems:[
       {name:'假体隆鼻', origin:'KR', done:false, batchId:'B1'},
       {name:'鼻翼缩小', origin:'KR', done:false, batchId:'B1'}
@@ -3063,6 +3063,12 @@ function innCareLines(c){
   krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='either' && s.inn>0) out.push({item:it.name, name:x.name, innName:x.innName, times:s.inn, price:x.innPrice||0, day:x.day||''}); }); });
   return out;
 }
+/* 付清尾款（含 IN 按 KR 判断退差额后视为结清）时：锁定分配，印尼部分术后管理生成「待 IN 室长收款」 */
+function finalizeInnCare(c){
+  var inn = innCareLines(c);
+  if(inn.length && !c.innCare) c.innCare = {lines:inn, total:inn.reduce(function(s,l){ return s+l.price*l.times; },0), status:'pending'};
+  return inn;
+}
 function coreSettleBalance(c, by){
   if(!isArrived(c) || c.krBalancePaid || !c.krJudge || c.krJudge.settled) return {ok:false};
   var j = c.krJudge; if(j.result!=='ok' && j.result!=='changed') return {ok:false};
@@ -3074,8 +3080,7 @@ function coreSettleBalance(c, by){
     return {ok:true, refund:true};
   }
   c.krBalancePaid = true; j.settled = true; /* 付清尾款后分配锁定 */
-  var inn = innCareLines(c);
-  if(inn.length){ c.innCare = {lines:inn, total:inn.reduce(function(s,l){ return s+l.price*l.times; },0), status:'pending'}; }
+  var inn = finalizeInnCare(c);
   logCaseEvent(c, by, 'KR确认行程并标记"付清尾款"：尾款 '+formatCurrency(info.diff,'KRW')+(inn.length ? '；术后管理印尼部分 '+formatCurrency(c.innCare.total,'IDR')+' 待 IN 室长收款' : ''));
   pushNotif('赴韩施术','客人付清尾款、行程已确认：'+c.name+(inn.length ? '；印尼部分术后管理 '+formatCurrency(c.innCare.total,'IDR')+' 请收款（收到后转为客人持有项目）' : ''), {caseId:c.id});
   return {ok:true};
@@ -4396,6 +4401,18 @@ CASE_ITEMS.forEach(function(c){
 
 /* 种子数据全部跑完：之后的操作人 = 当前登录的人；IN 室长名单按账号重算 */
 SEEDING = false;
+/* 在韩进行中的演示数据（KR 端系列 4/5）：Nadia = 在韩进行中（今天施术，有 timeline）；Rina / Wulan = 已结案（子项全部完成）；Dinda（H2）已付定金还没有 timeline */
+(function seedKrProgress(){
+  var byId = function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; };
+  var mk = function(c, n, date, content, kind, place, done, proj){ return {id:'s'+c.id+n, no:c.caseNo+'-'+pad2(n), date:date, content:content, kind:kind, place:place, projectName:proj||'', done:!!done, doneAt:done?date+' 12:00':'', doneBy:done?'이서연':'', informed:false}; };
+  var nad = byId('nadia'); if(nad){
+    nad.krJudge = {result:'ok', settled:true};
+    var first = krActiveItems(nad)[0];
+    nad.subItems = [mk(nad,1,D(0),'施术（'+(first?first.name:'')+'）','施术','KR',false,first?first.name:''), mk(nad,2,D(1),'复诊','复诊','KR',false), mk(nad,3,D(5),'拆线（印尼 / 韩国均可）','管理','either',false)];
+  }
+  var rina = byId('rina'); if(rina){ rina.subItems = [mk(rina,1,D(-37),'施术','施术','KR',true), mk(rina,2,D(-36),'复诊','复诊','KR',true)]; rina.krJudge = rina.krJudge || {result:'ok', settled:true}; }
+  var wulan = byId('wulan'); if(wulan){ wulan.subItems = [mk(wulan,1,D(-5),'施术','施术','KR',true), mk(wulan,2,D(-4),'复诊','复诊','KR',true)]; wulan.krJudge = wulan.krJudge || {result:'ok', settled:true}; }
+})();
 initHospitalData();
 normalizeSeeds();
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */

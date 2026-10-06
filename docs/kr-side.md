@@ -89,3 +89,43 @@ tab：全部 / 面诊 / 项目确认中 / 施术预约 / 赴韩施术 / 已结�
 3. 演示翻译只翻模板固定词；正式版 AI 翻译整篇。
 4. 语音识别用韩语（`ko-KR`）；院长口述语言以后可设定。
 5. 仓库按"诊所:案件号"存在医院资料里，院长账号能看到自己案件的；管理者/室长看全部。
+
+---
+
+# KR 端系列 4/5：施术预约与在韩项目进程（2026-10-06）
+依据 Notion KR-CASE-02（测试情境 K16～K23）、Case Management Flow 06 与「2026-10-06 修订：赴韩项目进程」、Data Retention & Consent「麻醉同意书」、KR-SCHD-01 第 2 节。KR 的操作同样经 `Store.mutateClinic` 改来源诊所的案件，业务逻辑在 data.js 的 `core*` 函数；**IN 端面诊 + 施术相关的"演示：模拟 KR…"按钮已全部拿掉**。
+
+## 一 可选范围加项目资料
+每个推荐赴韩项目：推荐在韩时间、麻醉特性（局部/睡眠/全身 + 备注）、所需术后管理 `postcare:[{name, price(韩元/次), times, place:'KR'|'either', day, innName, innPrice(印尼盾/次), inTimes}]`。在韩做的术后管理选自本医院项目库新增的「韩国术后管理」分类（`postcare:true` 特殊标记，案例库按部位和 IN 项目选择里不出现，两家医院各 4 个演示项目）；印尼做的选自来源诊所「术后管理」分类（`innName`，只有"均可"的项目才能选）。补加可选项目也带麻醉和在韩时间。
+
+## 二 IN 项目选择与定金
+项目选择显示 KR 写的资料；IN 室长按项目把"均可"的术后管理分配 韩国 n + 印尼 m（`corePcAlloc`，付尾款前可改，改后 `recomputeBatch` 重算合计）。**定金 =（施术项目 + 必须在韩国的术后管理）× `KR_DEPOSIT_RATE`**；均可的显示"暂定"，不算进定金（所以改分配不影响定金）。付定金前必须勾选签署麻醉同意书（`ANES_CONSENT_VERSION` = v0.1 占位文案，案件上记 `anesthesiaConsent` = 版本 + 时间 + 各项目麻醉方式；追加项目时只对还没签的项目再签）；没签不能付。
+
+## 三 KR 端施术预约（施术 tab）
+待确认施术时间：看 IN 递交的首选/备选、项目、院长当天日程 → 选日期 + 到院时间（30 分钟间隔）+ 地址（默认医院地址可改）→ `coreScheduleConfirm`，或［无法安排］+ 原因 → `coreScheduleReject`（IN 回到重新选日期并显示原因）。时间已确认：同一天内 `coreScheduleAdjust`（到院时间/地址，IN 通知；没有改日期入口）。改期待确认：`coreChangeConfirm` / `coreChangeReject`（原日期继续有效）。确认后 `syncSurgeryBlock` 在该院长日程自动加"施术"块（`directorSchedule` 的块多了 `kind/caseId/clinicId/name`，没有结束时间，第 5 份补）。
+
+## 四 在韩 timeline 与子项
+付定金后 KR 室长在「项目进程」整理：`c.subItems` = `{id, no:'A000001-01', date, content, kind:施术|复诊|管理|其他, place:KR|IN|either, projectName, done, informed, booked}`；新增/修改/删除（已完成不能改），每次 IN 收通知。IN 赴韩项目 tab 下新增「在韩 timeline」子 tab（只读，`c.krSubTab`）。
+
+## 五 到院、尾款与调整（KR 端）
+`coreMarkArrived` → `coreJudge`（能·没变动 / 能·有变动 / 不能）；有变动：`coreMarkUnable`、`coreSwapItem`（新结算单"计入尾款"）；`coreSettleBalance`：定金够 → 付清尾款并**确认行程**（KR 也可调分配，确认后锁定）；定金多 → KR 判断应退差额（`krJudge.refundDue`），IN 室长按此金额在系统里退（`settleKrBalance`），退后视为结清。不能施术：`coreRebook`（KR 在韩重新预约，回到时间已确认）或 `coreRefundDecision`（退定金 全部/不退，IN 按判断操作 `krRefundDeposit` → 仅出报告）。付尾款时（`finalizeInnCare`）印尼部分术后管理生成 `c.innCare`（待 IN 室长收印尼盾）：IN 点［已收款］（`confirmInnCare(true)`）才转成客人持有批次（`schedule` = 术后第 N 天）；［客人当下不买］不生成，之后回印尼当一般本地项目买。
+
+## 六 子项进行、回诊与结案
+`coreSubDone`：付清尾款后 KR 逐个标子项完成（施术子项带动项目完成）；**在韩国的子项（地点=韩国）全部完成 → 结案**（取代"施术完成 → 已结案"；地点=印尼/均可 的不挡结案）；没有整理 timeline 的案件可 `coreMarkAllDone`。回印尼的子项：`coreSubInform` 通知 IN 室长 → 通知点开预约弹窗（`openSubBookModal`/`confirmSubBook`），新案件自动关联原赴韩案件（来访目的 复诊/术后管理）。到院后加做项目：`coreAddOnItem`，KR 直接新增、另开新结算单（`addOn`，状态"韩国付款"，不进尾款，IN 只读，原结算单不动）。
+
+## 七 大盘卡片
+"术后管理待确认" → "timeline 待整理"（已付定金、没有 timeline）+ "今日在韩子项"（今天要做且没完成的子项）。
+
+## 八 删除的 IN 端模拟按钮/函数
+模拟KR确认首选/备选/无法安排（`simulateKrScheduleConfirmNew/RejectNew`）、确认新首选/新备选/无法确认（`…ChangeConfirm/ChangeReject`）、标记已到医院（`simulateKrMarkArrived`）、判断能否施术（`simulateKrJudge`/`submitKrJudge`）、标记无法施术（`simulateKrMarkUnable`/`submitKrUnable`）、更换项目（`simulateKrProjectSwap`）、付清尾款（`simulateKrMarkBalancePaid`）、标记完成（`simulateKrMarkDone`/`submitKrMarkDone`）、补加术后管理（`simulateKrAddPostCare`/`confirmPostCare`）、确认术后管理（`simulateKrConfirmPostCare`/`submitPostCareConfirm`）、KR 在韩重新预约（`krReschedule`）及 5 个弹窗。保留：IN 室长按 KR 判断操作的退款（退尾款差额、退定金，去掉"演示"字样）、「模拟时间超过预计」、对话/来电相关演示。
+
+## 九 演示数据
+H1 的 Fajar/Ayu 可选范围带麻醉、在韩时间、术后管理；Nadia = 在韩进行中（今天施术、有 timeline、已判断能施术）；Rina / Wulan = 已结案（子项全部完成）；Dinda（H2）已付定金没有 timeline。数据版本 20。
+
+## 我的判断（待确认）
+1. 地点=印尼/均可 的子项不挡结案；"均可"的子项 KR 可在标完成前改成韩国/印尼。
+2. 施术子项可关联项目；没关联的施术子项标完成时视为该案件所有未开始项目完成。
+3. 更换项目后原项目的术后管理不再计入（原项目 swapped，不算 `krActiveItems`）；更换的新项目没有术后管理资料。
+4. 回诊加做的项目不经过麻醉同意书、不进尾款计算（`krAddOn`），在韩国单独付款。
+5. 印尼部分术后管理的价格取来源诊所「术后管理」项目的单次价格（印尼盾）× 次数；收款 / 不买之后不能再改。
+6. 麻醉同意书只存在案件上，没有同步写进客户的同意书记录（等文案和版本规则）。
