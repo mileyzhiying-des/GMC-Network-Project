@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 16;
+var DEMO_DATA_VERSION = 17;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -824,7 +824,7 @@ var CASE_ITEMS = [
     ]}),
 
   /* 待付款：已确认所选管理项目、生成结算单，等待付款 */
-  makeCase({id:'fajar', name:'Fajar Nugroho', subState:'arrived', materialsConfirmed:true, caseNo:'A000007', updated:'2 小时前',
+  makeCase({id:'fajar', reportDate:D(-1), name:'Fajar Nugroho', subState:'arrived', materialsConfirmed:true, caseNo:'A000007', updated:'2 小时前',
     concern:'鼻基底低平', expectation:'希望鼻型更立体', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议先做假体隆鼻改善鼻基底，再评估鼻翼缩小。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
@@ -843,12 +843,12 @@ var CASE_ITEMS = [
     ]}),
 
   /* 赴韩施术中：已付款，韩国项目里还有未完成的 */
-  makeCase({id:'nadia', name:'Nadia Permata', subState:'arrived', materialsConfirmed:true, caseNo:'A000008', updated:'今天',
+  makeCase({id:'nadia', reportDate:D(-4), name:'Nadia Permata', subState:'arrived', materialsConfirmed:true, caseNo:'A000008', updated:'今天',
     concern:'轮廓松弛、法令纹', expectation:'希望紧致提升', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议颧骨缩小+下巴假体联合方案改善轮廓。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true,
-    krSchedule:{status:'confirmed', confirmedDate:D(2), confirmedTime:'10:00', primary:D(2), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
+    krSchedule:{status:'confirmed', confirmedDate:D(0), confirmedTime:'10:00', primary:D(0), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
       {name:'颧骨缩小', origin:'KR', done:false, batchId:'B1'},
       {name:'下巴假体 / 颏成形', origin:'KR', done:true, batchId:'B1'}
@@ -4156,14 +4156,18 @@ function initHospitalData(){
       directors: DIRECTOR_INFO.map(function(d, i){ return {id:'H1-D'+(i+1), name:d.name, active:d.active}; }),
       coordinators: KR_COORDINATORS.slice(),
       openDates: {'김민석 원장': KR_OPEN_DATES.slice(), '이수진 원장': dayList([2,3,4,5,11,12,18,19,25,26,32,33,39,40]), '박지훈 원장': []},
-      directorSchedule: KR_DIRECTOR_SCHEDULE, coordSchedule: KR_COORD_SCHEDULE, projects:[], libCases:[]
+      directorSchedule: KR_DIRECTOR_SCHEDULE, coordSchedule: KR_COORD_SCHEDULE, projects:[], libCases:[],
+      offs: [{date:D(0), who:'이수진 원장', kind:'director', note:'休假'}, {date:D(0), who:'박준혁 실장', kind:'coord', note:'调休'}, {date:D(1), who:'김민석 원장', kind:'director', note:'学会'}],
+      dayConfirm: {}, reportRead: {}
     },
     H2:{
       directors: [{id:'H2-D1', name:'박서윤 원장', active:true}, {id:'H2-D2', name:'최지호 원장', active:true}, {id:'H2-D3', name:'한도윤 원장', active:false}],
       coordinators: ['정하늘', '최민준'],
       openDates: {'박서윤 원장': dayList([1,3,4,8,9,15,16,22,23,29,30,36]), '최지호 원장': dayList([2,3,5,6,12,13,19,20,26,27,33]), '한도윤 원장': []},
       directorSchedule: {'박서윤 원장':[{date:D(0), time:'10:00', title:'手术'}, {date:D(0), time:'10:30', title:'手术'}], '최지호 원장':[{date:D(1), time:'14:00', title:'面诊'}], '한도윤 원장':[]},
-      coordSchedule: [{date:D(0), time:'09:30', title:'정하늘：与 IN 室长对接'}, {date:D(1), time:'11:00', title:'최민준：报告提交'}], projects:[], libCases:[]
+      coordSchedule: [{date:D(0), time:'09:30', title:'정하늘：与 IN 室长对接'}, {date:D(1), time:'11:00', title:'최민준：报告提交'}], projects:[], libCases:[],
+      offs: [{date:D(0), who:'최지호 원장', kind:'director', note:'外出'}],
+      dayConfirm: {}, reportRead: {}
     }
   };
 }
