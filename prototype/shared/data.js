@@ -2570,7 +2570,7 @@ function generateSettlementBatch(c){
   var newItems = c.recommended.map(function(it){ return Object.assign({}, it, {done:false, batchId:batchId}); });
   c.settlementBatches = c.settlementBatches || [];
   c.settlementBatches.push({id:batchId, afterReport:!!c.reportReady, orderedBy:actingName(), settledBy:'客人', time:nowFullDt(), status:'unpaid',
-    krTotal:b.krTotal, krDeposit:b.krDeposit, krBalance:b.krBalance, inTotal:b.inTotal});
+    krTotal:b.krTotal, krDeposit:b.krDeposit, krBalance:b.krBalance, krProvisional:b.krProvisional||0, inTotal:b.inTotal});
   c.procedureItems = (c.procedureItems||[]).concat(newItems);
   c.settleTab = null; /* 新结算单：默认打开最新一张 */
   c.recommended = [];
@@ -2622,12 +2622,12 @@ function projectPickerHtml(c, isAddition){
       var scopeNote = scope.overallNote ? '<div style="font-size:12px;color:var(--slate2);background:var(--terracotta-bg);border-radius:8px;padding:10px 12px;margin-bottom:12px;">KR室长整体备注：'+scope.overallNote+'</div>' : '';
       var catalog = scope.items.map(function(si){
         var p = PROJECT_LIBRARY.filter(function(x){ return x.name===si.name; })[0];
-        return p ? Object.assign({}, p, {krNote:si.note}) : null;
+        return p ? Object.assign({}, p, {krNote:si.note, krMeta:itemMetaText(si)}) : null;
       }).filter(function(p){ return p && p.origin==='KR'; }); /* 赴韩tab只取krScope里origin=KR的，术后管理(IN)另在本地tab处理 */
       if(q) catalog = catalog.filter(function(p){ return p.name.toLowerCase().indexOf(q)>-1; });
       leftRows = scopeNote + (catalog.map(function(p){
         var checked = selected.some(function(it){ return it.projectId===p.id; });
-        var noteHtml = p.krNote ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+p.krNote+'</div>' : '';
+        var noteHtml = (p.krNote ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+p.krNote+'</div>' : '')+((p.krMeta||[]).length ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;line-height:1.6;">'+p.krMeta.join('<br>')+'</div>' : '');
         return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
           '<input type="checkbox" onchange="toggleProject(\''+p.id+'\')" '+(checked?'checked':'')+' style="margin-top:2px;">'+
           '<span style="flex-grow:1;">'+p.name+projCasesLinkHtml(p.id)+noteHtml+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
@@ -2773,9 +2773,34 @@ function latestUnpaidBatch(c){
   return null;
 }
 
+/* 术后管理分配改了（付尾款前）：重算所在结算单的合计；定金不变（可弹性的不算进定金） */
+function recomputeBatch(c, batchId){
+  var b = (c.settlementBatches||[]).filter(function(x){ return x.id===batchId; })[0]; if(!b || b.noDeposit) return;
+  var bd = computeBatchBreakdown((c.procedureItems||[]).filter(function(it){ return it.batchId===batchId && it.origin==='KR' && !it.cancelled && !it.swapped; }));
+  b.krTotal = bd.krTotal; b.krBalance = bd.krTotal - b.krDeposit; b.krProvisional = bd.krProvisional;
+}
+function setPcAlloc(projectId, batchId, i, v){
+  var c = getCurrentCase(); if(!c || !pcAllocEditable(c)) return;
+  var it = batchId ? (c.procedureItems||[]).filter(function(x){ return x.projectId===projectId && x.batchId===batchId; })[0] : (c.recommended||[]).filter(function(x){ return x.projectId===projectId; })[0];
+  var x = it && it.postcare && it.postcare[i]; if(!x || x.place!=='either' || !x.innName) return;
+  var old = x.inTimes||0; x.inTimes = Math.max(0, Math.min(x.times, parseInt(v,10)||0));
+  if(batchId){ recomputeBatch(c, batchId); if(old!==x.inTimes) logCaseEvent(c, actingName(), '术后管理分配：'+it.name+'·'+x.name+' 印尼 '+old+' → '+x.inTimes+' 次（韩国 '+(x.times-x.inTimes)+' 次）'); buildCaseLog(c); }
+  renderCaseBody(c);
+}
+var SETTLE_ANES_SIGNED = false;
+function toggleAnesSign(on){ SETTLE_ANES_SIGNED = !!on; var b = document.getElementById('settle-pay-btn'); if(b){ b.disabled = !on; b.style.opacity = on ? '' : '.5'; } }
 function confirmSettlementPayment(){
   var c = getCurrentCase(); if(!c) return;
   var batch = (c.settlementBatches||[]).filter(function(b){ return b.id===SETTLE_MODAL_BATCH_ID; })[0]; if(!batch) return;
+  /* 付定金前必须签署麻醉同意书（没签不能付） */
+  var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; });
+  var need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
+  if(need.length){
+    if(!SETTLE_ANES_SIGNED){ alert('请先签署麻醉同意书，才能付定金'); return; }
+    var prev = (c.anesthesiaConsent && c.anesthesiaConsent.projects) || [];
+    c.anesthesiaConsent = {version:ANES_CONSENT_VERSION, ts:nowFullDt(), by:actingName(), projects:prev.concat(anesItemsOf(batchKr).map(function(a){ return {name:a.name, type:a.type, label:a.label, note:a.note}; }))};
+    logCaseEvent(c, actingName(), '客人签署麻醉同意书（'+ANES_CONSENT_VERSION+'）：'+need.map(function(a){ return a.name+'：'+a.label; }).join('、'));
+  }
   batch.status = 'active';
   c.settlementDone = true; /* 一旦付过一次款就一直是 true；加项后新批次单独走 unpaid→active，不影响这个总开关 */
   var today = nowFullDt().split(' ')[0];

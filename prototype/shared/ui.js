@@ -1846,6 +1846,10 @@ function toggleProject(projectId){
   } else {
     var p = projById(projectId); if(!p) return;
     var item = {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId};
+    if(p.origin==='KR'){ /* 带上 KR 写在可选范围里的项目资料：麻醉特性、推荐在韩时间、所需术后管理（分配默认全部在韩国） */
+      var si = ((c.krScope && c.krScope.items) || []).filter(function(x){ return x.name===p.name; })[0];
+      if(si){ if(si.anesthesia) item.anesthesia = si.anesthesia; if(si.stay) item.stay = si.stay; if(si.postcare && si.postcare.length) item.postcare = si.postcare.map(function(x){ return Object.assign({}, x, {inTimes:0}); }); }
+    }
     if(p.origin==='IN'){ item.qty = 1; item.discountPct = 100; item.itemNote = ''; } /* 个数/折扣/备注，2026-09-29 第十轮新增，只有本地项目有 */
     c.recommended.push(item);
   }
@@ -1868,7 +1872,7 @@ function settleProjects(batchId){
   var rows = '';
   if(batch.krTotal){
     rows += '<div><div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:6px;">赴韩项目（收预付金，尾款赴韩后支付）</div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>项目小计</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>项目小计（含术后管理的韩国部分）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px;"><span>预付金（'+Math.round(KR_DEPOSIT_RATE*100)+'%）</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后支付）</span><span>'+formatCurrency(batch.krBalance,'KRW')+'</span></div></div>';
   }
@@ -1880,7 +1884,15 @@ function settleProjects(batchId){
   if(batch.krDeposit) payLines.push('<div style="display:flex;justify-content:space-between;"><span>赴韩本次应付</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>');
   if(batch.inTotal) payLines.push('<div style="display:flex;justify-content:space-between;"><span>本地本次应付</span><span>'+formatCurrency(batch.inTotal,'IDR')+'</span></div>');
   rows += '<div style="border-top:1px solid var(--border);padding-top:14px;font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:6px;"><span style="font-size:13px;color:var(--muted);font-weight:400;">本次合计应付（两种币种分开支付，不合并）</span>'+payLines.join('')+'</div>';
-  rows += '<button class="btn-primary" onclick="confirmSettlementPayment()">确认付款</button>';
+  var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; }), need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
+  SETTLE_ANES_SIGNED = false;
+  if(batch.krProvisional) rows += '<div style="font-size:12px;color:var(--muted);">其中可弹性术后管理 '+formatCurrency(batch.krProvisional,'KRW')+' 为暂定，不算进定金，付尾款前可在项目卡上调整韩国 / 印尼分配。</div>';
+  if(need.length){
+    rows += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#FBF6EA;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">麻醉同意书 <span style="font-weight:400;font-size:11px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
+      '<div style="font-size:12px;color:var(--slate2);line-height:1.8;">（文案待撰写，演示占位）客人已了解下列项目的麻醉方式并同意：<br>'+need.map(function(a){ return '· '+a.name+'：<b>'+a.label+'</b>'+(a.note?'（'+a.note+'）':''); }).join('<br>')+'</div>'+
+      '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleAnesSign(this.checked)"> 客人已签署麻醉同意书（记录版本和时间）</label></div>';
+  }
+  rows += '<button class="btn-primary" id="settle-pay-btn" onclick="confirmSettlementPayment()"'+(need.length ? ' disabled style="opacity:.5;"' : '')+'>确认付款</button>';
   document.getElementById('settle-breakdown').innerHTML = rows;
   document.getElementById('settle-overlay').classList.add('open');
 }

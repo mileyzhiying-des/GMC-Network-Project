@@ -231,13 +231,12 @@ function settlementBigCardHtml(c, items, removable){
   }
   var krCard = '';
   if(krItems.length){
-    var krTotal = krItems.reduce(function(s,it){ return s+it.price; },0);
-    var krDeposit = Math.round(krTotal*KR_DEPOSIT_RATE);
+    var bd = computeBatchBreakdown(krItems), krTotal = bd.krTotal, krDeposit = bd.krDeposit;
     krCard = '<div style="border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:8px;">赴韩项目</div>'+
-      krItems.map(function(it){ return settlementItemRow(c, it, removable); }).join('')+
+      krItems.map(function(it){ return settlementItemRow(c, it, removable)+pcLinesHtml(c, it); }).join('')+
       '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;"><span>合计</span><span style="font-weight:700;">'+formatCurrency(krTotal,'KRW')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（'+Math.round(KR_DEPOSIT_RATE*100)+'%，比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（'+Math.round(KR_DEPOSIT_RATE*100)+'% ×（施术项目 + 必须在韩国的术后管理），比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
       noteFieldHtml('备注（KR + IN 可见）','noteKR',c.noteKR)+
       '</div>';
   }
@@ -267,7 +266,7 @@ function krBalanceInfo(c){
   (c.settlementBatches||[]).forEach(function(b){ if(b.status==='active') deposit += b.krDeposit||0; });
   var preRefund = (c.refunds||[]).filter(function(r){ return !r.afterArrival && (r.currency||'KRW')==='KRW'; }).reduce(function(sum,r){ return sum + (r.amount||0); }, 0);
   var effDeposit = deposit - preRefund; /* 仍留在诊所、可抵尾款的定金 */
-  var total = krActiveItems(c).reduce(function(sum,it){ return sum + (it.price||0); }, 0); /* 实际要做的项目合计（不含已取消/已更换） */
+  var total = krActiveItems(c).reduce(function(sum,it){ return sum + itemKrAmount(it); }, 0); /* 实际要做的项目合计（不含已取消/已更换） */
   return {deposit:deposit, preRefund:preRefund, effDeposit:effDeposit, total:total, diff:total-effDeposit}; /* diff>0 补尾款；diff<0 退差额 */
 }
 
@@ -282,18 +281,25 @@ function settleKrBalance(){
 }
  /* 赴韩项目收预付金比例，演示先用30%，具体比例待业务确认 */
 /* items 现在是快照数组（自带 price/origin），不用再回查项目库；本地项目按个数+折扣算总价（2026-09-29 第十轮新增） */
+/* 赴韩项目的术后管理（2026-10-06，KR-CASE-02）：it.postcare = [{name, price(韩元/次), times, place:'KR'|'either', day, innName, innPrice(印尼盾/次), inTimes}]
+   place='KR' 必须在韩国做；'either' 韩国或印尼都可，由 IN 室长分配（inTimes = 分给印尼的次数，其余在韩国），付尾款前都可以改
+   定金 =（施术项目 + 必须在韩国的术后管理）× 比例；可弹性的先"暂定"，不算进定金（所以分配改变不影响定金） */
+function pcSplit(x){ var inn = (x.place==='either' && x.innName) ? Math.min(x.times, Math.max(0, x.inTimes||0)) : 0; return {kr:x.times-inn, inn:inn}; }
+function itemKrParts(it){ var must = 0, elastic = 0; (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='KR') must += (x.price||0)*x.times; else elastic += (x.price||0)*s.kr; }); return {base:it.price||0, must:must, elastic:elastic}; }
+function itemKrAmount(it){ var p = itemKrParts(it); return p.base + p.must + p.elastic; } /* 这个赴韩项目在韩国要付的合计（含术后管理的韩国部分） */
+function itemInnAmount(it){ var t = 0; (it.postcare||[]).forEach(function(x){ t += (x.innPrice||0)*pcSplit(x).inn; }); return t; } /* 分给印尼的术后管理（印尼盾） */
 function computeBatchBreakdown(items){
-  var krItems = [], inItems = [], krTotal = 0, inTotal = 0;
+  var krItems = [], inItems = [], krTotal = 0, inTotal = 0, krFixed = 0, krProvisional = 0;
   items.forEach(function(it){
-    if(it.origin==='KR'){ krItems.push(it); krTotal += it.price; }
+    if(it.origin==='KR'){ krItems.push(it); var pp = itemKrParts(it); krTotal += pp.base + pp.must + pp.elastic; krFixed += pp.base + pp.must; krProvisional += pp.elastic; }
     else {
       inItems.push(it);
       var qty = it.qty||1, pct = (it.discountPct===undefined||it.discountPct===null) ? 100 : it.discountPct;
       inTotal += Math.round(it.price*qty*pct/100);
     }
   });
-  var krDeposit = Math.round(krTotal * KR_DEPOSIT_RATE);
-  return {krItems:krItems, krTotal:krTotal, krDeposit:krDeposit, krBalance:krTotal-krDeposit, inItems:inItems, inTotal:inTotal};
+  var krDeposit = Math.round(krFixed * KR_DEPOSIT_RATE);
+  return {krItems:krItems, krTotal:krTotal, krDeposit:krDeposit, krBalance:krTotal-krDeposit, krFixed:krFixed, krProvisional:krProvisional, inItems:inItems, inTotal:inTotal};
 }
  /* 会被 nearestOpenMonth()/修改日期时的原定月份实时覆盖，这里只是初值 */
 function fmtDateYMD(y,m,d){
@@ -463,4 +469,38 @@ function krCaseVisible(c, hid){
   if(!c || c.hospitalId !== hid) return false;
   if(c.consultFeeWaived || c.reportReady || c.reuseReport) return true;
   return !!c.consultRequested && ['paid_waiting_kr','awaiting_report','report_ready'].indexOf(c.consultStatus) > -1;
+}
+
+
+/* ---- 赴韩项目资料与术后管理分配（2026-10-06，KR-CASE-02 第 1、2 节） ---- */
+var ANES_LABEL = {local:'局部麻醉', sleep:'睡眠麻醉', general:'全身麻醉'};
+/* 项目资料一行小字：麻醉特性、推荐在韩时间、所需术后管理（KR 写报告时填的） */
+function itemMetaText(it){
+  var bits = [];
+  if(it.anesthesia) bits.push('麻醉：'+it.anesthesia.label+(it.anesthesia.note?'（'+it.anesthesia.note+'）':''));
+  if(it.stay) bits.push('推荐在韩：'+it.stay);
+  (it.postcare||[]).forEach(function(x){ bits.push('术后管理：'+x.name+' × '+x.times+'（'+(x.place==='KR'?'必须在韩国':'韩国或印尼都可')+(x.day?'，'+x.day:'')+'）'); });
+  return bits;
+}
+function pcAllocEditable(c){ return !c.krBalancePaid && !isEnded(c); } /* 付尾款前都可以改 */
+/* 已选 / 结算单里每个赴韩项目下面的术后管理行：显示韩国 n + 印尼 m；可弹性的（且有印尼对应项目）IN 室长可调 */
+function pcLinesHtml(c, it){
+  if(!(it.postcare||[]).length) return '';
+  var editable = pcAllocEditable(c) && !it.cancelled && !it.swapped, bid = it.batchId || '';
+  return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);">'+it.postcare.map(function(x, i){
+    var s = pcSplit(x), amt = (x.price||0)*s.kr, head = x.name+'（韩元 '+formatCurrency(x.price||0,'KRW')+'/次'+(x.day?'，'+x.day:'')+'）';
+    if(x.place==='KR') return '<div style="margin:3px 0;">'+head+'：韩国 '+x.times+' 次，必须在韩国 · '+formatCurrency(amt,'KRW')+'（计入定金）</div>';
+    var ctl = (editable && x.innName)
+      ? '印尼 <input type="number" min="0" max="'+x.times+'" value="'+s.inn+'" onchange="setPcAlloc(\''+it.projectId+'\',\''+bid+'\','+i+',this.value)" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;font-size:11px;"> 次'
+      : '印尼 '+s.inn+' 次'+(x.innName ? '' : '（没有印尼对应项目，只能在韩国）');
+    return '<div style="margin:3px 0;">'+head+'：韩国 '+s.kr+' 次 + '+ctl+' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;font-size:10px;">暂定</span> · 韩国部分 '+formatCurrency(amt,'KRW')+(s.inn ? '，印尼部分 '+formatCurrency((x.innPrice||0)*s.inn,'IDR')+'（'+x.innName+'）' : '')+'</div>';
+  }).join('')+'</div>';
+}
+/* 麻醉同意书（占位文案，等用户撰写；记录版本 + 签署时间存在案件上） */
+var ANES_CONSENT_VERSION = 'v0.1（占位文案）';
+function anesItemsOf(items){ return (items||[]).filter(function(it){ return it.origin==='KR' && it.anesthesia; }).map(function(it){ return {name:it.name, type:it.anesthesia.type, label:it.anesthesia.label, note:it.anesthesia.note||''}; }); }
+function anesNeeded(c, items){
+  var list = anesItemsOf(items); if(!list.length) return [];
+  var signed = (c.anesthesiaConsent && c.anesthesiaConsent.projects) || [];
+  return list.filter(function(a){ return !signed.some(function(s){ return s.name===a.name && s.type===a.type; }); });
 }
