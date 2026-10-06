@@ -6,7 +6,9 @@
    ④ 客人端查看/取消/重新预约  ?view=Case编号（确认/提醒短信里的网址）→ 手机验证 → 预约信息、［取消预约］、［重新预约］
    语言：印尼文 / 中文（右上角切换，记在浏览器里，词典在 i18n.js 的 BOOK_DICT）。规则和数据函数在 data.js（submitSelfBooking 等）。 */
 var BK = null;
-var BK_STEPS = ['time','phone','profile','purpose','health','consent','confirm'];
+/* 新客人 9 步：选时间 → 验证手机 → 个人资料 → 来访目的 → 病史/过敏史 → 医美史（可跳过）→ 同意 → 确认提交 → 完成
+   老客人：选时间 → 验证手机 → 来访目的 → 医美史（可跳过）→（同意书版本更新过才有同意）→ 确认提交 → 完成（跳过个人资料和病史/过敏史） */
+var BK_STEPS = ['time','phone','profile','purpose','health','beauty','consent','confirm'];
 
 function bkH(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function bkDayLabel(ds){
@@ -71,7 +73,7 @@ function bkNav(nextHandler, showBack){
 }
 function bkRenderStep(){
   var s = BK_STEPS[BK.step];
-  var fn = {time:bkStepTime, phone:window.bkStepPhone, profile:window.bkStepProfile, purpose:window.bkStepPurpose, health:window.bkStepHealth, consent:window.bkStepConsent, confirm:window.bkStepConfirm}[s];
+  var fn = {time:bkStepTime, phone:window.bkStepPhone, profile:window.bkStepProfile, purpose:window.bkStepPurpose, health:window.bkStepHealth, beauty:window.bkStepBeauty, consent:window.bkStepConsent, confirm:window.bkStepConfirm}[s];
   return fn ? fn() : '';
 }
 
@@ -181,12 +183,15 @@ function bkStepPurpose(){
 }
 function bkPickPurpose(p){ BK.f.purpose = p; bkRender(); }
 
-/* ---- 第 5 步：健康资料（病史/过敏史、过往医美史；老客人显示上次填的） ---- */
+/* ---- 病史 / 过敏史（只有新客人；老客人跳过，有变化由室长到店时修改） ---- */
 function bkStepHealth(){
   var f = BK.f;
-  return bkFrame('s.health', (BK.client ? '<div class="bk-info">'+bt('health.prev')+'</div>' : '')+
-    bkField(bt('health.history'), '<textarea rows="3" placeholder="'+bkH(bt('health.ph'))+'" oninput="bkSet(\'history\',this.value)">'+bkH(f.history)+'</textarea>')+
-    bkField(bt('health.beauty'), '<textarea rows="3" placeholder="'+bkH(bt('health.ph'))+'" oninput="bkSet(\'beautyHistory\',this.value)">'+bkH(f.beautyHistory)+'</textarea>')+bkNav('bkNextStep()', true));
+  return bkFrame('s.health', bkField(bt('health.history'), '<textarea rows="4" placeholder="'+bkH(bt('health.ph'))+'" oninput="bkSet(\'history\',this.value)">'+bkH(f.history)+'</textarea>')+bkNav('bkNextStep()', true));
+}
+
+/* ---- 医美史（可跳过，新老客人都有；一笔一行，见下面"医美史"部分） ---- */
+function bkStepBeauty(){
+  return bkFrame('s.beauty', '<div class="bk-info">'+bt('beauty.hint')+'</div>'+bkNav('bkNextStep()', true));
 }
 
 /* ---- 第 6 步：同意（隐私政策 + 两项必勾；记录同意书版本 + 时间） ---- */

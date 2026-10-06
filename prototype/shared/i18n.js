@@ -147,6 +147,8 @@ var BOOK_DICT = {
   'health.beauty':{id:'Riwayat tindakan estetik sebelumnya', zh:'过往医美史'},
   'health.ph':   {id:'Tulis "tidak ada" jika tidak ada', zh:'没有请写"无"'},
   /* 6 同意 */
+  's.beauty':    {id:'Riwayat estetik', zh:'医美史'},
+  'beauty.hint': {id:'Boleh dikosongkan. Menuliskan pengalaman tindakan estetik Anda membantu dokter menilai dengan lebih akurat dan memberi saran yang lebih tepat.', zh:'没有可以不填。填写过往的医美经历，可以帮助医生更准确地评估，为您提供更合适的建议。'},
   's.consent':   {id:'Persetujuan', zh:'同意'},
   'consent.policy':{id:'Kebijakan privasi (versi {v})', zh:'隐私政策（版本 {v}）'},
   'consent.c1':  {id:'Saya menyetujui pengumpulan data pribadi saya.', zh:'我同意收集我的个人资料。'},
