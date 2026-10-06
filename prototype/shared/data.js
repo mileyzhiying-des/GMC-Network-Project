@@ -2932,6 +2932,65 @@ function simulateKrScheduleRejectNew(){
   renderCaseBody(c);
 }
 
+/* ---- KR 端施术预约操作（2026-10-06，KR-CASE-02 第 3 节）：不碰界面，KR 页面在 Store.mutateClinic 里调用 ----
+   krSchedule 新增字段：address（到院地址）、rejectNote（KR 无法安排的原因，IN 重新选日期时显示）；confirmedTime = 到院时间 */
+/* 确认施术时间后自动在该院长日程加一个"施术"块（关联案件、来源诊所）；时间或地址调整时同步（KR-SCHD-01） */
+function syncSurgeryBlock(c){
+  var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid]; if(!h || !c.director) return;
+  h.directorSchedule = h.directorSchedule || {};
+  var arr = (h.directorSchedule[c.director] = h.directorSchedule[c.director] || []);
+  for(var i = arr.length-1; i >= 0; i--){ if(arr[i].kind==='施术' && arr[i].caseId===c.id && arr[i].clinicId===c.clinicId) arr.splice(i, 1); }
+  var ks = c.krSchedule;
+  if(ks && (ks.status==='confirmed' || ks.status==='change_pending' || ks.status==='arrived') && ks.confirmedDate){
+    arr.push({date:ks.confirmedDate, time:ks.confirmedTime||'09:00', title:'施术', kind:'施术', caseId:c.id, clinicId:c.clinicId, name:c.name});
+  }
+}
+function coreScheduleConfirm(c, date, time, address, by){
+  var ks = c.krSchedule; if(!ks || ks.status!=='pending') return false;
+  ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||''; ks.rejectNote = '';
+  logCaseEvent(c, by, 'KR确认施术时间：'+date+' '+time+' 到院'+(address?'，地址：'+address:''));
+  pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+date+' '+time+(address?'（'+address+'）':''), {caseId:c.id});
+  syncSurgeryBlock(c); updateCaseStage(c);
+  return true;
+}
+function coreScheduleReject(c, reason, by){
+  var ks = c.krSchedule; if(!ks || ks.status!=='pending') return false;
+  ks.status = null; ks.primary = ''; ks.backup = ''; ks.rejectNote = reason;
+  logCaseEvent(c, by, 'KR无法安排所选日期：'+reason+'（请 IN 重新选日期）');
+  pushNotif('赴韩施术','KR 无法安排施术日期：'+c.name+'（'+reason+'），请重新选择', {caseId:c.id});
+  updateCaseStage(c);
+  return true;
+}
+/* 时间已确认：同一天之内调整到院时间和地址（不能改日期） */
+function coreScheduleAdjust(c, time, address, by){
+  var ks = c.krSchedule; if(!ks || ks.status!=='confirmed') return false;
+  var oldT = ks.confirmedTime, oldA = ks.address||'';
+  ks.confirmedTime = time; ks.address = address||'';
+  logCaseEvent(c, by, 'KR调整到院时间/地址：'+oldT+' → '+time+(oldA!==ks.address ? '；地址：'+(oldA||'—')+' → '+(ks.address||'—') : ''));
+  pushNotif('赴韩施术','KR 调整了到院时间/地址：'+c.name+'（'+ks.confirmedDate+' '+time+(ks.address?'，'+ks.address:'')+'）', {caseId:c.id});
+  syncSurgeryBlock(c);
+  return true;
+}
+/* 改期待确认：确认新时间 */
+function coreChangeConfirm(c, date, time, address, by){
+  var ks = c.krSchedule; if(!ks || ks.status!=='change_pending' || !ks.changeSubmitted) return false;
+  var oldD = ks.confirmedDate;
+  ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||ks.address||'';
+  ks.changePrimary = ''; ks.changeBackup = ''; ks.changeSubmitted = false; ks.rejectNote = '';
+  logCaseEvent(c, by, 'KR确认新施术时间：'+oldD+' → '+date+' '+time);
+  pushNotif('赴韩施术','KR 确认新施术时间：'+c.name+' '+date+' '+time, {caseId:c.id});
+  syncSurgeryBlock(c); updateCaseStage(c);
+  return true;
+}
+/* 改期无法安排：原日期继续有效 */
+function coreChangeReject(c, reason, by){
+  var ks = c.krSchedule; if(!ks || ks.status!=='change_pending' || !ks.changeSubmitted) return false;
+  ks.changePrimary = ''; ks.changeBackup = ''; ks.changeSubmitted = false; ks.rejectNote = reason;
+  logCaseEvent(c, by, 'KR无法安排新日期：'+reason+'（原日期 '+ks.confirmedDate+' 继续有效）');
+  pushNotif('赴韩施术','KR 无法安排新日期：'+c.name+'（'+reason+'），原日期 '+ks.confirmedDate+' 继续有效', {caseId:c.id});
+  return true;
+}
+
 /* 确认后修改日期：施术前2周内置灰不可点；月历默认打开原定日期所在月份（2026-09-29 第十轮修复） */
 function startKrScheduleChange(){
   var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='confirmed') return;
@@ -3022,7 +3081,7 @@ function krProcedureTabHtml(c){
     var canModify = ks && ks.status==='confirmed' && !isWithin2WeeksOfToday(ks.confirmedDate) && !c.hasArrived;
     if(st==='Draft'){
       ks = ensureKrScheduleDraft(c);
-      body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
+      body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">只能选择KR室长已开放的日期（浅色为未开放）</div>'+
         monthNav+
         '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">第一次点击选首选，第二次点击选备选，再点一次已选日期取消选择</div>'+
@@ -3038,7 +3097,7 @@ function krProcedureTabHtml(c){
         '</div>';
     } else if(st==='Confirmed'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
-        '<div class="card" style="padding:14px 16px;margin-bottom:14px;">施术日期 '+ks.confirmedDate+' '+ks.confirmedTime+'，请转告客人</div>'+
+        '<div class="card" style="padding:14px 16px;margin-bottom:14px;">施术日期 '+ks.confirmedDate+'，到院时间 '+ks.confirmedTime+(ks.address?'，地址：'+ks.address:'')+'，请转告客人'+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+
         (c.hasArrived
           ? '<div style="font-size:12px;color:var(--terracotta);margin-bottom:12px;">KR 已在韩国重新预约施术时间；到过医院之后 IN 端不能再修改日期或取消项目，客人再到医院时由 KR 重新标记"已到医院"</div>'
           : '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">'+

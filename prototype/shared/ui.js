@@ -1903,7 +1903,7 @@ function submitKrScheduleDate(){
   var c = getCurrentCase(); if(!c) return;
   var ks = ensureKrScheduleDraft(c);
   if(!ks.primary){ alert('至少选择首选日期'); return; }
-  ks.status = 'pending';
+  ks.status = 'pending'; ks.rejectNote = '';
   logCaseEvent(c, ME_NAME, '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'），等待Kr室长确认');
   updateCaseStage(c);
   buildCaseLog(c);
