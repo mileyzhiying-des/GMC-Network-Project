@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 18;
+var DEMO_DATA_VERSION = 19;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -1419,7 +1419,7 @@ function coreJudgeContinuation(c, changed, by){
 function coreAddScopeItem(c, item, by){
   if(!c || !c.reportReady || c.stage!=='consult' || !c.krScope) return false;
   if(c.krScope.items.some(function(it){ return it.name===item.name; })) return false;
-  c.krScope.items.push({name:item.name, price:item.price, note:item.note||''});
+  c.krScope.items.push(Object.assign({}, item, {note:item.note||''}));
   c.krScope.updatedAt = nowFullDt();
   logCaseEvent(c, by, 'KR室长补加可选项目："'+item.name+'"');
   pushNotif('面诊','KR 补加了可选项目：'+c.name+'（'+item.name+'）', {caseId:c.id});
@@ -3451,6 +3451,9 @@ function addProjCategory(label, origin){
 var PCAT = {};
  // 建种子数据时临时存 label->id，方便下面 PROJECT_LIBRARY 直接引用
 ['眼部','鼻部','轮廓','面部年轻化','胸部','身体'].forEach(function(l){ PCAT[l] = addProjCategory(l, 'KR'); });
+/* 「韩国术后管理」分类（2026-10-06，KR 端系列 4/5）：特殊标记 postcare:true——只在 KR 写报告选所需术后管理时用，IN 项目选择里不出现，案例库按部位没有案例所以也不显示 */
+PCAT['韩国术后管理'] = addProjCategory('韩国术后管理', 'KR'); PROJECT_CATEGORIES[PCAT['韩国术后管理']].postcare = true;
+function isKrPostcareCat(id){ var c = PROJECT_CATEGORIES[id] || KR_CATEGORIES[id]; return !!(c && c.postcare); }
 
 ['提升','脱发','去除色素','脱毛','填充','水光','黄金微针','术后管理'].forEach(function(l){ PCAT[l] = addProjCategory(l, 'IN'); });
 
@@ -4202,6 +4205,10 @@ function buildClinicViews(inProjects, inCases, inCats){
 }
 /* H2（강남 뷰티의원）的赴韩项目和案例；C1 的几个案件改成属于 H2（名字按 H2 的人换掉） */
 function seedHospitalH2(){
+  /* 两家医院各自的「韩国术后管理」项目（韩元，演示数据；价格两家不同） */
+  [['H1',[['术后消肿管理',150000],['拆线',50000],['术后复诊检查',80000],['伤口护理',100000]]], ['H2',[['术后消肿管理',180000],['拆线',60000],['术后复诊检查',90000],['伤口护理',120000]]]].forEach(function(r){
+    r[1].forEach(function(x){ var p = makeProj(x[0], x[1], 'KR', '韩国术后管理', r[0]); p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')}; PROJECT_LIBRARY.push(p); });
+  });
   [['切开双眼皮',2200000,'眼部'],['埋线双眼皮',1200000,'眼部'],['双眼皮修复',3500000,'眼部'],['假体隆鼻',3000000,'鼻部'],['鼻综合（假体+鼻尖）',5800000,'鼻部'],
    ['颧骨缩小',8500000,'轮廓'],['下颌角整形',9500000,'轮廓'],['面部提升线雕',6000000,'面部年轻化'],['自体脂肪移植（全脸）',5000000,'面部年轻化']].forEach(function(r){
     var p = makeProj(r[0], r[1], 'KR', r[2], 'H2');
