@@ -56,7 +56,8 @@ function bkNeedConsent(){ var last = bkLastConsent(); return !last || last.versi
 function bkSkipStep(s){ return (s==='time' && BK.entry==='walkin') || (s==='phone' && BK.verified) || ((s==='profile' || s==='health') && !!BK.client) || (s==='consent' && !bkNeedConsent()); }
 function bkStepList(){ return BK_STEPS.filter(function(s){ return !bkSkipStep(s); }); }
 function bkFrame(titleKey, bodyHtml){
-  var list = bkStepList(), cur = list.indexOf(BK_STEPS[BK.step]);
+  /* 步骤条：已经验证过手机的仍然算一步（走过了）；被跳过的步骤（老客人的个人资料/病史、不需要的同意）不出现；取消后重新预约时手机早已验证，不算 */
+  var list = BK_STEPS.filter(function(x){ return x==='phone' ? !BK.f.rebookFrom : !bkSkipStep(x); }), cur = list.indexOf(BK_STEPS[BK.step]);
   var banner = '';
   if(BK.entry==='walkin') banner = '<div class="bk-info">'+bt('entry.walkin', {time:BK.f.time})+'</div>';
   else if(BK.entry==='link' && BK.step>0) banner = '<div class="bk-info">'+bt('entry.link', {time:bkTimeText(BK.f.date, BK.f.time)})+' · <a href="#" onclick="bkGo(0);return false;" style="color:var(--navy);font-weight:700;">'+bt('entry.change')+'</a></div>';
@@ -71,9 +72,8 @@ function bkFooter(err, buttonsHtml){
   return '<div class="bk-footer">'+(err ? '<div class="bk-err" style="margin:0 0 8px;">'+bkH(err)+'</div>' : '')+'<div class="bk-footer-row">'+buttonsHtml+'</div></div>';
 }
 function bkNav(nextHandler, showBack){
-  return (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+
-    '<button class="bk-btn" onclick="'+nextHandler+'">'+bt(nextHandler==='bkSubmit()' ? 'btn.submit' : 'btn.next')+'</button>'+
-    (showBack ? '<button class="bk-btn ghost" onclick="bkPrevStep()">'+bt('btn.back')+'</button>' : '');
+  return bkFooter(BK.err, (showBack ? '<button class="bk-btn ghost" onclick="bkPrevStep()">'+bt('btn.back')+'</button>' : '')+
+    '<button class="bk-btn" onclick="'+nextHandler+'">'+bt(nextHandler==='bkSubmit()' ? 'btn.submit' : 'btn.next')+'</button>');
 }
 function bkRenderStep(){
   var s = BK_STEPS[BK.step];
@@ -121,12 +121,10 @@ function bkStepPhone(){
   var o = BK.otp, locked = BK.phoneLocked;
   var body = bkField(bt('phone.label'), phoneInputHtml('bk-phone', BK.f.phone, {readonly:locked||o}))+
     (locked ? '<div class="bk-sub" style="margin-top:-6px;">'+bt('phone.locked')+'</div>' : '');
-  if(!o) body += (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+'<button class="bk-btn" onclick="bkSendCode()">'+bt('phone.send')+'</button>'+
-    (BK.step>0 && BK.entry!=='walkin' && !locked ? '<button class="bk-btn ghost" onclick="bkPrevStep()">'+bt('btn.back')+'</button>' : '');
+  if(!o) body += bkFooter(BK.err, (BK.step>0 && BK.entry!=='walkin' && !locked ? '<button class="bk-btn ghost" onclick="bkPrevStep()">'+bt('btn.back')+'</button>' : '')+'<button class="bk-btn" onclick="bkSendCode()">'+bt('phone.send')+'</button>');
   else body += '<div class="bk-demo">'+bt('phone.demo', {phone:bkH(BK.f.phone), code:o.code})+'</div>'+
     bkField(bt('phone.code'), '<input type="text" id="bk-code" inputmode="numeric" maxlength="6" onkeydown="if(event.key===\'Enter\')bkVerify()">')+
-    (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+
-    '<button class="bk-btn" onclick="bkVerify()">'+bt('phone.verify')+'</button><button class="bk-btn ghost" onclick="bkSendCode(true)">'+bt('phone.resend')+'</button>';
+    bkFooter(BK.err, '<button class="bk-btn ghost" onclick="bkSendCode(true)">'+bt('phone.resend')+'</button><button class="bk-btn" onclick="bkVerify()">'+bt('phone.verify')+'</button>');
   return bkFrame('s.phone', body);
 }
 function bkSendCode(resend){
@@ -156,7 +154,7 @@ function bkStepProfile(){
   var cl = BK.client, f = BK.f;
   if(BK.mismatch && cl){
     return bkFrame('s.profile', '<div class="bk-info" style="font-size:14px;color:var(--navy);">'+bt('mismatch.q', {reg:bkH(cl.name)})+'</div>'+
-      '<button class="bk-btn" onclick="bkMismatch(true)">'+bt('mismatch.yes')+'</button><button class="bk-btn ghost" onclick="bkMismatch(false)">'+bt('mismatch.no')+'</button>');
+      bkFooter('', '<button class="bk-btn ghost" onclick="bkMismatch(false)">'+bt('mismatch.no')+'</button><button class="bk-btn" onclick="bkMismatch(true)">'+bt('mismatch.yes')+'</button>'));
   }
   var body = (cl ? '<div class="bk-info">'+bt('profile.back')+'</div>' : '')+
     bkField(bt('profile.name'), bkInput('name','text','autocomplete="name"'))+
