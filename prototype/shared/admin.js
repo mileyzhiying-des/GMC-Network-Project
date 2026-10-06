@@ -393,3 +393,42 @@ ADMIN_RENDER.bizdata = function(el){
       '按案件 Timeline 里的操作记录统计，一个案件有多位室长操作时每人各算一件。')+
     '<div style="font-size:11px;color:var(--muted);">待讨论：具体要看哪些数字、是否要趋势图/导出（这是基础版）。</div>';
 };
+
+/* ================= 操作日志（老板、管理者；A8） =================
+   记录：购买 / 退订 / 重设 / 激活（换使用人）/ 诊所设定变更；显示时间、操作账号与当时使用人、内容。数据 ACCOUNT_LOG（logOp 写入）。 */
+var OPLOG_FILTER = {cat:'all', sub:'all', from:'', to:''};
+var OPLOG_SUBS = ['购买','退订','重设','激活'];
+/* 老数据没有 sub：按文字推断；分类：账号 / 设定变更 / 其他 */
+function oplogCat(l){ return l.type==='设定变更' ? 'setting' : (l.type==='账号管理' ? 'account' : 'other'); }
+function oplogSub(l){
+  if(l.sub) return l.sub;
+  var s = String(l.text||'');
+  return /购买|加购/.test(s) && !/取消|退订/.test(s) ? '购买' : /取消加购|退订/.test(s) ? '退订' : /重设/.test(s) ? '重设' : /激活/.test(s) ? '激活' : '';
+}
+function oplogSet(k, v){ OPLOG_FILTER[k] = v; if(k==='cat') OPLOG_FILTER.sub = 'all'; openAdminPage('oplog', true); }
+ADMIN_RENDER.oplog = function(el){
+  var f = OPLOG_FILTER;
+  var rows = ACCOUNT_LOG.filter(function(l){
+    if(f.cat!=='all' && oplogCat(l)!==f.cat) return false;
+    if(f.cat==='account' && f.sub!=='all' && oplogSub(l)!==f.sub) return false;
+    var d = String(l.ts||'').slice(0,10);
+    if(f.from && d < f.from) return false;
+    if(f.to && d > f.to) return false;
+    return true;
+  }).sort(function(a,b){ return String(b.ts).localeCompare(String(a.ts)); });
+  var chip = function(label, active, js){ return '<span class="chip'+(active?' active':'')+'" onclick="'+js+'">'+label+'</span>'; };
+  var cats = [['all','全部'],['account','账号'],['setting','设定变更'],['other','其他']];
+  var chips = cats.map(function(c){ return chip(c[1], f.cat===c[0], 'oplogSet(\'cat\',\''+c[0]+'\')'); }).join('');
+  var subs = f.cat==='account' ? '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--muted);">账号操作：</span>'+chip('全部', f.sub==='all', 'oplogSet(\'sub\',\'all\')')+OPLOG_SUBS.map(function(s){ return chip(s, f.sub===s, 'oplogSet(\'sub\',\''+s+'\')'); }).join('')+'</div>' : '';
+  var tableRows = rows.map(function(l){
+    var sub = oplogSub(l), tag = l.type==='设定变更' ? '设定变更' : (sub || l.type || '其他');
+    return '<div class="trow" style="grid-template-columns:1.1fr 1.3fr 0.8fr 4fr;align-items:flex-start;"><span style="color:var(--slate2);">'+aEsc(l.ts)+'</span><span><b>'+aEsc(l.name||'—')+'</b>（'+aEsc(l.accountId)+'）</span><span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+aEsc(tag)+'</span></span><span style="line-height:1.6;">'+aEsc(l.text)+'</span></div>';
+  }).join('');
+  el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('操作日志')+'</div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+chips+'</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--slate2);">日期 <input type="date" value="'+f.from+'" onchange="oplogSet(\'from\',this.value)" style="padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;"> ～ <input type="date" value="'+f.to+'" onchange="oplogSet(\'to\',this.value)" style="padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;">'+
+    ((f.from||f.to) ? ' <a href="#" onclick="OPLOG_FILTER.from=\'\';OPLOG_FILTER.to=\'\';openAdminPage(\'oplog\',true);return false;" style="color:var(--navy);">清除日期</a>' : '')+'</div></div>'+subs+
+    '<div class="card" style="padding:4px 20px;"><div class="trow head" style="grid-template-columns:1.1fr 1.3fr 0.8fr 4fr;"><span>时间</span><span>操作账号（当时使用人）</span><span>类型</span><span>内容</span></div>'+
+    (tableRows || '<div style="padding:18px 0;font-size:12px;color:var(--muted);">没有符合条件的记录</div>')+'</div>'+
+    '<div style="font-size:11px;color:var(--muted);">共 '+rows.length+' 条。姓名是操作当时的使用人；账号以后换了人，这里仍显示当时的名字。</div>';
+};

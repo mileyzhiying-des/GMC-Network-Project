@@ -48,7 +48,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 6. **通知**：系统更新的"没上线的人下次登录弹出"没做离线队列；"未接来电"没有真实超时判断；通知 90 天清除只是显示时过滤。
 7. **对话**：抽屉 🔍 只搜房间名；未读数只有演示数据 + "模拟新消息"会增加。
 8. **术后管理**："KR 确认（可变更）"只做了标注进行时间，没做改项目/改次数；IN 侧的"更换项目"没有演示入口（只有 KR 发起）。
-9. **账号/权限/设定/经营数据/操作 log**：账号数据、登录/激活/忘记密码、头像菜单已做（第三十二轮）；权限控制、设定页、账号管理页、经营数据、操作日志页待做（指令第四～八部分）。
+9. **账号/权限/设定/经营数据/操作 log**（第三十二、三十三轮已全部做完）：仍待确认的见 `docs/accounts-settings.md` 各部分「我的判断」；经营数据只是基础版（具体看哪些数字待讨论）；韩文/印尼文界面只翻译了侧边栏、按钮和设定页（其余显示中文）；提示音开关只存了值，没有真实铃声；老板没有铃铛，加购验证码用页面横幅演示。
 
 **旧名称已清理**（对照表见 `docs/case-management-flow.md` 末尾）：Reservation ID、等待确认面诊时间/等待缴纳面诊费（主状态）、待付款/已付款/待确认施术时间/等待施术（大状态）、赴韩施术中、管理进行中、已出报告（状态）、AI整理中、邀请室长视频、等待面诊、面诊进行中、视频/书面面诊、二次面诊、再次面诊、提及案件、"预计 X 内提交"。
 
@@ -89,6 +89,7 @@ https://www.notion.so/GMC-Network-3e3eda0cf87b800ba75bc500064c901c
 - 第三十轮（2026-10-05 结构拆分·一，账号与设定指令的第一部分；二→八等用户检查后再做）：把单文件原型拆成 `prototype/shared/`（`rules.js` 规则层、`ui.js` 界面层、`data.js` 数据层、`store.js` 存档与多标签页同步、`boot-in.js` IN 端启动、`app.css`）+ 入口页 `login.html`（暂为按角色进入的占位登录页）/`in.html`（IN 端全部页面）/`owner.html`、`kr.html`（占位）/`booking.html`（客户自助预约表单，参数 `?date=&time=&phone=&purpose=&ph=`）；旧的 `gmc-network-prototype.html` 已删除（git 历史里还在）。功能和拆分前完全一致（函数清单 638 个一个没少，只多了 `refreshView`/`resetDemoData`，并删掉一个重复定义的 `toggleAttachMenu`）。数据存 localStorage（`gmc_state`，带版本号 `DEMO_DATA_VERSION`=4），刷新不再重置；多标签页实时同步；超容量提示"演示数据过大，已重置"；真实上传图片只在内存。新增 `start.command` 一键启动，`dev/check.sh` 取代 `/tmp/check.sh`。
 - 第三十一轮（2026-10-05 账号与设定·二 账号数据与演示账号）：`ACCOUNTS`（OWN 老板/A1 Dewi 管理者/A2 Rina 一般/A3 待激活加购/A4 已停用加购/A5 Putri 加购管理者）、`ACCOUNT_LOG`、`currentAccountId()`（sessionStorage）、`accountLabel`/`actorDisplay`/`staffLabel`/`seatSummary`/`logOp`；Timeline 和案件列表 IN 室长列显示"Rina（A2）"，新记录带 `actorId`。用词：**OWN = 老板（诊所管理账号）**，院长 = 韩国医院医生；激活上传**证件照**（字段 `photo`），不收集身份证。
 - 第三十二轮（2026-10-06 账号与设定·三 登录与激活，`docs/accounts-settings.md`）：`login.html` 登录/首次激活（手机验证码显示在屏幕上 → 设密码+姓名+职位+证件照）/忘记密码；sessionStorage 登录、`guardPage()` 守卫（in.html 只许管理者/一般室长，owner.html 只许老板）；头像菜单（个人设置只读资料卡/切换账号/退出登录）；删除案例库/项目库的"演示用角色"下拉；`ME_NAME` 跟登录账号走，种子外的写死 Dewi 全部改成 `actingName()`/`ME_NAME`；对话消息带 `sender`；`IN_COORDINATORS` 由账号算出；数据版本 6。演示密码 = 编号小写 + 123（own123/a1123/a2123/a4123/a5123）。四～八待做。
+- 第三十三轮（2026-10-06，账号与设定四～八 + 演示时钟；客户自助预约页还没开始，等 `CLIENTS` 改对象后做，顺序 C → A4 → A5 → A6 → A7 → A8 → K → B1–B5）：**C** `demoNow()` 取电脑当前时间（只加演示按钮往后拨的 `DEMO_SHIFT_MS`），`TODAY_DATE` 取真实今天，全部演示数据日期改成相对今天 `D(n)`/`KD(n)`，演示数据生成日不是今天就自动重置（`gmc_demo_day`）；**A4** 权限 `ROLE_PERMS`/`canDo()`/`ADMIN_PAGES`，管理页壳 `#in-admin` + `ADMIN_RENDER`，老板端 owner.html 只有管理类；**A5** 个人设定 + 诊所设定（`CLINIC_SETTINGS` 取代写死的营业时间/午休/15·30 分钟/面诊费/CLINIC_TZ），新增 `shared/i18n.js`、`shared/admin.js`；**A6** 账号管理（重设/加购/退订，管理者加购管理者需老板验证码）；**A7** 经营数据基础版；**A8** 操作日志（按类型/子类型/日期筛选）。详见 `docs/accounts-settings.md` 四～八。
 - 教训：补丁用 `region(start,end)` 替换时结束标记必须紧邻；**第四部分的补丁曾误删一整段弹窗 HTML**，已恢复；现在 `/tmp/check.sh` 除了函数清单还检查 DOM id 是否缺失。
 
 ## 工作方式（沿用和 Claude Chat 讨论时定的规矩）
@@ -197,3 +198,14 @@ prototype/shared/app.css  共用样式
 - 存档规则：每次点击/输入/选择后 60ms 内、以及每 2 秒，如果数据有变化就存档；其他标签页收到 `storage` 事件后重读数据并 `refreshView()`；页面离开时再存一次。容量超限（约 5MB，`QuotaExceeded`）时：console.warn + 画面顶部红色提示"演示数据过大，已重置"，清掉存档，这个页面之后不再存档（刷新页面恢复演示数据）。真实上传的图片（data: 地址）只放内存，存档里是 `@img:编号`，刷新后不再显示。
 - **自测补充**：提交前改跑 `bash dev/check.sh`（函数清单对比 `prototype/shared/*.js` 与 HEAD、语法、DOM id 缺失；`add-slot-purpose`、`bell-dd` 是动态生成的 id，属正常）；多标签页同步用两个标签页验证（一个改数据，另一个不刷新就能看到）；改完后冷启动检查用 `in.html`。
 - 演示账号/密码（已做，见 `docs/accounts-settings.md`）：密码 = 账号编号小写 + `123`，例如 A1 → `a1123`；A3 待激活（手机 +62 811-0000-0004，验证码显示在屏幕上）；A4 已停用。登录入口 `/login.html`；每个标签页各自登录（sessionStorage），可同时登不同账号测多人。**自测时先登录再测**（in.html 没登录会跳回登录页）。
+
+
+---
+
+## 账号与设定补充（2026-10-06，追加；以下取代前文关于 owner.html"占位"和文件列表的说法，旧文字保留作历史）
+
+**文件结构新增**：`prototype/shared/i18n.js`（共用多语言：韩/印尼/中，IN 端用；预约页印尼/中词典之后加在同一文件）、`prototype/shared/admin.js`（管理类页面：个人设定、诊所设定、账号管理、经营数据、操作日志，用 `ADMIN_RENDER[key]` 登记）。`owner.html` 现在是老板端壳（侧边栏 = 经营数据/账号管理/诊所设定/操作日志，个人设定在头像菜单）；`in.html` 里管理者在侧边栏"诊所管理"组看到同样四项。脚本加载顺序：`rules.js → i18n.js → ui.js → data.js → store.js → admin.js →（in.html 再加 boot-in.js）`。`dev/check.sh` 的文件清单已含 i18n/admin。
+**权限**：老板 = 只有管理类；管理者 = 全部；一般室长 = 工作类 + 个人设定；没权限的入口不显示，直接输入网址会被 `guardPage()`/`openAdminPage()` 导回自己的首页。
+**演示时钟**：现在是真实时间；打开原型时数据都落在"今天附近"；`gmc_demo_day` 与今天不同会自动重置演示数据（登录账号状态、设定等也会回到初始）。
+**演示账号/密码**：OWN 老板 `own123`；A1 管理者 Dewi `a1123`；A2 一般室长 Rina `a2123`；A3 待激活（手机 +62 811-0000-0004）；A4 已停用；A5 管理者 Putri `a5123`。新购买/重设后的账号手机号为空，激活时接手人自己填手机号（验证码显示在屏幕上）。
+**自测清单补充**：① 三种角色各登录一次：一般室长看不到"诊所管理"组，直接输入 `in.html?page=admin-accounts` 会回首页；老板登录后只有四个管理页，没有铃铛/对话；② 诊所设定改值保存 → 日历行/午休斜纹/占位倒计时/面诊费卡立即变化、"系统"通知和操作日志各一条；③ 两个标签页（老板重设 A2、A2 在另一个标签页）验证"原使用人立即登出"；④ 设置里切换韩文/印尼文，侧边栏和设定页变译文；⑤ 冷启动检查 + console 无报错 + `bash dev/check.sh`。
