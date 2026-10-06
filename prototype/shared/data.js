@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 17;
+var DEMO_DATA_VERSION = 18;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -3086,6 +3086,7 @@ function krProcedureTabHtml(c){
 function markConsultPaid(){
   var c = getCurrentCase(); if(!c) return;
   c.consultStatus = 'paid_waiting_kr';
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), '客人已缴面诊费：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
   logCaseEvent(c, '客人', '完成面诊费支付，已在Main对话群自动通知');
   buildCaseLog(c); renderCaseHeaderActions(c);
@@ -3096,6 +3097,7 @@ function markConsultPaid(){
 function applyWaiveFee(c, reason, note){
   c.consultFeeWaived = {reason: reason==='其他' ? '其他：'+note : reason, note:note};
   c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：待确认报告时间 */
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), '面诊费已免除：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c);
   logCaseEvent(c, actingName(), '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
   buildCaseLog(c); renderCaseHeaderActions(c);
@@ -3930,6 +3932,16 @@ function mainRoomHospital(id){ return String(id).indexOf('main-')===0 ? String(i
 function caseKrHospital(c){ return caseHospitalId(c) || linkedHospitalIds(c.clinicId)[0] || null; } /* 案件的 KR 一侧是哪家医院（没选时只对接一家就是那家） */
 /* "演示：模拟KR…"按钮写进案件 Timeline 的 KR 操作人：用该案件所选医院的室长/院长（不再写死 H1 的人） */
 function krCoordShort(c){ return (c && c.krCoordinator ? c.krCoordinator.split(' ')[0] : null) || krCoordinatorsOf(c)[0] || '이서연'; }
+/* KR 端通知（2026-10-06，KR 端系列 2/5·六）：写进该医院的资料里（全局存档），KR 页面收到存档变化后即时刷新
+   to：'coord' = 该医院的 KR 室长/管理者；'director' = 案件所选院长；kind：'consultpaid' 等。IN 端的事件在这里调用 */
+function pushKrNotif(hid, text, opt){
+  var h = HOSPITAL_DATA[hid]; if(!h) return null;
+  opt = opt || {};
+  h.notifs = h.notifs || [];
+  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, kind:opt.kind||'case', readBy:[]};
+  h.notifs.unshift(n); if(h.notifs.length>200) h.notifs.length = 200;
+  return n;
+}
 function krDirName(c){ return (c && c.director) || hospitalDirectorNames(caseKrHospital(c))[0] || '김민석 원장'; }
 function syncKrCoordinator(c){ var hs = hospitalCoordinators(caseKrHospital(c)); if(hs.length && (!c.krCoordinator || hs.indexOf(c.krCoordinator.split(' ')[0])<0)) c.krCoordinator = hs[0]+' 실장'; }
 function krCoordinatorsOf(c){ return hospitalCoordinators(caseKrHospital(c)).slice(); }
@@ -4158,7 +4170,12 @@ function initHospitalData(){
       openDates: {'김민석 원장': KR_OPEN_DATES.slice(), '이수진 원장': dayList([2,3,4,5,11,12,18,19,25,26,32,33,39,40]), '박지훈 원장': []},
       directorSchedule: KR_DIRECTOR_SCHEDULE, coordSchedule: KR_COORD_SCHEDULE, projects:[], libCases:[],
       offs: [{date:D(0), who:'이수진 원장', kind:'director', note:'休假'}, {date:D(0), who:'박준혁 실장', kind:'coord', note:'调休'}, {date:D(1), who:'김민석 원장', kind:'director', note:'学会'}],
-      dayConfirm: {}, reportRead: {}
+      dayConfirm: {}, reportRead: {}, chatRead: {},
+      notifs: [
+        {id:'kn1', ts:D(-2)+' 14:40', text:'客人已缴面诊费：Maya Putri（A000002，GMC 合作诊所（雅加达））→ 请确认报告时间', clinicId:'C1', caseId:'maya', to:'coord', director:null, kind:'consultpaid', readBy:[]},
+        {id:'kn2', ts:D(0)+' 08:00', text:'报告已超过预计时间：Dedi Prasetyo（A000004）', clinicId:'C1', caseId:'dedi', to:'coord', director:null, kind:'overdue', readBy:[]},
+        {id:'kn3', ts:D(0)+' 09:30', text:'等你出报告：Putri Wulandari（A000003），预计 '+D(2)+' 14:00', clinicId:'C1', caseId:'putri', to:'director', director:'김민석 원장', kind:'waitreport', readBy:[]}
+      ]
     },
     H2:{
       directors: [{id:'H2-D1', name:'박서윤 원장', active:true}, {id:'H2-D2', name:'최지호 원장', active:true}, {id:'H2-D3', name:'한도윤 원장', active:false}],
@@ -4167,7 +4184,7 @@ function initHospitalData(){
       directorSchedule: {'박서윤 원장':[{date:D(0), time:'10:00', title:'手术'}, {date:D(0), time:'10:30', title:'手术'}], '최지호 원장':[{date:D(1), time:'14:00', title:'面诊'}], '한도윤 원장':[]},
       coordSchedule: [{date:D(0), time:'09:30', title:'정하늘：与 IN 室长对接'}, {date:D(1), time:'11:00', title:'최민준：报告提交'}], projects:[], libCases:[],
       offs: [{date:D(0), who:'최지호 원장', kind:'director', note:'外出'}],
-      dayConfirm: {}, reportRead: {}
+      dayConfirm: {}, reportRead: {}, chatRead: {}, notifs: []
     }
   };
 }
