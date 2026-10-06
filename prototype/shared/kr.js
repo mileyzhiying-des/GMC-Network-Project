@@ -39,7 +39,7 @@ function krRefreshAll(){
 function krNavItems(){
   var items = [];
   if(canDo('krview') || canDo('krviewOwn')) items.push({id:'kr-dashboard', key:'krdash', label:'大盘', icon:'盘'});
-  if(canDo('krview')) items.push({id:'kr-cases', key:'krcases', label:'案件列表', icon:'件'}, {id:'kr-notifications', key:'krnotifs', label:'通知中心', icon:'通'});
+  if(canDo('krview') || canDo('krviewOwn')) items.push({id:'kr-cases', key:'krcases', label:'案件列表', icon:'件'}, {id:'kr-notifications', key:'krnotifs', label:'通知中心', icon:'通'});
   return items;
 }
 function buildKrSidebar(activePage){
@@ -58,7 +58,7 @@ function buildKrSidebar(activePage){
   return '<div class="sidebar'+(SIDEBAR_COLLAPSED?' collapsed':'')+'">'+toggle+brand+'<nav>'+nav+'</nav>'+(SIDEBAR_COLLAPSED?'':'<div class="sidebar-foot">GMC Network · 韩国医院端</div>')+'</div>';
 }
 function buildKrTopbar(title){
-  var a = currentAccount(), notDirector = a && a.role!=='kr_director', hasWork = canDo('krview');
+  var a = currentAccount(), hasWork = canDo('krview') || canDo('krviewOwn');
   return '<div class="topbar"><span class="title">'+t(title)+'</span><div class="actions">'+
     (hasWork ? '<button class="icon-btn" onclick="krOpenDrawer()" aria-label="对话">💬<span class="badge kr-chat-badge" style="display:none;">0</span></button>'+
       '<button class="icon-btn" onclick="krToggleBell(event)" aria-label="通知">🔔<span class="badge kr-bell-badge" style="display:none;">0</span></button>' : '')+
@@ -77,9 +77,11 @@ function krRenderPage(id){
 function krBoot(){
   try{ i18nStart(); }catch(e){}
   document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
-  var start = canDo('krview') || canDo('krviewOwn') ? 'kr-dashboard' : null;
+  var start = canDo('krview') || canDo('krviewOwn') ? 'kr-dashboard' : null; /* 地址带 ?case=诊所:案件号 时直接进详情 */
   if(!start){ location.replace(homeUrl()); return; }
   CURRENT_PAGE_ID = start;
+  var q = new URLSearchParams(location.search).get('case');
+  if(q){ var pr = q.split(':'); if(!krFindCase(pr[0], pr[1])){ location.replace(homeUrl()); return; } KR_CASE = {clinicId:pr[0], id:pr[1], tab:new URLSearchParams(location.search).get('tab')||'basic'}; start = 'kr-casedetail'; }
   krRenderPage(start); showPage(start);
   KR_LAST_UNREAD = krNotifUnread().length; krUpdateBadges();
 }
@@ -436,7 +438,7 @@ function krToggleBell(e){
   var d = document.createElement('div'); d.id = 'kr-bell-dd';
   d.style.cssText = 'position:fixed;top:54px;right:70px;width:360px;max-height:70vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:60;padding:6px 14px;';
   d.onclick = function(ev){ ev.stopPropagation(); };
-  d.innerHTML = '<div style="padding:10px 0;font-weight:700;border-bottom:1px solid var(--line);">通知</div>'+(list.length ? list.map(krNotifRowHtml).join('') : '<div style="padding:16px;color:var(--muted);">没有通知</div>')+(canDo('krview') ? '<div style="padding:10px 0;text-align:center;"><a href="#" onclick="krCloseBell();nav(\'kr-notifications\');return false;" style="font-size:12px;">查看全部</a></div>' : '');
+  d.innerHTML = '<div style="padding:10px 0;font-weight:700;border-bottom:1px solid var(--line);">通知</div>'+(list.length ? list.map(krNotifRowHtml).join('') : '<div style="padding:16px;color:var(--muted);">没有通知</div>')+('<div style="padding:10px 0;text-align:center;"><a href="#" onclick="krCloseBell();nav(\'kr-notifications\');return false;" style="font-size:12px;">查看全部</a></div>');
   document.body.appendChild(d);
 }
 document.addEventListener('click', function(){ krCloseBell(); });
@@ -452,11 +454,11 @@ function krRoomList(){
     var add = function(roomId, name, caseRow){
       var msgs = (v.CHAT_DATA||{})[roomId]; if(!msgs) return;
       var key = cl.id+'|'+roomId, mark = ((h.chatRead||{})[me.id]||{})[key] || 0;
-      var unread = msgs.slice(mark).filter(function(m){ return m.from!=='sys' && !krMsgIsMine(m); }).length;
+      var unread = msgs.slice(mark).filter(function(m){ return m.from!=='sys' && !krMsgIsMine(m) && (!(me.role==='kr_director' && !caseRow) || krMentionsMe(m)); }).length; /* 院长在 Main 群里是静音的：不计未读、不推播，被 @ 才提醒 */
       var last = msgs.filter(function(m){ return m.from!=='sys'; }).slice(-1)[0];
       out.push({key:key, clinicId:cl.id, roomId:roomId, name:name, clinicName:cl.name, isMain:!caseRow, unread:unread, count:msgs.length, last:last ? krMsgText(last) : '', lastTime:last ? last.time : '', caseRow:caseRow||null});
     };
-    if(me.role!=='kr_director') add('main-'+hid, 'Main · '+cl.name, null);
+    add('main-'+hid, 'Main · '+cl.name, null);
     Object.keys(v.CHAT_DATA||{}).forEach(function(rid){
       if(rid.indexOf('case-')!==0) return;
       var r = visible[cl.id+':'+rid.slice(5)]; if(r) add(rid, r.name+' · '+r.caseNo, r);
@@ -464,6 +466,7 @@ function krRoomList(){
   });
   return out.sort(function(a,b){ return (b.unread>0)-(a.unread>0) || (b.isMain-a.isMain); });
 }
+function krMentionsMe(m){ var me = currentAccount(); return !!me && String(m.orig||'').indexOf('@'+me.name.split(' ')[0]) > -1; }
 var KR_CHAT = {open:false, room:null};
 function krUpdateBadges(){
   try{
