@@ -225,6 +225,68 @@ function bkRenderDone(){
     '<a href="'+caseViewUrl(c)+'" class="bk-btn ghost" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box;margin-top:14px;">'+bt('done.manage')+'</a></div>';
 }
 
+/* ================= 客人端：查看 / 取消 / 重新预约（确认/提醒短信里的网址 booking.html?view=Case编号，需要手机验证） ================= */
+function bkViewCase(){ return CASE_ITEMS.filter(function(c){ return c.caseNo===BK.view.caseNo; })[0] || null; }
+function bkViewFrame(bodyHtml){ return '<div class="bk-card"><div class="bk-title">'+bt('view.title')+'</div>'+bodyHtml+'</div>'; }
+function bkRenderView(){
+  var v = BK.view, c = bkViewCase();
+  if(!c) return bkViewFrame('<div class="bk-info">'+bt('view.notfound')+'</div>');
+  if(v.stage==='phone' || v.stage==='otp'){
+    var o = BK.otp;
+    var body = '<div class="bk-sub">'+bt('view.verify')+'</div>'+bkField(bt('phone.label'), '<input type="tel" id="bk-phone" value="'+bkH(BK.f.phone)+'" '+(o?'readonly ':'')+'oninput="bkSet(\'phone\',this.value)" placeholder="+62 812-xxxx-xxxx">');
+    if(!o) body += (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+'<button class="bk-btn" onclick="bkViewSend()">'+bt('phone.send')+'</button>';
+    else body += '<div class="bk-demo">'+bt('phone.demo', {phone:bkH(BK.f.phone), code:o.code})+'</div>'+bkField(bt('phone.code'), '<input type="text" id="bk-code" inputmode="numeric" maxlength="6" onkeydown="if(event.key===\'Enter\')bkViewVerify()">')+
+      (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+'<button class="bk-btn" onclick="bkViewVerify()">'+bt('phone.verify')+'</button><button class="bk-btn ghost" onclick="bkViewSend(true)">'+bt('phone.resend')+'</button>';
+    return bkViewFrame(body);
+  }
+  /* 已验证：显示预约信息 */
+  var vs = visitStateOf(c), key = vs==='预约取消' ? 'cancelled' : vs==='未到店' ? 'noshow' : vs==='已到访' ? 'arrived' : 'waiting';
+  var color = {waiting:'#8A7650', arrived:'var(--sage)', cancelled:'var(--muted)', noshow:'#C1454A'}[key];
+  var row = function(k, val){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(val)+'</span></div>'; };
+  var info = '<div style="margin-bottom:8px;"><span style="font-weight:700;color:'+color+';">● '+bt('view.status.'+key)+'</span></div>'+
+    row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+row('sum.purpose', bt('purpose.'+(c.visitPurpose||'面诊商谈')))+(c.visitNote ? row('sum.note', c.visitNote) : '')+
+    row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone);
+  if(v.stage==='confirmCancel'){
+    return bkViewFrame(info+'<div class="bk-info" style="margin-top:12px;font-size:14px;color:var(--navy);"><b>'+bt('view.cancelQ')+'</b><br><span style="font-size:12px;">'+bt('view.cancelT')+'</span></div>'+
+      '<button class="bk-btn danger" onclick="bkDoCancel()">'+bt('view.cancelYes')+'</button><button class="bk-btn ghost" onclick="BK.view.stage=\'card\';bkRender()">'+bt('view.cancelNo')+'</button>');
+  }
+  var tail = '';
+  if(v.msg) tail += '<div class="bk-info" style="margin-top:12px;">'+bkH(v.msg)+'</div>';
+  if(customerCanCancel(c)) tail += '<button class="bk-btn danger" style="margin-top:14px;" onclick="BK.view.stage=\'confirmCancel\';bkRender()">'+bt('view.cancel')+'</button>';
+  else if(key==='waiting') tail += '<div class="bk-info" style="margin-top:12px;">'+bt('view.cant')+'</div>';
+  if(key==='cancelled' || key==='noshow') tail += '<div class="bk-sub" style="margin-top:12px;">'+bt('view.rebookHint')+'</div><button class="bk-btn" onclick="bkRebook()">'+bt('view.rebook')+'</button>';
+  return bkViewFrame(info+tail);
+}
+function bkViewSend(resend){
+  var c = bkViewCase(); if(!c) return;
+  var ph = (document.getElementById('bk-phone')||{}).value || BK.f.phone; BK.f.phone = String(ph).trim();
+  if(!resend && normPhoneKey(BK.f.phone) !== normPhoneKey(clientPhoneOf(c.name))){ BK.err = bt('view.mismatch'); return bkRender(); }
+  BK.err = ''; BK.otp = {code:String(100000+Math.floor(Math.random()*900000)), exp:Date.now()+5*60000};
+  sendSms('code', BK.f.phone, {code:BK.otp.code}, null); Store.save(); bkRender();
+}
+function bkViewVerify(){
+  var code = ((document.getElementById('bk-code')||{}).value||'').trim(), o = BK.otp;
+  if(!o){ BK.err = bt('code.first'); return bkRender(); }
+  if(Date.now() > o.exp){ BK.err = bt('code.expired'); BK.otp = null; return bkRender(); }
+  if(code !== o.code){ BK.err = bt('code.bad'); return bkRender(); }
+  BK.otp = null; BK.err = ''; BK.verified = true; BK.view.stage = 'card'; bkRender();
+}
+function bkDoCancel(){
+  var c = bkViewCase(); if(!c) return;
+  var r = customerCancelCase(c.id);
+  BK.view.stage = 'card'; BK.view.msg = r.ok ? bt('view.cancelled') : bt('view.cant');
+  Store.save(); bkRender();
+}
+/* 取消后［重新预约］：回到选时间，资料带入；手机已验证所以跳过验证步骤；马上重约时 IN 端只收到一条合并的"客人改约"通知 */
+function bkRebook(){
+  var c = bkViewCase(); if(!c) return;
+  var cl = clientByName(c.name);
+  BK.entry = 'web'; BK.view = null; BK.verified = true; BK.otp = null; BK.err = ''; BK.step = 0; BK.dayPick = null; BK.done = null; BK.mismatchOk = true;
+  BK.f.phone = cl ? cl.phone : BK.f.phone; bkLoadClient();
+  BK.f.date = ''; BK.f.time = ''; BK.f.phId = null; BK.f.purpose = c.visitPurpose || '面诊商谈'; BK.f.note = c.visitNote || ''; BK.f.c1 = false; BK.f.c2 = false; BK.f.rebookFrom = c.id;
+  bkRender();
+}
+
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bkInit); else bkInit();
 /* 别的标签页（IN 端）改了数据 → 本页重新读档并重画（例如时段被约满） */
 window.addEventListener('storage', function(){ setTimeout(function(){ if(BK && !BK.done && BK.entry!=='view' && BK_STEPS[BK.step]==='time') bkRender(); }, 80); /* 只在选时间那一步刷新（时段可能被约满），其他步骤不打断填写 */ });

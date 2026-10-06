@@ -379,7 +379,7 @@ function submitSelfBooking(f){
   else if(f.entry==='link') c.logEntries[0].action = '客人通过预约链接填完资料，预约成功，生成 Case ID '+c.caseNo;
   var when = dateLabel(f.date)+' '+f.time, tail = '：'+cl.name+'（'+c.caseNo+'）'+when+(c.visitNote ? ' · '+c.visitNote : '');
   var old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
-  if(old && old.cancelNotifId){
+  if(old && old.cancelNotifId && Date.now()-(old.cancelledAt||0) < 30*60000){
     /* 取消后马上重新预约：把"客人取消预约"那条通知收回，只留一条合并的"客人改约" */
     NOTIFS = NOTIFS.filter(function(n){ return n.id!==old.cancelNotifId; }); old.cancelNotifId = null;
     pushNotif('预约', '客人改约：'+cl.name+' 原 '+dateLabel(old.visitDate)+' '+old.visitTime+' → 新 '+when+'（'+c.caseNo+'）', {caseId:c.id, names:workingIN(), silent:true});

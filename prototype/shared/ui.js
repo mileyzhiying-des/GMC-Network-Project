@@ -509,14 +509,14 @@ function renderClientProfile(name){
   var cons = (c.consents||[]).slice(-1)[0];
   var consHtml = cons ? '已签署<span class="sub">个人资料收集同意 + 健康资料处理同意 · 同意书 '+aEscC(cons.version)+' · '+aEscC(cons.ts)+' · '+aEscC(cons.source)+'</span>' : '<span style="color:var(--muted);">未登记</span><span class="sub">到店后由室长当面签署正式同意书</span>';
   el.innerHTML = row('姓名', aEscC(c.name), 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+
-    row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+
+    row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+row('过往医美史（客人自报）', aEscC(c.beautyHistory||'—'), 'beautyHistory', 1)+
     row('护照信息', aEscC(c.passport.text)+(c.passport.date?'<span class="sub">'+aEscC(c.passport.date)+'</span>':''), 'passport')+
     row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+
     '<div class="field-row"><span class="fk">隐私协议</span><span class="fv">'+consHtml+'</span><span class="fa"></span></div>';
 }
 function aEscC(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 var CLIENT_FIELD_DEF = {
-  name:{label:'姓名', kind:'text'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
+  name:{label:'姓名', kind:'text'}, beautyHistory:{label:'过往医美史', kind:'area'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
   gender:{label:'性别 / 出生日期', kind:'gender'}, passport:{label:'护照信息', kind:'text'}, phone:{label:'联系方式（手机号）', kind:'text'}
 };
 function openClientEdit(name, field){
