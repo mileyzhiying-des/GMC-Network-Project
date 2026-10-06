@@ -361,6 +361,24 @@ function pushTargets(c){
   return {inn: pick(ops.inn, IN_COORDINATORS), kr: (ops.kr.length || caseHasKrSide(c)) ? pick(ops.kr, KR_COORDINATORS) : []};
 }
 
+/* ================= 手机号输入（2026-10-06）：一律拆成两栏——国码下拉 + 号码；存成完整格式"国码 号码" =================
+   预约页、员工激活/忘记密码、客户详情的联系方式都用它。号码栏只输入后面的数字（可带 - 或空格），默认国码 +62（印尼）。 */
+var PHONE_CCS = ['+62', '+86', '+65', '+82'];
+function splitPhone(full){
+  var m = String(full||'').trim().match(/^(\+\d{1,3})[\s-]*(.*)$/);
+  if(m && PHONE_CCS.indexOf(m[1])>-1) return {cc:m[1], num:m[2]};
+  return {cc:'+62', num:String(full||'').trim().replace(/^\+/, '')};
+}
+function phoneInputHtml(id, full, opt){
+  opt = opt || {}; var p = splitPhone(full), ro = opt.readonly ? ' disabled' : '';
+  return '<div class="phone-row"><select id="'+id+'-cc"'+ro+'>'+PHONE_CCS.map(function(c){ return '<option value="'+c+'"'+(c===p.cc?' selected':'')+'>'+c+'</option>'; }).join('')+'</select>'+
+    '<input type="tel" id="'+id+'-num" value="'+String(p.num).replace(/"/g,'&quot;')+'" placeholder="'+(opt.placeholder||'812-xxxx-xxxx')+'"'+(opt.readonly?' readonly':'')+(opt.onEnter?' onkeydown="if(event.key===\'Enter\')'+opt.onEnter+'"':'')+'></div>';
+}
+function phoneInputGet(id){
+  var cc = document.getElementById(id+'-cc'), num = document.getElementById(id+'-num');
+  var n = num ? num.value.trim() : ''; return n ? ((cc ? cc.value : '+62')+' '+n) : '';
+}
+
 /* ================= 权限（2026-10-06·A4，Notion Accounts & Settings 第 2 节） =================
    work=处理客人和案件（工作台/客户/案件/案例库/项目库/通知/对话）；bizdata=经营数据；accounts=账号管理；clinic=诊所设定；oplog=操作日志；personal=个人设定。
    老板：只有管理类（看汇总，看不到个别客人和案件）；管理者：全部；一般室长：work + personal。没有权限的入口完全不显示。 */

@@ -498,6 +498,7 @@ function openClientEdit(name, field){
   var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;';
   var body = d.kind==='area' ? '<textarea id="ce-v" rows="3" style="'+inp+'">'+aEscC(c[field])+'</textarea>' :
     d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select><input id="ce-v2" type="date" value="'+aEscC(c.dob)+'" style="'+inp+'"></div>' :
+    field==='phone' ? phoneInputHtml('ce-ph', c.phone) :
     '<input id="ce-v" type="text" value="'+aEscC(field==='passport' ? c.passport.text : c[field])+'" style="'+inp+'">';
   ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">修改「'+d.label+'」</div>'+body+
     '<div id="ce-err" class="error-text" style="display:none;margin-top:8px;"></div><div style="font-size:11px;color:var(--muted);margin-top:8px;">保存后写回客户档案，并记入客户 Timeline（操作人：'+aEscC(accountLabel(currentAccountId()))+'）。</div>'+
@@ -508,7 +509,7 @@ function closeClientEdit(){ var ov = document.getElementById('client-edit-overla
 function saveClientEdit(){
   var x = CLIENT_EDIT; if(!x) return;
   var c = clientByName(x.name), d = CLIENT_FIELD_DEF[x.field]; if(!c) return;
-  var v = (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
+  var v = x.field==='phone' ? phoneInputGet('ce-ph') : (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
   var fail = function(m){ var e = document.getElementById('ce-err'); e.textContent = m; e.style.display = 'block'; };
   if(x.field==='name'){
     if(!v) return fail('姓名不能为空');

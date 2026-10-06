@@ -152,6 +152,7 @@ var BOOK_DICT = {
   'consent.c1':  {id:'Saya menyetujui pengumpulan data pribadi saya.', zh:'我同意收集我的个人资料。'},
   'consent.c2':  {id:'Saya menyetujui pemrosesan data kesehatan saya.', zh:'我同意处理我的健康资料。'},
   'consent.err': {id:'Kedua persetujuan wajib dicentang.', zh:'两项同意都必须勾选。'},
+  'consent.updated':{id:'Surat persetujuan telah diperbarui ({old} → {nw}). Mohon centang kembali.', zh:'同意书已更新（{old} → {nw}），请重新勾选。'},
   'consent.note':{id:'Surat persetujuan resmi (privasi / transfer data lintas negara) akan ditandatangani langsung di klinik.', zh:'正式《隐私/数据跨境使用授权同意书》到店后当面签署。'},
   /* 7 确认 */
   's.confirm':   {id:'Konfirmasi & kirim', zh:'确认并提交'},

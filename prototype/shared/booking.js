@@ -48,7 +48,11 @@ function bkRender(){
 }
 
 /* ---- 步骤框架 ---- */
-function bkStepList(){ return BK_STEPS.filter(function(s){ return !(s==='time' && BK.entry==='walkin') && !(s==='phone' && BK.verified); }); }
+/* 老客人已签过当前版本的同意书 → 跳过"同意"这一步；同意书版本更新过的（或新客人）才要勾选 */
+function bkLastConsent(){ var cl = BK.client; return cl ? (cl.consents||[]).slice(-1)[0] || null : null; }
+function bkNeedConsent(){ var last = bkLastConsent(); return !last || last.version !== CLINIC_SETTINGS.privacyVersion; }
+function bkSkipStep(s){ return (s==='time' && BK.entry==='walkin') || (s==='phone' && BK.verified) || (s==='consent' && !bkNeedConsent()); }
+function bkStepList(){ return BK_STEPS.filter(function(s){ return !bkSkipStep(s); }); }
 function bkFrame(titleKey, bodyHtml){
   var list = bkStepList(), cur = list.indexOf(BK_STEPS[BK.step]);
   var banner = '';
@@ -58,8 +62,8 @@ function bkFrame(titleKey, bodyHtml){
     banner+'<div class="bk-title">'+bt(titleKey)+'</div>'+bodyHtml+'</div>';
 }
 function bkGo(i){ BK.step = i; BK.err = ''; bkRender(); }
-function bkNextStep(){ var i = BK.step + 1; while(i < BK_STEPS.length && ((BK_STEPS[i]==='phone' && BK.verified) || (BK_STEPS[i]==='time' && BK.entry==='walkin'))) i++; bkGo(i); }
-function bkPrevStep(){ var i = BK.step - 1; while(i > 0 && ((BK_STEPS[i]==='phone' && BK.verified) || (BK_STEPS[i]==='time' && BK.entry==='walkin'))) i--; if(i<0) i = 0; bkGo(i); }
+function bkNextStep(){ var i = BK.step + 1; while(i < BK_STEPS.length && bkSkipStep(BK_STEPS[i])) i++; bkGo(i); }
+function bkPrevStep(){ var i = BK.step - 1; while(i > 0 && bkSkipStep(BK_STEPS[i])) i--; if(i<0) i = 0; bkGo(i); }
 function bkNav(nextHandler, showBack){
   return (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+
     '<button class="bk-btn" onclick="'+nextHandler+'">'+bt(nextHandler==='bkSubmit()' ? 'btn.submit' : 'btn.next')+'</button>'+
@@ -110,7 +114,7 @@ function bkInput(k, type, extra){ return '<input type="'+(type||'text')+'" value
 /* ---- 第 2 步：验证手机（演示验证码直接显示在画面上），验证后按手机号找老客人 ---- */
 function bkStepPhone(){
   var o = BK.otp, locked = BK.phoneLocked;
-  var body = bkField(bt('phone.label'), '<input type="tel" id="bk-phone" value="'+bkH(BK.f.phone)+'" '+(locked||o?'readonly ':'')+'oninput="bkSet(\'phone\',this.value)" placeholder="+62 812-xxxx-xxxx">')+
+  var body = bkField(bt('phone.label'), phoneInputHtml('bk-phone', BK.f.phone, {readonly:locked||o}))+
     (locked ? '<div class="bk-sub" style="margin-top:-6px;">'+bt('phone.locked')+'</div>' : '');
   if(!o) body += (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+'<button class="bk-btn" onclick="bkSendCode()">'+bt('phone.send')+'</button>'+
     (BK.step>0 && BK.entry!=='walkin' && !locked ? '<button class="bk-btn ghost" onclick="bkPrevStep()">'+bt('btn.back')+'</button>' : '');
@@ -121,7 +125,7 @@ function bkStepPhone(){
   return bkFrame('s.phone', body);
 }
 function bkSendCode(resend){
-  var ph = (document.getElementById('bk-phone')||{}).value || BK.f.phone;
+  var ph = BK.otp ? BK.f.phone : (phoneInputGet('bk-phone') || BK.f.phone);
   if(!resend && normPhoneKey(ph).length < 8){ BK.err = bt('phone.bad'); return bkRender(); }
   BK.f.phone = (BK.otp ? BK.f.phone : ph).trim(); BK.err = '';
   BK.otp = {code:String(100000+Math.floor(Math.random()*900000)), exp:Date.now()+5*60000};
@@ -190,6 +194,7 @@ function bkStepHealth(){
 function bkStepConsent(){
   var f = BK.f;
   return bkFrame('s.consent', '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+bt('consent.policy', {v:bkH(CLINIC_SETTINGS.privacyVersion)})+'</div>'+
+    (bkLastConsent() ? '<div class="bk-demo">'+bt('consent.updated', {old:bkH(bkLastConsent().version), nw:bkH(CLINIC_SETTINGS.privacyVersion)})+'</div>' : '')+
     '<div class="bk-info" style="max-height:140px;overflow-y:auto;">'+bkH(CLINIC_SETTINGS.privacyPolicy)+'</div>'+
     '<label class="bk-check"><input type="checkbox" '+(f.c1?'checked ':'')+'onchange="BK.f.c1=this.checked"> <span>'+bt('consent.c1')+'</span></label>'+
     '<label class="bk-check"><input type="checkbox" '+(f.c2?'checked ':'')+'onchange="BK.f.c2=this.checked"> <span>'+bt('consent.c2')+'</span></label>'+
@@ -208,7 +213,7 @@ function bkStepConfirm(){
 }
 function bkSubmit(){
   var f = BK.f, old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
-  var res = submitSelfBooking({entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, gender:f.gender, dob:f.dob,
+  var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, gender:f.gender, dob:f.dob,
     history:f.history, beautyHistory:f.beautyHistory, purpose:f.purpose, note:f.note, rebookFrom:old ? old.id : null});
   if(!res.ok){ BK.err = bt('time.taken'); BK.f.time = ''; if(BK.entry!=='walkin') BK.step = 0; return bkRender(); }
   Store.save(); BK.done = res; bkRender();
@@ -233,7 +238,7 @@ function bkRenderView(){
   if(!c) return bkViewFrame('<div class="bk-info">'+bt('view.notfound')+'</div>');
   if(v.stage==='phone' || v.stage==='otp'){
     var o = BK.otp;
-    var body = '<div class="bk-sub">'+bt('view.verify')+'</div>'+bkField(bt('phone.label'), '<input type="tel" id="bk-phone" value="'+bkH(BK.f.phone)+'" '+(o?'readonly ':'')+'oninput="bkSet(\'phone\',this.value)" placeholder="+62 812-xxxx-xxxx">');
+    var body = '<div class="bk-sub">'+bt('view.verify')+'</div>'+bkField(bt('phone.label'), phoneInputHtml('bk-phone', BK.f.phone, {readonly:!!o}));
     if(!o) body += (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+'<button class="bk-btn" onclick="bkViewSend()">'+bt('phone.send')+'</button>';
     else body += '<div class="bk-demo">'+bt('phone.demo', {phone:bkH(BK.f.phone), code:o.code})+'</div>'+bkField(bt('phone.code'), '<input type="text" id="bk-code" inputmode="numeric" maxlength="6" onkeydown="if(event.key===\'Enter\')bkViewVerify()">')+
       (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+'<button class="bk-btn" onclick="bkViewVerify()">'+bt('phone.verify')+'</button><button class="bk-btn ghost" onclick="bkViewSend(true)">'+bt('phone.resend')+'</button>';
@@ -259,7 +264,7 @@ function bkRenderView(){
 }
 function bkViewSend(resend){
   var c = bkViewCase(); if(!c) return;
-  var ph = (document.getElementById('bk-phone')||{}).value || BK.f.phone; BK.f.phone = String(ph).trim();
+  var ph = BK.otp ? BK.f.phone : (phoneInputGet('bk-phone') || BK.f.phone); BK.f.phone = String(ph).trim();
   if(!resend && normPhoneKey(BK.f.phone) !== normPhoneKey(clientPhoneOf(c.name))){ BK.err = bt('view.mismatch'); return bkRender(); }
   BK.err = ''; BK.otp = {code:String(100000+Math.floor(Math.random()*900000)), exp:Date.now()+5*60000};
   sendSms('code', BK.f.phone, {code:BK.otp.code}, null); Store.save(); bkRender();

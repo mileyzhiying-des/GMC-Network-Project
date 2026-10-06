@@ -24,10 +24,17 @@
 <section class="page active" id="main" style="display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:36px 16px;gap:18px;background:var(--bg,#F4F6F9);">
   <div><span class="logo">GMC Network</span><span class="logo-sub">跨境医美协作平台</span></div>
   <div class="login-card" id="login-card"></div>
+  <div class="demo-box" style="text-align:center;">
+    <a href="/booking.html" target="_blank" rel="noopener" style="display:inline-block;background:#2F6FEB;color:#fff;font-size:14px;font-weight:700;padding:12px 22px;border-radius:12px;text-decoration:none;box-shadow:0 4px 14px rgba(47,111,235,.35);">📱 打开客户预约页</a>
+    <div style="margin-top:6px;color:var(--muted);">客户端页面，不用登录；在新分页打开，方便同时对照 IN 端</div>
+    <div style="margin-top:8px;text-align:left;background:#EAF1FF;border-radius:10px;padding:10px 12px;color:#27447A;">
+      <b>老客人测试：</b>Siti Rahayu <code>000-0000-0001</code>（已签最新版同意书）、Ayu Lestari <code>000-0000-0002</code>（签的是旧版同意书，会要求重新勾选）；<br>
+      <b>新客人测试：</b>任意输入一个没登记过的号码（国码默认 +62）
+    </div>
+  </div>
   <div class="demo-box">
     <b>演示账号</b>（密码 = 账号编号小写 + <code>123</code>）：<code>OWN</code> 老板 · <code>A1</code> Dewi 管理者 · <code>A2</code> Rina 一般室长 · <code>A5</code> Putri 管理者（加购）<br>
     <code>A3</code> 一般室长（加购）尚未激活：点"首次激活"，手机号 <code>+62 811-0000-0004</code>，验证码会显示在屏幕上；<code>A4</code> 已停用。<br>
-    <a href="/booking.html">客户自助预约表单（演示）</a> ·
     <a href="#" onclick="if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。')) resetDemoData(); return false;">重置演示数据</a>
   </div>
 </section>
@@ -86,7 +93,7 @@ function checkOtp(id, code){
 function viewActivate1(msg){
   show('<h2>首次激活</h2><div class="sub">输入老板/管理者分配给你的账号编号，和登记的手机号</div>'+errBox(msg)+
     '<div class="field"><label>账号编号</label><input id="f-id" type="text" placeholder="例如 A3"></div>'+
-    '<div class="field"><label>手机号</label><input id="f-phone" type="text" placeholder="+62 8xx-xxxx-xxxx"></div>'+
+    '<div class="field"><label>手机号</label>'+phoneInputHtml('f-phone','')+'</div>'+
     '<button class="btn-primary" style="width:100%;" onclick="activate1()">获取验证码</button>'+
     '<div class="login-links"><a onclick="viewLogin()">返回登录</a><span></span></div>');
 }
@@ -95,7 +102,7 @@ function activate1(){
   if(!a) return viewActivate1('账号编号不存在');
   if(a.status==='active') return viewActivate1('账号 '+a.id+' 已经激活，请直接登录');
   if(a.status==='disabled') return viewActivate1('账号 '+a.id+' 已停用，不能激活');
-  var ph = $('f-phone').value.trim();
+  var ph = phoneInputGet('f-phone');
   if(a.phone){ if(normPhone(ph)!==normPhone(a.phone)) return viewActivate1('手机号和登记的不一致'); }
   else if(normPhone(ph).length < 8) return viewActivate1('请输入你自己的手机号（用来收验证码）'); /* 新购买/重设后的账号没有登记手机：接手的人自己填 */
   sendOtp(a); FLOW = {id:a.id, phone:a.phone ? '' : ph}; viewActivate2();
@@ -146,7 +153,7 @@ function activate3(){
 function viewForgot1(msg){
   show('<h2>忘记密码</h2><div class="sub">输入账号编号和登记的手机号，用验证码重设密码</div>'+errBox(msg)+
     '<div class="field"><label>账号编号</label><input id="f-id" type="text"></div>'+
-    '<div class="field"><label>手机号</label><input id="f-phone" type="text" placeholder="+62 8xx-xxxx-xxxx"></div>'+
+    '<div class="field"><label>手机号</label>'+phoneInputHtml('f-phone','')+'</div>'+
     '<button class="btn-primary" style="width:100%;" onclick="forgot1()">获取验证码</button>'+
     '<div class="login-links"><a onclick="viewLogin()">返回登录</a><span></span></div>');
 }
@@ -155,7 +162,7 @@ function forgot1(){
   if(!a) return viewForgot1('账号编号不存在');
   if(a.status==='pending') return viewForgot1('账号 '+a.id+' 还没有激活，请用"首次激活"');
   if(a.status==='disabled') return viewForgot1('账号 '+a.id+' 已停用');
-  if(normPhone($('f-phone').value)!==normPhone(a.phone)) return viewForgot1('手机号和登记的不一致');
+  if(normPhone(phoneInputGet('f-phone'))!==normPhone(a.phone)) return viewForgot1('手机号和登记的不一致');
   sendOtp(a); FLOW = {id:a.id}; viewForgot2();
 }
 function viewForgot2(msg){
