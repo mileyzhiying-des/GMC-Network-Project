@@ -161,17 +161,40 @@ var Store = (function(){
     try{ writeKey(keyC(cid), JSON.stringify(p, replacer)); return true; }catch(e){ console.warn('[存档] 跨诊所写入失败', e); return false; }
   }
 
-  /* 临时把某家诊所的分区数据换进全局变量里执行 fn（KR 端借用 IN 端的状态/显示函数渲染别家诊所的案件）；执行完立刻还原，fn 里不要改数据 */
-  function withClinic(cid, fn){
-    var vars = readClinic(cid); if(!vars) return undefined;
-    var saved = {}, keepCid = CURRENT_CLINIC_ID;
+  /* 临时把某家诊所的分区数据换进全局变量里执行 fn（KR 端借用 IN 端的状态/显示/业务函数处理别家诊所的案件）：
+     换进去的有：诊所分区变量、CURRENT_CLINIC_ID、IN_COORDINATORS、按该诊所对接医院合成的项目库/案例库/分类；fn 返回后全部还原。
+     withClinic 只读；要改数据用 mutateClinic（改完写回该诊所的分区，该诊所的分页即时同步） */
+  function enter(vars, cid){
+    var ctx = {saved:{}, keepCid:CURRENT_CLINIC_ID, keepIn:IN_COORDINATORS.slice(), keepPL:PROJECT_LIBRARY.slice(), keepLC:LIB_CASES.slice(), keepCats:Object.assign({}, PROJECT_CATEGORIES), keepPCAT:Object.assign({}, PCAT)};
     CLINIC_VAR_NAMES.forEach(function(n){
-      if(n==='PROJECT_LIBRARY' || n==='LIB_CASES' || n==='PROJECT_CATEGORIES') return; /* 这三个是"诊所+医院"合成数组，KR 端用全局的 */
-      if(vars.hasOwnProperty(n)){ saved[n] = window[n]; window[n] = vars[n]; }
+      if(n==='PROJECT_LIBRARY' || n==='LIB_CASES' || n==='PROJECT_CATEGORIES') return; /* 这三个是"诊所+医院"合成数组，下面按该诊所重新合成 */
+      if(vars.hasOwnProperty(n)){ ctx.saved[n] = window[n]; window[n] = vars[n]; }
     });
     CURRENT_CLINIC_ID = cid;
-    try{ return fn(vars); }
-    finally{ Object.keys(saved).forEach(function(n){ window[n] = saved[n]; }); CURRENT_CLINIC_ID = keepCid; }
+    try{ buildClinicViews(vars.PROJECT_LIBRARY || [], vars.LIB_CASES || [], vars.PROJECT_CATEGORIES || null); }catch(e){ console.warn('[withClinic] 合成项目库失败', e); }
+    try{ syncInCoordinators(); }catch(e){}
+    return ctx;
+  }
+  function leave(ctx, vars, writeBack){
+    Object.keys(ctx.saved).forEach(function(n){ if(writeBack) vars[n] = window[n]; window[n] = ctx.saved[n]; });
+    CURRENT_CLINIC_ID = ctx.keepCid;
+    PROJECT_LIBRARY.length = 0; Array.prototype.push.apply(PROJECT_LIBRARY, ctx.keepPL);
+    LIB_CASES.length = 0; Array.prototype.push.apply(LIB_CASES, ctx.keepLC);
+    Object.keys(PROJECT_CATEGORIES).forEach(function(k){ delete PROJECT_CATEGORIES[k]; }); Object.assign(PROJECT_CATEGORIES, ctx.keepCats);
+    Object.keys(PCAT).forEach(function(k){ delete PCAT[k]; }); Object.assign(PCAT, ctx.keepPCAT);
+    IN_COORDINATORS.length = 0; Array.prototype.push.apply(IN_COORDINATORS, ctx.keepIn);
+  }
+  function withClinic(cid, fn){
+    var vars = readClinic(cid); if(!vars) return undefined;
+    var ctx = enter(vars, cid);
+    try{ return fn(vars); } finally{ leave(ctx, vars, false); }
+  }
+  function mutateClinic(cid, fn){
+    var p = readRaw(keyC(cid)); if(!p || !p.vars) return undefined;
+    var ctx = enter(p.vars, cid), out;
+    try{ out = fn(p.vars); } finally{ leave(ctx, p.vars, true); }
+    try{ writeKey(keyC(cid), JSON.stringify(p, replacer)); }catch(e){ console.warn('[存档] 跨诊所写入失败', e); }
+    return out;
   }
 
   /* 其他标签页存了新数据：只重读和自己相关的部分 + 重画 */
@@ -205,7 +228,7 @@ var Store = (function(){
     try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
     init(); load();
   }
-  return {save:save, load:load, touch:touch, readClinic:readClinic, updateClinic:updateClinic, withClinic:withClinic, isDisabled:function(){ return disabled; }};
+  return {save:save, load:load, touch:touch, readClinic:readClinic, updateClinic:updateClinic, withClinic:withClinic, mutateClinic:mutateClinic, isDisabled:function(){ return disabled; }};
 })();
 
 /* 重置演示数据：清掉所有 gmc_ 开头的存档，其他标签页收到通知后也会刷新 */

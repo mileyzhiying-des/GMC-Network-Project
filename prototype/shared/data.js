@@ -3105,19 +3105,32 @@ function applyWaiveFee(c, reason, note){
   renderCaseBody(c);
 }
 
+/* 确认 / 修改预计出报告时间（KR 端操作，KR-CASE-01）：改案件状态 + 两边 Timeline + IN 通知；不碰界面，KR 页面在 Store.mutateClinic 里调用
+   isChange=false：待确认报告时间 → 等待报告；isChange=true：等待报告时修改，Timeline 记原时间和新时间 */
+function coreSetReportEta(c, eta, by, isChange){
+  if(!c) return false;
+  if(isChange){
+    if(c.consultStatus!=='awaiting_report') return false;
+    var old = c.reportEta || '—';
+    c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
+    logCaseEvent(c, by, 'KR修改预计出报告时间：'+old+' → '+eta);
+    pushNotif('面诊','KR 修改了预计出报告时间：'+c.name+'（'+old+' → '+eta+'）', {caseId:c.id});
+  } else {
+    if(c.consultStatus!=='paid_waiting_kr') return false;
+    syncKrCoordinator(c);
+    c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
+    c.consultStatus = 'awaiting_report';
+    logCaseEvent(c, by, 'KR确认预计出报告时间：'+eta);
+    pushNotif('面诊','KR 确认预计出报告时间：'+c.name+' '+eta, {caseId:c.id});
+  }
+  updateCaseStage(c);
+  return true;
+}
+/* IN 端演示按钮（第六部分删除）还在用的包装 */
 function krConfirmReportEta(eta, c){
   c = c || getCurrentCase();
-  if(!c || c.consultStatus!=='paid_waiting_kr') return;
-  syncKrCoordinator(c);
-  c.reportEta = eta;
-  c.reportOverdue = false;
-  c.consultStatus = 'awaiting_report';
-  updateCaseStage(c);
-  logCaseEvent(c, krCoordShort(c), 'KR确认预计出报告时间：'+eta);
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
-  pushNotif('面诊','KR 确认预计出报告时间：'+c.name+' '+eta, {caseId:c.id});
+  if(!coreSetReportEta(c, eta, krCoordShort(c), false)) return;
+  buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 
 /* 演示：超过预计时间还没出报告——小状态变橘色"已超过预计时间"，只提醒，状态不变 */

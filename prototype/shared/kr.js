@@ -330,15 +330,55 @@ function krTabBasic(c){
     krCardBox('医美史', beauty)+
     krCardBox('检测与上传', krKV('메타뷰 检测', c.metaviewStatus==='ready' ? '已检测到' : '—')+krKV('照片', c.photoUploaded?'✓ 已上传':'—')+krKV('视频', c.videoUploaded?'✓ 已上传':'—'));
 }
+/* ---- 面诊 tab（KR-CASE-01 第 2 节）：按状态给不同内容；操作都经 Store.mutateClinic 写进来源诊所的分区 ---- */
+function krCan(){ return canDo('krwork'); } /* 室长 / 管理者 */
+function krIsMyCase(c){ var me = currentAccount(); return !!me && (me.role!=='kr_director' || c.director===me.name || c.director===me.name+' 원장'); }
+function krMut(fn){ var r = Store.mutateClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? fn(c) : undefined; }); krRefreshAll(); return r; }
+function krTimeOptions(sel){ var o = ''; for(var m = 8*60; m <= 20*60; m += 30){ var tt = minToTime(m); o += '<option'+(tt===sel?' selected':'')+'>'+tt+'</option>'; } return o; }
+function krDateAdd(n){ var d = new Date(nowDateObj().getTime() + n*86400000); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+
+/* 一、预计出报告时间 */
+function krEtaBlock(c, change){
+  var hid = krHospitalIdOfMe(), today = krToday(), tomorrow = krDateAdd(1);
+  var sched = ((HOSPITAL_DATA[hid].directorSchedule||{})[c.director]||[]);
+  var day = function(d, label){ var l = sched.filter(function(s){ return s.date===d; }).sort(function(a,b){ return a.time.localeCompare(b.time); }); return '<div style="font-size:12px;margin-bottom:6px;"><b>'+label+' '+d+'</b>：'+(l.length ? l.map(function(s){ return krEsc(s.time+' '+s.title); }).join('、') : '<span style="color:var(--muted);">没有日程</span>')+'</div>'; };
+  var offs = krOffRows(hid, today).concat(krOffRows(hid, tomorrow)).filter(function(o){ return o.who===c.director; });
+  var base = c.reportEta ? c.reportEta.split(' ') : [krDateAdd(1), '14:00'];
+  var form = krCan()
+    ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><input type="date" id="kr-eta-d" value="'+base[0]+'" min="'+today+'" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;"><select id="kr-eta-t" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;">'+krTimeOptions(base[1])+'</select><button class="btn-primary" onclick="krDoEta('+(change?'true':'false')+')">'+(change?'确认修改':'确认')+'</button>'+(change?'<button class="btn-ghost" onclick="krSetEtaEdit(false)">取消</button>':'')+'</div>'
+    : '<div style="font-size:12px;color:var(--muted);margin-top:8px;">预计出报告时间由 KR 室长确认，院长账号不能改。</div>';
+  return krCardBox(change ? '修改预计出报告时间' : '确认预计出报告时间（院长 '+krEsc(c.director||'—')+'）',
+    '<div style="font-size:12px;color:var(--slate2);margin-bottom:8px;">参考院长当天和隔天的日程（来自日程管理）：</div>'+day(today,'今天')+day(tomorrow,'明天')+(offs.length ? '<div style="font-size:12px;color:#C26A1B;">⚠ 院长 OFF：'+offs.map(function(o){ return krEsc(o.date+(o.note?' '+o.note:'')); }).join('、')+'</div>' : '')+form);
+}
+var KR_ETA_EDIT = false;
+function krSetEtaEdit(v){ KR_ETA_EDIT = v; krRenderCaseDetail(); }
+function krDoEta(change){
+  var d = document.getElementById('kr-eta-d').value, tm = document.getElementById('kr-eta-t').value;
+  if(!d || !tm){ alert('请填日期和时间'); return; }
+  var eta = d+' '+tm;
+  if(eta <= nowFullDt()){ alert('预计出报告时间必须晚于现在'); return; }
+  KR_ETA_EDIT = false;
+  krMut(function(c){ return coreSetReportEta(c, eta, ME_NAME, !!change); });
+}
+function krEtaStatusBlock(c){
+  var over = reportOverdueNow(c);
+  return krCardBox('预计出报告时间', krKV('预计时间', krEsc(c.reportEta||'—'))+krKV('倒计时', over ? '<b style="color:#C26A1B;">已超过预计时间</b>' : krEsc(reportRemainingText(c)))+
+    (over ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-top:8px;">⏰ 已超过预计出报告时间，报告还没提交。请尽快提交，或修改预计时间（IN 端会收到通知）。</div>' : '')+
+    (krCan() && !KR_ETA_EDIT ? '<div style="margin-top:10px;"><button class="btn-outline" onclick="krSetEtaEdit(true)">修改预计时间</button></div>' : ''));
+}
+
 function krTabConsult(c){
-  var fee = consultFeeStatusMain(c);
-  var items = caseSubStatusItems(c);
-  return krCardBox('面诊费', krKV('状态', fee+(c.consultFeeWaived ? '（原因：'+krEsc(c.consultFeeWaived.reason)+'）' : '')))+
-    krCardBox('报告', krKV('预计出报告时间', c.reportEta ? krEsc(c.reportEta)+(reportOverdueNow(c)&&!c.reportReady?' <span style="color:#B2453A;">（已超时）</span>':'') : '—')+
-      krKV('报告状态', c.reportReady ? '已出报告（'+krEsc(c.reportDate||'—')+'，'+krEsc(c.reportUploadedBy||'—')+'）' : '还没有报告')+
-      (c.reportReady ? krKV('面诊摘要', krEsc(c.videoSummary||'—')) : ''))+
-    krCardBox('当前小状态', krSubHtml(items)||krEmpty('—'))+
-    '<div style="font-size:11px;color:var(--muted);">只读：确认报告时间、提交报告等操作在后面的指令里做。</div>';
+  var fee = consultFeeStatusMain(c), out = '';
+  var head = krCardBox('面诊费', krKV('状态', fee+(c.consultFeeWaived ? '（原因：'+krEsc(c.consultFeeWaived.reason)+'）' : '')))+krCardBox('当前小状态', krSubHtml(caseSubStatusItems(c))||krEmpty('—'));
+  if(c.reuseReport) return head+krCardBox('沿用原报告', krKV('来源', krEsc(c.reuseReport.caseNo)+'（'+krEsc(c.reuseReport.date||'')+'）')+krKV('报告', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
+  if(c.consultStatus==='paid_waiting_kr') return head+krEtaBlock(c, false);
+  if(c.consultStatus==='awaiting_report'){
+    out = head+krEtaStatusBlock(c)+(KR_ETA_EDIT ? krEtaBlock(c, true) : '');
+    if(typeof krRecordBlock==='function') out += krRecordBlock(c);
+    return out;
+  }
+  if(c.consultStatus==='report_ready') return head+krCardBox('报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(c.reportUploadedBy||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
+  return head;
 }
 function krTabItems(c){
   var all = krAllItems(c);
