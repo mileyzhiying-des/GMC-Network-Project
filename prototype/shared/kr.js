@@ -400,8 +400,9 @@ function krTabProc(c){
     '<div style="font-size:11px;color:var(--muted);">只读：确认施术时间、到院判断、施术完成等操作在后面的指令里做。</div>';
 }
 function krTabFiles(c){
+  var vaultHtml = krIsMyCase(c) ? krVaultHtml(c) : '';
   var files = caseAttachments(c).filter(function(f){ return !f.chatLog; });
-  return krCardBox('附件', files.length ? files.map(function(f){ return '<div class="case-field-row"><span class="status-pill" style="background:var(--blue-bg);color:var(--blue);font-size:10px;margin-right:8px;">'+krEsc(f.src)+'</span><span style="flex:1;font-size:13px;">'+krEsc(f.label)+'</span><span style="font-size:11px;color:var(--muted);">'+krEsc(f.date||'')+'</span></div>'; }).join('') : krEmpty('没有附件'));
+  return vaultHtml + krCardBox('附件', files.length ? files.map(function(f){ return '<div class="case-field-row"><span class="status-pill" style="background:var(--blue-bg);color:var(--blue);font-size:10px;margin-right:8px;">'+krEsc(f.src)+'</span><span style="flex:1;font-size:13px;">'+krEsc(f.label)+'</span><span style="font-size:11px;color:var(--muted);">'+krEsc(f.date||'')+'</span></div>'; }).join('') : krEmpty('没有附件'));
 }
 function krTabRelated(c){
   var hid = krHospitalIdOfMe();
@@ -554,4 +555,95 @@ function krSendMsg(){
   Store.updateClinic(parts[0], function(v){ v.CHAT_DATA[parts[1]] = v.CHAT_DATA[parts[1]] || []; v.CHAT_DATA[parts[1]].push(msg); v.ROOM_UNREAD = v.ROOM_UNREAD || {}; v.ROOM_UNREAD[parts[1]] = (v.ROOM_UNREAD[parts[1]]||0) + 1; });
   krRenderChat(true);
   var i2 = document.getElementById('kr-chat-in'); if(i2) i2.focus();
+}
+
+/* ---------- 二、录入面诊 → AI 草稿 + KR 专用附件仓库（KR-CASE-01 第 3 节） ---------- */
+/* KR 专用附件仓库：存在医院资料里（HOSPITAL_DATA[h].vault），只有 KR 页面读写，IN 端不显示；保存期限结案后 3 年（Data Retention & Consent）
+   每个案件：{audio:[{id,ts,by,label,sec}], transcripts:[{id,ts,by,mode,text,demo}], drafts:[{id,ts,by,source,text}], history:[{ts,by,action}]} */
+function krVault(clinicId, caseId, create){
+  var h = krHData(); h.vault = h.vault || {};
+  var k = clinicId+':'+caseId;
+  if(!h.vault[k] && create) h.vault[k] = {audio:[], transcripts:[], drafts:[], history:[]};
+  return h.vault[k] || {audio:[], transcripts:[], drafts:[], history:[]};
+}
+function krVaultLog(v, action){ v.history.push({ts:nowFullDt(), by:ME_NAME, action:action}); }
+var KR_REC = {caseKey:'', text:'', recording:false, demoVoice:false, rec:null, startedAt:0};
+var KR_DEMO_TRANSCRIPT = '턱선이 전반적으로 처지고 팔자주름이 깊습니다. 피부 탄력 저하가 중등도로 보이며, 우선 리프팅 위주로 시작하고 필요하면 윤곽 시술을 추가하는 것을 권합니다. 시술 후 2주간은 사우나와 격한 운동을 피하셔야 합니다. （演示用转写文字）';
+function krRecKey(){ return KR_CASE.clinicId+':'+KR_CASE.id; }
+function krRecReset(){ if(KR_REC.caseKey !== krRecKey()){ krRecStop(true); KR_REC = {caseKey:krRecKey(), text:'', recording:false, demoVoice:false, rec:null, startedAt:0}; } }
+function krCanRecord(c){ var me = currentAccount(); return !!me && (canDo('krwork') || (me.role==='kr_director' && krIsMyCase(c))); }
+function krRecInput(v){ KR_REC.text = v; }
+
+function krRecStart(mode){
+  if(mode==='manual'){ KR_REC.recording = false; krRenderCaseDetail(); var t0 = document.getElementById('kr-rec-text'); if(t0) t0.focus(); return; }
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  KR_REC.startedAt = Date.now();
+  if(!SR){ /* 浏览器不支持语音识别：用演示文字代替 */
+    KR_REC.demoVoice = true; KR_REC.recording = true; KR_REC.text = (KR_REC.text ? KR_REC.text+'\n' : '') + KR_DEMO_TRANSCRIPT; krRenderCaseDetail(); return;
+  }
+  try{
+    var r = new SR(); r.lang = 'ko-KR'; r.continuous = true; r.interimResults = true;
+    var base = KR_REC.text ? KR_REC.text+'\n' : '';
+    r.onresult = function(e){ var fin = '', itm = ''; for(var i = 0; i < e.results.length; i++){ if(e.results[i].isFinal) fin += e.results[i][0].transcript; else itm += e.results[i][0].transcript; } KR_REC.text = base + fin + itm; var ta = document.getElementById('kr-rec-text'); if(ta) ta.value = KR_REC.text; };
+    r.onerror = function(){ /* 没有麦克风权限 / 识别服务不可用：改用演示文字代替 */ KR_REC.demoVoice = true; KR_REC.rec = null; if(!KR_REC.text.trim()) KR_REC.text = KR_DEMO_TRANSCRIPT; krRenderCaseDetail(); };
+    r.onend = function(){ if(KR_REC.recording && KR_REC.rec===r){ try{ r.start(); }catch(e){} } };
+    KR_REC.rec = r; KR_REC.recording = true; KR_REC.demoVoice = false; r.start();
+  }catch(e){ KR_REC.demoVoice = true; KR_REC.recording = true; KR_REC.text += (KR_REC.text ? '\n' : '') + KR_DEMO_TRANSCRIPT; }
+  krRenderCaseDetail();
+}
+function krRecStop(silent){
+  if(KR_REC.rec){ try{ KR_REC.rec.stop(); }catch(e){} KR_REC.rec = null; }
+  if(!KR_REC.recording) return;
+  KR_REC.recording = false;
+  if(silent) return;
+  if(!KR_REC.text.trim()){ KR_REC.demoVoice = true; KR_REC.text = KR_DEMO_TRANSCRIPT; } /* 没识别到任何内容：演示文字代替 */
+  var sec = Math.max(1, Math.round((Date.now() - KR_REC.startedAt)/1000)), v = krVault(KR_CASE.clinicId, KR_CASE.id, true);
+  v.audio.push({id:'au'+Date.now(), ts:nowFullDt(), by:ME_NAME, label:'面诊原始录音（演示占位，没有真实音频文件）', sec:sec});
+  krVaultLog(v, '语音录入面诊（'+(KR_REC.demoVoice ? '演示文字' : '语音识别')+'，约 '+sec+' 秒），生成原始录音占位');
+  Store.touch(); krRenderCaseDetail();
+}
+function krSaveTranscript(){
+  var txt = (KR_REC.text||'').trim(); if(!txt){ alert('还没有内容'); return null; }
+  var v = krVault(KR_CASE.clinicId, KR_CASE.id, true), mode = KR_REC.demoVoice ? 'voice' : (KR_REC.startedAt ? 'voice' : 'manual');
+  v.transcripts.push({id:'tr'+Date.now(), ts:nowFullDt(), by:ME_NAME, mode:mode, text:txt, demo:!!KR_REC.demoVoice});
+  krVaultLog(v, (mode==='voice' ? '保存转写文字' : '手动输入面诊')+'（'+txt.length+' 字）');
+  Store.touch(); return txt;
+}
+/* AI 整理成报告草稿（演示：模板；正式版接 LLM，见 Integrations & APIs） */
+function krAiDraftText(c, text){
+  return '[면담 소견 요약]\n고객: '+c.name+' ('+c.caseNo+')\n고민: '+(c.concern||'—')+'\n기대: '+(c.expectation||'—')+'\n\n[원장 소견]\n'+text+'\n\n[권장 시술]\n- （실장이 가능 범위에서 선택）\n\n[주의사항]\n- 시술 전후 주의사항은 상담 시 안내 예정\n\n※ 데모용 템플릿 초안입니다. 실제 서비스에서는 LLM이 정리합니다.';
+}
+function krMakeDraft(){
+  var txt = krSaveTranscript(); if(!txt) return;
+  Store.withClinic(KR_CASE.clinicId, function(){
+    var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0], v = krVault(KR_CASE.clinicId, KR_CASE.id, true);
+    v.drafts.push({id:'dr'+Date.now(), ts:nowFullDt(), by:ME_NAME, source:'AI 草稿（演示模板）', text:krAiDraftText(c, txt)});
+    krVaultLog(v, 'AI 整理成报告草稿（演示模板）');
+  });
+  KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false;
+  Store.touch(); krRenderCaseDetail();
+}
+function krVaultHtml(c){
+  var v = krVault(KR_CASE.clinicId, KR_CASE.id, false);
+  var row = function(tag, ts, by, body){ return '<div class="case-field-row" style="align-items:flex-start;font-size:12px;"><span class="status-pill" style="background:var(--border2);color:var(--slate2);font-size:10px;margin-right:8px;">'+tag+'</span><span style="min-width:112px;color:var(--muted);">'+krEsc(ts)+'</span><span style="min-width:60px;font-weight:600;">'+krEsc(by)+'</span><span style="flex:1;white-space:pre-wrap;">'+body+'</span></div>'; };
+  var rows = v.audio.map(function(a){ return row('录音', a.ts, a.by, krEsc(a.label)+'（'+a.sec+' 秒）'); }).concat(
+    v.transcripts.map(function(x){ return row('转写', x.ts, x.by, krEsc(x.text)+(x.demo?' <i style="color:var(--muted);">（演示）</i>':'')); }),
+    v.drafts.map(function(d){ return row(d.source.indexOf('AI')===0?'AI草稿':'修改稿', d.ts, d.by, krEsc(d.text)); }),
+    v.history.map(function(h0){ return row('过程', h0.ts, h0.by, krEsc(h0.action)); }));
+  return krCardBox('KR 专用附件仓库 <span style="font-weight:400;font-size:11px;color:var(--muted);">只有 KR 看得到，IN 看不到；保存期限：结案后 3 年</span>', rows.length ? rows.join('') : krEmpty('还没有内容（语音 / 手动录入后会放进来）'));
+}
+function krRecordBlock(c){
+  krRecReset();
+  if(!krCanRecord(c)) return krCardBox('录入面诊', krEmpty('你的账号不能录入这个案件的面诊'));
+  var srOk = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  var tip = KR_REC.recording ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:8px;">🎙 录音中…'+(KR_REC.demoVoice ? '（演示：当前浏览器不支持语音识别，已填入演示文字）' : '（正在做语音转文字，韩语）')+'</div>' : (!srOk ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">演示：这个浏览器不支持语音识别，点［语音录入面诊］会用演示文字代替。</div>' : '');
+  var btns = KR_REC.recording
+    ? '<button class="btn-primary" onclick="krRecStop()">⏹ 停止录音</button>'
+    : '<button class="btn-outline" onclick="krRecStart(\'voice\')">🎙 语音录入面诊</button><button class="btn-outline" onclick="krRecStart(\'manual\')">⌨ 手动输入面诊</button>';
+  var box = krCardBox('录入面诊（院长口述 / 室长代录）',
+    tip+'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'+btns+'</div>'+
+    '<textarea id="kr-rec-text" oninput="krRecInput(this.value)" placeholder="面诊内容（语音转写或手动输入，可修改）" style="width:100%;min-height:110px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_REC.text)+'</textarea>'+
+    '<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn-primary" onclick="krMakeDraft()">✨ AI 整理成报告草稿（演示）</button></div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-top:6px;">演示：草稿由固定模板生成，正式版接 LLM。原始录音、转写、草稿和修改过程都进「KR 专用附件仓库」。</div>');
+  return box+krVaultHtml(c)+(typeof krSubmitBlock==='function' && canDo('krwork') ? krSubmitBlock(c) : '');
 }
