@@ -2779,12 +2779,18 @@ function recomputeBatch(c, batchId){
   var bd = computeBatchBreakdown((c.procedureItems||[]).filter(function(it){ return it.batchId===batchId && it.origin==='KR' && !it.cancelled && !it.swapped; }));
   b.krTotal = bd.krTotal; b.krBalance = bd.krTotal - b.krDeposit; b.krProvisional = bd.krProvisional;
 }
-function setPcAlloc(projectId, batchId, i, v){
-  var c = getCurrentCase(); if(!c || !pcAllocEditable(c)) return;
+/* 术后管理分配（IN 室长在项目选择/赴韩项目 tab 改；KR 在付尾款确认行程时也能改）：x.inTimes = 分给印尼的次数 */
+function corePcAlloc(c, projectId, batchId, i, v, by){
+  if(!pcAllocEditable(c)) return false;
   var it = batchId ? (c.procedureItems||[]).filter(function(x){ return x.projectId===projectId && x.batchId===batchId; })[0] : (c.recommended||[]).filter(function(x){ return x.projectId===projectId; })[0];
-  var x = it && it.postcare && it.postcare[i]; if(!x || x.place!=='either' || !x.innName) return;
+  var x = it && it.postcare && it.postcare[i]; if(!x || x.place!=='either' || !x.innName) return false;
   var old = x.inTimes||0; x.inTimes = Math.max(0, Math.min(x.times, parseInt(v,10)||0));
-  if(batchId){ recomputeBatch(c, batchId); if(old!==x.inTimes) logCaseEvent(c, actingName(), '术后管理分配：'+it.name+'·'+x.name+' 印尼 '+old+' → '+x.inTimes+' 次（韩国 '+(x.times-x.inTimes)+' 次）'); buildCaseLog(c); }
+  if(batchId){ recomputeBatch(c, batchId); if(old!==x.inTimes) logCaseEvent(c, by, '术后管理分配：'+it.name+'·'+x.name+' 印尼 '+old+' → '+x.inTimes+' 次（韩国 '+(x.times-x.inTimes)+' 次）'); }
+  return true;
+}
+function setPcAlloc(projectId, batchId, i, v){
+  var c = getCurrentCase(); if(!c) return;
+  if(corePcAlloc(c, projectId, batchId, i, v, actingName()) && batchId) buildCaseLog(c);
   renderCaseBody(c);
 }
 var SETTLE_ANES_SIGNED = false;
@@ -3036,6 +3042,116 @@ function krTimelineTabHtml(c){
     '<div style="font-size:11px;color:var(--muted);margin-top:10px;">可据此安排机票、住宿；客人端暂不显示。每一行是案件下的一个子项，编号 '+(c.caseNo||'A000001')+'-01、-02……</div>';
 }
 
+/* ---- KR 端：到院、判断、调整、尾款（2026-10-06，KR-CASE-02 第 5 节；沿用 Case Management Flow 06） ---- */
+function coreMarkArrived(c, by){
+  if(!c.settlementDone || isArrived(c) || !c.krSchedule || c.krSchedule.status!=='confirmed') return false;
+  c.krSchedule.status = 'arrived'; c.hasArrived = true;
+  updateCaseStage(c);
+  logCaseEvent(c, by, 'KR标记"已到医院"');
+  pushNotif('赴韩施术','客人已到医院：'+c.name, {caseId:c.id});
+  return true;
+}
+var KR_JUDGE_TEXT = {ok:'能施术，项目没变动', changed:'能施术，但项目有变动', cannot:'不能施术'};
+function coreJudge(c, result, by){
+  if(!c.hasArrived || c.visitClosed || c.krJudge || !KR_JUDGE_TEXT[result]) return false;
+  c.krJudge = {result:result, settled:false};
+  logCaseEvent(c, by, 'KR判断：'+KR_JUDGE_TEXT[result]);
+  pushNotif('赴韩施术','KR 判断：'+c.name+'（'+KR_JUDGE_TEXT[result]+'）', {caseId:c.id});
+  return true;
+}
+function coreMarkUnable(c, names, reason, by){
+  if(!c.krJudge || c.krJudge.result!=='changed' || c.krJudge.settled) return false;
+  var pending = krNotStartedItems(c);
+  if(!names.length || names.length>=pending.length) return false; /* 至少保留一个；全部不能做属于"不能施术" */
+  pending.forEach(function(it){ if(names.indexOf(it.name)>-1){ it.cancelled = true; it.unable = true; it.unableReason = reason; } });
+  logCaseEvent(c, by, 'KR标记无法施术：'+names.join('、')+'（项目→已取消）；原因：'+reason);
+  pushNotif('赴韩施术','KR 标记无法施术：'+c.name+'（'+names.join('、')+'）', {caseId:c.id});
+  updateCaseStage(c);
+  return true;
+}
+/* 更换项目：原项目留在原结算单标「已更换」；新项目另开新结算单，不收定金，金额直接计入尾款（"计入尾款"） */
+function coreSwapItem(c, itemName, altName, by){
+  if(!c.krJudge || c.krJudge.result!=='changed' || c.krJudge.settled) return false;
+  var target = krNotStartedItems(c).filter(function(it){ return it.name===itemName; })[0];
+  var alt = PROJECT_LIBRARY.filter(function(p){ return p.name===altName && p.active && p.origin==='KR' && (!c.hospitalId || p.hospitalId===c.hospitalId); })[0];
+  if(!target || !alt) return false;
+  target.swapped = true; target.replacedBy = alt.name;
+  var newId = 'B' + ((c.settlementBatches||[]).length + 1);
+  c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:alt.price, krDeposit:0, krBalance:alt.price, inTotal:0, noDeposit:true, swapOf:target.name});
+  c.procedureItems.push({projectId:alt.id, name:alt.name, price:alt.price, currency:currencyOf(alt.origin), origin:'KR', categoryId:alt.categoryId, done:false, batchId:newId, swappedFrom:target.name});
+  c.settleTab = null;
+  logCaseEvent(c, by, '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
+  pushNotif('赴韩施术','KR 更换项目：'+c.name+'（'+target.name+' → '+alt.name+'）', {caseId:c.id});
+  return true;
+}
+/* 付尾款并确认行程：可弹性术后管理的地点和金额在这时确定（锁定分配）；韩国部分进尾款，印尼部分生成「待 IN 室长收款」（收到后才转 IN 持有项目，客人当下不买就不生成） */
+function innCareLines(c){
+  var out = [];
+  krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='either' && s.inn>0) out.push({item:it.name, name:x.name, innName:x.innName, times:s.inn, price:x.innPrice||0, day:x.day||''}); }); });
+  return out;
+}
+function coreSettleBalance(c, by){
+  if(!isArrived(c) || c.krBalancePaid || !c.krJudge || c.krJudge.settled) return {ok:false};
+  var j = c.krJudge; if(j.result!=='ok' && j.result!=='changed') return {ok:false};
+  var info = krBalanceInfo(c);
+  if(info.diff < 0){ /* 定金多了：金额由 KR 判断，IN 室长按这个金额退差额 */
+    j.refundDue = -info.diff;
+    logCaseEvent(c, by, 'KR判断：尾款应退差额 '+formatCurrency(-info.diff,'KRW')+'（实际项目合计 '+formatCurrency(info.total,'KRW')+'，可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'），请 IN 室长按此金额退款');
+    pushNotif('赴韩施术','KR 判断需退尾款差额 '+formatCurrency(-info.diff,'KRW')+'：'+c.name+'，请按此金额操作退款', {caseId:c.id});
+    return {ok:true, refund:true};
+  }
+  c.krBalancePaid = true; j.settled = true; /* 付清尾款后分配锁定 */
+  var inn = innCareLines(c);
+  if(inn.length){ c.innCare = {lines:inn, total:inn.reduce(function(s,l){ return s+l.price*l.times; },0), status:'pending'}; }
+  logCaseEvent(c, by, 'KR确认行程并标记"付清尾款"：尾款 '+formatCurrency(info.diff,'KRW')+(inn.length ? '；术后管理印尼部分 '+formatCurrency(c.innCare.total,'IDR')+' 待 IN 室长收款' : ''));
+  pushNotif('赴韩施术','客人付清尾款、行程已确认：'+c.name+(inn.length ? '；印尼部分术后管理 '+formatCurrency(c.innCare.total,'IDR')+' 请收款（收到后转为客人持有项目）' : ''), {caseId:c.id});
+  return {ok:true};
+}
+/* KR 在韩重新预约施术时间：回到"施术时间已确认"（新时间），客人再到医院时 KR 重新标记已到医院；IN 不能改 */
+function coreRebook(c, date, time, by){
+  if(!c.krSchedule || !isArrived(c) || (c.krJudge && c.krJudge.result!=='cannot' && c.krJudge.settled)) return false;
+  var ks = c.krSchedule; ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time;
+  c.krJudge = null;
+  logCaseEvent(c, by, 'KR在韩国重新预约施术时间：'+date+' '+time+'（回到施术时间已确认，IN端显示更改时间）');
+  pushNotif('赴韩施术','KR 在韩国重新预约了施术时间：'+c.name+' '+date+' '+time, {caseId:c.id});
+  syncSurgeryBlock(c); updateCaseStage(c);
+  return true;
+}
+/* 不能施术时退定金：全部退回 / 不退，由 KR 室长判断；IN 室长按这个判断在系统里操作退款 → 仅出报告 */
+function coreRefundDecision(c, kind, by){
+  if(!c.krJudge || c.krJudge.result!=='cannot' || c.krJudge.refundKind) return false;
+  c.krJudge.refundKind = kind;
+  logCaseEvent(c, by, 'KR判断：不能施术，定金'+(kind==='all' ? '全部退回' : '不退')+'（请 IN 室长按此判断操作）');
+  pushNotif('赴韩施术','KR 判断不能施术、定金'+(kind==='all' ? '全部退回' : '不退')+'：'+c.name+'，请按此操作', {caseId:c.id});
+  return true;
+}
+/* IN 室长收印尼盾后，印尼部分术后管理转成客人在 IN 的持有项目（schedule = 术后第 N 天）；客人当下不买就不生成，之后回印尼当一般本地项目买 */
+function confirmInnCare(buy){
+  var c = getCurrentCase(); if(!c || !c.innCare || c.innCare.status!=='pending') return;
+  var today = nowFullDt().split(' ')[0];
+  if(buy){
+    c.innCare.lines.forEach(function(l){
+      grantHolding(c.name, l.innName, '术后管理', c.id, today, l.times, false);
+      var h = (CLIENT_HOLDINGS[c.name]||[]).filter(function(x){ return x.itemName===l.innName; })[0], b = h && h.batches[h.batches.length-1], m = String(l.day).match(/(\d+)/);
+      if(b && m) b.schedule = '术后第'+m[1]+'天'; /* 持有项目的进行时间 */
+    });
+    c.innCare.status = 'collected'; c.innCare.at = nowFullDt();
+    logCaseEvent(c, actingName(), '收取术后管理印尼部分 '+formatCurrency(c.innCare.total,'IDR')+'，已转入客人持有项目：'+c.innCare.lines.map(function(l){ return l.innName+' ×'+l.times; }).join('、'));
+  } else {
+    c.innCare.status = 'declined'; c.innCare.at = nowFullDt();
+    logCaseEvent(c, actingName(), '客人当下不购买术后管理印尼部分（不生成持有项目，之后回印尼当一般本地项目购买）');
+  }
+  buildCaseLog(c); renderCaseBody(c);
+}
+function innCareCardHtml(c){
+  var ic = c.innCare; if(!ic) return '';
+  var lines = ic.lines.map(function(l){ return '<div style="font-size:12px;margin:3px 0;">'+l.innName+' × '+l.times+'（'+formatCurrency(l.price,'IDR')+'/次'+(l.day?'，'+l.day:'')+'，来自 '+l.item+' 的术后管理）</div>'; }).join('');
+  var action = ic.status==='pending'
+    ? '<div style="display:flex;gap:8px;margin-top:8px;"><button class="btn-primary" onclick="confirmInnCare(true)">已收款 '+formatCurrency(ic.total,'IDR')+'（转为客人持有项目）</button><button class="btn-outline" onclick="confirmInnCare(false)">客人当下不买</button></div>'
+    : '<div style="font-size:12px;color:'+(ic.status==='collected'?'var(--sage)':'var(--muted)')+';margin-top:6px;">'+(ic.status==='collected' ? '✓ 已收款并转为客人持有项目（'+ic.at+'）' : '客人当下没有购买，没有生成持有项目；之后回印尼当一般本地项目购买')+'</div>';
+  return '<div style="border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-top:14px;background:#FBF6EA;"><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">术后管理 · 印尼部分（付尾款确认行程时由 IN 室长收印尼盾）</div>'+lines+action+'</div>';
+}
+
 /* 确认后修改日期：施术前2周内置灰不可点；月历默认打开原定日期所在月份（2026-09-29 第十轮修复） */
 function startKrScheduleChange(){
   var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='confirmed') return;
@@ -3206,7 +3322,7 @@ function krProcedureTabMain(c, tabsHtml){
     '</div>';
   var unableBanner = '';
   var unableBtn = '';
-  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+body+itemsHtml+'</div>';
+  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+body+itemsHtml+innCareCardHtml(c)+'</div>';
 }
 
 function markConsultPaid(){

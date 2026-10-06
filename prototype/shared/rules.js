@@ -484,14 +484,15 @@ function itemMetaText(it){
 }
 function pcAllocEditable(c){ return !c.krBalancePaid && !isEnded(c); } /* 付尾款前都可以改 */
 /* 已选 / 结算单里每个赴韩项目下面的术后管理行：显示韩国 n + 印尼 m；可弹性的（且有印尼对应项目）IN 室长可调 */
-function pcLinesHtml(c, it){
+function pcLinesHtml(c, it, fn){
+  fn = fn || 'setPcAlloc';
   if(!(it.postcare||[]).length) return '';
   var editable = pcAllocEditable(c) && !it.cancelled && !it.swapped, bid = it.batchId || '';
   return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);">'+it.postcare.map(function(x, i){
     var s = pcSplit(x), amt = (x.price||0)*s.kr, head = x.name+'（韩元 '+formatCurrency(x.price||0,'KRW')+'/次'+(x.day?'，'+x.day:'')+'）';
     if(x.place==='KR') return '<div style="margin:3px 0;">'+head+'：韩国 '+x.times+' 次，必须在韩国 · '+formatCurrency(amt,'KRW')+'（计入定金）</div>';
     var ctl = (editable && x.innName)
-      ? '印尼 <input type="number" min="0" max="'+x.times+'" value="'+s.inn+'" onchange="setPcAlloc(\''+it.projectId+'\',\''+bid+'\','+i+',this.value)" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;font-size:11px;"> 次'
+      ? '印尼 <input type="number" min="0" max="'+x.times+'" value="'+s.inn+'" onchange="'+fn+'(\''+it.projectId+'\',\''+bid+'\','+i+',this.value)" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;font-size:11px;"> 次'
       : '印尼 '+s.inn+' 次'+(x.innName ? '' : '（没有印尼对应项目，只能在韩国）');
     return '<div style="margin:3px 0;">'+head+'：韩国 '+s.kr+' 次 + '+ctl+' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;font-size:10px;">暂定</span> · 韩国部分 '+formatCurrency(amt,'KRW')+(s.inn ? '，印尼部分 '+formatCurrency((x.innPrice||0)*s.inn,'IDR')+'（'+x.innName+'）' : '')+'</div>';
   }).join('')+'</div>';
