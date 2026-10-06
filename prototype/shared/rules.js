@@ -5,7 +5,7 @@ function dowOfDate(ds){ var d = new Date(ds+'T00:00:00'); var wd = d.getDay(); r
 
 function dateLabel(ds){ var d = new Date(ds+'T00:00:00'); return (d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]; }
  /* 只含启用的院长（案例库院长节点、选项都读这个） */
-function isDirectorActive(name){ return DIRECTOR_LIST.indexOf(name)>-1; }
+function isDirectorActive(name){ return Object.keys(HOSPITAL_DATA).some(function(h){ return hospitalDirectorNames(h).indexOf(name)>-1; }); } /* 院长名字在各医院里不重名；停用的不算 */
 
 function clientCaseStatus(entry){
   var c = clientLatestCase(entry.name);

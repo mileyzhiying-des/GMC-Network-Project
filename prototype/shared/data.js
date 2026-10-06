@@ -1568,7 +1568,11 @@ function applyCaseLink(c){
   if(!c.linkedCase || !c.linkedCase.caseId) { c.linkedCase = null; return; }
   var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
   logCaseEvent(c, actingName(), '关联之前案件 '+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'（'+c.linkedCase.reason+'）');
-  if(src && (c.linkedCase.reason==='复诊' || c.linkedCase.reason==='延续既往面诊') && DIRECTOR_LIST.indexOf(src.director)>-1 && c.director!==src.director){
+  if(src && src.hospitalId && (c.linkedCase.reason==='复诊' || c.linkedCase.reason==='延续既往面诊') && c.hospitalId!==src.hospitalId){
+    logCaseEvent(c, '系统', '关联'+c.linkedCase.reason+'：医院锁定为原案件的医院 '+hospitalName(src.hospitalId,'ko'));
+    c.hospitalId = src.hospitalId;
+  }
+  if(src && (c.linkedCase.reason==='复诊' || c.linkedCase.reason==='延续既往面诊') && isDirectorActive(src.director) && c.director!==src.director){
     logCaseEvent(c, '系统', '关联'+c.linkedCase.reason+'：院长锁定为原院长 '+src.director+'（原：'+c.director+'）');
     c.director = src.director;
   }
@@ -1768,33 +1772,69 @@ function onNewHistoryChanged(){
   renderCaseBody(c);
 }
 
-/* 院长（2026-10-02）：选"面诊"才出现，必选；选项只含启用的院长；复诊/延续既往面诊 → 默认带出原案件院长并锁定，原院长停用时才解锁可改选；
-   确认后写入案件的对接院长，选定后不能更换（没有更换院长按钮）；不面诊的本地案件没有院长 */
+/* 医院 + 院长（2026-10-06 多医院）：选"面诊"才出现，都必选；先选医院（只列出本诊所对接的医院；只对接一家就自动选定），再选该医院的院长（只含启用的院长）；
+   复诊/延续既往面诊 → 医院锁定为原案件的医院；院长默认带出原案件院长并锁定，原院长停用时才解锁可改选（医院仍锁定）；
+   确认后写入案件的医院和对接院长，选定后不能更换；不面诊的本地案件没有医院和院长 */
+function hospitalLockInfo(c){
+  var l = c.linkedCase; if(!l || !l.caseId || (l.reason!=='复诊' && l.reason!=='延续既往面诊')) return null;
+  var src = CASE_ITEMS.filter(function(x){ return x.id===l.caseId; })[0];
+  if(!src || !src.hospitalId) return null;
+  return {hospitalId:src.hospitalId, caseNo:src.caseNo, reason:l.reason};
+}
 function directorLockInfo(c){
   var l = c.linkedCase; if(!l || !l.caseId || (l.reason!=='复诊' && l.reason!=='延续既往面诊')) return null;
   var src = CASE_ITEMS.filter(function(x){ return x.id===l.caseId; })[0];
   if(!src || !src.director || !isDirectorActive(src.director)) return null;
-  return {name:src.director, caseNo:src.caseNo, reason:l.reason};
+  return {name:src.director, hospitalId:src.hospitalId, caseNo:src.caseNo, reason:l.reason};
 }
+/* 这个案件面诊的医院：已选的；只对接一家医院的诊所自动是那一家 */
+function caseHospitalId(c){
+  var hl = hospitalLockInfo(c); if(hl) return hl.hospitalId;
+  if(c.hospitalId) return c.hospitalId;
+  var ls = linkedHospitalIds(c.clinicId); return ls.length===1 ? ls[0] : null;
+}
+function caseHospitalName(c){ var h = c.hospitalId || caseHospitalId(c); return h ? hospitalName(h, 'ko') : ''; }
+/* 这个案件所选院长开放的施术日期（KR 端按院长设定） */
+function caseOpenDates(c){ return (c && c.hospitalId && c.director) ? hospitalOpenDates(c.hospitalId, c.director) : []; }
 
 function syncDirectorChoice(c){
   if(c.materialsConfirmed) return;
+  if(c.needsConsult!==true){ c.director = null; c.hospitalId = null; return; }
+  var hid = caseHospitalId(c); if(hid) c.hospitalId = hid;
   var lk = directorLockInfo(c);
-  if(c.needsConsult===true && lk) c.director = lk.name;
-  else if(c.needsConsult!==true) c.director = null;
-  else if(c.director && !isDirectorActive(c.director)) c.director = null;
+  if(lk && (!c.hospitalId || lk.hospitalId===c.hospitalId)) c.director = lk.name;
+  else if(c.director && (!c.hospitalId || hospitalDirectorNames(c.hospitalId).indexOf(c.director)<0)) c.director = null;
 }
 
+function setCaseHospital(v){
+  var c = getCurrentCase(); if(!c) return;
+  c.hospitalId = v || null;
+  if(!c.hospitalId || hospitalDirectorNames(c.hospitalId).indexOf(c.director)<0) c.director = null; /* 换医院后，院长要在新医院里重选 */
+  renderCaseBody(c);
+}
 function setCaseDirector(v){ var c = getCurrentCase(); if(!c) return; c.director = v || null; renderCaseBody(c); }
+
+/* 医院 + 院长两个下拉（基础资料选面诊时；增加面诊后缴费前也用这两个） */
+function hospitalDirectorSelectHtml(c, onHospital, onDirector, selStyle){
+  var hl = hospitalLockInfo(c), lk = directorLockInfo(c), ls = linkedHospitals(c.clinicId);
+  var hid = caseHospitalId(c);
+  var hospSel = '<select '+((hl || ls.length<2)?'disabled ':'')+'onchange="'+onHospital+'(this.value)" style="'+selStyle+((hl||ls.length<2)?'background:var(--sand);color:var(--muted);':'')+'"><option value="">请选择医院</option>'+
+    ls.map(function(h){ return '<option value="'+h.id+'"'+(hid===h.id?' selected':'')+'>'+h.name.ko+' / '+h.name.en+'</option>'; }).join('')+'</select>';
+  var names = hid ? hospitalDirectorNames(hid) : [];
+  var dirLocked = !!lk && (!hid || lk.hospitalId===hid);
+  var dirSel = '<select '+((dirLocked || !hid)?'disabled ':'')+'onchange="'+onDirector+'(this.value)" style="'+selStyle+((dirLocked||!hid)?'background:var(--sand);color:var(--muted);':'')+'"><option value="">'+(hid?'请选择院长':'请先选择医院')+'</option>'+
+    names.map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+'</select>';
+  return {hosp:hospSel, dir:dirSel, hid:hid, hl:hl, lk:lk};
+}
 
 function directorRowHtml(c){
   if(c.needsConsult!==true) return '';
-  var lk = directorLockInfo(c);
-  var sel = '<select '+(lk?'disabled ':'')+'onchange="setCaseDirector(this.value)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;'+(lk?'background:var(--sand);color:var(--muted);':'')+'"><option value="">请选择院长</option>'+
-    DIRECTOR_LIST.map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+'</select>';
-  var hint = lk ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">🔒 关联"'+lk.reason+'"（'+lk.caseNo+'）：已锁定原院长；原院长停用时才可改选</div>'
-    : ((c.linkedCase && c.linkedCase.caseId && (c.linkedCase.reason==='复诊'||c.linkedCase.reason==='延续既往面诊')) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">原案件的院长已停用，请重新选择院长</div>' : '<div style="font-size:11px;color:var(--muted);margin-top:6px;">确认后不能更换</div>');
-  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+sel+hint+'</div></div>';
+  var o = hospitalDirectorSelectHtml(c, 'setCaseHospital', 'setCaseDirector', 'padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;');
+  var lk = o.lk, hl = o.hl;
+  var hint = (hl ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">🔒 关联"'+hl.reason+'"（'+hl.caseNo+'）：医院已锁定为原案件的医院'+(lk ? '，院长已锁定原院长；原院长停用时才可改选' : '')+'</div>' : '')+
+    ((!lk && c.linkedCase && c.linkedCase.caseId && (c.linkedCase.reason==='复诊'||c.linkedCase.reason==='延续既往面诊')) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">原案件的院长已停用，请在原医院里重新选择院长</div>' : '')+
+    ((!hl && !lk) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">先选医院（只列出本诊所对接的医院），再选该医院的院长；确认基础资料后不能更换</div>' : '');
+  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">医院 / 院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+o.hosp+o.dir+'</div>'+hint+'</div></div>';
 }
 
 function setNeedsConsult(val){
@@ -1820,7 +1860,8 @@ function applyReuseReport(c){
   var src = reportSrcOf(c); if(!src) return;
   c.needsConsult = true;
   c.consultRequested = true;
-  c.director = src.director || c.director; /* 沿用原报告：院长沿用原案件的 */
+  c.director = src.director || c.director; /* 沿用原报告：医院和院长沿用原案件的 */
+  c.hospitalId = src.hospitalId || c.hospitalId;
   c.reportReady = true;
   c.consultStatus = 'report_ready';
   c.videoSummary = src.videoSummary || '';
@@ -1989,7 +2030,8 @@ function addConsult(){
   c.consultRequested = true;
   c.consultStatus = 'awaiting_payment';
   c.activeCaseTab = 'consult';
-  var lk0 = directorLockInfo(c); if(lk0) c.director = lk0.name; /* 关联复诊/延续既往面诊：锁定原院长；否则缴费前在面诊费卡里选院长 */
+  var hl0 = hospitalLockInfo(c); if(hl0) c.hospitalId = hl0.hospitalId; else if(!c.hospitalId) c.hospitalId = caseHospitalId(c);
+  var lk0 = directorLockInfo(c); if(lk0) c.director = lk0.name; /* 关联复诊/延续既往面诊：锁定原医院和院长；否则缴费前在面诊费卡里选医院和院长 */
   updateCaseStage(c);
   logCaseEvent(c, actingName(), '发起"增加面诊"（面诊费在面诊资料tab缴纳或免除）');
   renderCaseStatusBar(c);
@@ -2065,13 +2107,14 @@ function feeDraft(c){
   return c.feeDraft;
 }
 
+function setConsultHospital(v){ setCaseHospital(v); }
 function setConsultDirector(v){ var c = getCurrentCase(); if(!c) return; c.director = v || null; renderCaseBody(c); }
 
 function consultDirectorPickHtml(c){
-  if(c.director) return '';
-  return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--terracotta-bg);border-radius:10px;font-size:13px;">院长 <span style="color:var(--terracotta);">*</span> '+
-    '<select onchange="setConsultDirector(this.value)" style="margin-left:8px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">请选择院长</option>'+
-    DIRECTOR_LIST.map(function(x){ return '<option>'+x+'</option>'; }).join('')+'</select><span style="font-size:11px;color:var(--muted);margin-left:8px;">缴费前必选，选定后不能更换</span></div>';
+  if(c.director && c.hospitalId) return '';
+  var o = hospitalDirectorSelectHtml(c, 'setConsultHospital', 'setConsultDirector', 'padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;');
+  return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--terracotta-bg);border-radius:10px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">医院 / 院长 <span style="color:var(--terracotta);">*</span> '+
+    o.hosp+o.dir+'<span style="font-size:11px;color:var(--muted);">缴费前必选，选定后不能更换</span></div>';
 }
 
 function consultFeeFormHtml(c){
@@ -2741,7 +2784,7 @@ function confirmSettlementPayment(){
   c.procedureItems = (c.procedureItems||[]).filter(function(it){ return it.origin!=='IN'; });
   if(krActiveItems(c).length>0){
     c.activeCaseTab = 'kr';
-    KR_SCHED_VIEW_MONTH = nearestOpenMonth(TODAY_DATE); /* 月历默认打开最近的可选月份，不停在上次浏览过的月份 */
+    KR_SCHED_VIEW_MONTH = nearestOpenMonth(TODAY_DATE, caseOpenDates(c)); /* 月历默认打开最近的可选月份，不停在上次浏览过的月份 */
   } else {
     /* 纯本地：结算后必须过一遍"持有项目使用/本次不使用"才能结案，即使刚买的项目也要在这一步决定用不用 */
     if(c.mgmtActive){ c.addUse = true; } /* 本地管理进行中追加购买：付款后直接问是否继续使用 */
@@ -2766,14 +2809,15 @@ function confirmSettlementPayment(){
 
 /* ---- 赴韩施术 tab（2026-09-29 重写，原"施术"tab拆分为两个）：施术日期改到已付款之后才递交，
    不再是结算前的排期门槛；日期只能选 KR_OPEN_DATES 里开放的（演示数据，未开放置灰不可选） ---- */
-var KR_OPEN_DATES = [D(1),D(2),D(3),D(4),D(10),D(11),D(17),D(18),D(20),D(24),D(25),D(31),D(32),D(38),D(39),D(45),D(46),D(52),D(53)];
+var KR_OPEN_DATES = [D(1),D(2),D(3),D(4),D(10),D(11),D(17),D(18),D(20),D(24),D(25),D(31),D(32),D(38),D(39),D(45),D(46),D(52),D(53)]; /* 种子：H1 김민석 院长的开放日期（初始化后按医院/院长存在 HOSPITAL_DATA 里，读 caseOpenDates(c)） */
 
 var KR_SCHED_VIEW_MONTH = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth(), 1);
 
 /* 月历默认打开的月份（2026-09-29 第十轮修复：原来是全局变量，翻页后不会在切换案件/重新进入时复位，
    导致"看起来停在别的月份"；现在每次进入日期选择/修改流程时显式重置，不再依赖上次翻页停留的位置） */
-function nearestOpenMonth(fromDate){
-  var sorted = KR_OPEN_DATES.slice().sort();
+function nearestOpenMonth(fromDate, dates){
+  var sorted = (dates || []).slice().sort();
+  if(!sorted.length) return new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
   var target = sorted.filter(function(d){ return new Date(d) >= fromDate; })[0] || sorted[0];
   var d = new Date(target);
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -2793,8 +2837,8 @@ function krScheduleMonthShift(dir){
    pf/bf 是存放首选/备选的字段名（首次递交：primary/backup；修改日期：changePrimary/changeBackup） */
 function pickKrDate(pf, bf, y, m, d){
   var dateStr = fmtDateYMD(y,m,d);
-  if(KR_OPEN_DATES.indexOf(dateStr)===-1) return; /* 未开放的日期不可选 */
   var c = getCurrentCase(); if(!c) return;
+  if(caseOpenDates(c).indexOf(dateStr)===-1) return; /* 未开放的日期不可选（只看该案件所选院长开放的日期） */
   var ks = ensureKrScheduleDraft(c);
   if(ks[pf]===dateStr) ks[pf] = '';
   else if(ks[bf]===dateStr) ks[bf] = '';
@@ -2804,6 +2848,7 @@ function pickKrDate(pf, bf, y, m, d){
 }
 
 function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
+  var openDatesNow = caseOpenDates(getCurrentCase());
   var y = KR_SCHED_VIEW_MONTH.getFullYear(), m = KR_SCHED_VIEW_MONTH.getMonth();
   var firstDow = new Date(y,m,1).getDay();
   var daysInMonth = new Date(y,m+1,0).getDate();
@@ -2817,7 +2862,7 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
     cells.map(function(d){
       if(!d) return '<div></div>';
       var dateStr = fmtDateYMD(y,m,d);
-      var open = KR_OPEN_DATES.indexOf(dateStr)>-1;
+      var open = openDatesNow.indexOf(dateStr)>-1;
       var style = 'padding:5px 0;border-radius:6px;';
       if(!open) style += 'color:var(--dim);';
       else if(dateStr===primaryVal) style += 'background:var(--navy);color:#fff;font-weight:700;cursor:pointer;';
@@ -2849,7 +2894,7 @@ function simulateKrScheduleRejectNew(){
   c.krSchedule.status = null;
   c.krSchedule.primary = '';
   c.krSchedule.backup = '';
-  KR_SCHED_VIEW_MONTH = nearestOpenMonth(TODAY_DATE);
+  KR_SCHED_VIEW_MONTH = nearestOpenMonth(TODAY_DATE, caseOpenDates(getCurrentCase()));
   logCaseEvent(c, '이서연', 'Kr室长回复：两个日期都无法安排，请重新选择');
   updateCaseStage(c);
   buildCaseLog(c);

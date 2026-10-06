@@ -1229,7 +1229,7 @@ function simulateKrScopeUpdate(){
   c.krScope = c.krScope || {items:[], overallNote:'', updatedAt:''};
   var noteMap = {'颧骨缩小':'不可与下颌角同时做', '假体隆鼻':'需先评估鼻基底条件'};
   var candidates = PROJECT_LIBRARY.filter(function(p){
-    return p.origin==='KR' && p.active && !c.krScope.items.some(function(it){ return it.name===p.name; });
+    return p.origin==='KR' && p.active && (!c.hospitalId || p.hospitalId===c.hospitalId) && !c.krScope.items.some(function(it){ return it.name===p.name; });
   });
   if(!candidates.length){ alert('演示：项目库里的赴韩项目已经全部在可选范围内了'); return; }
   var pick = candidates[0];
@@ -1254,7 +1254,7 @@ function openCaseInfoDrawer(){
   var c = getCurrentCase(); if(!c) return;
   document.getElementById('peek-name').textContent = '姓名：'+c.name;
   document.getElementById('peek-contact').textContent = '联系方式：'+caseBasic(c).contact;
-  document.getElementById('peek-director').textContent = '对接院长：'+(c.director||'—');
+  document.getElementById('peek-director').textContent = (c.hospitalId ? '医院：'+hospitalName(c.hospitalId,'ko')+' · ' : '')+'对接院长：'+(c.director||'—');
   document.getElementById('peek-viewall').onclick = function(){ closeCaseInfoDrawer(); openClientDetail(c.name, 'in-cases'); return false; };
   document.getElementById('peek-overlay').classList.add('open');
   document.getElementById('case-info-drawer').classList.add('open');
@@ -1310,7 +1310,7 @@ function closeCancelIntakeModal(){
 
 function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;
-  var html = c.director ? '对接院长：'+c.director : '';
+  var html = (c.hospitalId ? '医院：'+hospitalName(c.hospitalId,'ko') : '')+(c.director ? (c.hospitalId?' · ':'')+'对接院长：'+c.director : '');
   if(c.linkedCase && c.linkedCase.caseId){
     var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
     html += (html ? ' · ' : '')+'关联：<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
@@ -1353,7 +1353,7 @@ function renderIntentionPickerModal(){
   document.getElementById('intention-picker-tabs').innerHTML =
     '<span class="chip'+(INTENTION_PICKER_FILTER==='KR'?' active':'')+'" onclick="setIntentionPickerFilter(\'KR\')">赴韩项目</span>'+
     '<span class="chip'+(INTENTION_PICKER_FILTER==='IN'?' active':'')+'" onclick="setIntentionPickerFilter(\'IN\')">本地项目</span>';
-  var catalog = PROJECT_LIBRARY.filter(function(p){ return p.origin===INTENTION_PICKER_FILTER && p.active; });
+  var catalog = PROJECT_LIBRARY.filter(function(p){ return p.origin===INTENTION_PICKER_FILTER && p.active && (p.origin!=='KR' || !c.hospitalId || p.hospitalId===c.hospitalId); }); /* 赴韩项目：已选医院就只列该医院的 */
   document.getElementById('intention-picker-list').innerHTML = catalog.map(function(p){
     var checked = (c.intentionProjects||[]).some(function(it){ return it.projectId===p.id; });
     return '<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
@@ -1407,6 +1407,7 @@ function confirmMaterials(){
   if(c.needsConsult!==true && c.needsConsult!==false && !(c.needsConsult==='reuse' && reusableReportSrc(c))) missing.push('面诊需求');
   if(c.linkedCase && c.linkedCase.caseId && !c.linkedCase.reason) missing.push('关联原因');
   syncDirectorChoice(c);
+  if(c.needsConsult===true && !c.hospitalId) missing.push('医院');
   if(c.needsConsult===true && !c.director) missing.push('院长');
   if(missing.length){
     c.materialsError = '';
@@ -1497,7 +1498,7 @@ function editConcernField(field){
 
 function confirmConsultFee(){
   var c = getCurrentCase(); if(!c) return;
-  if(!c.director){ alert('请先选择院长'); return; }
+  if(!c.hospitalId || !c.director){ alert('请先选择医院和院长'); return; }
   var d = feeDraft(c);
   if(d.locked && d.mode==='waive'){ alert('距原案件报告日期已超过1个月，不能免除面诊费'); return; }
   if(d.mode==='paid'){ markConsultPaid(); return; }
@@ -1826,11 +1827,11 @@ function submitKrUnable(){
 function krReschedule(clearJudge){
   var c = getCurrentCase(); if(!c || !c.krSchedule || !isArrived(c)) return;
   var ks = c.krSchedule;
-  var def = KR_OPEN_DATES.filter(function(d){ return d>ks.confirmedDate; })[0] || KR_OPEN_DATES[0];
+  var od = caseOpenDates(c), def = od.filter(function(d){ return d>ks.confirmedDate; })[0] || od[0];
   var v = prompt('KR 在韩国重新预约：请输入新的施术日期（KR 已开放，例如 '+def+'）', def);
   if(v===null) return;
   v = v.trim();
-  if(KR_OPEN_DATES.indexOf(v)===-1){ alert('该日期 KR 未开放'); return; }
+  if(od.indexOf(v)===-1){ alert('该日期 KR 未开放（'+c.director+'）'); return; }
   ks.status = 'confirmed'; ks.confirmedDate = v; ks.confirmedTime = '14:00';
   if(clearJudge) c.krJudge = null; /* 不能施术→重新预约：之后到院重新判断 */
   logCaseEvent(c, '김민석 원장', 'KR在韩国重新预约施术时间：'+v+' 14:00（回到施术时间已确认，IN端显示更改时间）');
