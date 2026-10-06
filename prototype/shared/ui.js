@@ -1237,23 +1237,6 @@ function closeInviteKrModal(){
   document.getElementById('invite-kr-overlay').classList.remove('open');
 }
 
-/* 演示按钮：模拟KR室长更新可选项目——往 krScope 里加一个项目+备注，结算前、加项时都能用 */
-function simulateKrScopeUpdate(){
-  var c = getCurrentCase(); if(!c) return;
-  c.krScope = c.krScope || {items:[], overallNote:'', updatedAt:''};
-  var noteMap = {'颧骨缩小':'不可与下颌角同时做', '假体隆鼻':'需先评估鼻基底条件'};
-  var candidates = PROJECT_LIBRARY.filter(function(p){
-    return p.origin==='KR' && p.active && (!c.hospitalId || p.hospitalId===c.hospitalId) && !c.krScope.items.some(function(it){ return it.name===p.name; });
-  });
-  if(!candidates.length){ alert('演示：项目库里的赴韩项目已经全部在可选范围内了'); return; }
-  var pick = candidates[0];
-  c.krScope.items.push({name:pick.name, price:pick.price, note:noteMap[pick.name]||''});
-  c.krScope.updatedAt = nowFullDt();
-  logCaseEvent(c, krCoordShort(c), 'KR室长更新赴韩可选项目：新增"'+pick.name+'"');
-  buildCaseLog(c);
-  renderCaseBody(c);
-}
-
 function openReportModal(){
   var c = getCurrentCase(); if(!c) return;
   document.getElementById('report-body').innerHTML = reportModalContent(c);
@@ -2020,17 +2003,6 @@ function cancelConsult(){
 
 /* ---- 韩国那边的回应（2026-10-02 面诊改版）：面诊只有一种——院长看资料口述，KR室长整理提交报告，院长不参与视频。
    付面诊费 → 待确认报告时间（面诊预约）→ KR确认预计出报告时间 → 等待报告（预计X出报告+倒计时；超时只提醒）→ KR室长提交报告 → 项目确认中 ---- */
-function simulateKrConfirmReportEta(){
-  var c = getCurrentCase(); if(!c || c.consultStatus!=='paid_waiting_kr') return;
-  var d = new Date(nowDateObj().getTime() + 2*86400000);
-  var pad = function(n){ return (n<10?'0':'')+n; };
-  var def = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' 14:00';
-  var v = prompt('KR 确认的预计出报告时间（演示用，格式 YYYY-MM-DD HH:mm）', def);
-  if(v===null) return;
-  v = v.trim();
-  if(!reportEtaParse(v)){ alert('时间格式不对，请按 YYYY-MM-DD HH:mm 填写'); return; }
-  krConfirmReportEta(v, c);
-}
  /* 术后照片按恢复时间排序：1周→1个月→3个月… */
 /* 演示用角色：案例库、项目库两个页面共用同一个开关，切一次两边权限一起变 */
 var DEMO_ROLE = 'in';

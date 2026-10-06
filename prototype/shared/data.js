@@ -1415,13 +1415,6 @@ function coreJudgeContinuation(c, changed, by){
   }
   return true;
 }
-/* IN 端演示按钮（第六部分删除）还在用的包装 */
-function simulateDirectorJudge(changed){
-  var c = getCurrentCase(); if(!c) return;
-  if(!coreJudgeContinuation(c, changed, krDirName(c))) return;
-  buildCaseLog(c); updateCaseStage(c); renderCaseStatusBar(c); renderCaseBody(c);
-}
-
 /* 项目确认中：KR 室长补加可选项目（只能新增，不能删除；要拿掉在对话里和 IN 室长商量）。item = {name, price, note} */
 function coreAddScopeItem(c, item, by){
   if(!c || !c.reportReady || c.stage!=='consult' || !c.krScope) return false;
@@ -1455,38 +1448,6 @@ function coreSubmitReport(c, rep, by){
   pushNotif('面诊','报告已出：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   return true;
 }
-/* IN 端演示按钮（第六部分删除）还在用的包装 */
-function markReportUploaded(){
-  var c = getCurrentCase(); if(!c || c.consultStatus!=='awaiting_report') return;
-  syncKrCoordinator(c);
-  var txt = '轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。';
-  coreSubmitReport(c, {original:txt, zh:txt, items:defaultKrScopeItems(c), overallNote:'具体术式最终以到院评估为准', files:[]}, krCoordShort(c));
-  buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
-}
-
-/* 赴韩项目可选范围（2026-09-29 重写，"项目列表/赴韩施术/本地管理重构"指令）：
-   由KR室长直接整理（不经过院长），出报告时写入演示数据，格式 {name,price,note}，不挂项目库id引用。
-   演示用的具体项目名单+备注不是业务方指定的（用户确认继续当演示数据） */
-function defaultKrScopeItems(c){ /* 价格取该案件所选医院的赴韩项目 */
-  var hid = c && c.hospitalId;
-  return [
-    {name:'鼻综合（假体+鼻尖）', note:''},
-    {name:'切开双眼皮', note:''},
-    {name:'颧骨缩小', note:'不可与下颌角同时做'}
-  ].map(function(x){
-    var p = PROJECT_LIBRARY.filter(function(y){ return y.name===x.name && y.origin==='KR' && (!hid || y.hospitalId===hid); })[0];
-    return p ? {name:p.name, price:p.price, note:x.note} : null;
-  }).filter(Boolean);
-}
-
-function applyDirectorPlan(c){
-  /* 出报告同时，KR室长给出赴韩可选项目范围，不再自动预勾选到已选列表，改由IN室长自由勾选 */
-  c.krScope = {items:defaultKrScopeItems(c), overallNote:'具体术式最终以到院评估为准', updatedAt:nowFullDt()};
-  c.projectsEnabled = true;
-  c.projectOriginFilter = 'KR';
-}
-
-
 /* ---- 查看报告：格式化的报告视图，底部"查看方案"跳转项目列表 ---- */
 var REPORT_SHOW_ORIG = false; /* 报告弹窗：false = 翻译，true = 韩文原文 */
 function reportModalContent(c){
@@ -2221,19 +2182,15 @@ function consultTabHtml(c){
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认预计出报告时间（院长看资料后口述，由 KR 室长整理并提交报告；院长不参与视频）</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-outline" onclick="openFloatingChat(\'main\')">查看 Main 对话 →</button>'+
-      '<button class="btn-ghost" onclick="simulateKrConfirmReportEta()">演示：模拟KR确认预计出报告时间</button>'+
       '</div>');
   }
   if(c.consultStatus==='awaiting_report'){
     var judging = isContinuationConsult(c);
     var tip = judging
-      ? '延续既往面诊：院长判断相对原报告有无变动（无变动→沿用原报告→项目确认中；有变动→由KR室长提交新报告）'
+      ? '延续既往面诊：等 KR 判断相对原报告有无变动（无变动→沿用原报告→项目确认中；有变动→由KR室长提交新报告）'
       : '等待 KR 室长整理并提交报告';
     var btns = '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>查看报告 →</button>'+
-      (judging
-        ? '<button class="btn-ghost" onclick="simulateDirectorJudge(false)">演示：模拟院长判断：无变动</button><button class="btn-ghost" onclick="simulateDirectorJudge(true)">演示：模拟院长判断：有变动</button>'
-        : '<button class="btn-ghost" onclick="markReportUploaded()">演示：模拟KR室长提交报告</button>')+
-      '<button class="btn-ghost" onclick="simulateReportTimeout()">演示：模拟时间超过预计</button>';
+      '<button class="btn-ghost" onclick="simulateReportTimeout()">演示：模拟时间超过预计</button>'; /* 保留：这是演示时钟，不是 KR 的操作 */
     return wrap(feeCard+sub+
       '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">'+tip+(c.contJudged ? '（院长已判断：有变动）' : '')+'</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+btns+'</div>');
@@ -2676,7 +2633,6 @@ function projectPickerHtml(c, isAddition){
           '<span style="flex-grow:1;">'+p.name+projCasesLinkHtml(p.id)+noteHtml+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
       }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>');
     }
-    leftRows += '<button class="btn-ghost" style="margin-top:10px;font-size:11px;" onclick="simulateKrScopeUpdate()">演示：模拟KR室长更新可选项目</button>';
   } else {
     /* 本地项目分两块（2026-09-29 第十轮）：普通本地项目不受限，术后管理项目同样只能从krScope里选 */
     function inRow(p){
@@ -3161,13 +3117,6 @@ function coreSetReportEta(c, eta, by, isChange){
   updateCaseStage(c);
   return true;
 }
-/* IN 端演示按钮（第六部分删除）还在用的包装 */
-function krConfirmReportEta(eta, c){
-  c = c || getCurrentCase();
-  if(!coreSetReportEta(c, eta, krCoordShort(c), false)) return;
-  buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
-}
-
 /* 演示：超过预计时间还没出报告——小状态变橘色"已超过预计时间"，只提醒，状态不变 */
 function simulateReportTimeout(){
   var c = getCurrentCase(); if(!c || c.consultStatus!=='awaiting_report') return;

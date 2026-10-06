@@ -623,6 +623,7 @@ function krMakeDraft(){
     krVaultLog(v, 'AI 整理成报告草稿（演示模板）');
   });
   KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false;
+  if(typeof KR_SUB!=='undefined') KR_SUB.text = null; /* 提交区的报告内容改成最新草稿 */
   Store.touch(); krRenderCaseDetail();
 }
 function krVaultHtml(c){

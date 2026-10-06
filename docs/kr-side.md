@@ -59,3 +59,33 @@ tab：全部 / 面诊 / 项目确认中 / 施术预约 / 赴韩施术 / 已结�
 5. 对话只做了文字消息 + 引用标记显示，没有文件/视频/@/引用案件/静音（后面按需要补）。
 6. KR 通知目前只有：客人缴/免面诊费（真实钩子）+ 演示种子；报告超时、改期、术后管理等钩子在系列 3/4 随各操作一起加。
 7. 医院设定/账号管理在 KR 端只读；KR 账号购买/退订/重设的规则按 Accounts & Settings 第 7 节，放在后面做。
+
+---
+
+# KR 端系列 3/5：面诊联动（2026-10-06）
+依据 Notion KR-CASE-01（含分工表和测试情境 K9～K15）、Data Retention & Consent、Integrations & APIs。**KR 端操作 → 改来源诊所的案件**：`Store.mutateClinic(cid, fn)`（store.js）把该诊所分区换进全局变量（连 `CURRENT_CLINIC_ID`、`IN_COORDINATORS`、按该诊所合成的项目库一起换），fn 里直接调 IN 端的业务函数（`updateCaseStage`、`logCaseEvent`、`pushNotif`…），改完写回分区，IN 分页收到 storage 事件即时同步。业务逻辑放在 data.js 的 `core*` 函数（不碰界面）。
+
+## 一 确认 / 修改预计出报告时间（室长、管理者）
+`coreSetReportEta(c, eta, by, isChange)`：待确认报告时间 → 等待报告（IN 倒计时 + 通知）；等待报告时修改 → 两边 Timeline 记"原时间 → 新时间"+ IN 通知。面诊 tab 显示院长今天/明天的日程和 OFF；超时橘色提醒（IN 端规则不变，仍按时钟）。
+
+## 二 录入面诊 → AI 草稿（院长：自己的案件；室长：全部）
+语音（Web Speech API，韩语；不支持 / 没有麦克风权限 / 没识别到内容 → 演示文字，画面注明）、手动输入、［AI 整理成报告草稿］（固定韩文模板，注明演示；正式版接 LLM）。原始录音（演示占位，没有真实音频）、转写、草稿、修改过程存进 **KR 专用附件仓库** `HOSPITAL_DATA[h].vault['诊所:案件']`（IN 端不读不显示，结案后 3 年）。
+
+## 三 提交最终报告（只有室长、管理者）
+草稿上调整（韩文原文）+ 可选范围（赴韩项目选自 `HOSPITAL_DATA[h].projects`；术后管理项目选自来源诊所本地项目库「术后管理」分类）+ 各项备注 + 整体备注 + 附件（演示只记名称）→ `coreSubmitReport`：IN 变项目确认中、"报告已出"通知、院长大盘"室长刚提交的报告"出现。报告存 `c.reportKo`（原文），IN 看 `c.videoSummary`（演示翻译：只翻译模板固定词，注明），报告弹窗可切换看原文（`toggleReportOrig`）。可选范围的"所需术后管理 / 麻醉特性 / 推荐在韩时间"留给第 4 份。
+
+## 四 延续既往面诊与补加可选项目
+`coreJudgeContinuation`：无变动 → `applyReuseReport` 沿用原报告，IN 直接项目确认中；有变动 → 仍在等待报告，走二、三出新报告（院长自己的案件也可判断）。`coreAddScopeItem`：项目确认中（报告已出、还没进施术预约）补加，只增不减，IN 可选列表即时多出。
+
+## 五 权限
+院长：能录入、看草稿和仓库、判断延续既往（仅自己的案件）；不能确认/修改时间、提交、补加（界面不显示，函数里也再检查一次）。代表院长：进不了 kr.html（导去 owner.html），没有任何案件页。越权地址（`kr.html?case=诊所:案件号`）→ 导回首页。
+
+## 六 拿掉 IN 端面诊相关的"模拟 KR"
+删除：`simulateKrConfirmReportEta`（ui.js）、`krConfirmReportEta`、`markReportUploaded`、`simulateDirectorJudge`、`applyDirectorPlan`/`defaultKrScopeItems`（data.js，随之作废）、`simulateKrScopeUpdate`（ui.js）及它们在面诊 tab / 项目选择里的按钮。**保留**：「模拟时间超过预计」（`simulateReportTimeout`，是演示时钟不是 KR 操作）、所有施术相关的模拟按钮（第 4 份处理）。
+
+## 我的判断（待确认）
+1. "补加可选项目"的时机 = 报告已出且案件还在项目确认中（进施术预约后不能再补）。
+2. 提交报告至少要勾一个可选项目（赴韩或术后管理）。
+3. 演示翻译只翻模板固定词；正式版 AI 翻译整篇。
+4. 语音识别用韩语（`ko-KR`）；院长口述语言以后可设定。
+5. 仓库按"诊所:案件号"存在医院资料里，院长账号能看到自己案件的；管理者/室长看全部。
