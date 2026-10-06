@@ -354,3 +354,42 @@ function buyPay(){
   closeAcctModal(); openAdminPage('accounts', true);
   showToast('购买成功', ids.join('、')+' 待激活：把编号交给使用人，在登录页「首次激活」', null);
 }
+
+/* ================= 经营数据（老板、管理者；A7 基础版，只显示汇总数字，不显示个别客人） =================
+   具体要看哪些数字之后再讨论（Notion Accounts & Settings 第 6 节"待确认"）。口径是我的判断，见 docs/accounts-settings.md。 */
+var BIZ_MONTH = 'cur'; /* 'cur' 本月 / 'all' 全部 / 'YYYY-MM' */
+function bizCaseMonth(c){ var d = (c.logEntries && c.logEntries[0] && c.logEntries[0].dt) ? c.logEntries[0].dt.slice(0,10) : (c.visitDate || D(0)); return d.slice(0,7); }
+function bizSetMonth(v){ BIZ_MONTH = v; openAdminPage('bizdata', true); }
+ADMIN_RENDER.bizdata = function(el){
+  var curM = D(0).slice(0,7);
+  var months = {}; months[curM] = 1; CASE_ITEMS.forEach(function(c){ months[bizCaseMonth(c)] = 1; });
+  var monthList = Object.keys(months).sort().reverse();
+  var want = BIZ_MONTH==='cur' ? curM : BIZ_MONTH;
+  var cs = CASE_ITEMS.filter(function(c){ return want==='all' || bizCaseMonth(c)===want; });
+  var cnt = function(st){ return cs.filter(function(c){ return c.stage===st; }).length; };
+  var closed = cnt('closed'), report = cnt('reportonly'), cancelled = cnt('cancelled'), ongoing = cs.length - closed - report - cancelled;
+  var consultCases = cs.filter(function(c){ return consultFeePaid(c) || c.consultFeeWaived || c.reportReady; });
+  var travelCases = consultCases.filter(function(c){ return krAllItems(c).length > 0; });
+  var ratio = consultCases.length ? Math.round(travelCases.length*100/consultCases.length) : 0;
+  var feeCount = cs.filter(consultFeePaid).length, feeSum = feeCount * CLINIC_SETTINGS.consultFee;
+  var localSum = 0, krDeposit = 0;
+  cs.forEach(function(c){ var p = financePaid(c); localSum += p.inn; krDeposit += Math.max(0, p.kr - refundSum(c)); });
+  var perCoord = {};
+  cs.forEach(function(c){ var ops = caseOperators(c, true).inn; if(!ops.length) ops = ['（无操作记录）']; ops.forEach(function(n){ var o = perCoord[n] = perCoord[n] || {total:0, closed:0}; o.total++; if(c.stage==='closed') o.closed++; }); });
+  var coordNames = Object.keys(perCoord).sort(function(a,b){ return perCoord[b].total - perCoord[a].total; });
+  var maxC = Math.max.apply(null, [1].concat(coordNames.map(function(n){ return perCoord[n].total; })));
+  var tile = function(label, big, sub, color){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:140px;"><div style="font-size:11px;color:var(--muted);">'+label+'</div><div style="font-size:24px;font-weight:700;margin:4px 0;'+(color?'color:'+color+';':'')+'">'+big+'</div><div style="font-size:11px;color:var(--slate2);">'+sub+'</div></div>'; };
+  var bar = function(label, n, max, color, right){ return '<div style="display:flex;align-items:center;gap:12px;padding:7px 0;font-size:13px;"><span style="width:150px;flex-shrink:0;">'+label+'</span><span style="flex:1;background:var(--border2);border-radius:6px;height:12px;overflow:hidden;"><span style="display:block;height:100%;width:'+Math.round(n*100/max)+'%;background:'+color+';"></span></span><span style="width:110px;text-align:right;font-weight:700;">'+(right||n)+'</span></div>'; };
+  var opts = '<option value="cur"'+(BIZ_MONTH==='cur'?' selected':'')+'>本月（'+curM+'）</option><option value="all"'+(BIZ_MONTH==='all'?' selected':'')+'>全部</option>'+
+    monthList.filter(function(m){ return m!==curM; }).map(function(m){ return '<option value="'+m+'"'+(BIZ_MONTH===m?' selected':'')+'>'+m+'</option>'; }).join('');
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('经营数据')+'</div>'+
+    '<select onchange="bizSetMonth(this.value)" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+opts+'</select></div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('案件总数', cs.length, '按案件开始的月份统计')+tile('已结案', closed, '客人做了项目/有购买', 'var(--sage)')+tile('仅出报告', report, '只做了面诊出报告')+tile('已取消', cancelled, '未到店/取消/未购买')+tile('进行中', ongoing, '还没到终态')+'</div>'+
+    aSection('面诊 → 赴韩', '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end;"><div><div style="font-size:11px;color:var(--muted);">面诊案件</div><div style="font-size:24px;font-weight:700;">'+consultCases.length+'</div></div><div><div style="font-size:11px;color:var(--muted);">其中选了赴韩项目</div><div style="font-size:24px;font-weight:700;">'+travelCases.length+'</div></div><div><div style="font-size:11px;color:var(--muted);">赴韩比例</div><div style="font-size:24px;font-weight:700;color:var(--navy);">'+ratio+'%</div></div></div>',
+      '面诊案件 = 缴过面诊费、免除面诊费或已出报告的案件；赴韩比例 = 面诊案件里有赴韩项目的占比。')+
+    aSection('收入（各币种分开，不相加）', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('面诊费', fmtRp(feeSum), feeCount+' 个案件缴费（按当前面诊费 '+fmtRp(CLINIC_SETTINGS.consultFee)+' 估算）')+tile('本地项目', fmtRp(localSum), '本地项目已收款（印尼盾）')+tile('赴韩定金', formatCurrency(krDeposit,'KRW'), '已收定金，扣除已退款（韩元）')+'</div>',
+      '免除面诊费的案件不计收入；赴韩定金比例是 GMC 统一设定的演示占位值。')+
+    aSection('每位室长处理的案件数', coordNames.length ? coordNames.map(function(n){ var o = perCoord[n]; return bar(staffLabel(n), o.total, maxC, 'var(--navy)', o.total+' 件 · 已结案 '+o.closed); }).join('') : '<div style="font-size:12px;color:var(--muted);">这个月份没有案件</div>',
+      '按案件 Timeline 里的操作记录统计，一个案件有多位室长操作时每人各算一件。')+
+    '<div style="font-size:11px;color:var(--muted);">待讨论：具体要看哪些数字、是否要趋势图/导出（这是基础版）。</div>';
+};
