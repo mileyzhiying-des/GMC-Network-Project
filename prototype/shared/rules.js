@@ -358,7 +358,7 @@ function pushTargets(c){
     var work = opsList.filter(function(n){ return !isOffOn(n, today); });
     return work.length ? work : all.filter(function(n){ return !isOffOn(n, today); });
   };
-  return {inn: pick(ops.inn, IN_COORDINATORS), kr: (ops.kr.length || caseHasKrSide(c)) ? pick(ops.kr, KR_COORDINATORS) : []};
+  return {inn: pick(ops.inn, IN_COORDINATORS), kr: (ops.kr.length || caseHasKrSide(c)) ? pick(ops.kr, krCoordinatorsOf(c)) : []};
 }
 
 /* ================= 手机号输入（2026-10-06）：一律拆成两栏——国码下拉 + 号码；存成完整格式"国码 号码" =================

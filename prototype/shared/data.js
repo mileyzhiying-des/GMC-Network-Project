@@ -3908,9 +3908,28 @@ var CHAT_DATA = {
 
 function getCaseRoomId(caseId){ return 'case-'+caseId; }
 
+/* ---- 多医院的对话（2026-10-06）：Main 全员群每一组"诊所 × 医院"一个（id = main-医院ID）：本诊所的 IN 室长 + 该医院的 KR 室长 / 院长；
+   案件对话房的 KR 成员只有该案件所选医院的人 ---- */
+function isMainRoom(id){ return /^main(-|$)/.test(String(id||'')); }
+function mainRoomId(hid){ return 'main-'+hid; }
+function mainRoomHospital(id){ return String(id).indexOf('main-')===0 ? String(id).slice(5) : null; }
+function caseKrHospital(c){ return caseHospitalId(c) || linkedHospitalIds(c.clinicId)[0] || null; } /* 案件的 KR 一侧是哪家医院（没选时只对接一家就是那家） */
+function krCoordinatorsOf(c){ return hospitalCoordinators(caseKrHospital(c)).slice(); }
+function allKrCoordinatorNames(){ var out = []; Object.keys(HOSPITAL_DATA).forEach(function(h){ out = out.concat(HOSPITAL_DATA[h].coordinators || []); }); return out; } /* 认操作人用：所有医院的 KR 室长 */
+/* 同事名单（新建对话房选人）：本诊所的 IN 室长 + 对接医院的 KR 室长、院长 */
+function buildStaffRoster(cid){
+  var out = [];
+  clinicAccounts(cid).filter(function(a){ return a.role!=='owner' && a.status==='active' && a.name; }).forEach(function(a){ out.push({id:'in-'+a.name.toLowerCase(), name:a.name+' · 印尼室长'}); });
+  linkedHospitalIds(cid).forEach(function(h){
+    hospitalCoordinators(h).forEach(function(n){ out.push({id:'kr-'+n, name:n+' · 韩国室长'}); });
+    hospitalDirectorNames(h).forEach(function(n){ var nm = n.split(' ')[0]; out.push({id:'director-'+nm, name:nm+' · 院长'}); });
+  });
+  return out;
+}
+
 function caseRoomMembers(c){
   var kr = caseHasKrSide(c);
-  return {inn:IN_COORDINATORS.slice(), kr: kr ? KR_COORDINATORS.slice() : [], director: (kr && c.director) ? c.director : null};
+  return {inn:IN_COORDINATORS.slice(), kr: kr ? krCoordinatorsOf(c) : [], director: (kr && c.director) ? c.director : null}; /* KR 成员只有该案件所选医院的室长和选定的院长 */
 }
 
 /* ---- 备忘 / OFF 数据（2026-10-02·七）：IN 室长的 OFF 从"新增 memo"来；KR 院长/KR 室长的 OFF 用演示数据代替（KR 端功能） ----
@@ -3936,7 +3955,7 @@ function caseOperators(c, strict){
   (c.logEntries||[]).forEach(function(l){
     var a = String(l.actor||'');
     if(IN_COORDINATORS.indexOf(a)>-1){ if(inn.indexOf(a)<0) inn.push(a); }
-    else { var k = offNameKey(a); if(KR_COORDINATORS.indexOf(k)>-1 && kr.indexOf(k)<0) kr.push(k); }
+    else { var k = offNameKey(a); if(allKrCoordinatorNames().indexOf(k)>-1 && kr.indexOf(k)<0) kr.push(k); }
   });
   if(!strict && !inn.length && c.inCoordinator) inn.push(c.inCoordinator); /* 推播用：没有任何操作记录时按案件默认负责室长；列表显示只按真实操作记录 */
   return {inn:inn, kr:kr};
@@ -3970,7 +3989,7 @@ function atCandidates(){
     var c = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_ROOM.slice(5); })[0];
     if(c){ var m = caseRoomMembers(c); return m.inn.concat(m.kr).concat(m.director ? [m.director] : []); }
   }
-  if(CURRENT_ROOM==='main') return IN_COORDINATORS.concat(KR_COORDINATORS).concat(DIRECTOR_LIST);
+  if(isMainRoom(CURRENT_ROOM)){ var mh = mainRoomHospital(CURRENT_ROOM); return IN_COORDINATORS.concat(hospitalCoordinators(mh)).concat(hospitalDirectorNames(mh)); }
   var r = roomById(CURRENT_ROOM); return [ME_NAME].concat(r ? [r.name.split(' ')[0]] : []);
 }
 
@@ -4006,7 +4025,7 @@ function refBarHtml(caseId){
 
 var ROOM_FILE_SEQ = 1;
 
-function krEnterRoomName(c){ return (c.krCoordinator||KR_COORDINATORS[0]).split(' ')[0]; }
+function krEnterRoomName(c){ return (c.krCoordinator||krCoordinatorsOf(c)[0]||'').split(' ')[0]; }
 
 /* 演示：KR室长进入/离开案件对话房（进入前 🎥 灰色不可用，进入后可用） */
 function simulateKrEnterRoom(){
@@ -4074,10 +4093,11 @@ function memberRowsHtml(){
       if(m.director) html += head('院长（选定院长，选定后不能更换）') + row(m.director+' · 院长', m.director, mute);
       if(!m.kr.length) html += '<div style="font-size:11px;color:var(--muted);margin-top:10px;">这个案件没有面诊：只有印尼室长。点"增加面诊"并缴费后，韩国室长和院长才会加入。</div>';
     }
-  } else if(roomId==='main'){
-    html += head('院长') + DIRECTOR_LIST.map(function(d){ return row(d, d, mute); }).join('') +
+  } else if(isMainRoom(roomId)){
+    var mhid = mainRoomHospital(roomId);
+    html += head('院长') + hospitalDirectorNames(mhid).map(function(d){ return row(d, d, mute); }).join('') +
       head('印尼室长') + IN_COORDINATORS.map(function(n){ return row(n, n); }).join('') +
-      head('韩国室长') + KR_COORDINATORS.map(function(n){ return row(n, n); }).join('');
+      head('韩国室长') + hospitalCoordinators(mhid).map(function(n){ return row(n, n); }).join('');
   } else {
     html += head('成员') + row(ME_NAME+'（我）', ME_NAME) + row(r.name, r.name.split(' ')[0]);
   }
@@ -4100,7 +4120,6 @@ SEEDING = false;
 initHospitalData();
 normalizeSeeds();
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */
-bindHospitalShim();
 syncInCoordinators();
 applyClinicSettings();
 
@@ -4130,14 +4149,7 @@ function initHospitalData(){
     }
   };
 }
-/* 老的全局名字（DIRECTOR_INFO / DIRECTOR_LIST / KR_COORDINATORS / KR_OPEN_DATES / KR_DIRECTOR_SCHEDULE / KR_COORD_SCHEDULE）暂时指向 H1 的数据，
-   让还没按医院改写的 IN 端代码继续工作；二、三、四部分改完后这个过渡层会删除。每次读档后重新绑定。 */
-function bindHospitalShim(){
-  var h = HOSPITAL_DATA.H1; if(!h) return;
-  DIRECTOR_INFO = h.directors; DIRECTOR_LIST = h.directors.filter(function(d){ return d.active; }).map(function(d){ return d.name; });
-  KR_COORDINATORS = h.coordinators; KR_OPEN_DATES = (h.openDates[h.directors[0].name] || []);
-  KR_DIRECTOR_SCHEDULE = h.directorSchedule; KR_COORD_SCHEDULE = h.coordSchedule;
-}
+/* 老的种子变量（DIRECTOR_INFO / KR_COORDINATORS / KR_OPEN_DATES / KR_DIRECTOR_SCHEDULE / KR_COORD_SCHEDULE）只在生成 HOSPITAL_DATA.H1 时用一次；运行时一律读 HOSPITAL_DATA（hospitalDirectors / hospitalCoordinators / hospitalOpenDates 等）。 */
 /* 把合成数组（种子全在里面）拆开：KR 项目/案例归医院，IN 的留在诊所里；然后按本诊所对接的医院重新合成 */
 function buildClinicViews(inProjects, inCases){
   var hs = linkedHospitalIds(CURRENT_CLINIC_ID), pp = inProjects.slice(), cc = inCases.slice();
@@ -4146,6 +4158,21 @@ function buildClinicViews(inProjects, inCases){
   LIB_CASES.length = 0; Array.prototype.push.apply(LIB_CASES, cc);
 }
 function normalizeSeeds(){
+  /* 对话：原来的 Main 全员群 = C1×H1；再加 C1×H2；同事名单按对接医院重建 */
+  (function(){
+    var m = ROOMS.filter(function(r){ return r.id==='main'; })[0];
+    if(m){ m.id = 'main-H1'; m.hospitalId = 'H1'; m.name = 'Main · '+hospitalName('H1','ko'); }
+    if(CHAT_DATA.hasOwnProperty('main')){ CHAT_DATA['main-H1'] = CHAT_DATA.main; delete CHAT_DATA.main; }
+    if(ROOM_UNREAD.hasOwnProperty('main')){ ROOM_UNREAD['main-H1'] = ROOM_UNREAD.main; delete ROOM_UNREAD.main; }
+    ROOMS.splice(1, 0, {id:'main-H2', hospitalId:'H2', name:'Main · '+hospitalName('H2','ko'), isMain:true, color:'var(--slate2)', init:'G', date:'今天 10:30'});
+    CHAT_DATA['main-H2'] = [
+      {day:KD(0), from:'them', name:'박서윤 원장', color:'var(--slate2)', init:'박', orig:'이번 주 수술 일정이 거의 찼습니다.', trans:'本周手术排期基本满了。', time:'10:00'},
+      {day:KD(0), from:'them', name:'정하늘', color:'var(--sage)', init:'정', orig:'IN 쪽 신규 케이스 확인했습니다.', trans:'已确认 IN 这边的新案件。', time:'10:30'}
+    ];
+    STAFF_ROSTER.length = 0; Array.prototype.push.apply(STAFF_ROSTER, [
+      {id:'kr-lee', name:'이서연 · 韩国室长'}, {id:'kr-park', name:'박준혁 · 韩国室长'}, {id:'director-kim', name:'김민석 · 院长'},
+      {id:'kr-정하늘', name:'정하늘 · 韩国室长'}, {id:'kr-최민준', name:'최민준 · 韩国室长'}, {id:'director-박서윤', name:'박서윤 · 院长'}, {id:'rina', name:'Rina · 印尼室长'}]);
+  })();
   CLIENTS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; });
   CASE_ITEMS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; if(c.director && !c.hospitalId) c.hospitalId = 'H1'; });
   var inP = [], inC = [];
@@ -4159,7 +4186,7 @@ function emptyClinicVars(cid){
   return {
     CLINIC_SETTINGS: defaultClinicSettings({name:cl.name, address:'Jl. Basuki Rahmat No. 21, Surabaya', phone:'+62 31 5550 7788', city:'泗水'}),
     PURCHASE_REQ:null, ACCOUNT_SEQ:2, RESUMED_VISITS:[], PLACEHOLDER_HISTORY:[], PLACEHOLDER_SEQ:1, RESERVATION_PLACEHOLDERS:[],
-    CLIENTS:[], CLIENT_HOLDINGS:{}, CASE_ITEMS:[], NOTIF_SEQ:0, NOTIFS:[], ROOMS:[main], STAFF_ROSTER:[], ROOM_UNREAD:{}, CHAT_DATA:{main:[]}, MUTED_ROOMS:{}, ROOM_FILE_SEQ:1,
+    CLIENTS:[], CLIENT_HOLDINGS:{}, CASE_ITEMS:[], NOTIF_SEQ:0, NOTIFS:[], ROOMS:linkedHospitalIds(cid).map(function(h){ var m = JSON.parse(JSON.stringify(main)); m.id = mainRoomId(h); m.hospitalId = h; m.name = 'Main · '+hospitalName(h,'ko'); return m; }), STAFF_ROSTER:buildStaffRoster(cid), ROOM_UNREAD:{}, CHAT_DATA:linkedHospitalIds(cid).reduce(function(o, h){ o[mainRoomId(h)] = []; return o; }, {}), MUTED_ROOMS:{}, ROOM_FILE_SEQ:1,
     CAL_MEMOS:[], SMS_LOG:[], SMS_SEQ:1, LIB_PROBLEM_SEQ:LIB_PROBLEM_SEQ, LIB_PROBLEMS:JSON.parse(JSON.stringify(LIB_PROBLEMS)), LIB_PROBLEM_IDS:JSON.parse(JSON.stringify(LIB_PROBLEM_IDS)),
     PROJECT_LIBRARY:[], LIB_CASES:[]
   };

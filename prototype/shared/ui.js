@@ -1120,7 +1120,7 @@ function buildCaseLog(c){
 function openInviteKrModal(){
   var c0 = getCurrentCase();
   /* 只列上传过报告的KR室长（Notion：选择上传了报告的室长） */
-  var cands = KR_COORDINATORS.filter(function(n){ return c0 && (c0.reportUploadedBy||'').indexOf(n)>-1; });
+  var cands = (c0 ? krCoordinatorsOf(c0) : []).filter(function(n){ return (c0.reportUploadedBy||'').indexOf(n)>-1; });
   if(!cands.length){ alert('没有找到上传报告的室长'); return; }
   document.getElementById('invite-kr-list').innerHTML = cands.map(function(name, i){
     return '<button class="'+(i===0?'btn-primary':'btn-outline')+'" onclick="inviteKrVideo(\'' + name + '\')">' + name + '</button>';
@@ -2202,7 +2202,7 @@ function renderLibCaseModal(){
     return '<div style="margin-bottom:8px;"><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">'+cat.label+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+
       ps.map(function(pr){ return '<span class="chip'+(c.projectIds.indexOf(pr.id)>-1?' active':'')+'" onclick="libToggleProject(\''+pr.id+'\')">'+pr.name+(pr.active?'':'（已非活性）')+'</span>'; }).join('')+'</div></div>';
   }).join('');
-  var dirOptions = '<option value=""'+(!c.director?' selected':'')+'>-</option>'+DIRECTOR_LIST.map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+
+  var dirOptions = '<option value=""'+(!c.director?' selected':'')+'>-</option>'+(function(){ var ns = []; linkedHospitalIds().forEach(function(h){ ns = ns.concat(hospitalDirectorNames(h)); }); return ns; })().map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+
     ((c.director && !isDirectorActive(c.director)) ? '<option selected value="'+c.director+'">'+c.director+'（已停用，显示为"-"）</option>' : '');
   var n = c.names;
   var nameInp = function(k, label){ return '<div class="case-field-row"><span class="fk">'+label+'</span><input type="text" value="'+(n[k]||'').replace(/"/g,'&quot;')+'" oninput="libEditName(\''+k+'\',this.value)" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'; };
@@ -2592,7 +2592,7 @@ function toggleNewStaffPick(id){
 }
 
 function renderNewStaffChatList(){
-  document.getElementById('new-staff-chat-list').innerHTML = STAFF_ROSTER.map(function(s){
+  document.getElementById('new-staff-chat-list').innerHTML = STAFF_ROSTER.filter(function(s){ return s.name.split(' ')[0]!==ME_NAME; }).map(function(s){
     var checked = NEW_STAFF_SELECTED.indexOf(s.id)>-1;
     return '<label style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleNewStaffPick(\''+s.id+'\')" '+(checked?'checked':'')+'><span>'+s.name+'</span></label>';
   }).join('');
@@ -2815,7 +2815,7 @@ function openFloatingChat(roomId, subtitleOverride, caseId){
   if(roomId.indexOf('case-')===0){ oc.style.display = 'inline'; oc.onclick = function(e){ e.stopPropagation(); openCaseNewTab(roomId.slice(5)); }; } /* ↗ 新标签页打开案件页 */
   else { oc.style.display = 'none'; oc.onclick = null; }
   var isCaseRoom = roomId.indexOf('case-')===0;
-  document.getElementById('float-sub').textContent = isCaseRoom ? '本案件专属对话' : (subtitleOverride ? ('关于 '+subtitleOverride+' 的沟通') : (roomId==='main' ? '院长 · 韩国室长 · 印尼室长 全员群聊 · 支持 @提及' : '内部沟通'));
+  document.getElementById('float-sub').textContent = isCaseRoom ? '本案件专属对话' : (subtitleOverride ? ('关于 '+subtitleOverride+' 的沟通') : (isMainRoom(roomId) ? '院长 · 韩国室长 · 印尼室长 全员群聊（'+(mainRoomHospital(roomId) ? hospitalName(mainRoomHospital(roomId),'ko') : '')+'）· 支持 @提及' : '内部沟通'));
   ATTACHED_CASE_ID = caseId || (isCaseRoom ? roomId.slice(5) : null);
   renderChatCaseChip();
   renderFloatToolbar();
