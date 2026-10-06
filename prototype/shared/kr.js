@@ -695,8 +695,9 @@ function krSubmitReport(){
   var text = (KR_SUB.text||'').trim(); if(!text){ alert('报告内容不能为空'); return; }
   var cand = krScopeCandidates(KR_CASE.clinicId), items = [];
   cand.kr.concat(cand.post).forEach(function(p){ if(KR_SUB.pick[p.name]) items.push({name:p.name, price:p.price, note:(KR_SUB.notes[p.name]||'').trim()}); });
-  if(!items.length){ alert('请至少勾选一个可选项目（赴韩项目或术后管理项目）'); return; }
-  if(!confirm('提交后 IN 端会变成"项目确认中"，并收到"报告已出"通知。确认提交？')) return;
+  /* 可以 0 个可选项目（院长判断不建议做任何项目）：单独确认；IN 端客人之后可走仅出报告或本地项目 */
+  if(!items.length){ if(!confirm('本报告不推荐任何赴韩项目，确定提交吗？')) return; }
+  else if(!confirm('提交后 IN 端会变成"项目确认中"，并收到"报告已出"通知。确认提交？')) return;
   var v = krVault(KR_CASE.clinicId, KR_CASE.id, true), last = v.drafts.length ? v.drafts[v.drafts.length-1].text : '';
   if(text !== last){ v.drafts.push({id:'dr'+Date.now(), ts:nowFullDt(), by:ME_NAME, source:'KR 室长调整稿', text:text}); krVaultLog(v, '室长调整草稿（最终报告）'); }
   krVaultLog(v, '提交最终报告');

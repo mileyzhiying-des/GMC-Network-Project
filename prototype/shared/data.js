@@ -2617,7 +2617,7 @@ function projectPickerHtml(c, isAddition){
     if(!scope || !scope.items.length){
       var addConsultBtn = (c.needsConsult===false && !c.consultRequested)
         ? '<button class="btn-outline" style="margin-top:10px;" onclick="addConsult()">增加面诊</button>' : '';
-      leftRows = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">需先完成面诊，由韩国室长给出可选项目</div>'+addConsultBtn;
+      leftRows = (c.reportReady ? '<div style="font-size:12px;color:var(--slate2);padding:14px 4px;line-height:1.7;">本报告不推荐任何赴韩项目。可以改选本地项目，或点「客人不做项目」走仅出报告。</div>' : '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">需先完成面诊，由韩国室长给出可选项目</div>')+addConsultBtn;
     } else {
       var scopeNote = scope.overallNote ? '<div style="font-size:12px;color:var(--slate2);background:var(--terracotta-bg);border-radius:8px;padding:10px 12px;margin-bottom:12px;">KR室长整体备注：'+scope.overallNote+'</div>' : '';
       var catalog = scope.items.map(function(si){
