@@ -5,6 +5,18 @@ var NAV_STACK = [];
 
 var CURRENT_PAGE_ID = 'in-dashboard';
 
+/* 这个时段的完整日程列表（周视图格子里超过 3 个时点"+N 更多"）：每项可点进案件/占位 */
+function openSlotList(ds, hr){
+  var evs = calendarEvents().filter(function(e){ return e.date===ds && slotOf(e.time)===hr && !(e.kind==='reservation' && e.vstate==='预约取消'); }).sort(function(a,b){ return a.time.localeCompare(b.time) || ((a.kind==='placeholder')-(b.kind==='placeholder')) || String(a.name).localeCompare(String(b.name)); });
+  var ov = document.getElementById('slot-list-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'slot-list-overlay'; ov.style.zIndex = 70; ov.onclick = function(e){ if(e.target===ov) closeSlotList(); }; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:420px;max-height:80vh;overflow-y:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">'+dateLabel(ds)+' '+hr+' · '+evs.length+' 项日程</span><span style="cursor:pointer;color:var(--slate);" onclick="closeSlotList()">✕</span></div>'+
+    '<div class="slot-list-body" style="display:flex;flex-direction:column;gap:6px;">'+evs.map(function(e){ return '<div style="display:flex;gap:8px;align-items:stretch;"><span style="font-size:11px;color:var(--muted);width:38px;padding-top:4px;">'+e.time+'</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;">'+eventChipHtml(e)+'</div></div>'; }).join('')+'</div></div>';
+  ov.querySelector('.slot-list-body').addEventListener('click', function(e){ if(e.target.closest('.event-chip')) closeSlotList(); }, true); /* 捕获阶段：事件块自己的 onclick 会 stopPropagation，所以不能靠冒泡 */
+  ov.classList.add('open');
+}
+function closeSlotList(){ var ov = document.getElementById('slot-list-overlay'); if(ov) ov.classList.remove('open'); }
+
 /* 管理类页面（经营数据/账号管理/诊所设定/操作日志）：各页的渲染函数在 ADMIN_RENDER[key] 里登记（第五～八部分）；没权限 → 导回自己的首页 */
 var ADMIN_RENDER = {};
 var ADMIN_KEY = null;
@@ -265,8 +277,8 @@ function buildWeekGrid(){
     html += '<div class="wk-time'+(rowEvs.length?'':' empty')+(hr===nowSlot?' wk-now':'')+'">'+hr+'<span class="kr">KR '+krTimeOf(hr)+'</span></div>';
     for(var d=0; d<7; d++){
       var ds = dateStr(days[d]);
-      var cell = rowEvs.filter(function(e){ return e.date===ds; });
-      var chips = cell.map(eventChipHtml).join('');
+      var cell = rowEvs.filter(function(e){ return e.date===ds; }).sort(function(a,b){ return a.time.localeCompare(b.time) || ((a.kind==='placeholder')-(b.kind==='placeholder')) || String(a.name).localeCompare(String(b.name)); }); /* 同一时段：按时间，占位排在预约后面，再按名字 */
+      var chips = cell.slice(0, 3).map(eventChipHtml).join('') + (cell.length > 3 ? '<div class="wk-more" onclick="event.stopPropagation();openSlotList(\''+ds+'\',\''+hr+'\')">+'+(cell.length-3)+' 更多</div>' : ''); /* 超过 3 个：前 3 个 + "+N 更多" */
       var why = slotBlockReason(ds, hr); /* 和预约修改、占位、预约页同一套规则：past 已过 / full 额满 / closed 休诊 / lunch 午休 */
       var pastSlot = why==='past', closedDay = why==='closed', fullSlot = why==='full';
       var slotClick = why ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';

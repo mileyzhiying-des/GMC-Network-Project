@@ -264,7 +264,7 @@ function eventChipHtml(e){
     onclick = 'openPlaceholderModal(\''+e.phId+'\')';
   }
   var dashed = e.kind==='placeholder' ? 'border-style:dashed;' : '';
-  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+(e.purpose?' · '+e.purpose:'')+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'"><div class="l1">'+l1+'</div><div class="l2">'+l2+'</div></div>';
+  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+(e.purpose?' · '+e.purpose:'')+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'"><div class="l1"><b>'+l1+'</b>'+(l2 ? ' · '+l2 : '')+'</div></div>'; /* 每个预约一行："名字（粗体）· 来访目的" */
 }
 
 function calPrev(){ if(CAL_MODE==='week') WEEK_OFFSET--; else if(CAL_MODE==='day') DAY_OFFSET--; renderCalendar(); }
