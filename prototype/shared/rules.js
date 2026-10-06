@@ -122,7 +122,12 @@ function isRescheduleDateDisabled(d){
   return d.getDay()===4; /* 每周星期四休诊 */
 }
  /* 演示按钮"模拟时间超过30分钟"会把演示时钟往后拨 */
-function demoNow(){ return new Date(new Date(2026,8,18,11,0).getTime() + (Date.now()-DEMO_LOAD_TS) + DEMO_SHIFT_MS); }
+/* 演示时钟 = 电脑当前时间 + 演示按钮往后拨的毫秒数（2026-10-06 起不再固定在 2026-09-18 11:00） */
+function demoNow(){ return new Date(Date.now() + DEMO_SHIFT_MS); }
+
+/* 演示数据的日期一律写成"相对今天"：D(0)=今天、D(-3)=3 天前、D(2)=2 天后；KD(n) 是韩文日期（对话分隔线用） */
+function D(n){ var d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return dateStr(d); }
+function KD(n){ var d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일'; }
 
 function pad2(n){ return (n<10?'0':'')+n; }
 
@@ -297,7 +302,7 @@ function fmtDateYMD(y,m,d){
   return y+'-'+mm+'-'+dd;
 }
 
-/* 施术前2周内不可修改日期：TODAY_DATE 是原型里固定的"今天"（2026-09-18），比较用它，不用真实系统时间 */
+/* 施术前2周内不可修改日期：TODAY_DATE 是原型里的"今天"（当天 0 点，取电脑日期；2026-10-06 起不再固定），比较用它 */
 function isWithin2WeeksOfToday(dateStr){
   if(!dateStr) return false;
   var diffDays = (new Date(dateStr) - TODAY_DATE) / 86400000;

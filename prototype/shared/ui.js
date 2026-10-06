@@ -105,7 +105,7 @@ function highlightSidebar(activePage){
     if(slot) slot.innerHTML = buildSidebar(activePage);
   });
 }
- // 2026-09-18, Thursday
+
 var CAL_MODE = 'week';
 
 var WEEK_OFFSET = 0;
@@ -114,6 +114,7 @@ var DAY_OFFSET = 0;
 
 function applyTzSetting(){
   var o = TZ_OPTIONS[CLINIC_TZ];
+  var dd = document.getElementById('dash-date'); if(dd){ var t = demoNow(); dd.textContent = t.getFullYear()+'年'+(t.getMonth()+1)+'月'+t.getDate()+'日（周'+DOW_CN[dowOfDate(dateStr(t))]+'）'; } /* 今天的日期取电脑日期 */
   var w = document.getElementById('dash-weather'); if(w) w.textContent = '☁ '+o.city+' '+o.temp+'℃';
   var l = document.getElementById('cal-tz-label'); if(l) l.textContent = CLINIC_TZ;
 }
@@ -484,11 +485,11 @@ function editClientField(el){
 /* 客户级 Timeline 只记：建档 / 基础信息修改（含修正）/ 案件开始 / 案件结案（进行中显示"进行中"） */
 function renderClientTimeline(name){
   var log = [
-    {stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:'2026-09-01 10:02', kind:'plain'},
-    {stage:'基础信息修改', actor:'Dewi', action:'补录护照信息、确认医美史', dt:'2026-09-02 11:15', kind:'plain'}
+    {stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'},
+    {stage:'基础信息修改', actor:'Dewi', action:'补录护照信息、确认医美史', dt:D(-16)+' 11:15', kind:'plain'}
   ].concat(CLIENT_FIX_LOG[name]||[]);
   CASE_ITEMS.filter(function(c){ return c.name===name; }).forEach(function(c){
-    var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt : '2026-09-18 09:00';
+    var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt : D(0)+' 09:00';
     log.push({stage:'案件开始', actor:'系统', action:'Case 开始 · '+c.caseNo, dt:first, kind:'case', caseId:c.id});
     if(isEnded(c)){
       var last = (c.logEntries&&c.logEntries.length) ? c.logEntries[c.logEntries.length-1].dt : first;
@@ -675,8 +676,8 @@ function renderClientCases(name){
 
 function buildHistoryList(name){
   var records = [
-    {project:'热玛吉5代，超声刀3代，肉毒，玻尿酸', date:'2025-03-10', origin:'客人自报', bad:'无'},
-    {project:'玻尿酸填充（苹果肌）', date:'2023-05-02', origin:'客人自报', bad:'轻微淤青，已恢复'}
+    {project:'热玛吉5代，超声刀3代，肉毒，玻尿酸', date:D(-557), origin:'客人自报', bad:'无'},
+    {project:'玻尿酸填充（苹果肌）', date:D(-1235), origin:'客人自报', bad:'轻微淤青，已恢复'}
   ];
   var own = name ? CASE_ITEMS.filter(function(c){ return c.name===name; }).map(function(c){
     var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : '—';
@@ -695,9 +696,9 @@ function buildDetailLog(){
      Everything that happens inside a case lives in that case's own timeline instead.
      Format: 进程名／具体做了什么／谁／00-00-00 00:00 */
   var log = [
-    {stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:'2026-09-15 10:02', kind:'plain'},
-    {stage:'建档', actor:'Dewi', action:'修改基础信息（补录护照信息、确认医美史）', dt:'2026-09-15 11:15', kind:'plain'},
-    {stage:'预约到店', actor:'Dewi', action:'Case 开始 · 预约到店', dt:'2026-09-16 09:05', kind:'case', caseId:'siti'}
+    {stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-3)+' 10:02', kind:'plain'},
+    {stage:'建档', actor:'Dewi', action:'修改基础信息（补录护照信息、确认医美史）', dt:D(-3)+' 11:15', kind:'plain'},
+    {stage:'预约到店', actor:'Dewi', action:'Case 开始 · 预约到店', dt:D(-2)+' 09:05', kind:'case', caseId:'siti'}
   ];
   document.getElementById('detail-log').innerHTML = log.map(logLine).join('');
 }
@@ -874,7 +875,7 @@ var RESCHED_SELECTED_TIME = null;
 function openRescheduleModal(){
   var c = getCurrentCase(); if(!c) return;
   RESCHED_CASE_ID = c.id;
-  RESCHED_SELECTED_DATE = c.visitDate ? new Date(c.visitDate) : new Date(2026,6,4);
+  RESCHED_SELECTED_DATE = c.visitDate ? new Date(c.visitDate) : new Date(TODAY_DATE);
   RESCHED_SELECTED_TIME = c.visitTime || '15:00';
   RESCHED_VIEW_MONTH = new Date(RESCHED_SELECTED_DATE.getFullYear(), RESCHED_SELECTED_DATE.getMonth(), 1);
   renderRescheduleCalendar();
@@ -2635,7 +2636,7 @@ function sendRoomFile(type){
   var ext = {'文件':'pdf', '照片':'jpg', '视频':'mp4'}[type];
   var fname = {'文件':'document', '照片':'photo', '视频':'video'}[type]+'-'+(ROOM_FILE_SEQ++)+'.'+ext; /* 三个都是上传；视频 = 上传视频文件 */
   if(!CHAT_DATA[CURRENT_ROOM]) CHAT_DATA[CURRENT_ROOM] = [];
-  CHAT_DATA[CURRENT_ROOM].push({day:'2026년 9월 18일', from:'me', sender:ME_NAME, kind:'file', fileType:type, fname:fname, orig:'['+type+'] '+fname, time:nowTime()});
+  CHAT_DATA[CURRENT_ROOM].push({day:KD(0), from:'me', sender:ME_NAME, kind:'file', fileType:type, fname:fname, orig:'['+type+'] '+fname, time:nowTime()});
   renderFloatMessages();
 }
 
@@ -2803,7 +2804,7 @@ function simulateIncomingMsg(atMe){
   var cc = isCase ? CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0] : null;
   var who = (isCase && cc && caseHasKrSide(cc)) ? krEnterRoomName(cc) : '이서연';
   if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = [];
-  CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@'+ME_NAME+' ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime()});
+  CHAT_DATA[roomId].push({day:KD(0), from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@'+ME_NAME+' ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime()});
   renderFloatMessages();
   var roomOpen = document.getElementById('chat-float-overlay').classList.contains('open') && CURRENT_ROOM===roomId;
   if(!atMe && !roomOpen){ ROOM_UNREAD[roomId] = (ROOM_UNREAD[roomId]||0)+1; updateChatBadge(); try{ if(document.getElementById('chat-drawer').classList.contains('open')) renderDrawerList(); }catch(e){} } /* 未读不含 @ */
@@ -2821,7 +2822,7 @@ function sendFloatMsg(){
   if(!val) return;
   var isNewCaseRoom = CURRENT_ROOM.indexOf('case-')===0 && !CHAT_DATA.hasOwnProperty(CURRENT_ROOM);
   if(!CHAT_DATA[CURRENT_ROOM]) CHAT_DATA[CURRENT_ROOM] = [];
-  var msg = {day:'2026년 9월 18일', from:'me', sender:ME_NAME, orig:val, trans:'（演示译文）'+val, time:nowTime()};
+  var msg = {day:KD(0), from:'me', sender:ME_NAME, orig:val, trans:'（演示译文）'+val, time:nowTime()};
   if(REF_CHIP) msg.refCaseId = REF_CHIP;
   CHAT_DATA[CURRENT_ROOM].push(msg);
   var srcIdx = CHAT_DATA[CURRENT_ROOM].length-1;

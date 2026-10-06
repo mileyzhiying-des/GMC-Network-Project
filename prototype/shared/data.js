@@ -4,9 +4,12 @@
 var DEMO_DATA_VERSION = 6;
 (function(){
   try{
-    if(localStorage.getItem('gmc_demo_ver') !== String(DEMO_DATA_VERSION)){
+    /* 版本不符，或"演示数据生成的那天"不是今天（演示日期都是相对生成当天算的）→ 清空重新生成 */
+    var todayKey = dateStr(new Date());
+    if(localStorage.getItem('gmc_demo_ver') !== String(DEMO_DATA_VERSION) || localStorage.getItem('gmc_demo_day') !== todayKey){
       Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); });
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
+      localStorage.setItem('gmc_demo_day', todayKey);
     }
   }catch(e){}
 })();
@@ -16,7 +19,7 @@ var DEMO_DATA_VERSION = 6;
 /* ================= dashboard: calendar (month / week / day) ================= */
 var DOW_CN = ['一','二','三','四','五','六','日'];
 
-var TODAY_DATE = new Date(2026,8,18);
+var TODAY_DATE = (function(){ var d = new Date(); d.setHours(0,0,0,0); return d; })(); /* 真实今天（2026-10-06 起） */
 
 /* 日历事件类型（2026-10-02·六）：预约来访 / 预约占位 / 赴韩施术；删除"视频沟通""术后管理""其他" */
 var TYPE_COLOR = {reservation:'var(--navy)', placeholder:'var(--slate)', travel:'var(--terracotta)'};
@@ -58,19 +61,19 @@ var ACCOUNT_ROLES = {owner:'老板（诊所管理账号）', manager:'室长（�
 var ACCOUNT_STATUS = {active:'使用中', pending:'待激活', disabled:'已停用'};
 var BASIC_SEATS = 3;
 var ACCOUNTS = [
-  {id:'OWN', role:'owner',   seat:'basic', name:'Hartono', position:'老板',   phone:'+62 811-0000-0001', status:'active',   password:'own123', photo:'证件照', createdAt:'2026-08-01 09:00', activatedAt:'2026-08-01 09:30', history:[{ts:'2026-08-01 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Hartono（OWN）'}]},
-  {id:'A1',  role:'manager', seat:'basic', name:'Dewi',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  photo:'证件照', createdAt:'2026-08-01 09:10', activatedAt:'2026-08-01 10:00', history:[{ts:'2026-08-01 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'Dewi（A1）'}]},
-  {id:'A2',  role:'general', seat:'basic', name:'Rina',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  photo:'证件照', createdAt:'2026-08-01 09:20', activatedAt:'2026-08-02 09:00', history:[{ts:'2026-08-02 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Rina（A2）'}]},
-  {id:'A3',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     photo:'',           createdAt:'2026-09-16 14:00', activatedAt:'',                 history:[{ts:'2026-09-16 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'Dewi（A1）'}]},
-  {id:'A4',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:'2026-08-20 11:00', activatedAt:'2026-08-21 09:00', disabledAt:'2026-09-10 17:00', history:[{ts:'2026-08-21 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:'2026-09-10 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]},
-  {id:'A5',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:'2026-09-17 10:00', activatedAt:'2026-09-17 11:00', history:[{ts:'2026-09-17 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:'2026-09-17 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]}
+  {id:'OWN', role:'owner',   seat:'basic', name:'Hartono', position:'老板',   phone:'+62 811-0000-0001', status:'active',   password:'own123', photo:'证件照', createdAt:D(-48)+' 09:00', activatedAt:D(-48)+' 09:30', history:[{ts:D(-48)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Hartono（OWN）'}]},
+  {id:'A1',  role:'manager', seat:'basic', name:'Dewi',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  photo:'证件照', createdAt:D(-48)+' 09:10', activatedAt:D(-48)+' 10:00', history:[{ts:D(-48)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'Dewi（A1）'}]},
+  {id:'A2',  role:'general', seat:'basic', name:'Rina',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  photo:'证件照', createdAt:D(-48)+' 09:20', activatedAt:D(-47)+' 09:00', history:[{ts:D(-47)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Rina（A2）'}]},
+  {id:'A3',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     photo:'',           createdAt:D(-2)+' 14:00', activatedAt:'',                 history:[{ts:D(-2)+' 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'Dewi（A1）'}]},
+  {id:'A4',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:D(-29)+' 11:00', activatedAt:D(-28)+' 09:00', disabledAt:D(-8)+' 17:00', history:[{ts:D(-28)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:D(-8)+' 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]},
+  {id:'A5',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]}
 ];
 var ACCOUNT_SEQ = 5; /* 下一个加购账号编号 = 'A'+(ACCOUNT_SEQ+1) */
 /* 操作日志（owner/管理者在"操作日志"页看；第八部分做页面）：时间、操作账号 + 当时的姓名、内容、类型 */
 var ACCOUNT_LOG = [
-  {id:'log1', ts:'2026-09-16 14:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购账号 A3（一般室长）'},
-  {id:'log2', ts:'2026-09-10 17:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'取消加购账号 A4（Sari）'},
-  {id:'log3', ts:'2026-09-17 10:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购管理者账号 A5（老板验证码确认）'}
+  {id:'log1', ts:D(-2)+' 14:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购账号 A3（一般室长）'},
+  {id:'log2', ts:D(-8)+' 17:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'取消加购账号 A4（Sari）'},
+  {id:'log3', ts:D(-1)+' 10:00', accountId:'A1', name:'Dewi', type:'账号管理', text:'购买加购管理者账号 A5（老板验证码确认）'}
 ];
 /* 当前登录的账号：存在 sessionStorage 的 gmc_acct（每个标签页各自登录，互不影响）；没登录、账号被停用/被重置成待激活，都返回 null */
 function currentAccountId(){
@@ -117,15 +120,15 @@ function memoSet(k, v){
 var CAL_VIEW = 'in', KR_DIRECTOR = '김민석 원장';
 
 var KR_COORD_SCHEDULE = [
-  {date:'2026-09-17', time:'10:00', title:'이서연：整理 Budi 报告'}, {date:'2026-09-18', time:'09:30', title:'이서연：与 IN 室长对接'},
-  {date:'2026-09-18', time:'15:00', title:'박준혁：术后回访'}, {date:'2026-09-19', time:'11:00', title:'이서연：报告提交'}
+  {date:D(-1), time:'10:00', title:'이서연：整理 Budi 报告'}, {date:D(0), time:'09:30', title:'이서연：与 IN 室长对接'},
+  {date:D(0), time:'15:00', title:'박준혁：术后回访'}, {date:D(1), time:'11:00', title:'이서연：报告提交'}
 ];
 
 var KR_DIRECTOR_SCHEDULE = (function(){
   var m = {'김민석 원장':[], '이수진 원장':[]};
-  WK_HOURS.forEach(function(h){ if(h!=='13:00' && h!=='16:00') m['김민석 원장'].push({date:'2026-09-18', time:h, title:h<'12:00'?'手术':'面诊/手术'}); }); /* 当天几乎满档 */
-  m['김민석 원장'].push({date:'2026-09-17', time:'10:00', title:'面诊'}, {date:'2026-09-17', time:'14:00', title:'手术'}, {date:'2026-09-19', time:'09:00', title:'手术'});
-  m['이수진 원장'].push({date:'2026-09-18', time:'11:00', title:'面诊'}, {date:'2026-09-17', time:'15:00', title:'手术'}, {date:'2026-09-19', time:'10:30', title:'面诊'});
+  WK_HOURS.forEach(function(h){ if(h!=='13:00' && h!=='16:00') m['김민석 원장'].push({date:D(0), time:h, title:h<'12:00'?'手术':'面诊/手术'}); }); /* 当天几乎满档 */
+  m['김민석 원장'].push({date:D(-1), time:'10:00', title:'面诊'}, {date:D(-1), time:'14:00', title:'手术'}, {date:D(1), time:'09:00', title:'手术'});
+  m['이수진 원장'].push({date:D(0), time:'11:00', title:'面诊'}, {date:D(-1), time:'15:00', title:'手术'}, {date:D(1), time:'10:30', title:'面诊'});
   return m;
 })();
 
@@ -154,7 +157,7 @@ function slotOf(time){ var h = time.slice(0,2), m = parseInt(time.slice(3),10); 
 var RESUMED_VISITS = [];
 
 /* 预约占位的历史记录（失效/取消的占位），供"预约历史记录"页用 */
-var PLACEHOLDER_HISTORY = [{id:'phx1', phone:'+62 812-3300-0099', date:'2026-09-17', time:'13:00', status:'占位失效', link:'https://gmc.link/old01', purpose:'面诊商谈'}];
+var PLACEHOLDER_HISTORY = [{id:'phx1', phone:'+62 812-3300-0099', date:D(-1), time:'13:00', status:'占位失效', link:'https://gmc.link/old01', purpose:'面诊商谈'}];
 
 /* 日历事件：全部从案件数据实时算出来（一份数据，其他页面和日历不会各说各的）：
    预约来访 = 每个案件的 visitDate/visitTime；赴韩施术 = 案件里已确认的施术日期；预约占位 = RESERVATION_PLACEHOLDERS */
@@ -246,7 +249,7 @@ function purposeSelectHtml(id){
 var PLACEHOLDER_SEQ = 1;
 
 var RESERVATION_PLACEHOLDERS = [
-  {id:'ph0', date:'2026-09-18', time:'14:00', phone:'+62 812-5555-0101', link:'https://gmc.link/demo01', smsText:DEFAULT_SMS_TEMPLATE, purpose:'面诊商谈', expiresAt:Date.now()+15*60000} /* 演示：占位中 */
+  {id:'ph0', date:D(0), time:'14:00', phone:'+62 812-5555-0101', link:'https://gmc.link/demo01', smsText:DEFAULT_SMS_TEMPLATE, purpose:'面诊商谈', expiresAt:Date.now()+15*60000} /* 演示：占位中 */
 ];
 
 function placeholderCountdownText(p){
@@ -480,17 +483,17 @@ function makeCase(o){
 var CASE_ITEMS = [
   makeCase({id:'siti', name:'Siti Rahayu', caseNo:'A000017', updated:'刚刚',
     basic:{gender:'女', dob:'1992-03-08', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
-    logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-18 09:05'}]}),
+    logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(0)+' 09:05'}]}),
 
   /* 演示（到访接续）：Ayu Lestari 已有进行中案件 ayu（项目确认中），这条是她新的预约来访（待访问） */
   makeCase({id:'ayu2', name:'Ayu Lestari', caseNo:'A000021', updated:'刚刚',
-    logEntries:[{stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:'2026-09-18 09:10'}]}),
+    logEntries:[{stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:D(0)+' 09:10'}]}),
 
   /* 接待中：客人已到店，메타뷰/照片/视频/苦恼/希望预期还没确认完，所以还没生成 Case ID */
   makeCase({id:'andi', name:'Andi Wijaya', subState:'arrived', caseNo:'A000018', updated:'昨天',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-17 10:00'},
-      {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:'2026-09-17 10:30'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-1)+' 10:00'},
+      {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:D(-1)+' 10:30'}
     ]}),
 
   /* 待选项目：分支2"不面诊"——基础资料确认时选了不面诊，Case ID 已生成，正在选管理项目、还没点"确认所选项目" */
@@ -498,57 +501,57 @@ var CASE_ITEMS = [
     concern:'皮肤暗沉、毛孔粗大', expectation:'希望肤色均匀、毛孔细致', needsConsult:false, activeCaseTab:'localmgmt', projectsEnabled:true, projectOriginFilter:'IN',
     entryChoicePending:true, projectEntryMode:'new', /* 2026-09-29 第十轮：不面诊后先经过入口选择，这里演示已经点了"新增项目" */
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-16 09:00'},
-      {stage:'预约到店', actor:'Dewi', action:'标记客人已到店', dt:'2026-09-16 09:20'},
-      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:'2026-09-16 09:35'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-2)+' 09:00'},
+      {stage:'预约到店', actor:'Dewi', action:'标记客人已到店', dt:D(-2)+' 09:20'},
+      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:D(-2)+' 09:35'}
     ]}),
 
   /* 待确认报告时间：面诊费已缴，已在 Main 对话群通知，等 Kr室长确认预计出报告时间 */
   makeCase({id:'maya', name:'Maya Putri', subState:'arrived', materialsConfirmed:true, caseNo:'A000002', updated:'昨天',
     concern:'轮廓线条不明显', expectation:'想要更立体的轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'paid_waiting_kr',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-16 14:00'},
-      {stage:'预约到店', actor:'Dewi', action:'标记客人已到店', dt:'2026-09-16 14:20'},
-      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：面诊', dt:'2026-09-16 14:35'},
-      {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:'2026-09-16 14:40'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-2)+' 14:00'},
+      {stage:'预约到店', actor:'Dewi', action:'标记客人已到店', dt:D(-2)+' 14:20'},
+      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：面诊', dt:D(-2)+' 14:35'},
+      {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:D(-2)+' 14:40'}
     ]}),
 
   /* 等待报告：Kr室长已确认预计出报告时间（倒计时中） */
   makeCase({id:'putri', name:'Putri Wulandari', subState:'arrived', materialsConfirmed:true, caseNo:'A000003', updated:'3 天前',
-    concern:'法令纹加深', expectation:'希望改善法令纹', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:'2026-09-20 14:00',
+    concern:'法令纹加深', expectation:'希望改善法令纹', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:D(2)+' 14:00',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-14 09:00'},
-      {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:'2026-09-14 10:00'},
-      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：2026-09-20 14:00', dt:'2026-09-14 16:00'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-4)+' 09:00'},
+      {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:D(-4)+' 10:00'},
+      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：'+D(2)+' 14:00', dt:D(-4)+' 16:00'}
     ]}),
 
   /* 等待报告：超过预计时间（小状态橘色提醒） */
   makeCase({id:'dedi', name:'Dedi Prasetyo', subState:'arrived', materialsConfirmed:true, caseNo:'A000004', updated:'刚刚',
-    concern:'苹果肌塌陷', expectation:'希望恢复饱满', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:'2026-09-18 08:00', reportOverdue:true,
+    concern:'苹果肌塌陷', expectation:'希望恢复饱满', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:D(0)+' 08:00', reportOverdue:true,
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-13 09:00'},
-      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：2026-09-18 08:00', dt:'2026-09-13 11:00'},
-      {stage:'面诊安排', actor:'系统', action:'已超过预计出报告时间，报告还没提交（仅提醒，状态不变）', dt:'2026-09-18 08:05'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-5)+' 09:00'},
+      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：'+D(0)+' 08:00', dt:D(-5)+' 11:00'},
+      {stage:'面诊安排', actor:'系统', action:'已超过预计出报告时间，报告还没提交（仅提醒，状态不变）', dt:D(0)+' 08:05'}
     ]}),
 
   /* 等待报告：预计时间未到 */
   makeCase({id:'budi', name:'Budi Santoso', subState:'arrived', materialsConfirmed:true, caseNo:'A000005', updated:'3 天前',
-    concern:'轮廓松弛', expectation:'希望紧致轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:'2026-09-20 11:00',
+    concern:'轮廓松弛', expectation:'希望紧致轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:D(2)+' 11:00',
     videoSummary:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-12 09:00'},
-      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：2026-09-20 11:00', dt:'2026-09-18 09:30'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-6)+' 09:00'},
+      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：'+D(2)+' 11:00', dt:D(0)+' 09:30'}
     ]}),
 
   /* 已出报告：报告已出，正在待客人/室长选管理项目 */
-  makeCase({id:'ayu', reportDate:'2026-09-10', name:'Ayu Lestari', subState:'arrived', materialsConfirmed:true, caseNo:'A000006', updated:'昨天',
+  makeCase({id:'ayu', reportDate:D(-8), name:'Ayu Lestari', subState:'arrived', materialsConfirmed:true, caseNo:'A000006', updated:'昨天',
     concern:'皮肤暗沉、细纹', expectation:'希望肤质透亮', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'面部凹陷、细纹较明显，建议先做自体脂肪移植改善轮廓，再评估面部拉皮。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
-    projectsEnabled:true, krScope:{items:[{name:'自体脂肪移植（全脸）', price:4500000, note:''},{name:'面部拉皮', price:12000000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:'2026-09-19 11:20'},
+    projectsEnabled:true, krScope:{items:[{name:'自体脂肪移植（全脸）', price:4500000, note:''},{name:'面部拉皮', price:12000000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(1)+' 11:20'},
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-11 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:'2026-09-19 11:20'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-7)+' 09:00'},
+      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 11:20'}
     ]}),
 
   /* 待付款：已确认所选管理项目、生成结算单，等待付款 */
@@ -557,17 +560,17 @@ var CASE_ITEMS = [
     videoSummary:'建议先做假体隆鼻改善鼻基底，再评估鼻翼缩小。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true,
-    krScope:{items:[{name:'假体隆鼻', price:2500000, note:''},{name:'鼻翼缩小', price:1500000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:'2026-09-20 14:20'},
+    krScope:{items:[{name:'假体隆鼻', price:2500000, note:''},{name:'鼻翼缩小', price:1500000, note:''}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(2)+' 14:20'},
     procedureItems:[
       {name:'假体隆鼻', origin:'KR', done:false, batchId:'B1'},
       {name:'鼻翼缩小', origin:'KR', done:false, batchId:'B1'}
     ],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-21 10:00', status:'unpaid',
+    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(3)+' 10:00', status:'unpaid',
       krTotal:4000000, krDeposit:1200000, krBalance:2800000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-10 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:'2026-09-20 14:20'},
-      {stage:'面诊安排', actor:'Dewi', action:'确认所选管理项目：假体隆鼻、鼻翼缩小', dt:'2026-09-21 10:00'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-8)+' 09:00'},
+      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(2)+' 14:20'},
+      {stage:'面诊安排', actor:'Dewi', action:'确认所选管理项目：假体隆鼻、鼻翼缩小', dt:D(3)+' 10:00'}
     ]}),
 
   /* 赴韩施术中：已付款，韩国项目里还有未完成的 */
@@ -576,18 +579,18 @@ var CASE_ITEMS = [
     videoSummary:'建议颧骨缩小+下巴假体联合方案改善轮廓。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true,
-    krSchedule:{status:'confirmed', confirmedDate:'2026-09-20', confirmedTime:'10:00', primary:'2026-09-20', backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
+    krSchedule:{status:'confirmed', confirmedDate:D(2), confirmedTime:'10:00', primary:D(2), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
       {name:'颧骨缩小', origin:'KR', done:false, batchId:'B1'},
       {name:'下巴假体 / 颏成形', origin:'KR', done:true, batchId:'B1'}
     ],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-20 11:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(2)+' 11:00', status:'active',
       krTotal:12000000, krDeposit:3600000, krBalance:8400000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-05 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:'2026-09-19 10:00'},
-      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩3,600,000），项目清单已锁定', dt:'2026-09-20 11:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"下巴假体 / 颏成形"施术，"颧骨缩小"待安排', dt:'2026-09-22 16:00'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-13)+' 09:00'},
+      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 10:00'},
+      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩3,600,000），项目清单已锁定', dt:D(2)+' 11:00'},
+      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"下巴假体 / 颏成形"施术，"颧骨缩小"待安排', dt:D(4)+' 16:00'}
     ]}),
 
   /* 待确认施术时间：已付款，已递交施术日期，正等Kr室长确认（2026-09-29 改用krSchedule细分状态演示） */
@@ -596,61 +599,61 @@ var CASE_ITEMS = [
     videoSummary:'建议面部拉皮+自体脂肪移植联合方案。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true,
-    krSchedule:{status:'pending', primary:'2026-10-05', backup:'2026-10-06', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
+    krSchedule:{status:'pending', primary:D(17), backup:D(18), confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
       {name:'面部拉皮', origin:'KR', done:false, batchId:'B1'},
       {name:'自体脂肪移植（全脸）', origin:'KR', done:false, batchId:'B1'}
     ],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-23 10:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(5)+' 10:00', status:'active',
       krTotal:16500000, krDeposit:4950000, krBalance:11550000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-08 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:'2026-09-21 10:00'},
-      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩4,950,000），项目清单已锁定', dt:'2026-09-23 10:00'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-10)+' 09:00'},
+      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(3)+' 10:00'},
+      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩4,950,000），项目清单已锁定', dt:D(5)+' 10:00'}
     ]}),
 
   /* 本地管理（2026-09-30 改）：纯本地案件，已使用持有项目、管理尚未完成/取消；原"已付款待使用"不再是本地管理 */
   makeCase({id:'rizky', name:'Rizky Hidayat', subState:'arrived', materialsConfirmed:true, caseNo:'A000009', updated:'今天',
     concern:'术后恢复期护理', expectation:'希望恢复期更舒适', needsConsult:false, activeCaseTab:'localmgmt',
     projectsEnabled:true, projectsLocked:true, settlementDone:true,
-    mgmtActive:true, mgmtUses:[{itemName:'好莱坞焕肤 1次', qty:1, date:'2026-09-15'}],
+    mgmtActive:true, mgmtUses:[{itemName:'好莱坞焕肤 1次', qty:1, date:D(-3)}],
     procedureItems:[],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-15 09:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(-3)+' 09:00', status:'active',
       krTotal:0, krDeposit:0, krBalance:0, inTotal:860000}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-01 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:'2026-09-15 08:50'},
-      {stage:'面诊安排', actor:'Dewi', action:'选择"新增项目"', dt:'2026-09-15 08:55'},
-      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：本地全款 Rp 860.000），项目清单已锁定', dt:'2026-09-15 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'本地项目已转入客户持有：好莱坞焕肤 1次 x1、Genesis焕肤（Clarity II）1次 x1', dt:'2026-09-15 09:00'},
-      {stage:'本地管理', actor:'Dewi', action:'使用了好莱坞焕肤 1次 1次，剩余0次', dt:'2026-09-15 09:20'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-17)+' 09:00'},
+      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:D(-3)+' 08:50'},
+      {stage:'面诊安排', actor:'Dewi', action:'选择"新增项目"', dt:D(-3)+' 08:55'},
+      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：本地全款 Rp 860.000），项目清单已锁定', dt:D(-3)+' 09:00'},
+      {stage:'面诊安排', actor:'Dewi', action:'本地项目已转入客户持有：好莱坞焕肤 1次 x1、Genesis焕肤（Clarity II）1次 x1', dt:D(-3)+' 09:00'},
+      {stage:'本地管理', actor:'Dewi', action:'使用了好莱坞焕肤 1次 1次，剩余0次', dt:D(-3)+' 09:20'}
     ]}),
 
   /* 已结案：赴韩行程施术完成即结案（2026-09-29 第十轮：本地项目已转客户持有，不再算在这个案件的完成条件里） */
-  makeCase({id:'rina', director:'박지훈 원장', reportDate:'2026-08-12', name:'Rina Marlina', subState:'arrived', materialsConfirmed:true, caseNo:'A000010', updated:'1 周前',
+  makeCase({id:'rina', director:'박지훈 원장', reportDate:D(-37), name:'Rina Marlina', subState:'arrived', materialsConfirmed:true, caseNo:'A000010', updated:'1 周前',
     concern:'整体抗老', expectation:'希望延缓衰老迹象', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议自体脂肪移植打底，配合本地焕肤护理维持效果。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true, visitClosed:true, krProcedureDone:true,
-    krSchedule:{status:'confirmed', confirmedDate:'2026-08-25', confirmedTime:'10:00', primary:'2026-08-25', backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
+    krSchedule:{status:'confirmed', confirmedDate:D(-24), confirmedTime:'10:00', primary:D(-24), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
       {name:'自体脂肪移植（全脸）', origin:'KR', done:true, batchId:'B1'}
     ],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-08-20 09:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(-29)+' 09:00', status:'active',
       krTotal:4500000, krDeposit:1350000, krBalance:3150000, inTotal:540000}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-08-10 09:00'},
-      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩1,350,000、本地全款 Rp 540.000），项目清单已锁定', dt:'2026-08-20 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'本地项目已转入客户持有：Genesis焕肤（Clarity II）1次 x1', dt:'2026-08-20 09:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"自体脂肪移植（全脸）"施术', dt:'2026-08-25 10:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'KR标记"施术完成"，案件已结案', dt:'2026-08-27 09:00'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-39)+' 09:00'},
+      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩1,350,000、本地全款 Rp 540.000），项目清单已锁定', dt:D(-29)+' 09:00'},
+      {stage:'面诊安排', actor:'Dewi', action:'本地项目已转入客户持有：Genesis焕肤（Clarity II）1次 x1', dt:D(-29)+' 09:00'},
+      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"自体脂肪移植（全脸）"施术', dt:D(-24)+' 10:00'},
+      {stage:'赴韩施术', actor:'김민석 원장', action:'KR标记"施术完成"，案件已结案', dt:D(-22)+' 09:00'}
     ]}),
 
   /* 接待中（演示"关联之前案件"）：Rina 之前有已结案的赴韩案件 A000010，这次再来，基础资料里可关联并看到"可能与 A000010 相关" */
   makeCase({id:'rina2', inCoordinator:'Rina', name:'Rina Marlina', subState:'arrived', caseNo:'A000019', updated:'刚刚',
     logEntries:[
-      {stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:'2026-09-18 09:00'},
-      {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:'2026-09-18 09:30'}
+      {stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:D(0)+' 09:00'},
+      {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:D(0)+' 09:30'}
     ]}),
 
   /* 已结案 + 有退款：分支6——赴韩项目里一个取消退定金，另一个完成后案件结案（2026-09-29 第十轮改用赴韩项目演示，
@@ -659,66 +662,66 @@ var CASE_ITEMS = [
     concern:'轮廓不对称', expectation:'希望改善轮廓线条', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议下颌角整形+颧骨缩小联合方案改善轮廓。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
-    krScope:{items:[{name:'下颌角整形', price:9000000, note:''},{name:'颧骨缩小', price:8000000, note:'不可与下颌角同时做'}], overallNote:'具体术式最终以到院评估为准', updatedAt:'2026-09-08 09:00'},
+    krScope:{items:[{name:'下颌角整形', price:9000000, note:''},{name:'颧骨缩小', price:8000000, note:'不可与下颌角同时做'}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(-10)+' 09:00'},
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true, visitClosed:true,
     krProcedureDone:true,
-    refunds:[{amount:2400000, currency:'KRW', reason:'客人检查后决定不做颧骨缩小', date:'2026-09-11', items:['颧骨缩小'], batchIds:['B1']}],
-    krSchedule:{status:'confirmed', confirmedDate:'2026-09-13', confirmedTime:'11:00', primary:'2026-09-13', backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
+    refunds:[{amount:2400000, currency:'KRW', reason:'客人检查后决定不做颧骨缩小', date:D(-7), items:['颧骨缩小'], batchIds:['B1']}],
+    krSchedule:{status:'confirmed', confirmedDate:D(-5), confirmedTime:'11:00', primary:D(-5), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[{name:'下颌角整形', origin:'KR', done:true, batchId:'B1'},{name:'颧骨缩小', origin:'KR', done:false, cancelled:true, batchId:'B1'}],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-08 09:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(-10)+' 09:00', status:'active',
       krTotal:17000000, krDeposit:5100000, krBalance:11900000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-01 09:00'},
-      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩5,100,000），项目清单已锁定', dt:'2026-09-08 09:00'},
-      {stage:'赴韩施术', actor:'Dewi', action:'取消项目"颧骨缩小"，退款 ₩2,400,000，退款原因：客人检查后决定不做颧骨缩小', dt:'2026-09-11 09:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"下颌角整形"施术', dt:'2026-09-13 11:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'KR标记"施术完成"，案件已结案（退款记入财务字段）', dt:'2026-09-13 15:00'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-17)+' 09:00'},
+      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩5,100,000），项目清单已锁定', dt:D(-10)+' 09:00'},
+      {stage:'赴韩施术', actor:'Dewi', action:'取消项目"颧骨缩小"，退款 ₩2,400,000，退款原因：客人检查后决定不做颧骨缩小', dt:D(-7)+' 09:00'},
+      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"下颌角整形"施术', dt:D(-5)+' 11:00'},
+      {stage:'赴韩施术', actor:'김민석 원장', action:'KR标记"施术完成"，案件已结案（退款记入财务字段）', dt:D(-5)+' 15:00'}
     ]}),
 
   /* 已取消预约：分支1——待访问阶段直接终止，资料保留，没有走到基础资料确认，所以没有 Case ID */
   makeCase({id:'bayu', name:'Bayu Aditya', subState:'cancelled', cancelReason:'未到店', caseNo:'A000022', updated:'昨天',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-17 09:00'},
-      {stage:'预约到店', actor:'系统', action:'过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）', dt:'2026-09-17 10:30'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-1)+' 09:00'},
+      {stage:'预约到店', actor:'系统', action:'过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）', dt:D(-1)+' 10:30'}
     ]}),
   makeCase({id:'agus', name:'Agus Salim', subState:'cancelled', caseNo:'A000020', cancelReason:'预约取消', updated:'4 天前',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-19 09:00'},
-      {stage:'预约到店', actor:'Dewi', action:'取消预约，原因：联系不上客人', dt:'2026-09-19 18:00'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(1)+' 09:00'},
+      {stage:'预约到店', actor:'Dewi', action:'取消预约，原因：联系不上客人', dt:D(1)+' 18:00'}
     ]}),
 
   /* 仅出报告（2026-09-30）：分支6——赴韩项目全部取消并退款、没做本地项目，客人只拿到了面诊报告；财务结果=全额退款 */
-  makeCase({id:'lina', reportDate:'2026-09-05', name:'Lina Kusuma', materialsConfirmed:true, caseNo:'A000012', updated:'6 天前',
+  makeCase({id:'lina', reportDate:D(-13), name:'Lina Kusuma', materialsConfirmed:true, caseNo:'A000012', updated:'6 天前',
     concern:'眼部松弛', expectation:'希望眼周更年轻', needsConsult:true, activeCaseTab:'basic', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议提眉联合上睑整形。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, visitClosed:true,
-    refunds:[{amount:300000, currency:'KRW', reason:'客人因个人原因取消赴韩行程', date:'2026-09-12', items:['提眉手术'], batchIds:['B1']}],
+    refunds:[{amount:300000, currency:'KRW', reason:'客人因个人原因取消赴韩行程', date:D(-6), items:['提眉手术'], batchIds:['B1']}],
     procedureItems:[{name:'提眉手术', origin:'KR', done:false, cancelled:true, batchId:'B1'}],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:'2026-09-10 09:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(-8)+' 09:00', status:'active',
       krTotal:1000000, krDeposit:300000, krBalance:700000, inTotal:0}],
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-04 09:00'},
-      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩300,000），项目清单已锁定', dt:'2026-09-10 09:00'},
-      {stage:'赴韩施术', actor:'Dewi', action:'取消项目"提眉手术"，退款 ₩300,000，退款原因：客人因个人原因取消赴韩行程', dt:'2026-09-12 09:00'},
-      {stage:'赴韩施术', actor:'Dewi', action:'全部赴韩项目均已取消退款，案件结束：仅出报告', dt:'2026-09-12 09:05'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-14)+' 09:00'},
+      {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩300,000），项目清单已锁定', dt:D(-8)+' 09:00'},
+      {stage:'赴韩施术', actor:'Dewi', action:'取消项目"提眉手术"，退款 ₩300,000，退款原因：客人因个人原因取消赴韩行程', dt:D(-6)+' 09:00'},
+      {stage:'赴韩施术', actor:'Dewi', action:'全部赴韩项目均已取消退款，案件结束：仅出报告', dt:D(-6)+' 09:05'}
     ]}),
 
   /* 已取消（管理取消）：不面诊案件使用持有项目后，管理全部取消、本次无购买，未做次数已归还持有 */
   makeCase({id:'hana', name:'Hana Permana', subState:'arrived', materialsConfirmed:true, caseNo:'A000015', updated:'3 天前',
     concern:'术后恢复', expectation:'希望恢复期舒适', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'管理取消', mgmtStatus:'cancelled_all',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-20 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'使用了术后消肿护理 1次 1次，剩余1次', dt:'2026-09-20 10:00'},
-      {stage:'本地管理', actor:'Dewi', action:'管理取消（全部）：1次已归还持有项目（不是退款）；本次无购买，案件已取消（管理取消）', dt:'2026-09-20 10:30'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(2)+' 09:00'},
+      {stage:'面诊安排', actor:'Dewi', action:'使用了术后消肿护理 1次 1次，剩余1次', dt:D(2)+' 10:00'},
+      {stage:'本地管理', actor:'Dewi', action:'管理取消（全部）：1次已归还持有项目（不是退款）；本次无购买，案件已取消（管理取消）', dt:D(2)+' 10:30'}
     ]}),
 
   /* 已取消（未购买未使用）：不面诊案件，本次既没购买也没使用 */
   makeCase({id:'tari', name:'Tari Wibowo', subState:'arrived', materialsConfirmed:true, caseNo:'A000016', updated:'2 天前',
     concern:'皮肤暗沉', expectation:'了解项目', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'未购买未使用',
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:'2026-09-21 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'本次不购买项目，案件已取消（未购买未使用）', dt:'2026-09-21 10:00'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(3)+' 09:00'},
+      {stage:'面诊安排', actor:'Dewi', action:'本次不购买项目，案件已取消（未购买未使用）', dt:D(3)+' 10:00'}
     ]})
 ];
 
@@ -728,12 +731,12 @@ var CASE_NO_SEQ = 23;
 
 /* ---- 演示数据：每个案件一条预约来访（日期/时间/目的）——日历每个事件都对应案件列表里的一个案件（2026-10-02·一） ---- */
 var DEMO_VISITS = {
-  siti:['2026-09-18','10:45','面诊商谈'], ayu2:['2026-09-18','15:00','复诊'], andi:['2026-09-18','09:30','面诊商谈'], rina2:['2026-09-18','10:00','复诊'],
-  yuni:['2026-09-16','09:30','皮肤商谈'], maya:['2026-09-16','14:00','面诊商谈'], putri:['2026-09-14','10:00','面诊商谈'], dedi:['2026-09-15','10:30','面诊商谈'],
-  budi:['2026-09-15','14:30','面诊商谈'], ayu:['2026-09-16','11:00','皮肤商谈'], fajar:['2026-09-17','09:30','面诊商谈'], nadia:['2026-09-14','14:00','面诊商谈'],
-  dinda:['2026-09-17','14:00','面诊商谈'], rizky:['2026-09-17','11:00','皮肤管理'], rina:['2026-09-14','09:30','面诊商谈'], wulan:['2026-09-15','09:30','面诊商谈'],
-  agus:['2026-09-19','10:00','面诊商谈'], lina:['2026-09-15','16:00','面诊商谈'], hana:['2026-09-17','15:30','术后管理'], tari:['2026-09-17','16:00','皮肤管理'],
-  bayu:['2026-09-17','10:00','面诊商谈']
+  siti:[D(0),'10:45','面诊商谈'], ayu2:[D(0),'15:00','复诊'], andi:[D(0),'09:30','面诊商谈'], rina2:[D(0),'10:00','复诊'],
+  yuni:[D(-2),'09:30','皮肤商谈'], maya:[D(-2),'14:00','面诊商谈'], putri:[D(-4),'10:00','面诊商谈'], dedi:[D(-3),'10:30','面诊商谈'],
+  budi:[D(-3),'14:30','面诊商谈'], ayu:[D(-2),'11:00','皮肤商谈'], fajar:[D(-1),'09:30','面诊商谈'], nadia:[D(-4),'14:00','面诊商谈'],
+  dinda:[D(-1),'14:00','面诊商谈'], rizky:[D(-1),'11:00','皮肤管理'], rina:[D(-4),'09:30','面诊商谈'], wulan:[D(-3),'09:30','面诊商谈'],
+  agus:[D(1),'10:00','面诊商谈'], lina:[D(-3),'16:00','面诊商谈'], hana:[D(-1),'15:30','术后管理'], tari:[D(-1),'16:00','皮肤管理'],
+  bayu:[D(-1),'10:00','面诊商谈']
 };
 
 CASE_ITEMS.forEach(function(c){ var v = DEMO_VISITS[c.id]; if(v){ c.visitDate = v[0]; c.visitTime = v[1]; c.visitPurpose = v[2]; } });
@@ -1023,8 +1026,6 @@ function logLine(e){
   return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+e.stage+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+actorDisplay(e)+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+e.dt+'</span></div>';
 }
 
-var DEMO_LOAD_TS = Date.now();
-
 var DEMO_SHIFT_MS = 0;
 
 function nowFullDt(){ var d = demoNow(); return dateStr(d)+' '+pad2(d.getHours())+':'+pad2(d.getMinutes()); }
@@ -1186,7 +1187,7 @@ function applyDirectorPlan(c){
 /* ---- 查看报告：格式化的报告视图，底部"查看方案"跳转项目列表 ---- */
 function reportModalContent(c){
   var body = c.videoSummary;
-  return '<div style="font-size:11px;color:var(--muted);margin-bottom:22px;">2026-09-18</div>'+
+  return '<div style="font-size:11px;color:var(--muted);margin-bottom:22px;">'+D(0)+'</div>'+
     '<div style="font-size:13px;line-height:1.9;color:var(--navy);margin-bottom:32px;">尊敬的 '+c.name+'：<br><br>'+body+'<br><br>如有任何疑问，欢迎随时联系。</div>'+
     '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:6px;">'+
     '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+(c.director||'')+'</span>'+
@@ -2505,9 +2506,9 @@ function confirmSettlementPayment(){
 
 /* ---- 赴韩施术 tab（2026-09-29 重写，原"施术"tab拆分为两个）：施术日期改到已付款之后才递交，
    不再是结算前的排期门槛；日期只能选 KR_OPEN_DATES 里开放的（演示数据，未开放置灰不可选） ---- */
-var KR_OPEN_DATES = ['2026-09-19','2026-09-20','2026-09-21','2026-09-22','2026-09-28','2026-09-29','2026-10-05','2026-10-06','2026-10-08','2026-10-12','2026-10-13','2026-10-19','2026-10-20','2026-10-26','2026-10-27','2026-11-02','2026-11-03','2026-11-09','2026-11-10'];
+var KR_OPEN_DATES = [D(1),D(2),D(3),D(4),D(10),D(11),D(17),D(18),D(20),D(24),D(25),D(31),D(32),D(38),D(39),D(45),D(46),D(52),D(53)];
 
-var KR_SCHED_VIEW_MONTH = new Date(2026,9,1);
+var KR_SCHED_VIEW_MONTH = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth(), 1);
 
 /* 月历默认打开的月份（2026-09-29 第十轮修复：原来是全局变量，翻页后不会在切换案件/重新进入时复位，
    导致"看起来停在别的月份"；现在每次进入日期选择/修改流程时显式重置，不再依赖上次翻页停留的位置） */
@@ -3203,11 +3204,11 @@ var PROJECT_LIBRARY = [
 /* demo 客户持有项目种子数据（2026-09-29 第十轮新增）：对应上面几个demo案例结算后应该转入持有的本地项目，
    补种子数据的写法，和真实交互路径（confirmSettlementPayment 里 grantHolding）效果一样 */
 (function seedDemoHoldings(){
-  grantHolding('Rizky Hidayat', '好莱坞焕肤 1次', '本地', 'rizky', '2026-09-15', 1, false);
-  grantHolding('Rizky Hidayat', 'Genesis焕肤（Clarity II）1次', '本地', 'rizky', '2026-09-15', 1, false);
-  grantHolding('Rina Marlina', 'Genesis焕肤（Clarity II）1次', '本地', 'rina', '2026-08-20', 1, false);
-  useHolding('Rina Marlina', 'Genesis焕肤（Clarity II）1次', 'rina', '2026-08-27', 1); /* 已用完，演示"已用/购买"显示 */
-  useHolding('Rizky Hidayat', '好莱坞焕肤 1次', 'rizky', '2026-09-15', 1, 'main'); /* rizky 本地管理：已使用1次 */
+  grantHolding('Rizky Hidayat', '好莱坞焕肤 1次', '本地', 'rizky', D(-3), 1, false);
+  grantHolding('Rizky Hidayat', 'Genesis焕肤（Clarity II）1次', '本地', 'rizky', D(-3), 1, false);
+  grantHolding('Rina Marlina', 'Genesis焕肤（Clarity II）1次', '本地', 'rina', D(-29), 1, false);
+  useHolding('Rina Marlina', 'Genesis焕肤（Clarity II）1次', 'rina', D(-22), 1); /* 已用完，演示"已用/购买"显示 */
+  useHolding('Rizky Hidayat', '好莱坞焕肤 1次', 'rizky', D(-3), 1, 'main'); /* rizky 本地管理：已使用1次 */
 })();
 
 
@@ -3444,12 +3445,12 @@ function demoNotif(kind){
   else if(kind==='missed') pushNotif('视频','未接来电：이서연 呼叫了 '+ayu.name+' 的案件视频', {caseId:'ayu', link:{kind:'caseRoom'}});
   else if(kind==='at'){
     ensureCaseRoom(ayu); var roomId = getCaseRoomId('ayu');
-    CHAT_DATA[roomId].push({day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'@Dewi 这位客人的报告我已经补充了，请看一下。', trans:'（演示译文）', time:nowTime()});
+    CHAT_DATA[roomId].push({day:KD(0), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'@Dewi 这位客人的报告我已经补充了，请看一下。', trans:'（演示译文）', time:nowTime()});
     pushNotif('对话','이서연 在「'+ayu.name+' · '+ayu.caseNo+'」里 @ 了你', {caseId:'ayu', names:[ME_NAME], link:{kind:'mention', roomId:roomId, msgIdx:CHAT_DATA[roomId].length-1}});
   }
-  else if(kind==='system') pushNotif('系统','诊所管理账号更新了设定：面诊费 300,000 → 350,000 印尼盾，2026-10-03 起生效', {names:IN_COORDINATORS, link:{kind:'system'}, detail:{title:'面诊费调整', changes:['面诊费 300,000 → 350,000 印尼盾'], effective:'2026-10-03 起'}});
+  else if(kind==='system') pushNotif('系统','诊所管理账号更新了设定：面诊费 300,000 → 350,000 印尼盾，'+D(15)+' 起生效', {names:IN_COORDINATORS, link:{kind:'system'}, detail:{title:'面诊费调整', changes:['面诊费 300,000 → 350,000 印尼盾'], effective:D(15)+' 起'}});
   else if(kind==='noshow') pushNotif('预约','未到店（自动判定）：Bayu Aditya 过预约时间30分钟未到店，已取消', {caseId:'bayu'});
-  else if(kind==='schedule') pushNotif('赴韩施术','KR 确认施术时间：Nadia Permata 2026-09-20 14:00', {caseId:'nadia'});
+  else if(kind==='schedule') pushNotif('赴韩施术','KR 确认施术时间：Nadia Permata '+D(2)+' 14:00', {caseId:'nadia'});
   else if(kind==='other') pushNotif('面诊','报告已出：Andi Wijaya（这个案件只有 Rina 操作过 → 只发给 Rina）', {caseId:'andi'});
 }
 
@@ -3459,17 +3460,17 @@ function demoNotif(kind){
     var n = {id:'n'+(++NOTIF_SEQ), cat:cat, text:text, caseId:caseId, ts:ts, recipients:names||['Dewi'], read:read?{Dewi:true}:{}, link:link||(caseId?{kind:'case'}:{kind:'none'}), detail:detail||null};
     NOTIFS.push(n);
   }
-  add('预约','客人自助预约提交：Siti Rahayu（A000017）','siti','2026-09-18 09:05',false);
-  add('预约','未到店（自动判定）：Bayu Aditya 过预约时间30分钟未到店，已取消','bayu','2026-09-17 10:31',true);
-  add('预约','预约占位快过期（剩 5 分钟）：+62 812-3300-0099','','2026-09-17 12:55',true,{kind:'none'});
-  add('面诊','KR 确认预计出报告时间：Putri Wulandari 2026-09-20 14:00','putri','2026-09-14 16:00',true);
-  add('面诊','等待报告超过预计时间：Dedi Prasetyo（预计 2026-09-18 08:00）','dedi','2026-09-18 08:05',false);
-  add('面诊','报告已出：Ayu Lestari（A000006）','ayu','2026-09-16 11:20',true);
-  add('赴韩施术','KR 确认施术时间：Nadia Permata 2026-09-20 14:00','nadia','2026-09-15 10:00',true);
-  add('赴韩施术','客人已到医院：Nadia Permata','nadia','2026-09-17 09:30',false);
-  add('视频','未接来电：이서연 呼叫了 Ayu Lestari 的案件视频','ayu','2026-09-17 15:20',false,{kind:'caseRoom'});
-  add('对话','이서연 在「Ayu Lestari · A000006」里 @ 了你','ayu','2026-09-16 13:10',true,{kind:'mention', roomId:'case-ayu', msgIdx:0});
-  add('系统','诊所管理账号更新了设定：营业时间 09:00–18:00 → 09:00–19:00，2026-09-20 起生效','','2026-09-16 08:00',true,{kind:'system'},{title:'营业时间调整', changes:['营业时间 09:00–18:00 → 09:00–19:00'], effective:'2026-09-20 起'},['Dewi','Rina']);
+  add('预约','客人自助预约提交：Siti Rahayu（A000017）','siti',D(0)+' 09:05',false);
+  add('预约','未到店（自动判定）：Bayu Aditya 过预约时间30分钟未到店，已取消','bayu',D(-1)+' 10:31',true);
+  add('预约','预约占位快过期（剩 5 分钟）：+62 812-3300-0099','',D(-1)+' 12:55',true,{kind:'none'});
+  add('面诊','KR 确认预计出报告时间：Putri Wulandari '+D(2)+' 14:00','putri',D(-4)+' 16:00',true);
+  add('面诊','等待报告超过预计时间：Dedi Prasetyo（预计 '+D(0)+' 08:00）','dedi',D(0)+' 08:05',false);
+  add('面诊','报告已出：Ayu Lestari（A000006）','ayu',D(-2)+' 11:20',true);
+  add('赴韩施术','KR 确认施术时间：Nadia Permata '+D(2)+' 14:00','nadia',D(-3)+' 10:00',true);
+  add('赴韩施术','客人已到医院：Nadia Permata','nadia',D(-1)+' 09:30',false);
+  add('视频','未接来电：이서연 呼叫了 Ayu Lestari 的案件视频','ayu',D(-1)+' 15:20',false,{kind:'caseRoom'});
+  add('对话','이서연 在「Ayu Lestari · A000006」里 @ 了你','ayu',D(-2)+' 13:10',true,{kind:'mention', roomId:'case-ayu', msgIdx:0});
+  add('系统','诊所管理账号更新了设定：营业时间 09:00–18:00 → 09:00–19:00，'+D(2)+' 起生效','',D(-2)+' 08:00',true,{kind:'system'},{title:'营业时间调整', changes:['营业时间 09:00–18:00 → 09:00–19:00'], effective:D(2)+' 起'},['Dewi','Rina']);
 })();
 
 /* 日历上"等待报告超过预计时间"自动提醒用的标记：dedi 演示案件已经提醒过 */
@@ -3516,71 +3517,71 @@ function roomLastKey(roomId){
 
 var CHAT_DATA = {
   'kr-lee':[
-    {day:'2026년 9월 17일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'Siti Rahayu 자료 검토 부탁드립니다.', trans:'Siti Rahayu 的材料麻烦帮忙看一下。', time:'14:00'},
-    {day:'2026년 9월 17일', from:'me', orig:'好的，我这边帮您确认，院长看完资料后会出报告。', time:'14:05'},
-    {day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'면담 시간은 09.20 14:00 KST로 확정됐습니다.', trans:'预计出报告时间已确认为 09.20 14:00（KST）。', time:'09:12'},
-    {day:'2026년 9월 18일', from:'me', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20', refCaseId:'ayu'},
-    {day:'2026년 9월 18일', from:'me', orig:'Lina 之前的报告可以当参考。', trans:'Lina 님의 이전 리포트를 참고하세요.', time:'10:25', refCaseId:'lina'}
+    {day:KD(-1), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'Siti Rahayu 자료 검토 부탁드립니다.', trans:'Siti Rahayu 的材料麻烦帮忙看一下。', time:'14:00'},
+    {day:KD(-1), from:'me', orig:'好的，我这边帮您确认，院长看完资料后会出报告。', time:'14:05'},
+    {day:KD(0), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'면담 시간은 09.20 14:00 KST로 확정됐습니다.', trans:'预计出报告时间已确认为 09.20 14:00（KST）。', time:'09:12'},
+    {day:KD(0), from:'me', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20', refCaseId:'ayu'},
+    {day:KD(0), from:'me', orig:'Lina 之前的报告可以当参考。', trans:'Lina 님의 이전 리포트를 참고하세요.', time:'10:25', refCaseId:'lina'}
   ],
   'main':[
-    {day:'2026년 9월 18일', from:'them', name:'김민석 원장', color:'var(--slate2)', init:'김', orig:'이번 주 신규 케이스 3건 검토 예정입니다.', trans:'本周有 3 个新案件待审核。', time:'09:00'},
-    {day:'2026년 9월 18일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Budi Santoso 案件资料补充中，晚点提交。', time:'09:20'},
-    {day:'2026년 9월 18일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'@Dewi 下午的持有项目对账麻烦你过来一下。', trans:'（演示译文）', time:'09:40'}
+    {day:KD(0), from:'them', name:'김민석 원장', color:'var(--slate2)', init:'김', orig:'이번 주 신규 케이스 3건 검토 예정입니다.', trans:'本周有 3 个新案件待审核。', time:'09:00'},
+    {day:KD(0), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Budi Santoso 案件资料补充中，晚点提交。', time:'09:20'},
+    {day:KD(0), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'@Dewi 下午的持有项目对账麻烦你过来一下。', trans:'（演示译文）', time:'09:40'}
   ],
   'grp-이서연-rina':[
-    {day:'2026년 9월 18일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'这周 KR 那边的开放日期都排满了吗？', trans:'이번 주 KR 쪽 개방 일정이 다 찼나요?', time:'10:05'},
-    {day:'2026년 9월 18일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'아직 21일, 22일이 비어 있습니다.', trans:'21 日、22 日还有空位。', time:'10:12'}
+    {day:KD(0), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'这周 KR 那边的开放日期都排满了吗？', trans:'이번 주 KR 쪽 개방 일정이 다 찼나요?', time:'10:05'},
+    {day:KD(0), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'아직 21일, 22일이 비어 있습니다.', trans:'21 日、22 日还有空位。', time:'10:12'}
   ],
   'director-kim':[
-    {day:'2026년 9월 17일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Siti Rahayu 자료 잘 받았습니다, 검토하겠습니다.', trans:'Siti Rahayu 的材料已收到，我会审核。', time:'11:40'}
+    {day:KD(-1), from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Siti Rahayu 자료 잘 받았습니다, 검토하겠습니다.', trans:'Siti Rahayu 的材料已收到，我会审核。', time:'11:40'}
   ],
   'rina':[
-    {day:'2026년 9월 16일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Budi 的材料我再补充一下', time:'16:20'}
+    {day:KD(-2), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Budi 的材料我再补充一下', time:'16:20'}
   ],
 
   /* 案件专属房间：只给已经生成 Case ID 的案件开（见 docs/conversation-video-flow.md"只有主动发起过对话的案件才会存在"），
      每个案例配一条和它当前状态对得上的对话记录，这样"对话"抽屉的"案件"分类点进去看到的内容和案件详情页是一致的 */
   'case-yuni':[
-    {day:'2026년 9월 16일', from:'me', orig:'客人想先看一下术后管理的价格，我整理了项目单发给她。', trans:'고객이 시술 후 관리 가격부터 보고 싶어 해서 항목표를 보냈습니다.', time:'09:40'}
+    {day:KD(-2), from:'me', orig:'客人想先看一下术后管理的价格，我整理了项目单发给她。', trans:'고객이 시술 후 관리 가격부터 보고 싶어 해서 항목표를 보냈습니다.', time:'09:40'}
   ],
   'case-maya':[
-    {day:'2026년 9월 16일', from:'me', orig:'客人想知道大概多久能出报告。', trans:'고객이 리포트가 언제쯤 나오는지 궁금해합니다.', time:'14:40'},
-    {day:'2026년 9월 16일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'수신했습니다, 원장님께 전달하겠습니다.', trans:'已收到，会转达给院长。', time:'15:10'}
+    {day:KD(-2), from:'me', orig:'客人想知道大概多久能出报告。', trans:'고객이 리포트가 언제쯤 나오는지 궁금해합니다.', time:'14:40'},
+    {day:KD(-2), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'수신했습니다, 원장님께 전달하겠습니다.', trans:'已收到，会转达给院长。', time:'15:10'}
   ],
   'case-putri':[
-    {day:'2026년 9월 14일', from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'자료 확인했습니다. 원장님과 함께 검토 중입니다.', trans:'资料已确认，正在和院长一起看。', time:'16:05'}
+    {day:KD(-4), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'자료 확인했습니다. 원장님과 함께 검토 중입니다.', trans:'资料已确认，正在和院长一起看。', time:'16:05'}
   ],
   'case-dedi':[
-    {day:'2026년 9월 18일', from:'me', orig:'客人在问报告什么时候能好，我先回复她还在等。', trans:'고객이 리포트 일정을 물어 아직 기다리는 중이라고 답했습니다.', time:'09:10'}
+    {day:KD(0), from:'me', orig:'客人在问报告什么时候能好，我先回复她还在等。', trans:'고객이 리포트 일정을 물어 아직 기다리는 중이라고 답했습니다.', time:'09:10'}
   ],
   'case-budi':[
-    {day:'2026년 9월 20일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'윤곽 이완은 중등도입니다. 초음파 리프팅 먼저 평가하시죠.', trans:'轮廓松弛属中度，建议先评估超声刀。', time:'09:30'}
+    {day:KD(2), from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'윤곽 이완은 중등도입니다. 초음파 리프팅 먼저 평가하시죠.', trans:'轮廓松弛属中度，建议先评估超声刀。', time:'09:30'}
   ],
   'case-ayu':[
-    {day:'2026년 9월 19일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Ayu Lestari 리포트 발송했습니다.', trans:'Ayu Lestari 的面诊报告已发送。', time:'11:20'},
-    {day:'2026년 9월 18일', from:'me', kind:'quote', speaker:'Dewi', srcRoomId:'kr-lee', srcRoom:'이서연 · 韩国室长', srcIdx:3, srcDt:'26-09-18 10:20', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20'} /* 从其他房间引用进来 */
+    {day:KD(1), from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Ayu Lestari 리포트 발송했습니다.', trans:'Ayu Lestari 的面诊报告已发送。', time:'11:20'},
+    {day:KD(0), from:'me', kind:'quote', speaker:'Dewi', srcRoomId:'kr-lee', srcRoom:'이서연 · 韩国室长', srcIdx:3, srcDt:'26-09-18 10:20', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20'} /* 从其他房间引用进来 */
   ],
   'case-fajar':[
-    {day:'2026년 9월 21일', from:'me', orig:'客人说想再对比一下鼻翼缩小的价格，稍后回复。', trans:'고객이 콧볼 축소 가격을 다시 비교해 보겠다고 했습니다.', time:'10:00'}
+    {day:KD(3), from:'me', orig:'客人说想再对比一下鼻翼缩小的价格，稍后回复。', trans:'고객이 콧볼 축소 가격을 다시 비교해 보겠다고 했습니다.', time:'10:00'}
   ],
   'case-dinda':[
-    {day:'2026년 9월 23일', from:'me', orig:'客人问施术日期怎么选，我发了日历说明。', trans:'고객이 시술 날짜 선택 방법을 물어 달력 안내를 보냈습니다.', time:'10:05'}
+    {day:KD(5), from:'me', orig:'客人问施术日期怎么选，我发了日历说明。', trans:'고객이 시술 날짜 선택 방법을 물어 달력 안내를 보냈습니다.', time:'10:05'}
   ],
   'case-nadia':[
-    {day:'2026년 9월 20일', from:'me', orig:'客人已经到首尔了，酒店信息我发给 KR 室长。', trans:'고객이 서울에 도착했고 호텔 정보를 KR 실장님께 보냅니다.', time:'11:00'},
-    {day:'2026년 9월 22일', from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'턱 보형물 시술 완료했습니다, 광대축소술은 다음 주 예정입니다.', trans:'下巴假体已完成，颧骨缩小下周进行。', time:'14:00'}
+    {day:KD(2), from:'me', orig:'客人已经到首尔了，酒店信息我发给 KR 室长。', trans:'고객이 서울에 도착했고 호텔 정보를 KR 실장님께 보냅니다.', time:'11:00'},
+    {day:KD(4), from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'턱 보형물 시술 완료했습니다, 광대축소술은 다음 주 예정입니다.', trans:'下巴假体已完成，颧骨缩小下周进行。', time:'14:00'}
   ],
   'case-rizky':[
-    {day:'2026년 9월 19일', from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Rizky 的赴韩项目已经全部完成，本地这边还剩一项', time:'09:30'}
+    {day:KD(1), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Rizky 的赴韩项目已经全部完成，本地这边还剩一项', time:'09:30'}
   ],
   'case-rina':[
-    {day:'2026년 8월 27일', from:'me', orig:'客人对结果很满意，之后回来做护理再约。', trans:'고객이 결과에 매우 만족하며 이후 관리는 다시 예약하겠다고 했습니다.', time:'09:00'}
+    {day:KD(-22), from:'me', orig:'客人对结果很满意，之后回来做护理再约。', trans:'고객이 결과에 매우 만족하며 이후 관리는 다시 예약하겠다고 했습니다.', time:'09:00'}
   ],
   'case-wulan':[
-    {day:'2026년 9월 13일', from:'me', orig:'客人反馈恢复得不错。', trans:'고객이 회복이 좋다고 했습니다.', time:'09:05'}
+    {day:KD(-5), from:'me', orig:'客人反馈恢复得不错。', trans:'고객이 회복이 좋다고 했습니다.', time:'09:05'}
   ],
   'case-lina':[
-    {day:'2026년 9월 12일', from:'me', orig:'报告已经发给客人了，她想再考虑一下。', trans:'리포트를 고객에게 보냈고 조금 더 고민해 보겠다고 합니다.', time:'09:05'}
+    {day:KD(-6), from:'me', orig:'报告已经发给客人了，她想再考虑一下。', trans:'리포트를 고객에게 보냈고 조금 더 고민해 보겠다고 합니다.', time:'09:05'}
   ]
 
 };
@@ -3595,12 +3596,12 @@ function caseRoomMembers(c){
 /* ---- 备忘 / OFF 数据（2026-10-02·七）：IN 室长的 OFF 从"新增 memo"来；KR 院长/KR 室长的 OFF 用演示数据代替（KR 端功能） ----
    {id, date, type:'备忘'|'OFF', scope:'公开'|'私人', role:'IN室长'|'KR室长'|'KR院长'(OFF 用), person:(OFF 的人), author, text} */
 var DEMO_MEMOS = [
-  {id:'m1', date:'2026-09-18', type:'OFF', scope:'公开', role:'KR院长', person:'이수진 원장', author:'KR（演示）', text:''},
-  {id:'m2', date:'2026-09-18', type:'OFF', scope:'公开', role:'KR室长', person:'이서연', author:'KR（演示）', text:''},
-  {id:'m3', date:'2026-09-19', type:'OFF', scope:'公开', role:'IN室长', person:'Rina', author:'Rina', text:''},
-  {id:'m4', date:'2026-09-21', type:'OFF', scope:'公开', role:'KR院长', person:'김민석 원장', author:'KR（演示）', text:''},
-  {id:'m5', date:'2026-09-18', type:'备忘', scope:'公开', author:'Dewi', text:'下午整理持有项目对账'},
-  {id:'m6', date:'2026-09-17', type:'备忘', scope:'私人', author:'Dewi', text:'给 Rizky 回电（私人）'}
+  {id:'m1', date:D(0), type:'OFF', scope:'公开', role:'KR院长', person:'이수진 원장', author:'KR（演示）', text:''},
+  {id:'m2', date:D(0), type:'OFF', scope:'公开', role:'KR室长', person:'이서연', author:'KR（演示）', text:''},
+  {id:'m3', date:D(1), type:'OFF', scope:'公开', role:'IN室长', person:'Rina', author:'Rina', text:''},
+  {id:'m4', date:D(3), type:'OFF', scope:'公开', role:'KR院长', person:'김민석 원장', author:'KR（演示）', text:''},
+  {id:'m5', date:D(0), type:'备忘', scope:'公开', author:'Dewi', text:'下午整理持有项目对账'},
+  {id:'m6', date:D(-1), type:'备忘', scope:'私人', author:'Dewi', text:'给 Rizky 回电（私人）'}
 ];
 
 var CAL_MEMOS = (function(){ try{ var v = JSON.parse(localStorage.getItem('gmc_memos')||'null'); if(v) return v; }catch(e){} return DEMO_MEMOS.map(function(m){ return Object.assign({}, m); }); })();
@@ -3623,7 +3624,7 @@ function caseOperators(c, strict){
 
 function shouldPushToMe(c){ return pushTargets(c).inn.indexOf(ME_NAME)>-1; }
  /* 演示视角：当前登录的是 Dewi（IN室长） */
-function roomSysMsg(text){ return {day:'2026년 9월 18일', from:'sys', kind:'sys', orig:text, time:nowTime()}; }
+function roomSysMsg(text){ return {day:KD(0), from:'sys', kind:'sys', orig:text, time:nowTime()}; }
 
 /* 点［发起对话］/新建案件对话时才建房（有房间之后才出现在抽屉里）；建房时IN室长进入房间 */
 function ensureCaseRoom(c){

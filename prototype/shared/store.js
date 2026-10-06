@@ -5,7 +5,7 @@
    - 超出 localStorage 容量（约 5MB）时：不报错、不卡住，console.warn + 画面上提示"演示数据过大，已重置"，之后这个页面不再存档。
    加载顺序：rules.js → ui.js → data.js → store.js →（in.html 再加 boot-in.js） */
 var PERSIST_VARS = [
-  'CLINIC_TZ', 'DEMO_LOAD_TS', 'DEMO_SHIFT_MS',
+  'CLINIC_TZ', 'DEMO_SHIFT_MS',
   'RESUMED_VISITS', 'PLACEHOLDER_HISTORY', 'PLACEHOLDER_SEQ', 'RESERVATION_PLACEHOLDERS',
   'CLIENTS', 'CLIENT_HOLDINGS', 'CLIENT_FIX_LOG',
   'CASE_ITEMS', 'CASE_NO_SEQ',
