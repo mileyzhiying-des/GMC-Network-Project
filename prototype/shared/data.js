@@ -2991,6 +2991,51 @@ function coreChangeReject(c, reason, by){
   return true;
 }
 
+/* ---- 在韩 timeline 与子项（2026-10-06，KR-CASE-02 第 4 节）----
+   付定金后 KR 室长整理：每一行 = 案件下的一个子项 {id, no:'A000001-01', date, content, kind:'施术'|'复诊'|'管理'|'其他', place:'KR'|'IN'|'either', projectName(施术子项关联的项目), done, doneAt, doneBy, informed}
+   客人端暂不显示；IN 端在赴韩项目 tab 下的子 tab 只读 */
+var SUB_PLACE_LABEL = {KR:'韩国', IN:'印尼', either:'印尼 / 韩国均可'};
+function subNextNo(c){ var n = 0; (c.subItems||[]).forEach(function(s){ var m = String(s.no).match(/-(\d+)$/); if(m) n = Math.max(n, parseInt(m[1],10)); }); return c.caseNo+'-'+pad2(n+1); }
+function coreSubAdd(c, o, by){
+  if(!c.settlementDone) return false;
+  c.subItems = c.subItems || [];
+  var first = c.subItems.length===0;
+  var s = {id:'s'+Date.now()+Math.floor(Math.random()*100), no:subNextNo(c), date:o.date, content:o.content, kind:o.kind||'其他', place:o.place||'KR', projectName:o.projectName||'', done:false, doneAt:'', doneBy:'', informed:false};
+  c.subItems.push(s); c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || a.no.localeCompare(b.no); });
+  logCaseEvent(c, by, 'KR新增在韩子项 '+s.no+'：'+s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）');
+  pushNotif('赴韩施术', first ? 'KR 已整理在韩 timeline：'+c.name+'（可据此安排机票和住宿）' : 'KR 更新了在韩 timeline：'+c.name+'（新增 '+s.no+' '+s.date+' '+s.content+'）', {caseId:c.id});
+  return true;
+}
+function coreSubEdit(c, id, patch, by){
+  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done) return false;
+  var before = s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）';
+  Object.keys(patch).forEach(function(k){ s[k] = patch[k]; });
+  c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || a.no.localeCompare(b.no); });
+  logCaseEvent(c, by, 'KR修改在韩子项 '+s.no+'：'+before+' → '+s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）');
+  pushNotif('赴韩施术','KR 修改了在韩 timeline：'+c.name+'（'+s.no+'）', {caseId:c.id});
+  return true;
+}
+function coreSubDel(c, id, by){
+  var i = (c.subItems||[]).findIndex(function(x){ return x.id===id; }); if(i<0 || c.subItems[i].done) return false;
+  var s = c.subItems.splice(i, 1)[0];
+  logCaseEvent(c, by, 'KR删除在韩子项 '+s.no+'：'+s.date+' '+s.content);
+  pushNotif('赴韩施术','KR 删除了在韩 timeline 的一项：'+c.name+'（'+s.no+' '+s.content+'）', {caseId:c.id});
+  return true;
+}
+/* IN 赴韩项目 tab 下的子 tab 切换 + 在韩 timeline（只读） */
+function setKrSubTab(v){ var c = getCurrentCase(); if(!c) return; c.krSubTab = v; renderCaseBody(c); }
+function subItemRowHtml(s){
+  var pc = {KR:['var(--terracotta-bg)','var(--terracotta)'], IN:['var(--sage-bg)','var(--sage)'], either:['var(--blue-bg)','var(--blue)']}[s.place];
+  return '<div class="case-field-row" style="font-size:13px;gap:10px;"><span style="min-width:104px;font-weight:700;">'+s.no+'</span><span style="min-width:90px;">'+s.date+'</span><span style="flex:1;">'+s.content+' <span style="font-size:11px;color:var(--muted);">'+s.kind+'</span></span><span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+SUB_PLACE_LABEL[s.place]+'</span>'+
+    '<span class="status-pill" style="background:'+(s.done?'var(--sage-bg)':'var(--border2)')+';color:'+(s.done?'var(--sage)':'var(--slate2)')+';">'+(s.done?'已完成':'未开始')+'</span></div>';
+}
+function krTimelineTabHtml(c){
+  var list = (c.subItems||[]).map(subItemRowHtml).join('');
+  return '<div class="info-heading" style="margin-bottom:8px;">在韩 timeline（KR 室长整理，只读）</div>'+
+    (list || '<div style="font-size:13px;color:var(--muted);padding:10px 0;">KR 还没有整理 timeline（付定金后由 KR 室长整理，整理好会通知你）</div>')+
+    '<div style="font-size:11px;color:var(--muted);margin-top:10px;">可据此安排机票、住宿；客人端暂不显示。每一行是案件下的一个子项，编号 '+(c.caseNo||'A000001')+'-01、-02……</div>';
+}
+
 /* 确认后修改日期：施术前2周内置灰不可点；月历默认打开原定日期所在月份（2026-09-29 第十轮修复） */
 function startKrScheduleChange(){
   var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='confirmed') return;
@@ -3070,6 +3115,12 @@ function simulateKrMarkBalancePaid(){
 }
 
 function krProcedureTabHtml(c){
+  var sub = c.krSubTab || 'main';
+  var tabsHtml = c.settlementDone ? '<div style="display:flex;gap:8px;margin-bottom:12px;"><span class="chip'+(sub==='main'?' active':'')+'" onclick="setKrSubTab(\'main\')">施术日期与项目</span><span class="chip'+(sub==='timeline'?' active':'')+'" onclick="setKrSubTab(\'timeline\')">在韩 timeline'+((c.subItems||[]).length?'（'+c.subItems.length+'）':'')+'</span></div>' : '';
+  if(sub==='timeline' && c.settlementDone) return '<div class="card" style="padding:22px 24px;">'+tabsHtml+krTimelineTabHtml(c)+'</div>';
+  return krProcedureTabMain(c, tabsHtml);
+}
+function krProcedureTabMain(c, tabsHtml){
   var ks = c.krSchedule;
   var st = scheduleState(c);
   var monthLabel = KR_SCHED_VIEW_MONTH.getFullYear()+'年'+(KR_SCHED_VIEW_MONTH.getMonth()+1)+'月';
@@ -3155,7 +3206,7 @@ function krProcedureTabHtml(c){
     '</div>';
   var unableBanner = '';
   var unableBtn = '';
-  return '<div class="card" style="padding:22px 24px;">'+subStatusRowHtml(caseSubStatusItems(c))+body+itemsHtml+'</div>';
+  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+body+itemsHtml+'</div>';
 }
 
 function markConsultPaid(){
