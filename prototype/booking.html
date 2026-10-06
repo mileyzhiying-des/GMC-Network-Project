@@ -8,9 +8,10 @@
 <style>
   body{background:var(--bg,#F4F6F9);}
   .bk-wrap{max-width:480px;margin:0 auto;padding:16px 16px 40px;min-height:100vh;display:flex;flex-direction:column;gap:14px;}
-  .bk-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .bk-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  .bk-lang{flex-shrink:0;}
   .bk-lang{display:inline-flex;border:1px solid var(--border);border-radius:999px;overflow:hidden;background:#fff;}
-  .bk-lang button{border:0;background:transparent;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--slate2);font-family:inherit;}
+  .bk-lang button{white-space:nowrap;border:0;background:transparent;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--slate2);font-family:inherit;}
   .bk-lang button.on{background:var(--navy);color:#fff;font-weight:700;}
   .bk-card{background:#fff;border-radius:16px;padding:20px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
   .bk-title{font-size:17px;font-weight:700;margin-bottom:4px;}

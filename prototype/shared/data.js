@@ -1,9 +1,9 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 7;
+var DEMO_DATA_VERSION = 8;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06） */
-var ACCOUNT_STRUCT_VERSION = 1;
+var ACCOUNT_STRUCT_VERSION = 2;
 var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_SEQ', 'ACCOUNT_LOG', 'PURCHASE_REQ', 'CLINIC_SETTINGS'];
 (function(){
   try{
@@ -66,9 +66,9 @@ var CLINIC_SETTINGS = {
   remindBeforeHours:24,                  /* 提醒短信：预约开始前几小时发送 */
   sms:{
     link:'您好，这里是GMC Network，麻烦点击链接填写基础信息，完成后即视为预约成功：',
-    confirm:'【{clinic}】{name}，您已预约 {time}。地址：{address}，电话：{phone}。查看/取消预约：{url}',
-    remind:'【{clinic}】{name}，提醒您 {time} 的预约。地址：{address}。查看/取消预约：{url}',
-    cancel:'【{clinic}】{name}，您 {time} 的预约已取消。如需重新预约：{url}'
+    confirm:'【{clinic}】Halo {name}, reservasi Anda {time} sudah dikonfirmasi. Alamat: {address}, Telp: {phone}. Lihat/batalkan: {url}　|　您好 {name}，您已预约 {time}，地址：{address}。查看/取消预约：{url}',
+    remind:'【{clinic}】Pengingat: reservasi {name} pada {time}. Alamat: {address}. Lihat/batalkan: {url}　|　提醒：您 {time} 有预约。查看/取消：{url}',
+    cancel:'【{clinic}】Halo {name}, reservasi {time} telah dibatalkan. Reservasi ulang: {url}　|　您 {time} 的预约已取消，重新预约：{url}'
   },
   privacyVersion:'v1.0',
   privacyPolicy:'本诊所仅为办理预约、接待和医美咨询收集您的个人资料与健康资料，并按《隐私/数据跨境使用授权同意书》约定处理；您可随时要求查看、更正或删除。',
@@ -330,9 +330,13 @@ function slotBookingCount(date, time, excludePhId){
 /* 返回 '' = 可约；否则是不可约的原因：closed 休诊 / lunch 午休 / outside 不在可预约时段 / past 已过 / full 额满 */
 function slotBlockReason(date, time, excludePhId){
   var d = new Date(date+'T00:00:00');
-  if(isRescheduleDateDisabled(d)) return 'closed';
-  if(slotIsLunch(time)) return 'lunch';
-  if(!slotBookable(time)) return 'outside';
+  /* 室长发的占位本身占着的时段：就算在午休/可预约时段之外也认（室长特意留的），只检查是否已过、是否约满 */
+  var own = excludePhId ? findPlaceholder(excludePhId) : null, ownSlot = !!own && own.ph.date===date && slotOf(own.ph.time)===slotOf(time);
+  if(!ownSlot){
+    if(isRescheduleDateDisabled(d)) return 'closed';
+    if(slotIsLunch(time)) return 'lunch';
+    if(!slotBookable(time)) return 'outside';
+  }
   if(new Date(date+'T'+time+':00') <= demoNow()) return 'past';
   if(slotBookingCount(date, time, excludePhId) >= CLINIC_SETTINGS.slotCapacity) return 'full';
   return '';
@@ -378,10 +382,10 @@ function submitSelfBooking(f){
   if(old && old.cancelNotifId){
     /* 取消后马上重新预约：把"客人取消预约"那条通知收回，只留一条合并的"客人改约" */
     NOTIFS = NOTIFS.filter(function(n){ return n.id!==old.cancelNotifId; }); old.cancelNotifId = null;
-    pushNotif('预约', '客人改约：'+cl.name+' 原 '+dateLabel(old.visitDate)+' '+old.visitTime+' → 新 '+when+'（'+c.caseNo+'）', {caseId:c.id, names:workingIN()});
-  } else if(f.entry==='walkin') pushNotif('预约', '客人到店自己填完资料'+tail+'，请在客人到店后点［已到店］', {caseId:c.id, names:workingIN()});
-  else if(f.phId) pushNotif('预约', '占位客人填完资料'+tail, {caseId:c.id, names:workingIN()});
-  else pushNotif('预约', '客人自助预约提交'+tail, {caseId:c.id, names:workingIN()});
+    pushNotif('预约', '客人改约：'+cl.name+' 原 '+dateLabel(old.visitDate)+' '+old.visitTime+' → 新 '+when+'（'+c.caseNo+'）', {caseId:c.id, names:workingIN(), silent:true});
+  } else if(f.entry==='walkin') pushNotif('预约', '客人到店自己填完资料'+tail+'，请在客人到店后点［已到店］', {caseId:c.id, names:workingIN(), silent:true});
+  else if(f.phId) pushNotif('预约', '占位客人填完资料'+tail, {caseId:c.id, names:workingIN(), silent:true});
+  else pushNotif('预约', '客人自助预约提交'+tail, {caseId:c.id, names:workingIN(), silent:true});
   sendSms('confirm', f.phone, smsVarsOfCase(c), c.id);
   return {ok:true, c:c, client:cl, isNew:isNew};
 }
@@ -394,7 +398,7 @@ function customerCancelCase(caseId){
   c.subState = 'cancelled'; c.cancelReason = '预约取消';
   updateCaseStage(c);
   logCaseEvent(c, '客人', '客人自行取消预约（原 '+c.visitDate+' '+c.visitTime+'）');
-  var n = pushNotif('预约', '客人取消预约：'+c.name+'（'+c.caseNo+'）原 '+dateLabel(c.visitDate)+' '+c.visitTime, {caseId:c.id, names:workingIN()});
+  var n = pushNotif('预约', '客人取消预约：'+c.name+'（'+c.caseNo+'）原 '+dateLabel(c.visitDate)+' '+c.visitTime, {caseId:c.id, names:workingIN(), silent:true});
   c.cancelNotifId = n.id; c.cancelledAt = Date.now();
   sendSms('cancel', clientPhoneOf(c.name), smsVarsOfCase(c), c.id);
   return {ok:true, c:c};
@@ -450,7 +454,7 @@ function purposeSelectHtml(id){
 var PLACEHOLDER_SEQ = 1;
 
 var RESERVATION_PLACEHOLDERS = [
-  {id:'ph0', date:D(0), time:'14:00', phone:'+62 812-5555-0101', link:'https://gmc.link/demo01', smsText:CLINIC_SETTINGS.sms.link, purpose:'面诊商谈', expiresAt:Date.now()+15*60000} /* 演示：占位中（种子固定 15 分钟） */
+  {id:'ph0', date:D(0), time:'15:00', phone:'+62 812-5555-0101', link:bookingUrl({ph:'ph0'}), smsText:CLINIC_SETTINGS.sms.link, purpose:'面诊商谈', expiresAt:Date.now()+15*60000} /* 演示：占位中（种子固定 15 分钟） */
 ];
 
 function placeholderCountdownText(p){
