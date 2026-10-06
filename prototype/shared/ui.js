@@ -2516,6 +2516,7 @@ function openNotif(id, src){
     if(newTab) openCaseNewTab(n.caseId, '&chat=open'); else openCaseRoom(n.caseId);
     return;
   }
+  if(k==='subBook'){ if(n.caseId) openSubBookModal(n.caseId, n.link.subId); return; } /* KR 通知预约 → 预约弹窗 */
   if(n.caseId){ if(newTab) openCaseNewTab(n.caseId); else openCaseDetail(n.caseId); }
 }
 

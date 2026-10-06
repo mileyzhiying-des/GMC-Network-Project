@@ -861,12 +861,22 @@ function krProgressBlock(c){
   if(!c.settlementDone || !krAllItems(c).length) return krCardBox('项目进程（在韩 timeline）', krEmpty('付定金后，KR 室长在这里整理在韩 timeline'));
   var can = krCan(), inp = 'padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;';
   var rows = (c.subItems||[]).map(function(s){
-    if(!can || s.done) return subItemRowHtml(s);
-    return '<div class="case-field-row" style="font-size:12px;gap:6px;flex-wrap:wrap;"><b style="min-width:104px;">'+krEsc(s.no)+'</b><input type="date" value="'+s.date+'" onchange="krSubEdit(\''+s.id+'\',\'date\',this.value)" style="'+inp+'"><input value="'+krEsc(s.content)+'" onchange="krSubEdit(\''+s.id+'\',\'content\',this.value)" style="'+inp+'flex:1;min-width:160px;"><select onchange="krSubEdit(\''+s.id+'\',\'place\',this.value)" style="'+inp+'">'+krPlaceOpts(s.place)+'</select><a href="#" onclick="krSubDel(\''+s.id+'\');return false;">删除</a></div>';
+    var tail = '';
+    if(can && !s.done && c.krBalancePaid) tail += '<button class="btn-primary" style="padding:3px 10px;font-size:11px;" onclick="krSubDone(\''+s.id+'\')">标记完成</button>';
+    if(can && !s.done && s.place!=='KR') tail += s.booked ? '<span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">IN 已预约 '+krEsc(s.booked)+'</span>' : '<button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="krSubInform(\''+s.id+'\')">'+(s.informed?'再次通知 IN 室长预约':'通知 IN 室长预约')+'</button>';
+    if(!can || s.done) return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+subItemRowHtml(s)+'</div>';
+    tail = tail ? '<div style="margin:-2px 0 6px 112px;">'+tail+'</div>' : '';
+    return '<div class="case-field-row" style="font-size:12px;gap:6px;flex-wrap:wrap;"><b style="min-width:104px;">'+krEsc(s.no)+'</b><input type="date" value="'+s.date+'" onchange="krSubEdit(\''+s.id+'\',\'date\',this.value)" style="'+inp+'"><input value="'+krEsc(s.content)+'" onchange="krSubEdit(\''+s.id+'\',\'content\',this.value)" style="'+inp+'flex:1;min-width:160px;"><select onchange="krSubEdit(\''+s.id+'\',\'place\',this.value)" style="'+inp+'">'+krPlaceOpts(s.place)+'</select><a href="#" onclick="krSubDel(\''+s.id+'\');return false;">删除</a></div>'+tail;
   }).join('');
   var projOpts = '<option value="">（不关联项目）</option>'+krActiveItems(c).map(function(it){ return '<option value="'+krEsc(it.name).replace(/"/g,'')+'"'+(KR_SUB_NEW.projectName===it.name?' selected':'')+'>'+krEsc(it.name)+'</option>'; }).join('');
   var add = can ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--border2);"><input type="date" value="'+KR_SUB_NEW.date+'" onchange="krSubNewSet(\'date\',this.value)" style="'+inp+'"><select onchange="krSubNewSet(\'kind\',this.value)" style="'+inp+'">'+['施术','复诊','管理','其他'].map(function(x){ return '<option'+(KR_SUB_NEW.kind===x?' selected':'')+'>'+x+'</option>'; }).join('')+'</select><input placeholder="内容（例如 10/16 施术、消肿管理）" value="'+krEsc(KR_SUB_NEW.content)+'" oninput="krSubNewSet(\'content\',this.value)" style="'+inp+'flex:1;min-width:200px;"><select onchange="krSubNewSet(\'place\',this.value)" style="'+inp+'">'+krPlaceOpts(KR_SUB_NEW.place)+'</select><select onchange="krSubNewSet(\'projectName\',this.value)" style="'+inp+'">'+projOpts+'</select><button class="btn-primary" onclick="krSubAdd()">添加子项</button></div>' : '';
-  return krCardBox('项目进程（在韩 timeline，每一行是案件下的一个子项）', (rows || krEmpty('还没有子项：请整理在韩 timeline（例如 施术、复诊、消肿管理、拆线）'))+add+'<div style="font-size:11px;color:var(--muted);margin-top:8px;">IN 端在赴韩项目 tab 下的子 tab 只读显示；客人端暂不显示。已完成的子项不能再改。</div>');
+  var extra = '';
+  if(can && c.krBalancePaid && !(c.subItems||[]).length && krNotStartedItems(c).length) extra += '<div style="margin-top:10px;"><button class="btn-outline" onclick="krDoAllDone()">没有整理 timeline：直接标记全部项目已完成</button></div>';
+  if(can && c.hasArrived && !c.visitClosed){
+    var addOpts = krScopeCandidates(KR_CASE.clinicId).kr.filter(function(p){ return !krAllItems(c).some(function(it){ return it.name===p.name && !it.cancelled && !it.swapped; }); }).map(function(p){ return '<option>'+krEsc(p.name)+'</option>'; }).join('');
+    extra += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border2);display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;"><span>回诊时加做项目（另开新结算单，在韩国付款；原结算不变）：</span><select id="kr-addon-sel" style="'+inp+'">'+addOpts+'</select><button class="btn-outline" onclick="krDoAddOn()">加做</button></div>';
+  }
+  return krCardBox('项目进程（在韩 timeline，每一行是案件下的一个子项）', (rows || krEmpty('还没有子项：请整理在韩 timeline（例如 施术、复诊、消肿管理、拆线）'))+add+''+extra+'<div style="font-size:11px;color:var(--muted);margin-top:8px;">IN 端在赴韩项目 tab 下的子 tab 只读显示；客人端暂不显示。已完成的子项不能再改。</div>');
 }
 function krPlaceOpts(sel){ return [['KR','韩国'],['IN','印尼'],['either','印尼 / 韩国均可']].map(function(p){ return '<option value="'+p[0]+'"'+(sel===p[0]?' selected':'')+'>'+p[1]+'</option>'; }).join(''); }
 function krSubAdd(){
@@ -938,3 +948,8 @@ function krDoSettle(){
 }
 function krDoRebook(){ if(!krCan() || !KR_ARR.rebookDate){ alert('请选择新的施术日期'); return; } var d = KR_ARR.rebookDate, t0 = KR_ARR.rebookTime; krMut(function(c){ return coreRebook(c, d, t0, ME_NAME); }); }
 function krDoRefundDecision(kind){ if(!krCan() || !confirm('确认：定金'+(kind==='all'?'全部退回':'不退')+'？IN 室长会按这个判断操作。')) return; krMut(function(c){ return coreRefundDecision(c, kind, ME_NAME); }); }
+
+function krSubDone(id){ if(!krCan()) return; krMut(function(c){ return coreSubDone(c, id, ME_NAME); }); }
+function krSubInform(id){ if(!krCan()) return; krMut(function(c){ return coreSubInform(c, id, ME_NAME); }); }
+function krDoAllDone(){ if(!krCan() || !confirm('确认全部赴韩项目已完成？案件将结案。')) return; krMut(function(c){ return coreMarkAllDone(c, ME_NAME); }); }
+function krDoAddOn(){ var s = document.getElementById('kr-addon-sel'); if(!krCan() || !s || !s.value) return; var n = s.value; if(!confirm('加做「'+n+'」：另开新结算单，在韩国付款。确认？')) return; krMut(function(c){ return coreAddOnItem(c, n, ME_NAME); }); }

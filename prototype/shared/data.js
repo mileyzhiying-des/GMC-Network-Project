@@ -1099,9 +1099,11 @@ function finishCase(c, cancelReasonIfCancelled){
   updateCaseStage(c);
   logCaseEvent(c, '系统', '案件结束：'+terminalBadge(c)[2]+(c.stage==='cancelled' ? '（'+endReasonText(c)+'）' : ''));
   if(c.stage==='closed' && c.hasArrived && krAllItems(c).some(function(it){ return it.done; })) pushNotif('赴韩施术','施术完成，案件已结案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
-  buildCaseLog(c);
-  renderCaseStatusBar(c);
-  renderCaseBody(c);
+  if(typeof document!=='undefined' && document.getElementById('case-body')){ /* KR 页面没有 IN 的案件详情，不画 */
+    buildCaseLog(c);
+    renderCaseStatusBar(c);
+    renderCaseBody(c);
+  }
 }
 
 /* 终态标签：结局 + 财务标签，例如"仅出报告 · 有项目收入 ₩300,000" */
@@ -2243,6 +2245,7 @@ function inLineTotal(it){
 /* ---- 结算单（Settlement，总览第5节）：待付款 / 已付款 / 部分退款 / 全额退款；多张按时间排序，新的在上面，全部显示 ---- */
 function batchStatusLabel(c, b){
   if(b.status==='unpaid') return '待付款';
+  if(b.addOn) return '韩国付款'; /* 回诊时 KR 加做的项目：另开新结算单，在韩国付款 */
   var krs = krAllItems(c).filter(function(it){ return it.batchId===b.id; });
   var cancelled = krs.filter(function(it){ return it.cancelled; });
   if(cancelled.length && cancelled.length===krs.length && !(b.inTotal>0)) return '全额退款';
@@ -3033,7 +3036,7 @@ function setKrSubTab(v){ var c = getCurrentCase(); if(!c) return; c.krSubTab = v
 function subItemRowHtml(s){
   var pc = {KR:['var(--terracotta-bg)','var(--terracotta)'], IN:['var(--sage-bg)','var(--sage)'], either:['var(--blue-bg)','var(--blue)']}[s.place];
   return '<div class="case-field-row" style="font-size:13px;gap:10px;"><span style="min-width:104px;font-weight:700;">'+s.no+'</span><span style="min-width:90px;">'+s.date+'</span><span style="flex:1;">'+s.content+' <span style="font-size:11px;color:var(--muted);">'+s.kind+'</span></span><span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+SUB_PLACE_LABEL[s.place]+'</span>'+
-    '<span class="status-pill" style="background:'+(s.done?'var(--sage-bg)':'var(--border2)')+';color:'+(s.done?'var(--sage)':'var(--slate2)')+';">'+(s.done?'已完成':'未开始')+'</span></div>';
+    '<span class="status-pill" style="background:'+(s.done?'var(--sage-bg)':'var(--border2)')+';color:'+(s.done?'var(--sage)':'var(--slate2)')+';">'+(s.done?'已完成':'未开始')+'</span>'+(s.booked ? '<span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">已预约 '+s.booked+'</span>' : (s.informed ? '<span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">KR 已通知预约</span>' : ''))+'</div>';
 }
 function krTimelineTabHtml(c){
   var list = (c.subItems||[]).map(subItemRowHtml).join('');
@@ -3150,6 +3153,87 @@ function innCareCardHtml(c){
     ? '<div style="display:flex;gap:8px;margin-top:8px;"><button class="btn-primary" onclick="confirmInnCare(true)">已收款 '+formatCurrency(ic.total,'IDR')+'（转为客人持有项目）</button><button class="btn-outline" onclick="confirmInnCare(false)">客人当下不买</button></div>'
     : '<div style="font-size:12px;color:'+(ic.status==='collected'?'var(--sage)':'var(--muted)')+';margin-top:6px;">'+(ic.status==='collected' ? '✓ 已收款并转为客人持有项目（'+ic.at+'）' : '客人当下没有购买，没有生成持有项目；之后回印尼当一般本地项目购买')+'</div>';
   return '<div style="border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-top:14px;background:#FBF6EA;"><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">术后管理 · 印尼部分（付尾款确认行程时由 IN 室长收印尼盾）</div>'+lines+action+'</div>';
+}
+
+/* ---- 子项进行、回诊与结案（2026-10-06，KR-CASE-02 第 5 节） ----
+   结案 = 在韩国的子项（地点=韩国）全部完成（取代"施术完成 → 已结案"）；地点=印尼/均可 的子项不挡结案，仍有未完成的由 KR 按［通知 IN 室长预约］ */
+function subKrPending(c){ return (c.subItems||[]).filter(function(s){ return s.place==='KR' && !s.done; }); }
+function coreSubDone(c, id, by){
+  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0];
+  if(!s || s.done || !c.krBalancePaid) return false; /* 付清尾款（开始施术）之后才能逐个标完成 */
+  s.done = true; s.doneAt = nowFullDt(); s.doneBy = by;
+  if(s.kind==='施术'){ krNotStartedItems(c).forEach(function(it){ if(!s.projectName || it.name===s.projectName) it.done = true; }); }
+  logCaseEvent(c, by, 'KR标记子项已完成 '+s.no+'：'+s.content);
+  pushNotif('赴韩施术','KR 完成在韩子项：'+c.name+'（'+s.no+' '+s.content+'）', {caseId:c.id});
+  if(!subKrPending(c).length && !c.visitClosed){ /* 在韩国的子项全部完成 → 结案 */
+    krNotStartedItems(c).forEach(function(it){ it.done = true; });
+    c.krProcedureDone = true;
+    var left = (c.subItems||[]).filter(function(x){ return !x.done; });
+    if(left.length) logCaseEvent(c, '系统', '在韩国的子项已全部完成；仍有 '+left.length+' 项在印尼/均可（由 KR 通知 IN 室长预约）');
+    finishCase(c);
+  }
+  return true;
+}
+/* 没有整理 timeline 的案件：KR 一次标全部项目完成 → 结案 */
+function coreMarkAllDone(c, by){
+  if(!c.krBalancePaid || c.visitClosed || (c.subItems||[]).length || !krNotStartedItems(c).length) return false;
+  krNotStartedItems(c).forEach(function(it){ it.done = true; });
+  logCaseEvent(c, by, 'KR标记全部赴韩项目已完成');
+  c.krProcedureDone = true; finishCase(c);
+  return true;
+}
+/* 客人回印尼后要做的子项：KR 通知 IN 室长预约（附子项内容）→ IN 点通知打开预约弹窗，新案件自动关联原赴韩案件 */
+function coreSubInform(c, id, by){
+  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.place==='KR') return false;
+  s.informed = true; s.informedAt = nowFullDt();
+  logCaseEvent(c, by, 'KR通知 IN 室长预约 '+s.no+'：'+s.date+' '+s.content);
+  pushNotif('赴韩施术','KR 通知预约：'+c.name+' 回印尼后需要做 '+s.no+'「'+s.content+'」（约 '+s.date+'），请预约', {caseId:c.id, link:{kind:'subBook', subId:s.id}});
+  return true;
+}
+/* 回诊时加做项目：KR 室长直接新增，另开新结算单、在韩国付款（不经过 IN 选择，原结算单不动）；IN 收到通知、只读可见 */
+function coreAddOnItem(c, projectName, by){
+  if(!c.hasArrived || c.visitClosed) return false;
+  var p = PROJECT_LIBRARY.filter(function(x){ return x.name===projectName && x.active && x.origin==='KR' && (!c.hospitalId || x.hospitalId===c.hospitalId); })[0]; if(!p) return false;
+  var newId = 'B' + ((c.settlementBatches||[]).length + 1);
+  c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（韩国付款）', time:nowFullDt(), status:'active', krTotal:p.price, krDeposit:0, krBalance:p.price, inTotal:0, noDeposit:true, addOn:true});
+  c.procedureItems.push({projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:'KR', categoryId:p.categoryId, done:false, batchId:newId, krAddOn:true});
+  c.settleTab = null;
+  logCaseEvent(c, by, 'KR加做项目："'+p.name+'"（另开结算单 '+newId+'，在韩国付款，原结算单不变）');
+  pushNotif('赴韩施术','KR 加做项目：'+c.name+'（'+p.name+'，另开结算单 '+newId+'，在韩国付款）', {caseId:c.id});
+  updateCaseStage(c);
+  return true;
+}
+/* IN：点「通知预约」的通知 → 预约弹窗（带入客人、来访目的），新案件自动关联原赴韩案件 */
+var SUB_BOOK = null;
+function openSubBookModal(caseId, subId){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  var s = (c.subItems||[]).filter(function(x){ return x.id===subId; })[0]; if(!s) return;
+  SUB_BOOK = {caseId:caseId, subId:subId};
+  var ov = document.getElementById('sub-book-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'sub-book-overlay'; ov.className = 'modal-overlay'; ov.onclick = function(e){ if(e.target===ov) closeSubBookModal(); }; document.body.appendChild(ov); }
+  var today = nowFullDt().split(' ')[0], def = s.date > today ? s.date : today;
+  ov.innerHTML = '<div class="modal-box"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><span style="font-size:15px;font-weight:700;">预约来访（KR 通知：回印尼后要做）</span><span style="cursor:pointer;" onclick="closeSubBookModal()">✕</span></div>'+
+    '<div style="font-size:13px;line-height:1.8;margin-bottom:12px;"><b>'+c.name+'</b>（'+c.caseNo+'）<br>子项 '+s.no+'：'+s.content+'（KR 建议约 '+s.date+'）</div>'+
+    '<div class="field" style="margin-bottom:10px;"><label>日期</label><input type="date" id="sub-book-date" value="'+def+'" min="'+today+'"></div>'+
+    '<div class="field" style="margin-bottom:10px;"><label>时间</label><select id="sub-book-time">'+WK_HOURS.filter(slotBookable).map(function(t0){ return '<option>'+t0+'</option>'; }).join('')+'</select></div>'+
+    '<div class="field" style="margin-bottom:6px;"><label>来访目的</label><select id="sub-book-purpose"><option>术后管理</option><option>复诊</option></select></div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">生成的新案件会自动关联原赴韩案件 '+c.caseNo+'（原因随来访目的：术后管理 / 复诊）</div>'+
+    '<button class="btn-primary" style="width:100%;" onclick="confirmSubBook()">确认预约</button></div>';
+  ov.classList.add('open');
+}
+function closeSubBookModal(){ var ov = document.getElementById('sub-book-overlay'); if(ov) ov.classList.remove('open'); }
+function confirmSubBook(){
+  if(!SUB_BOOK) return;
+  var c = CASE_ITEMS.filter(function(x){ return x.id===SUB_BOOK.caseId; })[0], s = c && (c.subItems||[]).filter(function(x){ return x.id===SUB_BOOK.subId; })[0]; if(!s) return;
+  var date = document.getElementById('sub-book-date').value, time = document.getElementById('sub-book-time').value, purpose = document.getElementById('sub-book-purpose').value;
+  var why = slotBlockReason(date, time); if(why){ alert(why); return; }
+  var nc = createReservationCase(c.name, null, date, time, null, purpose);
+  nc.linkedCase = {caseId:c.id, reason:(purpose==='复诊' ? '复诊' : '术后管理'), auto:true};
+  s.booked = nc.caseNo;
+  logCaseEvent(c, actingName(), 'IN 室长预约了 '+s.no+'「'+s.content+'」：新案件 '+nc.caseNo+'（'+date+' '+time+'，'+purpose+'），已关联本案件');
+  logCaseEvent(nc, actingName(), '由赴韩案件 '+c.caseNo+' 的子项 '+s.no+'「'+s.content+'」预约，自动关联原案件');
+  closeSubBookModal(); renderCalendar();
+  showToast('预约已生成', c.name+' · '+date+' '+time+'，新案件 '+nc.caseNo+' 已关联 '+c.caseNo, null);
 }
 
 /* 确认后修改日期：施术前2周内置灰不可点；月历默认打开原定日期所在月份（2026-09-29 第十轮修复） */
