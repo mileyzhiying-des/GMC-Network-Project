@@ -84,7 +84,7 @@
     <div class="topbar-slot"></div>
     <div class="content">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <input type="text" placeholder="搜索客户姓名" style="width:260px;padding:10px 14px;border:1px solid var(--border);border-radius:9px;font-size:13px;">
+        <input type="text" id="client-search" oninput="renderClientRows()" placeholder="搜索客户姓名或手机号" style="width:260px;padding:10px 14px;border:1px solid var(--border);border-radius:9px;font-size:13px;">
       </div>
       <div class="card" style="padding:4px 20px;">
         <div class="trow head" style="grid-template-columns:1.4fr 1.2fr 1.3fr 0.9fr 0.9fr auto;"><span>客户姓名</span><span>当前进度</span><span>财务</span><span>建档室长</span><span>更新时间</span><span></span></div>
@@ -268,15 +268,7 @@
 
         <div>
           <div class="info-heading" style="margin-bottom:10px;">基础信息</div>
-          <div class="card" style="padding:2px 20px;">
-            <div class="field-row"><span class="fk">姓名</span><span class="fv" id="detail-profile-name">Siti Rahayu</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
-            <div class="field-row"><span class="fk">特别备注</span><span class="fv" style="font-weight:400;color:var(--slate2);">无</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
-            <div class="field-row"><span class="fk">性别 / 出生年月</span><span class="fv">女 · 1992年03月</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
-            <div class="field-row"><span class="fk">基础病史和过敏史</span><span class="fv" style="font-weight:400;">无</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
-            <div class="field-row"><span class="fk">护照信息</span><span class="fv">已登记<span class="sub">拍照上传 · 2026-08-20</span></span><span class="fa"><a href="#" class="info-link">查看扫描件 ↗</a><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
-            <div class="field-row"><span class="fk">联系方式</span><span class="fv">WhatsApp +62 812-xxxx-xxxx</span><span class="fa"><a href="#" class="info-link" onclick="editClientField(this);return false;">修改</a></span></div>
-            <div class="field-row"><span class="fk">隐私协议</span><span class="fv">已签署<span class="sub">2026-08-20</span></span><span class="fa"><a href="#" class="info-link">查看签字文档 ↗</a></span></div>
-          </div>
+          <div class="card" style="padding:2px 20px;" id="detail-profile"></div>
         </div>
 
         <div>
@@ -665,7 +657,7 @@
         <span style="cursor:pointer;color:var(--slate);font-size:13px;" onclick="rescheduleDayShift(1)">›</span>
       </div>
       <div id="reschedule-slots"></div>
-      <div style="font-size:11px;color:var(--muted);margin:14px 0;">定期休诊：每周星期四，公休日</div>
+      <div id="reschedule-closed-note" style="font-size:11px;color:var(--muted);margin:14px 0;"></div>
       <button class="btn-primary" style="width:100%;" onclick="confirmReschedule()">预约</button>
     </div>
   </div>

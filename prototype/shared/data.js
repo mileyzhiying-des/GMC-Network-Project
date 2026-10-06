@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 6;
+var DEMO_DATA_VERSION = 7;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06） */
 var ACCOUNT_STRUCT_VERSION = 1;
 var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_SEQ', 'ACCOUNT_LOG', 'PURCHASE_REQ', 'CLINIC_SETTINGS'];
@@ -274,6 +274,28 @@ function calNext(){ if(CAL_MODE==='week') WEEK_OFFSET++; else if(CAL_MODE==='day
 function calToday(){ WEEK_OFFSET=0; DAY_OFFSET=0; CAL_WEEK_FULL=false; CAL_ANCHOR=null; renderCalendar(); }
  /* 回今天：今天在第一栏 */
 
+
+/* ---- 客户档案读写（2026-10-06·K） ---- */
+function normPhoneKey(p){ return String(p||'').replace(/\D/g,''); } /* 只比数字：+62 812-3000-0001 和 6281230000001 视为同一个手机号 */
+function clientByPhone(phone){ var k = normPhoneKey(phone); if(!k) return null; return CLIENTS.filter(function(c){ return normPhoneKey(c.phone)===k; })[0] || null; }
+function clientByName(name){ return CLIENTS.filter(function(c){ return c.name===name; })[0] || null; }
+function clientPhoneOf(name){ var c = clientByName(name); return c && c.phone ? c.phone : ''; }
+/* 新建客户档案：写"建档"到客户 Timeline；consent 可选 {version, ts, source} */
+function addClient(o){
+  var ts = nowFullDt();
+  var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), name:o.name, gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
+    passport:{text:'未登记', date:''}, consents:o.consent ? [o.consent] : [], createdBy:o.createdBy||actingName(), updated:'刚刚',
+    fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'},
+    timeline:[{stage:'建档', actor:o.createdBy||actingName(), actorId:(o.createdBy&&o.createdBy!==actingName()) ? undefined : currentAccountId(), action:'建档 · '+(o.source||'室长建档'), dt:ts, kind:'plain'}]};
+  CLIENTS.unshift(c);
+  return c;
+}
+/* 案件的基础资料：客户档案是唯一来源（手机号、性别、出生日期、病史），找不到客户时退回案件上的旧值 */
+function caseBasic(c){
+  var cl = clientByName(c.name), b = c.basic || {};
+  return {gender:cl ? cl.gender : (b.gender||'—'), dob:cl ? (cl.dob||'—') : (b.dob||'—'), contact:cl ? (cl.phone||'—') : (b.contact||'—'), history:cl ? (cl.history||'无') : (b.history||'无')};
+}
+
 /* ================= dashboard: 预约来访 + 预约占位（2026-09-29 新增，IN-DASH-01） ================= */
 /* KR 院长名单（演示数据，以后由韩国端维护）：active=false 为停用，停用的不显示在选项里（2026-10-02） */
 var DIRECTOR_INFO = [{name:'김민석 원장', active:true}, {name:'이수진 원장', active:true}, {name:'박지훈 원장', active:false}];
@@ -283,15 +305,17 @@ var DIRECTOR_LIST = DIRECTOR_INFO.filter(function(d){ return d.active; }).map(fu
 /* 老客人（下拉选客人+选院长）或"模拟客户填写完成"占位转正式：生成 Case ID（2026-10-01：取消 Reservation ID，预约时直接生成）、开新案件（状态"待访问"），
    不经过占位；这里只做"开新案件"的预约来访——术后到店/使用持有项目也一律走这条开新案件（第十轮已确认） */
 function createReservationCase(name, director, date, time, phone, purpose){
+  /* 一个手机号对应一个客人：手机号已登记就沿用那位客人的姓名；没有这位客人才建档 */
+  var cl = (phone && clientByPhone(phone)) || clientByName(name);
+  if(cl){ name = cl.name; if(!cl.phone && phone) cl.phone = phone; }
+  else cl = addClient({name:name, phone:phone||'', createdBy:phone?'客人自助':actingName(), source:phone?'客户自助预约建档':'室长建档'});
   var caseNo = generateCaseNo();
   var id = 'r'+Date.now()+Math.floor(Math.random()*1000);
   var c = makeCase({id:id, name:name, director:null, updated:'刚刚', visitDate:date, visitTime:time, visitPurpose:purpose||'面诊商谈', /* 2026-10-02：预约不选院长，面诊案件在基础资料里选 */
-    basic:{gender:'—', dob:'—', contact:phone||'—', history:'无'},
     logEntries:[{stage:'预约到店', actor:phone?'客人':actingName(), action:(phone?'官网/短信链接自助预约成功':'室长代替预约')+'，生成 Case ID '+caseNo, dt:nowFullDt()}]});
   c.caseNo = caseNo;
   CASE_ITEMS.unshift(c);
   updateCaseStage(c);
-  if(!CLIENTS.some(function(x){ return x[0]===name; })) CLIENTS.unshift([name,'资料录入',actingName(),'刚刚','#E4E8ED','var(--slate2)']);
   return c;
 }
 
@@ -336,8 +360,11 @@ function submitGuestForm(){
   if(miss.length){ g.err = '还差：'+miss.join('、'); renderGuestForm(); return; }
   if(g.phId) RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==g.phId; }); /* 占位转正式预约 */
   var c = createReservationCase(g.name.trim(), null, g.date, g.time, g.phone.trim(), g.purpose);
-  c.basic = {gender:g.gender, dob:g.dob||'—', contact:g.phone.trim(), history:(g.history||'').trim()||'无'};
-  var row = CLIENTS.filter(function(x){ return x[0]===c.name; })[0]; if(row) row[2] = '客人自助'; /* 建档：客户自助预约 */
+  var cl = clientByName(c.name); /* 性别、出生日期、病史、同意记录写回客户档案（案件上不再存） */
+  if(cl){
+    cl.gender = g.gender || cl.gender; if(g.dob) cl.dob = g.dob; if((g.history||'').trim()) cl.history = g.history.trim();
+    cl.consents.push({version:CLINIC_SETTINGS.privacyVersion, ts:nowFullDt(), source:'客户自助预约'});
+  }
   closeGuestForm(); refreshView();
   pushNotif('预约', (g.phId ? '预约占位的客人填完资料：' : '客人自助预约提交：')+c.name+'（'+c.caseNo+'）'+dateLabel(g.date)+' '+g.time, {caseId:c.id, names:workingIN()});
 }
@@ -355,29 +382,31 @@ function simulateCustomerReschedule(caseId, newDow, newTime){
 
 
 /* ================= clients ================= */
-/* CLIENTS 每行：[姓名, 无案件时的兜底状态文案, 建档室长, 更新时间, 兜底底色, 兜底字色]。
-   有案件时"当前面诊·施术进度"这一列不用这里的兜底值，而是实时读对应 CASE_ITEMS 的徽章——
-   见 clientCaseStatus()，这样客户管理列表和案件管理才不会各说各的、慢慢对不上。 */
+/* CLIENTS：客户档案（2026-10-06·K，原来是 [姓名, 状态, 建档室长, …] 数组）。一个手机号对应一个客人（phone 唯一）；案件、持有项目仍按姓名关联（姓名在演示里唯一）。
+   字段：id、name、gender（女/男）、dob（YYYY-MM-DD，可空）、phone、note 特别备注、history 基础病史和过敏史、passport {text,date}、
+   consents 同意记录 [{version, ts, source}]（客户详情"隐私协议"读它，source：客户自助预约 / 到店签署 …）、createdBy 建档室长、updated 更新时间（显示文字）、
+   fallback {label,bg,fg}（没有案件时客户列表"当前进度"的兜底状态）、timeline 客户级 Timeline（建档 / 基础信息修改，案件开始/结案由案件算出，见 renderClientTimeline）。
+   有案件时"当前面诊·施术进度"这一列实时读对应 CASE_ITEMS 的徽章——见 clientCaseStatus()。 */
 var CLIENTS = [
-  ['Siti Rahayu','资料录入','Dewi','2 小时前','#E4E8ED','var(--slate2)'],
-  ['Andi Wijaya','资料录入','Rina','昨天','#E4E8ED','var(--slate2)'],
-  ['Yuni Kartika','资料录入','Dewi','2 小时前','#E4E8ED','var(--slate2)'],
-  ['Maya Putri','资料录入','Dewi','昨天','#E4E8ED','var(--slate2)'],
-  ['Putri Wulandari','资料录入','Dewi','3 天前','#E4E8ED','var(--slate2)'],
-  ['Dedi Prasetyo','资料录入','Rina','昨天','#E4E8ED','var(--slate2)'],
-  ['Budi Santoso','资料录入','Rina','3 天前','#E4E8ED','var(--slate2)'],
-  ['Ayu Lestari','资料录入','Dewi','昨天','#E4E8ED','var(--slate2)'],
-  ['Fajar Nugroho','资料录入','Rina','2 小时前','#E4E8ED','var(--slate2)'],
-  ['Dinda Anggraini','资料录入','Dewi','刚刚','#E4E8ED','var(--slate2)'],
-  ['Nadia Permata','资料录入','Dewi','今天','#E4E8ED','var(--slate2)'],
-  ['Rizky Hidayat','资料录入','Rina','今天','#E4E8ED','var(--slate2)'],
-  ['Rina Marlina','资料录入','Dewi','1 周前','#E4E8ED','var(--slate2)'],
-  ['Wulan Sari','资料录入','Dewi','5 天前','#E4E8ED','var(--slate2)'],
-  ['Agus Salim','资料录入','Rina','4 天前','#E4E8ED','var(--slate2)'],
-  ['Lina Kusuma','资料录入','Dewi','6 天前','#E4E8ED','var(--slate2)'],
-  ['Hana Permana','资料录入','Rina','3 天前','#E4E8ED','var(--slate2)'],
-  ['Tari Wibowo','资料录入','Rina','2 天前','#E4E8ED','var(--slate2)'],
-  ['Bayu Aditya','资料录入','Dewi','昨天','#E4E8ED','var(--slate2)']
+  {id:'cl1', name:'Siti Rahayu', gender:'女', dob:'1992-03-08', phone:'+62 812-3000-0001', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'},{stage:'基础信息修改', actor:'Dewi', action:'补录护照信息、确认医美史', dt:D(-16)+' 11:15', kind:'plain'}]},
+  {id:'cl2', name:'Andi Wijaya', gender:'男', dob:'1987-06-10', phone:'+62 812-3000-0002', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl3', name:'Yuni Kartika', gender:'女', dob:'1990-11-17', phone:'+62 812-3000-0003', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
+  {id:'cl4', name:'Maya Putri', gender:'女', dob:'1993-04-24', phone:'+62 812-3000-0004', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl5', name:'Putri Wulandari', gender:'女', dob:'1996-09-06', phone:'+62 812-3000-0005', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
+  {id:'cl6', name:'Dedi Prasetyo', gender:'男', dob:'1999-02-13', phone:'+62 812-3000-0006', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl7', name:'Budi Santoso', gender:'男', dob:'1985-07-20', phone:'+62 812-3000-0007', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[], createdBy:'Rina', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
+  {id:'cl8', name:'Ayu Lestari', gender:'女', dob:'1988-12-27', phone:'+62 812-3000-0008', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl9', name:'Fajar Nugroho', gender:'男', dob:'1991-05-09', phone:'+62 812-3000-0009', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
+  {id:'cl10', name:'Dinda Anggraini', gender:'女', dob:'1994-10-16', phone:'+62 812-3000-0010', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'刚刚', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl11', name:'Nadia Permata', gender:'女', dob:'1997-03-23', phone:'+62 812-3000-0011', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'今天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
+  {id:'cl12', name:'Rizky Hidayat', gender:'男', dob:'2000-08-05', phone:'+62 812-3000-0012', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'今天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl13', name:'Rina Marlina', gender:'女', dob:'1986-01-12', phone:'+62 812-3000-0013', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'1 周前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
+  {id:'cl14', name:'Wulan Sari', gender:'女', dob:'1989-06-19', phone:'+62 812-3000-0014', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[], createdBy:'Dewi', updated:'5 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl15', name:'Agus Salim', gender:'男', dob:'1992-11-26', phone:'+62 812-3000-0015', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'4 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
+  {id:'cl16', name:'Lina Kusuma', gender:'女', dob:'1995-04-08', phone:'+62 812-3000-0016', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'6 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl17', name:'Hana Permana', gender:'女', dob:'1998-09-15', phone:'+62 812-3000-0017', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
+  {id:'cl18', name:'Tari Wibowo', gender:'女', dob:'1984-02-22', phone:'+62 812-3000-0018', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'2 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl19', name:'Bayu Aditya', gender:'男', dob:'1987-07-04', phone:'+62 812-3000-0019', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]}
 ];
 
 /* 客户持有项目（2026-09-29 新增）：按客户姓名存，结算后本地项目（含术后管理）全部转入这里，不进入案件进程。
@@ -463,7 +492,6 @@ function clientLatestCase(name){
 }
 
 /* 室长修正客户原填字段：直接覆盖为定论，不做两版对比；谁改了什么由客户 Timeline 的"修正"条目留痕（Client & Case Rules §2） */
-var CLIENT_FIX_LOG = {};
 
 function holdingsAllSorted(name){
   var list = getClientHoldings(name).slice();

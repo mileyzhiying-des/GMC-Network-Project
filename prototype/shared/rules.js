@@ -8,8 +8,8 @@ function dateLabel(ds){ var d = new Date(ds+'T00:00:00'); return (d.getMonth()+1
 function isDirectorActive(name){ return DIRECTOR_LIST.indexOf(name)>-1; }
 
 function clientCaseStatus(entry){
-  var c = clientLatestCase(entry[0]);
-  if(!c) return {label:entry[1], bg:entry[4], fg:entry[5], finance:'<span style="font-size:12px;color:var(--muted);">—</span>'};
+  var c = clientLatestCase(entry.name);
+  if(!c) return {label:entry.fallback.label, bg:entry.fallback.bg, fg:entry.fallback.fg, finance:'<span style="font-size:12px;color:var(--muted);">—</span>'};
   var b = caseStatusBadge(c);
   return {label:b[2], bg:b[0], fg:b[1], finance:financeCellHtml(c)};
 }

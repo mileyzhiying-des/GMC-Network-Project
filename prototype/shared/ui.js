@@ -249,7 +249,7 @@ function buildWeekGrid(){
   var html = '<div class="wk-corner"></div>';
   days.forEach(function(dd,i){
     var isToday = sameDate(dd, TODAY_DATE);
-    html += '<div class="wk-head'+(isToday?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(dateStr(dd))]+'</div>';
+    html += '<div class="wk-head'+(isToday?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(dateStr(dd))]+(isRescheduleDateDisabled(dd)?'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>':'')+'</div>';
   });
   html += '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div>';
   days.forEach(function(dd){ html += '<div class="wk-memo">'+memoCellHtml(dateStr(dd))+'</div>'; });
@@ -262,9 +262,10 @@ function buildWeekGrid(){
       var cell = rowEvs.filter(function(e){ return e.date===ds; });
       var chips = cell.map(eventChipHtml).join('');
       var pastSlot = new Date(new Date(ds+'T'+hr+':00').getTime()+30*60000) <= demoNow(); /* 已经结束的时段不能约（hover 灰）；当前时段可以约（客人直接到店） */
-      var slotClick = (cell.length || pastSlot || !slotBookable(hr)) ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
+      var closedDay = isRescheduleDateDisabled(days[d]); /* 休诊日（诊所设定）整列不能约 */
+      var slotClick = (cell.length || pastSlot || closedDay || !slotBookable(hr)) ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
       var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
-      html += '<div class="wk-cell'+(cell.length?'':' wk-cell-open')+(pastSlot?' wk-past':'')+(slotIsLunch(hr)?' wk-lunch':'')+(isNow?' wk-now':'')+'"'+slotClick+'>'+chips+'</div>';
+      html += '<div class="wk-cell'+(cell.length?'':' wk-cell-open')+(pastSlot?' wk-past':'')+((slotIsLunch(hr)||closedDay)?' wk-lunch':'')+(isNow?' wk-now':'')+'"'+slotClick+'>'+chips+'</div>';
     }
   });
   document.getElementById('wk-grid').innerHTML = html;
@@ -339,7 +340,7 @@ function renderAddSlotBody(){
     '</div>';
   var body;
   if(ADD_SLOT_MODE==='existing'){
-    var clientOptions = CLIENTS.map(function(c){ return '<option>'+c[0]+'</option>'; }).join('');
+    var clientOptions = CLIENTS.map(function(c){ return '<option>'+c.name+'</option>'; }).join('');
     body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client">'+clientOptions+'</select></div>'+
       purposeSelectHtml('add-slot-purpose')+
       '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
@@ -389,8 +390,8 @@ function simulateSlotChange(id){
   var ws = new Date(p.date+'T00:00:00'); ws.setDate(ws.getDate() - dowOfDate(p.date));
   var evs = calendarEvents();
   for(var d=0; d<7; d++){
-    if(d===3) continue; /* 周四休诊 */
     var dd = new Date(ws); dd.setDate(ws.getDate()+d); var ds = dateStr(dd);
+    if(isRescheduleDateDisabled(dd)) continue; /* 休诊日读诊所设定 */
     if(new Date(ds+'T23:59:00') < demoNow()) continue;
     for(var i=0;i<WK_HOURS.length;i++){
       var hr = WK_HOURS[i];
@@ -479,13 +480,14 @@ function simulateCustomerFilledPlaceholder(id){
 function buildClients(){ renderClientRows(); }
 
 function renderClientRows(){
-  document.getElementById('client-rows').innerHTML = CLIENTS.map(function(c){
-    var s = clientCaseStatus(c);
-    return '<div class="trow" style="grid-template-columns:1.4fr 1.2fr 1.3fr 0.9fr 0.9fr auto;"><b style="font-size:13px;cursor:pointer;" onclick="openClientDetail(\''+c[0]+'\',\'in-clients\')">'+c[0]+'</b>'+
+  var q = ((document.getElementById('client-search')||{}).value||'').trim().toLowerCase();
+  document.getElementById('client-rows').innerHTML = CLIENTS.filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || normPhoneKey(c.phone).indexOf(normPhoneKey(q)||'#')>-1; }).map(function(c){
+    var s = clientCaseStatus(c), nm = c.name.replace(/'/g,"\\'");
+    return '<div class="trow" style="grid-template-columns:1.4fr 1.2fr 1.3fr 0.9fr 0.9fr auto;"><b style="font-size:13px;cursor:pointer;" onclick="openClientDetail(\''+nm+'\',\'in-clients\')">'+c.name+'</b>'+
       '<span><span class="status-pill" style="background:'+s.bg+';color:'+s.fg+';">'+s.label+'</span></span>'+
       '<span>'+s.finance+'</span>'+
-      '<span style="font-size:12px;">'+c[2]+'</span><span style="font-size:12px;color:var(--muted);">'+c[3]+'</span>'+
-      '<a href="#" onclick="openClientDetail(\''+c[0]+'\',\'in-clients\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
+      '<span style="font-size:12px;">'+c.createdBy+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
+      '<a href="#" onclick="openClientDetail(\''+nm+'\',\'in-clients\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
   }).join('');
 }
 
@@ -493,26 +495,81 @@ function renderClientRows(){
 /* ================= client detail ================= */
 var DETAIL_FROM = 'in-clients';
 
-function editClientField(el){
-  var row = el.closest('.field-row'); if(!row) return;
-  var label = row.querySelector('.fk').textContent;
-  var fv = row.querySelector('.fv'); var node = fv.firstChild;
-  var old = node ? node.textContent : fv.textContent;
-  var v = prompt('修正「'+label+'」', old);
-  if(v===null || v===old) return;
-  if(node && node.nodeType===3) node.textContent = v; else fv.textContent = v;
-  var name = document.getElementById('detail-name').textContent;
-  CLIENT_FIX_LOG[name] = CLIENT_FIX_LOG[name] || [];
-  CLIENT_FIX_LOG[name].push({stage:'基础信息修改', actor:'Dewi', action:'修正「'+label+'」', dt:nowFullDt(), kind:'plain'});
-  renderClientTimeline(name);
+/* ---- 客户详情"基础信息"：读真实客户档案（CLIENTS），［修改］存回客户并记入客户 Timeline（2026-10-06·K） ---- */
+var CLIENT_EDIT = null; /* {name, field} */
+function clientDobText(c){ return c.dob ? c.dob.replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$1年$2月$3日') : '—'; }
+function renderClientProfile(name){
+  var el = document.getElementById('detail-profile'); if(!el) return;
+  var c = clientByName(name);
+  if(!c){ el.innerHTML = '<div style="padding:14px 0;font-size:12px;color:var(--muted);">没有找到这位客户的档案</div>'; return; }
+  var nm = String(name).replace(/'/g, "\\'");
+  var row = function(k, v, field, extra){
+    return '<div class="field-row"><span class="fk">'+k+'</span><span class="fv"'+(extra?' style="font-weight:400;"':'')+'>'+v+'</span><span class="fa">'+
+      (field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</span></div>'; };
+  var cons = (c.consents||[]).slice(-1)[0];
+  var consHtml = cons ? '已签署<span class="sub">个人资料收集同意 + 健康资料处理同意 · 同意书 '+aEscC(cons.version)+' · '+aEscC(cons.ts)+' · '+aEscC(cons.source)+'</span>' : '<span style="color:var(--muted);">未登记</span><span class="sub">到店后由室长当面签署正式同意书</span>';
+  el.innerHTML = row('姓名', aEscC(c.name), 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+
+    row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+
+    row('护照信息', aEscC(c.passport.text)+(c.passport.date?'<span class="sub">'+aEscC(c.passport.date)+'</span>':''), 'passport')+
+    row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+
+    '<div class="field-row"><span class="fk">隐私协议</span><span class="fv">'+consHtml+'</span><span class="fa"></span></div>';
+}
+function aEscC(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+var CLIENT_FIELD_DEF = {
+  name:{label:'姓名', kind:'text'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
+  gender:{label:'性别 / 出生日期', kind:'gender'}, passport:{label:'护照信息', kind:'text'}, phone:{label:'联系方式（手机号）', kind:'text'}
+};
+function openClientEdit(name, field){
+  var c = clientByName(name), d = CLIENT_FIELD_DEF[field]; if(!c || !d) return;
+  CLIENT_EDIT = {name:name, field:field};
+  var ov = document.getElementById('client-edit-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'client-edit-overlay'; ov.style.zIndex = 90; ov.onclick = function(e){ if(e.target===ov) closeClientEdit(); }; document.body.appendChild(ov); }
+  var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;';
+  var body = d.kind==='area' ? '<textarea id="ce-v" rows="3" style="'+inp+'">'+aEscC(c[field])+'</textarea>' :
+    d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select><input id="ce-v2" type="date" value="'+aEscC(c.dob)+'" style="'+inp+'"></div>' :
+    '<input id="ce-v" type="text" value="'+aEscC(field==='passport' ? c.passport.text : c[field])+'" style="'+inp+'">';
+  ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">修改「'+d.label+'」</div>'+body+
+    '<div id="ce-err" class="error-text" style="display:none;margin-top:8px;"></div><div style="font-size:11px;color:var(--muted);margin-top:8px;">保存后写回客户档案，并记入客户 Timeline（操作人：'+aEscC(accountLabel(currentAccountId()))+'）。</div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="closeClientEdit()">取消</button><button class="btn-primary" onclick="saveClientEdit()">保存</button></div></div>';
+  ov.classList.add('open');
+}
+function closeClientEdit(){ var ov = document.getElementById('client-edit-overlay'); if(ov) ov.classList.remove('open'); CLIENT_EDIT = null; }
+function saveClientEdit(){
+  var x = CLIENT_EDIT; if(!x) return;
+  var c = clientByName(x.name), d = CLIENT_FIELD_DEF[x.field]; if(!c) return;
+  var v = (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
+  var fail = function(m){ var e = document.getElementById('ce-err'); e.textContent = m; e.style.display = 'block'; };
+  if(x.field==='name'){
+    if(!v) return fail('姓名不能为空');
+    if(v!==c.name && clientByName(v)) return fail('已有同名的客户档案');
+    oldTxt = c.name; newTxt = v;
+    if(v!==c.name){
+      CASE_ITEMS.forEach(function(cs){ if(cs.name===c.name) cs.name = v; });
+      if(CLIENT_HOLDINGS[c.name]){ CLIENT_HOLDINGS[v] = CLIENT_HOLDINGS[c.name]; delete CLIENT_HOLDINGS[c.name]; }
+      c.name = v; x.name = v;
+      document.getElementById('detail-name').textContent = v; HOLD_CARD_NAME = v;
+    }
+  } else if(x.field==='gender'){
+    var dob = document.getElementById('ce-v2').value;
+    oldTxt = c.gender+' · '+(c.dob||'—'); newTxt = v+' · '+(dob||'—'); c.gender = v; c.dob = dob;
+  } else if(x.field==='passport'){
+    oldTxt = c.passport.text; newTxt = v||'未登记'; c.passport.text = newTxt; c.passport.date = dateStr(demoNow());
+  } else if(x.field==='phone'){
+    if(!v) return fail('手机号不能为空');
+    var other = clientByPhone(v); if(other && other.id!==c.id) return fail('这个手机号已登记为 '+other.name+'（一个手机号对应一位客人）');
+    oldTxt = c.phone||'—'; newTxt = v; c.phone = v;
+  } else { oldTxt = c[x.field]||'无'; newTxt = v||'无'; c[x.field] = newTxt; }
+  if(oldTxt===newTxt){ closeClientEdit(); return; }
+  c.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'修改「'+d.label+'」：'+oldTxt+' → '+newTxt, dt:nowFullDt(), kind:'plain'});
+  c.updated = '刚刚';
+  closeClientEdit(); renderClientProfile(c.name); renderClientTimeline(c.name); renderClientRows();
+  try{ renderClientCases(c.name); }catch(e){}
 }
 
 /* 客户级 Timeline 只记：建档 / 基础信息修改（含修正）/ 案件开始 / 案件结案（进行中显示"进行中"） */
 function renderClientTimeline(name){
-  var log = [
-    {stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'},
-    {stage:'基础信息修改', actor:'Dewi', action:'补录护照信息、确认医美史', dt:D(-16)+' 11:15', kind:'plain'}
-  ].concat(CLIENT_FIX_LOG[name]||[]);
+  var cl = clientByName(name);
+  var log = (cl ? cl.timeline : []).slice();
   CASE_ITEMS.filter(function(c){ return c.name===name; }).forEach(function(c){
     var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt : D(0)+' 09:00';
     log.push({stage:'案件开始', actor:'系统', action:'Case 开始 · '+c.caseNo, dt:first, kind:'case', caseId:c.id});
@@ -530,7 +587,7 @@ function renderClientTimeline(name){
 function openClientDetail(name, from){
   DETAIL_FROM = from || 'in-clients';
   document.getElementById('detail-name').textContent = name;
-  var pn = document.getElementById('detail-profile-name'); if(pn) pn.textContent = name;
+  renderClientProfile(name);
   renderClientCases(name);
   renderClientHoldings(name);
   renderProjectHistory(name);
@@ -952,6 +1009,7 @@ function renderRescheduleTimePanel(){
   var pmGrid = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;">'+RESCHED_PM.map(slotBtn).join('')+'</div>';
   var lunchDivider = '<div style="text-align:center;font-size:11px;color:var(--terracotta);margin:12px 0;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
   document.getElementById('reschedule-slots').innerHTML = amGrid + lunchDivider + pmGrid;
+  var cn = document.getElementById('reschedule-closed-note'); if(cn) cn.textContent = '定期休诊：每周'+(CLINIC_SETTINGS.closedDow.length ? CLINIC_SETTINGS.closedDow.map(function(i){ return DOW_NAMES[i]; }).join('、') : '无')+'（诊所设定）';
 }
 
 function confirmReschedule(){
@@ -1155,7 +1213,7 @@ function closeReportModal(){ document.getElementById('report-overlay').classList
 function openCaseInfoDrawer(){
   var c = getCurrentCase(); if(!c) return;
   document.getElementById('peek-name').textContent = '姓名：'+c.name;
-  document.getElementById('peek-contact').textContent = '联系方式：'+c.basic.contact;
+  document.getElementById('peek-contact').textContent = '联系方式：'+caseBasic(c).contact;
   document.getElementById('peek-director').textContent = '对接院长：'+(c.director||'—');
   document.getElementById('peek-viewall').onclick = function(){ closeCaseInfoDrawer(); openClientDetail(c.name, 'in-cases'); return false; };
   document.getElementById('peek-overlay').classList.add('open');
@@ -1179,7 +1237,7 @@ function renderCaseBody(c){
   if(c.subState==='cancelled'){
     el.innerHTML = '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:10px;">'+(c.noShow ? '未到店（已取消）' : '预约已取消')+'</div>'+
-      '<div style="font-size:13px;color:var(--slate2);line-height:1.8;">性别：'+c.basic.gender+'　出生日期：'+c.basic.dob+'<br>联系方式：'+c.basic.contact+'　病史过敏史：'+c.basic.history+'</div>'+
+      '<div style="font-size:13px;color:var(--slate2);line-height:1.8;">性别：'+caseBasic(c).gender+'　出生日期：'+caseBasic(c).dob+'<br>联系方式：'+caseBasic(c).contact+'　病史过敏史：'+caseBasic(c).history+'</div>'+
       '<div style="font-size:11px;color:var(--muted);margin-top:10px;">资料已保留，客人重新预约后可继续跟进</div>'+
       '</div>';
     return;
