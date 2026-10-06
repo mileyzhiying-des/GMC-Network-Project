@@ -120,6 +120,6 @@ function resetDemoData(){
 function guardPage(roles){
   var a = currentAccount();
   if(!a){ location.replace('/login.html'); return false; }
-  if(roles.indexOf(a.role) < 0){ location.replace(a.role==='owner' ? '/owner.html' : '/in.html'); return false; }
+  if(roles.indexOf(a.role) < 0){ location.replace(homeUrl(a)); return false; }
   return true;
 }

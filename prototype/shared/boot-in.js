@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function(){
   var q = new URLSearchParams(location.search), cs = q.get('case'), pg = q.get('page');
   if(!cs && !pg) return;
   nav('in-dashboard');
+  if(pg && pg.indexOf('admin-')===0){ openAdminPage(pg.slice(6)); return; } /* 无权限会被导回首页 */
   if(pg && document.getElementById(pg)) nav(pg);
   if(cs){
     var c = CASE_ITEMS.filter(function(x){ return x.caseNo===cs || x.id===cs; })[0];

@@ -361,6 +361,28 @@ function pushTargets(c){
   return {inn: pick(ops.inn, IN_COORDINATORS), kr: (ops.kr.length || caseHasKrSide(c)) ? pick(ops.kr, KR_COORDINATORS) : []};
 }
 
+/* ================= 权限（2026-10-06·A4，Notion Accounts & Settings 第 2 节） =================
+   work=处理客人和案件（工作台/客户/案件/案例库/项目库/通知/对话）；bizdata=经营数据；accounts=账号管理；clinic=诊所设定；oplog=操作日志；personal=个人设定。
+   老板：只有管理类（看汇总，看不到个别客人和案件）；管理者：全部；一般室长：work + personal。没有权限的入口完全不显示。 */
+var ROLE_PERMS = {
+  owner:   {work:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true},
+  manager: {work:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true},
+  general: {work:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true}
+};
+/* 管理类页面（侧边栏"诊所管理"组；老板端的全部导航）。key 同时是 ?page=admin-xxx 的后缀 */
+var ADMIN_PAGES = [
+  {key:'bizdata',  label:'经营数据', icon:'数', perm:'bizdata'},
+  {key:'accounts', label:'账号管理', icon:'账', perm:'accounts'},
+  {key:'clinic',   label:'诊所设定', icon:'设', perm:'clinic'},
+  {key:'oplog',    label:'操作日志', icon:'志', perm:'oplog'}
+];
+function canDo(perm, acct){
+  var a = acct || currentAccount();
+  return !!(a && a.status==='active' && ROLE_PERMS[a.role] && ROLE_PERMS[a.role][perm]);
+}
+/* 自己的首页：能做日常工作的去 in.html，否则（老板）去 owner.html */
+function homeUrl(acct){ var a = acct || currentAccount(); return (a && a.role==='owner') ? '/owner.html' : '/in.html'; }
+
 /* ================= 账号辅助（2026-10-05·二） ================= */
 function accountById(id){ return ACCOUNTS.filter(function(a){ return a.id===id; })[0] || null; }
 /* 显示用："Rina（A2）" */

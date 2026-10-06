@@ -9,11 +9,12 @@
 <body>
 <script>try{ if(!sessionStorage.getItem("gmc_acct")) location.replace("/login.html"); }catch(e){}</script>
 <div id="app">
-<section class="page active" style="display:flex;flex-direction:column;min-height:100vh;">
-  <div class="topbar" style="position:static;"><span class="title">GMC Network · 老板端</span><div id="owner-actions"></div></div>
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px;">
-    <h1 style="margin:0;">老板（诊所管理账号）</h1>
-    <p style="max-width:460px;color:var(--slate2);line-height:1.7;margin:0;">你好，<b class="me-name"></b>。老板端的经营数据、账号管理、诊所设定、操作日志在后续部分实现。</p>
+<!-- 老板端（2026-10-06·A4）：没有工作台、案件、客户、对话；只有经营数据、账号管理、诊所设定、操作日志、个人设定（头像菜单）。内容由 ADMIN_RENDER 填入 -->
+<section class="page in-shell active" id="in-admin" data-page="admin" style="display:flex;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content" id="admin-body" style="max-width:1000px;"></div>
   </div>
 </section>
 </div>
@@ -25,9 +26,12 @@
 <script>
 window.GUARD_ROLES = ['owner'];
 if(guardPage(window.GUARD_ROLES)){
-  document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
-  document.getElementById('owner-actions').innerHTML = '<div class="actions">'+
-    '<span class="avatar" style="cursor:pointer;" onclick="toggleAvatarMenu(event)" title="'+ME_NAME+'">'+ME_NAME.charAt(0).toUpperCase()+'</span></div>';
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
+    CURRENT_PAGE_ID = 'in-admin';
+    var pg = new URLSearchParams(location.search).get('page') || 'admin-bizdata';
+    openAdminPage(pg.indexOf('admin-')===0 ? pg.slice(6) : 'bizdata'); /* 无权限的页面会被导回首页 */
+  });
   document.addEventListener('click', closeAvatarMenu);
 }
 </script>

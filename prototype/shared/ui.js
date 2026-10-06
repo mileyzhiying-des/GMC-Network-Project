@@ -5,7 +5,27 @@ var NAV_STACK = [];
 
 var CURRENT_PAGE_ID = 'in-dashboard';
 
+/* 管理类页面（经营数据/账号管理/诊所设定/操作日志）：各页的渲染函数在 ADMIN_RENDER[key] 里登记（第五～八部分）；没权限 → 导回自己的首页 */
+var ADMIN_RENDER = {};
+var ADMIN_KEY = null;
+function openAdminPage(key){
+  var p = ADMIN_PAGES.filter(function(x){ return x.key===key; })[0];
+  if(!p || !canDo(p.perm)){ location.replace(homeUrl()); return; }
+  var el = document.getElementById('in-admin'); if(!el) return;
+  ADMIN_KEY = key;
+  el.dataset.page = 'admin-'+key;
+  var tSlot = el.querySelector('.topbar-slot'); if(tSlot) tSlot.innerHTML = buildTopbar(p.label);
+  var body = document.getElementById('admin-body');
+  if(ADMIN_RENDER[key]) ADMIN_RENDER[key](body);
+  else body.innerHTML = '<div class="card" style="padding:28px;color:var(--slate2);line-height:1.8;">「'+p.label+'」页面在后续部分实现。</div>';
+  if(CURRENT_PAGE_ID !== 'in-admin') NAV_STACK.push(CURRENT_PAGE_ID);
+  showPage('in-admin');
+}
+function refreshAdminPage(){ if(CURRENT_PAGE_ID==='in-admin' && ADMIN_KEY) openAdminPage(ADMIN_KEY); }
+
 function nav(id){
+  if(id !== 'in-admin' && !canDo('work')){ location.replace(homeUrl()); return; } /* 没有日常工作权限的账号不能进工作类页面 */
+  if(id === 'in-admin'){ openAdminPage(ADMIN_KEY || 'bizdata'); return; }
   if(id === CURRENT_PAGE_ID) return;
   NAV_STACK.push(CURRENT_PAGE_ID);
   showPage(id);
@@ -46,13 +66,15 @@ var IN_NAV = [
 ];
 
 var TITLES = {dashboard:'工作台', clients:'客户管理', cases:'案件管理', library:'案例库', projects:'项目库', notifications:'通知中心'};
+ADMIN_PAGES.forEach(function(p){ TITLES['admin-'+p.key] = p.label; });
 
 
 function buildSidebar(activePage){
   var brand = SIDEBAR_COLLAPSED
     ? '<div class="brand collapsed-brand"><span class="logo-sq">G</span></div>'
     : '<div class="brand"><b>GMC Network</b><span>'+accountRoleShort()+' · '+ME_NAME+'</span></div>';
-  var navHtml = IN_NAV.map(function(item){
+  var navItems = canDo('work') ? IN_NAV : []; /* 没有日常工作权限（老板）的账号不显示工作类入口 */
+  var navHtml = navItems.map(function(item){
     var active = item.key === activePage ? ' active' : '';
     var inner = SIDEBAR_COLLAPSED
       ? '<span class="nav-icon">'+item.icon+'</span>'
@@ -60,15 +82,23 @@ function buildSidebar(activePage){
     var onclick = item.action ? (item.action+';return false;') : ((item.id==='in-library' || item.id==='in-projectlibrary') ? ('openSidebarPage(\''+item.id+'\');return false;') : ('nav(\''+item.id+'\');return false;'));
     return '<a class="nav-item'+active+'" href="#" title="'+item.label+'" onclick="'+onclick+'">'+inner+'</a>';
   }).join('');
+  var adminItems = ADMIN_PAGES.filter(function(p){ return canDo(p.perm); });
+  if(adminItems.length){
+    navHtml += (SIDEBAR_COLLAPSED || !navItems.length ? '' : '<div style="font-size:11px;color:var(--muted);padding:14px 14px 4px;">诊所管理</div>') + adminItems.map(function(p){
+      var active = ('admin-'+p.key) === activePage ? ' active' : '';
+      var inner = SIDEBAR_COLLAPSED ? '<span class="nav-icon">'+p.icon+'</span>' : '<span class="dot"></span><span>'+p.label+'</span>';
+      return '<a class="nav-item'+active+'" href="#" title="'+p.label+'" onclick="openAdminPage(\''+p.key+'\');return false;">'+inner+'</a>';
+    }).join('');
+  }
   var toggleGlyph = SIDEBAR_COLLAPSED ? '»' : '«';
   var toggleBtn = '<span class="collapse-toggle" onclick="toggleSidebar()" title="'+(SIDEBAR_COLLAPSED?'展开':'收起')+'">'+toggleGlyph+'</span>';
-  return '<div class="sidebar'+(SIDEBAR_COLLAPSED?' collapsed':'')+'">'+toggleBtn+brand+'<nav>'+navHtml+'</nav>'+(SIDEBAR_COLLAPSED?'':'<div class="sidebar-foot">GMC Network · 印尼室长端</div>')+'</div>';
+  return '<div class="sidebar'+(SIDEBAR_COLLAPSED?' collapsed':'')+'">'+toggleBtn+brand+'<nav>'+navHtml+'</nav>'+(SIDEBAR_COLLAPSED?'':'<div class="sidebar-foot">GMC Network · '+(canDo('work')?'印尼室长端':'老板端')+'</div>')+'</div>';
 }
 
 function buildTopRightIcons(){
   return '<div class="actions">'+
-    '<button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button>'+
-    '<button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button>'+
+    (canDo('work') ? '<button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button>'+
+    '<button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button>' : '')+
     '<span class="avatar" style="cursor:pointer;" onclick="toggleAvatarMenu(event)" title="'+ME_NAME+'">'+((ME_NAME||'?').charAt(0).toUpperCase())+'</span></div>';
 }
 
@@ -2866,6 +2896,7 @@ function refreshView(){
   [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
     try{ if(typeof m[1]==='function') m[1](); }catch(e){}
   });
+  try{ refreshAdminPage(); }catch(e){} /* 管理类页面（账号状态等被别的标签页改了） */
   try{
     if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID){
       var c = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_CASE_ID; })[0];
