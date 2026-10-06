@@ -224,7 +224,9 @@ function memoSet(k, v){
 
 /* ---- KR 医院日程视角（只读，2026-10-02·八）：KR 室长登记的日程、院长日程（下拉切换院长）、KR 开放的施术日期；
    有空 = 白色，已排的事 = 浅灰块，每件事一个独立的块（中间留缝隙）。演示数据：两位院长，김민석 当天几乎满档 ---- */
-var CAL_VIEW = 'in', KR_DIRECTOR = '김민석 원장';
+var CAL_VIEW = 'in', KR_DIRECTOR = '', KR_HOSPITAL = ''; /* KR 医院日程视角：先选医院（只列本诊所对接的），再选该医院的院长 */
+function krViewHospital(){ var ids = linkedHospitalIds(); return (KR_HOSPITAL && ids.indexOf(KR_HOSPITAL)>-1) ? KR_HOSPITAL : (ids[0] || ''); }
+function krViewDirector(){ var names = hospitalDirectorNames(krViewHospital()); return names.indexOf(KR_DIRECTOR)>-1 ? KR_DIRECTOR : (names[0] || ''); }
 
 var KR_COORD_SCHEDULE = [
   {date:D(-1), time:'10:00', title:'이서연：整理 Budi 报告'}, {date:D(0), time:'09:30', title:'이서연：与 IN 室长对接'},
@@ -3150,7 +3152,11 @@ var LIB_CASES = [];
  /* 种子数据在项目库建好之后（libSeedDemo） */
 
 /* ---- 项目 → 案例 ---- */
-function libCasesOfProject(pid){ return LIB_CASES.filter(function(c){ return (c.projectIds||[]).indexOf(pid)>-1; }); }
+/* 案例库按医院区分（2026-10-06）：赴韩施术的案例/项目属于医院，首页可切换医院，卡片上标明医院；印尼管理的不受影响 */
+var LIB_HOSPITAL = 'all';
+function libHospOk(x){ var travel = (x.source==='travel') || (x.origin==='KR'); return !travel || LIB_HOSPITAL==='all' || x.hospitalId===LIB_HOSPITAL; }
+function setLibHospital(v){ LIB_HOSPITAL = v; libGo('home', {groupId:null, projectId:null, caseId:null}); }
+function libCasesOfProject(pid){ return LIB_CASES.filter(function(c){ return libHospOk(c) && (c.projectIds||[]).indexOf(pid)>-1; }); }
 
 function libLatestCase(list){ return list.slice().sort(function(a,b){ return (b.uploadedAt||'').localeCompare(a.uploadedAt||''); })[0] || null; }
 
@@ -3166,7 +3172,7 @@ function libPhotoBox(ph, w, h, cap){
 function libGroupProjects(groupId){
   if(groupId==='skin') return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN'; });
   var catId = groupId.replace('cat:','');
-  return PROJECT_LIBRARY.filter(function(p){ return p.categoryId===catId; });
+  return PROJECT_LIBRARY.filter(function(p){ return p.categoryId===catId && libHospOk(p); });
 }
 
 function libGroupLabel(groupId){ return groupId==='skin' ? '皮肤管理' : ((PROJECT_CATEGORIES[groupId.replace('cat:','')]||{}).label || groupId); }
@@ -3255,9 +3261,9 @@ function libCaseCardHtml(c){
   var srcColor = c.source==='travel' ? ['var(--sage-bg)','var(--sage)'] : ['var(--terracotta-bg)','var(--terracotta)'];
   var dirRow = '';
   if(c.source==='travel'){
-    dirRow = libDirectorClickable(c)
+    dirRow = '<div style="font-size:11px;color:var(--slate2);">医院：'+hospitalName(c.hospitalId||'H1','ko')+'</div>' + (libDirectorClickable(c)
       ? '<div style="font-size:11px;color:var(--slate2);">院长：<a href="#" class="info-link" onclick="event.stopPropagation();openDirectorDetail(\''+c.director+'\');return false;">'+c.director+'</a></div>'
-      : '<div style="font-size:11px;color:var(--muted);">院长：-</div>'; /* 不在名单上（停用/离职）显示"-"，不可点击 */
+      : '<div style="font-size:11px;color:var(--muted);">院长：-</div>'); /* 不在名单上（停用/离职）显示"-"，不可点击 */
   }
   return '<div class="card" style="overflow:hidden;cursor:pointer;" onclick="libOpenCase(\''+c.id+'\')">'+libPhotoBox(libCoverPhoto(c),'100%','120px',c.title)+
     '<div style="padding:12px 14px;display:flex;flex-direction:column;gap:5px;"><b style="font-size:13px;">'+c.title+'</b>'+
@@ -3278,7 +3284,8 @@ function libRenderCases(){
     return true;
   });
   var sel = function(k, opts, cur, label){ return '<select onchange="setLibFilterVal(\''+k+'\',this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;"><option value="all">'+label+'：全部</option>'+opts.map(function(o){ return '<option value="'+o.v+'"'+(cur===o.v?' selected':'')+'>'+o.l+'</option>'; }).join('')+'</select>'; };
-  var dirs = DIRECTOR_LIST.map(function(d){ return {v:d, l:d}; }); /* 院长筛选的数据来自 KR 院长名单（Notion IN-SHOW-01） */
+  var dirHs = LIB_HOSPITAL==='all' ? linkedHospitalIds() : [LIB_HOSPITAL], dirs = [];
+  dirHs.forEach(function(h){ hospitalDirectorNames(h).forEach(function(d){ dirs.push({v:d, l:d}); }); }); /* 院长筛选的数据来自所选医院的 KR 院长名单（Notion IN-SHOW-01） */
   var filters = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">'+
     (isTravel ? sel('director', dirs, f.director, '院长') : sel('problem', Object.keys(LIB_PROBLEMS).map(function(id){ return {v:id, l:LIB_PROBLEMS[id].label}; }), f.problem, '问题'))+
     sel('recovery', RECOVERY_OPTIONS.filter(function(r){ return r!=='自定义'; }).map(function(r){ return {v:r, l:r}; }), f.recovery, '恢复时间')+
