@@ -471,26 +471,6 @@ function cancelPlaceholder(id){
   renderCalendar();
 }
 
-function guestSet(k, v){ GUEST_FORM[k] = v; if(k==='consent') renderGuestForm(); }
-
-function submitGuestForm(){
-  var g = GUEST_FORM; if(!g) return;
-  var miss = [];
-  if(!(g.name||'').trim()) miss.push('姓名');
-  if(!(g.phone||'').trim()) miss.push('手机号');
-  if(!g.consent) miss.push('同意勾选');
-  if(miss.length){ g.err = '还差：'+miss.join('、'); renderGuestForm(); return; }
-  if(g.phId) RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==g.phId; }); /* 占位转正式预约 */
-  var c = createReservationCase(g.name.trim(), null, g.date, g.time, g.phone.trim(), g.purpose);
-  var cl = clientByName(c.name); /* 性别、出生日期、病史、同意记录写回客户档案（案件上不再存） */
-  if(cl){
-    cl.gender = g.gender || cl.gender; if(g.dob) cl.dob = g.dob; if((g.history||'').trim()) cl.history = g.history.trim();
-    cl.consents.push({version:CLINIC_SETTINGS.privacyVersion, ts:nowFullDt(), source:'客户自助预约'});
-  }
-  closeGuestForm(); refreshView();
-  pushNotif('预约', (g.phId ? '预约占位的客人填完资料：' : '客人自助预约提交：')+c.name+'（'+c.caseNo+'）'+dateLabel(g.date)+' '+g.time, {caseId:c.id, names:workingIN()});
-}
-
 /* 客户在链接里自行改时间：案件的预约时间改掉，并通知室长（消息中心）——演示按钮，真实版由客户端触发 */
 function simulateCustomerReschedule(caseId, newDow, newTime){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c || !c.visitDate) return;

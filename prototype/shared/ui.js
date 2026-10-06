@@ -354,7 +354,7 @@ function renderAddSlotBody(){
       '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate2);margin-bottom:14px;"><input type="checkbox" id="add-slot-save-default"> 保存为默认模板（只勾选才会覆盖默认，不勾只对本次生效）</label>'+
       '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">发送后所选时段出现'+CLINIC_SETTINGS.holdMinutes+'分钟"预约占位"，客户在链接里填写完成后转为正式预约</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotNew(\''+link+'\')">发送链接</button>'+
-      '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="openGuestFormFromSlot()">演示：客人现场自己填资料（同预约链接表单）</button>';
+      '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="openGuestFormFromSlot()">演示：客人到店自己填资料（打开预约页，时间 = 现在）</button>';
   }
   document.getElementById('add-slot-body').innerHTML = modeTabs + body;
 }
@@ -423,7 +423,7 @@ function openPlaceholderModal(id){
     '<div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">'+
     '<button class="btn-outline" onclick="resendPlaceholderLink(\''+p.id+'\')">再次发送链接（倒计时重新计时）</button>'+
     '<button class="btn-outline" onclick="cancelPlaceholder(\''+p.id+'\')">取消占位</button>'+
-    '<button class="btn-ghost" onclick="simulateCustomerFilledPlaceholder(\''+p.id+'\')">演示：模拟客户填写完成</button>'+
+    '<button class="btn-ghost" onclick="simulateCustomerFilledPlaceholder(\''+p.id+'\')">演示：打开客人的预约链接（新标签页）</button>'+
     '<button class="btn-ghost" onclick="simulateSlotChange(\''+p.id+'\')">演示：客户在链接里改选其他空闲时间</button>'+
     '</div>';
   document.getElementById('add-slot-overlay').classList.add('open');
@@ -436,48 +436,17 @@ function resendPlaceholderLink(id){
   openPlaceholderModal(id);
 }
 
-/* 客人自己填资料（演示，同预约链接表单）：姓名、手机号、性别、出生日期、病史/医美史、轻量同意勾选（必勾）；提交 → 生成预约（待访问）+ 客户档案 */
-var GUEST_FORM = null;
-
+/* 客人自己填资料 = 客户自助预约页 booking.html（2026-10-06·B5，取代原来 in.html 里临时的表单）：
+   到店自己填 → 新标签页 ?walkin=1（时间 = 现在，提交后在这里点［已到店］）；预约链接 → ?ph=占位ID（客人手机里打开的就是这个页面）。
+   客人提交后数据存进共享存档，这个页面不用刷新就会同步（日历、预约历史、铃铛、通知） */
+function openBookingPage(params){ window.open(bookingUrl(params), '_blank'); }
 function openGuestFormFromSlot(){
-  var phoneEl = document.getElementById('add-slot-phone'), purEl = document.getElementById('add-slot-purpose');
-  openGuestForm({date:ADD_SLOT_CONTEXT.date, time:ADD_SLOT_CONTEXT.time, phone:phoneEl?phoneEl.value.trim():'', purpose:purEl?purEl.value:'面诊商谈', phId:null});
+  var phoneEl = document.getElementById('add-slot-phone'), purEl = document.getElementById('add-slot-purpose'), p = {walkin:1};
+  if(phoneEl && phoneEl.value.trim()) p.phone = phoneEl.value.trim();
+  if(purEl) p.purpose = purEl.value;
+  openBookingPage(p);
 }
-
-function openGuestForm(ctx){
-  closeAddSlotModal();
-  GUEST_FORM = Object.assign({name:'', gender:'女', dob:'', history:'', consent:false, err:''}, ctx);
-  renderGuestForm();
-  document.getElementById('guest-form-overlay').classList.add('open');
-}
-
-function closeGuestForm(){ document.getElementById('guest-form-overlay').classList.remove('open'); GUEST_FORM = null; }
-
-function renderGuestForm(){
-  var g = GUEST_FORM; if(!g) return;
-  document.getElementById('guest-form-sub').textContent = '预约时间：'+dateLabel(g.date)+' '+g.time+'　来访目的：'+g.purpose;
-  var inp = function(label, k, type, ph){ return '<div class="field" style="margin-bottom:10px;"><label>'+label+'</label><input type="'+(type||'text')+'" value="'+(g[k]||'').replace(/"/g,'&quot;')+'" placeholder="'+(ph||'')+'" oninput="guestSet(\''+k+'\',this.value)"></div>'; };
-  document.getElementById('guest-form-body').innerHTML =
-    inp('姓名 *','name','text','请输入姓名')+inp('手机号 *','phone','text','+62 812-xxxx-xxxx')+
-    '<div class="field" style="margin-bottom:10px;"><label>性别</label><select onchange="guestSet(\'gender\',this.value)"><option'+(g.gender==='女'?' selected':'')+'>女</option><option'+(g.gender==='男'?' selected':'')+'>男</option></select></div>'+
-    inp('出生日期','dob','date')+
-    '<div class="field" style="margin-bottom:10px;"><label>病史 / 过敏史 / 过往医美史</label><textarea rows="2" oninput="guestSet(\'history\',this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+(g.history||'')+'</textarea></div>'+
-    '<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer;"><input type="checkbox" '+(g.consent?'checked ':'')+'onchange="guestSet(\'consent\',this.checked)"> 我同意提供以上资料用于预约和接待（轻量同意，必勾）</label>'+
-    (g.err ? '<div class="error-text" style="display:block;margin-bottom:8px;">'+g.err+'</div>' : '')+
-    '<button class="btn-primary" style="width:100%;" onclick="submitGuestForm()">提交预约</button>';
-}
-
-function simulateCustomerFilledPlaceholder(id){
-  var ph0 = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0];
-  if(ph0){ openGuestForm({date:ph0.date, time:ph0.time, phone:ph0.phone, purpose:ph0.purpose||'面诊商谈', phId:id}); return; } /* 演示：客人在链接里填写 → 同一个表单 */
-  return;
-  var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
-  RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==id; });
-  closeAddSlotModal();
-  var c = createReservationCase('新客户 '+p.phone.slice(-4), null, p.date, p.time, p.phone, p.purpose);
-  renderCalendar();
-  showToast('客户已完成预约', c.name+' · Case ID '+c.caseNo+'，'+dateLabel(p.date)+' '+p.time, function(){ openCaseDetail(c.id); });
-}
+function simulateCustomerFilledPlaceholder(id){ openBookingPage({ph:id}); }
 
 function buildClients(){ renderClientRows(); }
 
@@ -2948,7 +2917,7 @@ function showToast(title, text, onClickFn){
    其他标签页改了共享数据（localStorage）后，当前标签页重读数据，再调用这个函数把"现在能看到的东西"重画一遍。
    每个模块各自 try/catch，页面里没有的元素（比如 booking.html）直接跳过。 */
 function refreshView(){
-  [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
+  [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['预约历史',renderResvHistory],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
     try{ if(typeof m[1]==='function') m[1](); }catch(e){}
   });
   try{ refreshAdminPage(); }catch(e){} /* 管理类页面（账号状态等被别的标签页改了） */
