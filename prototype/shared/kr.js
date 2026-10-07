@@ -27,6 +27,38 @@ function krAllCases(){
   });
   return rows;
 }
+/* 经营数据（KR 端，2026-10-07 资金归属）：KR 收入 = 尾款 + 韩国加做（医院收）；定金是诊所收的，不在这里。按案件开始的月份统计（同 IN 口径） */
+var KR_BIZ_MONTH = 'cur';
+function krBizSetMonth(v){ KR_BIZ_MONTH = v; openAdminPage('bizdata', true); }
+function krBizData(el){
+  var hid = krHospitalIdOfMe(), curM = D(0).slice(0,7), rows = [], months = {}; months[curM] = 1;
+  krClinics().forEach(function(cl){
+    Store.withClinic(cl.id, function(){
+      CASE_ITEMS.forEach(function(c){
+        if(!krCaseVisible(c, hid)) return;
+        var m = bizCaseMonth(c); months[m] = 1;
+        var info = krBalanceInfo(c), bal = (c.krBalancePaid && info.diff>0) ? info.diff : 0;
+        var add = (c.settlementBatches||[]).filter(function(b){ return b.addOn && b.status==='active'; }).reduce(function(t,b){ return t+(b.krTotal||0); }, 0);
+        rows.push({clinicId:cl.id, clinicName:cl.name, month:m, bal:bal, add:add, travel:krActiveItems(c).length>0, closed:c.stage==='closed'});
+      });
+    });
+  });
+  var want = KR_BIZ_MONTH==='cur' ? curM : KR_BIZ_MONTH, rs = rows.filter(function(r){ return want==='all' || r.month===want; });
+  var sum = function(k, list){ return (list||rs).reduce(function(t,r){ return t+r[k]; }, 0); };
+  var tile = function(label, big, sub, color){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:150px;"><div style="font-size:11px;color:var(--muted);">'+label+'</div><div style="font-size:22px;font-weight:700;margin:4px 0;'+(color?'color:'+color+';':'')+'">'+big+'</div><div style="font-size:11px;color:var(--muted);">'+sub+'</div></div>'; };
+  var opts = '<option value="cur"'+(KR_BIZ_MONTH==='cur'?' selected':'')+'>本月（'+curM+'）</option><option value="all"'+(KR_BIZ_MONTH==='all'?' selected':'')+'>全部</option>'+
+    Object.keys(months).sort().reverse().filter(function(m){ return m!==curM; }).map(function(m){ return '<option value="'+m+'"'+(KR_BIZ_MONTH===m?' selected':'')+'>'+m+'</option>'; }).join('');
+  var byClinic = krClinics().map(function(cl){
+    var l = rs.filter(function(r){ return r.clinicId===cl.id; });
+    return '<div class="trow" style="grid-template-columns:2fr 0.8fr 1.2fr 1.2fr 1.2fr;"><span>'+aEsc(cl.name)+'</span><span>'+l.length+'</span><span>'+formatCurrency(sum('bal',l),'KRW')+'</span><span>'+formatCurrency(sum('add',l),'KRW')+'</span><span><b>'+formatCurrency(sum('bal',l)+sum('add',l),'KRW')+'</b></span></div>';
+  }).join('');
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('经营数据')+' · '+aEsc(krHospitalName())+'</div>'+
+    '<select onchange="krBizSetMonth(this.value)" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+opts+'</select></div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('案件数', rs.length, '来自对接诊所的案件')+tile('尾款', formatCurrency(sum('bal'),'KRW'), '已付清的尾款（韩元，医院收）')+tile('韩国加做', formatCurrency(sum('add'),'KRW'), '回诊时在韩国加做的项目（单独付款，医院收）')+tile('KR 收入合计', formatCurrency(sum('bal')+sum('add'),'KRW'), '尾款 + 韩国加做', 'var(--sage)')+'</div>'+
+    aSection('按来源诊所', '<div class="trow head" style="grid-template-columns:2fr 0.8fr 1.2fr 1.2fr 1.2fr;"><span>来源诊所</span><span>案件数</span><span>尾款</span><span>韩国加做</span><span>合计</span></div>'+(byClinic || '<div style="font-size:12px;color:var(--muted);">没有对接的诊所</div>'),
+      'KR 收入 = 尾款 + 韩国加做；定金由诊所收取，不计入医院收入。医院原因造成的定金退款，分担方式由 IN 室长在退款备注里记录，这里不自动扣减。')+
+    '<div style="font-size:11px;color:var(--muted);">待讨论：具体要看哪些数字（这是基础版）。</div>';
+}
 function krFindCase(clinicId, id){ return krAllCases().filter(function(r){ return r.clinicId===clinicId && r.id===id; })[0] || null; }
 /* 其他标签页（IN 端缴费等）改了数据 → 重画当前 KR 页面和角标 */
 function krRefreshAll(){

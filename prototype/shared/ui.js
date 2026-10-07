@@ -1659,6 +1659,7 @@ function openRefundModal(items, mode, selectable, amountOverride){
   }).join('')+'<div style="font-size:11px;color:var(--muted);margin-top:6px;">退多少由室长决定（有的项目可退、有的不可退，金额可以为0），上面的预付金仅供参考</div>';
   document.getElementById('refund-amount').value = suggest;
   document.getElementById('refund-reason').value = '';
+  var rn = document.getElementById('refund-note'); if(rn) rn.value = '';
   document.getElementById('refund-overlay').classList.add('open');
 }
 
@@ -1676,6 +1677,7 @@ function confirmRefund(){
   if(raw==='' || isNaN(amount) || amount<0){ alert('请填写退款金额（数字，可为 0）'); return; }
   var reason = document.getElementById('refund-reason').value.trim();
   if(!reason){ alert('请填写退款原因'); return; }
+  var refNote = ((document.getElementById('refund-note')||{}).value||'').trim();
   var names = [], batchIds = [];
   var mode0 = REFUND_MODE;
   chosen.forEach(function(it){
@@ -1688,8 +1690,8 @@ function confirmRefund(){
   var hadKr = chosen.some(function(it){ return it.cancelled; });
   if(mode0==='diffRefund'){ (c.settlementBatches||[]).forEach(function(b){ if(b.krDeposit>0) batchIds.push(b.id); }); }
   c.refunds = c.refunds || [];
-  c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:nowFullDt().split(' ')[0], items:names, batchIds:batchIds, afterArrival:!!c.hasArrived});
-  logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，退款 ')+formatCurrency(amount,'KRW')+'，退款原因：'+reason+(c.hasArrived ? '（金额按KR室长判断）' : ''));
+  c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:nowFullDt().split(' ')[0], items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote});
+  logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，退款 ')+formatCurrency(amount,'KRW')+'，退款原因：'+reason+(refNote ? '；备注：'+refNote : '')+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];
   closeRefundModal();
   if(mode0==='diffRefund'){ /* 尾款多退少补：退差额后视为尾款已结清 */
@@ -1798,8 +1800,8 @@ function settleProjects(batchId){
   if(batch.krTotal){
     rows += '<div><div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:6px;">赴韩项目（收预付金，尾款赴韩后支付）</div>'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>施术项目小计（术后管理含在套餐内，不另收费）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px;"><span>预付金（'+Math.round(KR_DEPOSIT_RATE*100)+'%）</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后支付）</span><span>'+formatCurrency(batch.krBalance,'KRW')+'</span></div></div>';
+      '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px;"><span>定金（诊所收，'+Math.round(KR_DEPOSIT_RATE*100)+'%）</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后在医院支付，医院收）</span><span>'+formatCurrency(batch.krBalance,'KRW')+'</span></div></div>';
   }
   if(batch.inTotal){
     rows += '<div'+(batch.krTotal?' style="border-top:1px solid var(--border2);padding-top:14px;"':'')+'><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">本地项目（收全款）</div>'+

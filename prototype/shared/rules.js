@@ -156,12 +156,12 @@ function settlementCardHtml(c, b){
     }).join('');
   }
   var amounts = [];
-  if(b.addOn) amounts.push('回诊加做（KR 新增，另开结算单）：金额 '+formatCurrency(b.krTotal,'KRW')+'，在韩国付款');
-  else if(b.noDeposit) amounts.push('更换项目（'+(b.swapOf||'')+'→）：不收定金，金额 '+formatCurrency(b.krTotal,'KRW')+' 直接计入尾款');
-  else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（合计 '+formatCurrency(b.krTotal,'KRW')+'）');
+  if(b.addOn) amounts.push('韩国加做（KR 新增，另开结算单）：金额 '+formatCurrency(b.krTotal,'KRW')+'，客人在韩国单独付款，医院收款（不进尾款应付额，算 KR 收入）');
+  else if(b.noDeposit) amounts.push('更换项目（'+(b.swapOf||'')+'→）：不收定金，金额 '+formatCurrency(b.krTotal,'KRW')+' 直接计入尾款（医院收）');
+  else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（诊所收）；尾款 '+formatCurrency(b.krBalance!==undefined ? b.krBalance : b.krTotal-b.krDeposit,'KRW')+'（赴韩后医院收）；合计 '+formatCurrency(b.krTotal,'KRW'));
   if(b.inTotal) amounts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
   var refunds = (c.refunds||[]).filter(function(r){ return (r.batchIds||[]).indexOf(b.id)>-1; }).map(function(r){
-    return '<div style="font-size:12px;color:var(--terracotta);margin-top:4px;">退款 '+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+'）</div>';
+    return '<div style="font-size:12px;color:var(--terracotta);margin-top:4px;">退款 '+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+(r.note ? '；备注：'+r.note : '')+'）</div>';
   }).join('');
   var canCancel = b.status!=='unpaid' && krNotStartedItems(c).some(function(it){ return it.batchId===b.id; }) && !c.hasArrived && !c.visitClosed;
   var actions = b.status==='unpaid'
@@ -181,7 +181,7 @@ function settlementSummaryHtml(c){
   var balTxt = !krActiveItems(c).length ? '—' : c.krBalancePaid ? '已结清' : (info.diff>=0 ? formatCurrency(info.diff,'KRW') : '应退 '+formatCurrency(-info.diff,'KRW'));
   var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
-    cell('项目合计', totalTxt)+cell('已收定金', hasKr ? formatCurrency(info.deposit,'KRW') : '—')+cell('已退金额', ref>0 ? formatCurrency(ref,'KRW') : '—')+cell('应付尾款', balTxt)+'</div>';
+    cell('项目合计', totalTxt)+cell('已收定金（诊所收）', hasKr ? formatCurrency(info.deposit,'KRW') : '—')+cell('已退金额', ref>0 ? formatCurrency(ref,'KRW') : '—')+cell('应付尾款（医院收）', balTxt)+'</div>';
 }
 
 function settlementCardsHtml(c){
@@ -237,7 +237,8 @@ function settlementBigCardHtml(c, items, removable){
       '<div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:8px;">赴韩项目</div>'+
       krItems.map(function(it){ return settlementItemRow(c, it, removable)+pcLinesHtml(c, it); }).join('')+
       '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;"><span>合计</span><span style="font-weight:700;">'+formatCurrency(krTotal,'KRW')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（'+Math.round(KR_DEPOSIT_RATE*100)+'% × 施术项目，术后管理含在套餐内，比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（诊所收；'+Math.round(KR_DEPOSIT_RATE*100)+'% × 施术项目，术后管理含在套餐内，比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--slate2);"><span>尾款（赴韩后由医院收；施术项目的其余部分）</span><span>'+formatCurrency(krTotal-krDeposit,'KRW')+'</span></div>'+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
       noteFieldHtml('备注（KR + IN 可见）','noteKR',c.noteKR)+
       '</div>';
   }

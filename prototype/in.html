@@ -422,6 +422,8 @@
     <input type="number" min="0" id="refund-amount" placeholder="请输入本次退款总额（可为 0）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
     <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
     <textarea id="refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
+    <div style="font-size:12px;font-weight:700;margin:12px 0 6px;">备注（选填）</div>
+    <textarea id="refund-note" rows="2" placeholder="例如：医院原因造成的退款，诊所与医院各承担多少（分担方式），供之后对账" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button class="btn-outline" style="flex:1;" onclick="closeRefundModal()">取消</button>
       <button class="btn-primary" style="flex:1;" onclick="confirmRefund()">确认退款</button>

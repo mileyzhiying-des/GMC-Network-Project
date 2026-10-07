@@ -391,8 +391,8 @@ ADMIN_RENDER.bizdata = function(el){
     '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('案件总数', cs.length, '按案件开始的月份统计')+tile('已结案', closed, '客人做了项目/有购买', 'var(--sage)')+tile('仅出报告', report, '只做了面诊出报告')+tile('已取消', cancelled, '未到店/取消/未购买')+tile('进行中', ongoing, '还没到终态')+'</div>'+
     aSection('面诊 → 赴韩', '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end;"><div><div style="font-size:11px;color:var(--muted);">面诊案件</div><div style="font-size:24px;font-weight:700;">'+consultCases.length+'</div></div><div><div style="font-size:11px;color:var(--muted);">其中选了赴韩项目</div><div style="font-size:24px;font-weight:700;">'+travelCases.length+'</div></div><div><div style="font-size:11px;color:var(--muted);">赴韩比例</div><div style="font-size:24px;font-weight:700;color:var(--navy);">'+ratio+'%</div></div></div>',
       '面诊案件 = 缴过面诊费、免除面诊费或已出报告的案件；赴韩比例 = 面诊案件里有赴韩项目的占比。')+
-    aSection('收入（各币种分开，不相加）', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('面诊费', fmtRp(feeSum), feeCount+' 个案件缴费（按当前面诊费 '+fmtRp(CLINIC_SETTINGS.consultFee)+' 估算）')+tile('本地项目', fmtRp(localSum), '本地项目已收款（印尼盾）')+tile('赴韩定金', formatCurrency(krDeposit,'KRW'), '已收定金，扣除已退款（韩元）')+'</div>',
-      '免除面诊费的案件不计收入；赴韩定金比例是 GMC 统一设定的演示占位值。')+
+    aSection('收入（诊所收的部分，各币种分开，不相加）', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('面诊费', fmtRp(feeSum), feeCount+' 个案件缴费（按当前面诊费 '+fmtRp(CLINIC_SETTINGS.consultFee)+' 估算）')+tile('本地项目', fmtRp(localSum), '本地项目已收款，含印尼加做的术后管理（印尼盾）')+tile('赴韩定金', formatCurrency(krDeposit,'KRW'), '诊所收的定金，扣除已退款（韩元）')+'</div>',
+      '诊所收入 = 面诊费 + 赴韩定金 + 本地项目 + 印尼加做；赴韩尾款和韩国加做由医院收，算 KR 收入，不在这里。免除面诊费的案件不计收入；赴韩定金比例是演示占位值。')+
     aSection('每位室长处理的案件数', coordNames.length ? coordNames.map(function(n){ var o = perCoord[n]; return bar(staffLabel(n), o.total, maxC, 'var(--navy)', o.total+' 件 · 已结案 '+o.closed); }).join('') : '<div style="font-size:12px;color:var(--muted);">这个月份没有案件</div>',
       '按案件 Timeline 里的操作记录统计，一个案件有多位室长操作时每人各算一件。')+
     '<div style="font-size:11px;color:var(--muted);">待讨论：具体要看哪些数字、是否要趋势图/导出（这是基础版）。</div>';
