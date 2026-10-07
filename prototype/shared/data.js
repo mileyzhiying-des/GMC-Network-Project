@@ -503,9 +503,14 @@ function clientPastRecords(cl){
     if(local.length) did.push(local.join('、'));
     if(uses.length) did.push(uses.join('、'));
     if(!did.length) did.push(c.consultRequested ? '面诊' : ''); /* 只有面诊才写"面诊" */
-    var fp = financePaid(c), fee = consultFeePaid(c) ? (CLINIC_SETTINGS.consultFee||0) : 0;
+    /* 实付金额（按币种分开）= 面诊费 + 定金 + 尾款 + 韩国加做（韩元）/ 面诊费 + 本地项目 + 印尼加做（印尼盾）；有退款显示退款后的金额并标"含退款" */
+    var fp = financePaid(c), fee = consultFeePaid(c) ? (CLINIC_SETTINGS.consultFee||0) : 0, info = krBalanceInfo(c);
+    var balance = (c.krBalancePaid && info.diff > 0) ? info.diff : 0; /* 尾款：付清后才算；定金多了退差额的情况已在退款里扣 */
+    var addOn = (c.settlementBatches||[]).filter(function(b){ return b.addOn && b.status==='active'; }).reduce(function(t, b){ return t + (b.krTotal||0); }, 0);
+    var refKRW = (c.refunds||[]).filter(function(r){ return (r.currency||'KRW')==='KRW'; }).reduce(function(t, r){ return t + (r.amount||0); }, 0), refIDR = holdingRefundSum(c) + (c.refunds||[]).filter(function(r){ return r.currency==='IDR'; }).reduce(function(t, r){ return t + (r.amount||0); }, 0);
+    var paidKRW = Math.max(0, fp.kr + balance + addOn - refKRW), paidIDR = Math.max(0, fp.inn + fee - refIDR);
     return {id:c.id, caseNo:c.caseNo, date:(travel && c.krSchedule && c.krSchedule.confirmedDate) ? c.krSchedule.confirmedDate : c.visitDate, did:did.filter(Boolean).join('；'),
-      hospital:travel ? hospitalName(caseKrHospital(c), 'ko')+(c.director ? ' '+c.director : '') : '', paidKRW:fp.kr, paidIDR:fp.inn+fee, refund:(refundSum(c)>0 || holdingRefundSum(c)>0), report:!!c.reportReady};
+      hospital:travel ? hospitalName(caseKrHospital(c), 'ko')+(c.director ? ' '+c.director : '') : '', paidKRW:paidKRW, paidIDR:paidIDR, refund:(refKRW>0 || refIDR>0), report:!!c.reportReady};
   }).sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
 }
 
