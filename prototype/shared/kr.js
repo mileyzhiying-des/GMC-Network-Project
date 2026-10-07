@@ -193,12 +193,15 @@ function krRenderDashboard(){
 /* 院长大盘：今日自己的日程、等我出报告的案件、室长刚提交的报告（近 7 天，未读加粗） */
 function krDirectorBlocks(rows){
   var me = currentAccount(), h = krHData(), today = krToday();
-  var sched = ((h.directorSchedule||{})[me.name]||[]).filter(function(s){ return s.date===today; }).sort(function(a,b){ return a.time.localeCompare(b.time); });
-  var arrivals = rows.filter(KR_CARDS[4].test);
-  var schedHtml = (sched.length ? sched.map(function(s){ return '<div class="trow" style="grid-template-columns:0.6fr 3fr;"><span><b>'+krEsc(s.time)+'</b></span><span>'+krEsc(s.title)+'</span></div>'; }).join('') : '')+
-    arrivals.map(function(r){ return '<div class="trow" onclick="krOpenCase(\''+r.clinicId+'\',\''+r.id+'\')" style="grid-template-columns:0.6fr 3fr;cursor:pointer;"><span><b>'+krEsc(r.c.krSchedule.confirmedTime||'—')+'</b></span><span>到院：'+krEsc(r.name)+'（'+krEsc(r.clinicName)+'）</span></div>'; }).join('') ||
-    '';
-  if(!sched.length && !arrivals.length) schedHtml = '<div style="padding:18px;color:var(--muted);font-size:13px;">今天没有日程</div>';
+  /* 第一块：今天的平台客人（今天到院施术、回诊的 IN 案件）；不再显示医院自己的行程 */
+  var arrivals = rows.filter(KR_CARDS[4].test).sort(function(a,b){ return (a.c.krSchedule.confirmedTime||'').localeCompare(b.c.krSchedule.confirmedTime||''); });
+  var todaySubs = []; rows.forEach(function(r){ (r.c.subItems||[]).forEach(function(s){ if(s.date===today && s.place!=='IN' && !s.done && s.kind!=='施术') todaySubs.push({r:r, s:s}); }); });
+  var schedHtml = arrivals.map(function(r){
+      var items = krActiveItems(r.c).map(function(it){ return it.name; }).join('、');
+      return '<div class="trow" onclick="krOpenCase(\''+r.clinicId+'\',\''+r.id+'\')" style="grid-template-columns:0.6fr 1.2fr 1fr 2.4fr;cursor:pointer;"><span><b>'+krEsc(r.c.krSchedule.confirmedTime||'—')+'</b></span><span>到院施术：'+krEsc(r.name)+'</span><span>'+krEsc(r.clinicName)+'</span><span style="color:var(--slate2);">'+krEsc(items||'—')+'</span></div>';
+    }).join('')+
+    todaySubs.map(function(x){ return '<div class="trow" onclick="krOpenCase(\''+x.r.clinicId+'\',\''+x.r.id+'\')" style="grid-template-columns:0.6fr 1.2fr 1fr 2.4fr;cursor:pointer;"><span style="color:var(--muted);">今天</span><span>'+krEsc(x.s.kind)+'：'+krEsc(x.r.name)+'</span><span>'+krEsc(x.r.clinicName)+'</span><span style="color:var(--slate2);">'+krEsc(x.s.content)+'</span></div>'; }).join('');
+  if(!arrivals.length && !todaySubs.length) schedHtml = '<div style="padding:18px;color:var(--muted);font-size:13px;">今天没有平台客人</div>';
   var waiting = rows.filter(function(r){ return r.c.consultStatus==='awaiting_report'; }).sort(function(a,b){ return (a.c.reportEta||'9999').localeCompare(b.c.reportEta||'9999'); });
   var waitHtml = waiting.length ? waiting.map(function(r){
     var over = reportOverdueNow(r.c);
@@ -212,7 +215,7 @@ function krDirectorBlocks(rows){
     return '<div class="trow" onclick="krReadReport(\''+r.clinicId+'\',\''+r.id+'\')" style="grid-template-columns:1.2fr 1fr 1fr 1fr;cursor:pointer;'+(unread?'font-weight:700;':'color:var(--slate2);')+'"><span>'+(unread?'● ':'')+krEsc(r.name)+'</span><span>'+krEsc(r.clinicName)+'</span><span>'+krEsc(r.c.reportDate)+'</span><span>'+krEsc(r.c.reportUploadedBy)+'</span></div>';
   }).join('') : '<div style="padding:18px;color:var(--muted);font-size:13px;">近 7 天没有新提交的报告</div>';
   var blk = function(title, body){ return '<div style="font-size:15px;font-weight:700;margin-top:6px;">'+title+'</div><div class="card" style="padding:4px 16px;">'+body+'</div>'; };
-  return blk('今日我的日程', schedHtml) + blk('等我出报告的案件（按预计时间）', waitHtml) + blk('室长刚提交的报告（近 7 天，未读加粗）', doneHtml);
+  return blk('今天的平台客人', schedHtml) + blk('等我出报告的案件（按预计时间）', waitHtml) + blk('室长刚提交的报告（近 7 天，未读加粗）', doneHtml);
 }
 function krReadReport(clinicId, id){
   var me = currentAccount(), h = krHData(); h.reportRead[me.id] = h.reportRead[me.id] || [];
