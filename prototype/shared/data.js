@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 25;
+var DEMO_DATA_VERSION = 26;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -108,6 +108,8 @@ var CLINIC_HOSPITALS = [ /* 对接关系（2026-10-07 起一家诊所只对接�
 /* HOSPITAL_DATA[hid]：{directors:[{id,name,active}], coordinators:[姓名], openDates:{院长名:[日期]}, directorSchedule:{院长名:[块]}, coordSchedule:[块], projects:[赴韩项目], libCases:[赴韩案例]}
    （初始值在 data.js 末尾的 initHospitalData() 用上面的老种子变量生成；projects / libCases 在存档时由 PROJECT_LIBRARY / LIB_CASES 的合成数组拆回来，见 store.js） */
 var HOSPITAL_DATA = {};
+var C3_STASH = null; /* 种子阶段暂存：要迁到 C3 的案件等（见 stashC3Seeds） */
+var C3_CASE_IDS = ['budi', 'dinda', 'wulan', 'lina'];
 var CURRENT_CLINIC_ID = 'C1'; /* 当前页面所属诊所；在下面 currentAccount() 定义之后由 resolveClinicId() 重新计算 */
 function clinicById(id){ return CLINICS.filter(function(c){ return c.id===id; })[0] || null; }
 function hospitalById(id){ return HOSPITALS.filter(function(h){ return h.id===id; })[0] || null; }
@@ -249,7 +251,7 @@ function krViewHospital(){ var ids = linkedHospitalIds(); return (KR_HOSPITAL &&
 function krViewDirector(){ var names = hospitalDirectorNames(krViewHospital()); return names.indexOf(KR_DIRECTOR)>-1 ? KR_DIRECTOR : (names[0] || ''); }
 
 var KR_COORD_SCHEDULE = [
-  {date:D(-1), time:'10:00', title:'이서연：整理 Budi 报告'}, {date:D(0), time:'09:30', title:'이서연：与 IN 室长对接'},
+  {date:D(-1), time:'10:00', title:'이서연：整理 Putri 报告'}, {date:D(0), time:'09:30', title:'이서연：与 IN 室长对接'},
   {date:D(0), time:'15:00', title:'박준혁：术后回访'}, {date:D(1), time:'11:00', title:'이서연：报告提交'}
 ];
 
@@ -4638,12 +4640,42 @@ function moveSeedCaseToH2(caseId, director){
   c.hospitalId = 'H2'; if(director) c.director = director;
   var rk = 'case-'+caseId; if(CHAT_DATA[rk]) CHAT_DATA[rk] = swap(CHAT_DATA[rk]);
 }
+/* 一诊所一医院（2026-10-07）：原来 C1 里对接 H2 的四个案件（Budi / Dinda / Wulan / Lina）连同客户、持有项目、对话、通知，整体迁到新诊所 C3（巴厘，对接 H2）；案件编号保持原样。
+   normalizeSeeds 先把它们从 C1 的种子里抽出来放进 C3_STASH，buildClinicSeed('C3') 时再装进 C3 的分区 */
+/* 种子里的赴韩结算单按新公式重算：定金 = 施术项目 × 比例；尾款 = 其余；术后管理不计价（含已取消的项目——原结算单当时就是按全部项目收的定金） */
+function recomputeSeedKrBatches(){
+  CASE_ITEMS.forEach(function(c){
+    (c.settlementBatches||[]).forEach(function(b){
+      if(!b.krTotal || b.noDeposit || b.addOn) return;
+      var its = (c.procedureItems||[]).filter(function(it){ return it.batchId===b.id && it.origin==='KR'; });
+      if(!its.length || !its.every(function(it){ return it.price>0; })) return;
+      var bd = computeBatchBreakdown(its); b.krTotal = bd.krTotal; b.krDeposit = bd.krDeposit; b.krBalance = bd.krBalance; b.krProvisional = 0;
+    });
+  });
+}
+function stashC3Seeds(){
+  var mine = CASE_ITEMS.filter(function(x){ return C3_CASE_IDS.indexOf(x.id)>-1; }), names = mine.map(function(c){ return c.name; });
+  /* C3 的室长是 Dian（D1）：原来案件里的 Dewi / Rina（C1 的室长）一并换掉 */
+  var swap = function(o){ var j = JSON.stringify(o).split('Dewi').join('Dian').split('Rina').join('Dian').replace(/"actorId":"A\d"/g, '"actorId":"D1"'); return JSON.parse(j); };
+  C3_STASH = {cases:mine.map(function(c){ var n = swap(c); n.clinicId = 'C3'; n.hospitalId = 'H2'; if(n.inCoordinator) n.inCoordinator = 'Dian'; return n; }),
+    clients:CLIENTS.filter(function(x){ return names.indexOf(x.name)>-1; }).map(function(x){ var n = swap(x); n.clinicId = 'C3'; return n; }), holdings:{}, chat:{}, notifs:[]};
+  names.forEach(function(n){ if(CLIENT_HOLDINGS[n]){ C3_STASH.holdings[n] = JSON.parse(JSON.stringify(CLIENT_HOLDINGS[n])); delete CLIENT_HOLDINGS[n]; } });
+  C3_CASE_IDS.forEach(function(id){ var k = 'case-'+id; if(CHAT_DATA[k]){ C3_STASH.chat[k] = swap(CHAT_DATA[k]); delete CHAT_DATA[k]; } delete ROOM_UNREAD[k]; });
+  C3_STASH.notifs = NOTIFS.filter(function(n){ return C3_CASE_IDS.indexOf(n.caseId)>-1; }).map(function(n){ return swap(n); });
+  for(var i = CASE_ITEMS.length-1; i>=0; i--){ if(C3_CASE_IDS.indexOf(CASE_ITEMS[i].id)>-1) CASE_ITEMS.splice(i,1); }
+  for(var j = CLIENTS.length-1; j>=0; j--){ if(names.indexOf(CLIENTS[j].name)>-1) CLIENTS.splice(j,1); }
+  for(var k2 = NOTIFS.length-1; k2>=0; k2--){ if(C3_CASE_IDS.indexOf(NOTIFS[k2].caseId)>-1) NOTIFS.splice(k2,1); }
+  /* C1 里提到这几个案件的对话消息去掉（引用案件已不在本诊所） */
+  Object.keys(CHAT_DATA).forEach(function(k){ CHAT_DATA[k] = (CHAT_DATA[k]||[]).filter(function(m){ return C3_CASE_IDS.indexOf(m.refCaseId)<0 && !/Budi|Dinda|Wulan Sari|Lina/.test((m.orig||'')+(m.trans||'')); }); });
+}
 function normalizeSeeds(){
   /* 分类：赴韩的标准部位归全局，本地的留在诊所里（C1 种子） */
   var inCats = {};
   Object.keys(PROJECT_CATEGORIES).forEach(function(k){ var c = PROJECT_CATEGORIES[k]; if(c.origin==='KR') KR_CATEGORIES[k] = c; else inCats[k] = c; });
   seedHospitalH2();
   [['budi','박서윤 원장'], ['dinda','최지호 원장'], ['wulan','박서윤 원장'], ['lina','박서윤 원장']].forEach(function(r){ moveSeedCaseToH2(r[0], r[1]); });
+  recomputeSeedKrBatches();
+  stashC3Seeds();
   /* 对话：原来的 Main 全员群 = C1×H1；再加 C1×H2；同事名单按对接医院重建 */
   (function(){
     var m = ROOMS.filter(function(r){ return r.id==='main'; })[0];
@@ -4665,7 +4697,7 @@ function normalizeSeeds(){
 function emptyClinicVars(cid){
   var cl = clinicById(cid), main = JSON.parse(JSON.stringify(ROOMS.filter(function(r){ return r.isMain; })[0] || {id:'main', name:'Main · 全员', isMain:true, color:'var(--slate2)', init:'G', date:'今天'}));
   return {
-    CLINIC_SETTINGS: defaultClinicSettings({name:cl.name, address:'Jl. Basuki Rahmat No. 21, Surabaya', phone:'+62 31 5550 7788', city:'泗水'}),
+    CLINIC_SETTINGS: defaultClinicSettings(cid==='C3' ? {name:cl.name, address:'Jl. Sunset Road No. 88, Kuta, Bali', phone:'+62 361 555 0123', city:'巴厘'} : {name:cl.name, address:'Jl. Basuki Rahmat No. 21, Surabaya', phone:'+62 31 5550 7788', city:'泗水'}),
     PURCHASE_REQ:null, ACCOUNT_SEQ:2, RESUMED_VISITS:[], PLACEHOLDER_HISTORY:[], PLACEHOLDER_SEQ:1, RESERVATION_PLACEHOLDERS:[],
     CLIENTS:[], CLIENT_HOLDINGS:{}, CASE_ITEMS:[], NOTIF_SEQ:0, NOTIFS:[], ROOMS:linkedHospitalIds(cid).map(function(h){ var m = JSON.parse(JSON.stringify(main)); m.id = mainRoomId(h); m.hospitalId = h; m.name = 'Main · '+hospitalName(h,'ko'); return m; }), STAFF_ROSTER:buildStaffRoster(cid), ROOM_UNREAD:{}, CHAT_DATA:linkedHospitalIds(cid).reduce(function(o, h){ o[mainRoomId(h)] = []; return o; }, {}), MUTED_ROOMS:{}, ROOM_FILE_SEQ:1,
     CAL_MEMOS:[], SMS_LOG:[], SMS_SEQ:1, LIB_PROBLEM_SEQ:LIB_PROBLEM_SEQ, LIB_PROBLEMS:JSON.parse(JSON.stringify(LIB_PROBLEMS)), LIB_PROBLEM_IDS:JSON.parse(JSON.stringify(LIB_PROBLEM_IDS)),
@@ -4675,6 +4707,19 @@ function emptyClinicVars(cid){
 }
 /* 其他诊所的演示资料（C2：泗水合作诊所，只对接 H1）：几个客户和案件 + 自己的本地项目和一个印尼案例，用来验证诊所之间完全隔开 */
 function seedClinicDemo(cid){
+  if(cid === 'C3'){ /* 巴厘诊所：原 C1 里对接 H2 的案件整体迁入 */
+    var st = C3_STASH; if(!st) return;
+    st.cases.forEach(function(c){ CASE_ITEMS.push(JSON.parse(JSON.stringify(c))); });
+    st.clients.forEach(function(x){ CLIENTS.push(JSON.parse(JSON.stringify(x))); });
+    Object.keys(st.holdings).forEach(function(n){ CLIENT_HOLDINGS[n] = JSON.parse(JSON.stringify(st.holdings[n])); });
+    Object.keys(st.chat).forEach(function(k){ CHAT_DATA[k] = JSON.parse(JSON.stringify(st.chat[k])); });
+    st.notifs.forEach(function(n){ NOTIFS.push(JSON.parse(JSON.stringify(n))); });
+    CHAT_DATA[mainRoomId('H2')] = [
+      {day:KD(0), from:'them', name:'박서윤 원장', color:'var(--slate2)', init:'박', orig:'이번 주 수술 일정이 거의 찼습니다.', trans:'本周手术排期基本满了。', time:'10:00'},
+      {day:KD(0), from:'them', name:'정하늘', color:'var(--sage)', init:'정', orig:'IN 쪽 신규 케이스 확인했습니다.', trans:'已确认 IN 这边的新案件。', time:'10:30'}
+    ];
+    return;
+  }
   if(cid !== 'C2') return;
   var cons = function(d){ return {version:'v1.0', ts:D(-d)+' 10:00', source:'客户自助预约'}; };
   var mkClient = function(name, phone, g, dob, d){ var cl = addClient({name:name, phone:phone, gender:g, dob:dob, createdBy:'客人自助', source:'客户自助预约建档', consent:cons(d)}); return cl; };
