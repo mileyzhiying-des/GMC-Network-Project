@@ -207,7 +207,30 @@ var BOOK_DICT = {
   'view.cancelled':{id:'Reservasi telah dibatalkan. SMS pembatalan dikirim (demo).', zh:'预约已取消，已发送取消短信（演示）。'},
   'view.cant':   {id:'Reservasi ini tidak dapat dibatalkan lagi.', zh:'这个预约已经不能取消了。'},
   'view.rebook': {id:'Buat reservasi baru', zh:'重新预约'},
-  'view.rebookHint':{id:'Data Anda akan terisi otomatis.', zh:'您的资料会自动带入。'}
+  'view.rebookHint':{id:'Data Anda akan terisi otomatis.', zh:'您的资料会自动带入。'},
+  /* 我的预约（2026-10-07） */
+  'me.title':   {id:'Reservasi saya', zh:'我的预约'},
+  'me.ok':      {id:'Reservasi berhasil! Kami telah mengirim SMS konfirmasi (demo).', zh:'预约成功！已发送确认短信（演示）。'},
+  'me.current': {id:'Reservasi saat ini', zh:'目前的预约'},
+  'me.noCurrent':{id:'Belum ada reservasi.', zh:'目前没有预约。'},
+  'me.new':     {id:'Buat reservasi baru', zh:'新预约'},
+  'me.hold':    {id:'Paket yang dimiliki', zh:'持有项目'},
+  'me.holdIN':  {id:'Paket di Indonesia', zh:'印尼持有项目'},
+  'me.holdKR':  {id:'Paket di Korea', zh:'韩国持有项目'},
+  'me.none':    {id:'Tidak ada', zh:'没有'},
+  'me.left':    {id:'sisa {n}x', zh:'剩余 {n} 次'},
+  'me.past':    {id:'Riwayat kunjungan', zh:'过去的记录'},
+  'me.noPast':  {id:'Belum ada riwayat kunjungan.', zh:'还没有到店记录。'},
+  'me.date':    {id:'Tanggal', zh:'日期'},
+  'me.did':     {id:'Layanan', zh:'做了什么'},
+  'me.hospital':{id:'Rumah sakit / dokter', zh:'医院 / 院长'},
+  'me.paid':    {id:'Dibayar', zh:'实付'},
+  'me.refund':  {id:'ada pengembalian dana', zh:'有退款'},
+  'me.report':  {id:'Laporan sudah keluar', zh:'已出报告'},
+  'me.reportNote':{id:'Isi laporan dapat dilihat di klinik.', zh:'报告内容请到诊所查看。'},
+  'me.relogin': {id:'Sesi berakhir (30 menit). Verifikasi nomor ponsel Anda lagi untuk melihat reservasi.', zh:'已超过 30 分钟，请重新用手机验证码登录后查看。'},
+  'me.session': {id:'Tanpa verifikasi ulang selama 30 menit.', zh:'30 分钟内不用再验证。'}
+
 };
 function bt(key, vars){
   var e = BOOK_DICT[key], s = e ? (e[BOOK_LANG] || e.zh) : key;

@@ -482,6 +482,33 @@ function submitSelfBooking(f){
 }
 
 /* ---- 客人自己取消预约（booking.html?view=）：预约时间前都可以取消，没有截止时间 ---- */
+/* ---- 客人端「我的预约」的数据（BOOK-01 第 3 节，2026-10-07）：只读，只读本诊所的数据 ---- */
+/* 目前的预约：待到店的（还没到预约时间） */
+function clientCurrentCases(cl){ return CASE_ITEMS.filter(function(c){ return c.name===cl.name && visitStateOf(c)==='待访问' && c.stage==='booked'; }).sort(function(a,b){ return (a.visitDate+a.visitTime).localeCompare(b.visitDate+b.visitTime); }); }
+/* 持有项目：剩余次数>0；分印尼 / 韩国（韩国的 = 项目属赴韩 / 分类"韩国…"）；只显示项目名称和剩余次数 */
+function clientHoldingsView(cl){
+  var out = {IN:[], KR:[]};
+  (CLIENT_HOLDINGS[cl.name]||[]).forEach(function(h){ var rem = holdingRemaining(h); if(rem<=0) return; (h.origin==='KR' || /^韩国/.test(h.category||'') ? out.KR : out.IN).push({name:h.itemName, remaining:rem}); });
+  return out;
+}
+/* 过去的记录：只列有到店的案件（不列预约取消、未到店）；日期（赴韩为施术日期）/ Case ID / 做了什么 / 医院 + 院长（赴韩才有）/ 实付金额（按付款币种，有退款标示）；面诊报告只标"已出报告"，不显示内容 */
+function clientPastRecords(cl){
+  return CASE_ITEMS.filter(function(c){ return c.name===cl.name && visitStateOf(c)==='已到访'; }).map(function(c){
+    var kr = krAllItems(c).filter(function(it){ return !it.cancelled && !it.swapped; }), travel = kr.length > 0;
+    var local = []; (c.settlementBatches||[]).forEach(function(b){ (b.inItems||[]).forEach(function(it){ if(local.indexOf(it.name)<0) local.push(it.name); }); });
+    if(c.localMgmt) (c.localMgmt.batches||[]).forEach(function(b){ (b.items||[]).forEach(function(it){ if(local.indexOf(it.name)<0) local.push(it.name); }); });
+    var uses = (c.mgmtUses||[]).concat((c.localMgmt && c.localMgmt.mgmtUses) || []).map(function(u){ return u.itemName; });
+    var did = [];
+    if(travel) did.push(kr.map(function(it){ return it.name; }).join('、'));
+    if(local.length) did.push(local.join('、'));
+    if(uses.length) did.push(uses.join('、'));
+    if(!did.length) did.push(c.consultRequested ? '面诊' : ''); /* 只有面诊才写"面诊" */
+    var fp = financePaid(c), fee = consultFeePaid(c) ? (CLINIC_SETTINGS.consultFee||0) : 0;
+    return {id:c.id, caseNo:c.caseNo, date:(travel && c.krSchedule && c.krSchedule.confirmedDate) ? c.krSchedule.confirmedDate : c.visitDate, did:did.filter(Boolean).join('；'),
+      hospital:travel ? hospitalName(caseKrHospital(c), 'ko')+(c.director ? ' '+c.director : '') : '', paidKRW:fp.kr, paidIDR:fp.inn+fee, refund:(refundSum(c)>0 || holdingRefundSum(c)>0), report:!!c.reportReady};
+  }).sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+}
+
 function customerCanCancel(c){ return c.stage==='booked' && c.subState==='waiting' && !!c.visitDate && new Date(c.visitDate+'T'+c.visitTime+':00') > demoNow(); }
 function customerCancelCase(caseId){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];

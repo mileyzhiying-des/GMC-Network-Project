@@ -43,8 +43,8 @@ function bkRender(keepScroll){
   document.documentElement.lang = BOOK_LANG;
   document.getElementById('bk-sub').textContent = bt('brand.sub');
   ['id','zh'].forEach(function(l){ document.getElementById('lang-'+l).className = BOOK_LANG===l ? 'on' : ''; });
-  if(BK.entry==='view' && typeof bkRenderView === 'function') root.innerHTML = bkRenderView();
-  else if(BK.done && typeof bkRenderDone === 'function') root.innerHTML = bkRenderDone();
+  if(BK.mode==='me' && BK.me) root.innerHTML = bkMeActive() ? bkRenderMe() : bkMeLoginHtml(); /* 预约提交后 / 验证后直接进"我的预约"；30 分钟内免验证，超过要重新手机验证 */
+  else if(BK.entry==='view' && typeof bkRenderView === 'function') root.innerHTML = bkRenderView();
   else root.innerHTML = bkRenderStep();
   if(!keepScroll) window.scrollTo(0, 0);
 }
@@ -267,7 +267,7 @@ function bkSubmit(){
   var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, firstName:f.firstName, lastName:f.lastName, gender:f.gender, dob:f.dob,
     history:f.history, beauty:f.beauty, purpose:f.purpose, note:f.note, rebookFrom:old ? old.id : null});
   if(!res.ok){ BK.err = bt('time.taken'); BK.f.time = ''; if(BK.entry!=='walkin') BK.step = 0; return bkRender(); }
-  Store.save(); BK.done = res; bkRender();
+  Store.save(); BK.done = res; bkMeStart(f.phone, res.c.id); bkRender();
 }
 
 /* ---- 第 8 步：完成页（预约时间、诊所地址；演示"已发送确认短信"，附客人端网址） ---- */
@@ -325,7 +325,7 @@ function bkViewVerify(){
   if(!o){ BK.err = bt('code.first'); return bkRender(); }
   if(Date.now() > o.exp){ BK.err = bt('code.expired'); BK.otp = null; return bkRender(); }
   if(code !== o.code){ BK.err = bt('code.bad'); return bkRender(); }
-  BK.otp = null; BK.err = ''; BK.verified = true; BK.view.stage = 'card'; bkRender();
+  BK.otp = null; BK.err = ''; BK.verified = true; BK.view.stage = 'card'; bkMeStart(BK.f.phone, null); bkRender();
 }
 function bkDoCancel(){
   var c = bkViewCase(); if(!c) return;
@@ -334,14 +334,86 @@ function bkDoCancel(){
   Store.save(); bkRender();
 }
 /* 取消后［重新预约］：回到选时间，资料带入；手机已验证所以跳过验证步骤；马上重约时 IN 端只收到一条合并的"客人改约"通知 */
-function bkRebook(){
-  var c = bkViewCase(); if(!c) return;
+function bkRebook(id){
+  var c = id ? CASE_ITEMS.filter(function(x){ return x.id===id; })[0] : bkViewCase(); if(!c) return;
   var cl = clientByName(c.name);
-  BK.entry = 'web'; BK.view = null; BK.verified = true; BK.otp = null; BK.err = ''; BK.step = 0; BK.dayPick = null; BK.done = null; BK.mismatchOk = true;
+  BK.entry = 'web'; BK.view = null; BK.mode = 'wizard'; BK.verified = true; BK.otp = null; BK.err = ''; BK.step = 0; BK.dayPick = null; BK.done = null; BK.mismatchOk = true;
   BK.f.phone = cl ? cl.phone : BK.f.phone; bkLoadClient();
   BK.f.date = ''; BK.f.time = ''; BK.f.phId = null; BK.f.purpose = c.visitPurpose || '面诊商谈'; BK.f.note = c.visitNote || ''; BK.f.c1 = false; BK.f.c2 = false; BK.f.rebookFrom = c.id;
   bkRender();
 }
+
+/* ================= 我的预约（BOOK-01 第 3 节，2026-10-07）：目前的预约 / 持有项目 / 过去的记录 ================= */
+var BK_ME_MS = 30*60000; /* 提交 / 验证后 30 分钟内免验证；超过 30 分钟或重开页面（页面状态只在内存里）要重新手机验证 */
+function bkMeStart(phone, bookedCaseId){
+  var keep = BK.me ? BK.me.cancelled : [];
+  BK.me = {at:Date.now(), phone:phone, cancelled:keep, confirm:null, msg:'', booked:bookedCaseId};
+  BK.mode = 'me'; BK.done = null; BK.view = null;
+}
+function bkMeActive(){ return !!BK.me && (Date.now() - BK.me.at) <= BK_ME_MS; }
+function bkMeClient(){ return clientByPhone(BK.me ? BK.me.phone : BK.f.phone); }
+function bkMeFrame(inner){ return '<div class="bk-card"><div class="bk-title">'+bt('me.title')+'</div>'+inner+'</div>'; }
+function bkMeMoney(r){ var p = []; if(r.paidKRW>0) p.push(formatCurrency(r.paidKRW,'KRW')); if(r.paidIDR>0) p.push(formatCurrency(r.paidIDR,'IDR')); return (p.join(' + ') || '—')+(r.refund ? ' · '+bt('me.refund') : ''); }
+function bkRenderMe(){
+  var cl = bkMeClient(), me = BK.me; if(!cl) return bkMeFrame('<div class="bk-info">'+bt('view.notfound')+'</div>');
+  var row = function(k, v){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(v)+'</span></div>'; };
+  var sec = function(t0, inner){ return '<div style="font-size:14px;font-weight:700;margin:20px 0 8px;color:var(--navy);">'+t0+'</div>'+inner; };
+  var banner = me.booked ? '<div class="bk-info" style="margin-bottom:6px;"><b>✅ '+bt('me.ok')+'</b></div>' : '';
+  /* 一、目前的预约 */
+  var cur = clientCurrentCases(cl), canc = me.cancelled.map(function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; }).filter(Boolean);
+  var caseCard = function(c, cancelled){
+    var inner = row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+row('sum.purpose', bt('purpose.'+(c.visitPurpose||'面诊商谈')))+row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone);
+    if(cancelled) return '<div class="bk-info" style="margin-bottom:10px;opacity:.85;"><div style="font-weight:700;color:var(--muted);margin-bottom:4px;">● '+bt('view.status.cancelled')+'</div>'+inner+'<button class="bk-btn" style="margin-top:10px;" onclick="bkRebook(\''+c.id+'\')">'+bt('view.rebook')+'</button></div>';
+    var btn = me.confirm===c.id
+      ? '<div class="bk-info" style="margin-top:10px;font-size:14px;color:var(--navy);"><b>'+bt('view.cancelQ')+'</b><br><span style="font-size:12px;">'+bt('view.cancelT')+'</span></div><button class="bk-btn danger" onclick="bkMeCancel(\''+c.id+'\')">'+bt('view.cancelYes')+'</button><button class="bk-btn ghost" onclick="BK.me.confirm=null;bkRender(true)">'+bt('view.cancelNo')+'</button>'
+      : (customerCanCancel(c) ? '<button class="bk-btn danger" style="margin-top:10px;" onclick="BK.me.confirm=\''+c.id+'\';bkRender(true)">'+bt('view.cancel')+'</button>' : '<div class="bk-sub" style="margin-top:8px;">'+bt('view.cant')+'</div>');
+    return '<div class="bk-info" style="margin-bottom:10px;"><div style="font-weight:700;color:#8A7650;margin-bottom:4px;">● '+bt('view.status.waiting')+'</div>'+inner+btn+'</div>';
+  };
+  var curHtml = cur.map(function(c){ return caseCard(c, false); }).join('')+canc.filter(function(c){ return cur.indexOf(c)<0; }).map(function(c){ return caseCard(c, true); }).join('');
+  if(!curHtml) curHtml = '<div class="bk-info">'+bt('me.noCurrent')+'</div><button class="bk-btn" style="margin-top:8px;" onclick="bkNewBooking()">'+bt('me.new')+'</button>';
+  /* 二、持有项目 */
+  var hv = clientHoldingsView(cl), hl = function(list){ return list.length ? list.map(function(x){ return '<div class="bk-row"><span>'+bkH(x.name)+'</span><span>'+bt('me.left', {n:x.remaining})+'</span></div>'; }).join('') : '<div class="bk-sub">'+bt('me.none')+'</div>'; };
+  var holdHtml = '<div style="font-size:12px;font-weight:700;margin:4px 0;">'+bt('me.holdIN')+'</div>'+hl(hv.IN)+'<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">'+bt('me.holdKR')+'</div>'+hl(hv.KR);
+  /* 三、过去的记录（只列有到店的案件；报告只写"已出报告"） */
+  var past = clientPastRecords(cl);
+  var pastHtml = past.length ? past.map(function(r){
+    return '<div class="bk-info" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;gap:8px;"><b>'+bkH(r.date)+'</b><span>'+bkH(r.caseNo)+'</span></div>'+
+      '<div style="margin-top:4px;">'+bkH(r.did || '—')+(r.report ? ' <span style="font-size:11px;background:var(--sage-bg);color:var(--sage);border-radius:10px;padding:1px 8px;">'+bt('me.report')+'</span>' : '')+'</div>'+
+      (r.hospital ? '<div style="font-size:12px;color:var(--slate2);margin-top:3px;">'+bt('me.hospital')+'：'+bkH(r.hospital)+'</div>' : '')+
+      '<div style="font-size:12px;color:var(--slate2);margin-top:3px;">'+bt('me.paid')+'：'+bkH(bkMeMoney(r))+'</div></div>';
+  }).join('')+(past.some(function(r){ return r.report; }) ? '<div class="bk-sub">'+bt('me.reportNote')+'</div>' : '') : '<div class="bk-sub">'+bt('me.noPast')+'</div>';
+  return bkMeFrame(banner+(me.msg ? '<div class="bk-info" style="margin-bottom:6px;">'+bkH(me.msg)+'</div>' : '')+sec(bt('me.current'), curHtml)+sec(bt('me.hold'), holdHtml)+sec(bt('me.past'), pastHtml)+'<div class="bk-sub" style="margin-top:14px;">'+bt('me.session')+'</div>');
+}
+function bkMeCancel(id){
+  var r = customerCancelCase(id); BK.me.confirm = null;
+  if(r.ok){ if(BK.me.cancelled.indexOf(id)<0) BK.me.cancelled.push(id); BK.me.msg = bt('view.cancelled'); } else BK.me.msg = bt('view.cant');
+  BK.me.booked = null; Store.save(); bkRender(true);
+}
+/* 没有预约时［新预约］：回到选时间，资料带入（手机已验证，跳过验证步骤） */
+function bkNewBooking(){
+  var cl = bkMeClient();
+  BK.mode = 'wizard'; BK.entry = 'web'; BK.view = null; BK.verified = true; BK.otp = null; BK.err = ''; BK.step = 0; BK.dayPick = null; BK.done = null; BK.mismatchOk = true;
+  BK.f.phone = cl ? cl.phone : BK.f.phone; bkLoadClient(); BK.f.date = ''; BK.f.time = ''; BK.f.phId = null; BK.f.purpose = '面诊商谈'; BK.f.note = ''; BK.f.c1 = false; BK.f.c2 = false; BK.f.rebookFrom = null; BK.f.beauty = [];
+  bkRender();
+}
+/* 超过 30 分钟：重新用手机验证码登录（手机号固定为这位客人的） */
+function bkMeLoginHtml(){
+  var o = BK.otp, ph = BK.me ? BK.me.phone : BK.f.phone;
+  var body = '<div class="bk-info">'+bt('me.relogin')+'</div>'+bkField(bt('phone.label'), phoneInputHtml('bk-phone', ph, {readonly:true}));
+  if(!o) body += (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+'<button class="bk-btn" onclick="bkMeSend()">'+bt('phone.send')+'</button>';
+  else body += '<div class="bk-demo">'+bt('phone.demo', {phone:bkH(ph), code:o.code})+'</div>'+bkField(bt('phone.code'), '<input type="text" id="bk-code" inputmode="numeric" maxlength="6" onkeydown="if(event.key===\'Enter\')bkMeVerify()">')+
+    (BK.err ? '<div class="bk-err">'+bkH(BK.err)+'</div>' : '')+'<button class="bk-btn" onclick="bkMeVerify()">'+bt('phone.verify')+'</button><button class="bk-btn ghost" onclick="bkMeSend(true)">'+bt('phone.resend')+'</button>';
+  return bkMeFrame(body);
+}
+function bkMeSend(){ var ph = BK.me.phone; BK.err = ''; BK.otp = {code:String(100000+Math.floor(Math.random()*900000)), exp:Date.now()+5*60000}; sendSms('code', ph, {code:BK.otp.code}, null); Store.save(); bkRender(); }
+function bkMeVerify(){
+  var code = ((document.getElementById('bk-code')||{}).value||'').trim(), o = BK.otp;
+  if(!o){ BK.err = bt('code.first'); return bkRender(); }
+  if(Date.now() > o.exp){ BK.err = bt('code.expired'); BK.otp = null; return bkRender(); }
+  if(code !== o.code){ BK.err = bt('code.bad'); return bkRender(); }
+  BK.otp = null; BK.err = ''; BK.me.at = Date.now(); bkRender();
+}
+setInterval(function(){ if(BK && BK.mode==='me' && BK.me && !bkMeActive() && !BK.otp && !document.getElementById('bk-code')) bkRender(true); }, 20000); /* 超过 30 分钟自动回到手机验证 */
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bkInit); else bkInit();
 /* 别的标签页（IN 端）改了数据 → 本页重新读档并重画（例如时段被约满） */
