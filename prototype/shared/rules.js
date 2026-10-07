@@ -405,7 +405,6 @@ var ADMIN_PAGES = [
   {key:'smslog',   label:'短信发送记录', icon:'短', perm:'smslog'}, /* 演示短信集中在这里，老板/管理者在诊所设定旁边看到 */
   {key:'oplog',    label:'操作日志', icon:'志', perm:'oplog'},
   /* KR 医院端的管理类页面（2026-10-06，KR 端系列 5/5）：只有 KR 账号有这些权限，IN 账号 canDo 为 false 不会出现 */
-  {key:'krschedule', label:'日程管理', icon:'日', perm:'krsched'},
   {key:'krdoctors',  label:'院长管理', icon:'院', perm:'krdoctors'},
   {key:'krsrvc',     label:'项目库', icon:'项', perm:'krlib'},
   {key:'krshow',     label:'案例库', icon:'案', perm:'krlib'},
