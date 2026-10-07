@@ -16,6 +16,17 @@
 .otp-demo b{font-size:16px;letter-spacing:3px;}
 .ok-text{color:var(--sage);font-size:12px;margin-bottom:10px;}
 .demo-box{width:380px;max-width:100%;font-size:11px;color:var(--slate2);line-height:1.8;}
+.demo-box{width:420px;}
+.demo-tabs{display:flex;gap:6px;margin-bottom:10px;}
+.demo-tabs span{flex:1;text-align:center;padding:8px 6px;border:1px solid var(--border);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;background:#fff;}
+.demo-tabs span.on{background:var(--navy,#1E2A44);color:#fff;border-color:var(--navy,#1E2A44);}
+.demo-box details{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:8px;}
+.demo-box summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--slate);}
+.demo-box .grp{margin:8px 0 2px;font-size:11px;color:var(--muted);}
+.demo-box .acct{display:inline-flex;align-items:center;gap:4px;margin:3px 6px 3px 0;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#F4F6F9);font-size:12px;cursor:pointer;}
+.demo-box .acct:hover{border-color:var(--navy,#1E2A44);}
+.demo-box .acct b{font-size:11px;}
+.demo-box .note{font-size:11px;color:var(--muted);margin:4px 0;line-height:1.6;}
 .demo-box code{background:var(--border2);padding:1px 5px;border-radius:4px;}
 </style>
 </head>
@@ -24,21 +35,10 @@
 <section class="page active" id="main" style="display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:36px 16px;gap:18px;background:var(--bg,#F4F6F9);">
   <div><span class="logo">GMC Network</span><span class="logo-sub">跨境医美协作平台</span></div>
   <div class="login-card" id="login-card"></div>
-  <div class="demo-box" style="text-align:center;">
-    <a href="/booking.html" target="_blank" rel="noopener" style="display:inline-block;background:#2F6FEB;color:#fff;font-size:14px;font-weight:700;padding:12px 22px;border-radius:12px;text-decoration:none;box-shadow:0 4px 14px rgba(47,111,235,.35);">📱 打开客户预约页</a>
-    <div style="margin-top:6px;color:var(--muted);">客户端页面，不用登录；在新分页打开，方便同时对照 IN 端</div>
-    <div style="margin-top:8px;text-align:left;background:#EAF1FF;border-radius:10px;padding:10px 12px;color:#27447A;">
-      <b>老客人测试：</b>Siti Rahayu <code>000-0000-0001</code>（已签最新版同意书）、Ayu Lestari <code>000-0000-0002</code>（签的是旧版同意书，会要求重新勾选）；<br>
-      <b>新客人测试：</b>任意输入一个没登记过的号码（国码默认 +62）
-    </div>
-  </div>
-  <div class="demo-box">
-    <b>演示账号</b>（密码 = 账号编号小写 + <code>123</code>）：<code>OWN</code> 老板 · <code>A1</code> Dewi 管理者 · <code>A2</code> Rina 一般室长 · <code>A5</code> Putri 管理者（加购）<br>
-    <b>诊所 C3（巴厘，对接医院 H2）</b>：<code>D1</code> Dian 管理者（<code>d1123</code>）；<br>
-    <b>诊所 C2（泗水，对接医院 H1）</b>：<code>B1</code> Citra 管理者（<code>b1123</code>）· <code>B2</code> Bagas 一般室长（<code>b2123</code>）——看不到 C1 的任何资料；C1 = OWN / A1 / A2 / A3 / A4 / A5。<br>
-    <b>KR 医院端</b>（登录后进 kr.html；代表院长进 owner.html）：<b>H1 서울 소수</b>：<code>KO1</code> 박소현 代表院长（<code>ko1123</code>）· <code>KM1</code> 이서연 管理者（<code>km1123</code>）· <code>KC1</code> 박준혁 室长（<code>kc1123</code>）· <code>KD1</code> 김민석 院长（<code>kd1123</code>）；<b>H2 강남</b>：<code>KM2</code> 정하늘 管理者（<code>km2123</code>）· <code>KC2</code> 최민준 室长（<code>kc2123</code>）<br>
-    <code>A3</code> 一般室长（加购）尚未激活：点"首次激活"，手机号 <code>+62 811-0000-0004</code>，验证码会显示在屏幕上；<code>A4</code> 已停用。<br>
-    <a href="#" onclick="if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。')) resetDemoData(); return false;">重置演示数据</a>
+  <div class="demo-box" id="demo-box">
+    <div class="demo-tabs" id="demo-tabs"></div>
+    <div id="demo-body"></div>
+    <div style="margin-top:14px;text-align:center;"><a href="#" onclick="if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。')) resetDemoData(); return false;">重置演示数据</a></div>
   </div>
 </section>
 </div>
@@ -195,6 +195,46 @@ function forgot3(){
   viewLogin('', '密码已重设，请用新密码登录');
 }
 viewLogin(new URLSearchParams(location.search).get('switch') ? '' : '', new URLSearchParams(location.search).get('switch') ? '已退出当前账号，请登录另一个账号' : '');
+
+/* ---- 演示账号区（三个 tab；每个账号一个按钮，点一下直接登录，不用输入账号密码；正式版不会有） ---- */
+var DEMO_TAB = 'in';
+function acctBtn(id, label, extra){ return '<span class="acct" onclick="quickLogin(\''+id+'\')"><b>'+id+'</b> '+label+(extra||'')+'</span>'; }
+function renderDemo(){
+  var tabs = [['in','🇮🇩 印尼诊所'],['kr','🇰🇷 韩国医院'],['guest','👤 客人']];
+  $('demo-tabs').innerHTML = tabs.map(function(t){ return '<span class="'+(DEMO_TAB===t[0]?'on':'')+'" onclick="DEMO_TAB=\''+t[0]+'\';renderDemo()">'+t[1]+'</span>'; }).join('');
+  var h = '';
+  if(DEMO_TAB==='in'){
+    h += '<details open><summary>C1 GMC 合作诊所（雅加达，对接 H1）</summary>'+
+      '<div class="grp">所有人</div>'+acctBtn('OWN','老板')+
+      '<div class="grp">管理者</div>'+acctBtn('A1','Dewi')+acctBtn('A5','Putri（加购）')+
+      '<div class="grp">一般室长</div>'+acctBtn('A2','Rina')+
+      '<div class="grp">账号状态测试</div>'+acctBtn('A3','尚未激活')+acctBtn('A4','已停用')+
+      '<div class="note">A3：直接进入首次激活（手机 +62 811-0000-0004，验证码显示在画面上）；A4：点了会显示停用提示。</div></details>'+
+      '<details><summary>C2 泗水合作诊所（对接 H1）</summary><div class="grp">管理者</div>'+acctBtn('B1','Citra')+'<div class="grp">一般室长</div>'+acctBtn('B2','Bagas')+
+      '<div class="note">用途：测试诊所之间资料隔离、KR 端来源诊所筛选。</div></details>'+
+      '<details><summary>C3 巴厘合作诊所（对接 H2）</summary><div class="grp">管理者</div>'+acctBtn('D1','Dian')+'</details>';
+  } else if(DEMO_TAB==='kr'){
+    h += '<details open><summary>H1 서울 소수 성형외과（对接 C1、C2）</summary>'+
+      '<div class="grp">代表院长</div>'+acctBtn('KO1','박소현')+'<div class="grp">院长</div>'+acctBtn('KD1','김민석')+
+      '<div class="grp">管理者</div>'+acctBtn('KM1','이서연')+'<div class="grp">室长</div>'+acctBtn('KC1','박준혁')+'</details>'+
+      '<details><summary>H2 강남 뷰티의원（对接 C3）</summary><div class="grp">管理者</div>'+acctBtn('KM2','정하늘')+'<div class="grp">室长</div>'+acctBtn('KC2','최민준')+
+      '<div class="note">用途：测试医院之间资料隔离。</div></details>';
+  } else {
+    h += '<div style="text-align:center;margin-bottom:10px;"><a href="/booking.html" target="_blank" rel="noopener" style="display:inline-block;background:#2F6FEB;color:#fff;font-size:14px;font-weight:700;padding:12px 22px;border-radius:12px;text-decoration:none;">📱 打开客户预约页</a>'+
+      '<div class="note">客户端页面，不用登录；在新分页打开，方便同时对照 IN 端</div></div>'+
+      '<div style="background:#EAF1FF;border-radius:10px;padding:10px 12px;color:#27447A;line-height:1.9;">'+
+      '<b>老客人：</b><br>Siti Rahayu <code>000-0000-0001</code>（已签最新版同意书）<br>Ayu Lestari <code>000-0000-0002</code>（旧版同意书，会要求重新勾选）<br>'+
+      '<b>新客人：</b>输入任意未登记的号码（国码默认 +62）</div>';
+  }
+  $('demo-body').innerHTML = h;
+}
+function quickLogin(id){
+  var a = findAcct(id); if(!a) return;
+  if(a.status==='pending'){ sendOtp(a); FLOW = {id:a.id, phone:''}; window.scrollTo(0,0); return viewActivate2(); }
+  if(a.status==='disabled'){ window.scrollTo(0,0); return viewLogin('账号 '+a.id+' 已停用，请联系老板'); }
+  enterApp(a);
+}
+renderDemo();
 /* 其他标签页重置演示数据后，本页的账号数据也要刷新 */
 function resetDemoData(){
   try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
