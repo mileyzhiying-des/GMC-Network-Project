@@ -417,4 +417,4 @@ setInterval(function(){ if(BK && BK.mode==='me' && BK.me && !bkMeActive() && !BK
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bkInit); else bkInit();
 /* 别的标签页（IN 端）改了数据 → 本页重新读档并重画（例如时段被约满） */
-window.addEventListener('storage', function(){ setTimeout(function(){ if(BK && !BK.done && BK.entry!=='view' && BK_STEPS[BK.step]==='time') bkRender(); }, 80); /* 只在选时间那一步刷新（时段可能被约满），其他步骤不打断填写 */ });
+window.addEventListener('storage', function(){ setTimeout(function(){ var typing = document.activeElement && /^(input|textarea|select)$/i.test(document.activeElement.tagName); if(BK && BK.mode==='me' && BK.me && bkMeActive() && !typing && !document.getElementById('bk-code')){ bkRender(true); return; } /* 我的预约：IN 端改了案件状态/取消，客人端同步 */ if(BK && !BK.done && BK.entry!=='view' && BK_STEPS[BK.step]==='time') bkRender(); }, 80); /* 只在选时间那一步刷新（时段可能被约满），其他步骤不打断填写 */ });

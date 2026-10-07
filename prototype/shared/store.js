@@ -200,6 +200,35 @@ var Store = (function(){
     return out;
   }
 
+  /* 联动刷新的"不打断"规则（2026-10-07）：别的标签页写入后，数据立即重读，但画面重画要等——① 有弹窗打开（.modal-overlay.open / 预览抽屉）；② 正在输入（聚焦在输入框/文本框/下拉里，聊天输入框除外，因为聊天要实时收消息）。
+     等到弹窗关了、输入框失焦再重画；重画前后保留滚动位置（窗口、.content、周视图、聊天窗口）。当前所在页面/案件/tab 不变（重画只刷新当前页面）。 */
+  var SCROLL_SEL = '.content, .wk-scroll, .float-body, .drawer-list';
+  function refreshBusy(){
+    if(document.querySelector('.modal-overlay.open, .peek-overlay.open')) return true;
+    var el = document.activeElement; if(!el || el===document.body) return false;
+    var tag = (el.tagName||'').toLowerCase(), editable = tag==='input' || tag==='textarea' || tag==='select' || el.isContentEditable;
+    if(!editable) return false;
+    if(el.type==='checkbox' || el.type==='radio' || el.type==='button' || el.type==='file') return false;
+    if(el.id==='float-input-box' || el.id==='kr-chat-in' || (el.closest && el.closest('#chat-float-overlay, #chat-drawer, #kr-chat'))) return false;
+    return true;
+  }
+  function scrollSnap(){ var arr = []; Array.prototype.forEach.call(document.querySelectorAll(SCROLL_SEL), function(e, i){ arr.push([i, e.scrollTop]); }); return {y:window.scrollY, els:arr}; }
+  function scrollBack(sn){ try{ var all = document.querySelectorAll(SCROLL_SEL); sn.els.forEach(function(p){ if(all[p[0]]) all[p[0]].scrollTop = p[1]; }); window.scrollTo(0, sn.y); }catch(e){} }
+  var pendingRefresh = null, pendingTimer = null;
+  function safeRefresh(fn){
+    if(refreshBusy()){
+      pendingRefresh = fn; /* 数据已读进来，画面等一等；只记最新一次 */
+      if(!pendingTimer) pendingTimer = setInterval(function(){ if(refreshBusy()) return; clearInterval(pendingTimer); pendingTimer = null; var f = pendingRefresh; pendingRefresh = null; if(f) safeRefresh(f); }, 500);
+      return;
+    }
+    var sn = scrollSnap(); try{ fn(); }catch(e){ console.error('[联动刷新]', e); } scrollBack(sn);
+  }
+
+  /* 后台标签页的定时器会被浏览器降速：弹窗关闭 / 输入框失焦 / 切回本标签页时也立即补一次延后的重画 */
+  function flushPending(){ if(!pendingRefresh || refreshBusy()) return; if(pendingTimer){ clearInterval(pendingTimer); pendingTimer = null; } var f = pendingRefresh; pendingRefresh = null; safeRefresh(f); }
+  ['click', 'focusout', 'keyup', 'visibilitychange'].forEach(function(t){ document.addEventListener(t, function(){ setTimeout(flushPending, 60); }, true); });
+  window.addEventListener('focus', function(){ setTimeout(flushPending, 60); });
+
   /* 其他标签页存了新数据：只重读和自己相关的部分 + 重画 */
   window.addEventListener('storage', function(e){
     if(e.key === null || e.key === 'gmc_demo_ver'){ location.reload(); return; } /* 别的标签页重置了演示数据 → 本页也刷新 */
@@ -212,12 +241,12 @@ var Store = (function(){
         }
         afterLoad();
         if(window.GUARD_ROLES && !guardPage(window.GUARD_ROLES)) return; /* 本账号被停用/重置：回登录页 */
-        if(typeof refreshView === 'function') refreshView();
+        if(typeof refreshView === 'function') safeRefresh(refreshView);
       }
     } else if(!cid && e.key && e.key.indexOf('gmc_clinic_')===0 && e.newValue){ /* KR 页面没有自己的诊所：任何对接诊所的分区变了都要重画 */
-      if(typeof krRefreshAll === 'function') krRefreshAll();
+      if(typeof krRefreshAll === 'function') safeRefresh(krRefreshAll);
     } else if(cid && e.key === keyC(cid) && e.newValue){
-      if(loadClinic(cid)){ afterLoad(); if(typeof refreshView === 'function') refreshView(); }
+      if(loadClinic(cid)){ afterLoad(); if(typeof refreshView === 'function') safeRefresh(refreshView); }
     }
   });
   /* 操作之后（点击、输入、选择、键盘）稍后存档；另外每 2 秒兜底一次；页面离开/隐藏时再存一次 */
