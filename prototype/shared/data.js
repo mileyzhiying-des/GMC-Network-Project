@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 22;
+var DEMO_DATA_VERSION = 23;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -1840,6 +1840,26 @@ function hospitalDirectorSelectHtml(c, onHospital, onDirector, selStyle){
   return {hosp:hospSel, dir:dirSel, hid:hid, hl:hl, lk:lk};
 }
 
+/* IN 选院长的介绍卡（KR-DOC-01 第 2 节）：照片 + 姓名 + 职称 + 经历 + 认证 + 擅长项目；全部院长都列出（停用的不列），擅长客人意向项目的排前面并标示 */
+function docIntentMatch(hid, dr, c){
+  var h = HOSPITAL_DATA[hid] || {projects:[]}, catOf = function(n){ var p = (h.projects||[]).filter(function(x){ return x.name===n; })[0]; var cc = p && (PROJECT_CATEGORIES[p.categoryId] || KR_CATEGORIES[p.categoryId]); return cc ? cc.label : ''; };
+  var intents = (c.intentionProjects||[]).map(function(it){ var p = projById(it.projectId); var cc = p && PROJECT_CATEGORIES[p.categoryId]; return {name:it.name, cat:cc ? cc.label : ''}; });
+  return (dr.specialties||[]).filter(function(sn){ return intents.some(function(it){ return it.name===sn || (it.cat && catOf(sn)===it.cat); }); });
+}
+function directorCardHtml(dr, hid, c, pickable, selected){
+  var ph = dr.photo ? '<img src="'+dr.photo+'" style="width:54px;height:54px;border-radius:50%;object-fit:cover;">' : '<span style="width:54px;height:54px;border-radius:50%;background:'+(dr.color||'#ddd')+';display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;">'+dr.name.charAt(0)+'</span>';
+  var m = docIntentMatch(hid, dr, c), li = function(arr){ return (arr||[]).map(function(x){ return '<div>'+(x.when?x.when+'：':'')+(x.zh||x.ko)+'</div>'; }).join(''); };
+  return '<div '+(pickable?'onclick="setCaseDirector(\''+dr.name+'\')" ':'')+'style="display:flex;gap:12px;padding:12px;border:1px solid '+(selected?'var(--terracotta)':'var(--border)')+';border-radius:10px;background:'+(selected?'var(--terracotta-bg)':'#fff')+';'+(pickable?'cursor:pointer;':'')+'margin-top:8px;">'+ph+
+    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;">'+dr.name+' <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(m.length?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人意向项目</span>':'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
+    (dr.career&&dr.career.length ? '<div style="color:var(--slate2);margin-top:3px;">'+li(dr.career)+'</div>' : '')+(dr.certs&&dr.certs.length ? '<div style="color:var(--slate2);margin-top:3px;"><b>认证</b> '+dr.certs.map(function(x){ return x.zh||x.ko; }).join('；')+'</div>' : '')+
+    (dr.specialties&&dr.specialties.length ? '<div style="margin-top:4px;"><b>擅长</b> '+dr.specialties.map(function(sn){ return '<span class="chip'+(m.indexOf(sn)>-1?' active':'')+'" style="cursor:inherit;">'+sn+'</span>'; }).join('')+'</div>' : '')+'</div></div>';
+}
+function directorCardsHtml(c){
+  var hid = caseHospitalId(c); if(!hid) return '';
+  var lk = directorLockInfo(c), list = hospitalDirectors(hid).filter(function(x){ return x.active; });
+  list = list.map(function(dr, i){ return {dr:dr, m:docIntentMatch(hid, dr, c).length, i:i}; }).sort(function(a,b){ return (b.m>0)-(a.m>0) || a.i-b.i; });
+  return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">院长介绍'+(lk?'（已锁定原院长）':'（点卡片选择；擅长客人意向项目的排前面）')+'</div>'+list.map(function(x){ return directorCardHtml(x.dr, hid, c, !lk, c.director===x.dr.name); }).join('')+'</div>';
+}
 function directorRowHtml(c){
   if(c.needsConsult!==true) return '';
   var o = hospitalDirectorSelectHtml(c, 'setCaseHospital', 'setCaseDirector', 'padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;');
@@ -1847,7 +1867,7 @@ function directorRowHtml(c){
   var hint = (hl ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">🔒 关联"'+hl.reason+'"（'+hl.caseNo+'）：医院已锁定为原案件的医院'+(lk ? '，院长已锁定原院长；原院长停用时才可改选' : '')+'</div>' : '')+
     ((!lk && c.linkedCase && c.linkedCase.caseId && (c.linkedCase.reason==='复诊'||c.linkedCase.reason==='延续既往面诊')) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">原案件的院长已停用，请在原医院里重新选择院长</div>' : '')+
     ((!hl && !lk) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">先选医院（只列出本诊所对接的医院），再选该医院的院长；确认基础资料后不能更换</div>' : '');
-  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">医院 / 院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+o.hosp+o.dir+'</div>'+hint+'</div></div>';
+  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">医院 / 院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+o.hosp+o.dir+'</div>'+hint+directorCardsHtml(c)+'</div></div>';
 }
 
 function setNeedsConsult(val){
@@ -4461,6 +4481,31 @@ SEEDING = false;
 })();
 initHospitalData();
 normalizeSeeds();
+/* 院长资料（KR-DOC-01 介绍卡）：名单 ≠ 账号。字段：nameEn / nameZh / title（代表院长|院长）/ photo / color / career[{when:现|前, ko, zh, id}] / certs[] / societies[]（{ko, zh, id}）/ specialties[项目名，选自本医院项目库]
+   韩文填写，演示翻译成印尼文 / 中文，可修改（demoTranslate，不是真实翻译） */
+function trItem(ko){ return {ko:ko, zh:demoTranslate(ko,'ko','zh'), id:demoTranslate(ko,'ko','id')}; }
+function seedDoctorProfiles(){
+  var P = {
+    '김민석 원장':{nameEn:'Kim Min-seok', nameZh:'金旼锡', title:'院长', color:'#C9B8A3', career:[['现','서울 소수 성형외과 원장'],['前','강남 ID 병원 원장']], certs:['Ulthera 공식 인증의'], societies:['대한성형외과학회 정회원'], specialties:['假体隆鼻','鼻翼缩小','鼻综合（假体+鼻尖）']},
+    '이수진 원장':{nameEn:'Lee Su-jin', nameZh:'李秀珍', title:'院长', color:'#B8C9BD', career:[['现','서울 소수 성형외과 원장'],['前','서울대병원 성형외과 전임의']], certs:['대한안성형학회 인증의'], societies:['대한안성형학회 회원'], specialties:['切开双眼皮','埋线双眼皮','双眼皮修复']},
+    '박지훈 원장':{nameEn:'Park Ji-hoon', nameZh:'朴智勋', title:'院长', color:'#C4C4C4', career:[['前','서울 소수 성형외과 원장（퇴직）']], certs:[], societies:[], specialties:['颧骨缩小']},
+    '박소현 원장':{nameEn:'Park So-hyun', nameZh:'朴昭炫', title:'代表院长', color:'#D3B8B8', career:[['现','서울 소수 성형외과 대표원장'],['前','압구정 소수 클리닉 원장']], certs:['Alma Accent Prime Key Doctor'], societies:['한국미용성형레이저의학회 회원'], specialties:['自体脂肪移植（全脸）','面部拉皮']},
+    '박서윤 원장':{nameEn:'Park Seo-yoon', nameZh:'朴瑞润', title:'院长', color:'#B9C3D6', career:[['现','강남 뷰티의원 원장']], certs:['대한성형외과학회 전문의'], societies:['대한성형외과학회 정회원'], specialties:['切开双眼皮','假体隆鼻','鼻综合（假体+鼻尖）']},
+    '최지호 원장':{nameEn:'Choi Ji-ho', nameZh:'崔智浩', title:'院长', color:'#D6CDB9', career:[['现','강남 뷰티의원 원장']], certs:[], societies:[], specialties:['颧骨缩小','下颌角整形']},
+    '한도윤 원장':{nameEn:'Han Do-yoon', nameZh:'韩道允', title:'院长', color:'#C4C4C4', career:[['前','강남 뷰티의원 원장（퇴직）']], certs:[], societies:[], specialties:[]}
+  };
+  Object.keys(HOSPITAL_DATA).forEach(function(hid){
+    var h = HOSPITAL_DATA[hid];
+    if(hid==='H1' && !h.directors.some(function(x){ return x.name==='박소현 원장'; })){ h.directors.push({id:'H1-D4', name:'박소현 원장', active:true}); h.openDates['박소현 원장'] = []; } /* 代表院长也在名单里（她的老板账号只管营运，两个身份分开） */
+    h.directors.forEach(function(dr){
+      var p = P[dr.name]; if(!p || dr.nameEn) return;
+      dr.nameEn = p.nameEn; dr.nameZh = p.nameZh; dr.title = p.title; dr.color = p.color; dr.photo = '';
+      dr.career = p.career.map(function(c0){ var t0 = trItem(c0[1]); t0.when = c0[0]; return t0; });
+      dr.certs = p.certs.map(trItem); dr.societies = p.societies.map(trItem); dr.specialties = p.specialties.slice();
+    });
+  });
+}
+seedDoctorProfiles();
 Object.keys(HOSPITAL_DATA).forEach(normSchedBlocks);
 CASE_ITEMS.forEach(function(c){ if(c.krSchedule && c.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(c.krSchedule.status)>-1 && c.director) syncSurgeryBlock(c); }); /* 演示数据里已确认施术时间的案件，院长日程里也有施术块 */
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */
