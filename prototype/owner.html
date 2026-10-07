@@ -11,7 +11,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
 </script>
 </head>
 <body>
-<script>try{ if(!sessionStorage.getItem("gmc_acct")) location.replace("/login.html"); }catch(e){}</script>
+<script>try{ if(!sessionStorage.getItem("gmc_acct") && !/[?&]demo=/.test(location.search)) location.replace("/login.html"); }catch(e){}</script>
 <div id="app">
 <!-- 老板端（2026-10-06·A4）：没有工作台、案件、客户、对话；只有经营数据、账号管理、诊所设定、操作日志、个人设定（头像菜单）。内容由 ADMIN_RENDER 填入 -->
 <section class="page in-shell active" id="in-admin" data-page="admin" style="display:flex;">

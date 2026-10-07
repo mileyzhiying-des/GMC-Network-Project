@@ -11,7 +11,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
 </script>
 </head>
 <body>
-<script>try{ if(!sessionStorage.getItem("gmc_acct")) location.replace("/login.html"); }catch(e){}</script>
+<script>try{ if(!sessionStorage.getItem("gmc_acct") && !/[?&]demo=/.test(location.search)) location.replace("/login.html"); }catch(e){}</script>
 <div id="app">
 
 <!-- KR 医院端（2026-10-06，KR 端系列 2/5）：大盘、案件列表、案件详情骨架、通知中心；管理类页面（医院设定、账号管理…）共用 #in-admin 壳 -->

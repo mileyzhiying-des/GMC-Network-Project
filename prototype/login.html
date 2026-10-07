@@ -23,6 +23,7 @@
 .demo-box details{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:8px;}
 .demo-box summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--slate);}
 .demo-box .grp{margin:8px 0 2px;font-size:11px;color:var(--muted);}
+.demo-box a.acct{text-decoration:none;color:inherit;}
 .demo-box .acct{display:inline-flex;align-items:center;gap:4px;margin:3px 6px 3px 0;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#F4F6F9);font-size:12px;cursor:pointer;}
 .demo-box .acct:hover{border-color:var(--navy,#1E2A44);}
 .demo-box .acct b{font-size:11px;}
@@ -202,7 +203,11 @@ viewLogin(new URLSearchParams(location.search).get('switch') ? '' : '', new URLS
 
 /* ---- 演示账号区（三个 tab；每个账号一个按钮，点一下直接登录，不用输入账号密码；正式版不会有） ---- */
 var DEMO_TAB = 'in';
-function acctBtn(id, label, extra){ return '<span class="acct" onclick="quickLogin(\''+id+'\')"><b>'+id+'</b> '+label+(extra||'')+'</span>'; }
+/* 演示账号是真正的链接（2026-10-07，CMD-1007-02）：普通点击 = 当前分页登录；Cmd/Ctrl + 点击、中键、右键「在新标签页中打开」= 新分页直接以该账号登录，原分页不动。链接带 ?demo=账号，目标页读到后在本分页登录并把参数从地址栏清掉（applyDemoParam，store.js）；A3/A4 去登录页处理（首次激活 / 停用提示） */
+function acctBtn(id, label, extra){
+  var a = findAcct(id), href = (a && a.status==='active') ? homeUrl(a)+'?demo='+id : '/login.html?demo='+id;
+  return '<a class="acct" href="'+href+'"><b>'+id+'</b> '+label+(extra||'')+'</a>';
+}
 function renderDemo(){
   var tabs = [['in','🇮🇩 印尼诊所'],['kr','🇰🇷 韩国医院'],['guest','👤 客人']];
   $('demo-tabs').innerHTML = tabs.map(function(t){ return '<span class="'+(DEMO_TAB===t[0]?'on':'')+'" onclick="DEMO_TAB=\''+t[0]+'\';renderDemo()">'+t[1]+'</span>'; }).join('');
@@ -239,6 +244,12 @@ function quickLogin(id){
   enterApp(a);
 }
 renderDemo();
+/* 带 ?demo=A3 / A4 打开（新分页或普通点击）：进首次激活 / 停用提示；其他账号直接登录；然后把参数从地址栏清掉 */
+(function(){
+  var id = new URLSearchParams(location.search).get('demo'); if(!id) return;
+  try{ history.replaceState(null, '', location.pathname); }catch(e){}
+  var a = findAcct(id); if(a) quickLogin(a.id);
+})();
 /* 其他标签页重置演示数据后，本页的账号数据也要刷新 */
 function resetDemoData(){
   try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}

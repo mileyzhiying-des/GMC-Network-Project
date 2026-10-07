@@ -204,6 +204,17 @@ function currentAccountId(){
 }
 function currentAccount(){ return accountById(currentAccountId()); }
 var ME_NAME = (currentAccount() || {name:''}).name || '';
+/* 演示账号链接（?demo=账号，见 login.html，CMD-1007-02）：必须在下面算出页面所属诊所之前执行（诊所由登录账号决定）。只接受演示数据里存在且已激活的账号（待激活/停用不能这样登录；之后 guardPage 还会按存档里的真实状态再查一次）；在本分页登录（sessionStorage）后把参数从地址栏清掉。登录页自己处理，不在这里 */
+(function applyDemoParam(){
+  try{
+    if(/\/login\.html$/.test(location.pathname)) return;
+    var p = new URLSearchParams(location.search), id = p.get('demo'); if(!id) return;
+    var a = ACCOUNTS.filter(function(x){ return x.id===String(id).toUpperCase(); })[0];
+    if(a && a.status==='active') sessionStorage.setItem('gmc_acct', a.id);
+    p.delete('demo'); var q = p.toString();
+    history.replaceState(null, '', location.pathname + (q ? '?'+q : '') + location.hash);
+  }catch(e){}
+})();
 var PAGE_CLINIC_ID = resolveClinicId(); /* 这个页面所属的诊所：登录账号的诊所；客户预约页看地址里的 ?clinic=（原型不带默认 C1）；登录页没有 = null */
 CURRENT_CLINIC_ID = 'C1'; /* 演示数据种子一律按 C1 生成；种子跑完后（本文件末尾）才改成 PAGE_CLINIC_ID */
 /* 演示数据种子（SEEDING=true，data.js 末尾置 false）里的"当前操作人"固定写 Dewi，不随打开页面的账号变化；运行时 = 当前登录的人 */

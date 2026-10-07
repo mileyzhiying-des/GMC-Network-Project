@@ -11,7 +11,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
 </script>
 </head>
 <body>
-<script>try{ if(!sessionStorage.getItem("gmc_acct")) location.replace("/login.html"); }catch(e){}</script>
+<script>try{ if(!sessionStorage.getItem("gmc_acct") && !/[?&]demo=/.test(location.search)) location.replace("/login.html"); }catch(e){}</script>
 <div id="app">
 
 <!-- ============ IN: DASHBOARD ============ -->
