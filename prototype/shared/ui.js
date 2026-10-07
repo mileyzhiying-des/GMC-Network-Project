@@ -172,7 +172,7 @@ function openCalSettings(){ if(canDo('clinic')) openAdminPage('clinic'); }
 function renderTodayOff(){
   var el = document.getElementById('dash-off-row'); if(!el) return;
   var today = nowFullDt().split(' ')[0];
-  var offs = CAL_MEMOS.filter(function(m){ return m.type==='OFF' && m.date===today; });
+  var offs = memosOn(today).filter(function(m){ return m.type==='OFF'; });
   if(!offs.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
   var grp = function(role){ var n = offs.filter(function(m){ return m.role===role; }).map(function(m){ return m.person; }); return n.length ? '<span style="margin-right:16px;"><span style="color:var(--muted);">'+role+'</span> <b style="color:#C1454A;">'+n.join('、')+'</b></span>' : ''; };
   el.style.display = 'block';
@@ -313,7 +313,7 @@ function buildMonthGrid(){
   for(var i=0;i<42;i++){
     var ds = dateStr(cur), inMonth = cur.getMonth()===first.getMonth();
     var n = evs.filter(function(e){ return e.date===ds; }).length;
-    var offs = CAL_MEMOS.filter(function(m){ return m.type==='OFF' && m.date===ds; }).map(function(m){ return m.person; });
+    var offs = memosOn(ds).filter(function(m){ return m.type==='OFF'; }).map(function(m){ return m.person; });
     var extra = (offs.length ? '<div style="font-size:10px;font-weight:700;color:var(--terracotta);">'+offs.join('、')+' OFF</div>' : '')+(n ? '<div style="font-size:12px;font-weight:700;color:var(--slate2);">'+n+' 项日程</div>' : '');
     html += '<div class="cal-cell" onclick="openWeekOf(\''+ds+'\')" title="点击进入这一周的周视图"><span style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'">'+cur.getDate()+'</span>'+extra+'</div>';
     cur.setDate(cur.getDate()+1);

@@ -213,7 +213,13 @@ function logOp(type, text, sub, target){ /* type：账号管理 / 设定变更 /
   ACCOUNT_LOG.unshift({id:'log'+Date.now()+Math.floor(Math.random()*1000), clinicId:(a.hospitalId ? null : (a.clinicId||CURRENT_CLINIC_ID)), hospitalId:(a.hospitalId||null), ts:nowFullDt(), accountId:a.id, name:a.name, type:type, sub:sub||'', target:target||'', text:text});
 }
 
-function memosOn(date){ return CAL_MEMOS.filter(function(m){ return m.date===date && (m.scope==='公开' || m.author===ME_NAME); }); }
+/* KR 医院的 OFF（院长 / 室长，KR 端工作台日历上标的）：IN 的今日 OFF、周视图固定栏、月视图都读这里；原来 CAL_MEMOS 里 KR 角色的演示 OFF 不再用 */
+function krOffMemos(date){
+  var out = [];
+  linkedHospitalIds().forEach(function(hid){ ((HOSPITAL_DATA[hid]||{}).offs||[]).forEach(function(o){ if(o.date===date) out.push({id:o.id||('off'+o.who+o.date), date:o.date, type:'OFF', scope:'公开', role:o.kind==='director' ? 'KR院长' : 'KR室长', person:o.who+((o.part && o.part!=='全天') ? '（'+o.part+'）' : ''), author:'KR'}); }); });
+  return out;
+}
+function memosOn(date){ return CAL_MEMOS.filter(function(m){ return m.date===date && !/^KR/.test(m.role||'') && (m.scope==='公开' || m.author===ME_NAME); }).concat(krOffMemos(date)); }
 
 function memoCellHtml(ds){
   return memosOn(ds).map(function(m){
