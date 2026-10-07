@@ -868,17 +868,20 @@ function krProgressBlock(c){
     var tail = '';
     if(can && !s.done && c.krBalancePaid) tail += '<button class="btn-primary" style="padding:3px 10px;font-size:11px;" onclick="krSubDone(\''+s.id+'\')">标记完成</button>';
     if(can && !s.done && s.place!=='KR') tail += s.booked ? '<span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">IN 已预约 '+krEsc(s.booked)+'</span>' : '<button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="krSubInform(\''+s.id+'\')">'+(s.informed?'再次通知 IN 室长预约':'通知 IN 室长预约')+'</button>';
-    if(!can || s.done) return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+subItemRowHtml(s)+'</div>';
+    if(KR_SUBDONE.id===s.id){ /* 施术子项标完成：勾选这次做了哪些项目 */
+      return subItemRowHtml(s)+'<div style="margin:2px 0 8px 112px;padding:8px 12px;background:#FBF6EA;border-radius:8px;font-size:12px;"><div style="font-weight:700;margin-bottom:4px;">这次做了哪些项目？（必须勾选，不能默认全部）</div>'+krNotStartedItems(c).map(function(it){ return '<label style="display:block;margin:3px 0;"><input type="checkbox" onchange="krSubDonePick(\''+krEsc(it.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(it.name)+'</label>'; }).join('')+'<div style="margin-top:6px;display:flex;gap:8px;"><button class="btn-primary" style="padding:3px 12px;font-size:11px;" onclick="krSubDoneConfirm()">确认完成</button><button class="btn-ghost" style="padding:3px 12px;font-size:11px;" onclick="krSubDoneCancel()">取消</button></div></div>';
+    }
+    if(!can || s.done) return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+subItemRowHtml(s)+(s.doneItems&&s.doneItems.length ? '<span style="font-size:11px;color:var(--muted);">完成项目：'+krEsc(s.doneItems.join('、'))+'</span>' : '')+'</div>';
     tail = tail ? '<div style="margin:-2px 0 6px 112px;">'+tail+'</div>' : '';
     return '<div class="case-field-row" style="font-size:12px;gap:6px;flex-wrap:wrap;"><b style="min-width:104px;">'+krEsc(s.no)+'</b><input type="date" value="'+s.date+'" onchange="krSubEdit(\''+s.id+'\',\'date\',this.value)" style="'+inp+'"><input value="'+krEsc(s.content)+'" onchange="krSubEdit(\''+s.id+'\',\'content\',this.value)" style="'+inp+'flex:1;min-width:160px;"><select onchange="krSubEdit(\''+s.id+'\',\'place\',this.value)" style="'+inp+'">'+krPlaceOpts(s.place)+'</select><a href="#" onclick="krSubDel(\''+s.id+'\');return false;">删除</a></div>'+tail;
   }).join('');
   var projOpts = '<option value="">（不关联项目）</option>'+krActiveItems(c).map(function(it){ return '<option value="'+krEsc(it.name).replace(/"/g,'')+'"'+(KR_SUB_NEW.projectName===it.name?' selected':'')+'>'+krEsc(it.name)+'</option>'; }).join('');
   var add = can ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--border2);"><input type="date" value="'+KR_SUB_NEW.date+'" onchange="krSubNewSet(\'date\',this.value)" style="'+inp+'"><select onchange="krSubNewSet(\'kind\',this.value)" style="'+inp+'">'+['施术','复诊','管理','其他'].map(function(x){ return '<option'+(KR_SUB_NEW.kind===x?' selected':'')+'>'+x+'</option>'; }).join('')+'</select><input placeholder="内容（例如 10/16 施术、消肿管理）" value="'+krEsc(KR_SUB_NEW.content)+'" oninput="krSubNewSet(\'content\',this.value)" style="'+inp+'flex:1;min-width:200px;"><select onchange="krSubNewSet(\'place\',this.value)" style="'+inp+'">'+krPlaceOpts(KR_SUB_NEW.place)+'</select><select onchange="krSubNewSet(\'projectName\',this.value)" style="'+inp+'">'+projOpts+'</select><button class="btn-primary" onclick="krSubAdd()">添加子项</button></div>' : '';
   var extra = '';
-  if(can && c.krBalancePaid && !(c.subItems||[]).length && krNotStartedItems(c).length) extra += '<div style="margin-top:10px;"><button class="btn-outline" onclick="krDoAllDone()">没有整理 timeline：直接标记全部项目已完成</button></div>';
+  if(can && c.krBalancePaid && !c.visitClosed && krNotStartedItems(c).length) extra += '<div style="margin-top:10px;padding:8px 12px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;"><div style="font-weight:700;margin-bottom:4px;">未完成的项目（勾选已完成的；不能默认全部；在韩国的子项都完成且项目都处理完才结案）</div>'+krNotStartedItems(c).map(function(it){ return '<label style="display:block;margin:3px 0;"><input type="checkbox" onchange="krItemsPick(\''+krEsc(it.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(it.name)+'</label>'; }).join('')+'<button class="btn-outline" style="margin-top:6px;padding:3px 12px;font-size:11px;" onclick="krDoItemsDone()">标记所选项目已完成</button></div>';
   if(can && c.hasArrived && !c.visitClosed){
     var addOpts = krScopeCandidates(KR_CASE.clinicId).kr.filter(function(p){ return !krAllItems(c).some(function(it){ return it.name===p.name && !it.cancelled && !it.swapped; }); }).map(function(p){ return '<option>'+krEsc(p.name)+'</option>'; }).join('');
-    extra += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border2);display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;"><span>回诊时加做项目（另开新结算单，在韩国付款；原结算不变）：</span><select id="kr-addon-sel" style="'+inp+'">'+addOpts+'</select><button class="btn-outline" onclick="krDoAddOn()">加做</button></div>';
+    extra += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border2);display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;"><span>回诊时加做项目（另开新结算单，在韩国付款；原结算不变）：</span><select id="kr-addon-sel" style="'+inp+'">'+addOpts+'</select><select id="kr-addon-anes" onchange="krAddonAnesChg()" style="'+inp+'"><option value="local">局部麻醉</option><option value="sleep">睡眠麻醉</option><option value="general">全身麻醉</option></select><label id="kr-addon-sign-w" style="display:none;color:#A85A10;"><input type="checkbox" id="kr-addon-sign"> 已在现场签署麻醉同意书</label><button class="btn-outline" onclick="krDoAddOn()">加做</button></div>';
   }
   return krCardBox('项目进程（在韩 timeline，每一行是案件下的一个子项）', (rows || krEmpty('还没有子项：请整理在韩 timeline（例如 施术、复诊、消肿管理、拆线）'))+add+''+extra+'<div style="font-size:11px;color:var(--muted);margin-top:8px;">IN 端在赴韩项目 tab 下的子 tab 只读显示；客人端暂不显示。已完成的子项不能再改。</div>');
 }
@@ -895,7 +898,7 @@ function krSubDel(id){ if(!krCan() || !confirm('删除这个子项？')) return;
 
 /* ---------- 五、到院、判断、调整与尾款（KR 端操作；到院后 IN 只看结果，按 KR 判断操作退款） ---------- */
 var KR_ARR = {judge:'', unable:{}, reason:'', swapItem:'', swapAlt:'', rebookDate:'', rebookTime:'10:00', confirmTrip:false};
-function krArrSet(k, v){ KR_ARR[k] = v; if(k==='judge' || k==='swapItem' || k==='confirmTrip') krRenderCaseDetail(); }
+function krArrSet(k, v){ KR_ARR[k] = v; if(k==='judge' || k==='swapItem' || k==='swapAlt' || k==='confirmTrip') krRenderCaseDetail(); }
 function krUnableToggle(name, on){ KR_ARR.unable[name] = on; }
 function krSetAlloc(projectId, batchId, i, v){ if(!krCan()) return; krMut(function(c){ return corePcAlloc(c, projectId, batchId, i, v, ME_NAME); }); }
 function krAllocHtml(c){
@@ -904,6 +907,7 @@ function krAllocHtml(c){
   return '<div style="margin:10px 0;"><div style="font-size:12px;font-weight:700;">确认行程：术后管理的地点和金额（可弹性的在这时确定）</div>'+its.map(function(it){ return '<div style="font-size:12px;margin-top:6px;"><b>'+krEsc(it.name)+'</b></div>'+pcLinesHtml(c, it, 'krSetAlloc'); }).join('')+'</div>';
 }
 function krArrivalBlock(c){
+  if(KR_SUB.caseKey !== krRecKey()) KR_SUB = {caseKey:krRecKey(), text:null, pick:{}, notes:{}, overall:'', files:[], detail:{}};
   var st = scheduleState(c), can = krCan(), j = c.krJudge;
   if(!c.settlementDone || !krAllItems(c).length) return '';
   var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;', info = krBalanceInfo(c), body = '';
@@ -926,7 +930,7 @@ function krArrivalBlock(c){
       body += '<div style="margin:8px 0;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;"><div style="font-weight:700;margin-bottom:4px;">调整项目</div>'+
         pend.map(function(it){ return '<label style="display:block;margin:3px 0;"><input type="checkbox" '+(KR_ARR.unable[it.name]?'checked':'')+' onchange="krUnableToggle(\''+krEsc(it.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(it.name)+'</label>'; }).join('')+
         '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;"><input placeholder="无法施术的原因" value="'+krEsc(KR_ARR.reason)+'" oninput="krArrSet(\'reason\',this.value)" style="'+inp+'min-width:200px;"><button class="btn-outline" onclick="krDoUnable()">标记无法施术</button></div>'+
-        '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span>更换：</span><select onchange="krArrSet(\'swapItem\',this.value)" style="'+inp+'"><option value="">原项目</option>'+pend.map(function(it){ return '<option'+(KR_ARR.swapItem===it.name?' selected':'')+'>'+krEsc(it.name)+'</option>'; }).join('')+'</select><span>→</span><select onchange="krArrSet(\'swapAlt\',this.value)" style="'+inp+'"><option value="">新项目（本医院项目库）</option>'+krScopeCandidates(KR_CASE.clinicId).kr.map(function(p){ return '<option'+(KR_ARR.swapAlt===p.name?' selected':'')+'>'+krEsc(p.name)+'</option>'; }).join('')+'</select><button class="btn-outline" onclick="krDoSwap()">更换项目</button></div>'+
+        '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span>更换：</span><select onchange="krArrSet(\'swapItem\',this.value)" style="'+inp+'"><option value="">原项目</option>'+pend.map(function(it){ return '<option'+(KR_ARR.swapItem===it.name?' selected':'')+'>'+krEsc(it.name)+'</option>'; }).join('')+'</select><span>→</span><select onchange="krArrSet(\'swapAlt\',this.value)" style="'+inp+'"><option value="">新项目（本医院项目库）</option>'+krScopeCandidates(KR_CASE.clinicId).kr.map(function(p){ return '<option'+(KR_ARR.swapAlt===p.name?' selected':'')+'>'+krEsc(p.name)+'</option>'; }).join('')+'</select></div>'+(KR_ARR.swapAlt ? '<div style="margin-top:6px;">新项目的资料（所需术后管理 / 麻醉特性 / 推荐在韩时间）：'+krProjDetailHtml({name:'__swap'}, krScopeCandidates(KR_CASE.clinicId))+'<button class="btn-outline" onclick="krDoSwap()">更换项目</button></div>' : '')+
         '<div style="font-size:11px;color:var(--muted);margin-top:4px;">更换的新项目另开新结算单，不收定金，金额计入尾款。</div></div>';
     }
     if(!c.krBalancePaid && can){
@@ -945,7 +949,23 @@ function krDoUnable(){
   var ok = krMut(function(c){ return coreMarkUnable(c, names, reason, ME_NAME); });
   if(!ok) alert('至少要保留一个能做的项目；全部不能做请选"不能施术"'); else { KR_ARR.unable = {}; KR_ARR.reason = ''; krRenderCaseDetail(); }
 }
-function krDoSwap(){ if(!krCan() || !KR_ARR.swapItem || !KR_ARR.swapAlt){ alert('请选择原项目和新项目'); return; } var a = KR_ARR.swapItem, b = KR_ARR.swapAlt; KR_ARR.swapItem = ''; KR_ARR.swapAlt = ''; krMut(function(c){ return coreSwapItem(c, a, b, ME_NAME); }); }
+function krDoSwap(){
+  if(!krCan() || !KR_ARR.swapItem || !KR_ARR.swapAlt){ alert('请选择原项目和新项目'); return; }
+  var a = KR_ARR.swapItem, b = KR_ARR.swapAlt, cand = krScopeCandidates(KR_CASE.clinicId), dt = krDetailOf('__swap', cand);
+  if(dt.error){ alert(dt.error); return; }
+  KR_ARR.swapItem = ''; KR_ARR.swapAlt = ''; delete KR_SUB.detail['__swap'];
+  krMut(function(c){ return coreSwapItem(c, a, b, ME_NAME, dt); });
+}
+/* 把表单里某个项目的资料（推荐在韩时间、麻醉、所需术后管理）整理成快照字段 */
+function krDetailOf(key, cand){
+  var d = krDet(key), err = '';
+  var pc = d.pc.map(function(x){
+    var kp = cand.krPost.filter(function(o){ return o.name===x.kr; })[0], ip = x.place==='either' ? cand.post.filter(function(o){ return o.name===x.inn; })[0] : null;
+    if(!kp) err = '所需术后管理还有没选项目的行';
+    return {name:x.kr, price:kp ? kp.price : 0, times:x.times, place:x.place, day:(x.day||'').trim(), innName:ip ? ip.name : '', innPrice:ip ? ip.price : 0};
+  });
+  return {error:err, stay:(d.stay||'').trim(), anesthesia:{type:d.anes, label:KR_ANES[d.anes], note:(d.anesNote||'').trim()}, postcare:pc};
+}
 function krDoSettle(){
   if(!krCan() || !KR_ARR.confirmTrip) return; KR_ARR.confirmTrip = false;
   var r0 = krMut(function(c){ return coreSettleBalance(c, ME_NAME); }); if(!r0 || !r0.ok) alert('现在不能结算尾款');
@@ -953,7 +973,34 @@ function krDoSettle(){
 function krDoRebook(){ if(!krCan() || !KR_ARR.rebookDate){ alert('请选择新的施术日期'); return; } var d = KR_ARR.rebookDate, t0 = KR_ARR.rebookTime; krMut(function(c){ return coreRebook(c, d, t0, ME_NAME); }); }
 function krDoRefundDecision(kind){ if(!krCan() || !confirm('确认：定金'+(kind==='all'?'全部退回':'不退')+'？IN 室长会按这个判断操作。')) return; krMut(function(c){ return coreRefundDecision(c, kind, ME_NAME); }); }
 
-function krSubDone(id){ if(!krCan()) return; krMut(function(c){ return coreSubDone(c, id, ME_NAME); }); }
+var KR_SUBDONE = {id:'', pick:{}};
+function krSubDone(id){
+  if(!krCan()) return;
+  var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s = (c0.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s) return;
+  if(s.kind==='施术'){ KR_SUBDONE = {id:id, pick:{}}; krRenderCaseDetail(); return; } /* 施术子项：先勾选这次做了哪些项目 */
+  krMut(function(c){ return coreSubDone(c, id, ME_NAME, []); });
+}
+function krSubDonePick(name, on){ KR_SUBDONE.pick[name] = on; }
+function krSubDoneCancel(){ KR_SUBDONE = {id:'', pick:{}}; krRenderCaseDetail(); }
+function krSubDoneConfirm(){
+  var names = Object.keys(KR_SUBDONE.pick).filter(function(n){ return KR_SUBDONE.pick[n]; }), id = KR_SUBDONE.id;
+  if(!names.length){ alert('请勾选这次做了哪些项目'); return; }
+  KR_SUBDONE = {id:'', pick:{}}; krMut(function(c){ return coreSubDone(c, id, ME_NAME, names); });
+}
+var KR_ITEMS_PICK = {};
+function krItemsPick(name, on){ KR_ITEMS_PICK[name] = on; }
+function krDoItemsDone(){
+  var names = Object.keys(KR_ITEMS_PICK).filter(function(n){ return KR_ITEMS_PICK[n]; }); if(!krCan()) return;
+  if(!names.length){ alert('请勾选已完成的项目'); return; }
+  KR_ITEMS_PICK = {}; krMut(function(c){ return coreItemsDone(c, names, ME_NAME); });
+}
 function krSubInform(id){ if(!krCan()) return; krMut(function(c){ return coreSubInform(c, id, ME_NAME); }); }
-function krDoAllDone(){ if(!krCan() || !confirm('确认全部赴韩项目已完成？案件将结案。')) return; krMut(function(c){ return coreMarkAllDone(c, ME_NAME); }); }
-function krDoAddOn(){ var s = document.getElementById('kr-addon-sel'); if(!krCan() || !s || !s.value) return; var n = s.value; if(!confirm('加做「'+n+'」：另开新结算单，在韩国付款。确认？')) return; krMut(function(c){ return coreAddOnItem(c, n, ME_NAME); }); }
+function krAddonAnesChg(){ var v = document.getElementById('kr-addon-anes').value, w = document.getElementById('kr-addon-sign-w'); if(w) w.style.display = v==='local' ? 'none' : ''; }
+function krDoAddOn(){
+  var s = document.getElementById('kr-addon-sel'); if(!krCan() || !s || !s.value) return; var n = s.value;
+  var at = document.getElementById('kr-addon-anes').value, signed = !!(document.getElementById('kr-addon-sign') && document.getElementById('kr-addon-sign').checked);
+  if(at!=='local' && !signed){ alert('睡眠 / 全身麻醉：请勾选"已在现场签署麻醉同意书"才能新增'); return; }
+  if(!confirm('加做「'+n+'」：另开新结算单，在韩国付款。确认？')) return;
+  var an = {type:at, label:KR_ANES[at], note:''};
+  krMut(function(c){ return coreAddOnItem(c, n, ME_NAME, {anesthesia:an, signed:signed}); });
+}

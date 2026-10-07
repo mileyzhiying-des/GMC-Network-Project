@@ -727,6 +727,7 @@ function makeCase(o){
     krSchedule:(o.arrivedAtHospital && o.krSchedule) ? Object.assign({}, o.krSchedule, {status:'arrived'}) : (o.krSchedule||null), /* 2026-09-30：已到医院并入施术日期状态（Arrived），案件主状态直接读这里，不再单独存 arrivedAtHospital； {status:null|'pending'|'confirmed'|'change_pending', primary,backup,confirmedDate,confirmedTime,changePrimary,changeBackup,changeSubmitted} */
     krBalancePaid:!!o.krBalancePaid, /* 已到医院/付清尾款，2026-09-29（第十轮）改成KR端演示按钮操作，IN端只显示状态 */
     visitClosed:!!o.visitClosed, /* 2026-09-29（第十轮）新增："案件=一次到店或一次赴韩行程"，KR标记施术完成 / 本地持有项目用完（或本次不使用）时置true，deriveCaseStage 直接判 closed */
+    hasArrived:!!(o.hasArrived || (o.arrivedAtHospital && o.krSchedule)), /* 到过医院：种子里 arrivedAtHospital 的案件也算 */
     krProcedureDone:!!o.krProcedureDone, /* 2026-09-30：KR标记"施术完成"（至少完成一项赴韩施术），结局判定里算"完成了施术" */
     refunds:o.refunds||[], /* 2026-09-30：赴韩项目退款记录 [{amount,currency,reason,date,items}]，退款只进财务字段，不影响结局 */
     financeResult:null, /* 无收入/仅面诊费/有项目收入/全额退款，由 updateCaseStage→financeResultOf 现算 */
@@ -2775,9 +2776,9 @@ function latestUnpaidBatch(c){
 
 /* 术后管理分配改了（付尾款前）：重算所在结算单的合计；定金不变（可弹性的不算进定金） */
 function recomputeBatch(c, batchId){
-  var b = (c.settlementBatches||[]).filter(function(x){ return x.id===batchId; })[0]; if(!b || b.noDeposit) return;
+  var b = (c.settlementBatches||[]).filter(function(x){ return x.id===batchId; })[0]; if(!b) return;
   var bd = computeBatchBreakdown((c.procedureItems||[]).filter(function(it){ return it.batchId===batchId && it.origin==='KR' && !it.cancelled && !it.swapped; }));
-  b.krTotal = bd.krTotal; b.krBalance = bd.krTotal - b.krDeposit; b.krProvisional = bd.krProvisional;
+  b.krTotal = bd.krTotal; b.krBalance = bd.krTotal - (b.noDeposit ? 0 : b.krDeposit); b.krProvisional = bd.krProvisional;
 }
 /* 术后管理分配（IN 室长在项目选择/赴韩项目 tab 改；KR 在付尾款确认行程时也能改）：x.inTimes = 分给印尼的次数 */
 function corePcAlloc(c, projectId, batchId, i, v, by){
@@ -3043,15 +3044,18 @@ function coreMarkUnable(c, names, reason, by){
   return true;
 }
 /* 更换项目：原项目留在原结算单标「已更换」；新项目另开新结算单，不收定金，金额直接计入尾款（"计入尾款"） */
-function coreSwapItem(c, itemName, altName, by){
+function coreSwapItem(c, itemName, altName, by, detail){
   if(!c.krJudge || c.krJudge.result!=='changed' || c.krJudge.settled) return false;
   var target = krNotStartedItems(c).filter(function(it){ return it.name===itemName; })[0];
   var alt = PROJECT_LIBRARY.filter(function(p){ return p.name===altName && p.active && p.origin==='KR' && (!c.hospitalId || p.hospitalId===c.hospitalId); })[0];
   if(!target || !alt) return false;
   target.swapped = true; target.replacedBy = alt.name;
   var newId = 'B' + ((c.settlementBatches||[]).length + 1);
-  c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:alt.price, krDeposit:0, krBalance:alt.price, inTotal:0, noDeposit:true, swapOf:target.name});
-  c.procedureItems.push({projectId:alt.id, name:alt.name, price:alt.price, currency:currencyOf(alt.origin), origin:'KR', categoryId:alt.categoryId, done:false, batchId:newId, swappedFrom:target.name});
+  var ni = {projectId:alt.id, name:alt.name, price:alt.price, currency:currencyOf(alt.origin), origin:'KR', categoryId:alt.categoryId, done:false, batchId:newId, swappedFrom:target.name};
+  if(detail){ if(detail.stay) ni.stay = detail.stay; if(detail.anesthesia) ni.anesthesia = detail.anesthesia; if((detail.postcare||[]).length) ni.postcare = detail.postcare.map(function(x){ return Object.assign({inTimes:0}, x); }); } /* 新项目的所需术后管理、麻醉特性、推荐在韩时间 */
+  var amt = itemKrAmount(ni);
+  c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:amt, krDeposit:0, krBalance:amt, inTotal:0, noDeposit:true, swapOf:target.name});
+  c.procedureItems.push(ni);
   c.settleTab = null;
   logCaseEvent(c, by, '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
   pushNotif('赴韩施术','KR 更换项目：'+c.name+'（'+target.name+' → '+alt.name+'）', {caseId:c.id});
@@ -3133,28 +3137,40 @@ function innCareCardHtml(c){
 /* ---- 子项进行、回诊与结案（2026-10-06，KR-CASE-02 第 5 节） ----
    结案 = 在韩国的子项（地点=韩国）全部完成（取代"施术完成 → 已结案"）；地点=印尼/均可 的子项不挡结案，仍有未完成的由 KR 按［通知 IN 室长预约］ */
 function subKrPending(c){ return (c.subItems||[]).filter(function(s){ return s.place==='KR' && !s.done; }); }
-function coreSubDone(c, id, by){
+function coreSubDone(c, id, by, itemNames){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0];
   if(!s || s.done || !c.krBalancePaid) return false; /* 付清尾款（开始施术）之后才能逐个标完成 */
-  s.done = true; s.doneAt = nowFullDt(); s.doneBy = by;
-  if(s.kind==='施术'){ krNotStartedItems(c).forEach(function(it){ if(!s.projectName || it.name===s.projectName) it.done = true; }); }
-  logCaseEvent(c, by, 'KR标记子项已完成 '+s.no+'：'+s.content);
-  pushNotif('赴韩施术','KR 完成在韩子项：'+c.name+'（'+s.no+' '+s.content+'）', {caseId:c.id});
-  if(!subKrPending(c).length && !c.visitClosed){ /* 在韩国的子项全部完成 → 结案 */
-    krNotStartedItems(c).forEach(function(it){ it.done = true; });
-    c.krProcedureDone = true;
-    var left = (c.subItems||[]).filter(function(x){ return !x.done; });
-    if(left.length) logCaseEvent(c, '系统', '在韩国的子项已全部完成；仍有 '+left.length+' 项在印尼/均可（由 KR 通知 IN 室长预约）');
-    finishCase(c);
+  var picked = [];
+  if(s.kind==='施术'){ /* 标"施术"子项完成时，必须勾选这次做了哪些项目；不能默认全部完成 */
+    var pend = krNotStartedItems(c);
+    picked = pend.filter(function(it){ return (itemNames||[]).indexOf(it.name)>-1; });
+    if(!picked.length) return false;
   }
+  s.done = true; s.doneAt = nowFullDt(); s.doneBy = by;
+  picked.forEach(function(it){ it.done = true; });
+  s.doneItems = picked.map(function(it){ return it.name; });
+  logCaseEvent(c, by, 'KR标记子项已完成 '+s.no+'：'+s.content+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''));
+  pushNotif('赴韩施术','KR 完成在韩子项：'+c.name+'（'+s.no+' '+s.content+'）', {caseId:c.id});
+  krCloseIfDone(c);
   return true;
 }
-/* 没有整理 timeline 的案件：KR 一次标全部项目完成 → 结案 */
-function coreMarkAllDone(c, by){
-  if(!c.krBalancePaid || c.visitClosed || (c.subItems||[]).length || !krNotStartedItems(c).length) return false;
-  krNotStartedItems(c).forEach(function(it){ it.done = true; });
-  logCaseEvent(c, by, 'KR标记全部赴韩项目已完成');
-  c.krProcedureDone = true; finishCase(c);
+/* 在韩国的子项（地点=韩国）全部完成，且项目都已完成/取消/更换 → 结案；子项都完成但还有项目没标完成时不自动结案（KR 要勾选项目标完成，或标无法施术） */
+function krCloseIfDone(c){
+  if(c.visitClosed || subKrPending(c).length || krNotStartedItems(c).length || !krActiveItems(c).length) return false;
+  c.krProcedureDone = true;
+  var left = (c.subItems||[]).filter(function(x){ return !x.done; });
+  if(left.length) logCaseEvent(c, '系统', '在韩国的子项已全部完成；仍有 '+left.length+' 项在印尼/均可（由 KR 通知 IN 室长预约）');
+  finishCase(c);
+  return true;
+}
+/* 勾选项目标"已完成"（没有施术子项的项目、或子项都完成后剩下的项目） */
+function coreItemsDone(c, names, by){
+  if(!c.krBalancePaid || c.visitClosed) return false;
+  var picked = krNotStartedItems(c).filter(function(it){ return (names||[]).indexOf(it.name)>-1; });
+  if(!picked.length) return false;
+  picked.forEach(function(it){ it.done = true; });
+  logCaseEvent(c, by, 'KR标记项目已完成：'+picked.map(function(it){ return it.name; }).join('、'));
+  krCloseIfDone(c);
   return true;
 }
 /* 客人回印尼后要做的子项：KR 通知 IN 室长预约（附子项内容）→ IN 点通知打开预约弹窗，新案件自动关联原赴韩案件 */
@@ -3166,12 +3182,16 @@ function coreSubInform(c, id, by){
   return true;
 }
 /* 回诊时加做项目：KR 室长直接新增，另开新结算单、在韩国付款（不经过 IN 选择，原结算单不动）；IN 收到通知、只读可见 */
-function coreAddOnItem(c, projectName, by){
+function coreAddOnItem(c, projectName, by, opt){
   if(!c.hasArrived || c.visitClosed) return false;
+  opt = opt || {};
+  var an = opt.anesthesia || {type:'local', label:'局部麻醉', note:''};
+  if(an.type!=='local' && !opt.signed) return false; /* 睡眠 / 全身麻醉：必须勾选已在现场签署麻醉同意书；局部不用 */
   var p = PROJECT_LIBRARY.filter(function(x){ return x.name===projectName && x.active && x.origin==='KR' && (!c.hospitalId || x.hospitalId===c.hospitalId); })[0]; if(!p) return false;
   var newId = 'B' + ((c.settlementBatches||[]).length + 1);
   c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（韩国付款）', time:nowFullDt(), status:'active', krTotal:p.price, krDeposit:0, krBalance:p.price, inTotal:0, noDeposit:true, addOn:true});
-  c.procedureItems.push({projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:'KR', categoryId:p.categoryId, done:false, batchId:newId, krAddOn:true});
+  c.procedureItems.push({projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:'KR', categoryId:p.categoryId, done:false, batchId:newId, krAddOn:true, anesthesia:an});
+  if(an.type!=='local'){ var prev = (c.anesthesiaConsent && c.anesthesiaConsent.projects) || []; c.anesthesiaConsent = {version:(c.anesthesiaConsent&&c.anesthesiaConsent.version)||'KR 现场签署', ts:nowFullDt(), by:by, projects:prev.concat([{name:p.name, type:an.type, label:an.label, note:an.note||'', onSite:true}])}; logCaseEvent(c, by, 'KR确认客人已在现场签署麻醉同意书（'+p.name+'：'+an.label+'）'); }
   c.settleTab = null;
   logCaseEvent(c, by, 'KR加做项目："'+p.name+'"（另开结算单 '+newId+'，在韩国付款，原结算单不变）');
   pushNotif('赴韩施术','KR 加做项目：'+c.name+'（'+p.name+'，另开结算单 '+newId+'，在韩国付款）', {caseId:c.id});
