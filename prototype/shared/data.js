@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 23;
+var DEMO_DATA_VERSION = 24;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -4506,6 +4506,22 @@ function seedDoctorProfiles(){
   });
 }
 seedDoctorProfiles();
+/* 赴韩项目默认资料（KR-SRVC-01）：所需术后管理 / 麻醉 / 推荐在韩时间 / 施术时长；KR 写报告、更换、补加、加做时自动带入 */
+function seedProjectDefaults(){
+  var swell = {kr:'术后消肿管理', times:3, place:'either', day:'第3天'}, thread = {kr:'拆线', times:1, place:'KR', day:'第7天'}, check = {kr:'术后复诊检查', times:1, place:'KR', day:'第2天'};
+  var D0 = {
+    '切开双眼皮':{stay:'5天', durMin:90, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, thread, swell]},
+    '埋线双眼皮':{stay:'3天', durMin:45, anes:'local', anesNote:'', postcare:[thread]},
+    '假体隆鼻':{stay:'7天', durMin:120, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, thread, swell]},
+    '鼻翼缩小':{stay:'5天', durMin:60, anes:'local', anesNote:'', postcare:[thread]},
+    '鼻综合（假体+鼻尖）':{stay:'10天', durMin:150, anes:'sleep', anesNote:'需空腹 8 小时', postcare:[check, thread, swell]},
+    '颧骨缩小':{stay:'10天', durMin:180, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread, {kr:'术后消肿管理', times:5, place:'either', day:'第3天'}]},
+    '下颌角整形':{stay:'10天', durMin:180, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread]},
+    '面部拉皮':{stay:'14天', durMin:240, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread]}
+  };
+  Object.keys(HOSPITAL_DATA).forEach(function(hid){ (HOSPITAL_DATA[hid].projects||[]).forEach(function(p){ var df = D0[p.name]; if(df && !p.defaults) p.defaults = JSON.parse(JSON.stringify(df)); }); });
+}
+seedProjectDefaults();
 Object.keys(HOSPITAL_DATA).forEach(normSchedBlocks);
 CASE_ITEMS.forEach(function(c){ if(c.krSchedule && c.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(c.krSchedule.status)>-1 && c.director) syncSurgeryBlock(c); }); /* 演示数据里已确认施术时间的案件，院长日程里也有施术块 */
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */
