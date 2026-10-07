@@ -22,7 +22,7 @@ function bkInit(){
   var q = new URLSearchParams(location.search), lang = null;
   try{ lang = localStorage.getItem('gmc_book_lang'); }catch(e){}
   BOOK_LANG = (q.get('lang')==='zh' || q.get('lang')==='id') ? q.get('lang') : (lang==='zh' ? 'zh' : 'id');
-  BK = {entry:'web', step:0, f:{date:'', time:'', phone:'', name:'', gender:'女', dob:'', history:'', beauty:[], purpose:'面诊商谈', note:'', c1:false, c2:false, phId:null, rebookFrom:null},
+  BK = {entry:'web', step:0, f:{date:'', time:'', phone:'', name:'', firstName:'', lastName:'', gender:'女', dob:'', history:'', beauty:[], purpose:'面诊商谈', note:'', c1:false, c2:false, phId:null, rebookFrom:null},
         err:'', otp:null, verified:false, phoneLocked:false, client:null, mismatch:false, done:null, dayPick:null, view:null};
   if(q.get('view')){ BK.entry = 'view'; BK.view = {caseNo:q.get('view'), stage:'phone'}; }
   else if(q.get('walkin')){
@@ -146,7 +146,7 @@ function bkVerify(){
 /* 手机号找老客人：有 → 第 3、5 步自动带出资料；没有 → 新客人 */
 function bkLoadClient(){
   var cl = clientByPhone(BK.f.phone); BK.client = cl;
-  if(cl){ var f = BK.f; f.phone = cl.phone; f.name = cl.name; f.gender = cl.gender==='男' ? '男' : '女'; f.dob = cl.dob||''; f.history = cl.history==='无' ? '' : (cl.history||''); }
+  if(cl){ var f = BK.f; f.phone = cl.phone; f.name = cl.name; f.firstName = cl.firstName!==undefined ? cl.firstName : cl.name; f.lastName = cl.lastName||''; f.gender = cl.gender==='男' ? '男' : '女'; f.dob = cl.dob||''; f.history = cl.history==='无' ? '' : (cl.history||''); }
 }
 
 /* ---- 第 3 步：个人资料（新客人填姓名/性别/出生日期；老客人自动带出，确认即可；姓名和已登记的不同 → 问是不是本人） ---- */
@@ -157,14 +157,14 @@ function bkStepProfile(){
       bkFooter('', '<button class="bk-btn ghost" onclick="bkMismatch(false)">'+bt('mismatch.no')+'</button><button class="bk-btn" onclick="bkMismatch(true)">'+bt('mismatch.yes')+'</button>'));
   }
   var body = (cl ? '<div class="bk-info">'+bt('profile.back')+'</div>' : '')+
-    bkField(bt('profile.name'), bkInput('name','text','autocomplete="name"'))+
+    bkField(bt('profile.first'), bkInput('firstName','text','autocomplete="given-name"'))+bkField(bt('profile.last'), bkInput('lastName','text','autocomplete="family-name"'))+
     bkField(bt('profile.gender'), '<select onchange="bkSet(\'gender\',this.value)"><option value="女"'+(f.gender==='女'?' selected':'')+'>'+bt('gender.f')+'</option><option value="男"'+(f.gender==='男'?' selected':'')+'>'+bt('gender.m')+'</option></select>')+
     bkField(bt('profile.dob'), bkInput('dob','date','max="'+dateStr(demoNow())+'"'));
   return bkFrame('s.profile', body+bkNav('bkProfileNext()', true));
 }
 function bkProfileNext(){
-  var f = BK.f; f.name = (f.name||'').trim();
-  if(!f.name){ BK.err = bt('profile.errName'); return bkRender(); }
+  var f = BK.f; f.firstName = (f.firstName||'').trim(); f.lastName = (f.lastName||'').trim(); f.name = joinName(f.firstName, f.lastName); /* 名必填、姓选填，显示"名 姓" */
+  if(!f.firstName){ BK.err = bt('profile.errName'); return bkRender(); }
   if(!f.dob){ BK.err = bt('profile.errDob'); return bkRender(); }
   if(BK.client && f.name.toLowerCase() !== BK.client.name.toLowerCase() && !BK.mismatchOk){ BK.mismatch = true; BK.err = ''; return bkRender(); }
   BK.err = ''; bkNextStep();
@@ -173,7 +173,7 @@ function bkMismatch(isMe){
   if(isMe){ BK.mismatchOk = true; BK.mismatch = false; bkLoadClient(); BK.err = ''; return bkNextStep(); } /* 是本人：带出登记的资料 */
   /* 不是本人：请改用其他手机号，重新验证 */
   BK.mismatch = false; BK.mismatchOk = false; BK.verified = false; BK.client = null; BK.otp = null; BK.phoneLocked = false;
-  BK.f.phone = ''; BK.f.name = ''; BK.f.dob = ''; BK.f.history = ''; BK.f.beauty = [];
+  BK.f.phone = ''; BK.f.name = ''; BK.f.firstName = ''; BK.f.lastName = ''; BK.f.dob = ''; BK.f.history = ''; BK.f.beauty = [];
   BK.step = BK_STEPS.indexOf('phone'); BK.err = bt('phone.other'); bkRender();
 }
 
@@ -264,7 +264,7 @@ function bkStepConfirm(){
 }
 function bkSubmit(){
   var f = BK.f, old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
-  var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, gender:f.gender, dob:f.dob,
+  var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, firstName:f.firstName, lastName:f.lastName, gender:f.gender, dob:f.dob,
     history:f.history, beauty:f.beauty, purpose:f.purpose, note:f.note, rebookFrom:old ? old.id : null});
   if(!res.ok){ BK.err = bt('time.taken'); BK.f.time = ''; if(BK.entry!=='walkin') BK.step = 0; return bkRender(); }
   Store.save(); BK.done = res; bkRender();

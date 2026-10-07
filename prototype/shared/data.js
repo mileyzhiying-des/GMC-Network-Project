@@ -345,9 +345,14 @@ function clientByPhone(phone){ var k = normPhoneKey(phone); if(!k) return null; 
 function clientByName(name){ return CLIENTS.filter(function(c){ return c.name===name; })[0] || null; }
 function clientPhoneOf(name){ var c = clientByName(name); return c && c.phone ? c.phone : ''; }
 /* 新建客户档案：写"建档"到客户 Timeline；consent 可选 {version, ts, source} */
+/* 客人姓名分两栏（2026-10-07，BOOK-01 / IN-CLNT-01）：名（必填）+ 姓（选填，有些印尼人只有一个名字），显示"名 姓"；
+   客户档案里 name = 显示用的"名 姓"（案件、持有项目等都按它关联，不变），另存 firstName / lastName；旧资料迁移：原姓名放进"名"。员工账号维持一栏 */
+function joinName(first, last){ first = String(first||'').trim(); last = String(last||'').trim(); return last ? first+' '+last : first; }
+function normClientNames(){ (CLIENTS||[]).forEach(function(c){ if(c.firstName===undefined){ c.firstName = c.name; c.lastName = ''; } }); }
 function addClient(o){
   var ts = nowFullDt();
-  var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), clinicId:CURRENT_CLINIC_ID, name:o.name, gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
+  if(o.firstName!==undefined) o.name = joinName(o.firstName, o.lastName);
+  var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), clinicId:CURRENT_CLINIC_ID, name:o.name, firstName:(o.firstName!==undefined ? String(o.firstName).trim() : o.name), lastName:(o.firstName!==undefined ? String(o.lastName||'').trim() : ''), gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
     passport:{text:'未登记', date:''}, beautyRecords:[], consents:o.consent ? [o.consent] : [], createdBy:o.createdBy||actingName(), updated:'刚刚',
     fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'},
     timeline:[{stage:'建档', actor:o.createdBy||actingName(), actorId:(o.createdBy&&o.createdBy!==actingName()) ? undefined : currentAccountId(), action:'建档 · '+(o.source||'室长建档'), dt:ts, kind:'plain'}]};
@@ -450,7 +455,7 @@ function submitSelfBooking(f){
   var consent = {version:CLINIC_SETTINGS.privacyVersion, ts:nowFullDt(), source:'客户自助预约'};
   var cl = clientByPhone(f.phone), isNew = !cl;
   if(isNew){
-    cl = addClient({name:f.name, phone:f.phone, gender:f.gender, dob:f.dob, history:(f.history||'').trim()||'无', createdBy:'客人自助', source:'客户自助预约建档', consent:consent});
+    cl = addClient({name:f.name, firstName:f.firstName, lastName:f.lastName, phone:f.phone, gender:f.gender, dob:f.dob, history:(f.history||'').trim()||'无', createdBy:'客人自助', source:'客户自助预约建档', consent:consent});
   } else {
     /* 老客人资料有变化由室长到店接待时修改，预约页不提供修改：这里只记同意书（版本更新过才会重新勾选），不改客户档案 */
     if(f.consentGiven) cl.consents.push(consent);
@@ -4536,6 +4541,7 @@ seedProjectDefaults();
 Object.keys(HOSPITAL_DATA).forEach(normSchedBlocks);
 CASE_ITEMS.forEach(function(c){ if(c.krSchedule && c.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(c.krSchedule.status)>-1 && c.director) syncSurgeryBlock(c); }); /* 演示数据里已确认施术时间的案件，院长日程里也有施术块 */
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */
+normClientNames();
 syncInCoordinators();
 applyClinicSettings();
 

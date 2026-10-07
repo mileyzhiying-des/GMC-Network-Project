@@ -510,7 +510,7 @@ function renderClientProfile(name){
       (field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</span></div>'; };
   var cons = (c.consents||[]).slice(-1)[0];
   var consHtml = cons ? '已签署<span class="sub">个人资料收集同意 + 健康资料处理同意 · 同意书 '+aEscC(cons.version)+' · '+aEscC(cons.ts)+' · '+aEscC(cons.source)+'</span>' : '<span style="color:var(--muted);">未登记</span><span class="sub">到店后由室长当面签署正式同意书</span>';
-  el.innerHTML = row('姓名', aEscC(c.name), 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+
+  el.innerHTML = row('名 / 姓', aEscC(c.name)+'<span class="sub">名（必填）+ 姓（选填），显示“名 姓”</span>', 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+
     row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+
     row('护照信息', aEscC(c.passport.text)+(c.passport.date?'<span class="sub">'+aEscC(c.passport.date)+'</span>':''), 'passport')+
     row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+
@@ -518,7 +518,7 @@ function renderClientProfile(name){
 }
 function aEscC(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 var CLIENT_FIELD_DEF = {
-  name:{label:'姓名', kind:'text'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
+  name:{label:'名 / 姓', kind:'name2'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
   gender:{label:'性别 / 出生日期', kind:'gender'}, passport:{label:'护照信息', kind:'text'}, phone:{label:'联系方式（手机号）', kind:'text'}
 };
 function openClientEdit(name, field){
@@ -529,6 +529,7 @@ function openClientEdit(name, field){
   var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;';
   var body = d.kind==='area' ? '<textarea id="ce-v" rows="3" style="'+inp+'">'+aEscC(c[field])+'</textarea>' :
     d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select><input id="ce-v2" type="date" value="'+aEscC(c.dob)+'" style="'+inp+'"></div>' :
+    d.kind==='name2' ? '<div style="display:flex;gap:10px;"><input id="ce-fn" type="text" placeholder="名（必填）" value="'+aEscC(c.firstName!==undefined ? c.firstName : c.name)+'" style="'+inp+'"><input id="ce-ln" type="text" placeholder="姓（选填）" value="'+aEscC(c.lastName||'')+'" style="'+inp+'"></div>' :
     field==='phone' ? phoneInputHtml('ce-ph', c.phone) :
     '<input id="ce-v" type="text" value="'+aEscC(field==='passport' ? c.passport.text : c[field])+'" style="'+inp+'">';
   ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">修改「'+d.label+'」</div>'+body+
@@ -540,12 +541,13 @@ function closeClientEdit(){ var ov = document.getElementById('client-edit-overla
 function saveClientEdit(){
   var x = CLIENT_EDIT; if(!x) return;
   var c = clientByName(x.name), d = CLIENT_FIELD_DEF[x.field]; if(!c) return;
-  var v = x.field==='phone' ? phoneInputGet('ce-ph') : (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
+  var v = x.field==='phone' ? phoneInputGet('ce-ph') : x.field==='name' ? joinName((document.getElementById('ce-fn')||{}).value, (document.getElementById('ce-ln')||{}).value) : (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
   var fail = function(m){ var e = document.getElementById('ce-err'); e.textContent = m; e.style.display = 'block'; };
   if(x.field==='name'){
-    if(!v) return fail('姓名不能为空');
+    if(!(document.getElementById('ce-fn')||{}).value.trim()) return fail('名不能为空（姓可以留空）');
     if(v!==c.name && clientByName(v)) return fail('已有同名的客户档案');
     oldTxt = c.name; newTxt = v;
+    c.firstName = document.getElementById('ce-fn').value.trim(); c.lastName = document.getElementById('ce-ln').value.trim();
     if(v!==c.name){
       CASE_ITEMS.forEach(function(cs){ if(cs.name===c.name) cs.name = v; });
       if(CLIENT_HOLDINGS[c.name]){ CLIENT_HOLDINGS[v] = CLIENT_HOLDINGS[c.name]; delete CLIENT_HOLDINGS[c.name]; }
