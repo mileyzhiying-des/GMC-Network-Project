@@ -203,22 +203,24 @@ function bkStepBeauty(){
   }
   var rowHtml = rows.map(function(r, i){
     return '<div class="bk-br" id="bk-br-'+r.id+'"><div class="bk-br-head"><span>#'+(i+1)+'</span><button type="button" class="bk-x" aria-label="delete" onclick="bkDelBeauty('+i+')">✕</button></div>'+
-      bkField(bt('beauty.when'), '<input type="month" value="'+bkH(r.ym)+'" max="'+cur+'" onchange="bkBeautySet('+i+',\'ym\',this.value)">')+
-      bkField(bt('beauty.project'), '<input type="text" list="bk-proj-list" value="'+bkH(r.project)+'" placeholder="'+bkH(bt('beauty.projectPh'))+'" oninput="bkBeautySet('+i+',\'project\',this.value)">')+'</div>';
+      bkField(bt('beauty.when'), '<div style="display:flex;gap:8px;"><select style="flex:1;min-width:0;" onchange="bkBeautySet('+i+',\'y\',this.value)"><option value="">'+bt('beauty.year')+'</option>'+bkYearOpts(r.y)+'</select><select style="flex:1;min-width:0;" onchange="bkBeautySet('+i+',\'m\',this.value)"><option value="">'+bt('beauty.month')+'</option>'+bkMonthOpts(r.m)+'</select></div>')+
+      bkField(bt('beauty.project'), '<input type="text" value="'+bkH(r.project)+'" placeholder="'+bkH(bt('beauty.projectPh'))+'" oninput="bkBeautySet('+i+',\'project\',this.value)">')+'</div>'; /* 项目是纯文字输入（不接项目库）；时间是年、月两个下拉（Safari 桌面版不支援 month 输入）*/
   }).join('');
   return bkFrame('s.beauty', '<div class="bk-info">'+bt('beauty.hint')+'</div>'+reg+rowHtml+
-    '<datalist id="bk-proj-list">'+projectNameOptions().map(function(n){ return '<option value="'+bkH(n)+'">'; }).join('')+'</datalist>'+
     '<button type="button" class="bk-btn ghost" style="margin-top:0;" onclick="bkAddBeauty()">'+bt('beauty.add')+'</button>'+
     bkFooter(BK.err, '<button class="bk-btn ghost" onclick="bkBeautySkip()">'+bt('beauty.skip')+'</button><button class="bk-btn" onclick="bkBeautyNext()">'+bt('btn.next')+'</button>', true));
 }
-function bkBeautySet(i, k, v){ var r = bkBeautyRows()[i]; if(r) r[k] = v; }
+/* 年份从今年往前 30 年；月 1–12；两个都选了才算填了时间（r.ym = 'YYYY-MM'） */
+function bkYearOpts(sel){ var cy = demoNow().getFullYear(), o = ''; for(var y = cy; y >= cy-30; y--) o += '<option value="'+y+'"'+(String(sel)===String(y)?' selected':'')+'>'+y+'</option>'; return o; }
+function bkMonthOpts(sel){ var o = ''; for(var m = 1; m <= 12; m++) o += '<option value="'+m+'"'+(String(sel)===String(m)?' selected':'')+'>'+m+'</option>'; return o; }
+function bkBeautySet(i, k, v){ var r = bkBeautyRows()[i]; if(!r) return; r[k] = v; if(k==='y' || k==='m') r.ym = (r.y && r.m) ? r.y+'-'+pad2(+r.m) : ''; }
 function bkAddBeauty(){
-  var rows = bkBeautyRows(), id = 'n'+(BK_BR_SEQ++); rows.push({id:id, ym:'', project:''}); BK.err = ''; bkRender(true);
+  var rows = bkBeautyRows(), id = 'n'+(BK_BR_SEQ++); rows.push({id:id, ym:'', y:'', m:'', project:''}); BK.err = ''; bkRender(true);
   var el = document.getElementById('bk-br-'+id); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); /* 自动捲到新的那一行 */
 }
 function bkDelBeauty(i){ bkBeautyRows().splice(i, 1); BK.err = ''; bkRender(true); }
 /* ［跳过］：还没填任何一笔 → 直接跳过；已经填了 → 先确认"已填写的医美史不会保存"，确定才清空跳过 */
-function bkBeautyHasInput(){ return bkBeautyRows().some(function(r){ return (r.ym||'') || (r.project||'').trim(); }); }
+function bkBeautyHasInput(){ return bkBeautyRows().some(function(r){ return r.y || r.m || (r.project||'').trim(); }); }
 function bkBeautySkip(){
   if(!bkBeautyHasInput()) return bkBeautySkipNow();
   var ov = document.createElement('div'); ov.id = 'bk-skip-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(27,38,53,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px;';
@@ -229,7 +231,7 @@ function bkBeautySkip(){
 function bkCloseSkip(){ var ov = document.getElementById('bk-skip-ov'); if(ov) ov.remove(); }
 function bkBeautySkipNow(){ bkCloseSkip(); BK.f.beauty = []; BK.err = ''; bkNextStep(); }
 function bkBeautyNext(){
-  var rows = bkBeautyRows().filter(function(r){ return (r.ym||'') || (r.project||'').trim(); }); /* 整行没填的直接丢掉 */
+  var rows = bkBeautyRows().filter(function(r){ return r.y || r.m || (r.project||'').trim(); }); /* 整行没填的直接丢掉 */
   var cur = dateStr(demoNow()).slice(0,7);
   for(var i=0;i<rows.length;i++){
     if(!rows[i].ym || !(rows[i].project||'').trim()){ BK.f.beauty = rows; BK.err = bt('beauty.err'); return bkRender(true); }
