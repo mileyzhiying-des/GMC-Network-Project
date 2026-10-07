@@ -237,7 +237,7 @@ function settlementBigCardHtml(c, items, removable){
       '<div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:8px;">赴韩项目</div>'+
       krItems.map(function(it){ return settlementItemRow(c, it, removable)+pcLinesHtml(c, it); }).join('')+
       '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;"><span>合计</span><span style="font-weight:700;">'+formatCurrency(krTotal,'KRW')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（'+Math.round(KR_DEPOSIT_RATE*100)+'% ×（施术项目 + 必须在韩国的术后管理），比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（'+Math.round(KR_DEPOSIT_RATE*100)+'% × 施术项目，术后管理含在套餐内，比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
       noteFieldHtml('备注（KR + IN 可见）','noteKR',c.noteKR)+
       '</div>';
   }
@@ -279,13 +279,12 @@ function settleKrBalance(){
 }
  /* 赴韩项目收预付金比例，演示先用30%，具体比例待业务确认 */
 /* items 现在是快照数组（自带 price/origin），不用再回查项目库；本地项目按个数+折扣算总价（2026-09-29 第十轮新增） */
-/* 赴韩项目的术后管理（2026-10-06，KR-CASE-02）：it.postcare = [{name, price(韩元/次), times, place:'KR'|'either', day, innName, innPrice(印尼盾/次), inTimes}]
-   place='KR' 必须在韩国做；'either' 韩国或印尼都可，由 IN 室长分配（inTimes = 分给印尼的次数，其余在韩国），付尾款前都可以改
-   定金 =（施术项目 + 必须在韩国的术后管理）× 比例；可弹性的先"暂定"，不算进定金（所以分配改变不影响定金） */
+/* 赴韩项目的术后管理（2026-10-07 改：术后管理包含在套餐里，不另收费）：it.postcare = [{name, times, place:'KR'|'either', day, innName, inTimes}]
+   place='KR' 必须在韩国做；'either' 韩国或印尼都可，由 IN 室长分配（inTimes = 分给印尼的次数，其余在韩国），付尾款前都可以改——分配只为排程，不涉及金额
+   赴韩项目金额 = 施术项目价格；定金 = 施术项目 × 比例；尾款 = 施术项目 × (1 − 比例)（术后管理不计价；只有"加做"的术后管理才收费，见 coreAddOnItem） */
 function pcSplit(x){ var inn = (x.place==='either' && x.innName) ? Math.min(x.times, Math.max(0, x.inTimes||0)) : 0; return {kr:x.times-inn, inn:inn}; }
-function itemKrParts(it){ var must = 0, elastic = 0; (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='KR') must += (x.price||0)*x.times; else elastic += (x.price||0)*s.kr; }); return {base:it.price||0, must:must, elastic:elastic}; }
-function itemKrAmount(it){ var p = itemKrParts(it); return p.base + p.must + p.elastic; } /* 这个赴韩项目在韩国要付的合计（含术后管理的韩国部分） */
-function itemInnAmount(it){ var t = 0; (it.postcare||[]).forEach(function(x){ t += (x.innPrice||0)*pcSplit(x).inn; }); return t; } /* 分给印尼的术后管理（印尼盾） */
+function itemKrParts(it){ return {base:it.price||0, must:0, elastic:0}; }
+function itemKrAmount(it){ return it.price||0; } /* 这个赴韩项目在韩国要付的合计 = 施术项目价格 */
 function computeBatchBreakdown(items){
   var krItems = [], inItems = [], krTotal = 0, inTotal = 0, krFixed = 0, krProvisional = 0;
   items.forEach(function(it){
@@ -490,13 +489,13 @@ function pcLinesHtml(c, it, fn){
   fn = fn || 'setPcAlloc';
   if(!(it.postcare||[]).length) return '';
   var editable = pcAllocEditable(c) && !it.cancelled && !it.swapped, bid = it.batchId || '';
-  return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);">'+it.postcare.map(function(x, i){
-    var s = pcSplit(x), amt = (x.price||0)*s.kr, head = x.name+'（韩元 '+formatCurrency(x.price||0,'KRW')+'/次'+(x.day?'，'+x.day:'')+'）';
-    if(x.place==='KR') return '<div style="margin:3px 0;">'+head+'：韩国 '+x.times+' 次，必须在韩国 · '+formatCurrency(amt,'KRW')+'（计入定金）</div>';
+  return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);"><div style="color:var(--muted);margin-bottom:2px;">术后管理（含在套餐内，不另收费；地点分配只用于排程）</div>'+it.postcare.map(function(x, i){
+    var s = pcSplit(x), head = x.name+' × '+x.times+' 次'+(x.day?'（'+x.day+'）':'');
+    if(x.place==='KR') return '<div style="margin:3px 0;">'+head+'：韩国 '+x.times+' 次，必须在韩国</div>';
     var ctl = (editable && x.innName)
       ? '印尼 <input type="number" min="0" max="'+x.times+'" value="'+s.inn+'" onchange="'+fn+'(\''+it.projectId+'\',\''+bid+'\','+i+',this.value)" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;font-size:11px;"> 次'
       : '印尼 '+s.inn+' 次'+(x.innName ? '' : '（没有印尼对应项目，只能在韩国）');
-    return '<div style="margin:3px 0;">'+head+'：韩国 '+s.kr+' 次 + '+ctl+' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;font-size:10px;">暂定</span> · 韩国部分 '+formatCurrency(amt,'KRW')+(s.inn ? '，印尼部分 '+formatCurrency((x.innPrice||0)*s.inn,'IDR')+'（'+x.innName+'）' : '')+'</div>';
+    return '<div style="margin:3px 0;">'+head+'：韩国 '+s.kr+' 次 + '+ctl+(x.innName ? '（印尼：'+x.innName+'）' : '')+(pcAllocEditable(c) ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;font-size:10px;">暂定</span>' : '')+'</div>';
   }).join('')+'</div>';
 }
 /* 麻醉同意书（占位文案，等用户撰写；记录版本 + 签署时间存在案件上） */

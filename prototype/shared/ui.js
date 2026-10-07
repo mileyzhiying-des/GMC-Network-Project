@@ -628,11 +628,11 @@ function renderClientHoldings(name){
     var open = !!HOLD_EXPAND[gi];
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
-      var action = (st==='未使用' || st==='部分使用')
+      var action = b.pkg ? '<span style="font-size:11px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (st==='未使用' || st==='部分使用')
         ? '<a href="#" class="info-link" style="white-space:nowrap;" onclick="openHoldingRefundByIdx('+gi+','+bi+');return false;">退款</a>'
         : (b.refund ? '<span style="font-size:11px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '');
       return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 8px 14px;border-top:1px dashed var(--border2);">'+
-        '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
+        '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · '+(b.pkg ? '套餐内含 · ' : '')+'购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
         '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';white-space:nowrap;">'+st+'</span>'+
         '<span style="min-width:84px;text-align:right;">'+action+'</span></div>';
     }).join('') : '';
@@ -1694,7 +1694,7 @@ function confirmRefund(){
   closeRefundModal();
   if(mode0==='diffRefund'){ /* 尾款多退少补：退差额后视为尾款已结清 */
     c.krBalancePaid = true; if(c.krJudge) c.krJudge.settled = true;
-    if(finalizeInnCare(c).length){ logCaseEvent(c, actingName(), '行程已确认：术后管理印尼部分 '+formatCurrency(c.innCare.total,'IDR')+' 待收款'); pushNotif('赴韩施术','尾款已结清、行程已确认：'+c.name+'，印尼部分术后管理待收款', {caseId:c.id, silent:true}); }
+    if(finalizeInnCare(c).length){ logCaseEvent(c, actingName(), '行程已确认：术后管理印尼部分（套餐内含）已转为客人持有项目'); }
     buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
     return;
   }
@@ -1797,7 +1797,7 @@ function settleProjects(batchId){
   var rows = '';
   if(batch.krTotal){
     rows += '<div><div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:6px;">赴韩项目（收预付金，尾款赴韩后支付）</div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>项目小计（含术后管理的韩国部分）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>施术项目小计（术后管理含在套餐内，不另收费）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px;"><span>预付金（'+Math.round(KR_DEPOSIT_RATE*100)+'%）</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后支付）</span><span>'+formatCurrency(batch.krBalance,'KRW')+'</span></div></div>';
   }
@@ -1811,7 +1811,6 @@ function settleProjects(batchId){
   rows += '<div style="border-top:1px solid var(--border);padding-top:14px;font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:6px;"><span style="font-size:13px;color:var(--muted);font-weight:400;">本次合计应付（两种币种分开支付，不合并）</span>'+payLines.join('')+'</div>';
   var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; }), need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
   SETTLE_ANES_SIGNED = false;
-  if(batch.krProvisional) rows += '<div style="font-size:12px;color:var(--muted);">其中可弹性术后管理 '+formatCurrency(batch.krProvisional,'KRW')+' 为暂定，不算进定金，付尾款前可在项目卡上调整韩国 / 印尼分配。</div>';
   if(need.length){
     rows += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#FBF6EA;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">麻醉同意书 <span style="font-weight:400;font-size:11px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
       '<div style="font-size:12px;color:var(--slate2);line-height:1.8;">（文案待撰写，演示占位）客人已了解下列项目的麻醉方式并同意：<br>'+need.map(function(a){ return '· '+a.name+'：<b>'+a.label+'</b>'+(a.note?'（'+a.note+'）':''); }).join('<br>')+'</div>'+

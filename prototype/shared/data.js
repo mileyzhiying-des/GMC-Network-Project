@@ -3145,16 +3145,24 @@ function coreSwapItem(c, itemName, altName, by, detail){
   pushNotif('赴韩施术','KR 更换项目：'+c.name+'（'+target.name+' → '+alt.name+'）', {caseId:c.id});
   return true;
 }
-/* 付尾款并确认行程：可弹性术后管理的地点和金额在这时确定（锁定分配）；韩国部分进尾款，印尼部分生成「待 IN 室长收款」（收到后才转 IN 持有项目，客人当下不买就不生成） */
+/* 付尾款并确认行程：可弹性术后管理的地点在这时确定（锁定分配）；术后管理含在套餐里——分给印尼的部分直接变成客人在 IN 的 0 元持有批次（套餐内含，术后第 N 天），不再收款 */
 function innCareLines(c){
   var out = [];
-  krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='either' && s.inn>0) out.push({item:it.name, name:x.name, innName:x.innName, times:s.inn, price:x.innPrice||0, day:x.day||''}); }); });
+  krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='either' && s.inn>0) out.push({item:it.name, name:x.name, innName:x.innName||x.name, times:s.inn, day:x.day||''}); }); });
   return out;
 }
-/* 付清尾款（含 IN 按 KR 判断退差额后视为结清）时：锁定分配，印尼部分术后管理生成「待 IN 室长收款」 */
+/* 付清尾款（含 IN 按 KR 判断退差额后视为结清）时：锁定分配，印尼部分术后管理直接发放为 0 元持有批次（只发一次） */
 function finalizeInnCare(c){
   var inn = innCareLines(c);
-  if(inn.length && !c.innCare) c.innCare = {lines:inn, total:inn.reduce(function(s,l){ return s+l.price*l.times; },0), status:'pending'};
+  if(inn.length && !c.innCare){
+    var today = nowFullDt().split(' ')[0];
+    inn.forEach(function(l){
+      grantHolding(c.name, l.innName, '术后管理', c.id, today, l.times, false);
+      var h = (CLIENT_HOLDINGS[c.name]||[]).filter(function(x){ return x.itemName===l.innName; })[0], b = h && h.batches[h.batches.length-1], m = String(l.day).match(/(\d+)/);
+      if(b){ b.pkg = true; if(m) b.schedule = '术后第'+m[1]+'天'; } /* 套餐内含（0 元）；持有项目的进行时间 */
+    });
+    c.innCare = {lines:inn, status:'granted', at:nowFullDt()};
+  }
   return inn;
 }
 function coreSettleBalance(c, by){
@@ -3169,8 +3177,8 @@ function coreSettleBalance(c, by){
   }
   c.krBalancePaid = true; j.settled = true; /* 付清尾款后分配锁定 */
   var inn = finalizeInnCare(c);
-  logCaseEvent(c, by, 'KR确认行程并标记"付清尾款"：尾款 '+formatCurrency(info.diff,'KRW')+(inn.length ? '；术后管理印尼部分 '+formatCurrency(c.innCare.total,'IDR')+' 待 IN 室长收款' : ''));
-  pushNotif('赴韩施术','客人付清尾款、行程已确认：'+c.name+(inn.length ? '；印尼部分术后管理 '+formatCurrency(c.innCare.total,'IDR')+' 请收款（收到后转为客人持有项目）' : ''), {caseId:c.id});
+  logCaseEvent(c, by, 'KR确认行程并标记"付清尾款"：尾款 '+formatCurrency(info.diff,'KRW')+(inn.length ? '；术后管理印尼部分（套餐内含）已转为客人持有项目：'+inn.map(function(l){ return l.innName+' ×'+l.times; }).join('、') : ''));
+  pushNotif('赴韩施术','客人付清尾款、行程已确认：'+c.name+(inn.length ? '；印尼部分术后管理已转为客人持有项目（套餐内含）' : ''), {caseId:c.id});
   return {ok:true};
 }
 /* KR 在韩重新预约施术时间：回到"施术时间已确认"（新时间），客人再到医院时 KR 重新标记已到医院；IN 不能改 */
@@ -3191,31 +3199,11 @@ function coreRefundDecision(c, kind, by){
   pushNotif('赴韩施术','KR 判断不能施术、定金'+(kind==='all' ? '全部退回' : '不退')+'：'+c.name+'，请按此操作', {caseId:c.id});
   return true;
 }
-/* IN 室长收印尼盾后，印尼部分术后管理转成客人在 IN 的持有项目（schedule = 术后第 N 天）；客人当下不买就不生成，之后回印尼当一般本地项目买 */
-function confirmInnCare(buy){
-  var c = getCurrentCase(); if(!c || !c.innCare || c.innCare.status!=='pending') return;
-  var today = nowFullDt().split(' ')[0];
-  if(buy){
-    c.innCare.lines.forEach(function(l){
-      grantHolding(c.name, l.innName, '术后管理', c.id, today, l.times, false);
-      var h = (CLIENT_HOLDINGS[c.name]||[]).filter(function(x){ return x.itemName===l.innName; })[0], b = h && h.batches[h.batches.length-1], m = String(l.day).match(/(\d+)/);
-      if(b && m) b.schedule = '术后第'+m[1]+'天'; /* 持有项目的进行时间 */
-    });
-    c.innCare.status = 'collected'; c.innCare.at = nowFullDt();
-    logCaseEvent(c, actingName(), '收取术后管理印尼部分 '+formatCurrency(c.innCare.total,'IDR')+'，已转入客人持有项目：'+c.innCare.lines.map(function(l){ return l.innName+' ×'+l.times; }).join('、'));
-  } else {
-    c.innCare.status = 'declined'; c.innCare.at = nowFullDt();
-    logCaseEvent(c, actingName(), '客人当下不购买术后管理印尼部分（不生成持有项目，之后回印尼当一般本地项目购买）');
-  }
-  buildCaseLog(c); renderCaseBody(c);
-}
+/* 套餐内含的印尼部分术后管理：付清尾款时自动生成客人持有批次，IN 端只在案件里显示一条说明（没有收款/不买的选择） */
 function innCareCardHtml(c){
-  var ic = c.innCare; if(!ic) return '';
-  var lines = ic.lines.map(function(l){ return '<div style="font-size:12px;margin:3px 0;">'+l.innName+' × '+l.times+'（'+formatCurrency(l.price,'IDR')+'/次'+(l.day?'，'+l.day:'')+'，来自 '+l.item+' 的术后管理）</div>'; }).join('');
-  var action = ic.status==='pending'
-    ? '<div style="display:flex;gap:8px;margin-top:8px;"><button class="btn-primary" onclick="confirmInnCare(true)">已收款 '+formatCurrency(ic.total,'IDR')+'（转为客人持有项目）</button><button class="btn-outline" onclick="confirmInnCare(false)">客人当下不买</button></div>'
-    : '<div style="font-size:12px;color:'+(ic.status==='collected'?'var(--sage)':'var(--muted)')+';margin-top:6px;">'+(ic.status==='collected' ? '✓ 已收款并转为客人持有项目（'+ic.at+'）' : '客人当下没有购买，没有生成持有项目；之后回印尼当一般本地项目购买')+'</div>';
-  return '<div style="border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-top:14px;background:#FBF6EA;"><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">术后管理 · 印尼部分（付尾款确认行程时由 IN 室长收印尼盾）</div>'+lines+action+'</div>';
+  var ic = c.innCare; if(!ic || !ic.lines) return '';
+  var lines = ic.lines.map(function(l){ return '<div style="font-size:12px;margin:3px 0;">'+l.innName+' × '+l.times+' 次'+(l.day?'（术后第 '+((String(l.day).match(/(\d+)/)||[])[1]||'?')+' 天）':'')+'，来自 '+l.item+' 的术后管理</div>'; }).join('');
+  return '<div style="border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-top:14px;background:#FBF6EA;"><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">术后管理 · 印尼部分（套餐内含，已转为客人持有项目，0 元）</div>'+lines+'<div style="font-size:11px;color:var(--muted);margin-top:6px;">'+ic.at+' 发放；不另收款，到印尼使用时在客户详情的持有项目里扣次数。</div></div>';
 }
 
 /* ---- 子项进行、回诊与结案（2026-10-06，KR-CASE-02 第 5 节） ----
