@@ -73,6 +73,7 @@ var Store = (function(){
     return true;
   }
   function afterLoad(){
+    if(typeof ensureSeedAccounts === 'function') ensureSeedAccounts(); /* 新增的种子账号补进保留下来的账号里 */
     if(typeof normClientNames === 'function') try{ normClientNames(); }catch(e){} /* 旧客户资料补上名 / 姓两栏 */
     ME_NAME = (currentAccount() || {name:''}).name || ''; /* 账号改过名字（个人设定/激活）后，名字要跟存档走 */
     if(typeof syncInCoordinators === 'function') syncInCoordinators(); /* IN 室长名单由账号算出，不存档 */
@@ -126,6 +127,7 @@ var Store = (function(){
       var g = readRaw(KEY_G);
       if(!g || String(g.ver) !== String(DEMO_DATA_VERSION) || g.partial){
         if(g && g.partial && g.vars) Object.keys(g.vars).forEach(function(n){ window[n] = g.vars[n]; }); /* 版本重置时保留的账号等 */
+        if(typeof ensureSeedAccounts === 'function') ensureSeedAccounts();
         var snapC1 = null;
         CLINICS.forEach(function(cl){ /* 先写诊所分区（viewSplit 会把 KR 项拆回医院，全局部分要在它之后序列化） */
           var p = readRaw(keyC(cl.id));

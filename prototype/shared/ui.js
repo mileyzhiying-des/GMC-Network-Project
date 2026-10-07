@@ -215,7 +215,7 @@ function setCalView(v){
   document.getElementById('cal-view-kr').classList.toggle('active', v==='kr');
   var sel = document.getElementById('kr-dir-sel'), hsel = document.getElementById('kr-hosp-sel');
   sel.style.display = v==='kr' ? 'inline-block' : 'none';
-  hsel.style.display = (v==='kr' && linkedHospitals().length>0) ? 'inline-block' : 'none';
+  hsel.style.display = 'none'; /* 一诊所一医院：不再切换医院 */
   KR_HOSPITAL = krViewHospital(); KR_DIRECTOR = krViewDirector();
   hsel.innerHTML = linkedHospitals().map(function(h){ return '<option value="'+h.id+'"'+(h.id===KR_HOSPITAL?' selected':'')+'>'+h.name.ko+'</option>'; }).join('');
   sel.innerHTML = hospitalDirectorNames(KR_HOSPITAL).map(function(n){ return '<option'+(n===KR_DIRECTOR?' selected':'')+'>'+n+'</option>'; }).join('');
@@ -860,11 +860,12 @@ var CASE_REFUND_FILTER = false;
 function buildCaseTabs(){
   document.getElementById('case-tabs').innerHTML = CASE_TABS.map(function(t){
     return '<span class="tab'+(t.key===CASE_TAB_FILTER?' active':'')+'" onclick="filterCases(\''+t.key+'\')">'+t.label+'</span>';
-  }).join('') + (function(){ /* 医院筛选：本诊所对接了 2 家以上医院才显示；对接 1 家时列表里仍有"医院"栏 */
-    var hs = linkedHospitals(); if(hs.length<2) return '';
+  }).join('') + (function(){ /* 一诊所一医院：案件列表没有医院筛选 */
+    return '';
+    var hs = [];
     return '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;"><span style="font-size:11px;color:var(--muted);">医院</span><span class="chip'+(CASE_HOSPITAL_FILTER==='all'?' active':'')+'" onclick="setCaseHospitalFilter(\'all\')">全部</span>'+
       hs.map(function(h){ return '<span class="chip'+(CASE_HOSPITAL_FILTER===h.id?' active':'')+'" onclick="setCaseHospitalFilter(\''+h.id+'\')">'+h.name.ko+'</span>'; }).join('')+'</span>';
-  })() + '<span class="chip'+(CASE_REFUND_FILTER?' active':'')+'" style="'+(linkedHospitals().length<2?'margin-left:auto;':'')+'" onclick="toggleRefundFilter()">有退款</span>';
+  })() + '<span class="chip'+(CASE_REFUND_FILTER?' active':'')+'" style="margin-left:auto;" onclick="toggleRefundFilter()">有退款</span>';
 }
 
 function toggleRefundFilter(){ CASE_REFUND_FILTER = !CASE_REFUND_FILTER; buildCaseTabs(); renderCaseRows(); }
@@ -876,7 +877,6 @@ function setCaseHospitalFilter(v){ CASE_HOSPITAL_FILTER = v; buildCaseTabs(); re
 function renderCaseRows(){
   var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return c.stage===CASE_TAB_FILTER; });
   if(CASE_REFUND_FILTER) items = items.filter(hasRefundMark);
-  if(CASE_HOSPITAL_FILTER!=='all') items = items.filter(function(c){ return c.hospitalId===CASE_HOSPITAL_FILTER; });
   if(CASE_ONLY_MINE) items = items.filter(function(c){ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }); /* 仅看我的：只显示我操作过的案件 */
   if(items.length===0){
     document.getElementById('case-rows').innerHTML = '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">该分类下暂无案件（其余阶段的界面还没设计，先把预约到店这一段做完）</div>';
@@ -898,11 +898,11 @@ function renderCaseRows(){
         '<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="rowAction(\''+c.id+'\',\'noshow\')">未到店</button>'+
         '<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="rowAction(\''+c.id+'\',\'reschedule\')">预约修改</button></div>'
       : '';
-    return '<div class="trow" style="grid-template-columns:1.1fr 0.8fr 1.5fr 0.6fr 1.1fr 1fr 0.9fr 0.8fr 0.8fr 0.7fr auto;"><b style="font-size:13px;cursor:pointer;" onclick="openCaseDetail(\''+c.id+'\')">'+c.name+'</b>'+
+    return '<div class="trow" style="grid-template-columns:1.1fr 0.8fr 1.5fr 0.6fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr auto;"><b style="font-size:13px;cursor:pointer;" onclick="openCaseDetail(\''+c.id+'\')">'+c.name+'</b>'+
       '<span style="font-size:12px;color:var(--slate2);">'+c.caseNo+'</span>'+
       '<span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+lmTag+(c.stage==='cancelled' ? '<div style="font-size:11px;color:var(--muted);margin-top:3px;">'+endReasonText(c)+'</div>' : '')+rowBtns+'</span>'+
       '<span>'+abnormal+'</span><span>'+financeCellHtml(c)+'</span>'+
-      '<span style="font-size:12px;">'+(c.hospitalId ? hospitalName(c.hospitalId,'ko') : '—')+'</span><span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(staffLabel).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
+      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(staffLabel).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
       '<a href="#" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
   }).join('');
 }
@@ -1503,7 +1503,7 @@ function editConcernField(field){
 
 function confirmConsultFee(){
   var c = getCurrentCase(); if(!c) return;
-  if(!c.hospitalId || !c.director){ alert('请先选择医院和院长'); return; }
+  if(!c.hospitalId || !c.director){ alert('请先选择院长'); return; }
   var d = feeDraft(c);
   if(d.locked && d.mode==='waive'){ alert('距原案件报告日期已超过1个月，不能免除面诊费'); return; }
   if(d.mode==='paid'){ markConsultPaid(); return; }
@@ -1899,7 +1899,7 @@ function renderLibrary(){
   var f = document.getElementById('lib-filters');
   var searchBox = '<input type="text" id="lib-search" placeholder="搜索案例标题" value="'+LIB_SEARCH.replace(/"/g,'&quot;')+'" oninput="libSearchInput(this.value)" style="width:200px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;">';
   var hs = linkedHospitals(), hospSw = hs.length ? '<span style="display:inline-flex;gap:6px;align-items:center;"><span style="font-size:11px;color:var(--muted);">赴韩施术医院</span><span class="chip'+(LIB_HOSPITAL==='all'?' active':'')+'" onclick="setLibHospital(\'all\')">全部</span>'+hs.map(function(h){ return '<span class="chip'+(LIB_HOSPITAL===h.id?' active':'')+'" onclick="setLibHospital(\''+h.id+'\')">'+h.name.ko+'</span>'; }).join('')+'</span>' : '';
-  if(f) f.innerHTML = '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'+toggle+searchBox+(hs.length>1 ? hospSw : '')+(LIB_SEARCH ? '' : libCrumbsHtml())+'</div>';
+  if(f) f.innerHTML = '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'+toggle+searchBox+(LIB_SEARCH ? '' : libCrumbsHtml())+'</div>';
   main.style.display = 'block'; main.style.marginTop = '22px';
   renderLibMain();
 }
@@ -2181,7 +2181,7 @@ function renderProjLibFilters(){
       var label = c==='KRW'?'韩元（原价）':(c==='IDR'?(origin==='IN'?'印尼盾（原价）':'印尼盾'):'人民币');
       return '<option value="'+c+'"'+(curCcy===c?' selected':'')+'>'+label+'</option>';
     }).join('')+'</select>';
-  var hospSwitch = (origin==='KR') ? '<span style="font-size:11px;color:var(--muted);">医院</span>'+linkedHospitals().map(function(h){ return '<span class="chip'+(projLibHospital()===h.id?' active':'')+'" onclick="setProjLibHospital(\''+h.id+'\')">'+h.name.ko+'</span>'; }).join('') : '';
+  var hospSwitch = ''; /* 一诊所一医院：不切换医院 */
   el.innerHTML = (hospSwitch ? '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'+hospSwitch+'</div>' : '')+'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+search+chips+'</div>'+
     '<div style="display:flex;gap:10px;align-items:center;">'+ccySwitch+

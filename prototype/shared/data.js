@@ -99,10 +99,11 @@ var HOSPITALS = [
 ];
 var CLINICS = [
   {id:'C1', name:'GMC 合作诊所（雅加达）', accountPrefix:'A'},
-  {id:'C2', name:'泗水合作诊所（Surabaya）', accountPrefix:'B'}
+  {id:'C2', name:'泗水合作诊所（Surabaya）', accountPrefix:'B'},
+  {id:'C3', name:'巴厘合作诊所（Bali）', accountPrefix:'D'}
 ];
-var CLINIC_HOSPITALS = [ /* 对接关系（多对多）：C1 对接 H1、H2；C2 只对接 H1 */
-  {clinicId:'C1', hospitalId:'H1'}, {clinicId:'C1', hospitalId:'H2'}, {clinicId:'C2', hospitalId:'H1'}
+var CLINIC_HOSPITALS = [ /* 对接关系（2026-10-07 起一家诊所只对接一家医院，一家医院可对接多家诊所）：C1、C2 → H1；C3 → H2 */
+  {clinicId:'C1', hospitalId:'H1'}, {clinicId:'C2', hospitalId:'H1'}, {clinicId:'C3', hospitalId:'H2'}
 ];
 /* HOSPITAL_DATA[hid]：{directors:[{id,name,active}], coordinators:[姓名], openDates:{院长名:[日期]}, directorSchedule:{院长名:[块]}, coordSchedule:[块], projects:[赴韩项目], libCases:[赴韩案例]}
    （初始值在 data.js 末尾的 initHospitalData() 用上面的老种子变量生成；projects / libCases 在存档时由 PROJECT_LIBRARY / LIB_CASES 的合成数组拆回来，见 store.js） */
@@ -113,6 +114,7 @@ function hospitalById(id){ return HOSPITALS.filter(function(h){ return h.id===id
 function hospitalName(id, lang){ var h = hospitalById(id); return h ? (h.name[lang||'ko'] || h.name.ko) : '—'; }
 function linkedHospitalIds(clinicId){ return CLINIC_HOSPITALS.filter(function(r){ return r.clinicId===(clinicId||CURRENT_CLINIC_ID); }).map(function(r){ return r.hospitalId; }); }
 function linkedHospitals(clinicId){ return linkedHospitalIds(clinicId).map(hospitalById).filter(Boolean); }
+function clinicHospital(clinicId){ var ids = linkedHospitalIds(clinicId); return ids[0] || null; } /* 这家诊所对接的那一家医院 */
 function hospitalLinked(hid, clinicId){ return linkedHospitalIds(clinicId).indexOf(hid) > -1; }
 function hospitalDirectors(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.directors : []; }
 function hospitalDirectorNames(hid){ return hospitalDirectors(hid).filter(function(d){ return d.active; }).map(function(d){ return d.name; }); } /* 启用的院长（停用的不出现在选项里） */
@@ -169,6 +171,7 @@ var ACCOUNTS = [
   {id:'A4', clinicId:'C1',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:D(-29)+' 11:00', activatedAt:D(-28)+' 09:00', disabledAt:D(-8)+' 17:00', history:[{ts:D(-28)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:D(-8)+' 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]},
   {id:'A5', clinicId:'C1',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]},
   {id:'B1', clinicId:'C2', role:'manager', seat:'basic', name:'Citra', position:'室长', phone:'+62 811-0000-0011', status:'active', password:'b1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Citra（B1）'}]},
+  {id:'D1', clinicId:'C3', role:'manager', seat:'basic', name:'Dian', position:'室长', phone:'+62 811-0000-0021', status:'active', password:'d1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Dian（D1）'}]},
   {id:'B2', clinicId:'C2', role:'general', seat:'basic', name:'Bagas', position:'前台室长', phone:'+62 811-0000-0012', status:'active', password:'b2123', photo:'证件照', createdAt:D(-30)+' 09:10', activatedAt:D(-29)+' 09:00', history:[{ts:D(-29)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Bagas（B2）'}]}
 ,
   /* KR 医院账号（2026-10-06）：编号 K+角色字母（O 代表院长 / M 管理者 / C 室长 / D 院长）+医院序号，和 IN 的 OWN、A 开头、B 开头编号不冲突；密码 = 编号小写 + 123 */
@@ -179,6 +182,9 @@ var ACCOUNTS = [
   {id:'KM2', hospitalId:'H2', role:'kr_manager',  seat:'basic', name:'정하늘',   position:'室长',     phone:'+82 10-0000-0011', status:'active', password:'km2123', photo:'证件照', createdAt:D(-50)+' 09:10', activatedAt:D(-50)+' 10:00', history:[{ts:D(-50)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'정하늘（KM2）'}]},
   {id:'KC2', hospitalId:'H2', role:'kr_general',  seat:'basic', name:'최민준',   position:'室长',     phone:'+82 10-0000-0012', status:'active', password:'kc2123', photo:'证件照', createdAt:D(-50)+' 09:20', activatedAt:D(-49)+' 09:00', history:[{ts:D(-49)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'최민준（KC2）'}]}
 ];
+/* 种子账号补齐（2026-10-07）：版本号重置时账号资料从存档保留，新增的种子账号（如 C3 的 D1）要补进去，已有的不动 */
+var SEED_ACCOUNTS_COPY = JSON.parse(JSON.stringify(ACCOUNTS));
+function ensureSeedAccounts(){ SEED_ACCOUNTS_COPY.forEach(function(a){ if(!ACCOUNTS.some(function(x){ return x.id===a.id; })) ACCOUNTS.push(JSON.parse(JSON.stringify(a))); }); }
 var PURCHASE_REQ = null; /* 管理者加购"管理者账号"时发给老板的验证码：{code, by, qty, exp(毫秒时间戳), used}；演示：老板登录后在页面顶部看到 */
 var ACCOUNT_SEQ = 5; /* 本诊所下一个加购账号编号 = 诊所账号前缀 + (ACCOUNT_SEQ+1)；每家诊所各一份（存在诊所分区里；C1 前缀 A，C2 前缀 B） */
 /* 操作日志（owner/管理者在"操作日志"页看；第八部分做页面）：时间、操作账号 + 当时的姓名、内容、类型 */
@@ -1829,12 +1835,7 @@ function onNewHistoryChanged(){
 /* 医院 + 院长（2026-10-06 多医院）：选"面诊"才出现，都必选；先选医院（只列出本诊所对接的医院；只对接一家就自动选定），再选该医院的院长（只含启用的院长）；
    复诊/延续既往面诊 → 医院锁定为原案件的医院；院长默认带出原案件院长并锁定，原院长停用时才解锁可改选（医院仍锁定）；
    确认后写入案件的医院和对接院长，选定后不能更换；不面诊的本地案件没有医院和院长 */
-function hospitalLockInfo(c){
-  var l = c.linkedCase; if(!l || !l.caseId || (l.reason!=='复诊' && l.reason!=='延续既往面诊')) return null;
-  var src = CASE_ITEMS.filter(function(x){ return x.id===l.caseId; })[0];
-  if(!src || !src.hospitalId) return null;
-  return {hospitalId:src.hospitalId, caseNo:src.caseNo, reason:l.reason};
-}
+function hospitalLockInfo(c){ return null; } /* 2026-10-07：一诊所一医院，案件的医院就是本诊所对接的医院，不再选择也无需锁定 */
 function directorLockInfo(c){
   var l = c.linkedCase; if(!l || !l.caseId || (l.reason!=='复诊' && l.reason!=='延续既往面诊')) return null;
   var src = CASE_ITEMS.filter(function(x){ return x.id===l.caseId; })[0];
@@ -1845,7 +1846,7 @@ function directorLockInfo(c){
 function caseHospitalId(c){
   var hl = hospitalLockInfo(c); if(hl) return hl.hospitalId;
   if(c.hospitalId) return c.hospitalId;
-  var ls = linkedHospitalIds(c.clinicId); return ls.length===1 ? ls[0] : null;
+  return clinicHospital(c.clinicId || CURRENT_CLINIC_ID);
 }
 function caseHospitalName(c){ var h = c.hospitalId || caseHospitalId(c); return h ? hospitalName(h, 'ko') : ''; }
 /* 这个案件所选院长开放的施术日期（KR 端按院长设定） */
@@ -1861,26 +1862,16 @@ function syncDirectorChoice(c){
   else if(c.director && (!c.hospitalId || hospitalDirectorNames(c.hospitalId).indexOf(c.director)<0)) c.director = null;
 }
 
-function setCaseHospital(v){
-  var c = getCurrentCase(); if(!c) return;
-  c.hospitalId = v || null;
-  if(!c.hospitalId || hospitalDirectorNames(c.hospitalId).indexOf(c.director)<0) c.director = null; /* 换医院后，院长要在新医院里重选 */
-  if(c.hospitalId) syncKrCoordinator(c); /* KR 室长跟着医院换 */
-  renderCaseBody(c);
-}
 function setCaseDirector(v){ var c = getCurrentCase(); if(!c) return; c.director = v || null; renderCaseBody(c); }
 
 /* 医院 + 院长两个下拉（基础资料选面诊时；增加面诊后缴费前也用这两个） */
 function hospitalDirectorSelectHtml(c, onHospital, onDirector, selStyle){
-  var hl = hospitalLockInfo(c), lk = directorLockInfo(c), ls = linkedHospitals(c.clinicId);
-  var hid = caseHospitalId(c);
-  var hospSel = '<select '+((hl || ls.length<2)?'disabled ':'')+'onchange="'+onHospital+'(this.value)" style="'+selStyle+((hl||ls.length<2)?'background:var(--sand);color:var(--muted);':'')+'"><option value="">请选择医院</option>'+
-    ls.map(function(h){ return '<option value="'+h.id+'"'+(hid===h.id?' selected':'')+'>'+h.name.ko+' / '+h.name.en+'</option>'; }).join('')+'</select>';
+  var lk = directorLockInfo(c), hid = caseHospitalId(c);
   var names = hid ? hospitalDirectorNames(hid) : [];
   var dirLocked = !!lk && (!hid || lk.hospitalId===hid);
-  var dirSel = '<select '+((dirLocked || !hid)?'disabled ':'')+'onchange="'+onDirector+'(this.value)" style="'+selStyle+((dirLocked||!hid)?'background:var(--sand);color:var(--muted);':'')+'"><option value="">'+(hid?'请选择院长':'请先选择医院')+'</option>'+
+  var dirSel = '<select '+((dirLocked || !hid)?'disabled ':'')+'onchange="'+onDirector+'(this.value)" style="'+selStyle+((dirLocked||!hid)?'background:var(--sand);color:var(--muted);':'')+'"><option value="">请选择院长</option>'+
     names.map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+'</select>';
-  return {hosp:hospSel, dir:dirSel, hid:hid, hl:hl, lk:lk};
+  return {hosp:'', dir:dirSel, hid:hid, hl:null, lk:lk};
 }
 
 /* IN 选院长的介绍卡（KR-DOC-01 第 2 节）：照片 + 姓名 + 职称 + 经历 + 认证 + 擅长项目；全部院长都列出（停用的不列），擅长客人意向项目的排前面并标示 */
@@ -1905,12 +1896,12 @@ function directorCardsHtml(c){
 }
 function directorRowHtml(c){
   if(c.needsConsult!==true) return '';
-  var o = hospitalDirectorSelectHtml(c, 'setCaseHospital', 'setCaseDirector', 'padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;');
+  var o = hospitalDirectorSelectHtml(c, '', 'setCaseDirector', 'padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;');
   var lk = o.lk, hl = o.hl;
   var hint = (hl ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">🔒 关联"'+hl.reason+'"（'+hl.caseNo+'）：医院已锁定为原案件的医院'+(lk ? '，院长已锁定原院长；原院长停用时才可改选' : '')+'</div>' : '')+
     ((!lk && c.linkedCase && c.linkedCase.caseId && (c.linkedCase.reason==='复诊'||c.linkedCase.reason==='延续既往面诊')) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">原案件的院长已停用，请在原医院里重新选择院长</div>' : '')+
-    ((!hl && !lk) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">先选医院（只列出本诊所对接的医院），再选该医院的院长；确认基础资料后不能更换</div>' : '');
-  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">医院 / 院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+o.hosp+o.dir+'</div>'+hint+directorCardsHtml(c)+'</div></div>';
+    ((!hl && !lk) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">院长来自本诊所对接的医院（'+hospitalName(o.hid,'ko')+'）；确认基础资料后不能更换</div>' : '');
+  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+o.hosp+o.dir+'</div>'+hint+directorCardsHtml(c)+'</div></div>';
 }
 
 function setNeedsConsult(val){
@@ -2183,14 +2174,13 @@ function feeDraft(c){
   return c.feeDraft;
 }
 
-function setConsultHospital(v){ setCaseHospital(v); }
 function setConsultDirector(v){ var c = getCurrentCase(); if(!c) return; c.director = v || null; renderCaseBody(c); }
 
 function consultDirectorPickHtml(c){
   if(c.director && c.hospitalId) return '';
-  var o = hospitalDirectorSelectHtml(c, 'setConsultHospital', 'setConsultDirector', 'padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;');
-  return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--terracotta-bg);border-radius:10px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">医院 / 院长 <span style="color:var(--terracotta);">*</span> '+
-    o.hosp+o.dir+'<span style="font-size:11px;color:var(--muted);">缴费前必选，选定后不能更换</span></div>';
+  var o = hospitalDirectorSelectHtml(c, '', 'setConsultDirector', 'padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;');
+  return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--terracotta-bg);border-radius:10px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">院长 <span style="color:var(--terracotta);">*</span> '+
+    o.dir+'<span style="font-size:11px;color:var(--muted);">缴费前必选，选定后不能更换</span></div>';
 }
 
 function consultFeeFormHtml(c){
@@ -3992,7 +3982,7 @@ function setProjDisplayCcy(origin, ccy){
 }
 
 function projLibCategories(origin){
-  return Object.keys(PROJECT_CATEGORIES).filter(function(id){ return PROJECT_CATEGORIES[id].origin===origin; }).map(function(id){ return PROJECT_CATEGORIES[id]; });
+  return Object.keys(PROJECT_CATEGORIES).filter(function(id){ return PROJECT_CATEGORIES[id].origin===origin && !(PROJECT_CATEGORIES[id].postcare && DEMO_ROLE!=='kr'); }) /* 「韩国术后管理」只在 KR 端项目库出现（IN 不显示） */.map(function(id){ return PROJECT_CATEGORIES[id]; });
 }
 
 /* 使用情况（从案件数据和客户持有数据计算）：进行中案件=还没到终态且引用了这个项目（快照 projectId）；持有中批次=客户持有批次里剩余次数>0 的批次（按项目名称匹配） */
@@ -4672,14 +4662,9 @@ function normalizeSeeds(){
     if(m){ m.id = 'main-H1'; m.hospitalId = 'H1'; m.name = 'Main · '+hospitalName('H1','ko'); }
     if(CHAT_DATA.hasOwnProperty('main')){ CHAT_DATA['main-H1'] = CHAT_DATA.main; delete CHAT_DATA.main; }
     if(ROOM_UNREAD.hasOwnProperty('main')){ ROOM_UNREAD['main-H1'] = ROOM_UNREAD.main; delete ROOM_UNREAD.main; }
-    ROOMS.splice(1, 0, {id:'main-H2', hospitalId:'H2', name:'Main · '+hospitalName('H2','ko'), isMain:true, color:'var(--slate2)', init:'G', date:'今天 10:30'});
-    CHAT_DATA['main-H2'] = [
-      {day:KD(0), from:'them', name:'박서윤 원장', color:'var(--slate2)', init:'박', orig:'이번 주 수술 일정이 거의 찼습니다.', trans:'本周手术排期基本满了。', time:'10:00'},
-      {day:KD(0), from:'them', name:'정하늘', color:'var(--sage)', init:'정', orig:'IN 쪽 신규 케이스 확인했습니다.', trans:'已确认 IN 这边的新案件。', time:'10:30'}
-    ];
     STAFF_ROSTER.length = 0; Array.prototype.push.apply(STAFF_ROSTER, [
       {id:'kr-lee', name:'이서연 · 韩国室长'}, {id:'kr-park', name:'박준혁 · 韩国室长'}, {id:'director-kim', name:'김민석 · 院长'},
-      {id:'kr-정하늘', name:'정하늘 · 韩国室长'}, {id:'kr-최민준', name:'최민준 · 韩国室长'}, {id:'director-박서윤', name:'박서윤 · 院长'}, {id:'rina', name:'Rina · 印尼室长'}]);
+      {id:'rina', name:'Rina · 印尼室长'}]);
   })();
   CLIENTS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; });
   CASE_ITEMS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; if(c.director && !c.hospitalId) c.hospitalId = 'H1'; });
