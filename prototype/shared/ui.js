@@ -230,16 +230,22 @@ function buildKrWeekGrid(){
     var ds = dateStr(dd), open = hospitalOpenDates(krViewHospital(), krViewDirector()).indexOf(ds)>-1;
     html += '<div class="wk-head'+(sameDate(dd, TODAY_DATE)?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(open?'<br><span style="font-size:9px;color:var(--sage);font-weight:700;">施术开放</span>':'')+'</div>';
   });
-  var hd = HOSPITAL_DATA[krViewHospital()] || {directorSchedule:{}, coordSchedule:[]};
-  var dirEvs = hd.directorSchedule[krViewDirector()] || [];
+  /* IN 看到的 KR 医院日程（IN-DASH-01 / KR-SCHD-01 第 6 节）：只显示"这段时间不可预约"的灰色块，没有文字，不显示原因；只有本诊所客人的施术块显示客人名字。
+     行是诊所时间，第二行显示实际的韩国时间；KR 日程块的时间是韩国时间，所以按 krTimeOf(hr) 对应到这一行 */
+  var hd = HOSPITAL_DATA[krViewHospital()] || {directorSchedule:{}, offs:[]};
+  var dn = krViewDirector(), dirEvs = (hd.directorSchedule||{})[dn] || [], offs = (hd.offs||[]).filter(function(o){ return o.who===dn; });
   WK_HOURS.forEach(function(hr){
-    html += '<div class="wk-time">'+krTimeOf(hr)+'<span class="kr">KR 时间</span></div>';
+    var krT = krTimeOf(hr), s0 = timeToMin(krT), s1 = s0 + SLOT_MIN;
+    html += '<div class="wk-time">'+hr+'<span class="kr">KR '+krT+'</span></div>';
     for(var d=0; d<7; d++){
       var ds = dateStr(days[d]);
-      var blocks = hd.coordSchedule.filter(function(e){ return e.date===ds && slotOf(e.time)===hr; }).concat(dirEvs.filter(function(e){ return e.date===ds && slotOf(e.time)===hr; }));
-      html += '<div class="wk-cell" style="flex-direction:column;gap:4px;background:#fff;cursor:default;">'+blocks.map(function(b){
-        return '<div style="background:#ECEAE4;border-radius:6px;padding:4px 7px;font-size:11px;color:var(--slate2);">'+b.title+'</div>';
-      }).join('')+'</div>';
+      var cover = dirEvs.filter(function(e){ return e.date===ds && timeToMin(e.time) < s1 && timeToMin(e.end||minToTime(timeToMin(e.time)+SLOT_MIN)) > s0; });
+      var offHit = offs.some(function(o){ return o.date===ds && (o.part==='上午' ? s0 < 13*60 : o.part==='下午' ? s0 >= 13*60 : true); });
+      var own = cover.filter(function(e){ return e.kind==='施术' && e.clinicId===CURRENT_CLINIC_ID; });
+      var others = cover.length - own.length + (offHit ? 1 : 0);
+      html += '<div class="wk-cell" style="flex-direction:column;gap:4px;background:#fff;cursor:default;">'+
+        (others>0 ? '<div title="这段时间不可预约" style="background:#ECEAE4;border-radius:6px;min-height:20px;"></div>' : '')+
+        own.map(function(e){ return '<div style="background:var(--sage-bg);color:var(--sage);border-radius:6px;padding:4px 7px;font-size:11px;font-weight:700;">'+(e.name||'')+' · 施术</div>'; }).join('')+'</div>';
     }
   });
   document.getElementById('wk-grid').innerHTML = html;

@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 21;
+var DEMO_DATA_VERSION = 22;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -849,7 +849,7 @@ var CASE_ITEMS = [
     videoSummary:'建议颧骨缩小+下巴假体联合方案改善轮廓。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true,
-    krSchedule:{status:'confirmed', confirmedDate:D(0), confirmedTime:'10:00', primary:D(0), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
+    krSchedule:{status:'confirmed', confirmedDate:D(0), confirmedTime:'11:00', primary:D(0), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
       {name:'颧骨缩小', origin:'KR', done:false, batchId:'B1'},
       {name:'下巴假体 / 颏成形', origin:'KR', done:true, batchId:'B1'}
@@ -4462,6 +4462,7 @@ SEEDING = false;
 initHospitalData();
 normalizeSeeds();
 Object.keys(HOSPITAL_DATA).forEach(normSchedBlocks);
+CASE_ITEMS.forEach(function(c){ if(c.krSchedule && c.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(c.krSchedule.status)>-1 && c.director) syncSurgeryBlock(c); }); /* 演示数据里已确认施术时间的案件，院长日程里也有施术块 */
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */
 syncInCoordinators();
 applyClinicSettings();
