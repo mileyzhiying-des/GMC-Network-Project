@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 20;
+var DEMO_DATA_VERSION = 21;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 4;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -2912,6 +2912,31 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
 }
 
 /* 演示按钮：模拟KR室长确认/无法安排施术日期 */
+/* ---- KR 日程块（KR-SCHD-01，2026-10-06）：{id, who(院长/室长), date, time(开始), end(结束), type:手术|面诊|会议|占位|其他, title, note, caseId, clinicId, name, kind:'施术'(自动加入的)}；
+   按事逐笔登记，允许重叠（并排显示）；时间都是韩国时间 ---- */
+var SCHED_TYPES = ['手术', '面诊', '会议', '占位', '其他'];
+var SCHED_SEQ = 1;
+function schedGuessType(t){ return /手术|施术/.test(t) ? '手术' : /面诊/.test(t) ? '面诊' : /会议|对接/.test(t) ? '会议' : /占位/.test(t) ? '占位' : '其他'; }
+function normSchedBlocks(hid){
+  var h = HOSPITAL_DATA[hid]; if(!h) return;
+  var fix = function(b, who){
+    if(!b.id) b.id = 'sb'+(SCHED_SEQ++)+Math.floor(Math.random()*1000);
+    if(!b.who && who) b.who = who;
+    if(!b.type) b.type = b.kind==='施术' ? '手术' : schedGuessType(b.title||'');
+    if(!b.end) b.end = minToTime(Math.min(24*60-1, timeToMin(b.time)+30));
+    if(b.note===undefined) b.note = '';
+  };
+  Object.keys(h.directorSchedule||{}).forEach(function(n){ (h.directorSchedule[n]||[]).forEach(function(b){ fix(b, n); }); });
+  h.coordSchedule = h.coordSchedule || [];
+  h.coordSchedule.forEach(function(b){ var m = String(b.title||'').match(/^([^：]+)：/); fix(b, m ? m[1] : ''); });
+}
+/* 施术块的时长：本案件赴韩项目在医院项目库里的默认施术时长（分钟）合计；没有时长默认 1 小时 */
+function surgeryMinutes(c){
+  var h = HOSPITAL_DATA[caseKrHospital(c)] || {projects:[]}, tot = 0;
+  krActiveItems(c).forEach(function(it){ var p = (h.projects||[]).filter(function(x){ return x.name===it.name; })[0]; if(p && p.defaults && p.defaults.durMin) tot += p.defaults.durMin; });
+  return tot || 60;
+}
+
 /* ---- KR 端施术预约操作（2026-10-06，KR-CASE-02 第 3 节）：不碰界面，KR 页面在 Store.mutateClinic 里调用 ----
    krSchedule 新增字段：address（到院地址）、rejectNote（KR 无法安排的原因，IN 重新选日期时显示）；confirmedTime = 到院时间 */
 /* 确认施术时间后自动在该院长日程加一个"施术"块（关联案件、来源诊所）；时间或地址调整时同步（KR-SCHD-01） */
@@ -2922,7 +2947,8 @@ function syncSurgeryBlock(c){
   for(var i = arr.length-1; i >= 0; i--){ if(arr[i].kind==='施术' && arr[i].caseId===c.id && arr[i].clinicId===c.clinicId) arr.splice(i, 1); }
   var ks = c.krSchedule;
   if(ks && (ks.status==='confirmed' || ks.status==='change_pending' || ks.status==='arrived') && ks.confirmedDate){
-    arr.push({date:ks.confirmedDate, time:ks.confirmedTime||'09:00', title:'施术', kind:'施术', caseId:c.id, clinicId:c.clinicId, name:c.name});
+    var st = ks.confirmedTime||'09:00', en = minToTime(Math.min(24*60-1, timeToMin(st)+surgeryMinutes(c)));
+    arr.push({id:'sb'+(SCHED_SEQ++)+Math.floor(Math.random()*1000), who:c.director, date:ks.confirmedDate, time:st, end:en, type:'手术', title:'施术', note:'', kind:'施术', caseId:c.id, clinicId:c.clinicId, name:c.name});
   }
 }
 function coreScheduleConfirm(c, date, time, address, by){
@@ -4435,6 +4461,7 @@ SEEDING = false;
 })();
 initHospitalData();
 normalizeSeeds();
+Object.keys(HOSPITAL_DATA).forEach(normSchedBlocks);
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */
 syncInCoordinators();
 applyClinicSettings();

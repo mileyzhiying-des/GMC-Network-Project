@@ -395,7 +395,7 @@ var ROLE_PERMS = {
   kr_owner:    {work:false, krwork:false, krview:false, krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
   kr_manager:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
   kr_general:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:false, krlib:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false},
-  kr_director: {work:false, krwork:false, krview:false, krviewOwn:true,  krsched:'own', kropen:false, krdoctors:false, krlib:false, bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false}
+  kr_director: {work:false, krwork:false, krview:false, krviewOwn:true,  krsched:'own', kropen:'own', krdoctors:false, krlib:false, bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false}
 };
 /* 管理类页面（侧边栏"诊所管理"组；老板端的全部导航）。key 同时是 ?page=admin-xxx 的后缀 */
 var ADMIN_PAGES = [
@@ -404,6 +404,11 @@ var ADMIN_PAGES = [
   {key:'clinic',   label:'诊所设定', icon:'设', perm:'clinic'},
   {key:'smslog',   label:'短信发送记录', icon:'短', perm:'smslog'}, /* 演示短信集中在这里，老板/管理者在诊所设定旁边看到 */
   {key:'oplog',    label:'操作日志', icon:'志', perm:'oplog'},
+  /* KR 医院端的管理类页面（2026-10-06，KR 端系列 5/5）：只有 KR 账号有这些权限，IN 账号 canDo 为 false 不会出现 */
+  {key:'krschedule', label:'日程管理', icon:'日', perm:'krsched'},
+  {key:'krdoctors',  label:'院长管理', icon:'院', perm:'krdoctors'},
+  {key:'krsrvc',     label:'项目库', icon:'项', perm:'krlib'},
+  {key:'krshow',     label:'案例库', icon:'案', perm:'krlib'},
   {key:'personal', label:'个人设定', icon:'个', perm:'personal', hidden:true} /* 不在侧边栏，从头像菜单进入 */
 ];
 function canDo(perm, acct){
