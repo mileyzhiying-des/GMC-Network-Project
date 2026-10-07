@@ -1333,3 +1333,22 @@ ADMIN_RENDER.krsrvc = function(el){
     '<div style="display:flex;gap:8px;"><button class="chip'+(KRP.showInactive?'':' active')+'" onclick="KRP.showInactive=false;krpRender()">在用</button><button class="chip'+(KRP.showInactive?' active':'')+'" onclick="KRP.showInactive=true;krpRender()">非活性化</button><span style="flex:1;"></span>'+(can ? '<button class="btn-primary" onclick="krpOpen(\'new\')">+ 新增项目</button>' : '')+'</div>'+(KRP.draft ? krpEditor() : '')+(group || krEmpty('没有项目'))+
     '<div style="font-size:11px;color:var(--muted);">改价格只影响之后新选的项目；已选进案件的快照不变。"在用" = 所有对接诊所的进行中案件 + 本医院案例库案例；还在用的不能删除。分类是全系统共用的标准部位。</div>';
 };
+
+
+/* ---------- 五、KR 案例库（KR-SHOW-01）：赴韩施术案例；结构沿用 IN 案例库（部位 → 项目 → 案例、详情页、展示模式、手写同意书）
+   维护人 KR 室长、管理者；项目选自本医院项目库；院长读 KR-DOC-01 名单（停用显示"-"）；所有对接的诊所都看得到本医院的案例（IN 案例库按医院区分）
+   做法：KR 页面里把 IN 案例库用到的全局数据换成本医院的（LIB_CASES = 本医院案例数组，PROJECT_LIBRARY = 本医院项目），直接复用 IN 的渲染和编辑函数 ---- */
+function krShowBind(){
+  var h = krHData(); h.libCases = h.libCases || [];
+  window.DEMO_ROLE = 'kr'; window.LIB_HOSPITAL = krHospitalIdOfMe();
+  window.CURRENT_CLINIC_ID = '__KR'; /* 不属于任何诊所：IN 案例库的"医院切换"不会出现，也不会把案例记到某家诊所名下 */
+  PROJECT_LIBRARY.length = 0; Array.prototype.push.apply(PROJECT_LIBRARY, (h.projects||[]));
+  window.LIB_CASES = h.libCases; /* 同一个数组：新增/编辑直接写进医院资料，存档时随全局保存 */
+  window.libDirectorClickable = function(){ return false; }; /* KR 端没有 IN 的"院长详情"页 */
+}
+ADMIN_RENDER.krshow = function(el){
+  krShowBind();
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;"><div id="lib-filters" style="display:flex;flex-direction:column;gap:10px;flex-grow:1;min-width:280px;"></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;"><button class="btn-primary" id="lib-add-btn" onclick="openLibCaseModal(null)"'+(canDo('krlib')?'':' disabled')+'>+ 新增案例（赴韩施术）</button></div></div>'+
+    '<div style="font-size:11px;color:var(--muted);">所有对接的诊所的 IN 室长都看得到本医院的案例（标明医院）；上传必须勾选同意并上传手写同意书。</div><div id="lib-grid" style="margin-top:6px;"></div>';
+  renderLibrary();
+};

@@ -3533,7 +3533,7 @@ function setLibView(v){ LIB_VIEW = v; libGo('home', {groupId:null, projectId:nul
 function libOpenProject(pid){ /* 从任何地方直达某个项目的案例列表（案件里"查看相关案例"、详情页项目链接） */
   var pr = projById(pid); if(!pr) return;
   var gid = pr.origin==='IN' ? (LIB_VIEW==='part' ? 'skin' : 'cat:'+pr.categoryId) : 'cat:'+pr.categoryId;
-  if(CURRENT_PAGE_ID!=='in-library') nav('in-library');
+  if(CURRENT_PAGE_ID!=='in-library' && !(typeof krShowBind==='function' && CURRENT_PAGE_ID==='in-admin')) nav('in-library'); /* KR 端案例库在管理页壳里，不用跳转 */
   libGo('cases', {groupId:gid, projectId:pid, caseId:null});
 }
 
@@ -3543,7 +3543,7 @@ function libOpenCase(id){
   var pr = pid ? projById(pid) : null;
   var gid = LIB_STATE.groupId || (pr ? (pr.origin==='IN' ? (LIB_VIEW==='part'?'skin':'cat:'+pr.categoryId) : 'cat:'+pr.categoryId) : null);
   var projectId = LIB_STATE.projectId || pid;
-  if(CURRENT_PAGE_ID!=='in-library') nav('in-library');
+  if(CURRENT_PAGE_ID!=='in-library' && !(typeof krShowBind==='function' && CURRENT_PAGE_ID==='in-admin')) nav('in-library'); /* KR 端案例库在管理页壳里，不用跳转 */
   libGo('detail', {groupId:gid, projectId:projectId, caseId:id});
 }
 
@@ -3732,14 +3732,14 @@ function saveLibCase(){
   var from = ['zh','ko','id'].filter(function(k){ return (c.names[k]||'').trim(); })[0];
   ['zh','ko','id'].forEach(function(k){ if(!(c.names[k]||'').trim()) c.names[k] = demoTranslate(c.names[from].trim(), from, k); });
   c.title = c.names.zh.trim();
-  var me = DEMO_ROLE==='kr' ? '이서연（KR室长）' : ME_NAME;
+  var me = DEMO_ROLE==='kr' ? ME_NAME+'（KR）' : ME_NAME; /* KR 端上传的案例：上传人记 KR 账号的姓名 */
   if(c.id){
     c.editedBy = me; c.editedAt = nowFullDt();
     var idx = LIB_CASES.findIndex(function(x){ return x.id===c.id; });
     if(idx>-1) LIB_CASES[idx] = c;
   } else {
     c.id = newLibCaseId(); c.uploader = me; c.uploadedAt = nowFullDt(); c.editedBy = null; c.editedAt = null;
-    if(c.source==='local') c.clinicId = CURRENT_CLINIC_ID; else c.hospitalId = c.hospitalId || 'H1'; /* 归属：印尼案例属于本诊所，赴韩案例属于医院 */
+    if(c.source==='local') c.clinicId = CURRENT_CLINIC_ID; else c.hospitalId = c.hospitalId || (LIB_HOSPITAL!=='all' ? LIB_HOSPITAL : 'H1'); /* 归属：印尼案例属于本诊所，赴韩案例属于医院 */
     LIB_CASES.unshift(c);
   }
   closeLibCaseModal();

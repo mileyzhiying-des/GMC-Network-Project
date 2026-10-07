@@ -36,6 +36,44 @@
   <div class="main-col"><div class="topbar-slot"></div><div class="content" id="admin-body" style="max-width:1000px;"></div></div>
 </section>
 
+<!-- 案例库（KR-SHOW-01）沿用 IN 案例库的弹窗：新增/编辑案例、照片放大、展示模式 -->
+<!-- ============ LIBRARY: CASE FORM MODAL ============ -->
+<div class="modal-overlay" id="lib-case-overlay" onclick="if(event.target===this) closeLibCaseModal()">
+  <div class="modal-box" style="width:640px;max-width:92vw;max-height:88vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span id="lib-case-modal-title" style="font-size:15px;font-weight:700;">新增案例</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeLibCaseModal()">✕</span>
+    </div>
+    <div id="lib-case-body"></div>
+  </div>
+</div>
+<!-- ============ 案例库：照片放大 / 展示模式（2026-10-02） ============ -->
+<div class="modal-overlay" id="lib-viewer-overlay" style="z-index:95;" onclick="if(event.target===this) closeLibViewer()">
+  <div class="modal-box" style="width:min(720px,92vw);text-align:center;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><span id="lib-viewer-cap" style="font-size:13px;font-weight:700;"></span><span style="cursor:pointer;color:var(--slate);" onclick="closeLibViewer()">✕</span></div>
+    <div id="lib-viewer-body"></div>
+  </div>
+</div>
+<div id="lib-present-overlay" style="display:none;position:fixed;inset:0;background:#0D1420;z-index:99;flex-direction:column;align-items:center;justify-content:center;color:#fff;">
+  <span style="position:absolute;top:20px;right:28px;font-size:22px;cursor:pointer;" onclick="closeLibPresent()" title="关闭（Esc）">✕</span>
+  <div id="lib-present-cap" style="font-size:16px;font-weight:700;margin-bottom:14px;"></div>
+  <div style="display:flex;align-items:center;gap:24px;">
+    <span style="font-size:34px;cursor:pointer;user-select:none;" onclick="libPresentMove(-1)">‹</span>
+    <div id="lib-present-body" style="width:min(70vw,720px);height:min(70vh,520px);"></div>
+    <span style="font-size:34px;cursor:pointer;user-select:none;" onclick="libPresentMove(1)">›</span>
+  </div>
+  <div id="lib-present-count" style="margin-top:14px;font-size:12px;color:#9AA6B2;"></div>
+</div>
+<!-- ============ LIBRARY: NODE DELETE / BATCH MOVE MODAL ============ -->
+<div class="modal-overlay" id="lib-node-action-overlay" onclick="if(event.target===this) closeLibNodeActionModal()">
+  <div class="modal-box" style="width:400px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span id="lib-node-action-title" style="font-size:15px;font-weight:700;">批量更改标签</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeLibNodeActionModal()">✕</span>
+    </div>
+    <div id="lib-node-action-body"></div>
+  </div>
+</div>
 </div>
 <div id="toast-stack"></div>
 <script src="/shared/rules.js"></script>
