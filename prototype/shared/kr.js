@@ -140,22 +140,25 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
     var row = function(k, v){ return '<div class="field-row"><span class="fk">'+k+'</span><span class="fv" style="font-weight:400;">'+v+'</span><span class="fa"></span></div>'; };
     el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('医院设定')+'</div>'+
       '<div class="card" style="padding:2px 20px;">'+row('医院名称（韩 / 英）', aEsc(h.name.ko)+' / '+aEsc(h.name.en))+row('地址', aEsc(h.address))+row('时区', aEsc(tzLabel(h.tz||'Asia/Seoul')))+row('对接的诊所', clinics.map(function(c){ return aEsc(c.name); }).join('、')||'—')+'</div>'+
-      '<div class="card" style="padding:14px 20px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+t('定期休诊（每周固定，韩国时间）')+'</div>'+closedRulesEditorHtml(HOSP_CLOSED_DRAFT || h.closedRules || [], 'hospSetClosed')+
-        '<div style="font-size:11px;color:var(--muted);margin:6px 0 10px;">整天休诊：IN 的 KR 医院日程里显示 1/3 宽的窄列，客人 / IN 选不了这天的施术日期；部分时段休诊：该时段灰色。</div>'+
+      '<div class="card" style="padding:14px 20px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+t('定期休诊（每周固定，韩国时间）')+'</div>'+closedRulesEditorHtml((HOSP_DRAFT||{}).closedRules || krHData().closedRules || [], 'hospSetClosed')+
+        '<div style="font-size:11px;color:var(--muted);margin:6px 0 12px;">整天休诊：IN 的 KR 医院日程里显示 1/3 宽的窄列，IN 选不了这天的施术日期；部分时段休诊：该时段浅灰。</div>'+
+        '<div style="font-size:13px;font-weight:700;margin:6px 0;">'+t('午休（韩国时间）')+'</div><div style="display:flex;gap:8px;align-items:center;font-size:13px;"><input type="time" step="1800" value="'+aEsc(((HOSP_DRAFT||{}).lunch || krHData().lunch || {from:''}).from||'')+'" onchange="hospSetLunch(\'from\',this.value)" style="padding:6px 9px;border:1px solid var(--border);border-radius:8px;"> ～ <input type="time" step="1800" value="'+aEsc(((HOSP_DRAFT||{}).lunch || krHData().lunch || {to:''}).to||'')+'" onchange="hospSetLunch(\'to\',this.value)" style="padding:6px 9px;border:1px solid var(--border);border-radius:8px;"></div>'+
+        '<div style="font-size:11px;color:var(--muted);margin:6px 0 10px;">午休：施术不能开始于午休时段，但可以跨过午休；午休在 IN 的 KR 医院日程和 KR 日历里显示为浅灰带。</div>'+
         (canDo('clinic') ? '<button class="btn-primary" onclick="saveHospClosed()">'+t('保存')+'</button>' : '')+'</div>'+
       '<div style="font-size:11px;color:var(--muted);">医院设定的其他编辑项（语言、短信等）在后面几份指令里做；院长名单、开放施术日期、日程在 KR 端的日程管理 / 院长管理里。</div>';
   };
-  var HOSP_CLOSED_DRAFT = null;
-  window.hospSetClosed = function(dow, mode, from){
-    var h = krHospital(); if(!HOSP_CLOSED_DRAFT) HOSP_CLOSED_DRAFT = JSON.parse(JSON.stringify(h.closedRules || []));
-    closedRulesSet(HOSP_CLOSED_DRAFT, dow, mode, from, '16:00'); openAdminPage('clinic', true);
-  };
+  var HOSP_DRAFT = null; /* 医院设定草稿：{closedRules, lunch} */
+  var hospDraft = function(){ var h = krHData(); /* 医院资料（HOSPITAL_DATA）；krHospital() 是医院基本信息，不是这个 */ if(!HOSP_DRAFT) HOSP_DRAFT = {closedRules:JSON.parse(JSON.stringify(h.closedRules || [])), lunch:Object.assign({from:'', to:''}, h.lunch||{})}; return HOSP_DRAFT; };
+  window.hospSetClosed = function(dow, mode, from){ closedRulesSet(hospDraft().closedRules, dow, mode, from, '16:00'); openAdminPage('clinic', true); };
+  window.hospSetLunch = function(k, v){ hospDraft().lunch[k] = v; };
   window.saveHospClosed = function(){
-    if(!canDo('clinic') || !HOSP_CLOSED_DRAFT) { showToast('没有修改', '定期休诊和之前一样', null); return; }
-    var h = krHospital(), old = closedRulesText(h.closedRules), nw = closedRulesText(HOSP_CLOSED_DRAFT);
-    if(old===nw){ HOSP_CLOSED_DRAFT = null; showToast('没有修改', '定期休诊和之前一样', null); return; }
-    h.closedRules = HOSP_CLOSED_DRAFT; HOSP_CLOSED_DRAFT = null;
-    logOp('设定变更', '医院设定 · 定期休诊：'+old+' → '+nw); Store.touch(); openAdminPage('clinic', true); showToast('已保存', '定期休诊：'+nw, null);
+    if(!canDo('clinic') || !HOSP_DRAFT){ showToast('没有修改', '设定和之前一样', null); return; }
+    var h = krHData(), d = HOSP_DRAFT, lu = d.lunch;
+    if(lu.from || lu.to){ if(!/^\d\d:\d\d$/.test(lu.from||'') || !/^\d\d:\d\d$/.test(lu.to||'') || timeToMin(lu.to) <= timeToMin(lu.from)){ alert('午休请填完整的开始和结束时间，结束要晚于开始（不需要午休就两个都清空）'); return; } }
+    var old = '定期休诊：'+closedRulesText(h.closedRules)+'；午休：'+(h.lunch&&h.lunch.from ? h.lunch.from+'–'+h.lunch.to : '无'), nw = '定期休诊：'+closedRulesText(d.closedRules)+'；午休：'+(lu.from ? lu.from+'–'+lu.to : '无');
+    if(old===nw){ HOSP_DRAFT = null; showToast('没有修改', '设定和之前一样', null); return; }
+    h.closedRules = d.closedRules; h.lunch = lu.from ? {from:lu.from, to:lu.to} : null; HOSP_DRAFT = null;
+    logOp('设定变更', '医院设定：'+old+' → '+nw); Store.touch(); openAdminPage('clinic', true); showToast('已保存', nw, null);
   };
   ADMIN_RENDER.bizdata = function(el, r){
     if(!isKrAccount()) return baseBiz(el, r);
@@ -1064,7 +1067,7 @@ function krDoAddOn(){
    原则：韩国医院自己的本地客人不进平台，日历只显示从 IN 转来的平台案件。
    事件只有：到院施术（客人名 · 来源诊所 · 项目）、在韩子项（复诊、拆线、管理）、不可预约（灰块，不写原因）；固定栏 = 每天的 OFF；不显示预计出报告时间。
    周视图直接进入时今天在第一栏；韩国时间。操作：点空白格 → 加「不可预约」/ 标 OFF；单一院长的月视图点日期 → 设定当天是否开放施术；点施术 / 子项 → 打开案件。 */
-var KRC = {mode:'week', anchor:'', person:'all', pop:null, edit:null, popForm:{who:'', start:'10:00', end:'11:00', part:'全天', rep:'once'}};
+var KRC = {mode:'week', anchor:'', person:'all', pop:null, edit:null, popForm:{who:'', start:'10:00', end:'11:00', part:'全天'}};
 var KRC_H0 = 8, KRC_H1 = 20, KRC_PX = 34; /* 时间轴 08:00–20:00（韩国时间），一小时 34px */
 function krcIsDirector(){ var me = currentAccount(); return !!me && me.role==='kr_director'; }
 function krcAnchor(){ if(!KRC.anchor) KRC.anchor = krToday(); return KRC.anchor; }
@@ -1122,6 +1125,7 @@ function krcGridHtml(days, ev){
     var offs = ev.offs.filter(function(o){ return offApplies(o, ds); }), subs = ev.subs.filter(function(x){ return x.s.date===ds; }), isToday = ds===krToday(), open = openDs.indexOf(ds)>-1;
     var lines = ''; for(var h3 = KRC_H0; h3 < KRC_H1; h3++) lines += '<div style="position:absolute;left:0;right:0;top:'+((h3-KRC_H0)*KRC_PX)+'px;border-top:1px solid #f0ece3;"></div>';
     var hc = hospitalClosedOn(krHospitalIdOfMe(), ds), cf = hc ? '' : hospitalClosedFrom(krHospitalIdOfMe(), ds);
+    var lu = hospitalLunch(krHospitalIdOfMe()); if(lu && !hc) lines += '<div title="午休" style="position:absolute;left:0;right:0;top:'+((timeToMin(lu.from)-KRC_H0*60)*KRC_PX/60)+'px;height:'+((timeToMin(lu.to)-timeToMin(lu.from))*KRC_PX/60)+'px;background:#F3F1EC;color:#b5b0a4;font-size:10px;text-align:center;pointer-events:none;z-index:0;">午休</div>';
     if(cf) lines += '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(cf)-KRC_H0*60)*KRC_PX/60)+'px;bottom:0;background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);pointer-events:none;z-index:1;"></div>'; /* 部分时段休诊：该时段灰色斜纹 */
     if(hc){ r1 += '<div style="'+cell+'text-align:center;font-size:11px;padding:4px 0;background:#EFEBE4;">'+ds.slice(5)+'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">医院休诊</span></div>'; r2 += '<div style="'+cell+'background:#EFEBE4;border-top:1px solid var(--line);"></div>'; r3 += '<div style="'+cell+'background:#EFEBE4;border-top:1px solid var(--line);"></div>'; r4 += '<div style="'+cell+'height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);border-top:1px solid var(--line);"></div>'; return; }
     r1 += '<div style="'+cell+'text-align:center;font-size:12px;padding:4px 0;'+(isToday?'font-weight:700;color:var(--terracotta);':'')+'">'+ds.slice(5)+' 周'+krcDow(ds)+(open?'<br><span style="font-size:9px;color:var(--sage);font-weight:700;">施术开放</span>':'')+'</div>';
@@ -1154,8 +1158,8 @@ function krcAddBusy(){
 function krcAddOff(){
   var f = KRC.popForm, h = krHData();
   if(!f.who || !krcCanEdit(f.who)){ alert('没有权限给这位院长标 OFF'); return; }
-  h.offs = h.offs||[]; var wk = f.rep==='weekly'; h.offs.push({id:'off'+Date.now(), date:KRC.pop.date, who:f.who, kind:'director', part:f.part||'全天', note:'', by:ME_NAME, weekly:wk, dow:wk ? new Date(KRC.pop.date+'T00:00:00').getDay() : undefined}); /* 单次 或 每周固定这一天 */
-  logOp('其他', '标 OFF：'+f.who+' '+(f.rep==='weekly' ? '每周'+['日','一','二','三','四','五','六'][new Date(KRC.pop.date+'T00:00:00').getDay()] : KRC.pop.date)+' '+(f.part||'全天'), '日程'); KRC.pop = null; Store.touch(); krcRender();
+  h.offs = h.offs||[]; h.offs.push({id:'off'+Date.now(), date:KRC.pop.date, who:f.who, kind:'director', part:f.part||'全天', note:'', by:ME_NAME}); /* 只有单次（整天 / 半天），逐条新增，每条可各自删除（2026-10-08 起不再有每周固定） */
+  logOp('其他', '标 OFF：'+f.who+' '+KRC.pop.date+' '+(f.part||'全天'), '日程'); KRC.pop = null; Store.touch(); krcRender();
 }
 function krcDelOff(id){ var h = krHData(), o = (h.offs||[]).filter(function(x){ return x.id===id; })[0]; if(!o || !krcCanEdit(o.who) || !confirm('删除这条 OFF（'+o.who+' '+o.date+'）？')) return; h.offs = h.offs.filter(function(x){ return x.id!==id; }); Store.touch(); krcRender(); }
 function krcEdit(id){ KRC.edit = id; KRC.pop = null; krcRender(); }
@@ -1184,7 +1188,7 @@ function krcPopHtml(){
   return '<div class="card" style="padding:10px 14px;font-size:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0;"><b>'+KRC.pop.date+'</b>'+
     (krcWho()==='all' && !krcIsDirector() ? '<select onchange="krcPopSet(\'who\',this.value)" style="'+inp+'">'+dirs.map(function(n){ return '<option'+(f.who===n?' selected':'')+'>'+krEsc(n)+'</option>'; }).join('')+'</select>' : '<span>'+krEsc(f.who)+'</span>')+
     '<select onchange="krcPopSet(\'start\',this.value)" style="'+inp+'">'+krTimeOptions(f.start)+'</select>–<select onchange="krcPopSet(\'end\',this.value)" style="'+inp+'">'+krTimeOptions(f.end)+'</select><button class="btn-outline" onclick="krcAddBusy()">加不可预约</button>'+
-    '<span style="color:var(--muted);">｜</span><select onchange="krcPopSet(\'part\',this.value)" style="'+inp+'"><option>全天</option><option>上午</option><option>下午</option></select><select onchange="krcPopSet(\'rep\',this.value)" style="'+inp+'"><option value="once"'+(f.rep!=='weekly'?' selected':'')+'>单次</option><option value="weekly"'+(f.rep==='weekly'?' selected':'')+'>每周固定这一天</option></select><button class="btn-outline" onclick="krcAddOff()">标 OFF</button>'+'<button class="btn-ghost" onclick="KRC.pop=null;krcRender()">取消</button><span style="font-size:11px;color:var(--muted);">不可预约不用写原因，也不强制登记</span></div>';
+    '<span style="color:var(--muted);">｜</span><select onchange="krcPopSet(\'part\',this.value)" style="'+inp+'"><option>全天</option><option>上午</option><option>下午</option></select><button class="btn-outline" onclick="krcAddOff()">标 OFF</button>'+'<button class="btn-ghost" onclick="KRC.pop=null;krcRender()">取消</button><span style="font-size:11px;color:var(--muted);">不可预约不用写原因，也不强制登记</span></div>';
 }
 function krcEditHtml(){
   var b = krcBusyById(KRC.edit); if(!b) return ''; var can = krcCanEdit(b.who), inp = 'padding:5px 8px;border:1px solid var(--line);border-radius:7px;';

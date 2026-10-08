@@ -181,8 +181,12 @@ function renderTodayOff(){
 
 var MEMO_DRAFT = null;
 
-function openMemoModal(){
-  MEMO_DRAFT = {date:todayStr(), type:'备忘', scope:'公开', text:''};
+/* memo 新增 / 修改（2026-10-08）：editId 有值 = 修改自己写的 memo（固定栏里的「修改」）；弹窗底部 [保存][删除]，删除前再确认一次 */
+function openMemoModal(editId){
+  var m = editId ? CAL_MEMOS.filter(function(x){ return x.id===editId; })[0] : null;
+  if(editId && (!m || m.author!==ME_NAME)){ showToast('不能修改', '只能修改自己写的 memo', null); return; }
+  MEMO_DRAFT = m ? {editId:m.id, date:m.date, type:m.type, scope:m.scope, text:m.text||''} : {date:todayStr(), type:'备忘', scope:'公开', text:''};
+  var tt = document.getElementById('memo-title'); if(tt) tt.textContent = m ? '修改 memo' : '新增 memo';
   renderMemoBody();
   document.getElementById('memo-overlay').classList.add('open');
 }
@@ -194,20 +198,29 @@ function renderMemoBody(){
   var radio = function(name, val, label, checked, disabled){ return '<label style="margin-right:14px;font-size:13px;'+(disabled?'color:var(--dim);':'')+'"><input type="radio" name="'+name+'" '+(checked?'checked ':'')+(disabled?'disabled ':'')+'onchange="memoSet(\''+name+'\',\''+val+'\')"> '+label+'</label>'; };
   document.getElementById('memo-body').innerHTML =
     '<div class="field" style="margin-bottom:12px;"><label>日期</label><input type="date" value="'+d.date+'" onchange="memoSet(\'date\',this.value)"></div>'+
-    '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">类型</div>'+radio('type','备忘','备忘',d.type==='备忘')+radio('type','OFF','OFF',d.type==='OFF')+'</div>'+(isOff ? '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">重复</div>'+radio('rep','once','单次（这一天）',d.rep!=='weekly')+radio('rep','weekly','每周固定（每'+(d.date ? '周'+DOW_CN[dowOfDate(d.date)] : '周')+'）',d.rep==='weekly')+'</div>' : '')+
+    '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">类型</div>'+radio('type','备忘','备忘',d.type==='备忘')+radio('type','OFF','OFF',d.type==='OFF')+'</div>'+
     '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">可见范围</div>'+radio('scope','公开','公开',d.scope==='公开')+radio('scope','私人','私人',d.scope==='私人',isOff)+(isOff?'<span style="font-size:11px;color:var(--muted);">OFF 固定公开</span>':'')+'</div>'+
     '<div class="field" style="margin-bottom:12px;"><label>'+(isOff?'备注（选填）':'内容')+'</label><input type="text" value="'+(d.text||'').replace(/"/g,'&quot;')+'" oninput="memoSet(\'text\',this.value)" placeholder="'+(isOff?'例如：年假':'备忘内容')+'"></div>'+
     '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">作者：'+ME_NAME+(isOff?'（IN 室长的 OFF 从这里登记）':'')+'</div>'+
-    '<button class="btn-primary" style="width:100%;" onclick="saveMemoDraft()">保存</button>';
+    (d.editId ? '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="saveMemoDraft()">保存</button><button class="btn-outline" style="flex:1;color:#C1454A;border-color:#C1454A;" onclick="deleteMemoDraft()">删除</button></div>' : '<button class="btn-primary" style="width:100%;" onclick="saveMemoDraft()">保存</button>');
 }
 
 function saveMemoDraft(){
   var d = MEMO_DRAFT; if(!d.date){ alert('请选择日期'); return; }
   if(d.type==='备忘' && !(d.text||'').trim()){ alert('请填写备忘内容'); return; }
-  var wk = d.type==='OFF' && d.rep==='weekly'; /* OFF 可选「单次」或「每周固定某天」 */
-  CAL_MEMOS.push({id:'m'+Date.now(), date:d.date, weekly:wk, dow:wk ? new Date(d.date+'T00:00:00').getDay() : undefined, type:d.type, scope:d.type==='OFF' ? '公开' : d.scope, role:d.type==='OFF' ? 'IN室长' : undefined, person:d.type==='OFF' ? ME_NAME : undefined, author:ME_NAME, text:(d.text||'').trim()});
-  saveMemos(); closeMemoModal(); renderCalendar();
-  showToast('已保存', d.type==='OFF' ? ME_NAME+' '+d.date+' OFF（公开）' : '备忘已保存（'+d.scope+'）', null);
+  var fields = {date:d.date, weekly:false, dow:undefined, type:d.type, scope:d.type==='OFF' ? '公开' : d.scope, role:d.type==='OFF' ? 'IN室长' : undefined, person:d.type==='OFF' ? ME_NAME : undefined, text:(d.text||'').trim()};
+  if(d.editId){ var m = CAL_MEMOS.filter(function(x){ return x.id===d.editId; })[0]; if(!m || m.author!==ME_NAME) return; Object.assign(m, fields); } /* 修改：原地更新（只能改自己写的） */
+  else CAL_MEMOS.push(Object.assign({id:'m'+Date.now(), author:ME_NAME}, fields));
+  saveMemos(); closeMemoModal(); renderCalendar(); try{ Store.touch(); }catch(e){}
+  showToast(d.editId ? '已修改' : '已保存', d.type==='OFF' ? ME_NAME+' '+d.date+' OFF（公开）' : 'memo 已'+(d.editId?'修改':'保存')+'（'+d.scope+'）', null);
+}
+function deleteMemoDraft(){
+  var d = MEMO_DRAFT; if(!d || !d.editId) return;
+  var m = CAL_MEMOS.filter(function(x){ return x.id===d.editId; })[0]; if(!m || m.author!==ME_NAME) return;
+  if(!confirm('确定删除这条 memo？'+(m.type==='OFF' ? '（OFF · '+m.date+'）' : '（'+m.date+'）'))) return; /* 删除前再确认一次 */
+  CAL_MEMOS.splice(CAL_MEMOS.indexOf(m), 1);
+  saveMemos(); closeMemoModal(); renderCalendar(); try{ Store.touch(); }catch(e){}
+  showToast('已删除', 'memo 已删除', null);
 }
 
 function setCalView(v){
@@ -241,8 +254,8 @@ function krDayItems(ds){
       if(own){ /* 本诊所客人的施术：谁 · 做什么 · 哪位医生（项目取案件的赴韩施术项目；多项显示第一项 + 等 N 项） */
         var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0], its = c ? krActiveItems(c) : [];
         label = (b.name||'')+' · '+(its.length ? its[0].name+(its.length>1 ? ' 等'+its.length+'项' : '') : '施术')+' · '+n;
-      } else if(surg) label = '其他诊所 · '+n; /* 其他诊所客人的施术 */
-      out.push({who:n, s:s, e:e, type:surg ? 'surg' : 'busy', own:own, label:label}); /* 不可预约：不写任何字 */
+      } /* 其他诊所客人的施术：IN 看不到任何信息——当作和「不可预约」一样的浅灰无字块（「全部」里不显示；单一院长才显示浅灰块） */
+      out.push({who:n, s:s, e:e, type:own ? 'surg' : 'busy', own:own, label:label, caseId:own ? b.caseId : null}); /* 不可预约：不写任何字 */
     });
     (hd.offs||[]).forEach(function(o){
       if(!offApplies(o, ds) || o.who!==n || o.kind!=='director') return;
@@ -279,20 +292,20 @@ function krLaneLayout(list){
 /* 时间轴表头（和日期列头同一行）：「印尼」（大字）/「韩国」（小字），对应下面每一行的大字 / 小字；每一行时间本身不加标注 */
 function axisHeadHtml(){ return '<div style="font-size:12px;font-weight:700;color:var(--slate);line-height:1.2;">印尼</div><div style="font-size:9px;color:var(--dim);line-height:1.2;">韩国</div>'; }
 function krBlockStyle(it){
-  if(it.type==='surg' && it.own) return 'background:var(--sage-bg);color:var(--sage);border:1px solid #BFD3C5;font-weight:700;';
-  if(it.type==='surg') return 'background:#EAE7DF;color:#6F6B61;'; /* 其他诊所客人的施术：浅灰，只写「其他诊所 · 院长」 */
+  if(it.type==='surg' && it.own) return 'background:var(--sage-bg);color:var(--sage);border:1px solid #BFD3C5;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'; /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
   return 'background:#F3F1EC;'; /* 不可预约：很浅的灰，不写字 */
 }
 /* 某一天的一整列：items（韩国时间分钟）按诊所行对应的韩国时间摆放；baseMin = 第一行对应的韩国时间 */
-function krDayColHtml(ds, items, baseMin, closedFrom){
+function krDayColHtml(ds, items, baseMin, closedFrom, lunch){
   var total = WK_HOURS.length, h = total*KR_ROW_PX, blocks = '';
   krLaneLayout(items).forEach(function(r0){
     var it = r0.it, s = Math.max(it.s, baseMin), e = Math.min(it.e, baseMin + total*SLOT_MIN); if(e <= s) return;
     var top = (s-baseMin)/SLOT_MIN*KR_ROW_PX, hgt = Math.max(16, (e-s)/SLOT_MIN*KR_ROW_PX - 2), w = 100/r0.n;
-    blocks += '<div title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:11px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
+    blocks += '<div'+(it.own && it.caseId ? ' onclick="openCaseDetail(\''+it.caseId+'\')"' : '')+' title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:11px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
   });
   var hatch = closedFrom ? '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(closedFrom)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;bottom:0;background:#F3F1EC;z-index:1;"></div>' : ''; /* 部分时段休诊：灰色斜纹 */
-  return '<div style="position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+hatch+blocks+'</div>';
+  var lunchBand = lunch ? '<div title="午休" style="position:absolute;left:0;right:0;top:'+((timeToMin(lunch.from)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;height:'+((timeToMin(lunch.to)-timeToMin(lunch.from))/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;color:var(--dim);font-size:10px;text-align:center;line-height:16px;z-index:0;">午休</div>' : ''; /* 午休：浅灰窄带，文字浅色（时间由韩国时间换算成页面时区的行） */
+  return '<div style="position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+lunchBand+hatch+blocks+'</div>';
 }
 function krTimeColHtml(){
   return '<div>'+WK_HOURS.map(function(hr){ return '<div class="wk-time" style="height:'+KR_ROW_PX+'px;box-sizing:border-box;">'+hr+'<span class="kr">'+krTimeOf(hr)+'</span></div>'; }).join('')+'</div>';
@@ -312,7 +325,7 @@ function buildKrWeekGrid(){
   html += krTimeColHtml();
   days.forEach(function(dd){
     var ds = dateStr(dd);
-    html += hospitalClosedOn(hid, ds) ? '<div style="height:'+(WK_HOURS.length*KR_ROW_PX)+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#F3F1EC;"></div>' : krDayColHtml(ds, krGridItems(ds), baseMin, hospitalClosedFrom(hid, ds));
+    html += hospitalClosedOn(hid, ds) ? '<div style="height:'+(WK_HOURS.length*KR_ROW_PX)+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#F3F1EC;"></div>' : krDayColHtml(ds, krGridItems(ds), baseMin, hospitalClosedFrom(hid, ds), hospitalLunch(hid));
   });
   document.getElementById('wk-grid').innerHTML = html;
 }
@@ -341,7 +354,7 @@ function buildKrDayGrid(){
   else {
     var chips = krBarChips(ds);
     html += (chips ? '<div style="font-size:12px;margin-bottom:8px;"><b>不在：</b>'+chips+'</div>' : '')+
-      '<div style="display:grid;grid-template-columns:64px minmax(0,1fr);max-height:calc(100vh - 360px);overflow-y:auto;border-top:1px solid var(--border2);border-left:1px solid var(--border2);"><div class="wk-corner">'+axisHeadHtml()+'</div><div class="wk-head">'+(d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+'</div>'+krTimeColHtml()+krDayColHtml(ds, krGridItems(ds), baseMin, hospitalClosedFrom(hid, ds))+'</div>';
+      '<div style="display:grid;grid-template-columns:64px minmax(0,1fr);max-height:calc(100vh - 360px);overflow-y:auto;border-top:1px solid var(--border2);border-left:1px solid var(--border2);"><div class="wk-corner">'+axisHeadHtml()+'</div><div class="wk-head">'+(d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+'</div>'+krTimeColHtml()+krDayColHtml(ds, krGridItems(ds), baseMin, hospitalClosedFrom(hid, ds), hospitalLunch(hid))+'</div>';
   }
   document.getElementById('day-detail').innerHTML = html;
 }
@@ -1159,7 +1172,8 @@ function renderRescheduleTimePanel(){
     var why = slotBlockReason(dateStr(d), t, null, RESCHED_CASE_ID), off = !!why; /* past 已过：灰色无文字；full 额满：灰色 + 已满 */
     var selected = t===RESCHED_SELECTED_TIME && !off;
     var style = 'padding:10px 6px;text-align:center;font-size:12px;border-radius:8px;';
-    if(off) style += 'background:var(--border2);color:var(--dim);';
+    if(off && why==='full') style += 'background:var(--white);border:1px solid var(--border);color:var(--muted);'; /* 已满：白底只标字 */
+    else if(off) style += 'background:var(--border2);color:var(--dim);';
     else if(selected) style += 'background:var(--navy);color:#fff;font-weight:700;cursor:pointer;';
     else style += 'background:var(--white);border:1px solid var(--border);color:var(--navy);cursor:pointer;';
     var onclick = off ? '' : ' onclick="pickRescheduleTime(\''+t+'\')"';

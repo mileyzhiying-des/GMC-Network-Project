@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 29;
+var DEMO_DATA_VERSION = 31;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -131,7 +131,8 @@ function hospitalSlotClosed(hid, ds, hm){ if(hospitalClosedOn(hid, ds)) return t
 function offApplies(o, ds){ return o.weekly ? (o.dow === new Date(ds+'T00:00:00').getDay()) : o.date===ds; }
 /* KR 排施术时间的检查：整天休诊 / 休诊时段 / 院长 OFF 不能排；返回错误文字，'' = 可以（KR 端确认、调整、重新预约施术时间前调用） */
 function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, opts){
-  var s = timeToMin(time), e = s + (durMin||60);
+  var s = timeToMin(time), e = s + (durMin||60), lu = hospitalLunch(hid);
+  if(lu && s >= timeToMin(lu.from) && s < timeToMin(lu.to)) return '施术不能开始于午休时段（韩国 '+lu.from+'–'+lu.to+'）；可以跨过午休';
   if(hospitalClosedOn(hid, date)) return date+' 是医院定期休诊日，不能排施术';
   var cf = hospitalClosedFrom(hid, date); if(cf && e > timeToMin(cf)) return '这个时间落在医院休诊时段（周'+['日','一','二','三','四','五','六'][new Date(date+'T00:00:00').getDay()]+' '+cf+' 起休诊）';
   var h = HOSPITAL_DATA[hid] || {offs:[]}, bad = (h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); }).filter(function(o){ var hh = (o.part && o.part!=='全天') ? (KR_HALF[o.part]||['00:00','24:00']) : ['00:00','24:00'], a = hh[0]==='00:00' ? 0 : timeToMin(hh[0]), b = hh[1]==='24:00' ? 24*60 : timeToMin(hh[1]); return s < b && e > a; /* 半天 OFF：上午 09:00–13:00 / 下午 13:00–18:00（韩国时间） */ })[0];
@@ -158,6 +159,8 @@ function seedResolveOverlaps(){
     });
   });
 }
+/* KR 医院午休（医院设定里设，韩国时间；演示 H1 / H2 = 13:00–14:00）：施术不能开始于午休，但可以跨过午休 */
+function hospitalLunch(hid){ var h = HOSPITAL_DATA[hid]; return (h && h.lunch && h.lunch.from && h.lunch.to) ? h.lunch : null; }
 function hospitalOpenDates(hid, director){ var h = HOSPITAL_DATA[hid]; return ((h && h.openDates && h.openDates[director]) || []).filter(function(ds){ return !hospitalClosedOn(hid, ds); }); } /* 医院整天休诊的日子不能选施术 */
 function hospitalOfDirector(name){ for(var k in HOSPITAL_DATA){ if(hospitalDirectors(k).some(function(d){ return d.name===name; })) return k; } return null; }
 
@@ -293,11 +296,13 @@ function krOffMemos(date){
 }
 function memosOn(date){ return CAL_MEMOS.filter(function(m){ return (m.weekly ? m.dow===new Date(date+'T00:00:00').getDay() : m.date===date) && !/^KR/.test(m.role||'') && (m.scope==='公开' || m.author===ME_NAME); }).concat(krOffMemos(date)); }
 
+/* 固定栏里自己写的 memo（备忘 / OFF）后面的小字「修改」；别人写的公开 memo、KR 的 OFF 没有 */
+function memoEditLink(m){ return (m.author===ME_NAME && CAL_MEMOS.some(function(x){ return x.id===m.id; })) ? ' <a href="#" onclick="event.stopPropagation();openMemoModal(\''+m.id+'\');return false;" style="font-size:10px;font-weight:400;color:var(--muted);text-decoration:underline;">修改</a>' : ''; }
 function memoCellHtml(ds){
   return memosOn(ds).map(function(m){
     return m.type==='OFF'
-      ? '<div style="color:#C1454A;font-weight:700;">OFF · '+m.person+'</div>'
-      : '<div style="color:var(--slate2);">📝 '+m.text+' <span style="color:var(--muted);">'+m.author+(m.scope==='私人'?' · 私人':'')+'</span></div>';
+      ? '<div style="color:#C1454A;font-weight:700;">OFF · '+m.person+memoEditLink(m)+'</div>'
+      : '<div style="color:var(--slate2);">📝 '+m.text+' <span style="color:var(--muted);">'+m.author+(m.scope==='私人'?' · 私人':'')+'</span>'+memoEditLink(m)+'</div>';
   }).join('');
 }
 
@@ -4370,7 +4375,6 @@ function caseRoomMembers(c){
    {id, date, type:'备忘'|'OFF', scope:'公开'|'私人', role:'IN室长'|'KR室长'|'KR院长'(OFF 用), person:(OFF 的人), author, text} */
 var DEMO_MEMOS = [
   /* IN 室长的 OFF（2026-10-08 重设）：A1 每周一；A2 单次整天 10/5、10/14、10/23、10/28；其余旧 OFF 清掉。KR 的 OFF 在 HOSPITAL_DATA[h].offs 里 */
-  {id:'m1', date:'2026-10-05', weekly:true, dow:1, type:'OFF', scope:'公开', role:'IN室长', person:'A1 室长', author:'A1 室长', text:''},
   {id:'m2', date:'2026-10-05', type:'OFF', scope:'公开', role:'IN室长', person:'A2 室长', author:'A2 室长', text:''},
   {id:'m3', date:'2026-10-14', type:'OFF', scope:'公开', role:'IN室长', person:'A2 室长', author:'A2 室长', text:''},
   {id:'m4', date:'2026-10-23', type:'OFF', scope:'公开', role:'IN室长', person:'A2 室长', author:'A2 室长', text:''},
@@ -4379,6 +4383,7 @@ var DEMO_MEMOS = [
   {id:'m6', date:D(-1), type:'备忘', scope:'私人', author:'A1 室长', text:'给 客人11 回电（私人）'}
 ];
 
+(function(){ for(var d0 = -45; d0 <= 45; d0++){ var ds0 = D(d0); if(new Date(ds0+'T00:00:00').getDay()===1) DEMO_MEMOS.push({id:'m1_'+ds0, date:ds0, type:'OFF', scope:'公开', role:'IN室长', person:'A1 室长', author:'A1 室长', text:''}); } })();
 var CAL_MEMOS = (function(){ try{ var v = JSON.parse(localStorage.getItem('gmc_memos')||'null'); if(v) return v; }catch(e){} return DEMO_MEMOS.map(function(m){ return Object.assign({}, m); }); })();
 
 function saveMemos(){ try{ localStorage.setItem('gmc_memos', JSON.stringify(CAL_MEMOS)); }catch(e){} }
@@ -4639,7 +4644,7 @@ function initHospitalData(){
     H1:{
       directors: DIRECTOR_INFO.map(function(d, i){ return {id:'H1-D'+(i+1), name:d.name, active:d.active}; }),
       coordinators: KR_COORDINATORS.slice(),
-      openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], /* 医院每周日休诊 + 周六 16:00 起休诊（韩国时间） */
+      openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'}, /* 医院每周日休诊 + 周六 16:00 起休诊（韩国时间） */
       directorSchedule: {}, coordSchedule: [], projects:[], libCases:[],
       offs: [], /* OFF 在 seedKrMonthDemo 里设（KO1 每周一 + 10/20 年假；KD1 每周三 + 10/15 上午；KM1 每周四；KC1 每周五） */
       dayConfirm: {}, reportRead: {}, chatRead: {},
@@ -4652,7 +4657,7 @@ function initHospitalData(){
     H2:{
       directors: [{id:'H2-D1', name:'H2 院长1', active:true}, {id:'H2-D2', name:'H2 院长2', active:true}, {id:'H2-D3', name:'H2 院长3', active:false}],
       coordinators: ['KM2 室长', 'KC2 室长'],
-      openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}],
+      openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'},
       directorSchedule: {}, coordSchedule: [], projects:[], libCases:[],
       offs: [], /* H2 的旧 OFF 清掉 */
       dayConfirm: {}, reportRead: {}, chatRead: {}, notifs: []
@@ -4757,7 +4762,7 @@ function seedSurgeryCase(o){
 function seedKrMonthDemo(){
   /* 休诊：医院每周日 + 周六 16:00 起（在 initHospitalData 里设 closedRules）；OFF（2026-10-08 重设，其余旧 OFF 全部清掉）：
      KO1 代表院长：每周一 + 10/20 年假（整天）；KD1 院长：每周三 + 10/15 上午半休；KM1 室长：每周四；KC1 室长：每周五；H2 没有 OFF */
-  var T = [['09:00','10:30'], ['10:00','13:30'], ['09:30','11:00'], ['11:00','12:00'], ['13:30','15:00'], ['14:00','16:30'], ['15:30','17:00'], ['10:30','12:30']];
+  var T = [['09:00','10:30'], ['10:00','13:00'], ['09:30','11:00'], ['11:00','12:00'], ['14:00','15:30'], ['14:00','16:30'], ['15:30','17:00'], ['10:30','12:30']]; /* 不可预约块不落在午休（韩国 13:00–14:00） */
   var pick = function(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); };
   var CFG = {
     H1:{offs:[{who:'KO1 代表院长', kind:'director', part:'全天', weekly:true, dow:1}, {who:'KO1 代表院长', kind:'director', part:'全天', date:'2026-10-20', note:'年假'}, {who:'KD1 院长', kind:'director', part:'全天', weekly:true, dow:3}, {who:'KD1 院长', kind:'director', part:'上午', date:'2026-10-15'}, {who:'KM1 室长', kind:'coord', part:'全天', weekly:true, dow:4}, {who:'KC1 室长', kind:'coord', part:'全天', weekly:true, dow:5}],
@@ -4766,7 +4771,11 @@ function seedKrMonthDemo(){
   };
   Object.keys(CFG).forEach(function(hid, hi){
     var h = HOSPITAL_DATA[hid]; if(!h) return; var cfg = CFG[hid];
-    h.offs = cfg.offs.map(function(o, i){ var r = Object.assign({id:'off'+hid+i, note:'', by:o.who}, o); if(!r.weekly && !r.date) r.date = D(0); return r; });
+    h.offs = []; /* 每周 OFF 展开成单次条目（-45～+45 天，各自可删除）；没有「每周固定」功能 */
+    cfg.offs.forEach(function(o, i){
+      if(!o.weekly){ h.offs.push(Object.assign({id:'off'+hid+i, note:'', by:o.who}, o)); return; }
+      for(var d1 = -45; d1 <= 45; d1++){ var ds1 = D(d1); if(new Date(ds1+'T00:00:00').getDay()===o.dow) h.offs.push({id:'off'+hid+i+'_'+ds1, who:o.who, kind:o.kind, part:o.part, date:ds1, note:'', by:o.who}); }
+    });
     h.directorSchedule = {}; h.openDates = {};
     h.directors.filter(function(d){ return d.active; }).map(function(d){ return d.name; }).forEach(function(n, k){
       var arr = (h.directorSchedule[n] = []), open = [], pat = cfg.open[n] || [];
@@ -4834,7 +4843,7 @@ function normalizeSeeds(){
   /* C1 的已确认施术案件（KR 日程的施术块由它们生成；今天的 客人9、过去的 A2 室长 在上面的种子里） */
   seedSurgeryCase({id:'sinta', name:'客人23', phone:'+62 812-3100-0001', director:'KO1 代表院长', hospitalId:'H1', krCoordinator:'KC1 室长', date:D(4), time:'14:00', items:[['切开双眼皮', 1800000]]});
   seedSurgeryCase({id:'lukman', name:'客人24', phone:'+62 812-3100-0002', director:'KD1 院长', hospitalId:'H1', date:D(9), time:'10:00', items:[['假体隆鼻', 2500000], ['自体脂肪移植（全脸）', 4500000]]});
-  seedSurgeryCase({id:'dewis', name:'客人25', phone:'+62 812-3100-0003', director:'KO1 代表院长', hospitalId:'H1', date:D(15), time:'13:00', items:[['埋线双眼皮', 1000000]]});
+  seedSurgeryCase({id:'dewis', name:'客人25', phone:'+62 812-3100-0003', director:'KO1 代表院长', hospitalId:'H1', date:D(15), time:'14:00', items:[['埋线双眼皮', 1000000]]});
 }
 /* 其他诊所的全新分区（C2）：空白 + 少量演示资料（见"五、演示数据"）；种子函数写的是全局变量，所以临时把全局变量切成这份新分区 */
 function emptyClinicVars(cid){

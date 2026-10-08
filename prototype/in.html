@@ -702,7 +702,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
 <div class="modal-overlay" id="memo-overlay" style="z-index:70;" onclick="if(event.target===this) closeMemoModal()">
   <div class="modal-box" style="width:380px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <span style="font-size:15px;font-weight:700;">新增 memo</span>
+      <span id="memo-title" style="font-size:15px;font-weight:700;">新增 memo</span>
       <span style="cursor:pointer;color:var(--slate);" onclick="closeMemoModal()">✕</span>
     </div>
     <div id="memo-body"></div>
