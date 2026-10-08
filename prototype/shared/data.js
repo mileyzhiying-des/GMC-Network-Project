@@ -4517,7 +4517,7 @@ SEEDING = false;
     var first = krActiveItems(nad)[0];
     nad.subItems = [mk(nad,1,D(0),'施术（'+(first?first.name:'')+'）','施术','KR',false,first?first.name:''), mk(nad,2,D(1),'复诊','复诊','KR',false), mk(nad,3,D(5),'拆线（印尼 / 韩国均可）','管理','either',false)];
   }
-  var rina = byId('rina'); if(rina){ rina.subItems = [mk(rina,1,D(-37),'施术','施术','KR',true), mk(rina,2,D(-36),'复诊','复诊','KR',true)]; rina.krJudge = rina.krJudge || {result:'ok', settled:true}; }
+  var rina = byId('rina'); if(rina){ rina.subItems = [mk(rina,1,D(-24),'施术','施术','KR',true), mk(rina,2,D(-23),'复诊','复诊','KR',true)]; /* 子项日期和施术日 krSchedule.confirmedDate 对齐（原来错成施术日之前 13 天） */ rina.krJudge = rina.krJudge || {result:'ok', settled:true}; }
   var wulan = byId('wulan'); if(wulan){ wulan.subItems = [mk(wulan,1,D(-5),'施术','施术','KR',true), mk(wulan,2,D(-4),'复诊','复诊','KR',true)]; wulan.krJudge = wulan.krJudge || {result:'ok', settled:true}; }
 })();
 initHospitalData();
