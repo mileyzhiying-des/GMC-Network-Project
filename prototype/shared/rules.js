@@ -395,7 +395,7 @@ function caseHasKrSide(c){
   return !!c.consultRequested && c.consultStatus!=='awaiting_payment' && c.consultStatus!=='cancelled';
 }
 
-function isOffOn(name, date){ var k = offNameKey(name); return CAL_MEMOS.some(function(m){ return m.type==='OFF' && m.date===date && offNameKey(m.person)===k; }); }
+function isOffOn(name, date){ var k = offNameKey(name); return CAL_MEMOS.some(function(m){ return m.type==='OFF' && (m.weekly ? m.dow===new Date(date+'T00:00:00').getDay() : m.date===date) && offNameKey(m.person)===k; }); /* 每周固定的 OFF 也算 */ }
 
 function pushTargets(c){
   var today = todayStr(), ops = caseOperators(c);

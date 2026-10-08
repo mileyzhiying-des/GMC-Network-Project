@@ -194,7 +194,7 @@ function renderMemoBody(){
   var radio = function(name, val, label, checked, disabled){ return '<label style="margin-right:14px;font-size:13px;'+(disabled?'color:var(--dim);':'')+'"><input type="radio" name="'+name+'" '+(checked?'checked ':'')+(disabled?'disabled ':'')+'onchange="memoSet(\''+name+'\',\''+val+'\')"> '+label+'</label>'; };
   document.getElementById('memo-body').innerHTML =
     '<div class="field" style="margin-bottom:12px;"><label>日期</label><input type="date" value="'+d.date+'" onchange="memoSet(\'date\',this.value)"></div>'+
-    '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">类型</div>'+radio('type','备忘','备忘',d.type==='备忘')+radio('type','OFF','OFF',d.type==='OFF')+'</div>'+
+    '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">类型</div>'+radio('type','备忘','备忘',d.type==='备忘')+radio('type','OFF','OFF',d.type==='OFF')+'</div>'+(isOff ? '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">重复</div>'+radio('rep','once','单次（这一天）',d.rep!=='weekly')+radio('rep','weekly','每周固定（每'+(d.date ? '周'+DOW_CN[dowOfDate(d.date)] : '周')+'）',d.rep==='weekly')+'</div>' : '')+
     '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">可见范围</div>'+radio('scope','公开','公开',d.scope==='公开')+radio('scope','私人','私人',d.scope==='私人',isOff)+(isOff?'<span style="font-size:11px;color:var(--muted);">OFF 固定公开</span>':'')+'</div>'+
     '<div class="field" style="margin-bottom:12px;"><label>'+(isOff?'备注（选填）':'内容')+'</label><input type="text" value="'+(d.text||'').replace(/"/g,'&quot;')+'" oninput="memoSet(\'text\',this.value)" placeholder="'+(isOff?'例如：年假':'备忘内容')+'"></div>'+
     '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">作者：'+ME_NAME+(isOff?'（IN 室长的 OFF 从这里登记）':'')+'</div>'+
@@ -204,7 +204,8 @@ function renderMemoBody(){
 function saveMemoDraft(){
   var d = MEMO_DRAFT; if(!d.date){ alert('请选择日期'); return; }
   if(d.type==='备忘' && !(d.text||'').trim()){ alert('请填写备忘内容'); return; }
-  CAL_MEMOS.push({id:'m'+Date.now(), date:d.date, type:d.type, scope:d.type==='OFF' ? '公开' : d.scope, role:d.type==='OFF' ? 'IN室长' : undefined, person:d.type==='OFF' ? ME_NAME : undefined, author:ME_NAME, text:(d.text||'').trim()});
+  var wk = d.type==='OFF' && d.rep==='weekly'; /* OFF 可选「单次」或「每周固定某天」 */
+  CAL_MEMOS.push({id:'m'+Date.now(), date:d.date, weekly:wk, dow:wk ? new Date(d.date+'T00:00:00').getDay() : undefined, type:d.type, scope:d.type==='OFF' ? '公开' : d.scope, role:d.type==='OFF' ? 'IN室长' : undefined, person:d.type==='OFF' ? ME_NAME : undefined, author:ME_NAME, text:(d.text||'').trim()});
   saveMemos(); closeMemoModal(); renderCalendar();
   showToast('已保存', d.type==='OFF' ? ME_NAME+' '+d.date+' OFF（公开）' : '备忘已保存（'+d.scope+'）', null);
 }
@@ -240,7 +241,7 @@ function krDayItems(ds){
       out.push({who:n, s:s, e:e, type:b.kind==='施术' ? 'surg' : 'busy', own:own, label:own ? (b.name||'')+' · '+shortDir(n) : shortDir(n)});
     });
     (hd.offs||[]).forEach(function(o){
-      if(o.date!==ds || o.who!==n || o.kind!=='director') return;
+      if(!offApplies(o, ds) || o.who!==n || o.kind!=='director') return;
       out.push({who:n, s:o.part==='下午' ? 13*60 : 0, e:o.part==='上午' ? 13*60 : 24*60, type:'off', own:false, part:o.part||'全天', label:shortDir(n)+' OFF'});
     });
   });
