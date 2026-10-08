@@ -265,3 +265,11 @@ prototype/shared/app.css  共用样式
 - 时区：IANA 时区 + 浏览器 Intl；诊所时区由地址/城市自动判定（只读）；画面只显示 UTC+n；系统事件时间点存 UTC（`nowFullDt()`），显示走 `fmtUtc()`；预约/施术当地钟点仍存当地时间；`demoNow()` = 页面时区墙上时钟，`realNow()` = 真实时刻，`todayStr()` = 页面时区今天。新写时间点代码：存用 `nowFullDt()`，显示用 `fmtUtc()`，不要再用 `nowFullDt().split(' ')[0]` 取日期（用 `todayStr()`）。
 - 演示数据版本 27：KR 医院日程前后各一个月（`seedKrMonthDemo`），施术块来自 C1/C2/C3 真实案件（`seedSurgeryCase`）。
 - 自测补充：① A1 / B1 各看一次 KR 医院日程（全部、单一院长、月/周/日），C1 看 C2 客人 = 灰块 + 院长名；② KM1 登记医院休诊日 → A1 周视图该天即时变窄列；③ D1（巴厘 UTC+8）和 A1（UTC+7）的 Timeline 时间差 1 小时、第二行韩国时间对；④ 画面上搜不到 WIB/WITA/WIT；⑤ `bash dev/check.sh` + console 无报错。
+
+## CMD-1007-04 补充（2026-10-08，追加；旧文字保留作历史）
+- **同一施术在本院日程和 KR 医院日程差 2 小时**：原因是本院日程直接把 KR 的到院时间（韩国当地时间）当成诊所时间，现统一经 `krToClinic()` / `ksTimeText()` 换算（IN 页面显示诊所时间 + 括号韩国时间，KR 页面显示韩国时间）。**以后凡是 IN 端显示施术 / 到院时间，一律走 `ksTimeText` 或 `krToClinic`，不要直接显示 `ks.confirmedTime`。**
+- IN 的 KR 医院日程视角周/日视图：一个事一整块（`krDayColHtml`），整天 OFF 只在固定栏。
+- **定期休诊**：`closedRules`（诊所设定 / 医院设定，每周固定，整天或从某时刻起）取代 `closedDow`（派生）和逐日的 `closedDates`；`isRescheduleDateDisabled` 只管整天休诊，部分时段由 `slotBlockReason` / `hospitalClosedFrom` 判断。
+- **OFF 每周重复**：`weekly` + `dow`，一律用 `offApplies(o, ds)` 判断。
+- **匿名化**：员工显示名 = 账号编号 + 角色（A1 室长、KD1 院长、KO1 代表院长…），客人 = 客人N；**新写演示数据不要再用真实感人名**。旧人名（Dewi、Rina、Siti、Nadia、김민석、이수진…）只存在于上面的历史文字里，对应关系：Dewi=A1、Rina=A2、Putri=A5、Sari=A4、Citra=B1、Bagas=B2、Dian=D1、Hartono=OWN；김민석=KD1、박소현=KO1、이서연=KM1、박준혁=KC1、정하늘=KM2、최민준=KC2；이수진 已删除。演示数据版本 28，账号结构版本 5（账号会重置）。
+- 自测补充：① A2 周视图：本院日程与 KR 医院日程的同一施术时间一致（客人9 = 09:00）；周日窄列；KR 视角周六 16:00 后灰；整天 OFF 只在固定栏；② 客户预约页 / 代约周日不可选；③ 画面和存档里搜不到旧人名；④ `bash dev/check.sh` + console 无报错。
