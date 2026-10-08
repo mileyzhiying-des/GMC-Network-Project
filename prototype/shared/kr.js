@@ -142,22 +142,29 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
       '<div class="card" style="padding:2px 20px;">'+row('医院名称（韩 / 英）', aEsc(h.name.ko)+' / '+aEsc(h.name.en))+row('地址', aEsc(h.address))+row('时区', aEsc(tzLabel(h.tz||'Asia/Seoul')))+row('对接的诊所', clinics.map(function(c){ return aEsc(c.name); }).join('、')||'—')+'</div>'+
       '<div class="card" style="padding:14px 20px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+t('定期休诊（每周固定，韩国时间）')+'</div>'+closedRulesEditorHtml((HOSP_DRAFT||{}).closedRules || krHData().closedRules || [], 'hospSetClosed')+
         '<div style="font-size:11px;color:var(--muted);margin:6px 0 12px;">整天休诊：IN 的 KR 医院日程里显示 1/3 宽的窄列，IN 选不了这天的施术日期；部分时段休诊：该时段浅灰。</div>'+
+        '<div style="font-size:13px;font-weight:700;margin:0 0 6px;">'+t('营业时间（韩国时间）')+'</div><div style="display:flex;gap:8px;align-items:center;font-size:13px;"><input type="time" step="1800" value="'+aEsc(((HOSP_DRAFT||{}).openTime !== undefined ? (HOSP_DRAFT||{}).openTime : hospitalHours(krHospitalIdOfMe()).open))+'" onchange="hospSetHours(\'openTime\',this.value)" style="padding:6px 9px;border:1px solid var(--border);border-radius:8px;"> ～ <input type="time" step="1800" value="'+aEsc(((HOSP_DRAFT||{}).closeTime !== undefined ? (HOSP_DRAFT||{}).closeTime : hospitalHours(krHospitalIdOfMe()).close))+'" onchange="hospSetHours(\'closeTime\',this.value)" style="padding:6px 9px;border:1px solid var(--border);border-radius:8px;"></div>'+
+        '<div style="font-size:11px;color:var(--muted);margin:6px 0 12px;">IN 的 KR 医院日程时间轴、KR 日历、施术 / 不可预约的可排时间、半天 OFF（上午 = 营业开始→午休开始，下午 = 午休结束→营业结束）都读这里。</div>'+
         '<div style="font-size:13px;font-weight:700;margin:6px 0;">'+t('午休（韩国时间）')+'</div><div style="display:flex;gap:8px;align-items:center;font-size:13px;"><input type="time" step="1800" value="'+aEsc(((HOSP_DRAFT||{}).lunch || krHData().lunch || {from:''}).from||'')+'" onchange="hospSetLunch(\'from\',this.value)" style="padding:6px 9px;border:1px solid var(--border);border-radius:8px;"> ～ <input type="time" step="1800" value="'+aEsc(((HOSP_DRAFT||{}).lunch || krHData().lunch || {to:''}).to||'')+'" onchange="hospSetLunch(\'to\',this.value)" style="padding:6px 9px;border:1px solid var(--border);border-radius:8px;"></div>'+
         '<div style="font-size:11px;color:var(--muted);margin:6px 0 10px;">午休：施术不能开始于午休时段，但可以跨过午休；午休在 IN 的 KR 医院日程和 KR 日历里显示为浅灰带。</div>'+
         (canDo('clinic') ? '<button class="btn-primary" onclick="saveHospClosed()">'+t('保存')+'</button>' : '')+'</div>'+
       '<div style="font-size:11px;color:var(--muted);">医院设定的其他编辑项（语言、短信等）在后面几份指令里做；院长名单、开放施术日期、日程在 KR 端的日程管理 / 院长管理里。</div>';
   };
-  var HOSP_DRAFT = null; /* 医院设定草稿：{closedRules, lunch} */
-  var hospDraft = function(){ var h = krHData(); /* 医院资料（HOSPITAL_DATA）；krHospital() 是医院基本信息，不是这个 */ if(!HOSP_DRAFT) HOSP_DRAFT = {closedRules:JSON.parse(JSON.stringify(h.closedRules || [])), lunch:Object.assign({from:'', to:''}, h.lunch||{})}; return HOSP_DRAFT; };
+  var HOSP_DRAFT = null; /* 医院设定草稿：{openTime, closeTime, closedRules, lunch} */
+  var hospDraft = function(){ var h = krHData(); /* 医院资料（HOSPITAL_DATA）；krHospital() 是医院基本信息，不是这个 */ if(!HOSP_DRAFT) var hr0 = hospitalHours(krHospitalIdOfMe()); HOSP_DRAFT = {openTime:hr0.open, closeTime:hr0.close, closedRules:JSON.parse(JSON.stringify(h.closedRules || [])), lunch:Object.assign({from:'', to:''}, h.lunch||{})}; return HOSP_DRAFT; };
   window.hospSetClosed = function(dow, mode, from){ closedRulesSet(hospDraft().closedRules, dow, mode, from, '16:00'); openAdminPage('clinic', true); };
   window.hospSetLunch = function(k, v){ hospDraft().lunch[k] = v; };
+  window.hospSetHours = function(k, v){ hospDraft()[k] = v; };
   window.saveHospClosed = function(){
     if(!canDo('clinic') || !HOSP_DRAFT){ showToast('没有修改', '设定和之前一样', null); return; }
-    var h = krHData(), d = HOSP_DRAFT, lu = d.lunch;
+    var h = krHData(), d = HOSP_DRAFT, lu = d.lunch, hr = hospitalHours(krHospitalIdOfMe());
+    if(!/^\d\d:\d\d$/.test(d.openTime||'') || !/^\d\d:\d\d$/.test(d.closeTime||'') || timeToMin(d.closeTime) <= timeToMin(d.openTime)){ alert('营业时间请填完整的开始和结束时间，结束要晚于开始'); return; }
+    if((lu.from || lu.to) && (timeToMin(lu.from) < timeToMin(d.openTime) || timeToMin(lu.to) > timeToMin(d.closeTime))){ alert('午休必须在营业时间内'); return; }
+    var badRule = (d.closedRules||[]).filter(function(r){ return r.from && (timeToMin(r.from) < timeToMin(d.openTime) || timeToMin(r.from) >= timeToMin(d.closeTime)); })[0];
+    if(badRule){ alert('部分时段休诊的起始时刻必须在营业时间内'); return; }
     if(lu.from || lu.to){ if(!/^\d\d:\d\d$/.test(lu.from||'') || !/^\d\d:\d\d$/.test(lu.to||'') || timeToMin(lu.to) <= timeToMin(lu.from)){ alert('午休请填完整的开始和结束时间，结束要晚于开始（不需要午休就两个都清空）'); return; } }
-    var old = '定期休诊：'+closedRulesText(h.closedRules)+'；午休：'+(h.lunch&&h.lunch.from ? h.lunch.from+'–'+h.lunch.to : '无'), nw = '定期休诊：'+closedRulesText(d.closedRules)+'；午休：'+(lu.from ? lu.from+'–'+lu.to : '无');
+    var old = '营业时间：'+hr.open+'–'+hr.close+'；定期休诊：'+closedRulesText(h.closedRules)+'；午休：'+(h.lunch&&h.lunch.from ? h.lunch.from+'–'+h.lunch.to : '无'), nw = '营业时间：'+d.openTime+'–'+d.closeTime+'；定期休诊：'+closedRulesText(d.closedRules)+'；午休：'+(lu.from ? lu.from+'–'+lu.to : '无');
     if(old===nw){ HOSP_DRAFT = null; showToast('没有修改', '设定和之前一样', null); return; }
-    h.closedRules = d.closedRules; h.lunch = lu.from ? {from:lu.from, to:lu.to} : null; HOSP_DRAFT = null;
+    h.openTime = d.openTime; h.closeTime = d.closeTime; h.closedRules = d.closedRules; h.lunch = lu.from ? {from:lu.from, to:lu.to} : null; HOSP_DRAFT = null;
     logOp('设定变更', '医院设定：'+old+' → '+nw); Store.touch(); openAdminPage('clinic', true); showToast('已保存', nw, null);
   };
   ADMIN_RENDER.bizdata = function(el, r){

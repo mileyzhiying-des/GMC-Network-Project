@@ -1,11 +1,12 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 31;
+var DEMO_DATA_VERSION = 32; /* 32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
 var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_LOG'];                      /* 全局部分里保留的 */
+var DEMO_CLINIC_HOURS = {openTime:'10:00', closeTime:'21:00', bookFrom:'10:00', bookTo:'20:30', lunchFrom:'14:00', lunchTo:'15:00'}; /* IN 诊所演示营业时间（印尼当地时间）；周日休诊 */
 var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ']; /* 每个诊所分区里保留的 */
 (function(){
   try{
@@ -20,7 +21,7 @@ var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_
           if(st && st.vars){ keptG = {}; KEEP_ON_VERSION_RESET.forEach(function(n){ if(st.vars.hasOwnProperty(n)) keptG[n] = st.vars[n]; }); }
           Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_clinic_')===0; }).forEach(function(k){
             var p = JSON.parse(localStorage.getItem(k) || 'null'), o = {};
-            if(p && p.vars){ KEEP_CLINIC_ON_VERSION_RESET.forEach(function(n){ if(p.vars.hasOwnProperty(n)) o[n] = p.vars[n]; }); keptC[k] = o; }
+            if(p && p.vars){ KEEP_CLINIC_ON_VERSION_RESET.forEach(function(n){ if(p.vars.hasOwnProperty(n)) o[n] = p.vars[n]; }); if(o.CLINIC_SETTINGS) Object.assign(o.CLINIC_SETTINGS, DEMO_CLINIC_HOURS, {closedRules:[{dow:0, from:''}], closedDow:[0]}); /* CMD-1008-05：演示营业时间直接覆盖 */ keptC[k] = o; }
           });
         }catch(e){ keptG = null; keptC = {}; }
       }
@@ -65,8 +66,8 @@ var SLOT_MIN = 30; /* 时段长度（分钟），固定 30（我的判断：设�
 function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分区里）；o 可覆盖名称、地址等 */
  var s = {
   name:'GMC 合作诊所（雅加达）', address:'Jl. Jenderal Sudirman Kav. 52, Jakarta Selatan', phone:'+62 21 5550 1234', city:'雅加达', tz:'Asia/Jakarta', /* tz 由地址/城市自动判定（clinicTzOf），不能手动改 */
-  openTime:'09:00', closeTime:'17:00',   /* 营业时间（日历显示的行） */
-  bookFrom:'09:00', bookTo:'16:30',      /* 可预约时段：第一个 / 最后一个可约的开始时间 */
+  openTime:'10:00', closeTime:'21:00',   /* 营业时间（日历显示的行） */
+  bookFrom:'10:00', bookTo:'20:30',      /* 可预约时段：第一个 / 最后一个可约的开始时间 */
   lunchFrom:'14:00', lunchTo:'15:00',    /* 午休：不可预约 */
   closedRules:[{dow:0, from:''}],        /* 定期休诊（每周固定；2026-10-08 起取代只能整天休诊的 closedDow）：dow 0=周日…6=周六；from 为空 = 整天休诊，填 HH:mm = 这天从该时刻起休诊（到营业结束）；默认每周日整天休诊 */
   closedDow:[0],                         /* 派生：整天休诊的星期（由 closedRules 算出，不要直接改） */
@@ -131,11 +132,12 @@ function hospitalSlotClosed(hid, ds, hm){ if(hospitalClosedOn(hid, ds)) return t
 function offApplies(o, ds){ return o.weekly ? (o.dow === new Date(ds+'T00:00:00').getDay()) : o.date===ds; }
 /* KR 排施术时间的检查：整天休诊 / 休诊时段 / 院长 OFF 不能排；返回错误文字，'' = 可以（KR 端确认、调整、重新预约施术时间前调用） */
 function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, opts){
-  var s = timeToMin(time), e = s + (durMin||60), lu = hospitalLunch(hid);
+  var s = timeToMin(time), e = s + (durMin||60), lu = hospitalLunch(hid), hrs = hospitalHours(hid);
+  if(s < timeToMin(hrs.open) || e > timeToMin(hrs.close)) return '施术时间要在医院营业时间内（韩国 '+hrs.open+'–'+hrs.close+'）';
   if(lu && s >= timeToMin(lu.from) && s < timeToMin(lu.to)) return '施术不能开始于午休时段（韩国 '+lu.from+'–'+lu.to+'）；可以跨过午休';
   if(hospitalClosedOn(hid, date)) return date+' 是医院定期休诊日，不能排施术';
   var cf = hospitalClosedFrom(hid, date); if(cf && e > timeToMin(cf)) return '这个时间落在医院休诊时段（周'+['日','一','二','三','四','五','六'][new Date(date+'T00:00:00').getDay()]+' '+cf+' 起休诊）';
-  var h = HOSPITAL_DATA[hid] || {offs:[]}, bad = (h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); }).filter(function(o){ var hh = (o.part && o.part!=='全天') ? (KR_HALF[o.part]||['00:00','24:00']) : ['00:00','24:00'], a = hh[0]==='00:00' ? 0 : timeToMin(hh[0]), b = hh[1]==='24:00' ? 24*60 : timeToMin(hh[1]); return s < b && e > a; /* 半天 OFF：上午 09:00–13:00 / 下午 13:00–18:00（韩国时间） */ })[0];
+  var h = HOSPITAL_DATA[hid] || {offs:[]}, bad = (h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); }).filter(function(o){ var hh = (o.part && o.part!=='全天') ? krHalfRange(hid, o.part) : ['00:00','24:00'], a = hh[0]==='00:00' ? 0 : timeToMin(hh[0]), b = hh[1]==='24:00' ? 24*60 : timeToMin(hh[1]); return s < b && e > a; /* 半天 OFF：上午 = 营业开始→午休开始 / 下午 = 午休结束→营业结束（韩国时间，见 krHalfRange） */ })[0];
   if(bad) return director+' 在这个时间 OFF（'+(bad.part||'全天')+(bad.weekly ? '，每周固定' : '')+'），不能排施术';
   /* 同一位院长同一时间只能有一件事（KR-SCHD-01，2026-10-08）：不能和该院长的「不可预约」或别的施术重叠；不同院长之间可以重叠 */
   var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; }).filter(function(b){ return !(b.kind==='施术' && exceptCaseKey && (b.clinicId+':'+b.caseId)===exceptCaseKey); })[0];
@@ -145,7 +147,8 @@ function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, op
 }
 /* 新增 / 修改「不可预约」：不能和该院长已有的施术重叠 */
 function krBusySlotError(hid, director, date, time, end, exceptBusyId){
-  var s = timeToMin(time), e = timeToMin(end), h = HOSPITAL_DATA[hid] || {directorSchedule:{}};
+  var s = timeToMin(time), e = timeToMin(end), h = HOSPITAL_DATA[hid] || {directorSchedule:{}}, hrs = hospitalHours(hid);
+  if(s < timeToMin(hrs.open) || e > timeToMin(hrs.close)) return '不可预约时间要在医院营业时间内（韩国 '+hrs.open+'–'+hrs.close+'）';
   var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.kind==='施术' && b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; })[0];
   return clash ? '该时段已有施术（'+director+' '+clash.time+'–'+clash.end+'，'+(clash.name||'')+'）' : '';
 }
@@ -160,6 +163,13 @@ function seedResolveOverlaps(){
   });
 }
 /* KR 医院午休（医院设定里设，韩国时间；演示 H1 / H2 = 13:00–14:00）：施术不能开始于午休，但可以跨过午休 */
+/* KR 医院营业时间（韩国时间；2026-10-08 CMD-1008-05，KR 管理者在医院设定里改）：HOSPITAL_DATA[h].openTime / closeTime */
+function hospitalHours(hid){ var h = HOSPITAL_DATA[hid] || {}; return {open:h.openTime || '11:00', close:h.closeTime || '21:30'}; }
+/* 半天 OFF 对应的韩国时间段（跟着医院设定算，不写死）：上午 = 营业开始 → 午休开始；下午 = 午休结束 → 营业结束；没有午休时以中午 13:00 分界 */
+function krHalfRange(hid, part){
+  var hr = hospitalHours(hid), lu = hospitalLunch(hid), a = lu ? lu.from : '13:00', b = lu ? lu.to : '13:00';
+  return part==='下午' ? [b, hr.close] : [hr.open, a];
+}
 function hospitalLunch(hid){ var h = HOSPITAL_DATA[hid]; return (h && h.lunch && h.lunch.from && h.lunch.to) ? h.lunch : null; }
 function hospitalOpenDates(hid, director){ var h = HOSPITAL_DATA[hid]; return ((h && h.openDates && h.openDates[director]) || []).filter(function(ds){ return !hospitalClosedOn(hid, ds); }); } /* 医院整天休诊的日子不能选施术 */
 function hospitalOfDirector(name){ for(var k in HOSPITAL_DATA){ if(hospitalDirectors(k).some(function(d){ return d.name===name; })) return k; } return null; }
@@ -1016,7 +1026,7 @@ var CASE_ITEMS = [
     videoSummary:'建议自体脂肪移植打底，配合本地焕肤护理维持效果。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true, visitClosed:true, krProcedureDone:true,
-    krSchedule:{status:'confirmed', confirmedDate:D(-24), confirmedTime:'10:00', primary:D(-24), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
+    krSchedule:{status:'confirmed', confirmedDate:D(-24), confirmedTime:'11:00', primary:D(-24), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
       {name:'自体脂肪移植（全脸）', origin:'KR', done:true, batchId:'B1'}
     ],
@@ -1112,10 +1122,10 @@ var CASE_NO_SEQ = 23;
 
 /* ---- 演示数据：每个案件一条预约来访（日期/时间/目的）——日历每个事件都对应案件列表里的一个案件（2026-10-02·一） ---- */
 var DEMO_VISITS = {
-  siti:[D(0),'10:45','面诊商谈'], ayu2:[D(0),'15:00','复诊'], andi:[D(0),'09:30','面诊商谈'], rina2:[D(0),'10:00','复诊'],
-  yuni:[D(-2),'09:30','皮肤商谈'], maya:[D(-2),'14:00','面诊商谈'], putri:[D(-4),'10:00','面诊商谈'], dedi:[D(-3),'10:30','面诊商谈'],
-  budi:[D(-3),'14:30','面诊商谈'], ayu:[D(-2),'11:00','皮肤商谈'], fajar:[D(-1),'09:30','面诊商谈'], nadia:[D(-4),'14:00','面诊商谈'],
-  dinda:[D(-1),'14:00','面诊商谈'], rizky:[D(-1),'11:00','皮肤管理'], rina:[D(-4),'09:30','面诊商谈'], wulan:[D(-3),'09:30','面诊商谈'],
+  siti:[D(0),'10:45','面诊商谈'], ayu2:[D(0),'16:00','复诊'], andi:[D(0),'11:30','面诊商谈'], rina2:[D(0),'10:00','复诊'],
+  yuni:[D(-2),'10:30','皮肤商谈'], maya:[D(-2),'15:00','面诊商谈'], putri:[D(-4),'10:00','面诊商谈'], dedi:[D(-3),'10:30','面诊商谈'],
+  budi:[D(-3),'15:30','面诊商谈'], ayu:[D(-2),'11:00','皮肤商谈'], fajar:[D(-1),'10:30','面诊商谈'], nadia:[D(-4),'15:00','面诊商谈'],
+  dinda:[D(-1),'15:00','面诊商谈'], rizky:[D(-1),'11:00','皮肤管理'], rina:[D(-4),'10:30','面诊商谈'], wulan:[D(-3),'11:30','面诊商谈'],
   agus:[D(1),'10:00','面诊商谈'], lina:[D(-3),'16:00','面诊商谈'], hana:[D(-1),'15:30','术后管理'], tari:[D(-1),'16:00','皮肤管理'],
   bayu:[D(-1),'10:00','面诊商谈']
 };
@@ -4215,7 +4225,7 @@ function demoNotif(kind){
   add('赴韩施术','客人已到医院：客人9','nadia',D(-1)+' 09:30',false);
   add('视频','未接来电：KM1 室长 呼叫了 客人2 的案件视频','ayu',D(-1)+' 15:20',false,{kind:'caseRoom'});
   add('对话','KM1 室长 在「客人2 · A000006」里 @ 了你','ayu',D(-2)+' 13:10',true,{kind:'mention', roomId:'case-ayu', msgIdx:0});
-  add('系统','诊所管理账号更新了设定：营业时间 09:00–18:00 → 09:00–19:00，'+D(2)+' 起生效','',D(-2)+' 08:00',true,{kind:'system'},{title:'营业时间调整', changes:['营业时间 09:00–18:00 → 09:00–19:00'], effective:D(2)+' 起'},['A1 室长','A2 室长']);
+  add('系统','诊所管理账号更新了设定：营业时间 10:00–20:00 → 10:00–21:00，'+D(2)+' 起生效','',D(-2)+' 08:00',true,{kind:'system'},{title:'营业时间调整', changes:['营业时间 10:00–20:00 → 10:00–21:00'], effective:D(2)+' 起'},['A1 室长','A2 室长']);
 })();
 
 /* 日历上"等待报告超过预计时间"自动提醒用的标记：dedi 演示案件已经提醒过 */
@@ -4644,7 +4654,7 @@ function initHospitalData(){
     H1:{
       directors: DIRECTOR_INFO.map(function(d, i){ return {id:'H1-D'+(i+1), name:d.name, active:d.active}; }),
       coordinators: KR_COORDINATORS.slice(),
-      openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'}, /* 医院每周日休诊 + 周六 16:00 起休诊（韩国时间） */
+      openTime:'11:00', closeTime:'21:30', openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'}, /* 营业时间（韩国时间）；医院每周日休诊 + 周六 16:00 起休诊（韩国时间） */
       directorSchedule: {}, coordSchedule: [], projects:[], libCases:[],
       offs: [], /* OFF 在 seedKrMonthDemo 里设（KO1 每周一 + 10/20 年假；KD1 每周三 + 10/15 上午；KM1 每周四；KC1 每周五） */
       dayConfirm: {}, reportRead: {}, chatRead: {},
@@ -4657,7 +4667,7 @@ function initHospitalData(){
     H2:{
       directors: [{id:'H2-D1', name:'H2 院长1', active:true}, {id:'H2-D2', name:'H2 院长2', active:true}, {id:'H2-D3', name:'H2 院长3', active:false}],
       coordinators: ['KM2 室长', 'KC2 室长'],
-      openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'},
+      openTime:'11:00', closeTime:'21:30', openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'},
       directorSchedule: {}, coordSchedule: [], projects:[], libCases:[],
       offs: [], /* H2 的旧 OFF 清掉 */
       dayConfirm: {}, reportRead: {}, chatRead: {}, notifs: []
@@ -4762,7 +4772,7 @@ function seedSurgeryCase(o){
 function seedKrMonthDemo(){
   /* 休诊：医院每周日 + 周六 16:00 起（在 initHospitalData 里设 closedRules）；OFF（2026-10-08 重设，其余旧 OFF 全部清掉）：
      KO1 代表院长：每周一 + 10/20 年假（整天）；KD1 院长：每周三 + 10/15 上午半休；KM1 室长：每周四；KC1 室长：每周五；H2 没有 OFF */
-  var T = [['09:00','10:30'], ['10:00','13:00'], ['09:30','11:00'], ['11:00','12:00'], ['14:00','15:30'], ['14:00','16:30'], ['15:30','17:00'], ['10:30','12:30']]; /* 不可预约块不落在午休（韩国 13:00–14:00） */
+  var T = [['11:00','12:30'], ['11:00','13:00'], ['11:30','13:00'], ['12:00','13:00'], ['14:00','15:30'], ['14:00','16:30'], ['15:30','17:00'], ['17:00','19:30']]; /* 不可预约块都在医院营业时间（韩国 11:00–21:30）内，不落在午休（13:00–14:00）；周六 16:00 起休诊的由 cf 判断挡掉 */
   var pick = function(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); };
   var CFG = {
     H1:{offs:[{who:'KO1 代表院长', kind:'director', part:'全天', weekly:true, dow:1}, {who:'KO1 代表院长', kind:'director', part:'全天', date:'2026-10-20', note:'年假'}, {who:'KD1 院长', kind:'director', part:'全天', weekly:true, dow:3}, {who:'KD1 院长', kind:'director', part:'上午', date:'2026-10-15'}, {who:'KM1 室长', kind:'coord', part:'全天', weekly:true, dow:4}, {who:'KC1 室长', kind:'coord', part:'全天', weekly:true, dow:5}],
@@ -4790,7 +4800,7 @@ function seedKrMonthDemo(){
         for(var i = 0; i < cnt; i++){
           var ti = Math.floor(pick(d*11 + k*13 + i*7 + hi)*T.length); if(used[ti]) continue; used[ti] = 1;
           var tpl = T[ti]; if(cf && tpl[1] > cf) continue; /* 周六 16:00 起休诊：不排进休诊时段 */
-          if(offs.some(function(o){ return o.part==='上午' ? tpl[0] < '13:00' : tpl[1] > '13:00'; })) continue; /* 半天 OFF 的时段不排 */
+          if(offs.some(function(o){ var hh = krHalfRange(hid, o.part==='上午' ? '上午' : '下午'); return tpl[0] < hh[1] && tpl[1] > hh[0]; })) continue; /* 半天 OFF 的时段不排（范围跟着医院营业时间 / 午休算） */
           arr.push({date:ds, time:tpl[0], end:tpl[1], type:'不可预约'});
         }
       }
@@ -4810,11 +4820,19 @@ function seedSurgeryDate(hid, director, date, time){
 }
 /* 预约 / 占位不能落在休诊时段（诊所定期休诊）：种子里落在休诊日 / 休诊时段的到店预约，顺延到下一个营业日 */
 function seedFixVisits(){
-  var bad = function(ds, tm){ var dt = new Date(ds+'T00:00:00'); if(isRescheduleDateDisabled(dt)) return true; var cf = closedFromOf(CLINIC_SETTINGS.closedRules, dt.getDay()); return !!cf && timeToMin(tm||'09:00') >= timeToMin(cf); };
+  var bad = function(ds, tm){ var dt = new Date(ds+'T00:00:00'); if(isRescheduleDateDisabled(dt)) return true; var cf = closedFromOf(CLINIC_SETTINGS.closedRules, dt.getDay()); return !!cf && timeToMin(tm||'10:00') >= timeToMin(cf); };
   var next = function(ds){ var x = new Date(ds+'T00:00:00'); x.setDate(x.getDate()+1); return dateStr(x); };
-  CASE_ITEMS.forEach(function(c){ if(c.visitDate){ var g = 0; while(bad(c.visitDate, c.visitTime) && g++ < 7) c.visitDate = next(c.visitDate); } });
-  (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var g = 0; while(bad(p.date, p.time) && g++ < 7) p.date = next(p.date); });
-  (RESUMED_VISITS||[]).forEach(function(r){ var g = 0; while(bad(r.date, r.time) && g++ < 7) r.date = next(r.date); });
+  /* 营业时间修正（CMD-1008-05）：早于可预约最早时段 → 挪到最早；落在午休 → 挪到午休结束；晚于最晚时段 → 挪到最晚 */
+  var fixTime = function(tm){
+    if(!tm) return tm; var m = timeToMin(tm), s0 = CLINIC_SETTINGS;
+    if(m < timeToMin(s0.bookFrom)) return s0.bookFrom;
+    if(m >= timeToMin(s0.lunchFrom) && m < timeToMin(s0.lunchTo)) return s0.lunchTo;
+    if(m > timeToMin(s0.bookTo)) return s0.bookTo;
+    return tm;
+  };
+  CASE_ITEMS.forEach(function(c){ if(c.visitDate){ var g = 0; while(bad(c.visitDate, c.visitTime) && g++ < 7) c.visitDate = next(c.visitDate); c.visitTime = fixTime(c.visitTime); } });
+  (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var g = 0; while(bad(p.date, p.time) && g++ < 7) p.date = next(p.date); p.time = fixTime(p.time); });
+  (RESUMED_VISITS||[]).forEach(function(r){ var g = 0; while(bad(r.date, r.time) && g++ < 7) r.date = next(r.date); r.time = fixTime(r.time); });
 }
 function normalizeSeeds(){
   /* 分类：赴韩的标准部位归全局，本地的留在诊所里（C1 种子） */
@@ -4842,7 +4860,7 @@ function normalizeSeeds(){
   buildClinicViews(inP, inC, inCats);
   /* C1 的已确认施术案件（KR 日程的施术块由它们生成；今天的 客人9、过去的 A2 室长 在上面的种子里） */
   seedSurgeryCase({id:'sinta', name:'客人23', phone:'+62 812-3100-0001', director:'KO1 代表院长', hospitalId:'H1', krCoordinator:'KC1 室长', date:D(4), time:'14:00', items:[['切开双眼皮', 1800000]]});
-  seedSurgeryCase({id:'lukman', name:'客人24', phone:'+62 812-3100-0002', director:'KD1 院长', hospitalId:'H1', date:D(9), time:'10:00', items:[['假体隆鼻', 2500000], ['自体脂肪移植（全脸）', 4500000]]});
+  seedSurgeryCase({id:'lukman', name:'客人24', phone:'+62 812-3100-0002', director:'KD1 院长', hospitalId:'H1', date:D(9), time:'11:00', items:[['假体隆鼻', 2500000], ['自体脂肪移植（全脸）', 4500000]]});
   seedSurgeryCase({id:'dewis', name:'客人25', phone:'+62 812-3100-0003', director:'KO1 代表院长', hospitalId:'H1', date:D(15), time:'14:00', items:[['埋线双眼皮', 1000000]]});
 }
 /* 其他诊所的全新分区（C2）：空白 + 少量演示资料（见"五、演示数据"）；种子函数写的是全局变量，所以临时把全局变量切成这份新分区 */
@@ -4871,8 +4889,8 @@ function seedClinicDemo(cid){
     Object.keys(st.holdings).forEach(function(n){ CLIENT_HOLDINGS[n] = JSON.parse(JSON.stringify(st.holdings[n])); });
     Object.keys(st.chat).forEach(function(k){ CHAT_DATA[k] = JSON.parse(JSON.stringify(st.chat[k])); });
     st.notifs.forEach(function(n){ NOTIFS.push(JSON.parse(JSON.stringify(n))); });
-    var dn = CASE_ITEMS.filter(function(x){ return x.id==='dinda'; })[0]; if(dn && dn.krSchedule){ dn.krSchedule.status = 'confirmed'; var dd0 = seedSurgeryDate('H2', dn.director, D(18), '10:30'); dn.krSchedule.primary = dd0; dn.krSchedule.confirmedDate = dd0; dn.krSchedule.confirmedTime = '10:30'; /* 避开休诊 / 未开放 */ updateCaseStage(dn); } /* 客人10：KR 已确认施术时间 */
-    var rs = seedSurgeryCase({id:'ratna', name:'客人28', phone:'+62 812-3300-0001', director:'H2 院长1', hospitalId:'H2', krCoordinator:'KM2 室长', date:D(6), time:'10:00', items:[['面部拉皮', 12000000]]});
+    var dn = CASE_ITEMS.filter(function(x){ return x.id==='dinda'; })[0]; if(dn && dn.krSchedule){ dn.krSchedule.status = 'confirmed'; var dd0 = seedSurgeryDate('H2', dn.director, D(18), '11:30'); dn.krSchedule.primary = dd0; dn.krSchedule.confirmedDate = dd0; dn.krSchedule.confirmedTime = '11:30'; /* 避开休诊 / 未开放 */ updateCaseStage(dn); } /* 客人10：KR 已确认施术时间 */
+    var rs = seedSurgeryCase({id:'ratna', name:'客人28', phone:'+62 812-3300-0001', director:'H2 院长1', hospitalId:'H2', krCoordinator:'KM2 室长', date:D(6), time:'11:00', items:[['面部拉皮', 12000000]]});
     var fi = seedSurgeryCase({id:'fitri', name:'客人29', phone:'+62 812-3300-0002', director:'H2 院长2', hospitalId:'H2', krCoordinator:'KC2 室长', date:D(11), time:'14:00', items:[['自体脂肪移植（全脸）', 4500000]]});
     CASE_ITEMS.forEach(function(x){ if(x.krSchedule && x.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(x.krSchedule.status)>-1 && x.director) syncSurgeryBlock(x); }); /* C3 全部已确认施术的案件在 H2 日程里生成施术块 */
     CHAT_DATA[mainRoomId('H2')] = [
@@ -4888,7 +4906,7 @@ function seedClinicDemo(cid){
   mkClient('客人18', '+62 811-2000-0002', '男', '1988-02-03', 4);
   mkClient('客人19', '+62 811-2000-0003', '女', '1995-11-22', 8);
   var c1 = createReservationCase('客人17', null, D(1), '10:30', '+62 811-2000-0001', '面诊商谈');
-  var c2 = createReservationCase('客人18', null, D(0), '09:30', '+62 811-2000-0002', '面诊商谈'); c2.subState = 'arrived'; c2.needsConsult = true; c2.hospitalId = 'H1'; c2.director = 'KD1 院长'; c2.materialsConfirmed = true; c2.concern = '眼睛想变大一点'; c2.expectation = '自然的双眼皮'; c2.consultRequested = true; c2.consultStatus = 'paid_waiting_kr'; /* 已缴面诊费 → KR 端看得到（KR 端系列 2/5 演示） */ updateCaseStage(c2);
+  var c2 = createReservationCase('客人18', null, D(0), '10:00', '+62 811-2000-0002', '面诊商谈'); c2.subState = 'arrived'; c2.needsConsult = true; c2.hospitalId = 'H1'; c2.director = 'KD1 院长'; c2.materialsConfirmed = true; c2.concern = '眼睛想变大一点'; c2.expectation = '自然的双眼皮'; c2.consultRequested = true; c2.consultStatus = 'paid_waiting_kr'; /* 已缴面诊费 → KR 端看得到（KR 端系列 2/5 演示） */ updateCaseStage(c2);
   var c3 = createReservationCase('客人19', null, D(-2), '14:00', '+62 811-2000-0003', '皮肤商谈'); c3.subState = 'cancelled'; c3.cancelReason = '预约取消'; updateCaseStage(c3);
   [['玻尿酸填充 1cc（泗水）', 780000, '填充'], ['水光注射 2cc（泗水）', 1500000, '水光'], ['好莱坞焕肤 1次（泗水）', 300000, '去除色素'], ['黄金微针 1次（泗水）', 1800000, '黄金微针']].forEach(function(r){
     var p = makeProj(r[0], r[1], 'IN', r[2]); p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')}; PROJECT_LIBRARY.push(p);
