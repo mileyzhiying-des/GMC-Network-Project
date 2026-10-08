@@ -4067,6 +4067,49 @@ function displayAmount(amount, origin, target){
 
 function projById(id){ return PROJECT_LIBRARY.filter(function(p){ return p.id===id; })[0]; }
 
+/* ================= 本月活动价 / 套餐（2026-10-08，CMD-1008-09；Notion Project Library「本月活动价与套餐」、IN-SRVC-01 第 3-1 节） =================
+   · 活动价 PROMOS：挂在单一本地项目上 {id, projectId, price, from, to, ended}；状态进行中 / 未开始 / 已结束（按日期算，过期自动恢复原价；ended = 管理者手动结束）；
+   · 套餐 PACKAGES：{id, name, items:[{projectId, qty}], price(套餐价), from, to（可空 = 长期有效）, ended}；不可退款；
+   · 都按诊所分区存（各诊所自己管），只有 IN 管理者（canDo('promo')）能新增 / 编辑 / 结束，一般室长只看；
+   · 案件里选入时存成交价快照（活动价 / 套餐价 / 原价 + 折扣），之后改库不影响已选的案件 */
+var PROMOS = [];
+var PACKAGES = [];
+function newPromoId(prefix){ return prefix+Date.now().toString(36)+Math.floor(Math.random()*10000).toString(36); }
+function promoStatusOf(x){
+  var t = todayStr();
+  if(x.ended) return '已结束';
+  if(x.from && t < x.from) return '未开始';
+  if(x.to && t > x.to) return '已结束';
+  return '进行中';
+}
+function activePromoOf(projectId){ return PROMOS.filter(function(p){ return p.projectId===projectId && promoStatusOf(p)==='进行中'; })[0] || null; }
+/* 本地项目当前的成交单价：有进行中的活动价就用活动价（原价划线 + "本月" 标签），过期自动恢复原价 */
+function localUnitPrice(p){ var pm = activePromoOf(p.id); return pm ? {price:pm.price, orig:p.price, promo:pm} : {price:p.price, orig:p.price, promo:null}; }
+function packageListTotal(pk){ return (pk.items||[]).reduce(function(s, it){ var pr = projById(it.projectId); return s + (pr ? pr.price*(it.qty||1) : 0); }, 0); }
+function packageItemsText(pk){ return (pk.items||[]).map(function(it){ var pr = projById(it.projectId); return (pr ? pr.name : '（已删除的项目）')+' × '+(it.qty||1); }).join('、'); }
+function activePackages(){ return PACKAGES.filter(function(pk){ return promoStatusOf(pk)==='进行中'; }); }
+/* 同一项目的活动价期间不能重叠（已结束的不算） */
+function promoOverlap(projectId, from, to, exceptId){
+  return PROMOS.filter(function(p){ return p.projectId===projectId && p.id!==exceptId && !p.ended; }).filter(function(p){ return (p.from||'0000') <= to && (p.to||'9999') >= from; })[0] || null;
+}
+function shiftMonth(ds, n){
+  var d = new Date(ds+'T00:00:00'), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+n);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()));
+  return dateStr(d);
+}
+/* ［复制上个月活动］：把"上个自然月内结束的活动价"整体顺延一个月复制成新的活动价（同项目同期间已有的不重复复制），复制后可编辑；返回新增条数 */
+function copyLastMonthPromos(){
+  var t = new Date(todayStr()+'T00:00:00'), ms = dateStr(new Date(t.getFullYear(), t.getMonth()-1, 1)), me = dateStr(new Date(t.getFullYear(), t.getMonth(), 0)), n = 0;
+  PROMOS.slice().forEach(function(p){
+    if(!p.to || p.to < ms || p.to > me) return;
+    var nf = shiftMonth(p.from, 1), nt = shiftMonth(p.to, 1);
+    if(promoOverlap(p.projectId, nf, nt)) return;
+    PROMOS.push({id:newPromoId('pm'), projectId:p.projectId, price:p.price, from:nf, to:nt, ended:false}); n++;
+  });
+  return n;
+}
+
+
 function setProjLibTab(t){ PROJLIB_TAB = t; PROJLIB_CAT_FILTER = 'all'; renderProjLibrary(); }
 
 function setProjLibCatFilter(id){ PROJLIB_CAT_FILTER = id; renderProjLibrary(); }
@@ -4105,6 +4148,8 @@ function projDeleteBlockReason(p){
   if(u.cases) r.push('还有 '+u.cases+' 个进行中的案件引用它');
   if(u.batches) r.push('还有 '+u.batches+' 个客人持有中的批次（剩余次数>0）');
   if(u.libCases) r.push('还有 '+u.libCases+' 个案例库案例挂在这个项目上');
+  var np = PROMOS.filter(function(x){ return x.projectId===p.id; }).length, nk = PACKAGES.filter(function(k){ return (k.items||[]).some(function(it){ return it.projectId===p.id; }); }).length;
+  if(np) r.push('还有 '+np+' 条活动价挂在这个项目上'); if(nk) r.push('还有 '+nk+' 个套餐包含这个项目');
   return r.join('；');
 }
 
@@ -4691,7 +4736,7 @@ applyClinicSettings();
 var GLOBAL_VAR_NAMES = ['DEMO_SHIFT_MS', 'HOSPITALS', 'CLINICS', 'CLINIC_HOSPITALS', 'HOSPITAL_DATA', 'ACCOUNTS', 'ACCOUNT_LOG', 'CASE_NO_SEQ', 'PROJCAT_SEQ', 'KR_CATEGORIES', 'PROJ_SEQ', 'LIB_CASE_SEQ'];
 var CLINIC_VAR_NAMES = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ', 'RESUMED_VISITS', 'PLACEHOLDER_HISTORY', 'PLACEHOLDER_SEQ', 'RESERVATION_PLACEHOLDERS',
   'CLIENTS', 'CLIENT_HOLDINGS', 'CASE_ITEMS', 'NOTIF_SEQ', 'NOTIFS', 'ROOMS', 'STAFF_ROSTER', 'ROOM_UNREAD', 'CHAT_DATA', 'MUTED_ROOMS', 'ROOM_FILE_SEQ', 'CAL_MEMOS', 'SMS_LOG', 'SMS_SEQ',
-  'LIB_PROBLEM_SEQ', 'LIB_PROBLEMS', 'LIB_PROBLEM_IDS', 'PROJECT_CATEGORIES', 'PROJECT_LIBRARY', 'LIB_CASES'];
+  'LIB_PROBLEM_SEQ', 'LIB_PROBLEMS', 'LIB_PROBLEM_IDS', 'PROJECT_CATEGORIES', 'PROJECT_LIBRARY', 'LIB_CASES', 'PROMOS', 'PACKAGES'];
 /* PROJECT_LIBRARY / LIB_CASES / PROJECT_CATEGORIES 在内存里是"合成"的（本诊所的 + 对接医院 / 标准部位的）；PCAT（分类名→id）由分类重建，不存档：本诊所的 IN 项 + 对接医院的 KR 项；存档时按 hospitalId 拆回医院（store.js 的 viewSplit） */
 
 function dayList(arr){ return arr.map(function(n){ return D(n); }); }
@@ -4921,7 +4966,7 @@ function emptyClinicVars(cid){
     CLIENTS:[], CLIENT_HOLDINGS:{}, CASE_ITEMS:[], NOTIF_SEQ:0, NOTIFS:[], ROOMS:linkedHospitalIds(cid).map(function(h){ var m = JSON.parse(JSON.stringify(main)); m.id = mainRoomId(h); m.hospitalId = h; m.name = 'Main · '+hospitalName(h,'ko'); return m; }), STAFF_ROSTER:buildStaffRoster(cid), ROOM_UNREAD:{}, CHAT_DATA:linkedHospitalIds(cid).reduce(function(o, h){ o[mainRoomId(h)] = []; return o; }, {}), MUTED_ROOMS:{}, ROOM_FILE_SEQ:1,
     CAL_MEMOS:[], SMS_LOG:[], SMS_SEQ:1, LIB_PROBLEM_SEQ:LIB_PROBLEM_SEQ, LIB_PROBLEMS:JSON.parse(JSON.stringify(LIB_PROBLEMS)), LIB_PROBLEM_IDS:JSON.parse(JSON.stringify(LIB_PROBLEM_IDS)),
     PROJECT_CATEGORIES:Object.keys(PROJECT_CATEGORIES).filter(function(k){ return PROJECT_CATEGORIES[k].origin==='IN'; }).reduce(function(o,k){ o[k] = JSON.parse(JSON.stringify(PROJECT_CATEGORIES[k])); return o; }, {}), /* 新诊所的本地分类：先复制一份标准的，之后各自管理 */
-    PROJECT_LIBRARY:[], LIB_CASES:[]
+    PROJECT_LIBRARY:[], LIB_CASES:[], PROMOS:[], PACKAGES:[]
   };
 }
 /* 其他诊所的演示资料（C2：泗水合作诊所，只对接 H1）：几个客户和案件 + 自己的本地项目和一个印尼案例，用来验证诊所之间完全隔开 */

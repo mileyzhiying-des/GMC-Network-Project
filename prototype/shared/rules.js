@@ -448,7 +448,7 @@ function phoneInputGet(id){
    老板：只有管理类（看汇总，看不到个别客人和案件）；管理者：全部；一般室长：work + personal。没有权限的入口完全不显示。 */
 var ROLE_PERMS = {
   owner:   {work:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true,  smslog:true},
-  manager: {work:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true,  smslog:true},
+  manager: {work:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true,  smslog:true,  promo:true}, /* promo = 项目库「本月活动 / 套餐」的新增 / 编辑 / 结束（只有 IN 管理者，CMD-1008-09） */
   general: {work:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true,  smslog:false},
   /* KR 医院账号（2026-10-06，Notion Accounts & Settings 第 7 节）：krwork = 处理案件（确认报告时间、上传报告、施术相关）；krview = 看所有案件；krviewOwn = 只看自己负责的；
      krsched = 日程/OFF；kropen = 开放施术日期；krdoctors = 院长名单/停用；krlib = 赴韩项目库、案例库；bizdata/accounts/clinic（= 医院设定）/oplog = 管理类。 */

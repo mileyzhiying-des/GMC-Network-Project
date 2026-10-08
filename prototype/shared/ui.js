@@ -2296,9 +2296,128 @@ function renderProjLibrary(){
   }
 }
 
+
+/* ---- 本月活动 / 套餐 tab（CMD-1008-09，IN-SRVC-01 第 3-1 节）：只有 IN 管理者能新增 / 编辑 / 结束，一般室长只看 ---- */
+var PROMO_STATUS_STYLE = {'进行中':['var(--sage-bg)','var(--sage)'], '未开始':['#E4E8ED','var(--slate2)'], '已结束':['#EDEAE2','var(--muted)']};
+function promoStatusPill(x){ var st = promoStatusOf(x), c = PROMO_STATUS_STYLE[st]; return '<span class="status-pill" style="background:'+c[0]+';color:'+c[1]+';">'+st+'</span>'; }
+function periodText(x){ return (x.from ? x.from : '即日起')+' ～ '+(x.to ? x.to : '不限'); }
+function promoGridHtml(match){
+  var mg = canDo('promo'), rows = PROMOS.filter(function(p){ var pr = projById(p.projectId); return pr && match(pr); }).sort(function(a,b){ return (b.from||'').localeCompare(a.from||''); });
+  var head = '<div class="case-field-row" style="font-size:11px;color:var(--muted);font-weight:700;"><span style="flex-grow:1;">项目</span><span style="width:110px;text-align:right;">原价</span><span style="width:110px;text-align:right;">活动价</span><span style="width:190px;">期间</span><span style="width:70px;">状态</span><span style="width:100px;text-align:right;">操作</span></div>';
+  var body = rows.map(function(p){
+    var pr = projById(p.projectId), st = promoStatusOf(p);
+    var act = mg ? (st!=='已结束' ? '<a href="#" class="info-link" onclick="openPromoModal(\''+p.id+'\');return false;">编辑</a> <a href="#" class="info-link" onclick="endPromo(\''+p.id+'\');return false;">结束</a>' : '<a href="#" class="info-link" onclick="openPromoModal(\''+p.id+'\');return false;">编辑</a>') : '<span style="font-size:11px;color:var(--dim);">只读</span>';
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+pr.name+'</span><span style="width:110px;text-align:right;font-size:12px;color:var(--muted);text-decoration:line-through;">'+fmtRp(pr.price)+'</span><span style="width:110px;text-align:right;font-size:13px;font-weight:700;">'+fmtRp(p.price)+'</span><span style="width:190px;font-size:12px;color:var(--slate2);">'+periodText(p)+'</span><span style="width:70px;">'+promoStatusPill(p)+'</span><span style="width:100px;text-align:right;font-size:12px;">'+act+'</span></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">还没有活动价'+(mg ? '，点右上角［＋ 新增活动价］添加' : '')+'</div>';
+  return '<div class="card" style="padding:4px 20px;">'+head+body+'</div>';
+}
+function pkgGridHtml(match){
+  var mg = canDo('promo'), rows = PACKAGES.filter(function(k){ return match({name:k.name+' '+packageItemsText(k), names:{}}); }).sort(function(a,b){ return (b.from||'').localeCompare(a.from||''); });
+  var head = '<div class="case-field-row" style="font-size:11px;color:var(--muted);font-weight:700;"><span style="width:150px;">名称</span><span style="flex-grow:1;">内含项目</span><span style="width:130px;text-align:right;">套餐价</span><span style="width:170px;">期间</span><span style="width:70px;">状态</span><span style="width:80px;text-align:right;">操作</span></div>';
+  var body = rows.map(function(k){
+    var st = promoStatusOf(k);
+    var act = mg ? (st!=='已结束' ? '<a href="#" class="info-link" onclick="openPkgModal(\''+k.id+'\');return false;">编辑</a> <a href="#" class="info-link" onclick="endPkg(\''+k.id+'\');return false;">结束</a>' : '<a href="#" class="info-link" onclick="openPkgModal(\''+k.id+'\');return false;">编辑</a>') : '<span style="font-size:11px;color:var(--dim);">只读</span>';
+    return '<div class="case-field-row"><span style="width:150px;font-size:13px;font-weight:700;">'+k.name+' <span class="status-pill" style="background:#FBE9E7;color:#C1454A;font-size:10px;">不可退款</span></span><span style="flex-grow:1;font-size:12px;color:var(--slate2);">'+packageItemsText(k)+'</span><span style="width:130px;text-align:right;font-size:13px;font-weight:700;">'+fmtRp(k.price)+'<div style="font-size:10px;color:var(--muted);font-weight:400;">原价合计 '+fmtRp(packageListTotal(k))+'</div></span><span style="width:170px;font-size:12px;color:var(--slate2);">'+periodText(k)+'</span><span style="width:70px;">'+promoStatusPill(k)+'</span><span style="width:80px;text-align:right;font-size:12px;">'+act+'</span></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">还没有套餐'+(mg ? '，点右上角［＋ 新增套餐］添加' : '')+'</div>';
+  return '<div class="card" style="padding:4px 20px;">'+head+body+'</div>';
+}
+/* 动态弹窗（不在 in.html 里写死）：同一个 id 只建一次 */
+function ensurePromoOverlay(id){
+  var ov = document.getElementById(id);
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = id; ov.onclick = function(e){ if(e.target===ov) ov.classList.remove('open'); }; ov.innerHTML = '<div class="modal-box" style="width:460px;max-height:86vh;overflow:auto;"></div>'; document.body.appendChild(ov); }
+  return ov;
+}
+function closePromoOverlay(id){ var ov = document.getElementById(id); if(ov) ov.classList.remove('open'); }
+function localProjectOptions(selId){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && (p.active || p.id===selId); }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===selId?' selected':'')+'>'+p.name+'（'+fmtRp(p.price)+'）</option>'; }).join(''); }
+var PROMO_EDIT = null, PKG_EDIT = null;
+var PM_INPUT = 'width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:10px;';
+function openPromoModal(id){
+  if(!canDo('promo')) return;
+  var ex = id ? PROMOS.filter(function(p){ return p.id===id; })[0] : null;
+  PROMO_EDIT = ex ? Object.assign({}, ex) : {id:null, projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]||{}).id, price:'', from:todayStr(), to:'', ended:false};
+  renderPromoModal();
+}
+function renderPromoModal(){
+  var e = PROMO_EDIT, ov = ensurePromoOverlay('promo-edit-overlay');
+  ov.firstChild.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:14px;"><b style="font-size:15px;">'+(e.id ? '编辑活动价' : '新增活动价')+'</b><span style="cursor:pointer;color:var(--slate);" onclick="closePromoOverlay(\'promo-edit-overlay\')">✕</span></div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">本地项目</div><select style="'+PM_INPUT+'" onchange="PROMO_EDIT.projectId=this.value;renderPromoModal()">'+localProjectOptions(e.projectId)+'</select>'+
+    '<div style="font-size:12px;color:var(--muted);margin:-4px 0 10px;">原价 '+fmtRp((projById(e.projectId)||{}).price)+'</div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">活动价（Rp）</div><input type="number" min="0" value="'+(e.price===''?'':e.price)+'" oninput="PROMO_EDIT.price=this.value" style="'+PM_INPUT+'">'+
+    '<div style="display:flex;gap:10px;"><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">开始日</div><input type="date" value="'+(e.from||'')+'" onchange="PROMO_EDIT.from=this.value" style="'+PM_INPUT+'"></div><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">结束日</div><input type="date" value="'+(e.to||'')+'" onchange="PROMO_EDIT.to=this.value" style="'+PM_INPUT+'"></div></div>'+
+    (e.err ? '<div style="font-size:12px;color:#C1454A;margin-bottom:8px;">'+e.err+'</div>' : '')+
+    '<div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="closePromoOverlay(\'promo-edit-overlay\')">取消</button><button class="btn-primary" style="flex:1;" onclick="savePromo()">保存</button></div>';
+  ov.classList.add('open');
+}
+function savePromo(){
+  var e = PROMO_EDIT; if(!e || !canDo('promo')) return;
+  var price = Number(e.price), err = '';
+  if(!e.projectId) err = '请选择本地项目';
+  else if(e.price==='' || isNaN(price) || price<0) err = '请填写活动价（不小于 0 的数字）';
+  else if(!e.from || !e.to) err = '请填写开始日和结束日';
+  else if(e.to < e.from) err = '结束日不能早于开始日';
+  else if(promoOverlap(e.projectId, e.from, e.to, e.id)) err = '这个项目在这段期间已经有活动价了';
+  if(err){ e.err = err; renderPromoModal(); return; }
+  if(e.id){ var p = PROMOS.filter(function(x){ return x.id===e.id; })[0]; if(p){ p.projectId = e.projectId; p.price = price; p.from = e.from; p.to = e.to; } }
+  else PROMOS.push({id:newPromoId('pm'), projectId:e.projectId, price:price, from:e.from, to:e.to, ended:false});
+  PROMO_EDIT = null; closePromoOverlay('promo-edit-overlay'); renderProjLibrary();
+}
+function endPromo(id){
+  if(!canDo('promo')) return; var p = PROMOS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
+  if(!confirm('结束这条活动价？结束后本地选购不再带入活动价，恢复原价；已选进案件的成交价不变。')) return;
+  p.ended = true; renderProjLibrary();
+}
+function doCopyLastMonthPromos(){
+  if(!canDo('promo')) return;
+  var n = copyLastMonthPromos();
+  showToast(n ? '已复制上个月活动' : '没有可复制的活动', n ? '新增 '+n+' 条活动价（整体顺延一个月），可在列表里继续编辑' : '上个自然月内没有结束的活动价（或下个月已有同项目的活动价）', null);
+  renderProjLibrary();
+}
+function openPkgModal(id){
+  if(!canDo('promo')) return;
+  var ex = id ? PACKAGES.filter(function(k){ return k.id===id; })[0] : null;
+  PKG_EDIT = ex ? JSON.parse(JSON.stringify(ex)) : {id:null, name:'', items:[{projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]||{}).id, qty:1}], price:'', from:todayStr(), to:'', ended:false};
+  renderPkgModal();
+}
+function renderPkgModal(){
+  var e = PKG_EDIT, ov = ensurePromoOverlay('pkg-edit-overlay');
+  var rows = e.items.map(function(it, i){
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><select style="flex:1;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;" onchange="PKG_EDIT.items['+i+'].projectId=this.value;renderPkgModal()">'+localProjectOptions(it.projectId)+'</select>'+
+      qtyInputHtml({value:it.qty||1, min:1, onchange:'PKG_EDIT.items['+i+'].qty=parseInt(this.value,10)||1;renderPkgModal()'})+'<span style="font-size:12px;">次</span>'+
+      (e.items.length>1 ? '<a href="#" class="info-link" onclick="PKG_EDIT.items.splice('+i+',1);renderPkgModal();return false;">移除</a>' : '')+'</div>';
+  }).join('');
+  ov.firstChild.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:14px;"><b style="font-size:15px;">'+(e.id ? '编辑套餐' : '新增套餐')+'</b><span style="cursor:pointer;color:var(--slate);" onclick="closePromoOverlay(\'pkg-edit-overlay\')">✕</span></div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">套餐名称</div><input type="text" value="'+(e.name||'').replace(/"/g,'&quot;')+'" oninput="PKG_EDIT.name=this.value" style="'+PM_INPUT+'">'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">内含项目 × 次数</div>'+rows+'<a href="#" class="info-link" style="font-size:12px;" onclick="PKG_EDIT.items.push({projectId:(PROJECT_LIBRARY.filter(function(p){return p.origin===\'IN\'&&p.active;})[0]||{}).id,qty:1});renderPkgModal();return false;">＋ 添加内含项目</a>'+
+    '<div style="font-size:11px;color:var(--muted);margin:8px 0 12px;">原价合计 '+fmtRp(packageListTotal(e))+'</div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">套餐价（Rp）</div><input type="number" min="0" value="'+(e.price===''?'':e.price)+'" oninput="PKG_EDIT.price=this.value" style="'+PM_INPUT+'">'+
+    '<div style="display:flex;gap:10px;"><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">有效期开始（可空）</div><input type="date" value="'+(e.from||'')+'" onchange="PKG_EDIT.from=this.value" style="'+PM_INPUT+'"></div><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">有效期结束（可空）</div><input type="date" value="'+(e.to||'')+'" onchange="PKG_EDIT.to=this.value" style="'+PM_INPUT+'"></div></div>'+
+    '<div style="font-size:11px;color:var(--muted);margin:-4px 0 10px;">套餐不可退款：付款后拆成各项目的持有批次，批次标「套餐」，客户详情不显示退款按钮</div>'+
+    (e.err ? '<div style="font-size:12px;color:#C1454A;margin-bottom:8px;">'+e.err+'</div>' : '')+
+    '<div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="closePromoOverlay(\'pkg-edit-overlay\')">取消</button><button class="btn-primary" style="flex:1;" onclick="savePkg()">保存</button></div>';
+  ov.classList.add('open');
+}
+function savePkg(){
+  var e = PKG_EDIT; if(!e || !canDo('promo')) return;
+  var price = Number(e.price), err = '';
+  if(!(e.name||'').trim()) err = '请填写套餐名称';
+  else if(!e.items.length || e.items.some(function(it){ return !it.projectId; })) err = '请至少添加一个内含项目';
+  else if(e.price==='' || isNaN(price) || price<0) err = '请填写套餐价（不小于 0 的数字）';
+  else if(e.from && e.to && e.to < e.from) err = '有效期结束不能早于开始';
+  if(err){ e.err = err; renderPkgModal(); return; }
+  var rec = {name:e.name.trim(), items:e.items.map(function(it){ return {projectId:it.projectId, qty:it.qty||1}; }), price:price, from:e.from||'', to:e.to||''};
+  if(e.id){ var k = PACKAGES.filter(function(x){ return x.id===e.id; })[0]; if(k) Object.assign(k, rec); }
+  else PACKAGES.push(Object.assign({id:newPromoId('pk'), ended:false}, rec));
+  PKG_EDIT = null; closePromoOverlay('pkg-edit-overlay'); renderProjLibrary();
+}
+function endPkg(id){
+  if(!canDo('promo')) return; var k = PACKAGES.filter(function(x){ return x.id===id; })[0]; if(!k) return;
+  if(!confirm('结束这个套餐？结束后不能再被选购；已付款拆出的持有批次不变。')) return;
+  k.ended = true; renderProjLibrary();
+}
+
 function renderProjLibTabs(){
   var el = document.getElementById('projlib-tabs'); if(!el) return;
-  var tabs = [{k:'KR', label:'赴韩项目'+(DEMO_ROLE==='in'?'（只读）':'')}, {k:'IN', label:'本地项目'}, {k:'inactive', label:'非活性化'}];
+  var tabs = [{k:'KR', label:'赴韩项目'+(DEMO_ROLE==='in'?'（只读）':'')}, {k:'IN', label:'本地项目'}].concat(DEMO_ROLE==='in' ? [{k:'promo', label:'本月活动'}, {k:'pkg', label:'套餐'}] : []).concat([{k:'inactive', label:'非活性化'}]); /* 2026-10-08：IN 加本月活动 / 套餐 */
   el.innerHTML = tabs.map(function(t){
     return '<span class="tab'+(PROJLIB_TAB===t.k?' active':'')+'" onclick="setProjLibTab(\''+t.k+'\')">'+t.label+'</span>';
   }).join('');
@@ -2308,6 +2427,13 @@ function renderProjLibFilters(){
   var el = document.getElementById('projlib-filters'); if(!el) return;
   var search = '<input type="text" id="projlib-search" placeholder="搜索项目名称" value="'+PROJLIB_Q.replace(/"/g,'&quot;')+'" oninput="PROJLIB_Q=this.value;renderProjLibGrid();" style="width:220px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;">';
   if(PROJLIB_TAB==='inactive'){ el.innerHTML = '<div style="display:flex;gap:10px;align-items:center;">'+search+'</div>'; return; }
+  if(PROJLIB_TAB==='promo' || PROJLIB_TAB==='pkg'){
+    var mg = canDo('promo');
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><div style="display:flex;gap:8px;align-items:center;">'+search+
+      '<span style="font-size:11px;color:var(--muted);">'+(PROJLIB_TAB==='promo' ? '活动价期间内，本地选购默认带入活动价；过期自动恢复原价' : '套餐不可退款；付款后拆成各项目的持有批次')+(mg ? '' : '　·　只有 IN 管理者能新增 / 编辑 / 结束')+'</span></div>'+
+      (mg ? '<div style="display:flex;gap:8px;">'+(PROJLIB_TAB==='promo' ? '<button class="btn-outline" style="padding:6px 12px;font-size:12px;" onclick="doCopyLastMonthPromos()">复制上个月活动</button><button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="openPromoModal()">＋ 新增活动价</button>' : '<button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="openPkgModal()">＋ 新增套餐</button>')+'</div>' : '')+'</div>';
+    return;
+  }
   var origin = PROJLIB_TAB;
   var cats = projLibCategories(origin);
   var canEdit = libCanEdit(origin==='KR' ? 'travel' : 'local');
@@ -2384,6 +2510,8 @@ function renderProjLibGrid(){
     }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有已非活性化的项目</div>';
     return;
   }
+  if(PROJLIB_TAB==='promo'){ el.innerHTML = promoGridHtml(match); return; }
+  if(PROJLIB_TAB==='pkg'){ el.innerHTML = pkgGridHtml(match); return; }
   var origin = PROJLIB_TAB;
   var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active && match(p) && (origin!=='KR' || p.hospitalId===projLibHospital()); }); /* 赴韩项目：只看所选医院的 */
   if(PROJLIB_CAT_FILTER!=='all') items = items.filter(function(p){ return p.categoryId===PROJLIB_CAT_FILTER; });
