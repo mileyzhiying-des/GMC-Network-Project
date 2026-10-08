@@ -265,28 +265,20 @@ function settlementItemRow(c, it, removable){
     var lineTotal = inLineTotal(it);
     var origPrice = it.price*qty;
     var priceHtml;
-    if(removable){
-      priceHtml = qtyInputHtml({value:qty, min:1, onchange:"setInItemField('"+it.projectId+"','qty',this.value)"})+' 次 × '+
-        '<input type="number" min="1" max="100" value="'+pct+'" onchange="setInItemField(\''+it.projectId+'\',\'discountPct\',this.value)" style="width:44px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:center;">% ＝ '+
-        '<b>'+formatCurrency(lineTotal,ccy)+'</b>'+
-        ' <a href="#" class="info-link" onclick="toggleProject(\''+it.projectId+'\');return false;">移除</a>';
-    } else {
+    if(removable) return localRowHtml(c, 'main', it); /* 2026-10-08：赴韩方案 / 本地选购的「已选择」统一一行（行首 checkbox / 次数 / 折扣 / 金额 / ［备注］） */
       priceHtml = qty+'次'+(pct<100?'，'+pct+'折':'')+'　<b>'+formatCurrency(lineTotal,ccy)+'</b>'+(pct<100?' <span style="color:var(--muted);text-decoration:line-through;font-size:11px;">'+formatCurrency(origPrice,ccy)+'</span>':'');
-    }
     var held = clientHeldRemaining(c.name, it.name);
     var heldTag = held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '';
     var noteRow = removable ? '<div class="case-field-row" style="border-top:none;padding-top:0;padding-bottom:10px;"><input type="text" placeholder="备注（选填）" value="'+(it.itemNote||'')+'" onchange="setInItemField(\''+it.projectId+'\',\'itemNote\',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;"></div>' : '';
     return '<div class="case-field-row" style="flex-wrap:wrap;gap:6px;"><span style="flex-grow:1;font-size:13px;'+strike+'">'+it.name+heldTag+'</span><span style="font-size:12px;display:flex;align-items:center;gap:4px;">'+priceHtml+'</span></div>'+noteRow;
   }
-  var action = removable
-    ? ' <a href="#" class="info-link" onclick="toggleProject(\''+it.projectId+'\');return false;">移除</a>'
-    : '';
-  return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+strike+'">'+it.name+(it.done?'（已完成）':'')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(it.price, ccy)+action+'</span></div>';
+  if(removable) return '<div class="sel-row"><div class="sel-line"><input type="checkbox" checked title="取消勾选即移除" onchange="toggleProject(\''+it.projectId+'\')"><div class="sel-name"><div>'+it.name+'</div></div><span class="sel-amt">'+formatCurrency(it.price, ccy)+'</span></div></div>';
+  return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+strike+'">'+it.name+(it.done?'（已完成）':'')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(it.price, ccy)+'</span></div>';
 }
 
 function settlementBigCardHtml(c, items, removable){
   var krItems = items.filter(function(it){ return it.origin==='KR'; });
-  var inItems = items.filter(function(it){ return it.origin==='IN'; });
+  var inItems = items.filter(function(it){ return it.origin==='IN' && it.kind!=='service'; }); /* 서비스（赠送）不进本地项目卡，在下方单独的 서비스 区 */
   if(!krItems.length && !inItems.length){
     return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">尚未选择项目</div>';
   }
@@ -352,8 +344,7 @@ function computeBatchBreakdown(items){
     if(it.origin==='KR'){ krItems.push(it); var pp = itemKrParts(it); krTotal += pp.base + pp.must + pp.elastic; krFixed += pp.base + pp.must; krProvisional += pp.elastic; }
     else {
       inItems.push(it);
-      var qty = it.qty||1, pct = (it.discountPct===undefined||it.discountPct===null) ? 100 : it.discountPct;
-      inTotal += Math.round(it.price*qty*pct/100);
+      inTotal += inLineTotal(it); /* 成交单价（活动价 / 套餐价 / 原价）× 个数 × 实付比例；서비스 = 0 */
     }
   });
   var krDeposit = Math.round(krFixed * KR_DEPOSIT_RATE);

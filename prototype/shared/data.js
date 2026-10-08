@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 32; /* 32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 33; /* 33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -732,6 +732,7 @@ function grantHolding(name, itemName, category, caseId, date, qty, krCollected, 
   var nb = {caseId:caseId, date:date, bought:qty, used:0, usages:[], kr:!!krCollected};
   if(price){ nb.paid = price.paid; nb.listPrice = price.list; nb.discountPct = price.pct; nb.currency = price.currency || 'IDR'; }
   h.batches.push(nb);
+  return nb;
 }
 
 /* 使用持有：先扣最早购买的那一批，跨批次自动结转；记 usages 供客户详情页展开显示 */
@@ -2387,19 +2388,219 @@ function clientHeldRemaining(name, itemName){
 }
 
 /* 编辑中的本地项目行：改个数/折扣/备注（2026-09-29 第十轮新增），只在 removable=true（还没结算）时可编辑 */
-function setInItemField(projectId, field, val){
+function setInItemField(projectId, field, val){ setLocalItemField('main', projectId, field, val); } /* 旧入口，转到新的购物车函数 */
+
+/* ================= 本地选购（2026-10-08，CMD-1008-09；Notion IN-CASE-02 第 3 节「本地选购画面」） =================
+   两条路径分开（同一个项目库）：本地选购（本地管理 tab：不面诊案件的选择项目 + 面诊 / 赴韩案件的「+添加本地管理」）= 这里；赴韩方案（项目列表 tab）仍是 projectPickerHtml。
+   购物车（cart）条目 = 案件里的"已选择"：
+     scope 'main' → c.recommended（走主结算单 generateSettlementBatch → confirmSettlementPayment）；
+     scope 'lm'   → c.localMgmt.cart（走 lmSettle，直接转客户持有）。
+   条目：{kind:'project'|'package'|'service', key, projectId(=key，兼容旧代码), name, price(原价单价；套餐 = 内含项目原价合计), unitPrice(成交单价：活动价 / 套餐价 / 原价；服务 = 0),
+         qty, discountPct(实付比例，100 = 不打折；界面留空 = 不打折，填 80 = 八折), itemNote, promoId / promoTo(带入活动价时), pkgItems(套餐内含快照), origin:'IN'}
+   快照存成交价：之后改项目库 / 活动价 / 套餐不影响已选进案件的条目和已发放的持有批次 */
+function cartOf(c, scope){
+  if(scope==='lm'){ c.localMgmt.cart = c.localMgmt.cart || []; return c.localMgmt.cart; }
+  c.recommended = c.recommended || []; return c.recommended;
+}
+function cartKey(it){ return it.key || it.projectId; }
+function buildLocalItem(p){
+  var u = localUnitPrice(p);
+  return {kind:'project', key:p.id, projectId:p.id, name:p.name, price:p.price, unitPrice:u.price, promoId:u.promo ? u.promo.id : null, promoTo:u.promo ? u.promo.to : '', currency:'IDR', origin:'IN', categoryId:p.categoryId, qty:1, discountPct:100, itemNote:''};
+}
+function buildPackageItem(pk){
+  var its = (pk.items||[]).map(function(x){ var pr = projById(x.projectId) || {}; return {projectId:x.projectId, name:pr.name || '（已删除的项目）', qty:x.qty||1, price:pr.price||0, categoryId:pr.categoryId}; });
+  return {kind:'package', key:'pk:'+pk.id, projectId:'pk:'+pk.id, pkgId:pk.id, name:pk.name, price:packageListTotal(pk), unitPrice:pk.price, pkgItems:its, currency:'IDR', origin:'IN', categoryId:null, qty:1, discountPct:100, itemNote:''};
+}
+function buildServiceItem(p, qty){
+  return {kind:'service', key:'sv:'+p.id, projectId:'sv:'+p.id, srcProjectId:p.id, name:p.name, price:p.price, unitPrice:0, currency:'IDR', origin:'IN', categoryId:p.categoryId, qty:qty||1, discountPct:100, itemNote:''};
+}
+function inLineTotal(it){
+  var qty = it.qty||1, pct = (it.discountPct===undefined||it.discountPct===null) ? 100 : it.discountPct;
+  var unit = (it.unitPrice===undefined||it.unitPrice===null) ? it.price : it.unitPrice;
+  return Math.round(unit*qty*pct/100);
+}
+/* 已选择里的合计：paidCount = 付费项目（项目 / 套餐）的条数；只有服务没有付费项目时不能结算 */
+function cartTotals(items){
+  var paid = items.filter(function(it){ return it.origin==='IN' ? it.kind!=='service' : true; });
+  return {paidCount:paid.length, total:items.filter(function(it){ return it.origin==='IN'; }).reduce(function(s,it){ return s+inLineTotal(it); }, 0), onlyService:items.length>0 && !paid.length};
+}
+
+function toggleLocalProject(scope, projectId){
   var c = getCurrentCase(); if(!c) return;
-  var it = (c.recommended||[]).filter(function(x){ return x.projectId===projectId; })[0];
-  if(!it) return;
+  var cart = cartOf(c, scope), idx = cart.findIndex(function(it){ return cartKey(it)===projectId; });
+  if(idx>-1) cart.splice(idx, 1);
+  else { var p = projById(projectId); if(!p) return; cart.push(buildLocalItem(p)); }
+  renderCaseBody(c);
+}
+function toggleLocalPackage(scope, pkgId){
+  var c = getCurrentCase(); if(!c) return;
+  var cart = cartOf(c, scope), key = 'pk:'+pkgId, idx = cart.findIndex(function(it){ return cartKey(it)===key; });
+  if(idx>-1) cart.splice(idx, 1);
+  else { var pk = PACKAGES.filter(function(k){ return k.id===pkgId; })[0]; if(!pk) return; cart.push(buildPackageItem(pk)); }
+  renderCaseBody(c);
+}
+function removeLocalItem(scope, key){
+  var c = getCurrentCase(); if(!c) return;
+  var cart = cartOf(c, scope), idx = cart.findIndex(function(it){ return cartKey(it)===key; });
+  if(idx>-1) cart.splice(idx, 1);
+  renderCaseBody(c);
+}
+function setLocalItemField(scope, key, field, val){
+  var c = getCurrentCase(); if(!c) return;
+  var it = cartOf(c, scope).filter(function(x){ return cartKey(x)===key; })[0]; if(!it) return;
   if(field==='qty') it.qty = Math.max(1, parseInt(val,10)||1);
-  else if(field==='discountPct') it.discountPct = Math.min(100, Math.max(1, parseInt(val,10)||100));
+  else if(field==='discountPct'){ var n = parseInt(val,10); it.discountPct = (isNaN(n) || n>=100) ? 100 : Math.max(1, n); } /* 留空 / 100 = 不打折；填 80 = 八折 */
   else it.itemNote = val;
   renderCaseBody(c);
 }
+function toggleItemNote(scope, key){
+  var c = getCurrentCase(); if(!c) return;
+  var it = cartOf(c, scope).filter(function(x){ return cartKey(x)===key; })[0]; if(!it) return;
+  c.noteOpen = c.noteOpen || {};
+  var open = c.noteOpen[key]!==undefined ? c.noteOpen[key] : !!it.itemNote;
+  c.noteOpen[key] = !open;
+  renderCaseBody(c);
+}
+function setLocalNote(scope, val){
+  var c = getCurrentCase(); if(!c) return;
+  if(scope==='lm') c.localMgmt.noteIN = val; else c.noteIN = val;
+}
+function setLocalPickTab(tab){ var c = getCurrentCase(); if(!c) return; c.localPickTab = tab; renderCaseBody(c); }
 
-function inLineTotal(it){
-  var qty = it.qty||1, pct = (it.discountPct===undefined||it.discountPct===null) ? 100 : it.discountPct;
-  return Math.round(it.price*qty*pct/100);
+/* 服务（赠送）：本地选购 / 赴韩方案里的本地项目清单下方；金额 Rp 0（小字附原价）；付款后转持有，批次标「서비스」，不显示退款，不计入收入；必须搭配至少一个付费项目才能结算 */
+function openSvcAdd(scope){
+  var c = getCurrentCase(); if(!c) return;
+  var first = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; })[0];
+  c.svcDraft = {scope:scope, projectId:first ? first.id : '', qty:1};
+  renderCaseBody(c);
+}
+function setSvcDraft(field, val){ var c = getCurrentCase(); if(!c || !c.svcDraft) return; c.svcDraft[field] = field==='qty' ? Math.max(1, parseInt(val,10)||1) : val; }
+function cancelSvcAdd(){ var c = getCurrentCase(); if(!c) return; c.svcDraft = null; renderCaseBody(c); }
+function confirmSvcAdd(){
+  var c = getCurrentCase(); if(!c || !c.svcDraft) return;
+  var d = c.svcDraft, p = projById(d.projectId); if(!p) return;
+  var cart = cartOf(c, d.scope), key = 'sv:'+p.id, ex = cart.filter(function(it){ return cartKey(it)===key; })[0];
+  if(ex) ex.qty = (ex.qty||1) + d.qty; else cart.push(buildServiceItem(p, d.qty));
+  c.svcDraft = null; renderCaseBody(c);
+}
+function serviceBlockHtml(c, scope){
+  var cart = cartOf(c, scope), svcs = cart.filter(function(it){ return it.kind==='service'; });
+  var draft = (c.svcDraft && c.svcDraft.scope===scope) ? c.svcDraft : null, adder;
+  if(draft){
+    var opts = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===draft.projectId?' selected':'')+'>'+p.name+'（'+fmtRp(p.price)+'）</option>'; }).join('');
+    adder = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;"><select onchange="setSvcDraft(\'projectId\',this.value)" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;">'+opts+'</select>'+
+      qtyInputHtml({value:draft.qty, min:1, onchange:"setSvcDraft('qty',this.value)"})+'<span style="font-size:12px;">次</span>'+
+      '<button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="confirmSvcAdd()">添加</button><button class="btn-ghost" style="padding:5px 10px;font-size:12px;" onclick="cancelSvcAdd()">取消</button></div>';
+  } else adder = '<button class="btn-ghost" style="margin-top:8px;padding:5px 12px;font-size:12px;" onclick="openSvcAdd(\''+scope+'\')">＋ 添加서비스</button>';
+  return '<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);"><div style="font-size:12px;font-weight:700;color:var(--slate2);">서비스（赠送）</div>'+
+    '<div style="font-size:11px;color:var(--muted);margin:2px 0 6px;">金额 Rp 0，付款后转持有，批次标「서비스」，不可退款，不计入收入；需搭配付费项目</div>'+
+    svcs.map(function(it){ return localRowHtml(c, scope, it); }).join('')+adder+'</div>';
+}
+
+/* 已选择卡片的统一一行（本地选购 / 赴韩方案共用）：行首 checkbox（取消即移除）/ 项目名 / 次数 stepper / 折扣 / 金额 / 行尾［备注］；［备注］点了才展开短输入框，已有内容时显示"备注 ✓"并默认展开 */
+function localRowHtml(c, scope, it){
+  var key = cartKey(it), isSvc = it.kind==='service', isPkg = it.kind==='package', qty = it.qty||1, pct = (it.discountPct===undefined||it.discountPct===null) ? 100 : it.discountPct;
+  var tags = (isPkg ? ' <span class="status-pill" style="background:#FBE9E7;color:#C1454A;font-size:10px;">套餐 · 不可退款</span>' : '')+
+    (isSvc ? ' <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);font-size:10px;">서비스</span>' : '')+
+    (it.promoId ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本月</span>' : '');
+  var held = (isSvc||isPkg) ? 0 : clientHeldRemaining(c.name, it.name);
+  var sub = '';
+  if(it.promoId) sub = '活动价 '+fmtRp(it.unitPrice)+'<span style="text-decoration:line-through;margin-left:6px;">原价 '+fmtRp(it.price)+'</span>'+(it.promoTo ? '　至 '+it.promoTo : '');
+  else if(isPkg) sub = (it.pkgItems||[]).map(function(x){ return x.name+' ×'+x.qty; }).join('、')+'　原价合计 '+fmtRp(it.price);
+  else if(isSvc) sub = '原价 '+fmtRp(it.price)+'（赠送）';
+  if(held>0) sub += (sub ? '　' : '')+'<span style="color:var(--sage);">持有 '+held+' 次</span>';
+  var line = inLineTotal(it), noteOpen = c.noteOpen && c.noteOpen[key]!==undefined ? c.noteOpen[key] : !!it.itemNote;
+  var k = key.replace(/'/g, '');
+  return '<div class="sel-row"><div class="sel-line">'+
+    '<input type="checkbox" checked title="取消勾选即移除" onchange="removeLocalItem(\''+scope+'\',\''+k+'\')">'+
+    '<div class="sel-name"><div>'+it.name+tags+'</div>'+(sub ? '<div class="sel-sub">'+sub+'</div>' : '')+'</div>'+
+    qtyInputHtml({value:qty, min:1, onchange:"setLocalItemField('"+scope+"','"+k+"','qty',this.value)"})+
+    (isSvc ? '' : '<span class="sel-disc"><input type="number" min="1" max="100" placeholder="折扣" title="填客人实付比例，80 = 八折；留空 = 不打折" value="'+(pct<100 ? pct : '')+'" onchange="setLocalItemField(\''+scope+'\',\''+k+'\',\'discountPct\',this.value)"><i>%</i></span>')+
+    '<span class="sel-amt">'+formatCurrency(line,'IDR')+'</span>'+
+    '<button type="button" class="sel-note-btn" onclick="toggleItemNote(\''+scope+'\',\''+k+'\')">备注'+(it.itemNote ? ' ✓' : '')+'</button></div>'+
+    (noteOpen ? '<div class="sel-note"><input type="text" placeholder="备注（选填）" value="'+(it.itemNote||'').replace(/"/g,'&quot;')+'" onchange="setLocalItemField(\''+scope+'\',\''+k+'\',\'note\',this.value)"></div>' : '')+'</div>';
+}
+
+function localPriceCellHtml(p, ccy){
+  var u = localUnitPrice(p);
+  if(!u.promo) return '<span style="color:var(--slate2);">'+displayAmount(p.price, 'IN', ccy)+'</span>';
+  return '<span style="text-align:right;"><span style="color:var(--sage);font-weight:700;">'+displayAmount(u.price, 'IN', ccy)+'</span> <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本月</span>'+
+    '<div style="font-size:11px;color:var(--muted);"><span style="text-decoration:line-through;">'+displayAmount(p.price, 'IN', ccy)+'</span>　至 '+u.promo.to+'</div></span>';
+}
+
+function localCatalogHtml(c, scope, tab, q, ccy){
+  var cart = cartOf(c, scope), has = function(key){ return cart.some(function(it){ return cartKey(it)===key; }); };
+  var projRow = function(p){
+    var held = clientHeldRemaining(c.name, p.name);
+    return '<label class="loc-row"><input type="checkbox" onchange="toggleLocalProject(\''+scope+'\',\''+p.id+'\')" '+(has(p.id)?'checked':'')+'>'+
+      '<span style="flex-grow:1;">'+p.name+(held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '')+projCasesLinkHtml(p.id)+'</span>'+localPriceCellHtml(p, ccy)+'</label>';
+  };
+  var match = function(name){ return !q || name.toLowerCase().indexOf(q)>-1; };
+  var locals = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; }); /* 本地选购不显示术后管理分类 */
+  if(tab==='promo'){
+    var rows = PROMOS.filter(function(pm){ return promoStatusOf(pm)==='进行中'; }).map(function(pm){ return projById(pm.projectId); }).filter(function(p){ return p && p.active && p.categoryId!==POST_CARE_CAT_ID && match(p.name); });
+    return rows.map(projRow).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">本月暂无活动价</div>';
+  }
+  if(tab==='pkg'){
+    var pks = activePackages().filter(function(k){ return match(k.name+' '+packageItemsText(k)); });
+    return pks.map(function(k){
+      return '<label class="loc-row"><input type="checkbox" onchange="toggleLocalPackage(\''+scope+'\',\''+k.id+'\')" '+(has('pk:'+k.id)?'checked':'')+'>'+
+        '<span style="flex-grow:1;">'+k.name+' <span class="status-pill" style="background:#FBE9E7;color:#C1454A;font-size:10px;">不可退款</span><div style="font-size:11px;color:var(--muted);margin-top:2px;">'+packageItemsText(k)+(k.to ? '　有效期至 '+k.to : '')+'</div></span>'+
+        '<span style="text-align:right;"><b>'+displayAmount(k.price, 'IN', ccy)+'</b><div style="font-size:11px;color:var(--muted);">原价合计 '+displayAmount(packageListTotal(k), 'IN', ccy)+'</div></span></label>';
+    }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无可选套餐</div>';
+  }
+  return locals.filter(function(p){ return match(p.name); }).map(projRow).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>';
+}
+
+/* 本地选购画面（scope 'main' = 不面诊案件的选择项目 / 追加；'lm' = 本地管理的新增项目） */
+function localPurchaseHtml(c, scope, isAddition){
+  var cart = cartOf(c, scope), q = (c.projectSearch || '').toLowerCase(), ccy = CASE_DISPLAY_CCY_IN;
+  var tab = c.localPickTab || (PROMOS.some(function(pm){ return promoStatusOf(pm)==='进行中'; }) ? 'promo' : 'all');
+  var tabs = [['promo','本月活动'],['pkg','套餐'],['all','全部项目']].map(function(t){ return '<span class="chip'+(tab===t[0]?' active':'')+'" onclick="setLocalPickTab(\''+t[0]+'\')">'+t[1]+'</span>'; }).join('');
+  var left = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">'+tabs+caseCcySwitchHtml('IN')+'<a href="#" class="info-link" style="font-size:12px;" onclick="openProjectLibNewTab();return false;">在项目库查看 ↗</a></div>'+
+    '<input type="text" placeholder="搜索项目…" value="'+(c.projectSearch||'').replace(/"/g,'&quot;')+'" oninput="setProjectSearch(this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;box-sizing:border-box;">'+
+    localCatalogHtml(c, scope, tab, q, ccy);
+  var items = cart.filter(function(it){ return it.kind!=='service'; }), tot = cartTotals(cart);
+  var noteVal = (scope==='lm' ? (c.localMgmt.noteIN||'') : (c.noteIN||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  var canNoBuy = scope==='lm' || (!isAddition && c.entryChoicePending && c.projectEntryMode==='new' && isLocalCase(c) && !caseHasPurchase(c) && !(c.mgmtUses||[]).length && !((c.localMgmt && c.localMgmt.mgmtUses)||[]).length); /* 不面诊的本地案件、选择项目、没付款也没用过持有项目时才显示（CMD-1008-06） */
+  var settleFn = scope==='lm' ? 'lmSettle()' : (isAddition ? 'confirmAddition()' : 'confirmProjectSelection()');
+  var noBuyFn = scope==='lm' ? 'lmNoBuy()' : 'noPurchaseThisTime()';
+  var settleBtn = '<button class="btn-primary" style="flex:1;'+(tot.paidCount ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(tot.paidCount ? 'onclick="'+settleFn+'"' : 'disabled')+'>结算</button>';
+  var right = '<div class="sel-card"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+
+    '<textarea placeholder="备注（仅 IN，选填）" oninput="setLocalNote(\''+scope+'\',this.value)" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;">'+noteVal+'</textarea>'+
+    (items.length ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">折扣栏填客人实付比例：80 = 八折，留空 = 不打折</div>'+items.map(function(it){ return localRowHtml(c, scope, it); }).join('') : '<div style="font-size:12px;color:var(--muted);padding:10px 4px;">尚未选择项目</div>')+
+    serviceBlockHtml(c, scope)+
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);"><span style="font-size:13px;color:var(--slate2);">全款</span><span style="font-size:22px;font-weight:800;">'+formatCurrency(tot.total,'IDR')+'</span></div>'+
+    (tot.onlyService ? '<div style="font-size:12px;color:#A8740A;font-weight:700;margin-top:6px;">서비스需搭配付费项目</div>' : '')+
+    '<div style="display:flex;gap:10px;margin-top:14px;">'+settleBtn+(canNoBuy ? '<button class="btn-outline" style="flex:1;" onclick="'+noBuyFn+'">本次不购买</button>' : '')+'</div></div>';
+  var wrapOpen = isAddition ? '<div class="project-card" style="border-top:1px dashed var(--border);padding-top:18px;margin-top:4px;">' : '<div class="card project-card'+(c.projectsExpanded?' expanded':'')+'" style="padding:22px 24px;">';
+  var head = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="info-heading">本地选购</div>'+
+    (scope==='main' ? '<span style="cursor:pointer;font-size:12px;color:var(--slate);" onclick="toggleProjectsExpand()">'+(c.projectsExpanded?'⮡ 收起':'⮢ 展开满屏')+'</span>' : '')+
+    (isAddition ? '<span style="cursor:pointer;font-size:12px;color:var(--slate);margin-left:10px;" onclick="cancelAddMore()">取消追加</span>' : '')+'</div>';
+  return wrapOpen+head+'<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px;"><div>'+left+'</div><div>'+right+'</div></div></div>';
+}
+
+/* 把已选择的本地条目发放成客户持有批次（主结算单付款 / 本地管理结算共用）：项目 = 一个批次（实付 = 活动价 / 原价 × 个数 × 折扣）；
+   套餐 = 拆成各内含项目的批次（套餐价折后按各项目原价占比分摊，最后一项补尾差），批次标「套餐」；服务 = 批次标「서비스」，实付 0、原价另存，不可退款 */
+function grantLocalItems(c, items, today){
+  var catLabelOf = function(cid){ var cat = PROJECT_CATEGORIES[cid]; return (cat && cat.label==='术后管理') ? '术后管理' : '本地'; };
+  items.forEach(function(it){
+    var qty = it.qty||1, line = inLineTotal(it), pct = (it.discountPct===undefined||it.discountPct===null) ? 100 : it.discountPct, b;
+    if(it.kind==='package'){
+      var parts = it.pkgItems||[], listAll = parts.reduce(function(s,x){ return s + x.price*x.qty*qty; }, 0), left = line;
+      parts.forEach(function(x, i){
+        var xl = x.price*x.qty*qty, share = i===parts.length-1 ? left : Math.round(line*(listAll ? xl/listAll : 0)); left -= share;
+        b = grantHolding(c.name, x.name, catLabelOf(x.categoryId), c.id, today, x.qty*qty, false, {paid:share, list:xl, pct:100, currency:'IDR'});
+        b.pkgPaid = true; b.pkgName = it.name; /* 购买的套餐拆出的批次：不可退款（批次标「套餐」；b.pkg 只用于 KR 套餐内含的 0 元术后管理） */
+      });
+    } else if(it.kind==='service'){
+      b = grantHolding(c.name, it.name, catLabelOf(it.categoryId), c.id, today, qty, false, {paid:0, list:it.price*qty, pct:100, currency:'IDR'});
+      b.service = true; /* 서비스（赠送）：不可退款，不计入收入 */
+    } else {
+      b = grantHolding(c.name, it.name, catLabelOf(it.categoryId), c.id, today, qty, false, {paid:line, list:it.price*qty, pct:pct, currency:'IDR'});
+      if(it.promoId) b.promo = true;
+    }
+  });
 }
 
 /* ---- 结算单（Settlement，总览第5节）：待付款 / 已付款 / 部分退款 / 全额退款；多张按时间排序，新的在上面，全部显示 ---- */
@@ -2655,37 +2856,8 @@ function localMgmtTabHtml(c){
     '<button class="btn-outline" style="width:100%;" onclick="lmSetStep(\'buy\')">新增项目</button></div></div>';
 }
 
-/* 本地管理里的选购：简化版（勾选项目+个数，结算付款后直接转客户持有；不支持折扣/备注，也不走主结算单，避免影响赴韩部分的待付款状态） */
-function lmBuyHtml(c){
-  var lm = c.localMgmt;
-  var list = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; });
-  var total = 0;
-  var rows = list.map(function(p){
-    var pk = lm.pick[p.id] || {qty:0, pct:100, note:''};
-    var line = Math.round(p.price*pk.qty*pk.pct/100);
-    total += line;
-    var inputs = pk.qty>0
-      ? ' × <input type="number" min="1" max="100" value="'+pk.pct+'" onchange="lmPickField(\''+p.id+'\',\'pct\',this.value)" style="width:48px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:center;">% ＝ <b>'+formatCurrency(line,'IDR')+'</b>'
-      : '';
-    var noteRow = pk.qty>0 ? '<div class="case-field-row" style="border-top:none;padding-top:0;padding-bottom:10px;"><input type="text" placeholder="备注（选填）" value="'+(pk.note||'').replace(/"/g,'&quot;')+'" onchange="lmPickField(\''+p.id+'\',\'note\',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;"></div>' : '';
-    return '<div class="case-field-row" style="flex-wrap:wrap;gap:6px;"><span style="flex-grow:1;font-size:13px;">'+p.name+'</span><span style="font-size:12px;color:var(--slate2);">'+formatCurrency(p.price,'IDR')+'</span>'+
-      '<span style="font-size:12px;display:flex;align-items:center;gap:4px;">'+qtyInputHtml({value:pk.qty, min:0, onchange:"lmPickField('"+p.id+"','qty',this.value)"})+' 次'+inputs+'</span></div>'+noteRow;
-  }).join('');
-  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理：新增项目</div>'+rows+
-    '<div style="text-align:right;font-size:13px;font-weight:700;margin:12px 0;">合计 '+formatCurrency(total,'IDR')+'</div>'+
-    '<div style="display:flex;gap:10px;">'+(total>0?'<button class="btn-primary" style="flex:1;" onclick="lmSettle()">结算付款</button>':'')+
-    '<button class="btn-outline" style="flex:1;" onclick="lmNoBuy()">本次不购买</button></div></div>';
-}
-
-function lmPickField(id, field, v){
-  var c = getCurrentCase(); if(!c||!c.localMgmt) return;
-  var pk = c.localMgmt.pick[id] || {qty:0, pct:100, note:''};
-  if(field==='qty') pk.qty = Math.max(0, parseInt(v,10)||0);
-  else if(field==='pct') pk.pct = Math.min(100, Math.max(1, parseInt(v,10)||100));
-  else pk.note = v;
-  c.localMgmt.pick[id] = pk;
-  renderCaseBody(c);
-}
+/* 本地管理里的选购（2026-10-08 起和不面诊案件共用「本地选购」画面 localPurchaseHtml，购物车 = c.localMgmt.cart，结算 = lmSettle 直接转客户持有） */
+function lmBuyHtml(c){ return localPurchaseHtml(c, 'lm', false); }
 
 function lmNoBuy(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
@@ -2696,19 +2868,17 @@ function lmNoBuy(){
 
 function lmSettle(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
-  var lm = c.localMgmt, items = [], total = 0, today = todayStr();
-  PROJECT_LIBRARY.forEach(function(p){
-    var pk = lm.pick[p.id]; if(!pk || pk.qty<=0) return;
-    var line = Math.round(p.price*pk.qty*pk.pct/100);
-    items.push({name:p.name, qty:pk.qty, price:p.price, discountPct:pk.pct, itemNote:pk.note||'', lineTotal:line}); total += line;
-    grantHolding(c.name, p.name, '本地', c.id, today, pk.qty, false, {paid:line, list:p.price*pk.qty, pct:pk.pct, currency:'IDR'});
-  });
-  if(!items.length) return;
-  lm.batches.push({id:'L'+(lm.batches.length+1), items:items, inTotal:total, time:nowFullDt()});
-  lm.pick = {};
+  var lm = c.localMgmt, cart = lm.cart||[], today = todayStr();
+  if(!cart.length) return;
+  if(cartTotals(cart).onlyService){ alert('서비스需搭配付费项目'); return; }
+  var total = cart.reduce(function(s,it){ return s + inLineTotal(it); }, 0);
+  var items = cart.map(function(it){ return {name:it.name, kind:it.kind||'project', qty:it.qty||1, price:it.price, unitPrice:it.unitPrice, discountPct:(it.discountPct===undefined||it.discountPct===null)?100:it.discountPct, itemNote:it.itemNote||'', promo:!!it.promoId, pkgItems:it.pkgItems, lineTotal:inLineTotal(it)}; });
+  grantLocalItems(c, cart, today);
+  lm.batches.push({id:'L'+(lm.batches.length+1), items:items, inTotal:total, time:nowFullDt(), note:lm.noteIN||''});
+  lm.cart = []; lm.noteIN = '';
   if(lm.mgmtActive){ lm.addBuy = false; lm.addUse = true; } /* 本地管理进行中追加购买：付款后问是否继续使用 */
   else lm.step = 'afterBuyUse'; /* 结算后：是否使用？ */
-  logCaseEvent(c, actingName(), '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+' ×'+i.qty+(i.discountPct<100?'（'+i.discountPct+'折）':''); }).join('、')+'），已转客户持有');
+  logCaseEvent(c, actingName(), '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+(i.kind==='service' ? '（서비스）' : '')+' ×'+i.qty+(i.discountPct<100?'（实付'+i.discountPct+'%）':''); }).join('、')+'），已转客户持有');
   updateCaseStage(c); buildCaseLog(c); renderCaseBody(c);
 }
 
@@ -2716,6 +2886,7 @@ function lmSettle(){
    施术日期改到付款之后才走（见 krProcedureTabHtml），不再是结算前的门槛 */
 function confirmProjectSelection(){
   var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return;
+  if(cartTotals(c.recommended).onlyService){ alert('서비스需搭配付费项目'); return; }
   logCaseEvent(c, actingName(), '确认所选管理项目：'+c.recommended.map(function(it){ return it.name; }).join('、'));
   generateSettlementBatch(c);
   updateCaseStage(c);
@@ -2746,6 +2917,7 @@ function generateSettlementBatch(c){
    latestUnpaidBatch 永远找不到——这里顺带把这个缺口补上，属于本轮"加项"范围内的修复） */
 function confirmAddition(){
   var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return;
+  if(cartTotals(c.recommended).onlyService){ alert('서비스需搭配付费项目'); return; }
   generateSettlementBatch(c);
   settleProjects();
 }
@@ -2770,7 +2942,8 @@ function setCaseDisplayCcy(origin, ccy){
 function projectPickerHtml(c, isAddition){
   var selected = c.recommended || [];
   var noKrPicker = isLocalCase(c) && !c.reportReady; /* 不面诊的本地案件（选择项目 / 本地管理）：选购只有本地项目，没有赴韩项目子 tab；面诊案件的项目列表 tab 不变（CMD-1008-07） */
-  var originFilter = noKrPicker ? 'IN' : (c.projectOriginFilter || 'KR');
+  if(noKrPicker) return localPurchaseHtml(c, 'main', isAddition); /* 不面诊的本地案件 → 独立的「本地选购」画面（CMD-1008-09） */
+  var originFilter = c.projectOriginFilter || 'KR';
   var q = (c.projectSearch || '').toLowerCase();
   var pickerCcy = originFilter==='KR' ? CASE_DISPLAY_CCY_KR : CASE_DISPLAY_CCY_IN;
   var leftRows;
@@ -2804,7 +2977,7 @@ function projectPickerHtml(c, isAddition){
       var heldTag = held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '';
       return '<label style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
         '<input type="checkbox" onchange="toggleProject(\''+p.id+'\')" '+(checked?'checked':'')+'>'+
-        '<span style="flex-grow:1;">'+p.name+heldTag+projCasesLinkHtml(p.id)+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
+        '<span style="flex-grow:1;">'+p.name+heldTag+projCasesLinkHtml(p.id)+'</span>'+localPriceCellHtml(p, pickerCcy)+'</label>';
     }
     var normalCatalog = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; });
     if(q) normalCatalog = normalCatalog.filter(function(p){ return p.name.toLowerCase().indexOf(q)>-1; });
@@ -2829,20 +3002,22 @@ function projectPickerHtml(c, isAddition){
     caseCcySwitchHtml(originFilter)+
     '<a href="#" class="info-link" style="font-size:12px;" onclick="openProjectLibNewTab();return false;">在项目库查看 ↗</a>'+
     '</div>';
-  var settleBtn = selected.length ? '<button class="btn-primary" style="width:100%;margin-top:14px;" onclick="'+(isAddition?'confirmAddition()">结算追加项目 / 交定金':'confirmProjectSelection()">结算')+'</button>' : '';
-  var noBuyBtn = (!isAddition && c.entryChoicePending && c.projectEntryMode==='new' && isLocalCase(c) && !caseHasPurchase(c) && !(c.mgmtUses||[]).length && !((c.localMgmt && c.localMgmt.mgmtUses)||[]).length) ? /* 不面诊的本地案件、选择项目、没付款也没用过持有项目时才显示（CMD-1008-06） */ '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="noPurchaseThisTime()">本次不购买</button>' : '';
-  var noProjectBtn = (!isAddition && c.reportReady && !c.entryChoicePending && !c.settlementDone) ? '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="noProjectForClient()">客人不做项目</button>' : '';
+  var tot = cartTotals(selected);
+  var settleOn = isAddition ? 'confirmAddition()' : 'confirmProjectSelection()';
+  var settleBtn = '<button class="btn-primary" style="flex:1;'+(tot.paidCount ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(tot.paidCount ? 'onclick="'+settleOn+'"' : 'disabled')+'>'+(isAddition ? '结算追加项目 / 交定金' : '结算')+'</button>';
+  var noProjectBtn = (!isAddition && c.reportReady && !c.entryChoicePending && !c.settlementDone) ? '<button class="btn-outline" style="flex:1;" onclick="noProjectForClient()">客人不做项目</button>' : '';
   var wrapOpen = isAddition
     ? '<div class="project-card'+(c.projectsExpanded?' expanded':'')+'" style="border-top:1px dashed var(--border);padding-top:18px;margin-top:4px;">'
     : '<div class="card project-card'+(c.projectsExpanded?' expanded':'')+'" style="padding:22px 24px;">';
   return wrapOpen+
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="info-heading">'+(isAddition?'追加项目':'推荐管理项目')+'</div>'+expandBtn+(isAddition?'<span style="cursor:pointer;font-size:12px;color:var(--slate);margin-left:10px;" onclick="cancelAddMore()">取消追加</span>':'')+'</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="info-heading">'+(isAddition?'追加项目':'赴韩方案')+'</div>'+expandBtn+(isAddition?'<span style="cursor:pointer;font-size:12px;color:var(--slate);margin-left:10px;" onclick="cancelAddMore()">取消追加</span>':'')+'</div>'+
     '<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px;">'+
     '<div>'+subTabs+
     '<input type="text" placeholder="搜索项目…" value="'+(c.projectSearch||'')+'" oninput="setProjectSearch(this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;">'+
     leftRows+'</div>'+
-    '<div style="border-left:1px solid var(--border2);padding-left:24px;"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+settlementBigCardHtml(c, selected, true)+
-    settleBtn+noBuyBtn+noProjectBtn+'</div>'+
+    '<div class="sel-card"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+settlementBigCardHtml(c, selected, true)+serviceBlockHtml(c, 'main')+
+    (tot.onlyService ? '<div style="font-size:12px;color:#A8740A;font-weight:700;margin-top:10px;">서비스需搭配付费项目</div>' : '')+
+    '<div style="display:flex;gap:10px;margin-top:14px;">'+settleBtn+noProjectBtn+'</div></div>'+
     '</div></div>';
 }
 
@@ -2971,11 +3146,8 @@ function confirmSettlementPayment(){
   c.settlementDone = true; /* 一旦付过一次款就一直是 true；加项后新批次单独走 unpaid→active，不影响这个总开关 */
   var today = todayStr();
   var batchInItems = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='IN'; });
-  batch.inItems = batchInItems.map(function(it){ return {name:it.name, qty:it.qty||1, price:it.price, discountPct:(it.discountPct===undefined?100:it.discountPct), itemNote:it.itemNote||''}; }); /* 结算单展示用快照（本地项目结算后转持有，不留在 procedureItems） */
-  batchInItems.forEach(function(it){
-    var cat = PROJECT_CATEGORIES[it.categoryId];
-    grantHolding(c.name, it.name, (cat && cat.label==='术后管理') ? '术后管理' : '本地', c.id, today, it.qty||1, false, {paid:inLineTotal(it), list:it.price*(it.qty||1), pct:(it.discountPct===undefined||it.discountPct===null ? 100 : it.discountPct), currency:'IDR'});
-  });
+  batch.inItems = batchInItems.map(function(it){ return {name:it.name, kind:it.kind||'project', qty:it.qty||1, price:it.price, unitPrice:it.unitPrice, discountPct:(it.discountPct===undefined?100:it.discountPct), itemNote:it.itemNote||'', promo:!!it.promoId}; }); /* 结算单展示用快照（本地项目结算后转持有，不留在 procedureItems） */
+  grantLocalItems(c, batchInItems, today); /* 本地项目 / 套餐 / 서비스 转客户持有（套餐拆批次） */
   /* 本地项目（含术后管理）结算后立即转客户持有，不进入案件进程（2026-09-29 第十轮） */
   c.procedureItems = (c.procedureItems||[]).filter(function(it){ return it.origin!=='IN'; });
   if(krActiveItems(c).length>0){
@@ -4006,7 +4178,7 @@ var PROJECT_LIBRARY = [
   function byName(n){ return PROJECT_LIBRARY.filter(function(x){ return x.name===n; })[0]; }
   ['Genesis焕肤（Clarity II）1次','巴西式脱毛 + 焕肤护理','鼻修复'].forEach(function(n){ var q = byName(n); if(q) q.active = false; });
   var h = (CLIENT_HOLDINGS['客人11']||[]).filter(function(x){ return x.itemName==='好莱坞焕肤 1次'; })[0];
-  if(h && h.batches[0] && h.batches[0].bought===1){ h.batches[0].bought = 2; } /* 买2用1：部分使用 */
+  if(h && h.batches[0] && h.batches[0].bought===1){ h.batches[0].bought = 2; h.batches[0].paid = 640000; h.batches[0].listPrice = 640000; } /* 买2用1：部分使用（实付 = 2 × 320.000，CMD-1008-08 购买价快照同步） */
   /* 各语言名称：演示翻译 */
   PROJECT_LIBRARY.forEach(function(q){ q.names = {zh:q.name, ko:demoTranslate(q.name,'zh','ko'), id:demoTranslate(q.name,'zh','id')}; });
 })();
@@ -4097,6 +4269,25 @@ function shiftMonth(ds, n){
   d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()));
   return dateStr(d);
 }
+/* 演示数据（CMD-1008-09）：4 条活动价（2 进行中 / 1 未开始 / 1 已结束）、2 个套餐；客人12 持有 1 批「套餐」批次（焕肤护理套餐拆出的好莱坞焕肤 ×3 + 比基尼线脱毛 ×1），客人11 持有 1 批「서비스」批次（好莱坞焕肤 ×1，赠送）；仅 C1 */
+(function seedPromoDemo(){
+  var byName = function(n){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.name===n; })[0]; };
+  var hol = byName('好莱坞焕肤 1次'), xerf = byName('XERF提升 300发'), bik = byName('比基尼线脱毛 + 焕肤护理'), onda = byName('Onda提升 60kj');
+  if(!hol || !xerf || !bik || !onda) return;
+  PROMOS = [
+    {id:'pm-demo1', projectId:hol.id, price:250000, from:D(-5), to:D(20), ended:false},
+    {id:'pm-demo2', projectId:xerf.id, price:7400000, from:D(-2), to:D(25), ended:false},
+    {id:'pm-demo3', projectId:bik.id, price:900000, from:D(5), to:D(35), ended:false},
+    {id:'pm-demo4', projectId:onda.id, price:3900000, from:D(-40), to:D(-12), ended:false}
+  ];
+  PACKAGES = [
+    {id:'pk-demo1', name:'焕肤护理套餐', items:[{projectId:hol.id, qty:3}, {projectId:bik.id, qty:1}], price:1900000, from:D(-10), to:D(25), ended:false},
+    {id:'pk-demo2', name:'提升体验套餐', items:[{projectId:onda.id, qty:1}, {projectId:hol.id, qty:1}], price:4600000, from:'', to:'', ended:false}
+  ];
+  var b1 = grantHolding('客人12', hol.name, '本地', 'rina', D(-29), 3, false, {paid:885437, list:960000, pct:100, currency:'IDR'}); b1.pkgPaid = true; b1.pkgName = '焕肤护理套餐';
+  var b2 = grantHolding('客人12', bik.name, '本地', 'rina', D(-29), 1, false, {paid:1014563, list:1100000, pct:100, currency:'IDR'}); b2.pkgPaid = true; b2.pkgName = '焕肤护理套餐';
+  var b3 = grantHolding('客人11', hol.name, '本地', 'rizky', D(-3), 1, false, {paid:0, list:320000, pct:100, currency:'IDR'}); b3.service = true;
+})();
 /* ［复制上个月活动］：把"上个自然月内结束的活动价"整体顺延一个月复制成新的活动价（同项目同期间已有的不重复复制），复制后可编辑；返回新增条数 */
 function copyLastMonthPromos(){
   var t = new Date(todayStr()+'T00:00:00'), ms = dateStr(new Date(t.getFullYear(), t.getMonth()-1, 1)), me = dateStr(new Date(t.getFullYear(), t.getMonth(), 0)), n = 0;

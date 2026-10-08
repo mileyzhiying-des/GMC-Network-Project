@@ -304,3 +304,10 @@ prototype/shared/app.css  共用样式
 - **使用 / 选购数量的输入框一律用 `qtyInputHtml({id, value, min, max, onchange})`**（窄版带 ±，自动夹在 min～max；样式 `.qty-box`），不要再手写 `<input type="number">`；`.case-field-row input{flex-grow:1}` 会让裸输入框撑满整行。
 - （同日修正）"操作过"只算「已到店后基础资料有保存」的接待；面诊费改为**选面诊时**记进案件（`consultFeeAmount` / `recordConsultFee`，面诊费卡和财务栏读 `consultFeeOf(c)`，取代缴费时记 `consultFeePaidAmount`）；不面诊案件选购没有任何 chip。经营数据页面诊费汇总仍读当前设定（待决定）。
 
+## CMD-1008-09 补充（2026-10-08，追加；旧文字保留作历史）
+- **两条选购路径**：本地选购 = `localPurchaseHtml(c, scope, isAddition)`（scope `main` = 不面诊案件的选择项目，购物车 `c.recommended`；`lm` = 本地管理的新增项目，购物车 `c.localMgmt.cart`）；赴韩方案 = `projectPickerHtml`（项目列表 tab）。「已选择」一行统一用 `localRowHtml`；折扣留空 = 不打折（`discountPct` 100）。**新增选购相关函数优先改 `localRowHtml` / `grantLocalItems` / `cartTotals`，不要再手写行**。
+- **购物车条目**：`{kind:'project'|'package'|'service', key, projectId(=key), price(原价), unitPrice(成交单价：活动价 / 套餐价 / 原价；服务 0), qty, discountPct, itemNote, promoId, pkgItems}`；总价一律走 `inLineTotal(it)`（读 `unitPrice`）。
+- **活动价 / 套餐**：`PROMOS` / `PACKAGES`（诊所分区变量，`CLINIC_VAR_NAMES` / `emptyClinicVars`），权限 `promo`（只有 manager）；过期自动恢复原价靠 `promoStatusOf` / `localUnitPrice` 现算，不用定时器。
+- **持有批次标记**：`pkg`（KR 套餐内含 0 元）/ `pkgPaid`（购买的套餐拆出）/ `service`（赠送）/ `promo`（活动价）；`pkg` / `pkgPaid` / `service` 一律不可退款。批次发放统一走 `grantLocalItems`。
+- 演示数据版本 33（4 条活动价含 1 个已结束、2 个套餐、客人12 持有套餐批次、客人11 持有서비스批次）。
+

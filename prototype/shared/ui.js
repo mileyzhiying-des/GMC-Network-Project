@@ -759,11 +759,11 @@ function renderClientHoldings(name){
     var open = !!HOLD_EXPAND[gi];
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
-      var action = b.pkg ? '<span style="font-size:11px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (st==='未使用' || st==='部分使用')
+      var action = b.pkg ? '<span style="font-size:11px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (b.pkgPaid ? '<span style="font-size:11px;color:#C1454A;white-space:nowrap;">套餐 · 不可退款</span>' : (b.service ? '<span style="font-size:11px;color:var(--blue);white-space:nowrap;">서비스 · 不可退款</span>' : (st==='未使用' || st==='部分使用')
         ? '<a href="#" class="info-link" style="white-space:nowrap;" onclick="openHoldingRefundByIdx('+gi+','+bi+');return false;">退款</a>'
-        : (b.refund ? '<span style="font-size:11px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '');
+        : (b.refund ? '<span style="font-size:11px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '')));
       return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 8px 14px;border-top:1px dashed var(--border2);">'+
-        '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · '+(b.pkg ? '套餐内含 · ' : '')+'购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
+        '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · '+(b.pkg ? '套餐内含 · ' : '')+(b.pkgPaid ? '套餐「'+(b.pkgName||'')+'」· ' : '')+(b.service ? '서비스（赠送）· ' : '')+(b.promo ? '本月活动价 · ' : '')+'购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
         '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';white-space:nowrap;">'+st+'</span>'+
         '<span style="min-width:84px;text-align:right;">'+action+'</span></div>';
     }).join('') : '';
@@ -779,13 +779,13 @@ var HOLDING_REFUND_CTX = null;
 
 function openHoldingRefundModal(name, itemName, batchIdx){
   var h = (CLIENT_HOLDINGS[name]||[]).filter(function(x){ return x.itemName===itemName; })[0]; if(!h) return;
-  var b = h.batches[batchIdx]; if(!b || b.refund || b.voided || (b.bought-b.used)<=0) return; /* 还有剩余次数（未使用/部分使用）才能退款；已用完的不能 */
+  var b = h.batches[batchIdx]; if(!b || b.refund || b.voided || b.pkg || b.pkgPaid || b.service || (b.bought-b.used)<=0) return; /* 套餐 / 서비스 / 套餐内含批次不可退款；还有剩余次数（未使用/部分使用）才能退款；已用完的不能 */
   HOLDING_REFUND_CTX = {name:name, itemName:itemName, batchIdx:batchIdx};
   /* 购买价（CMD-1008-08）：当初实付（折后）+ 有折扣时的原价和折扣；按剩余次数的参考值只提示，不自动填入金额框；读批次购买时的快照，不读当前项目库价格 */
   var cur = b.currency || 'IDR', hasPaid = typeof b.paid==='number', remain = b.bought-b.used, priceHtml = '';
   if(hasPaid){
     var pct = (b.discountPct===undefined || b.discountPct===null) ? 100 : b.discountPct;
-    priceHtml = '<div style="margin-top:8px;font-size:13px;">当初实付：<b>'+formatCurrency(b.paid, cur)+'</b>'+(b.paid===0 && b.pkg ? '（套餐内含）' : '')+
+    priceHtml = '<div style="margin-top:8px;font-size:13px;">当初实付：<b>'+formatCurrency(b.paid, cur)+'</b>'+(b.paid===0 && b.pkg ? '（套餐内含）' : '')+(b.promo ? '（本月活动价）' : '')+
       (pct<100 && b.listPrice ? '<span style="color:var(--slate2);font-size:12px;">　原价 '+formatCurrency(b.listPrice, cur)+'，折扣 '+(100-pct)+'%（实付 '+pct+'%）</span>' : '')+'</div>'+
       '<div style="font-size:11px;color:var(--muted);margin-top:4px;">按剩余次数参考：'+formatCurrency(b.bought>0 ? Math.round(b.paid*remain/b.bought) : 0, cur)+'（实付 × 剩余 / 购买），仅供参考，不会自动填入；退款金额不能超过当初实付</div>';
   } else {
@@ -1910,12 +1910,11 @@ function toggleProject(projectId){
     c.recommended.splice(idx,1);
   } else {
     var p = projById(projectId); if(!p) return;
-    var item = {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId};
+    var item = p.origin==='IN' ? buildLocalItem(p) : {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId}; /* 本地项目：带入进行中的活动价（成交价快照） */
     if(p.origin==='KR'){ /* 带上 KR 写在可选范围里的项目资料：麻醉特性、推荐在韩时间、所需术后管理（分配默认全部在韩国） */
       var si = ((c.krScope && c.krScope.items) || []).filter(function(x){ return x.name===p.name; })[0];
       if(si){ if(si.anesthesia) item.anesthesia = si.anesthesia; if(si.stay) item.stay = si.stay; if(si.postcare && si.postcare.length) item.postcare = si.postcare.map(function(x){ return Object.assign({}, x, {inTimes:0}); }); }
     }
-    if(p.origin==='IN'){ item.qty = 1; item.discountPct = 100; item.itemNote = ''; } /* 个数/折扣/备注，2026-09-29 第十轮新增，只有本地项目有 */
     c.recommended.push(item);
   }
   renderCaseBody(c);

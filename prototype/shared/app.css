@@ -295,3 +295,20 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 .qty-box button:hover{background:#ECE8DF;}
 .qty-box input.qty-in{width:38px;flex:0 0 auto;padding:4px 2px;border:none;border-left:1px solid var(--border2);border-right:1px solid var(--border2);border-radius:0;font-size:12px;text-align:center;-moz-appearance:textfield;appearance:textfield;}
 .qty-box input.qty-in::-webkit-inner-spin-button,.qty-box input.qty-in::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+
+/* 本地选购 / 赴韩方案的「已选择」统一排版（CMD-1008-09）：行首 checkbox / 项目名 / 次数 stepper / 折扣 / 金额 / 行尾［备注］；折扣默认留空（= 不打折） */
+.sel-card{border:1px solid var(--border2);border-radius:12px;padding:16px 18px;background:var(--white);align-self:start;}
+.sel-row{border-bottom:1px solid var(--border2);padding:9px 0;}
+.sel-row:last-of-type{border-bottom:none;}
+.sel-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.sel-line > input[type=checkbox]{flex:0 0 auto;margin:0;}
+.sel-name{flex:1 1 130px;min-width:110px;font-size:13px;line-height:1.35;}
+.sel-sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5;}
+.sel-disc{display:inline-flex;align-items:center;gap:2px;font-size:12px;}
+.sel-disc input{width:50px;padding:4px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;}
+.sel-disc i{font-style:normal;color:var(--slate2);}
+.sel-amt{min-width:84px;text-align:right;font-size:13px;font-weight:700;margin-left:auto;}
+.sel-note-btn{border:none;background:none;color:var(--slate);font-size:12px;text-decoration:underline;cursor:pointer;padding:2px 4px;}
+.sel-note{padding:6px 0 0 26px;}
+.sel-note input{width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;box-sizing:border-box;}
+.loc-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;}
