@@ -312,3 +312,4 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 .sel-note{padding:6px 0 0 26px;}
 .sel-note input{width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;box-sizing:border-box;}
 .loc-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;}
+.sel-dtxt{font-weight:700;color:var(--terracotta);font-size:11px;margin-left:4px;}

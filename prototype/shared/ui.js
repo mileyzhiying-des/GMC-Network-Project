@@ -786,7 +786,7 @@ function openHoldingRefundModal(name, itemName, batchIdx){
   if(hasPaid){
     var pct = (b.discountPct===undefined || b.discountPct===null) ? 100 : b.discountPct;
     priceHtml = '<div style="margin-top:8px;font-size:13px;">当初实付：<b>'+formatCurrency(b.paid, cur)+'</b>'+(b.paid===0 && b.pkg ? '（套餐内含）' : '')+(b.promo ? '（本月活动价）' : '')+
-      (pct<100 && b.listPrice ? '<span style="color:var(--slate2);font-size:12px;">　原价 '+formatCurrency(b.listPrice, cur)+'，折扣 '+(100-pct)+'%（实付 '+pct+'%）</span>' : '')+'</div>'+
+      (pct<100 && b.listPrice ? '<span style="color:var(--slate2);font-size:12px;">　原价 '+formatCurrency(b.listPrice, cur)+'，'+discountText(pct)+'</span>' : '')+'</div>'+
       '<div style="font-size:11px;color:var(--muted);margin-top:4px;">按剩余次数参考：'+formatCurrency(b.bought>0 ? Math.round(b.paid*remain/b.bought) : 0, cur)+'（实付 × 剩余 / 购买），仅供参考，不会自动填入；退款金额不能超过当初实付</div>';
   } else {
     priceHtml = '<div style="margin-top:8px;font-size:12px;color:var(--muted);">这一批没有记录当初的购买价格，退款金额无法校验上限</div>';

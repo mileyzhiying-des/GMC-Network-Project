@@ -39,6 +39,11 @@ function qtyStep(btn, d){
   inp.dispatchEvent(new Event('change', {bubbles:true}));
 }
 
+/* 折扣显示统一（CMD-1008-10）：输入仍填实付比例（80），所有显示的地方一律写「8折」（85 → 8.5折，90 → 9折）；没有折扣（100 / 空）不显示 */
+function discountText(pct){
+  if(pct===undefined || pct===null || pct==='' || Number(pct)>=100 || Number(pct)<=0) return '';
+  return (Math.round(Number(pct))/10).toFixed(1).replace(/\.0$/, '')+'折';
+}
 function caseHasPurchase(c){
   var any = false, live = false;
   getClientHoldings(c.name).forEach(function(h){ h.batches.forEach(function(b){ if(b.caseId===c.id && !b.kr){ any = true; if(!b.voided && !b.refund) live = true; } }); });
@@ -212,7 +217,7 @@ function settlementCardHtml(c, b){
   if((b.inItems||[]).length){
     rows += b.inItems.map(function(it){
       var rb = null; getClientHoldings(c.name).forEach(function(h){ if(h.itemName===it.name) h.batches.forEach(function(x){ if(x.caseId===c.id && x.refund && x.bought===it.qty) rb = x.refund; }); });
-      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+' ×'+it.qty+(it.discountPct<100?'（'+it.discountPct+'折）':'')+'</span><span style="font-size:12px;color:var(--slate2);">本地 · 已转客户持有'+(rb?' · <b style="color:var(--terracotta);">'+'已退款 '+formatCurrency(rb.amount,'IDR')+'</b>':'')+'</span></div>';
+      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+' ×'+it.qty+(discountText(it.discountPct)?'（'+discountText(it.discountPct)+'）':'')+'</span><span style="font-size:12px;color:var(--slate2);">本地 · 已转客户持有'+(rb?' · <b style="color:var(--terracotta);">'+'已退款 '+formatCurrency(rb.amount,'IDR')+'</b>':'')+'</span></div>';
     }).join('');
   }
   var amounts = [];
@@ -266,7 +271,7 @@ function settlementItemRow(c, it, removable){
     var origPrice = it.price*qty;
     var priceHtml;
     if(removable) return localRowHtml(c, 'main', it); /* 2026-10-08：赴韩方案 / 本地选购的「已选择」统一一行（行首 checkbox / 次数 / 折扣 / 金额 / ［备注］） */
-      priceHtml = qty+'次'+(pct<100?'，'+pct+'折':'')+'　<b>'+formatCurrency(lineTotal,ccy)+'</b>'+(pct<100?' <span style="color:var(--muted);text-decoration:line-through;font-size:11px;">'+formatCurrency(origPrice,ccy)+'</span>':'');
+      priceHtml = qty+'次'+(discountText(pct)?'，'+discountText(pct):'')+'　<b>'+formatCurrency(lineTotal,ccy)+'</b>'+(pct<100?' <span style="color:var(--muted);text-decoration:line-through;font-size:11px;">'+formatCurrency(origPrice,ccy)+'</span>':'');
     var held = clientHeldRemaining(c.name, it.name);
     var heldTag = held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '';
     var noteRow = removable ? '<div class="case-field-row" style="border-top:none;padding-top:0;padding-bottom:10px;"><input type="text" placeholder="备注（选填）" value="'+(it.itemNote||'')+'" onchange="setInItemField(\''+it.projectId+'\',\'itemNote\',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;"></div>' : '';

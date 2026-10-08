@@ -310,4 +310,4 @@ prototype/shared/app.css  共用样式
 - **活动价 / 套餐**：`PROMOS` / `PACKAGES`（诊所分区变量，`CLINIC_VAR_NAMES` / `emptyClinicVars`），权限 `promo`（只有 manager）；过期自动恢复原价靠 `promoStatusOf` / `localUnitPrice` 现算，不用定时器。
 - **持有批次标记**：`pkg`（KR 套餐内含 0 元）/ `pkgPaid`（购买的套餐拆出）/ `service`（赠送）/ `promo`（活动价）；`pkg` / `pkgPaid` / `service` 一律不可退款。批次发放统一走 `grantLocalItems`。
 - 演示数据版本 33（4 条活动价含 1 个已结束、2 个套餐、客人12 持有套餐批次、客人11 持有서비스批次）。
-
+- （CMD-1008-10）折扣显示一律走 `discountText(pct)`（80 → 8折、85 → 8.5折，100/空不显示）；输入仍是实付比例。新写显示折扣的地方不要自己拼「X折」。

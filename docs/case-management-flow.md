@@ -339,3 +339,11 @@
 
 ## 五、不可退款的批次
 套餐拆出的批次（`pkgPaid`）+ 서비스批次（`service`）+ KR 套餐内含的 0 元术后管理批次（`pkg`）：客户详情不显示退款按钮，`openHoldingRefundModal` 也拒绝打开。
+
+
+---
+
+# CMD-1008-10：折扣显示统一为「8折」（2026-10-08，以 Notion 为准，Project Library「折扣显示」）
+
+- 输入仍填客人**实付比例**（80）；所有**显示**折扣的地方统一用 `discountText(pct)`：80 → 8折、85 → 8.5折、90 → 9折、100 / 空 → 不显示。不再出现「80折」。
+- 显示位置：本地选购 / 赴韩方案「已选择」行（折扣框旁边的 `= 8.5折`）、结算单（`settlementCardHtml` 本地项目行）、结算单非可编辑行（`settlementItemRow`）、持有批次退款弹窗（`openHoldingRefundModal`，「原价 Rp X，8折」）、Timeline（本地管理结算付款记录）。持有批次列表行本身没有显示折扣。

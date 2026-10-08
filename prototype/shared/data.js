@@ -2515,7 +2515,7 @@ function localRowHtml(c, scope, it){
     '<input type="checkbox" checked title="取消勾选即移除" onchange="removeLocalItem(\''+scope+'\',\''+k+'\')">'+
     '<div class="sel-name"><div>'+it.name+tags+'</div>'+(sub ? '<div class="sel-sub">'+sub+'</div>' : '')+'</div>'+
     qtyInputHtml({value:qty, min:1, onchange:"setLocalItemField('"+scope+"','"+k+"','qty',this.value)"})+
-    (isSvc ? '' : '<span class="sel-disc"><input type="number" min="1" max="100" placeholder="折扣" title="填客人实付比例，80 = 八折；留空 = 不打折" value="'+(pct<100 ? pct : '')+'" onchange="setLocalItemField(\''+scope+'\',\''+k+'\',\'discountPct\',this.value)"><i>%</i></span>')+
+    (isSvc ? '' : '<span class="sel-disc"><input type="number" min="1" max="100" placeholder="折扣" title="填客人实付比例，80 = 8折；留空 = 不打折" value="'+(pct<100 ? pct : '')+'" onchange="setLocalItemField(\''+scope+'\',\''+k+'\',\'discountPct\',this.value)"><i>%</i>'+(discountText(pct) ? '<b class="sel-dtxt">= '+discountText(pct)+'</b>' : '')+'</span>')+
     '<span class="sel-amt">'+formatCurrency(line,'IDR')+'</span>'+
     '<button type="button" class="sel-note-btn" onclick="toggleItemNote(\''+scope+'\',\''+k+'\')">备注'+(it.itemNote ? ' ✓' : '')+'</button></div>'+
     (noteOpen ? '<div class="sel-note"><input type="text" placeholder="备注（选填）" value="'+(it.itemNote||'').replace(/"/g,'&quot;')+'" onchange="setLocalItemField(\''+scope+'\',\''+k+'\',\'note\',this.value)"></div>' : '')+'</div>';
@@ -2568,7 +2568,7 @@ function localPurchaseHtml(c, scope, isAddition){
   var settleBtn = '<button class="btn-primary" style="flex:1;'+(tot.paidCount ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(tot.paidCount ? 'onclick="'+settleFn+'"' : 'disabled')+'>结算</button>';
   var right = '<div class="sel-card"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+
     '<textarea placeholder="备注（仅 IN，选填）" oninput="setLocalNote(\''+scope+'\',this.value)" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;">'+noteVal+'</textarea>'+
-    (items.length ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">折扣栏填客人实付比例：80 = 八折，留空 = 不打折</div>'+items.map(function(it){ return localRowHtml(c, scope, it); }).join('') : '<div style="font-size:12px;color:var(--muted);padding:10px 4px;">尚未选择项目</div>')+
+    (items.length ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">折扣栏填客人实付比例：80 = 8折，85 = 8.5折，留空 = 不打折</div>'+items.map(function(it){ return localRowHtml(c, scope, it); }).join('') : '<div style="font-size:12px;color:var(--muted);padding:10px 4px;">尚未选择项目</div>')+
     serviceBlockHtml(c, scope)+
     '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);"><span style="font-size:13px;color:var(--slate2);">全款</span><span style="font-size:22px;font-weight:800;">'+formatCurrency(tot.total,'IDR')+'</span></div>'+
     (tot.onlyService ? '<div style="font-size:12px;color:#A8740A;font-weight:700;margin-top:6px;">서비스需搭配付费项目</div>' : '')+
@@ -2878,7 +2878,7 @@ function lmSettle(){
   lm.cart = []; lm.noteIN = '';
   if(lm.mgmtActive){ lm.addBuy = false; lm.addUse = true; } /* 本地管理进行中追加购买：付款后问是否继续使用 */
   else lm.step = 'afterBuyUse'; /* 结算后：是否使用？ */
-  logCaseEvent(c, actingName(), '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+(i.kind==='service' ? '（서비스）' : '')+' ×'+i.qty+(i.discountPct<100?'（实付'+i.discountPct+'%）':''); }).join('、')+'），已转客户持有');
+  logCaseEvent(c, actingName(), '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+(i.kind==='service' ? '（서비스）' : '')+' ×'+i.qty+(discountText(i.discountPct)?'（'+discountText(i.discountPct)+'）':''); }).join('、')+'），已转客户持有');
   updateCaseStage(c); buildCaseLog(c); renderCaseBody(c);
 }
 
