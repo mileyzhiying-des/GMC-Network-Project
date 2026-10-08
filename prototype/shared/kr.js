@@ -139,7 +139,7 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
     var h = krHospital(), clinics = krClinics();
     var row = function(k, v){ return '<div class="field-row"><span class="fk">'+k+'</span><span class="fv" style="font-weight:400;">'+v+'</span><span class="fa"></span></div>'; };
     el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('医院设定')+'</div>'+
-      '<div class="card" style="padding:2px 20px;">'+row('医院名称（韩 / 英）', aEsc(h.name.ko)+' / '+aEsc(h.name.en))+row('地址', aEsc(h.address))+row('时区', aEsc(h.tz))+row('对接的诊所', clinics.map(function(c){ return aEsc(c.name); }).join('、')||'—')+'</div>'+
+      '<div class="card" style="padding:2px 20px;">'+row('医院名称（韩 / 英）', aEsc(h.name.ko)+' / '+aEsc(h.name.en))+row('地址', aEsc(h.address))+row('时区', aEsc(tzLabel(h.tz||'Asia/Seoul')))+row('对接的诊所', clinics.map(function(c){ return aEsc(c.name); }).join('、')||'—')+'</div>'+
       '<div style="font-size:11px;color:var(--muted);">医院设定的编辑项（语言、短信等）在后面几份指令里做；院长名单、开放施术日期、日程在 KR 端的日程管理 / 院长管理里。</div>';
   };
   ADMIN_RENDER.bizdata = function(el, r){
@@ -151,7 +151,7 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
 
 
 /* ---------- 三、KR 大盘（KR-DASH-01） ---------- */
-function krToday(){ return nowFullDt().split(' ')[0]; }
+function krToday(){ return todayStr(); }
 function krEsc(s){ return aEsc(s); }
 function krHData(){ var h = HOSPITAL_DATA[krHospitalIdOfMe()]; if(h){ h.dayConfirm = h.dayConfirm || {}; h.reportRead = h.reportRead || {}; h.offs = h.offs || []; } return h; }
 function krIsDirector(){ var a = currentAccount(); return !!a && a.role==='kr_director'; }
@@ -174,7 +174,7 @@ function krGoCards(key){ KR_LIST.card = key; KR_LIST.tab = 'all'; KR_LIST.clinic
 
 function krConfirmToday(){
   var h = krHData(); if(!h) return;
-  h.dayConfirm[krToday()] = {by: ME_NAME, at: nowFullDt().split(' ')[1]};
+  h.dayConfirm[krToday()] = {by: ME_NAME, at: nowFullDt()}; /* UTC */
   logOp('其他', '确认今日院长日程（'+krToday()+'）', '日程');
   Store.touch(); krRenderDashboard();
 }
@@ -237,7 +237,7 @@ function krDirectorBlocks(rows){
   var waiting = rows.filter(function(r){ return r.c.consultStatus==='awaiting_report'; }).sort(function(a,b){ return (a.c.reportEta||'9999').localeCompare(b.c.reportEta||'9999'); });
   var waitHtml = waiting.length ? waiting.map(function(r){
     var over = reportOverdueNow(r.c);
-    return '<div class="trow" onclick="krOpenCase(\''+r.clinicId+'\',\''+r.id+'\')" style="grid-template-columns:1.2fr 1fr 1.4fr;cursor:pointer;"><span><b>'+krEsc(r.name)+'</b></span><span>'+krEsc(r.clinicName)+'</span><span style="'+(over?'color:#B2453A;font-weight:600;':'')+'">预计 '+krEsc(r.c.reportEta||'—')+(over?'（已超时）':'')+'</span></div>';
+    return '<div class="trow" onclick="krOpenCase(\''+r.clinicId+'\',\''+r.id+'\')" style="grid-template-columns:1.2fr 1fr 1.4fr;cursor:pointer;"><span><b>'+krEsc(r.name)+'</b></span><span>'+krEsc(r.clinicName)+'</span><span style="'+(over?'color:#B2453A;font-weight:600;':'')+'">预计 '+krEsc(fmtUtc(r.c.reportEta)||'—')+(over?'（已超时）':'')+'</span></div>';
   }).join('') : '<div style="padding:18px;color:var(--muted);font-size:13px;">没有等你出报告的案件</div>';
   var weekAgo = new Date(nowDateObj().getTime() - 7*86400000).toISOString().slice(0,10);
   var read = h.reportRead[me.id] || [];
@@ -272,7 +272,7 @@ function krTabOf(r){
 function krKeyTime(r){
   var c = r.c;
   if(c.consultStatus==='paid_waiting_kr') return '待确认报告时间';
-  if(c.consultStatus==='awaiting_report') return '预计 '+(c.reportEta||'—')+(reportOverdueNow(c)?'（已超时）':'');
+  if(c.consultStatus==='awaiting_report') return '预计 '+(fmtUtc(c.reportEta)||'—')+(reportOverdueNow(c)?'（已超时）':'');
   var nextSub = (c.subItems||[]).filter(function(s){ return !s.done; })[0];
   if(nextSub && c.krBalancePaid) return '下一项 '+nextSub.date+' '+nextSub.content;
   var ks = c.krSchedule;
@@ -383,7 +383,7 @@ function krEtaBlock(c, change){
   var sched = ((HOSPITAL_DATA[hid].directorSchedule||{})[c.director]||[]);
   var day = function(d, label){ var l = sched.filter(function(s){ return s.date===d; }).sort(function(a,b){ return a.time.localeCompare(b.time); }); return '<div style="font-size:12px;margin-bottom:6px;"><b>'+label+' '+d+'</b>：'+(l.length ? l.map(function(s){ return krEsc(s.time+' '+s.title); }).join('、') : '<span style="color:var(--muted);">没有日程</span>')+'</div>'; };
   var offs = krOffRows(hid, today).concat(krOffRows(hid, tomorrow)).filter(function(o){ return o.who===c.director; });
-  var base = c.reportEta ? c.reportEta.split(' ') : [krDateAdd(1), '14:00'];
+  var base = c.reportEta ? fmtUtc(c.reportEta).split(' ') : [krDateAdd(1), '14:00']; /* UTC 存，KR 页面按韩国时间显示 / 输入 */
   var form = krCan()
     ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><input type="date" id="kr-eta-d" value="'+base[0]+'" min="'+today+'" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;"><select id="kr-eta-t" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;">'+krTimeOptions(base[1])+'</select><button class="btn-primary" onclick="krDoEta('+(change?'true':'false')+')">'+(change?'确认修改':'确认')+'</button>'+(change?'<button class="btn-ghost" onclick="krSetEtaEdit(false)">取消</button>':'')+'</div>'
     : '<div style="font-size:12px;color:var(--muted);margin-top:8px;">预计出报告时间由 KR 室长确认，院长账号不能改。</div>';
@@ -396,14 +396,14 @@ function krDoEta(change){
   if(!krCan()) return; /* 院长不能确认/修改时间 */
   var d = document.getElementById('kr-eta-d').value, tm = document.getElementById('kr-eta-t').value;
   if(!d || !tm){ alert('请填日期和时间'); return; }
-  var eta = d+' '+tm;
+  var eta = localToUtc(d, tm, KR_TZ); /* KR 输入的是韩国当地时间，存 UTC */
   if(eta <= nowFullDt()){ alert('预计出报告时间必须晚于现在'); return; }
   KR_ETA_EDIT = false;
   krMut(function(c){ return coreSetReportEta(c, eta, ME_NAME, !!change); });
 }
 function krEtaStatusBlock(c){
   var over = reportOverdueNow(c);
-  return krCardBox('预计出报告时间', krKV('预计时间', krEsc(c.reportEta||'—'))+krKV('倒计时', over ? '<b style="color:#C26A1B;">已超过预计时间</b>' : krEsc(reportRemainingText(c)))+
+  return krCardBox('预计出报告时间', krKV('预计时间', krEsc(fmtUtc(c.reportEta)||'—'))+krKV('倒计时', over ? '<b style="color:#C26A1B;">已超过预计时间</b>' : krEsc(reportRemainingText(c)))+
     (over ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-top:8px;">⏰ 已超过预计出报告时间，报告还没提交。请尽快提交，或修改预计时间（IN 端会收到通知）。</div>' : '')+
     (krCan() && !KR_ETA_EDIT ? '<div style="margin-top:10px;"><button class="btn-outline" onclick="krSetEtaEdit(true)">修改预计时间</button></div>' : ''));
 }
@@ -515,7 +515,7 @@ function krTabRelated(c){
   return krCardBox('之前关联', before||krEmpty())+krCardBox('后续关联', after||krEmpty());
 }
 function krTabLog(c){
-  var rows = (c.logEntries||[]).map(function(e){ return '<div class="case-field-row" style="font-size:12px;align-items:flex-start;"><span style="min-width:120px;color:var(--muted);">'+krEsc(e.dt||'')+'</span><span style="min-width:70px;color:var(--slate2);">'+krEsc(e.stage||'')+'</span><span style="min-width:90px;font-weight:600;">'+krEsc(e.actor||'')+'</span><span style="flex:1;">'+krEsc(e.action||'')+'</span></div>'; }).join('');
+  var rows = (c.logEntries||[]).map(function(e){ return '<div class="case-field-row" style="font-size:12px;align-items:flex-start;"><span style="min-width:120px;color:var(--muted);">'+krEsc(fmtUtc(e.dt||''))+'</span><span style="min-width:70px;color:var(--slate2);">'+krEsc(e.stage||'')+'</span><span style="min-width:90px;font-weight:600;">'+krEsc(e.actor||'')+'</span><span style="flex:1;">'+krEsc(e.action||'')+'</span></div>'; }).join('');
   return krCardBox('Timeline', rows || krEmpty());
 }
 var KR_TAB_FN = {basic:krTabBasic, consult:krTabConsult, items:krTabItems, proc:krTabProc, files:krTabFiles, related:krTabRelated, log:krTabLog};
@@ -559,7 +559,7 @@ function krReadAllNotifs(){ var me = currentAccount(); krNotifsForMe().forEach(f
 var KR_NOTIF_FILTER = 'all';
 function krNotifRowHtml(n){
   var me = currentAccount(), unread = (n.readBy||[]).indexOf(me.id) < 0, cl = clinicById(n.clinicId);
-  return '<div class="trow" onclick="krOpenNotif(\'' + n.id + '\')" style="grid-template-columns:18px 1fr 130px;cursor:pointer;'+(unread?'font-weight:700;':'color:var(--slate2);')+'"><span style="color:var(--terracotta);">'+(unread?'●':'')+'</span><span>'+krEsc(n.text)+(cl?' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(cl.name)+'</span>':'')+'</span><span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(n.ts)+'</span></div>';
+  return '<div class="trow" onclick="krOpenNotif(\'' + n.id + '\')" style="grid-template-columns:18px 1fr 130px;cursor:pointer;'+(unread?'font-weight:700;':'color:var(--slate2);')+'"><span style="color:var(--terracotta);">'+(unread?'●':'')+'</span><span>'+krEsc(n.text)+(cl?' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(cl.name)+'</span>':'')+'</span><span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(fmtUtc(n.ts))+'</span></div>';
 }
 function krRenderNotifs(){
   var el = document.getElementById('krnotifs-body'); if(!el) return;
@@ -639,7 +639,7 @@ function krRenderChat(scrollEnd){
     if(m.from==='sys') return day+'<div style="text-align:center;font-size:11px;color:var(--muted);margin:6px 0;">'+krEsc(m.orig)+'</div>';
     var mine = krMsgIsMine(m), who = m.from==='me' ? (m.sender||'Dewi')+' · IN' : (m.name||'');
     var ref = m.refCaseId ? '<div style="font-size:11px;color:var(--blue);">↗ 引用案件</div>' : '';
-    return day+'<div style="display:flex;flex-direction:column;align-items:'+(mine?'flex-end':'flex-start')+';margin:6px 0;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+krEsc(who)+' · '+krEsc(m.time||'')+'</div><div style="max-width:78%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.5;background:'+(mine?'var(--navy)':'var(--border2)')+';color:'+(mine?'#fff':'inherit')+';">'+ref+krEsc(krMsgText(m))+'</div></div>';
+    return day+'<div style="display:flex;flex-direction:column;align-items:'+(mine?'flex-end':'flex-start')+';margin:6px 0;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+krEsc(who)+' · '+krEsc(msgTime(m)||'')+'</div><div style="max-width:78%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.5;background:'+(mine?'var(--navy)':'var(--border2)')+';color:'+(mine?'#fff':'inherit')+';">'+ref+krEsc(krMsgText(m))+'</div></div>';
   }).join('');
   p.innerHTML = head(krEsc(room.name)+' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(room.clinicName)+'</span>', true)+
     '<div id="kr-chat-msgs" style="flex:1;overflow:auto;padding:8px 14px;">'+(body||'<div style="padding:24px;color:var(--muted);text-align:center;">还没有消息</div>')+'</div>'+
@@ -650,7 +650,7 @@ function krRenderChat(scrollEnd){
 function krSendMsg(){
   var inp = document.getElementById('kr-chat-in'); if(!inp || !inp.value.trim() || !KR_CHAT.room) return;
   var parts = KR_CHAT.room.split('|'), text = inp.value.trim(), me = currentAccount();
-  var msg = {day:KD(0), from:'them', name:ME_NAME, color:'var(--sage)', init:(ME_NAME||'?').charAt(0), orig:text, trans:demoTranslate(text,'ko','zh'), time:nowTime()};
+  var msg = {day:KD(0), from:'them', name:ME_NAME, color:'var(--sage)', init:(ME_NAME||'?').charAt(0), orig:text, trans:demoTranslate(text,'ko','zh'), time:nowTime(), ts:nowFullDt()};
   Store.updateClinic(parts[0], function(v){ v.CHAT_DATA[parts[1]] = v.CHAT_DATA[parts[1]] || []; v.CHAT_DATA[parts[1]].push(msg); v.ROOM_UNREAD = v.ROOM_UNREAD || {}; v.ROOM_UNREAD[parts[1]] = (v.ROOM_UNREAD[parts[1]]||0) + 1; });
   krRenderChat(true);
   var i2 = document.getElementById('kr-chat-in'); if(i2) i2.focus();
@@ -727,10 +727,10 @@ function krMakeDraft(){
 function krVaultHtml(c){
   var v = krVault(KR_CASE.clinicId, KR_CASE.id, false);
   var row = function(tag, ts, by, body){ return '<div class="case-field-row" style="align-items:flex-start;font-size:12px;"><span class="status-pill" style="background:var(--border2);color:var(--slate2);font-size:10px;margin-right:8px;">'+tag+'</span><span style="min-width:112px;color:var(--muted);">'+krEsc(ts)+'</span><span style="min-width:60px;font-weight:600;">'+krEsc(by)+'</span><span style="flex:1;white-space:pre-wrap;">'+body+'</span></div>'; };
-  var rows = v.audio.map(function(a){ return row('录音', a.ts, a.by, krEsc(a.label)+'（'+a.sec+' 秒）'); }).concat(
-    v.transcripts.map(function(x){ return row('转写', x.ts, x.by, krEsc(x.text)+(x.demo?' <i style="color:var(--muted);">（演示）</i>':'')); }),
-    v.drafts.map(function(d){ return row(d.source.indexOf('AI')===0?'AI草稿':'修改稿', d.ts, d.by, krEsc(d.text)); }),
-    v.history.map(function(h0){ return row('过程', h0.ts, h0.by, krEsc(h0.action)); }));
+  var rows = v.audio.map(function(a){ return row('录音', fmtUtc(a.ts), a.by, krEsc(a.label)+'（'+a.sec+' 秒）'); }).concat(
+    v.transcripts.map(function(x){ return row('转写', fmtUtc(x.ts), x.by, krEsc(x.text)+(x.demo?' <i style="color:var(--muted);">（演示）</i>':'')); }),
+    v.drafts.map(function(d){ return row(d.source.indexOf('AI')===0?'AI草稿':'修改稿', fmtUtc(d.ts), d.by, krEsc(d.text)); }),
+    v.history.map(function(h0){ return row('过程', fmtUtc(h0.ts), h0.by, krEsc(h0.action)); }));
   return krCardBox('KR 专用附件仓库 <span style="font-weight:400;font-size:11px;color:var(--muted);">只有 KR 看得到，IN 看不到；保存期限：结案后 3 年</span>', rows.length ? rows.join('') : krEmpty('还没有内容（语音 / 手动录入后会放进来）'));
 }
 function krRecordBlock(c){
@@ -1185,7 +1185,7 @@ function krCalendarHtml(){
   var title = KRC.mode==='month' ? a.slice(0,7) : (KRC.mode==='week' ? days[0]+' ～ '+days[6] : a+' 周'+krcDow(a));
   var h = krHData(), conf = h.dayConfirm[krToday()];
   var confirmBar = krcIsDirector() ? '' : (conf
-    ? '<span style="font-size:12px;color:var(--sage);">✓ 今日院长日程已由 '+krEsc(conf.by)+' 于 '+krEsc(conf.at)+' 确认</span>'
+    ? '<span style="font-size:12px;color:var(--sage);">✓ 今日院长日程已由 '+krEsc(conf.by)+' 于 '+krEsc(fmtUtcTime(conf.at))+' 确认</span>'
     : '<button class="btn-primary" onclick="krConfirmToday()">确认今日院长日程</button>');
   var tabs = ['day','week','month'].map(function(m){ return '<button onclick="krcSet(\'mode\',\''+m+'\')" style="padding:5px 13px;border-radius:15px;border:1px solid var(--line);background:'+(KRC.mode===m?'var(--navy)':'#fff')+';color:'+(KRC.mode===m?'#fff':'var(--slate)')+';cursor:pointer;font-size:12px;">'+{day:'日',week:'周',month:'月'}[m]+'</button>'; }).join('');
   var sel = krcIsDirector() ? '' : '<select onchange="krcSet(\'person\',this.value)" style="'+inp+'"><option value="all">全部院长</option>'+dirs.map(function(n){ return '<option'+(KRC.person===n?' selected':'')+'>'+krEsc(n)+'</option>'; }).join('')+'</select>';

@@ -159,10 +159,10 @@ var WEEK_OFFSET = 0;
 var DAY_OFFSET = 0;
 
 function applyTzSetting(){
-  var o = TZ_OPTIONS[CLINIC_TZ];
+  var o = TZ_INFO[CLINIC_TZ] || TZ_INFO['Asia/Jakarta'];
   var dd = document.getElementById('dash-date'); if(dd){ var t = demoNow(); dd.textContent = t.getFullYear()+'年'+(t.getMonth()+1)+'月'+t.getDate()+'日（周'+DOW_CN[dowOfDate(dateStr(t))]+'）'; } /* 今天的日期取电脑日期 */
   var w = document.getElementById('dash-weather'); if(w) w.textContent = '☁ '+(CLINIC_SETTINGS.city||o.city)+' '+o.temp+'℃';
-  var l = document.getElementById('cal-tz-label'); if(l) l.textContent = CLINIC_TZ;
+  var l = document.getElementById('cal-tz-label'); if(l) l.textContent = tzLabel(CLINIC_TZ); /* 画面上不显示 WIB / WITA / WIT，只显示 UTC+n */
 }
 
 /* 日历右上角的时区按钮：时区已搬到「诊所设定」（老板/管理者）；一般室长只看不改 */
@@ -171,7 +171,7 @@ function openCalSettings(){ if(canDo('clinic')) openAdminPage('clinic'); }
 /* "早上好"下面直接一行：今日 OFF：院长、KR 室长、IN 室长的名字；没有人 OFF 就不显示（2026-10-02 深夜；原来的"今日"区块含今日行程列表已删除） */
 function renderTodayOff(){
   var el = document.getElementById('dash-off-row'); if(!el) return;
-  var today = nowFullDt().split(' ')[0];
+  var today = todayStr();
   var offs = memosOn(today).filter(function(m){ return m.type==='OFF'; });
   if(!offs.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
   var grp = function(role){ var n = offs.filter(function(m){ return m.role===role; }).map(function(m){ return m.person; }); return n.length ? '<span style="margin-right:16px;"><span style="color:var(--muted);">'+role+'</span> <b style="color:#C1454A;">'+n.join('、')+'</b></span>' : ''; };
@@ -182,7 +182,7 @@ function renderTodayOff(){
 var MEMO_DRAFT = null;
 
 function openMemoModal(){
-  MEMO_DRAFT = {date:nowFullDt().split(' ')[0], type:'备忘', scope:'公开', text:''};
+  MEMO_DRAFT = {date:todayStr(), type:'备忘', scope:'公开', text:''};
   renderMemoBody();
   document.getElementById('memo-overlay').classList.add('open');
 }
@@ -300,7 +300,7 @@ function buildKrDayGrid(){
     if(!its.length) html += '<div style="font-size:12px;color:var(--muted);">当日暂无排期</div>';
     its.forEach(function(it){
       /* KR 时间（块的时间）→ 诊所时间；第二行小字 = 韩国时间 */
-      html += '<div class="schedule-row" style="cursor:default;"><span class="schedule-time">'+(it.type==='off' ? it.part : minToTime(((it.s - (KR_TZ_OFF - TZ_OPTIONS[CLINIC_TZ].off)*60)%1440+1440)%1440)+'<span style="display:block;font-size:9px;color:var(--dim);">'+minToTime(it.s)+'</span>')+'</span>'+krChipHtml(it)+'</div>';
+      html += '<div class="schedule-row" style="cursor:default;"><span class="schedule-time">'+(it.type==='off' ? it.part : minToTime(((it.s - (tzOffsetMin(KR_TZ) - tzOffsetMin(CLINIC_TZ)))%1440+1440)%1440)+'<span style="display:block;font-size:9px;color:var(--dim);">'+minToTime(it.s)+'</span>')+'</span>'+krChipHtml(it)+'</div>';
     });
   }
   document.getElementById('day-detail').innerHTML = html;
@@ -344,7 +344,7 @@ function buildWeekGrid(){
       if(!rowEvs.some(function(e){ return days.some(function(dd){ return dateStr(dd)===e.date; }); })) return;
     }
     var nowD = demoNow(), nowSlot = pad2(nowD.getHours())+':'+(nowD.getMinutes()>=30?'30':'00');
-    html += '<div class="wk-time'+(rowEvs.length?'':' empty')+(hr===nowSlot?' wk-now':'')+'">'+hr+'<span class="kr">KR '+krTimeOf(hr)+'</span></div>';
+    html += '<div class="wk-time'+(rowEvs.length?'':' empty')+(hr===nowSlot?' wk-now':'')+'">'+hr+'<span class="kr">'+krTimeOf(hr)+'</span></div>';
     for(var d=0; d<7; d++){
       var ds = dateStr(days[d]);
       var cell = rowEvs.filter(function(e){ return e.date===ds; }).sort(function(a,b){ return a.time.localeCompare(b.time) || ((a.kind==='placeholder')-(b.kind==='placeholder')) || String(a.name).localeCompare(String(b.name)); }); /* 同一时段：按时间，占位排在预约后面，再按名字 */
@@ -728,7 +728,7 @@ function confirmHoldingRefund(){
   var b = h.batches[ctx.batchIdx]; if(!b || b.voided || (b.bought-b.used)<=0) return;
   b.voidedRemaining = b.bought-b.used; /* 作废的剩余次数（已用的次数保留作历史） */
   b.voided = true; /* 这一批作废，剩余次数归零 */
-  b.refund = {amount:amount, currency:'IDR', reason:reason, date:nowFullDt().split(' ')[0]}; /* 退款记录挂在这一批上；不改变任何案件的结局 */
+  b.refund = {amount:amount, currency:'IDR', reason:reason, date:todayStr()}; /* 退款记录挂在这一批上；不改变任何案件的结局 */
   var pc = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0];
   if(pc){
     pc.holdingRefunds = pc.holdingRefunds || [];
@@ -1483,7 +1483,7 @@ function confirmMaterials(){
   c.expectation = expectationVal;
   c.materialsError = '';
   c.materialsConfirmed = true;
-  c.materialsDate = nowFullDt().split(' ')[0];
+  c.materialsDate = todayStr();
   applyCaseLink(c); /* Case ID 已在预约时生成，这里不再生成 */
   document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
   document.getElementById('case-chat-actions').style.display = 'flex';
@@ -1523,7 +1523,7 @@ function archiveCaseRoom(c){
   var msgs = CHAT_DATA[roomId];
   var lines = msgs.map(function(m){
     var who = m.kind==='sys' ? '系统' : msgSender(m);
-    return '['+m.day+' '+m.time+'] '+who+'：'+(m.kind==='quote' ? '（引用）'+m.speaker+'：'+m.orig : (m.orig||''));
+    return '['+m.day+' '+msgTime(m)+'] '+who+'：'+(m.kind==='quote' ? '（引用）'+m.speaker+'：'+m.orig : (m.orig||''));
   });
   var files = msgs.filter(function(m){ return m.kind==='file'; }).map(function(m){ return m.fname; });
   c.chatArchive = {text:lines.join('\n'), files:files, date:attDate()};
@@ -1588,7 +1588,7 @@ function submitHoldingsUse(scope){
   var c = getCurrentCase(); if(!c) return;
   var ctx = ctxOf(c, scope); if(!ctx) return;
   var holdings = clientHoldingsSorted(c.name);
-  var today = nowFullDt().split(' ')[0];
+  var today = todayStr();
   var used = [];
   holdings.forEach(function(h,i){
     var checkEl = document.getElementById('hold-check-'+scope+'-'+i);
@@ -1749,7 +1749,7 @@ function confirmRefund(){
   var hadKr = chosen.some(function(it){ return it.cancelled; });
   if(mode0==='diffRefund'){ (c.settlementBatches||[]).forEach(function(b){ if(b.krDeposit>0) batchIds.push(b.id); }); }
   c.refunds = c.refunds || [];
-  c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:nowFullDt().split(' ')[0], items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote});
+  c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote});
   logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，退款 ')+formatCurrency(amount,'KRW')+'，退款原因：'+reason+(refNote ? '；备注：'+refNote : '')+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];
   closeRefundModal();
@@ -1811,7 +1811,7 @@ function confirmLocalRefundAll(){
   var amounts = rows.map(function(x,i){ var raw = document.getElementById('lra-'+i).value.trim(); return raw==='' ? NaN : Number(raw); });
   if(amounts.some(function(a){ return isNaN(a) || a<0; })){ alert('请填写每个批次的退款金额（数字，可为 0）'); return; }
   if(!reason){ alert('请填写退款原因'); return; }
-  var today = nowFullDt().split(' ')[0], names = [];
+  var today = todayStr(), names = [];
   rows.forEach(function(x,i){ x.b.voided = true; x.b.refund = {amount:amounts[i], currency:'IDR', reason:reason, date:today}; names.push(x.h.itemName+' ×'+x.b.bought); });
   document.getElementById('local-refund-all-overlay').classList.remove('open');
   logCaseEvent(c, ME_NAME, '室长选择全部退款：整批退款 '+names.join('、')+'；退款原因：'+reason);
@@ -2411,7 +2411,7 @@ function toggleBellDropdown(ev){
   d.onclick = function(e){ e.stopPropagation(); };
   d.innerHTML = '<div style="padding:10px 14px;font-size:12px;font-weight:700;border-bottom:1px solid var(--border2);">最近通知</div>'+
     (list.length ? list.map(function(n){
-      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'bell\')"><span>'+NOTIF_ICON[n.cat]+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(n.read[ME_NAME]?'500':'700')+';">'+n.text+'</div><div style="font-size:10px;color:var(--muted);">'+n.ts+'</div></div>'+(n.read[ME_NAME]?'':'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>')+'</div>';
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'bell\')"><span>'+NOTIF_ICON[n.cat]+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(n.read[ME_NAME]?'500':'700')+';">'+n.text+'</div><div style="font-size:10px;color:var(--muted);">'+fmtUtc(n.ts)+'</div></div>'+(n.read[ME_NAME]?'':'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>')+'</div>';
     }).join('') : '<div style="padding:14px;font-size:12px;color:var(--muted);">没有通知</div>')+
     '<div style="padding:10px 14px;text-align:center;"><a href="#" class="info-link" onclick="closeBellDropdown();nav(\'in-notifications\');return false;">查看全部</a></div>';
   document.body.appendChild(d);
@@ -2453,7 +2453,7 @@ function renderNotifPage(){
   l.innerHTML = list.map(function(n){
     var c = n.caseId ? CASE_ITEMS.filter(function(x){ return x.id===n.caseId; })[0] : null, un = !n.read[ME_NAME];
     return '<div class="nrow" style="cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'page\')"><span class="ndot" style="background:'+(un?'var(--terracotta)':'transparent')+';"></span><span style="font-size:18px;margin-right:4px;">'+NOTIF_ICON[n.cat]+'</span>'+
-      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(un?'700':'500')+';">'+n.text+'</div><div style="font-size:11px;color:var(--muted);">'+n.cat+(c&&c.caseNo ? ' · '+c.caseNo : '')+' · '+n.ts+' · 收件：'+n.recipients.join('、')+'</div></div>'+
+      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(un?'700':'500')+';">'+n.text+'</div><div style="font-size:11px;color:var(--muted);">'+n.cat+(c&&c.caseNo ? ' · '+c.caseNo : '')+' · '+fmtUtc(n.ts)+' · 收件：'+n.recipients.join('、')+'</div></div>'+
       '<span class="status-pill" style="background:'+(un?'var(--terracotta-bg)':'var(--border2)')+';color:'+(un?'var(--terracotta)':'var(--muted)')+';">'+(un?'未读':'已读')+'</span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:16px 2px;">没有通知</div>';
 }
@@ -2681,7 +2681,7 @@ function sendRoomFile(type){
   var ext = {'文件':'pdf', '照片':'jpg', '视频':'mp4'}[type];
   var fname = {'文件':'document', '照片':'photo', '视频':'video'}[type]+'-'+(ROOM_FILE_SEQ++)+'.'+ext; /* 三个都是上传；视频 = 上传视频文件 */
   if(!CHAT_DATA[CURRENT_ROOM]) CHAT_DATA[CURRENT_ROOM] = [];
-  CHAT_DATA[CURRENT_ROOM].push({day:KD(0), from:'me', sender:ME_NAME, kind:'file', fileType:type, fname:fname, orig:'['+type+'] '+fname, time:nowTime()});
+  CHAT_DATA[CURRENT_ROOM].push({day:KD(0), from:'me', sender:ME_NAME, kind:'file', fileType:type, fname:fname, orig:'['+type+'] '+fname, time:nowTime(), ts:nowFullDt()});
   renderFloatMessages();
 }
 
@@ -2691,7 +2691,7 @@ function openRoomFiles(){
   document.getElementById('room-files-title').textContent = '对话中的文件 · '+r.name;
   document.getElementById('room-files-body').innerHTML = msgs.map(function(m){
     var icon = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
-    return '<div class="case-field-row"><span style="font-size:18px;margin-right:8px;">'+icon+'</span><span style="flex-grow:1;font-size:13px;">'+m.fname+'<div style="font-size:11px;color:var(--muted);">'+(m.from==='me'?'Dewi':(m.name||''))+' · '+m.day+' '+m.time+'</div></span>'+
+    return '<div class="case-field-row"><span style="font-size:18px;margin-right:8px;">'+icon+'</span><span style="flex-grow:1;font-size:13px;">'+m.fname+'<div style="font-size:11px;color:var(--muted);">'+(m.from==='me'?'Dewi':(m.name||''))+' · '+m.day+' '+msgTime(m)+'</div></span>'+
       '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">预览</a><a href="#" class="info-link" onclick="return false;">下载</a></span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 2px;">这个房间里还没有发过文件、照片、视频</div>';
   document.getElementById('room-files-overlay').classList.add('open');
@@ -2768,18 +2768,18 @@ function renderFloatMessages(){
     html += '<span id="msg-'+i+'"></span>';
     if(m.kind==='file' && !m.notMine){
       var fic = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
-      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+fic+' '+m.fname+'</div><span class="bubble-trans" style="text-align:right;">'+m.time+qLink+'</span></div></div>';
+      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+fic+' '+m.fname+'</div><span class="bubble-trans" style="text-align:right;">'+msgTime(m)+qLink+'</span></div></div>';
     } else if(m.kind==='sys'){
       html += '<div style="text-align:center;font-size:11px;color:var(--muted);margin:8px 0;">'+m.orig+'</div>';
     } else if(m.kind==='quote'){
       /* 被引用的消息在案件房里显示为「发言人 ｜ 来源房间 ↗」+ 原文 + 译文；点来源房间打开那个房间并定位到这条消息 */
       var srcHtml = m.srcRoomId ? '<a href="#" class="info-link" onclick="gotoQuoteSource(\''+m.srcRoomId+'\','+m.srcIdx+');return false;">'+m.srcRoom+' ↗</a>' : m.srcRoom;
-      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me" style="background:var(--border2);color:var(--slate2);border-left:3px solid var(--terracotta);"><div style="font-size:11px;font-weight:700;margin-bottom:4px;">'+m.speaker+' ｜ '+srcHtml+'</div>'+m.orig+(m.trans ? '<div style="font-size:11px;color:var(--muted);margin-top:4px;">译：'+m.trans+'</div>' : '')+'</div><span class="bubble-trans" style="text-align:right;">引用于 '+m.time+'</span></div></div>';
+      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me" style="background:var(--border2);color:var(--slate2);border-left:3px solid var(--terracotta);"><div style="font-size:11px;font-weight:700;margin-bottom:4px;">'+m.speaker+' ｜ '+srcHtml+'</div>'+m.orig+(m.trans ? '<div style="font-size:11px;color:var(--muted);margin-top:4px;">译：'+m.trans+'</div>' : '')+'</div><span class="bubble-trans" style="text-align:right;">引用于 '+msgTime(m)+'</span></div></div>';
     } else if(m.from==='me'){
-      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+m.orig+'</div>'+(m.refCaseId ? refBarHtml(m.refCaseId) : '')+'<span class="bubble-trans" style="text-align:right;">'+m.time+qLink+'</span></div></div>';
+      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+m.orig+'</div>'+(m.refCaseId ? refBarHtml(m.refCaseId) : '')+'<span class="bubble-trans" style="text-align:right;">'+msgTime(m)+qLink+'</span></div></div>';
     } else {
       html += '<div class="bubble-row them"><span class="bubble-avt" style="background:'+m.color+';">'+m.init+'</span><div class="bubble-col"><span class="bubble-name">'+m.name+'</span><div class="bubble them"'+(((m.orig||'').indexOf('@'+ME_NAME)>-1) ? ' style="background:#FFF1B8;box-shadow:0 0 0 2px #F0D56B;"' : '')+'>'+m.orig+'</div>'+
-        (m.trans ? '<span class="bubble-trans">译：'+m.trans+'</span>' : '')+'<span class="bubble-trans">'+m.time+qLink+'</span></div></div>';
+        (m.trans ? '<span class="bubble-trans">译：'+m.trans+'</span>' : '')+'<span class="bubble-trans">'+msgTime(m)+qLink+'</span></div></div>';
     }
   });
   document.getElementById('float-body').innerHTML = html;
@@ -2849,7 +2849,7 @@ function simulateIncomingMsg(atMe){
   var cc = isCase ? CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0] : null;
   var who = (isCase && cc && caseHasKrSide(cc)) ? krEnterRoomName(cc) : '이서연';
   if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = [];
-  CHAT_DATA[roomId].push({day:KD(0), from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@'+ME_NAME+' ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime()});
+  CHAT_DATA[roomId].push({day:KD(0), from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@'+ME_NAME+' ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime(), ts:nowFullDt()});
   renderFloatMessages();
   var roomOpen = document.getElementById('chat-float-overlay').classList.contains('open') && CURRENT_ROOM===roomId;
   if(!atMe && !roomOpen){ ROOM_UNREAD[roomId] = (ROOM_UNREAD[roomId]||0)+1; updateChatBadge(); try{ if(document.getElementById('chat-drawer').classList.contains('open')) renderDrawerList(); }catch(e){} } /* 未读不含 @ */
@@ -2867,7 +2867,7 @@ function sendFloatMsg(){
   if(!val) return;
   var isNewCaseRoom = CURRENT_ROOM.indexOf('case-')===0 && !CHAT_DATA.hasOwnProperty(CURRENT_ROOM);
   if(!CHAT_DATA[CURRENT_ROOM]) CHAT_DATA[CURRENT_ROOM] = [];
-  var msg = {day:KD(0), from:'me', sender:ME_NAME, orig:val, trans:'（演示译文）'+val, time:nowTime()};
+  var msg = {day:KD(0), from:'me', sender:ME_NAME, orig:val, trans:'（演示译文）'+val, time:nowTime(), ts:nowFullDt()};
   if(REF_CHIP) msg.refCaseId = REF_CHIP;
   CHAT_DATA[CURRENT_ROOM].push(msg);
   var srcIdx = CHAT_DATA[CURRENT_ROOM].length-1;

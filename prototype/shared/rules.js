@@ -123,11 +123,47 @@ function isRescheduleDateDisabled(d){
 }
  /* 演示按钮"模拟时间超过30分钟"会把演示时钟往后拨 */
 /* 演示时钟 = 电脑当前时间 + 演示按钮往后拨的毫秒数（2026-10-06 起不再固定在 2026-09-18 11:00） */
-function demoNow(){ return new Date(Date.now() + DEMO_SHIFT_MS); }
+/* ---- 时区（2026-10-07，CMD-1007-03；Notion Integrations & APIs 时区一行）----
+   · 诊所 / 医院存标准时区（IANA：Asia/Jakarta、Asia/Makassar、Asia/Jayapura、Asia/Seoul），原型用浏览器 Intl 算（模拟时区 API）；诊所时区由地址 / 城市自动判定（clinicTzOf），不能手动选。
+   · 系统事件时间点（Timeline、通知、对话、报告预计时间、操作日志）一律存 UTC（nowFullDt() = UTC 字符串 'YYYY-MM-DD HH:mm'），显示时按页面时区换算（fmtUtc）。
+   · 预约、施术等"当地钟点"仍存当地时间（诊所 / 医院当地），不改成 UTC。
+   · demoNow() 返回一个"本地字段 = 页面时区墙上时钟"的 Date：这样所有按本地字段（getHours、dateStr、new Date('YYYY-MM-DDTHH:mm')）算的日历 / 时段 / 倒计时逻辑，
+     不管电脑本身在哪个时区，都以诊所（IN 页面）或韩国（KR 页面）的当地时间为准；真正的时刻（UTC）用 realNow()。 */
+var TZ_INFO = {
+  'Asia/Jakarta':{city:'雅加达', temp:31}, 'Asia/Makassar':{city:'登巴萨（巴厘岛）', temp:30}, 'Asia/Jayapura':{city:'查亚普拉', temp:29}, 'Asia/Seoul':{city:'首尔', temp:18}
+};
+var _TZ_FMT = {};
+function _tzFmt(tz){ return _TZ_FMT[tz] || (_TZ_FMT[tz] = new Intl.DateTimeFormat('en-US', {timeZone:tz, hourCycle:'h23', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'})); }
+function tzParts(date, tz){ var o = {}; _tzFmt(tz).formatToParts(date).forEach(function(p){ o[p.type] = p.value; }); return {y:+o.year, mo:+o.month, d:+o.day, h:+o.hour, mi:+o.minute, s:+o.second}; }
+function tzOffsetMin(tz, date){ var dt = date || new Date(), p = tzParts(dt, tz); return Math.round((Date.UTC(p.y, p.mo-1, p.d, p.h, p.mi, p.s) - Math.floor(dt.getTime()/1000)*1000)/60000); }
+function tzLabel(tz){ var m = tzOffsetMin(tz), h = m/60; return 'UTC'+(h>=0?'+':'-')+(Math.abs(h) % 1 ? Math.abs(h).toFixed(1) : Math.abs(h)); }
+function realNow(){ return new Date(Date.now() + (+DEMO_SHIFT_MS || 0)); }
+function pageTz(){ try{ if(typeof isKrAccount==='function' && isKrAccount()) return 'Asia/Seoul'; }catch(e){} return (typeof CLINIC_TZ==='string' && CLINIC_TZ) ? CLINIC_TZ : 'Asia/Jakarta'; }
+function demoNow(){ var p = tzParts(realNow(), pageTz()); return new Date(p.y, p.mo-1, p.d, p.h, p.mi, p.s); }
+function todayStr(){ return dateStr(demoNow()); } /* 页面时区的"今天" */
+/* UTC 字符串 'YYYY-MM-DD HH:mm' ⇄ 页面时区显示；旧格式不符的原样返回 */
+function utcStrParse(s){ if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s||'')) return null; var d = new Date(String(s).slice(0,16).replace(' ','T')+':00Z'); return isNaN(d.getTime()) ? null : d; }
+function fmtUtc(s, tz){ var d = utcStrParse(s); if(!d) return s||''; var p = tzParts(d, tz || pageTz()); return p.y+'-'+pad2(p.mo)+'-'+pad2(p.d)+' '+pad2(p.h)+':'+pad2(p.mi); }
+function fmtUtcTime(s, tz){ var f = fmtUtc(s, tz); return f.length>=16 ? f.slice(11,16) : f; }
+/* 当地钟点（日期 + HH:mm，某时区的墙上时间）→ UTC 字符串（KR 室长输入的预计出报告时间等） */
+function localToUtc(date, hm, tz){
+  var a = String(date).split('-'), t = String(hm).split(':'), guess = Date.UTC(+a[0], +a[1]-1, +a[2], +t[0], +t[1]);
+  var off = tzOffsetMin(tz, new Date(guess)); var u = new Date(guess - off*60000);
+  off = tzOffsetMin(tz, u); u = new Date(guess - off*60000);
+  return u.toISOString().slice(0,10)+' '+u.toISOString().slice(11,16);
+}
+/* 诊所时区：按地址 / 城市关键词自动判定（原型没有地图 API，用关键词对照表模拟）；查不到默认 Asia/Jakarta */
+function clinicTzOf(s){
+  var t = String((s && s.address)||'')+' '+String((s && s.city)||''), low = t.toLowerCase();
+  var has = function(arr){ return arr.some(function(k){ return low.indexOf(k.toLowerCase())>-1; }); };
+  if(has(['jayapura','papua','ambon','maluku','merauke','sorong','查亚普拉','巴布亚','安汶'])) return 'Asia/Jayapura';
+  if(has(['bali','denpasar','kuta','ubud','seminyak','makassar','lombok','mataram','balikpapan','samarinda','manado','kupang','巴厘','登巴萨','望加锡','龙目','万鸦老'])) return 'Asia/Makassar';
+  return 'Asia/Jakarta';
+}
 
 /* 演示数据的日期一律写成"相对今天"：D(0)=今天、D(-3)=3 天前、D(2)=2 天后；KD(n) 是韩文日期（对话分隔线用） */
-function D(n){ var d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return dateStr(d); }
-function KD(n){ var d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일'; }
+function D(n){ var d = demoNow(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return dateStr(d); }
+function KD(n){ var d = demoNow(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일'; }
 
 function pad2(n){ return (n<10?'0':'')+n; }
 
@@ -338,7 +374,7 @@ function isProjectInUse(projectId){ /* 旧版只看案件；新版见 projDelete
   });
 }
 
-function workingIN(){ var today = nowFullDt().split(' ')[0]; return IN_COORDINATORS.filter(function(n){ return !isOffOn(n, today); }); }
+function workingIN(){ var today = todayStr(); return IN_COORDINATORS.filter(function(n){ return !isOffOn(n, today); }); }
 
 /* ---- 案件对话房规则（2026-10-02 选院长+对话合并版·二） ----
    建房条件：不面诊 = 基础资料确认后；面诊 = 缴费（或免除）后；之前完全不显示［发起对话］和"+新建案件对话"候选；终态案件没有房间。
@@ -357,7 +393,7 @@ function caseHasKrSide(c){
 function isOffOn(name, date){ var k = offNameKey(name); return CAL_MEMOS.some(function(m){ return m.type==='OFF' && m.date===date && offNameKey(m.person)===k; }); }
 
 function pushTargets(c){
-  var today = nowFullDt().split(' ')[0], ops = caseOperators(c);
+  var today = todayStr(), ops = caseOperators(c);
   var pick = function(opsList, all){
     var work = opsList.filter(function(n){ return !isOffOn(n, today); });
     return work.length ? work : all.filter(function(n){ return !isOffOn(n, today); });

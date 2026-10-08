@@ -111,7 +111,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
   if(!CLINIC_DRAFT || !isRefresh) clinicDraftFresh();
   var d = CLINIC_DRAFT;
   var f = function(k, type, extra){ return aInput('type="'+(type||'text')+'" value="'+aEsc(d[k])+'" data-k="'+k+'" oninput="clinicSet(this)" onchange="clinicSet(this)" '+(extra||'')); };
-  var tzOpts = Object.keys(TZ_OPTIONS).map(function(k){ return '<option value="'+k+'"'+(d.tz===k?' selected':'')+'>'+k+'（UTC+'+TZ_OPTIONS[k].off+'）</option>'; }).join('');
+  var tzTxt = tzLabel(clinicTzOf(d))+'，'+t('依地址自动判定'); /* 时区只读，由地址 / 城市自动判定 */
   var dow = [1,2,3,4,5,6,0].map(function(i){ return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(d.closedDow.indexOf(i)>-1?'checked ':'')+'onchange="clinicToggleDow('+i+',this.checked)"> '+t(DOW_NAMES[i])+'</label>'; }).join('');
   var sms = Object.keys(SMS_KIND_LABELS).map(function(k){
     return aField(SMS_KIND_LABELS[k], '<textarea rows="3" data-k="sms.'+k+'" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.sms[k])+'</textarea>'); }).join('');
@@ -120,10 +120,10 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
     return '<div style="font-size:13px;line-height:2;padding:6px 0;border-bottom:1px solid var(--border2);"><b>'+t('韩国医院')+'：</b>'+aEsc(h.name.ko)+' / '+aEsc(h.name.en)+'<br><b>'+t('韩国室长')+'：</b>'+hospitalCoordinators(h.id).map(aEsc).join('、')+'<br><b>'+t('院长名单')+'：</b>'+ds+'</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);">（本诊所还没有对接的医院）</div>';
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('诊所设定')+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);">'+(CLINIC_SETTINGS.updatedAt ? '最后修改：'+aEsc(CLINIC_SETTINGS.updatedBy)+'　'+CLINIC_SETTINGS.updatedAt : '')+'</div></div>'+
+    '<div style="font-size:11px;color:var(--muted);">'+(CLINIC_SETTINGS.updatedAt ? '最后修改：'+aEsc(CLINIC_SETTINGS.updatedBy)+'　'+fmtUtc(CLINIC_SETTINGS.updatedAt) : '')+'</div></div>'+
     aSection(t('诊所资料'),
       aGrid(2, aField(t('诊所名称'), f('name'))+aField(t('电话'), f('phone'))+aField(t('地址'), f('address'))+aField(t('所在城市'), f('city'), '显示在工作台的天气旁')+
-        aField(t('时区'), '<select data-k="tz" onchange="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+tzOpts+'</select>', '日历按诊所所在时区显示，下面一行小字显示 KR 时间'))) +
+        aField(t('时区'), '<div style="padding:9px 12px;border:1px dashed var(--border);border-radius:8px;font-size:13px;color:var(--slate2);background:var(--sand);">'+aEsc(tzTxt)+'</div>', '日历按诊所所在时区显示，下面一行小字显示实际的韩国时间（改地址 / 所在城市会自动更新）'))) +
     aSection(t('营业时间')+' / '+t('可预约时段')+' / '+t('午休'),
       aGrid(3, aField('营业开始', f('openTime','time','step="1800"'))+aField('营业结束', f('closeTime','time','step="1800"'))+'<div></div>'+
         aField('可预约最早时段', f('bookFrom','time','step="1800"'))+aField('可预约最晚时段（最后一个开始时间）', f('bookTo','time','step="1800"'))+'<div></div>'+
@@ -183,7 +183,7 @@ function clinicValidate(d){
   return '';
 }
 function clinicDiff(oldS, newS){
-  var ch = [], show = function(k, v){ if(k==='closedDow') return v.length ? v.map(function(i){ return DOW_NAMES[i]; }).join('、') : '无'; if(k==='tz') return v; if(k==='consultFee') return fmtRp(v); return String(v); };
+  var ch = [], show = function(k, v){ if(k==='closedDow') return v.length ? v.map(function(i){ return DOW_NAMES[i]; }).join('、') : '无'; if(k==='tz') return tzLabel(v); if(k==='consultFee') return fmtRp(v); return String(v); };
   Object.keys(CLINIC_FIELD_LABELS).forEach(function(k){
     if(JSON.stringify(oldS[k]) !== JSON.stringify(newS[k])) ch.push(CLINIC_FIELD_LABELS[k]+'：'+(k==='privacyPolicy' ? '（已修改）' : show(k, oldS[k])+' → '+show(k, newS[k])));
   });
@@ -260,8 +260,8 @@ function acctCanUnsub(a){ var me = currentAccount(); return !!(me && a.seat==='a
 
 function openAcctDetail(id){
   var a = accountById(id); if(!a) return;
-  var hist = (a.history||[]).slice().reverse().map(function(h){ return '<div style="padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;line-height:1.6;"><span style="color:var(--muted);">'+h.ts+'</span>　<b>'+aEsc(h.type)+'</b>　'+aEsc(h.text)+'<span style="color:var(--muted);">　—— '+aEsc(h.by||'')+'</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无</div>';
-  var logs = ACCOUNT_LOG.filter(function(l){ return l.target===id; }).map(function(l){ return '<div style="padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;line-height:1.6;"><span style="color:var(--muted);">'+l.ts+'</span>　'+aEsc(l.text)+'<span style="color:var(--muted);">　—— '+aEsc(l.name||'')+'（'+aEsc(l.accountId)+'）</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无</div>';
+  var hist = (a.history||[]).slice().reverse().map(function(h){ return '<div style="padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;line-height:1.6;"><span style="color:var(--muted);">'+fmtUtc(h.ts)+'</span>　<b>'+aEsc(h.type)+'</b>　'+aEsc(h.text)+'<span style="color:var(--muted);">　—— '+aEsc(h.by||'')+'</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无</div>';
+  var logs = ACCOUNT_LOG.filter(function(l){ return l.target===id; }).map(function(l){ return '<div style="padding:7px 0;border-bottom:1px solid var(--border2);font-size:12px;line-height:1.6;"><span style="color:var(--muted);">'+fmtUtc(l.ts)+'</span>　'+aEsc(l.text)+'<span style="color:var(--muted);">　—— '+aEsc(l.name||'')+'（'+aEsc(l.accountId)+'）</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">暂无</div>';
   var btns = (acctCanReset(a) ? '<button class="btn-outline" onclick="confirmResetAcct(\''+id+'\')">重设密码</button>' : '')+
     (a.seat==='addon' && acctCanUnsub(a) ? '<button class="btn-outline" style="color:#C1454A;border-color:#C1454A;" onclick="confirmUnsubAcct(\''+id+'\')">退订</button>' : '');
   acctModal('<div class="modal-box" style="width:560px;max-height:84vh;overflow-y:auto;">'+
@@ -427,7 +427,7 @@ ADMIN_RENDER.oplog = function(el){
   var subs = f.cat==='account' ? '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--muted);">账号操作：</span>'+chip('全部', f.sub==='all', 'oplogSet(\'sub\',\'all\')')+OPLOG_SUBS.map(function(s){ return chip(s, f.sub===s, 'oplogSet(\'sub\',\''+s+'\')'); }).join('')+'</div>' : '';
   var tableRows = rows.map(function(l){
     var sub = oplogSub(l), tag = l.type==='设定变更' ? '设定变更' : (sub || l.type || '其他');
-    return '<div class="trow" style="grid-template-columns:1.1fr 1.3fr 0.8fr 4fr;align-items:flex-start;"><span style="color:var(--slate2);">'+aEsc(l.ts)+'</span><span><b>'+aEsc(l.name||'—')+'</b>（'+aEsc(l.accountId)+'）</span><span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+aEsc(tag)+'</span></span><span style="line-height:1.6;">'+aEsc(l.text)+'</span></div>';
+    return '<div class="trow" style="grid-template-columns:1.1fr 1.3fr 0.8fr 4fr;align-items:flex-start;"><span style="color:var(--slate2);">'+aEsc(fmtUtc(l.ts))+'</span><span><b>'+aEsc(l.name||'—')+'</b>（'+aEsc(l.accountId)+'）</span><span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+aEsc(tag)+'</span></span><span style="line-height:1.6;">'+aEsc(l.text)+'</span></div>';
   }).join('');
   el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('操作日志')+'</div>'+
     '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+chips+'</div>'+
@@ -454,7 +454,7 @@ ADMIN_RENDER.smslog = function(el){
   var chips = chip('全部', SMSLOG_KIND==='all', 'smslogSet(\'all\')')+Object.keys(SMS_KIND_NAMES).map(function(k){ return chip(SMS_KIND_NAMES[k], SMSLOG_KIND===k, 'smslogSet(\''+k+'\')'); }).join('');
   var caseNo = function(id){ var c = id ? CASE_ITEMS.filter(function(x){ return x.id===id; })[0] : null; return c ? c.caseNo : '—'; };
   var tr = rows.map(function(s){
-    return '<div class="trow" style="grid-template-columns:1.1fr 1.2fr 0.8fr 0.8fr 4fr;align-items:flex-start;"><span style="color:var(--slate2);">'+aEsc(s.ts)+'</span><span>'+aEsc(s.to||'—')+'</span><span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+aEsc(SMS_KIND_NAMES[s.kind]||s.kind)+'</span></span><span>'+aEsc(caseNo(s.caseId))+'</span><span style="line-height:1.6;word-break:break-all;">'+aEsc(s.text)+'</span></div>';
+    return '<div class="trow" style="grid-template-columns:1.1fr 1.2fr 0.8fr 0.8fr 4fr;align-items:flex-start;"><span style="color:var(--slate2);">'+aEsc(fmtUtc(s.ts))+'</span><span>'+aEsc(s.to||'—')+'</span><span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+aEsc(SMS_KIND_NAMES[s.kind]||s.kind)+'</span></span><span>'+aEsc(caseNo(s.caseId))+'</span><span style="line-height:1.6;word-break:break-all;">'+aEsc(s.text)+'</span></div>';
   }).join('');
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('短信发送记录')+'</div>'+
     '<button class="btn-outline" onclick="smslogRemindNow()">演示：立即发送提醒短信</button></div>'+

@@ -39,7 +39,7 @@ var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_
 /* ================= dashboard: calendar (month / week / day) ================= */
 var DOW_CN = ['一','二','三','四','五','六','日'];
 
-var TODAY_DATE = (function(){ var d = new Date(); d.setHours(0,0,0,0); return d; })(); /* 真实今天（2026-10-06 起） */
+var TODAY_DATE = (function(){ var d = demoNow(); d.setHours(0,0,0,0); return d; })(); /* 真实今天（2026-10-06 起） */
 
 /* 日历事件类型（2026-10-02·六）：预约来访 / 预约占位 / 赴韩施术；删除"视频沟通""术后管理""其他" */
 var TYPE_COLOR = {reservation:'var(--navy)', placeholder:'var(--slate)', travel:'var(--terracotta)'};
@@ -53,9 +53,9 @@ var WK_HOURS = [];
 var KR_WK_HOURS = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30'];
 
 /* 诊所时区（设定，默认 WIB，可切换 WITA / WIT）；KR 固定 UTC+9。时差由设定算出，不写死 */
-var TZ_OPTIONS = {WIB:{off:7, city:'雅加达', temp:31}, WITA:{off:8, city:'登巴萨（巴厘岛）', temp:30}, WIT:{off:9, city:'查亚普拉', temp:29}};
+/* （2026-10-07 起诊所时区不再手动选，由地址 / 城市自动判定为 IANA 时区，见 rules.js clinicTzOf；TZ_OPTIONS 已删除） */
 
-var KR_TZ_OFF = 9;
+var KR_TZ = 'Asia/Seoul'; /* 韩国医院时区 */
 
 /* ================= 诊所设定（2026-10-06·A5，Notion Accounts & Settings 第 5 节；老板/管理者在"诊所设定"页改） =================
    所有"诊所可调"的值都放这里，日历、预约占位、未到店判定、面诊费卡、短信、客户自助预约页都读它；不再写死。
@@ -64,7 +64,7 @@ var KR_TZ_OFF = 9;
 var SLOT_MIN = 30; /* 时段长度（分钟），固定 30（我的判断：设定里不提供修改） */
 function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分区里）；o 可覆盖名称、地址等 */
  var s = {
-  name:'GMC 合作诊所（雅加达）', address:'Jl. Jenderal Sudirman Kav. 52, Jakarta Selatan', phone:'+62 21 5550 1234', city:'雅加达', tz:'WIB',
+  name:'GMC 合作诊所（雅加达）', address:'Jl. Jenderal Sudirman Kav. 52, Jakarta Selatan', phone:'+62 21 5550 1234', city:'雅加达', tz:'Asia/Jakarta', /* tz 由地址/城市自动判定（clinicTzOf），不能手动改 */
   openTime:'09:00', closeTime:'17:00',   /* 营业时间（日历显示的行） */
   bookFrom:'09:00', bookTo:'16:30',      /* 可预约时段：第一个 / 最后一个可约的开始时间 */
   lunchFrom:'14:00', lunchTo:'15:00',    /* 午休：不可预约 */
@@ -94,8 +94,8 @@ var CLINIC_TZ = CLINIC_SETTINGS.tz;
    - 按诊所分区存档（客户、案件、预约/占位、对话、通知、诊所设定、本地项目、印尼案例…），IN 账号只看得到自己诊所的分区（见 store.js）；
    - 按医院归属的数据放在 HOSPITAL_DATA[医院ID]（院长名单、KR 室长、赴韩项目、开放施术日期、KR 日程、赴韩案例），KR 端（之后）和各对接诊所共用。 */
 var HOSPITALS = [
-  {id:'H1', name:{ko:'서울 소수 성형외과', en:'Seoul Sosu Plastic Surgery'}, address:'서울특별시 강남구 압구정로 100', tz:'KST'},
-  {id:'H2', name:{ko:'강남 뷰티의원', en:'Gangnam Beauty Clinic'}, address:'서울특별시 강남구 논현로 508', tz:'KST'}
+  {id:'H1', name:{ko:'서울 소수 성형외과', en:'Seoul Sosu Plastic Surgery'}, address:'서울특별시 강남구 압구정로 100', tz:'Asia/Seoul'},
+  {id:'H2', name:{ko:'강남 뷰티의원', en:'Gangnam Beauty Clinic'}, address:'서울특별시 강남구 논현로 508', tz:'Asia/Seoul'}
 ];
 var CLINICS = [
   {id:'C1', name:'GMC 合作诊所（雅加达）', accountPrefix:'A'},
@@ -139,8 +139,9 @@ function smsFill(tpl, v){ return String(tpl||'').replace(/\{(\w+)\}/g, function(
 /* 设定变化后同步各处的派生值：时区镜像、日历行、改约弹窗的上午/下午时段、默认短信 */
 function applyClinicSettings(){
   var s = CLINIC_SETTINGS;
-  if(!TZ_OPTIONS[s.tz]) s.tz = 'WIB';
+  s.tz = clinicTzOf(s); /* 时区由地址 / 城市自动判定 */
   CLINIC_TZ = s.tz;
+  var t0 = demoNow(); t0.setHours(0,0,0,0); TODAY_DATE = t0; /* 日历的"今天"按页面时区算 */
   WK_HOURS = slotsBetween(s.openTime, s.closeTime);
   RESCHED_AM = slotsBetween(s.bookFrom, s.lunchFrom).filter(slotBookable);
   RESCHED_PM = slotsBetween(s.lunchTo, minToTime(timeToMin(s.bookTo)+SLOT_MIN)).filter(slotBookable);
@@ -149,7 +150,7 @@ function applyClinicSettings(){
 }
 
 function krTimeOf(hr){ /* 诊所时间 hr('HH:mm') → KR 时间 */
-  var diff = KR_TZ_OFF - TZ_OPTIONS[CLINIC_TZ].off;
+  var diff = (tzOffsetMin(KR_TZ) - tzOffsetMin(CLINIC_TZ))/60;
   var t = parseInt(hr.slice(0,2),10)*60 + parseInt(hr.slice(3),10) + diff*60;
   t = ((t % 1440) + 1440) % 1440;
   return pad2(Math.floor(t/60))+':'+pad2(t%60);
@@ -1360,12 +1361,13 @@ function logLine(e){
   var action = e.kind==='case'
     ? '<a href="#" onclick="openCaseDetail(\''+e.caseId+'\');return false;" style="color:var(--navy);font-weight:700;">'+e.action+' →</a>'
     : e.action;
-  return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+e.stage+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+actorDisplay(e)+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+e.dt+'</span></div>';
+  return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+e.stage+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+actorDisplay(e)+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+fmtUtc(e.dt)+'</span></div>';
 }
 
 var DEMO_SHIFT_MS = 0;
 
-function nowFullDt(){ var d = demoNow(); return dateStr(d)+' '+pad2(d.getHours())+':'+pad2(d.getMinutes()); }
+/* 系统事件时间点：UTC 字符串（2026-10-07 起）；要显示请用 fmtUtc()；要"页面时区的今天"请用 todayStr() */
+function nowFullDt(){ var d = realNow(); return d.toISOString().slice(0,10)+' '+d.toISOString().slice(11,16); }
 
 function logCaseEvent(c, actor, action){
   c.logEntries = c.logEntries || [];
@@ -1500,7 +1502,7 @@ function coreSubmitReport(c, rep, by){
   syncKrCoordinator(c);
   c.reportReady = true;
   c.consultStatus = 'report_ready';
-  c.reportDate = nowFullDt().split(' ')[0];
+  c.reportDate = todayStr();
   c.reportUploadedBy = by + ' 실장';
   c.reportKo = rep.original;
   c.videoSummary = rep.zh;
@@ -1825,11 +1827,11 @@ function reportSrcOf(c){ /* 关联原因=延续既往面诊 且被关联案件�
   return (src && src.reportReady) ? src : null;
 }
 
-function reportDateOf(src){ return src.reportDate || ((src.logEntries && src.logEntries[0]) ? src.logEntries[0].dt.split(' ')[0] : nowFullDt().split(' ')[0]); }
+function reportDateOf(src){ return src.reportDate || ((src.logEntries && src.logEntries[0]) ? src.logEntries[0].dt.split(' ')[0] : todayStr()); }
 
 function reportOverMonth(src){
   var d = new Date(reportDateOf(src)); d.setMonth(d.getMonth()+1);
-  return d < new Date(nowFullDt().split(' ')[0]);
+  return d < new Date(todayStr());
 }
 
 function continuationInfo(c){
@@ -2007,10 +2009,10 @@ function caseTabsHtml(c){
 }
 
 /* ---- 附件 tab（§7，2026-09-30）：生成 Case ID 之后出现；基础资料里的 메타뷰/照片/视频、关联案件带出的报告、手动上传、面诊阶段产生的文件统一放这里 ---- */
-function attDate(){ return nowFullDt().split(' ')[0].slice(2); }
+function attDate(){ return todayStr().slice(2); }
  /* YY-MM-DD */
 function caseBaseDate(c){
-  var d = c.materialsDate || ((c.logEntries && c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : nowFullDt().split(' ')[0]);
+  var d = c.materialsDate || ((c.logEntries && c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : todayStr());
   return d.slice(2);
 }
 
@@ -2142,9 +2144,9 @@ function consultFeeCardHtml(status, extraText, actionsHtml){
 
 /* 等待报告的小状态（2026-10-02 面诊改版）：KR确认预计出报告时间后 ✓"预计 X 出报告"+倒计时（Success）；
    超过预计时间还没出报告 → 橘色"已超过预计时间"（Warning），只提醒，状态不变 */
-function reportEtaParse(str){ if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(str||'')) return null; var d = new Date(str.replace(' ','T')+':00'); return isNaN(d.getTime()) ? null : d; }
+function reportEtaParse(str){ if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(str||'')) return null; var d = new Date(str.replace(' ','T')+':00Z'); return isNaN(d.getTime()) ? null : d; } /* 预计出报告时间存 UTC */
 
-function nowDateObj(){ return new Date(nowFullDt().replace(' ','T')+':00'); }
+function nowDateObj(){ return realNow(); } /* 真实时刻（和 UTC 存的时间点比较用） */
 
 function reportOverdueNow(c){
   var e = reportEtaParse(c.reportEta);
@@ -2159,8 +2161,8 @@ function reportRemainingText(c){
 }
 
 function reportWaitSubItems(c){
-  if(reportOverdueNow(c)) return [{kind:'Warning', text:'已超过预计时间（预计 '+(c.reportEta||'—')+' 出报告，报告还没提交）'}];
-  return [{kind:'Success', text:'预计 '+(c.reportEta||'—')+' 出报告（'+reportRemainingText(c)+'）'}];
+  if(reportOverdueNow(c)) return [{kind:'Warning', text:'已超过预计时间（预计 '+(fmtUtc(c.reportEta)||'—')+' 出报告，报告还没提交）'}];
+  return [{kind:'Success', text:'预计 '+(fmtUtc(c.reportEta)||'—')+' 出报告（'+reportRemainingText(c)+'）'}];
 }
 
 function consultSubItems(c){
@@ -2606,7 +2608,7 @@ function lmNoBuy(){
 
 function lmSettle(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
-  var lm = c.localMgmt, items = [], total = 0, today = nowFullDt().split(' ')[0];
+  var lm = c.localMgmt, items = [], total = 0, today = todayStr();
   PROJECT_LIBRARY.forEach(function(p){
     var pk = lm.pick[p.id]; if(!pk || pk.qty<=0) return;
     var line = Math.round(p.price*pk.qty*pk.pct/100);
@@ -2878,7 +2880,7 @@ function confirmSettlementPayment(){
   }
   batch.status = 'active';
   c.settlementDone = true; /* 一旦付过一次款就一直是 true；加项后新批次单独走 unpaid→active，不影响这个总开关 */
-  var today = nowFullDt().split(' ')[0];
+  var today = todayStr();
   var batchInItems = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='IN'; });
   batch.inItems = batchInItems.map(function(it){ return {name:it.name, qty:it.qty||1, price:it.price, discountPct:(it.discountPct===undefined?100:it.discountPct), itemNote:it.itemNote||''}; }); /* 结算单展示用快照（本地项目结算后转持有，不留在 procedureItems） */
   batchInItems.forEach(function(it){
@@ -3170,7 +3172,7 @@ function innCareLines(c){
 function finalizeInnCare(c){
   var inn = innCareLines(c);
   if(inn.length && !c.innCare){
-    var today = nowFullDt().split(' ')[0];
+    var today = todayStr();
     inn.forEach(function(l){
       grantHolding(c.name, l.innName, '术后管理', c.id, today, l.times, false);
       var h = (CLIENT_HOLDINGS[c.name]||[]).filter(function(x){ return x.itemName===l.innName; })[0], b = h && h.batches[h.batches.length-1], m = String(l.day).match(/(\d+)/);
@@ -3293,7 +3295,7 @@ function openSubBookModal(caseId, subId){
   SUB_BOOK = {caseId:caseId, subId:subId};
   var ov = document.getElementById('sub-book-overlay');
   if(!ov){ ov = document.createElement('div'); ov.id = 'sub-book-overlay'; ov.className = 'modal-overlay'; ov.onclick = function(e){ if(e.target===ov) closeSubBookModal(); }; document.body.appendChild(ov); }
-  var today = nowFullDt().split(' ')[0], def = s.date > today ? s.date : today;
+  var today = todayStr(), def = s.date > today ? s.date : today;
   ov.innerHTML = '<div class="modal-box"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><span style="font-size:15px;font-weight:700;">预约来访（KR 通知：回印尼后要做）</span><span style="cursor:pointer;" onclick="closeSubBookModal()">✕</span></div>'+
     '<div style="font-size:13px;line-height:1.8;margin-bottom:12px;"><b>'+c.name+'</b>（'+c.caseNo+'）<br>子项 '+s.no+'：'+s.content+'（KR 建议约 '+s.date+'）</div>'+
     '<div class="field" style="margin-bottom:10px;"><label>日期</label><input type="date" id="sub-book-date" value="'+def+'" min="'+today+'"></div>'+
@@ -3465,15 +3467,15 @@ function coreSetReportEta(c, eta, by, isChange){
     if(c.consultStatus!=='awaiting_report') return false;
     var old = c.reportEta || '—';
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
-    logCaseEvent(c, by, 'KR修改预计出报告时间：'+old+' → '+eta);
-    pushNotif('面诊','KR 修改了预计出报告时间：'+c.name+'（'+old+' → '+eta+'）', {caseId:c.id});
+    logCaseEvent(c, by, 'KR修改预计出报告时间：'+fmtUtc(old)+' → '+fmtUtc(eta));
+    pushNotif('面诊','KR 修改了预计出报告时间：'+c.name+'（'+fmtUtc(old)+' → '+fmtUtc(eta)+'）', {caseId:c.id});
   } else {
     if(c.consultStatus!=='paid_waiting_kr') return false;
     syncKrCoordinator(c);
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
     c.consultStatus = 'awaiting_report';
-    logCaseEvent(c, by, 'KR确认预计出报告时间：'+eta);
-    pushNotif('面诊','KR 确认预计出报告时间：'+c.name+' '+eta, {caseId:c.id});
+    logCaseEvent(c, by, 'KR确认预计出报告时间：'+fmtUtc(eta));
+    pushNotif('面诊','KR 确认预计出报告时间：'+c.name+' '+fmtUtc(eta), {caseId:c.id});
   }
   updateCaseStage(c);
   return true;
@@ -3482,11 +3484,11 @@ function coreSetReportEta(c, eta, by, isChange){
 function simulateReportTimeout(){
   var c = getCurrentCase(); if(!c || c.consultStatus!=='awaiting_report') return;
   c.reportOverdue = true;
-  logCaseEvent(c, '系统', '已超过预计出报告时间（'+(c.reportEta||'—')+'），报告还没提交（仅提醒，状态不变）');
+  logCaseEvent(c, '系统', '已超过预计出报告时间（'+(fmtUtc(c.reportEta)||'—')+'），报告还没提交（仅提醒，状态不变）');
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
-  pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+(c.reportEta||'—')+'）', {caseId:c.id});
+  pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+(fmtUtc(c.reportEta)||'—')+'）', {caseId:c.id});
 }
 
 /* ================= case library (案例库 · 2026-10-02 重写，取代院长/部位/问题/产品节点结构) =================
@@ -4118,7 +4120,7 @@ function notifyPushOn(){ var a = currentAccount(); return !(a && a.notify && a.n
 function notifySoundOn(){ var a = currentAccount(); return !(a && a.notify && a.notify.sound===false); }
 function notifMine(n){ return n.recipients.indexOf(ME_NAME)>-1; }
 
-function notifAlive(n){ return (new Date(nowFullDt().replace(' ','T')+':00') - new Date(n.ts.replace(' ','T')+':00')) <= 90*86400000; }
+function notifAlive(n){ return (realNow() - (utcStrParse(n.ts)||0)) <= 90*86400000; }
  /* 90 天后自动清除 */
 function myNotifs(){ return NOTIFS.filter(function(n){ return notifMine(n) && notifAlive(n); }); }
 
@@ -4142,7 +4144,7 @@ function demoNotif(kind){
   else if(kind==='missed') pushNotif('视频','未接来电：이서연 呼叫了 '+ayu.name+' 的案件视频', {caseId:'ayu', link:{kind:'caseRoom'}});
   else if(kind==='at'){
     ensureCaseRoom(ayu); var roomId = getCaseRoomId('ayu');
-    CHAT_DATA[roomId].push({day:KD(0), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'@Dewi 这位客人的报告我已经补充了，请看一下。', trans:'（演示译文）', time:nowTime()});
+    CHAT_DATA[roomId].push({day:KD(0), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'@Dewi 这位客人的报告我已经补充了，请看一下。', trans:'（演示译文）', time:nowTime(), ts:nowFullDt()});
     pushNotif('对话','이서연 在「'+ayu.name+' · '+ayu.caseNo+'」里 @ 了你', {caseId:'ayu', names:[ME_NAME], link:{kind:'mention', roomId:roomId, msgIdx:CHAT_DATA[roomId].length-1}});
   }
   else if(kind==='system') pushNotif('系统','诊所管理账号更新了设定：面诊费 300,000 → 350,000 印尼盾，'+D(15)+' 起生效', {names:IN_COORDINATORS, link:{kind:'system'}, detail:{title:'面诊费调整', changes:['面诊费 300,000 → 350,000 印尼盾'], effective:D(15)+' 起'}});
@@ -4354,7 +4356,7 @@ function caseOperators(c, strict){
 
 function shouldPushToMe(c){ return pushTargets(c).inn.indexOf(ME_NAME)>-1; }
  /* 演示视角：当前登录的是 Dewi（IN室长） */
-function roomSysMsg(text){ return {day:KD(0), from:'sys', kind:'sys', orig:text, time:nowTime()}; }
+function roomSysMsg(text){ return {day:KD(0), from:'sys', kind:'sys', orig:text, time:nowTime(), ts:nowFullDt()}; }
 
 /* 点［发起对话］/新建案件对话时才建房（有房间之后才出现在抽屉里）；建房时IN室长进入房间 */
 function ensureCaseRoom(c){
@@ -4393,7 +4395,7 @@ function floatKey(e){
 function deliverRefQuote(c, q){
   if(!c || isEnded(c)) return 'skip';
   var roomId = getCaseRoomId(c.id);
-  var msg = {day:q.day, from:'me', sender:ME_NAME, kind:'quote', speaker:q.speaker, srcRoomId:q.srcRoomId, srcRoom:q.srcRoom, srcIdx:q.srcIdx, srcDt:q.srcDt, orig:q.orig, trans:q.trans||'', time:nowTime()};
+  var msg = {day:q.day, from:'me', sender:ME_NAME, kind:'quote', speaker:q.speaker, srcRoomId:q.srcRoomId, srcRoom:q.srcRoom, srcIdx:q.srcIdx, srcDt:q.srcDt, orig:q.orig, trans:q.trans||'', time:nowTime(), ts:nowFullDt()};
   if(CHAT_DATA.hasOwnProperty(roomId)){ CHAT_DATA[roomId].push(msg); }
   else if(caseRoomEligible(c)){ ensureCaseRoom(c); CHAT_DATA[roomId].push(msg); }
   else {
@@ -4464,7 +4466,7 @@ var IN_COORDINATORS = ['Dewi','Rina'];
 /* 成员下拉（2026-10-02 增量·三）：点击房间名称 ▾ 显示成员；院长标"静音"，OFF 的人标"今日 OFF"（取代原来的 👤 成员 icon） */
 function memberRowsHtml(){
   var roomId = CURRENT_ROOM, r = roomById(roomId) || {name:roomId};
-  var today = nowFullDt().split(' ')[0];
+  var today = todayStr();
   var mute = '<span class="status-pill" style="background:#EDEAE2;color:var(--muted);font-size:10px;margin-left:6px;">静音</span>';
   var offTag = function(n){ return isOffOn(n, today) ? '<span class="status-pill" style="background:#FBE9E7;color:#C1454A;font-size:10px;margin-left:6px;">今日 OFF</span>' : ''; };
   var row = function(label, key, extra){ return '<div style="display:flex;align-items:center;padding:5px 0;font-size:13px;"><span>'+label+'</span>'+offTag(key)+(extra||'')+'</div>'; };
@@ -4498,7 +4500,9 @@ function memberRowsHtml(){
 /* 🔕（2026-10-02）：对自己关闭这个房间的提醒，可再打开；被 @ 照样提醒 */
 var MUTED_ROOMS = {};
 
-function nowTime(){ var d = demoNow(); return pad2(d.getHours())+':'+pad2(d.getMinutes()); }
+/* 消息显示的时间：新消息带 ts（UTC），按页面时区显示；旧演示消息只有 time 字符串 */
+function msgTime(m){ return m && m.ts ? fmtUtcTime(m.ts) : (m ? m.time : ''); }
+function nowTime(){ var d = demoNow(); return pad2(d.getHours())+':'+pad2(d.getMinutes()); } /* 页面时区的当前时间（旧显示用）；新消息同时存 ts（UTC） */
 
 /* 初始化（2026-10-02）：已是终态的案件整理对话房进附件并删除；仍在进行的演示房间里，KR室长视为已进入 */
 CASE_ITEMS.forEach(function(c){

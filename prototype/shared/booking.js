@@ -99,7 +99,7 @@ function bkStepTime(){
   }).join('');
   var chosen = BK.f.time ? '<div class="bk-info">'+bt('time.chosen', {time:bkTimeText(BK.f.date, BK.f.time)})+'</div>' : '';
   return bkFrame('s.time',
-    '<div class="bk-sub">'+bt('time.hint', {open:CLINIC_SETTINGS.openTime, close:CLINIC_SETTINGS.closeTime})+' · '+bt('tz', {tz:CLINIC_SETTINGS.tz})+'</div>'+
+    '<div class="bk-sub">'+bt('time.hint', {open:CLINIC_SETTINGS.openTime, close:CLINIC_SETTINGS.closeTime})+' · '+bt('tz', {tz:tzLabel(clinicTzOf(CLINIC_SETTINGS))})+'</div>'+
     '<div class="bk-days">'+dayHtml+'</div>'+(slotHtml.trim() ? '<div class="bk-slots">'+slotHtml+'</div>' : '<div class="bk-info">'+bt('time.none')+'</div>')+
     '<div style="margin-top:14px;">'+chosen+bkNav('bkTimeNext()', false)+'</div>');
 }
