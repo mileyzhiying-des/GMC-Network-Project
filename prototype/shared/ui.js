@@ -225,10 +225,11 @@ function setCalView(v){
 function buildKrWeekGrid(){
   var start = getWeekStart(WEEK_OFFSET), days = [];
   for(var i=0;i<7;i++){ var dd = new Date(start); dd.setDate(start.getDate()+i); days.push(dd); }
+  document.getElementById('wk-grid').style.gridTemplateColumns = '64px '+days.map(function(dd){ return hospitalClosedOn(krViewHospital(), dateStr(dd)) ? 'minmax(0,.34fr)' : 'minmax(0,1fr)'; }).join(' '); /* 医院休诊日：整列 1/3 宽 */
   var html = '<div class="wk-corner"></div>';
   days.forEach(function(dd,i){
-    var ds = dateStr(dd), open = hospitalOpenDates(krViewHospital(), krViewDirector()).indexOf(ds)>-1;
-    html += '<div class="wk-head'+(sameDate(dd, TODAY_DATE)?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(open?'<br><span style="font-size:9px;color:var(--sage);font-weight:700;">施术开放</span>':'')+'</div>';
+    var ds = dateStr(dd), open = hospitalOpenDates(krViewHospital(), krViewDirector()).indexOf(ds)>-1, hclosed = hospitalClosedOn(krViewHospital(), ds);
+    html += '<div class="wk-head'+(sameDate(dd, TODAY_DATE)?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(hclosed?'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>':(open?'<br><span style="font-size:9px;color:var(--sage);font-weight:700;">施术开放</span>':''))+'</div>';
   });
   /* IN 看到的 KR 医院日程（IN-DASH-01 / KR-SCHD-01 第 6 节）：只显示"这段时间不可预约"的灰色块，没有文字，不显示原因；只有本诊所客人的施术块显示客人名字。
      行是诊所时间，第二行显示实际的韩国时间；KR 日程块的时间是韩国时间，所以按 krTimeOf(hr) 对应到这一行 */
@@ -241,6 +242,7 @@ function buildKrWeekGrid(){
       var ds = dateStr(days[d]);
       var cover = dirEvs.filter(function(e){ return e.date===ds && timeToMin(e.time) < s1 && timeToMin(e.end||minToTime(timeToMin(e.time)+SLOT_MIN)) > s0; });
       var offHit = offs.some(function(o){ return o.date===ds && (o.part==='上午' ? s0 < 13*60 : o.part==='下午' ? s0 >= 13*60 : true); });
+      if(hospitalClosedOn(krViewHospital(), ds)){ html += '<div class="wk-cell wk-lunch" style="cursor:default;"></div>'; continue; } /* 医院休诊：灰色、不显示内容 */
       var own = cover.filter(function(e){ return e.kind==='施术' && e.clinicId===CURRENT_CLINIC_ID; });
       var others = cover.length - own.length + (offHit ? 1 : 0);
       html += '<div class="wk-cell" style="flex-direction:column;gap:4px;background:#fff;cursor:default;">'+
@@ -271,6 +273,8 @@ function buildWeekGrid(){
   var days = [];
   for(var i=0;i<7;i++){ var dd=new Date(start); dd.setDate(start.getDate()+i); days.push(dd); }
   var evs = calendarEvents().filter(function(e){ return !(e.kind==='reservation' && e.vstate==='预约取消'); }); /* 预约取消的事件从日历消失 */
+  /* 休诊日整列宽度 = 其他天的 1/3（灰色、不能点、不能新增预约；列头仍显示日期 + 休诊）；月视图不改 */
+  document.getElementById('wk-grid').style.gridTemplateColumns = '64px '+days.map(function(dd){ return isRescheduleDateDisabled(dd) ? 'minmax(0,.34fr)' : 'minmax(0,1fr)'; }).join(' ');
   var html = '<div class="wk-corner"></div>';
   days.forEach(function(dd,i){
     var isToday = sameDate(dd, TODAY_DATE);

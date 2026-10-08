@@ -121,6 +121,8 @@ function hospitalLinked(hid, clinicId){ return linkedHospitalIds(clinicId).index
 function hospitalDirectors(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.directors : []; }
 function hospitalDirectorNames(hid){ return hospitalDirectors(hid).filter(function(d){ return d.active; }).map(function(d){ return d.name; }); } /* 启用的院长（停用的不出现在选项里） */
 function hospitalCoordinators(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.coordinators : []; }
+/* 医院休诊日（2026-10-07，CMD-1007-03）：KR 室长在 KR 工作台日历登记整院休诊（可取消）；HOSPITAL_DATA[h].closedDates = [{id, date, by}]；IN 的 KR 医院日程视角和 KR 日历都读这里 */
+function hospitalClosedOn(hid, ds){ var h = HOSPITAL_DATA[hid]; return !!(h && (h.closedDates||[]).some(function(x){ return x.date===ds; })); }
 function hospitalOpenDates(hid, director){ var h = HOSPITAL_DATA[hid]; return (h && h.openDates && h.openDates[director]) || []; }
 function hospitalOfDirector(name){ for(var k in HOSPITAL_DATA){ if(hospitalDirectors(k).some(function(d){ return d.name===name; })) return k; } return null; }
 
