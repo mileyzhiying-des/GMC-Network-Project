@@ -3,6 +3,7 @@
 
 
 document.addEventListener('DOMContentLoaded', function(){
+  try{ sweepStaleReceptions(true); }catch(e){ console.error('[初始化失败] 接待中扫描', e); } /* 载入时先退回心跳过期的接待中案件（CMD-1008-06） */
   try{ i18nStart(); }catch(e){ console.error('[初始化失败] 多语言', e); }
   document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
   document.querySelectorAll('.in-shell').forEach(function(shell){
@@ -89,3 +90,12 @@ document.addEventListener('DOMContentLoaded', function(){
 
 /* 点页面其他地方，关闭头像菜单 */
 document.addEventListener('click', function(){ closeAvatarMenu(); });
+
+/* 接待中不停留（CMD-1008-06）：案件页开着且案件在接待中（基础资料未保存）→ 每 5 秒写心跳；每 5 秒扫一遍心跳过期（>45 秒）的接待中案件，退回待访问并刷新列表；
+   关分页 / 刷新时 beforeunload / pagehide 尽力当场退回（做不到时靠心跳过期兜底） */
+setInterval(function(){
+  try{ receptionBeatTick(); }catch(e){}
+  try{ if(sweepStaleReceptions(true)){ renderCaseRows(); buildWeekGrid(); var cur = (typeof getCurrentCase==='function') ? getCurrentCase() : null; if(cur && CURRENT_PAGE_ID==='in-casedetail'){ renderCaseStatusBar(cur); buildCaseLog(cur); renderCaseBody(cur); } } }catch(e){}
+}, 5000);
+window.addEventListener('beforeunload', function(){ try{ receptionLeaveNow(); }catch(e){} });
+window.addEventListener('pagehide', function(){ try{ receptionLeaveNow(); }catch(e){} });

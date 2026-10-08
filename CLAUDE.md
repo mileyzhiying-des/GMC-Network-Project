@@ -291,3 +291,11 @@ prototype/shared/app.css  共用样式
 - **半天 OFF** 用 `krHalfRange(hid, part)`（上午 = 营业开始→午休开始，下午 = 午休结束→营业结束），不再有写死的 `KR_HALF`。
 - **新写演示数据**：预约来访放进 IN 营业时间且避开午休，施术 / 不可预约放进 KR 营业时间、避开午休 / 周六 16:00 后；排完跑 `dev/audit-hours.js`（console 执行，要求"营业时间外 = 0"）。
 - 未改：KR 端自己的日历 `KRC_H0/KRC_H1` 仍是 08:00–20:00（医院营业到 21:30，晚于 20:00 的块会被截断），待确认。
+
+## CMD-1008-06 补充（2026-10-08，追加；旧文字保留作历史）
+- IN 侧边栏顺序：案件管理在客户管理上面；案件列表没有行内按钮（已到店 / 预约取消 / 未到店 / 预约修改只在案件页状态栏里做）。
+- 财务栏：无收入「–」；仅面诊费 / 有项目收入下方写金额。**面诊费金额读案件缴费记录 `consultFeePaidAmount`（`consultFeeOf(c)`），不读诊所设定**；新写缴面诊费的代码要记下这个字段。
+- **"操作过" = 从接待开始实际处理过案件**（`caseOperators` / `caseOperatedLogs`，代约不算）；列表、仅看我的、推播共用。新写 Timeline 记录时，代约 / 预约修改 / 预约取消类动作的文字里要带这些关键词（见 `caseOperatedLogs`），否则会被算成"处理过"。
+- **接待中不停留**：`receptionOpen(c)` = 待访问点了已到店且基础资料未保存；页面内离开弹确认（`intakeLeaveOk`，挂在 `nav` / `goBack` / `openCaseDetail` / `openAdminPage`）；关分页 `beforeunload` + 心跳过期（45 秒）扫描退回（`sweepStaleReceptions`）。**演示数据不能有停在接待中且基础资料未保存的案件**（会被扫描退回待访问）。
+- 测试时用浏览器的 `window.confirm = ...` 覆盖确认框。
+

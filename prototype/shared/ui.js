@@ -23,6 +23,7 @@ var ADMIN_KEY = null;
 function openAdminPage(key, isRefresh){
   var p = ADMIN_PAGES.filter(function(x){ return x.key===key; })[0];
   if(!p || !canDo(p.perm)){ location.replace(homeUrl()); return; }
+  if(!isRefresh && CURRENT_PAGE_ID==='in-casedetail' && !intakeLeaveOk()) return; /* 接待中未保存：先确认 */
   var el = document.getElementById('in-admin'); if(!el) return;
   ADMIN_KEY = key;
   el.dataset.page = 'admin-'+key;
@@ -36,8 +37,31 @@ function openAdminPage(key, isRefresh){
 }
 function refreshAdminPage(){ if(CURRENT_PAGE_ID==='in-admin' && ADMIN_KEY) openAdminPage(ADMIN_KEY, true); }
 
+/* ---- 接待中不停留（CMD-1008-06，IN-CASE-01 / 状态机总览第 13 节）：接待中、基础资料未保存时，页面内离开 → 弹窗确认；
+   确定 = 案件回到待访问（Timeline 记"接待未完成，退回待访问"）并离开；取消 = 留在页面。直接关分页 / 刷新：beforeunload 当场退回，兜底靠心跳过期扫描（data.js sweepStaleReceptions） ---- */
+function currentReceptionCase(){
+  if(CURRENT_PAGE_ID!=='in-casedetail' || !CURRENT_CASE_ID) return null;
+  var c = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_CASE_ID; })[0];
+  return receptionOpen(c) ? c : null;
+}
+function intakeLeaveOk(){
+  var c = currentReceptionCase(); if(!c) return true;
+  if(!confirm('还没保存，确定要关闭该页面吗？')) return false;
+  revertIntakeToWaiting(c, '接待未完成，退回待访问', actingName());
+  clearReceptionBeat(c);
+  try{ renderCaseRows(); buildWeekGrid(); }catch(e){}
+  return true;
+}
+function receptionBeatTick(){ var c = currentReceptionCase(); if(c) writeReceptionBeat(c); }
+function receptionLeaveNow(){ /* 关分页 / 刷新 / 离开页面：尽力当场退回待访问（做不到时由心跳过期兜底） */
+  var c = currentReceptionCase(); if(!c) return;
+  revertIntakeToWaiting(c, '接待未完成，退回待访问', '系统'); clearReceptionBeat(c);
+  try{ Store.save(); }catch(e){}
+}
+
 function nav(id){
-  if(id !== 'in-admin' && !canDo('work') && !isKrAccount()){ location.replace(homeUrl()); return; } /* KR 账号的页面权限在 kr.js 里判断 */ /* 没有日常工作权限的账号不能进工作类页面 */
+  if(id !== 'in-admin' && !canDo('work') && !isKrAccount()){ location.replace(homeUrl()); return; }
+  if(id !== CURRENT_PAGE_ID && !intakeLeaveOk()) return; /* 接待中未保存：先确认 */ /* KR 账号的页面权限在 kr.js 里判断 */ /* 没有日常工作权限的账号不能进工作类页面 */
   if(id === 'in-admin'){ openAdminPage(ADMIN_KEY || 'bizdata'); return; }
   if(id === CURRENT_PAGE_ID) return;
   NAV_STACK.push(CURRENT_PAGE_ID);
@@ -48,6 +72,7 @@ function nav(id){
 var CASE_RETURN = [];
  /* 案件页内跳转到另一个案件时，记下来源案件，goBack() 回到它 */
 function goBack(){
+  if(!intakeLeaveOk()) return;
   var prev = NAV_STACK.pop();
   if(prev==='in-casedetail' && CURRENT_PAGE_ID==='in-casedetail' && CASE_RETURN.length){
     openCaseDetail(CASE_RETURN.pop(), true); /* 返回来源案件（不再入栈） */
@@ -72,8 +97,8 @@ var SIDEBAR_COLLAPSED = false;
 
 var IN_NAV = [
   {id:'in-dashboard', key:'dashboard', label:'工作台', icon:'工'},
+  {id:'in-cases', key:'cases', label:'案件管理', icon:'件'}, /* 2026-10-08（CMD-1008-06）：案件管理在客户管理上面 */
   {id:'in-clients', key:'clients', label:'客户管理', icon:'客'},
-  {id:'in-cases', key:'cases', label:'案件管理', icon:'件'},
   {id:'in-library', key:'library', label:'案例库', icon:'库'},
   {id:'in-projectlibrary', key:'projects', label:'项目库', icon:'项'},
   {id:'in-notifications', key:'notifications', label:'通知中心', icon:'通'}
@@ -996,17 +1021,10 @@ function renderCaseRows(){
     var abnormal = tags.length
       ? '<span class="status-pill" style="background:#F6DCDC;color:#C1454A;" title="'+tags.join('、')+'">非正常</span>'
       : '<span style="font-size:12px;color:var(--slate2);">正常</span>';
-    /* 待访问行内按钮（IN-CASE-03）：已到店 / 预约取消 / 未到店 / 预约修改 */
-    var rowBtns = (c.stage==='booked' && c.subState==='waiting')
-      ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">'+
-        '<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="rowAction(\''+c.id+'\',\'arrive\')">已到店</button>'+
-        '<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="rowAction(\''+c.id+'\',\'cancel\')">预约取消</button>'+
-        '<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="rowAction(\''+c.id+'\',\'noshow\')">未到店</button>'+
-        '<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="rowAction(\''+c.id+'\',\'reschedule\')">预约修改</button></div>'
-      : '';
+    /* 2026-10-08：待访问行内按钮（已到店 / 预约取消 / 未到店 / 预约修改）已废弃，这些操作只在案件页顶部状态栏里做（IN-CASE-03 第 3 节） */
     return '<div class="trow" style="grid-template-columns:1.1fr 0.8fr 1.5fr 0.6fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr auto;"><b style="font-size:13px;cursor:pointer;" onclick="openCaseDetail(\''+c.id+'\')">'+c.name+'</b>'+
       '<span style="font-size:12px;color:var(--slate2);">'+c.caseNo+'</span>'+
-      '<span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+lmTag+(c.stage==='cancelled' ? '<div style="font-size:11px;color:var(--muted);margin-top:3px;">'+endReasonText(c)+'</div>' : '')+rowBtns+'</span>'+
+      '<span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+lmTag+(c.stage==='cancelled' ? '<div style="font-size:11px;color:var(--muted);margin-top:3px;">'+endReasonText(c)+'</div>' : '')+'</span>'+
       '<span>'+abnormal+'</span><span>'+financeCellHtml(c)+'</span>'+
       '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(staffLabel).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
       '<a href="#" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
@@ -1025,6 +1043,7 @@ var CHAT_VIDEO_CONTEXT_CASE_ID = null;
 function openCaseDetail(id, noPush){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0];
   if(!c) return;
+  if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID && CURRENT_CASE_ID!==id && !intakeLeaveOk()) return; /* 从接待中的案件页打开另一个案件：先确认 */
   if(!noPush && CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID && CURRENT_CASE_ID!==id){
     CASE_RETURN.push(CURRENT_CASE_ID); NAV_STACK.push('in-casedetail'); /* 案件页 → 另一个案件页 */
   }
@@ -2957,6 +2976,7 @@ function showToast(title, text, onClickFn){
    每个模块各自 try/catch，页面里没有的元素（比如 booking.html）直接跳过。 */
 function refreshView(){
   if(isKrAccount()){ if(typeof krRefreshAll==='function') krRefreshAll(); return; } /* KR 端自己重画 */
+  try{ sweepStaleReceptions(true); }catch(e){} /* 接待中但心跳过期的案件退回待访问（CMD-1008-06） */
   [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['预约历史',renderResvHistory],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
     try{ if(typeof m[1]==='function') m[1](); }catch(e){}
   });

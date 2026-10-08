@@ -582,7 +582,7 @@ function clientPastRecords(cl){
     if(uses.length) did.push(uses.join('、'));
     if(!did.length) did.push(c.consultRequested ? '面诊' : ''); /* 只有面诊才写"面诊" */
     /* 实付金额（按币种分开）= 面诊费 + 定金 + 尾款 + 韩国加做（韩元）/ 面诊费 + 本地项目 + 印尼加做（印尼盾）；有退款显示退款后的金额并标"含退款" */
-    var fp = financePaid(c), fee = consultFeePaid(c) ? (CLINIC_SETTINGS.consultFee||0) : 0, info = krBalanceInfo(c);
+    var fp = financePaid(c), fee = consultFeePaid(c) ? consultFeeOf(c) : 0, info = krBalanceInfo(c);
     var balance = (c.krBalancePaid && info.diff > 0) ? info.diff : 0; /* 尾款：付清后才算；定金多了退差额的情况已在退款里扣 */
     var addOn = (c.settlementBatches||[]).filter(function(b){ return b.addOn && b.status==='active'; }).reduce(function(t, b){ return t + (b.krTotal||0); }, 0);
     var refKRW = (c.refunds||[]).filter(function(r){ return (r.currency||'KRW')==='KRW'; }).reduce(function(t, r){ return t + (r.amount||0); }, 0), refIDR = holdingRefundSum(c) + (c.refunds||[]).filter(function(r){ return r.currency==='IDR'; }).reduce(function(t, r){ return t + (r.amount||0); }, 0);
@@ -856,6 +856,7 @@ function makeCase(o){
     mgmtUses:o.mgmtUses||[], mgmtActive:!!o.mgmtActive, mgmtDone:!!o.mgmtDone, mgmtStatus:o.mgmtStatus||null, mgmtCancelling:false,
     linkedCase:o.linkedCase||null, /* 2026-09-30 §6：关联之前案件 {caseId, reason:复诊/术后管理/延续既往面诊, auto?} */
     linkedFiles:o.linkedFiles||[], manualAttachments:o.manualAttachments||[], materialsDate:o.materialsDate||null, /* §7 附件 */
+    consultFeePaidAmount:(typeof o.consultFeePaidAmount==='number' ? o.consultFeePaidAmount : undefined), /* 缴面诊费时记下的金额（CMD-1008-06） */
     consultFeeWaived:o.consultFeeWaived||null, /* 面诊费免除（2026-09-30）：{reason, note}，免除时财务结果按无收入判断 */
     localTrack:!!o.localTrack, /* 2026-09-30：本地案件标记（面诊取消后做本地项目 / 无法协调后做本地管理），用于状态推算：选择项目→本地管理 */
     needsConsultTouched:false, /* 2026-10-01 延续既往面诊：基础资料新增医美史 / 室长是否手动选过面诊需求 */
@@ -881,10 +882,9 @@ var CASE_ITEMS = [
     logEntries:[{stage:'预约到店', actor:'A1 室长', action:'老客人预约来访', dt:D(0)+' 09:10'}]}),
 
   /* 接待中：客人已到店，메타뷰/照片/视频/苦恼/希望预期还没确认完，所以还没生成 Case ID */
-  makeCase({id:'andi', name:'客人3', subState:'arrived', caseNo:'A000018', updated:'昨天',
+  makeCase({id:'andi', name:'客人3', subState:'waiting', caseNo:'A000018', updated:'昨天', /* 2026-10-08：接待中不停留，演示数据不再有停在接待中的案件 */
     logEntries:[
-      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-1)+' 10:00'},
-      {stage:'预约到店', actor:'A2 室长', action:'标记客人已到店', dt:D(-1)+' 10:30'}
+      {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-1)+' 10:00'}
     ]}),
 
   /* 待选项目：分支2"不面诊"——基础资料确认时选了不面诊，Case ID 已生成，正在选管理项目、还没点"确认所选项目" */
@@ -1040,11 +1040,10 @@ var CASE_ITEMS = [
       {stage:'赴韩施术', actor:'KD1 院长', action:'KR标记"施术完成"，案件已结案', dt:D(-22)+' 09:00'}
     ]}),
 
-  /* 接待中（演示"关联之前案件"）：A2 室长 之前有已结案的赴韩案件 A000010，这次再来，基础资料里可关联并看到"可能与 A000010 相关" */
-  makeCase({id:'rina2', inCoordinator:'A2 室长', name:'客人12', subState:'arrived', caseNo:'A000019', updated:'刚刚',
+  /* 待访问（演示"关联之前案件"）：A2 室长 之前有已结案的赴韩案件 A000010，这次再来，点"已到店"后基础资料里可关联并看到"可能与 A000010 相关"（2026-10-08：接待中不停留，改成待访问） */
+  makeCase({id:'rina2', inCoordinator:'A2 室长', name:'客人12', subState:'waiting', caseNo:'A000019', updated:'刚刚',
     logEntries:[
-      {stage:'预约到店', actor:'A1 室长', action:'老客人预约来访', dt:D(0)+' 09:00'},
-      {stage:'预约到店', actor:'A2 室长', action:'标记客人已到店', dt:D(0)+' 09:30'}
+      {stage:'预约到店', actor:'A1 室长', action:'老客人预约来访', dt:D(0)+' 09:00'}
     ]}),
 
   /* 已结案 + 有退款：分支6——赴韩项目里一个取消退定金，另一个完成后案件结案（2026-09-29 第十轮改用赴韩项目演示，
@@ -1284,14 +1283,6 @@ function markNoShow(caseId, auto){
   return true;
 }
 
-function rowAction(caseId, kind){
-  CURRENT_CASE_ID = caseId;
-  if(kind==='arrive'){ markArrived(); renderCaseRows(); }
-  else if(kind==='cancel'){ openCancelModal(); }
-  else if(kind==='reschedule'){ openRescheduleModal(); }
-  else if(kind==='noshow'){ rowMarkNoShow(caseId); }
-}
-
 /* 项目标签（非主状态）：时间变更待确认 / KR已标记无法施术 / 已更换；有任一标签 → 状态列显示"非正常" */
 function caseAbnormalTags(c){
   var tags = [];
@@ -1311,15 +1302,21 @@ function krItemFlags(c, it){
   return flags;
 }
 
+/* 本案件实际缴的面诊费（读缴费记录 consultFeePaidAmount，缴费时按当时设定记下；设定以后调价不影响已缴的案件；老数据没有记录时才退回读设定） */
+function consultFeeOf(c){ return (c && typeof c.consultFeePaidAmount==='number') ? c.consultFeePaidAmount : (CLINIC_SETTINGS.consultFee||0); }
+/* 财务栏（2026-10-08，IN-CASE-03 第 2 节）：无收入显示"–"（面诊费已免除 = 无收入）；有收入时标签下方小字写金额：
+   仅面诊费 = 本案件实缴面诊费；有项目收入 = 已付款金额（赴韩定金扣退款用韩元 + 本地项目用印尼盾，不换算、不含面诊费）；退款行照旧 */
 function financeCellHtml(c){
-  var f = financeResultOf(c), pd = financePaid(c), ref = refundSum(c), income = [];
-  if(pd.kr>0) income.push(formatCurrency(pd.kr,'KRW'));
-  if(pd.inn>0) income.push(formatCurrency(pd.inn,'IDR'));
-  return '<div style="font-size:12px;font-weight:700;">'+f+'</div>'+
-    (income.length ? '<div style="font-size:11px;color:var(--slate2);">收入 '+income.join(' + ')+'</div>' : '')+
-    (ref>0 ? '<div style="font-size:11px;color:var(--terracotta);">退款 '+formatCurrency(ref,'KRW')+'</div>' : '')+
+  var f = financeResultOf(c), pd = financePaid(c), ref = refundSum(c), amt = [];
+  if(f==='有项目收入' || f==='全额退款'){
+    if(pd.kr-ref>0) amt.push(formatCurrency(pd.kr-ref,'KRW'));
+    if(pd.inn>0) amt.push(formatCurrency(pd.inn,'IDR'));
+  } else if(f==='仅面诊费'){ amt.push(formatCurrency(consultFeeOf(c),'IDR')); }
+  var extra = (ref>0 ? '<div style="font-size:11px;color:var(--terracotta);">退款 '+formatCurrency(ref,'KRW')+'</div>' : '')+
     ((c.holdingRefunds||[]).length ? '<div style="font-size:11px;color:var(--terracotta);" title="客户详情里持有批次的退款，记在当初购买的案件上">有退款 '+formatCurrency(holdingRefundSum(c),'IDR')+'（持有批次）</div>' : '')+
     (c.cancelReason==='仅办理退款' ? '<div style="font-size:11px;color:var(--terracotta);">有退款（本次到访只办理退款）</div>' : '');
+  var head = f==='无收入' ? '<div style="font-size:12px;color:var(--slate2);">–</div>' : '<div style="font-size:12px;font-weight:700;">'+f+'</div>';
+  return head+(amt.length ? '<div style="font-size:11px;color:var(--slate2);">'+amt.join(' + ')+'</div>' : '')+extra;
 }
 
 /* ---- 小状态行（SubStatus，总览第2节）：统一组件，只有3种样式 Success(✓绿) / Waiting(灰，默认) / Warning(⚠黄)，文字按状态替换 ---- */
@@ -1618,10 +1615,40 @@ function continueNewVisit(){
 function markArrived(){
   var c = getCurrentCase(); if(!c) return;
   c.subState = 'arrived';
+  writeReceptionBeat(c); /* 接待开始：立刻写心跳 */
   renderCaseStatusBar(c);
   logCaseEvent(c, actingName(), '标记客人已到店');
   buildCaseLog(c);
   renderCaseBody(c);
+}
+
+/* 接待中不停留（CMD-1008-06）：接待中且基础资料还没保存 */
+function receptionOpen(c){ return !!c && c.stage==='booked' && c.subState==='arrived' && !c.materialsConfirmed; }
+/* 退回待访问的核心（不碰界面）：手动取消接待、页面内离开确认、关分页兜底、心跳过期扫描共用 */
+function revertIntakeToWaiting(c, logText, actor){
+  c.subState = 'waiting';
+  c.metaviewStatus = 'idle'; c.photoUploaded = false; c.videoUploaded = false;
+  c.concern = ''; c.expectation = ''; c.intentionProjects = []; c.intentionNote = '';
+  c.budgetMin = null; c.budgetMax = null; c.needsConsult = null; c.materialsError = '';
+  updateCaseStage(c);
+  logCaseEvent(c, actor, logText);
+}
+/* 心跳：案件页开着且案件在接待中、基础资料未保存时每 5 秒写一次（单独的 localStorage 键，不触发其他分页刷新）；超过 45 秒没更新视为分页已关 → 退回待访问 */
+var RECEPTION_BEAT_KEY = 'gmc_reception_beat', RECEPTION_BEAT_TTL = 45000;
+function readReceptionBeats(){ try{ return JSON.parse(localStorage.getItem(RECEPTION_BEAT_KEY)||'{}') || {}; }catch(e){ return {}; } }
+function writeReceptionBeat(c){
+  try{ var b = readReceptionBeats(), now = Date.now(); b[CURRENT_CLINIC_ID+':'+c.id] = now; Object.keys(b).forEach(function(k){ if(now-b[k] > 10*60000) delete b[k]; }); localStorage.setItem(RECEPTION_BEAT_KEY, JSON.stringify(b)); }catch(e){}
+}
+function clearReceptionBeat(c){ try{ var b = readReceptionBeats(); delete b[CURRENT_CLINIC_ID+':'+c.id]; localStorage.setItem(RECEPTION_BEAT_KEY, JSON.stringify(b)); }catch(e){} }
+function sweepStaleReceptions(noRefresh){
+  var b = readReceptionBeats(), now = Date.now(), n = 0;
+  CASE_ITEMS.forEach(function(c){
+    if(!receptionOpen(c)) return;
+    var t = b[CURRENT_CLINIC_ID+':'+c.id];
+    if(!t || now - t > RECEPTION_BEAT_TTL){ revertIntakeToWaiting(c, '接待未完成，退回待访问', '系统'); clearReceptionBeat(c); n++; }
+  });
+  if(n){ try{ Store.touch(); }catch(e){} if(!noRefresh){ try{ refreshView(); }catch(e){} } }
+  return n;
 }
 
 function confirmCancelIntake(){
@@ -1640,6 +1667,7 @@ function confirmCancelIntake(){
   c.needsConsult = null;
   c.materialsError = '';
   updateCaseStage(c);
+  clearReceptionBeat(c);
   logCaseEvent(c, actingName(), '取消接待，案件回到待访问');
   buildCaseLog(c);
   renderCaseStatusBar(c);
@@ -2797,7 +2825,7 @@ function projectPickerHtml(c, isAddition){
     '<a href="#" class="info-link" style="font-size:12px;" onclick="openProjectLibNewTab();return false;">在项目库查看 ↗</a>'+
     '</div>';
   var settleBtn = selected.length ? '<button class="btn-primary" style="width:100%;margin-top:14px;" onclick="'+(isAddition?'confirmAddition()">结算追加项目 / 交定金':'confirmProjectSelection()">结算')+'</button>' : '';
-  var noBuyBtn = (!isAddition && c.entryChoicePending && c.projectEntryMode==='new') ? '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="noPurchaseThisTime()">本次不购买</button>' : '';
+  var noBuyBtn = (!isAddition && c.entryChoicePending && c.projectEntryMode==='new' && isLocalCase(c) && !caseHasPurchase(c) && !(c.mgmtUses||[]).length && !((c.localMgmt && c.localMgmt.mgmtUses)||[]).length) ? /* 不面诊的本地案件、选择项目、没付款也没用过持有项目时才显示（CMD-1008-06） */ '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="noPurchaseThisTime()">本次不购买</button>' : '';
   var noProjectBtn = (!isAddition && c.reportReady && !c.entryChoicePending && !c.settlementDone) ? '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="noProjectForClient()">客人不做项目</button>' : '';
   var wrapOpen = isAddition
     ? '<div class="project-card'+(c.projectsExpanded?' expanded':'')+'" style="border-top:1px dashed var(--border);padding-top:18px;margin-top:4px;">'
@@ -3496,6 +3524,7 @@ function krProcedureTabMain(c, tabsHtml){
 function markConsultPaid(){
   var c = getCurrentCase(); if(!c) return;
   c.consultStatus = 'paid_waiting_kr';
+  c.consultFeePaidAmount = CLINIC_SETTINGS.consultFee||0; /* 缴费记录：按缴费当时的面诊费记下 */
   if(!SEEDING) pushKrNotif(caseKrHospital(c), '客人已缴面诊费：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
   logCaseEvent(c, '客人', '完成面诊费支付，已在Main对话群自动通知');
@@ -4401,9 +4430,20 @@ function saveMemos(){ try{ localStorage.setItem('gmc_memos', JSON.stringify(CAL_
 function offNameKey(n){ return String(n||'').split(' ')[0]; }
 
 /* 推播对象（2026-10-02·三）：这个案件所有操作过的室长（只发给当天上班的）；操作过的都 OFF → 改发给同一边当天上班的所有室长；被 @ 的人一定收到 */
+/* "操作过"的定义（2026-10-08，IN-CASE-03 第 2 节）：从接待开始实际处理过案件的室长；代约（帮客人预约）不算，只记在 Timeline。
+   实现：Timeline 里第一条"标记客人已到店"（接待开始）之后的记录才算；从没到店过的案件（待访问 / 预约取消 / 未到店）没有操作过的人；
+   种子里没有"已到店"记录的已到店案件，按去掉代约 / 预约修改 / 预约取消 / 手动未到店这类预约到店阶段记录处理。列表、仅看我的、推播共用这一个函数 */
+function caseArrivedEver(c){ return !!c.hasArrived || c.subState==='arrived' || (c.stage!=='booked' && !(c.stage==='cancelled' && ['预约取消','未到店'].indexOf(c.cancelReason)>-1)); }
+function caseOperatedLogs(c){
+  var L = c.logEntries||[], k = -1;
+  for(var i = 0; i < L.length; i++){ if(/标记客人已到店/.test(L[i].action||'')){ k = i; break; } }
+  if(k > -1) return L.slice(k);
+  if(!caseArrivedEver(c)) return [];
+  return L.filter(function(l){ return !(l.stage==='预约到店' && /代替预约|代约|预约修改|改约|取消预约|未到店|老客人预约/.test(l.action||'')); });
+}
 function caseOperators(c, strict){
   var inn = [], kr = [];
-  (c.logEntries||[]).forEach(function(l){
+  caseOperatedLogs(c).forEach(function(l){
     var a = String(l.actor||'');
     if(IN_COORDINATORS.indexOf(a)>-1){ if(inn.indexOf(a)<0) inn.push(a); }
     else { var k = offNameKey(a); if(allKrCoordinatorNames().indexOf(k)>-1 && kr.indexOf(k)<0) kr.push(k); }
@@ -4633,7 +4673,7 @@ syncInCoordinators();
 applyClinicSettings();
 /* C1 种子 + 全局种子（账号、日志、医院资料）的系统时间点换算成 UTC */
 (function(){ try{
-  seedFixVisits(); /* 预约 / 占位不能落在休诊时段 */
+  seedFixVisits(); /* 预约 / 占位不能落在休诊时段 */ seedSnapshotConsultFee();
   seedResolveOverlaps(); /* 同一院长同一时间只有一件事：删掉和施术重叠的不可预约 */
   seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS));
   seedTimesToUtc(ACCOUNTS.filter(function(a){ return !a.hospitalId; }).concat(ACCOUNT_LOG.filter(function(l){ return !l.hospitalId; })), clinicTzOf(CLINIC_SETTINGS));
@@ -4819,6 +4859,8 @@ function seedSurgeryDate(hid, director, date, time){
   return date;
 }
 /* 预约 / 占位不能落在休诊时段（诊所定期休诊）：种子里落在休诊日 / 休诊时段的到店预约，顺延到下一个营业日 */
+/* 已缴面诊费的演示案件：缴费记录按当时的面诊费记下（CMD-1008-06：财务栏读缴费记录，不读诊所设定） */
+function seedSnapshotConsultFee(){ CASE_ITEMS.forEach(function(c){ if(typeof c.consultFeePaidAmount!=='number' && !c.consultFeeWaived && consultFeePaid(c)) c.consultFeePaidAmount = CLINIC_SETTINGS.consultFee||0; }); }
 function seedFixVisits(){
   var bad = function(ds, tm){ var dt = new Date(ds+'T00:00:00'); if(isRescheduleDateDisabled(dt)) return true; var cf = closedFromOf(CLINIC_SETTINGS.closedRules, dt.getDay()); return !!cf && timeToMin(tm||'10:00') >= timeToMin(cf); };
   var next = function(ds){ var x = new Date(ds+'T00:00:00'); x.setDate(x.getDate()+1); return dateStr(x); };
@@ -4934,7 +4976,7 @@ function buildClinicSeed(cid){
   CLINIC_VAR_NAMES.forEach(function(n){ saved[n] = window[n]; window[n] = vars[n]; });
   CURRENT_CLINIC_ID = cid; SEEDING = true; SEED_ACTOR = (clinicAccounts(cid).filter(function(a){ return a.role==='manager' && a.name; })[0] || {name:'A1 室长'}).name;
   var out = {};
-  try{ syncInCoordinators(); seedClinicDemo(cid); seedFixVisits(); seedResolveOverlaps(); seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS)); }catch(e){ console.error('[种子] '+cid, e); }
+  try{ syncInCoordinators(); seedClinicDemo(cid); seedFixVisits(); seedSnapshotConsultFee(); seedResolveOverlaps(); seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS)); }catch(e){ console.error('[种子] '+cid, e); }
   CLINIC_VAR_NAMES.forEach(function(n){ out[n] = window[n]; });
   CLINIC_VAR_NAMES.forEach(function(n){ window[n] = saved[n]; });
   CURRENT_CLINIC_ID = keepClinic; SEEDING = keepSeeding; SEED_ACTOR = keepActor;
