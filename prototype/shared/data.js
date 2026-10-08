@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 28;
+var DEMO_DATA_VERSION = 29;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -130,13 +130,33 @@ function hospitalSlotClosed(hid, ds, hm){ if(hospitalClosedOn(hid, ds)) return t
 /* OFF 在某天是否生效：单次 = date 相同；每周固定 = weekly 且星期相同（2026-10-08，CMD-1007-04） */
 function offApplies(o, ds){ return o.weekly ? (o.dow === new Date(ds+'T00:00:00').getDay()) : o.date===ds; }
 /* KR 排施术时间的检查：整天休诊 / 休诊时段 / 院长 OFF 不能排；返回错误文字，'' = 可以（KR 端确认、调整、重新预约施术时间前调用） */
-function krSurgerySlotError(hid, director, date, time, durMin){
+function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, opts){
   var s = timeToMin(time), e = s + (durMin||60);
   if(hospitalClosedOn(hid, date)) return date+' 是医院定期休诊日，不能排施术';
   var cf = hospitalClosedFrom(hid, date); if(cf && e > timeToMin(cf)) return '这个时间落在医院休诊时段（周'+['日','一','二','三','四','五','六'][new Date(date+'T00:00:00').getDay()]+' '+cf+' 起休诊）';
-  var h = HOSPITAL_DATA[hid] || {offs:[]}, bad = (h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); }).filter(function(o){ var a = o.part==='下午' ? 13*60 : 0, b = o.part==='上午' ? 13*60 : 24*60; return s < b && e > a; })[0];
+  var h = HOSPITAL_DATA[hid] || {offs:[]}, bad = (h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); }).filter(function(o){ var hh = (o.part && o.part!=='全天') ? (KR_HALF[o.part]||['00:00','24:00']) : ['00:00','24:00'], a = hh[0]==='00:00' ? 0 : timeToMin(hh[0]), b = hh[1]==='24:00' ? 24*60 : timeToMin(hh[1]); return s < b && e > a; /* 半天 OFF：上午 09:00–13:00 / 下午 13:00–18:00（韩国时间） */ })[0];
   if(bad) return director+' 在这个时间 OFF（'+(bad.part||'全天')+(bad.weekly ? '，每周固定' : '')+'），不能排施术';
+  /* 同一位院长同一时间只能有一件事（KR-SCHD-01，2026-10-08）：不能和该院长的「不可预约」或别的施术重叠；不同院长之间可以重叠 */
+  var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; }).filter(function(b){ return !(b.kind==='施术' && exceptCaseKey && (b.clinicId+':'+b.caseId)===exceptCaseKey); })[0];
+  if(clash && clash.kind==='施术') return '该时段已有施术（'+director+' '+clash.time+'–'+clash.end+'）';
+  if(clash && !(opts && opts.ignoreBusy)) return '该时段院长不可预约（'+director+' '+clash.time+'–'+clash.end+'）';
   return '';
+}
+/* 新增 / 修改「不可预约」：不能和该院长已有的施术重叠 */
+function krBusySlotError(hid, director, date, time, end, exceptBusyId){
+  var s = timeToMin(time), e = timeToMin(end), h = HOSPITAL_DATA[hid] || {directorSchedule:{}};
+  var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.kind==='施术' && b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; })[0];
+  return clash ? '该时段已有施术（'+director+' '+clash.time+'–'+clash.end+'，'+(clash.name||'')+'）' : '';
+}
+/* 演示数据：以施术为准——删掉和施术重叠的不可预约块（施术块之间的冲突在选日期时已避开） */
+function seedResolveOverlaps(){
+  Object.keys(HOSPITAL_DATA).forEach(function(hid){
+    var h = HOSPITAL_DATA[hid];
+    Object.keys(h.directorSchedule||{}).forEach(function(n){
+      var arr = h.directorSchedule[n]||[], surg = arr.filter(function(b){ return b.kind==='施术'; });
+      h.directorSchedule[n] = arr.filter(function(b){ return b.kind==='施术' || !surg.some(function(x){ return x.date===b.date && timeToMin(x.time) < timeToMin(b.end) && timeToMin(x.end) > timeToMin(b.time); }); });
+    });
+  });
 }
 function hospitalOpenDates(hid, director){ var h = HOSPITAL_DATA[hid]; return ((h && h.openDates && h.openDates[director]) || []).filter(function(ds){ return !hospitalClosedOn(hid, ds); }); } /* 医院整天休诊的日子不能选施术 */
 function hospitalOfDirector(name){ for(var k in HOSPITAL_DATA){ if(hospitalDirectors(k).some(function(d){ return d.name===name; })) return k; } return null; }
@@ -4599,6 +4619,7 @@ applyClinicSettings();
 /* C1 种子 + 全局种子（账号、日志、医院资料）的系统时间点换算成 UTC */
 (function(){ try{
   seedFixVisits(); /* 预约 / 占位不能落在休诊时段 */
+  seedResolveOverlaps(); /* 同一院长同一时间只有一件事：删掉和施术重叠的不可预约 */
   seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS));
   seedTimesToUtc(ACCOUNTS.filter(function(a){ return !a.hospitalId; }).concat(ACCOUNT_LOG.filter(function(l){ return !l.hospitalId; })), clinicTzOf(CLINIC_SETTINGS));
   seedTimesToUtc(ACCOUNTS.filter(function(a){ return a.hospitalId; }).concat(ACCOUNT_LOG.filter(function(l){ return l.hospitalId; })).concat([HOSPITAL_DATA]), KR_TZ);
@@ -4773,7 +4794,7 @@ function seedKrMonthDemo(){
 function seedSurgeryDate(hid, director, date, time){
   var d = date;
   for(var i = 0; i < 60; i++){
-    if(!krSurgerySlotError(hid, director, d, time, 60) && hospitalOpenDates(hid, director).indexOf(d) > -1) return d;
+    if(!krSurgerySlotError(hid, director, d, time, 60, null, {ignoreBusy:true}) && hospitalOpenDates(hid, director).indexOf(d) > -1) return d; /* 不可预约块以施术为准会被删掉，所以这里只避开休诊 / OFF / 别的施术 */
     var x = new Date(d+'T00:00:00'); x.setDate(x.getDate()+1); d = dateStr(x);
   }
   return date;
@@ -4886,7 +4907,7 @@ function buildClinicSeed(cid){
   CLINIC_VAR_NAMES.forEach(function(n){ saved[n] = window[n]; window[n] = vars[n]; });
   CURRENT_CLINIC_ID = cid; SEEDING = true; SEED_ACTOR = (clinicAccounts(cid).filter(function(a){ return a.role==='manager' && a.name; })[0] || {name:'A1 室长'}).name;
   var out = {};
-  try{ syncInCoordinators(); seedClinicDemo(cid); seedFixVisits(); seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS)); }catch(e){ console.error('[种子] '+cid, e); }
+  try{ syncInCoordinators(); seedClinicDemo(cid); seedFixVisits(); seedResolveOverlaps(); seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS)); }catch(e){ console.error('[种子] '+cid, e); }
   CLINIC_VAR_NAMES.forEach(function(n){ out[n] = window[n]; });
   CLINIC_VAR_NAMES.forEach(function(n){ window[n] = saved[n]; });
   CURRENT_CLINIC_ID = keepClinic; SEEDING = keepSeeding; SEED_ACTOR = keepActor;

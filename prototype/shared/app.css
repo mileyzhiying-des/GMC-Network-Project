@@ -120,10 +120,10 @@ input,textarea,select{font-family:inherit;}
 div.phone-row{display:flex;gap:8px;align-items:stretch;width:100%;}
 div.phone-row select{width:96px;min-width:96px;flex:0 0 96px;}
 div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
-.wk-cell.wk-lunch,.wk-cell.wk-lunch.wk-cell-open:hover{background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);cursor:default;} /* 午休（诊所设定）：斜纹、不能点 */
+.wk-cell.wk-lunch,.wk-cell.wk-lunch.wk-cell-open:hover{background:#F3F1EC;cursor:default;} /* 午休（诊所设定）：斜纹、不能点 */
 .wk-cell.wk-past.wk-cell-open:hover{background:transparent;}
 .wk-cell.wk-full{background:#F3F1EC;cursor:default;} /* 额满：灰色 + 小字"已满" */ /* 过去的时段：白底、hover 不变色、不能点 */
-.wk-lunchbar{grid-column:1/-1;height:22px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--terracotta);border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);} /* 午休：一条窄横条，不占整格高度（时间读诊所设定） */
+.wk-lunchbar{grid-column:1/-1;height:22px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--dim);border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#F3F1EC;} /* 午休：一条窄横条，不占整格高度（时间读诊所设定） */
 .wk-cell.empty{min-height:22px;padding:2px 6px;}
 .event-chip{position:relative;z-index:0;border-radius:6px;padding:3px 7px;font-size:11px;line-height:1.5;border-left:4px solid;cursor:pointer;overflow:hidden;flex:0 0 auto;min-width:0;}
 .event-chip .l1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
