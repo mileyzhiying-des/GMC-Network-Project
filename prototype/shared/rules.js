@@ -20,6 +20,25 @@ function isEnded(c){ return c.stage==='closed' || c.stage==='reportonly' || c.st
 
 function isLocalCtxWorkDone(ctx){ return !!ctx && (!!ctx.mgmtDone || ((ctx.mgmtUses||[]).length>0 && ctx.mgmtStatus!=='cancelled_all')); }
 
+/* 数量输入框（CMD-1008-07）：窄版（约 3 位数宽）带 ± 的统一样式，用在使用持有项目数量、项目列表个数、本地管理选购个数；
+   max 为空 = 不限；改值时夹在 min~max 之间（不能超过剩余次数）。onchange 为选填的 JS 字符串，值改完后执行。样式见 app.css 的 .qty-box */
+function qtyInputHtml(o){
+  var min = (o.min===undefined ? 0 : o.min), max = (o.max===undefined || o.max===null) ? '' : o.max;
+  return '<span class="qty-box"><button type="button" tabindex="-1" onclick="qtyStep(this,-1)">−</button>'+
+    '<input type="number" class="qty-in"'+(o.id?' id="'+o.id+'"':'')+' min="'+min+'"'+(max!=='' ? ' max="'+max+'"' : '')+' value="'+o.value+'" onchange="qtyClamp(this);'+(o.onchange||'')+'">'+
+    '<button type="button" tabindex="-1" onclick="qtyStep(this,1)">＋</button></span>';
+}
+function qtyClamp(el){
+  var mn = parseInt(el.min, 10), mx = el.max==='' ? Infinity : parseInt(el.max, 10), v = parseInt(el.value, 10);
+  if(isNaN(mn)) mn = 0; if(isNaN(v)) v = mn;
+  el.value = Math.max(mn, Math.min(mx, v));
+}
+function qtyStep(btn, d){
+  var inp = btn.parentNode.querySelector('input'); if(!inp) return;
+  inp.value = (parseInt(inp.value, 10) || 0) + d; qtyClamp(inp);
+  inp.dispatchEvent(new Event('change', {bubbles:true}));
+}
+
 function caseHasPurchase(c){
   var any = false, live = false;
   getClientHoldings(c.name).forEach(function(h){ h.batches.forEach(function(b){ if(b.caseId===c.id && !b.kr){ any = true; if(!b.voided && !b.refund) live = true; } }); });
@@ -247,7 +266,7 @@ function settlementItemRow(c, it, removable){
     var origPrice = it.price*qty;
     var priceHtml;
     if(removable){
-      priceHtml = '<input type="number" min="1" value="'+qty+'" onchange="setInItemField(\''+it.projectId+'\',\'qty\',this.value)" style="width:44px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:center;"> 次 × '+
+      priceHtml = qtyInputHtml({value:qty, min:1, onchange:"setInItemField('"+it.projectId+"','qty',this.value)"})+' 次 × '+
         '<input type="number" min="1" max="100" value="'+pct+'" onchange="setInItemField(\''+it.projectId+'\',\'discountPct\',this.value)" style="width:44px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:center;">% ＝ '+
         '<b>'+formatCurrency(lineTotal,ccy)+'</b>'+
         ' <a href="#" class="info-link" onclick="toggleProject(\''+it.projectId+'\');return false;">移除</a>';

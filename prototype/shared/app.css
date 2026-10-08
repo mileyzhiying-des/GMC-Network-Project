@@ -288,3 +288,10 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 .modal-overlay{position:fixed;inset:0;background:rgba(27,38,53,.25);z-index:65;display:none;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex;}
 .modal-box{width:320px;background:var(--white);border-radius:14px;padding:22px;box-shadow:0 24px 60px rgba(0,0,0,.25);}
+
+/* 数量输入框（CMD-1008-07）：窄版（约 3 位数宽）带 ±，使用持有项目数量 / 项目列表个数 / 本地管理选购个数共用 */
+.qty-box{display:inline-flex;align-items:stretch;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#fff;flex:0 0 auto;}
+.qty-box button{width:22px;border:none;background:var(--bg,#F6F4EF);color:var(--slate2);font-size:13px;line-height:1;padding:0;cursor:pointer;}
+.qty-box button:hover{background:#ECE8DF;}
+.qty-box input.qty-in{width:38px;flex:0 0 auto;padding:4px 2px;border:none;border-left:1px solid var(--border2);border-right:1px solid var(--border2);border-radius:0;font-size:12px;text-align:center;-moz-appearance:textfield;appearance:textfield;}
+.qty-box input.qty-in::-webkit-inner-spin-button,.qty-box input.qty-in::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}

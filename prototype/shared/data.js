@@ -2527,8 +2527,7 @@ function holdingsUseHtml(c, scope){
       (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'');
     return '<div class="case-field-row"><input type="checkbox" id="hold-check-'+scope+'-'+i+'" style="flex-grow:0;margin-right:10px;">'+
       '<span style="flex-grow:1;font-size:13px;">'+h.itemName+tags+(holdingSchedule(h)?' <span style="font-size:11px;color:var(--terracotta);">进行时间：'+holdingSchedule(h)+'</span>':'')+'</span>'+
-      '<span style="font-size:12px;color:var(--slate2);margin-right:10px;">剩余 '+remaining+' 次</span>'+
-      '<input type="number" min="1" max="'+remaining+'" value="1" id="hold-qty-'+scope+'-'+i+'" style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'+
+      '<span style="display:flex;align-items:center;gap:8px;white-space:nowrap;"><span style="font-size:12px;color:var(--slate2);">剩余 '+remaining+' 次</span>'+qtyInputHtml({id:'hold-qty-'+scope+'-'+i, value:1, min:1, max:remaining})+'</span>'+
       '</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无持有项目</div>';
   return '<div class="card" style="padding:22px 24px;">'+
@@ -2665,7 +2664,7 @@ function lmBuyHtml(c){
       : '';
     var noteRow = pk.qty>0 ? '<div class="case-field-row" style="border-top:none;padding-top:0;padding-bottom:10px;"><input type="text" placeholder="备注（选填）" value="'+(pk.note||'').replace(/"/g,'&quot;')+'" onchange="lmPickField(\''+p.id+'\',\'note\',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;"></div>' : '';
     return '<div class="case-field-row" style="flex-wrap:wrap;gap:6px;"><span style="flex-grow:1;font-size:13px;">'+p.name+'</span><span style="font-size:12px;color:var(--slate2);">'+formatCurrency(p.price,'IDR')+'</span>'+
-      '<span style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="number" min="0" value="'+pk.qty+'" onchange="lmPickField(\''+p.id+'\',\'qty\',this.value)" style="width:46px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:center;"> 次'+inputs+'</span></div>'+noteRow;
+      '<span style="font-size:12px;display:flex;align-items:center;gap:4px;">'+qtyInputHtml({value:pk.qty, min:0, onchange:"lmPickField('"+p.id+"','qty',this.value)"})+' 次'+inputs+'</span></div>'+noteRow;
   }).join('');
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理：新增项目</div>'+rows+
     '<div style="text-align:right;font-size:13px;font-weight:700;margin:12px 0;">合计 '+formatCurrency(total,'IDR')+'</div>'+
@@ -2765,7 +2764,8 @@ function setCaseDisplayCcy(origin, ccy){
 
 function projectPickerHtml(c, isAddition){
   var selected = c.recommended || [];
-  var originFilter = c.projectOriginFilter || 'KR';
+  var noKrPicker = isLocalCase(c) && !c.reportReady; /* 不面诊的本地案件（选择项目 / 本地管理）：选购只有本地项目，没有赴韩项目子 tab；面诊案件的项目列表 tab 不变（CMD-1008-07） */
+  var originFilter = noKrPicker ? 'IN' : (c.projectOriginFilter || 'KR');
   var q = (c.projectSearch || '').toLowerCase();
   var pickerCcy = originFilter==='KR' ? CASE_DISPLAY_CCY_KR : CASE_DISPLAY_CCY_IN;
   var leftRows;
@@ -2820,7 +2820,7 @@ function projectPickerHtml(c, isAddition){
   var expandBtn = '<span style="cursor:pointer;font-size:12px;color:var(--slate);" onclick="toggleProjectsExpand()">'+(c.projectsExpanded?'⮡ 收起':'⮢ 展开满屏')+'</span>';
   var subTabs = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">'+
     '<span class="chip'+(originFilter==='IN'?' active':'')+'" onclick="setProjectOrigin(\'IN\')">本地项目</span>'+
-    '<span class="chip'+(originFilter==='KR'?' active':'')+'" onclick="setProjectOrigin(\'KR\')">赴韩项目</span>'+
+    (noKrPicker ? '' : '<span class="chip'+(originFilter==='KR'?' active':'')+'" onclick="setProjectOrigin(\'KR\')">赴韩项目</span>')+
     caseCcySwitchHtml(originFilter)+
     '<a href="#" class="info-link" style="font-size:12px;" onclick="openProjectLibNewTab();return false;">在项目库查看 ↗</a>'+
     '</div>';

@@ -299,3 +299,7 @@ prototype/shared/app.css  共用样式
 - **接待中不停留**：`receptionOpen(c)` = 待访问点了已到店且基础资料未保存；页面内离开弹确认（`intakeLeaveOk`，挂在 `nav` / `goBack` / `openCaseDetail` / `openAdminPage`）；关分页 `beforeunload` + 心跳过期（45 秒）扫描退回（`sweepStaleReceptions`）。**演示数据不能有停在接待中且基础资料未保存的案件**（会被扫描退回待访问）。
 - 测试时用浏览器的 `window.confirm = ...` 覆盖确认框。
 
+## CMD-1008-07 补充（2026-10-08，追加；旧文字保留作历史）
+- 不面诊的本地案件（`isLocalCase(c) && !c.reportReady`）选购只显示本地项目，没有赴韩项目子 tab；面诊案件的项目列表 tab 不变。
+- **使用 / 选购数量的输入框一律用 `qtyInputHtml({id, value, min, max, onchange})`**（窄版带 ±，自动夹在 min～max；样式 `.qty-box`），不要再手写 `<input type="number">`；`.case-field-row input{flex-grow:1}` 会让裸输入框撑满整行。
+
