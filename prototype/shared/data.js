@@ -723,12 +723,15 @@ function holdingRemaining(h){ return h.batches.reduce(function(s,b){ return b.vo
 function holdingTotal(h){ return h.batches.reduce(function(s,b){ return b.voided ? s : s+b.bought; }, 0); }
 
 /* 结算/KR代收 时调用：给客户新增一批持有 */
-function grantHolding(name, itemName, category, caseId, date, qty, krCollected){
+/* 购买价（CMD-1008-08）：price = {paid 当初实付（折后）, list 原价合计, pct 实付比例（100 = 不打折）, currency}；快照存在批次上，退款弹窗读这里（不读当前项目库价格） */
+function grantHolding(name, itemName, category, caseId, date, qty, krCollected, price){
   CLIENT_HOLDINGS[name] = CLIENT_HOLDINGS[name] || [];
   var h = CLIENT_HOLDINGS[name].filter(function(x){ return x.itemName===itemName; })[0];
   if(!h){ h = {itemName:itemName, category:category, batches:[], krCollected:!!krCollected}; CLIENT_HOLDINGS[name].push(h); }
   if(krCollected) h.krCollected = true;
-  h.batches.push({caseId:caseId, date:date, bought:qty, used:0, usages:[], kr:!!krCollected});
+  var nb = {caseId:caseId, date:date, bought:qty, used:0, usages:[], kr:!!krCollected};
+  if(price){ nb.paid = price.paid; nb.listPrice = price.list; nb.discountPct = price.pct; nb.currency = price.currency || 'IDR'; }
+  h.batches.push(nb);
 }
 
 /* 使用持有：先扣最早购买的那一批，跨批次自动结转；记 usages 供客户详情页展开显示 */
@@ -2698,7 +2701,7 @@ function lmSettle(){
     var pk = lm.pick[p.id]; if(!pk || pk.qty<=0) return;
     var line = Math.round(p.price*pk.qty*pk.pct/100);
     items.push({name:p.name, qty:pk.qty, price:p.price, discountPct:pk.pct, itemNote:pk.note||'', lineTotal:line}); total += line;
-    grantHolding(c.name, p.name, '本地', c.id, today, pk.qty, false);
+    grantHolding(c.name, p.name, '本地', c.id, today, pk.qty, false, {paid:line, list:p.price*pk.qty, pct:pk.pct, currency:'IDR'});
   });
   if(!items.length) return;
   lm.batches.push({id:'L'+(lm.batches.length+1), items:items, inTotal:total, time:nowFullDt()});
@@ -2971,7 +2974,7 @@ function confirmSettlementPayment(){
   batch.inItems = batchInItems.map(function(it){ return {name:it.name, qty:it.qty||1, price:it.price, discountPct:(it.discountPct===undefined?100:it.discountPct), itemNote:it.itemNote||''}; }); /* 结算单展示用快照（本地项目结算后转持有，不留在 procedureItems） */
   batchInItems.forEach(function(it){
     var cat = PROJECT_CATEGORIES[it.categoryId];
-    grantHolding(c.name, it.name, (cat && cat.label==='术后管理') ? '术后管理' : '本地', c.id, today, it.qty||1, false);
+    grantHolding(c.name, it.name, (cat && cat.label==='术后管理') ? '术后管理' : '本地', c.id, today, it.qty||1, false, {paid:inLineTotal(it), list:it.price*(it.qty||1), pct:(it.discountPct===undefined||it.discountPct===null ? 100 : it.discountPct), currency:'IDR'});
   });
   /* 本地项目（含术后管理）结算后立即转客户持有，不进入案件进程（2026-09-29 第十轮） */
   c.procedureItems = (c.procedureItems||[]).filter(function(it){ return it.origin!=='IN'; });
@@ -3260,7 +3263,7 @@ function finalizeInnCare(c){
   if(inn.length && !c.innCare){
     var today = todayStr();
     inn.forEach(function(l){
-      grantHolding(c.name, l.innName, '术后管理', c.id, today, l.times, false);
+      grantHolding(c.name, l.innName, '术后管理', c.id, today, l.times, false, {paid:0, list:0, pct:100, currency:'IDR'}); /* 套餐内含：0 元 */
       var h = (CLIENT_HOLDINGS[c.name]||[]).filter(function(x){ return x.itemName===l.innName; })[0], b = h && h.batches[h.batches.length-1], m = String(l.day).match(/(\d+)/);
       if(b){ b.pkg = true; if(m) b.schedule = '术后第'+m[1]+'天'; } /* 套餐内含（0 元）；持有项目的进行时间 */
     });
@@ -3986,9 +3989,9 @@ var PROJECT_LIBRARY = [
 /* demo 客户持有项目种子数据（2026-09-29 第十轮新增）：对应上面几个demo案例结算后应该转入持有的本地项目，
    补种子数据的写法，和真实交互路径（confirmSettlementPayment 里 grantHolding）效果一样 */
 (function seedDemoHoldings(){
-  grantHolding('客人11', '好莱坞焕肤 1次', '本地', 'rizky', D(-3), 1, false);
-  grantHolding('客人11', 'Genesis焕肤（Clarity II）1次', '本地', 'rizky', D(-3), 1, false);
-  grantHolding('客人12', 'Genesis焕肤（Clarity II）1次', '本地', 'rina', D(-29), 1, false);
+  grantHolding('客人11', '好莱坞焕肤 1次', '本地', 'rizky', D(-3), 1, false, {paid:320000, list:320000, pct:100, currency:'IDR'});
+  grantHolding('客人11', 'Genesis焕肤（Clarity II）1次', '本地', 'rizky', D(-3), 1, false, {paid:540000, list:540000, pct:100, currency:'IDR'});
+  grantHolding('客人12', 'Genesis焕肤（Clarity II）1次', '本地', 'rina', D(-29), 1, false, {paid:540000, list:540000, pct:100, currency:'IDR'});
   useHolding('客人12', 'Genesis焕肤（Clarity II）1次', 'rina', D(-22), 1); /* 已用完，演示"已用/购买"显示 */
   useHolding('客人11', '好莱坞焕肤 1次', 'rizky', D(-3), 1, 'main'); /* rizky 本地管理：已使用1次 */
 })();

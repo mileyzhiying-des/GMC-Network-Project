@@ -781,7 +781,17 @@ function openHoldingRefundModal(name, itemName, batchIdx){
   var h = (CLIENT_HOLDINGS[name]||[]).filter(function(x){ return x.itemName===itemName; })[0]; if(!h) return;
   var b = h.batches[batchIdx]; if(!b || b.refund || b.voided || (b.bought-b.used)<=0) return; /* 还有剩余次数（未使用/部分使用）才能退款；已用完的不能 */
   HOLDING_REFUND_CTX = {name:name, itemName:itemName, batchIdx:batchIdx};
-  document.getElementById('holding-refund-info').innerHTML = '<b>'+itemName+'</b><br><span style="color:var(--slate2);font-size:12px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 购买 '+b.bought+' 次，已用 '+b.used+' 次，<b>剩余 '+(b.bought-b.used)+' 次将作废</b></span>';
+  /* 购买价（CMD-1008-08）：当初实付（折后）+ 有折扣时的原价和折扣；按剩余次数的参考值只提示，不自动填入金额框；读批次购买时的快照，不读当前项目库价格 */
+  var cur = b.currency || 'IDR', hasPaid = typeof b.paid==='number', remain = b.bought-b.used, priceHtml = '';
+  if(hasPaid){
+    var pct = (b.discountPct===undefined || b.discountPct===null) ? 100 : b.discountPct;
+    priceHtml = '<div style="margin-top:8px;font-size:13px;">当初实付：<b>'+formatCurrency(b.paid, cur)+'</b>'+(b.paid===0 && b.pkg ? '（套餐内含）' : '')+
+      (pct<100 && b.listPrice ? '<span style="color:var(--slate2);font-size:12px;">　原价 '+formatCurrency(b.listPrice, cur)+'，折扣 '+(100-pct)+'%（实付 '+pct+'%）</span>' : '')+'</div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:4px;">按剩余次数参考：'+formatCurrency(b.bought>0 ? Math.round(b.paid*remain/b.bought) : 0, cur)+'（实付 × 剩余 / 购买），仅供参考，不会自动填入；退款金额不能超过当初实付</div>';
+  } else {
+    priceHtml = '<div style="margin-top:8px;font-size:12px;color:var(--muted);">这一批没有记录当初的购买价格，退款金额无法校验上限</div>';
+  }
+  document.getElementById('holding-refund-info').innerHTML = '<b>'+itemName+'</b><br><span style="color:var(--slate2);font-size:12px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 购买 '+b.bought+' 次，已用 '+b.used+' 次，<b>剩余 '+remain+' 次将作废</b></span>'+priceHtml;
   document.getElementById('holding-refund-amount').value = '';
   document.getElementById('holding-refund-reason').value = '';
   document.getElementById('holding-refund-overlay').classList.add('open');
@@ -798,9 +808,10 @@ function confirmHoldingRefund(){
   if(!reason){ alert('请填写退款原因'); return; }
   var h = (CLIENT_HOLDINGS[ctx.name]||[]).filter(function(x){ return x.itemName===ctx.itemName; })[0]; if(!h) return;
   var b = h.batches[ctx.batchIdx]; if(!b || b.voided || (b.bought-b.used)<=0) return;
+  if(typeof b.paid==='number' && amount > b.paid){ alert('不能超过当初实付 '+formatCurrency(b.paid, b.currency||'IDR')); return; } /* 退款金额 > 当初实付 → 挡下；0 仍可以 */
   b.voidedRemaining = b.bought-b.used; /* 作废的剩余次数（已用的次数保留作历史） */
   b.voided = true; /* 这一批作废，剩余次数归零 */
-  b.refund = {amount:amount, currency:'IDR', reason:reason, date:todayStr()}; /* 退款记录挂在这一批上；不改变任何案件的结局 */
+  b.refund = {amount:amount, currency:b.currency||'IDR', reason:reason, date:todayStr()}; /* 退款记录挂在这一批上；不改变任何案件的结局 */
   var pc = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0];
   if(pc){
     pc.holdingRefunds = pc.holdingRefunds || [];
