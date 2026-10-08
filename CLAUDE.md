@@ -258,3 +258,10 @@ prototype/shared/app.css  共用样式
 - 目标页读到 `?demo=` 后在本分页写 sessionStorage 登录并用 `history.replaceState` 清掉地址栏参数（`data.js` 里的 `applyDemoParam`，**必须在算 `PAGE_CLINIC_ID` 之前执行**，否则诊所归属算不出来、该分页的改动不会存档）；只接受演示数据里存在且已激活的账号，待激活/停用账号不能这样登录（A3 去首次激活、A4 显示停用提示）；各页面 head 里原来"没登录就跳登录页"的内联脚本对带 `demo` 参数的网址放行。正式的账号 + 密码登录框不变。
 - 根目录 `http://localhost:3000/` 自动 302 跳 `login.html`（`server/index.js` 原有）。
 - `start.command`：启动后在终端窗口印出服务器地址和「测试期间请勿关闭此窗口，关闭后新页面会打不开」；服务器已在运行（重复双击）时不报错，只印提示并打开已运行服务器的登录页。
+
+## IN 工作台 KR 医院日程 + 休诊日 + 时区补充（2026-10-07，CMD-1007-03，追加；旧文字保留作历史）
+- 休诊日：IN 周视图休诊日窄列（1/3 宽）；KR 医院休诊日 `closedDates`，KR 室长/管理者在 KR 日历登记/取消。
+- IN 的 KR 医院日程视角：全部 / 各院长，月/周/日；灰块只写院长名字，本诊所客人施术块写客人名 + 院长；在韩子项不进院长日程（KR-SCHD-01 已废弃）。
+- 时区：IANA 时区 + 浏览器 Intl；诊所时区由地址/城市自动判定（只读）；画面只显示 UTC+n；系统事件时间点存 UTC（`nowFullDt()`），显示走 `fmtUtc()`；预约/施术当地钟点仍存当地时间；`demoNow()` = 页面时区墙上时钟，`realNow()` = 真实时刻，`todayStr()` = 页面时区今天。新写时间点代码：存用 `nowFullDt()`，显示用 `fmtUtc()`，不要再用 `nowFullDt().split(' ')[0]` 取日期（用 `todayStr()`）。
+- 演示数据版本 27：KR 医院日程前后各一个月（`seedKrMonthDemo`），施术块来自 C1/C2/C3 真实案件（`seedSurgeryCase`）。
+- 自测补充：① A1 / B1 各看一次 KR 医院日程（全部、单一院长、月/周/日），C1 看 C2 客人 = 灰块 + 院长名；② KM1 登记医院休诊日 → A1 周视图该天即时变窄列；③ D1（巴厘 UTC+8）和 A1（UTC+7）的 Timeline 时间差 1 小时、第二行韩国时间对；④ 画面上搜不到 WIB/WITA/WIT；⑤ `bash dev/check.sh` + console 无报错。
