@@ -906,8 +906,8 @@ function buildDetailLog(){
      Format: 进程名／具体做了什么／谁／00-00-00 00:00 */
   var log = [
     {stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-3)+' 10:02', kind:'plain'},
-    {stage:'建档', actor:'Dewi', action:'修改基础信息（补录护照信息、确认医美史）', dt:D(-3)+' 11:15', kind:'plain'},
-    {stage:'预约到店', actor:'Dewi', action:'Case 开始 · 预约到店', dt:D(-2)+' 09:05', kind:'case', caseId:'siti'}
+    {stage:'建档', actor:'A1 室长', action:'修改基础信息（补录护照信息、确认医美史）', dt:D(-3)+' 11:15', kind:'plain'},
+    {stage:'预约到店', actor:'A1 室长', action:'Case 开始 · 预约到店', dt:D(-2)+' 09:05', kind:'case', caseId:'siti'}
   ];
   document.getElementById('detail-log').innerHTML = log.map(logLine).join('');
 }
@@ -1310,7 +1310,7 @@ function acceptIncomingCall(){
   document.getElementById('incoming-call-overlay').classList.remove('open');
   if(!INCOMING_CALL) return;
   var c = CASE_ITEMS.filter(function(x){ return x.id===INCOMING_CALL.caseId; })[0];
-  startCall('chat', INCOMING_CALL.caseId, [ME_NAME+'（印尼室长）', (c ? c.krCoordinator : '이서연 실장')]);
+  startCall('chat', INCOMING_CALL.caseId, [ME_NAME+'（印尼室长）', (c ? c.krCoordinator : 'KM1 室长')]);
   VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); INCOMING_CALL = null;
 }
 
@@ -2711,7 +2711,7 @@ function openRoomFiles(){
   document.getElementById('room-files-title').textContent = '对话中的文件 · '+r.name;
   document.getElementById('room-files-body').innerHTML = msgs.map(function(m){
     var icon = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
-    return '<div class="case-field-row"><span style="font-size:18px;margin-right:8px;">'+icon+'</span><span style="flex-grow:1;font-size:13px;">'+m.fname+'<div style="font-size:11px;color:var(--muted);">'+(m.from==='me'?'Dewi':(m.name||''))+' · '+m.day+' '+msgTime(m)+'</div></span>'+
+    return '<div class="case-field-row"><span style="font-size:18px;margin-right:8px;">'+icon+'</span><span style="flex-grow:1;font-size:13px;">'+m.fname+'<div style="font-size:11px;color:var(--muted);">'+(m.from==='me'?'A1 室长':(m.name||''))+' · '+m.day+' '+msgTime(m)+'</div></span>'+
       '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">预览</a><a href="#" class="info-link" onclick="return false;">下载</a></span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 2px;">这个房间里还没有发过文件、照片、视频</div>';
   document.getElementById('room-files-overlay').classList.add('open');
@@ -2867,7 +2867,7 @@ function simulateIncomingMsg(atMe){
   var roomId = CURRENT_ROOM;
   var isCase = roomId.indexOf('case-')===0;
   var cc = isCase ? CASE_ITEMS.filter(function(x){ return x.id===roomId.slice(5); })[0] : null;
-  var who = (isCase && cc && caseHasKrSide(cc)) ? krEnterRoomName(cc) : '이서연';
+  var who = (isCase && cc && caseHasKrSide(cc)) ? krEnterRoomName(cc) : 'KM1 室长';
   if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = [];
   CHAT_DATA[roomId].push({day:KD(0), from:'them', name:who, color:'var(--sage)', init:who.charAt(0), orig:(atMe ? '@'+ME_NAME+' ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime(), ts:nowFullDt()});
   renderFloatMessages();
@@ -2948,12 +2948,12 @@ function refreshView(){
 }
 
 /* ================= 登录身份相关界面（2026-10-05·三） ================= */
-/* 对话消息发送人：from:'me' 的消息带 sender（发送当时的姓名）；旧演示消息没有 sender，视为 Dewi 发的 */
-function msgIsMine(m){ return m.from==='me' && (m.sender||'Dewi')===ME_NAME; }
-function msgSender(m){ return m.from==='me' ? (m.sender||'Dewi') : (m.name||''); }
+/* 对话消息发送人：from:'me' 的消息带 sender（发送当时的姓名）；旧演示消息没有 sender，视为 A1 室长 发的 */
+function msgIsMine(m){ return m.from==='me' && (m.sender||'A1 室长')===ME_NAME; }
+function msgSender(m){ return m.from==='me' ? (m.sender||'A1 室长') : (m.name||''); }
 function msgView(m){
   if(m.from!=='me' || m.kind==='quote' || msgIsMine(m)) return m;
-  var n = m.sender||'Dewi';
+  var n = m.sender||'A1 室长';
   return Object.assign({}, m, {from:'them', notMine:true, name:n, color:'var(--terracotta)', init:n.charAt(0).toUpperCase()});
 }
 function accountRoleShort(){ var a = currentAccount(); return a ? ({owner:'老板', manager:'管理者', general:'室长', kr_owner:'代表院长', kr_manager:'管理者', kr_general:'室长', kr_director:'院长'}[a.role]||'室长') : '室长'; }

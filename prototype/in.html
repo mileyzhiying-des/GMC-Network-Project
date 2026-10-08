@@ -176,8 +176,8 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
 
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
         <div>
-          <span id="case-title" onclick="openCaseInfoDrawer()" style="font-size:20px;font-weight:700;cursor:pointer;border-bottom:1px dashed var(--border);">Siti Rahayu · Case</span>
-          <div id="case-subtitle" style="font-size:12px;color:var(--muted);margin-top:4px;">对接院长：김민석 원장</div>
+          <span id="case-title" onclick="openCaseInfoDrawer()" style="font-size:20px;font-weight:700;cursor:pointer;border-bottom:1px dashed var(--border);">客人1 · Case</span>
+          <div id="case-subtitle" style="font-size:12px;color:var(--muted);margin-top:4px;">对接院长：KD1 院长</div>
         </div>
         <div id="case-chat-actions" style="display:none;gap:10px;"></div>
       </div>
@@ -209,7 +209,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
       <div style="font-size:11px;color:var(--muted);">通知保留 90 天；一般对话消息不进通知中心，被 @ 才进；收件人按通知规则（案件事件 = 操作过且当天上班的室长）。</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="font-size:10px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
         <button class="btn-ghost" onclick="demoNotif('report')">报告已出</button><button class="btn-ghost" onclick="demoNotif('missed')">未接来电</button><button class="btn-ghost" onclick="demoNotif('at')">被 @</button>
-        <button class="btn-ghost" onclick="demoNotif('system')">系统更新</button><button class="btn-ghost" onclick="demoNotif('noshow')">未到店</button><button class="btn-ghost" onclick="demoNotif('schedule')">KR确认施术时间</button><button class="btn-ghost" onclick="demoNotif('other')">只有 Rina 操作过的案件事件（我不会收到）</button></div>
+        <button class="btn-ghost" onclick="demoNotif('system')">系统更新</button><button class="btn-ghost" onclick="demoNotif('noshow')">未到店</button><button class="btn-ghost" onclick="demoNotif('schedule')">KR确认施术时间</button><button class="btn-ghost" onclick="demoNotif('other')">只有 A2 室长 操作过的案件事件（我不会收到）</button></div>
     </div>
   </div>
 </section>
@@ -253,7 +253,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
     <div class="content">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <div id="detail-name" style="font-size:22px;font-weight:700;">Siti Rahayu</div>
+          <div id="detail-name" style="font-size:22px;font-weight:700;">客人1</div>
         </div>
         <button class="btn-primary" onclick="openFloatingChat('kr-lee', document.getElementById('detail-name').textContent)">发起内部对话</button>
       </div>
@@ -306,7 +306,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
       <div class="card" style="padding:6px 22px;">
         <div class="detail-row"><span class="k">고민</span><span class="v">面部轮廓松弛，下颌线不清晰</span></div>
         <div class="detail-row"><span class="k">메타뷰资料</span><span class="v">已检测 <a href="#" style="font-weight:700;">查看报告 →</a></span></div>
-        <div class="detail-row"><span class="k">进行项目 &amp; 院长</span><span class="v">超声刀轮廓提升 · 김민석 원장</span></div>
+        <div class="detail-row"><span class="k">进行项目 &amp; 院长</span><span class="v">超声刀轮廓提升 · KD1 院长</span></div>
         <div class="detail-row"><span class="k">收费</span><span class="v">₩ 2,800,000</span></div>
         <div class="detail-row"><span class="k">Timeline</span><span class="v">2026-01-10 资料提交 → 01-13 院长审核 → 01-15 施术完成</span></div>
         <div class="detail-row" style="border-bottom:none;"><span class="k">视频 / 录音 / AI 文稿</span><span class="v"><a href="#" style="font-weight:700;">查看记录 →</a></span></div>
@@ -350,7 +350,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
     <div class="float-head">
       <div class="l">
         <span class="sq-avt" id="float-avt" style="width:34px;height:34px;border-radius:10px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;">D</span>
-        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">이서연 · 韩国室长</span> <span id="float-open-case" style="display:none;font-size:13px;color:var(--blue);font-weight:700;" title="新标签页打开案件页">↗</span> <span style="font-size:11px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 Siti Rahayu 的面诊安排</div></div>
+        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">KM1 室长 · 韩国室长</span> <span id="float-open-case" style="display:none;font-size:13px;color:var(--blue);font-weight:700;" title="新标签页打开案件页">↗</span> <span style="font-size:11px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 客人1 的面诊安排</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
         <span style="cursor:pointer;" title="对话中的文件" onclick="openRoomFiles()">📁</span>

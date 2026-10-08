@@ -483,16 +483,18 @@ function resolveClinicId(){
 function clinicAccounts(clinicId){ var c = clinicId || CURRENT_CLINIC_ID; return ACCOUNTS.filter(function(a){ return !a.hospitalId && (a.clinicId||'C1')===c; }); } /* KR 医院账号不属于任何诊所 */
 function clinicAccountPrefix(clinicId){ var c = clinicById(clinicId || CURRENT_CLINIC_ID); return c ? c.accountPrefix : 'A'; }
 function accountById(id){ return ACCOUNTS.filter(function(a){ return a.id===id; })[0] || null; }
-/* 显示用："Rina（A2）" */
-function accountLabel(id){ var a = accountById(id); return a ? (a.name||'（待激活）')+'（'+a.id+'）' : String(id); }
-/* 旧演示数据里的操作人只写了名字（Dewi / Rina）：按当时的账号编号显示，不跟随账号后来换人 */
-var LEGACY_STAFF_ID = {Dewi:'A1', Rina:'A2'};
+/* 显示用："A2 室长（A2）" */
+/* 员工显示名 = 账号编号 + 角色（如「A1 室长」）：名字本身已经带编号时，括号里不再重复编号 */
+function nameWithId(n, id){ return String(n||'').indexOf(String(id)+' ')===0 ? n : n+'（'+id+'）'; }
+function accountLabel(id){ var a = accountById(id); return a ? (a.name ? nameWithId(a.name, a.id) : '（待激活）（'+a.id+'）') : String(id); }
+/* 旧演示数据里的操作人只写了名字（A1 室长 / A2 室长）：按当时的账号编号显示，不跟随账号后来换人 */
+var LEGACY_STAFF_ID = {'A1 室长':'A1', 'A2 室长':'A2'};
 /* 日志条目的操作人显示：新条目带 actorId；旧条目按名字查 */
 function actorDisplay(entry){
   var n = String(entry.actor||''), id = entry.actorId || LEGACY_STAFF_ID[n];
-  return id ? n+'（'+id+'）' : n;
+  return id ? nameWithId(n, id) : n;
 }
-function staffLabel(name){ var id = LEGACY_STAFF_ID[name]; return id ? name+'（'+id+'）' : name; }
+function staffLabel(name){ var id = LEGACY_STAFF_ID[name]; return id ? nameWithId(name, id) : name; }
 /* 席位概况：基础 3 + 加购；使用中/待激活占用席位，已停用不占 */
 function seatSummary(){
   var used = function(seat){ return clinicAccounts().filter(function(a){ return a.seat===seat && a.status!=='disabled'; }).length; };

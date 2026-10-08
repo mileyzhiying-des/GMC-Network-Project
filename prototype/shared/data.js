@@ -1,9 +1,9 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 27;
+var DEMO_DATA_VERSION = 28;
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
-var ACCOUNT_STRUCT_VERSION = 4;
+var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
 var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_LOG'];                      /* 全局部分里保留的 */
 var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ']; /* 每个诊所分区里保留的 */
@@ -194,28 +194,28 @@ function krTimeOf(hr){ /* 诊所时间 hr('HH:mm') → KR 时间 */
    席位：基础 3 个（OWN 老板、A1 管理者、A2 一般室长）+ 加购账号（A3 起顺序编号；一般室长和管理者都可以加购，单独定价，可以有多个）。
    status：active 使用中 / pending 待激活（还没人设密码）/ disabled 已停用（取消加购后）。
    演示密码 = 账号编号小写 + 123（OWN → own123，A1 → a1123）；待激活账号没有密码，激活时用手机验证码（登录/激活在第三部分做）。
-   history：这个账号编号上的变更历史（激活、重置密码、停用…）；操作人以"当时的姓名 + 编号"记录，之后账号换了新的人，旧记录仍显示"Rina（A2）"。 */
+   history：这个账号编号上的变更历史（激活、重置密码、停用…）；操作人以"当时的姓名 + 编号"记录，之后账号换了新的人，旧记录仍显示"A2 室长（A2）"。 */
 var ACCOUNT_ROLES = {owner:'老板（诊所管理账号）', manager:'室长（管理者）', general:'一般室长', kr_owner:'代表院长（医院管理账号）', kr_manager:'KR 管理者（室长）', kr_general:'KR 室长', kr_director:'院长'};
 var ACCOUNT_STATUS = {active:'使用中', pending:'待激活', disabled:'已停用'};
 var BASIC_SEATS = 3;
 var ACCOUNTS = [
-  {id:'OWN', clinicId:'C1', role:'owner',   seat:'basic', name:'Hartono', position:'老板',   phone:'+62 811-0000-0001', status:'active',   password:'own123', photo:'证件照', createdAt:D(-48)+' 09:00', activatedAt:D(-48)+' 09:30', history:[{ts:D(-48)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Hartono（OWN）'}]},
-  {id:'A1', clinicId:'C1',  role:'manager', seat:'basic', name:'Dewi',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  photo:'证件照', createdAt:D(-48)+' 09:10', activatedAt:D(-48)+' 10:00', history:[{ts:D(-48)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'Dewi（A1）'}]},
-  {id:'A2', clinicId:'C1',  role:'general', seat:'basic', name:'Rina',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  photo:'证件照', createdAt:D(-48)+' 09:20', activatedAt:D(-47)+' 09:00', history:[{ts:D(-47)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Rina（A2）'}]},
-  {id:'A3', clinicId:'C1',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     photo:'',           createdAt:D(-2)+' 14:00', activatedAt:'',                 history:[{ts:D(-2)+' 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'Dewi（A1）'}]},
-  {id:'A4', clinicId:'C1',  role:'general', seat:'addon', name:'Sari',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:D(-29)+' 11:00', activatedAt:D(-28)+' 09:00', disabledAt:D(-8)+' 17:00', history:[{ts:D(-28)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Sari（A4）'},{ts:D(-8)+' 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'Dewi（A1）'}]},
-  {id:'A5', clinicId:'C1',  role:'manager', seat:'addon', name:'Putri',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'Dewi（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'Putri（A5）'}]},
-  {id:'B1', clinicId:'C2', role:'manager', seat:'basic', name:'Citra', position:'室长', phone:'+62 811-0000-0011', status:'active', password:'b1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Citra（B1）'}]},
-  {id:'D1', clinicId:'C3', role:'manager', seat:'basic', name:'Dian', position:'室长', phone:'+62 811-0000-0021', status:'active', password:'d1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'Dian（D1）'}]},
-  {id:'B2', clinicId:'C2', role:'general', seat:'basic', name:'Bagas', position:'前台室长', phone:'+62 811-0000-0012', status:'active', password:'b2123', photo:'证件照', createdAt:D(-30)+' 09:10', activatedAt:D(-29)+' 09:00', history:[{ts:D(-29)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'Bagas（B2）'}]}
+  {id:'OWN', clinicId:'C1', role:'owner',   seat:'basic', name:'OWN 老板', position:'老板',   phone:'+62 811-0000-0001', status:'active',   password:'own123', photo:'证件照', createdAt:D(-48)+' 09:00', activatedAt:D(-48)+' 09:30', history:[{ts:D(-48)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'OWN 老板（OWN）'}]},
+  {id:'A1', clinicId:'C1',  role:'manager', seat:'basic', name:'A1 室长',    position:'室长',   phone:'+62 811-0000-0002', status:'active',   password:'a1123',  photo:'证件照', createdAt:D(-48)+' 09:10', activatedAt:D(-48)+' 10:00', history:[{ts:D(-48)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'A1 室长（A1）'}]},
+  {id:'A2', clinicId:'C1',  role:'general', seat:'basic', name:'A2 室长',    position:'前台室长', phone:'+62 811-0000-0003', status:'active',   password:'a2123',  photo:'证件照', createdAt:D(-48)+' 09:20', activatedAt:D(-47)+' 09:00', history:[{ts:D(-47)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'A2 室长（A2）'}]},
+  {id:'A3', clinicId:'C1',  role:'general', seat:'addon', name:'',        position:'',       phone:'+62 811-0000-0004', status:'pending',  password:null,     photo:'',           createdAt:D(-2)+' 14:00', activatedAt:'',                 history:[{ts:D(-2)+' 14:00', type:'购买', text:'加购账号 A3（一般室长），待激活，激活手机 +62 811-0000-0004', by:'A1 室长（A1）'}]},
+  {id:'A4', clinicId:'C1',  role:'general', seat:'addon', name:'A4 室长',    position:'助理室长', phone:'+62 811-0000-0005', status:'disabled', password:'a4123',  photo:'证件照', createdAt:D(-29)+' 11:00', activatedAt:D(-28)+' 09:00', disabledAt:D(-8)+' 17:00', history:[{ts:D(-28)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'A4 室长（A4）'},{ts:D(-8)+' 17:00', type:'取消加购', text:'取消加购账号 A4，已停用（历史记录保留）', by:'A1 室长（A1）'}]},
+  {id:'A5', clinicId:'C1',  role:'manager', seat:'addon', name:'A5 室长',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'A1 室长（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'A5 室长（A5）'}]},
+  {id:'B1', clinicId:'C2', role:'manager', seat:'basic', name:'B1 室长', position:'室长', phone:'+62 811-0000-0011', status:'active', password:'b1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'B1 室长（B1）'}]},
+  {id:'D1', clinicId:'C3', role:'manager', seat:'basic', name:'D1 室长', position:'室长', phone:'+62 811-0000-0021', status:'active', password:'d1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'D1 室长（D1）'}]},
+  {id:'B2', clinicId:'C2', role:'general', seat:'basic', name:'B2 室长', position:'前台室长', phone:'+62 811-0000-0012', status:'active', password:'b2123', photo:'证件照', createdAt:D(-30)+' 09:10', activatedAt:D(-29)+' 09:00', history:[{ts:D(-29)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'B2 室长（B2）'}]}
 ,
   /* KR 医院账号（2026-10-06）：编号 K+角色字母（O 代表院长 / M 管理者 / C 室长 / D 院长）+医院序号，和 IN 的 OWN、A 开头、B 开头编号不冲突；密码 = 编号小写 + 123 */
-  {id:'KO1', hospitalId:'H1', role:'kr_owner',    seat:'basic', name:'박소현',   position:'代表院长', phone:'+82 10-0000-0001', status:'active', password:'ko1123', photo:'证件照', createdAt:D(-60)+' 09:00', activatedAt:D(-60)+' 09:30', history:[{ts:D(-60)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'박소현（KO1）'}]},
-  {id:'KM1', hospitalId:'H1', role:'kr_manager',  seat:'basic', name:'이서연',   position:'室长',     phone:'+82 10-0000-0002', status:'active', password:'km1123', photo:'证件照', createdAt:D(-60)+' 09:10', activatedAt:D(-60)+' 10:00', history:[{ts:D(-60)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'이서연（KM1）'}]},
-  {id:'KC1', hospitalId:'H1', role:'kr_general',  seat:'basic', name:'박준혁',   position:'室长',     phone:'+82 10-0000-0003', status:'active', password:'kc1123', photo:'证件照', createdAt:D(-60)+' 09:20', activatedAt:D(-59)+' 09:00', history:[{ts:D(-59)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'박준혁（KC1）'}]},
-  {id:'KD1', hospitalId:'H1', role:'kr_director', seat:'addon', name:'김민석 원장', position:'院长',   phone:'+82 10-0000-0004', status:'active', password:'kd1123', photo:'证件照', createdAt:D(-40)+' 09:00', activatedAt:D(-40)+' 09:30', history:[{ts:D(-40)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'김민석 원장（KD1）'}]},
-  {id:'KM2', hospitalId:'H2', role:'kr_manager',  seat:'basic', name:'정하늘',   position:'室长',     phone:'+82 10-0000-0011', status:'active', password:'km2123', photo:'证件照', createdAt:D(-50)+' 09:10', activatedAt:D(-50)+' 10:00', history:[{ts:D(-50)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'정하늘（KM2）'}]},
-  {id:'KC2', hospitalId:'H2', role:'kr_general',  seat:'basic', name:'최민준',   position:'室长',     phone:'+82 10-0000-0012', status:'active', password:'kc2123', photo:'证件照', createdAt:D(-50)+' 09:20', activatedAt:D(-49)+' 09:00', history:[{ts:D(-49)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'최민준（KC2）'}]}
+  {id:'KO1', hospitalId:'H1', role:'kr_owner',    seat:'basic', name:'KO1 代表院长',   position:'代表院长', phone:'+82 10-0000-0001', status:'active', password:'ko1123', photo:'证件照', createdAt:D(-60)+' 09:00', activatedAt:D(-60)+' 09:30', history:[{ts:D(-60)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'KO1 代表院长（KO1）'}]},
+  {id:'KM1', hospitalId:'H1', role:'kr_manager',  seat:'basic', name:'KM1 室长',   position:'室长',     phone:'+82 10-0000-0002', status:'active', password:'km1123', photo:'证件照', createdAt:D(-60)+' 09:10', activatedAt:D(-60)+' 10:00', history:[{ts:D(-60)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'KM1 室长（KM1）'}]},
+  {id:'KC1', hospitalId:'H1', role:'kr_general',  seat:'basic', name:'KC1 室长',   position:'室长',     phone:'+82 10-0000-0003', status:'active', password:'kc1123', photo:'证件照', createdAt:D(-60)+' 09:20', activatedAt:D(-59)+' 09:00', history:[{ts:D(-59)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'KC1 室长（KC1）'}]},
+  {id:'KD1', hospitalId:'H1', role:'kr_director', seat:'addon', name:'KD1 院长', position:'院长',   phone:'+82 10-0000-0004', status:'active', password:'kd1123', photo:'证件照', createdAt:D(-40)+' 09:00', activatedAt:D(-40)+' 09:30', history:[{ts:D(-40)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'KD1 院长（KD1）'}]},
+  {id:'KM2', hospitalId:'H2', role:'kr_manager',  seat:'basic', name:'KM2 室长',   position:'室长',     phone:'+82 10-0000-0011', status:'active', password:'km2123', photo:'证件照', createdAt:D(-50)+' 09:10', activatedAt:D(-50)+' 10:00', history:[{ts:D(-50)+' 10:00', type:'激活', text:'账号激活，设置了登录密码', by:'KM2 室长（KM2）'}]},
+  {id:'KC2', hospitalId:'H2', role:'kr_general',  seat:'basic', name:'KC2 室长',   position:'室长',     phone:'+82 10-0000-0012', status:'active', password:'kc2123', photo:'证件照', createdAt:D(-50)+' 09:20', activatedAt:D(-49)+' 09:00', history:[{ts:D(-49)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'KC2 室长（KC2）'}]}
 ];
 /* 种子账号补齐（2026-10-07）：版本号重置时账号资料从存档保留，新增的种子账号（如 C3 的 D1）要补进去，已有的不动 */
 var SEED_ACCOUNTS_COPY = JSON.parse(JSON.stringify(ACCOUNTS));
@@ -224,9 +224,9 @@ var PURCHASE_REQ = null; /* 管理者加购"管理者账号"时发给老板的�
 var ACCOUNT_SEQ = 5; /* 本诊所下一个加购账号编号 = 诊所账号前缀 + (ACCOUNT_SEQ+1)；每家诊所各一份（存在诊所分区里；C1 前缀 A，C2 前缀 B） */
 /* 操作日志（owner/管理者在"操作日志"页看；第八部分做页面）：时间、操作账号 + 当时的姓名、内容、类型 */
 var ACCOUNT_LOG = [
-  {id:'log1', clinicId:'C1', ts:D(-2)+' 14:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'购买', target:'A3', text:'购买加购账号 A3（一般室长）'},
-  {id:'log2', clinicId:'C1', ts:D(-8)+' 17:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'退订', target:'A4', text:'退订加购账号 A4（Sari）'},
-  {id:'log3', clinicId:'C1', ts:D(-1)+' 10:00', accountId:'A1', name:'Dewi', type:'账号管理', sub:'购买', target:'A5', text:'购买加购管理者账号 A5（老板验证码确认）'}
+  {id:'log1', clinicId:'C1', ts:D(-2)+' 14:00', accountId:'A1', name:'A1 室长', type:'账号管理', sub:'购买', target:'A3', text:'购买加购账号 A3（一般室长）'},
+  {id:'log2', clinicId:'C1', ts:D(-8)+' 17:00', accountId:'A1', name:'A1 室长', type:'账号管理', sub:'退订', target:'A4', text:'退订加购账号 A4（A4 室长）'},
+  {id:'log3', clinicId:'C1', ts:D(-1)+' 10:00', accountId:'A1', name:'A1 室长', type:'账号管理', sub:'购买', target:'A5', text:'购买加购管理者账号 A5（老板验证码确认）'}
 ];
 /* 当前登录的账号：存在 sessionStorage 的 gmc_acct（每个标签页各自登录，互不影响）；没登录、账号被停用/被重置成待激活，都返回 null */
 function currentAccountId(){
@@ -250,9 +250,9 @@ var ME_NAME = (currentAccount() || {name:''}).name || '';
 })();
 var PAGE_CLINIC_ID = resolveClinicId(); /* 这个页面所属的诊所：登录账号的诊所；客户预约页看地址里的 ?clinic=（原型不带默认 C1）；登录页没有 = null */
 CURRENT_CLINIC_ID = 'C1'; /* 演示数据种子一律按 C1 生成；种子跑完后（本文件末尾）才改成 PAGE_CLINIC_ID */
-/* 演示数据种子（SEEDING=true，data.js 末尾置 false）里的"当前操作人"固定写 Dewi，不随打开页面的账号变化；运行时 = 当前登录的人 */
+/* 演示数据种子（SEEDING=true，data.js 末尾置 false）里的"当前操作人"固定写 A1 室长，不随打开页面的账号变化；运行时 = 当前登录的人 */
 var SEEDING = true;
-var SEED_ACTOR = 'Dewi'; /* 种子数据里的"当前操作人"（C1 = Dewi；生成其他诊所的种子时临时改成那家诊所的室长） */
+var SEED_ACTOR = 'A1 室长'; /* 种子数据里的"当前操作人"（C1 = A1 室长；生成其他诊所的种子时临时改成那家诊所的室长） */
 function actingName(){ return SEEDING ? SEED_ACTOR : ME_NAME; }
 /* IN 室长名单 = 使用中的非老板账号的姓名（账号被停用/重置/激活后重新计算） */
 function syncInCoordinators(){
@@ -289,23 +289,13 @@ function memoSet(k, v){
 }
 
 /* ---- KR 医院日程视角（只读，2026-10-02·八）：KR 室长登记的日程、院长日程（下拉切换院长）、KR 开放的施术日期；
-   有空 = 白色，已排的事 = 浅灰块，每件事一个独立的块（中间留缝隙）。演示数据：两位院长，김민석 当天几乎满档 ---- */
+   有空 = 白色，已排的事 = 浅灰块，每件事一个独立的块（中间留缝隙）。演示数据：两位院长，KD1 院长 当天几乎满档 ---- */
 var CAL_VIEW = 'in', KR_DIRECTOR = '', KR_HOSPITAL = ''; /* KR 医院日程视角：先选医院（只列本诊所对接的），再选该医院的院长 */
 function krViewHospital(){ var ids = linkedHospitalIds(); return (KR_HOSPITAL && ids.indexOf(KR_HOSPITAL)>-1) ? KR_HOSPITAL : (ids[0] || ''); }
 function krViewDirector(){ var names = hospitalDirectorNames(krViewHospital()); return names.indexOf(KR_DIRECTOR)>-1 ? KR_DIRECTOR : (names[0] || ''); }
 
-var KR_COORD_SCHEDULE = [
-  {date:D(-1), time:'10:00', title:'이서연：整理 Putri 报告'}, {date:D(0), time:'09:30', title:'이서연：与 IN 室长对接'},
-  {date:D(0), time:'15:00', title:'박준혁：术后回访'}, {date:D(1), time:'11:00', title:'이서연：报告提交'}
-];
-
-var KR_DIRECTOR_SCHEDULE = (function(){
-  var m = {'김민석 원장':[], '이수진 원장':[]};
-  KR_WK_HOURS.forEach(function(h){ if(h!=='13:00' && h!=='16:00') m['김민석 원장'].push({date:D(0), time:h, title:h<'12:00'?'手术':'面诊/手术'}); }); /* 当天几乎满档 */
-  m['김민석 원장'].push({date:D(-1), time:'10:00', title:'面诊'}, {date:D(-1), time:'14:00', title:'手术'}, {date:D(1), time:'09:00', title:'手术'});
-  m['이수진 원장'].push({date:D(0), time:'11:00', title:'面诊'}, {date:D(-1), time:'15:00', title:'手术'}, {date:D(1), time:'10:30', title:'面诊'});
-  return m;
-})();
+var KR_COORD_SCHEDULE = []; /* 室长的内部日程不进平台 */
+var KR_DIRECTOR_SCHEDULE = {}; /* KR 医院日程的块全部由 seedKrMonthDemo（不可预约）和案件（施术）生成，不再写死 */
 
 /* ---- 预约历史记录（2026-10-02·八）：全部从案件/占位数据算 ---- */
 function resvHistoryRows(){
@@ -422,7 +412,7 @@ function caseBasic(c){
 function beautyRecordsOf(cl){ return (cl && cl.beautyRecords) || []; }
 function addBeautyRecord(cl, o){
   cl.beautyRecords = cl.beautyRecords || [];
-  /* 每一笔永久保留来源信息：来源 + 登记时间 + 所属案件 ID（室长登记的再加操作人，如"Dewi（A1）"）；newCaseId 只管"本次新增"标记 */
+  /* 每一笔永久保留来源信息：来源 + 登记时间 + 所属案件 ID（室长登记的再加操作人，如"A1 室长（A1）"）；newCaseId 只管"本次新增"标记 */
   var staff = (o.source||'室长登记')==='室长登记';
   var r = {id:'br'+Date.now()+Math.floor(Math.random()*1000), year:o.year, month:o.month, project:o.project, source:o.source||'室长登记', addedAt:nowFullDt(), caseId:o.caseId||null, by:staff ? accountLabel(currentAccountId()) : '', newCaseId:o.newCaseId||null};
   cl.beautyRecords.push(r); cl.updated = '刚刚';
@@ -596,7 +586,7 @@ function checkReminders(force){
 
 /* ================= dashboard: 预约来访 + 预约占位（2026-09-29 新增，IN-DASH-01） ================= */
 /* KR 院长名单（演示数据，以后由韩国端维护）：active=false 为停用，停用的不显示在选项里（2026-10-02） */
-var DIRECTOR_INFO = [{name:'김민석 원장', active:true}, {name:'이수진 원장', active:true}, {name:'박지훈 원장', active:false}];
+var DIRECTOR_INFO = [{name:'KD1 院长', active:true}, {name:'KO1 代表院长', active:true}, {name:'H1 院长3', active:false}]; /* H1：KD1 院长、KO1 代表院长（也看诊做手术）、一位停用院长（演示用）；原 KD1 院长 已删除，她的案件改给 KD1 / KO1 */
 
 var DIRECTOR_LIST = DIRECTOR_INFO.filter(function(d){ return d.active; }).map(function(d){ return d.name; });
 
@@ -666,25 +656,25 @@ function simulateCustomerReschedule(caseId, newDow, newTime){
    fallback {label,bg,fg}（没有案件时客户列表"当前进度"的兜底状态）、timeline 客户级 Timeline（建档 / 基础信息修改，案件开始/结案由案件算出，见 renderClientTimeline）。
    有案件时"当前面诊·施术进度"这一列实时读对应 CASE_ITEMS 的徽章——见 clientCaseStatus()。 */
 var CLIENTS = [
-  {id:'cl1', name:'Siti Rahayu', gender:'女', dob:'1992-03-08', phone:'+62 000-0000-0001', note:'无', beautyRecords:[{id:'brs1', year:2023, month:5, project:'玻尿酸填充（苹果肌）', source:'客人自填', addedAt:D(-17)+' 10:02', caseId:'siti', newCaseId:null},{id:'brs2', year:2024, month:8, project:'水光针', source:'客人自填', addedAt:D(-18)+' 10:02', caseId:'siti', newCaseId:null}], history:'对青霉素过敏；无慢性病', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'},{stage:'基础信息修改', actor:'Dewi', action:'补录护照信息、确认医美史', dt:D(-16)+' 11:15', kind:'plain'}]},
-  {id:'cl2', name:'Andi Wijaya', gender:'男', dob:'1987-06-10', phone:'+62 812-3000-0002', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
-  {id:'cl3', name:'Yuni Kartika', gender:'女', dob:'1990-11-17', phone:'+62 812-3000-0003', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
-  {id:'cl4', name:'Maya Putri', gender:'女', dob:'1993-04-24', phone:'+62 812-3000-0004', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
-  {id:'cl5', name:'Putri Wulandari', gender:'女', dob:'1996-09-06', phone:'+62 812-3000-0005', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
-  {id:'cl6', name:'Dedi Prasetyo', gender:'男', dob:'1999-02-13', phone:'+62 812-3000-0006', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
-  {id:'cl7', name:'Budi Santoso', gender:'男', dob:'1985-07-20', phone:'+62 812-3000-0007', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[], createdBy:'Rina', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
-  {id:'cl8', name:'Ayu Lestari', gender:'女', dob:'1988-12-27', phone:'+62 000-0000-0002', note:'无', beautyRecords:[{id:'bra1', year:2022, month:3, project:'热玛吉', source:'客人自填', addedAt:D(-17)+' 10:02', caseId:'ayu', newCaseId:null},{id:'bra2', year:2025, month:6, project:'肉毒（下颌线）', source:'客人自填', addedAt:D(-18)+' 10:02', caseId:'ayu', newCaseId:null}], history:'轻度哮喘；对海鲜过敏', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v0.9', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
-  {id:'cl9', name:'Fajar Nugroho', gender:'男', dob:'1991-05-09', phone:'+62 812-3000-0009', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
-  {id:'cl10', name:'Dinda Anggraini', gender:'女', dob:'1994-10-16', phone:'+62 812-3000-0010', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'刚刚', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
-  {id:'cl11', name:'Nadia Permata', gender:'女', dob:'1997-03-23', phone:'+62 812-3000-0011', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'今天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
-  {id:'cl12', name:'Rizky Hidayat', gender:'男', dob:'2000-08-05', phone:'+62 812-3000-0012', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'今天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
-  {id:'cl13', name:'Rina Marlina', gender:'女', dob:'1986-01-12', phone:'+62 812-3000-0013', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'1 周前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
-  {id:'cl14', name:'Wulan Sari', gender:'女', dob:'1989-06-19', phone:'+62 812-3000-0014', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[], createdBy:'Dewi', updated:'5 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
-  {id:'cl15', name:'Agus Salim', gender:'男', dob:'1992-11-26', phone:'+62 812-3000-0015', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'4 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
-  {id:'cl16', name:'Lina Kusuma', gender:'女', dob:'1995-04-08', phone:'+62 812-3000-0016', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'6 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
-  {id:'cl17', name:'Hana Permana', gender:'女', dob:'1998-09-15', phone:'+62 812-3000-0017', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
-  {id:'cl18', name:'Tari Wibowo', gender:'女', dob:'1984-02-22', phone:'+62 812-3000-0018', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'Rina', updated:'2 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
-  {id:'cl19', name:'Bayu Aditya', gender:'男', dob:'1987-07-04', phone:'+62 812-3000-0019', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'Dewi', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]}
+  {id:'cl1', name:'客人1', gender:'女', dob:'1992-03-08', phone:'+62 000-0000-0001', note:'无', beautyRecords:[{id:'brs1', year:2023, month:5, project:'玻尿酸填充（苹果肌）', source:'客人自填', addedAt:D(-17)+' 10:02', caseId:'siti', newCaseId:null},{id:'brs2', year:2024, month:8, project:'水光针', source:'客人自填', addedAt:D(-18)+' 10:02', caseId:'siti', newCaseId:null}], history:'对青霉素过敏；无慢性病', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'},{stage:'基础信息修改', actor:'A1 室长', action:'补录护照信息、确认医美史', dt:D(-16)+' 11:15', kind:'plain'}]},
+  {id:'cl2', name:'客人3', gender:'男', dob:'1987-06-10', phone:'+62 812-3000-0002', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl3', name:'客人4', gender:'女', dob:'1990-11-17', phone:'+62 812-3000-0003', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
+  {id:'cl4', name:'客人5', gender:'女', dob:'1993-04-24', phone:'+62 812-3000-0004', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl5', name:'客人6', gender:'女', dob:'1996-09-06', phone:'+62 812-3000-0005', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
+  {id:'cl6', name:'客人7', gender:'男', dob:'1999-02-13', phone:'+62 812-3000-0006', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl7', name:'客人20', gender:'男', dob:'1985-07-20', phone:'+62 812-3000-0007', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[], createdBy:'A2 室长', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
+  {id:'cl8', name:'客人2', gender:'女', dob:'1988-12-27', phone:'+62 000-0000-0002', note:'无', beautyRecords:[{id:'bra1', year:2022, month:3, project:'热玛吉', source:'客人自填', addedAt:D(-17)+' 10:02', caseId:'ayu', newCaseId:null},{id:'bra2', year:2025, month:6, project:'肉毒（下颌线）', source:'客人自填', addedAt:D(-18)+' 10:02', caseId:'ayu', newCaseId:null}], history:'轻度哮喘；对海鲜过敏', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v0.9', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl9', name:'客人8', gender:'男', dob:'1991-05-09', phone:'+62 812-3000-0009', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
+  {id:'cl10', name:'客人10', gender:'女', dob:'1994-10-16', phone:'+62 812-3000-0010', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'刚刚', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl11', name:'客人9', gender:'女', dob:'1997-03-23', phone:'+62 812-3000-0011', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'今天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
+  {id:'cl12', name:'客人11', gender:'男', dob:'2000-08-05', phone:'+62 812-3000-0012', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'今天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl13', name:'客人12', gender:'女', dob:'1986-01-12', phone:'+62 812-3000-0013', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'1 周前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
+  {id:'cl14', name:'客人21', gender:'女', dob:'1989-06-19', phone:'+62 812-3000-0014', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[], createdBy:'A1 室长', updated:'5 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl15', name:'客人14', gender:'男', dob:'1992-11-26', phone:'+62 812-3000-0015', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'4 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
+  {id:'cl16', name:'客人22', gender:'女', dob:'1995-04-08', phone:'+62 812-3000-0016', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'6 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl17', name:'客人15', gender:'女', dob:'1998-09-15', phone:'+62 812-3000-0017', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
+  {id:'cl18', name:'客人16', gender:'女', dob:'1984-02-22', phone:'+62 812-3000-0018', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'2 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
+  {id:'cl19', name:'客人13', gender:'男', dob:'1987-07-04', phone:'+62 812-3000-0019', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]}
 ];
 
 /* 客户持有项目（2026-09-29 新增）：按客户姓名存，结算后本地项目（含术后管理）全部转入这里，不进入案件进程。
@@ -803,14 +793,14 @@ function makeCase(o){
     inCoordinator:o.inCoordinator||actingName(), krInRoom:!!o.krInRoom, chatArchive:null, /* 2026-10-02：负责该案件的IN室长 / KR室长是否已进入案件对话房 / 结案后整理的对话记录 */
     visitDate:o.visitDate||null, visitTime:o.visitTime||null, visitPurpose:o.visitPurpose||'面诊商谈', /* 2026-10-02：日历、案件列表、预约历史都从案件这份数据算 */
     reportEta:o.reportEta||null, reportOverdue:!!o.reportOverdue, /* 2026-10-02：KR确认的预计出报告时间 / 已超时提醒 */
-    director:(o.director!==undefined ? o.director : ((o.consultRequested || o.needsConsult===true) ? '김민석 원장' : null)), /* 2026-10-02：本地案件没有院长 */ krCoordinator:o.krCoordinator||'이서연 실장', updated:o.updated||'刚刚', caseNo:o.caseNo||null,
+    director:(o.director!==undefined ? o.director : ((o.consultRequested || o.needsConsult===true) ? 'KD1 院长' : null)), /* 2026-10-02：本地案件没有院长 */ krCoordinator:o.krCoordinator||'KM1 室长', updated:o.updated||'刚刚', caseNo:o.caseNo||null,
     basic:o.basic||{gender:'女', dob:'1990-01-01', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
     materialsConfirmed:!!o.materialsConfirmed, photoUploaded:!!o.materialsConfirmed, videoUploaded:!!o.materialsConfirmed,
     concern:o.concern||'', expectation:o.expectation||'', metaviewStatus:o.materialsConfirmed?'ready':'idle',
     needsConsult: o.needsConsult===undefined ? null : o.needsConsult, activeCaseTab:o.activeCaseTab||'basic',
     consultRequested:!!o.consultRequested, consultStatus:o.consultStatus||null,
     videoSummary:o.videoSummary||'', consultFiles:o.consultFiles||[], reportReady:!!o.reportReady, krVideoInvited:!!o.krVideoInvited,
-    reportUploadedBy:o.reportUploadedBy||(o.reportReady ? (o.krCoordinator||'이서연 실장') : ''), /* 2026-09-30：报告由KR室长上传（Notion），邀请室长视频的候选人只列上传过报告的室长 */
+    reportUploadedBy:o.reportUploadedBy||(o.reportReady ? (o.krCoordinator||'KM1 室长') : ''), /* 2026-09-30：报告由KR室长上传（Notion），邀请室长视频的候选人只列上传过报告的室长 */
     /* 2026-09-29 新状态机：visibleToKR 默认跟着"是否需要面诊"走，不面诊案件默认对韩国侧不可见，点"增加面诊"后才变 true */
     visibleToKR: o.visibleToKR!==undefined ? !!o.visibleToKR : (o.needsConsult===true),
     /* 意向项目/预算（2026-09-29 新增，基础资料tab"希望预期"下面）：客人来访时的初步意向，KR可见 */
@@ -847,81 +837,81 @@ function makeCase(o){
 }
 
 var CASE_ITEMS = [
-  makeCase({id:'siti', name:'Siti Rahayu', caseNo:'A000017', updated:'刚刚',
+  makeCase({id:'siti', name:'客人1', caseNo:'A000017', updated:'刚刚',
     basic:{gender:'女', dob:'1992-03-08', contact:'WhatsApp +62 812-xxxx-xxxx', history:'无'},
     logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(0)+' 09:05'}]}),
 
-  /* 演示（到访接续）：Ayu Lestari 已有进行中案件 ayu（项目确认中），这条是她新的预约来访（待访问） */
-  makeCase({id:'ayu2', name:'Ayu Lestari', caseNo:'A000021', updated:'刚刚',
-    logEntries:[{stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:D(0)+' 09:10'}]}),
+  /* 演示（到访接续）：客人2 已有进行中案件 ayu（项目确认中），这条是她新的预约来访（待访问） */
+  makeCase({id:'ayu2', name:'客人2', caseNo:'A000021', updated:'刚刚',
+    logEntries:[{stage:'预约到店', actor:'A1 室长', action:'老客人预约来访', dt:D(0)+' 09:10'}]}),
 
   /* 接待中：客人已到店，메타뷰/照片/视频/苦恼/希望预期还没确认完，所以还没生成 Case ID */
-  makeCase({id:'andi', name:'Andi Wijaya', subState:'arrived', caseNo:'A000018', updated:'昨天',
+  makeCase({id:'andi', name:'客人3', subState:'arrived', caseNo:'A000018', updated:'昨天',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-1)+' 10:00'},
-      {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:D(-1)+' 10:30'}
+      {stage:'预约到店', actor:'A2 室长', action:'标记客人已到店', dt:D(-1)+' 10:30'}
     ]}),
 
   /* 待选项目：分支2"不面诊"——基础资料确认时选了不面诊，Case ID 已生成，正在选管理项目、还没点"确认所选项目" */
-  makeCase({id:'yuni', name:'Yuni Kartika', subState:'arrived', materialsConfirmed:true, caseNo:'A000001', updated:'2 小时前',
+  makeCase({id:'yuni', name:'客人4', subState:'arrived', materialsConfirmed:true, caseNo:'A000001', updated:'2 小时前',
     concern:'皮肤暗沉、毛孔粗大', expectation:'希望肤色均匀、毛孔细致', needsConsult:false, activeCaseTab:'localmgmt', projectsEnabled:true, projectOriginFilter:'IN',
     entryChoicePending:true, projectEntryMode:'new', /* 2026-09-29 第十轮：不面诊后先经过入口选择，这里演示已经点了"新增项目" */
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-2)+' 09:00'},
-      {stage:'预约到店', actor:'Dewi', action:'标记客人已到店', dt:D(-2)+' 09:20'},
-      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:D(-2)+' 09:35'}
+      {stage:'预约到店', actor:'A1 室长', action:'标记客人已到店', dt:D(-2)+' 09:20'},
+      {stage:'面诊安排', actor:'A1 室长', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:D(-2)+' 09:35'}
     ]}),
 
   /* 待确认报告时间：面诊费已缴，已在 Main 对话群通知，等 Kr室长确认预计出报告时间 */
-  makeCase({id:'maya', name:'Maya Putri', subState:'arrived', materialsConfirmed:true, caseNo:'A000002', updated:'昨天',
+  makeCase({id:'maya', name:'客人5', subState:'arrived', materialsConfirmed:true, caseNo:'A000002', updated:'昨天',
     concern:'轮廓线条不明显', expectation:'想要更立体的轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'paid_waiting_kr',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-2)+' 14:00'},
-      {stage:'预约到店', actor:'Dewi', action:'标记客人已到店', dt:D(-2)+' 14:20'},
-      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：面诊', dt:D(-2)+' 14:35'},
+      {stage:'预约到店', actor:'A1 室长', action:'标记客人已到店', dt:D(-2)+' 14:20'},
+      {stage:'面诊安排', actor:'A1 室长', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：面诊', dt:D(-2)+' 14:35'},
       {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:D(-2)+' 14:40'}
     ]}),
 
   /* 等待报告：Kr室长已确认预计出报告时间（倒计时中） */
-  makeCase({id:'putri', name:'Putri Wulandari', subState:'arrived', materialsConfirmed:true, caseNo:'A000003', updated:'3 天前',
+  makeCase({id:'putri', name:'客人6', subState:'arrived', materialsConfirmed:true, caseNo:'A000003', updated:'3 天前',
     concern:'法令纹加深', expectation:'希望改善法令纹', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:D(2)+' 14:00',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-4)+' 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:D(-4)+' 10:00'},
-      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：'+D(2)+' 14:00', dt:D(-4)+' 16:00'}
+      {stage:'面诊安排', actor:'KM1 室长', action:'KR确认预计出报告时间：'+D(2)+' 14:00', dt:D(-4)+' 16:00'}
     ]}),
 
   /* 等待报告：超过预计时间（小状态橘色提醒） */
-  makeCase({id:'dedi', name:'Dedi Prasetyo', subState:'arrived', materialsConfirmed:true, caseNo:'A000004', updated:'刚刚',
+  makeCase({id:'dedi', name:'客人7', subState:'arrived', materialsConfirmed:true, caseNo:'A000004', updated:'刚刚',
     concern:'苹果肌塌陷', expectation:'希望恢复饱满', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:D(0)+' 08:00', reportOverdue:true,
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-5)+' 09:00'},
-      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：'+D(0)+' 08:00', dt:D(-5)+' 11:00'},
+      {stage:'面诊安排', actor:'KM1 室长', action:'KR确认预计出报告时间：'+D(0)+' 08:00', dt:D(-5)+' 11:00'},
       {stage:'面诊安排', actor:'系统', action:'已超过预计出报告时间，报告还没提交（仅提醒，状态不变）', dt:D(0)+' 08:05'}
     ]}),
 
   /* 等待报告：预计时间未到 */
-  makeCase({id:'budi', name:'Budi Santoso', subState:'arrived', materialsConfirmed:true, caseNo:'A000005', updated:'3 天前',
+  makeCase({id:'budi', name:'客人20', subState:'arrived', materialsConfirmed:true, caseNo:'A000005', updated:'3 天前',
     concern:'轮廓松弛', expectation:'希望紧致轮廓', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:'awaiting_report', reportEta:D(2)+' 11:00',
     videoSummary:'轮廓松弛属中度，建议先做超声刀评估，配合居家护理观察 4 周后复诊。',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-6)+' 09:00'},
-      {stage:'面诊安排', actor:'이서연', action:'KR确认预计出报告时间：'+D(2)+' 11:00', dt:D(0)+' 09:30'}
+      {stage:'面诊安排', actor:'KM1 室长', action:'KR确认预计出报告时间：'+D(2)+' 11:00', dt:D(0)+' 09:30'}
     ]}),
 
   /* 已出报告：报告已出，正在待客人/室长选管理项目 */
-  makeCase({id:'ayu', reportDate:D(-8), name:'Ayu Lestari', subState:'arrived', materialsConfirmed:true, caseNo:'A000006', updated:'昨天',
+  makeCase({id:'ayu', reportDate:D(-8), name:'客人2', subState:'arrived', materialsConfirmed:true, caseNo:'A000006', updated:'昨天',
     concern:'皮肤暗沉、细纹', expectation:'希望肤质透亮', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'面部凹陷、细纹较明显，建议先做自体脂肪移植改善轮廓，再评估面部拉皮。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, krScope:{items:[{name:'自体脂肪移植（全脸）', price:4500000, note:'', stay:'10天', anesthesia:{type:'sleep', label:'睡眠麻醉', note:''}, postcare:[{name:'术后消肿管理', price:150000, times:5, place:'either', day:'第3天', innName:'术后消肿护理 1次', innPrice:450000, inTimes:0}]},{name:'面部拉皮', price:12000000, note:'', stay:'14天', anesthesia:{type:'general', label:'全身麻醉', note:'全麻需空腹 8 小时'}, postcare:[{name:'术后复诊检查', price:80000, times:2, place:'KR', day:'第2天', innName:'', innPrice:0, inTimes:0}]}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(1)+' 11:20'},
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-7)+' 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 11:20'}
+      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 11:20'}
     ]}),
 
   /* 待付款：已确认所选管理项目、生成结算单，等待付款 */
-  makeCase({id:'fajar', reportDate:D(-1), name:'Fajar Nugroho', subState:'arrived', materialsConfirmed:true, caseNo:'A000007', updated:'2 小时前',
+  makeCase({id:'fajar', reportDate:D(-1), name:'客人8', subState:'arrived', materialsConfirmed:true, caseNo:'A000007', updated:'2 小时前',
     concern:'鼻基底低平', expectation:'希望鼻型更立体', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议先做假体隆鼻改善鼻基底，再评估鼻翼缩小。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
@@ -931,16 +921,16 @@ var CASE_ITEMS = [
       {name:'假体隆鼻', origin:'KR', done:false, batchId:'B1'},
       {name:'鼻翼缩小', origin:'KR', done:false, batchId:'B1'}
     ],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(3)+' 10:00', status:'unpaid',
+    settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(3)+' 10:00', status:'unpaid',
       krTotal:4000000, krDeposit:1200000, krBalance:2800000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-8)+' 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(2)+' 14:20'},
-      {stage:'面诊安排', actor:'Dewi', action:'确认所选管理项目：假体隆鼻、鼻翼缩小', dt:D(3)+' 10:00'}
+      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊报告，已出报告', dt:D(2)+' 14:20'},
+      {stage:'面诊安排', actor:'A1 室长', action:'确认所选管理项目：假体隆鼻、鼻翼缩小', dt:D(3)+' 10:00'}
     ]}),
 
   /* 赴韩施术中：已付款，韩国项目里还有未完成的 */
-  makeCase({id:'nadia', reportDate:D(-4), name:'Nadia Permata', subState:'arrived', materialsConfirmed:true, caseNo:'A000008', updated:'今天',
+  makeCase({id:'nadia', reportDate:D(-4), name:'客人9', subState:'arrived', materialsConfirmed:true, caseNo:'A000008', updated:'今天',
     concern:'轮廓松弛、法令纹', expectation:'希望紧致提升', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议颧骨缩小+下巴假体联合方案改善轮廓。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
@@ -950,17 +940,17 @@ var CASE_ITEMS = [
       {name:'颧骨缩小', origin:'KR', done:false, batchId:'B1'},
       {name:'下巴假体 / 颏成形', origin:'KR', done:true, batchId:'B1'}
     ],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(2)+' 11:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(2)+' 11:00', status:'active',
       krTotal:12000000, krDeposit:3600000, krBalance:8400000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-13)+' 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 10:00'},
+      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 10:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩3,600,000），项目清单已锁定', dt:D(2)+' 11:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"下巴假体 / 颏成形"施术，"颧骨缩小"待安排', dt:D(4)+' 16:00'}
+      {stage:'赴韩施术', actor:'KD1 院长', action:'已完成"下巴假体 / 颏成形"施术，"颧骨缩小"待安排', dt:D(4)+' 16:00'}
     ]}),
 
   /* 待确认施术时间：已付款，已递交施术日期，正等Kr室长确认（2026-09-29 改用krSchedule细分状态演示） */
-  makeCase({id:'dinda', name:'Dinda Anggraini', subState:'arrived', materialsConfirmed:true, caseNo:'A000013', updated:'刚刚',
+  makeCase({id:'dinda', name:'客人10', subState:'arrived', materialsConfirmed:true, caseNo:'A000013', updated:'刚刚',
     concern:'轮廓松弛', expectation:'希望紧致提升', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议面部拉皮+自体脂肪移植联合方案。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
@@ -970,33 +960,33 @@ var CASE_ITEMS = [
       {name:'面部拉皮', origin:'KR', done:false, batchId:'B1'},
       {name:'自体脂肪移植（全脸）', origin:'KR', done:false, batchId:'B1'}
     ],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(5)+' 10:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(5)+' 10:00', status:'active',
       krTotal:16500000, krDeposit:4950000, krBalance:11550000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-10)+' 09:00'},
-      {stage:'面诊安排', actor:'김민석 원장', action:'KR室长提交面诊报告，已出报告', dt:D(3)+' 10:00'},
+      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊报告，已出报告', dt:D(3)+' 10:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩4,950,000），项目清单已锁定', dt:D(5)+' 10:00'}
     ]}),
 
   /* 本地管理（2026-09-30 改）：纯本地案件，已使用持有项目、管理尚未完成/取消；原"已付款待使用"不再是本地管理 */
-  makeCase({id:'rizky', name:'Rizky Hidayat', subState:'arrived', materialsConfirmed:true, caseNo:'A000009', updated:'今天',
+  makeCase({id:'rizky', name:'客人11', subState:'arrived', materialsConfirmed:true, caseNo:'A000009', updated:'今天',
     concern:'术后恢复期护理', expectation:'希望恢复期更舒适', needsConsult:false, activeCaseTab:'localmgmt',
     projectsEnabled:true, projectsLocked:true, settlementDone:true,
     mgmtActive:true, mgmtUses:[{itemName:'好莱坞焕肤 1次', qty:1, date:D(-3)}],
     procedureItems:[],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(-3)+' 09:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(-3)+' 09:00', status:'active',
       krTotal:0, krDeposit:0, krBalance:0, inTotal:860000}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-17)+' 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:D(-3)+' 08:50'},
-      {stage:'面诊安排', actor:'Dewi', action:'选择"新增项目"', dt:D(-3)+' 08:55'},
+      {stage:'面诊安排', actor:'A1 室长', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:D(-3)+' 08:50'},
+      {stage:'面诊安排', actor:'A1 室长', action:'选择"新增项目"', dt:D(-3)+' 08:55'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：本地全款 Rp 860.000），项目清单已锁定', dt:D(-3)+' 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'本地项目已转入客户持有：好莱坞焕肤 1次 x1、Genesis焕肤（Clarity II）1次 x1', dt:D(-3)+' 09:00'},
-      {stage:'本地管理', actor:'Dewi', action:'使用了好莱坞焕肤 1次 1次，剩余0次', dt:D(-3)+' 09:20'}
+      {stage:'面诊安排', actor:'A1 室长', action:'本地项目已转入客户持有：好莱坞焕肤 1次 x1、Genesis焕肤（Clarity II）1次 x1', dt:D(-3)+' 09:00'},
+      {stage:'本地管理', actor:'A1 室长', action:'使用了好莱坞焕肤 1次 1次，剩余0次', dt:D(-3)+' 09:20'}
     ]}),
 
   /* 已结案：赴韩行程施术完成即结案（2026-09-29 第十轮：本地项目已转客户持有，不再算在这个案件的完成条件里） */
-  makeCase({id:'rina', director:'박지훈 원장', reportDate:D(-37), name:'Rina Marlina', subState:'arrived', materialsConfirmed:true, caseNo:'A000010', updated:'1 周前',
+  makeCase({id:'rina', director:'H1 院长3', reportDate:D(-37), name:'客人12', subState:'arrived', materialsConfirmed:true, caseNo:'A000010', updated:'1 周前',
     concern:'整体抗老', expectation:'希望延缓衰老迹象', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议自体脂肪移植打底，配合本地焕肤护理维持效果。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
@@ -1005,26 +995,26 @@ var CASE_ITEMS = [
     procedureItems:[
       {name:'自体脂肪移植（全脸）', origin:'KR', done:true, batchId:'B1'}
     ],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(-29)+' 09:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(-29)+' 09:00', status:'active',
       krTotal:4500000, krDeposit:1350000, krBalance:3150000, inTotal:540000}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-39)+' 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩1,350,000、本地全款 Rp 540.000），项目清单已锁定', dt:D(-29)+' 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'本地项目已转入客户持有：Genesis焕肤（Clarity II）1次 x1', dt:D(-29)+' 09:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"自体脂肪移植（全脸）"施术', dt:D(-24)+' 10:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'KR标记"施术完成"，案件已结案', dt:D(-22)+' 09:00'}
+      {stage:'面诊安排', actor:'A1 室长', action:'本地项目已转入客户持有：Genesis焕肤（Clarity II）1次 x1', dt:D(-29)+' 09:00'},
+      {stage:'赴韩施术', actor:'KD1 院长', action:'已完成"自体脂肪移植（全脸）"施术', dt:D(-24)+' 10:00'},
+      {stage:'赴韩施术', actor:'KD1 院长', action:'KR标记"施术完成"，案件已结案', dt:D(-22)+' 09:00'}
     ]}),
 
-  /* 接待中（演示"关联之前案件"）：Rina 之前有已结案的赴韩案件 A000010，这次再来，基础资料里可关联并看到"可能与 A000010 相关" */
-  makeCase({id:'rina2', inCoordinator:'Rina', name:'Rina Marlina', subState:'arrived', caseNo:'A000019', updated:'刚刚',
+  /* 接待中（演示"关联之前案件"）：A2 室长 之前有已结案的赴韩案件 A000010，这次再来，基础资料里可关联并看到"可能与 A000010 相关" */
+  makeCase({id:'rina2', inCoordinator:'A2 室长', name:'客人12', subState:'arrived', caseNo:'A000019', updated:'刚刚',
     logEntries:[
-      {stage:'预约到店', actor:'Dewi', action:'老客人预约来访', dt:D(0)+' 09:00'},
-      {stage:'预约到店', actor:'Rina', action:'标记客人已到店', dt:D(0)+' 09:30'}
+      {stage:'预约到店', actor:'A1 室长', action:'老客人预约来访', dt:D(0)+' 09:00'},
+      {stage:'预约到店', actor:'A2 室长', action:'标记客人已到店', dt:D(0)+' 09:30'}
     ]}),
 
   /* 已结案 + 有退款：分支6——赴韩项目里一个取消退定金，另一个完成后案件结案（2026-09-29 第十轮改用赴韩项目演示，
      本地项目现在不能退款，"部分退"这个终态只能从赴韩项目取消这条路径触发了） */
-  makeCase({id:'wulan', name:'Wulan Sari', subState:'arrived', materialsConfirmed:true, caseNo:'A000011', updated:'5 天前',
+  makeCase({id:'wulan', name:'客人21', subState:'arrived', materialsConfirmed:true, caseNo:'A000011', updated:'5 天前',
     concern:'轮廓不对称', expectation:'希望改善轮廓线条', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议下颌角整形+颧骨缩小联合方案改善轮廓。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
@@ -1034,60 +1024,60 @@ var CASE_ITEMS = [
     refunds:[{amount:2400000, currency:'KRW', reason:'客人检查后决定不做颧骨缩小', date:D(-7), items:['颧骨缩小'], batchIds:['B1']}],
     krSchedule:{status:'confirmed', confirmedDate:D(-5), confirmedTime:'11:00', primary:D(-5), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[{name:'下颌角整形', origin:'KR', done:true, batchId:'B1'},{name:'颧骨缩小', origin:'KR', done:false, cancelled:true, batchId:'B1'}],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(-10)+' 09:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(-10)+' 09:00', status:'active',
       krTotal:17000000, krDeposit:5100000, krBalance:11900000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-17)+' 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩5,100,000），项目清单已锁定', dt:D(-10)+' 09:00'},
-      {stage:'赴韩施术', actor:'Dewi', action:'取消项目"颧骨缩小"，退款 ₩2,400,000，退款原因：客人检查后决定不做颧骨缩小', dt:D(-7)+' 09:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'已完成"下颌角整形"施术', dt:D(-5)+' 11:00'},
-      {stage:'赴韩施术', actor:'김민석 원장', action:'KR标记"施术完成"，案件已结案（退款记入财务字段）', dt:D(-5)+' 15:00'}
+      {stage:'赴韩施术', actor:'A1 室长', action:'取消项目"颧骨缩小"，退款 ₩2,400,000，退款原因：客人检查后决定不做颧骨缩小', dt:D(-7)+' 09:00'},
+      {stage:'赴韩施术', actor:'KD1 院长', action:'已完成"下颌角整形"施术', dt:D(-5)+' 11:00'},
+      {stage:'赴韩施术', actor:'KD1 院长', action:'KR标记"施术完成"，案件已结案（退款记入财务字段）', dt:D(-5)+' 15:00'}
     ]}),
 
   /* 已取消预约：分支1——待访问阶段直接终止，资料保留，没有走到基础资料确认，所以没有 Case ID */
-  makeCase({id:'bayu', name:'Bayu Aditya', subState:'cancelled', cancelReason:'未到店', caseNo:'A000022', updated:'昨天',
+  makeCase({id:'bayu', name:'客人13', subState:'cancelled', cancelReason:'未到店', caseNo:'A000022', updated:'昨天',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-1)+' 09:00'},
       {stage:'预约到店', actor:'系统', action:'过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）', dt:D(-1)+' 10:30'}
     ]}),
-  makeCase({id:'agus', name:'Agus Salim', subState:'cancelled', caseNo:'A000020', cancelReason:'预约取消', updated:'4 天前',
+  makeCase({id:'agus', name:'客人14', subState:'cancelled', caseNo:'A000020', cancelReason:'预约取消', updated:'4 天前',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(1)+' 09:00'},
-      {stage:'预约到店', actor:'Dewi', action:'取消预约，原因：联系不上客人', dt:D(1)+' 18:00'}
+      {stage:'预约到店', actor:'A1 室长', action:'取消预约，原因：联系不上客人', dt:D(1)+' 18:00'}
     ]}),
 
   /* 仅出报告（2026-09-30）：分支6——赴韩项目全部取消并退款、没做本地项目，客人只拿到了面诊报告；财务结果=全额退款 */
-  makeCase({id:'lina', reportDate:D(-13), name:'Lina Kusuma', materialsConfirmed:true, caseNo:'A000012', updated:'6 天前',
+  makeCase({id:'lina', reportDate:D(-13), name:'客人22', materialsConfirmed:true, caseNo:'A000012', updated:'6 天前',
     concern:'眼部松弛', expectation:'希望眼周更年轻', needsConsult:true, activeCaseTab:'basic', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议提眉联合上睑整形。',
     consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, visitClosed:true,
     refunds:[{amount:300000, currency:'KRW', reason:'客人因个人原因取消赴韩行程', date:D(-6), items:['提眉手术'], batchIds:['B1']}],
     procedureItems:[{name:'提眉手术', origin:'KR', done:false, cancelled:true, batchId:'B1'}],
-    settlementBatches:[{id:'B1', orderedBy:'Dewi', settledBy:'客人', time:D(-8)+' 09:00', status:'active',
+    settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(-8)+' 09:00', status:'active',
       krTotal:1000000, krDeposit:300000, krBalance:700000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-14)+' 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩300,000），项目清单已锁定', dt:D(-8)+' 09:00'},
-      {stage:'赴韩施术', actor:'Dewi', action:'取消项目"提眉手术"，退款 ₩300,000，退款原因：客人因个人原因取消赴韩行程', dt:D(-6)+' 09:00'},
-      {stage:'赴韩施术', actor:'Dewi', action:'全部赴韩项目均已取消退款，案件结束：仅出报告', dt:D(-6)+' 09:05'}
+      {stage:'赴韩施术', actor:'A1 室长', action:'取消项目"提眉手术"，退款 ₩300,000，退款原因：客人因个人原因取消赴韩行程', dt:D(-6)+' 09:00'},
+      {stage:'赴韩施术', actor:'A1 室长', action:'全部赴韩项目均已取消退款，案件结束：仅出报告', dt:D(-6)+' 09:05'}
     ]}),
 
   /* 已取消（管理取消）：不面诊案件使用持有项目后，管理全部取消、本次无购买，未做次数已归还持有 */
-  makeCase({id:'hana', name:'Hana Permana', subState:'arrived', materialsConfirmed:true, caseNo:'A000015', updated:'3 天前',
+  makeCase({id:'hana', name:'客人15', subState:'arrived', materialsConfirmed:true, caseNo:'A000015', updated:'3 天前',
     concern:'术后恢复', expectation:'希望恢复期舒适', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'管理取消', mgmtStatus:'cancelled_all',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(2)+' 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'使用了术后消肿护理 1次 1次，剩余1次', dt:D(2)+' 10:00'},
-      {stage:'本地管理', actor:'Dewi', action:'管理取消（全部）：1次已归还持有项目（不是退款）；本次无购买，案件已取消（管理取消）', dt:D(2)+' 10:30'}
+      {stage:'面诊安排', actor:'A1 室长', action:'使用了术后消肿护理 1次 1次，剩余1次', dt:D(2)+' 10:00'},
+      {stage:'本地管理', actor:'A1 室长', action:'管理取消（全部）：1次已归还持有项目（不是退款）；本次无购买，案件已取消（管理取消）', dt:D(2)+' 10:30'}
     ]}),
 
   /* 已取消（未购买未使用）：不面诊案件，本次既没购买也没使用 */
-  makeCase({id:'tari', name:'Tari Wibowo', subState:'arrived', materialsConfirmed:true, caseNo:'A000016', updated:'2 天前',
+  makeCase({id:'tari', name:'客人16', subState:'arrived', materialsConfirmed:true, caseNo:'A000016', updated:'2 天前',
     concern:'皮肤暗沉', expectation:'了解项目', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'未购买未使用',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(3)+' 09:00'},
-      {stage:'面诊安排', actor:'Dewi', action:'本次不购买项目，案件已取消（未购买未使用）', dt:D(3)+' 10:00'}
+      {stage:'面诊安排', actor:'A1 室长', action:'本次不购买项目，案件已取消（未购买未使用）', dt:D(3)+' 10:00'}
     ]})
 ];
 
@@ -1405,7 +1395,7 @@ function logCaseEvent(c, actor, action){
   c.logEntries.push({stage: stageLogLabel(c), actor: actor, actorId: (actor===ME_NAME ? currentAccountId() : undefined), action: action, dt: nowFullDt()});
 }
 
-var KR_COORDINATORS = ['이서연', '박준혁'];
+var KR_COORDINATORS = ['KM1 室长', 'KC1 室长'];
 
 /* 室长商谈（2026-10-01）：入口①案件对话房里发起（工具栏🧑‍⚕️）；入口②报告卡片[邀请室长商谈]快捷入口——点击后进入案件对话房再选室长发起视频（同一个功能） */
 function consultTalkShortcut(){
@@ -1425,12 +1415,12 @@ function startCall(kind, caseId, participants){
   renderVideoPage();
 }
 
-function startDemoCall(){ startCall('demo', null, [ME_NAME+'（印尼室长）', '이서연 실장（韩国室长）']); VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); }
+function startDemoCall(){ startCall('demo', null, [ME_NAME+'（印尼室长）', 'KM1 室长（韩国室长）']); VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); }
 
 function seedTranscript(){
   VIDEO_CALL.transcript = [
-    {name:'Dewi', orig:'您好，我们先确认一下客人的情况。', trans:'안녕하세요, 고객 상황부터 확인하겠습니다.'},
-    {name:'이서연', orig:'네, 사진은 확인했습니다.', trans:'好的，照片已经确认过了。'}
+    {name:'A1 室长', orig:'您好，我们先确认一下客人的情况。', trans:'안녕하세요, 고객 상황부터 확인하겠습니다.'},
+    {name:'KM1 室长', orig:'네, 사진은 확인했습니다.', trans:'好的，照片已经确认过了。'}
   ];
 }
 
@@ -1465,7 +1455,7 @@ function endVideoConsult(){
       c2.krVideoInvited = true;
       logCaseEvent(c2, '系统', '室长视频沟通结束，已生成AI转写稿附件');
       buildCaseLog(c2);
-      postCaseRoomFile(c2.id, '이서연', 'var(--sage)', '이', '室长面诊文本（AI生成，仅供参考）+ 室长面诊视频');
+      postCaseRoomFile(c2.id, 'KM1 室长', 'var(--sage)', '이', '室长面诊文本（AI生成，仅供参考）+ 室长面诊视频');
       touchedCase = c2;
     }
     INVITE_KR_CONTEXT_CASE_ID = null;
@@ -2947,7 +2937,7 @@ function confirmSettlementPayment(){
 
 /* ---- 赴韩施术 tab（2026-09-29 重写，原"施术"tab拆分为两个）：施术日期改到已付款之后才递交，
    不再是结算前的排期门槛；日期只能选 KR_OPEN_DATES 里开放的（演示数据，未开放置灰不可选） ---- */
-var KR_OPEN_DATES = [D(1),D(2),D(3),D(4),D(10),D(11),D(17),D(18),D(20),D(24),D(25),D(31),D(32),D(38),D(39),D(45),D(46),D(52),D(53)]; /* 种子：H1 김민석 院长的开放日期（初始化后按医院/院长存在 HOSPITAL_DATA 里，读 caseOpenDates(c)） */
+var KR_OPEN_DATES = [D(1),D(2),D(3),D(4),D(10),D(11),D(17),D(18),D(20),D(24),D(25),D(31),D(32),D(38),D(39),D(45),D(46),D(52),D(53)]; /* 种子：H1 KD1 院长 院长的开放日期（初始化后按医院/院长存在 HOSPITAL_DATA 里，读 caseOpenDates(c)） */
 
 var KR_SCHED_VIEW_MONTH = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth(), 1);
 
@@ -3930,23 +3920,23 @@ var PROJECT_LIBRARY = [
 /* demo 客户持有项目种子数据（2026-09-29 第十轮新增）：对应上面几个demo案例结算后应该转入持有的本地项目，
    补种子数据的写法，和真实交互路径（confirmSettlementPayment 里 grantHolding）效果一样 */
 (function seedDemoHoldings(){
-  grantHolding('Rizky Hidayat', '好莱坞焕肤 1次', '本地', 'rizky', D(-3), 1, false);
-  grantHolding('Rizky Hidayat', 'Genesis焕肤（Clarity II）1次', '本地', 'rizky', D(-3), 1, false);
-  grantHolding('Rina Marlina', 'Genesis焕肤（Clarity II）1次', '本地', 'rina', D(-29), 1, false);
-  useHolding('Rina Marlina', 'Genesis焕肤（Clarity II）1次', 'rina', D(-22), 1); /* 已用完，演示"已用/购买"显示 */
-  useHolding('Rizky Hidayat', '好莱坞焕肤 1次', 'rizky', D(-3), 1, 'main'); /* rizky 本地管理：已使用1次 */
+  grantHolding('客人11', '好莱坞焕肤 1次', '本地', 'rizky', D(-3), 1, false);
+  grantHolding('客人11', 'Genesis焕肤（Clarity II）1次', '本地', 'rizky', D(-3), 1, false);
+  grantHolding('客人12', 'Genesis焕肤（Clarity II）1次', '本地', 'rina', D(-29), 1, false);
+  useHolding('客人12', 'Genesis焕肤（Clarity II）1次', 'rina', D(-22), 1); /* 已用完，演示"已用/购买"显示 */
+  useHolding('客人11', '好莱坞焕肤 1次', 'rizky', D(-3), 1, 'main'); /* rizky 本地管理：已使用1次 */
 })();
 
 
 /* 演示数据（2026-10-02·五）：非活性化的项目 + 部分使用的持有批次，用来对应项目库的使用情况/删除规则
-   - Genesis焕肤：非活性化，但 Rizky 手上还有 1 个未用批次 → 删除按钮置灰
+   - Genesis焕肤：非活性化，但 客人11 手上还有 1 个未用批次 → 删除按钮置灰
    - 巴西式脱毛 + 焕肤护理：非活性化，完全没有在用 → 可以删除
    - 鼻修复（赴韩）：非活性化，没有在用 → 可以删除
-   - 好莱坞焕肤：Rizky 买2次、用1次（部分使用）→ 客户详情可退款剩余1次 */
+   - 好莱坞焕肤：客人11 买2次、用1次（部分使用）→ 客户详情可退款剩余1次 */
 (function seedProjectLibraryDemo(){
   function byName(n){ return PROJECT_LIBRARY.filter(function(x){ return x.name===n; })[0]; }
   ['Genesis焕肤（Clarity II）1次','巴西式脱毛 + 焕肤护理','鼻修复'].forEach(function(n){ var q = byName(n); if(q) q.active = false; });
-  var h = (CLIENT_HOLDINGS['Rizky Hidayat']||[]).filter(function(x){ return x.itemName==='好莱坞焕肤 1次'; })[0];
+  var h = (CLIENT_HOLDINGS['客人11']||[]).filter(function(x){ return x.itemName==='好莱坞焕肤 1次'; })[0];
   if(h && h.batches[0] && h.batches[0].bought===1){ h.batches[0].bought = 2; } /* 买2用1：部分使用 */
   /* 各语言名称：演示翻译 */
   PROJECT_LIBRARY.forEach(function(q){ q.names = {zh:q.name, ko:demoTranslate(q.name,'zh','ko'), id:demoTranslate(q.name,'zh','id')}; });
@@ -3963,17 +3953,17 @@ var PROJECT_LIBRARY = [
     LIB_CASES.push({id:id, clinicId:(source==='local' ? CURRENT_CLINIC_ID : undefined), hospitalId:(source==='travel' ? 'H1' : undefined), title:title, names:{zh:title, ko:demoTranslate(title,'zh','ko'), id:demoTranslate(title,'zh','id')}, source:source,
       projectIds:projNames.map(pid).filter(Boolean), director:director, problemIds:(problems||[]).map(function(l){ return LIB_PROBLEM_IDS[l]; }),
       beforePhotos:[{url:'', color:'#E6DDD0'}, {url:'', color:'#E1D8CB'}], afterPhotos:recs.map(function(r){ return photo(r); }),
-      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:(source==='travel'?'이서연（KR室长）':actingName()), uploadedAt:'2026-09-'+day+' 10:00',
+      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:(source==='travel'?'KM1 室长（KR室长）':actingName()), uploadedAt:'2026-09-'+day+' 10:00',
       editedBy:null, editedAt:null});
   }
-  mk('切开双眼皮 · 自然平行型','travel',['切开双眼皮'],'김민석 원장',[],['1周','1个月','3个月'],'16');
-  mk('埋线双眼皮 术后恢复','travel',['埋线双眼皮'],'이수진 원장',[],['1周','1个月'],'14');
-  mk('假体隆鼻 基底改善','travel',['假体隆鼻'],'김민석 원장',[],['1个月','6个月'],'12');
-  mk('鼻综合 鼻尖精修','travel',['鼻综合（假体+鼻尖）'],'박지훈 원장',[],['3个月'],'10'); /* 박지훈 已停用 → 院长显示"-" */
-  mk('颧骨缩小 侧面轮廓','travel',['颧骨缩小'],'김민석 원장',[],['1周','3个月'],'09');
-  mk('下颌角整形联合方案','travel',['下颌角整形','颧骨缩小'],'이수진 원장',[],['1个月'],'08');
-  mk('面部拉皮 提升','travel',['面部拉皮'],'김민석 원장',[],['3个月','6个月'],'07');
-  mk('自体脂肪移植 面部填充','travel',['自体脂肪移植（全脸）'],'이수진 원장',[],['1个月'],'06');
+  mk('切开双眼皮 · 自然平行型','travel',['切开双眼皮'],'KD1 院长',[],['1周','1个月','3个月'],'16');
+  mk('埋线双眼皮 术后恢复','travel',['埋线双眼皮'],'KO1 代表院长',[],['1周','1个月'],'14');
+  mk('假体隆鼻 基底改善','travel',['假体隆鼻'],'KD1 院长',[],['1个月','6个月'],'12');
+  mk('鼻综合 鼻尖精修','travel',['鼻综合（假体+鼻尖）'],'H1 院长3',[],['3个月'],'10'); /* H1 院长3 已停用 → 院长显示"-" */
+  mk('颧骨缩小 侧面轮廓','travel',['颧骨缩小'],'KD1 院长',[],['1周','3个月'],'09');
+  mk('下颌角整形联合方案','travel',['下颌角整形','颧骨缩小'],'KO1 代表院长',[],['1个月'],'08');
+  mk('面部拉皮 提升','travel',['面部拉皮'],'KD1 院长',[],['3个月','6个月'],'07');
+  mk('自体脂肪移植 面部填充','travel',['自体脂肪移植（全脸）'],'KO1 代表院长',[],['1个月'],'06');
   mk('好莱坞焕肤 色素改善','local',['好莱坞焕肤 1次'],null,['色素沉着','暗沉'],['1周','1个月'],'15');
   mk('Genesis焕肤 暗沉改善','local',['Genesis焕肤（Clarity II）1次'],null,['暗沉'],['1个月'],'13'); /* 项目已非活性化 → 卡片标"已非活性" */
   mk('黄金微针 毛孔紧致','local',['黄金微针 毛孔探头'],null,['毛孔粗大','痘印'],['1个月','3个月'],'11');
@@ -4172,35 +4162,35 @@ function markAllNotifRead(){ notifFiltered().forEach(function(n){ n.read[ME_NAME
 function demoNotif(kind){
   var ayu = CASE_ITEMS.filter(function(x){ return x.id==='ayu'; })[0];
   if(kind==='report') pushNotif('面诊','报告已出：'+ayu.name+'（'+ayu.caseNo+'），已进入项目确认中', {caseId:'ayu'});
-  else if(kind==='missed') pushNotif('视频','未接来电：이서연 呼叫了 '+ayu.name+' 的案件视频', {caseId:'ayu', link:{kind:'caseRoom'}});
+  else if(kind==='missed') pushNotif('视频','未接来电：KM1 室长 呼叫了 '+ayu.name+' 的案件视频', {caseId:'ayu', link:{kind:'caseRoom'}});
   else if(kind==='at'){
     ensureCaseRoom(ayu); var roomId = getCaseRoomId('ayu');
-    CHAT_DATA[roomId].push({day:KD(0), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'@Dewi 这位客人的报告我已经补充了，请看一下。', trans:'（演示译文）', time:nowTime(), ts:nowFullDt()});
-    pushNotif('对话','이서연 在「'+ayu.name+' · '+ayu.caseNo+'」里 @ 了你', {caseId:'ayu', names:[ME_NAME], link:{kind:'mention', roomId:roomId, msgIdx:CHAT_DATA[roomId].length-1}});
+    CHAT_DATA[roomId].push({day:KD(0), from:'them', name:'KM1 室长', color:'var(--sage)', init:'이', orig:'@A1 室长 这位客人的报告我已经补充了，请看一下。', trans:'（演示译文）', time:nowTime(), ts:nowFullDt()});
+    pushNotif('对话','KM1 室长 在「'+ayu.name+' · '+ayu.caseNo+'」里 @ 了你', {caseId:'ayu', names:[ME_NAME], link:{kind:'mention', roomId:roomId, msgIdx:CHAT_DATA[roomId].length-1}});
   }
   else if(kind==='system') pushNotif('系统','诊所管理账号更新了设定：面诊费 300,000 → 350,000 印尼盾，'+D(15)+' 起生效', {names:IN_COORDINATORS, link:{kind:'system'}, detail:{title:'面诊费调整', changes:['面诊费 300,000 → 350,000 印尼盾'], effective:D(15)+' 起'}});
-  else if(kind==='noshow') pushNotif('预约','未到店（自动判定）：Bayu Aditya 过预约时间30分钟未到店，已取消', {caseId:'bayu'});
-  else if(kind==='schedule') pushNotif('赴韩施术','KR 确认施术时间：Nadia Permata '+D(2)+' 14:00', {caseId:'nadia'});
-  else if(kind==='other') pushNotif('面诊','报告已出：Andi Wijaya（这个案件只有 Rina 操作过 → 只发给 Rina）', {caseId:'andi'});
+  else if(kind==='noshow') pushNotif('预约','未到店（自动判定）：客人13 过预约时间30分钟未到店，已取消', {caseId:'bayu'});
+  else if(kind==='schedule') pushNotif('赴韩施术','KR 确认施术时间：客人9 '+D(2)+' 14:00', {caseId:'nadia'});
+  else if(kind==='other') pushNotif('面诊','报告已出：客人3（这个案件只有 A2 室长 操作过 → 只发给 A2 室长）', {caseId:'andi'});
 }
 
 /* 演示通知（各分类至少一条，含已读/未读） */
 (function seedNotifs(){
   function add(cat, text, caseId, ts, read, link, detail, names){
-    var n = {id:'n'+(++NOTIF_SEQ), cat:cat, text:text, caseId:caseId, ts:ts, recipients:names||['Dewi'], read:read?{Dewi:true}:{}, link:link||(caseId?{kind:'case'}:{kind:'none'}), detail:detail||null};
+    var n = {id:'n'+(++NOTIF_SEQ), cat:cat, text:text, caseId:caseId, ts:ts, recipients:names||['A1 室长'], read:read?{'A1 室长':true}:{}, link:link||(caseId?{kind:'case'}:{kind:'none'}), detail:detail||null};
     NOTIFS.push(n);
   }
-  add('预约','客人自助预约提交：Siti Rahayu（A000017）','siti',D(0)+' 09:05',false);
-  add('预约','未到店（自动判定）：Bayu Aditya 过预约时间30分钟未到店，已取消','bayu',D(-1)+' 10:31',true);
+  add('预约','客人自助预约提交：客人1（A000017）','siti',D(0)+' 09:05',false);
+  add('预约','未到店（自动判定）：客人13 过预约时间30分钟未到店，已取消','bayu',D(-1)+' 10:31',true);
   add('预约','预约占位快过期（剩 5 分钟）：+62 812-3300-0099','',D(-1)+' 12:55',true,{kind:'none'});
-  add('面诊','KR 确认预计出报告时间：Putri Wulandari '+D(2)+' 14:00','putri',D(-4)+' 16:00',true);
-  add('面诊','等待报告超过预计时间：Dedi Prasetyo（预计 '+D(0)+' 08:00）','dedi',D(0)+' 08:05',false);
-  add('面诊','报告已出：Ayu Lestari（A000006）','ayu',D(-2)+' 11:20',true);
-  add('赴韩施术','KR 确认施术时间：Nadia Permata '+D(2)+' 14:00','nadia',D(-3)+' 10:00',true);
-  add('赴韩施术','客人已到医院：Nadia Permata','nadia',D(-1)+' 09:30',false);
-  add('视频','未接来电：이서연 呼叫了 Ayu Lestari 的案件视频','ayu',D(-1)+' 15:20',false,{kind:'caseRoom'});
-  add('对话','이서연 在「Ayu Lestari · A000006」里 @ 了你','ayu',D(-2)+' 13:10',true,{kind:'mention', roomId:'case-ayu', msgIdx:0});
-  add('系统','诊所管理账号更新了设定：营业时间 09:00–18:00 → 09:00–19:00，'+D(2)+' 起生效','',D(-2)+' 08:00',true,{kind:'system'},{title:'营业时间调整', changes:['营业时间 09:00–18:00 → 09:00–19:00'], effective:D(2)+' 起'},['Dewi','Rina']);
+  add('面诊','KR 确认预计出报告时间：客人6 '+D(2)+' 14:00','putri',D(-4)+' 16:00',true);
+  add('面诊','等待报告超过预计时间：客人7（预计 '+D(0)+' 08:00）','dedi',D(0)+' 08:05',false);
+  add('面诊','报告已出：客人2（A000006）','ayu',D(-2)+' 11:20',true);
+  add('赴韩施术','KR 确认施术时间：客人9 '+D(2)+' 14:00','nadia',D(-3)+' 10:00',true);
+  add('赴韩施术','客人已到医院：客人9','nadia',D(-1)+' 09:30',false);
+  add('视频','未接来电：KM1 室长 呼叫了 客人2 的案件视频','ayu',D(-1)+' 15:20',false,{kind:'caseRoom'});
+  add('对话','KM1 室长 在「客人2 · A000006」里 @ 了你','ayu',D(-2)+' 13:10',true,{kind:'mention', roomId:'case-ayu', msgIdx:0});
+  add('系统','诊所管理账号更新了设定：营业时间 09:00–18:00 → 09:00–19:00，'+D(2)+' 起生效','',D(-2)+' 08:00',true,{kind:'system'},{title:'营业时间调整', changes:['营业时间 09:00–18:00 → 09:00–19:00'], effective:D(2)+' 起'},['A1 室长','A2 室长']);
 })();
 
 /* 日历上"等待报告超过预计时间"自动提醒用的标记：dedi 演示案件已经提醒过 */
@@ -4211,10 +4201,10 @@ CASE_ITEMS.filter(function(c){ return c.id==='dedi'; }).forEach(function(c){ c.o
 
 var ROOMS = [
   {id:'main', name:'Main · 全员', isMain:true, color:'var(--slate2)', init:'G', date:'今天 09:20'},
-  {id:'kr-lee', name:'이서연 · 韩国室长', color:'var(--sage)', init:'이', date:'今天 14:02'},
-  {id:'director-kim', name:'김민석 · 院长', color:'var(--slate2)', init:'김', date:'昨天'},
-  {id:'rina', name:'Rina · 印尼室长', color:'var(--terracotta)', init:'R', date:'2 天前'},
-  {id:'grp-이서연-rina', name:'이서연、Rina', color:'var(--blue)', init:'G', date:'今天'}
+  {id:'kr-lee', name:'KM1 室长 · 韩国室长', color:'var(--sage)', init:'이', date:'今天 14:02'},
+  {id:'director-kim', name:'KD1 院长 · 院长', color:'var(--slate2)', init:'김', date:'昨天'},
+  {id:'rina', name:'A2 室长 · 印尼室长', color:'var(--terracotta)', init:'R', date:'2 天前'},
+  {id:'grp-KM1 室长-rina', name:'KM1 室长、A2 室长', color:'var(--blue)', init:'G', date:'今天'}
 ];
 
 function drawerFootAction(){
@@ -4223,9 +4213,9 @@ function drawerFootAction(){
 }
 
 var STAFF_ROSTER = [
-  {id:'kr-lee', name:'이서연 · 韩国室长'},
-  {id:'director-kim', name:'김민석 · 院长'},
-  {id:'rina', name:'Rina · 印尼室长'}
+  {id:'kr-lee', name:'KM1 室长 · 韩国室长'},
+  {id:'director-kim', name:'KD1 院长 · 院长'},
+  {id:'rina', name:'A2 室长 · 印尼室长'}
 ];
 
 function confirmNewCaseChat(caseId){
@@ -4247,26 +4237,26 @@ function roomLastKey(roomId){
 
 var CHAT_DATA = {
   'kr-lee':[
-    {day:KD(-1), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'Siti Rahayu 자료 검토 부탁드립니다.', trans:'Siti Rahayu 的材料麻烦帮忙看一下。', time:'14:00'},
+    {day:KD(-1), from:'them', name:'KM1 室长', color:'var(--sage)', init:'이', orig:'客人1 자료 검토 부탁드립니다.', trans:'客人1 的材料麻烦帮忙看一下。', time:'14:00'},
     {day:KD(-1), from:'me', orig:'好的，我这边帮您确认，院长看完资料后会出报告。', time:'14:05'},
-    {day:KD(0), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'면담 시간은 09.20 14:00 KST로 확정됐습니다.', trans:'预计出报告时间已确认为 09.20 14:00（KST）。', time:'09:12'},
+    {day:KD(0), from:'them', name:'KM1 室长', color:'var(--sage)', init:'이', orig:'면담 시간은 09.20 14:00 KST로 확정됐습니다.', trans:'预计出报告时间已确认为 09.20 14:00（KST）。', time:'09:12'},
     {day:KD(0), from:'me', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20', refCaseId:'ayu'},
-    {day:KD(0), from:'me', orig:'Lina 之前的报告可以当参考。', trans:'Lina 님의 이전 리포트를 참고하세요.', time:'10:25', refCaseId:'lina'}
+    {day:KD(0), from:'me', orig:'客人22 之前的报告可以当参考。', trans:'客人22 님의 이전 리포트를 참고하세요.', time:'10:25', refCaseId:'lina'}
   ],
   'main':[
-    {day:KD(0), from:'them', name:'김민석 원장', color:'var(--slate2)', init:'김', orig:'이번 주 신규 케이스 3건 검토 예정입니다.', trans:'本周有 3 个新案件待审核。', time:'09:00'},
-    {day:KD(0), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Budi Santoso 案件资料补充中，晚点提交。', time:'09:20'},
-    {day:KD(0), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'@Dewi 下午的持有项目对账麻烦你过来一下。', trans:'（演示译文）', time:'09:40'}
+    {day:KD(0), from:'them', name:'KD1 院长', color:'var(--slate2)', init:'김', orig:'이번 주 신규 케이스 3건 검토 예정입니다.', trans:'本周有 3 个新案件待审核。', time:'09:00'},
+    {day:KD(0), from:'them', name:'A2 室长', color:'var(--terracotta)', init:'R', orig:'客人20 案件资料补充中，晚点提交。', time:'09:20'},
+    {day:KD(0), from:'them', name:'A2 室长', color:'var(--terracotta)', init:'R', orig:'@A1 室长 下午的持有项目对账麻烦你过来一下。', trans:'（演示译文）', time:'09:40'}
   ],
-  'grp-이서연-rina':[
-    {day:KD(0), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'这周 KR 那边的开放日期都排满了吗？', trans:'이번 주 KR 쪽 개방 일정이 다 찼나요?', time:'10:05'},
-    {day:KD(0), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'아직 21일, 22일이 비어 있습니다.', trans:'21 日、22 日还有空位。', time:'10:12'}
+  'grp-KM1 室长-rina':[
+    {day:KD(0), from:'them', name:'A2 室长', color:'var(--terracotta)', init:'R', orig:'这周 KR 那边的开放日期都排满了吗？', trans:'이번 주 KR 쪽 개방 일정이 다 찼나요?', time:'10:05'},
+    {day:KD(0), from:'them', name:'KM1 室长', color:'var(--sage)', init:'이', orig:'아직 21일, 22일이 비어 있습니다.', trans:'21 日、22 日还有空位。', time:'10:12'}
   ],
   'director-kim':[
-    {day:KD(-1), from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Siti Rahayu 자료 잘 받았습니다, 검토하겠습니다.', trans:'Siti Rahayu 的材料已收到，我会审核。', time:'11:40'}
+    {day:KD(-1), from:'them', name:'KD1 院长', color:'var(--slate2)', init:'김', orig:'客人1 자료 잘 받았습니다, 검토하겠습니다.', trans:'客人1 的材料已收到，我会审核。', time:'11:40'}
   ],
   'rina':[
-    {day:KD(-2), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Budi 的材料我再补充一下', time:'16:20'}
+    {day:KD(-2), from:'them', name:'A2 室长', color:'var(--terracotta)', init:'R', orig:'客人20 的材料我再补充一下', time:'16:20'}
   ],
 
   /* 案件专属房间：只给已经生成 Case ID 的案件开（见 docs/conversation-video-flow.md"只有主动发起过对话的案件才会存在"），
@@ -4276,20 +4266,20 @@ var CHAT_DATA = {
   ],
   'case-maya':[
     {day:KD(-2), from:'me', orig:'客人想知道大概多久能出报告。', trans:'고객이 리포트가 언제쯤 나오는지 궁금해합니다.', time:'14:40'},
-    {day:KD(-2), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'수신했습니다, 원장님께 전달하겠습니다.', trans:'已收到，会转达给院长。', time:'15:10'}
+    {day:KD(-2), from:'them', name:'KM1 室长', color:'var(--sage)', init:'이', orig:'수신했습니다, 원장님께 전달하겠습니다.', trans:'已收到，会转达给院长。', time:'15:10'}
   ],
   'case-putri':[
-    {day:KD(-4), from:'them', name:'이서연', color:'var(--sage)', init:'이', orig:'자료 확인했습니다. 원장님과 함께 검토 중입니다.', trans:'资料已确认，正在和院长一起看。', time:'16:05'}
+    {day:KD(-4), from:'them', name:'KM1 室长', color:'var(--sage)', init:'이', orig:'자료 확인했습니다. 원장님과 함께 검토 중입니다.', trans:'资料已确认，正在和院长一起看。', time:'16:05'}
   ],
   'case-dedi':[
     {day:KD(0), from:'me', orig:'客人在问报告什么时候能好，我先回复她还在等。', trans:'고객이 리포트 일정을 물어 아직 기다리는 중이라고 답했습니다.', time:'09:10'}
   ],
   'case-budi':[
-    {day:KD(2), from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'윤곽 이완은 중등도입니다. 초음파 리프팅 먼저 평가하시죠.', trans:'轮廓松弛属中度，建议先评估超声刀。', time:'09:30'}
+    {day:KD(2), from:'them', name:'KD1 院长', color:'var(--slate2)', init:'김', orig:'윤곽 이완은 중등도입니다. 초음파 리프팅 먼저 평가하시죠.', trans:'轮廓松弛属中度，建议先评估超声刀。', time:'09:30'}
   ],
   'case-ayu':[
-    {day:KD(1), from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'Ayu Lestari 리포트 발송했습니다.', trans:'Ayu Lestari 的面诊报告已发送。', time:'11:20'},
-    {day:KD(0), from:'me', kind:'quote', speaker:'Dewi', srcRoomId:'kr-lee', srcRoom:'이서연 · 韩国室长', srcIdx:3, srcDt:'26-09-18 10:20', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20'} /* 从其他房间引用进来 */
+    {day:KD(1), from:'them', name:'KD1 院长', color:'var(--slate2)', init:'김', orig:'客人2 리포트 발송했습니다.', trans:'客人2 的面诊报告已发送。', time:'11:20'},
+    {day:KD(0), from:'me', kind:'quote', speaker:'A1 室长', srcRoomId:'kr-lee', srcRoom:'KM1 室长 · 韩国室长', srcIdx:3, srcDt:'26-09-18 10:20', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20'} /* 从其他房间引用进来 */
   ],
   'case-fajar':[
     {day:KD(3), from:'me', orig:'客人说想再对比一下鼻翼缩小的价格，稍后回复。', trans:'고객이 콧볼 축소 가격을 다시 비교해 보겠다고 했습니다.', time:'10:00'}
@@ -4299,10 +4289,10 @@ var CHAT_DATA = {
   ],
   'case-nadia':[
     {day:KD(2), from:'me', orig:'客人已经到首尔了，酒店信息我发给 KR 室长。', trans:'고객이 서울에 도착했고 호텔 정보를 KR 실장님께 보냅니다.', time:'11:00'},
-    {day:KD(4), from:'them', name:'김민석', color:'var(--slate2)', init:'김', orig:'턱 보형물 시술 완료했습니다, 광대축소술은 다음 주 예정입니다.', trans:'下巴假体已完成，颧骨缩小下周进行。', time:'14:00'}
+    {day:KD(4), from:'them', name:'KD1 院长', color:'var(--slate2)', init:'김', orig:'턱 보형물 시술 완료했습니다, 광대축소술은 다음 주 예정입니다.', trans:'下巴假体已完成，颧骨缩小下周进行。', time:'14:00'}
   ],
   'case-rizky':[
-    {day:KD(1), from:'them', name:'Rina', color:'var(--terracotta)', init:'R', orig:'Rizky 的赴韩项目已经全部完成，本地这边还剩一项', time:'09:30'}
+    {day:KD(1), from:'them', name:'A2 室长', color:'var(--terracotta)', init:'R', orig:'客人11 的赴韩项目已经全部完成，本地这边还剩一项', time:'09:30'}
   ],
   'case-rina':[
     {day:KD(-22), from:'me', orig:'客人对结果很满意，之后回来做护理再约。', trans:'고객이 결과에 매우 만족하며 이후 관리는 다시 예약하겠다고 했습니다.', time:'09:00'}
@@ -4325,7 +4315,7 @@ function mainRoomId(hid){ return 'main-'+hid; }
 function mainRoomHospital(id){ return String(id).indexOf('main-')===0 ? String(id).slice(5) : null; }
 function caseKrHospital(c){ return caseHospitalId(c) || linkedHospitalIds(c.clinicId)[0] || null; } /* 案件的 KR 一侧是哪家医院（没选时只对接一家就是那家） */
 /* "演示：模拟KR…"按钮写进案件 Timeline 的 KR 操作人：用该案件所选医院的室长/院长（不再写死 H1 的人） */
-function krCoordShort(c){ return (c && c.krCoordinator ? c.krCoordinator.split(' ')[0] : null) || krCoordinatorsOf(c)[0] || '이서연'; }
+function krCoordShort(c){ return (c && c.krCoordinator ? c.krCoordinator.split(' ')[0] : null) || krCoordinatorsOf(c)[0] || 'KM1 室长'; }
 /* KR 端通知（2026-10-06，KR 端系列 2/5·六）：写进该医院的资料里（全局存档），KR 页面收到存档变化后即时刷新
    to：'coord' = 该医院的 KR 室长/管理者；'director' = 案件所选院长；kind：'consultpaid' 等。IN 端的事件在这里调用 */
 function pushKrNotif(hid, text, opt){
@@ -4336,7 +4326,7 @@ function pushKrNotif(hid, text, opt){
   h.notifs.unshift(n); if(h.notifs.length>200) h.notifs.length = 200;
   return n;
 }
-function krDirName(c){ return (c && c.director) || hospitalDirectorNames(caseKrHospital(c))[0] || '김민석 원장'; }
+function krDirName(c){ return (c && c.director) || hospitalDirectorNames(caseKrHospital(c))[0] || 'KD1 院长'; }
 function syncKrCoordinator(c){ var hs = hospitalCoordinators(caseKrHospital(c)); if(hs.length && (!c.krCoordinator || hs.indexOf(c.krCoordinator.split(' ')[0])<0)) c.krCoordinator = hs[0]+' 실장'; }
 function krCoordinatorsOf(c){ return hospitalCoordinators(caseKrHospital(c)).slice(); }
 function allKrCoordinatorNames(){ var out = []; Object.keys(HOSPITAL_DATA).forEach(function(h){ out = out.concat(HOSPITAL_DATA[h].coordinators || []); }); return out; } /* 认操作人用：所有医院的 KR 室长 */
@@ -4359,12 +4349,14 @@ function caseRoomMembers(c){
 /* ---- 备忘 / OFF 数据（2026-10-02·七）：IN 室长的 OFF 从"新增 memo"来；KR 院长/KR 室长的 OFF 用演示数据代替（KR 端功能） ----
    {id, date, type:'备忘'|'OFF', scope:'公开'|'私人', role:'IN室长'|'KR室长'|'KR院长'(OFF 用), person:(OFF 的人), author, text} */
 var DEMO_MEMOS = [
-  {id:'m1', date:D(0), type:'OFF', scope:'公开', role:'KR院长', person:'이수진 원장', author:'KR（演示）', text:''},
-  {id:'m2', date:D(0), type:'OFF', scope:'公开', role:'KR室长', person:'이서연', author:'KR（演示）', text:''},
-  {id:'m3', date:D(1), type:'OFF', scope:'公开', role:'IN室长', person:'Rina', author:'Rina', text:''},
-  {id:'m4', date:D(3), type:'OFF', scope:'公开', role:'KR院长', person:'김민석 원장', author:'KR（演示）', text:''},
-  {id:'m5', date:D(0), type:'备忘', scope:'公开', author:'Dewi', text:'下午整理持有项目对账'},
-  {id:'m6', date:D(-1), type:'备忘', scope:'私人', author:'Dewi', text:'给 Rizky 回电（私人）'}
+  /* IN 室长的 OFF（2026-10-08 重设）：A1 每周一；A2 单次整天 10/5、10/14、10/23、10/28；其余旧 OFF 清掉。KR 的 OFF 在 HOSPITAL_DATA[h].offs 里 */
+  {id:'m1', date:'2026-10-05', weekly:true, dow:1, type:'OFF', scope:'公开', role:'IN室长', person:'A1 室长', author:'A1 室长', text:''},
+  {id:'m2', date:'2026-10-05', type:'OFF', scope:'公开', role:'IN室长', person:'A2 室长', author:'A2 室长', text:''},
+  {id:'m3', date:'2026-10-14', type:'OFF', scope:'公开', role:'IN室长', person:'A2 室长', author:'A2 室长', text:''},
+  {id:'m4', date:'2026-10-23', type:'OFF', scope:'公开', role:'IN室长', person:'A2 室长', author:'A2 室长', text:''},
+  {id:'m4b', date:'2026-10-28', type:'OFF', scope:'公开', role:'IN室长', person:'A2 室长', author:'A2 室长', text:''},
+  {id:'m5', date:D(0), type:'备忘', scope:'公开', author:'A1 室长', text:'下午整理持有项目对账'},
+  {id:'m6', date:D(-1), type:'备忘', scope:'私人', author:'A1 室长', text:'给 客人11 回电（私人）'}
 ];
 
 var CAL_MEMOS = (function(){ try{ var v = JSON.parse(localStorage.getItem('gmc_memos')||'null'); if(v) return v; }catch(e){} return DEMO_MEMOS.map(function(m){ return Object.assign({}, m); }); })();
@@ -4386,7 +4378,7 @@ function caseOperators(c, strict){
 }
 
 function shouldPushToMe(c){ return pushTargets(c).inn.indexOf(ME_NAME)>-1; }
- /* 演示视角：当前登录的是 Dewi（IN室长） */
+ /* 演示视角：当前登录的是 A1 室长（IN室长） */
 function roomSysMsg(text){ return {day:KD(0), from:'sys', kind:'sys', orig:text, time:nowTime(), ts:nowFullDt()}; }
 
 /* 点［发起对话］/新建案件对话时才建房（有房间之后才出现在抽屉里）；建房时IN室长进入房间 */
@@ -4492,7 +4484,7 @@ function quoteDt(m){
 }
 
 /* ---- 对话房成员（2026-09-30）：案件房成员=客人选择的院长+全部印尼室长+全部韩国室长（案件中途可能换人，院长可更换） ---- */
-var IN_COORDINATORS = ['Dewi','Rina'];
+var IN_COORDINATORS = ['A1 室长','A2 室长'];
 
 /* 成员下拉（2026-10-02 增量·三）：点击房间名称 ▾ 显示成员；院长标"静音"，OFF 的人标"今日 OFF"（取代原来的 👤 成员 icon） */
 function memberRowsHtml(){
@@ -4543,10 +4535,10 @@ CASE_ITEMS.forEach(function(c){
 
 /* 种子数据全部跑完：之后的操作人 = 当前登录的人；IN 室长名单按账号重算 */
 SEEDING = false;
-/* 在韩进行中的演示数据（KR 端系列 4/5）：Nadia = 在韩进行中（今天施术，有 timeline）；Rina / Wulan = 已结案（子项全部完成）；Dinda（H2）已付定金还没有 timeline */
+/* 在韩进行中的演示数据（KR 端系列 4/5）：客人9 = 在韩进行中（今天施术，有 timeline）；A2 室长 / 客人21 = 已结案（子项全部完成）；客人10（H2）已付定金还没有 timeline */
 (function seedKrProgress(){
   var byId = function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; };
-  var mk = function(c, n, date, content, kind, place, done, proj){ return {id:'s'+c.id+n, no:c.caseNo+'-'+pad2(n), date:date, content:content, kind:kind, place:place, projectName:proj||'', done:!!done, doneAt:done?date+' 12:00':'', doneBy:done?'이서연':'', informed:false}; };
+  var mk = function(c, n, date, content, kind, place, done, proj){ return {id:'s'+c.id+n, no:c.caseNo+'-'+pad2(n), date:date, content:content, kind:kind, place:place, projectName:proj||'', done:!!done, doneAt:done?date+' 12:00':'', doneBy:done?'KM1 室长':'', informed:false}; };
   var nad = byId('nadia'); if(nad){
     nad.krJudge = {result:'ok', settled:true};
     var first = krActiveItems(nad)[0];
@@ -4556,23 +4548,23 @@ SEEDING = false;
   var wulan = byId('wulan'); if(wulan){ wulan.subItems = [mk(wulan,1,D(-5),'施术','施术','KR',true), mk(wulan,2,D(-4),'复诊','复诊','KR',true)]; wulan.krJudge = wulan.krJudge || {result:'ok', settled:true}; }
 })();
 initHospitalData();
+seedKrMonthDemo(); /* 休诊 / OFF / 开放日期 / 不可预约块先就位，后面的施术案件按它们选日期 */
 normalizeSeeds();
 /* 院长资料（KR-DOC-01 介绍卡）：名单 ≠ 账号。字段：nameEn / nameZh / title（代表院长|院长）/ photo / color / career[{when:现|前, ko, zh, id}] / certs[] / societies[]（{ko, zh, id}）/ specialties[项目名，选自本医院项目库]
    韩文填写，演示翻译成印尼文 / 中文，可修改（demoTranslate，不是真实翻译） */
 function trItem(ko){ return {ko:ko, zh:demoTranslate(ko,'ko','zh'), id:demoTranslate(ko,'ko','id')}; }
 function seedDoctorProfiles(){
   var P = {
-    '김민석 원장':{nameEn:'Kim Min-seok', nameZh:'金旼锡', title:'院长', color:'#C9B8A3', career:[['现','서울 소수 성형외과 원장'],['前','강남 ID 병원 원장']], certs:['Ulthera 공식 인증의'], societies:['대한성형외과학회 정회원'], specialties:['假体隆鼻','鼻翼缩小','鼻综合（假体+鼻尖）']},
-    '이수진 원장':{nameEn:'Lee Su-jin', nameZh:'李秀珍', title:'院长', color:'#B8C9BD', career:[['现','서울 소수 성형외과 원장'],['前','서울대병원 성형외과 전임의']], certs:['대한안성형학회 인증의'], societies:['대한안성형학회 회원'], specialties:['切开双眼皮','埋线双眼皮','双眼皮修复']},
-    '박지훈 원장':{nameEn:'Park Ji-hoon', nameZh:'朴智勋', title:'院长', color:'#C4C4C4', career:[['前','서울 소수 성형외과 원장（퇴직）']], certs:[], societies:[], specialties:['颧骨缩小']},
-    '박소현 원장':{nameEn:'Park So-hyun', nameZh:'朴昭炫', title:'代表院长', color:'#D3B8B8', career:[['现','서울 소수 성형외과 대표원장'],['前','압구정 소수 클리닉 원장']], certs:['Alma Accent Prime Key Doctor'], societies:['한국미용성형레이저의학회 회원'], specialties:['自体脂肪移植（全脸）','面部拉皮']},
-    '박서윤 원장':{nameEn:'Park Seo-yoon', nameZh:'朴瑞润', title:'院长', color:'#B9C3D6', career:[['现','강남 뷰티의원 원장']], certs:['대한성형외과학회 전문의'], societies:['대한성형외과학회 정회원'], specialties:['切开双眼皮','假体隆鼻','鼻综合（假体+鼻尖）']},
-    '최지호 원장':{nameEn:'Choi Ji-ho', nameZh:'崔智浩', title:'院长', color:'#D6CDB9', career:[['现','강남 뷰티의원 원장']], certs:[], societies:[], specialties:['颧骨缩小','下颌角整形']},
-    '한도윤 원장':{nameEn:'Han Do-yoon', nameZh:'韩道允', title:'院长', color:'#C4C4C4', career:[['前','강남 뷰티의원 원장（퇴직）']], certs:[], societies:[], specialties:[]}
+    'KD1 院长':{nameEn:'', nameZh:'', title:'院长', color:'#C9B8A3', career:[['现','서울 소수 성형외과 원장'],['前','강남 ID 병원 원장']], certs:['Ulthera 공식 인증의'], societies:['대한성형외과학회 정회원'], specialties:['假体隆鼻','鼻翼缩小','鼻综合（假体+鼻尖）']},
+    'H1 院长3':{nameEn:'', nameZh:'', title:'院长', color:'#C4C4C4', career:[['前','서울 소수 성형외과 원장（퇴직）']], certs:[], societies:[], specialties:['颧骨缩小']},
+    'KO1 代表院长':{nameEn:'', nameZh:'', title:'代表院长', color:'#D3B8B8', career:[['现','서울 소수 성형외과 대표원장'],['前','압구정 소수 클리닉 원장']], certs:['Alma Accent Prime Key Doctor'], societies:['한국미용성형레이저의학회 회원'], specialties:['自体脂肪移植（全脸）','面部拉皮']},
+    'H2 院长1':{nameEn:'', nameZh:'', title:'院长', color:'#B9C3D6', career:[['现','강남 뷰티의원 원장']], certs:['대한성형외과학회 전문의'], societies:['대한성형외과학회 정회원'], specialties:['切开双眼皮','假体隆鼻','鼻综合（假体+鼻尖）']},
+    'H2 院长2':{nameEn:'', nameZh:'', title:'院长', color:'#D6CDB9', career:[['现','강남 뷰티의원 원장']], certs:[], societies:[], specialties:['颧骨缩小','下颌角整形']},
+    'H2 院长3':{nameEn:'', nameZh:'', title:'院长', color:'#C4C4C4', career:[['前','강남 뷰티의원 원장（퇴직）']], certs:[], societies:[], specialties:[]}
   };
   Object.keys(HOSPITAL_DATA).forEach(function(hid){
     var h = HOSPITAL_DATA[hid];
-    if(hid==='H1' && !h.directors.some(function(x){ return x.name==='박소현 원장'; })){ h.directors.push({id:'H1-D4', name:'박소현 원장', active:true}); h.openDates['박소현 원장'] = []; } /* 代表院长也在名单里（她的老板账号只管营运，两个身份分开） */
+    if(hid==='H1' && !h.directors.some(function(x){ return x.name==='KO1 代表院长'; })){ h.directors.push({id:'H1-D4', name:'KO1 代表院长', active:true}); h.openDates['KO1 代表院长'] = []; } /* 代表院长也在名单里（她的老板账号只管营运，两个身份分开） */
     h.directors.forEach(function(dr){
       var p = P[dr.name]; if(!p || dr.nameEn) return;
       dr.nameEn = p.nameEn; dr.nameZh = p.nameZh; dr.title = p.title; dr.color = p.color; dr.photo = '';
@@ -4598,7 +4590,6 @@ function seedProjectDefaults(){
   Object.keys(HOSPITAL_DATA).forEach(function(hid){ (HOSPITAL_DATA[hid].projects||[]).forEach(function(p){ var df = D0[p.name]; if(df && !p.defaults) p.defaults = JSON.parse(JSON.stringify(df)); }); });
 }
 seedProjectDefaults();
-seedKrMonthDemo();
 Object.keys(HOSPITAL_DATA).forEach(normSchedBlocks);
 CASE_ITEMS.forEach(function(c){ if(c.krSchedule && c.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(c.krSchedule.status)>-1 && c.director) syncSurgeryBlock(c); }); /* 演示数据里已确认施术时间的案件，院长日程里也有施术块 */
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */
@@ -4607,6 +4598,7 @@ syncInCoordinators();
 applyClinicSettings();
 /* C1 种子 + 全局种子（账号、日志、医院资料）的系统时间点换算成 UTC */
 (function(){ try{
+  seedFixVisits(); /* 预约 / 占位不能落在休诊时段 */
   seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS));
   seedTimesToUtc(ACCOUNTS.filter(function(a){ return !a.hospitalId; }).concat(ACCOUNT_LOG.filter(function(l){ return !l.hospitalId; })), clinicTzOf(CLINIC_SETTINGS));
   seedTimesToUtc(ACCOUNTS.filter(function(a){ return a.hospitalId; }).concat(ACCOUNT_LOG.filter(function(l){ return l.hospitalId; })).concat([HOSPITAL_DATA]), KR_TZ);
@@ -4626,23 +4618,22 @@ function initHospitalData(){
     H1:{
       directors: DIRECTOR_INFO.map(function(d, i){ return {id:'H1-D'+(i+1), name:d.name, active:d.active}; }),
       coordinators: KR_COORDINATORS.slice(),
-      openDates: {'김민석 원장': KR_OPEN_DATES.slice(), '이수진 원장': dayList([2,3,4,5,11,12,18,19,25,26,32,33,39,40]), '박지훈 원장': []},
-      directorSchedule: KR_DIRECTOR_SCHEDULE, coordSchedule: KR_COORD_SCHEDULE, projects:[], libCases:[],
-      offs: [{date:D(0), who:'이수진 원장', kind:'director', note:'休假'}, {date:D(0), who:'박준혁 실장', kind:'coord', note:'调休'}, {date:D(1), who:'김민석 원장', kind:'director', note:'学会'}],
+      openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], /* 医院每周日休诊 + 周六 16:00 起休诊（韩国时间） */
+      directorSchedule: {}, coordSchedule: [], projects:[], libCases:[],
+      offs: [], /* OFF 在 seedKrMonthDemo 里设（KO1 每周一 + 10/20 年假；KD1 每周三 + 10/15 上午；KM1 每周四；KC1 每周五） */
       dayConfirm: {}, reportRead: {}, chatRead: {},
       notifs: [
-        {id:'kn1', ts:D(-2)+' 14:40', text:'客人已缴面诊费：Maya Putri（A000002，GMC 合作诊所（雅加达））→ 请确认报告时间', clinicId:'C1', caseId:'maya', to:'coord', director:null, kind:'consultpaid', readBy:[]},
-        {id:'kn2', ts:D(0)+' 08:00', text:'报告已超过预计时间：Dedi Prasetyo（A000004）', clinicId:'C1', caseId:'dedi', to:'coord', director:null, kind:'overdue', readBy:[]},
-        {id:'kn3', ts:D(0)+' 09:30', text:'等你出报告：Putri Wulandari（A000003），预计 '+D(2)+' 14:00', clinicId:'C1', caseId:'putri', to:'director', director:'김민석 원장', kind:'waitreport', readBy:[]}
+        {id:'kn1', ts:D(-2)+' 14:40', text:'客人已缴面诊费：客人5（A000002，GMC 合作诊所（雅加达））→ 请确认报告时间', clinicId:'C1', caseId:'maya', to:'coord', director:null, kind:'consultpaid', readBy:[]},
+        {id:'kn2', ts:D(0)+' 08:00', text:'报告已超过预计时间：客人7（A000004）', clinicId:'C1', caseId:'dedi', to:'coord', director:null, kind:'overdue', readBy:[]},
+        {id:'kn3', ts:D(0)+' 09:30', text:'等你出报告：客人6（A000003），预计 '+D(2)+' 14:00', clinicId:'C1', caseId:'putri', to:'director', director:'KD1 院长', kind:'waitreport', readBy:[]}
       ]
     },
     H2:{
-      directors: [{id:'H2-D1', name:'박서윤 원장', active:true}, {id:'H2-D2', name:'최지호 원장', active:true}, {id:'H2-D3', name:'한도윤 원장', active:false}],
-      coordinators: ['정하늘', '최민준'],
-      openDates: {'박서윤 원장': dayList([1,3,4,8,9,15,16,22,23,29,30,36]), '최지호 원장': dayList([2,3,5,6,12,13,19,20,26,27,33]), '한도윤 원장': []},
-      directorSchedule: {'박서윤 원장':[{date:D(0), time:'10:00', title:'手术'}, {date:D(0), time:'10:30', title:'手术'}], '최지호 원장':[{date:D(1), time:'14:00', title:'面诊'}], '한도윤 원장':[]},
-      coordSchedule: [{date:D(0), time:'09:30', title:'정하늘：与 IN 室长对接'}, {date:D(1), time:'11:00', title:'최민준：报告提交'}], projects:[], libCases:[],
-      offs: [{date:D(0), who:'최지호 원장', kind:'director', note:'外出'}],
+      directors: [{id:'H2-D1', name:'H2 院长1', active:true}, {id:'H2-D2', name:'H2 院长2', active:true}, {id:'H2-D3', name:'H2 院长3', active:false}],
+      coordinators: ['KM2 室长', 'KC2 室长'],
+      openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}],
+      directorSchedule: {}, coordSchedule: [], projects:[], libCases:[],
+      offs: [], /* H2 的旧 OFF 清掉 */
       dayConfirm: {}, reportRead: {}, chatRead: {}, notifs: []
     }
   };
@@ -4681,21 +4672,21 @@ function seedHospitalH2(){
     LIB_CASES.push({id:id, hospitalId:'H2', title:title, names:{zh:title, ko:demoTranslate(title,'zh','ko'), id:demoTranslate(title,'zh','id')}, source:'travel',
       projectIds:projNames.map(pid).filter(Boolean), director:director, problemIds:[],
       beforePhotos:[{url:'', color:'#E6DDD0'}], afterPhotos:recs.map(function(r){ return {url:'', color:colors[(ci++)%colors.length], recovery:r, recoveryCustom:''}; }),
-      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:'정하늘（KR室长）', uploadedAt:D(-day)+' 10:00', editedBy:null, editedAt:null});
+      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:'KM2 室长（KR室长）', uploadedAt:D(-day)+' 10:00', editedBy:null, editedAt:null});
   };
-  mk('切开双眼皮 · 自然型（강남）', ['切开双眼皮'], '박서윤 원장', ['1周','1个月'], 12);
-  mk('假体隆鼻 · 侧面线条（강남）', ['假体隆鼻'], '최지호 원장', ['1个月','3个月'], 10);
-  mk('颧骨缩小 · 脸型改善（강남）', ['颧骨缩小'], '한도윤 원장', ['3个月'], 8); /* 한도윤 已停用 → 院长显示"-" */
+  mk('切开双眼皮 · 自然型（강남）', ['切开双眼皮'], 'H2 院长1', ['1周','1个月'], 12);
+  mk('假体隆鼻 · 侧面线条（강남）', ['假体隆鼻'], 'H2 院长2', ['1个月','3个月'], 10);
+  mk('颧骨缩小 · 脸型改善（강남）', ['颧骨缩小'], 'H2 院长3', ['3个月'], 8); /* H2 院长3 已停用 → 院长显示"-" */
 }
 function moveSeedCaseToH2(caseId, director){
-  var H2_NAME_MAP = [['김민석 원장','박서윤 원장'], ['이수진 원장','최지호 원장'], ['박지훈 원장','한도윤 원장'], ['김민석','박서윤'], ['이수진','최지호'], ['박지훈','한도윤'], ['이서연','정하늘'], ['박준혁','최민준']];
+  var H2_NAME_MAP = [['KD1 院长','H2 院长1'], ['KO1 代表院长','H2 院长2'], ['H1 院长3','H2 院长3'], ['KM1 室长','KM2 室长'], ['KC1 室长','KC2 室长']];
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
   var swap = function(o){ var j = JSON.stringify(o); H2_NAME_MAP.forEach(function(m){ j = j.split(m[0]).join(m[1]); }); return JSON.parse(j); };
   var nc = swap(c); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, nc);
   c.hospitalId = 'H2'; if(director) c.director = director;
   var rk = 'case-'+caseId; if(CHAT_DATA[rk]) CHAT_DATA[rk] = swap(CHAT_DATA[rk]);
 }
-/* 一诊所一医院（2026-10-07）：原来 C1 里对接 H2 的四个案件（Budi / Dinda / Wulan / Lina）连同客户、持有项目、对话、通知，整体迁到新诊所 C3（巴厘，对接 H2）；案件编号保持原样。
+/* 一诊所一医院（2026-10-07）：原来 C1 里对接 H2 的四个案件（客人20 / 客人10 / 客人21 / 客人22）连同客户、持有项目、对话、通知，整体迁到新诊所 C3（巴厘，对接 H2）；案件编号保持原样。
    normalizeSeeds 先把它们从 C1 的种子里抽出来放进 C3_STASH，buildClinicSeed('C3') 时再装进 C3 的分区 */
 /* 种子里的赴韩结算单按新公式重算：定金 = 施术项目 × 比例；尾款 = 其余；术后管理不计价（含已取消的项目——原结算单当时就是按全部项目收的定金） */
 function recomputeSeedKrBatches(){
@@ -4710,9 +4701,9 @@ function recomputeSeedKrBatches(){
 }
 function stashC3Seeds(){
   var mine = CASE_ITEMS.filter(function(x){ return C3_CASE_IDS.indexOf(x.id)>-1; }), names = mine.map(function(c){ return c.name; });
-  /* C3 的室长是 Dian（D1）：原来案件里的 Dewi / Rina（C1 的室长）一并换掉 */
-  var swap = function(o){ var j = JSON.stringify(o).split('Dewi').join('Dian').split('Rina').join('Dian').replace(/"actorId":"A\d"/g, '"actorId":"D1"'); return JSON.parse(j); };
-  C3_STASH = {cases:mine.map(function(c){ var n = swap(c); n.clinicId = 'C3'; n.hospitalId = 'H2'; if(n.inCoordinator) n.inCoordinator = 'Dian'; return n; }),
+  /* C3 的室长是 D1 室长（D1）：原来案件里的 A1 室长 / A2 室长（C1 的室长）一并换掉 */
+  var swap = function(o){ var j = JSON.stringify(o).split('A1 室长').join('D1 室长').split('A2 室长').join('D1 室长').replace(/"actorId":"A\d"/g, '"actorId":"D1"'); return JSON.parse(j); };
+  C3_STASH = {cases:mine.map(function(c){ var n = swap(c); n.clinicId = 'C3'; n.hospitalId = 'H2'; if(n.inCoordinator) n.inCoordinator = 'D1 室长'; return n; }),
     clients:CLIENTS.filter(function(x){ return names.indexOf(x.name)>-1; }).map(function(x){ var n = swap(x); n.clinicId = 'C3'; return n; }), holdings:{}, chat:{}, notifs:[]};
   names.forEach(function(n){ if(CLIENT_HOLDINGS[n]){ C3_STASH.holdings[n] = JSON.parse(JSON.stringify(CLIENT_HOLDINGS[n])); delete CLIENT_HOLDINGS[n]; } });
   C3_CASE_IDS.forEach(function(id){ var k = 'case-'+id; if(CHAT_DATA[k]){ C3_STASH.chat[k] = swap(CHAT_DATA[k]); delete CHAT_DATA[k]; } delete ROOM_UNREAD[k]; });
@@ -4721,10 +4712,11 @@ function stashC3Seeds(){
   for(var j = CLIENTS.length-1; j>=0; j--){ if(names.indexOf(CLIENTS[j].name)>-1) CLIENTS.splice(j,1); }
   for(var k2 = NOTIFS.length-1; k2>=0; k2--){ if(C3_CASE_IDS.indexOf(NOTIFS[k2].caseId)>-1) NOTIFS.splice(k2,1); }
   /* C1 里提到这几个案件的对话消息去掉（引用案件已不在本诊所） */
-  Object.keys(CHAT_DATA).forEach(function(k){ CHAT_DATA[k] = (CHAT_DATA[k]||[]).filter(function(m){ return C3_CASE_IDS.indexOf(m.refCaseId)<0 && !/Budi|Dinda|Wulan Sari|Lina/.test((m.orig||'')+(m.trans||'')); }); });
+  Object.keys(CHAT_DATA).forEach(function(k){ CHAT_DATA[k] = (CHAT_DATA[k]||[]).filter(function(m){ return C3_CASE_IDS.indexOf(m.refCaseId)<0 && !/客人20|客人10|客人21|客人22/.test((m.orig||'')+(m.trans||'')); }); });
 }
 /* 已确认施术时间的演示案件（KR 日程的"施术"块由它们生成）：o = {id, name, phone, clinicId?, director, hospitalId, krCoordinator, date, time, items:[[项目名, 价格]]} */
 function seedSurgeryCase(o){
+  o.date = seedSurgeryDate(o.hospitalId, o.director, o.date, o.time); /* 避开医院休诊 / 院长 OFF / 未开放日 */
   if(!clientByName(o.name)) addClient({name:o.name, phone:o.phone, gender:'女', dob:'1990-05-05', createdBy:'客人自助', source:'客户自助预约建档', consent:{version:'v1.0', ts:D(-12)+' 10:00', source:'客户自助预约'}});
   var items = o.items.map(function(i){ return {name:i[0], origin:'KR', price:i[1], done:false, batchId:'B1'}; }), total = items.reduce(function(t, i){ return t + i.price; }, 0), dep = Math.round(total*KR_DEPOSIT_RATE);
   var c = makeCase({id:o.id, name:o.name, subState:'arrived', materialsConfirmed:true, caseNo:generateCaseNo(), director:o.director, hospitalId:o.hospitalId, krCoordinator:o.krCoordinator, updated:'3 天前',
@@ -4742,51 +4734,64 @@ function seedSurgeryCase(o){
    · OFF：整天 / 上午 / 下午都有；开放施术日期：不同院长不同；医院休诊日每家医院至少 2 天（含一个过去的）；
    · 施术块不在这里写：由已确认施术时间的案件生成（syncSurgeryBlock），C1、C2、C3 都有真实案件。 */
 function seedKrMonthDemo(){
+  /* 休诊：医院每周日 + 周六 16:00 起（在 initHospitalData 里设 closedRules）；OFF（2026-10-08 重设，其余旧 OFF 全部清掉）：
+     KO1 代表院长：每周一 + 10/20 年假（整天）；KD1 院长：每周三 + 10/15 上午半休；KM1 室长：每周四；KC1 室长：每周五；H2 没有 OFF */
   var T = [['09:00','10:30'], ['10:00','13:30'], ['09:30','11:00'], ['11:00','12:00'], ['13:30','15:00'], ['14:00','16:30'], ['15:30','17:00'], ['10:30','12:30']];
   var pick = function(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); };
   var CFG = {
-    H1:{closed:[],
-        offs:{'김민석 원장':[[-7,'全天'],[2,'全天'],[7,'上午'],[20,'下午']], '이수진 원장':[[0,'全天'],[14,'全天'],[5,'上午'],[-6,'下午']], '박소현 원장':[[4,'全天'],[-14,'全天'],[8,'上午'],[-2,'下午']]},
-        open:{'김민석 원장':[1,3,5], '이수진 원장':[2,4,6], '박소현 원장':[1,2,3,4,5]}},
-    H2:{closed:[],
-        offs:{'박서윤 원장':[[2,'全天'],[8,'上午'],[-3,'下午'],[21,'全天']], '최지호 원장':[[0,'全天'],[13,'全天'],[-5,'上午'],[18,'下午']]},
-        open:{'박서윤 원장':[1,3,5], '최지호 원장':[2,4,6]}}
+    H1:{offs:[{who:'KO1 代表院长', kind:'director', part:'全天', weekly:true, dow:1}, {who:'KO1 代表院长', kind:'director', part:'全天', date:'2026-10-20', note:'年假'}, {who:'KD1 院长', kind:'director', part:'全天', weekly:true, dow:3}, {who:'KD1 院长', kind:'director', part:'上午', date:'2026-10-15'}, {who:'KM1 室长', kind:'coord', part:'全天', weekly:true, dow:4}, {who:'KC1 室长', kind:'coord', part:'全天', weekly:true, dow:5}],
+        open:{'KD1 院长':[1,2,4,5], 'KO1 代表院长':[2,3,4,5,6]}},
+    H2:{offs:[], open:{'H2 院长1':[1,3,5], 'H2 院长2':[2,4,6]}}
   };
   Object.keys(CFG).forEach(function(hid, hi){
     var h = HOSPITAL_DATA[hid]; if(!h) return; var cfg = CFG[hid];
-    var closedDs = cfg.closed.map(D), names = h.directors.filter(function(d){ return d.active; }).map(function(d){ return d.name; });
-    h.closedRules = [{dow:0, from:''}, {dow:6, from:'16:00'}]; /* 医院每周日休诊 + 周六 16:00 起休诊（韩国时间）；取代原来逐日登记的 closedDates */
-    delete h.closedDates;
-    h.directorSchedule = {}; h.offs = (h.offs||[]).filter(function(o){ return o.kind==='coord' && o.date===D(0); }); /* 室长 OFF 只留今天的那条 */
-    h.openDates = h.openDates || {};
-    names.forEach(function(n, k){
-      var arr = (h.directorSchedule[n] = []), offDays = {};
-      (cfg.offs[n]||[]).forEach(function(r){ var ds = D(r[0]); offDays[ds] = r[1]; h.offs.push({id:'off'+hid+k+r[0], date:ds, who:n, kind:'director', part:r[1], note:'', by:n}); });
-      var open = [];
+    h.offs = cfg.offs.map(function(o, i){ var r = Object.assign({id:'off'+hid+i, note:'', by:o.who}, o); if(!r.weekly && !r.date) r.date = D(0); return r; });
+    h.directorSchedule = {}; h.openDates = {};
+    h.directors.filter(function(d){ return d.active; }).map(function(d){ return d.name; }).forEach(function(n, k){
+      var arr = (h.directorSchedule[n] = []), open = [], pat = cfg.open[n] || [];
       for(var d = -45; d <= 45; d++){
         var ds = D(d), dow = new Date(ds+'T00:00:00').getDay();
-        if(closedDs.indexOf(ds) > -1) continue;
-        var pat = (cfg.open[n]||[]); if(pat.indexOf(dow) > -1 && d >= -30 && !offDays[ds]) open.push(ds);
-        if(d < -30 || d > 30 || dow===0 || offDays[ds]==='全天') continue; /* 前后各一个月的工作日 */
-        var r0 = pick(d*7 + k*31 + hi*101 + 3);
-        if(r0 < 0.15) continue; /* 约 15% 的工作日空着 */
-        var cnt = 1 + Math.floor(pick(d*5 + k*17 + 9)*3), used = {};
+        if(hospitalClosedOn(hid, ds)) continue;
+        var offs = h.offs.filter(function(o){ return o.kind==='director' && o.who===n && offApplies(o, ds); }), offAll = offs.some(function(o){ return o.part==='全天'; });
+        if(pat.indexOf(dow) > -1 && d >= -30 && !offAll) open.push(ds); /* 不同院长不同的开放施术日期 */
+        if(d < -30 || d > 30 || offAll) continue; /* 前后各一个月的工作日 */
+        if(pick(d*7 + k*31 + hi*101 + 3) < 0.15) continue; /* 约 15% 的工作日空着 */
+        var cnt = 1 + Math.floor(pick(d*5 + k*17 + 9)*3), used = {}, cf = hospitalClosedFrom(hid, ds);
         for(var i = 0; i < cnt; i++){
           var ti = Math.floor(pick(d*11 + k*13 + i*7 + hi)*T.length); if(used[ti]) continue; used[ti] = 1;
-          var tpl = T[ti]; if(offDays[ds]==='上午' && tpl[0] < '13:00') continue; if(offDays[ds]==='下午' && tpl[0] >= '13:00') continue;
+          var tpl = T[ti]; if(cf && tpl[1] > cf) continue; /* 周六 16:00 起休诊：不排进休诊时段 */
+          if(offs.some(function(o){ return o.part==='上午' ? tpl[0] < '13:00' : tpl[1] > '13:00'; })) continue; /* 半天 OFF 的时段不排 */
           arr.push({date:ds, time:tpl[0], end:tpl[1], type:'不可预约'});
         }
       }
       h.openDates[n] = open;
     });
+    h.directors.filter(function(d){ return !d.active; }).forEach(function(d){ h.openDates[d.name] = []; });
   });
+}
+/* 演示案件的施术日期：顺延到「该院长开放的、不在医院休诊 / 院长 OFF 里」的日子 */
+function seedSurgeryDate(hid, director, date, time){
+  var d = date;
+  for(var i = 0; i < 60; i++){
+    if(!krSurgerySlotError(hid, director, d, time, 60) && hospitalOpenDates(hid, director).indexOf(d) > -1) return d;
+    var x = new Date(d+'T00:00:00'); x.setDate(x.getDate()+1); d = dateStr(x);
+  }
+  return date;
+}
+/* 预约 / 占位不能落在休诊时段（诊所定期休诊）：种子里落在休诊日 / 休诊时段的到店预约，顺延到下一个营业日 */
+function seedFixVisits(){
+  var bad = function(ds, tm){ var dt = new Date(ds+'T00:00:00'); if(isRescheduleDateDisabled(dt)) return true; var cf = closedFromOf(CLINIC_SETTINGS.closedRules, dt.getDay()); return !!cf && timeToMin(tm||'09:00') >= timeToMin(cf); };
+  var next = function(ds){ var x = new Date(ds+'T00:00:00'); x.setDate(x.getDate()+1); return dateStr(x); };
+  CASE_ITEMS.forEach(function(c){ if(c.visitDate){ var g = 0; while(bad(c.visitDate, c.visitTime) && g++ < 7) c.visitDate = next(c.visitDate); } });
+  (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var g = 0; while(bad(p.date, p.time) && g++ < 7) p.date = next(p.date); });
+  (RESUMED_VISITS||[]).forEach(function(r){ var g = 0; while(bad(r.date, r.time) && g++ < 7) r.date = next(r.date); });
 }
 function normalizeSeeds(){
   /* 分类：赴韩的标准部位归全局，本地的留在诊所里（C1 种子） */
   var inCats = {};
   Object.keys(PROJECT_CATEGORIES).forEach(function(k){ var c = PROJECT_CATEGORIES[k]; if(c.origin==='KR') KR_CATEGORIES[k] = c; else inCats[k] = c; });
   seedHospitalH2();
-  [['budi','박서윤 원장'], ['dinda','최지호 원장'], ['wulan','박서윤 원장'], ['lina','박서윤 원장']].forEach(function(r){ moveSeedCaseToH2(r[0], r[1]); });
+  [['budi','H2 院长1'], ['dinda','H2 院长2'], ['wulan','H2 院长1'], ['lina','H2 院长1']].forEach(function(r){ moveSeedCaseToH2(r[0], r[1]); });
   recomputeSeedKrBatches();
   stashC3Seeds();
   /* 对话：原来的 Main 全员群 = C1×H1；再加 C1×H2；同事名单按对接医院重建 */
@@ -4796,8 +4801,8 @@ function normalizeSeeds(){
     if(CHAT_DATA.hasOwnProperty('main')){ CHAT_DATA['main-H1'] = CHAT_DATA.main; delete CHAT_DATA.main; }
     if(ROOM_UNREAD.hasOwnProperty('main')){ ROOM_UNREAD['main-H1'] = ROOM_UNREAD.main; delete ROOM_UNREAD.main; }
     STAFF_ROSTER.length = 0; Array.prototype.push.apply(STAFF_ROSTER, [
-      {id:'kr-lee', name:'이서연 · 韩国室长'}, {id:'kr-park', name:'박준혁 · 韩国室长'}, {id:'director-kim', name:'김민석 · 院长'},
-      {id:'rina', name:'Rina · 印尼室长'}]);
+      {id:'kr-lee', name:'KM1 室长 · 韩国室长'}, {id:'kr-park', name:'KC1 室长 · 韩国室长'}, {id:'director-kim', name:'KD1 院长 · 院长'},
+      {id:'rina', name:'A2 室长 · 印尼室长'}]);
   })();
   CLIENTS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; });
   CASE_ITEMS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; if(c.director && !c.hospitalId) c.hospitalId = 'H1'; });
@@ -4805,10 +4810,10 @@ function normalizeSeeds(){
   PROJECT_LIBRARY.forEach(function(p){ if(p.origin==='KR'){ var h = HOSPITAL_DATA[p.hospitalId||'H1']; (h.projects = h.projects || []).push(p); } else { if(!p.clinicId) p.clinicId = 'C1'; inP.push(p); } });
   LIB_CASES.forEach(function(c){ if(c.source==='travel'){ var h = HOSPITAL_DATA[c.hospitalId||'H1']; (h.libCases = h.libCases || []).push(c); } else { if(!c.clinicId) c.clinicId = 'C1'; inC.push(c); } });
   buildClinicViews(inP, inC, inCats);
-  /* C1 的已确认施术案件（KR 日程的施术块由它们生成；今天的 Nadia、过去的 Rina 在上面的种子里） */
-  seedSurgeryCase({id:'sinta', name:'Sinta Dewi', phone:'+62 812-3100-0001', director:'이수진 원장', hospitalId:'H1', krCoordinator:'박준혁 실장', date:D(4), time:'14:00', items:[['切开双眼皮', 1800000]]});
-  seedSurgeryCase({id:'lukman', name:'Lukman Hakim', phone:'+62 812-3100-0002', director:'김민석 원장', hospitalId:'H1', date:D(9), time:'10:00', items:[['假体隆鼻', 2500000], ['自体脂肪移植（全脸）', 4500000]]});
-  seedSurgeryCase({id:'dewis', name:'Dewi Sartika', phone:'+62 812-3100-0003', director:'박소현 원장', hospitalId:'H1', date:D(15), time:'13:00', items:[['埋线双眼皮', 1000000]]});
+  /* C1 的已确认施术案件（KR 日程的施术块由它们生成；今天的 客人9、过去的 A2 室长 在上面的种子里） */
+  seedSurgeryCase({id:'sinta', name:'客人23', phone:'+62 812-3100-0001', director:'KO1 代表院长', hospitalId:'H1', krCoordinator:'KC1 室长', date:D(4), time:'14:00', items:[['切开双眼皮', 1800000]]});
+  seedSurgeryCase({id:'lukman', name:'客人24', phone:'+62 812-3100-0002', director:'KD1 院长', hospitalId:'H1', date:D(9), time:'10:00', items:[['假体隆鼻', 2500000], ['自体脂肪移植（全脸）', 4500000]]});
+  seedSurgeryCase({id:'dewis', name:'客人25', phone:'+62 812-3100-0003', director:'KO1 代表院长', hospitalId:'H1', date:D(15), time:'13:00', items:[['埋线双眼皮', 1000000]]});
 }
 /* 其他诊所的全新分区（C2）：空白 + 少量演示资料（见"五、演示数据"）；种子函数写的是全局变量，所以临时把全局变量切成这份新分区 */
 function emptyClinicVars(cid){
@@ -4825,8 +4830,8 @@ function emptyClinicVars(cid){
 /* 其他诊所的演示资料（C2：泗水合作诊所，只对接 H1）：几个客户和案件 + 自己的本地项目和一个印尼案例，用来验证诊所之间完全隔开 */
 function seedClinicDemo(cid){
   if(cid === 'C2'){ /* C2 的已确认施术案件（H1 的日程里会有 C2 客人的施术块；C1 的医院日程视角看到的是灰块 + 院长名字） */
-    var h2a = seedSurgeryCase({id:'hendra', name:'Hendra Wijaya', phone:'+62 811-2100-0001', director:'김민석 원장', hospitalId:'H1', date:D(5), time:'11:00', items:[['假体隆鼻', 2500000]]});
-    var h2b = seedSurgeryCase({id:'citral', name:'Citra Lestari', phone:'+62 811-2100-0002', director:'이수진 원장', hospitalId:'H1', date:D(11), time:'15:00', items:[['切开双眼皮', 1800000]]});
+    var h2a = seedSurgeryCase({id:'hendra', name:'客人26', phone:'+62 811-2100-0001', director:'KD1 院长', hospitalId:'H1', date:D(5), time:'11:00', items:[['假体隆鼻', 2500000]]});
+    var h2b = seedSurgeryCase({id:'citral', name:'客人27', phone:'+62 811-2100-0002', director:'KD1 院长', hospitalId:'H1', date:D(11), time:'15:00', items:[['切开双眼皮', 1800000]]});
     syncSurgeryBlock(h2a); syncSurgeryBlock(h2b);
   }
   if(cid === 'C3'){ /* 巴厘诊所：原 C1 里对接 H2 的案件整体迁入 */
@@ -4836,32 +4841,32 @@ function seedClinicDemo(cid){
     Object.keys(st.holdings).forEach(function(n){ CLIENT_HOLDINGS[n] = JSON.parse(JSON.stringify(st.holdings[n])); });
     Object.keys(st.chat).forEach(function(k){ CHAT_DATA[k] = JSON.parse(JSON.stringify(st.chat[k])); });
     st.notifs.forEach(function(n){ NOTIFS.push(JSON.parse(JSON.stringify(n))); });
-    var dn = CASE_ITEMS.filter(function(x){ return x.id==='dinda'; })[0]; if(dn && dn.krSchedule){ dn.krSchedule.status = 'confirmed'; dn.krSchedule.primary = D(18); dn.krSchedule.confirmedDate = D(18); dn.krSchedule.confirmedTime = '10:30'; /* 避开周日 */ updateCaseStage(dn); } /* Dinda：KR 已确认施术时间 */
-    var rs = seedSurgeryCase({id:'ratna', name:'Ratna Sari', phone:'+62 812-3300-0001', director:'박서윤 원장', hospitalId:'H2', krCoordinator:'정하늘 실장', date:D(6), time:'10:00', items:[['面部拉皮', 12000000]]});
-    var fi = seedSurgeryCase({id:'fitri', name:'Fitri Handayani', phone:'+62 812-3300-0002', director:'최지호 원장', hospitalId:'H2', krCoordinator:'최민준 실장', date:D(11), time:'14:00', items:[['自体脂肪移植（全脸）', 4500000]]});
+    var dn = CASE_ITEMS.filter(function(x){ return x.id==='dinda'; })[0]; if(dn && dn.krSchedule){ dn.krSchedule.status = 'confirmed'; var dd0 = seedSurgeryDate('H2', dn.director, D(18), '10:30'); dn.krSchedule.primary = dd0; dn.krSchedule.confirmedDate = dd0; dn.krSchedule.confirmedTime = '10:30'; /* 避开休诊 / 未开放 */ updateCaseStage(dn); } /* 客人10：KR 已确认施术时间 */
+    var rs = seedSurgeryCase({id:'ratna', name:'客人28', phone:'+62 812-3300-0001', director:'H2 院长1', hospitalId:'H2', krCoordinator:'KM2 室长', date:D(6), time:'10:00', items:[['面部拉皮', 12000000]]});
+    var fi = seedSurgeryCase({id:'fitri', name:'客人29', phone:'+62 812-3300-0002', director:'H2 院长2', hospitalId:'H2', krCoordinator:'KC2 室长', date:D(11), time:'14:00', items:[['自体脂肪移植（全脸）', 4500000]]});
     CASE_ITEMS.forEach(function(x){ if(x.krSchedule && x.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(x.krSchedule.status)>-1 && x.director) syncSurgeryBlock(x); }); /* C3 全部已确认施术的案件在 H2 日程里生成施术块 */
     CHAT_DATA[mainRoomId('H2')] = [
-      {day:KD(0), from:'them', name:'박서윤 원장', color:'var(--slate2)', init:'박', orig:'이번 주 수술 일정이 거의 찼습니다.', trans:'本周手术排期基本满了。', time:'10:00'},
-      {day:KD(0), from:'them', name:'정하늘', color:'var(--sage)', init:'정', orig:'IN 쪽 신규 케이스 확인했습니다.', trans:'已确认 IN 这边的新案件。', time:'10:30'}
+      {day:KD(0), from:'them', name:'H2 院长1', color:'var(--slate2)', init:'박', orig:'이번 주 수술 일정이 거의 찼습니다.', trans:'本周手术排期基本满了。', time:'10:00'},
+      {day:KD(0), from:'them', name:'KM2 室长', color:'var(--sage)', init:'정', orig:'IN 쪽 신규 케이스 확인했습니다.', trans:'已确认 IN 这边的新案件。', time:'10:30'}
     ];
     return;
   }
   if(cid !== 'C2') return;
   var cons = function(d){ return {version:'v1.0', ts:D(-d)+' 10:00', source:'客户自助预约'}; };
   var mkClient = function(name, phone, g, dob, d){ var cl = addClient({name:name, phone:phone, gender:g, dob:dob, createdBy:'客人自助', source:'客户自助预约建档', consent:cons(d)}); return cl; };
-  mkClient('Maria Gunawan', '+62 811-2000-0001', '女', '1991-07-14', 5);
-  mkClient('Yoga Pratama', '+62 811-2000-0002', '男', '1988-02-03', 4);
-  mkClient('Lia Anggara', '+62 811-2000-0003', '女', '1995-11-22', 8);
-  var c1 = createReservationCase('Maria Gunawan', null, D(1), '10:30', '+62 811-2000-0001', '面诊商谈');
-  var c2 = createReservationCase('Yoga Pratama', null, D(0), '09:30', '+62 811-2000-0002', '面诊商谈'); c2.subState = 'arrived'; c2.needsConsult = true; c2.hospitalId = 'H1'; c2.director = '이수진 원장'; c2.materialsConfirmed = true; c2.concern = '眼睛想变大一点'; c2.expectation = '自然的双眼皮'; c2.consultRequested = true; c2.consultStatus = 'paid_waiting_kr'; /* 已缴面诊费 → KR 端看得到（KR 端系列 2/5 演示） */ updateCaseStage(c2);
-  var c3 = createReservationCase('Lia Anggara', null, D(-2), '14:00', '+62 811-2000-0003', '皮肤商谈'); c3.subState = 'cancelled'; c3.cancelReason = '预约取消'; updateCaseStage(c3);
+  mkClient('客人17', '+62 811-2000-0001', '女', '1991-07-14', 5);
+  mkClient('客人18', '+62 811-2000-0002', '男', '1988-02-03', 4);
+  mkClient('客人19', '+62 811-2000-0003', '女', '1995-11-22', 8);
+  var c1 = createReservationCase('客人17', null, D(1), '10:30', '+62 811-2000-0001', '面诊商谈');
+  var c2 = createReservationCase('客人18', null, D(0), '09:30', '+62 811-2000-0002', '面诊商谈'); c2.subState = 'arrived'; c2.needsConsult = true; c2.hospitalId = 'H1'; c2.director = 'KD1 院长'; c2.materialsConfirmed = true; c2.concern = '眼睛想变大一点'; c2.expectation = '自然的双眼皮'; c2.consultRequested = true; c2.consultStatus = 'paid_waiting_kr'; /* 已缴面诊费 → KR 端看得到（KR 端系列 2/5 演示） */ updateCaseStage(c2);
+  var c3 = createReservationCase('客人19', null, D(-2), '14:00', '+62 811-2000-0003', '皮肤商谈'); c3.subState = 'cancelled'; c3.cancelReason = '预约取消'; updateCaseStage(c3);
   [['玻尿酸填充 1cc（泗水）', 780000, '填充'], ['水光注射 2cc（泗水）', 1500000, '水光'], ['好莱坞焕肤 1次（泗水）', 300000, '去除色素'], ['黄金微针 1次（泗水）', 1800000, '黄金微针']].forEach(function(r){
     var p = makeProj(r[0], r[1], 'IN', r[2]); p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')}; PROJECT_LIBRARY.push(p);
   });
   var lp = PROJECT_LIBRARY.filter(function(x){ return x.origin==='IN'; })[1], lid = newLibCaseId();
   LIB_CASES.push({id:lid, clinicId:'C2', title:'水光注射 · 肤质改善（泗水）', names:{zh:'水光注射 · 肤质改善（泗水）', ko:demoTranslate('水光注射 · 肤质改善（泗水）','zh','ko'), id:demoTranslate('水光注射 · 肤质改善（泗水）','zh','id')}, source:'local',
     projectIds:[lp.id], director:null, problemIds:[], beforePhotos:[{url:'', color:'#E6DDD0'}], afterPhotos:[{url:'', color:'#D9CFC1', recovery:'1个月', recoveryCustom:''}],
-    consent:{signed:true, file:'consent-'+lid+'.pdf'}, uploader:'Citra', uploadedAt:D(-6)+' 10:00', editedBy:null, editedAt:null});
+    consent:{signed:true, file:'consent-'+lid+'.pdf'}, uploader:'B1 室长', uploadedAt:D(-6)+' 10:00', editedBy:null, editedAt:null});
 }
 /* 种子里写死的系统时间点（Timeline dt、通知 ts、创建/激活时间…）原来是"诊所当地时间"，现在系统事件时间点存 UTC：种子生成完后一次性换算成 UTC，Timeline 等在雅加达显示就不会多 7 小时（2026-10-08，CMD-1007-04） */
 function seedTimesToUtc(root, tz){
@@ -4879,9 +4884,9 @@ function seedTimesToUtc(root, tz){
 function buildClinicSeed(cid){
   var vars = emptyClinicVars(cid), saved = {}, keepClinic = CURRENT_CLINIC_ID, keepSeeding = SEEDING, keepActor = SEED_ACTOR, keepIn = IN_COORDINATORS.slice();
   CLINIC_VAR_NAMES.forEach(function(n){ saved[n] = window[n]; window[n] = vars[n]; });
-  CURRENT_CLINIC_ID = cid; SEEDING = true; SEED_ACTOR = (clinicAccounts(cid).filter(function(a){ return a.role==='manager' && a.name; })[0] || {name:'Dewi'}).name;
+  CURRENT_CLINIC_ID = cid; SEEDING = true; SEED_ACTOR = (clinicAccounts(cid).filter(function(a){ return a.role==='manager' && a.name; })[0] || {name:'A1 室长'}).name;
   var out = {};
-  try{ syncInCoordinators(); seedClinicDemo(cid); seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS)); }catch(e){ console.error('[种子] '+cid, e); }
+  try{ syncInCoordinators(); seedClinicDemo(cid); seedFixVisits(); seedTimesToUtc([CASE_ITEMS, CLIENTS, NOTIFS, SMS_LOG, CHAT_DATA], clinicTzOf(CLINIC_SETTINGS)); }catch(e){ console.error('[种子] '+cid, e); }
   CLINIC_VAR_NAMES.forEach(function(n){ out[n] = window[n]; });
   CLINIC_VAR_NAMES.forEach(function(n){ window[n] = saved[n]; });
   CURRENT_CLINIC_ID = keepClinic; SEEDING = keepSeeding; SEED_ACTOR = keepActor;
