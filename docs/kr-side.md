@@ -5,12 +5,12 @@
 ## 1. 账号与登录
 | 账号 | 角色 | 医院 | 姓名 | 密码 |
 |---|---|---|---|---|
-| KO1 | 代表院长 | H1 | 박소현 | ko1123 |
-| KM1 | 管理者 | H1 | 이서연 | km1123 |
-| KC1 | 室长 | H1 | 박준혁 | kc1123 |
-| KD1 | 院长（加购席位） | H1 | 김민석 원장 | kd1123 |
-| KM2 | 管理者 | H2 | 정하늘 | km2123 |
-| KC2 | 室长 | H2 | 최민준 | kc2123 |
+| KO1 | 代表院长 | H1 | KO1 代表院长 | ko1123 |
+| KM1 | 管理者 | H1 | KM1 室长 | km1123 |
+| KC1 | 室长 | H1 | KC1 室长 | kc1123 |
+| KD1 | 院长（加购席位） | H1 | KD1 院长 | kd1123 |
+| KM2 | 管理者 | H2 | KM2 室长 | km2123 |
+| KC2 | 室长 | H2 | KC2 室长 | kc2123 |
 
 编号 K 开头，不和 IN 的 OWN / A* / B* 冲突；密码规则同 IN（编号小写 + 123）。账号带 `hospitalId`、没有 `clinicId`。
 登录后：代表院长 → `owner.html`（只有管理类页面，范围 = 本医院）；管理者/室长/院长 → `kr.html`。
@@ -120,7 +120,7 @@ tab：全部 / 面诊 / 项目确认中 / 施术预约 / 赴韩施术 / 已结�
 模拟KR确认首选/备选/无法安排（`simulateKrScheduleConfirmNew/RejectNew`）、确认新首选/新备选/无法确认（`…ChangeConfirm/ChangeReject`）、标记已到医院（`simulateKrMarkArrived`）、判断能否施术（`simulateKrJudge`/`submitKrJudge`）、标记无法施术（`simulateKrMarkUnable`/`submitKrUnable`）、更换项目（`simulateKrProjectSwap`）、付清尾款（`simulateKrMarkBalancePaid`）、标记完成（`simulateKrMarkDone`/`submitKrMarkDone`）、补加术后管理（`simulateKrAddPostCare`/`confirmPostCare`）、确认术后管理（`simulateKrConfirmPostCare`/`submitPostCareConfirm`）、KR 在韩重新预约（`krReschedule`）及 5 个弹窗。保留：IN 室长按 KR 判断操作的退款（退尾款差额、退定金，去掉"演示"字样）、「模拟时间超过预计」、对话/来电相关演示。
 
 ## 九 演示数据
-H1 的 Fajar/Ayu 可选范围带麻醉、在韩时间、术后管理；Nadia = 在韩进行中（今天施术、有 timeline、已判断能施术）；Rina / Wulan = 已结案（子项全部完成）；Dinda（H2）已付定金没有 timeline。数据版本 20。
+H1 的 客人8/客人2 可选范围带麻醉、在韩时间、术后管理；客人9 = 在韩进行中（今天施术、有 timeline、已判断能施术）；A2 室长 / 客人21 = 已结案（子项全部完成）；客人10（H2）已付定金没有 timeline。数据版本 20。
 
 ## 我的判断（待确认）
 1. 地点=印尼/均可 的子项不挡结案；"均可"的子项 KR 可在标完成前改成韩国/印尼。
@@ -142,7 +142,7 @@ H1 的 Fajar/Ayu 可选范围带麻醉、在韩时间、术后管理；Nadia = �
 只显示无文字的灰色「这段时间不可预约」块（含 OFF）；只有本诊所客人的施术块显示客人名字（他诊所客人、占位、会议都是灰块）。行是诊所时间，第二行显示实际韩国时间（`KR 11:00`，不再是"KR 时间"字样）；KR 日程块的时间是韩国时间，按 `krTimeOf(hr)` 对应到行。
 
 ## 三 KR 院长管理（`krdoctors`，perm `krdoctors`：代表院长、管理者）
-院长资料（`HOSPITAL_DATA[h].directors[]` 扩展）：照片、韩/英/中姓名、职称（代表院长/院长）、经历（现/前）、认证、学会/培训、擅长项目（选自本医院项目库）、在职/停用、账号有无。韩文填写，演示翻译（`demoTranslate`）成中文 / 印尼文，可改。已有院长不改姓名（姓名是案件/日程的关联键）。代表院长（박소현）也在名单里。IN 选院长时显示介绍卡（`directorCardsHtml`）：全部在职院长，擅长客人意向项目（同项目或同分类）的排前面并标「★ 擅长客人意向项目」；停用的不列，复诊/延续锁定原院长时只读。
+院长资料（`HOSPITAL_DATA[h].directors[]` 扩展）：照片、韩/英/中姓名、职称（代表院长/院长）、经历（现/前）、认证、学会/培训、擅长项目（选自本医院项目库）、在职/停用、账号有无。韩文填写，演示翻译（`demoTranslate`）成中文 / 印尼文，可改。已有院长不改姓名（姓名是案件/日程的关联键）。代表院长（KO1 代表院长）也在名单里。IN 选院长时显示介绍卡（`directorCardsHtml`）：全部在职院长，擅长客人意向项目（同项目或同分类）的排前面并标「★ 擅长客人意向项目」；停用的不列，复诊/延续锁定原院长时只读。
 
 ## 四 KR 项目库（`krsrvc`，perm `krlib`：KR 室长、管理者）
 赴韩项目，韩元，一个价格所有诊所一样；按全系统标准部位 + 「韩国术后管理」分类分组；项目默认资料 `p.defaults = {stay, durMin, anes, anesNote, postcare:[{kr, times, place, day}]}`，KR 写报告选项目、更换项目、补加可选项目、回诊加做时自动带入（`krDefaultsDetail`），可按客人调整；非活性化 / 重新启用 / 删除（"在用"= 所有对接诊所的进行中案件 + 本医院案例库案例）；改价格不影响已选进案件的快照。
@@ -271,7 +271,7 @@ H1 的 Fajar/Ayu 可选范围带麻醉、在韩时间、术后管理；Nadia = �
 
 ## 四 演示数据（数据版本 27）
 - `seedKrMonthDemo()`：H1/H2 今天前后各一个月、每位院长大部分工作日有 1～3 块不可预约（含 10:00–13:30 长块、不同院长重叠）、整天/上午/下午 OFF、不同院长不同的开放日期、每家医院 ≥ 2 天休诊日（含一个过去的）；每次生成结果一样。
-- 施术块对应真实案件：C1 的 Nadia（今天）、Sinta、Lukman、Dewi Sartika，C2 的 Hendra、Citra，C3 的 Ratna、Fitri、Dinda（已改成 KR 已确认）、Wulan（已结案）；`seedSurgeryCase()`。IN 的 KR 视角里，本诊所客人显示名字，他诊所客人 = 灰块 + 院长名。
+- 施术块对应真实案件：C1 的 客人9（今天）、客人23、客人24、客人25，C2 的 客人26、B1 室长，C3 的 客人28、客人29、客人10（已改成 KR 已确认）、客人21（已结案）；`seedSurgeryCase()`。IN 的 KR 视角里，本诊所客人显示名字，他诊所客人 = 灰块 + 院长名。
 
 ## 我的判断（待确认）
 1. KR 工作台大盘里的「今天在韩子项」卡片（系列 4/5）还在，它不是院长日程，我没动；如果这也属于"子项不进日程"请告诉我。
