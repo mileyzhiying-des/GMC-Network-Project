@@ -311,3 +311,12 @@ prototype/shared/app.css  共用样式
 - **持有批次标记**：`pkg`（KR 套餐内含 0 元）/ `pkgPaid`（购买的套餐拆出）/ `service`（赠送）/ `promo`（活动价）；`pkg` / `pkgPaid` / `service` 一律不可退款。批次发放统一走 `grantLocalItems`。
 - 演示数据版本 33（4 条活动价含 1 个已结束、2 个套餐、客人12 持有套餐批次、客人11 持有서비스批次）。
 - （CMD-1008-10）折扣显示一律走 `discountText(pct)`（80 → 8折、85 → 8.5折，100/空不显示）；输入仍是实付比例。新写显示折扣的地方不要自己拼「X折」。
+
+## CMD-1008-12 补充（2026-10-08，追加；旧文字保留作历史）
+- **视频来电信号** `gmc_call`（localStorage，不进 `gmc_state`）：`startCall` 写、KR 页面 `krCallHandle` 响铃，状态 ringing → accepted / declined → ended；IN 的 `inHandleCallSignal` 接收。
+- **面诊两个时间**：`c.consultAt = {date,time}`（韩国当地）+ `c.reportEta`（UTC）；面诊块 `kind:'面诊'` 在 `HOSPITAL_DATA[h].directorSchedule`，和施术同级参与「同一位院长同一时间只能有一件事」；新排院长日程的代码继续走 `krSurgerySlotError` / `krBusySlotError`。
+- **KR 术后管理候选**：`krScopeCandidates` 的 `post` = 来源诊所全部本地项目（KR 只看名称），`postCat` = 术后管理分类，`krPost` = KR 项目库术后管理。
+- **子项类型只有三种**（施术 / 术后管理记录 / 增加项目），施术一行由 `syncSurgerySub` 自动产生（在 `coreScheduleConfirm` / `coreChangeConfirm` / `coreRebook` / `coreMarkUnable` / `coreSwapItem` 里同步）；`coreAddOnItem` 按 `c.krBalancePaid` 分两种结算（尾款前一次结算、付清后另开）。
+- 测试时不要在 console 里 `var t = ...`（会覆盖全局 `t()` 翻译函数导致 KR 页面刷新报错）。
+- 数据版本 34。
+

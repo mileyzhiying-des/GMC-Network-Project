@@ -226,6 +226,7 @@ function settlementCardHtml(c, b){
   var rows = (krRows && localRows) ? grp('赴韩项目（₩）')+krRows+grp('本地项目（Rp）')+localRows : (krRows + localRows);
   var amounts = [];
   if(b.addOn) amounts.push('韩国加做（KR 新增，另开结算单）：金额 '+formatCurrency(b.krTotal,'KRW')+'，客人在韩国单独付款，医院收款（不进尾款应付额，算 KR 收入）');
+  else if(b.preAdd) amounts.push('到院后增加项目（KR 新增）：金额 '+formatCurrency(b.krTotal,'KRW')+'，与尾款一次结算（不收定金，计入尾款，医院收）');
   else if(b.noDeposit) amounts.push('更换项目（'+(b.swapOf||'')+'→）：不收定金，金额 '+formatCurrency(b.krTotal,'KRW')+' 直接计入尾款（医院收）');
   else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（诊所收）；尾款 '+formatCurrency(b.krBalance!==undefined ? b.krBalance : b.krTotal-b.krDeposit,'KRW')+'（赴韩后医院收）；合计 '+formatCurrency(b.krTotal,'KRW'));
   if(b.inTotal) amounts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
@@ -543,7 +544,9 @@ function itemMetaText(it){
   var bits = [];
   if(it.anesthesia) bits.push('麻醉：'+it.anesthesia.label+(it.anesthesia.note?'（'+it.anesthesia.note+'）':''));
   if(it.stay) bits.push('推荐在韩：'+it.stay);
-  (it.postcare||[]).forEach(function(x){ bits.push('术后管理：'+x.name+' × '+x.times+'（'+(x.place==='KR'?'必须在韩国':'韩国或印尼都可')+(x.day?'，'+x.day:'')+'）'); });
+  (it.postcare||[]).forEach(function(x){ /* 术后管理挂在赴韩项目下显示（CMD-1008-12 C7）：每项标「在韩国 / 在印尼」，如「好莱坞焕肤（在印尼）」 */
+    var where = x.place==='KR' ? x.name+'（在韩国，必须）' : (x.innName ? x.name+'（在韩国）或 '+x.innName+'（在印尼）' : x.name+'（在韩国；没有印尼对应项目）');
+    bits.push('术后管理：'+where+' × '+x.times+(x.day?'，'+x.day:'')); });
   return bits;
 }
 function pcAllocEditable(c){ return !c.krBalancePaid && !isEnded(c); } /* 付尾款前都可以改 */
@@ -553,12 +556,12 @@ function pcLinesHtml(c, it, fn){
   if(!(it.postcare||[]).length) return '';
   var editable = pcAllocEditable(c) && !it.cancelled && !it.swapped, bid = it.batchId || '';
   return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);"><div style="color:var(--muted);margin-bottom:2px;">术后管理（含在套餐内，不另收费；地点分配只用于排程）</div>'+it.postcare.map(function(x, i){
-    var s = pcSplit(x), head = x.name+' × '+x.times+' 次'+(x.day?'（'+x.day+'）':'');
+    var s = pcSplit(x), head = x.name+'（在韩国） × '+x.times+' 次'+(x.day?'（'+x.day+'）':'');
     if(x.place==='KR') return '<div style="margin:3px 0;">'+head+'：韩国 '+x.times+' 次，必须在韩国</div>';
     var ctl = (editable && x.innName)
       ? '印尼 <input type="number" min="0" max="'+x.times+'" value="'+s.inn+'" onchange="'+fn+'(\''+it.projectId+'\',\''+bid+'\','+i+',this.value)" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;font-size:11px;"> 次'
       : '印尼 '+s.inn+' 次'+(x.innName ? '' : '（没有印尼对应项目，只能在韩国）');
-    return '<div style="margin:3px 0;">'+head+'：韩国 '+s.kr+' 次 + '+ctl+(x.innName ? '（印尼：'+x.innName+'）' : '')+(pcAllocEditable(c) ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;font-size:10px;">暂定</span>' : '')+'</div>';
+    return '<div style="margin:3px 0;">'+head+'：韩国 '+s.kr+' 次 + '+ctl+(x.innName ? '（'+x.innName+'（在印尼））' : '')+(pcAllocEditable(c) ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;font-size:10px;">暂定</span>' : '')+'</div>';
   }).join('')+'</div>';
 }
 /* 麻醉同意书（占位文案，等用户撰写；记录版本 + 签署时间存在案件上） */
