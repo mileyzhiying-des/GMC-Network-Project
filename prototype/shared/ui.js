@@ -1560,6 +1560,7 @@ function confirmMaterials(){
     /* 选了面诊，直接进面诊资料tab走缴费，不需要再多点一次"面诊申请" */
     c.consultRequested = true;
     c.consultStatus = 'awaiting_payment';
+    recordConsultFee(c); /* 选面诊：把当下的面诊费记进案件（面诊费卡和财务栏读这个金额） */
     c.activeCaseTab = 'consult';
   } else {
     /* 选了不面诊 → 主状态"选择项目"，自动打开本地管理tab，先给"持有项目使用/新增项目"两个入口（IN-CASE-01） */

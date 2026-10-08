@@ -856,7 +856,7 @@ function makeCase(o){
     mgmtUses:o.mgmtUses||[], mgmtActive:!!o.mgmtActive, mgmtDone:!!o.mgmtDone, mgmtStatus:o.mgmtStatus||null, mgmtCancelling:false,
     linkedCase:o.linkedCase||null, /* 2026-09-30 §6：关联之前案件 {caseId, reason:复诊/术后管理/延续既往面诊, auto?} */
     linkedFiles:o.linkedFiles||[], manualAttachments:o.manualAttachments||[], materialsDate:o.materialsDate||null, /* §7 附件 */
-    consultFeePaidAmount:(typeof o.consultFeePaidAmount==='number' ? o.consultFeePaidAmount : undefined), /* 缴面诊费时记下的金额（CMD-1008-06） */
+    consultFeeAmount:(typeof o.consultFeeAmount==='number' ? o.consultFeeAmount : undefined), /* 选「面诊」时记下的面诊费金额（读这里，不读诊所设定；诊所之后调价不影响已选面诊的案件） */
     consultFeeWaived:o.consultFeeWaived||null, /* 面诊费免除（2026-09-30）：{reason, note}，免除时财务结果按无收入判断 */
     localTrack:!!o.localTrack, /* 2026-09-30：本地案件标记（面诊取消后做本地项目 / 无法协调后做本地管理），用于状态推算：选择项目→本地管理 */
     needsConsultTouched:false, /* 2026-10-01 延续既往面诊：基础资料新增医美史 / 室长是否手动选过面诊需求 */
@@ -1302,8 +1302,9 @@ function krItemFlags(c, it){
   return flags;
 }
 
-/* 本案件实际缴的面诊费（读缴费记录 consultFeePaidAmount，缴费时按当时设定记下；设定以后调价不影响已缴的案件；老数据没有记录时才退回读设定） */
-function consultFeeOf(c){ return (c && typeof c.consultFeePaidAmount==='number') ? c.consultFeePaidAmount : (CLINIC_SETTINGS.consultFee||0); }
+/* 本案件的面诊费：选「面诊」的那一刻按当时的诊所设定记进案件（consultFeeAmount），面诊费卡和财务栏都读这个金额；待缴费期间诊所调价也不影响已选面诊的案件；没有记录的老数据才退回读设定 */
+function consultFeeOf(c){ return (c && typeof c.consultFeeAmount==='number') ? c.consultFeeAmount : (CLINIC_SETTINGS.consultFee||0); }
+function recordConsultFee(c){ if(c && typeof c.consultFeeAmount!=='number') c.consultFeeAmount = CLINIC_SETTINGS.consultFee||0; }
 /* 财务栏（2026-10-08，IN-CASE-03 第 2 节）：无收入显示"–"（面诊费已免除 = 无收入）；有收入时标签下方小字写金额：
    仅面诊费 = 本案件实缴面诊费；有项目收入 = 已付款金额（赴韩定金扣退款用韩元 + 本地项目用印尼盾，不换算、不含面诊费）；退款行照旧 */
 function financeCellHtml(c){
@@ -2197,6 +2198,7 @@ function addConsult(){
   c.needsConsult = true;
   c.consultRequested = true;
   c.consultStatus = 'awaiting_payment';
+  recordConsultFee(c); /* 选面诊：把当下的面诊费记进案件 */
   c.activeCaseTab = 'consult';
   var hl0 = hospitalLockInfo(c); if(hl0) c.hospitalId = hl0.hospitalId; else if(!c.hospitalId) c.hospitalId = caseHospitalId(c);
   var lk0 = directorLockInfo(c); if(lk0) c.director = lk0.name; /* 关联复诊/延续既往面诊：锁定原医院和院长；否则缴费前在面诊费卡里选医院和院长 */
@@ -2218,10 +2220,10 @@ function consultFeeStatusMain(c){
   return c.consultFeeWaived ? '已免除' : '已缴费';
 }
 
-function consultFeeCardHtml(status, extraText, actionsHtml){
+function consultFeeCardHtml(status, extraText, actionsHtml, c){
   var col = CONSULT_FEE_COLORS[status];
   return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border2);">'+
-    '<span style="font-size:13px;font-weight:700;">面诊费</span><span style="font-size:12px;color:var(--slate2);">'+fmtRp(CLINIC_SETTINGS.consultFee)+'</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+status+'</span>'+
+    '<span style="font-size:13px;font-weight:700;">面诊费</span><span style="font-size:12px;color:var(--slate2);">'+fmtRp(c ? consultFeeOf(c) : CLINIC_SETTINGS.consultFee)+'</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+status+'</span>'+
     (extraText ? '<span style="font-size:11px;color:var(--muted);">'+extraText+'</span>' : '')+
     (actionsHtml ? '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">'+actionsHtml+'</span>' : '')+'</div>';
 }
@@ -2326,14 +2328,14 @@ function consultTabHtml(c){
   var sub = subStatusRowHtml(consultSubItems(c));
   var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(c.consultStatus==='awaiting_payment'){
-    return wrap(consultFeeCardHtml(fee, '', '')+consultFeeFormHtml(c)+sub);
+    return wrap(consultFeeCardHtml(fee, '', '', c)+consultFeeFormHtml(c)+sub);
   }
   if(c.consultStatus==='cancelled'){
     /* 2026-10-02：面诊取消（只在待缴费时）→ 面诊费已取消 → 主状态"选择项目"，本地管理tab已自动打开；这里只留记录 */
-    return wrap(consultFeeCardHtml(fee, '只作记录，不影响后续；面诊费由当地自行处理', '')+
+    return wrap(consultFeeCardHtml(fee, '只作记录，不影响后续；面诊费由当地自行处理', '', c)+
       '<div style="font-size:13px;color:var(--slate2);">面诊已取消，案件已进入"选择项目"，请在「本地管理」tab 继续。</div>');
   }
-  var feeCard = consultFeeCardHtml(fee, waiverText, '');
+  var feeCard = consultFeeCardHtml(fee, waiverText, '', c);
   if(c.consultStatus==='paid_waiting_kr'){
     return wrap(feeCard+sub+
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认预计出报告时间（院长看资料后口述，由 KR 室长整理并提交报告；院长不参与视频）</div>'+
@@ -2819,7 +2821,7 @@ function projectPickerHtml(c, isAddition){
   }
   var expandBtn = '<span style="cursor:pointer;font-size:12px;color:var(--slate);" onclick="toggleProjectsExpand()">'+(c.projectsExpanded?'⮡ 收起':'⮢ 展开满屏')+'</span>';
   var subTabs = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">'+
-    '<span class="chip'+(originFilter==='IN'?' active':'')+'" onclick="setProjectOrigin(\'IN\')">本地项目</span>'+
+    (noKrPicker ? '' : '<span class="chip'+(originFilter==='IN'?' active':'')+'" onclick="setProjectOrigin(\'IN\')">本地项目</span>')+
     (noKrPicker ? '' : '<span class="chip'+(originFilter==='KR'?' active':'')+'" onclick="setProjectOrigin(\'KR\')">赴韩项目</span>')+
     caseCcySwitchHtml(originFilter)+
     '<a href="#" class="info-link" style="font-size:12px;" onclick="openProjectLibNewTab();return false;">在项目库查看 ↗</a>'+
@@ -3524,7 +3526,7 @@ function krProcedureTabMain(c, tabsHtml){
 function markConsultPaid(){
   var c = getCurrentCase(); if(!c) return;
   c.consultStatus = 'paid_waiting_kr';
-  c.consultFeePaidAmount = CLINIC_SETTINGS.consultFee||0; /* 缴费记录：按缴费当时的面诊费记下 */
+  recordConsultFee(c); /* 正常情况下选面诊时已记；没有记录的老数据在缴费时补记 */
   if(!SEEDING) pushKrNotif(caseKrHospital(c), '客人已缴面诊费：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
   logCaseEvent(c, '客人', '完成面诊费支付，已在Main对话群自动通知');
@@ -4430,13 +4432,15 @@ function saveMemos(){ try{ localStorage.setItem('gmc_memos', JSON.stringify(CAL_
 function offNameKey(n){ return String(n||'').split(' ')[0]; }
 
 /* 推播对象（2026-10-02·三）：这个案件所有操作过的室长（只发给当天上班的）；操作过的都 OFF → 改发给同一边当天上班的所有室长；被 @ 的人一定收到 */
-/* "操作过"的定义（2026-10-08，IN-CASE-03 第 2 节）：从接待开始实际处理过案件的室长；代约（帮客人预约）不算，只记在 Timeline。
-   实现：Timeline 里第一条"标记客人已到店"（接待开始）之后的记录才算；从没到店过的案件（待访问 / 预约取消 / 未到店）没有操作过的人；
+/* "操作过"的定义（2026-10-08，IN-CASE-03 第 2 节；同日修正）：从接待开始实际处理过案件的室长，代约不算；
+   **只有「已到店后基础资料有保存」的那次接待才算**：接待中还没保存、或被退回待访问的接待只留 Timeline，不计入 IN 室长栏 / 仅看我的 / 推播。
+   实现：基础资料已保存（materialsConfirmed）时，从 Timeline 里最后一条"标记客人已到店"（= 这次保存的接待）起的记录才算；从没到店过的案件没有操作过的人；
    种子里没有"已到店"记录的已到店案件，按去掉代约 / 预约修改 / 预约取消 / 手动未到店这类预约到店阶段记录处理。列表、仅看我的、推播共用这一个函数 */
 function caseArrivedEver(c){ return !!c.hasArrived || c.subState==='arrived' || (c.stage!=='booked' && !(c.stage==='cancelled' && ['预约取消','未到店'].indexOf(c.cancelReason)>-1)); }
 function caseOperatedLogs(c){
+  if(!c.materialsConfirmed) return []; /* 基础资料没保存：这次接待不算操作过 */
   var L = c.logEntries||[], k = -1;
-  for(var i = 0; i < L.length; i++){ if(/标记客人已到店/.test(L[i].action||'')){ k = i; break; } }
+  for(var i = L.length-1; i >= 0; i--){ if(/标记客人已到店/.test(L[i].action||'')){ k = i; break; } }
   if(k > -1) return L.slice(k);
   if(!caseArrivedEver(c)) return [];
   return L.filter(function(l){ return !(l.stage==='预约到店' && /代替预约|代约|预约修改|改约|取消预约|未到店|老客人预约/.test(l.action||'')); });
@@ -4859,8 +4863,8 @@ function seedSurgeryDate(hid, director, date, time){
   return date;
 }
 /* 预约 / 占位不能落在休诊时段（诊所定期休诊）：种子里落在休诊日 / 休诊时段的到店预约，顺延到下一个营业日 */
-/* 已缴面诊费的演示案件：缴费记录按当时的面诊费记下（CMD-1008-06：财务栏读缴费记录，不读诊所设定） */
-function seedSnapshotConsultFee(){ CASE_ITEMS.forEach(function(c){ if(typeof c.consultFeePaidAmount!=='number' && !c.consultFeeWaived && consultFeePaid(c)) c.consultFeePaidAmount = CLINIC_SETTINGS.consultFee||0; }); }
+/* 选了面诊的演示案件：面诊费按当时的设定记进案件（财务栏和面诊费卡读案件里的金额，不读诊所设定） */
+function seedSnapshotConsultFee(){ CASE_ITEMS.forEach(function(c){ if(c.consultRequested && c.consultStatus && !c.reuseReport) recordConsultFee(c); }); }
 function seedFixVisits(){
   var bad = function(ds, tm){ var dt = new Date(ds+'T00:00:00'); if(isRescheduleDateDisabled(dt)) return true; var cf = closedFromOf(CLINIC_SETTINGS.closedRules, dt.getDay()); return !!cf && timeToMin(tm||'10:00') >= timeToMin(cf); };
   var next = function(ds){ var x = new Date(ds+'T00:00:00'); x.setDate(x.getDate()+1); return dateStr(x); };

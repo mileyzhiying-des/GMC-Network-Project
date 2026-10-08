@@ -302,4 +302,5 @@ prototype/shared/app.css  共用样式
 ## CMD-1008-07 补充（2026-10-08，追加；旧文字保留作历史）
 - 不面诊的本地案件（`isLocalCase(c) && !c.reportReady`）选购只显示本地项目，没有赴韩项目子 tab；面诊案件的项目列表 tab 不变。
 - **使用 / 选购数量的输入框一律用 `qtyInputHtml({id, value, min, max, onchange})`**（窄版带 ±，自动夹在 min～max；样式 `.qty-box`），不要再手写 `<input type="number">`；`.case-field-row input{flex-grow:1}` 会让裸输入框撑满整行。
+- （同日修正）"操作过"只算「已到店后基础资料有保存」的接待；面诊费改为**选面诊时**记进案件（`consultFeeAmount` / `recordConsultFee`，面诊费卡和财务栏读 `consultFeeOf(c)`，取代缴费时记 `consultFeePaidAmount`）；不面诊案件选购没有任何 chip。经营数据页面诊费汇总仍读当前设定（待决定）。
 
