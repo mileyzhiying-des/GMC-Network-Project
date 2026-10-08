@@ -100,19 +100,35 @@ function changeMyPassword(){
 var CLINIC_DRAFT = null;
 var CLINIC_FIELD_LABELS = {
   name:'诊所名称', address:'地址', phone:'电话', city:'所在城市', tz:'时区', openTime:'营业开始', closeTime:'营业结束', bookFrom:'可预约最早时段', bookTo:'可预约最晚时段',
-  lunchFrom:'午休开始', lunchTo:'午休结束', closedDow:'休诊日', holdMinutes:'预约占位倒计时（分钟）', noShowMinutes:'未到店判定（分钟）', consultFee:'面诊费（印尼盾）',
+  lunchFrom:'午休开始', lunchTo:'午休结束', closedRules:'定期休诊', holdMinutes:'预约占位倒计时（分钟）', noShowMinutes:'未到店判定（分钟）', consultFee:'面诊费（印尼盾）',
   slotCapacity:'每个时段的预约上限', remindBeforeHours:'提醒短信发送时间（预约前几小时）', privacyVersion:'同意书版本', privacyPolicy:'隐私政策'
 };
 var SMS_KIND_LABELS = {link:'预约链接短信', confirm:'预约确认短信', remind:'预约提醒短信', cancel:'预约取消短信'};
 var DOW_NAMES = ['周日','周一','周二','周三','周四','周五','周六'];
 
+/* 定期休诊编辑器（诊所设定 / KR 医院设定共用）：每个星期选「营业 / 整天休诊 / 从某时刻起休诊」 */
+function closedRulesEditorHtml(rules, fn){
+  var inp = 'padding:6px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;';
+  return [1,2,3,4,5,6,0].map(function(i){
+    var r = closedRuleOf(rules, i), mode = !r ? 'open' : (r.from ? 'from' : 'all');
+    return '<div style="display:flex;align-items:center;gap:10px;margin:4px 0;font-size:13px;"><span style="width:44px;">'+t(DOW_NAMES[i])+'</span>'+
+      '<select onchange="'+fn+'('+i+',this.value,\''+(r&&r.from||'')+'\')" style="'+inp+'"><option value="open"'+(mode==='open'?' selected':'')+'>'+t('营业')+'</option><option value="all"'+(mode==='all'?' selected':'')+'>'+t('整天休诊')+'</option><option value="from"'+(mode==='from'?' selected':'')+'>'+t('从某时刻起休诊')+'</option></select>'+
+      (mode==='from' ? '<input type="time" step="1800" value="'+aEsc(r.from)+'" onchange="'+fn+'('+i+',\'from\',this.value)" style="'+inp+'"> '+t('起休诊') : '')+'</div>';
+  }).join('');
+}
+function closedRulesSet(rules, dow, mode, from, dflt){
+  for(var k = rules.length-1; k >= 0; k--) if(rules[k].dow===dow) rules.splice(k, 1);
+  if(mode==='all') rules.push({dow:dow, from:''}); else if(mode==='from') rules.push({dow:dow, from:from || dflt});
+  rules.sort(function(a,b){ return a.dow-b.dow; });
+}
+function clinicSetClosed(dow, mode, from){ closedRulesSet(CLINIC_DRAFT.closedRules, dow, mode, from, '16:00'); openAdminPage('clinic', true); }
 function clinicDraftFresh(){ CLINIC_DRAFT = JSON.parse(JSON.stringify(CLINIC_SETTINGS)); }
 ADMIN_RENDER.clinic = function(el, isRefresh){
   if(!CLINIC_DRAFT || !isRefresh) clinicDraftFresh();
   var d = CLINIC_DRAFT;
   var f = function(k, type, extra){ return aInput('type="'+(type||'text')+'" value="'+aEsc(d[k])+'" data-k="'+k+'" oninput="clinicSet(this)" onchange="clinicSet(this)" '+(extra||'')); };
   var tzTxt = tzLabel(clinicTzOf(d))+'，'+t('依地址自动判定'); /* 时区只读，由地址 / 城市自动判定 */
-  var dow = [1,2,3,4,5,6,0].map(function(i){ return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(d.closedDow.indexOf(i)>-1?'checked ':'')+'onchange="clinicToggleDow('+i+',this.checked)"> '+t(DOW_NAMES[i])+'</label>'; }).join('');
+  var dow = closedRulesEditorHtml(d.closedRules, 'clinicSetClosed'); /* 定期休诊：每周固定，整天或从某时刻起 */
   var sms = Object.keys(SMS_KIND_LABELS).map(function(k){
     return aField(SMS_KIND_LABELS[k], '<textarea rows="3" data-k="sms.'+k+'" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.sms[k])+'</textarea>'); }).join('');
   var hospBlock = linkedHospitals().map(function(h){
@@ -128,7 +144,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
       aGrid(3, aField('营业开始', f('openTime','time','step="1800"'))+aField('营业结束', f('closeTime','time','step="1800"'))+'<div></div>'+
         aField('可预约最早时段', f('bookFrom','time','step="1800"'))+aField('可预约最晚时段（最后一个开始时间）', f('bookTo','time','step="1800"'))+'<div></div>'+
         aField('午休开始', f('lunchFrom','time','step="1800"'))+aField('午休结束', f('lunchTo','time','step="1800"'))+'<div></div>')+
-      aField(t('休诊日'), dow), '日历的行按营业时间生成；午休不能预约；时段长度固定 30 分钟。')+
+      aField(t('定期休诊（每周固定）'), dow, '客人约不到休诊时段（代约、占位、预约页、选施术日期都是灰色）；周视图整天休诊显示 1/3 宽的窄列，部分时段休诊该时段灰色'), '日历的行按营业时间生成；午休不能预约；时段长度固定 30 分钟。')+
     aSection(t('预约规则'),
       aGrid(3, aField(t('预约占位倒计时（分钟）'), f('holdMinutes','number','min="1" max="120"'), '默认 15')+aField(t('未到店判定（分钟）'), f('noShowMinutes','number','min="5" max="240"'), '默认 30')+
         aField(t('面诊费（印尼盾）'), f('consultFee','number','min="0" step="1000"'))+
@@ -152,11 +168,6 @@ function clinicSet(inp){
   if(inp.type==='number') v = v==='' ? '' : Number(v);
   if(k.indexOf('sms.')===0) CLINIC_DRAFT.sms[k.slice(4)] = v; else CLINIC_DRAFT[k] = v;
 }
-function clinicToggleDow(i, on){
-  var a = CLINIC_DRAFT.closedDow, p = a.indexOf(i);
-  if(on && p<0) a.push(i); else if(!on && p>-1) a.splice(p, 1);
-  a.sort();
-}
 function clinicErr(msg){ var e = document.getElementById('clinic-err'); if(e){ e.textContent = msg; e.style.display = msg ? 'block' : 'none'; } }
 function clinicValidate(d){
   var tm = /^\d\d:\d\d$/;
@@ -170,6 +181,7 @@ function clinicValidate(d){
   if(m('bookFrom') < m('openTime') || m('bookTo') >= m('closeTime') || m('bookFrom') > m('bookTo')) return '可预约时段必须在营业时间内（最晚时段要早于营业结束）';
   if(m('lunchFrom') >= m('lunchTo')) return '午休结束必须晚于午休开始';
   if(m('lunchFrom') < m('openTime') || m('lunchTo') > m('closeTime')) return '午休必须在营业时间内';
+  for(var ci=0; ci<d.closedRules.length; ci++){ var cr = d.closedRules[ci]; if(cr.from && (!tm.test(cr.from) || timeToMin(cr.from) < m('openTime') || timeToMin(cr.from) >= m('closeTime'))) return '部分时段休诊的起始时间必须在营业时间内（'+DOW_NAMES[cr.dow]+'）'; }
   var num = function(k, lo, hi){ var v = d[k]; return typeof v==='number' && isFinite(v) && v>=lo && v<=hi && Math.floor(v)===v; };
   if(!num('holdMinutes',1,120)) return '预约占位倒计时请填 1～120 之间的整数分钟';
   if(!num('noShowMinutes',5,240)) return '未到店判定请填 5～240 之间的整数分钟';
@@ -183,7 +195,7 @@ function clinicValidate(d){
   return '';
 }
 function clinicDiff(oldS, newS){
-  var ch = [], show = function(k, v){ if(k==='closedDow') return v.length ? v.map(function(i){ return DOW_NAMES[i]; }).join('、') : '无'; if(k==='tz') return tzLabel(v); if(k==='consultFee') return fmtRp(v); return String(v); };
+  var ch = [], show = function(k, v){ if(k==='closedRules') return closedRulesText(v); if(k==='tz') return tzLabel(v); if(k==='consultFee') return fmtRp(v); return String(v); };
   Object.keys(CLINIC_FIELD_LABELS).forEach(function(k){
     if(JSON.stringify(oldS[k]) !== JSON.stringify(newS[k])) ch.push(CLINIC_FIELD_LABELS[k]+'：'+(k==='privacyPolicy' ? '（已修改）' : show(k, oldS[k])+' → '+show(k, newS[k])));
   });

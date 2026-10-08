@@ -260,14 +260,15 @@ function krBlockStyle(it){
   return 'background:#ECEAE4;color:#7A766C;border:1px solid #DDD9CF;';
 }
 /* 某一天的一整列：items（韩国时间分钟）按诊所行对应的韩国时间摆放；baseMin = 第一行对应的韩国时间 */
-function krDayColHtml(ds, items, baseMin, extraBg){
+function krDayColHtml(ds, items, baseMin, closedFrom){
   var total = WK_HOURS.length, h = total*KR_ROW_PX, blocks = '';
   krLaneLayout(items.filter(function(it){ return !(it.type==='off' && it.part==='全天'); })).forEach(function(r0){
     var it = r0.it, s = Math.max(it.s, baseMin), e = Math.min(it.e, baseMin + total*SLOT_MIN); if(e <= s) return;
     var top = (s-baseMin)/SLOT_MIN*KR_ROW_PX, hgt = Math.max(16, (e-s)/SLOT_MIN*KR_ROW_PX - 2), w = 100/r0.n;
     blocks += '<div title="'+(it.type==='surg' && it.own ? it.label : (it.type==='off' ? it.label : '这段时间不可预约'))+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:11px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
   });
-  return '<div style="position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:'+(extraBg||'#fff')+' repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+blocks+'</div>';
+  var hatch = closedFrom ? '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(closedFrom)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;bottom:0;background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);z-index:1;"></div>' : ''; /* 部分时段休诊：灰色斜纹 */
+  return '<div style="position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+hatch+blocks+'</div>';
 }
 function krTimeColHtml(){
   return '<div>'+WK_HOURS.map(function(hr){ return '<div class="wk-time" style="height:'+KR_ROW_PX+'px;box-sizing:border-box;">'+hr+'<span class="kr">'+krTimeOf(hr)+'</span></div>'; }).join('')+'</div>';
@@ -290,12 +291,10 @@ function buildKrWeekGrid(){
   html += krTimeColHtml();
   days.forEach(function(dd){
     var ds = dateStr(dd);
-    html += hospitalClosedOn(hid, ds) ? '<div style="height:'+(WK_HOURS.length*KR_ROW_PX)+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);"></div>' : krDayColHtml(ds, krDayItems(ds), baseMin, krClosedBg(hid, ds, baseMin));
+    html += hospitalClosedOn(hid, ds) ? '<div style="height:'+(WK_HOURS.length*KR_ROW_PX)+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);"></div>' : krDayColHtml(ds, krDayItems(ds), baseMin, hospitalClosedFrom(hid, ds));
   });
   document.getElementById('wk-grid').innerHTML = html;
 }
-/* 部分时段休诊（定期休诊的一部分时段）：该时段灰色斜纹；在 krClosedRanges 里取（KR 时间分钟区间） */
-function krClosedBg(hid, ds, baseMin){ return '#fff'; }
 function buildKrMonthGrid(){
   var grid = document.getElementById('cal-grid'), hid = krViewHospital();
   var first = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth(), 1), cur = new Date(first); cur.setDate(1-first.getDay());
@@ -321,7 +320,7 @@ function buildKrDayGrid(){
   else {
     var chips = krOffDayChips(ds);
     html += (chips ? '<div style="font-size:12px;margin-bottom:8px;"><b>全天 OFF：</b>'+chips+'</div>' : '')+
-      '<div style="display:grid;grid-template-columns:64px minmax(0,1fr);max-height:calc(100vh - 360px);overflow-y:auto;border-top:1px solid var(--border2);border-left:1px solid var(--border2);">'+krTimeColHtml()+krDayColHtml(ds, krDayItems(ds), baseMin, '#fff')+'</div>';
+      '<div style="display:grid;grid-template-columns:64px minmax(0,1fr);max-height:calc(100vh - 360px);overflow-y:auto;border-top:1px solid var(--border2);border-left:1px solid var(--border2);">'+krTimeColHtml()+krDayColHtml(ds, krDayItems(ds), baseMin, hospitalClosedFrom(hid, ds))+'</div>';
   }
   document.getElementById('day-detail').innerHTML = html;
 }
@@ -1149,7 +1148,7 @@ function renderRescheduleTimePanel(){
   var pmGrid = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;">'+RESCHED_PM.map(slotBtn).join('')+'</div>';
   var lunchDivider = '<div style="text-align:center;font-size:11px;color:var(--terracotta);margin:12px 0;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
   document.getElementById('reschedule-slots').innerHTML = amGrid + lunchDivider + pmGrid;
-  var cn = document.getElementById('reschedule-closed-note'); if(cn) cn.textContent = '定期休诊：每周'+(CLINIC_SETTINGS.closedDow.length ? CLINIC_SETTINGS.closedDow.map(function(i){ return DOW_NAMES[i]; }).join('、') : '无')+'（诊所设定）';
+  var cn = document.getElementById('reschedule-closed-note'); if(cn) cn.textContent = '定期休诊：'+closedRulesText(CLINIC_SETTINGS.closedRules)+'（诊所设定）';
 }
 
 function confirmReschedule(){

@@ -68,7 +68,8 @@ function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分
   openTime:'09:00', closeTime:'17:00',   /* 营业时间（日历显示的行） */
   bookFrom:'09:00', bookTo:'16:30',      /* 可预约时段：第一个 / 最后一个可约的开始时间 */
   lunchFrom:'14:00', lunchTo:'15:00',    /* 午休：不可预约 */
-  closedDow:[4],                         /* 休诊日（0=周日…6=周六），默认周四 */
+  closedRules:[{dow:0, from:''}],        /* 定期休诊（每周固定；2026-10-08 起取代只能整天休诊的 closedDow）：dow 0=周日…6=周六；from 为空 = 整天休诊，填 HH:mm = 这天从该时刻起休诊（到营业结束）；默认每周日整天休诊 */
+  closedDow:[0],                         /* 派生：整天休诊的星期（由 closedRules 算出，不要直接改） */
   holdMinutes:15, noShowMinutes:30,      /* 预约占位倒计时 / 未到店判定 */
   consultFee:300000,                     /* 面诊费（印尼盾） */
   slotCapacity:2,                        /* 每个时段的预约上限（客户自助预约用） */
@@ -83,7 +84,7 @@ function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分
   privacyPolicy:'本诊所仅为办理预约、接待和医美咨询收集您的个人资料与健康资料，并按《隐私/数据跨境使用授权同意书》约定处理；您可随时要求查看、更正或删除。',
   updatedAt:'', updatedBy:''
  };
- s.sms = Object.assign({}, s.sms); s.closedDow = s.closedDow.slice();
+ s.sms = Object.assign({}, s.sms); s.closedRules = s.closedRules.map(function(r){ return Object.assign({}, r); }); s.closedDow = s.closedDow.slice();
  return Object.assign(s, o||{});
 }
 var CLINIC_SETTINGS = defaultClinicSettings();
@@ -122,8 +123,22 @@ function hospitalDirectors(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.direct
 function hospitalDirectorNames(hid){ return hospitalDirectors(hid).filter(function(d){ return d.active; }).map(function(d){ return d.name; }); } /* 启用的院长（停用的不出现在选项里） */
 function hospitalCoordinators(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.coordinators : []; }
 /* 医院休诊日（2026-10-07，CMD-1007-03）：KR 室长在 KR 工作台日历登记整院休诊（可取消）；HOSPITAL_DATA[h].closedDates = [{id, date, by}]；IN 的 KR 医院日程视角和 KR 日历都读这里 */
-function hospitalClosedOn(hid, ds){ var h = HOSPITAL_DATA[hid]; return !!(h && (h.closedDates||[]).some(function(x){ return x.date===ds; })); }
-function hospitalOpenDates(hid, director){ var h = HOSPITAL_DATA[hid]; return (h && h.openDates && h.openDates[director]) || []; }
+/* 2026-10-08：医院休诊改成定期休诊（HOSPITAL_DATA[h].closedRules，每周固定，整天或从某时刻起）；取代 CMD-03 的逐日登记 closedDates */
+function hospitalClosedOn(hid, ds){ var h = HOSPITAL_DATA[hid]; return !!h && closedWholeDay(h.closedRules, new Date(ds+'T00:00:00').getDay()); }
+function hospitalClosedFrom(hid, ds){ var h = HOSPITAL_DATA[hid]; return h ? closedFromOf(h.closedRules, new Date(ds+'T00:00:00').getDay()) : ''; } /* 这天从几点（韩国时间）起休诊，没有 = '' */
+function hospitalSlotClosed(hid, ds, hm){ if(hospitalClosedOn(hid, ds)) return true; var f = hospitalClosedFrom(hid, ds); return !!f && timeToMin(hm) >= timeToMin(f); }
+/* OFF 在某天是否生效：单次 = date 相同；每周固定 = weekly 且星期相同（2026-10-08，CMD-1007-04） */
+function offApplies(o, ds){ return o.weekly ? (o.dow === new Date(ds+'T00:00:00').getDay()) : o.date===ds; }
+/* KR 排施术时间的检查：整天休诊 / 休诊时段 / 院长 OFF 不能排；返回错误文字，'' = 可以（KR 端确认、调整、重新预约施术时间前调用） */
+function krSurgerySlotError(hid, director, date, time, durMin){
+  var s = timeToMin(time), e = s + (durMin||60);
+  if(hospitalClosedOn(hid, date)) return date+' 是医院定期休诊日，不能排施术';
+  var cf = hospitalClosedFrom(hid, date); if(cf && e > timeToMin(cf)) return '这个时间落在医院休诊时段（周'+['日','一','二','三','四','五','六'][new Date(date+'T00:00:00').getDay()]+' '+cf+' 起休诊）';
+  var h = HOSPITAL_DATA[hid] || {offs:[]}, bad = (h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); }).filter(function(o){ var a = o.part==='下午' ? 13*60 : 0, b = o.part==='上午' ? 13*60 : 24*60; return s < b && e > a; })[0];
+  if(bad) return director+' 在这个时间 OFF（'+(bad.part||'全天')+(bad.weekly ? '，每周固定' : '')+'），不能排施术';
+  return '';
+}
+function hospitalOpenDates(hid, director){ var h = HOSPITAL_DATA[hid]; return ((h && h.openDates && h.openDates[director]) || []).filter(function(ds){ return !hospitalClosedOn(hid, ds); }); } /* 医院整天休诊的日子不能选施术 */
 function hospitalOfDirector(name){ for(var k in HOSPITAL_DATA){ if(hospitalDirectors(k).some(function(d){ return d.name===name; })) return k; } return null; }
 
 function timeToMin(t){ return parseInt(t.slice(0,2),10)*60 + parseInt(t.slice(3),10); }
@@ -139,6 +154,8 @@ function smsFill(tpl, v){ return String(tpl||'').replace(/\{(\w+)\}/g, function(
 /* 设定变化后同步各处的派生值：时区镜像、日历行、改约弹窗的上午/下午时段、默认短信 */
 function applyClinicSettings(){
   var s = CLINIC_SETTINGS;
+  if(!Array.isArray(s.closedRules)) s.closedRules = (s.closedDow||[]).map(function(i){ return {dow:i, from:''}; }); /* 旧存档：整天休诊的星期转成规则 */
+  s.closedDow = s.closedRules.filter(function(r){ return !r.from; }).map(function(r){ return r.dow; });
   s.tz = clinicTzOf(s); /* 时区由地址 / 城市自动判定 */
   CLINIC_TZ = s.tz;
   var t0 = demoNow(); t0.setHours(0,0,0,0); TODAY_DATE = t0; /* 日历的"今天"按页面时区算 */
@@ -464,6 +481,7 @@ function slotBlockReason(date, time, excludePhId, excludeCaseId){
   var own = excludePhId ? findPlaceholder(excludePhId) : null, ownSlot = !!own && own.ph.date===date && slotOf(own.ph.time)===slotOf(time);
   if(!ownSlot){
     if(isRescheduleDateDisabled(d)) return 'closed';
+    var cf = closedFromOf(CLINIC_SETTINGS.closedRules, d.getDay()); if(cf && timeToMin(time) >= timeToMin(cf)) return 'closed'; /* 部分时段休诊 */
     if(slotIsLunch(time)) return 'lunch';
     if(!slotBookable(time)) return 'outside';
   }
@@ -4727,17 +4745,18 @@ function seedKrMonthDemo(){
   var T = [['09:00','10:30'], ['10:00','13:30'], ['09:30','11:00'], ['11:00','12:00'], ['13:30','15:00'], ['14:00','16:30'], ['15:30','17:00'], ['10:30','12:30']];
   var pick = function(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); };
   var CFG = {
-    H1:{closed:[-10, 12, 13],
+    H1:{closed:[],
         offs:{'김민석 원장':[[-7,'全天'],[2,'全天'],[7,'上午'],[20,'下午']], '이수진 원장':[[0,'全天'],[14,'全天'],[5,'上午'],[-6,'下午']], '박소현 원장':[[4,'全天'],[-14,'全天'],[8,'上午'],[-2,'下午']]},
         open:{'김민석 원장':[1,3,5], '이수진 원장':[2,4,6], '박소현 원장':[1,2,3,4,5]}},
-    H2:{closed:[-6, 9, 10],
+    H2:{closed:[],
         offs:{'박서윤 원장':[[2,'全天'],[8,'上午'],[-3,'下午'],[21,'全天']], '최지호 원장':[[0,'全天'],[13,'全天'],[-5,'上午'],[18,'下午']]},
         open:{'박서윤 원장':[1,3,5], '최지호 원장':[2,4,6]}}
   };
   Object.keys(CFG).forEach(function(hid, hi){
     var h = HOSPITAL_DATA[hid]; if(!h) return; var cfg = CFG[hid];
     var closedDs = cfg.closed.map(D), names = h.directors.filter(function(d){ return d.active; }).map(function(d){ return d.name; });
-    h.closedDates = closedDs.map(function(ds, i){ return {id:'hc'+hid+i, date:ds, by:(hid==='H1'?'이서연':'정하늘')}; });
+    h.closedRules = [{dow:0, from:''}, {dow:6, from:'16:00'}]; /* 医院每周日休诊 + 周六 16:00 起休诊（韩国时间）；取代原来逐日登记的 closedDates */
+    delete h.closedDates;
     h.directorSchedule = {}; h.offs = (h.offs||[]).filter(function(o){ return o.kind==='coord' && o.date===D(0); }); /* 室长 OFF 只留今天的那条 */
     h.openDates = h.openDates || {};
     names.forEach(function(n, k){

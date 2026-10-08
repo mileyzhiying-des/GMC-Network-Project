@@ -118,8 +118,13 @@ function deriveCaseStage(c){
   return 'booked';
 }
 
+/* 定期休诊（每周固定，诊所设定 / KR 医院设定）：rules = [{dow, from}]；from 为空 = 整天休诊，否则这天从 from 起休诊 */
+function closedRuleOf(rules, dow){ return (rules||[]).filter(function(r){ return r.dow===dow; })[0] || null; }
+function closedWholeDay(rules, dow){ var r = closedRuleOf(rules, dow); return !!r && !r.from; }
+function closedFromOf(rules, dow){ var r = closedRuleOf(rules, dow); return r && r.from ? r.from : ''; }
+function closedRulesText(rules){ var N = ['周日','周一','周二','周三','周四','周五','周六']; return (rules||[]).slice().sort(function(a,b){ return a.dow-b.dow; }).map(function(r){ return N[r.dow]+(r.from ? ' '+r.from+' 起' : '整天'); }).join('、') || '无'; }
 function isRescheduleDateDisabled(d){
-  return CLINIC_SETTINGS.closedDow.indexOf(d.getDay()) > -1; /* 休诊日读诊所设定（默认周四） */
+  return closedWholeDay(CLINIC_SETTINGS.closedRules, d.getDay()); /* 整天休诊读诊所设定的定期休诊（默认每周日）；部分时段休诊由 slotBlockReason 判断 */
 }
  /* 演示按钮"模拟时间超过30分钟"会把演示时钟往后拨 */
 /* 演示时钟 = 电脑当前时间 + 演示按钮往后拨的毫秒数（2026-10-06 起不再固定在 2026-09-18 11:00） */
