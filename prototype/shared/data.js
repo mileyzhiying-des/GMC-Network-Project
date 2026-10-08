@@ -1443,8 +1443,19 @@ function consultTalkShortcut(){
 
 function callTitle(){ var c = VIDEO_CALL.caseId ? CASE_ITEMS.filter(function(x){ return x.id===VIDEO_CALL.caseId; })[0] : null; return c ? c.name : '演示'; }
 
+/* ---- 视频来电信号（CMD-1008-12 A1）：IN 发起视频邀请时写到单独的 localStorage 键 gmc_call，KR 页面（室长 / 院长）的 storage 监听收到后跳来电画面；
+   状态 ringing → accepted / declined → ended；不放进 gmc_state，不触发其他分页的整页刷新 ---- */
+var CALL_SIGNAL_KEY = 'gmc_call';
+function readCallSignal(){ try{ return JSON.parse(localStorage.getItem(CALL_SIGNAL_KEY)||'null'); }catch(e){ return null; } }
+function writeCallSignal(sig){ try{ localStorage.setItem(CALL_SIGNAL_KEY, JSON.stringify(sig)); }catch(e){} }
+function patchCallSignal(id, patch){ var s = readCallSignal(); if(!s || s.id!==id) return null; Object.keys(patch).forEach(function(k){ s[k] = patch[k]; }); s.ts = Date.now(); writeCallSignal(s); return s; }
 function startCall(kind, caseId, participants){
   VIDEO_CALL = {active:true, kind:kind, caseId:caseId, participants:participants, status:'ringing', shareBy:null, muted:false, startedAt:Date.now(), transcript:[]};
+  var cc = caseId ? CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0] : null;
+  if(kind!=='demo' && cc && caseKrHospital(cc)){ /* 呼叫 KR 一侧：该医院的 KR 室长 + 案件院长都会收到来电 */
+    VIDEO_CALL.sigId = 'call'+Date.now()+Math.floor(Math.random()*1000);
+    writeCallSignal({id:VIDEO_CALL.sigId, status:'ringing', clinicId:CURRENT_CLINIC_ID, clinicName:(clinicById(CURRENT_CLINIC_ID)||{}).name||'', caseId:cc.id, caseNo:cc.caseNo||'', name:cc.name, hospitalId:caseKrHospital(cc), director:cc.director||'', from:ME_NAME, kind:kind, ts:Date.now()});
+  }
   INVITE_KR_CONTEXT_CASE_ID = (kind==='talk') ? caseId : null;
   CHAT_VIDEO_CONTEXT_CASE_ID = (kind==='chat') ? caseId : null;
   renderDashCallCard();
@@ -1482,6 +1493,7 @@ function inviteKrVideo(name){
 
 function endVideoConsult(){
   var touchedCase = null;
+  if(VIDEO_CALL.sigId) patchCallSignal(VIDEO_CALL.sigId, {status:'ended', by:ME_NAME}); /* 通知 KR 一侧通话结束 */
   VIDEO_CALL.active = false; /* 通话结束后，对话抽屉的红卡片和工作台卡片都消失 */
   if(INVITE_KR_CONTEXT_CASE_ID){
     var c2 = CASE_ITEMS.filter(function(x){ return x.id===INVITE_KR_CONTEXT_CASE_ID; })[0];

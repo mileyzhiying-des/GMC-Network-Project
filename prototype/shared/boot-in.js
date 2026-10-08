@@ -91,6 +91,8 @@ document.addEventListener('DOMContentLoaded', function(){
 /* 点页面其他地方，关闭头像菜单 */
 document.addEventListener('click', function(){ closeAvatarMenu(); });
 
+window.addEventListener('storage', function(e){ if(e.key==='gmc_call' && e.newValue){ try{ inHandleCallSignal(JSON.parse(e.newValue)); }catch(x){} } }); /* KR 的来电反馈（CMD-1008-12 A1） */
+
 /* 接待中不停留（CMD-1008-06）：案件页开着且案件在接待中（基础资料未保存）→ 每 5 秒写心跳；每 5 秒扫一遍心跳过期（>45 秒）的接待中案件，退回待访问并刷新列表；
    关分页 / 刷新时 beforeunload / pagehide 尽力当场退回（做不到时靠心跳过期兜底） */
 setInterval(function(){

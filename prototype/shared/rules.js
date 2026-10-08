@@ -211,15 +211,19 @@ function settlementCardHtml(c, b){
   var st = batchStatusLabel(c, b);
   var pc = {'待付款':['#FBF0C9','#8F6F0C'], '已付款':['var(--sage-bg)','var(--sage)'], '计入尾款':['var(--blue-bg)','var(--blue)'], '韩国付款':['var(--blue-bg)','var(--blue)'], '部分退款':['var(--terracotta-bg)','var(--terracotta)'], '全额退款':['#EDEAE2','var(--muted)']}[st];
   var krs = krAllItems(c).filter(function(it){ return it.batchId===b.id; });
-  var rows = krs.map(function(it){
+  /* 本地项目（CMD-1008-12 A2）：付款后读结算单里的快照 b.inItems；待付款时还没发放持有，直接读这张结算单的 procedureItems（origin IN）——原来只读快照，待付款的结算单会漏掉本地项目 */
+  var locals = (b.inItems && b.inItems.length) ? b.inItems : (c.procedureItems||[]).filter(function(it){ return it.batchId===b.id && it.origin==='IN'; });
+  var krRows = krs.map(function(it){
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+'</span><span style="font-size:12px;color:var(--slate2);">'+(it.price?formatCurrency(it.price,'KRW'):'')+' · '+krItemStatus(it)+'</span></div>';
   }).join('');
-  if((b.inItems||[]).length){
-    rows += b.inItems.map(function(it){
-      var rb = null; getClientHoldings(c.name).forEach(function(h){ if(h.itemName===it.name) h.batches.forEach(function(x){ if(x.caseId===c.id && x.refund && x.bought===it.qty) rb = x.refund; }); });
-      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+' ×'+it.qty+(discountText(it.discountPct)?'（'+discountText(it.discountPct)+'）':'')+'</span><span style="font-size:12px;color:var(--slate2);">本地 · 已转客户持有'+(rb?' · <b style="color:var(--terracotta);">'+'已退款 '+formatCurrency(rb.amount,'IDR')+'</b>':'')+'</span></div>';
-    }).join('');
-  }
+  var localRows = locals.map(function(it){
+    var rb = null; getClientHoldings(c.name).forEach(function(h){ if(h.itemName===it.name) h.batches.forEach(function(x){ if(x.caseId===c.id && x.refund && x.bought===it.qty) rb = x.refund; }); });
+    var tag = it.kind==='package' ? ' <span style="font-size:10px;color:#C1454A;">套餐</span>' : (it.kind==='service' ? ' <span style="font-size:10px;color:var(--blue);">서비스</span>' : (it.promo || it.promoId ? ' <span style="font-size:10px;color:var(--sage);">本月</span>' : ''));
+    var held = b.status==='unpaid' ? '待付款' : '已转客户持有';
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+tag+' ×'+(it.qty||1)+(discountText(it.discountPct)?'（'+discountText(it.discountPct)+'）':'')+'</span><span style="font-size:12px;color:var(--slate2);">'+formatCurrency(inLineTotal(it),'IDR')+' · 本地 · '+held+(rb?' · <b style="color:var(--terracotta);">'+'已退款 '+formatCurrency(rb.amount,'IDR')+'</b>':'')+'</span></div>';
+  }).join('');
+  var grp = function(t){ return '<div style="font-size:11px;font-weight:700;color:var(--slate2);margin:8px 0 2px;">'+t+'</div>'; };
+  var rows = (krRows && localRows) ? grp('赴韩项目（₩）')+krRows+grp('本地项目（Rp）')+localRows : (krRows + localRows);
   var amounts = [];
   if(b.addOn) amounts.push('韩国加做（KR 新增，另开结算单）：金额 '+formatCurrency(b.krTotal,'KRW')+'，客人在韩国单独付款，医院收款（不进尾款应付额，算 KR 收入）');
   else if(b.noDeposit) amounts.push('更换项目（'+(b.swapOf||'')+'→）：不收定金，金额 '+formatCurrency(b.krTotal,'KRW')+' 直接计入尾款（医院收）');

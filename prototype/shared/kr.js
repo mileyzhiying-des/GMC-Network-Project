@@ -106,6 +106,56 @@ function krRenderPage(id){
   else if(id==='kr-casedetail') krRenderCaseDetail();
   try{ krUpdateBadges(); }catch(e){}
 }
+/* ---------- 来自 IN 的视频来电（CMD-1008-12 A1）：IN 发起视频邀请 → gmc_call 信号 → 本医院的 KR 室长 / 案件院长跳来电画面（接听 / 拒绝）；接听后进通话画面（演示：顶部计时、静音、［结束通话］） ---------- */
+var KR_CALL = {sig:null, state:'idle', startedAt:0, timer:null, muted:false}; /* state: idle | ringing | connected */
+function krCallRelevant(sig){
+  var a = currentAccount(); if(!a || !a.hospitalId || a.hospitalId!==sig.hospitalId) return false;
+  if(a.role==='kr_manager' || a.role==='kr_general') return true; /* 本医院的 KR 室长 / 管理者 */
+  if(a.role==='kr_director') return !!sig.director && a.name===sig.director; /* 院长：只有自己负责的案件 */
+  return false; /* 代表院长不接 */
+}
+function krCallOverlay(){
+  var ov = document.getElementById('kr-call-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'kr-call-overlay'; ov.style.cssText = 'position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(27,38,53,.55);'; document.body.appendChild(ov); }
+  return ov;
+}
+function krCallRender(){
+  var ov = krCallOverlay(), sig = KR_CALL.sig;
+  if(KR_CALL.state==='idle' || !sig){ ov.style.display = 'none'; ov.innerHTML = ''; return; }
+  var title = sig.clinicName+' · '+sig.name+'（'+sig.caseNo+'）';
+  if(KR_CALL.state==='ringing'){
+    ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:28px 32px;width:340px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);"><div style="font-size:36px;">📞</div><div style="font-size:16px;font-weight:800;margin:10px 0 4px;">'+krEsc(sig.from)+' 呼叫你</div><div style="font-size:12px;color:var(--slate2);margin-bottom:20px;">'+krEsc(title)+' · 视频沟通</div>'+
+      '<div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;color:#C1454A;border-color:#C1454A;" onclick="krCallDecline()">拒绝</button><button class="btn-primary" style="flex:1;background:var(--sage);" onclick="krCallAccept()">接听</button></div></div>';
+  } else {
+    ov.style.background = '#1B2635';
+    ov.innerHTML = '<div style="color:#fff;text-align:center;width:420px;"><div style="font-size:12px;opacity:.7;">视频沟通中</div><div style="font-size:18px;font-weight:800;margin:6px 0;">'+krEsc(title)+'</div><div style="font-size:13px;opacity:.85;margin-bottom:6px;">参与者：'+krEsc(sig.from)+'（印尼室长）、'+krEsc(ME_NAME)+'</div><div id="kr-call-timer" style="font-size:28px;font-weight:700;margin:14px 0 22px;">00:00</div>'+
+      '<div style="display:flex;gap:12px;justify-content:center;"><button class="btn-outline" style="background:transparent;color:#fff;border-color:#fff;" onclick="KR_CALL.muted=!KR_CALL.muted;krCallRender()">'+(KR_CALL.muted?'取消静音':'静音')+'</button><button class="btn-primary" style="background:#C1454A;" onclick="krCallHangup()">结束通话</button></div></div>';
+  }
+  ov.style.display = 'flex';
+}
+function krCallTick(){ var el = document.getElementById('kr-call-timer'); if(!el || KR_CALL.state!=='connected') return; var s = Math.floor((Date.now()-KR_CALL.startedAt)/1000), p = function(n){ return (n<10?'0':'')+n; }; el.textContent = p(Math.floor(s/60))+':'+p(s%60); }
+function krCallHandle(sig){
+  if(!sig) return;
+  if(sig.status==='ringing' && Date.now()-sig.ts < 60000 && krCallRelevant(sig) && KR_CALL.state==='idle'){ KR_CALL.sig = sig; KR_CALL.state = 'ringing'; krCallRender(); return; }
+  if(KR_CALL.sig && sig.id===KR_CALL.sig.id){
+    if(KR_CALL.state==='ringing' && (sig.status==='accepted' || sig.status==='declined' || sig.status==='ended')){ if(sig.by!==ME_NAME){ KR_CALL = {sig:null, state:'idle', startedAt:0, timer:null, muted:false}; krCallRender(); } } /* 别的 KR 同事接了 / 拒了，或 IN 取消：本页来电消失 */
+    else if(KR_CALL.state==='connected' && sig.status==='ended' && sig.by!==ME_NAME){ krCallFinish(); showToast('通话已结束', (sig.by||'IN')+' 结束了视频通话', null); }
+  }
+}
+function krCallAccept(){
+  if(!KR_CALL.sig) return;
+  var cur = readCallSignal();
+  if(!cur || cur.id!==KR_CALL.sig.id || cur.status!=='ringing'){ krCallFinish(); showToast('来电已失效', '已经有人接听或对方已取消', null); return; }
+  patchCallSignal(cur.id, {status:'accepted', by:ME_NAME});
+  KR_CALL.state = 'connected'; KR_CALL.startedAt = Date.now(); KR_CALL.muted = false;
+  if(KR_CALL.timer) clearInterval(KR_CALL.timer); KR_CALL.timer = setInterval(krCallTick, 1000);
+  krCallRender();
+}
+function krCallDecline(){ if(!KR_CALL.sig) return; patchCallSignal(KR_CALL.sig.id, {status:'declined', by:ME_NAME}); krCallFinish(); }
+function krCallHangup(){ if(!KR_CALL.sig) return; patchCallSignal(KR_CALL.sig.id, {status:'ended', by:ME_NAME}); krCallFinish(); }
+function krCallFinish(){ if(KR_CALL.timer) clearInterval(KR_CALL.timer); KR_CALL = {sig:null, state:'idle', startedAt:0, timer:null, muted:false}; var ov = krCallOverlay(); ov.style.background = 'rgba(27,38,53,.55)'; krCallRender(); }
+window.addEventListener('storage', function(e){ if(e.key==='gmc_call' && e.newValue && isKrAccount() && canDo('krview')|| (e.key==='gmc_call' && e.newValue && isKrAccount() && canDo('krviewOwn'))){ try{ krCallHandle(JSON.parse(e.newValue)); }catch(x){} } });
+
 function krBoot(){
   try{ i18nStart(); }catch(e){}
   document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
@@ -116,6 +166,7 @@ function krBoot(){
   if(q){ var pr = q.split(':'); if(!krFindCase(pr[0], pr[1])){ location.replace(homeUrl()); return; } KR_CASE = {clinicId:pr[0], id:pr[1], tab:new URLSearchParams(location.search).get('tab')||'basic'}; start = 'kr-casedetail'; }
   krRenderPage(start); showPage(start);
   KR_LAST_UNREAD = krNotifUnread().length; krUpdateBadges();
+  try{ krCallHandle(readCallSignal()); }catch(e){} /* 刚打开页面时，如果正好有一通 60 秒内的来电，也要响 */
 }
 
 /* ---------- 管理类页面（代表院长在 owner.html、管理者在 kr.html；范围 = 本医院） ---------- */

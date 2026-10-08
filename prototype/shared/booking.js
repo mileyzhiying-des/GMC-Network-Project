@@ -72,9 +72,17 @@ function bkFooter(err, buttonsHtml){
   return '<div class="bk-footer">'+(err ? '<div class="bk-err" style="margin:0 0 8px;">'+bkH(err)+'</div>' : '')+'<div class="bk-footer-row">'+buttonsHtml+'</div></div>';
 }
 function bkNav(nextHandler, showBack){
+  var off = !bkStepValid(BK_STEPS[BK.step]); /* 必填没填完时［下一步］置灰（CMD-1008-12 B） */
   return bkFooter(BK.err, (showBack ? '<button class="bk-btn ghost" onclick="bkPrevStep()">'+bt('btn.back')+'</button>' : '')+
-    '<button class="bk-btn" onclick="'+nextHandler+'">'+bt(nextHandler==='bkSubmit()' ? 'btn.submit' : 'btn.next')+'</button>');
+    '<button class="bk-btn" id="bk-next" '+(off ? 'disabled ' : '')+'onclick="'+nextHandler+'">'+bt(nextHandler==='bkSubmit()' ? 'btn.submit' : 'btn.next')+'</button>');
 }
+/* 这一步的必填是否满足：健康资料（病史 / 过敏史）必填；两份同意书都勾选 */
+function bkStepValid(s){
+  if(s==='health') return !!(BK.f.history||'').trim();
+  if(s==='consent') return !!(BK.f.c1 && BK.f.c2);
+  return true;
+}
+function bkRefreshNext(){ var b = document.getElementById('bk-next'); if(b) b.disabled = !bkStepValid(BK_STEPS[BK.step]); }
 function bkRenderStep(){
   var s = BK_STEPS[BK.step];
   var fn = {time:bkStepTime, phone:window.bkStepPhone, profile:window.bkStepProfile, purpose:window.bkStepPurpose, health:window.bkStepHealth, beauty:window.bkStepBeauty, consent:window.bkStepConsent, confirm:window.bkStepConfirm}[s];
@@ -188,8 +196,10 @@ function bkPickPurpose(p){ BK.f.purpose = p; bkRender(); }
 /* ---- 病史 / 过敏史（只有新客人；老客人跳过，有变化由室长到店时修改） ---- */
 function bkStepHealth(){
   var f = BK.f;
-  return bkFrame('s.health', bkField(bt('health.history'), '<textarea rows="4" placeholder="'+bkH(bt('health.ph'))+'" oninput="bkSet(\'history\',this.value)">'+bkH(f.history)+'</textarea>')+bkNav('bkNextStep()', true));
+  return bkFrame('s.health', bkField(bt('health.history'), '<textarea rows="4" placeholder="'+bkH(bt('health.ph'))+'" oninput="bkSet(\'history\',this.value);bkRefreshNext()">'+bkH(f.history)+'</textarea>')+bkNav('bkHealthNext()', true));
 }
+
+function bkHealthNext(){ if(!bkStepValid('health')){ BK.err = bt('health.err'); return bkRender(); } BK.err = ''; bkNextStep(); }
 
 /* ---- 医美史（可跳过，新老客人都有）：一笔一行 = 时间（年 + 月，手机原生选择器）+ 项目（从项目库选或自由输入）；［＋增加医美史］往下加一行并自动捲到新行；老客人上方先列出已登记的（只读） ---- */
 var BK_BR_SEQ = 1;
@@ -247,8 +257,8 @@ function bkStepConsent(){
   return bkFrame('s.consent', '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+bt('consent.policy', {v:bkH(CLINIC_SETTINGS.privacyVersion)})+'</div>'+
     (bkLastConsent() ? '<div class="bk-demo">'+bt('consent.updated', {old:bkH(bkLastConsent().version), nw:bkH(CLINIC_SETTINGS.privacyVersion)})+'</div>' : '')+
     '<div class="bk-info" style="max-height:140px;overflow-y:auto;">'+bkH(CLINIC_SETTINGS.privacyPolicy)+'</div>'+
-    '<label class="bk-check"><input type="checkbox" '+(f.c1?'checked ':'')+'onchange="BK.f.c1=this.checked"> <span>'+bt('consent.c1')+'</span></label>'+
-    '<label class="bk-check"><input type="checkbox" '+(f.c2?'checked ':'')+'onchange="BK.f.c2=this.checked"> <span>'+bt('consent.c2')+'</span></label>'+
+    '<label class="bk-check"><input type="checkbox" '+(f.c1?'checked ':'')+'onchange="BK.f.c1=this.checked;bkRefreshNext()"> <span>'+bt('consent.c1')+'</span></label>'+
+    '<label class="bk-check"><input type="checkbox" '+(f.c2?'checked ':'')+'onchange="BK.f.c2=this.checked;bkRefreshNext()"> <span>'+bt('consent.c2')+'</span></label>'+
     '<div class="bk-sub">'+bt('consent.note')+'</div>'+bkNav('bkConsentNext()', true));
 }
 function bkConsentNext(){
@@ -382,7 +392,7 @@ function bkRenderMe(){
       (r.hospital ? '<div style="font-size:12px;color:var(--slate2);margin-top:3px;">'+bt('me.hospital')+'：'+bkH(r.hospital)+'</div>' : '')+
       '<div style="font-size:12px;color:var(--slate2);margin-top:3px;">'+bt('me.paid')+'：'+bkH(bkMeMoney(r))+'</div></div>';
   }).join('')+(past.some(function(r){ return r.report; }) ? '<div class="bk-sub">'+bt('me.reportNote')+'</div>' : '') : '<div class="bk-sub">'+bt('me.noPast')+'</div>';
-  return bkMeFrame(banner+(me.msg ? '<div class="bk-info" style="margin-bottom:6px;">'+bkH(me.msg)+'</div>' : '')+sec(bt('me.current'), curHtml)+sec(bt('me.hold'), holdHtml)+sec(bt('me.past'), pastHtml)+'<div class="bk-sub" style="margin-top:14px;">'+bt('me.session')+'</div>');
+  return bkMeFrame(banner+(me.msg ? '<div class="bk-info" style="margin-bottom:6px;">'+bkH(me.msg)+'</div>' : '')+sec(bt('me.current'), curHtml)+sec(bt('me.hold'), holdHtml)+sec(bt('me.past'), pastHtml)); /* CMD-1008-12：不再写出「30 分钟不用再验证」这句；30 分钟内免验证的逻辑保留 */
 }
 function bkMeCancel(id){
   var r = customerCancelCase(id); BK.me.confirm = null;

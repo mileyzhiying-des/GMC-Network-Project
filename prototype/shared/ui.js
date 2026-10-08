@@ -1282,6 +1282,13 @@ function openInviteKrModal(){
    任一室长按［结束并归档］，或所有人离开超过10分钟自动结束并归档（演示按钮模拟）；离开后可从对话抽屉红卡片 / 工作台卡片重新加入，结束后两者消失 */
 var VIDEO_CALL = {active:false, kind:null, caseId:null, participants:[], status:'idle', shareBy:null, muted:false, startedAt:0, transcript:[]};
 
+/* KR 室长 / 院长接听、拒绝、结束（来自 gmc_call 信号，boot-in.js 的 storage 监听调用） */
+function inHandleCallSignal(sig){
+  if(!sig || !VIDEO_CALL.active || !VIDEO_CALL.sigId || sig.id!==VIDEO_CALL.sigId) return;
+  if(sig.status==='accepted' && VIDEO_CALL.status==='ringing'){ showToast('对方已接听', (sig.by||'KR')+' 加入了视频通话', null); simulatePeerJoin(); }
+  else if(sig.status==='declined' && VIDEO_CALL.status==='ringing') simulatePeerDecline();
+  else if(sig.status==='ended' && VIDEO_CALL.status==='connected'){ showToast('对方已结束通话', (sig.by||'KR')+' 结束了视频通话', null); endVideoConsult(); }
+}
 function simulatePeerDecline(){
   if(VIDEO_CALL.status!=='ringing') return;
   VIDEO_CALL.active = false; INVITE_KR_CONTEXT_CASE_ID = null; CHAT_VIDEO_CONTEXT_CASE_ID = null;
