@@ -714,6 +714,7 @@ function krOpenCaseChat(){ if(typeof krOpenRoomFor==='function') krOpenRoomFor(K
 function krNotifsForMe(){
   var h = krHData(), me = currentAccount(); if(!h || !me) return [];
   return (h.notifs||[]).filter(function(n){
+    if(n.by && n.by===me.name) return false; /* 自己触发的不通知自己 */
     if(n.only && n.only!==me.name) return false; /* 指名给某个人的（被 @ 的室长） */
     if(n.to==='all') return true;
     if(me.role==='kr_director') return n.to==='director' && n.director===me.name;

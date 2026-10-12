@@ -1029,7 +1029,7 @@ function renderCaseRows(){
     var lmTag = localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '';
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
     /* 2026-10-08：待访问行内按钮已废弃；CMD-1008-13：当前状态拆成「阶段（彩色标签）+ 进程（文字）」，去掉「状态」栏和最右边「查看 →」，整行可点击（hover 浅粉色） */
-    return '<div class="trow case-row-click" onclick="openCaseDetail(\''+c.id+'\')" style="grid-template-columns:1.1fr 0.8fr 0.9fr 1.4fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr;cursor:pointer;"><span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
+    return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:1.1fr 0.8fr 0.9fr 1.4fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr;cursor:pointer;"><span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
       '<span style="font-size:12px;color:var(--slate2);">'+c.caseNo+'</span>'+
       '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
       '<span style="font-size:12px;">'+si.proc+lmTag+'</span>'+
@@ -1068,7 +1068,7 @@ function renderCaseStatusBar(c){
   var b = caseStageBadge(c);
   var actionBtn = '';
   if(c.stage==='booked' && c.subState==='waiting'){
-    actionBtn = '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="markArrived()">客人已到店</button><button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
+    actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
   var ug = urgeInfo(c);
   if(ug) actionBtn += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#C26A1B;">'+ug.label+'</span><button class="btn-primary" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>';
@@ -2605,7 +2605,8 @@ function pushNotif(cat, text, opts){
   if(opts.names) rec = opts.names.slice();
   else if(c){ var t = pushTargets(c); rec = t.inn.concat(t.kr); }
   else rec = workingIN();
-  var n = {id:'n'+(++NOTIF_SEQ), cat:cat, text:text, caseId:opts.caseId||null, ts:opts.ts||nowFullDt(), recipients:rec, read:{}, link:opts.link||(c?{kind:'case'}:{kind:'none'}), detail:opts.detail||null};
+  rec = rec.filter(function(x){ return x!==ME_NAME; }); /* 操作人自己不收自己触发的通知 */
+  var n = {id:'n'+(++NOTIF_SEQ), cat:cat, by:ME_NAME, text:text, caseId:opts.caseId||null, ts:opts.ts||nowFullDt(), recipients:rec, read:{}, link:opts.link||(c?{kind:'case'}:{kind:'none'}), detail:opts.detail||null};
   if(opts.read) n.read[ME_NAME] = true;
   NOTIFS.unshift(n);
   updateBell();

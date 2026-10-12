@@ -1659,6 +1659,7 @@ function continueNewVisit(){
 
 function markArrived(){
   var c = getCurrentCase(); if(!c) return;
+  if(c.visitDate && c.visitDate!==todayStr()){ alert('只有来访当天才能标记客人已到店（预约日期：'+c.visitDate+'）'); return; }
   c.subState = 'arrived';
   writeReceptionBeat(c); /* 接待开始：立刻写心跳 */
   renderCaseStatusBar(c);
@@ -2008,7 +2009,7 @@ function syncDirectorChoice(c){
   else if(c.director && (!c.hospitalId || hospitalDirectorNames(c.hospitalId).indexOf(c.director)<0)) c.director = null;
 }
 
-function setCaseDirector(v){ var c = getCurrentCase(); if(!c) return; c.director = v || null; renderCaseBody(c); }
+function setCaseDirector(v){ var c = getCurrentCase(); if(!c) return; var hid0 = caseHospitalId(c), off0 = v && hid0 ? directorTodayOff(hid0, v) : null; if(off0 && off0.full) return; c.director = v || null; renderCaseBody(c); }
 
 /* 医院 + 院长两个下拉（基础资料选面诊时；增加面诊后缴费前也用这两个） */
 function hospitalDirectorSelectHtml(c, onHospital, onDirector, selStyle){
@@ -2026,11 +2027,29 @@ function docIntentMatch(hid, dr, c){
   var intents = (c.intentionProjects||[]).map(function(it){ var p = projById(it.projectId); var cc = p && PROJECT_CATEGORIES[p.categoryId]; return {name:it.name, cat:cc ? cc.label : ''}; });
   return (dr.specialties||[]).filter(function(sn){ return intents.some(function(it){ return it.name===sn || (it.cat && catOf(sn)===it.cat); }); });
 }
+/* 院长默认头像（演示数据没有照片时用）：灰底剪影，颜色取自院长的代表色 */
+function defaultAvatarUri(color){
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="'+(color||'#C9B8A3')+'"/><circle cx="32" cy="24" r="11" fill="#fff" fill-opacity=".92"/><path d="M10 64c0-13 10-22 22-22s22 9 22 22z" fill="#fff" fill-opacity=".92"/></svg>';
+  return 'data:image/svg+xml;utf8,'+encodeURIComponent(svg);
+}
+function directorAvatarHtml(dr, size){
+  var a = ACCOUNTS.filter(function(x){ return x.hospitalId && x.name===dr.name; })[0];
+  var src = dr.photo || (a && a.photo && String(a.photo).indexOf('data:')===0 ? a.photo : '') || defaultAvatarUri(dr.color);
+  return '<img src="'+src+'" style="width:'+size+'px;height:'+size+'px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+}
+/* 今天这位院长有没有 OFF（A5）：整天 OFF = 不可选；半天 OFF = 只标出来，还能选 */
+function directorTodayOff(hid, name){
+  var td = todayStr(), offs = ((HOSPITAL_DATA[hid]||{}).offs||[]).filter(function(o){ return o.kind==='director' && o.who===name && offApplies(o, td); });
+  if(!offs.length) return null;
+  var full = offs.some(function(o){ return !o.part || o.part==='全天'; });
+  return {full:full, part: full ? '全天' : offs.map(function(o){ return o.part; }).join('、')};
+}
 function directorCardHtml(dr, hid, c, pickable, selected){
-  var ph = dr.photo ? '<img src="'+dr.photo+'" style="width:54px;height:54px;border-radius:50%;object-fit:cover;">' : '<span style="width:54px;height:54px;border-radius:50%;background:'+(dr.color||'#ddd')+';display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;">'+dr.name.charAt(0)+'</span>';
+  var off = directorTodayOff(hid, dr.name); if(off && off.full){ pickable = false; selected = false; }
+  var ph = directorAvatarHtml(dr, 54);
   var m = docIntentMatch(hid, dr, c), li = function(arr){ return (arr||[]).map(function(x){ return '<div>'+(x.when?x.when+'：':'')+(x.zh||x.ko)+'</div>'; }).join(''); };
-  return '<div '+(pickable?'onclick="setCaseDirector(\''+dr.name+'\')" ':'')+'style="display:flex;gap:12px;padding:12px;border:1px solid '+(selected?'var(--terracotta)':'var(--border)')+';border-radius:10px;background:'+(selected?'var(--terracotta-bg)':'#fff')+';'+(pickable?'cursor:pointer;':'')+'margin-top:8px;">'+ph+
-    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;">'+dr.name+' <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(m.length?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人意向项目</span>':'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
+  return '<div '+(pickable?'onclick="setCaseDirector(\''+dr.name+'\')" ':'')+'style="display:flex;gap:12px;padding:12px;border:1px solid '+(selected?'var(--terracotta)':'var(--border)')+';border-radius:10px;background:'+(selected?'var(--terracotta-bg)':'#fff')+';'+(pickable?'cursor:pointer;':'')+((off&&off.full)?'opacity:.5;filter:grayscale(1);cursor:not-allowed;':'')+'margin-top:8px;">'+ph+
+    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;">'+dr.name+' <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(off ? ' <span class="status-pill" style="background:#F6DCDC;color:#C1454A;">'+(off.full?'今日 OFF':'今日'+off.part+' OFF')+'</span>' : '')+(m.length?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人意向项目</span>':'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
     (dr.career&&dr.career.length ? '<div style="color:var(--slate2);margin-top:3px;">'+li(dr.career)+'</div>' : '')+(dr.certs&&dr.certs.length ? '<div style="color:var(--slate2);margin-top:3px;"><b>认证</b> '+dr.certs.map(function(x){ return x.zh||x.ko; }).join('；')+'</div>' : '')+
     (dr.specialties&&dr.specialties.length ? '<div style="margin-top:4px;"><b>擅长</b> '+dr.specialties.map(function(sn){ return '<span class="chip'+(m.indexOf(sn)>-1?' active':'')+'" style="cursor:inherit;">'+sn+'</span>'; }).join('')+'</div>' : '')+'</div></div>';
 }
@@ -2047,7 +2066,7 @@ function directorRowHtml(c){
   var hint = (hl ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">🔒 关联"'+hl.reason+'"（'+hl.caseNo+'）：医院已锁定为原案件的医院'+(lk ? '，院长已锁定原院长；原院长停用时才可改选' : '')+'</div>' : '')+
     ((!lk && c.linkedCase && c.linkedCase.caseId && (c.linkedCase.reason==='复诊'||c.linkedCase.reason==='延续既往面诊')) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">原案件的院长已停用，请在原医院里重新选择院长</div>' : '')+
     ((!hl && !lk) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">院长来自本诊所对接的医院（'+hospitalName(o.hid,'ko')+'）；确认基础资料后不能更换</div>' : '');
-  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+o.hosp+o.dir+'</div>'+hint+directorCardsHtml(c)+'</div></div>';
+  return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+hint+directorCardsHtml(c)+'</div></div>';
 }
 
 function setNeedsConsult(val){
@@ -2351,9 +2370,7 @@ function setConsultDirector(v){ var c = getCurrentCase(); if(!c) return; c.direc
 
 function consultDirectorPickHtml(c){
   if(c.director && c.hospitalId) return '';
-  var o = hospitalDirectorSelectHtml(c, '', 'setConsultDirector', 'padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;');
-  return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--terracotta-bg);border-radius:10px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">院长 <span style="color:var(--terracotta);">*</span> '+
-    o.dir+'<span style="font-size:11px;color:var(--muted);">缴费前必选，选定后不能更换</span></div>';
+  return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--terracotta-bg);border-radius:10px;font-size:13px;">院长 <span style="color:var(--terracotta);">*</span> <span style="font-size:11px;color:var(--muted);">缴费前必选（点卡片选择），选定后不能更换</span>'+directorCardsHtml(c)+'</div>';
 }
 
 function consultFeeFormHtml(c){
@@ -4785,7 +4802,7 @@ function pushKrNotif(hid, text, opt){
   var h = HOSPITAL_DATA[hid]; if(!h) return null;
   opt = opt || {};
   h.notifs = h.notifs || [];
-  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, only:opt.only||null, kind:opt.kind||'case', readBy:[]};
+  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, only:opt.only||null, kind:opt.kind||'case', by:(typeof currentAccount==='function'&&currentAccount()?currentAccount().name:null), readBy:[]};
   h.notifs.unshift(n); if(h.notifs.length>200) h.notifs.length = 200;
   return n;
 }
