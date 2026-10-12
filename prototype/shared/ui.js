@@ -1029,7 +1029,7 @@ function renderCaseRows(){
     var lmTag = localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '';
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
     /* 2026-10-08：待访问行内按钮已废弃；CMD-1008-13：当前状态拆成「阶段（彩色标签）+ 进程（文字）」，去掉「状态」栏和最右边「查看 →」，整行可点击（hover 浅粉色） */
-    return '<div class="trow case-row-click" onclick="openCaseDetail(\''+c.id+'\')" style="grid-template-columns:1.1fr 0.8fr 0.9fr 1.4fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr;cursor:pointer;"><b style="font-size:13px;">'+c.name+'</b>'+
+    return '<div class="trow case-row-click" onclick="openCaseDetail(\''+c.id+'\')" style="grid-template-columns:1.1fr 0.8fr 0.9fr 1.4fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr;cursor:pointer;"><span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
       '<span style="font-size:12px;color:var(--slate2);">'+c.caseNo+'</span>'+
       '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
       '<span style="font-size:12px;">'+si.proc+lmTag+'</span>'+
@@ -1070,6 +1070,8 @@ function renderCaseStatusBar(c){
   if(c.stage==='booked' && c.subState==='waiting'){
     actionBtn = '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="markArrived()">客人已到店</button><button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
+  var ug = urgeInfo(c);
+  if(ug) actionBtn += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#C26A1B;">'+ug.label+'</span><button class="btn-primary" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>';
   document.getElementById('case-status-bar').innerHTML =
     '<div class="card" style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'+
     '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--slate);">当前状态</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
@@ -1283,13 +1285,14 @@ function inHandleCallSignal(sig){
   if(!sig || !VIDEO_CALL.active || !VIDEO_CALL.sigId || sig.id!==VIDEO_CALL.sigId) return;
   if(sig.status==='accepted' && VIDEO_CALL.status==='ringing'){ showToast('对方已接听', (sig.by||'KR')+' 加入了视频通话', null); simulatePeerJoin(); }
   else if(sig.status==='declined' && VIDEO_CALL.status==='ringing') simulatePeerDecline();
-  else if(sig.status==='ended' && VIDEO_CALL.status==='connected'){ showToast('对方已结束通话', (sig.by||'KR')+' 结束了视频通话', null); endVideoConsult(); }
+  else if(sig.status==='ended' && VIDEO_CALL.status==='connected'){ showToast('📞 对方已结束通话', (sig.by||'KR')+' 结束了视频通话', null, {sticky:true}); endVideoConsult(); }
 }
 function simulatePeerDecline(){
   if(VIDEO_CALL.status!=='ringing') return;
   VIDEO_CALL.active = false; INVITE_KR_CONTEXT_CASE_ID = null; CHAT_VIDEO_CONTEXT_CASE_ID = null;
   renderDashCallCard(); try{ renderDrawerList(); }catch(e){}
-  showToast('对方拒绝了通话', callTitle()+' 的视频通话没有接通', null);
+  clearTimeout(VIDEO_CALL.ringTimer);
+  showToast('📞 对方已拒绝', callTitle()+' 的视频通话被对方拒绝了', null, {sticky:true});
   goBack();
 }
 
@@ -2506,7 +2509,7 @@ function renderProjLibGrid(){
   var q = (PROJLIB_Q||'').toLowerCase();
   var match = function(p){ return !q || p.name.toLowerCase().indexOf(q)>-1 || ((p.names||{}).ko||'').toLowerCase().indexOf(q)>-1 || ((p.names||{}).id||'').toLowerCase().indexOf(q)>-1; };
   if(PROJLIB_TAB==='inactive'){
-    var inactive = PROJECT_LIBRARY.filter(function(p){ return !p.active && match(p) && (p.origin!=='KR' || p.hospitalId===projLibHospital()); });
+    var inactive = PROJECT_LIBRARY.filter(function(p){ return !p.active && match(p) && (p.origin!=='KR' || (p.hospitalId===projLibHospital() && !isKrPostcareCat(p.categoryId))); }); /* IN 不显示「韩国术后管理」（CMD-1012-01 L-002） */
     var groups = [{origin:'KR', label:'赴韩项目'}, {origin:'IN', label:'本地项目'}];
     el.innerHTML = groups.map(function(g){
       var items = inactive.filter(function(p){ return p.origin===g.origin; });
@@ -2519,7 +2522,7 @@ function renderProjLibGrid(){
   if(PROJLIB_TAB==='promo'){ el.innerHTML = promoGridHtml(match); return; }
   if(PROJLIB_TAB==='pkg'){ el.innerHTML = pkgGridHtml(match); return; }
   var origin = PROJLIB_TAB;
-  var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active && match(p) && (origin!=='KR' || p.hospitalId===projLibHospital()); }); /* 赴韩项目：只看所选医院的 */
+  var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active && match(p) && (origin!=='KR' || (p.hospitalId===projLibHospital() && !isKrPostcareCat(p.categoryId))); }); /* 赴韩项目：只看所选医院的 */
   if(PROJLIB_CAT_FILTER!=='all') items = items.filter(function(p){ return p.categoryId===PROJLIB_CAT_FILTER; });
   el.innerHTML = '<div class="card" style="padding:4px 20px;">'+projLibHeadHtml()+
     (items.length ? items.map(projLibRowHtml).join('') : '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有符合条件的项目</div>')+
@@ -2607,7 +2610,9 @@ function pushNotif(cat, text, opts){
   NOTIFS.unshift(n);
   updateBell();
   if(CURRENT_PAGE_ID==='in-notifications') renderNotifPage();
-  if(!opts.silent && notifMine(n) && notifyPushOn()) showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); });
+  if(opts.silent) n.silent = true;
+  if(NOTIF_SEEN) NOTIF_SEEN[notifKey(n)] = 1; /* 本页自己产生的：下面直接弹，不要再被 toastNewNotifs 重复弹 */
+  if(!opts.silent && notifMine(n) && notifyPushOn()) showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky:true});
   return n;
 }
 
@@ -2870,9 +2875,17 @@ function gotoQuoteSource(roomId, idx){
 
 /* @ 提醒：被 @ 的人一定收到提醒，包括院长（平时静音）和不负责这个案件的室长 */
 function notifyAtMentions(val){
+  var cc = CURRENT_ROOM.indexOf('case-')===0 ? CASE_ITEMS.filter(function(x){ return x.id===CURRENT_ROOM.slice(5); })[0] : null;
+  var hid = cc ? caseKrHospital(cc) : mainRoomHospital(CURRENT_ROOM), roomName = (roomById(CURRENT_ROOM)||{}).name || CURRENT_ROOM;
   atCandidates().forEach(function(n){
-    if(val.indexOf('@'+n)>-1) showToast('已提醒 '+n, '@提及一定会提醒（院长平时静音、不负责该案件的室长也会收到）', null);
+    if(val.indexOf('@'+n)<0) return;
+    /* CMD-1012-01 J-006：@ KR 一侧的人（院长 / 室长）→ 写进他自己的通知中心（KR 页面会弹 toast，手动确认） */
+    var dirs = hid ? hospitalDirectorNames(hid) : [], coords = hid ? hospitalCoordinators(hid) : [];
+    var isDir = dirs.indexOf(n)>-1, isCoord = !isDir && coords.some(function(x){ return krAcctId(n)===x.split(' ')[0] || n===x; });
+    if(hid && (isDir || isCoord)) pushKrNotif(hid, ME_NAME+' 在「'+roomName+'」里 @ 了你', {to:isDir?'director':'coord', director:isDir?n:null, only:n, caseId:cc?cc.id:null, clinicId:CURRENT_CLINIC_ID, kind:'mention'});
+    showToast('已提醒 '+n, '@提及一定会提醒（院长平时静音、不负责该案件的室长也会收到）', null);
   });
+  try{ Store.touch(); }catch(e){}
 }
 function toggleAttachMenu(){
   var m = document.getElementById('attach-menu'); if(!m) return;
@@ -3091,23 +3104,49 @@ function sendFloatMsg(){
   renderDrawerList();
 }
 
-function showToast(title, text, onClickFn){
-  var wrap = document.getElementById('toast-stack');
+/* toast：通知类（opts.sticky）必须手动［确认］才消失，多条叠放（CMD-1012-01）；普通操作反馈（已保存等）仍 6 秒自动消失 */
+function showToast(title, text, onClickFn, opts){
+  var wrap = document.getElementById('toast-stack'); if(!wrap) return;
+  opts = opts || {};
   var el = document.createElement('div');
   el.className = 'toast-card';
   var body = document.createElement('div');
   body.className = 'toast-body';
   body.innerHTML = '<div class="toast-title">'+title+'</div><div class="toast-text">'+text+'</div>';
   body.addEventListener('click', function(){ if(el.parentNode) el.remove(); if(onClickFn) onClickFn(); });
-  var closeBtn = document.createElement('span');
-  closeBtn.className = 'toast-close';
-  closeBtn.textContent = '✕';
-  closeBtn.addEventListener('click', function(e){ e.stopPropagation(); if(el.parentNode) el.remove(); });
   el.appendChild(body);
-  el.appendChild(closeBtn);
-  while(wrap.children.length>=4) wrap.removeChild(wrap.firstChild); /* 叠放最多 4 个，不挡住主要操作区域 */
+  if(opts.sticky){
+    el.setAttribute('data-sticky', '1');
+    var ok = document.createElement('button');
+    ok.className = 'toast-ok'; ok.textContent = '确认';
+    ok.addEventListener('click', function(e){ e.stopPropagation(); if(el.parentNode) el.remove(); });
+    el.appendChild(ok);
+  } else {
+    var closeBtn = document.createElement('span');
+    closeBtn.className = 'toast-close';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', function(e){ e.stopPropagation(); if(el.parentNode) el.remove(); });
+    el.appendChild(closeBtn);
+    /* 普通反馈最多叠 4 个（只挤掉普通反馈，不会挤掉还没确认的通知） */
+    var plain = Array.prototype.filter.call(wrap.children, function(c){ return !c.getAttribute('data-sticky'); });
+    while(plain.length>=4){ wrap.removeChild(plain.shift()); }
+    setTimeout(function(){ if(el.parentNode) el.remove(); }, 6000);
+  }
   wrap.appendChild(el);
-  setTimeout(function(){ if(el.parentNode) el.remove(); }, 6000);
+}
+
+/* 通知 toast（IN）：别的分页 / 客户预约页 / KR 产生的新通知到达后，也给收件人弹 toast（K-002）。
+   NOTIF_SEEN = 这个分页已经处理过（弹过或本页自己产生）的通知；第一次调用只登记已有的，不补弹 */
+var NOTIF_SEEN = null;
+function notifKey(n){ return n.id+'|'+n.ts; }
+function toastNewNotifs(){
+  if(typeof NOTIFS==='undefined') return;
+  if(NOTIF_SEEN===null){ NOTIF_SEEN = {}; NOTIFS.forEach(function(n){ NOTIF_SEEN[notifKey(n)] = 1; }); return; }
+  NOTIFS.slice().reverse().forEach(function(n){
+    var k = notifKey(n); if(NOTIF_SEEN[k]) return; NOTIF_SEEN[k] = 1;
+    if(n.silent || !notifMine(n) || n.read[ME_NAME] || !notifAlive(n) || !notifyPushOn()) return;
+    showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky:true});
+  });
 }
 
 /* ================= 多标签页同步后的整体刷新（2026-10-05·一） =================
@@ -3115,6 +3154,7 @@ function showToast(title, text, onClickFn){
    每个模块各自 try/catch，页面里没有的元素（比如 booking.html）直接跳过。 */
 function refreshView(){
   if(isKrAccount()){ if(typeof krRefreshAll==='function') krRefreshAll(); return; } /* KR 端自己重画 */
+  try{ toastNewNotifs(); }catch(e){} /* 别的分页产生的新通知 → toast（K-002） */
   try{ sweepStaleReceptions(true); }catch(e){} /* 接待中但心跳过期的案件退回待访问（CMD-1008-06） */
   [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['预约历史',renderResvHistory],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
     try{ if(typeof m[1]==='function') m[1](); }catch(e){}
@@ -3163,3 +3203,100 @@ function toggleAvatarMenu(e){
 /* 退出/切换：只清当前标签页的登录信息，其他标签页不受影响 */
 function logout(){ try{ sessionStorage.removeItem('gmc_acct'); }catch(e){} location.href = '/login.html'; }
 function switchAccount(){ try{ sessionStorage.removeItem('gmc_acct'); }catch(e){} location.href = '/login.html?switch=1'; }
+
+/* ================= 谁正在处理这个案件 + 同账号分页锁（CMD-1012-01，IN-CASE-03 2026-10-12） =================
+   心跳：案件页开着时每 5 秒写一次 gmc_case_presence（单独的 localStorage 键，不进 Store，不触发数据同步）；约 1 分钟（PRES_TTL）没更新 = 已离开。
+   显示：① IN / KR 案件列表客人名后小字「A1 室长正在处理」（多人列出，双方都显示）；② 案件页上方「A2 室长也在查看这个案件」（不含自己）。
+   分页锁：同一账号在第二个分页打开同一案件 → 提示「这个案件已经在另一个分页打开」+［在这里继续］；按下后原分页变只读（页面置灰 + 提示）；不同账号互不挡。
+   原型限制：并发写入覆盖不修，交由正式开发的后端（见 qa-results.md）。 */
+var PRES_KEY = 'gmc_case_presence', LOCK_KEY = 'gmc_case_lock', PRES_TTL = 60000, PRES_BEAT = 5000;
+var TAB_ID = 't'+Math.random().toString(36).slice(2, 8);
+var PRES_LAST_KEY = null, PRES_BLOCKED = null, PRES_SIG = '';
+function presRead(){ try{ return JSON.parse(localStorage.getItem(PRES_KEY)||'{}') || {}; }catch(e){ return {}; } }
+function presWrite(o){ try{ localStorage.setItem(PRES_KEY, JSON.stringify(o)); }catch(e){} }
+function lockRead(){ try{ return JSON.parse(localStorage.getItem(LOCK_KEY)||'{}') || {}; }catch(e){ return {}; } }
+function lockWrite(o){ try{ localStorage.setItem(LOCK_KEY, JSON.stringify(o)); }catch(e){} }
+function presMyAcct(){ try{ return currentAccountId(); }catch(e){ return ME_NAME; } }
+function presCaseKey(){
+  try{
+    if(isKrAccount()) return (CURRENT_PAGE_ID==='kr-casedetail' && typeof KR_CASE!=='undefined' && KR_CASE && KR_CASE.id) ? KR_CASE.clinicId+':'+KR_CASE.id : null;
+    return (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID) ? CURRENT_CLINIC_ID+':'+CURRENT_CASE_ID : null;
+  }catch(e){ return null; }
+}
+function presFresh(e){ return e && (Date.now() - e.ts) < PRES_TTL; }
+/* 某个案件现在有谁在看（去重的名字，按名字排序） */
+function presViewers(key){
+  var o = presRead()[key] || {}, names = [];
+  Object.keys(o).forEach(function(t){ if(presFresh(o[t]) && names.indexOf(o[t].name)<0) names.push(o[t].name); });
+  return names.sort();
+}
+function presTag(clinicId, caseId){
+  var n = presViewers(clinicId+':'+caseId); if(!n.length) return '';
+  return ' <span class="pres-tag" style="font-size:11px;font-weight:400;color:#C26A1B;">'+n.join('、')+'正在处理</span>';
+}
+function presBeat(){
+  var all = presRead(), key = presCaseKey(), now = Date.now(), changed = false;
+  Object.keys(all).forEach(function(k){
+    Object.keys(all[k]).forEach(function(t){ if(!presFresh(all[k][t]) || (t===TAB_ID && k!==key) || (t===TAB_ID && PRES_BLOCKED===k)){ delete all[k][t]; changed = true; } });
+    if(!Object.keys(all[k]).length){ delete all[k]; changed = true; }
+  });
+  if(key && PRES_BLOCKED!==key){ (all[key] = all[key] || {})[TAB_ID] = {name:ME_NAME, acct:presMyAcct(), ts:now}; changed = true; var L = lockRead(), lk = lockKey(key); if(L[lk] && L[lk].tab===TAB_ID){ L[lk].ts = now; lockWrite(L); } }
+  if(changed) presWrite(all);
+}
+/* 同一账号在别的分页开着同一案件（别的分页 id、没过期） */
+function presOwnOthers(key){
+  var o = presRead()[key] || {}, me = presMyAcct();
+  return Object.keys(o).filter(function(t){ return t!==TAB_ID && presFresh(o[t]) && o[t].acct===me; });
+}
+/* 持有者记录：每个「案件 + 账号」一条（不同账号互不影响） */
+function lockKey(key){ return key+'|'+presMyAcct(); }
+function presClaim(key){ var L0 = lockRead(); L0[lockKey(key)] = {tab:TAB_ID, ts:Date.now()}; lockWrite(L0); if(PRES_BLOCKED===key) PRES_BLOCKED = null; presBeat(); presRender(); }
+function presContinueHere(){ var key = presCaseKey(); if(key) presClaim(key); }
+function presOnOpen(key){
+  PRES_BLOCKED = null;
+  if(!key) return;
+  var L = lockRead(), holderIsMe = !!(L[lockKey(key)] && L[lockKey(key)].tab===TAB_ID);
+  if(presOwnOthers(key).length && !holderIsMe) PRES_BLOCKED = key; /* 同一账号已经在别的分页打开 */
+  else presClaim(key);
+}
+/* 只读：这个分页不是持有者（别的分页按了「在这里继续」） */
+function presReadonly(key){
+  var h = key ? lockRead()[lockKey(key)] : null; return !!(h && h.tab!==TAB_ID && presFresh(h) && PRES_BLOCKED!==key);
+}
+function presRender(){
+  var key = presCaseKey(), blocked = key && PRES_BLOCKED===key, ro = presReadonly(key);
+  var ov = document.getElementById('case-lock-ov');
+  if(blocked){
+    if(!ov){ ov = document.createElement('div'); ov.id = 'case-lock-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(27,38,53,.5);display:flex;align-items:center;justify-content:center;'; document.body.appendChild(ov); }
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 30px;width:380px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);"><div style="font-size:16px;font-weight:800;margin-bottom:8px;">这个案件已经在另一个分页打开</div><div style="font-size:12px;color:var(--slate2);line-height:1.7;margin-bottom:16px;">同一个账号同一时间只能在一个分页里处理同一个案件。在这里继续后，另一个分页会变成只读。</div><button class="btn-primary" style="width:100%;" onclick="presContinueHere()">在这里继续</button></div>';
+  } else if(ov) ov.remove();
+  var pageEl = key ? document.getElementById(isKrAccount() ? 'kr-casedetail' : 'in-casedetail') : null, content = pageEl ? (pageEl.querySelector('.content') || pageEl) : null;
+  var ban = document.getElementById('case-readonly-bar');
+  document.querySelectorAll('.case-ro').forEach(function(e){ if(e!==content || !ro){ e.classList.remove('case-ro'); e.inert = false; } });
+  if(ro && content){
+    content.classList.add('case-ro'); content.inert = true;
+    if(!ban){ ban = document.createElement('div'); ban.id = 'case-readonly-bar'; ban.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:90;background:#FFF4E0;border:1px solid #F0D9A8;color:#8A5A10;padding:8px 14px;border-radius:10px;font-size:12px;box-shadow:0 8px 20px rgba(0,0,0,.12);display:flex;gap:12px;align-items:center;'; document.body.appendChild(ban); }
+    ban.innerHTML = '这个案件已在另一个分页继续处理，本页只读（按钮已置灰）<button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="presContinueHere()">在这里继续</button>';
+  } else if(ban) ban.remove();
+  var pb = document.getElementById('case-pres-bar'), others = key ? presViewers(key).filter(function(n){ return n!==ME_NAME; }) : [];
+  if(others.length && !blocked){
+    if(!pb){ pb = document.createElement('div'); pb.id = 'case-pres-bar'; pb.style.cssText = 'position:fixed;top:64px;right:24px;z-index:85;background:#FFF4E0;border:1px solid #F0D9A8;color:#8A5A10;padding:6px 12px;border-radius:10px;font-size:12px;'+(ro?'display:none;':''); document.body.appendChild(pb); }
+    pb.textContent = others.join('、')+'也在查看这个案件';
+  } else if(pb) pb.remove();
+}
+function presRefreshLists(){
+  try{ if(isKrAccount()){ if(CURRENT_PAGE_ID==='kr-cases' && typeof krRenderCaseRows==='function') krRenderCaseRows(); } else if(CURRENT_PAGE_ID==='in-cases' && typeof renderCaseRows==='function') renderCaseRows(); }catch(e){}
+}
+function presTick(){
+  var key = presCaseKey();
+  if(key!==PRES_LAST_KEY){ PRES_LAST_KEY = key; presOnOpen(key); }
+  var sig = JSON.stringify([Object.keys(presRead()).map(function(k){ return k+':'+presViewers(k).join(','); }), JSON.stringify(lockRead()), PRES_BLOCKED]);
+  if(sig!==PRES_SIG){ PRES_SIG = sig; presRender(); presRefreshLists(); }
+}
+(function(){
+  setInterval(function(){ try{ presBeat(); }catch(e){} }, PRES_BEAT);
+  setInterval(function(){ try{ presTick(); }catch(e){} }, 1000);
+  window.addEventListener('storage', function(e){ if(e.key===PRES_KEY || e.key===LOCK_KEY){ try{ presTick(); presRender(); }catch(x){} } });
+  var leave = function(){ try{ var all = presRead(), L = lockRead(); Object.keys(all).forEach(function(k){ delete all[k][TAB_ID]; if(!Object.keys(all[k]).length) delete all[k]; }); presWrite(all); Object.keys(L).forEach(function(k){ if(L[k].tab===TAB_ID) delete L[k]; }); lockWrite(L); }catch(e){} };
+  window.addEventListener('pagehide', leave); window.addEventListener('beforeunload', leave);
+})();

@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function(){
   [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['对话未读',updateChatBadge]].forEach(function(m){
     try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); }
   });
+  try{ toastNewNotifs(); }catch(e){ console.error('[初始化失败] 通知toast登记', e); } /* 登记启动时已有的通知，之后别的分页产生的新通知才弹 toast */
   try{ buildHistoryList(); }catch(e){ console.error('[初始化失败] 医美史', e); }
   [['客户详情Timeline',buildDetailLog]].forEach(function(m){ try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); } });
 });
@@ -39,6 +40,7 @@ setInterval(function(){
     if(p) el.textContent = placeholderCountdownText(p);
   });
   CASE_ITEMS.forEach(function(c){ if(c.consultStatus==='awaiting_report' && !c.overdueNotified && reportOverdueNow(c)){ c.overdueNotified = true; pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+tkU(c.reportEta)+'）', {caseId:c.id}); } });
+  try{ if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID){ var cu = getCurrentCase(), su = !!(cu && urgeInfo(cu)); if(su!==window.__urgeShown){ window.__urgeShown = su; if(cu) renderCaseStatusBar(cu); } } }catch(e){} /* 到点出现［催办］ */
   document.querySelectorAll('[data-visit-countdown]').forEach(function(el){
     var left = parseInt(el.getAttribute('data-visit-countdown'),10) + noShowMs() - demoNow().getTime();
     el.textContent = left>0 ? Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒' : '已超时';
@@ -101,3 +103,21 @@ setInterval(function(){
 }, 5000);
 window.addEventListener('beforeunload', function(){ try{ receptionLeaveNow(); }catch(e){} });
 window.addEventListener('pagehide', function(){ try{ receptionLeaveNow(); }catch(e){} });
+
+/* 预约时间过了 N 分钟（诊所设定「未到店判定」，默认 30）还没点［已到店］ → 系统自动判定已取消（未到店）（CMD-1012-01 边界）；真实定时检查，演示按钮「模拟时间超过 30 分钟」保留 */
+function autoNoShowSweep(){
+  var now = demoNow().getTime(), n = 0;
+  CASE_ITEMS.slice().forEach(function(c){
+    if(c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime) return;
+    var when = new Date(c.visitDate+'T'+c.visitTime+':00').getTime();
+    if(!isNaN(when) && when + noShowMs() <= now && markNoShow(c.id, true)) n++;
+  });
+  if(n){
+    try{ Store.touch(); renderCaseRows(); buildWeekGrid(); }catch(e){}
+    var cur = getCurrentCase();
+    if(cur && CURRENT_PAGE_ID==='in-casedetail'){ try{ renderCaseStatusBar(cur); buildCaseLog(cur); renderCaseBody(cur); }catch(e){} }
+  }
+  return n;
+}
+setInterval(function(){ try{ autoNoShowSweep(); }catch(e){ console.error('[未到店自动判定]', e); } }, 5000);
+document.addEventListener('DOMContentLoaded', function(){ try{ autoNoShowSweep(); }catch(e){} });

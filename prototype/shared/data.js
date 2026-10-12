@@ -551,10 +551,10 @@ function submitSelfBooking(f){
   if(old && old.cancelNotifId && Date.now()-(old.cancelledAt||0) < 30*60000){
     /* 取消后马上重新预约：把"客人取消预约"那条通知收回，只留一条合并的"客人改约" */
     NOTIFS = NOTIFS.filter(function(n){ return n.id!==old.cancelNotifId; }); old.cancelNotifId = null;
-    pushNotif('预约', '客人改约：'+cl.name+' 原 '+dateLabel(old.visitDate)+' '+old.visitTime+' → 新 '+when+'（'+c.caseNo+'）', {caseId:c.id, names:workingIN(), silent:true});
-  } else if(f.entry==='walkin') pushNotif('预约', '客人到店自己填完资料'+tail+'，请在客人到店后点［已到店］', {caseId:c.id, names:workingIN(), silent:true});
-  else if(f.phId) pushNotif('预约', '占位客人填完资料'+tail, {caseId:c.id, names:workingIN(), silent:true});
-  else pushNotif('预约', '客人自助预约提交'+tail, {caseId:c.id, names:workingIN(), silent:true});
+    pushNotif('预约', '客人改约：'+cl.name+' 原 '+dateLabel(old.visitDate)+' '+old.visitTime+' → 新 '+when+'（'+c.caseNo+'）', {caseId:c.id, names:workingIN()});
+  } else if(f.entry==='walkin') pushNotif('预约', '客人到店自己填完资料'+tail+'，请在客人到店后点［已到店］', {caseId:c.id, names:workingIN()});
+  else if(f.phId) pushNotif('预约', '占位客人填完资料'+tail, {caseId:c.id, names:workingIN()});
+  else pushNotif('预约', '客人自助预约提交'+tail, {caseId:c.id, names:workingIN()});
   sendSms('confirm', f.phone, smsVarsOfCase(c), c.id);
   return {ok:true, c:c, client:cl, isNew:isNew};
 }
@@ -599,7 +599,7 @@ function customerCancelCase(caseId){
   c.subState = 'cancelled'; c.cancelReason = '预约取消';
   updateCaseStage(c);
   logCaseEvent(c, '客人', '客人自行取消预约（原 '+c.visitDate+' '+c.visitTime+'）');
-  var n = pushNotif('预约', '客人取消预约：'+c.name+'（'+c.caseNo+'）原 '+dateLabel(c.visitDate)+' '+c.visitTime, {caseId:c.id, names:workingIN(), silent:true});
+  var n = pushNotif('预约', '客人取消预约：'+c.name+'（'+c.caseNo+'）原 '+dateLabel(c.visitDate)+' '+c.visitTime, {caseId:c.id, names:workingIN()});
   c.cancelNotifId = n.id; c.cancelledAt = Date.now();
   sendSms('cancel', clientPhoneOf(c.name), smsVarsOfCase(c), c.id);
   return {ok:true, c:c};
@@ -1450,6 +1450,28 @@ var CALL_SIGNAL_KEY = 'gmc_call';
 function readCallSignal(){ try{ return JSON.parse(localStorage.getItem(CALL_SIGNAL_KEY)||'null'); }catch(e){ return null; } }
 function writeCallSignal(sig){ try{ localStorage.setItem(CALL_SIGNAL_KEY, JSON.stringify(sig)); }catch(e){} }
 function patchCallSignal(id, patch){ var s = readCallSignal(); if(!s || s.id!==id) return null; Object.keys(patch).forEach(function(k){ s[k] = patch[k]; }); s.ts = Date.now(); writeCallSignal(s); return s; }
+/* 来电响铃超时（CMD-1012-01 J-008）：发起方 30 秒没人接 → 发起方看到「对方未接听」，被叫方（KR 室长 / 院长）收到「未接来电」toast + 通知中心；
+   发起方响铃中自己挂断也算未接来电；被叫方拒绝 → 发起方看到「对方已拒绝」（被叫方自己拒绝的不再给未接来电，这是我的判断） */
+var CALL_RING_MS = 30000;
+function recordMissedCall(sig){
+  var h = HOSPITAL_DATA[sig.hospitalId]; if(!h) return;
+  h.notifs = h.notifs || [];
+  var txt = '未接来电：'+(sig.clinicName||'')+' · '+sig.name+'（'+sig.caseNo+'）的视频来电（'+(sig.from||'IN')+'）';
+  [['kmc_'+sig.id,'coord',null], (sig.director ? ['kmd_'+sig.id,'director',sig.director] : null)].forEach(function(x){
+    if(!x || h.notifs.some(function(n){ return n.id===x[0]; })) return;
+    h.notifs.unshift({id:x[0], ts:nowFullDt(), text:txt, clinicId:sig.clinicId, caseId:sig.caseId, to:x[1], director:x[2], kind:'missedcall', readBy:[]});
+  });
+  Store.touch();
+}
+function callRingTimeout(sigId){
+  if(!VIDEO_CALL.active || VIDEO_CALL.sigId!==sigId || VIDEO_CALL.status!=='ringing') return;
+  var sig = patchCallSignal(sigId, {status:'missed', by:ME_NAME}) || readCallSignal();
+  if(sig) recordMissedCall(sig);
+  VIDEO_CALL.active = false; INVITE_KR_CONTEXT_CASE_ID = null; CHAT_VIDEO_CONTEXT_CASE_ID = null;
+  try{ renderDashCallCard(); renderDrawerList(); }catch(e){}
+  showToast('📞 对方未接听', callTitle()+' 的视频通话没有人接听（响铃 '+(CALL_RING_MS/1000)+' 秒）', null, {sticky:true});
+  goBack();
+}
 function startCall(kind, caseId, participants){
   VIDEO_CALL = {active:true, kind:kind, caseId:caseId, participants:participants, status:'ringing', shareBy:null, muted:false, startedAt:Date.now(), transcript:[]};
   var cc = caseId ? CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0] : null;
@@ -1457,6 +1479,7 @@ function startCall(kind, caseId, participants){
     VIDEO_CALL.sigId = 'call'+Date.now()+Math.floor(Math.random()*1000);
     writeCallSignal({id:VIDEO_CALL.sigId, status:'ringing', clinicId:CURRENT_CLINIC_ID, clinicName:(clinicById(CURRENT_CLINIC_ID)||{}).name||'', caseId:cc.id, caseNo:cc.caseNo||'', name:cc.name, hospitalId:caseKrHospital(cc), director:cc.director||'', from:ME_NAME, kind:kind, ts:Date.now()});
   }
+  if(VIDEO_CALL.sigId){ var sid0 = VIDEO_CALL.sigId; VIDEO_CALL.ringTimer = setTimeout(function(){ callRingTimeout(sid0); }, CALL_RING_MS); } /* 响铃超时没人接 → 未接听 */
   INVITE_KR_CONTEXT_CASE_ID = (kind==='talk') ? caseId : null;
   CHAT_VIDEO_CONTEXT_CASE_ID = (kind==='chat') ? caseId : null;
   renderDashCallCard();
@@ -1473,7 +1496,7 @@ function seedTranscript(){
   ];
 }
 
-function simulatePeerJoin(){ if(VIDEO_CALL.status!=='ringing') return; VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); }
+function simulatePeerJoin(){ if(VIDEO_CALL.status!=='ringing') return; clearTimeout(VIDEO_CALL.ringTimer); VIDEO_CALL.status = 'connected'; seedTranscript(); renderVideoPage(); }
 
 function leaveCall(){ goBack(); }
  /* 离开/断线：通话仍在进行，可从抽屉红卡片/工作台卡片重新加入 */
@@ -1494,7 +1517,11 @@ function inviteKrVideo(name){
 
 function endVideoConsult(){
   var touchedCase = null;
-  if(VIDEO_CALL.sigId) patchCallSignal(VIDEO_CALL.sigId, {status:'ended', by:ME_NAME}); /* 通知 KR 一侧通话结束 */
+  clearTimeout(VIDEO_CALL.ringTimer);
+  if(VIDEO_CALL.sigId){
+    if(VIDEO_CALL.status==='ringing'){ var sg0 = patchCallSignal(VIDEO_CALL.sigId, {status:'missed', by:ME_NAME}); if(sg0) recordMissedCall(sg0); } /* 还没人接就挂断 = 未接来电 */
+    else patchCallSignal(VIDEO_CALL.sigId, {status:'ended', by:ME_NAME}); /* 通知 KR 一侧通话结束 */
+  }
   VIDEO_CALL.active = false; /* 通话结束后，对话抽屉的红卡片和工作台卡片都消失 */
   if(INVITE_KR_CONTEXT_CASE_ID){
     var c2 = CASE_ITEMS.filter(function(x){ return x.id===INVITE_KR_CONTEXT_CASE_ID; })[0];
@@ -2256,6 +2283,32 @@ function reportOverdueNow(c){
   return !!c.reportOverdue || (!!e && e < nowDateObj());
 }
 
+/* 催办（CMD-1012-01）：案件在「待 KR 确认时间」且缴费 / 免除后已超过 URGE_CONFIRM_MIN 分钟（规则没定超时标准，先用 30 分钟），
+   或「等待报告」且已超过预计出报告时间 → IN 案件页显示［催办］；在韩中 / 在韩后续不显示 */
+var URGE_CONFIRM_MIN = 30;
+function consultPaidAtOf(c){
+  if(c.consultPaidAt) return c.consultPaidAt;
+  var L = (c.logEntries||[]).slice().reverse().find(function(l){ return /完成面诊费支付|免除面诊费/.test(l.action||''); });
+  return L ? L.dt : '';
+}
+function urgeInfo(c){
+  if(!c || isEnded(c) || !c.consultRequested || c.reportReady) return null;
+  if(c.consultStatus==='paid_waiting_kr'){
+    var t = utcStrParse(consultPaidAtOf(c));
+    if(t && (nowDateObj() - t) >= URGE_CONFIRM_MIN*60000) return {label:'待 KR 确认时间已超过 '+URGE_CONFIRM_MIN+' 分钟', why:'待 KR 确认面诊时间'};
+  }
+  if(c.consultStatus==='awaiting_report' && reportOverdueNow(c)) return {label:'已超过预计出报告时间', why:'等待报告已超过预计时间'};
+  return null;
+}
+function urgeKr(){
+  var c = getCurrentCase(); if(!c) return; var u = urgeInfo(c); if(!u){ showToast('不需要催办','这个案件现在没有超时',null); renderCaseStatusBar(c); return; }
+  var hid = caseKrHospital(c); if(!hid) return;
+  pushKrNotif(hid, '催办：'+actingName()+' 催促 '+c.name+'（'+c.caseNo+'）——'+u.why, {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'urge'});
+  c.urgedAt = nowFullDt();
+  logCaseEvent(c, actingName(), '催办 KR 室长：'+u.why);
+  Store.touch(); buildCaseLog(c); renderCaseStatusBar(c);
+  showToast('已催办', 'KR 室长会收到提醒（toast + 通知中心），Timeline 已记录', null);
+}
 function reportRemainingText(c){
   var e = reportEtaParse(c.reportEta); if(!e) return '';
   var mins = Math.max(0, Math.round((e - nowDateObj())/60000));
@@ -2458,11 +2511,20 @@ function removeLocalItem(scope, key){
   if(idx>-1) cart.splice(idx, 1);
   renderCaseBody(c);
 }
+var LOCAL_QTY_MAX = 99; /* 本地选购单项数量上限 */
 function setLocalItemField(scope, key, field, val){
   var c = getCurrentCase(); if(!c) return;
   var it = cartOf(c, scope).filter(function(x){ return cartKey(x)===key; })[0]; if(!it) return;
-  if(field==='qty') it.qty = Math.max(1, parseInt(val,10)||1);
-  else if(field==='discountPct'){ var n = parseInt(val,10); it.discountPct = (isNaN(n) || n>=100) ? 100 : Math.max(1, n); } /* 留空 / 100 = 不打折；填 80 = 八折 */
+  if(field==='qty'){
+    var q = String(val).trim(), qn = parseInt(q,10);
+    if(!/^\d+$/.test(q) || qn<1 || qn>LOCAL_QTY_MAX){ alert('数量请填 1～'+LOCAL_QTY_MAX+' 之间的整数'); renderCaseBody(c); return; } /* 超出范围挡下并提示（CMD-1012-01） */
+    it.qty = qn;
+  }
+  else if(field==='discountPct'){
+    var dv = String(val).trim();
+    if(dv===''){ it.discountPct = 100; } /* 留空 = 不打折 */
+    else { var n = parseInt(dv,10); if(!/^\d+$/.test(dv) || n<1 || n>99){ alert('折扣请填 1～99（实付比例：80 = 8折），留空 = 不打折'); renderCaseBody(c); return; } it.discountPct = n; }
+  }
   else it.itemNote = val;
   renderCaseBody(c);
 }
@@ -2502,7 +2564,7 @@ function serviceBlockHtml(c, scope){
   if(draft){
     var opts = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===draft.projectId?' selected':'')+'>'+p.name+'（'+fmtRp(p.price)+'）</option>'; }).join('');
     adder = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;"><select onchange="setSvcDraft(\'projectId\',this.value)" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;">'+opts+'</select>'+
-      qtyInputHtml({value:draft.qty, min:1, onchange:"setSvcDraft('qty',this.value)"})+'<span style="font-size:12px;">次</span>'+
+      qtyInputHtml({value:draft.qty, min:1, max:LOCAL_QTY_MAX, onchange:"setSvcDraft('qty',this.value)"})+'<span style="font-size:12px;">次</span>'+
       '<button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="confirmSvcAdd()">添加</button><button class="btn-ghost" style="padding:5px 10px;font-size:12px;" onclick="cancelSvcAdd()">取消</button></div>';
   } else adder = '<button class="btn-ghost" style="margin-top:8px;padding:5px 12px;font-size:12px;" onclick="openSvcAdd(\''+scope+'\')">＋ 添加서비스</button>';
   return '<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);"><div style="font-size:12px;font-weight:700;color:var(--slate2);">서비스（赠送）</div>'+
@@ -2527,7 +2589,7 @@ function localRowHtml(c, scope, it){
   return '<div class="sel-row"><div class="sel-line">'+
     '<input type="checkbox" checked title="取消勾选即移除" onchange="removeLocalItem(\''+scope+'\',\''+k+'\')">'+
     '<div class="sel-name"><div>'+it.name+tags+'</div>'+(sub ? '<div class="sel-sub">'+sub+'</div>' : '')+'</div>'+
-    qtyInputHtml({value:qty, min:1, onchange:"setLocalItemField('"+scope+"','"+k+"','qty',this.value)"})+
+    qtyInputHtml({value:qty, min:1, max:LOCAL_QTY_MAX, onchange:"setLocalItemField('"+scope+"','"+k+"','qty',this.value)"})+
     (isSvc ? '' : '<span class="sel-disc"><input type="number" min="1" max="100" placeholder="折扣" title="填客人实付比例，80 = 8折；留空 = 不打折" value="'+(pct<100 ? pct : '')+'" onchange="setLocalItemField(\''+scope+'\',\''+k+'\',\'discountPct\',this.value)"><i>%</i>'+(discountText(pct) ? '<b class="sel-dtxt">= '+discountText(pct)+'</b>' : '')+'</span>')+
     '<span class="sel-amt">'+formatCurrency(line,'IDR')+'</span>'+
     '<button type="button" class="sel-note-btn" onclick="toggleItemNote(\''+scope+'\',\''+k+'\')">备注'+(it.itemNote ? ' ✓' : '')+'</button></div>'+
@@ -2643,6 +2705,14 @@ function unpaidBatchesHtml(c){
 
 /* ---- 项目列表 tab ---- */
 function projectListTabHtml(c, inLocalTab){
+  /* CMD-1012-01：终态案件（已结案 / 仅出报告 / 已取消）不能再编辑——只看结算单，没有［+ 追加项目］［添加서비스］［客人不做项目］等入口；持有项目退款在客户详情，不受影响 */
+  if(isEnded(c)){
+    var hasBs = (c.settlementBatches||[]).length>0;
+    return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">已选择 / 结算</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">案件已结束（'+terminalBadge(c)[2]+'），不能再选择或追加项目；客人再来请新建预约。</div>'+
+      (c.noteOverall ? '<div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">整体备注：'+String(c.noteOverall).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '')+
+      (hasBs ? settlementCardsHtml(c) : '<div style="font-size:12px;color:var(--muted);">本案件没有结算单</div>')+'</div>';
+  }
   /* 面诊案件只买本地项目后，本地流程（是否使用/本地管理）在"本地管理"tab里进行，这里只看结算单 */
   if(!inLocalTab && isLocalCase(c) && c.reportReady){
     return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">结算单</div>'+
@@ -3756,7 +3826,7 @@ function krProcedureTabMain(c, tabsHtml){
 
 function markConsultPaid(){
   var c = getCurrentCase(); if(!c) return;
-  c.consultStatus = 'paid_waiting_kr';
+  c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt(); /* 催办用：缴费后超过 30 分钟 KR 还没确认时间就可催办 */
   recordConsultFee(c); /* 正常情况下选面诊时已记；没有记录的老数据在缴费时补记 */
   if(!SEEDING) pushKrNotif(caseKrHospital(c), '客人已缴面诊费：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
@@ -3769,7 +3839,7 @@ function markConsultPaid(){
 
 function applyWaiveFee(c, reason, note){
   c.consultFeeWaived = {reason: reason==='其他' ? '其他：'+note : reason, note:note};
-  c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：待确认报告时间 */
+  c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt(); /* 免除后照正常流程：待确认报告时间 */
   if(!SEEDING) pushKrNotif(caseKrHospital(c), '面诊费已免除：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c);
   ensureCaseRoom(c); /* 免除面诊费同样自动建房 */
@@ -4715,7 +4785,7 @@ function pushKrNotif(hid, text, opt){
   var h = HOSPITAL_DATA[hid]; if(!h) return null;
   opt = opt || {};
   h.notifs = h.notifs || [];
-  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, kind:opt.kind||'case', readBy:[]};
+  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, only:opt.only||null, kind:opt.kind||'case', readBy:[]};
   h.notifs.unshift(n); if(h.notifs.length>200) h.notifs.length = 200;
   return n;
 }
@@ -4849,6 +4919,7 @@ function refBarHtml(caseId){
 
 var ROOM_FILE_SEQ = 1;
 
+function krAcctId(name){ var a = ACCOUNTS.filter(function(x){ return x.hospitalId && x.name===name; })[0]; return a ? a.id : String(name||'').split(' ')[0]; }
 function krEnterRoomName(c){ return (c.krCoordinator||krCoordinatorsOf(c)[0]||'').split(' ')[0]; }
 
 function roomById(id){
@@ -4893,7 +4964,7 @@ function memberRowsHtml(){
       html += head('印尼室长（全部）') + m.inn.map(function(n){ return row(n+' · 印尼室长', n); }).join('');
       if(m.kr.length){
         html += head('韩国室长（全部）') + m.kr.map(function(n){
-          var inRoom = c.krInRoom && krEnterRoomName(c)===n;
+          var inRoom = c.krInRoom && krAcctId(n)===krEnterRoomName(c); /* 用账号编号比较（成员名「KM1 室长」≠ 「KM1」，J-003） */
           return row(n+' 실장 · 韩国室长', n, '<span style="font-size:11px;margin-left:6px;color:'+(inRoom?'var(--sage)':'var(--muted)')+';">'+(inRoom?'已进入':'未进入')+'</span>');
         }).join('');
       }

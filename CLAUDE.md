@@ -333,3 +333,13 @@ prototype/shared/app.css  共用样式
 - 预约页：手机号验证成功且是老客人 → 先出「是本人吗？」（`BK.mismatch`），是本人才跳过个人资料。
 - 缴面诊费 / 免除面诊费自动建案件对话房（`ensureCaseRoom`，不通知；有 KR 一侧时 `c.krInRoom = true`）；对话房里的「演示：模拟 KR…」按钮和 `simulateKrEnterRoom` / `simulateKrLeaveRoom` 已删除。
 - 超时通知只发一条：`simulateReportTimeout` 与 `boot-in.js` 自动检查共用 `c.overdueNotified`。
+
+## CMD-1012-01 补充（2026-10-12，追加；旧文字保留作历史）
+- **toast**：`showToast(title, text, onClick, {sticky:true})` = 通知类，必须点［确认］才消失（`.toast-ok`），不挤掉、可滚动；不带 `sticky` 的是操作反馈（6 秒消失，最多 4 个）。IN 用 `toastNewNotifs()`（`NOTIF_SEEN` 登记已处理的通知，`refreshView` 末尾调用），KR 用 `krToastNew()`；**新写通知不要再用 `silent:true`**（只有验证码类例外）。
+- **来电**：`startCall` 起 30 秒响铃计时（`CALL_RING_MS`，`callRingTimeout`）；信号状态 ringing → accepted / declined / ended / **missed**；`recordMissedCall(sig)` 往医院通知里记「未接来电」（按信号 id 去重）；KR 页面 `krCallRingFallback` 兜底。
+- **KR 通知**可以指名：`pushKrNotif(..., {only:'KM1 室长'})`（`krNotifsForMe` 按 `only` 过滤）；IN 在案件房 / Main 群 @ KR 人员时 `notifyAtMentions` 写 `kind:'mention'` 通知；院长的房间未读只算 @ 他的消息。成员「已进入」按账号编号比较（`krAcctId`）。
+- **催办**：`urgeInfo(c)` / `urgeKr()`；缴费 / 免除时记 `c.consultPaidAt`；待 KR 确认超过 `URGE_CONFIRM_MIN`（30 分钟，规则未定）或等待报告超时才出现按钮。
+- **谁在处理 + 分页锁**（`ui.js` 末尾）：`gmc_case_presence`（心跳，每案件每分页一条）+ `gmc_case_lock`（每「案件|账号」一条持有者）；`TAB_ID` 每个分页一个；同账号第二个分页 `PRES_BLOCKED` 弹遮罩，［在这里继续］ = `presContinueHere()` 抢持有权，原分页 `presReadonly()` → 内容区 `inert` + `.case-ro`。列表客人名后用 `presTag(clinicId, caseId)`。
+- **终态案件页**没有编辑入口（`projectListTabHtml` 开头 `isEnded(c)` 早返回）。IN 项目库赴韩列表不列「韩国术后管理」。IN 经营数据面诊费 = 各案件 `consultFeeOf(c)` 加总。
+- **边界**：`autoNoShowSweep()`（boot-in，5 秒一扫，按 `noShowMs()`）；折扣 1～99、数量 1～`LOCAL_QTY_MAX`（99）；`isWithin2WeeksOfToday` 用 `todayStr()` 的纯日期差；`krTimeOptions(sel, kind)`；KR 加 OFF 检查与施术 / 面诊重叠。
+- **交接注意事项（正式开发后端要处理）**：存档是整个诊所分区「最后写入者覆盖」，没有版本号 / 合并——两个分页几乎同时写同一诊所的数据，或一个分页卡住期间另一个分页写入，较晚保存的一方会覆盖对方（实测过）；原型不修。离线登录不补弹未读系统通知（按规则不做）。

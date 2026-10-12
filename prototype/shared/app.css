@@ -265,11 +265,12 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 .booking-panel{padding:20px;display:flex;flex-direction:column;gap:14px;}
 
 /* ---- toast notifications ---- */
-#toast-stack{position:fixed;top:76px;right:24px;z-index:80;display:flex;flex-direction:column;gap:10px;max-width:320px;}
+#toast-stack{position:fixed;top:76px;right:24px;z-index:80;display:flex;flex-direction:column;gap:10px;max-width:320px;max-height:calc(100vh - 100px);overflow-y:auto;}
 .toast-card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.14);padding:14px 16px;display:flex;align-items:flex-start;gap:10px;animation:toast-in .18s ease;}
 .toast-body{flex-grow:1;cursor:pointer;}
 .toast-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:3px;}
 .toast-text{font-size:12px;color:var(--slate2);}
+.toast-ok{align-self:center;flex-shrink:0;padding:5px 12px;border:1px solid var(--terracotta);background:var(--terracotta);color:#fff;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;}
 .toast-close{cursor:pointer;color:var(--muted);font-size:13px;flex-shrink:0;}
 @keyframes toast-in{from{opacity:0;transform:translateX(24px);}to{opacity:1;transform:translateX(0);}}
 
@@ -314,3 +315,6 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 .sel-note input{width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;box-sizing:border-box;}
 .loc-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;}
 .sel-dtxt{font-weight:700;color:var(--terracotta);font-size:11px;margin-left:4px;}
+
+/* 案件页只读（同一账号在另一个分页继续，CMD-1012-01） */
+.case-ro{opacity:.5;filter:grayscale(.6);}

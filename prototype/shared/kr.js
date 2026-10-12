@@ -136,11 +136,17 @@ function krCallRender(){
 function krCallTick(){ var el = document.getElementById('kr-call-timer'); if(!el || KR_CALL.state!=='connected') return; var s = Math.floor((Date.now()-KR_CALL.startedAt)/1000), p = function(n){ return (n<10?'0':'')+n; }; el.textContent = p(Math.floor(s/60))+':'+p(s%60); }
 function krCallHandle(sig){
   if(!sig) return;
-  if(sig.status==='ringing' && Date.now()-sig.ts < 60000 && krCallRelevant(sig) && KR_CALL.state==='idle'){ KR_CALL.sig = sig; KR_CALL.state = 'ringing'; krCallRender(); return; }
+  if(sig.status==='ringing' && Date.now()-sig.ts < 60000 && krCallRelevant(sig) && KR_CALL.state==='idle'){ KR_CALL.sig = sig; KR_CALL.state = 'ringing'; krCallRender(); var sid1 = sig.id; setTimeout(function(){ krCallRingFallback(sid1); }, CALL_RING_MS+8000); return; }
   if(KR_CALL.sig && sig.id===KR_CALL.sig.id){
-    if(KR_CALL.state==='ringing' && (sig.status==='accepted' || sig.status==='declined' || sig.status==='ended')){ if(sig.by!==ME_NAME){ KR_CALL = {sig:null, state:'idle', startedAt:0, timer:null, muted:false}; krCallRender(); } } /* 别的 KR 同事接了 / 拒了，或 IN 取消：本页来电消失 */
+    if(KR_CALL.state==='ringing' && (sig.status==='accepted' || sig.status==='declined' || sig.status==='ended' || sig.status==='missed')){ if(sig.by!==ME_NAME){ KR_CALL = {sig:null, state:'idle', startedAt:0, timer:null, muted:false}; krCallRender(); } } /* 别的 KR 同事接了 / 拒了，或 IN 取消：本页来电消失 */
     else if(KR_CALL.state==='connected' && sig.status==='ended' && sig.by!==ME_NAME){ krCallFinish(); showToast('通话已结束', (sig.by||'IN')+' 结束了视频通话', null); }
   }
+}
+/* 兜底：发起方页面已经关了、没人处理响铃 → 本页把来电标成未接并记未接来电（按信号 id 去重，只会记一次） */
+function krCallRingFallback(sigId){
+  if(!KR_CALL.sig || KR_CALL.sig.id!==sigId || KR_CALL.state!=='ringing') return;
+  var cur = readCallSignal(); if(cur && cur.id===sigId && cur.status==='ringing'){ patchCallSignal(sigId, {status:'missed', by:'系统'}); recordMissedCall(cur); }
+  krCallFinish();
 }
 function krCallAccept(){
   if(!KR_CALL.sig) return;
@@ -165,7 +171,7 @@ function krBoot(){
   var q = new URLSearchParams(location.search).get('case');
   if(q){ var pr = q.split(':'); if(!krFindCase(pr[0], pr[1])){ location.replace(homeUrl()); return; } KR_CASE = {clinicId:pr[0], id:pr[1], tab:new URLSearchParams(location.search).get('tab')||'basic'}; start = 'kr-casedetail'; }
   krRenderPage(start); showPage(start);
-  KR_LAST_UNREAD = krNotifUnread().length; krUpdateBadges();
+  KR_LAST_UNREAD = krNotifUnread().length; krUpdateBadges(); try{ krToastNew([]); }catch(e){} /* 登记启动时已有的通知，之后新到的才弹 */
   try{ krCallHandle(readCallSignal()); }catch(e){} /* 刚打开页面时，如果正好有一通 60 秒内的来电，也要响 */
 }
 
@@ -416,7 +422,7 @@ function krRenderCaseRows(){
   box.innerHTML = '<div class="trow head" style="grid-template-columns:'+g+';"><span>客户姓名</span><span>Case ID</span><span>来源诊所</span><span>院长</span><span>状态</span><span>关键时间</span><span>KR 室长</span><span>更新时间</span></div>'+
     (rows.length ? rows.map(function(r){
       return '<div class="trow" onclick="krOpenCase(\''+r.clinicId+'\',\''+r.id+'\')" style="grid-template-columns:'+g+';cursor:pointer;align-items:start;">'+
-        '<span><b>'+krEsc(r.name)+'</b></span><span>'+krEsc(r.caseNo)+'</span><span>'+krEsc(r.clinicName)+'</span><span>'+krEsc(r.director)+'</span>'+
+        '<span><b>'+krEsc(r.name)+'</b>'+presTag(r.clinicId, r.id)+'</span><span>'+krEsc(r.caseNo)+'</span><span>'+krEsc(r.clinicName)+'</span><span>'+krEsc(r.director)+'</span>'+
         '<span><span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.label)+'</span>'+krSubHtml(r.subItems)+'</span>'+
         '<span style="font-size:12px;">'+krEsc(krKeyTime(r))+'</span><span>'+krEsc(r.krCoordinator)+'</span><span style="color:var(--muted);font-size:12px;">'+krEsc(r.updated)+'</span></div>';
     }).join('') : '<div style="padding:24px;color:var(--muted);text-align:center;">没有符合条件的案件</div>');
@@ -450,7 +456,15 @@ function krTabBasic(c){
 function krCan(){ return canDo('krwork'); } /* 室长 / 管理者 */
 function krIsMyCase(c){ var me = currentAccount(); return !!me && (me.role!=='kr_director' || c.director===me.name); }
 function krMut(fn){ var r = Store.mutateClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? fn(c) : undefined; }); krRefreshAll(); return r; }
-function krTimeOptions(sel){ var o = ''; for(var m = 8*60; m <= 20*60; m += 30){ var tt = minToTime(m); o += '<option'+(tt===sel?' selected':'')+'>'+tt+'</option>'; } return o; }
+/* KR 时间下拉（CMD-1012-01）：只列医院营业时间内的时间；施术 / 到院时间（kind 默认 'surgery'）还要避开午休开始；不可预约的起止（kind 'range'）列到营业结束 */
+function krTimeOptions(sel, kind){
+  var hid = krHospitalIdOfMe(), hr = hospitalHours(hid), lu = hospitalLunch(hid), o = '', from = timeToMin(hr.open), to = timeToMin(hr.close);
+  for(var m = from; m <= to; m += 30){
+    if(kind!=='range'){ if(m > to-30) continue; if(lu && m >= timeToMin(lu.from) && m < timeToMin(lu.to)) continue; }
+    var tt = minToTime(m); o += '<option'+(tt===sel?' selected':'')+'>'+tt+'</option>';
+  }
+  return o;
+}
 function krDateAdd(n){ var d = new Date(nowDateObj().getTime() + n*86400000); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
 
 /* 一、确认两个时间：面诊时间（给院长，默认今天）+ 预计出报告时间（给客人 / IN，默认 = 面诊时间 + 30 分钟）（CMD-1008-12 C3） */
@@ -700,6 +714,7 @@ function krOpenCaseChat(){ if(typeof krOpenRoomFor==='function') krOpenRoomFor(K
 function krNotifsForMe(){
   var h = krHData(), me = currentAccount(); if(!h || !me) return [];
   return (h.notifs||[]).filter(function(n){
+    if(n.only && n.only!==me.name) return false; /* 指名给某个人的（被 @ 的室长） */
     if(n.to==='all') return true;
     if(me.role==='kr_director') return n.to==='director' && n.director===me.name;
     return n.to==='coord';
@@ -752,7 +767,7 @@ function krRoomList(){
     var add = function(roomId, name, caseRow){
       var msgs = (v.CHAT_DATA||{})[roomId]; if(!msgs) return;
       var key = cl.id+'|'+roomId, mark = ((h.chatRead||{})[me.id]||{})[key] || 0;
-      var unread = msgs.slice(mark).filter(function(m){ return m.from!=='sys' && !krMsgIsMine(m) && (!(me.role==='kr_director' && !caseRow) || krMentionsMe(m)); }).length; /* 院长在 Main 群里是静音的：不计未读、不推播，被 @ 才提醒 */
+      var unread = msgs.slice(mark).filter(function(m){ return m.from!=='sys' && !krMsgIsMine(m) && (me.role!=='kr_director' || krMentionsMe(m)); }).length; /* 院长在 Main 群里是静音的：不计未读、不推播，被 @ 才提醒 */
       var last = msgs.filter(function(m){ return m.from!=='sys'; }).slice(-1)[0];
       out.push({key:key, clinicId:cl.id, roomId:roomId, name:name, clinicName:cl.name, isMain:!caseRow, unread:unread, count:msgs.length, last:last ? krMsgText(last) : '', lastTime:last ? last.time : '', caseRow:caseRow||null});
     };
@@ -773,7 +788,13 @@ function krUpdateBadges(){
   }catch(e){}
 }
 var KR_LAST_UNREAD = null;
-(function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open) krRenderChat(); var u = krNotifUnread(); if(KR_LAST_UNREAD!==null && u.length > KR_LAST_UNREAD){ var n = u[0]; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }); } KR_LAST_UNREAD = u.length; }; })();
+/* KR 端新通知 toast（CMD-1012-01）：每条新的未读通知各弹一条，手动［确认］才消失；第一次只登记已有的 */
+var KR_NOTIF_SEEN = null;
+function krToastNew(unread){
+  if(KR_NOTIF_SEEN===null){ KR_NOTIF_SEEN = {}; krNotifsForMe().forEach(function(n){ KR_NOTIF_SEEN[n.id] = 1; }); return; }
+  unread.slice().reverse().forEach(function(n){ if(KR_NOTIF_SEEN[n.id]) return; KR_NOTIF_SEEN[n.id] = 1; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky:true}); });
+}
+(function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open) krRenderChat(); var u = krNotifUnread(); krToastNew(u); KR_LAST_UNREAD = u.length; }; })();
 
 function krOpenDrawer(){ KR_CHAT.open = true; KR_CHAT.room = null; krRenderChat(); }
 function krOpenRoomFor(clinicId, caseId){ KR_CHAT.open = true; KR_CHAT.room = clinicId+'|case-'+caseId; krRenderChat(); }
@@ -1345,6 +1366,10 @@ function krcAddBusy(){
 function krcAddOff(){
   var f = KRC.popForm, h = krHData();
   if(!f.who || !krcCanEdit(f.who)){ alert('没有权限给这位院长标 OFF'); return; }
+  /* 同一位院长同一时间只能有一件事（KR-SCHD-01）：OFF 的时段里已经有这位院长的施术 / 面诊 → 挡下（CMD-1012-01） */
+  var hid0 = krHospitalIdOfMe(), part0 = f.part||'全天', rg0 = part0==='全天' ? ['00:00','24:00'] : krHalfRange(hid0, part0), a0 = rg0[0]==='00:00' ? 0 : timeToMin(rg0[0]), z0 = rg0[1]==='24:00' ? 1440 : timeToMin(rg0[1]);
+  var clash0 = ((h.directorSchedule||{})[f.who]||[]).filter(function(b){ return (b.kind==='施术' || b.kind==='面诊') && b.date===KRC.pop.date && timeToMin(b.time) < z0 && timeToMin(b.end) > a0; })[0];
+  if(clash0){ alert('这位院长在这个时段已有'+clash0.kind+'（'+clash0.time+'–'+clash0.end+'），不能标 OFF；请先改期'+clash0.kind); return; }
   h.offs = h.offs||[]; h.offs.push({id:'off'+Date.now(), date:KRC.pop.date, who:f.who, kind:'director', part:f.part||'全天', note:'', by:ME_NAME}); /* 只有单次（整天 / 半天），逐条新增，每条可各自删除（2026-10-08 起不再有每周固定） */
   logOp('其他', '标 OFF：'+f.who+' '+KRC.pop.date+' '+(f.part||'全天'), '日程'); KRC.pop = null; Store.touch(); krcRender();
 }
@@ -1374,12 +1399,12 @@ function krcPopHtml(){
   var f = KRC.popForm, dirs = krcDirectors(), inp = 'padding:5px 8px;border:1px solid var(--line);border-radius:7px;';
   return '<div class="card" style="padding:10px 14px;font-size:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0;"><b>'+KRC.pop.date+'</b>'+
     (krcWho()==='all' && !krcIsDirector() ? '<select onchange="krcPopSet(\'who\',this.value)" style="'+inp+'">'+dirs.map(function(n){ return '<option'+(f.who===n?' selected':'')+'>'+krEsc(n)+'</option>'; }).join('')+'</select>' : '<span>'+krEsc(f.who)+'</span>')+
-    '<select onchange="krcPopSet(\'start\',this.value)" style="'+inp+'">'+krTimeOptions(f.start)+'</select>–<select onchange="krcPopSet(\'end\',this.value)" style="'+inp+'">'+krTimeOptions(f.end)+'</select><button class="btn-outline" onclick="krcAddBusy()">加不可预约</button>'+
+    '<select onchange="krcPopSet(\'start\',this.value)" style="'+inp+'">'+krTimeOptions(f.start,'range')+'</select>–<select onchange="krcPopSet(\'end\',this.value)" style="'+inp+'">'+krTimeOptions(f.end,'range')+'</select><button class="btn-outline" onclick="krcAddBusy()">加不可预约</button>'+
     '<span style="color:var(--muted);">｜</span><select onchange="krcPopSet(\'part\',this.value)" style="'+inp+'"><option>全天</option><option>上午</option><option>下午</option></select><button class="btn-outline" onclick="krcAddOff()">标 OFF</button>'+'<button class="btn-ghost" onclick="KRC.pop=null;krcRender()">取消</button><span style="font-size:11px;color:var(--muted);">不可预约不用写原因，也不强制登记</span></div>';
 }
 function krcEditHtml(){
   var b = krcBusyById(KRC.edit); if(!b) return ''; var can = krcCanEdit(b.who), inp = 'padding:5px 8px;border:1px solid var(--line);border-radius:7px;';
-  return '<div class="card" style="padding:10px 14px;font-size:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0;"><b>不可预约 · '+krEsc(b.who)+'</b><input type="date" id="krc-e-date" value="'+b.date+'" style="'+inp+'" '+(can?'':'disabled')+'><select id="krc-e-start" style="'+inp+'" '+(can?'':'disabled')+'>'+krTimeOptions(b.time)+'</select>–<select id="krc-e-end" style="'+inp+'" '+(can?'':'disabled')+'>'+krTimeOptions(b.end)+'</select>'+(can ? '<button class="btn-primary" onclick="krcSaveBusy()">保存</button><button class="btn-outline" onclick="krcDelBusy()">删除</button>' : '')+'<button class="btn-ghost" onclick="KRC.edit=null;krcRender()">关闭</button></div>';
+  return '<div class="card" style="padding:10px 14px;font-size:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0;"><b>不可预约 · '+krEsc(b.who)+'</b><input type="date" id="krc-e-date" value="'+b.date+'" style="'+inp+'" '+(can?'':'disabled')+'><select id="krc-e-start" style="'+inp+'" '+(can?'':'disabled')+'>'+krTimeOptions(b.time,'range')+'</select>–<select id="krc-e-end" style="'+inp+'" '+(can?'':'disabled')+'>'+krTimeOptions(b.end,'range')+'</select>'+(can ? '<button class="btn-primary" onclick="krcSaveBusy()">保存</button><button class="btn-outline" onclick="krcDelBusy()">删除</button>' : '')+'<button class="btn-ghost" onclick="KRC.edit=null;krcRender()">关闭</button></div>';
 }
 /* 日历整块（工作台下半部） */
 function krCalendarHtml(){

@@ -426,7 +426,9 @@ function fmtDateYMD(y,m,d){
 /* 施术前2周内不可修改日期：TODAY_DATE 是原型里的"今天"（当天 0 点，取电脑日期；2026-10-06 起不再固定），比较用它 */
 function isWithin2WeeksOfToday(dateStr){
   if(!dateStr) return false;
-  var diffDays = (new Date(dateStr) - TODAY_DATE) / 86400000;
+  /* CMD-1012-01：按页面（诊所）时区的「今天」和 YYYY-MM-DD 的纯日期差来算，不依赖浏览器时区；距今天 ≤ 14 天算 2 周内 */
+  var a = String(dateStr).slice(0,10).split('-'), b = todayStr().split('-');
+  var diffDays = (Date.UTC(+a[0], +a[1]-1, +a[2]) - Date.UTC(+b[0], +b[1]-1, +b[2])) / 86400000;
   return diffDays <= 14;
 }
 
