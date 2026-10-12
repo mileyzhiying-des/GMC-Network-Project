@@ -443,3 +443,6 @@ prototype/shared/app.css  共用样式
 - **在韩加项后付**：新增只有「术后管理记录」「增加项目」两种，**本地管理项目选项已拿掉**。尾款付清后加的项目 `pendingPay:true`、`batchId:''`（状态「待付款」）、不立刻生成结算单；KR 施术 tab 最上方红色「未付款」（`krUnpaidBanner`）+［已付款］→ `coreAddOnPaid` 一次生成一张结算单（`addOn:true`，IN 结算 tab 来源「在韩加项」）。有待付款（`pendingPayItems`）时 `krCloseIfDone` / `afterKrItemsChanged` 不结案。到院当天尾款未付时加的照旧并入尾款（`preBalanceAdd`）。
 - **施术备注**：`s.note`（`coreSubNote`，KR 进程里施术行［备注］写 / 改；`subItemRowHtml` 在 KR / IN 两边显示，IN 只读）。
 - **IN 本地管理进行中**：每行［完成］［取消］（`markMgmtRows(scope, action, all, oneIdx)`），底部只留［全部完成］，拿掉勾选框和［标记所选…］［管理完成］［管理取消］；取消 = 次数归还持有。数据版本不变（40）。
+
+## CMD-1013-01 补充（2026-10-13，追加；旧文字保留作历史）
+- 在韩待付款项目［修正］：KR 项目进程里「增加项目」行（对应项目 `pendingPay`）行尾红色［修正］→ 弹窗（`krFixOpen`）改项目（只能选 KR 项目库的韩国项目）/ 数量（`it.qty`）/ 金额（合计，直接存在 `it.price`）/ 麻醉（睡眠 / 全麻必须勾已在现场签署）/ 删除；`coreAddOnEdit` / `coreAddOnDelete`（Timeline 记「改前 → 改后」或「删除 xx」，同步增加项目子项和麻醉同意书记录；换项目会按项目库默认资料重带推荐在韩 / 术后管理）。只有 KR 室长有按钮（`krCanFix()` 排除院长 / 代表院长），按［已付款］后项目不再 `pendingPay`，不能改。删光待付款后 `krCloseIfDone` 自动结案。IN 只读显示（数量写在项目名后）。数据版本不变（40）。

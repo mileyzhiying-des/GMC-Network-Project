@@ -3997,6 +3997,39 @@ function coreAddOnPaid(c, by){
   krCloseIfDone(c); /* 付款确认后，其余都做完了才结案 */
   return true;
 }
+/* 待付款在韩加项的修正 / 删除（CMD-1013-01）：只有待付款项目能改（按［已付款］后不能改）；改项目仍只能选 KR 项目库的韩国项目；睡眠 / 全麻必须勾已在现场签署 */
+function coreAddOnEdit(c, idx, patch, by){
+  var it = (c.procedureItems||[])[idx]; if(!it || !it.pendingPay || c.visitClosed) return {ok:false, err:'这个项目不是待付款状态，不能修正'};
+  var qty = Math.max(1, parseInt(patch.qty,10) || 1), amount = Math.round(Number(patch.amount));
+  if(!(amount >= 0) || isNaN(amount)) return {ok:false, err:'请填写金额'};
+  var an = patch.anesthesia || it.anesthesia || {type:'local', label:'局部麻醉', note:''};
+  if(an.type!=='local' && !patch.signed && !(it.anesthesia && it.anesthesia.type===an.type && c.anesthesiaConsent)) return {ok:false, err:'睡眠 / 全身麻醉：必须勾选「已在现场签署麻醉同意书」'};
+  var p = PROJECT_LIBRARY.filter(function(x){ return x.name===patch.name && x.active && x.origin==='KR' && (!c.hospitalId || x.hospitalId===c.hospitalId); })[0];
+  if(!p) return {ok:false, err:'只能选 KR 项目库里的韩国项目'};
+  var before = it.name+'（×'+(it.qty||1)+'，'+formatCurrency(it.price,'KRW')+'）', oldName = it.name;
+  if(p.name!==it.name){ /* 换了项目：推荐在韩 / 所需术后管理按新项目的默认资料重新带入 */
+    it.projectId = p.id; it.name = p.name; it.categoryId = p.categoryId; delete it.stay; delete it.postcare;
+    var df = p.defaults; if(df){ it.stay = df.stay; it.postcare = (df.postcare||[]).map(function(x){ var o = {mgmt:x.mgmt||'', name:x.kr, times:x.times, interval:x.times>1 ? (parseInt(x.interval,10)||1) : 0, place:x.place, startDay:parseInt(x.start,10)||0, innName:'', inTimes:0}; o.day = pcDayText(o); return o; }); }
+  }
+  it.qty = qty; it.price = amount; it.anesthesia = an;
+  var cons = c.anesthesiaConsent; if(cons && cons.projects) cons.projects = cons.projects.filter(function(x){ return x.name!==oldName; });
+  if(an.type!=='local'){ var prev = (c.anesthesiaConsent && c.anesthesiaConsent.projects) || []; c.anesthesiaConsent = {version:(c.anesthesiaConsent&&c.anesthesiaConsent.version)||'KR 现场签署', ts:nowFullDt(), by:by, projects:prev.concat([{name:it.name, type:an.type, label:an.label, note:an.note||'', onSite:true}])}; }
+  var sub = (c.subItems||[]).filter(function(s){ return s.kind==='增加项目' && s.projectName===oldName && !s.done; })[0]; if(sub){ sub.projectName = it.name; sub.content = it.name + (qty>1 ? ' ×'+qty : ''); }
+  logCaseEvent(c, by, '待付款在韩加项修正：'+before+' → '+it.name+'（×'+qty+'，'+formatCurrency(amount,'KRW')+'）');
+  pushNotif('赴韩施术','在韩待付款项目已修正：'+c.name+'（'+oldName+' → '+it.name+'，'+formatCurrency(amount,'KRW')+'）', {caseId:c.id, level:'info'});
+  return {ok:true};
+}
+function coreAddOnDelete(c, idx, by){
+  var it = (c.procedureItems||[])[idx]; if(!it || !it.pendingPay || c.visitClosed) return false;
+  c.procedureItems.splice(idx, 1);
+  c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && s.projectName===it.name && !s.done); });
+  if(c.anesthesiaConsent && c.anesthesiaConsent.projects) c.anesthesiaConsent.projects = c.anesthesiaConsent.projects.filter(function(x){ return x.name!==it.name; });
+  logCaseEvent(c, by, '待付款在韩加项删除：'+it.name+'（×'+(it.qty||1)+'，'+formatCurrency(it.price,'KRW')+'）');
+  pushNotif('赴韩施术','在韩待付款项目已删除：'+c.name+'（'+it.name+'）', {caseId:c.id, level:'info'});
+  updateCaseStage(c);
+  krCloseIfDone(c); /* 待付款删光、其余都完成 → 自动结案 */
+  return true;
+}
 /* 施术备注：KR 室长 / 院长写，IN 只读（CMD-1012-15 一·6） */
 function coreSubNote(c, id, text, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.kind!=='施术') return false;
@@ -4151,7 +4184,7 @@ function krProcedureTabMain(c, tabsHtml){
       var stText = krItemStatus(it), pc = pillStyle[stText];
       var nameHtml = it.replacedBy
         ? '<span style="text-decoration:line-through;color:var(--muted);">'+it.name+'</span> → 更换为 <b>'+it.replacedBy+'</b>'
-        : '<span style="'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+'</span>';
+        : '<span style="'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+(it.qty>1 ? ' ×'+it.qty : '')+'</span>';
       var flags = krItemFlags(c, it).map(function(f){ return '<span class="status-pill" style="background:#FBF0C9;color:#A8740A;font-size:10px;margin-left:6px;">⚠ '+f+'</span>'; }).join('');
       return '<div class="case-field-row" style="flex-wrap:wrap;"><span style="flex-grow:1;font-size:13px;">'+nameHtml+flags+'</span>'+
         '<span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+stText+'</span>'+itemArrangeHtml(it, true)+'</div>';
