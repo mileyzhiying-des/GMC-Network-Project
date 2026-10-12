@@ -350,3 +350,12 @@ prototype/shared/app.css  共用样式
 - ［查看我的预约］：手机号（默认 +62）→ 验证码（`bkLkSend` / `bkLkVerify`，`BK.mode='lookup'`）→ 直接进"我的预约"（`bkMeStart`）；号码没登记 → `lookupNone`："没有预约记录" + ［去预约］。
 - "我的预约"加 列表 / 日历 切换（`BK.me.view`，`bkMeCalHtml` 月历：来院蓝条、在韩橙条、已完成灰绿条）；新增"在韩术后管理预约"（`bkKrCareEvents`，读客人案件的 `subItems`）和当前预约卡的"实付金额"（`bkCasePaidText`）。
 - **CMD-1012-02 的"我的预约 list / 日历"部分可直接复用 `bkMeCalHtml`**；IN 端待预约流程那部分 02 还没做。
+
+## CMD-1012-02 补充（2026-10-12，追加；旧文字保留作历史）
+- **院长卡片**：IN 选院长只有卡片（头像 `directorAvatarHtml`，默认剪影 `defaultAvatarUri`；院长账号「上传头像」同步到介绍卡）；今天整天 OFF 的院长灰显不可选 + 标「今日 OFF」（`directorTodayOff`），半天 OFF 只标不禁。［客人已到店］只在来访当天（`markArrived` 也拦）；案件列表点击新分页打开。
+- **KR**：大盘改名「工作台」；确认面诊时间卡片只列「谁 当天的日程 / HH:mm～HH:mm 不可预约」，去掉右侧说明；KR 案件状态显示「阶段 · 进程」（`stageText`，筛选仍用旧 `label`）；「KR 专用附件」是 Timeline 旁独立 tab。时间标地点：`tzRender` / `ksTimeText` 加「（印尼）/（韩国）」。
+- **「报告」→「诊疗方案」**只改**文档名词**（发送诊疗方案、查看诊疗方案、面诊诊疗方案、诊疗方案已到、沿用原诊疗方案…）；**状态 / 进程名保留**（等待报告、待确认报告时间、预计出报告时间、仅出报告——Notion 仍是这些写法）。
+- **术后管理设定**（`pcDays` / `pcDayText` / `pcLabel`，rules.js）：管理项目 `mgmt`（不写地点）/ 次数 / 多次 `interval` 天 / 地点 `place` / 具体项目 `name`（`innName` 为来源诊所本地项目）/ `startDay` 第 N 天起，之后日子自动生成；项目库默认资料里存 `{mgmt, kr, times, interval, place, start}`，报告里 `krPcToItem` 转成项目快照。**推荐项目整理** `recSummaryHtml`（KR 可选范围下、IN 选项目最上方 `projectRecSummaryHtml`、赴韩施术 tab + ［打印］）。
+- **诊疗方案单独页面** `in-report`（`openReportModal` → `renderReportPage`，`reportDocHtml` 模板），［生成 PDF 并存入附件］= 浏览器打印窗口（另存为 PDF）+ 在案件附件里记一条（演示）。待付款结算单 `reselectProjects()`（撤销未付款批次回到选择）；**KR 账号 `krAllItems` 读不到待付款批次的赴韩项目**（`isKrAccount()` 判断）。
+- **到院与在韩**：`KR_JUDGE_TEXT` 三项（可以手术，原方案不变 / 可以手术，但需要调整方案 / 不建议手术），除第一项外 memo 必填（`j.memo`）；`coreUnarrive` 撤回已到医院（评估之前）；评估为可以手术后弹 `krPcbOpen` 术后管理预约（`corePcBooking`：在韩国做 → 在韩子项带 `time`；回印尼做 → `inTimes` + 子项 place IN，勾「请 IN 帮忙预约」→ `coreSubInform` → IN 通知 + 工作台待办 `renderSubBookCard`，代约沿用 `openSubBookModal`）；付清尾款前必须完成术后管理预约；付清尾款后施术日期 / 到院卡收成一行，详细记录在 KR「Timeline」tab。
+- **通知分级** `notifLevel`（rules.js）：`action` 需要处理、`next` 进入下一阶段（两类 toast 手动确认），`info` 一般消息（6 秒消失）；通知创建时写 `n.level`，可用 `opts.level` 显式指定；操作人自己不收（`n.by`）；判断类通知文字带操作人 + 原因。数据版本 36。
