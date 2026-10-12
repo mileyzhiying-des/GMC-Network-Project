@@ -1509,7 +1509,7 @@ function openCaseChatNewTab(id){
 var INTENTION_PICKER_FILTER = 'KR';
 
 function openIntentionPickerModal(){
-  INTENTION_PICKER_FILTER = 'KR';
+  var c0 = getCurrentCase(); INTENTION_PICKER_FILTER = (c0 && intentKrAllowed(c0)) ? 'KR' : 'IN';
   renderIntentionPickerModal();
   document.getElementById('intention-project-overlay').classList.add('open');
 }
@@ -1519,8 +1519,9 @@ function closeIntentionPickerModal(){ document.getElementById('intention-project
 function renderIntentionPickerModal(){
   var c = getCurrentCase(); if(!c) return;
   document.getElementById('intention-picker-tabs').innerHTML =
-    '<span class="chip'+(INTENTION_PICKER_FILTER==='KR'?' active':'')+'" onclick="setIntentionPickerFilter(\'KR\')">赴韩项目</span>'+
+    (intentKrAllowed(c) ? '<span class="chip'+(INTENTION_PICKER_FILTER==='KR'?' active':'')+'" onclick="setIntentionPickerFilter(\'KR\')">赴韩项目</span>' : '<span style="font-size:11px;color:var(--muted);">没选「面诊」：只能选本地项目</span>')+
     '<span class="chip'+(INTENTION_PICKER_FILTER==='IN'?' active':'')+'" onclick="setIntentionPickerFilter(\'IN\')">本地项目</span>';
+  if(INTENTION_PICKER_FILTER==='KR' && !intentKrAllowed(c)) INTENTION_PICKER_FILTER = 'IN';
   var catalog = PROJECT_LIBRARY.filter(function(p){ return p.origin===INTENTION_PICKER_FILTER && p.active && (p.origin!=='KR' || !c.hospitalId || p.hospitalId===c.hospitalId); }); /* 赴韩项目：已选医院就只列该医院的 */
   document.getElementById('intention-picker-list').innerHTML = catalog.map(function(p){
     var checked = (c.intentionProjects||[]).some(function(it){ return it.projectId===p.id; });
@@ -1537,6 +1538,7 @@ function toggleIntentionProject(projectId){
   if(idx>-1) c.intentionProjects.splice(idx,1);
   else {
     var p = projById(projectId); if(!p) return;
+    if(p.origin==='KR' && !intentKrAllowed(c)){ alert('没选「面诊」时意向项目只能选本地项目'); return; }
     c.intentionProjects.push({projectId:p.id, name:p.name, origin:p.origin});
   }
   renderIntentionPickerModal();
@@ -3173,6 +3175,11 @@ function showToast(title, text, onClickFn, opts){
    NOTIF_SEEN = 这个分页已经处理过（弹过或本页自己产生）的通知；第一次调用只登记已有的，不补弹 */
 var NOTIF_SEEN = null;
 function notifKey(n){ return n.id+'|'+n.ts; }
+/* 新通知马上弹（不等画面重画）：别的分页写入存档后由 store.js 立即调用；另有每 3 秒的兜底轮询（后台分页被浏览器降速时也能补上） */
+function remoteNotifTick(){
+  if(typeof isKrAccount==='function' && isKrAccount()){ if(typeof krNotifUnread==='function'){ var u = krNotifUnread(); if(typeof krToastNew==='function') krToastNew(u); if(typeof krUpdateBadges==='function') krUpdateBadges(); } return; }
+  toastNewNotifs(); if(typeof updateBell==='function') updateBell();
+}
 function toastNewNotifs(){
   if(typeof NOTIFS==='undefined') return;
   if(NOTIF_SEEN===null){ NOTIF_SEEN = {}; NOTIFS.forEach(function(n){ NOTIF_SEEN[notifKey(n)] = 1; }); return; }
@@ -3253,6 +3260,7 @@ function lockWrite(o){ try{ localStorage.setItem(LOCK_KEY, JSON.stringify(o)); }
 function presMyAcct(){ try{ return currentAccountId(); }catch(e){ return ME_NAME; } }
 function presCaseKey(){
   try{
+    if(window.__krRecInTab) return null; /* 院长的面诊输入页（新分页）不登记「在看这个案件」，也不触发同一账号两分页锁 */
     if(isKrAccount()) return (CURRENT_PAGE_ID==='kr-casedetail' && typeof KR_CASE!=='undefined' && KR_CASE && KR_CASE.id) ? KR_CASE.clinicId+':'+KR_CASE.id : null;
     return (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID) ? CURRENT_CLINIC_ID+':'+CURRENT_CASE_ID : null;
   }catch(e){ return null; }

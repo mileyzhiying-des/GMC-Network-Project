@@ -235,20 +235,21 @@ var Store = (function(){
   window.addEventListener('storage', function(e){
     if(e.key === null || e.key === 'gmc_demo_ver'){ location.reload(); return; } /* 别的标签页重置了演示数据 → 本页也刷新 */
     var cid = pageClinic();
+    var tick = function(){ if(typeof remoteNotifTick === 'function') try{ remoteNotifTick(); }catch(err){} }; /* 通知弹出不能等画面重画：正在输入 / 有弹窗时画面会延后，但新通知必须马上弹（CMD-1012-08 第 0 条） */
     if(e.key === KEY_G && e.newValue){
       if(loadGlobal()){
         if(cid){ /* 医院资料变了：合成数组按新的医院资料重建（IN 项保持不变） */
           var inCats = {}; Object.keys(PROJECT_CATEGORIES).forEach(function(k){ if(PROJECT_CATEGORIES[k].origin!=='KR') inCats[k] = PROJECT_CATEGORIES[k]; });
           buildClinicViews(PROJECT_LIBRARY.filter(function(p){ return p.origin!=='KR'; }), LIB_CASES.filter(function(c){ return c.source!=='travel'; }), inCats);
         }
-        afterLoad();
+        afterLoad(); tick();
         if(window.GUARD_ROLES && !guardPage(window.GUARD_ROLES)) return; /* 本账号被停用/重置：回登录页 */
         if(typeof refreshView === 'function') safeRefresh(refreshView);
       }
     } else if(!cid && e.key && e.key.indexOf('gmc_clinic_')===0 && e.newValue){ /* KR 页面没有自己的诊所：任何对接诊所的分区变了都要重画 */
-      if(typeof krRefreshAll === 'function') safeRefresh(krRefreshAll);
+      tick(); if(typeof krRefreshAll === 'function') safeRefresh(krRefreshAll);
     } else if(cid && e.key === keyC(cid) && e.newValue){
-      if(loadClinic(cid)){ afterLoad(); if(typeof refreshView === 'function') safeRefresh(refreshView); }
+      if(loadClinic(cid)){ afterLoad(); tick(); if(typeof refreshView === 'function') safeRefresh(refreshView); }
     }
   });
   /* 操作之后（点击、输入、选择、键盘）稍后存档；另外每 2 秒兜底一次；页面离开/隐藏时再存一次 */

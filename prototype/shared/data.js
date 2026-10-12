@@ -1952,6 +1952,10 @@ function materialsCardHtml(c){
     return '<span class="chip active" style="display:inline-flex;align-items:center;gap:4px;">'+it.name+'<span style="cursor:pointer;" onclick="removeIntentionProject('+idx+');event.stopPropagation();">✕</span></span>';
   }).join('');
 
+  var intentRow =     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">意向项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;">'+intentionChips+'<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="openIntentionPickerModal()">+ 添加</button></div>'+
+      '<input type="text" id="cf-intention-note" placeholder="补充说明…" value="'+(c.intentionNote||'')+'" oninput="saveMaterialsDraft(\'intentionNote\',this.value)">'+
+      '</div></div>';
   return '<div class="card" style="padding:22px 24px;">'+
     resumeBannerHtml(c)+
     linkRowHtml(c)+
@@ -1960,10 +1964,6 @@ function materialsCardHtml(c){
     '<div class="case-field-row"><span class="fk">上传视频 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+videoText+'</div></div>'+
     '<div class="case-field-row"><span class="fk">苦恼 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-concern" placeholder="客人本次的苦恼…" value="'+(c.concern||'')+'" oninput="saveMaterialsDraft(\'concern\',this.value)"></div>'+
     '<div class="case-field-row"><span class="fk">希望预期 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-expectation" placeholder="客人希望达到的效果…" value="'+(c.expectation||'')+'" oninput="saveMaterialsDraft(\'expectation\',this.value)"></div>'+
-    '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">意向项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+
-      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;">'+intentionChips+'<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="openIntentionPickerModal()">+ 添加</button></div>'+
-      '<input type="text" id="cf-intention-note" placeholder="补充说明…" value="'+(c.intentionNote||'')+'" oninput="saveMaterialsDraft(\'intentionNote\',this.value)">'+
-      '</div></div>'+
     '<div class="case-field-row"><span class="fk">预算（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:8px;">'+
       '<span style="font-size:12px;color:var(--muted);">Rp</span><input type="number" id="cf-budget-min" placeholder="最低" value="'+(c.budgetMin||'')+'" style="width:120px;" oninput="saveBudgetDraft(\'budgetMin\',this.value)">'+
       '<span style="font-size:12px;color:var(--muted);">～</span>'+
@@ -1973,6 +1973,7 @@ function materialsCardHtml(c){
     caseBeautyRowHtml(c)+
     '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
     directorRowHtml(c)+
+    intentRow+ /* 意向项目在院长选择下面（CMD-1012-08 一·1） */
     '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div>'+
     '</div>';
 }
@@ -2129,8 +2130,15 @@ function directorRowHtml(c){
   return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+hint+directorCardsHtml(c)+'</div></div>';
 }
 
+/* 没选「面诊」时意向项目只能选本地项目（赴韩项目要先面诊）；选了「面诊」或「沿用原诊疗方案」才能选赴韩项目（CMD-1012-08 一·2） */
+function intentKrAllowed(c){ return c.needsConsult===true || c.needsConsult==='reuse'; }
 function setNeedsConsult(val){
   var c=getCurrentCase(); if(!c) return;
+  if(val!==true && val!=='reuse' && (c.intentionProjects||[]).some(function(it){ return it.origin==='KR'; })){
+    var names = c.intentionProjects.filter(function(it){ return it.origin==='KR'; }).map(function(it){ return it.name; });
+    c.intentionProjects = c.intentionProjects.filter(function(it){ return it.origin!=='KR'; });
+    alert('没选「面诊」时意向项目只能选本地项目，已移除赴韩项目：'+names.join('、'));
+  }
   var ci = continuationInfo(c);
   if(ci && ci.overdue && val!==true) return; /* 超过1个月：只能面诊 */
   c.needsConsult = val;
@@ -4054,6 +4062,8 @@ function coreStartConsult(c, by){
   c.consultStartedAt = nowFullDt(); c.consultStartedBy = by;
   logCaseEvent(c, by, '开始面诊');
   updateCaseStage(c);
+  pushKrNotif(caseKrHospital(c), by+' 开始面诊：'+c.name+'（'+(c.caseNo||'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'next'}); /* 开始面诊 → KR 室长（自己触发的不收，见 krNotifsForMe） */
+  pushNotif('面诊', '开始面诊：'+c.name+'（'+(c.caseNo||'')+'）'+by, {caseId:c.id, level:'info'}); /* IN 一般消息 */
   return true;
 }
 function coreSetReportEta(c, eta, by, isChange){

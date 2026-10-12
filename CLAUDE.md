@@ -394,3 +394,10 @@ prototype/shared/app.css  共用样式
 - **测试轮次**：测试覆盖页顶部下拉「当前测试轮次」（第 1 / 第 2 轮，存 `localStorage.gmc_cfg_round`，**`gmc_cfg_` 前缀的键重置 / 版本升级都不清**）；之后用户新建的案件自动带 `c.round`（`createReservationCase`，`currentTestRound()`）；覆盖页每种情况分别显示第 1 / 第 2 轮是否测到 + 「最后一次」案件 / 时间 / 版本 / 轮次；案件列表有轮次标签，可手动改（`setCaseRound` 直接改存档分区）。没有 `round` 的旧案件按第 1 轮算。
 - **导出**：JSON 每种情况带 `occurrences`（案件、诊所、轮次、首次 / 最后一次的时间和版本）、`rounds`、顶层 `currentBuild` / `currentRound` / `roundCoverage`；Markdown 每种情况下列出各次记录和轮次汇总，Timeline 行末带〔版本〕。
 - 只加记录，业务逻辑没改。自动备份只存浏览器（04 补充时已改）。
+
+## CMD-1012-08 补充（2026-10-12，追加；旧文字保留作历史）
+- **通知不弹出的原因**：新通知的 toast 原来挂在「画面重画」上（`store.js` 的 `safeRefresh` → `refreshView` / `krRefreshAll` 末尾才调 `toastNewNotifs` / `krToastNew`），而画面重画遇到「有弹窗打开 / 焦点在输入框、下拉里」就**延后**（`refreshBusy`）——测试时焦点几乎总停在某个输入框 / 下拉上，所以任何通知（含 6 秒的一般消息）都弹不出来。已验证：KM1 焦点在输入框里，旧逻辑不弹，新逻辑立刻弹。修法：`store.js` 的 storage 事件处理里数据读进来后**立刻**调 `remoteNotifTick()`（ui.js：IN 调 `toastNewNotifs` + `updateBell`，KR 调 `krToastNew` + `krUpdateBadges`），不再等画面；toast 栈 z-index 提到 100000（原来 80，盖不过 z-index 200 的案件锁遮罩）。**以后通知相关改动不要把 toast 放进可被延后的刷新里**。
+- 开始面诊现在会通知：KR 室长（`coreStartConsult` → `pushKrNotif`，next 级）+ IN 一般消息；院长上传内容 → KR 室长「请发送诊疗方案」（action 级）+ IN 一般消息。
+- **IN 基础资料**：「意向项目」行移到「院长」行下面；没选「面诊」（且不是「沿用原诊疗方案」）时只能选本地项目（`intentKrAllowed`），选择弹窗不显示赴韩 tab，已选的韩国项目改成不面诊时提示并移除。
+- **KR 面诊 tab**：大字院长卡片拿掉，改成面诊卡片第一行「负责院长：… ［院长日程］」（`krDirLine`）；按［开始面诊］之前不显示「录入面诊」「发送诊疗方案」；发送诊疗方案改左右两栏（左 = 诊疗方案内容，输入区加高到 380px；右 = 赴韩项目可选范围 + 推荐整理 + 备注 + 附件；窄屏上下排）。
+- **院长端开始面诊**：［开始面诊］→ 弹窗选语音 / 手动 → 新分页打开输入页（`?rec=`）+ 原案件页自动切「基础资料」tab；输入页（`window.__krRecInTab`）不登记案件在线、不触发「同一账号两分页」锁；院长上传后 KR 室长分页即时变「面诊结束」并出现发送诊疗方案。
