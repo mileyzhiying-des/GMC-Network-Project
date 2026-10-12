@@ -181,7 +181,7 @@
     if(SRC.imported) opts += '<option value="imported" selected>导入的文件：'+esc(SRC.imported.name)+'</option>';
     sel.innerHTML = opts; if(SRC.imported) sel.value = 'imported';
     var n = pj(localStorage.getItem('gmc_backup_notice'));
-    document.getElementById('notice').innerHTML = n ? '<div class="warn">ℹ 最近一次自动备份：'+esc(n.name)+'（'+esc(n.reason)+'，'+esc(new Date(n.t).toLocaleString())+'）。已在浏览器里存了一份，下拉里选它即可查看；也可点「导出完整备份」下载。</div>' : '';
+    document.getElementById('notice').innerHTML = n ? '<div class="warn">ℹ 最近一次自动备份：'+esc(n.name)+'（'+esc(n.reason)+'，'+esc(new Date(n.t).toLocaleString())+'）。浏览器里存了一份（最近 3 份），下拉里选它即可查看；需要文件时点「导出完整备份」自己下载。</div>' : '';
   }
   window.loadSource = function(){
     var v = document.getElementById('src').value;

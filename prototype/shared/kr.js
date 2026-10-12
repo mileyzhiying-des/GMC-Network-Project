@@ -1180,7 +1180,7 @@ function krProgressBlock(c){
       form = '<span style="font-size:12px;color:var(--muted);">增加项目：客人到院（标记「已到医院」）后才能新增。</span>';
     } else if(KR_SUB_NEW.type==='local'){
       form = krLocalPickerHtml('addon')+'<input type="date" id="kr-addon-date" value="'+(KR_SUB_NEW.date2 || krToday())+'" onchange="krSubNewSet(\'date2\',this.value)" style="'+inp+'"><button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="krDoAddLocal()">增加</button>'+
-        '<div style="width:100%;font-size:11px;color:var(--muted);">'+(!c.krBalancePaid ? '尾款付清前：和尾款一次结算（计入尾款，医院收）。' : '尾款已付清：另开新结算单、在韩国付款。')+'面议项目增加后在结算单里按实际价格由医院收取。</div>';
+        '<div style="width:100%;font-size:11px;color:var(--muted);">'+(!c.krBalancePaid ? '尾款付清前：和尾款一次结算（计入尾款，医院收）。' : '尾款已付清：另开新结算单、在韩国付款。')+'面议项目必须手动填价格，没填不能增加。</div>';
     } else if(!c.hasArrived){
       form = '<span style="font-size:12px;color:var(--muted);">增加项目：客人到院（标记「已到医院」）后才能新增。</span>';
     } else {
@@ -1213,7 +1213,7 @@ function krUnableToggle(name, on){ KR_ARR.unable[name] = on; }
 function krSetAlloc(projectId, batchId, i, v){ if(!krCan()) return; krMut(function(c){ return corePcAlloc(c, projectId, batchId, i, v, ME_NAME); }); }
 /* 「可以手术，但需要调整方案」（CMD-1012-05 四）：① 原项目勾选 = 保留 ② ［增加项目］（KR 项目库，填所需术后管理等）③ 结算：列出结算单 → 已付款 ④ 付款后才弹术后管理预约（按最终项目） */
 var KR_ADJ = {dropped:{}, adds:{}, addOpen:false, signed:{}, locals:[]};
-function krAdjAddLocal(){ var pk = krLpPick('adj'); if(!pk) return; KR_ADJ.locals.push({name:pk.p.name, specLabel:pk.sp.label, price:pk.sp.price, projectId:pk.p.id}); krRenderCaseDetail(); }
+function krAdjAddLocal(){ var pk = krLpPick('adj'); if(!pk) return; if(pk.p.neg && !(pk.price>0)){ alert('面议项目必须手动填价格（韩元）'); return; } KR_ADJ.locals.push({name:pk.p.name, specLabel:pk.sp.label, price:pk.price, projectId:pk.p.id}); krRenderCaseDetail(); }
 function krAdjToggleKeep(name, keep){ KR_ADJ.dropped[name] = !keep; krRenderCaseDetail(); }
 function krAdjToggleAdd(name, on){ if(on){ KR_ADJ.adds[name] = true; KR_SUB.detail[name] = KR_SUB.detail[name] || krDefaultsDetail(name); } else delete KR_ADJ.adds[name]; krRenderCaseDetail(); }
 function krAdjBlock(c, info){
@@ -1371,26 +1371,27 @@ function krDoItemsDone(){
 }
 function krSubInform(id){ if(!krCan()) return; krMut(function(c){ return coreSubInform(c, id, ME_NAME); }); }
 /* 本地管理项目选择器（类别 → 项目 → 规格 → 价格，韩元；CMD-1012-04）：key 区分不同位置的选择状态 */
-var KRLP = {};
+var KRLP = {}; /* 面议项目：KRLP[key].manual = 手动填的韩元价格 */
 function krLpState(key){ var l = krLocalLib(krHospitalIdOfMe()); var s = KRLP[key] = KRLP[key] || {cat:'', pid:'', sid:''}; if(!s.cat) s.cat = l.length ? l[0].catLabel : ''; var ps = l.filter(function(p){ return p.catLabel===s.cat; }); if(!ps.filter(function(p){ return p.id===s.pid; })[0]) s.pid = ps.length ? ps[0].id : ''; var p = ps.filter(function(x){ return x.id===s.pid; })[0]; if(!p || !(p.specs||[]).filter(function(x){ return x.id===s.sid; })[0]) s.sid = p && p.specs.length ? p.specs[0].id : ''; return s; }
 function krLpSet(key, k2, v){ KRLP[key] = KRLP[key] || {}; KRLP[key][k2] = v; if(k2==='cat'){ KRLP[key].pid = ''; KRLP[key].sid = ''; } if(k2==='pid') KRLP[key].sid = ''; krRenderCaseDetail(); }
-function krLpPick(key){ var s = krLpState(key), p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===s.pid; })[0]; var sp = p && p.specs.filter(function(x){ return x.id===s.sid; })[0]; return p && sp ? {p:p, sp:sp} : null; }
+function krLpPick(key){ var s = krLpState(key), p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===s.pid; })[0]; var sp = p && p.specs.filter(function(x){ return x.id===s.sid; })[0]; if(!(p && sp)) return null; var manual = p.neg ? (parseInt(KRLP[key].manual,10)||0) : 0; return {p:p, sp:sp, price:p.neg ? manual : sp.price}; }
 function krLocalPickerHtml(key){
   var l = krLocalLib(krHospitalIdOfMe()), s = krLpState(key), cats = []; l.forEach(function(p){ if(cats.indexOf(p.catLabel)<0) cats.push(p.catLabel); });
   var inp = 'padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;', ps = l.filter(function(p){ return p.catLabel===s.cat; }), pk = krLpPick(key);
   return '<select onchange="krLpSet(\''+key+'\',\'cat\',this.value)" style="'+inp+'">'+cats.map(function(c0){ return '<option'+(c0===s.cat?' selected':'')+'>'+krEsc(c0)+'</option>'; }).join('')+'</select>'+
     '<select onchange="krLpSet(\''+key+'\',\'pid\',this.value)" style="'+inp+'">'+ps.map(function(p){ return '<option value="'+p.id+'"'+(p.id===s.pid?' selected':'')+'>'+krEsc(p.name)+'</option>'; }).join('')+'</select>'+
     '<select onchange="krLpSet(\''+key+'\',\'sid\',this.value)" style="'+inp+'">'+((pk ? pk.p.specs : [])).map(function(sp){ return '<option value="'+sp.id+'"'+(sp.id===s.sid?' selected':'')+'>'+krEsc(sp.label)+'</option>'; }).join('')+'</select>'+
-    '<span style="font-size:12px;font-weight:700;">'+(pk ? (pk.p.neg ? '面议' : formatCurrency(pk.sp.price,'KRW')) : '')+'</span>';
+    (pk && pk.p.neg ? '<input type="number" min="1" placeholder="面议：填价格（₩）" value="'+(KRLP[key].manual||'')+'" oninput="KRLP[\''+key+'\'].manual=this.value" onchange="krRenderCaseDetail()" style="'+inp+'width:150px;">' : '<span style="font-size:12px;font-weight:700;">'+(pk ? formatCurrency(pk.sp.price,'KRW') : '')+'</span>');
 }
 function krAddonSelChg(){ var s = document.getElementById('kr-addon-sel'), a = document.getElementById('kr-addon-anes'); if(!s || !a) return; a.value = krDefaultsDetail(s.value).anes; krAddonAnesChg(); }
 function krAddonAnesChg(){ var v = document.getElementById('kr-addon-anes').value, w = document.getElementById('kr-addon-sign-w'); if(w) w.style.display = v==='local' ? 'none' : ''; }
 function krDoAddLocal(){
   if(!krCan()) return; var pk = krLpPick('addon'); if(!pk) return;
   var date = (document.getElementById('kr-addon-date')||{}).value || krToday();
-  if(!confirm('增加本地管理项目「'+pk.p.name+' · '+pk.sp.label+'」'+(pk.p.neg ? '（面议）' : '：'+formatCurrency(pk.sp.price,'KRW'))+'？')) return;
+  if(pk.p.neg && !(pk.price>0)){ alert('面议项目必须手动填价格（韩元）'); return; }
+  if(!confirm('增加本地管理项目「'+pk.p.name+' · '+pk.sp.label+'」：'+formatCurrency(pk.price,'KRW')+'？')) return;
   KR_SUB_NEW.date2 = '';
-  krMut(function(c){ return coreAddOnItem(c, pk.p.name, ME_NAME, {local:{name:pk.p.name, specLabel:pk.sp.label, price:pk.sp.price, projectId:pk.p.id}, date:date}); });
+  krMut(function(c){ return coreAddOnItem(c, pk.p.name, ME_NAME, {local:{name:pk.p.name, specLabel:pk.sp.label, price:pk.price, projectId:pk.p.id}, date:date}); });
 }
 function krDoAddOn(){
   var s = document.getElementById('kr-addon-sel'); if(!krCan() || !s || !s.value) return; var n = s.value;
@@ -1731,7 +1732,7 @@ ADMIN_RENDER.krsrvc = function(el){
 var KRL = {open:{}, draft:null, edit:null};
 function krlRender(){ ADMIN_RENDER.krsrvc(document.getElementById('admin-body')); }
 function krlToggle(id){ KRL.open[id] = !KRL.open[id]; krlRender(); }
-function krlOpen(id){ var p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===id; })[0]; if(!p) return; KRL.edit = id; KRL.draft = {name:p.name, specs:p.specs.map(function(s){ return Object.assign({}, s); }), neg:!!p.neg, opt:p.opt ? {label:p.opt.label, values:p.opt.values.slice()} : null, err:''}; krlRender(); }
+function krlOpen(id){ var p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===id; })[0]; if(!p) return; KRL.edit = id; KRL.draft = {name:p.name, specs:p.specs.map(function(s){ return Object.assign({}, s); }), neg:!!p.neg, opt:p.opt ? {label:p.opt.label, rules:(p.opt.rules||[{match:'*', values:p.opt.values||[]}]).map(function(r){ return {match:r.match, values:r.values.slice()}; })} : null, err:''}; krlRender(); }
 function krlClose(){ KRL.edit = null; KRL.draft = null; krlRender(); }
 function krlSave(){
   var p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===KRL.edit; })[0]; if(!p || !canDo('krlib')) return;
@@ -1749,7 +1750,7 @@ function krlSectionHtml(can){
       return '<div class="card" style="padding:8px 18px;"><div style="font-size:12px;font-weight:700;color:var(--terracotta);padding:6px 0;">'+krEsc(cl)+'</div>'+lib.filter(function(p){ return p.catLabel===cl; }).map(function(p){
         var open = !!KRL.open[p.id], ps = p.specs.map(function(s){ return s.price; }), lo = Math.min.apply(null, ps), hi = Math.max.apply(null, ps);
         return '<div class="case-field-row" style="font-size:13px;gap:10px;"><span style="flex:1;cursor:pointer;" onclick="krlToggle(\''+p.id+'\')"><span style="color:var(--muted);">'+(open?'▾':'▸')+'</span> <b>'+krEsc(p.name)+'</b></span><span style="font-size:12px;">'+(p.neg ? '面议' : formatCurrency(lo,'KRW')+(hi>lo?' 起':''))+' <span style="color:var(--muted);">· '+p.specs.length+' 个规格</span></span>'+(can ? '<button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="krlOpen(\''+p.id+'\')">编辑</button>' : '')+'</div>'+
-          (open ? '<div style="margin:0 0 8px 22px;padding:8px 14px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;">'+(p.opt ? '<div style="color:var(--slate2);margin-bottom:4px;">使用时选「'+krEsc(p.opt.label)+'」：'+krEsc(p.opt.values.join(' / '))+'</div>' : '')+p.specs.map(function(s){ return '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>'+krEsc(s.label)+'</span><span>'+(p.neg ? '面议' : formatCurrency(s.price,'KRW'))+'</span></div>'; }).join('')+'</div>' : '');
+          (open ? '<div style="margin:0 0 8px 22px;padding:8px 14px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;">'+p.specs.map(function(s){ var ov = optValuesFor(p, s.label); return '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>'+krEsc(s.label)+(ov.length ? ' <span style="color:var(--muted);">（使用时选'+krEsc(p.opt.label)+'：'+krEsc(ov.join(' / '))+'）</span>' : '')+'</span><span>'+(p.neg ? '面议' : formatCurrency(s.price,'KRW'))+'</span></div>'; }).join('')+'</div>' : '');
       }).join('')+'</div>';
     }).join('');
 }

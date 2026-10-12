@@ -270,7 +270,7 @@ function resetDemoData(){
     var n = JSON.parse(localStorage.getItem('gmc_backup_notice') || 'null'); if(!n) return;
     var bar = document.createElement('div');
     bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:10px;z-index:99;background:#FDEBD3;color:#A85A10;border-radius:10px;padding:10px 16px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.15);max-width:92vw;';
-    bar.innerHTML = 'ℹ 刚才（'+new Date(n.t).toLocaleString()+'）因「'+n.reason+'」自动备份了旧数据：浏览器里留了一份、也尝试下载了 <b>'+n.name+'</b>。<a href="/test-coverage.html" target="_blank">打开测试覆盖页查看 / 导出</a>　<a href="#" onclick="localStorage.removeItem(\'gmc_backup_notice\');this.parentNode.remove();return false;">知道了</a>';
+    bar.innerHTML = 'ℹ 刚才（'+new Date(n.t).toLocaleString()+'）因「'+n.reason+'」自动备份了旧数据：浏览器里留了一份（最近 3 份，没有自动下载文件）。<a href="/test-coverage.html" target="_blank">打开测试覆盖页查看 / 导出</a>　<a href="#" onclick="localStorage.removeItem(\'gmc_backup_notice\');this.parentNode.remove();return false;">知道了</a>';
     document.body.appendChild(bar);
   }catch(e){}
 })();

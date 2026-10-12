@@ -866,13 +866,13 @@ function renderProjectHistory(name){
     var tab = PROJ_HIST_TAB[gi] || 'batches';
     var batchRows = g.batches.map(function(b){
       var usedText = g.origin==='KR' ? (b.cancelled?'已取消（退款）':b.used>0?'已完成 1/1':'未完成 0/1') : ('已用 '+b.used+'/'+b.bought);
-      return '<div style="padding:6px 0;font-size:12px;">'+b.date+' · 购买 <a href="#" class="info-link" onclick="openCaseDetail(\''+b.caseId+'\');return false;">'+caseLabel(b.caseId)+'</a> · '+usedText+(b.refund?' · <span style="color:var(--terracotta);font-weight:700;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'（'+b.refund.reason+'，整批作废）</span>':'')+'</div>';
+      return '<div style="padding:6px 0;font-size:12px;">'+b.date+' · 购买 <a href="#" class="info-link" onclick="openCaseDetail(\''+b.caseId+'\');return false;">'+caseLabel(b.caseId)+'</a>'+(b.spec ? ' · '+b.spec : '')+' · '+usedText+(b.refund?' · <span style="color:var(--terracotta);font-weight:700;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'（'+b.refund.reason+'，整批作废）</span>':'')+'</div>';
     }).join('');
     var usageRows = [];
     g.batches.forEach(function(b){ b.usages.forEach(function(u){ usageRows.push(u); }); });
     usageRows.sort(function(a,b){ return a.date<b.date?-1:1; });
     var usageHtml = usageRows.map(function(u){
-      return '<div style="padding:6px 0;font-size:12px;">'+u.date+' · <a href="#" class="info-link" onclick="openCaseDetail(\''+u.caseId+'\');return false;">'+caseLabel(u.caseId)+'</a> · 用了 '+u.qty+' 次</div>';
+      return '<div style="padding:6px 0;font-size:12px;">'+u.date+' · <a href="#" class="info-link" onclick="openCaseDetail(\''+u.caseId+'\');return false;">'+caseLabel(u.caseId)+'</a> · 用了 '+u.qty+' 次'+(u.opt ? '（'+u.opt+'）' : '')+'</div>';
     }).join('') || '<div style="font-size:12px;color:var(--muted);padding:6px 0;">暂无使用记录</div>';
     var tabsHtml = '<div style="display:flex;gap:8px;margin:6px 0;"><span class="chip'+(tab==='batches'?' active':'')+'" onclick="setProjHistTab('+gi+',\'batches\')">购买批次</span><span class="chip'+(tab==='usages'?' active':'')+'" onclick="setProjHistTab('+gi+',\'usages\')">使用明细</span></div>';
     batchRows = tabsHtml + (tab==='batches' ? batchRows : usageHtml);
@@ -2589,7 +2589,7 @@ function openProjNewModal(){
 
 function openProjEditModal(id){
   var p = projById(id); if(!p) return;
-  PROJ_EDIT = Object.assign({}, p); if(p.specs) PROJ_EDIT.specs = p.specs.map(function(x){ return Object.assign({}, x); }); if(p.opt) PROJ_EDIT.opt = {label:p.opt.label, values:p.opt.values.slice()}; PROJ_EDIT.names = p.names ? Object.assign({}, p.names) : {zh:p.name, ko:'', id:''};
+  PROJ_EDIT = Object.assign({}, p); if(p.specs) PROJ_EDIT.specs = p.specs.map(function(x){ return Object.assign({}, x); }); if(p.opt) PROJ_EDIT.opt = {label:p.opt.label, rules:(p.opt.rules||[{match:'*', values:p.opt.values||[]}]).map(function(r){ return {match:r.match, values:r.values.slice()}; })}; PROJ_EDIT.names = p.names ? Object.assign({}, p.names) : {zh:p.name, ko:'', id:''};
   renderProjEditModal();
   document.getElementById('proj-edit-overlay').classList.add('open');
 }

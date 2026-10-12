@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 37; /* 37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 38; /* 38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -9,7 +9,7 @@ var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_LOG'];                      /*
 var DEMO_CLINIC_HOURS = {openTime:'10:00', closeTime:'21:00', bookFrom:'10:00', bookTo:'20:30', lunchFrom:'14:00', lunchTo:'15:00'}; /* IN 诊所演示营业时间（印尼当地时间）；周日休诊 */
 var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ']; /* 每个诊所分区里保留的 */
 /* ---- 重置前自动备份（CMD-1012-06）：任何清掉 gmc_ 存档的地方（数据版本升级、手动「重置演示数据」）都先把当前全部存档备份：
-   ① 存进 localStorage 的 gmc_backup_<时间>（重置不清它，只保留最近 3 份）；② 尝试自动下载一份 JSON；③ 登录页 / 测试覆盖页顶部提示。 ---- */
+   ① 存进 localStorage 的 gmc_backup_<时间>（重置不清它，只保留最近 3 份）；② 不自动下载文件（需要时到测试覆盖页自己导出）；③ 登录页 / 测试覆盖页顶部提示。 ---- */
 function gmcCollectRaw(){ var o = {}; try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); }catch(e){} return o; }
 function gmcBackupMake(reason){
   try{
@@ -26,9 +26,8 @@ function gmcBackupKeep(bk){
   try{
     localStorage.setItem('gmc_backup_'+bk.t, bk.str);
     Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_backup_')===0 && k!=='gmc_backup_notice'; }).sort().slice(0, -3).forEach(function(k){ localStorage.removeItem(k); });
-  }catch(e){ try{ localStorage.removeItem('gmc_backup_'+bk.t); }catch(e2){} } /* 容量不够：只剩自动下载那一份 */
+  }catch(e){ try{ localStorage.removeItem('gmc_backup_'+bk.t); }catch(e2){} } /* 容量不够：这份备份就存不下了 */
   try{ localStorage.setItem('gmc_backup_notice', JSON.stringify({name:bk.name, t:bk.t, reason:bk.reason})); }catch(e){}
-  try{ gmcDownloadText(bk.name, bk.str); }catch(e){}
 }
 function gmcDownloadText(name, text, mime){
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:mime || 'application/json'})); a.download = name; (document.body || document.documentElement).appendChild(a); a.click();
@@ -2928,7 +2927,8 @@ function holdingsUseHtml(c, scope){
     var tags = (h.category==='术后管理'?' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>':'')+
       (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'');
     var pr = PROJECT_LIBRARY.filter(function(p0){ return p0.origin==='IN' && p0.name===h.itemName; })[0];
-    var optSel = pr && pr.opt ? '<select id="hold-opt-'+scope+'-'+i+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"><option value="">选择'+pr.opt.label+'</option>'+pr.opt.values.map(function(v){ return '<option>'+v+'</option>'; }).join('')+'</select>' : '';
+    var nb = h.batches.slice().sort(function(a,b){ return a.date<b.date?-1:1; }).filter(function(b){ return !b.voided && b.bought-b.used>0; })[0], ovals = pr && pr.opt && nb ? optValuesFor(pr, nb.spec) : []; /* 按下一个会被扣的批次的规格给选项（全身等没有选项的不用选） */
+    var optSel = ovals.length ? '<select id="hold-opt-'+scope+'-'+i+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"><option value="">选择'+pr.opt.label+'</option>'+ovals.map(function(v){ return '<option>'+v+'</option>'; }).join('')+'</select>' : '';
     return '<div class="case-field-row"><input type="checkbox" id="hold-check-'+scope+'-'+i+'" style="flex-grow:0;margin-right:10px;">'+
       '<span style="flex-grow:1;font-size:13px;">'+h.itemName+tags+(holdingSchedule(h)?' <span style="font-size:11px;color:var(--terracotta);">进行时间：'+holdingSchedule(h)+'</span>':'')+'</span>'+
       '<span style="display:flex;align-items:center;gap:8px;white-space:nowrap;">'+optSel+'<span style="font-size:12px;color:var(--slate2);">剩余 '+remaining+' 次</span>'+qtyInputHtml({id:'hold-qty-'+scope+'-'+i, value:1, min:1, max:remaining})+'</span>'+
@@ -4445,10 +4445,10 @@ Cooling Cryo | 1次 4.9 | 3次 9.9
 HealFusion Pro（非侵入 MTS，含婴儿针） | 1次 27 | 3次 79
 WiQO Uno（含 LDM 再生 6 分钟） | 1次 25 | 3次 69
 AstroDome 面部管理 | 1次 18 | 3次 49
-LDM {模式:再生,红血丝,美白} | 12分钟·1次 11 | 12分钟·3次 29.7 | 6分钟·1次 6.6 | 6分钟·3次 17.8 | 8分钟（红血丝）·1次 8.8 | 8分钟（红血丝）·3次 23.8
+LDM {模式:12分钟=痘痘,紧致,提升;6分钟=保湿,再生,舒缓;8分钟=红血丝} | 12分钟·1次 11 | 12分钟·3次 29.7 | 6分钟·1次 6.6 | 6分钟·3次 17.8 | 8分钟（红血丝）·1次 8.8 | 8分钟（红血丝）·3次 23.8
 # 营养针
-基础营养针 {种类:白玉,灰姑娘,胎盘,甘草} | 1次 2.9
-高级营养针 {种类:免疫力,抗氧化,维生素D,综合维他命,精氨酸} | 1次 5.9
+基础营养针 {种类:*=白玉,灰姑娘,胎盘,甘草} | 1次 2.9
+高级营养针 {种类:*=免疫力,抗氧化,维生素D,综合维他命,精氨酸} | 1次 5.9
 # 疤痕 / 毛孔
 黄金微针 面部整体（含镇静面膜） | 1次 27 | 3次 59 | 5次 79
 黄金微针 全脸 SFA 尖头（含镇静面膜） | 1次 30 | 3次 59 | 5次 95
@@ -4465,12 +4465,12 @@ CAPRI 激光（不含挤压） | 1次 8.8 | 5次 34.9
 消炎针 | 1次 1.1 | 面部整体 3.3
 # 肉毒
 咬肌（瘦脸针） | 韩国产 50u 2.5 | 韩国产 100u 3.7 | CORETOX 50u 5.9 | CORETOX 100u 9.9 | 西马 50u 9.9 | 西马 100u 17.9 | 保妥适 50u 24.9 | 保妥适 100u 44
-除皱 {部位:额头,眉间,鱼尾纹,鼻背纹,法令纹,下巴,颈纹} | 韩国产 1部位 2.4 | 韩国产 3部位 5.7 | CORETOX 1部位 3.5 | CORETOX 3部位 8.4 | 西马 1部位 5.9 | 西马 3部位 14 | 保妥适 1部位 9.9 | 保妥适 3部位 23
-皮肤肉毒 | 韩国产 1部位 6.9 | 韩国产 全脸 11.9 | CORETOX 1部位 8.9 | CORETOX 全脸 14.9 | 西马 1部位 10.9 | 西马 全脸 18.9 | 保妥适 1部位 19.9 | 保妥适 全脸 34.9
+除皱 {部位:*=额头,眉间,眉上,眼周,眼下,嘴角,核桃纹,鼻翼} | 韩国产 1部位 2.4 | 韩国产 3部位 5.7 | CORETOX 1部位 3.5 | CORETOX 3部位 8.4 | 西马 1部位 5.9 | 西马 3部位 14 | 保妥适 1部位 9.9 | 保妥适 3部位 23
+皮肤肉毒 {部位:1部位=下颌线,脸颊,额头} | 韩国产 1部位 6.9 | 韩国产 全脸 11.9 | CORETOX 1部位 8.9 | CORETOX 全脸 14.9 | 西马 1部位 10.9 | 西马 全脸 18.9 | 保妥适 1部位 19.9 | 保妥适 全脸 34.9
 多汗症肉毒 | 韩国产 50u 7 | 韩国产 100u 11.9 | CORETOX 50u 10.9 | CORETOX 100u 19.9 | 西马 50u 15 | 西马 100u 29 | 保妥适 50u 39.9 | 保妥适 100u 69.9
 # 身体美白
-Lucas {部位:手臂,腿部,腋下,背部,腹部,比基尼线} | 小部位·1次 3 | 小部位·10次 25.5 | 敏感部位·1次 7 | 敏感部位·10次 59.5 | 全身·1次 69 | 全身·10次 352
-皮秒 {部位:手臂,腿部,腋下,背部,腹部,比基尼线} | 小部位·1次 9 | 小部位·10次 76.5 | 敏感部位·1次 21 | 敏感部位·10次 178.5 | 全身·1次 99 | 全身·10次 505
+Lucas {部位:小部位=腋下,肘部,脚踝,膝盖;敏感部位=臀部,Y区,私密} | 小部位·1次 3 | 小部位·10次 25.5 | 敏感部位·1次 7 | 敏感部位·10次 59.5 | 全身·1次 69 | 全身·10次 352
+皮秒 {部位:小部位=腋下,肘部,脚踝,膝盖;敏感部位=臀部,Y区,私密} | 小部位·1次 9 | 小部位·10次 76.5 | 敏感部位·1次 21 | 敏感部位·10次 178.5 | 全身·1次 99 | 全身·10次 505
 # 干细胞
 干细胞静脉注射 | 12cc 180 | 24cc 310
 干细胞皮肤注射（手打） | 3cc·1次 70 | 3cc·3次 189 | 6cc·1次 110 | 6cc·3次 297
@@ -4481,6 +4481,18 @@ SelfoXome {面议} | 静脉注射 面议 | 直接注射 面议
 麻醉喷雾 | 1次 1.1
 局部麻醉 | 1次 3
 睡眠麻醉 | 1次 20`;
+/* 「使用时选」的选项按规格分组：opt = {label, rules:[{match, values}]}，match 是规格名里包含的文字（'*' = 所有规格）；规格没有匹配的规则 = 不用选（如身体美白「全身」） */
+function parseOptRules(txt){
+  var i = txt.indexOf(':'), label = txt.slice(0, i), rules = txt.slice(i+1).split(';').map(function(r){ var j = r.indexOf('='); return {match:r.slice(0, j), values:r.slice(j+1).split(',').map(function(x){ return x.trim(); }).filter(Boolean)}; });
+  return {label:label, rules:rules};
+}
+function optRulesText(opt){ return opt ? (opt.rules||[{match:'*', values:opt.values||[]}]).map(function(r){ return r.match+'='+r.values.join(','); }).join(';') : ''; }
+function optValuesFor(p, specLabel){
+  if(!p || !p.opt) return [];
+  var rules = p.opt.rules || [{match:'*', values:p.opt.values||[]}];
+  for(var i = 0; i < rules.length; i++){ if(rules[i].match==='*' || String(specLabel||'').indexOf(rules[i].match)>-1) return rules[i].values; }
+  return [];
+}
 var LOCAL_CATALOG = (function(){
   var cats = [], cur = null;
   LOCAL_CATALOG_TEXT.split('\n').forEach(function(line){
@@ -4488,7 +4500,7 @@ var LOCAL_CATALOG = (function(){
     if(line.charAt(0)==='#'){ cur = {label:line.slice(1).trim(), items:[]}; cats.push(cur); return; }
     var parts = line.split('|').map(function(x){ return x.trim(); }), head = parts[0], opt = null, neg = false;
     var m = head.match(/\{([^}]*)\}/);
-    if(m){ head = head.replace(m[0], '').trim(); if(m[1]==='面议') neg = true; else { var kv = m[1].split(':'); opt = {label:kv[0], values:(kv[1]||'').split(',')}; } }
+    if(m){ head = head.replace(m[0], '').trim(); if(m[1]==='面议') neg = true; else { opt = parseOptRules(m[1]); } }
     var specs = parts.slice(1).map(function(sp, i){
       var idx = sp.lastIndexOf(' '), label = sp.slice(0, idx).trim(), pr = sp.slice(idx+1).trim(), tm = label.match(/(\d+)次/);
       return {label:label, wan:(pr==='面议' ? null : parseFloat(pr)), times:tm ? parseInt(tm[1],10) : 1};
@@ -4817,7 +4829,7 @@ function projPriceSummaryHtml(p, disp){
   return '<span style="font-size:13px;font-weight:700;">'+displayAmount(lo, p.origin, disp)+(hi>lo ? ' 起' : '')+'</span><div style="font-size:10px;color:var(--muted);font-weight:400;">'+sp.length+' 个规格'+(disp!==native ? ' · 原价 '+formatCurrency(lo, native)+(hi>lo?' 起':'') : '')+'</div>';
 }
 function projSpecsListHtml(p, disp){
-  return '<div style="margin:0 0 8px 22px;padding:8px 14px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;">'+(p.opt ? '<div style="color:var(--slate2);margin-bottom:4px;">使用时选「'+p.opt.label+'」：'+p.opt.values.join(' / ')+'</div>' : '')+
+  return '<div style="margin:0 0 8px 22px;padding:8px 14px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;">'+''+
     p.specs.map(function(sp){ return '<div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0;"><span>'+sp.label+(sp.times>1 ? ' <span style="color:var(--muted);">（付款后持有 '+sp.times+' 次）</span>' : '')+'</span><span>'+specPriceText(p, sp, disp)+'</span></div>'; }).join('')+'</div>';
 }
 
@@ -4832,12 +4844,12 @@ function specEdHtml(targetExpr, rerender, ccy, obj){
   return '<div style="font-size:12px;font-weight:700;margin:8px 0 2px;">规格（一层，每个规格一个价格；规格里写「N次」付款后持有 N 次）</div>'+rows+
     '<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="specEdAdd('+targetExpr+');'+rerender+'">+ 添加规格</button>'+
     '<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin:8px 0;"><input type="checkbox" '+(obj.neg?'checked':'')+' onchange="'+targetExpr+'.neg=this.checked;'+rerender+'"> 面议（选了之后手动填价）</label>'+
-    '<div style="display:flex;gap:6px;align-items:center;font-size:12px;margin:4px 0;">使用时选 <input type="text" placeholder="选项名（如 模式 / 部位，不填 = 没有）" value="'+String((obj.opt&&obj.opt.label)||'').replace(/"/g,'&quot;')+'" oninput="specEdOpt('+targetExpr+',\'label\',this.value)" style="'+inp+'width:150px;"><input type="text" placeholder="可选值，用逗号分隔" value="'+String(((obj.opt&&obj.opt.values)||[]).join(',')).replace(/"/g,'&quot;')+'" oninput="specEdOpt('+targetExpr+',\'values\',this.value)" style="'+inp+'flex:1;min-width:0;"></div>';
+    '<div style="display:flex;gap:6px;align-items:center;font-size:12px;margin:4px 0;">使用时选 <input type="text" placeholder="选项名（模式 / 部位，不填 = 没有）" value="'+String((obj.opt&&obj.opt.label)||'').replace(/"/g,'&quot;')+'" oninput="specEdOpt('+targetExpr+',\'label\',this.value)" style="'+inp+'width:130px;"><input type="text" placeholder="规则：规格含的字=选项,选项;…（* = 所有规格）" value="'+optRulesText(obj.opt).replace(/"/g,'&quot;')+'" oninput="specEdOpt('+targetExpr+',\'rules\',this.value)" style="'+inp+'flex:1;min-width:0;"></div>';
 }
 function specEdSet(o, i, k, v){ if(o.specs && o.specs[i]){ o.specs[i][k] = v; if(k==='label'){ var m = String(v).match(/(\d+)次/); o.specs[i].times = m ? parseInt(m[1],10) : 1; } } }
 function specEdAdd(o){ o.specs = o.specs || []; o.specs.push({id:'sp'+(LOCAL_SPEC_SEQ++), label:'', price:'', times:1}); }
 function specEdDel(o, i){ if(o.specs){ o.specs.splice(i, 1); } }
-function specEdOpt(o, k, v){ o.opt = o.opt || {label:'', values:[]}; if(k==='label') o.opt.label = v; else o.opt.values = String(v).split(/[,，]/).map(function(x){ return x.trim(); }).filter(Boolean); if(!o.opt.label && !o.opt.values.length) o.opt = null; }
+function specEdOpt(o, k, v){ o.opt = o.opt || {label:'', rules:[]}; if(k==='label') o.opt.label = v; else o.opt.rules = String(v).split(/[;；]/).map(function(r){ var j = r.indexOf('='); return j<0 ? null : {match:r.slice(0,j).trim(), values:r.slice(j+1).split(/[,，]/).map(function(x){ return x.trim(); }).filter(Boolean)}; }).filter(Boolean); if(!o.opt.label && !(o.opt.rules||[]).length) o.opt = null; }
 /* 保存前整理规格：返回错误文字或 '' */
 function specEdFinish(o){
   var sp = (o.specs||[]).filter(function(x){ return String(x.label||'').trim() || (x.price!=='' && x.price!=null); });
