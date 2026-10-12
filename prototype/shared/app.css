@@ -266,12 +266,12 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 
 /* ---- toast notifications ---- */
 #toast-stack{position:fixed;top:76px;right:24px;z-index:100000;display:flex;flex-direction:column;gap:10px;max-width:320px;max-height:calc(100vh - 100px);overflow-y:auto;}
-.toast-card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.14);padding:14px 16px;display:flex;align-items:flex-start;gap:10px;animation:toast-in .18s ease;}
+.toast-card{background:#E8923A;border:1px solid #D07E2A;color:#fff;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.14);padding:14px 16px;display:flex;align-items:flex-start;gap:10px;animation:toast-in .18s ease;}
 .toast-body{flex-grow:1;cursor:pointer;}
-.toast-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:3px;}
-.toast-text{font-size:12px;color:var(--slate2);}
-.toast-ok{align-self:center;flex-shrink:0;padding:5px 12px;border:1px solid var(--terracotta);background:var(--terracotta);color:#fff;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;}
-.toast-close{cursor:pointer;color:var(--muted);font-size:13px;flex-shrink:0;}
+.toast-title{font-size:13px;font-weight:700;color:#fff;margin-bottom:3px;}
+.toast-text{font-size:12px;color:#fff;}
+.toast-ok{align-self:center;flex-shrink:0;padding:5px 12px;border:1px solid #fff;background:#fff;color:#D2691E;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;}
+.toast-close{cursor:pointer;color:#fff;font-size:13px;flex-shrink:0;}
 @keyframes toast-in{from{opacity:0;transform:translateX(24px);}to{opacity:1;transform:translateX(0);}}
 
 /* ---- lightweight info peek drawer (case → client quick-peek) ---- */

@@ -407,3 +407,9 @@ prototype/shared/app.css  共用样式
 - **每次升级数据版本要做两件事**：① 在 `store.js` 的 `MIGRATIONS` 里加一条 `{to:新版本, fn}`，补新增字段的默认值 / 旧项目名替换；② 汇报里写「数据版本 X → Y、用户案件已迁移 N 个 / 有 M 个未能迁移」。种子里改了项目名时同步更新 `OLD_LOCAL_NAME_MAP`。
 - **登录页「重置演示数据」两个选项**：① 只重置演示数据（保留我的测试案件）② 全部清空（先问要不要导出）；`gmcResetAll(reason, keepUser)`。测试覆盖的轮次（`gmc_cfg_round`）、版本章、轮次字段都跟案件一起保留。
 - 没有保留的：用户改过的项目库价格 / 活动价 / 套餐、日历 memo、案例库上传（都当设定 / 演示数据处理，升级后回到种子）。
+
+## CMD-1012-10 补充（2026-10-12，追加；旧文字保留作历史）
+- 取消的案件 / 无有效赴韩项目 → `syncSurgeryBlock` 不再留施术块，`sweepStaleSurgeryBlocks` 在 KR 启动时清掉旧残留；`updateCaseStage` 会同步施术块。
+- 赴韩施术 tab 到院前有［取消项目］（`openCancelItems()` 不传批次 = 所有已付款未开始赴韩项目）；KR 确认 / 修改面诊时间通知院长（action）。
+- KR 工作台卡片红点：`HOSPITAL_DATA[h].cardSeen[账号][卡片key]` 记录已看案件，点进卡片消失。toast 改橙黄底白字。
+- `ui.js` 末尾每 5 秒比对 `version.js` 的 hash，不同就提示"原型代码已更新，刷新"（旧分页跑旧代码是通知没弹的可能原因）。未升级数据版本（仍为 38）。

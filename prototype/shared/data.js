@@ -3526,13 +3526,28 @@ function surgeryMinutes(c){
 /* ---- KR 端施术预约操作（2026-10-06，KR-CASE-02 第 3 节）：不碰界面，KR 页面在 Store.mutateClinic 里调用 ----
    krSchedule 新增字段：address（到院地址）、rejectNote（KR 无法安排的原因，IN 重新选日期时显示）；confirmedTime = 到院时间 */
 /* 确认施术时间后自动在该院长日程加一个"施术"块（关联案件、来源诊所）；时间或地址调整时同步（KR-SCHD-01） */
+/* 清掉已经过期的施术块（旧存档里取消后还留着的）：块对应的案件已取消 / 已无赴韩项目 / 没有施术日期。clinicId 的案件从 getCase 取 */
+function sweepStaleSurgeryBlocks(getCase){
+  var n = 0;
+  Object.keys(HOSPITAL_DATA||{}).forEach(function(hid){ var h = HOSPITAL_DATA[hid]; Object.keys(h.directorSchedule||{}).forEach(function(dn){
+    var arr = h.directorSchedule[dn]||[];
+    for(var i = arr.length-1; i >= 0; i--){
+      var b = arr[i]; if(b.kind!=='施术' || !b.caseId) continue;
+      var cs = getCase(b.clinicId, b.caseId); if(!cs) continue; /* 读不到案件（别家诊所读不出）就不动 */
+      var ks = cs.krSchedule, live = cs.stage!=='cancelled' && cs.stage!=='reportonly' && krActiveItems(cs).length && ks && ks.confirmedDate===b.date;
+      if(!live){ arr.splice(i, 1); n++; }
+    }
+  }); });
+  return n;
+}
 function syncSurgeryBlock(c){
   var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid]; if(!h || !c.director) return;
   h.directorSchedule = h.directorSchedule || {};
   var arr = (h.directorSchedule[c.director] = h.directorSchedule[c.director] || []);
   for(var i = arr.length-1; i >= 0; i--){ if(arr[i].kind==='施术' && arr[i].caseId===c.id && arr[i].clinicId===c.clinicId) arr.splice(i, 1); }
   var ks = c.krSchedule;
-  if(ks && (ks.status==='confirmed' || ks.status==='change_pending' || ks.status==='arrived') && ks.confirmedDate){
+  var dead = c.stage==='cancelled' || c.stage==='reportonly' || !krActiveItems(c).length; /* 案件已取消 / 仅出报告 / 赴韩项目已全部取消：施术不再占院长日程、KR 工作台日历、IN 的 KR 医院日程（CMD-1012-10） */
+  if(!dead && ks && (ks.status==='confirmed' || ks.status==='change_pending' || ks.status==='arrived') && ks.confirmedDate){
     var st = ks.confirmedTime||'09:00', en = minToTime(Math.min(24*60-1, timeToMin(st)+surgeryMinutes(c)));
     arr.push({id:'sb'+(SCHED_SEQ++)+Math.floor(Math.random()*1000), who:c.director, date:ks.confirmedDate, time:st, end:en, type:'施术', title:'施术', note:'', kind:'施术', caseId:c.id, clinicId:c.clinicId, name:c.name});
   }
@@ -4033,9 +4048,10 @@ function krProcedureTabMain(c, tabsHtml){
     '</div>';
   var unableBanner = '';
   var unableBtn = '';
+  var cancelBtn = (hasActive && !c.hasArrived && !c.visitClosed && c.settlementDone && krNotStartedItems(c).some(function(it){ var b = (c.settlementBatches||[]).filter(function(x){ return x.id===it.batchId; })[0]; return b && b.status!=='unpaid'; })) ? '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn-outline" onclick="openCancelItems()">取消项目</button></div>' : ''; /* 赴韩施术 tab 的［取消项目］：已到医院前显示（CMD-1012-10 修改1） */
   var recHtml = hasActive ? recSummaryHtml(krActiveItems(c).map(function(it){ return {name:it.name, stay:it.stay, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), c.krScope && c.krScope.overallNote, {print:true, inNote:c.recInNote}) : ''; /* 推荐项目整理 + ［打印］给客人（CMD-1012-02 C5）；IN 室长备注一起印出（CMD-1012-05 三·3） */
   if(recHtml) recHtml = '<div style="margin:10px 0 0;"><input type="text" placeholder="IN 室长备注（选填，打印时一起印出）" value="'+String(c.recInNote||'').replace(/"/g,'&quot;')+'" onchange="setRecInNote(this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;"></div>'+recHtml;
-  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+recHtml+body+itemsHtml+innCareCardHtml(c)+'</div>';
+  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+cancelBtn+recHtml+body+itemsHtml+innCareCardHtml(c)+'</div>';
 }
 
 function markConsultPaid(){
@@ -4091,6 +4107,7 @@ function coreConfirmConsultTimes(c, consultDate, consultTime, etaUtc, by){
   if(!ok) return false;
   logCaseEvent(c, by, 'KR确认面诊时间：'+consultDate+' '+consultTime+'（韩国时间，院长 '+(c.director||'—')+'）');
   syncConsultBlock(c);
+  if(c.director) pushKrNotif(caseKrHospital(c), '需要处理：'+consultDate+' '+consultTime+'（韩国时间）面诊 '+c.name+'（'+(c.caseNo||'')+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 通知该院长：几点要面诊哪位客人（CMD-1012-10 修改2） */
   return true;
 }
 /* 开始面诊：室长账号室长按、院长账号院长按，谁先按都算 → 小状态「面诊中」；上传内容 = 面诊结束（CMD-1012-05 一·2） */
@@ -4109,6 +4126,7 @@ function coreSetReportEta(c, eta, by, isChange){
     if(c.consultStatus!=='awaiting_report') return false;
     var old = c.reportEta || '—';
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
+    if(c.director && c.consultAt) pushKrNotif(caseKrHospital(c), '需要处理：面诊 '+c.name+'（'+(c.caseNo||'')+'）的时间有变动（面诊 '+c.consultAt.date+' '+c.consultAt.time+'，预计出诊疗方案 '+tkU(eta)+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 修改时间也通知院长 */
     logCaseEvent(c, by, 'KR修改预计出报告时间：'+tkU(old)+' → '+tkU(eta));
     syncConsultBlock(c);
     pushNotif('面诊','KR 修改了预计出报告时间：'+c.name+'（'+tkU(old)+' → '+tkU(eta)+'）', {caseId:c.id});

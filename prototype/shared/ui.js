@@ -993,6 +993,7 @@ function simulateTimePass30(){
 }
 
 function updateCaseStage(c){ c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c);
+  if(!SEEDING && c.director && typeof syncSurgeryBlock==='function'){ try{ syncSurgeryBlock(c); }catch(e){} } /* 状态变化后施术块跟着更新（取消的不再占日程） */
   var fo = (typeof document!=='undefined') && document.getElementById('chat-float-overlay'); if(fo && fo.classList.contains('open') && typeof renderFloatMessages==='function'){ try{ renderFloatMessages(); }catch(e){} } }
 
 var CASE_TAB_FILTER = 'all';
@@ -3341,4 +3342,19 @@ function presTick(){
   window.addEventListener('storage', function(e){ if(e.key===PRES_KEY || e.key===LOCK_KEY){ try{ presTick(); presRender(); }catch(x){} } });
   var leave = function(){ try{ var all = presRead(), L = lockRead(); Object.keys(all).forEach(function(k){ delete all[k][TAB_ID]; if(!Object.keys(all[k]).length) delete all[k]; }); presWrite(all); Object.keys(L).forEach(function(k){ if(L[k].tab===TAB_ID) delete L[k]; }); lockWrite(L); }catch(e){} };
   window.addEventListener('pagehide', leave); window.addEventListener('beforeunload', leave);
+})();
+
+
+/* 代码更新提示（CMD-1012-10 修改 / Bug1）：每次提交后 version.js 里的 hash 会变；已经打开的分页还在跑旧代码（比如新的通知逻辑），这里每 5 秒看一眼，发现变了就在顶部提示刷新。 */
+(function(){
+  if(typeof GMC_BUILD==='undefined' || !GMC_BUILD || typeof fetch!=='function') return;
+  setInterval(function(){
+    fetch('/shared/version.js?t='+Date.now(), {cache:'no-store'}).then(function(r){ return r.text(); }).then(function(t){
+      var m = t.match(/h:"([0-9a-f]+)"/); if(!m || m[1]===GMC_BUILD.h || document.getElementById('gmc-update-bar')) return;
+      var bar = document.createElement('div'); bar.id = 'gmc-update-bar';
+      bar.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:100001;background:#1B2635;color:#fff;padding:8px 16px;border-radius:0 0 10px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.3);';
+      bar.innerHTML = '原型代码已更新（'+GMC_BUILD.h+' → '+m[1]+'），这个分页还在跑旧代码　<a href="#" style="color:#FFD28A;font-weight:700;" onclick="location.reload();return false;">刷新</a>';
+      document.body.appendChild(bar);
+    }).catch(function(){});
+  }, 5000);
 })();

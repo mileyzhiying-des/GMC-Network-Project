@@ -170,6 +170,7 @@ function krBoot(){
   CURRENT_PAGE_ID = start;
   var q = new URLSearchParams(location.search).get('case');
   if(q){ var pr = q.split(':'); if(!krFindCase(pr[0], pr[1])){ location.replace(homeUrl()); return; } KR_CASE = {clinicId:pr[0], id:pr[1], tab:new URLSearchParams(location.search).get('tab')||'basic'}; start = 'kr-casedetail'; }
+  try{ if(sweepStaleSurgeryBlocks(function(cid, id){ var v = Store.readClinic(cid); return v ? (v.CASE_ITEMS||[]).filter(function(x){ return x.id===id; })[0] : null; })) Store.touch(); }catch(e){} /* 取消后还留着的施术块一次性清掉 */
   if(new URLSearchParams(location.search).get('rec')) window.__krRecInTab = true; /* 录入输入页（院长开始面诊后新开的分页）：不参与「同一账号两分页」锁，和案件页属于同一次操作 */
   krRenderPage(start); showPage(start);
   var recQ = new URLSearchParams(location.search).get('rec'); if(recQ && start==='kr-casedetail'){ setTimeout(function(){ try{ krSetCaseTab('consult'); krRecOpenModal(recQ==='voice' ? 'voice' : 'manual'); }catch(e){} }, 200); }
@@ -254,7 +255,7 @@ var KR_CARDS = [
 function krCardRows(card, rows){ return rows.filter(card.test); }
 /* 点卡片 → 案件列表（带筛选）；案件列表在第四部分 */
 var KR_LIST = {tab:'all', card:'', clinic:'', director:'', q:'', mine:false};
-function krGoCards(key){ KR_LIST.card = key; KR_LIST.tab = 'all'; KR_LIST.clinic = ''; KR_LIST.director = ''; KR_LIST.q = ''; KR_LIST.mine = false; nav('kr-cases'); }
+function krGoCards(key){ krCardMarkSeen(key); KR_LIST.card = key; KR_LIST.tab = 'all'; KR_LIST.clinic = ''; KR_LIST.director = ''; KR_LIST.q = ''; KR_LIST.mine = false; nav('kr-cases'); }
 
 function krConfirmToday(){
   var h = krHData(); if(!h) return;
@@ -264,12 +265,21 @@ function krConfirmToday(){
 }
 function krOffRows(hid, date){ return (HOSPITAL_DATA[hid].offs||[]).filter(function(o){ return offApplies(o, date); }); }
 
+/* 待办卡片红点（CMD-1012-10 修改4）：按账号记录「已看」的案件，卡片里有看过之后新进来的案件就亮红点；点进卡片后消失。第一次显示时把当前内容当作已看（不吓人） */
+function krCardSeen(){ var h = krHData(), me = currentAccount(); if(!h || !me) return null; h.cardSeen = h.cardSeen || {}; return (h.cardSeen[me.id] = h.cardSeen[me.id] || {}); }
+function krCardIds(card, rows){ return krCardRows(card, rows).map(function(r){ return r.clinicId+':'+r.id; }); }
+function krCardHasNew(card, rows){
+  var seen = krCardSeen(); if(!seen) return false; var ids = krCardIds(card, rows);
+  if(!seen[card.key]){ seen[card.key] = ids; return false; }
+  return ids.some(function(i){ return seen[card.key].indexOf(i) < 0; });
+}
+function krCardMarkSeen(key){ var seen = krCardSeen(), card = KR_CARDS.filter(function(x){ return x.key===key; })[0]; if(!seen || !card) return; seen[key] = krCardIds(card, krAllCases()); Store.touch(); }
 function krCardHtml(card, rows){
-  var hit = krCardRows(card, rows), per = {};
+  var hit = krCardRows(card, rows), per = {}, dot = krCardHasNew(card, rows);
   hit.forEach(function(r){ per[r.clinicName] = (per[r.clinicName]||0) + 1; });
   var sub = krClinics().map(function(cl){ return '<span style="margin-right:10px;">'+krEsc(cl.name)+' <b>'+(per[cl.name]||0)+'</b></span>'; }).join('');
   var warn = hit.length && (card.hot ? hit.some(card.hot) : card.key==='due'); /* 快到期 / 已超时标红 */
-  return '<div class="card" onclick="krGoCards(\''+card.key+'\')" title="'+krEsc(card.tip)+'" style="padding:14px 16px;cursor:pointer;min-width:0;'+(warn?'border-color:#E8A8A0;':'')+'">'+
+  return '<div class="card" onclick="krGoCards(\''+card.key+'\')" title="'+krEsc(card.tip)+'" style="position:relative;padding:14px 16px;cursor:pointer;min-width:0;'+(warn?'border-color:#E8A8A0;':'')+'">'+(dot ? '<span title="有新进来的项目" style="position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:#E5484D;"></span>' : '')+
     '<div style="font-size:12px;color:var(--slate2);">'+t(card.label)+'</div>'+
     '<div style="font-size:28px;font-weight:700;margin:4px 0;color:'+(warn?'#B2453A':'var(--navy)')+';">'+hit.length+'</div>'+
     '<div style="font-size:11px;color:var(--muted);line-height:1.6;">'+sub+'</div></div>';
@@ -693,11 +703,12 @@ function krTabProc(c){
   if(c.krBalancePaid && st==='Arrived'){ /* 付清尾款后：施术日期 / 到院与尾款卡片收进 Timeline（CMD-1012-02 D6） */
     return krCardBox('施术日期与到院', '<div style="font-size:12px;color:var(--sage);">✓ 已到院、尾款已付清；施术日期和到院记录已收进「Timeline」tab。</div>')+krCardBox('赴韩项目', items || krEmpty('没有赴韩项目'))+(typeof krProgressBlock==='function' ? krProgressBlock(c) : '');
   }
+  if(!c.settlementDone) return krCardBox('赴韩施术', krEmpty('IN 付定金后才会出现施术日期和赴韩项目。')); /* 未付定金：三张卡都不显示（CMD-1012-10 修改3） */
   var schedCard = krCardBox('施术日期（'+{Draft:'待 IN 递交', Pending:'待确认施术时间', Confirmed:'时间已确认', Changing:'改期待确认', Arrived:'已到医院'}[st]+'）', body), arr = krArrivalBlock(c);
   /* 时间已确认之后：「到院与尾款」放到页面最上方（CMD-1008-12 D2） */
   var confirmedOn = ['Confirmed','Changing','Arrived'].indexOf(st) > -1;
   return (confirmedOn ? arr : '')+schedCard+krCardBox('赴韩项目', items || krEmpty('没有赴韩项目'))+(confirmedOn ? '' : arr)+
-    (typeof krProgressBlock==='function' ? krProgressBlock(c) : '');
+    (confirmedOn && typeof krProgressBlock==='function' ? krProgressBlock(c) : ''); /* 施术时间确认后才出现项目进程 */
 }
 function krTabFiles(c){
   var files = caseAttachments(c).filter(function(f){ return !f.chatLog; });
@@ -997,7 +1008,7 @@ function krRecordBlock(c){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn-outline" onclick="krRecOpenModal(\'voice\')">🎙 语音录入面诊</button><button class="btn-outline" onclick="krRecOpenModal(\'manual\')">⌨ 手动输入面诊</button></div>'+
     (entries || '<div style="font-size:12px;color:var(--muted);margin-top:10px;">还没有录入内容：点上面的录入方式，在弹窗里录入或输入，再点［上传内容］，内容会以文字显示在这里。</div>')+
     '<div style="font-size:11px;color:var(--muted);margin-top:8px;">录入内容、原始录音和修改过程都进「KR 专用附件」tab（Timeline 旁边），只有 KR 看得到。</div>');
-  return box+(typeof krSubmitBlock==='function' && canDo('krwork') ? (c.consultContentAt ? krSubmitBlock(c) : krCardBox('发送诊疗方案', krEmpty('面诊结束（院长上传内容）后才能发送诊疗方案'))) : '');
+  return box+(typeof krSubmitBlock==='function' && canDo('krwork') ? (c.consultContentAt ? krSubmitBlock(c) : '') : '');
 }
 
 
