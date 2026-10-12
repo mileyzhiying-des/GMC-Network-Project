@@ -143,6 +143,7 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 
 /* clients table */
 .trow{display:grid;grid-template-columns:1.6fr 1.2fr 1fr 1fr auto;align-items:center;gap:12px;padding:13px 6px;border-bottom:1px solid var(--border2);}
+.trow.case-row-click:hover{background:var(--terracotta-bg);} /* 案件列表整行可点：hover 浅粉色（CMD-1008-13） */
 .trow.head{font-size:11px;font-weight:700;color:var(--muted);border-color:var(--border);}
 .status-pill{font-size:11px;font-weight:700;padding:5px 12px;border-radius:999px;width:fit-content;}
 

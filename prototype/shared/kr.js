@@ -853,6 +853,7 @@ function krRecCancel(){ krRecStop(true); KR_REC_OPEN = false; KR_REC.text = ''; 
 function krRecUpload(){
   krRecStop(false);
   var txt = krSaveTranscript(); if(!txt) return;
+  krMut(function(c){ if(!c.consultContentAt) c.consultContentAt = nowFullDt(); }); /* 院长按［上传内容］：IN 案件列表的进程由「面诊中」变「等待报告」 */
   KR_REC_OPEN = false; KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false;
   closePromoOverlay('kr-rec-overlay'); Store.touch(); krRenderCaseDetail();
 }

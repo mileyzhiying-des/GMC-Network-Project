@@ -320,3 +320,9 @@ prototype/shared/app.css  共用样式
 - 测试时不要在 console 里 `var t = ...`（会覆盖全局 `t()` 翻译函数导致 KR 页面刷新报错）。
 - 数据版本 34。
 
+
+## CMD-1008-13 补充（2026-10-12，追加；旧文字保留作历史）
+- IN 案件列表「当前状态」拆成**阶段**（彩色标签，同顶部 tab）+ **进程**（文字），拿掉「状态」栏（正常 / 非正常标签只留在案件页状态栏）和「查看 →」，整行可点（`.case-row-click` hover 浅粉）。推导函数 `caseStageInfo` / `caseProcessText` / `caseStageBadge` / `caseStageProcText`（`rules.js`），**不改主状态**（`caseStatusLabel` / `stage` / `consultStatus` / `scheduleState` 照旧，KR 端仍用 `caseStatusBadge`）。
+- 其他 IN 显示（案件页状态栏、客户详情案件 / 案件记录、关联案件、引用 chip、对话抽屉、@ 案件选单、接续提示）统一写「阶段 · 进程」。
+- 面诊进程：待缴费 → 待 KR 确认时间 → 等面诊（`consultAt` 之前）→ 面诊中（到了 `consultAt`，`consultAtPassed`）→ 等待报告（院长按［上传内容］，`krRecUpload` 写 `c.consultContentAt`）→ 项目确认中。没有 `consultAt` 的旧数据直接显示等待报告。
+- 新写 IN 端显示案件状态：用 `caseStageBadge` / `caseStageProcText`，不要再直接用 `caseStatusBadge`。

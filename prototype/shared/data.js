@@ -1619,7 +1619,7 @@ function resumeBannerHtml(c){
     list.map(function(x){
       var lastDt = (x.logEntries && x.logEntries.length) ? x.logEntries[x.logEntries.length-1].dt : '—';
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid #F0D9A8;font-size:12px;">'+
-        '<span>'+x.caseNo+' · '+caseStatusBadge(x)[2].split(' · ')[0]+' · 最近更新 '+lastDt+'</span>'+
+        '<span>'+x.caseNo+' · '+caseStageProcText(x)+' · 最近更新 '+lastDt+'</span>'+
         '<button class="btn-primary" style="padding:4px 12px;font-size:11px;" onclick="resumeVisit(\''+x.id+'\')">接续</button></div>';
     }).join('')+'</div>';
 }
@@ -1729,7 +1729,7 @@ function setLinkReason(reason){
 function linkRowHtml(c){
   var prior = clientPriorCases(c);
   var opts = '<option value="">（不关联）</option>'+prior.map(function(x){
-    return '<option value="'+x.id+'"'+(c.linkedCase&&c.linkedCase.caseId===x.id?' selected':'')+'>'+x.caseNo+' · '+caseStatusBadge(x)[2].split(' · ')[0]+'</option>';
+    return '<option value="'+x.id+'"'+(c.linkedCase&&c.linkedCase.caseId===x.id?' selected':'')+'>'+x.caseNo+' · '+caseStageProcText(x)+'</option>';
   }).join('');
   var reasonSel = (c.linkedCase && c.linkedCase.caseId)
     ? '<select onchange="setLinkReason(this.value)" style="margin-left:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">选择关联原因 *</option>'+
@@ -1787,7 +1787,7 @@ function postCareUsesOf(f){
 
 function relatedSummaryHtml(c, other, reason, follower, origin){
   var row = function(k, v){ return '<div style="display:flex;gap:10px;font-size:12px;padding:3px 0;"><span style="color:var(--muted);min-width:96px;">'+k+'</span><span style="flex:1;color:var(--slate2);">'+v+'</span></div>'; };
-  var statusTxt = caseStatusBadge(other)[2];
+  var statusTxt = caseStageProcText(other);
   var html = '';
   if(reason==='复诊'){
     html += row('日期', caseFirstDate(other))+row('面诊结论 / 报告摘要', other.reportReady ? (other.videoSummary||'已出报告') : '没有面诊报告')+row('使用的项目', caseProjectNames(other))+row('当前状态', statusTxt);
@@ -1810,7 +1810,7 @@ function relatedSummaryHtml(c, other, reason, follower, origin){
 }
 
 function relatedEntryHtml(c, other, link, follower, origin, key){
-  var b = caseStatusBadge(other), open = !!REL_OPEN[key];
+  var b = caseStageBadge(other), open = !!REL_OPEN[key];
   var head = '<div style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 0;" onclick="toggleRelExpand(\''+key+'\')">'+
     '<span style="font-size:13px;font-weight:700;min-width:84px;">'+other.caseNo+'</span>'+
     '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+link.reason+(link.auto?'（自动）':'')+'</span>'+
@@ -4834,9 +4834,9 @@ function deliverRefQuote(c, q){
 
 function refBarHtml(caseId){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return '';
-  var ended = isEnded(c), b = caseStatusBadge(c); /* 显示案件"现在的"大状态（渲染时实时读，案件推进后跟着变），样式同案件列表 */
+  var ended = isEnded(c), b = caseStageBadge(c); /* 显示案件"现在的"大状态（渲染时实时读，案件推进后跟着变），样式同案件列表 */
   return '<div style="margin-top:4px;background:#EDEAE2;border-radius:10px;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--slate2);">📄 引用案件 '+(c.caseNo||c.name)+
-    ' · <span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2].split(' · ')[0]+'</span>'+
+    ' · <span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
     ' <a href="#" class="info-link" style="color:var(--blue);" onclick="openCaseNewTab(\''+c.id+'\');return false;">查看案件</a>'+
     (ended ? '' : '<button class="btn-outline" style="padding:2px 10px;font-size:11px;background:#fff;" onclick="openCaseChatNewTab(\''+c.id+'\')">转到案件对话</button>')+'</div>';
 }

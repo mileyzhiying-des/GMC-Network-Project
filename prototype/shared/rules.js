@@ -10,7 +10,7 @@ function isDirectorActive(name){ return Object.keys(HOSPITAL_DATA).some(function
 function clientCaseStatus(entry){
   var c = clientLatestCase(entry.name);
   if(!c) return {label:entry.fallback.label, bg:entry.fallback.bg, fg:entry.fallback.fg, finance:'<span style="font-size:12px;color:var(--muted);">—</span>'};
-  var b = caseStatusBadge(c);
+  var b = caseStageBadge(c);
   return {label:b[2], bg:b[0], fg:b[1], finance:financeCellHtml(c)};
 }
 
@@ -77,6 +77,53 @@ function caseStatusBadge(c){
   var label = caseStatusLabel(c), col = toneColors(label);
   return [col[0], col[1], label];
 }
+
+/* 阶段 + 进程（CMD-1008-13，IN-CASE-03 第 2 节）：案件列表"当前状态"拆成两栏——阶段（彩色标签，同顶部 tab）+ 进程（一般文字）。
+   只是换一种显示：案件主状态（caseStatusLabel / stage / consultStatus / scheduleState）一概不改；KR 端仍用 caseStatusBadge。 */
+var STAGE_LABELS = {booked:'预约到店', consult:'面诊安排', travel:'赴韩施术', local:'本地管理', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'};
+var STAGE_TONE_LABEL = {booked:'待访问', consult:'面诊预约', travel:'施术预约', local:'选择项目', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'}; /* 借现有主状态取颜色，保证和 tab / 旧标签同色 */
+function consultAtPassed(c){ /* KR 确认的面诊时间（韩国当地）是否已到 */
+  if(!c.consultAt || !c.consultAt.date || !c.consultAt.time) return false;
+  var u = utcStrParse(localToUtc(c.consultAt.date, c.consultAt.time, KR_TZ)); return !!u && u <= realNow();
+}
+function caseProcessText(c){
+  if(c.stage==='booked') return c.subState==='arrived' ? '接待中' : '待访问';
+  if(c.stage==='consult'){
+    if(c.localAsk) return '项目确认中';
+    var inFlow = c.consultRequested && !c.reportReady;
+    if(inFlow && c.consultStatus==='awaiting_payment') return '待缴费';
+    if(inFlow && c.consultStatus==='paid_waiting_kr') return '待 KR 确认时间';
+    if(inFlow && c.consultStatus==='awaiting_report'){
+      if(c.consultContentAt || !c.consultAt) return '等待报告'; /* 院长已上传内容；没有面诊时间的旧数据直接当作等待报告 */
+      return consultAtPassed(c) ? '面诊中' : '等面诊';
+    }
+    if(c.projectsEnabled || c.reportReady) return '项目确认中';
+    if(c.consultStatus==='cancelled') return '面诊已取消';
+    return '面诊预约';
+  }
+  if(c.stage==='travel'){
+    var st = scheduleState(c);
+    if(st==='Draft') return '待递交日期';
+    if(st==='Pending') return '待确认施术时间';
+    if(st==='Arrived'){
+      var sg = (c.subItems||[]).filter(function(x){ return x.kind==='施术'; });
+      return (sg.length && sg.every(function(x){ return x.done; })) ? '在韩后续' : '在韩中（已到院）';
+    }
+    return '时间已确认'; /* Confirmed / Changing */
+  }
+  if(c.stage==='local') return c.mgmtActive ? '本地管理中' : '选择项目';
+  if(c.stage==='cancelled') return endReasonText(c);
+  if(c.stage==='closed') return caseWorkDone(c) ? '完成施术/管理' : '购买本地项目';
+  if(c.stage==='reportonly') return '只出报告';
+  return '';
+}
+function caseStageInfo(c){
+  var col = toneColors(STAGE_TONE_LABEL[c.stage] || caseStatusLabel(c));
+  return {bg:col[0], fg:col[1], stage:STAGE_LABELS[c.stage] || c.stage, proc:caseProcessText(c)};
+}
+/* 其他显示案件状态的地方统一写法：「阶段 · 进程」（已结案 / 仅出报告 / 已取消的进程就是结束原因） */
+function caseStageBadge(c){ var i = caseStageInfo(c); return [i.bg, i.fg, caseStageProcText(c)]; } /* [底色, 字色, 「阶段 · 进程」]，替代 IN 端显示用的 caseStatusBadge */
+function caseStageProcText(c){ var i = caseStageInfo(c); return i.stage + (i.proc ? ' · '+i.proc : ''); }
 
 function caseStatusLabel(c){
   if(c.stage==='booked') return c.subState==='arrived' ? '接待中' : '待访问';

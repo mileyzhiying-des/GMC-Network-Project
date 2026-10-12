@@ -895,7 +895,7 @@ function renderClientCases(name){
   if(!el) return;
   if(mine.length===0){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">当前没有进行中的案件</div>'; return; }
   el.innerHTML = mine.map(function(c){
-    var b = caseStatusBadge(c);
+    var b = caseStageBadge(c);
     return '<div class="trow" style="grid-template-columns:1fr 1fr auto;">'+
       '<span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';width:fit-content;">'+b[2]+'</span>'+
       '<span style="font-size:12px;color:var(--slate2);">'+caseStatusSub(c)+'</span>'+
@@ -956,7 +956,7 @@ function buildHistoryList(name){
   var addBtn = document.getElementById('beauty-add-btn'); if(addBtn) addBtn.style.display = cl ? '' : 'none';
   var own = name ? CASE_ITEMS.filter(function(c){ return c.name===name; }).map(function(c){
     var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : '—';
-    var bd = caseStatusBadge(c);
+    var bd = caseStageBadge(c);
     return '<div class="info-card"><div class="info-card-row"><div style="min-width:0;"><div class="value"><a href="#" class="info-link" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-weight:700;">'+c.caseNo+'</a> · 本院案件</div><div class="sub">'+first+'</div></div>'+
       '<span class="status-pill" style="background:'+bd[0]+';color:'+bd[1]+';">'+bd[2]+'</span></div></div>';
   }).join('') : '';
@@ -1025,20 +1025,16 @@ function renderCaseRows(){
     return;
   }
   document.getElementById('case-rows').innerHTML = items.map(function(c){
-    var b = caseStatusBadge(c);
+    var si = caseStageInfo(c);
     var lmTag = localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '';
-    var tags = caseAbnormalTags(c);
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
-    var abnormal = tags.length
-      ? '<span class="status-pill" style="background:#F6DCDC;color:#C1454A;" title="'+tags.join('、')+'">非正常</span>'
-      : '<span style="font-size:12px;color:var(--slate2);">正常</span>';
-    /* 2026-10-08：待访问行内按钮（已到店 / 预约取消 / 未到店 / 预约修改）已废弃，这些操作只在案件页顶部状态栏里做（IN-CASE-03 第 3 节） */
-    return '<div class="trow" style="grid-template-columns:1.1fr 0.8fr 1.5fr 0.6fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr auto;"><b style="font-size:13px;cursor:pointer;" onclick="openCaseDetail(\''+c.id+'\')">'+c.name+'</b>'+
+    /* 2026-10-08：待访问行内按钮已废弃；CMD-1008-13：当前状态拆成「阶段（彩色标签）+ 进程（文字）」，去掉「状态」栏和最右边「查看 →」，整行可点击（hover 浅粉色） */
+    return '<div class="trow case-row-click" onclick="openCaseDetail(\''+c.id+'\')" style="grid-template-columns:1.1fr 0.8fr 0.9fr 1.4fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr;cursor:pointer;"><b style="font-size:13px;">'+c.name+'</b>'+
       '<span style="font-size:12px;color:var(--slate2);">'+c.caseNo+'</span>'+
-      '<span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+lmTag+(c.stage==='cancelled' ? '<div style="font-size:11px;color:var(--muted);margin-top:3px;">'+endReasonText(c)+'</div>' : '')+'</span>'+
-      '<span>'+abnormal+'</span><span>'+financeCellHtml(c)+'</span>'+
-      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(staffLabel).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
-      '<a href="#" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
+      '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
+      '<span style="font-size:12px;">'+si.proc+lmTag+'</span>'+
+      '<span>'+financeCellHtml(c)+'</span>'+
+      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(staffLabel).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
   }).join('');
 }
 
@@ -1069,7 +1065,7 @@ function openCaseDetail(id, noPush){
 }
 
 function renderCaseStatusBar(c){
-  var b = caseStatusBadge(c);
+  var b = caseStageBadge(c);
   var actionBtn = '';
   if(c.stage==='booked' && c.subState==='waiting'){
     actionBtn = '<div style="display:flex;gap:10px;"><button class="btn-primary" onclick="markArrived()">客人已到店</button><button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
@@ -2763,10 +2759,10 @@ function renderDrawerList(){
       .filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || (c.caseNo && c.caseNo.toLowerCase().indexOf(q)>-1); })
       .sort(function(a,b){ return roomLastKey(getCaseRoomId(b.id)) - roomLastKey(getCaseRoomId(a.id)); }); /* 其他房间按最新消息排序 */
     items.forEach(function(c){
-      var b = caseStatusBadge(c), rid = getCaseRoomId(c.id);
+      var b = caseStageBadge(c), rid = getCaseRoomId(c.id);
       html += '<div class="chat-card" onclick="openCaseRoom(\''+c.id+'\')"><span class="sq-avt" style="background:var(--terracotta);">'+c.name.charAt(0).toUpperCase()+'</span>'+
         '<div style="flex-grow:1;"><div style="font-size:13px;font-weight:700;">'+c.name+unreadDot(rid)+'</div><div style="font-size:11px;color:var(--muted);">Case：'+c.caseNo+'</div></div>'+
-        '<div style="text-align:right;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2].split(' · ')[0]+'</span><div style="font-size:11px;color:var(--muted);margin-top:4px;">'+((CHAT_DATA[rid]||[]).slice(-1)[0]||{}).time+'</div></div></div>';
+        '<div style="text-align:right;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span><div style="font-size:11px;color:var(--muted);margin-top:4px;">'+((CHAT_DATA[rid]||[]).slice(-1)[0]||{}).time+'</div></div></div>';
     });
     if(!items.length) html += '<div style="font-size:12px;color:var(--muted);padding:16px 4px;">没有匹配的案件</div>';
   } else {
@@ -2825,7 +2821,7 @@ function setRefChip(id){ REF_CHIP = id; renderRefChip(); var i = document.getEle
 
 function openMentionCase(){
   document.getElementById('mention-case-list').innerHTML = CASE_ITEMS.map(function(c){
-    var b = caseStatusBadge(c);
+    var b = caseStageBadge(c);
     return '<div style="display:flex;align-items:center;gap:8px;padding:7px 4px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border2);" onclick="pickRefCase(\''+c.id+'\')">'+c.name+' · '+(c.caseNo||'')+' <span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';font-size:10px;">'+b[2]+'</span></div>';
   }).join('');
   document.getElementById('mention-case-overlay').classList.add('open');
