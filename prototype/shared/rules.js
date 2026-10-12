@@ -94,7 +94,7 @@ function caseProcessText(c){
     if(inFlow && c.consultStatus==='awaiting_payment') return '待缴费';
     if(inFlow && c.consultStatus==='paid_waiting_kr') return '待 KR 确认时间';
     if(inFlow && c.consultStatus==='awaiting_report'){
-      if(c.consultContentAt || !c.consultAt) return '等待报告'; /* 院长已上传内容；没有面诊时间的旧数据直接当作等待报告 */
+      if(c.consultContentAt || !c.consultAt || reportOverdueNow(c)) return '等待报告'; /* 院长已上传内容；没有面诊时间的旧数据直接当作等待报告 */
       return consultAtPassed(c) ? '面诊中' : '等面诊';
     }
     if(c.projectsEnabled || c.reportReady) return '项目确认中';
