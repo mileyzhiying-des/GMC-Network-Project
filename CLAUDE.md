@@ -418,3 +418,8 @@ prototype/shared/app.css  共用样式
 - 升级 / 重置时，项目库（IN 项目 + KR 项目 + KR 本地管理项目）、案例库案例、活动价、套餐、日历 memo 里**用户新增或改过的**也一起保留，没动过的回到新演示数据。判断靠**指纹**：种子生成时每项盖 `_h`（内容哈希，`gmcStamp`），存档带 `st:1`；没有 `_h` = 用户新增，哈希变了 = 用户改过（`gmcChanged`）。旧存档（没有 `st`）读档时把当时内容盖章当基准，**盖章之前用户做过的修改无法识别**（只能靠 id 特征认出活动价 / 套餐 / memo 的新增）。
 - 恢复（`store.js` `cfgMergeProjects` / `cfgMergeById`）：改过的种子项目按名称对上就覆盖字段，对不上或新增的 id 加 `u` 前缀（避免撞号），案件 / 活动价 / 套餐 / 案例里的 `projectId` / `key` / `projectIds` 同步改（`cfgRemap`）；分类按名称对上，没有就新建。用户删掉的种子项目升级后会回来。
 - `krLocalLib` 懒生成的本地项目库也会盖章。数据版本不变（38）。
+
+## CMD-1012-11 补充（2026-10-12，追加；旧文字保留作历史）
+- IN 案件页 tab 新顺序：基础资料｜面诊资料｜**赴韩施术**｜**本地管理**｜**结算**｜（关联案件）｜附件；「项目列表」tab 删除，旧存档 / 旧链接里的 `activeCaseTab==='projects'` 在 `normalizeCaseTab` 映射到 `kr`。出现条件（`ui.js`）：`showKrTab`（面诊案件出诊疗方案后或已有赴韩项目）、`showLocalTab`（加上「本案件买过本地项目批次」）、`showSettleTab`（有任何结算单）。
+- 赴韩施术 tab = `krTabContent(c)`：付款前走 `projectListTabHtml(c,false)`（赴韩方案选项目含「本地项目」分页、待付款 / 重新选择项目、`localAsk`）；付款后 = ［+ 追加项目］ + `krProcedureTabHtml`（已确定项目 + 推荐整理、施术日期、在韩进程、［取消项目］）。本地管理 tab 只用 `localPurchaseHtml(c,'main')` 本地选购画面（`projectListTabHtml(c,true)` 不再出现赴韩方案 / 结算汇总）；赴韩案件里买的本地项目显示 `localBoughtHtml`（本次购买，只读）。结算 tab = `settleTabHtml`（顶部 `settleTabTopHtml`：项目合计 / 已收 / 已退 / 待收尾款，韩元印尼盾分开；每张结算单标来源并可点回对应 tab，只读）。
+- 业务规则不变；数据版本不变（38）。

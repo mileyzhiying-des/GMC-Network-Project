@@ -1411,7 +1411,7 @@ function openReportModal(){
 function renderReportPage(){
   var c = getCurrentCase(), el = document.getElementById('rp-body'); if(!c || !el) return;
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><button class="btn-outline" onclick="goBack()">← 返回案件</button>'+
-    '<div style="display:flex;gap:8px;"><button class="btn-outline" onclick="reportToPdf()">生成 PDF 并存入附件</button><button class="btn-primary" onclick="goBack();switchCaseTab(\'projects\')">查看方案 →</button></div></div>'+
+    '<div style="display:flex;gap:8px;"><button class="btn-outline" onclick="reportToPdf()">生成 PDF 并存入附件</button><button class="btn-primary" onclick="goBack();switchCaseTab(\'kr\')">查看方案 →</button></div></div>'+
     '<div class="card" style="padding:28px 36px;max-width:820px;">'+reportDocHtml(c, REPORT_SHOW_ORIG)+'</div>';
 }
 
@@ -1616,9 +1616,12 @@ function confirmMaterials(){
 }
 
 /* Tab 出现时机（IN-CASE-01）：项目列表=面诊案件报告出来后；本地管理=本地案件确认后，或面诊/赴韩案件点"+添加本地管理"后 */
-function showProjectsTab(c){ return !!c.projectsEnabled && (!isLocalCase(c) || !!c.reportReady); }
+/* Tab 出现时机（CMD-1012-11）：赴韩施术 = 面诊案件出诊疗方案后（或已有赴韩项目）；本地管理 = 有本地项目；结算 = 有任何一张结算单。「项目列表」tab 已并入赴韩施术 / 本地管理 */
+function showKrTab(c){ return (!!c.projectsEnabled && !!c.reportReady) || (!!c.settlementDone && krAllItems(c).length>0); }
+function showProjectsTab(c){ return showKrTab(c); } /* 旧名称，指向赴韩施术 */
+function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.localMgmt && (c.localMgmt.batches||[]).length); }
 
-function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c); }
+function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0; }
 
 function showRelatedTab(c){ return !!(c.linkedCase && c.linkedCase.caseId) || relatedFollowers(c).length>0; }
 
@@ -1722,7 +1725,7 @@ function submitHoldingsUse(scope){
   });
   if(!used.length){ alert('请至少勾选一项持有项目'); return; }
   ctx.mgmtActive = true; ctx.mgmtDone = false; ctx.mgmtStatus = null; ctx.addUse = false;
-  if(scope==='main'){ c.entryChoicePending = false; c.activeCaseTab = isLocalCase(c) ? 'localmgmt' : 'projects'; }
+  if(scope==='main'){ c.entryChoicePending = false; c.activeCaseTab = isLocalCase(c) ? 'localmgmt' : 'kr'; }
   else { ctx.step = 'active'; }
   updateCaseStage(c);
   buildCaseLog(c);
