@@ -75,7 +75,7 @@
     ['D20','到院前取消部分项目 + 加项', logHit(/取消项目"/, function(c){ return /已生成结算单（批次 B[2-9]/.test(T(c)); }), 'Timeline「取消项目」+ 有第 2 张以上结算单'],
     ['D21','KR 无法安排 → 重选日期', logHit(/KR无法安排所选日期/), 'Timeline「KR无法安排所选日期」'],
     ['D22a','时间确认后改期', logHit(/申请修改施术日期/, function(c){ return /KR确认新施术时间/.test(T(c)); }), 'Timeline「申请修改施术日期」+「KR确认新施术时间」'],
-    ['D22b','改期时 2 周内被挡', function(){ return {auto:false, note:'界面里日期被置灰、没有产生任何记录，无法从存档判断'}; }, ''],
+    ['D22b','改期时 2 周内被挡', function(){ return {void:true, note:'施术前 2 周不可改期的限制已拿掉（CMD-1012-13），不计入覆盖率'}; }, '已作废'],
     ['D23','到院后调整方案 → 多退少补 → 结案', byCase(function(c){ return c.stage==='closed' && c.krJudge && c.krJudge.result==='changed'; }), '结案 + 到院评估「需要调整方案」'],
     ['D24','全部不能做 → 在韩重新约', logHit(/KR在韩国重新预约施术时间/), 'Timeline「KR在韩国重新预约施术时间」'],
     ['D25','全部不能做 → 退定金 → 仅出报告', logHit(/KR判断：不能施术，定金/, function(c){ return c.stage==='reportonly'; }), 'Timeline「KR判断：不能施术，定金…」+ 仅出报告'],
@@ -87,9 +87,9 @@
     ['D28c','无法协调（时间确认前，有本地项目）→ 全退', logHit(/室长选择全部退款/, function(c){ return /点［无法协调］/.test(T(c)); }), 'Timeline「室长点［无法协调］」+「室长选择全部退款」'],
     ['D29a','无法协调（时间确认前，无本地项目）→ 增加本地', logHit(/点［无法协调］/, function(c){ return /询问是否增加本地项目/.test(T(c)) && /客人要做\/增加本地项目/.test(T(c)); }), 'Timeline「室长点［无法协调］」+「询问是否增加本地项目」+「客人要做/增加本地项目」（CMD-1012-06 补记）'],
     ['D29b','无法协调（时间确认前，无本地项目）→ 不加', logHit(/点［无法协调］/, function(c){ return /询问是否增加本地项目/.test(T(c)) && /客人不做\/不增加本地项目/.test(T(c)); }), 'Timeline「室长点［无法协调］」+「询问是否增加本地项目」+「客人不做/不增加本地项目」'],
-    ['D30a','取消项目（时间确认后，取消全部赴韩，有本地项目）→ 保留并使用', logHit(/室长选择保留本案件的本地项目/, function(c){ return !/点［无法协调］/.test(T(c)) && /使用了/.test(T(c)); }), 'Timeline「室长选择保留」+「使用了」，且没有「点［无法协调］」（取消项目在施术时间确认后，CMD-1012-12）'],
-    ['D30b','取消项目（时间确认后，有本地项目）→ 保留但这次不做', logHit(/室长选择保留本案件的本地项目/, function(c){ return !/点［无法协调］/.test(T(c)) && /本次不使用任何持有项目/.test(T(c)); }), 'Timeline「室长选择保留」+「本次不使用任何持有项目」，没有「点［无法协调］」'],
-    ['D30c','取消项目（时间确认后，有本地项目）→ 全退', logHit(/室长选择全部退款/, function(c){ return !/点［无法协调］/.test(T(c)); }), 'Timeline「室长选择全部退款」，没有「点［无法协调］」'],
+    ['D31a','取消项目（时间确认后，取消全部赴韩，有本地项目）→ 保留并使用', logHit(/室长选择保留本案件的本地项目/, function(c){ return !/点［无法协调］/.test(T(c)) && /使用了/.test(T(c)); }), 'Timeline「室长选择保留」+「使用了」，且没有「点［无法协调］」（取消项目在施术时间确认后，CMD-1012-12）'],
+    ['D31b','取消项目（时间确认后，有本地项目）→ 保留但这次不做', logHit(/室长选择保留本案件的本地项目/, function(c){ return !/点［无法协调］/.test(T(c)) && /本次不使用任何持有项目/.test(T(c)); }), 'Timeline「室长选择保留」+「本次不使用任何持有项目」，没有「点［无法协调］」'],
+    ['D31c','取消项目（时间确认后，有本地项目）→ 全退', logHit(/室长选择全部退款/, function(c){ return !/点［无法协调］/.test(T(c)); }), 'Timeline「室长选择全部退款」，没有「点［无法协调］」'],
     ['D30','面诊或赴韩案件中添加本地管理', logHit(/添加本地管理（同日插做本地项目/), 'Timeline「添加本地管理」'],
     ['E','其他可从记录判断的'],
     ['E1','客人自助预约（新客）', byCase(function(c){ return c.bookClient==='new'; }), '案件字段 bookClient=new（CMD-1012-06 起记录）'],
@@ -138,11 +138,11 @@
     var groups = [], cur = null, covered = 0, total = 0, unjudge = [];
     CHECKS.forEach(function(ch){
       if(ch.length===2){ cur = {id:ch[0], title:ch[1], items:[]}; groups.push(cur); return; }
-      var r = ch[2](d), item = {id:ch[0], title:ch[1], basis:ch[3]||'', auto:r.auto!==false, note:r.note||'', hits:(r.hits||[]).map(decorate)};
-      cur.items.push(item); total++;
+      var r = ch[2](d), item = {id:ch[0], title:ch[1], basis:ch[3]||'', auto:r.auto!==false && !r.void, void:!!r.void, note:r.note||'', hits:(r.hits||[]).map(decorate)};
+      cur.items.push(item); if(!item.void) total++; /* 已作废的情况不计入覆盖率 */
       item.rounds = {}; ROUNDS.forEach(function(rd0){ item.rounds[rd0] = item.hits.filter(function(h){ return h.round===rd0; }).length; });
       item.last = item.hits.slice().sort(function(a,b){ return String(b.ldt||'').localeCompare(String(a.ldt||'')); })[0] || null;
-      if(!item.auto) unjudge.push(item); else if(item.hits.length) covered++;
+      if(item.void){} else if(!item.auto) unjudge.push(item); else if(item.hits.length) covered++;
     });
     var roundCov = {}; ROUNDS.forEach(function(rd0){ roundCov[rd0] = 0; groups.forEach(function(g){ g.items.forEach(function(it){ if(it.auto && it.rounds[rd0]) roundCov[rd0]++; }); }); });
     return {groups:groups, covered:covered, total:total, unjudge:unjudge, roundCov:roundCov};
@@ -173,7 +173,7 @@
     document.getElementById('sumsub').textContent = '数据来源：'+SRC.label+'；数据版本 '+(DATA.ver||'?')+'；你的案件 '+DATA.cases.filter(function(c){ return !c.__demo; }).length+' 个、演示案件 '+DATA.cases.filter(function(c){ return c.__demo; }).length+' 个（诊所 '+DATA.clinics.join('、')+'）；演示案件另外显示，不计入覆盖率（演示案件里已有 '+RESULT.demoCovered+' 条情况）';
     document.getElementById('checks').innerHTML = RESULT.groups.map(function(g){
       return '<div class="grp">'+esc(g.id+' '+g.title)+'</div><div class="card" style="padding:4px 18px;">'+g.items.map(function(it){
-        var mk = !it.auto ? '❔' : it.hits.length ? '✅' : '⬜';
+        var mk = it.void ? '🚫' : !it.auto ? '❔' : it.hits.length ? '✅' : '⬜';
         var first = it.hits.slice().sort(function(a,b){ return String(a.dt||'').localeCompare(String(b.dt||'')); })[0];
         var demoLine = it.auto && it.demoHits && it.demoHits.length ? '<div class="muted" style="opacity:.7;">演示案件里也有 '+it.demoHits.length+' 次（不计入覆盖率）：'+it.demoHits.slice(0,3).map(function(h){ return h.c ? '<a href="'+caseLink(h.c)+'" target="_blank">'+caseTag(h.c)+'</a>' : esc(h.label||''); }).join('、')+'</div>' : '';
         var rmk = it.auto ? ROUNDS.map(function(r0){ return '第'+r0+'轮 '+(it.rounds[r0] ? '✅'+it.rounds[r0] : '⬜'); }).join('　') : '';
@@ -266,7 +266,7 @@
       md += '## '+g.id+' '+g.title+'\n\n';
       g.items.forEach(function(it){
         var first = it.hits.slice().sort(function(a,b){ return String(a.dt||'').localeCompare(String(b.dt||'')); })[0];
-        md += '- '+(!it.auto ? '❔' : it.hits.length ? '✅' : '⬜')+' **'+it.id+' '+it.title+'**'+(!it.auto ? '（无法自动判断：'+it.note+'）' : it.hits.length ? '——'+it.hits.length+' 次；第一次 '+(first.c ? first.c.caseNo+' '+first.c.name : (first.label||''))+(first.dt ? ' '+String(first.dt).slice(0,16) : '') : '——未发生')+'\n';
+        md += '- '+(it.void ? '🚫' : !it.auto ? '❔' : it.hits.length ? '✅' : '⬜')+' **'+it.id+' '+it.title+'**'+(it.void ? '（已作废：'+it.note+'）' : !it.auto ? '（无法自动判断：'+it.note+'）' : it.hits.length ? '——'+it.hits.length+' 次；第一次 '+(first.c ? first.c.caseNo+' '+first.c.name : (first.label||''))+(first.dt ? ' '+String(first.dt).slice(0,16) : '') : '——未发生')+'\n';
         if(it.auto && it.hits.length){ it.hits.forEach(function(h){ md += '    - '+(h.c ? h.c.caseNo+' '+h.c.name : (h.label||''))+' · 第 '+h.round+' 轮 · 最早 '+String(h.dt||'').slice(0,16)+' 版本 '+(h.ver||'—')+' · 最后 '+String(h.ldt||'').slice(0,16)+' 版本 '+(h.lver||'—')+'\n'; }); md += '    - 轮次汇总：'+ROUNDS.map(function(r0){ return '第'+r0+'轮 '+(it.rounds[r0]||0)+' 次'; }).join('，')+'\n'; }
       });
       md += '\n';

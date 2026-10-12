@@ -446,6 +446,7 @@ function fmtDateYMD(y,m,d){
 }
 
 /* 施术前2周内不可修改日期：TODAY_DATE 是原型里的"今天"（当天 0 点，取电脑日期；2026-10-06 起不再固定），比较用它 */
+/* 已废弃（CMD-1012-13）：施术前 2 周不可改期的限制已拿掉，这个函数不再被调用 */
 function isWithin2WeeksOfToday(dateStr){
   if(!dateStr) return false;
   /* CMD-1012-01：按页面（诊所）时区的「今天」和 YYYY-MM-DD 的纯日期差来算，不依赖浏览器时区；距今天 ≤ 14 天算 2 周内 */

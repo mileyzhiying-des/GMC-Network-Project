@@ -4019,7 +4019,6 @@ function confirmSubBook(){
 /* 确认后修改日期：施术前2周内置灰不可点；月历默认打开原定日期所在月份（2026-09-29 第十轮修复） */
 function startKrScheduleChange(){
   var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='confirmed') return;
-  if(isWithin2WeeksOfToday(c.krSchedule.confirmedDate)) return;
   var orig = new Date(c.krSchedule.confirmedDate);
   KR_SCHED_VIEW_MONTH = new Date(orig.getFullYear(), orig.getMonth(), 1);
   c.krSchedule.status = 'change_pending';
@@ -4069,7 +4068,7 @@ function krProcedureTabMain(c, tabsHtml){
   if(hasActive && c.krBalancePaid && st==='Arrived'){ body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div><div style="font-size:12px;color:var(--sage);">✓ 已到院、尾款已付清（施术日期 '+ks.confirmedDate+'）；详细记录见「Timeline」。</div>'; }
   else if(hasActive){
     /* 施术日期卡片（Schedule）：Draft / Pending / Confirmed / Changing / Arrived，案件主状态直接读这里 */
-    var canModify = ks && ks.status==='confirmed' && !isWithin2WeeksOfToday(ks.confirmedDate) && !c.hasArrived;
+    var canModify = ks && ks.status==='confirmed' && !c.hasArrived; /* 到医院前都可改日期（CMD-1012-13，拿掉施术前 2 周限制） */
     if(st==='Draft'){
       ks = ensureKrScheduleDraft(c);
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
@@ -4093,7 +4092,7 @@ function krProcedureTabMain(c, tabsHtml){
             (canModify ? '<button class="btn-outline" onclick="startKrScheduleChange()">修改日期</button>' : '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>修改日期</button>')+
             '<button class="btn-outline" onclick="openCancelItems()">取消项目</button>'+ /* 时间确认后：［无法协调］拿掉，同一位置改为［取消项目］（CMD-1012-12） */
             '</div>'+
-            (!canModify ? '<div style="font-size:11px;color:var(--terracotta);margin-bottom:10px;">施术前2周内不可修改日期</div>' : ''))+
+            '')+
         '<div style="border-top:1px solid var(--border2);padding-top:14px;font-size:12px;color:var(--muted);">已到医院 / 付清尾款 / 子项完成均由 KR 端操作，这里只显示状态；KR 同一天内可调整到院时间和地址（会通知你）</div>';
     } else if(st==='Changing'){
       if(!ks.changeSubmitted){
