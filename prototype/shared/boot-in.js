@@ -38,7 +38,7 @@ setInterval(function(){
     var p = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===el.getAttribute('data-ph-countdown'); })[0];
     if(p) el.textContent = placeholderCountdownText(p);
   });
-  CASE_ITEMS.forEach(function(c){ if(c.consultStatus==='awaiting_report' && !c.overdueNotified && reportOverdueNow(c)){ c.overdueNotified = true; pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+(c.reportEta||'—')+'）', {caseId:c.id}); } });
+  CASE_ITEMS.forEach(function(c){ if(c.consultStatus==='awaiting_report' && !c.overdueNotified && reportOverdueNow(c)){ c.overdueNotified = true; pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+tkU(c.reportEta)+'）', {caseId:c.id}); } });
   document.querySelectorAll('[data-visit-countdown]').forEach(function(el){
     var left = parseInt(el.getAttribute('data-visit-countdown'),10) + noShowMs() - demoNow().getTime();
     el.textContent = left>0 ? Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒' : '已超时';

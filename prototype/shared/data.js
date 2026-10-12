@@ -1416,9 +1416,10 @@ function pickRescheduleTime(t){ RESCHED_SELECTED_TIME = t; renderRescheduleTimeP
 
 /* ---- Timeline format: 进程名/具体做了什么/谁/00-00-00 00:00 ---- */
 function logLine(e){
+  var act = tzRender(e.action); /* 时间标记按看的人的时区显示 */
   var action = e.kind==='case'
-    ? '<a href="#" onclick="openCaseDetail(\''+e.caseId+'\');return false;" style="color:var(--navy);font-weight:700;">'+e.action+' →</a>'
-    : e.action;
+    ? '<a href="#" onclick="openCaseDetail(\''+e.caseId+'\');return false;" style="color:var(--navy);font-weight:700;">'+act+' →</a>'
+    : act;
   return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+e.stage+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+actorDisplay(e)+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+fmtUtc(e.dt)+'</span></div>';
 }
 
@@ -3304,7 +3305,7 @@ function coreScheduleConfirm(c, date, time, address, by){
   var ks = c.krSchedule; if(!ks || ks.status!=='pending') return false;
   ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||''; ks.rejectNote = '';
   logCaseEvent(c, by, 'KR确认施术时间：'+date+' '+time+'（韩国时间）到院'+(address?'，地址：'+address:''));
-  pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+ksTimeText({confirmedDate:date, confirmedTime:time}, true)+(address?'（'+address+'）':''), {caseId:c.id});
+  pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+tkK(date, time)+(address?'（'+address+'）':''), {caseId:c.id});
   syncSurgeryBlock(c); updateCaseStage(c);
   syncSurgerySub(c);
   return true;
@@ -3322,8 +3323,8 @@ function coreScheduleAdjust(c, time, address, by){
   var ks = c.krSchedule; if(!ks || ks.status!=='confirmed') return false;
   var oldT = ks.confirmedTime, oldA = ks.address||'';
   ks.confirmedTime = time; ks.address = address||'';
-  logCaseEvent(c, by, 'KR调整到院时间/地址：'+oldT+' → '+time+(oldA!==ks.address ? '；地址：'+(oldA||'—')+' → '+(ks.address||'—') : ''));
-  pushNotif('赴韩施术','KR 调整了到院时间/地址：'+c.name+'（'+ksTimeText({confirmedDate:ks.confirmedDate, confirmedTime:time}, true)+(ks.address?'，'+ks.address:'')+'）', {caseId:c.id});
+  logCaseEvent(c, by, 'KR调整到院时间/地址：'+tkK(ks.confirmedDate, oldT)+' → '+tkK(ks.confirmedDate, time)+(oldA!==ks.address ? '；地址：'+(oldA||'—')+' → '+(ks.address||'—') : ''));
+  pushNotif('赴韩施术','KR 调整了到院时间/地址：'+c.name+'（'+tkK(ks.confirmedDate, time)+(ks.address?'，'+ks.address:'')+'）', {caseId:c.id});
   syncSurgeryBlock(c);
   return true;
 }
@@ -3334,7 +3335,7 @@ function coreChangeConfirm(c, date, time, address, by){
   ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||ks.address||'';
   ks.changePrimary = ''; ks.changeBackup = ''; ks.changeSubmitted = false; ks.rejectNote = '';
   logCaseEvent(c, by, 'KR确认新施术时间（韩国时间）：'+oldD+' → '+date+' '+time);
-  pushNotif('赴韩施术','KR 确认新施术时间：'+c.name+' '+ksTimeText({confirmedDate:date, confirmedTime:time}, true), {caseId:c.id});
+  pushNotif('赴韩施术','KR 确认新施术时间：'+c.name+' '+tkK(date, time), {caseId:c.id});
   syncSurgeryBlock(c); updateCaseStage(c);
   syncSurgerySub(c);
   return true;
@@ -3508,7 +3509,7 @@ function coreRebook(c, date, time, by){
   var ks = c.krSchedule; ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time;
   c.krJudge = null;
   logCaseEvent(c, by, 'KR在韩国重新预约施术时间：'+date+' '+time+'（韩国时间；回到施术时间已确认，IN端显示更改时间）');
-  pushNotif('赴韩施术','KR 在韩国重新预约了施术时间：'+c.name+' '+ksTimeText({confirmedDate:date, confirmedTime:time}, true), {caseId:c.id});
+  pushNotif('赴韩施术','KR 在韩国重新预约了施术时间：'+c.name+' '+tkK(date, time), {caseId:c.id});
   syncSurgeryBlock(c); updateCaseStage(c);
   syncSurgerySub(c); return true;
 }
@@ -3759,6 +3760,7 @@ function markConsultPaid(){
   recordConsultFee(c); /* 正常情况下选面诊时已记；没有记录的老数据在缴费时补记 */
   if(!SEEDING) pushKrNotif(caseKrHospital(c), '客人已缴面诊费：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
+  ensureCaseRoom(c); /* CMD-1008-14：缴完面诊费自动建案件对话房（不通知、不响铃），KR 一开始就能在房里留言 */
   logCaseEvent(c, '客人', '完成面诊费支付，已在Main对话群自动通知');
   buildCaseLog(c); renderCaseHeaderActions(c);
   renderCaseStatusBar(c);
@@ -3770,6 +3772,7 @@ function applyWaiveFee(c, reason, note){
   c.consultStatus = 'paid_waiting_kr'; /* 免除后照正常流程：待确认报告时间 */
   if(!SEEDING) pushKrNotif(caseKrHospital(c), '面诊费已免除：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c);
+  ensureCaseRoom(c); /* 免除面诊费同样自动建房 */
   logCaseEvent(c, actingName(), '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
   buildCaseLog(c); renderCaseHeaderActions(c);
   renderCaseStatusBar(c);
@@ -3812,16 +3815,16 @@ function coreSetReportEta(c, eta, by, isChange){
     if(c.consultStatus!=='awaiting_report') return false;
     var old = c.reportEta || '—';
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
-    logCaseEvent(c, by, 'KR修改预计出报告时间：'+fmtUtc(old)+' → '+fmtUtc(eta));
+    logCaseEvent(c, by, 'KR修改预计出报告时间：'+tkU(old)+' → '+tkU(eta));
     syncConsultBlock(c);
-    pushNotif('面诊','KR 修改了预计出报告时间：'+c.name+'（'+fmtUtc(old)+' → '+fmtUtc(eta)+'）', {caseId:c.id});
+    pushNotif('面诊','KR 修改了预计出报告时间：'+c.name+'（'+tkU(old)+' → '+tkU(eta)+'）', {caseId:c.id});
   } else {
     if(c.consultStatus!=='paid_waiting_kr') return false;
     syncKrCoordinator(c);
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
     c.consultStatus = 'awaiting_report';
-    logCaseEvent(c, by, 'KR确认预计出报告时间：'+fmtUtc(eta));
-    pushNotif('面诊','KR 确认预计出报告时间：'+c.name+' '+fmtUtc(eta), {caseId:c.id});
+    logCaseEvent(c, by, 'KR确认预计出报告时间：'+tkU(eta));
+    pushNotif('面诊','KR 确认预计出报告时间：'+c.name+' '+tkU(eta), {caseId:c.id});
   }
   updateCaseStage(c);
   return true;
@@ -3829,12 +3832,13 @@ function coreSetReportEta(c, eta, by, isChange){
 /* 演示：超过预计时间还没出报告——小状态变橘色"已超过预计时间"，只提醒，状态不变 */
 function simulateReportTimeout(){
   var c = getCurrentCase(); if(!c || c.consultStatus!=='awaiting_report') return;
-  c.reportOverdue = true;
-  logCaseEvent(c, '系统', '已超过预计出报告时间（'+(fmtUtc(c.reportEta)||'—')+'），报告还没提交（仅提醒，状态不变）');
+  var first = !c.overdueNotified; /* 超时只发一条通知、只记一条 Timeline：自动检查和这个演示按钮共用 overdueNotified */
+  c.reportOverdue = true; c.overdueNotified = true;
+  if(first) logCaseEvent(c, '系统', '已超过预计出报告时间（'+tkU(c.reportEta)+'），报告还没提交（仅提醒，状态不变）');
   buildCaseLog(c);
   renderCaseStatusBar(c);
   renderCaseBody(c);
-  pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+(fmtUtc(c.reportEta)||'—')+'）', {caseId:c.id});
+  if(first) pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+tkU(c.reportEta)+'）', {caseId:c.id});
 }
 
 /* ================= case library (案例库 · 2026-10-02 重写，取代院长/部位/问题/产品节点结构) =================
@@ -4769,25 +4773,27 @@ function caseOperatedLogs(c){
   return L.filter(function(l){ return !(l.stage==='预约到店' && /代替预约|代约|预约修改|改约|取消预约|未到店|老客人预约/.test(l.action||'')); });
 }
 function caseOperators(c, strict){
-  var inn = [], kr = [];
+  var inn = [], kr = [], innIds = {};
   caseOperatedLogs(c).forEach(function(l){
-    var a = String(l.actor||'');
-    if(IN_COORDINATORS.indexOf(a)>-1){ if(inn.indexOf(a)<0) inn.push(a); }
+    var a = String(l.actor||''), id = l.actorId || LEGACY_STAFF_ID[a], acct = id ? accountById(id) : null;
+    /* CMD-1008-14（A-010）：账号换使用人后，旧使用人做过的操作仍算旧使用人——按当时记下的名字 / 账号编号认，不看现在的账号名单 */
+    if(IN_COORDINATORS.indexOf(a)>-1 || (acct && !acct.hospitalId)){ if(inn.indexOf(a)<0) inn.push(a); if(id) innIds[a] = id; }
     else { var k = offNameKey(a); if(allKrCoordinatorNames().indexOf(k)>-1 && kr.indexOf(k)<0) kr.push(k); }
   });
   if(!strict && !inn.length && c.inCoordinator) inn.push(c.inCoordinator); /* 推播用：没有任何操作记录时按案件默认负责室长；列表显示只按真实操作记录 */
-  return {inn:inn, kr:kr};
+  return {inn:inn, kr:kr, innIds:innIds};
 }
 
 function shouldPushToMe(c){ return pushTargets(c).inn.indexOf(ME_NAME)>-1; }
  /* 演示视角：当前登录的是 A1 室长（IN室长） */
 function roomSysMsg(text){ return {day:KD(0), from:'sys', kind:'sys', orig:text, time:nowTime(), ts:nowFullDt()}; }
 
-/* 点［发起对话］/新建案件对话时才建房（有房间之后才出现在抽屉里）；建房时IN室长进入房间 */
+/* 建房：面诊案件缴费 / 免除面诊费时自动建（CMD-1008-14，不通知、不响铃）；其他案件点［发起对话］/新建案件对话时建；有房间之后才出现在抽屉里；建房时IN室长进入房间。［发起对话］直接打开已建好的房间 */
 function ensureCaseRoom(c){
   var roomId = getCaseRoomId(c.id);
   if(!CHAT_DATA.hasOwnProperty(roomId)){
     CHAT_DATA[roomId] = IN_COORDINATORS.map(function(n){ return roomSysMsg(n+' 进入房间'); });
+    if(caseHasKrSide(c) && krEnterRoomName(c)){ c.krInRoom = true; CHAT_DATA[roomId].push(roomSysMsg(krEnterRoomName(c)+' 进入房间')); } /* 两边都能真实联动，KR 室长从建房起就在房里（不再有「模拟 KR 进入房间」按钮） */
     (c.pendingQuotes||[]).forEach(function(q){ CHAT_DATA[roomId].push(q); }); c.pendingQuotes = []; /* 还没到建房条件时记下的引用，房间建立后带进房间 */
   }
   return roomId;
@@ -4844,23 +4850,6 @@ function refBarHtml(caseId){
 var ROOM_FILE_SEQ = 1;
 
 function krEnterRoomName(c){ return (c.krCoordinator||krCoordinatorsOf(c)[0]||'').split(' ')[0]; }
-
-/* 演示：KR室长进入/离开案件对话房（进入前 🎥 灰色不可用，进入后可用） */
-function simulateKrEnterRoom(){
-  var c = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0];
-  if(!c || !caseHasKrSide(c) || c.krInRoom) return;
-  c.krInRoom = true;
-  CHAT_DATA[getCaseRoomId(c.id)].push(roomSysMsg(krEnterRoomName(c)+' 进入房间'));
-  renderFloatMessages(); renderFloatToolbar(); renderChatCaseChip();
-}
-
-function simulateKrLeaveRoom(){
-  var c = CASE_ITEMS.filter(function(x){ return x.id===ATTACHED_CASE_ID; })[0];
-  if(!c || !c.krInRoom) return;
-  c.krInRoom = false;
-  CHAT_DATA[getCaseRoomId(c.id)].push(roomSysMsg(krEnterRoomName(c)+' 离开房间'));
-  renderFloatMessages(); renderFloatToolbar(); renderChatCaseChip();
-}
 
 function roomById(id){
   if(id && id.indexOf('case-')===0){

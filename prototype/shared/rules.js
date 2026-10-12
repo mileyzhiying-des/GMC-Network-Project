@@ -221,6 +221,15 @@ function todayStr(){ return dateStr(demoNow()); } /* 页面时区的"今天" */
 function utcStrParse(s){ if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s||'')) return null; var d = new Date(String(s).slice(0,16).replace(' ','T')+':00Z'); return isNaN(d.getTime()) ? null : d; }
 function fmtUtc(s, tz){ var d = utcStrParse(s); if(!d) return s||''; var p = tzParts(d, tz || pageTz()); return p.y+'-'+pad2(p.mo)+'-'+pad2(p.d)+' '+pad2(p.h)+':'+pad2(p.mi); }
 function fmtUtcTime(s, tz){ var f = fmtUtc(s, tz); return f.length>=16 ? f.slice(11,16) : f; }
+/* 时间标记（CMD-1008-14）：写进通知 / Timeline 的时间不再写死成某个时区的文字，而是写标记，显示时按"看的人"的时区换算：
+   ⟦u:UTC 时间点⟧ → 页面时区（IN 看印尼时间、KR 看韩国时间）；⟦k:日期|钟点⟧ → 韩国当地钟点（IN 显示诊所时间 +（韩国 X），KR 显示韩国时间）。
+   新写含时间的通知 / Timeline 文字：用 tkU / tkK 生成标记，不要直接拼 fmtUtc(...) 或韩国钟点。 */
+function tkU(s){ return s ? '⟦u:'+s+'⟧' : '—'; }
+function tkK(date, hm){ return '⟦k:'+date+'|'+(hm||'')+'⟧'; }
+function tzRender(t){
+  return String(t==null ? '' : t).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ return fmtUtc(u) || '—'; })
+    .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; });
+}
 /* 当地钟点（日期 + HH:mm，某时区的墙上时间）→ UTC 字符串（KR 室长输入的预计出报告时间等） */
 function localToUtc(date, hm, tz){
   var a = String(date).split('-'), t = String(hm).split(':'), guess = Date.UTC(+a[0], +a[1]-1, +a[2], +t[0], +t[1]);
@@ -467,7 +476,7 @@ function isOffOn(name, date){ var k = offNameKey(name); return CAL_MEMOS.some(fu
 function pushTargets(c){
   var today = todayStr(), ops = caseOperators(c);
   var pick = function(opsList, all){
-    var work = opsList.filter(function(n){ return !isOffOn(n, today); });
+    var work = opsList.filter(function(n){ return all.indexOf(n)>-1 && !isOffOn(n, today); }); /* 已换掉的旧使用人不再收推播 */
     return work.length ? work : all.filter(function(n){ return !isOffOn(n, today); });
   };
   return {inn: pick(ops.inn, IN_COORDINATORS), kr: (ops.kr.length || caseHasKrSide(c)) ? pick(ops.kr, krCoordinatorsOf(c)) : []};

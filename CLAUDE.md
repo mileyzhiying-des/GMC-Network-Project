@@ -326,3 +326,10 @@ prototype/shared/app.css  共用样式
 - 其他 IN 显示（案件页状态栏、客户详情案件 / 案件记录、关联案件、引用 chip、对话抽屉、@ 案件选单、接续提示）统一写「阶段 · 进程」。
 - 面诊进程：待缴费 → 待 KR 确认时间 → 等面诊（`consultAt` 之前）→ 面诊中（到了 `consultAt`，`consultAtPassed`）→ 等待报告（院长按［上传内容］，`krRecUpload` 写 `c.consultContentAt`）→ 项目确认中。没有 `consultAt` 的旧数据直接显示等待报告。
 - 新写 IN 端显示案件状态：用 `caseStageBadge` / `caseStageProcText`，不要再直接用 `caseStatusBadge`。
+
+## CMD-1008-14 补充（2026-10-12，追加；旧文字保留作历史）
+- **通知 / Timeline 里的时间用标记**（`rules.js`）：`tkU(UTC 时间点)` / `tkK(韩国日期, 韩国钟点)` 生成 `⟦u:…⟧` / `⟦k:…|…⟧`，显示时 `tzRender()` 按看的人的时区换算（`logLine`、IN 通知下拉 / 通知中心 / 详情 / toast、KR 通知行、KR Timeline）。**新写含时间的通知 / Timeline 文字不要直接拼 `fmtUtc(...)` 或韩国钟点**。
+- 操作人：`caseOperators` 按日志的 `actor` + `actorId` 认 IN 室长，账号换使用人后旧使用人的操作保留（返回 `innIds`）；推播只发给现在的室长。
+- 预约页：手机号验证成功且是老客人 → 先出「是本人吗？」（`BK.mismatch`），是本人才跳过个人资料。
+- 缴面诊费 / 免除面诊费自动建案件对话房（`ensureCaseRoom`，不通知；有 KR 一侧时 `c.krInRoom = true`）；对话房里的「演示：模拟 KR…」按钮和 `simulateKrEnterRoom` / `simulateKrLeaveRoom` 已删除。
+- 超时通知只发一条：`simulateReportTimeout` 与 `boot-in.js` 自动检查共用 `c.overdueNotified`。

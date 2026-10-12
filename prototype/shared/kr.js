@@ -673,7 +673,7 @@ function krTabRelated(c){
   return krCardBox('之前关联', before||krEmpty())+krCardBox('后续关联', after||krEmpty());
 }
 function krTabLog(c){
-  var rows = (c.logEntries||[]).map(function(e){ return '<div class="case-field-row" style="font-size:12px;align-items:flex-start;"><span style="min-width:120px;color:var(--muted);">'+krEsc(fmtUtc(e.dt||''))+'</span><span style="min-width:70px;color:var(--slate2);">'+krEsc(e.stage||'')+'</span><span style="min-width:90px;font-weight:600;">'+krEsc(e.actor||'')+'</span><span style="flex:1;">'+krEsc(e.action||'')+'</span></div>'; }).join('');
+  var rows = (c.logEntries||[]).map(function(e){ return '<div class="case-field-row" style="font-size:12px;align-items:flex-start;"><span style="min-width:120px;color:var(--muted);">'+krEsc(fmtUtc(e.dt||''))+'</span><span style="min-width:70px;color:var(--slate2);">'+krEsc(e.stage||'')+'</span><span style="min-width:90px;font-weight:600;">'+krEsc(e.actor||'')+'</span><span style="flex:1;">'+krEsc(tzRender(e.action||''))+'</span></div>'; }).join('');
   return krCardBox('Timeline', rows || krEmpty());
 }
 var KR_TAB_FN = {basic:krTabBasic, consult:krTabConsult, items:krTabItems, proc:krTabProc, files:krTabFiles, related:krTabRelated, log:krTabLog};
@@ -717,7 +717,7 @@ function krReadAllNotifs(){ var me = currentAccount(); krNotifsForMe().forEach(f
 var KR_NOTIF_FILTER = 'all';
 function krNotifRowHtml(n){
   var me = currentAccount(), unread = (n.readBy||[]).indexOf(me.id) < 0, cl = clinicById(n.clinicId);
-  return '<div class="trow" onclick="krOpenNotif(\'' + n.id + '\')" style="grid-template-columns:18px 1fr 130px;cursor:pointer;'+(unread?'font-weight:700;':'color:var(--slate2);')+'"><span style="color:var(--terracotta);">'+(unread?'●':'')+'</span><span>'+krEsc(n.text)+(cl?' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(cl.name)+'</span>':'')+'</span><span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(fmtUtc(n.ts))+'</span></div>';
+  return '<div class="trow" onclick="krOpenNotif(\'' + n.id + '\')" style="grid-template-columns:18px 1fr 130px;cursor:pointer;'+(unread?'font-weight:700;':'color:var(--slate2);')+'"><span style="color:var(--terracotta);">'+(unread?'●':'')+'</span><span>'+krEsc(tzRender(n.text))+(cl?' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(cl.name)+'</span>':'')+'</span><span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(fmtUtc(n.ts))+'</span></div>';
 }
 function krRenderNotifs(){
   var el = document.getElementById('krnotifs-body'); if(!el) return;
@@ -773,7 +773,7 @@ function krUpdateBadges(){
   }catch(e){}
 }
 var KR_LAST_UNREAD = null;
-(function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open) krRenderChat(); var u = krNotifUnread(); if(KR_LAST_UNREAD!==null && u.length > KR_LAST_UNREAD){ var n = u[0]; showToast('🔔 通知', krEsc(n.text), function(){ krOpenNotif(n.id); }); } KR_LAST_UNREAD = u.length; }; })();
+(function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open) krRenderChat(); var u = krNotifUnread(); if(KR_LAST_UNREAD!==null && u.length > KR_LAST_UNREAD){ var n = u[0]; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }); } KR_LAST_UNREAD = u.length; }; })();
 
 function krOpenDrawer(){ KR_CHAT.open = true; KR_CHAT.room = null; krRenderChat(); }
 function krOpenRoomFor(clinicId, caseId){ KR_CHAT.open = true; KR_CHAT.room = clinicId+'|case-'+caseId; krRenderChat(); }

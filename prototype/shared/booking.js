@@ -53,7 +53,7 @@ function bkRender(keepScroll){
 /* 老客人（手机验证后认出）：跳过"个人资料"和"健康资料"（有变化由室长到店时修改）；已签过当前版本的同意书 → 也跳过"同意"；同意书版本更新过的（或新客人）才要勾选 */
 function bkLastConsent(){ var cl = BK.client; return cl ? (cl.consents||[]).slice(-1)[0] || null : null; }
 function bkNeedConsent(){ var last = bkLastConsent(); return !last || last.version !== CLINIC_SETTINGS.privacyVersion; }
-function bkSkipStep(s){ return (s==='time' && BK.entry==='walkin') || (s==='phone' && BK.verified) || ((s==='profile' || s==='health') && !!BK.client) || (s==='consent' && !bkNeedConsent()); }
+function bkSkipStep(s){ return (s==='time' && BK.entry==='walkin') || (s==='phone' && BK.verified) || (s==='profile' && !!BK.client && !BK.mismatch) || (s==='health' && !!BK.client) || (s==='consent' && !bkNeedConsent()); }
 function bkStepList(){ return BK_STEPS.filter(function(s){ return !bkSkipStep(s); }); }
 function bkFrame(titleKey, bodyHtml){
   /* 步骤条：已经验证过手机的仍然算一步（走过了）；被跳过的步骤（老客人的个人资料/病史、不需要的同意）不出现；取消后重新预约时手机早已验证，不算 */
@@ -149,7 +149,10 @@ function bkVerify(){
   if(Date.now() > o.exp){ BK.err = bt('code.expired'); BK.otp = null; return bkRender(); }
   if(code !== o.code){ BK.err = bt('code.bad'); return bkRender(); }
   BK.verified = true; BK.otp = null; BK.err = '';
-  bkLoadClient(); bkNextStep();
+  bkLoadClient();
+  /* CMD-1008-14（B-015）：手机号已登记 → 先问「这个手机号已登记为 X，是本人吗？」（手机号是客人自己输入的，不是从确认短信链接带来的）；是本人才带出资料并跳过个人资料 */
+  if(BK.client && !BK.mismatchOk){ BK.mismatch = true; return bkGo(BK_STEPS.indexOf('profile')); }
+  bkNextStep();
 }
 /* 手机号找老客人：有 → 第 3、5 步自动带出资料；没有 → 新客人 */
 function bkLoadClient(){

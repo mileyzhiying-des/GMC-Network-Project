@@ -1034,7 +1034,7 @@ function renderCaseRows(){
       '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
       '<span style="font-size:12px;">'+si.proc+lmTag+'</span>'+
       '<span>'+financeCellHtml(c)+'</span>'+
-      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(staffLabel).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
+      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
   }).join('');
 }
 
@@ -1437,7 +1437,7 @@ function resumeVisit(targetId){
   if(!confirm('接续到原案件 '+t.caseNo+'？本次新案件 '+c.caseNo+' 将作废（不留记录）。')) return;
   RESUMED_VISITS.push({name:c.name, date:c.visitDate, time:c.visitTime, purpose:c.visitPurpose, caseId:t.id, origCaseNo:t.caseNo, voidedCaseNo:c.caseNo}); /* 日历上这条预约来访改挂到原案件，显示已到访 */
   CASE_ITEMS.splice(CASE_ITEMS.indexOf(c), 1);
-  logCaseEvent(t, ME_NAME, '接续到访「'+ME_NAME+'」 '+nowFullDt());
+  logCaseEvent(t, ME_NAME, '接续到访「'+ME_NAME+'」 '+tkU(nowFullDt()));
   CASE_RETURN.length = 0;
   if(typeof buildCaseTabs==='function'){ buildCaseTabs(); renderCaseRows(); }
   openCaseDetail(t.id, true);
@@ -2607,7 +2607,7 @@ function pushNotif(cat, text, opts){
   NOTIFS.unshift(n);
   updateBell();
   if(CURRENT_PAGE_ID==='in-notifications') renderNotifPage();
-  if(!opts.silent && notifMine(n) && notifyPushOn()) showToast(NOTIF_ICON[cat]+' '+cat, text, function(){ openNotif(n.id, 'toast'); });
+  if(!opts.silent && notifMine(n) && notifyPushOn()) showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); });
   return n;
 }
 
@@ -2624,7 +2624,7 @@ function toggleBellDropdown(ev){
   d.onclick = function(e){ e.stopPropagation(); };
   d.innerHTML = '<div style="padding:10px 14px;font-size:12px;font-weight:700;border-bottom:1px solid var(--border2);">最近通知</div>'+
     (list.length ? list.map(function(n){
-      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'bell\')"><span>'+NOTIF_ICON[n.cat]+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(n.read[ME_NAME]?'500':'700')+';">'+n.text+'</div><div style="font-size:10px;color:var(--muted);">'+fmtUtc(n.ts)+'</div></div>'+(n.read[ME_NAME]?'':'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>')+'</div>';
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'bell\')"><span>'+NOTIF_ICON[n.cat]+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(n.read[ME_NAME]?'500':'700')+';">'+tzRender(n.text)+'</div><div style="font-size:10px;color:var(--muted);">'+fmtUtc(n.ts)+'</div></div>'+(n.read[ME_NAME]?'':'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>')+'</div>';
     }).join('') : '<div style="padding:14px;font-size:12px;color:var(--muted);">没有通知</div>')+
     '<div style="padding:10px 14px;text-align:center;"><a href="#" class="info-link" onclick="closeBellDropdown();nav(\'in-notifications\');return false;">查看全部</a></div>';
   document.body.appendChild(d);
@@ -2651,7 +2651,7 @@ function openNotif(id, src){
 }
 
 function openNotifDetail(n){
-  var d = n.detail || {title:'诊所设定更新', changes:[n.text], effective:''};
+  var d = n.detail || {title:'诊所设定更新', changes:[tzRender(n.text)], effective:''};
   document.getElementById('notif-detail-title').textContent = d.title;
   document.getElementById('notif-detail-body').innerHTML = '<div style="margin-bottom:6px;"><b>改了什么</b></div>'+d.changes.map(function(x){ return '<div>• '+x+'</div>'; }).join('')+(d.effective ? '<div style="margin-top:10px;"><b>何时生效</b>　'+d.effective+'</div>' : '')+'<div style="margin-top:10px;font-size:11px;color:var(--muted);">发布于 '+n.ts+'；诊所所有 IN 室长都会收到，当时没上线的下次登录时弹出。</div>';
   document.getElementById('notif-detail-overlay').classList.add('open');
@@ -2666,7 +2666,7 @@ function renderNotifPage(){
   l.innerHTML = list.map(function(n){
     var c = n.caseId ? CASE_ITEMS.filter(function(x){ return x.id===n.caseId; })[0] : null, un = !n.read[ME_NAME];
     return '<div class="nrow" style="cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'page\')"><span class="ndot" style="background:'+(un?'var(--terracotta)':'transparent')+';"></span><span style="font-size:18px;margin-right:4px;">'+NOTIF_ICON[n.cat]+'</span>'+
-      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(un?'700':'500')+';">'+n.text+'</div><div style="font-size:11px;color:var(--muted);">'+n.cat+(c&&c.caseNo ? ' · '+c.caseNo : '')+' · '+fmtUtc(n.ts)+' · 收件：'+n.recipients.join('、')+'</div></div>'+
+      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(un?'700':'500')+';">'+tzRender(n.text)+'</div><div style="font-size:11px;color:var(--muted);">'+n.cat+(c&&c.caseNo ? ' · '+c.caseNo : '')+' · '+fmtUtc(n.ts)+' · 收件：'+n.recipients.join('、')+'</div></div>'+
       '<span class="status-pill" style="background:'+(un?'var(--terracotta-bg)':'var(--border2)')+';color:'+(un?'var(--terracotta)':'var(--muted)')+';">'+(un?'未读':'已读')+'</span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:16px 2px;">没有通知</div>';
 }
@@ -2954,14 +2954,7 @@ function renderChatCaseChip(){
   if(!c){ el.style.display='none'; return; }
   el.style.display='flex';
   var isRoom = CURRENT_ROOM.indexOf('case-')===0 && CURRENT_ROOM===getCaseRoomId(c.id);
-  var demo = '';
-  if(isRoom && caseHasKrSide(c)){
-    demo = c.krInRoom
-      ? '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateKrLeaveRoom()">演示：模拟KR室长离开房间</button>'
-      : '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateKrEnterRoom()">演示：模拟KR室长进入房间</button>';
-    if(c.krInRoom) demo += '<button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateIncomingCall()">演示：模拟KR室长来电</button><button class="btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="simulateMissedCall()">演示：模拟未接来电</button>';
-  }
-  el.innerHTML = '<span style="font-size:11px;">📎</span><span style="font-size:11px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>'+demo;
+  el.innerHTML = '<span style="font-size:11px;">📎</span><span style="font-size:11px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>';
 }
 
 function closeFloat(){ document.getElementById('chat-float-overlay').classList.remove('open'); }
