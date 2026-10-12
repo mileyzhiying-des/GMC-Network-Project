@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 34; /* 34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 35; /* 35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -5263,6 +5263,24 @@ function seedFixVisits(){
   CASE_ITEMS.forEach(function(c){ if(c.visitDate){ var g = 0; while(bad(c.visitDate, c.visitTime) && g++ < 7) c.visitDate = next(c.visitDate); c.visitTime = fixTime(c.visitTime); } });
   (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var g = 0; while(bad(p.date, p.time) && g++ < 7) p.date = next(p.date); p.time = fixTime(p.time); });
   (RESUMED_VISITS||[]).forEach(function(r){ var g = 0; while(bad(r.date, r.time) && g++ < 7) r.date = next(r.date); r.time = fixTime(r.time); });
+  /* 待访问的演示预约一律排在「现在」之后（重置演示数据时自动产生）：已经过了、或快到「未到店判定」时间的，按今天往后排到下一个可预约时段（每个间隔 1 小时、跳过午休 / 休诊 / 非营业时段），
+     避免一打开页面就被自动判定成未到店（CMD-1012-01 之后未到店是真实自动判定的） */
+  var now0 = demoNow(), limit = now0.getTime() + noShowMs() + 10*60000, cursor = new Date(now0.getTime() + noShowMs() + 30*60000);
+  var s1 = CLINIC_SETTINGS, step = 30, nextSlot = function(){
+    for(var guard = 0; guard < 400; guard++){
+      var ds = dateStr(cursor), tm = pad2(cursor.getHours())+':'+pad2(cursor.getMinutes()), m = timeToMin(tm);
+      var ok = m >= timeToMin(s1.bookFrom) && m <= timeToMin(s1.bookTo) && !(m >= timeToMin(s1.lunchFrom) && m < timeToMin(s1.lunchTo)) && !bad(ds, tm);
+      if(ok){ var out = {date:ds, time:tm}; cursor = new Date(cursor.getTime() + 60*60000); return out; }
+      cursor = new Date(cursor.getTime() + step*60000);
+    }
+    return null;
+  };
+  CASE_ITEMS.forEach(function(c){
+    if(c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime) return;
+    var when = new Date(c.visitDate+'T'+c.visitTime+':00').getTime();
+    if(isNaN(when) || when >= limit) return;
+    var sl = nextSlot(); if(sl){ c.visitDate = sl.date; c.visitTime = sl.time; }
+  });
 }
 function normalizeSeeds(){
   /* 分类：赴韩的标准部位归全局，本地的留在诊所里（C1 种子） */
