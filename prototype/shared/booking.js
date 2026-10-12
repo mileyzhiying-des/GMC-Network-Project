@@ -429,7 +429,7 @@ function bkRenderMe(){
   /* 二、持有项目 */
   var hv = clientHoldingsView(cl), hl = function(list){ return list.length ? list.map(function(x){ return '<div class="bk-row"><span>'+bkH(x.name)+'</span><span>'+bt('me.left', {n:x.remaining})+'</span></div>'; }).join('') : '<div class="bk-sub">'+bt('me.none')+'</div>'; };
   var holdHtml = '<div style="font-size:12px;font-weight:700;margin:4px 0;">'+bt('me.holdIN')+'</div>'+hl(hv.IN)+'<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">'+bt('me.holdKR')+'</div>'+hl(hv.KR);
-  /* 三、过去的记录（只列有到店的案件；报告只写"已出报告"） */
+  /* 三、过去的记录（只列有到店的案件；报告只写"已出诊疗方案"） */
   var past = clientPastRecords(cl);
   var pastHtml = past.length ? past.map(function(r){
     return '<div class="bk-info" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;gap:8px;"><b>'+bkH(r.date)+'</b><span>'+bkH(r.caseNo)+'</span></div>'+

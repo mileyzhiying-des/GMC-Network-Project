@@ -207,10 +207,10 @@ function krToClinic(date, hm){
 /* 施术时间的文字：KR 页面显示韩国时间；IN 页面显示诊所时间并在括号里写韩国时间（forceIn = 通知等只给 IN 看的文字） */
 function ksTimeText(ks, forceIn){
   if(!ks || !ks.confirmedDate) return '';
-  if(!forceIn && typeof isKrAccount==='function' && isKrAccount()) return ks.confirmedDate+' '+(ks.confirmedTime||'');
+  if(!forceIn && typeof isKrAccount==='function' && isKrAccount()) return ks.confirmedDate+' '+(ks.confirmedTime||'')+(ks.confirmedTime ? '（韩国）' : '');
   if(!ks.confirmedTime) return ks.confirmedDate;
   var r = krToClinic(ks.confirmedDate, ks.confirmedTime);
-  return r.date+' '+r.time+'（韩国 '+ks.confirmedTime+'）';
+  return r.date+' '+r.time+'（印尼）（韩国 '+ks.confirmedTime+'）';
 }
 function krTimeOf(hr){ /* 诊所时间 hr('HH:mm') → KR 时间 */
   var diff = (tzOffsetMin(KR_TZ) - tzOffsetMin(CLINIC_TZ))/60;
@@ -569,7 +569,7 @@ function clientHoldingsView(cl){
   (CLIENT_HOLDINGS[cl.name]||[]).forEach(function(h){ var rem = holdingRemaining(h); if(rem<=0) return; (h.origin==='KR' || /^韩国/.test(h.category||'') ? out.KR : out.IN).push({name:h.itemName, remaining:rem}); });
   return out;
 }
-/* 过去的记录：只列有到店的案件（不列预约取消、未到店）；日期（赴韩为施术日期）/ Case ID / 做了什么 / 医院 + 院长（赴韩才有）/ 实付金额（按付款币种，有退款标示）；面诊报告只标"已出报告"，不显示内容 */
+/* 过去的记录：只列有到店的案件（不列预约取消、未到店）；日期（赴韩为施术日期）/ Case ID / 做了什么 / 医院 + 院长（赴韩才有）/ 实付金额（按付款币种，有退款标示）；面诊诊疗方案只标"已出诊疗方案"，不显示内容 */
 function clientPastRecords(cl){
   return CASE_ITEMS.filter(function(c){ return c.name===cl.name && visitStateOf(c)==='已到访'; }).map(function(c){
     var kr = krAllItems(c).filter(function(it){ return !it.cancelled && !it.swapped; }), travel = kr.length > 0;
@@ -938,22 +938,22 @@ var CASE_ITEMS = [
       {stage:'面诊安排', actor:'KM1 室长', action:'KR确认预计出报告时间：'+D(2)+' 11:00', dt:D(0)+' 09:30'}
     ]}),
 
-  /* 已出报告：报告已出，正在待客人/室长选管理项目 */
+  /* 已出诊疗方案：诊疗方案已到，正在待客人/室长选管理项目 */
   makeCase({id:'ayu', reportDate:D(-8), name:'客人2', subState:'arrived', materialsConfirmed:true, caseNo:'A000006', updated:'昨天',
     concern:'皮肤暗沉、细纹', expectation:'希望肤质透亮', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'面部凹陷、细纹较明显，建议先做自体脂肪移植改善轮廓，再评估面部拉皮。',
-    consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
+    consultFiles:[{label:'面诊诊疗方案'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, krScope:{items:[{name:'自体脂肪移植（全脸）', price:4500000, note:'', stay:'10天', anesthesia:{type:'sleep', label:'睡眠麻醉', note:''}, postcare:[{name:'术后消肿管理', price:150000, times:5, place:'either', day:'第3天', innName:'术后消肿护理 1次', innPrice:450000, inTimes:0}]},{name:'面部拉皮', price:12000000, note:'', stay:'14天', anesthesia:{type:'general', label:'全身麻醉', note:'全麻需空腹 8 小时'}, postcare:[{name:'术后复诊检查', price:80000, times:2, place:'KR', day:'第2天', innName:'', innPrice:0, inTimes:0}]}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(1)+' 11:20'},
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-7)+' 09:00'},
-      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 11:20'}
+      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊诊疗方案，已出诊疗方案', dt:D(1)+' 11:20'}
     ]}),
 
   /* 待付款：已确认所选管理项目、生成结算单，等待付款 */
   makeCase({id:'fajar', reportDate:D(-1), name:'客人8', subState:'arrived', materialsConfirmed:true, caseNo:'A000007', updated:'2 小时前',
     concern:'鼻基底低平', expectation:'希望鼻型更立体', needsConsult:true, activeCaseTab:'projects', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议先做假体隆鼻改善鼻基底，再评估鼻翼缩小。',
-    consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
+    consultFiles:[{label:'面诊诊疗方案'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true,
     krScope:{items:[{name:'假体隆鼻', price:2500000, note:'', stay:'7天', anesthesia:{type:'sleep', label:'睡眠麻醉', note:'需空腹 6 小时'}, postcare:[{name:'术后消肿管理', price:150000, times:5, place:'either', day:'第3天', innName:'术后消肿护理 1次', innPrice:450000, inTimes:0},{name:'拆线', price:50000, times:1, place:'KR', day:'第7天', innName:'', innPrice:0, inTimes:0}]},{name:'鼻翼缩小', price:1500000, note:'', stay:'5天', anesthesia:{type:'local', label:'局部麻醉', note:''}, postcare:[{name:'拆线', price:50000, times:1, place:'KR', day:'第7天', innName:'', innPrice:0, inTimes:0}]}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(2)+' 14:20'},
     procedureItems:[
@@ -964,7 +964,7 @@ var CASE_ITEMS = [
       krTotal:4000000, krDeposit:1200000, krBalance:2800000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-8)+' 09:00'},
-      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊报告，已出报告', dt:D(2)+' 14:20'},
+      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊诊疗方案，已出诊疗方案', dt:D(2)+' 14:20'},
       {stage:'面诊安排', actor:'A1 室长', action:'确认所选管理项目：假体隆鼻、鼻翼缩小', dt:D(3)+' 10:00'}
     ]}),
 
@@ -972,7 +972,7 @@ var CASE_ITEMS = [
   makeCase({id:'nadia', reportDate:D(-4), name:'客人9', subState:'arrived', materialsConfirmed:true, caseNo:'A000008', updated:'今天',
     concern:'轮廓松弛、法令纹', expectation:'希望紧致提升', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议颧骨缩小+下巴假体联合方案改善轮廓。',
-    consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
+    consultFiles:[{label:'面诊诊疗方案'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true,
     krSchedule:{status:'confirmed', confirmedDate:D(0), confirmedTime:'11:00', primary:D(0), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
@@ -983,7 +983,7 @@ var CASE_ITEMS = [
       krTotal:12000000, krDeposit:3600000, krBalance:8400000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-13)+' 09:00'},
-      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊报告，已出报告', dt:D(1)+' 10:00'},
+      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊诊疗方案，已出诊疗方案', dt:D(1)+' 10:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩3,600,000），项目清单已锁定', dt:D(2)+' 11:00'},
       {stage:'赴韩施术', actor:'KD1 院长', action:'已完成"下巴假体 / 颏成形"施术，"颧骨缩小"待安排', dt:D(4)+' 16:00'}
     ]}),
@@ -992,7 +992,7 @@ var CASE_ITEMS = [
   makeCase({id:'dinda', name:'客人10', subState:'arrived', materialsConfirmed:true, caseNo:'A000013', updated:'刚刚',
     concern:'轮廓松弛', expectation:'希望紧致提升', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议面部拉皮+自体脂肪移植联合方案。',
-    consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
+    consultFiles:[{label:'面诊诊疗方案'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true,
     krSchedule:{status:'pending', primary:D(17), backup:D(18), confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
@@ -1003,7 +1003,7 @@ var CASE_ITEMS = [
       krTotal:16500000, krDeposit:4950000, krBalance:11550000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-10)+' 09:00'},
-      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊报告，已出报告', dt:D(3)+' 10:00'},
+      {stage:'面诊安排', actor:'KD1 院长', action:'KR室长提交面诊诊疗方案，已出诊疗方案', dt:D(3)+' 10:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩4,950,000），项目清单已锁定', dt:D(5)+' 10:00'}
     ]}),
 
@@ -1028,7 +1028,7 @@ var CASE_ITEMS = [
   makeCase({id:'rina', director:'H1 院长3', reportDate:D(-37), name:'客人12', subState:'arrived', materialsConfirmed:true, caseNo:'A000010', updated:'1 周前',
     concern:'整体抗老', expectation:'希望延缓衰老迹象', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议自体脂肪移植打底，配合本地焕肤护理维持效果。',
-    consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
+    consultFiles:[{label:'面诊诊疗方案'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true, visitClosed:true, krProcedureDone:true,
     krSchedule:{status:'confirmed', confirmedDate:D(-24), confirmedTime:'11:00', primary:D(-24), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:[
@@ -1055,7 +1055,7 @@ var CASE_ITEMS = [
   makeCase({id:'wulan', name:'客人21', subState:'arrived', materialsConfirmed:true, caseNo:'A000011', updated:'5 天前',
     concern:'轮廓不对称', expectation:'希望改善轮廓线条', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议下颌角整形+颧骨缩小联合方案改善轮廓。',
-    consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
+    consultFiles:[{label:'面诊诊疗方案'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     krScope:{items:[{name:'下颌角整形', price:9000000, note:''},{name:'颧骨缩小', price:8000000, note:'不可与下颌角同时做'}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(-10)+' 09:00'},
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true, visitClosed:true,
     krProcedureDone:true,
@@ -1084,11 +1084,11 @@ var CASE_ITEMS = [
       {stage:'预约到店', actor:'A1 室长', action:'取消预约，原因：联系不上客人', dt:D(1)+' 18:00'}
     ]}),
 
-  /* 仅出报告（2026-09-30）：分支6——赴韩项目全部取消并退款、没做本地项目，客人只拿到了面诊报告；财务结果=全额退款 */
+  /* 仅出报告（2026-09-30）：分支6——赴韩项目全部取消并退款、没做本地项目，客人只拿到了面诊诊疗方案；财务结果=全额退款 */
   makeCase({id:'lina', reportDate:D(-13), name:'客人22', materialsConfirmed:true, caseNo:'A000012', updated:'6 天前',
     concern:'眼部松弛', expectation:'希望眼周更年轻', needsConsult:true, activeCaseTab:'basic', consultRequested:true, consultStatus:'report_ready', reportReady:true,
     videoSummary:'建议提眉联合上睑整形。',
-    consultFiles:[{label:'面诊报告'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
+    consultFiles:[{label:'面诊诊疗方案'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
     projectsEnabled:true, projectsLocked:true, settlementDone:true, visitClosed:true,
     refunds:[{amount:300000, currency:'KRW', reason:'客人因个人原因取消赴韩行程', date:D(-6), items:['提眉手术'], batchIds:['B1']}],
     procedureItems:[{name:'提眉手术', origin:'KR', done:false, cancelled:true, batchId:'B1'}],
@@ -1347,7 +1347,7 @@ function caseSubStatusItems(c){
     else if(inFlow && c.consultStatus==='paid_waiting_kr') items.push({kind:'Waiting', text:'待确认报告时间'});
     else if(inFlow && c.consultStatus==='awaiting_report') items = items.concat(reportWaitSubItems(c)); /* 预计出报告时间+倒计时 / 已超过预计时间 */
     else if(c.projectsEnabled || c.reportReady){
-      if(c.reportReady) items.push({kind:'Success', text: c.reuseReport ? '沿用原报告（'+c.reuseReport.caseNo+'）' : '报告已出'});
+      if(c.reportReady) items.push({kind:'Success', text: c.reuseReport ? '沿用原诊疗方案（'+c.reuseReport.caseNo+'）' : '诊疗方案已到'});
       if(c.projectsLocked && !c.settlementDone) items.push({kind:'Waiting', text:'待付款'});
     }
   } else if(c.stage==='travel'){
@@ -1435,9 +1435,9 @@ function logCaseEvent(c, actor, action){
 
 var KR_COORDINATORS = ['KM1 室长', 'KC1 室长'];
 
-/* 室长商谈（2026-10-01）：入口①案件对话房里发起（工具栏🧑‍⚕️）；入口②报告卡片[邀请室长商谈]快捷入口——点击后进入案件对话房再选室长发起视频（同一个功能） */
+/* 室长商谈（2026-10-01）：入口①案件对话房里发起（工具栏🧑‍⚕️）；入口②诊疗方案卡片[邀请室长商谈]快捷入口——点击后进入案件对话房再选室长发起视频（同一个功能） */
 function consultTalkShortcut(){
-  /* 2026-10-02：报告卡［邀请室长商谈］→ 直接打开视频画面（不经过对话房），只能选上传报告的KR室长 */
+  /* 2026-10-02：诊疗方案卡［邀请室长商谈］→ 直接打开视频画面（不经过对话房），只能选上传诊疗方案的KR室长 */
   var c = getCurrentCase(); if(!c) return;
   openInviteKrModal();
 }
@@ -1512,7 +1512,7 @@ function simulateMissedCall(){
 function inviteKrVideo(name){
   /* 邀请室长视频是临时加开的一次沟通，不改变 consultStatus，但结束后要给该案件附上一份AI转写稿文件 */
   closeInviteKrModal();
-  startCall('talk', CURRENT_CASE_ID, [ME_NAME+'（印尼室长）', name+' 실장（韩国室长）']); /* 室长商谈：直接呼叫上传报告的KR室长 */
+  startCall('talk', CURRENT_CASE_ID, [ME_NAME+'（印尼室长）', name+' 실장（韩国室长）']); /* 室长商谈：直接呼叫上传诊疗方案的KR室长 */
 }
 
 function endVideoConsult(){
@@ -1563,10 +1563,10 @@ function endVideoConsult(){
 }
 
 /* 延续既往面诊的"有无变动"（2026-10-02 面诊改版）：走面诊时进入等待报告后，演示按钮"模拟院长判断：无变动 / 有变动"：
-   无变动 → 沿用原报告（面诊资料tab显示原报告，标注"沿用自 A000xxx"，项目列表按原方案预填）→ 项目确认中；
-   有变动 → 仍在等待报告，由"模拟KR室长提交报告"出新报告 → 项目确认中。没有视频/书面分支 */
+   无变动 → 沿用原诊疗方案（面诊资料tab显示原诊疗方案，标注"沿用自 A000xxx"，项目列表按原方案预填）→ 项目确认中；
+   有变动 → 仍在等待报告，由"模拟KR室长发送诊疗方案"出新诊疗方案 → 项目确认中。没有视频/书面分支 */
 /* 延续既往面诊判断有无变动（KR 室长按院长的判断操作，或院长自己，KR-CASE-01）：
-   无变动 → 沿用原报告（面诊资料沿用自 A000xxx，项目列表按原方案预填）→ 项目确认中；有变动 → 仍在等待报告，走录入/提交流程出新报告 */
+   无变动 → 沿用原诊疗方案（面诊资料沿用自 A000xxx，项目列表按原方案预填）→ 项目确认中；有变动 → 仍在等待报告，走录入/提交流程出新诊疗方案 */
 function coreJudgeContinuation(c, changed, by){
   if(!c || c.consultStatus!=='awaiting_report' || !isContinuationConsult(c)) return false;
   c.contJudged = true;
@@ -1575,10 +1575,10 @@ function coreJudgeContinuation(c, changed, by){
     logCaseEvent(c, by, '院长判断：无变动（由KR端确认）');
     applyReuseReport(c);
     updateCaseStage(c);
-    pushNotif('面诊','延续既往面诊判断无变动，沿用原报告：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
+    pushNotif('面诊','延续既往面诊判断无变动，沿用原诊疗方案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   } else {
-    logCaseEvent(c, by, '院长判断：有变动（由KR室长提交新报告）');
-    pushNotif('面诊','延续既往面诊判断有变动，KR 将提交新报告：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
+    logCaseEvent(c, by, '院长判断：有变动（由KR室长提交新诊疗方案）');
+    pushNotif('面诊','延续既往面诊判断有变动，KR 将提交新诊疗方案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   }
   return true;
 }
@@ -1606,16 +1606,16 @@ function coreSubmitReport(c, rep, by){
   c.videoSummary = rep.zh;
   c.consultFiles = c.consultFiles || [];
   (rep.files||[]).slice().reverse().forEach(function(f){ c.consultFiles.unshift({label:f, date:attDate()}); });
-  c.consultFiles.unshift({label:'面诊报告（院长口述 + 室长整理）', date:attDate()});
+  c.consultFiles.unshift({label:'面诊诊疗方案（院长口述 + 室长整理）', date:attDate()});
   c.krScope = {items:rep.items, overallNote:rep.overallNote||'', updatedAt:nowFullDt()};
   c.projectsEnabled = true;
   c.projectOriginFilter = 'KR';
-  logCaseEvent(c, by, 'KR室长提交面诊报告，已出报告');
+  logCaseEvent(c, by, 'KR室长提交面诊诊疗方案，已出诊疗方案');
   updateCaseStage(c);
-  pushNotif('面诊','报告已出：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
+  pushNotif('面诊','诊疗方案已到：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   return true;
 }
-/* ---- 查看报告：格式化的报告视图，底部"查看方案"跳转项目列表 ---- */
+/* ---- 查看诊疗方案：格式化的报告视图，底部"查看方案"跳转项目列表 ---- */
 var REPORT_SHOW_ORIG = false; /* 报告弹窗：false = 翻译，true = 韩文原文 */
 function reportModalContent(c){
   var hasOrig = !!c.reportKo, showOrig = REPORT_SHOW_ORIG && hasOrig;
@@ -1770,7 +1770,7 @@ function linkRowHtml(c){
     linkSuggestionHtml(c)+'</div></div>';
 }
 
-/* 确认基础资料时落实关联：复诊/延续既往面诊 → 把原案件的面诊报告复制进新案件附件 */
+/* 确认基础资料时落实关联：复诊/延续既往面诊 → 把原案件的面诊诊疗方案复制进新案件附件 */
 function applyCaseLink(c){
   if(!c.linkedCase || !c.linkedCase.caseId) { c.linkedCase = null; return; }
   var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
@@ -1784,7 +1784,7 @@ function applyCaseLink(c){
     c.director = src.director;
   }
   if(src && (c.linkedCase.reason==='复诊' || c.linkedCase.reason==='延续既往面诊')){
-    (src.consultFiles||[]).filter(function(f){ return f.label.indexOf('面诊报告')>-1; }).forEach(function(f){
+    (src.consultFiles||[]).filter(function(f){ return f.label.indexOf('面诊诊疗方案')>-1; }).forEach(function(f){
       c.linkedFiles.push({label:f.label+'（来自 '+src.caseNo+'）', date:attDate()});
     });
   }
@@ -1819,7 +1819,7 @@ function relatedSummaryHtml(c, other, reason, follower, origin){
   var statusTxt = caseStageProcText(other);
   var html = '';
   if(reason==='复诊'){
-    html += row('日期', caseFirstDate(other))+row('面诊结论 / 报告摘要', other.reportReady ? (other.videoSummary||'已出报告') : '没有面诊报告')+row('使用的项目', caseProjectNames(other))+row('当前状态', statusTxt);
+    html += row('日期', caseFirstDate(other))+row('面诊结论 / 报告摘要', other.reportReady ? (other.videoSummary||'已出诊疗方案') : '没有面诊诊疗方案')+row('使用的项目', caseProjectNames(other))+row('当前状态', statusTxt);
   } else if(reason==='术后管理'){
     if(other===follower){
       var uses = postCareUsesOf(follower);
@@ -1830,9 +1830,9 @@ function relatedSummaryHtml(c, other, reason, follower, origin){
     }
   } else { /* 延续既往面诊 */
     if(other===follower){
-      html += row('沿用的报告', follower.reuseReport ? '沿用自 '+origin.caseNo+' 的面诊报告' : '没有沿用（重新面诊；原报告已带入附件）')+row('选了哪些项目', caseProjectNames(follower))+row('当前状态', statusTxt);
+      html += row('沿用的报告', follower.reuseReport ? '沿用自 '+origin.caseNo+' 的面诊诊疗方案' : '没有沿用（重新面诊；原诊疗方案已带入附件）')+row('选了哪些项目', caseProjectNames(follower))+row('当前状态', statusTxt);
     } else {
-      html += row('面诊报告', other.reportReady ? (other.videoSummary||'已出报告') : '没有面诊报告')+row('选了哪些项目', caseProjectNames(other))+row('当前状态', statusTxt);
+      html += row('面诊诊疗方案', other.reportReady ? (other.videoSummary||'已出诊疗方案') : '没有面诊诊疗方案')+row('选了哪些项目', caseProjectNames(other))+row('当前状态', statusTxt);
     }
   }
   return html;
@@ -1873,7 +1873,7 @@ function relatedTabHtml(c){
 function materialsCardHtml(c){
   syncDirectorChoice(c);
   var metaviewText = c.metaviewStatus==='ready'
-    ? '<span style="font-weight:700;color:var(--sage);">已检测到</span> <a href="#" class="info-link">查看报告 ↗</a>'
+    ? '<span style="font-weight:700;color:var(--sage);">已检测到</span> <a href="#" class="info-link">查看诊疗方案 ↗</a>'
     : c.metaviewStatus==='checking'
       ? '<span style="color:var(--terracotta);">检测中…</span>'
       : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>';
@@ -1883,10 +1883,10 @@ function materialsCardHtml(c){
   var btn = function(val, label, key){ var on = (c.needsConsult===val); return '<button class="'+(on?'btn-primary':'btn-outline')+'" onclick="setNeedsConsult('+key+')">'+(on?'✅ ':'')+label+'</button>'; };
   var needsConsultBody = '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+btn(true,'面诊','true')+
     ((ci0 && ci0.overdue) ? '' : btn(false,'不面诊','false'))+
-    (reusableReportSrc(c) ? btn('reuse','沿用原报告',"'reuse'") : '')+'</div>'+
-    ((ci0 && ci0.overdue) ? '<div style="font-size:11px;color:#C1454A;margin-top:6px;">距原案件 '+ci0.src.caseNo+' 的报告日期（'+ci0.reportDate+'）已超过1个月：只能面诊并付费，不能免除、不能沿用原报告</div>' : '')+
+    (reusableReportSrc(c) ? btn('reuse','沿用原诊疗方案',"'reuse'") : '')+'</div>'+
+    ((ci0 && ci0.overdue) ? '<div style="font-size:11px;color:#C1454A;margin-top:6px;">距原案件 '+ci0.src.caseNo+' 的报告日期（'+ci0.reportDate+'）已超过1个月：只能面诊并付费，不能免除、不能沿用原诊疗方案</div>' : '')+
     ((ci0 && !ci0.overdue && ci0.newHistory) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">有新增医美史，建议面诊（默认面诊并付费，室长可以改）</div>' : '')+
-    ((ci0 && !ci0.overdue && !ci0.newHistory) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">距原案件报告日期（'+ci0.reportDate+'）1个月内：可面诊（默认免除面诊费）/ 不面诊 / 沿用原报告</div>' : '');
+    ((ci0 && !ci0.overdue && !ci0.newHistory) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">距原案件报告日期（'+ci0.reportDate+'）1个月内：可面诊（默认免除面诊费）/ 不面诊 / 沿用原诊疗方案</div>' : '');
 
   var intentionChips = (c.intentionProjects||[]).map(function(it,idx){
     return '<span class="chip active" style="display:inline-flex;align-items:center;gap:4px;">'+it.name+'<span style="cursor:pointer;" onclick="removeIntentionProject('+idx+');event.stopPropagation();">✕</span></span>';
@@ -1948,9 +1948,9 @@ function intentionInfoHtml(c){
 /* 延续既往面诊（2026-10-01 修正）：
    - 距原案件报告日期超过 1 个月 → 锁定：只能"面诊"且付费，不能免除、不能沿用
    - 基础资料新增了医美史 → 提示"有新增医美史，建议面诊"，默认面诊（付费），室长可以改
-   - 1 个月内（且室长没有改成付费面诊）→ 面诊 / 不面诊 / 沿用原报告 三选一
-   - 面诊（付费或免除）结束后多一步"有无变动"：无变动→沿用原报告→项目确认中（不经过等待报告）；有变动→视频进等待报告、书面直接出新报告→项目确认中 */
-function reportSrcOf(c){ /* 关联原因=延续既往面诊 且被关联案件有面诊报告 */
+   - 1 个月内（且室长没有改成付费面诊）→ 面诊 / 不面诊 / 沿用原诊疗方案 三选一
+   - 面诊（付费或免除）结束后多一步"有无变动"：无变动→沿用原诊疗方案→项目确认中（不经过等待报告）；有变动→视频进等待报告、书面直接出新诊疗方案→项目确认中 */
+function reportSrcOf(c){ /* 关联原因=延续既往面诊 且被关联案件有面诊诊疗方案 */
   var l = c.linkedCase;
   if(!l || !l.caseId || l.reason!=='延续既往面诊') return null;
   var src = CASE_ITEMS.filter(function(x){ return x.id===l.caseId; })[0];
@@ -2086,20 +2086,20 @@ function mockUpload(kind){
   renderCaseBody(c);
 }
 
-/* 沿用之前报告：面诊资料tab显示旧报告（只读，标注"沿用自 A000xxx"）；项目列表按旧报告的方案预填（价格按现在的项目库重新取）；
+/* 沿用之前诊疗方案：面诊资料tab显示旧诊疗方案（只读，标注"沿用自 A000xxx"）；项目列表按旧诊疗方案的方案预填（价格按现在的项目库重新取）；
    之后流程（付款→施术预约…）同普通面诊案件；旧案件（如仅出报告）保持终态不变，只在它的关联案件tab里出现反向记录 */
 function applyReuseReport(c){
   var src = reportSrcOf(c); if(!src) return;
   c.needsConsult = true;
   c.consultRequested = true;
-  c.director = src.director || c.director; /* 沿用原报告：医院和院长沿用原案件的 */
+  c.director = src.director || c.director; /* 沿用原诊疗方案：医院和院长沿用原案件的 */
   c.hospitalId = src.hospitalId || c.hospitalId;
   c.reportReady = true;
   c.consultStatus = 'report_ready';
   c.videoSummary = src.videoSummary || '';
   c.reportUploadedBy = src.reportUploadedBy || '';
   c.reuseReport = {fromId:src.id, caseNo:src.caseNo, date:reportDateOf(src)};
-  /* 旧报告的方案：旧案件的赴韩项目名（不含已更换的原项目）；没有就取它的可选范围；价格按现在的项目库重新取 */
+  /* 旧诊疗方案的方案：旧案件的赴韩项目名（不含已更换的原项目）；没有就取它的可选范围；价格按现在的项目库重新取 */
   var names = [];
   krAllItems(src).forEach(function(it){ if(!it.swapped && names.indexOf(it.name)<0) names.push(it.name); });
   if(!names.length && src.krScope) src.krScope.items.forEach(function(it){ if(names.indexOf(it.name)<0) names.push(it.name); });
@@ -2111,7 +2111,7 @@ function applyReuseReport(c){
   c.projectsEnabled = true;
   c.projectOriginFilter = 'KR';
   c.activeCaseTab = 'projects';
-  logCaseEvent(c, actingName(), (c.reuseAfterConsult ? '面诊后院长判断无变动，沿用原报告（' : '沿用原报告（')+src.caseNo+'）：'+(c.reuseAfterConsult ? '' : '不产生面诊费，')+'直接进入项目确认中，不经过等待报告；项目列表按原方案预填 '+c.recommended.length+' 项（价格按现在的项目库）');
+  logCaseEvent(c, actingName(), (c.reuseAfterConsult ? '面诊后院长判断无变动，沿用原诊疗方案（' : '沿用原诊疗方案（')+src.caseNo+'）：'+(c.reuseAfterConsult ? '' : '不产生面诊费，')+'直接进入项目确认中，不经过等待报告；项目列表按原方案预填 '+c.recommended.length+' 项（价格按现在的项目库）');
 }
 
 
@@ -2242,7 +2242,7 @@ function supplementUpload(kind){
 
 function basicTabHtml(c){
   var metaviewText = c.metaviewStatus==='ready' ? '已检测到' : '待检测';
-  var consultLabel = c.reuseReport ? '沿用之前报告（'+c.reuseReport.caseNo+'）' : (c.needsConsult===true ? '面诊' : '不需要面诊');
+  var consultLabel = c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult===true ? '面诊' : '不需要面诊');
   return '<div class="card" style="padding:4px 24px;">'+
     suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+suppRowHtml(c,'photo','照片',c.photoUploaded)+suppRowHtml(c,'video','视频',c.videoUploaded)+
     '<div class="case-field-row"><span class="fk">苦恼</span><span style="flex-grow:1;font-size:13px;">'+(c.concern||'—')+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="editConcernField(\'concern\');return false;">修正</a></span></div>'+
@@ -2345,7 +2345,7 @@ function consultSubItems(c){
   if(c.consultStatus==='awaiting_payment') items.push({kind:'Waiting', text:'待缴费'});
   else if(c.consultStatus==='paid_waiting_kr') items.push({kind:'Waiting', text:'待确认报告时间'});
   else if(c.consultStatus==='awaiting_report') items = items.concat(reportWaitSubItems(c));
-  else if(c.consultStatus==='report_ready') items.push({kind:'Success', text:'报告已出'});
+  else if(c.consultStatus==='report_ready') items.push({kind:'Success', text:'诊疗方案已到'});
   return items;
 }
 
@@ -2400,10 +2400,10 @@ function setFeeNote(v){ var c=getCurrentCase(); if(!c) return; feeDraft(c).note=
 function reuseReportHtml(c){
   var r = c.reuseReport;
   return '<div class="card" style="padding:22px 24px;">'+
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">沿用自 '+r.caseNo+'</span><span style="font-size:11px;color:var(--muted);">只读 · 原报告日期 '+r.date+(c.reuseAfterConsult ? ' · 面诊后院长判断无变动' : ' · 没有面诊费')+'</span></div>'+(c.reuseAfterConsult ? consultFeeCardHtml(consultFeeStatusMain(c), c.consultFeeWaived ? '原因：'+c.consultFeeWaived.reason : '', '') : '')+
-    subStatusRowHtml([{kind:'Success', text:'沿用原报告'}])+
-    '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;line-height:1.7;">'+(c.videoSummary||'（旧报告没有摘要）')+'</div>'+
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openReportModal()">查看报告 →</button>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">沿用自 '+r.caseNo+'</span><span style="font-size:11px;color:var(--muted);">只读 · 原诊疗方案日期 '+r.date+(c.reuseAfterConsult ? ' · 面诊后院长判断无变动' : ' · 没有面诊费')+'</span></div>'+(c.reuseAfterConsult ? consultFeeCardHtml(consultFeeStatusMain(c), c.consultFeeWaived ? '原因：'+c.consultFeeWaived.reason : '', '') : '')+
+    subStatusRowHtml([{kind:'Success', text:'沿用原诊疗方案'}])+
+    '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;line-height:1.7;">'+(c.videoSummary||'（旧诊疗方案没有摘要）')+'</div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openReportModal()">查看诊疗方案 →</button>'+
     '<button class="btn-outline" onclick="openCaseDetail(\''+r.fromId+'\')">查看原案件 →</button></div>'+
     '<div style="font-size:11px;color:var(--muted);margin-top:12px;">原案件保持终态不变；报告文件已带入「附件」tab</div></div>';
 }
@@ -2425,7 +2425,7 @@ function consultTabHtml(c){
   var feeCard = consultFeeCardHtml(fee, waiverText, '', c);
   if(c.consultStatus==='paid_waiting_kr'){
     return wrap(feeCard+sub+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认预计出报告时间（院长看资料后口述，由 KR 室长整理并提交报告；院长不参与视频）</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">等待韩国室长确认预计出报告时间（院长看资料后口述，由 KR 室长整理并发送诊疗方案；院长不参与视频）</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn-outline" onclick="openFloatingChat(\'main\')">查看 Main 对话 →</button>'+
       '</div>');
@@ -2433,9 +2433,9 @@ function consultTabHtml(c){
   if(c.consultStatus==='awaiting_report'){
     var judging = isContinuationConsult(c);
     var tip = judging
-      ? '延续既往面诊：等 KR 判断相对原报告有无变动（无变动→沿用原报告→项目确认中；有变动→由KR室长提交新报告）'
-      : '等待 KR 室长整理并提交报告';
-    var btns = '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>查看报告 →</button>'+
+      ? '延续既往面诊：等 KR 判断相对原诊疗方案有无变动（无变动→沿用原诊疗方案→项目确认中；有变动→由KR室长提交新诊疗方案）'
+      : '等待 KR 室长整理并发送诊疗方案';
+    var btns = '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>查看诊疗方案 →</button>'+
       '<button class="btn-ghost" onclick="simulateReportTimeout()">演示：模拟时间超过预计</button>'; /* 保留：这是演示时钟，不是 KR 的操作 */
     return wrap(feeCard+sub+
       '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">'+tip+(c.contJudged ? '（院长已判断：有变动）' : '')+'</div>'+
@@ -2443,7 +2443,7 @@ function consultTabHtml(c){
   }
   if(c.consultStatus==='report_ready'){
     return wrap(feeCard+sub+
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openReportModal()">查看报告 →</button><button class="btn-outline" onclick="consultTalkShortcut()">邀请室长商谈</button></div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openReportModal()">查看诊疗方案 →</button><button class="btn-outline" onclick="consultTalkShortcut()">邀请室长商谈</button></div>'+
       '<div style="font-size:11px;color:var(--muted);margin-top:12px;">面诊阶段产生的文件统一在「附件」tab 查看</div>');
   }
   return '';
@@ -4251,7 +4251,7 @@ function addProjCategory(label, origin){
 var PCAT = {};
  // 建种子数据时临时存 label->id，方便下面 PROJECT_LIBRARY 直接引用
 ['眼部','鼻部','轮廓','面部年轻化','胸部','身体'].forEach(function(l){ PCAT[l] = addProjCategory(l, 'KR'); });
-/* 「韩国术后管理」分类（2026-10-06，KR 端系列 4/5）：特殊标记 postcare:true——只在 KR 写报告选所需术后管理时用，IN 项目选择里不出现，案例库按部位没有案例所以也不显示 */
+/* 「韩国术后管理」分类（2026-10-06，KR 端系列 4/5）：特殊标记 postcare:true——只在 KR 写诊疗方案选所需术后管理时用，IN 项目选择里不出现，案例库按部位没有案例所以也不显示 */
 PCAT['韩国术后管理'] = addProjCategory('韩国术后管理', 'KR'); PROJECT_CATEGORIES[PCAT['韩国术后管理']].postcare = true;
 function isKrPostcareCat(id){ var c = PROJECT_CATEGORIES[id] || KR_CATEGORIES[id]; return !!(c && c.postcare); }
 
@@ -4641,7 +4641,7 @@ function markAllNotifRead(){ notifFiltered().forEach(function(n){ n.read[ME_NAME
 /* 演示按钮：触发几个事件，确认会弹 toast、进通知中心、收件人正确 */
 function demoNotif(kind){
   var ayu = CASE_ITEMS.filter(function(x){ return x.id==='ayu'; })[0];
-  if(kind==='report') pushNotif('面诊','报告已出：'+ayu.name+'（'+ayu.caseNo+'），已进入项目确认中', {caseId:'ayu'});
+  if(kind==='report') pushNotif('面诊','诊疗方案已到：'+ayu.name+'（'+ayu.caseNo+'），已进入项目确认中', {caseId:'ayu'});
   else if(kind==='missed') pushNotif('视频','未接来电：KM1 室长 呼叫了 '+ayu.name+' 的案件视频', {caseId:'ayu', link:{kind:'caseRoom'}});
   else if(kind==='at'){
     ensureCaseRoom(ayu); var roomId = getCaseRoomId('ayu');
@@ -4651,7 +4651,7 @@ function demoNotif(kind){
   else if(kind==='system') pushNotif('系统','诊所管理账号更新了设定：面诊费 300,000 → 350,000 印尼盾，'+D(15)+' 起生效', {names:IN_COORDINATORS, link:{kind:'system'}, detail:{title:'面诊费调整', changes:['面诊费 300,000 → 350,000 印尼盾'], effective:D(15)+' 起'}});
   else if(kind==='noshow') pushNotif('预约','未到店（自动判定）：客人13 过预约时间30分钟未到店，已取消', {caseId:'bayu'});
   else if(kind==='schedule') pushNotif('赴韩施术','KR 确认施术时间：客人9 '+D(2)+' 14:00', {caseId:'nadia'});
-  else if(kind==='other') pushNotif('面诊','报告已出：客人3（这个案件只有 A2 室长 操作过 → 只发给 A2 室长）', {caseId:'andi'});
+  else if(kind==='other') pushNotif('面诊','诊疗方案已到：客人3（这个案件只有 A2 室长 操作过 → 只发给 A2 室长）', {caseId:'andi'});
 }
 
 /* 演示通知（各分类至少一条，含已读/未读） */
@@ -4665,7 +4665,7 @@ function demoNotif(kind){
   add('预约','预约占位快过期（剩 5 分钟）：+62 812-3300-0099','',D(-1)+' 12:55',true,{kind:'none'});
   add('面诊','KR 确认预计出报告时间：客人6 '+D(2)+' 14:00','putri',D(-4)+' 16:00',true);
   add('面诊','等待报告超过预计时间：客人7（预计 '+D(0)+' 08:00）','dedi',D(0)+' 08:05',false);
-  add('面诊','报告已出：客人2（A000006）','ayu',D(-2)+' 11:20',true);
+  add('面诊','诊疗方案已到：客人2（A000006）','ayu',D(-2)+' 11:20',true);
   add('赴韩施术','KR 确认施术时间：客人9 '+D(2)+' 14:00','nadia',D(-3)+' 10:00',true);
   add('赴韩施术','客人已到医院：客人9','nadia',D(-1)+' 09:30',false);
   add('视频','未接来电：KM1 室长 呼叫了 客人2 的案件视频','ayu',D(-1)+' 15:20',false,{kind:'caseRoom'});
@@ -4758,7 +4758,7 @@ var CHAT_DATA = {
     {day:KD(2), from:'them', name:'KD1 院长', color:'var(--slate2)', init:'김', orig:'윤곽 이완은 중등도입니다. 초음파 리프팅 먼저 평가하시죠.', trans:'轮廓松弛属中度，建议先评估超声刀。', time:'09:30'}
   ],
   'case-ayu':[
-    {day:KD(1), from:'them', name:'KD1 院长', color:'var(--slate2)', init:'김', orig:'客人2 리포트 발송했습니다.', trans:'客人2 的面诊报告已发送。', time:'11:20'},
+    {day:KD(1), from:'them', name:'KD1 院长', color:'var(--slate2)', init:'김', orig:'客人2 리포트 발송했습니다.', trans:'客人2 的面诊诊疗方案已发送。', time:'11:20'},
     {day:KD(0), from:'me', kind:'quote', speaker:'A1 室长', srcRoomId:'kr-lee', srcRoom:'KM1 室长 · 韩国室长', srcIdx:3, srcDt:'26-09-18 10:20', orig:'这位客人的报告你看一下是否需要补充？', trans:'이 고객 리포트 보완이 필요한지 확인해 주세요.', time:'10:20'} /* 从其他房间引用进来 */
   ],
   'case-fajar':[
@@ -5053,7 +5053,7 @@ function seedDoctorProfiles(){
   });
 }
 seedDoctorProfiles();
-/* 赴韩项目默认资料（KR-SRVC-01）：所需术后管理 / 麻醉 / 推荐在韩时间 / 施术时长；KR 写报告、更换、补加、加做时自动带入 */
+/* 赴韩项目默认资料（KR-SRVC-01）：所需术后管理 / 麻醉 / 推荐在韩时间 / 施术时长；KR 写诊疗方案、更换、补加、加做时自动带入 */
 function seedProjectDefaults(){
   var swell = {kr:'术后消肿管理', times:3, place:'either', day:'第3天'}, thread = {kr:'拆线', times:1, place:'KR', day:'第7天'}, check = {kr:'术后复诊检查', times:1, place:'KR', day:'第2天'};
   var D0 = {
@@ -5202,10 +5202,10 @@ function seedSurgeryCase(o){
   var items = o.items.map(function(i){ return {name:i[0], origin:'KR', price:i[1], done:false, batchId:'B1'}; }), total = items.reduce(function(t, i){ return t + i.price; }, 0), dep = Math.round(total*KR_DEPOSIT_RATE);
   var c = makeCase({id:o.id, name:o.name, subState:'arrived', materialsConfirmed:true, caseNo:generateCaseNo(), director:o.director, hospitalId:o.hospitalId, krCoordinator:o.krCoordinator, updated:'3 天前',
     concern:'（演示）', expectation:'（演示）', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true, reportDate:D(-8),
-    consultFiles:[{label:'面诊报告'}], projectsEnabled:true, projectsLocked:true, settlementDone:true,
+    consultFiles:[{label:'面诊诊疗方案'}], projectsEnabled:true, projectsLocked:true, settlementDone:true,
     krSchedule:{status:'confirmed', confirmedDate:o.date, confirmedTime:o.time, primary:o.date, backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
     procedureItems:items, settlementBatches:[{id:'B1', orderedBy:actingName(), settledBy:'客人', time:D(-5)+' 10:00', status:'active', krTotal:total, krDeposit:dep, krBalance:total-dep, inTotal:0}],
-    logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-12)+' 09:00'}, {stage:'面诊安排', actor:o.director, action:'KR室长提交面诊报告，已出报告', dt:D(-8)+' 10:00'}, {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1），项目清单已锁定', dt:D(-5)+' 10:00'}, {stage:'赴韩施术', actor:'KR', action:'KR确认施术时间：'+o.date+' '+o.time, dt:D(-4)+' 11:00'}]});
+    logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-12)+' 09:00'}, {stage:'面诊安排', actor:o.director, action:'KR室长提交面诊诊疗方案，已出诊疗方案', dt:D(-8)+' 10:00'}, {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1），项目清单已锁定', dt:D(-5)+' 10:00'}, {stage:'赴韩施术', actor:'KR', action:'KR确认施术时间：'+o.date+' '+o.time, dt:D(-4)+' 11:00'}]});
   if(o.clinicId) c.clinicId = o.clinicId;
   CASE_ITEMS.push(c); updateCaseStage(c);
   return c;

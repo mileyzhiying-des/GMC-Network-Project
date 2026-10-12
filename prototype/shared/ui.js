@@ -1267,7 +1267,7 @@ function openInviteKrModal(){
   var c0 = getCurrentCase();
   /* 只列上传过报告的KR室长（Notion：选择上传了报告的室长） */
   var cands = (c0 ? krCoordinatorsOf(c0) : []).filter(function(n){ return (c0.reportUploadedBy||'').indexOf(n)>-1; });
-  if(!cands.length){ alert('没有找到上传报告的室长'); return; }
+  if(!cands.length){ alert('没有找到上传诊疗方案的室长'); return; }
   document.getElementById('invite-kr-list').innerHTML = cands.map(function(name, i){
     return '<button class="'+(i===0?'btn-primary':'btn-outline')+'" onclick="inviteKrVideo(\'' + name + '\')">' + name + '</button>';
   }).join('');
@@ -1572,7 +1572,7 @@ function confirmMaterials(){
   document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
   document.getElementById('case-chat-actions').style.display = 'flex';
   if(c.needsConsult==='reuse'){
-    applyReuseReport(c); /* 沿用之前报告：不产生面诊费卡片，直接进入"项目确认中" */
+    applyReuseReport(c); /* 沿用之前诊疗方案：不产生面诊费卡片，直接进入"项目确认中" */
   } else if(c.needsConsult===true){
     /* 选了面诊，直接进面诊资料tab走缴费，不需要再多点一次"面诊申请" */
     c.consultRequested = true;
@@ -1587,7 +1587,7 @@ function confirmMaterials(){
   }
   updateCaseStage(c);
   renderCaseStatusBar(c);
-  logCaseEvent(c, ME_NAME, '确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：'+(c.reuseReport ? '沿用之前报告（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊')));
+  logCaseEvent(c, ME_NAME, '确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：'+(c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊')));
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -1703,7 +1703,7 @@ function submitHoldingsUse(scope){
   renderCaseBody(c);
 }
 
-/* 已出报告后，客人决定不做项目（不赴韩也不做本地）：二次确认 → 按结局推算（没买本地项目 → 仅出报告） */
+/* 已出诊疗方案后，客人决定不做项目（不赴韩也不做本地）：二次确认 → 按结局推算（没买本地项目 → 仅出报告） */
 function noProjectForClient(){
   var c = getCurrentCase(); if(!c) return;
   if(!confirm('确认客人不做任何项目？案件将按结局结束（仅出报告）。')) return;
@@ -2018,8 +2018,8 @@ function cancelConsult(){
   renderCaseBody(c);
 }
 
-/* ---- 韩国那边的回应（2026-10-02 面诊改版）：面诊只有一种——院长看资料口述，KR室长整理提交报告，院长不参与视频。
-   付面诊费 → 待确认报告时间（面诊预约）→ KR确认预计出报告时间 → 等待报告（预计X出报告+倒计时；超时只提醒）→ KR室长提交报告 → 项目确认中 ---- */
+/* ---- 韩国那边的回应（2026-10-02 面诊改版）：面诊只有一种——院长看资料口述，KR室长整理发送诊疗方案，院长不参与视频。
+   付面诊费 → 待确认报告时间（面诊预约）→ KR确认预计出报告时间 → 等待报告（预计X出报告+倒计时；超时只提醒）→ KR室长发送诊疗方案 → 项目确认中 ---- */
  /* 术后照片按恢复时间排序：1周→1个月→3个月… */
 /* 演示用角色：案例库、项目库两个页面共用同一个开关，切一次两边权限一起变 */
 var DEMO_ROLE = 'in';

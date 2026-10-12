@@ -246,8 +246,8 @@ var BOOK_DICT = {
   'me.hospital':{id:'Rumah sakit / dokter', zh:'医院 / 院长'},
   'me.paid':    {id:'Dibayar', zh:'实付'},
   'me.refund':  {id:'ada pengembalian dana', zh:'有退款'},
-  'me.report':  {id:'Laporan sudah keluar', zh:'已出报告'},
-  'me.reportNote':{id:'Isi laporan dapat dilihat di klinik.', zh:'报告内容请到诊所查看。'},
+  'me.report':  {id:'Rencana perawatan sudah keluar', zh:'已出诊疗方案'},
+  'me.reportNote':{id:'Isi rencana perawatan dapat dilihat di klinik.', zh:'诊疗方案内容请到诊所查看。'},
   'me.relogin': {id:'Sesi berakhir (30 menit). Verifikasi nomor ponsel Anda lagi untuk melihat reservasi.', zh:'已超过 30 分钟，请重新用手机验证码登录后查看。'},
   'me.session': {id:'Tanpa verifikasi ulang selama 30 menit.', zh:'30 分钟内不用再验证。'}
 

@@ -132,7 +132,7 @@ function caseStatusLabel(c){
     var inFlow = c.consultRequested && !c.reportReady;
     if(inFlow && (c.consultStatus==='awaiting_payment' || c.consultStatus==='paid_waiting_kr')) return '面诊预约'; /* 小状态：待缴费 → 待确认报告时间 */
     if(inFlow && c.consultStatus==='awaiting_report') return '等待报告';
-    if(c.projectsEnabled || c.reportReady) return '项目确认中'; /* 含待付款（小状态）；"已出报告"只是 Timeline 事件 */
+    if(c.projectsEnabled || c.reportReady) return '项目确认中'; /* 含待付款（小状态）；"已出诊疗方案"只是 Timeline 事件 */
     if(c.consultStatus==='cancelled') return '面诊已取消';
     return '面诊预约';
   }
@@ -227,7 +227,7 @@ function fmtUtcTime(s, tz){ var f = fmtUtc(s, tz); return f.length>=16 ? f.slice
 function tkU(s){ return s ? '⟦u:'+s+'⟧' : '—'; }
 function tkK(date, hm){ return '⟦k:'+date+'|'+(hm||'')+'⟧'; }
 function tzRender(t){
-  return String(t==null ? '' : t).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ return fmtUtc(u) || '—'; })
+  return String(t==null ? '' : t).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）') : '—'; })
     .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; });
 }
 /* 当地钟点（日期 + HH:mm，某时区的墙上时间）→ UTC 字符串（KR 室长输入的预计出报告时间等） */
@@ -462,7 +462,7 @@ function workingIN(){ var today = todayStr(); return IN_COORDINATORS.filter(func
 /* ---- 案件对话房规则（2026-10-02 选院长+对话合并版·二） ----
    建房条件：不面诊 = 基础资料确认后；面诊 = 缴费（或免除）后；之前完全不显示［发起对话］和"+新建案件对话"候选；终态案件没有房间。
    成员：不面诊 = 全部IN室长；面诊 = 全部IN室长 + 全部KR室长 + 选定院长（不面诊案件点"增加面诊"并缴费后，KR室长和院长才加入）。
-   推播/toast/未读：只给"负责该案件的IN室长"和"确认报告时间或上传报告的KR室长"；其他室长是成员但不推播；院长完全不推播、不提醒、不显示未读。 */
+   推播/toast/未读：只给"负责该案件的IN室长"和"确认报告时间或上传诊疗方案的KR室长"；其他室长是成员但不推播；院长完全不推播、不提醒、不显示未读。 */
 function caseRoomEligible(c){
   if(!c || !c.materialsConfirmed || isEnded(c)) return false;
   if(c.consultRequested && c.consultStatus==='awaiting_payment') return false; /* 面诊案件缴费（或免除）后才能建房 */
@@ -509,7 +509,7 @@ var ROLE_PERMS = {
   owner:   {work:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true,  smslog:true},
   manager: {work:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true,  smslog:true,  promo:true}, /* promo = 项目库「本月活动 / 套餐」的新增 / 编辑 / 结束（只有 IN 管理者，CMD-1008-09） */
   general: {work:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true,  smslog:false},
-  /* KR 医院账号（2026-10-06，Notion Accounts & Settings 第 7 节）：krwork = 处理案件（确认报告时间、上传报告、施术相关）；krview = 看所有案件；krviewOwn = 只看自己负责的；
+  /* KR 医院账号（2026-10-06，Notion Accounts & Settings 第 7 节）：krwork = 处理案件（确认报告时间、上传诊疗方案、施术相关）；krview = 看所有案件；krviewOwn = 只看自己负责的；
      krsched = 日程/OFF；kropen = 开放施术日期；krdoctors = 院长名单/停用；krlib = 赴韩项目库、案例库；bizdata/accounts/clinic（= 医院设定）/oplog = 管理类。 */
   kr_owner:    {work:false, krwork:false, krview:false, krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
   kr_manager:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
@@ -597,7 +597,7 @@ function krCaseVisible(c, hid){
 
 /* ---- 赴韩项目资料与术后管理分配（2026-10-06，KR-CASE-02 第 1、2 节） ---- */
 var ANES_LABEL = {local:'局部麻醉', sleep:'睡眠麻醉', general:'全身麻醉'};
-/* 项目资料一行小字：麻醉特性、推荐在韩时间、所需术后管理（KR 写报告时填的） */
+/* 项目资料一行小字：麻醉特性、推荐在韩时间、所需术后管理（KR 写诊疗方案时填的） */
 function itemMetaText(it){
   var bits = [];
   if(it.anesthesia) bits.push('麻醉：'+it.anesthesia.label+(it.anesthesia.note?'（'+it.anesthesia.note+'）':''));
