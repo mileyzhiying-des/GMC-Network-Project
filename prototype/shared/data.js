@@ -1245,7 +1245,15 @@ var STATE_TONE = {
 };
 
 /* 赴韩项目：取消的项目不从 procedureItems 里删，标 cancelled（行状态=已取消） */
-function krAllItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR'; }); }
+/* KR 在 IN 确认已付款之后才看得到赴韩项目（CMD-1012-02 C4）：待付款结算单里的项目，KR 账号读不到；IN 端照常 */
+function krAllItems(c){
+  var kr = typeof isKrAccount==='function' && isKrAccount(), bs = c.settlementBatches || [];
+  return (c.procedureItems||[]).filter(function(it){
+    if(it.origin!=='KR') return false;
+    if(kr && it.batchId){ var b = bs.filter(function(x){ return x.id===it.batchId; })[0]; if(b && b.status==='unpaid') return false; }
+    return true;
+  });
+}
 
 function krActiveItems(c){ return krAllItems(c).filter(function(it){ return !it.cancelled && !it.swapped; }); }
 
@@ -1617,18 +1625,31 @@ function coreSubmitReport(c, rep, by){
 }
 /* ---- 查看诊疗方案：格式化的报告视图，底部"查看方案"跳转项目列表 ---- */
 var REPORT_SHOW_ORIG = false; /* 报告弹窗：false = 翻译，true = 韩文原文 */
-function reportModalContent(c){
-  var hasOrig = !!c.reportKo, showOrig = REPORT_SHOW_ORIG && hasOrig;
-  var body = String(showOrig ? c.reportKo : c.videoSummary).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>');
-  var toggle = hasOrig ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><span style="font-size:11px;color:var(--muted);">'+(showOrig ? '韩文原文' : '中文翻译（演示翻译，正式版由 AI 翻译）')+'</span><button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="toggleReportOrig()">'+(showOrig ? '看翻译' : '看原文')+'</button></div>' : '';
-  return '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">'+(c.reportDate||D(0))+'</div>'+toggle+
-    '<div style="font-size:13px;line-height:1.9;color:var(--navy);margin-bottom:32px;">'+(showOrig ? '' : '尊敬的 '+c.name+'：<br><br>')+body+(showOrig ? '' : '<br><br>如有任何疑问，欢迎随时联系。')+'</div>'+
-    '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:6px;">'+
-    '<span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+(c.director||'')+'</span>'+
-    '<span style="font-size:11px;color:var(--muted);">主诊院长</span></div>'+
-    '<button class="btn-primary" style="width:100%;margin-top:22px;" onclick="closeReportModal();switchCaseTab(\'projects\')">查看方案 →</button>';
+/* 诊疗方案正式模板（页面和 PDF 共用）：抬头 / 客人与案件信息 / 正文 / 推荐项目整理 / 院长署名 */
+function reportDocHtml(c, showOrigWanted){
+  var hasOrig = !!c.reportKo, showOrig = showOrigWanted && hasOrig, esc = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var body = esc(showOrig ? c.reportKo : c.videoSummary).replace(/\n/g,'<br>');
+  var toggle = (hasOrig && typeof document!=='undefined' && document.getElementById('rp-body')) ? '<div style="display:flex;align-items:center;gap:10px;margin:10px 0;" class="no-print"><span style="font-size:11px;color:var(--muted);">'+(showOrig ? '韩文原文' : '中文翻译（演示翻译，正式版由 AI 翻译）')+'</span><button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="toggleReportOrig()">'+(showOrig ? '看翻译' : '看原文')+'</button></div>' : '';
+  var ks = c.krScope || {items:[], overallNote:''}, rec = recSummaryHtml(ks.items||[], ks.overallNote);
+  return '<div style="text-align:center;border-bottom:2px solid var(--navy);padding-bottom:12px;margin-bottom:14px;"><div style="font-size:12px;letter-spacing:2px;color:var(--muted);">GMC NETWORK</div><div style="font-size:22px;font-weight:700;color:var(--navy);margin-top:4px;">诊疗方案</div></div>'+
+    '<table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:14px;"><tr><td style="padding:4px 0;color:var(--muted);width:90px;">客人</td><td>'+esc(c.name)+'</td><td style="color:var(--muted);width:90px;">Case ID</td><td>'+esc(c.caseNo||'')+'</td></tr>'+
+    '<tr><td style="padding:4px 0;color:var(--muted);">主诊院长</td><td>'+esc(c.director||'')+'</td><td style="color:var(--muted);">出具日期</td><td>'+esc(c.reportDate||D(0))+'</td></tr>'+
+    '<tr><td style="padding:4px 0;color:var(--muted);">医院</td><td colspan="3">'+esc(hospitalName(caseKrHospital(c),'ko'))+'</td></tr></table>'+toggle+
+    '<div style="font-size:13px;line-height:1.9;color:var(--navy);margin-bottom:18px;">'+(showOrig ? '' : '尊敬的 '+esc(c.name)+'：<br><br>')+body+(showOrig ? '' : '<br><br>如有任何疑问，欢迎随时联系。')+'</div>'+
+    (rec ? rec : '')+
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin-top:22px;"><span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+esc(c.director||'')+'</span><span style="font-size:11px;color:var(--muted);">主诊院长</span></div>';
 }
-function toggleReportOrig(){ REPORT_SHOW_ORIG = !REPORT_SHOW_ORIG; var c = getCurrentCase(); if(c) document.getElementById('report-body').innerHTML = reportModalContent(c); }
+function reportToPdf(){
+  var c = getCurrentCase(); if(!c) return;
+  var html = '<html><head><meta charset="utf-8"><title>诊疗方案_'+(c.caseNo||'')+'</title><style>body{font-family:sans-serif;padding:32px;color:#1c2b40;} .no-print{display:none;} table{width:100%;} </style></head><body>'+reportDocHtml(c, false).replace(/<button[^>]*>.*?<\/button>/g,'')+'</body></html>';
+  var label = '诊疗方案_'+(c.caseNo||c.id)+'_'+(c.reportDate||D(0))+'.pdf';
+  c.consultFiles = c.consultFiles || [];
+  if(!c.consultFiles.some(function(f){ return f.label===label; })){ c.consultFiles.unshift({label:label, date:attDate()}); logCaseEvent(c, actingName(), '生成诊疗方案 PDF 并存入附件'); buildCaseLog(c); }
+  var w = window.open('', '_blank');
+  if(w){ w.document.write(html); w.document.close(); w.focus(); setTimeout(function(){ w.print(); }, 300); } /* 演示：浏览器打印窗口选「另存为 PDF」；正式版由后端生成 */
+  showToast('已存入附件', label, null);
+}
+function toggleReportOrig(){ REPORT_SHOW_ORIG = !REPORT_SHOW_ORIG; if(typeof renderReportPage==='function') renderReportPage(); }
 
 /* "客户到访"不是一个独立状态——点"到访"后直接进入"接待中"（c.subState='arrived'）；
    同时日历上对应的预约来访事件变暗并标"已到访"（2026-09-29 新增） */
@@ -2743,7 +2764,9 @@ function projectListTabHtml(c, inLocalTab){
   if(c.entryChoicePending && c.projectEntryMode==='holdings') return holdingsUseTabHtml(c);
   if(c.entryChoicePending && !c.projectEntryMode && !c.projectsLocked) return localEntryChoiceHtml(c);
   if(c.projectsLocked){
-    var addPicker = c.addingMore ? projectPickerHtml(c, true) : '<button class="btn-outline" style="width:100%;margin-top:14px;" onclick="addMoreProjects()">+ 追加项目</button>';
+    /* 待付款（已结算、未确认付款）：没有［+ 追加项目］，改为［重新选择项目］回上一步（CMD-1012-02 C3） */
+    var unpaidB = latestUnpaidBatch(c);
+    var addPicker = c.addingMore ? projectPickerHtml(c, true) : (unpaidB ? '<button class="btn-outline" style="width:100%;margin-top:14px;" onclick="reselectProjects()">重新选择项目</button><div style="font-size:11px;color:var(--muted);margin-top:4px;">回到上一步可以加项目或取消项目；确认付款后 KR 才看得到赴韩项目</div>' : '<button class="btn-outline" style="width:100%;margin-top:14px;" onclick="addMoreProjects()">+ 追加项目</button>');
     return '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:14px;">已选择 / 结算</div>'+
       subStatusRowHtml(caseSubStatusItems(c))+
@@ -2997,6 +3020,20 @@ function confirmProjectSelection(){
 
 /* 生成结算单：把 c.recommended 的快照搬进 procedureItems + 新开一个 settlementBatches 记录，
    projectsLocked=true 代表"结算单已生成"，等真正标记付款（settleProjects→confirmSettlementPayment）才变"已付款" */
+/* 待付款结算单退回上一步：撤销这张未付款的结算单，项目放回已选择（可加可取消） */
+function reselectProjects(){
+  var c = getCurrentCase(); if(!c) return;
+  var b = latestUnpaidBatch(c); if(!b) return;
+  var back = (c.procedureItems||[]).filter(function(it){ return it.batchId===b.id; });
+  c.recommended = back.map(function(it){ var o = Object.assign({}, it); delete o.done; delete o.batchId; return o; });
+  c.procedureItems = (c.procedureItems||[]).filter(function(it){ return it.batchId!==b.id; });
+  c.settlementBatches = (c.settlementBatches||[]).filter(function(x){ return x.id!==b.id; });
+  c.projectsLocked = c.settlementBatches.length>0;
+  c.addingMore = c.projectsLocked; /* 前面还有已付款的批次：回到「追加项目」选择；没有：回到最初的项目选择 */
+  c.settleTab = null;
+  logCaseEvent(c, actingName(), '待付款结算单（批次 '+b.id+'）退回重新选择项目');
+  updateCaseStage(c); renderCaseStatusBar(c); buildCaseLog(c); renderCaseBody(c);
+}
 function generateSettlementBatch(c){
   var batchId = 'B' + ((c.settlementBatches||[]).length + 1);
   var b = computeBatchBreakdown(c.recommended);
@@ -3039,6 +3076,12 @@ function setCaseDisplayCcy(origin, ccy){
   var c = getCurrentCase(); if(c) renderCaseBody(c);
 }
 
+/* 选项目时最上方的推荐项目整理（随勾选即时重算）：只算已勾选的赴韩项目，资料来自 KR 诊疗方案的可选范围（C2） */
+function projectRecSummaryHtml(c, selected){
+  var scope = c.krScope; if(!scope || !(scope.items||[]).length) return '';
+  var items = (selected||[]).map(function(it){ return (scope.items||[]).filter(function(si){ return si.name===it.name; })[0]; }).filter(function(si){ return si && (si.stay || si.anesthesia || (si.postcare||[]).length); });
+  return items.length ? recSummaryHtml(items, scope.overallNote) : '<div style="font-size:12px;color:var(--muted);margin:0 0 12px;">勾选赴韩项目后，这里显示「推荐项目整理」（推荐在韩天数、麻醉、术后管理）。</div>';
+}
 function projectPickerHtml(c, isAddition){
   var selected = c.recommended || [];
   var noKrPicker = isLocalCase(c) && !c.reportReady; /* 不面诊的本地案件（选择项目 / 本地管理）：选购只有本地项目，没有赴韩项目子 tab；面诊案件的项目列表 tab 不变（CMD-1008-07） */
@@ -3111,6 +3154,7 @@ function projectPickerHtml(c, isAddition){
     : '<div class="card project-card'+(c.projectsExpanded?' expanded':'')+'" style="padding:22px 24px;">';
   return wrapOpen+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="info-heading">'+(isAddition?'追加项目':'赴韩方案')+'</div>'+expandBtn+(isAddition?'<span style="cursor:pointer;font-size:12px;color:var(--slate);margin-left:10px;" onclick="cancelAddMore()">取消追加</span>':'')+'</div>'+
+    projectRecSummaryHtml(c, selected)+
     '<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px;">'+
     '<div>'+subTabs+
     '<input type="text" placeholder="搜索项目…" value="'+(c.projectSearch||'')+'" oninput="setProjectSearch(this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:10px;">'+
@@ -3557,7 +3601,7 @@ function coreSwapItem(c, itemName, altName, by, detail){
 /* 付尾款并确认行程：可弹性术后管理的地点在这时确定（锁定分配）；术后管理含在套餐里——分给印尼的部分直接变成客人在 IN 的 0 元持有批次（套餐内含，术后第 N 天），不再收款 */
 function innCareLines(c){
   var out = [];
-  krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='either' && s.inn>0) out.push({item:it.name, name:x.name, innName:x.innName||x.name, times:s.inn, day:x.day||''}); }); });
+  krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='either' && s.inn>0) out.push({item:it.name, name:x.name, mgmt:x.mgmt||'', innName:x.innName||x.name, times:s.inn, day:pcDayText(x)||x.day||'', days:pcDays(x)}); }); });
   return out;
 }
 /* 付清尾款（含 IN 按 KR 判断退差额后视为结清）时：锁定分配，印尼部分术后管理直接发放为 0 元持有批次（只发一次） */
@@ -3838,7 +3882,8 @@ function krProcedureTabMain(c, tabsHtml){
     '</div>';
   var unableBanner = '';
   var unableBtn = '';
-  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+body+itemsHtml+innCareCardHtml(c)+'</div>';
+  var recHtml = hasActive ? recSummaryHtml(krActiveItems(c).map(function(it){ return {name:it.name, stay:it.stay, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), c.krScope && c.krScope.overallNote, {print:true}) : ''; /* 推荐项目整理 + ［打印］给客人（CMD-1012-02 C5） */
+  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+recHtml+body+itemsHtml+innCareCardHtml(c)+'</div>';
 }
 
 function markConsultPaid(){
@@ -5055,7 +5100,7 @@ function seedDoctorProfiles(){
 seedDoctorProfiles();
 /* 赴韩项目默认资料（KR-SRVC-01）：所需术后管理 / 麻醉 / 推荐在韩时间 / 施术时长；KR 写诊疗方案、更换、补加、加做时自动带入 */
 function seedProjectDefaults(){
-  var swell = {kr:'术后消肿管理', times:3, place:'either', day:'第3天'}, thread = {kr:'拆线', times:1, place:'KR', day:'第7天'}, check = {kr:'术后复诊检查', times:1, place:'KR', day:'第2天'};
+  var swell = {mgmt:'消肿管理', kr:'术后消肿管理', times:3, interval:2, start:3, place:'either', day:'第3、5、7天'}, thread = {mgmt:'拆线', kr:'拆线', times:1, place:'KR', start:7, day:'第7天'}, check = {mgmt:'术后复诊', kr:'术后复诊检查', times:1, place:'KR', start:2, day:'第2天'};
   var D0 = {
     '切开双眼皮':{stay:'5天', durMin:90, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, thread, swell]},
     '埋线双眼皮':{stay:'3天', durMin:45, anes:'local', anesNote:'', postcare:[thread]},

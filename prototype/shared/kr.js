@@ -980,13 +980,18 @@ function krItemMetaHtml(it){
   var bits = [];
   if(it.anesthesia) bits.push('麻醉：'+krEsc(it.anesthesia.label+(it.anesthesia.note?'（'+it.anesthesia.note+'）':'')));
   if(it.stay) bits.push('推荐在韩：'+krEsc(it.stay));
-  (it.postcare||[]).forEach(function(x){ bits.push('术后管理：'+krEsc(x.name)+' × '+x.times+'（'+(x.place==='KR'?'必须在韩国':'韩国或印尼都可')+(x.day?'，'+krEsc(x.day):'')+'）'); });
+  (it.postcare||[]).forEach(function(x){ bits.push('术后管理：'+krEsc(pcLabel(x))+(x.mgmt && x.name ? '（'+krEsc(x.name)+'）' : '')+' × '+x.times+'（'+(x.place==='KR'?'必须在韩国':'韩国或印尼都可')+(x.times>1 && x.interval ? '，每隔 '+x.interval+' 天' : '')+(pcDayText(x)?'，'+krEsc(pcDayText(x)):'')+'）'); });
   return bits.length ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;">'+bits.join(' ｜ ')+'</div>' : '';
+}
+/* 编辑中的一行 → 存进项目的术后管理快照；第 N 天起 + 间隔自动生成之后的日子 */
+function krPcToItem(x, ip){
+  var o = {mgmt:(x.mgmt||'').trim(), name:x.kr, times:x.times, interval:x.times>1 ? (parseInt(x.interval,10)||1) : 0, place:x.place, startDay:parseInt(x.start,10)||0, innName:ip ? ip.name : ''};
+  o.day = pcDayText(o); return o;
 }
 function krDet(name){ return KR_SUB.detail[name] || (KR_SUB.detail[name] = {stay:'', anes:'local', anesNote:'', pc:[]}); }
 function krDetSet(name, k, v){ krDet(name)[k] = v; }
-function krPcSet(name, i, k, v){ krDet(name).pc[i][k] = v; if(k==='place') krRenderCaseDetail(); }
-function krPcAdd(name){ krDet(name).pc.push({kr:'', inn:'', times:1, place:'KR', day:''}); krRenderCaseDetail(); }
+function krPcSet(name, i, k, v){ krDet(name).pc[i][k] = v; if(k==='place' || k==='times' || k==='interval' || k==='start') krRenderCaseDetail(); }
+function krPcAdd(name){ krDet(name).pc.push({mgmt:'', kr:'', inn:'', times:1, interval:1, place:'KR', start:''}); krRenderCaseDetail(); }
 function krPcDel(name, i){ krDet(name).pc.splice(i, 1); krRenderCaseDetail(); }
 var KR_ANES = {local:'局部麻醉', sleep:'睡眠麻醉', general:'全身麻醉'};
 /* 勾选的赴韩项目下面展开的项目资料：推荐在韩时间、麻醉特性、所需术后管理 */
@@ -994,15 +999,18 @@ function krProjDetailHtml(p, cand){
   var d = krDet(p.name), q = function(s){ return krEsc(s).replace(/'/g,''); };
   var inp = 'padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;';
   var pcRows = d.pc.map(function(x, i){
-    var krOpts = '<option value="">选择术后管理项目（KR 项目库，在韩国）</option>'+cand.krPost.map(function(o){ return '<option value="'+q(o.name)+'"'+(x.kr===o.name?' selected':'')+'>'+krEsc(o.name)+'（在韩国）</option>'; }).join('');
+    var krOpts = '<option value="">选择具体项目（KR 项目库，在韩国）</option>'+cand.krPost.map(function(o){ return '<option value="'+q(o.name)+'"'+(x.kr===o.name?' selected':'')+'>'+krEsc(o.name)+'（在韩国）</option>'; }).join('');
     var inOpts = '<option value="">印尼对应项目（来源诊所本地项目，只看名称；选填）</option>'+cand.post.map(function(o){ return '<option value="'+q(o.name)+'"'+(x.inn===o.name?' selected':'')+'>'+krEsc(o.name)+'（在印尼）</option>'; }).join('');
     var ph = '\''+q(p.name)+'\','+i;
-    return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0;"><select onchange="krPcSet('+ph+',\'kr\',this.value)" style="'+inp+'">'+krOpts+'</select>'+
+    var days = pcDayText({startDay:x.start, times:x.times, interval:x.interval});
+    return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0;"><input placeholder="管理项目（例如 拆线）" value="'+krEsc(x.mgmt||'')+'" oninput="krPcSet('+ph+',\'mgmt\',this.value)" style="'+inp+'width:130px;">'+
       '<input type="number" min="1" value="'+x.times+'" onchange="krPcSet('+ph+',\'times\',Math.max(1,parseInt(this.value,10)||1))" style="'+inp+'width:56px;" title="次数"> 次'+
+      (x.times>1 ? '每隔 <input type="number" min="1" value="'+(x.interval||1)+'" onchange="krPcSet('+ph+',\'interval\',Math.max(1,parseInt(this.value,10)||1))" style="'+inp+'width:56px;"> 天' : '')+
       '<select onchange="krPcSet('+ph+',\'place\',this.value)" style="'+inp+'"><option value="KR"'+(x.place==='KR'?' selected':'')+'>必须在韩国</option><option value="either"'+(x.place==='either'?' selected':'')+'>韩国或印尼都可</option></select>'+
-      '<input placeholder="术后第几天" value="'+krEsc(x.day)+'" oninput="krPcSet('+ph+',\'day\',this.value)" style="'+inp+'width:96px;">'+
+      '<select onchange="krPcSet('+ph+',\'kr\',this.value)" style="'+inp+'">'+krOpts+'</select>'+
       (x.place==='either' ? '<select onchange="krPcSet('+ph+',\'inn\',this.value)" style="'+inp+'">'+inOpts+'</select>' : '')+
-      '<a href="#" onclick="krPcDel('+ph+');return false;">移除</a></div>';
+      '第 <input type="number" min="1" placeholder="N" value="'+krEsc(x.start||'')+'" onchange="krPcSet('+ph+',\'start\',this.value)" style="'+inp+'width:56px;"> 天起'+(days ? ' <span style="color:var(--sage);">→ '+krEsc(days)+'</span>' : '')+
+      ' <a href="#" onclick="krPcDel('+ph+');return false;">移除</a></div>';
   }).join('');
   return '<div style="margin:4px 0 10px 22px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;">'+
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px;"><span>推荐在韩时间</span><input placeholder="例如 7 天" value="'+krEsc(d.stay)+'" oninput="krDetSet(\''+q(p.name)+'\',\'stay\',this.value)" style="'+inp+'width:90px;">'+
@@ -1017,6 +1025,11 @@ function krDelFile(i){ KR_SUB.files.splice(i, 1); krRenderCaseDetail(); }
 var KR_ZH_MAP = [['[면담 소견 요약]','【面诊意见摘要】'],['고객:','客户：'],['고민:','苦恼：'],['기대:','期望：'],['[원장 소견]','【院长意见】'],['[권장 시술]','【建议项目】'],['[주의사항]','【注意事项】'],['- 시술 전후 주의사항은 상담 시 안내 예정','- 术前术后注意事项将在咨询时说明'],['※ 데모용 템플릿 초안입니다. 실제 서비스에서는 LLM이 정리합니다.','※ 演示用模板草稿，正式版由 LLM 整理。'],['（실장이 가능 범위에서 선택）','（由室长在可选范围内选择）']];
 /* 演示翻译：只翻模板里的固定词，院长口述的正文原样保留并标注（正式版接 AI 翻译） */
 function krDemoZh(text){ var o = text; KR_ZH_MAP.forEach(function(m){ o = o.split(m[0]).join(m[1]); }); return o + '\n\n（演示翻译：只翻译了模板固定词，正文为韩文原文；正式版由 AI 翻译）'; }
+/* 可选范围下方自动生成的推荐项目整理（勾选 / 资料变化即时重算，整体备注取下面的输入） */
+function krRecSummaryBlock(cand){
+  var items = cand.kr.filter(function(p){ return KR_SUB.pick[p.name]; }).map(function(p){ var d = krDet(p.name); return {name:p.name, stay:d.stay, anesthesia:{label:KR_ANES[d.anes], note:d.anesNote}, postcare:d.pc.map(function(x){ return krPcToItem(x, null); }), note:KR_SUB.notes[p.name]||''}; });
+  return recSummaryHtml(items, KR_SUB.overall) || '<div style="font-size:12px;color:var(--muted);margin:10px 0;">勾选赴韩项目后，这里自动生成「推荐项目整理」。</div>';
+}
 function krSubmitBlock(c){
   krSubReset(c);
   var cand = krScopeCandidates(KR_CASE.clinicId);
@@ -1025,8 +1038,8 @@ function krSubmitBlock(c){
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;flex-wrap:wrap;"><div style="font-size:12px;color:var(--slate2);">报告内容（韩文原文；AI 整理出重点后，请室长修改必要内容）</div><button class="btn-outline" onclick="krAiOrganize()">✨ AI 整理报告（演示）</button></div>'+
     '<textarea oninput="krSubSet(\'text\',this.value)" placeholder="还没有内容：先在上面录入面诊，点［AI 整理报告］整理出重点，再在这里修改；也可以直接写" style="width:100%;min-height:170px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.text)+'</textarea>'+
     '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">赴韩项目可选范围（本医院项目库）</div>'+(cand.kr.map(function(p){ return row(p,'kr'); }).join('') || krEmpty('本医院项目库没有项目'))+
-    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">术后管理项目（来源诊所本地项目库「术后管理」分类，在印尼；只看名称）</div>'+(cand.postCat.map(function(p){ return row(p,'in'); }).join('') || krEmpty('来源诊所没有术后管理项目'))+
-    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">整体备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;">'+
+    krRecSummaryBlock(cand)+'<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">术后管理项目（来源诊所本地项目库「术后管理」分类，在印尼；只看名称）</div>'+(cand.postCat.map(function(p){ return row(p,'in'); }).join('') || krEmpty('来源诊所没有术后管理项目'))+
+    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">整体备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" onchange="krRenderCaseDetail()" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;">'+
     '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">附件</div>'+KR_SUB.files.map(function(f,i){ return '<div style="font-size:12px;padding:3px 0;">📎 '+krEsc(f)+' <a href="#" onclick="krDelFile('+i+');return false;">移除</a></div>'; }).join('')+
     '<div style="display:flex;gap:8px;margin-top:4px;"><input id="kr-file-name" placeholder="附件名称（演示：只记名称，不上传真实文件）" style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;"><button class="btn-outline" onclick="krAddFile()">添加</button></div>'+
     '<div style="margin-top:16px;"><button class="btn-primary" onclick="krSubmitReport()">发送诊疗方案</button></div>');
@@ -1046,7 +1059,7 @@ function krSubmitReport(){
       it.postcare = d.pc.map(function(x){
         var kp = cand.krPost.filter(function(o){ return o.name===x.kr; })[0], ip = x.place==='either' ? cand.post.filter(function(o){ return o.name===x.inn; })[0] : null;
         if(!kp) bad = '「'+p.name+'」的所需术后管理还有没选项目的行';
-        return {name:x.kr, times:x.times, place:x.place, day:(x.day||'').trim(), innName:ip ? ip.name : ''};
+        return krPcToItem(x, ip);
       });
     }
     items.push(it);
@@ -1227,7 +1240,7 @@ function krDetailOf(key, cand){
   var pc = d.pc.map(function(x){
     var kp = cand.krPost.filter(function(o){ return o.name===x.kr; })[0], ip = x.place==='either' ? cand.post.filter(function(o){ return o.name===x.inn; })[0] : null;
     if(!kp) err = '所需术后管理还有没选项目的行';
-    return {name:x.kr, times:x.times, place:x.place, day:(x.day||'').trim(), innName:ip ? ip.name : ''};
+    return krPcToItem(x, ip);
   });
   return {error:err, stay:(d.stay||'').trim(), anesthesia:{type:d.anes, label:KR_ANES[d.anes], note:(d.anesNote||'').trim()}, postcare:pc};
 }
@@ -1517,7 +1530,7 @@ function krpCatId(label){ var r = ''; Object.keys(KR_CATEGORIES).forEach(functio
 /* 项目的默认资料 → 报告/更换表单用的 detail */
 function krDefaultsDetail(name){
   var p = krpProjects().filter(function(x){ return x.name===name; })[0], df = (p && p.defaults) || {};
-  return {stay:df.stay||'', anes:df.anes||'local', anesNote:df.anesNote||'', pc:(df.postcare||[]).map(function(x){ return {kr:x.kr, inn:'', times:x.times||1, place:x.place||'KR', day:x.day||''}; })};
+  return {stay:df.stay||'', anes:df.anes||'local', anesNote:df.anesNote||'', pc:(df.postcare||[]).map(function(x){ return {mgmt:x.mgmt||'', kr:x.kr, inn:'', times:x.times||1, interval:x.interval||1, place:x.place||'KR', start:x.start||(String(x.day||'').match(/(\d+)/)||[])[1]||''}; })};
 }
 /* "在用"：所有对接诊所的进行中案件引用（可选范围/已选/结算项目/意向）+ 本医院案例库案例 */
 function krpUsage(p){
@@ -1548,9 +1561,9 @@ function krpOpen(id){
 function krpField(k, v){ KRP.draft[k] = v; }
 function krpName(k, v){ KRP.draft.names[k] = v; if(k==='ko'){ if(!KRP.draft.names.zh || KRP.draft.names._auto!==false){ KRP.draft.names.zh = KRP.draft.names.zh || demoTranslate(v,'ko','zh'); } KRP.draft.names.id = demoTranslate(v,'ko','id'); } }
 function krpDef(k, v){ KRP.draft.defaults[k] = v; }
-function krpPcAdd(){ KRP.draft.defaults.postcare.push({kr:'', times:1, place:'KR', day:''}); krpRender(); }
+function krpPcAdd(){ KRP.draft.defaults.postcare.push({mgmt:'', kr:'', times:1, interval:1, place:'KR', start:''}); krpRender(); }
 function krpPcDel(i){ KRP.draft.defaults.postcare.splice(i, 1); krpRender(); }
-function krpPcSet(i, k, v){ KRP.draft.defaults.postcare[i][k] = v; }
+function krpPcSet(i, k, v){ KRP.draft.defaults.postcare[i][k] = v; if(k==='times' || k==='interval' || k==='start' || k==='place') krpRender(); }
 function krpClose(){ KRP.edit = null; KRP.draft = null; krpRender(); }
 function krpSave(){
   if(!canDo('krlib')){ alert('只有 KR 室长、管理者可以维护项目库'); return; }
@@ -1578,7 +1591,7 @@ function krpEditor(){
     (isPost ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">「韩国术后管理」分类：在韩国做的术后管理，只在 KR 写诊疗方案选"所需术后管理"时用，不用填默认资料。</div>' :
     '<div style="margin-top:10px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;"><div style="font-weight:700;margin-bottom:6px;">项目默认资料（KR 写诊疗方案 / 更换项目 / 补加时自动带入，可按客人调整）</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">推荐在韩时间 <input value="'+krEsc(df.stay)+'" oninput="krpDef(\'stay\',this.value)" placeholder="例如 7 天" style="'+inp+'width:90px;"> 施术时长 <input type="number" min="15" step="15" value="'+krEsc(df.durMin)+'" oninput="krpDef(\'durMin\',this.value)" style="'+inp+'width:80px;"> 分钟 麻醉 <select onchange="krpDef(\'anes\',this.value)" style="'+inp+'">'+Object.keys(KR_ANES).map(function(k){ return '<option value="'+k+'"'+(df.anes===k?' selected':'')+'>'+KR_ANES[k]+'</option>'; }).join('')+'</select><input placeholder="麻醉备注" value="'+krEsc(df.anesNote)+'" oninput="krpDef(\'anesNote\',this.value)" style="'+inp+'min-width:180px;"></div>'+
-      '<div style="margin-top:8px;font-weight:700;">所需术后管理</div>'+df.postcare.map(function(x, i){ return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0;"><select onchange="krpPcSet('+i+',\'kr\',this.value)" style="'+inp+'"><option value="">选择韩国术后管理项目</option>'+post.map(function(o){ return '<option'+(x.kr===o.name?' selected':'')+'>'+krEsc(o.name)+'</option>'; }).join('')+'</select><input type="number" min="1" value="'+x.times+'" onchange="krpPcSet('+i+',\'times\',Math.max(1,parseInt(this.value,10)||1))" style="'+inp+'width:56px;"> 次<select onchange="krpPcSet('+i+',\'place\',this.value)" style="'+inp+'"><option value="KR"'+(x.place==='KR'?' selected':'')+'>必须在韩国</option><option value="either"'+(x.place==='either'?' selected':'')+'>韩国或印尼都可</option></select><input placeholder="术后第几天" value="'+krEsc(x.day)+'" oninput="krpPcSet('+i+',\'day\',this.value)" style="'+inp+'width:96px;"><a href="#" onclick="krpPcDel('+i+');return false;">移除</a></div>'; }).join('')+'<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="krpPcAdd()">+ 添加所需术后管理</button></div>')+
+      '<div style="margin-top:8px;font-weight:700;">所需术后管理</div>'+df.postcare.map(function(x, i){ var dt = pcDayText({startDay:x.start, times:x.times, interval:x.interval}); return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0;"><input placeholder="管理项目（例如 拆线）" value="'+krEsc(x.mgmt||'')+'" oninput="krpPcSet('+i+',\'mgmt\',this.value)" style="'+inp+'width:130px;"><input type="number" min="1" value="'+x.times+'" onchange="krpPcSet('+i+',\'times\',Math.max(1,parseInt(this.value,10)||1))" style="'+inp+'width:56px;"> 次'+(x.times>1 ? '每隔 <input type="number" min="1" value="'+(x.interval||1)+'" onchange="krpPcSet('+i+',\'interval\',Math.max(1,parseInt(this.value,10)||1))" style="'+inp+'width:56px;"> 天' : '')+'<select onchange="krpPcSet('+i+',\'place\',this.value)" style="'+inp+'"><option value="KR"'+(x.place==='KR'?' selected':'')+'>必须在韩国</option><option value="either"'+(x.place==='either'?' selected':'')+'>韩国或印尼都可</option></select><select onchange="krpPcSet('+i+',\'kr\',this.value)" style="'+inp+'"><option value="">选择具体项目（KR 项目库）</option>'+post.map(function(o){ return '<option'+(x.kr===o.name?' selected':'')+'>'+krEsc(o.name)+'</option>'; }).join('')+'</select>第 <input type="number" min="1" placeholder="N" value="'+krEsc(x.start||'')+'" onchange="krpPcSet('+i+',\'start\',this.value)" style="'+inp+'width:56px;"> 天起'+(dt ? ' <span style="color:var(--sage);">→ '+krEsc(dt)+'</span>' : '')+' <a href="#" onclick="krpPcDel('+i+');return false;">移除</a></div>'; }).join('')+'<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="krpPcAdd()">+ 添加所需术后管理</button></div>')+
     '<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn-primary" onclick="krpSave()">保存</button><button class="btn-ghost" onclick="krpClose()">取消</button></div>');
 }
 ADMIN_RENDER.krsrvc = function(el){

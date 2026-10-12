@@ -401,6 +401,15 @@ function settleKrBalance(){
 /* 赴韩项目的术后管理（2026-10-07 改：术后管理包含在套餐里，不另收费）：it.postcare = [{name, times, place:'KR'|'either', day, innName, inTimes}]
    place='KR' 必须在韩国做；'either' 韩国或印尼都可，由 IN 室长分配（inTimes = 分给印尼的次数，其余在韩国），付尾款前都可以改——分配只为排程，不涉及金额
    赴韩项目金额 = 施术项目价格；定金 = 施术项目 × 比例；尾款 = 施术项目 × (1 − 比例)（术后管理不计价；只有"加做"的术后管理才收费，见 coreAddOnItem） */
+/* 术后管理设定（CMD-1012-02 B6）：管理项目（不写地点）/ 次数 / 多次时每隔几天 / 地点 / 具体项目 / 第 N 天起，之后的日子自动生成 */
+function pcDays(x){
+  var st = parseInt(x.startDay || (String(x.day||'').match(/(\d+)/)||[])[1], 10) || 0, n = Math.max(1, x.times||1), gap = Math.max(1, parseInt(x.interval,10)||1), out = [];
+  if(!st) return out;
+  for(var i = 0; i < n; i++) out.push(st + i*gap);
+  return out;
+}
+function pcDayText(x){ var d = pcDays(x); return d.length ? '第'+d.join('、')+'天' : (x.day||''); }
+function pcLabel(x){ return x.mgmt || x.name; }
 function pcSplit(x){ var inn = (x.place==='either' && x.innName) ? Math.min(x.times, Math.max(0, x.inTimes||0)) : 0; return {kr:x.times-inn, inn:inn}; }
 function itemKrParts(it){ return {base:it.price||0, must:0, elastic:0}; }
 function itemKrAmount(it){ return it.price||0; } /* 这个赴韩项目在韩国要付的合计 = 施术项目价格 */
@@ -603,9 +612,38 @@ function itemMetaText(it){
   if(it.anesthesia) bits.push('麻醉：'+it.anesthesia.label+(it.anesthesia.note?'（'+it.anesthesia.note+'）':''));
   if(it.stay) bits.push('推荐在韩：'+it.stay);
   (it.postcare||[]).forEach(function(x){ /* 术后管理挂在赴韩项目下显示（CMD-1008-12 C7）：每项标「在韩国 / 在印尼」，如「好莱坞焕肤（在印尼）」 */
-    var where = x.place==='KR' ? x.name+'（在韩国，必须）' : (x.innName ? x.name+'（在韩国）或 '+x.innName+'（在印尼）' : x.name+'（在韩国；没有印尼对应项目）');
-    bits.push('术后管理：'+where+' × '+x.times+(x.day?'，'+x.day:'')); });
+    var where = (x.mgmt ? x.mgmt+'：' : '')+(x.place==='KR' ? x.name+'（在韩国，必须）' : (x.innName ? x.name+'（在韩国）或 '+x.innName+'（在印尼）' : x.name+'（在韩国；没有印尼对应项目）'));
+    bits.push('术后管理：'+where+' × '+x.times+(x.times>1 && x.interval ? '（每隔 '+x.interval+' 天）' : '')+(pcDayText(x) ? '，'+pcDayText(x) : '')); });
   return bits;
+}
+/* 推荐项目整理（CMD-1012-02 B7）：根据选中的赴韩项目自动生成——推荐在韩天数 = 各项最大值；逐项「项目｜推荐在韩 N 天｜麻醉 + 备注｜术后管理明细」；整体备注 */
+function recStayDays(it){ var m = String(it.stay||'').match(/(\d+)/); return m ? parseInt(m[1], 10) : 0; }
+function recSummaryData(items, overall){
+  var days = items.reduce(function(m, it){ return Math.max(m, recStayDays(it)); }, 0);
+  var rows = items.map(function(it){
+    var an = it.anesthesia ? (it.anesthesia.label||'')+(it.anesthesia.note ? '（'+it.anesthesia.note+'）' : '') : '—';
+    var pc = (it.postcare||[]).map(function(x){
+      return pcLabel(x)+' × '+x.times+(x.times>1 && x.interval ? '（每隔 '+x.interval+' 天）' : '')+(pcDayText(x) ? ' '+pcDayText(x) : '')+'｜'+(x.place==='KR' ? '必须在韩国' : '韩国或印尼都可');
+    });
+    return {name:it.name, stay:it.stay ? recStayDays(it)+' 天' : '—', anes:an, pc:pc, note:it.note||''};
+  });
+  return {days:days, rows:rows, overall:overall||''};
+}
+function recSummaryHtml(items, overall, opt){
+  opt = opt || {};
+  var d = recSummaryData(items, overall), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  if(!d.rows.length) return '';
+  return '<div class="rec-summary" style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:10px 0;background:#fff;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b style="font-size:13px;">推荐项目整理</b>'+(opt.print ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="printRecSummary()">打印</button>' : '')+'</div>'+
+    '<div style="font-size:13px;margin:6px 0;">推荐在韩天数：<b>'+(d.days ? d.days+' 天' : '—')+'</b>（各项目最大值）</div>'+
+    d.rows.map(function(r){ return '<div style="font-size:12px;padding:6px 0;border-top:1px solid var(--border2);"><b>'+e(r.name)+'</b>｜推荐在韩 '+e(r.stay)+'｜麻醉：'+e(r.anes)+(r.note ? '｜备注：'+e(r.note) : '')+(r.pc.length ? '<div style="color:var(--slate2);margin-top:2px;">术后管理：'+r.pc.map(e).join('；')+'</div>' : '<div style="color:var(--muted);margin-top:2px;">术后管理：无</div>')+'</div>'; }).join('')+
+    (d.overall ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding-top:6px;margin-top:2px;">整体备注：'+e(d.overall)+'</div>' : '')+'</div>';
+}
+/* 打印推荐项目整理（给客人）：只打印这一块 */
+function printRecSummary(){
+  var el = document.querySelector('.rec-summary'); if(!el) return;
+  var w = window.open('', '_blank'); if(!w) return;
+  w.document.write('<html><head><meta charset="utf-8"><title>推荐项目整理</title></head><body style="font-family:sans-serif;padding:24px;">'+el.outerHTML.replace(/<button[^>]*>.*?<\/button>/g, '')+'</body></html>'); w.document.close(); w.focus(); w.print();
 }
 function pcAllocEditable(c){ return !c.krBalancePaid && !isEnded(c); } /* 付尾款前都可以改 */
 /* 已选 / 结算单里每个赴韩项目下面的术后管理行：显示韩国 n + 印尼 m；可弹性的（且有印尼对应项目）IN 室长可调 */
@@ -614,7 +652,7 @@ function pcLinesHtml(c, it, fn){
   if(!(it.postcare||[]).length) return '';
   var editable = pcAllocEditable(c) && !it.cancelled && !it.swapped, bid = it.batchId || '';
   return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);"><div style="color:var(--muted);margin-bottom:2px;">术后管理（含在套餐内，不另收费；地点分配只用于排程）</div>'+it.postcare.map(function(x, i){
-    var s = pcSplit(x), head = x.name+'（在韩国） × '+x.times+' 次'+(x.day?'（'+x.day+'）':'');
+    var s = pcSplit(x), head = (x.mgmt ? x.mgmt+'｜' : '')+x.name+'（在韩国） × '+x.times+' 次'+(pcDayText(x)?'（'+pcDayText(x)+'）':'');
     if(x.place==='KR') return '<div style="margin:3px 0;">'+head+'：韩国 '+x.times+' 次，必须在韩国</div>';
     var ctl = (editable && x.innName)
       ? '印尼 <input type="number" min="0" max="'+x.times+'" value="'+s.inn+'" onchange="'+fn+'(\''+it.projectId+'\',\''+bid+'\','+i+',this.value)" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;font-size:11px;"> 次'

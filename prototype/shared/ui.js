@@ -1388,10 +1388,16 @@ function closeInviteKrModal(){
   document.getElementById('invite-kr-overlay').classList.remove('open');
 }
 
+/* 查看诊疗方案 = 单独页面（CMD-1012-02 C1，不再是弹窗）；旧入口函数名保留 */
 function openReportModal(){
   var c = getCurrentCase(); if(!c) return;
-  document.getElementById('report-body').innerHTML = reportModalContent(c);
-  document.getElementById('report-overlay').classList.add('open');
+  nav('in-report'); renderReportPage();
+}
+function renderReportPage(){
+  var c = getCurrentCase(), el = document.getElementById('rp-body'); if(!c || !el) return;
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><button class="btn-outline" onclick="goBack()">← 返回案件</button>'+
+    '<div style="display:flex;gap:8px;"><button class="btn-outline" onclick="reportToPdf()">生成 PDF 并存入附件</button><button class="btn-primary" onclick="goBack();switchCaseTab(\'projects\')">查看方案 →</button></div></div>'+
+    '<div class="card" style="padding:28px 36px;max-width:820px;">'+reportDocHtml(c, REPORT_SHOW_ORIG)+'</div>';
 }
 
 function closeReportModal(){ document.getElementById('report-overlay').classList.remove('open'); }
