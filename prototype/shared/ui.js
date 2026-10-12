@@ -1752,14 +1752,15 @@ function noPurchaseThisTime(){
 }
 
 /* 标记项目行：action 'done' / 'cancelled'；all=true 时作用于全部进行中的项目，否则作用于勾选的 */
-function markMgmtRows(scope, action, all){
+function markMgmtRows(scope, action, all, oneIdx){
   var c = getCurrentCase(); if(!c) return;
   var ctx = ctxOf(c, scope); if(!ctx) return;
   var uses = ctx.mgmtUses||[];
-  var idxs = all
+  var idxs = oneIdx!==undefined ? [oneIdx] : all
     ? uses.map(function(u,i){ return localItemStatus(u)==='进行中' ? i : -1; }).filter(function(i){ return i>-1; })
     : Array.prototype.slice.call(document.querySelectorAll('.mgmt-cb-'+scope)).filter(function(cb){ return cb.checked; }).map(function(cb){ return parseInt(cb.value,10); });
-  if(!idxs.length){ alert('请先勾选要标记的项目'); return; }
+  if(!idxs.length){ alert('没有要标记的项目'); return; }
+  if(oneIdx!==undefined && action==='cancelled' && !confirm('确认取消这一项？未做的次数会归还持有项目（不是退款）。')) return;
   var returned = 0, names = [];
   idxs.forEach(function(i){
     var u = uses[i]; if(!u || localItemStatus(u)!=='进行中') return;
