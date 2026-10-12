@@ -2023,7 +2023,7 @@ function materialsCardHtml(c){
     return '<span class="chip active" style="display:inline-flex;align-items:center;gap:4px;">'+it.name+'<span style="cursor:pointer;" onclick="removeIntentionProject('+idx+');event.stopPropagation();">✕</span></span>';
   }).join('');
 
-  var intentRow =     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">意向项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+
+  var intentRow = !intentKrAllowed(c) ? '' : '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">意向项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+
       '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;">'+intentionChips+'<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="openIntentionPickerModal()">+ 添加</button></div>'+
       '<input type="text" id="cf-intention-note" placeholder="补充说明…" value="'+(c.intentionNote||'')+'" oninput="saveMaterialsDraft(\'intentionNote\',this.value)">'+
       '</div></div>';
@@ -2073,7 +2073,8 @@ function intentionInfoHtml(c){
     return '<span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);margin-right:4px;">'+it.name+'</span>';
   }).join('') || '<span style="color:var(--muted);">—</span>';
   var budgetText = (c.budgetMin||c.budgetMax) ? (formatCurrency(c.budgetMin||0,'IDR')+' ～ '+(c.budgetMax?formatCurrency(c.budgetMax,'IDR'):'不限')) : '—';
-  return '<div class="case-field-row"><span class="fk">意向项目</span><div style="flex-grow:1;font-size:13px;">'+chips+(c.intentionNote?'<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+c.intentionNote+'</div>':'')+'</div></div>'+
+  var intentLine = !intentKrAllowed(c) ? '' : '<div class="case-field-row"><span class="fk">意向项目</span><div style="flex-grow:1;font-size:13px;">'+chips+(c.intentionNote?'<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+c.intentionNote+'</div>':'')+'</div></div>';
+  return intentLine+
     '<div class="case-field-row"><span class="fk">预算</span><span style="flex-grow:1;font-size:13px;">'+budgetText+'</span></div>';
 }
 
@@ -2205,10 +2206,10 @@ function directorRowHtml(c){
 function intentKrAllowed(c){ return c.needsConsult===true || c.needsConsult==='reuse'; }
 function setNeedsConsult(val){
   var c=getCurrentCase(); if(!c) return;
-  if(val!==true && val!=='reuse' && (c.intentionProjects||[]).some(function(it){ return it.origin==='KR'; })){
-    var names = c.intentionProjects.filter(function(it){ return it.origin==='KR'; }).map(function(it){ return it.name; });
-    c.intentionProjects = c.intentionProjects.filter(function(it){ return it.origin!=='KR'; });
-    alert('没选「面诊」时意向项目只能选本地项目，已移除赴韩项目：'+names.join('、'));
+  if(val!==true && val!=='reuse' && (c.intentionProjects||[]).length){ /* 未选面诊：意向项目整个栏位不出现，已选的提示后清空（CMD-1012-12 三·1，取代 08 的「只能选本地项目」） */
+    var names = c.intentionProjects.map(function(it){ return it.name; });
+    c.intentionProjects = [];
+    alert('没选「面诊」，不需要填意向项目，已清空：'+names.join('、'));
   }
   var ci = continuationInfo(c);
   if(ci && ci.overdue && val!==true) return; /* 超过1个月：只能面诊 */
@@ -2943,10 +2944,7 @@ function projectListTabHtml(c, inLocalTab){
 function krTabContent(c){
   if(c.localAsk) return localAskHtml(c);
   if(c.settlementDone && krAllItems(c).length>0){
-    var canAdd = !isEnded(c) && !c.hasArrived && !c.visitClosed && !c.krBalancePaid;
-    var addBox = c.addingMore ? '<div class="card" style="padding:18px 24px;margin-bottom:12px;">'+projectPickerHtml(c, true)+'</div>'
-      : (canAdd ? '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><button class="btn-outline" onclick="addMoreProjects()">+ 追加项目</button></div>' : '');
-    return addBox+krProcedureTabHtml(c);
+    return krProcedureTabHtml(c);
   }
   return projectListTabHtml(c, false);
 }
@@ -4049,6 +4047,12 @@ function cancelKrScheduleChange(){
    界面显示"时间变更待确认"（即 change_pending 状态本身）；只有IN室长手动点"无法协调"才真正取消退定金 */
 /* KR端三步操作（2026-09-29 第十轮改）：已到医院/付清尾款/施术完成 都由KR端操作，IN端只显示状态，
    原型里用演示按钮模拟；施术完成即案件结案（"案件=一次赴韩行程"） */
+/* ［+ 追加项目］在赴韩项目列表下方（CMD-1012-12 一·4） */
+function krAddMoreHtml(c){
+  if(c.addingMore) return '<div style="margin-top:14px;border-top:1px solid var(--border2);padding-top:14px;">'+projectPickerHtml(c, true)+'</div>';
+  var canAdd = !isEnded(c) && !c.hasArrived && !c.visitClosed && !c.krBalancePaid;
+  return canAdd ? '<div style="margin-top:12px;"><button class="btn-outline" onclick="addMoreProjects()">+ 追加项目</button></div>' : '';
+}
 function krProcedureTabHtml(c){
   var sub = c.krSubTab || 'main';
   var tabsHtml = c.settlementDone ? '<div style="display:flex;gap:8px;margin-bottom:12px;"><span class="chip'+(sub==='main'?' active':'')+'" onclick="setKrSubTab(\'main\')">施术日期与项目</span><span class="chip'+(sub==='timeline'?' active':'')+'" onclick="setKrSubTab(\'timeline\')">在韩 timeline'+((c.subItems||[]).length?'（'+c.subItems.length+'）':'')+'</span></div>' : '';
@@ -4073,11 +4077,13 @@ function krProcedureTabMain(c, tabsHtml){
         monthNav+
         '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">第一次点击选首选，第二次点击选备选，再点一次已选日期取消选择</div>'+
         krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+
-        '<button class="btn-primary" style="width:100%;margin-top:16px;" onclick="submitKrScheduleDate()">递交施术日期</button>';
+        '<button class="btn-primary" style="width:100%;margin-top:16px;" onclick="submitKrScheduleDate()">递交施术日期</button>'+
+        '<button class="btn-outline" style="width:100%;margin-top:10px;" onclick="requestCannotCoordinate()">无法协调</button>'; /* ［无法协调］只在时间确认前（待递交 / 待确认）出现 */
     } else if(st==='Pending'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
         '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待Kr室长确认</div>'+
-        '<div style="font-size:12px;color:var(--muted);">等待 KR 室长选定日期、填到院时间和地址（或回复无法安排）</div>';
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">等待 KR 室长选定日期、填到院时间和地址（或回复无法安排）</div>'+
+        '<button class="btn-outline" onclick="requestCannotCoordinate()">无法协调</button>';
     } else if(st==='Confirmed'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
         '<div class="card" style="padding:14px 16px;margin-bottom:14px;">施术日期 '+ks.confirmedDate+'，到院时间 '+ksTimeText({confirmedDate:ks.confirmedDate, confirmedTime:ks.confirmedTime}).replace(ks.confirmedDate+' ','')+(ks.address?'，地址：'+ks.address:'')+'，请转告客人'+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+
@@ -4085,7 +4091,7 @@ function krProcedureTabMain(c, tabsHtml){
           ? '<div style="font-size:12px;color:var(--terracotta);margin-bottom:12px;">KR 已在韩国重新预约施术时间；到过医院之后 IN 端不能再修改日期或取消项目，客人再到医院时由 KR 重新标记"已到医院"</div>'
           : '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">'+
             (canModify ? '<button class="btn-outline" onclick="startKrScheduleChange()">修改日期</button>' : '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>修改日期</button>')+
-            '<button class="btn-outline" onclick="requestCannotCoordinate()">无法协调</button>'+
+            '<button class="btn-outline" onclick="openCancelItems()">取消项目</button>'+ /* 时间确认后：［无法协调］拿掉，同一位置改为［取消项目］（CMD-1012-12） */
             '</div>'+
             (!canModify ? '<div style="font-size:11px;color:var(--terracotta);margin-bottom:10px;">施术前2周内不可修改日期</div>' : ''))+
         '<div style="border-top:1px solid var(--border2);padding-top:14px;font-size:12px;color:var(--muted);">已到医院 / 付清尾款 / 子项完成均由 KR 端操作，这里只显示状态；KR 同一天内可调整到院时间和地址（会通知你）</div>';
@@ -4106,7 +4112,7 @@ function krProcedureTabMain(c, tabsHtml){
           '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">等待 KR 室长确认新时间（或回复无法安排，原日期继续有效）</div>'+
           '<div style="display:flex;gap:10px;">'+
           '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button>'+
-          '<button class="btn-outline" onclick="requestCannotCoordinate()">无法协调</button>'+
+          '<button class="btn-outline" onclick="openCancelItems()">取消项目</button>'+
           '</div>';
       }
     } else { /* Arrived：之后IN不能再操作，只显示状态，KR端用演示按钮模拟 */
@@ -4133,10 +4139,9 @@ function krProcedureTabMain(c, tabsHtml){
     '</div>';
   var unableBanner = '';
   var unableBtn = '';
-  var cancelBtn = (hasActive && !c.hasArrived && !c.visitClosed && c.settlementDone && krNotStartedItems(c).some(function(it){ var b = (c.settlementBatches||[]).filter(function(x){ return x.id===it.batchId; })[0]; return b && b.status!=='unpaid'; })) ? '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn-outline" onclick="openCancelItems()">取消项目</button></div>' : ''; /* 赴韩施术 tab 的［取消项目］：已到医院前显示（CMD-1012-10 修改1） */
   var recHtml = hasActive ? recSummaryHtml(krActiveItems(c).map(function(it){ return {name:it.name, stay:it.stay, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), c.krScope && c.krScope.overallNote, {print:true, inNote:c.recInNote}) : ''; /* 推荐项目整理 + ［打印］给客人（CMD-1012-02 C5）；IN 室长备注一起印出（CMD-1012-05 三·3） */
   if(recHtml) recHtml = '<div style="margin:10px 0 0;"><input type="text" placeholder="IN 室长备注（选填，打印时一起印出）" value="'+String(c.recInNote||'').replace(/"/g,'&quot;')+'" onchange="setRecInNote(this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;"></div>'+recHtml;
-  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+cancelBtn+recHtml+body+itemsHtml+innCareCardHtml(c)+'</div>';
+  return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+recHtml+body+itemsHtml+krAddMoreHtml(c)+innCareCardHtml(c)+'</div>';
 }
 
 function markConsultPaid(){

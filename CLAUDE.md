@@ -423,3 +423,9 @@ prototype/shared/app.css  共用样式
 - IN 案件页 tab 新顺序：基础资料｜面诊资料｜**赴韩施术**｜**本地管理**｜**结算**｜（关联案件）｜附件；「项目列表」tab 删除，旧存档 / 旧链接里的 `activeCaseTab==='projects'` 在 `normalizeCaseTab` 映射到 `kr`。出现条件（`ui.js`）：`showKrTab`（面诊案件出诊疗方案后或已有赴韩项目）、`showLocalTab`（加上「本案件买过本地项目批次」）、`showSettleTab`（有任何结算单）。
 - 赴韩施术 tab = `krTabContent(c)`：付款前走 `projectListTabHtml(c,false)`（赴韩方案选项目含「本地项目」分页、待付款 / 重新选择项目、`localAsk`）；付款后 = ［+ 追加项目］ + `krProcedureTabHtml`（已确定项目 + 推荐整理、施术日期、在韩进程、［取消项目］）。本地管理 tab 只用 `localPurchaseHtml(c,'main')` 本地选购画面（`projectListTabHtml(c,true)` 不再出现赴韩方案 / 结算汇总）；赴韩案件里买的本地项目显示 `localBoughtHtml`（本次购买，只读）。结算 tab = `settleTabHtml`（顶部 `settleTabTopHtml`：项目合计 / 已收 / 已退 / 待收尾款，韩元印尼盾分开；每张结算单标来源并可点回对应 tab，只读）。
 - 业务规则不变；数据版本不变（38）。
+
+## CMD-1012-12 补充（2026-10-12，追加；旧文字保留作历史）
+- 赴韩施术 tab：［无法协调］只在施术时间确认前（待递交 / 待确认）；确认后（Confirmed / Changing）同一位置改为［取消项目］（`openCancelItems()`，不传批次 = 全部已付款未开始的赴韩项目），两者不并存；取消全部赴韩项目走 `afterKrItemsChanged`（有本地项目 → 保留 / 全退 → 是否做本地管理；无 → 是否增加本地项目）。本地项目全部退款弹窗每项显示当初实付（规格、折扣、原价）。［+ 追加项目］在赴韩项目列表下方（`krAddMoreHtml`）。
+- 已结案进程文字（`caseProcessText`）：赴韩完成 / 本地完成 / **本地项目保留**（取消赴韩后保留本地项目且一次没用）。
+- IN 基础资料：未选面诊（且不是沿用诊疗方案）时意向项目整个栏位不出现（表单、只读展示、必填检查），从面诊改成不面诊时已选的意向项目提示后清空；预算栏不变。取代 08 的「只能选本地项目」（`intentKrAllowed` 仍用于判断）。
+- 测试覆盖：D28a–c 要求 Timeline 有「点［无法协调］」（确认前）；新增 D30a–c = 取消项目（确认后）有本地项目的三种结局（没有「点［无法协调］」）；D27 / D29 判断依据不变，名称标明「时间确认前」。数据版本不变（38）。

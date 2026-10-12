@@ -1572,7 +1572,7 @@ function confirmMaterials(){
   if(!c.videoUploaded) missing.push('视频');
   if(!concernVal) missing.push('苦恼');
   if(!expectationVal) missing.push('希望预期');
-  if(!(c.intentionProjects||[]).length) missing.push('意向项目');
+  if(intentKrAllowed(c) && !(c.intentionProjects||[]).length) missing.push('意向项目');
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
   if(c.needsConsult!==true && c.needsConsult!==false && !(c.needsConsult==='reuse' && reusableReportSrc(c))) missing.push('面诊需求');
@@ -1915,7 +1915,9 @@ function localKeepChoice(kind){
   if(!rows.length){ alert('这些批次都用过了，不能退款，只能保留'); c.localAsk = true; openLocalAskModal(c); return; }
   window.__LOCAL_REFUND_ROWS = rows;
   document.getElementById('local-refund-all-rows').innerHTML = rows.map(function(x,i){
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+x.h.itemName+' ×'+x.b.bought+'</span><span style="font-size:12px;">Rp <input type="number" min="0" id="lra-'+i+'" placeholder="金额" style="width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></span></div>';
+    var pb = x.b, cur = pb.currency || 'IDR', pct = (pb.discountPct===undefined || pb.discountPct===null) ? 100 : pb.discountPct;
+    var paidLine = typeof pb.paid==='number' ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;">当初实付 <b>'+formatCurrency(pb.paid, cur)+'</b>'+(pb.spec ? '　规格：'+pb.spec : '')+(pct<100 && pb.listPrice ? '　原价 '+formatCurrency(pb.listPrice, cur)+'，'+discountText(pct) : '')+(pb.pkg ? '（套餐内含）' : '')+(pb.promo ? '（活动价）' : '')+'</div>' : '<div style="font-size:11px;color:var(--muted);margin-top:2px;">没有记录当初实付</div>';
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+x.h.itemName+' ×'+x.b.bought+paidLine+'</span><span style="font-size:12px;">Rp <input type="number" min="0" id="lra-'+i+'" placeholder="金额" style="width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></span></div>';
   }).join('');
   document.getElementById('local-refund-all-reason').value = '';
   document.getElementById('local-refund-all-overlay').classList.add('open');

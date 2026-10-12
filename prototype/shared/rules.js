@@ -115,7 +115,12 @@ function caseProcessText(c){
   }
   if(c.stage==='local') return c.mgmtActive ? '本地管理中' : '选择项目';
   if(c.stage==='cancelled') return endReasonText(c);
-  if(c.stage==='closed') return (c.krProcedureDone || krAllItems(c).some(function(it){ return it.done; })) ? '赴韩完成' : '本地完成'; /* CMD-1008-13 确认 */
+  if(c.stage==='closed'){ /* 赴韩完成 / 本地完成 / 本地项目保留（取消赴韩后保留本地项目、本次没使用；CMD-1012-12 二） */
+    if(c.krProcedureDone || krAllItems(c).some(function(it){ return it.done; })) return '赴韩完成';
+    var kept = localPurchasedBatches(c);
+    if(krAllItems(c).length && !c.localMgmt && kept.length && kept.every(function(x){ return !(x.b.used>0); })) return '本地项目保留';
+    return '本地完成';
+  } /* CMD-1008-13 确认 */
   if(c.stage==='reportonly') return c.endNote || ((c.krScope && (c.krScope.items||[]).length===0) ? 'KR 无可选项目' : '只出报告'); /* 仅出报告写原因 */
   return '';
 }
