@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 36; /* 36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 37; /* 37（CMD-1012-05）：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -4925,7 +4925,7 @@ var DEMO_MEMOS = [
   {id:'m6', date:D(-1), type:'备忘', scope:'私人', author:'A1 室长', text:'给 客人11 回电（私人）'}
 ];
 
-(function(){ for(var d0 = -45; d0 <= 45; d0++){ var ds0 = D(d0); if(new Date(ds0+'T00:00:00').getDay()===1) DEMO_MEMOS.push({id:'m1_'+ds0, date:ds0, type:'OFF', scope:'公开', role:'IN室长', person:'A1 室长', author:'A1 室长', text:''}); } })();
+(function(){ for(var d0 = -45; d0 <= 45; d0++){ var ds0 = D(d0); if(d0>=3 && (d0-3)%7===0 || d0<3 && (3-d0)%7===0) DEMO_MEMOS.push({id:'m1_'+ds0, date:ds0, type:'OFF', scope:'公开', role:'IN室长', person:'A1 室长', author:'A1 室长', text:''}); } })();
 var CAL_MEMOS = (function(){ try{ var v = JSON.parse(localStorage.getItem('gmc_memos')||'null'); if(v) return v; }catch(e){} return DEMO_MEMOS.map(function(m){ return Object.assign({}, m); }); })();
 
 function saveMemos(){ try{ localStorage.setItem('gmc_memos', JSON.stringify(CAL_MEMOS)); }catch(e){} }
