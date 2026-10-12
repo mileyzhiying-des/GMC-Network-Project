@@ -16,12 +16,39 @@ function currentTestRound(){ try{ return parseInt(localStorage.getItem('gmc_cfg_
 /* ---- 数据升级 / 重置时保留用户测试案件（CMD-1012-09）----
    只重置演示数据：demo:true 的案件、种子客人、种子设定重新生成；用户新建的案件（demo:false，或旧存档里没标记的 r+时间戳 id）连同它们的客人、持有批次、通知、对话房、
    KR 侧的通知 / 院长日程块 / 录入仓库一起「提取」存进 gmc_cfg_carry（gmc_cfg_ 开头的键重置不清），新种子生成后由 store.js 的 carryRestore 合并回去并按「旧版本 → 新版本」迁移。 */
+/* ---- 用户改过的设定 / 资料也保留（CMD-1012-09 补）：种子生成时给项目库项目、案例库案例、活动价、套餐、日历 memo 各盖一个指纹 _h（内容的哈希）。
+   升级时：没有 _h = 用户新增；有 _h 但现在的哈希不同 = 用户改过；两者都带走，只有没动过的才回到新演示数据。存档整体带 st:1 表示指纹有效。 */
+function gmcHash(o){ var s = JSON.stringify(o, function(k, v){ return k==='_h' ? undefined : v; }) || '', h = 5381; for(var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h; }
+function gmcStamp(arr){ (arr || []).forEach(function(x){ if(x && typeof x==='object' && x._h===undefined) x._h = gmcHash(x); }); }
+var GMC_CLINIC_LISTS = ['PROJECT_LIBRARY', 'LIB_CASES', 'PROMOS', 'PACKAGES', 'CAL_MEMOS'], GMC_HOSP_LISTS = ['projects', 'libCases', 'localLib'];
+function gmcStampVars(v){ GMC_CLINIC_LISTS.forEach(function(n){ gmcStamp(v && v[n]); }); }
+function gmcStampHospitals(hd){ Object.keys(hd || {}).forEach(function(h){ GMC_HOSP_LISTS.forEach(function(n){ gmcStamp(hd[h] && hd[h][n]); }); }); }
+function gmcChanged(x){ return x._h===undefined || gmcHash(x)!==x._h; }
+/* 没有指纹的旧存档（升级到这个功能之前的数据）：只能按 id 特征认出用户新增的 */
+function gmcLegacyUser(listName, x){
+  if(listName==='CAL_MEMOS') return /^m\d{10,}/.test(String(x.id));
+  if(listName==='PROMOS') return /^pm[a-z0-9]{8,}/.test(String(x.id));
+  if(listName==='PACKAGES') return /^pk[a-z0-9]{8,}/.test(String(x.id));
+  return false;
+}
+function gmcUserCfgOfClinic(v, stamped, cats){
+  var o = {}, n = 0;
+  GMC_CLINIC_LISTS.forEach(function(ln){
+    var arr = (v[ln] || []).filter(function(x){ return x && (stamped ? gmcChanged(x) : gmcLegacyUser(ln, x)); });
+    if(arr.length){ o[ln] = arr; n += arr.length; }
+  });
+  var catIds = {}; (o.PROJECT_LIBRARY || []).forEach(function(p){ if(p.categoryId) catIds[p.categoryId] = 1; });
+  o.cats = {}; Object.keys(catIds).forEach(function(k){ if(cats && cats[k]) o.cats[k] = cats[k]; });
+  o.n = n; return o;
+}
 function gmcIsUserCase(c){ return !!c && (c.demo===false || (c.demo===undefined && /^r\d{9,}/.test(String(c.id)))); }
 function gmcExtractUserCarry(){
   var carry = {from:localStorage.getItem('gmc_demo_ver')||'', at:new Date().toISOString(), clinics:{}, hospitals:{}, seq:0, total:0}, allIds = {};
   Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_clinic_')===0; }).forEach(function(k){
     var p = JSON.parse(localStorage.getItem(k) || 'null'); if(!p || !p.vars || p.partial) return;
-    var v = p.vars, cid = k.replace('gmc_clinic_', ''), cases = (v.CASE_ITEMS||[]).filter(gmcIsUserCase); if(!cases.length) return;
+    var v = p.vars, cid = k.replace('gmc_clinic_', ''), cases = (v.CASE_ITEMS||[]).filter(gmcIsUserCase);
+    var cfg = gmcUserCfgOfClinic(v, p.st===1, v.PROJECT_CATEGORIES); if(cfg.n){ (carry.cfg = carry.cfg || {})[cid] = cfg; carry.cfgN = (carry.cfgN || 0) + cfg.n; }
+    if(!cases.length){ if(cfg.n) carry.clinics[cid] = {cases:[], clients:[], holdings:{}, notifs:[], rooms:[], chat:{}, sms:[]}; return; }
     var ids = {}, names = {};
     cases.forEach(function(c){ ids[c.id] = 1; allIds[c.id] = cid; names[c.name] = 1; var n = parseInt(String(c.caseNo||'').slice(1), 10) || 0; if(n > carry.seq) carry.seq = n; });
     var holdings = {}; Object.keys(v.CLIENT_HOLDINGS||{}).forEach(function(n){ if(names[n]) holdings[n] = v.CLIENT_HOLDINGS[n]; });
@@ -31,8 +58,15 @@ function gmcExtractUserCarry(){
       notifs:(v.NOTIFS||[]).filter(function(n){ return n.caseId && ids[n.caseId]; }), rooms:rooms, chat:chat, sms:(v.SMS_LOG||[]).filter(function(s){ return s.caseId && ids[s.caseId]; })};
     carry.total += cases.length;
   });
-  if(!carry.total) return carry;
   var g = JSON.parse(localStorage.getItem('gmc_state') || 'null'), hd = g && g.vars && g.vars.HOSPITAL_DATA;
+  if(hd){ /* 医院侧：KR 项目库 / 本地管理项目 / 赴韩案例里用户新增或改过的 */
+    Object.keys(hd).forEach(function(hid){
+      var h = hd[hid], o = {}, n = 0; GMC_HOSP_LISTS.forEach(function(ln){ if(g.st!==1) return; var arr = (h[ln] || []).filter(function(x){ return x && gmcChanged(x); }); if(arr.length){ o[ln] = arr; n += arr.length; } });
+      if(n){ var ids = {}; (o.projects || []).concat(o.localLib || []).forEach(function(p){ if(p.categoryId) ids[p.categoryId] = 1; }); o.cats = {}; Object.keys(ids).forEach(function(k){ if(g.vars.KR_CATEGORIES && g.vars.KR_CATEGORIES[k]) o.cats[k] = g.vars.KR_CATEGORIES[k]; });
+        (carry.cfgH = carry.cfgH || {})[hid] = o; carry.cfgN = (carry.cfgN || 0) + n; }
+    });
+  }
+  if(!carry.total) return carry;
   if(hd) Object.keys(hd).forEach(function(hid){
     var h = hd[hid], o = {notifs:(h.notifs||[]).filter(function(n){ return n.caseId && allIds[n.caseId]; }), sched:{}, vault:{}};
     Object.keys(h.directorSchedule||{}).forEach(function(dn){ var bl = (h.directorSchedule[dn]||[]).filter(function(b){ return b.caseId && allIds[b.caseId]; }); if(bl.length) o.sched[dn] = bl; });
@@ -43,7 +77,7 @@ function gmcExtractUserCarry(){
 }
 /* 提取结果存起来；只有真的提取到案件才覆盖（手动「只重置演示数据」后重载会再走一次版本检查，那时存档已空，不能把刚存的清掉） */
 function gmcStoreCarry(carry){
-  if(!carry || !carry.total) return;
+  if(!carry || (!carry.total && !carry.cfgN)) return;
   try{ localStorage.setItem('gmc_cfg_carry', JSON.stringify(carry)); }
   catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:carry.from, to:null, at:carry.at, migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'存档容量不够，用户案件没能保留（旧数据在自动备份里）'}]})); }catch(e2){} }
 }
@@ -5809,7 +5843,7 @@ function buildClinicSeed(cid){
 
 
 /* KR 的本地管理项目库（CMD-1012-04）：每家医院一份清单（韩元），KR 项目库页面「本地管理项目」组；缺的补上 */
-function krLocalLib(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; if(!h.localLib) h.localLib = buildLocalProjects('KR', hid); return h.localLib; }
+function krLocalLib(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; if(!h.localLib){ h.localLib = buildLocalProjects('KR', hid); gmcStamp(h.localLib); } return h.localLib; }
 Object.keys(HOSPITAL_DATA).forEach(function(h){ krLocalLib(h); });
 
 /* 演示案件标记（CMD-1012-06 补）：种子里建立的案件都带 demo:true；用户自己新建的案件（id 为 r+时间戳）没有这个标记，测试覆盖页只计算后者。

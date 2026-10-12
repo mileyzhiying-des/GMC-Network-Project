@@ -11,7 +11,7 @@
    加载顺序：rules.js → i18n.js → ui.js → data.js → store.js → admin.js →（in.html 再加 boot-in.js） */
 var Store = (function(){
   var KEY_G = 'gmc_state';
-  var disabled = false;   /* 容量超限后，这个页面不再存档 */
+  var disabled = false, stampDirty = false;   /* 容量超限后，这个页面不再存档 */
   var lastG = '', lastC = '';  /* 上次存档/读档时全局部分、本诊所分区的内容，用来判断有没有变化 */
   var imgByValue = {}, imgById = {}, imgSeq = 0; /* 内存里的图片登记：data: 地址 ⇄ 编号 */
 
@@ -52,7 +52,7 @@ var Store = (function(){
   }
   function snapshotG(){ return JSON.stringify(pick(GLOBAL_VAR_NAMES), replacer); }
   function clinicVarsObj(split){ var o = pick(CLINIC_VAR_NAMES); if(split){ o.PROJECT_LIBRARY = split.PROJECT_LIBRARY; o.LIB_CASES = split.LIB_CASES; o.PROJECT_CATEGORIES = split.PROJECT_CATEGORIES; } return o; }
-  function wrap(vars){ return JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), vars:vars}, replacer); }
+  function wrap(vars){ return JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), st:1, vars:vars}, replacer); }
   function snapshot(){ /* 返回 {g, c}：全局部分和本诊所分区的 JSON（c 为 null 表示这个页面没有诊所） */
     var cid = pageClinic(), split = cid ? viewSplit() : null;
     return {g: snapshotG(), c: cid ? JSON.stringify(clinicVarsObj(split), replacer) : null};
@@ -62,12 +62,14 @@ var Store = (function(){
   function loadGlobal(){
     var st = readRaw(KEY_G);
     if(!st || String(st.ver) !== String(DEMO_DATA_VERSION) || !st.vars || st.partial) return false;
+    if(st.st!==1){ gmcStampHospitals(st.vars.HOSPITAL_DATA); stampDirty = true; } /* 旧存档：把现在的内容当作基准盖章 */
     GLOBAL_VAR_NAMES.forEach(function(n){ if(st.vars.hasOwnProperty(n)) assignInPlace(n, st.vars[n]); });
     return true;
   }
   function loadClinic(cid){
     var st = readRaw(keyC(cid));
     if(!st || String(st.ver) !== String(DEMO_DATA_VERSION) || !st.vars || st.partial || !st.vars.CASE_ITEMS) return false;
+    if(st.st!==1){ gmcStampVars(st.vars); stampDirty = true; }
     CLINIC_VAR_NAMES.forEach(function(n){ if(n!=='PROJECT_LIBRARY' && n!=='LIB_CASES' && n!=='PROJECT_CATEGORIES' && st.vars.hasOwnProperty(n)) assignInPlace(n, st.vars[n]); });
     buildClinicViews(st.vars.PROJECT_LIBRARY || [], st.vars.LIB_CASES || [], st.vars.PROJECT_CATEGORIES || {});
     return true;
@@ -80,6 +82,7 @@ var Store = (function(){
     if(typeof applyClinicSettings === 'function') applyClinicSettings(); /* 日历行/时区等由诊所设定派生，不存档 */
     if(typeof markDemoCases === 'function') markDemoCases(); /* 旧存档里的演示案件补上 demo 标记 */
     var snap = snapshot(); lastG = snap.g; lastC = snap.c;
+    if(stampDirty){ stampDirty = false; lastG = ''; lastC = ''; setTimeout(function(){ save(); }, 300); } /* 刚盖的章要存下去 */
   }
   function load(){
     try{
@@ -109,8 +112,8 @@ var Store = (function(){
     var snap;
     try{ snap = snapshot(); }catch(e){ console.warn('[存档] 序列化失败', e); return; }
     try{
-      if(snap.g !== lastG){ writeKey(KEY_G, '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"vars":'+snap.g+'}'); lastG = snap.g; }
-      if(snap.c !== null && snap.c !== lastC){ writeKey(keyC(pageClinic()), '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"vars":'+snap.c+'}'); lastC = snap.c; }
+      if(snap.g !== lastG){ writeKey(KEY_G, '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.g+'}'); lastG = snap.g; }
+      if(snap.c !== null && snap.c !== lastC){ writeKey(keyC(pageClinic()), '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.c+'}'); lastC = snap.c; }
     }catch(e){
       console.warn('[存档] localStorage 容量超限，演示数据已重置，此页面之后的操作不再保存', e);
       disabled = true;
@@ -138,8 +141,10 @@ var Store = (function(){
           if(cl.id==='C1'){ var split = viewSplit(); vars = clinicVarsObj(split); }
           else vars = demoMarked(buildClinicSeed(cl.id));
           if(p && p.vars) Object.keys(p.vars).forEach(function(n){ vars[n] = p.vars[n]; }); /* 版本重置时保留的诊所设定等 */
+          gmcStampVars(vars);
           writeKey(keyC(cl.id), wrap(vars));
         });
+        gmcStampHospitals(HOSPITAL_DATA);
         writeKey(KEY_G, wrap(pick(GLOBAL_VAR_NAMES)));
       } else {
         CLINICS.forEach(function(cl){ /* 全局在、某个诊所分区缺（或只剩保留下来的部分）→ 补齐这个分区 */
@@ -287,6 +292,38 @@ var Store = (function(){
       (h.batches||[]).forEach(function(b){ if(!b.spec) b.spec = m[1]; });
     }); });
   }
+  /* 用户改过 / 新增的设定资料合并回新种子（CMD-1012-09 补）：项目（按名称对上种子项目就覆盖字段，对不上就新增；新增的 id 加 u 前缀避免撞号，案件 / 活动价 / 套餐里的引用同步改）、案例、活动价、套餐、memo */
+  function cfgRemap(obj, idMap){
+    if(!obj || typeof obj !== 'object') return;
+    if(Array.isArray(obj)){ obj.forEach(function(x){ cfgRemap(x, idMap); }); return; }
+    Object.keys(obj).forEach(function(k){
+      var v = obj[k];
+      if((k==='projectId' || k==='key') && typeof v === 'string' && idMap[v]) obj[k] = idMap[v];
+      else if(k==='projectIds' && Array.isArray(v)) obj[k] = v.map(function(x){ return idMap[x] || x; });
+      else if(v && typeof v === 'object') cfgRemap(v, idMap);
+    });
+  }
+  function cfgCat(cats, oldId, srcCats, extraList){
+    if(!oldId) return oldId;
+    if(cats[oldId] && srcCats[oldId] && cats[oldId].label===srcCats[oldId].label) return oldId;
+    var src = srcCats[oldId]; if(!src) return cats[oldId] ? oldId : oldId;
+    var hit = Object.keys(cats).filter(function(k){ return cats[k].label===src.label && cats[k].origin===src.origin; })[0];
+    if(hit) return hit;
+    var nid = 'u' + oldId; cats[nid] = Object.assign({}, src, {id:nid}); return nid;
+  }
+  function cfgMergeProjects(target, carried, cats, srcCats, idMap, noteFn){
+    carried.forEach(function(p){
+      delete p._h;
+      p.categoryId = cfgCat(cats, p.categoryId, srcCats || {});
+      var ex = target.filter(function(x){ return x.name===p.name && x.origin===p.origin && (x.hospitalId||'')===(p.hospitalId||'') && (x.clinicId||'')===(p.clinicId||''); })[0];
+      if(ex){ var id = ex.id; Object.keys(p).forEach(function(k){ if(k!=='id' && k!=='categoryId') ex[k] = p[k]; }); ex.id = id; ex.categoryId = ex.categoryId || p.categoryId; if(p.id !== id) idMap[p.id] = id; noteFn('更新项目「'+p.name+'」'); }
+      else { var nid = 'u' + p.id; idMap[p.id] = nid; p.id = nid; target.push(p); noteFn('新增项目「'+p.name+'」'); }
+    });
+  }
+  function cfgMergeById(target, carried, idPrefix, noteFn, label){
+    carried.forEach(function(x){ delete x._h; var i = target.findIndex(function(y){ return y.id===x.id; });
+      if(i > -1){ target[i] = x; noteFn('更新'+label); } else { if(idPrefix && target.some(function(y){ return y.id===x.id; })) x.id = idPrefix + x.id; target.push(x); noteFn('新增'+label); } });
+  }
   function carryRestore(){
     var raw = null; try{ raw = localStorage.getItem('gmc_cfg_carry'); }catch(e){} if(!raw) return;
     var carry = null; try{ carry = JSON.parse(raw); }catch(e){}
@@ -304,6 +341,17 @@ var Store = (function(){
       var nmap = {}; var seq = v.NOTIF_SEQ || 0;
       cc.notifs.forEach(function(n){ var nid = 'n'+(++seq); nmap[n.id] = nid; n.id = nid; });
       v.NOTIF_SEQ = seq; Array.prototype.unshift.apply(v.NOTIFS, cc.notifs);
+      var cfg = (carry.cfg || {})[cid], cfgIdMap = {}, cfgNotes = [];
+      if(cfg){
+        var cn = function(t){ cfgNotes.push(t); }, cats = v.PROJECT_CATEGORIES = v.PROJECT_CATEGORIES || {};
+        if(cfg.PROJECT_LIBRARY) cfgMergeProjects(v.PROJECT_LIBRARY = v.PROJECT_LIBRARY || [], cfg.PROJECT_LIBRARY, cats, cfg.cats, cfgIdMap, cn);
+        ['LIB_CASES','PROMOS','PACKAGES','CAL_MEMOS'].forEach(function(ln){
+          if(!cfg[ln]) return; cfgRemap(cfg[ln], cfgIdMap);
+          cfgMergeById(v[ln] = v[ln] || [], cfg[ln], ln==='LIB_CASES' ? 'u' : '', cn, ({LIB_CASES:'案例',PROMOS:'活动价',PACKAGES:'套餐',CAL_MEMOS:'日历 memo'})[ln]);
+        });
+        cc.cases.forEach(function(c){ cfgRemap(c, cfgIdMap); });
+        report.cfg = (report.cfg || 0) + cfgNotes.length;
+      }
       cc.cases.forEach(function(c){
         var notes = []; ctx.note = function(t){ notes.push(t); };
         try{
@@ -337,6 +385,12 @@ var Store = (function(){
     if(g && g.vars){
       g.vars.CASE_NO_SEQ = Math.max(g.vars.CASE_NO_SEQ || 0, (carry.seq || 0) + 1);
       var hd = g.vars.HOSPITAL_DATA || {};
+      Object.keys(carry.cfgH || {}).forEach(function(hid){
+        var o = carry.cfgH[hid], h = hd[hid]; if(!h) return; var idMap = {}, cats = g.vars.KR_CATEGORIES = g.vars.KR_CATEGORIES || {}, cn = function(){ report.cfg = (report.cfg || 0) + 1; };
+        if(o.projects) cfgMergeProjects(h.projects = h.projects || [], o.projects, cats, o.cats, idMap, cn);
+        if(o.localLib) cfgMergeProjects(h.localLib = h.localLib || [], o.localLib, cats, o.cats, idMap, cn);
+        if(o.libCases){ cfgRemap(o.libCases, idMap); cfgMergeById(h.libCases = h.libCases || [], o.libCases, 'u', cn, '赴韩案例'); }
+      });
       Object.keys(carry.hospitals || {}).forEach(function(hid){
         var o = carry.hospitals[hid], h = hd[hid]; if(!h) return;
         h.notifs = (o.notifs || []).concat(h.notifs || []);
