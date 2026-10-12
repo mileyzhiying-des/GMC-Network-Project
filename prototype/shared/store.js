@@ -265,7 +265,7 @@ var Store = (function(){
 
 /* 重置演示数据：清掉所有 gmc_ 开头的存档，其他标签页收到通知后也会刷新 */
 function resetDemoData(){
-  try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
+  gmcResetAll('手动重置演示数据'); /* 先自动备份再清（CMD-1012-06） */
   location.reload();
 }
 

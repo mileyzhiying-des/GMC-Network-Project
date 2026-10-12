@@ -8,6 +8,37 @@ var ACCOUNT_STRUCT_VERSION = 5;
 var KEEP_ON_VERSION_RESET = ['ACCOUNTS', 'ACCOUNT_LOG'];                      /* 全局部分里保留的 */
 var DEMO_CLINIC_HOURS = {openTime:'10:00', closeTime:'21:00', bookFrom:'10:00', bookTo:'20:30', lunchFrom:'14:00', lunchTo:'15:00'}; /* IN 诊所演示营业时间（印尼当地时间）；周日休诊 */
 var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ']; /* 每个诊所分区里保留的 */
+/* ---- 重置前自动备份（CMD-1012-06）：任何清掉 gmc_ 存档的地方（数据版本升级、手动「重置演示数据」）都先把当前全部存档备份：
+   ① 存进 localStorage 的 gmc_backup_<时间>（重置不清它，只保留最近 3 份）；② 尝试自动下载一份 JSON；③ 登录页 / 测试覆盖页顶部提示。 ---- */
+function gmcCollectRaw(){ var o = {}; try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); }catch(e){} return o; }
+function gmcBackupMake(reason){
+  try{
+    var raw = gmcCollectRaw();
+    if(!raw.gmc_state && !Object.keys(raw).some(function(k){ return k.indexOf('gmc_clinic_')===0; })) return null; /* 还没有数据：不用备份 */
+    var full = Object.keys(raw).some(function(k){ if(k!=='gmc_state' && k.indexOf('gmc_clinic_')!==0) return false; try{ var q = JSON.parse(raw[k]); return q && !q.partial && q.vars; }catch(e){ return false; } });
+    if(!full) return null; /* 只剩一份重置后保留下来的「半成品」存档（不含案件）：不用再备份 */
+    var t = new Date(), rec = {kind:'gmc-backup', exportedAt:t.toISOString(), reason:reason, dataVersion:raw.gmc_demo_ver || '', raw:raw};
+    return {name:'gmc-backup-'+t.toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json', str:JSON.stringify(rec), t:t.getTime(), reason:reason};
+  }catch(e){ return null; }
+}
+function gmcBackupKeep(bk){
+  if(!bk) return;
+  try{
+    localStorage.setItem('gmc_backup_'+bk.t, bk.str);
+    Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_backup_')===0 && k!=='gmc_backup_notice'; }).sort().slice(0, -3).forEach(function(k){ localStorage.removeItem(k); });
+  }catch(e){ try{ localStorage.removeItem('gmc_backup_'+bk.t); }catch(e2){} } /* 容量不够：只剩自动下载那一份 */
+  try{ localStorage.setItem('gmc_backup_notice', JSON.stringify({name:bk.name, t:bk.t, reason:bk.reason})); }catch(e){}
+  try{ gmcDownloadText(bk.name, bk.str); }catch(e){}
+}
+function gmcDownloadText(name, text, mime){
+  var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:mime || 'application/json'})); a.download = name; (document.body || document.documentElement).appendChild(a); a.click();
+  setTimeout(function(){ try{ URL.revokeObjectURL(a.href); a.remove(); }catch(e){} }, 1500);
+}
+function gmcResetAll(reason){
+  var bk = gmcBackupMake(reason || '手动重置演示数据');
+  try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
+  gmcBackupKeep(bk);
+}
 (function(){
   try{
     /* 演示数据版本号变了：清掉业务演示资料（案件、客户、预约…）重新生成，但保留账号资料（密码、使用人、使用人历史、操作日志）和诊所设定；
@@ -25,7 +56,9 @@ var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_
           });
         }catch(e){ keptG = null; keptC = {}; }
       }
-      Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); });
+      var bkv = gmcBackupMake('演示数据版本升级 '+(localStorage.getItem('gmc_demo_ver')||'?')+' → '+DEMO_DATA_VERSION); /* 升级前自动备份旧数据 */
+      Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
+      gmcBackupKeep(bkv);
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
       localStorage.setItem('gmc_struct_ver', String(ACCOUNT_STRUCT_VERSION));
       /* 保留下来的只是一部分变量；其余变量由 store.js 启动时按种子补齐（见 Store.init） */
@@ -542,6 +575,7 @@ function submitSelfBooking(f){
   if(f.phId) RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==f.phId; }); /* 占位转为预约来访 */
   var c = createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose);
   c.visitNote = (f.note||'').trim(); c.bookEntry = f.entry; c.remindSent = false;
+  c.bookClient = isNew ? 'new' : 'old'; c.consentResigned = !isNew && !!f.consentGiven; /* 记录：新客 / 老客、老客是否重签同意书（测试覆盖页用，CMD-1012-06） */
   /* 医美史（结构化）：年月 + 项目 + 来源"客人自填"；老客人新增的标"本次新增"（到店时室长在基础资料里看得到并确认；延续既往面诊的"有新增医美史"读它） */
   (f.beauty||[]).forEach(function(b){ if(b && b.ym && b.project) addBeautyRecord(cl, {year:+b.ym.slice(0,4), month:+b.ym.slice(5,7), project:b.project, source:'客人自填', caseId:c.id, newCaseId:isNew ? null : c.id}); });
   if(f.entry==='walkin') c.logEntries[0].action = '到店自己填资料（平板/手机）预约成功，生成 Case ID '+c.caseNo;

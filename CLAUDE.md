@@ -366,3 +366,9 @@ prototype/shared/app.css  共用样式
 - **术后管理格式**：管理项目名称下拉（`KR_PC_NAMES`：术后复诊 / 拆线 / 消肿管理 / 伤口护理）｜N 次｜隔几天下拉｜具体项目下拉｜所在地｜第 N 天起｜自动日子，网格对齐；可选范围底部「术后管理项目」整块已拿掉；KR 项目 tab 每个赴韩项目下写出安排，「KR 可选范围」读 `c.krScope.items`。IN：选施术日期今天以前置灰；项目 / 结算单 / 赴韩施术 tab 的赴韩项目行下写安排（`itemArrangeHtml`）；推荐项目整理可加 IN 室长备注（`c.recInNote`），打印一起印出。
 - **调整方案流程**（`krAdjustBlock` → `krAdjBlock`）：原项目勾选 = 保留 → ［增加项目］（KR 项目库 + 所需术后管理 / 麻醉 / 在韩时间，非局麻要勾现场签署）→ 结算单预览 →［结算并标记已付款］（`krDoSettle` 一次完成：增加 `coreAddOnItem(detail)`、未勾选的 `coreMarkUnable`、`coreSettleBalance`）→ **付款后才弹术后管理预约**（`corePcBooking` 允许 `krBalancePaid && result==='changed'`，之后再 `finalizeInnCare`）；删掉「更换」下拉和［标记无法施术］。
 - **代表院长 KO1 = 院长 + 老板**：`isKrDirectorLike()`（`kr_director` / `kr_owner`）；`kr_owner` 的 `krviewOwn:true`，登录进 `kr.html`（`homeUrl`），看自己负责的案件、录入面诊、自己的日程 / OFF，管理类页面照旧。
+
+## CMD-1012-06 补充（2026-10-12，追加；旧文字保留作历史）
+- **重置 / 版本升级前自动备份**（`data.js` 开头 `gmcBackupMake` / `gmcBackupKeep` / `gmcResetAll`）：任何会清掉 `gmc_` 存档的地方（`DEMO_DATA_VERSION` 变了、登录页 / `store.js` 的「重置演示数据」）先备份旧数据：① 存进 localStorage `gmc_backup_<时间>`（重置不清它，只留最近 3 份，容量不够则只剩下载那份）② 尝试自动下载 `gmc-backup-….json` ③ 登录页顶部提示一次（`gmc_backup_notice`）。**以后升数据版本不需要再手动导出**，但仍建议提醒用户。登录页「重置演示数据」先问「重置会清掉测试记录，要先导出吗？」。
+- **测试覆盖页** `prototype/test-coverage.html` + `shared/coverage.js`（开发用，登录页底部［🧪 测试覆盖］进入）：**不加载 data.js**，直接读 localStorage 存档，所以不会触发版本重置；按案件 Timeline（`logEntries`）和状态字段对照情况清单（A–F，共 56 条，其中 D22b / D29 无法自动判断）；数据来源可选「当前浏览器 / 自动备份 / 导入的文件」；导出测试记录（JSON）、可读版（Markdown）、完整备份（JSON，可再导入分析并「恢复」到浏览器）。**新增情况 = 在 `coverage.js` 的 `CHECKS` 里加一行**（id、标题、判断函数、依据文字）。
+- 补的记录字段：自助预约案件 `c.bookClient`（new / old）、`c.consentResigned`（老客重签同意书），供覆盖页判断 E1–E3。
+- 注意：种子演示数据里本来就有的案件也会算「已覆盖」（覆盖页看不出是种子还是手测）。

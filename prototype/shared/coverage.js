@@ -1,0 +1,229 @@
+/* shared/coverage.js —— 测试覆盖页（CMD-1012-06，开发用，不属于产品功能）
+   只读浏览器 localStorage 里的存档（gmc_state / gmc_clinic_*），不加载 data.js，所以不会触发「演示数据版本重置」。
+   按每个案件的 Timeline（logEntries）和状态字段，对照情况清单逐条判断是否发生过。 */
+(function(){
+  var SRC = {raw:null, label:''};          /* 当前分析的数据：raw = {存档键: JSON 字符串} */
+  var DATA = null, RESULT = null;
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+  function pj(s){ try{ return JSON.parse(s); }catch(e){ return null; } }
+
+  /* ---------- 读取 ---------- */
+  function collectLive(){ var o = {}; Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); return o; }
+  function parseRaw(raw){
+    var d = {cases:[], clients:[], holdings:{}, phHistory:[], notifs:[], hospitalNotifs:[], ver:raw.gmc_demo_ver || '', clinics:[]};
+    Object.keys(raw).filter(function(k){ return k.indexOf('gmc_clinic_')===0; }).sort().forEach(function(k){
+      var p = pj(raw[k]); if(!p || !p.vars) return; var cid = k.replace('gmc_clinic_',''), v = p.vars; d.clinics.push(cid);
+      (v.CASE_ITEMS||[]).forEach(function(c){ c.__clinic = cid; d.cases.push(c); });
+      (v.CLIENTS||[]).forEach(function(c){ c.__clinic = cid; d.clients.push(c); });
+      Object.keys(v.CLIENT_HOLDINGS||{}).forEach(function(n){ d.holdings[cid+'|'+n] = v.CLIENT_HOLDINGS[n]; });
+      (v.PLACEHOLDER_HISTORY||[]).forEach(function(h){ d.phHistory.push(Object.assign({__clinic:cid}, h)); });
+      (v.NOTIFS||[]).forEach(function(n){ d.notifs.push(Object.assign({__clinic:cid}, n)); });
+    });
+    var g = pj(raw.gmc_state); var hd = g && g.vars && g.vars.HOSPITAL_DATA;
+    if(hd) Object.keys(hd).forEach(function(h){ (hd[h].notifs||[]).forEach(function(n){ d.hospitalNotifs.push(Object.assign({__hospital:h}, n)); }); });
+    d.cases.forEach(function(c){ c.__t = (c.logEntries||[]).map(function(e){ return e.action||''; }).join('\n'); });
+    return d;
+  }
+
+  /* ---------- 情况清单 ---------- */
+  /* eval 返回 {hits:[{c, note, dt}]}；auto:false = 无法自动判断（note 写原因） */
+  function T(c){ return c.__t; }
+  function re(c, rx){ return rx.test(T(c)); }
+  function firstDt(c, rx){ var e = (c.logEntries||[]).filter(function(x){ return rx.test(x.action||''); })[0]; return e ? e.dt : ''; }
+  function krItems(c){ return (c.procedureItems||[]).filter(function(i){ return i.origin==='KR'; }); }
+  function byCase(pred, rx){ return function(d){ return {hits:d.cases.filter(pred).map(function(c){ return {c:c, dt:rx ? firstDt(c, rx) : ''}; })}; }; };
+  function logHit(rx, extra){ return byCase(function(c){ return re(c, rx) && (!extra || extra(c)); }, rx); }
+  function holdFlag(flag){
+    return function(d){ var hits = [];
+      d.cases.forEach(function(c){ var hs = d.holdings[c.__clinic+'|'+c.name] || []; hs.forEach(function(h){ (h.batches||[]).forEach(function(b){ if(b.caseId===c.id && b[flag] && !hits.some(function(x){ return x.c===c; })) hits.push({c:c, dt:b.date||'', note:h.itemName}); }); }); });
+      return {hits:hits}; };
+  }
+  function postBook(pred){
+    return function(d){ return {hits:d.cases.filter(function(c){ return (c.subItems||[]).some(function(s){ return s.pcb && pred(s); }); }).map(function(c){ return {c:c, dt:firstDt(c, /术后管理预约/)}; })}; };
+  }
+  var CHECKS = [
+    ['A','到店前 / 接待'],
+    ['A1','室长取消预约', logHit(/取消该客人的到店预约/), '看 Timeline「取消该客人的到店预约」'],
+    ['A2','未到店 → 重新预约', function(d){ var hits = [];
+        d.cases.filter(function(c){ return c.cancelReason==='未到店' || c.noShow; }).forEach(function(c){
+          var t0 = (c.logEntries||[])[0] ? c.logEntries[0].dt : '';
+          if(d.cases.some(function(o){ return o!==c && o.name===c.name && o.__clinic===c.__clinic && ((o.logEntries||[])[0]||{}).dt > t0; })) hits.push({c:c, dt:firstDt(c, /未到店/)}); });
+        return {hits:hits}; }, '案件取消原因「未到店」+ 同一客人之后又有新案件'],
+    ['A3','预约修改后到店', logHit(/修改预约为/, function(c){ return /标记客人已到店/.test(T(c)); }), 'Timeline「修改预约为」且之后「标记客人已到店」'],
+    ['A4','接待未保存离开 → 退回待访问', logHit(/接待未完成，退回待访问|取消接待，案件回到待访问/), 'Timeline「接待未完成，退回待访问」/「取消接待…」'],
+    ['A5','接续另一个进行中案件 → 本案作废', logHit(/接续到访/), '原案件 Timeline「接续到访」（作废的新案件已从列表移除，只能从原案件侧判断）'],
+    ['B','不面诊（本地）'],
+    ['B6','选购 → 付款 → 使用 → 结案', logHit(/本地项目已转入客户持有/, function(c){ return c.stage==='closed' && /使用了/.test(T(c)); }), '结案 + Timeline「本地项目已转入客户持有」+「使用了」'],
+    ['B7','只用以前持有的项目 → 结案', logHit(/使用了/, function(c){ return c.stage==='closed' && !/本地项目已转入客户持有|完成项目付款/.test(T(c)) && !krItems(c).length; }), '结案 + 有「使用了」+ 没有本次付款'],
+    ['B8','使用中管理取消（次数归还）', logHit(/标记取消（次数已归还持有/), 'Timeline「标记取消（次数已归还持有…」'],
+    ['B9','本次不购买 → 已取消', logHit(/本次不购买项目/, function(c){ return c.stage==='cancelled'; }), 'Timeline「本次不购买项目」+ 主状态已取消'],
+    ['B10','只办退款 → 已取消（仅办理退款）', byCase(function(c){ return /仅办理退款/.test(String(c.cancelReason||'')) || c.cancelReason==='refundVisit' || c.refundVisit; }), '取消原因「仅办理退款」'],
+    ['B11a','买活动价项目', holdFlag('promo'), '持有批次标记 promo（购买案件）'],
+    ['B11b','买套餐', holdFlag('pkgPaid'), '持有批次标记 pkgPaid'],
+    ['B11c','送서비스', holdFlag('service'), '持有批次标记 service'],
+    ['B12','本地案件中途增加面诊', logHit(/发起"增加面诊"/), 'Timeline「发起"增加面诊"」'],
+    ['C','面诊到出诊疗方案'],
+    ['C13','待缴费时取消面诊 → 转不面诊', logHit(/面诊取消（面诊费已取消）/), 'Timeline「面诊取消（面诊费已取消）」'],
+    ['C14','面诊费免除', logHit(/免除面诊费/), 'Timeline「免除面诊费」'],
+    ['C15','出诊疗方案后客人不做项目 → 仅出报告', logHit(/客人不做项目/, function(c){ return c.stage==='reportonly'; }), 'Timeline「客人不做项目」+ 仅出报告'],
+    ['C16','KR 不给项目 → 仅出报告', byCase(function(c){ return c.stage==='reportonly' && c.reportReady && !(c.krScope && c.krScope.items && c.krScope.items.length); }), '仅出报告 + 已出诊疗方案 + KR 可选范围为空'],
+    ['C17','延续既往面诊、沿用原诊疗方案', logHit(/沿用原(诊疗方案|报告)|沿用之前(诊疗方案|报告)/), 'Timeline「沿用原诊疗方案」'],
+    ['D','赴韩'],
+    ['D18','赴韩无变动 → 结案', byCase(function(c){ return c.stage==='closed' && c.krJudge && c.krJudge.result==='ok' && c.krBalancePaid; }), '结案 + 到院评估「原方案不变」+ 已付清尾款'],
+    ['D19','术后管理回印尼使用（关联原案件）', logHit(/术后管理项目，自动关联|由赴韩案件.*子项.*自动关联原案件/), '新案件 Timeline「自动关联」到赴韩案件'],
+    ['D20','到院前取消部分项目 + 加项', logHit(/取消项目"/, function(c){ return /已生成结算单（批次 B[2-9]/.test(T(c)); }), 'Timeline「取消项目」+ 有第 2 张以上结算单'],
+    ['D21','KR 无法安排 → 重选日期', logHit(/KR无法安排所选日期/), 'Timeline「KR无法安排所选日期」'],
+    ['D22a','时间确认后改期', logHit(/申请修改施术日期/, function(c){ return /KR确认新施术时间/.test(T(c)); }), 'Timeline「申请修改施术日期」+「KR确认新施术时间」'],
+    ['D22b','改期时 2 周内被挡', function(){ return {auto:false, note:'界面里日期被置灰、没有产生任何记录，无法从存档判断'}; }, ''],
+    ['D23','到院后调整方案 → 多退少补 → 结案', byCase(function(c){ return c.stage==='closed' && c.krJudge && c.krJudge.result==='changed'; }), '结案 + 到院评估「需要调整方案」'],
+    ['D24','全部不能做 → 在韩重新约', logHit(/KR在韩国重新预约施术时间/), 'Timeline「KR在韩国重新预约施术时间」'],
+    ['D25','全部不能做 → 退定金 → 仅出报告', logHit(/KR判断：不能施术，定金/, function(c){ return c.stage==='reportonly'; }), 'Timeline「KR判断：不能施术，定金…」+ 仅出报告'],
+    ['D26','在韩加做项目', logHit(/KR增加项目/), 'Timeline「KR增加项目」'],
+    ['D27a','赴韩项目全部取消（无本地项目）→ 做本地', logHit(/询问是否增加本地项目/, function(c){ return /客人要做\/增加本地项目/.test(T(c)); }), 'Timeline「询问是否增加本地项目」+「客人要做/增加本地项目」'],
+    ['D27b','赴韩项目全部取消（无本地项目）→ 不做', logHit(/询问是否增加本地项目/, function(c){ return /客人不做\/不增加本地项目/.test(T(c)); }), 'Timeline「询问是否增加本地项目」+「客人不做/不增加本地项目」'],
+    ['D28a','无法协调（有本地项目）→ 保留并使用', logHit(/室长选择保留本案件的本地项目/, function(c){ return /使用了/.test(T(c)); }), 'Timeline「室长选择保留」+「使用了」'],
+    ['D28b','无法协调（有本地项目）→ 保留但这次不做', logHit(/室长选择保留本案件的本地项目/, function(c){ return /本次不使用任何持有项目/.test(T(c)); }), 'Timeline「室长选择保留」+「本次不使用任何持有项目」'],
+    ['D28c','无法协调（有本地项目）→ 全退', logHit(/室长选择全部退款/), 'Timeline「室长选择全部退款」'],
+    ['D29','无法协调（无本地项目）→ 增加 / 不加本地', function(){ return {auto:false, note:'和 D27 走同一条代码路径，记录里分不出是点了［无法协调］还是逐个取消项目；D27a/b 已覆盖同样的结果'}; }, ''],
+    ['D30','面诊或赴韩案件中添加本地管理', logHit(/添加本地管理（同日插做本地项目/), 'Timeline「添加本地管理」'],
+    ['E','其他可从记录判断的'],
+    ['E1','客人自助预约（新客）', byCase(function(c){ return c.bookClient==='new'; }), '案件字段 bookClient=new（CMD-1012-06 起记录）'],
+    ['E2','客人自助预约（老客）', byCase(function(c){ return c.bookClient==='old' || /官网\/短信链接自助预约成功/.test(((c.logEntries||[])[0]||{}).action||''); }), '案件字段 bookClient=old / 第一条记录「自助预约成功」'],
+    ['E3','老客旧版同意书重签', byCase(function(c){ return c.consentResigned; }), '案件字段 consentResigned（CMD-1012-06 起记录）'],
+    ['E4','占位链接提交', byCase(function(c){ return c.bookEntry==='link' || /通过预约链接填完资料/.test(((c.logEntries||[])[0]||{}).action||''); }), '第一条记录「通过预约链接填完资料」'],
+    ['E5','占位超时', function(d){ return {hits:d.phHistory.filter(function(h){ return h.status==='占位失效'; }).map(function(h){ return {c:null, label:h.phone+' '+h.date+' '+h.time, dt:h.date}; })}; }, '预约占位历史「占位失效」'],
+    ['E6','已到医院撤回', logHit(/撤回"已到医院"/), 'Timeline「KR撤回已到医院」'],
+    ['E7a','术后管理预约 — 在韩国', postBook(function(s){ return s.place==='KR'; }), '子项 pcb + place=KR'],
+    ['E7b','术后管理预约 — 回印尼做', postBook(function(s){ return s.place==='IN'; }), '子项 pcb + place=IN'],
+    ['E7c','术后管理预约 — 请 IN 代约', postBook(function(s){ return !!s.informed; }), '子项 pcb + informed'],
+    ['E7d','IN 代约成功（关联原案件）', logHit(/IN 室长预约了/), 'Timeline「IN 室长预约了」'],
+    ['E8','催办', logHit(/催办 KR 室长/), 'Timeline「催办 KR 室长」'],
+    ['E9','未接来电', function(d){ var hits = [];
+        d.notifs.concat(d.hospitalNotifs).forEach(function(n){ if(/未接来电/.test(n.text||'')){ var c = d.cases.filter(function(x){ return x.id===n.caseId; })[0]; hits.push({c:c||null, label:(n.text||'').slice(0,40), dt:n.ts||''}); } });
+        return {hits:hits}; }, '通知里有「未接来电」（通知保留 90 天）'],
+    ['E10','持有项目退款', logHit(/持有批次退款/), 'Timeline「…办理持有批次退款」'],
+    ['E11','重新选择项目（待付款）', logHit(/待付款结算单.*退回重新选择项目/), 'Timeline「待付款结算单…退回重新选择项目」'],
+    ['F','新增功能（CMD-1012-02 / 05）'],
+    ['F1','开始面诊', logHit(/开始面诊/), 'Timeline「开始面诊」'],
+    ['F2','上传面诊内容 → 面诊结束', logHit(/上传面诊内容，面诊结束/), 'Timeline「上传面诊内容，面诊结束」'],
+    ['F3','院长评估：可以手术，原方案不变', logHit(/院长评估结果：可以手术，原方案不变/), 'Timeline「院长评估结果」'],
+    ['F4','院长评估：需要调整方案', logHit(/院长评估结果：可以手术，但需要调整方案/), 'Timeline「院长评估结果」'],
+    ['F5','院长评估：不建议手术', logHit(/院长评估结果：不建议手术/), 'Timeline「院长评估结果」'],
+    ['F6','生成诊疗方案 PDF', logHit(/生成诊疗方案 PDF/), 'Timeline「生成诊疗方案 PDF」']
+  ];
+
+  function evaluate(d){
+    var groups = [], cur = null, covered = 0, total = 0, unjudge = [];
+    CHECKS.forEach(function(ch){
+      if(ch.length===2){ cur = {id:ch[0], title:ch[1], items:[]}; groups.push(cur); return; }
+      var r = ch[2](d), item = {id:ch[0], title:ch[1], basis:ch[3]||'', auto:r.auto!==false, note:r.note||'', hits:r.hits||[]};
+      cur.items.push(item); total++;
+      if(!item.auto) unjudge.push(item); else if(item.hits.length) covered++;
+    });
+    return {groups:groups, covered:covered, total:total, unjudge:unjudge};
+  }
+
+  /* ---------- 案件路径 ---------- */
+  function casePath(c){
+    var seq = [], last = null;
+    (c.logEntries||[]).forEach(function(e){ var st = e.stage || ''; if(st && st!==last){ seq.push(st); last = st; } });
+    return seq;
+  }
+  function caseLink(c){
+    var acct = c.__clinic==='C2' ? 'B1' : c.__clinic==='C3' ? 'D1' : 'A1';
+    return '/in.html?demo='+acct+'&case='+encodeURIComponent(c.caseNo||c.id);
+  }
+  function caseTag(c){ return esc((c.caseNo||c.id)+' · '+c.name); }
+
+  /* ---------- 渲染 ---------- */
+  function render(){
+    RESULT = evaluate(DATA);
+    document.getElementById('sum').textContent = '已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'（其中 '+RESULT.unjudge.length+' 条无法自动判断）';
+    document.getElementById('sumsub').textContent = '数据来源：'+SRC.label+'；数据版本 '+(DATA.ver||'?')+'；案件 '+DATA.cases.length+' 个（诊所 '+DATA.clinics.join('、')+'）';
+    document.getElementById('checks').innerHTML = RESULT.groups.map(function(g){
+      return '<div class="grp">'+esc(g.id+' '+g.title)+'</div><div class="card" style="padding:4px 18px;">'+g.items.map(function(it){
+        var mk = !it.auto ? '❔' : it.hits.length ? '✅' : '⬜';
+        var first = it.hits.slice().sort(function(a,b){ return String(a.dt||'').localeCompare(String(b.dt||'')); })[0];
+        var who = it.hits.length ? '第一次：'+(first.c ? '<a href="'+caseLink(first.c)+'" target="_blank">'+caseTag(first.c)+'</a>' : esc(first.label||''))+(first.dt ? ' · '+esc(String(first.dt).slice(0,16)) : '')+(first.note ? ' · '+esc(first.note) : '')+' · 发生 '+it.hits.length+' 次' : '';
+        return '<div class="row"><span class="mk">'+mk+'</span><span class="id">'+esc(it.id)+'</span><span style="flex:1;"><b>'+esc(it.title)+'</b><div class="muted">'+(!it.auto ? esc(it.note) : who || '没发生过')+'</div><div class="muted" style="opacity:.7;">判断依据：'+esc(it.basis||'—')+'</div></span></div>';
+      }).join('')+'</div>';
+    }).join('');
+    document.getElementById('cases').innerHTML = DATA.cases.slice().sort(function(a,b){ return String(a.caseNo).localeCompare(String(b.caseNo)); }).map(function(c){
+      var path = casePath(c);
+      return '<div class="card" style="padding:8px 14px;"><details><summary><b>'+caseTag(c)+'</b> <span class="pill">'+esc(c.__clinic)+'</span><span class="pill">'+esc(c.stage)+'</span> <span class="muted">'+esc(path.join(' → '))+'</span> <a href="'+caseLink(c)+'" target="_blank">打开</a></summary>'+
+        '<div class="path">'+(c.logEntries||[]).map(function(e){ return esc((e.dt||'').slice(0,16)+'　['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')); }).join('<br>')+'</div></details></div>';
+    }).join('') || '<div class="muted">没有案件</div>';
+    document.getElementById('unjudge').innerHTML = '<b>无法自动判断的情况</b>：'+(RESULT.unjudge.length ? RESULT.unjudge.map(function(i){ return esc(i.id+' '+i.title+'（'+i.note+'）'); }).join('；') : '无');
+  }
+
+  /* ---------- 数据来源 ---------- */
+  function listBackups(){ return Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_backup_')===0 && k!=='gmc_backup_notice'; }).sort().reverse(); }
+  function fillSources(){
+    var sel = document.getElementById('src'), opts = '<option value="live">当前浏览器里的数据</option>';
+    listBackups().forEach(function(k){ var r = pj(localStorage.getItem(k)); opts += '<option value="'+k+'">自动备份 '+esc((r&&r.exportedAt||'').slice(0,19).replace('T',' '))+'（'+esc(r&&r.reason||'')+'）</option>'; });
+    if(SRC.imported) opts += '<option value="imported" selected>导入的文件：'+esc(SRC.imported.name)+'</option>';
+    sel.innerHTML = opts; if(SRC.imported) sel.value = 'imported';
+    var n = pj(localStorage.getItem('gmc_backup_notice'));
+    document.getElementById('notice').innerHTML = n ? '<div class="warn">ℹ 最近一次自动备份：'+esc(n.name)+'（'+esc(n.reason)+'，'+esc(new Date(n.t).toLocaleString())+'）。已在浏览器里存了一份，下拉里选它即可查看；也可点「导出完整备份」下载。</div>' : '';
+  }
+  window.loadSource = function(){
+    var v = document.getElementById('src').value;
+    if(v==='live'){ SRC = {raw:collectLive(), label:'当前浏览器数据'}; }
+    else if(v==='imported'){ /* 保持 */ }
+    else { var r = pj(localStorage.getItem(v)); SRC = {raw:(r&&r.raw)||{}, label:'自动备份 '+v}; }
+    DATA = parseRaw(SRC.raw); render();
+  };
+  window.importFile = function(inp){
+    var f = inp.files && inp.files[0]; if(!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      var j = pj(rd.result); if(!j){ alert('不是有效的 JSON 文件'); return; }
+      var raw = j.raw || (j.kind==='gmc-test-record' && j.raw) || null;
+      if(!raw){ alert('这个文件里没有完整存档（只有「导出完整备份」或自动备份的文件才能重新分析 / 恢复）'); return; }
+      SRC = {raw:raw, label:'导入文件 '+f.name, imported:{name:f.name}};
+      DATA = parseRaw(raw); fillSources(); render();
+      if(confirm('已载入并重新分析。要把这份存档「恢复」到当前浏览器吗？\n（会覆盖浏览器里现有的演示数据；覆盖前会先自动留一份备份）')) restore(raw);
+    };
+    rd.readAsText(f); inp.value = '';
+  };
+  function restore(raw){
+    var bk = {t:Date.now(), name:'gmc-backup-before-restore.json', reason:'恢复导入文件前', str:JSON.stringify({kind:'gmc-backup', exportedAt:new Date().toISOString(), reason:'恢复导入文件前', raw:collectLive()})};
+    try{ localStorage.setItem('gmc_backup_'+bk.t, bk.str); }catch(e){}
+    Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
+    Object.keys(raw).forEach(function(k){ if(k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0) localStorage.setItem(k, raw[k]); });
+    alert('已恢复。请回到演示页面刷新。（注意：如果文件里的数据版本和当前代码版本不同，刷新时会按版本升级流程重置，但会先自动备份。）');
+  }
+
+  /* ---------- 导出 ---------- */
+  function stamp(){ return new Date().toISOString().slice(0,19).replace(/[:T]/g,'-'); }
+  function download(name, text, mime){ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:mime||'application/json'})); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+  function slimCase(c){ var o = {}; Object.keys(c).forEach(function(k){ if(k!=='__t') o[k] = c[k]; }); return o; }
+  function coverageOut(){ return RESULT.groups.reduce(function(a,g){ return a.concat(g.items.map(function(it){ return {id:it.id, group:g.id, title:it.title, covered:it.auto ? it.hits.length>0 : null, autoJudged:it.auto, count:it.hits.length, note:it.note, basis:it.basis,
+      first:it.hits.slice().sort(function(x,y){ return String(x.dt||'').localeCompare(String(y.dt||'')); }).slice(0,1).map(function(h){ return {caseNo:h.c&&h.c.caseNo, name:h.c&&h.c.name, dt:h.dt, label:h.label}; })[0]||null}; })); }, []); }
+  window.exportJson = function(){
+    download('gmc-test-record-'+stamp()+'.json', JSON.stringify({kind:'gmc-test-record', exportedAt:new Date().toISOString(), dataVersion:DATA.ver, source:SRC.label, summary:{covered:RESULT.covered, total:RESULT.total, unjudged:RESULT.unjudge.length}, coverage:coverageOut(),
+      cases:DATA.cases.map(function(c){ return {caseNo:c.caseNo, name:c.name, clinic:c.__clinic, stage:c.stage, subState:c.subState, cancelReason:c.cancelReason||null, path:casePath(c), timeline:c.logEntries||[]}; })}, null, 1));
+  };
+  window.exportMd = function(){
+    var md = '# GMC 测试覆盖记录\n\n导出时间：'+new Date().toISOString()+'　数据版本：'+DATA.ver+'　来源：'+SRC.label+'\n\n**已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'**（'+RESULT.unjudge.length+' 条无法自动判断）\n\n';
+    RESULT.groups.forEach(function(g){
+      md += '## '+g.id+' '+g.title+'\n\n';
+      g.items.forEach(function(it){
+        var first = it.hits.slice().sort(function(a,b){ return String(a.dt||'').localeCompare(String(b.dt||'')); })[0];
+        md += '- '+(!it.auto ? '❔' : it.hits.length ? '✅' : '⬜')+' **'+it.id+' '+it.title+'**'+(!it.auto ? '（无法自动判断：'+it.note+'）' : it.hits.length ? '——'+it.hits.length+' 次；第一次 '+(first.c ? first.c.caseNo+' '+first.c.name : (first.label||''))+(first.dt ? ' '+String(first.dt).slice(0,16) : '') : '——未发生')+'\n';
+      });
+      md += '\n';
+    });
+    md += '## 各案件实际走过的路径\n\n';
+    DATA.cases.slice().sort(function(a,b){ return String(a.caseNo).localeCompare(String(b.caseNo)); }).forEach(function(c){
+      md += '### '+c.caseNo+' · '+c.name+'（'+c.__clinic+'，当前 '+c.stage+(c.cancelReason ? '，'+c.cancelReason : '')+'）\n\n路径：'+casePath(c).join(' → ')+'\n\n';
+      (c.logEntries||[]).forEach(function(e){ md += '- '+(e.dt||'').slice(0,16)+' ['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')+'\n'; });
+      md += '\n';
+    });
+    download('gmc-test-record-'+stamp()+'.md', md, 'text/markdown');
+  };
+  window.exportBackup = function(){ download('gmc-export-'+stamp()+'.json', JSON.stringify({kind:'gmc-backup', exportedAt:new Date().toISOString(), reason:'手动导出完整备份', dataVersion:SRC.raw.gmc_demo_ver||'', raw:SRC.raw})); };
+
+  fillSources(); window.loadSource();
+})();

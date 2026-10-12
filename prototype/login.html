@@ -43,7 +43,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
   <div class="demo-box" id="demo-box">
     <div class="demo-tabs" id="demo-tabs"></div>
     <div id="demo-body"></div>
-    <div style="margin-top:14px;text-align:center;"><a href="#" onclick="if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。')) resetDemoData(); return false;">重置演示数据</a></div>
+    <div style="margin-top:14px;text-align:center;"><a href="#" onclick="return resetWithExportPrompt();">重置演示数据</a> · <a href="/test-coverage.html" target="_blank">🧪 测试覆盖</a></div>
   </div>
 </section>
 </div>
@@ -250,11 +250,30 @@ renderDemo();
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
   var a = findAcct(id); if(a) quickLogin(a.id);
 })();
+/* 重置前提示：重置会清掉测试记录，要先导出吗？（CMD-1012-06）；不管怎么选，重置时都会再自动备份一份 */
+function resetWithExportPrompt(){
+  if(confirm('重置会清掉测试记录，要先导出吗？\n\n点【确定】= 先导出（下载 JSON 备份），再继续；点【取消】= 不导出，直接进入重置确认。')){
+    var raw = gmcCollectRaw(); gmcDownloadText('gmc-export-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json', JSON.stringify({kind:'gmc-backup', exportedAt:new Date().toISOString(), reason:'重置前手动导出', dataVersion:raw.gmc_demo_ver||'', raw:raw}));
+  }
+  if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。（重置时还会自动留一份备份）')) resetDemoData();
+  return false;
+}
 /* 其他标签页重置演示数据后，本页的账号数据也要刷新 */
 function resetDemoData(){
-  try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
+  gmcResetAll('登录页重置演示数据'); /* 先自动备份再清（CMD-1012-06） */
   location.reload();
 }
+
+/* 自动备份提示（CMD-1012-06）：数据版本升级 / 重置时自动备份过旧数据，这里提醒一次 */
+(function(){
+  try{
+    var n = JSON.parse(localStorage.getItem('gmc_backup_notice') || 'null'); if(!n) return;
+    var bar = document.createElement('div');
+    bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:10px;z-index:99;background:#FDEBD3;color:#A85A10;border-radius:10px;padding:10px 16px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.15);max-width:92vw;';
+    bar.innerHTML = 'ℹ 刚才（'+new Date(n.t).toLocaleString()+'）因「'+n.reason+'」自动备份了旧数据：浏览器里留了一份、也尝试下载了 <b>'+n.name+'</b>。<a href="/test-coverage.html" target="_blank">打开测试覆盖页查看 / 导出</a>　<a href="#" onclick="localStorage.removeItem(\'gmc_backup_notice\');this.parentNode.remove();return false;">知道了</a>';
+    document.body.appendChild(bar);
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
