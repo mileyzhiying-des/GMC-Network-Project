@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 36; /* 37（CMD-1012-05）：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 37; /* 37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -770,7 +770,7 @@ function grantHolding(name, itemName, category, caseId, date, qty, krCollected, 
 }
 
 /* 使用持有：先扣最早购买的那一批，跨批次自动结转；记 usages 供客户详情页展开显示 */
-function useHolding(name, itemName, caseId, date, qty, tag){
+function useHolding(name, itemName, caseId, date, qty, tag, optVal){
   var h = (CLIENT_HOLDINGS[name]||[]).filter(function(x){ return x.itemName===itemName; })[0];
   if(!h) return 0;
   var left = qty;
@@ -781,7 +781,7 @@ function useHolding(name, itemName, caseId, date, qty, tag){
     if(avail<=0) continue;
     var take = Math.min(avail, left);
     b.used += take;
-    b.usages.push({caseId:caseId, date:date, qty:take, tag:tag||'main'});
+    b.usages.push({caseId:caseId, date:date, qty:take, tag:tag||'main', opt:optVal||undefined}); /* optVal = 使用时选的选项（模式 / 部位 / 营养针种类） */
     left -= take;
   }
   return qty-left; /* 实际扣掉的次数 */
@@ -1045,7 +1045,7 @@ var CASE_ITEMS = [
   makeCase({id:'rizky', name:'客人11', subState:'arrived', materialsConfirmed:true, caseNo:'A000009', updated:'今天',
     concern:'术后恢复期护理', expectation:'希望恢复期更舒适', needsConsult:false, activeCaseTab:'localmgmt',
     projectsEnabled:true, projectsLocked:true, settlementDone:true,
-    mgmtActive:true, mgmtUses:[{itemName:'好莱坞焕肤 1次', qty:1, date:D(-3)}],
+    mgmtActive:true, mgmtUses:[{itemName:'LHALa peel', qty:1, date:D(-3)}],
     procedureItems:[],
     settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(-3)+' 09:00', status:'active',
       krTotal:0, krDeposit:0, krBalance:0, inTotal:860000}],
@@ -1054,8 +1054,8 @@ var CASE_ITEMS = [
       {stage:'面诊安排', actor:'A1 室长', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：不面诊', dt:D(-3)+' 08:50'},
       {stage:'面诊安排', actor:'A1 室长', action:'选择"新增项目"', dt:D(-3)+' 08:55'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：本地全款 Rp 860.000），项目清单已锁定', dt:D(-3)+' 09:00'},
-      {stage:'面诊安排', actor:'A1 室长', action:'本地项目已转入客户持有：好莱坞焕肤 1次 x1、Genesis焕肤（Clarity II）1次 x1', dt:D(-3)+' 09:00'},
-      {stage:'本地管理', actor:'A1 室长', action:'使用了好莱坞焕肤 1次 1次，剩余0次', dt:D(-3)+' 09:20'}
+      {stage:'面诊安排', actor:'A1 室长', action:'本地项目已转入客户持有：LHALa peel x1、艺人水光焕肤 x1', dt:D(-3)+' 09:00'},
+      {stage:'本地管理', actor:'A1 室长', action:'使用了LHALa peel 1次，剩余0次', dt:D(-3)+' 09:20'}
     ]}),
 
   /* 已结案：赴韩行程施术完成即结案（2026-09-29 第十轮：本地项目已转客户持有，不再算在这个案件的完成条件里） */
@@ -1073,7 +1073,7 @@ var CASE_ITEMS = [
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-39)+' 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩1,350,000、本地全款 Rp 540.000），项目清单已锁定', dt:D(-29)+' 09:00'},
-      {stage:'面诊安排', actor:'A1 室长', action:'本地项目已转入客户持有：Genesis焕肤（Clarity II）1次 x1', dt:D(-29)+' 09:00'},
+      {stage:'面诊安排', actor:'A1 室长', action:'本地项目已转入客户持有：艺人水光焕肤 x1', dt:D(-29)+' 09:00'},
       {stage:'赴韩施术', actor:'KD1 院长', action:'已完成"自体脂肪移植（全脸）"施术', dt:D(-24)+' 10:00'},
       {stage:'赴韩施术', actor:'KD1 院长', action:'KR标记"施术完成"，案件已结案', dt:D(-22)+' 09:00'}
     ]}),
@@ -1140,7 +1140,7 @@ var CASE_ITEMS = [
     concern:'术后恢复', expectation:'希望恢复期舒适', needsConsult:false, activeCaseTab:'localmgmt', visitClosed:true, cancelReason:'管理取消', mgmtStatus:'cancelled_all',
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(2)+' 09:00'},
-      {stage:'面诊安排', actor:'A1 室长', action:'使用了术后消肿护理 1次 1次，剩余1次', dt:D(2)+' 10:00'},
+      {stage:'面诊安排', actor:'A1 室长', action:'使用了LDM 1次，剩余1次', dt:D(2)+' 10:00'},
       {stage:'本地管理', actor:'A1 室长', action:'管理取消（全部）：1次已归还持有项目（不是退款）；本次无购买，案件已取消（管理取消）', dt:D(2)+' 10:30'}
     ]}),
 
@@ -2541,16 +2541,17 @@ function cartOf(c, scope){
   c.recommended = c.recommended || []; return c.recommended;
 }
 function cartKey(it){ return it.key || it.projectId; }
-function buildLocalItem(p){
-  var u = localUnitPrice(p);
-  return {kind:'project', key:p.id, projectId:p.id, name:p.name, price:p.price, unitPrice:u.price, promoId:u.promo ? u.promo.id : null, promoTo:u.promo ? u.promo.to : '', currency:'IDR', origin:'IN', categoryId:p.categoryId, qty:1, discountPct:100, itemNote:''};
+function buildLocalItem(p, specId){
+  var sp = specById(p, specId) || defaultSpec(p), u = localUnitPrice(p, sp ? sp.id : null);
+  return {kind:'project', key:p.id, projectId:p.id, name:p.name, specId:sp ? sp.id : '', specLabel:sp ? sp.label : '', specTimes:sp ? sp.times : 1, neg:!!p.neg, price:u.orig, unitPrice:u.price, promoId:u.promo ? u.promo.id : null, promoTo:u.promo ? u.promo.to : '', currency:'IDR', origin:'IN', categoryId:p.categoryId, qty:1, discountPct:100, itemNote:''};
 }
 function buildPackageItem(pk){
-  var its = (pk.items||[]).map(function(x){ var pr = projById(x.projectId) || {}; return {projectId:x.projectId, name:pr.name || '（已删除的项目）', qty:x.qty||1, price:pr.price||0, categoryId:pr.categoryId}; });
+  var its = (pk.items||[]).map(function(x){ var pr = projById(x.projectId) || {}, sp = pkgItemSpec(x); return {projectId:x.projectId, specId:sp ? sp.id : '', specLabel:sp ? sp.label : '', specTimes:sp ? sp.times : 1, name:pr.name || '（已删除的项目）', qty:x.qty||1, price:(sp ? sp.price : pr.price)||0, categoryId:pr.categoryId}; });
   return {kind:'package', key:'pk:'+pk.id, projectId:'pk:'+pk.id, pkgId:pk.id, name:pk.name, price:packageListTotal(pk), unitPrice:pk.price, pkgItems:its, currency:'IDR', origin:'IN', categoryId:null, qty:1, discountPct:100, itemNote:''};
 }
 function buildServiceItem(p, qty){
-  return {kind:'service', key:'sv:'+p.id, projectId:'sv:'+p.id, srcProjectId:p.id, name:p.name, price:p.price, unitPrice:0, currency:'IDR', origin:'IN', categoryId:p.categoryId, qty:qty||1, discountPct:100, itemNote:''};
+  var ssp = specPickOf({}, p);
+  return {kind:'service', key:'sv:'+p.id, projectId:'sv:'+p.id, srcProjectId:p.id, name:p.name, specId:ssp ? ssp.id : '', specLabel:ssp ? ssp.label : '', specTimes:ssp ? ssp.times : 1, price:(ssp ? ssp.price : p.price), unitPrice:0, currency:'IDR', origin:'IN', categoryId:p.categoryId, qty:qty||1, discountPct:100, itemNote:''};
 }
 function inLineTotal(it){
   var qty = it.qty||1, pct = (it.discountPct===undefined||it.discountPct===null) ? 100 : it.discountPct;
@@ -2560,15 +2561,30 @@ function inLineTotal(it){
 /* 已选择里的合计：paidCount = 付费项目（项目 / 套餐）的条数；只有服务没有付费项目时不能结算 */
 function cartTotals(items){
   var paid = items.filter(function(it){ return it.origin==='IN' ? it.kind!=='service' : true; });
-  return {paidCount:paid.length, total:items.filter(function(it){ return it.origin==='IN'; }).reduce(function(s,it){ return s+inLineTotal(it); }, 0), onlyService:items.length>0 && !paid.length};
+  return {paidCount:paid.length, total:items.filter(function(it){ return it.origin==='IN'; }).reduce(function(s,it){ return s+inLineTotal(it); }, 0), onlyService:items.length>0 && !paid.length, missingPrice:items.filter(function(it){ return it.origin==='IN' && it.neg && !(it.unitPrice>0); }).length}; /* 面议项目没填价格：不能结算 */
 }
 
 function toggleLocalProject(scope, projectId){
   var c = getCurrentCase(); if(!c) return;
   var cart = cartOf(c, scope), idx = cart.findIndex(function(it){ return cartKey(it)===projectId; });
   if(idx>-1) cart.splice(idx, 1);
-  else { var p = projById(projectId); if(!p) return; cart.push(buildLocalItem(p)); }
+  else { var p = projById(projectId); if(!p) return; var sp0 = specPickOf(c, p); cart.push(buildLocalItem(p, sp0 ? sp0.id : null)); }
   renderCaseBody(c);
+}
+/* 选规格：记在案件上；已在购物车里的项目同时换成新规格（数量 / 折扣 / 备注保留） */
+function setLocalSpec(scope, projectId, specId){
+  var c = getCurrentCase(); if(!c) return;
+  c.specPick = c.specPick || {}; c.specPick[projectId] = specId;
+  var cart = cartOf(c, scope), idx = cart.findIndex(function(it){ return cartKey(it)===projectId; });
+  if(idx>-1){ var old = cart[idx], p = projById(projectId); if(p){ var ni = buildLocalItem(p, specId); ni.qty = old.qty; ni.discountPct = old.discountPct; ni.itemNote = old.itemNote; cart[idx] = ni; } }
+  renderCaseBody(c);
+}
+/* 面议项目：选了之后手动填价（成交单价） */
+function setLocalManualPrice(scope, key, val){
+  var c = getCurrentCase(); if(!c) return;
+  var it = cartOf(c, scope).filter(function(x){ return cartKey(x)===key; })[0]; if(!it) return;
+  var n = parseInt(String(val).trim(), 10); if(!(n>0)){ alert('请填大于 0 的价格（印尼盾）'); return; }
+  it.price = n; it.unitPrice = n; renderCaseBody(c);
 }
 function toggleLocalPackage(scope, pkgId){
   var c = getCurrentCase(); if(!c) return;
@@ -2652,15 +2668,16 @@ function localRowHtml(c, scope, it){
     (it.promoId ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本月</span>' : '');
   var held = (isSvc||isPkg) ? 0 : clientHeldRemaining(c.name, it.name);
   var sub = '';
+  if(!isSvc && !isPkg && (it.specTimes||1)>1) sub = '付款后持有 '+((it.specTimes||1)*(it.qty||1))+' 次';
   if(it.promoId) sub = '活动价 '+fmtRp(it.unitPrice)+'<span style="text-decoration:line-through;margin-left:6px;">原价 '+fmtRp(it.price)+'</span>'+(it.promoTo ? '　至 '+it.promoTo : '');
   else if(isPkg) sub = (it.pkgItems||[]).map(function(x){ return x.name+' ×'+x.qty; }).join('、')+'　原价合计 '+fmtRp(it.price);
   else if(isSvc) sub = '原价 '+fmtRp(it.price)+'（赠送）';
-  if(held>0) sub += (sub ? '　' : '')+'<span style="color:var(--sage);">持有 '+held+' 次</span>';
+  if(held>0) sub += (sub ? '　' : '')+'<span style="color:var(--sage);">已持有 '+held+' 次</span>';
   var line = inLineTotal(it), noteOpen = c.noteOpen && c.noteOpen[key]!==undefined ? c.noteOpen[key] : !!it.itemNote;
   var k = key.replace(/'/g, '');
   return '<div class="sel-row"><div class="sel-line">'+
     '<input type="checkbox" checked title="取消勾选即移除" onchange="removeLocalItem(\''+scope+'\',\''+k+'\')">'+
-    '<div class="sel-name"><div>'+it.name+tags+'</div>'+(sub ? '<div class="sel-sub">'+sub+'</div>' : '')+'</div>'+
+    '<div class="sel-name"><div>'+itemFullName(it)+tags+'</div>'+(sub ? '<div class="sel-sub">'+sub+'</div>' : '')+(it.neg ? '<div class="sel-sub"><input type="number" min="1" placeholder="面议：填价格（Rp）" value="'+(it.unitPrice>0 ? it.unitPrice : '')+'" onchange="setLocalManualPrice(\''+scope+'\',\''+k+'\',this.value)" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:150px;"></div>' : '')+'</div>'+
     qtyInputHtml({value:qty, min:1, max:LOCAL_QTY_MAX, onchange:"setLocalItemField('"+scope+"','"+k+"','qty',this.value)"})+
     (isSvc ? '' : '<span class="sel-disc"><input type="number" min="1" max="100" placeholder="折扣" title="填客人实付比例，80 = 8折；留空 = 不打折" value="'+(pct<100 ? pct : '')+'" onchange="setLocalItemField(\''+scope+'\',\''+k+'\',\'discountPct\',this.value)"><i>%</i>'+(discountText(pct) ? '<b class="sel-dtxt">= '+discountText(pct)+'</b>' : '')+'</span>')+
     '<span class="sel-amt">'+formatCurrency(line,'IDR')+'</span>'+
@@ -2675,18 +2692,27 @@ function localPriceCellHtml(p, ccy){
     '<div style="font-size:11px;color:var(--muted);"><span style="text-decoration:line-through;">'+displayAmount(p.price, 'IN', ccy)+'</span>　至 '+u.promo.to+'</div></span>';
 }
 
+/* 本地项目选择（CMD-1012-04）：先选类别 → 项目（一行一个）→ 规格下拉 → 价格自动出现；面议项目选了之后在右边「已选择」里手动填价 */
+function localProjRowHtml(c, scope, p, ccy, forcedSpecId){
+  var cart = cartOf(c, scope), inCart = cart.filter(function(it){ return cartKey(it)===p.id; })[0];
+  var sp = forcedSpecId ? specById(p, forcedSpecId) : (inCart ? specById(p, inCart.specId) : null) || specPickOf(c, p);
+  var held = clientHeldRemaining(c.name, p.name), u = localUnitPrice(p, sp ? sp.id : null);
+  var sel = (p.specs||[]).length > 1 && !forcedSpecId ? '<select onchange="setLocalSpec(\''+scope+'\',\''+p.id+'\',this.value)" onclick="event.stopPropagation()" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;max-width:190px;">'+p.specs.map(function(x){ return '<option value="'+x.id+'"'+(sp && sp.id===x.id ? ' selected' : '')+'>'+x.label+'</option>'; }).join('')+'</select>'
+    : (sp ? '<span style="font-size:12px;color:var(--slate2);">'+sp.label+'</span>' : '');
+  var price = p.neg ? '<span style="color:var(--slate2);">面议</span>'
+    : (u.promo ? '<span style="text-align:right;"><span style="color:var(--sage);font-weight:700;">'+displayAmount(u.price, 'IN', ccy)+'</span> <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本月</span><div style="font-size:11px;color:var(--muted);"><span style="text-decoration:line-through;">'+displayAmount(u.orig, 'IN', ccy)+'</span>　至 '+u.promo.to+'</div></span>'
+      : '<span style="color:var(--slate2);">'+displayAmount(u.price, 'IN', ccy)+'</span>');
+  return '<label class="loc-row" style="gap:8px;"><input type="checkbox" onchange="toggleLocalProject(\''+scope+'\',\''+p.id+'\')" '+(inCart?'checked':'')+'>'+
+    '<span style="flex-grow:1;">'+p.name+(p.opt ? ' <span style="font-size:10px;color:var(--muted);">使用时选'+p.opt.label+'</span>' : '')+(held>0 ? ' <span style="font-size:11px;color:var(--sage);">已持有 '+held+' 次</span>' : '')+projCasesLinkHtml(p.id)+'</span>'+sel+'<span style="min-width:96px;text-align:right;">'+price+'</span></label>';
+}
+function setLocalCat(cat){ var c = getCurrentCase(); if(!c) return; c.localCatFilter = cat; renderCaseBody(c); }
 function localCatalogHtml(c, scope, tab, q, ccy){
   var cart = cartOf(c, scope), has = function(key){ return cart.some(function(it){ return cartKey(it)===key; }); };
-  var projRow = function(p){
-    var held = clientHeldRemaining(c.name, p.name);
-    return '<label class="loc-row"><input type="checkbox" onchange="toggleLocalProject(\''+scope+'\',\''+p.id+'\')" '+(has(p.id)?'checked':'')+'>'+
-      '<span style="flex-grow:1;">'+p.name+(held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '')+projCasesLinkHtml(p.id)+'</span>'+localPriceCellHtml(p, ccy)+'</label>';
-  };
   var match = function(name){ return !q || name.toLowerCase().indexOf(q)>-1; };
-  var locals = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; }); /* 本地选购不显示术后管理分类 */
+  var locals = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; });
   if(tab==='promo'){
-    var rows = PROMOS.filter(function(pm){ return promoStatusOf(pm)==='进行中'; }).map(function(pm){ return projById(pm.projectId); }).filter(function(p){ return p && p.active && p.categoryId!==POST_CARE_CAT_ID && match(p.name); });
-    return rows.map(projRow).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">本月暂无活动价</div>';
+    var rows = PROMOS.filter(function(pm){ return promoStatusOf(pm)==='进行中'; }).map(function(pm){ var p = projById(pm.projectId); return p && p.active && match(p.name) ? localProjRowHtml(c, scope, p, ccy, pm.specId || null) : ''; }).join('');
+    return rows || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">本月暂无活动价</div>';
   }
   if(tab==='pkg'){
     var pks = activePackages().filter(function(k){ return match(k.name+' '+packageItemsText(k)); });
@@ -2696,7 +2722,16 @@ function localCatalogHtml(c, scope, tab, q, ccy){
         '<span style="text-align:right;"><b>'+displayAmount(k.price, 'IN', ccy)+'</b><div style="font-size:11px;color:var(--muted);">原价合计 '+displayAmount(packageListTotal(k), 'IN', ccy)+'</div></span></label>';
     }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无可选套餐</div>';
   }
-  return locals.filter(function(p){ return match(p.name); }).map(projRow).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>';
+  /* 全部项目：类别 chips → 项目一行一个 */
+  var cats = []; locals.forEach(function(p){ if(cats.indexOf(p.catLabel)<0) cats.push(p.catLabel); });
+  var cur = c.localCatFilter && cats.indexOf(c.localCatFilter)>-1 ? c.localCatFilter : 'all';
+  var chips = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"><span class="chip'+(cur==='all'?' active':'')+'" onclick="setLocalCat(\'all\')">全部类别</span>'+cats.map(function(ct){ return '<span class="chip'+(cur===ct?' active':'')+'" onclick="setLocalCat(\''+ct.replace(/'/g,'')+'\')">'+ct+'</span>'; }).join('')+'</div>';
+  var shown = locals.filter(function(p){ return match(p.name) && (cur==='all' || p.catLabel===cur); });
+  var body = cats.filter(function(ct){ return cur==='all' || ct===cur; }).map(function(ct){
+    var rows = shown.filter(function(p){ return p.catLabel===ct; }); if(!rows.length) return '';
+    return '<div style="font-size:11px;font-weight:700;color:var(--terracotta);margin:10px 0 2px;">'+ct+'</div>'+rows.map(function(p){ return localProjRowHtml(c, scope, p, ccy, null); }).join('');
+  }).join('');
+  return chips+(body || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>');
 }
 
 /* 本地选购画面（scope 'main' = 不面诊案件的选择项目 / 追加；'lm' = 本地管理的新增项目） */
@@ -2712,7 +2747,8 @@ function localPurchaseHtml(c, scope, isAddition){
   var canNoBuy = scope==='lm' || (!isAddition && c.entryChoicePending && c.projectEntryMode==='new' && isLocalCase(c) && !caseHasPurchase(c) && !(c.mgmtUses||[]).length && !((c.localMgmt && c.localMgmt.mgmtUses)||[]).length); /* 不面诊的本地案件、选择项目、没付款也没用过持有项目时才显示（CMD-1008-06） */
   var settleFn = scope==='lm' ? 'lmSettle()' : (isAddition ? 'confirmAddition()' : 'confirmProjectSelection()');
   var noBuyFn = scope==='lm' ? 'lmNoBuy()' : 'noPurchaseThisTime()';
-  var settleBtn = '<button class="btn-primary" style="flex:1;'+(tot.paidCount ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(tot.paidCount ? 'onclick="'+settleFn+'"' : 'disabled')+'>结算</button>';
+  var settleOk = tot.paidCount && !tot.missingPrice;
+  var settleBtn = '<button class="btn-primary" style="flex:1;'+(settleOk ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(settleOk ? 'onclick="'+settleFn+'"' : 'disabled')+'>结算</button>';
   var right = '<div class="sel-card"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+
     '<textarea placeholder="备注（仅 IN，选填）" oninput="setLocalNote(\''+scope+'\',this.value)" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;">'+noteVal+'</textarea>'+
     (items.length ? '<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">折扣栏填客人实付比例：80 = 8折，85 = 8.5折，留空 = 不打折</div>'+items.map(function(it){ return localRowHtml(c, scope, it); }).join('') : '<div style="font-size:12px;color:var(--muted);padding:10px 4px;">尚未选择项目</div>')+
@@ -2737,14 +2773,17 @@ function grantLocalItems(c, items, today){
       var parts = it.pkgItems||[], listAll = parts.reduce(function(s,x){ return s + x.price*x.qty*qty; }, 0), left = line;
       parts.forEach(function(x, i){
         var xl = x.price*x.qty*qty, share = i===parts.length-1 ? left : Math.round(line*(listAll ? xl/listAll : 0)); left -= share;
-        b = grantHolding(c.name, x.name, catLabelOf(x.categoryId), c.id, today, x.qty*qty, false, {paid:share, list:xl, pct:100, currency:'IDR'});
+        b = grantHolding(c.name, x.name, catLabelOf(x.categoryId), c.id, today, x.qty*qty*(x.specTimes||1), false, {paid:share, list:xl, pct:100, currency:'IDR'}); /* 次数类规格：N 次 × 数量 */
+        if(x.specLabel) b.spec = x.specLabel;
         b.pkgPaid = true; b.pkgName = it.name; /* 购买的套餐拆出的批次：不可退款（批次标「套餐」；b.pkg 只用于 KR 套餐内含的 0 元术后管理） */
       });
     } else if(it.kind==='service'){
-      b = grantHolding(c.name, it.name, catLabelOf(it.categoryId), c.id, today, qty, false, {paid:0, list:it.price*qty, pct:100, currency:'IDR'});
+      b = grantHolding(c.name, it.name, catLabelOf(it.categoryId), c.id, today, qty*(it.specTimes||1), false, {paid:0, list:it.price*qty, pct:100, currency:'IDR'});
+      if(it.specLabel) b.spec = it.specLabel;
       b.service = true; /* 서비스（赠送）：不可退款，不计入收入 */
     } else {
-      b = grantHolding(c.name, it.name, catLabelOf(it.categoryId), c.id, today, qty, false, {paid:line, list:it.price*qty, pct:pct, currency:'IDR'});
+      b = grantHolding(c.name, it.name, catLabelOf(it.categoryId), c.id, today, qty*(it.specTimes||1), false, {paid:line, list:it.price*qty, pct:pct, currency:'IDR'}); /* 规格「N次」→ 付款后持有 N 次（× 数量） */
+      if(it.specLabel){ b.spec = it.specLabel; b.units = qty; }
       if(it.promoId) b.promo = true;
     }
   });
@@ -2888,9 +2927,11 @@ function holdingsUseHtml(c, scope){
     var remaining = holdingRemaining(h);
     var tags = (h.category==='术后管理'?' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>':'')+
       (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'');
+    var pr = PROJECT_LIBRARY.filter(function(p0){ return p0.origin==='IN' && p0.name===h.itemName; })[0];
+    var optSel = pr && pr.opt ? '<select id="hold-opt-'+scope+'-'+i+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"><option value="">选择'+pr.opt.label+'</option>'+pr.opt.values.map(function(v){ return '<option>'+v+'</option>'; }).join('')+'</select>' : '';
     return '<div class="case-field-row"><input type="checkbox" id="hold-check-'+scope+'-'+i+'" style="flex-grow:0;margin-right:10px;">'+
       '<span style="flex-grow:1;font-size:13px;">'+h.itemName+tags+(holdingSchedule(h)?' <span style="font-size:11px;color:var(--terracotta);">进行时间：'+holdingSchedule(h)+'</span>':'')+'</span>'+
-      '<span style="display:flex;align-items:center;gap:8px;white-space:nowrap;"><span style="font-size:12px;color:var(--slate2);">剩余 '+remaining+' 次</span>'+qtyInputHtml({id:'hold-qty-'+scope+'-'+i, value:1, min:1, max:remaining})+'</span>'+
+      '<span style="display:flex;align-items:center;gap:8px;white-space:nowrap;">'+optSel+'<span style="font-size:12px;color:var(--slate2);">剩余 '+remaining+' 次</span>'+qtyInputHtml({id:'hold-qty-'+scope+'-'+i, value:1, min:1, max:remaining})+'</span>'+
       '</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无持有项目</div>';
   return '<div class="card" style="padding:22px 24px;">'+
@@ -3148,30 +3189,8 @@ function projectPickerHtml(c, isAddition){
       }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>');
     }
   } else {
-    /* 本地项目分两块（2026-09-29 第十轮）：普通本地项目不受限，术后管理项目同样只能从krScope里选 */
-    function inRow(p){
-      var checked = selected.some(function(it){ return it.projectId===p.id; });
-      var held = clientHeldRemaining(c.name, p.name);
-      var heldTag = held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '';
-      return '<label style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
-        '<input type="checkbox" onchange="toggleProject(\''+p.id+'\')" '+(checked?'checked':'')+'>'+
-        '<span style="flex-grow:1;">'+p.name+heldTag+projCasesLinkHtml(p.id)+'</span>'+localPriceCellHtml(p, pickerCcy)+'</label>';
-    }
-    var normalCatalog = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; });
-    if(q) normalCatalog = normalCatalog.filter(function(p){ return p.name.toLowerCase().indexOf(q)>-1; });
-    var scope2 = c.krScope;
-    var postCareCatalog = (scope2 ? scope2.items.map(function(si){
-      var p = PROJECT_LIBRARY.filter(function(x){ return x.name===si.name; })[0];
-      return p ? Object.assign({}, p, {krNote:si.note}) : null;
-    }).filter(function(p){ return p && p.origin==='IN' && p.categoryId===POST_CARE_CAT_ID; }) : []);
-    if(q) postCareCatalog = postCareCatalog.filter(function(p){ return p.name.toLowerCase().indexOf(q)>-1; });
-    var postCareBlock = '<div style="font-size:11px;font-weight:700;color:var(--terracotta);margin-bottom:4px;">术后管理（需先出报告，仅限KR室长给出的范围）</div>'+
-      (postCareCatalog.length
-        ? postCareCatalog.map(function(p){ var noteHtml = p.krNote ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+p.krNote+'</div>' : ''; return inRow(p)+(noteHtml?'<div style="margin:-6px 0 6px 30px;">'+noteHtml+'</div>':''); }).join('')
-        : '<div style="font-size:12px;color:var(--muted);padding:6px 4px 14px;">暂无可选术后管理项目</div>');
-    var normalBlock = '<div style="font-size:11px;font-weight:700;color:var(--sage);margin:14px 0 4px;">其他本地项目</div>'+
-      (normalCatalog.map(inRow).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>');
-    leftRows = postCareBlock + normalBlock;
+    /* 赴韩方案里的本地项目：和本地选购同一套画面（类别 → 项目 → 规格 → 价格，CMD-1012-04）；IN 已没有「术后管理」分类，术后管理的具体项目在 KR 设定里选 */
+    leftRows = localCatalogHtml(c, 'main', 'all', q, pickerCcy);
   }
   var expandBtn = '<span style="cursor:pointer;font-size:12px;color:var(--slate);" onclick="toggleProjectsExpand()">'+(c.projectsExpanded?'⮡ 收起':'⮢ 展开满屏')+'</span>';
   var subTabs = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">'+
@@ -3182,7 +3201,7 @@ function projectPickerHtml(c, isAddition){
     '</div>';
   var tot = cartTotals(selected);
   var settleOn = isAddition ? 'confirmAddition()' : 'confirmProjectSelection()';
-  var settleBtn = '<button class="btn-primary" style="flex:1;'+(tot.paidCount ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(tot.paidCount ? 'onclick="'+settleOn+'"' : 'disabled')+'>'+(isAddition ? '结算追加项目 / 交定金' : '结算')+'</button>';
+  var settleBtn = '<button class="btn-primary" style="flex:1;'+((tot.paidCount && !tot.missingPrice) ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+((tot.paidCount && !tot.missingPrice) ? 'onclick="'+settleOn+'"' : 'disabled')+'>'+(isAddition ? '结算追加项目 / 交定金' : '结算')+'</button>';
   var noProjectBtn = (!isAddition && c.reportReady && !c.entryChoicePending && !c.settlementDone) ? '<button class="btn-outline" style="flex:1;" onclick="noProjectForClient()">客人不做项目</button>' : '';
   var wrapOpen = isAddition
     ? '<div class="project-card'+(c.projectsExpanded?' expanded':'')+'" style="border-top:1px dashed var(--border);padding-top:18px;margin-top:4px;">'
@@ -3325,7 +3344,7 @@ function confirmSettlementPayment(){
   c.settlementDone = true; /* 一旦付过一次款就一直是 true；加项后新批次单独走 unpaid→active，不影响这个总开关 */
   var today = todayStr();
   var batchInItems = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='IN'; });
-  batch.inItems = batchInItems.map(function(it){ return {name:it.name, kind:it.kind||'project', qty:it.qty||1, price:it.price, unitPrice:it.unitPrice, discountPct:(it.discountPct===undefined?100:it.discountPct), itemNote:it.itemNote||'', promo:!!it.promoId}; }); /* 结算单展示用快照（本地项目结算后转持有，不留在 procedureItems） */
+  batch.inItems = batchInItems.map(function(it){ return {name:it.name, specLabel:it.specLabel||'', specTimes:it.specTimes||1, kind:it.kind||'project', qty:it.qty||1, price:it.price, unitPrice:it.unitPrice, discountPct:(it.discountPct===undefined?100:it.discountPct), itemNote:it.itemNote||'', promo:!!it.promoId}; }); /* 结算单展示用快照（本地项目结算后转持有，不留在 procedureItems） */
   grantLocalItems(c, batchInItems, today); /* 本地项目 / 套餐 / 서비스 转客户持有（套餐拆批次） */
   /* 本地项目（含术后管理）结算后立即转客户持有，不进入案件进程（2026-09-29 第十轮） */
   c.procedureItems = (c.procedureItems||[]).filter(function(it){ return it.origin!=='IN'; });
@@ -3792,7 +3811,8 @@ function coreAddOnItem(c, projectName, by, opt){
   opt = opt || {};
   var an = opt.anesthesia || {type:'local', label:'局部麻醉', note:''};
   if(an.type!=='local' && !opt.signed) return false; /* 睡眠 / 全身麻醉：必须勾选已在现场签署麻醉同意书；局部不用 */
-  var p = PROJECT_LIBRARY.filter(function(x){ return x.name===projectName && x.active && x.origin==='KR' && (!c.hospitalId || x.hospitalId===c.hospitalId); })[0]; if(!p) return false;
+  var p = opt.local ? {id:'lc:'+(opt.local.projectId||opt.local.name), name:opt.local.name+' · '+opt.local.specLabel, price:opt.local.price, origin:'KR', categoryId:null, local:true}
+    : PROJECT_LIBRARY.filter(function(x){ return x.name===projectName && x.active && x.origin==='KR' && (!c.hospitalId || x.hospitalId===c.hospitalId); })[0]; if(!p) return false; /* 本地管理项目（清单项目，韩元价格）也能在韩增加 */
   /* 到院 → KR 室长面谈、可推项目（增加项目）→ 一次结算 = 尾款 + 当天增加的项目 → 付清尾款（CMD-1008-12 D3）：
      尾款付清前增加的项目和尾款一次结算（不收定金，金额计入尾款，医院收）；尾款付清后再增加的项目另开新结算单（原结算不变） */
   var pre = !c.krBalancePaid, newId = 'B' + ((c.settlementBatches||[]).length + 1);
@@ -4382,6 +4402,116 @@ function addProjCategory(label, origin){
   return id;
 }
 
+/* TODO: 接入实时汇率API，这里先用固定演示汇率（CMD-1012-04：KRW_IDR = 11.8 印尼盾 / 韩元，写进 CLAUDE.md） */
+var FX_RATES = { KRW_IDR:11.8, KRW_CNY:0.0052, IDR_CNY:0.00044 };
+/* ============ 本地管理项目库清单（CMD-1012-04，Notion「本地管理项目库清单（KR / IN 对齐版）」2026-10-12 定）============
+   结构：类别 → 项目（一行一个）→ 规格（用量 / 次数，一层）→ 价格；价格单位 = 万韩元（49 = ₩490,000）；KR 用韩元，IN = 韩元 × 演示汇率（FX_RATES.KRW_IDR）四舍五入成整数印尼盾，之后各诊所可自行改价。
+   花括号 {标签:值,值} = 不影响价格的「使用时选」选项（模式 / 部位 / 营养针种类；这里的值是演示占位，业务方要按实际改）；价格写「面议」= 选了之后手动填价。
+   KR 在韩术后管理（拆线、消肿管理、术后复诊检查、伤口护理）另存在 KR 项目库「韩国术后管理」分类，全部免费；KR 手术项目库不动。 */
+var LOCAL_CATALOG_TEXT = `# 提升仪器
+美版超声刀二代 | 100发 49 | 300发 140 | 600发 258
+热玛吉 | 300发 130 | 600发 230 | 眼部 225发 99 | 眼部 450发 159
+钛提升 | 40kj 39 | 80kj 69
+热拉提（红/蓝） | 20kj·1次 27.9 | 20kj·3次 69 | 60kj·1次 55 | 60kj·3次 130 | 80kj·1次 84.9
+ONDA 提升 | 脸部 40kj·1次 45 | 脸部 40kj·3次 115 | 脸部 60kj·1次 60 | 脸部 60kj·3次 155 | 脸部 80kj·1次 79 | 脸部 80kj·3次 199 | 身体 60kj·1次 70 | 身体 60kj·3次 185 | 身体 120kj·1次 130 | 身体 120kj·3次 333
+索夫波 Sofwave | 20发 30 | 50发 60 | 100发 110 | 200发 200 | 300发 295
+Tune Liner 溶脂探头（整体下颌线） | 1次 14.9
+Mjoule BBL 激光 | 1次 60
+# 水光注射
+丽珠兰黑盒（手打） | 2cc·1次 24.9 | 2cc·3次 62.5 | 4cc·1次 42.9 | 4cc·3次 105
+丽珠兰红盒 HB Plus（手打） | 1cc 21.9 | 2cc 40.9 | 4cc 67.9
+眼部丽珠兰（手打） | 1cc·1次 17 | 1cc·3次 45.9 | 2cc·1次 32 | 2cc·3次 81.9 | 4cc·1次 50 | 4cc·3次 119
+丽珠兰 S（手打） | 1cc·1次 15 | 1cc·3次 40.5
+保柔缇 REVIVE（手打） | 1cc·1次 60 | 2cc·1次 110 | 2cc·3次 290
+婴儿针 | 1cc Auto MTS 4.5 | 1cc 黄金微针 22.5 | 2cc Auto MTS 8.5 | 2cc 黄金微针 26.5
+三文鱼水光 | 1cc 手打 3 | 1cc Auto MTS 6 | 1cc 黄金微针 21 | 3cc 手打 7.9 | 3cc Auto MTS 10.9 | 3cc 黄金微针 25.9
+Ultracol 100 5cc（手打） | 1次 23.9 | 3次 59
+# 焕肤
+LHALa peel | 1次 9.9 | 3次 25.9
+黑米醋换肤 | 1次 6.9 | 3次 18.9
+艺人水光焕肤 | 1次 14.9 | 3次 40
+奶滑焕肤 | 1次 6.9 | 3次 18.9
+玫瑰焕肤（脸，含挤压） | 1次 15 | 3次 40.5
+玫瑰焕肤（身体，不含挤压） | 胸部·1次 22 | 胸部·3次 59.4 | 背上部·1次 25 | 背上部·3次 67.5 | 上臂·1次 22 | 上臂·3次 59.4
+基础祛痘管理 | 1次 4.9 | 3次 13.2
+水氧活肤 | 1次 4.9 | 3次 9.9
+# 机器管理
+O2 Derm 氧气疗法 | 1次 5.9 | 3次 13.9
+Cooling Cryo | 1次 4.9 | 3次 9.9
+离子美白管理 | 1次 4.9 | 3次 9.9
+高级 IONZYME | 1次 6.49 | 3次 15.93
+补水超声波管理 | 1次 4.9 | 3次 9.9
+# 再生管理
+HealFusion Pro（非侵入 MTS，含婴儿针） | 1次 27 | 3次 79
+WiQO Uno（含 LDM 再生 6 分钟） | 1次 25 | 3次 69
+AstroDome 面部管理 | 1次 18 | 3次 49
+LDM {模式:再生,红血丝,美白} | 12分钟·1次 11 | 12分钟·3次 29.7 | 6分钟·1次 6.6 | 6分钟·3次 17.8 | 8分钟（红血丝）·1次 8.8 | 8分钟（红血丝）·3次 23.8
+# 营养针
+基础营养针 {种类:白玉,灰姑娘,胎盘,甘草} | 1次 2.9
+高级营养针 {种类:免疫力,抗氧化,维生素D,综合维他命,精氨酸} | 1次 5.9
+# 疤痕 / 毛孔
+黄金微针 面部整体（含镇静面膜） | 1次 27 | 3次 59 | 5次 79
+黄金微针 全脸 SFA 尖头（含镇静面膜） | 1次 30 | 3次 59 | 5次 95
+VIRTUE RF | 眼周·1次 25 | 眼周·3次 70 | 全脸+眼周·1次 50 | 全脸+眼周·3次 139
+皮秒飞梭 全脸 | 1次 12 | 3次 33 | 5次 55
+蜂巢皮秒 pro 飞梭（含奶滑换肤 + Cryo） | 1次 19 | 5次 89 | 10次 175
+Mjoule MOXI 激光 | 1次 100
+# 痘痘
+CAPRI 激光（不含挤压） | 1次 8.8 | 5次 34.9
+黄金微针 AGNES | 1次 17.9 | 3次 44.9
+皮秒飞梭 + 黄金微针 AGNES（含镇静面膜） | 1次 21 | 3次 55 | 5次 89
+白金 PTT | 1次 27.9 | 3次 69.9
+针清 | 10个以内 3.3 | 10～50个 5.5
+消炎针 | 1次 1.1 | 面部整体 3.3
+# 肉毒
+咬肌（瘦脸针） | 韩国产 50u 2.5 | 韩国产 100u 3.7 | CORETOX 50u 5.9 | CORETOX 100u 9.9 | 西马 50u 9.9 | 西马 100u 17.9 | 保妥适 50u 24.9 | 保妥适 100u 44
+除皱 {部位:额头,眉间,鱼尾纹,鼻背纹,法令纹,下巴,颈纹} | 韩国产 1部位 2.4 | 韩国产 3部位 5.7 | CORETOX 1部位 3.5 | CORETOX 3部位 8.4 | 西马 1部位 5.9 | 西马 3部位 14 | 保妥适 1部位 9.9 | 保妥适 3部位 23
+皮肤肉毒 | 韩国产 1部位 6.9 | 韩国产 全脸 11.9 | CORETOX 1部位 8.9 | CORETOX 全脸 14.9 | 西马 1部位 10.9 | 西马 全脸 18.9 | 保妥适 1部位 19.9 | 保妥适 全脸 34.9
+多汗症肉毒 | 韩国产 50u 7 | 韩国产 100u 11.9 | CORETOX 50u 10.9 | CORETOX 100u 19.9 | 西马 50u 15 | 西马 100u 29 | 保妥适 50u 39.9 | 保妥适 100u 69.9
+# 身体美白
+Lucas {部位:手臂,腿部,腋下,背部,腹部,比基尼线} | 小部位·1次 3 | 小部位·10次 25.5 | 敏感部位·1次 7 | 敏感部位·10次 59.5 | 全身·1次 69 | 全身·10次 352
+皮秒 {部位:手臂,腿部,腋下,背部,腹部,比基尼线} | 小部位·1次 9 | 小部位·10次 76.5 | 敏感部位·1次 21 | 敏感部位·10次 178.5 | 全身·1次 99 | 全身·10次 505
+# 干细胞
+干细胞静脉注射 | 12cc 180 | 24cc 310
+干细胞皮肤注射（手打） | 3cc·1次 70 | 3cc·3次 189 | 6cc·1次 110 | 6cc·3次 297
+干细胞头皮注射（手打） | 3cc·1次 80 | 3cc·3次 219
+SelfoXome {面议} | 静脉注射 面议 | 直接注射 面议
+# 麻醉（附加项）
+麻醉膏 | 1次 0.55
+麻醉喷雾 | 1次 1.1
+局部麻醉 | 1次 3
+睡眠麻醉 | 1次 20`;
+var LOCAL_CATALOG = (function(){
+  var cats = [], cur = null;
+  LOCAL_CATALOG_TEXT.split('\n').forEach(function(line){
+    line = line.trim(); if(!line) return;
+    if(line.charAt(0)==='#'){ cur = {label:line.slice(1).trim(), items:[]}; cats.push(cur); return; }
+    var parts = line.split('|').map(function(x){ return x.trim(); }), head = parts[0], opt = null, neg = false;
+    var m = head.match(/\{([^}]*)\}/);
+    if(m){ head = head.replace(m[0], '').trim(); if(m[1]==='面议') neg = true; else { var kv = m[1].split(':'); opt = {label:kv[0], values:(kv[1]||'').split(',')}; } }
+    var specs = parts.slice(1).map(function(sp, i){
+      var idx = sp.lastIndexOf(' '), label = sp.slice(0, idx).trim(), pr = sp.slice(idx+1).trim(), tm = label.match(/(\d+)次/);
+      return {label:label, wan:(pr==='面议' ? null : parseFloat(pr)), times:tm ? parseInt(tm[1],10) : 1};
+    });
+    cur.items.push({name:head, specs:specs, opt:opt, neg:neg});
+  });
+  return cats;
+})();
+var LOCAL_SPEC_SEQ = 1;
+/* 按清单生成项目对象：origin 'IN' = 印尼盾（韩元 × FX_RATES.KRW_IDR，整数）、挂 PCAT 里的本地分类；origin 'KR' = 韩元、用 catLabel 分组（存在医院资料里） */
+function krwOfWan(w){ return w===null ? 0 : Math.round(w*10000); }
+function buildLocalProjects(origin, hospitalId){
+  var out = [];
+  LOCAL_CATALOG.forEach(function(cat){
+    cat.items.forEach(function(it){
+      var specs = it.specs.map(function(sp){ var krw = krwOfWan(sp.wan); return {id:'sp'+(LOCAL_SPEC_SEQ++), label:sp.label, price:(origin==='KR' ? krw : Math.round(krw*FX_RATES.KRW_IDR)), times:sp.times}; });
+      var p = {id:newProjId(), name:it.name, price:specs.length ? specs[0].price : 0, origin:origin, active:true, specs:specs, opt:it.opt, neg:!!it.neg, catLabel:cat.label};
+      if(origin==='IN'){ p.categoryId = PCAT[cat.label]; p.clinicId = CURRENT_CLINIC_ID; } else p.hospitalId = hospitalId || 'H1';
+      out.push(p);
+    });
+  });
+  return out;
+}
 var PCAT = {};
  // 建种子数据时临时存 label->id，方便下面 PROJECT_LIBRARY 直接引用
 ['眼部','鼻部','轮廓','面部年轻化','胸部','身体'].forEach(function(l){ PCAT[l] = addProjCategory(l, 'KR'); });
@@ -4389,9 +4519,9 @@ var PCAT = {};
 PCAT['韩国术后管理'] = addProjCategory('韩国术后管理', 'KR'); PROJECT_CATEGORIES[PCAT['韩国术后管理']].postcare = true;
 function isKrPostcareCat(id){ var c = PROJECT_CATEGORIES[id] || KR_CATEGORIES[id]; return !!(c && c.postcare); }
 
-['提升','脱发','去除色素','脱毛','填充','水光','黄金微针','术后管理'].forEach(function(l){ PCAT[l] = addProjCategory(l, 'IN'); });
+LOCAL_CATALOG.forEach(function(cat){ PCAT[cat.label] = addProjCategory(cat.label, 'IN'); }); /* IN 本地分类 = 清单 12 类（CMD-1012-04；原「术后管理」等旧分类已去掉） */
 
-var POST_CARE_CAT_ID = PCAT['术后管理'];
+var POST_CARE_CAT_ID = ''; /* IN 的「术后管理」分类已去掉（CMD-1012-04），保留变量让旧判断（!== POST_CARE_CAT_ID）继续成立 */
  /* 2026-09-29：术后管理虽然归类本地项目，但和普通本地项目不同，选购时同样受krScope限制 */
 
 var PROJ_SEQ = 1;
@@ -4422,32 +4552,9 @@ var PROJECT_LIBRARY = [
   makeProj('自体脂肪移植（全脸）', 4500000, 'KR', '面部年轻化'),
   makeProj('假体隆胸', 13000000, 'KR', '胸部'),
   makeProj('腹部吸脂', 4000000, 'KR', '身体'),
-  makeProj('大腿吸脂', 4500000, 'KR', '身体'),
-  /* 本地项目（IDR） */
-  makeProj('V-RO超声波 300发 + 高频率 3000发', 3300000, 'IN', '提升'),
-  makeProj('Onda提升 60kj', 4800000, 'IN', '提升'),
-  makeProj('XERF提升 300发', 8200000, 'IN', '提升'),
-  makeProj('Onda提升 60kj + 美版超声刀 300发', 14000000, 'IN', '提升'),
-  makeProj('Onda提升 60kj + XERF提升 300发', 12000000, 'IN', '提升'),
-  makeProj('干细胞30皮肤注射 / 脱发治疗注射', 4400000, 'IN', '脱发'),
-  makeProj('好莱坞焕肤 1次', 320000, 'IN', '去除色素'),
-  makeProj('Genesis焕肤（Clarity II）1次', 540000, 'IN', '去除色素'),
-  makeProj('比基尼线脱毛 + 焕肤护理', 1100000, 'IN', '脱毛'),
-  makeProj('巴西式脱毛 + 焕肤护理', 1400000, 'IN', '脱毛'),
-  makeProj('随心所选玻尿酸填充 1个部位（1cc，韩国产）', 870000, 'IN', '填充'),
-  makeProj('臀窝 / 臀部提升填充（1cc）', 990000, 'IN', '填充'),
-  makeProj('丽珠兰黑盒 + LiliedM 水光注射（2cc）', 1600000, 'IN', '水光'),
-  makeProj('LiliedM + 皮肤肉毒（5cc）', 2700000, 'IN', '水光'),
-  makeProj('乔雅露蓝瓶 Juvelook Skin（3cc）', 1850000, 'IN', '水光'),
-  makeProj('乔雅露蓝瓶 Juvelook Skin（3cc）+ 丽珠兰黑盒（2cc）+ LDM', 3300000, 'IN', '水光'),
-  makeProj('黄金微针 毛孔探头', 1600000, 'IN', '黄金微针'),
-  makeProj('黄金微针 毛孔探头 + 外泌体（5cc）+ LDM', 4050000, 'IN', '黄金微针'),
-  makeProj('黄金微针 Pumping探头 + 乔雅露（3cc）+ LDM', 4250000, 'IN', '黄金微针'),
-  makeProj('黄金微针 Pumping探头 + Gouri水光（4cc）+ LDM', 4400000, 'IN', '黄金微针'),
-  /* 术后管理（2026-09-29 新增分类）：具体项目名/价格是我编的演示数据，不是业务方给的清单 */
-  makeProj('术后消肿护理 1次', 450000, 'IN', '术后管理'),
-  makeProj('术后疤痕修复护理 1次', 680000, 'IN', '术后管理')
+  makeProj('大腿吸脂', 4500000, 'KR', '身体')
 ];
+buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, id:p.name}; PROJECT_LIBRARY.push(p); }); /* 本地项目 = 清单（CMD-1012-04） */
 
 
 /* TODO: 接入实时汇率API，这里先用固定演示汇率 */
@@ -4470,11 +4577,13 @@ var PROJECT_LIBRARY = [
 /* demo 客户持有项目种子数据（2026-09-29 第十轮新增）：对应上面几个demo案例结算后应该转入持有的本地项目，
    补种子数据的写法，和真实交互路径（confirmSettlementPayment 里 grantHolding）效果一样 */
 (function seedDemoHoldings(){
-  grantHolding('客人11', '好莱坞焕肤 1次', '本地', 'rizky', D(-3), 1, false, {paid:320000, list:320000, pct:100, currency:'IDR'});
-  grantHolding('客人11', 'Genesis焕肤（Clarity II）1次', '本地', 'rizky', D(-3), 1, false, {paid:540000, list:540000, pct:100, currency:'IDR'});
-  grantHolding('客人12', 'Genesis焕肤（Clarity II）1次', '本地', 'rina', D(-29), 1, false, {paid:540000, list:540000, pct:100, currency:'IDR'});
-  useHolding('客人12', 'Genesis焕肤（Clarity II）1次', 'rina', D(-22), 1); /* 已用完，演示"已用/购买"显示 */
-  useHolding('客人11', '好莱坞焕肤 1次', 'rizky', D(-3), 1, 'main'); /* rizky 本地管理：已使用1次 */
+  /* 价格 = 清单价（万韩元 × 10000 × FX_RATES.KRW_IDR，整数印尼盾）：LHALa peel 1次 9.9 万 = Rp 1.168.200；艺人水光焕肤 1次 14.9 万 = Rp 1.758.200（CMD-1012-04 换成清单项目） */
+  var pL = Math.round(99000*FX_RATES.KRW_IDR), pA = Math.round(149000*FX_RATES.KRW_IDR);
+  grantHolding('客人11', 'LHALa peel', '本地', 'rizky', D(-3), 1, false, {paid:pL, list:pL, pct:100, currency:'IDR'}).spec = '1次';
+  grantHolding('客人11', '艺人水光焕肤', '本地', 'rizky', D(-3), 1, false, {paid:pA, list:pA, pct:100, currency:'IDR'}).spec = '1次';
+  grantHolding('客人12', '艺人水光焕肤', '本地', 'rina', D(-29), 1, false, {paid:pA, list:pA, pct:100, currency:'IDR'}).spec = '1次';
+  useHolding('客人12', '艺人水光焕肤', 'rina', D(-22), 1); /* 已用完，演示"已用/购买"显示 */
+  useHolding('客人11', 'LHALa peel', 'rizky', D(-3), 1, 'main'); /* rizky 本地管理：已使用1次 */
 })();
 
 
@@ -4485,9 +4594,9 @@ var PROJECT_LIBRARY = [
    - 好莱坞焕肤：客人11 买2次、用1次（部分使用）→ 客户详情可退款剩余1次 */
 (function seedProjectLibraryDemo(){
   function byName(n){ return PROJECT_LIBRARY.filter(function(x){ return x.name===n; })[0]; }
-  ['Genesis焕肤（Clarity II）1次','巴西式脱毛 + 焕肤护理','鼻修复'].forEach(function(n){ var q = byName(n); if(q) q.active = false; });
-  var h = (CLIENT_HOLDINGS['客人11']||[]).filter(function(x){ return x.itemName==='好莱坞焕肤 1次'; })[0];
-  if(h && h.batches[0] && h.batches[0].bought===1){ h.batches[0].bought = 2; h.batches[0].paid = 640000; h.batches[0].listPrice = 640000; } /* 买2用1：部分使用（实付 = 2 × 320.000，CMD-1008-08 购买价快照同步） */
+  ['艺人水光焕肤','黑米醋换肤','鼻修复'].forEach(function(n){ var q = byName(n); if(q) q.active = false; });
+  var h = (CLIENT_HOLDINGS['客人11']||[]).filter(function(x){ return x.itemName==='LHALa peel'; })[0];
+  if(h && h.batches[0] && h.batches[0].bought===1){ h.batches[0].bought = 2; h.batches[0].paid = 2*h.batches[0].paid; h.batches[0].listPrice = h.batches[0].paid; } /* 买2用1：部分使用（实付 = 2 × 320.000，CMD-1008-08 购买价快照同步） */
   /* 各语言名称：演示翻译 */
   PROJECT_LIBRARY.forEach(function(q){ q.names = {zh:q.name, ko:demoTranslate(q.name,'zh','ko'), id:demoTranslate(q.name,'zh','id')}; });
 })();
@@ -4514,15 +4623,14 @@ var PROJECT_LIBRARY = [
   mk('下颌角整形联合方案','travel',['下颌角整形','颧骨缩小'],'KO1 代表院长',[],['1个月'],'08');
   mk('面部拉皮 提升','travel',['面部拉皮'],'KD1 院长',[],['3个月','6个月'],'07');
   mk('自体脂肪移植 面部填充','travel',['自体脂肪移植（全脸）'],'KO1 代表院长',[],['1个月'],'06');
-  mk('好莱坞焕肤 色素改善','local',['好莱坞焕肤 1次'],null,['色素沉着','暗沉'],['1周','1个月'],'15');
-  mk('Genesis焕肤 暗沉改善','local',['Genesis焕肤（Clarity II）1次'],null,['暗沉'],['1个月'],'13'); /* 项目已非活性化 → 卡片标"已非活性" */
-  mk('黄金微针 毛孔紧致','local',['黄金微针 毛孔探头'],null,['毛孔粗大','痘印'],['1个月','3个月'],'11');
-  mk('干细胞注射 脱发改善','local',['干细胞30皮肤注射 / 脱发治疗注射'],null,['脱发'],['3个月','6个月'],'05');
-  mk('Onda提升 面部紧致','local',['Onda提升 60kj'],null,['松弛'],['1个月'],'04');
-  mk('乔雅露蓝瓶 水光','local',['乔雅露蓝瓶 Juvelook Skin（3cc）'],null,['暗沉','毛孔粗大'],['1周'],'03');
+  mk('LHALa peel 色素改善','local',['LHALa peel'],null,['色素沉着','暗沉'],['1周','1个月'],'15');
+  mk('艺人水光焕肤 暗沉改善','local',['艺人水光焕肤'],null,['暗沉'],['1个月'],'13'); /* 项目已非活性化 → 卡片标"已非活性" */
+  mk('黄金微针 毛孔紧致','local',['黄金微针 面部整体（含镇静面膜）'],null,['毛孔粗大','痘印'],['1个月','3个月'],'11');
+  mk('干细胞注射 脱发改善','local',['干细胞皮肤注射（手打）'],null,['脱发'],['3个月','6个月'],'05');
+  mk('ONDA 提升 面部紧致','local',['ONDA 提升'],null,['松弛'],['1个月'],'04');
+  mk('婴儿针 水光','local',['婴儿针'],null,['暗沉','毛孔粗大'],['1周'],'03');
 })();
 
-var FX_RATES = { KRW_IDR:11.8, KRW_CNY:0.0052, IDR_CNY:0.00044 };
 
 function convertCurrency(amount, from, to){
   if(from===to) return amount;
@@ -4563,15 +4671,24 @@ function promoStatusOf(x){
   if(x.to && t > x.to) return '已结束';
   return '进行中';
 }
-function activePromoOf(projectId){ return PROMOS.filter(function(p){ return p.projectId===projectId && promoStatusOf(p)==='进行中'; })[0] || null; }
+function activePromoOf(projectId, specId){ return PROMOS.filter(function(p){ return p.projectId===projectId && (!specId || !p.specId || p.specId===specId) && promoStatusOf(p)==='进行中'; })[0] || null; }
+/* 规格（CMD-1012-04）：项目 p.specs = [{id, label, price, times}]；选了哪个规格 = 成交价；规格里写「N次」付款后持有 N 次（specTimes），其他规格一个规格 = 持有 1 次 */
+function specById(p, id){ return (p && p.specs || []).filter(function(x){ return x.id===id; })[0] || null; }
+function defaultSpec(p){ return (p && p.specs || [])[0] || null; }
+function specPickOf(c, p){ return specById(p, (c.specPick||{})[p.id]) || defaultSpec(p); }
+function itemFullName(it){ return it.name+(it.specLabel ? ' · '+it.specLabel : ''); }
 /* 本地项目当前的成交单价：有进行中的活动价就用活动价（原价划线 + "本月" 标签），过期自动恢复原价 */
-function localUnitPrice(p){ var pm = activePromoOf(p.id); return pm ? {price:pm.price, orig:p.price, promo:pm} : {price:p.price, orig:p.price, promo:null}; }
-function packageListTotal(pk){ return (pk.items||[]).reduce(function(s, it){ var pr = projById(it.projectId); return s + (pr ? pr.price*(it.qty||1) : 0); }, 0); }
-function packageItemsText(pk){ return (pk.items||[]).map(function(it){ var pr = projById(it.projectId); return (pr ? pr.name : '（已删除的项目）')+' × '+(it.qty||1); }).join('、'); }
+function localUnitPrice(p, specId){
+  var sp = specById(p, specId) || defaultSpec(p), base = sp ? sp.price : p.price, pm = activePromoOf(p.id, sp ? sp.id : null);
+  return pm ? {price:pm.price, orig:base, promo:pm} : {price:base, orig:base, promo:null};
+}
+function pkgItemSpec(it){ var pr = projById(it.projectId); return pr ? (specById(pr, it.specId) || defaultSpec(pr)) : null; }
+function packageListTotal(pk){ return (pk.items||[]).reduce(function(s, it){ var pr = projById(it.projectId), sp = pkgItemSpec(it); return s + (pr ? (sp ? sp.price : pr.price)*(it.qty||1) : 0); }, 0); }
+function packageItemsText(pk){ return (pk.items||[]).map(function(it){ var pr = projById(it.projectId), sp = pkgItemSpec(it); return (pr ? pr.name+(sp ? ' · '+sp.label : '') : '（已删除的项目）')+' × '+(it.qty||1); }).join('、'); }
 function activePackages(){ return PACKAGES.filter(function(pk){ return promoStatusOf(pk)==='进行中'; }); }
 /* 同一项目的活动价期间不能重叠（已结束的不算） */
-function promoOverlap(projectId, from, to, exceptId){
-  return PROMOS.filter(function(p){ return p.projectId===projectId && p.id!==exceptId && !p.ended; }).filter(function(p){ return (p.from||'0000') <= to && (p.to||'9999') >= from; })[0] || null;
+function promoOverlap(projectId, from, to, exceptId, specId){
+  return PROMOS.filter(function(p){ return p.projectId===projectId && p.id!==exceptId && !p.ended && (!specId || !p.specId || p.specId===specId); }).filter(function(p){ return (p.from||'0000') <= to && (p.to||'9999') >= from; })[0] || null;
 }
 function shiftMonth(ds, n){
   var d = new Date(ds+'T00:00:00'), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+n);
@@ -4581,21 +4698,25 @@ function shiftMonth(ds, n){
 /* 演示数据（CMD-1008-09）：4 条活动价（2 进行中 / 1 未开始 / 1 已结束）、2 个套餐；客人12 持有 1 批「套餐」批次（焕肤护理套餐拆出的好莱坞焕肤 ×3 + 比基尼线脱毛 ×1），客人11 持有 1 批「서비스」批次（好莱坞焕肤 ×1，赠送）；仅 C1 */
 (function seedPromoDemo(){
   var byName = function(n){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.name===n; })[0]; };
-  var hol = byName('好莱坞焕肤 1次'), xerf = byName('XERF提升 300发'), bik = byName('比基尼线脱毛 + 焕肤护理'), onda = byName('Onda提升 60kj');
+  var specOf = function(p, label){ return (p.specs||[]).filter(function(x){ return x.label===label; })[0]; };
+  var hol = byName('LHALa peel'), xerf = byName('索夫波 Sofwave'), bik = byName('基础祛痘管理'), onda = byName('ONDA 提升');
   if(!hol || !xerf || !bik || !onda) return;
+  var sH = specOf(hol,'1次'), sX = specOf(xerf,'300发'), sB = specOf(bik,'1次'), sO = specOf(onda,'脸部 60kj·1次');
   PROMOS = [
-    {id:'pm-demo1', projectId:hol.id, price:250000, from:D(-5), to:D(20), ended:false},
-    {id:'pm-demo2', projectId:xerf.id, price:7400000, from:D(-2), to:D(25), ended:false},
-    {id:'pm-demo3', projectId:bik.id, price:900000, from:D(5), to:D(35), ended:false},
-    {id:'pm-demo4', projectId:onda.id, price:3900000, from:D(-40), to:D(-12), ended:false}
+    {id:'pm-demo1', projectId:hol.id, specId:sH.id, price:850000, from:D(-5), to:D(20), ended:false},
+    {id:'pm-demo2', projectId:xerf.id, specId:sX.id, price:31000000, from:D(-2), to:D(25), ended:false},
+    {id:'pm-demo3', projectId:bik.id, specId:sB.id, price:450000, from:D(5), to:D(35), ended:false},
+    {id:'pm-demo4', projectId:onda.id, specId:sO.id, price:5900000, from:D(-40), to:D(-12), ended:false}
   ];
   PACKAGES = [
-    {id:'pk-demo1', name:'焕肤护理套餐', items:[{projectId:hol.id, qty:3}, {projectId:bik.id, qty:1}], price:1900000, from:D(-10), to:D(25), ended:false},
-    {id:'pk-demo2', name:'提升体验套餐', items:[{projectId:onda.id, qty:1}, {projectId:hol.id, qty:1}], price:4600000, from:'', to:'', ended:false}
+    {id:'pk-demo1', name:'焕肤护理套餐', items:[{projectId:hol.id, specId:sH.id, qty:3}, {projectId:bik.id, specId:sB.id, qty:1}], price:3600000, from:D(-10), to:D(25), ended:false},
+    {id:'pk-demo2', name:'提升体验套餐', items:[{projectId:onda.id, specId:sO.id, qty:1}, {projectId:hol.id, specId:sH.id, qty:1}], price:7500000, from:'', to:'', ended:false}
   ];
-  var b1 = grantHolding('客人12', hol.name, '本地', 'rina', D(-29), 3, false, {paid:885437, list:960000, pct:100, currency:'IDR'}); b1.pkgPaid = true; b1.pkgName = '焕肤护理套餐';
-  var b2 = grantHolding('客人12', bik.name, '本地', 'rina', D(-29), 1, false, {paid:1014563, list:1100000, pct:100, currency:'IDR'}); b2.pkgPaid = true; b2.pkgName = '焕肤护理套餐';
-  var b3 = grantHolding('客人11', hol.name, '本地', 'rizky', D(-3), 1, false, {paid:0, list:320000, pct:100, currency:'IDR'}); b3.service = true;
+  /* 客人12 持有 1 批「套餐」批次（焕肤护理套餐拆出的 LHALa peel ×3 + 基础祛痘管理 ×1，套餐价按原价占比分摊），客人11 持有 1 批「서비스」批次（LHALa peel ×1，赠送） */
+  var list1 = sH.price*3, list2 = sB.price, pk = 3600000, sh1 = Math.round(pk*list1/(list1+list2)), sh2 = pk - sh1;
+  var b1 = grantHolding('客人12', hol.name, '本地', 'rina', D(-29), 3, false, {paid:sh1, list:list1, pct:100, currency:'IDR'}); b1.pkgPaid = true; b1.pkgName = '焕肤护理套餐'; b1.spec = '1次';
+  var b2 = grantHolding('客人12', bik.name, '本地', 'rina', D(-29), 1, false, {paid:sh2, list:list2, pct:100, currency:'IDR'}); b2.pkgPaid = true; b2.pkgName = '焕肤护理套餐'; b2.spec = '1次';
+  var b3 = grantHolding('客人11', hol.name, '本地', 'rizky', D(-3), 1, false, {paid:0, list:sH.price, pct:100, currency:'IDR'}); b3.service = true; b3.spec = '1次';
 })();
 /* ［复制上个月活动］：把"上个自然月内结束的活动价"整体顺延一个月复制成新的活动价（同项目同期间已有的不重复复制），复制后可编辑；返回新增条数 */
 function copyLastMonthPromos(){
@@ -4603,8 +4724,8 @@ function copyLastMonthPromos(){
   PROMOS.slice().forEach(function(p){
     if(!p.to || p.to < ms || p.to > me) return;
     var nf = shiftMonth(p.from, 1), nt = shiftMonth(p.to, 1);
-    if(promoOverlap(p.projectId, nf, nt)) return;
-    PROMOS.push({id:newPromoId('pm'), projectId:p.projectId, price:p.price, from:nf, to:nt, ended:false}); n++;
+    if(promoOverlap(p.projectId, nf, nt, null, p.specId)) return;
+    PROMOS.push({id:newPromoId('pm'), projectId:p.projectId, specId:p.specId, price:p.price, from:nf, to:nt, ended:false}); n++;
   });
   return n;
 }
@@ -4674,14 +4795,61 @@ function projLibRowHtml(p){
   }
   var native = currencyOf(p.origin);
   var disp = p.origin==='KR' ? PROJ_DISPLAY_CCY_KR : PROJ_DISPLAY_CCY_IN;
-  var priceHtml = '<span style="font-size:13px;font-weight:700;">'+displayAmount(p.price, p.origin, disp)+'</span>'+
-    (disp!==native ? '<div style="font-size:10px;color:var(--muted);font-weight:400;">原价 '+formatCurrency(p.price, native)+'</div>' : '');
+  var priceHtml = projPriceSummaryHtml(p, disp);
   var nm = p.names ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;">'+(p.names.ko||'')+' · '+(p.names.id||'')+'</div>' : '';
-  return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+p.name+nm+'</span>'+
+  var open = !!PROJLIB_OPEN[p.id], hasSpecs = (p.specs||[]).length>0;
+  return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+(hasSpecs?'cursor:pointer;':'')+'"'+(hasSpecs ? ' onclick="toggleProjSpecs(\''+p.id+'\')"' : '')+'>'+(hasSpecs ? '<span style="color:var(--muted);">'+(open?'▾':'▸')+'</span> ' : '')+p.name+nm+'</span>'+
     '<span style="font-size:11px;color:var(--muted);width:90px;">'+(cat?cat.label:'—')+'</span>'+
     '<span style="width:130px;text-align:right;">'+priceHtml+'</span>'+
     '<span style="font-size:11px;color:var(--slate2);width:190px;text-align:right;">进行中案件 '+u.cases+' 个 · 持有中批次 '+u.batches+' 个 · 案例 '+u.libCases+' 个</span>'+
-    '<span class="fa" style="gap:12px;width:150px;justify-content:flex-end;">'+actions+'</span></div>';
+    '<span class="fa" style="gap:12px;width:150px;justify-content:flex-end;">'+actions+'</span></div>'+
+    (open && hasSpecs ? projSpecsListHtml(p, disp) : '');
+}
+/* 规格（一层）：一个项目一行，展开看全部规格和价格（CMD-1012-04） */
+var PROJLIB_OPEN = {};
+function toggleProjSpecs(id){ PROJLIB_OPEN[id] = !PROJLIB_OPEN[id]; if(typeof renderProjLibGrid==='function') renderProjLibGrid(); if(typeof krpRender==='function' && typeof KRP!=='undefined' && document.getElementById('admin-body') && /krsrvc/.test(ADMIN_KEY||'')) krpRender(); }
+function specPriceText(p, sp, ccy){ return p.neg ? '面议（手动填价）' : displayAmount(sp.price, p.origin, ccy); }
+function projPriceSummaryHtml(p, disp){
+  var native = currencyOf(p.origin), sp = p.specs||[];
+  if(!sp.length) return '<span style="font-size:13px;font-weight:700;">'+displayAmount(p.price, p.origin, disp)+'</span>'+(disp!==native ? '<div style="font-size:10px;color:var(--muted);font-weight:400;">原价 '+formatCurrency(p.price, native)+'</div>' : '');
+  if(p.neg) return '<span style="font-size:13px;font-weight:700;">面议</span><div style="font-size:10px;color:var(--muted);">'+sp.length+' 个规格</div>';
+  var ps = sp.map(function(x){ return x.price; }), lo = Math.min.apply(null, ps), hi = Math.max.apply(null, ps);
+  return '<span style="font-size:13px;font-weight:700;">'+displayAmount(lo, p.origin, disp)+(hi>lo ? ' 起' : '')+'</span><div style="font-size:10px;color:var(--muted);font-weight:400;">'+sp.length+' 个规格'+(disp!==native ? ' · 原价 '+formatCurrency(lo, native)+(hi>lo?' 起':'') : '')+'</div>';
+}
+function projSpecsListHtml(p, disp){
+  return '<div style="margin:0 0 8px 22px;padding:8px 14px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;">'+(p.opt ? '<div style="color:var(--slate2);margin-bottom:4px;">使用时选「'+p.opt.label+'」：'+p.opt.values.join(' / ')+'</div>' : '')+
+    p.specs.map(function(sp){ return '<div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0;"><span>'+sp.label+(sp.times>1 ? ' <span style="color:var(--muted);">（付款后持有 '+sp.times+' 次）</span>' : '')+'</span><span>'+specPriceText(p, sp, disp)+'</span></div>'; }).join('')+'</div>';
+}
+
+/* ---- 规格编辑器（IN / KR 项目库编辑共用）：targetExpr = 编辑对象的全局表达式（如 'PROJ_EDIT'），rerender = 重画表达式 ---- */
+function specEdHtml(targetExpr, rerender, ccy, obj){
+  var inp = 'padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;';
+  var rows = (obj.specs||[]).map(function(sp, i){
+    return '<div style="display:flex;gap:6px;align-items:center;margin:4px 0;"><input type="text" placeholder="规格（如 300发 / 3次）" value="'+String(sp.label||'').replace(/"/g,'&quot;')+'" oninput="specEdSet('+targetExpr+','+i+',\'label\',this.value)" style="'+inp+'flex:1;min-width:0;">'+
+      (obj.neg ? '<span style="font-size:12px;color:var(--muted);width:110px;">面议（手动填价）</span>' : '<input type="number" min="0" placeholder="价格（'+ccy+'）" value="'+(sp.price===''||sp.price==null ? '' : sp.price)+'" oninput="specEdSet('+targetExpr+','+i+',\'price\',this.value)" style="'+inp+'width:110px;">')+
+      '<a href="#" onclick="specEdDel('+targetExpr+','+i+');'+rerender+';return false;" style="font-size:12px;">删除</a></div>';
+  }).join('');
+  return '<div style="font-size:12px;font-weight:700;margin:8px 0 2px;">规格（一层，每个规格一个价格；规格里写「N次」付款后持有 N 次）</div>'+rows+
+    '<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="specEdAdd('+targetExpr+');'+rerender+'">+ 添加规格</button>'+
+    '<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin:8px 0;"><input type="checkbox" '+(obj.neg?'checked':'')+' onchange="'+targetExpr+'.neg=this.checked;'+rerender+'"> 面议（选了之后手动填价）</label>'+
+    '<div style="display:flex;gap:6px;align-items:center;font-size:12px;margin:4px 0;">使用时选 <input type="text" placeholder="选项名（如 模式 / 部位，不填 = 没有）" value="'+String((obj.opt&&obj.opt.label)||'').replace(/"/g,'&quot;')+'" oninput="specEdOpt('+targetExpr+',\'label\',this.value)" style="'+inp+'width:150px;"><input type="text" placeholder="可选值，用逗号分隔" value="'+String(((obj.opt&&obj.opt.values)||[]).join(',')).replace(/"/g,'&quot;')+'" oninput="specEdOpt('+targetExpr+',\'values\',this.value)" style="'+inp+'flex:1;min-width:0;"></div>';
+}
+function specEdSet(o, i, k, v){ if(o.specs && o.specs[i]){ o.specs[i][k] = v; if(k==='label'){ var m = String(v).match(/(\d+)次/); o.specs[i].times = m ? parseInt(m[1],10) : 1; } } }
+function specEdAdd(o){ o.specs = o.specs || []; o.specs.push({id:'sp'+(LOCAL_SPEC_SEQ++), label:'', price:'', times:1}); }
+function specEdDel(o, i){ if(o.specs){ o.specs.splice(i, 1); } }
+function specEdOpt(o, k, v){ o.opt = o.opt || {label:'', values:[]}; if(k==='label') o.opt.label = v; else o.opt.values = String(v).split(/[,，]/).map(function(x){ return x.trim(); }).filter(Boolean); if(!o.opt.label && !o.opt.values.length) o.opt = null; }
+/* 保存前整理规格：返回错误文字或 '' */
+function specEdFinish(o){
+  var sp = (o.specs||[]).filter(function(x){ return String(x.label||'').trim() || (x.price!=='' && x.price!=null); });
+  if(!sp.length) return '请至少添加一个规格';
+  for(var i = 0; i < sp.length; i++){
+    if(!String(sp[i].label||'').trim()) return '规格名称不能为空';
+    if(!o.neg){ var pr = Number(sp[i].price); if(sp[i].price==='' || isNaN(pr) || pr<0) return '规格「'+sp[i].label+'」缺价格'; sp[i].price = Math.round(pr); } else sp[i].price = 0;
+    var m = String(sp[i].label).match(/(\d+)次/); sp[i].times = m ? parseInt(m[1],10) : 1; sp[i].label = String(sp[i].label).trim();
+  }
+  o.specs = sp; if(o.opt && !String(o.opt.label||'').trim()) o.opt = null;
+  o.price = o.neg ? 0 : sp[0].price;
+  return '';
 }
 
 function reactivateProj(id){
@@ -4712,7 +4880,9 @@ function saveProj(){
   var missing = [];
   var nm0 = ensureProjNames(p);
   if(!['zh','ko','id'].some(function(k){ return (nm0[k]||'').trim(); })) missing.push('项目名称');
-  if(!p.price || isNaN(price) || price<0) missing.push('价格');
+  var specErr = (p.specs && p.specs.length || p.neg || p.catLabel!==undefined) ? specEdFinish(p) : '';
+  if(!(p.specs && p.specs.length) && (!p.price || isNaN(price) || price<0)) missing.push('价格');
+  if(specErr) missing.push(specErr);
   if(!p.categoryId) missing.push('分类');
   if(missing.length){
     p.errorMsg = '还差 '+missing.join('、')+' 未完成';
@@ -4722,7 +4892,8 @@ function saveProj(){
   var fromLang = ['zh','ko','id'].filter(function(k){ return (p.names[k]||'').trim(); })[0];
   ['zh','ko','id'].forEach(function(k){ if(!(p.names[k]||'').trim()) p.names[k] = demoTranslate(p.names[fromLang].trim(), fromLang, k); }); /* 没填的语言保存时自动翻译补全 */
   p.name = p.names.zh.trim(); /* 列表和案件里显示中文名；案件里存的是快照 */
-  p.price = Math.round(price);
+  if(p.origin==='IN') p.catLabel = (PROJECT_CATEGORIES[p.categoryId]||{}).label || p.catLabel;
+  if(!(p.specs && p.specs.length)) p.price = Math.round(price);
   p.errorMsg = '';
   if(p.id){
     var idx = PROJECT_LIBRARY.findIndex(function(x){ return x.id===p.id; });
@@ -5271,7 +5442,7 @@ function buildClinicViews(inProjects, inCases, inCats){
 /* H2（강남 뷰티의원）的赴韩项目和案例；C1 的几个案件改成属于 H2（名字按 H2 的人换掉） */
 function seedHospitalH2(){
   /* 两家医院各自的「韩国术后管理」项目（韩元，演示数据；价格两家不同） */
-  [['H1',[['术后消肿管理',150000],['拆线',50000],['术后复诊检查',80000],['伤口护理',100000]]], ['H2',[['术后消肿管理',180000],['拆线',60000],['术后复诊检查',90000],['伤口护理',120000]]]].forEach(function(r){
+  [['H1',[['术后消肿管理',0],['拆线',0],['术后复诊检查',0],['伤口护理',0]]], ['H2',[['术后消肿管理',0],['拆线',0],['术后复诊检查',0],['伤口护理',0]]]] /* 在韩术后管理全部免费（手术附带，CMD-1012-04） */.forEach(function(r){
     r[1].forEach(function(x){ var p = makeProj(x[0], x[1], 'KR', '韩国术后管理', r[0]); p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')}; PROJECT_LIBRARY.push(p); });
   });
   [['切开双眼皮',2200000,'眼部'],['埋线双眼皮',1200000,'眼部'],['双眼皮修复',3500000,'眼部'],['假体隆鼻',3000000,'鼻部'],['鼻综合（假体+鼻尖）',5800000,'鼻部'],
@@ -5498,6 +5669,7 @@ function seedClinicDemo(cid){
     ];
     return;
   }
+  if(cid==='C3'){ buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, id:p.name}; PROJECT_LIBRARY.push(p); }); }
   if(cid !== 'C2') return;
   var cons = function(d){ return {version:'v1.0', ts:D(-d)+' 10:00', source:'客户自助预约'}; };
   var mkClient = function(name, phone, g, dob, d){ var cl = addClient({name:name, phone:phone, gender:g, dob:dob, createdBy:'客人自助', source:'客户自助预约建档', consent:cons(d)}); return cl; };
@@ -5507,10 +5679,8 @@ function seedClinicDemo(cid){
   var c1 = createReservationCase('客人17', null, D(1), '10:30', '+62 811-2000-0001', '面诊商谈');
   var c2 = createReservationCase('客人18', null, D(0), '10:00', '+62 811-2000-0002', '面诊商谈'); c2.subState = 'arrived'; c2.needsConsult = true; c2.hospitalId = 'H1'; c2.director = 'KD1 院长'; c2.materialsConfirmed = true; c2.concern = '眼睛想变大一点'; c2.expectation = '自然的双眼皮'; c2.consultRequested = true; c2.consultStatus = 'paid_waiting_kr'; /* 已缴面诊费 → KR 端看得到（KR 端系列 2/5 演示） */ updateCaseStage(c2);
   var c3 = createReservationCase('客人19', null, D(-2), '14:00', '+62 811-2000-0003', '皮肤商谈'); c3.subState = 'cancelled'; c3.cancelReason = '预约取消'; updateCaseStage(c3);
-  [['玻尿酸填充 1cc（泗水）', 780000, '填充'], ['水光注射 2cc（泗水）', 1500000, '水光'], ['好莱坞焕肤 1次（泗水）', 300000, '去除色素'], ['黄金微针 1次（泗水）', 1800000, '黄金微针']].forEach(function(r){
-    var p = makeProj(r[0], r[1], 'IN', r[2]); p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')}; PROJECT_LIBRARY.push(p);
-  });
-  var lp = PROJECT_LIBRARY.filter(function(x){ return x.origin==='IN'; })[1], lid = newLibCaseId();
+  buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, id:p.name}; PROJECT_LIBRARY.push(p); }); /* 每家诊所一份清单（价格之后可自行改） */
+  var lp = PROJECT_LIBRARY.filter(function(x){ return x.origin==='IN' && x.name==='婴儿针'; })[0], lid = newLibCaseId();
   LIB_CASES.push({id:lid, clinicId:'C2', title:'水光注射 · 肤质改善（泗水）', names:{zh:'水光注射 · 肤质改善（泗水）', ko:demoTranslate('水光注射 · 肤质改善（泗水）','zh','ko'), id:demoTranslate('水光注射 · 肤质改善（泗水）','zh','id')}, source:'local',
     projectIds:[lp.id], director:null, problemIds:[], beforePhotos:[{url:'', color:'#E6DDD0'}], afterPhotos:[{url:'', color:'#D9CFC1', recovery:'1个月', recoveryCustom:''}],
     consent:{signed:true, file:'consent-'+lid+'.pdf'}, uploader:'B1 室长', uploadedAt:D(-6)+' 10:00', editedBy:null, editedAt:null});
@@ -5554,6 +5724,10 @@ function buildClinicSeed(cid){
   return out;
 }
 
+
+/* KR 的本地管理项目库（CMD-1012-04）：每家医院一份清单（韩元），KR 项目库页面「本地管理项目」组；缺的补上 */
+function krLocalLib(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; if(!h.localLib) h.localLib = buildLocalProjects('KR', hid); return h.localLib; }
+Object.keys(HOSPITAL_DATA).forEach(function(h){ krLocalLib(h); });
 
 /* 演示案件标记（CMD-1012-06 补）：种子里建立的案件都带 demo:true；用户自己新建的案件（id 为 r+时间戳）没有这个标记，测试覆盖页只计算后者。
    旧存档里没有标记的演示案件，按 id 补上（用户新建的案件 id 一律是 r 加 9 位以上数字）。 */

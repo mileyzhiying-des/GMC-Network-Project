@@ -1695,21 +1695,25 @@ function submitHoldingsUse(scope){
   var holdings = clientHoldingsSorted(c.name);
   var today = todayStr();
   var used = [];
+  /* 先检查：勾选了的项目如果有「使用时选」的选项，必须选好再扣次数（模式 / 部位 / 营养针种类） */
+  var missOpt = holdings.filter(function(h,i){ var ce = document.getElementById('hold-check-'+scope+'-'+i), oe = document.getElementById('hold-opt-'+scope+'-'+i); return ce && ce.checked && oe && !oe.value; })[0];
+  if(missOpt){ alert('「'+missOpt.itemName+'」使用时要先选好选项（模式 / 部位 / 种类）'); return; }
   holdings.forEach(function(h,i){
     var checkEl = document.getElementById('hold-check-'+scope+'-'+i);
     if(!checkEl || !checkEl.checked) return;
     var qty = parseInt(document.getElementById('hold-qty-'+scope+'-'+i).value, 10) || 0;
     if(qty<=0) return;
+    var optEl = document.getElementById('hold-opt-'+scope+'-'+i), optVal = optEl ? optEl.value : '';
     var srcIds = holdingSourceCaseIds(h, qty);
-    var actual = useHolding(c.name, h.itemName, c.id, today, qty, scope);
+    var actual = useHolding(c.name, h.itemName, c.id, today, qty, scope, optVal);
     if(actual>0 && h.category==='术后管理' && !c.linkedCase){
       var srcId = srcIds.filter(function(id){ return id!==c.id; })[0];
       if(srcId){ c.visibleToKR = true; c.linkedCase = {caseId:srcId, reason:'术后管理', auto:true}; logCaseEvent(c, '系统', '使用了 '+caseNoLabel(srcId)+' 的术后管理项目，自动关联该案件'); renderCaseSubtitle(c); }
     }
     if(actual>0){
       ctx.mgmtUses = ctx.mgmtUses || [];
-      ctx.mgmtUses.push({itemName:h.itemName, qty:actual, date:today});
-      logCaseEvent(c, ME_NAME, (scope==='lm'?'本地管理：':'')+'使用了'+h.itemName+' '+actual+'次，剩余'+holdingRemaining(h)+'次');
+      ctx.mgmtUses.push({itemName:h.itemName, qty:actual, date:today, opt:optVal||undefined});
+      logCaseEvent(c, ME_NAME, (scope==='lm'?'本地管理：':'')+'使用了'+h.itemName+(optVal ? '（'+optEl.options[0].text.replace('选择','')+'：'+optVal+'）' : '')+' '+actual+'次，剩余'+holdingRemaining(h)+'次');
       used.push(h.itemName);
     }
   });
@@ -2337,7 +2341,8 @@ function promoGridHtml(match){
   var body = rows.map(function(p){
     var pr = projById(p.projectId), st = promoStatusOf(p);
     var act = mg ? (st!=='已结束' ? '<a href="#" class="info-link" onclick="openPromoModal(\''+p.id+'\');return false;">编辑</a> <a href="#" class="info-link" onclick="endPromo(\''+p.id+'\');return false;">结束</a>' : '<a href="#" class="info-link" onclick="openPromoModal(\''+p.id+'\');return false;">编辑</a>') : '<span style="font-size:11px;color:var(--dim);">只读</span>';
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+pr.name+'</span><span style="width:110px;text-align:right;font-size:12px;color:var(--muted);text-decoration:line-through;">'+fmtRp(pr.price)+'</span><span style="width:110px;text-align:right;font-size:13px;font-weight:700;">'+fmtRp(p.price)+'</span><span style="width:190px;font-size:12px;color:var(--slate2);">'+periodText(p)+'</span><span style="width:70px;">'+promoStatusPill(p)+'</span><span style="width:100px;text-align:right;font-size:12px;">'+act+'</span></div>';
+    var psp = specById(pr, p.specId) || defaultSpec(pr);
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+pr.name+(psp ? ' · '+psp.label : '')+'</span><span style="width:110px;text-align:right;font-size:12px;color:var(--muted);text-decoration:line-through;">'+fmtRp(psp ? psp.price : pr.price)+'</span><span style="width:110px;text-align:right;font-size:13px;font-weight:700;">'+fmtRp(p.price)+'</span><span style="width:190px;font-size:12px;color:var(--slate2);">'+periodText(p)+'</span><span style="width:70px;">'+promoStatusPill(p)+'</span><span style="width:100px;text-align:right;font-size:12px;">'+act+'</span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">还没有活动价'+(mg ? '，点右上角［＋ 新增活动价］添加' : '')+'</div>';
   return '<div class="card" style="padding:4px 20px;">'+head+body+'</div>';
 }
@@ -2358,20 +2363,24 @@ function ensurePromoOverlay(id){
   return ov;
 }
 function closePromoOverlay(id){ var ov = document.getElementById(id); if(ov) ov.classList.remove('open'); }
-function localProjectOptions(selId){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && (p.active || p.id===selId); }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===selId?' selected':'')+'>'+p.name+'（'+fmtRp(p.price)+'）</option>'; }).join(''); }
+function localProjectOptions(selId){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && (p.active || p.id===selId); }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===selId?' selected':'')+'>'+p.name+'</option>'; }).join(''); }
+function specOptions(projectId, selSpecId){ var p = projById(projectId); return ((p && p.specs) || []).map(function(sp){ return '<option value="'+sp.id+'"'+(sp.id===selSpecId?' selected':'')+'>'+sp.label+'（'+fmtRp(sp.price)+'）</option>'; }).join(''); }
+function defaultSpecIdOf(projectId){ var sp = defaultSpec(projById(projectId)); return sp ? sp.id : ''; }
 var PROMO_EDIT = null, PKG_EDIT = null;
 var PM_INPUT = 'width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:10px;';
 function openPromoModal(id){
   if(!canDo('promo')) return;
   var ex = id ? PROMOS.filter(function(p){ return p.id===id; })[0] : null;
-  PROMO_EDIT = ex ? Object.assign({}, ex) : {id:null, projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]||{}).id, price:'', from:todayStr(), to:'', ended:false};
+  PROMO_EDIT = ex ? Object.assign({}, ex) : {id:null, projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]||{}).id, specId:'', price:'', from:todayStr(), to:'', ended:false};
+  if(!PROMO_EDIT.specId) PROMO_EDIT.specId = defaultSpecIdOf(PROMO_EDIT.projectId);
   renderPromoModal();
 }
 function renderPromoModal(){
   var e = PROMO_EDIT, ov = ensurePromoOverlay('promo-edit-overlay');
   ov.firstChild.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:14px;"><b style="font-size:15px;">'+(e.id ? '编辑活动价' : '新增活动价')+'</b><span style="cursor:pointer;color:var(--slate);" onclick="closePromoOverlay(\'promo-edit-overlay\')">✕</span></div>'+
-    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">本地项目</div><select style="'+PM_INPUT+'" onchange="PROMO_EDIT.projectId=this.value;renderPromoModal()">'+localProjectOptions(e.projectId)+'</select>'+
-    '<div style="font-size:12px;color:var(--muted);margin:-4px 0 10px;">原价 '+fmtRp((projById(e.projectId)||{}).price)+'</div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">本地项目</div><select style="'+PM_INPUT+'" onchange="PROMO_EDIT.projectId=this.value;PROMO_EDIT.specId=defaultSpecIdOf(this.value);renderPromoModal()">'+localProjectOptions(e.projectId)+'</select>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">规格</div><select style="'+PM_INPUT+'" onchange="PROMO_EDIT.specId=this.value;renderPromoModal()">'+specOptions(e.projectId, e.specId)+'</select>'+
+    '<div style="font-size:12px;color:var(--muted);margin:-4px 0 10px;">原价 '+fmtRp(((specById(projById(e.projectId), e.specId))||{}).price)+'</div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">活动价（Rp）</div><input type="number" min="0" value="'+(e.price===''?'':e.price)+'" oninput="PROMO_EDIT.price=this.value" style="'+PM_INPUT+'">'+
     '<div style="display:flex;gap:10px;"><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">开始日</div><input type="date" value="'+(e.from||'')+'" onchange="PROMO_EDIT.from=this.value" style="'+PM_INPUT+'"></div><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">结束日</div><input type="date" value="'+(e.to||'')+'" onchange="PROMO_EDIT.to=this.value" style="'+PM_INPUT+'"></div></div>'+
     (e.err ? '<div style="font-size:12px;color:#C1454A;margin-bottom:8px;">'+e.err+'</div>' : '')+
@@ -2385,10 +2394,10 @@ function savePromo(){
   else if(e.price==='' || isNaN(price) || price<0) err = '请填写活动价（不小于 0 的数字）';
   else if(!e.from || !e.to) err = '请填写开始日和结束日';
   else if(e.to < e.from) err = '结束日不能早于开始日';
-  else if(promoOverlap(e.projectId, e.from, e.to, e.id)) err = '这个项目在这段期间已经有活动价了';
+  else if(promoOverlap(e.projectId, e.from, e.to, e.id, e.specId)) err = '这个项目（同规格）在这段期间已经有活动价了';
   if(err){ e.err = err; renderPromoModal(); return; }
-  if(e.id){ var p = PROMOS.filter(function(x){ return x.id===e.id; })[0]; if(p){ p.projectId = e.projectId; p.price = price; p.from = e.from; p.to = e.to; } }
-  else PROMOS.push({id:newPromoId('pm'), projectId:e.projectId, price:price, from:e.from, to:e.to, ended:false});
+  if(e.id){ var p = PROMOS.filter(function(x){ return x.id===e.id; })[0]; if(p){ p.projectId = e.projectId; p.specId = e.specId; p.price = price; p.from = e.from; p.to = e.to; } }
+  else PROMOS.push({id:newPromoId('pm'), projectId:e.projectId, specId:e.specId, price:price, from:e.from, to:e.to, ended:false});
   PROMO_EDIT = null; closePromoOverlay('promo-edit-overlay'); renderProjLibrary();
 }
 function endPromo(id){
@@ -2405,19 +2414,20 @@ function doCopyLastMonthPromos(){
 function openPkgModal(id){
   if(!canDo('promo')) return;
   var ex = id ? PACKAGES.filter(function(k){ return k.id===id; })[0] : null;
-  PKG_EDIT = ex ? JSON.parse(JSON.stringify(ex)) : {id:null, name:'', items:[{projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]||{}).id, qty:1}], price:'', from:todayStr(), to:'', ended:false};
+  PKG_EDIT = ex ? JSON.parse(JSON.stringify(ex)) : {id:null, name:'', items:[{projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]||{}).id, specId:'', qty:1}], price:'', from:todayStr(), to:'', ended:false};
+  PKG_EDIT.items.forEach(function(it){ if(!it.specId) it.specId = defaultSpecIdOf(it.projectId); });
   renderPkgModal();
 }
 function renderPkgModal(){
   var e = PKG_EDIT, ov = ensurePromoOverlay('pkg-edit-overlay');
   var rows = e.items.map(function(it, i){
-    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><select style="flex:1;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;" onchange="PKG_EDIT.items['+i+'].projectId=this.value;renderPkgModal()">'+localProjectOptions(it.projectId)+'</select>'+
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><select style="flex:1;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;" onchange="PKG_EDIT.items['+i+'].projectId=this.value;PKG_EDIT.items['+i+'].specId=defaultSpecIdOf(this.value);renderPkgModal()">'+localProjectOptions(it.projectId)+'</select><select style="width:150px;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;" onchange="PKG_EDIT.items['+i+'].specId=this.value;renderPkgModal()">'+specOptions(it.projectId, it.specId)+'</select>'+
       qtyInputHtml({value:it.qty||1, min:1, onchange:'PKG_EDIT.items['+i+'].qty=parseInt(this.value,10)||1;renderPkgModal()'})+'<span style="font-size:12px;">次</span>'+
       (e.items.length>1 ? '<a href="#" class="info-link" onclick="PKG_EDIT.items.splice('+i+',1);renderPkgModal();return false;">移除</a>' : '')+'</div>';
   }).join('');
   ov.firstChild.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:14px;"><b style="font-size:15px;">'+(e.id ? '编辑套餐' : '新增套餐')+'</b><span style="cursor:pointer;color:var(--slate);" onclick="closePromoOverlay(\'pkg-edit-overlay\')">✕</span></div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">套餐名称</div><input type="text" value="'+(e.name||'').replace(/"/g,'&quot;')+'" oninput="PKG_EDIT.name=this.value" style="'+PM_INPUT+'">'+
-    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">内含项目 × 次数</div>'+rows+'<a href="#" class="info-link" style="font-size:12px;" onclick="PKG_EDIT.items.push({projectId:(PROJECT_LIBRARY.filter(function(p){return p.origin===\'IN\'&&p.active;})[0]||{}).id,qty:1});renderPkgModal();return false;">＋ 添加内含项目</a>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">内含项目 × 次数</div>'+rows+'<a href="#" class="info-link" style="font-size:12px;" onclick="var np=(PROJECT_LIBRARY.filter(function(p){return p.origin===\'IN\'&&p.active;})[0]||{}).id;PKG_EDIT.items.push({projectId:np,specId:defaultSpecIdOf(np),qty:1});renderPkgModal();return false;">＋ 添加内含项目</a>'+
     '<div style="font-size:11px;color:var(--muted);margin:8px 0 12px;">原价合计 '+fmtRp(packageListTotal(e))+'</div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">套餐价（Rp）</div><input type="number" min="0" value="'+(e.price===''?'':e.price)+'" oninput="PKG_EDIT.price=this.value" style="'+PM_INPUT+'">'+
     '<div style="display:flex;gap:10px;"><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">有效期开始（可空）</div><input type="date" value="'+(e.from||'')+'" onchange="PKG_EDIT.from=this.value" style="'+PM_INPUT+'"></div><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">有效期结束（可空）</div><input type="date" value="'+(e.to||'')+'" onchange="PKG_EDIT.to=this.value" style="'+PM_INPUT+'"></div></div>'+
@@ -2434,7 +2444,7 @@ function savePkg(){
   else if(e.price==='' || isNaN(price) || price<0) err = '请填写套餐价（不小于 0 的数字）';
   else if(e.from && e.to && e.to < e.from) err = '有效期结束不能早于开始';
   if(err){ e.err = err; renderPkgModal(); return; }
-  var rec = {name:e.name.trim(), items:e.items.map(function(it){ return {projectId:it.projectId, qty:it.qty||1}; }), price:price, from:e.from||'', to:e.to||''};
+  var rec = {name:e.name.trim(), items:e.items.map(function(it){ return {projectId:it.projectId, specId:it.specId, qty:it.qty||1}; }), price:price, from:e.from||'', to:e.to||''};
   if(e.id){ var k = PACKAGES.filter(function(x){ return x.id===e.id; })[0]; if(k) Object.assign(k, rec); }
   else PACKAGES.push(Object.assign({id:newPromoId('pk'), ended:false}, rec));
   PKG_EDIT = null; closePromoOverlay('pkg-edit-overlay'); renderProjLibrary();
@@ -2545,8 +2555,10 @@ function renderProjLibGrid(){
   var origin = PROJLIB_TAB;
   var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active && match(p) && (origin!=='KR' || (p.hospitalId===projLibHospital() && !isKrPostcareCat(p.categoryId))); }); /* 赴韩项目：只看所选医院的 */
   if(PROJLIB_CAT_FILTER!=='all') items = items.filter(function(p){ return p.categoryId===PROJLIB_CAT_FILTER; });
+  /* 按类别分组，一个项目一行（CMD-1012-04） */
+  var catIds = []; items.forEach(function(p){ if(catIds.indexOf(p.categoryId)<0) catIds.push(p.categoryId); });
   el.innerHTML = '<div class="card" style="padding:4px 20px;">'+projLibHeadHtml()+
-    (items.length ? items.map(projLibRowHtml).join('') : '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有符合条件的项目</div>')+
+    (items.length ? catIds.map(function(cid){ var cat = PROJECT_CATEGORIES[cid]; return '<div style="font-size:12px;font-weight:700;color:var(--terracotta);padding:10px 0 2px;">'+(cat ? cat.label : '其他')+'</div>'+items.filter(function(p){ return p.categoryId===cid; }).map(projLibRowHtml).join(''); }).join('') : '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有符合条件的项目</div>')+
     '</div>';
 }
 
@@ -2570,14 +2582,14 @@ var PROJ_EDIT = null;
 
 function openProjNewModal(){
   var origin = DEMO_ROLE==='kr' ? 'KR' : 'IN';
-  PROJ_EDIT = {id:null, name:'', names:{zh:'',ko:'',id:''}, price:'', origin:origin, categoryId:(projLibCategories(origin)[0]||{}).id||''};
+  PROJ_EDIT = {id:null, name:'', names:{zh:'',ko:'',id:''}, price:'', origin:origin, categoryId:(projLibCategories(origin)[0]||{}).id||'', specs:origin==='IN' ? [{id:'sp'+(LOCAL_SPEC_SEQ++), label:'1次', price:'', times:1}] : undefined, neg:false, opt:null};
   renderProjEditModal();
   document.getElementById('proj-edit-overlay').classList.add('open');
 }
 
 function openProjEditModal(id){
   var p = projById(id); if(!p) return;
-  PROJ_EDIT = Object.assign({}, p); PROJ_EDIT.names = p.names ? Object.assign({}, p.names) : {zh:p.name, ko:'', id:''};
+  PROJ_EDIT = Object.assign({}, p); if(p.specs) PROJ_EDIT.specs = p.specs.map(function(x){ return Object.assign({}, x); }); if(p.opt) PROJ_EDIT.opt = {label:p.opt.label, values:p.opt.values.slice()}; PROJ_EDIT.names = p.names ? Object.assign({}, p.names) : {zh:p.name, ko:'', id:''};
   renderProjEditModal();
   document.getElementById('proj-edit-overlay').classList.add('open');
 }
@@ -2603,7 +2615,7 @@ function renderProjEditModal(){
     '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">项目名称 <span style="color:#C1454A;">*</span> <span style="font-weight:400;color:var(--muted);">只填一种语言，其他语言用 AI 翻译，可手动修改</span></div>'+
     inp('zh')+inp('ko')+inp('id')+
     '<div style="margin:6px 0 10px;"><button class="btn-ghost" style="font-size:11px;" onclick="projAiFillNames()">AI 翻译补全（演示）</button></div>'+
-    '<div class="case-field-row"><span class="fk">价格（'+currencyOf(p.origin)+' 原价）</span><input id="proj-edit-price" type="number" value="'+(p.price===''?'':p.price)+'" oninput="PROJ_EDIT.price=this.value" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'+
+    specEdHtml('PROJ_EDIT', 'renderProjEditModal()', currencyOf(p.origin), p)+
     '<div class="case-field-row"><span class="fk">分类</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="PROJ_EDIT.categoryId=this.value">'+
       cats.map(function(c){ return '<option value="'+c.id+'"'+(p.categoryId===c.id?' selected':'')+'>'+c.label+'</option>'; }).join('')+
     '</select></div>'+

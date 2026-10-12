@@ -281,10 +281,10 @@ function settlementCardHtml(c, b){
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+'</span><span style="font-size:12px;color:var(--slate2);">'+(it.price?formatCurrency(it.price,'KRW'):'')+' · '+krItemStatus(it)+'</span></div>';
   }).join('');
   var localRows = locals.map(function(it){
-    var rb = null; getClientHoldings(c.name).forEach(function(h){ if(h.itemName===it.name) h.batches.forEach(function(x){ if(x.caseId===c.id && x.refund && x.bought===it.qty) rb = x.refund; }); });
+    var rb = null; getClientHoldings(c.name).forEach(function(h){ if(h.itemName===it.name) h.batches.forEach(function(x){ if(x.caseId===c.id && x.refund && x.bought===(it.qty||1)*(it.specTimes||1)) rb = x.refund; }); });
     var tag = it.kind==='package' ? ' <span style="font-size:10px;color:#C1454A;">套餐</span>' : (it.kind==='service' ? ' <span style="font-size:10px;color:var(--blue);">서비스</span>' : (it.promo || it.promoId ? ' <span style="font-size:10px;color:var(--sage);">本月</span>' : ''));
     var held = b.status==='unpaid' ? '待付款' : '已转客户持有';
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+it.name+tag+' ×'+(it.qty||1)+(discountText(it.discountPct)?'（'+discountText(it.discountPct)+'）':'')+'</span><span style="font-size:12px;color:var(--slate2);">'+formatCurrency(inLineTotal(it),'IDR')+' · 本地 · '+held+(rb?' · <b style="color:var(--terracotta);">'+'已退款 '+formatCurrency(rb.amount,'IDR')+'</b>':'')+'</span></div>';
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+itemFullName(it)+tag+' ×'+(it.qty||1)+(discountText(it.discountPct)?'（'+discountText(it.discountPct)+'）':'')+'</span><span style="font-size:12px;color:var(--slate2);">'+formatCurrency(inLineTotal(it),'IDR')+' · 本地 · '+held+(rb?' · <b style="color:var(--terracotta);">'+'已退款 '+formatCurrency(rb.amount,'IDR')+'</b>':'')+'</span></div>';
   }).join('');
   var grp = function(t){ return '<div style="font-size:11px;font-weight:700;color:var(--slate2);margin:8px 0 2px;">'+t+'</div>'; };
   var rows = (krRows && localRows) ? grp('赴韩项目（₩）')+krRows+grp('本地项目（Rp）')+localRows : (krRows + localRows);
@@ -344,7 +344,7 @@ function settlementItemRow(c, it, removable){
     var held = clientHeldRemaining(c.name, it.name);
     var heldTag = held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '';
     var noteRow = removable ? '<div class="case-field-row" style="border-top:none;padding-top:0;padding-bottom:10px;"><input type="text" placeholder="备注（选填）" value="'+(it.itemNote||'')+'" onchange="setInItemField(\''+it.projectId+'\',\'itemNote\',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;"></div>' : '';
-    return '<div class="case-field-row" style="flex-wrap:wrap;gap:6px;"><span style="flex-grow:1;font-size:13px;'+strike+'">'+it.name+heldTag+'</span><span style="font-size:12px;display:flex;align-items:center;gap:4px;">'+priceHtml+'</span></div>'+noteRow;
+    return '<div class="case-field-row" style="flex-wrap:wrap;gap:6px;"><span style="flex-grow:1;font-size:13px;'+strike+'">'+itemFullName(it)+heldTag+'</span><span style="font-size:12px;display:flex;align-items:center;gap:4px;">'+priceHtml+'</span></div>'+noteRow;
   }
   if(removable) return '<div class="sel-row"><div class="sel-line"><input type="checkbox" checked title="取消勾选即移除" onchange="toggleProject(\''+it.projectId+'\')"><div class="sel-name"><div>'+it.name+'</div></div><span class="sel-amt">'+formatCurrency(it.price, ccy)+'</span></div></div>';
   return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+strike+'">'+it.name+(it.done?'（已完成）':'')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(it.price, ccy)+'</span></div>';
