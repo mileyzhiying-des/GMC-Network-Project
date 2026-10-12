@@ -10,7 +10,10 @@ var DEMO_CLINIC_HOURS = {openTime:'10:00', closeTime:'21:00', bookFrom:'10:00', 
 var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ']; /* 每个诊所分区里保留的 */
 /* ---- 重置前自动备份（CMD-1012-06）：任何清掉 gmc_ 存档的地方（数据版本升级、手动「重置演示数据」）都先把当前全部存档备份：
    ① 存进 localStorage 的 gmc_backup_<时间>（重置不清它，只保留最近 3 份）；② 不自动下载文件（需要时到测试覆盖页自己导出）；③ 登录页 / 测试覆盖页顶部提示。 ---- */
-function gmcCollectRaw(){ var o = {}; try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); }catch(e){} return o; }
+/* 版本章 + 测试轮次（CMD-1012-07）：Timeline 记录带上当时的原型版本（最新提交的短 hash + 提交时间，shared/version.js 由 post-commit 钩子写入）；用户新建的案件带上当时的测试轮次（测试覆盖页下拉设置，存 gmc_cfg_round，重置不清） */
+function gmcVerStamp(){ return (typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? {ver:GMC_BUILD.h, vt:GMC_BUILD.t} : {}; }
+function currentTestRound(){ try{ return parseInt(localStorage.getItem('gmc_cfg_round'), 10) || 1; }catch(e){ return 1; } }
+function gmcCollectRaw(){ var o = {}; try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); }catch(e){} return o; }
 function gmcBackupMake(reason){
   try{
     var raw = gmcCollectRaw();
@@ -35,7 +38,7 @@ function gmcDownloadText(name, text, mime){
 }
 function gmcResetAll(reason){
   var bk = gmcBackupMake(reason || '手动重置演示数据');
-  try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
+  try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   gmcBackupKeep(bk);
 }
 (function(){
@@ -56,7 +59,7 @@ function gmcResetAll(reason){
         }catch(e){ keptG = null; keptC = {}; }
       }
       var bkv = gmcBackupMake('演示数据版本升级 '+(localStorage.getItem('gmc_demo_ver')||'?')+' → '+DEMO_DATA_VERSION); /* 升级前自动备份旧数据 */
-      Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
+      Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
       gmcBackupKeep(bkv);
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
       localStorage.setItem('gmc_struct_ver', String(ACCOUNT_STRUCT_VERSION));
@@ -670,6 +673,7 @@ function createReservationCase(name, director, date, time, phone, purpose){
   var c = makeCase({id:id, name:name, director:null, updated:'刚刚', visitDate:date, visitTime:time, visitPurpose:purpose||'面诊商谈', /* 2026-10-02：预约不选院长，面诊案件在基础资料里选 */
     logEntries:[{stage:'预约到店', actor:phone?'客人':actingName(), action:(phone?'官网/短信链接自助预约成功':'室长代替预约')+'，生成 Case ID '+caseNo, dt:nowFullDt()}]});
   c.caseNo = caseNo;
+  if(!SEEDING){ c.round = currentTestRound(); Object.assign(c.logEntries[0], gmcVerStamp()); } /* 用户新建的案件：记下当时的测试轮次 + 第一条记录盖版本章 */
   CASE_ITEMS.unshift(c);
   updateCaseStage(c);
   return c;
@@ -1324,7 +1328,7 @@ function markNoShow(caseId, auto){
   updateCaseStage(c);
   if(auto) pushNotif('预约','未到店（自动判定）：'+c.name+' 过预约时间30分钟未到店，已取消', {caseId:c.id});
   c.logEntries = c.logEntries || [];
-  c.logEntries.push({stage:'预约到店', actor: auto ? '系统' : actingName(), action: auto ? '过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）' : '手动标记未到店：已取消（未到店）', dt:nowFullDt()});
+  c.logEntries.push(Object.assign(gmcVerStamp(), {stage:'预约到店', actor: auto ? '系统' : actingName(), action: auto ? '过预约时间30分钟未点"到访"，系统自动判定：已取消（未到店）' : '手动标记未到店：已取消（未到店）', dt:nowFullDt()}));
   return true;
 }
 
@@ -1471,7 +1475,9 @@ function nowFullDt(){ var d = realNow(); return d.toISOString().slice(0,10)+' '+
 
 function logCaseEvent(c, actor, action){
   c.logEntries = c.logEntries || [];
-  c.logEntries.push({stage: stageLogLabel(c), actor: actor, actorId: (actor===ME_NAME ? currentAccountId() : undefined), action: action, dt: nowFullDt()});
+  var ent = {stage: stageLogLabel(c), actor: actor, actorId: (actor===ME_NAME ? currentAccountId() : undefined), action: action, dt: nowFullDt()};
+  if(typeof SEEDING==='undefined' || !SEEDING) Object.assign(ent, gmcVerStamp()); /* 演示种子不盖版本章 */
+  c.logEntries.push(ent);
 }
 
 var KR_COORDINATORS = ['KM1 室长', 'KC1 室长'];

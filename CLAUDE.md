@@ -388,3 +388,9 @@ prototype/shared/app.css  共用样式
 - **选择画面**统一：类别 chips → 项目一行一个 → 规格下拉 → 价格（`localCatalogHtml` / `localProjRowHtml`，本地选购、赴韩方案里的本地项目共用）；KR 术后管理设定的「具体项目」下拉含本地管理项目名称；KR 在韩「增加项目」和调整方案的「增加项目」可选本地管理项目（`krLocalPickerHtml`，`coreAddOnItem` 的 `opt.local`）。项目库页面（IN / KR）按类别分组、一项目一行、点开看规格（`PROJLIB_OPEN`），编辑可增删规格（`specEdHtml`）。
 - 旧种子对照：好莱坞焕肤 1次 → LHALa peel 1次；Genesis焕肤 → 艺人水光焕肤；巴西式脱毛 → 黑米醋换肤；比基尼线脱毛 → 基础祛痘管理；XERF → 索夫波 Sofwave 300发；Onda提升 60kj → ONDA 提升 脸部 60kj·1次；术后消肿护理 → LDM；案例库本地案例同理。数据版本 37（升级前自动备份旧数据）。
 - （CMD-1012-04 补，2026-10-12）**「使用时选」选项按规格分组**：`opt = {label, rules:[{match, values}]}`（`optValuesFor(p, 规格名)`；match 是规格名里含的文字，`*` = 全部，没匹配 = 不用选）。真实值（用户给的价格表）：LDM 12 分钟→痘痘/紧致/提升、6 分钟→保湿/再生/舒缓、8 分钟→红血丝；除皱部位 额头/眉间/眉上/眼周/眼下/嘴角/核桃纹/鼻翼；皮肤肉毒「1部位」→下颌线/脸颊/额头（全脸不用选）；Lucas、皮秒 小部位→腋下/肘部/脚踝/膝盖、敏感部位→臀部/Y区/私密、全身不用选；基础 / 高级营养针种类。使用持有项目时按「下一个会被扣的批次」的规格给选项。客户详情持有批次行显示规格名、使用明细显示所选选项。**KR 增加面议项目必须手动填价格**（`KRLP[key].manual`），没填不能增加 / 结算。**自动备份只存浏览器（最近 3 份），不再自动下载文件**，需要文件时到测试覆盖页导出。数据版本 38。
+
+## CMD-1012-07 补充（2026-10-12，追加；旧文字保留作历史）
+- **版本章**：`prototype/shared/version.js`（`var GMC_BUILD = {h:'短hash', t:'提交时间'}`）由 `.git/hooks/post-commit` 调 `dev/stamp-version.sh` 在**每次提交后自动写入**最新提交的 hash + 时间（钩子在 `.git/hooks/`，不进版本库；新机器要自己 `cp` 或手动跑 `bash dev/stamp-version.sh`；文件已 `git update-index --assume-unchanged`，不会让 `git status` 变脏）。所有页面在 `rules.js` 前加载它。`logCaseEvent` / 新建预约案件的第一条 / 未到店记录会带 `ver`（hash）和 `vt`（提交时间）；种子不盖章。
+- **测试轮次**：测试覆盖页顶部下拉「当前测试轮次」（第 1 / 第 2 轮，存 `localStorage.gmc_cfg_round`，**`gmc_cfg_` 前缀的键重置 / 版本升级都不清**）；之后用户新建的案件自动带 `c.round`（`createReservationCase`，`currentTestRound()`）；覆盖页每种情况分别显示第 1 / 第 2 轮是否测到 + 「最后一次」案件 / 时间 / 版本 / 轮次；案件列表有轮次标签，可手动改（`setCaseRound` 直接改存档分区）。没有 `round` 的旧案件按第 1 轮算。
+- **导出**：JSON 每种情况带 `occurrences`（案件、诊所、轮次、首次 / 最后一次的时间和版本）、`rounds`、顶层 `currentBuild` / `currentRound` / `roundCoverage`；Markdown 每种情况下列出各次记录和轮次汇总，Timeline 行末带〔版本〕。
+- 只加记录，业务逻辑没改。自动备份只存浏览器（04 补充时已改）。

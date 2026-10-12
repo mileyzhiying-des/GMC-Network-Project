@@ -9,7 +9,7 @@
   function pj(s){ try{ return JSON.parse(s); }catch(e){ return null; } }
 
   /* ---------- 读取 ---------- */
-  function collectLive(){ var o = {}; Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); return o; }
+  function collectLive(){ var o = {}; Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); return o; }
   function parseRaw(raw){
     var d = {cases:[], clients:[], holdings:{}, phHistory:[], notifs:[], hospitalNotifs:[], ver:raw.gmc_demo_ver || '', clinics:[]};
     Object.keys(raw).filter(function(k){ return k.indexOf('gmc_clinic_')===0; }).sort().forEach(function(k){
@@ -32,7 +32,7 @@
   function re(c, rx){ return rx.test(T(c)); }
   function firstDt(c, rx){ var e = (c.logEntries||[]).filter(function(x){ return rx.test(x.action||''); })[0]; return e ? e.dt : ''; }
   function krItems(c){ return (c.procedureItems||[]).filter(function(i){ return i.origin==='KR'; }); }
-  function byCase(pred, rx){ return function(d){ return {hits:d.cases.filter(pred).map(function(c){ return {c:c, dt:rx ? firstDt(c, rx) : ''}; })}; }; };
+  function byCase(pred, rx){ return function(d){ return {hits:d.cases.filter(pred).map(function(c){ return {c:c, dt:rx ? firstDt(c, rx) : '', rx:rx||null}; })}; }; };
   function logHit(rx, extra){ return byCase(function(c){ return re(c, rx) && (!extra || extra(c)); }, rx); }
   function holdFlag(flag){
     return function(d){ var hits = [];
@@ -120,15 +120,29 @@
     o.phHistory = d.phHistory.filter(function(h){ return /^phx/.test(String(h.id))===demo; });
     return o;
   }
+  var ROUNDS = [1, 2];
+  /* 给每次测到的记录补上：首次 / 最后一次的时间、版本章（提交 hash + 时间）、轮次（案件上的 round，没有的按第 1 轮） */
+  function decorate(h){
+    var c = h.c; h.round = c ? (parseInt(c.round,10) || 1) : 1;
+    if(!c) return h;
+    var ents = c.logEntries || [], m = h.rx ? ents.filter(function(e){ return h.rx.test(e.action||''); }) : [];
+    var first = m[0], last = m[m.length-1];
+    if(!last){ var st = ents.filter(function(e){ return e.ver; }); last = st[st.length-1]; first = first || st[0]; }
+    h.ver = first && first.ver || ''; h.vt = first && first.vt || ''; h.lver = last && last.ver || ''; h.lvt = last && last.vt || ''; h.ldt = last && last.dt || h.dt || '';
+    return h;
+  }
   function evaluateOne(d){
     var groups = [], cur = null, covered = 0, total = 0, unjudge = [];
     CHECKS.forEach(function(ch){
       if(ch.length===2){ cur = {id:ch[0], title:ch[1], items:[]}; groups.push(cur); return; }
-      var r = ch[2](d), item = {id:ch[0], title:ch[1], basis:ch[3]||'', auto:r.auto!==false, note:r.note||'', hits:r.hits||[]};
+      var r = ch[2](d), item = {id:ch[0], title:ch[1], basis:ch[3]||'', auto:r.auto!==false, note:r.note||'', hits:(r.hits||[]).map(decorate)};
       cur.items.push(item); total++;
+      item.rounds = {}; ROUNDS.forEach(function(rd0){ item.rounds[rd0] = item.hits.filter(function(h){ return h.round===rd0; }).length; });
+      item.last = item.hits.slice().sort(function(a,b){ return String(b.ldt||'').localeCompare(String(a.ldt||'')); })[0] || null;
       if(!item.auto) unjudge.push(item); else if(item.hits.length) covered++;
     });
-    return {groups:groups, covered:covered, total:total, unjudge:unjudge};
+    var roundCov = {}; ROUNDS.forEach(function(rd0){ roundCov[rd0] = 0; groups.forEach(function(g){ g.items.forEach(function(it){ if(it.auto && it.rounds[rd0]) roundCov[rd0]++; }); }); });
+    return {groups:groups, covered:covered, total:total, unjudge:unjudge, roundCov:roundCov};
   }
 
   function evaluate(d){
@@ -152,21 +166,24 @@
   /* ---------- 渲染 ---------- */
   function render(){
     RESULT = evaluate(DATA);
-    document.getElementById('sum').textContent = '已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'（其中 '+RESULT.unjudge.length+' 条无法自动判断；只算你自己新建的案件）';
+    document.getElementById('sum').textContent = '已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'（其中 '+RESULT.unjudge.length+' 条无法自动判断；只算你自己新建的案件）　第 1 轮 '+RESULT.roundCov[1]+'　第 2 轮 '+RESULT.roundCov[2];
     document.getElementById('sumsub').textContent = '数据来源：'+SRC.label+'；数据版本 '+(DATA.ver||'?')+'；你的案件 '+DATA.cases.filter(function(c){ return !c.__demo; }).length+' 个、演示案件 '+DATA.cases.filter(function(c){ return c.__demo; }).length+' 个（诊所 '+DATA.clinics.join('、')+'）；演示案件另外显示，不计入覆盖率（演示案件里已有 '+RESULT.demoCovered+' 条情况）';
     document.getElementById('checks').innerHTML = RESULT.groups.map(function(g){
       return '<div class="grp">'+esc(g.id+' '+g.title)+'</div><div class="card" style="padding:4px 18px;">'+g.items.map(function(it){
         var mk = !it.auto ? '❔' : it.hits.length ? '✅' : '⬜';
         var first = it.hits.slice().sort(function(a,b){ return String(a.dt||'').localeCompare(String(b.dt||'')); })[0];
         var demoLine = it.auto && it.demoHits && it.demoHits.length ? '<div class="muted" style="opacity:.7;">演示案件里也有 '+it.demoHits.length+' 次（不计入覆盖率）：'+it.demoHits.slice(0,3).map(function(h){ return h.c ? '<a href="'+caseLink(h.c)+'" target="_blank">'+caseTag(h.c)+'</a>' : esc(h.label||''); }).join('、')+'</div>' : '';
+        var rmk = it.auto ? ROUNDS.map(function(r0){ return '第'+r0+'轮 '+(it.rounds[r0] ? '✅'+it.rounds[r0] : '⬜'); }).join('　') : '';
+        var lastLine = it.auto && it.last ? '最后一次：'+(it.last.c ? '<a href="'+caseLink(it.last.c)+'" target="_blank">'+caseTag(it.last.c)+'</a>' : esc(it.last.label||''))+' · '+esc(String(it.last.ldt||'').slice(0,16))+' · 版本 '+esc(it.last.lver||'（无版本章）')+(it.last.lvt ? '（'+esc(it.last.lvt)+'）' : '')+' · 第 '+it.last.round+' 轮' : '';
         var who = it.hits.length ? '第一次：'+(first.c ? '<a href="'+caseLink(first.c)+'" target="_blank">'+caseTag(first.c)+'</a>' : esc(first.label||''))+(first.dt ? ' · '+esc(String(first.dt).slice(0,16)) : '')+(first.note ? ' · '+esc(first.note) : '')+' · 发生 '+it.hits.length+' 次' : '';
-        return '<div class="row"><span class="mk">'+mk+'</span><span class="id">'+esc(it.id)+'</span><span style="flex:1;"><b>'+esc(it.title)+'</b><div class="muted">'+(!it.auto ? esc(it.note) : who || '没发生过')+'</div>'+demoLine+'<div class="muted" style="opacity:.7;">判断依据：'+esc(it.basis||'—')+'</div></span></div>';
+        return '<div class="row"><span class="mk">'+mk+'</span><span class="id">'+esc(it.id)+'</span><span style="flex:1;"><b>'+esc(it.title)+'</b><div class="muted">'+(!it.auto ? esc(it.note) : who || '没发生过')+'</div>'+(lastLine ? '<div class="muted">'+lastLine+'</div>' : '')+(rmk ? '<div class="muted" style="font-weight:700;">'+rmk+'</div>' : '')+demoLine+'<div class="muted" style="opacity:.7;">判断依据：'+esc(it.basis||'—')+'</div></span></div>';
       }).join('')+'</div>';
     }).join('');
     var caseCard = function(cs){ return cs.slice().sort(function(a,b){ return String(a.caseNo).localeCompare(String(b.caseNo)); }).map(function(c){
       var path = casePath(c);
-      return '<div class="card" style="padding:8px 14px;"><details><summary><b>'+caseTag(c)+'</b> <span class="pill">'+esc(c.__clinic)+'</span><span class="pill">'+esc(c.stage)+'</span> <span class="muted">'+esc(path.join(' → '))+'</span> <a href="'+caseLink(c)+'" target="_blank">打开</a></summary>'+
-        '<div class="path">'+(c.logEntries||[]).map(function(e){ return esc((e.dt||'').slice(0,16)+'　['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')); }).join('<br>')+'</div></details></div>'; }).join(''); };
+      return '<div class="card" style="padding:8px 14px;"><details><summary><b>'+caseTag(c)+'</b> <span class="pill">'+esc(c.__clinic)+'</span><span class="pill">'+esc(c.stage)+'</span>'+(c.__demo ? '' : '<span class="pill" style="background:#E6EEFB;">第 '+(parseInt(c.round,10)||1)+' 轮</span>')+' <span class="muted">'+esc(path.join(' → '))+'</span> <a href="'+caseLink(c)+'" target="_blank">打开</a></summary>'+
+        (c.__demo ? '' : '<div style="font-size:12px;margin:6px 0 0 12px;">改这个案件的轮次：<select onchange="setCaseRound(\''+c.__clinic+'\',\''+String(c.id).replace(/'/g,'')+'\',this.value)">'+ROUNDS.map(function(r0){ return '<option value="'+r0+'"'+((parseInt(c.round,10)||1)===r0?' selected':'')+'>第 '+r0+' 轮</option>'; }).join('')+'</select></div>')+
+        '<div class="path">'+(c.logEntries||[]).map(function(e){ return esc((e.dt||'').slice(0,16)+'　['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')+(e.ver ? '　〔'+e.ver+'〕' : '')); }).join('<br>')+'</div></details></div>'; }).join(''); };
     var mine = DATA.cases.filter(function(c){ return !c.__demo; }), demo = DATA.cases.filter(function(c){ return c.__demo; });
     document.getElementById('cases').innerHTML = '<div class="grp">我的案件（'+mine.length+'）</div>'+(caseCard(mine) || '<div class="muted">还没有你新建的案件</div>')+
       '<details style="margin-top:14px;"><summary class="grp" style="display:inline-block;">演示案件（'+demo.length+'，不计入覆盖率）</summary>'+caseCard(demo)+'</details>';
@@ -175,6 +192,19 @@
 
   /* ---------- 数据来源 ---------- */
   function listBackups(){ return Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_backup_')===0 && k!=='gmc_backup_notice'; }).sort().reverse(); }
+  /* 当前原型版本 + 测试轮次下拉（存浏览器 gmc_cfg_round，之后新建的案件自动带上当时的轮次） */
+  function fillRound(){
+    var cur = parseInt(localStorage.getItem('gmc_cfg_round'), 10) || 1, b = (typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? GMC_BUILD : null;
+    document.getElementById('roundbar').innerHTML = '当前测试轮次：<select onchange="localStorage.setItem(\'gmc_cfg_round\',this.value);fillRoundBar()">'+ROUNDS.map(function(r0){ return '<option value="'+r0+'"'+(cur===r0?' selected':'')+'>第 '+r0+' 轮</option>'; }).join('')+'</select> <span class="muted">之后新建的案件自动标上这个轮次；选错可在下面案件里改</span>　<span class="muted">当前原型版本：'+(b ? esc(b.h)+'（'+esc(b.t)+'）' : '未知')+'</span>';
+  }
+  window.fillRoundBar = fillRound;
+  window.setCaseRound = function(clinic, caseId, round){
+    var key = 'gmc_clinic_'+clinic, p = pj(localStorage.getItem(key)); if(!p || !p.vars) return;
+    var c = (p.vars.CASE_ITEMS||[]).filter(function(x){ return String(x.id)===String(caseId); })[0]; if(!c) return;
+    c.round = parseInt(round, 10) || 1;
+    try{ localStorage.setItem(key, JSON.stringify(p)); }catch(e){ alert('保存失败：存档太大'); return; }
+    if(SRC.label==='当前浏览器数据'){ SRC.raw[key] = localStorage.getItem(key); DATA = parseRaw(SRC.raw); render(); } else window.loadSource();
+  };
   function fillSources(){
     var sel = document.getElementById('src'), opts = '<option value="live">当前浏览器里的数据</option>';
     listBackups().forEach(function(k){ var r = pj(localStorage.getItem(k)); opts += '<option value="'+k+'">自动备份 '+esc((r&&r.exportedAt||'').slice(0,19).replace('T',' '))+'（'+esc(r&&r.reason||'')+'）</option>'; });
@@ -206,8 +236,8 @@
   function restore(raw){
     var bk = {t:Date.now(), name:'gmc-backup-before-restore.json', reason:'恢复导入文件前', str:JSON.stringify({kind:'gmc-backup', exportedAt:new Date().toISOString(), reason:'恢复导入文件前', raw:collectLive()})};
     try{ localStorage.setItem('gmc_backup_'+bk.t, bk.str); }catch(e){}
-    Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
-    Object.keys(raw).forEach(function(k){ if(k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0) localStorage.setItem(k, raw[k]); });
+    Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
+    Object.keys(raw).forEach(function(k){ if(k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0) localStorage.setItem(k, raw[k]); });
     alert('已恢复。请回到演示页面刷新。（注意：如果文件里的数据版本和当前代码版本不同，刷新时会按版本升级流程重置，但会先自动备份。）');
   }
 
@@ -216,30 +246,31 @@
   function download(name, text, mime){ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:mime||'application/json'})); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
   function slimCase(c){ var o = {}; Object.keys(c).forEach(function(k){ if(k!=='__t') o[k] = c[k]; }); return o; }
   function coverageOut(){ return RESULT.groups.reduce(function(a,g){ return a.concat(g.items.map(function(it){ return {id:it.id, group:g.id, title:it.title, covered:it.auto ? it.hits.length>0 : null, autoJudged:it.auto, count:it.hits.length, demoCount:(it.demoHits||[]).length, note:it.note, basis:it.basis,
-      first:it.hits.slice().sort(function(x,y){ return String(x.dt||'').localeCompare(String(y.dt||'')); }).slice(0,1).map(function(h){ return {caseNo:h.c&&h.c.caseNo, name:h.c&&h.c.name, dt:h.dt, label:h.label}; })[0]||null}; })); }, []); }
+      rounds:it.rounds, occurrences:it.hits.map(function(h){ return {caseNo:h.c&&h.c.caseNo, name:h.c&&h.c.name, clinic:h.c&&h.c.__clinic, round:h.round, firstAt:h.dt||'', firstVersion:h.ver||'', firstVersionTime:h.vt||'', lastAt:h.ldt||'', lastVersion:h.lver||'', lastVersionTime:h.lvt||'', label:h.label||''}; })}; })); }, []); }
   window.exportJson = function(){
-    download('gmc-test-record-'+stamp()+'.json', JSON.stringify({kind:'gmc-test-record', exportedAt:new Date().toISOString(), dataVersion:DATA.ver, source:SRC.label, summary:{covered:RESULT.covered, total:RESULT.total, unjudged:RESULT.unjudge.length}, coverage:coverageOut(), note:'覆盖率只计算用户自己新建的案件；演示案件（demo:true）另外列出，不计入',
-      cases:DATA.cases.map(function(c){ return {demo:!!c.__demo, caseNo:c.caseNo, name:c.name, clinic:c.__clinic, stage:c.stage, subState:c.subState, cancelReason:c.cancelReason||null, path:casePath(c), timeline:c.logEntries||[]}; })}, null, 1));
+    download('gmc-test-record-'+stamp()+'.json', JSON.stringify({kind:'gmc-test-record', exportedAt:new Date().toISOString(), dataVersion:DATA.ver, currentBuild:(typeof GMC_BUILD!=='undefined' ? GMC_BUILD : null), currentRound:parseInt(localStorage.getItem('gmc_cfg_round'),10)||1, roundCoverage:RESULT.roundCov, source:SRC.label, summary:{covered:RESULT.covered, total:RESULT.total, unjudged:RESULT.unjudge.length}, coverage:coverageOut(), note:'覆盖率只计算用户自己新建的案件；演示案件（demo:true）另外列出，不计入',
+      cases:DATA.cases.map(function(c){ return {demo:!!c.__demo, round:c.__demo ? null : (parseInt(c.round,10)||1), caseNo:c.caseNo, name:c.name, clinic:c.__clinic, stage:c.stage, subState:c.subState, cancelReason:c.cancelReason||null, path:casePath(c), timeline:c.logEntries||[]}; })}, null, 1));
   };
   window.exportMd = function(){
-    var md = '# GMC 测试覆盖记录\n\n导出时间：'+new Date().toISOString()+'　数据版本：'+DATA.ver+'　来源：'+SRC.label+'\n\n**已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'**（'+RESULT.unjudge.length+' 条无法自动判断）\n\n';
+    var md = '# GMC 测试覆盖记录\n\n导出时间：'+new Date().toISOString()+'　数据版本：'+DATA.ver+'　来源：'+SRC.label+'\n\n**已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'**（'+RESULT.unjudge.length+' 条无法自动判断）；第 1 轮 '+RESULT.roundCov[1]+'，第 2 轮 '+RESULT.roundCov[2]+'；当前原型版本 '+((typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? GMC_BUILD.h+'（'+GMC_BUILD.t+'）' : '未知')+'\n\n';
     RESULT.groups.forEach(function(g){
       md += '## '+g.id+' '+g.title+'\n\n';
       g.items.forEach(function(it){
         var first = it.hits.slice().sort(function(a,b){ return String(a.dt||'').localeCompare(String(b.dt||'')); })[0];
         md += '- '+(!it.auto ? '❔' : it.hits.length ? '✅' : '⬜')+' **'+it.id+' '+it.title+'**'+(!it.auto ? '（无法自动判断：'+it.note+'）' : it.hits.length ? '——'+it.hits.length+' 次；第一次 '+(first.c ? first.c.caseNo+' '+first.c.name : (first.label||''))+(first.dt ? ' '+String(first.dt).slice(0,16) : '') : '——未发生')+'\n';
+        if(it.auto && it.hits.length){ it.hits.forEach(function(h){ md += '    - '+(h.c ? h.c.caseNo+' '+h.c.name : (h.label||''))+' · 第 '+h.round+' 轮 · 最早 '+String(h.dt||'').slice(0,16)+' 版本 '+(h.ver||'—')+' · 最后 '+String(h.ldt||'').slice(0,16)+' 版本 '+(h.lver||'—')+'\n'; }); md += '    - 轮次汇总：'+ROUNDS.map(function(r0){ return '第'+r0+'轮 '+(it.rounds[r0]||0)+' 次'; }).join('，')+'\n'; }
       });
       md += '\n';
     });
     md += '## 各案件实际走过的路径\n\n';
     DATA.cases.slice().sort(function(a,b){ return String(a.caseNo).localeCompare(String(b.caseNo)); }).forEach(function(c){
       md += '### '+(c.__demo ? '［演示］' : '')+c.caseNo+' · '+c.name+'（'+c.__clinic+'，当前 '+c.stage+(c.cancelReason ? '，'+c.cancelReason : '')+'）\n\n路径：'+casePath(c).join(' → ')+'\n\n';
-      (c.logEntries||[]).forEach(function(e){ md += '- '+(e.dt||'').slice(0,16)+' ['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')+'\n'; });
+      (c.logEntries||[]).forEach(function(e){ md += '- '+(e.dt||'').slice(0,16)+' ['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')+(e.ver ? ' 〔'+e.ver+(e.vt ? ' '+e.vt : '')+'〕' : '')+'\n'; });
       md += '\n';
     });
     download('gmc-test-record-'+stamp()+'.md', md, 'text/markdown');
   };
   window.exportBackup = function(){ download('gmc-export-'+stamp()+'.json', JSON.stringify({kind:'gmc-backup', exportedAt:new Date().toISOString(), reason:'手动导出完整备份', dataVersion:SRC.raw.gmc_demo_ver||'', raw:SRC.raw})); };
 
-  fillSources(); window.loadSource();
+  fillRound(); fillSources(); window.loadSource();
 })();
