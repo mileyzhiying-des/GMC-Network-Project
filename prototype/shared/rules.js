@@ -113,8 +113,8 @@ function caseProcessText(c){
   }
   if(c.stage==='local') return c.mgmtActive ? '本地管理中' : '选择项目';
   if(c.stage==='cancelled') return endReasonText(c);
-  if(c.stage==='closed') return caseWorkDone(c) ? '完成施术/管理' : '购买本地项目';
-  if(c.stage==='reportonly') return '只出报告';
+  if(c.stage==='closed') return (c.krProcedureDone || krAllItems(c).some(function(it){ return it.done; })) ? '赴韩完成' : '本地完成'; /* CMD-1008-13 确认 */
+  if(c.stage==='reportonly') return c.endNote || ((c.krScope && (c.krScope.items||[]).length===0) ? 'KR 无可选项目' : '只出报告'); /* 仅出报告写原因 */
   return '';
 }
 function caseStageInfo(c){

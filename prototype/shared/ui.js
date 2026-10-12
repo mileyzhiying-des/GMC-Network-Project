@@ -1657,7 +1657,7 @@ function localAskAnswer(yes){
   var c = getCurrentCase(); if(!c || !c.localAsk) return;
   document.getElementById('local-ask-overlay').classList.remove('open');
   c.localAsk = false;
-  if(!yes){ logCaseEvent(c, ME_NAME, '客人不做/不增加本地项目'); finishCase(c, '未购买未使用'); return; } /* 有购买→已结案；没有→仅出报告 */
+  if(!yes){ logCaseEvent(c, ME_NAME, '客人不做/不增加本地项目'); c.endNote = '客人不做项目'; finishCase(c, '未购买未使用'); return; } /* 有购买→已结案；没有→仅出报告 */
   logCaseEvent(c, ME_NAME, '客人要做/增加本地项目，在本案件内继续走本地流程');
   c.localTrack = true;
   c.entryChoicePending = true; c.projectEntryMode = null;
@@ -1705,6 +1705,7 @@ function noProjectForClient(){
   var c = getCurrentCase(); if(!c) return;
   if(!confirm('确认客人不做任何项目？案件将按结局结束（仅出报告）。')) return;
   logCaseEvent(c, ME_NAME, '客人不做项目');
+  c.endNote = (c.krScope && (c.krScope.items||[]).length===0) ? 'KR 无可选项目' : '客人不做项目'; /* 仅出报告的原因（列表进程栏显示） */
   finishCase(c, '未购买未使用');
 }
 
@@ -1713,6 +1714,7 @@ function noPurchaseThisTime(){
   var c = getCurrentCase(); if(!c) return;
   if(!confirm('确认本次不购买项目？')) return;
   logCaseEvent(c, ME_NAME, '本次不购买项目');
+  c.endNote = '客人不做项目';
   finishCase(c, '未购买未使用');
 }
 
@@ -1842,6 +1844,7 @@ function confirmRefund(){
     return;
   }
   if(mode0==='krCannot'){ /* KR判断不能施术 → 退定金 → 仅出报告（不再问本地管理） */
+    c.endNote = '退定金';
     finishCase(c, '未购买未使用');
     return;
   }
@@ -1898,6 +1901,7 @@ function confirmLocalRefundAll(){
   document.getElementById('local-refund-all-overlay').classList.remove('open');
   logCaseEvent(c, ME_NAME, '室长选择全部退款：整批退款 '+names.join('、')+'；退款原因：'+reason);
   c.localAsk = false;
+  c.endNote = '本地项目全退';
   finishCase(c, '未购买未使用'); /* 本次没有购买（或已全退）→ 仅出报告；还有用过的批次保留则为已结案 */
 }
 
