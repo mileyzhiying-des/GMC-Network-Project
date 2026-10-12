@@ -1290,7 +1290,7 @@ function inHandleCallSignal(sig){
 function simulatePeerDecline(){
   if(VIDEO_CALL.status!=='ringing') return;
   VIDEO_CALL.active = false; INVITE_KR_CONTEXT_CASE_ID = null; CHAT_VIDEO_CONTEXT_CASE_ID = null;
-  renderDashCallCard(); try{ renderDrawerList(); }catch(e){}
+  renderDashCallCard(); try{ renderSubBookCard(); }catch(e){} try{ renderDrawerList(); }catch(e){}
   clearTimeout(VIDEO_CALL.ringTimer);
   showToast('📞 对方已拒绝', callTitle()+' 的视频通话被对方拒绝了', null, {sticky:true});
   goBack();
@@ -1351,6 +1351,20 @@ function renderVideoPage(){
 }
 
 /* 工作台顶部卡片：只在通话进行中出现（没有通话时不显示） */
+/* 工作台待办：KR 请 IN 帮忙预约的术后管理（回印尼做的子项，已通知、还没预约）；点［代约］打开预约弹窗，生成的新案件关联原案件（CMD-1012-02 D5） */
+function subBookTodos(){
+  var out = [];
+  CASE_ITEMS.forEach(function(c){ (c.subItems||[]).forEach(function(s){ if(s.informed && !s.booked && !s.done && s.place!=='KR') out.push({c:c, s:s}); }); });
+  return out;
+}
+function renderSubBookCard(){
+  var el = document.getElementById('dash-subbook-card'); if(!el) return;
+  var list = subBookTodos();
+  if(!list.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = '<div style="padding:14px 18px;"><div style="font-size:14px;font-weight:700;margin-bottom:8px;">待预约（KR 请帮忙预约术后管理）<span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);margin-left:6px;">'+list.length+'</span></div>'+
+    list.map(function(x){ return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="flex:1;"><b>'+x.c.name+'</b>（'+x.c.caseNo+'）· '+x.s.content+' · 建议 '+x.s.date+'</span><button class="btn-primary" style="padding:4px 12px;font-size:12px;" onclick="openSubBookModal(\''+x.c.id+'\',\''+x.s.id+'\')">代约</button></div>'; }).join('')+'</div>';
+}
 function renderDashCallCard(){
   var el = document.getElementById('dash-call-card'); if(!el) return;
   if(!VIDEO_CALL.active){ el.style.display = 'none'; el.innerHTML = ''; return; }
@@ -2612,14 +2626,14 @@ function pushNotif(cat, text, opts){
   else if(c){ var t = pushTargets(c); rec = t.inn.concat(t.kr); }
   else rec = workingIN();
   rec = rec.filter(function(x){ return x!==ME_NAME; }); /* 操作人自己不收自己触发的通知 */
-  var n = {id:'n'+(++NOTIF_SEQ), cat:cat, by:ME_NAME, text:text, caseId:opts.caseId||null, ts:opts.ts||nowFullDt(), recipients:rec, read:{}, link:opts.link||(c?{kind:'case'}:{kind:'none'}), detail:opts.detail||null};
+  var n = {id:'n'+(++NOTIF_SEQ), cat:cat, by:ME_NAME, level:opts.level || notifLevel(text), text:text, caseId:opts.caseId||null, ts:opts.ts||nowFullDt(), recipients:rec, read:{}, link:opts.link||(c?{kind:'case'}:{kind:'none'}), detail:opts.detail||null};
   if(opts.read) n.read[ME_NAME] = true;
   NOTIFS.unshift(n);
   updateBell();
   if(CURRENT_PAGE_ID==='in-notifications') renderNotifPage();
   if(opts.silent) n.silent = true;
   if(NOTIF_SEEN) NOTIF_SEEN[notifKey(n)] = 1; /* 本页自己产生的：下面直接弹，不要再被 toastNewNotifs 重复弹 */
-  if(!opts.silent && notifMine(n) && notifyPushOn()) showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky:true});
+  if(!opts.silent && notifMine(n) && notifyPushOn()) showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky:n.level!=='info'});
   return n;
 }
 
@@ -3152,7 +3166,7 @@ function toastNewNotifs(){
   NOTIFS.slice().reverse().forEach(function(n){
     var k = notifKey(n); if(NOTIF_SEEN[k]) return; NOTIF_SEEN[k] = 1;
     if(n.silent || !notifMine(n) || n.read[ME_NAME] || !notifAlive(n) || !notifyPushOn()) return;
-    showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky:true});
+    showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky:notifLevelOf(n)!=='info'});
   });
 }
 

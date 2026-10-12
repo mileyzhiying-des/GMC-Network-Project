@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 35; /* 35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 36; /* 36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -3489,11 +3489,40 @@ function coreSubAdd(c, o, by){
   if(!c.settlementDone) return false;
   c.subItems = c.subItems || [];
   var first = c.subItems.length===0;
-  var s = {id:'s'+Date.now()+Math.floor(Math.random()*100), no:subNextNo(c), date:o.date, content:o.content, kind:o.kind||'术后管理记录', place:o.place||'KR', projectName:o.projectName||'', done:false, doneAt:'', doneBy:'', informed:false};
+  var s = {id:'s'+Date.now()+Math.floor(Math.random()*100)+(o.salt||''), no:subNextNo(c), date:o.date, content:o.content, kind:o.kind||'术后管理记录', place:o.place||'KR', projectName:o.projectName||'', done:false, doneAt:'', doneBy:'', informed:false};
   if(o.auto) s.auto = true;
+  if(o.time) s.time = o.time;
+  if(o.pcb) s.pcb = true; /* 由「术后管理预约」弹窗产生 */
   c.subItems.push(s); c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || a.no.localeCompare(b.no); });
+  if(o.silent) return s;
   logCaseEvent(c, by, 'KR新增'+subKindLabel(s.kind)+' '+s.no+'：'+s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）');
   pushNotif('赴韩施术', first ? 'KR 已整理在韩 timeline：'+c.name+'（可据此安排机票和住宿）' : 'KR 更新了在韩 timeline：'+c.name+'（新增 '+s.no+' '+s.date+' '+s.content+'）', {caseId:c.id});
+  return true;
+}
+/* 术后管理预约（CMD-1012-02 D4）：按术后管理设定逐条生成；rows = [{projectId, batchId, pcIdx, mgmt, name, innName, date, time, where:'KR'|'IN', askIn}]
+   在韩国做 → 在韩子项（术后管理记录，place KR，带时间）；回印尼做 → 分配给客人在印尼的持有项目（inTimes）+ 子项 place IN，可勾"请 IN 帮忙预约"→ IN 收到"待预约"。重复提交会替换上一次的预约子项 */
+function corePcBooking(c, rows, by){
+  if(!c.settlementDone || c.krBalancePaid || c.visitClosed) return false;
+  c.subItems = (c.subItems||[]).filter(function(s){ return !(s.pcb && !s.done && !s.booked); });
+  var cnt = {}; krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x, i){ if(x.place==='either' && x.innName) cnt[it.name+'|'+i] = 0; }); });
+  var inRows = [];
+  rows.forEach(function(r, k){
+    if(r.where==='IN'){
+      cnt[r.item+'|'+r.pcIdx] = (cnt[r.item+'|'+r.pcIdx]||0) + 1;
+      var s = coreSubAdd(c, {kind:'术后管理记录', date:r.date, content:(r.mgmt||r.name)+'（回印尼做：'+r.innName+'）', place:'IN', pcb:true, silent:true, salt:'i'+k}, by);
+      if(r.askIn && s) inRows.push(s);
+    } else {
+      coreSubAdd(c, {kind:'术后管理记录', date:r.date, time:r.time, content:(r.mgmt||r.name)+(r.mgmt && r.mgmt!==r.name ? '（'+r.name+'，在韩国）' : '（在韩国）'), place:'KR', pcb:true, silent:true, salt:'k'+k}, by);
+    }
+  });
+  Object.keys(cnt).forEach(function(key){
+    var p = key.split('|'), it = krActiveItems(c).filter(function(x){ return x.name===p[0]; })[0], x = it && (it.postcare||[])[parseInt(p[1],10)]; if(!x) return;
+    x.inTimes = Math.max(0, Math.min(x.times, cnt[key])); if(it.batchId) recomputeBatch(c, it.batchId); /* 回印尼做的次数 = 分配给印尼的次数 */
+  });
+  c.pcBooked = true;
+  logCaseEvent(c, by, 'KR完成术后管理预约：在韩国 '+rows.filter(function(r){ return r.where!=='IN'; }).length+' 次，回印尼做 '+rows.filter(function(r){ return r.where==='IN'; }).length+' 次');
+  inRows.forEach(function(s){ coreSubInform(c, s.id, by); });
+  pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' 术后管理已预约（在韩 '+rows.filter(function(r){ return r.where!=='IN'; }).length+'，回印尼 '+rows.filter(function(r){ return r.where==='IN'; }).length+(inRows.length ? '；请 IN 帮忙预约 '+inRows.length+' 次' : '')+'）', {caseId:c.id});
   return true;
 }
 /* 「施术」那一行由案件自动产生（日期 = 已确认的施术日期，内容 = 施术项目），KR 不能手动新增、也不能改（CMD-1008-12 D4） */
@@ -3554,18 +3583,30 @@ function krTimelineTabHtml(c){
 /* ---- KR 端：到院、判断、调整、尾款（2026-10-06，KR-CASE-02 第 5 节；沿用 Case Management Flow 06） ---- */
 function coreMarkArrived(c, by){
   if(!c.settlementDone || isArrived(c) || !c.krSchedule || c.krSchedule.status!=='confirmed') return false;
+  c.arrivedPrev = !!c.hasArrived; /* 撤回时恢复到院前的状态 */
   c.krSchedule.status = 'arrived'; c.hasArrived = true;
   updateCaseStage(c);
   logCaseEvent(c, by, 'KR标记"已到医院"');
   pushNotif('赴韩施术','客人已到医院：'+c.name, {caseId:c.id});
   return true;
 }
-var KR_JUDGE_TEXT = {ok:'能施术，项目没变动', changed:'能施术，但项目有变动', cannot:'不能施术'};
-function coreJudge(c, result, by){
+var KR_JUDGE_TEXT = {ok:'可以手术，原方案不变', changed:'可以手术，但需要调整方案', cannot:'不建议手术'}; /* 院长评估结果（CMD-1012-02 D1）：除第一项外 memo 必填 */
+/* "已到医院"可撤回：院长评估 / 结算之前（D3），回到时间已确认，Timeline 记一笔 */
+function coreUnarrive(c, by){
+  if(!c.krSchedule || c.krSchedule.status!=='arrived' || c.krJudge || c.krBalancePaid || c.visitClosed) return false;
+  c.krSchedule.status = 'confirmed'; c.hasArrived = !!c.arrivedPrev; delete c.arrivedPrev;
+  updateCaseStage(c);
+  logCaseEvent(c, by, 'KR撤回"已到医院"（院长评估之前），回到施术时间已确认');
+  pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' 撤回了"已到医院"（回到施术时间已确认）', {caseId:c.id});
+  return true;
+}
+function coreJudge(c, result, by, memo){
   if(!c.hasArrived || c.visitClosed || c.krJudge || !KR_JUDGE_TEXT[result]) return false;
-  c.krJudge = {result:result, settled:false};
-  logCaseEvent(c, by, 'KR判断：'+KR_JUDGE_TEXT[result]);
-  pushNotif('赴韩施术','KR 判断：'+c.name+'（'+KR_JUDGE_TEXT[result]+'）', {caseId:c.id});
+  memo = String(memo||'').trim();
+  if(result!=='ok' && !memo) return false; /* 除"原方案不变"外 memo 必填 */
+  c.krJudge = {result:result, settled:false, memo:memo, by:by};
+  logCaseEvent(c, by, '院长评估结果：'+KR_JUDGE_TEXT[result]+(memo ? '；原因：'+memo : ''));
+  pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' '+KR_JUDGE_TEXT[result]+(memo ? ' / 原因：'+memo : ''), {caseId:c.id});
   return true;
 }
 function coreMarkUnable(c, names, reason, by){
@@ -3574,7 +3615,7 @@ function coreMarkUnable(c, names, reason, by){
   if(!names.length || names.length>=pending.length) return false; /* 至少保留一个；全部不能做属于"不能施术" */
   pending.forEach(function(it){ if(names.indexOf(it.name)>-1){ it.cancelled = true; it.unable = true; it.unableReason = reason; } });
   logCaseEvent(c, by, 'KR标记无法施术：'+names.join('、')+'（项目→已取消）；原因：'+reason);
-  pushNotif('赴韩施术','KR 标记无法施术：'+c.name+'（'+names.join('、')+'）', {caseId:c.id});
+  pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' 无法施术：'+names.join('、')+' / 原因：'+reason, {caseId:c.id});
   updateCaseStage(c);
   syncSurgerySub(c);
   return true;
@@ -3594,7 +3635,7 @@ function coreSwapItem(c, itemName, altName, by, detail){
   c.procedureItems.push(ni);
   c.settleTab = null;
   logCaseEvent(c, by, '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
-  pushNotif('赴韩施术','KR 更换项目：'+c.name+'（'+target.name+' → '+alt.name+'）', {caseId:c.id});
+  pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' 更换项目：'+target.name+' → '+alt.name, {caseId:c.id});
   syncSurgerySub(c);
   return true;
 }
@@ -3640,7 +3681,7 @@ function coreRebook(c, date, time, by){
   var ks = c.krSchedule; ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time;
   c.krJudge = null;
   logCaseEvent(c, by, 'KR在韩国重新预约施术时间：'+date+' '+time+'（韩国时间；回到施术时间已确认，IN端显示更改时间）');
-  pushNotif('赴韩施术','KR 在韩国重新预约了施术时间：'+c.name+' '+tkK(date, time), {caseId:c.id});
+  pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' 在韩国重新预约了施术时间 '+tkK(date, time)+((c.krJudge&&c.krJudge.memo) ? ' / 原因：'+c.krJudge.memo : ''), {caseId:c.id});
   syncSurgeryBlock(c); updateCaseStage(c);
   syncSurgerySub(c); return true;
 }
@@ -3705,7 +3746,7 @@ function coreSubInform(c, id, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.place==='KR') return false;
   s.informed = true; s.informedAt = nowFullDt();
   logCaseEvent(c, by, 'KR通知 IN 室长预约 '+s.no+'：'+s.date+' '+s.content);
-  pushNotif('赴韩施术','KR 通知预约：'+c.name+' 回印尼后需要做 '+s.no+'「'+s.content+'」（约 '+s.date+'），请预约', {caseId:c.id, link:{kind:'subBook', subId:s.id}});
+  pushNotif('赴韩施术','请 IN 帮忙预约：'+by+' / '+c.name+' 回印尼后需要做 '+s.no+'「'+s.content+'」（建议 '+s.date+'）', {caseId:c.id, link:{kind:'subBook', subId:s.id}});
   return true;
 }
 /* 回诊时加做项目：KR 室长直接新增，另开新结算单、在韩国付款（不经过 IN 选择，原结算单不动）；IN 收到通知、只读可见 */
@@ -3764,7 +3805,7 @@ function confirmSubBook(){
   s.booked = nc.caseNo;
   logCaseEvent(c, actingName(), 'IN 室长预约了 '+s.no+'「'+s.content+'」：新案件 '+nc.caseNo+'（'+date+' '+time+'，'+purpose+'），已关联本案件');
   logCaseEvent(nc, actingName(), '由赴韩案件 '+c.caseNo+' 的子项 '+s.no+'「'+s.content+'」预约，自动关联原案件');
-  closeSubBookModal(); renderCalendar();
+  closeSubBookModal(); renderCalendar(); if(typeof renderSubBookCard==='function') renderSubBookCard();
   showToast('预约已生成', c.name+' · '+date+' '+time+'，新案件 '+nc.caseNo+' 已关联 '+c.caseNo, null);
 }
 
@@ -3812,7 +3853,8 @@ function krProcedureTabMain(c, tabsHtml){
   var monthNav = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span style="cursor:pointer;" onclick="krScheduleMonthShift(-1)">‹</span><b>'+monthLabel+'</b><span style="cursor:pointer;" onclick="krScheduleMonthShift(1)">›</span></div>';
   var hasActive = krActiveItems(c).length>0;
   var body = '';
-  if(hasActive){
+  if(hasActive && c.krBalancePaid && st==='Arrived'){ body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div><div style="font-size:12px;color:var(--sage);">✓ 已到院、尾款已付清（施术日期 '+ks.confirmedDate+'）；详细记录见「Timeline」。</div>'; }
+  else if(hasActive){
     /* 施术日期卡片（Schedule）：Draft / Pending / Confirmed / Changing / Arrived，案件主状态直接读这里 */
     var canModify = ks && ks.status==='confirmed' && !isWithin2WeeksOfToday(ks.confirmedDate) && !c.hasArrived;
     if(st==='Draft'){
@@ -4847,7 +4889,7 @@ function pushKrNotif(hid, text, opt){
   var h = HOSPITAL_DATA[hid]; if(!h) return null;
   opt = opt || {};
   h.notifs = h.notifs || [];
-  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, only:opt.only||null, kind:opt.kind||'case', by:(typeof currentAccount==='function'&&currentAccount()?currentAccount().name:null), readBy:[]};
+  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, only:opt.only||null, kind:opt.kind||'case', by:(typeof currentAccount==='function'&&currentAccount()?currentAccount().name:null), level:opt.level||notifLevel(text), readBy:[]};
   h.notifs.unshift(n); if(h.notifs.length>200) h.notifs.length = 200;
   return n;
 }

@@ -224,6 +224,12 @@ function fmtUtcTime(s, tz){ var f = fmtUtc(s, tz); return f.length>=16 ? f.slice
 /* 时间标记（CMD-1008-14）：写进通知 / Timeline 的时间不再写死成某个时区的文字，而是写标记，显示时按"看的人"的时区换算：
    ⟦u:UTC 时间点⟧ → 页面时区（IN 看印尼时间、KR 看韩国时间）；⟦k:日期|钟点⟧ → 韩国当地钟点（IN 显示诊所时间 +（韩国 X），KR 显示韩国时间）。
    新写含时间的通知 / Timeline 文字：用 tkU / tkK 生成标记，不要直接拼 fmtUtc(...) 或韩国钟点。 */
+/* 通知分级（Notification Center 2026-10-12）：action = 需要你处理（手动确认）；next = 进入下一阶段（手动确认）；info = 一般消息（6 秒自动消失，铃铛仍留记录）。
+   通知事件创建时记在 n.level（可在 opts.level 显式指定），没有记的（旧数据）按文字推断 */
+var NOTIF_ACTION_RE = /待确认|催办|诊疗方案已到|无法安排|请 IN 帮忙预约|未接来电|@ 了你|调整了到院时间|请确认报告时间|请按此|重新选择/;
+var NOTIF_INFO_RE = /客人自助预约|占位客人填完资料|客人到店自己填|客人改约|自行把预约时间|客人取消预约|修改了预计出报告时间|预约占位快过期|进入了|更新了诊所设定|加购/;
+function notifLevel(text){ var t0 = String(text||''); if(NOTIF_ACTION_RE.test(t0)) return 'action'; if(NOTIF_INFO_RE.test(t0)) return 'info'; return /已缴面诊费|免除|确认.*施术时间|确认预计出报告时间|已到医院|可以手术|不建议手术|施术完成|结案|仅出报告|已取消|未到店|付清尾款|更换项目|无法施术|重新预约了施术|术后管理已预约|增加项目|延续既往面诊判断|补加了可选项目|完成在韩子项|timeline/.test(t0) ? 'next' : 'info'; }
+function notifLevelOf(n){ return (n && n.level) || notifLevel(n && n.text); }
 function tkU(s){ return s ? '⟦u:'+s+'⟧' : '—'; }
 function tkK(date, hm){ return '⟦k:'+date+'|'+(hm||'')+'⟧'; }
 function tzRender(t){

@@ -375,7 +375,7 @@ function bkMeMoney(r){ var p = []; if(r.paidKRW>0) p.push(formatCurrency(r.paidK
 function bkKrCareEvents(cl){
   var out = [];
   CASE_ITEMS.filter(function(c){ return c.name===cl.name; }).forEach(function(c){
-    (c.subItems||[]).forEach(function(s){ if(s.date) out.push({date:s.date, text:s.content, done:!!s.done, caseNo:c.caseNo, kind:s.kind, place:s.place}); });
+    (c.subItems||[]).forEach(function(s){ if(s.date) out.push({date:s.date, text:(s.time ? s.time+' ' : '')+s.content+(s.booked ? '（'+(BOOK_LANG==='zh' ? '已预约 ' : 'sudah dijadwalkan ')+s.booked+'）' : ''), done:!!s.done, caseNo:c.caseNo, kind:s.kind, place:s.place}); });
   });
   return out.sort(function(a,b){ return a.date.localeCompare(b.date); });
 }
