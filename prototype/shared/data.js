@@ -5553,3 +5553,9 @@ function buildClinicSeed(cid){
   IN_COORDINATORS.length = 0; Array.prototype.push.apply(IN_COORDINATORS, keepIn);
   return out;
 }
+
+
+/* 演示案件标记（CMD-1012-06 补）：种子里建立的案件都带 demo:true；用户自己新建的案件（id 为 r+时间戳）没有这个标记，测试覆盖页只计算后者。
+   旧存档里没有标记的演示案件，按 id 补上（用户新建的案件 id 一律是 r 加 9 位以上数字）。 */
+function markDemoCases(){ try{ (CASE_ITEMS||[]).forEach(function(c){ if(c.demo===undefined) c.demo = !/^r\d{9,}/.test(String(c.id)); }); }catch(e){} }
+(CASE_ITEMS||[]).forEach(function(c){ c.demo = true; }); /* 种子刚建立的案件：全部明确标记为演示（含种子里用 createReservationCase 生成的预约案件）；存档读入后用户新建的案件没有这个标记 */

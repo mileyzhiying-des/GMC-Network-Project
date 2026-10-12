@@ -22,7 +22,7 @@
     });
     var g = pj(raw.gmc_state); var hd = g && g.vars && g.vars.HOSPITAL_DATA;
     if(hd) Object.keys(hd).forEach(function(h){ (hd[h].notifs||[]).forEach(function(n){ d.hospitalNotifs.push(Object.assign({__hospital:h}, n)); }); });
-    d.cases.forEach(function(c){ c.__t = (c.logEntries||[]).map(function(e){ return e.action||''; }).join('\n'); });
+    d.cases.forEach(function(c){ c.__t = (c.logEntries||[]).map(function(e){ return e.action||''; }).join('\n'); c.__demo = c.demo===true || (c.demo===undefined && !/^r\d{9,}/.test(String(c.id))); /* 演示案件 = 种子建立的（demo 标记）；用户自己新建的案件 id 是 r+时间戳 */ });
     return d;
   }
 
@@ -80,12 +80,13 @@
     ['D24','全部不能做 → 在韩重新约', logHit(/KR在韩国重新预约施术时间/), 'Timeline「KR在韩国重新预约施术时间」'],
     ['D25','全部不能做 → 退定金 → 仅出报告', logHit(/KR判断：不能施术，定金/, function(c){ return c.stage==='reportonly'; }), 'Timeline「KR判断：不能施术，定金…」+ 仅出报告'],
     ['D26','在韩加做项目', logHit(/KR增加项目/), 'Timeline「KR增加项目」'],
-    ['D27a','赴韩项目全部取消（无本地项目）→ 做本地', logHit(/询问是否增加本地项目/, function(c){ return /客人要做\/增加本地项目/.test(T(c)); }), 'Timeline「询问是否增加本地项目」+「客人要做/增加本地项目」'],
-    ['D27b','赴韩项目全部取消（无本地项目）→ 不做', logHit(/询问是否增加本地项目/, function(c){ return /客人不做\/不增加本地项目/.test(T(c)); }), 'Timeline「询问是否增加本地项目」+「客人不做/不增加本地项目」'],
+    ['D27a','到院前取消全部赴韩项目（无本地项目）→ 做本地', logHit(/询问是否增加本地项目/, function(c){ return !/点［无法协调］/.test(T(c)) && /客人要做\/增加本地项目/.test(T(c)); }), 'Timeline「询问是否增加本地项目」（没有「点［无法协调］」）+「客人要做/增加本地项目」'],
+    ['D27b','到院前取消全部赴韩项目（无本地项目）→ 不做', logHit(/询问是否增加本地项目/, function(c){ return !/点［无法协调］/.test(T(c)) && /客人不做\/不增加本地项目/.test(T(c)); }), 'Timeline「询问是否增加本地项目」（没有「点［无法协调］」）+「客人不做/不增加本地项目」'],
     ['D28a','无法协调（有本地项目）→ 保留并使用', logHit(/室长选择保留本案件的本地项目/, function(c){ return /使用了/.test(T(c)); }), 'Timeline「室长选择保留」+「使用了」'],
     ['D28b','无法协调（有本地项目）→ 保留但这次不做', logHit(/室长选择保留本案件的本地项目/, function(c){ return /本次不使用任何持有项目/.test(T(c)); }), 'Timeline「室长选择保留」+「本次不使用任何持有项目」'],
     ['D28c','无法协调（有本地项目）→ 全退', logHit(/室长选择全部退款/), 'Timeline「室长选择全部退款」'],
-    ['D29','无法协调（无本地项目）→ 增加 / 不加本地', function(){ return {auto:false, note:'和 D27 走同一条代码路径，记录里分不出是点了［无法协调］还是逐个取消项目；D27a/b 已覆盖同样的结果'}; }, ''],
+    ['D29a','无法协调（无本地项目）→ 增加本地', logHit(/点［无法协调］/, function(c){ return /询问是否增加本地项目/.test(T(c)) && /客人要做\/增加本地项目/.test(T(c)); }), 'Timeline「室长点［无法协调］」+「询问是否增加本地项目」+「客人要做/增加本地项目」（CMD-1012-06 补记）'],
+    ['D29b','无法协调（无本地项目）→ 不加', logHit(/点［无法协调］/, function(c){ return /询问是否增加本地项目/.test(T(c)) && /客人不做\/不增加本地项目/.test(T(c)); }), 'Timeline「室长点［无法协调］」+「询问是否增加本地项目」+「客人不做/不增加本地项目」'],
     ['D30','面诊或赴韩案件中添加本地管理', logHit(/添加本地管理（同日插做本地项目/), 'Timeline「添加本地管理」'],
     ['E','其他可从记录判断的'],
     ['E1','客人自助预约（新客）', byCase(function(c){ return c.bookClient==='new'; }), '案件字段 bookClient=new（CMD-1012-06 起记录）'],
@@ -100,7 +101,7 @@
     ['E7d','IN 代约成功（关联原案件）', logHit(/IN 室长预约了/), 'Timeline「IN 室长预约了」'],
     ['E8','催办', logHit(/催办 KR 室长/), 'Timeline「催办 KR 室长」'],
     ['E9','未接来电', function(d){ var hits = [];
-        d.notifs.concat(d.hospitalNotifs).forEach(function(n){ if(/未接来电/.test(n.text||'')){ var c = d.cases.filter(function(x){ return x.id===n.caseId; })[0]; hits.push({c:c||null, label:(n.text||'').slice(0,40), dt:n.ts||''}); } });
+        d.notifs.concat(d.hospitalNotifs).forEach(function(n){ if(/未接来电/.test(n.text||'')){ var c = d.cases.filter(function(x){ return x.id===n.caseId && x.__clinic===(n.__clinic||x.__clinic); })[0]; if(c) hits.push({c:c, label:(n.text||'').slice(0,40), dt:n.ts||''}); } });
         return {hits:hits}; }, '通知里有「未接来电」（通知保留 90 天）'],
     ['E10','持有项目退款', logHit(/持有批次退款/), 'Timeline「…办理持有批次退款」'],
     ['E11','重新选择项目（待付款）', logHit(/待付款结算单.*退回重新选择项目/), 'Timeline「待付款结算单…退回重新选择项目」'],
@@ -113,7 +114,13 @@
     ['F6','生成诊疗方案 PDF', logHit(/生成诊疗方案 PDF/), 'Timeline「生成诊疗方案 PDF」']
   ];
 
-  function evaluate(d){
+  /* 把数据拆成「我的案件」和「演示案件」两份，各自判断；覆盖率只算我的 */
+  function subset(d, demo){
+    var o = Object.assign({}, d); o.cases = d.cases.filter(function(c){ return c.__demo===demo; });
+    o.phHistory = d.phHistory.filter(function(h){ return /^phx/.test(String(h.id))===demo; });
+    return o;
+  }
+  function evaluateOne(d){
     var groups = [], cur = null, covered = 0, total = 0, unjudge = [];
     CHECKS.forEach(function(ch){
       if(ch.length===2){ cur = {id:ch[0], title:ch[1], items:[]}; groups.push(cur); return; }
@@ -122,6 +129,12 @@
       if(!item.auto) unjudge.push(item); else if(item.hits.length) covered++;
     });
     return {groups:groups, covered:covered, total:total, unjudge:unjudge};
+  }
+
+  function evaluate(d){
+    var u = evaluateOne(subset(d, false)), m = evaluateOne(subset(d, true));
+    u.groups.forEach(function(g, gi){ g.items.forEach(function(it, ii){ it.demoHits = m.groups[gi].items[ii].hits; }); });
+    u.demoCovered = m.covered; return u;
   }
 
   /* ---------- 案件路径 ---------- */
@@ -139,21 +152,24 @@
   /* ---------- 渲染 ---------- */
   function render(){
     RESULT = evaluate(DATA);
-    document.getElementById('sum').textContent = '已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'（其中 '+RESULT.unjudge.length+' 条无法自动判断）';
-    document.getElementById('sumsub').textContent = '数据来源：'+SRC.label+'；数据版本 '+(DATA.ver||'?')+'；案件 '+DATA.cases.length+' 个（诊所 '+DATA.clinics.join('、')+'）';
+    document.getElementById('sum').textContent = '已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'（其中 '+RESULT.unjudge.length+' 条无法自动判断；只算你自己新建的案件）';
+    document.getElementById('sumsub').textContent = '数据来源：'+SRC.label+'；数据版本 '+(DATA.ver||'?')+'；你的案件 '+DATA.cases.filter(function(c){ return !c.__demo; }).length+' 个、演示案件 '+DATA.cases.filter(function(c){ return c.__demo; }).length+' 个（诊所 '+DATA.clinics.join('、')+'）；演示案件另外显示，不计入覆盖率（演示案件里已有 '+RESULT.demoCovered+' 条情况）';
     document.getElementById('checks').innerHTML = RESULT.groups.map(function(g){
       return '<div class="grp">'+esc(g.id+' '+g.title)+'</div><div class="card" style="padding:4px 18px;">'+g.items.map(function(it){
         var mk = !it.auto ? '❔' : it.hits.length ? '✅' : '⬜';
         var first = it.hits.slice().sort(function(a,b){ return String(a.dt||'').localeCompare(String(b.dt||'')); })[0];
+        var demoLine = it.auto && it.demoHits && it.demoHits.length ? '<div class="muted" style="opacity:.7;">演示案件里也有 '+it.demoHits.length+' 次（不计入覆盖率）：'+it.demoHits.slice(0,3).map(function(h){ return h.c ? '<a href="'+caseLink(h.c)+'" target="_blank">'+caseTag(h.c)+'</a>' : esc(h.label||''); }).join('、')+'</div>' : '';
         var who = it.hits.length ? '第一次：'+(first.c ? '<a href="'+caseLink(first.c)+'" target="_blank">'+caseTag(first.c)+'</a>' : esc(first.label||''))+(first.dt ? ' · '+esc(String(first.dt).slice(0,16)) : '')+(first.note ? ' · '+esc(first.note) : '')+' · 发生 '+it.hits.length+' 次' : '';
-        return '<div class="row"><span class="mk">'+mk+'</span><span class="id">'+esc(it.id)+'</span><span style="flex:1;"><b>'+esc(it.title)+'</b><div class="muted">'+(!it.auto ? esc(it.note) : who || '没发生过')+'</div><div class="muted" style="opacity:.7;">判断依据：'+esc(it.basis||'—')+'</div></span></div>';
+        return '<div class="row"><span class="mk">'+mk+'</span><span class="id">'+esc(it.id)+'</span><span style="flex:1;"><b>'+esc(it.title)+'</b><div class="muted">'+(!it.auto ? esc(it.note) : who || '没发生过')+'</div>'+demoLine+'<div class="muted" style="opacity:.7;">判断依据：'+esc(it.basis||'—')+'</div></span></div>';
       }).join('')+'</div>';
     }).join('');
-    document.getElementById('cases').innerHTML = DATA.cases.slice().sort(function(a,b){ return String(a.caseNo).localeCompare(String(b.caseNo)); }).map(function(c){
+    var caseCard = function(cs){ return cs.slice().sort(function(a,b){ return String(a.caseNo).localeCompare(String(b.caseNo)); }).map(function(c){
       var path = casePath(c);
       return '<div class="card" style="padding:8px 14px;"><details><summary><b>'+caseTag(c)+'</b> <span class="pill">'+esc(c.__clinic)+'</span><span class="pill">'+esc(c.stage)+'</span> <span class="muted">'+esc(path.join(' → '))+'</span> <a href="'+caseLink(c)+'" target="_blank">打开</a></summary>'+
-        '<div class="path">'+(c.logEntries||[]).map(function(e){ return esc((e.dt||'').slice(0,16)+'　['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')); }).join('<br>')+'</div></details></div>';
-    }).join('') || '<div class="muted">没有案件</div>';
+        '<div class="path">'+(c.logEntries||[]).map(function(e){ return esc((e.dt||'').slice(0,16)+'　['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')); }).join('<br>')+'</div></details></div>'; }).join(''); };
+    var mine = DATA.cases.filter(function(c){ return !c.__demo; }), demo = DATA.cases.filter(function(c){ return c.__demo; });
+    document.getElementById('cases').innerHTML = '<div class="grp">我的案件（'+mine.length+'）</div>'+(caseCard(mine) || '<div class="muted">还没有你新建的案件</div>')+
+      '<details style="margin-top:14px;"><summary class="grp" style="display:inline-block;">演示案件（'+demo.length+'，不计入覆盖率）</summary>'+caseCard(demo)+'</details>';
     document.getElementById('unjudge').innerHTML = '<b>无法自动判断的情况</b>：'+(RESULT.unjudge.length ? RESULT.unjudge.map(function(i){ return esc(i.id+' '+i.title+'（'+i.note+'）'); }).join('；') : '无');
   }
 
@@ -199,11 +215,11 @@
   function stamp(){ return new Date().toISOString().slice(0,19).replace(/[:T]/g,'-'); }
   function download(name, text, mime){ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:mime||'application/json'})); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
   function slimCase(c){ var o = {}; Object.keys(c).forEach(function(k){ if(k!=='__t') o[k] = c[k]; }); return o; }
-  function coverageOut(){ return RESULT.groups.reduce(function(a,g){ return a.concat(g.items.map(function(it){ return {id:it.id, group:g.id, title:it.title, covered:it.auto ? it.hits.length>0 : null, autoJudged:it.auto, count:it.hits.length, note:it.note, basis:it.basis,
+  function coverageOut(){ return RESULT.groups.reduce(function(a,g){ return a.concat(g.items.map(function(it){ return {id:it.id, group:g.id, title:it.title, covered:it.auto ? it.hits.length>0 : null, autoJudged:it.auto, count:it.hits.length, demoCount:(it.demoHits||[]).length, note:it.note, basis:it.basis,
       first:it.hits.slice().sort(function(x,y){ return String(x.dt||'').localeCompare(String(y.dt||'')); }).slice(0,1).map(function(h){ return {caseNo:h.c&&h.c.caseNo, name:h.c&&h.c.name, dt:h.dt, label:h.label}; })[0]||null}; })); }, []); }
   window.exportJson = function(){
-    download('gmc-test-record-'+stamp()+'.json', JSON.stringify({kind:'gmc-test-record', exportedAt:new Date().toISOString(), dataVersion:DATA.ver, source:SRC.label, summary:{covered:RESULT.covered, total:RESULT.total, unjudged:RESULT.unjudge.length}, coverage:coverageOut(),
-      cases:DATA.cases.map(function(c){ return {caseNo:c.caseNo, name:c.name, clinic:c.__clinic, stage:c.stage, subState:c.subState, cancelReason:c.cancelReason||null, path:casePath(c), timeline:c.logEntries||[]}; })}, null, 1));
+    download('gmc-test-record-'+stamp()+'.json', JSON.stringify({kind:'gmc-test-record', exportedAt:new Date().toISOString(), dataVersion:DATA.ver, source:SRC.label, summary:{covered:RESULT.covered, total:RESULT.total, unjudged:RESULT.unjudge.length}, coverage:coverageOut(), note:'覆盖率只计算用户自己新建的案件；演示案件（demo:true）另外列出，不计入',
+      cases:DATA.cases.map(function(c){ return {demo:!!c.__demo, caseNo:c.caseNo, name:c.name, clinic:c.__clinic, stage:c.stage, subState:c.subState, cancelReason:c.cancelReason||null, path:casePath(c), timeline:c.logEntries||[]}; })}, null, 1));
   };
   window.exportMd = function(){
     var md = '# GMC 测试覆盖记录\n\n导出时间：'+new Date().toISOString()+'　数据版本：'+DATA.ver+'　来源：'+SRC.label+'\n\n**已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'**（'+RESULT.unjudge.length+' 条无法自动判断）\n\n';
@@ -217,7 +233,7 @@
     });
     md += '## 各案件实际走过的路径\n\n';
     DATA.cases.slice().sort(function(a,b){ return String(a.caseNo).localeCompare(String(b.caseNo)); }).forEach(function(c){
-      md += '### '+c.caseNo+' · '+c.name+'（'+c.__clinic+'，当前 '+c.stage+(c.cancelReason ? '，'+c.cancelReason : '')+'）\n\n路径：'+casePath(c).join(' → ')+'\n\n';
+      md += '### '+(c.__demo ? '［演示］' : '')+c.caseNo+' · '+c.name+'（'+c.__clinic+'，当前 '+c.stage+(c.cancelReason ? '，'+c.cancelReason : '')+'）\n\n路径：'+casePath(c).join(' → ')+'\n\n';
       (c.logEntries||[]).forEach(function(e){ md += '- '+(e.dt||'').slice(0,16)+' ['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')+'\n'; });
       md += '\n';
     });

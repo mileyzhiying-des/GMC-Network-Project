@@ -78,6 +78,7 @@ var Store = (function(){
     ME_NAME = (currentAccount() || {name:''}).name || ''; /* 账号改过名字（个人设定/激活）后，名字要跟存档走 */
     if(typeof syncInCoordinators === 'function') syncInCoordinators(); /* IN 室长名单由账号算出，不存档 */
     if(typeof applyClinicSettings === 'function') applyClinicSettings(); /* 日历行/时区等由诊所设定派生，不存档 */
+    if(typeof markDemoCases === 'function') markDemoCases(); /* 旧存档里的演示案件补上 demo 标记 */
     var snap = snapshot(); lastG = snap.g; lastC = snap.c;
   }
   function load(){
@@ -120,6 +121,7 @@ var Store = (function(){
   function touch(){ clearTimeout(touch._t); touch._t = setTimeout(save, 60); }
 
   /* ---- 启动：补齐缺的存档（第一次打开 / 版本号重置后只保留了账号和诊所设定 / 新增了诊所） ---- */
+  function demoMarked(vars){ try{ (vars.CASE_ITEMS||[]).forEach(function(c){ c.demo = true; }); }catch(e){} return vars; } /* 其他诊所的种子案件也标记为演示（CMD-1012-06 补） */
   function init(){
     var keepClinic = CURRENT_CLINIC_ID;
     CURRENT_CLINIC_ID = 'C1'; /* 此刻全局变量里还是 C1 的演示数据种子 */
@@ -134,7 +136,7 @@ var Store = (function(){
           if(p && String(p.ver)===String(DEMO_DATA_VERSION) && !p.partial && p.vars && p.vars.CASE_ITEMS) return;
           var vars;
           if(cl.id==='C1'){ var split = viewSplit(); vars = clinicVarsObj(split); }
-          else vars = buildClinicSeed(cl.id);
+          else vars = demoMarked(buildClinicSeed(cl.id));
           if(p && p.vars) Object.keys(p.vars).forEach(function(n){ vars[n] = p.vars[n]; }); /* 版本重置时保留的诊所设定等 */
           writeKey(keyC(cl.id), wrap(vars));
         });
@@ -143,7 +145,7 @@ var Store = (function(){
         CLINICS.forEach(function(cl){ /* 全局在、某个诊所分区缺（或只剩保留下来的部分）→ 补齐这个分区 */
           var p = readRaw(keyC(cl.id));
           if(p && String(p.ver)===String(DEMO_DATA_VERSION) && !p.partial && p.vars && p.vars.CASE_ITEMS) return;
-          var vars = (cl.id==='C1') ? clinicVarsObj(viewSplit()) : buildClinicSeed(cl.id);
+          var vars = (cl.id==='C1') ? clinicVarsObj(viewSplit()) : demoMarked(buildClinicSeed(cl.id));
           if(p && p.vars) Object.keys(p.vars).forEach(function(n){ vars[n] = p.vars[n]; });
           writeKey(keyC(cl.id), wrap(vars));
         });

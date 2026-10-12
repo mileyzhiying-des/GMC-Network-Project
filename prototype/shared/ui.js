@@ -1857,6 +1857,7 @@ function confirmRefund(){
   if(mode0==='diffRefund'){ (c.settlementBatches||[]).forEach(function(b){ if(b.krDeposit>0) batchIds.push(b.id); }); }
   c.refunds = c.refunds || [];
   c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote});
+  if(mode0==='cannotCoordinate') logCaseEvent(c, ME_NAME, '室长点［无法协调］：施术日期始终无法协调，取消全部未完成赴韩项目并退款'); /* 供测试覆盖页判断 D29（CMD-1012-06 补） */
   logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，退款 ')+formatCurrency(amount,'KRW')+'，退款原因：'+reason+(refNote ? '；备注：'+refNote : '')+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];
   closeRefundModal();
