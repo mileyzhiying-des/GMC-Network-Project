@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 38; /* 38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 40; /* 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -5541,11 +5541,31 @@ function seedProjectDefaults(){
     '鼻综合（假体+鼻尖）':{stay:'10天', durMin:150, anes:'sleep', anesNote:'需空腹 8 小时', postcare:[check, thread, swell]},
     '颧骨缩小':{stay:'10天', durMin:180, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread, {kr:'术后消肿管理', times:5, place:'either', day:'第3天'}]},
     '下颌角整形':{stay:'10天', durMin:180, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread]},
+    '下巴假体 / 颏成形':{stay:'7天', durMin:90, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, thread]},
+    '自体脂肪移植（全脸）':{stay:'7天', durMin:150, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, swell]},
     '面部拉皮':{stay:'14天', durMin:240, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread]}
   };
   Object.keys(HOSPITAL_DATA).forEach(function(hid){ (HOSPITAL_DATA[hid].projects||[]).forEach(function(p){ var df = D0[p.name]; if(df && !p.defaults) p.defaults = JSON.parse(JSON.stringify(df)); }); });
 }
 seedProjectDefaults();
+/* 演示案件的赴韩项目补上推荐在韩天数 / 麻醉 / 所需术后管理（从医院项目库默认资料带入；推荐项目整理才有内容，CMD-1012-14） */
+function gmcFillKrMeta(cases){
+  var ANES = {local:'局部麻醉', sleep:'睡眠麻醉', general:'全身麻醉'};
+  (cases || []).forEach(function(c){
+    var h = HOSPITAL_DATA[c.hospitalId || 'H1']; if(!h) return;
+    (c.procedureItems || []).forEach(function(it){
+      if(it.origin!=='KR' || it.stay || it.anesthesia || (it.postcare || []).length) return;
+      var p = (h.projects || []).filter(function(x){ return x.name===it.name && x.defaults; })[0], df = p && p.defaults;
+      if(!df) Object.keys(HOSPITAL_DATA).some(function(k){ var q = (HOSPITAL_DATA[k].projects || []).filter(function(x){ return x.name===it.name && x.defaults; })[0]; if(q){ df = q.defaults; return true; } return false; }); /* 本医院项目库里没有这个项目（演示数据）：借用别家医院同名项目的默认资料 */
+      if(!df) return;
+      it.stay = df.stay; it.anesthesia = {type:df.anes, label:ANES[df.anes], note:df.anesNote || ''};
+      it.postcare = (df.postcare || []).map(function(x){
+        var o = {mgmt:x.mgmt || '', name:x.kr, times:x.times, interval:x.times>1 ? (parseInt(x.interval,10) || 1) : 0, place:x.place, startDay:parseInt(x.start,10) || 0, innName:'', inTimes:0};
+        o.day = pcDayText(o); return o;
+      });
+    });
+  });
+}
 Object.keys(HOSPITAL_DATA).forEach(normSchedBlocks);
 CASE_ITEMS.forEach(function(c){ if(c.krSchedule && c.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(c.krSchedule.status)>-1 && c.director) syncSurgeryBlock(c); }); /* 演示数据里已确认施术时间的案件，院长日程里也有施术块 */
 CURRENT_CLINIC_ID = PAGE_CLINIC_ID || 'C1'; /* 种子按 C1 生成完了；之后这个页面属于哪家诊所就是哪家（读档时 store.js 再把那家诊所的分区读进来） */

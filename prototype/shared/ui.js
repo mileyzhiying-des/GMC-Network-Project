@@ -1809,7 +1809,8 @@ var REFUND_SELECTABLE = false;
 
 function openCancelItems(batchId){
   var c = getCurrentCase(); if(!c || c.hasArrived || c.visitClosed) return;
-  var items = krNotStartedItems(c).filter(function(it){ return it.batchId===batchId; });
+  var paidIds = (c.settlementBatches||[]).filter(function(b){ return b.status!=='unpaid'; }).map(function(b){ return b.id; });
+  var items = krNotStartedItems(c).filter(function(it){ return batchId ? it.batchId===batchId : paidIds.indexOf(it.batchId)>-1; }); /* 不传批次 = 赴韩施术 tab 的［取消项目］：所有已付款的未开始赴韩项目；和结算单上的［取消项目］走同一个流程 */
   if(!items.length) return;
   openRefundModal(items, 'normal', true);
 }

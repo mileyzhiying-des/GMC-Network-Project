@@ -124,7 +124,7 @@ var Store = (function(){
   function touch(){ clearTimeout(touch._t); touch._t = setTimeout(save, 60); }
 
   /* ---- 启动：补齐缺的存档（第一次打开 / 版本号重置后只保留了账号和诊所设定 / 新增了诊所） ---- */
-  function demoMarked(vars){ try{ (vars.CASE_ITEMS||[]).forEach(function(c){ c.demo = true; }); }catch(e){} return vars; } /* 其他诊所的种子案件也标记为演示（CMD-1012-06 补） */
+  function demoMarked(vars){ try{ (vars.CASE_ITEMS||[]).forEach(function(c){ c.demo = true; }); gmcFillKrMeta(vars.CASE_ITEMS); }catch(e){} return vars; } /* 其他诊所的种子案件也标记为演示（CMD-1012-06 补） */
   function init(){
     var keepClinic = CURRENT_CLINIC_ID;
     CURRENT_CLINIC_ID = 'C1'; /* 此刻全局变量里还是 C1 的演示数据种子 */
@@ -138,7 +138,7 @@ var Store = (function(){
           var p = readRaw(keyC(cl.id));
           if(p && String(p.ver)===String(DEMO_DATA_VERSION) && !p.partial && p.vars && p.vars.CASE_ITEMS) return;
           var vars;
-          if(cl.id==='C1'){ var split = viewSplit(); vars = clinicVarsObj(split); }
+          if(cl.id==='C1'){ var split = viewSplit(); vars = clinicVarsObj(split); try{ gmcFillKrMeta(vars.CASE_ITEMS); }catch(e){} }
           else vars = demoMarked(buildClinicSeed(cl.id));
           if(p && p.vars) Object.keys(p.vars).forEach(function(n){ vars[n] = p.vars[n]; }); /* 版本重置时保留的诊所设定等 */
           gmcStampVars(vars);
@@ -282,7 +282,9 @@ var Store = (function(){
       (c.mgmtUses||[]).forEach(rn); ((c.localMgmt && c.localMgmt.mgmtUses)||[]).forEach(rn);
       (c.intentionProjects||[]).forEach(function(it){ var m = OLD_LOCAL_NAME_MAP[it.name], p = libIn.concat(ctx.libKr).filter(function(x){ return x.name===(m ? m[0] : it.name) && x.origin===it.origin; })[0]; if(p){ it.name = p.name; it.projectId = p.id; } });
     }},
-    {to:38, fn:function(c, ctx){ /* 「使用时选」选项按规格分组：案件里没有存选项，无需改动 */ }}
+    {to:38, fn:function(c, ctx){ /* 「使用时选」选项按规格分组：案件里没有存选项，无需改动 */ }},
+    {to:39, fn:function(c, ctx){ /* 演示案件补推荐在韩 / 麻醉 / 术后管理：用户案件的项目本来就带资料，无需改动 */ }},
+    {to:40, fn:function(c, ctx){ /* 同上（补全剩余演示项目的默认资料），无需改动 */ }}
   ];
   function migrateHoldings(hs, fromVer, libIn){
     if(fromVer >= 37) return;
