@@ -94,8 +94,10 @@ function caseProcessText(c){
     if(inFlow && c.consultStatus==='awaiting_payment') return '待缴费';
     if(inFlow && c.consultStatus==='paid_waiting_kr') return '待 KR 确认时间';
     if(inFlow && c.consultStatus==='awaiting_report'){
-      if(c.consultContentAt || !c.consultAt || reportOverdueNow(c)) return '等待报告'; /* 院长已上传内容；没有面诊时间的旧数据直接当作等待报告 */
-      return consultAtPassed(c) ? '面诊中' : '等面诊';
+      if(c.consultContentAt) return '等待报告'; /* 院长已上传内容 = 面诊结束 */
+      if(c.consultStartedAt) return '面诊中';
+      if(!c.consultAt || reportOverdueNow(c)) return '等待报告'; /* 没有面诊时间的旧数据 / 超时：直接当作等待报告 */
+      return '等面诊'; /* 「面诊中」由 KR 按［开始面诊］触发，不再按时间自动判定（CMD-1012-05） */
     }
     if(c.projectsEnabled || c.reportReady) return '项目确认中';
     if(c.consultStatus==='cancelled') return '面诊已取消';
@@ -359,7 +361,7 @@ function settlementBigCardHtml(c, items, removable){
     var bd = computeBatchBreakdown(krItems), krTotal = bd.krTotal, krDeposit = bd.krDeposit;
     krCard = '<div style="border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:8px;">赴韩项目</div>'+
-      krItems.map(function(it){ return settlementItemRow(c, it, removable)+pcLinesHtml(c, it); }).join('')+
+      krItems.map(function(it){ return settlementItemRow(c, it, removable)+itemArrangeHtml(it, false)+pcLinesHtml(c, it); }).join('')+
       '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;"><span>合计</span><span style="font-weight:700;">'+formatCurrency(krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（诊所收；'+Math.round(KR_DEPOSIT_RATE*100)+'% × 施术项目，术后管理含在套餐内，比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--slate2);"><span>尾款（赴韩后由医院收；施术项目的其余部分）</span><span>'+formatCurrency(krTotal-krDeposit,'KRW')+'</span></div>'+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
@@ -526,11 +528,13 @@ var ROLE_PERMS = {
   general: {work:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true,  smslog:false},
   /* KR 医院账号（2026-10-06，Notion Accounts & Settings 第 7 节）：krwork = 处理案件（确认报告时间、上传诊疗方案、施术相关）；krview = 看所有案件；krviewOwn = 只看自己负责的；
      krsched = 日程/OFF；kropen = 开放施术日期；krdoctors = 院长名单/停用；krlib = 赴韩项目库、案例库；bizdata/accounts/clinic（= 医院设定）/oplog = 管理类。 */
-  kr_owner:    {work:false, krwork:false, krview:false, krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
+  kr_owner:    {work:false, krwork:false, krview:false, krviewOwn:true, krsched:true,  kropen:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
   kr_manager:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
   kr_general:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:false, krlib:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false},
   kr_director: {work:false, krwork:false, krview:false, krviewOwn:true,  krsched:'own', kropen:'own', krdoctors:false, krlib:false, bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false}
 };
+/* 代表院长 = 院长 + 老板（CMD-1012-05 五）：院长功能（自己负责的案件、开始 / 录入面诊、自己的日程与 OFF）+ 保留老板的管理类页面 */
+function isKrDirectorLike(a){ return !!a && (a.role==='kr_director' || a.role==='kr_owner'); }
 /* 管理类页面（侧边栏"诊所管理"组；老板端的全部导航）。key 同时是 ?page=admin-xxx 的后缀 */
 var ADMIN_PAGES = [
   {key:'bizdata',  label:'经营数据', icon:'数', perm:'bizdata'},
@@ -551,7 +555,7 @@ function canDo(perm, acct){
 /* 自己的首页：能做日常工作的去 in.html，否则（老板）去 owner.html */
 function homeUrl(acct){
   var a = acct || currentAccount();
-  if(a && (a.role==='owner' || a.role==='kr_owner')) return '/owner.html';   /* 老板端：IN 老板 = 诊所营运；KR 代表院长 = 医院营运 */
+  if(a && a.role==='owner') return '/owner.html';   /* 老板端：IN 老板 = 诊所营运；KR 代表院长 = 医院营运 */
   if(a && a.role.indexOf('kr_')===0) return '/kr.html';                      /* KR 室长 / 管理者 / 院长 */
   return '/in.html';
 }
@@ -643,13 +647,20 @@ function recSummaryHtml(items, overall, opt){
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b style="font-size:13px;">推荐项目整理</b>'+(opt.print ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="printRecSummary()">打印</button>' : '')+'</div>'+
     '<div style="font-size:13px;margin:6px 0;">推荐在韩天数：<b>'+(d.days ? d.days+' 天' : '—')+'</b>（各项目最大值）</div>'+
     d.rows.map(function(r){ return '<div style="font-size:12px;padding:6px 0;border-top:1px solid var(--border2);"><b>'+e(r.name)+'</b>｜推荐在韩 '+e(r.stay)+'｜麻醉：'+e(r.anes)+(r.note ? '｜备注：'+e(r.note) : '')+(r.pc.length ? '<div style="color:var(--slate2);margin-top:2px;">术后管理：'+r.pc.map(e).join('；')+'</div>' : '<div style="color:var(--muted);margin-top:2px;">术后管理：无</div>')+'</div>'; }).join('')+
-    (d.overall ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding-top:6px;margin-top:2px;">整体备注：'+e(d.overall)+'</div>' : '')+'</div>';
+    (d.overall ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding-top:6px;margin-top:2px;">整体备注：'+e(d.overall)+'</div>' : '')+
+    (opt.inNote ? '<div style="font-size:12px;padding-top:6px;margin-top:2px;">IN 室长备注：'+e(opt.inNote)+'</div>' : '')+'</div>';
 }
 /* 打印推荐项目整理（给客人）：只打印这一块 */
 function printRecSummary(){
   var el = document.querySelector('.rec-summary'); if(!el) return;
   var w = window.open('', '_blank'); if(!w) return;
   w.document.write('<html><head><meta charset="utf-8"><title>推荐项目整理</title></head><body style="font-family:sans-serif;padding:24px;">'+el.outerHTML.replace(/<button[^>]*>.*?<\/button>/g, '')+'</body></html>'); w.document.close(); w.focus(); w.print();
+}
+/* 赴韩项目行下方写出具体安排（推荐在韩 / 麻醉 / 所需术后管理）；full=false 时不含术后管理（那里另有 pcLinesHtml） */
+function itemArrangeHtml(it, full){
+  var bits = itemMetaText(it).filter(function(b){ return full || b.indexOf('术后管理：')!==0; });
+  if(!bits.length) return '';
+  return '<div style="flex-basis:100%;font-size:11px;color:var(--slate2);margin:2px 0 4px 2px;line-height:1.6;">'+bits.map(function(b){ return String(b).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }).join('<br>')+'</div>';
 }
 function pcAllocEditable(c){ return !c.krBalancePaid && !isEnded(c); } /* 付尾款前都可以改 */
 /* 已选 / 结算单里每个赴韩项目下面的术后管理行：显示韩国 n + 印尼 m；可弹性的（且有印尼对应项目）IN 室长可调 */

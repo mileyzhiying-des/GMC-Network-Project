@@ -27,7 +27,7 @@ ADMIN_RENDER.personal = function(el){
     return '<option value="'+aEsc(p)+'"'+(p===a.position?' selected':'')+'>'+t(p)+'</option>'; }).join('');
   var profile =
     '<div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;"><span id="pf-photo">'+acctPhotoHtml(a, 64)+'</span>'+
-    '<label class="btn-outline" style="cursor:pointer;padding:6px 12px;font-size:12px;">'+(currentAccount()&&currentAccount().role==='kr_director'?'上传头像':t('更换照片'))+'<input type="file" accept="image/*" style="display:none;" onchange="profilePhoto(this)"></label>'+
+    '<label class="btn-outline" style="cursor:pointer;padding:6px 12px;font-size:12px;">'+(isKrDirectorLike(currentAccount())?'上传头像':t('更换照片'))+'<input type="file" accept="image/*" style="display:none;" onchange="profilePhoto(this)"></label>'+
     '<span style="font-size:11px;color:var(--muted);">'+accountLabel(a.id)+' · '+aEsc(ACCOUNT_ROLES[a.role])+'</span></div>'+
     aGrid(2, aField(t('姓名'), aInput('id="pf-name" value="'+aEsc(a.name)+'"'))+aField(t('职位'), '<select id="pf-pos" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+posOpts+'</select>')+
       aField(t('手机'), aInput('id="pf-phone" value="'+aEsc(a.phone)+'"'), '手机号只用来收验证码（激活、忘记密码）')) +
@@ -54,8 +54,8 @@ function profilePhoto(inp){
   var rd = new FileReader();
   rd.onload = function(){
     var a = currentAccount(); if(!a) return;
-    a.photo = rd.result; logAcctHistory(a, '资料变更', a.role==='kr_director' ? '上传了头像' : '更换了证件照');
-    if(a.role==='kr_director' && a.hospitalId){ var dr = hospitalDirectors(a.hospitalId).filter(function(x){ return x.name===a.name; })[0]; if(dr) dr.photo = rd.result; } /* 院长头像同步到介绍卡（IN 选院长时显示） */
+    a.photo = rd.result; logAcctHistory(a, '资料变更', isKrDirectorLike(a) ? '上传了头像' : '更换了证件照');
+    if(isKrDirectorLike(a) && a.hospitalId){ var dr = hospitalDirectors(a.hospitalId).filter(function(x){ return x.name===a.name; })[0]; if(dr) dr.photo = rd.result; } /* 院长头像同步到介绍卡（IN 选院长时显示） */
     Store.touch && Store.touch();
     var ph = document.getElementById('pf-photo'); if(ph) ph.innerHTML = acctPhotoHtml(a, 64);
     showToast('照片已更新', '（演示：只保存在内存里）', null);

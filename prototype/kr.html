@@ -88,7 +88,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
 <script src="/shared/admin.js"></script>
 <script src="/shared/kr.js"></script>
 <script>
-window.GUARD_ROLES = ['kr_manager', 'kr_general', 'kr_director'];
+window.GUARD_ROLES = ['kr_manager', 'kr_general', 'kr_director', 'kr_owner'];
 if(guardPage(window.GUARD_ROLES)){
   document.addEventListener('DOMContentLoaded', function(){ try{ krBoot(); }catch(e){ console.error('[初始化失败] KR 端', e); } });
   document.addEventListener('click', closeAvatarMenu);
