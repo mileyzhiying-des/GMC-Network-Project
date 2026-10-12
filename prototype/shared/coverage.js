@@ -211,7 +211,13 @@
     if(SRC.imported) opts += '<option value="imported" selected>导入的文件：'+esc(SRC.imported.name)+'</option>';
     sel.innerHTML = opts; if(SRC.imported) sel.value = 'imported';
     var n = pj(localStorage.getItem('gmc_backup_notice'));
-    document.getElementById('notice').innerHTML = n ? '<div class="warn">ℹ 最近一次自动备份：'+esc(n.name)+'（'+esc(n.reason)+'，'+esc(new Date(n.t).toLocaleString())+'）。浏览器里存了一份（最近 3 份），下拉里选它即可查看；需要文件时点「导出完整备份」自己下载。</div>' : '';
+    var mg = pj(localStorage.getItem('gmc_cfg_migration')), mgHtml = '';
+    if(mg){
+      var bad = mg.failed || [];
+      mgHtml = '<div class="warn" style="'+(bad.length ? '' : 'background:#E7F3EC;color:#2F6B4A;')+'">数据版本 '+esc(mg.from||'?')+' → '+esc(mg.to||'?')+'（'+esc((mg.at||'').slice(0,19).replace('T',' '))+'）：用户案件已迁移 '+mg.migrated+' 个'+(bad.length ? '；<b>以下案件未能迁移：</b>'+bad.map(function(f){ return esc((f.caseNo||'')+' '+(f.name||'')+'（'+f.reason+'）'); }).join('；')+'。它们没有丢，仍在升级前的自动备份里（下拉选「自动备份」查看 / 导出）。' : '。')+
+        ((mg.notes||[]).length ? '<div style="margin-top:4px;">迁移备注：'+mg.notes.map(function(x){ return esc(x.caseNo+' '+x.name+'：'+x.notes.join('、')); }).join('；')+'</div>' : '')+'</div>';
+    }
+    document.getElementById('notice').innerHTML = mgHtml+(n ? '<div class="warn">ℹ 最近一次自动备份：'+esc(n.name)+'（'+esc(n.reason)+'，'+esc(new Date(n.t).toLocaleString())+'）。浏览器里存了一份（最近 3 份），下拉里选它即可查看；需要文件时点「导出完整备份」自己下载。</div>' : '');
   }
   window.loadSource = function(){
     var v = document.getElementById('src').value;

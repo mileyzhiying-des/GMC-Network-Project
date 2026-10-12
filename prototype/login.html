@@ -251,20 +251,39 @@ renderDemo();
   try{ history.replaceState(null, '', location.pathname); }catch(e){}
   var a = findAcct(id); if(a) quickLogin(a.id);
 })();
-/* 重置前提示：重置会清掉测试记录，要先导出吗？（CMD-1012-06）；不管怎么选，重置时都会再自动备份一份 */
+/* 重置演示数据：两个选项（CMD-1012-09）——① 只重置演示数据（保留我的测试案件）② 全部清空（先提示导出）；不管哪个，重置时都会自动留一份备份 */
 function resetWithExportPrompt(){
+  var ov = document.getElementById('reset-ov');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'reset-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(27,38,53,.45);display:flex;align-items:center;justify-content:center;'; document.body.appendChild(ov); }
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:24px 26px;width:420px;max-width:92vw;box-shadow:0 24px 60px rgba(0,0,0,.3);"><div style="font-size:16px;font-weight:800;margin-bottom:10px;">重置演示数据</div>'+
+    '<button class="btn-primary" style="width:100%;text-align:left;padding:12px 14px;margin-bottom:10px;" onclick="resetDemoData(true)">① 只重置演示数据<div style="font-size:11px;font-weight:400;opacity:.85;margin-top:3px;">保留我的测试案件（案件、客人、持有项目、通知、对话、Timeline、轮次）</div></button>'+
+    '<button class="btn-outline" style="width:100%;text-align:left;padding:12px 14px;margin-bottom:10px;" onclick="resetAllWithExport()">② 全部清空<div style="font-size:11px;font-weight:400;color:#C1454A;margin-top:3px;">连我的测试案件一起清掉；会先问要不要导出</div></button>'+
+    '<button class="btn-ghost" style="width:100%;" onclick="document.getElementById(\'reset-ov\').remove()">取消</button>'+
+    '<div style="font-size:11px;color:var(--muted);margin-top:8px;">两种都会先自动备份旧数据（浏览器里最近 3 份）</div></div>';
+  return false;
+}
+function resetAllWithExport(){
   if(confirm('重置会清掉测试记录，要先导出吗？\n\n点【确定】= 先导出（下载 JSON 备份），再继续；点【取消】= 不导出，直接进入重置确认。')){
     var raw = gmcCollectRaw(); gmcDownloadText('gmc-export-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json', JSON.stringify({kind:'gmc-backup', exportedAt:new Date().toISOString(), reason:'重置前手动导出', dataVersion:raw.gmc_demo_ver||'', raw:raw}));
   }
-  if(confirm('确定重置演示数据？所有标签页的演示数据都会回到初始状态。（重置时还会自动留一份备份）')) resetDemoData();
-  return false;
+  if(confirm('确定全部清空？所有标签页的数据（包括我的测试案件）都会回到初始状态。')) resetDemoData(false);
 }
 /* 其他标签页重置演示数据后，本页的账号数据也要刷新 */
-function resetDemoData(){
-  gmcResetAll('登录页重置演示数据'); /* 先自动备份再清（CMD-1012-06） */
+function resetDemoData(keepUser){
+  gmcResetAll(keepUser ? '登录页：只重置演示数据（保留测试案件）' : '登录页：全部清空', !!keepUser); /* 先自动备份再清（CMD-1012-06）；keepUser = 保留我的测试案件（CMD-1012-09） */
   location.reload();
 }
 
+/* 数据升级迁移结果（CMD-1012-09）：用户案件已迁移 N 个 / M 个未能迁移（详情在测试覆盖页顶部） */
+(function(){
+  try{
+    var m = JSON.parse(localStorage.getItem('gmc_cfg_migration') || 'null'); if(!m || m.seen) return;
+    var bar = document.createElement('div'); bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:62px;z-index:99;background:#E7F3EC;color:#2F6B4A;border-radius:10px;padding:10px 16px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.15);max-width:92vw;';
+    var bad = (m.failed||[]).length;
+    bar.innerHTML = '数据版本 '+(m.from||'?')+' → '+(m.to||'?')+'：用户案件已迁移 '+m.migrated+' 个'+(bad ? '，<b style="color:#C1454A;">'+bad+' 个未能迁移</b>' : '')+'。<a href="/test-coverage.html" target="_blank">打开测试覆盖页查看</a>　<a href="#" onclick="try{var x=JSON.parse(localStorage.getItem(\'gmc_cfg_migration\'));x.seen=true;localStorage.setItem(\'gmc_cfg_migration\',JSON.stringify(x));}catch(e){}this.parentNode.remove();return false;">知道了</a>';
+    document.body.appendChild(bar);
+  }catch(e){}
+})();
 /* 自动备份提示（CMD-1012-06）：数据版本升级 / 重置时自动备份过旧数据，这里提醒一次 */
 (function(){
   try{

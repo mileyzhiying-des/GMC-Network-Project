@@ -13,6 +13,40 @@ var KEEP_CLINIC_ON_VERSION_RESET = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_
 /* 版本章 + 测试轮次（CMD-1012-07）：Timeline 记录带上当时的原型版本（最新提交的短 hash + 提交时间，shared/version.js 由 post-commit 钩子写入）；用户新建的案件带上当时的测试轮次（测试覆盖页下拉设置，存 gmc_cfg_round，重置不清） */
 function gmcVerStamp(){ return (typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? {ver:GMC_BUILD.h, vt:GMC_BUILD.t} : {}; }
 function currentTestRound(){ try{ return parseInt(localStorage.getItem('gmc_cfg_round'), 10) || 1; }catch(e){ return 1; } }
+/* ---- 数据升级 / 重置时保留用户测试案件（CMD-1012-09）----
+   只重置演示数据：demo:true 的案件、种子客人、种子设定重新生成；用户新建的案件（demo:false，或旧存档里没标记的 r+时间戳 id）连同它们的客人、持有批次、通知、对话房、
+   KR 侧的通知 / 院长日程块 / 录入仓库一起「提取」存进 gmc_cfg_carry（gmc_cfg_ 开头的键重置不清），新种子生成后由 store.js 的 carryRestore 合并回去并按「旧版本 → 新版本」迁移。 */
+function gmcIsUserCase(c){ return !!c && (c.demo===false || (c.demo===undefined && /^r\d{9,}/.test(String(c.id)))); }
+function gmcExtractUserCarry(){
+  var carry = {from:localStorage.getItem('gmc_demo_ver')||'', at:new Date().toISOString(), clinics:{}, hospitals:{}, seq:0, total:0}, allIds = {};
+  Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_clinic_')===0; }).forEach(function(k){
+    var p = JSON.parse(localStorage.getItem(k) || 'null'); if(!p || !p.vars || p.partial) return;
+    var v = p.vars, cid = k.replace('gmc_clinic_', ''), cases = (v.CASE_ITEMS||[]).filter(gmcIsUserCase); if(!cases.length) return;
+    var ids = {}, names = {};
+    cases.forEach(function(c){ ids[c.id] = 1; allIds[c.id] = cid; names[c.name] = 1; var n = parseInt(String(c.caseNo||'').slice(1), 10) || 0; if(n > carry.seq) carry.seq = n; });
+    var holdings = {}; Object.keys(v.CLIENT_HOLDINGS||{}).forEach(function(n){ if(names[n]) holdings[n] = v.CLIENT_HOLDINGS[n]; });
+    var rooms = (v.ROOMS||[]).filter(function(r){ return /^case-/.test(String(r.id)) && ids[String(r.id).slice(5)]; }), chat = {};
+    rooms.forEach(function(r){ if((v.CHAT_DATA||{})[r.id]) chat[r.id] = v.CHAT_DATA[r.id]; });
+    carry.clinics[cid] = {cases:cases, clients:(v.CLIENTS||[]).filter(function(cl){ return names[cl.name]; }), holdings:holdings,
+      notifs:(v.NOTIFS||[]).filter(function(n){ return n.caseId && ids[n.caseId]; }), rooms:rooms, chat:chat, sms:(v.SMS_LOG||[]).filter(function(s){ return s.caseId && ids[s.caseId]; })};
+    carry.total += cases.length;
+  });
+  if(!carry.total) return carry;
+  var g = JSON.parse(localStorage.getItem('gmc_state') || 'null'), hd = g && g.vars && g.vars.HOSPITAL_DATA;
+  if(hd) Object.keys(hd).forEach(function(hid){
+    var h = hd[hid], o = {notifs:(h.notifs||[]).filter(function(n){ return n.caseId && allIds[n.caseId]; }), sched:{}, vault:{}};
+    Object.keys(h.directorSchedule||{}).forEach(function(dn){ var bl = (h.directorSchedule[dn]||[]).filter(function(b){ return b.caseId && allIds[b.caseId]; }); if(bl.length) o.sched[dn] = bl; });
+    Object.keys(h.vault||{}).forEach(function(vk){ if(allIds[vk.split(':')[1]]) o.vault[vk] = h.vault[vk]; });
+    if(o.notifs.length || Object.keys(o.sched).length || Object.keys(o.vault).length) carry.hospitals[hid] = o;
+  });
+  return carry;
+}
+/* 提取结果存起来；只有真的提取到案件才覆盖（手动「只重置演示数据」后重载会再走一次版本检查，那时存档已空，不能把刚存的清掉） */
+function gmcStoreCarry(carry){
+  if(!carry || !carry.total) return;
+  try{ localStorage.setItem('gmc_cfg_carry', JSON.stringify(carry)); }
+  catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:carry.from, to:null, at:carry.at, migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'存档容量不够，用户案件没能保留（旧数据在自动备份里）'}]})); }catch(e2){} }
+}
 function gmcCollectRaw(){ var o = {}; try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); }catch(e){} return o; }
 function gmcBackupMake(reason){
   try{
@@ -36,8 +70,10 @@ function gmcDownloadText(name, text, mime){
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:mime || 'application/json'})); a.download = name; (document.body || document.documentElement).appendChild(a); a.click();
   setTimeout(function(){ try{ URL.revokeObjectURL(a.href); a.remove(); }catch(e){} }, 1500);
 }
-function gmcResetAll(reason){
+function gmcResetAll(reason, keepUser){
   var bk = gmcBackupMake(reason || '手动重置演示数据');
+  if(keepUser){ try{ gmcStoreCarry(gmcExtractUserCarry()); }catch(e){} } /* ① 只重置演示数据：保留我的测试案件 */
+  else { try{ localStorage.removeItem('gmc_cfg_carry'); }catch(e){} } /* ② 全部清空 */
   try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
   gmcBackupKeep(bk);
 }
@@ -59,6 +95,7 @@ function gmcResetAll(reason){
         }catch(e){ keptG = null; keptC = {}; }
       }
       var bkv = gmcBackupMake('演示数据版本升级 '+(localStorage.getItem('gmc_demo_ver')||'?')+' → '+DEMO_DATA_VERSION); /* 升级前自动备份旧数据 */
+      try{ gmcStoreCarry(gmcExtractUserCarry()); }catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:localStorage.getItem('gmc_demo_ver'), to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'提取用户案件时出错：'+e.message+'（旧数据在自动备份里）'}]})); }catch(e2){} } /* 用户新建的案件先存起来，新种子生成后合并回去（CMD-1012-09） */
       Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
       gmcBackupKeep(bkv);
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));

@@ -252,6 +252,103 @@ var Store = (function(){
       if(loadClinic(cid)){ afterLoad(); tick(); if(typeof refreshView === 'function') safeRefresh(refreshView); }
     }
   });
+  /* ---- 数据升级 / 重置后：把提取出来的用户案件合并回新种子，并按「旧版本 → 新版本」迁移（CMD-1012-09） ---- */
+  var OLD_LOCAL_NAME_MAP = { /* 36 → 37：本地项目换成清单项目（旧名称 → [新名称, 规格]） */
+    '好莱坞焕肤 1次':['LHALa peel','1次'], 'Genesis焕肤（Clarity II）1次':['艺人水光焕肤','1次'], '巴西式脱毛 + 焕肤护理':['黑米醋换肤','1次'], '比基尼线脱毛 + 焕肤护理':['基础祛痘管理','1次'],
+    'XERF提升 300发':['索夫波 Sofwave','300发'], 'Onda提升 60kj':['ONDA 提升','脸部 60kj·1次'], '术后消肿护理 1次':['LDM','6分钟·1次'], '术后疤痕修复护理 1次':['补水超声波管理','1次'],
+    'V-RO超声波 300发 + 高频率 3000发':['美版超声刀二代','300发'], '干细胞30皮肤注射 / 脱发治疗注射':['干细胞皮肤注射（手打）','3cc·1次'], '丽珠兰黑盒 + LiliedM 水光注射（2cc）':['丽珠兰黑盒（手打）','2cc·1次'],
+    '乔雅露蓝瓶 Juvelook Skin（3cc）':['婴儿针','1cc Auto MTS'], '黄金微针 毛孔探头':['黄金微针 面部整体（含镇静面膜）','1次'], '玻尿酸填充 1cc（泗水）':['丽珠兰 S（手打）','1cc·1次'], '水光注射 2cc（泗水）':['丽珠兰黑盒（手打）','2cc·1次'], '好莱坞焕肤 1次（泗水）':['LHALa peel','1次'], '黄金微针 1次（泗水）':['黄金微针 面部整体（含镇静面膜）','1次']
+  };
+  /* 每次升级写一个迁移步骤：to = 迁移到的版本；fn(case, ctx) 补齐新增字段的默认值 / 替换旧引用；ctx.fromVer 是升级前版本，ctx.note(text) 记一条备注 */
+  var MIGRATIONS = [
+    {to:37, fn:function(c, ctx){ /* 本地项目 → 清单项目 */
+      var libIn = ctx.libIn;
+      var fix = function(it){
+        if(!it || it.origin!=='IN' || it.specId!==undefined) return;
+        var m = OLD_LOCAL_NAME_MAP[it.name], p = libIn.filter(function(x){ return x.name===(m ? m[0] : it.name); })[0];
+        if(!p){ it.migrateNote = '项目已不在项目库'; ctx.note('项目「'+it.name+'」已不在项目库，保留原名称'); return; }
+        var sp = (m && (p.specs||[]).filter(function(x){ return x.label===m[1]; })[0]) || (p.specs||[])[0];
+        if(m) it.name = p.name; it.projectId = p.id; it.specId = sp ? sp.id : ''; it.specLabel = sp ? sp.label : ''; it.specTimes = sp ? sp.times : 1;
+        if(it.key && /^p\d+$/.test(it.key)) it.key = p.id;
+      };
+      (c.recommended||[]).forEach(fix); (c.procedureItems||[]).forEach(fix); ((c.localMgmt && c.localMgmt.cart)||[]).forEach(fix);
+      (c.settlementBatches||[]).forEach(function(b){ (b.inItems||[]).forEach(function(it){ var m = OLD_LOCAL_NAME_MAP[it.name]; if(it.specLabel===undefined){ if(m){ it.name = m[0]; it.specLabel = m[1]; } it.specLabel = it.specLabel||''; it.specTimes = it.specTimes||1; } }); });
+      var rn = function(u){ var m = u && OLD_LOCAL_NAME_MAP[u.itemName]; if(m) u.itemName = m[0]; };
+      (c.mgmtUses||[]).forEach(rn); ((c.localMgmt && c.localMgmt.mgmtUses)||[]).forEach(rn);
+      (c.intentionProjects||[]).forEach(function(it){ var m = OLD_LOCAL_NAME_MAP[it.name], p = libIn.concat(ctx.libKr).filter(function(x){ return x.name===(m ? m[0] : it.name) && x.origin===it.origin; })[0]; if(p){ it.name = p.name; it.projectId = p.id; } });
+    }},
+    {to:38, fn:function(c, ctx){ /* 「使用时选」选项按规格分组：案件里没有存选项，无需改动 */ }}
+  ];
+  function migrateHoldings(hs, fromVer, libIn){
+    if(fromVer >= 37) return;
+    Object.keys(hs).forEach(function(n){ (hs[n]||[]).forEach(function(h){
+      var m = OLD_LOCAL_NAME_MAP[h.itemName]; if(!m) return;
+      var p = libIn.filter(function(x){ return x.name===m[0]; })[0]; h.itemName = m[0];
+      (h.batches||[]).forEach(function(b){ if(!b.spec) b.spec = m[1]; });
+    }); });
+  }
+  function carryRestore(){
+    var raw = null; try{ raw = localStorage.getItem('gmc_cfg_carry'); }catch(e){} if(!raw) return;
+    var carry = null; try{ carry = JSON.parse(raw); }catch(e){}
+    var report = {from:carry && carry.from, to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[], notes:[]};
+    if(!carry || !carry.clinics){ try{ localStorage.removeItem('gmc_cfg_carry'); }catch(e){} return; }
+    var fromVer = parseInt(carry.from, 10) || 0, g = readRaw(KEY_G), idMap = {};
+    Object.keys(carry.clinics).forEach(function(cid){
+      var cc = carry.clinics[cid], p = readRaw(keyC(cid));
+      if(!p || !p.vars){ cc.cases.forEach(function(c){ report.failed.push({caseNo:c.caseNo, name:c.name, reason:'诊所分区 '+cid+' 不存在'}); }); return; }
+      var v = p.vars; v.CASE_ITEMS = v.CASE_ITEMS || []; v.CLIENTS = v.CLIENTS || []; v.CLIENT_HOLDINGS = v.CLIENT_HOLDINGS || {}; v.NOTIFS = v.NOTIFS || []; v.ROOMS = v.ROOMS || []; v.CHAT_DATA = v.CHAT_DATA || {};
+      var libIn = (v.PROJECT_LIBRARY || []).filter(function(x){ return x.origin==='IN'; }), libKr = [];
+      Object.keys((g && g.vars && g.vars.HOSPITAL_DATA) || {}).forEach(function(hid){ libKr = libKr.concat(g.vars.HOSPITAL_DATA[hid].projects || []); });
+      var ctx = {fromVer:fromVer, libIn:libIn, libKr:libKr, note:null};
+      /* 通知换新 id（旧 id 会和新种子的通知撞）；案件里引用旧通知 id 的字段同步改 */
+      var nmap = {}; var seq = v.NOTIF_SEQ || 0;
+      cc.notifs.forEach(function(n){ var nid = 'n'+(++seq); nmap[n.id] = nid; n.id = nid; });
+      v.NOTIF_SEQ = seq; Array.prototype.unshift.apply(v.NOTIFS, cc.notifs);
+      cc.cases.forEach(function(c){
+        var notes = []; ctx.note = function(t){ notes.push(t); };
+        try{
+          if(c.cancelNotifId && nmap[c.cancelNotifId]) c.cancelNotifId = nmap[c.cancelNotifId];
+          MIGRATIONS.forEach(function(m){ if(m.to > fromVer) m.fn(c, ctx); });
+          if(notes.length){ c.migrationNotes = (c.migrationNotes||[]).concat(notes.map(function(t){ return '数据升级 '+carry.from+' → '+DEMO_DATA_VERSION+'：'+t; })); report.notes.push({caseNo:c.caseNo, name:c.name, notes:notes}); }
+          if(v.CASE_ITEMS.some(function(x){ return x.id===c.id; })) throw new Error('案件 id 与新种子重复');
+          v.CASE_ITEMS.push(c); report.migrated++;
+        }catch(e){ report.failed.push({caseNo:c.caseNo, name:c.name, reason:String(e && e.message || e)}); }
+      });
+      /* 客人：新种子里已有同手机号 / 同名的就合并（时间线、同意记录、医美史补进去），没有就加进去 */
+      cc.clients.forEach(function(cl){
+        var ex = v.CLIENTS.filter(function(x){ return (cl.phone && x.phone===cl.phone) || x.name===cl.name; })[0];
+        if(!ex){ v.CLIENTS.push(cl); return; }
+        var has = function(arr, f){ return arr.some(f); };
+        (cl.timeline||[]).forEach(function(t){ ex.timeline = ex.timeline||[]; if(!has(ex.timeline, function(y){ return y.dt===t.dt && y.action===t.action; })) ex.timeline.push(t); });
+        (cl.consents||[]).forEach(function(t){ ex.consents = ex.consents||[]; if(!has(ex.consents, function(y){ return y.ts===t.ts; })) ex.consents.push(t); });
+        (cl.beautyRecords||[]).forEach(function(t){ ex.beautyRecords = ex.beautyRecords||[]; if(!has(ex.beautyRecords, function(y){ return y.id===t.id; })) ex.beautyRecords.push(t); });
+      });
+      migrateHoldings(cc.holdings, fromVer, libIn);
+      Object.keys(cc.holdings).forEach(function(n){
+        var cur = v.CLIENT_HOLDINGS[n] = v.CLIENT_HOLDINGS[n] || [];
+        (cc.holdings[n]||[]).forEach(function(h){ var ex = cur.filter(function(x){ return x.itemName===h.itemName; })[0]; if(ex) ex.batches = (ex.batches||[]).concat(h.batches||[]); else cur.push(h); });
+      });
+      cc.rooms.forEach(function(r){ if(!v.ROOMS.some(function(x){ return x.id===r.id; })) v.ROOMS.push(r); });
+      Object.keys(cc.chat).forEach(function(rid){ v.CHAT_DATA[rid] = cc.chat[rid]; });
+      v.SMS_LOG = (v.SMS_LOG || []).concat(cc.sms || []);
+      writeKey(keyC(cid), JSON.stringify(p, replacer));
+    });
+    /* 全局：案件编号接着往后排；KR 侧的通知 / 院长日程块 / 录入仓库 */
+    if(g && g.vars){
+      g.vars.CASE_NO_SEQ = Math.max(g.vars.CASE_NO_SEQ || 0, (carry.seq || 0) + 1);
+      var hd = g.vars.HOSPITAL_DATA || {};
+      Object.keys(carry.hospitals || {}).forEach(function(hid){
+        var o = carry.hospitals[hid], h = hd[hid]; if(!h) return;
+        h.notifs = (o.notifs || []).concat(h.notifs || []);
+        h.directorSchedule = h.directorSchedule || {};
+        Object.keys(o.sched || {}).forEach(function(dn){ var arr = h.directorSchedule[dn] = h.directorSchedule[dn] || []; o.sched[dn].forEach(function(b){ b.id = 'sbc'+Date.now()+Math.floor(Math.random()*1000); arr.push(b); }); });
+        h.vault = h.vault || {}; Object.keys(o.vault || {}).forEach(function(vk){ h.vault[vk] = o.vault[vk]; });
+      });
+      writeKey(KEY_G, JSON.stringify(g, replacer));
+    }
+    try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify(report)); localStorage.removeItem('gmc_cfg_carry'); }catch(e){}
+  }
+
   /* 操作之后（点击、输入、选择、键盘）稍后存档；另外每 2 秒兜底一次；页面离开/隐藏时再存一次 */
   ['click', 'change', 'input', 'keyup', 'submit', 'drop'].forEach(function(t){ document.addEventListener(t, touch, true); });
   setInterval(save, 2000);
@@ -259,6 +356,7 @@ var Store = (function(){
   document.addEventListener('visibilitychange', function(){ if(document.hidden) save(); });
 
   init();
+  try{ carryRestore(); }catch(e){ console.warn('[迁移] 合并用户案件失败', e); try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:null, to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'合并出错：'+e.message+'（旧数据在自动备份里）'}]})); }catch(e2){} }
   if(!load()){ /* 读不出来（极少见：存档损坏）就用刚生成的种子重新写一遍 */
     try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
     init(); load();
