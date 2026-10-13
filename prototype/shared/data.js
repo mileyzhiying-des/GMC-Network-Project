@@ -4011,14 +4011,13 @@ function innCareCardHtml(c){
 /* ---- 子项进行、回诊与结案（2026-10-06，KR-CASE-02 第 5 节） ----
    结案 = 在韩国的子项（地点=韩国）全部完成（取代"施术完成 → 已结案"）；地点=印尼/均可 的子项不挡结案，仍有未完成的由 KR 按［通知 IN 室长预约］ */
 function subKrPending(c){ return (c.subItems||[]).filter(function(s){ return s.place==='KR' && !s.done; }); }
-function coreSubDone(c, id, by, itemNames){
+function coreSubDone(c, id, by, itemNames, noClose){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0];
   if(!s || s.done || !c.krBalancePaid) return false; /* 付清尾款（开始施术）之后才能逐个标完成 */
   var picked = [];
-  if(s.kind==='施术'){ /* 标"施术"子项完成时，必须勾选这次做了哪些项目；不能默认全部完成 */
-    var pend = krNotStartedItems(c);
-    picked = pend.filter(function(it){ return (itemNames||[]).indexOf(it.name)>-1; });
-    if(pend.length && !picked.length) return false; /* 还有没完成的项目时必须勾选；项目都已处理完（旧数据里项目先被标完成）时施术行可以直接完成（CMD-1012-15 零） */
+  if(!s.simDay && s.kind==='术后管理记录' && s.date && s.date > todayStr()) return false; /* 术后管理未到当天不能标完成（原型可用［模拟到当日］，CMD-1013-10 一·2） */
+  if(s.kind==='施术'){ /* 施术行标完成 = 本次的施术项目都完成（增加项目各有自己的一行；不再弹「做了哪些项目」勾选，CMD-1013-10 一·4） */
+    picked = krNotStartedItems(c).filter(function(it){ return !it.krAddOn; });
   } else if(s.kind==='增加项目'){ /* 增加项目：完成 = 这个加做的项目做完了 */
     picked = krNotStartedItems(c).filter(function(it){ return it.name===s.projectName && (it.preBalanceAdd || it.krAddOn); });
   }
@@ -4026,9 +4025,33 @@ function coreSubDone(c, id, by, itemNames){
   picked.forEach(function(it){ it.done = true; });
   s.doneItems = picked.map(function(it){ return it.name; });
   logCaseEvent(c, by, 'KR标记子项已完成 '+s.no+'：'+s.content+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''));
-  krCloseIfDone(c);
+  if(!noClose) krCloseIfDone(c);
   return true;
 }
+/* 今日项目（施术 + 增加项目）：勾选后按［已完成］ → 勾的几行变已完成，不自动结案，由 KR 在弹窗里确认「今日的项目都已完成了吗」（CMD-1013-10 一·1） */
+function todayProjectSubs(c){ return (c.subItems||[]).filter(function(s){ return s.kind==='施术' || s.kind==='增加项目'; }); }
+function coreTodayDone(c, ids, by){
+  var n = 0; (ids||[]).forEach(function(id){ if(coreSubDone(c, id, by, [], true)) n++; });
+  return n>0;
+}
+/* 「是，结案」：没勾的增加项目 / 未完成的术后管理 / 已付未做的管理项目转在韩持有（已约时间保留，日历照显示），案件结案 */
+function todayFinishInfo(c){
+  if(!c.settlementDone || !c.krBalancePaid || c.visitClosed || isEnded(c)) return null;
+  var undone = todayProjectSubs(c).filter(function(s){ return !s.done; });
+  return {undone:undone, surgeryUndone:undone.some(function(s){ return s.kind==='施术'; }), pendingPay:pendingPayItems(c).length>0};
+}
+function coreFinishToday(c, by){
+  var info = todayFinishInfo(c); if(!info || info.surgeryUndone || info.pendingPay) return false;
+  var held = [];
+  info.undone.forEach(function(s){ s.hold = true; held.push(s.content); var it = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName && x.krAddOn && !x.done; })[0]; if(it) it.done = true; });
+  (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && !s.done && !s.hold){ s.hold = true; held.push(s.content); } });
+  krNotStartedItems(c).forEach(function(it){ if(isLocalKrItem(it) && !it.service){ it.heldOver = true; it.holdDone = false; held.push(it.name); } it.done = true; });
+  c.krHoldAt = nowFullDt(); c.krProcedureDone = true;
+  logCaseEvent(c, by, '今日项目都已完成，结案'+(held.length ? '；剩余 '+held.length+' 项转在韩持有：'+held.join('；') : ''));
+  finishCase(c);
+  return true;
+}
+function coreSubSimDay(c, id, by){ var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done) return false; s.simDay = true; logCaseEvent(c, by, '（仅原型）模拟到当日：'+s.no+'「'+s.content+'」'); return true; }
 /* 在韩国的子项（地点=韩国）全部完成，且项目都已完成/取消/更换 → 结案；子项都完成但还有项目没标完成时不自动结案（KR 要勾选项目标完成，或标无法施术） */
 function krCloseIfDone(c){
   if(c.visitClosed || subKrPending(c).length || krNotStartedItems(c).length || !krActiveItems(c).length) return false;
@@ -4111,11 +4134,12 @@ function coreAddOnItem(c, projectName, by, opt){
     : PROJECT_LIBRARY.filter(function(x){ return x.name===projectName && x.active && x.origin==='KR' && (!c.hospitalId || x.hospitalId===c.hospitalId); })[0]; if(!p) return false; /* 本地管理项目（清单项目，韩元价格）也能在韩增加 */
   /* 到院 → KR 室长面谈、可推项目（增加项目）→ 一次结算 = 尾款 + 当天增加的项目 → 付清尾款（CMD-1008-12 D3）：
      尾款付清前增加的项目和尾款一次结算（不收定金，金额计入尾款，医院收）；尾款付清后再增加的项目另开新结算单（原结算不变） */
+  var svc = !!(opt.local && opt.local.service);
   var pre = !c.krBalancePaid, newId = 'B' + ((c.settlementBatches||[]).length + 1);
-  if(pre) c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:p.price, krDeposit:0, krBalance:p.price, inTotal:0, noDeposit:true, preAdd:true});
+  if(pre && !svc) c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:p.price, krDeposit:0, krBalance:p.price, inTotal:0, noDeposit:true, preAdd:true});
   /* 尾款付清后加的项目：先进进程标「待付款」，不立刻生成结算单；KR 点［已付款］时一次生成一张（CMD-1012-15 一·2） */
-  var ni = {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:'KR', categoryId:p.categoryId, done:false, batchId:(pre ? newId : ''), anesthesia:an};
-  if(!pre) ni.pendingPay = true;
+  var ni = {projectId:p.id, name:p.name, price:svc ? 0 : p.price, currency:currencyOf(p.origin), origin:'KR', categoryId:p.categoryId, done:false, batchId:(pre && !svc ? newId : ''), anesthesia:an};
+  if(svc){ ni.service = true; ni.name = p.name+'（서비스）'; } else if(!pre) ni.pendingPay = true;
   if(opt.detail){ if(opt.detail.stay) ni.stay = opt.detail.stay; if((opt.detail.postcare||[]).length) ni.postcare = opt.detail.postcare.map(function(x){ return Object.assign({inTimes:0}, x); }); } /* 增加的项目也带推荐在韩 / 所需术后管理 */
   if(pre) ni.preBalanceAdd = true; else ni.krAddOn = true;
   c.procedureItems.push(ni);
@@ -4123,7 +4147,7 @@ function coreAddOnItem(c, projectName, by, opt){
   c.settleTab = null;
   /* 子项：增加项目一行（地点韩国；日期默认今天） */
   c.subItems = c.subItems || [];
-  var sub = {id:'s'+Date.now()+Math.floor(Math.random()*100), no:subNextNo(c), date:opt.date || todayStr(), content:p.name, kind:'增加项目', place:'KR', projectName:p.name, done:false, doneAt:'', doneBy:'', informed:false};
+  var sub = {id:'s'+Date.now()+Math.floor(Math.random()*100), no:subNextNo(c), date:opt.date || todayStr(), content:ni.name, kind:'增加项目', place:'KR', projectName:ni.name, done:false, doneAt:'', doneBy:'', informed:false};
   c.subItems.push(sub); c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || a.no.localeCompare(b.no); });
   var msg = pre ? 'KR增加项目："'+p.name+'"（与尾款一次结算，另开结算单 '+newId+' 计入尾款；付清尾款后再加的项目另开结算）' : 'KR增加项目："'+p.name+'"（尾款已付清，标「待付款」，KR 点［已付款］后生成结算单，原结算单不变）';
   logCaseEvent(c, by, msg);
