@@ -52,7 +52,7 @@
     ['A2','未到店 → 重新预约', function(d){ var hits = [];
         d.cases.filter(function(c){ return c.cancelReason==='未到店' || c.noShow; }).forEach(function(c){
           var t0 = (c.logEntries||[])[0] ? c.logEntries[0].dt : '';
-          if(d.cases.some(function(o){ return o!==c && o.name===c.name && o.__clinic===c.__clinic && ((o.logEntries||[])[0]||{}).dt > t0; })) hits.push({c:c, dt:firstDt(c, /未到店/)}); });
+          if(d.cases.some(function(o){ return o!==c && o.name===c.name && o.__clinic===c.__clinic && (((o.logEntries||[])[0]||{}).dt > t0 || (((o.logEntries||[])[0]||{}).dt === t0 && String(o.caseNo) > String(c.caseNo))); })) hits.push({c:c, dt:firstDt(c, /未到店/)}); });
         return {hits:hits}; }, '案件取消原因「未到店」+ 同一客人之后又有新案件'],
     ['A3','预约修改后到店', logHit(/修改预约为/, function(c){ return /标记客人已到店/.test(T(c)); }), 'Timeline「修改预约为」且之后「标记客人已到店」'],
     ['A4','接待未保存离开 → 退回待访问', logHit(/接待未完成，退回待访问|取消接待，案件回到待访问/), 'Timeline「接待未完成，退回待访问」/「取消接待…」'],

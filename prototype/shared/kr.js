@@ -193,14 +193,13 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
   ADMIN_RENDER.accounts = function(el, r){
     if(!isKrAccount()) return baseAccounts(el, r);
     var hid = krHospitalIdOfMe(), list = hospitalAccounts(hid), me = currentAccount();
-    var cnt = function(role){ return list.filter(function(a){ return a.role===role && a.status!=='disabled'; }).length; };
+    var cnt = function(role, seat){ return list.filter(function(a){ return a.role===role && (!seat || a.seat===seat) && a.status!=='disabled'; }).length; };
     var stat = function(label, big, sub){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:150px;"><div style="font-size:11px;color:var(--muted);">'+label+'</div><div style="font-size:22px;font-weight:700;margin:4px 0;">'+big+'</div><div style="font-size:11px;color:var(--slate2);">'+sub+'</div></div>'; };
-    var rows = '<div class="trow head" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;"><span>账号 ID</span><span>类型</span><span>当前使用人</span><span>席位</span><span>状态</span></div>'+
-      list.map(function(a){ return '<div class="trow" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;"><span><b>'+a.id+'</b>'+(a.id===me.id?'<span style="font-size:10px;color:var(--navy);margin-left:6px;">我</span>':'')+'</span><span>'+t(KR_ROLE_LABEL[a.role])+'</span><span><b>'+aEsc(a.name)+'</b><span style="color:var(--muted);font-size:11px;margin-left:6px;">'+aEsc(a.position||'')+'</span></span><span>'+(a.seat==='basic'?'基础':'加购')+'</span><span>'+krAccountStatusPill(a)+'</span></div>'; }).join('');
-    el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('账号管理')+' · '+aEsc(krHospitalName())+'</div>'+
-      '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+stat('基本席位','3 个','代表院长 1 · 管理者 1 · 室长 1（不能退订）')+stat('院长账号', cnt('kr_director')+' 个', '加购')+stat('管理者', cnt('kr_manager')+' 个','')+stat('室长', cnt('kr_general')+' 个','')+'</div>'+
-      '<div class="card" style="padding:4px 20px;">'+rows+'</div>'+
-      '<div style="font-size:11px;color:var(--muted);line-height:1.7;">KR 账号的购买 / 退订 / 重设密码 / 换使用人规则同 IN 端（Notion Accounts & Settings 第 7 节），操作入口在后面几份指令里做；这一页先只读。</div>';
+    var pend = list.filter(function(a){ return a.status==='pending'; }).length;
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('账号管理')+' · '+aEsc(krHospitalName())+'</div><button class="btn-primary" onclick="openBuyAccounts()">＋ 加购账号</button></div>'+
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+stat('基本席位','3 个','代表院长 1 · 管理者 1 · 室长 1（不能退订）')+stat('加购院长账号', cnt('kr_director','addon')+' 个', ACCOUNT_PRICE_TEXT)+stat('加购管理者', cnt('kr_manager','addon')+' 个', ACCOUNT_PRICE_TEXT)+stat('加购室长', cnt('kr_general','addon')+' 个', ACCOUNT_PRICE_TEXT)+stat('待激活', pend+' 个', '已购买 / 已重设，等使用人激活')+'</div>'+
+      '<div class="card" style="padding:4px 20px;">'+acctRowsHtml()+'</div>'+
+      '<div style="font-size:11px;color:var(--muted);line-height:1.7;">点一行看使用人历史和该账号的操作记录。KR 账号的购买 / 退订 / 重设密码 / 换使用人规则同 IN 端：重设密码后账号变「待激活」，原使用人立即登出，下一位在登录页「首次激活」接手；管理者加购管理者账号需要代表院长的验证码；代表院长账号不能被重设。</div>';
   };
   ADMIN_RENDER.clinic = function(el, r){
     if(!isKrAccount()) return baseClinic(el, r);
@@ -218,7 +217,7 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
       '<div style="font-size:11px;color:var(--muted);">医院设定的其他编辑项（语言、短信等）在后面几份指令里做；院长名单、开放施术日期、日程在 KR 端的日程管理 / 院长管理里。</div>';
   };
   var HOSP_DRAFT = null; /* 医院设定草稿：{openTime, closeTime, closedRules, lunch} */
-  var hospDraft = function(){ var h = krHData(); /* 医院资料（HOSPITAL_DATA）；krHospital() 是医院基本信息，不是这个 */ if(!HOSP_DRAFT) var hr0 = hospitalHours(krHospitalIdOfMe()); HOSP_DRAFT = {openTime:hr0.open, closeTime:hr0.close, closedRules:JSON.parse(JSON.stringify(h.closedRules || [])), lunch:Object.assign({from:'', to:''}, h.lunch||{})}; return HOSP_DRAFT; };
+  var hospDraft = function(){ if(!HOSP_DRAFT){ var h = krHData(), hr0 = hospitalHours(krHospitalIdOfMe()); /* 医院资料（HOSPITAL_DATA）；krHospital() 是医院基本信息，不是这个；草稿只在第一次建，之后沿用（CMD-1013-15：原来每次都重建且第二次起 hr0 为空报错，营业时间 / 午休 / 休诊改不了第二项） */ HOSP_DRAFT = {openTime:hr0.open, closeTime:hr0.close, closedRules:JSON.parse(JSON.stringify(h.closedRules || [])), lunch:Object.assign({from:'', to:''}, h.lunch||{})}; } return HOSP_DRAFT; };
   window.hospSetClosed = function(dow, mode, from){ closedRulesSet(hospDraft().closedRules, dow, mode, from, '16:00'); openAdminPage('clinic', true); };
   window.hospSetLunch = function(k, v){ hospDraft().lunch[k] = v; };
   window.hospSetHours = function(k, v){ hospDraft()[k] = v; };

@@ -151,7 +151,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
       aGrid(3, aField(t('预约占位倒计时（分钟）'), f('holdMinutes','number','min="1" max="120"'), '默认 15')+aField(t('未到店判定（分钟）'), f('noShowMinutes','number','min="5" max="240"'), '默认 30')+
         aField(t('面诊费（印尼盾）'), f('consultFee','number','min="0" step="1000"'))+
         aField(t('每个时段的预约上限'), f('slotCapacity','number','min="1" max="50"'), '客户自助预约：时段预约数达到上限就不能再选')+
-        aField(t('提醒短信发送时间')+' · '+t('预约开始前（小时）'), f('remindBeforeHours','number','min="1" max="72"'))), '赴韩定金比例不在这里（GMC 统一设定）。')+
+        aField(t('提醒短信发送时间')+' · '+t('预约开始前（小时）'), f('remindBeforeHours','number','min="1" max="72"'))), '赴韩定金比例：'+Math.round(KR_DEPOSIT_RATE*100)+'%（GMC 统一设定，这里只读、不能改）。')+
     aSection(t('短信模板'), sms, '可用变量：{clinic} 诊所名称、{name} 客人姓名、{time} 预约时间、{address} 地址、{phone} 电话、{url} 客人端网址、{code} 验证码（验证码短信格式固定，不在这里改）。')+
     aSection(t('使用政策与同意书'),
       aGrid(2, aField(t('同意书版本'), f('privacyVersion'), '改版本后，客户详情「隐私协议」仍按客人签署时的版本显示')) +
@@ -223,22 +223,28 @@ function saveClinicSettings(){
 }
 
 /* ================= 账号管理（老板、管理者；IN-SETT-01 第 3 节，A6） ================= */
-var ROLE_SHORT = {owner:'老板', manager:'管理者', general:'一般室长'};
+var ROLE_SHORT = {owner:'老板', manager:'管理者', general:'一般室长', kr_owner:'代表院长', kr_manager:'管理者', kr_general:'室长', kr_director:'院长'};
+/* 账号管理的范围：IN = 本诊所，KR = 本医院（CMD-1013-15：KR 账号管理补上购买 / 退订 / 重设入口） */
+function scopeAccounts(){ return isKrAccount() ? hospitalAccounts(krHospitalIdOfMe()) : clinicAccounts(); }
+function acctIdNum(id){ var m = String(id).match(/(\d+)$/); return m ? parseInt(m[1],10) : 0; }
+function purchaseReq(){ return isKrAccount() ? (krHData().purchaseReq || null) : PURCHASE_REQ; }
+function setPurchaseReq(r){ if(isKrAccount()) krHData().purchaseReq = r; else PURCHASE_REQ = r; }
+function isOwnerRole(a){ return !!a && (a.role==='owner' || a.role==='kr_owner'); }
 var STATUS_STYLE = {active:['使用中','var(--sage-bg)','var(--sage)'], pending:['待激活','#FBF0C9','#8F6F0C'], disabled:['已停用','#EDEAE2','var(--muted)']};
 var ACCOUNT_PRICE_TEXT = '价格待定'; /* Notion：价格、计费周期待代表确认 */
 function acctStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span class="status-pill" style="background:'+s[1]+';color:'+s[2]+';">'+s[0]+'</span>'; }
 
 /* 老板顶部横幅：管理者申请加购管理者账号时，验证码演示在老板的页面里显示 */
 function adminBanner(){
-  var a = currentAccount(), r = PURCHASE_REQ;
-  if(!a || a.role!=='owner' || !r || r.used || Date.now() > r.exp) return '';
+  var a = currentAccount(), r = purchaseReq();
+  if(!a || !isOwnerRole(a) || !r || r.used || Date.now() > r.exp) return '';
   return '<div style="background:#FBF0C9;color:#8F6F0C;border-radius:10px;padding:12px 16px;font-size:13px;line-height:1.7;">🔐 <b>验证码（演示）</b>：'+aEsc(accountLabel(r.by))+' 申请加购 '+r.qty+' 个管理者账号，需要你确认。验证码 <b style="font-size:16px;letter-spacing:2px;">'+r.code+'</b>（'+Math.max(1, Math.round((r.exp-Date.now())/60000))+' 分钟内有效），请告诉对方。真实版会发到老板的手机/通知。</div>';
 }
 
 function acctRowsHtml(){
   var me = currentAccount();
-  var order = {owner:0, manager:1, general:2};
-  var list = clinicAccounts().slice().sort(function(x,y){ return (order[x.role]-order[y.role]) || (x.id==='OWN' ? -1 : y.id==='OWN' ? 1 : parseInt(x.id.slice(1),10)-parseInt(y.id.slice(1),10)); });
+  var order = {owner:0, kr_owner:0, manager:1, kr_manager:1, kr_director:2, general:3, kr_general:3};
+  var list = scopeAccounts().slice().sort(function(x,y){ return (order[x.role]-order[y.role]) || (x.id==='OWN' ? -1 : y.id==='OWN' ? 1 : acctIdNum(x.id)-acctIdNum(y.id)); });
   var head = '<div class="trow head" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;"><span>账号 ID</span><span>类型</span><span>当前使用人</span><span>席位</span><span>状态</span></div>';
   return head + list.map(function(a){
     var who = a.status==='pending' ? '<span style="color:var(--muted);">（还没有使用人）</span>' :
@@ -269,7 +275,7 @@ function acctModal(html){
   ov.innerHTML = html; ov.classList.add('open');
 }
 function closeAcctModal(){ var ov = document.getElementById('acct-overlay'); if(ov) ov.classList.remove('open'); }
-function acctCanReset(a){ var me = currentAccount(); return !!(me && a.status==='active' && a.role!=='owner' && a.id!==me.id); }
+function acctCanReset(a){ var me = currentAccount(); return !!(me && a.status==='active' && !isOwnerRole(a) && a.id!==me.id); }
 function acctCanUnsub(a){ var me = currentAccount(); return !!(me && a.seat==='addon' && a.status!=='disabled' && a.id!==me.id); }
 
 function openAcctDetail(id){
@@ -322,13 +328,13 @@ function doUnsubAcct(id){
 
 /* ---- 加购：选类型和数量 →（管理者加购管理者账号：先要老板验证码）→ 演示付款 → 生成新账号（待激活） ---- */
 var BUY = {role:'general', qty:1, step:'pick', err:''};
-function openBuyAccounts(){ BUY = {role:'general', qty:1, step:'pick', err:''}; renderBuy(); }
+function openBuyAccounts(){ BUY = {role:isKrAccount() ? 'kr_director' : 'general', qty:1, step:'pick', err:''}; renderBuy(); }
 /* 管理者加购管理者账号要老板验证码；这家诊所没有老板账号（例如 C2）时没人可发，就不要求验证码（我的判断） */
-function buyNeedsOwnerCode(){ var me = currentAccount(); return BUY.role==='manager' && me && me.role!=='owner' && clinicAccounts().some(function(x){ return x.role==='owner' && x.status==='active'; }); }
+function buyNeedsOwnerCode(){ var me = currentAccount(); return (BUY.role==='manager' || BUY.role==='kr_manager') && me && !isOwnerRole(me) && scopeAccounts().some(function(x){ return isOwnerRole(x) && x.status==='active'; }); }
 function renderBuy(){
   var err = BUY.err ? '<div class="error-text" style="display:block;margin-bottom:10px;">'+BUY.err+'</div>' : '', body = '';
   if(BUY.step==='pick'){
-    body = '<div class="field" style="margin-bottom:12px;"><label>账号类型</label><select onchange="BUY.role=this.value;renderBuy()" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="general"'+(BUY.role==='general'?' selected':'')+'>一般室长账号</option><option value="manager"'+(BUY.role==='manager'?' selected':'')+'>管理者账号</option></select></div>'+
+    body = '<div class="field" style="margin-bottom:12px;"><label>账号类型</label><select onchange="BUY.role=this.value;renderBuy()" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+(isKrAccount() ? '<option value="kr_director"'+(BUY.role==='kr_director'?' selected':'')+'>院长账号</option><option value="kr_general"'+(BUY.role==='kr_general'?' selected':'')+'>室长账号</option><option value="kr_manager"'+(BUY.role==='kr_manager'?' selected':'')+'>管理者账号</option>' : '<option value="general"'+(BUY.role==='general'?' selected':'')+'>一般室长账号</option><option value="manager"'+(BUY.role==='manager'?' selected':'')+'>管理者账号</option>')+'</select></div>'+
       '<div class="field" style="margin-bottom:12px;"><label>数量</label><input type="number" min="1" max="10" value="'+BUY.qty+'" oninput="BUY.qty=parseInt(this.value,10)||0" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'+
       '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">单价：'+ACCOUNT_PRICE_TEXT+'（演示付款，不收真实款项）。'+(buyNeedsOwnerCode()?'<br><b>管理者加购管理者账号，需要老板确认：</b>点下一步后验证码会发给老板，你输入老板告诉你的验证码后才能付款。':'')+'</div>'+
       err+'<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-outline" onclick="closeAcctModal()">取消</button><button class="btn-primary" onclick="buyNext()">'+(buyNeedsOwnerCode()?'下一步：发验证码给老板':'下一步：付款')+'</button></div>';
@@ -347,28 +353,36 @@ function buyNext(resend){
   BUY.err = '';
   if(buyNeedsOwnerCode()){
     var me = currentAccount();
-    PURCHASE_REQ = {code:String(100000+Math.floor(Math.random()*900000)), by:me.id, qty:BUY.qty, exp:Date.now()+10*60000, used:false};
-    var owner = clinicAccounts().filter(function(x){ return x.role==='owner' && x.name; })[0];
-    pushNotif('系统', accountLabel(me.id)+' 申请加购 '+BUY.qty+' 个管理者账号，验证码 '+PURCHASE_REQ.code+'（10 分钟内有效）', {names:owner?[owner.name]:[], silent:true, link:{kind:'system'}});
+    setPurchaseReq({code:String(100000+Math.floor(Math.random()*900000)), by:me.id, qty:BUY.qty, exp:Date.now()+10*60000, used:false});
+    var owner = scopeAccounts().filter(function(x){ return isOwnerRole(x) && x.name; })[0];
+    if(!isKrAccount()) pushNotif('系统', accountLabel(me.id)+' 申请加购 '+BUY.qty+' 个管理者账号，验证码 '+purchaseReq().code+'（10 分钟内有效）', {names:owner?[owner.name]:[], silent:true, link:{kind:'system'}});
     BUY.step = 'code'; if(resend) showToast('验证码已重新发送', '给老板', null);
   } else BUY.step = 'pay';
   renderBuy();
 }
 function buyVerify(){
-  var r = PURCHASE_REQ, c = (document.getElementById('buy-code')||{}).value||'';
+  var r = purchaseReq(), c = (document.getElementById('buy-code')||{}).value||'';
   if(!r || r.used || Date.now() > r.exp){ BUY.err = '验证码已过期，请重新发送'; return renderBuy(); }
   if(c.trim() !== r.code){ BUY.err = '验证码不对'; return renderBuy(); }
   r.used = true; BUY.err = ''; BUY.step = 'pay'; renderBuy();
 }
+function krNewAccountId(role){
+  var p = 'K'+{kr_owner:'O', kr_manager:'M', kr_general:'C', kr_director:'D'}[role], n = 0;
+  ACCOUNTS.forEach(function(x){ if(String(x.id).indexOf(p)===0) n = Math.max(n, acctIdNum(x.id)); });
+  return p+(n+1);
+}
 function buyPay(){
-  var me = currentAccount(), ids = [], ts = nowFullDt(), roleName = BUY.role==='manager' ? '管理者' : '一般室长';
+  var me = currentAccount(), ids = [], ts = nowFullDt(), kr = isKrAccount(), roleName = kr ? ROLE_SHORT[BUY.role] : (BUY.role==='manager' ? '管理者' : '一般室长'), codeNote = ((BUY.role==='manager' || BUY.role==='kr_manager') && !isOwnerRole(me)) ? '，老板验证码确认' : '';
   for(var i=0;i<BUY.qty;i++){
-    var id = clinicAccountPrefix()+(++ACCOUNT_SEQ);
-    ACCOUNTS.push({id:id, clinicId:CURRENT_CLINIC_ID, role:BUY.role, seat:'addon', name:'', position:'', phone:'', status:'pending', password:null, photo:'', createdAt:ts, activatedAt:'',
-      history:[{ts:ts, type:'购买', text:'加购账号 '+id+'（'+roleName+'）'+(BUY.role==='manager' && me.role!=='owner' ? '，老板验证码确认' : '')+'，待激活', by:accountLabel(me.id)}]});
-    logOp('账号管理', accountLabel(me.id)+' 购买了加购'+roleName+'账号 '+id+(BUY.role==='manager' && me.role!=='owner' ? '（老板验证码确认）' : ''), '购买', id);
+    var id = kr ? krNewAccountId(BUY.role) : clinicAccountPrefix()+(++ACCOUNT_SEQ);
+    var acct = {id:id, role:BUY.role, seat:'addon', name:'', position:'', phone:'', status:'pending', password:null, photo:'', createdAt:ts, activatedAt:'',
+      history:[{ts:ts, type:'购买', text:'加购账号 '+id+'（'+roleName+'）'+codeNote+'，待激活', by:accountLabel(me.id)}]};
+    if(kr) acct.hospitalId = krHospitalIdOfMe(); else acct.clinicId = CURRENT_CLINIC_ID;
+    ACCOUNTS.push(acct);
+    logOp('账号管理', accountLabel(me.id)+' 购买了加购'+roleName+'账号 '+id+(codeNote ? '（老板验证码确认）' : ''), '购买', id);
     ids.push(id);
   }
+  Store.touch && Store.touch();
   closeAcctModal(); openAdminPage('accounts', true);
   showToast('购买成功', ids.join('、')+' 待激活：把编号交给使用人，在登录页「首次激活」', null);
 }
