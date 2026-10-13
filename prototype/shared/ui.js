@@ -179,7 +179,7 @@ function highlightSidebar(activePage){
 
 var CAL_MODE = 'week';
 
-var WEEK_OFFSET = 0;
+var WEEK_OFFSET = 0, MONTH_OFFSET = 0; /* 月视图：相对「今天所在月」的偏移（CMD-1013-09 补充 1，原来 ‹ › 换不了月） */
 
 var DAY_OFFSET = 0;
 
@@ -362,7 +362,7 @@ function buildKrWeekGrid(){
 }
 function buildKrMonthGrid(){
   var grid = document.getElementById('cal-grid'), hid = krViewHospital();
-  var first = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth(), 1), cur = new Date(first); cur.setDate(1-first.getDay());
+  var first = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth()+MONTH_OFFSET, 1), cur = new Date(first); cur.setDate(1-first.getDay());
   var html = '';
   for(var i=0;i<42;i++){
     var ds = dateStr(cur), inMonth = cur.getMonth()===first.getMonth(), closed = hospitalClosedOn(hid, ds), body = '';
@@ -436,7 +436,7 @@ function buildMonthGrid(){
   if(CAL_VIEW==='kr'){ buildKrMonthGrid(); return; }
   var grid = document.getElementById('cal-grid');
   var evs = calendarEvents().filter(function(e){ return !(e.kind==='reservation' && e.vstate==='预约取消'); });
-  var first = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth(), 1);
+  var first = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth()+MONTH_OFFSET, 1);
   var startPad = first.getDay(); /* 周日=0，月历从周日开始 */
   var html = '';
   var cur = new Date(first); cur.setDate(1-startPad);
@@ -475,7 +475,30 @@ function setCalMode(mode){
   renderCalendar();
 }
 
+/* 月视图：原［今天］位置显示当前月份（「10月」），‹ → 上个月、› → 下个月；点月份弹出选年 + 月（内含［回到今天］）；周 / 日视图仍是［今天］ */
+function monthViewDate(){ return new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth()+MONTH_OFFSET, 1); }
+function updateCalNavLabel(){
+  var b = document.querySelector('.cal-nav-today'); if(!b) return;
+  if(CAL_MODE==='month'){ var d = monthViewDate(); b.textContent = (d.getFullYear()!==TODAY_DATE.getFullYear() ? d.getFullYear()+'年' : '')+(d.getMonth()+1)+'月'; b.onclick = openMonthPicker; b.title = '选择年月'; }
+  else { b.textContent = '今天'; b.onclick = calToday; b.title = ''; }
+}
+function openMonthPicker(){
+  var ov = document.getElementById('cal-month-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'cal-month-overlay'; ov.className = 'modal-overlay'; ov.onclick = function(e){ if(e.target===ov) ov.classList.remove('open'); }; document.body.appendChild(ov); }
+  var cur = monthViewDate(), y0 = TODAY_DATE.getFullYear();
+  ov.innerHTML = '<div class="modal-box" style="width:340px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>选择年月</b><span style="cursor:pointer;" onclick="document.getElementById(\'cal-month-overlay\').classList.remove(\'open\')">✕</span></div>'+
+    '<select id="cal-pick-year" onchange="renderMonthPickerMonths()" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">'+[y0-2,y0-1,y0,y0+1,y0+2].map(function(y){ return '<option'+(y===cur.getFullYear()?' selected':'')+'>'+y+'</option>'; }).join('')+'</select>'+
+    '<div id="cal-pick-months" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>'+
+    '<button class="btn-outline" style="width:100%;margin-top:12px;" onclick="calToday();document.getElementById(\'cal-month-overlay\').classList.remove(\'open\')">回到今天</button></div>';
+  renderMonthPickerMonths(); ov.classList.add('open');
+}
+function renderMonthPickerMonths(){
+  var y = parseInt(document.getElementById('cal-pick-year').value, 10), cur = monthViewDate(), html = '';
+  for(var m = 0; m < 12; m++) html += '<button class="'+((y===cur.getFullYear() && m===cur.getMonth()) ? 'btn-primary' : 'btn-outline')+'" style="padding:8px 0;" onclick="pickMonth('+y+','+m+')">'+(m+1)+'月</button>';
+  document.getElementById('cal-pick-months').innerHTML = html;
+}
+function pickMonth(y, m){ MONTH_OFFSET = (y-TODAY_DATE.getFullYear())*12 + (m-TODAY_DATE.getMonth()); document.getElementById('cal-month-overlay').classList.remove('open'); renderCalendar(); }
 function renderCalendar(){
+  updateCalNavLabel();
   renderTodayOff();
   if(CAL_MODE==='week') buildWeekGrid();
   else if(CAL_MODE==='month') buildMonthGrid();
@@ -1068,7 +1091,6 @@ function openCaseDetail(id, noPush){
     CASE_RETURN.push(CURRENT_CASE_ID); NAV_STACK.push('in-casedetail'); /* 案件页 → 另一个案件页 */
   }
   CURRENT_CASE_ID = id;
-  document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
   renderCaseSubtitle(c);
   document.getElementById('case-chat-actions').style.display = c.materialsConfirmed ? 'flex' : 'none'; /* 发起对话等按钮：基础资料确认后才显示 */
   renderCaseStatusBar(c);
@@ -1574,9 +1596,21 @@ function closeCancelIntakeModal(){
   document.getElementById('cancel-intake-overlay').classList.remove('open');
 }
 
+/* 案件页头两行（CMD-1013-09 一）：第一行「客人名（点进客户详情）· 第 N 次来访」；第二行小字「Case ID · 对接院长」，不显示医院名 */
+function caseVisitNo(c){
+  if(c.subState!=='arrived') return 0; /* 本案件还没到店：不显示 */
+  var list = CASE_ITEMS.filter(function(x){ return x.name===c.name && x.subState==='arrived'; }).sort(function(a, b){ return ((a.visitDate||'')+' '+(a.visitTime||'')).localeCompare((b.visitDate||'')+' '+(b.visitTime||'')) || String(a.caseNo).localeCompare(String(b.caseNo)); });
+  return list.findIndex(function(x){ return x.id===c.id; })+1;
+}
+function openClientFromCase(){ var c = getCurrentCase(); if(c) openClientDetail(c.name, 'in-casedetail'); }
+function renderCaseTitle(c){
+  var el = document.getElementById('case-title'); if(!el) return; var n = caseVisitNo(c);
+  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(n ? ' · 第 '+n+' 次来访' : '');
+}
 function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;
-  var html = (c.hospitalId ? '医院：'+hospitalName(c.hospitalId,'ko') : '')+(c.director ? (c.hospitalId?' · ':'')+'对接院长：'+c.director : '');
+  renderCaseTitle(c);
+  var html = (c.caseNo||'')+(c.director ? ' · 对接院长：'+c.director : '');
   if(c.linkedCase && c.linkedCase.caseId){
     var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
     html += (html ? ' · ' : '')+'关联：<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
@@ -1689,7 +1723,7 @@ function confirmMaterials(){
   c.materialsConfirmed = true;
   c.materialsDate = todayStr();
   applyCaseLink(c); /* Case ID 已在预约时生成，这里不再生成 */
-  document.getElementById('case-title').textContent = c.name + ' · Case · ' + c.caseNo;
+  renderCaseSubtitle(c);
   document.getElementById('case-chat-actions').style.display = 'flex';
   if(c.needsConsult==='reuse'){
     applyReuseReport(c); /* 沿用之前诊疗方案：不产生面诊费卡片，直接进入"项目确认中" */

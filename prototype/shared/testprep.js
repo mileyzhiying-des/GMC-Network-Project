@@ -54,6 +54,10 @@
     yuki: function(){ var cl = mkClient('Yuki'); var c = krBase(cl); withReport(c, ['假体隆鼻']); c.consultStatus = 'report_ready'; logCaseEvent(c, '测试准备', '测试准备：诊疗方案已到，项目确认中'); mark(c); updateCaseStage(c); return {cl:cl, cases:[c], where:'IN（A1）', start:'新增预约（手机号 '+cl.phone+'）→ 到店 → 接待时会提示「客人有进行中的案件」，可测接续。进行中案件 '+c.caseNo+'（项目确认中）。'}; },
     sara: function(){ var cl = mkClient('Sara'); var c = pastLocalCase(cl, [{name:'LHALa peel', qty:3, used:0, paid:2336400}, {name:'艺人水光焕肤', qty:2, used:0, paid:1758200}, {name:'LHALa peel', qty:1, used:0, paid:800000}]); return {cl:cl, cases:[c], where:'IN（A1）', start:'新增预约（手机号 '+cl.phone+'）→ 到店 → 基础资料顶部［退款服务］。客人有 3 个可退批次（都没用过：'+localName('LHALa peel')+' ×3、'+localName('艺人水光焕肤')+' ×2、'+localName('LHALa peel')+' ×1）。'}; },
     olivia: function(){ var cl = mkClient('Olivia'); var c = krBase(cl); withReport(c, ['假体隆鼻']); c.reportDate = D(-12); c.endNote = '客人不做项目'; c.consultStatus = 'report_ready'; logCaseEvent(c, '测试准备', '测试准备：诊疗方案已出（12 天前），客人不做项目'); mark(c); finishCase(c, '未购买未使用'); return {cl:cl, cases:[c], where:'IN（A1）', start:'新增预约（手机号 '+cl.phone+'）→ 基础资料选「面诊」→ 关联之前案件 '+c.caseNo+'（延续既往面诊 / 沿用原诊疗方案，诊疗方案 12 天前，1 个月内）。'}; },
+    mini: function(){ /* 老客，40 天前面诊过、KR 已发诊疗方案、案件已结束（仅出报告）：测「超过一个月不能沿用原诊疗方案」（Olivia 的反例，CMD-1013-09 补充 3） */
+      var cl = mkClient('MINI'); var c = krBase(cl); withReport(c, ['假体隆鼻']); c.visitDate = D(-40); c.reportDate = D(-40); c.endNote = '客人不做项目'; c.consultStatus = 'report_ready';
+      logCaseEvent(c, '测试准备', '测试准备：诊疗方案已出（40 天前），客人不做项目'); mark(c); finishCase(c, '未购买未使用');
+      return {cl:cl, cases:[c], where:'IN（A1）', start:'新增预约（手机号 '+cl.phone+'）→ 基础资料选「面诊」→ 关联之前案件 '+c.caseNo+'：诊疗方案是 40 天前出的（超过 1 个月），不能沿用原诊疗方案、不能延续免除，只能重新面诊。'}; },
     c42: function(){
       var cl = mkClient('Case42'); var c = krBase(cl); var items = withReport(c, ['假体隆鼻', '鼻翼缩小']); pay(c, items);
       c.krSchedule = {status:'arrived', confirmedDate:D(-4), confirmedTime:'11:00', primary:D(-4), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; c.hasArrived = true; c.krBalancePaid = true; c.krJudge = {result:'ok', settled:true, memo:'', by:'KM1 室长'};
@@ -75,7 +79,7 @@
       logCaseEvent(c, '测试准备', '测试准备：施术时间已确认 '+date+' 11:00，待客人到院（2 个赴韩项目，其中有术后管理）'); mark(c); updateCaseStage(c); try{ syncSurgeryBlock(c); }catch(e){} try{ syncSurgerySub(c); }catch(e){} /* 施术一行（项目进程里的「施术」子项） */
       return {cl:cl, cases:[c], where:'KR（KM1 登录）', start:'案件 '+c.caseNo+' → 施术 tab Step 1：［客人已到医院］→ 评估（3-1 / 3-2 / 3-3）→ 付清尾款 → 术后管理预约。IN 不再分配术后管理（弹窗默认未选）。'}; }
   };
-  var LABEL = {queen:'Queen（老客 + 有剩余持有项目）', zoe:'Zoe（老客 + 同意书旧版本）', yuki:'Yuki（已有进行中的案件）', sara:'Sara（老客 + 3 个可退批次）', olivia:'Olivia（上个月出过诊疗方案）', c42:'第 42 条（赴韩已结案 + 回印尼术后管理持有）', stageA:'面诊结束，待发送诊疗方案', stageB:'已付定金，待确认施术时间', stageC:'施术时间已确认，待到院'};
+  var LABEL = {queen:'Queen（老客 + 有剩余持有项目）', zoe:'Zoe（老客 + 同意书旧版本）', yuki:'Yuki（已有进行中的案件）', sara:'Sara（老客 + 3 个可退批次）', olivia:'Olivia（上个月出过诊疗方案）', mini:'MINI（40 天前出过诊疗方案，已超过一个月）', c42:'第 42 条（赴韩已结案 + 回印尼术后管理持有）', stageA:'面诊结束，待发送诊疗方案', stageB:'已付定金，待确认施术时间', stageC:'施术时间已确认，待到院'};
   window.TESTPREP_LABEL = LABEL;
   window.testPrepRun = function(){
     var key = qs('make'), out = document.getElementById('out');

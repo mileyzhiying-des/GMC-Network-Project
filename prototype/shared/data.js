@@ -410,7 +410,7 @@ function krOffMemos(date){
   linkedHospitalIds().forEach(function(hid){ ((HOSPITAL_DATA[hid]||{}).offs||[]).forEach(function(o){ if(offApplies(o, date)) out.push({id:o.id||('off'+o.who+o.date), date:date, weekly:!!o.weekly, type:'OFF', scope:'公开', role:o.kind==='director' ? 'KR院长' : 'KR室长', person:o.who+((o.part && o.part!=='全天') ? '（'+o.part+'）' : ''), author:'KR'}); }); });
   return out;
 }
-function memosOn(date){ return CAL_MEMOS.filter(function(m){ return (m.weekly ? m.dow===new Date(date+'T00:00:00').getDay() : m.date===date) && !/^KR/.test(m.role||'') && (m.scope==='公开' || m.author===ME_NAME); }).concat(krOffMemos(date)); }
+function memosOn(date){ return CAL_MEMOS.filter(function(m){ return (m.weekly ? m.dow===new Date(date+'T00:00:00').getDay() : m.date===date) && !/^KR/.test(m.role||'') && (m.scope==='公开' || m.author===ME_NAME); }).concat(CAL_VIEW==='kr' ? krOffMemos(date) : []); } /* 本院日程只显示 IN 室长的 OFF；KR 人员的 OFF 只在「KR 医院日程」显示（CMD-1013-09 补充 2） */
 
 /* 固定栏里自己写的 memo（备忘 / OFF）后面的小字「修改」；别人写的公开 memo、KR 的 OFF 没有 */
 function memoEditLink(m){ return (m.author===ME_NAME && CAL_MEMOS.some(function(x){ return x.id===m.id; })) ? ' <a href="#" onclick="event.stopPropagation();openMemoModal(\''+m.id+'\');return false;" style="font-size:10px;font-weight:400;color:var(--muted);text-decoration:underline;">修改</a>' : ''; }
@@ -514,11 +514,11 @@ function eventChipHtml(e){
   return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+(e.purpose?' · '+e.purpose:'')+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'"><div class="l1"><b>'+l1+'</b>'+(l2 ? ' · '+l2 : '')+'</div></div>'; /* 每个预约一行："名字（粗体）· 来访目的" */
 }
 
-function calPrev(){ if(CAL_MODE==='week') WEEK_OFFSET--; else if(CAL_MODE==='day') DAY_OFFSET--; renderCalendar(); }
+function calPrev(){ if(CAL_MODE==='week') WEEK_OFFSET--; else if(CAL_MODE==='day') DAY_OFFSET--; else MONTH_OFFSET--; renderCalendar(); }
 
-function calNext(){ if(CAL_MODE==='week') WEEK_OFFSET++; else if(CAL_MODE==='day') DAY_OFFSET++; renderCalendar(); }
+function calNext(){ if(CAL_MODE==='week') WEEK_OFFSET++; else if(CAL_MODE==='day') DAY_OFFSET++; else MONTH_OFFSET++; renderCalendar(); }
 
-function calToday(){ WEEK_OFFSET=0; DAY_OFFSET=0; CAL_WEEK_FULL=false; CAL_ANCHOR=null; renderCalendar(); }
+function calToday(){ WEEK_OFFSET=0; DAY_OFFSET=0; MONTH_OFFSET=0; CAL_WEEK_FULL=false; CAL_ANCHOR=null; renderCalendar(); }
  /* 回今天：今天在第一栏 */
 
 
@@ -4324,11 +4324,15 @@ function krProcedureTabMain(c, tabsHtml){
   var pillStyle = {'待付款':['#FDECEA','#B3261E'], '未开始':['var(--terracotta-bg)','var(--terracotta)'], '已完成':['var(--sage-bg)','var(--sage)'], '已取消':['#EDEAE2','var(--muted)'], '已更换':['var(--blue-bg)','var(--blue)']};
   var itemsHtml = '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border2);">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:12px;font-weight:700;color:var(--terracotta);">赴韩项目（韩国那边施术，印尼只读，无法操作）</div>'+'</div>'+
-    krAllItems(c).map(function(it){
-      var stText = krItemStatus(it), pc = pillStyle[stText];
+    (function(){ /* 在韩加的项目同一项目（同规格）加多次合并成一行写「×N」，并标「在韩增加」（CMD-1013-09 五） */
+      var gl = [];
+      krAllItems(c).forEach(function(it){ var added = !!(it.krAddOn || it.preBalanceAdd || it.swappedFrom), g = (added && !it.cancelled) ? gl.filter(function(x){ return x.added && !x.it.cancelled && x.it.name===it.name; })[0] : null; if(g){ g.n += (it.qty||1); g.all.push(it); } else gl.push({it:it, n:(it.qty||1), all:[it], added:added}); });
+      return gl;
+    })().map(function(g){
+      var it = g.it, stText = g.all.length>1 ? (g.all.every(function(x){ return x.done; }) ? '已完成' : (g.all.some(function(x){ return x.pendingPay; }) ? '待付款' : '未开始')) : krItemStatus(it), pc = pillStyle[stText];
       var nameHtml = it.replacedBy
         ? '<span style="text-decoration:line-through;color:var(--muted);">'+it.name+'</span> → 更换为 <b>'+it.replacedBy+'</b>'
-        : '<span style="'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+(it.qty>1 ? ' ×'+it.qty : '')+'</span>';
+        : '<span style="'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+(g.n>1 ? ' ×'+g.n : '')+'</span>'+(g.added ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:10px;">在韩增加</span>' : '');
       var flags = krItemFlags(c, it).map(function(f){ return '<span class="status-pill" style="background:#FBF0C9;color:#A8740A;font-size:10px;margin-left:6px;">⚠ '+f+'</span>'; }).join('');
       return '<div class="case-field-row" style="flex-wrap:wrap;"><span style="flex-grow:1;font-size:13px;">'+nameHtml+flags+'</span>'+
         '<span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+stText+'</span>'+itemArrangeHtml(it, true)+'</div>';
@@ -4336,7 +4340,7 @@ function krProcedureTabMain(c, tabsHtml){
     '</div>';
   var unableBanner = '';
   var unableBtn = '';
-  var recHtml = hasActive ? recSummaryHtml(krActiveItems(c).map(function(it){ return {name:it.name, stay:it.stay, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), c.krScope && c.krScope.overallNote, {print:true, inNote:c.recInNote}) : ''; /* 推荐项目整理 + ［打印］给客人（CMD-1012-02 C5）；IN 室长备注一起印出（CMD-1012-05 三·3） */
+  var recHtml = hasActive ? recSummaryHtml(krActiveItems(c).filter(function(it){ return !(c.krScope && c.krScope.items && c.krScope.items.length) || !(it.krAddOn || it.preBalanceAdd || it.swappedFrom); }).map(function(it){ /* 推荐项目整理保持原诊疗方案：在韩加的（到院加项 / 施术中增加 / 更换）不混进来（CMD-1013-09 四） */ return {name:it.name, stay:it.stay, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), c.krScope && c.krScope.overallNote, {print:true, inNote:c.recInNote}) : ''; /* 推荐项目整理 + ［打印］给客人（CMD-1012-02 C5）；IN 室长备注一起印出（CMD-1012-05 三·3） */
   if(recHtml) recHtml = '<div style="margin:10px 0 0;"><input type="text" placeholder="IN 室长备注（选填，打印时一起印出）" value="'+String(c.recInNote||'').replace(/"/g,'&quot;')+'" onchange="setRecInNote(this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;"></div>'+recHtml;
   return '<div class="card" style="padding:22px 24px;">'+(tabsHtml||'')+subStatusRowHtml(caseSubStatusItems(c))+recHtml+body+itemsHtml+krAddMoreHtml(c)+innCareCardHtml(c)+'</div>';
 }
