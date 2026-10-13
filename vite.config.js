@@ -35,7 +35,7 @@ export default defineConfig({
     outDir: path.join(rootDir, 'dist'),
     emptyOutDir: true,
     rollupOptions: {
-      input: ['login', 'in', 'owner', 'kr', 'booking', 'phone', 'test-coverage'].map((n) => path.join(rootDir, 'prototype', n + '.html')),
+      input: ['login', 'in', 'owner', 'kr', 'booking', 'phone', 'test-coverage', 'test-prep'].map((n) => path.join(rootDir, 'prototype', n + '.html')),
     },
   },
 });

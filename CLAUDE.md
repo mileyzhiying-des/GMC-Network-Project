@@ -466,3 +466,8 @@ prototype/shared/app.css  共用样式
 - 测试覆盖：E1 / E2 按 `c.bookClient` 分开（旧案件没有该字段的不计入，避免同一案件既算新客又算老客）；B10 只算案件最终 `stage==='cancelled'` 且取消原因「仅办理退款」；E10 同时认「退款服务：」记录。
 - **不建议手术 → 取消项目 → 更换项目**：院长评估保留「不建议手术 + memo」（`j.result` 仍是 `cannot`，新增 `j.replaced=true`），Timeline 记「取消项目 → 更换为 xx」；`coreSettleBalance` / 预约弹窗 / IN 显示按 `replaced` 当作调整后的结算处理。**更换时间**（`krDoRebook`）也弹非营业时间确认。
 - **IN 不再分配术后管理**：`pcLinesHtml` 只读（必须在韩国 / 韩国或印尼都可、次数、第 N 天起）；「韩国或印尼都可」（含共同）一律由 KR 在付清尾款后的预约弹窗决定，弹窗里默认「请选择」（`where:''`），没选不能确认；迁移 42 清掉还没付尾款 / 没预约案件里旧的 `inTimes`（已生成的持有批次、已预约子项不动）。共用 ONDA 回印尼做 → 持有批次只生成一次（`pcUniqueEntries`）。数据版本 41 → 42。
+
+## CMD-1013-05 补充（2026-10-13，追加；旧文字保留作历史）
+- **一键准备测试客人**（纯测试工具，不属于产品功能）：`prototype/test-coverage.html` 顶部「🧪 一键准备测试客人」按钮 → 新页面 `prototype/test-prep.html?demo=A1&make=<key>`（加载 rules / i18n / ui / data / store + `shared/testprep.js`，以 A1 身份写进 C1 诊所存档）建好客人和前置条件，并写明「请用 A1 / KM1 登录，从 xx 开始」。A 组：`queen`（老客 + 剩余持有项目）、`zoe`（同意书旧版本 v0.5）、`yuki`（已有进行中案件，项目确认中）、`sara`（3 个可退批次）、`olivia`（12 天前出过诊疗方案，客人不做项目 → 仅出报告）、`c42`（赴韩已结案 + 回印尼术后管理 0 元持有批次）；B 组：`stageA`（面诊结束待发送诊疗方案）、`stageB`（已付定金待确认施术时间）、`stageC`（施术时间已确认待到院，2 个赴韩项目，其中有术后管理「韩国或印尼都可」+ 印尼对应项目；用 CMD-1013-03 的分步结构，IN 不分配）。
+- **规则**：客人名 `T-xxx`（重复自动编号 `T-Queen 2`）；案件 `prep:true` + `demo:false`（不是演示数据，升级时和用户案件一样保留）；准备阶段的 Timeline 都带 `prep:true`（`testPrepRun` 末尾把所有 `touched` 案件的记录统一标 prep，包括 `finishCase` 补写的系统记录）。
+- **覆盖页**（`coverage.js`）：`parseRaw` 把「用户还没动过」的准备案件（所有记录都是 prep）整个排除并单独列出（🧪 一键准备的案件，不计入）；用户动过的准备案件只按非 prep 记录判断（`__t` / `firstDt` 跳过 prep）；案件旁标 🧪；导出的案件行带 `prep` / `prepOnly`。`vite.config.js` 的 input 加了 `test-prep`。数据版本不变（42）。

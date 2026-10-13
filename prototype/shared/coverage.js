@@ -22,7 +22,11 @@
     });
     var g = pj(raw.gmc_state); var hd = g && g.vars && g.vars.HOSPITAL_DATA;
     if(hd) Object.keys(hd).forEach(function(h){ (hd[h].notifs||[]).forEach(function(n){ d.hospitalNotifs.push(Object.assign({__hospital:h}, n)); }); });
-    d.cases.forEach(function(c){ c.__t = (c.logEntries||[]).map(function(e){ return e.action||''; }).join('\n'); c.__demo = c.demo===true || (c.demo===undefined && !/^r\d{9,}/.test(String(c.id))); /* 演示案件 = 种子建立的（demo 标记）；用户自己新建的案件 id 是 r+时间戳 */ });
+    /* 一键准备的案件（prep:true，CMD-1013-05）：准备阶段自动产生的 Timeline（prep:true）不算覆盖；用户还没动过的准备案件整个跳过（只单独列出），动过之后只算用户亲手做的步骤 */
+    d.prepCases = [];
+    d.cases.forEach(function(c){ c.__prep = !!c.prep; c.__prepOnly = c.__prep && !(c.logEntries||[]).some(function(e){ return !e.prep; }); if(c.__prepOnly) d.prepCases.push(c); });
+    d.cases = d.cases.filter(function(c){ return !c.__prepOnly; });
+    d.cases.forEach(function(c){ c.__t = (c.logEntries||[]).filter(function(e){ return !e.prep; }).map(function(e){ return e.action||''; }).join('\n'); c.__demo = c.demo===true || (c.demo===undefined && !/^r\d{9,}/.test(String(c.id))); /* 演示案件 = 种子建立的（demo 标记）；用户自己新建的案件 id 是 r+时间戳 */ });
     return d;
   }
 
@@ -30,7 +34,7 @@
   /* eval 返回 {hits:[{c, note, dt}]}；auto:false = 无法自动判断（note 写原因） */
   function T(c){ return c.__t; }
   function re(c, rx){ return rx.test(T(c)); }
-  function firstDt(c, rx){ var e = (c.logEntries||[]).filter(function(x){ return rx.test(x.action||''); })[0]; return e ? e.dt : ''; }
+  function firstDt(c, rx){ var e = (c.logEntries||[]).filter(function(x){ return !x.prep && rx.test(x.action||''); })[0]; return e ? e.dt : ''; }
   function krItems(c){ return (c.procedureItems||[]).filter(function(i){ return i.origin==='KR'; }); }
   function byCase(pred, rx){ return function(d){ return {hits:d.cases.filter(pred).map(function(c){ return {c:c, dt:rx ? firstDt(c, rx) : '', rx:rx||null}; })}; }; };
   function logHit(rx, extra){ return byCase(function(c){ return re(c, rx) && (!extra || extra(c)); }, rx); }
@@ -164,7 +168,7 @@
     var acct = c.__clinic==='C2' ? 'B1' : c.__clinic==='C3' ? 'D1' : 'A1';
     return '/in.html?demo='+acct+'&case='+encodeURIComponent(c.caseNo||c.id);
   }
-  function caseTag(c){ return esc((c.caseNo||c.id)+' · '+c.name); }
+  function caseTag(c){ return esc((c.caseNo||c.id)+' · '+c.name)+(c.prep ? ' <span class="pill">🧪一键准备</span>' : ''); }
 
   /* ---------- 渲染 ---------- */
   function render(){
@@ -188,7 +192,9 @@
         (c.__demo ? '' : '<div style="font-size:12px;margin:6px 0 0 12px;">改这个案件的轮次：<select onchange="setCaseRound(\''+c.__clinic+'\',\''+String(c.id).replace(/'/g,'')+'\',this.value)">'+ROUNDS.map(function(r0){ return '<option value="'+r0+'"'+((parseInt(c.round,10)||1)===r0?' selected':'')+'>第 '+r0+' 轮</option>'; }).join('')+'</select></div>')+
         '<div class="path">'+(c.logEntries||[]).map(function(e){ return esc((e.dt||'').slice(0,16)+'　['+(e.stage||'')+'] '+(e.actor||'')+'：'+(e.action||'')+(e.ver ? '　〔'+e.ver+'〕' : '')); }).join('<br>')+'</div></details></div>'; }).join(''); };
     var mine = DATA.cases.filter(function(c){ return !c.__demo; }), demo = DATA.cases.filter(function(c){ return c.__demo; });
+    var prepList = (DATA.prepCases||[]).map(function(c){ return '<div class="row"><span style="flex:1;">'+caseTag(c)+' <span class="muted">· 用户还没动过，不计入覆盖</span></span></div>'; }).join('');
     document.getElementById('cases').innerHTML = '<div class="grp">我的案件（'+mine.length+'）</div>'+(caseCard(mine) || '<div class="muted">还没有你新建的案件</div>')+
+      '<details style="margin-top:14px;"><summary class="grp" style="display:inline-block;">🧪 一键准备的案件（'+(DATA.prepCases||[]).length+'，未动过，不计入覆盖率）</summary>'+(prepList || '<div class="muted">没有</div>')+'</details>'+
       '<details style="margin-top:14px;"><summary class="grp" style="display:inline-block;">演示案件（'+demo.length+'，不计入覆盖率）</summary>'+caseCard(demo)+'</details>';
     document.getElementById('unjudge').innerHTML = '<b>无法自动判断的情况</b>：'+(RESULT.unjudge.length ? RESULT.unjudge.map(function(i){ return esc(i.id+' '+i.title+'（'+i.note+'）'); }).join('；') : '无');
   }
@@ -258,7 +264,7 @@
       rounds:it.rounds, occurrences:it.hits.map(function(h){ return {caseNo:h.c&&h.c.caseNo, name:h.c&&h.c.name, clinic:h.c&&h.c.__clinic, round:h.round, firstAt:h.dt||'', firstVersion:h.ver||'', firstVersionTime:h.vt||'', lastAt:h.ldt||'', lastVersion:h.lver||'', lastVersionTime:h.lvt||'', label:h.label||''}; })}; })); }, []); }
   window.exportJson = function(){
     download('gmc-test-record-'+stamp()+'.json', JSON.stringify({kind:'gmc-test-record', exportedAt:new Date().toISOString(), dataVersion:DATA.ver, currentBuild:(typeof GMC_BUILD!=='undefined' ? GMC_BUILD : null), currentRound:parseInt(localStorage.getItem('gmc_cfg_round'),10)||1, roundCoverage:RESULT.roundCov, source:SRC.label, summary:{covered:RESULT.covered, total:RESULT.total, unjudged:RESULT.unjudge.length}, coverage:coverageOut(), note:'覆盖率只计算用户自己新建的案件；演示案件（demo:true）另外列出，不计入',
-      cases:DATA.cases.map(function(c){ return {demo:!!c.__demo, round:c.__demo ? null : (parseInt(c.round,10)||1), caseNo:c.caseNo, name:c.name, clinic:c.__clinic, stage:c.stage, subState:c.subState, cancelReason:c.cancelReason||null, path:casePath(c), timeline:c.logEntries||[]}; })}, null, 1));
+      cases:DATA.cases.concat(DATA.prepCases||[]).map(function(c){ return {prep:!!c.prep, prepOnly:!!c.__prepOnly, demo:!!c.__demo, round:c.__demo ? null : (parseInt(c.round,10)||1), caseNo:c.caseNo, name:c.name, clinic:c.__clinic, stage:c.stage, subState:c.subState, cancelReason:c.cancelReason||null, path:casePath(c), timeline:c.logEntries||[]}; })}, null, 1));
   };
   window.exportMd = function(){
     var md = '# GMC 测试覆盖记录\n\n导出时间：'+new Date().toISOString()+'　数据版本：'+DATA.ver+'　来源：'+SRC.label+'\n\n**已覆盖 '+RESULT.covered+' / 共 '+RESULT.total+'**（'+RESULT.unjudge.length+' 条无法自动判断）；第 1 轮 '+RESULT.roundCov[1]+'，第 2 轮 '+RESULT.roundCov[2]+'；当前原型版本 '+((typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? GMC_BUILD.h+'（'+GMC_BUILD.t+'）' : '未知')+'\n\n';
