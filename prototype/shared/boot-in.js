@@ -26,11 +26,13 @@ document.addEventListener('DOMContentLoaded', function(){
 try{ checkReminders(); }catch(e){ console.error('[初始化失败] 提醒短信', e); }
 setInterval(function(){ try{ if(checkReminders()>0 && typeof refreshAdminPage==='function') refreshAdminPage(); }catch(e){} }, 10000);
 
+try{ if(repairWronglyClosedCases()) Store.touch(); }catch(e){ console.error('[修正误结案]', e); }
 /* 每秒扫一遍占位倒计时：更新页面上的倒计时文字；超时的从占位里移除（时段自动空出），记入预约历史"占位失效" */
 setInterval(function(){
   var changed = false;
   RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(p){
     if(!p.warned && p.expiresAt-Date.now() <= 5*60000 && p.expiresAt-Date.now() > 0){ p.warned = true; pushNotif('预约','预约占位快过期（剩 5 分钟）：'+p.phone+' '+dateLabel(p.date)+' '+p.time, {names:workingIN()}); }
+    if(phConverted(p)){ changed = true; return false; } /* 已转成预约的占位直接收掉 */
     if(Date.now() >= p.expiresAt){ changed = true; PLACEHOLDER_HISTORY.push({id:p.id, phone:p.phone, date:p.date, time:p.time, status:'占位失效', link:p.link, purpose:p.purpose}); return false; }
     return true;
   });

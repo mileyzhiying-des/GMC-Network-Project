@@ -92,6 +92,7 @@
       out.innerHTML = '<h2>已建好：'+LABEL[key]+'</h2>'+
         '<p>客人：<b>'+r.cl.name+'</b>（手机号 '+r.cl.phone+'）</p>'+
         '<p>案件：'+r.cases.map(function(c){ return '<b>'+c.caseNo+'</b>'; }).join('、')+'（标记为测试准备，不算覆盖、不是演示数据，数据升级时会保留）</p>'+
+        '<p>'+(clientByName(r.cl.name) ? '✓ 已写入诊所 '+CURRENT_CLINIC_ID+' 的客户列表（共 '+CLIENTS.length+' 位客人，客户列表 / 代约下拉里都找得到）' : '<span style="color:#C1454A;">⚠ 客人没有写进客户列表，请重试</span>')+'；IN 端必须用和这个页面<b>同一个地址</b>（'+location.origin+'）打开，localhost 和 127.0.0.1 的数据是分开的。</p>'+
         '<p>请用 <b>'+r.where+'</b> 登录，从这里开始：</p><div class="start">'+r.start+'</div>'+
         '<p class="muted">登录页：<a href="/login.html" target="_blank">/login.html</a>；可以关掉这个页面。再建一个同类客人会自动编号（如 '+r.cl.name+' 2）。</p>';
     }catch(e){ console.error(e); out.innerHTML = '<p style="color:#C1454A;">创建失败：'+(e&&e.message||e)+'</p>'; }

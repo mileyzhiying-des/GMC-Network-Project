@@ -380,7 +380,7 @@ function buildKrMonthGrid(){
 }
 function renderResvHistory(){
   var q = ((document.getElementById('resv-search')||{}).value||'').toLowerCase();
-  var colors = {'预约占位':['#E4E8ED','var(--slate2)'], '占位失效':['#EDEAE2','var(--muted)'], '待访问':['#F2EADB','#8A7650'], '已到访':['var(--sage-bg)','var(--sage)'], '未到店':['#FBE9E7','#C1454A'], '预约取消':['#EDEAE2','var(--muted)']};
+  var colors = {'预约占位':['#E4E8ED','var(--slate2)'], '占位失效':['#EDEAE2','var(--muted)'], '已转预约':['var(--sage-bg)','var(--sage)'], '待访问':['#F2EADB','#8A7650'], '已到访':['var(--sage-bg)','var(--sage)'], '未到店':['#FBE9E7','#C1454A'], '预约取消':['#EDEAE2','var(--muted)']};
   var rows = resvHistoryRows().filter(function(r){ return !q || r.name.toLowerCase().indexOf(q)>-1; });
   document.getElementById('resv-rows').innerHTML = rows.map(function(r){
     var col = colors[r.type] || colors['待访问'];
@@ -1789,6 +1789,7 @@ function editConcernField(field){
 function confirmConsultFee(){
   var c = getCurrentCase(); if(!c) return;
   if(!c.hospitalId || !c.director){ alert('请先选择院长'); return; }
+  if(c.addConsultMode && intentKrAllowed(c) && !(c.intentionProjects||[]).length){ alert('请先填意向项目（至少一个）'); return; }
   var d = feeDraft(c);
   if(d.locked && d.mode==='waive'){ alert('距原案件报告日期已超过1个月，不能免除面诊费'); return; }
   if(d.mode==='paid'){ markConsultPaid(); return; }
@@ -1893,6 +1894,7 @@ function markMgmtRows(scope, action, all, oneIdx){
   ctx.mgmtStatus = !anyCancelled ? 'done' : (anyDone ? 'cancelled_partial' : 'cancelled_all');
   ctx.mgmtActive = false; ctx.mgmtCancelling = false;
   if(scope==='lm') return afterLmFinished(c);
+  if(mainlineOngoing(c)){ logCaseEvent(c, '系统', '本地管理已做完；面诊 / 赴韩还在进行，案件不自动结案'); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; }
   finishCase(c, '管理取消');
 }
 

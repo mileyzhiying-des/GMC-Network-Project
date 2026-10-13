@@ -249,7 +249,7 @@ function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, op
   /* 同一位院长同一时间只能有一件事（KR-SCHD-01，2026-10-08）：不能和该院长的「不可预约」或别的施术重叠；不同院长之间可以重叠 */
   var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; }).filter(function(b){ return !((b.kind==='施术' || b.kind==='面诊') && exceptCaseKey && (b.clinicId+':'+b.caseId)===exceptCaseKey && (!opts || !opts.exceptKind || opts.exceptKind===b.kind)); })[0];
   /* 冲突说明（CMD-1013-11 一·5）：写清楚「到院时间 + 施术时长」和哪一段重叠 */
-  var why = clash ? time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 '+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' ? '已有'+clash.kind : '不可预约')+' 重叠' : '';
+  var why = clash ? (opts && opts.use ? time+' 开始，使用约 '+(durMin||30)+' 分钟到 '+minToTime(e)+'，和 ' : time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 ')+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' ? '已有'+clash.kind : '不可预约')+' 重叠' : '';
   if(clash && (clash.kind==='施术' || clash.kind==='面诊')) return why;
   if(clash && !(opts && opts.ignoreBusy)) return why;
   return '';
@@ -446,8 +446,8 @@ function resvHistoryRows(){
   var rows = [];
   CASE_ITEMS.forEach(function(c){ if(c.visitDate) rows.push({name:c.name, caseNo:c.caseNo, caseId:c.id, date:c.visitDate, time:c.visitTime, type:visitStateOf(c)}); });
   RESUMED_VISITS.forEach(function(r){ rows.push({name:r.name, caseNo:r.origCaseNo, caseId:r.caseId, date:r.date, time:r.time, type:'已到访'}); }); /* 接续：显示原案件 ID，类型已到访 */
-  RESERVATION_PLACEHOLDERS.forEach(function(ph){ rows.push({name:ph.phone, caseNo:null, caseId:null, date:ph.date, time:ph.time, type:'预约占位'}); });
-  PLACEHOLDER_HISTORY.forEach(function(ph){ rows.push({name:ph.phone, caseNo:null, caseId:null, date:ph.date, time:ph.time, type:'占位失效'}); });
+  RESERVATION_PLACEHOLDERS.forEach(function(ph){ if(phConverted(ph)) return; rows.push({name:ph.phone, caseNo:null, caseId:null, date:ph.date, time:ph.time, type:'预约占位'}); });
+  PLACEHOLDER_HISTORY.forEach(function(ph){ rows.push({name:ph.phone, caseNo:ph.caseNo||null, caseId:ph.caseId||null, date:ph.date, time:ph.time, type:ph.status||'占位失效'}); });
   return rows.sort(function(a,b){ return (b.date+b.time).localeCompare(a.date+a.time); });
 }
  /* 直接进工作台：今天在第一栏往后排7天；从月视图点某一周进来：完整一周（周一到周日） */
@@ -485,7 +485,7 @@ function calendarEvents(){
       (function(){ var r = krToClinic(ks.confirmedDate, ks.confirmedTime||'14:00'); evs.push({kind:'travel', date:r.date, time:r.time, name:c.name, caseId:c.id, ended:isEnded(c)}); })(); /* KR 的到院时间换算成诊所时间 */
   });
   RESUMED_VISITS.forEach(function(r){ evs.push({kind:'reservation', date:r.date, time:r.time, name:r.name, caseId:r.caseId, purpose:r.purpose, vstate:'已到访', ended:false}); });
-  RESERVATION_PLACEHOLDERS.forEach(function(ph){ evs.push({kind:'placeholder', date:ph.date, time:ph.time, name:ph.phone, phId:ph.id, purpose:ph.purpose}); });
+  RESERVATION_PLACEHOLDERS.forEach(function(ph){ if(phConverted(ph)) return; evs.push({kind:'placeholder', date:ph.date, time:ph.time, name:ph.phone, phId:ph.id, purpose:ph.purpose}); });
   return evs;
 }
 
@@ -636,6 +636,8 @@ function findPlaceholder(id){
 
 /* ---- 提交自助预约（booking.html 第 7 步）：建客户档案（新客人）/ 更新老客人资料、记同意书、建预约案件、占位转预约、通知 IN、发确认短信 ----
    f：{entry:'web'|'link'|'walkin', phId, date, time, phone, name, gender, dob, history, beauty[{ym:'2024-03', project}], purpose, note, rebookFrom(取消后重新预约的原案件 id)} */
+/* 占位已转成预约（c.fromPh）→ 占位不再显示（CMD-1013-13 一·1：提交即转成预约，不留孤儿占位） */
+function phConverted(ph){ return CASE_ITEMS.some(function(c){ return c.fromPh===ph.id; }); }
 function submitSelfBooking(f){
   if(f.entry==='walkin'){ var cs = currentSlotNow(); f.date = cs.date; f.time = cs.time; }
   else { var why = slotBlockReason(f.date, f.time, f.phId); if(why) return {ok:false, reason:why}; }
@@ -648,9 +650,13 @@ function submitSelfBooking(f){
     if(f.consentGiven) cl.consents.push(consent);
     cl.updated = '刚刚';
   }
-  if(f.phId) RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id!==f.phId; }); /* 占位转为预约来访 */
   var c = createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose);
   c.visitNote = (f.note||'').trim(); c.bookEntry = f.entry; c.remindSent = false;
+  /* 占位转预约：按占位 id，或同手机号 + 同一时段的占位一起收掉；预约历史里这行记为「已转预约」 */
+  var pk = normPhoneKey(f.phone), conv = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===f.phId || (normPhoneKey(x.phone)===pk && x.date===f.date && x.time===f.time); });
+  RESERVATION_PLACEHOLDERS = RESERVATION_PLACEHOLDERS.filter(function(x){ return conv.indexOf(x)<0; });
+  conv.forEach(function(x){ PLACEHOLDER_HISTORY.push({id:x.id, phone:x.phone, date:x.date, time:x.time, status:'已转预约', link:x.link, purpose:x.purpose, caseNo:c.caseNo, caseId:c.id}); });
+  if(f.phId){ c.fromPh = f.phId; var hv = PLACEHOLDER_HISTORY.filter(function(x){ return x.id===f.phId && x.status==='占位失效'; })[0]; if(hv){ hv.status = '已转预约'; hv.caseNo = c.caseNo; hv.caseId = c.id; } } /* 已超时的占位链接仍有效：提交后也记为已转预约 */
   c.bookClient = isNew ? 'new' : 'old'; c.consentResigned = !isNew && !!f.consentGiven; /* 记录：新客 / 老客、老客是否重签同意书（测试覆盖页用，CMD-1012-06） */
   /* 医美史（结构化）：年月 + 项目 + 来源"客人自填"；老客人新增的标"本次新增"（到店时室长在基础资料里看得到并确认；延续既往面诊的"有新增医美史"读它） */
   (f.beauty||[]).forEach(function(b){ if(b && b.ym && b.project) addBeautyRecord(cl, {year:+b.ym.slice(0,4), month:+b.ym.slice(5,7), project:b.project, source:'客人自填', caseId:c.id, newCaseId:isNew ? null : c.id}); });
@@ -1281,6 +1287,23 @@ function localPurchasedBatches(c){ /* 本案件买的本地项目/术后管理�
   return out;
 }
 
+/* 面诊（待缴费 / 待确认报告时间 / 等待报告 / 增加面诊后项目确认中）或赴韩还在进行 → 本地管理做完也不自动结案（CMD-1013-13 一·2，临时规则，只加这个保护） */
+function mainlineOngoing(c){
+  if(krNotStartedItems(c).length || (c.settlementDone && krActiveItems(c).length && !c.krProcedureDone)) return true;
+  if(!c.consultRequested || c.consultStatus==='cancelled' || c.endNote || c.krProcedureDone) return false;
+  return ['awaiting_payment','paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1 || (c.consultStatus==='report_ready' && !!c.addedConsultAfterLocal);
+}
+/* 已被误结案的案件（本地管理做完时面诊 / 赴韩还在进行，如 A000009）恢复；启动时执行，幂等 */
+function repairWronglyClosedCases(){
+  var n = 0;
+  CASE_ITEMS.forEach(function(c){
+    if(!c.visitClosed || !(c.addedConsultAfterLocal || c.localTrack || c.needsConsult===true) || !mainlineOngoing(c)) return;
+    if(!c.consultRequested && !krActiveItems(c).length) return;
+    c.visitClosed = false; c.cancelReason = null; c.krProcedureDone = c.krProcedureDone && krActiveItems(c).length>0 ? c.krProcedureDone : false;
+    updateCaseStage(c); logCaseEvent(c, '系统', '修正：本地管理做完时面诊 / 赴韩还在进行，案件不应结案，已恢复为进行中'); n++;
+  });
+  return n;
+}
 function caseWorkDone(c){ return !!c.krProcedureDone || (c.postcareUses||[]).length>0 || isLocalCtxWorkDone(c) || isLocalCtxWorkDone(c.localMgmt); }
 
 function refundSum(c){ return (c.refunds||[]).reduce(function(sum,r){ return sum+(r.amount||0); }, 0); }
@@ -2002,6 +2025,24 @@ function relatedTabHtml(c){ /* 关联只往前：只显示本案件关联的旧�
     '<div style="font-size:11px;color:var(--muted);margin-top:12px;">只读：不改变被关联案件的状态、财务、结局，也不会在它的 Timeline 里新增记录。</div></div>';
 }
 
+/* 意向项目一行 / 预算一行：基础资料和「增加面诊」共用（CMD-1013-13 二·1） */
+function intentRowHtml(c){
+  var intentionChips = (c.intentionProjects||[]).map(function(it,idx){
+    return '<span class="chip active" style="display:inline-flex;align-items:center;gap:4px;">'+it.name+'<span style="cursor:pointer;" onclick="removeIntentionProject('+idx+');event.stopPropagation();">✕</span></span>';
+  }).join('');
+
+  return !intentKrAllowed(c) ? '' : '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">意向项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;">'+intentionChips+'<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="openIntentionPickerModal()">+ 添加</button></div>'+
+      '<input type="text" id="cf-intention-note" placeholder="补充说明…" value="'+(c.intentionNote||'')+'" oninput="saveMaterialsDraft(\'intentionNote\',this.value)">'+
+      '</div></div>';
+}
+function budgetRowHtml(c){
+  return '<div class="case-field-row"><span class="fk">预算（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:8px;">'+
+      '<span style="font-size:12px;color:var(--muted);">Rp</span><input type="number" id="cf-budget-min" placeholder="最低" value="'+(c.budgetMin||'')+'" style="width:120px;" oninput="saveBudgetDraft(\'budgetMin\',this.value)">'+
+      '<span style="font-size:12px;color:var(--muted);">～</span>'+
+      '<span style="font-size:12px;color:var(--muted);">Rp</span><input type="number" id="cf-budget-max" placeholder="最高" value="'+(c.budgetMax||'')+'" style="width:120px;" oninput="saveBudgetDraft(\'budgetMax\',this.value)">'+
+      '</div></div>';
+}
 function materialsCardHtml(c){
   syncDirectorChoice(c);
   var metaviewText = c.metaviewStatus==='ready'
@@ -2020,14 +2061,7 @@ function materialsCardHtml(c){
     ((ci0 && !ci0.overdue && ci0.newHistory) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">有新增医美史，建议面诊（默认面诊并付费，室长可以改）</div>' : '')+
     ((ci0 && !ci0.overdue && !ci0.newHistory) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">距原案件报告日期（'+ci0.reportDate+'）1个月内：可面诊（默认免除面诊费）/ 不面诊 / 沿用原诊疗方案</div>' : '');
 
-  var intentionChips = (c.intentionProjects||[]).map(function(it,idx){
-    return '<span class="chip active" style="display:inline-flex;align-items:center;gap:4px;">'+it.name+'<span style="cursor:pointer;" onclick="removeIntentionProject('+idx+');event.stopPropagation();">✕</span></span>';
-  }).join('');
-
-  var intentRow = !intentKrAllowed(c) ? '' : '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">意向项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+
-      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;">'+intentionChips+'<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="openIntentionPickerModal()">+ 添加</button></div>'+
-      '<input type="text" id="cf-intention-note" placeholder="补充说明…" value="'+(c.intentionNote||'')+'" oninput="saveMaterialsDraft(\'intentionNote\',this.value)">'+
-      '</div></div>';
+  var intentRow = intentRowHtml(c);
   return '<div class="card" style="padding:22px 24px;">'+
     resumeBannerHtml(c)+
     linkRowHtml(c)+
@@ -2036,11 +2070,7 @@ function materialsCardHtml(c){
     '<div class="case-field-row"><span class="fk">上传视频 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+videoText+'</div></div>'+
     '<div class="case-field-row"><span class="fk">苦恼 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-concern" placeholder="客人本次的苦恼…" value="'+(c.concern||'')+'" oninput="saveMaterialsDraft(\'concern\',this.value)"></div>'+
     '<div class="case-field-row"><span class="fk">希望预期 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-expectation" placeholder="客人希望达到的效果…" value="'+(c.expectation||'')+'" oninput="saveMaterialsDraft(\'expectation\',this.value)"></div>'+
-    '<div class="case-field-row"><span class="fk">预算（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:8px;">'+
-      '<span style="font-size:12px;color:var(--muted);">Rp</span><input type="number" id="cf-budget-min" placeholder="最低" value="'+(c.budgetMin||'')+'" style="width:120px;" oninput="saveBudgetDraft(\'budgetMin\',this.value)">'+
-      '<span style="font-size:12px;color:var(--muted);">～</span>'+
-      '<span style="font-size:12px;color:var(--muted);">Rp</span><input type="number" id="cf-budget-max" placeholder="最高" value="'+(c.budgetMax||'')+'" style="width:120px;" oninput="saveBudgetDraft(\'budgetMax\',this.value)">'+
-      '</div></div>'+
+    budgetRowHtml(c)+
     '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return f.label; }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>'+
     caseBeautyRowHtml(c)+
     '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
@@ -2407,6 +2437,7 @@ function addConsult(){
   c.needsConsult = true;
   c.consultRequested = true;
   c.consultStatus = 'awaiting_payment';
+  c.addConsultMode = true; /* 面诊 tab 用和基础资料选面诊同一套顺序：意向项目 / 预算 → 院长 → 面诊费 → 确认（CMD-1013-13 二·1） */
   recordConsultFee(c); /* 选面诊：把当下的面诊费记进案件 */
   c.activeCaseTab = 'consult';
   var hl0 = hospitalLockInfo(c); if(hl0) c.hospitalId = hl0.hospitalId; else if(!c.hospitalId) c.hospitalId = caseHospitalId(c);
@@ -2519,7 +2550,7 @@ function consultDirectorPickHtml(c){
   return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--terracotta-bg);border-radius:10px;font-size:13px;">院长 <span style="color:var(--terracotta);">*</span> <span style="font-size:11px;color:var(--muted);">缴费前必选（点卡片选择），选定后不能更换</span>'+directorCardsHtml(c)+'</div>';
 }
 
-function consultFeeFormHtml(c){
+function consultFeeFormHtml(c, noDirPick){
   var d = feeDraft(c);
   var reasons = WAIVE_REASONS;
   var waiveBlock = d.mode==='waive'
@@ -2531,7 +2562,7 @@ function consultFeeFormHtml(c){
   var waiveRadio = d.locked
     ? '<div style="font-size:12px;color:#C1454A;padding:4px 0;">'+d.hint+'</div>'
     : '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;"><input type="radio" name="fee-mode" '+(d.mode==='waive'?'checked':'')+' onchange="setFeeMode(\'waive\')"> 免除面诊费</label>'+waiveBlock;
-  return consultDirectorPickHtml(c)+'<div style="margin-bottom:12px;">'+
+  return (noDirPick ? '' : consultDirectorPickHtml(c))+'<div style="margin-bottom:12px;">'+
     '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;"><input type="radio" name="fee-mode" '+(d.mode==='paid'?'checked':'')+' onchange="setFeeMode(\'paid\')"> 已缴费</label>'+waiveRadio+
     ((!d.locked && d.hint) ? '<div style="font-size:11px;color:var(--terracotta);margin:2px 0 4px 24px;">'+d.hint+'</div>' : '')+
     '<div style="display:flex;gap:10px;margin-top:10px;"><button class="btn-primary" onclick="confirmConsultFee()">确认</button><button class="btn-outline" onclick="cancelConsult()">面诊取消</button></div></div>';
@@ -2561,6 +2592,10 @@ function consultTabHtml(c){
   var sub = subStatusRowHtml(consultSubItems(c));
   var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(c.consultStatus==='awaiting_payment'){
+    if(c.addConsultMode){ /* 本地案件［增加面诊］：同基础资料选面诊的顺序和组件 */
+      return wrap(consultFeeCardHtml(fee, '', '', c)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先填意向项目 / 预算，选院长，再缴费或免除面诊费，最后点确认</div>'+
+        intentRowHtml(c)+budgetRowHtml(c)+directorRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true)+sub);
+    }
     return wrap(consultFeeCardHtml(fee, '', '', c)+consultFeeFormHtml(c)+sub);
   }
   if(c.consultStatus==='cancelled'){
@@ -3159,7 +3194,7 @@ function notUseThisTime(scope){
   if(ctx0 && ctx0.mgmtActive){ ctx0.addUse = false; renderCaseBody(c); return; } /* 本地管理进行中：只是不再追加使用 */
   if(scope==='lm') return lmNotUse(c);
   logCaseEvent(c, actingName(), '本次不使用任何持有项目');
-  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ finishCase(c); return; }
+  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; } finishCase(c); return; }
   c.projectEntryMode = 'new'; /* 是否选购？ */
   buildCaseLog(c);
   renderCaseBody(c);

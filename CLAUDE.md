@@ -513,3 +513,11 @@ prototype/shared/app.css  共用样式
 - **KR 客人管理**：同一客人 = IN 客人档案（来源诊所 + 档案 id，`krClientRows` / `krClientKeyFor` / `krOpenClient(key)`），名字旁显示生日；详情去掉附件卡，分「术后管理」「持有项目」两张卡。
 - **术后管理**（所有 care 子项，案件页 / 客人页共用 `krCareActHtml`）：到当天 +［客人已到］（`coreSubArrived`，`s.arrived`）才能［标记完成］（`coreSubDone` 同时拦），未到当天按钮灰，［模拟到当日］（`s.simDay`）仅原型。**持有项目**（`heldOver` 的已付管理项目）只列项目 + 剩余次数（`holdItemLeft` / `holdItemPlanned`），没有标完成；［安排使用］（`krHuOpen` / `coreHoldUseSchedule`）选日期时间（弹当天日程、非营业时间确认、撞院长日程挡住）→ 生成一条带 `holdUseOf` 的在韩持有子项（进 KR 日历和当天日程）→ 客人已到 → 标完成时持有项目 `holdUsed` +1，用完 `holdDone`。KR 案件页：项目 tab「持有项目」卡（`krHoldCard(c,'items')`）、施术 tab「术后管理（在韩持有）」（`krHoldCard(c,'care')`）。
 - **KR 项目库时长必填**：赴韩项目（非术后管理类）保存必须填施术时长，管理项目编辑必须填时长（`p.durMin`，`surgeryMinutes` 也读 `lc:` 项目）；`krBackfillDurations()`（KR 启动时执行）给旧数据 / 演示数据没填的补上（赴韩 60 分钟、管理 30 分钟）；`surgeryMinutes` 的 60 分钟兜底仅作旧数据保护。数据版本不变（42）。
+
+## CMD-1013-13 补充（2026-10-13，追加；旧文字保留作历史）
+- **占位转预约**：`submitSelfBooking` 提交后收掉占位（按占位 id，或同手机号 + 同时段），预约历史里这行记为「已转预约」（`PLACEHOLDER_HISTORY` status，带 caseNo）；案件记 `c.fromPh`；`phConverted(ph)` 让日历 / 预约历史 / 每秒扫描都不再显示已转的占位（孤儿保护）。单页复现不出残留，判断是跨分页写入的覆盖（旧分页拿着旧占位列表写回）；原来只按 id 移除，没有任何兜底。
+- **不自动结案保护**：`mainlineOngoing(c)`（赴韩项目进行中，或面诊在待缴费 / 待确认报告时间 / 等待报告 / 本地案件增加面诊后的项目确认中）为真时，本地管理做完（`markMgmtRows` main）/ 本次不使用（`notUseThisTime`）不 `finishCase`；`repairWronglyClosedCases()`（boot-in 启动执行，幂等）恢复已被误结案的这类案件（A000009 类）。其他结案逻辑不动。
+- **增加面诊**：`c.addConsultMode`，面诊 tab 待缴费时用和基础资料选面诊同一套组件（`intentRowHtml` / `budgetRowHtml` / `directorRowHtml` / `consultFeeFormHtml(c,true)`），顺序 意向项目 / 预算 → 院长 → 面诊费 → 确认；确认时意向项目至少一个。
+- **KR 在韩预约到店**：日历上的术后管理 / 持有使用块点开弹 `krVisitPop`（客人 / 项目 / 时间 +［客人已到店］，状态存 `s.arrived`，四处同步）；「今天到院」卡片（`KR_CARDS.today`）含今天来做术后管理 / 持有使用的客人，案件列表行上有［客人已到店］；撞院长日程提示写「使用约 30 分钟」（`opts.use`）。
+- **KR 通知点击进对应 tab**：`krNotifTarget(n)`（面诊相关 → 面诊；施术日期 / 改期 / 到院 / 评估 / 待付款 / 术后管理提前 → 施术；选定项目 / 付定金 → 项目；@ / 未接来电 → 对话；系统 → 医院设定），通知中心点击和 toast 的确认共用 `krOpenNotif`。
+- 一键准备结果页提示「已写入客户列表」并写明必须用同一个地址（localhost / 127.0.0.1 数据分开）。数据版本不变（42）。
