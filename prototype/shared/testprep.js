@@ -72,7 +72,7 @@
       return {cl:cl, cases:[c], where:'KR（KM1 登录）', start:'案件 '+c.caseNo+' → 施术 tab：选日期、到院时间、地址 → 确认（可试非营业时间确认弹窗）。'}; },
     stageC: function(){ var cl = mkClient('待到院'); var c = krBase(cl); var items = withReport(c, ['假体隆鼻', '鼻翼缩小']); pay(c, items);
       var date = seedSurgeryDate(HID, DIRECTOR, D(8), '11:00'); c.krSchedule = {status:'confirmed', primary:date, backup:'', confirmedDate:date, confirmedTime:'11:00', address:'（测试准备）首尔市江南区', changePrimary:'', changeBackup:'', changeSubmitted:false};
-      logCaseEvent(c, '测试准备', '测试准备：施术时间已确认 '+date+' 11:00，待客人到院（2 个赴韩项目，其中有术后管理）'); mark(c); updateCaseStage(c); try{ syncSurgeryBlock(c); }catch(e){}
+      logCaseEvent(c, '测试准备', '测试准备：施术时间已确认 '+date+' 11:00，待客人到院（2 个赴韩项目，其中有术后管理）'); mark(c); updateCaseStage(c); try{ syncSurgeryBlock(c); }catch(e){} try{ syncSurgerySub(c); }catch(e){} /* 施术一行（项目进程里的「施术」子项） */
       return {cl:cl, cases:[c], where:'KR（KM1 登录）', start:'案件 '+c.caseNo+' → 施术 tab Step 1：［客人已到医院］→ 评估（3-1 / 3-2 / 3-3）→ 付清尾款 → 术后管理预约。IN 不再分配术后管理（弹窗默认未选）。'}; }
   };
   var LABEL = {queen:'Queen（老客 + 有剩余持有项目）', zoe:'Zoe（老客 + 同意书旧版本）', yuki:'Yuki（已有进行中的案件）', sara:'Sara（老客 + 3 个可退批次）', olivia:'Olivia（上个月出过诊疗方案）', c42:'第 42 条（赴韩已结案 + 回印尼术后管理持有）', stageA:'面诊结束，待发送诊疗方案', stageB:'已付定金，待确认施术时间', stageC:'施术时间已确认，待到院'};

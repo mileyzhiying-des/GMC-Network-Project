@@ -756,6 +756,8 @@ function renderClientHoldings(name){
     var remaining = holdingRemaining(h), total = holdingTotal(h);
     var tags = (h.category==='术后管理'?' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>':'')+
       (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'');
+    var dueMax = 0; if(h.category==='术后管理') h.batches.forEach(function(b0){ if(b0.voided || b0.refund || b0.bought-b0.used<=0) return; var sg0 = pcBatchSuggest(b0); if(sg0) dueMax = Math.max(dueMax, pcDaysLate(sg0.date)); });
+    if(dueMax>0) tags += ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;font-size:10px;">已过建议日期 '+dueMax+' 天</span>';
     var open = !!HOLD_EXPAND[gi];
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
@@ -1301,7 +1303,7 @@ function inHandleCallSignal(sig){
 function simulatePeerDecline(){
   if(VIDEO_CALL.status!=='ringing') return;
   VIDEO_CALL.active = false; INVITE_KR_CONTEXT_CASE_ID = null; CHAT_VIDEO_CONTEXT_CASE_ID = null;
-  renderDashCallCard(); try{ renderSubBookCard(); }catch(e){} try{ renderDrawerList(); }catch(e){}
+  renderDashCallCard(); try{ renderSubBookCard(); }catch(e){} try{ renderPcDueCard(); }catch(e){} try{ renderDrawerList(); }catch(e){}
   clearTimeout(VIDEO_CALL.ringTimer);
   showToast('📞 对方已拒绝', callTitle()+' 的视频通话被对方拒绝了', null, {sticky:true});
   goBack();
@@ -1367,6 +1369,15 @@ function subBookTodos(){
   var out = [];
   CASE_ITEMS.forEach(function(c){ (c.subItems||[]).forEach(function(s){ if(s.informed && !s.booked && !s.done && s.place!=='KR') out.push({c:c, s:s}); }); });
   return out;
+}
+/* IN 工作台：术后管理已过建议日期还没做的提醒（CMD-1013-06 一·4） */
+function renderPcDueCard(){
+  var el = document.getElementById('dash-pcdue-card'); if(!el) return;
+  var list = postcareDueList();
+  if(!list.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = '<div style="padding:14px 18px;"><div style="font-size:14px;font-weight:700;margin-bottom:8px;color:#C1454A;">术后管理已过建议日期<span class="status-pill" style="background:#FBE3E1;color:#C1454A;margin-left:8px;">'+list.length+'</span></div>'+
+    list.map(function(x){ return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="flex:1;"><b>'+x.name+'</b> · '+x.h.itemName+'（属于 '+x.sg.src.caseNo+'，建议 '+pcMD(x.sg.date)+'）<span style="color:#C1454A;">已过 '+x.late+' 天</span></span></div>'; }).join('')+'<div style="font-size:11px;color:var(--muted);margin-top:6px;">客人来店时在本地管理 / 持有项目使用里点［做术后管理］补做，会记「延后 N 天」。</div></div>';
 }
 function renderSubBookCard(){
   var el = document.getElementById('dash-subbook-card'); if(!el) return;

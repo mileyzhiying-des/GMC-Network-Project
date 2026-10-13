@@ -1278,7 +1278,7 @@ function localPurchasedBatches(c){ /* 本案件买的本地项目/术后管理�
   return out;
 }
 
-function caseWorkDone(c){ return !!c.krProcedureDone || isLocalCtxWorkDone(c) || isLocalCtxWorkDone(c.localMgmt); }
+function caseWorkDone(c){ return !!c.krProcedureDone || (c.postcareUses||[]).length>0 || isLocalCtxWorkDone(c) || isLocalCtxWorkDone(c.localMgmt); }
 
 function refundSum(c){ return (c.refunds||[]).reduce(function(sum,r){ return sum+(r.amount||0); }, 0); }
 
@@ -3054,10 +3054,36 @@ function postCareBatchesOf(c){
    scope='main' 操作案件本身（c），scope='lm' 操作同日插做的本地管理（c.localMgmt）；两者字段同名（mgmtUses/mgmtActive/mgmtDone/mgmtStatus） ---- */
 function ctxOf(c, scope){ return scope==='lm' ? c.localMgmt : c; }
 
+/* 术后管理批次的建议日期 = 原手术施术日期 + 术后第 N 天（CMD-1013-06 一）；没有施术日期 / 进行时间的旧批次返回 null */
+function pcBatchSuggest(b){
+  var src = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0], m = String(b.schedule||'').match(/(\d+)/); if(!src || !m) return null;
+  var base = (src.krSchedule && src.krSchedule.confirmedDate) || b.date; if(!base) return null;
+  var dt = new Date(String(base).slice(0,10)+'T00:00:00'); dt.setDate(dt.getDate()+parseInt(m[1],10));
+  var ds = dt.getFullYear()+'-'+pad2(dt.getMonth()+1)+'-'+pad2(dt.getDate());
+  return {src:src, day:parseInt(m[1],10), date:ds, items:krAllItems(src).filter(function(it){ return !it.cancelled && !it.swapped; }).map(function(it){ return it.name; }).join('、')};
+}
+function pcDaysLate(ds){ var a = String(ds).slice(0,10).split('-'), b0 = todayStr().split('-'); return Math.round((Date.UTC(+b0[0], +b0[1]-1, +b0[2]) - Date.UTC(+a[0], +a[1]-1, +a[2]))/86400000); } /* >0 = 过了建议日期 N 天 */
+function pcMD(ds){ return String(ds).slice(5,7)+'/'+String(ds).slice(8,10); }
+/* 已过建议日期还没做的术后管理批次（客户详情 / 本地管理列表标红，IN 工作台提醒） */
+function postcareDueList(){
+  var out = [];
+  Object.keys(CLIENT_HOLDINGS).forEach(function(name){ (CLIENT_HOLDINGS[name]||[]).forEach(function(h){ if(h.category!=='术后管理') return;
+    h.batches.forEach(function(b, bi){ if(b.voided || b.refund || b.bought-b.used<=0) return; var sg = pcBatchSuggest(b); if(!sg) return; var late = pcDaysLate(sg.date); if(late>0) out.push({name:name, h:h, b:b, bi:bi, sg:sg, late:late}); }); }); });
+  return out;
+}
 function holdingsUseHtml(c, scope){
   var holdings = clientHoldingsSorted(c.name);
   var rows = holdings.map(function(h,i){
     var remaining = holdingRemaining(h);
+    if(h.category==='术后管理'){ /* 术后管理照列但不可勾选：每批一行 +［做术后管理］走关联原案件的路径（CMD-1013-06 一） */
+      return h.batches.map(function(b, bi){
+        if(b.voided || b.refund || b.bought-b.used<=0) return '';
+        var sg = pcBatchSuggest(b), late = sg ? pcDaysLate(sg.date) : 0;
+        var info = sg ? '属于 '+sg.src.caseNo+(sg.items ? ' '+sg.items : '')+' · 建议术后第 '+sg.day+' 天（'+pcMD(sg.date)+'）'+(late>0 ? ' <b style="color:#C1454A;">已过建议日期 '+late+' 天</b>' : '') : '属于 '+caseNoLabel(b.caseId);
+        return '<div class="case-field-row" style="align-items:center;"><span style="flex-grow:1;font-size:13px;">'+h.itemName+' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span> <span style="font-size:12px;color:var(--slate2);">剩余 '+(b.bought-b.used)+' 次</span><div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+info+'</div></span>'+
+          '<button class="btn-outline" style="white-space:nowrap;" onclick="openPostcareUse(\''+scope+'\','+i+','+bi+')">做术后管理</button></div>';
+      }).join('');
+    }
     var tags = (h.category==='术后管理'?' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>':'')+
       (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'');
     var pr = PROJECT_LIBRARY.filter(function(p0){ return p0.origin==='IN' && p0.name===h.itemName; })[0];
@@ -3077,6 +3103,45 @@ function holdingsUseHtml(c, scope){
     '</div></div>';
 }
 
+/* ［做术后管理］：挂在原手术案件下（本案件自动关联原案件、KR 可见），不混进本案件的本地管理；客人在店里当场完成。
+   提前做：原因必填，原案件 Timeline 记「比建议日期提前 N 天，原因 xx」，KR 室长收到通知（只通知不批准）；过了没做补做：记「比建议日期延后 N 天」 */
+var PC_USE = null;
+function openPostcareUse(scope, hi, bi){
+  var c = getCurrentCase(); if(!c) return;
+  var h = clientHoldingsSorted(c.name)[hi], b = h && h.batches[bi]; if(!b || b.voided || b.bought-b.used<=0) return;
+  var sg = pcBatchSuggest(b), delta = sg ? -pcDaysLate(sg.date) : 0; /* delta>0 = 提前 N 天 */
+  PC_USE = {scope:scope, hi:hi, bi:bi, early:delta>0};
+  var ov = document.getElementById('pc-use-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'pc-use-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b style="font-size:15px;">做术后管理</b><span style="cursor:pointer;" onclick="closePostcareUse()">✕</span></div>'+
+    '<div style="font-size:13px;line-height:1.8;"><b>'+h.itemName+'</b>（剩余 '+(b.bought-b.used)+' 次，这次用 1 次）<br>'+(sg ? '属于 '+sg.src.caseNo+(sg.items ? ' '+sg.items : '')+'；建议术后第 '+sg.day+' 天（'+sg.date+'）<br>'+(delta>0 ? '<span style="color:#C26A1B;">今天比建议日期提前 '+delta+' 天，请写原因（KR 室长会收到通知）</span>' : (delta<0 ? '<span style="color:#C1454A;">已过建议日期 '+(-delta)+' 天，补做会记「延后 '+(-delta)+' 天」</span>' : '今天正是建议日期')) : '这一批没有建议日期记录')+'</div>'+
+    (delta>0 ? '<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">提前原因 <span style="color:#C1454A;">*</span></div><textarea id="pc-use-reason" rows="3" placeholder="必填" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>' : '')+
+    '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-primary" style="flex:1;" onclick="confirmPostcareUse()">确认完成</button><button class="btn-outline" onclick="closePostcareUse()">取消</button></div></div>';
+  ov.classList.add('open');
+}
+function closePostcareUse(){ var ov = document.getElementById('pc-use-overlay'); if(ov) ov.classList.remove('open'); }
+function confirmPostcareUse(){
+  var c = getCurrentCase(), ctx = PC_USE; if(!c || !ctx) return;
+  var h = clientHoldingsSorted(c.name)[ctx.hi], b = h && h.batches[ctx.bi]; if(!b || b.voided || b.bought-b.used<=0) return;
+  var sg = pcBatchSuggest(b), delta = sg ? -pcDaysLate(sg.date) : 0, reasonEl = document.getElementById('pc-use-reason'), reason = reasonEl ? reasonEl.value.trim() : '';
+  if(delta>0 && !reason){ alert('提前做术后管理必须写原因'); return; }
+  var today = todayStr(), by = actingName();
+  b.used += 1; b.usages.push({caseId:c.id, date:today, qty:1, tag:ctx.scope, postcare:true, suggested:sg ? sg.date : undefined, deltaDays:sg ? delta : undefined, reason:reason||undefined, by:by});
+  c.postcareUses = c.postcareUses || [];
+  c.postcareUses.push({itemName:h.itemName, date:today, srcCaseId:b.caseId, suggested:sg ? sg.date : '', deltaDays:sg ? delta : 0, reason:reason, by:by, byId:currentAccountId()});
+  if(!c.linkedCase && b.caseId!==c.id){ c.visibleToKR = true; c.linkedCase = {caseId:b.caseId, reason:'术后管理', auto:true}; logCaseEvent(c, '系统', '使用了 '+caseNoLabel(b.caseId)+' 的术后管理项目，自动关联该案件'); renderCaseSubtitle(c); }
+  var when = sg ? (delta>0 ? '比建议日期提前 '+delta+' 天，原因：'+reason : (delta<0 ? '补做，比建议日期延后 '+(-delta)+' 天' : '按建议日期完成')) : '无建议日期记录';
+  var line = '术后管理：'+h.itemName+' 1 次（建议 '+(sg ? sg.date : '—')+'，实际 '+today+'，操作人 '+by+'（'+currentAccountId()+'）；'+when+'；办理案件 '+(c.caseNo||'')+'）';
+  logCaseEvent(c, by, line);
+  var src = sg ? sg.src : CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0];
+  if(src && src.id!==c.id){
+    logCaseEvent(src, by, line); /* 原手术案件 Timeline：KR 看得到（建议日期 / 实际日期 / 操作人 / 原因） */
+    if(delta>0){ try{ pushKrNotif(caseKrHospital(src), '术后管理提前：'+src.name+'（'+(src.caseNo||'')+'）的 '+h.itemName+' 比建议日期提前 '+delta+' 天做了，原因：'+reason, {to:'coord', caseId:src.id, clinicId:src.clinicId||CURRENT_CLINIC_ID, level:'info'}); }catch(e){} }
+  }
+  PC_USE = null; closePostcareUse();
+  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  if(typeof renderPcDueCard==='function') renderPcDueCard();
+}
 function holdingsUseTabHtml(c){ return holdingsUseHtml(c,'main'); }
 
 /* 本次不使用：已经发生过购买 → 结案；还没购买 → 问"是否选购"（进入新增项目）。本地管理里的走法见 lmNotUse */
@@ -3086,7 +3151,7 @@ function notUseThisTime(scope){
   if(ctx0 && ctx0.mgmtActive){ ctx0.addUse = false; renderCaseBody(c); return; } /* 本地管理进行中：只是不再追加使用 */
   if(scope==='lm') return lmNotUse(c);
   logCaseEvent(c, actingName(), '本次不使用任何持有项目');
-  if(caseHasPurchase(c)){ finishCase(c); return; }
+  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ finishCase(c); return; }
   c.projectEntryMode = 'new'; /* 是否选购？ */
   buildCaseLog(c);
   renderCaseBody(c);
@@ -3157,22 +3222,33 @@ function afterLmFinished(c){
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 
+/* ［+ 添加本地管理］后的「本次不使用 / 本次不购买」= 返回：这次添加没有任何购买 / 使用 → 本地管理 tab 消失、案件回到原样、不留记录（CMD-1013-06 二·1） */
+function lmNothingYet(lm){ return !(lm.batches||[]).length && !(lm.mgmtUses||[]).length; }
+function lmBackOut(c){
+  var i = -1; (c.logEntries||[]).forEach(function(e, k){ if(/^添加本地管理（同日插做本地项目/.test(e.action||'')) i = k; });
+  if(i>-1) c.logEntries.splice(i, 1); /* 不留记录 */
+  c.localMgmt = null; c.activeCaseTab = showKrTab(c) ? 'kr' : (c.consultRequested ? 'consult' : 'basic');
+  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+}
 function lmNotUse(c){
   var lm = c.localMgmt; if(!lm) return;
+  if(lmNothingYet(lm) && !lm.mgmtActive){ lmBackOut(c); return; }
   logCaseEvent(c, actingName(), '本地管理：本次不使用任何持有项目');
   if(lm.batches.length){ afterLmFinished(c); return; } /* 已经购买过 → 本地管理结束 */
   lm.step = 'buy'; /* 还没购买 → 是否选购 */
   buildCaseLog(c); renderCaseBody(c);
 }
 
+function lmContinue(what){ var c = getCurrentCase(); if(!c || !c.localMgmt) return; var lm = c.localMgmt; lm.ended = false; lm.active = true; lm.mgmtActive = false; lm.step = what==='use' ? 'use' : 'buy'; logCaseEvent(c, actingName(), '本地管理：继续'+(what==='use' ? '使用持有项目' : '选购')); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }
 function lmSetStep(step){ var c=getCurrentCase(); if(!c||!c.localMgmt) return; c.localMgmt.step = step; renderCaseBody(c); }
 
 function localMgmtTabHtml(c){
   var lm = c.localMgmt;
-  if(lm.ended){
+  if(lm.ended){ /* 到结案前都可继续加：项目都完成后仍显示已完成列表 + 继续选购 / 使用持有的入口（CMD-1013-06 二·2）；结案后只读 */
     var uses = (lm.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
     var buys = (lm.batches||[]).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.items.map(function(i){ return i.name+' ×'+i.qty; }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
-    return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">本地管理（已结束）</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">本次本地管理没有购买也没有使用</div>')+'</div>';
+    var open = !isEnded(c) && !c.visitClosed, more = open ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="lmContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="lmContinue(\'use\')">继续使用持有项目</button></div>' : '';
+    return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">'+(open ? '本地管理（已完成的项目）' : '本地管理（本次购买与使用记录）')+'</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">本次本地管理没有购买也没有使用</div>')+more+'</div>';
   }
   if(lm.mgmtActive) return mgmtActiveHtml(c, 'lm')+(lm.addUse ? '<div style="margin-top:12px;">'+holdingsUseHtml(c,'lm')+'</div>' : '')+(lm.addBuy ? '<div style="margin-top:12px;">'+lmBuyHtml(c)+'</div>' : '');
   if(lm.step==='use' || lm.step==='afterBuyUse') return holdingsUseHtml(c, 'lm');
@@ -3191,6 +3267,7 @@ function lmBuyHtml(c){ return localPurchaseHtml(c, 'lm', false); }
 function lmNoBuy(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
   if(c.localMgmt.mgmtActive){ c.localMgmt.addBuy = false; renderCaseBody(c); return; } /* 本地管理进行中：只收起选购 */
+  if(lmNothingYet(c.localMgmt)){ lmBackOut(c); return; } /* 什么都没买 / 没用：返回 */
   logCaseEvent(c, actingName(), '本地管理：本次不购买项目');
   afterLmFinished(c);
 }
@@ -3763,8 +3840,8 @@ function setKrSubTab(v){ var c = getCurrentCase(); if(!c) return; c.krSubTab = v
 /* 项目进程 / 在韩 timeline 的统一排版（CMD-1008-12 D5；KR-CASE-02 2026-10-08 修订）：按日期一行一件，每行 日期 / 类型 / 内容 / 状态 / 地点；
    子项类型只有三种：施术（案件自动产生，不能手动新增）/ 术后管理记录（免费，日期 + memo；复诊、拆线、消肿都属此类）/ 增加项目（到院后加做，需结账） */
 function subKindLabel(k){ return k==='施术' ? '施术' : (k==='增加项目' ? '增加项目' : '术后管理记录'); } /* 旧类型（复诊 / 管理 / 其他）一律算术后管理记录 */
-var SUB_GRID_COLS = '104px 92px 1fr 170px 92px auto';
-function subGridHeadHtml(){ return '<div style="display:grid;grid-template-columns:'+SUB_GRID_COLS+';gap:10px;font-size:11px;color:var(--muted);font-weight:700;padding:4px 0 6px;border-bottom:1px solid var(--border);"><span>日期</span><span>类型</span><span>内容</span><span>状态</span><span>地点</span><span></span></div>'; }
+var SUB_GRID_COLS = '104px 92px 1fr 150px 70px auto 84px'; /* 日期 / 类型 / 内容 / 状态（只放标签）/ 地点 / 操作 / 最右侧单独一栏［标记完成］（CMD-1013-06 三·3） */
+function subGridHeadHtml(){ return '<div style="display:grid;grid-template-columns:'+SUB_GRID_COLS+';gap:10px;font-size:11px;color:var(--muted);font-weight:700;padding:4px 0 6px;border-bottom:1px solid var(--border);"><span>日期</span><span>类型</span><span>内容</span><span>状态</span><span>地点</span><span></span><span></span></div>'; }
 /* cells：可选 {date, content, place, ops} 自定义（KR 可编辑时传入），否则只读 */
 function subItemRowHtml(s, cells){
   cells = cells || {};
@@ -3774,7 +3851,7 @@ function subItemRowHtml(s, cells){
   return '<div title="编号 '+s.no+'" style="display:grid;grid-template-columns:'+SUB_GRID_COLS+';gap:10px;align-items:center;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border2);">'+
     '<span>'+(cells.date || s.date)+'</span><span class="status-pill" style="background:'+kc[0]+';color:'+kc[1]+';justify-self:start;">'+subKindLabel(s.kind)+'</span>'+
     '<span>'+(cells.content || s.content)+'</span><span>'+st+'</span>'+
-    '<span>'+(cells.place || '<span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+SUB_PLACE_LABEL[s.place]+'</span>')+'</span><span>'+(cells.ops || '')+'</span></div>'+
+    '<span>'+(cells.place || '<span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+SUB_PLACE_LABEL[s.place]+'</span>')+'</span><span>'+(cells.ops || '')+'</span><span style="text-align:right;">'+(cells.done || '')+'</span></div>'+
     (s.kind==='施术' && s.note ? '<div style="font-size:12px;color:var(--slate2);margin:-2px 0 6px 104px;">施术备注：'+String(s.note).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '');
 }
 function krTimelineTabHtml(c){
@@ -3833,16 +3910,18 @@ function coreJudgeRevert(c, by){
   return true;
 }
 /* 不建议手术 → 取消项目 → 更换项目：原项目全部「已更换」，KR 项目库选新项目（不另算差价，尾款 = 最终项目合计 − 已付定金），判断改记「需要调整方案」后走结算 */
-function coreCannotReplace(c, names, byName, by){
-  var j = c.krJudge; if(!j || j.result!=='cannot' || j.replaced || j.settled || c.krBalancePaid || c.visitClosed || !names.length) return false;
+function coreCannotReplace(c, names, byName, by, locals){
+  locals = locals || [];
+  var j = c.krJudge; if(!j || j.result!=='cannot' || j.replaced || j.settled || c.krBalancePaid || c.visitClosed || (!names.length && !locals.length)) return false;
   var pend = krNotStartedItems(c); if(!pend.length) return false;
   var origNames = pend.map(function(it){ return it.name; });
-  pend.forEach(function(it){ it.swapped = true; it.replacedBy = names.join('、'); });
+  var allNames = names.concat(locals.map(function(x){ return x.name+' · '+x.specLabel; })); pend.forEach(function(it){ it.swapped = true; it.replacedBy = allNames.join('、'); });
   var ok = true;
   names.forEach(function(n){ var o = (byName||{})[n] || {}; if(ok && !coreAddOnItem(c, n, by, {anesthesia:o.anesthesia, signed:o.signed, detail:o.detail})) ok = false; });
+  locals.forEach(function(x){ if(ok && !coreAddOnItem(c, x.name, by, {local:x})) ok = false; }); /* 管理项目（KR 本地管理项目库，韩元，收费） */
   if(!ok){ pend.forEach(function(it){ delete it.swapped; delete it.replacedBy; }); return false; }
   j.replaced = true; delete j.refundKind; /* 院长评估仍保留「不建议手术 + memo」，不改记为需要调整方案（CMD-1013-04 四·1） */
-  logCaseEvent(c, by, '取消项目 → 更换为 '+names.join('、')+'（原项目 '+origNames.join('、')+'；评估仍是「不建议手术」；不另算差价，尾款按最终项目合计 − 已付定金）');
+  logCaseEvent(c, by, '取消项目 → 更换为 '+allNames.join('、')+'（原项目 '+origNames.join('、')+'；评估仍是「不建议手术」；不另算差价，尾款按最终项目合计 − 已付定金）');
   syncSurgerySub(c); updateCaseStage(c);
   return true;
 }
