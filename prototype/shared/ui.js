@@ -888,6 +888,15 @@ function toggleProjHistory(i){
   el.style.display = el.style.display==='none' ? 'block' : 'none';
 }
 
+/* 术后管理 / 复诊预约到店的案件：写时间 + 内容 + 来源，例「10/24 14:00 到店 · ONDA 提升 第 1 次（来自 A000038 腹部吸脂）」（CMD-1013-02 十）；来源 = 预约时的赴韩案件子项 */
+function subVisitText(c){
+  if(!c.linkedCase || !c.linkedCase.auto || !c.visitDate) return '';
+  var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0]; if(!src) return '';
+  var sub = (src.subItems||[]).filter(function(s){ return s.booked===c.caseNo; })[0]; if(!sub) return '';
+  var m = String(c.visitDate).match(/^\d{4}-(\d\d)-(\d\d)/), md = m ? m[1]+'/'+m[2] : c.visitDate;
+  var main = krAllItems(src).filter(function(it){ return !it.cancelled; }).map(function(it){ return it.name; }).join('、');
+  return md+' '+(c.visitTime||'')+' 到店 · '+sub.content+'（来自 '+src.caseNo+(main ? ' '+main : '')+'）';
+}
 function renderClientCases(name){
   /* "正在进行案件"只放没结束的：已结案、已取消（不管是预约阶段取消还是全退/部分退那两个终态）都不算"进行中" */
   var mine = CASE_ITEMS.filter(function(c){ return c.name===name && !isEnded(c); });
@@ -898,7 +907,7 @@ function renderClientCases(name){
     var b = caseStageBadge(c);
     return '<div class="trow" style="grid-template-columns:1fr 1fr auto;">'+
       '<span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';width:fit-content;">'+b[2]+'</span>'+
-      '<span style="font-size:12px;color:var(--slate2);">'+caseStatusSub(c)+'</span>'+
+      '<span style="font-size:12px;color:var(--slate2);">'+(subVisitText(c) || caseStatusSub(c))+'</span>'+
       '<a href="#" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-size:12px;font-weight:700;">进入案件 →</a></div>';
   }).join('');
 }
@@ -1509,8 +1518,11 @@ function openCaseChatNewTab(id){
 /* 意向项目选择弹窗（2026-09-29 新增）：赴韩/本地项目都能多选，选中即时存进 c.intentionProjects（快照 name+origin） */
 var INTENTION_PICKER_FILTER = 'KR';
 
+/* 意向项目只列赴韩手术项目（CMD-1013-02 一）：没有本地项目，也没有消肿管理 / 拆线 / 术后复诊检查 / 伤口护理这几类术后管理（韩国术后管理分类、同名项目都不列） */
+var INTENT_EXCLUDE_NAMES = ['术后消肿管理', '消肿管理', '术后管理', '拆线', '术后复诊检查', '术后复诊', '伤口护理'];
+function intentSurgeryProjects(c){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && (!c.hospitalId || p.hospitalId===c.hospitalId) && !isKrPostcareCat(p.categoryId) && INTENT_EXCLUDE_NAMES.indexOf(p.name)<0; }); }
 function openIntentionPickerModal(){
-  var c0 = getCurrentCase(); INTENTION_PICKER_FILTER = (c0 && intentKrAllowed(c0)) ? 'KR' : 'IN';
+  var c0 = getCurrentCase(); INTENTION_PICKER_FILTER = 'KR';
   renderIntentionPickerModal();
   document.getElementById('intention-project-overlay').classList.add('open');
 }
@@ -1519,11 +1531,8 @@ function closeIntentionPickerModal(){ document.getElementById('intention-project
 
 function renderIntentionPickerModal(){
   var c = getCurrentCase(); if(!c) return;
-  document.getElementById('intention-picker-tabs').innerHTML =
-    (intentKrAllowed(c) ? '<span class="chip'+(INTENTION_PICKER_FILTER==='KR'?' active':'')+'" onclick="setIntentionPickerFilter(\'KR\')">赴韩项目</span>' : '<span style="font-size:11px;color:var(--muted);">没选「面诊」：只能选本地项目</span>')+
-    '<span class="chip'+(INTENTION_PICKER_FILTER==='IN'?' active':'')+'" onclick="setIntentionPickerFilter(\'IN\')">本地项目</span>';
-  if(INTENTION_PICKER_FILTER==='KR' && !intentKrAllowed(c)) INTENTION_PICKER_FILTER = 'IN';
-  var catalog = PROJECT_LIBRARY.filter(function(p){ return p.origin===INTENTION_PICKER_FILTER && p.active && (p.origin!=='KR' || !c.hospitalId || p.hospitalId===c.hospitalId); }); /* 赴韩项目：已选医院就只列该医院的 */
+  document.getElementById('intention-picker-tabs').innerHTML = '<span style="font-size:11px;color:var(--muted);">只列赴韩手术项目</span>';
+  var catalog = intentSurgeryProjects(c);
   document.getElementById('intention-picker-list').innerHTML = catalog.map(function(p){
     var checked = (c.intentionProjects||[]).some(function(it){ return it.projectId===p.id; });
     return '<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
@@ -1539,7 +1548,7 @@ function toggleIntentionProject(projectId){
   if(idx>-1) c.intentionProjects.splice(idx,1);
   else {
     var p = projById(projectId); if(!p) return;
-    if(p.origin==='KR' && !intentKrAllowed(c)){ alert('没选「面诊」时意向项目只能选本地项目'); return; }
+    if(p.origin!=='KR' || INTENT_EXCLUDE_NAMES.indexOf(p.name)>-1) return;
     c.intentionProjects.push({projectId:p.id, name:p.name, origin:p.origin});
   }
   renderIntentionPickerModal();
@@ -2013,6 +2022,7 @@ function submitKrScheduleDate(){
   if(!ks.primary){ alert('至少选择首选日期'); return; }
   ks.status = 'pending'; ks.rejectNote = '';
   logCaseEvent(c, ME_NAME, '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'），等待Kr室长确认');
+  try{ if(c.settlementDone) pushKrNotif(caseKrHospital(c), '施术日期待确认：'+c.name+'（'+(c.caseNo||'')+'）已递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){} /* 通知 KR 室长（CMD-1013-02 九） */
   updateCaseStage(c);
   buildCaseLog(c);
   renderCaseStatusBar(c);
@@ -2024,6 +2034,7 @@ function submitKrScheduleChangeDate(){
   if(!c.krSchedule.changePrimary){ alert('至少选择新的首选日期'); return; }
   c.krSchedule.changeSubmitted = true;
   logCaseEvent(c, ME_NAME, '提交新施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'），等待Kr室长确认');
+  try{ pushKrNotif(caseKrHospital(c), '改期待确认：'+c.name+'（'+(c.caseNo||'')+'）提交了新的施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){}
   buildCaseLog(c);
   renderCaseBody(c);
 }

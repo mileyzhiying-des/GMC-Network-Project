@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 40; /* 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 41; /* 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -238,11 +238,11 @@ function hospitalSlotClosed(hid, ds, hm){ if(hospitalClosedOn(hid, ds)) return t
 function offApplies(o, ds){ return o.weekly ? (o.dow === new Date(ds+'T00:00:00').getDay()) : o.date===ds; }
 /* KR 排施术时间的检查：整天休诊 / 休诊时段 / 院长 OFF 不能排；返回错误文字，'' = 可以（KR 端确认、调整、重新预约施术时间前调用） */
 function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, opts){
-  var s = timeToMin(time), e = s + (durMin||60), lu = hospitalLunch(hid), hrs = hospitalHours(hid);
-  if(s < timeToMin(hrs.open) || e > timeToMin(hrs.close)) return '施术时间要在医院营业时间内（韩国 '+hrs.open+'–'+hrs.close+'）';
-  if(lu && s >= timeToMin(lu.from) && s < timeToMin(lu.to)) return '不能开始于午休时段（韩国 '+lu.from+'–'+lu.to+'）；可以跨过午休';
+  var s = timeToMin(time), e = s + (durMin||60), lu = hospitalLunch(hid), hrs = hospitalHours(hid), soft = !!(opts && opts.allowOffHours); /* soft：午休 / 营业时间外不拦，由界面弹窗确认（CMD-1013-02 二） */
+  if(!soft && (s < timeToMin(hrs.open) || e > timeToMin(hrs.close))) return '施术时间要在医院营业时间内（韩国 '+hrs.open+'–'+hrs.close+'）';
+  if(!soft && lu && s >= timeToMin(lu.from) && s < timeToMin(lu.to)) return '不能开始于午休时段（韩国 '+lu.from+'–'+lu.to+'）；可以跨过午休';
   if(hospitalClosedOn(hid, date)) return date+' 是医院定期休诊日，不能排施术';
-  var cf = hospitalClosedFrom(hid, date); if(cf && e > timeToMin(cf)) return '这个时间落在医院休诊时段（周'+['日','一','二','三','四','五','六'][new Date(date+'T00:00:00').getDay()]+' '+cf+' 起休诊）';
+  var cf = soft ? '' : hospitalClosedFrom(hid, date); if(cf && e > timeToMin(cf)) return '这个时间落在医院休诊时段（周'+['日','一','二','三','四','五','六'][new Date(date+'T00:00:00').getDay()]+' '+cf+' 起休诊）';
   var h = HOSPITAL_DATA[hid] || {offs:[]}, bad = (h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); }).filter(function(o){ var hh = (o.part && o.part!=='全天') ? krHalfRange(hid, o.part) : ['00:00','24:00'], a = hh[0]==='00:00' ? 0 : timeToMin(hh[0]), b = hh[1]==='24:00' ? 24*60 : timeToMin(hh[1]); return s < b && e > a; /* 半天 OFF：上午 = 营业开始→午休开始 / 下午 = 午休结束→营业结束（韩国时间，见 krHalfRange） */ })[0];
   if(bad) return director+' 在这个时间 OFF（'+(bad.part||'全天')+(bad.weekly ? '，每周固定' : '')+'），不能排施术';
   /* 同一位院长同一时间只能有一件事（KR-SCHD-01，2026-10-08）：不能和该院长的「不可预约」或别的施术重叠；不同院长之间可以重叠 */
@@ -5586,7 +5586,7 @@ function seedDoctorProfiles(){
 seedDoctorProfiles();
 /* 赴韩项目默认资料（KR-SRVC-01）：所需术后管理 / 麻醉 / 推荐在韩时间 / 施术时长；KR 写诊疗方案、更换、补加、加做时自动带入 */
 function seedProjectDefaults(){
-  var swell = {mgmt:'消肿管理', kr:'术后消肿管理', times:3, interval:2, start:3, place:'either', day:'第3、5、7天'}, thread = {mgmt:'拆线', kr:'拆线', times:1, place:'KR', start:7, day:'第7天'}, check = {mgmt:'术后复诊', kr:'术后复诊检查', times:1, place:'KR', start:2, day:'第2天'};
+  var swell = {mgmt:'术后管理', kr:'术后消肿管理', times:3, interval:2, start:3, place:'either', day:'第3、5、7天'}, thread = {mgmt:'拆线', kr:'拆线', times:1, place:'KR', start:7, day:'第7天'}, check = {mgmt:'术后复诊', kr:'术后复诊检查', times:1, place:'KR', start:2, day:'第2天'};
   var D0 = {
     '切开双眼皮':{stay:'5天', durMin:90, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, thread, swell]},
     '埋线双眼皮':{stay:'3天', durMin:45, anes:'local', anesNote:'', postcare:[thread]},
@@ -5604,6 +5604,9 @@ function seedProjectDefaults(){
 seedProjectDefaults();
 /* 演示案件的赴韩项目补上推荐在韩天数 / 麻醉 / 所需术后管理（从医院项目库默认资料带入；推荐项目整理才有内容，CMD-1012-14） */
 function gmcFillKrMeta(cases){
+  (cases || []).forEach(function(c){ /* 意向项目只留赴韩手术项目（CMD-1013-02 一）：演示数据里引用到的本地项目 / 术后管理类顺手去掉 */
+    if((c.intentionProjects||[]).length) c.intentionProjects = c.intentionProjects.filter(function(it){ return it.origin==='KR' && ['术后消肿管理','消肿管理','术后管理','拆线','术后复诊检查','术后复诊','伤口护理'].indexOf(it.name)<0; });
+  });
   var ANES = {local:'局部麻醉', sleep:'睡眠麻醉', general:'全身麻醉'};
   (cases || []).forEach(function(c){
     var h = HOSPITAL_DATA[c.hospitalId || 'H1']; if(!h) return;

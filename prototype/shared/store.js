@@ -284,7 +284,13 @@ var Store = (function(){
     }},
     {to:38, fn:function(c, ctx){ /* 「使用时选」选项按规格分组：案件里没有存选项，无需改动 */ }},
     {to:39, fn:function(c, ctx){ /* 演示案件补推荐在韩 / 麻醉 / 术后管理：用户案件的项目本来就带资料，无需改动 */ }},
-    {to:40, fn:function(c, ctx){ /* 同上（补全剩余演示项目的默认资料），无需改动 */ }}
+    {to:40, fn:function(c, ctx){ /* 同上（补全剩余演示项目的默认资料），无需改动 */ }},
+    {to:41, fn:function(c, ctx){ /* 「消肿管理」改名「术后管理」；意向项目只留赴韩手术项目 */
+      var fixPc = function(arr){ (arr||[]).forEach(function(x){ if(x && x.mgmt==='消肿管理') x.mgmt = '术后管理'; }); };
+      (c.procedureItems||[]).forEach(function(it){ fixPc(it.postcare); });
+      ((c.krScope||{}).items||[]).forEach(function(it){ fixPc(it.postcare); });
+      if((c.intentionProjects||[]).length){ var n0 = c.intentionProjects.length; c.intentionProjects = c.intentionProjects.filter(function(it){ return it.origin==='KR' && ['术后消肿管理','消肿管理','术后管理','拆线','术后复诊检查','术后复诊','伤口护理'].indexOf(it.name)<0; }); if(c.intentionProjects.length!==n0) ctx.note('意向项目只留赴韩手术项目，已去掉 '+(n0-c.intentionProjects.length)+' 个本地 / 术后管理项目'); }
+    }}
   ];
   function migrateHoldings(hs, fromVer, libIn){
     if(fromVer >= 37) return;

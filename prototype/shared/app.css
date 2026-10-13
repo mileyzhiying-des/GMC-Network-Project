@@ -318,3 +318,8 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 
 /* 案件页只读（同一账号在另一个分页继续，CMD-1012-01） */
 .case-ro{opacity:.5;filter:grayscale(.6);}
+
+/* 面诊录入独立小窗口（CMD-1013-02 四）：只显示录入弹窗 */
+body.kr-recwin > *:not(#kr-rec-overlay){display:none !important;}
+body.kr-recwin #kr-rec-overlay{position:static;background:none;display:flex;align-items:flex-start;justify-content:center;padding:12px;min-height:100vh;}
+body.kr-recwin #kr-rec-overlay .modal-box{width:100% !important;max-width:none;box-shadow:none;}
