@@ -188,10 +188,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
 
       <div id="case-body" style="display:none;flex-direction:column;gap:20px;"></div>
 
-      <div>
-        <div class="info-heading" style="margin-bottom:10px;">Timeline</div>
-        <div class="card" style="padding:6px 20px;" id="case-log"></div>
-      </div>
+      <div style="display:none;"><div id="case-log"></div></div> <!-- Timeline 改成案件页独立 tab（CMD-1013-08）；保留 #case-log 兼容旧代码 -->
 
     </div>
   </div>

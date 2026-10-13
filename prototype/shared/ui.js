@@ -1039,7 +1039,7 @@ function renderCaseRows(){
   }
   document.getElementById('case-rows').innerHTML = items.map(function(c){
     var si = caseStageInfo(c);
-    var lmTag = localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '';
+    var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '')+(krHoldOpen(c) ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:10px;">在韩后续进行中</span>' : '');
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
     /* 2026-10-08：待访问行内按钮已废弃；CMD-1008-13：当前状态拆成「阶段（彩色标签）+ 进程（文字）」，去掉「状态」栏和最右边「查看 →」，整行可点击（hover 浅粉色） */
     return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:1.1fr 0.8fr 0.9fr 1.4fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr;cursor:pointer;"><span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
@@ -1273,7 +1273,8 @@ function confirmChatVideoParticipants(){
 }
 
 function buildCaseLog(c){
-  document.getElementById('case-log').innerHTML = (c.logEntries||[]).map(logLine).join('');
+  var el = document.getElementById('case-log'); if(el) el.innerHTML = (c.logEntries||[]).map(logLine).join('');
+  if(c.id===CURRENT_CASE_ID && c.activeCaseTab==='timeline' && c.materialsConfirmed && typeof renderCaseBody==='function') renderCaseBody(c); /* Timeline 是独立 tab：打开着时同步刷新 */
 }
 
 function openInviteKrModal(){
@@ -1543,10 +1544,10 @@ function renderCaseBody(c){
       '<div class="info-heading" style="margin-bottom:10px;">'+(c.noShow ? '未到店（已取消）' : '预约已取消')+'</div>'+
       '<div style="font-size:13px;color:var(--slate2);line-height:1.8;">性别：'+caseBasic(c).gender+'　出生日期：'+caseBasic(c).dob+'<br>联系方式：'+caseBasic(c).contact+'　病史过敏史：'+caseBasic(c).history+'</div>'+
       '<div style="font-size:11px;color:var(--muted);margin-top:10px;">资料已保留，客人重新预约后可继续跟进</div>'+
-      '</div>';
+      '</div>'+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>';
     return;
   }
-  if(!c.materialsConfirmed){ el.innerHTML = refundServiceBarHtml(c)+materialsCardHtml(c); return; }
+  if(!c.materialsConfirmed){ el.innerHTML = refundServiceBarHtml(c)+materialsCardHtml(c)+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>'; return; } /* 基础资料确认前没有 tab，Timeline 仍挂在下面 */
   normalizeCaseTab(c);
   el.innerHTML = caseTabsHtml(c) + (c.activeCaseTab==='basic' ? refundServiceBarHtml(c) : '') + caseTabContentHtml(c);
 }
