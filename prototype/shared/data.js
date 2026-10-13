@@ -6155,6 +6155,12 @@ function emptyClinicVars(cid){
   };
 }
 /* 其他诊所的演示资料（C2：泗水合作诊所，只对接 H1）：几个客户和案件 + 自己的本地项目和一个印尼案例，用来验证诊所之间完全隔开 */
+/* 本诊所没有本地项目库就按清单补一份（旧存档里的 C3 就是空的；启动时执行，幂等） */
+function backfillLocalLib(){
+  if(PROJECT_LIBRARY.some(function(p){ return p.origin==='IN'; })) return false;
+  buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, id:p.name}; PROJECT_LIBRARY.push(p); });
+  return true;
+}
 function seedClinicDemo(cid){
   if(cid === 'C2'){ /* C2 的已确认施术案件（H1 的日程里会有 C2 客人的施术块；C1 的医院日程视角看到的是灰块 + 院长名字） */
     var h2a = seedSurgeryCase({id:'hendra', name:'客人26', phone:'+62 811-2100-0001', director:'KD1 院长', hospitalId:'H1', date:D(5), time:'11:00', items:[['假体隆鼻', 2500000]]});
@@ -6176,9 +6182,9 @@ function seedClinicDemo(cid){
       {day:KD(0), from:'them', name:'H2 院长1', color:'var(--slate2)', init:'박', orig:'이번 주 수술 일정이 거의 찼습니다.', trans:'本周手术排期基本满了。', time:'10:00'},
       {day:KD(0), from:'them', name:'KM2 室长', color:'var(--sage)', init:'정', orig:'IN 쪽 신규 케이스 확인했습니다.', trans:'已确认 IN 这边的新案件。', time:'10:30'}
     ];
+    backfillLocalLib(); /* 巴厘诊所也要有自己的本地项目库（CMD-1013-15：原来这行写在 return 之后，C3 一直是空的） */
     return;
   }
-  if(cid==='C3'){ buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, id:p.name}; PROJECT_LIBRARY.push(p); }); }
   if(cid !== 'C2') return;
   var cons = function(d){ return {version:'v1.0', ts:D(-d)+' 10:00', source:'客户自助预约'}; };
   var mkClient = function(name, phone, g, dob, d){ var cl = addClient({name:name, phone:phone, gender:g, dob:dob, createdBy:'客人自助', source:'客户自助预约建档', consent:cons(d)}); return cl; };

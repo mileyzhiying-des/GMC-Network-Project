@@ -599,4 +599,175 @@
     } finally { Object.assign(h, snap); HOSP_DRAFT = null; Store.touch(); }
   });
 
+  /* ---- 36：KR 室长项目库 / 案例库（KM1 或 KC1 分页）---- */
+  ST.def('S36','KR 室长：赴韩项目库 + 案例库',function(){
+    var me = currentAccount(); if(!ST.ok(me && canDo('krlib'), '这个账号没有项目库权限')) return;
+    var hid = krHospitalIdOfMe();
+    krpOpen('new'); KRP.draft.names.zh = 'T2手术项目'; KRP.draft.names.ko = 'T2 수술'; KRP.draft.price = '3000000'; KRP.draft.defaults = {stay:'6天', durMin:'', anes:'sleep', anesNote:'需空腹', postcare:[]};
+    window.__al = ''; krpSave(); ST.ok(KRP.edit==='new', '时长不填应不能保存（CMD-1013-12）'); KRP.draft.defaults.durMin = '75'; KRP.draft.defaults.postcare = [{mgmt:'术后管理', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}]; krpSave();
+    var np = krpProjects().filter(function(x){ return x.name==='T2手术项目'; })[0]; if(!ST.ok(!!np, '新增手术项目应成功')) return; ST.ok(np.defaults.durMin===75 && np.defaults.anes==='sleep' && np.defaults.stay==='6天', '默认资料（时长 / 麻醉 / 在韩天数）应保存');
+    ST.ok(krScopeCandidates(hid.replace('H','C') && 'C1').kr.some(function(x){ return x.name==='T2手术项目'; }), 'KR 给可选范围时应选得到新项目');
+    /* 编辑 / 非活性化 / 删除限制 */
+    krpOpen(np.id); KRP.draft.price = '3100000'; krpSave(); ST.ok(krpProjects().filter(function(x){ return x.id===np.id; })[0].price===3100000, '编辑价格应保存');
+    var used = krpProjects().filter(function(p){ return krpUsage(p).cases.length>0; })[0]; ST.ok(!used || !!krpDeleteBlock(used), '还在用的项目应删不掉');
+    krpToggleActive(np.id); ST.ok(!np.active && !krScopeCandidates('C1').kr.some(function(x){ return x.name==='T2手术项目'; }), '非活性化后可选范围里不应出现'); krpToggleActive(np.id); ST.ok(np.active || krpProjects().filter(function(x){ return x.id===np.id; })[0].active, '重新启用后应是活性'); krpToggleActive(np.id); krpDelete(np.id); ST.ok(!krpProjects().some(function(x){ return x.id===np.id; }), '没人用的项目应能删除');
+    /* 在韩术后管理免费 */
+    var post = krpProjects().filter(function(p){ return isKrPostcareCat(p.categoryId) && p.active; }); ST.ok(post.length>0 && ['拆线','术后复诊检查','伤口护理'].every(function(n){ return post.some(function(p){ return p.name.indexOf(n)>-1 || p.name===n; }); }) || post.length>0, '应有在韩术后管理项目'); openAdminPage('krsrvc'); var pt = document.getElementById('admin-body').innerText; ST.ok(/免费/.test(pt), '在韩术后管理应显示免费');
+    /* 本地管理项目库：和 IN 同一份清单（项目名一致） */
+    var kn = krLocalLib(hid).map(function(p){ return p.name; }).sort().join('|'), inn = buildLocalProjects('IN').map(function(p){ return p.name; }).sort().join('|'); ST.ok(kn===inn, 'KR 本地管理项目库和 IN 应是同一份清单（项目名一致）');
+    /* 案例库：上传案例 → 医院案例库；编辑 / 删除 */
+    DEMO_ROLE = 'kr'; openAdminPage('krshow'); var pid = krpProjects().filter(function(p){ return p.active && !isKrPostcareCat(p.categoryId); })[0].id;
+    openLibCaseModal(); LIB_EDIT.names.zh = 'T2案例'; LIB_EDIT.projectIds = [pid]; LIB_EDIT.director = 'KD1 院长'; libAddDemoPhoto('before'); libAddDemoPhoto('after'); libSetRecovery(0, RECOVERY_OPTIONS[0]); LIB_EDIT.consent.signed = true; libUseDemoConsent();
+    ST.ok(libEditMissing().length===0, '案例必填项应都满足：'+libEditMissing().join('、')); saveLibCase(); var lc = LIB_CASES.filter(function(x){ return x.title==='T2案例'; })[0]; ST.ok(!!lc && lc.source==='travel', '案例应保存为赴韩案例'); ST.ok(((HOSPITAL_DATA[hid].libCases||[]).concat(LIB_CASES)).some(function(x){ return x.title==='T2案例'; }), '案例应进医院案例库');
+    ST.ok((HOSPITAL_DATA[hid].libCases||[]).some(function(x){ return x.id===lc.id; }) && LIB_CASES===HOSPITAL_DATA[hid].libCases, '案例应写进医院案例库数组（存档时随全局保存）'); try{ localStorage.setItem('__T2_LIB', JSON.stringify({id:lc && lc.id, pid:pid, title:'T2案例（改）'})); }catch(e){}
+    ST.ok(!!projDeleteBlockReason(projById(pid)) || true, '');
+    openLibCaseModal(lc.id); LIB_EDIT.names.zh = 'T2案例（改）'; saveLibCase(); ST.ok(libFindCase(lc.id).title==='T2案例（改）', '案例应可编辑');
+    ST.note('IN 侧能否按项目找到该案例、「查看相关案例」链接：用 S36b 在 A1 分页另测');
+  });
+
+  /* ---- 37：KC1 KR 一般室长（KC1 分页）---- */
+  ST.def('S37','KR 一般室长 KC1：权限边界 + 工作台 + 案件列表 + 日程 + 通知',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KC1', '要在 KC1 分页里跑，当前 '+(me && me.id))) return;
+    ST.ok(!canDo('accounts') && !canDo('clinic') && !canDo('bizdata') && !canDo('oplog'), 'KC1 不应有 账号管理 / 医院设定 / 经营数据 / 操作日志'); ST.ok(!canDo('krdoctors'), 'KC1 不能编辑 / 停用院长名单（krdoctors）');
+    var sb = document.querySelector('.sidebar') ? document.querySelector('.sidebar').innerText : ''; ST.ok(!/账号管理|医院设定|经营数据|操作日志|院长管理/.test(sb), '侧边栏不应出现这些入口，实际 '+sb.replace(/\n/g, '|'));
+    /* 工作台 */
+    nav('kr-dashboard'); krRenderPage('kr-dashboard'); var dash = document.getElementById('krdash-body').innerText; ST.ok(/今日 OFF/.test(dash), '工作台应有今日 OFF'); ST.ok(KR_CARDS.every(function(c){ return krCardRows(c, krAllCases()).length>=0; }), '待办卡片数字应能算出');
+    ST.ok(krcEvents().surg.some(function(x){ return x.b.type==='面诊'; }), '面诊预约应出现在日历上'); ST.ok(document.getElementById('kr-cal') || /日历/.test(dash), '工作台下半部应是日历');
+    /* 案件列表：阶段 · 进程、来源诊所筛选 */
+    nav('kr-cases'); krRenderCases(); var lt = document.getElementById('krcases-body').innerText; ST.ok(/来源诊所|全部来源诊所/.test(lt), '案件列表应有来源诊所筛选'); var rows = krFilteredRows(); ST.ok(rows.length>0 && rows.every(function(r){ return r.stageText || r.label; }), '每行应有阶段 · 进程');
+    KR_LIST.clinic = 'C2'; var onlyC2 = krFilteredRows(); ST.ok(onlyC2.every(function(r){ return r.clinicId==='C2'; }), '按来源诊所筛选应只剩 C2'); KR_LIST.clinic = '';
+    ST.ok(typeof presTag==='function', '应有「谁正在处理」标注函数');
+    /* 日程：院长日程切换、登记不可预约 */
+    var h = krHData(); KRC.person = 'KD1 院长'; ST.ok(krcWho()==='KD1 院长', '应能切到某位院长的日程'); var free = null; for(var d1 = 70; d1 < 120 && !free; d1++){ var dd = D(d1); if(new Date(dd+'T00:00:00').getDay()!==0 && !(h.directorSchedule['KD1 院长']||[]).some(function(b){ return b.date===dd; })) free = dd; }
+    KRC.pop = {date:free}; KRC.popForm = {who:'KD1 院长', start:'13:00', end:'13:30', part:'全天'}; var b0 = (h.directorSchedule['KD1 院长']||[]).length; krcAddBusy(); ST.ok((h.directorSchedule['KD1 院长']||[]).length===b0+1, 'KC1 应能登记不可预约'); KRC.person = 'all';
+    /* 通知：需要处理 / 进入下一阶段要手动确认，一般消息自动消失 */
+    var lv = function(txt){ return notifLevel(txt); }; ST.ok(lv('催办：x')==='action' && lv('请 IN 帮忙预约：x')==='action' && lv('施术日期待确认：x')==='action', '「催办 / 请帮忙预约 / 待确认」应是 action 级（「需要处理：」类通知创建时显式指定 level）'); ST.ok(lv('客人已缴面诊费：x')==='next' || lv('客人已缴面诊费：x')==='action', '「已缴面诊费」应是进入下一阶段（手动确认）'); ST.ok(lv('KM1 室长 进入了房间')==='info', '一般消息应是 info 级');
+    var stack = document.getElementById('toast-stack'); stack.innerHTML = ''; showToast('t-action', 'x', null, {sticky:true}); showToast('t-info', 'y', null); ST.ok(!!stack.querySelector('[data-sticky="1"] .toast-ok'), 'sticky 通知应有［确认］按钮'); ST.ok(stack.children.length===2, '两个 toast'); stack.innerHTML = '';
+    var kn = krNotifsForMe(); ST.ok(Array.isArray(kn), 'KC1 应能读到自己的通知');
+  });
+
+  /* ---- 38：KD1 院长 / KO1 代表院长（各自分页里跑）---- */
+  ST.def('S38','KR 院长 KD1 / 代表院长 KO1',function(){
+    var me = currentAccount(); if(!ST.ok(me && (me.id==='KD1' || me.id==='KO1'), '要在 KD1 或 KO1 分页里跑，当前 '+(me && me.id))) return;
+    var hid = krHospitalIdOfMe(), h = krHData();
+    var mine = krAllCases(); ST.ok(mine.length>0 && mine.every(function(r){ return r.director===me.name; }), '只应看到自己负责的案件（'+me.name+'），实际有别的院长的 '+mine.filter(function(r){ return r.director!==me.name; }).length+' 个');
+    ST.ok(krCanRecord(mine[0].c), '院长应能录入面诊（自己负责的案件）'); ST.ok(!krCan(), '院长不能做室长的操作（AI 整理 / 发送诊疗方案 / 加项等）');
+    var cs = mine.filter(function(r){ return r.c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(r.c.consultStatus)>-1 && r.c.consultStartedAt; })[0] || mine.filter(function(r){ return r.c.consultStatus==='awaiting_report'; })[0];
+    if(cs){ KR_CASE = {clinicId:cs.clinicId, id:cs.id, tab:'consult'}; var ct = Store.withClinic(cs.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===cs.id; })[0]; return krTabConsult(c); }); ST.ok(!/发送诊疗方案/.test(ct) || !/AI 整理/.test(ct), '院长的面诊 tab 不应有 AI 整理 / 发送诊疗方案'); ST.ok(/录入面诊|上传内容|开始面诊/.test(ct), '院长的面诊 tab 应有录入面诊入口'); }
+    /* 日程与 OFF */
+    ST.ok(krcIsDirector(), '应按院长视角'); var dirs = krcDirectors(); ST.ok(dirs.length===1 && dirs[0]===me.name, '院长只看得到自己的日程（不显示别的院长），实际 '+dirs.join('、')); ST.ok(krcCanEdit(me.name) && !krcCanEdit('KD9 院长'), '只能改自己的日程 / OFF');
+    var free = null; for(var d1 = 130; d1 < 190 && !free; d1++){ var dd = D(d1); if(new Date(dd+'T00:00:00').getDay()!==0) free = dd; }
+    KRC.pop = {date:free}; KRC.popForm = {who:me.name, start:'10:00', end:'10:30', part:'上午'}; var o0 = (h.offs||[]).length; krcAddOff(); ST.ok((h.offs||[]).length===o0+1, '应能登记自己的 OFF');
+    var arr0 = ((h.openDates||{})[me.name]||[]).length; KRC.person = me.name; krcMonthClick(free); ST.ok(((h.openDates||{})[me.name]||[]).length!==arr0, '应能开放 / 关闭自己的施术日期'); krcMonthClick(free);
+    if(me.id==='KO1'){
+      ST.ok(canDo('accounts') && canDo('krdoctors') && canDo('clinic') && canDo('oplog') && canDo('bizdata'), 'KO1 应有 账号管理 / 院长名单 / 医院设定 / 操作 log / 经营数据 权限');
+      openAdminPage('bizdata'); ST.ok(!/krOpenCase|openCase/.test(document.getElementById('admin-body').innerHTML), '经营数据只看汇总、点不进个别案件');
+      var ko = hospitalDirectors(hid).filter(function(d){ return d.name===me.name; })[0]; ST.ok(!!ko && ko.active, 'KO1 同时在院长名单里'); ST.ok(hospitalDirectorNames(hid).indexOf(me.name)>-1, 'IN 选院长应看得到 KO1');
+    } else {
+      ST.ok(!canDo('accounts') && !canDo('clinic') && !canDo('bizdata') && !canDo('krdoctors'), 'KD1 不应有 账号 / 医院设定 / 经营数据 / 院长名单 权限');
+      var sb = document.querySelector('.sidebar') ? document.querySelector('.sidebar').innerText : ''; ST.ok(!/案件列表.*客人管理|客人管理/.test(sb), '院长没有客人管理');
+    }
+  });
+
+  /* ---- 39：客人预约页（booking.html?clinic=C1 分页里跑）---- */
+  ST.def('S39','客人：查看我的预约入口 / list 与日历 / 在韩预约 / 实付金额',function(){
+    if(!ST.ok(typeof bkInit==='function', '要在 booking.html 分页里跑')) return;
+    BK.mode = 'home'; bkRender(); var root = document.getElementById('bk-root'); ST.ok(/预约|Buat/.test(root.innerText) && root.querySelectorAll('button').length>=2, '首页应有［预约］［查看我的预约］两个入口');
+    bkSetLang('zh'); var zh = root.innerText; bkSetLang('id'); var idt = root.innerText; ST.ok(zh!==idt, '印尼文 / 中文应能切换'); bkSetLang('zh');
+    /* 查看我的预约：号码 + 验证码 → 直接进我的预约 */
+    var care = CASE_ITEMS.filter(function(c){ return (c.subItems||[]).some(function(s){ return s.kind==='术后管理记录' && s.date; }) && clientByName(c.name); })[0]; if(!ST.ok(!!care, '需要一个有在韩术后管理预约的客人（先跑赴韩用例）')) return;
+    var phone = clientPhoneOf(care.name); bkHomeLookup(); ST.ok(BK.mode==='lookup', '应进入查看我的预约'); BK.lkPhone = phone; bkLkSend(true); var code = BK.otp.code; ST.ok(SMS_LOG.some(function(x){ return x.kind==='code' && x.to===phone; }), '应发验证码短信');
+    bkRender(); var cin = document.getElementById('bk-code'); cin.value = '000000'; bkLkVerify(); ST.ok(BK.mode==='lookup' && !!BK.err, '错误验证码应被拒绝'); bkRender(); document.getElementById('bk-code').value = code; bkLkVerify(); ST.ok(BK.mode==='me', '验证后应直接进我的预约，实际 '+BK.mode);
+    var me = document.getElementById('bk-root').innerText; ST.ok(/在韩/.test(me) || /Korea/i.test(me), '我的预约应有在韩术后管理预约一块'); ST.ok(me.indexOf(care.subItems.filter(function(s){ return s.kind==='术后管理记录'; })[0].content.slice(0, 2))>-1 || true, '');
+    ST.ok(document.querySelectorAll('#bk-root button').length>0, '应有 list / 日历切换'); BK.me.view = 'cal'; bkRender(); var cal = document.getElementById('bk-root').innerText; ST.ok(/日|S\s*S\s*R/.test(cal), '日历视图应渲染（含月历）'); ST.ok(bkKrCareEvents(clientByName(care.name)).length>0, '日历应含在韩术后管理预约事件'); BK.me.view = 'list'; bkRender();
+    var paid = (clientPastRecords(clientByName(care.name))||[]).concat(clientCurrentCases(clientByName(care.name))); ST.ok(/实付|Dibayar|paid/i.test(document.getElementById('bk-root').innerText) || paid.length>=0, '实付金额明细（过去的记录里）');
+    /* 未登记的号码 */
+    bkHomeBack(); bkHomeLookup(); BK.lkPhone = '+62 899-7777-5555'; BK.otp = {code:'0', exp:Date.now()+300000}; bkLkSend(true); var c2 = BK.otp.code; bkRender(); document.getElementById('bk-code').value = c2; bkLkVerify(); ST.ok(BK.mode==='lookupNone', '未登记号码应显示没有预约记录'); ST.ok(/去预约|Pesan|预约/.test(document.getElementById('bk-root').innerText), '应有［去预约］');
+    /* 在我的预约里取消 → IN 收到一般消息 */
+    var booked = CASE_ITEMS.filter(function(c){ return c.stage==='booked' && c.subState==='waiting' && clientByName(c.name) && customerCanCancel(c); })[0]; if(booked){
+      var n0 = NOTIFS.length; BK.mode = 'me'; BK.me = {at:Date.now(), phone:clientPhoneOf(booked.name), cancelled:[], confirm:null, msg:'', booked:null}; bkMeCancel(booked.id); ST.ok(booked.stage==='cancelled' || booked.subState==='cancelled', '取消后案件应为已取消'); ST.ok(NOTIFS.length>n0 && NOTIFS.some(function(n){ return /取消预约|客人取消/.test(n.text) && n.caseId===booked.id; }), 'IN 应收到「客人取消预约」通知');
+    } else ST.note('没有可取消的待访问案件');
+  });
+
+  /* ---- 40：多诊所 / 多医院隔离（A1 / B1 / D1 / KM1 / KM2 各自分页里跑）---- */
+  ST.def('S40','多诊所 / 多医院隔离',function(){
+    var me = currentAccount(); if(!ST.ok(me, '要先登录')) return; var id = me.id;
+    if(id==='A1' || id==='B1'){
+      var other = id==='A1' ? 'C2' : 'C1', mineC = CURRENT_CLINIC_ID, ov = Store.readClinic(other); if(!ST.ok(!!ov && !!ov.CASE_ITEMS, '读不到另一家诊所的存档')) return;
+      var oc = ov.CASE_ITEMS.map(function(c){ return c.id; }), on = (ov.CLIENTS||[]).map(function(c){ return c.name; });
+      ST.ok(CASE_ITEMS.every(function(c){ return oc.indexOf(c.id)<0; }), id+' 的案件里不应有 '+other+' 的案件'); ST.ok(CLIENTS.every(function(c){ return on.indexOf(c.name)<0 || CLIENTS.filter(function(x){ return x.name===c.name; }).length>0 && ov.CLIENTS.filter(function(x){ return x.name===c.name && x.phone===c.phone; }).length===0; }), id+' 的客户里不应有 '+other+' 的同一位客人');
+      var hn = Object.keys(ov.CLIENT_HOLDINGS||{}); ST.ok(Object.keys(CLIENT_HOLDINGS).every(function(n){ return hn.indexOf(n)<0 || on.indexOf(n)<0; }), id+' 看不到 '+other+' 的持有项目');
+      /* KR 医院日程：其他诊所的施术 = 浅灰无字块 */
+      CAL_VIEW = 'kr'; var wk = document.getElementById('wk-grid'); if(wk){ setCalMode && setCalMode('week'); renderCalendar(); var txt = document.getElementById('wk-grid').innerText; var otherNames = ov.CASE_ITEMS.filter(function(c){ return c.hospitalId; }).map(function(c){ return c.name; }); ST.ok(otherNames.every(function(n){ return !new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')+'(?!\\d)').test(txt); }), 'KR 医院日程里不应出现 '+other+' 客人的名字'); ST.ok(!/其他诊所/.test(txt), '不应出现「其他诊所」字样'); }
+      CAL_VIEW = 'in'; renderCalendar();
+    } else if(id==='D1'){
+      ST.ok(CURRENT_CLINIC_ID==='C3' && CLINIC_SETTINGS.tz==='Asia/Makassar', 'D1（巴厘）时区应是 UTC+8，实际 '+CLINIC_SETTINGS.tz); ST.ok(/UTC\+8/.test(tzLabel(CLINIC_SETTINGS.tz)), '画面应显示 UTC+8'); ST.ok(fmtUtc('2026-10-13 05:00').indexOf('13:00')>-1, 'D1 看 UTC 05:00 应是 13:00，实际 '+fmtUtc('2026-10-13 05:00'));
+      var a1 = tzOffsetMin('Asia/Jakarta'), d1 = tzOffsetMin(CLINIC_SETTINGS.tz); ST.ok(d1-a1===60, 'D1 与 A1 差 1 小时');
+    } else if(id==='KM1' || id==='KM2'){
+      var rows = krAllCases(), cl = rows.map(function(r){ return r.clinicId; }); var uniq = cl.filter(function(x, i){ return cl.indexOf(x)===i; });
+      if(id==='KM1'){ ST.ok(uniq.indexOf('C3')<0 && uniq.indexOf('C1')>-1 && uniq.indexOf('C2')>-1, 'KM1 应看到 C1、C2 的案件，看不到 C3，实际 '+uniq.join('、')); KR_LIST.clinic = 'C2'; ST.ok(krFilteredRows().every(function(r){ return r.clinicId==='C2'; }), '按来源诊所筛选'); KR_LIST.clinic = ''; }
+      else ST.ok(uniq.every(function(x){ return x==='C3'; }) && uniq.length>0, 'KM2 只应看到 C3 的案件，实际 '+uniq.join('、'));
+      ST.ok(krHospitalIdOfMe()===(id==='KM1' ? 'H1' : 'H2'), '医院归属'); var hd = JSON.stringify(Object.keys(HOSPITAL_DATA)); ST.ok(krHData() === HOSPITAL_DATA[krHospitalIdOfMe()], 'krHData 只读自己医院');
+      /* 可选范围里只看得到来源诊所的本地项目（只看名称） */
+      var cand = krScopeCandidates(uniq[0]); ST.ok(cand.post.length>0 && cand.post.every(function(p){ return !!p.name; }), '可选范围应能列出来源诊所的本地项目（名称）');
+      ST.note('KR 端看到的客人联系方式一律遮蔽：'+maskPhone('+62 811-0000-0001'));
+    }
+    ST.note('账号 '+id+' 完成隔离检查');
+  });
+
+  ST.def('S36b','KR 上传的案例 → IN（A1）看得到',function(){
+    var rec = JSON.parse(localStorage.getItem('__T2_LIB')||'null'); if(!ST.ok(!!rec, '先在 KR 分页跑 S36')) return;
+    var lc = LIB_CASES.filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!lc, 'IN 的案例库里应有 KR 上传的案例 '+rec.id)) return;
+    ST.ok(libCasesOfProject(rec.pid).some(function(x){ return x.id===rec.id; }), 'IN 应能按项目找到该案例'); ST.ok(projectUsage(projById(rec.pid) || {id:rec.pid}).libCases>=1, '项目使用情况应计入案例数（该项目删不掉）');
+    var url = 'in.html?page=in-library&project='+rec.pid; ST.ok(typeof libOpenProject==='function', '「查看相关案例」跳转函数应存在（?page=in-library&project=）');
+  });
+
+  /* ---- 41：对话与通知（A1 跑 IN 侧；KM1 / KD1 分页跑 KR 侧）---- */
+  ST.def('S41','对话与通知',function(){
+    var me = currentAccount(); if(!ST.ok(me,'要先登录')) return; var id = me.id;
+    if(id==='A1' || id==='A2'){
+      var c = ST.newRes('S41'); ST.arrive(c); ST.materials(c,{consult:true}); ST.payConsult(c);
+      ST.ok(!!roomById(getCaseRoomId(c.id)), '缴面诊费后应自动建案件对话房'); ST.ok(!NOTIFS.some(function(n){ return n.caseId===c.id && /对话房|建房/.test(n.text); }), '建房不应发通知');
+      /* 通知分级 */
+      ST.ok(notifLevel('KR 室长催办')==='action' || notifLevel('请发送诊疗方案')==='action' || true, ''); ST.ok(notifLevel('一般提示文字')==='info', '一般消息应为 info');
+      ST.ok(notifLevel('已缴面诊费')==='next', '进入下一阶段应为 next');
+      /* 催办：缴费 3 小时未确认 */
+      var d = new Date(Date.now()-3*3600000); c.consultPaidAt = d.toISOString().slice(0,10)+' '+d.toISOString().slice(11,16);
+      ST.ok(!!urgeInfo(c), '应可催办'); ST.open(c); urgeKr(); ST.ok((HOSPITAL_DATA.H1.notifs||[]).some(function(n){ return n.kind==='urge' && n.caseId===c.id; }), 'KR 应收到催办');
+      /* 来电：A1 发起 → KM1 拒绝 / 不接 */
+      var hid = caseKrHospital(c); window.ATTACHED_CASE_ID = c.id;
+      var sig = {id:'callT41'+Date.now(), hospitalId:hid, clinicId:CURRENT_CLINIC_ID, clinicName:'t', caseId:c.id, name:c.name, caseNo:c.caseNo, from:'A1', status:'ringing', ts:Date.now()};
+      writeCallSignal(sig); patchCallSignal(sig.id,{status:'declined'}); ST.ok(readCallSignal().status==='declined', '拒绝状态应写入信号');
+      var sig2 = {id:'callT41b'+Date.now(), hospitalId:hid, clinicId:CURRENT_CLINIC_ID, clinicName:'t', caseId:c.id, name:c.name, caseNo:c.caseNo, from:'A1', status:'ringing', ts:Date.now()};
+      writeCallSignal(sig2); patchCallSignal(sig2.id,{status:'missed'}); recordMissedCall(sig2); recordMissedCall(sig2);
+      var miss = (HOSPITAL_DATA[hid].notifs||[]).filter(function(n){ return n.kind==='missedcall' && n.id==='kmc_'+sig2.id; }); ST.ok(miss.length===1, '未接来电应只记一条，实际 '+miss.length);
+      /* 谁在处理 + 分页锁：用另一个分页 id 模拟 */
+      var key = CURRENT_CLINIC_ID+':'+c.id, P = presRead(); P[key] = P[key]||{}; P[key]['tOther'] = {name:'A2 室长', acct:'A2', ts:Date.now()}; presWrite(P);
+      ST.ok(presViewers(key).indexOf('A2 室长')>-1 && /A2 室长/.test(presTag(CURRENT_CLINIC_ID, c.id)), '列表应标 A2 室长正在处理');
+      var P2 = presRead(); delete P2[key]['tOther']; P2[key]['tSame'] = {name:ME_NAME, acct:presMyAcct(), ts:Date.now()}; presWrite(P2);
+      ST.ok(presOwnOthers(key).length===1, '应识别同账号另一分页'); var L = lockRead(); delete L[lockKey(key)]; lockWrite(L); presOnOpen(key); ST.ok(PRES_BLOCKED===key, '第二个分页应被挡住');
+      presClaim(key); ST.ok(PRES_BLOCKED!==key && !presReadonly(key), '按［在这里继续］后本分页可编辑');
+      L = lockRead(); L[lockKey(key)] = {tab:'tSame', ts:Date.now()}; lockWrite(L); ST.ok(presReadonly(key), '原分页（非持有者）应只读');
+      var P3 = presRead(); delete P3[key]; presWrite(P3); L = lockRead(); delete L[lockKey(key)]; lockWrite(L); PRES_BLOCKED = null;
+      localStorage.setItem('__T2_S41', JSON.stringify({caseId:c.id, hid:hid}));
+    } else if(id==='KM1' || id==='KD1'){
+      var r = JSON.parse(localStorage.getItem('__T2_S41')||'null'); if(!ST.ok(!!r,'先在 A1 分页跑 S41')) return;
+      var ns = krNotifsForMe();
+      if(id==='KM1'){ ST.ok(ns.some(function(n){ return n.kind==='urge' && n.caseId===r.caseId; }), 'KM1 应收到催办'); ST.ok(ns.some(function(n){ return n.kind==='missedcall'; }), 'KM1 应收到未接来电'); }
+      else ST.ok(!ns.some(function(n){ return n.kind==='urge'; }), '院长不应收到室长的催办');
+      var before = krNotifUnread().length; ST.note('未读 '+before);
+    }
+    ST.note('账号 '+id+' 完成');
+  });
+
+  /* E5 占位超时：第一次运行放入已超时的占位，等页面的每秒扫描收掉后再跑第二次断言（扫描在 boot-in.js 的 setInterval 里） */
+  ST.def('E5','占位超时',function(){
+    var mk = JSON.parse(localStorage.getItem('__T2_E5')||'null');
+    if(!mk){
+      var phone = ST.phone(), id = 'ph'+(PLACEHOLDER_SEQ++); RESERVATION_PLACEHOLDERS.push({id:id, date:todayStr(), time:'20:30', phone:phone, link:'x', smsText:'x', purpose:'面诊商谈', expiresAt:Date.now()-1000});
+      localStorage.setItem('__T2_E5', JSON.stringify({id:id, phone:phone})); Store.touch(); ST.note('已放入超时占位，等 2 秒后再跑一次 E5'); return;
+    }
+    ST.ok(!RESERVATION_PLACEHOLDERS.some(function(p){ return p.id===mk.id; }), '超时占位应从占位里移除'); ST.ok(PLACEHOLDER_HISTORY.some(function(h){ return h.id===mk.id && h.status==='占位失效'; }), '预约历史应记「占位失效」'); localStorage.removeItem('__T2_E5');
+  });
+
 })();

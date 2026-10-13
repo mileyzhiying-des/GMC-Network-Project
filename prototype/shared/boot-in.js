@@ -27,6 +27,7 @@ try{ checkReminders(); }catch(e){ console.error('[初始化失败] 提醒短信'
 setInterval(function(){ try{ if(checkReminders()>0 && typeof refreshAdminPage==='function') refreshAdminPage(); }catch(e){} }, 10000);
 
 try{ if(repairWronglyClosedCases()) Store.touch(); }catch(e){ console.error('[修正误结案]', e); }
+try{ if(backfillLocalLib()) Store.touch(); }catch(e){ console.error('[补本地项目库]', e); }
 /* 每秒扫一遍占位倒计时：更新页面上的倒计时文字；超时的从占位里移除（时段自动空出），记入预约历史"占位失效" */
 setInterval(function(){
   var changed = false;
