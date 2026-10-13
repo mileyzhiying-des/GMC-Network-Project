@@ -1991,16 +1991,14 @@ function viewRelatedCase(id){
   else openCaseNewTab(id);
 }
 
-function relatedTabHtml(c){
-  var before = '', after = '';
+function relatedTabHtml(c){ /* 关联只往前：只显示本案件关联的旧案件（CMD-1013-12 一·1） */
+  var before = '';
   if(c.linkedCase && c.linkedCase.caseId){
     var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
     if(src) before = relatedEntryHtml(c, src, c.linkedCase, c, src, 'b-'+src.id);
   }
-  relatedFollowers(c).forEach(function(f){ after += relatedEntryHtml(c, f, f.linkedCase, f, c, 'a-'+f.id); });
   var empty = '<div style="font-size:12px;color:var(--muted);padding:10px 0;">—</div>';
-  return '<div class="card" style="padding:18px 24px;"><div class="info-heading" style="margin-bottom:6px;">之前关联 <span style="font-weight:400;font-size:11px;color:var(--muted);">本案件关联了谁</span></div>'+(before||empty)+
-    '<div class="info-heading" style="margin:16px 0 6px;">后续关联 <span style="font-weight:400;font-size:11px;color:var(--muted);">谁关联了本案件（系统自动生成）</span></div>'+(after||empty)+
+  return '<div class="card" style="padding:18px 24px;"><div class="info-heading" style="margin-bottom:6px;">关联案件 <span style="font-weight:400;font-size:11px;color:var(--muted);">本案件关联了谁</span></div>'+(before||empty)+
     '<div style="font-size:11px;color:var(--muted);margin-top:12px;">只读：不改变被关联案件的状态、财务、结局，也不会在它的 Timeline 里新增记录。</div></div>';
 }
 
@@ -3685,9 +3683,19 @@ function normSchedBlocks(hid){
   h.coordSchedule = []; /* 室长的内部日程不进平台 */
 }
 /* 施术块的时长：本案件赴韩项目在医院项目库里的默认施术时长（分钟）合计；没有时长默认 1 小时 */
+/* KR 项目库时长必填（CMD-1013-12 三）：旧数据 / 演示数据没填的补上（赴韩项目按类别给演示值，管理项目 30 分钟）；surgeryMinutes 的 60 分钟兜底仅作旧数据保护 */
+function krBackfillDurations(){
+  var n = 0;
+  Object.keys(HOSPITAL_DATA||{}).forEach(function(hid){
+    var h = HOSPITAL_DATA[hid]; if(!h) return;
+    (h.projects||[]).forEach(function(p){ if(isKrPostcareCat(p.categoryId)) return; p.defaults = p.defaults || {stay:'', durMin:0, anes:'local', anesNote:'', postcare:[]}; if(!(Number(p.defaults.durMin) > 0)){ p.defaults.durMin = 60; n++; } });
+    (h.localLib||[]).forEach(function(p){ if(!(Number(p.durMin) > 0)){ p.durMin = 30; n++; } });
+  });
+  return n;
+}
 function surgeryMinutes(c){
   var h = HOSPITAL_DATA[caseKrHospital(c)] || {projects:[]}, tot = 0;
-  krActiveItems(c).forEach(function(it){ var p = (h.projects||[]).filter(function(x){ return x.name===it.name; })[0]; if(p && p.defaults && p.defaults.durMin) tot += p.defaults.durMin; });
+  krActiveItems(c).forEach(function(it){ var p = (h.projects||[]).filter(function(x){ return x.name===it.name; })[0]; if(p && p.defaults && p.defaults.durMin) tot += p.defaults.durMin; else if(/^lc:/.test(String(it.projectId||''))){ var lp = (h.localLib||[]).filter(function(x){ return 'lc:'+x.id===it.projectId; })[0]; if(lp && lp.durMin) tot += lp.durMin; } });
   return tot || 60;
 }
 
@@ -4018,13 +4026,14 @@ function coreSubDone(c, id, by, itemNames, noClose){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0];
   if(!s || s.done || !c.krBalancePaid) return false; /* 付清尾款（开始施术）之后才能逐个标完成 */
   var picked = [];
-  if(!s.simDay && s.kind==='术后管理记录' && s.date && s.date > todayStr()) return false; /* 术后管理未到当天不能标完成（原型可用［模拟到当日］，CMD-1013-10 一·2） */
+  if(s.kind==='术后管理记录'){ if(!s.simDay && s.date && s.date > todayStr()) return false; if(!s.arrived) return false; } /* 术后管理：到当天 + ［客人已到］才能标完成（原型可用［模拟到当日］，CMD-1013-10 / 12） */
   if(s.kind==='施术'){ /* 施术行标完成 = 本次的施术项目都完成（增加项目各有自己的一行；不再弹「做了哪些项目」勾选，CMD-1013-10 一·4） */
     picked = krNotStartedItems(c).filter(function(it){ return !it.krAddOn; });
   } else if(s.kind==='增加项目'){ /* 增加项目：完成 = 这个加做的项目做完了 */
     picked = krNotStartedItems(c).filter(function(it){ return it.name===s.projectName && (it.preBalanceAdd || it.krAddOn); });
   }
   s.done = true; s.doneAt = nowFullDt(); s.doneBy = by;
+  if(s.holdUseOf){ var hi = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===s.holdUseOf; })[0]; if(hi){ hi.holdUsed = (hi.holdUsed||0)+1; if(hi.holdUsed >= (hi.qty||1)){ hi.holdDone = true; } } } /* 持有项目使用一次 */
   picked.forEach(function(it){ it.done = true; });
   s.doneItems = picked.map(function(it){ return it.name; });
   logCaseEvent(c, by, 'KR标记子项已完成 '+s.no+'：'+s.content+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''));
@@ -4053,6 +4062,21 @@ function coreFinishToday(c, by){
   logCaseEvent(c, by, '今日项目都已完成，结案'+(held.length ? '；剩余 '+held.length+' 项转在韩持有：'+held.join('；') : ''));
   finishCase(c);
   return true;
+}
+function coreSubArrived(c, id, by){
+  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.arrived) return false;
+  if(!s.simDay && s.date && s.date > todayStr()) return false;
+  s.arrived = true; s.arrivedAt = nowFullDt(); logCaseEvent(c, by, '客人已到：'+s.no+'「'+s.content+'」'); return true;
+}
+/* 持有项目（在韩持有的已付管理项目）剩余次数；安排使用 = 排一个时间（进 KR 日历和当天工作台），客人到后才标完成 */
+function holdItemLeft(c, it){ return (it.qty||1) - (it.holdUsed||0); }
+function holdItemPlanned(c, it){ return (c.subItems||[]).filter(function(s){ return s.holdUseOf===it.name && !s.done; }).length; }
+function coreHoldUseSchedule(c, name, date, time, by){
+  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone && x.name===name; })[0]; if(!it) return false;
+  if(holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return false;
+  var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by);
+  if(!s) return false; s.hold = true; s.holdUseOf = name;
+  logCaseEvent(c, by, '安排使用持有项目「'+name+'」：'+date+' '+time); return true;
 }
 function coreSubSimDay(c, id, by){ var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done) return false; s.simDay = true; logCaseEvent(c, by, '（仅原型）模拟到当日：'+s.no+'「'+s.content+'」'); return true; }
 /* 在韩国的子项（地点=韩国）全部完成，且项目都已完成/取消/更换 → 结案；子项都完成但还有项目没标完成时不自动结案（KR 要勾选项目标完成，或标无法施术） */

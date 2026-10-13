@@ -863,49 +863,33 @@ var PROJ_HIST_NAME = null, PROJ_HIST_TAB = {};
 
 function setProjHistTab(gi, tab){ PROJ_HIST_TAB[gi] = tab; renderProjectHistory(PROJ_HIST_NAME); var el = document.getElementById('proj-hist-'+gi); if(el) el.style.display='block'; }
 
+/* 医美史·本院项目记录（CMD-1013-12 一·3）：按「日期 + 案件」分组，最新在上；组头「日期 … Case ID」，下面列这次做完的项目；补登的外部项目单独成组（右侧写「外部项目」）；只列做完的 */
 function renderProjectHistory(name){
   PROJ_HIST_NAME = name;
   var el = document.getElementById('project-history-list');
   if(!el) return;
-  var groups = {};
+  var groups = {}, order = [];
+  var add = function(date, caseId, label, ext){
+    var key = (ext ? 'x|' : 'c|')+date+'|'+(caseId||''); if(!groups[key]){ groups[key] = {date:date, caseId:caseId, items:[], ext:!!ext}; order.push(key); }
+    groups[key].items.push(label);
+  };
   getClientHoldings(name).forEach(function(h){
-    groups[h.itemName] = groups[h.itemName] || {origin:'IN', batches:[]};
-    groups[h.itemName].batches = groups[h.itemName].batches.concat(h.batches);
+    h.batches.forEach(function(b){ (b.usages||[]).forEach(function(u){ add(u.date, u.caseId, h.itemName+(b.spec ? ' · '+b.spec : '')+' × '+u.qty+' 次'+(u.opt ? '（'+u.opt+'）' : ''), false); }); });
   });
   CASE_ITEMS.filter(function(c){ return c.name===name; }).forEach(function(c){
-    (c.procedureItems||[]).filter(function(it){ return it.origin==='KR'; }).forEach(function(it){
-      var lastDt = (c.logEntries&&c.logEntries.length) ? c.logEntries[c.logEntries.length-1].dt.split(' ')[0] : '—';
-      groups[it.name] = groups[it.name] || {origin:'KR', batches:[]};
-      if(it.done) groups[it.name].batches.push({caseId:c.id, date:lastDt, bought:1, used:1, usages:[], cancelled:false}); /* 本院项目记录只列已完成的（CMD-1013-04 二） */
-    });
+    var lastDt = (c.logEntries&&c.logEntries.length) ? c.logEntries[c.logEntries.length-1].dt.split(' ')[0] : '—';
+    var sd = (c.subItems||[]).filter(function(s){ return s.kind==='施术' && s.done && s.doneAt; })[0], dt = sd ? sd.doneAt.slice(0,10) : lastDt;
+    (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && it.done && !it.cancelled && !it.swapped; }).forEach(function(it){ add(dt, c.id, it.name+(it.qty>1 ? ' ×'+it.qty : ''), false); });
   });
-  Object.keys(groups).forEach(function(n){ var g = groups[n]; if(g.origin==='IN') g.batches = g.batches.filter(function(b){ return b.used>0; }); if(!g.batches.length) delete groups[n]; }); /* 还没用的只在持有项目里看 */
-  var names = Object.keys(groups);
-  if(!names.length){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无项目记录</div>'; return; }
-  el.innerHTML = names.map(function(n, gi){
-    var g = groups[n];
-    function caseLabel(caseId){
-      var cc = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
-      return cc && cc.caseNo ? cc.caseNo : caseId;
-    }
-    /* 2026-09-30：每个项目展开后用 tab 切换「购买批次」和「使用明细」，不再默认全部展开 */
-    var tab = PROJ_HIST_TAB[gi] || 'batches';
-    var batchRows = g.batches.map(function(b){
-      var usedText = g.origin==='KR' ? (b.cancelled?'已取消（退款）':b.used>0?'已完成 1/1':'未完成 0/1') : ('已用 '+b.used+'/'+b.bought);
-      return '<div style="padding:6px 0;font-size:12px;">'+b.date+' · 购买 <a href="#" class="info-link" onclick="openCaseDetail(\''+b.caseId+'\');return false;">'+caseLabel(b.caseId)+'</a>'+(b.spec ? ' · '+b.spec : '')+' · '+usedText+(b.refund?' · <span style="color:var(--terracotta);font-weight:700;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'（'+b.refund.reason+'，整批作废）</span>':'')+'</div>';
-    }).join('');
-    var usageRows = [];
-    g.batches.forEach(function(b){ b.usages.forEach(function(u){ usageRows.push(u); }); });
-    usageRows.sort(function(a,b){ return a.date<b.date?-1:1; });
-    var usageHtml = usageRows.map(function(u){
-      return '<div style="padding:6px 0;font-size:12px;">'+u.date+' · <a href="#" class="info-link" onclick="openCaseDetail(\''+u.caseId+'\');return false;">'+caseLabel(u.caseId)+'</a> · 用了 '+u.qty+' 次'+(u.opt ? '（'+u.opt+'）' : '')+'</div>';
-    }).join('') || '<div style="font-size:12px;color:var(--muted);padding:6px 0;">暂无使用记录</div>';
-    var tabsHtml = '<div style="display:flex;gap:8px;margin:6px 0;"><span class="chip'+(tab==='batches'?' active':'')+'" onclick="setProjHistTab('+gi+',\'batches\')">购买批次</span><span class="chip'+(tab==='usages'?' active':'')+'" onclick="setProjHistTab('+gi+',\'usages\')">使用明细</span></div>';
-    batchRows = tabsHtml + (tab==='batches' ? batchRows : usageHtml);
-    return '<div class="field-row" style="flex-direction:column;align-items:flex-start;">'+
-      '<div style="display:flex;width:100%;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleProjHistory('+gi+')"><span class="fk">'+n+'</span><span style="font-size:11px;color:var(--slate);">'+g.batches.length+' 批 ▾</span></div>'+
-      '<div id="proj-hist-'+gi+'" style="display:none;width:100%;">'+batchRows+'</div>'+
-      '</div>';
+  var cl = clientByName(name);
+  if(cl) beautyRecordsOf(cl).filter(function(r){ return r.source==='室长登记'; }).forEach(function(r){ add(r.year+'-'+pad2(r.month), '', r.project, true); });
+  order.sort(function(a, b){ return groups[b].date.localeCompare(groups[a].date); });
+  if(!order.length){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无项目记录</div>'; return; }
+  el.innerHTML = order.map(function(key){
+    var g = groups[key], cc = g.caseId ? CASE_ITEMS.filter(function(x){ return x.id===g.caseId; })[0] : null;
+    var right = g.ext ? '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">外部项目</span>' : (cc ? '<a href="#" class="info-link" onclick="openCaseDetail(\''+cc.id+'\');return false;" style="font-weight:700;">'+cc.caseNo+'</a>' : '');
+    return '<div class="field-row" style="flex-direction:column;align-items:flex-start;padding:8px 0;"><div style="display:flex;width:100%;justify-content:space-between;align-items:center;"><span class="fk" style="font-weight:700;">'+g.date+'</span>'+right+'</div>'+
+      g.items.map(function(x){ return '<div style="padding:3px 0;font-size:13px;">· '+aEscC(x)+'</div>'; }).join('')+'</div>';
   }).join('');
 }
 
@@ -991,8 +975,8 @@ function buildHistoryList(name){
   var addBtn = document.getElementById('beauty-add-btn'); if(addBtn) addBtn.style.display = cl ? '' : 'none';
   var own = name ? CASE_ITEMS.filter(function(c){ return c.name===name; }).map(function(c){
     var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : '—';
-    var bd = caseStageBadge(c);
-    return '<div class="info-card"><div class="info-card-row"><div style="min-width:0;"><div class="value"><a href="#" class="info-link" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-weight:700;">'+c.caseNo+'</a> · 本院案件</div><div class="sub">'+first+'</div></div>'+
+    var bd = caseStageBadge(c), lkSrc = (c.linkedCase && c.linkedCase.caseId) ? CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0] : null, lk = lkSrc ? '关联 '+lkSrc.caseNo+' · '+c.linkedCase.reason : '';
+    return '<div class="info-card"><div class="info-card-row"><div style="min-width:0;"><div class="value"><a href="#" class="info-link" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-weight:700;">'+c.caseNo+'</a></div><div class="sub">'+first+(lk ? ' · '+lk : '')+'</div></div>'+
       '<span class="status-pill" style="background:'+bd[0]+';color:'+bd[1]+';">'+bd[2]+'</span></div></div>';
   }).join('') : '';
   document.getElementById('history-list').innerHTML = records + own;
@@ -1754,7 +1738,7 @@ function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.loc
 
 function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0; }
 
-function showRelatedTab(c){ return !!(c.linkedCase && c.linkedCase.caseId) || relatedFollowers(c).length>0; }
+function showRelatedTab(c){ return !!(c.linkedCase && c.linkedCase.caseId); } /* 只有往前关联的案件才有关联案件 tab */
 
 /* ---- 案件终态（2026-10-02·六）：对话房整理进附件（对话记录（文本）+ 📁 里文件的链接，不复制文件；录像和AI文本本来就在面诊资料附件里），然后删除房间，
    对话抽屉里不再出现；作废的案件没有房间 ---- */

@@ -506,3 +506,10 @@ prototype/shared/app.css  共用样式
 - **KR 案件「项目」tab 三张卡**（`krTabItems`）：手术项目（在韩加的标「在韩增加」）/ 术后项目 / 持有项目（`krHoldCard(c,'持有项目')`，没有不显示）；拿掉「KR 可选范围」卡；施术 tab 不动。
 - **KR 客人管理**（KR-CLNT-01）：`kr-clients` / `kr-clientdetail` 页面，只有室长 / 管理者（`canDo('krview')`），案件页客人名可点；`krClientRows()` 由 `krAllCases()` 聚合（只含本院可见案件）；详情有本院案件 / 在韩持有（`krCliAct` 把 `KR_CASE` 指到对应案件再调案件页函数）/ 施术记录 / 附件。数据版本不变（42）。
 - **教训**：补丁脚本用「起点 index → 另一个很远的标记」做区间替换会误删中间几百行（本次一度删掉 kr.js 650 行，已从 git HEAD 恢复并重做）；区间替换的结束点必须取该函数自己的结尾。
+
+## CMD-1013-12 补充（2026-10-13，追加；旧文字保留作历史）
+- **关联只往前**：`relatedTabHtml` / `krTabRelated` 只显示本案件关联的旧案件（不再有「后续关联」）；`showRelatedTab` 只看 `c.linkedCase`，没有往前关联的案件不显示关联案件 tab（IN / KR 一样，KR 的 tab 在 `krRenderCaseDetail` 里过滤）。客户详情案件记录每行 Case ID / 日期 / 状态，有关联的加「关联 A000033 · 复诊」，拿掉「本院案件」字样。
+- **医美史·本院项目记录**（`renderProjectHistory`）：按「日期 + 案件」分组（最新在上），组头日期 + Case ID，下面列这次做完的项目（持有批次的使用明细 + 赴韩已完成项目）；`source==='室长登记'` 的补登医美史单独成组，右侧「外部项目」；不再按项目名统计「N 批」。
+- **KR 客人管理**：同一客人 = IN 客人档案（来源诊所 + 档案 id，`krClientRows` / `krClientKeyFor` / `krOpenClient(key)`），名字旁显示生日；详情去掉附件卡，分「术后管理」「持有项目」两张卡。
+- **术后管理**（所有 care 子项，案件页 / 客人页共用 `krCareActHtml`）：到当天 +［客人已到］（`coreSubArrived`，`s.arrived`）才能［标记完成］（`coreSubDone` 同时拦），未到当天按钮灰，［模拟到当日］（`s.simDay`）仅原型。**持有项目**（`heldOver` 的已付管理项目）只列项目 + 剩余次数（`holdItemLeft` / `holdItemPlanned`），没有标完成；［安排使用］（`krHuOpen` / `coreHoldUseSchedule`）选日期时间（弹当天日程、非营业时间确认、撞院长日程挡住）→ 生成一条带 `holdUseOf` 的在韩持有子项（进 KR 日历和当天日程）→ 客人已到 → 标完成时持有项目 `holdUsed` +1，用完 `holdDone`。KR 案件页：项目 tab「持有项目」卡（`krHoldCard(c,'items')`）、施术 tab「术后管理（在韩持有）」（`krHoldCard(c,'care')`）。
+- **KR 项目库时长必填**：赴韩项目（非术后管理类）保存必须填施术时长，管理项目编辑必须填时长（`p.durMin`，`surgeryMinutes` 也读 `lc:` 项目）；`krBackfillDurations()`（KR 启动时执行）给旧数据 / 演示数据没填的补上（赴韩 60 分钟、管理 30 分钟）；`surgeryMinutes` 的 60 分钟兜底仅作旧数据保护。数据版本不变（42）。
