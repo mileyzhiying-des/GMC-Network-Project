@@ -1512,7 +1512,9 @@ function consultCarryStage(c){
 
 function localCarried(c){ return !!c.addedConsultAfterLocal && !isEnded(c); }
 
-function localMgmtTagOn(c){ return !isEnded(c) && ((c.localMgmt && c.localMgmt.active) || (localCarried(c) && (c.mgmtActive || c.settlementDone))); }
+/* 本地项目都做完了（使用都已标完、没有进行中）：「本地管理进行中」标签消失（CMD-1013-14 一·1） */
+function localMainDone(c){ var us = c.mgmtUses||[]; return us.length>0 && !c.mgmtActive && !us.some(function(u){ return localItemStatus(u)==='进行中'; }); }
+function localMgmtTagOn(c){ return !isEnded(c) && ((c.localMgmt && c.localMgmt.active) || (localCarried(c) && !localMainDone(c) && (c.mgmtActive || c.settlementDone))); }
 
 var CASE_PROGRESS_ORDER = ['booked','consult','travel','local','closed'];
 
@@ -2381,6 +2383,8 @@ function caseTabContentHtml(c){
   if(c.activeCaseTab==='consult' && c.consultRequested) return consultIntentionCardHtml(c)+consultTabHtml(c);
   normalizeCaseTab(c);
   if(c.activeCaseTab==='kr' && showKrTab(c)) return krTabContent(c);
+  if(c.activeCaseTab==='localmgmt' && localCarried(c) && c.localMgmt) return localMgmtTabHtml(c); /* 继续选购 / 使用后进入本地管理流程 */
+  if(c.activeCaseTab==='localmgmt' && localCarried(c) && localMainDone(c)) return localCarriedDoneHtml(c); /* 本地项目都做完：列做过的项目 + 继续选购 / 使用（CMD-1013-14 一·2） */
   if(c.activeCaseTab==='localmgmt' && (isLocalCase(c) || localCarried(c))) return projectListTabHtml(c, true); /* 本地案件：选择项目→本地管理的完整流程（07） */
   if(c.activeCaseTab==='localmgmt' && c.localMgmt) return localMgmtTabHtml(c);
   if(c.activeCaseTab==='localmgmt' && showLocalTab(c)) return localBoughtHtml(c);
@@ -3285,11 +3289,24 @@ function lmNotUse(c){
 function lmContinue(what){ var c = getCurrentCase(); if(!c || !c.localMgmt) return; var lm = c.localMgmt; lm.ended = false; lm.active = true; lm.mgmtActive = false; lm.step = what==='use' ? 'use' : 'buy'; logCaseEvent(c, actingName(), '本地管理：继续'+(what==='use' ? '使用持有项目' : '选购')); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }
 function lmSetStep(step){ var c=getCurrentCase(); if(!c||!c.localMgmt) return; c.localMgmt.step = step; renderCaseBody(c); }
 
+function localCarriedDoneHtml(c){
+  var uses = (c.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
+  var buys = (c.settlementBatches||[]).filter(function(b){ return (b.inItems||[]).length; }).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.inItems.map(function(i){ return i.name+(i.qty>1 ? ' ×'+i.qty : ''); }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
+  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">本地管理（已完成的项目）</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">没有记录</div>')+
+    '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="carriedContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="carriedContinue(\'use\')">继续使用持有项目</button></div></div>';
+}
+function carriedContinue(what){
+  var c = getCurrentCase(); if(!c || c.localMgmt || isEnded(c)) return;
+  c.localMgmt = {active:true, ended:false, step:what==='use' ? 'use' : 'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
+  c.activeCaseTab = 'localmgmt'; logCaseEvent(c, actingName(), '本地管理：继续'+(what==='use' ? '使用持有项目' : '选购'));
+  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+}
 function localMgmtTabHtml(c){
   var lm = c.localMgmt;
   if(lm.ended){ /* 到结案前都可继续加：项目都完成后仍显示已完成列表 + 继续选购 / 使用持有的入口（CMD-1013-06 二·2）；结案后只读 */
     var uses = (lm.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
     var buys = (lm.batches||[]).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.items.map(function(i){ return i.name+' ×'+i.qty; }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
+    if(localCarried(c)){ uses = (c.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次</span></div>'; }).join('')+uses; } /* 增加面诊的本地案件：把之前做过的也列出来 */
     var open = !isEnded(c) && !c.visitClosed, more = open ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="lmContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="lmContinue(\'use\')">继续使用持有项目</button></div>' : '';
     return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">'+(open ? '本地管理（已完成的项目）' : '本地管理（本次购买与使用记录）')+'</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">本次本地管理没有购买也没有使用</div>')+more+'</div>';
   }
@@ -3815,6 +3832,14 @@ function coreChangeReject(c, reason, by){
    付定金后 KR 室长整理：每一行 = 案件下的一个子项 {id, no:'A000001-01', date, content, kind:'施术'|'复诊'|'管理'|'其他', place:'KR'|'IN'|'either', projectName(施术子项关联的项目), done, doneAt, doneBy, informed}
    客人端暂不显示；IN 端在赴韩项目 tab 下的子 tab 只读 */
 var SUB_PLACE_LABEL = {KR:'韩国', IN:'印尼', either:'印尼 / 韩国均可'};
+/* 子案件（CMD-1013-14 二）：客人在韩每到院一次一个子案件 A000023-1、-2…；-1 = 施术那天，之后每次术后管理 / 持有使用的预约各一个（按日期排）。
+   子案件 = 案件的「施术」「术后管理记录」子项，购买 / 加项 / 关联 / 结算都挂主案件；增加项目属于施术当天的流程，不是子案件。显示编号现算，不改存档 */
+function subCaseList(c){
+  var l = (c.subItems||[]).filter(function(s){ return s.kind==='施术' || s.kind==='术后管理记录'; });
+  return l.sort(function(a, b){ return (a.kind==='施术' ? 0 : 1)-(b.kind==='施术' ? 0 : 1) || (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || String(a.no).localeCompare(String(b.no)); });
+}
+function subCaseNo(c, s){ var i = subCaseList(c).indexOf(s); return i<0 ? '' : c.caseNo+'-'+(i+1); }
+function subCaseNos(c){ subCaseList(c).forEach(function(s, i){ s.dno = c.caseNo+'-'+(i+1); }); }
 function subNextNo(c){ var n = 0; (c.subItems||[]).forEach(function(s){ var m = String(s.no).match(/-(\d+)$/); if(m) n = Math.max(n, parseInt(m[1],10)); }); return c.caseNo+'-'+pad2(n+1); }
 function coreSubAdd(c, o, by){
   if(!c.settlementDone) return false;
@@ -3900,11 +3925,12 @@ function subItemRowHtml(s, cells){
   var st = '<span class="status-pill" style="background:'+(s.done?'var(--sage-bg)':'var(--border2)')+';color:'+(s.done?'var(--sage)':'var(--slate2)')+';">'+(s.done?'已完成':'未开始')+'</span>'+(s.booked ? ' <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">已预约 '+s.booked+'</span>' : (s.informed ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">KR 已通知预约</span>' : ''));
   return '<div title="编号 '+s.no+'" style="display:grid;grid-template-columns:'+SUB_GRID_COLS+';gap:10px;align-items:center;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border2);">'+
     '<span>'+(cells.date || s.date)+'</span><span class="status-pill" style="background:'+kc[0]+';color:'+kc[1]+';justify-self:start;">'+subKindLabel(s.kind)+'</span>'+
-    '<span>'+(cells.content || s.content)+'</span><span>'+st+'</span>'+
+    '<span>'+(s.dno && s.kind!=='增加项目' ? '<b style="font-size:11px;color:var(--slate2);">'+s.dno+'</b> ' : '')+(cells.content || s.content)+'</span><span>'+st+'</span>'+
     '<span>'+(cells.place || '<span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+SUB_PLACE_LABEL[s.place]+'</span>')+'</span><span>'+(cells.ops || '')+'</span><span style="text-align:right;">'+(cells.done || '')+'</span></div>'+
     (s.note ? '<div style="font-size:12px;color:var(--slate2);margin:-2px 0 6px 104px;">'+(s.kind==='施术' ? '施术备注' : '备注')+'：'+String(s.note).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '');
 }
 function krTimelineTabHtml(c){
+  subCaseNos(c);
   var list = (c.subItems||[]).slice().sort(function(a, b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); }).map(function(s){ return subItemRowHtml(s); }).join('')+(c.krProgressMemo ? '<div style="font-size:12px;color:var(--slate2);margin-top:8px;white-space:pre-wrap;"><b>项目进程 memo：</b>'+String(c.krProgressMemo).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '');
   return '<div class="info-heading" style="margin-bottom:8px;">项目进程（KR 室长整理，只读）</div>'+
     (list ? subGridHeadHtml()+list : '<div style="font-size:13px;color:var(--muted);padding:10px 0;">KR 还没有整理项目进程（付定金后由 KR 室长整理，整理好会通知你）</div>')+
