@@ -453,3 +453,9 @@ prototype/shared/app.css  共用样式
 - **面诊录入独立小窗口**：`krRecNewTab(mode, add)` = `window.open(?…&rec=&win=1, 'krrec', 'popup=yes,width=640,height=720')`（院长和 KR 室长一样），原案件页不跳转；小窗口里 `body.kr-recwin` 只显示录入弹窗，上传 / 取消后 `window.close()`，原页靠存档同步自动更新。上传后「录入面诊」锁住，改显示［增加内容］（语音 / 手动，同样小窗口，`KR_REC.add`），每笔带时间 + 录入人，发送诊疗方案后不再显示；AI 整理把所有笔都算进去。
 - 「消肿管理」→「术后管理」（`KR_PC_NAMES`、演示数据 `mgmt`；迁移 41 同步改用户案件）。发送诊疗方案左 1/3 右 2/3；推荐项目整理（`#kr-rec-sum`）随推荐在韩 / 麻醉 / 术后管理 / 整体备注填写即时重算（`krSumRefresh`）。
 - IN 递交施术日期 / 改期日期后 KR 室长收到「施术日期待确认 / 改期待确认」（action 级）；KR 基础资料「检测与上传」各行和附件点开直接查看（`krUploadRow`）；IN 客户详情进行中案件里，术后管理 / 复诊预约到店的案件写「10/24 14:00 到店 · ONDA 提升 第 1 次（来自 A000038 腹部吸脂）」（`subVisitText`，读赴韩案件子项的 `booked`）。数据版本 40 → 41。
+
+## CMD-1013-03 补充（2026-10-13，追加；旧文字保留作历史）
+- **KR 施术 tab 分步式**（`krWizard(c)`，付尾款前、状态 Confirmed / Arrived 时代替原来的整页卡片；`krTabProc` 里 `ub+krWizard(c)`）：Step 1 到院前（施术日期卡 + ［修改］到院时间 / 地址 +［客人已到医院］；施术项目卡 `krStepItemsCard` 每项 麻醉｜推荐在韩｜术后管理｜状态）→ Step 2 已到医院（项目卡 + 到院与尾款 `krArrivalBlock` 选院长评估，非「原方案不变」memo 必填）→ 3-1 原方案不变（项目 / ［添加项目］可不加 / ［付清尾款］）；3-2 需要调整方案（勾选保留，没勾的可选「更换为」KR 项目库里的项目或直接取消 → ［下一步］→ 添加项目 → 结算）；3-3 不建议手术（memo → ［更换时间］重新预约 / ［取消项目］→［更换项目］（KR 项目库选新项目，`coreCannotReplace`：原项目全部「已更换」，判断改记「需要调整方案」后结算）/［退款］（`coreRefundDecision`））。
+- **［上一步］**：`coreJudgeRevert`，付清尾款 / 确认更换时间 / 退款完成前都可退回重选；评估后选的保留 / 更换 / 添加项目只在界面状态里（`KR_ADJ`），**点［付清尾款］（`krDoSettle`）时才一次生成结算单**；Timeline 记「退回评估重选」。
+- **金额**：换项目不另算差价，尾款 = 最终项目合计 − 已付定金（`krWzSettleCard` 预览，不含本地管理项目）；付清尾款后施术中再加的继续走「待付款 + ［修正］」。**术后管理预约弹窗只在付清尾款后出现**（`krDoJudge` 不再自动弹；`corePcBooking` 付款后原方案不变 / 调整方案都允许；`krPcbButtonHtml` 付款前不显示）。
+- **共同术后管理**：发送诊疗方案右侧各项目下方一块（`krCommonBlock`，行格式同所需术后管理 + 适用项目勾选至少 2 项，数据在 `KR_SUB.detail['__common']`）；提交时给每个适用项目的 `postcare` 各带一份（`x.cid` 相同、`x.applies`）。显示 / 预约 / 转持有按 cid 只算一次（`pcUniqueEntries(c)`、`commonCareOf(items)`；`itemMetaText` / `recSummaryData` / `pcLinesHtml` 跳过 cid 条目，推荐项目整理另列「共同术后管理」段，KR 施术项目卡一行）；适用项目取消后只剩一个仍保留，全部取消一起拿掉（按活跃项目现算）。数据版本不变（41）。

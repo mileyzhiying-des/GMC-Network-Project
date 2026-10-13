@@ -3706,7 +3706,7 @@ function corePcBooking(c, rows, by){
   var afterPay = c.krBalancePaid && c.krJudge && (c.krJudge.result==='changed' || c.krJudge.result==='ok'); /* 术后管理预约只在付清尾款后（原方案不变 / 调整方案都是，CMD-1013-03） */
   if(!c.settlementDone || (c.krBalancePaid && !afterPay) || c.visitClosed) return false;
   c.subItems = (c.subItems||[]).filter(function(s){ return !(s.pcb && !s.done && !s.booked); });
-  var cnt = {}; krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x, i){ if(x.place==='either' && x.innName) cnt[it.name+'|'+i] = 0; }); });
+  var cnt = {}; pcUniqueEntries(c).forEach(function(e0){ if(e0.x.place==='either' && e0.x.innName) cnt[e0.it.name+'|'+e0.i] = 0; }); /* 共同术后管理只按一份算 */
   var inRows = [];
   rows.forEach(function(r, k){
     if(r.where==='IN'){
@@ -3868,7 +3868,7 @@ function coreSwapItem(c, itemName, altName, by, detail){
 /* 付尾款并确认行程：可弹性术后管理的地点在这时确定（锁定分配）；术后管理含在套餐里——分给印尼的部分直接变成客人在 IN 的 0 元持有批次（套餐内含，术后第 N 天），不再收款 */
 function innCareLines(c){
   var out = [];
-  krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x){ var s = pcSplit(x); if(x.place==='either' && s.inn>0) out.push({item:it.name, name:x.name, mgmt:x.mgmt||'', innName:x.innName||x.name, times:s.inn, day:pcDayText(x)||x.day||'', days:pcDays(x)}); }); });
+  pcUniqueEntries(c).forEach(function(e0){ var it = e0.it, x = e0.x; (function(){ var s = pcSplit(x); if(x.place==='either' && s.inn>0) out.push({item:it.name, name:x.name, mgmt:x.mgmt||'', innName:x.innName||x.name, times:s.inn, day:pcDayText(x)||x.day||'', days:pcDays(x)}); })(); });
   return out;
 }
 /* 付清尾款（含 IN 按 KR 判断退差额后视为结清）时：锁定分配，印尼部分术后管理直接发放为 0 元持有批次（只发一次） */

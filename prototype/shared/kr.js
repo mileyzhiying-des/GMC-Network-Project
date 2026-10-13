@@ -1130,6 +1130,28 @@ function krPcNameSelect(sel, onchange, inp){
   return '<select onchange="'+onchange+'" style="'+inp+'"><option value="">管理项目</option>'+names.map(function(n){ return '<option'+(sel===n?' selected':'')+'>'+krEsc(n)+'</option>'; }).join('')+'</select>';
 }
 function krDet(name){ return KR_SUB.detail[name] || (KR_SUB.detail[name] = {stay:'', anes:'local', anesNote:'', pc:[]}); }
+/* 共同术后管理（CMD-1013-03 二）：发送诊疗方案右侧各项目下方一块；格式同所需术后管理一行 + 适用项目勾选（至少 2 项） */
+function krCommonApply(i, name, on){ var x = krDet('__common').pc[i]; x.apply = x.apply || {}; x.apply[name] = on; krSumRefresh(); }
+function krCommonBlock(cand){
+  var picked = cand.kr.filter(function(p){ return KR_SUB.pick[p.name]; }), d = krDet('__common'), inp = 'padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;', q = function(s){ return krEsc(s).replace(/'/g,''); };
+  if(picked.length < 2) return '<div style="font-size:11px;color:var(--muted);margin:10px 0;">共同术后管理：勾选至少 2 个赴韩项目后可添加（几个项目共用同一个术后管理，例如腹部 + 大腿吸脂共用 ONDA）。</div>';
+  var rows = d.pc.map(function(x, i){
+    var ph = '\'__common\','+i;
+    var krOpts = '<option value="">具体项目</option>'+cand.krPost.map(function(o){ return '<option value="'+q(o.name)+'"'+(x.kr===o.name?' selected':'')+'>'+krEsc(o.name)+'（免费）</option>'; }).join('')+'<optgroup label="本地管理项目（只看名称）">'+cand.krLocal.map(function(o){ return '<option value="'+q(o.name)+'"'+(x.kr===o.name?' selected':'')+'>'+krEsc(o.name)+'</option>'; }).join('')+'</optgroup>';
+    var inOpts = '<option value="">印尼对应项目（选填）</option>'+cand.post.map(function(o){ return '<option value="'+q(o.name)+'"'+(x.inn===o.name?' selected':'')+'>'+krEsc(o.name)+'</option>'; }).join('');
+    var apply = picked.map(function(p){ return '<label style="margin-right:12px;font-size:12px;cursor:pointer;"><input type="checkbox" '+((x.apply||{})[p.name]?'checked':'')+' onchange="krCommonApply('+i+',\''+q(p.name)+'\',this.checked)"> '+krEsc(p.name)+'</label>'; }).join('');
+    return '<div style="border-bottom:1px solid var(--border2);padding:6px 0;"><div style="display:grid;grid-template-columns:120px 62px 84px 1fr 130px 92px 1.1fr auto;gap:6px;align-items:center;">'+
+      krPcNameSelect(x.mgmt, 'krPcSet('+ph+',\'mgmt\',this.value)', inp)+
+      '<span><input type="number" min="1" value="'+x.times+'" onchange="krPcSet('+ph+',\'times\',Math.max(1,parseInt(this.value,10)||1))" style="'+inp+'width:44px;"> 次</span>'+
+      (x.times>1 ? '<select onchange="krPcSet('+ph+',\'interval\',parseInt(this.value,10))" style="'+inp+'">'+[1,2,3,4,5,6,7,10,14].map(function(n){ return '<option value="'+n+'"'+((x.interval||1)===n?' selected':'')+'>隔 '+n+' 天</option>'; }).join('')+'</select>' : '<span></span>')+
+      '<span style="display:flex;gap:4px;"><select onchange="krPcSet('+ph+',\'kr\',this.value)" style="'+inp+'flex:1;min-width:0;">'+krOpts+'</select>'+(x.place==='either' ? '<select onchange="krPcSet('+ph+',\'inn\',this.value)" style="'+inp+'flex:1;min-width:0;">'+inOpts+'</select>' : '')+'</span>'+
+      '<select onchange="krPcSet('+ph+',\'place\',this.value)" style="'+inp+'"><option value="KR"'+(x.place==='KR'?' selected':'')+'>必须在韩国</option><option value="either"'+(x.place==='either'?' selected':'')+'>韩国或印尼</option></select>'+
+      '<span>第 <input type="number" min="1" value="'+krEsc(x.start||'')+'" onchange="krPcSet('+ph+',\'start\',this.value)" style="'+inp+'width:40px;"> 天起</span>'+
+      '<span style="color:var(--sage);font-size:11px;">'+krEsc(pcDayText({startDay:x.start, times:x.times, interval:x.interval}))+'</span><a href="#" onclick="krPcDel('+ph+');return false;">移除</a></div>'+
+      '<div style="margin:4px 0 0 4px;font-size:12px;color:var(--slate2);">适用项目（至少 2 项）：'+apply+'</div></div>';
+  }).join('');
+  return '<div style="margin:12px 0;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:8px;"><div style="font-size:12px;font-weight:700;">共同术后管理</div>'+(rows || '<div style="font-size:12px;color:var(--muted);margin:4px 0;">没有（几个项目共用的术后管理在这里加一行，只预约 / 转持有一次）</div>')+'<a href="#" onclick="krPcAdd(\'__common\');return false;" style="font-size:12px;">＋ 添加共同术后管理</a></div>';
+}
 function krSumRefresh(){ var el = document.getElementById('kr-rec-sum'); if(el) el.innerHTML = krRecSummaryBlock(krScopeCandidates(KR_CASE.clinicId)); } /* 推荐项目整理随填写即时重算（CMD-1013-02 八） */
 function krDetSet(name, k, v){ krDet(name)[k] = v; krSumRefresh(); }
 function krPcSet(name, i, k, v){ krDet(name).pc[i][k] = v; if(k==='place' || k==='times' || k==='interval' || k==='start') krRenderCaseDetail(); else krSumRefresh(); }
@@ -1168,8 +1190,19 @@ var KR_ZH_MAP = [['[면담 소견 요약]','【面诊意见摘要】'],['고객:
 /* 演示翻译：只翻模板里的固定词，院长口述的正文原样保留并标注（正式版接 AI 翻译） */
 function krDemoZh(text){ var o = text; KR_ZH_MAP.forEach(function(m){ o = o.split(m[0]).join(m[1]); }); return o + '\n\n（演示翻译：只翻译了模板固定词，正文为韩文原文；正式版由 AI 翻译）'; }
 /* 可选范围下方自动生成的推荐项目整理（勾选 / 资料变化即时重算，整体备注取下面的输入） */
+/* 共同术后管理 → 适用于某项目的 postcare 条目（带 cid / applies） */
+function krCommonEntries(cand, itemName){
+  var d = KR_SUB.detail['__common']; if(!d) return [];
+  var picked = cand.kr.filter(function(p){ return KR_SUB.pick[p.name]; }).map(function(p){ return p.name; }), out = [];
+  d.pc.forEach(function(x, i){
+    var ap = picked.filter(function(n){ return (x.apply||{})[n]; }); if(ap.length < 2 || ap.indexOf(itemName) < 0) return;
+    var ip = x.place==='either' ? cand.post.filter(function(o){ return o.name===x.inn; })[0] : null, e = krPcToItem(x, ip); e.cid = 'cm'+(i+1); e.applies = ap; out.push(e);
+  });
+  return out;
+}
 function krRecSummaryBlock(cand){
   var items = cand.kr.filter(function(p){ return KR_SUB.pick[p.name]; }).map(function(p){ var d = krDet(p.name); return {name:p.name, stay:d.stay, anesthesia:{label:KR_ANES[d.anes], note:d.anesNote}, postcare:d.pc.map(function(x){ return krPcToItem(x, null); }), note:KR_SUB.notes[p.name]||''}; });
+  items.forEach(function(it){ it.postcare = (it.postcare||[]).concat(krCommonEntries(cand, it.name)); });
   return recSummaryHtml(items, KR_SUB.overall) || '<div style="font-size:12px;color:var(--muted);margin:10px 0;">勾选赴韩项目后，这里自动生成「推荐项目整理」。</div>';
 }
 function krSubmitBlock(c){
@@ -1181,7 +1214,7 @@ function krSubmitBlock(c){
     '<textarea oninput="krSubSet(\'text\',this.value)" placeholder="还没有内容：先在上面录入面诊，点［AI 整理报告］整理出重点，再在这里修改；也可以直接写" style="width:100%;min-height:380px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.text)+'</textarea>'+
     '</div><div style="flex:2 1 400px;min-width:300px;">'+
     '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">赴韩项目可选范围（本医院项目库）</div>'+(cand.kr.map(function(p){ return row(p,'kr'); }).join('') || krEmpty('本医院项目库没有项目'))+
-    '<div id="kr-rec-sum">'+krRecSummaryBlock(cand)+'</div>'+
+    krCommonBlock(cand)+'<div id="kr-rec-sum">'+krRecSummaryBlock(cand)+'</div>'+
     '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">整体备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" onchange="krRenderCaseDetail()" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;">'+
     '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">附件</div>'+KR_SUB.files.map(function(f,i){ return '<div style="font-size:12px;padding:3px 0;">📎 '+krEsc(f)+' <a href="#" onclick="krDelFile('+i+');return false;">移除</a></div>'; }).join('')+
     '<div style="display:flex;gap:8px;margin-top:4px;"><input id="kr-file-name" placeholder="附件名称（演示：只记名称，不上传真实文件）" style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;"><button class="btn-outline" onclick="krAddFile()">添加</button></div>'+
@@ -1207,6 +1240,10 @@ function krSubmitReport(){
     }
     items.push(it);
   });
+  var dcm = KR_SUB.detail['__common'];
+  if(dcm){ var pk = cand.kr.filter(function(p){ return KR_SUB.pick[p.name]; }).map(function(p){ return p.name; });
+    dcm.pc.forEach(function(x, i){ var ap = pk.filter(function(n){ return (x.apply||{})[n]; }); if(!x.kr) bad = '共同术后管理第 '+(i+1)+' 行还没选具体项目'; else if(ap.length < 2) bad = '共同术后管理第 '+(i+1)+' 行适用项目至少要勾 2 个'; }); }
+  if(!bad) items.forEach(function(it){ if(cand.kr.some(function(p){ return p.name===it.name; })) it.postcare = (it.postcare||[]).concat(krCommonEntries(cand, it.name)); });
   if(bad){ alert(bad); return; }
   /* 可以 0 个可选项目（院长判断不建议做任何项目）：单独确认；IN 端客人之后可走仅出报告或本地项目 */
   if(!items.length){ if(!confirm('本报告不推荐任何赴韩项目，确定提交吗？')) return; }
@@ -1905,15 +1942,16 @@ ADMIN_RENDER.krshow = function(el){
 var KR_PCB = {rows:[]};
 function krPcbBuild(c){
   var ks = c.krSchedule || {}, base = ks.confirmedDate || todayStr(), rows = [];
-  krActiveItems(c).forEach(function(it){
-    (it.postcare||[]).forEach(function(x, i){
+  pcUniqueEntries(c).forEach(function(e0){
+    var it = e0.it, x = e0.x, i = e0.i;
+    (function(){
       var days = pcDays(x); if(!days.length) days = [0];
       days.forEach(function(n){
         var dt = new Date(base+'T00:00:00'); dt.setDate(dt.getDate()+n);
         rows.push({projectId:it.projectId, batchId:it.batchId||'', pcIdx:i, item:it.name, mgmt:x.mgmt||'', name:x.name, innName:x.innName||'', place:x.place, canIn:(x.place==='either' && !!x.innName),
-          date:dt.getFullYear()+'-'+pad2(dt.getMonth()+1)+'-'+pad2(dt.getDate()), time:'', where:'KR', askIn:false});
+          date:dt.getFullYear()+'-'+pad2(dt.getMonth()+1)+'-'+pad2(dt.getDate()), time:'', where:'KR', askIn:false, common:!!x.cid});
       });
-    });
+    })();
   });
   return rows;
 }
@@ -1981,7 +2019,8 @@ function krStepItemsCard(c){
     return '<div class="case-field-row" style="flex-wrap:wrap;"><span style="flex:1;font-size:13px;font-weight:600;'+(gone ? 'text-decoration:line-through;color:var(--muted);' : '')+'">'+krEsc(it.name)+(it.qty>1 ? ' ×'+it.qty : '')+'</span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+stText+'</span>'+
       (bits.length ? '<div style="flex-basis:100%;font-size:11px;color:var(--slate2);margin:2px 0 4px;line-height:1.6;">'+bits.map(krEsc).join('　｜　')+'</div>' : '')+'</div>';
   }).join('');
-  return krCardBox('施术项目', rows || krEmpty('没有赴韩项目'));
+  var cm = commonCareOf(krActiveItems(c)), cmHtml = cm.length ? '<div style="font-size:12px;color:var(--slate2);margin-top:8px;border-top:1px solid var(--border2);padding-top:6px;"><b>共同术后管理</b>'+cm.map(function(x){ return '<div>'+krEsc(x.text)+'（适用：'+x.applies.map(krEsc).join('、')+'）</div>'; }).join('')+'</div>' : '';
+  return krCardBox('施术项目', (rows || krEmpty('没有赴韩项目'))+cmHtml);
 }
 function krWzBackBar(label){ return '<div style="margin-top:10px;"><button class="btn-ghost" onclick="'+(label||'krWzBack()')+'">← 上一步</button></div>'; }
 /* 添加项目（可不加）：左选项目（KR 项目库）/ 右已选 + 结算，同 IN 本地选购版面；睡眠 / 全麻须勾麻醉同意书 */
