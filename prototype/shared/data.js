@@ -3703,7 +3703,7 @@ function coreSubAdd(c, o, by){
 /* 术后管理预约（CMD-1012-02 D4）：按术后管理设定逐条生成；rows = [{projectId, batchId, pcIdx, mgmt, name, innName, date, time, where:'KR'|'IN', askIn}]
    在韩国做 → 在韩子项（术后管理记录，place KR，带时间）；回印尼做 → 分配给客人在印尼的持有项目（inTimes）+ 子项 place IN，可勾"请 IN 帮忙预约"→ IN 收到"待预约"。重复提交会替换上一次的预约子项 */
 function corePcBooking(c, rows, by){
-  var afterPay = c.krBalancePaid && c.krJudge && c.krJudge.result==='changed'; /* 调整方案：付款后才预约术后管理 */
+  var afterPay = c.krBalancePaid && c.krJudge && (c.krJudge.result==='changed' || c.krJudge.result==='ok'); /* 术后管理预约只在付清尾款后（原方案不变 / 调整方案都是，CMD-1013-03） */
   if(!c.settlementDone || (c.krBalancePaid && !afterPay) || c.visitClosed) return false;
   c.subItems = (c.subItems||[]).filter(function(s){ return !(s.pcb && !s.done && !s.booked); });
   var cnt = {}; krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x, i){ if(x.place==='either' && x.innName) cnt[it.name+'|'+i] = 0; }); });
@@ -3822,6 +3822,28 @@ function coreMarkUnable(c, names, reason, by){
   pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' 无法施术：'+names.join('、')+' / 原因：'+reason, {caseId:c.id});
   updateCaseStage(c);
   syncSurgerySub(c);
+  return true;
+}
+/* 退回评估重选（CMD-1013-03「上一步」）：评估后、结算 / 确认更换时间 / 退款完成之前都可以退回；结束前的选择不产生结算单、不记为定案（Timeline 记一笔修改） */
+function coreJudgeRevert(c, by){
+  var j = c.krJudge; if(!j || j.settled || c.krBalancePaid || c.visitClosed || isEnded(c)) return false;
+  c.krJudge = null;
+  logCaseEvent(c, by, 'KR退回评估重选：原选择「'+KR_JUDGE_TEXT[j.result]+'」'+(j.memo ? '（memo：'+j.memo+'）' : '')+(j.refundKind ? '，原退定金判断（'+(j.refundKind==='all' ? '全部退回' : '不退')+'）作废' : '')+'；还没有结算，没有产生结算单');
+  updateCaseStage(c);
+  return true;
+}
+/* 不建议手术 → 取消项目 → 更换项目：原项目全部「已更换」，KR 项目库选新项目（不另算差价，尾款 = 最终项目合计 − 已付定金），判断改记「需要调整方案」后走结算 */
+function coreCannotReplace(c, names, byName, by){
+  var j = c.krJudge; if(!j || j.result!=='cannot' || j.settled || c.krBalancePaid || c.visitClosed || !names.length) return false;
+  var pend = krNotStartedItems(c); if(!pend.length) return false;
+  var origNames = pend.map(function(it){ return it.name; });
+  pend.forEach(function(it){ it.swapped = true; it.replacedBy = names.join('、'); });
+  var ok = true;
+  names.forEach(function(n){ var o = (byName||{})[n] || {}; if(ok && !coreAddOnItem(c, n, by, {anesthesia:o.anesthesia, signed:o.signed, detail:o.detail})) ok = false; });
+  if(!ok){ pend.forEach(function(it){ delete it.swapped; delete it.replacedBy; }); return false; }
+  j.result = 'changed'; delete j.refundKind; j.memo = (j.memo||'')+'（更换项目：'+origNames.join('、')+' → '+names.join('、')+'）';
+  logCaseEvent(c, by, '不建议手术 → 取消项目 → 更换项目：'+origNames.join('、')+' → '+names.join('、')+'（不另算差价，尾款按最终项目合计 − 已付定金）');
+  syncSurgerySub(c); updateCaseStage(c);
   return true;
 }
 /* 更换项目：原项目留在原结算单标「已更换」；新项目另开新结算单，不收定金，金额直接计入尾款（"计入尾款"） */
