@@ -459,3 +459,10 @@ prototype/shared/app.css  共用样式
 - **［上一步］**：`coreJudgeRevert`，付清尾款 / 确认更换时间 / 退款完成前都可退回重选；评估后选的保留 / 更换 / 添加项目只在界面状态里（`KR_ADJ`），**点［付清尾款］（`krDoSettle`）时才一次生成结算单**；Timeline 记「退回评估重选」。
 - **金额**：换项目不另算差价，尾款 = 最终项目合计 − 已付定金（`krWzSettleCard` 预览，不含本地管理项目）；付清尾款后施术中再加的继续走「待付款 + ［修正］」。**术后管理预约弹窗只在付清尾款后出现**（`krDoJudge` 不再自动弹；`corePcBooking` 付款后原方案不变 / 调整方案都允许；`krPcbButtonHtml` 付款前不显示）。
 - **共同术后管理**：发送诊疗方案右侧各项目下方一块（`krCommonBlock`，行格式同所需术后管理 + 适用项目勾选至少 2 项，数据在 `KR_SUB.detail['__common']`）；提交时给每个适用项目的 `postcare` 各带一份（`x.cid` 相同、`x.applies`）。显示 / 预约 / 转持有按 cid 只算一次（`pcUniqueEntries(c)`、`commonCareOf(items)`；`itemMetaText` / `recSummaryData` / `pcLinesHtml` 跳过 cid 条目，推荐项目整理另列「共同术后管理」段，KR 施术项目卡一行）；适用项目取消后只剩一个仍保留，全部取消一起拿掉（按活跃项目现算）。数据版本不变（41）。
+
+## CMD-1013-04 补充（2026-10-13，追加；旧文字保留作历史）
+- **退款服务**：IN 案件基础资料 tab 顶部［退款服务（可退批次 N 个）］（`refundServiceBarHtml`，接待中 / 基础资料未确认时也有；只有客人有可退批次 `refundableBatches` 才出现）→ 弹窗勾选批次（日期 / 购买案件 / 已用/购买 / 实付 / 参考值）、逐批填金额（可为 0、不超实付）、共用一个必填原因，可一次退多批（`confirmRefundService`）→ 问「这次只办退款吗？」（`openRefundOnlyAsk`）：是 → `finishCase` 结局已取消（仅办理退款）；还有别的 → 照常接待（`c.refundVisit` 保留，之后没有其他购买 / 使用结案时仍是仅办理退款）。Timeline 记三边：本案件、客人 Timeline（`stage:'退款服务'`）、购买批次的案件（`holdingRefunds`，退款仍记在购买案件财务上）。
+- 客户详情持有项目卡拿掉［退款］（`openHoldingRefundByIdx` / `openHoldingRefundModal` 留在代码里但没有入口）；医美史「本院项目记录」只列已使用 / 已完成的批次和赴韩项目（`renderProjectHistory`）。
+- 测试覆盖：E1 / E2 按 `c.bookClient` 分开（旧案件没有该字段的不计入，避免同一案件既算新客又算老客）；B10 只算案件最终 `stage==='cancelled'` 且取消原因「仅办理退款」；E10 同时认「退款服务：」记录。
+- **不建议手术 → 取消项目 → 更换项目**：院长评估保留「不建议手术 + memo」（`j.result` 仍是 `cannot`，新增 `j.replaced=true`），Timeline 记「取消项目 → 更换为 xx」；`coreSettleBalance` / 预约弹窗 / IN 显示按 `replaced` 当作调整后的结算处理。**更换时间**（`krDoRebook`）也弹非营业时间确认。
+- **IN 不再分配术后管理**：`pcLinesHtml` 只读（必须在韩国 / 韩国或印尼都可、次数、第 N 天起）；「韩国或印尼都可」（含共同）一律由 KR 在付清尾款后的预约弹窗决定，弹窗里默认「请选择」（`where:''`），没选不能确认；迁移 42 清掉还没付尾款 / 没预约案件里旧的 `inTimes`（已生成的持有批次、已预约子项不动）。共用 ONDA 回印尼做 → 持有批次只生成一次（`pcUniqueEntries`）。数据版本 41 → 42。

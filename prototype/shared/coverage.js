@@ -58,7 +58,7 @@
     ['B7','只用以前持有的项目 → 结案', logHit(/使用了/, function(c){ return c.stage==='closed' && !/本地项目已转入客户持有|完成项目付款/.test(T(c)) && !krItems(c).length; }), '结案 + 有「使用了」+ 没有本次付款'],
     ['B8','使用中管理取消（次数归还）', logHit(/标记取消（次数已归还持有/), 'Timeline「标记取消（次数已归还持有…」'],
     ['B9','本次不购买 → 已取消', logHit(/本次不购买项目/, function(c){ return c.stage==='cancelled'; }), 'Timeline「本次不购买项目」+ 主状态已取消'],
-    ['B10','只办退款 → 已取消（仅办理退款）', byCase(function(c){ return /仅办理退款/.test(String(c.cancelReason||'')) || c.cancelReason==='refundVisit' || c.refundVisit; }), '取消原因「仅办理退款」'],
+    ['B10','只办退款 → 已取消（仅办理退款）', byCase(function(c){ return c.stage==='cancelled' && /仅办理退款/.test(String(c.cancelReason||'')); }), '案件最终为已取消（取消原因「仅办理退款」）；还在接待 / 面诊中、只是办过退款的不算（CMD-1013-04）'],
     ['B11a','买活动价项目', holdFlag('promo'), '持有批次标记 promo（购买案件）'],
     ['B11b','买套餐', holdFlag('pkgPaid'), '持有批次标记 pkgPaid'],
     ['B11c','送서비스', holdFlag('service'), '持有批次标记 service'],
@@ -93,7 +93,7 @@
     ['D30','面诊或赴韩案件中添加本地管理', logHit(/添加本地管理（同日插做本地项目/), 'Timeline「添加本地管理」'],
     ['E','其他可从记录判断的'],
     ['E1','客人自助预约（新客）', byCase(function(c){ return c.bookClient==='new'; }), '案件字段 bookClient=new（CMD-1012-06 起记录）'],
-    ['E2','客人自助预约（老客）', byCase(function(c){ return c.bookClient==='old' || /官网\/短信链接自助预约成功/.test(((c.logEntries||[])[0]||{}).action||''); }), '案件字段 bookClient=old / 第一条记录「自助预约成功」'],
+    ['E2','客人自助预约（老客）', byCase(function(c){ return c.bookClient==='old'; }), '案件字段 bookClient=old（预约时这位客人已有档案）；和 E1 不会同时成立（CMD-1013-04）；没有 bookClient 的旧案件不计入 E1 / E2'],
     ['E3','老客旧版同意书重签', byCase(function(c){ return c.consentResigned; }), '案件字段 consentResigned（CMD-1012-06 起记录）'],
     ['E4','占位链接提交', byCase(function(c){ return c.bookEntry==='link' || /通过预约链接填完资料/.test(((c.logEntries||[])[0]||{}).action||''); }), '第一条记录「通过预约链接填完资料」'],
     ['E5','占位超时', function(d){ return {hits:d.phHistory.filter(function(h){ return h.status==='占位失效'; }).map(function(h){ return {c:null, label:h.phone+' '+h.date+' '+h.time, dt:h.date}; })}; }, '预约占位历史「占位失效」'],
@@ -106,7 +106,7 @@
     ['E9','未接来电', function(d){ var hits = [];
         d.notifs.concat(d.hospitalNotifs).forEach(function(n){ if(/未接来电/.test(n.text||'')){ var c = d.cases.filter(function(x){ return x.id===n.caseId && x.__clinic===(n.__clinic||x.__clinic); })[0]; if(c) hits.push({c:c, label:(n.text||'').slice(0,40), dt:n.ts||''}); } });
         return {hits:hits}; }, '通知里有「未接来电」（通知保留 90 天）'],
-    ['E10','持有项目退款', logHit(/持有批次退款/), 'Timeline「…办理持有批次退款」'],
+    ['E10','持有项目退款', logHit(/持有批次退款|退款服务：/), 'Timeline「…办理持有批次退款」或「退款服务：…」'],
     ['E11','重新选择项目（待付款）', logHit(/待付款结算单.*退回重新选择项目/), 'Timeline「待付款结算单…退回重新选择项目」'],
     ['F','新增功能（CMD-1012-02 / 05）'],
     ['F1','开始面诊', logHit(/开始面诊/), 'Timeline「开始面诊」'],

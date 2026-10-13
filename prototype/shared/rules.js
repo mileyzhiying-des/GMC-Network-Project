@@ -684,17 +684,12 @@ function itemArrangeHtml(it, full){
 function pcAllocEditable(c){ return !c.krBalancePaid && !isEnded(c); } /* 付尾款前都可以改 */
 /* 已选 / 结算单里每个赴韩项目下面的术后管理行：显示韩国 n + 印尼 m；可弹性的（且有印尼对应项目）IN 室长可调 */
 function pcLinesHtml(c, it, fn){
-  fn = fn || 'setPcAlloc';
+  /* IN 不再分配术后管理（CMD-1013-04 五）：只读显示 必须在韩国 / 韩国或印尼都可、次数、第 N 天起；「韩国或印尼都可」一律由 KR 在付清尾款后的预约弹窗决定 */
   if(!(it.postcare||[]).filter(function(x){ return !x.cid; }).length) return '';
-  var editable = pcAllocEditable(c) && !it.cancelled && !it.swapped, bid = it.batchId || '';
-  return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);"><div style="color:var(--muted);margin-bottom:2px;">术后管理（含在套餐内，不另收费；地点分配只用于排程）</div>'+it.postcare.map(function(x, i){
+  return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);"><div style="color:var(--muted);margin-bottom:2px;">术后管理（含在套餐内，不另收费；地点由 KR 在付清尾款后预约时决定）</div>'+it.postcare.map(function(x){
     if(x.cid) return ''; /* 共同术后管理不在每个项目下重复（另列一段） */
-    var s = pcSplit(x), head = (x.mgmt ? x.mgmt+'｜' : '')+x.name+'（在韩国） × '+x.times+' 次'+(pcDayText(x)?'（'+pcDayText(x)+'）':'');
-    if(x.place==='KR') return '<div style="margin:3px 0;">'+head+'：韩国 '+x.times+' 次，必须在韩国</div>';
-    var ctl = (editable && x.innName)
-      ? '印尼 <input type="number" min="0" max="'+x.times+'" value="'+s.inn+'" onchange="'+fn+'(\''+it.projectId+'\',\''+bid+'\','+i+',this.value)" style="width:44px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;font-size:11px;"> 次'
-      : '印尼 '+s.inn+' 次'+(x.innName ? '' : '（没有印尼对应项目，只能在韩国）');
-    return '<div style="margin:3px 0;">'+head+'：韩国 '+s.kr+' 次 + '+ctl+(x.innName ? '（'+x.innName+'（在印尼））' : '')+(pcAllocEditable(c) ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;font-size:10px;">暂定</span>' : '')+'</div>';
+    var head = (x.mgmt ? x.mgmt+'｜' : '')+x.name+' × '+x.times+' 次'+(pcDayText(x)?'（'+pcDayText(x)+'）':'');
+    return '<div style="margin:3px 0;">'+head+'：'+(x.place==='KR' ? '必须在韩国' : '韩国或印尼都可')+'</div>';
   }).join('')+'</div>';
 }
 /* 麻醉同意书（占位文案，等用户撰写；记录版本 + 签署时间存在案件上） */

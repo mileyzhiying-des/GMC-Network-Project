@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 41; /* 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 42; /* 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -3398,7 +3398,7 @@ function krArrivedOpsHtml(c){
     inner = wait('等待 KR 室长判断能否施术（到院后的判断、调整、尾款、子项进行全部由 KR 端操作，这里只显示结果）');
   } else if(j.result==='ok'){
     inner = note('KR判断：能施术，项目没变动')+(c.krBalancePaid ? '<div style="font-size:12px;color:var(--sage);font-weight:700;">✓ 已付清尾款，行程已确认；在韩 timeline 的子项由 KR 逐个标完成，在韩国的子项全部完成后案件结案</div>' : wait('等待 KR 确认行程并标记付清尾款（尾款 '+formatCurrency(info.diff,'KRW')+'）'));
-  } else if(j.result==='changed'){
+  } else if(j.result==='changed' || j.replaced){
     var calc = '实际项目合计 '+formatCurrency(info.total,'KRW')+'；定金合计 '+formatCurrency(info.deposit,'KRW')+(info.preRefund>0 ? '，减去到院前已退 '+formatCurrency(info.preRefund,'KRW') : '')+' = 可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'；'+(info.diff>=0 ? '尾款 ' : '应退差额 ')+formatCurrency(Math.abs(info.diff),'KRW');
     inner = note('KR判断：能施术，但项目有变动')+'<div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">'+calc+'</div>'+
       (c.krBalancePaid ? '<div style="font-size:12px;color:var(--sage);font-weight:700;">✓ 尾款已结清（按实际项目重算）；在韩 timeline 的子项由 KR 逐个标完成</div>'
@@ -3703,7 +3703,7 @@ function coreSubAdd(c, o, by){
 /* 术后管理预约（CMD-1012-02 D4）：按术后管理设定逐条生成；rows = [{projectId, batchId, pcIdx, mgmt, name, innName, date, time, where:'KR'|'IN', askIn}]
    在韩国做 → 在韩子项（术后管理记录，place KR，带时间）；回印尼做 → 分配给客人在印尼的持有项目（inTimes）+ 子项 place IN，可勾"请 IN 帮忙预约"→ IN 收到"待预约"。重复提交会替换上一次的预约子项 */
 function corePcBooking(c, rows, by){
-  var afterPay = c.krBalancePaid && c.krJudge && (c.krJudge.result==='changed' || c.krJudge.result==='ok'); /* 术后管理预约只在付清尾款后（原方案不变 / 调整方案都是，CMD-1013-03） */
+  var afterPay = c.krBalancePaid && c.krJudge && (c.krJudge.result==='changed' || c.krJudge.result==='ok' || c.krJudge.replaced); /* 术后管理预约只在付清尾款后（原方案不变 / 调整方案都是，CMD-1013-03） */
   if(!c.settlementDone || (c.krBalancePaid && !afterPay) || c.visitClosed) return false;
   c.subItems = (c.subItems||[]).filter(function(s){ return !(s.pcb && !s.done && !s.booked); });
   var cnt = {}; pcUniqueEntries(c).forEach(function(e0){ if(e0.x.place==='either' && e0.x.innName) cnt[e0.it.name+'|'+e0.i] = 0; }); /* 共同术后管理只按一份算 */
@@ -3834,15 +3834,15 @@ function coreJudgeRevert(c, by){
 }
 /* 不建议手术 → 取消项目 → 更换项目：原项目全部「已更换」，KR 项目库选新项目（不另算差价，尾款 = 最终项目合计 − 已付定金），判断改记「需要调整方案」后走结算 */
 function coreCannotReplace(c, names, byName, by){
-  var j = c.krJudge; if(!j || j.result!=='cannot' || j.settled || c.krBalancePaid || c.visitClosed || !names.length) return false;
+  var j = c.krJudge; if(!j || j.result!=='cannot' || j.replaced || j.settled || c.krBalancePaid || c.visitClosed || !names.length) return false;
   var pend = krNotStartedItems(c); if(!pend.length) return false;
   var origNames = pend.map(function(it){ return it.name; });
   pend.forEach(function(it){ it.swapped = true; it.replacedBy = names.join('、'); });
   var ok = true;
   names.forEach(function(n){ var o = (byName||{})[n] || {}; if(ok && !coreAddOnItem(c, n, by, {anesthesia:o.anesthesia, signed:o.signed, detail:o.detail})) ok = false; });
   if(!ok){ pend.forEach(function(it){ delete it.swapped; delete it.replacedBy; }); return false; }
-  j.result = 'changed'; delete j.refundKind; j.memo = (j.memo||'')+'（更换项目：'+origNames.join('、')+' → '+names.join('、')+'）';
-  logCaseEvent(c, by, '不建议手术 → 取消项目 → 更换项目：'+origNames.join('、')+' → '+names.join('、')+'（不另算差价，尾款按最终项目合计 − 已付定金）');
+  j.replaced = true; delete j.refundKind; /* 院长评估仍保留「不建议手术 + memo」，不改记为需要调整方案（CMD-1013-04 四·1） */
+  logCaseEvent(c, by, '取消项目 → 更换为 '+names.join('、')+'（原项目 '+origNames.join('、')+'；评估仍是「不建议手术」；不另算差价，尾款按最终项目合计 − 已付定金）');
   syncSurgerySub(c); updateCaseStage(c);
   return true;
 }
@@ -3887,7 +3887,7 @@ function finalizeInnCare(c){
 }
 function coreSettleBalance(c, by){
   if(!isArrived(c) || c.krBalancePaid || !c.krJudge || c.krJudge.settled) return {ok:false};
-  var j = c.krJudge; if(j.result!=='ok' && j.result!=='changed') return {ok:false};
+  var j = c.krJudge; if(j.result!=='ok' && j.result!=='changed' && !(j.result==='cannot' && j.replaced)) return {ok:false};
   var info = krBalanceInfo(c);
   if(info.diff < 0){ /* 定金多了：金额由 KR 判断，IN 室长按这个金额退差额 */
     j.refundDue = -info.diff;
@@ -3903,7 +3903,7 @@ function coreSettleBalance(c, by){
 }
 /* KR 在韩重新预约施术时间：回到"施术时间已确认"（新时间），客人再到医院时 KR 重新标记已到医院；IN 不能改 */
 function coreRebook(c, date, time, by){
-  if(!c.krSchedule || !isArrived(c) || (c.krJudge && c.krJudge.result!=='cannot' && c.krJudge.settled)) return false;
+  if(!c.krSchedule || !isArrived(c) || (c.krJudge && (c.krJudge.result!=='cannot' || c.krJudge.replaced) && c.krJudge.settled)) return false;
   var ks = c.krSchedule; ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time;
   c.krJudge = null;
   logCaseEvent(c, by, 'KR在韩国重新预约施术时间：'+date+' '+time+'（韩国时间；回到施术时间已确认，IN端显示更改时间）');
