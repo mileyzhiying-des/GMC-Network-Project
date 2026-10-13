@@ -1834,7 +1834,7 @@ function noProjectForClient(){
   var c = getCurrentCase(); if(!c) return;
   if(!confirm('确认客人不做任何项目？案件将按结局结束（仅出报告）。')) return;
   logCaseEvent(c, ME_NAME, '客人不做项目');
-  c.endNote = (c.krScope && (c.krScope.items||[]).length===0) ? 'KR 无可选项目' : '客人不做项目'; /* 仅出报告的原因（列表进程栏显示） */
+  c.endNote = '客人不做项目'; /* 仅出报告的原因（列表进程栏显示） */
   finishCase(c, '未购买未使用');
 }
 

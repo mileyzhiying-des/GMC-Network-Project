@@ -121,7 +121,7 @@ function caseProcessText(c){
     if(krAllItems(c).length && !c.localMgmt && kept.length && kept.every(function(x){ return !(x.b.used>0); })) return '本地项目保留';
     return '本地完成';
   } /* CMD-1008-13 确认 */
-  if(c.stage==='reportonly') return c.endNote || ((c.krScope && (c.krScope.items||[]).length===0) ? 'KR 无可选项目' : '只出报告'); /* 仅出报告写原因 */
+  if(c.stage==='reportonly') return c.endNote || '只出报告'; /* 仅出报告写原因 */
   return '';
 }
 function caseStageInfo(c){

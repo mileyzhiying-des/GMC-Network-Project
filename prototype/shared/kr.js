@@ -1245,9 +1245,9 @@ function krSubmitReport(){
     dcm.pc.forEach(function(x, i){ var ap = pk.filter(function(n){ return (x.apply||{})[n]; }); if(!x.kr) bad = '共同术后管理第 '+(i+1)+' 行还没选具体项目'; else if(ap.length < 2) bad = '共同术后管理第 '+(i+1)+' 行适用项目至少要勾 2 个'; }); }
   if(!bad) items.forEach(function(it){ if(cand.kr.some(function(p){ return p.name===it.name; })) it.postcare = (it.postcare||[]).concat(krCommonEntries(cand, it.name)); });
   if(bad){ alert(bad); return; }
-  /* 可以 0 个可选项目（院长判断不建议做任何项目）：单独确认；IN 端客人之后可走仅出报告或本地项目 */
-  if(!items.length){ if(!confirm('本报告不推荐任何赴韩项目，确定提交吗？')) return; }
-  else if(!confirm('发送后 IN 端会变成"项目确认中"，并收到"诊疗方案已到"通知。确认发送？')) return;
+  /* 发送诊疗方案至少勾 1 个赴韩项目（CMD-1013-07 一；取消「KR 不给项目 → 仅出报告」的路径） */
+  if(!items.length){ alert('至少要勾选 1 个赴韩项目才能发送诊疗方案'); return; }
+  if(!confirm('发送后 IN 端会变成"项目确认中"，并收到"诊疗方案已到"通知。确认发送？')) return;
   var v = krVault(KR_CASE.clinicId, KR_CASE.id, true), last = v.drafts.length ? v.drafts[v.drafts.length-1].text : '';
   if(text !== last){ v.drafts.push({id:'dr'+Date.now(), ts:nowFullDt(), by:ME_NAME, source:'KR 室长调整稿', text:text}); krVaultLog(v, '室长调整草稿（最终报告）'); }
   krVaultLog(v, '提交最终报告');
@@ -1454,7 +1454,7 @@ function krDoSettle(){
   if(!krCan() || !KR_ARR.confirmTrip) return;
   var r0 = krFindCase(KR_CASE.clinicId, KR_CASE.id), c0 = r0.c, j0 = c0.krJudge || {};
   var mode = KR_WZ.cannotOpt==='replace' && j0.result==='cannot' ? 'replace' : j0.result; /* ok / changed / replace（不建议手术 → 取消项目 → 更换项目） */
-  var cand = krScopeCandidates(KR_CASE.clinicId), adds = [], swaps = [], drops = [], i;
+  var cand = krScopeCandidates(KR_CASE.clinicId), adds = [], swaps = [], drops = [], i, lcs = KR_ADJ.locals.slice();
   var addNames = Object.keys(KR_ADJ.adds);
   for(i = 0; i < addNames.length; i++){
     var dt = krDetailOf(addNames[i], cand); if(dt.error){ alert('「'+addNames[i]+'」：'+dt.error); return; }
@@ -1466,12 +1466,12 @@ function krDoSettle(){
     pend.forEach(function(it){
       if(!KR_ADJ.dropped[it.name]) return;
       var alt = KR_ADJ.swap[it.name];
-      if(alt){ KR_SUB.detail['__swap'+it.name] = KR_SUB.detail['__swap'+it.name] || krDefaultsDetail(alt); var sd = krDetailOf('__swap'+it.name, cand); swaps.push({from:it.name, to:alt, detail:sd}); }
+      if(alt && /^L\|/.test(alt)){ var li = krSwapLocal(alt); if(li) swaps.push({from:it.name, local:li}); else drops.push(it.name); } /* 更换为管理项目（收费） */
+      else if(alt){ KR_SUB.detail['__swap'+it.name] = KR_SUB.detail['__swap'+it.name] || krDefaultsDetail(alt); var sd = krDetailOf('__swap'+it.name, cand); swaps.push({from:it.name, to:alt, detail:sd}); }
       else drops.push(it.name);
     });
     if(pend.length - drops.length + adds.length + lcs.length < 1){ alert('至少要保留或增加一个项目；全部不做请选"不建议手术"'); return; }
   }
-  var lcs = KR_ADJ.locals.slice();
   if(mode==='replace' && !adds.length && !lcs.length){ alert('请先选要更换成的项目（KR 项目库）'); return; }
   if(mode==='ok' && !pend.length && !adds.length) return;
   KR_ARR.confirmTrip = false;
@@ -1481,7 +1481,7 @@ function krDoSettle(){
       var byName = {}; adds.forEach(function(a){ byName[a.name] = {anesthesia:a.detail.anesthesia, signed:true, detail:a.detail}; });
       if(!coreCannotReplace(c, adds.map(function(a){ return a.name; }), byName, ME_NAME, lcs)) return false;
     } else {
-      swaps.forEach(function(s){ coreSwapItem(c, s.from, s.to, ME_NAME, s.detail); });
+      swaps.forEach(function(s){ coreSwapItem(c, s.from, s.to, ME_NAME, s.detail, s.local); });
       adds.forEach(function(a){ coreAddOnItem(c, a.name, ME_NAME, {anesthesia:a.detail.anesthesia, signed:true, detail:a.detail}); });
       lcs.forEach(function(x){ coreAddOnItem(c, x.name, ME_NAME, {local:x}); });
       if(drops.length) coreMarkUnable(c, drops, (c.krJudge && c.krJudge.memo) || '评估调整', ME_NAME);
@@ -1938,7 +1938,7 @@ function krPcbBuild(c){
       days.forEach(function(n){
         var dt = new Date(base+'T00:00:00'); dt.setDate(dt.getDate()+n);
         rows.push({projectId:it.projectId, batchId:it.batchId||'', pcIdx:i, item:it.name, mgmt:x.mgmt||'', name:x.name, innName:x.innName||'', place:x.place, canIn:(x.place==='either' && !!x.innName),
-          date:dt.getFullYear()+'-'+pad2(dt.getMonth()+1)+'-'+pad2(dt.getDate()), time:'', where:(x.place==='either' && !!x.innName ? '' : 'KR'), askIn:false, common:!!x.cid}); /* 韩国或印尼都可：默认未选，由 KR 选（不读 IN 的分配，CMD-1013-04 五） */
+          day:n, date:dt.getFullYear()+'-'+pad2(dt.getMonth()+1)+'-'+pad2(dt.getDate()), time:'', where:(x.place==='either' && !!x.innName ? '' : 'KR'), askIn:false, common:!!x.cid}); /* 韩国或印尼都可：默认未选，由 KR 选（不读 IN 的分配，CMD-1013-04 五） */
       });
     })();
   });
@@ -2061,7 +2061,7 @@ function krWzSettleCard(c, mode){
   var doneTotal = krAllItems(c).filter(function(it){ return it.done && !it.cancelled && !it.swapped; }).reduce(function(s, it){ return s + itemKrAmount(it); }, 0);
   if(mode==='replace'){ /* 原项目全部更换 */ }
   else pend.forEach(function(it){
-    if(mode==='changed' && KR_ADJ.dropped[it.name]){ var alt = KR_ADJ.swap[it.name]; if(alt) lines.push({t:krEsc(it.name)+' → 更换为 '+krEsc(alt), amt:price(alt)}); }
+    if(mode==='changed' && KR_ADJ.dropped[it.name]){ var alt = KR_ADJ.swap[it.name]; if(alt && /^L\|/.test(alt)){ var li = krSwapLocal(alt); if(li) lines.push({t:krEsc(it.name)+' → 更换为 '+krEsc(li.name+' · '+li.specLabel)+'（管理）', amt:li.price}); } else if(alt) lines.push({t:krEsc(it.name)+' → 更换为 '+krEsc(alt), amt:price(alt)}); }
     else lines.push({t:krEsc(it.name), amt:itemKrAmount(it)});
   });
   Object.keys(KR_ADJ.adds).forEach(function(n){ lines.push({t:'＋ '+krEsc(n)+'（当天加，手术）', amt:price(n)}); });
@@ -2096,7 +2096,8 @@ function krWizard(c){
     if(KR_ADJ.step!=='add'){
       var pickRows = pend.map(function(it){
         var keep = !KR_ADJ.dropped[it.name], nm = krEsc(it.name).replace(/'/g,'');
-        var opts = '<option value="">（不做，直接取消）</option>'+cand.kr.filter(function(p){ return p.name!==it.name && !krAllItems(c).some(function(x){ return x.name===p.name && !x.cancelled && !x.swapped; }); }).map(function(p){ return '<option'+(KR_ADJ.swap[it.name]===p.name?' selected':'')+'>'+krEsc(p.name)+'</option>'; }).join('');
+        var opts = '<option value="">（不做，直接取消）</option><optgroup label="手术项目（KR 赴韩项目库）">'+cand.kr.filter(function(p){ return p.name!==it.name && !krAllItems(c).some(function(x){ return x.name===p.name && !x.cancelled && !x.swapped; }); }).map(function(p){ return '<option'+(KR_ADJ.swap[it.name]===p.name?' selected':'')+'>'+krEsc(p.name)+'</option>'; }).join('')+'</optgroup>'+
+          '<optgroup label="管理项目（KR 本地管理项目库，收费）">'+krLocalLib(krHospitalIdOfMe()).filter(function(p){ return !p.neg; }).map(function(p){ return p.specs.map(function(sp){ var v = 'L|'+p.id+'|'+sp.id; return '<option value="'+v+'"'+(KR_ADJ.swap[it.name]===v?' selected':'')+'>'+krEsc(p.name+' · '+sp.label+'（'+formatCurrency(sp.price,'KRW')+'）')+'</option>'; }).join(''); }).join('')+'</optgroup>';
         return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:13px;"><label style="display:flex;gap:8px;align-items:center;min-width:220px;cursor:pointer;"><input type="checkbox" '+(keep?'checked':'')+' onchange="krAdjToggleKeep(\''+nm+'\',this.checked)"> 保留 '+krEsc(it.name)+' <span style="color:var(--muted);">'+formatCurrency(itemKrAmount(it),'KRW')+'</span></label>'+
           (keep ? '' : '<span style="color:var(--slate2);">更换为</span><select onchange="KR_ADJ.swap[\''+nm+'\']=this.value;krRenderCaseDetail()" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;">'+opts+'</select>')+'</div>';
       }).join('');
@@ -2123,6 +2124,8 @@ function krWizard(c){
   }
   return items+krCardBox('到院与尾款', infoLine+optHtml+sub)+(can ? krWzBackBar() : '');
 }
+/* 3-2 更换为管理项目：下拉值 'L|项目id|规格id' → {name, specLabel, price, projectId} */
+function krSwapLocal(v){ var p = String(v).split('|'), pr = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===p[1]; })[0], sp = pr && pr.specs.filter(function(s){ return s.id===p[2]; })[0]; return (pr && sp) ? {name:pr.name, specLabel:sp.label, price:sp.price, projectId:pr.id} : null; }
 function krAdjNext(){
   var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, pend = krNotStartedItems(c);
   var kept = pend.filter(function(it){ return !KR_ADJ.dropped[it.name] || KR_ADJ.swap[it.name]; }).length;

@@ -71,7 +71,6 @@
     ['C13','待缴费时取消面诊 → 转不面诊', logHit(/面诊取消（面诊费已取消）/), 'Timeline「面诊取消（面诊费已取消）」'],
     ['C14','面诊费免除', logHit(/免除面诊费/), 'Timeline「免除面诊费」'],
     ['C15','出诊疗方案后客人不做项目 → 仅出报告', logHit(/客人不做项目/, function(c){ return c.stage==='reportonly'; }), 'Timeline「客人不做项目」+ 仅出报告'],
-    ['C16','KR 不给项目 → 仅出报告', byCase(function(c){ return c.stage==='reportonly' && c.reportReady && !(c.krScope && c.krScope.items && c.krScope.items.length); }), '仅出报告 + 已出诊疗方案 + KR 可选范围为空'],
     ['C17','延续既往面诊、沿用原诊疗方案', logHit(/沿用原(诊疗方案|报告)|沿用之前(诊疗方案|报告)/), 'Timeline「沿用原诊疗方案」'],
     ['D','赴韩'],
     ['D18','赴韩无变动 → 结案', byCase(function(c){ return c.stage==='closed' && c.krJudge && c.krJudge.result==='ok' && c.krBalancePaid; }), '结案 + 到院评估「原方案不变」+ 已付清尾款'],
