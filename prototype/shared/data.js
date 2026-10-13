@@ -1289,6 +1289,18 @@ function localPurchasedBatches(c){ /* 本案件买的本地项目/术后管理�
 
 /* 面诊（待缴费 / 待确认报告时间 / 等待报告 / 增加面诊后项目确认中）或赴韩还在进行 → 本地管理做完也不自动结案（CMD-1013-13 一·2，临时规则，只加这个保护） */
 function mainlineOngoing(c){
+  if(newCloseOn()) return mainlineOngoingNew(c);
+  return mainlineOngoingOld(c);
+}
+/* 新规则（CMD-1013-16）：优先级 施术 > 面诊 > 本地。有施术或面诊的案件，本地做完不结束，等施术 / 面诊有结果（客人不做项目、手动结束、赴韩结束才算有结果）；纯本地案件本地做完就结束 */
+function mainlineOngoingNew(c){
+  if(krNotStartedItems(c).length || (c.settlementDone && krActiveItems(c).length && !c.krProcedureDone)) return true;
+  if(c.endNote || c.krProcedureDone || c.manualEnd) return false;
+  if(krAllItems(c).length && !krActiveItems(c).length) return false; /* 赴韩项目都取消 / 更换完了：施术已有结果（如无法协调后保留本地） */
+  if(c.consultRequested && c.consultStatus!=='cancelled') return true;
+  return !!c.reuseReport && !!c.reportReady && c.needsConsult!==false;
+}
+function mainlineOngoingOld(c){
   if(krNotStartedItems(c).length || (c.settlementDone && krActiveItems(c).length && !c.krProcedureDone)) return true;
   if(!c.consultRequested || c.consultStatus==='cancelled' || c.endNote || c.krProcedureDone) return false;
   return ['awaiting_payment','paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1 || (c.consultStatus==='report_ready' && !!c.addedConsultAfterLocal);
@@ -1297,12 +1309,48 @@ function mainlineOngoing(c){
 function repairWronglyClosedCases(){
   var n = 0;
   CASE_ITEMS.forEach(function(c){
-    if(!c.visitClosed || !(c.addedConsultAfterLocal || c.localTrack || c.needsConsult===true) || !mainlineOngoing(c)) return;
+    if(!c.visitClosed || !(c.addedConsultAfterLocal || c.localTrack || c.needsConsult===true) || !mainlineOngoingOld(c)) return;
     if(!c.consultRequested && !krActiveItems(c).length) return;
     c.visitClosed = false; c.cancelReason = null; c.krProcedureDone = c.krProcedureDone && krActiveItems(c).length>0 ? c.krProcedureDone : false;
     updateCaseStage(c); logCaseEvent(c, '系统', '修正：本地管理做完时面诊 / 赴韩还在进行，案件不应结案，已恢复为进行中'); n++;
   });
   return n;
+}
+/* ===== CMD-1013-16 新结案规则（试行，newCloseOn() 控制）===== */
+/* 钱没清：待收款（面诊费待缴 / 待付款结算单 / 在韩待付款加项）。待退款目前没有独立的「待退」状态（退款都是当场办完），所以只列待收 */
+function closeBlockers(c){
+  var out = [];
+  if(c.consultRequested && c.consultStatus==='awaiting_payment') out.push('面诊费待缴');
+  (c.settlementBatches||[]).forEach(function(b){ if(b.status==='unpaid') out.push('待付款结算单（批次 '+b.id+'）'); });
+  pendingPayItems(c).forEach(function(it){ out.push('在韩待付款：'+it.name); });
+  return out;
+}
+/* 自动结束的统一出口（本地流程里的各个结束点用）：开着新规则时，钱没清 → 不结束，写系统记录 + 提示；其余照旧 finishCase */
+function autoFinish(c, reason){
+  if(newCloseOn()){
+    var bl = closeBlockers(c);
+    if(bl.length){
+      logCaseEvent(c, '系统', '案件暂不结束：还有未处理的款项（'+bl.join('、')+'），请先收款或取消该项目');
+      if(typeof showToast==='function') showToast('钱还没清', '还有未处理的款项：'+bl.join('、')+'。先收款或取消该项目，案件才能结束', null);
+      updateCaseStage(c);
+      if(typeof document!=='undefined' && document.getElementById('case-body')){ buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }
+      return false;
+    }
+  }
+  finishCase(c, reason); return true;
+}
+/* 本地管理只能当天加：面诊 / 赴韩案件里，只有「本地管理第一次添加的当天」或「本案件到店当天」可以加；纯本地案件不适用；开关关 = 不限 */
+function localDayLimited(c){ return newCloseOn() && !!c && (c.consultRequested || c.needsConsult===true || krAllItems(c).length>0 || c.addedConsultAfterLocal); }
+function localAddAllowed(c){
+  if(!localDayLimited(c)) return true;
+  var t = todayStr();
+  return t===c.localMgmtDay || t===(c.arrivedDay || c.visitDate);
+}
+/* 手动［结束案件］：只在付定金之前；IN 一般室长 / 管理者 */
+function krDepositPaid(c){ return !!c.hasArrived || !!c.krProcedureDone || (c.settlementBatches||[]).some(function(b){ return b.status==='active' && (b.krDeposit||0)>0; }); }
+function canEndCase(c){
+  if(!newCloseOn() || !c || isEnded(c) || c.visitClosed || c.subState!=='arrived' || krDepositPaid(c)) return false;
+  var a = currentAccount(); return !!a && a.role.indexOf('kr_')!==0 && a.role!=='owner' && canDo('work');
 }
 function caseWorkDone(c){ return !!c.krProcedureDone || (c.postcareUses||[]).length>0 || isLocalCtxWorkDone(c) || isLocalCtxWorkDone(c.localMgmt); }
 
@@ -1819,7 +1867,7 @@ function continueNewVisit(){
 function markArrived(){
   var c = getCurrentCase(); if(!c) return;
   if(c.visitDate && c.visitDate!==todayStr()){ alert('只有来访当天才能标记客人已到店（预约日期：'+c.visitDate+'）'); return; }
-  c.subState = 'arrived';
+  c.subState = 'arrived'; c.arrivedDay = todayStr();
   writeReceptionBeat(c); /* 接待开始：立刻写心跳 */
   renderCaseStatusBar(c);
   logCaseEvent(c, actingName(), '标记客人已到店');
@@ -3198,7 +3246,7 @@ function notUseThisTime(scope){
   if(ctx0 && ctx0.mgmtActive){ ctx0.addUse = false; renderCaseBody(c); return; } /* 本地管理进行中：只是不再追加使用 */
   if(scope==='lm') return lmNotUse(c);
   logCaseEvent(c, actingName(), '本次不使用任何持有项目');
-  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; } finishCase(c); return; }
+  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; } autoFinish(c); return; }
   c.projectEntryMode = 'new'; /* 是否选购？ */
   buildCaseLog(c);
   renderCaseBody(c);
@@ -3256,6 +3304,8 @@ function localRefundNoteHtml(c){
    案件主状态不变，只在状态栏加小标签"本地管理进行中"；购买和使用在案件结案时算进结局判断 ---- */
 function addLocalMgmt(){
   var c = getCurrentCase(); if(!c || c.localMgmt || isEnded(c)) return;
+  if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; }
+  if(!c.localMgmtDay) c.localMgmtDay = todayStr();
   c.localMgmt = {active:true, ended:false, step:'entry', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
   c.activeCaseTab = 'localmgmt';
   logCaseEvent(c, actingName(), '添加本地管理（同日插做本地项目，案件主状态不变）');
@@ -3286,17 +3336,18 @@ function lmNotUse(c){
   buildCaseLog(c); renderCaseBody(c);
 }
 
-function lmContinue(what){ var c = getCurrentCase(); if(!c || !c.localMgmt) return; var lm = c.localMgmt; lm.ended = false; lm.active = true; lm.mgmtActive = false; lm.step = what==='use' ? 'use' : 'buy'; logCaseEvent(c, actingName(), '本地管理：继续'+(what==='use' ? '使用持有项目' : '选购')); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }
+function lmContinue(what){ var c = getCurrentCase(); if(!c || !c.localMgmt) return; if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; } var lm = c.localMgmt; lm.ended = false; lm.active = true; lm.mgmtActive = false; lm.step = what==='use' ? 'use' : 'buy'; logCaseEvent(c, actingName(), '本地管理：继续'+(what==='use' ? '使用持有项目' : '选购')); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }
 function lmSetStep(step){ var c=getCurrentCase(); if(!c||!c.localMgmt) return; c.localMgmt.step = step; renderCaseBody(c); }
 
 function localCarriedDoneHtml(c){
   var uses = (c.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
   var buys = (c.settlementBatches||[]).filter(function(b){ return (b.inItems||[]).length; }).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.inItems.map(function(i){ return i.name+(i.qty>1 ? ' ×'+i.qty : ''); }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">本地管理（已完成的项目）</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">没有记录</div>')+
-    '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="carriedContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="carriedContinue(\'use\')">继续使用持有项目</button></div></div>';
+    (localAddAllowed(c) ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="carriedContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="carriedContinue(\'use\')">继续使用持有项目</button></div>' : '<div style="font-size:12px;color:var(--muted);margin-top:12px;">本地管理只能在到店当天添加，今天不能再继续选购 / 使用。</div>')+'</div>';
 }
 function carriedContinue(what){
   var c = getCurrentCase(); if(!c || c.localMgmt || isEnded(c)) return;
+  if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; }
   c.localMgmt = {active:true, ended:false, step:what==='use' ? 'use' : 'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
   c.activeCaseTab = 'localmgmt'; logCaseEvent(c, actingName(), '本地管理：继续'+(what==='use' ? '使用持有项目' : '选购'));
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
@@ -3307,7 +3358,7 @@ function localMgmtTabHtml(c){
     var uses = (lm.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
     var buys = (lm.batches||[]).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.items.map(function(i){ return i.name+' ×'+i.qty; }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
     if(localCarried(c)){ uses = (c.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次</span></div>'; }).join('')+uses; } /* 增加面诊的本地案件：把之前做过的也列出来 */
-    var open = !isEnded(c) && !c.visitClosed, more = open ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="lmContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="lmContinue(\'use\')">继续使用持有项目</button></div>' : '';
+    var open = !isEnded(c) && !c.visitClosed && localAddAllowed(c), more = open ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="lmContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="lmContinue(\'use\')">继续使用持有项目</button></div>' : '';
     return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">'+(open ? '本地管理（已完成的项目）' : '本地管理（本次购买与使用记录）')+'</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">本次本地管理没有购买也没有使用</div>')+more+'</div>';
   }
   if(lm.mgmtActive) return mgmtActiveHtml(c, 'lm')+(lm.addUse ? '<div style="margin-top:12px;">'+holdingsUseHtml(c,'lm')+'</div>' : '')+(lm.addBuy ? '<div style="margin-top:12px;">'+lmBuyHtml(c)+'</div>' : '');

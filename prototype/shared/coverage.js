@@ -117,7 +117,12 @@
     ['F3','院长评估：可以手术，原方案不变', logHit(/院长评估结果：可以手术，原方案不变/), 'Timeline「院长评估结果」'],
     ['F4','院长评估：需要调整方案', logHit(/院长评估结果：可以手术，但需要调整方案/), 'Timeline「院长评估结果」'],
     ['F5','院长评估：不建议手术', logHit(/院长评估结果：不建议手术/), 'Timeline「院长评估结果」'],
-    ['F6','生成诊疗方案 PDF', logHit(/生成诊疗方案 PDF/), 'Timeline「生成诊疗方案 PDF」']
+    ['F6','生成诊疗方案 PDF', logHit(/生成诊疗方案 PDF/), 'Timeline「生成诊疗方案 PDF」'],
+    ['G','手动结束案件（CMD-1013-16，新结案规则试行；开关关闭时不会出现）'],
+    ['G1','面诊等报告时手动结束 → 仅出报告', logHit(/手动结束案件（付定金前，当时：面诊等报告）/, function(c){ return c.stage==='reportonly'; }), 'Timeline「手动结束案件（付定金前，当时：面诊等报告）」且结局仅出报告'],
+    ['G2','项目确认中手动结束', logHit(/手动结束案件（付定金前，当时：项目确认中）/), 'Timeline「手动结束案件（付定金前，当时：项目确认中）」'],
+    ['G3','本地没用完就手动结束（转持有 / 退款）', logHit(/结束案件：.*(转为客人持有|退款 )/), 'Timeline「结束案件：…转为客人持有」或「结束案件：退款 …」'],
+    ['G4','有待收 / 待退时结束被挡', logHit(/案件暂不结束：还有未处理的款项/), 'Timeline「案件暂不结束：还有未处理的款项」']
   ];
 
   /* 把数据拆成「我的案件」和「演示案件」两份，各自判断；覆盖率只算我的 */
@@ -204,7 +209,18 @@
   function fillRound(){
     var cur = parseInt(localStorage.getItem('gmc_cfg_round'), 10) || 1, b = (typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? GMC_BUILD : null;
     document.getElementById('roundbar').innerHTML = '当前测试轮次：<select onchange="localStorage.setItem(\'gmc_cfg_round\',this.value);fillRoundBar()">'+ROUNDS.map(function(r0){ return '<option value="'+r0+'"'+(cur===r0?' selected':'')+'>第 '+r0+' 轮</option>'; }).join('')+'</select> <span class="muted">之后新建的案件自动标上这个轮次；选错可在下面案件里改</span>　<span class="muted">当前原型版本：'+(b ? esc(b.h)+'（'+esc(b.t)+'）' : '未知')+'</span>';
+    fillNewClose();
   }
+  /* CMD-1013-16：新结案规则开关（gmc_cfg_newclose，默认开，'0' = 关；切换不动已存案件）+ 模拟到隔天（演示时钟 +24 小时，改 gmc_state 里的 DEMO_SHIFT_MS，打开的原型页面会同步） */
+  function fillNewClose(){
+    var on = localStorage.getItem('gmc_cfg_newclose')!=='0', el = document.getElementById('roundbar'); if(!el) return;
+    el.innerHTML += '<div style="margin-top:8px;">新结案规则：<b>'+(on ? '开' : '关')+'</b> <button onclick="toggleNewClose()">'+(on ? '关闭（回到旧逻辑）' : '开启')+'</button> <span class="muted">默认开；关闭 = 完全照 de648c4 的旧逻辑；切换不动已存的案件状态</span>　<button onclick="shiftOneDay()">模拟到隔天</button> <span class="muted">演示时钟 +24 小时（测「本地管理只能当天加」）</span></div>';
+  }
+  window.toggleNewClose = function(){ localStorage.setItem('gmc_cfg_newclose', localStorage.getItem('gmc_cfg_newclose')==='0' ? '1' : '0'); fillRound(); };
+  window.shiftOneDay = function(){
+    var g = pj(localStorage.getItem('gmc_state')); if(!g || !g.vars){ alert('没有找到存档'); return; }
+    g.vars.DEMO_SHIFT_MS = (+g.vars.DEMO_SHIFT_MS || 0) + 86400000; localStorage.setItem('gmc_state', JSON.stringify(g)); alert('演示时钟已往后拨 1 天（累计 '+Math.round(g.vars.DEMO_SHIFT_MS/86400000)+' 天）。已打开的原型页面会自动同步。');
+  };
   window.fillRoundBar = fillRound;
   window.setCaseRound = function(clinic, caseId, round){
     var key = 'gmc_clinic_'+clinic, p = pj(localStorage.getItem(key)); if(!p || !p.vars) return;

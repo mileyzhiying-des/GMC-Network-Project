@@ -1089,6 +1089,7 @@ function renderCaseStatusBar(c){
   if(c.stage==='booked' && c.subState==='waiting'){
     actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
+  if(canEndCase(c)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">结束案件</button>';
   var ug = urgeInfo(c);
   if(ug) actionBtn += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#C26A1B;">'+ug.label+'</span><button class="btn-primary" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>';
   document.getElementById('case-status-bar').innerHTML =
@@ -1115,7 +1116,7 @@ function renderCaseHeaderActions(c){
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
   var lmBtn = '';
-  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true)){
+  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c)){
     lmBtn = '<button class="btn-outline" onclick="addLocalMgmt()">+ 添加本地管理</button>';
   }
   el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' : '') + lmBtn + stageBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
@@ -1536,7 +1537,7 @@ function refundOnlyAnswer(yes){
   var ov = document.getElementById('refund-only-overlay'); if(ov) ov.classList.remove('open');
   var c = getCurrentCase(); if(!c || !yes) return;
   c.endNote = '仅办理退款'; logCaseEvent(c, ME_NAME, '这次只办退款，案件结束');
-  finishCase(c, '未购买未使用');
+  autoFinish(c, '未购买未使用');
 }
 function renderCaseBody(c){
   var el = document.getElementById('case-body');
@@ -1802,7 +1803,7 @@ function localAskAnswer(yes){
   var c = getCurrentCase(); if(!c || !c.localAsk) return;
   document.getElementById('local-ask-overlay').classList.remove('open');
   c.localAsk = false;
-  if(!yes){ logCaseEvent(c, ME_NAME, '客人不做/不增加本地项目'); c.endNote = '客人不做项目'; finishCase(c, '未购买未使用'); return; } /* 有购买→已结案；没有→仅出报告 */
+  if(!yes){ logCaseEvent(c, ME_NAME, '客人不做/不增加本地项目'); c.endNote = '客人不做项目'; autoFinish(c, '未购买未使用'); return; } /* 有购买→已结案；没有→仅出报告 */
   logCaseEvent(c, ME_NAME, '客人要做/增加本地项目，在本案件内继续走本地流程');
   c.localTrack = true;
   c.entryChoicePending = true; c.projectEntryMode = null;
@@ -1855,7 +1856,7 @@ function noProjectForClient(){
   if(!confirm('确认客人不做任何项目？案件将按结局结束（仅出报告）。')) return;
   logCaseEvent(c, ME_NAME, '客人不做项目');
   c.endNote = '客人不做项目'; /* 仅出报告的原因（列表进程栏显示） */
-  finishCase(c, '未购买未使用');
+  autoFinish(c, '未购买未使用');
 }
 
 /* 新增项目里"本次不购买"：判断本 case 是否有购买——有→已结案，无→已取消（未购买未使用） */
@@ -1864,7 +1865,7 @@ function noPurchaseThisTime(){
   if(!confirm('确认本次不购买项目？')) return;
   logCaseEvent(c, ME_NAME, '本次不购买项目');
   c.endNote = '客人不做项目';
-  finishCase(c, '未购买未使用');
+  autoFinish(c, '未购买未使用');
 }
 
 /* 标记项目行：action 'done' / 'cancelled'；all=true 时作用于全部进行中的项目，否则作用于勾选的 */
@@ -1895,7 +1896,7 @@ function markMgmtRows(scope, action, all, oneIdx){
   ctx.mgmtActive = false; ctx.mgmtCancelling = false;
   if(scope==='lm') return afterLmFinished(c);
   if(mainlineOngoing(c)){ logCaseEvent(c, '系统', '本地管理已做完；面诊 / 赴韩还在进行，案件不自动结案'); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; }
-  finishCase(c, '管理取消');
+  autoFinish(c, '管理取消');
 }
 
 function mgmtComplete(scope){
@@ -2057,7 +2058,7 @@ function confirmLocalRefundAll(){
   logCaseEvent(c, ME_NAME, '室长选择全部退款：整批退款 '+names.join('、')+'；退款原因：'+reason);
   c.localAsk = false;
   c.endNote = '本地项目全退';
-  finishCase(c, '未购买未使用'); /* 本次没有购买（或已全退）→ 仅出报告；还有用过的批次保留则为已结案 */
+  autoFinish(c, '未购买未使用'); /* 本次没有购买（或已全退）→ 仅出报告；还有用过的批次保留则为已结案 */
 }
 
 /* 标记无法施术（只在"项目有变动"时用）：选中的未开始项目 → 已取消（unable）；不能全部标，全部不能做属于"不能施术" */
@@ -2157,6 +2158,114 @@ function requestCannotCoordinate(){
 
 /* 演示按钮「模拟KR标记完成」（2026-09-30）：逐个勾选项目标完成，或一次全部标完成；所有赴韩项目都已完成/已取消后系统自动判断结局 */
 /* 演示按钮：模拟KR补加术后管理项目——弹窗从术后管理分类里选，直接进客户持有，标"KR代收"，印尼不再付款 */
+
+/* ================= 手动［结束案件］（CMD-1013-16，新结案规则试行） =================
+   只在付定金之前；弹窗列出未处理项逐项选，结束原因必填，钱清了才能按确定。结局由系统按 08 判断（面诊费已缴 / 免除、报告未出 → 仅出报告）。 */
+var END_CASE = null;
+var END_REASONS = ['客人不做了', '失联', '其他'];
+function endCaseRows(c){
+  var rows = [];
+  if(c.consultRequested && c.consultStatus==='awaiting_payment') rows.push({key:'fee', title:'面诊费待缴', opts:[['pay','收款（客人已缴面诊费）'],['cancel','取消面诊']]});
+  else if(c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) rows.push({key:'consult', info:'面诊诊疗方案还没出：照样等报告。结束后结局算「仅出报告」，KR 之后发出的诊疗方案会放进这个已结束的案件（只读、可下载），新案件关联本案件也能看。'});
+  (c.settlementBatches||[]).forEach(function(b){
+    if(b.status!=='unpaid') return;
+    var opts = []; if(!(b.krDeposit>0)) opts.push(['pay','收款（标记已付款，本地项目转持有）']); opts.push(['cancel','取消该项目（撤销这张结算单）']);
+    var amt = [b.krDeposit>0 ? '定金 '+formatCurrency(b.krDeposit,'KRW') : '', b.inTotal>0 ? '本地 '+formatCurrency(b.inTotal,'IDR') : ''].filter(Boolean).join(' + ');
+    rows.push({key:'batch:'+b.id, title:'待收款：批次 '+b.id+(amt ? '（'+amt+'）' : ''), opts:opts});
+  });
+  var uses = (c.mgmtUses||[]).concat(c.localMgmt ? (c.localMgmt.mgmtUses||[]) : []).filter(function(u){ return localItemStatus(u)==='进行中'; });
+  if(uses.length) rows.push({key:'inuse', info:'使用中的本地项目（'+uses.map(function(u){ return u.itemName+' ×'+u.qty; }).join('、')+'）：结束时标「取消」，次数归还客人持有（不是退款）；归还后想退款，可再用基础资料页的［退款服务］。'});
+  refundableBatches(c.name).filter(function(x){ return x.b.caseId===c.id; }).forEach(function(x, i){
+    rows.push({key:'hold:'+x.h.itemName+':'+x.bi, hold:x, title:'本地项目：'+x.h.itemName+(x.b.spec ? '（'+x.b.spec+'）' : '')+' 剩余 '+(x.b.bought-x.b.used)+' 次', opts:[['keep','转持有（留给客人下次用）'],['refund','退款']]});
+  });
+  return rows;
+}
+function openEndCase(){
+  var c = getCurrentCase(); if(!c || !canEndCase(c)) return;
+  END_CASE = {caseId:c.id, choice:{}, amt:{}, reason:'', note:''};
+  renderEndCase();
+}
+function renderEndCase(){
+  var c = getCurrentCase(); if(!c || !END_CASE) return;
+  var ov = document.getElementById('end-case-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'end-case-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var rows = endCaseRows(c), st = END_CASE;
+  var html = rows.map(function(r){
+    if(r.info) return '<div style="padding:10px 12px;border-radius:8px;background:#F7F5EF;font-size:12px;color:var(--slate2);margin-bottom:8px;">'+r.info+'</div>';
+    var opts = r.opts.map(function(o){ return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-top:6px;"><input type="radio" name="ec-'+r.key+'" '+(st.choice[r.key]===o[0] ? 'checked' : '')+' onchange="endCaseSet(\''+r.key+'\',\''+o[0]+'\')">'+o[1]+'</label>'; }).join('');
+    var amt = (r.hold && st.choice[r.key]==='refund') ? '<div style="margin-top:6px;font-size:12px;">退款金额（Rp）：<input type="number" min="0" value="'+(st.amt[r.key]===undefined ? '' : st.amt[r.key])+'" oninput="END_CASE.amt[\''+r.key+'\']=this.value;endCaseUpdateBtn()" style="width:140px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;"> <span style="color:var(--muted);">当初实付 '+(typeof r.hold.b.paid==='number' ? formatCurrency(r.hold.b.paid, r.hold.b.currency||'IDR') : '—')+'，可为 0</span></div>' : '';
+    return '<div style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;"><div style="font-size:13px;font-weight:600;">'+r.title+'</div>'+opts+amt+'</div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">没有未处理的项目。</div>';
+  var reasons = END_REASONS.map(function(x){ return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin-right:14px;"><input type="radio" name="ec-reason" '+(st.reason===x ? 'checked' : '')+' onchange="END_CASE.reason=\''+x+'\';endCaseUpdateBtn()">'+x+'</label>'; }).join('');
+  ov.innerHTML = '<div class="modal-box" style="width:520px;max-height:84vh;overflow:auto;"><div style="font-size:15px;font-weight:700;margin-bottom:4px;">结束案件</div>'+
+    '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">客人中途不做了 / 有事要走。付定金之前才能手动结束；下面没处理完的要逐项选好，钱清了才能确定。</div>'+html+
+    '<div style="margin:12px 0 6px;font-size:13px;font-weight:600;">结束原因（必填）</div><div>'+reasons+'</div>'+
+    '<input type="text" placeholder="补充说明（选「其他」时必填）" value="'+(st.note||'').replace(/"/g,'&quot;')+'" oninput="END_CASE.note=this.value;endCaseUpdateBtn()" style="width:100%;margin-top:8px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;">'+
+    '<div id="ec-hint" style="font-size:12px;color:#C26A1B;margin-top:8px;"></div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="closeEndCase()">返回</button><button id="ec-ok" class="btn-primary" onclick="confirmEndCase()">确定结束</button></div></div>';
+  ov.classList.add('open'); endCaseUpdateBtn();
+}
+function endCaseSet(key, val){ END_CASE.choice[key] = val; renderEndCase(); }
+function closeEndCase(){ var ov = document.getElementById('end-case-overlay'); if(ov) ov.classList.remove('open'); END_CASE = null; }
+/* 还缺什么：返回提示文字，空 = 可以确定 */
+function endCaseMissing(c){
+  var st = END_CASE, miss = '';
+  endCaseRows(c).forEach(function(r){
+    if(r.info || miss) return;
+    if(!st.choice[r.key]) { miss = '还没选：'+r.title; return; }
+    if(r.hold && st.choice[r.key]==='refund'){ var raw = st.amt[r.key], a = Number(raw); if(raw===undefined || raw==='' || isNaN(a) || a<0){ miss = '请填写退款金额：'+r.title; } else if(typeof r.hold.b.paid==='number' && a>r.hold.b.paid){ miss = '退款金额不能超过当初实付：'+r.title; } }
+  });
+  if(!miss && !st.reason) miss = '请选择结束原因';
+  if(!miss && st.reason==='其他' && !(st.note||'').trim()) miss = '选「其他」请补充说明';
+  return miss;
+}
+function endCaseUpdateBtn(){
+  var c = getCurrentCase(); if(!c || !END_CASE) return; var m = endCaseMissing(c), b = document.getElementById('ec-ok'), h = document.getElementById('ec-hint');
+  if(h) h.textContent = m; if(b){ b.disabled = !!m; b.style.opacity = m ? '.5' : ''; }
+}
+function confirmEndCase(){
+  var c = getCurrentCase(); if(!c || !END_CASE || !canEndCase(c)) return;
+  var m = endCaseMissing(c); if(m){ alert(m); return; }
+  var st = END_CASE, rows = endCaseRows(c), today = todayStr(), by = actingName(), done = [];
+  var reasonText = st.reason + ((st.note||'').trim() ? '：'+st.note.trim() : '');
+  var phase = c.consultRequested ? (c.consultStatus==='awaiting_payment' ? '面诊待缴费' : c.consultStatus==='report_ready' ? '项目确认中' : c.consultStatus==='cancelled' ? '纯本地' : '面诊等报告') : (isLocalCase(c) ? '纯本地' : '接待中');
+  closeEndCase();
+  rows.forEach(function(r){
+    var ch = st.choice[r.key]; if(r.info || !ch) return;
+    if(r.key==='fee'){
+      if(ch==='pay'){ markConsultPaid(); done.push('面诊费已收'); }
+      else { c.consultStatus = 'cancelled'; logCaseEvent(c, by, '面诊取消（结束案件时处理待缴的面诊费）'); done.push('面诊取消'); }
+    } else if(r.key.indexOf('batch:')===0){
+      var bid = r.key.slice(6);
+      if(ch==='pay'){ SETTLE_MODAL_BATCH_ID = bid; confirmSettlementPayment(); done.push('批次 '+bid+' 已收款'); }
+      else {
+        c.procedureItems = (c.procedureItems||[]).filter(function(it){ return it.batchId!==bid; });
+        c.settlementBatches = (c.settlementBatches||[]).filter(function(x){ return x.id!==bid; });
+        c.projectsLocked = c.settlementBatches.length>0; c.recommended = []; logCaseEvent(c, by, '结束案件：取消待收款的结算单（批次 '+bid+'）'); done.push('批次 '+bid+' 已取消');
+      }
+    } else if(r.hold){
+      var b = r.hold.b, h = r.hold.h;
+      if(ch==='refund'){
+        var amt = Number(st.amt[r.key]);
+        b.voidedRemaining = b.bought-b.used; b.voided = true; b.refund = {amount:amt, currency:b.currency||'IDR', reason:reasonText, date:today, viaCaseId:c.id};
+        c.holdingRefunds = c.holdingRefunds || []; c.holdingRefunds.push({itemName:h.itemName, amount:amt, reason:reasonText, date:today, qty:b.voidedRemaining||0, viaCaseId:c.id});
+        logCaseEvent(c, by, '结束案件：退款 '+h.itemName+(b.spec ? '（'+b.spec+'）' : '')+'，剩余 '+b.voidedRemaining+' 次作废，退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reasonText);
+        done.push(h.itemName+' 已退款');
+      } else { logCaseEvent(c, by, '结束案件：'+h.itemName+(b.spec ? '（'+b.spec+'）' : '')+' 剩余 '+(b.bought-b.used)+' 次转为客人持有'); done.push(h.itemName+' 转持有'); }
+    }
+  });
+  /* 使用中的本地项目：标取消，次数归还持有 */
+  [['main', c.mgmtUses], ['lm', c.localMgmt ? c.localMgmt.mgmtUses : null]].forEach(function(p){
+    (p[1]||[]).forEach(function(u){ if(localItemStatus(u)==='进行中'){ u.status = 'cancelled'; u.cancelQty = u.qty; returnHolding(c.name, u.itemName, c.id, u.qty, p[0]); logCaseEvent(c, by, '结束案件：使用中的 '+u.itemName+' 标取消，次数已归还持有（不是退款）'); } });
+  });
+  var left = closeBlockers(c);
+  if(left.length){ alert('还有未处理的款项：'+left.join('、')+'，案件没有结束'); renderCaseStatusBar(c); renderCaseBody(c); return; }
+  c.manualEnd = {reason:st.reason, note:(st.note||'').trim(), by:by, at:nowFullDt()};
+  c.endNote = '手动结束：'+reasonText;
+  logCaseEvent(c, by, '手动结束案件（付定金前，当时：'+phase+'）：'+reasonText);
+  finishCase(c, st.reason);
+}
+
 function cancelConsult(){
   var c = getCurrentCase(); if(!c || !canCancelConsult(c)) return;
   if(!confirm('确认取消本次面诊？取消后面诊费记为"已取消"，主状态变为"选择项目"，自动打开本地管理。')) return;

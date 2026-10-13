@@ -16,6 +16,9 @@ function clientCaseStatus(entry){
 
 /* ============ 结局模型（2026-09-30）：终态只有 已结案 / 仅出报告 / 已取消，由系统在案件结束时推算 ============
    判断标准是"客人得到了什么"，退多少钱不影响结局，退款只记入财务字段 financeResult + refunds */
+/* CMD-1013-16：新结案规则（试行）开关。存在浏览器（gmc_cfg_ 前缀，重置 / 版本升级都不清），默认开；关掉 = 完全照 de648c4 的旧逻辑。
+   开关切换不动已存的案件状态，只影响之后的判断和显示。测试覆盖页顶部可切换。 */
+function newCloseOn(){ try{ return localStorage.getItem('gmc_cfg_newclose')!=='0'; }catch(e){ return true; } }
 function isEnded(c){ return c.stage==='closed' || c.stage==='reportonly' || c.stage==='cancelled'; }
 
 function isLocalCtxWorkDone(ctx){ return !!ctx && (!!ctx.mgmtDone || ((ctx.mgmtUses||[]).length>0 && ctx.mgmtStatus!=='cancelled_all')); }
@@ -55,6 +58,8 @@ function caseHasPurchase(c){
 
 function computeOutcome(c){
   if(caseWorkDone(c) || caseHasPurchase(c)) return 'closed';
+  /* CMD-1013-16：手动结束（付定金前）时面诊费已缴 / 免除、报告还没出 → 仅出报告；标记 c.manualEnd 只在新规则开着时才会写入，之后切开关也不变 */
+  if(c.manualEnd && !c.reportReady && c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) return 'reportonly';
   return c.reportReady ? 'reportonly' : 'cancelled';
 }
 
