@@ -17,7 +17,7 @@ function todoIsKr(){ try{ return isKrAccount(); }catch(e){ return false; } }
 /* ---------------- 待办条目 ----------------
    it = {kind, text, name, no, due('YYYY-MM-DD' 或 'YYYY-MM-DD HH:mm'，页面时区), over, pin, mine, go()} */
 /* CMD-1014-02：4 张卡 = 待办 4 类。每条待办恰好属于一类（待办总数 = 4 类加总，卡片数字 = 点下去筛出的条数） */
-var TODO_CAT = {plan:'todo', resched:'todo', relay:'todo', recheck:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
+var TODO_CAT = {bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
 function todoMk(kind, text, c, due, over, go, extra){
   return Object.assign({kind:kind, cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (c.caseNo||'') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
@@ -40,7 +40,7 @@ function inTodoItems(){
     if(ug && !newCalOn()) push(todoMk('urge', (c.consultStatus==='awaiting_report' ? '等待报告已超时：可催办' : '待确认施术时间已超过 1 个工作日：可催办'), c, c.consultStatus==='awaiting_report' ? todoEtaDue(c) : '', true, todoInGo(c, c.consultStatus==='awaiting_report' ? 'consult' : 'kr')));
     /* 10/14：今天来访（预约还没接待，一位一条）+ 等 KR 回复（没超时灰色，超时红 + ［催办］） */
     if(newCalOn()){
-      if(c.stage==='booked' && c.subState==='waiting' && c.visitDate===today) push(todoMk('visit', (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, today+' '+(c.visitTime||''), false, function(){ openCaseDetail(c.id); }));
+      if(c.stage==='booked' && c.subState==='waiting' && c.visitDate===today && !c.krVisit) push(todoMk('visit', (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, today+' '+(c.visitTime||''), false, function(){ openCaseDetail(c.id); }));
       var wk = null;
       if(c.consultStatus==='paid_waiting_kr') wk = {t:'等 KR 确认出报告时间', due:'', tab:'consult'};
       else if(c.consultStatus==='awaiting_report') wk = {t:'等 KR 出诊疗方案', due:todoEtaDue(c), tab:'consult'};
@@ -71,6 +71,8 @@ function inTodoItems(){
       if(last && (now - last) > 3*86400000) push(todoMk('quiet', '项目确认中超过 3 天没动静：问问客人决定了吗', c, '', true, todoInGo(c, 'kr')));
     }
   });
+  /* CMD-1014-16：IN 在 KR 日程占位的预约，KR 改时间 / 无法安排 → 重选时间 */
+  try{ krbMine().filter(function(b){ return b.status==='reselect'; }).forEach(function(b){ out.push(todoMk('rebook', '重选时间：'+b.clientName+'（'+(b.reselectKind==='change' ? 'KR 建议改时间' : 'KR 无法安排')+'：'+(b.reselectReason||'—')+'）', null, b.date+' '+b.time, true, function(){ krBookReselectOpen(b.id); }, {name:b.clientName, no:''})); }); }catch(e){}
   /* 术后管理过了建议日期（按客人，不属于某个案件） */
   try{ postcareDueList().forEach(function(x){ out.push(Object.assign(todoMk('pcdue', '术后管理已过建议日期 '+x.late+' 天：'+x.h.itemName, null, '', true, function(){ openClientDetail(x.name, 'dashboard'); }), {name:x.name})); }); }catch(e){}
   /* 预约占位快过期（剩 5 分钟内） */
@@ -104,6 +106,12 @@ function krTodoItems(rows){
       push(todoMk('today', '今天到院：施术', c, today+' '+(ks.confirmedTime||''), false, function(){ krOpenSurgSub(r.clinicId, r.id); }, {no:(krSurgSub(c) ? subCaseNo(c, krSurgSub(c)) : '') || c.caseNo}));
     krTodayVisits(c).forEach(function(s){ push(todoMk('today', '今天到店：'+(s.content||'术后管理'), c, today+' '+(s.time||''), false, function(){ krOpenSub(r.clinicId, r.id, s.id); }, {no:subCaseNo(c, s) || c.caseNo})); });
   });
+  /* CMD-1014-16：IN 在 KR 日程占位的预约 → 确认预约时间；确认后的预约今天到店 */
+  try{ var hidB = krHospitalIdOfMe(), meB = currentAccount(); (krbList(hidB)||[]).forEach(function(b){
+    var cn = ((clinicById(b.clinicId)||{}).name)||'';
+    if(work && b.status==='pending') out.push(todoMk('bkconf', '确认预约时间（'+krbPurposeText(b.purpose)+'）· '+cn, null, b.date+' '+b.time, false, function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
+    if(b.status==='confirmed' && b.date===today && (work || (isKrDirectorLike(meB) && b.director===meB.name))) out.push(todoMk('today', '今天到店：预约 · '+krbPurposeText(b.purpose), null, b.date+' '+b.time, false, function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
+  }); }catch(e){}
   if(work && !isDir && h && !(h.dayConfirm||{})[today]) out.push(todoMk('dayconf', '今日院长日程未确认', null, today, false, function(){ krScrollCal(); }));
   try{ krNotifUnread().forEach(function(n){ if(n.kind==='mention' || n.kind==='missedcall' || /@ 了你|未接来电/.test(n.text||'')) out.push(todoMk('stay', tzRender(n.text), null, '', false, function(){ krOpenNotif(n.id); })); }); }catch(e){}
   return out;

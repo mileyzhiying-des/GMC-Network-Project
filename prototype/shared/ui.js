@@ -280,6 +280,11 @@ function krDayItems(ds){
     ((hd.directorSchedule||{})[n]||[]).forEach(function(b){
       if(b.date!==ds) return;
       var s = timeToMin(b.time), e = timeToMin(b.end||minToTime(s+SLOT_MIN)), surg = b.kind==='施术', own = surg && b.clinicId===CURRENT_CLINIC_ID, label = '';
+      if(b.kind==='预约'){ /* CMD-1014-16：IN 在 KR 日程帮客人占位预约；本诊所的显示「客人 · 待 KR 确认 / 预约」，其他诊所的 = 浅灰无字 */
+        var mine = b.clinicId===CURRENT_CLINIC_ID;
+        out.push({who:n, s:s, e:e, type:mine ? 'book' : 'busy', own:mine, pending:b.status==='待确认', bookingId:b.bookingId, label:mine ? (b.name||'')+' · '+(b.status==='待确认' ? '待 KR 确认' : '预约')+' · '+n : '', caseId:mine ? (b.caseId||null) : null});
+        return;
+      }
       if(own){ /* 本诊所客人的施术：谁 · 做什么 · 哪位医生（项目取案件的赴韩施术项目；多项显示第一项 + 等 N 项） */
         var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0], its = c ? krActiveItems(c) : [];
         label = (b.name||'')+' · '+(its.length ? its[0].name+(its.length>1 ? ' 等'+its.length+'项' : '') : '施术')+' · '+n;
@@ -294,7 +299,7 @@ function krDayItems(ds){
   return out;
 }
 /* 时间格里画什么：「全部」只画施术（平台案件）；单一院长画该院长的施术 + 不可预约（浅灰无字）；OFF 不画在时间格里 */
-function krGridItems(ds){ var all = krViewIsAll(); return krDayItems(ds).filter(function(it){ return it.type==='surg' || (!all && it.type==='busy'); }); }
+function krGridItems(ds){ var all = krViewIsAll(); return krDayItems(ds).filter(function(it){ return it.type==='surg' || it.type==='book' || (!all && it.type==='busy'); }); }
 /* 固定栏写所有"不在"：整天 OFF 写「X OFF」；半休写「X HH:mm–HH:mm 不在」（时间换算成页面时区）；「全部」时室长 OFF 照旧；单一院长时只写该院长自己的 */
 /* 半天 OFF 对应的韩国时间段：跟着医院设定算（krHalfRange，data.js）：上午 = 营业开始→午休开始，下午 = 午休结束→营业结束 */
 function krBarChips(ds){
@@ -324,6 +329,7 @@ function krLaneLayout(list){
 /* 时间轴表头（和日期列头同一行）：「印尼」（大字）/「韩国」（小字），对应下面每一行的大字 / 小字；每一行时间本身不加标注 */
 function axisHeadHtml(){ return '<div style="font-size:12px;font-weight:700;color:var(--slate);line-height:1.2;">印尼</div><div style="font-size:9px;color:var(--dim);line-height:1.2;">韩国</div>'; }
 function krBlockStyle(it){
+  if(it.type==='book') return it.pending ? 'background:#fff;color:var(--sage);border:1.5px dashed #3F7A55;font-weight:700;cursor:pointer;' : 'background:var(--sage-bg);color:var(--sage);border:1px solid #BFD3C5;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'; /* CMD-1014-16：IN 在 KR 日程占位预约：待 KR 确认 = 虚线块，确认后 = 实线块 */
   if(it.type==='surg' && it.own) return 'background:var(--sage-bg);color:var(--sage);border:1px solid #BFD3C5;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'; /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
   return 'background:#F3F1EC;'; /* 不可预约：很浅的灰，不写字 */
 }
@@ -333,12 +339,12 @@ function krDayColHtml(ds, items, baseMin, closedFrom, lunch, closedBefore){
   krLaneLayout(items).forEach(function(r0){
     var it = r0.it, s = Math.max(it.s, baseMin), e = Math.min(it.e, baseMin + total*SLOT_MIN); if(e <= s) return;
     var top = (s-baseMin)/SLOT_MIN*KR_ROW_PX, hgt = Math.max(16, (e-s)/SLOT_MIN*KR_ROW_PX - 2), w = 100/r0.n;
-    blocks += '<div'+((it.type==='surg' && it.own) ? '' : ' class="kr-busy"')+(it.own && it.caseId ? ' onclick="openCaseDetail(\''+it.caseId+'\')"' : '')+' title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:11px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
+    blocks += '<div'+(((it.type==='surg' || it.type==='book') && it.own) ? '' : ' class="kr-busy"')+(it.type==='book' && it.own ? ' onclick="krBookBlockClick(\''+it.bookingId+'\')"' : (it.own && it.caseId ? ' onclick="openCaseDetail(\''+it.caseId+'\')"' : ''))+' title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:11px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
   });
   var hatch = closedFrom ? '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(closedFrom)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;bottom:0;background:#F3F1EC;z-index:1;"></div>' : ''; /* 部分时段休诊：灰色斜纹 */
   var hatchB = closedBefore ? '<div title="医院休诊（半天营业）" style="position:absolute;left:0;right:0;top:0;height:'+Math.max(0, (timeToMin(closedBefore)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;z-index:1;"></div>' : '';
   var lunchBand = lunch ? '<div title="午休" style="position:absolute;left:0;right:0;top:'+((timeToMin(lunch.from)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;height:'+((timeToMin(lunch.to)-timeToMin(lunch.from))/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;color:var(--dim);font-size:10px;text-align:center;line-height:16px;z-index:0;">午休</div>' : ''; /* 午休：浅灰窄带，文字浅色（时间由韩国时间换算成页面时区的行） */
-  return '<div style="position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+lunchBand+hatch+hatchB+blocks+'</div>';
+  return '<div class="kr-daycol" data-ds="'+ds+'" onclick="krBookCellClick(\''+ds+'\',event,this,'+baseMin+')" style="cursor:cell;position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+lunchBand+hatch+hatchB+blocks+'</div>';
 }
 function krTimeColHtml(){
   return '<div>'+krRows().map(function(kr){ return '<div class="wk-time" style="height:'+KR_ROW_PX+'px;box-sizing:border-box;">'+krToPageTime(kr)+'<span class="kr">'+kr+'</span></div>'; }).join('')+'</div>';
@@ -1103,7 +1109,9 @@ function openCaseDetail(id, noPush){
 function renderCaseStatusBar(c){
   var b = caseStageBadge(c);
   var actionBtn = '';
-  if(c.stage==='booked' && c.subState==='waiting'){
+  if(c.krVisit && c.stage==='booked'){ /* CMD-1014-16：在韩到店案件（KR 医院）：到店 / 完成由 KR 标记，IN 不接待、不判未到店 */
+    actionBtn = '<span style="font-size:12px;color:var(--slate2);">在韩到店预约（KR 医院）：'+(c.krVisit.arrived ? '客人已到店，等 KR 标记完成' : (c.visitDate+' '+c.visitTime+'（韩国）等 KR 标记客人到店'))+'</span>';
+  } else if(c.stage==='booked' && c.subState==='waiting'){
     actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
   if(canEndCase(c)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">结束案件</button>';

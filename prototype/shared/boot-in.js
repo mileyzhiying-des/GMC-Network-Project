@@ -113,7 +113,7 @@ window.addEventListener('pagehide', function(){ try{ receptionLeaveNow(); }catch
 function autoNoShowSweep(){
   var now = demoNow().getTime(), n = 0;
   CASE_ITEMS.slice().forEach(function(c){
-    if(c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime) return;
+    if(c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime || c.krVisit) return; /* 在韩到店案件（KR 医院）不按诊所时间判未到店 */
     var when = new Date(c.visitDate+'T'+c.visitTime+':00').getTime();
     if(!isNaN(when) && when + noShowMs() <= now && markNoShow(c.id, true)) n++;
   });

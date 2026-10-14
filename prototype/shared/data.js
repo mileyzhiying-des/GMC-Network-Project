@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 42; /* 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 43; /* 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -254,8 +254,8 @@ function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, op
   /* 同一位院长同一时间只能有一件事（KR-SCHD-01，2026-10-08）：不能和该院长的「不可预约」或别的施术重叠；不同院长之间可以重叠 */
   var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; }).filter(function(b){ return !((b.kind==='施术' || b.kind==='面诊') && exceptCaseKey && (b.clinicId+':'+b.caseId)===exceptCaseKey && (!opts || !opts.exceptKind || opts.exceptKind===b.kind)); })[0];
   /* 冲突说明（CMD-1013-11 一·5）：写清楚「到院时间 + 施术时长」和哪一段重叠 */
-  var why = clash ? (opts && opts.use ? time+' 开始，使用约 '+(durMin||30)+' 分钟到 '+minToTime(e)+'，和 ' : time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 ')+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' ? '已有'+clash.kind : '不可预约')+' 重叠' : '';
-  if(clash && (clash.kind==='施术' || clash.kind==='面诊')) return why;
+  var why = clash ? (opts && opts.use ? time+' 开始，使用约 '+(durMin||30)+' 分钟到 '+minToTime(e)+'，和 ' : time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 ')+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约' ? '已有'+clash.kind : '不可预约')+' 重叠' : '';
+  if(clash && (clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约')) return why;
   if(clash && !(opts && opts.ignoreBusy)) return why;
   return '';
 }
@@ -362,7 +362,9 @@ var ACCOUNTS = [
   {id:'A5', clinicId:'C1',  role:'manager', seat:'addon', name:'A5 室长',   position:'副室长', phone:'+62 811-0000-0006', status:'active',   password:'a5123',  photo:'证件照', createdAt:D(-1)+' 10:00', activatedAt:D(-1)+' 11:00', history:[{ts:D(-1)+' 10:00', type:'购买', text:'加购管理者账号 A5（老板收验证码确认）', by:'A1 室长（A1）'},{ts:D(-1)+' 11:00', type:'激活', text:'账号激活，设置了登录密码', by:'A5 室长（A5）'}]},
   {id:'B1', clinicId:'C2', role:'manager', seat:'basic', name:'B1 室长', position:'室长', phone:'+62 811-0000-0011', status:'active', password:'b1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'B1 室长（B1）'}]},
   {id:'D1', clinicId:'C3', role:'manager', seat:'basic', name:'D1 室长', position:'室长', phone:'+62 811-0000-0021', status:'active', password:'d1123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:30', history:[{ts:D(-30)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'D1 室长（D1）'}]},
-  {id:'B2', clinicId:'C2', role:'general', seat:'basic', name:'B2 室长', position:'前台室长', phone:'+62 811-0000-0012', status:'active', password:'b2123', photo:'证件照', createdAt:D(-30)+' 09:10', activatedAt:D(-29)+' 09:00', history:[{ts:D(-29)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'B2 室长（B2）'}]}
+  {id:'B2', clinicId:'C2', role:'general', seat:'basic', name:'B2 室长', position:'前台室长', phone:'+62 811-0000-0012', status:'active', password:'b2123', photo:'证件照', createdAt:D(-30)+' 09:10', activatedAt:D(-29)+' 09:00', history:[{ts:D(-29)+' 09:00', type:'激活', text:'账号激活，设置了登录密码', by:'B2 室长（B2）'}]},
+  {id:'OWN2', clinicId:'C2', role:'owner',   seat:'basic', name:'OWN2 老板', position:'老板', phone:'+62 811-0000-0013', status:'active', password:'own2123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:20', history:[{ts:D(-30)+' 09:20', type:'激活', text:'账号激活，设置了登录密码', by:'OWN2 老板（OWN2）'}]},
+  {id:'OWN3', clinicId:'C3', role:'owner',   seat:'basic', name:'OWN3 老板', position:'老板', phone:'+62 811-0000-0022', status:'active', password:'own3123', photo:'证件照', createdAt:D(-30)+' 09:00', activatedAt:D(-30)+' 09:20', history:[{ts:D(-30)+' 09:20', type:'激活', text:'账号激活，设置了登录密码', by:'OWN3 老板（OWN3）'}]}
 ,
   /* KR 医院账号（2026-10-06）：编号 K+角色字母（O 代表院长 / M 管理者 / C 室长 / D 院长）+医院序号，和 IN 的 OWN、A 开头、B 开头编号不冲突；密码 = 编号小写 + 123 */
   {id:'KO1', hospitalId:'H1', role:'kr_owner',    seat:'basic', name:'KO1 代表院长',   position:'代表院长', phone:'+82 10-0000-0001', status:'active', password:'ko1123', photo:'证件照', createdAt:D(-60)+' 09:00', activatedAt:D(-60)+' 09:30', history:[{ts:D(-60)+' 09:30', type:'激活', text:'账号激活，设置了登录密码', by:'KO1 代表院长（KO1）'}]},
@@ -492,7 +494,7 @@ function visitStateOf(c){
 function calendarEvents(){
   var evs = [];
   CASE_ITEMS.forEach(function(c){
-    if(c.visitDate && c.visitTime) evs.push({kind:'reservation', date:c.visitDate, time:c.visitTime, name:c.name, caseId:c.id, purpose:c.visitPurpose, vstate:visitStateOf(c), ended:isEnded(c)});
+    if(c.visitDate && c.visitTime && !c.krVisit) evs.push({kind:'reservation', date:c.visitDate, time:c.visitTime, name:c.name, caseId:c.id, purpose:c.visitPurpose, vstate:visitStateOf(c), ended:isEnded(c)});
     var ks = c.krSchedule;
     if(ks && ks.confirmedDate && (ks.status==='confirmed' || ks.status==='arrived' || ks.status==='change_pending'))
       (function(){ var r = krToClinic(ks.confirmedDate, ks.confirmedTime||'14:00'); evs.push({kind:'travel', date:r.date, time:r.time, name:c.name, caseId:c.id, ended:isEnded(c)}); })(); /* KR 的到院时间换算成诊所时间 */
@@ -3890,10 +3892,11 @@ function normSchedBlocks(hid){
       b.who = b.who || n;
       if(!b.end) b.end = minToTime(Math.min(24*60-1, timeToMin(b.time)+30));
       if(b.kind==='施术'){ b.type = '施术'; b.title = '施术'; }
+      else if(b.kind==='预约'){ b.type = '预约'; b.title = '预约'; } /* CMD-1014-16：IN 在 KR 日程占位预约（待确认 / 已确认） */
       else if(b.kind==='面诊'){ b.type = '面诊'; b.title = '面诊'; } /* 2026-10-08（CMD-1008-12 C）：KR 室长确认的面诊时间也进院长日程，显示「面诊 · 客人 · 院长」 */
       else { b.type = '不可预约'; b.title = '不可预约'; b.note = ''; delete b.kind; }
     });
-    var rest = arr.filter(function(b){ return b.type==='施术' || b.type==='面诊'; }), busy = arr.filter(function(b){ return b.type!=='施术' && b.type!=='面诊'; }).sort(function(x,y){ return (x.date+x.time).localeCompare(y.date+y.time); }), merged = [];
+    var rest = arr.filter(function(b){ return b.type==='施术' || b.type==='面诊' || b.type==='预约'; }), busy = arr.filter(function(b){ return b.type!=='施术' && b.type!=='面诊' && b.type!=='预约'; }).sort(function(x,y){ return (x.date+x.time).localeCompare(y.date+y.time); }), merged = [];
     busy.forEach(function(b){ var p = merged[merged.length-1]; if(p && p.date===b.date && timeToMin(b.time) <= timeToMin(p.end)){ if(timeToMin(b.end) > timeToMin(p.end)) p.end = b.end; } else merged.push(b); });
     h.directorSchedule[n] = rest.concat(merged);
   });
@@ -6344,6 +6347,17 @@ function seedClinicDemo(cid){
     var rs = seedSurgeryCase({id:'ratna', name:'客人28', phone:'+62 812-3300-0001', director:'H2 院长1', hospitalId:'H2', krCoordinator:'KM2 室长', date:D(6), time:'11:00', items:[['面部拉皮', 12000000]]});
     var fi = seedSurgeryCase({id:'fitri', name:'客人29', phone:'+62 812-3300-0002', director:'H2 院长2', hospitalId:'H2', krCoordinator:'KC2 室长', date:D(11), time:'14:00', items:[['自体脂肪移植（全脸）', 4500000]]});
     CASE_ITEMS.forEach(function(x){ if(x.krSchedule && x.krSchedule.confirmedDate && ['confirmed','arrived','change_pending'].indexOf(x.krSchedule.status)>-1 && x.director) syncSurgeryBlock(x); }); /* C3 全部已确认施术的案件在 H2 日程里生成施术块 */
+    /* CMD-1014-16 四：H2 补「等 KR 确认出报告时间」「已出报告（项目确认中）」两种状态的案件 */
+    var mkH2 = function(id, name, phone, status){
+      addClient({name:name, phone:phone, gender:'女', dob:'1992-03-09', createdBy:'客人自助', source:'客户自助预约建档', consent:{version:'v1.0', ts:D(-4)+' 10:00', source:'客户自助预约'}});
+      var cn = generateCaseNo(), rep = status==='report_ready';
+      var c = makeCase({id:id, name:name, subState:'arrived', materialsConfirmed:true, caseNo:cn, hospitalId:'H2', director:'H2 院长1', krCoordinator:'KM2 室长', updated:'今天', concern:'想改善面部轮廓', expectation:'自然、不过度', needsConsult:true, activeCaseTab:'consult', consultRequested:true, consultStatus:status, visitDate:D(rep ? -6 : -1), visitTime:'11:00',
+        reportReady:rep, reportDate:rep ? D(-2) : null, projectsEnabled:rep,
+        krScope:rep ? {items:[{name:'面部拉皮', price:12000000, note:'', stay:'7天', anesthesia:{type:'sleep', label:'睡眠麻醉', note:''}, postcare:[]}], overallNote:'', updatedAt:D(-2)+' 15:00'} : null,
+        logEntries:[{stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(rep ? -6 : -1)+' 10:00'}, {stage:'面诊安排', actor:'D1 室长', action:'确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：面诊', dt:D(rep ? -6 : -1)+' 11:20'}, {stage:'面诊安排', actor:'客人', action:'完成面诊费支付，已在Main对话群自动通知', dt:D(rep ? -6 : -1)+' 11:30'}].concat(rep ? [{stage:'面诊安排', actor:'KM2 室长', action:'KR室长提交诊疗方案，已出诊疗方案', dt:D(-2)+' 15:00'}] : [])});
+      c.caseNo = cn; CASE_ITEMS.push(c); updateCaseStage(c); return c;
+    };
+    mkH2('mina', '客人30', '+62 812-3300-0010', 'paid_waiting_kr'); mkH2('nadia2', '客人31', '+62 812-3300-0011', 'report_ready');
     CHAT_DATA[mainRoomId('H2')] = [
       {day:KD(0), from:'them', name:'H2 院长1', color:'var(--slate2)', init:'박', orig:'이번 주 수술 일정이 거의 찼습니다.', trans:'本周手术排期基本满了。', time:'10:00'},
       {day:KD(0), from:'them', name:'KM2 室长', color:'var(--sage)', init:'정', orig:'IN 쪽 신규 케이스 확인했습니다.', trans:'已确认 IN 这边的新案件。', time:'10:30'}
@@ -6362,6 +6376,7 @@ function seedClinicDemo(cid){
   var c3 = createReservationCase('客人19', null, D(-2), '14:00', '+62 811-2000-0003', '皮肤商谈'); c3.subState = 'cancelled'; c3.cancelReason = '预约取消'; updateCaseStage(c3);
   buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, id:p.name}; PROJECT_LIBRARY.push(p); }); /* 每家诊所一份清单（价格之后可自行改） */
   var lp = PROJECT_LIBRARY.filter(function(x){ return x.origin==='IN' && x.name==='婴儿针'; })[0], lid = newLibCaseId();
+  grantHolding('客人17', lp.name, catLabelOf(lp.categoryId), c1.id, D(-6), 3, false, {paid:1500000, list:1500000, pct:100, currency:'IDR'}); /* CMD-1014-16 四：C2 补一个可退批次（退款服务 / 置换测试用） */
   LIB_CASES.push({id:lid, clinicId:'C2', title:'水光注射 · 肤质改善（泗水）', names:{zh:'水光注射 · 肤质改善（泗水）', ko:demoTranslate('水光注射 · 肤质改善（泗水）','zh','ko'), id:demoTranslate('水光注射 · 肤质改善（泗水）','zh','id')}, source:'local',
     projectIds:[lp.id], director:null, problemIds:[], beforePhotos:[{url:'', color:'#E6DDD0'}], afterPhotos:[{url:'', color:'#D9CFC1', recovery:'1个月', recoveryCustom:''}],
     consent:{signed:true, file:'consent-'+lid+'.pdf'}, uploader:'B1 室长', uploadedAt:D(-6)+' 10:00', editedBy:null, editedAt:null});

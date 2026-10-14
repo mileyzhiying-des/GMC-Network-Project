@@ -61,6 +61,7 @@ function caseHasPurchase(c){
 }
 
 function computeOutcome(c){
+  if(c.krVisit && c.krVisit.done) return 'closed'; /* 在韩到店案件：KR 标完成 = 已结案 */
   if(caseWorkDone(c) || caseHasPurchase(c)) return 'closed';
   /* CMD-1013-16：手动结束（付定金前）时面诊费已缴 / 免除、报告还没出 → 仅出报告；标记 c.manualEnd 只在新规则开着时才会写入，之后切开关也不变 */
   if(c.manualEnd && !c.reportReady && c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) return 'reportonly';
@@ -96,6 +97,8 @@ function consultAtPassed(c){ /* KR 确认的面诊时间（韩国当地）是否
   var u = utcStrParse(localToUtc(c.consultAt.date, c.consultAt.time, KR_TZ)); return !!u && u <= realNow();
 }
 function caseProcessText(c){
+  if(c.krVisit && c.stage==='booked') return c.krVisit.arrived ? '在韩已到店' : '待在韩到店（KR 医院）';
+  if(c.krVisit && c.krVisit.done && c.stage==='closed') return '在韩到店完成';
   if(c.stage==='booked') return c.subState==='arrived' ? '接待中' : '待访问';
   if(c.stage==='consult'){
     if(c.localAsk) return '项目确认中';
@@ -648,6 +651,7 @@ function maskPhone(p){
 }
 /* KR 端能看到的案件：选了本医院，且面诊费已缴或已免除（KR 在客人缴费后才看得到案件；未缴费 / 不面诊的本地案件 / 选了别家医院的都看不到） */
 function krCaseVisible(c, hid){
+  if(c && c.krVisit && c.krVisit.hospitalId===hid) return true; /* CMD-1014-16：IN 在 KR 日程占位、KR 确认后建的「在韩到店」案件，KR 和 IN 都看得到 */
   if(!c || c.hospitalId !== hid) return false;
   if(c.consultFeeWaived || c.reportReady || c.reuseReport) return true;
   return !!c.consultRequested && ['paid_waiting_kr','awaiting_report','report_ready'].indexOf(c.consultStatus) > -1;

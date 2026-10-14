@@ -120,6 +120,10 @@
     ['F6','生成诊疗方案 PDF', logHit(/生成诊疗方案 PDF/), 'Timeline「生成诊疗方案 PDF」'],
     ['H','赴韩取消 / 无法协调的退款方式（CMD-1014-03）'],
     ['H1','无法退款 → 转本地项目（置换）', logHit(/赴韩定金转本地(置换|代偿)：−Rp/), 'Timeline「赴韩定金转本地置换：−Rp …」（取消项目 / 无法协调选「转本地项目（置换）」并买完）'],
+    ['H2a','IN 在 KR 医院日程占位 → KR 确认（建新案件 · 在韩到店）', logHit(/KR 确认 IN 在 KR 医院日程的占位预约/), 'Timeline「KR 确认 IN 在 KR 医院日程的占位预约…」（案件 c.krVisit）'],
+    ['H2b','IN 在 KR 医院日程占位 → KR 无法安排 / 改时间 → IN 重选', function(d){ var hits = [];
+        d.notifs.forEach(function(n){ if(/KR (无法安排预约|建议改预约时间)/.test(n.text||'')) hits.push({c:{id:'bk-'+n.id, caseNo:'（占位，无案件号）', name:(n.text||'').slice(0,34), __clinic:n.__clinic, __demo:false, round:n.round, logEntries:[]}, dt:n.ts||'', note:(n.text||'').slice(0,50)}); });
+        return {hits:hits}; }, 'IN 通知里有「KR 无法安排预约 / 建议改预约时间」（占位预约还没有案件号）'],
     ['G','手动结束案件（CMD-1013-16，新结案规则试行；开关关闭时不会出现）'],
     ['G1','面诊等报告时手动结束 → 仅出报告', logHit(/手动结束案件（付定金前，当时：面诊等报告）/, function(c){ return c.stage==='reportonly'; }), 'Timeline「手动结束案件（付定金前，当时：面诊等报告）」且结局仅出报告'],
     ['G2','项目确认中手动结束', logHit(/手动结束案件（付定金前，当时：项目确认中）/), 'Timeline「手动结束案件（付定金前，当时：项目确认中）」'],

@@ -889,6 +889,7 @@ function krOpenNotif(id){
   var n = (h.notifs||[]).filter(function(x){ return x.id===id; })[0]; if(!n) return;
   n.readBy = n.readBy || []; if(n.readBy.indexOf(me.id) < 0) n.readBy.push(me.id);
   Store.touch(); krCloseBell();
+  if(n.kind==='krbook' && n.bookingId && typeof krBookOpen==='function'){ krBookOpen(n.bookingId); return; } /* CMD-1014-16：预约待确认 → 直接打开预约窗 */
   var tg = krNotifTarget(n);
   if(tg==='settings' && canDo('clinic')){ openAdminPage('clinic'); return; }
   if(n.caseId && krFindCase(n.clinicId, n.caseId)){
@@ -1898,6 +1899,7 @@ function krcEvents(){
   var surg = [], busy = [];
   Object.keys(h.directorSchedule||{}).forEach(function(n){ if(!okWho(n)) return; (h.directorSchedule[n]||[]).forEach(function(b){
     if(b.type==='面诊'){ var rc = rm[b.clinicId+':'+b.caseId]; if(krcIsDirector() && !rc && !(newCalOn() && krcViewAll())) return; surg.push({b:b, row:rc, label:'面诊 · '+(b.name||'')+' · '+n}); } /* 面诊预约（CMD-1008-12 C1）：「面诊 · 客人 · 院长」 */
+    else if(b.type==='预约'){ var rbk = rm[b.clinicId+':'+b.caseId] || null; surg.push({b:b, row:rbk, label:'预约 · '+(b.name||''), done:!!b.done}); } /* CMD-1014-16：IN 在 KR 日程占位 / 已确认的预约（krbook.js） */
     else if(b.type==='施术'){ var r = rm[b.clinicId+':'+b.caseId]; if(krcIsDirector() && !r && !(newCalOn() && krcViewAll())) return; var items = r ? krActiveItems(r.c).map(function(it){ return it.name; }).join('、') : ''; surg.push({b:b, row:r, label:(b.name||'')+' · '+(r ? r.clinicName : ((clinicById(b.clinicId)||{}).name||''))+(items ? ' · '+items : '')}); }
     else busy.push(b);
   }); });
@@ -1918,6 +1920,7 @@ function krcLanes(list){
   return res;
 }
 function krcBlockHtml(r0, showWho){
+  if(r0.b.type==='预约' && typeof krbBlockHtml==='function') return krbBlockHtml(r0, showWho);
   var b = r0.b, isS = b.type==='施术' || b.type==='面诊' || b.type==='术后管理', isC = b.type==='面诊', isP = b.type==='术后管理', s = Math.max(timeToMin(b.time), KRC_H0*60), e = Math.min(timeToMin(b.end), KRC_H1*60); if(e <= s) e = s + 20;
   var w = 100 / r0.n, top = (s - KRC_H0*60) * KRC_PX / 60, hgt = Math.max(16, (e - s) * KRC_PX / 60 - 2);
   var style = 'position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;border-radius:5px;padding:2px 5px;font-size:10px;line-height:1.3;overflow:hidden;cursor:pointer;z-index:2;'+(r0.done ? 'opacity:.45;text-decoration:line-through;' : (newCalOn() && krcIsPast(b) ? 'opacity:.5;filter:grayscale(1);' : ''))+(isP ? 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;' : isC ? 'background:#E3EAF6;color:#2F4F86;border:1px solid #A9BDE0;' : isS ? 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;' : 'background:#E4E2DC;color:#777;');
