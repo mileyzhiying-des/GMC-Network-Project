@@ -1077,13 +1077,14 @@
     ST.ok(!!c.comp && !c.comp.used && c.comp.scope==='main' && Math.abs(c.comp.credit - 2*price) <= 12, '应记代偿额度 ≈ 2 倍单价，实际 '+(c.comp&&c.comp.credit)); ST.ok(c.activeCaseTab==='localmgmt' && /代偿额度/.test(document.getElementById('case-body').innerText), '直接进本地管理的选购画面并显示代偿额度');
     ST.ok((c.refunds||[]).some(function(r){ return r.comp; }) && ST.hasLog(c, /转本地代偿/), '定金按代偿处理（不是退钱）+ Timeline');
     ST.ok(!hasRefundMark(c) && refundCashSum(c)===0 && compSum(c)>0, '案件标「代偿」，不出现「有退款」'); ST.ok(/代偿/.test(financeCellHtml(c)) && !/退款/.test(financeCellHtml(c).replace(/代偿/g,'')), '财务栏写代偿，不写退款');
-    toggleLocalProject('main', p.id); confirmProjectSelection(); var b = latestUnpaidBatch(c); ST.ok(!!b && b.compCredit===c.comp.credit, '比额度便宜也可以结算（多退少补），结算单带代偿额度');
-    settleProjects(); ST.ok(/代偿余额退还/.test(document.getElementById('settle-breakdown').innerText), '结算窗写「代偿余额退还」'); confirmSettlementPayment();
-    ST.ok(c.comp.used && b.compRefund>0 && ST.hasLog(c, /代偿余额退还 Rp/), '付款后代偿用完，余额退还 + Timeline'); var hs = getClientHoldings(c.name).reduce(function(a, h){ return a.concat(h.batches); }, []).filter(function(x){ return x.caseId===c.id; });
-    ST.ok(hs.length && hs.every(function(x){ return x.comp; }), '买到的批次标「代偿」'); ST.ok(!refundableBatches(c.name).some(function(x){ return x.b.comp; }), '代偿批次不可退款（退款服务不列）'); ST.ok(/代偿余额退还/.test(settlementCardHtml(c, b)), '结算单写代偿余额退还');
+    toggleLocalProject('main', p.id); confirmProjectSelection(); ST.ok(!latestUnpaidBatch(c), '比额度便宜：不能结算（额度不退钱，要再加项目）'); ST.ok(/还剩 Rp/.test(document.getElementById('case-body').innerText), '提示「还剩 Rp X，请再加项目」');
+    c.recommended[0].qty = 3; confirmProjectSelection(); var b = latestUnpaidBatch(c); ST.ok(!!b && b.compCredit===c.comp.credit, '加到超过额度可以结算，结算单带代偿额度');
+    settleProjects(); ST.ok(/赴韩定金转本地代偿/.test(document.getElementById('settle-breakdown').innerText) && !/退还/.test(document.getElementById('settle-breakdown').innerText), '结算窗写代偿，没有退还'); confirmSettlementPayment();
+    ST.ok(c.comp.used && b.payExtra>0 && ST.hasLog(c, /补付 Rp/), '付款后代偿用完，补付差额 + Timeline'); var hs = getClientHoldings(c.name).reduce(function(a, h){ return a.concat(h.batches); }, []).filter(function(x){ return x.caseId===c.id; });
+    ST.ok(hs.length && hs.every(function(x){ return x.comp; }), '买到的批次标「代偿」'); ST.ok(!refundableBatches(c.name).some(function(x){ return x.b.comp; }), '代偿批次不可退款（退款服务不列）'); ST.ok(/代偿/.test(settlementCardHtml(c, b)), '结算单写代偿');
     /* A2：比额度贵 → 补付 */
     var e = ST.newRes('CP1c'); ST.consultToReport(e); ST.selectAndPay(e, ['假体隆鼻']); ST.open(e); requestCannotCoordinate(); document.getElementById('refund-amount').value = Math.round(price/FX_RATES.KRW_IDR); setRefundMethod('comp'); document.getElementById('refund-reason').value = '（自测）补付'; confirmRefund();
-    toggleLocalProject('main', p.id); e.recommended[0].qty = 3; confirmProjectSelection(); var eb = latestUnpaidBatch(e); settleProjects(); confirmSettlementPayment(); ST.ok(e.comp.used && eb.compRefund===0 && eb.payExtra>0 && ST.hasLog(e, /补付 Rp/), '比额度贵：补付差额');
+    toggleLocalProject('main', p.id); e.recommended[0].qty = 3; confirmProjectSelection(); var eb = latestUnpaidBatch(e); settleProjects(); confirmSettlementPayment(); ST.ok(e.comp.used && eb.payExtra>0 && ST.hasLog(e, /补付 Rp/), '比额度贵：补付差额');
     /* B：部分取消（取消项目）→ 走本地管理 lm 选购 */
     var d = ST.newRes('CP1b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻', '鼻翼缩小']); ST.open(d); openCancelItems(); var cb = document.querySelector('.refund-cb'); cb.checked = true; refundRecalc();
     document.getElementById('refund-amount').value = Math.floor(price/FX_RATES.KRW_IDR); setRefundMethod('comp'); document.getElementById('refund-reason').value = '（自测）取消项目'; confirmRefund();
@@ -1103,7 +1104,7 @@
     var d = ST.newRes('CP2b'); d.name = c.name; ST.arrive(d); ST.open(d); d.materialsConfirmed = true; d.consultRequested = false; d.localTrack = true; d.entryChoicePending = true; d.projectEntryMode = 'new'; d.projectOriginFilter = 'IN'; d.activeCaseTab = 'localmgmt'; renderCaseBody(d);
     ST.ok(/用代偿额度换项目/.test(document.getElementById('case-body').innerText), '新案件本地选购画面出现［用代偿额度换项目］');
     compUseCredit(cr[0].id, 'main'); ST.ok(!!d.comp && d.comp.fromCaseNo===c.caseNo, '用额度：记来源原案件号');
-    toggleLocalProject('main', p.id); confirmProjectSelection(); settleProjects(); confirmSettlementPayment();
+    toggleLocalProject('main', p.id); confirmProjectSelection(); ST.ok(!latestUnpaidBatch(d), '下次来换也一样：不够不能结算'); d.recommended[0].qty = 9; confirmProjectSelection(); settleProjects(); confirmSettlementPayment();
     ST.ok(clientCompCredits(c.name).length===0, '换完后额度归零'); ST.ok(ST.hasLog(d, new RegExp('来源 '+c.caseNo)), 'Timeline 写来源原案件号');
   });
   ST.def('HS2','医院设定：有施术的那天改休息被挡，改期后能改（KM1 分页）',function(){

@@ -2125,11 +2125,11 @@ function settleProjects(batchId){
   if(batch.inTotal){
     rows += '<div'+(batch.krTotal?' style="border-top:1px solid var(--border2);padding-top:14px;"':'')+'><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">本地项目（收全款）</div>'+
       (batch.compCredit ? '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>本地项目合计</span><span>'+formatCurrency(batch.inTotal,'IDR')+'</span></div><div style="display:flex;justify-content:space-between;font-size:13px;color:#8F6F0C;"><span>赴韩定金转本地代偿</span><span>−'+formatCurrency(batch.compCredit,'IDR')+'</span></div>' : '')+
-      (batch.compCredit && batch.inTotal<batch.compCredit ? '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:#8F6F0C;"><span>代偿余额退还</span><span>'+formatCurrency(batch.compCredit-batch.inTotal,'IDR')+'</span></div></div>' : '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;"><span>应付金额</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div></div>');
+      '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;"><span>应付金额</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div></div>';
   }
   var payLines = [];
   if(batch.krDeposit) payLines.push('<div style="display:flex;justify-content:space-between;"><span>赴韩本次应付</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>');
-  if(batch.inTotal && batch.compCredit && batch.inTotal<batch.compCredit) payLines.push('<div style="display:flex;justify-content:space-between;color:#8F6F0C;"><span>代偿余额退还客人</span><span>'+formatCurrency(batch.compCredit-batch.inTotal,'IDR')+'</span></div>'); else if(batch.inTotal) payLines.push('<div style="display:flex;justify-content:space-between;"><span>本地本次应付'+(batch.compCredit ? '（已扣代偿）' : '')+'</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div>');
+  if(batch.inTotal) payLines.push('<div style="display:flex;justify-content:space-between;"><span>本地本次应付'+(batch.compCredit ? '（已扣代偿）' : '')+'</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div>');
   rows += '<div style="border-top:1px solid var(--border);padding-top:14px;font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:6px;"><span style="font-size:13px;color:var(--muted);font-weight:400;">本次合计应付（两种币种分开支付，不合并）</span>'+payLines.join('')+'</div>';
   var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; }), need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
   SETTLE_ANES_SIGNED = false;
