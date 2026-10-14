@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if(tSlot) tSlot.innerHTML = buildTopbar(TITLES[page] || '');
   });
   /* 初始化防护（2026-10-02）：每个模块各自 try/catch，一个地方出错只在 console 记录，不让整个页面停下来 */
-  [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['对话未读',updateChatBadge]].forEach(function(m){
+  [['日历与今日区块',renderCalendar],['待预约提醒卡',renderSubBookCard],['术后管理过期提醒卡',renderPcDueCard],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['对话未读',updateChatBadge]].forEach(function(m){
     try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); }
   });
   try{ todoInBoot(); }catch(e){ console.error('[初始化失败] 默认日视图', e); } /* CMD-1013-17：开关开着时工作台默认打开日视图 */

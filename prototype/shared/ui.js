@@ -3462,7 +3462,7 @@ function refreshView(){
   if(isKrAccount()){ if(typeof krRefreshAll==='function') krRefreshAll(); return; } /* KR 端自己重画 */
   try{ toastNewNotifs(); }catch(e){} /* 别的分页产生的新通知 → toast（K-002） */
   try{ sweepStaleReceptions(true); }catch(e){} /* 接待中但心跳过期的案件退回待访问（CMD-1008-06） */
-  [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['预约历史',renderResvHistory],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
+  [['日历与今日区块',renderCalendar],['待预约提醒卡',renderSubBookCard],['术后管理过期提醒卡',renderPcDueCard],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['预约历史',renderResvHistory],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
     try{ if(typeof m[1]==='function') m[1](); }catch(e){}
   });
   try{ refreshAdminPage(); }catch(e){} /* 管理类页面（账号状态等被别的标签页改了） */
