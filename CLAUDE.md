@@ -609,3 +609,9 @@ prototype/shared/app.css  共用样式
 - 基准 2c78e61（20c30ad 之后）；两个提交，数据版本不变（42）。**（二）890cac4 用语「代偿」→「置换」**：画面、Timeline、通知、提示文字、持有批次标签、客户详情「置换额度」、［用置换额度换项目］、结算单「赴韩定金转本地置换」全部改了；变量名（`c.comp`、`compFinalize`、`compSum` 等）不改；覆盖页 H1 同时认旧记录里的「代偿」；selftest CP1/CP2 断言跟着改。**用户已有的旧 Timeline 文字里的「代偿」不会自动改（存档里的历史文字）**；以后新写文案一律用「置换」。
 - **（一）58cc16b 视觉修正**（`dstyle.js` 新样式 CSS，旧样式不受影响）：时间轴副文字（`font-size:9px;color:var(--dim)` 的 inline 样式、`.wk-time.empty`、`.wk-time .kr`）、`.wk-lunchbar` 和 `[title^="午休"]` 提到对比度 ≥3:1；`.sidebar-foot`、IN 项目库「只读」同；KR 院长管理头像首字母加 class `ds-avl`（深色字）；KR 周视图休诊窄列表头新样式下写「休诊」+ 悬停 title 显示「MM-DD 医院休诊」（`kr.js` `krcGridHtml`）；`.todo-nowline` z-index 30/31。**IN 日视图「+N 更多」（不挂开关，在 `calalign.js` `buildDayGridNew`）**：同一 30 分钟时段超过 3 个事件只画前 3 个 + 一个「+N 更多」块（占该时段的车道，点开 `openSlotList`），规则同周视图。
 - 没做（不在范围）：KR 周视图 / 工作台固定栏空格的「—」对比度 1.51（`color:#ccc`，旧路径里的占位）、IN 日视图块在大量重叠时仍很窄（正常数据影响不大）。
+
+## CMD-1014-14 补充（2026-10-14，追加；旧文字保留作历史）
+- **角色功能测试**（取代 CMD-1014-13）：新增开发工具 `prototype/shared/roletest.js`（不属于产品，不改业务数据；临时造的案件 / memo / 通知用完会清掉或改回）。用法：用某个账号登录后，在该页面注入 `/shared/roletest.js`（IN 账号再加 `/shared/selftest.js`，用来建测试案件），调用 `RT.R.length=0; RT.runIn()`（IN / 老板）或 `RT.runKr()`（KR），再 `RT.save()` 存进 localStorage（键 `rt_res_账号编号`，不带 `gmc_` 前缀，重置演示数据不清）；`RT.all()` 汇总。每一格 = 规格期望（✅ 能 / ❌ 不能 / 👁 只看 / — 规格未写）× 实测。依据 Accounts & Settings §2 §7、IN-SETT-01、KR-DASH-01、KR-CASE-03、KR-CLNT-01、Notification Center、IN-SRVC-01（活动价 / 套餐只有管理者）。
+- 结果：IN（OWN / A1 / A2 / B1）、KR（KO1 / KM1 / KC1 / KD1 / KM2）逐格实测，**与规格不符的 = 0**；规格没写的几项只记录实测（见 Notion 汇报）。KM2 / B1 里「演示数据没有这个情形」的格子（H2 没有等确认出报告时间的案件、C2 没有可退批次、C2 / C3 没有老板账号）无法实测，不是程序问题。
+- 测试时注意：① 在控制台里不要 `var t = ...`（覆盖全局翻译函数 `t()`，管理页会报 `t is not a function`）；② KR 页面（kr.html）不支持 `?page=` 地址参数，直接输入网址测不了 KR 的页面守卫，要在页面里调 `nav()` / `openAdminPage()`；③ 院长账号名下没有某状态的案件时，`roletest.js` 会临时把一个同状态案件的院长改成自己，测完改回（`RT._borrowed`）。
+- 没改程序代码；数据版本不变（42）。
