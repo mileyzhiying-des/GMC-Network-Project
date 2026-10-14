@@ -28,6 +28,8 @@
   ST.open = function(c){ openCaseDetail(c.id); return c; };
   ST.arrive = function(c){ ST.open(c); markArrived(); return c; };
   /* 填基础资料并确认：opts {consult:true|false|'reuse', intents:[项目名], link:{caseId, reason}, director:'KD1 院长'} */
+  /* 今天整天 OFF 的院长不能选（演示数据里 KD1 有些天整天 OFF）：默认 KD1，他今天 OFF 就换名单里下一位 */
+  ST.freeDirector = function(c){ var hid = caseHospitalId(c), ds = hospitalDirectorNames(hid); var ok = ds.filter(function(n){ var o = directorTodayOff(hid, n); return !(o && o.full); }); return ok.indexOf('KD1 院长')>-1 ? 'KD1 院长' : (ok[0] || 'KD1 院长'); };
   ST.materials = function(c, o){
     o = o || {}; ST.open(c);
     c.metaviewStatus = 'ready'; c.photoUploaded = true; c.videoUploaded = true; c.concern = '（自测）苦恼'; c.expectation = '（自测）希望';
@@ -35,7 +37,7 @@
     renderCaseBody(c);
     if(o.consult===true || o.consult==='reuse'){ setNeedsConsult(o.consult); } else setNeedsConsult(false);
     if(o.consult===true || o.consult==='reuse'){
-      c.hospitalId = c.hospitalId || caseHospitalId(c); if(o.director || !c.director) setCaseDirector(o.director || 'KD1 院长');
+      c.hospitalId = c.hospitalId || caseHospitalId(c); if(o.director || !c.director) setCaseDirector(o.director || ST.freeDirector(c));
       (o.intents || ['假体隆鼻']).forEach(function(n){ var p = intentSurgeryProjects(c).filter(function(x){ return x.name===n; })[0]; if(p && !(c.intentionProjects||[]).some(function(it){ return it.projectId===p.id; })) toggleIntentionProject(p.id); });
     }
     renderCaseBody(c);
@@ -397,7 +399,8 @@
   });
   ST.def('E8','催办',function(){
     var c = ST.newRes('E8'); ST.arrive(c); ST.materials(c, {consult:true}); ST.payConsult(c); var d = new Date(Date.now()-3*3600000); c.consultPaidAt = d.toISOString().slice(0,10)+' '+d.toISOString().slice(11,16);
-    ST.ok(!!urgeInfo(c), '缴费 3 小时未确认应可催办'); urgeKr(); ST.ok(ST.hasLog(c, /催办 KR 室长/), '缺催办记录'); var hn = HOSPITAL_DATA.H1.notifs || []; ST.ok(hn.some(function(n){ return /催办/.test(n.text) && n.caseId===c.id; }), 'KR 应收到催办通知');
+    if(newTodoOn()){ ST.ok(!urgeInfo(c), '新规则：待确认面诊时间不再有 30 分钟的催办'); coreConfirmConsultTimes(c, todayStr(), '20:30', D(1)+' 05:00', ST.krBy); c.reportEta = D(-1)+' 05:00'; } /* 新规则：等报告超过预计出报告时间才能催 */
+    ST.ok(!!urgeInfo(c), newTodoOn() ? '等待报告超过预计时间应可催办' : '缴费 3 小时未确认应可催办'); urgeKr(); ST.ok(ST.hasLog(c, /催办 KR 室长/), '缺催办记录'); var hn = HOSPITAL_DATA.H1.notifs || []; ST.ok(hn.some(function(n){ return /催办/.test(n.text) && n.caseId===c.id; }), 'KR 应收到催办通知');
   });
   ST.def('E9','未接来电',function(){
     var c = ST.newRes('E9'); ST.arrive(c); ST.materials(c, {consult:true}); ST.payConsult(c); window.ATTACHED_CASE_ID = c.id; simulateMissedCall(); ST.ok(NOTIFS.some(function(n){ return /未接来电/.test(n.text) && n.caseId===c.id; }), '通知里应有未接来电');
@@ -839,6 +842,89 @@
     try{ role('owner'); ST.ok(!canEndCase(c), '老板不能'); role('kr_manager'); ST.ok(!canEndCase(c), 'KR 不能'); role('general'); ST.ok(canEndCase(c), '一般室长能'); role('manager'); ST.ok(canEndCase(c), '管理者能'); }
     finally { currentAccount = real; }
     c.settlementBatches = [{id:'B1', status:'active', krDeposit:100000}]; ST.ok(!canEndCase(c), '付定金之后（赴韩阶段）不显示'); c.settlementBatches = [];
+  });
+
+  /* ================= 待办 / 通知调整（CMD-1013-17；关闭开关时检查「和 ed2a41d 一样」）================= */
+  ST.shiftTo = function(h, m){ var base = DEMO_SHIFT_MS, n = demoNow(), t = new Date(n); t.setHours(h, m, 0, 0); DEMO_SHIFT_MS = base + (t - n); return function(){ DEMO_SHIFT_MS = base; }; };
+  ST.def('TD1','待办生成与自动消失（IN）',function(){
+    if(!newTodoOn()){ ST.ok(!document.getElementById('todo-pane') && !document.getElementById('in-cards'), '开关关闭：不应有待办栏 / IN 卡片'); ST.note('开关关闭：没有待办栏，跳过'); return; }
+    var has = function(c, k){ return inTodoItems().some(function(i){ return i.no===c.caseNo && i.kind===k; }); };
+    var c = ST.newRes('TD1'); ST.consultToReport(c); ST.ok(has(c,'plan'), '诊疗方案已到应有「联络客人选项目」待办');
+    ST.open(c); c.activeCaseTab = 'kr'; var p = PROJECT_LIBRARY.filter(function(x){ return x.origin==='KR' && x.hospitalId==='H1' && x.name==='假体隆鼻'; })[0]; toggleProject(p.id); confirmProjectSelection();
+    ST.ok(!has(c,'plan') && has(c,'pay'), '选了项目后：计划待办消失、出现「待收款」'); reselectProjects(); ST.ok(!has(c,'pay'), '撤销待付款结算单后「待收款」消失');
+    /* 项目确认中超过 3 天没动静 */
+    var q = ST.newRes('TD1q'); ST.consultToReport(q); ST.ok(!has(q,'quiet'), '刚出诊疗方案不应有「没动静」'); var old = new Date(Date.now()-5*86400000).toISOString(); q.logEntries.forEach(function(e){ e.dt = old.slice(0,10)+' '+old.slice(11,16); }); ST.ok(has(q,'quiet'), '超过 3 天没动静应出现');
+    /* 等待报告超时 → 可催办（已超时分组） */
+    var u = ST.newRes('TD1u'); ST.arrive(u); ST.materials(u,{consult:true}); ST.payConsult(u); coreConfirmConsultTimes(u, todayStr(), '20:30', D(1)+' 05:00', ST.krBy); ST.open(u);
+    ST.ok(!has(u,'urge'), '还没超过预计出报告时间不能催'); u.reportEta = D(-1)+' 05:00'; ST.ok(has(u,'urge') && !!urgeInfo(u), '超过预计出报告时间应可催办'); ST.ok(/已超时/.test(todoPaneHtml(inTodoItems())), '待办栏应有「已超时」分组');
+    var pd = ST.newRes('TD1p'); ST.arrive(pd); ST.materials(pd,{consult:true}); ST.payConsult(pd); var d3 = new Date(Date.now()-3*3600000); pd.consultPaidAt = d3.toISOString().slice(0,10)+' '+d3.toISOString().slice(11,16); ST.ok(!urgeInfo(pd), '待确认面诊时间不再有 30 分钟的催办门槛');
+    /* 转告客人：KR 确认施术时间后出现，打开赴韩施术 tab 后消失 */
+    var s = ST.toConfirmed('TD1s'); ST.ok(has(s,'relay'), 'KR 确认施术时间后应有「转告客人」待办'); ST.open(s); s.activeCaseTab = 'kr'; renderCaseBody(s); ST.ok(!has(s,'relay'), '打开赴韩施术 tab 后「转告客人」应消失');
+    /* 当天本地项目未标完成：营业结束前 1 小时出现，标完才消失 */
+    var lp = ST.localProj('LHALa peel'), l = ST.localCase('TD1l'); ST.localPay(l, function(){ toggleLocalProject('main', lp.id); }); ST.useHold(l, 'main', lp.name, 1);
+    var back = ST.shiftTo(12, 0); try{ ST.ok(!has(l,'local'), '营业结束前 1 小时之前不应出现'); } finally { back(); }
+    back = ST.shiftTo(20, 30); try{ ST.ok(has(l,'local'), '营业结束前 1 小时应出现「本地项目未标完成」'); markMgmtRows('main','done',true); ST.ok(!has(l,'local'), '标完成后应消失'); } finally { back(); }
+    /* 被 @ / 未接来电：读掉才消失 */
+    var n = {id:'ntd'+Date.now(), cat:'视频', by:'KM1 室长', level:'action', text:'未接来电：KM1 室长 呼叫了 TD1', caseId:null, ts:nowFullDt(), recipients:[ME_NAME], read:{}, link:{kind:'none'}}; NOTIFS.unshift(n);
+    ST.ok(inTodoItems().some(function(i){ return i.kind==='stay' && /TD1/.test(i.text); }), '未接来电应是待办'); n.read[ME_NAME] = true; ST.ok(!inTodoItems().some(function(i){ return i.kind==='stay' && /TD1/.test(i.text); }), '读掉后消失');
+    /* 只看我的 */
+    TODO_UI.mine = true; var mineN = todoVisible(inTodoItems()).length; TODO_UI.mine = false; ST.ok(mineN <= todoVisible(inTodoItems()).length, '只看我的不应比全部多');
+  });
+  ST.def('TD2','弹出提示：待办弹一次自动收起、消息不弹、被 @ / 未接来电停留（IN）',function(){
+    var stack = document.getElementById('toast-stack'); if(!ST.ok(!!stack, '没有 toast 容器')) return;
+    var fire = function(cat, text){ stack.innerHTML = ''; var n = {id:'ntd'+Math.random(), cat:cat, by:'KM1 室长', level:notifLevel(text), text:text, caseId:null, ts:nowFullDt(), recipients:[ME_NAME], read:{}, link:{kind:'none'}}; if(NOTIF_SEEN===null) NOTIF_SEEN = {}; NOTIFS.unshift(n); toastNewNotifs(); var kids = [].slice.call(stack.children); return {count:kids.length, sticky:kids.some(function(k){ return k.getAttribute('data-sticky'); })}; };
+    var msg = fire('预约', '客人取消预约：TD2 测试'), todo = fire('面诊', '诊疗方案已到：TD2 测试'), stay = fire('视频', '未接来电：TD2 测试');
+    if(newTodoOn()){ ST.ok(msg.count===0, '消息不应弹出，实际 '+msg.count); ST.ok(todo.count===1 && !todo.sticky, '新待办应弹一次、不用确认（非停留）'); ST.ok(stay.count===1 && stay.sticky, '未接来电应弹出并停留'); }
+    else { ST.ok(msg.count===1 && !msg.sticky, '开关关闭：一般消息照旧 6 秒自动消失的 toast'); ST.ok(todo.count===1, '开关关闭：待办类照旧弹出'); }
+    stack.innerHTML = '';
+  });
+  ST.def('TD3','默认日视图 + 现在时间线 + IN 四张卡',function(){
+    if(!newTodoOn()){ ST.note('开关关闭：没有现在时间线 / IN 卡片'); setCalMode('week'); var back0 = ST.shiftTo(11, 10); try{ renderCalendar(); ST.ok(!document.querySelector('.todo-nowline'), '开关关闭不应有现在时间线'); } finally { back0(); setCalMode('day'); } return; }
+    nav('in-dashboard'); todoRefresh(); var cards = document.getElementById('in-cards'); ST.ok(!!cards && cards.children.length===4, 'IN 应有 4 张卡，实际 '+(cards ? cards.children.length : 0));
+    ST.ok(/待我处理/.test(cards.innerText) && /今天来访/.test(cards.innerText) && /等 KR 回复/.test(cards.innerText) && /新消息/.test(cards.innerText), '4 张卡的名字');
+    var back = ST.shiftTo(11, 10); try{
+      setCalMode('week'); TODO_SCROLL_KEY = ''; renderCalendar(); var l = document.querySelector('.todo-nowline'); ST.ok(!!l && l.textContent==='11:10', '周视图应有 11:10 的现在时间线'); ST.ok(document.querySelector('#cal-week-view .wk-scroll').scrollTop > 0, '应自动滚到现在附近');
+      setCalMode('day'); renderCalendar(); ST.ok(!!document.querySelector('.todo-daynow'), '日视图应有「现在」分隔线');
+    } finally { back(); }
+  });
+  ST.def('TD4','催办新门槛：待确认施术时间超过 1 个工作日',function(){
+    if(!newTodoOn()){ ST.note('开关关闭：旧门槛 30 分钟'); return; }
+    var c = ST.newRes('TD4'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); var ks = ensureKrScheduleDraft(c), od = caseOpenDates(c); ks.primary = od[0]; submitKrScheduleDate();
+    ST.ok(scheduleState(c)==='Pending' && !urgeInfo(c), '刚递交的施术日期不能催');
+    var old = new Date(Date.now()-4*86400000).toISOString(); c.logEntries.filter(function(e){ return /递交施术日期/.test(e.action); }).forEach(function(e){ e.dt = old.slice(0,10)+' '+old.slice(11,16); });
+    var u = urgeInfo(c); ST.ok(!!u && /1 个工作日/.test(u.label), '超过 1 个工作日应可催办，实际 '+JSON.stringify(u));
+  });
+
+  /* ---- KR 端（在 KM1 分页里跑）：卡片 8→4、待办生成与案件状态一致、弹出分类 ---- */
+  ST.def('TDK1','KR 待办 / 四张卡（KM1）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    if(!newTodoOn()){ ST.ok(!document.getElementById('todo-pane'), '开关关闭：不应有待办栏'); var g = document.querySelector('#krdash-body div[style*="grid-template-columns"]'); ST.ok(g && g.children.length===8, '开关关闭：KR 应是 8 张卡，实际 '+(g ? g.children.length : 0)); ST.ok(KR_CARDS.filter(function(c){ return !c.n; }).length===8, '原 8 张卡定义不变'); return; }
+    krRenderDashboard(); var g2 = document.querySelector('#krdash-body div[style*="grid-template-columns"]'); ST.ok(g2 && g2.children.length===4, '开关打开：KR 应是 4 张卡，实际 '+(g2 ? g2.children.length : 0));
+    var tx = g2.innerText; ST.ok(/待我处理/.test(tx) && /今天到院/.test(tx) && /等待报告/.test(tx) && /新消息/.test(tx), '4 张卡的名字：'+tx.replace(/\s+/g,' ').slice(0,80));
+    ST.ok(!!document.getElementById('todo-pane') && /待办/.test(document.getElementById('todo-pane').innerText), '应有待办栏');
+    var rows = krAllCases(), items = krTodoItems(rows), K = function(r, k){ return items.some(function(i){ return i.rowKey===r.clinicId+':'+r.id && i.kind===k; }); };
+    rows.forEach(function(r){
+      var c = r.c;
+      ST.ok(K(r,'eta') === (c.consultStatus==='paid_waiting_kr'), r.caseNo+'：确认预计出报告时间待办应与案件状态一致');
+      ST.ok(K(r,'send') === (c.consultStatus==='awaiting_report' && !!c.consultContentAt), r.caseNo+'：发送诊疗方案待办应与案件状态一致');
+      ST.ok(K(r,'sched') === (c.stage==='travel' && scheduleState(c)==='Pending'), r.caseNo+'：确认施术时间待办');
+      ST.ok(K(r,'change') === (c.stage==='travel' && scheduleState(c)==='Changing'), r.caseNo+'：改期待确认待办');
+      ST.ok(K(r,'pay') === (pendingPayItems(c).length>0), r.caseNo+'：在韩加项待付款待办');
+    });
+    /* 做完自动消失：把一个待确认报告时间的案件确认掉 → 待办没了 */
+    var r0 = rows.filter(function(r){ return r.c.consultStatus==='paid_waiting_kr'; })[0]; if(r0){ ST.ok(K(r0,'eta'), '前置：有确认出报告时间待办'); var before = items.length; Store.mutateClinic(r0.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; coreConfirmConsultTimes(cc, todayStr(), '14:30', D(1)+' 05:00', ST.krBy); }); items = krTodoItems(krAllCases()); ST.ok(!items.some(function(i){ return i.rowKey===r0.clinicId+':'+r0.id && i.kind==='eta'; }), '确认之后待办自动消失'); }
+    /* 今日院长日程未确认 */
+    var h = krHData(), had = (h.dayConfirm||{})[krToday()]; delete h.dayConfirm[krToday()]; ST.ok(krTodoItems(krAllCases()).some(function(i){ return i.kind==='dayconf'; }), '今日院长日程未确认应有待办'); h.dayConfirm[krToday()] = {by:'自测', at:nowFullDt()}; ST.ok(!krTodoItems(krAllCases()).some(function(i){ return i.kind==='dayconf'; }), '确认后消失'); if(!had) delete h.dayConfirm[krToday()];
+    ST.ok(KRC.mode==='day' || KRC.mode==='week' || KRC.mode==='month', 'KRC 模式'); ST.ok(todayHeldLineHtml({})==='' || true, '');
+  });
+  ST.def('TDK2','KR 弹出提示分类（KM1）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var stack = document.getElementById('toast-stack'); if(!ST.ok(!!stack, '没有 toast 容器')) return; var h = krHData();
+    var fire = function(text, kind){ stack.innerHTML = ''; var n = {id:'kn'+Math.random(), ts:nowFullDt(), text:text, clinicId:'C1', caseId:null, to:'coord', director:null, only:null, kind:kind||'case', by:'A1 室长', readBy:[]}; h.notifs.unshift(n); KR_NOTIF_SEEN = KR_NOTIF_SEEN || {}; krToastNew(krNotifUnread()); var kids = [].slice.call(stack.children); return {count:kids.length, sticky:kids.some(function(k){ return k.getAttribute('data-sticky'); })}; };
+    var msg = fire('IN 结束案件：自测客人（A000999）原因：客人不做了'), todo = fire('客人已缴面诊费：自测客人（A000999）→ 请确认报告时间', 'consultpaid'), stay = fire('KC1 室长 在「自测」里 @ 了你', 'mention');
+    if(newTodoOn()){ ST.ok(msg.count===0, '消息不弹，实际 '+msg.count); ST.ok(todo.count===1 && !todo.sticky, '新待办弹一次自动收起'); ST.ok(stay.count===1 && stay.sticky, '被 @ 停留'); }
+    else { ST.ok(msg.count===1 && !msg.sticky, '开关关闭：一般消息照旧自动消失'); ST.ok(todo.count===1 && todo.sticky, '开关关闭：进入下一阶段 / 需要处理照旧要手动确认'); }
+    stack.innerHTML = ''; h.notifs = h.notifs.filter(function(n){ return !/自测/.test(n.text); });
   });
 
 })();

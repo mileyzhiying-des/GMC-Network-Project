@@ -323,3 +323,30 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 body.kr-recwin > *:not(#kr-rec-overlay):not(#kr-pcb-overlay):not(#kr-off-overlay){display:none !important;}
 body.kr-recwin #kr-rec-overlay, body.kr-recwin #kr-pcb-overlay{position:static;background:none;display:flex;align-items:flex-start;justify-content:center;padding:12px;min-height:100vh;}
 body.kr-recwin #kr-rec-overlay .modal-box, body.kr-recwin #kr-pcb-overlay .modal-box{width:100% !important;max-width:none;box-shadow:none;}
+
+
+/* ===== CMD-1013-17 待办栏 / 现在时间线（只新增；开关 newTodoOn() 关闭时这些元素不会出现） ===== */
+#todo-pane{flex-shrink:0;}
+.todo-box{width:300px;background:#fff;border:1px solid var(--border2,#E9E5DC);border-radius:12px;padding:12px 14px;box-sizing:border-box;max-height:calc(100vh - 220px);display:flex;flex-direction:column;}
+.todo-head{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;}
+.todo-seg{margin-left:auto;display:inline-flex;border:1px solid var(--border2,#E9E5DC);border-radius:14px;overflow:hidden;font-size:11px;}
+.todo-seg span{padding:2px 9px;cursor:pointer;color:var(--slate2,#5b6672);}
+.todo-seg span.on{background:var(--navy,#1B2635);color:#fff;}
+.todo-fold{cursor:pointer;color:var(--muted,#8a8f98);padding:0 2px;}
+.todo-filter{font-size:11px;color:var(--slate2,#5b6672);margin-bottom:6px;}
+.todo-list{overflow-y:auto;flex:1;min-height:60px;}
+.todo-group{font-size:11px;font-weight:700;color:var(--slate2,#5b6672);margin:10px 0 4px;}
+.todo-group.over{color:#B2453A;}
+.todo-group span{font-weight:400;color:var(--muted,#8a8f98);}
+.todo-row{padding:7px 8px;border-radius:8px;border-top:1px solid var(--border2,#F0ECE3);}
+.todo-row:hover{background:#faf6ef;}
+.todo-row.pin{background:#FBF0C9;}
+.todo-text{font-size:12.5px;font-weight:600;line-height:1.35;}
+.todo-sub{font-size:11px;color:var(--muted,#8a8f98);margin-top:2px;}
+.todo-due.over{color:#B2453A;font-weight:600;}
+.todo-empty{font-size:12px;color:var(--muted,#8a8f98);padding:14px 4px;}
+.todo-mini{white-space:nowrap;}
+.todo-nowline{position:absolute;left:0;right:0;height:0;border-top:2px solid #E5484D;z-index:6;pointer-events:none;}
+.todo-nowline span{position:absolute;left:2px;top:-9px;background:#E5484D;color:#fff;font-size:10px;line-height:1;padding:2px 4px;border-radius:4px;}
+.todo-daynow{border-top:2px solid #E5484D;margin:6px 0;position:relative;height:0;}
+.todo-daynow span{position:absolute;left:0;top:-9px;background:#E5484D;color:#fff;font-size:10px;line-height:1;padding:2px 5px;border-radius:4px;}

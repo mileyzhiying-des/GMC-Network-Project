@@ -315,10 +315,11 @@ function krRenderDashboard(){
   var el = document.getElementById('krdash-body'); if(!el) return;
   var hid = krHospitalIdOfMe(), h = krHData(), rows = krAllCases();
   var head = '<div style="font-size:18px;font-weight:700;">'+krEsc(krGreeting())+' <span style="font-size:13px;font-weight:400;color:var(--muted);">'+krEsc(krHospitalName())+' · '+krToday()+'</span></div>';
-  if(krIsDirector()){ el.innerHTML = head + krOffBar(hid) + krDirectorBlocks(rows) + krCalendarHtml(); return; }
+  if(krIsDirector()){ el.innerHTML = head + krOffBar(hid) + krDirectorBlocks(rows) + (newTodoOn() ? todoKrCalWrap(krCalendarHtml()) : krCalendarHtml()); return; }
   var conf = h.dayConfirm[krToday()];
   var banner = conf ? '' : '<div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:12px;background:#FBF0C9;border-color:#E8D48A;"><span style="flex:1;font-size:13px;color:#8F6F0C;"><b>今日院长日程尚未确认</b></span><button class="btn-primary" onclick="krScrollCal()">去确认 →</button></div>';
-  var cards = KR_CARDS.slice().sort(function(a0,b0){ return (a0.ord||50)-(b0.ord||50); });
+  var cards = KR_CARDS.filter(function(c){ return !c.n; }).sort(function(a0,b0){ return (a0.ord||50)-(b0.ord||50); });
+  if(newTodoOn()){ el.innerHTML = head + krOffBar(hid) + banner + todoKrCardsHtml(rows) + todoKrCalWrap(krCalendarHtml()); return; } /* CMD-1013-17：卡片 8→4 + 待办栏 */
   el.innerHTML = head + krOffBar(hid) + banner +
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">'+cards.map(function(c){ return krCardHtml(c, rows); }).join('')+'</div>'+
     krCalendarHtml();
@@ -959,7 +960,9 @@ var KR_LAST_UNREAD = null;
 var KR_NOTIF_SEEN = null;
 function krToastNew(unread){
   if(KR_NOTIF_SEEN===null){ KR_NOTIF_SEEN = {}; krNotifsForMe().forEach(function(n){ KR_NOTIF_SEEN[n.id] = 1; }); return; }
-  unread.slice().reverse().forEach(function(n){ if(KR_NOTIF_SEEN[n.id]) return; KR_NOTIF_SEEN[n.id] = 1; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky:notifLevelOf(n)!=='info'}); });
+  unread.slice().reverse().forEach(function(n){ if(KR_NOTIF_SEEN[n.id]) return; KR_NOTIF_SEEN[n.id] = 1;
+    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk==='msg') return; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky: tk==='stay'}); return; } /* CMD-1013-17 */
+    showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky:notifLevelOf(n)!=='info'}); });
 }
 (function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open) krRenderChat(); var u = krNotifUnread(); krToastNew(u); KR_LAST_UNREAD = u.length; }; })();
 
@@ -1556,7 +1559,7 @@ function krTodayAsk(){
   var ov = document.getElementById('kr-tdq-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-tdq-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, info = todayFinishInfo(c); if(!info){ ov.classList.remove('open'); return; }
   var warn = info.pendingPay ? '<div style="color:#B3261E;font-size:12px;margin-bottom:8px;">还有待付款的项目，不能结案：请先在最上方确认未付款。</div>' : (info.surgeryUndone ? '<div style="color:#B3261E;font-size:12px;margin-bottom:8px;">施术一行还没标完成，不能结案。</div>' : '');
-  ov.innerHTML = '<div class="modal-box" style="width:420px;">'+warn+'<div style="font-size:14px;font-weight:700;margin-bottom:4px;">客人今日的项目都已完成了吗？</div><div style="display:flex;gap:8px;margin-top:14px;"><button class="btn-primary" style="flex:1;'+(warn ? 'opacity:.5;cursor:not-allowed;' : '')+'"'+(warn ? ' disabled' : '')+' onclick="krTodayYes()">是，结案</button><button class="btn-ghost" style="flex:1;" onclick="document.getElementById(\'kr-tdq-overlay\').classList.remove(\'open\')">否，返回</button></div></div>';
+  ov.innerHTML = '<div class="modal-box" style="width:420px;">'+warn+'<div style="font-size:14px;font-weight:700;margin-bottom:4px;">客人今日的项目都已完成了吗？</div>'+todayHeldLineHtml(c)+'<div style="display:flex;gap:8px;margin-top:14px;"><button class="btn-primary" style="flex:1;'+(warn ? 'opacity:.5;cursor:not-allowed;' : '')+'"'+(warn ? ' disabled' : '')+' onclick="krTodayYes()">是，结案</button><button class="btn-ghost" style="flex:1;" onclick="document.getElementById(\'kr-tdq-overlay\').classList.remove(\'open\')">否，返回</button></div></div>';
   ov.classList.add('open');
 }
 function krTodayYes(){
@@ -1859,7 +1862,7 @@ function krcGridHtml(days, ev){
     r1 += '<div style="'+cell+'text-align:center;font-size:12px;padding:4px 0;'+(isToday?'font-weight:700;color:var(--terracotta);':'')+'">'+ds.slice(5)+' 周'+krcDow(ds)+(open?'<br><span style="font-size:9px;color:var(--sage);font-weight:700;">施术开放</span>':'')+'</div>';
     r2 += '<div style="'+cell+'padding:2px;background:#faf8f3;border-top:1px solid var(--line);">'+(offs.map(krcOffChip).join('')||'<span style="font-size:10px;color:#ccc;">—</span>')+'</div>';
     r3 += '<div style="'+cell+'padding:2px;border-top:1px solid var(--line);">'+subs.map(krcSubChip).join('')+'</div>';
-    r4 += '<div style="'+cell+'position:relative;height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:#fff;border-top:1px solid var(--line);cursor:cell;" onmousemove="krcHover(this,event)" onmouseleave="krcHoverOff(this)" onclick="krcCellClick(\''+ds+'\',event,this)"><div class="krc-hl" style="display:none;position:absolute;left:0;right:0;height:'+(KRC_PX/2)+'px;background:rgba(190,120,90,.12);pointer-events:none;"></div>'+lines+
+    r4 += '<div style="'+cell+'position:relative;height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:#fff;border-top:1px solid var(--line);cursor:cell;" onmousemove="krcHover(this,event)" onmouseleave="krcHoverOff(this)" onclick="krcCellClick(\''+ds+'\',event,this)">'+(isToday ? todoNowLineHtml() : '')+'<div class="krc-hl" style="display:none;position:absolute;left:0;right:0;height:'+(KRC_PX/2)+'px;background:rgba(190,120,90,.12);pointer-events:none;"></div>'+lines+
       lanes.map(function(r0){ var x = r0.b._x; return krcBlockHtml(x ? {b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done} : r0, showWho); }).join('')+'</div>';
   });
   r3 = ''; /* 子项行已废弃 */

@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function(){
   [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['对话未读',updateChatBadge]].forEach(function(m){
     try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); }
   });
+  try{ todoInBoot(); }catch(e){ console.error('[初始化失败] 默认日视图', e); } /* CMD-1013-17：开关开着时工作台默认打开日视图 */
   try{ toastNewNotifs(); }catch(e){ console.error('[初始化失败] 通知toast登记', e); } /* 登记启动时已有的通知，之后别的分页产生的新通知才弹 toast */
   try{ buildHistoryList(); }catch(e){ console.error('[初始化失败] 医美史', e); }
   [['客户详情Timeline',buildDetailLog]].forEach(function(m){ try{ m[1](); }catch(e){ console.error('[初始化失败] '+m[0], e); } });

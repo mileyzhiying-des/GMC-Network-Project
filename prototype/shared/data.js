@@ -2540,6 +2540,11 @@ function consultPaidAtOf(c){
   return L ? L.dt : '';
 }
 function urgeInfo(c){
+  if(newTodoOn() && c && !isEnded(c)){ /* CMD-1013-17：等报告超过预计出报告时间才能催；待确认施术时间超过 1 个工作日才能催（取代 30 分钟的演示值） */
+    if(c.consultRequested && !c.reportReady && c.consultStatus==='awaiting_report' && reportOverdueNow(c)) return {label:'已超过预计出报告时间', why:'等待报告已超过预计时间'};
+    if(c.stage==='travel' && scheduleState(c)==='Pending' && todoWorkdaysSince(todoScheduleSubmittedAt(c)) >= 1) return {label:'待确认施术时间已超过 1 个工作日', why:'待 KR 确认施术时间'};
+    return null;
+  }
   if(!c || isEnded(c) || !c.consultRequested || c.reportReady) return null;
   if(c.consultStatus==='paid_waiting_kr'){
     var t = utcStrParse(consultPaidAtOf(c));
