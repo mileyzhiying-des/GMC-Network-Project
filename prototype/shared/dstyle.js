@@ -12,9 +12,9 @@
   document.documentElement.classList.add('ds-new');
   var VARS = {
     '--bg-page':'#F7F4EE','--bg-surface':'#FFFFFF','--bg-sidebar':'#F7F4F0','--bg-hover':'#EFEAE4','--bg-disabled':'#EFEAE4','--bg-brand-subtle':'#F6E9DE','--bg-brand-faint':'#FBF5EF',
-    '--border-default':'#E3DCD4','--border-strong':'#CFC6BC','--border-focus':'#A0592F',
-    '--text-primary':'#221E1B','--text-body':'#3A342F','--text-secondary':'#6E665E','--text-placeholder':'#8E857C','--text-on-action':'#FFFFFF','--text-link':'#A0592F',
-    '--action-primary':'#A0592F','--action-primary-hover':'#864A27','--action-danger':'#B83A2E','--action-danger-hover':'#9A2F25',
+    '--border-default':'#E3DCD4','--border-strong':'#CFC6BC','--border-focus':'#9A6A4B',
+    '--text-primary':'#221E1B','--text-body':'#3A342F','--text-secondary':'#6E665E','--text-placeholder':'#8E857C','--text-on-action':'#FFFFFF','--text-link':'#9A6A4B',
+    '--action-primary':'#9A6A4B','--action-primary-hover':'#7E563C','--action-danger':'#B83A2E','--action-danger-hover':'#9A2F25',
     '--feedback-success-fg':'#2F7A4D','--feedback-success-bg':'#E4F1EA','--feedback-warning-fg':'#8A6400','--feedback-warning-icon':'#D9A100','--feedback-warning-bg':'#FBF3D5',
     '--feedback-error-fg':'#B83A2E','--feedback-error-bg':'#F9E6E3','--feedback-info-fg':'#2F5E8F','--feedback-info-bg':'#E5EEF8',
     '--status-violet-bg':'#EEEBF7','--status-violet-fg':'#5B4B9A','--status-yellow-bg':'#FBF3D5','--status-yellow-fg':'#7A5A00','--status-blue-bg':'#E5EEF8','--status-blue-fg':'#2F5E8F',
@@ -111,6 +111,10 @@
     '.cal-switch span.active,.todo-seg span.on,.chip.active{background:var(--bg-surface);color:var(--action-primary);border:1px solid var(--border-default);font-weight:700;}'+
     'button[style*="background:var(--navy)"]{background:var(--bg-surface) !important;color:var(--action-primary) !important;border-color:var(--border-default) !important;}'+
     'div[style*="background:var(--navy);color:#fff"]{background:var(--bg-brand-subtle) !important;color:var(--action-primary) !important;}'+
+    /* CMD-1014-17：案件详情页右上「对话」改线框（白底 + 驼色字 + 细框；用 inset 阴影画框，不改尺寸） */
+    'button.btn-primary[onclick*="openCaseRoom(CURRENT_CASE_ID)"],button.btn-primary[onclick="krOpenCaseChat()"]{background:var(--bg-surface);color:var(--action-primary);box-shadow:inset 0 0 0 1px var(--border-default);} button.btn-primary[onclick*="openCaseRoom(CURRENT_CASE_ID)"]:hover,button.btn-primary[onclick="krOpenCaseChat()"]:hover{background:var(--bg-brand-faint);}'+
+    /* CMD-1014-17：催办是次要动作，同一画面已有主按钮时改线框 */
+    'button.btn-primary.todo-urge,button.btn-primary[onclick="urgeKr()"]{background:var(--bg-surface);color:var(--action-primary);box-shadow:inset 0 0 0 1px var(--border-default);}'+
     '.todo-nowline{border-top-color:var(--action-primary);} .todo-nowline span{background:var(--action-primary);}'+
     '.card[data-n]:not([data-warn]) .ds-cnum{color:var(--text-body) !important;} .card[data-n="0"] .ds-cnum.ds-cnum:not(.x):not(.y){color:var(--text-placeholder) !important;}'+ /* CMD-1014-09：有超时才红，没超时正文色；0 = 灰 */
     '.card[onclick*="todoCardFilter(\'todo\')"]:not([data-n="0"]){border-color:var(--border-default) !important;box-shadow:inset 2px 0 0 var(--action-primary);} .card[onclick*="todoCardFilter(\'todo\')"]:not([data-n="0"]) .ds-cnum{color:var(--action-primary) !important;}'+
