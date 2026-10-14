@@ -2002,7 +2002,7 @@ function krcEditHtml(){
 function krCalendarHtml(){
   var a = krcAnchor(), ev = krcEvents(), dirs = krcDirectors(), inp = 'padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;';
   var days = KRC.mode==='week' ? [0,1,2,3,4,5,6].map(function(i){ return krcAdd(a, i); }) : [a]; /* 周视图：今天在第一栏 */
-  var title = KRC.mode==='month' ? a.slice(0,7) : (KRC.mode==='week' ? days[0]+' ～ '+days[6] : a+' 周'+krcDow(a));
+  var title = KRC.mode==='month' ? a.slice(0,7) : (KRC.mode==='week' ? days[0]+' ～ '+days[6] : a+' 周'+krcDow(a)+(relDayLabel(relDayDiff(a, krToday())) ? '（'+relDayLabel(relDayDiff(a, krToday()))+'）' : ''));
   var h = krHData(), conf = h.dayConfirm[krToday()];
   var confirmBar = krcIsDirector() ? '' : (conf
     ? '<span style="font-size:12px;color:var(--sage);">✓ 今日院长日程已由 '+krEsc(conf.by)+' 于 '+krEsc(fmtUtcTime(conf.at))+' 确认</span>'

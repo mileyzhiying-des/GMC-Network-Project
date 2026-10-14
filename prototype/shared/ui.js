@@ -479,7 +479,18 @@ function setCalMode(mode){
 
 /* 月视图：原［今天］位置显示当前月份（「10月」），‹ → 上个月、› → 下个月；点月份弹出选年 + 月（内含［回到今天］）；周 / 日视图仍是［今天］ */
 function monthViewDate(){ return new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth()+MONTH_OFFSET, 1); }
+var CAL_NAV_ORIG = null;
 function updateCalNavLabel(){
+  /* CMD-1014-15 三：日视图工具列照 KR 的样式（‹ 日期（相对日子） › + ［今天］）；周 / 月视图还原原来的 ‹ 今天 › */
+  var nv = document.querySelector('.cal-nav');
+  if(nv){
+    if(CAL_NAV_ORIG===null) CAL_NAV_ORIG = nv.innerHTML;
+    if(CAL_MODE==='day'){
+      var dd = new Date(TODAY_DATE); dd.setDate(dd.getDate()+DAY_OFFSET); var dsx = dateStr(dd), rl = relDayLabel(DAY_OFFSET);
+      nv.innerHTML = '<button class="cal-nav-btn" onclick="calPrev()">‹</button><b class="cal-day-title" style="font-size:13px;white-space:nowrap;">'+dsx+' 周'+DOW_CN[dowOfDate(dsx)]+(rl ? '（'+rl+'）' : '')+'</b><button class="cal-nav-btn" onclick="calNext()">›</button><button class="cal-nav-btn cal-nav-today" onclick="calToday()">今天</button>';
+      nv.setAttribute('data-day','1');
+    } else if(nv.getAttribute('data-day')==='1'){ nv.innerHTML = CAL_NAV_ORIG; nv.removeAttribute('data-day'); }
+  }
   var b = document.querySelector('.cal-nav-today'); if(!b) return;
   if(CAL_MODE==='month'){ var d = monthViewDate(); b.textContent = (d.getFullYear()!==TODAY_DATE.getFullYear() ? d.getFullYear()+'年' : '')+(d.getMonth()+1)+'月'; b.onclick = openMonthPicker; b.title = '选择年月'; }
   else { b.textContent = '今天'; b.onclick = calToday; b.title = ''; }

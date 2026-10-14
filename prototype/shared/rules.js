@@ -709,3 +709,8 @@ function anesNeeded(c, items){
   var signed = (c.anesthesiaConsent && c.anesthesiaConsent.projects) || [];
   return list.filter(function(a){ return !signed.some(function(s){ return s.name===a.name && s.type===a.type; }); });
 }
+
+
+/* CMD-1014-15 三：日视图标题的相对日子（前天 / 昨天 / 今天 / 明天 / 后天；再往外不写）：n = 距离今天的天数 */
+function relDayLabel(n){ return {'-2':'前天','-1':'昨天','0':'今天','1':'明天','2':'后天'}[String(n)] || ''; }
+function relDayDiff(ds, todayDs){ return Math.round((new Date(ds+'T00:00:00') - new Date(todayDs+'T00:00:00')) / 86400000); }

@@ -40,7 +40,7 @@ function inTodoItems(){
     if(ug && !newCalOn()) push(todoMk('urge', (c.consultStatus==='awaiting_report' ? '等待报告已超时：可催办' : '待确认施术时间已超过 1 个工作日：可催办'), c, c.consultStatus==='awaiting_report' ? todoEtaDue(c) : '', true, todoInGo(c, c.consultStatus==='awaiting_report' ? 'consult' : 'kr')));
     /* 10/14：今天来访（预约还没接待，一位一条）+ 等 KR 回复（没超时灰色，超时红 + ［催办］） */
     if(newCalOn()){
-      if(c.stage==='booked' && c.subState==='waiting' && c.visitDate===today) push(todoMk('visit', (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, today+' '+(c.visitTime||''), false, function(){ openCaseDetail(c.id); }, {name:''}));
+      if(c.stage==='booked' && c.subState==='waiting' && c.visitDate===today) push(todoMk('visit', (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, today+' '+(c.visitTime||''), false, function(){ openCaseDetail(c.id); }));
       var wk = null;
       if(c.consultStatus==='paid_waiting_kr') wk = {t:'等 KR 确认出报告时间', due:'', tab:'consult'};
       else if(c.consultStatus==='awaiting_report') wk = {t:'等 KR 出诊疗方案', due:todoEtaDue(c), tab:'consult'};
@@ -138,12 +138,21 @@ function todoCardFilter(key){ todoCardOpen(key); TODO_UI.kind = key; todoSaveUi(
 function todoUrge(id){ var c = calCaseById(id); if(!c) return; var old = CURRENT_CASE_ID; CURRENT_CASE_ID = id; try{ urgeKr(); }finally{ CURRENT_CASE_ID = old; } todoRefresh(); }
 
 /* ---------------- 待办栏 ---------------- */
+/* CMD-1014-15 三：待办每行四栏对齐：事项｜预计时间｜状态｜客人名 + Case ID；状态 = 等待中（灰）/ 待处理 / 待接待 / 已超时（红 +［催办］）；事项文字统一正文色；没有期限写「—」 */
+function todoStatusOf(it){
+  if(it.over) return {t:'已超时', cls:'over'};
+  if(it.cat==='visit') return {t:'待接待', cls:'recv'};
+  if(it.gray || it.cat==='kr' || it.cat==='waiting') return {t:'等待中', cls:'wait'};
+  return {t:'待处理', cls:'todo'};
+}
 function todoRowHtml(it){
-  var i = TODO_ACTS.push(it.go) - 1, who = [it.name, it.no].filter(Boolean).join(' · ');
+  var i = TODO_ACTS.push(it.go) - 1, st = todoStatusOf(it);
   var urgeBtn = it.urge ? '<button class="btn-primary todo-urge" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</button>' : '';
-  return '<div class="todo-row'+(it.pin?' pin':'')+(it.gray?' gray':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
-    '<div class="todo-text">'+(it.pin?'📌 ':'')+todoEsc(it.text)+urgeBtn+'</div>'+
-    '<div class="todo-sub">'+todoEsc(who)+(it.due ? '<span class="todo-due'+(it.over?' over':'')+'"> · 期限 '+todoEsc(it.due.slice(0,16))+'</span>' : '')+'</div></div>';
+  return '<div class="todo-row'+(it.pin?' pin':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
+    '<div class="todo-text">'+(it.pin?'📌 ':'')+todoEsc(it.text)+'</div>'+
+    '<div class="todo-due'+(it.over?' over':'')+'">'+(it.due ? todoEsc(it.due.slice(5,16)) : '—')+'</div>'+
+    '<div class="todo-st '+st.cls+'">'+st.t+urgeBtn+'</div>'+
+    '<div class="todo-who">'+(it.name ? '<b>'+todoEsc(it.name)+'</b>' : '<span style="color:var(--muted);">—</span>')+(it.no ? '<span>'+todoEsc(it.no)+'</span>' : '')+'</div></div>';
 }
 function todoGo(i){ var f = TODO_ACTS[i]; if(f) try{ f(); }catch(e){ console.error('[待办跳转]', e); } }
 function todoPaneHtml(all){

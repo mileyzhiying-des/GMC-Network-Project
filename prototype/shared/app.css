@@ -339,15 +339,23 @@ body.kr-recwin #kr-rec-overlay .modal-box, body.kr-recwin #kr-pcb-overlay .modal
 .todo-fold{cursor:pointer;color:var(--muted,#8a8f98);padding:0 2px;}
 .todo-filter{font-size:11px;color:var(--slate2,#5b6672);margin-bottom:6px;}
 .todo-list{overflow-y:auto;flex:1;min-height:60px;}
-.todo-group{font-size:11px;font-weight:700;color:var(--slate2,#5b6672);margin:10px 0 4px;}
-.todo-group.over{color:#B2453A;}
+.todo-group{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--slate2,#5b6672);margin:10px 0 4px;padding:5px 8px;border-radius:6px;background:var(--bg-brand-subtle,#F6E9DE);} /* CMD-1014-15：分组标题整行底色带：已超时浅红、今天 / 之后浅驼 */
+.todo-group.over{color:#B2453A;background:var(--feedback-error-bg,#FBE3E1);}
 .todo-group span{font-weight:400;color:var(--muted,#8a8f98);}
-.todo-row{padding:7px 8px;border-radius:8px;border-top:1px solid var(--border2,#F0ECE3);}
+.todo-row{display:grid;grid-template-columns:minmax(90px,1.6fr) 64px 52px minmax(56px,.8fr);gap:6px;align-items:center;padding:7px 8px;border-radius:8px;border-top:1px solid var(--border2,#F0ECE3);}
 .todo-row:hover{background:#faf6ef;}
 .todo-row.pin{background:#FBF0C9;}
-.todo-text{font-size:12.5px;font-weight:600;line-height:1.35;}
-.todo-sub{font-size:11px;color:var(--muted,#8a8f98);margin-top:2px;}
+.todo-text{font-size:12.5px;font-weight:500;line-height:1.35;color:var(--text-body,var(--navy,#1B2635));}
+.todo-due{font-size:11px;color:var(--muted,#8a8f98);white-space:nowrap;}
 .todo-due.over{color:#B2453A;font-weight:600;}
+.todo-st{font-size:11px;font-weight:600;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-start;gap:3px;}
+.todo-st.wait{color:var(--muted,#8a8f98);font-weight:500;}
+.todo-st.todo{color:var(--action-primary,#A0592F);}
+.todo-st.recv{color:var(--feedback-info-fg,#2F5F86);}
+.todo-st.over{color:#B2453A;}
+.todo-who{font-size:11px;color:var(--muted,#8a8f98);min-width:0;display:flex;flex-direction:column;}
+.todo-who b{font-size:12px;color:var(--text-body,var(--navy,#1B2635));font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.todo-who span{white-space:nowrap;}
 .todo-empty{font-size:12px;color:var(--muted,#8a8f98);padding:14px 4px;}
 .todo-mini{white-space:nowrap;}
 .todo-nowline{position:absolute;left:0;right:0;height:0;border-top:2px solid #E5484D;z-index:6;pointer-events:none;}
@@ -366,6 +374,5 @@ body.kr-recwin #kr-rec-overlay .modal-box, body.kr-recwin #kr-pcb-overlay .modal
 .event-chip[data-recheck]{position:relative;}
 .event-chip[data-recheck]::after{content:'日程待确认';position:absolute;right:3px;top:2px;font-size:9px;line-height:1;background:#FBF0C9;color:#8F6F0C;border-radius:3px;padding:1px 3px;}
 /* ===== CMD-1014-02（只新增） ===== */
-.todo-urge{margin-left:8px;padding:1px 9px;font-size:11px;border-radius:12px;}
-.todo-row.gray{opacity:.62;}
+.todo-urge{margin-left:0;padding:1px 9px;font-size:11px;border-radius:12px;}
 .dayblk .event-chip{height:100%;margin:0;box-sizing:border-box;}
