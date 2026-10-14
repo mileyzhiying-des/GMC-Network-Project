@@ -622,3 +622,11 @@ prototype/shared/app.css  共用样式
 - **IN 的「KR 医院日程」日视图没做**：IN-DASH-01 的 10-14 修订写「切到 KR 医院日程、日视图、全部院长时每位院长一栏」，但同页 10-08 修订写「KR 医院日程只有月 / 周（拿掉日视图）」，原型现在是后者（`setCalMode` 在 KR 视角下把日改成周）。两条矛盾，没改，列在汇报问题清单。
 - **二 KR / 院长对话、通知照 IN**：对话 = 右侧抽屉（`#kr-chat.chat-drawer` + `#kr-chat-overlay.drawer-overlay`，共用 `app.css` 的 IN 抽屉样式；「职员间」tab = Main 群，「案件」tab = 案件房，卡片 / 搜索 / 未读圆点同 IN；点房间在抽屉里看消息并发送，房间内容、成员、权限、院长静音不变）；**没做［新建职员对话］［新建案件对话］按钮**：KR 现在没有创建房间的数据结构（只有 Main 群和 IN 建的案件房），规格也没写 KR 能新建什么，列在问题清单。铃铛 = IN 的「最近通知」样式（`krToggleBell`，图标按通知类型 `krNotifIcon`）；对话和通知一次只开一个（`krToggleBell` 关抽屉、`krOpenDrawer` / `openDrawer` 关下拉，IN 补了同样的互斥）。
 - **三 待办栏 / 日视图标题**：待办行四栏 grid（`.todo-row`：事项｜预计时间 `MM-DD HH:mm`｜状态｜客人 + Case ID；`todoStatusOf`：已超时（红，催办按钮放状态栏）/ 待接待（visit）/ 等待中（gray 或 kr / waiting 类）/ 待处理），分组标题 `.todo-group` 整行底色带（已超时 `--feedback-error-bg`，今天 / 之后 `--bg-brand-subtle`，旧样式有 hex 兜底）；事项文字统一正文色（`.todo-row.gray` 变灰已拿掉）；「今天来访」待办不再清空 `name`（客人栏显示名字）。日视图标题：KR `krCalendarHtml` 日期后加（前天 / 昨天 / 今天 / 明天 / 后天，`relDayLabel` / `relDayDiff` 在 rules.js）；IN 日视图时 `updateCalNavLabel` 把 `.cal-nav` 换成 ‹ 日期（相对日子） › + ［今天］，周 / 月还原。
+
+## CMD-1014-16 补充（2026-10-14，追加；旧文字保留作历史）
+- 基准 75e0e1a，四个提交（70a717f 权限与可见范围、73dab3c KR［新建职员对话］、0b1856e IN 在 KR 日程占位预约、a884cd4 演示数据）+ 一个修复提交；不带开关；**数据版本 42 → 43**（`MIGRATIONS` 空迁移，升级前自动备份并保留用户案件；用户在 `HOSPITAL_DATA` 里新建的占位预约 `krBookings` 重置后会丢）。
+- **权限**：IN 老板有铃铛只收「系统」类；案例库统一由 IN 维护（新增时选本地 / 赴韩），KR 全角色只读（`krshowview`）；代表院长可看 KR 客人管理（只读）；金额可见范围走 `viewerTextFilter` / `viewerLogHidden`（只改显示，不改存的文字）；开放施术日期残留清掉。
+- **KR［新建职员对话］**：成员 = 本院 KR 人员 + 对接诊所的 IN 室长（同一房只能选同一家诊所的 IN 室长），房间放在所选 IN 室长的诊所分区（`ROOMS` 带 `members`）。
+- **IN 在 KR 医院日程占位预约**（新文件 `shared/krbook.js`，in.html / kr.html 在 kr.js 后加载）：IN 点 KR 医院日程空白时段 → 选客人 / 目的 → 院长日程里出现 `kind:'预约'` 待确认块；KR `coreBookConfirm` 确认后用 `createReservationCase` 在来源诊所分区建新案件（`c.krVisit`，时间是韩国当地，不进本院日历 / 今天来访 / 未到店自动判定），到店 `coreBookArrive` → 完成 `coreBookDone`（使用持有 / 新做管理 / 其他）→ `finishCase`；KR `coreBookReselect`（无法安排 / 建议改时间）→ IN 待办「重选时间」。覆盖表 H2a / H2b；selftest BK1a-c、BK2a-c、BK3（跨账号分页分段跑：A1 → KM1 → A1）。**KR 的 `core*` 要在 KR 分页跑，IN 分页里改同一诊所分区不会刷新自己的活数组。**
+- 演示数据：OWN2 / OWN3（C2 / C3 老板）、C2 客人17 可退批次（婴儿针 ×3）、H2 客人30 等确认出报告时间 / 客人31 已出诊疗方案；登录页加按钮。修过一个种子 bug：`catLabelOf` 是函数内局部变量，C2 种子抛错导致后面案例库种子被截断。
+- 简化 / 待确认：新做管理只记项目名不计价；使用持有扣在韩持有项一次；占位预约的目的选项为我自拟。

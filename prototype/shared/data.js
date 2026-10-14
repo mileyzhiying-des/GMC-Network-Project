@@ -6376,7 +6376,7 @@ function seedClinicDemo(cid){
   var c3 = createReservationCase('客人19', null, D(-2), '14:00', '+62 811-2000-0003', '皮肤商谈'); c3.subState = 'cancelled'; c3.cancelReason = '预约取消'; updateCaseStage(c3);
   buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, id:p.name}; PROJECT_LIBRARY.push(p); }); /* 每家诊所一份清单（价格之后可自行改） */
   var lp = PROJECT_LIBRARY.filter(function(x){ return x.origin==='IN' && x.name==='婴儿针'; })[0], lid = newLibCaseId();
-  grantHolding('客人17', lp.name, catLabelOf(lp.categoryId), c1.id, D(-6), 3, false, {paid:1500000, list:1500000, pct:100, currency:'IDR'}); /* CMD-1014-16 四：C2 补一个可退批次（退款服务 / 置换测试用） */
+  grantHolding('客人17', lp.name, '本地', c1.id, D(-6), 3, false, {paid:1500000, list:1500000, pct:100, currency:'IDR'}); /* CMD-1014-16 四：C2 补一个可退批次（退款服务 / 置换测试用） */
   LIB_CASES.push({id:lid, clinicId:'C2', title:'水光注射 · 肤质改善（泗水）', names:{zh:'水光注射 · 肤质改善（泗水）', ko:demoTranslate('水光注射 · 肤质改善（泗水）','zh','ko'), id:demoTranslate('水光注射 · 肤质改善（泗水）','zh','id')}, source:'local',
     projectIds:[lp.id], director:null, problemIds:[], beforePhotos:[{url:'', color:'#E6DDD0'}], afterPhotos:[{url:'', color:'#D9CFC1', recovery:'1个月', recoveryCustom:''}],
     consent:{signed:true, file:'consent-'+lid+'.pdf'}, uploader:'B1 室长', uploadedAt:D(-6)+' 10:00', editedBy:null, editedAt:null});
