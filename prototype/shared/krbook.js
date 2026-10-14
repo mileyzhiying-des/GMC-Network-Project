@@ -6,6 +6,7 @@
    → KR 待办「确认预约时间」：［确认］= 正式预约 + 建立新案件（从预约到店开始，地点 KR 医院，c.krVisit，IN 和 KR 都看得到）+ IN 收到消息；改时间 /［无法安排］→ IN 待办「重选时间」
    → 到那天 KR 日历点预约 →［客人已到店］→ 用持有 / 新做管理 / 其他 → ［标记完成］（案件结案：在韩到店完成）。
    我的判断（待确认）：新做管理在韩国收费，不进平台结算，只记录项目名；使用在韩持有 = 扣减客人在韩持有项目一次。 */
+var KRB_HOSP = '__全院'; /* CMD-1014-18 四·2：占位预约不选院长，块挂在「全院」下（directorSchedule[KRB_HOSP]） */
 var KRB_PURPOSE = {hold:'使用在韩持有', care:'新做管理', other:'其他'};
 function krbPurposeText(p){ return KRB_PURPOSE[p] || p || ''; }
 function krbHid(){ if(typeof isKrAccount==='function' && isKrAccount()) return krHospitalIdOfMe(); return (typeof krViewHospital==='function' ? krViewHospital() : null) || (linkedHospitalIds()[0] || 'H1'); }
@@ -17,13 +18,20 @@ function krbBlockSync(hid, bk){
   krbBlockRemove(hid, bk.id);
   if(['pending','confirmed','done'].indexOf(bk.status)<0) return;
   var h = HOSPITAL_DATA[hid]; h.directorSchedule = h.directorSchedule || {};
-  (h.directorSchedule[bk.director] = h.directorSchedule[bk.director] || []).push({id:'bk'+bk.id, bookingId:bk.id, kind:'预约', who:bk.director, date:bk.date, time:bk.time, end:bk.end, clinicId:bk.clinicId, name:bk.clientName, status:bk.status==='pending' ? '待确认' : '已确认', caseId:bk.caseId||'', done:bk.status==='done'});
+  (h.directorSchedule[KRB_HOSP] = h.directorSchedule[KRB_HOSP] || []).push({id:'bk'+bk.id, bookingId:bk.id, kind:'预约', who:KRB_HOSP, date:bk.date, time:bk.time, end:bk.end, clinicId:bk.clinicId, name:bk.clientName, status:bk.status==='pending' ? '待确认' : '已确认', caseId:bk.caseId||'', done:bk.status==='done'});
   normSchedBlocks(hid);
 }
 function krbOffText(hid, date, time){
   var s = timeToMin(time), e = s + 30, hr = hospitalHours(hid), lu = hospitalLunch(hid), cf = hospitalClosedFrom(hid, date), cb = hospitalClosedBefore(hid, date);
   if(lu && s >= timeToMin(lu.from) && s < timeToMin(lu.to)) return '这是医院午休时间';
   if(s < timeToMin(hr.open) || e > timeToMin(hr.close) || (cf && e > timeToMin(cf)) || (cb && s < timeToMin(cb))) return '这是医院营业时间外';
+  return '';
+}
+/* 占位预约只看医院：休诊日 / 部分时段休诊挡住（不看院长 OFF / 不可预约 / 其他预约）；午休、营业时间外另弹确认（krbOffText） */
+function krbClosedText(hid, date, time){
+  if(hospitalClosedOn(hid, date)) return date+' 是医院休诊日，不能预约';
+  var s = timeToMin(time), e = s + 30, cf = hospitalClosedFrom(hid, date), cb = hospitalClosedBefore(hid, date);
+  if((cf && e > timeToMin(cf)) || (cb && s < timeToMin(cb))) return '这个时间医院休诊（'+time+'），不能预约';
   return '';
 }
 function krbTimeOptions(hid, sel){
@@ -54,24 +62,22 @@ function krBookCellClick(ds, ev, el, baseMin){
   var hid = krViewHospital(); if(!hid) return;
   if(hospitalClosedOn(hid, ds)){ alert(ds+' 是医院休诊日，不能预约'); return; }
   var y = ev.clientY - el.getBoundingClientRect().top, m = baseMin + Math.floor(y/KR_ROW_PX)*SLOT_MIN;
-  var dirs = krViewIsAll() ? hospitalDirectorNames(hid) : krViewDirs();
-  KRB = {hid:hid, date:ds, time:minToTime(Math.min(m, 23*60+30)), director:dirs[0]||'', client:'', purpose:'hold', note:'', replaceId:null, info:'', err:''};
+  KRB = {hid:hid, date:ds, time:minToTime(Math.min(m, 23*60+30)), director:'', client:'', purpose:'hold', note:'', replaceId:null, info:'', err:''};
   krbRender(); krbOverlay('krb-overlay').classList.add('open');
 }
 function krBookReselectOpen(id){
   var hid = krbHid(), b = krbFind(hid, id); if(!b) return;
-  KRB = {hid:hid, date:(b.suggest && b.suggest.date) || b.date, time:(b.suggest && b.suggest.time) || b.time, director:b.director, client:b.clientName, purpose:b.purpose, note:b.note||'', replaceId:b.id, info:'KR '+(b.reselectKind==='change' ? '建议改时间' : '无法安排')+'：'+(b.reselectReason||'—')+(b.suggest ? '（建议 '+b.suggest.date+' '+b.suggest.time+' 韩国时间）' : ''), err:''};
+  KRB = {hid:hid, date:(b.suggest && b.suggest.date) || b.date, time:(b.suggest && b.suggest.time) || b.time, director:'', client:b.clientName, purpose:b.purpose, note:b.note||'', replaceId:b.id, info:'KR '+(b.reselectKind==='change' ? '建议改时间' : '无法安排')+'：'+(b.reselectReason||'—')+(b.suggest ? '（建议 '+b.suggest.date+' '+b.suggest.time+' 韩国时间）' : ''), err:''};
   krbRender(); krbOverlay('krb-overlay').classList.add('open');
 }
 function krbRender(){
   var f = KRB, ov = krbOverlay('krb-overlay'); if(!f) return;
   var inp = 'width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;', row = function(k, v){ return '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">'+k+'</div>'+v+'</div>'; };
-  var clients = krbClients(), dirs = hospitalDirectorNames(f.hid);
+  var clients = krbClients();
   ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b style="font-size:15px;">'+(f.replaceId ? '重选预约时间' : '在 KR 医院日程占位预约')+'</b><span style="cursor:pointer;" onclick="document.getElementById(\'krb-overlay\').classList.remove(\'open\')">✕</span></div>'+
     (f.info ? '<div style="font-size:12px;background:#FBF0C9;color:#8F6F0C;border-radius:8px;padding:8px 10px;margin-bottom:10px;">'+krbEsc(f.info)+'</div>' : '')+
     row('客人（只能选有赴韩项目的）', '<select style="'+inp+'" onchange="KRB.client=this.value"><option value="">请选择</option>'+clients.map(function(n){ return '<option'+(f.client===n ? ' selected' : '')+'>'+krbEsc(n)+'</option>'; }).join('')+'</select>')+
     row('来访目的', '<select style="'+inp+'" onchange="KRB.purpose=this.value">'+Object.keys(KRB_PURPOSE).map(function(k){ return '<option value="'+k+'"'+(f.purpose===k ? ' selected' : '')+'>'+KRB_PURPOSE[k]+'</option>'; }).join('')+'</select>')+
-    row('院长', '<select style="'+inp+'" onchange="KRB.director=this.value">'+dirs.map(function(n){ return '<option'+(f.director===n ? ' selected' : '')+'>'+krbEsc(n)+'</option>'; }).join('')+'</select>')+
     '<div style="display:flex;gap:10px;">'+row('日期（韩国）', '<input type="date" value="'+f.date+'" style="'+inp+'" onchange="KRB.date=this.value">').replace('<div style="margin-bottom:10px;">','<div style="margin-bottom:10px;flex:1;">')+row('时间（韩国）', '<select style="'+inp+'" onchange="KRB.time=this.value">'+krbTimeOptions(f.hid, f.time)+'</select>').replace('<div style="margin-bottom:10px;">','<div style="margin-bottom:10px;flex:1;">')+'</div>'+
     row('备注', '<textarea style="'+inp+'height:60px;" oninput="KRB.note=this.value">'+krbEsc(f.note)+'</textarea>')+
     '<div id="krb-err" style="font-size:12px;color:#C1454A;min-height:18px;">'+krbEsc(f.err)+'</div>'+
@@ -79,18 +85,17 @@ function krbRender(){
 }
 function krbSubmit(){
   var f = KRB; if(!f) return; var fail = function(m){ f.err = m; var e = document.getElementById('krb-err'); if(e) e.textContent = m; };
-  if(!f.client){ fail('请选择客人'); return; } if(!f.director){ fail('请选择院长'); return; } if(!f.date || !f.time){ fail('请选日期和时间'); return; }
+  if(!f.client){ fail('请选择客人'); return; } if(!f.date || !f.time){ fail('请选日期和时间'); return; }
   if(krbInPast(f.date, f.time)){ fail('不能约过去的时间'); return; }
-  if(hospitalClosedOn(f.hid, f.date)){ fail(f.date+' 是医院休诊日，不能预约'); return; }
   var old = f.replaceId ? krbFind(f.hid, f.replaceId) : null; if(old) krbBlockRemove(f.hid, old.id); /* 重选：先拿掉旧占位再检查冲突 */
-  var bad = krSurgerySlotError(f.hid, f.director, f.date, f.time, 30, null, {allowOffHours:true, use:true});
+  var bad = krbClosedText(f.hid, f.date, f.time);
   if(bad){ if(old) krbBlockSync(f.hid, old); fail(bad); return; }
   var off = krbOffText(f.hid, f.date, f.time);
   if(off && !confirm(off+'（韩国 '+f.time+'），确定要约吗？')){ if(old) krbBlockSync(f.hid, old); return; }
   if(old){ old.status = 'replaced'; (old.history = old.history||[]).push({ts:nowFullDt(), text:'IN 重选时间，旧占位作废'}); }
-  var bk = {id:'kb'+Date.now()+Math.floor(Math.random()*1000), clinicId:CURRENT_CLINIC_ID, clientName:f.client, purpose:f.purpose, director:f.director, date:f.date, time:f.time, end:minToTime(timeToMin(f.time)+30), note:(f.note||'').trim(), status:'pending', by:ME_NAME, createdAt:nowFullDt(), caseId:'', history:[{ts:nowFullDt(), text:ME_NAME+' 在 KR 医院日程占位：'+f.date+' '+f.time+'（韩国）'+f.director+'，'+krbPurposeText(f.purpose)}]};
+  var bk = {id:'kb'+Date.now()+Math.floor(Math.random()*1000), clinicId:CURRENT_CLINIC_ID, clientName:f.client, purpose:f.purpose, director:'', date:f.date, time:f.time, end:minToTime(timeToMin(f.time)+30), note:(f.note||'').trim(), status:'pending', by:ME_NAME, createdAt:nowFullDt(), caseId:'', history:[{ts:nowFullDt(), text:ME_NAME+' 在 KR 医院日程占位：'+f.date+' '+f.time+'（韩国）'+f.director+'，'+krbPurposeText(f.purpose)}]};
   krbList(f.hid).push(bk); krbBlockSync(f.hid, bk);
-  var n = pushKrNotif(f.hid, '预约待确认：'+f.client+' · '+f.date+' '+f.time+'（韩国）· '+f.director+' · '+krbPurposeText(f.purpose)+'（来源诊所 '+((clinicById(CURRENT_CLINIC_ID)||{}).name||'')+'）→ 请确认预约时间', {kind:'krbook', to:'coord', clinicId:CURRENT_CLINIC_ID, level:'action'});
+  var n = pushKrNotif(f.hid, '预约待确认：'+f.client+' · '+f.date+' '+f.time+'（韩国）· '+krbPurposeText(f.purpose)+'（来源诊所 '+((clinicById(CURRENT_CLINIC_ID)||{}).name||'')+'）→ 请确认预约时间', {kind:'krbook', to:'coord', clinicId:CURRENT_CLINIC_ID, level:'action'});
   if(n) n.bookingId = bk.id;
   krbOverlay('krb-overlay').classList.remove('open'); KRB = null;
   Store.touch && Store.touch(); try{ renderCalendar(); todoRefresh(); }catch(e){}
@@ -100,7 +105,7 @@ function krBookBlockClick(id){
   var hid = krbHid(), b = krbFind(hid, id); if(!b) return;
   var ov = krbOverlay('krb-info-overlay'), st = {pending:'待 KR 确认', confirmed:'已确认', reselect:'需要重选时间', done:'已完成', cancelled:'已取消', replaced:'已作废'}[b.status] || b.status;
   ov.innerHTML = '<div class="modal-box" style="width:400px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b style="font-size:15px;">KR 医院预约</b><span style="cursor:pointer;" onclick="document.getElementById(\'krb-info-overlay\').classList.remove(\'open\')">✕</span></div>'+
-    '<div style="font-size:13px;line-height:1.9;"><b>'+krbEsc(b.clientName)+'</b> · '+krbEsc(krbPurposeText(b.purpose))+'<br>'+krbEsc(krbSlotLabel(b))+' · '+krbEsc(b.director)+'<br>状态：<b>'+st+'</b>'+(b.note ? '<br>备注：'+krbEsc(b.note) : '')+(b.reselectReason ? '<br>KR：'+krbEsc(b.reselectReason) : '')+'</div>'+
+    '<div style="font-size:13px;line-height:1.9;"><b>'+krbEsc(b.clientName)+'</b> · '+krbEsc(krbPurposeText(b.purpose))+'<br>'+krbEsc(krbSlotLabel(b))+'<br>状态：<b>'+st+'</b>'+(b.note ? '<br>备注：'+krbEsc(b.note) : '')+(b.reselectReason ? '<br>KR：'+krbEsc(b.reselectReason) : '')+'</div>'+
     '<div style="display:flex;gap:10px;margin-top:14px;">'+(b.status==='pending' || b.status==='reselect' ? '<button class="btn-outline" style="flex:1;" onclick="krBookCancel(\''+b.id+'\')">取消预约</button>' : '')+(b.status==='reselect' ? '<button class="btn-primary" style="flex:1;" onclick="document.getElementById(\'krb-info-overlay\').classList.remove(\'open\');krBookReselectOpen(\''+b.id+'\')">重选时间</button>' : '')+(b.caseId ? '<button class="btn-primary" style="flex:1;" onclick="document.getElementById(\'krb-info-overlay\').classList.remove(\'open\');openCaseDetail(\''+b.caseId+'\')">查看案件</button>' : '')+'</div></div>';
   ov.classList.add('open');
 }
@@ -114,16 +119,16 @@ function krBookCancel(id){
 function coreBookConfirm(hid, id, by){
   var b = krbFind(hid, id); if(!b || b.status!=='pending') return {ok:false, err:'这笔预约已经不是待确认'};
   krbBlockRemove(hid, id); /* 先拿掉自己的块再检查冲突 */
-  var bad = krSurgerySlotError(hid, b.director, b.date, b.time, 30, null, {allowOffHours:true, use:true});
+  var bad = krbClosedText(hid, b.date, b.time);
   if(bad){ krbBlockSync(hid, b); return {ok:false, err:bad}; }
   var caseId = '';
   Store.mutateClinic(b.clinicId, function(){
     var c = createReservationCase(b.clientName, null, b.date, b.time, '', '在韩到店·'+krbPurposeText(b.purpose));
-    c.krVisit = {bookingId:b.id, hospitalId:hid, director:b.director, purpose:b.purpose, note:b.note||'', place:'KR 医院', confirmedBy:by, arrived:false, done:false};
-    c.hospitalId = hid; c.director = b.director; c.krCoordinator = c.krCoordinator || '';
-    logCaseEvent(c, by, 'KR 确认 IN 在 KR 医院日程的占位预约：'+b.date+' '+b.time+'（韩国）'+b.director+'；到店目的：'+krbPurposeText(b.purpose)+'；地点 KR 医院；从预约到店开始');
+    c.krVisit = {bookingId:b.id, hospitalId:hid, director:'', purpose:b.purpose, note:b.note||'', place:'KR 医院', confirmedBy:by, arrived:false, done:false};
+    c.hospitalId = hid; c.director = ''; c.krCoordinator = c.krCoordinator || '';
+    logCaseEvent(c, by, 'KR 确认 IN 在 KR 医院日程的占位预约：'+b.date+' '+b.time+'（韩国）；到店目的：'+krbPurposeText(b.purpose)+'；地点 KR 医院；从预约到店开始');
     caseId = c.id;
-    pushNotif('预约', 'KR 已确认预约：'+b.clientName+' · '+b.date+' '+b.time+'（韩国）· '+b.director+'，已建立案件 '+(c.caseNo||'')+'（在韩到店）', {caseId:c.id, level:'info'});
+    pushNotif('预约', 'KR 已确认预约：'+b.clientName+' · '+b.date+' '+b.time+'（韩国），已建立案件 '+(c.caseNo||'')+'（在韩到店）', {caseId:c.id, level:'info'});
   });
   b.status = 'confirmed'; b.caseId = caseId; (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 确认预约，建立案件'});
   krbBlockSync(hid, b);
@@ -137,8 +142,11 @@ function coreBookReselect(hid, id, kind, reason, suggest, by){
   Store.mutateClinic(b.clinicId, function(){ pushNotif('预约', 'KR '+(kind==='change' ? '建议改预约时间' : '无法安排预约')+'：'+b.clientName+' · '+b.date+' '+b.time+'（韩国）；原因：'+(reason||'—')+'，请重选时间', {level:'action'}); });
   return {ok:true};
 }
+/* CMD-1014-18 四·18：还没到预约当天不能标「客人已到店」；原型用［模拟到当日］（b.simDay） */
+function coreBookSimDay(hid, id){ var b = krbFind(hid, id); if(!b || b.status!=='confirmed') return false; b.simDay = true; return true; }
+function krbArriveAllowed(b){ return b.simDay || b.date <= krToday(); }
 function coreBookArrive(hid, id, by){
-  var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || b.arrivedAt) return false;
+  var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || b.arrivedAt || !krbArriveAllowed(b)) return false;
   b.arrivedAt = nowFullDt(); (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 标记客人已到店'});
   Store.mutateClinic(b.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]; if(c && c.krVisit){ c.krVisit.arrived = true; logCaseEvent(c, by, '客人已到店（KR 医院）'); } });
   return true;
@@ -148,16 +156,30 @@ function krbHoldChoices(clinicId, clientName){
   var out = []; Store.withClinic(clinicId, function(){ CASE_ITEMS.forEach(function(c){ if(c.name!==clientName || c.krVisit) return; (c.procedureItems||[]).forEach(function(it){ if(it.heldOver && !it.holdDone && holdItemLeft(c, it)>0) out.push({caseId:c.id, caseNo:c.caseNo, name:it.name, left:holdItemLeft(c, it)}); }); }); });
   return out;
 }
+/* 新做管理计价（四·3）：从 KR 项目库选项目 → 待付款 → 已付款；金额只存在预约记录里，KR 看得到，IN 的案件 / Timeline / 通知都不带金额 */
+function coreBookFeeAdd(hid, id, item, by){
+  var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || !b.arrivedAt) return {ok:false, err:'要先标记客人已到店'};
+  if(!item || !item.name || !(item.price>0)) return {ok:false, err:'请选择项目并填写价格'};
+  b.fee = {name:item.name, specLabel:item.specLabel||'', price:item.price, projectId:item.projectId||'', status:'待付款'};
+  (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 加入新做管理「'+item.name+(item.specLabel ? ' · '+item.specLabel : '')+'」'+formatCurrency(item.price,'KRW')+'（待付款）'});
+  return {ok:true};
+}
+function coreBookFeePaid(hid, id, by){
+  var b = krbFind(hid, id); if(!b || !b.fee || b.fee.status!=='待付款') return {ok:false, err:'没有待付款的项目'};
+  b.fee.status = '已付款'; (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 标记已付款：'+formatCurrency(b.fee.price,'KRW')});
+  return {ok:true};
+}
+function coreBookFeeRemove(hid, id, by){ var b = krbFind(hid, id); if(!b || !b.fee || b.fee.status!=='待付款') return {ok:false, err:'已付款的不能删除'}; b.fee = null; return {ok:true}; }
 function coreBookDone(hid, id, did, by){
   var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || !b.arrivedAt) return {ok:false, err:'要先标记客人已到店'};
   did = did || {kind:b.purpose};
-  if(did.kind==='hold'){ var ch = krbHoldChoices(b.clinicId, b.clientName).filter(function(x){ return x.caseId===did.caseId && x.name===did.name; })[0]; if(!ch) return {ok:false, err:'请选择要使用的在韩持有项目'}; }
-  if(did.kind==='care' && !did.name) return {ok:false, err:'请选择做了哪个管理项目'};
+  if(did.kind==='hold'){ var ch = krbHoldChoices(b.clinicId, b.clientName).filter(function(x){ return x.caseId===did.caseId && x.name===did.name; })[0]; if(!ch) return {ok:false, err:'请选择要使用的在韩持有项目'}; did.qty = Math.max(1, parseInt(did.qty,10)||1); if(did.qty > ch.left) return {ok:false, err:'「'+did.name+'」只剩 '+ch.left+' 次'}; }
+  if(did.kind==='care'){ if(!b.fee) return {ok:false, err:'请先选择管理项目并加入（待付款）'}; if(b.fee.status!=='已付款') return {ok:false, err:'还没付款：请先标记已付款'}; did.name = b.fee.name+(b.fee.specLabel ? ' · '+b.fee.specLabel : ''); }
   var text = '';
   Store.mutateClinic(b.clinicId, function(){
     if(did.kind==='hold'){ var src = CASE_ITEMS.filter(function(x){ return x.id===did.caseId; })[0], it = src && (src.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===did.name; })[0];
-      if(it){ it.holdUsed = (it.holdUsed||0)+1; if(it.holdUsed >= (it.qty||1)) it.holdDone = true; logCaseEvent(src, by, '使用在韩持有「'+it.name+'」1 次（在韩到店预约，案件 '+((CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]||{}).caseNo||'')+'）'); } text = '使用在韩持有「'+did.name+'」'; }
-    else if(did.kind==='care') text = '新做管理「'+did.name+'」（韩国现场收费，不进平台结算）';
+      if(it){ it.holdUsed = (it.holdUsed||0)+did.qty; if(it.holdUsed >= (it.qty||1)) it.holdDone = true; logCaseEvent(src, by, '使用在韩持有「'+it.name+'」'+did.qty+' 次（在韩到店预约，案件 '+((CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]||{}).caseNo||'')+'）'); } text = '使用在韩持有「'+did.name+'」'+did.qty+' 次'; }
+    else if(did.kind==='care') text = '新做管理「'+did.name+'」';
     else text = '其他'+(did.note ? '：'+did.note : '');
     var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0];
     if(c && c.krVisit){ c.krVisit.done = true; c.krVisit.did = did; logCaseEvent(c, by, '在韩到店完成：'+text); finishCase(c); }
@@ -171,7 +193,7 @@ function coreBookDone(hid, id, did, by){
 var KRBK = null;
 function krBookOpen(id){
   var hid = krHospitalIdOfMe(), b = krbFind(hid, id); if(!b) return;
-  KRBK = {id:id, mode:null, date:b.date, time:b.time, reason:'', did:b.purpose, hold:'', care:'', note:'', err:''};
+  KRBK = {id:id, mode:null, date:b.date, time:b.time, reason:'', did:b.purpose, hold:'', holdQty:1, care:'', pid:'', sid:'', manual:'', note:'', err:''};
   krbRenderKr(); krbOverlay('krb-kr-overlay').classList.add('open');
 }
 function krbRenderKr(){
@@ -179,30 +201,57 @@ function krbRenderKr(){
   var can = krCan(), cn = (clinicById(b.clinicId)||{}).name || '', inp = 'width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;';
   var st = {pending:'待 KR 确认', confirmed:b.arrivedAt ? '已到店' : '已确认', reselect:'IN 重选时间中', done:'已完成', cancelled:'已取消', replaced:'已作废'}[b.status] || b.status;
   var head = '<div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b style="font-size:15px;">IN 预约（KR 医院）</b><span style="cursor:pointer;" onclick="document.getElementById(\'krb-kr-overlay\').classList.remove(\'open\')">✕</span></div>';
-  var info = '<div style="font-size:13px;line-height:1.9;margin-bottom:10px;"><b>'+krbEsc(b.clientName)+'</b> · '+krbEsc(krbPurposeText(b.purpose))+'（'+krbEsc(cn)+'）<br>'+krbEsc(b.date+' '+b.time)+'（韩国）· '+krbEsc(b.director)+'<br>状态：<b>'+st+'</b>'+(b.note ? '<br>备注：'+krbEsc(b.note) : '')+(b.caseId ? '<br><a href="#" onclick="document.getElementById(\'krb-kr-overlay\').classList.remove(\'open\');krShowCase(\''+b.clinicId+'\',\''+b.caseId+'\');return false;" style="color:var(--terracotta);">打开案件</a>' : '')+'</div>';
+  var info = '<div style="font-size:13px;line-height:1.9;margin-bottom:10px;"><b>'+krbEsc(b.clientName)+'</b> · '+krbEsc(krbPurposeText(b.purpose))+'（'+krbEsc(cn)+'）<br>'+krbEsc(b.date+' '+b.time)+'（韩国）<br>状态：<b>'+st+'</b>'+(b.note ? '<br>备注：'+krbEsc(b.note) : '')+'</div>'; /* 打开案件入口统一成下面的按钮 */
   var body = '';
   if(b.status==='pending' && can){
     if(f.mode==='change') body = '<div style="display:flex;gap:10px;margin-bottom:8px;"><input type="date" value="'+f.date+'" style="'+inp+'" onchange="KRBK.date=this.value"><select style="'+inp+'" onchange="KRBK.time=this.value">'+krbTimeOptions(hid, f.time)+'</select></div><textarea placeholder="原因（选填）" style="'+inp+'height:56px;" oninput="KRBK.reason=this.value"></textarea><div style="display:flex;gap:10px;margin-top:10px;"><button class="btn-outline" style="flex:1;" onclick="KRBK.mode=null;krbRenderKr()">返回</button><button class="btn-primary" style="flex:1;" onclick="krbDoReselect(\'change\')">发给 IN 重选</button></div>';
     else if(f.mode==='reject') body = '<textarea placeholder="无法安排的原因（选填）" style="'+inp+'height:56px;" oninput="KRBK.reason=this.value"></textarea><div style="display:flex;gap:10px;margin-top:10px;"><button class="btn-outline" style="flex:1;" onclick="KRBK.mode=null;krbRenderKr()">返回</button><button class="btn-primary" style="flex:1;" onclick="krbDoReselect(\'reject\')">确认无法安排</button></div>';
     else body = '<div style="display:flex;gap:8px;"><button class="btn-primary" style="flex:1;" onclick="krbDoConfirm()">确认</button><button class="btn-outline" style="flex:1;" onclick="KRBK.mode=\'change\';krbRenderKr()">改时间</button><button class="btn-outline" style="flex:1;" onclick="KRBK.mode=\'reject\';krbRenderKr()">无法安排</button></div>';
   } else if(b.status==='confirmed' && can){
-    if(!b.arrivedAt) body = '<button class="btn-primary" style="width:100%;" onclick="krbDoArrive()">客人已到店</button>';
-    else {
-      var opts = krbHoldChoices(b.clinicId, b.clientName), care = krLocalLib(hid).map(function(p){ return p.name; });
+    var viewBtn = b.caseId ? '<button class="btn-outline" style="flex:1;" onclick="krbOpenCase()">查看客人资料（打开案件）</button>' : '', closeBtn = '<button class="btn-ghost" style="flex:1;" onclick="document.getElementById(\'krb-kr-overlay\').classList.remove(\'open\')">关闭</button>';
+    if(!b.arrivedAt){
+      /* CMD-1014-18 四·18：还没到预约当天不显示［客人已到店］，只有查看客人资料 / 关闭；到当天才出现（原型用［模拟到当日］） */
+      body = '<div style="display:flex;gap:8px;">'+(krbArriveAllowed(b) ? '<button class="btn-primary" style="flex:1;" onclick="krbDoArrive()">客人已到店</button>' : '')+viewBtn+closeBtn+'</div>'+
+        (krbArriveAllowed(b) ? '' : '<div style="margin-top:10px;font-size:11px;color:var(--muted);">还没到预约当天，到店当天才能标记客人已到店。 <a href="#" onclick="krbDoSimDay();return false;">［模拟到当日］</a>（原型）</div>');
+    } else {
+      var opts = krbHoldChoices(b.clinicId, b.clientName), cur = f.did==='hold' ? opts.filter(function(x){ return f.hold===x.caseId+'|'+x.name; })[0] : null;
       body = '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">做了什么</div><select style="'+inp+'margin-bottom:8px;" onchange="KRBK.did=this.value;krbRenderKr()"><option value="hold"'+(f.did==='hold' ? ' selected' : '')+'>使用在韩持有</option><option value="care"'+(f.did==='care' ? ' selected' : '')+'>新做管理</option><option value="other"'+(f.did==='other' ? ' selected' : '')+'>其他</option></select>'+
-        (f.did==='hold' ? '<select style="'+inp+'" onchange="KRBK.hold=this.value"><option value="">'+(opts.length ? '请选择持有项目' : '这位客人没有可用的在韩持有')+'</option>'+opts.map(function(x){ return '<option value="'+x.caseId+'|'+krbEsc(x.name)+'"'+(f.hold===x.caseId+'|'+x.name ? ' selected' : '')+'>'+krbEsc(x.name)+'（'+x.caseNo+'，剩 '+x.left+' 次）</option>'; }).join('')+'</select>' :
-        f.did==='care' ? '<select style="'+inp+'" onchange="KRBK.care=this.value"><option value="">请选择管理项目</option>'+care.map(function(n){ return '<option'+(f.care===n ? ' selected' : '')+'>'+krbEsc(n)+'</option>'; }).join('')+'</select><div style="font-size:11px;color:var(--muted);margin-top:4px;">管理项目在韩国现场收费，平台只记录项目名。</div>' :
+        (f.did==='hold' ? '<select style="'+inp+'" onchange="KRBK.hold=this.value;KRBK.holdQty=1;krbRenderKr()"><option value="">'+(opts.length ? '请选择持有项目' : '这位客人没有可用的在韩持有')+'</option>'+opts.map(function(x){ return '<option value="'+x.caseId+'|'+krbEsc(x.name)+'"'+(f.hold===x.caseId+'|'+x.name ? ' selected' : '')+'>'+krbEsc(x.name)+'（剩 '+x.left+' 次）</option>'; }).join('')+'</select>'+(cur ? '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px;">使用次数 <input type="number" min="1" max="'+cur.left+'" value="'+f.holdQty+'" style="width:70px;'+inp.replace('width:100%;','')+'" onchange="KRBK.holdQty=Math.max(1,Math.min('+cur.left+',parseInt(this.value,10)||1));krbRenderKr()"> 次（最多 '+cur.left+'）</div>' : '') :
+        f.did==='care' ? krbCareHtml(b, f, inp) :
         '<textarea placeholder="备注" style="'+inp+'height:56px;" oninput="KRBK.note=this.value"></textarea>')+
-        '<button class="btn-primary" style="width:100%;margin-top:10px;" onclick="krbDoDone()">标记完成</button>';
+        '<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn-primary" style="flex:2;" onclick="krbDoDone()">标记完成</button>'+viewBtn+closeBtn+'</div>';
     }
   } else if(b.status==='pending' || b.status==='confirmed') body = '<div style="font-size:12px;color:var(--muted);">只有室长 / 管理者能处理这笔预约。</div>';
   ov.innerHTML = '<div class="modal-box" style="width:420px;">'+head+info+body+'<div id="krb-kr-err" style="font-size:12px;color:#C1454A;min-height:16px;margin-top:6px;">'+krbEsc(f.err)+'</div></div>';
 }
+/* 新做管理：从 KR 项目库选项目（类别 → 项目 → 规格）→ 加入（待付款）→ 已付款；金额只在 KR 这个弹窗里看得到 */
+function krbCareHtml(b, f, inp){
+  if(b.fee){
+    var fe = b.fee;
+    return '<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.8;"><b>'+krbEsc(fe.name)+(fe.specLabel ? ' · '+krbEsc(fe.specLabel) : '')+'</b>　'+formatCurrency(fe.price,'KRW')+'　<span style="font-weight:700;color:'+(fe.status==='已付款' ? 'var(--sage)' : '#B5483E')+';">'+fe.status+'</span>'+
+      '<div style="display:flex;gap:8px;margin-top:6px;">'+(fe.status==='待付款' ? '<button class="btn-primary" style="flex:1;" onclick="krbDoFeePaid()">已付款</button><button class="btn-outline" style="flex:1;" onclick="krbDoFeeRemove()">删除</button>' : '')+'</div></div>';
+  }
+  var lib = krLocalLib(krHospitalIdOfMe()), pr = lib.filter(function(p){ return p.id===f.pid; })[0], sp = pr && pr.specs.filter(function(x){ return x.id===f.sid; })[0], price = sp ? (pr.neg ? (parseInt(f.manual,10)||0) : sp.price) : 0, cats = [];
+  lib.forEach(function(p){ if(cats.indexOf(p.catLabel)<0) cats.push(p.catLabel); });
+  return '<select style="'+inp+'margin-bottom:6px;" onchange="KRBK.pid=this.value;KRBK.sid=\'\';krbRenderKr()"><option value="">请选择管理项目（KR 项目库）</option>'+cats.map(function(c0){ return '<optgroup label="'+krbEsc(c0)+'">'+lib.filter(function(p){ return p.catLabel===c0; }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===f.pid ? ' selected' : '')+'>'+krbEsc(p.name)+'</option>'; }).join('')+'</optgroup>'; }).join('')+'</select>'+
+    (pr ? '<select style="'+inp+'margin-bottom:6px;" onchange="KRBK.sid=this.value;krbRenderKr()"><option value="">请选择规格</option>'+pr.specs.map(function(x){ return '<option value="'+x.id+'"'+(x.id===f.sid ? ' selected' : '')+'>'+krbEsc(x.label)+(pr.neg ? '' : '　'+formatCurrency(x.price,'KRW'))+'</option>'; }).join('')+'</select>' : '')+
+    (pr && pr.neg ? '<input type="number" min="1" placeholder="面议：填价格（₩）" value="'+krbEsc(f.manual)+'" style="'+inp+'margin-bottom:6px;" onchange="KRBK.manual=this.value;krbRenderKr()">' : '')+
+    '<button class="btn-outline" style="width:100%;" onclick="krbDoFeeAdd()">加入（待付款）'+(sp && price>0 ? ' · '+formatCurrency(price,'KRW') : '')+'</button>';
+}
+function krbOpenCase(){ var f = KRBK, b = f && krbFind(krHospitalIdOfMe(), f.id); if(!b || !b.caseId) return; document.getElementById('krb-kr-overlay').classList.remove('open'); krShowCase(b.clinicId, b.caseId); }
+function krbDoSimDay(){ if(coreBookSimDay(krHospitalIdOfMe(), KRBK.id)){ Store.touch && Store.touch(); krbRenderKr(); } }
+function krbDoFeeAdd(){
+  var f = KRBK, lib = krLocalLib(krHospitalIdOfMe()), pr = lib.filter(function(p){ return p.id===f.pid; })[0], sp = pr && pr.specs.filter(function(x){ return x.id===f.sid; })[0];
+  if(!pr || !sp){ f.err = '请选择项目和规格'; krbRenderKr(); return; } var price = pr.neg ? (parseInt(f.manual,10)||0) : sp.price;
+  var r = coreBookFeeAdd(krHospitalIdOfMe(), f.id, {name:pr.name, specLabel:sp.label, price:price, projectId:pr.id}, ME_NAME); if(krbKrDone(r)) krbRenderKr();
+}
+function krbDoFeePaid(){ var r = coreBookFeePaid(krHospitalIdOfMe(), KRBK.id, ME_NAME); if(krbKrDone(r)) krbRenderKr(); }
+function krbDoFeeRemove(){ var r = coreBookFeeRemove(krHospitalIdOfMe(), KRBK.id, ME_NAME); if(krbKrDone(r)) krbRenderKr(); }
 function krbKrDone(res){ var f = KRBK; if(!res.ok){ f.err = res.err || '操作失败'; krbRenderKr(); return false; } f.err = ''; Store.touch && Store.touch(); try{ krRefreshAll(); }catch(e){} return true; }
 function krbDoConfirm(){ var r = coreBookConfirm(krHospitalIdOfMe(), KRBK.id, ME_NAME); if(krbKrDone(r)){ krbRenderKr(); } }
 function krbDoReselect(kind){ var f = KRBK; if(kind==='change' && krbInPast(f.date, f.time)){ f.err = '不能建议过去的时间'; krbRenderKr(); return; } var r = coreBookReselect(krHospitalIdOfMe(), f.id, kind, (f.reason||'').trim(), kind==='change' ? {date:f.date, time:f.time} : null, ME_NAME); if(krbKrDone(r)){ krbOverlay('krb-kr-overlay').classList.remove('open'); } }
 function krbDoArrive(){ if(coreBookArrive(krHospitalIdOfMe(), KRBK.id, ME_NAME)){ Store.touch && Store.touch(); try{ krRefreshAll(); }catch(e){} krbRenderKr(); } }
-function krbDoDone(){ var f = KRBK, did = f.did==='hold' ? {kind:'hold', caseId:(f.hold||'').split('|')[0], name:(f.hold||'').split('|').slice(1).join('|')} : (f.did==='care' ? {kind:'care', name:f.care} : {kind:'other', note:(f.note||'').trim()}); var r = coreBookDone(krHospitalIdOfMe(), f.id, did, ME_NAME); if(krbKrDone(r)){ krbOverlay('krb-kr-overlay').classList.remove('open'); } }
+function krbDoDone(){ var f = KRBK, did = f.did==='hold' ? {kind:'hold', caseId:(f.hold||'').split('|')[0], name:(f.hold||'').split('|').slice(1).join('|'), qty:f.holdQty} : (f.did==='care' ? {kind:'care'} : {kind:'other', note:(f.note||'').trim()}); var r = coreBookDone(krHospitalIdOfMe(), f.id, did, ME_NAME); if(krbKrDone(r)){ krbOverlay('krb-kr-overlay').classList.remove('open'); } }
 
 /* KR 日历上的预约块（kr.js 的 krcBlockHtml 遇到 type '预约' 时调用） */
 function krbBlockHtml(r0, showWho){
@@ -211,5 +260,5 @@ function krbBlockHtml(r0, showWho){
   var style = 'position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;border-radius:5px;padding:2px 5px;font-size:10px;line-height:1.3;overflow:hidden;cursor:pointer;z-index:2;'+(b.done ? 'opacity:.45;text-decoration:line-through;' : '')+
     (pend ? 'background:#fff;color:#2F6B4A;border:1.5px dashed #3F7A55;' : 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;');
   var label = (pend ? '待 KR 确认 · ' : '预约 · ')+(b.name||'')+' · '+cn;
-  return '<div onclick="event.stopPropagation();krBookOpen(\''+b.bookingId+'\')" title="'+krbEsc(b.time+'–'+b.end+' '+label)+'" style="'+style+'"><b>'+krbEsc(b.time)+'</b> '+krbEsc(label)+(showWho ? '<br>'+krbEsc(b.who) : '')+'</div>';
+  return '<div onclick="event.stopPropagation();krBookOpen(\''+b.bookingId+'\')" title="'+krbEsc(b.time+'–'+b.end+' '+label)+'" style="'+style+'"><b>'+krbEsc(b.time)+'</b> '+krbEsc(label)+(showWho && b.who!==KRB_HOSP ? '<br>'+krbEsc(b.who) : '')+'</div>';
 }

@@ -286,7 +286,7 @@ function krDayItems(ds){
       var s = timeToMin(b.time), e = timeToMin(b.end||minToTime(s+SLOT_MIN)), surg = b.kind==='施术', own = surg && b.clinicId===CURRENT_CLINIC_ID, label = '';
       if(b.kind==='预约'){ /* CMD-1014-16：IN 在 KR 日程帮客人占位预约；本诊所的显示「客人 · 待 KR 确认 / 预约」，其他诊所的 = 浅灰无字 */
         var mine = b.clinicId===CURRENT_CLINIC_ID;
-        out.push({who:n, s:s, e:e, type:mine ? 'book' : 'busy', own:mine, pending:b.status==='待确认', bookingId:b.bookingId, label:mine ? (b.name||'')+' · '+(b.status==='待确认' ? '待 KR 确认' : '预约')+' · '+n : '', caseId:mine ? (b.caseId||null) : null});
+        out.push({who:n, s:s, e:e, type:mine ? 'book' : 'busy', own:mine, pending:b.status==='待确认', bookingId:b.bookingId, label:mine ? (b.name||'')+' · '+(b.status==='待确认' ? '待 KR 确认' : '预约') : '', caseId:mine ? (b.caseId||null) : null});
         return;
       }
       if(own){ /* 本诊所客人的施术：谁 · 做什么 · 哪位医生（项目取案件的赴韩施术项目；多项显示第一项 + 等 N 项） */
@@ -299,6 +299,12 @@ function krDayItems(ds){
       if(!offApplies(o, ds) || o.who!==n || o.kind!=='director') return;
       out.push({who:n, s:0, e:0, type:'off', own:false, part:o.part||'全天', label:n+' OFF', offKr:o});
     });
+  });
+  /* CMD-1014-18 四·2：占位预约不挂院长（全院），任何院长视角都显示 */
+  ((hd.directorSchedule||{})[KRB_HOSP]||[]).forEach(function(b){
+    if(b.date!==ds || b.kind!=='预约') return;
+    var s = timeToMin(b.time), e = timeToMin(b.end||minToTime(s+SLOT_MIN)), mine = b.clinicId===CURRENT_CLINIC_ID;
+    out.push({who:'', s:s, e:e, type:mine ? 'book' : 'busy', own:mine, pending:b.status==='待确认', bookingId:b.bookingId, label:mine ? (b.name||'')+' · '+(b.status==='待确认' ? '待 KR 确认' : '预约') : '', caseId:mine ? (b.caseId||null) : null});
   });
   return out;
 }
@@ -1411,6 +1417,7 @@ function subBookTodos(){
 /* IN 工作台：术后管理已过建议日期还没做的提醒（CMD-1013-06 一·4） */
 function renderPcDueCard(){
   var el = document.getElementById('dash-pcdue-card'); if(!el) return;
+  el.style.display = 'none'; el.innerHTML = ''; return; /* CMD-1014-18 四·4：工作台不再有这张卡（回印尼的术后管理由客人持有 + 待办提醒，不再请 IN 帮忙预约） */
   var list = postcareDueList();
   if(!list.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'block';
@@ -1419,6 +1426,7 @@ function renderPcDueCard(){
 }
 function renderSubBookCard(){
   var el = document.getElementById('dash-subbook-card'); if(!el) return;
+  el.style.display = 'none'; el.innerHTML = ''; return; /* CMD-1014-18 四·4：工作台不再有这张卡（回印尼的术后管理由客人持有 + 待办提醒，不再请 IN 帮忙预约） */
   var list = subBookTodos();
   if(!list.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'block';

@@ -1518,7 +1518,7 @@ function krProgressBlock(c){
     var ops = '', stBtn = '';
     var isCare = s.kind==='术后管理记录';
     if(isCare && can && !s.done && paidOk) stBtn = krCareActHtml(s);
-    if(can && !s.done && s.place!=='KR') ops += s.booked ? '' : '<button class="btn-outline" style="padding:2px 9px;font-size:11px;" onclick="krSubInform(\''+s.id+'\')">'+(s.informed?'再次通知 IN 预约':'通知 IN 室长预约')+'</button> ';
+    /* CMD-1014-18 四·4：拿掉［通知 IN 室长预约］，回印尼的术后管理照旧进客人持有，由 IN 按持有项目预约 */
     if(s.kind==='增加项目' && !s.done && krCanFix()){ var pi = (c.procedureItems||[]).findIndex(function(x){ return x.origin==='KR' && x.pendingPay && x.name===s.projectName && !x.cancelled; }); if(pi>-1) ops += '<a href="#" onclick="krFixOpen('+pi+');return false;" style="font-size:12px;margin-right:6px;color:#B3261E;">修正</a>'; } /* 只有待付款项目有［修正］ */
     if(can && (s.kind==='施术' || kind==='术后管理记录')) ops += '<a href="#" onclick="krSubNote(\''+s.id+'\');return false;" style="font-size:12px;margin-right:6px;">'+(s.note?'改备注':'备注')+'</a>'; /* 术后管理行：［备注］+［改时间］，不再有［删除］（CMD-1013-08 三·2） */
     if(can && !s.done && kind==='术后管理记录') ops += '<a href="#" onclick="krSubTimeOpen(\''+s.id+'\');return false;" style="font-size:12px;">改时间</a>';
@@ -1894,7 +1894,7 @@ function krcEvents(){
   var hid = krHospitalIdOfMe(), h = krHData(), who = krcWho(), rows = krAllCases(), rm = {};
   normSchedBlocks(hid);
   rows.forEach(function(r){ rm[r.clinicId+':'+r.id] = r; });
-  var okWho = function(n){ return who==='all' || n===who; };
+  var okWho = function(n){ return n===KRB_HOSP ? !(krcIsDirector() && !(newCalOn() && krcViewAll())) : (who==='all' || n===who); }; /* CMD-1014-18：全院的占位预约不挂院长，室长 / 代表院长看全部时都显示 */
   var surg = [], busy = [];
   Object.keys(h.directorSchedule||{}).forEach(function(n){ if(!okWho(n)) return; (h.directorSchedule[n]||[]).forEach(function(b){
     if(b.type==='面诊'){ var rc = rm[b.clinicId+':'+b.caseId]; if(krcIsDirector() && !rc && !(newCalOn() && krcViewAll())) return; surg.push({b:b, row:rc, label:'面诊 · '+(b.name||'')+' · '+n}); } /* 面诊预约（CMD-1008-12 C1）：「面诊 · 客人 · 院长」 */
@@ -1985,6 +1985,13 @@ function krcDayColsHtml(ds, ev){
     else r4 += '<div style="'+cell+'position:relative;height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:#fff;border-top:1px solid var(--line);cursor:cell;" onmousemove="krcHover(this,event)" onmouseleave="krcHoverOff(this)" onclick="krcCellClick(\''+ds+'\',event,this,\''+krEsc(name).replace(/\'/g,'')+'\')">'+nowHtml+'<div class="krc-hl" style="display:none;position:absolute;left:0;right:0;height:'+(KRC_PX/2)+'px;background:rgba(190,120,90,.12);pointer-events:none;"></div>'+lines+
       lanes.map(function(r0){ var x = r0.b._x; return krcBlockHtml(x ? {b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done} : r0, false); }).join('')+'</div>';
   });
+  var hospB = (typeof KRB_HOSP!=='undefined') ? ev.surg.filter(function(x){ return x.b.date===ds && x.b.who===KRB_HOSP; }).map(function(x){ return Object.assign({}, x.b, {_x:x}); }) : [];
+  if(hospB.length){ /* CMD-1014-18 四·2：全院的占位预约没有院长，另放一栏「全院预约」 */
+    r1 += '<div class="krc-dirhead" style="'+cell+'text-align:center;font-size:12px;font-weight:700;padding:6px 4px;white-space:nowrap;">全院预约</div>';
+    r2 += '<div style="'+cell+'padding:2px;background:#faf8f3;border-top:1px solid var(--line);"></div>';
+    r4 += '<div style="'+cell+'position:relative;height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:#fff;border-top:1px solid var(--line);">'+(isToday ? todoNowLineHtml().replace(/<span>[\s\S]*?<\/span>/, '') : '')+lines+krcLanes(hospB).map(function(r0){ var x = r0.b._x; return krcBlockHtml({b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done}, false); }).join('')+'</div>';
+    n++;
+  }
   return '<div style="overflow-x:auto;flex-shrink:0;border:1px solid var(--line);border-radius:10px;"><div style="display:grid;grid-template-columns:44px repeat('+n+',minmax(180px,1fr));min-width:'+(44+180*n)+'px;">'+r1+rAll+r2+r4+'</div></div>';
 }
 function krcHover(el, e){ var hl = el.querySelector('.krc-hl'); if(!hl) return; var y = e.clientY - el.getBoundingClientRect().top, slot = Math.floor(y / (KRC_PX/2)); hl.style.display = 'block'; hl.style.top = (slot * KRC_PX/2)+'px'; }
@@ -2333,7 +2340,7 @@ function krPcbRender(){
     var right;
     if(!r.where){ right = '<span style="font-size:12px;color:var(--muted);">先选在哪里做</span>'; }
     else if(r.where==='IN'){
-      right = '<label style="font-size:12px;"><input type="checkbox" '+(r.askIn?'checked':'')+' onchange="krPcbSet('+i+',\'askIn\',this.checked)"> 请 IN 帮忙预约</label>'+(r.askIn ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;">建议日期 '+krEsc(r.date)+'（第 N 天）｜印尼诊所当天：'+krEsc(krInnDayStatus(KR_CASE.clinicId, r.date))+'</div>' : '');
+      right = '<span style="font-size:12px;color:var(--slate2);">回印尼做：转入客人持有，由 IN 按持有项目预约（建议日期 '+krEsc(r.date)+'）</span>';
     } else if(!KR_PCB.single[r.date]){
       right = '<span style="font-size:12px;color:var(--slate2);">按本组时间 '+krEsc(r.time||'（未选）')+'</span>';
     } else {

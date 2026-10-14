@@ -1134,14 +1134,14 @@
     nav('in-dashboard'); setCalView('kr'); setCalMode('week'); var col = [].slice.call(document.querySelectorAll('.kr-daycol')).filter(function(e){ return e.getAttribute('data-ds')>todayStr() && !hospitalClosedOn(hid, e.getAttribute('data-ds')); })[0];
     ST.ok(!!col, 'KR 医院日程周视图应有可点的空白列'); var r = col.getBoundingClientRect(); col.dispatchEvent(new MouseEvent('click', {bubbles:true, clientX:r.left+8, clientY:r.top+KR_ROW_PX*2+3}));
     ST.ok(!!KRB && document.getElementById('krb-overlay').classList.contains('open'), '点空白时段应弹出预约窗');
-    var busy = null; Object.keys(HOSPITAL_DATA[hid].directorSchedule).forEach(function(n){ (HOSPITAL_DATA[hid].directorSchedule[n]||[]).forEach(function(b){ if(!busy && b.type==='不可预约' && b.date>todayStr()) busy = {n:n, b:b}; }); });
-    if(busy){ KRB.client = name; KRB.director = busy.n; KRB.date = busy.b.date; KRB.time = busy.b.time; krbSubmit(); ST.ok(/不可预约|重叠|已有/.test(KRB.err||''), '撞不可预约应挡住并说明，实际：'+KRB.err); }
+    var busyCnt = 0; Object.keys(HOSPITAL_DATA[hid].directorSchedule).forEach(function(n){ (HOSPITAL_DATA[hid].directorSchedule[n]||[]).forEach(function(b){ if(b.type==='不可预约' && b.date>todayStr() && !busyCnt){ busyCnt = 1; KRB.client = name; KRB.date = b.date; KRB.time = b.time; krbSubmit(); ST.ok(KRB===null || !/不可预约|重叠|已有/.test(KRB.err||''), 'CMD-1014-18：占位只看医院营业 / 休诊，不再因院长不可预约挡住，实际：'+(KRB&&KRB.err)); var mk = krbList(hid).filter(function(x){ return x.clientName===name && x.date===b.date && x.time===b.time && x.status==='pending'; })[0]; if(mk) krBookCancel(mk.id); } }); });
+    if(!KRB) KRB = {hid:hid, date:D(2), time:'11:00', director:'', client:name, purpose:'care', note:'', replaceId:null, info:'', err:''};
     var closed = null; for(var d = 1; d < 15 && !closed; d++){ if(hospitalClosedOn(hid, D(d))) closed = D(d); } if(closed){ KRB.date = closed; krbSubmit(); ST.ok(/休诊/.test(KRB.err||''), '医院休诊日应挡住'); }
     KRB.date = D(-1); krbSubmit(); ST.ok(/过去|休诊|已有|重叠/.test(KRB.err||''), '过去的时间应挡住');
     var slot = ST.bkFreeSlot(hid, 2); if(!ST.ok(!!slot, '找不到空档')) return;
-    KRB = {hid:hid, date:slot.ds, time:slot.t, director:slot.dir, client:name, purpose:'care', note:'T2 占位', replaceId:null, info:'', err:''}; var n0 = CASE_ITEMS.length; krbSubmit();
+    KRB = {hid:hid, date:slot.ds, time:slot.t, director:'', client:name, purpose:'care', note:'T2 占位', replaceId:null, info:'', err:''}; var n0 = CASE_ITEMS.length; krbSubmit();
     var bk = krbList(hid).filter(function(b){ return b.clientName===name && b.status==='pending' && b.date===slot.ds; })[0]; if(!ST.ok(!!bk, '提交后应有一笔待确认占位，错误：'+(KRB && KRB.err))) return;
-    ST.ok(CASE_ITEMS.length===n0, '占位时还不建案件'); ST.ok((HOSPITAL_DATA[hid].directorSchedule[bk.director]||[]).some(function(b){ return b.bookingId===bk.id && b.kind==='预约' && b.status==='待确认'; }), '院长日程里应有「待确认」预约块');
+    ST.ok(CASE_ITEMS.length===n0, '占位时还不建案件'); ST.ok((HOSPITAL_DATA[hid].directorSchedule[KRB_HOSP]||[]).some(function(b){ return b.bookingId===bk.id && b.kind==='预约' && b.status==='待确认'; }), '全院日程里应有「待确认」预约块（不挂院长）');
     ST.ok(HOSPITAL_DATA[hid].notifs.some(function(x){ return x.bookingId===bk.id && x.kind==='krbook'; }), 'KR 应收到「预约待确认」通知');
     try{ localStorage.setItem('__T2_BK1', JSON.stringify({hid:hid, id:bk.id, name:name, clinic:CURRENT_CLINIC_ID, date:bk.date, dir:bk.director})); }catch(e){}
   });
@@ -1156,9 +1156,15 @@
     var bk = krbFind(hid, rec.id); if(!ST.ok(!!bk && bk.status==='pending', '占位应是待确认')) return;
     var res = coreBookConfirm(hid, bk.id, 'KM1 室长'); ST.ok(res.ok && !!res.caseId, 'KR 确认应成功并建案件：'+res.err); var v = Store.readClinic(rec.clinic), c = (v.CASE_ITEMS||[]).filter(function(x){ return x.id===res.caseId; })[0]; if(!ST.ok(!!c, '应建立新案件')) return;
     ST.ok(c.krVisit && c.krVisit.hospitalId===hid && c.stage==='booked' && c.director===bk.director, '新案件：在韩到店、从预约到店开始、地点 KR 医院'); ST.ok(krAllCases().some(function(x){ return x.id===c.id; }), 'KR 案件列表应看得到这个案件');
-    ST.ok(!coreBookDone(hid, bk.id, {kind:'other'}, 'KM1 室长').ok, '没到店不能标完成'); ST.ok(coreBookArrive(hid, bk.id, 'KM1 室长'), '标记客人已到店');
+    ST.ok(!coreBookDone(hid, bk.id, {kind:'other'}, 'KM1 室长').ok, '没到店不能标完成'); ST.ok(!coreBookArrive(hid, bk.id, 'KM1 室长'), 'CMD-1014-18：还没到预约当天不能标客人已到店'); ST.ok(coreBookSimDay(hid, bk.id) && coreBookArrive(hid, bk.id, 'KM1 室长'), '模拟到当日后标记客人已到店');
     ST.ok(!coreBookDone(hid, bk.id, {kind:'care', name:''}, 'KM1 室长').ok, '新做管理要选项目'); ST.ok(!coreBookDone(hid, bk.id, {kind:'hold', caseId:'x', name:'y'}, 'KM1 室长').ok, '使用持有要选项目');
-    var dn = coreBookDone(hid, bk.id, {kind:'care', name:krLocalLib(hid)[0].name}, 'KM1 室长'); ST.ok(dn.ok, '标记完成：'+dn.err); ST.ok(krbFind(hid, bk.id).status==='done', '预约状态 done');
+    var lp = krLocalLib(hid).filter(function(p){ return !p.neg; })[0], sp0 = lp.specs[0];
+    ST.ok(!coreBookFeeAdd(hid, bk.id, {name:lp.name, price:0}, 'KM1 室长').ok, '新做管理要有价格');
+    ST.ok(coreBookFeeAdd(hid, bk.id, {name:lp.name, specLabel:sp0.label, price:sp0.price, projectId:lp.id}, 'KM1 室长').ok && krbFind(hid, bk.id).fee.status==='待付款', '新做管理：加入后待付款');
+    ST.ok(!coreBookDone(hid, bk.id, {kind:'care'}, 'KM1 室长').ok, '待付款不能标完成');
+    ST.ok(coreBookFeePaid(hid, bk.id, 'KM1 室长').ok && krbFind(hid, bk.id).fee.status==='已付款', '标记已付款');
+    var dn = coreBookDone(hid, bk.id, {kind:'care'}, 'KM1 室长'); ST.ok(dn.ok, '标记完成：'+dn.err); ST.ok(krbFind(hid, bk.id).status==='done', '预约状态 done');
+    var cc = (Store.readClinic(rec.clinic).CASE_ITEMS||[]).filter(function(x){ return x.id===res.caseId; })[0]; ST.ok(!(cc.logEntries||[]).some(function(l){ return /₩|KRW|\d,\d{3}|万/.test(l.action) && /新做管理/.test(l.action); }), 'IN 的案件 Timeline 不带 KR 的金额');
   });
   ST.def('BK2b','KR 无法安排 → IN 重选（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__T2_BK2')||'null'); if(!ST.ok(!!rec, '先在 A1 分页跑 BK2a')) return;

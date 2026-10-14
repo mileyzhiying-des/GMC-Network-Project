@@ -57,8 +57,6 @@ function inTodoItems(){
       push(todoMk('relay', 'KR 已确认施术时间：转告客人（'+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, todoInGo(c, 'kr')));
     /* 确认客人日程有无变化：赴韩施术前 2 天出现（CMD-1014-01 二·3） */
     if(newCalOn() && calNeedsRecheck(c)) push(todoMk('recheck', '确认客人日程有无变化（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, todoInGo(c, 'kr')));
-    /* 请 IN 帮忙预约印尼术后管理 */
-    (c.subItems||[]).forEach(function(s){ if(s.informed && !s.booked && !s.done && s.place!=='KR') push(todoMk('subbook', '请帮忙预约印尼术后管理：'+s.content, c, s.date||'', false, todoInGo(c, 'kr'))); });
     /* 待收款 */
     closeBlockers(c).forEach(function(b){ push(todoMk('pay', '待收款：'+b, c, '', false, todoInGo(c, /面诊费/.test(b) ? 'consult' : 'settle'))); });
     /* 当天本地项目未标完成：营业结束前 1 小时出现，标完才消失 */
@@ -382,7 +380,7 @@ function todoInBoot(){ if(!newTodoOn() || todoIsKr()) return; try{ if(typeof set
 function notifTodoKind(n){
   var tx = String(n.text||''), kd = n.kind||'';
   if(kd==='mention' || kd==='missedcall' || /@ 了你|未接来电/.test(tx)) return 'stay';
-  if(/诊疗方案已到|等待报告超过|无法安排|请 IN 帮忙预约|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
+  if(/诊疗方案已到|等待报告超过|无法安排|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
   return 'msg';
 }
 
