@@ -3088,7 +3088,7 @@ function renderDrawerList(){
     });
     if(!items.length) html += '<div style="font-size:12px;color:var(--muted);padding:16px 4px;">没有匹配的案件</div>';
   } else {
-    var rooms = ROOMS.filter(function(r){ return !q || r.name.toLowerCase().indexOf(q)>-1; });
+    var rooms = ROOMS.filter(function(r){ return roomVisibleToMe(r.id) && (!q || r.name.toLowerCase().indexOf(q)>-1); });
     rooms.sort(function(a,b){ if(a.isMain!==b.isMain) return a.isMain ? -1 : 1; return roomLastKey(b.id)-roomLastKey(a.id); }); /* 置顶②：Main 全员群；其他按最新消息排序 */
     rooms.forEach(function(r){
       var pin = r.isMain ? '<span class="pin-icon">📌</span>' : '';

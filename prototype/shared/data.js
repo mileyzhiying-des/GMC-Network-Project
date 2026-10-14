@@ -5664,7 +5664,9 @@ function confirmNewCaseChat(caseId){
 /* ---- 对话未读（2026-10-03，IN-CHAT-01）：顶部 💬 显示当前用户所在房间的未读消息数，**不含 @**（@ 在通知中心）；打开房间清零；院长账号不显示未读 ---- */
 var ROOM_UNREAD = {'kr-lee':2, 'main':1, 'case-dedi':1};
  /* 演示 */
-function totalUnread(){ var t = 0; Object.keys(ROOM_UNREAD).forEach(function(k){ if(CHAT_DATA.hasOwnProperty(k)) t += ROOM_UNREAD[k]||0; }); return t; }
+/* CMD-1014-16：KR 新建的职员对话带成员名单（r.members），只有成员看得到；没有 members 的房间（Main 群 / IN 自己建的）所有 IN 室长都看得到 */
+function roomVisibleToMe(roomId){ var r = (typeof roomById==='function') ? roomById(roomId) : null; return !(r && r.members && r.members.length) || r.members.indexOf(ME_NAME)>-1; }
+function totalUnread(){ var t = 0; Object.keys(ROOM_UNREAD).forEach(function(k){ if(CHAT_DATA.hasOwnProperty(k) && roomVisibleToMe(k)) t += ROOM_UNREAD[k]||0; }); return t; }
 
 /* 抽屉排序：房间最新一条消息的时间（day + time）→ 可比较的数字 */
 function roomLastKey(roomId){

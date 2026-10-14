@@ -949,15 +949,16 @@ function krRoomList(){
       var key = cl.id+'|'+roomId, mark = ((h.chatRead||{})[me.id]||{})[key] || 0;
       var unread = msgs.slice(mark).filter(function(m){ return m.from!=='sys' && !krMsgIsMine(m) && (!isKrDirectorLike(me) || krMentionsMe(m)); }).length; /* 院长在 Main 群里是静音的：不计未读、不推播，被 @ 才提醒 */
       var last = msgs.filter(function(m){ return m.from!=='sys'; }).slice(-1)[0];
-      out.push({key:key, clinicId:cl.id, roomId:roomId, name:name, clinicName:cl.name, isMain:!caseRow, unread:unread, count:msgs.length, last:last ? krMsgText(last) : '', lastTime:last ? last.time : '', caseRow:caseRow||null});
+      out.push({key:key, clinicId:cl.id, roomId:roomId, name:name, clinicName:cl.name, isMain:!caseRow && roomId.indexOf('main-')===0, isStaff:!caseRow, unread:unread, count:msgs.length, last:last ? krMsgText(last) : '', lastTime:last ? last.time : '', caseRow:caseRow||null});
     };
     add('main-'+hid, 'Main · '+cl.name, null);
+    (v.ROOMS||[]).forEach(function(rm){ if(rm.members && rm.members.indexOf(me.name)>-1) add(rm.id, rm.name, null); }); /* CMD-1014-16：KR 新建的职员对话（带成员名单，成员才看得到） */
     Object.keys(v.CHAT_DATA||{}).forEach(function(rid){
       if(rid.indexOf('case-')!==0) return;
       var r = visible[cl.id+':'+rid.slice(5)]; if(r) add(rid, r.name+' · '+r.caseNo, r);
     });
   });
-  return out.sort(function(a,b){ return (b.unread>0)-(a.unread>0) || (b.isMain-a.isMain); });
+  return out.sort(function(a,b){ return (b.isMain-a.isMain) || (b.unread>0)-(a.unread>0); });
 }
 function krMentionsMe(m){ var me = currentAccount(); return !!me && String(m.orig||'').indexOf('@'+me.name.split(' ')[0]) > -1; }
 var KR_CHAT = {open:false, room:null, tab:'staff', q:'', search:false};
@@ -994,9 +995,9 @@ function krChatSearch(v){ KR_CHAT.q = v; var el = document.getElementById('kr-dr
 function krDrawerListHtml(rooms){
   var q = (KR_CHAT.q||'').toLowerCase();
   var unreadDot = function(r){ return r.unread ? '<span class="badge" style="position:static;width:auto;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:inline-flex;margin-left:6px;">'+r.unread+'</span>' : ''; };
-  var list = rooms.filter(function(r){ return KR_CHAT.tab==='case' ? !r.isMain : r.isMain; }).filter(function(r){ return !q || (r.name+' '+r.clinicName).toLowerCase().indexOf(q)>-1; });
+  var list = rooms.filter(function(r){ return KR_CHAT.tab==='case' ? !r.isStaff : r.isStaff; }).filter(function(r){ return !q || (r.name+' '+r.clinicName).toLowerCase().indexOf(q)>-1; });
   var html = list.map(function(r){
-    if(r.isMain) return '<div class="chat-card" onclick="krPickRoom(\''+r.key+'\')"><span class="sq-avt" style="background:var(--slate2);">G</span><div style="flex-grow:1;min-width:0;"><div style="font-size:13px;font-weight:700;"><span class="pin-icon">📌</span>'+krEsc(r.name)+unreadDot(r)+'</div><div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+krEsc(r.last||'—')+'</div></div><div style="text-align:right;font-size:11px;color:var(--muted);">'+krEsc(r.lastTime||'')+'</div></div>';
+    if(r.isStaff) return '<div class="chat-card" onclick="krPickRoom(\''+r.key+'\')"><span class="sq-avt" style="background:'+(r.isMain ? 'var(--slate2)' : 'var(--blue)')+';">G</span><div style="flex-grow:1;min-width:0;"><div style="font-size:13px;font-weight:700;">'+(r.isMain ? '<span class="pin-icon">📌</span>' : '')+krEsc(r.name)+unreadDot(r)+'</div><div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+krEsc(r.last||'—')+'</div></div><div style="text-align:right;font-size:11px;color:var(--muted);">'+krEsc(r.lastTime||'')+'</div></div>';
     var b = null; try{ b = caseStageBadge(r.caseRow.c); }catch(e){}
     return '<div class="chat-card" onclick="krPickRoom(\''+r.key+'\')"><span class="sq-avt" style="background:var(--terracotta);">'+krEsc((r.caseRow.name||'?').charAt(0).toUpperCase())+'</span><div style="flex-grow:1;min-width:0;"><div style="font-size:13px;font-weight:700;">'+krEsc(r.caseRow.name)+unreadDot(r)+'</div><div style="font-size:11px;color:var(--muted);">Case：'+krEsc(r.caseRow.caseNo||'')+' · '+krEsc(r.clinicName)+'</div></div><div style="text-align:right;">'+(b ? '<span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+krEsc(b[2])+'</span>' : '')+'<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+krEsc(r.lastTime||'')+'</div></div></div>';
   }).join('');
@@ -1010,7 +1011,8 @@ function krRenderChat(scrollEnd){
     p.innerHTML = '<div class="drawer-head"><span style="font-size:15px;font-weight:700;">对话</span><div style="display:flex;align-items:center;gap:14px;"><span style="cursor:pointer;font-size:15px;" onclick="KR_CHAT.search=!KR_CHAT.search;krRenderChat()">🔍</span><span style="cursor:pointer;font-size:15px;" onclick="krCloseChat()">✕</span></div></div>'+
       '<div style="display:flex;border-bottom:1px solid var(--border2);"><div onclick="krSetChatTab(\'staff\')" style="flex:1;text-align:center;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer;border-bottom:'+tabBorder('staff')+';">职员间</div><div onclick="krSetChatTab(\'case\')" style="flex:1;text-align:center;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer;border-bottom:'+tabBorder('case')+';">案件</div></div>'+
       '<div class="drawer-search-wrap'+(KR_CHAT.search ? ' open' : '')+'"><input type="text" placeholder="搜索对话…" value="'+krEsc(KR_CHAT.q||'')+'" oninput="krChatSearch(this.value)"></div>'+
-      '<div class="drawer-list" id="kr-drawer-list">'+krDrawerListHtml(rooms)+'</div>';
+      '<div class="drawer-list" id="kr-drawer-list">'+krDrawerListHtml(rooms)+'</div>'+
+      (KR_CHAT.tab==='staff' ? '<div class="drawer-foot"><button class="btn-primary" style="width:100%;" onclick="krOpenNewStaffChat()">+ 新建职员对话</button></div>' : '');
     krUpdateBadges(); return;
   }
   var msgs = (Store.readClinic(room.clinicId).CHAT_DATA||{})[room.roomId] || [], lastDay = '';
@@ -1026,6 +1028,51 @@ function krRenderChat(scrollEnd){
     '<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);"><input id="kr-chat-in" placeholder="输入消息…（Enter 发送）" onkeydown="if(event.key===\'Enter\')krSendMsg()" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;"><button class="btn-primary" onclick="krSendMsg()">发送</button></div>';
   var box = document.getElementById('kr-chat-msgs'); if(box) box.scrollTop = box.scrollHeight;
   krMarkRead(room.key, msgs.length); krUpdateBadges();
+}
+
+/* ---------- CMD-1014-16 二：KR［新建职员对话］（室长 / 管理者 / 院长都有；功能同 IN） ----------
+   成员 = 本院 KR 人员 + 对接诊所的 IN 室长（已激活、有姓名的账号）；房间放在「所选 IN 室长所在诊所」的分区里（ROOMS 带 members），IN 在职员间 tab 看得到
+   （只有成员看得到）；只选 KR 人员时放在第一家对接诊所的分区里，IN 看不到；一个房间只能选同一家诊所的 IN 室长；成员完全相同的房已存在就直接进原来的房。 */
+var KR_NEWCHAT = {sel:[]};
+function krChatRoster(){
+  var hid = krHospitalIdOfMe(), me = currentAccount(), out = [];
+  ACCOUNTS.forEach(function(a){ if(a.status==='active' && a.name && a.id!==me.id){
+    if(a.hospitalId===hid && a.role.indexOf('kr_')===0) out.push({name:a.name, label:a.name+' · '+(KR_ROLE_LABEL[a.role]||'KR'), kr:true});
+    else if(!a.hospitalId && a.role!=='owner' && krClinics().some(function(cl){ return cl.id===(a.clinicId||'C1'); })) out.push({name:a.name, label:a.name+' · IN 室长（'+((clinicById(a.clinicId||'C1')||{}).name||'')+'）', kr:false, clinicId:a.clinicId||'C1'});
+  } });
+  return out;
+}
+function krOpenNewStaffChat(){
+  KR_NEWCHAT = {sel:[]};
+  var ov = document.getElementById('kr-newchat-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-newchat-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 90; ov.onclick = function(e){ if(e.target===ov) ov.classList.remove('open'); }; document.body.appendChild(ov); }
+  krRenderNewStaffChat(); ov.classList.add('open');
+}
+function krRenderNewStaffChat(){
+  var ov = document.getElementById('kr-newchat-overlay'); if(!ov) return;
+  ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b style="font-size:15px;">新建职员对话</b><span style="cursor:pointer;" onclick="document.getElementById(\'kr-newchat-overlay\').classList.remove(\'open\')">✕</span></div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">选成员：本院 KR 人员 + 对接诊所的 IN 室长（同一个房间只能选同一家诊所的 IN 室长）</div>'+
+    '<div style="max-height:46vh;overflow:auto;">'+krChatRoster().map(function(r){ var on = KR_NEWCHAT.sel.indexOf(r.name)>-1; return '<label style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;"><input type="checkbox" '+(on?'checked ':'')+'onchange="krToggleNewChatPick(\''+krEsc(r.name).replace(/\'/g,'')+'\')"><span>'+krEsc(r.label)+'</span></label>'; }).join('')+'</div>'+
+    '<div id="kr-newchat-err" style="font-size:12px;color:#C1454A;min-height:18px;margin-top:6px;"></div>'+
+    '<div style="display:flex;gap:10px;margin-top:6px;"><button class="btn-outline" style="flex:1;" onclick="document.getElementById(\'kr-newchat-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" style="flex:1;" onclick="krConfirmNewStaffChat()">开始对话</button></div></div>';
+}
+function krToggleNewChatPick(name){ var i = KR_NEWCHAT.sel.indexOf(name); if(i>-1) KR_NEWCHAT.sel.splice(i,1); else KR_NEWCHAT.sel.push(name); krRenderNewStaffChat(); }
+function krConfirmNewStaffChat(){
+  var err = function(m){ var e = document.getElementById('kr-newchat-err'); if(e) e.textContent = m; };
+  var me = currentAccount(), sel = KR_NEWCHAT.sel.slice(), roster = krChatRoster();
+  if(!sel.length){ err('请至少选择一位同事'); return; }
+  var inClinics = {}; sel.forEach(function(nm){ var r = roster.filter(function(x){ return x.name===nm; })[0]; if(r && !r.kr) inClinics[r.clinicId] = 1; });
+  var cids = Object.keys(inClinics); if(cids.length>1){ err('一个房间只能选同一家诊所的 IN 室长（你选了 '+cids.length+' 家诊所的人）'); return; }
+  var cid = cids[0] || krClinics()[0].id, members = [me.name].concat(sel).sort(), roomId = 'kgrp-'+members.join('-');
+  var key = cid+'|'+roomId;
+  Store.updateClinic(cid, function(v){
+    v.ROOMS = v.ROOMS || []; v.CHAT_DATA = v.CHAT_DATA || {};
+    if(!v.ROOMS.some(function(r){ return r.id===roomId; })){
+      v.ROOMS.push({id:roomId, name:members.filter(function(n){ return n!==me.name; }).map(function(n){ return n.split(' ')[0]; }).join('、')+'（职员间）', color:'var(--blue)', init:'G', date:'刚刚', members:members, createdBy:me.name});
+      v.CHAT_DATA[roomId] = v.CHAT_DATA[roomId] || [{day:KD(0), from:'sys', orig:me.name+' 新建了职员对话', time:nowTime(), ts:nowFullDt()}];
+    }
+  });
+  document.getElementById('kr-newchat-overlay').classList.remove('open');
+  KR_CHAT.open = true; KR_CHAT.tab = 'staff'; KR_CHAT.room = key; krRenderChat(true);
 }
 function krSendMsg(){
   var inp = document.getElementById('kr-chat-in'); if(!inp || !inp.value.trim() || !KR_CHAT.room) return;
