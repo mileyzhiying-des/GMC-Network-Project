@@ -34,10 +34,32 @@ function hspSelect(ds){ HSP.sel = ds; hspRefresh(); }
 function hspSet(mode){
   if(!canDo('clinic') || !HSP.sel) return; var h = krHData(), ds = HSP.sel, from = '', to = '';
   if(mode==='half'){ from = (document.getElementById('hsp-from')||{}).value; to = (document.getElementById('hsp-to')||{}).value; if(!/^\d\d:\d\d$/.test(from||'') || !/^\d\d:\d\d$/.test(to||'') || timeToMin(to) <= timeToMin(from)){ alert('请填完整的营业开始和结束时间，结束要晚于开始'); return; } }
+  if(mode==='closed' || mode==='half'){ var cf = hspConflicts(ds, mode, from, to); if(cf.length){ hspConflictModal(ds, mode, from, to, cf); return; } } /* CMD-1014-05：那天已有排好的施术 / 术后管理，先改期清空才能改 */
   h.specialDays = (h.specialDays||[]).filter(function(x){ return x.date!==ds; });
   h.specialDays.push({id:'sd'+Date.now(), date:ds, mode:mode, from:from, to:to, by:ME_NAME});
   logOp('设定变更', '医院特殊日子：'+ds+' → '+(mode==='open' ? '改为营业' : mode==='closed' ? '改为休息' : '半天营业 '+from+'–'+to)); Store.touch(); hspRefresh();
 }
+/* 改成休息 / 半天营业前检查：那天（半天营业时指营业时段以外）已排好的施术、没做完的术后管理（含在韩持有使用） */
+function hspConflicts(ds, mode, from, to){
+  var out = [], hid = krHospitalIdOfMe(), outside = function(tm){ return mode==='closed' || (tm && (timeToMin(tm) < timeToMin(from) || timeToMin(tm) >= timeToMin(to))); };
+  krClinics().forEach(function(cl){
+    Store.withClinic(cl.id, function(){
+      CASE_ITEMS.forEach(function(c){
+        if(!krCaseVisible(c, hid) || isEnded(c) && !(c.subItems||[]).some(function(s){ return !s.done && s.date===ds; })) return;
+        var ks = c.krSchedule;
+        if(ks && ks.confirmedDate===ds && ['confirmed','change_pending'].indexOf(ks.status)>-1 && !c.hasArrived && outside(ks.confirmedTime||'')) out.push({clinicId:cl.id, id:c.id, caseNo:c.caseNo, name:c.name, what:'施术', time:ks.confirmedTime||'', dir:c.director||'', surg:true});
+        (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && !s.done && !s.cancelled && s.date===ds && outside(s.time||'')) out.push({clinicId:cl.id, id:c.id, caseNo:c.caseNo, name:c.name, what:'术后管理 · '+(s.projectName||s.content||''), time:s.time||'', dir:c.director||'', subId:s.id}); });
+      });
+    });
+  });
+  return out.sort(function(a, b){ return String(a.time).localeCompare(String(b.time)); });
+}
+function hspConflictModal(ds, mode, from, to, cf){
+  var old = document.getElementById('hsp-conf-overlay'); if(old) old.remove();
+  var rows = cf.map(function(x){ return '<a href="#" onclick="hspGoCase(\''+x.clinicId+'\',\''+x.id+'\',\''+(x.subId||'')+'\');return false;" style="display:flex;gap:10px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;margin-bottom:6px;font-size:12px;color:inherit;text-decoration:none;"><b>'+(x.time||'未定时间')+'</b><span>'+x.what+'</span><span style="color:var(--slate2);">'+x.name+' · '+x.caseNo+(x.dir ? ' · '+x.dir : '')+'</span></a>'; }).join('');
+  document.body.insertAdjacentHTML('beforeend', '<div id="hsp-conf-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:3000;display:flex;align-items:center;justify-content:center;"><div style="background:#fff;border-radius:14px;padding:20px 22px;width:min(520px,92vw);max-height:80vh;overflow:auto;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">不能改：'+ds+' 已有排好的安排</div><div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">'+(mode==='closed' ? '改成休息' : '改成半天营业 '+from+'–'+to)+'前，请先把下面'+cf.length+'项改期或取消（点开进入案件），清空后再改。</div>'+rows+'<div style="text-align:right;margin-top:8px;"><button class="btn-outline" onclick="document.getElementById(\'hsp-conf-overlay\').remove()">知道了</button></div></div></div>');
+}
+function hspGoCase(clinicId, id, subId){ var o = document.getElementById('hsp-conf-overlay'); if(o) o.remove(); if(subId) krOpenSub(clinicId, id, subId); else krOpenSurgSub(clinicId, id); }
 function hspClear(){
   if(!canDo('clinic') || !HSP.sel) return; var h = krHData(), ds = HSP.sel; h.specialDays = (h.specialDays||[]).filter(function(x){ return x.date!==ds; });
   logOp('设定变更', '医院特殊日子：'+ds+' 改回原来'); Store.touch(); hspRefresh();

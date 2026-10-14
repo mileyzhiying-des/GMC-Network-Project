@@ -67,7 +67,7 @@ function computeOutcome(c){
   return c.reportReady ? 'reportonly' : 'cancelled';
 }
 
-function hasRefundMark(c){ return refundSum(c)>0 || (c.holdingRefunds||[]).length>0 || c.cancelReason==='仅办理退款'; }
+function hasRefundMark(c){ return refundCashSum(c)>0 || (c.holdingRefunds||[]).length>0 || c.cancelReason==='仅办理退款'; }
 
 function toneColors(label){ return TONE_COLORS[STATE_TONE[label]] || TONE_COLORS.Gray; }
 
@@ -309,7 +309,7 @@ function settlementCardHtml(c, b){
   else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（诊所收）；尾款 '+formatCurrency(b.krBalance!==undefined ? b.krBalance : b.krTotal-b.krDeposit,'KRW')+'（赴韩后医院收）；合计 '+formatCurrency(b.krTotal,'KRW'));
   if(b.inTotal) amounts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
   var refunds = (c.refunds||[]).filter(function(r){ return (r.batchIds||[]).indexOf(b.id)>-1; }).map(function(r){
-    return '<div style="font-size:12px;color:var(--terracotta);margin-top:4px;">退款 '+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+(r.note ? '；备注：'+r.note : '')+'）</div>';
+    return '<div style="font-size:12px;color:'+(r.comp ? '#8F6F0C' : 'var(--terracotta)')+';margin-top:4px;">'+(r.comp ? '转本地代偿 ' : '退款 ')+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+(r.note ? '；备注：'+r.note : '')+'）</div>';
   }).join('');
   var canCancel = b.status!=='unpaid' && krNotStartedItems(c).some(function(it){ return it.batchId===b.id; }) && !c.hasArrived && !c.visitClosed;
   var actions = b.status==='unpaid'
@@ -323,13 +323,13 @@ function settlementCardHtml(c, b){
 
 /* 汇总行（2026-10-01）：项目合计 / 已收定金 / 已退金额 / 应付尾款，跨所有结算单计算（赴韩=韩元，本地=印尼盾，不相加） */
 function settlementSummaryHtml(c){
-  var info = krBalanceInfo(c), ref = refundSum(c), pd = financePaid(c);
+  var info = krBalanceInfo(c), ref = refundCashSum(c), compK = compSum(c), pd = financePaid(c);
   var hasKr = krAllItems(c).length>0;
   var totalTxt = (hasKr ? formatCurrency(info.total,'KRW') : '') + ((hasKr && pd.inn>0) ? ' ＋ ' : '') + (pd.inn>0 ? formatCurrency(pd.inn,'IDR') : '') || '—';
   var balTxt = !krActiveItems(c).length ? '—' : c.krBalancePaid ? '已结清' : (info.diff>=0 ? formatCurrency(info.diff,'KRW') : '应退 '+formatCurrency(-info.diff,'KRW'));
   var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
-    cell('项目合计', totalTxt)+cell('已收定金（诊所收）', hasKr ? formatCurrency(info.deposit,'KRW') : '—')+cell('已退金额', ref>0 ? formatCurrency(ref,'KRW') : '—')+cell('应付尾款（医院收）', balTxt)+'</div>';
+    cell('项目合计', totalTxt)+cell('已收定金（诊所收）', hasKr ? formatCurrency(info.deposit,'KRW') : '—')+cell('已退金额', ref>0 ? formatCurrency(ref,'KRW') : '—')+(compK>0 ? cell('已转代偿', formatCurrency(compK,'KRW')) : '')+cell('应付尾款（医院收）', balTxt)+'</div>';
 }
 
 function settlementCardsHtml(c){

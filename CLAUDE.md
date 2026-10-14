@@ -569,3 +569,12 @@ prototype/shared/app.css  共用样式
 - **第 2 轮前 Code 先跑一遍**：三个开关全开 + 第 2 轮 + 全新演示数据 + 单分页。IN 全套 73/73；角色功能 S29–S41、E5、G1–G4、N1–N3、TD/TDK、CAL1–CAL7、HS1 按账号（A1/A2/OWN/KC1/KM1/KD1/KO1/booking）分别跑过。开关全关再跑 IN 全套 72/73（S31 是重复运行占满数据，非程序问题）。
 - **修的是测试，不是程序**：S35、S38 的「开放 / 关闭施术日期」是 CMD-1014-03 已取消的功能，断言改成「点日期只进那一周，openDates 不变」；S41 催办在开关开时（CMD-1013-17）只有「等报告超时」才能催，用例改为先把案件置成 awaiting_report + reportOverdue。程序代码无改动，数据版本不变（42）。
 - 注意：HS1 会跳到管理页，之后同一分页跑 CAL2 会因找不到工作台元素失败，先 `nav('kr-dashboard')` 或把 HS1 放最后。
+
+## CMD-1014-05 补充（2026-10-14，追加；旧文字保留作历史）
+- 规则变更，**不带开关**；基准 c7e41cc，单独一个提交；数据版本不变（42），新增可空字段：客户档案 `compCredits`（`[{id, amount, kwr, fromCaseId, fromCaseNo, reason, date, used, usedCaseNo}]`）、`c.comp.deferred / creditId / fromCaseNo`、结算批次 `compRefund / compFrom`。
+- **代偿标「代偿」不标「退款」**：定金仍以 `c.refunds` 带 `comp:true` 入账（财务净额 `refundSum` 不变、经营数据算法不变）；新增 `refundCashSum`（只算真退款）/ `compSum`（代偿）——`hasRefundMark`、「有退款」筛选、财务栏、`financeLabel`、结算汇总行「已退金额」只认现金退款，代偿另写「代偿 ₩X」/「已转代偿」。
+- **当场换 = 一次换完、多退少补**：`compFinalize` 算 `extra`（补付）与 `back`（代偿余额退还，记在结算批次 `compRefund`，`financePaid` 的本地收入扣掉它）；去掉「不到额度不能结算」。结算窗 / 结算单写「代偿余额退还 Rp X」。
+- **先不换**：选购画面代偿横幅上［之后再换］（`compDefer`）→ 额度存成客人的 `compCredits`（不设期限、不可退款），客户详情持有项目卡最上方显示（`renderClientHoldings` 包装）；赴韩全部取消后案件退回面诊级，`canEndCase` 用 `compAllKrGone(c)` 放行（定金已退 / 转代偿、没到院时也出现［结束案件］）。
+- **下次来换**：本地选购画面（main / lm）出现［用代偿额度换项目］（`compUseBarHtml` / `compUseCredit`），同一个选购画面，`compFinalize` 把客人额度标 used；结算单 / Timeline 写来源原案件号（`cp.fromCaseNo`）。
+- **医院设定改休息 / 半天营业先清空**：`hspSet` 改前调 `hspConflicts(日期, 模式, from, to)`（该日已确认未到院的施术、没做完的术后管理 / 在韩持有使用；半天营业只算营业时段以外的），有冲突弹 `#hsp-conf-overlay` 列出案件（点开进子案件），改期 / 取消后才能改。
+- 测试：`selftest.js` CP1 改写（便宜退差额 / 贵补付 / 标代偿不标退款）、新增 CP2（先不换→结束案件→客户详情→新案件换→归零）、HS2（KM1 分页）；HS1 选没有排期的周一。
