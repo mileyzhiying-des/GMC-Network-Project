@@ -598,3 +598,9 @@ prototype/shared/app.css  共用样式
 
 ## CMD-1014-10 补充（2026-10-14，追加；旧文字保留作历史）
 - 基准 8cf07ae，**两个提交**，数据版本不变（42）。**（一）** 新样式开关下只换颜色：`#kr-cal` 白底卡片（白底 + `border-default` + 圆角 8 + 内边距 16，工具列 / 图例 / 日历 / 说明都在里面）；日视图不染今天（`#day-grid .wk-head.today` 透明；KR 的今天表头 / 列类名 `krc-head-today` / `krc-col-today` 只在多天视图加）；不可预约块（KR `krc-busy`、IN 的 KR 医院日程 `kr-busy`）= `bg-hover` + 1px `border-strong` + 次要文字色；客人预约页 `.bk-btn`（非 ghost / danger）改 `action-primary`（hover `action-primary-hover`）、进度条驼色。**（二）** 不带开关、改版面高度：待办栏和日历一样高——`#cal-todo-wrap` 在「日历对齐」开着时 `align-items:stretch`，`.todo-box`（带 `width:auto` 的）绝对定位铺满待办栏（不撑高那一行），标题行固定、`.todo-list` 在框内滚动；收起行为不变。
+
+## CMD-1014-11 补充（2026-10-14，追加；旧文字保留作历史）
+- **第 2 轮跑完（四开关全开含新样式 + 轮次 2 + 全新数据）**：IN（A1）套件 73/73、E5 两步、A2/OWN/KC1/KM1/KD1/KO1/B1/D1/booking 角色用例全部通过；新样式切到旧样式后再跑 IN 73/73 + E5 + A2 + KM1 全部通过。跑法仍是 `selftest.js` 调页面函数（不是手点），另加视觉审计：对比度 / 截断脚本 + 截图（IN 工作台 / 案件列表 / 案件各 tab / 弹窗，KR 工作台 KM1·KD1 / 案件 tab / 院长管理，预约页手机宽度）。
+- **修的 bug（commit 20c30ad）**：工作台「待预约（KR 请帮忙预约术后管理）」`#dash-subbook-card` 和「术后管理已过建议日期」`#dash-pcdue-card` 只在事件（预约后 / 做术后管理 / 拒绝来电）时才渲染，**刷新页面后消失**（冷启动检查没覆盖）。现在 `boot-in.js` 初始化列表和 `ui.js` `refreshView` 都会渲染。数据版本不变（42）。
+- **测试方法教训**：在 in.html 里 `gmcResetAll` 后直接跳转，旧页面离开时会把内存里的旧数据**再存回去**，所以「重置」不干净（案件数 114 而不是 20，S31 / A3 因此失败）。**正确做法：先到 login.html 执行 `gmcResetAll(...)`，再进 in.html?demo=A1**，开头检查 `CASE_ITEMS.length===20`。S31 / A3 在脏数据上会失败（S31 的「T2自测项目」重名、A3 的 19:00 时段被占满），不是程序问题。
+- 测试顺序提醒：CAL2 要在工作台页面上跑（前面 S36 / TDK 之后要先 `nav('kr-dashboard')`），否则「当前时段框 / 月份」会失败；S41 要先 A1、再 KM1。
