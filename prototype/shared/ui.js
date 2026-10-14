@@ -3633,6 +3633,88 @@ function presTick(){
 })();
 
 
+/* ================= 同一案件同一时间只有一位室长能操作（CMD-1014-18 一） =================
+   做法：localStorage 键 gmc_case_operator，每「案件 + 端（IN / KR）」一条 {tab, acct, name, ts}；案件页打开时若没有操作人（或记录超过 OP_TTL 没心跳）就成为操作人，心跳随 presBeat 每 5 秒刷新；
+   别的室长打开 → 只读（顶部提示「xx 正在操作此案件」），点任何操作按钮 / 输入框 → 弹窗［取消（只读）］［接管操作］；接管后原操作人切成只读 + 「xx 已接管操作」，案件 Timeline 记一条。
+   离开案件页 / 关分页（pagehide）立即放开；异常关闭没放开的，超过 OP_TTL（40 秒）没心跳就视为离开。适用 IN 室长（管理者 / 一般）之间、KR 室长（管理者 / 一般）之间；IN 与 KR 互不锁；院长 / 代表院长 / 老板不参与。
+   原型限制：浏览器对后台分页的定时器会降速，后台分页的心跳可能延迟，所以 TTL 取 40 秒而不是更短。 */
+var OP_KEY = 'gmc_case_operator', OP_TTL = 40000, OP_RO = false, OP_TAKEN_BY = '', OP_WAS_MINE = false, OP_LAST_KEY = null;
+function opRead(){ try{ return JSON.parse(localStorage.getItem(OP_KEY)||'{}') || {}; }catch(e){ return {}; } }
+function opWrite(o){ try{ localStorage.setItem(OP_KEY, JSON.stringify(o)); }catch(e){} }
+function opApplies(){ try{ var a = currentAccount(); if(!a) return false; return isKrAccount() ? (a.role==='kr_manager' || a.role==='kr_general') : (a.role==='manager' || a.role==='general'); }catch(e){ return false; } }
+function opSlot(key){ return key+'|'+(isKrAccount() ? 'KR' : 'IN'); }
+function opHolder(key){ var h = opRead()[opSlot(key)]; return (h && (Date.now() - h.ts) < OP_TTL) ? h : null; }
+function opClaim(key){ var o = opRead(); o[opSlot(key)] = {tab:TAB_ID, acct:presMyAcct(), name:ME_NAME, ts:Date.now()}; opWrite(o); OP_RO = false; OP_TAKEN_BY = ''; OP_WAS_MINE = true; }
+function opRelease(){ try{ var o = opRead(), ch = false; Object.keys(o).forEach(function(k){ if(o[k].tab===TAB_ID){ delete o[k]; ch = true; } }); if(ch) opWrite(o); }catch(e){} }
+function opBeat(key){ if(!key || !OP_WAS_MINE || OP_RO) return; var h = opHolder(key); if(h && h.tab===TAB_ID){ h.ts = Date.now(); var o = opRead(); o[opSlot(key)] = h; opWrite(o); } }
+/* 每秒 / 收到 storage 事件时对一下：我是不是操作人 */
+function opTick(){
+  var key = (opApplies() && !PRES_BLOCKED) ? presCaseKey() : null;
+  if(key!==OP_LAST_KEY){ opRelease(); OP_LAST_KEY = key; OP_WAS_MINE = false; OP_RO = false; OP_TAKEN_BY = ''; }
+  if(!key){ opRender(null); return; }
+  var h = opHolder(key), me = presMyAcct();
+  if(!h){ if(!document.hidden || !OP_WAS_MINE) opClaim(key); }
+  else if(h.acct===me){ if(h.tab!==TAB_ID && !OP_WAS_MINE) opClaim(key); else if(h.tab!==TAB_ID && OP_WAS_MINE){ OP_RO = false; } }
+  else {
+    if(OP_WAS_MINE){ OP_TAKEN_BY = h.name; OP_WAS_MINE = false; } /* 我刚才是操作人，现在别人接管了 */
+    OP_RO = true;
+  }
+  if(h && h.tab===TAB_ID) OP_RO = false;
+  opRender(key);
+}
+function opRender(key){
+  var bar = document.getElementById('op-ro-bar');
+  if(!key || !OP_RO){ if(bar) bar.remove(); return; }
+  var h = opHolder(key), txt = OP_TAKEN_BY ? (OP_TAKEN_BY+'已接管操作，本页只读') : ((h ? h.name : '其他室长')+'正在操作此案件，本页只读');
+  if(!bar){ bar = document.createElement('div'); bar.id = 'op-ro-bar'; bar.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:91;background:#FFF4E0;border:1px solid #F0D9A8;color:#8A5A10;padding:8px 14px;border-radius:10px;font-size:12px;box-shadow:0 8px 20px rgba(0,0,0,.12);'; document.body.appendChild(bar); }
+  bar.textContent = txt;
+}
+function opTakeoverAsk(){
+  var ov = document.getElementById('op-take-ov'); if(ov) ov.remove();
+  ov = document.createElement('div'); ov.id = 'op-take-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(27,38,53,.5);display:flex;align-items:center;justify-content:center;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 30px;width:400px;box-shadow:0 24px 60px rgba(0,0,0,.3);"><div style="font-size:16px;font-weight:800;margin-bottom:8px;">当前案件正在被操作</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;margin-bottom:18px;">该案件正在由其他室长操作。继续操作后，你将获得操作权限，对方将切换为只读模式。</div><div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="document.getElementById(\'op-take-ov\').remove()">取消（只读）</button><button class="btn-primary" style="flex:1;" onclick="opTakeover()">接管操作</button></div></div>';
+  document.body.appendChild(ov);
+}
+function opTakeover(){
+  var ov = document.getElementById('op-take-ov'); if(ov) ov.remove();
+  var key = presCaseKey(); if(!key) return; var h = opHolder(key); opClaim(key);
+  var note = ME_NAME+'接管操作'+(h ? '（原操作人：'+h.name+'）' : '');
+  try{
+    if(isKrAccount()){ var parts = key.split(':'); Store.mutateClinic(parts[0], function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===parts.slice(1).join(':'); })[0]; if(c) logCaseEvent(c, ME_NAME, note); }); if(typeof krRefreshAll==='function') krRefreshAll(); }
+    else { var c = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_CASE_ID; })[0]; if(c){ logCaseEvent(c, ME_NAME, note); if(typeof refreshView==='function') refreshView(); } }
+  }catch(e){ console.error(e); }
+  opRender(key);
+}
+/* 只读时点任何操作元素 → 弹窗；导航类（切 tab / 返回 / 跳页）放行 */
+var OP_ALLOW = /switchCaseTab|krSetCaseTab|goBack|\bnav\(|openCaseDetail|krShowCase|krOpenClient|openCaseNewTab|toggleHoldExpand|setSettleTab|openSidebarPage|toggleBellDropdown|openDrawer|krOpenDrawer|krToggleBell|openClientDetail|krOpenSub|krOpenSurgSub|presContinueHere|opTakeover/;
+function opGuard(ev){
+  if(!OP_RO) return;
+  var key = presCaseKey(); if(!key) return;
+  var t = ev.target; if(!t || !t.closest) return;
+  var page = document.getElementById(isKrAccount() ? 'kr-casedetail' : 'in-casedetail'); if(!page || !page.contains(t)) return;
+  if(t.closest('#op-take-ov,#op-ro-bar,#case-lock-ov')) return;
+  var el = t.closest('button,[onclick],input,select,textarea,label,a'); if(!el || !page.contains(el)) return;
+  var oc = el.getAttribute('onclick') || '';
+  if(oc && OP_ALLOW.test(oc)) return;
+  if(el.tagName==='A' && !oc) return;
+  if(!oc && !/^(INPUT|SELECT|TEXTAREA|LABEL)$/.test(el.tagName)) { var p = el.closest('[onclick]'); if(!p) return; }
+  if(ev.type==='focusin' && !/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+  ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+  if(document.activeElement && document.activeElement.blur && ev.type==='focusin') document.activeElement.blur();
+  if(!document.getElementById('op-take-ov')){
+    var h = opHolder(key);
+    if(!h){ opClaim(key); opRender(key); return; } /* 没人操作了 → 直接成为操作人，请再点一次 */
+    opTakeoverAsk();
+  }
+}
+(function(){
+  ['click','focusin','mousedown'].forEach(function(n){ document.addEventListener(n, function(ev){ try{ opGuard(ev); }catch(e){} }, true); });
+  setInterval(function(){ try{ opBeat(presCaseKey()); }catch(e){} }, PRES_BEAT);
+  setInterval(function(){ try{ opTick(); }catch(e){} }, 1000);
+  window.addEventListener('storage', function(e){ if(e.key===OP_KEY){ try{ opTick(); }catch(x){} } });
+  window.addEventListener('pagehide', opRelease); window.addEventListener('beforeunload', opRelease);
+})();
+
 /* 代码更新提示（CMD-1012-10 修改 / Bug1）：每次提交后 version.js 里的 hash 会变；已经打开的分页还在跑旧代码（比如新的通知逻辑），这里每 5 秒看一眼，发现变了就在顶部提示刷新。 */
 (function(){
   if(typeof GMC_BUILD==='undefined' || !GMC_BUILD || typeof fetch!=='function') return;
