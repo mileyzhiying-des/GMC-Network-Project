@@ -276,6 +276,7 @@ function seedResolveOverlaps(){
 function hospitalHours(hid){ var h = HOSPITAL_DATA[hid] || {}; return {open:h.openTime || '11:00', close:h.closeTime || '21:30'}; }
 /* 半天 OFF 对应的韩国时间段（跟着医院设定算，不写死）：上午 = 营业开始 → 午休开始；下午 = 午休结束 → 营业结束；没有午休时以中午 13:00 分界 */
 function krHalfRange(hid, part){
+  var m0 = /^指定(\d\d:\d\d)-(\d\d:\d\d)$/.exec(part||''); if(m0) return [m0[1], m0[2]]; /* CMD-1014-02：OFF 改成「全天 / 指定时间」，part 写成 指定09:00-13:00 */
   var hr = hospitalHours(hid), lu = hospitalLunch(hid), a = lu ? lu.from : '13:00', b = lu ? lu.to : '13:00';
   return part==='下午' ? [b, hr.close] : [hr.open, a];
 }
@@ -420,7 +421,7 @@ function memoEditLink(m){ return (m.author===ME_NAME && CAL_MEMOS.some(function(
 function memoCellHtml(ds){
   return memosOn(ds).map(function(m){
     return m.type==='OFF'
-      ? '<div style="color:#C1454A;font-weight:700;">OFF · '+m.person+memoEditLink(m)+'</div>'
+      ? '<div style="color:#C1454A;font-weight:700;">OFF · '+m.person+(m.from ? '（'+m.from+'–'+m.to+'）' : '')+memoEditLink(m)+'</div>'
       : '<div style="color:var(--slate2);">📝 '+m.text+' <span style="color:var(--muted);">'+m.author+(m.scope==='私人'?' · 私人':'')+'</span>'+memoEditLink(m)+'</div>';
   }).join('');
 }

@@ -548,3 +548,12 @@ prototype/shared/app.css  共用样式
 - **待办补充**：点卡片 = 筛选待办栏（`TODO_FILTERS` / `todoCardFilter`，标题后「· 待我处理 ✕」，4 张卡 IN / KR 都一样，不再跳案件列表 / 切日历 / 开对话）；IN「转告客人」加［已转告客人］（`calRelayDone`，记 `c.relayTold` / `relayAt` + Timeline，取代「打开 tab 即算」）；IN 新待办「确认客人日程有无变化」（`calNeedsRecheck`：赴韩施术前 2 天、时间已确认、`c.recheck.key`≠现在的日期时间；IN 日历那个施术块带 `data-recheck` 徽标；赴韩施术 tab 上方「确认日程无变动」卡 + ［确认无变动］（`calRecheckOk`，`c.recheck = {key, by, at}` + Timeline）；KR 主案件施术日期卡多一行「日程确认」✓ / IN 尚未确认日程，只显示）；院长待办「上传面诊内容」（等待报告且 `consultContentAt` 空）；KR 室长待办「等院长上传面诊（已超时）」（超过预计出报告时间且 `consultStartedAt` 空，院长开始面诊就消失）。
 - **规则变更（不带开关）**：KR 在韩持有（案件页持有项目卡、客人管理）拿掉［安排使用］，改显示「要使用请由 IN 预约」；术后管理［客人已到店］→ 标完成照旧。**bug（不带开关）**：旧案件 `repairScheduleGaps()`（`boot-in.js` 启动 / `krBoot` 里执行，幂等）补上确认施术时间时没填的地址（取医院地址）和缺的 -1 施术子案件（A000023～27 类）。
 - 测试：`selftest.js` 新增 CAL1（IN）、CAL2 / CAL3（KM1 / KD1 分页）；TD1 / TD3 按开关分支。数据版本不变（42），新增可空字段 `relayAt`、`recheck`、`HOSPITAL_DATA[h].memos`。
+
+## CMD-1014-02 补充（2026-10-14，追加；旧文字保留作历史）
+- 基准 **7078420**，单独一个提交；全部挂在现有开关「日历对齐 + 新待办 10/14」（`newCalOn()`，`gmc_cfg_newcal`）下，关 = f3c7ab4；唯一不带开关的是 `krHalfRange` 能解析 `指定HH:MM-HH:MM`、`offPartArg`（纯新增，旧数据不受影响）。
+- **卡片 = 待办 4 类**（最重要）：每条待办带 `cat`（`TODO_CAT`），IN：todo 待我处理 / visit 今天来访 / kr 等 KR 回复 / msg 新消息；KR：todo / today2 今天到院、到店 / waiting 等待报告 / msg；每条恰好属于一类，待办总数 = 4 类加总；卡片数字 = 点下去 `todoVisible` 筛出来的条数（跟着［只看我的］），`todoCatCardsHtml` 画卡（IN 的 `#in-cards` 和 KR 工作台共用），红点 = 这一类有新条目（点卡片才灭）。新条目：IN `visit`（今天预约还没接待，一位一条「10:30 客人 · 来访目的」，到店 / 未到店后消失）、IN `waitkr`（等报告 / 等确认出报告时间 / 等确认施术时间 / 等确认改期；没超时灰色，超时红 +［催办］，`todoUrge` 借用 `urgeKr`）；KR `waitdir`（awaiting_report 且院长还没上传面诊内容，超时红）。院长只有待办栏。
+- **工作台版面**：日历 : 待办 = 3 : 2（IN / KR / 院长）；IN 日视图改 KR 画法（`buildDayGridNew`：`#day-col` 按分钟 / 时长画块、车道布局、午休细条、营业时间外淡底，固定栏保留 IN 设计）；院长工作台拿掉「今天的平台客人 / 等我出报告的案件 / 室长刚提交的诊疗方案」，只留日历 + 待办；代表院长（`kr_owner`）默认看自己，可切「全部院长（只看）」（`KRC.viewAll`，只看不操作）。
+- **OFF**：改「全天 / 指定时间」（part 存 `指定09:00-13:00`，旧的上午 / 下午数据照旧能读）；KR 新增 OFF 先选室长 / 院长 → 再选人（KR 室长可标自己、其他室长、院长；院长只标自己）；悬停加 OFF 同；IN memo 的 OFF 也加时间（`m.from/to`，固定栏写「OFF · 谁（13:00–15:30）」，只有指定时间才多这一段）。
+- **KR / 院长日历细节**：过去事件变灰；双时间轴（韩国 + 印尼，印尼 = 对接诊所时区，C3 巴厘 UTC+8）；午休画成 14px 细条；月视图点日期 = 进那一周，**日历上不再点日期设定开放施术**——医院设定里目前**没有**开放施术日期的入口（只有院长管理加院长时的初始日期），没自己加，见汇报。
+- **规则**：IN 营业时间前后 2 小时的行室长可代约（`calOffHoursOk` → 确认「营业时间外，确定预约吗？」→ 代约弹窗），客人自助预约仍只能约营业时间内（`slotBlockReason` 不变）；「确认日程无变动」过期（施术日已到 / 已过）仍未确认 → 标红一直挂着，直到确认或改期 / 取消（`calNeedsRecheck` 不再要求 d>=0）。
+- 测试：`selftest.js` 新增 CAL4（IN）、CAL5 / CAL6（KM1 / KD1）、CAL7（KO1）；`ST.freeDirector` 等同上。数据版本不变（42）。

@@ -300,7 +300,7 @@ function krBarChips(ds){
   var chip = function(txt){ return '<span style="display:inline-block;background:#F3E3E1;color:#B5483E;border-radius:5px;padding:1px 6px;margin:1px;font-size:10px;">'+txt+'</span>'; };
   var out = krDayItems(ds).filter(function(it){ return it.type==='off'; }).map(function(it){
     if(it.part==='全天') return chip(it.label);
-    var h = krHalfRange(krViewHospital(), it.part==='下午' ? '下午' : '上午'), a = krToClinic(ds, h[0]).time, z = krToClinic(ds, h[1]).time;
+    var h = krHalfRange(krViewHospital(), offPartArg(it.part)), a = krToClinic(ds, h[0]).time, z = krToClinic(ds, h[1]).time;
     return chip(it.who+' '+a+'–'+z+' 不在');
   });
   if(krViewIsAll()){
@@ -423,7 +423,7 @@ function buildWeekGrid(){
       var chips = cell.slice(0, 3).map(eventChipHtml).join('') + (cell.length > 3 ? '<div class="wk-more" onclick="event.stopPropagation();openSlotList(\''+ds+'\',\''+hr+'\')">+'+(cell.length-3)+' 更多</div>' : ''); /* 超过 3 个：前 3 个 + "+N 更多" */
       var why = slotBlockReason(ds, hr); /* 和预约修改、占位、预约页同一套规则：past 已过 / full 额满 / closed 休诊 / lunch 午休 */
       var pastSlot = why==='past', closedDay = why==='closed', fullSlot = why==='full';
-      var slotClick = why ? '' : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
+      var slotClick = why ? ((newCalOn() && calOffHoursOk(ds,hr)) ? ' onclick="calOffHoursAdd(\''+ds+'\',\''+hr+'\')" title="营业时间外：点击代约（会再确认一次）"' : '') : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
       var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
       var fullTag = fullSlot ? '<div style="font-size:10px;color:var(--muted);text-align:right;">已满</div>' : '';
       html += '<div class="wk-cell'+(why?'':' wk-cell-open')+(pastSlot?' wk-past':'')+((why==='lunch'||closedDay)?' wk-lunch':'')+(fullSlot?' wk-full':'')+(isNow?' wk-now':'')+'"'+slotClick+'>'+chips+fullTag+'</div>';
