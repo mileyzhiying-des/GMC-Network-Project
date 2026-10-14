@@ -291,6 +291,7 @@ var Store = (function(){
       (c.procedureItems||[]).forEach(function(it){ clr(it.postcare); }); ((c.krScope||{}).items||[]).forEach(function(it){ clr(it.postcare); });
       if(n) ctx.note('IN 不再分配术后管理，已清掉 '+n+' 条旧的印尼分配');
     }},
+    {to:43, fn:function(c, ctx){ /* CMD-1014-16 四：只是补演示缺口（老板账号、C2 可退批次、H2 的两种状态案件）；用户案件无需改动 */ }},
     {to:41, fn:function(c, ctx){ /* 「消肿管理」改名「术后管理」；意向项目只留赴韩手术项目 */
       var fixPc = function(arr){ (arr||[]).forEach(function(x){ if(x && x.mgmt==='消肿管理') x.mgmt = '术后管理'; }); };
       (c.procedureItems||[]).forEach(function(it){ fixPc(it.postcare); });
