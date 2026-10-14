@@ -2918,6 +2918,7 @@ function closeBellDropdown(){ var d = document.getElementById('bell-dd'); if(d) 
 function toggleBellDropdown(ev){
   if(ev) ev.stopPropagation();
   if(document.getElementById('bell-dd')){ closeBellDropdown(); return; }
+  try{ closeDrawer(); }catch(e){} /* CMD-1014-15：对话和通知一次只开一个 */
   var btn = ev && ev.currentTarget, r = btn ? btn.getBoundingClientRect() : {bottom:56, right:window.innerWidth-24};
   var list = myNotifs().sort(function(a,b){ return b.ts.localeCompare(a.ts); }).slice(0,6);
   var d = document.createElement('div');
@@ -3038,6 +3039,7 @@ function confirmNewStaffChat(){
 }
 
 function openDrawer(){
+  try{ closeBellDropdown(); }catch(e){} /* CMD-1014-15：对话和通知一次只开一个 */
   document.getElementById('drawer-overlay').classList.add('open');
   document.getElementById('chat-drawer').classList.add('open');
   setDrawerTab(DRAWER_TAB);

@@ -913,14 +913,23 @@ function krRenderNotifs(){
     '<div class="card" style="padding:4px 16px;">'+(list.length ? list.map(krNotifRowHtml).join('') : '<div style="padding:24px;color:var(--muted);text-align:center;">没有通知</div>')+'</div>';
 }
 function krCloseBell(){ var d = document.getElementById('kr-bell-dd'); if(d) d.remove(); }
+/* CMD-1014-15 二：铃铛下拉照 IN 的「最近通知」（图标 / 一行标题 / 一行时间 / 未读圆点 / ［查看全部］）；一次只开一个：开通知时对话抽屉自动关掉 */
+function krNotifIcon(n){ var tx = String(n.text||''), kd = n.kind||''; if(kd==='mention' || /@ 了你/.test(tx)) return '💬'; if(kd==='missedcall' || /未接来电/.test(tx)) return '🎥'; if(kd==='system' || /设定更新|更新了设定/.test(tx)) return '⚙️'; if(/施术|到院|到医院|术后|尾款|付款/.test(tx)) return '✈️'; if(/面诊|报告|催办|诊疗方案/.test(tx)) return '🩺'; return '🔔'; }
 function krToggleBell(e){
   if(e) e.stopPropagation();
   if(document.getElementById('kr-bell-dd')){ krCloseBell(); return; }
-  var list = krNotifsForMe().slice(0, 8);
+  if(typeof krCloseChat==='function') krCloseChat();
+  var me = currentAccount(), btn = e && e.currentTarget, r = btn ? btn.getBoundingClientRect() : {bottom:56, right:window.innerWidth-24};
+  var list = krNotifsForMe().slice().sort(function(a,b){ return String(b.ts).localeCompare(String(a.ts)); }).slice(0, 6);
   var d = document.createElement('div'); d.id = 'kr-bell-dd';
-  d.style.cssText = 'position:fixed;top:54px;right:70px;width:360px;max-height:70vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:60;padding:6px 14px;';
+  d.style.cssText = 'position:fixed;top:'+(r.bottom+8)+'px;right:'+Math.max(12, window.innerWidth-r.right-10)+'px;width:340px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.16);z-index:75;overflow:hidden;';
   d.onclick = function(ev){ ev.stopPropagation(); };
-  d.innerHTML = '<div style="padding:10px 0;font-weight:700;border-bottom:1px solid var(--line);">通知</div>'+(list.length ? list.map(krNotifRowHtml).join('') : '<div style="padding:16px;color:var(--muted);">没有通知</div>')+('<div style="padding:10px 0;text-align:center;"><a href="#" onclick="krCloseBell();nav(\'kr-notifications\');return false;" style="font-size:12px;">查看全部</a></div>');
+  d.innerHTML = '<div style="padding:10px 14px;font-size:12px;font-weight:700;border-bottom:1px solid var(--border2);">最近通知</div>'+
+    (list.length ? list.map(function(n){
+      var unread = (n.readBy||[]).indexOf(me.id) < 0;
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="krOpenNotif(\''+n.id+'\')"><span>'+krNotifIcon(n)+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(unread?'700':'500')+';">'+krEsc(tzRender(n.text))+'</div><div style="font-size:10px;color:var(--muted);">'+krEsc(fmtUtc(n.ts))+'</div></div>'+(unread?'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>':'')+'</div>';
+    }).join('') : '<div style="padding:14px;font-size:12px;color:var(--muted);">没有通知</div>')+
+    '<div style="padding:10px 14px;text-align:center;"><a href="#" class="info-link" onclick="krCloseBell();nav(\'kr-notifications\');return false;">查看全部</a></div>';
   document.body.appendChild(d);
 }
 document.addEventListener('click', function(){ krCloseBell(); });
@@ -949,7 +958,7 @@ function krRoomList(){
   return out.sort(function(a,b){ return (b.unread>0)-(a.unread>0) || (b.isMain-a.isMain); });
 }
 function krMentionsMe(m){ var me = currentAccount(); return !!me && String(m.orig||'').indexOf('@'+me.name.split(' ')[0]) > -1; }
-var KR_CHAT = {open:false, room:null};
+var KR_CHAT = {open:false, room:null, tab:'staff', q:'', search:false};
 function krUpdateBadges(){
   try{
     var u = krNotifUnread().length; document.querySelectorAll('.kr-bell-badge').forEach(function(b){ b.textContent = u; b.style.display = u ? '' : 'none'; });
@@ -965,22 +974,41 @@ function krToastNew(unread){
     if(newTodoOn()){ var tk = notifTodoKind(n); if(tk==='msg') return; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky: tk==='stay'}); return; } /* CMD-1013-17 */
     showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky:notifLevelOf(n)!=='info'}); });
 }
-(function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open) krRenderChat(); var u = krNotifUnread(); krToastNew(u); KR_LAST_UNREAD = u.length; }; })();
+(function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open && !(document.activeElement && /^kr-chat-in$|^$/.test(document.activeElement.id||'') && document.activeElement.tagName==='INPUT')) krRenderChat(); var u = krNotifUnread(); krToastNew(u); KR_LAST_UNREAD = u.length; }; })();
 
-function krOpenDrawer(){ KR_CHAT.open = true; KR_CHAT.room = null; krRenderChat(); }
-function krOpenRoomFor(clinicId, caseId){ KR_CHAT.open = true; KR_CHAT.room = clinicId+'|case-'+caseId; krRenderChat(); }
-function krCloseChat(){ KR_CHAT.open = false; var p = document.getElementById('kr-chat'); if(p) p.remove(); }
+function krOpenDrawer(){ krCloseBell(); KR_CHAT.open = true; KR_CHAT.room = null; krRenderChat(); }
+function krOpenRoomFor(clinicId, caseId){ krCloseBell(); KR_CHAT.open = true; KR_CHAT.room = clinicId+'|case-'+caseId; krRenderChat(); }
+function krCloseChat(){ KR_CHAT.open = false; ['kr-chat','kr-chat-overlay'].forEach(function(id){ var el = document.getElementById(id); if(el) el.classList.remove('open'); }); }
 function krPickRoom(key){ KR_CHAT.room = key; krRenderChat(true); }
 function krMarkRead(key, count){ var me = currentAccount(), h = krHData(); h.chatRead = h.chatRead||{}; h.chatRead[me.id] = h.chatRead[me.id]||{}; if(h.chatRead[me.id][key] !== count){ h.chatRead[me.id][key] = count; Store.touch(); } }
+/* CMD-1014-15 二：KR / 院长的对话照 IN：右侧抽屉（职员间 / 案件两个 tab、卡片、搜索）；点房间在抽屉里打开消息；房间内容、成员、权限、院长静音规则不变 */
+function krEnsureChat(){
+  var ov = document.getElementById('kr-chat-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-chat-overlay'; ov.className = 'drawer-overlay'; ov.onclick = function(){ krCloseChat(); }; document.body.appendChild(ov); }
+  var p = document.getElementById('kr-chat'); if(!p){ p = document.createElement('div'); p.id = 'kr-chat'; p.className = 'chat-drawer'; document.body.appendChild(p); }
+  return p;
+}
+function krSetChatTab(tab){ KR_CHAT.tab = tab; KR_CHAT.room = null; krRenderChat(); }
+function krChatSearch(v){ KR_CHAT.q = v; var el = document.getElementById('kr-drawer-list'); if(el) el.innerHTML = krDrawerListHtml(krRoomList()); }
+function krDrawerListHtml(rooms){
+  var q = (KR_CHAT.q||'').toLowerCase();
+  var unreadDot = function(r){ return r.unread ? '<span class="badge" style="position:static;width:auto;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:inline-flex;margin-left:6px;">'+r.unread+'</span>' : ''; };
+  var list = rooms.filter(function(r){ return KR_CHAT.tab==='case' ? !r.isMain : r.isMain; }).filter(function(r){ return !q || (r.name+' '+r.clinicName).toLowerCase().indexOf(q)>-1; });
+  var html = list.map(function(r){
+    if(r.isMain) return '<div class="chat-card" onclick="krPickRoom(\''+r.key+'\')"><span class="sq-avt" style="background:var(--slate2);">G</span><div style="flex-grow:1;min-width:0;"><div style="font-size:13px;font-weight:700;"><span class="pin-icon">📌</span>'+krEsc(r.name)+unreadDot(r)+'</div><div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+krEsc(r.last||'—')+'</div></div><div style="text-align:right;font-size:11px;color:var(--muted);">'+krEsc(r.lastTime||'')+'</div></div>';
+    var b = null; try{ b = caseStageBadge(r.caseRow.c); }catch(e){}
+    return '<div class="chat-card" onclick="krPickRoom(\''+r.key+'\')"><span class="sq-avt" style="background:var(--terracotta);">'+krEsc((r.caseRow.name||'?').charAt(0).toUpperCase())+'</span><div style="flex-grow:1;min-width:0;"><div style="font-size:13px;font-weight:700;">'+krEsc(r.caseRow.name)+unreadDot(r)+'</div><div style="font-size:11px;color:var(--muted);">Case：'+krEsc(r.caseRow.caseNo||'')+' · '+krEsc(r.clinicName)+'</div></div><div style="text-align:right;">'+(b ? '<span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+krEsc(b[2])+'</span>' : '')+'<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+krEsc(r.lastTime||'')+'</div></div></div>';
+  }).join('');
+  return html || '<div style="font-size:12px;color:var(--muted);padding:16px 4px;">'+(KR_CHAT.tab==='case' ? '没有匹配的案件' : '没有匹配的对话')+'</div>';
+}
 function krRenderChat(scrollEnd){
-  var p = document.getElementById('kr-chat');
-  if(!p){ p = document.createElement('div'); p.id = 'kr-chat'; p.style.cssText = 'position:fixed;top:54px;right:16px;width:400px;height:calc(100vh - 80px);background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 36px rgba(0,0,0,.18);z-index:55;display:flex;flex-direction:column;overflow:hidden;'; document.body.appendChild(p); }
+  var p = krEnsureChat(), ov = document.getElementById('kr-chat-overlay'); p.classList.add('open'); ov.classList.add('open');
   var rooms = krRoomList(), room = KR_CHAT.room ? rooms.filter(function(r){ return r.key===KR_CHAT.room; })[0] : null;
-  var head = function(title, back){ return '<div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);font-weight:700;">'+(back?'<a href="#" onclick="KR_CHAT.room=null;krRenderChat();return false;" style="text-decoration:none;">←</a>':'')+'<span style="flex:1;">'+title+'</span><a href="#" onclick="krCloseChat();return false;" style="text-decoration:none;color:var(--muted);">✕</a></div>'; };
   if(!room){
-    p.innerHTML = head('对话', false)+'<div style="flex:1;overflow:auto;">'+(rooms.length ? rooms.map(function(r){
-      return '<div onclick="krPickRoom(\''+r.key+'\')" style="display:flex;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;align-items:center;"><span style="width:34px;height:34px;border-radius:50%;background:'+(r.isMain?'var(--slate2)':'var(--terracotta)')+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">'+(r.isMain?'G':krEsc(r.name.charAt(0)))+'</span><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;">'+krEsc(r.name)+'</div><div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+krEsc(r.last||'—')+'</div></div><div style="text-align:right;font-size:11px;color:var(--muted);">'+krEsc(r.lastTime)+(r.unread?'<div style="margin-top:4px;background:var(--terracotta);color:#fff;border-radius:10px;padding:1px 7px;display:inline-block;">'+r.unread+'</div>':'')+'</div></div>';
-    }).join('') : '<div style="padding:24px;color:var(--muted);text-align:center;">还没有对话</div>')+'</div>';
+    var tabBorder = function(k){ return KR_CHAT.tab===k ? '2px solid var(--navy)' : 'none'; };
+    p.innerHTML = '<div class="drawer-head"><span style="font-size:15px;font-weight:700;">对话</span><div style="display:flex;align-items:center;gap:14px;"><span style="cursor:pointer;font-size:15px;" onclick="KR_CHAT.search=!KR_CHAT.search;krRenderChat()">🔍</span><span style="cursor:pointer;font-size:15px;" onclick="krCloseChat()">✕</span></div></div>'+
+      '<div style="display:flex;border-bottom:1px solid var(--border2);"><div onclick="krSetChatTab(\'staff\')" style="flex:1;text-align:center;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer;border-bottom:'+tabBorder('staff')+';">职员间</div><div onclick="krSetChatTab(\'case\')" style="flex:1;text-align:center;padding:12px 0;font-size:13px;font-weight:700;cursor:pointer;border-bottom:'+tabBorder('case')+';">案件</div></div>'+
+      '<div class="drawer-search-wrap'+(KR_CHAT.search ? ' open' : '')+'"><input type="text" placeholder="搜索对话…" value="'+krEsc(KR_CHAT.q||'')+'" oninput="krChatSearch(this.value)"></div>'+
+      '<div class="drawer-list" id="kr-drawer-list">'+krDrawerListHtml(rooms)+'</div>';
     krUpdateBadges(); return;
   }
   var msgs = (Store.readClinic(room.clinicId).CHAT_DATA||{})[room.roomId] || [], lastDay = '';
@@ -991,7 +1019,7 @@ function krRenderChat(scrollEnd){
     var ref = m.refCaseId ? '<div style="font-size:11px;color:var(--blue);">↗ 引用案件</div>' : '';
     return day+'<div style="display:flex;flex-direction:column;align-items:'+(mine?'flex-end':'flex-start')+';margin:6px 0;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+krEsc(who)+' · '+krEsc(msgTime(m)||'')+'</div><div style="max-width:78%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.5;background:'+(mine?'var(--navy)':'var(--border2)')+';color:'+(mine?'#fff':'inherit')+';">'+ref+krEsc(krMsgText(m))+'</div></div>';
   }).join('');
-  p.innerHTML = head(krEsc(room.name)+' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(room.clinicName)+'</span>', true)+
+  p.innerHTML = '<div class="drawer-head"><span style="display:flex;align-items:center;gap:8px;min-width:0;"><a href="#" onclick="KR_CHAT.room=null;krRenderChat();return false;" style="text-decoration:none;">←</a><span style="font-size:15px;font-weight:700;">'+krEsc(room.name)+' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+krEsc(room.clinicName)+'</span></span></span><span style="cursor:pointer;font-size:15px;" onclick="krCloseChat()">✕</span></div>'+
     '<div id="kr-chat-msgs" style="flex:1;overflow:auto;padding:8px 14px;">'+(body||'<div style="padding:24px;color:var(--muted);text-align:center;">还没有消息</div>')+'</div>'+
     '<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);"><input id="kr-chat-in" placeholder="输入消息…（Enter 发送）" onkeydown="if(event.key===\'Enter\')krSendMsg()" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;"><button class="btn-primary" onclick="krSendMsg()">发送</button></div>';
   var box = document.getElementById('kr-chat-msgs'); if(box) box.scrollTop = box.scrollHeight;
