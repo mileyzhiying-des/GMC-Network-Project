@@ -135,7 +135,9 @@ function caseProcessText(c){
 }
 function caseStageInfo(c){
   var col = toneColors(STAGE_TONE_LABEL[c.stage] || caseStatusLabel(c));
-  return {bg:col[0], fg:col[1], stage:STAGE_LABELS[c.stage] || c.stage, proc:caseProcessText(c)};
+  var pr = caseProcessText(c);
+  if(typeof isKrAccount==='function' && isKrAccount()) pr = String(pr).replace(/本地项目(全退|保留)|本地完成|本地项目[^，；·]*/g,'IN 已处理'); /* CMD-1014-16：KR 不显示 IN 本地项目的内容，只显示事件 */
+  return {bg:col[0], fg:col[1], stage:STAGE_LABELS[c.stage] || c.stage, proc:pr};
 }
 /* 其他显示案件状态的地方统一写法：「阶段 · 进程」（已结案 / 仅出报告 / 已取消的进程就是结束原因） */
 function caseStageBadge(c){ var i = caseStageInfo(c); return [i.bg, i.fg, caseStageProcText(c)]; } /* [底色, 字色, 「阶段 · 进程」]，替代 IN 端显示用的 caseStatusBadge */
@@ -248,9 +250,32 @@ function notifLevel(text){ var t0 = String(text||''); if(NOTIF_ACTION_RE.test(t0
 function notifLevelOf(n){ return (n && n.level) || notifLevel(n && n.text); }
 function tkU(s){ return s ? '⟦u:'+s+'⟧' : '—'; }
 function tkK(date, hm){ return '⟦k:'+date+'|'+(hm||'')+'⟧'; }
+/* ---------- CMD-1014-16：金额 / 内容可见范围（Case Management Flow「IN / KR 金额可见范围」） ----------
+   KR 看不到：面诊费、IN 本地项目及金额、置换换了哪些本地项目及金额（只显示事件）；赴韩定金金额 KR 可看。
+   IN 看不到：KR 收的尾款金额（只显示已付清 / 未付）、KR 在韩加项的金额（项目名照样显示）。
+   通知文字、Timeline 文字都过滤；只改显示，存档和判断逻辑读原文。 */
+function viewerLogHidden(e){
+  if(!(typeof isKrAccount==='function' && isKrAccount())) return false;
+  var a = String((e && e.action) || ''), st = String((e && e.stage) || '');
+  if(/转本地置换|置换额度/.test(a)) return false; /* 置换：改写成一句事件（viewerTextFilter） */
+  if(/在韩|赴韩|KR/.test(a) && !/本地项目|本地管理/.test(a)) return false; /* 赴韩 / 在韩的事照常显示 */
+  return st==='本地管理' || /本地项目|本地管理|选购|活动价|套餐|本地购买|持有批次|使用.*持有|做本地|置换/.test(a);
+}
+function viewerTextFilter(x){
+  var s = String(x==null ? '' : x), kr = (typeof isKrAccount==='function' && isKrAccount());
+  if(kr){
+    if(/转本地置换|置换额度/.test(s)) s = '定金已转本地置换';
+    s = s.replace(/客人已缴面诊费/g,'客人已开始面诊').replace(/面诊费已免除/g,'面诊已开始').replace(/完成面诊费支付/g,'开始面诊').replace(/免除面诊费（原因：[^）]*）/g,'面诊已开始（免费）').replace(/免除面诊费/g,'面诊已开始（免费）').replace(/面诊费/g,'费用');
+    s = s.replace(/Rp\.?\s?[\d.,]+/g,'').replace(/[\d.,]+\s?印尼盾/g,'');
+  } else if(typeof isKrAccount==='function'){
+    s = s.replace(/尾款\s*₩\s?[\d,]+/g,'尾款已付清');
+    if(/在韩加项|在韩增加|在韩加做|韩国加做/.test(s)) s = s.replace(/[，,]\s*(合计\s*)?₩\s?[\d,]+/g,'').replace(/（金额\s*₩\s?[\d,]+[，,]?/g,'（').replace(/₩\s?[\d,]+/g,'');
+  }
+  return s;
+}
 function tzRender(t){
-  return String(t==null ? '' : t).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）') : '—'; })
-    .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; });
+  return viewerTextFilter(String(t==null ? '' : t).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）') : '—'; })
+    .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; }));
 }
 /* 当地钟点（日期 + HH:mm，某时区的墙上时间）→ UTC 字符串（KR 室长输入的预计出报告时间等） */
 function localToUtc(date, hm, tz){
@@ -292,7 +317,7 @@ function settlementCardHtml(c, b){
   /* 本地项目（CMD-1008-12 A2）：付款后读结算单里的快照 b.inItems；待付款时还没发放持有，直接读这张结算单的 procedureItems（origin IN）——原来只读快照，待付款的结算单会漏掉本地项目 */
   var locals = (b.inItems && b.inItems.length) ? b.inItems : (c.procedureItems||[]).filter(function(it){ return it.batchId===b.id && it.origin==='IN'; });
   var krRows = krs.map(function(it){
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+'</span><span style="font-size:12px;color:var(--slate2);">'+(it.price?formatCurrency(it.price,'KRW'):'')+' · '+krItemStatus(it)+'</span></div>';
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+it.name+'</span><span style="font-size:12px;color:var(--slate2);">'+((it.price && !(b.addOn || b.preAdd || b.noDeposit || it.krAddOn || it.preBalanceAdd)) ? formatCurrency(it.price,'KRW')+' · ' : '')+krItemStatus(it)+'</span></div>';
   }).join('');
   var localRows = locals.map(function(it){
     var rb = null; getClientHoldings(c.name).forEach(function(h){ if(h.itemName===it.name) h.batches.forEach(function(x){ if(x.caseId===c.id && x.refund && x.bought===(it.qty||1)*(it.specTimes||1)) rb = x.refund; }); });
@@ -303,10 +328,10 @@ function settlementCardHtml(c, b){
   var grp = function(t){ return '<div style="font-size:11px;font-weight:700;color:var(--slate2);margin:8px 0 2px;">'+t+'</div>'; };
   var rows = (krRows && localRows) ? grp('赴韩项目（₩）')+krRows+grp('本地项目（Rp）')+localRows : (krRows + localRows);
   var amounts = [];
-  if(b.addOn) amounts.push('韩国加做（KR 新增，另开结算单）：金额 '+formatCurrency(b.krTotal,'KRW')+'，客人在韩国单独付款，医院收款（不进尾款应付额，算 KR 收入）');
-  else if(b.preAdd) amounts.push('到院后增加项目（KR 新增）：金额 '+formatCurrency(b.krTotal,'KRW')+'，与尾款一次结算（不收定金，计入尾款，医院收）');
-  else if(b.noDeposit) amounts.push('更换项目（'+(b.swapOf||'')+'→）：不收定金，金额 '+formatCurrency(b.krTotal,'KRW')+' 直接计入尾款（医院收）');
-  else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（诊所收）；尾款 '+formatCurrency(b.krBalance!==undefined ? b.krBalance : b.krTotal-b.krDeposit,'KRW')+'（赴韩后医院收）；合计 '+formatCurrency(b.krTotal,'KRW'));
+  if(b.addOn) amounts.push('韩国加做（KR 新增，另开结算单）：客人在韩国单独付款，医院收款（不进尾款应付额，算 KR 收入）；金额由医院收，这里不显示');
+  else if(b.preAdd) amounts.push('到院后增加项目（KR 新增）：与尾款一次结算（不收定金，计入尾款，医院收）');
+  else if(b.noDeposit) amounts.push('更换项目（'+(b.swapOf||'')+'→）：不收定金，直接计入尾款（医院收）');
+  else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（诊所收）；尾款 '+(c.krBalancePaid ? '已付清' : '未付')+'（赴韩后医院收）');
   if(b.inTotal) amounts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
   var refunds = (c.refunds||[]).filter(function(r){ return (r.batchIds||[]).indexOf(b.id)>-1; }).map(function(r){
     return '<div style="font-size:12px;color:'+(r.comp ? '#8F6F0C' : 'var(--terracotta)')+';margin-top:4px;">'+(r.comp ? '转本地置换 ' : '退款 ')+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+(r.note ? '；备注：'+r.note : '')+'）</div>';
@@ -326,7 +351,7 @@ function settlementSummaryHtml(c){
   var info = krBalanceInfo(c), ref = refundCashSum(c), compK = compSum(c), pd = financePaid(c);
   var hasKr = krAllItems(c).length>0;
   var totalTxt = (hasKr ? formatCurrency(info.total,'KRW') : '') + ((hasKr && pd.inn>0) ? ' ＋ ' : '') + (pd.inn>0 ? formatCurrency(pd.inn,'IDR') : '') || '—';
-  var balTxt = !krActiveItems(c).length ? '—' : c.krBalancePaid ? '已结清' : (info.diff>=0 ? formatCurrency(info.diff,'KRW') : '应退 '+formatCurrency(-info.diff,'KRW'));
+  var balTxt = !krActiveItems(c).length ? '—' : c.krBalancePaid ? '尾款已付清' : (info.diff>=0 ? '尾款未付' : '应退 '+formatCurrency(-info.diff,'KRW')); /* CMD-1014-16：KR 收的尾款金额 IN 不显示 */
   var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
     cell('项目合计', totalTxt)+cell('已收定金（诊所收）', hasKr ? formatCurrency(info.deposit,'KRW') : '—')+cell('已退金额', ref>0 ? formatCurrency(ref,'KRW') : '—')+(compK>0 ? cell('已转置换', formatCurrency(compK,'KRW')) : '')+cell('应付尾款（医院收）', balTxt)+'</div>';
@@ -542,11 +567,11 @@ var ROLE_PERMS = {
   manager: {work:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true,  smslog:true,  promo:true}, /* promo = 项目库「本月活动 / 套餐」的新增 / 编辑 / 结束（只有 IN 管理者，CMD-1008-09） */
   general: {work:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true,  smslog:false},
   /* KR 医院账号（2026-10-06，Notion Accounts & Settings 第 7 节）：krwork = 处理案件（确认报告时间、上传诊疗方案、施术相关）；krview = 看所有案件；krviewOwn = 只看自己负责的；
-     krsched = 日程/OFF；kropen = 开放施术日期；krdoctors = 院长名单/停用；krlib = 赴韩项目库、案例库；bizdata/accounts/clinic（= 医院设定）/oplog = 管理类。 */
-  kr_owner:    {work:false, krwork:false, krview:false, krviewOwn:true, krsched:true,  kropen:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
-  kr_manager:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:true,  krlib:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
-  kr_general:  {work:false, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  kropen:true,  krdoctors:false, krlib:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false},
-  kr_director: {work:false, krwork:false, krview:false, krviewOwn:true,  krsched:'own', kropen:'own', krdoctors:false, krlib:false, bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false}
+     krsched = 日程/OFF；krdoctors = 院长名单/停用；krlib = 赴韩项目库（维护）；krshowview = 案例库只读（IN 统一维护，KR 全部只读，CMD-1014-16）；bizdata/accounts/clinic（= 医院设定）/oplog = 管理类。 */
+  kr_owner:    {work:false, krshowview:true, krwork:false, krview:false, krviewOwn:true, krsched:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
+  kr_manager:  {work:false, krshowview:true, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  krdoctors:true,  krlib:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
+  kr_general:  {work:false, krshowview:true, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  krdoctors:false, krlib:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false},
+  kr_director: {work:false, krshowview:true, krwork:false, krview:false, krviewOwn:true,  krsched:'own', krdoctors:false, krlib:false, bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false}
 };
 /* 代表院长 = 院长 + 老板（CMD-1012-05 五）：院长功能（自己负责的案件、开始 / 录入面诊、自己的日程与 OFF）+ 保留老板的管理类页面 */
 function isKrDirectorLike(a){ return !!a && (a.role==='kr_director' || a.role==='kr_owner'); }
@@ -560,7 +585,7 @@ var ADMIN_PAGES = [
   /* KR 医院端的管理类页面（2026-10-06，KR 端系列 5/5）：只有 KR 账号有这些权限，IN 账号 canDo 为 false 不会出现 */
   {key:'krdoctors',  label:'院长管理', icon:'院', perm:'krdoctors'},
   {key:'krsrvc',     label:'项目库', icon:'项', perm:'krlib'},
-  {key:'krshow',     label:'案例库', icon:'案', perm:'krlib'},
+  {key:'krshow',     label:'案例库', icon:'案', perm:'krshowview'},
   {key:'personal', label:'个人设定', icon:'个', perm:'personal', hidden:true} /* 不在侧边栏，从头像菜单进入 */
 ];
 function canDo(perm, acct){

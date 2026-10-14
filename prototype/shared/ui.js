@@ -138,7 +138,8 @@ function buildSidebar(activePage){
 function buildTopRightIcons(){
   return '<div class="actions">'+
     (canDo('work') ? '<button class="icon-btn" onclick="openDrawer()" aria-label="对话">💬<span class="badge chat-badge">0</span></button>'+
-    '<button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button>' : '')+
+    '<button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button>' :
+      (currentAccount() && currentAccount().role==='owner' ? '<button class="icon-btn" onclick="toggleBellDropdown(event)" aria-label="通知">🔔<span class="badge bell-badge">0</span></button>' : '')) /* CMD-1014-16：IN 老板有铃铛，只收「系统」类（设定更新、账号加购 / 退订），没有对话 */ +
     '<span class="avatar" style="cursor:pointer;" onclick="toggleAvatarMenu(event)" title="'+ME_NAME+'">'+((ME_NAME||'?').charAt(0).toUpperCase())+'</span></div>';
 }
 
@@ -2133,7 +2134,7 @@ function settleProjects(batchId){
     rows += '<div><div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:6px;">赴韩项目（收预付金，尾款赴韩后支付）</div>'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>施术项目小计（术后管理含在套餐内，不另收费）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px;"><span>定金（诊所收，'+Math.round(KR_DEPOSIT_RATE*100)+'%）</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后在医院支付，医院收）</span><span>'+formatCurrency(batch.krBalance,'KRW')+'</span></div></div>';
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后在医院支付，医院收）</span><span>金额由医院收</span></div></div>';
   }
   if(batch.inTotal){
     rows += '<div'+(batch.krTotal?' style="border-top:1px solid var(--border2);padding-top:14px;"':'')+'><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">本地项目（收全款）</div>'+
@@ -2338,7 +2339,7 @@ function renderLibrary(){
   var main = document.getElementById('lib-grid'); if(!main) return;
   var sel = document.getElementById('lib-role-select'); if(sel) sel.value = DEMO_ROLE;
   var addBtn = document.getElementById('lib-add-btn');
-  if(addBtn) addBtn.textContent = DEMO_ROLE==='in' ? '+ 新增案例（印尼管理）' : '+ 新增案例（赴韩施术）';
+  if(addBtn){ addBtn.textContent = '+ 新增案例'; addBtn.style.display = DEMO_ROLE==='in' ? '' : 'none'; } /* CMD-1014-16：KR 案例库只读，没有新增 */
   var toggle = '<div class="cal-switch"><span class="'+(LIB_VIEW==='part'?'active':'')+'" onclick="setLibView(\'part\')">按部位</span><span class="'+(LIB_VIEW==='method'?'active':'')+'" onclick="setLibView(\'method\')">按施术 / 管理</span></div>';
   var f = document.getElementById('lib-filters');
   var searchBox = '<input type="text" id="lib-search" placeholder="搜索案例标题" value="'+LIB_SEARCH.replace(/"/g,'&quot;')+'" oninput="libSearchInput(this.value)" style="width:200px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;">';
@@ -2384,7 +2385,7 @@ function renderDirectorDetail(){
 }
 
 function deleteLibCase(id){
-  var c = libFindCase(id); if(!c || !libCanEdit(c.source)) return;
+  var c = libFindCase(id); if(!c || !libCaseCanEdit(c.source)) return;
   if(!confirm('确认删除案例"'+c.title+'"？删除后不可恢复。')) return;
   LIB_CASES = LIB_CASES.filter(function(x){ return x.id!==id; });
   if(CURRENT_PAGE_ID==='in-director') renderDirectorDetail();
@@ -2433,17 +2434,18 @@ var LIB_EDIT = null;
 
 function openLibCaseModal(caseId){
   if(caseId){
-    var c = libFindCase(caseId); if(!c || !libCanEdit(c.source)) return;
+    var c = libFindCase(caseId); if(!c || !libCaseCanEdit(c.source)) return;
     LIB_EDIT = JSON.parse(JSON.stringify(c));
     LIB_EDIT.names = LIB_EDIT.names || {zh:c.title, ko:'', id:''};
     LIB_EDIT.consent = LIB_EDIT.consent || {signed:false, file:''};
   } else {
-    LIB_EDIT = {id:null, title:'', names:{zh:'',ko:'',id:''}, source: DEMO_ROLE==='kr' ? 'travel' : 'local', projectIds:[], director:null, problemIds:[], beforePhotos:[], afterPhotos:[], consent:{signed:false, file:''}};
+    LIB_EDIT = {id:null, title:'', names:{zh:'',ko:'',id:''}, source:'local', projectIds:[], director:null, problemIds:[], beforePhotos:[], afterPhotos:[], consent:{signed:false, file:''}};
   }
   renderLibCaseModal();
   document.getElementById('lib-case-overlay').classList.add('open');
 }
 
+function libEditSource(src){ if(!LIB_EDIT || LIB_EDIT.id || LIB_EDIT.source===src) return; LIB_EDIT.source = src; LIB_EDIT.projectIds = []; LIB_EDIT.director = null; LIB_EDIT.problemIds = []; renderLibCaseModal(); } /* CMD-1014-16：IN 新增案例时选类型 */
 function closeLibCaseModal(){ document.getElementById('lib-case-overlay').classList.remove('open'); LIB_EDIT = null; }
 
 function libEditAiFill(){
@@ -2482,7 +2484,7 @@ function renderLibCaseModal(){
   var c = LIB_EDIT; if(!c) return;
   document.getElementById('lib-case-modal-title').textContent = c.id ? '编辑案例' : '新增案例';
   var isTravel = c.source==='travel';
-  var srcLabel = isTravel ? '赴韩施术（医院案例，只有 KR 室长维护）' : '印尼管理（印尼案例）';
+  var srcLabel = isTravel ? '赴韩施术案例（IN 维护，KR 只读）' : '本地项目案例（IN 维护）';
   var origin = isTravel ? 'KR' : 'IN';
   var projGroups = projLibCategories(origin).map(function(cat){
     var ps = PROJECT_LIBRARY.filter(function(pr){ return pr.categoryId===cat.id && (pr.active || c.projectIds.indexOf(pr.id)>-1); });
@@ -2496,7 +2498,7 @@ function renderLibCaseModal(){
   var nameInp = function(k, label){ return '<div class="case-field-row"><span class="fk">'+label+'</span><input type="text" value="'+(n[k]||'').replace(/"/g,'&quot;')+'" oninput="libEditName(\''+k+'\',this.value)" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'; };
   var missing = libEditMissing();
   document.getElementById('lib-case-body').innerHTML =
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">来源：'+srcLabel+'（按当前演示角色自动决定）</div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">案例类型：'+(!c.id ? '<span class="chip'+(!isTravel?' active':'')+'" onclick="libEditSource(\'local\')">本地项目案例</span> <span class="chip'+(isTravel?' active':'')+'" onclick="libEditSource(\'travel\')">赴韩施术案例</span>' : srcLabel)+'</div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">标题 <span style="color:var(--terracotta);">*</span> <span style="font-weight:400;color:var(--muted);">只填一种语言，其他语言 AI 翻译，可手动修改</span></div>'+
     nameInp('zh','中文')+nameInp('ko','한국어')+nameInp('id','Bahasa Indonesia')+
     '<div style="margin:6px 0 12px;"><button class="btn-ghost" style="font-size:11px;" onclick="libEditAiFill()">AI 翻译补全（演示）</button></div>'+
@@ -2909,6 +2911,7 @@ function pushNotif(cat, text, opts){
   if(opts.names) rec = opts.names.slice();
   else if(c){ var t = pushTargets(c); rec = t.inn.concat(t.kr); }
   else rec = workingIN();
+  if(cat==='系统' && typeof clinicAccounts==='function'){ clinicAccounts().forEach(function(a){ if(a.role==='owner' && a.status==='active' && a.name && rec.indexOf(a.name)<0) rec.push(a.name); }); } /* CMD-1014-16：老板只收「系统」类 */
   rec = rec.filter(function(x){ return x!==ME_NAME; }); /* 操作人自己不收自己触发的通知 */
   var n = {id:'n'+(++NOTIF_SEQ), cat:cat, by:ME_NAME, level:opts.level || notifLevel(text), text:text, caseId:opts.caseId||null, ts:opts.ts||nowFullDt(), recipients:rec, read:{}, link:opts.link||(c?{kind:'case'}:{kind:'none'}), detail:opts.detail||null};
   if(opts.read) n.read[ME_NAME] = true;
@@ -2940,7 +2943,7 @@ function toggleBellDropdown(ev){
     (list.length ? list.map(function(n){
       return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'bell\')"><span>'+NOTIF_ICON[n.cat]+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(n.read[ME_NAME]?'500':'700')+';">'+tzRender(n.text)+'</div><div style="font-size:10px;color:var(--muted);">'+fmtUtc(n.ts)+'</div></div>'+(n.read[ME_NAME]?'':'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>')+'</div>';
     }).join('') : '<div style="padding:14px;font-size:12px;color:var(--muted);">没有通知</div>')+
-    '<div style="padding:10px 14px;text-align:center;"><a href="#" class="info-link" onclick="closeBellDropdown();nav(\'in-notifications\');return false;">查看全部</a></div>';
+    (canDo('work') ? '<div style="padding:10px 14px;text-align:center;"><a href="#" class="info-link" onclick="closeBellDropdown();nav(\'in-notifications\');return false;">查看全部</a></div>' : '');
   document.body.appendChild(d);
 }
 

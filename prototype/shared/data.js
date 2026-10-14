@@ -213,7 +213,7 @@ var CLINICS = [
 var CLINIC_HOSPITALS = [ /* 对接关系（2026-10-07 起一家诊所只对接一家医院，一家医院可对接多家诊所）：C1、C2 → H1；C3 → H2 */
   {clinicId:'C1', hospitalId:'H1'}, {clinicId:'C2', hospitalId:'H1'}, {clinicId:'C3', hospitalId:'H2'}
 ];
-/* HOSPITAL_DATA[hid]：{directors:[{id,name,active}], coordinators:[姓名], openDates:{院长名:[日期]}, directorSchedule:{院长名:[块]}, coordSchedule:[块], projects:[赴韩项目], libCases:[赴韩案例]}
+/* HOSPITAL_DATA[hid]：{directors:[{id,name,active}], coordinators:[姓名], directorSchedule:{院长名:[块]}, coordSchedule:[块], projects:[赴韩项目], libCases:[赴韩案例]}
    （初始值在 data.js 末尾的 initHospitalData() 用上面的老种子变量生成；projects / libCases 在存档时由 PROJECT_LIBRARY / LIB_CASES 的合成数组拆回来，见 store.js） */
 var HOSPITAL_DATA = {};
 var C3_STASH = null; /* 种子阶段暂存：要迁到 C3 的案件等（见 stashC3Seeds） */
@@ -1630,6 +1630,7 @@ function pickRescheduleTime(t){ RESCHED_SELECTED_TIME = t; renderRescheduleTimeP
 
 /* ---- Timeline format: 进程名/具体做了什么/谁/00-00-00 00:00 ---- */
 function logLine(e){
+  if(viewerLogHidden(e)) return ''; /* CMD-1014-16：KR 看不到 IN 本地项目 / 金额相关的记录 */
   var act = tzRender(e.action); /* 时间标记按看的人的时区显示 */
   var action = e.kind==='case'
     ? '<a href="#" onclick="openCaseDetail(\''+e.caseId+'\');return false;" style="color:var(--navy);font-weight:700;">'+act+' →</a>'
@@ -3107,10 +3108,10 @@ function settleTabTopHtml(c){
   var refKrw = (c.refunds||[]).filter(function(r){ return (r.currency||'KRW')==='KRW'; }).reduce(function(s,r){ return s+(r.amount||0); }, 0);
   var refIdr = (c.refunds||[]).filter(function(r){ return r.currency==='IDR'; }).reduce(function(s,r){ return s+(r.amount||0); }, 0);
   var two = function(krw, idr){ var a = []; if(krw) a.push(formatCurrency(krw,'KRW')); if(idr) a.push(formatCurrency(idr,'IDR')); return a.join(' ＋ ') || '—'; };
-  var bal = !krActiveItems(c).length ? '—' : c.krBalancePaid ? '已结清' : (info.diff>=0 ? formatCurrency(info.diff,'KRW') : '应退 '+formatCurrency(-info.diff,'KRW'));
+  var bal = !krActiveItems(c).length ? '—' : c.krBalancePaid ? '尾款已付清' : (info.diff>=0 ? '尾款未付' : '应退 '+formatCurrency(-info.diff,'KRW')); /* CMD-1014-16：KR 收的尾款金额 IN 不显示 */
   var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:14px;">'+
-    cell('项目合计', two(hasKr ? info.total : 0, pd.inn))+cell('已收', two(hasKr ? info.deposit + (c.krBalancePaid ? Math.max(0, info.diff) : 0) : 0, pd.inn))+cell('已退', two(refKrw, refIdr))+cell('待收尾款（医院收）', bal)+'</div>';
+    cell('项目合计', two(hasKr ? info.total : 0, pd.inn))+cell('已收（诊所）', two(hasKr ? info.deposit : 0, pd.inn))+cell('已退', two(refKrw, refIdr))+cell('待收尾款（医院收）', bal)+'</div>';
 }
 
 /* 无法协调、赴韩项目全退后：问客人要不要做本地管理（2026-09-30）：要→同一案件接着走本地流程（从"是否持有项目"开始），不要→按结局推算 */
@@ -3696,7 +3697,7 @@ function krArrivedOpsHtml(c){
   if(!j){
     inner = wait('等待 KR 室长判断能否施术（到院后的判断、调整、尾款、子项进行全部由 KR 端操作，这里只显示结果）');
   } else if(j.result==='ok'){
-    inner = note('KR判断：能施术，项目没变动')+(c.krBalancePaid ? '<div style="font-size:12px;color:var(--sage);font-weight:700;">✓ 已付清尾款，行程已确认；在韩 timeline 的子项由 KR 逐个标完成，在韩国的子项全部完成后案件结案</div>' : wait('等待 KR 确认行程并标记付清尾款（尾款 '+formatCurrency(info.diff,'KRW')+'）'));
+    inner = note('KR判断：能施术，项目没变动')+(c.krBalancePaid ? '<div style="font-size:12px;color:var(--sage);font-weight:700;">✓ 已付清尾款，行程已确认；在韩 timeline 的子项由 KR 逐个标完成，在韩国的子项全部完成后案件结案</div>' : wait('等待 KR 确认行程并标记付清尾款（尾款未付；金额由医院收）'));
   } else if(j.result==='changed' || j.replaced){
     var calc = '实际项目合计 '+formatCurrency(info.total,'KRW')+'；定金合计 '+formatCurrency(info.deposit,'KRW')+(info.preRefund>0 ? '，减去到院前已退 '+formatCurrency(info.preRefund,'KRW') : '')+' = 可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'；'+(info.diff>=0 ? '尾款 ' : '应退差额 ')+formatCurrency(Math.abs(info.diff),'KRW');
     inner = note('KR判断：能施术，但项目有变动')+'<div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">'+calc+'</div>'+
@@ -4735,6 +4736,8 @@ function recoveryRank(ph){ return RECOVERY_RANK[ph.recovery] || 6; }
 function sortedAfter(c){ return (c.afterPhotos||[]).slice().sort(function(a,b){ return recoveryRank(a)-recoveryRank(b); }); }
 
 function libCanEdit(source){ return (DEMO_ROLE==='in' && source==='local') || (DEMO_ROLE==='kr' && source==='travel'); }
+/* CMD-1014-16：案例库单一由 IN 管理（本地案例和赴韩施术案例都归 IN 诊所维护）；KR 一律只读 */
+function libCaseCanEdit(source){ return DEMO_ROLE==='in'; }
  /* IN 只能维护印尼管理；赴韩施术只有 KR 室长维护 */
 
 /* ---- 问题标签（印尼管理案例，手动维护） ---- */
@@ -4931,7 +4934,7 @@ function libRenderDetail(){
     cmp.map(function(k){ var o = libPhotoByKey(c,k); return '<div style="flex:1;min-width:200px;">'+libPhotoBox(o.ph,'100%','220px',o.cap)+'<div style="text-align:center;font-size:12px;margin-top:4px;">'+o.cap+'</div></div>'; }).join('')+'</div></div>'
     : '<div style="font-size:11px;color:var(--muted);margin-top:8px;">勾选两张照片的"对比"可以左右对比；点照片放大。</div>';
   var actions = '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openLibPresent()">展示模式</button>'+
-    (libCanEdit(c.source) ? '<button class="btn-outline" onclick="openLibCaseModal(\''+c.id+'\')">编辑</button><button class="btn-outline" style="color:#C1454A;" onclick="deleteLibCase(\''+c.id+'\')">删除</button>' : '')+'</div>';
+    (libCaseCanEdit(c.source) ? '<button class="btn-outline" onclick="openLibCaseModal(\''+c.id+'\')">编辑</button><button class="btn-outline" style="color:#C1454A;" onclick="deleteLibCase(\''+c.id+'\')">删除</button>' : '')+'</div>';
   return '<div class="card" style="padding:22px 26px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px;"><div><div style="font-size:20px;font-weight:700;margin-bottom:8px;">'+c.title+'</div>'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;"><span class="status-pill" style="background:'+srcColor[0]+';color:'+srcColor[1]+';">'+srcLabel+'</span>'+
     (c.source==='travel' ? '<span>院长：'+dirHtml+'</span>' : '')+'<span>项目：'+(projLinks||'—')+'</span>'+(tags ? '<span>问题：'+tags+'</span>' : '')+'</div></div>'+actions+'</div>'+
@@ -5011,7 +5014,7 @@ function saveLibCase(){
     if(idx>-1) LIB_CASES[idx] = c;
   } else {
     c.id = newLibCaseId(); c.uploader = me; c.uploadedAt = nowFullDt(); c.editedBy = null; c.editedAt = null;
-    if(c.source==='local') c.clinicId = CURRENT_CLINIC_ID; else c.hospitalId = c.hospitalId || (LIB_HOSPITAL!=='all' ? LIB_HOSPITAL : 'H1'); /* 归属：印尼案例属于本诊所，赴韩案例属于医院 */
+    if(c.source==='local') c.clinicId = CURRENT_CLINIC_ID; else c.hospitalId = c.hospitalId || (DEMO_ROLE==='in' && typeof clinicHospital==='function' && clinicHospital(CURRENT_CLINIC_ID) ? clinicHospital(CURRENT_CLINIC_ID) : (LIB_HOSPITAL!=='all' ? LIB_HOSPITAL : 'H1')); /* 归属：印尼案例属于本诊所，赴韩案例属于医院 */
     LIB_CASES.unshift(c);
   }
   closeLibCaseModal();
@@ -5262,7 +5265,7 @@ buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, i
     LIB_CASES.push({id:id, clinicId:(source==='local' ? CURRENT_CLINIC_ID : undefined), hospitalId:(source==='travel' ? 'H1' : undefined), title:title, names:{zh:title, ko:demoTranslate(title,'zh','ko'), id:demoTranslate(title,'zh','id')}, source:source,
       projectIds:projNames.map(pid).filter(Boolean), director:director, problemIds:(problems||[]).map(function(l){ return LIB_PROBLEM_IDS[l]; }),
       beforePhotos:[{url:'', color:'#E6DDD0'}, {url:'', color:'#E1D8CB'}], afterPhotos:recs.map(function(r){ return photo(r); }),
-      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:(source==='travel'?'KM1 室长（KR室长）':actingName()), uploadedAt:'2026-09-'+day+' 10:00',
+      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:(source==='travel'?'A1 室长':actingName()), uploadedAt:'2026-09-'+day+' 10:00',
       editedBy:null, editedAt:null});
   }
   mk('切开双眼皮 · 自然平行型','travel',['切开双眼皮'],'KD1 院长',[],['1周','1个月','3个月'],'16');
@@ -6077,7 +6080,7 @@ function initHospitalData(){
     H1:{
       directors: DIRECTOR_INFO.map(function(d, i){ return {id:'H1-D'+(i+1), name:d.name, active:d.active}; }),
       coordinators: KR_COORDINATORS.slice(),
-      openTime:'11:00', closeTime:'21:30', openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'}, /* 营业时间（韩国时间）；医院每周日休诊 + 周六 16:00 起休诊（韩国时间） */
+      openTime:'11:00', closeTime:'21:30', closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'}, /* 营业时间（韩国时间）；医院每周日休诊 + 周六 16:00 起休诊（韩国时间） */
       directorSchedule: {}, coordSchedule: [], projects:[], libCases:[],
       offs: [], /* OFF 在 seedKrMonthDemo 里设（KO1 每周一 + 10/20 年假；KD1 每周三 + 10/15 上午；KM1 每周四；KC1 每周五） */
       dayConfirm: {}, reportRead: {}, chatRead: {},
@@ -6090,7 +6093,7 @@ function initHospitalData(){
     H2:{
       directors: [{id:'H2-D1', name:'H2 院长1', active:true}, {id:'H2-D2', name:'H2 院长2', active:true}, {id:'H2-D3', name:'H2 院长3', active:false}],
       coordinators: ['KM2 室长', 'KC2 室长'],
-      openTime:'11:00', closeTime:'21:30', openDates: {}, closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'},
+      openTime:'11:00', closeTime:'21:30', closedRules: [{dow:0, from:''}, {dow:6, from:'16:00'}], lunch: {from:'13:00', to:'14:00'},
       directorSchedule: {}, coordSchedule: [], projects:[], libCases:[],
       offs: [], /* H2 的旧 OFF 清掉 */
       dayConfirm: {}, reportRead: {}, chatRead: {}, notifs: []
@@ -6131,7 +6134,7 @@ function seedHospitalH2(){
     LIB_CASES.push({id:id, hospitalId:'H2', title:title, names:{zh:title, ko:demoTranslate(title,'zh','ko'), id:demoTranslate(title,'zh','id')}, source:'travel',
       projectIds:projNames.map(pid).filter(Boolean), director:director, problemIds:[],
       beforePhotos:[{url:'', color:'#E6DDD0'}], afterPhotos:recs.map(function(r){ return {url:'', color:colors[(ci++)%colors.length], recovery:r, recoveryCustom:''}; }),
-      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:'KM2 室长（KR室长）', uploadedAt:D(-day)+' 10:00', editedBy:null, editedAt:null});
+      consent:{signed:true, file:'consent-'+id+'.pdf'}, uploader:'D1 室长', uploadedAt:D(-day)+' 10:00', editedBy:null, editedAt:null});
   };
   mk('切开双眼皮 · 自然型（강남）', ['切开双眼皮'], 'H2 院长1', ['1周','1个月'], 12);
   mk('假体隆鼻 · 侧面线条（강남）', ['假体隆鼻'], 'H2 院长2', ['1个月','3个月'], 10);
@@ -6209,14 +6212,13 @@ function seedKrMonthDemo(){
       if(!o.weekly){ h.offs.push(Object.assign({id:'off'+hid+i, note:'', by:o.who}, o)); return; }
       for(var d1 = -45; d1 <= 45; d1++){ var ds1 = D(d1); if(new Date(ds1+'T00:00:00').getDay()===o.dow) h.offs.push({id:'off'+hid+i+'_'+ds1, who:o.who, kind:o.kind, part:o.part, date:ds1, note:'', by:o.who}); }
     });
-    h.directorSchedule = {}; h.openDates = {};
+    h.directorSchedule = {};
     h.directors.filter(function(d){ return d.active; }).map(function(d){ return d.name; }).forEach(function(n, k){
-      var arr = (h.directorSchedule[n] = []), open = [], pat = cfg.open[n] || [];
+      var arr = (h.directorSchedule[n] = []);
       for(var d = -45; d <= 45; d++){
         var ds = D(d), dow = new Date(ds+'T00:00:00').getDay();
         if(hospitalClosedOn(hid, ds)) continue;
         var offs = h.offs.filter(function(o){ return o.kind==='director' && o.who===n && offApplies(o, ds); }), offAll = offs.some(function(o){ return o.part==='全天'; });
-        if(pat.indexOf(dow) > -1 && d >= -30 && !offAll) open.push(ds); /* 不同院长不同的开放施术日期 */
         if(d < -30 || d > 30 || offAll) continue; /* 前后各一个月的工作日 */
         if(pick(d*7 + k*31 + hi*101 + 3) < 0.15) continue; /* 约 15% 的工作日空着 */
         var cnt = 1 + Math.floor(pick(d*5 + k*17 + 9)*3), used = {}, cf = hospitalClosedFrom(hid, ds);
@@ -6227,9 +6229,7 @@ function seedKrMonthDemo(){
           arr.push({date:ds, time:tpl[0], end:tpl[1], type:'不可预约'});
         }
       }
-      h.openDates[n] = open;
     });
-    h.directors.filter(function(d){ return !d.active; }).forEach(function(d){ h.openDates[d.name] = []; });
   });
 }
 /* 演示案件的施术日期：顺延到「该院长开放的、不在医院休诊 / 院长 OFF 里」的日子 */

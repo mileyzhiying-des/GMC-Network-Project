@@ -25,7 +25,7 @@ RT.runIn = function(){
   RT.cell('侧栏：短信发送记录', '—', RT.yn(L.indexOf('短信发送记录')>-1));
   var bell = !!document.querySelector('.topbar [onclick*="toggleBellDropdown"], [onclick*="toggleBellDropdown"]'), chat = !!document.querySelector('[onclick*="openDrawer()"]');
   RT.cell('顶部对话按钮', isOwn ? '❌' : '✅', RT.yn(chat));
-  RT.cell('顶部铃铛', isOwn ? '—' : '✅', RT.yn(bell), isOwn ? 'IN-SETT-01 只写老板没有「工作台、案件、对话」，没写铃铛' : '');
+  RT.cell('顶部铃铛', '✅', RT.yn(bell), isOwn ? '老板有铃铛，只收「系统」类（Accounts & Settings 10-14 修订）' : '');
   /* 个人设定：所有账号 */
   RT.cell('个人设定（头像菜单）', '✅', RT.yn(canDo('personal')));
   /* 诊所管理类页面 */
@@ -91,6 +91,15 @@ RT.runIn = function(){
     RT.cell('日历 memo：看不到别人写的「私人」memo；自己的私人看得到', '✅', RT.yn(!mm.seePrivateOther && mm.seePrivateMine));
     RT.cell('日历 memo：能改自己写的 / 不能改别人写的', '✅', RT.yn(mm.editMine && !mm.editOther), JSON.stringify(mm));
   }
+  if(isOwn){
+    var on = T(function(){ var a0 = NOTIFS.length, old = ME_NAME; ME_NAME = 'A1 室长'; var nSys = pushNotif('系统','RT 系统类通知',{names:IN_COORDINATORS.slice(), silent:true, level:'info'}); var nCase = pushNotif('预约','RT 案件通知（老板不该收）',{names:IN_COORDINATORS.slice(), silent:true}); ME_NAME = old; var r0 = {sys:nSys.recipients.indexOf(old)>-1, cas:nCase.recipients.indexOf(old)>-1, shownInBell:myNotifs().some(function(n){ return n.id===nSys.id; })}; NOTIFS.splice(0, NOTIFS.length-a0); return r0; });
+    RT.cell('通知：收别人触发的「系统」类（设定更新、账号加购 / 退订）', '✅', RT.yn(on.sys && on.shownInBell), JSON.stringify(on));
+    RT.cell('通知：收案件类通知', '❌', RT.yn(on.cas));
+  }
+  if(!isOwn && canDo('work')){
+    var osys = T(function(){ var a0 = NOTIFS.length; var n0 = pushNotif('系统','RT 系统类通知',{names:IN_COORDINATORS.slice(), silent:true, level:'info'}); var ncase = pushNotif('预约','RT 案件通知',{silent:true}); var own = clinicAccounts().filter(function(x){ return x.role==='owner' && x.name; }).map(function(x){ return x.name; }); var r0 = {sysOwner:own.length ? own.every(function(nm){ return n0.recipients.indexOf(nm)>-1; }) : null, caseOwner:own.some(function(nm){ return ncase.recipients.indexOf(nm)>-1; })}; NOTIFS.splice(0, NOTIFS.length-a0); return r0; });
+    RT.cell('通知：老板收「系统」类、不收案件通知（由本账号触发时看老板的收件人）', osys.sysOwner===null ? '—' : '✅', osys.sysOwner===null ? '（本诊所没有老板账号）' : RT.yn(osys.sysOwner && !osys.caseOwner), JSON.stringify(osys));
+  }
   if(canDo('accounts')){
     var ac = T(function(){ openAdminPage('accounts'); var t = document.getElementById('in-admin').textContent; return {reset:/重设密码/.test(t), buy:/加购账号|加购/.test(t), unsub:/退订/.test(t)}; });
     RT.cell('账号管理页：［重设密码］［加购账号］［退订］', '✅', RT.yn(ac.reset && ac.buy && ac.unsub), JSON.stringify(ac));
@@ -112,10 +121,13 @@ RT.runKr = function(){
   var T = function(f){ try{ return f(); }catch(e){ return 'ERR '+e; } };
   var L = RT.navLabels();
   RT.cell('侧栏：工作台 / 案件列表 / 通知中心', '✅', RT.yn(RT.has(L, ['工作台','案件列表','通知中心'])));
-  RT.cell('侧栏：客人管理（院长没有此页）', coord ? '✅' : '❌', RT.yn(L.indexOf('客人管理')>-1), isOwn ? '规格只写「院长没有此页」，代表院长按「= 院长 + 老板」推导为没有' : '');
+  RT.cell('侧栏：客人管理（一般院长没有；代表院长可看，只读）', (coord || isOwn) ? '✅' : '❌', RT.yn(L.indexOf('客人管理')>-1));
   RT.cell('侧栏 / 页面：经营数据、账号管理、医院设定、操作日志', admin ? '✅' : '❌', RT.yn(RT.has(L, ['经营数据','账号管理','医院设定','操作日志'])));
   RT.cell('侧栏 / 页面：院长管理（院长名单、停用）', admin ? '✅' : '❌', RT.yn(L.indexOf('院长管理')>-1));
-  RT.cell('侧栏 / 页面：赴韩项目库、案例库', coord ? '✅' : '❌', RT.yn(RT.has(L, ['项目库','案例库'])));
+  RT.cell('侧栏 / 页面：赴韩项目库（维护）', coord ? '✅' : '❌', RT.yn(L.indexOf('项目库')>-1));
+  RT.cell('侧栏 / 页面：案例库（KR 全部只读）', '✅', RT.yn(L.indexOf('案例库')>-1));
+  var lib0 = T(function(){ var d0 = DEMO_ROLE; DEMO_ROLE = 'kr'; var r0 = {edit:libCaseCanEdit('travel') || libCaseCanEdit('local')}; DEMO_ROLE = d0; return r0; });
+  RT.cell('案例库：上传 / 编辑 / 删除案例', '❌', RT.yn(lib0.edit===true));
   RT.cell('侧栏：短信发送记录', '—', RT.yn(L.indexOf('短信发送记录')>-1));
   var bell = !!document.querySelector('[onclick*="toggleBellDropdown"], [onclick*="krToggleBell"], .icon-btn[aria-label="通知"]'), chat = !!document.querySelector('[onclick*="krOpenDrawer"], [onclick*="openKrDrawer"], .icon-btn[aria-label="对话"]');
   RT.cell('顶部铃铛 + 对话', '✅', RT.yn(bell && chat), 'bell='+bell+' chat='+chat);
@@ -174,7 +186,7 @@ RT.runKr = function(){
   RT.cell('账号管理：购买 / 退订 / 重设', admin ? '✅' : '❌', RT.yn(canDo('accounts')));
   RT.cell('经营数据（只看汇总）', admin ? '✅' : '❌', RT.yn(canDo('bizdata')));
   RT.cell('操作日志', admin ? '✅' : '❌', RT.yn(canDo('oplog')));
-  RT.cell('赴韩项目库 / 案例库 维护', coord ? '✅' : '❌', RT.yn(canDo('krlib')));
+  RT.cell('赴韩项目库 维护', coord ? '✅' : '❌', RT.yn(canDo('krlib')));
   var ktk = T(function(){ return krTodoItems(krAllCases()).map(function(x){ return x.kind; }); });
   var kset = Array.isArray(ktk) ? ktk : [];
   RT.cell('待办栏：含「确认预计出报告时间」（室长待办）', coord ? '✅' : '❌', RT.yn(kset.indexOf('eta')>-1), '待办种类 '+JSON.stringify(Array.from(new Set(kset))));

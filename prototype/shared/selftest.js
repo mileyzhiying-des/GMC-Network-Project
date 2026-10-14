@@ -618,13 +618,12 @@
     var post = krpProjects().filter(function(p){ return isKrPostcareCat(p.categoryId) && p.active; }); ST.ok(post.length>0 && ['拆线','术后复诊检查','伤口护理'].every(function(n){ return post.some(function(p){ return p.name.indexOf(n)>-1 || p.name===n; }); }) || post.length>0, '应有在韩术后管理项目'); openAdminPage('krsrvc'); var pt = document.getElementById('admin-body').innerText; ST.ok(/免费/.test(pt), '在韩术后管理应显示免费');
     /* 本地管理项目库：和 IN 同一份清单（项目名一致） */
     var kn = krLocalLib(hid).map(function(p){ return p.name; }).sort().join('|'), inn = buildLocalProjects('IN').map(function(p){ return p.name; }).sort().join('|'); ST.ok(kn===inn, 'KR 本地管理项目库和 IN 应是同一份清单（项目名一致）');
-    /* 案例库：上传案例 → 医院案例库；编辑 / 删除 */
-    DEMO_ROLE = 'kr'; openAdminPage('krshow'); var pid = krpProjects().filter(function(p){ return p.active && !isKrPostcareCat(p.categoryId); })[0].id;
-    openLibCaseModal(); LIB_EDIT.names.zh = 'T2案例'; LIB_EDIT.projectIds = [pid]; LIB_EDIT.director = 'KD1 院长'; libAddDemoPhoto('before'); libAddDemoPhoto('after'); libSetRecovery(0, RECOVERY_OPTIONS[0]); LIB_EDIT.consent.signed = true; libUseDemoConsent();
-    ST.ok(libEditMissing().length===0, '案例必填项应都满足：'+libEditMissing().join('、')); saveLibCase(); var lc = LIB_CASES.filter(function(x){ return x.title==='T2案例'; })[0]; ST.ok(!!lc && lc.source==='travel', '案例应保存为赴韩案例'); ST.ok(((HOSPITAL_DATA[hid].libCases||[]).concat(LIB_CASES)).some(function(x){ return x.title==='T2案例'; }), '案例应进医院案例库');
-    ST.ok((HOSPITAL_DATA[hid].libCases||[]).some(function(x){ return x.id===lc.id; }) && LIB_CASES===HOSPITAL_DATA[hid].libCases, '案例应写进医院案例库数组（存档时随全局保存）'); try{ localStorage.setItem('__T2_LIB', JSON.stringify({id:lc && lc.id, pid:pid, title:'T2案例（改）'})); }catch(e){}
-    ST.ok(!!projDeleteBlockReason(projById(pid)) || true, '');
-    openLibCaseModal(lc.id); LIB_EDIT.names.zh = 'T2案例（改）'; saveLibCase(); ST.ok(libFindCase(lc.id).title==='T2案例（改）', '案例应可编辑');
+    /* 案例库（CMD-1014-16）：IN 统一维护，KR 只读 */
+    DEMO_ROLE = 'kr'; openAdminPage('krshow'); var lc0 = LIB_CASES[0];
+    ST.ok(!document.getElementById('lib-add-btn'), 'KR 案例库不应有［新增案例］按钮'); ST.ok(!libCaseCanEdit('travel') && !libCaseCanEdit('local'), 'KR 对任何案例都不能编辑');
+    if(lc0){ openLibCaseModal(lc0.id); ST.ok(LIB_EDIT===null, 'KR 点编辑不应打开编辑窗'); libOpenCase(lc0.id); ST.ok(!/编辑|删除/.test(document.getElementById('lib-grid').innerText), 'KR 案例详情页不应有［编辑］［删除］'); }
+    ST.ok(LIB_CASES.some(function(x){ return x.source==='travel'; }) && LIB_CASES.some(function(x){ return x.source!=='travel'; }), 'KR 看到的 = 本医院赴韩案例 + 对接诊所的本地案例');
+    var rec0 = null; try{ rec0 = JSON.parse(localStorage.getItem('__T2_LIB')||'null'); }catch(e){} if(rec0) ST.ok(LIB_CASES.some(function(x){ return x.id===rec0.id; }), 'IN（S36b）上传的赴韩案例 KR 应看得到（只读）');
     ST.note('IN 侧能否按项目找到该案例、「查看相关案例」链接：用 S36b 在 A1 分页另测');
   });
 
@@ -718,11 +717,14 @@
     ST.note('账号 '+id+' 完成隔离检查');
   });
 
-  ST.def('S36b','KR 上传的案例 → IN（A1）看得到',function(){
-    var rec = JSON.parse(localStorage.getItem('__T2_LIB')||'null'); if(!ST.ok(!!rec, '先在 KR 分页跑 S36')) return;
-    var lc = LIB_CASES.filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!lc, 'IN 的案例库里应有 KR 上传的案例 '+rec.id)) return;
-    ST.ok(libCasesOfProject(rec.pid).some(function(x){ return x.id===rec.id; }), 'IN 应能按项目找到该案例'); ST.ok(projectUsage(projById(rec.pid) || {id:rec.pid}).libCases>=1, '项目使用情况应计入案例数（该项目删不掉）');
-    var url = 'in.html?page=in-library&project='+rec.pid; ST.ok(typeof libOpenProject==='function', '「查看相关案例」跳转函数应存在（?page=in-library&project=）');
+  ST.def('S36b','IN 统一维护案例库（A1）：上传赴韩案例 / 本地案例，KR 只读',function(){
+    DEMO_ROLE = 'in'; var pid = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && !isKrPostcareCat(p.categoryId); })[0]; if(!ST.ok(!!pid, '需要赴韩项目')) return; pid = pid.id;
+    openLibCaseModal(); ST.ok(!!document.getElementById('lib-add-btn') || true, ''); libEditSource('travel'); LIB_EDIT.names.zh = 'T2案例'; LIB_EDIT.projectIds = [pid]; LIB_EDIT.director = 'KD1 院长'; libAddDemoPhoto('before'); libAddDemoPhoto('after'); libSetRecovery(0, RECOVERY_OPTIONS[0]); LIB_EDIT.consent.signed = true; libUseDemoConsent();
+    ST.ok(libEditMissing().length===0, '案例必填项应都满足：'+libEditMissing().join('、')); saveLibCase(); var lc = LIB_CASES.filter(function(x){ return x.title==='T2案例'; })[0]; ST.ok(!!lc && lc.source==='travel' && !!lc.hospitalId, 'IN 应能保存赴韩施术案例（带医院）'); if(!lc) return;
+    ST.ok(libCasesOfProject(pid).some(function(x){ return x.id===lc.id; }), 'IN 应能按项目找到该案例'); ST.ok(projectUsage(projById(pid) || {id:pid}).libCases>=1, '项目使用情况应计入案例数（该项目删不掉）');
+    openLibCaseModal(lc.id); LIB_EDIT.names.zh = 'T2案例（改）'; saveLibCase(); ST.ok(libFindCase(lc.id).title==='T2案例（改）', 'IN 案例应可编辑');
+    try{ localStorage.setItem('__T2_LIB', JSON.stringify({id:lc.id, pid:pid, title:'T2案例（改）'})); }catch(e){}
+    var url = 'in.html?page=in-library&project='+pid; ST.ok(typeof libOpenProject==='function', '「查看相关案例」跳转函数应存在（?page=in-library&project=）');
   });
 
   /* ---- 41：对话与通知（A1 跑 IN 侧；KM1 / KD1 分页跑 KR 侧）---- */

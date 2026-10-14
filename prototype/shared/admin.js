@@ -322,6 +322,7 @@ function doUnsubAcct(id){
   a.status = 'disabled'; a.disabledAt = ts;
   logOp('账号管理', accountLabel(me.id)+' 退订了加购账号 '+id+(old?'（'+old+'）':''), '退订', id);
   syncInCoordinators();
+  if(!isKrAccount()) pushNotif('系统', accountLabel(me.id)+' 退订了加购账号 '+id+(old?'（'+old+'）':''), {names:IN_COORDINATORS.slice(), link:{kind:'system'}, level:'info', detail:{title:'账号退订', changes:[accountLabel(me.id)+' 退订了加购账号 '+id+(old?'（使用人 '+old+'）':'')], effective:'立即停用，记录保留'}});
   closeAcctModal(); openAdminPage('accounts', true);
   showToast('已退订 '+id, '账号已停用，记录保留', null);
 }
@@ -383,6 +384,7 @@ function buyPay(){
     ids.push(id);
   }
   Store.touch && Store.touch();
+  if(!kr) pushNotif('系统', accountLabel(me.id)+' 购买了加购'+roleName+'账号 '+ids.join('、'), {names:IN_COORDINATORS.slice(), link:{kind:'system'}, level:'info', detail:{title:'账号加购', changes:[accountLabel(me.id)+' 购买了加购'+roleName+'账号 '+ids.join('、')+'（待激活）'], effective:'立即生效'}});
   closeAcctModal(); openAdminPage('accounts', true);
   showToast('购买成功', ids.join('、')+' 待激活：把编号交给使用人，在登录页「首次激活」', null);
 }

@@ -23,6 +23,12 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
   </div>
 </section>
 </div>
+<div class="modal-overlay" id="notif-detail-overlay" style="z-index:85;" onclick="if(event.target===this) closeNotifDetail()">
+  <div class="modal-box" style="width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span id="notif-detail-title" style="font-size:15px;font-weight:700;">系统更新</span><span style="cursor:pointer;color:var(--slate);" onclick="closeNotifDetail()">✕</span></div>
+    <div id="notif-detail-body" style="font-size:13px;line-height:1.8;"></div>
+  </div>
+</div>
 <div id="toast-stack"></div>
 <script src="/shared/version.js"></script>
 <script src="/shared/rules.js"></script>
