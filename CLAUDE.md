@@ -564,3 +564,8 @@ prototype/shared/app.css  共用样式
 - **拿掉院长开放施术日**：`hospitalOpenOn(hid, 院长, 日期)` = 医院当天有营业 − 这位院长的整天 OFF − 盖满营业时间的不可预约；`hospitalOpenDates` 改成按它算（今天 −30 ～ +240 天）；`h.openDates` 不再被读，院长管理新建院长不再预置开放日期；KR 日历月视图点日期一律进那一周（不再设定开放）。IN 选施术日期 / KR 确认时间都照这个判断。
 - **本地代偿**：IN［取消项目］［无法协调］的退款弹窗新增「退款方式：退钱 / 转本地项目（代偿）」（`REFUND_METHOD`，只在 `normal` / `cannotCoordinate` 两种模式出现；选代偿要金额 > 0）；确认后 `startCompPurchase`：`c.comp = {kwr, credit = 韩元 × FX_RATES.KRW_IDR, scope, used}`；赴韩项目都取消 → 同一案件转本地案件、`scope:'main'`（走原来的本地选购 + 结算单 `compCredit`，并重置 `projectsLocked` / `recommended`）；还有赴韩项目继续 → `scope:'lm'`（走本地管理选购 `lmSettle`）。选购画面顶部「代偿额度 Rp X · 已选 · 剩余 · 需补付」（`compBannerHtml`）；已选 < 额度不能结算（`confirmProjectSelection` / `lmSettle` 都挡），超过补付，不能「本次不购买」；付款时结算窗写「赴韩定金转本地代偿：−Rp X」、应付扣掉额度（`compFinalize`：买到的持有批次标 `comp`、`c.comp.used`、Timeline「赴韩定金转本地代偿：−Rp X…」）；`comp` 批次不可退款（`refundableBatches` / 退款服务 / 全部退款 / 持有项目显示「代偿 · 不可退款」）。定金按「退款」入账（`c.refunds` 带 `comp:true`，所以定金净额为 0、本地全额计入收入，不重复算）；代偿之后照现有流程（使用 / 本次不使用 / 退回）。
 - 测试覆盖页新增 H1（无法退款 → 本地代偿，认 Timeline「赴韩定金转本地代偿：−Rp」）；`selftest.js` 新增 HS1（KM1 分页）、CP1（IN）。
+
+## CMD-1014-04 补充（2026-10-14，追加；旧文字保留作历史）
+- **第 2 轮前 Code 先跑一遍**：三个开关全开 + 第 2 轮 + 全新演示数据 + 单分页。IN 全套 73/73；角色功能 S29–S41、E5、G1–G4、N1–N3、TD/TDK、CAL1–CAL7、HS1 按账号（A1/A2/OWN/KC1/KM1/KD1/KO1/booking）分别跑过。开关全关再跑 IN 全套 72/73（S31 是重复运行占满数据，非程序问题）。
+- **修的是测试，不是程序**：S35、S38 的「开放 / 关闭施术日期」是 CMD-1014-03 已取消的功能，断言改成「点日期只进那一周，openDates 不变」；S41 催办在开关开时（CMD-1013-17）只有「等报告超时」才能催，用例改为先把案件置成 awaiting_report + reportOverdue。程序代码无改动，数据版本不变（42）。
+- 注意：HS1 会跳到管理页，之后同一分页跑 CAL2 会因找不到工作台元素失败，先 `nav('kr-dashboard')` 或把 HS1 放最后。
