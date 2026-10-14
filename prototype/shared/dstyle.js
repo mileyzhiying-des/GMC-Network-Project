@@ -11,7 +11,7 @@
   if(off) return;
   document.documentElement.classList.add('ds-new');
   var VARS = {
-    '--bg-page':'#FCFBF9','--bg-surface':'#FFFFFF','--bg-sidebar':'#F7F4F0','--bg-hover':'#EFEAE4','--bg-disabled':'#EFEAE4','--bg-brand-subtle':'#F6E9DE','--bg-brand-faint':'#FBF5EF',
+    '--bg-page':'#F7F4EE','--bg-surface':'#FFFFFF','--bg-sidebar':'#F7F4F0','--bg-hover':'#EFEAE4','--bg-disabled':'#EFEAE4','--bg-brand-subtle':'#F6E9DE','--bg-brand-faint':'#FBF5EF',
     '--border-default':'#E3DCD4','--border-strong':'#CFC6BC','--border-focus':'#A0592F',
     '--text-primary':'#221E1B','--text-body':'#3A342F','--text-secondary':'#6E665E','--text-placeholder':'#8E857C','--text-on-action':'#FFFFFF','--text-link':'#A0592F',
     '--action-primary':'#A0592F','--action-primary-hover':'#864A27','--action-danger':'#B83A2E','--action-danger-hover':'#9A2F25',
@@ -23,8 +23,8 @@
   /* 旧色值 → 语义变量（只放用途明确对得上的；其余原样保留） */
   var MAP = {}; function m(v, list){ list.split(' ').forEach(function(h){ MAP['#'+h] = 'var('+v+')'; }); }
   m('--text-primary','1B2635 1C2B40 1E2A44 2A3344 1B2333'); m('--text-body','3B4A5A'); m('--text-secondary','5B6672 6B7A90 6B7A8D'); m('--text-placeholder','8A8F98 9AA6B2');
-  m('--bg-page','FAF7F2 FAF8F3 FBF8F2'); m('--bg-brand-faint','FAF6EF'); m('--bg-sidebar','F7F4EF F6F4EF F4F0E8 F4F6F9 F4F6F8 F1F4F8');
-  m('--bg-hover','F3F1EC EFEBE4 EDEAE2 EDE6DA E9E5DC E4E2DC F0ECE3 F0ECE2 ECE8DF E6DDD0');
+  m('--bg-page','FAF7F2 FAF8F3 FBF8F2'); m('--bg-brand-faint','FAF6EF'); m('--bg-sidebar','F7F4EF F6F4EF F4F0E8 F4F6F9 F4F6F8 F1F4F8 F3F1EC EFEBE4'); /* 休诊 / 午休 / 不可预约 = #F7F4F0（CMD-1014-08） */
+  m('--bg-hover','EDEAE2 EDE6DA E9E5DC E4E2DC F0ECE3 F0ECE2 ECE8DF E6DDD0');
   m('--border-default','E4DED2 E4E8ED'); m('--border-strong','C7BFAF D9CFC1 D3CFD9');
   m('--action-primary','C1694F'); m('--action-primary-hover','8A4A2A'); m('--bg-brand-subtle','F3E4DD F3DFD3');
   m('--action-danger','C1454A B3261E B2453A E5484D'); m('--feedback-error-bg','FBE9E7 FDECEA FBE3E1 FBEAE7 FADADD F6DCDC');
@@ -104,6 +104,17 @@
     '.btn-outline{border-color:var(--action-primary);color:var(--action-primary);background:var(--bg-surface);} .btn-ghost{background:var(--bg-hover);color:var(--text-body);}'+
     'input:focus,select:focus,textarea:focus{outline:none;border-color:var(--border-focus);}'+
     'a.info-link,.info-link{color:var(--text-link);}'+
+
+    /* CMD-1014-08 颜色角色：背景 #F7F4EE / 驼色强调 / 侧栏选中 / 今天表头 / 分段切换 / 现在时间线 / 数据卡数字 / 休诊 · 午休 */
+    '.nav-item.active{background:var(--bg-sidebar);color:var(--action-primary);font-weight:700;} .nav-item.active .dot{background:var(--action-primary);} .nav-item.active .nav-icon{background:var(--action-primary);color:var(--text-on-action);}'+
+    '.wk-head.today,.krc-head-today{background:var(--bg-brand-subtle) !important;color:var(--action-primary) !important;box-shadow:inset 0 -2px 0 var(--action-primary);font-weight:700;} .wk-cell.wk-tcol:not(.wk-lunch):not(.wk-past){background:var(--bg-brand-faint);} .krc-col-today{background:var(--bg-brand-faint) !important;}'+
+    '.cal-switch span.active,.todo-seg span.on,.chip.active{background:var(--bg-surface);color:var(--action-primary);border:1px solid var(--border-default);font-weight:700;}'+
+    'button[style*="background:var(--navy)"]{background:var(--bg-surface) !important;color:var(--action-primary) !important;border-color:var(--border-default) !important;}'+
+    'div[style*="background:var(--navy);color:#fff"]{background:var(--bg-brand-subtle) !important;color:var(--action-primary) !important;}'+
+    '.todo-nowline{border-top-color:var(--action-primary);} .todo-nowline span{background:var(--action-primary);}'+
+    '.card[data-n] .ds-cnum{color:var(--text-body);} .card[data-n="0"] .ds-cnum{color:var(--text-placeholder) !important;}'+
+    '.card[onclick*="todoCardFilter(\'todo\')"]:not([data-n="0"]){border-color:var(--border-default) !important;box-shadow:inset 2px 0 0 var(--action-primary);} .card[onclick*="todoCardFilter(\'todo\')"]:not([data-n="0"]) .ds-cnum{color:var(--action-primary) !important;}'+
+    '.wk-cell.wk-lunch,.wk-cell.wk-lunch.wk-cell-open:hover,.wk-lunchbar{background:var(--bg-sidebar);}'+
     '.ds-ic{position:relative;display:inline-flex;width:1.15em;height:1.15em;vertical-align:-0.2em;align-items:center;justify-content:center;} .ds-ic svg{width:100%;height:100%;} .ds-ic-t{position:absolute;width:0;height:0;overflow:hidden;font-size:0;opacity:0;}';
   document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">'+'<style id="ds-css">'+css+root+extra+'</style>');
 })();

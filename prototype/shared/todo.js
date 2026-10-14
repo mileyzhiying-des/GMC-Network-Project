@@ -188,9 +188,9 @@ function todoKrCalWrap(calHtml){
 
 /* ---------------- 卡片 ---------------- */
 function todoCardHtml(label, count, tip, onclick, warn, dot, sub){
-  return '<div class="card" onclick="'+onclick+'" title="'+todoEsc(tip)+'" style="position:relative;padding:14px 16px;cursor:pointer;min-width:0;'+(warn?'border-color:#E8A8A0;':'')+'">'+(dot ? '<span title="有新进来的项目" style="position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:#E5484D;"></span>' : '')+
+  return '<div class="card" data-n="'+count+'" onclick="'+onclick+'" title="'+todoEsc(tip)+'" style="position:relative;padding:14px 16px;cursor:pointer;min-width:0;'+(warn?'border-color:#E8A8A0;':'')+'">'+(dot ? '<span title="有新进来的项目" style="position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:#E5484D;"></span>' : '')+
     '<div style="font-size:12px;color:var(--slate2);">'+label+'</div>'+
-    '<div style="font-size:28px;font-weight:700;margin:4px 0;color:'+(warn?'#B2453A':'var(--navy)')+';">'+count+'</div>'+
+    '<div class="ds-cnum" style="font-size:28px;font-weight:700;margin:4px 0;color:'+(warn?'#B2453A':'var(--navy)')+';">'+count+'</div>'+
     '<div style="font-size:11px;color:var(--muted);line-height:1.6;">'+(sub||'&nbsp;')+'</div></div>';
 }
 var TODO_SEEN = {}, TODO_LIT = {};
