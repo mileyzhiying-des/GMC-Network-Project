@@ -39,6 +39,16 @@ function krbSlotLabel(b){ var cl = krToClinic(b.date, b.time); return b.date+' '
 /* ================= IN 端 ================= */
 var KRB = null;
 function krbClients(){ var seen = {}, out = []; CASE_ITEMS.forEach(function(c){ if(c.krVisit || seen[c.name]) return; if(typeof krAllItems==='function' && krAllItems(c).some(function(it){ return !it.cancelled; })){ seen[c.name] = 1; out.push(c.name); } }); return out.sort(); }
+/* CMD-1014-18 三·4：KR 医院日程里可占位的时段 hover 粉色（同本院日程，#FADADD）；休诊日 / 过去的时段不亮 */
+function krBookHover(el, ev, baseMin){
+  var t = ev.target; if(t && t.closest){ var inner = t.closest('[onclick]'); if(inner && inner!==el){ krBookHoverOff(el); return; } }
+  var ds = el.getAttribute('data-ds'), hid = krViewHospital(); if(!hid || hospitalClosedOn(hid, ds)){ krBookHoverOff(el); return; }
+  var y = ev.clientY - el.getBoundingClientRect().top, slot = Math.floor(y/KR_ROW_PX), m = baseMin + slot*SLOT_MIN;
+  if(krbInPast(ds, minToTime(m))){ krBookHoverOff(el); return; }
+  var hl = el.querySelector('.krb-hl'); if(!hl){ hl = document.createElement('div'); hl.className = 'krb-hl'; hl.style.cssText = 'position:absolute;left:0;right:0;background:#FADADD;pointer-events:none;z-index:0;height:'+KR_ROW_PX+'px;'; el.insertBefore(hl, el.firstChild); }
+  hl.style.top = (slot*KR_ROW_PX)+'px';
+}
+function krBookHoverOff(el){ var hl = el.querySelector('.krb-hl'); if(hl) hl.remove(); }
 function krBookCellClick(ds, ev, el, baseMin){
   var t = ev && ev.target; if(t && t.closest){ var inner = t.closest('[onclick]'); if(inner && inner!==el) return; } /* 点在预约块 / 案件块上由它们自己处理 */
   var hid = krViewHospital(); if(!hid) return;

@@ -507,7 +507,7 @@ function calendarEvents(){
 /* 日历上要不要藏掉这个事件：旧的预约取消（没记取消方）照旧消失；新取消（记了 cancelBy）划掉保留 */
 function calEvHidden(e){ return e.kind==='reservation' && e.vstate==='预约取消' && !e.cancelBy; }
 
-function eventChipHtml(e){
+function eventChipHtml(e, opts){
   var now = demoNow();
   var when = new Date(e.date+'T'+e.time+':00');
   var past = (when < now);
@@ -533,7 +533,7 @@ function eventChipHtml(e){
     onclick = 'openPlaceholderModal(\''+e.phId+'\')';
   }
   var dashed = e.kind==='placeholder' ? 'border-style:dashed;' : '';
-  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+(e.purpose?' · '+e.purpose:'')+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'"><div class="l1"><b>'+l1+'</b>'+(l2 ? ' · '+l2 : '')+'</div></div>'; /* 每个预约一行："名字（粗体）· 来访目的" */
+  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+(e.purpose?' · '+e.purpose:'')+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'"><div class="l1">'+((opts && opts.day) ? e.time+'｜<b>'+l1+'</b>'+(l2 ? '｜'+l2 : '') : '<b>'+l1+'</b>'+(l2 ? ' · '+l2 : ''))+'</div></div>'; /* 每个预约一行："名字（粗体）· 来访目的" */
 }
 
 function calPrev(){ if(CAL_MODE==='week') WEEK_OFFSET--; else if(CAL_MODE==='day') DAY_OFFSET--; else MONTH_OFFSET--; renderCalendar(); }

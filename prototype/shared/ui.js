@@ -249,11 +249,15 @@ function deleteMemoDraft(){
   showToast('已删除', 'memo 已删除', null);
 }
 
+var CAL_MODE_BY = {}; /* CMD-1014-18 三·3：本院日程 / KR 医院日程各自记住日 / 周 / 月，切回来回到原本的视图 */
 function setCalView(v){
+  if(CAL_VIEW!==v) CAL_MODE_BY[CAL_VIEW] = CAL_MODE;
+  var memo = (CAL_VIEW!==v) ? CAL_MODE_BY[v] : null;
   CAL_VIEW = v;
   /* CMD-1008-05：KR 医院日程只有月 / 周；从本院日程的日视图切过来时自动变周视图（周含当天），切回本院日程保持周视图；「日」按钮在 KR 视角隐藏 */
   var dayBtn = document.getElementById('cal-sw-day'); if(dayBtn) dayBtn.style.display = v==='kr' ? 'none' : '';
   if(v==='kr' && CAL_MODE==='day'){ var dd = new Date(TODAY_DATE); dd.setDate(dd.getDate()+DAY_OFFSET); CAL_WEEK_FULL = true; CAL_ANCHOR = dd; WEEK_OFFSET = 0; DAY_OFFSET = 0; CAL_MODE = 'week'; ['month','week','day'].forEach(function(m){ var sw = document.getElementById('cal-sw-'+m), pn = document.getElementById('cal-'+m+'-view'); if(sw) sw.classList.toggle('active', m==='week'); if(pn) pn.style.display = m==='week' ? 'block' : 'none'; }); }
+  if(memo && memo!==CAL_MODE && !(v==='kr' && memo==='day')){ CAL_MODE = memo; ['month','week','day'].forEach(function(m){ var sw = document.getElementById('cal-sw-'+m), pn = document.getElementById('cal-'+m+'-view'); if(sw) sw.classList.toggle('active', m===memo); if(pn) pn.style.display = m===memo ? 'block' : 'none'; }); }
   document.getElementById('cal-view-in').classList.toggle('active', v==='in');
   document.getElementById('cal-view-kr').classList.toggle('active', v==='kr');
   var sel = document.getElementById('kr-dir-sel'), hsel = document.getElementById('kr-hosp-sel');
@@ -344,7 +348,7 @@ function krDayColHtml(ds, items, baseMin, closedFrom, lunch, closedBefore){
   var hatch = closedFrom ? '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(closedFrom)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;bottom:0;background:#F3F1EC;z-index:1;"></div>' : ''; /* 部分时段休诊：灰色斜纹 */
   var hatchB = closedBefore ? '<div title="医院休诊（半天营业）" style="position:absolute;left:0;right:0;top:0;height:'+Math.max(0, (timeToMin(closedBefore)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;z-index:1;"></div>' : '';
   var lunchBand = lunch ? '<div title="午休" style="position:absolute;left:0;right:0;top:'+((timeToMin(lunch.from)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;height:'+((timeToMin(lunch.to)-timeToMin(lunch.from))/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;color:var(--dim);font-size:10px;text-align:center;line-height:16px;z-index:0;">午休</div>' : ''; /* 午休：浅灰窄带，文字浅色（时间由韩国时间换算成页面时区的行） */
-  return '<div class="kr-daycol" data-ds="'+ds+'" onclick="krBookCellClick(\''+ds+'\',event,this,'+baseMin+')" style="cursor:cell;position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+lunchBand+hatch+hatchB+blocks+'</div>';
+  return '<div class="kr-daycol" data-ds="'+ds+'" onclick="krBookCellClick(\''+ds+'\',event,this,'+baseMin+')" onmousemove="krBookHover(this,event,'+baseMin+')" onmouseleave="krBookHoverOff(this)" style="cursor:cell;position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+lunchBand+hatch+hatchB+blocks+'</div>';
 }
 function krTimeColHtml(){
   return '<div>'+krRows().map(function(kr){ return '<div class="wk-time" style="height:'+KR_ROW_PX+'px;box-sizing:border-box;">'+krToPageTime(kr)+'<span class="kr">'+kr+'</span></div>'; }).join('')+'</div>';
@@ -488,19 +492,20 @@ function setCalMode(mode){
 function monthViewDate(){ return new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth()+MONTH_OFFSET, 1); }
 var CAL_NAV_ORIG = null;
 function updateCalNavLabel(){
-  /* CMD-1014-15 三：日视图工具列照 KR 的样式（‹ 日期（相对日子） › + ［今天］）；周 / 月视图还原原来的 ‹ 今天 › */
-  var nv = document.querySelector('.cal-nav');
-  if(nv){
-    if(CAL_NAV_ORIG===null) CAL_NAV_ORIG = nv.innerHTML;
-    if(CAL_MODE==='day'){
-      var dd = new Date(TODAY_DATE); dd.setDate(dd.getDate()+DAY_OFFSET); var dsx = dateStr(dd), rl = relDayLabel(DAY_OFFSET);
-      nv.innerHTML = '<button class="cal-nav-btn" onclick="calPrev()">‹</button><b class="cal-day-title" style="font-size:13px;white-space:nowrap;">'+dsx+' 周'+DOW_CN[dowOfDate(dsx)]+(rl ? '（'+rl+'）' : '')+'</b><button class="cal-nav-btn" onclick="calNext()">›</button><button class="cal-nav-btn cal-nav-today" onclick="calToday()">今天</button>';
-      nv.setAttribute('data-day','1');
-    } else if(nv.getAttribute('data-day')==='1'){ nv.innerHTML = CAL_NAV_ORIG; nv.removeAttribute('data-day'); }
+  /* CMD-1014-18 三·5：日 / 周 / 月工具列同一样式 ‹ 标题 › ［今天］。日「2026-10-14 周三（今天）」，周「10-12 ～ 10-18（本周）」，月「2026 年 10 月（本月）」（点月份弹选年月）；往外一周 / 一月只写日期 */
+  var nv = document.querySelector('.cal-nav'); if(!nv) return;
+  var title, clickAttr = '';
+  if(CAL_MODE==='day'){
+    var dd = new Date(TODAY_DATE); dd.setDate(dd.getDate()+DAY_OFFSET); var dsx = dateStr(dd), rl = relDayLabel(DAY_OFFSET);
+    title = dsx+' 周'+DOW_CN[dowOfDate(dsx)]+(rl ? '（'+rl+'）' : '');
+  } else if(CAL_MODE==='week'){
+    var st = getWeekStart(WEEK_OFFSET), en = new Date(st); en.setDate(st.getDate()+6), stS = dateStr(st), enS = dateStr(en), wl = relWeekLabel(stS, dateStr(TODAY_DATE));
+    title = stS.slice(5)+' ～ '+enS.slice(5)+(wl ? '（'+wl+'）' : '');
+  } else {
+    var md = monthViewDate(), ym = md.getFullYear()+'-'+pad2(md.getMonth()+1), ml = relMonthLabel(ym, dateStr(TODAY_DATE).slice(0,7));
+    title = md.getFullYear()+' 年 '+(md.getMonth()+1)+' 月'+(ml ? '（'+ml+'）' : ''); clickAttr = ' onclick="openMonthPicker()" title="选择年月" style="font-size:13px;white-space:nowrap;cursor:pointer;"';
   }
-  var b = document.querySelector('.cal-nav-today'); if(!b) return;
-  if(CAL_MODE==='month'){ var d = monthViewDate(); b.textContent = (d.getFullYear()!==TODAY_DATE.getFullYear() ? d.getFullYear()+'年' : '')+(d.getMonth()+1)+'月'; b.onclick = openMonthPicker; b.title = '选择年月'; }
-  else { b.textContent = '今天'; b.onclick = calToday; b.title = ''; }
+  nv.innerHTML = '<button class="cal-nav-btn" onclick="calPrev()">‹</button><b class="cal-day-title"'+(clickAttr || ' style="font-size:13px;white-space:nowrap;"')+'>'+title+'</b><button class="cal-nav-btn" onclick="calNext()">›</button><button class="cal-nav-btn cal-nav-today" onclick="calToday()">今天</button>';
 }
 function openMonthPicker(){
   var ov = document.getElementById('cal-month-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'cal-month-overlay'; ov.className = 'modal-overlay'; ov.onclick = function(e){ if(e.target===ov) ov.classList.remove('open'); }; document.body.appendChild(ov); }

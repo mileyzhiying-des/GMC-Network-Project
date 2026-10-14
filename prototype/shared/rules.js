@@ -742,4 +742,7 @@ function anesNeeded(c, items){
 
 /* CMD-1014-15 三：日视图标题的相对日子（前天 / 昨天 / 今天 / 明天 / 后天；再往外不写）：n = 距离今天的天数 */
 function relDayLabel(n){ return {'-2':'前天','-1':'昨天','0':'今天','1':'明天','2':'后天'}[String(n)] || ''; }
+/* CMD-1014-18：周 / 月标题后缀。周：这一周含今天 = 本周，往前一周 = 上周，往后一周 = 下周，再往外不写；月同理 */
+function relWeekLabel(startDs, todayDs){ var w = Math.floor(relDayDiff(todayDs, startDs) / 7); return {'0':'本周','1':'上周','-1':'下周'}[String(w)] || ''; }
+function relMonthLabel(ym, todayYm){ var a = parseInt(ym.slice(0,4),10)*12 + parseInt(ym.slice(5,7),10), b = parseInt(todayYm.slice(0,4),10)*12 + parseInt(todayYm.slice(5,7),10); return {'0':'本月','-1':'上个月','1':'下个月'}[String(a-b)] || ''; }
 function relDayDiff(ds, todayDs){ return Math.round((new Date(ds+'T00:00:00') - new Date(todayDs+'T00:00:00')) / 86400000); }

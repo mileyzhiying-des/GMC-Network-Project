@@ -42,8 +42,8 @@ function buildDayGridNew(){
   });
   var items = keep.map(function(e){ var s0 = Math.max(timeToMin(e.time), H0), e0 = Math.min(timeToMin(e.time)+calEventMinutes(e), H1); if(e0 <= s0) e0 = s0 + 20; return {e:e, s:s0, e_:e0, end:e0}; }).concat(moreItems);
   var lay = krLaneLayout(items.map(function(x){ return {s:x.s, e:x.end, x:x}; }));
-  var blocks = lay.map(function(r){ var x = r.it.x, w = 100 / r.n, top = (x.s - H0) * PX / 60, hgt = Math.max(18, (x.end - x.s) * PX / 60 - 2);
-    return '<div class="dayblk" style="position:absolute;left:calc('+(r.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;overflow:hidden;z-index:2;">'+(x.more ? '<div class="wk-more" onclick="event.stopPropagation();openSlotList(\''+ds+'\',\''+x.more.hr+'\')">+'+x.more.n+' 更多</div>' : eventChipHtml(x.e))+'</div>'; }).join('');
+  var blocks = lay.map(function(r){ var x = r.it.x, w = 100 / Math.max(Math.max(1, CLINIC_SETTINGS.slotCapacity||1), r.n), /* CMD-1014-18：每块宽 = 1 / 诊所「每个时段上限」 */ top = (x.s - H0) * PX / 60, hgt = Math.max(18, (x.end - x.s) * PX / 60 - 2);
+    return '<div class="dayblk" style="position:absolute;left:calc('+(r.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;overflow:hidden;z-index:2;">'+(x.more ? '<div class="wk-more" onclick="event.stopPropagation();openSlotList(\''+ds+'\',\''+x.more.hr+'\')">+'+x.more.n+' 更多</div>' : eventChipHtml(x.e,{day:true}))+'</div>'; }).join('');
   var lines = '', axis = '';
   for(var m = H0; m < H1; m += 60){ lines += '<div style="position:absolute;left:0;right:0;top:'+((m-H0)*PX/60)+'px;border-top:1px solid #f0ece3;"></div>'; axis += '<div style="height:'+PX+'px;box-sizing:border-box;border-top:1px solid #eee;font-size:11px;color:var(--slate2);padding:2px 6px 0 0;text-align:right;">'+minToTime(m)+'<span style="display:block;font-size:9px;color:var(--dim);">'+krTimeOf(minToTime(m))+'</span></div>'; }
   var open0 = timeToMin(CLINIC_SETTINGS.openTime), close0 = timeToMin(CLINIC_SETTINGS.closeTime);
@@ -52,7 +52,6 @@ function buildDayGridNew(){
   var lf = timeToMin(CLINIC_SETTINGS.lunchFrom), lt = timeToMin(CLINIC_SETTINGS.lunchTo);
   if(!closedDay && lt > lf) lines += '<div title="午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'" style="position:absolute;left:0;right:0;top:'+((lf-H0)*PX/60)+'px;height:14px;background:#F3F1EC;color:#b5b0a4;font-size:10px;text-align:center;pointer-events:none;z-index:1;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
   if(closedDay) lines += '<div style="position:absolute;inset:0;background:#F3F1EC;pointer-events:none;z-index:1;"></div>';
-  if(isToday && nowMin >= H0 && nowMin < H1) lines += '<div class="krc-nowframe" style="top:'+(Math.floor((nowMin-H0)/30)*30*PX/60)+'px;height:'+(PX/2)+'px;"></div>';
   var h = '<div class="wk-scroll"><div class="wk-grid" id="day-grid" style="grid-template-columns:64px minmax(0,1fr);position:relative;">'+
     '<div class="wk-corner">'+axisHeadHtml()+'</div>'+
     '<div class="wk-head'+(isToday?' today':'')+'">'+(d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(closedDay?'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>':'')+'</div>'+
@@ -104,7 +103,6 @@ function krfxDelete(){
 
 /* ---------------- KR / 院长：月视图照 IN（月份显示、点月份选年月 + 回到今天） ---------------- */
 function krcTodayBtnHtml(){
-  if(KRC.mode==='month'){ var a = krcAnchor(), y = parseInt(a.slice(0,4),10), m = parseInt(a.slice(5,7),10); return '<button class="btn-ghost" onclick="krcMonthPicker()" title="选择年月">'+((y!==parseInt(krToday().slice(0,4),10)) ? y+'年' : '')+m+'月</button>'; }
   return '<button class="btn-ghost" onclick="krcToday()">今天</button>';
 }
 function krcMonthPicker(){
@@ -125,6 +123,7 @@ function krcPickMonth(y, m){ KRC.anchor = y+'-'+pad2(m+1)+'-01'; document.getEle
 
 /* ---------------- KR / 院长：当前时段颜色框 + 图例 + ［＋memo］ ---------------- */
 function krcNowFrameHtml(){
+  return ''; /* CMD-1014-18：拿掉当前时段方框 */
   if(!newCalOn()) return '';
   var m = todoNowMinutes(); if(m < KRC_H0*60 || m >= KRC_H1*60) return '';
   var top = Math.floor((m - KRC_H0*60)/30) * 30 * KRC_PX / 60;

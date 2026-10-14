@@ -916,7 +916,7 @@
     /* 做完自动消失：把一个待确认报告时间的案件确认掉 → 待办没了 */
     var r0 = rows.filter(function(r){ return r.c.consultStatus==='paid_waiting_kr'; })[0]; if(r0){ ST.ok(K(r0,'eta'), '前置：有确认出报告时间待办'); var before = items.length; Store.mutateClinic(r0.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; coreConfirmConsultTimes(cc, todayStr(), '14:30', D(1)+' 05:00', ST.krBy); }); items = krTodoItems(krAllCases()); ST.ok(!items.some(function(i){ return i.rowKey===r0.clinicId+':'+r0.id && i.kind==='eta'; }), '确认之后待办自动消失'); }
     /* 今日院长日程未确认 */
-    var h = krHData(), had = (h.dayConfirm||{})[krToday()]; delete h.dayConfirm[krToday()]; ST.ok(krTodoItems(krAllCases()).some(function(i){ return i.kind==='dayconf'; }), '今日院长日程未确认应有待办'); h.dayConfirm[krToday()] = {by:'自测', at:nowFullDt()}; ST.ok(!krTodoItems(krAllCases()).some(function(i){ return i.kind==='dayconf'; }), '确认后消失'); if(!had) delete h.dayConfirm[krToday()];
+    ST.ok(!krTodoItems(krAllCases()).some(function(i){ return i.kind==='dayconf'; }) && !/确认今日院长日程/.test(document.body.innerText), 'CMD-1014-18：拿掉确认今日院长日程（待办 / 按钮）');
     ST.ok(KRC.mode==='day' || KRC.mode==='week' || KRC.mode==='month', 'KRC 模式'); ST.ok(todayHeldLineHtml({})==='' || true, '');
   });
   ST.def('TDK2','KR 弹出提示分类（KM1）',function(){
@@ -961,7 +961,7 @@
     if(!newCalOn()){ ST.ok(KRC_H0===8 && KRC_H1===20, '开关关闭：固定 08:00～20:00'); ST.ok(!/＋ memo/.test(cal) && !/术后到店/.test(cal), '开关关闭：没有 ＋memo / 新图例'); ST.ok(!document.querySelector('.krc-nowframe'), '开关关闭：没有时段框'); return; }
     ST.ok(KRC_H0===Math.floor((timeToMin(hr.open)-120)/60) && KRC_H1===Math.min(24, Math.ceil((timeToMin(hr.close)+120)/60)), '时间范围 = 医院营业时间前后 2 小时，实际 '+KRC_H0+'～'+KRC_H1);
     ST.ok(/＋ memo/.test(cal) && /固定栏/.test(cal) && /术后到店/.test(cal) && /面诊/.test(cal), '应有 ＋memo、固定栏、图例（面诊 / 术后到店）');
-    var today = krToday(); krcSet('mode','day'); KRC.anchor = today; krcRender(); ST.ok(!!document.querySelector('.krc-nowframe') || todoNowMinutes() < KRC_H0*60 || todoNowMinutes() >= KRC_H1*60, '今天那一列应有当前时段颜色框（现在在时间轴里时）');
+    var today = krToday(); krcSet('mode','day'); KRC.anchor = today; krcRender(); ST.ok(!document.querySelector('.krc-nowframe') || getComputedStyle(document.querySelector('.krc-nowframe')).display==='none', 'CMD-1014-18：当前时段方框已拿掉'); ST.ok(document.querySelectorAll('#kr-cal .todo-nowline span').length<=1, '现在线只有一个时间标签');
     /* memo：新增 → 显示在固定栏 → 修改 → 删除（只有作者） */
     var h = krHData(), n0 = krMemosOf().length, tx = 'T2自测memo'+Date.now()%1000;
     krfxOpen(); KRFX.type = '备忘'; KRFX.text = tx; KRFX.date = today; krfxSave(); ST.ok(krMemosOf().length===n0+1 && /T2自测memo/.test(krcFixedHtml(today, [])), 'memo 应出现在固定栏');
@@ -973,7 +973,7 @@
     /* 权限：院长只能改自己的；室长能改所有人 */
     var drs = hospitalDirectorNames(krHospitalIdOfMe()); drs.forEach(function(n){ ST.ok(krcCanEdit(n) === (krcIsDirector() ? n===me.name : true), me.id+' 对 '+n+' 的 OFF 修改权限'); });
     /* 月视图：月份显示 + 选年月 */
-    krcSet('mode','month'); ST.ok(/\d+月/.test(document.getElementById('kr-cal').innerText), '月视图应显示月份'); krcMonthPicker(); ST.ok(document.getElementById('krc-month-overlay').classList.contains('open'), '点月份应弹出选年月'); krcPickMonth(parseInt(today.slice(0,4),10), 0); ST.ok(KRC.anchor.slice(5,7)==='01', '应能选 1 月'); krcToday(); krcSet('mode','day');
+    krcSet('mode','month'); ST.ok(/\d+ 月/.test(document.getElementById('kr-cal').innerText), '月视图应显示月份'); krcMonthPicker(); ST.ok(document.getElementById('krc-month-overlay').classList.contains('open'), '点月份应弹出选年月'); krcPickMonth(parseInt(today.slice(0,4),10), 0); ST.ok(KRC.anchor.slice(5,7)==='01', '应能选 1 月'); krcToday(); krcSet('mode','day');
     ST.ok(krHoldCard.toString().indexOf('krHuOpen')<0 && krHoldCard.toString().indexOf('安排使用')<0, 'KR 在韩持有不再有［安排使用］（规则变更，不带开关）');
   });
   ST.def('CAL3','KR 待办：院长上传面诊内容 / KR 等院长上传（已超时）+ 两个 bug（KM1 / KD1 分页）',function(){

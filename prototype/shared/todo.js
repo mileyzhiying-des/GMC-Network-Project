@@ -112,7 +112,6 @@ function krTodoItems(rows){
     if(work && b.status==='pending') out.push(todoMk('bkconf', '确认预约时间（'+krbPurposeText(b.purpose)+'）· '+cn, null, b.date+' '+b.time, false, function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
     if(b.status==='confirmed' && b.date===today && (work || (isKrDirectorLike(meB) && b.director===meB.name))) out.push(todoMk('today', '今天到店：预约 · '+krbPurposeText(b.purpose), null, b.date+' '+b.time, false, function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
   }); }catch(e){}
-  if(work && !isDir && h && !(h.dayConfirm||{})[today]) out.push(todoMk('dayconf', '今日院长日程未确认', null, today, false, function(){ krScrollCal(); }));
   try{ krNotifUnread().forEach(function(n){ if(n.kind==='mention' || n.kind==='missedcall' || /@ 了你|未接来电/.test(n.text||'')) out.push(todoMk('stay', tzRender(n.text), null, '', false, function(){ krOpenNotif(n.id); })); }); }catch(e){}
   return out;
 }
@@ -325,9 +324,9 @@ function todoDayDivider(){
   if(before) box.insertBefore(d, before); else box.appendChild(d);
 }
 function todoKrNowTick(){
-  document.querySelectorAll('.krc-nowline').forEach(function(el){
+  document.querySelectorAll('.krc-nowline').forEach(function(el, i){
     var m = todoNowMinutes(), top = (m - KRC_H0*60) * KRC_PX / 60;
-    el.style.display = (m < KRC_H0*60 || m >= KRC_H1*60) ? 'none' : ''; el.style.top = top+'px'; el.innerHTML = '<span>'+todoNowLabel()+'</span>';
+    el.style.display = (m < KRC_H0*60 || m >= KRC_H1*60) ? 'none' : ''; el.style.top = top+'px'; el.innerHTML = i===0 ? '<span>'+todoNowLabel()+'</span>' : ''; /* CMD-1014-18：一条线横贯所有栏，只有第一栏写时间标签 */
   });
 }
 function todoNowLineHtml(){ /* kr.js 的 krcGridHtml 在今天那一列里调用 */
