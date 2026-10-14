@@ -595,3 +595,6 @@ prototype/shared/app.css  共用样式
 - **KR 案件列表**（含院长账号，同一个 `krRenderCaseRows`）：「状态」拆成「阶段」（徽章，`caseStageInfo(r.c).stage`，颜色同 IN）+「进程」（`caseStageInfo(r.c).proc` 一般文字 + 在韩后续标签 + 原来徽章下面的小字 `krSubHtml` / 今天到店）；其他栏位、tab、筛选、排序不动。
 - **IN 客户管理列表**（`renderClientRows`，in.html 表头）、**KR 客人管理列表**（`krClientListHtml` / 新函数 `krCliStageProc`）：「当前进度 / 状态」拆成阶段 + 进程，**只列进行中（未结束）的案件**，一位客人有多个进行中案件就一行叠几行；没有进行中案件两栏都显示「—」，不再显示最后一个已结束案件的状态。IN 的财务栏照旧读最近一个案件（`clientCaseStatus`）。
 - ④ 数据卡数字：`todoCardHtml` 加 `data-warn`，新样式下有超时项（`warn`）才红，没超时用正文色 `text-body`，0 = 灰；「待我处理」> 0 仍是驼色 + 左细条。⑤ 客人预约页选中态（语言切换 / 日期 / 时段 / 单选 / 首页大卡）= 浅驼底 #F6E9DE + 驼色字 + 驼色细框，CSS 在 `dstyle.js`（用 `!important` 盖过 `booking.html` 自带样式）；旧样式恢复黑底。
+
+## CMD-1014-10 补充（2026-10-14，追加；旧文字保留作历史）
+- 基准 8cf07ae，**两个提交**，数据版本不变（42）。**（一）** 新样式开关下只换颜色：`#kr-cal` 白底卡片（白底 + `border-default` + 圆角 8 + 内边距 16，工具列 / 图例 / 日历 / 说明都在里面）；日视图不染今天（`#day-grid .wk-head.today` 透明；KR 的今天表头 / 列类名 `krc-head-today` / `krc-col-today` 只在多天视图加）；不可预约块（KR `krc-busy`、IN 的 KR 医院日程 `kr-busy`）= `bg-hover` + 1px `border-strong` + 次要文字色；客人预约页 `.bk-btn`（非 ghost / danger）改 `action-primary`（hover `action-primary-hover`）、进度条驼色。**（二）** 不带开关、改版面高度：待办栏和日历一样高——`#cal-todo-wrap` 在「日历对齐」开着时 `align-items:stretch`，`.todo-box`（带 `width:auto` 的）绝对定位铺满待办栏（不撑高那一行），标题行固定、`.todo-list` 在框内滚动；收起行为不变。

@@ -327,6 +327,10 @@ body.kr-recwin #kr-rec-overlay .modal-box, body.kr-recwin #kr-pcb-overlay .modal
 
 /* ===== CMD-1013-17 待办栏 / 现在时间线（只新增；开关 newTodoOn() 关闭时这些元素不会出现） ===== */
 #todo-pane{flex-shrink:0;}
+/* CMD-1014-10 五：待办栏和日历一样高——待办框绝对定位铺满待办栏（不撑高那一行），标题行固定、列表在框内滚动；只在「日历对齐」开关开着（框带 width:auto）时生效 */
+#todo-pane{position:relative;}
+#todo-pane > .todo-box[style*="width:auto"]{position:absolute;inset:0;max-height:none;}
+#todo-pane > .todo-box[style*="width:auto"] .todo-list{min-height:0;}
 .todo-box{width:300px;background:#fff;border:1px solid var(--border2,#E9E5DC);border-radius:12px;padding:12px 14px;box-sizing:border-box;max-height:calc(100vh - 220px);display:flex;flex-direction:column;}
 .todo-head{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;}
 .todo-seg{margin-left:auto;display:inline-flex;border:1px solid var(--border2,#E9E5DC);border-radius:14px;overflow:hidden;font-size:11px;}
