@@ -589,3 +589,9 @@ prototype/shared/app.css  共用样式
 
 ## CMD-1014-08 补充（2026-10-14，追加；旧文字保留作历史）
 - **颜色角色重新分配**（只换颜色，挂 07 的「新样式」开关，旧样式全部恢复；基准 ecb41cd；数据版本不变 42）：`--bg-page` 改 #F7F4EE；侧栏选中 = 底 `bg-sidebar` + 驼色字 / 圆点 + 粗体；今天表头（IN `.wk-head.today`、KR `.krc-head-today`）= `bg-brand-subtle` + 驼色字 + 底部 2px inset 细线，今天那一列格子 `bg-brand-faint`（IN 周视图格子加 `wk-tcol` 类、KR 今天列加 `krc-col-today` 类，旧样式下没有样式）；分段切换选中（`.cal-switch` / `.todo-seg` / `.chip` / KR 里行内 `background:var(--navy)` 的按钮）= 白底 + 驼色字 + 细框；现在时间线驼色；数据卡数字（`todoCardHtml` 加 `data-n` / `.ds-cnum`）0 = 灰、「待我处理」>0 = 驼色 + 左侧 2px inset 细条、其他警示保持红；休诊 / 午休 / 不可预约（`#F3F1EC`、`#EFEBE4`）→ `bg-sidebar`。所有样式在 `shared/dstyle.js` 的 `extra` 里，加新「选中 / 当前」状态时用同一套语义变量。
+
+## CMD-1014-09 补充（2026-10-14，追加；旧文字保留作历史）
+- 基准 56e9505，单独一个提交，数据版本不变（42）。①②③ 不带开关，④⑤ 挂在 07 的「新样式」开关下。
+- **KR 案件列表**（含院长账号，同一个 `krRenderCaseRows`）：「状态」拆成「阶段」（徽章，`caseStageInfo(r.c).stage`，颜色同 IN）+「进程」（`caseStageInfo(r.c).proc` 一般文字 + 在韩后续标签 + 原来徽章下面的小字 `krSubHtml` / 今天到店）；其他栏位、tab、筛选、排序不动。
+- **IN 客户管理列表**（`renderClientRows`，in.html 表头）、**KR 客人管理列表**（`krClientListHtml` / 新函数 `krCliStageProc`）：「当前进度 / 状态」拆成阶段 + 进程，**只列进行中（未结束）的案件**，一位客人有多个进行中案件就一行叠几行；没有进行中案件两栏都显示「—」，不再显示最后一个已结束案件的状态。IN 的财务栏照旧读最近一个案件（`clientCaseStatus`）。
+- ④ 数据卡数字：`todoCardHtml` 加 `data-warn`，新样式下有超时项（`warn`）才红，没超时用正文色 `text-body`，0 = 灰；「待我处理」> 0 仍是驼色 + 左细条。⑤ 客人预约页选中态（语言切换 / 日期 / 时段 / 单选 / 首页大卡）= 浅驼底 #F6E9DE + 驼色字 + 驼色细框，CSS 在 `dstyle.js`（用 `!important` 盖过 `booking.html` 自带样式）；旧样式恢复黑底。

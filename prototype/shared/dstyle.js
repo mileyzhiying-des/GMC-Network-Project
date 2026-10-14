@@ -112,9 +112,12 @@
     'button[style*="background:var(--navy)"]{background:var(--bg-surface) !important;color:var(--action-primary) !important;border-color:var(--border-default) !important;}'+
     'div[style*="background:var(--navy);color:#fff"]{background:var(--bg-brand-subtle) !important;color:var(--action-primary) !important;}'+
     '.todo-nowline{border-top-color:var(--action-primary);} .todo-nowline span{background:var(--action-primary);}'+
-    '.card[data-n] .ds-cnum{color:var(--text-body);} .card[data-n="0"] .ds-cnum{color:var(--text-placeholder) !important;}'+
+    '.card[data-n]:not([data-warn]) .ds-cnum{color:var(--text-body) !important;} .card[data-n="0"] .ds-cnum.ds-cnum:not(.x):not(.y){color:var(--text-placeholder) !important;}'+ /* CMD-1014-09：有超时才红，没超时正文色；0 = 灰 */
     '.card[onclick*="todoCardFilter(\'todo\')"]:not([data-n="0"]){border-color:var(--border-default) !important;box-shadow:inset 2px 0 0 var(--action-primary);} .card[onclick*="todoCardFilter(\'todo\')"]:not([data-n="0"]) .ds-cnum{color:var(--action-primary) !important;}'+
     '.wk-cell.wk-lunch,.wk-cell.wk-lunch.wk-cell-open:hover,.wk-lunchbar{background:var(--bg-sidebar);}'+
+    /* CMD-1014-09 客人预约页选中态改驼色（浅驼底 + 驼色字 + 驼色细框）：语言切换 / 日期 / 时段 / 单选 / 首页大卡 */
+    '.bk-lang button.on,.bk-day.on,.bk-slot.on{background:var(--bg-brand-subtle) !important;color:var(--action-primary) !important;border-color:var(--action-primary) !important;font-weight:700;} .bk-radio.on{border-color:var(--action-primary) !important;background:var(--bg-brand-faint) !important;}'+
+    '.bk-btn[style*="padding:18px 16px"]:not(.ghost){background:var(--bg-brand-subtle);color:var(--action-primary);box-shadow:inset 0 0 0 1px var(--action-primary);}'+
     '.ds-ic{position:relative;display:inline-flex;width:1.15em;height:1.15em;vertical-align:-0.2em;align-items:center;justify-content:center;} .ds-ic svg{width:100%;height:100%;} .ds-ic-t{position:absolute;width:0;height:0;overflow:hidden;font-size:0;opacity:0;}';
   document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">'+'<style id="ds-css">'+css+root+extra+'</style>');
 })();
