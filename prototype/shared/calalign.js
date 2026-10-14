@@ -75,14 +75,14 @@ function calDayClick(ds, e, el){
 function krMemosOf(){ var h = krHData(); if(!h) return []; h.memos = h.memos || []; return h.memos; }
 function krMemosOn(ds){ var me = currentAccount(); return krMemosOf().filter(function(m){ return m.date===ds && (m.scope!=='私人' || m.by===me.id); }); }
 /* 固定栏单元格：OFF 标签（带［修改］）+ memo；有权限的才有［修改］，不再点标签直接删除 */
-function krcFixedHtml(ds, offs){
+function krcFixedHtml(ds, offs, memoPred){
   var out = '', me = currentAccount();
   offs.forEach(function(o){
     if(!o.id) o.id = 'off'+Date.now()+Math.floor(Math.random()*1000);
     var can = krcCanEdit(o.who);
     out += '<span class="krfx off" title="OFF">OFF · '+krEsc(o.who)+krcOffPartText(o)+(can ? ' <a href="#" onclick="krfxEditOff(\''+o.id+'\');return false;">修改</a>' : '')+'</span>';
   });
-  krMemosOn(ds).forEach(function(m){
+  krMemosOn(ds).filter(function(m){ return !memoPred || memoPred(m); }).forEach(function(m){
     var mine = m.by===me.id;
     out += '<span class="krfx memo" title="'+krEsc(m.text)+'">'+(m.scope==='私人'?'🔒 ':'')+krEsc(m.text)+' <i>'+krEsc(m.author)+'</i>'+(mine ? ' <a href="#" onclick="krfxEditMemo(\''+m.id+'\');return false;">修改</a>' : '')+'</span>';
   });
