@@ -604,3 +604,8 @@ prototype/shared/app.css  共用样式
 - **修的 bug（commit 20c30ad）**：工作台「待预约（KR 请帮忙预约术后管理）」`#dash-subbook-card` 和「术后管理已过建议日期」`#dash-pcdue-card` 只在事件（预约后 / 做术后管理 / 拒绝来电）时才渲染，**刷新页面后消失**（冷启动检查没覆盖）。现在 `boot-in.js` 初始化列表和 `ui.js` `refreshView` 都会渲染。数据版本不变（42）。
 - **测试方法教训**：在 in.html 里 `gmcResetAll` 后直接跳转，旧页面离开时会把内存里的旧数据**再存回去**，所以「重置」不干净（案件数 114 而不是 20，S31 / A3 因此失败）。**正确做法：先到 login.html 执行 `gmcResetAll(...)`，再进 in.html?demo=A1**，开头检查 `CASE_ITEMS.length===20`。S31 / A3 在脏数据上会失败（S31 的「T2自测项目」重名、A3 的 19:00 时段被占满），不是程序问题。
 - 测试顺序提醒：CAL2 要在工作台页面上跑（前面 S36 / TDK 之后要先 `nav('kr-dashboard')`），否则「当前时段框 / 月份」会失败；S41 要先 A1、再 KM1。
+
+## CMD-1014-12 补充（2026-10-14，追加；旧文字保留作历史）
+- 基准 2c78e61（20c30ad 之后）；两个提交，数据版本不变（42）。**（二）890cac4 用语「代偿」→「置换」**：画面、Timeline、通知、提示文字、持有批次标签、客户详情「置换额度」、［用置换额度换项目］、结算单「赴韩定金转本地置换」全部改了；变量名（`c.comp`、`compFinalize`、`compSum` 等）不改；覆盖页 H1 同时认旧记录里的「代偿」；selftest CP1/CP2 断言跟着改。**用户已有的旧 Timeline 文字里的「代偿」不会自动改（存档里的历史文字）**；以后新写文案一律用「置换」。
+- **（一）58cc16b 视觉修正**（`dstyle.js` 新样式 CSS，旧样式不受影响）：时间轴副文字（`font-size:9px;color:var(--dim)` 的 inline 样式、`.wk-time.empty`、`.wk-time .kr`）、`.wk-lunchbar` 和 `[title^="午休"]` 提到对比度 ≥3:1；`.sidebar-foot`、IN 项目库「只读」同；KR 院长管理头像首字母加 class `ds-avl`（深色字）；KR 周视图休诊窄列表头新样式下写「休诊」+ 悬停 title 显示「MM-DD 医院休诊」（`kr.js` `krcGridHtml`）；`.todo-nowline` z-index 30/31。**IN 日视图「+N 更多」（不挂开关，在 `calalign.js` `buildDayGridNew`）**：同一 30 分钟时段超过 3 个事件只画前 3 个 + 一个「+N 更多」块（占该时段的车道，点开 `openSlotList`），规则同周视图。
+- 没做（不在范围）：KR 周视图 / 工作台固定栏空格的「—」对比度 1.51（`color:#ccc`，旧路径里的占位）、IN 日视图块在大量重叠时仍很窄（正常数据影响不大）。
