@@ -124,6 +124,12 @@
     '.krc-busy,.kr-busy{background:var(--bg-hover) !important;border:1px solid var(--border-strong) !important;color:var(--text-secondary) !important;}'+
     /* ④客人预约页主按钮 / 进度条改驼色 */
     '.bk-btn:not(.ghost):not(.danger){background:var(--action-primary) !important;color:var(--text-on-action) !important;} .bk-btn:not(.ghost):not(.danger):hover{background:var(--action-primary-hover) !important;} .bk-bar span{background:var(--action-primary) !important;}'+
+    /* CMD-1014-12 视觉修正（新样式）：①时间轴副文字 / 午休文字提到 ≥3:1 ②侧栏底部 / 项目库「只读」 ③KR 院长头像首字母改深色 ⑥「现在」标签放最上层 */
+    '[style*="font-size:9px;color:var(--dim)"]{color:var(--text-placeholder) !important;} [title^="午休"]{color:var(--text-secondary) !important;}'+
+    '.sidebar-foot{color:var(--text-placeholder);} #in-projectlibrary [style*="font-size:11px;color:var(--dim)"]{color:var(--text-placeholder) !important;}'+
+    '.ds-avl{color:var(--text-primary) !important;}'+
+    '.wk-time.empty,.wk-time .kr,.wk-lunchbar{color:var(--text-placeholder);}'+
+    '.todo-nowline{z-index:30;} .todo-nowline span{z-index:31;}'+
     '.ds-ic{position:relative;display:inline-flex;width:1.15em;height:1.15em;vertical-align:-0.2em;align-items:center;justify-content:center;} .ds-ic svg{width:100%;height:100%;} .ds-ic-t{position:absolute;width:0;height:0;overflow:hidden;font-size:0;opacity:0;}';
   document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">'+'<style id="ds-css">'+css+root+extra+'</style>');
 })();

@@ -32,10 +32,18 @@ function buildDayGridNew(){
   var ds = dateStr(d), closedDay = isRescheduleDateDisabled(d), hrs = calHours(), H0 = timeToMin(hrs[0]), H1 = timeToMin(hrs[hrs.length-1]) + SLOT_MIN, PX = CAL_DAY_PX;
   var evs = calendarEvents().filter(function(e){ return e.date===ds && !(e.kind==='reservation' && e.vstate==='预约取消'); });
   var nowD = demoNow(), nowMin = nowD.getHours()*60 + nowD.getMinutes(), isToday = ds===dateStr(nowD);
-  var items = evs.map(function(e){ var s0 = Math.max(timeToMin(e.time), H0), e0 = Math.min(timeToMin(e.time)+calEventMinutes(e), H1); if(e0 <= s0) e0 = s0 + 20; return {e:e, s:s0, e_:e0, end:e0}; });
+  /* CMD-1014-12：同一时段（30 分钟）事件超过 3 个时，和周视图同一规则：只画前 3 个 + "+N 更多"（点开看全部） */
+  var bySlot = {}; evs.forEach(function(e){ (bySlot[slotOf(e.time)] = bySlot[slotOf(e.time)] || []).push(e); });
+  var moreItems = [], keep = [];
+  Object.keys(bySlot).forEach(function(sl){
+    var g = bySlot[sl].sort(function(a,b){ return a.time.localeCompare(b.time) || ((a.kind==='placeholder')-(b.kind==='placeholder')) || String(a.name).localeCompare(String(b.name)); });
+    keep = keep.concat(g.slice(0,3));
+    if(g.length > 3){ var ms = Math.max(timeToMin(sl), H0); moreItems.push({more:{hr:sl, n:g.length-3}, s:ms, e_:ms+SLOT_MIN, end:Math.min(ms+SLOT_MIN, H1)}); }
+  });
+  var items = keep.map(function(e){ var s0 = Math.max(timeToMin(e.time), H0), e0 = Math.min(timeToMin(e.time)+calEventMinutes(e), H1); if(e0 <= s0) e0 = s0 + 20; return {e:e, s:s0, e_:e0, end:e0}; }).concat(moreItems);
   var lay = krLaneLayout(items.map(function(x){ return {s:x.s, e:x.end, x:x}; }));
   var blocks = lay.map(function(r){ var x = r.it.x, w = 100 / r.n, top = (x.s - H0) * PX / 60, hgt = Math.max(18, (x.end - x.s) * PX / 60 - 2);
-    return '<div class="dayblk" style="position:absolute;left:calc('+(r.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;overflow:hidden;z-index:2;">'+eventChipHtml(x.e)+'</div>'; }).join('');
+    return '<div class="dayblk" style="position:absolute;left:calc('+(r.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;overflow:hidden;z-index:2;">'+(x.more ? '<div class="wk-more" onclick="event.stopPropagation();openSlotList(\''+ds+'\',\''+x.more.hr+'\')">+'+x.more.n+' 更多</div>' : eventChipHtml(x.e))+'</div>'; }).join('');
   var lines = '', axis = '';
   for(var m = H0; m < H1; m += 60){ lines += '<div style="position:absolute;left:0;right:0;top:'+((m-H0)*PX/60)+'px;border-top:1px solid #f0ece3;"></div>'; axis += '<div style="height:'+PX+'px;box-sizing:border-box;border-top:1px solid #eee;font-size:11px;color:var(--slate2);padding:2px 6px 0 0;text-align:right;">'+minToTime(m)+'<span style="display:block;font-size:9px;color:var(--dim);">'+krTimeOf(minToTime(m))+'</span></div>'; }
   var open0 = timeToMin(CLINIC_SETTINGS.openTime), close0 = timeToMin(CLINIC_SETTINGS.closeTime);
