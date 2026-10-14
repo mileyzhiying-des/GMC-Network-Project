@@ -118,6 +118,12 @@
     /* CMD-1014-09 客人预约页选中态改驼色（浅驼底 + 驼色字 + 驼色细框）：语言切换 / 日期 / 时段 / 单选 / 首页大卡 */
     '.bk-lang button.on,.bk-day.on,.bk-slot.on{background:var(--bg-brand-subtle) !important;color:var(--action-primary) !important;border-color:var(--action-primary) !important;font-weight:700;} .bk-radio.on{border-color:var(--action-primary) !important;background:var(--bg-brand-faint) !important;}'+
     '.bk-btn[style*="padding:18px 16px"]:not(.ghost){background:var(--bg-brand-subtle);color:var(--action-primary);box-shadow:inset 0 0 0 1px var(--action-primary);}'+
+    /* CMD-1014-10 ①KR / 院长日历白底卡片 ②日视图不染今天 ③不可预约加深（新样式） */
+    '#kr-cal{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:8px;padding:16px;box-sizing:border-box;}'+
+    '#day-grid .wk-head.today{background:transparent !important;box-shadow:none !important;}'+
+    '.krc-busy,.kr-busy{background:var(--bg-hover) !important;border:1px solid var(--border-strong) !important;color:var(--text-secondary) !important;}'+
+    /* ④客人预约页主按钮 / 进度条改驼色 */
+    '.bk-btn:not(.ghost):not(.danger){background:var(--action-primary) !important;color:var(--text-on-action) !important;} .bk-btn:not(.ghost):not(.danger):hover{background:var(--action-primary-hover) !important;} .bk-bar span{background:var(--action-primary) !important;}'+
     '.ds-ic{position:relative;display:inline-flex;width:1.15em;height:1.15em;vertical-align:-0.2em;align-items:center;justify-content:center;} .ds-ic svg{width:100%;height:100%;} .ds-ic-t{position:absolute;width:0;height:0;overflow:hidden;font-size:0;opacity:0;}';
   document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">'+'<style id="ds-css">'+css+root+extra+'</style>');
 })();
