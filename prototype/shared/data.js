@@ -1361,7 +1361,7 @@ function localAddAllowed(c){
 }
 /* 手动［结束案件］：只在付定金之前；IN 一般室长 / 管理者 */
 function krDepositPaid(c){ return !!c.hasArrived || !!c.krProcedureDone || (c.settlementBatches||[]).some(function(b){ return b.status==='active' && (b.krDeposit||0)>0; }); }
-/* 赴韩项目全部取消（定金已退 / 转代偿）且没到院：回到面诊级，仍可手动结束 */
+/* 赴韩项目全部取消（定金已退 / 转置换）且没到院：回到面诊级，仍可手动结束 */
 function compAllKrGone(c){ return !c.hasArrived && !c.krProcedureDone && krAllItems(c).length>0 && krActiveItems(c).length===0; }
 function canEndCase(c){
   if(!newCloseOn() || !c || isEnded(c) || c.visitClosed || c.subState!=='arrived' || (krDepositPaid(c) && !compAllKrGone(c))) return false;
@@ -1369,8 +1369,8 @@ function canEndCase(c){
 }
 function caseWorkDone(c){ return !!c.krProcedureDone || (c.postcareUses||[]).length>0 || isLocalCtxWorkDone(c) || isLocalCtxWorkDone(c.localMgmt); }
 
-function refundSum(c){ return (c.refunds||[]).reduce(function(sum,r){ return sum+(r.amount||0); }, 0); } /* 财务净额用：含代偿（定金转了本地额度，赴韩定金净额为 0） */
-/* CMD-1014-05：代偿不算「退款」——案件标「代偿」，不出现「有退款」；退款显示 / 标记用 refundCashSum，代偿单独 compSum */
+function refundSum(c){ return (c.refunds||[]).reduce(function(sum,r){ return sum+(r.amount||0); }, 0); } /* 财务净额用：含置换（定金转了本地额度，赴韩定金净额为 0） */
+/* CMD-1014-05：置换不算「退款」——案件标「置换」，不出现「有退款」；退款显示 / 标记用 refundCashSum，置换单独 compSum */
 function refundCashSum(c){ return (c.refunds||[]).filter(function(r){ return !r.comp; }).reduce(function(sum,r){ return sum+(r.amount||0); }, 0); }
 function compSum(c){ return (c.refunds||[]).filter(function(r){ return r.comp; }).reduce(function(sum,r){ return sum+(r.amount||0); }, 0); }
 
@@ -1409,7 +1409,7 @@ function financeLabel(c){
     if(parts.length) t += ' ' + parts.join(' + ');
   }
   if(refundCashSum(c)>0) t += ' · 已退款 ' + formatCurrency(refundCashSum(c),'KRW');
-  if(compSum(c)>0) t += ' · 代偿 ' + formatCurrency(compSum(c),'KRW');
+  if(compSum(c)>0) t += ' · 置换 ' + formatCurrency(compSum(c),'KRW');
   return t;
 }
 
@@ -1529,7 +1529,7 @@ function financeCellHtml(c){
     if(pd.kr-ref>0) amt.push(formatCurrency(pd.kr-ref,'KRW'));
     if(pd.inn>0) amt.push(formatCurrency(pd.inn,'IDR'));
   } else if(f==='仅面诊费'){ amt.push(formatCurrency(consultFeeOf(c),'IDR')); }
-  var extra = (refundCashSum(c)>0 ? '<div style="font-size:11px;color:var(--terracotta);">退款 '+formatCurrency(refundCashSum(c),'KRW')+'</div>' : '')+(compSum(c)>0 ? '<div style="font-size:11px;color:#8F6F0C;">代偿 '+formatCurrency(compSum(c),'KRW')+'</div>' : '')+
+  var extra = (refundCashSum(c)>0 ? '<div style="font-size:11px;color:var(--terracotta);">退款 '+formatCurrency(refundCashSum(c),'KRW')+'</div>' : '')+(compSum(c)>0 ? '<div style="font-size:11px;color:#8F6F0C;">置换 '+formatCurrency(compSum(c),'KRW')+'</div>' : '')+
     ((c.holdingRefunds||[]).length ? '<div style="font-size:11px;color:var(--terracotta);" title="客户详情里持有批次的退款，记在当初购买的案件上">有退款 '+formatCurrency(holdingRefundSum(c),'IDR')+'（持有批次）</div>' : '')+
     (c.cancelReason==='仅办理退款' ? '<div style="font-size:11px;color:var(--terracotta);">有退款（本次到访只办理退款）</div>' : '');
   var head = f==='无收入' ? '<div style="font-size:12px;color:var(--slate2);">–</div>' : '<div style="font-size:12px;font-weight:700;">'+f+'</div>';
@@ -2953,7 +2953,7 @@ function localPurchaseHtml(c, scope, isAddition){
   var settleFn = scope==='lm' ? 'lmSettle()' : (isAddition ? 'confirmAddition()' : 'confirmProjectSelection()');
   var noBuyFn = scope==='lm' ? 'lmNoBuy()' : 'noPurchaseThisTime()';
   var settleOk = tot.paidCount && !tot.missingPrice, cp = compPending(c, scope), compBanner = '';
-  if(cp){ settleOk = settleOk && tot.total >= cp.credit; canNoBuy = false; compBanner = compBannerHtml(cp, tot.total, scope); } /* 代偿：一次换完、多退少补；不换用「之后再换」 */
+  if(cp){ settleOk = settleOk && tot.total >= cp.credit; canNoBuy = false; compBanner = compBannerHtml(cp, tot.total, scope); } /* 置换：一次换完、多退少补；不换用「之后再换」 */
   else compBanner = compUseBarHtml(c, scope);
   var settleBtn = '<button class="btn-primary" style="flex:1;'+(settleOk ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(settleOk ? 'onclick="'+settleFn+'"' : 'disabled')+'>结算</button>';
   var right = '<div class="sel-card"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+
@@ -3082,7 +3082,7 @@ function localBoughtHtml(c){
 (function(){
   if(typeof settlementCardHtml!=='function') return;
   var b0 = settlementCardHtml;
-  settlementCardHtml = function(c, b){ var h = b0.apply(this, arguments); return (b && b.compCredit) ? h+'<div style="font-size:12px;color:#8F6F0C;background:#FBF0C9;border-radius:8px;padding:8px 12px;margin-top:8px;">'+(b.compFrom ? '代偿额度（来源 '+b.compFrom+'）' : '赴韩定金转本地代偿')+'：−'+formatCurrency(b.compCredit,'IDR')+'；本次补付 '+formatCurrency(Math.max(0,(b.inTotal||0)-b.compCredit),'IDR')+'（买到的项目标「代偿」，不可退款）</div>' : h; };
+  settlementCardHtml = function(c, b){ var h = b0.apply(this, arguments); return (b && b.compCredit) ? h+'<div style="font-size:12px;color:#8F6F0C;background:#FBF0C9;border-radius:8px;padding:8px 12px;margin-top:8px;">'+(b.compFrom ? '置换额度（来源 '+b.compFrom+'）' : '赴韩定金转本地置换')+'：−'+formatCurrency(b.compCredit,'IDR')+'；本次补付 '+formatCurrency(Math.max(0,(b.inTotal||0)-b.compCredit),'IDR')+'（买到的项目标「置换」，不可退款）</div>' : h; };
 })();
 function settleTabHtml(c){
   var all = [];
@@ -3417,14 +3417,14 @@ function lmNoBuy(){
   afterLmFinished(c);
 }
 
-/* ===== CMD-1014-03 本地代偿：取消项目 / 无法协调时不退钱，赴韩定金转成本地项目额度（c.comp = {kwr, credit, scope, used}） =====
+/* ===== CMD-1014-03 本地置换：取消项目 / 无法协调时不退钱，赴韩定金转成本地项目额度（c.comp = {kwr, credit, scope, used}） =====
    额度 = 原本应退的韩元 × 汇率，必须一次用完（已选 ≥ 额度才能结算），超过的差额补付；买到的批次标 comp:true，不可退款。 */
 function compPending(c, scope){ return (c && c.comp && !c.comp.used && c.comp.scope===scope) ? c.comp : null; }
 function holdingBatchSet(c){ var out = []; getClientHoldings(c.name).forEach(function(h){ h.batches.forEach(function(b){ out.push(b); }); }); return out; }
 function compBannerHtml(cp, total, scope){
   var left = Math.max(0, cp.credit - total), extra = Math.max(0, total - cp.credit);
   var src = cp.fromCaseNo ? '（来源 '+cp.fromCaseNo+'）' : '（赴韩定金 '+formatCurrency(cp.kwr,'KRW')+' 转本地）';
-  return '<div class="card" style="padding:10px 14px;margin-bottom:10px;background:#FBF0C9;border-color:#E8D48A;font-size:12px;line-height:1.7;"><b>代偿额度 '+formatCurrency(cp.credit,'IDR')+'</b>'+src+' · 已选 '+formatCurrency(total,'IDR')+' · '+(left>0 ? '还剩 <b style="color:#C1454A;">'+formatCurrency(left,'IDR')+'</b>，请再加项目' : '需补付 <b>'+formatCurrency(extra,'IDR')+'</b>')+
+  return '<div class="card" style="padding:10px 14px;margin-bottom:10px;background:#FBF0C9;border-color:#E8D48A;font-size:12px;line-height:1.7;"><b>置换额度 '+formatCurrency(cp.credit,'IDR')+'</b>'+src+' · 已选 '+formatCurrency(total,'IDR')+' · '+(left>0 ? '还剩 <b style="color:#C1454A;">'+formatCurrency(left,'IDR')+'</b>，请再加项目' : '需补付 <b>'+formatCurrency(extra,'IDR')+'</b>')+
     '<br><span style="color:#8F6F0C;">额度不退钱：已选不到额度不能结算，要加项目凑够；超过额度补付差额；买到的项目不可退款。</span> <a href="#" class="info-link" onclick="compDefer(\''+scope+'\');return false;">之后再换</a></div>';
 }
 function compFinalize(c, cp, before, total, batchObj){
@@ -3433,49 +3433,49 @@ function compFinalize(c, cp, before, total, batchObj){
   cp.used = true; cp.usedAt = nowFullDt();
   if(batchObj){ batchObj.compCredit = cp.credit; batchObj.payExtra = extra; if(cp.fromCaseNo) batchObj.compFrom = cp.fromCaseNo; }
   if(cp.creditId){ var cl = clientByName(c.name), cr = cl && (cl.compCredits||[]).filter(function(x){ return x.id===cp.creditId; })[0]; if(cr){ cr.used = true; cr.usedCaseNo = c.caseNo; cr.usedAt = nowFullDt(); } }
-  logCaseEvent(c, actingName(), (cp.fromCaseNo ? '用代偿额度换项目（来源 '+cp.fromCaseNo+'）' : '赴韩定金转本地代偿')+'：额度 '+formatCurrency(cp.credit,'IDR')+(cp.fromCaseNo ? '' : '（定金 '+formatCurrency(cp.kwr,'KRW')+'）')+'；本次购买 '+formatCurrency(total,'IDR')+'，补付 '+formatCurrency(extra,'IDR')+'；买到的项目标「代偿」、不可退款');
+  logCaseEvent(c, actingName(), (cp.fromCaseNo ? '用置换额度换项目（来源 '+cp.fromCaseNo+'）' : '赴韩定金转本地置换')+'：额度 '+formatCurrency(cp.credit,'IDR')+(cp.fromCaseNo ? '' : '（定金 '+formatCurrency(cp.kwr,'KRW')+'）')+'；本次购买 '+formatCurrency(total,'IDR')+'，补付 '+formatCurrency(extra,'IDR')+'；买到的项目标「置换」、不可退款');
 }
-/* 之后再换：这次不买，额度存成客人的「代偿额度」（客户详情显示，不设期限、不可退款），下次来在本地管理里用 */
+/* 之后再换：这次不买，额度存成客人的「置换额度」（客户详情显示，不设期限、不可退款），下次来在本地管理里用 */
 function compDefer(scope){
   var c = getCurrentCase(); if(!c || !c.comp || c.comp.used) return;
   var cp = c.comp;
-  if(!confirm('这次先不换项目？代偿额度 '+formatCurrency(cp.credit,'IDR')+' 会留给客人，下次来可以换。')) return;
+  if(!confirm('这次先不换项目？置换额度 '+formatCurrency(cp.credit,'IDR')+' 会留给客人，下次来可以换。')) return;
   var cl = clientByName(c.name); if(cl){ cl.compCredits = cl.compCredits || []; }
   if(cp.creditId){ /* 来自客人已有的额度：放回去即可 */
-    c.comp = null; logCaseEvent(c, actingName(), '代偿额度 '+formatCurrency(cp.credit,'IDR')+'（来源 '+cp.fromCaseNo+'）这次先不换，仍留给客人');
+    c.comp = null; logCaseEvent(c, actingName(), '置换额度 '+formatCurrency(cp.credit,'IDR')+'（来源 '+cp.fromCaseNo+'）这次先不换，仍留给客人');
   } else {
     var id = 'cc'+Date.now()%1000000+Math.floor(Math.random()*100);
     if(cl) cl.compCredits.push({id:id, amount:cp.credit, kwr:cp.kwr, fromCaseId:c.id, fromCaseNo:c.caseNo, reason:cp.reason||'', date:todayStr(), used:false});
     cp.deferred = true; cp.used = true; cp.creditId = id;
-    logCaseEvent(c, actingName(), '代偿额度 '+formatCurrency(cp.credit,'IDR')+' 这次先不换，留给客人（客户详情「代偿额度」，不可退款，不设期限，下次来在本地管理里换项目）');
+    logCaseEvent(c, actingName(), '置换额度 '+formatCurrency(cp.credit,'IDR')+' 这次先不换，留给客人（客户详情「置换额度」，不可退款，不设期限，下次来在本地管理里换项目）');
   }
   if(scope==='lm'){ if(c.localMgmt && lmNothingYet(c.localMgmt)){ c.localMgmt = null; c.activeCaseTab = showKrTab(c) ? 'kr' : (c.consultRequested ? 'consult' : 'basic'); } }
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); if(typeof Store!=='undefined') Store.touch();
 }
 function clientCompCredits(name){ var cl = clientByName(name); return cl ? (cl.compCredits||[]).filter(function(x){ return !x.used; }) : []; }
-/* 新案件本地管理选购画面：客人有代偿额度时出现［用代偿额度换项目］ */
+/* 新案件本地管理选购画面：客人有置换额度时出现［用置换额度换项目］ */
 function compUseBarHtml(c, scope){
   if(compPending(c, scope) || (c.comp && !c.comp.used)) return '';
   var cr = clientCompCredits(c.name); if(!cr.length) return '';
-  return '<div class="card" style="padding:10px 14px;margin-bottom:10px;background:#FBF0C9;border-color:#E8D48A;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span>客人有代偿额度：'+cr.map(function(x){ return '<b>'+formatCurrency(x.amount,'IDR')+'</b>（来源 '+x.fromCaseNo+'）'; }).join('、')+'</span>'+
-    cr.map(function(x){ return '<button class="btn-outline" style="padding:4px 10px;font-size:12px;" onclick="compUseCredit(\''+x.id+'\',\''+scope+'\')">用代偿额度换项目</button>'; }).join('')+'</div>';
+  return '<div class="card" style="padding:10px 14px;margin-bottom:10px;background:#FBF0C9;border-color:#E8D48A;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span>客人有置换额度：'+cr.map(function(x){ return '<b>'+formatCurrency(x.amount,'IDR')+'</b>（来源 '+x.fromCaseNo+'）'; }).join('、')+'</span>'+
+    cr.map(function(x){ return '<button class="btn-outline" style="padding:4px 10px;font-size:12px;" onclick="compUseCredit(\''+x.id+'\',\''+scope+'\')">用置换额度换项目</button>'; }).join('')+'</div>';
 }
 function compUseCredit(creditId, scope){
   var c = getCurrentCase(); if(!c) return; var cl = clientByName(c.name), cr = cl && (cl.compCredits||[]).filter(function(x){ return x.id===creditId && !x.used; })[0]; if(!cr) return;
   c.comp = {kwr:cr.kwr, credit:cr.amount, reason:cr.reason, date:todayStr(), items:[], scope:scope, used:false, creditId:cr.id, fromCaseNo:cr.fromCaseNo};
-  logCaseEvent(c, actingName(), '选择用代偿额度换项目：'+formatCurrency(cr.amount,'IDR')+'（来源 '+cr.fromCaseNo+'）');
+  logCaseEvent(c, actingName(), '选择用置换额度换项目：'+formatCurrency(cr.amount,'IDR')+'（来源 '+cr.fromCaseNo+'）');
   buildCaseLog(c); renderCaseBody(c);
 }
-(function(){ /* 客户详情持有项目卡上方：代偿额度（不可退款） */
+(function(){ /* 客户详情持有项目卡上方：置换额度（不可退款） */
   var r0 = renderClientHoldings;
   renderClientHoldings = function(name){
     r0.apply(this, arguments);
     var cr = clientCompCredits(name), block = document.getElementById('detail-holdings-block'), el = document.getElementById('detail-holdings'); if(!cr.length || !block || !el) return;
     block.style.display = 'block';
-    el.innerHTML = cr.map(function(x){ return '<div style="border:1px solid #E8D48A;background:#FBF0C9;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:700;">代偿额度 '+formatCurrency(x.amount,'IDR')+'</div><div style="font-size:11px;color:#8F6F0C;">来源 '+x.fromCaseNo+'（'+x.date+'，赴韩定金 '+formatCurrency(x.kwr,'KRW')+' 转本地）· 不设期限 · 下次来在本地管理里换项目</div></div><span class="status-pill" style="background:#F3E3B5;color:#8F6F0C;font-size:11px;">不可退款</span></div>'; }).join('')+el.innerHTML;
+    el.innerHTML = cr.map(function(x){ return '<div style="border:1px solid #E8D48A;background:#FBF0C9;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:700;">置换额度 '+formatCurrency(x.amount,'IDR')+'</div><div style="font-size:11px;color:#8F6F0C;">来源 '+x.fromCaseNo+'（'+x.date+'，赴韩定金 '+formatCurrency(x.kwr,'KRW')+' 转本地）· 不设期限 · 下次来在本地管理里换项目</div></div><span class="status-pill" style="background:#F3E3B5;color:#8F6F0C;font-size:11px;">不可退款</span></div>'; }).join('')+el.innerHTML;
   };
 })();
-/* 退款弹窗选了「转本地项目（代偿）」之后：直接进本地管理 tab 的选购画面 */
+/* 退款弹窗选了「转本地项目（置换）」之后：直接进本地管理 tab 的选购画面 */
 function startCompPurchase(c, kwr, reason, names){
   var credit = Math.round(kwr * FX_RATES.KRW_IDR), partial = krActiveItems(c).length>0;
   c.comp = {kwr:kwr, credit:credit, reason:reason, date:todayStr(), items:names, scope:partial ? 'lm' : 'main', used:false};
@@ -3486,7 +3486,7 @@ function startCompPurchase(c, kwr, reason, names){
     c.krSchedule = null; c.localAsk = false; c.localTrack = true; c.entryChoicePending = true; c.projectEntryMode = 'new'; c.projectsLocked = false; c.recommended = []; c.projectOriginFilter = 'IN'; /* 赴韩项目都取消了：同一案件转本地案件，直接是选购画面（和「增加本地项目」同一套重置） */
   }
   c.activeCaseTab = 'localmgmt';
-  logCaseEvent(c, actingName(), '退款方式选「转本地项目（代偿）」：代偿额度 '+formatCurrency(credit,'IDR')+'（'+formatCurrency(kwr,'KRW')+' × '+FX_RATES.KRW_IDR+'），进入本地管理选购画面');
+  logCaseEvent(c, actingName(), '退款方式选「转本地项目（置换）」：置换额度 '+formatCurrency(credit,'IDR')+'（'+formatCurrency(kwr,'KRW')+' × '+FX_RATES.KRW_IDR+'），进入本地管理选购画面');
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 function lmSettle(){
@@ -3495,7 +3495,7 @@ function lmSettle(){
   if(!cart.length) return;
   if(cartTotals(cart).onlyService){ alert('서비스需搭配付费项目'); return; }
   var total = cart.reduce(function(s,it){ return s + inLineTotal(it); }, 0);
-  var cpL = compPending(c, 'lm'); if(cpL && total < cpL.credit){ alert('代偿额度不退钱：还剩 '+formatCurrency(cpL.credit-total,'IDR')+'，请再加项目'); return; }
+  var cpL = compPending(c, 'lm'); if(cpL && total < cpL.credit){ alert('置换额度不退钱：还剩 '+formatCurrency(cpL.credit-total,'IDR')+'，请再加项目'); return; }
   var beforeB = cpL ? holdingBatchSet(c) : null;
   var items = cart.map(function(it){ return {name:it.name, kind:it.kind||'project', qty:it.qty||1, price:it.price, unitPrice:it.unitPrice, discountPct:(it.discountPct===undefined||it.discountPct===null)?100:it.discountPct, itemNote:it.itemNote||'', promo:!!it.promoId, pkgItems:it.pkgItems, lineTotal:inLineTotal(it)}; });
   grantLocalItems(c, cart, today);
@@ -3513,7 +3513,7 @@ function lmSettle(){
 function confirmProjectSelection(){
   var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return;
   if(cartTotals(c.recommended).onlyService){ alert('서비스需搭配付费项目'); return; }
-  var cpM = compPending(c, 'main'); if(cpM && cartTotals(c.recommended).total < cpM.credit){ alert('代偿额度不退钱：还剩 '+formatCurrency(cpM.credit-cartTotals(c.recommended).total,'IDR')+'，请再加项目'); return; }
+  var cpM = compPending(c, 'main'); if(cpM && cartTotals(c.recommended).total < cpM.credit){ alert('置换额度不退钱：还剩 '+formatCurrency(cpM.credit-cartTotals(c.recommended).total,'IDR')+'，请再加项目'); return; }
   logCaseEvent(c, actingName(), '确认所选管理项目：'+c.recommended.map(function(it){ return it.name; }).join('、'));
   generateSettlementBatch(c);
   if(cpM){ var lb = c.settlementBatches[c.settlementBatches.length-1]; lb.compCredit = cpM.credit; }
