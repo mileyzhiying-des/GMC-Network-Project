@@ -42,6 +42,8 @@ function inTodoItems(){
     /* KR 已确认施术时间 → 转告客人（打开该案件的赴韩施术 tab 即视为已看到，见 todoMarkRelay） */
     if(scheduleState(c)==='Confirmed' && ks && c.relayTold !== (ks.confirmedDate+' '+ks.confirmedTime))
       push(todoMk('relay', 'KR 已确认施术时间：转告客人（'+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, todoInGo(c, 'kr')));
+    /* 确认客人日程有无变化：赴韩施术前 2 天出现（CMD-1014-01 二·3） */
+    if(newCalOn() && calNeedsRecheck(c)) push(todoMk('recheck', '确认客人日程有无变化（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, false, todoInGo(c, 'kr')));
     /* 请 IN 帮忙预约印尼术后管理 */
     (c.subItems||[]).forEach(function(s){ if(s.informed && !s.booked && !s.done && s.place!=='KR') push(todoMk('subbook', '请帮忙预约印尼术后管理：'+s.content, c, s.date||'', false, todoInGo(c, 'kr'))); });
     /* 待收款 */
@@ -73,6 +75,7 @@ function krTodoItems(rows){
     var goCase = function(tab){ return function(){ krShowCase(r.clinicId, r.id); krSetCaseTab(tab); }; };
     if(work){
       if(c.consultStatus==='paid_waiting_kr') push(todoMk('eta', '确认预计出报告时间', c, '', false, goCase('consult')));
+      if(newCalOn() && c.consultStatus==='awaiting_report' && !c.consultStartedAt && reportOverdueNow(c)) push(todoMk('waitdir', '等院长上传面诊（已超时）', c, todoEtaDue(c), true, goCase('consult')));
       if(c.consultStatus==='awaiting_report' && c.consultContentAt){ var over = reportOverdueNow(c); push(todoMk('send', '发送诊疗方案'+(over ? '（已超时）' : ''), c, todoEtaDue(c), over, goCase('consult'))); }
       if(c.urgedAt && ((c.consultStatus==='awaiting_report' && !c.reportReady) || c.consultStatus==='paid_waiting_kr' || scheduleState(c)==='Pending')) push(todoMk('urged', '被催办：请尽快处理', c, '', true, goCase(scheduleState(c)==='Pending' ? 'proc' : 'consult'), {pin:true}));
       if(c.stage==='travel' && scheduleState(c)==='Pending') push(todoMk('sched', '确认施术时间', c, (c.krSchedule||{}).primary||'', false, goCase('proc')));
@@ -80,6 +83,8 @@ function krTodoItems(rows){
       var pp = pendingPayItems(c); if(pp.length) push(todoMk('pay', '在韩加项待付款：'+pp.map(function(i){ return i.name; }).join('、'), c, '', false, goCase('proc')));
       if(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, goCase('proc')));
     }
+    /* 院长：上传面诊内容（面诊已安排、院长还没上传） */
+    if(newCalOn() && isDir && c.consultStatus==='awaiting_report' && !c.consultContentAt) push(todoMk('upload', '上传面诊内容', c, todoEtaDue(c), reportOverdueNow(c), goCase('consult')));
     /* 今天到院 / 到店（院长账号看自己的案件） */
     var ks = c.krSchedule;
     if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed)
@@ -98,9 +103,24 @@ function todoItems(){
 }
 function todoGroupOf(it){ if(it.over) return 0; if(it.due && it.due.slice(0,10) > todayStr()) return 2; return 1; }
 function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || (a.due||'9999').localeCompare(b.due||'9999'); }
-function todoVisible(items){
-  return items.filter(function(it){ return (!TODO_UI.mine || it.mine) && (!TODO_UI.kind || it.kind===TODO_UI.kind); });
+/* CMD-1014-01 二·1：点卡片 = 筛选待办栏（标题后出现「· 待我处理 ✕」，✕ 回到全部）；开关关闭时仍是 10/13 的 kind 相等判断 */
+var TODO_FILTERS = {
+  todo:   {label:'待我处理', fn:function(it){ return todoIsKr() ? it.kind!=='today' : true; }},
+  visit:  {label:'今天来访', fn:function(it){ return (it.due||'').slice(0,10)===todayStr(); }},
+  kr:     {label:'等 KR 回复', fn:function(it){ return ['urge','resched','relay','recheck'].indexOf(it.kind)>-1; }},
+  today2: {label:'今天到院 / 到店', fn:function(it){ return it.kind==='today'; }},
+  waiting:{label:'等待报告', fn:function(it){ return ['eta','send','urged','waitdir','upload'].indexOf(it.kind)>-1; }},
+  msg:    {label:'新消息', fn:function(it){ return it.kind==='stay'; }}
+};
+function todoKindOk(it){
+  if(!TODO_UI.kind) return true;
+  if(newCalOn() && TODO_FILTERS[TODO_UI.kind]) return TODO_FILTERS[TODO_UI.kind].fn(it);
+  return it.kind===TODO_UI.kind;
 }
+function todoVisible(items){
+  return items.filter(function(it){ return (!TODO_UI.mine || it.mine) && todoKindOk(it); });
+}
+function todoCardFilter(key){ todoCardOpen(key); TODO_UI.kind = key; todoSaveUi(); todoRefresh(); }
 
 /* ---------------- 待办栏 ---------------- */
 function todoRowHtml(it){
@@ -120,10 +140,11 @@ function todoPaneHtml(all){
     if(!list.length) return '';
     return '<div class="todo-group'+(g[0]===0?' over':'')+'">'+g[1]+' <span>'+list.length+'</span></div>'+list.map(todoRowHtml).join('');
   }).join('') || '<div class="todo-empty">现在没有待办</div>';
-  return '<div class="todo-box"><div class="todo-head"><b>待办 '+n+'</b>'+
+  var tag = (newCalOn() && TODO_UI.kind && TODO_FILTERS[TODO_UI.kind]) ? '<span class="todo-tag">· '+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></span>' : '';
+  return '<div class="todo-box"><div class="todo-head"><b>待办 '+n+'</b>'+tag+
     '<span class="todo-seg"><span class="'+(TODO_UI.mine?'':'on')+'" onclick="todoSetMine(false)">全部</span><span class="'+(TODO_UI.mine?'on':'')+'" onclick="todoSetMine(true)">只看我的</span></span>'+
     '<span class="todo-fold" onclick="todoToggle()" title="收起">⟩</span></div>'+
-    (TODO_UI.kind ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+
+    ((TODO_UI.kind && !tag) ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+
     '<div class="todo-list">'+body+'</div></div>';
 }
 var TODO_KIND_LABEL = {today:'今天到院 / 到店'};
@@ -177,10 +198,10 @@ function todoInCardsHtml(all){
   var waiting = CASE_ITEMS.filter(function(c){ return !isEnded(c) && c.subState!=='cancelled' && (['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1 || (c.stage==='travel' && ['Pending','Changing'].indexOf(scheduleState(c))>-1)); });
   var late = waiting.some(function(c){ return c.consultStatus==='awaiting_report' && reportOverdueNow(c); });
   var unread = 0; try{ unread = totalUnread(); }catch(e){}
-  return todoCardHtml('待我处理', all.length, '要你做的事（右边待办栏）', 'todoCardOpen(\'todo\');todoSetKind(\'\')', all.some(function(i){ return i.over; }), todoCardDot('todo', all.map(function(i){ return i.kind+i.no+i.text; })), '我的 <b>'+mine.length+'</b>')+
-    todoCardHtml('今天来访', vis.length, '今天的预约来访、赴韩施术（点一下看今天的日历）', 'todoShowToday()', false, false, '')+
-    todoCardHtml('等 KR 回复', waiting.length, '等 KR 确认出报告时间、等待报告、待确认施术时间；超时标红', 'filterCases(\'consult\');nav(\'in-cases\')', late, false, '')+
-    todoCardHtml('新消息', unread, '对话里的未读消息', 'todoDotClear(\'msg\');openDrawer()', false, todoCardDot('msg', todoCountIds(unread)), '');
+  return todoCardHtml('待我处理', all.length, '要你做的事（右边待办栏）', (newCalOn() ? 'todoCardFilter(\'todo\')' : 'todoCardOpen(\'todo\');todoSetKind(\'\')'), all.some(function(i){ return i.over; }), todoCardDot('todo', all.map(function(i){ return i.kind+i.no+i.text; })), '我的 <b>'+mine.length+'</b>')+
+    todoCardHtml('今天来访', vis.length, '今天的预约来访、赴韩施术（点一下看今天的日历）', (newCalOn() ? 'todoCardFilter(\'visit\')' : 'todoShowToday()'), false, false, '')+
+    todoCardHtml('等 KR 回复', waiting.length, '等 KR 确认出报告时间、等待报告、待确认施术时间；超时标红', (newCalOn() ? 'todoCardFilter(\'kr\')' : 'filterCases(\'consult\');nav(\'in-cases\')'), late, false, '')+
+    todoCardHtml('新消息', unread, '对话里的未读消息', (newCalOn() ? 'todoCardFilter(\'msg\')' : 'todoDotClear(\'msg\');openDrawer()'), false, todoCardDot('msg', todoCountIds(unread)), '');
 }
 function todoShowToday(){ if(typeof calToday==='function'){ DAY_OFFSET = 0; WEEK_OFFSET = 0; if(typeof setCalMode==='function') setCalMode('day'); calToday(); } var g = document.getElementById('cal-todo-wrap'); if(g) g.scrollIntoView({behavior:'smooth', block:'start'}); }
 /* KR 四张：待我处理 / 今天到院、到店 / 等待报告（超时标红）/ 新消息 */
@@ -196,12 +217,13 @@ function todoKrCardsHtml(rows){
   var cs = ['todo','today2','waiting'].map(function(k){ return KR_CARDS.filter(function(c){ return c.key===k; })[0]; });
   var html = cs.map(function(card){
     var h = krCardHtml(card, rows);
+    if(newCalOn()){ h = h.replace(/onclick="[^"]*"/, 'onclick="krCardMarkSeen(\''+card.key+'\');todoCardFilter(\''+card.key+'\')"'); if(card.key==='todo') h = h.replace(/<div style="font-size:28px[^>]*>\d+</, function(m){ return m.replace(/>\d+</, '>'+all.length+'<'); }); return h; }
     if(card.key==='todo') h = h.replace(/onclick="[^"]*"/, 'onclick="krCardMarkSeen(\'todo\');todoSetKind(\'\')"').replace(/<div style="font-size:28px[^>]*>\d+</, function(m){ return m.replace(/>\d+</, '>'+all.length+'<'); });
     if(card.key==='today2') h = h.replace(/onclick="[^"]*"/, 'onclick="krCardMarkSeen(\'today2\');todoSetKind(\'today\');todoKrToday()"');
     return h;
   }).join('');
   var unread = 0; try{ unread = krRoomList().reduce(function(s, r){ return s + r.unread; }, 0); }catch(e){}
-  html += todoCardHtml('新消息', unread, '对话里的未读消息', 'todoDotClear(\'krmsg\');krOpenDrawer()', false, todoCardDot('krmsg', todoCountIds(unread)), '');
+  html += todoCardHtml('新消息', unread, '对话里的未读消息', (newCalOn() ? 'todoCardFilter(\'msg\')' : 'todoDotClear(\'krmsg\');krOpenDrawer()'), false, todoCardDot('krmsg', todoCountIds(unread)), '');
   return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">'+html+'</div>';
 }
 function todoKrToday(){ if(typeof KRC!=='undefined'){ KRC.mode = 'day'; KRC.anchor = krToday(); KRC.person = 'all'; krcRender(); } }
@@ -210,7 +232,7 @@ function todoKrToday(){ if(typeof KRC!=='undefined'){ KRC.mode = 'day'; KRC.anch
 function todoNowLabel(){ var d = demoNow(); return pad2(d.getHours())+':'+pad2(d.getMinutes()); }
 function todoNowMinutes(){ var d = demoNow(); return d.getHours()*60 + d.getMinutes(); }
 function todoPlaceInLine(){
-  var grid = document.getElementById('wk-grid'); if(!grid || CAL_MODE!=='week') return;
+  var grid = document.getElementById(CAL_MODE==='day' ? 'day-grid' : 'wk-grid'); if(!grid || (CAL_MODE!=='week' && !(CAL_MODE==='day' && newCalOn()))) return;
   var old = grid.querySelector('.todo-nowline'); if(old) old.remove();
   var wkDays = grid.querySelectorAll('.wk-head'); var today = todayStr(), has = false;
   /* 本周里有今天才画（日期列头 today 标记） */
@@ -231,7 +253,7 @@ function todoPlaceInLine(){
 }
 function todoScrollToNow(line){
   var key = CAL_MODE+'|'+CAL_VIEW+'|'+WEEK_OFFSET; if(TODO_SCROLL_KEY===key) return;
-  var sc = document.querySelector('#cal-week-view .wk-scroll'); if(!sc || !sc.clientHeight) return; /* 工作台不在画面上（别的页面）时先不滚，等回到工作台再滚 */
+  var sc = line.closest('.wk-scroll'); if(!sc || !sc.clientHeight) return; /* 工作台不在画面上（别的页面）时先不滚，等回到工作台再滚 */
   TODO_SCROLL_KEY = key; sc.scrollTop = Math.max(0, line.offsetTop - sc.clientHeight/3);
 }
 function todoDayDivider(){
@@ -267,7 +289,7 @@ function todoRefresh(){
 /* renderCalendar() 末尾调用：日历重画后补上待办栏 + 现在时间线 */
 function todoAfterCalendar(){
   if(!newTodoOn() || todoIsKr()) return;
-  try{ todoRefresh(); if(CAL_MODE==='day') todoDayDivider(); else todoPlaceInLine(); }catch(e){ console.error('[待办日历]', e); }
+  try{ todoRefresh(); if(CAL_MODE==='day' && !newCalOn()) todoDayDivider(); else todoPlaceInLine(); }catch(e){ console.error('[待办日历]', e); }
 }
 function todoTick(){
   if(!newTodoOn()) return;
@@ -276,7 +298,7 @@ function todoTick(){
     if(CURRENT_PAGE_ID!=='in-dashboard') return;
     todoRefresh();
     var line = document.querySelector('.todo-nowline');
-    if(CAL_MODE==='week') todoPlaceInLine(); else if(CAL_MODE==='day') todoDayDivider();
+    if(CAL_MODE==='week' || (CAL_MODE==='day' && newCalOn())) todoPlaceInLine(); else if(CAL_MODE==='day') todoDayDivider();
   }catch(e){}
 }
 setInterval(todoTick, 30000);
@@ -292,7 +314,7 @@ function todoInBoot(){ if(!newTodoOn() || todoIsKr()) return; try{ if(typeof set
   var base = renderCaseBody;
   renderCaseBody = function(c){
     base.apply(this, arguments);
-    try{ if(newTodoOn() && !todoIsKr() && c && c.activeCaseTab==='kr' && scheduleState(c)==='Confirmed' && c.krSchedule){ var key = c.krSchedule.confirmedDate+' '+c.krSchedule.confirmedTime; if(c.relayTold!==key){ c.relayTold = key; Store.touch(); } } }catch(e){}
+    try{ if(newTodoOn() && !newCalOn() && !todoIsKr() && c && c.activeCaseTab==='kr' && scheduleState(c)==='Confirmed' && c.krSchedule){ var key = c.krSchedule.confirmedDate+' '+c.krSchedule.confirmedTime; if(c.relayTold!==key){ c.relayTold = key; Store.touch(); } } }catch(e){}
   };
 })();
 

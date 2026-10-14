@@ -20,6 +20,8 @@ function clientCaseStatus(entry){
    开关切换不动已存的案件状态，只影响之后的判断和显示。测试覆盖页顶部可切换。 */
 function newCloseOn(){ try{ return localStorage.getItem('gmc_cfg_newclose')!=='0'; }catch(e){ return true; } }
 /* CMD-1013-17：新待办 / 通知（试行）开关，存浏览器 gmc_cfg_newtodo（'0' = 关，默认开；gmc_cfg_ 前缀重置 / 版本升级都不清）；关 = 完全是 ed2a41d 的样子。测试覆盖页顶部切换，切换后刷新分页生效。 */
+/* CMD-1014-01：日历对齐 + 新待办 10/14 开关，存浏览器 gmc_cfg_newcal（'0' = 关，默认开；gmc_cfg_ 前缀重置 / 升级不清）；关 = f3c7ab4 的样子。测试覆盖页顶部切换，切换后原型分页刷新生效。 */
+function newCalOn(){ try{ return localStorage.getItem('gmc_cfg_newcal')!=='0'; }catch(e){ return true; } }
 function newTodoOn(){ try{ return localStorage.getItem('gmc_cfg_newtodo')!=='0'; }catch(e){ return true; } }
 function isEnded(c){ return c.stage==='closed' || c.stage==='reportonly' || c.stage==='cancelled'; }
 

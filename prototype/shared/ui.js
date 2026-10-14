@@ -408,7 +408,7 @@ function buildWeekGrid(){
   html += '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div>';
   days.forEach(function(dd){ html += '<div class="wk-memo">'+memoCellHtml(dateStr(dd))+'</div>'; });
   var lunchBarDone = false;
-  WK_HOURS.forEach(function(hr){
+  calHours().forEach(function(hr){ /* CMD-1014-01：开关开着时时间范围 = 营业时间前后各 2 小时 */
     var rowEvs = evs.filter(function(e){ return slotOf(e.time)===hr; });
     if(slotIsLunch(hr)){
       /* 午休：一条窄横条（读诊所设定）；午休时段里本周有日程的才另外显示那一行，没有就不占高度 */
@@ -452,6 +452,7 @@ function buildMonthGrid(){
 }
 
 function buildDayGrid(){
+  if(newCalOn()){ buildDayGridNew(); return; } /* CMD-1014-01：日视图改整天时间格 */
   var d = new Date(TODAY_DATE); d.setDate(d.getDate()+DAY_OFFSET);
   var ds = dateStr(d);
   var evs = calendarEvents().filter(function(e){ return e.date===ds && !(e.kind==='reservation' && e.vstate==='预约取消'); });
