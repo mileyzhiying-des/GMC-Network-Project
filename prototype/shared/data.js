@@ -494,7 +494,7 @@ function visitStateOf(c){
 function calendarEvents(){
   var evs = [];
   CASE_ITEMS.forEach(function(c){
-    if(c.visitDate && c.visitTime && !c.krVisit) evs.push({kind:'reservation', date:c.visitDate, time:c.visitTime, name:c.name, caseId:c.id, purpose:c.visitPurpose, vstate:visitStateOf(c), ended:isEnded(c)});
+    if(c.visitDate && c.visitTime && !c.krVisit) evs.push({kind:'reservation', date:c.visitDate, time:c.visitTime, name:c.name, caseId:c.id, purpose:c.visitPurpose, vstate:visitStateOf(c), ended:isEnded(c), cancelBy:c.cancelBy||''});
     var ks = c.krSchedule;
     if(ks && ks.confirmedDate && (ks.status==='confirmed' || ks.status==='arrived' || ks.status==='change_pending'))
       (function(){ var r = krToClinic(ks.confirmedDate, ks.confirmedTime||'14:00'); evs.push({kind:'travel', date:r.date, time:r.time, name:c.name, caseId:c.id, ended:isEnded(c)}); })(); /* KR 的到院时间换算成诊所时间 */
@@ -504,6 +504,9 @@ function calendarEvents(){
   return evs;
 }
 
+/* 日历上要不要藏掉这个事件：旧的预约取消（没记取消方）照旧消失；新取消（记了 cancelBy）划掉保留 */
+function calEvHidden(e){ return e.kind==='reservation' && e.vstate==='预约取消' && !e.cancelBy; }
+
 function eventChipHtml(e){
   var now = demoNow();
   var when = new Date(e.date+'T'+e.time+':00');
@@ -511,12 +514,13 @@ function eventChipHtml(e){
   var grey = (past && e.kind!=='placeholder') ? 'opacity:.5;filter:grayscale(1);' : ''; /* 只有已过去 / 已结束的事件块是灰色，灰色块照样可以点开；超时/取消的占位从日历消失（在预约历史记录里看） */
   var l1, l2, onclick;
   if(e.kind==='reservation'){
-    l1 = e.vstate==='未到店' ? '<s>'+e.name+'</s>' : e.name;
-    l2 = (e.purpose||'')+(e.vstate==='已到访' ? '（已到访）' : '')+(e.vstate==='未到店' ? ' 未到店' : '');
+    l1 = (e.vstate==='未到店' || e.vstate==='预约取消') ? '<s>'+e.name+'</s>' : e.name;
+    l2 = (e.purpose||'')+(e.vstate==='已到访' ? '（已到访）' : '')+(e.vstate==='未到店' ? ' 未到店' : '')+(e.vstate==='预约取消' ? (e.cancelBy==='客人' ? ' 客人取消预约' : ' 预约取消') : '');
+    if(e.vstate==='预约取消') grey = 'opacity:.5;filter:grayscale(1);';
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     if(e.vstate==='待访问' && past){
       var left = when.getTime() + noShowMs() - now.getTime();
-      if(left > 0){ grey = ''; l2 += ' <b data-visit-countdown="'+when.getTime()+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; } /* 30 分钟内未到访：保持亮色+倒计时 */
+      if(left > 0){ grey = ''; l2 += ' <b data-visit-countdown="'+when.getTime()+'" data-visit-case="'+(e.caseId||'')+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; } /* 30 分钟内未到访：保持亮色+倒计时 */
     }
     onclick = e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)';
   } else if(e.kind==='travel'){
@@ -727,7 +731,7 @@ function customerCanCancel(c){ return c.stage==='booked' && c.subState==='waitin
 function customerCancelCase(caseId){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
   if(!c || !customerCanCancel(c)) return {ok:false};
-  c.subState = 'cancelled'; c.cancelReason = '预约取消';
+  c.subState = 'cancelled'; c.cancelReason = '预约取消'; c.cancelBy = '客人'; /* CMD-1014-18：日历上划掉并写「客人取消预约」 */
   updateCaseStage(c);
   logCaseEvent(c, '客人', '客人自行取消预约（原 '+c.visitDate+' '+c.visitTime+'）');
   var n = pushNotif('预约', '客人取消预约：'+c.name+'（'+c.caseNo+'）原 '+dateLabel(c.visitDate)+' '+c.visitTime, {caseId:c.id, names:workingIN()});

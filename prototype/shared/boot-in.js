@@ -47,6 +47,8 @@ setInterval(function(){
   CASE_ITEMS.forEach(function(c){ if(c.consultStatus==='awaiting_report' && !c.overdueNotified && reportOverdueNow(c)){ c.overdueNotified = true; pushNotif('面诊','等待报告超过预计时间：'+c.name+'（预计 '+tkU(c.reportEta)+'）', {caseId:c.id}); } });
   try{ if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID){ var cu = getCurrentCase(), su = !!(cu && urgeInfo(cu)); if(su!==window.__urgeShown){ window.__urgeShown = su; if(cu) renderCaseStatusBar(cu); } } }catch(e){} /* 到点出现［催办］ */
   document.querySelectorAll('[data-visit-countdown]').forEach(function(el){
+    var vc = CASE_ITEMS.filter(function(x){ return x.id===el.getAttribute('data-visit-case'); })[0]; /* 案件已取消 / 已到店就不再倒计时（CMD-1014-18） */
+    if(vc && visitStateOf(vc)!=='待访问'){ el.textContent = visitStateOf(vc)==='预约取消' ? (vc.cancelBy==='客人' ? '客人取消预约' : '预约取消') : visitStateOf(vc); return; }
     var left = parseInt(el.getAttribute('data-visit-countdown'),10) + noShowMs() - demoNow().getTime();
     el.textContent = left>0 ? Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒' : '已超时';
   });

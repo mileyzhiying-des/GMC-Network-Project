@@ -7,7 +7,7 @@ var CURRENT_PAGE_ID = 'in-dashboard';
 
 /* 这个时段的完整日程列表（周视图格子里超过 3 个时点"+N 更多"）：每项可点进案件/占位 */
 function openSlotList(ds, hr){
-  var evs = calendarEvents().filter(function(e){ return e.date===ds && slotOf(e.time)===hr && !(e.kind==='reservation' && e.vstate==='预约取消'); }).sort(function(a,b){ return a.time.localeCompare(b.time) || ((a.kind==='placeholder')-(b.kind==='placeholder')) || String(a.name).localeCompare(String(b.name)); });
+  var evs = calendarEvents().filter(function(e){ return e.date===ds && slotOf(e.time)===hr && !calEvHidden(e); }).sort(function(a,b){ return a.time.localeCompare(b.time) || ((a.kind==='placeholder')-(b.kind==='placeholder')) || String(a.name).localeCompare(String(b.name)); });
   var ov = document.getElementById('slot-list-overlay');
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'slot-list-overlay'; ov.style.zIndex = 70; ov.onclick = function(e){ if(e.target===ov) closeSlotList(); }; document.body.appendChild(ov); }
   ov.innerHTML = '<div class="modal-box" style="width:420px;max-height:80vh;overflow-y:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">'+dateLabel(ds)+' '+hr+' · '+evs.length+' 项日程</span><span style="cursor:pointer;color:var(--slate);" onclick="closeSlotList()">✕</span></div>'+
@@ -405,7 +405,7 @@ function buildWeekGrid(){
   var start = getWeekStart(WEEK_OFFSET);
   var days = [];
   for(var i=0;i<7;i++){ var dd=new Date(start); dd.setDate(start.getDate()+i); days.push(dd); }
-  var evs = calendarEvents().filter(function(e){ return !(e.kind==='reservation' && e.vstate==='预约取消'); }); /* 预约取消的事件从日历消失 */
+  var evs = calendarEvents().filter(function(e){ return !calEvHidden(e); }); /* 预约取消的事件从日历消失 */
   /* 休诊日整列宽度 = 其他天的 1/3（灰色、不能点、不能新增预约；列头仍显示日期 + 休诊）；月视图不改 */
   document.getElementById('wk-grid').style.gridTemplateColumns = '64px '+days.map(function(dd){ return isRescheduleDateDisabled(dd) ? 'minmax(0,.34fr)' : 'minmax(0,1fr)'; }).join(' ');
   var html = '<div class="wk-corner">'+axisHeadHtml()+'</div>';
@@ -443,7 +443,7 @@ function buildWeekGrid(){
 function buildMonthGrid(){
   if(CAL_VIEW==='kr'){ buildKrMonthGrid(); return; }
   var grid = document.getElementById('cal-grid');
-  var evs = calendarEvents().filter(function(e){ return !(e.kind==='reservation' && e.vstate==='预约取消'); });
+  var evs = calendarEvents().filter(function(e){ return !calEvHidden(e); });
   var first = new Date(TODAY_DATE.getFullYear(), TODAY_DATE.getMonth()+MONTH_OFFSET, 1);
   var startPad = first.getDay(); /* 周日=0，月历从周日开始 */
   var html = '';
@@ -463,7 +463,7 @@ function buildDayGrid(){
   if(newCalOn()){ buildDayGridNew(); return; } /* CMD-1014-01：日视图改整天时间格 */
   var d = new Date(TODAY_DATE); d.setDate(d.getDate()+DAY_OFFSET);
   var ds = dateStr(d);
-  var evs = calendarEvents().filter(function(e){ return e.date===ds && !(e.kind==='reservation' && e.vstate==='预约取消'); });
+  var evs = calendarEvents().filter(function(e){ return e.date===ds && !calEvHidden(e); });
   var html = '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">'+(d.getMonth()+1)+'月'+d.getDate()+'日 周'+DOW_CN[dowOfDate(ds)]+'</div>';
   if(evs.length===0){ html += '<div style="font-size:12px;color:var(--muted);">当日暂无排期</div>'; }
   else{
@@ -1167,7 +1167,7 @@ function renderCancelReasons(){
 function confirmCancel(){
   if(!CANCEL_REASON){ alert('请先选择取消原因'); return; }
   var c = getCurrentCase(); if(!c) return;
-  c.subState = 'cancelled';
+  c.subState = 'cancelled'; c.cancelBy = '室长';
   c.cancelReason = CANCEL_REASON;
   updateCaseStage(c);
   closeCancelModal();

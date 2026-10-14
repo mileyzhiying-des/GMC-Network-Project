@@ -30,7 +30,7 @@ function buildDayGridNew(){
   var box = document.getElementById('day-detail'); if(!box) return;
   var d = new Date(TODAY_DATE); d.setDate(d.getDate()+DAY_OFFSET);
   var ds = dateStr(d), closedDay = isRescheduleDateDisabled(d), hrs = calHours(), H0 = timeToMin(hrs[0]), H1 = timeToMin(hrs[hrs.length-1]) + SLOT_MIN, PX = CAL_DAY_PX;
-  var evs = calendarEvents().filter(function(e){ return e.date===ds && !(e.kind==='reservation' && e.vstate==='预约取消'); });
+  var evs = calendarEvents().filter(function(e){ return e.date===ds && !calEvHidden(e); });
   var nowD = demoNow(), nowMin = nowD.getHours()*60 + nowD.getMinutes(), isToday = ds===dateStr(nowD);
   /* CMD-1014-12：同一时段（30 分钟）事件超过 3 个时，和周视图同一规则：只画前 3 个 + "+N 更多"（点开看全部） */
   var bySlot = {}; evs.forEach(function(e){ (bySlot[slotOf(e.time)] = bySlot[slotOf(e.time)] || []).push(e); });

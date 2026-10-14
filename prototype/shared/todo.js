@@ -243,7 +243,7 @@ function todoMountInCards(){
 function todoInCardsHtml(all){
   if(newCalOn()) return todoCatCardsHtml(all, [['todo','待我处理','要我现在动手的事（联络客人选项目、待收款、转告客人、确认日程…）'],['visit','今天来访','今天预约、还没接待的客人（一位一条；按了已到店 / 未到店就消失）'],['kr','等 KR 回复','等报告、等确认施术时间；没超时灰色，超时变红可催办'],['msg','新消息','未读的被 @、未接来电（看了就消失）']], true);
   var mine = all.filter(function(it){ return it.mine; });
-  var today = todayStr(), vis = calendarEvents().filter(function(e){ return e.date===today && e.kind!=='placeholder' && !(e.kind==='reservation' && e.vstate==='预约取消'); });
+  var today = todayStr(), vis = calendarEvents().filter(function(e){ return e.date===today && e.kind!=='placeholder' && e.vstate!=='预约取消'; });
   var waiting = CASE_ITEMS.filter(function(c){ return !isEnded(c) && c.subState!=='cancelled' && (['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1 || (c.stage==='travel' && ['Pending','Changing'].indexOf(scheduleState(c))>-1)); });
   var late = waiting.some(function(c){ return c.consultStatus==='awaiting_report' && reportOverdueNow(c); });
   var unread = 0; try{ unread = totalUnread(); }catch(e){}
