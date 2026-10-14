@@ -273,7 +273,7 @@ function todoKrCardsHtml(rows){
   html += todoCardHtml('新消息', unread, '对话里的未读消息', (newCalOn() ? 'todoCardFilter(\'msg\')' : 'todoDotClear(\'krmsg\');krOpenDrawer()'), false, todoCardDot('krmsg', todoCountIds(unread)), '');
   return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">'+html+'</div>';
 }
-function todoKrToday(){ if(typeof KRC!=='undefined'){ KRC.mode = 'day'; KRC.anchor = krToday(); KRC.person = 'all'; krcRender(); } }
+function todoKrToday(){ if(typeof KRC!=='undefined'){ KRC.mode = 'day'; KRC.anchor = krToday(); KRC.person = 'all'; KRC.layer = 'hospital'; krcRender(); } }
 
 /* ---------------- 现在时间线 ---------------- */
 function todoNowLabel(){ var d = demoNow(); return pad2(d.getHours())+':'+pad2(d.getMinutes()); }
@@ -287,7 +287,7 @@ function todoPlaceInLine(){
   has = !!grid.querySelector('.wk-head.today'); if(!has) return;
   var nowMin = todoNowMinutes(), rows = grid.querySelectorAll('.wk-time'), hit = null, frac = 0;
   for(var i = 0; i < rows.length; i++){
-    var m = /^(\d{1,2}):(\d{2})/.exec((rows[i].firstChild && rows[i].firstChild.nodeValue) || rows[i].textContent || ''); if(!m) continue;
+    var m = /印\s*(\d{1,2}):(\d{2})/.exec(rows[i].textContent || '') || /^(\d{1,2}):(\d{2})/.exec((rows[i].firstChild && rows[i].firstChild.nodeValue) || ''); if(!m) continue; /* CMD-1014-19：时间前标了「印 / 韩」 */
     var s = parseInt(m[1],10)*60 + parseInt(m[2],10), span = rows[i].offsetHeight ? 30 : 30;
     if(nowMin >= s && nowMin < s + span){ hit = rows[i]; frac = (nowMin - s) / span; break; }
   }

@@ -114,6 +114,8 @@ input,textarea,select{font-family:inherit;}
 .wk-time.wk-now{color:var(--terracotta);font-weight:700;}
 .wk-time .kr{display:block;font-size:9px;color:var(--dim);margin-top:2px;}
 .wk-cell-open{cursor:pointer;}
+.wk-cell.wk-outside{background:#F1EEE8;cursor:pointer;} /* CMD-1014-19：营业时间外（前后 2 小时）浅灰底，仍可约（弹确认） */
+.wk-cell.wk-outside:hover{background:#FADADD;}
 .wk-cell-open:hover{background:#FADADD;}
 /* 手机号两栏：用 div.phone-row 提高优先级，盖过页面里 select/input 的 width:100% */
 div.phone-row{display:flex;gap:8px;align-items:stretch;width:100%;}

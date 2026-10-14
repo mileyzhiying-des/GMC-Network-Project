@@ -264,5 +264,5 @@ function krbBlockHtml(r0, showWho){
   var style = 'position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;border-radius:5px;padding:2px 5px;font-size:10px;line-height:1.3;overflow:hidden;cursor:pointer;z-index:2;'+(b.done ? 'opacity:.45;text-decoration:line-through;' : '')+
     (pend ? 'background:#fff;color:#2F6B4A;border:1.5px dashed #3F7A55;' : 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;');
   var label = (pend ? '待 KR 确认 · ' : '预约 · ')+(b.name||'')+' · '+cn;
-  return '<div onclick="event.stopPropagation();krBookOpen(\''+b.bookingId+'\')" title="'+krbEsc(b.time+'–'+b.end+' '+label)+'" style="'+style+'"><b>'+krbEsc(b.time)+'</b> '+krbEsc(label)+(showWho && b.who!==KRB_HOSP ? '<br>'+krbEsc(b.who) : '')+'</div>';
+  return '<div onclick="event.stopPropagation();krBookOpen(\''+b.bookingId+'\')" title="'+krbEsc(b.time+'–'+b.end+' '+label)+'" style="'+style+'">'+(showWho ? krcOneLine(r0) : '<b>'+krbEsc(b.time)+'</b> '+krbEsc(label))+'</div>';
 }

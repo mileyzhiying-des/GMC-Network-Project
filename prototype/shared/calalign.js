@@ -45,16 +45,16 @@ function buildDayGridNew(){
   var blocks = lay.map(function(r){ var x = r.it.x, w = 100 / Math.max(Math.max(1, CLINIC_SETTINGS.slotCapacity||1), r.n), /* CMD-1014-18：每块宽 = 1 / 诊所「每个时段上限」 */ top = (x.s - H0) * PX / 60, hgt = Math.max(18, (x.end - x.s) * PX / 60 - 2);
     return '<div class="dayblk" style="position:absolute;left:calc('+(r.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;overflow:hidden;z-index:2;">'+(x.more ? '<div class="wk-more" onclick="event.stopPropagation();openSlotList(\''+ds+'\',\''+x.more.hr+'\')">+'+x.more.n+' 更多</div>' : eventChipHtml(x.e,{day:true}))+'</div>'; }).join('');
   var lines = '', axis = '';
-  for(var m = H0; m < H1; m += 60){ lines += '<div style="position:absolute;left:0;right:0;top:'+((m-H0)*PX/60)+'px;border-top:1px solid #f0ece3;"></div>'; axis += '<div style="height:'+PX+'px;box-sizing:border-box;border-top:1px solid #eee;font-size:11px;color:var(--slate2);padding:2px 6px 0 0;text-align:right;">'+minToTime(m)+'<span style="display:block;font-size:9px;color:var(--dim);">'+krTimeOf(minToTime(m))+'</span></div>'; }
+  for(var m = H0; m < H1; m += 60){ lines += '<div style="position:absolute;left:0;right:0;top:'+((m-H0)*PX/60)+'px;border-top:1px solid #f0ece3;"></div>'; axis += '<div style="height:'+PX+'px;box-sizing:border-box;border-top:1px solid #eee;font-size:11px;color:var(--slate2);padding:2px 6px 0 0;text-align:right;"><b>印 '+minToTime(m)+'</b><span style="display:block;font-size:9px;color:var(--dim);">韩 '+krTimeOf(minToTime(m))+'</span></div>'; }
   var open0 = timeToMin(CLINIC_SETTINGS.openTime), close0 = timeToMin(CLINIC_SETTINGS.closeTime);
-  if(open0 > H0) lines += '<div style="position:absolute;left:0;right:0;top:0;height:'+((open0-H0)*PX/60)+'px;background:#FAF8F3;pointer-events:none;"></div>';
-  if(close0 < H1) lines += '<div style="position:absolute;left:0;right:0;top:'+((close0-H0)*PX/60)+'px;bottom:0;background:#FAF8F3;pointer-events:none;"></div>';
+  if(open0 > H0) lines += '<div style="position:absolute;left:0;right:0;top:0;height:'+((open0-H0)*PX/60)+'px;background:#F1EEE8;pointer-events:none;"></div>';
+  if(close0 < H1) lines += '<div style="position:absolute;left:0;right:0;top:'+((close0-H0)*PX/60)+'px;bottom:0;background:#F1EEE8;pointer-events:none;"></div>';
   var lf = timeToMin(CLINIC_SETTINGS.lunchFrom), lt = timeToMin(CLINIC_SETTINGS.lunchTo);
   if(!closedDay && lt > lf) lines += '<div title="午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'" style="position:absolute;left:0;right:0;top:'+((lf-H0)*PX/60)+'px;height:14px;background:#F3F1EC;color:#b5b0a4;font-size:10px;text-align:center;pointer-events:none;z-index:1;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
   if(closedDay) lines += '<div style="position:absolute;inset:0;background:#F3F1EC;pointer-events:none;z-index:1;"></div>';
   var h = '<div class="wk-scroll"><div class="wk-grid" id="day-grid" style="grid-template-columns:64px minmax(0,1fr);position:relative;">'+
     '<div class="wk-corner">'+axisHeadHtml()+'</div>'+
-    '<div class="wk-head'+(isToday?' today':'')+'">'+(d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(closedDay?'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>':'')+'</div>'+
+    '<div class="wk-head'+(isToday?' today':'')+'">'+(d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(closedDay?'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>':inCapHeadHtml(ds))+'</div>'+
     '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div><div class="wk-memo">'+memoCellHtml(ds)+'</div>'+
     '<div>'+axis+'</div>'+
     '<div id="day-col" data-h0="'+H0+'" style="position:relative;height:'+((H1-H0)*PX/60)+'px;background:#fff;border-left:1px solid var(--border2);border-bottom:1px solid var(--border2);cursor:cell;" onmousemove="calDayHover(this,event)" onmouseleave="calDayHoverOff(this)" onclick="calDayClick(\''+ds+'\',event,this)">'+lines+'<div class="krc-hl" style="display:none;position:absolute;left:0;right:0;height:'+(PX/2)+'px;background:rgba(229,72,77,.10);pointer-events:none;"></div>'+blocks+'</div>'+
@@ -317,3 +317,58 @@ function memoOffSet(k, v){ MEMO_DRAFT[k] = v; if(k==='offMode') renderMemoBody()
     return r;
   };
 })();
+
+
+/* ================= CMD-1014-19：约满标记（取代「施术开放 / 未开放」） =================
+   上限的算法：
+   · KR 医院层：已约 = 当天各客人预约块（面诊 / 施术 / 术后到店 / IN 占位）占用的「营业时间内、不含午休 / 休诊时段」的 30 分钟段数合计；上限 = 当天在岗院长数（没有整天 OFF 的）× 这些 30 分钟段数；
+   · KR 院长层：已约 = 这位院长的预约块 + 不可预约块占用的段数；上限 = 这些 30 分钟段数（整天 OFF = 「OFF」）；
+   · IN 本院日程：已约 = 当天各时段的有效预约 + 占位数（不含取消 / 未到店）；上限 = 诊所设定「每个时段的预约上限」× 当天可约的 30 分钟时段数（营业时间内、不含午休，休诊日不显示）。
+   已约 ≥ 上限 → 「约满」。 */
+function krCapSlots(hid, ds){
+  if(hospitalClosedOn(hid, ds)) return [];
+  var hr = hospitalHours(hid), lu = hospitalLunch(hid), cf = hospitalClosedFrom(hid, ds), cb = hospitalClosedBefore(hid, ds), out = [];
+  for(var m = timeToMin(hr.open); m < timeToMin(hr.close); m += 30){
+    if(lu && m >= timeToMin(lu.from) && m < timeToMin(lu.to)) continue;
+    if(cf && m + 30 > timeToMin(cf)) continue; if(cb && m < timeToMin(cb)) continue; out.push(m);
+  }
+  return out;
+}
+function krCapUsed(slots, blocks){ var used = 0; blocks.forEach(function(b){ var s = timeToMin(b.time), e = timeToMin(b.end || minToTime(s+30)); slots.forEach(function(m){ if(s < m+30 && e > m) used++; }); }); return used; }
+function capHtml(used, cap, off){
+  if(off) return '<br><span style="font-size:9px;font-weight:700;color:#B5483E;">OFF</span>';
+  if(!cap) return '';
+  return '<br><span style="font-size:9px;font-weight:700;color:'+(used>=cap ? '#B5483E' : 'var(--muted)')+';">'+(used>=cap ? '约满' : '已约 '+used+' / '+cap)+'</span>';
+}
+function krCapDirOff(h, ds, name){ return (h.offs||[]).some(function(o){ return o.kind==='director' && o.who===name && offApplies(o, ds) && (!o.part || o.part==='全天'); }); }
+function krCapHeadHtml(ds, blocks, who){
+  var hid = krHospitalIdOfMe(), h = krHData(), slots = krCapSlots(hid, ds); if(!slots.length) return '';
+  var bl = blocks.map(function(b){ return b._x ? b : b; });
+  if(who==='all'){ var duty = krcDirectors().filter(function(n){ return !krCapDirOff(h, ds, n); }).length; return capHtml(krCapUsed(slots, bl), slots.length*duty, false); }
+  if(krCapDirOff(h, ds, who)) return capHtml(0, 0, true);
+  return capHtml(krCapUsed(slots, bl), slots.length, false);
+}
+function inCapHeadHtml(ds){
+  var slots = []; if(typeof isRescheduleDateDisabled==='function' && isRescheduleDateDisabled(new Date(ds+'T00:00:00'))) return '';
+  var lf = timeToMin(CLINIC_SETTINGS.lunchFrom), lt = timeToMin(CLINIC_SETTINGS.lunchTo);
+  for(var m = timeToMin(CLINIC_SETTINGS.openTime); m < timeToMin(CLINIC_SETTINGS.closeTime); m += 30){ if(lt > lf && m >= lf && m < lt) continue; slots.push(m); }
+  var used = 0; slots.forEach(function(m){ used += slotBookingCount(ds, minToTime(m)); });
+  return capHtml(used, slots.length * (CLINIC_SETTINGS.slotCapacity||1), false);
+}
+
+/* ---------------- 院长 OFF 那天不该有他的施术 / 面诊 / 预约（CMD-1014-19 一·9，不带开关；幂等）----------------
+   演示数据里 KD1 每周三 OFF，而种子里 10-14 有客人9 的施术 → 数据自相矛盾。启动时把「和院长已有施术 / 面诊 / 预约重叠的 OFF 条目」去掉（只删这一次的 OFF 条目，不删案件）。
+   正常流程是挡得住的：krSurgerySlotError 遇到院长 OFF 会拦（整天 OFF 拦整天、指定时间 OFF 拦重叠时段），所以只有演示种子 / 旧数据会有这种矛盾。 */
+function repairOffConflicts(){
+  var n = 0;
+  Object.keys(HOSPITAL_DATA||{}).forEach(function(hid){
+    var h = HOSPITAL_DATA[hid]; if(!h || !h.offs) return;
+    h.offs = h.offs.filter(function(o){
+      if(o.kind!=='director') return true;
+      var rg = (!o.part || o.part==='全天') ? [0,1440] : (function(){ try{ var r = krHalfRange(hid, offPartArg(o.part)); return [timeToMin(r[0]), r[1]==='24:00' ? 1440 : timeToMin(r[1])]; }catch(e){ return [0,1440]; } })();
+      var clash = ((h.directorSchedule||{})[o.who]||[]).some(function(b){ return (b.kind==='施术' || b.kind==='面诊' || b.kind==='预约' || b.type==='施术' || b.type==='面诊') && b.date===o.date && timeToMin(b.time) < rg[1] && timeToMin(b.end||b.time) > rg[0]; });
+      if(clash){ n++; return false; } return true;
+    });
+  });
+  return n;
+}
