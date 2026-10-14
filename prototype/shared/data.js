@@ -1638,10 +1638,11 @@ function pickRescheduleTime(t){ RESCHED_SELECTED_TIME = t; renderRescheduleTimeP
 function logLine(e){
   if(viewerLogHidden(e)) return ''; /* CMD-1014-16：KR 看不到 IN 本地项目 / 金额相关的记录 */
   var act = tzRender(e.action); /* 时间标记按看的人的时区显示 */
+  var stg = e.stage; if(typeof isKrAccount==='function' && isKrAccount()){ if(/本地管理/.test(stg)) stg = '—'; act = act.replace(/本地管理/g, 'IN 处理'); } /* CMD-1014-19 二·1：KR Timeline 不显示 IN 的「本地管理」字样 */
   var action = e.kind==='case'
     ? '<a href="#" onclick="openCaseDetail(\''+e.caseId+'\');return false;" style="color:var(--navy);font-weight:700;">'+act+' →</a>'
     : act;
-  return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+e.stage+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+actorDisplay(e)+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+fmtUtc(e.dt)+'</span></div>';
+  return '<div style="padding:11px 0;border-bottom:1px solid var(--border2);font-size:13px;"><b>'+stg+'</b>&nbsp;&nbsp;'+action+'&nbsp;&nbsp;<span style="color:var(--slate2);">「'+actorDisplay(e)+'」</span>&nbsp;&nbsp;<span style="color:var(--muted);">'+fmtUtc(e.dt)+'</span></div>';
 }
 
 var DEMO_SHIFT_MS = 0;

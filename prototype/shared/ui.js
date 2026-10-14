@@ -3666,7 +3666,7 @@ function opTick(){
   if(key!==OP_LAST_KEY){ opRelease(); OP_LAST_KEY = key; OP_WAS_MINE = false; OP_RO = false; OP_TAKEN_BY = ''; }
   if(!key){ opRender(null); return; }
   var h = opHolder(key), me = presMyAcct();
-  if(!h){ if(!document.hidden || !OP_WAS_MINE) opClaim(key); }
+  if(!h){ if(!document.hidden || !OP_WAS_MINE){ var wasRo = OP_RO; opClaim(key); if(wasRo && typeof showToast==='function') showToast('你现在可以操作了', '原操作人已离开这个案件，你已自动成为操作人', null); } } /* CMD-1014-19 二·2：只读分页自动升级时给提示 */
   else if(h.acct===me){ if(h.tab!==TAB_ID && !OP_WAS_MINE) opClaim(key); else if(h.tab!==TAB_ID && OP_WAS_MINE){ OP_RO = false; } }
   else {
     if(OP_WAS_MINE){ OP_TAKEN_BY = h.name; OP_WAS_MINE = false; } /* 我刚才是操作人，现在别人接管了 */

@@ -159,22 +159,23 @@ function krbHoldChoices(clinicId, clientName){
 /* 新做管理计价（四·3）：从 KR 项目库选项目 → 待付款 → 已付款；金额只存在预约记录里，KR 看得到，IN 的案件 / Timeline / 通知都不带金额 */
 function coreBookFeeAdd(hid, id, item, by){
   var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || !b.arrivedAt) return {ok:false, err:'要先标记客人已到店'};
-  if(!item || !item.name || !(item.price>0)) return {ok:false, err:'请选择项目并填写价格'};
-  b.fee = {name:item.name, specLabel:item.specLabel||'', price:item.price, projectId:item.projectId||'', status:'待付款'};
-  (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 加入新做管理「'+item.name+(item.specLabel ? ' · '+item.specLabel : '')+'」'+formatCurrency(item.price,'KRW')+'（待付款）'});
+  if(!item || !item.name || (!item.service && !(item.price>0))) return {ok:false, err:'请选择项目并填写价格'};
+  b.fees = b.fees || [];
+  b.fees.push({name:item.name, specLabel:item.specLabel||'', price:item.service ? 0 : item.price, projectId:item.projectId||'', service:!!item.service, status:item.service ? '已付款' : '待付款'});
+  (b.history = b.history||[]).push({ts:nowFullDt(), text:by+(item.service ? ' 赠送(서비스)「' : ' 加入新做管理「')+item.name+(item.specLabel ? ' · '+item.specLabel : '')+'」'+(item.service ? '' : formatCurrency(item.price,'KRW')+'（待付款）')});
   return {ok:true};
 }
 function coreBookFeePaid(hid, id, by){
-  var b = krbFind(hid, id); if(!b || !b.fee || b.fee.status!=='待付款') return {ok:false, err:'没有待付款的项目'};
-  b.fee.status = '已付款'; (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 标记已付款：'+formatCurrency(b.fee.price,'KRW')});
+  var b = krbFind(hid, id), ps = b && (b.fees||[]).filter(function(f){ return f.status==='待付款'; }); if(!ps || !ps.length) return {ok:false, err:'没有待付款的项目'};
+  var sum = 0; ps.forEach(function(f){ f.status = '已付款'; sum += f.price; }); (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 标记已付款：'+formatCurrency(sum,'KRW')});
   return {ok:true};
 }
-function coreBookFeeRemove(hid, id, by){ var b = krbFind(hid, id); if(!b || !b.fee || b.fee.status!=='待付款') return {ok:false, err:'已付款的不能删除'}; b.fee = null; return {ok:true}; }
+function coreBookFeeRemove(hid, id, idx, by){ var b = krbFind(hid, id); if(!b || !b.fees || !b.fees[idx] || b.fees[idx].status!=='待付款') return {ok:false, err:'已付款的不能删除'}; b.fees.splice(idx, 1); return {ok:true}; }
 function coreBookDone(hid, id, did, by){
   var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || !b.arrivedAt) return {ok:false, err:'要先标记客人已到店'};
   did = did || {kind:b.purpose};
   if(did.kind==='hold'){ var ch = krbHoldChoices(b.clinicId, b.clientName).filter(function(x){ return x.caseId===did.caseId && x.name===did.name; })[0]; if(!ch) return {ok:false, err:'请选择要使用的在韩持有项目'}; did.qty = Math.max(1, parseInt(did.qty,10)||1); if(did.qty > ch.left) return {ok:false, err:'「'+did.name+'」只剩 '+ch.left+' 次'}; }
-  if(did.kind==='care'){ if(!b.fee) return {ok:false, err:'请先选择管理项目并加入（待付款）'}; if(b.fee.status!=='已付款') return {ok:false, err:'还没付款：请先标记已付款'}; did.name = b.fee.name+(b.fee.specLabel ? ' · '+b.fee.specLabel : ''); }
+  if(did.kind==='care'){ if(!(b.fees||[]).length) return {ok:false, err:'请先选择管理项目并加入'}; if(b.fees.some(function(f){ return f.status!=='已付款'; })) return {ok:false, err:'还没付款：请先标记已付款'}; did.name = b.fees.map(function(f){ return f.name+(f.specLabel ? ' · '+f.specLabel : '')+(f.service ? '（서비스）' : ''); }).join('、'); }
   var text = '';
   Store.mutateClinic(b.clinicId, function(){
     if(did.kind==='hold'){ var src = CASE_ITEMS.filter(function(x){ return x.id===did.caseId; })[0], it = src && (src.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===did.name; })[0];
@@ -226,27 +227,30 @@ function krbRenderKr(){
 }
 /* 新做管理：从 KR 项目库选项目（类别 → 项目 → 规格）→ 加入（待付款）→ 已付款；金额只在 KR 这个弹窗里看得到 */
 function krbCareHtml(b, f, inp){
-  if(b.fee){
-    var fe = b.fee;
-    return '<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.8;"><b>'+krbEsc(fe.name)+(fe.specLabel ? ' · '+krbEsc(fe.specLabel) : '')+'</b>　'+formatCurrency(fe.price,'KRW')+'　<span style="font-weight:700;color:'+(fe.status==='已付款' ? 'var(--sage)' : '#B5483E')+';">'+fe.status+'</span>'+
-      '<div style="display:flex;gap:8px;margin-top:6px;">'+(fe.status==='待付款' ? '<button class="btn-primary" style="flex:1;" onclick="krbDoFeePaid()">已付款</button><button class="btn-outline" style="flex:1;" onclick="krbDoFeeRemove()">删除</button>' : '')+'</div></div>';
-  }
-  var lib = krLocalLib(krHospitalIdOfMe()), pr = lib.filter(function(p){ return p.id===f.pid; })[0], sp = pr && pr.specs.filter(function(x){ return x.id===f.sid; })[0], price = sp ? (pr.neg ? (parseInt(f.manual,10)||0) : sp.price) : 0, cats = [];
+  var fees = b.fees || [], unpaid = fees.some(function(x){ return x.status==='待付款'; });
+  var feeBox = fees.length ? '<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:8px;">'+fees.map(function(x, i){ return '<div style="display:flex;gap:8px;align-items:center;padding:3px 0;"><span style="flex:1;"><b>'+krbEsc(x.name)+'</b>'+(x.specLabel ? ' · '+krbEsc(x.specLabel) : '')+(x.service ? ' <span style="color:var(--sage);font-size:11px;">서비스</span>' : '')+'</span><span>'+(x.service ? '0' : formatCurrency(x.price,'KRW'))+'</span><span style="font-weight:700;font-size:11px;color:'+(x.status==='已付款' ? 'var(--sage)' : '#B5483E')+';">'+x.status+'</span>'+(x.status==='待付款' ? '<a href="#" onclick="krbDoFeeRemove('+i+');return false;" style="font-size:11px;">删除</a>' : '')+'</div>'; }).join('')+(unpaid ? '<button class="btn-primary" style="width:100%;margin-top:6px;" onclick="krbDoFeePaid()">已付款</button>' : '')+'</div>' : '';
+  /* 选项目画面同 IN 本地选购：KR 本地管理项目库（韩元价格）按类别一行一个项目 + 规格 +［加入］/［赠送］(서비스) */
+  var q = String(f.q||'').trim().toLowerCase(), lib = krLocalLib(krHospitalIdOfMe()).filter(function(p){ return !q || p.name.toLowerCase().indexOf(q)>-1 || String(p.catLabel||'').toLowerCase().indexOf(q)>-1; }), cats = [];
   lib.forEach(function(p){ if(cats.indexOf(p.catLabel)<0) cats.push(p.catLabel); });
-  return '<select style="'+inp+'margin-bottom:6px;" onchange="KRBK.pid=this.value;KRBK.sid=\'\';krbRenderKr()"><option value="">请选择管理项目（KR 项目库）</option>'+cats.map(function(c0){ return '<optgroup label="'+krbEsc(c0)+'">'+lib.filter(function(p){ return p.catLabel===c0; }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===f.pid ? ' selected' : '')+'>'+krbEsc(p.name)+'</option>'; }).join('')+'</optgroup>'; }).join('')+'</select>'+
-    (pr ? '<select style="'+inp+'margin-bottom:6px;" onchange="KRBK.sid=this.value;krbRenderKr()"><option value="">请选择规格</option>'+pr.specs.map(function(x){ return '<option value="'+x.id+'"'+(x.id===f.sid ? ' selected' : '')+'>'+krbEsc(x.label)+(pr.neg ? '' : '　'+formatCurrency(x.price,'KRW'))+'</option>'; }).join('')+'</select>' : '')+
-    (pr && pr.neg ? '<input type="number" min="1" placeholder="面议：填价格（₩）" value="'+krbEsc(f.manual)+'" style="'+inp+'margin-bottom:6px;" onchange="KRBK.manual=this.value;krbRenderKr()">' : '')+
-    '<button class="btn-outline" style="width:100%;" onclick="krbDoFeeAdd()">加入（待付款）'+(sp && price>0 ? ' · '+formatCurrency(price,'KRW') : '')+'</button>';
+  f.sel = f.sel || {};
+  var rows = cats.map(function(cl){ return '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 2px;">'+krbEsc(cl)+'</div>'+lib.filter(function(p){ return p.catLabel===cl; }).map(function(p){
+    var st = f.sel[p.id] || {}, sp = p.specs.filter(function(x){ return x.id===st.sid; })[0] || p.specs[0];
+    return '<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border2);font-size:13px;flex-wrap:wrap;"><span style="flex:1 1 110px;font-weight:600;">'+krbEsc(p.name)+'</span><select onchange="krbCareSel(\''+p.id+'\',\'sid\',this.value)" style="padding:3px 5px;border:1px solid var(--line);border-radius:6px;font-size:12px;">'+p.specs.map(function(x){ return '<option value="'+x.id+'"'+(sp && x.id===sp.id ? ' selected' : '')+'>'+krbEsc(x.label)+'</option>'; }).join('')+'</select>'+
+      (p.neg ? '<input type="number" min="1" placeholder="面议 ₩" value="'+krbEsc(st.manual||'')+'" oninput="krbCareSel(\''+p.id+'\',\'manual\',this.value,true)" style="width:84px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;font-size:12px;">' : '<span style="min-width:76px;text-align:right;font-size:12px;">'+(sp ? formatCurrency(sp.price,'KRW') : '')+'</span>')+
+      '<button class="btn-outline" style="padding:2px 9px;font-size:11px;" onclick="krbCareAdd(\''+p.id+'\',false)">加入</button><button class="btn-ghost" style="padding:2px 8px;font-size:11px;" title="서비스：赠送，0 元" onclick="krbCareAdd(\''+p.id+'\',true)">赠送</button></div>'; }).join(''); }).join('') || '<div style="font-size:12px;color:var(--muted);">没有匹配的管理项目</div>';
+  return feeBox+'<input placeholder="搜索项目 / 类别" value="'+krbEsc(f.q||'')+'" oninput="KRBK.q=this.value;krbCareRefresh()" style="'+inp+'margin-bottom:4px;"><div id="krb-care-list" style="max-height:230px;overflow:auto;">'+rows+'</div>';
+}
+function krbCareRefresh(){ var f = KRBK, b = f && krbFind(krHospitalIdOfMe(), f.id); if(!b) return; var box = document.getElementById('krb-care-list'); if(!box){ krbRenderKr(); return; } var tmp = document.createElement('div'); tmp.innerHTML = krbCareHtml(b, f, ''); var nb = tmp.querySelector('#krb-care-list'); if(nb) box.innerHTML = nb.innerHTML; }
+function krbCareSel(pid, k, v, quiet){ KRBK.sel = KRBK.sel || {}; (KRBK.sel[pid] = KRBK.sel[pid] || {})[k] = v; if(!quiet) krbRenderKr(); }
+function krbCareAdd(pid, service){
+  var f = KRBK, p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===pid; })[0]; if(!p) return; var st = (f.sel||{})[pid] || {}, sp = p.specs.filter(function(x){ return x.id===st.sid; })[0] || p.specs[0];
+  var price = p.neg ? (parseInt(st.manual,10)||0) : sp.price;
+  var r = coreBookFeeAdd(krHospitalIdOfMe(), f.id, {name:p.name, specLabel:sp.label, price:price, projectId:p.id, service:service}, ME_NAME); if(krbKrDone(r)) krbRenderKr();
 }
 function krbOpenCase(){ var f = KRBK, b = f && krbFind(krHospitalIdOfMe(), f.id); if(!b || !b.caseId) return; document.getElementById('krb-kr-overlay').classList.remove('open'); krShowCase(b.clinicId, b.caseId); }
 function krbDoSimDay(){ if(coreBookSimDay(krHospitalIdOfMe(), KRBK.id)){ Store.touch && Store.touch(); krbRenderKr(); } }
-function krbDoFeeAdd(){
-  var f = KRBK, lib = krLocalLib(krHospitalIdOfMe()), pr = lib.filter(function(p){ return p.id===f.pid; })[0], sp = pr && pr.specs.filter(function(x){ return x.id===f.sid; })[0];
-  if(!pr || !sp){ f.err = '请选择项目和规格'; krbRenderKr(); return; } var price = pr.neg ? (parseInt(f.manual,10)||0) : sp.price;
-  var r = coreBookFeeAdd(krHospitalIdOfMe(), f.id, {name:pr.name, specLabel:sp.label, price:price, projectId:pr.id}, ME_NAME); if(krbKrDone(r)) krbRenderKr();
-}
 function krbDoFeePaid(){ var r = coreBookFeePaid(krHospitalIdOfMe(), KRBK.id, ME_NAME); if(krbKrDone(r)) krbRenderKr(); }
-function krbDoFeeRemove(){ var r = coreBookFeeRemove(krHospitalIdOfMe(), KRBK.id, ME_NAME); if(krbKrDone(r)) krbRenderKr(); }
+function krbDoFeeRemove(i){ var r = coreBookFeeRemove(krHospitalIdOfMe(), KRBK.id, i, ME_NAME); if(krbKrDone(r)) krbRenderKr(); }
 function krbKrDone(res){ var f = KRBK; if(!res.ok){ f.err = res.err || '操作失败'; krbRenderKr(); return false; } f.err = ''; Store.touch && Store.touch(); try{ krRefreshAll(); }catch(e){} return true; }
 function krbDoConfirm(){ var r = coreBookConfirm(krHospitalIdOfMe(), KRBK.id, ME_NAME); if(krbKrDone(r)){ krbRenderKr(); } }
 function krbDoReselect(kind){ var f = KRBK; if(kind==='change' && krbInPast(f.date, f.time)){ f.err = '不能建议过去的时间'; krbRenderKr(); return; } var r = coreBookReselect(krHospitalIdOfMe(), f.id, kind, (f.reason||'').trim(), kind==='change' ? {date:f.date, time:f.time} : null, ME_NAME); if(krbKrDone(r)){ krbOverlay('krb-kr-overlay').classList.remove('open'); } }
