@@ -431,8 +431,9 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
       <span style="cursor:pointer;color:var(--slate);" onclick="closeRefundModal()">✕</span>
     </div>
     <div id="refund-items" style="margin-bottom:12px;"></div>
+    <div id="refund-method" style="margin-bottom:12px;display:none;"></div>
     <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（₩，手动填写） <span style="color:#C1454A;">*</span></div>
-    <input type="number" min="0" id="refund-amount" placeholder="请输入本次退款总额（可为 0）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
+    <input type="number" min="0" id="refund-amount" oninput="refundMethodRender()" placeholder="请输入本次退款总额（可为 0）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
     <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
     <textarea id="refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
     <div style="font-size:12px;font-weight:700;margin:12px 0 6px;">备注（选填）</div>

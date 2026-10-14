@@ -327,7 +327,7 @@ function krBlockStyle(it){
   return 'background:#F3F1EC;'; /* 不可预约：很浅的灰，不写字 */
 }
 /* 某一天的一整列：items（韩国时间分钟）按诊所行对应的韩国时间摆放；baseMin = 第一行对应的韩国时间 */
-function krDayColHtml(ds, items, baseMin, closedFrom, lunch){
+function krDayColHtml(ds, items, baseMin, closedFrom, lunch, closedBefore){
   var total = krRows().length, h = total*KR_ROW_PX, blocks = '';
   krLaneLayout(items).forEach(function(r0){
     var it = r0.it, s = Math.max(it.s, baseMin), e = Math.min(it.e, baseMin + total*SLOT_MIN); if(e <= s) return;
@@ -335,8 +335,9 @@ function krDayColHtml(ds, items, baseMin, closedFrom, lunch){
     blocks += '<div'+(it.own && it.caseId ? ' onclick="openCaseDetail(\''+it.caseId+'\')"' : '')+' title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:11px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
   });
   var hatch = closedFrom ? '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(closedFrom)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;bottom:0;background:#F3F1EC;z-index:1;"></div>' : ''; /* 部分时段休诊：灰色斜纹 */
+  var hatchB = closedBefore ? '<div title="医院休诊（半天营业）" style="position:absolute;left:0;right:0;top:0;height:'+Math.max(0, (timeToMin(closedBefore)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;z-index:1;"></div>' : '';
   var lunchBand = lunch ? '<div title="午休" style="position:absolute;left:0;right:0;top:'+((timeToMin(lunch.from)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;height:'+((timeToMin(lunch.to)-timeToMin(lunch.from))/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;color:var(--dim);font-size:10px;text-align:center;line-height:16px;z-index:0;">午休</div>' : ''; /* 午休：浅灰窄带，文字浅色（时间由韩国时间换算成页面时区的行） */
-  return '<div style="position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+lunchBand+hatch+blocks+'</div>';
+  return '<div style="position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+lunchBand+hatch+hatchB+blocks+'</div>';
 }
 function krTimeColHtml(){
   return '<div>'+krRows().map(function(kr){ return '<div class="wk-time" style="height:'+KR_ROW_PX+'px;box-sizing:border-box;">'+krToPageTime(kr)+'<span class="kr">'+kr+'</span></div>'; }).join('')+'</div>';
@@ -356,7 +357,7 @@ function buildKrWeekGrid(){
   html += krTimeColHtml();
   days.forEach(function(dd){
     var ds = dateStr(dd);
-    html += hospitalClosedOn(hid, ds) ? '<div style="height:'+(krRows().length*KR_ROW_PX)+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#F3F1EC;"></div>' : krDayColHtml(ds, krGridItems(ds), baseMin, hospitalClosedFrom(hid, ds), hospitalLunch(hid));
+    html += hospitalClosedOn(hid, ds) ? '<div style="height:'+(krRows().length*KR_ROW_PX)+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#F3F1EC;"></div>' : krDayColHtml(ds, krGridItems(ds), baseMin, hospitalClosedFrom(hid, ds), hospitalLunch(hid), hospitalClosedBefore(hid, ds));
   });
   document.getElementById('wk-grid').innerHTML = html;
 }
@@ -786,11 +787,11 @@ function renderClientHoldings(name){
     var open = !!HOLD_EXPAND[gi];
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
-      var action = b.pkg ? '<span style="font-size:11px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (b.pkgPaid ? '<span style="font-size:11px;color:#C1454A;white-space:nowrap;">套餐 · 不可退款</span>' : (b.service ? '<span style="font-size:11px;color:var(--blue);white-space:nowrap;">서비스 · 不可退款</span>' : (st==='未使用' || st==='部分使用')
+      var action = b.pkg ? '<span style="font-size:11px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (b.pkgPaid ? '<span style="font-size:11px;color:#C1454A;white-space:nowrap;">套餐 · 不可退款</span>' : (b.comp ? '<span style="font-size:11px;color:#8F6F0C;white-space:nowrap;">代偿 · 不可退款</span>' : b.service ? '<span style="font-size:11px;color:var(--blue);white-space:nowrap;">서비스 · 不可退款</span>' : (st==='未使用' || st==='部分使用')
         ? ''
         : (b.refund ? '<span style="font-size:11px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '')));
       return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 8px 14px;border-top:1px dashed var(--border2);">'+
-        '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · '+(b.pkg ? '套餐内含 · ' : '')+(b.pkgPaid ? '套餐「'+(b.pkgName||'')+'」· ' : '')+(b.service ? '서비스（赠送）· ' : '')+(b.promo ? '本月活动价 · ' : '')+'购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
+        '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · '+(b.pkg ? '套餐内含 · ' : '')+(b.pkgPaid ? '套餐「'+(b.pkgName||'')+'」· ' : '')+(b.comp ? '代偿（赴韩定金转本地）· ' : '')+(b.service ? '서비스（赠送）· ' : '')+(b.promo ? '本月活动价 · ' : '')+'购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
         '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';white-space:nowrap;">'+st+'</span>'+
         '<span style="min-width:84px;text-align:right;">'+action+'</span></div>';
     }).join('') : '';
@@ -806,7 +807,7 @@ var HOLDING_REFUND_CTX = null;
 
 function openHoldingRefundModal(name, itemName, batchIdx){
   var h = (CLIENT_HOLDINGS[name]||[]).filter(function(x){ return x.itemName===itemName; })[0]; if(!h) return;
-  var b = h.batches[batchIdx]; if(!b || b.refund || b.voided || b.pkg || b.pkgPaid || b.service || (b.bought-b.used)<=0) return; /* 套餐 / 서비스 / 套餐内含批次不可退款；还有剩余次数（未使用/部分使用）才能退款；已用完的不能 */
+  var b = h.batches[batchIdx]; if(!b || b.refund || b.voided || b.pkg || b.pkgPaid || b.service || b.comp || (b.bought-b.used)<=0) return; /* 套餐 / 서비스 / 套餐内含批次不可退款；还有剩余次数（未使用/部分使用）才能退款；已用完的不能 */
   HOLDING_REFUND_CTX = {name:name, itemName:itemName, batchIdx:batchIdx};
   /* 购买价（CMD-1008-08）：当初实付（折后）+ 有折扣时的原价和折扣；按剩余次数的参考值只提示，不自动填入金额框；读批次购买时的快照，不读当前项目库价格 */
   var cur = b.currency || 'IDR', hasPaid = typeof b.paid==='number', remain = b.bought-b.used, priceHtml = '';
@@ -1470,7 +1471,7 @@ function closeCaseInfoDrawer(){
 /* 退款服务（CMD-1013-04 一）：基础资料 tab 顶部（接待中、基础资料未确认时也有）；只有客人有可退批次（还有剩余次数、非套餐 / 서비스）时才出现 */
 function refundableBatches(name){
   var out = [];
-  getClientHoldings(name).forEach(function(h){ h.batches.forEach(function(b, bi){ if(!b.refund && !b.voided && !b.pkg && !b.pkgPaid && !b.service && (b.bought-b.used)>0) out.push({h:h, bi:bi, b:b}); }); });
+  getClientHoldings(name).forEach(function(h){ h.batches.forEach(function(b, bi){ if(!b.refund && !b.voided && !b.pkg && !b.pkgPaid && !b.service && !b.comp && (b.bought-b.used)>0) out.push({h:h, bi:bi, b:b}); }); });
   return out;
 }
 function refundServiceBarHtml(c){
@@ -1942,6 +1943,7 @@ function refundRecalc(){
     if(cb.checked){ var it = REFUND_PENDING_ITEMS[parseInt(cb.value,10)]; if(it) sum += Math.round(it.price*KR_DEPOSIT_RATE); }
   });
   document.getElementById('refund-amount').value = sum;
+  refundMethodRender();
 }
 
 function openRefundModal(items, mode, selectable, amountOverride){
@@ -1956,11 +1958,23 @@ function openRefundModal(items, mode, selectable, amountOverride){
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+cb+it.name+'</span><span style="font-size:12px;color:var(--muted);">参考预付金 '+formatCurrency(Math.round(it.price*KR_DEPOSIT_RATE),'KRW')+'</span></div>';
   }).join('')+'<div style="font-size:11px;color:var(--muted);margin-top:6px;">退多少由室长决定（有的项目可退、有的不可退，金额可以为0），上面的预付金仅供参考</div>';
   document.getElementById('refund-amount').value = suggest;
+  REFUND_METHOD = 'refund'; refundMethodRender();
   document.getElementById('refund-reason').value = '';
   var rn = document.getElementById('refund-note'); if(rn) rn.value = '';
   document.getElementById('refund-overlay').classList.add('open');
 }
 
+/* CMD-1014-03：［取消项目］［无法协调］的退款方式：退钱 / 转本地项目（代偿） */
+var REFUND_METHOD = 'refund';
+function refundMethodRender(){
+  var box = document.getElementById('refund-method'); if(!box) return;
+  if(['normal','cannotCoordinate'].indexOf(REFUND_MODE)<0){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  var amt = Number((document.getElementById('refund-amount')||{}).value) || 0, credit = Math.round(amt * FX_RATES.KRW_IDR);
+  box.style.display = 'block';
+  box.innerHTML = '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款方式</div><label style="margin-right:16px;font-size:13px;"><input type="radio" name="refund-method" '+(REFUND_METHOD==='refund'?'checked ':'')+'onchange="setRefundMethod(\'refund\')"> 退钱</label><label style="font-size:13px;"><input type="radio" name="refund-method" '+(REFUND_METHOD==='comp'?'checked ':'')+'onchange="setRefundMethod(\'comp\')"> 转本地项目（代偿）</label>'+
+    (REFUND_METHOD==='comp' ? '<div id="refund-comp-hint" style="font-size:12px;color:#8F6F0C;margin-top:6px;">代偿额度 = 上面的金额 × '+FX_RATES.KRW_IDR+' = <b>'+formatCurrency(credit,'IDR')+'</b>；确定后直接进本地管理的选购画面，要一次用完，超过的补付，买到的项目不可退款。</div>' : '');
+}
+function setRefundMethod(m){ REFUND_METHOD = m; refundMethodRender(); }
 function closeRefundModal(){ document.getElementById('refund-overlay').classList.remove('open'); }
 
 function confirmRefund(){
@@ -1988,9 +2002,11 @@ function confirmRefund(){
   var hadKr = chosen.some(function(it){ return it.cancelled; });
   if(mode0==='diffRefund'){ (c.settlementBatches||[]).forEach(function(b){ if(b.krDeposit>0) batchIds.push(b.id); }); }
   c.refunds = c.refunds || [];
-  c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote});
+  var compMode = REFUND_METHOD==='comp' && ['normal','cannotCoordinate'].indexOf(mode0)>-1;
+  if(compMode && !(amount>0)){ alert('转本地项目（代偿）的金额要大于 0'); chosen.forEach(function(it){ if(names.indexOf(it.name)>-1) it.cancelled = false; }); return; }
+  c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote, comp:compMode});
   if(mode0==='cannotCoordinate') logCaseEvent(c, ME_NAME, '室长点［无法协调］：施术日期始终无法协调，取消全部未完成赴韩项目并退款'); /* 供测试覆盖页判断 D29（CMD-1012-06 补） */
-  logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，退款 ')+formatCurrency(amount,'KRW')+'，退款原因：'+reason+(refNote ? '；备注：'+refNote : '')+(c.hasArrived ? '（金额按KR室长判断）' : ''));
+  logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，'+(compMode ? '转本地代偿 ' : '退款 '))+formatCurrency(amount,'KRW')+'，'+(compMode ? '代偿' : '退款')+'原因：'+reason+(refNote ? '；备注：'+refNote : '')+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];
   closeRefundModal();
   if(mode0==='diffRefund'){ /* 尾款多退少补：退差额后视为尾款已结清 */
@@ -2004,6 +2020,7 @@ function confirmRefund(){
     finishCase(c, '未购买未使用');
     return;
   }
+  if(compMode){ startCompPurchase(c, amount, reason, names); return; }
   afterKrItemsChanged(c);
 }
 
@@ -2033,7 +2050,7 @@ function localKeepChoice(kind){
     openLocalAskModal(c);
     return;
   }
-  var rows = localPurchasedBatches(c).filter(function(x){ return x.b.used===0; });
+  var rows = localPurchasedBatches(c).filter(function(x){ return x.b.used===0 && !x.b.comp; }); /* 代偿批次不可退款 */
   if(!rows.length){ alert('这些批次都用过了，不能退款，只能保留'); c.localAsk = true; openLocalAskModal(c); return; }
   window.__LOCAL_REFUND_ROWS = rows;
   document.getElementById('local-refund-all-rows').innerHTML = rows.map(function(x,i){
@@ -2107,11 +2124,12 @@ function settleProjects(batchId){
   }
   if(batch.inTotal){
     rows += '<div'+(batch.krTotal?' style="border-top:1px solid var(--border2);padding-top:14px;"':'')+'><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">本地项目（收全款）</div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;"><span>应付金额</span><span>'+formatCurrency(batch.inTotal,'IDR')+'</span></div></div>';
+      (batch.compCredit ? '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>本地项目合计</span><span>'+formatCurrency(batch.inTotal,'IDR')+'</span></div><div style="display:flex;justify-content:space-between;font-size:13px;color:#8F6F0C;"><span>赴韩定金转本地代偿</span><span>−'+formatCurrency(batch.compCredit,'IDR')+'</span></div>' : '')+
+      '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;"><span>应付金额</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div></div>';
   }
   var payLines = [];
   if(batch.krDeposit) payLines.push('<div style="display:flex;justify-content:space-between;"><span>赴韩本次应付</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>');
-  if(batch.inTotal) payLines.push('<div style="display:flex;justify-content:space-between;"><span>本地本次应付</span><span>'+formatCurrency(batch.inTotal,'IDR')+'</span></div>');
+  if(batch.inTotal) payLines.push('<div style="display:flex;justify-content:space-between;"><span>本地本次应付'+(batch.compCredit ? '（已扣代偿）' : '')+'</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div>');
   rows += '<div style="border-top:1px solid var(--border);padding-top:14px;font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:6px;"><span style="font-size:13px;color:var(--muted);font-weight:400;">本次合计应付（两种币种分开支付，不合并）</span>'+payLines.join('')+'</div>';
   var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; }), need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
   SETTLE_ANES_SIGNED = false;

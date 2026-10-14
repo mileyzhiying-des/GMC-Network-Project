@@ -533,6 +533,7 @@ function krDirUnavail(hid, director, date){
   offs.forEach(function(o){ var rg = krHalfRange(hid, offPartArg(o.part)); out.push({a:rg[0], b:rg[1], tag:'OFF（'+o.part+'）'}); });
   ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date; }).forEach(function(b){ out.push({a:b.time, b:b.end, tag:b.kind==='施术' ? '施术' : (b.kind==='面诊' ? '面诊' : '不可预约')}); });
   var cf = hospitalClosedFrom(hid, date); if(cf) out.push({a:cf, b:hospitalHours(hid).close, tag:'医院休诊'});
+  var cb0 = hospitalClosedBefore(hid, date); if(cb0) out.push({a:hospitalHours(hid).open, b:cb0, tag:'医院休诊'});
   out.sort(function(x, y){ return timeToMin(x.a) - timeToMin(y.a); });
   return {whole:'', ranges:out};
 }
@@ -546,9 +547,9 @@ function krDirDayTextOld(hid, director, date){
 }
 /* 非营业时间确认（午休 / 营业前 / 营业后）：弹窗［确认］就约，［更换时间］关闭（CMD-1013-02 二） */
 function krOffHoursText(hid, date, time, dur){
-  var s = timeToMin(time), e = s + (dur||30), hr = hospitalHours(hid), lu = hospitalLunch(hid), cf = hospitalClosedFrom(hid, date);
+  var s = timeToMin(time), e = s + (dur||30), hr = hospitalHours(hid), lu = hospitalLunch(hid), cf = hospitalClosedFrom(hid, date), cb = hospitalClosedBefore(hid, date);
   if(lu && s >= timeToMin(lu.from) && s < timeToMin(lu.to)) return '这是午休时间';
-  if(s < timeToMin(hr.open) || e > timeToMin(hr.close) || (cf && e > timeToMin(cf))) return '这是营业时间外';
+  if(s < timeToMin(hr.open) || e > timeToMin(hr.close) || (cf && e > timeToMin(cf)) || (hospitalClosedBefore(hid, date) && s < timeToMin(hospitalClosedBefore(hid, date)))) return '这是营业时间外';
   return '';
 }
 function krOffConfirm(text, onOk){
@@ -1422,6 +1423,7 @@ function krDayAgendaHtml(director, date){
   rows.push({a:'00:00', b:hr.open, tag:'营业时间外'}); rows.push({a:hr.close, b:'24:00', tag:'营业时间外'});
   if(lu) rows.push({a:lu.from, b:lu.to, tag:'午休'});
   var cf = hospitalClosedFrom(hid, date); if(cf) rows.push({a:cf, b:hr.close, tag:'医院休诊'});
+  var cb1 = hospitalClosedBefore(hid, date); if(cb1) rows.push({a:hr.open, b:cb1, tag:'医院休诊'});
   ((h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); })).forEach(function(o){ var rg = (o.part && o.part!=='全天') ? krHalfRange(hid, o.part) : [hr.open, hr.close]; rows.push({a:rg[0], b:rg[1], tag:'OFF（'+(o.part||'全天')+'）'}); });
   ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date; }).forEach(function(b){ rows.push({a:b.time, b:b.end, tag:(function(){ var ty = b.type||b.kind; return (ty==='施术' || ty==='面诊') ? ty+'·'+(b.name||'客人') : '不可预约（手动）'; })()}); });
   /* 术后管理（在韩子项，带时间）：来自所有对接诊所的案件 */
@@ -1858,6 +1860,7 @@ function krcGridHtml(days, ev){
     var lines = ''; for(var h3 = KRC_H0; h3 < KRC_H1; h3++) lines += '<div style="position:absolute;left:0;right:0;top:'+((h3-KRC_H0)*KRC_PX)+'px;border-top:1px solid #f0ece3;"></div>';
     var hc = hospitalClosedOn(krHospitalIdOfMe(), ds), cf = hc ? '' : hospitalClosedFrom(krHospitalIdOfMe(), ds);
     var lu = hospitalLunch(krHospitalIdOfMe()); if(lu && !hc) lines += '<div title="午休" style="position:absolute;left:0;right:0;top:'+((timeToMin(lu.from)-KRC_H0*60)*KRC_PX/60)+'px;height:'+(newCalOn() ? Math.min(14, (timeToMin(lu.to)-timeToMin(lu.from))*KRC_PX/60) : (timeToMin(lu.to)-timeToMin(lu.from))*KRC_PX/60)+'px;background:#F3F1EC;color:#b5b0a4;font-size:10px;text-align:center;pointer-events:none;z-index:0;">午休</div>';
+    var cbf = hc ? '' : hospitalClosedBefore(krHospitalIdOfMe(), ds); if(cbf) lines += '<div title="医院休诊（半天营业）" style="position:absolute;left:0;right:0;top:0;height:'+Math.max(0, (timeToMin(cbf)-KRC_H0*60)*KRC_PX/60)+'px;background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);pointer-events:none;z-index:1;"></div>';
     if(cf) lines += '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(cf)-KRC_H0*60)*KRC_PX/60)+'px;bottom:0;background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);pointer-events:none;z-index:1;"></div>'; /* 部分时段休诊：该时段灰色斜纹 */
     if(hc){ r1 += '<div style="'+cell+'text-align:center;font-size:11px;padding:4px 0;background:#EFEBE4;">'+ds.slice(5)+'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">医院休诊</span></div>'; r2 += '<div style="'+cell+'background:#EFEBE4;border-top:1px solid var(--line);"></div>'; r3 += '<div style="'+cell+'background:#EFEBE4;border-top:1px solid var(--line);"></div>'; r4 += '<div style="'+cell+'height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:repeating-linear-gradient(45deg,#F7F4EF,#F7F4EF 6px,#EFEBE4 6px,#EFEBE4 12px);border-top:1px solid var(--line);"></div>'; return; }
     r1 += '<div style="'+cell+'text-align:center;font-size:12px;padding:4px 0;'+(isToday?'font-weight:700;color:var(--terracotta);':'')+'">'+ds.slice(5)+' 周'+krcDow(ds)+(open?'<br><span style="font-size:9px;color:var(--sage);font-weight:700;">施术开放</span>':'')+'</div>';
@@ -1905,7 +1908,7 @@ function krcSaveBusy(){ var b = krcBusyById(KRC.edit); if(!b || !krcCanEdit(b.wh
 function krcDelBusy(){ var h = krHData(), b = krcBusyById(KRC.edit); if(!b || !krcCanEdit(b.who) || !confirm('删除这个不可预约？')) return; h.directorSchedule[b.who] = h.directorSchedule[b.who].filter(function(x){ return x.id!==b.id; }); KRC.edit = null; Store.touch(); krcRender(); }
 /* 月视图：单一院长时点日期 = 设定该院长当天是否开放施术；全部院长时点日期 = 看当天 */
 function krcMonthClick(ds){
-  if(newCalOn()){ KRC.anchor = krcWeekStartMon(ds); krcSet('mode','week'); return; } /* CMD-1014-02：点日期 = 进那一周；日历上不再设定开放施术日期（只在医院设定改） */
+  { KRC.anchor = krcWeekStartMon(ds); krcSet('mode','week'); return; } /* CMD-1014-02：点日期 = 进那一周；日历上不再设定开放施术日期（只在医院设定改） */
   var who = krcWho();
   if(who==='all'){ KRC.anchor = ds; krcSet('mode','day'); return; }
   if(!(krcIsDirector() ? who===currentAccount().name && canDo('kropen') : canDo('kropen'))){ alert('没有权限设定这位院长的开放日期'); return; }
@@ -1984,7 +1987,7 @@ function krdSave(){
   var list = krdDoctors();
   if(!KRD.edit || KRD.edit==='new'){
     if(list.some(function(x){ return x.name===d0.name.trim(); })){ alert('名单里已经有这位院长'); return; }
-    d0.id = hid+'-D'+(list.length+1); d0.name = d0.name.trim(); list.push(d0); h.openDates = h.openDates||{}; h.openDates[d0.name] = h.openDates[d0.name]||[];
+    d0.id = hid+'-D'+(list.length+1); d0.name = d0.name.trim(); list.push(d0); 
     logOp('其他', '新增院长：'+d0.name, '院长管理');
   } else {
     var cur = list.filter(function(x){ return x.id===KRD.edit; })[0]; d0.name = cur.name; /* 姓名是案件/日程的关联键，已有院长不改姓名 */

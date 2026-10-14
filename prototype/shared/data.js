@@ -231,9 +231,13 @@ function hospitalDirectorNames(hid){ return hospitalDirectors(hid).filter(functi
 function hospitalCoordinators(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.coordinators : []; }
 /* 医院休诊日（2026-10-07，CMD-1007-03）：KR 室长在 KR 工作台日历登记整院休诊（可取消）；HOSPITAL_DATA[h].closedDates = [{id, date, by}]；IN 的 KR 医院日程视角和 KR 日历都读这里 */
 /* 2026-10-08：医院休诊改成定期休诊（HOSPITAL_DATA[h].closedRules，每周固定，整天或从某时刻起）；取代 CMD-03 的逐日登记 closedDates */
-function hospitalClosedOn(hid, ds){ var h = HOSPITAL_DATA[hid]; return !!h && closedWholeDay(h.closedRules, new Date(ds+'T00:00:00').getDay()); }
-function hospitalClosedFrom(hid, ds){ var h = HOSPITAL_DATA[hid]; return h ? closedFromOf(h.closedRules, new Date(ds+'T00:00:00').getDay()) : ''; } /* 这天从几点（韩国时间）起休诊，没有 = '' */
-function hospitalSlotClosed(hid, ds, hm){ if(hospitalClosedOn(hid, ds)) return true; var f = hospitalClosedFrom(hid, ds); return !!f && timeToMin(hm) >= timeToMin(f); }
+/* CMD-1014-03：KR 医院设定的「特殊日子」（HOSPITAL_DATA[h].specialDays = [{id, date, mode:'open'|'closed'|'half', from, to}]）优先于每周固定休诊：
+   open = 本来休息改营业；closed = 本来营业改休息；half = 半天营业（from～to 营业，其余时间休诊）。 */
+function hospitalSpecial(hid, ds){ var h = HOSPITAL_DATA[hid]; return (h && (h.specialDays||[]).filter(function(x){ return x.date===ds; })[0]) || null; }
+function hospitalClosedOn(hid, ds){ var h = HOSPITAL_DATA[hid]; if(!h) return false; var sp = hospitalSpecial(hid, ds); if(sp) return sp.mode==='closed'; return closedWholeDay(h.closedRules, new Date(ds+'T00:00:00').getDay()); }
+function hospitalClosedFrom(hid, ds){ var h = HOSPITAL_DATA[hid]; if(!h) return ''; var sp = hospitalSpecial(hid, ds); if(sp) return sp.mode==='half' ? sp.to : ''; return closedFromOf(h.closedRules, new Date(ds+'T00:00:00').getDay()); } /* 这天从几点（韩国时间）起休诊，没有 = '' */
+function hospitalClosedBefore(hid, ds){ var sp = hospitalSpecial(hid, ds); return (sp && sp.mode==='half') ? sp.from : ''; } /* 半天营业：这个时刻之前休诊 */
+function hospitalSlotClosed(hid, ds, hm){ if(hospitalClosedOn(hid, ds)) return true; var f = hospitalClosedFrom(hid, ds), b = hospitalClosedBefore(hid, ds); return (!!f && timeToMin(hm) >= timeToMin(f)) || (!!b && timeToMin(hm) < timeToMin(b)); }
 /* OFF 在某天是否生效：单次 = date 相同；每周固定 = weekly 且星期相同（2026-10-08，CMD-1007-04） */
 function offApplies(o, ds){ return o.weekly ? (o.dow === new Date(ds+'T00:00:00').getDay()) : o.date===ds; }
 /* KR 排施术时间的检查：整天休诊 / 休诊时段 / 院长 OFF 不能排；返回错误文字，'' = 可以（KR 端确认、调整、重新预约施术时间前调用） */
@@ -243,6 +247,7 @@ function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, op
   if(!soft && (s < timeToMin(hrs.open) || e > timeToMin(hrs.close))) return '施术时间要在医院营业时间内（韩国 '+hrs.open+'–'+hrs.close+'）';
   if(!soft && lu && s >= timeToMin(lu.from) && s < timeToMin(lu.to)) return '不能开始于午休时段（韩国 '+lu.from+'–'+lu.to+'）；可以跨过午休';
   if(hospitalClosedOn(hid, date)) return date+' 是医院定期休诊日，不能排施术';
+  var cb = soft ? '' : hospitalClosedBefore(hid, date); if(cb && s < timeToMin(cb)) return '这个时间落在医院休诊时段（'+date+' 半天营业，'+cb+' 前休诊）';
   var cf = soft ? '' : hospitalClosedFrom(hid, date); if(cf && e > timeToMin(cf)) return '这个时间落在医院休诊时段（周'+['日','一','二','三','四','五','六'][new Date(date+'T00:00:00').getDay()]+' '+cf+' 起休诊）';
   var h = HOSPITAL_DATA[hid] || {offs:[]}, bad = (h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); }).filter(function(o){ var hh = (o.part && o.part!=='全天') ? krHalfRange(hid, o.part) : ['00:00','24:00'], a = hh[0]==='00:00' ? 0 : timeToMin(hh[0]), b = hh[1]==='24:00' ? 24*60 : timeToMin(hh[1]); return s < b && e > a; /* 半天 OFF：上午 = 营业开始→午休开始 / 下午 = 午休结束→营业结束（韩国时间，见 krHalfRange） */ })[0];
   if(bad) return director+' 在这个时间 OFF（'+(bad.part||'全天')+(bad.weekly ? '，每周固定' : '')+'），不能排施术';
@@ -281,7 +286,14 @@ function krHalfRange(hid, part){
   return part==='下午' ? [b, hr.close] : [hr.open, a];
 }
 function hospitalLunch(hid){ var h = HOSPITAL_DATA[hid]; return (h && h.lunch && h.lunch.from && h.lunch.to) ? h.lunch : null; }
-function hospitalOpenDates(hid, director){ var h = HOSPITAL_DATA[hid]; return ((h && h.openDates && h.openDates[director]) || []).filter(function(ds){ return !hospitalClosedOn(hid, ds); }); } /* 医院整天休诊的日子不能选施术 */
+/* CMD-1014-03：不再有「院长开放施术日」——院长哪天能做手术 = 医院有营业的日子，扣掉这位院长的整天 OFF 和盖满营业时间的不可预约 */
+function hospitalOpenOn(hid, director, ds){
+  var h = HOSPITAL_DATA[hid]; if(!h || hospitalClosedOn(hid, ds)) return false;
+  if((h.offs||[]).some(function(o){ return o.kind==='director' && o.who===director && offApplies(o, ds) && (!o.part || o.part==='全天'); })) return false;
+  var hr = hospitalHours(hid), a = timeToMin(hospitalClosedBefore(hid, ds) || hr.open), z = timeToMin(hospitalClosedFrom(hid, ds) || hr.close);
+  return !((h.directorSchedule||{})[director]||[]).some(function(b){ return b.date===ds && (b.type||b.kind)==='不可预约' && timeToMin(b.time) <= a && timeToMin(b.end) >= z; });
+}
+function hospitalOpenDates(hid, director){ var out = []; for(var k = -30; k <= 240; k++){ var ds = D(k); if(hospitalOpenOn(hid, director, ds)) out.push(ds); } return out; }
 function hospitalOfDirector(name){ for(var k in HOSPITAL_DATA){ if(hospitalDirectors(k).some(function(d){ return d.name===name; })) return k; } return null; }
 
 function timeToMin(t){ return parseInt(t.slice(0,2),10)*60 + parseInt(t.slice(3),10); }
@@ -2931,7 +2943,8 @@ function localPurchaseHtml(c, scope, isAddition){
   var canNoBuy = scope==='lm' || (!isAddition && c.entryChoicePending && c.projectEntryMode==='new' && isLocalCase(c) && !caseHasPurchase(c) && !(c.mgmtUses||[]).length && !((c.localMgmt && c.localMgmt.mgmtUses)||[]).length); /* 不面诊的本地案件、选择项目、没付款也没用过持有项目时才显示（CMD-1008-06） */
   var settleFn = scope==='lm' ? 'lmSettle()' : (isAddition ? 'confirmAddition()' : 'confirmProjectSelection()');
   var noBuyFn = scope==='lm' ? 'lmNoBuy()' : 'noPurchaseThisTime()';
-  var settleOk = tot.paidCount && !tot.missingPrice;
+  var settleOk = tot.paidCount && !tot.missingPrice, cp = compPending(c, scope), compBanner = '';
+  if(cp){ settleOk = settleOk && tot.total >= cp.credit; canNoBuy = false; compBanner = compBannerHtml(cp, tot.total); } /* 代偿额度要一次用完，不能「本次不购买」 */
   var settleBtn = '<button class="btn-primary" style="flex:1;'+(settleOk ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(settleOk ? 'onclick="'+settleFn+'"' : 'disabled')+'>结算</button>';
   var right = '<div class="sel-card"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:8px;">已选择</div>'+
     '<textarea placeholder="备注（仅 IN，选填）" oninput="setLocalNote(\''+scope+'\',this.value)" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;margin-bottom:10px;">'+noteVal+'</textarea>'+
@@ -2944,7 +2957,7 @@ function localPurchaseHtml(c, scope, isAddition){
   var head = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="info-heading">本地选购</div>'+
     (scope==='main' ? '<span style="cursor:pointer;font-size:12px;color:var(--slate);" onclick="toggleProjectsExpand()">'+(c.projectsExpanded?'⮡ 收起':'⮢ 展开满屏')+'</span>' : '')+
     (isAddition ? '<span style="cursor:pointer;font-size:12px;color:var(--slate);margin-left:10px;" onclick="cancelAddMore()">取消追加</span>' : '')+'</div>';
-  return wrapOpen+head+'<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px;"><div>'+left+'</div><div>'+right+'</div></div></div>';
+  return wrapOpen+head+(compBanner ? compBanner : '')+'<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px;"><div>'+left+'</div><div>'+right+'</div></div></div>';
 }
 
 /* 把已选择的本地条目发放成客户持有批次（主结算单付款 / 本地管理结算共用）：项目 = 一个批次（实付 = 活动价 / 原价 × 个数 × 折扣）；
@@ -3056,6 +3069,11 @@ function localBoughtHtml(c){
 }
 
 /* 结算 tab：本案件所有结算单（赴韩 / 本地 / 加项 / 更换 / 到院调整 / 退款）按时间排，只看不操作，每张标来源并可点回对应 tab */
+(function(){
+  if(typeof settlementCardHtml!=='function') return;
+  var b0 = settlementCardHtml;
+  settlementCardHtml = function(c, b){ var h = b0.apply(this, arguments); return (b && b.compCredit) ? h+'<div style="font-size:12px;color:#8F6F0C;background:#FBF0C9;border-radius:8px;padding:8px 12px;margin-top:8px;">赴韩定金转本地代偿：−'+formatCurrency(b.compCredit,'IDR')+'；本次补付 '+formatCurrency(b.payExtra||Math.max(0,(b.inTotal||0)-b.compCredit),'IDR')+'（买到的项目标「代偿」，不可退款）</div>' : h; };
+})();
 function settleTabHtml(c){
   var all = [];
   (c.settlementBatches||[]).forEach(function(b){ all.push({t:b.time||'', kind:'sb', b:b, src:((b.krTotal||0)>0 || hasKrBatch(c, b)) ? 'kr' : 'local'}); }); /* 有赴韩部分的算「赴韩施术」，纯本地的算「本地管理」 */
@@ -3389,15 +3407,47 @@ function lmNoBuy(){
   afterLmFinished(c);
 }
 
+/* ===== CMD-1014-03 本地代偿：取消项目 / 无法协调时不退钱，赴韩定金转成本地项目额度（c.comp = {kwr, credit, scope, used}） =====
+   额度 = 原本应退的韩元 × 汇率，必须一次用完（已选 ≥ 额度才能结算），超过的差额补付；买到的批次标 comp:true，不可退款。 */
+function compPending(c, scope){ return (c && c.comp && !c.comp.used && c.comp.scope===scope) ? c.comp : null; }
+function holdingBatchSet(c){ var out = []; getClientHoldings(c.name).forEach(function(h){ h.batches.forEach(function(b){ out.push(b); }); }); return out; }
+function compBannerHtml(cp, total){
+  var left = Math.max(0, cp.credit - total), extra = Math.max(0, total - cp.credit);
+  return '<div class="card" style="padding:10px 14px;margin-bottom:10px;background:#FBF0C9;border-color:#E8D48A;font-size:12px;line-height:1.7;"><b>代偿额度 '+formatCurrency(cp.credit,'IDR')+'</b>（赴韩定金 '+formatCurrency(cp.kwr,'KRW')+' 转本地） · 已选 '+formatCurrency(total,'IDR')+' · 剩余 <b>'+formatCurrency(left,'IDR')+'</b> · 需补付 <b>'+formatCurrency(extra,'IDR')+'</b><br><span style="color:#8F6F0C;">额度要一次用完：已选不到额度不能结算；超过额度补付差额；买到的项目不可退款。</span></div>';
+}
+function compFinalize(c, cp, before, total, batchObj){
+  var extra = Math.max(0, total - cp.credit);
+  getClientHoldings(c.name).forEach(function(h){ h.batches.forEach(function(b){ if(before.indexOf(b)<0 && b.caseId===c.id){ b.comp = true; } }); });
+  cp.used = true; cp.usedAt = nowFullDt();
+  if(batchObj){ batchObj.compCredit = cp.credit; batchObj.payExtra = extra; }
+  logCaseEvent(c, actingName(), '赴韩定金转本地代偿：−'+formatCurrency(cp.credit,'IDR')+'（定金 '+formatCurrency(cp.kwr,'KRW')+'）；本次购买 '+formatCurrency(total,'IDR')+'，补付 '+formatCurrency(extra,'IDR')+'；买到的项目标「代偿」、不可退款');
+}
+/* 退款弹窗选了「转本地项目（代偿）」之后：直接进本地管理 tab 的选购画面 */
+function startCompPurchase(c, kwr, reason, names){
+  var credit = Math.round(kwr * FX_RATES.KRW_IDR), partial = krActiveItems(c).length>0;
+  c.comp = {kwr:kwr, credit:credit, reason:reason, date:todayStr(), items:names, scope:partial ? 'lm' : 'main', used:false};
+  if(partial){
+    c.localMgmt = {active:true, ended:false, step:'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}, cart:[]};
+    c.localMgmtDay = c.localMgmtDay || todayStr();
+  } else {
+    c.krSchedule = null; c.localAsk = false; c.localTrack = true; c.entryChoicePending = true; c.projectEntryMode = 'new'; c.projectsLocked = false; c.recommended = []; c.projectOriginFilter = 'IN'; /* 赴韩项目都取消了：同一案件转本地案件，直接是选购画面（和「增加本地项目」同一套重置） */
+  }
+  c.activeCaseTab = 'localmgmt';
+  logCaseEvent(c, actingName(), '退款方式选「转本地项目（代偿）」：代偿额度 '+formatCurrency(credit,'IDR')+'（'+formatCurrency(kwr,'KRW')+' × '+FX_RATES.KRW_IDR+'），进入本地管理选购画面');
+  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+}
 function lmSettle(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
   var lm = c.localMgmt, cart = lm.cart||[], today = todayStr();
   if(!cart.length) return;
   if(cartTotals(cart).onlyService){ alert('서비스需搭配付费项目'); return; }
   var total = cart.reduce(function(s,it){ return s + inLineTotal(it); }, 0);
+  var cpL = compPending(c, 'lm'); if(cpL && total < cpL.credit){ alert('代偿额度 '+formatCurrency(cpL.credit,'IDR')+' 要一次用完：已选 '+formatCurrency(total,'IDR')+' 不够，请继续选购'); return; }
+  var beforeB = cpL ? holdingBatchSet(c) : null;
   var items = cart.map(function(it){ return {name:it.name, kind:it.kind||'project', qty:it.qty||1, price:it.price, unitPrice:it.unitPrice, discountPct:(it.discountPct===undefined||it.discountPct===null)?100:it.discountPct, itemNote:it.itemNote||'', promo:!!it.promoId, pkgItems:it.pkgItems, lineTotal:inLineTotal(it)}; });
   grantLocalItems(c, cart, today);
   lm.batches.push({id:'L'+(lm.batches.length+1), items:items, inTotal:total, time:nowFullDt(), note:lm.noteIN||''});
+  if(cpL) compFinalize(c, cpL, beforeB, total, lm.batches[lm.batches.length-1]);
   lm.cart = []; lm.noteIN = '';
   if(lm.mgmtActive){ lm.addBuy = false; lm.addUse = true; } /* 本地管理进行中追加购买：付款后问是否继续使用 */
   else lm.step = 'afterBuyUse'; /* 结算后：是否使用？ */
@@ -3410,8 +3460,10 @@ function lmSettle(){
 function confirmProjectSelection(){
   var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return;
   if(cartTotals(c.recommended).onlyService){ alert('서비스需搭配付费项目'); return; }
+  var cpM = compPending(c, 'main'); if(cpM && cartTotals(c.recommended).total < cpM.credit){ alert('代偿额度 '+formatCurrency(cpM.credit,'IDR')+' 要一次用完：已选 '+formatCurrency(cartTotals(c.recommended).total,'IDR')+' 不够，请继续选购'); return; }
   logCaseEvent(c, actingName(), '确认所选管理项目：'+c.recommended.map(function(it){ return it.name; }).join('、'));
   generateSettlementBatch(c);
+  if(cpM){ var lb = c.settlementBatches[c.settlementBatches.length-1]; lb.compCredit = cpM.credit; }
   updateCaseStage(c);
   renderCaseStatusBar(c);
   buildCaseLog(c);
@@ -3671,7 +3723,9 @@ function confirmSettlementPayment(){
   var today = todayStr();
   var batchInItems = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='IN'; });
   batch.inItems = batchInItems.map(function(it){ return {name:it.name, specLabel:it.specLabel||'', specTimes:it.specTimes||1, kind:it.kind||'project', qty:it.qty||1, price:it.price, unitPrice:it.unitPrice, discountPct:(it.discountPct===undefined?100:it.discountPct), itemNote:it.itemNote||'', promo:!!it.promoId}; }); /* 结算单展示用快照（本地项目结算后转持有，不留在 procedureItems） */
+  var __cb = batch.compCredit ? holdingBatchSet(c) : null;
   grantLocalItems(c, batchInItems, today); /* 本地项目 / 套餐 / 서비스 转客户持有（套餐拆批次） */
+  if(batch.compCredit && c.comp){ compFinalize(c, c.comp, __cb, batch.inTotal, batch); }
   /* 本地项目（含术后管理）结算后立即转客户持有，不进入案件进程（2026-09-29 第十轮） */
   c.procedureItems = (c.procedureItems||[]).filter(function(it){ return it.origin!=='IN'; });
   if(krActiveItems(c).length>0){
@@ -6129,7 +6183,7 @@ function seedKrMonthDemo(){
 function seedSurgeryDate(hid, director, date, time){
   var d = date;
   for(var i = 0; i < 60; i++){
-    if(!krSurgerySlotError(hid, director, d, time, 60, null, {ignoreBusy:true}) && hospitalOpenDates(hid, director).indexOf(d) > -1) return d; /* 不可预约块以施术为准会被删掉，所以这里只避开休诊 / OFF / 别的施术 */
+    if(!krSurgerySlotError(hid, director, d, time, 60, null, {ignoreBusy:true}) && hospitalOpenOn(hid, director, d)) return d; /* 不可预约块以施术为准会被删掉，所以这里只避开休诊 / OFF / 别的施术 */
     var x = new Date(d+'T00:00:00'); x.setDate(x.getDate()+1); d = dateStr(x);
   }
   return date;

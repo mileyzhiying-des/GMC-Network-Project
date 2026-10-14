@@ -1046,4 +1046,46 @@
     krcSetViewAll('me');
   });
 
+  /* ================= CMD-1014-03 ================= */
+  ST.def('HS1','KR 医院设定小日历 + 拿掉院长开放施术日（KM1 / KO1 / KD1 / KC1 权限）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var hid = krHospitalIdOfMe(), h = krHData(), n = function(role){ return canDo('clinic', {role:role, status:'active'}); };
+    ST.ok(n('kr_manager') && n('kr_owner') && !n('kr_general') && !n('kr_director'), '权限：KR 管理者、代表院长能改医院设定；一般室长、一般院长不能');
+    openAdminPage('clinic', true); ST.ok(/特殊日子/.test(document.getElementById('admin-body').innerText) && document.querySelectorAll('#admin-body [onclick^="hspSelect"]').length>=28, '医院设定应有特殊日子小日历');
+    var sun = null, mon = null; for(var k = 3; k < 60 && !(sun && mon); k++){ var ds = D(k), dw = new Date(ds+'T00:00:00').getDay(); if(!sun && hspBaseRest(ds) && !hospitalSpecial(hid, ds)) sun = ds; if(!mon && !hspBaseRest(ds) && !hospitalSpecial(hid, ds) && dw===1) mon = ds; }
+    ST.ok(!!sun && !!mon, '找得到一个休息日和一个营业日'); if(!sun || !mon) return;
+    HSP.ym = sun.slice(0,7); HSP.sel = sun; hspRefresh(); document.getElementById('hsp-from').value = '12:00'; document.getElementById('hsp-to').value = '16:00'; hspSet('half');
+    ST.ok(!hospitalClosedOn(hid, sun) && hospitalClosedBefore(hid, sun)==='12:00' && hospitalClosedFrom(hid, sun)==='16:00', '本来休息的周日改半天营业 12:00–16:00');
+    ST.ok(/半天/.test(krSurgerySlotError(hid, hospitalDirectorNames(hid)[0], sun, '11:00', 60, null, {ignoreBusy:true})) || /休诊/.test(krSurgerySlotError(hid, hospitalDirectorNames(hid)[0], sun, '11:00', 60, null, {ignoreBusy:true})), '半天营业之前的时间不能排施术');
+    ST.ok(hospitalSlotClosed(hid, sun, '10:00') && !hospitalSlotClosed(hid, sun, '13:00') && hospitalSlotClosed(hid, sun, '17:00'), '半天营业 12–16 点之外算休诊');
+    HSP.sel = mon; hspRefresh(); hspSet('closed'); ST.ok(hospitalClosedOn(hid, mon), '本来营业的周一改休息'); ST.ok(hospitalOpenDates(hid, hospitalDirectorNames(hid)[0]).indexOf(mon)<0, '改休息的日子 IN 选不到');
+    HSP.sel = sun; hspRefresh(); hspSet('open'); ST.ok(!hospitalClosedOn(hid, sun) && hospitalClosedFrom(hid, sun)==='' && hospitalClosedBefore(hid, sun)==='', '改为营业'); ST.ok(hospitalOpenDates(hid, hospitalDirectorNames(hid)[0]).indexOf(sun)>-1, '特殊营业的日子可选施术日期');
+    /* 改回 */ HSP.sel = sun; hspClear(); HSP.sel = mon; hspClear(); ST.ok(hospitalClosedOn(hid, sun) && !hospitalClosedOn(hid, mon) && !hospitalSpecial(hid, sun) && !hospitalSpecial(hid, mon), '都能改回原来');
+    /* 院长开放施术日 = 医院营业 − 院长 OFF：不再有预置开放日期 */
+    var dir = hospitalDirectorNames(hid)[0], dd = D(30), kk = 30; while(hospitalClosedOn(hid, dd) || (h.offs||[]).some(function(o){ return o.who===dir && offApplies(o, dd); })){ kk++; dd = D(kk); }
+    ST.ok(hospitalOpenOn(hid, dir, dd), '营业日 + 院长没 OFF → 能做手术'); var off = {id:'offT'+Date.now(), date:dd, who:dir, kind:'director', part:'全天', note:''}; h.offs.push(off); ST.ok(!hospitalOpenOn(hid, dir, dd) && hospitalOpenDates(hid, dir).indexOf(dd)<0, '院长整天 OFF → IN 选不到那天'); h.offs = h.offs.filter(function(o){ return o!==off; });
+    ST.ok(hospitalOpenOn(hid, dir, dd), '去掉 OFF 又能选'); Store.touch();
+  });
+  ST.def('CP1','本地代偿（取消项目 / 无法协调）',function(){
+    var p = ST.localProj('LHALa peel'), price = (function(){ var it = buildLocalItem(p, null); return inLineTotal(it); })();
+    /* A：全部取消（无法协调）→ 额度 = 2 倍单价，1 个不够被挡、3 个够、补付差额 */
+    var c = ST.newRes('CP1a'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c);
+    var kwr = Math.round(2*price/FX_RATES.KRW_IDR); window.confirm = function(){ return true; }; requestCannotCoordinate();
+    ST.ok(document.getElementById('refund-overlay').classList.contains('open') && /转本地项目（代偿）/.test(document.getElementById('refund-method').innerHTML), '退款弹窗应有「退款方式：退钱 / 转本地项目（代偿）」');
+    document.getElementById('refund-amount').value = kwr; setRefundMethod('comp'); ST.ok(/代偿额度/.test(document.getElementById('refund-comp-hint').innerText), '选转本地后显示代偿额度');
+    document.getElementById('refund-reason').value = '（自测）无法协调'; confirmRefund();
+    ST.ok(!!c.comp && !c.comp.used && c.comp.scope==='main' && Math.abs(c.comp.credit - 2*price) <= 12, '应记代偿额度 ≈ 2 倍单价，实际 '+(c.comp&&c.comp.credit)); ST.ok(c.activeCaseTab==='localmgmt' && /代偿额度/.test(document.getElementById('case-body').innerText), '直接进本地管理的选购画面并显示代偿额度');
+    ST.ok((c.refunds||[]).some(function(r){ return r.comp; }) && ST.hasLog(c, /转本地代偿/), '定金按代偿处理（不是退钱）+ Timeline');
+    toggleLocalProject('main', p.id); confirmProjectSelection(); ST.ok(!latestUnpaidBatch(c), '不到额度不能结算');
+    c.recommended[0].qty = 3; confirmProjectSelection(); var b = latestUnpaidBatch(c); ST.ok(!!b && b.compCredit===c.comp.credit, '超过额度可以结算，结算单带代偿额度');
+    settleProjects(); ST.ok(/赴韩定金转本地代偿/.test(document.getElementById('settle-breakdown').innerText), '结算窗写「赴韩定金转本地代偿」'); confirmSettlementPayment();
+    ST.ok(c.comp.used && ST.hasLog(c, /赴韩定金转本地代偿：−Rp/), '付款后代偿用完 + Timeline'); var hs = getClientHoldings(c.name).reduce(function(a, h){ return a.concat(h.batches); }, []).filter(function(x){ return x.caseId===c.id; });
+    ST.ok(hs.length && hs.every(function(x){ return x.comp; }), '买到的批次标「代偿」'); ST.ok(!refundableBatches(c.name).some(function(x){ return x.b.comp; }), '代偿批次不可退款（退款服务不列）'); ST.ok(/代偿/.test(settlementCardHtml(c, b)), '结算单写代偿');
+    /* B：部分取消（取消项目）→ 走本地管理 lm 选购 */
+    var d = ST.newRes('CP1b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻', '鼻翼缩小']); ST.open(d); openCancelItems(); var cb = document.querySelector('.refund-cb'); cb.checked = true; refundRecalc();
+    document.getElementById('refund-amount').value = Math.floor(price/FX_RATES.KRW_IDR); setRefundMethod('comp'); document.getElementById('refund-reason').value = '（自测）取消项目'; confirmRefund();
+    ST.ok(!!d.comp && d.comp.scope==='lm' && !!d.localMgmt && krActiveItems(d).length===1, '部分取消：另一个赴韩项目继续，走本地管理选购'); ST.ok(/代偿额度/.test(document.getElementById('case-body').innerText), '本地管理选购画面显示代偿额度');
+    toggleLocalProject('lm', p.id); d.localMgmt.cart[0].qty = 1; lmSettle(); ST.ok((d.localMgmt.batches||[]).length===1 && d.comp.used, '额度约等于一个项目：一次买够即可结算'); ST.ok(!refundableBatches(d.name).some(function(x){ return x.b.comp; }), '代偿批次不可退款');
+  });
+
 })();
