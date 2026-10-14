@@ -581,3 +581,8 @@ prototype/shared/app.css  共用样式
 
 ## CMD-1014-06 补充（2026-10-14，追加；取代 CMD-1014-05 里「多退少补 / 代偿余额退还」的部分，旧文字保留作历史）
 - **代偿换项目不退钱**：已选合计 < 代偿额度 → 不能结算（`localPurchaseHtml` 结算按钮灰、`lmSettle` / `confirmProjectSelection` 弹提示「还剩 Rp X，请再加项目」），横幅写「还剩 Rp X，请再加项目」；> 额度 → 补付差额。当场换、［之后再换］留给下次、下次［用代偿额度换项目］三处同一规则。`compRefund` / 「代偿余额退还」已拿掉（`financePaid` 恢复原样）；其余（标代偿不标退款、客户详情代偿额度、结束案件放行、医院设定挡住）不动。数据版本不变（42）。
+
+## CMD-1014-07 补充（2026-10-14，追加；旧文字保留作历史）
+- **🎨 新样式 / 旧样式开关**：基准 5eb85b2，单独一个提交；开关 `localStorage.gmc_cfg_newstyle`（`'0'` = 旧样式，默认新样式；`gmc_cfg_` 前缀重置 / 升级不清），在**测试覆盖页顶部**（和其他开关并排）切换，切换后原型分页刷新生效。数据版本不变（42）。
+- 新文件 `shared/dstyle.js`（in / kr / owner / login / booking / test-prep 在 `app.css` 后立刻加载；`dev/check.sh` 已纳入）：新样式时 ① 同步读 `app.css`（`?direct` 让 Vite 开发服务器回原样 CSS），把写死色值换成语义变量，追加语义变量定义（`--bg-* / --border-* / --text-* / --action-* / --feedback-* / --status-*`）、旧变量（`--ivory/--navy/--terracotta…`）改指向语义变量、字体（Pretendard + Noto Sans SC，CDN 加载，离线回退系统字体）、圆角（徽章 4 / 按钮输入框 6 / 卡片 8 / 弹窗 12）、字重 600 / 800 → 700、主按钮改品牌色，`document.write` 成 `<style id="ds-css">` 盖在 app.css 后面；② 页面自带 `<style>` 和 JS 生成的 `style=""` 里的色值 / 字重用 MutationObserver 同样替换（`window.DS_UNMAPPED` 是没对上的色值，保持原样）；③ 文字里的 emoji 换成 Lucide 线条图标（线宽 1.5、颜色跟随文字，原 emoji 留在隐藏文字里，`innerText` 不变，所以自测不受影响）。旧样式 = `dstyle.js` 直接返回，什么都不做。
+- `data.js`：`TONE_COLORS`（Violet / Yellow / Blue / Green / Rose / Gray，键名 Beige / Brown 保持不变）和日历事件 `TYPE_COLOR / TYPE_BG`（预约来访 = Violet、赴韩施术 = Blue）按 `window.DS_NEW` 取值。**新写颜色 / 图标时：颜色优先用语义变量，图标要在 `dstyle.js` 的 `ICONS` 里加映射**。

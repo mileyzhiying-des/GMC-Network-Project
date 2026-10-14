@@ -211,7 +211,7 @@
   function fillRound(){
     var cur = parseInt(localStorage.getItem('gmc_cfg_round'), 10) || 1, b = (typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? GMC_BUILD : null;
     document.getElementById('roundbar').innerHTML = '当前测试轮次：<select onchange="localStorage.setItem(\'gmc_cfg_round\',this.value);fillRoundBar()">'+ROUNDS.map(function(r0){ return '<option value="'+r0+'"'+(cur===r0?' selected':'')+'>第 '+r0+' 轮</option>'; }).join('')+'</select> <span class="muted">之后新建的案件自动标上这个轮次；选错可在下面案件里改</span>　<span class="muted">当前原型版本：'+(b ? esc(b.h)+'（'+esc(b.t)+'）' : '未知')+'</span>';
-    fillNewClose(); fillNewTodo(); fillNewCal();
+    fillNewClose(); fillNewTodo(); fillNewCal(); fillNewStyle();
   }
   /* CMD-1013-16：新结案规则开关（gmc_cfg_newclose，默认开，'0' = 关；切换不动已存案件）+ 模拟到隔天（演示时钟 +24 小时，改 gmc_state 里的 DEMO_SHIFT_MS，打开的原型页面会同步） */
   function fillNewClose(){
@@ -228,6 +228,12 @@
     var on = localStorage.getItem('gmc_cfg_newcal')!=='0', el = document.getElementById('roundbar'); if(!el) return;
     el.innerHTML += '<div style="margin-top:8px;">日历对齐 + 新待办 10/14：<b>'+(on ? '开' : '关')+'</b> <button onclick="toggleNewCal()">'+(on ? '关闭（回到 f3c7ab4 的样子）' : '开启')+'</button> <span class="muted">默认开；KR / 院长固定栏 + memo + 月视图 + 时段框 + 图例、IN 日视图整天格、时间范围前后 2 小时、点卡片筛选待办、已转告客人、确认日程无变动、院长 / KR 面诊待办；切换后原型分页刷新生效（KR 不能安排使用、两个 bug 修复不带开关）</span></div>';
   }
+  /* CMD-1014-07：新样式 / 旧样式开关（gmc_cfg_newstyle，默认新样式） */
+  function fillNewStyle(){
+    var on = localStorage.getItem('gmc_cfg_newstyle')!=='0', el = document.getElementById('roundbar'); if(!el) return;
+    el.innerHTML += '<div style="margin-top:8px;">设计系统样式：<b>'+(on ? '新样式' : '旧样式')+'</b> <button onclick="toggleNewStyle()">'+(on ? '切回旧样式' : '切到新样式')+'</button> <span class="muted">默认新样式；只换颜色 / 字体 / 圆角 / 图标；切换后原型分页要刷新</span></div>';
+  }
+  window.toggleNewStyle = function(){ localStorage.setItem('gmc_cfg_newstyle', localStorage.getItem('gmc_cfg_newstyle')==='0' ? '1' : '0'); fillRound(); };
   window.toggleNewCal = function(){ localStorage.setItem('gmc_cfg_newcal', localStorage.getItem('gmc_cfg_newcal')==='0' ? '1' : '0'); fillRound(); };
   window.toggleNewTodo = function(){ localStorage.setItem('gmc_cfg_newtodo', localStorage.getItem('gmc_cfg_newtodo')==='0' ? '1' : '0'); fillRound(); };
   window.toggleNewClose = function(){ localStorage.setItem('gmc_cfg_newclose', localStorage.getItem('gmc_cfg_newclose')==='0' ? '1' : '0'); fillRound(); };
