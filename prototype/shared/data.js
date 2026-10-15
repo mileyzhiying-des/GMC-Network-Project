@@ -160,9 +160,9 @@ var DOW_CN = ['一','二','三','四','五','六','日'];
 var TODAY_DATE = (function(){ var d = demoNow(); d.setHours(0,0,0,0); return d; })(); /* 真实今天（2026-10-06 起） */
 
 /* 日历事件类型（2026-10-02·六）：预约来访 / 预约占位 / 赴韩施术；删除"视频沟通""术后管理""其他" */
-var TYPE_COLOR = window.DS_NEW ? {reservation:'var(--status-violet-fg)', placeholder:'var(--text-secondary)', travel:'var(--status-blue-fg)'} : {reservation:'var(--navy)', placeholder:'var(--slate)', travel:'var(--terracotta)'}; /* CMD-1014-07：预约来访 = Violet、赴韩施术 = Blue */
+var TYPE_COLOR = {reservation:'var(--status-violet-fg)', placeholder:'var(--text-secondary)', travel:'var(--status-blue-fg)'}; /* CMD-1014-07：预约来访 = Violet、赴韩施术 = Blue */
 
-var TYPE_BG = window.DS_NEW ? {reservation:'var(--status-violet-bg)', placeholder:'var(--bg-sidebar)', travel:'var(--status-blue-bg)'} : {reservation:'#E4E8ED', placeholder:'#F4F6F8', travel:'var(--terracotta-bg)'};
+var TYPE_BG = {reservation:'var(--status-violet-bg)', placeholder:'var(--bg-sidebar)', travel:'var(--status-blue-bg)'};
 
 var TYPE_LABEL = {reservation:'预约来访', placeholder:'预约占位', travel:'赴韩施术'};
 
@@ -1445,12 +1445,9 @@ function finishCase(c, cancelReasonIfCancelled){
 
 /* 终态标签：结局 + 财务标签，例如"仅出报告 · 有项目收入 ₩300,000" */
 /* 状态机总览（Notion State Machines，2026-09-30，取代状态总表）：大状态两层，颜色做成独立属性 Tone */
-var TONE_COLORS = window.DS_NEW ? { /* CMD-1014-07：Tone = Violet（待访问 / 接待中，键名 Beige）/ Yellow / Blue / Green / Rose（仅出报告，键名 Brown）/ Gray */
+var TONE_COLORS = { /* CMD-1014-07：Tone = Violet（待访问 / 接待中，键名 Beige）/ Yellow / Blue / Green / Rose（仅出报告，键名 Brown）/ Gray */
   Beige:['var(--status-violet-bg)','var(--status-violet-fg)'], Yellow:['var(--status-yellow-bg)','var(--status-yellow-fg)'], Blue:['var(--status-blue-bg)','var(--status-blue-fg)'],
   Green:['var(--status-green-bg)','var(--status-green-fg)'], Brown:['var(--status-rose-bg)','var(--status-rose-fg)'], Gray:['var(--status-gray-bg)','var(--status-gray-fg)']
-} : {
-  Beige:['#F2EADB','#8A7650'], Yellow:['#FBF0C9','#8F6F0C'], Blue:['var(--blue-bg)','var(--blue)'],
-  Green:['var(--sage-bg)','var(--sage)'], Brown:['#E8D5C4','#7A4E2D'], Gray:['#EDEAE2','var(--muted)']
 };
 
 var STATE_TONE = {

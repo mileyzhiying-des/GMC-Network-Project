@@ -1,14 +1,10 @@
-/* ================= CMD-1014-07 设计系统样式（新样式 / 旧样式开关） =================
+/* ================= CMD-1014-07 设计系统样式（10/15 起只有这一套） =================
    只换颜色 / 字体 / 圆角 / 图标；版面、间距、文字、结构、交互不动。
-   开关：localStorage.gmc_cfg_newstyle（'0' = 旧样式，默认新样式；gmc_cfg_ 前缀重置不清），在测试覆盖页顶部切换。
-   旧样式 = 本文件什么都不做（app.css 和所有写死的色值原样）。
+   （原来的新 / 旧样式开关已收掉，旧样式不再保留；app.css 里的旧色值仍由本文件在运行时映射成语义变量。）
    做法（新样式时）：① 读 app.css，把写死的色值换成语义变量，加上语义变量定义和字体 / 圆角 / 字重覆盖，document.write 成一段 <style>（放在 app.css 后面覆盖）；
    ② 页面里单独的 <style> 和 JS 生成的 style="" 里的色值 / 字重同样替换（MutationObserver）；③ 文字里的 emoji 图标换成 Lucide 线条图标（线宽 1.5，颜色跟随文字，原 emoji 留在隐藏文字里，innerText 不变）。
    色值来源：Notion「UI 规范 Design System」+ CMD-1014-07 的色值表；表里没有的色值不造新的，保持原样并列进汇报（window.DS_UNMAPPED 可在 console 查看当前页面没对上的色值）。 */
 (function(){
-  var off = false; try{ off = localStorage.getItem('gmc_cfg_newstyle')==='0'; }catch(e){}
-  window.DS_NEW = !off;
-  if(off) return;
   document.documentElement.classList.add('ds-new');
   var VARS = {
     '--bg-page':'#F7F4EE','--bg-surface':'#FFFFFF','--bg-sidebar':'#F7F4F0','--bg-hover':'#EFEAE4','--bg-disabled':'#EFEAE4','--bg-brand-subtle':'#F6E9DE','--bg-brand-faint':'#FBF5EF',

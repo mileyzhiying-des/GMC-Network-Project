@@ -215,7 +215,7 @@
   function fillRound(){
     var cur = parseInt(localStorage.getItem('gmc_cfg_round'), 10) || 1, b = (typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? GMC_BUILD : null;
     document.getElementById('roundbar').innerHTML = '当前测试轮次：<select onchange="localStorage.setItem(\'gmc_cfg_round\',this.value);fillRoundBar()">'+ROUNDS.map(function(r0){ return '<option value="'+r0+'"'+(cur===r0?' selected':'')+'>第 '+r0+' 轮</option>'; }).join('')+'</select> <span class="muted">之后新建的案件自动标上这个轮次；选错可在下面案件里改</span>　<span class="muted">当前原型版本：'+(b ? esc(b.h)+'（'+esc(b.t)+'）' : '未知')+'</span>';
-    fillDemoTime(); fillNewStyle();
+    fillDemoTime();
   }
   /* CMD-1015-11 演示时间：以韩国时间设起点，之后照常往前走；到「真实时间」的恢复点自动恢复；［立刻恢复］。存 gmc_cfg_demotime，所有分页同步，和［模拟到隔天］叠加 */
   var KST = 9*3600000;
@@ -242,12 +242,6 @@
     localStorage.setItem('gmc_cfg_demotime', JSON.stringify({startUtc:s, setAt:Date.now(), restoreUtc:r || 0, startKr:document.getElementById('dt-start').value, restoreKr:document.getElementById('dt-restore').value})); demoTimeTick();
   };
   window.demoTimeReset = function(){ localStorage.removeItem('gmc_cfg_demotime'); demoTimeTick(); };
-  /* CMD-1014-07：新样式 / 旧样式开关（gmc_cfg_newstyle，默认新样式） */
-  function fillNewStyle(){
-    var on = localStorage.getItem('gmc_cfg_newstyle')!=='0', el = document.getElementById('roundbar'); if(!el) return;
-    el.innerHTML += '<div style="margin-top:8px;">设计系统样式：<b>'+(on ? '新样式' : '旧样式')+'</b> <button onclick="toggleNewStyle()">'+(on ? '切回旧样式' : '切到新样式')+'</button> <span class="muted">默认新样式；只换颜色 / 字体 / 圆角 / 图标；切换后原型分页要刷新</span></div>';
-  }
-  window.toggleNewStyle = function(){ localStorage.setItem('gmc_cfg_newstyle', localStorage.getItem('gmc_cfg_newstyle')==='0' ? '1' : '0'); fillRound(); };
   window.shiftOneDay = function(){
     var g = pj(localStorage.getItem('gmc_state')); if(!g || !g.vars){ alert('没有找到存档'); return; }
     g.vars.DEMO_SHIFT_MS = (+g.vars.DEMO_SHIFT_MS || 0) + 86400000; localStorage.setItem('gmc_state', JSON.stringify(g)); alert('演示时钟已往后拨 1 天（累计 '+Math.round(g.vars.DEMO_SHIFT_MS/86400000)+' 天）。已打开的原型页面会自动同步。');
