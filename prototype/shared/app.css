@@ -387,3 +387,17 @@ body.kr-recwin #kr-rec-overlay .modal-box, body.kr-recwin #kr-pcb-overlay .modal
 
 .todo-newdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#E5484D;margin-right:5px;vertical-align:middle;} /* CMD-1015-05 九 */
 .todo-stage{color:var(--text-secondary,var(--slate2));font-weight:600;}
+
+/* CMD-1015-07 待办 6 栏 */
+.todo-row{grid-template-columns:42px 48px minmax(0,1fr) 38px 42px 52px;gap:3px;padding-left:4px;padding-right:4px;}
+.todo-row .todo-due,.todo-row .todo-st{font-size:10.5px;}
+.todo-row .todo-who{min-width:0;overflow:hidden;}
+.todo-row .todo-who b{font-size:11px;}
+.todo-row .todo-at{font-size:11px;color:var(--text-body,var(--navy,#1B2635));white-space:nowrap;}
+.todo-row .todo-stage{font-size:11px;white-space:normal;}
+.todo-row.is-over .todo-at,.todo-row.is-over .todo-stage,.todo-row.is-over .todo-text,.todo-row.is-over .todo-due,.todo-row.is-over .todo-who b,.todo-row.is-over .todo-who span{color:#B2453A;}
+.todo-headrow{font-size:10px;color:var(--muted,#8a8f98);font-weight:700;border-top:none;padding:4px 8px;cursor:default;}
+.todo-headrow:hover{background:transparent;}
+
+.todo-row>div{min-width:0;overflow-wrap:anywhere;}
+.todo-row .todo-st{white-space:normal;}

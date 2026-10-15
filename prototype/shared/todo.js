@@ -32,7 +32,7 @@ function todoIsNew(it){ return !todoSeenLoad()[it.key]; }
 function todoMarkCaseSeen(caseId){ if(!caseId) return; var s = todoSeenLoad(), ch = false; Object.keys(s).forEach(function(){}); (TODO_LAST||[]).forEach(function(it){ if(it.caseId===caseId && !s[it.key]){ s[it.key] = 1; ch = true; } }); if(ch){ todoSeenSave(); try{ todoRefresh(); }catch(e){} } }
 var TODO_LAST = [], TODO_ACT_CASE = [];
 function todoMk(kind, text, c, due, over, go, extra){
-  return Object.assign({kind:kind, stage:todoStageOf(kind, c), key:kind+'|'+(c ? c.id : '')+'|'+(c ? '' : text), cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (c.caseNo||'') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
+  return Object.assign({kind:kind, stage:todoStageOf(kind, c), key:kind+'|'+(c ? c.id : '')+'|'+(c ? '' : String(text).replace(/（已超时）/g, '')), cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (c.caseNo||'') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
 }
 function todoInGo(c, tab){ return function(){ openCaseDetail(c.id); if(tab){ c.activeCaseTab = tab; renderCaseBody(c); } }; }
 function todoInMine(c){ try{ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }catch(e){ return true; } }
@@ -131,8 +131,27 @@ function todoItems(){
   try{ items = todoIsKr() ? krTodoItems(krAllCases()) : inTodoItems(); }catch(e){ console.error('[待办]', e); items = []; }
   return items;
 }
-function todoGroupOf(it){ if(it.over) return 0; if(it.due && it.due.slice(0,10) > todayStr()) return 2; return 1; }
-function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || (a.due||'9999').localeCompare(b.due||'9999'); }
+/* CMD-1015-07：待办新格式——一行 6 栏「出现时间｜阶段｜进程｜截止时间｜状态｜客人 + Case ID」。
+   出现时间 = 这条待办第一次出现的时间（每账号各记，存 localStorage gmc_cfg_todoat_账号，用演示时钟 demoNow()，所以拨时钟 / 隔天会跟着变）；
+   超过截止时间还没处理 → 出现时间改成截止时间并按新时间重排、整行红字；分组 = 昨日及更早 / 今天 / 未来（依据显示的出现时间）；
+   组内：超时的在最上面（按截止时间旧→新），其余按出现时间旧→新。 */
+function todoAtKey(){ var id = ''; try{ id = currentAccountId() || ''; }catch(e){} return 'gmc_cfg_todoat_'+id; }
+var TODO_AT = null;
+function todoAtLoad(){ if(TODO_AT) return TODO_AT; TODO_AT = {}; try{ var raw = localStorage.getItem(todoAtKey()); if(raw) TODO_AT = JSON.parse(raw) || {}; }catch(e){} return TODO_AT; }
+function todoNowStr(){ var d = demoNow(), p = function(n){ return (n<10?'0':'')+n; }; return dateStr(d)+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+/* 给每条待办盖出现时间（第一次见到的时刻），清掉已经不在列表里的；返回 true 表示有变化 */
+function todoStampAt(all){
+  var m = todoAtLoad(), now = todoNowStr(), keep = {}, ch = false;
+  all.forEach(function(it){ keep[it.key] = 1; if(!m[it.key]){ m[it.key] = now; ch = true; } it.at = m[it.key]; });
+  Object.keys(m).forEach(function(k){ if(!keep[k]){ delete m[k]; ch = true; } });
+  if(ch){ try{ localStorage.setItem(todoAtKey(), JSON.stringify(m)); }catch(e){} }
+  return ch;
+}
+/* 显示的出现时间：超时且有截止时间 → 截止时间；否则第一次出现的时间 */
+function todoShownAt(it){ return (it.over && it.due && it.due <= todoNowStr()) ? it.due : (it.at || ''); } /* 截止时间已过才改用截止时间；超时但「截止」是将来的日期（如施术日期）时仍用出现时间 */
+function todoFmtTime(s){ if(!s) return '—'; var d = s.slice(0,10), hm = s.length>=16 ? s.slice(11,16) : ''; if(d===todayStr()) return hm || '今天'; return s.slice(5,10)+(hm ? ' '+hm : ''); }
+function todoGroupOf(it){ if(!it.over && it.due && it.due.slice(0,10) > todayStr()) return 2; var d = (todoShownAt(it)||'').slice(0,10) || todayStr(); return d < todayStr() ? 0 : (d > todayStr() ? 2 : 1); }
+function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || ((b.over?1:0)-(a.over?1:0)) || (todoShownAt(a)||'9999').localeCompare(todoShownAt(b)||'9999'); }
 /* CMD-1014-01 二·1：点卡片 = 筛选待办栏（标题后出现「· 待我处理 ✕」，✕ 回到全部）；开关关闭时仍是 10/13 的 kind 相等判断 */
 var TODO_FILTERS = {
   todo:   {label:'待我处理', fn:function(it){ return todoIsKr() ? it.kind!=='today' : true; }},
@@ -165,29 +184,33 @@ function todoStatusOf(it){
 function todoRowHtml(it){
   var i = TODO_ACTS.push(it.go) - 1, st = todoStatusOf(it); TODO_ACT_CASE[i] = it.caseId||'';
   var urgeBtn = it.urge ? '<button class="btn-primary todo-urge" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</button>' : '';
-  return '<div class="todo-row'+(it.pin?' pin':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
-    '<div class="todo-text">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+(it.pin?'📌 ':'')+(it.stage ? '<span class="todo-stage">'+todoEsc(it.stage)+'｜</span>' : '')+todoEsc(it.text)+'</div>'+
-    '<div class="todo-due'+(it.over?' over':'')+'">'+(it.due ? todoEsc(it.due.slice(5,16)) : '—')+'</div>'+
+  var proc = String(it.text||'').replace(/（已超时）|\(已超时\)/g, '').trim();
+  return '<div class="todo-row'+(it.pin?' pin':'')+(it.over?' is-over':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
+    '<div class="todo-at">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+todoEsc(todoFmtTime(todoShownAt(it)))+'</div>'+
+    '<div class="todo-stage">'+(it.pin?'📌 ':'')+todoEsc(it.stage||'—')+'</div>'+
+    '<div class="todo-text">'+todoEsc(proc)+'</div>'+
+    '<div class="todo-due'+(it.over?' over':'')+'">'+(it.due ? todoEsc(todoFmtTime(it.due)) : '—')+'</div>'+
     '<div class="todo-st '+st.cls+'">'+st.t+urgeBtn+'</div>'+
     '<div class="todo-who">'+(it.name ? '<b>'+todoEsc(it.name)+'</b>' : '<span style="color:var(--muted);">—</span>')+(it.no ? '<span>'+todoEsc(it.no)+'</span>' : '')+'</div></div>';
 }
 function todoGo(i){ var f = TODO_ACTS[i]; try{ var cid = (TODO_ACT_CASE||{})[i]; if(cid) todoMarkCaseSeen(cid); }catch(e){} if(f) try{ f(); }catch(e){ console.error('[待办跳转]', e); } }
 function todoPaneHtml(all){
-  TODO_ACTS = []; TODO_ACT_CASE = []; TODO_LAST = all; todoSeenBaseline(all);
+  TODO_ACTS = []; TODO_ACT_CASE = []; TODO_LAST = all; todoSeenBaseline(all); todoStampAt(all);
   var vis = todoVisible(all), n = vis.length;
   if(TODO_UI.collapsed) return '<button class="btn-outline todo-mini" onclick="todoToggle()">待办 '+n+'</button>';
   var boxStyle = newCalOn() ? ' style="width:auto;"' : '';
-  var groups = [[0,'已超时'],[1,'今天'],[2,'之后']];
+  var groups = [[0,'昨日及更早'],[1,'今天'],[2,'未来']];
   var body = groups.map(function(g){
     var list = vis.filter(function(it){ return todoGroupOf(it)===g[0]; }).sort(todoSort);
     if(!list.length) return '';
-    return '<div class="todo-group'+(g[0]===0?' over':'')+'">'+g[1]+' <span>'+list.length+'</span></div>'+list.map(todoRowHtml).join('');
+    return '<div class="todo-group">'+g[1]+' <span>'+list.length+'</span></div>'+list.map(todoRowHtml).join('');
   }).join('') || '<div class="todo-empty">现在没有待办</div>';
   var tag = (newCalOn() && TODO_UI.kind && TODO_FILTERS[TODO_UI.kind]) ? '<span class="todo-tag">· '+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></span>' : '';
   return '<div class="todo-box"'+boxStyle+'><div class="todo-head"><b>待办 '+n+'</b>'+tag+
     '<span class="todo-seg"><span class="'+(TODO_UI.mine?'':'on')+'" onclick="todoSetMine(false)">全部</span><span class="'+(TODO_UI.mine?'on':'')+'" onclick="todoSetMine(true)">只看我的</span></span>'+
     '<span class="todo-fold" onclick="todoToggle()" title="收起">⟩</span></div>'+
     ((TODO_UI.kind && !tag) ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+
+    (vis.length ? '<div class="todo-row todo-headrow"><div>出现时间</div><div>阶段</div><div>进程</div><div>截止时间</div><div>状态</div><div>客人</div></div>' : '')+
     '<div class="todo-list">'+body+'</div></div>';
 }
 var TODO_KIND_LABEL = {today:'今天到院 / 到店'};
