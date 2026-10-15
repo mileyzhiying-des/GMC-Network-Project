@@ -155,7 +155,7 @@ RT.runKr = function(){
   RT.cell('面诊：［确认］预计出报告时间', coord ? '✅' : (b2 ? '❌' : '—'), b2 ? RT.yn(inList(b2,'确认')) : '（该账号名下没有这个状态的案件）', '案件 '+(b2&&b2.caseNo)+' 的按钮：'+JSON.stringify(b2));
   RT.cell('面诊：［开始面诊］', '✅', b3 ? RT.yn(inList(b3,'开始面诊')) : '（该账号名下没有「等待报告」状态的案件）', '室长 / 院长都能按（规格 2026-10-12：谁先按都算）；A000003 的按钮：'+JSON.stringify(b3));
   RT.cell('面诊：［修改预计时间］', coord ? '—' : '—', b3 ? RT.yn(inList(b3,'修改预计时间')) : '（看不到）', '规格没写院长能不能改预计出报告时间');
-  RT.cell('面诊：［补加可选项目］ / 发送诊疗方案（调整并提交最终报告）', coord ? '✅' : '❌', b6 ? RT.yn(inList(b6,'补加可选项目')) : '（该账号名下没有「已出报告」状态的案件）', '案件 '+(b6&&b6.caseNo)+' 的按钮：'+JSON.stringify(b6));
+  RT.cell('面诊：［补加可选项目］ / 发送诊疗方案（调整并提交最终报告）', coord ? '✅' : '❌', b6 ? RT.yn(Array.isArray(b6) && b6.some(function(x){ return /补加可选项目/.test(x); })) /* CMD-1015-05：按钮改成「＋ 补加可选项目」 */ : '（该账号名下没有「已出报告」状态的案件）', '案件 '+(b6&&b6.caseNo)+' 的按钮：'+JSON.stringify(b6));
   var sub = T(function(){ var hit = null; krClinics().forEach(function(cl){ if(hit) return; Store.withClinic(cl.id, function(){ CASE_ITEMS.forEach(function(c){ if(!hit && krCaseVisible(c, hid) && c.stage==='travel' && c.consultRequested && (c.subItems||[]).some(function(x){ return x.kind==='施术'; })) hit = {cid:cl.id, id:c.id, old:c.director, no:c.caseNo}; }); }); });
     if(!hit) return null; var borrowed = dirLike && hit.old!==me; if(borrowed) Store.mutateClinic(hit.cid, function(){ CASE_ITEMS.filter(function(x){ return x.id===hit.id; })[0].director = me; });
     var r0 = {no:hit.no}; try{ krOpenSurgSub(hit.cid, hit.id); var pg = document.querySelector('.page.active'); r0.btns = [].slice.call(pg.querySelectorAll('button')).map(function(b){ return b.textContent.trim(); }).filter(function(x){ return x && !/^[💬🔔]/.test(x); }); }catch(e){ r0.err = String(e); }
@@ -211,3 +211,7 @@ RT.save = function(extra){
   return out;
 };
 RT.all = function(){ var o = {}; Object.keys(localStorage).filter(function(k){ return k.indexOf('rt_res_')===0; }).forEach(function(k){ o[k.slice(7)] = JSON.parse(localStorage.getItem(k)); }); return o; };
+
+/* CMD-1015-05：页面刚载入时顶部图标（对话 / 铃铛）要等几百毫秒才挂上，测之前先等到出现（最多 6 秒） */
+RT.waitHead = function(){ return new Promise(function(res){ var t0 = Date.now(); (function chk(){ if(document.querySelector('.head-actions') || Date.now()-t0 > 6000) return res(); setTimeout(chk, 200); })(); }); };
+['runIn','runKr'].forEach(function(k){ var f = RT[k]; if(typeof f!=='function') return; RT[k] = function(){ var a = arguments, me = this; return RT.waitHead().then(function(){ return f.apply(me, a); }); }; });

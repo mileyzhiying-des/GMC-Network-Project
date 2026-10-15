@@ -753,3 +753,7 @@ function relDayLabel(n){ return {'-2':'前天','-1':'昨天','0':'今天','1':'�
 function relWeekLabel(startDs, todayDs){ var w = Math.floor(relDayDiff(todayDs, startDs) / 7); return {'0':'本周','1':'上周','-1':'下周'}[String(w)] || ''; }
 function relMonthLabel(ym, todayYm){ var a = parseInt(ym.slice(0,4),10)*12 + parseInt(ym.slice(5,7),10), b = parseInt(todayYm.slice(0,4),10)*12 + parseInt(todayYm.slice(5,7),10); return {'0':'本月','-1':'上个月','1':'下个月'}[String(a-b)] || ''; }
 function relDayDiff(ds, todayDs){ return Math.round((new Date(ds+'T00:00:00') - new Date(todayDs+'T00:00:00')) / 86400000); }
+
+/* CMD-1015-05 十一：案件管理按「最近更新」排序（最近有变动的在最上面）——取 Timeline 里最晚的一条时间；没有记录的排最后 */
+function caseUpdatedKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && e.dt > m) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
+function caseUpdatedDesc(a, b){ return caseUpdatedKey(b).localeCompare(caseUpdatedKey(a)); }

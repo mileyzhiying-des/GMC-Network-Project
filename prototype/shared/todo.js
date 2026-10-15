@@ -19,8 +19,20 @@ function todoIsKr(){ try{ return isKrAccount(); }catch(e){ return false; } }
 /* CMD-1014-02：4 张卡 = 待办 4 类。每条待办恰好属于一类（待办总数 = 4 类加总，卡片数字 = 点下去筛出的条数） */
 var TODO_CAT = {bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
+/* CMD-1015-05 九：第一栏「阶段｜待办事项」——阶段读案件的阶段（同案件列表），没有案件的按类型 */
+var TODO_STAGE_BY_KIND = {bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', send:'面诊', plan:'项目确认'};
+function todoStageOf(kind, c){ if(TODO_STAGE_BY_KIND[kind]) return TODO_STAGE_BY_KIND[kind]; try{ if(c) return caseStageInfo(c).stage || ''; }catch(e){} return ''; }
+/* 红点：新进来的待办亮红点，打开那个案件后灭（每个账号各自记；第一次打开先把现有的都当已看过） */
+function todoSeenKey(){ var id = ''; try{ id = currentAccountId() || ''; }catch(e){} return 'gmc_cfg_todoseen_'+id; }
+var TODO_SEEN_SET = null;
+function todoSeenLoad(){ if(TODO_SEEN_SET) return TODO_SEEN_SET; TODO_SEEN_SET = {}; try{ var raw = localStorage.getItem(todoSeenKey()); if(raw) TODO_SEEN_SET = JSON.parse(raw); else TODO_SEEN_SET = {__init:1}; }catch(e){} return TODO_SEEN_SET; }
+function todoSeenSave(){ try{ localStorage.setItem(todoSeenKey(), JSON.stringify(TODO_SEEN_SET)); }catch(e){} }
+function todoSeenBaseline(items){ var s = todoSeenLoad(); if(s.__init){ delete s.__init; items.forEach(function(it){ s[it.key] = 1; }); todoSeenSave(); } }
+function todoIsNew(it){ return !todoSeenLoad()[it.key]; }
+function todoMarkCaseSeen(caseId){ if(!caseId) return; var s = todoSeenLoad(), ch = false; Object.keys(s).forEach(function(){}); (TODO_LAST||[]).forEach(function(it){ if(it.caseId===caseId && !s[it.key]){ s[it.key] = 1; ch = true; } }); if(ch){ todoSeenSave(); try{ todoRefresh(); }catch(e){} } }
+var TODO_LAST = [], TODO_ACT_CASE = [];
 function todoMk(kind, text, c, due, over, go, extra){
-  return Object.assign({kind:kind, cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (c.caseNo||'') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
+  return Object.assign({kind:kind, stage:todoStageOf(kind, c), key:kind+'|'+(c ? c.id : '')+'|'+(c ? '' : text), cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (c.caseNo||'') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
 }
 function todoInGo(c, tab){ return function(){ openCaseDetail(c.id); if(tab){ c.activeCaseTab = tab; renderCaseBody(c); } }; }
 function todoInMine(c){ try{ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }catch(e){ return true; } }
@@ -151,17 +163,17 @@ function todoStatusOf(it){
   return {t:'待处理', cls:'todo'};
 }
 function todoRowHtml(it){
-  var i = TODO_ACTS.push(it.go) - 1, st = todoStatusOf(it);
+  var i = TODO_ACTS.push(it.go) - 1, st = todoStatusOf(it); TODO_ACT_CASE[i] = it.caseId||'';
   var urgeBtn = it.urge ? '<button class="btn-primary todo-urge" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</button>' : '';
   return '<div class="todo-row'+(it.pin?' pin':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
-    '<div class="todo-text">'+(it.pin?'📌 ':'')+todoEsc(it.text)+'</div>'+
+    '<div class="todo-text">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+(it.pin?'📌 ':'')+(it.stage ? '<span class="todo-stage">'+todoEsc(it.stage)+'｜</span>' : '')+todoEsc(it.text)+'</div>'+
     '<div class="todo-due'+(it.over?' over':'')+'">'+(it.due ? todoEsc(it.due.slice(5,16)) : '—')+'</div>'+
     '<div class="todo-st '+st.cls+'">'+st.t+urgeBtn+'</div>'+
     '<div class="todo-who">'+(it.name ? '<b>'+todoEsc(it.name)+'</b>' : '<span style="color:var(--muted);">—</span>')+(it.no ? '<span>'+todoEsc(it.no)+'</span>' : '')+'</div></div>';
 }
-function todoGo(i){ var f = TODO_ACTS[i]; if(f) try{ f(); }catch(e){ console.error('[待办跳转]', e); } }
+function todoGo(i){ var f = TODO_ACTS[i]; try{ var cid = (TODO_ACT_CASE||{})[i]; if(cid) todoMarkCaseSeen(cid); }catch(e){} if(f) try{ f(); }catch(e){ console.error('[待办跳转]', e); } }
 function todoPaneHtml(all){
-  TODO_ACTS = [];
+  TODO_ACTS = []; TODO_ACT_CASE = []; TODO_LAST = all; todoSeenBaseline(all);
   var vis = todoVisible(all), n = vis.length;
   if(TODO_UI.collapsed) return '<button class="btn-outline todo-mini" onclick="todoToggle()">待办 '+n+'</button>';
   var boxStyle = newCalOn() ? ' style="width:auto;"' : '';
@@ -410,3 +422,9 @@ function todoScheduleSubmittedAt(c){
   var l = (c.logEntries||[]).slice().reverse().filter(function(e){ return /递交施术日期/.test(e.action||''); })[0];
   return l ? l.dt : '';
 }
+
+/* CMD-1015-05 九：不管从哪里打开案件（待办、案件列表、日历），打开后这个案件的新待办红点就灭 */
+(function(){
+  if(typeof openCaseDetail==='function'){ var o1 = openCaseDetail; openCaseDetail = function(id){ var r = o1.apply(this, arguments); try{ todoMarkCaseSeen(id); }catch(e){} return r; }; }
+  if(typeof krShowCase==='function'){ var o2 = krShowCase; krShowCase = function(cl, id){ var r = o2.apply(this, arguments); try{ todoMarkCaseSeen(id); }catch(e){} return r; }; }
+})();

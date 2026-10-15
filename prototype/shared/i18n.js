@@ -222,6 +222,8 @@ var BOOK_DICT = {
   'me.left':    {id:'sisa {n}x', zh:'剩余 {n} 次'},
   /* 首页 + 查看我的预约（CMD-1012-03） */
   'home.hello': {id:'Selamat datang', zh:'欢迎'},
+  'home.welcome': {id:'Selamat datang di {name}!', zh:'您好，欢迎来到 {name}！'},
+  'home.intro': {id:'Pesan jadwal kunjungan Anda dengan mudah, atau lihat reservasi yang sudah ada. Tim kami siap membantu Anda dari konsultasi hingga perawatan.', zh:'在这里可以轻松预约来院时间，也可以查看已有的预约。从咨询到治疗，我们的团队都会陪伴在您身边。'},
   'home.book':  {id:'Buat reservasi', zh:'预约'},
   'home.bookSub':{id:'Pilih waktu kunjungan Anda', zh:'选择来院时间'},
   'home.view':  {id:'Lihat reservasi saya', zh:'查看我的预约'},

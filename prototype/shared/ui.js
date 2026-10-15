@@ -182,9 +182,11 @@ var WEEK_OFFSET = 0, MONTH_OFFSET = 0; /* 月视图：相对「今天所在月�
 
 var DAY_OFFSET = 0;
 
+function dashClockText(){ var t = demoNow(), p2 = function(n){ return (n<10?'0':'')+n; }; return p2(t.getFullYear()%100)+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate())+'（周'+DOW_CN[dowOfDate(dateStr(t))]+'）'+p2(t.getHours())+':'+p2(t.getMinutes())+':'+p2(t.getSeconds()); }
+setInterval(function(){ try{ document.querySelectorAll('[data-clock]').forEach(function(e){ e.textContent = dashClockText(); }); }catch(x){} }, 1000);
 function applyTzSetting(){
   var o = TZ_INFO[CLINIC_TZ] || TZ_INFO['Asia/Jakarta'];
-  var dd = document.getElementById('dash-date'); if(dd){ var t = demoNow(); dd.textContent = t.getFullYear()+'年'+(t.getMonth()+1)+'月'+t.getDate()+'日（周'+DOW_CN[dowOfDate(dateStr(t))]+'）'; } /* 今天的日期取电脑日期 */
+  var dd = document.getElementById('dash-date'); if(dd){ dd.setAttribute('data-clock','1'); dd.textContent = dashClockText(); } /* CMD-1015-05 十：26-10-15（周四）14:32:05，每秒走字；时间按页面时区（IN = 印尼诊所，KR / 院长 = 韩国） */
   var w = document.getElementById('dash-weather'); if(w) w.textContent = '☁ '+(CLINIC_SETTINGS.city||o.city)+' '+o.temp+'℃';
   var l = document.getElementById('cal-tz-label'); if(l) l.textContent = tzLabel(CLINIC_TZ); /* 画面上不显示 WIB / WITA / WIT，只显示 UTC+n */
 }
@@ -1102,6 +1104,7 @@ function setCaseHospitalFilter(v){ CASE_HOSPITAL_FILTER = v; buildCaseTabs(); re
 function renderCaseRows(){
   var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return c.stage===CASE_TAB_FILTER; });
   if(CASE_REFUND_FILTER) items = items.filter(hasRefundMark);
+  items = items.slice().sort(caseUpdatedDesc); /* CMD-1015-05 十一：最近更新的在上面 */
   if(CASE_ONLY_MINE) items = items.filter(function(c){ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }); /* 仅看我的：只显示我操作过的案件 */
   if(items.length===0){
     document.getElementById('case-rows').innerHTML = '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">该分类下暂无案件（其余阶段的界面还没设计，先把预约到店这一段做完）</div>';
@@ -2971,7 +2974,7 @@ function pushNotif(cat, text, opts){
   if(opts.silent) n.silent = true;
   if(NOTIF_SEEN) NOTIF_SEEN[notifKey(n)] = 1; /* 本页自己产生的：下面直接弹，不要再被 toastNewNotifs 重复弹 */
   if(!opts.silent && notifMine(n) && notifyPushOn()){
-    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk!=='msg') showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay'}); } /* CMD-1013-17：消息不弹；新待办弹一次自动收起；被 @ / 未接来电停留 */
+    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk!=='msg') showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay', urgent: tk==='stay'}); } /* CMD-1013-17：消息不弹；新待办弹一次自动收起；被 @ / 未接来电停留 */
     else showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky:n.level!=='info'});
   }
   return n;
@@ -3473,6 +3476,8 @@ function showToast(title, text, onClickFn, opts){
   opts = opts || {};
   var el = document.createElement('div');
   el.className = 'toast-card';
+  var urgent = !!opts.urgent || /^📞/.test(title);
+  if(urgent){ var ico = document.createElement('span'); ico.className = 'toast-ico'; ico.textContent = /^📞/.test(title) ? '📞' : '!'; el.appendChild(ico); title = String(title).replace(/^📞\s*/, ''); }
   var body = document.createElement('div');
   body.className = 'toast-body';
   body.innerHTML = '<div class="toast-title">'+title+'</div><div class="toast-text">'+text+'</div>';
@@ -3515,7 +3520,7 @@ function toastNewNotifs(){
     if(n.silent || !notifMine(n) || n.read[ME_NAME] || !notifAlive(n) || !notifyPushOn()) return;
     if(newTodoOn()){ /* CMD-1013-17：被 @ / 未接来电 弹出并停留；新待办弹一次自动收起；消息不弹（只进铃铛 + 新消息卡） */
       var tk = notifTodoKind(n); if(tk==='msg') return;
-      showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay'}); return;
+      showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay', urgent: tk==='stay'}); return;
     }
     showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky:notifLevelOf(n)!=='info'});
   });
@@ -3827,10 +3832,13 @@ function headMount(){
   try{ if(typeof updateChatBadge==='function' && !isKrAccount()){ updateChatBadge(); updateBell(); } if(isKrAccount() && typeof krUpdateBadges==='function') krUpdateBadges(); }catch(e){}
 }
 (function(){
-  var pend = false, go = function(){ if(pend) return; pend = true; requestAnimationFrame(function(){ pend = false; try{ headMount(); }catch(e){ console.error('[页头]', e); } }); };
+  var pend = false, go = function(){ if(pend) return; pend = true; setTimeout(function(){ pend = false; try{ headMount(); }catch(e){ console.error('[页头]', e); } }, 16); }; /* CMD-1015-05：不用 requestAnimationFrame（页面在后台 / 隐藏时不触发，顶部图标会挂不上） */
   var start = function(){
     document.querySelectorAll('.content').forEach(function(c){ try{ new MutationObserver(go).observe(c, {childList:true}); }catch(e){} });
     setTimeout(go, 50); setTimeout(go, 400);
+    window.addEventListener('load', go);
+    /* CMD-1015-05：启动慢（数据多）时 50 / 400ms 那两次可能挂不上，可见页面还没有 .head-actions 就补挂（headMount 本身可重复执行） */
+    setInterval(function(){ try{ if(currentAccount() && !document.querySelector('.page:not([style*="none"]) .head-actions')) go(); }catch(e){} }, 1000);
   };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

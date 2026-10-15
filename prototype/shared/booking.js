@@ -43,6 +43,9 @@ function bkRender(keepScroll){
   var root = document.getElementById('bk-root'); if(!root) return;
   document.documentElement.lang = BOOK_LANG;
   document.getElementById('bk-sub').textContent = bt('brand.sub');
+  var home = BK.mode==='home'; document.body.classList.toggle('bk-home-mode', home);
+  var lg = document.getElementById('bk-logo'); if(lg) lg.textContent = home ? bkClinicName() : 'GMC Network'; /* 首页左上写诊所名 */
+  if(home) document.getElementById('bk-sub').textContent = '';
   ['id','zh'].forEach(function(l){ document.getElementById('lang-'+l).className = BOOK_LANG===l ? 'on' : ''; });
   if(BK.mode==='home') root.innerHTML = bkHomeHtml();
   else if(BK.mode==='lookup') root.innerHTML = bkLookupHtml();
@@ -456,9 +459,16 @@ function bkNewBooking(){
   bkRender();
 }
 /* ================= 首页 + 查看我的预约入口（CMD-1012-03，BOOK-01 2026-10-12） ================= */
+function bkClinicName(){ try{ var cl = clinicById(PAGE_CLINIC_ID); if(cl && cl.name) return cl.name; }catch(e){} return 'GMC 合作诊所（雅加达）'; }
+/* CMD-1015-05 十三：首页 = 棕榈叶背景 + 左上诊所名 + 右上语言 + 大标题 + 欢迎语 + 两张大卡（图标·标题+说明·右箭头）；功能不变 */
 function bkHomeHtml(){
-  var card = function(fn, title, sub, primary){ return '<button class="bk-btn'+(primary?'':' ghost')+'" style="text-align:left;padding:18px 16px;margin-top:12px;'+(primary?'':'font-weight:700;')+'" onclick="'+fn+'"><div style="font-size:16px;">'+bt(title)+'</div><div style="font-size:12px;font-weight:400;opacity:.8;margin-top:4px;">'+bt(sub)+'</div></button>'; };
-  return '<div class="bk-card"><div class="bk-title">'+bt('home.hello')+'</div>'+card('bkHomeBook()','home.book','home.bookSub',true)+card('bkHomeLookup()','home.view','home.viewSub',false)+'</div>';
+  var arrow = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  var ico = {
+    book: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+    view: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6a2 2 0 0 1 2 2v14H7V6a2 2 0 0 1 2-2z"/><path d="M10 9h4M10 13h4M10 17h2"/></svg>'
+  };
+  var card = function(fn, icon, title, sub, primary){ return '<button class="bk-home-card'+(primary?' primary':'')+'" onclick="'+fn+'"><span class="bk-home-ico">'+ico[icon]+'</span><span class="bk-home-txt"><b>'+bt(title)+'</b><small>'+bt(sub)+'</small></span><span class="bk-home-arrow">'+arrow+'</span></button>'; };
+  return '<div class="bk-home"><h1 class="bk-home-title">'+bt('home.welcome', {name:bkH(bkClinicName())})+'</h1><p class="bk-home-intro">'+bt('home.intro')+'</p>'+card('bkHomeBook()','book','home.book','home.bookSub',true)+card('bkHomeLookup()','view','home.view','home.viewSub',false)+'</div>';
 }
 function bkHomeBook(){ BK.mode = null; BK.err = ''; bkRender(); }
 function bkHomeLookup(){ BK.mode = 'lookup'; BK.otp = null; BK.err = ''; BK.lkPhone = BK.lkPhone || '+62 '; bkRender(); }

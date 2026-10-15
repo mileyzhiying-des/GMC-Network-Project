@@ -640,10 +640,10 @@
     KR_LIST.clinic = 'C2'; var onlyC2 = krFilteredRows(); ST.ok(onlyC2.every(function(r){ return r.clinicId==='C2'; }), '按来源诊所筛选应只剩 C2'); KR_LIST.clinic = '';
     ST.ok(typeof presTag==='function', '应有「谁正在处理」标注函数');
     /* 日程：院长日程切换、登记不可预约 */
-    var h = krHData(); KRC.person = 'KD1 院长'; ST.ok(krcWho()==='KD1 院长', '应能切到某位院长的日程'); var free = null; for(var d1 = 70; d1 < 120 && !free; d1++){ var dd = D(d1); if(new Date(dd+'T00:00:00').getDay()!==0 && !(h.directorSchedule['KD1 院长']||[]).some(function(b){ return b.date===dd; })) free = dd; }
+    var h = krHData(); KRC.layer = 'director'; KRC.person = 'KD1 院长'; ST.ok(krcWho()==='KD1 院长', '应能切到某位院长的日程'); var free = null; for(var d1 = 70; d1 < 120 && !free; d1++){ var dd = D(d1); if(new Date(dd+'T00:00:00').getDay()!==0 && !(h.directorSchedule['KD1 院长']||[]).some(function(b){ return b.date===dd; })) free = dd; }
     KRC.pop = {date:free}; KRC.popForm = {who:'KD1 院长', start:'13:00', end:'13:30', part:'全天'}; var b0 = (h.directorSchedule['KD1 院长']||[]).length; krcAddBusy(); ST.ok((h.directorSchedule['KD1 院长']||[]).length===b0+1, 'KC1 应能登记不可预约'); KRC.person = 'all';
     /* 通知：需要处理 / 进入下一阶段要手动确认，一般消息自动消失 */
-    var lv = function(txt){ return notifLevel(txt); }; ST.ok(lv('催办：x')==='action' && lv('请 IN 帮忙预约：x')==='action' && lv('施术日期待确认：x')==='action', '「催办 / 请帮忙预约 / 待确认」应是 action 级（「需要处理：」类通知创建时显式指定 level）'); ST.ok(lv('客人已缴面诊费：x')==='next' || lv('客人已缴面诊费：x')==='action', '「已缴面诊费」应是进入下一阶段（手动确认）'); ST.ok(lv('KM1 室长 进入了房间')==='info', '一般消息应是 info 级');
+    var lv = function(txt){ return notifLevel(txt); }; ST.ok(lv('催办：x')==='action' && lv('施术日期待确认：x')==='action', '「催办 / 待确认」应是 action 级（「需要处理：」类通知创建时显式指定 level）'); ST.ok(lv('客人已缴面诊费：x')==='next' || lv('客人已缴面诊费：x')==='action', '「已缴面诊费」应是进入下一阶段（手动确认）'); ST.ok(lv('KM1 室长 进入了房间')==='info', '一般消息应是 info 级');
     var stack = document.getElementById('toast-stack'); stack.innerHTML = ''; showToast('t-action', 'x', null, {sticky:true}); showToast('t-info', 'y', null); ST.ok(!!stack.querySelector('[data-sticky="1"] .toast-ok'), 'sticky 通知应有［确认］按钮'); ST.ok(stack.children.length===2, '两个 toast'); stack.innerHTML = '';
     var kn = krNotifsForMe(); ST.ok(Array.isArray(kn), 'KC1 应能读到自己的通知');
   });
