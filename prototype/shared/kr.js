@@ -1454,12 +1454,6 @@ function krCareActHtml(s, act){
 }
 function krSubArrived(id){ if(!krCan()) return; krMut(function(c){ return coreSubArrived(c, id, ME_NAME); }); }
 var KR_HOLD_TAG = '<span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:10px;">在韩后续进行中</span>';
-/* 主线完成 + 在韩持有（CMD-1013-08 一） */
-function krMainFinishBtn(c){
-  var info = mainFinishInfo(c); if(!info || !krCan()) return '';
-  return '<div style="background:#EEF4FC;border:1px solid #BFD3EE;border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;"><span style="flex:1;font-size:12px;color:#2F5FA8;min-width:240px;">施术已完成，还有 '+(info.subs.length+info.items.length)+' 项没做完（术后管理 / 已付的管理项目）。按下后这些转入这位客人的「在韩持有」（已约时间保留，日历照显示），案件结案。</span><button class="btn-primary" onclick="krMainFinish()">主线完成，剩余转在韩持有</button></div>';
-}
-function krMainFinish(){ if(!krCan() || !confirm('确认主线完成？未完成的项目会转入在韩持有，案件结案。')) return; krMut(function(c){ return coreMainFinish(c, ME_NAME); }); }
 /* 在韩持有两张卡：mode 'care' = 术后管理（有预约日期的子项，到当天 + 客人已到才能标完成）；mode 'items' = 持有项目（已付的管理项目，只列项目 + 剩余次数，［安排使用］选日期时间，客人到后标完成）（CMD-1013-12 二·3、4） */
 function krHoldCard(c, mode){
   var can = krCan(), subs = (c.subItems||[]).filter(function(s){ return s.hold && !s.done; }), items = (c.procedureItems||[]).filter(function(it){ return it.heldOver && !it.holdDone; });

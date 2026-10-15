@@ -4329,25 +4329,6 @@ function krHoldList(c){
   return out;
 }
 function krHoldOpen(c){ return krHoldList(c).length>0; }
-function mainFinishInfo(c){ /* 能不能出现［主线完成，剩余转在韩持有］ */
-  if(!c.settlementDone || !c.krBalancePaid || c.visitClosed || isEnded(c)) return null;
-  var surg = (c.subItems||[]).filter(function(s){ return s.kind==='施术'; });
-  if(!surg.length || !surg.every(function(s){ return s.done; }) || pendingPayItems(c).length) return null;
-  var restSubs = (c.subItems||[]).filter(function(s){ return s.kind!=='施术' && !s.done; });
-  var restItems = krNotStartedItems(c).filter(isLocalKrItem);
-  if(krNotStartedItems(c).some(function(it){ return !isLocalKrItem(it); })) return null; /* 手术项目还没都标完成 */
-  if(!restSubs.length && !restItems.length) return null; /* 全部当场做完：照旧自动结案，不出现这个按钮 */
-  return {subs:restSubs, items:restItems};
-}
-function coreMainFinish(c, by){
-  var info = mainFinishInfo(c); if(!info) return false;
-  info.subs.forEach(function(s){ s.hold = true; });
-  info.items.forEach(function(it){ it.heldOver = true; it.holdDone = false; it.done = true; });
-  c.krHoldAt = nowFullDt(); c.krProcedureDone = true;
-  logCaseEvent(c, by, '主线完成，剩余 '+(info.subs.length+info.items.length)+' 项转在韩持有：'+info.subs.map(function(s){ return (s.date||'')+(s.time ? ' '+s.time : '')+' '+s.content; }).concat(info.items.map(function(it){ return it.name; })).join('；'));
-  finishCase(c);
-  return true;
-}
 function coreHoldItemDone(c, name, by){
   var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone && x.name===name; })[0]; if(!it) return false;
   it.holdDone = true; logCaseEvent(c, by, '在韩持有完成：'+it.name); return true;

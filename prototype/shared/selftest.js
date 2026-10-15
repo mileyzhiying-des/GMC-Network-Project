@@ -848,7 +848,7 @@
   ST.def('N1','新结案优先级：面诊案件本地做完不结案 / 纯本地做完结案',function(){
     var fake = {consultRequested:true, consultStatus:'report_ready', needsConsult:true};
     ST.ok(mainlineOngoing(fake) === true && mainlineOngoingRepair(fake) === false, '项目确认中的面诊案件：主线进行中（修复专用的旧判断不是）');
-    ST.ok(mainlineOngoingNew({consultRequested:true, consultStatus:'report_ready', endNote:'客人不做项目'}) === false, '客人不做项目后主线结束');
+    ST.ok(mainlineOngoing({consultRequested:true, consultStatus:'report_ready', endNote:'客人不做项目'}) === false, '客人不做项目后主线结束');
     var p = ST.localProj('LHALa peel'), c = ST.localCase('N1'); ST.localPay(c, function(){ toggleLocalProject('main', p.id); }); ST.useHold(c, 'main', p.name, 1); addConsult();
     markMgmtRows('main', 'done', true); ST.ok(!isEnded(c), '本地案件中途增加面诊 → 本地做完不结案，实际 '+c.stage);
   });

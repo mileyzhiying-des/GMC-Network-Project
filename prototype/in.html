@@ -431,26 +431,6 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
   </div>
 </div>
 
-<!-- ============ 本地项目退款 MODAL（2026-09-30：客户详情"持有项目"卡片，按购买批次退款，金额+原因必填） ============ -->
-<div class="modal-overlay" id="holding-refund-overlay" onclick="if(event.target===this) closeHoldingRefundModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">本地项目退款</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeHoldingRefundModal()">✕</span>
-    </div>
-    <div id="holding-refund-info" style="font-size:13px;margin-bottom:12px;"></div>
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款金额（Rp，可为 0） <span style="color:#C1454A;">*</span></div>
-    <input type="number" min="0" id="holding-refund-amount" placeholder="请输入退款金额" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px;">
-    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
-    <textarea id="holding-refund-reason" rows="3" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">按批次退款：只要还有剩余次数（未使用、部分使用）就能退；退款后这一批作废、剩余次数归零（已用过的次数保留为历史）；退款记录挂在这一批购买上，不改变任何案件的结局。</div>
-    <div style="display:flex;gap:10px;margin-top:16px;">
-      <button class="btn-outline" style="flex:1;" onclick="closeHoldingRefundModal()">取消</button>
-      <button class="btn-primary" style="flex:1;" onclick="confirmHoldingRefund()">确认退款</button>
-    </div>
-  </div>
-</div>
-
 
 <!-- ============ 免除面诊费 MODAL（2026-09-30，Notion 09-30） ============ -->
 <!-- ============ 引用消息到案件 MODAL（2026-09-30，Conversation & Video Flow 入口3） ============ -->
