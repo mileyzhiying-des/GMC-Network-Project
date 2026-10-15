@@ -883,10 +883,10 @@
     var q = ST.newRes('TD1q'); ST.consultToReport(q); ST.ok(!has(q,'quiet'), '刚出诊疗方案不应有「没动静」'); var old = new Date(Date.now()-5*86400000).toISOString(); q.logEntries.forEach(function(e){ e.dt = old.slice(0,10)+' '+old.slice(11,16); }); ST.ok(has(q,'quiet'), '超过 3 天没动静应出现');
     /* 等待报告超时 → 可催办（已超时分组） */
     var u = ST.newRes('TD1u'); ST.arrive(u); ST.materials(u,{consult:true}); ST.payConsult(u); coreConfirmConsultTimes(u, todayStr(), '20:30', D(1)+' 05:00', ST.krBy); ST.open(u);
-    ST.ok(!urgeInfo(u), '还没超过预计出报告时间不能催'); u.reportEta = D(-1)+' 05:00'; ST.ok(has(u, newCalOn() ? 'waitkr' : 'urge') && !!urgeInfo(u), '超过预计出报告时间应可催办'); ST.ok(/已超时/.test(todoPaneHtml(inTodoItems())), '待办栏应有「已超时」分组');
+    ST.ok(!urgeInfo(u), '还没超过预计出报告时间不能催'); u.reportEta = D(-1)+' 05:00'; ST.ok(has(u, 'waitkr') && !!urgeInfo(u), '超过预计出报告时间应可催办'); ST.ok(/已超时/.test(todoPaneHtml(inTodoItems())), '待办栏应有「已超时」分组');
     var pd = ST.newRes('TD1p'); ST.arrive(pd); ST.materials(pd,{consult:true}); ST.payConsult(pd); var d3 = new Date(Date.now()-3*3600000); pd.consultPaidAt = d3.toISOString().slice(0,10)+' '+d3.toISOString().slice(11,16); ST.ok(!urgeInfo(pd), '待确认面诊时间不再有 30 分钟的催办门槛');
     /* 转告客人：KR 确认施术时间后出现，打开赴韩施术 tab 后消失 */
-    var s = ST.toConfirmed('TD1s'); ST.ok(has(s,'relay'), 'KR 确认施术时间后应有「转告客人」待办'); ST.open(s); s.activeCaseTab = 'kr'; renderCaseBody(s); if(newCalOn()){ ST.ok(has(s,'relay'), '10/14 起：打开 tab 不算已转告，要按［已转告客人］'); calRelayDone(s.id); } ST.ok(!has(s,'relay'), '已转告 / 打开 tab 后「转告客人」应消失');
+    var s = ST.toConfirmed('TD1s'); ST.ok(has(s,'relay'), 'KR 确认施术时间后应有「转告客人」待办'); ST.open(s); s.activeCaseTab = 'kr'; renderCaseBody(s); ST.ok(has(s,'relay'), '10/14 起：打开 tab 不算已转告，要按［已转告客人］'); calRelayDone(s.id); ST.ok(!has(s,'relay'), '已转告 / 打开 tab 后「转告客人」应消失');
     /* 当天本地项目未标完成：营业结束前 1 小时出现，标完才消失 */
     var lp = ST.localProj('LHALa peel'), l = ST.localCase('TD1l'); ST.localPay(l, function(){ toggleLocalProject('main', lp.id); }); ST.useHold(l, 'main', lp.name, 1);
     var back = ST.shiftTo(12, 0); try{ ST.ok(!has(l,'local'), '营业结束前 1 小时之前不应出现'); } finally { back(); }
@@ -909,7 +909,7 @@
     ST.ok(/待我处理/.test(cards.innerText) && /今天来访/.test(cards.innerText) && /等 KR 回复/.test(cards.innerText) && /新消息/.test(cards.innerText), '4 张卡的名字');
     var back = ST.shiftTo(11, 10); try{
       setCalMode('week'); TODO_SCROLL_KEY = ''; renderCalendar(); var l = document.querySelector('.todo-nowline'); ST.ok(!!l && l.textContent==='11:10', '周视图应有 11:10 的现在时间线'); ST.ok(document.querySelector('#cal-week-view .wk-scroll').scrollTop > 0, '应自动滚到现在附近');
-      setCalMode('day'); renderCalendar(); if(newCalOn()) ST.ok(!!document.querySelector('#day-grid .todo-nowline'), '日视图整天格里应有现在时间线'); else ST.ok(!!document.querySelector('.todo-daynow'), '日视图应有「现在」分隔线');
+      setCalMode('day'); renderCalendar(); ST.ok(!!document.querySelector('#day-grid .todo-nowline'), '日视图整天格里应有现在时间线');
     } finally { back(); }
   });
   ST.def('TD4','催办新门槛：待确认施术时间超过 1 个工作日',function(){
@@ -952,9 +952,6 @@
   /* ================= CMD-1014-01 三边日历对齐 + 待办补充 ================= */
   ST.def('CAL1','IN 日视图整天格 + 时间范围前后 2 小时 + 待办卡片筛选 + 转告 / 确认日程无变动',function(){
     nav('in-dashboard');
-    if(!newCalOn()){
-      setCalMode('day'); renderCalendar(); ST.ok(!document.getElementById('day-grid'), '开关关闭：日视图不是整天时间格'); setCalMode('week'); renderCalendar(); ST.ok(document.querySelectorAll('#wk-grid .wk-time').length===WK_HOURS.filter(function(h){ return !slotIsLunch(h); }).length + WK_HOURS.filter(function(h){ return slotIsLunch(h); }).filter(function(h){ return false; }).length || true, ''); setCalMode('day'); return;
-    }
     setCalMode('day'); renderCalendar(); var g = document.getElementById('day-grid'); ST.ok(!!g && !!document.getElementById('day-col'), '日视图应是 KR 画法的整天时间格');
     /* CMD-1015-01：营业时间外（前后 2 小时）按需显示——没有营业外预约的一天只显示营业时间；点顶 / 底小条才展开前后 2 小时 */
     var o0 = timeToMin(CLINIC_SETTINGS.openTime), cl0 = timeToMin(CLINIC_SETTINGS.closeTime), dayRange = function(){ var col = document.getElementById('day-col'), H0 = parseInt(col.getAttribute('data-h0'),10); return [H0, H0 + Math.round(col.offsetHeight*60/CAL_DAY_PX)]; };
@@ -983,7 +980,6 @@
   ST.def('CAL2','KR / 院长日历对齐（固定栏 OFF / memo、月视图、时段框、图例、时间范围）',function(){
     var me = currentAccount(); if(!ST.ok(me && /^(KM1|KD1)$/.test(me.id), '要在 KM1 / KD1 分页里跑')) return;
     krRenderDashboard(); var cal = document.getElementById('kr-cal').innerText, hr = hospitalHours(krHospitalIdOfMe());
-    if(!newCalOn()){ ST.ok(KRC_H0===8 && KRC_H1===20, '开关关闭：固定 08:00～20:00'); ST.ok(!/＋ memo/.test(cal) && !/术后到店/.test(cal), '开关关闭：没有 ＋memo / 新图例'); ST.ok(!document.querySelector('.krc-nowframe'), '开关关闭：没有时段框'); return; }
     ST.krcRangeCheck(hr);
     ST.ok(/＋ memo/.test(cal) && /固定栏/.test(cal) && /术后到店/.test(cal) && /面诊/.test(cal), '应有 ＋memo、固定栏、图例（面诊 / 术后到店）');
     var today = krToday(); krcSet('mode','day'); KRC.anchor = today; krcRender(); ST.ok(!document.querySelector('.krc-nowframe') || getComputedStyle(document.querySelector('.krc-nowframe')).display==='none', 'CMD-1014-18：当前时段方框已拿掉'); ST.ok(document.querySelectorAll('#kr-cal .todo-nowline span').length<=1, '现在线只有一个时间标签');
@@ -1004,7 +1000,7 @@
   ST.def('CAL3','KR 待办：院长上传面诊内容 / KR 等院长上传（已超时）+ 两个 bug（KM1 / KD1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && /^(KM1|KD1)$/.test(me.id), '要在 KM1 / KD1 分页里跑')) return;
     var rows = krAllCases(), items = krTodoItems(rows), K = function(r, k){ return items.some(function(i){ return i.rowKey===r.clinicId+':'+r.id && i.kind===k; }); };
-    if(newCalOn()) rows.forEach(function(r){
+    rows.forEach(function(r){
       var c = r.c;
       if(krIsDirector()) ST.ok(K(r,'upload') === (c.consultStatus==='awaiting_report' && !c.consultContentAt), r.caseNo+'：院长「上传面诊内容」待办与状态一致');
       else ST.ok(K(r,'waitdir') === (c.consultStatus==='awaiting_report' && !c.consultContentAt), r.caseNo+'：KR「等院长上传面诊」待办与状态一致');
@@ -1015,7 +1011,6 @@
 
   /* ================= CMD-1014-02 ================= */
   ST.def('CAL4','IN：卡片数字 = 待办筛选条数 / 今天来访 / 等 KR 回复 / 3:2 / 营业时间外代约 / 日程确认过期',function(){
-    if(!newCalOn()){ ST.note('开关关闭：跳过'); return; }
     nav('in-dashboard'); var c1 = ST.newRes('CAL4a'), c2 = ST.newRes('CAL4b'); c1.visitDate = c2.visitDate = todayStr(); var items = inTodoItems(), cats = {todo:0, visit:0, kr:0, msg:0};
     items.forEach(function(i){ ST.ok(!!cats.hasOwnProperty(i.cat), '待办分类应是 4 类之一：'+i.kind+'→'+i.cat); cats[i.cat]++; });
     ST.ok(items.length === cats.todo+cats.visit+cats.kr+cats.msg, '待办总数应 = 4 类加总');
@@ -1041,7 +1036,7 @@
     try{ DEMO_SHIFT_MS = base + (calDaysToSurgery(s)+3)*86400000; var r = has(); ST.ok(!!r && r.over, '施术日已过仍未确认：标红、一直挂着'); calRecheckOk(s.id); ST.ok(!has(), '确认后消失'); } finally { DEMO_SHIFT_MS = base; }
   });
   ST.def('CAL5','KR：卡片数字 = 待办筛选条数（KM1）',function(){
-    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; if(!newCalOn()){ ST.note('开关关闭：跳过'); return; }
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var items = todoItems(), cats = {todo:0, today2:0, waiting:0, msg:0}; items.forEach(function(i){ ST.ok(cats.hasOwnProperty(i.cat), '分类：'+i.kind+'→'+i.cat); cats[i.cat]++; });
     ST.ok(items.length === cats.todo+cats.today2+cats.waiting+cats.msg, '待办总数 = 4 类加总'); krRenderDashboard();
     var g = document.querySelector('#krdash-body div[style*="grid-template-columns"]'); ST.ok(g && g.children.length===4, '4 张卡');
@@ -1049,7 +1044,7 @@
     todoSetKind(''); var cal = document.getElementById('cal-todo-wrap'); ST.ok(cal.firstElementChild.style.flex.indexOf('2')===0 && document.getElementById('todo-pane').style.flex.indexOf('1')===0, '日历 : 待办 = 2 : 1');
   });
   ST.def('CAL6','OFF 新流程（全天 / 指定时间 + 先选室长 / 院长再选人）+ KR 日历细节（KM1 / KD1）',function(){
-    var me = currentAccount(); if(!ST.ok(me && /^(KM1|KD1)$/.test(me.id), '要在 KM1 / KD1 分页里跑')) return; if(!newCalOn()){ ST.note('开关关闭：跳过'); return; }
+    var me = currentAccount(); if(!ST.ok(me && /^(KM1|KD1)$/.test(me.id), '要在 KM1 / KD1 分页里跑')) return;
     var h = krHData(), isDir = krcIsDirector(), d = D(41);
     krRenderDashboard(); var html = document.getElementById('kr-cal').innerHTML;
     ST.ok(/韩 \d\d:00/.test(html) && /印 \d\d:00/.test(html), '双时间轴：韩国 + 印尼');
@@ -1067,7 +1062,7 @@
     var lu = hospitalLunch(krHospitalIdOfMe()); if(lu){ var lb = [].slice.call(document.querySelectorAll('#kr-cal [title="午休"]'))[0]; ST.ok(!lb || parseFloat(lb.style.height) <= 14, '午休画窄'); }
   });
   ST.def('CAL7','代表院长：默认看自己、可切到全部院长（只看不操作）（KO1）',function(){
-    var me = currentAccount(); if(!ST.ok(me && me.id==='KO1', '要在 KO1 分页里跑')) return; if(!newCalOn()){ ST.note('开关关闭：跳过'); return; }
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KO1', '要在 KO1 分页里跑')) return;
     krcSetViewAll('me'); ST.ok(!krcViewAll() && krcDirectors().length===1 && krcWho()===me.name, '默认只看自己'); krRenderDashboard(); ST.ok(/全部院长（只看）/.test(document.getElementById('kr-cal').innerText), '应有切换「全部院长（只看）」');
     KRC.layer = 'hospital'; krcSetViewAll('all'); ST.ok(krcViewAll() && krcWho()==='all' && krcDirectors().length>=2, '切到全部院长'); var pop0 = KRC.pop; krcCellClick(todayStr(), {clientY:0}, document.createElement('div')); ST.ok(KRC.pop===pop0, '全部院长视角只看不操作（点空白格不加东西）'); ST.ok(hospitalDirectorNames(krHospitalIdOfMe()).every(function(n){ return n===me.name || !krcCanEdit(n); }), '别的院长的 OFF 不能改');
     krcSetViewAll('me');

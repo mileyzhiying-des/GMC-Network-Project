@@ -472,7 +472,7 @@ function buildWeekGrid(){
       var chips = cell.slice(0, 3).map(eventChipHtml).join('') + (cell.length > 3 ? '<div class="wk-more" onclick="event.stopPropagation();openSlotList(\''+ds+'\',\''+hr+'\')">+'+(cell.length-3)+' 更多</div>' : ''); /* 超过 3 个：前 3 个 + "+N 更多" */
       var why = slotBlockReason(ds, hr); /* 和预约修改、占位、预约页同一套规则：past 已过 / full 额满 / closed 休诊 / lunch 午休 */
       var pastSlot = why==='past', closedDay = why==='closed', fullSlot = why==='full';
-      var slotClick = why ? ((newCalOn() && calOffHoursOk(ds,hr)) ? ' onclick="calOffHoursAdd(\''+ds+'\',\''+hr+'\')" title="营业时间外：点击代约（会再确认一次）"' : '') : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
+      var slotClick = why ? ((calOffHoursOk(ds,hr)) ? ' onclick="calOffHoursAdd(\''+ds+'\',\''+hr+'\')" title="营业时间外：点击代约（会再确认一次）"' : '') : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
       var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
       var fullTag = fullSlot ? '<div style="font-size:10px;color:var(--muted);text-align:right;">已满</div>' : '';
       html += '<div class="wk-cell'+(why?'':' wk-cell-open')+(pastSlot?' wk-past':'')+((why==='lunch'||closedDay)?' wk-lunch':'')+(why==='outside'?' wk-outside':'')+(fullSlot?' wk-full':'')+(isNow?' wk-now':'')+(sameDate(days[d], TODAY_DATE)?' wk-tcol':'')+'"'+slotClick+'>'+chips+fullTag+'</div>';
@@ -501,20 +501,8 @@ function buildMonthGrid(){
   grid.innerHTML = html;
 }
 
-function buildDayGrid(){
-  if(newCalOn()){ buildDayGridNew(); return; } /* CMD-1014-01：日视图改整天时间格 */
-  var d = new Date(TODAY_DATE); d.setDate(d.getDate()+DAY_OFFSET);
-  var ds = dateStr(d);
-  var evs = calendarEvents().filter(function(e){ return e.date===ds && !calEvHidden(e); });
-  var html = '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">'+(d.getMonth()+1)+'月'+d.getDate()+'日 周'+DOW_CN[dowOfDate(ds)]+'</div>';
-  if(evs.length===0){ html += '<div style="font-size:12px;color:var(--muted);">当日暂无排期</div>'; }
-  else{
-    evs.slice().sort(function(a,b){return a.time.localeCompare(b.time);}).forEach(function(e){
-      html += '<div class="schedule-row" onclick="'+(e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)')+'"><span class="schedule-time">'+e.time+'</span><span class="dotmark" style="background:'+TYPE_COLOR[e.kind]+';"></span><span style="font-size:13px;">'+e.name+' · '+TYPE_LABEL[e.kind]+(e.purpose?' · '+e.purpose:'')+'</span></div>';
-    });
-  }
-  document.getElementById('day-detail').innerHTML = html;
-}
+function buildDayGrid(){ buildDayGridNew(); } /* CMD-1014-01：日视图 = 整天时间格（旧的当天列表已删） */
+
 
 function setCalMode(mode){
   if(CAL_VIEW==='kr' && mode==='day') mode = 'week'; /* KR 医院日程没有日视图 */

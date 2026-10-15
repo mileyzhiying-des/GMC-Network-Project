@@ -1,7 +1,7 @@
-/* ================= CMD-1014-01 三边日历对齐 + 待办补充（开关 newCalOn()；关 = f3c7ab4 的样子）=================
+/* ================= CMD-1014-01 三边日历对齐 + 待办补充（10/15 正式采用）=================
    规则：IN-DASH-01 / KR-DASH-01 顶部「🧪 2026-10-14 三边日历对齐」、Notification Center 🧪 第 7 点。
    原则：以 IN 室长现有做法为准，IN 只改日视图（整天时间格）和时间范围（营业时间前后各 2 小时）；其余是 KR 室长 / 院长对齐 IN。
-   本文件在 todo.js 之后加载；所有入口先检查 newCalOn()。 */
+   本文件在 todo.js 之后加载。 */
 
 /* ---------------- 时间范围：营业时间前 2 小时 ～ 后 2 小时 ---------------- */
 /* CMD-1015-01：营业时间外（前后 2 小时）按需显示——这一周 / 这一天有预约落在营业前才显示营业前那段，营业后同理；没有就只显示营业时间。
@@ -22,7 +22,6 @@ function calInNeed(){
   return {b:b, a:a};
 }
 function calHours(){
-  if(!newCalOn()) return WK_HOURS;
   var open = timeToMin(CLINIC_SETTINGS.openTime), close = timeToMin(CLINIC_SETTINGS.closeTime), nd = calInNeed(), a = open, z = close;
   if(CAL_OUT.in.b || nd.b!==null) a = Math.max(0, Math.min(open-120, nd.b!==null ? Math.floor(nd.b/30)*30 : open-120));
   if(CAL_OUT.in.a || nd.a!==null) z = Math.min(24*60, Math.max(close+120, nd.a!==null ? Math.floor(nd.a/30)*30+30 : close+120));
@@ -30,7 +29,6 @@ function calHours(){
 }
 /* KR / 院长：医院营业时间前后各 2 小时（取代固定 08:00～20:00）；整点取整 */
 function krcApplyRange(){
-  if(!newCalOn()){ KRC_H0 = 8; KRC_H1 = 20; return; }
   var hr = hospitalHours(krHospitalIdOfMe()), open = timeToMin(hr.open), close = timeToMin(hr.close), a = open, z = close, b = null, af = null;
   if(KRC.mode!=='month'){ /* 按需显示营业时间外（CMD-1015-01）：当前这一天 / 这一周有预约落在营业前 / 后才展开 */
     try{ var a0 = krcAnchor(), ds = KRC.mode==='week' ? [0,1,2,3,4,5,6].map(function(i){ return krcAdd(a0, i); }) : [a0]; var ev = krcEvents();
@@ -54,7 +52,7 @@ function calEventMinutes(e){
   return 30;
 }
 /* 营业时间外（营业前 / 营业后的两个小时）室长可代约，弹「营业时间外，确定预约吗？」；客人自助预约不受影响（只能约营业时间内） */
-function calOffHoursOk(ds, hr){ return newCalOn() && slotBlockReason(ds, hr)==='outside' && !slotIsPast(ds, hr); }
+function calOffHoursOk(ds, hr){ return slotBlockReason(ds, hr)==='outside' && !slotIsPast(ds, hr); }
 function calOffHoursAdd(ds, hr){ if(confirm('营业时间外，确定预约吗？')) openAddSlotModal(ds, hr); }
 function buildDayGridNew(){
   var box = document.getElementById('day-detail'); if(!box) return;
@@ -154,10 +152,6 @@ function krcPickMonth(y, m){ KRC.anchor = y+'-'+pad2(m+1)+'-01'; document.getEle
 /* ---------------- KR / 院长：当前时段颜色框 + 图例 + ［＋memo］ ---------------- */
 function krcNowFrameHtml(){
   return ''; /* CMD-1014-18：拿掉当前时段方框 */
-  if(!newCalOn()) return '';
-  var m = todoNowMinutes(); if(m < KRC_H0*60 || m >= KRC_H1*60) return '';
-  var top = Math.floor((m - KRC_H0*60)/30) * 30 * KRC_PX / 60;
-  return '<div class="krc-nowframe" style="top:'+top+'px;height:'+(KRC_PX/2)+'px;"></div>';
 }
 (function(){
   if(typeof krCalendarHtml!=='function') return;
@@ -165,7 +159,6 @@ function krcNowFrameHtml(){
   krCalendarHtml = function(){
     krcApplyRange();
     var h = base.apply(this, arguments);
-    if(!newCalOn()) return h;
     h = h.replace('<button class="btn-ghost" onclick="krcToday()">今天</button>', krcTodayBtnHtml()+'<button class="btn-outline" onclick="krfxOpen()" title="新增备忘 / OFF">＋ memo</button>');
     h = h.replace('图例：', '图例：<span style="background:#E3EAF6;color:#2F4F86;padding:0 5px;border-radius:3px;">面诊</span> <span style="background:#E4EEE7;color:#2F6B4A;padding:0 5px;border-radius:3px;">术后到店</span> ');
     return h;
@@ -193,7 +186,7 @@ function calNeedsRecheck(c){
 }
 function calRecheckText(c){ return (c.recheck && c.recheck.key===calKey(c)) ? '✓ 日程已确认无变动（IN · '+c.recheck.at.slice(0,10)+'）' : 'IN 尚未确认日程'; }
 function calRelayRecheckCards(c){
-  if(!newCalOn() || scheduleState(c)!=='Confirmed' || !c.krSchedule) return '';
+  if(scheduleState(c)!=='Confirmed' || !c.krSchedule) return '';
   var key = calKey(c), out = '', told = c.relayTold===key, rc = c.recheck && c.recheck.key===key, d = calDaysToSurgery(c);
   out += '<div class="card" style="padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;"><div style="font-size:13px;font-weight:700;">转告客人</div><div style="font-size:12px;color:var(--slate2);margin-top:2px;">KR 已确认施术时间：'+aEsc(key)+'（韩国时间）'+(told ? ' · <span style="color:var(--sage);">✓ 已转告客人'+(c.relayAt ? '（'+aEsc(c.relayAt.slice(0,16))+'）' : '')+'</span>' : '')+'</div></div>'+(told ? '' : '<button class="btn-primary" onclick="calRelayDone(\''+c.id+'\')">已转告客人</button>')+'</div>';
   if(d<=2 || rc) out += '<div class="card" style="padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;"><div style="font-size:13px;font-weight:700;">确认日程无变动</div><div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+(rc ? '<span style="color:var(--sage);">'+aEsc(calRecheckText(c))+'</span>' : '施术前 2 天：问一下客人这个日程有没有变化；有变化走下面原来的改期流程')+'</div></div>'+(rc ? '' : '<button class="btn-primary" onclick="calRecheckOk(\''+c.id+'\')">确认无变动</button>')+'</div>';
@@ -201,13 +194,13 @@ function calRelayRecheckCards(c){
 }
 function calCaseById(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; }
 function calRelayDone(id){
-  var c = calCaseById(id); if(!c || !newCalOn()) return;
+  var c = calCaseById(id); if(!c) return;
   c.relayTold = calKey(c); c.relayAt = nowFullDt();
   logCaseEvent(c, actingName(), '已转告客人 KR 确认的施术时间：'+calKey(c)+'（韩国时间）');
   Store.touch(); buildCaseLog(c); renderCaseBody(c); try{ todoRefresh(); }catch(e){}
 }
 function calRecheckOk(id){
-  var c = calCaseById(id); if(!c || !newCalOn()) return;
+  var c = calCaseById(id); if(!c) return;
   c.recheck = {key:calKey(c), by:actingName(), at:nowFullDt()};
   logCaseEvent(c, actingName(), '确认客人日程无变动（施术 '+calKey(c)+'）');
   Store.touch(); buildCaseLog(c); renderCaseBody(c); try{ todoRefresh(); renderCalendar(); }catch(e){}
@@ -215,19 +208,19 @@ function calRecheckOk(id){
 (function(){
   if(typeof krTabContent==='function'){
     var base = krTabContent;
-    krTabContent = function(c){ var h = base.apply(this, arguments); try{ return newCalOn() ? calRelayRecheckCards(c)+h : h; }catch(e){ return h; } };
+    krTabContent = function(c){ var h = base.apply(this, arguments); try{ return calRelayRecheckCards(c)+h; }catch(e){ return h; } };
   }
   /* 日历上那天标「日程待确认」：事件块加 data-recheck，样式在 app.css（纯 CSS 徽标，不改事件块内容） */
   if(typeof eventChipHtml==='function'){
     var baseChip = eventChipHtml;
     eventChipHtml = function(e){
       var h = baseChip.apply(this, arguments);
-      try{ if(newCalOn() && e && e.kind==='travel' && e.caseId){ var c = calCaseById(e.caseId); if(c && calNeedsRecheck(c)) h = h.replace('class="event-chip"', 'class="event-chip" data-recheck="1"'); } }catch(err){}
+      try{ if(e && e.kind==='travel' && e.caseId){ var c = calCaseById(e.caseId); if(c && calNeedsRecheck(c)) h = h.replace('class="event-chip"', 'class="event-chip" data-recheck="1"'); } }catch(err){}
       return h;
     };
   }
 })();
-if(newCalOn()){ try{ TODO_UI.kind = ''; }catch(e){} } /* 卡片筛选不跨刷新保留 */
+try{ TODO_UI.kind = ''; }catch(e){} /* 卡片筛选不跨刷新保留 */
 
 /* ================= CMD-1014-02 ================= */
 function offPartArg(p){ return (p && p.indexOf('指定')===0) ? p : (p==='下午' ? '下午' : '上午'); }
@@ -243,15 +236,15 @@ function krcOffPartText(o){
 }
 (function(){
   /* 月视图：提示文字改成「点日期 = 进那一周」 */
-  if(typeof krcMonthHtml==='function'){ var bm = krcMonthHtml; krcMonthHtml = function(){ var h = bm.apply(this, arguments); return newCalOn() ? h.replace(/点日期看当天；[^<]*|点日期 = 开放[^<]*/, '点日期 = 进那一周；营业 / 休诊 / 特殊营业只在医院设定里改。') : h; }; }
+  if(typeof krcMonthHtml==='function'){ var bm = krcMonthHtml; krcMonthHtml = function(){ var h = bm.apply(this, arguments); return h.replace(/点日期看当天；[^<]*|点日期 = 开放[^<]*/, '点日期 = 进那一周；营业 / 休诊 / 特殊营业只在医院设定里改。'); }; }
   /* 悬停加 OFF：「全天 / 指定时间」（取代上午 / 下午），指定时间用左边的开始–结束 */
-  if(typeof krcPopHtml==='function'){ var bp = krcPopHtml; krcPopHtml = function(){ var h = bp.apply(this, arguments); return newCalOn() ? h.replace('<option>全天</option><option>上午</option><option>下午</option>', '<option>全天</option><option>指定时间</option>').replace('标 OFF</button>', '标 OFF</button><span style="font-size:10px;color:var(--muted);">（指定时间 = 用左边的开始–结束）</span>') : h; }; }
+  if(typeof krcPopHtml==='function'){ var bp = krcPopHtml; krcPopHtml = function(){ var h = bp.apply(this, arguments); return h.replace('<option>全天</option><option>上午</option><option>下午</option>', '<option>全天</option><option>指定时间</option>').replace('标 OFF</button>', '标 OFF</button><span style="font-size:10px;color:var(--muted);">（指定时间 = 用左边的开始–结束）</span>'); }; }
   if(typeof krcAddOff==='function'){ var ba = krcAddOff; krcAddOff = function(){
-    if(newCalOn()){ var f = KRC.popForm; if(f.part==='指定时间'){ if(timeToMin(f.end) <= timeToMin(f.start)){ alert('结束时间要晚于开始时间'); return; } f.part = '指定'+f.start+'-'+f.end; } else if(f.part!=='全天') f.part = '全天'; }
-    var r = ba.apply(this, arguments); if(newCalOn()) KRC.popForm.part = '全天'; return r; }; }
+    { var f = KRC.popForm; if(f.part==='指定时间'){ if(timeToMin(f.end) <= timeToMin(f.start)){ alert('结束时间要晚于开始时间'); return; } f.part = '指定'+f.start+'-'+f.end; } else if(f.part!=='全天') f.part = '全天'; }
+    var r = ba.apply(this, arguments); KRC.popForm.part = '全天'; return r; }; }
   /* 代表院长：看自己 / 全部院长（只看不操作） */
   if(typeof krCalendarHtml==='function'){ var b2 = krCalendarHtml; krCalendarHtml = function(){
-    var h = b2.apply(this, arguments); if(!newCalOn()) return h; var me = currentAccount();
+    var h = b2.apply(this, arguments); var me = currentAccount();
     if(me && me.role==='kr_owner') h = h.replace('<span style="font-size:11px;color:var(--muted);">图例：', '<select onchange="krcSetViewAll(this.value)" style="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;"><option value="me"'+(krcViewAll()?'':' selected')+'>看自己</option><option value="all"'+(krcViewAll()?' selected':'')+'>全部院长（只看）</option></select><span style="font-size:11px;color:var(--muted);">图例：');
     return h; }; }
 })();
@@ -327,20 +320,20 @@ function memoOffSet(k, v){ MEMO_DRAFT[k] = v; if(k==='offMode') renderMemoBody()
   if(typeof renderMemoBody!=='function') return;
   var br = renderMemoBody, bo = openMemoModal, bs = saveMemoDraft;
   renderMemoBody = function(){
-    br.apply(this, arguments); if(!newCalOn() || !MEMO_DRAFT || MEMO_DRAFT.type!=='OFF') return;
+    br.apply(this, arguments); if(!MEMO_DRAFT || MEMO_DRAFT.type!=='OFF') return;
     var d = MEMO_DRAFT; d.offMode = d.offMode || '全天'; d.offFrom = d.offFrom || '10:00'; d.offTo = d.offTo || '12:00'; var inp = 'padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;';
     var radio = function(val, label){ return '<label style="margin-right:14px;font-size:13px;"><input type="radio" '+(d.offMode===val?'checked ':'')+'onchange="memoOffSet(\'offMode\',\''+val+'\')"> '+label+'</label>'; };
     document.getElementById('memo-body').insertAdjacentHTML('afterbegin', '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">时间</div>'+radio('全天','全天')+radio('指定','指定时间')+(d.offMode==='指定' ? '<span style="white-space:nowrap;"><input type="time" value="'+d.offFrom+'" onchange="MEMO_DRAFT.offFrom=this.value" style="'+inp+'"> – <input type="time" value="'+d.offTo+'" onchange="MEMO_DRAFT.offTo=this.value" style="'+inp+'"></span>' : '')+'</div>');
   };
   openMemoModal = function(editId){
-    bo.apply(this, arguments); if(!newCalOn() || !MEMO_DRAFT) return;
+    bo.apply(this, arguments); if(!MEMO_DRAFT) return;
     var m = editId ? CAL_MEMOS.filter(function(x){ return x.id===editId; })[0] : null; if(m && m.type==='OFF' && m.from){ MEMO_DRAFT.offMode = '指定'; MEMO_DRAFT.offFrom = m.from; MEMO_DRAFT.offTo = m.to; renderMemoBody(); }
   };
   saveMemoDraft = function(){
-    var dd = MEMO_DRAFT, n0 = CAL_MEMOS.length, timed = newCalOn() && dd && dd.type==='OFF' && dd.offMode==='指定';
+    var dd = MEMO_DRAFT, n0 = CAL_MEMOS.length, timed = dd && dd.type==='OFF' && dd.offMode==='指定';
     if(timed && timeToMin(dd.offTo) <= timeToMin(dd.offFrom)){ alert('结束时间要晚于开始时间'); return; }
     var r = bs.apply(this, arguments);
-    if(newCalOn() && dd && dd.type==='OFF'){
+    if(dd && dd.type==='OFF'){
       var m = dd.editId ? CAL_MEMOS.filter(function(x){ return x.id===dd.editId; })[0] : (CAL_MEMOS.length>n0 ? CAL_MEMOS[CAL_MEMOS.length-1] : null);
       if(m){ if(timed){ m.from = dd.offFrom; m.to = dd.offTo; } else { delete m.from; delete m.to; } try{ saveMemos(); }catch(e){} try{ Store.touch(); }catch(e){} try{ renderCalendar(); }catch(e){} }
     }
