@@ -123,8 +123,8 @@ function krTodoItems(rows){
     /* 今天到院 / 到店（院长账号看自己的案件） */
     var ks = c.krSchedule;
     if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed)
-      push(todoMk('today', todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived') ? '客人还没到：联络 IN 确认行程' : '今天到院：施术', c, today+' '+(ks.confirmedTime||''), todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived'), function(){ krOpenSurgSub(r.clinicId, r.id); }, {no:(krSurgSub(c) ? subCaseNo(c, krSurgSub(c)) : '') || c.caseNo}));
-    krTodayVisits(c).forEach(function(s){ push(todoMk('today', todoNotArrivedOver(today, s.time, !!s.arrived) ? '客人还没到：联络 IN 确认行程' : '今天到店：'+(s.content||'术后管理'), c, today+' '+(s.time||''), todoNotArrivedOver(today, s.time, !!s.arrived), function(){ krOpenSub(r.clinicId, r.id, s.id); }, {no:subCaseNo(c, s) || c.caseNo})); });
+      push(todoMk('today', todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived') ? '客人还没到：联络 IN 确认行程' : '今天到院：施术', c, today+' '+(ks.confirmedTime||''), todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived'), function(){ krOpenSubCard(r.clinicId, r.id); }, {no:(krSurgSub(c) ? subCaseNo(c, krSurgSub(c)) : '') || c.caseNo}));
+    krTodayVisits(c).forEach(function(s){ push(todoMk('today', todoNotArrivedOver(today, s.time, !!s.arrived) ? '客人还没到：联络 IN 确认行程' : '今天到店：'+(s.content||'术后管理'), c, today+' '+(s.time||''), todoNotArrivedOver(today, s.time, !!s.arrived), function(){ krOpenSubCard(r.clinicId, r.id, s.id); }, {no:subCaseNo(c, s) || c.caseNo})); });
   });
   /* CMD-1014-16：IN 在 KR 日程占位的预约 → 确认预约时间；确认后的预约今天到店 */
   try{ var hidB = krHospitalIdOfMe(), meB = currentAccount(); (krbList(hidB)||[]).forEach(function(b){

@@ -407,3 +407,6 @@ body.kr-recwin #kr-rec-overlay .modal-box, body.kr-recwin #kr-pcb-overlay .modal
 
 /* CMD-1015-11 演示时间标记（右上时钟旁） */
 .demo-time-tag{display:inline-block;font-size:10px;font-weight:700;line-height:1;padding:3px 6px;border-radius:4px;background:#FBF0C9;color:#8F6F0C;margin-left:6px;vertical-align:middle;}
+
+/* CMD-1015-12 子案件卡片高亮（从工作台 / 日历点进来时） */
+.kr-sub-hl{background:#FBF0C9 !important;box-shadow:inset 3px 0 0 var(--action-primary,#9A6A4B);border-radius:6px;}
