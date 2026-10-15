@@ -2966,7 +2966,7 @@ function pushNotif(cat, text, opts){
   else rec = workingIN();
   if(cat==='系统' && typeof clinicAccounts==='function'){ clinicAccounts().forEach(function(a){ if(a.role==='owner' && a.status==='active' && a.name && rec.indexOf(a.name)<0) rec.push(a.name); }); } /* CMD-1014-16：老板只收「系统」类 */
   rec = rec.filter(function(x){ return x!==ME_NAME; }); /* 操作人自己不收自己触发的通知 */
-  var n = {id:'n'+(++NOTIF_SEQ), cat:cat, by:ME_NAME, level:opts.level || notifLevel(text), text:text, caseId:opts.caseId||null, ts:opts.ts||nowFullDt(), recipients:rec, read:{}, link:opts.link||(c?{kind:'case'}:{kind:'none'}), detail:opts.detail||null};
+  var n = {id:'n'+(++NOTIF_SEQ), cat:cat, by:ME_NAME, level:opts.level || notifLevel(text), text:text, caseId:opts.caseId||null, ts:opts.ts||nowFullDt(), recipients:rec, read:{}, link:opts.link||(c?{kind:'case'}:{kind:'none'}), detail:opts.detail||null, popup:opts.popup||null};
   if(opts.read) n.read[ME_NAME] = true;
   NOTIFS.unshift(n);
   updateBell();
@@ -2974,7 +2974,7 @@ function pushNotif(cat, text, opts){
   if(opts.silent) n.silent = true;
   if(NOTIF_SEEN) NOTIF_SEEN[notifKey(n)] = 1; /* 本页自己产生的：下面直接弹，不要再被 toastNewNotifs 重复弹 */
   if(!opts.silent && notifMine(n) && notifyPushOn()){
-    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk!=='msg') showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay', urgent: tk==='stay'}); } /* CMD-1013-17：消息不弹；新待办弹一次自动收起；被 @ / 未接来电停留 */
+    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk!=='msg') showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay' || tk==='confirm', urgent: tk==='stay', onOk: tk==='confirm' ? function(){ notifMarkRead(n); } : null}); } /* CMD-1013-17：消息不弹；新待办弹一次自动收起；被 @ / 未接来电停留 */
     else showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky:n.level!=='info'});
   }
   return n;
@@ -3000,6 +3000,7 @@ function toggleBellDropdown(ev){
   document.body.appendChild(d);
 }
 
+function notifMarkRead(n){ n.read[ME_NAME] = true; try{ updateBell(); Store.touch(); }catch(e){} } /* 设定更新 toast 的［确认］：算已读，下次上线不再弹 */
 /* 点通知：标为已读并打开对应内容；通知中心页里点 = 页内跳转；正在某个案件里从铃铛/toast 点 = 新标签页 */
 function openNotif(id, src){
   var n = NOTIFS.filter(function(x){ return x.id===id; })[0]; if(!n) return;
@@ -3007,7 +3008,8 @@ function openNotif(id, src){
   if(CURRENT_PAGE_ID==='in-notifications') renderNotifPage();
   var newTab = (src!=='page' && CURRENT_PAGE_ID==='in-casedetail');
   var k = n.link.kind;
-  if(k==='system'){ openNotifDetail(n); return; }
+  if(k==='system'){ if(n.popup==='confirm' && n.cat==='系统' && canDo('clinic') && !n.detail){ openAdminPage('clinic'); return; } openNotifDetail(n); return; }
+  if(k==='resvHistory'){ nav('in-resvhistory'); return; } /* IN-17：客人改约 / 取消 → 预约历史记录 */
   if(k==='mention'){
     if(n.caseId && newTab){ openCaseNewTab(n.caseId, '&chat=open'); return; }
     gotoQuoteSource(n.link.roomId, n.link.msgIdx); return; /* 被 @ → 打开该对话并定位到消息 */
@@ -3487,7 +3489,7 @@ function showToast(title, text, onClickFn, opts){
     el.setAttribute('data-sticky', '1');
     var ok = document.createElement('button');
     ok.className = 'toast-ok'; ok.textContent = '确认';
-    ok.addEventListener('click', function(e){ e.stopPropagation(); if(el.parentNode) el.remove(); });
+    ok.addEventListener('click', function(e){ e.stopPropagation(); if(el.parentNode) el.remove(); if(opts.onOk) try{ opts.onOk(); }catch(x){} });
     el.appendChild(ok);
   } else {
     var closeBtn = document.createElement('span');
@@ -3514,13 +3516,16 @@ function remoteNotifTick(){
 }
 function toastNewNotifs(){
   if(typeof NOTIFS==='undefined') return;
-  if(NOTIF_SEEN===null){ NOTIF_SEEN = {}; NOTIFS.forEach(function(n){ NOTIF_SEEN[notifKey(n)] = 1; }); return; }
+  if(NOTIF_SEEN===null){ /* 第一次：已有通知只登记不补弹；例外（CMD-1015-09）：设定更新（popup:'confirm'）没按过确认的，没上线的人下次上线要弹 */
+    NOTIF_SEEN = {}; NOTIFS.forEach(function(n){ NOTIF_SEEN[notifKey(n)] = 1; if(n.popup==='confirm' && !n.silent && notifMine(n) && !n.read[ME_NAME] && notifAlive(n) && notifyPushOn()) showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky:true, onOk:function(){ notifMarkRead(n); }}); });
+    return;
+  }
   NOTIFS.slice().reverse().forEach(function(n){
     var k = notifKey(n); if(NOTIF_SEEN[k]) return; NOTIF_SEEN[k] = 1;
     if(n.silent || !notifMine(n) || n.read[ME_NAME] || !notifAlive(n) || !notifyPushOn()) return;
     if(newTodoOn()){ /* CMD-1013-17：被 @ / 未接来电 弹出并停留；新待办弹一次自动收起；消息不弹（只进铃铛 + 新消息卡） */
       var tk = notifTodoKind(n); if(tk==='msg') return;
-      showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay', urgent: tk==='stay'}); return;
+      showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay' || tk==='confirm', urgent: tk==='stay', onOk: tk==='confirm' ? function(){ notifMarkRead(n); } : null}); return;
     }
     showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky:notifLevelOf(n)!=='info'});
   });

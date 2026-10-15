@@ -39,6 +39,13 @@ function todoInMine(c){ try{ return caseOperators(c, true).inn.indexOf(ME_NAME)>
 function todoEtaDue(c){ return c.reportEta ? fmtUtc(c.reportEta) : ''; }
 function todoCloseMinusHour(){ var m = timeToMin(CLINIC_SETTINGS.closeTime||'21:00') - 60; return m; }
 
+/* IN-08：待收款点了去哪——面诊费 → 面诊资料；待付款结算单 → 它所在的 tab（有赴韩项目 = 赴韩施术计划，只有本地项目 = 本地管理）并滚到那张结算单 */
+function todoPayGo(c, b){
+  if(/面诊费/.test(b)) return todoInGo(c, 'consult');
+  var m = /批次 ([^）)]+)/.exec(b), bid = m ? m[1] : '', bt = (c.settlementBatches||[]).filter(function(x){ return x.id===bid; })[0];
+  var hasKr = bt ? krAllItems(c).some(function(it){ return it.batchId===bid; }) : false;
+  return function(){ openCaseDetail(c.id); c.activeCaseTab = hasKr ? 'kr' : (bt ? 'localmgmt' : 'settle'); renderCaseBody(c); setTimeout(function(){ var el = document.getElementById('settle-card-'+bid); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80); };
+}
 function inTodoItems(){
   var out = [], now = nowDateObj(), today = todayStr(), nowMin = demoNow().getHours()*60 + demoNow().getMinutes();
   CASE_ITEMS.forEach(function(c){
@@ -73,7 +80,7 @@ function inTodoItems(){
     /* 确认客人日程有无变化：赴韩施术前 2 天出现（CMD-1014-01 二·3） */
     if(newCalOn() && calNeedsRecheck(c)) push(todoMk('recheck', '确认客人日程有无变化（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, todoInGo(c, 'kr')));
     /* 待收款 */
-    closeBlockers(c).forEach(function(b){ push(todoMk('pay', '待收款：'+b, c, '', false, todoInGo(c, /面诊费/.test(b) ? 'consult' : 'settle'))); });
+    closeBlockers(c).forEach(function(b){ push(todoMk('pay', '待收款：'+b, c, '', false, todoPayGo(c, b))); }); /* IN-08：点了去那张待付款结算单所在的 tab（赴韩施术计划 / 本地管理）并滚到那张结算单 */
     /* 当天本地项目未标完成：营业结束前 1 小时出现，标完才消失 */
     var uses = (c.mgmtUses||[]).concat(c.localMgmt ? (c.localMgmt.mgmtUses||[]) : []).filter(function(u){ return localItemStatus(u)==='进行中'; });
     if(uses.length && (c.arrivedDay===today || c.visitDate===today || c.localMgmtDay===today) && nowMin >= todoCloseMinusHour())
@@ -87,9 +94,9 @@ function inTodoItems(){
   /* CMD-1014-16：IN 在 KR 日程占位的预约，KR 改时间 / 无法安排 → 重选时间 */
   try{ krbMine().filter(function(b){ return b.status==='reselect'; }).forEach(function(b){ out.push(todoMk('rebook', '重选时间：'+b.clientName+'（'+(b.reselectKind==='change' ? 'KR 建议改时间' : 'KR 无法安排')+'：'+(b.reselectReason||'—')+'）', null, b.date+' '+b.time, true, function(){ krBookReselectOpen(b.id); }, {name:b.clientName, no:''})); }); }catch(e){}
   /* 术后管理过了建议日期（按客人，不属于某个案件） */
-  try{ postcareDueList().forEach(function(x){ out.push(Object.assign(todoMk('pcdue', '术后管理已过建议日期 '+x.late+' 天：'+x.h.itemName, null, '', true, function(){ openClientDetail(x.name, 'dashboard'); }), {name:x.name})); }); }catch(e){}
+  try{ postcareDueList().forEach(function(x){ out.push(Object.assign(todoMk('pcdue', '术后管理已过建议日期 '+x.late+' 天：'+x.h.itemName, null, '', true, function(){ openClientDetail(x.name, 'dashboard'); setTimeout(function(){ var el = document.getElementById('detail-holdings-block'); if(el && el.scrollIntoView) el.scrollIntoView({block:'start'}); }, 80); }), {name:x.name})); }); }catch(e){} /* IN-11：去客户详情 · 持有 */
   /* 预约占位快过期（剩 5 分钟内） */
-  (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var left = p.expiresAt - Date.now(); if(left>0 && left<=5*60000) out.push(todoMk('ph', '预约占位快过期：'+p.phone+' '+p.time, null, p.date+' '+p.time, false, null, {name:p.phone})); });
+  (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var left = p.expiresAt - Date.now(); if(left>0 && left<=5*60000) out.push(todoMk('ph', '预约占位快过期：'+p.phone+' '+p.time, null, p.date+' '+p.time, false, function(){ todoGoPlaceholder(p); }, {name:p.phone})); /* IN-12：去工作台，日历上看那个占位 */ });
   /* 被 @ / 未接来电（读掉才消失） */
   (NOTIFS||[]).forEach(function(n){ if(!notifMine(n) || n.read[ME_NAME] || !notifAlive(n) || notifTodoKind(n)!=='stay') return; var c = n.caseId ? CASE_ITEMS.filter(function(x){ return x.id===n.caseId; })[0] : null; out.push(todoMk('stay', tzRender(n.text), c, '', false, function(){ openNotif(n.id, 'todo'); })); });
   return out;
@@ -133,6 +140,7 @@ function krTodoItems(rows){
 function todoNotArrivedOver(ds, tm, arrived){ return !arrived && !!tm && todoNowStr() >= ds+' '+tm; }
 /* 待办 = 现在需要我动手做的事：状态「等待中 / 待接待」（没超时的 visit / kr / waiting / today2 类）不进待办栏，只在点卡片时当灰色参考名单显示（it.ref） */
 var TODO_REF_CATS = ['visit', 'kr', 'waiting', 'today2'];
+function todoGoPlaceholder(p){ try{ nav('in-dashboard'); if(typeof setCalView==='function' && CAL_VIEW!=='in') setCalView('in'); DAY_OFFSET = Math.round((new Date(p.date+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/86400000); setCalMode('day'); renderCalendar(); }catch(e){ console.error('[占位跳转]', e); } }
 function todoItems(){
   var items;
   try{ items = todoIsKr() ? krTodoItems(krAllCases()) : inTodoItems(); }catch(e){ console.error('[待办]', e); items = []; }
@@ -432,6 +440,8 @@ function todoInBoot(){ if(!newTodoOn() || todoIsKr()) return; try{ if(typeof set
 function notifTodoKind(n){
   var tx = String(n.text||''), kd = n.kind||'';
   if(kd==='mention' || kd==='missedcall' || /@ 了你|未接来电/.test(tx)) return 'stay';
+  if(n.popup==='confirm') return 'confirm'; /* CMD-1015-09：设定更新（IN-23 / KR-14）弹出并停留、手动确认（不是紧急，没有彩色图标） */
+  if(n.popup==='once') return 'todo'; /* 今天的自助预约（IN-15 / IN-16）：弹一次、几秒后自动收起 */
   if(/诊疗方案已到|等待报告超过|无法安排|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
   return 'msg';
 }

@@ -695,10 +695,10 @@ function submitSelfBooking(f){
   if(old && old.cancelNotifId && Date.now()-(old.cancelledAt||0) < 30*60000){
     /* 取消后马上重新预约：把"客人取消预约"那条通知收回，只留一条合并的"客人改约" */
     NOTIFS = NOTIFS.filter(function(n){ return n.id!==old.cancelNotifId; }); old.cancelNotifId = null;
-    pushNotif('预约', '客人改约：'+cl.name+' 原 '+dateLabel(old.visitDate)+' '+old.visitTime+' → 新 '+when+'（'+c.caseNo+'）', {caseId:c.id, names:workingIN()});
+    pushNotif('预约', '客人改约：'+cl.name+' 原 '+dateLabel(old.visitDate)+' '+old.visitTime+' → 新 '+when, {caseId:c.id, names:workingIN(), link:{kind:'resvHistory'}}); /* IN-17：点了去预约历史记录；不弹 */
   } else if(f.entry==='walkin') pushNotif('预约', '客人到店自己填完资料'+tail+'，请在客人到店后点［已到店］', {caseId:c.id, names:workingIN()});
-  else if(f.phId) pushNotif('预约', '占位客人填完资料'+tail, {caseId:c.id, names:workingIN()});
-  else pushNotif('预约', '客人自助预约提交'+tail, {caseId:c.id, names:workingIN()});
+  else if(f.phId) pushNotif('预约', cl.name+' 已填完预约资料（'+when+'）', {caseId:c.id, names:workingIN(), popup:(f.date===todayStr() ? 'once' : null)}); /* IN-16：预约的是今天才弹一次，其他日子只进铃铛 */
+  else pushNotif('预约', cl.name+' 自助预约了 '+when+'（'+(c.visitPurpose||c.visitNote||'到店')+'）', {caseId:c.id, names:workingIN(), popup:(f.date===todayStr() ? 'once' : null)}); /* IN-15 */
   sendSms('confirm', f.phone, smsVarsOfCase(c), c.id);
   return {ok:true, c:c, client:cl, isNew:isNew};
 }
@@ -743,7 +743,7 @@ function customerCancelCase(caseId){
   c.subState = 'cancelled'; c.cancelReason = '预约取消'; c.cancelBy = '客人'; /* CMD-1014-18：日历上划掉并写「客人取消预约」 */
   updateCaseStage(c);
   logCaseEvent(c, '客人', '客人自行取消预约（原 '+c.visitDate+' '+c.visitTime+'）');
-  var n = pushNotif('预约', '客人取消预约：'+c.name+'（'+c.caseNo+'）原 '+dateLabel(c.visitDate)+' '+c.visitTime, {caseId:c.id, names:workingIN()});
+  var n = pushNotif('预约', c.name+' 取消了 '+dateLabel(c.visitDate)+' '+c.visitTime+' 的预约', {caseId:c.id, names:workingIN(), link:{kind:'resvHistory'}}); /* IN-17 */
   c.cancelNotifId = n.id; c.cancelledAt = Date.now();
   sendSms('cancel', clientPhoneOf(c.name), smsVarsOfCase(c), c.id);
   return {ok:true, c:c};
@@ -825,7 +825,7 @@ function simulateCustomerReschedule(caseId, newDow, newTime){
   ws.setDate(ws.getDate()+DOW_CN.indexOf(newDow));
   c.visitDate = dateStr(ws); c.visitTime = newTime;
   if(CAL_MODE==='week') buildWeekGrid();
-  pushNotif('预约', c.name+' 自行把预约时间从 '+oldLabel+' 改到 '+dateLabel(c.visitDate)+' '+newTime, {caseId:c.id});
+  pushNotif('预约', '客人改约：'+c.name+' 原 '+oldLabel+' → 新 '+dateLabel(c.visitDate)+' '+newTime, {caseId:c.id, link:{kind:'resvHistory'}}); /* IN-17 */
 }
 
 
@@ -5790,7 +5790,7 @@ function pushKrNotif(hid, text, opt){
   var h = HOSPITAL_DATA[hid]; if(!h) return null;
   opt = opt || {};
   h.notifs = h.notifs || [];
-  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, only:opt.only||null, kind:opt.kind||'case', by:(typeof currentAccount==='function'&&currentAccount()?currentAccount().name:null), level:opt.level||notifLevel(text), readBy:[]};
+  var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, only:opt.only||null, popup:opt.popup||null, kind:opt.kind||'case', by:(typeof currentAccount==='function'&&currentAccount()?currentAccount().name:null), level:opt.level||notifLevel(text), readBy:[]};
   h.notifs.unshift(n); if(h.notifs.length>200) h.notifs.length = 200;
   return n;
 }

@@ -236,7 +236,7 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
     var old = '营业时间：'+hr.open+'–'+hr.close+'；定期休诊：'+closedRulesText(h.closedRules)+'；午休：'+(h.lunch&&h.lunch.from ? h.lunch.from+'–'+h.lunch.to : '无'), nw = '营业时间：'+d.openTime+'–'+d.closeTime+'；定期休诊：'+closedRulesText(d.closedRules)+'；午休：'+(lu.from ? lu.from+'–'+lu.to : '无');
     if(old===nw){ HOSP_DRAFT = null; showToast('没有修改', '设定和之前一样', null); return; }
     h.openTime = d.openTime; h.closeTime = d.closeTime; h.closedRules = d.closedRules; h.lunch = lu.from ? {from:lu.from, to:lu.to} : null; HOSP_DRAFT = null;
-    logOp('设定变更', '医院设定：'+old+' → '+nw); Store.touch(); openAdminPage('clinic', true); showToast('已保存', nw, null);
+    logOp('设定变更', '医院设定：'+old+' → '+nw); krSettingsNotif('医院设定：'+old+' → '+nw); Store.touch(); openAdminPage('clinic', true); showToast('已保存', nw, null);
   };
   ADMIN_RENDER.bizdata = function(el, r){
     if(!isKrAccount()) return baseBiz(el, r);
@@ -872,6 +872,7 @@ function krNotifsForMe(){
     return n.to==='coord';
   });
 }
+function krMarkNotifRead(n){ var me = currentAccount(); n.readBy = n.readBy || []; if(n.readBy.indexOf(me.id) < 0) n.readBy.push(me.id); try{ Store.touch(); krUpdateBadges(); }catch(e){} } /* 设定更新 toast 的［确认］= 已读 */
 function krNotifUnread(){ var me = currentAccount(); return krNotifsForMe().filter(function(n){ return (n.readBy||[]).indexOf(me.id) < 0; }); }
 /* KR 通知点击直接进对应 tab（CMD-1013-13 四）：面诊相关 → 面诊；施术日期 / 改期 / 到院 / 评估 / 待付款 / 术后管理提前 → 施术；IN 选定项目 / 付定金 → 项目；@ / 未接来电 → 对话；系统 / 设定更新 → 医院设定 */
 function krNotifTarget(n){
@@ -971,11 +972,16 @@ function krUpdateBadges(){
 }
 var KR_LAST_UNREAD = null;
 /* KR 端新通知 toast（CMD-1012-01）：每条新的未读通知各弹一条，手动［确认］才消失；第一次只登记已有的 */
+/* KR-14 医院设定更新：该医院所有室长收到，弹出并停留、手动确认；没上线的人下次上线要弹；操作的人自己不收（krNotifsForMe 按 by 过滤）。点了去医院设定 */
+function krSettingsNotif(what){
+  var hid = krHospitalIdOfMe(), me = currentAccount(); if(!hid || !me) return;
+  pushKrNotif(hid, ME_NAME+' 更新了医院设定：'+what+'，'+todayStr()+' 起生效', {kind:'system', to:'coord', popup:'confirm', by:ME_NAME, clinicId:''});
+}
 var KR_NOTIF_SEEN = null;
 function krToastNew(unread){
-  if(KR_NOTIF_SEEN===null){ KR_NOTIF_SEEN = {}; krNotifsForMe().forEach(function(n){ KR_NOTIF_SEEN[n.id] = 1; }); return; }
+  if(KR_NOTIF_SEEN===null){ KR_NOTIF_SEEN = {}; krNotifsForMe().forEach(function(n){ KR_NOTIF_SEEN[n.id] = 1; }); /* 设定更新没按过确认的：没上线的人下次上线要弹（CMD-1015-09） */ unread.forEach(function(n){ if(n.popup==='confirm') showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky:true, onOk:function(){ krMarkNotifRead(n); }}); }); return; }
   unread.slice().reverse().forEach(function(n){ if(KR_NOTIF_SEEN[n.id]) return; KR_NOTIF_SEEN[n.id] = 1;
-    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk==='msg') return; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky: tk==='stay', urgent: tk==='stay'}); return; } /* CMD-1013-17 */
+    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk==='msg') return; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky: tk==='stay' || tk==='confirm', urgent: tk==='stay', onOk: tk==='confirm' ? function(){ krMarkNotifRead(n); } : null}); return; } /* CMD-1013-17 */
     showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky:notifLevelOf(n)!=='info'}); });
 }
 (function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open && !(document.activeElement && /^kr-chat-in$|^$/.test(document.activeElement.id||'') && document.activeElement.tagName==='INPUT')) krRenderChat(); var u = krNotifUnread(); krToastNew(u); KR_LAST_UNREAD = u.length; }; })();

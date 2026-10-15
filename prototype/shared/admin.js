@@ -216,7 +216,7 @@ function saveClinicSettings(){
   applyClinicSettings();
   try{ renderCalendar(); }catch(e){}
   logOp('设定变更', '诊所设定：'+ch.join('；'));
-  pushNotif('系统', who+' 更新了诊所设定：'+ch.join('；'), {names:IN_COORDINATORS.slice(), link:{kind:'system'}, detail:{title:'诊所设定更新', changes:ch, effective:'保存后立即生效（'+CLINIC_SETTINGS.updatedAt+'，由 '+who+' 修改）'}});
+  pushNotif('系统', who+' 更新了诊所设定：'+ch.join('；')+'，'+todayStr()+' 起生效', {names:IN_COORDINATORS.slice(), link:{kind:'system'}, popup:'confirm', detail:{title:'诊所设定更新', changes:ch, effective:'保存后立即生效（'+CLINIC_SETTINGS.updatedAt+'，由 '+who+' 修改）'}});
   clinicDraftFresh();
   openAdminPage('clinic', true);
   showToast('诊所设定已保存', '已立即生效，并通知所有室长', null);
