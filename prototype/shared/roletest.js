@@ -120,7 +120,7 @@ RT.runKr = function(){
   var coord = isMgr || isGen, dirLike = isOwn || isDir, admin = isOwn || isMgr;
   var T = function(f){ try{ return f(); }catch(e){ return 'ERR '+e; } };
   var L = RT.navLabels();
-  RT.cell('侧栏：工作台 / 案件列表 / 通知中心', '✅', RT.yn(RT.has(L, ['工作台','案件列表','通知中心'])));
+  RT.cell('侧栏：工作台 / 案件列表 / 通知中心', '✅', RT.yn(RT.has(L, ['工作台','案件管理','通知中心'])));
   RT.cell('侧栏：客人管理（一般院长没有；代表院长可看，只读）', (coord || isOwn) ? '✅' : '❌', RT.yn(L.indexOf('客人管理')>-1));
   RT.cell('侧栏 / 页面：经营数据、账号管理、医院设定、操作日志', admin ? '✅' : '❌', RT.yn(RT.has(L, ['经营数据','账号管理','医院设定','操作日志'])));
   RT.cell('侧栏 / 页面：院长管理（院长名单、停用）', admin ? '✅' : '❌', RT.yn(L.indexOf('院长管理')>-1));

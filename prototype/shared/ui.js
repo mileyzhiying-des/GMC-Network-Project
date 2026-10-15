@@ -3777,31 +3777,53 @@ function opGuard(ev){
    对话 / 通知 / 头像（.head-actions）放进第一行最右边；返回链接（IN 的案件详情 / 客户详情 / 院长详情 / 上次项目史）放进第一行最左。
    页面重画（KR 页面整块 innerHTML 重写）后由 MutationObserver 重新挂上（幂等）。 */
 var HEAD_ADMIN_TITLE = '';
-var HEAD_TITLES = {'in-clients':'客户管理', 'in-cases':'案件列表', 'in-library':'案例库', 'in-projectlibrary':'项目库', 'in-notifications':'通知中心', 'in-report':'诊疗方案', 'in-lastcase':'上次项目史', 'in-director':'院长详情',
-  'kr-cases':'案件列表', 'kr-clients':'客人管理', 'kr-notifications':'通知中心'};
-var HEAD_OWN = {'in-dashboard':'.dash-top', 'in-casedetail':'first', 'in-clientdetail':'first', 'in-resvhistory':'first', 'kr-dashboard':'.dash-top', 'kr-casedetail':'first', 'kr-clientdetail':'first', 'kr-subcase':'first'};
-var HEAD_BACK = {'in-casedetail':1, 'in-clientdetail':1, 'in-director':1, 'in-lastcase':1};
+var HEAD_TITLES = {'in-clients':'客户管理', 'in-cases':'案件管理', 'in-library':'案例库', 'in-projectlibrary':'项目库', 'in-notifications':'通知中心', 'in-report':'诊疗方案', 'in-lastcase':'上次项目史',
+  'kr-cases':'案件管理', 'kr-clients':'客人管理', 'kr-notifications':'通知中心'};
+var HEAD_OWN = {'in-dashboard':'.dash-top', 'kr-dashboard':'.dash-top'};
+/* CMD-1015-03：二级页面（从一级页面点进去的）= 第一行「← 返回」+ 右边三个图标，第二行 = 页面自己原来的第一行；新标签页打开的页面（诊疗方案、上次项目史）按一级页面样式，不放返回 */
+var HEAD_L2 = {'in-casedetail':1, 'in-clientdetail':1, 'in-director':1, 'in-resvhistory':1, 'kr-casedetail':1, 'kr-clientdetail':1, 'kr-subcase':1};
 function headIconsHtml(){ return (isKrAccount() && typeof krHeadIconsHtml==='function') ? krHeadIconsHtml() : buildTopRightIcons(); }
 function headMount(){
   var pg = [].slice.call(document.querySelectorAll('.page')).filter(function(p){ return p.style.display!=='none' && p.querySelector('.content'); })[0]; if(!pg) return;
   var content = pg.querySelector('.content'), id = pg.id, row = null;
   if(!content || !currentAccount()) return;
-  var own = HEAD_OWN[id], title = HEAD_TITLES[id] || (id==='in-admin' ? HEAD_ADMIN_TITLE : '') || (/^kr-/.test(id) ? '' : '');
+  var own = HEAD_OWN[id], title = HEAD_TITLES[id] || '';
   if(id==='in-admin' || (content.id==='admin-body')) title = HEAD_ADMIN_TITLE || title;
-  if(own){ row = own==='first' ? content.firstElementChild : content.querySelector(own); }
-  else {
-    row = content.querySelector(':scope > .page-title-row');
-    if(!row && title){ row = document.createElement('div'); row.className = 'page-title-row'; row.innerHTML = '<h1 class="page-title">'+title+'</h1>'; content.insertBefore(row, content.firstChild); }
-    else if(row && title){ var h = row.querySelector('.page-title'); if(h && h.textContent!==title) h.textContent = title; }
+  var mkActions = function(){ var tmp = document.createElement('div'); tmp.innerHTML = headIconsHtml(); var act = tmp.firstElementChild; if(act) act.classList.add('head-actions'); return act; };
+  if(HEAD_L2[id]){
+    row = content.querySelector(':scope > .page-head-row');
+    if(!row){
+      row = document.createElement('div'); row.className = 'page-head-row'; row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;';
+      var a = document.createElement('a'); a.href = '#'; a.className = 'head-back'; a.textContent = '← 返回'; a.style.cssText = 'font-size:13px;color:var(--slate);white-space:nowrap;'; a.onclick = function(ev){ ev.preventDefault(); goBack(); }; row.appendChild(a);
+      var act0 = mkActions(); if(act0){ act0.style.marginLeft = 'auto'; row.appendChild(act0); }
+      content.insertBefore(row, content.firstChild);
+    }
+    var second = row.nextElementSibling; /* 第二行里原来的「← 返回」按钮拿掉（返回去处不变，由第一行的返回负责） */
+    if(second){ [].slice.call(second.querySelectorAll('button[onclick^="goBack"], a[onclick^="goBack"]')).forEach(function(b){ b.remove(); }); }
+  } else {
+    if(own){ row = content.querySelector(own); }
+    else {
+      row = content.querySelector(':scope > .page-title-row');
+      if(!row && title){ row = document.createElement('div'); row.className = 'page-title-row'; row.innerHTML = '<h1 class="page-title">'+title+'</h1>'; content.insertBefore(row, content.firstChild); }
+      else if(row && title){ var h = row.querySelector('.page-title'); if(h && h.textContent!==title) h.textContent = title; }
+    }
+    if(!row) return;
+    if(!row.querySelector(':scope > .head-actions')){
+      var kids = [].slice.call(row.children);
+      row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.justifyContent = 'flex-start'; row.style.gap = row.style.gap || '16px';
+      var act = mkActions();
+      if(act){ if(kids.length > 1){ kids[kids.length-1].style.marginLeft = 'auto'; act.style.marginLeft = '14px'; } else act.style.marginLeft = 'auto'; row.appendChild(act); }
+    }
   }
-  if(!row) return;
-  if(!row.querySelector(':scope > .head-actions')){
-    var kids = [].slice.call(row.children).filter(function(k){ return !k.classList.contains('head-back'); });
-    row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.justifyContent = 'flex-start'; row.style.gap = row.style.gap || '16px';
-    if(kids.length > (own ? 1 : 1) || (own && kids.length>=2)){ var last = kids[kids.length-1]; last.style.marginLeft = 'auto'; }
-    var tmp = document.createElement('div'); tmp.innerHTML = headIconsHtml(); var act = tmp.firstElementChild; if(act){ act.classList.add('head-actions'); act.style.marginLeft = (kids.length>1 || (own && kids.length>=2)) ? '14px' : 'auto'; if(kids.length<=1) act.style.marginLeft = 'auto'; row.appendChild(act); }
+  /* CMD-1015-03：页面名只写一次——内容里自己带的同名标题拿掉（有解释文字的只去掉标题那几个字） */
+  if(title && !HEAD_L2[id]){
+    [].slice.call(content.querySelectorAll(':scope > div:not(.page-title-row) div[style*="font-size:18px;font-weight:700"], :scope > div[style*="font-size:18px;font-weight:700"]')).slice(0, 3).forEach(function(el){
+      var tn = el.firstChild; var txt = (tn && tn.nodeType===3) ? tn.nodeValue.trim() : (el.children.length ? '' : el.textContent.trim());
+      if(!txt || txt.indexOf(title)!==0) return;
+      if(tn && tn.nodeType===3 && el.children.length){ tn.nodeValue = txt.slice(title.length).replace(/^[\s·]+/,''); }
+      else el.remove();
+    });
   }
-  if(HEAD_BACK[id] && !row.querySelector(':scope > .head-back')){ var a = document.createElement('a'); a.href = '#'; a.className = 'head-back'; a.textContent = '← 返回'; a.style.cssText = 'font-size:13px;color:var(--slate);white-space:nowrap;'; a.onclick = function(ev){ ev.preventDefault(); goBack(); }; row.insertBefore(a, row.firstChild); }
   try{ if(typeof updateChatBadge==='function' && !isKrAccount()){ updateChatBadge(); updateBell(); } if(isKrAccount() && typeof krUpdateBadges==='function') krUpdateBadges(); }catch(e){}
 }
 (function(){

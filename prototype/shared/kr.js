@@ -73,7 +73,7 @@ function krClientsAllowed(){ var a = currentAccount(); return canDo('krview') ||
 function krNavItems(){
   var items = [];
   if(canDo('krview') || canDo('krviewOwn')) items.push({id:'kr-dashboard', key:'krdash', label:'工作台', icon:'盘'});
-  if(canDo('krview') || canDo('krviewOwn')) items.push({id:'kr-cases', key:'krcases', label:'案件列表', icon:'件'});
+  if(canDo('krview') || canDo('krviewOwn')) items.push({id:'kr-cases', key:'krcases', label:'案件管理', icon:'件'});
   if(krClientsAllowed()) items.push({id:'kr-clients', key:'krclients', label:'客人管理', icon:'客'}); /* 院长没有客人管理（KR-CLNT-01，CMD-1013-11 四） */
   if(canDo('krview') || canDo('krviewOwn')) items.push({id:'kr-notifications', key:'krnotifs', label:'通知中心', icon:'通'});
   return items;
@@ -317,7 +317,7 @@ function krRenderDashboard(){
   var el = document.getElementById('krdash-body'); if(!el) return;
   var hid = krHospitalIdOfMe(), h = krHData(), rows = krAllCases();
   var td0 = new Date(krToday()+'T00:00:00'); /* CMD-1015-02：问候行 + 右上日期照 IN 的排法（.dash-top / .dash-greet h1 / .dash-meta .date） */
-  var head = '<div class="dash-top"><div class="dash-greet"><h1>'+krEsc(krGreeting())+'</h1></div><div class="dash-meta"><div class="date">'+td0.getFullYear()+'年'+(td0.getMonth()+1)+'月'+td0.getDate()+'日（周'+krcDow(krToday())+'）</div><div class="weather">'+krEsc(krHospitalName())+'</div></div></div>';
+  var head = '<div class="dash-top"><div class="dash-greet"><h1>'+krEsc(krGreeting())+'</h1></div><div class="dash-meta"><div class="date">'+td0.getFullYear()+'年'+(td0.getMonth()+1)+'月'+td0.getDate()+'日（周'+krcDow(krToday())+'）</div><div class="weather">☁ '+((TZ_INFO['Asia/Seoul']||{}).city||'首尔')+' '+((TZ_INFO['Asia/Seoul']||{}).temp||18)+'℃</div></div></div>';
   if(krIsDirector()){ el.innerHTML = head + krOffBar(hid) + (newCalOn() ? '' : krDirectorBlocks(rows)) + (newTodoOn() ? todoKrCalWrap(krCalendarHtml()) : krCalendarHtml()); return; }
   var banner = ''; /* CMD-1014-18 三·6：拿掉「确认今日院长日程」黄色横幅 */
   var cards = KR_CARDS.filter(function(c){ return !c.n; }).sort(function(a0,b0){ return (a0.ord||50)-(b0.ord||50); });
@@ -423,20 +423,20 @@ function krRenderCases(){
   var el = document.getElementById('krcases-body'); if(!el) return;
   var hid = krHospitalIdOfMe(), all = krAllCases(), isDir = krIsDirector();
   var counts = {}; KR_TABS.forEach(function(t0){ counts[t0.key] = t0.key==='all' ? all.length : all.filter(function(r){ return krTabOf(r)===t0.key; }).length; });
-  var tabs = KR_TABS.map(function(t0){ var on = KR_LIST.tab===t0.key; return '<button onclick="krSetList(\'tab\',\''+t0.key+'\')" style="padding:7px 14px;border-radius:18px;border:1px solid var(--line);background:'+(on?'var(--navy)':'#fff')+';color:'+(on?'#fff':'var(--slate)')+';cursor:pointer;font-size:13px;">'+t(t0.label)+' <span style="opacity:.7;">'+counts[t0.key]+'</span></button>'; }).join('');
+  var tabs = KR_TABS.map(function(t0){ var on = KR_LIST.tab===t0.key; return '<span class="tab'+(on?' active':'')+'" onclick="krSetList(\'tab\',\''+t0.key+'\')">'+t(t0.label)+'</span>'; }).join(''); /* CMD-1015-03：IN 的下划线 tab、不带件数 */
   var clinicOpts = '<option value="">全部来源诊所</option>'+krClinics().map(function(cl){ return '<option value="'+cl.id+'"'+(KR_LIST.clinic===cl.id?' selected':'')+'>'+krEsc(cl.name)+'</option>'; }).join('');
   var dirOpts = '<option value="">全部院长</option>'+hospitalDirectorNames(hid).map(function(d){ return '<option value="'+krEsc(d)+'"'+(KR_LIST.director===d?' selected':'')+'>'+krEsc(d)+'</option>'; }).join('');
   var card = KR_CARDS.filter(function(c){ return c.key===KR_LIST.card; })[0];
-  el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('案件列表')+'</div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+tabs+'</div>'+
+  var fsel = 'padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;';
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div class="tabs" style="flex:1 1 380px;">'+tabs+'</div>'+
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+
-      '<select onchange="krSetList(\'clinic\',this.value)" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;">'+clinicOpts+'</select>'+
-      (isDir ? '' : '<select onchange="krSetList(\'director\',this.value)" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;">'+dirOpts+'</select>')+
-      '<input placeholder="搜索客户姓名 / Case ID" value="'+krEsc(KR_LIST.q)+'" oninput="krSetList(\'q\',this.value)" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;min-width:200px;">'+
-      (isDir ? '' : '<label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" '+(KR_LIST.mine?'checked':'')+' onchange="krSetList(\'mine\',this.checked)"> 仅看我的</label>')+
+      '<select onchange="krSetList(\'clinic\',this.value)" style="'+fsel+'">'+clinicOpts+'</select>'+
+      (isDir ? '' : '<select onchange="krSetList(\'director\',this.value)" style="'+fsel+'">'+dirOpts+'</select>')+
+      '<input placeholder="搜索客户姓名 / Case ID" value="'+krEsc(KR_LIST.q)+'" oninput="krSetList(\'q\',this.value)" style="'+fsel+'min-width:180px;">'+
+      (isDir ? '' : '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" '+(KR_LIST.mine?'checked':'')+' onchange="krSetList(\'mine\',this.checked)"> 仅看我的</label>')+
       (card ? '<span class="status-pill" style="background:var(--blue-bg);color:var(--blue);cursor:pointer;" onclick="krClearCard()">筛选：'+t(card.label)+' ✕</span>' : '')+
-    '</div>'+
-    '<div class="card" style="padding:4px 16px;" id="kr-rows"></div>';
+    '</div></div>'+
+    '<div class="card" style="padding:4px 20px;" id="kr-rows"></div>';
   krRenderCaseRows();
 }
 function krRenderCaseRows(){
