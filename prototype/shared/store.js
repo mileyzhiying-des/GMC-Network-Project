@@ -107,18 +107,52 @@ var Store = (function(){
     localStorage.setItem(key, json);
   }
   /* ---- 存档：只写变了的部分；写失败（容量超限等）→ 清掉存档，提示并停止存档 ---- */
+  /* ---- CMD-1015-05：数据容量（原来写失败就清掉整个存档 → 用户建的案件全没了；现在先腾地方，绝不清用户案件）----
+     容量吃在哪里（实测 4.7MB 里）：自动备份 3 份 × 约 1.2MB = 3.7MB（最大头）；诊所 C1 存档 0.7MB（案件 0.5MB，其中案件 Timeline 约 0.16MB）；全局存档 0.18MB（医院数据 0.16MB，其中通知 0.05MB）；其他很小。
+     腾地方的顺序：① 删自动备份 / 测试残留键 ② 删最旧的通知 / 短信 / 操作日志 / 对话旧消息 / 演示案件的旧 Timeline ③ 再瘦用户案件的旧 Timeline（只删日志，案件本身一个都不删）。 */
+  function totalChars(){ var n = 0, get = window.gmcRawGet || function(k){ return localStorage.getItem(k); }; try{ for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); n += k.length + (get(k)||'').length; } }catch(e){} return n; } /* 按压缩后的实际占用算 */
+  var SOFT_LIMIT = 3600000, HARD_LIMIT = 4700000; /* 字符数；浏览器上限约 5.24M */
+  function dropBackups(all){
+    try{ Object.keys(localStorage).filter(function(k){ return /^gmc_backup_\d+$/.test(k); }).sort().slice(0, all ? undefined : -1).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
+    try{ Object.keys(localStorage).filter(function(k){ return /^(__T|rt_|va_)/.test(k); }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
+  }
+  function keepLast(arr, n){ if(Array.isArray(arr) && arr.length > n) arr.splice(0, arr.length - n); }
+  function pruneLive(level){
+    try{ if(typeof NOTIFS!=='undefined') keepLast(NOTIFS, level>=2 ? 60 : 150); }catch(e){}
+    try{ if(typeof SMS_LOG!=='undefined') keepLast(SMS_LOG, level>=2 ? 30 : 100); }catch(e){}
+    try{ if(typeof ACCOUNT_LOG!=='undefined') keepLast(ACCOUNT_LOG, level>=2 ? 100 : 300); }catch(e){}
+    try{ if(typeof CHAT_DATA!=='undefined') Object.keys(CHAT_DATA).forEach(function(r){ keepLast(CHAT_DATA[r], level>=2 ? 60 : 200); }); }catch(e){}
+    try{ if(typeof HOSPITAL_DATA!=='undefined') Object.keys(HOSPITAL_DATA).forEach(function(h){ var d = HOSPITAL_DATA[h]; if(d && d.notifs) keepLast(d.notifs, level>=2 ? 60 : 150); }); }catch(e){}
+    try{ (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).forEach(function(c){
+      (c.logEntries||[]).forEach(function(l){ if(l.vt) delete l.vt; }); /* 提交时间可以由版本号推出来，不存 */
+      var cap = c.demo ? (level>=2 ? 25 : 60) : (level>=3 ? 120 : 400); keepLast(c.logEntries, cap); /* 只删旧 Timeline，案件本身不动 */
+    }); }catch(e){}
+  }
+  function tryWrite(){
+    var snap = snapshot();
+    if(snap.g !== lastG){ writeKey(KEY_G, '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.g+'}'); lastG = snap.g; }
+    if(snap.c !== null && snap.c !== lastC){ writeKey(keyC(pageClinic()), '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.c+'}'); lastC = snap.c; }
+  }
+  function makeRoomAndRetry(){
+    var steps = [function(){ dropBackups(true); }, function(){ pruneLive(1); }, function(){ pruneLive(2); }, function(){ pruneLive(3); }];
+    for(var i = 0; i < steps.length; i++){
+      try{ steps[i](); lastG = ''; lastC = ''; tryWrite(); console.warn('[存档] 容量快满，已清理（第 '+(i+1)+' 级）后写入成功'); return true; }catch(e){}
+    }
+    return false;
+  }
+  /* ---- 存档：只写变了的部分；写失败（容量超限等）→ 先腾地方再写，绝不清用户案件 ---- */
   function save(){
     if(disabled) return;
-    var snap;
-    try{ snap = snapshot(); }catch(e){ console.warn('[存档] 序列化失败', e); return; }
+    try{ snapshot(); }catch(e){ console.warn('[存档] 序列化失败', e); return; }
     try{
-      if(snap.g !== lastG){ writeKey(KEY_G, '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.g+'}'); lastG = snap.g; }
-      if(snap.c !== null && snap.c !== lastC){ writeKey(keyC(pageClinic()), '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.c+'}'); lastC = snap.c; }
+      tryWrite();
+      if(totalChars() > SOFT_LIMIT){ dropBackups(false); if(totalChars() > HARD_LIMIT){ pruneLive(1); lastG = ''; lastC = ''; try{ tryWrite(); }catch(e0){} } } /* 提前瘦身：超过软上限先删多余备份，快到硬上限再删最旧日志 */
     }catch(e){
-      console.warn('[存档] localStorage 容量超限，演示数据已重置，此页面之后的操作不再保存', e);
-      disabled = true;
-      try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e2){}
-      notice('演示数据过大，已重置（这个页面之后的操作不再保存，刷新页面可恢复演示数据）');
+      console.warn('[存档] localStorage 容量不够，先腾地方（备份 → 最旧通知 / 日志），不会清用户案件', e);
+      if(!makeRoomAndRetry()){
+        disabled = true; /* 极端情况：腾完还写不进去——停止存档，已有存档原样保留（不删）*/
+        notice('存档容量不足，这个页面之后的操作暂不保存（已有数据没有被清除；请在测试覆盖页导出备份后再「全部清空」）');
+      }
     }
   }
   function touch(){ clearTimeout(touch._t); touch._t = setTimeout(save, 60); }

@@ -96,7 +96,7 @@ function gmcBackupKeep(bk){
   if(!bk) return;
   try{
     localStorage.setItem('gmc_backup_'+bk.t, bk.str);
-    Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_backup_')===0 && k!=='gmc_backup_notice'; }).sort().slice(0, -3).forEach(function(k){ localStorage.removeItem(k); });
+    Object.keys(localStorage).filter(function(k){ return /^gmc_backup_\d+$/.test(k); }).sort().slice(0, -1).forEach(function(k){ localStorage.removeItem(k); }); /* CMD-1015-05：只留最近 1 份（原来 3 份 ≈ 3.7MB，是撑爆容量的最大头） */
   }catch(e){ try{ localStorage.removeItem('gmc_backup_'+bk.t); }catch(e2){} } /* 容量不够：这份备份就存不下了 */
   try{ localStorage.setItem('gmc_backup_notice', JSON.stringify({name:bk.name, t:bk.t, reason:bk.reason})); }catch(e){}
 }
