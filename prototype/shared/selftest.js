@@ -935,9 +935,14 @@
     if(!newCalOn()){
       setCalMode('day'); renderCalendar(); ST.ok(!document.getElementById('day-grid'), '开关关闭：日视图不是整天时间格'); setCalMode('week'); renderCalendar(); ST.ok(document.querySelectorAll('#wk-grid .wk-time').length===WK_HOURS.filter(function(h){ return !slotIsLunch(h); }).length + WK_HOURS.filter(function(h){ return slotIsLunch(h); }).filter(function(h){ return false; }).length || true, ''); setCalMode('day'); return;
     }
-    setCalMode('day'); renderCalendar(); var g = document.getElementById('day-grid'); ST.ok(!!g && !!document.getElementById('day-col'), '日视图应是 KR 画法的整天时间格'); var col = document.getElementById('day-col'), H0 = parseInt(col.getAttribute('data-h0'),10), H1 = H0 + Math.round(col.offsetHeight*60/CAL_DAY_PX);
-    var o = timeToMin(CLINIC_SETTINGS.openTime)-120, cl = timeToMin(CLINIC_SETTINGS.closeTime)+120; ST.ok(H0===o && H1>=cl-30 && H1<=cl+30, '时间范围应是营业时间前后 2 小时：'+minToTime(H0)+'～'+minToTime(H1));
-    setCalMode('week'); renderCalendar(); ST.ok(document.querySelectorAll('#wk-grid .wk-time')[0].textContent.slice(2,7)===minToTime(o), '周视图同样范围');
+    setCalMode('day'); renderCalendar(); var g = document.getElementById('day-grid'); ST.ok(!!g && !!document.getElementById('day-col'), '日视图应是 KR 画法的整天时间格');
+    /* CMD-1015-01：营业时间外（前后 2 小时）按需显示——没有营业外预约的一天只显示营业时间；点顶 / 底小条才展开前后 2 小时 */
+    var o0 = timeToMin(CLINIC_SETTINGS.openTime), cl0 = timeToMin(CLINIC_SETTINGS.closeTime), dayRange = function(){ var col = document.getElementById('day-col'), H0 = parseInt(col.getAttribute('data-h0'),10); return [H0, H0 + Math.round(col.offsetHeight*60/CAL_DAY_PX)]; };
+    DAY_OFFSET = 40; CAL_OUT.in.b = CAL_OUT.in.a = false; renderCalendar(); var rg = dayRange(); ST.ok(rg[0]===o0 && Math.abs(rg[1]-cl0)<=30, '没有营业外预约：只显示营业时间 '+minToTime(rg[0])+'～'+minToTime(rg[1]));
+    ST.ok(document.querySelectorAll('#day-grid .wk-outbar').length===2, '时间轴顶 / 底各一个「显示营业前 / 后」小条');
+    CAL_OUT.in.b = CAL_OUT.in.a = true; renderCalendar(); rg = dayRange(); ST.ok(rg[0]===o0-120 && Math.abs(rg[1]-(cl0+120))<=30, '点开后显示营业时间前后各 2 小时：'+minToTime(rg[0])+'～'+minToTime(rg[1]));
+    CAL_OUT.in.b = CAL_OUT.in.a = false; DAY_OFFSET = 41; var early = createReservationCase('T2-OUT', null, dateStr(new Date(new Date(TODAY_DATE).getTime()+41*86400000)), minToTime(o0-60), '+62 811-9999-0101', '面诊商谈'); renderCalendar(); rg = dayRange(); ST.ok(rg[0]<o0, '有预约落在营业前 → 自动显示营业前那段（'+minToTime(rg[0])+'）'); ST.ok(!(calInNeed().a!==null), '没有营业后预约就不展开营业后'); CASE_ITEMS.splice(CASE_ITEMS.indexOf(early), 1); DAY_OFFSET = 0;
+    setCalMode('week'); WEEK_OFFSET = 9; CAL_OUT.in.b = false; renderCalendar(); ST.ok(document.querySelectorAll('#wk-grid .wk-time')[0].textContent.slice(2,7)===minToTime(o0), '周视图：没有营业外预约就从营业开始'); WEEK_OFFSET = 0; renderCalendar(); var o = o0;
     /* 点卡片 = 筛选待办栏 */
     todoRefresh(); todoCardFilter('kr'); ST.ok(TODO_UI.kind==='kr' && /等 KR 回复/.test(document.getElementById('todo-pane').innerText) && /✕/.test(document.getElementById('todo-pane').innerText), '点卡片后待办标题应出现筛选标签'); todoSetKind(''); ST.ok(!/等 KR 回复 ✕/.test(document.getElementById('todo-pane').innerText), '✕ 回到全部');
     ['todo','visit','kr','msg'].forEach(function(k){ todoCardFilter(k); ST.ok(TODO_UI.kind===k, '4 张卡都应能筛选：'+k); }); todoSetKind('');
@@ -959,7 +964,7 @@
     var me = currentAccount(); if(!ST.ok(me && /^(KM1|KD1)$/.test(me.id), '要在 KM1 / KD1 分页里跑')) return;
     krRenderDashboard(); var cal = document.getElementById('kr-cal').innerText, hr = hospitalHours(krHospitalIdOfMe());
     if(!newCalOn()){ ST.ok(KRC_H0===8 && KRC_H1===20, '开关关闭：固定 08:00～20:00'); ST.ok(!/＋ memo/.test(cal) && !/术后到店/.test(cal), '开关关闭：没有 ＋memo / 新图例'); ST.ok(!document.querySelector('.krc-nowframe'), '开关关闭：没有时段框'); return; }
-    ST.ok(KRC_H0===Math.floor((timeToMin(hr.open)-120)/60) && KRC_H1===Math.min(24, Math.ceil((timeToMin(hr.close)+120)/60)), '时间范围 = 医院营业时间前后 2 小时，实际 '+KRC_H0+'～'+KRC_H1);
+    ST.krcRangeCheck(hr);
     ST.ok(/＋ memo/.test(cal) && /固定栏/.test(cal) && /术后到店/.test(cal) && /面诊/.test(cal), '应有 ＋memo、固定栏、图例（面诊 / 术后到店）');
     var today = krToday(); krcSet('mode','day'); KRC.anchor = today; krcRender(); ST.ok(!document.querySelector('.krc-nowframe') || getComputedStyle(document.querySelector('.krc-nowframe')).display==='none', 'CMD-1014-18：当前时段方框已拿掉'); ST.ok(document.querySelectorAll('#kr-cal .todo-nowline span').length<=1, '现在线只有一个时间标签');
     /* memo：新增 → 显示在固定栏 → 修改 → 删除（只有作者） */
@@ -1037,7 +1042,7 @@
     /* 月视图点日期 = 进那一周；日历上不再设定开放施术 */
     krcSet('mode','month'); var opens = JSON.stringify(h.openDates||{}); krcMonthClick(d); ST.ok(KRC.mode==='week' && KRC.anchor===krcWeekStartMon(d), '点日期应进那一周'); ST.ok(JSON.stringify(h.openDates||{})===opens, '日历上点日期不再改开放施术日期'); krcToday(); krcSet('mode','day');
     /* 过去的事件变灰 */
-    ST.ok(krcIsPast({date:D(-2), end:'10:00'}) && !krcIsPast({date:D(3), end:'10:00'}), '过去的事件应变灰'); ST.ok(KRC_H0 < Math.floor(timeToMin(hospitalHours(krHospitalIdOfMe()).open)/60), '时间范围仍是前后 2 小时');
+    ST.ok(krcIsPast({date:D(-2), end:'10:00'}) && !krcIsPast({date:D(3), end:'10:00'}), '过去的事件应变灰'); ST.krcRangeCheck(hospitalHours(krHospitalIdOfMe()));
     if(isDir){ var drs = document.getElementById('krdash-body').innerText; ST.ok(!/今天的平台客人|等我出报告的案件|室长刚提交的诊疗方案/.test(drs), '院长工作台拿掉三块'); ST.ok(!!document.getElementById('todo-pane'), '院长工作台只留日历 + 待办'); }
     var lu = hospitalLunch(krHospitalIdOfMe()); if(lu){ var lb = [].slice.call(document.querySelectorAll('#kr-cal [title="午休"]'))[0]; ST.ok(!lb || parseFloat(lb.style.height) <= 14, '午休画窄'); }
   });
@@ -1126,15 +1131,24 @@
   });
 
   /* ---- 新增（CMD-1014-16 三）：IN 在 KR 医院日程占位预约 → KR 确认 / 无法安排 ---- */
-  ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds = D(d); if(hospitalClosedOn(hid, ds)) continue; for(var m = 11*60; m < 20*60; m += 30){ var t0 = minToTime(m); var dirs = hospitalDirectorNames(hid); for(var i = 0; i < dirs.length; i++){ if(!krSurgerySlotError(hid, dirs[i], ds, t0, 30, null, {allowOffHours:true, use:true}) && !krbOffText(hid, ds, t0)) return {ds:ds, t:t0, dir:dirs[i]}; } } } return null; };
+  /* CMD-1015-01：KR / 院长日历营业时间外按需显示——没有营业外预约的一天只显示营业时间；点顶 / 底小条才展开前后 2 小时 */
+ST.krcRangeCheck = function(hr){
+  var keep = {m:KRC.mode, a:KRC.anchor}, open = timeToMin(hr.open), close = timeToMin(hr.close);
+  KRC.mode = 'day'; KRC.anchor = krcAdd(krToday(), 60); CAL_OUT.krc.b = CAL_OUT.krc.a = false; krcApplyRange();
+  ST.ok(KRC_H0===Math.floor(open/60) && KRC_H1===Math.ceil(close/60), '没有营业外预约：只显示营业时间，实际 '+KRC_H0+'～'+KRC_H1);
+  CAL_OUT.krc.b = CAL_OUT.krc.a = true; krcApplyRange();
+  ST.ok(KRC_H0===Math.floor((open-120)/60) && KRC_H1===Math.min(24, Math.ceil((close+120)/60)), '点开后显示营业时间前后各 2 小时，实际 '+KRC_H0+'～'+KRC_H1);
+  CAL_OUT.krc.b = CAL_OUT.krc.a = false; KRC.mode = keep.m; KRC.anchor = keep.a; krcApplyRange();
+};
+ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds = D(d); if(hospitalClosedOn(hid, ds)) continue; for(var m = 11*60; m < 20*60; m += 30){ var t0 = minToTime(m); var dirs = hospitalDirectorNames(hid); for(var i = 0; i < dirs.length; i++){ if(!krSurgerySlotError(hid, dirs[i], ds, t0, 30, null, {allowOffHours:true, use:true}) && !krbOffText(hid, ds, t0)) return {ds:ds, t:t0, dir:dirs[i]}; } } } return null; };
   /* 跨账号三段：A1 占位（BK1a / BK2a）→ KM1 处理（BK1b / BK2b，KR 的 core* 要在 KR 分页里跑，不能在 IN 分页里改同一诊所的分区）→ A1 验证（BK1c / BK2c） */
   ST.def('CAL8','KR 日历医院 / 院长两层 + 约满标记 + 韩 / 印时间轴（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; nav('kr-dashboard'); KRC.layer = 'hospital'; krcSet('mode','day'); var cal = function(){ return document.getElementById('kr-cal'); };
-    ST.ok(/医院/.test(cal().innerText) && /各位院长/.test(cal().innerText), '第一层 医院 | 各位院长'); ST.ok(!cal().querySelector('.krc-dirhead') && !cal().querySelector('.krc-busy'), '医院层日视图不分栏、不显示不可预约');
+    ST.ok(/医院/.test(cal().innerText) && !/各位院长/.test(cal().innerText) && cal().querySelectorAll('.cal-switch span').length>=5, '第一层平铺：医院 + 各位院长按钮并列，日 / 周 / 月是分段按钮'); ST.ok(!cal().querySelector('.krc-dirhead') && !cal().querySelector('.krc-busy'), '医院层日视图不分栏、不显示不可预约');
     var one = [].slice.call(cal().querySelectorAll('[onclick*="krShowCase"],[onclick*="krOpenSurgSub"],[onclick*="krBookOpen"],[onclick*="krOpenSub"]')).filter(function(e){ return e.innerText; }); ST.ok(one.length===0 || one.every(function(e){ return /\d\d:\d\d · .+ · .+ · .+/.test(e.innerText.replace(/\n/g,' ')); }), '医院层每块一行：时间 · 客人 · 类型 · 院长');
     ST.ok(/韩 \d\d:00/.test(cal().innerText) && /印 \d\d:00/.test(cal().innerText) && !/印尼\s*韩国/.test(cal().innerText.slice(0,300)), '时间轴每个时间前标韩 / 印，没有顶部小标题');
-    krcSet('mode','week'); ST.ok(/已约 \d+ \/ \d+|约满/.test(cal().innerText) && !/施术开放|未开放/.test(cal().innerText), '周视图日期下写已约 / 约满，没有施术开放');
-    krcSet('mode','month'); ST.ok(/已约 \d+ \/ \d+|约满/.test(cal().innerText) && !/开放/.test(cal().innerText.replace(/营业/g,'')), '月视图同样');
+    krcSet('mode','week'); ST.ok(!/已约/.test(cal().innerText) && !/施术开放|未开放/.test(cal().innerText), 'CMD-1015-01：周视图不写已约数字（只有约满才写），没有施术开放');
+    krcSet('mode','month'); ST.ok(!/已约/.test(cal().innerText) && !/开放/.test(cal().innerText.replace(/营业/g,'')), '月视图同样');
     krcSet('layer','director'); krcSet('person','KD1 院长'); krcSet('mode','day'); ST.ok(!!cal().querySelector('.krc-busy') || true, '院长层'); ST.ok(!/KO1 代表院长 OFF/.test(cal().innerText), '院长层固定栏只有这位院长'); ST.ok(!/确认今日院长日程/.test(document.body.innerText), '没有确认今日院长日程');
     ST.ok(repairOffConflicts()===0, 'OFF 那天没有该院长的施术 / 面诊 / 预约（演示数据已修）');
     var offO = (HOSPITAL_DATA.H1.offs||[]).filter(function(o){ return o.kind==='director' && (!o.part || o.part==='全天') && o.date > krToday(); })[0];
@@ -1143,9 +1157,9 @@
   });
   ST.def('CAL9','IN 本院日程 / KR 医院日程：韩 / 印标注、约满、两层（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return; nav('in-dashboard'); setCalView('in'); setCalMode('week');
-    var g = document.getElementById('wk-grid'); ST.ok(/印 \d\d:\d\d/.test(g.innerText) && /韩 \d\d:\d\d/.test(g.innerText), 'IN 时间轴印 / 韩标注'); ST.ok(/已约 \d+ \/ \d+|约满/.test(g.innerText), 'IN 周视图日期下写已约 / 约满');
-    setCalView('kr'); setCalMode('week'); var o = [].slice.call(document.getElementById('kr-dir-sel').options).map(function(x){ return x.textContent; }); ST.ok(o[0]==='医院' && o.length>1, 'KR 医院日程第一层 医院 + 各院长'); ST.ok(!/施术开放|未开放/.test(document.getElementById('wk-grid').innerText), '没有施术开放 / 未开放');
-    ST.ok(!document.querySelector('#cal-sw-day') || getComputedStyle(document.getElementById('cal-sw-day')).display==='none', 'KR 医院日程没有日视图'); setCalMode('month'); ST.ok(/已约 \d+ \/ \d+|约满/.test(document.getElementById('cal-grid').innerText), 'KR 月视图写已约 / 约满');
+    var g = document.getElementById('wk-grid'); ST.ok(/印 \d\d:\d\d/.test(g.innerText) && /韩 \d\d:\d\d/.test(g.innerText), 'IN 时间轴印 / 韩标注'); ST.ok(!/已约/.test(g.innerText), 'CMD-1015-01：IN 周视图不写已约数字');
+    setCalView('kr'); setCalMode('week'); var o = [].slice.call(document.querySelectorAll('#kr-dir-bar span')).map(function(x){ return x.textContent; }); ST.ok(o[0]==='医院' && o.length>1 && !/各位院长/.test(o.join()), 'KR 医院日程第一层平铺：医院 + 各院长'); ST.ok(!/施术开放|未开放/.test(document.getElementById('wk-grid').innerText), '没有施术开放 / 未开放');
+    ST.ok(!document.querySelector('#cal-sw-day') || getComputedStyle(document.getElementById('cal-sw-day')).display==='none', 'KR 医院日程没有日视图'); setCalMode('month'); ST.ok(!/已约/.test(document.getElementById('cal-grid').innerText), 'KR 月视图不写已约数字');
     setCalView('in'); setCalMode('week');
   });
   ST.def('BK1a','IN 在 KR 医院日程占位（A1 分页）：点空白时段 → 预约窗 → 挡住冲突 → 提交占位',function(){

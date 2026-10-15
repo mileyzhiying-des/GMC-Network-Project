@@ -4,17 +4,45 @@
    本文件在 todo.js 之后加载；所有入口先检查 newCalOn()。 */
 
 /* ---------------- 时间范围：营业时间前 2 小时 ～ 后 2 小时 ---------------- */
+/* CMD-1015-01：营业时间外（前后 2 小时）按需显示——这一周 / 这一天有预约落在营业前才显示营业前那段，营业后同理；没有就只显示营业时间。
+   室长要约营业时间外：时间轴顶 / 底有「▲ 显示营业前 / ▼ 显示营业后」小条，点开才展开（再点收起）。CAL_OUT 只是界面状态，不存档。 */
+var CAL_OUT = {in:{b:false,a:false}, kr:{b:false,a:false}, krc:{b:false,a:false}};
+function calOutToggle(key, side){ CAL_OUT[key][side] = !CAL_OUT[key][side]; if(key==='krc') krcRender(); else renderCalendar(); }
+function calOutBar(key, side, auto){
+  if(auto) return ''; var on = CAL_OUT[key][side];
+  return '<div class="wk-outbar" onclick="calOutToggle(\''+key+'\',\''+side+'\')">'+(side==='b' ? (on ? '▲ 收起营业前' : '▼ 显示营业前') : (on ? '▼ 收起营业后' : '▲ 显示营业后'))+'</div>';
+}
+function calInDates(){
+  if(CAL_MODE==='day'){ var d = new Date(TODAY_DATE); d.setDate(d.getDate()+DAY_OFFSET); return [dateStr(d)]; }
+  var st = getWeekStart(WEEK_OFFSET), out = []; for(var i = 0; i < 7; i++){ var dd = new Date(st); dd.setDate(st.getDate()+i); out.push(dateStr(dd)); } return out;
+}
+function calInNeed(){
+  var open = timeToMin(CLINIC_SETTINGS.openTime), close = timeToMin(CLINIC_SETTINGS.closeTime), ds = calInDates(), b = null, a = null;
+  calendarEvents().forEach(function(e){ if(calEvHidden(e) || ds.indexOf(e.date)<0) return; var m = timeToMin(e.time); if(m < open) b = (b===null ? m : Math.min(b, m)); if(m >= close) a = (a===null ? m : Math.max(a, m)); });
+  return {b:b, a:a};
+}
 function calHours(){
   if(!newCalOn()) return WK_HOURS;
-  var a = Math.max(0, timeToMin(CLINIC_SETTINGS.openTime) - 120), b = Math.min(24*60, timeToMin(CLINIC_SETTINGS.closeTime) + 120);
-  return slotsBetween(minToTime(a), b >= 24*60 ? '24:00' : minToTime(b));
+  var open = timeToMin(CLINIC_SETTINGS.openTime), close = timeToMin(CLINIC_SETTINGS.closeTime), nd = calInNeed(), a = open, z = close;
+  if(CAL_OUT.in.b || nd.b!==null) a = Math.max(0, Math.min(open-120, nd.b!==null ? Math.floor(nd.b/30)*30 : open-120));
+  if(CAL_OUT.in.a || nd.a!==null) z = Math.min(24*60, Math.max(close+120, nd.a!==null ? Math.floor(nd.a/30)*30+30 : close+120));
+  return slotsBetween(minToTime(a), z >= 24*60 ? '24:00' : minToTime(z));
 }
 /* KR / 院长：医院营业时间前后各 2 小时（取代固定 08:00～20:00）；整点取整 */
 function krcApplyRange(){
   if(!newCalOn()){ KRC_H0 = 8; KRC_H1 = 20; return; }
-  var hr = hospitalHours(krHospitalIdOfMe()), a = Math.max(0, timeToMin(hr.open) - 120), b = Math.min(24*60, timeToMin(hr.close) + 120);
-  KRC_H0 = Math.floor(a/60); KRC_H1 = Math.min(24, Math.ceil(b/60));
+  var hr = hospitalHours(krHospitalIdOfMe()), open = timeToMin(hr.open), close = timeToMin(hr.close), a = open, z = close, b = null, af = null;
+  if(KRC.mode!=='month'){ /* 按需显示营业时间外（CMD-1015-01）：当前这一天 / 这一周有预约落在营业前 / 后才展开 */
+    try{ var a0 = krcAnchor(), ds = KRC.mode==='week' ? [0,1,2,3,4,5,6].map(function(i){ return krcAdd(a0, i); }) : [a0]; var ev = krcEvents();
+      ev.surg.concat(ev.busy).forEach(function(x){ var bb = x.b || x; if(ds.indexOf(bb.date)<0) return; var s = timeToMin(bb.time), e = timeToMin(bb.end || bb.time); if(s < open) b = (b===null ? s : Math.min(b, s)); if(e > close) af = (af===null ? e : Math.max(af, e)); });
+    }catch(err){}
+  }
+  KRC_NEED = {b:b!==null, a:af!==null};
+  if(CAL_OUT.krc.b || b!==null) a = Math.max(0, Math.min(open-120, b!==null ? b : open-120));
+  if(CAL_OUT.krc.a || af!==null) z = Math.min(24*60, Math.max(close+120, af!==null ? af : close+120));
+  KRC_H0 = Math.floor(a/60); KRC_H1 = Math.min(24, Math.ceil(z/60));
 }
+var KRC_NEED = {b:false, a:false};
 
 /* ---------------- IN 日视图：用 KR 日视图的画法（时间格 + 按时长画块；固定栏保留 IN 现在的设计） ---------------- */
 var CAL_DAY_PX = 44; /* 一小时 44px */
@@ -47,8 +75,8 @@ function buildDayGridNew(){
   var lines = '', axis = '';
   for(var m = H0; m < H1; m += 60){ lines += '<div style="position:absolute;left:0;right:0;top:'+((m-H0)*PX/60)+'px;border-top:1px solid #f0ece3;"></div>'; axis += '<div style="height:'+PX+'px;box-sizing:border-box;border-top:1px solid #eee;font-size:11px;color:var(--slate2);padding:2px 6px 0 0;text-align:right;"><b>印 '+minToTime(m)+'</b><span style="display:block;font-size:9px;color:var(--dim);">韩 '+krTimeOf(minToTime(m))+'</span></div>'; }
   var open0 = timeToMin(CLINIC_SETTINGS.openTime), close0 = timeToMin(CLINIC_SETTINGS.closeTime);
-  if(open0 > H0) lines += '<div style="position:absolute;left:0;right:0;top:0;height:'+((open0-H0)*PX/60)+'px;background:#F1EEE8;pointer-events:none;"></div>';
-  if(close0 < H1) lines += '<div style="position:absolute;left:0;right:0;top:'+((close0-H0)*PX/60)+'px;bottom:0;background:#F1EEE8;pointer-events:none;"></div>';
+  if(open0 > H0) lines += '<div style="position:absolute;left:0;right:0;top:0;height:'+((open0-H0)*PX/60)+'px;background:var(--neutral-25);pointer-events:none;"></div>';
+  if(close0 < H1) lines += '<div style="position:absolute;left:0;right:0;top:'+((close0-H0)*PX/60)+'px;bottom:0;background:var(--neutral-25);pointer-events:none;"></div>';
   var lf = timeToMin(CLINIC_SETTINGS.lunchFrom), lt = timeToMin(CLINIC_SETTINGS.lunchTo);
   if(!closedDay && lt > lf) lines += '<div title="午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'" style="position:absolute;left:0;right:0;top:'+((lf-H0)*PX/60)+'px;height:14px;background:#F3F1EC;color:#b5b0a4;font-size:10px;text-align:center;pointer-events:none;z-index:1;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
   if(closedDay) lines += '<div style="position:absolute;inset:0;background:#F3F1EC;pointer-events:none;z-index:1;"></div>';
@@ -56,9 +84,9 @@ function buildDayGridNew(){
     '<div class="wk-corner">'+axisHeadHtml()+'</div>'+
     '<div class="wk-head'+(isToday?' today':'')+'">'+(d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(closedDay?'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>':inCapHeadHtml(ds))+'</div>'+
     '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div><div class="wk-memo">'+memoCellHtml(ds)+'</div>'+
-    '<div>'+axis+'</div>'+
+    calOutBar('in','b', calInNeed().b!==null)+'<div>'+axis+'</div>'+
     '<div id="day-col" data-h0="'+H0+'" style="position:relative;height:'+((H1-H0)*PX/60)+'px;background:#fff;border-left:1px solid var(--border2);border-bottom:1px solid var(--border2);cursor:cell;" onmousemove="calDayHover(this,event)" onmouseleave="calDayHoverOff(this)" onclick="calDayClick(\''+ds+'\',event,this)">'+lines+'<div class="krc-hl" style="display:none;position:absolute;left:0;right:0;height:'+(PX/2)+'px;background:rgba(229,72,77,.10);pointer-events:none;"></div>'+blocks+'</div>'+
-    '</div></div>';
+    calOutBar('in','a', calInNeed().a!==null)+'</div></div>';
   box.innerHTML = h;
 }
 function calDaySlot(el, e){ var y = e.clientY - el.getBoundingClientRect().top, H0 = parseInt(el.getAttribute('data-h0'),10); return {slot:Math.floor(y/(CAL_DAY_PX/2)), time:minToTime(H0 + Math.floor(y/(CAL_DAY_PX/2))*30)}; }
@@ -337,8 +365,8 @@ function krCapSlots(hid, ds){
 function krCapUsed(slots, blocks){ var used = 0; blocks.forEach(function(b){ var s = timeToMin(b.time), e = timeToMin(b.end || minToTime(s+30)); slots.forEach(function(m){ if(s < m+30 && e > m) used++; }); }); return used; }
 function capHtml(used, cap, off){
   if(off) return '<br><span style="font-size:9px;font-weight:700;color:#B5483E;">OFF</span>';
-  if(!cap) return '';
-  return '<br><span style="font-size:9px;font-weight:700;color:'+(used>=cap ? '#B5483E' : 'var(--muted)')+';">'+(used>=cap ? '约满' : '已约 '+used+' / '+cap)+'</span>';
+  if(!cap || used < cap) return ''; /* CMD-1015-01：只在约满时写「约满」，不写已约数字 */
+  return '<br><span style="font-size:9px;font-weight:700;color:#B5483E;">约满</span>';
 }
 function krCapDirOff(h, ds, name){ return (h.offs||[]).some(function(o){ return o.kind==='director' && o.who===name && offApplies(o, ds) && (!o.part || o.part==='全天'); }); }
 function krCapHeadHtml(ds, blocks, who){

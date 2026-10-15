@@ -644,3 +644,6 @@ prototype/shared/app.css  共用样式
 - **时间轴「韩 / 印」**：每个时间前两行（KR：韩 09:00 / 印 07:00，IN：印 09:00 / 韩 11:00），拿掉顶部「印尼 / 韩国」小标题（`axisHeadHtml` 返回空）；`todoPlaceInLine` 按「印 hh:mm」解析时间行。**营业时间外前后 2 小时浅灰 `#F1EEE8`**（IN：`wk-outside`、日视图带；KR：每列底带），仍可约（弹确认）。
 - **OFF 那天有施术的数据**：演示数据 KD1 每周三 OFF 而种子 10-14 有客人9 施术；`repairOffConflicts()`（启动幂等）删去和该院长已有施术 / 面诊 / 预约重叠的那一条 OFF；正常流程 `krSurgerySlotError` 本来就拦院长整天 OFF（自测 CAL8 验证）。
 - **二**：KR Timeline `logLine` 把阶段「本地管理」显示成「—」、正文「本地管理」换成「IN 处理」；操作锁自动升级弹 toast「你现在可以操作了」；占位预约到店「新做管理」选项目同 IN 本地选购（KR 本地管理项目库、按类别一行一项目 + 规格 + 加入 / 赠送서비스，`b.fees[]`，可多项，全部已付款才能标完成）。数据版本不变（43）。
+
+## CMD-1015-01 补充（2026-10-15，追加；旧文字保留作历史）
+- 只改日历，不带开关，数据版本不变（43）。**约满**只写「约满」不写已约数字（`capHtml`，整天 OFF 的院长层仍写 OFF）。**营业时间外按需显示**（`CAL_OUT` 界面状态 + `calOutBar`）：IN 本院（`calHours` / `calInNeed`）、IN 的 KR 医院日程（`krRows` / `krOutNeed`，KR 时间）、KR / 院长（`krcApplyRange` / `KRC_NEED`）——这一周 / 这一天有预约落在营业前（后）才展开前（后）2 小时，没有就只显示营业时间；时间轴顶 / 底有「▼ 显示营业前 / ▲ 显示营业后」小条，点开才展开（再点收起），自动展开时不显示小条。底色 `--neutral-25`（app.css，取 text-placeholder #8E857C 的 14% 透明度；设计规范里的 neutral/25 具体取值仓库里没有，需要时改这一个变量）。第一层平铺：KR `krcPick`、IN `setKrDir` + `#kr-dir-bar`；KR 日 / 周 / 月和第一层用 `.cal-switch` 分段按钮；`calEvHidden` 把 `travel` 事件藏掉（IN 本院日程不显示赴韩施术，图例也拿掉）。

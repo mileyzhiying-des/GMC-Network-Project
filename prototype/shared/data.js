@@ -505,7 +505,7 @@ function calendarEvents(){
 }
 
 /* 日历上要不要藏掉这个事件：旧的预约取消（没记取消方）照旧消失；新取消（记了 cancelBy）划掉保留 */
-function calEvHidden(e){ return e.kind==='reservation' && e.vstate==='预约取消' && !e.cancelBy; }
+function calEvHidden(e){ return e.kind==='travel' || (e.kind==='reservation' && e.vstate==='预约取消' && !e.cancelBy); } /* CMD-1015-01：IN 本院日程只显示预约来访 / 占位，赴韩施术只在 KR 医院日程 */
 
 function eventChipHtml(e, opts){
   var now = demoNow();
