@@ -432,7 +432,7 @@ function renderResvHistory(){
   document.getElementById('resv-rows').innerHTML = rows.map(function(r){
     var col = colors[r.type] || colors['待访问'];
     return '<div class="trow" style="grid-template-columns:1.4fr 1fr 1.2fr 1fr;'+(r.caseId?'cursor:pointer;':'')+'"'+(r.caseId?' onclick="openCaseDetail(\''+r.caseId+'\')"':'')+'><span style="font-size:13px;">'+r.name+'</span><span style="font-size:12px;">'+(r.caseNo||'-')+'</span><span style="font-size:12px;">'+r.date+' '+r.time+'</span><span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+r.type+'</span></span></div>';
-  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 2px;">没有匹配的记录</div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 2px;">'+(resvHistoryRows().length ? '没有匹配的记录' : '暂无预约记录')+'</div>';
 }
 
 var CAL_WEEK_FULL = false, CAL_ANCHOR = null;
@@ -709,7 +709,7 @@ function renderClientRows(){
       '<span>'+s.finance+'</span>'+
       '<span style="font-size:12px;">'+c.createdBy+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
       '<a href="#" onclick="openClientDetail(\''+nm+'\',\'in-clients\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
-  }).join('');
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">'+(CLIENTS.length ? '没有匹配的客户' : '暂无客户')+'</div>'; /* CMD-1015-06：空状态 */
 }
 
 
@@ -1107,7 +1107,7 @@ function renderCaseRows(){
   items = items.slice().sort(caseUpdatedDesc); /* CMD-1015-05 十一：最近更新的在上面 */
   if(CASE_ONLY_MINE) items = items.filter(function(c){ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }); /* 仅看我的：只显示我操作过的案件 */
   if(items.length===0){
-    document.getElementById('case-rows').innerHTML = '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">该分类下暂无案件（其余阶段的界面还没设计，先把预约到店这一段做完）</div>';
+    document.getElementById('case-rows').innerHTML = '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">暂无案件</div>';
     return;
   }
   document.getElementById('case-rows').innerHTML = items.map(function(c){

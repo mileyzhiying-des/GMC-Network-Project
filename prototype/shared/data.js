@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 43; /* 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 44; /* 44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -75,6 +75,15 @@ function gmcExtractUserCarry(){
   });
   return carry;
 }
+/* CMD-1015-06：升级到 44 时一次性不保留任何案件 / 客人（项目库、活动价、套餐、案例、memo 里用户改过的仍照旧保留） */
+function gmcCarryDropCases(carry){
+  if(!carry) return carry;
+  carry.total = 0; carry.seq = 0; carry.hospitals = {};
+  var cl = {}; Object.keys(carry.cfg || {}).forEach(function(cid){ cl[cid] = {cases:[], clients:[], holdings:{}, notifs:[], rooms:[], chat:{}, sms:[]}; });
+  carry.clinics = cl; return carry;
+}
+/* 测试脚本留在 localStorage 里的记录（不带 gmc_ 前缀，重置时一起清）：roletest 结果、selftest 跨账号暂存 */
+function gmcClearTestKeys(){ try{ Object.keys(localStorage).filter(function(k){ return /^(rt_res_|rt_st_|__T2_)/.test(k); }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){} }
 /* 提取结果存起来；只有真的提取到案件才覆盖（手动「只重置演示数据」后重载会再走一次版本检查，那时存档已空，不能把刚存的清掉） */
 function gmcStoreCarry(carry){
   if(!carry || (!carry.total && !carry.cfgN)) return;
@@ -109,7 +118,7 @@ function gmcResetAll(reason, keepUser){
   if(keepUser){ try{ gmcStoreCarry(gmcExtractUserCarry()); }catch(e){} } /* ① 只重置演示数据：保留我的测试案件 */
   else { try{ localStorage.removeItem('gmc_cfg_carry'); }catch(e){} } /* ② 全部清空 */
   try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
-  gmcBackupKeep(bk);
+  gmcBackupKeep(bk); gmcClearTestKeys();
 }
 (function(){
   try{
@@ -129,9 +138,9 @@ function gmcResetAll(reason, keepUser){
         }catch(e){ keptG = null; keptC = {}; }
       }
       var bkv = gmcBackupMake('演示数据版本升级 '+(localStorage.getItem('gmc_demo_ver')||'?')+' → '+DEMO_DATA_VERSION); /* 升级前自动备份旧数据 */
-      try{ gmcStoreCarry(gmcExtractUserCarry()); }catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:localStorage.getItem('gmc_demo_ver'), to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'提取用户案件时出错：'+e.message+'（旧数据在自动备份里）'}]})); }catch(e2){} } /* 用户新建的案件先存起来，新种子生成后合并回去（CMD-1012-09） */
+      try{ var cry = gmcExtractUserCarry(); if((parseInt(localStorage.getItem('gmc_demo_ver'),10)||0) < 44) cry = gmcCarryDropCases(cry); gmcStoreCarry(cry); }catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:localStorage.getItem('gmc_demo_ver'), to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'提取用户案件时出错：'+e.message+'（旧数据在自动备份里）'}]})); }catch(e2){} } /* 用户新建的案件先存起来，新种子生成后合并回去（CMD-1012-09） */
       Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
-      gmcBackupKeep(bkv);
+      gmcBackupKeep(bkv); gmcClearTestKeys();
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
       localStorage.setItem('gmc_struct_ver', String(ACCOUNT_STRUCT_VERSION));
       /* 保留下来的只是一部分变量；其余变量由 store.js 启动时按种子补齐（见 Store.init） */
@@ -6093,6 +6102,25 @@ var CLINIC_VAR_NAMES = ['CLINIC_SETTINGS', 'PURCHASE_REQ', 'ACCOUNT_SEQ', 'RESUM
   'CLIENTS', 'CLIENT_HOLDINGS', 'CASE_ITEMS', 'NOTIF_SEQ', 'NOTIFS', 'ROOMS', 'STAFF_ROSTER', 'ROOM_UNREAD', 'CHAT_DATA', 'MUTED_ROOMS', 'ROOM_FILE_SEQ', 'CAL_MEMOS', 'SMS_LOG', 'SMS_SEQ',
   'LIB_PROBLEM_SEQ', 'LIB_PROBLEMS', 'LIB_PROBLEM_IDS', 'PROJECT_CATEGORIES', 'PROJECT_LIBRARY', 'LIB_CASES', 'PROMOS', 'PACKAGES'];
 /* PROJECT_LIBRARY / LIB_CASES / PROJECT_CATEGORIES 在内存里是"合成"的（本诊所的 + 对接医院 / 标准部位的）；PCAT（分类名→id）由分类重建，不存档：本诊所的 IN 项 + 对接医院的 KR 项；存档时按 hospitalId 拆回医院（store.js 的 viewSplit） */
+
+/* ================= CMD-1015-06：演示数据不带任何客人 / 案件 =================
+   种子仍由原来的代码生成，在写进存档前统一清掉客人和案件相关的块；保留账号、院长与日程（OFF / memo / 不可预约）、项目库、诊所设定、案例库、短信模板。 */
+function gmcWipeClinicVars(vars){
+  if(!vars) return vars;
+  vars.CLIENTS = []; vars.CLIENT_HOLDINGS = {}; vars.CASE_ITEMS = [];
+  vars.RESUMED_VISITS = []; vars.PLACEHOLDER_HISTORY = []; vars.RESERVATION_PLACEHOLDERS = [];
+  vars.NOTIFS = []; vars.SMS_LOG = []; vars.ROOM_UNREAD = {};
+  vars.ROOMS = (vars.ROOMS || []).filter(function(r){ return !/^case-/.test(String(r.id)); });
+  var chat = {}; vars.ROOMS.forEach(function(r){ chat[r.id] = []; }); vars.CHAT_DATA = chat; /* 职员间对话房保留，消息清空 */
+  return vars;
+}
+function gmcWipeHospitals(hd){
+  Object.keys(hd || {}).forEach(function(hid){
+    var h = hd[hid]; if(!h) return;
+    Object.keys(h.directorSchedule || {}).forEach(function(dn){ h.directorSchedule[dn] = (h.directorSchedule[dn] || []).filter(function(b){ return (b.type || b.kind) === '不可预约'; }); }); /* 施术 / 面诊 / 预约 / 术后管理块都是客人的 */
+    h.notifs = []; h.vault = {}; h.krBookings = []; h.dayConfirm = {}; h.reportRead = {}; h.chatRead = {}; h.cardSeen = {};
+  });
+}
 
 function dayList(arr){ return arr.map(function(n){ return D(n); }); }
 /* 医院资料（H1 沿用原来的种子变量；H2 是新医院，赴韩项目和案例见"五、演示数据"） */

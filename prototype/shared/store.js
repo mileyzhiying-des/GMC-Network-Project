@@ -142,7 +142,7 @@ var Store = (function(){
   }
   /* ---- 存档：只写变了的部分；写失败（容量超限等）→ 先腾地方再写，绝不清用户案件 ---- */
   function save(){
-    if(disabled) return;
+    if(disabled || window.GMC_NO_SAVE) return; /* GMC_NO_SAVE：测试清理还原快照后，本页不能再把内存里的旧数据写回去（selftest ST.cleanup） */
     try{ snapshot(); }catch(e){ console.warn('[存档] 序列化失败', e); return; }
     try{
       tryWrite();
@@ -174,17 +174,19 @@ var Store = (function(){
           var vars;
           if(cl.id==='C1'){ var split = viewSplit(); vars = clinicVarsObj(split); try{ gmcFillKrMeta(vars.CASE_ITEMS); }catch(e){} }
           else vars = demoMarked(buildClinicSeed(cl.id));
+          gmcWipeClinicVars(vars); /* CMD-1015-06：演示数据不带客人 / 案件 */
           if(p && p.vars) Object.keys(p.vars).forEach(function(n){ vars[n] = p.vars[n]; }); /* 版本重置时保留的诊所设定等 */
           gmcStampVars(vars);
           writeKey(keyC(cl.id), wrap(vars));
         });
+        gmcWipeHospitals(HOSPITAL_DATA); CASE_NO_SEQ = 1;
         gmcStampHospitals(HOSPITAL_DATA);
         writeKey(KEY_G, wrap(pick(GLOBAL_VAR_NAMES)));
       } else {
         CLINICS.forEach(function(cl){ /* 全局在、某个诊所分区缺（或只剩保留下来的部分）→ 补齐这个分区 */
           var p = readRaw(keyC(cl.id));
           if(p && String(p.ver)===String(DEMO_DATA_VERSION) && !p.partial && p.vars && p.vars.CASE_ITEMS) return;
-          var vars = (cl.id==='C1') ? clinicVarsObj(viewSplit()) : demoMarked(buildClinicSeed(cl.id));
+          var vars = gmcWipeClinicVars((cl.id==='C1') ? clinicVarsObj(viewSplit()) : demoMarked(buildClinicSeed(cl.id)));
           if(p && p.vars) Object.keys(p.vars).forEach(function(n){ vars[n] = p.vars[n]; });
           writeKey(keyC(cl.id), wrap(vars));
         });

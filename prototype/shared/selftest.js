@@ -101,7 +101,40 @@
   };
   ST.tests = {};
   ST.run = function(id){ if(!ST.tests[id]) return null; return ST.T(id, ST.tests[id].title, ST.tests[id].fn); };
-  ST.runAll = function(ids){ (ids || Object.keys(ST.tests)).forEach(function(id){ ST.run(id); }); return ST.sum(); };
+  /* CMD-1015-06：测试自己建数据、测完清掉。
+     ST.begin()：把当前存档（gmc_state / gmc_clinic_*）原样存一份快照到 gmc_cfg_stsnap（已有快照就不覆盖，所以跨账号分页接着跑也只留最早那份）；
+     ST.ensureFixtures()：用一键准备的同一套造法在 C1 建好 KR 阶段用例要的案件（待到院 / 已付定金 / 面诊结束 / 已付面诊费），IN 和 KR 分页都能调用；
+     ST.cleanup()：整份还原快照 + 清掉测试留下的 localStorage 键，并刷新页面（还原后本页不再写档，避免旧内存又盖回去）。 */
+  ST.begin = function(){
+    try{ if(localStorage.getItem('gmc_cfg_stsnap')) return false; var o = {}; Object.keys(localStorage).filter(function(k){ return /^gmc_(state|clinic_)/.test(k); }).forEach(function(k){ o[k] = localStorage.getItem(k); }); localStorage.setItem('gmc_cfg_stsnap', JSON.stringify(o)); return true; }catch(e){ console.warn('[测试] 快照失败', e); return false; }
+  };
+  ST.cleanup = function(){
+    var raw = localStorage.getItem('gmc_cfg_stsnap'); if(!raw) return false;
+    window.GMC_NO_SAVE = true; /* store.js 的 save() 看到这个就不写档 */
+    var o = JSON.parse(raw);
+    Object.keys(localStorage).filter(function(k){ return /^gmc_(state|clinic_)/.test(k); }).forEach(function(k){ localStorage.removeItem(k); });
+    Object.keys(o).forEach(function(k){ localStorage.setItem(k, o[k]); });
+    localStorage.removeItem('gmc_cfg_stsnap'); localStorage.removeItem('gmc_cfg_stfix'); try{ gmcClearTestKeys(); }catch(e){}
+    setTimeout(function(){ location.reload(); }, 50); return true;
+  };
+  ST.loadTestprep = function(){ return new Promise(function(res){ if(window.TESTPREP_MAKE) return res(); var sc = document.createElement('script'); sc.src = '/shared/testprep.js?'+Date.now(); sc.onload = res; document.head.appendChild(sc); }); };
+  ST.ensureFixtures = async function(keys){
+    var done = {}; try{ done = JSON.parse(localStorage.getItem('gmc_cfg_stfix') || '{}'); }catch(e){}
+    keys = (keys || ['stagePay', 'stageA', 'stageW', 'stageB', 'stageC']).filter(function(k){ return !done[k]; }); /* 案件列表按最近更新排序：同状态的取最后建的，所以「面诊还没开始」的 stageW 放在 stageA 后面；已建过的夹具不重复建 */
+    if(!keys.length) return false;
+    await ST.loadTestprep();
+    /* 键后缀：无 = C1（对接 H1）；@C2 = C2（对接 H1）；@H2 = C3（对接 H2），KM2 / B1 角色测试用 */
+    var CFG = {'': {cid:'C1', cfg:null}, '@C2': {cid:'C2', cfg:null}, '@H2': {cid:'C3', cfg:{hid:'H2', director:'H2 院长1', coord:'KM2 室长'}}};
+    var onKr = typeof isKrAccount==='function' && isKrAccount();
+    Object.keys(CFG).forEach(function(suf){
+      var ks = keys.filter(function(k){ var m = /(@C2|@H2)$/.exec(k); return (m ? m[1] : '') === suf; }); if(!ks.length) return;
+      var run = function(){ ks.forEach(function(k){ window.TESTPREP_MAKE(k.replace(/@(C2|H2)$/, ''), CFG[suf].cfg); done[k] = 1; }); };
+      if(!onKr && CURRENT_CLINIC_ID===CFG[suf].cid){ run(); Store.touch(); } else Store.mutateClinic(CFG[suf].cid, run);
+    });
+    try{ localStorage.setItem('gmc_cfg_stfix', JSON.stringify(done)); }catch(e){}
+    return true;
+  };
+  ST.runAll = async function(ids){ ST.begin(); if(typeof isKrAccount==='function' && isKrAccount()) await ST.ensureFixtures(); (ids || Object.keys(ST.tests)).forEach(function(id){ ST.run(id); }); return ST.sum(); };
   ST.def = function(id, title, fn){ ST.tests[id] = {title:title, fn:fn}; };
 
   /*TESTS*/

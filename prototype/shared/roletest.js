@@ -46,7 +46,7 @@ RT.runIn = function(){
     var shown = (document.getElementById('case-rows')||document.body).innerText;
     /* 联系方式：IN 显示完整号码 */
     var mp = typeof maskPhone==='function' ? maskPhone('+62 812-5555-0101') : '';
-    RT.cell('客人联系方式：完整显示（IN 不遮蔽）', '✅', RT.yn(!/\*/.test(clientPhoneOf(CASE_ITEMS[0].name)||'') ), 'KR 端遮蔽示例：'+mp);
+    RT.cell('客人联系方式：完整显示（IN 不遮蔽）', '✅', RT.yn(!/\*/.test(clientPhoneOf((CASE_ITEMS[0]||{}).name)||'') ), 'KR 端遮蔽示例：'+mp);
   }
   /* 结束案件（付定金前、已到店、IN 一般室长 / 管理者；老板和 KR 不行） */
   var probe = {subState:'arrived', stage:'waiting', clientName:'rt'};
@@ -214,4 +214,10 @@ RT.all = function(){ var o = {}; Object.keys(localStorage).filter(function(k){ r
 
 /* CMD-1015-05：页面刚载入时顶部图标（对话 / 铃铛）要等几百毫秒才挂上，测之前先等到出现（最多 6 秒） */
 RT.waitHead = function(){ return new Promise(function(res){ var t0 = Date.now(); (function chk(){ if(document.querySelector('.head-actions') || Date.now()-t0 > 6000) return res(); setTimeout(chk, 200); })(); }); };
-['runIn','runKr'].forEach(function(k){ var f = RT[k]; if(typeof f!=='function') return; RT[k] = function(){ var a = arguments, me = this; return RT.waitHead().then(function(){ return f.apply(me, a); }); }; });
+['runIn','runKr'].forEach(function(k){ var f = RT[k]; if(typeof f!=='function') return; RT[k] = function(){ var a = arguments, me = this; return RT.waitHead().then(RT.prepare).then(function(){ return f.apply(me, a); }); }; });
+
+/* CMD-1015-06：角色测试自己建数据——先拍存档快照（ST.begin），再用一键准备的同一套造法建好各状态的案件（ST.ensureFixtures）；测完 ST.cleanup() 整份还原，画面上不留测试数据 */
+RT.prepare = function(){
+  return new Promise(function(res){ if(window.ST) return res(); var s = document.createElement('script'); s.src = '/shared/selftest.js?'+Date.now(); s.onload = res; document.head.appendChild(s); })
+    .then(function(){ ST.begin(); return ST.ensureFixtures(['stagePay', 'stageA', 'stageWO', 'stageW', 'stageB', 'stageC', 'yuki', 'queen', 'stagePay@H2', 'stageA@H2', 'stageW@H2', 'stageB@H2', 'stageC@H2', 'yuki@H2', 'queen@C2']); });
+};
