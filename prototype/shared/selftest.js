@@ -815,7 +815,6 @@
     END_CASE.reason = reason || '客人不做了'; END_CASE.note = note || ''; confirmEndCase(); return true;
   };
   ST.def('G1','面诊等报告时手动结束 → 仅出报告，KR 之后的诊疗方案仍进案件',function(){
-    if(!newCloseOn()){ ST.note('开关关闭：没有［结束案件］，跳过'); return; }
     var c = ST.newRes('G1'); ST.arrive(c); ST.materials(c,{consult:true}); ST.payConsult(c); coreConfirmConsultTimes(c, todayStr(), '20:30', D(1)+' 05:00', ST.krBy);
     ST.open(c); ST.ok(canEndCase(c) && /结束案件/.test(document.getElementById('case-status-bar').innerHTML), '付定金前应显示［结束案件］');
     openEndCase(); var rows = endCaseRows(c); ST.ok(rows.some(function(r){ return r.key==='consult'; }), '弹窗应列出「面诊未出报告 → 照样等报告」'); closeEndCase();
@@ -826,12 +825,10 @@
     ST.ok(/诊疗方案/.test(consultTabHtml(c)), '已结束案件的面诊 tab 应能看到诊疗方案');
   });
   ST.def('G2','项目确认中手动结束',function(){
-    if(!newCloseOn()){ ST.note('开关关闭，跳过'); return; }
     var c = ST.newRes('G2'); ST.consultToReport(c); ST.open(c); ST.ok(canEndCase(c), '项目确认中应可结束');
     ST.endCase(c, {}, '其他', null, '客人说再想想'); ST.ok(c.stage==='reportonly', '出了报告没做项目 → 仅出报告，实际 '+c.stage); ST.ok(ST.hasLog(c, /当时：项目确认中）：其他：客人说再想想/), '缺记录');
   });
   ST.def('G3','本地没用完就手动结束（转持有 / 退款）',function(){
-    if(!newCloseOn()){ ST.note('开关关闭，跳过'); return; }
     var p = ST.localProj('LHALa peel');
     var a = ST.localCase('G3a'); ST.localPay(a, function(){ toggleLocalProject('main', p.id); }); ST.open(a); openEndCase(); var ra = endCaseRows(a).filter(function(r){ return r.hold; }); closeEndCase();
     ST.ok(ra.length===1, '应列出一个未用完的本地批次，实际 '+ra.length);
@@ -841,7 +838,6 @@
     ST.endCase(b, ch, '失联', am); ST.ok(isEnded(b), '退款后应结束'); ST.ok(rb[0].hold.b.voided && rb[0].hold.b.refund && rb[0].hold.b.refund.amount===100000, '批次应作废并记退款'); ST.ok(ST.hasLog(b, /结束案件：退款/), '缺退款记录');
   });
   ST.def('G4','有待收款时结束被挡 / 取消该项目后可结束',function(){
-    if(!newCloseOn()){ ST.note('开关关闭，跳过'); return; }
     var p = ST.localProj('LHALa peel'), c = ST.localCase('G4'); ST.open(c); c.activeCaseTab = 'localmgmt'; chooseProjectEntryMode('new'); toggleLocalProject('main', p.id); confirmProjectSelection();
     ST.ok(!!latestUnpaidBatch(c), '应有待付款结算单'); ST.ok(closeBlockers(c).length===1, '应有 1 项待收款');
     noPurchaseThisTime(); ST.ok(!isEnded(c), '钱没清，自动结束点不应结束'); ST.ok(ST.hasLog(c, /案件暂不结束：还有未处理的款项/), '缺系统记录');
@@ -851,9 +847,8 @@
   });
   ST.def('N1','新结案优先级：面诊案件本地做完不结案 / 纯本地做完结案',function(){
     var fake = {consultRequested:true, consultStatus:'report_ready', needsConsult:true};
-    ST.ok(mainlineOngoingNew(fake) === true && mainlineOngoingOld(fake) === false, '项目确认中的面诊案件：新规则主线进行中，旧规则不是');
+    ST.ok(mainlineOngoing(fake) === true && mainlineOngoingRepair(fake) === false, '项目确认中的面诊案件：主线进行中（修复专用的旧判断不是）');
     ST.ok(mainlineOngoingNew({consultRequested:true, consultStatus:'report_ready', endNote:'客人不做项目'}) === false, '客人不做项目后主线结束');
-    ST.ok(mainlineOngoing(fake) === newCloseOn(), 'mainlineOngoing 应跟开关走');
     var p = ST.localProj('LHALa peel'), c = ST.localCase('N1'); ST.localPay(c, function(){ toggleLocalProject('main', p.id); }); ST.useHold(c, 'main', p.name, 1); addConsult();
     markMgmtRows('main', 'done', true); ST.ok(!isEnded(c), '本地案件中途增加面诊 → 本地做完不结案，实际 '+c.stage);
   });
@@ -863,14 +858,12 @@
     DEMO_SHIFT_MS += 26*3600000;
     try{
       renderCaseHeaderActions(c); var html = document.getElementById('case-chat-actions').innerHTML;
-      if(newCloseOn()){ ST.ok(!localAddAllowed(c) && !/\+ 添加本地管理/.test(html), '隔天应不能添加 / 不显示按钮'); var n = window.__alerts ? window.__alerts.length : 0; addLocalMgmt(); ST.ok(!c.localMgmt, '隔天 addLocalMgmt 应被拦'); }
-      else ST.ok(localAddAllowed(c) && /\+ 添加本地管理/.test(html), '开关关闭 = 不限当天');
+      ST.ok(!localAddAllowed(c) && !/\+ 添加本地管理/.test(html), '隔天应不能添加 / 不显示按钮'); var n = window.__alerts ? window.__alerts.length : 0; addLocalMgmt(); ST.ok(!c.localMgmt, '隔天 addLocalMgmt 应被拦');
     } finally { DEMO_SHIFT_MS -= 26*3600000; }
     /* 纯本地案件不受限 */
     var l = ST.localCase('N2b'); DEMO_SHIFT_MS += 26*3600000; try{ ST.ok(localAddAllowed(l), '纯本地案件不适用当天限制'); } finally { DEMO_SHIFT_MS -= 26*3600000; }
   });
   ST.def('N3','［结束案件］权限与时机',function(){
-    if(!newCloseOn()){ ST.note('开关关闭，跳过'); return; }
     var c = ST.newRes('N3'); ST.open(c); ST.ok(!canEndCase(c), '待访问（还没到店）不显示');
     ST.arrive(c); ST.ok(canEndCase(c), '接待中应显示（A1 / A2）');
     var real = currentAccount; var role = function(r){ currentAccount = function(){ return {id:'X', role:r, status:'active', name:'X'}; }; };

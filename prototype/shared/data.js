@@ -83,6 +83,8 @@ function gmcCarryDropCases(carry){
   carry.clinics = cl; return carry;
 }
 /* 测试脚本留在 localStorage 里的记录（不带 gmc_ 前缀，重置时一起清）：roletest 结果、selftest 跨账号暂存 */
+/* CMD-1015-13：四个试行开关已收掉，浏览器里存的开关设定不再读取，顺手清掉 */
+try{ ['gmc_cfg_newclose','gmc_cfg_newtodo','gmc_cfg_newcal','gmc_cfg_newstyle'].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
 function gmcClearTestKeys(){ try{ Object.keys(localStorage).filter(function(k){ return /^(rt_res_|rt_st_|__T2_)/.test(k); }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){} }
 /* 提取结果存起来；只有真的提取到案件才覆盖（手动「只重置演示数据」后重载会再走一次版本检查，那时存档已空，不能把刚存的清掉） */
 function gmcStoreCarry(carry){
@@ -1315,20 +1317,16 @@ function localPurchasedBatches(c){ /* 本案件买的本地项目/术后管理�
   return out;
 }
 
-/* 面诊（待缴费 / 待确认报告时间 / 等待报告 / 增加面诊后项目确认中）或赴韩还在进行 → 本地管理做完也不自动结案（CMD-1013-13 一·2，临时规则，只加这个保护） */
+/* 主线还在进行 → 本地管理做完也不自动结案（CMD-1013-16 新结案规则，10/15 正式采用）：优先级 施术 > 面诊 > 本地。有施术或面诊的案件，本地做完不结束，等施术 / 面诊有结果（客人不做项目、手动结束、赴韩结束才算有结果）；纯本地案件本地做完就结束 */
 function mainlineOngoing(c){
-  if(newCloseOn()) return mainlineOngoingNew(c);
-  return mainlineOngoingOld(c);
-}
-/* 新规则（CMD-1013-16）：优先级 施术 > 面诊 > 本地。有施术或面诊的案件，本地做完不结束，等施术 / 面诊有结果（客人不做项目、手动结束、赴韩结束才算有结果）；纯本地案件本地做完就结束 */
-function mainlineOngoingNew(c){
   if(krNotStartedItems(c).length || (c.settlementDone && krActiveItems(c).length && !c.krProcedureDone)) return true;
   if(c.endNote || c.krProcedureDone || c.manualEnd) return false;
   if(krAllItems(c).length && !krActiveItems(c).length) return false; /* 赴韩项目都取消 / 更换完了：施术已有结果（如无法协调后保留本地） */
   if(c.consultRequested && c.consultStatus!=='cancelled') return true;
   return !!c.reuseReport && !!c.reportReady && c.needsConsult!==false;
 }
-function mainlineOngoingOld(c){
+/* 修复专用的旧判断：只给 repairWronglyClosedCases 用（避免新规则把已结案的老案件重新打开） */
+function mainlineOngoingRepair(c){
   if(krNotStartedItems(c).length || (c.settlementDone && krActiveItems(c).length && !c.krProcedureDone)) return true;
   if(!c.consultRequested || c.consultStatus==='cancelled' || c.endNote || c.krProcedureDone) return false;
   return ['awaiting_payment','paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1 || (c.consultStatus==='report_ready' && !!c.addedConsultAfterLocal);
@@ -1337,14 +1335,14 @@ function mainlineOngoingOld(c){
 function repairWronglyClosedCases(){
   var n = 0;
   CASE_ITEMS.forEach(function(c){
-    if(!c.visitClosed || !(c.addedConsultAfterLocal || c.localTrack || c.needsConsult===true) || !mainlineOngoingOld(c)) return;
+    if(!c.visitClosed || !(c.addedConsultAfterLocal || c.localTrack || c.needsConsult===true) || !mainlineOngoingRepair(c)) return;
     if(!c.consultRequested && !krActiveItems(c).length) return;
     c.visitClosed = false; c.cancelReason = null; c.krProcedureDone = c.krProcedureDone && krActiveItems(c).length>0 ? c.krProcedureDone : false;
     updateCaseStage(c); logCaseEvent(c, '系统', '修正：本地管理做完时面诊 / 赴韩还在进行，案件不应结案，已恢复为进行中'); n++;
   });
   return n;
 }
-/* ===== CMD-1013-16 新结案规则（试行，newCloseOn() 控制）===== */
+/* ===== CMD-1013-16 新结案规则（10/15 正式采用）===== */
 /* 钱没清：待收款（面诊费待缴 / 待付款结算单 / 在韩待付款加项）。待退款目前没有独立的「待退」状态（退款都是当场办完），所以只列待收 */
 function closeBlockers(c){
   var out = [];
@@ -1353,22 +1351,20 @@ function closeBlockers(c){
   pendingPayItems(c).forEach(function(it){ out.push('在韩待付款：'+it.name); });
   return out;
 }
-/* 自动结束的统一出口（本地流程里的各个结束点用）：开着新规则时，钱没清 → 不结束，写系统记录 + 提示；其余照旧 finishCase */
+/* 自动结束的统一出口（本地流程里的各个结束点用）：钱没清 → 不结束，写系统记录 + 提示；其余照旧 finishCase */
 function autoFinish(c, reason){
-  if(newCloseOn()){
-    var bl = closeBlockers(c);
-    if(bl.length){
-      logCaseEvent(c, '系统', '案件暂不结束：还有未处理的款项（'+bl.join('、')+'），请先收款或取消该项目');
-      if(typeof showToast==='function') showToast('钱还没清', '还有未处理的款项：'+bl.join('、')+'。先收款或取消该项目，案件才能结束', null);
-      updateCaseStage(c);
-      if(typeof document!=='undefined' && document.getElementById('case-body')){ buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }
-      return false;
-    }
+  var bl = closeBlockers(c);
+  if(bl.length){
+    logCaseEvent(c, '系统', '案件暂不结束：还有未处理的款项（'+bl.join('、')+'），请先收款或取消该项目');
+    if(typeof showToast==='function') showToast('钱还没清', '还有未处理的款项：'+bl.join('、')+'。先收款或取消该项目，案件才能结束', null);
+    updateCaseStage(c);
+    if(typeof document!=='undefined' && document.getElementById('case-body')){ buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }
+    return false;
   }
   finishCase(c, reason); return true;
 }
-/* 本地管理只能当天加：面诊 / 赴韩案件里，只有「本地管理第一次添加的当天」或「本案件到店当天」可以加；纯本地案件不适用；开关关 = 不限 */
-function localDayLimited(c){ return newCloseOn() && !!c && (c.consultRequested || c.needsConsult===true || krAllItems(c).length>0 || c.addedConsultAfterLocal); }
+/* 本地管理只能当天加：面诊 / 赴韩案件里，只有「本地管理第一次添加的当天」或「本案件到店当天」可以加；纯本地案件不适用 */
+function localDayLimited(c){ return !!c && (c.consultRequested || c.needsConsult===true || krAllItems(c).length>0 || c.addedConsultAfterLocal); }
 function localAddAllowed(c){
   if(!localDayLimited(c)) return true;
   var t = todayStr();
@@ -1379,7 +1375,7 @@ function krDepositPaid(c){ return !!c.hasArrived || !!c.krProcedureDone || (c.se
 /* 赴韩项目全部取消（定金已退 / 转置换）且没到院：回到面诊级，仍可手动结束 */
 function compAllKrGone(c){ return !c.hasArrived && !c.krProcedureDone && krAllItems(c).length>0 && krActiveItems(c).length===0; }
 function canEndCase(c){
-  if(!newCloseOn() || !c || isEnded(c) || c.visitClosed || c.subState!=='arrived' || (krDepositPaid(c) && !compAllKrGone(c))) return false;
+  if(!c || isEnded(c) || c.visitClosed || c.subState!=='arrived' || (krDepositPaid(c) && !compAllKrGone(c))) return false;
   var a = currentAccount(); return !!a && a.role.indexOf('kr_')!==0 && a.role!=='owner' && canDo('work');
 }
 function caseWorkDone(c){ return !!c.krProcedureDone || (c.postcareUses||[]).length>0 || isLocalCtxWorkDone(c) || isLocalCtxWorkDone(c.localMgmt); }
