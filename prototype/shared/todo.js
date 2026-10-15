@@ -52,7 +52,10 @@ function inTodoItems(){
     if(ug && !newCalOn()) push(todoMk('urge', (c.consultStatus==='awaiting_report' ? '等待报告已超时：可催办' : '待确认施术时间已超过 1 个工作日：可催办'), c, c.consultStatus==='awaiting_report' ? todoEtaDue(c) : '', true, todoInGo(c, c.consultStatus==='awaiting_report' ? 'consult' : 'kr')));
     /* 10/14：今天来访（预约还没接待，一位一条）+ 等 KR 回复（没超时灰色，超时红 + ［催办］） */
     if(newCalOn()){
-      if(c.stage==='booked' && c.subState==='waiting' && c.visitDate===today && !c.krVisit) push(todoMk('visit', (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, today+' '+(c.visitTime||''), false, function(){ openCaseDetail(c.id); }));
+      if(c.stage==='booked' && c.subState==='waiting' && c.visitDate===today && !c.krVisit){ /* CMD-1015-08：没到预约时间 = 参考名单（不进待办）；过了预约时间还没按已到店 / 未到店 = 待办「客人还没到：联络客人」 */
+        var vdue = today+' '+(c.visitTime||''), vover = !!c.visitTime && todoNowStr() >= vdue;
+        push(todoMk('visit', vover ? '客人还没到：联络客人' : (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, vdue, vover, function(){ openCaseDetail(c.id); }));
+      }
       var wk = null;
       if(c.consultStatus==='paid_waiting_kr') wk = {t:'等 KR 确认出报告时间', due:'', tab:'consult'};
       else if(c.consultStatus==='awaiting_report') wk = {t:'等 KR 出诊疗方案', due:todoEtaDue(c), tab:'consult'};
@@ -113,22 +116,30 @@ function krTodoItems(rows){
     /* 今天到院 / 到店（院长账号看自己的案件） */
     var ks = c.krSchedule;
     if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed)
-      push(todoMk('today', '今天到院：施术', c, today+' '+(ks.confirmedTime||''), false, function(){ krOpenSurgSub(r.clinicId, r.id); }, {no:(krSurgSub(c) ? subCaseNo(c, krSurgSub(c)) : '') || c.caseNo}));
-    krTodayVisits(c).forEach(function(s){ push(todoMk('today', '今天到店：'+(s.content||'术后管理'), c, today+' '+(s.time||''), false, function(){ krOpenSub(r.clinicId, r.id, s.id); }, {no:subCaseNo(c, s) || c.caseNo})); });
+      push(todoMk('today', todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived') ? '客人还没到：联络 IN 确认行程' : '今天到院：施术', c, today+' '+(ks.confirmedTime||''), todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived'), function(){ krOpenSurgSub(r.clinicId, r.id); }, {no:(krSurgSub(c) ? subCaseNo(c, krSurgSub(c)) : '') || c.caseNo}));
+    krTodayVisits(c).forEach(function(s){ push(todoMk('today', todoNotArrivedOver(today, s.time, !!s.arrived) ? '客人还没到：联络 IN 确认行程' : '今天到店：'+(s.content||'术后管理'), c, today+' '+(s.time||''), todoNotArrivedOver(today, s.time, !!s.arrived), function(){ krOpenSub(r.clinicId, r.id, s.id); }, {no:subCaseNo(c, s) || c.caseNo})); });
   });
   /* CMD-1014-16：IN 在 KR 日程占位的预约 → 确认预约时间；确认后的预约今天到店 */
   try{ var hidB = krHospitalIdOfMe(), meB = currentAccount(); (krbList(hidB)||[]).forEach(function(b){
     var cn = ((clinicById(b.clinicId)||{}).name)||'';
     if(work && b.status==='pending') out.push(todoMk('bkconf', '确认预约时间（'+krbPurposeText(b.purpose)+'）· '+cn, null, b.date+' '+b.time, false, function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
-    if(b.status==='confirmed' && b.date===today && (work || (isKrDirectorLike(meB) && b.director===meB.name))) out.push(todoMk('today', '今天到店：预约 · '+krbPurposeText(b.purpose), null, b.date+' '+b.time, false, function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
+    if(b.status==='confirmed' && b.date===today && (work || (isKrDirectorLike(meB) && b.director===meB.name))) out.push(todoMk('today', todoNotArrivedOver(b.date, b.time, !!b.arrivedAt) ? '客人还没到：联络 IN 确认行程' : '今天到店：预约 · '+krbPurposeText(b.purpose), null, b.date+' '+b.time, todoNotArrivedOver(b.date, b.time, !!b.arrivedAt), function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
   }); }catch(e){}
   try{ krNotifUnread().forEach(function(n){ if(n.kind==='mention' || n.kind==='missedcall' || /@ 了你|未接来电/.test(n.text||'')) out.push(todoMk('stay', tzRender(n.text), null, '', false, function(){ krOpenNotif(n.id); })); }); }catch(e){}
   return out;
 }
 
+/* CMD-1015-08：过了到院 / 到店时间还没标到 = 超时（待办）；已到的不算 */
+function todoNotArrivedOver(ds, tm, arrived){ return !arrived && !!tm && todoNowStr() >= ds+' '+tm; }
+/* 待办 = 现在需要我动手做的事：状态「等待中 / 待接待」（没超时的 visit / kr / waiting / today2 类）不进待办栏，只在点卡片时当灰色参考名单显示（it.ref） */
+var TODO_REF_CATS = ['visit', 'kr', 'waiting', 'today2'];
 function todoItems(){
   var items;
   try{ items = todoIsKr() ? krTodoItems(krAllCases()) : inTodoItems(); }catch(e){ console.error('[待办]', e); items = []; }
+  if(newCalOn()){
+    if(todoIsKr() && krIsDirector()) items = items.filter(function(it){ return it.kind!=='today'; }); /* 院长：今天到院不进待办（看日历） */
+    items.forEach(function(it){ it.ref = TODO_REF_CATS.indexOf(it.cat)>-1 && !it.over; });
+  }
   return items;
 }
 /* CMD-1015-07：待办新格式——一行 6 栏「出现时间｜阶段｜进程｜截止时间｜状态｜客人 + Case ID」。
@@ -150,7 +161,7 @@ function todoStampAt(all){
 /* 显示的出现时间：超时且有截止时间 → 截止时间；否则第一次出现的时间 */
 function todoShownAt(it){ return (it.over && it.due && it.due <= todoNowStr()) ? it.due : (it.at || ''); } /* 截止时间已过才改用截止时间；超时但「截止」是将来的日期（如施术日期）时仍用出现时间 */
 function todoFmtTime(s){ if(!s) return '—'; var d = s.slice(0,10), hm = s.length>=16 ? s.slice(11,16) : ''; if(d===todayStr()) return hm || '今天'; return s.slice(5,10)+(hm ? ' '+hm : ''); }
-function todoGroupOf(it){ if(!it.over && it.due && it.due.slice(0,10) > todayStr()) return 2; var d = (todoShownAt(it)||'').slice(0,10) || todayStr(); return d < todayStr() ? 0 : (d > todayStr() ? 2 : 1); }
+function todoGroupOf(it){ var d = (todoShownAt(it)||'').slice(0,10) || todayStr(); return d < todayStr() ? 0 : 1; } /* CMD-1015-08：只留 昨日及更早 / 今天 */
 function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || ((b.over?1:0)-(a.over?1:0)) || (todoShownAt(a)||'9999').localeCompare(todoShownAt(b)||'9999'); }
 /* CMD-1014-01 二·1：点卡片 = 筛选待办栏（标题后出现「· 待我处理 ✕」，✕ 回到全部）；开关关闭时仍是 10/13 的 kind 相等判断 */
 var TODO_FILTERS = {
@@ -166,9 +177,12 @@ function todoKindOk(it){
   if(newCalOn() && TODO_FILTERS[TODO_UI.kind]) return it.cat===TODO_UI.kind;
   return it.kind===TODO_UI.kind;
 }
+function todoRefMode(){ return newCalOn() && TODO_REF_CATS.indexOf(TODO_UI.kind)>-1; } /* 点了「今天来访 / 等 KR 回复 / 今天到院·到店 / 等待报告」卡：待办栏改显示那份名单（灰色参考） */
 function todoVisible(items){
-  return items.filter(function(it){ return (!TODO_UI.mine || it.mine) && todoKindOk(it); });
+  var ref = todoRefMode();
+  return items.filter(function(it){ return (!TODO_UI.mine || it.mine) && todoKindOk(it) && (ref || !it.ref); });
 }
+
 function todoCardFilter(key){ todoCardOpen(key); TODO_UI.kind = key; todoSaveUi(); todoRefresh(); }
 /* 催办（待办栏里的 KR 回复行）：借用案件页的 urgeKr() */
 function todoUrge(id){ var c = calCaseById(id); if(!c) return; var old = CURRENT_CASE_ID; CURRENT_CASE_ID = id; try{ urgeKr(); }finally{ CURRENT_CASE_ID = old; } todoRefresh(); }
@@ -178,6 +192,7 @@ function todoUrge(id){ var c = calCaseById(id); if(!c) return; var old = CURRENT
 function todoStatusOf(it){
   if(it.over) return {t:'已超时', cls:'over'};
   if(it.cat==='visit') return {t:'待接待', cls:'recv'};
+  if(it.cat==='today2') return {t:'未到', cls:'wait'}; /* CMD-1015-08：今天到院 / 到店还没到（只在参考名单里出现） */
   if(it.gray || it.cat==='kr' || it.cat==='waiting') return {t:'等待中', cls:'wait'};
   return {t:'待处理', cls:'todo'};
 }
@@ -185,7 +200,7 @@ function todoRowHtml(it){
   var i = TODO_ACTS.push(it.go) - 1, st = todoStatusOf(it); TODO_ACT_CASE[i] = it.caseId||'';
   var urgeBtn = it.urge ? '<button class="btn-primary todo-urge" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</button>' : '';
   var proc = String(it.text||'').replace(/（已超时）|\(已超时\)/g, '').trim();
-  return '<div class="todo-row'+(it.pin?' pin':'')+(it.over?' is-over':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
+  return '<div class="todo-row'+(it.pin?' pin':'')+(it.over?' is-over':'')+((it.ref || (todoRefMode() && !it.over))?' is-ref':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
     '<div class="todo-at">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+todoEsc(todoFmtTime(todoShownAt(it)))+'</div>'+
     '<div class="todo-stage">'+(it.pin?'📌 ':'')+todoEsc(it.stage||'—')+'</div>'+
     '<div class="todo-text">'+todoEsc(proc)+'</div>'+
@@ -199,14 +214,16 @@ function todoPaneHtml(all){
   var vis = todoVisible(all), n = vis.length;
   if(TODO_UI.collapsed) return '<button class="btn-outline todo-mini" onclick="todoToggle()">待办 '+n+'</button>';
   var boxStyle = newCalOn() ? ' style="width:auto;"' : '';
-  var groups = [[0,'昨日及更早'],[1,'今天'],[2,'未来']];
+  var groups = [[0,'昨日及更早'],[1,'今天']];
   var body = groups.map(function(g){
     var list = vis.filter(function(it){ return todoGroupOf(it)===g[0]; }).sort(todoSort);
     if(!list.length) return '';
     return '<div class="todo-group">'+g[1]+' <span>'+list.length+'</span></div>'+list.map(todoRowHtml).join('');
-  }).join('') || '<div class="todo-empty">现在没有待办</div>';
+  }).join('') || '<div class="todo-empty">'+(refMode ? '这类名单现在是空的' : '现在没有待办')+'</div>';
   var tag = (newCalOn() && TODO_UI.kind && TODO_FILTERS[TODO_UI.kind]) ? '<span class="todo-tag">· '+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></span>' : '';
-  return '<div class="todo-box"'+boxStyle+'><div class="todo-head"><b>待办 '+n+'</b>'+tag+
+  var refMode = todoRefMode();
+  var headTitle = refMode ? '<b>'+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' '+n+'（参考）</b> <span onclick="todoSetKind(\'\')" title="回到待办" style="cursor:pointer;">✕</span>' : '<b>待办 '+n+'</b>'+tag; /* CMD-1015-08：参考名单标题「今天来访 4（参考）✕」 */
+  return '<div class="todo-box'+(refMode?' is-refmode':'')+'"'+boxStyle+'><div class="todo-head">'+headTitle+
     '<span class="todo-seg"><span class="'+(TODO_UI.mine?'':'on')+'" onclick="todoSetMine(false)">全部</span><span class="'+(TODO_UI.mine?'on':'')+'" onclick="todoSetMine(true)">只看我的</span></span>'+
     '<span class="todo-fold" onclick="todoToggle()" title="收起">⟩</span></div>'+
     ((TODO_UI.kind && !tag) ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+

@@ -401,3 +401,6 @@ body.kr-recwin #kr-rec-overlay .modal-box, body.kr-recwin #kr-pcb-overlay .modal
 
 .todo-row>div{min-width:0;overflow-wrap:anywhere;}
 .todo-row .todo-st{white-space:normal;}
+
+/* CMD-1015-08 参考名单整份灰色，超时的仍红字 */
+.todo-row.is-ref:not(.is-over) .todo-at,.todo-row.is-ref:not(.is-over) .todo-stage,.todo-row.is-ref:not(.is-over) .todo-text,.todo-row.is-ref:not(.is-over) .todo-due,.todo-row.is-ref:not(.is-over) .todo-st,.todo-row.is-ref:not(.is-over) .todo-who b,.todo-row.is-ref:not(.is-over) .todo-who span{color:var(--muted,#8a8f98) !important;font-weight:400;}
