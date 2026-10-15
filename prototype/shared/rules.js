@@ -241,7 +241,15 @@ function _tzFmt(tz){ return _TZ_FMT[tz] || (_TZ_FMT[tz] = new Intl.DateTimeForma
 function tzParts(date, tz){ var o = {}; _tzFmt(tz).formatToParts(date).forEach(function(p){ o[p.type] = p.value; }); return {y:+o.year, mo:+o.month, d:+o.day, h:+o.hour, mi:+o.minute, s:+o.second}; }
 function tzOffsetMin(tz, date){ var dt = date || new Date(), p = tzParts(dt, tz); return Math.round((Date.UTC(p.y, p.mo-1, p.d, p.h, p.mi, p.s) - Math.floor(dt.getTime()/1000)*1000)/60000); }
 function tzLabel(tz){ var m = tzOffsetMin(tz), h = m/60; return 'UTC'+(h>=0?'+':'-')+(Math.abs(h) % 1 ? Math.abs(h).toFixed(1) : Math.abs(h)); }
-function realNow(){ return new Date(Date.now() + (+DEMO_SHIFT_MS || 0)); }
+/* CMD-1015-11 演示时间（测试工具，不属于业务功能）：测试覆盖页设定 {startUtc 演示起点（UTC 毫秒）, setAt 设定时的真实毫秒, restoreUtc 真实时间到这一刻自动恢复}；
+   存 localStorage gmc_cfg_demotime（同一浏览器所有分页立即生效、刷新不掉、重置演示数据不清）；演示时间 = 起点 + 设定之后真实走过的时间（照常往前走）；
+   和 DEMO_SHIFT_MS（［模拟到隔天］等拨时钟按钮）叠加 */
+var DEMO_CLOCK_KEY = 'gmc_cfg_demotime', DEMO_CLOCK_CACHE = null, DEMO_CLOCK_AT = 0;
+function demoClockCfg(){ var n = Date.now(); if(DEMO_CLOCK_AT && n - DEMO_CLOCK_AT < 400) return DEMO_CLOCK_CACHE; DEMO_CLOCK_AT = n; try{ var raw = localStorage.getItem(DEMO_CLOCK_KEY); DEMO_CLOCK_CACHE = raw ? JSON.parse(raw) : null; }catch(e){ DEMO_CLOCK_CACHE = null; } return DEMO_CLOCK_CACHE; }
+function demoClockShiftMs(){ var c = demoClockCfg(); if(!c || !c.startUtc || !c.setAt) return 0; if(c.restoreUtc && Date.now() >= c.restoreUtc) return 0; return c.startUtc - c.setAt; }
+function demoTimeActive(){ return demoClockShiftMs() !== 0 || (+DEMO_SHIFT_MS || 0) !== 0; }
+try{ window.addEventListener('storage', function(e){ if(e.key === DEMO_CLOCK_KEY || e.key === null) DEMO_CLOCK_AT = 0; }); }catch(e){}
+function realNow(){ return new Date(Date.now() + demoClockShiftMs() + (+DEMO_SHIFT_MS || 0)); }
 function pageTz(){ try{ if(typeof isKrAccount==='function' && isKrAccount()) return 'Asia/Seoul'; }catch(e){} return (typeof CLINIC_TZ==='string' && CLINIC_TZ) ? CLINIC_TZ : 'Asia/Jakarta'; }
 function demoNow(){ var p = tzParts(realNow(), pageTz()); return new Date(p.y, p.mo-1, p.d, p.h, p.mi, p.s); }
 function todayStr(){ return dateStr(demoNow()); } /* 页面时区的"今天" */

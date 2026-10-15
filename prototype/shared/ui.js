@@ -182,11 +182,12 @@ var WEEK_OFFSET = 0, MONTH_OFFSET = 0; /* 月视图：相对「今天所在月�
 
 var DAY_OFFSET = 0;
 
+function dashClockHtml(){ return dashClockText() + (demoTimeActive() ? ' <span class="demo-time-tag" title="现在不是真实时间（测试覆盖页可恢复）">演示时间</span>' : ''); } /* CMD-1015-11：不是真实时间时，时钟旁标「演示时间」 */
 function dashClockText(){ var t = demoNow(), p2 = function(n){ return (n<10?'0':'')+n; }; return p2(t.getFullYear()%100)+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate())+'（周'+DOW_CN[dowOfDate(dateStr(t))]+'）'+p2(t.getHours())+':'+p2(t.getMinutes())+':'+p2(t.getSeconds()); }
-setInterval(function(){ try{ document.querySelectorAll('[data-clock]').forEach(function(e){ e.textContent = dashClockText(); }); }catch(x){} }, 1000);
+setInterval(function(){ try{ document.querySelectorAll('[data-clock]').forEach(function(e){ e.innerHTML = dashClockHtml(); }); }catch(x){} }, 1000);
 function applyTzSetting(){
   var o = TZ_INFO[CLINIC_TZ] || TZ_INFO['Asia/Jakarta'];
-  var dd = document.getElementById('dash-date'); if(dd){ dd.setAttribute('data-clock','1'); dd.textContent = dashClockText(); } /* CMD-1015-05 十：26-10-15（周四）14:32:05，每秒走字；时间按页面时区（IN = 印尼诊所，KR / 院长 = 韩国） */
+  var dd = document.getElementById('dash-date'); if(dd){ dd.setAttribute('data-clock','1'); dd.innerHTML = dashClockHtml(); } /* CMD-1015-05 十：26-10-15（周四）14:32:05，每秒走字；时间按页面时区（IN = 印尼诊所，KR / 院长 = 韩国） */
   var w = document.getElementById('dash-weather'); if(w) w.textContent = '☁ '+(CLINIC_SETTINGS.city||o.city)+' '+o.temp+'℃';
   var l = document.getElementById('cal-tz-label'); if(l) l.textContent = tzLabel(CLINIC_TZ); /* 画面上不显示 WIB / WITA / WIT，只显示 UTC+n */
 }

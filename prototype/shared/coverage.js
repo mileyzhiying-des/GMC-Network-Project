@@ -215,8 +215,33 @@
   function fillRound(){
     var cur = parseInt(localStorage.getItem('gmc_cfg_round'), 10) || 1, b = (typeof GMC_BUILD!=='undefined' && GMC_BUILD) ? GMC_BUILD : null;
     document.getElementById('roundbar').innerHTML = '当前测试轮次：<select onchange="localStorage.setItem(\'gmc_cfg_round\',this.value);fillRoundBar()">'+ROUNDS.map(function(r0){ return '<option value="'+r0+'"'+(cur===r0?' selected':'')+'>第 '+r0+' 轮</option>'; }).join('')+'</select> <span class="muted">之后新建的案件自动标上这个轮次；选错可在下面案件里改</span>　<span class="muted">当前原型版本：'+(b ? esc(b.h)+'（'+esc(b.t)+'）' : '未知')+'</span>';
-    fillNewClose(); fillNewTodo(); fillNewCal(); fillNewStyle();
+    fillDemoTime(); fillNewClose(); fillNewTodo(); fillNewCal(); fillNewStyle();
   }
+  /* CMD-1015-11 演示时间：以韩国时间设起点，之后照常往前走；到「真实时间」的恢复点自动恢复；［立刻恢复］。存 gmc_cfg_demotime，所有分页同步，和［模拟到隔天］叠加 */
+  var KST = 9*3600000;
+  function krStr(utcMs){ var d = new Date(utcMs + KST), p = function(n){ return (n<10?'0':'')+n; }; return d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate())+' '+p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds()); }
+  function inStr(utcMs){ return krStr(utcMs - KST + 7*3600000); } /* 印尼 UTC+7（雅加达；巴厘 +8 另算） */
+  function krInputToUtc(v){ var m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(v||''); return m ? Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5]) - KST : 0; }
+  function demoCfg(){ try{ return JSON.parse(localStorage.getItem('gmc_cfg_demotime') || 'null'); }catch(e){ return null; } }
+  function stateShift(){ var g = pj(localStorage.getItem('gmc_state')); return g && g.vars ? (+g.vars.DEMO_SHIFT_MS || 0) : 0; }
+  function fillDemoTime(){
+    var el = document.getElementById('roundbar'); if(!el) return; var c = demoCfg();
+    el.innerHTML += '<div id="demotime" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border,#ddd);border-radius:8px;"><b>演示时间</b> <span class="muted">（测试用：原型时间从下面的韩国时间开始照常往前走；所有分页同时生效、刷新不掉；到真实时间的恢复点自动恢复；右上时钟旁会标「演示时间」；和［模拟到隔天］等拨时钟按钮叠加）</span>'+
+      '<div style="margin-top:8px;">开始时间（韩国时间）：<input type="datetime-local" id="dt-start" value="'+(c && c.startKr ? c.startKr : '2026-10-15T12:00')+'"> 　到真实时间（韩国时间）：<input type="datetime-local" id="dt-restore" value="'+(c && c.restoreKr ? c.restoreKr : '2026-10-16T00:00')+'"> 自动恢复　<button onclick="demoTimeSet()">设定并开始</button> <button onclick="demoTimeReset()">立刻恢复真实时间</button></div><div id="dt-status" style="margin-top:6px;font-size:12px;"></div></div>';
+    demoTimeTick();
+  }
+  function demoTimeTick(){
+    var st = document.getElementById('dt-status'); if(!st) return; var c = demoCfg(), now = Date.now(), active = c && c.startUtc && c.setAt && !(c.restoreUtc && now >= c.restoreUtc), sh = stateShift();
+    var demoUtc = now + (active ? c.startUtc - c.setAt : 0) + sh;
+    st.innerHTML = (active ? '<b style="color:#8F6F0C;">演示时间生效中</b>' : (c ? '演示时间已到恢复点，现在是真实时间' : '未设定，现在是真实时间'))+'　现在原型时间：韩国 <b>'+krStr(demoUtc)+'</b>（印尼 '+inStr(demoUtc)+'）'+(sh ? '　（含拨时钟按钮累计 '+(sh/3600000).toFixed(1)+' 小时）' : '')+(active && c.restoreUtc ? '　真实时间（韩国）'+krStr(c.restoreUtc)+' 自动恢复，还有 '+Math.max(0, Math.round((c.restoreUtc-now)/60000))+' 分钟' : '');
+  }
+  setInterval(function(){ try{ demoTimeTick(); }catch(e){} }, 1000);
+  window.demoTimeSet = function(){
+    var s = krInputToUtc((document.getElementById('dt-start')||{}).value), r = krInputToUtc((document.getElementById('dt-restore')||{}).value);
+    if(!s){ alert('请填开始时间（韩国时间）'); return; } if(r && r <= Date.now()){ alert('恢复时间（真实时间）已经过了，请改成将来的时间；或留空 = 不自动恢复'); return; }
+    localStorage.setItem('gmc_cfg_demotime', JSON.stringify({startUtc:s, setAt:Date.now(), restoreUtc:r || 0, startKr:document.getElementById('dt-start').value, restoreKr:document.getElementById('dt-restore').value})); demoTimeTick();
+  };
+  window.demoTimeReset = function(){ localStorage.removeItem('gmc_cfg_demotime'); demoTimeTick(); };
   /* CMD-1013-16：新结案规则开关（gmc_cfg_newclose，默认开，'0' = 关；切换不动已存案件）+ 模拟到隔天（演示时钟 +24 小时，改 gmc_state 里的 DEMO_SHIFT_MS，打开的原型页面会同步） */
   function fillNewClose(){
     var on = localStorage.getItem('gmc_cfg_newclose')!=='0', el = document.getElementById('roundbar'); if(!el) return;
