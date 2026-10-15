@@ -107,7 +107,8 @@
 
     /* CMD-1014-08 颜色角色：背景 #F7F4EE / 驼色强调 / 侧栏选中 / 今天表头 / 分段切换 / 现在时间线 / 数据卡数字 / 休诊 · 午休 */
     '.nav-item.active{background:var(--bg-sidebar);color:var(--action-primary);font-weight:700;} .nav-item.active .dot{background:var(--action-primary);} .nav-item.active .nav-icon{background:var(--action-primary);color:var(--text-on-action);}'+
-    '.wk-head.today,.krc-head-today{background:var(--bg-brand-subtle) !important;color:var(--action-primary) !important;box-shadow:inset 0 -2px 0 var(--action-primary);font-weight:700;} .wk-cell.wk-tcol:not(.wk-lunch):not(.wk-past){background:var(--bg-brand-faint);} .krc-col-today{background:var(--bg-brand-faint) !important;}'+
+    /* CMD-1015-01 第二部分·6：今天不染整栏（格子保持白色，hover 色只给可预约格子），只在表头标示：日期主色加粗 + 底线 */
+    '.wk-head.today,.krc-head-today{background:transparent !important;color:var(--action-primary) !important;box-shadow:inset 0 -2px 0 var(--action-primary);font-weight:700;} .krc-col-today{background:transparent !important;}'+
     '.cal-switch span.active,.todo-seg span.on,.chip.active{background:var(--bg-surface);color:var(--action-primary);border:1px solid var(--border-default);font-weight:700;}'+
     'button[style*="background:var(--navy)"]{background:var(--bg-surface) !important;color:var(--action-primary) !important;border-color:var(--border-default) !important;}'+
     'div[style*="background:var(--navy);color:#fff"]{background:var(--bg-brand-subtle) !important;color:var(--action-primary) !important;}'+

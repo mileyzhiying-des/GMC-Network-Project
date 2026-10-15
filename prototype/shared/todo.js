@@ -190,14 +190,14 @@ function todoMountIn(){
   var wrap = document.getElementById('cal-todo-wrap');
   if(!wrap){
     wrap = document.createElement('div'); wrap.id = 'cal-todo-wrap'; wrap.style.cssText = 'display:flex;gap:16px;align-items:'+(newCalOn() ? 'stretch' : 'flex-start')+';';
-    calCard.parentNode.insertBefore(wrap, calCard); wrap.appendChild(calCard); calCard.style.flex = newCalOn() ? '3 1 0' : '1'; calCard.style.minWidth = '0'; /* 10/14：日历 : 待办 = 3 : 2 */
+    calCard.parentNode.insertBefore(wrap, calCard); wrap.appendChild(calCard); calCard.style.flex = newCalOn() ? '2 1 0' : '1'; calCard.style.minWidth = '0'; /* CMD-1015-01：日历 : 待办 = 2 : 1 */
     var p = document.createElement('div'); p.id = 'todo-pane'; wrap.appendChild(p);
   }
   return document.getElementById('todo-pane');
 }
 function todoKrCalWrap(calHtml){
   var nc = newCalOn();
-  return '<div id="cal-todo-wrap" style="display:flex;gap:16px;align-items:'+(nc ? 'stretch' : 'flex-start')+';"><div style="flex:'+(nc ? '3 1 0' : '1')+';min-width:0;">'+calHtml+'</div><div id="todo-pane"'+(nc ? ' style="flex:'+(TODO_UI.collapsed ? '0 0 auto' : '2 1 0')+';min-width:0;"' : '')+'>'+todoPaneHtml(todoItems())+'</div></div>';
+  return '<div id="cal-todo-wrap" style="display:flex;gap:16px;align-items:'+(nc ? 'stretch' : 'flex-start')+';"><div style="flex:'+(nc ? '2 1 0' : '1')+';min-width:0;">'+calHtml+'</div><div id="todo-pane"'+(nc ? ' style="flex:'+(TODO_UI.collapsed ? '0 0 auto' : '1 1 0')+';min-width:0;"' : '')+'>'+todoPaneHtml(todoItems())+'</div></div>';
 }
 
 /* ---------------- 卡片 ---------------- */
@@ -338,8 +338,8 @@ function todoRefresh(){
   if(!newTodoOn()) return;
   try{
     var all = todoItems(), p = document.getElementById('todo-pane');
-    if(todoIsKr()){ if(p){ p.innerHTML = todoPaneHtml(all); if(newCalOn()) p.style.cssText = 'flex:'+(TODO_UI.collapsed ? '0 0 auto' : '2 1 0')+';min-width:0;'; } return; }
-    p = todoMountIn(); if(p){ p.innerHTML = todoPaneHtml(all); if(newCalOn()) p.style.cssText = 'flex:'+(TODO_UI.collapsed ? '0 0 auto' : '2 1 0')+';min-width:0;'; }
+    if(todoIsKr()){ if(p){ p.innerHTML = todoPaneHtml(all); if(newCalOn()) p.style.cssText = 'flex:'+(TODO_UI.collapsed ? '0 0 auto' : '1 1 0')+';min-width:0;'; } return; }
+    p = todoMountIn(); if(p){ p.innerHTML = todoPaneHtml(all); if(newCalOn()) p.style.cssText = 'flex:'+(TODO_UI.collapsed ? '0 0 auto' : '1 1 0')+';min-width:0;'; }
     var cards = todoMountInCards(); if(cards) cards.innerHTML = todoInCardsHtml(all);
   }catch(e){ console.error('[待办刷新]', e); }
 }

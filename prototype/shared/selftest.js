@@ -1010,7 +1010,7 @@
     u.reportEta = D(-1)+' 05:00'; w = inTodoItems().filter(function(i){ return i.kind==='waitkr' && i.no===u.caseNo; })[0]; ST.ok(!!w && w.over && w.urge, '超时：红色 + ［催办］'); ST.ok(/催办/.test(todoPaneHtml(inTodoItems())), '待办栏行里应有催办按钮');
     todoUrge(u.id); ST.ok(ST.hasLog(u, /催办 KR 室长/) && (HOSPITAL_DATA.H1.notifs||[]).some(function(n){ return n.kind==='urge' && n.caseId===u.id; }), '待办栏催办应通知 KR');
     /* 3 : 2 */
-    var wrap = document.getElementById('cal-todo-wrap'), cal = wrap.firstElementChild, pane = document.getElementById('todo-pane'); ST.ok(cal.style.flex.indexOf('3')===0 && pane.style.flex.indexOf('2')===0, '日历 : 待办应是 3 : 2');
+    var wrap = document.getElementById('cal-todo-wrap'), cal = wrap.firstElementChild, pane = document.getElementById('todo-pane'); ST.ok(cal.style.flex.indexOf('2')===0 && pane.style.flex.indexOf('1')===0, '日历 : 待办应是 2 : 1');
     /* 营业时间外代约：室长可代约（弹确认），客人自助预约不能 */
     var ds = D(2), early = minToTime(timeToMin(CLINIC_SETTINGS.openTime)-60); while(isRescheduleDateDisabled(new Date(ds+'T00:00:00'))){ ds = D(3); break; }
     ST.ok(slotBlockReason(ds, early)==='outside', '营业前的时段对客人自助预约仍是「营业时间外」'); ST.ok(calOffHoursOk(ds, early), '室长可以在营业时间外代约（弹确认）');
@@ -1026,7 +1026,7 @@
     ST.ok(items.length === cats.todo+cats.today2+cats.waiting+cats.msg, '待办总数 = 4 类加总'); krRenderDashboard();
     var g = document.querySelector('#krdash-body div[style*="grid-template-columns"]'); ST.ok(g && g.children.length===4, '4 张卡');
     ['todo','today2','waiting','msg'].forEach(function(k, i){ var n = parseInt(g.children[i].querySelector('div[style*="font-size:28px"]').textContent, 10); ST.ok(n===cats[k], '卡片「'+k+'」数字 '+n+' 应 = '+cats[k]); todoCardFilter(k); ST.ok(todoVisible(todoItems()).length===cats[k], '点卡片后待办栏条数应 = '+cats[k]); });
-    todoSetKind(''); var cal = document.getElementById('cal-todo-wrap'); ST.ok(cal.firstElementChild.style.flex.indexOf('3')===0 && document.getElementById('todo-pane').style.flex.indexOf('2')===0, '日历 : 待办 = 3 : 2');
+    todoSetKind(''); var cal = document.getElementById('cal-todo-wrap'); ST.ok(cal.firstElementChild.style.flex.indexOf('2')===0 && document.getElementById('todo-pane').style.flex.indexOf('1')===0, '日历 : 待办 = 2 : 1');
   });
   ST.def('CAL6','OFF 新流程（全天 / 指定时间 + 先选室长 / 院长再选人）+ KR 日历细节（KM1 / KD1）',function(){
     var me = currentAccount(); if(!ST.ok(me && /^(KM1|KD1)$/.test(me.id), '要在 KM1 / KD1 分页里跑')) return; if(!newCalOn()){ ST.note('开关关闭：跳过'); return; }
@@ -1147,6 +1147,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/医院/.test(cal().innerText) && !/各位院长/.test(cal().innerText) && cal().querySelectorAll('.cal-switch span').length>=5, '第一层平铺：医院 + 各位院长按钮并列，日 / 周 / 月是分段按钮'); ST.ok(!cal().querySelector('.krc-dirhead') && !cal().querySelector('.krc-busy'), '医院层日视图不分栏、不显示不可预约');
     var one = [].slice.call(cal().querySelectorAll('[onclick*="krShowCase"],[onclick*="krOpenSurgSub"],[onclick*="krBookOpen"],[onclick*="krOpenSub"]')).filter(function(e){ return e.innerText; }); ST.ok(one.length===0 || one.every(function(e){ return /\d\d:\d\d · .+ · .+ · .+/.test(e.innerText.replace(/\n/g,' ')); }), '医院层每块一行：时间 · 客人 · 类型 · 院长');
     ST.ok(/韩 \d\d:00/.test(cal().innerText) && /印 \d\d:00/.test(cal().innerText) && !/印尼\s*韩国/.test(cal().innerText.slice(0,300)), '时间轴每个时间前标韩 / 印，没有顶部小标题');
+    ST.ok(KRC_PX===CAL_DAY_PX, 'CMD-1015-01：KR 日视图格子高度同 IN（44px/小时）'); var ow = cal().querySelector('.krc-outwrap'); ST.ok(!!ow && ow.style.overflow==='auto' && /100vh/.test(ow.style.height), 'KR 日历撑满画面、栏内滚动'); ST.ok(!cal().querySelector('.krc-col-today') || getComputedStyle(cal().querySelector('.krc-col-today')).backgroundColor!==getComputedStyle(document.documentElement).getPropertyValue('--bg-brand-faint'), '今天不染整栏');
     krcSet('mode','week'); ST.ok(!/已约/.test(cal().innerText) && !/施术开放|未开放/.test(cal().innerText), 'CMD-1015-01：周视图不写已约数字（只有约满才写），没有施术开放');
     krcSet('mode','month'); ST.ok(!/已约/.test(cal().innerText) && !/开放/.test(cal().innerText.replace(/营业/g,'')), '月视图同样');
     krcSet('layer','director'); krcSet('person','KD1 院长'); krcSet('mode','day'); ST.ok(!!cal().querySelector('.krc-busy') || true, '院长层'); ST.ok(!/KO1 代表院长 OFF/.test(cal().innerText), '院长层固定栏只有这位院长'); ST.ok(!/确认今日院长日程/.test(document.body.innerText), '没有确认今日院长日程');
