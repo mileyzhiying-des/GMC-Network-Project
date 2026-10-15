@@ -318,13 +318,9 @@ function krRenderDashboard(){
   var hid = krHospitalIdOfMe(), h = krHData(), rows = krAllCases();
   var td0 = new Date(krToday()+'T00:00:00'); /* CMD-1015-02：问候行 + 右上日期照 IN 的排法（.dash-top / .dash-greet h1 / .dash-meta .date） */
   var head = '<div class="dash-top"><div class="dash-greet"><h1>'+krEsc(krGreeting())+'</h1></div><div class="dash-meta"><div class="date" data-clock="1">'+dashClockHtml()+'</div><div class="weather">☁ '+((TZ_INFO['Asia/Seoul']||{}).city||'首尔')+' '+((TZ_INFO['Asia/Seoul']||{}).temp||18)+'℃</div></div></div>';
-  if(krIsDirector()){ el.innerHTML = head + krOffBar(hid) + (newCalOn() ? '' : krDirectorBlocks(rows)) + (newTodoOn() ? todoKrCalWrap(krCalendarHtml()) : krCalendarHtml()); return; }
+  if(krIsDirector()){ el.innerHTML = head + krOffBar(hid) + (newCalOn() ? '' : krDirectorBlocks(rows)) + todoKrCalWrap(krCalendarHtml()); return; }
   var banner = ''; /* CMD-1014-18 三·6：拿掉「确认今日院长日程」黄色横幅 */
-  var cards = KR_CARDS.filter(function(c){ return !c.n; }).sort(function(a0,b0){ return (a0.ord||50)-(b0.ord||50); });
-  if(newTodoOn()){ el.innerHTML = head + krOffBar(hid) + banner + todoKrCardsHtml(rows) + todoKrCalWrap(krCalendarHtml()); return; } /* CMD-1013-17：卡片 8→4 + 待办栏 */
-  el.innerHTML = head + krOffBar(hid) + banner +
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">'+cards.map(function(c){ return krCardHtml(c, rows); }).join('')+'</div>'+
-    krCalendarHtml();
+  el.innerHTML = head + krOffBar(hid) + banner + todoKrCardsHtml(rows) + todoKrCalWrap(krCalendarHtml()); /* CMD-1013-17：卡片 8→4 + 待办栏 */
 }
 
 /* 院长大盘：今日自己的日程、等我出报告的案件、室长刚提交的诊疗方案（近 7 天，未读加粗） */
@@ -981,8 +977,7 @@ var KR_NOTIF_SEEN = null;
 function krToastNew(unread){
   if(KR_NOTIF_SEEN===null){ KR_NOTIF_SEEN = {}; krNotifsForMe().forEach(function(n){ KR_NOTIF_SEEN[n.id] = 1; }); /* 设定更新没按过确认的：没上线的人下次上线要弹（CMD-1015-09） */ unread.forEach(function(n){ if(n.popup==='confirm') showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky:true, onOk:function(){ krMarkNotifRead(n); }}); }); return; }
   unread.slice().reverse().forEach(function(n){ if(KR_NOTIF_SEEN[n.id]) return; KR_NOTIF_SEEN[n.id] = 1;
-    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk==='msg') return; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky: tk==='stay' || tk==='confirm', urgent: tk==='stay', onOk: tk==='confirm' ? function(){ krMarkNotifRead(n); } : null}); return; } /* CMD-1013-17 */
-    showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky:notifLevelOf(n)!=='info'}); });
+    { var tk = notifTodoKind(n); if(tk==='msg') return; showToast('🔔 通知', krEsc(tzRender(n.text)), function(){ krOpenNotif(n.id); }, {sticky: tk==='stay' || tk==='confirm', urgent: tk==='stay', onOk: tk==='confirm' ? function(){ krMarkNotifRead(n); } : null}); return; } /* CMD-1013-17 */});
 }
 (function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); if(KR_CHAT.open && !(document.activeElement && /^kr-chat-in$|^$/.test(document.activeElement.id||'') && document.activeElement.tagName==='INPUT')) krRenderChat(); var u = krNotifUnread(); krToastNew(u); KR_LAST_UNREAD = u.length; }; })();
 

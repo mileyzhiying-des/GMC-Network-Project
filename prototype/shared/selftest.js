@@ -432,8 +432,8 @@
   });
   ST.def('E8','催办',function(){
     var c = ST.newRes('E8'); ST.arrive(c); ST.materials(c, {consult:true}); ST.payConsult(c); var d = new Date(Date.now()-3*3600000); c.consultPaidAt = d.toISOString().slice(0,10)+' '+d.toISOString().slice(11,16);
-    if(newTodoOn()){ ST.ok(!urgeInfo(c), '新规则：待确认面诊时间不再有 30 分钟的催办'); coreConfirmConsultTimes(c, todayStr(), '20:30', D(1)+' 05:00', ST.krBy); c.reportEta = D(-1)+' 05:00'; } /* 新规则：等报告超过预计出报告时间才能催 */
-    ST.ok(!!urgeInfo(c), newTodoOn() ? '等待报告超过预计时间应可催办' : '缴费 3 小时未确认应可催办'); urgeKr(); ST.ok(ST.hasLog(c, /催办 KR 室长/), '缺催办记录'); var hn = HOSPITAL_DATA.H1.notifs || []; ST.ok(hn.some(function(n){ return /催办/.test(n.text) && n.caseId===c.id; }), 'KR 应收到催办通知');
+    ST.ok(!urgeInfo(c), '新规则：待确认面诊时间不再有 30 分钟的催办'); coreConfirmConsultTimes(c, todayStr(), '20:30', D(1)+' 05:00', ST.krBy); c.reportEta = D(-1)+' 05:00';  /* 新规则：等报告超过预计出报告时间才能催 */
+    ST.ok(!!urgeInfo(c), '等待报告超过预计时间应可催办'); urgeKr(); ST.ok(ST.hasLog(c, /催办 KR 室长/), '缺催办记录'); var hn = HOSPITAL_DATA.H1.notifs || []; ST.ok(hn.some(function(n){ return /催办/.test(n.text) && n.caseId===c.id; }), 'KR 应收到催办通知');
   });
   ST.def('E9','未接来电',function(){
     var c = ST.newRes('E9'); ST.arrive(c); ST.materials(c, {consult:true}); ST.payConsult(c); window.ATTACHED_CASE_ID = c.id; simulateMissedCall(); ST.ok(NOTIFS.some(function(n){ return /未接来电/.test(n.text) && n.caseId===c.id; }), '通知里应有未接来电');
@@ -770,7 +770,7 @@
       ST.ok(notifLevel('KR 室长催办')==='action' || notifLevel('请发送诊疗方案')==='action' || true, ''); ST.ok(notifLevel('一般提示文字')==='info', '一般消息应为 info');
       ST.ok(notifLevel('已缴面诊费')==='next', '进入下一阶段应为 next');
       /* 催办：缴费 3 小时未确认 */
-      var d = new Date(Date.now()-3*3600000); c.consultPaidAt = d.toISOString().slice(0,10)+' '+d.toISOString().slice(11,16); if(newTodoOn()){ c.consultStatus = 'awaiting_report'; c.reportOverdue = true; } /* CMD-1013-17：只有等报告超时才能催 */
+      var d = new Date(Date.now()-3*3600000); c.consultPaidAt = d.toISOString().slice(0,10)+' '+d.toISOString().slice(11,16); c.consultStatus = 'awaiting_report'; c.reportOverdue = true;  /* CMD-1013-17：只有等报告超时才能催 */
       ST.ok(!!urgeInfo(c), '应可催办'); ST.open(c); urgeKr(); ST.ok((HOSPITAL_DATA.H1.notifs||[]).some(function(n){ return n.kind==='urge' && n.caseId===c.id; }), 'KR 应收到催办');
       /* 来电：A1 发起 → KM1 拒绝 / 不接 */
       var hid = caseKrHospital(c); window.ATTACHED_CASE_ID = c.id;
@@ -875,7 +875,6 @@
   /* ================= 待办 / 通知调整（CMD-1013-17；关闭开关时检查「和 ed2a41d 一样」）================= */
   ST.shiftTo = function(h, m){ var base = DEMO_SHIFT_MS, n = demoNow(), t = new Date(n); t.setHours(h, m, 0, 0); DEMO_SHIFT_MS = base + (t - n); return function(){ DEMO_SHIFT_MS = base; }; };
   ST.def('TD1','待办生成与自动消失（IN）',function(){
-    if(!newTodoOn()){ ST.ok(!document.getElementById('todo-pane') && !document.getElementById('in-cards'), '开关关闭：不应有待办栏 / IN 卡片'); ST.note('开关关闭：没有待办栏，跳过'); return; }
     var has = function(c, k){ return inTodoItems().some(function(i){ return i.no===c.caseNo && i.kind===k; }); };
     var c = ST.newRes('TD1'); ST.consultToReport(c); ST.ok(has(c,'plan'), '诊疗方案已到应有「联络客人选项目」待办');
     ST.open(c); c.activeCaseTab = 'kr'; var p = PROJECT_LIBRARY.filter(function(x){ return x.origin==='KR' && x.hospitalId==='H1' && x.name==='假体隆鼻'; })[0]; toggleProject(p.id); confirmProjectSelection();
@@ -902,12 +901,10 @@
     var stack = document.getElementById('toast-stack'); if(!ST.ok(!!stack, '没有 toast 容器')) return;
     var fire = function(cat, text){ stack.innerHTML = ''; var n = {id:'ntd'+Math.random(), cat:cat, by:'KM1 室长', level:notifLevel(text), text:text, caseId:null, ts:nowFullDt(), recipients:[ME_NAME], read:{}, link:{kind:'none'}}; if(NOTIF_SEEN===null) NOTIF_SEEN = {}; NOTIFS.unshift(n); toastNewNotifs(); var kids = [].slice.call(stack.children); return {count:kids.length, sticky:kids.some(function(k){ return k.getAttribute('data-sticky'); })}; };
     var msg = fire('预约', '客人取消预约：TD2 测试'), todo = fire('面诊', '诊疗方案已到：TD2 测试'), stay = fire('视频', '未接来电：TD2 测试');
-    if(newTodoOn()){ ST.ok(msg.count===0, '消息不应弹出，实际 '+msg.count); ST.ok(todo.count===1 && !todo.sticky, '新待办应弹一次、不用确认（非停留）'); ST.ok(stay.count===1 && stay.sticky, '未接来电应弹出并停留'); }
-    else { ST.ok(msg.count===1 && !msg.sticky, '开关关闭：一般消息照旧 6 秒自动消失的 toast'); ST.ok(todo.count===1, '开关关闭：待办类照旧弹出'); }
+    ST.ok(msg.count===0, '消息不应弹出，实际 '+msg.count); ST.ok(todo.count===1 && !todo.sticky, '新待办应弹一次、不用确认（非停留）'); ST.ok(stay.count===1 && stay.sticky, '未接来电应弹出并停留'); 
     stack.innerHTML = '';
   });
   ST.def('TD3','默认日视图 + 现在时间线 + IN 四张卡',function(){
-    if(!newTodoOn()){ ST.note('开关关闭：没有现在时间线 / IN 卡片'); setCalMode('week'); var back0 = ST.shiftTo(11, 10); try{ renderCalendar(); ST.ok(!document.querySelector('.todo-nowline'), '开关关闭不应有现在时间线'); } finally { back0(); setCalMode('day'); } return; }
     nav('in-dashboard'); todoRefresh(); var cards = document.getElementById('in-cards'); ST.ok(!!cards && cards.children.length===4, 'IN 应有 4 张卡，实际 '+(cards ? cards.children.length : 0));
     ST.ok(/待我处理/.test(cards.innerText) && /今天来访/.test(cards.innerText) && /等 KR 回复/.test(cards.innerText) && /新消息/.test(cards.innerText), '4 张卡的名字');
     var back = ST.shiftTo(11, 10); try{
@@ -916,7 +913,6 @@
     } finally { back(); }
   });
   ST.def('TD4','催办新门槛：待确认施术时间超过 1 个工作日',function(){
-    if(!newTodoOn()){ ST.note('开关关闭：旧门槛 30 分钟'); return; }
     var c = ST.newRes('TD4'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); var ks = ensureKrScheduleDraft(c), od = caseOpenDates(c); ks.primary = od[0]; submitKrScheduleDate();
     ST.ok(scheduleState(c)==='Pending' && !urgeInfo(c), '刚递交的施术日期不能催');
     var old = new Date(Date.now()-4*86400000).toISOString(); c.logEntries.filter(function(e){ return /递交施术日期/.test(e.action); }).forEach(function(e){ e.dt = old.slice(0,10)+' '+old.slice(11,16); });
@@ -926,7 +922,6 @@
   /* ---- KR 端（在 KM1 分页里跑）：卡片 8→4、待办生成与案件状态一致、弹出分类 ---- */
   ST.def('TDK1','KR 待办 / 四张卡（KM1）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
-    if(!newTodoOn()){ ST.ok(!document.getElementById('todo-pane'), '开关关闭：不应有待办栏'); var g = document.querySelector('#krdash-body div[style*="grid-template-columns"]'); ST.ok(g && g.children.length===8, '开关关闭：KR 应是 8 张卡，实际 '+(g ? g.children.length : 0)); ST.ok(KR_CARDS.filter(function(c){ return !c.n; }).length===8, '原 8 张卡定义不变'); return; }
     krRenderDashboard(); var g2 = document.querySelector('#krdash-body div[style*="grid-template-columns"]'); ST.ok(g2 && g2.children.length===4, '开关打开：KR 应是 4 张卡，实际 '+(g2 ? g2.children.length : 0));
     var tx = g2.innerText; ST.ok(/待我处理/.test(tx) && /今天到院/.test(tx) && /等待报告/.test(tx) && /新消息/.test(tx), '4 张卡的名字：'+tx.replace(/\s+/g,' ').slice(0,80));
     ST.ok(!!document.getElementById('todo-pane') && /待办/.test(document.getElementById('todo-pane').innerText), '应有待办栏');
@@ -950,8 +945,7 @@
     var stack = document.getElementById('toast-stack'); if(!ST.ok(!!stack, '没有 toast 容器')) return; var h = krHData();
     var fire = function(text, kind){ stack.innerHTML = ''; var n = {id:'kn'+Math.random(), ts:nowFullDt(), text:text, clinicId:'C1', caseId:null, to:'coord', director:null, only:null, kind:kind||'case', by:'A1 室长', readBy:[]}; h.notifs.unshift(n); KR_NOTIF_SEEN = KR_NOTIF_SEEN || {}; krToastNew(krNotifUnread()); var kids = [].slice.call(stack.children); return {count:kids.length, sticky:kids.some(function(k){ return k.getAttribute('data-sticky'); })}; };
     var msg = fire('IN 结束案件：自测客人（A000999）原因：客人不做了'), todo = fire('客人已缴面诊费：自测客人（A000999）→ 请确认报告时间', 'consultpaid'), stay = fire('KC1 室长 在「自测」里 @ 了你', 'mention');
-    if(newTodoOn()){ ST.ok(msg.count===0, '消息不弹，实际 '+msg.count); ST.ok(todo.count===1 && !todo.sticky, '新待办弹一次自动收起'); ST.ok(stay.count===1 && stay.sticky, '被 @ 停留'); }
-    else { ST.ok(msg.count===1 && !msg.sticky, '开关关闭：一般消息照旧自动消失'); ST.ok(todo.count===1 && todo.sticky, '开关关闭：进入下一阶段 / 需要处理照旧要手动确认'); }
+    ST.ok(msg.count===0, '消息不弹，实际 '+msg.count); ST.ok(todo.count===1 && !todo.sticky, '新待办弹一次自动收起'); ST.ok(stay.count===1 && stay.sticky, '被 @ 停留'); 
     stack.innerHTML = ''; h.notifs = h.notifs.filter(function(n){ return !/自测/.test(n.text); });
   });
 

@@ -1,6 +1,6 @@
-/* ================= CMD-1013-17 待办 / 通知调整（试行，只加不改 + 开关 newTodoOn()）=================
+/* ================= CMD-1013-17 待办 / 通知调整（10/15 正式采用）=================
    规则：Notification Center 顶部「🧪 2026-10-13 待办 / 通知调整」、IN-DASH-01 / KR-DASH-01 同名节。
-   原则：现有工作台 / 日历 / 通知中心的版面样式一律不动，这里只新增；开关关闭 = 完全是 ed2a41d 的样子（本文件所有入口都先检查 newTodoOn()）。
+   原则：现有工作台 / 日历 / 通知中心的版面样式一律不动，这里只新增。
    内容：① 待办栏（IN / KR 工作台日历右边，可收起，分已超时 / 今天 / 之后，做完由案件状态算出自动消失）
         ② 默认日视图 + 日 / 周视图「现在时间线」（每分钟移动，打开时滚到画面上方约 1/3）
         ③ KR 卡片 8 → 4、IN 加同样 4 张  ④ 弹出提示：待办弹一次自动收起，消息不弹，被 @ / 未接来电停留
@@ -388,14 +388,12 @@ function todoKrNowTick(){
   });
 }
 function todoNowLineHtml(){ /* kr.js 的 krcGridHtml 在今天那一列里调用 */
-  if(!newTodoOn()) return '';
   var m = todoNowMinutes(); if(m < KRC_H0*60 || m >= KRC_H1*60) return '';
   return '<div class="krc-nowline todo-nowline" style="top:'+((m - KRC_H0*60) * KRC_PX / 60)+'px;"><span>'+todoNowLabel()+'</span></div>';
 }
 
 /* ---------------- 刷新 / 入口 ---------------- */
 function todoRefresh(){
-  if(!newTodoOn()) return;
   try{
     var all = todoItems(), p = document.getElementById('todo-pane');
     if(todoIsKr()){ if(p){ p.innerHTML = todoPaneHtml(all); if(newCalOn()) p.style.cssText = 'flex:'+(TODO_UI.collapsed ? '0 0 auto' : '1 1 0')+';min-width:0;'; } return; }
@@ -405,11 +403,10 @@ function todoRefresh(){
 }
 /* renderCalendar() 末尾调用：日历重画后补上待办栏 + 现在时间线 */
 function todoAfterCalendar(){
-  if(!newTodoOn() || todoIsKr()) return;
+  if(todoIsKr()) return;
   try{ todoRefresh(); if(CAL_MODE==='day' && !newCalOn()) todoDayDivider(); else todoPlaceInLine(); }catch(e){ console.error('[待办日历]', e); }
 }
 function todoTick(){
-  if(!newTodoOn()) return;
   try{
     if(todoIsKr()){ todoKrNowTick(); if(document.getElementById('todo-pane') && !document.querySelector('.modal-overlay.open')) todoRefresh(); return; }
     if(CURRENT_PAGE_ID!=='in-dashboard') return;
@@ -419,11 +416,11 @@ function todoTick(){
   }catch(e){}
 }
 setInterval(todoTick, 30000);
-setInterval(function(){ try{ if(newTodoOn() && document.getElementById('todo-pane') && !document.hidden) todoRefresh(); }catch(e){} }, 5000);
+setInterval(function(){ try{ if(document.getElementById('todo-pane') && !document.hidden) todoRefresh(); }catch(e){} }, 5000);
 /* IN 启动：默认打开日视图 */
-function todoInBoot(){ if(!newTodoOn() || todoIsKr()) return; try{ if(typeof setCalMode==='function') setCalMode('day'); }catch(e){ console.error('[默认日视图]', e); } }
+function todoInBoot(){ if(todoIsKr()) return; try{ if(typeof setCalMode==='function') setCalMode('day'); }catch(e){ console.error('[默认日视图]', e); } }
 /* KR：默认日视图（全部院长） */
-(function(){ try{ if(newTodoOn() && typeof KRC!=='undefined'){ KRC.mode = 'day'; KRC.person = 'all'; } }catch(e){} })();
+(function(){ try{ if(typeof KRC!=='undefined'){ KRC.mode = 'day'; KRC.person = 'all'; } }catch(e){} })();
 
 /* ---------------- 转告客人：打开该案件的赴韩施术 tab 即视为已看到 ---------------- */
 (function(){
@@ -431,7 +428,7 @@ function todoInBoot(){ if(!newTodoOn() || todoIsKr()) return; try{ if(typeof set
   var base = renderCaseBody;
   renderCaseBody = function(c){
     base.apply(this, arguments);
-    try{ if(newTodoOn() && !newCalOn() && !todoIsKr() && c && c.activeCaseTab==='kr' && scheduleState(c)==='Confirmed' && c.krSchedule){ var key = c.krSchedule.confirmedDate+' '+c.krSchedule.confirmedTime; if(c.relayTold!==key){ c.relayTold = key; Store.touch(); } } }catch(e){}
+    try{ if(!newCalOn() && !todoIsKr() && c && c.activeCaseTab==='kr' && scheduleState(c)==='Confirmed' && c.krSchedule){ var key = c.krSchedule.confirmedDate+' '+c.krSchedule.confirmedTime; if(c.relayTold!==key){ c.relayTold = key; Store.touch(); } } }catch(e){}
   };
 })();
 
@@ -455,7 +452,6 @@ function todayHeldCount(c){
   return n;
 }
 function todayHeldLineHtml(c){
-  if(!newTodoOn()) return '';
   var n = todayHeldCount(c); if(!n) return '';
   return '<div style="font-size:12px;color:var(--slate2);margin:2px 0 4px;">未完成的 '+n+' 项会转入在韩持有</div>';
 }

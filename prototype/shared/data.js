@@ -2568,24 +2568,11 @@ function reportOverdueNow(c){
 
 /* 催办（CMD-1012-01）：案件在「待 KR 确认时间」且缴费 / 免除后已超过 URGE_CONFIRM_MIN 分钟（规则没定超时标准，先用 30 分钟），
    或「等待报告」且已超过预计出报告时间 → IN 案件页显示［催办］；在韩中 / 在韩后续不显示 */
-var URGE_CONFIRM_MIN = 30;
-function consultPaidAtOf(c){
-  if(c.consultPaidAt) return c.consultPaidAt;
-  var L = (c.logEntries||[]).slice().reverse().find(function(l){ return /完成面诊费支付|免除面诊费/.test(l.action||''); });
-  return L ? L.dt : '';
-}
 function urgeInfo(c){
-  if(newTodoOn() && c && !isEnded(c)){ /* CMD-1013-17：等报告超过预计出报告时间才能催；待确认施术时间超过 1 个工作日才能催（取代 30 分钟的演示值） */
-    if(c.consultRequested && !c.reportReady && c.consultStatus==='awaiting_report' && reportOverdueNow(c)) return {label:'已超过预计出报告时间', why:'等待报告已超过预计时间'};
-    if(c.stage==='travel' && scheduleState(c)==='Pending' && todoWorkdaysSince(todoScheduleSubmittedAt(c)) >= 1) return {label:'待确认施术时间已超过 1 个工作日', why:'待 KR 确认施术时间'};
-    return null;
-  }
-  if(!c || isEnded(c) || !c.consultRequested || c.reportReady) return null;
-  if(c.consultStatus==='paid_waiting_kr'){
-    var t = utcStrParse(consultPaidAtOf(c));
-    if(t && (nowDateObj() - t) >= URGE_CONFIRM_MIN*60000) return {label:'待 KR 确认时间已超过 '+URGE_CONFIRM_MIN+' 分钟', why:'待 KR 确认面诊时间'};
-  }
-  if(c.consultStatus==='awaiting_report' && reportOverdueNow(c)) return {label:'已超过预计出报告时间', why:'等待报告已超过预计时间'};
+  if(!c || isEnded(c)) return null;
+  /* CMD-1013-17：等报告超过预计出报告时间才能催；待确认施术时间超过 1 个工作日才能催 */
+  if(c.consultRequested && !c.reportReady && c.consultStatus==='awaiting_report' && reportOverdueNow(c)) return {label:'已超过预计出报告时间', why:'等待报告已超过预计时间'};
+  if(c.stage==='travel' && scheduleState(c)==='Pending' && todoWorkdaysSince(todoScheduleSubmittedAt(c)) >= 1) return {label:'待确认施术时间已超过 1 个工作日', why:'待 KR 确认施术时间'};
   return null;
 }
 function urgeKr(){

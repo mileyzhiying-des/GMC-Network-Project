@@ -2975,8 +2975,7 @@ function pushNotif(cat, text, opts){
   if(opts.silent) n.silent = true;
   if(NOTIF_SEEN) NOTIF_SEEN[notifKey(n)] = 1; /* 本页自己产生的：下面直接弹，不要再被 toastNewNotifs 重复弹 */
   if(!opts.silent && notifMine(n) && notifyPushOn()){
-    if(newTodoOn()){ var tk = notifTodoKind(n); if(tk!=='msg') showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay' || tk==='confirm', urgent: tk==='stay', onOk: tk==='confirm' ? function(){ notifMarkRead(n); } : null}); } /* CMD-1013-17：消息不弹；新待办弹一次自动收起；被 @ / 未接来电停留 */
-    else showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky:n.level!=='info'});
+    { var tk = notifTodoKind(n); if(tk!=='msg') showToast(NOTIF_ICON[cat]+' '+cat, tzRender(text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay' || tk==='confirm', urgent: tk==='stay', onOk: tk==='confirm' ? function(){ notifMarkRead(n); } : null}); } /* CMD-1013-17：消息不弹；新待办弹一次自动收起；被 @ / 未接来电停留 */
   }
   return n;
 }
@@ -3524,11 +3523,10 @@ function toastNewNotifs(){
   NOTIFS.slice().reverse().forEach(function(n){
     var k = notifKey(n); if(NOTIF_SEEN[k]) return; NOTIF_SEEN[k] = 1;
     if(n.silent || !notifMine(n) || n.read[ME_NAME] || !notifAlive(n) || !notifyPushOn()) return;
-    if(newTodoOn()){ /* CMD-1013-17：被 @ / 未接来电 弹出并停留；新待办弹一次自动收起；消息不弹（只进铃铛 + 新消息卡） */
+    { /* CMD-1013-17：被 @ / 未接来电 弹出并停留；新待办弹一次自动收起；消息不弹（只进铃铛 + 新消息卡） */
       var tk = notifTodoKind(n); if(tk==='msg') return;
       showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky: tk==='stay' || tk==='confirm', urgent: tk==='stay', onOk: tk==='confirm' ? function(){ notifMarkRead(n); } : null}); return;
     }
-    showToast(NOTIF_ICON[n.cat]+' '+n.cat, tzRender(n.text), function(){ openNotif(n.id, 'toast'); }, {sticky:notifLevelOf(n)!=='info'});
   });
 }
 
