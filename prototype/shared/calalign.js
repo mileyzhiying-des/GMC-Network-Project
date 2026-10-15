@@ -41,12 +41,13 @@ function krcApplyRange(){
   if(CAL_OUT.krc.b || b!==null) a = Math.max(0, Math.min(open-120, b!==null ? b : open-120));
   if(CAL_OUT.krc.a || af!==null) z = Math.min(24*60, Math.max(close+120, af!==null ? af : close+120));
   KRC_H0 = Math.floor(a/60); KRC_H1 = Math.min(24, Math.ceil(z/60));
-  KRC_PX = KRC.mode==='day' ? CAL_DAY_PX : 112; /* CMD-1015-01·8：格子高度同 IN（日视图 44px/小时，周视图 56px/半小时） */
+  KRC_PX = KRC.mode==='day' ? calDayPx(KRC_H1-KRC_H0) : 112; /* CMD-1015-01·8：格子高度同 IN（日视图 44px/小时，周视图 56px/半小时） */
 }
 var KRC_NEED = {b:false, a:false};
 
 /* ---------------- IN 日视图：用 KR 日视图的画法（时间格 + 按时长画块；固定栏保留 IN 现在的设计） ---------------- */
-var CAL_DAY_PX = 44; /* 一小时 44px */
+var CAL_DAY_PX = 44; /* 一小时 44px（最小值；日视图会把显示的时段平均分配、撑满整个日历卡片，见 calDayPx） */
+function calDayPx(hours){ var avail = Math.max(420, window.innerHeight - 300) - 100; return Math.max(44, Math.floor(avail / Math.max(1, hours))); } /* CMD-1015-02·3：日视图撑满卡片，放不下才在卡片内滚动 */
 function calEventMinutes(e){
   if(e.kind==='placeholder') return 30;
   if(e.kind==='travel'){ var c = e.caseId ? calCaseById(e.caseId) : null; try{ return c ? Math.max(30, surgeryMinutes(c)) : 120; }catch(err){ return 120; } }
@@ -58,7 +59,7 @@ function calOffHoursAdd(ds, hr){ if(confirm('营业时间外，确定预约吗�
 function buildDayGridNew(){
   var box = document.getElementById('day-detail'); if(!box) return;
   var d = new Date(TODAY_DATE); d.setDate(d.getDate()+DAY_OFFSET);
-  var ds = dateStr(d), closedDay = isRescheduleDateDisabled(d), hrs = calHours(), H0 = timeToMin(hrs[0]), H1 = timeToMin(hrs[hrs.length-1]) + SLOT_MIN, PX = CAL_DAY_PX;
+  var ds = dateStr(d), closedDay = isRescheduleDateDisabled(d), hrs = calHours(), H0 = timeToMin(hrs[0]), H1 = timeToMin(hrs[hrs.length-1]) + SLOT_MIN, PX = (CAL_DAY_PX = calDayPx((H1-H0)/60));
   var evs = calendarEvents().filter(function(e){ return e.date===ds && !calEvHidden(e); });
   var nowD = demoNow(), nowMin = nowD.getHours()*60 + nowD.getMinutes(), isToday = ds===dateStr(nowD);
   /* CMD-1014-12：同一时段（30 分钟）事件超过 3 个时，和周视图同一规则：只画前 3 个 + "+N 更多"（点开看全部） */

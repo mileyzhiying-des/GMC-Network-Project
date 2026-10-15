@@ -27,7 +27,7 @@ function openAdminPage(key, isRefresh){
   var el = document.getElementById('in-admin'); if(!el) return;
   ADMIN_KEY = key;
   el.dataset.page = 'admin-'+key;
-  var tSlot = el.querySelector('.topbar-slot'); if(tSlot) tSlot.innerHTML = buildTopbar(adminPageLabel(p));
+  HEAD_ADMIN_TITLE = adminPageLabel(p);
   var body = document.getElementById('admin-body');
   if(ADMIN_RENDER[key]) ADMIN_RENDER[key](body, isRefresh);
   else body.innerHTML = '<div class="card" style="padding:28px;color:var(--slate2);line-height:1.8;">「'+adminPageLabel(p)+'」页面在后续部分实现。</div>';
@@ -89,6 +89,7 @@ function showPage(id){
   CURRENT_PAGE_ID = id;
   if(el.classList.contains('in-shell')) highlightSidebar(el.dataset.page);
   window.scrollTo(0,0);
+  try{ headMount(); }catch(e){ console.error('[页头]', e); }
 }
 
 
@@ -143,10 +144,7 @@ function buildTopRightIcons(){
     '<span class="avatar" style="cursor:pointer;" onclick="toggleAvatarMenu(event)" title="'+ME_NAME+'">'+((ME_NAME||'?').charAt(0).toUpperCase())+'</span></div>';
 }
 
-function buildTopbar(title){
-  if(isKrAccount() && typeof buildKrTopbar==='function') return buildKrTopbar(title);
-  return '<div class="topbar"><span class="title">'+title+'</span>'+buildTopRightIcons()+'</div>';
-}
+function buildTopbar(title){ return ''; } /* CMD-1015-02 五：拿掉最上面的白色顶栏；对话 / 通知 / 头像移到各页第一行最右（headMount） */
 
 /* 页面打开方式（2026-10-02·三）：在案件页里打开案例库 / 项目库 → 新标签页（?page=...）；不在案件里 → 页内跳转。
    这两个页面的入口只有侧边栏的［案例库］［项目库］两项（每个 in-shell 页面共用同一个侧边栏） */
@@ -3771,4 +3769,46 @@ function opGuard(ev){
       document.body.appendChild(bar);
     }).catch(function(){});
   }, 5000);
+})();
+
+
+/* ================= CMD-1015-02 五：拿掉顶栏，图标移到各页第一行最右 =================
+   做法：每页内容区（.content）的「第一行」= 页面自己的第一行（工作台 = 问候行、案件详情 = 客人名那一行…）；没有自己标题的页面补一行标题（.page-title-row）。
+   对话 / 通知 / 头像（.head-actions）放进第一行最右边；返回链接（IN 的案件详情 / 客户详情 / 院长详情 / 上次项目史）放进第一行最左。
+   页面重画（KR 页面整块 innerHTML 重写）后由 MutationObserver 重新挂上（幂等）。 */
+var HEAD_ADMIN_TITLE = '';
+var HEAD_TITLES = {'in-clients':'客户管理', 'in-cases':'案件列表', 'in-library':'案例库', 'in-projectlibrary':'项目库', 'in-notifications':'通知中心', 'in-report':'诊疗方案', 'in-lastcase':'上次项目史', 'in-director':'院长详情',
+  'kr-cases':'案件列表', 'kr-clients':'客人管理', 'kr-notifications':'通知中心'};
+var HEAD_OWN = {'in-dashboard':'.dash-top', 'in-casedetail':'first', 'in-clientdetail':'first', 'in-resvhistory':'first', 'kr-dashboard':'.dash-top', 'kr-casedetail':'first', 'kr-clientdetail':'first', 'kr-subcase':'first'};
+var HEAD_BACK = {'in-casedetail':1, 'in-clientdetail':1, 'in-director':1, 'in-lastcase':1};
+function headIconsHtml(){ return (isKrAccount() && typeof krHeadIconsHtml==='function') ? krHeadIconsHtml() : buildTopRightIcons(); }
+function headMount(){
+  var pg = [].slice.call(document.querySelectorAll('.page')).filter(function(p){ return p.style.display!=='none' && p.querySelector('.content'); })[0]; if(!pg) return;
+  var content = pg.querySelector('.content'), id = pg.id, row = null;
+  if(!content || !currentAccount()) return;
+  var own = HEAD_OWN[id], title = HEAD_TITLES[id] || (id==='in-admin' ? HEAD_ADMIN_TITLE : '') || (/^kr-/.test(id) ? '' : '');
+  if(id==='in-admin' || (content.id==='admin-body')) title = HEAD_ADMIN_TITLE || title;
+  if(own){ row = own==='first' ? content.firstElementChild : content.querySelector(own); }
+  else {
+    row = content.querySelector(':scope > .page-title-row');
+    if(!row && title){ row = document.createElement('div'); row.className = 'page-title-row'; row.innerHTML = '<h1 class="page-title">'+title+'</h1>'; content.insertBefore(row, content.firstChild); }
+    else if(row && title){ var h = row.querySelector('.page-title'); if(h && h.textContent!==title) h.textContent = title; }
+  }
+  if(!row) return;
+  if(!row.querySelector(':scope > .head-actions')){
+    var kids = [].slice.call(row.children).filter(function(k){ return !k.classList.contains('head-back'); });
+    row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.justifyContent = 'flex-start'; row.style.gap = row.style.gap || '16px';
+    if(kids.length > (own ? 1 : 1) || (own && kids.length>=2)){ var last = kids[kids.length-1]; last.style.marginLeft = 'auto'; }
+    var tmp = document.createElement('div'); tmp.innerHTML = headIconsHtml(); var act = tmp.firstElementChild; if(act){ act.classList.add('head-actions'); act.style.marginLeft = (kids.length>1 || (own && kids.length>=2)) ? '14px' : 'auto'; if(kids.length<=1) act.style.marginLeft = 'auto'; row.appendChild(act); }
+  }
+  if(HEAD_BACK[id] && !row.querySelector(':scope > .head-back')){ var a = document.createElement('a'); a.href = '#'; a.className = 'head-back'; a.textContent = '← 返回'; a.style.cssText = 'font-size:13px;color:var(--slate);white-space:nowrap;'; a.onclick = function(ev){ ev.preventDefault(); goBack(); }; row.insertBefore(a, row.firstChild); }
+  try{ if(typeof updateChatBadge==='function' && !isKrAccount()){ updateChatBadge(); updateBell(); } if(isKrAccount() && typeof krUpdateBadges==='function') krUpdateBadges(); }catch(e){}
+}
+(function(){
+  var pend = false, go = function(){ if(pend) return; pend = true; requestAnimationFrame(function(){ pend = false; try{ headMount(); }catch(e){ console.error('[页头]', e); } }); };
+  var start = function(){
+    document.querySelectorAll('.content').forEach(function(c){ try{ new MutationObserver(go).observe(c, {childList:true}); }catch(e){} });
+    setTimeout(go, 50); setTimeout(go, 400);
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

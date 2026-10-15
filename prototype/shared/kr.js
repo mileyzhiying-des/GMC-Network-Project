@@ -93,13 +93,14 @@ function buildKrSidebar(activePage){
   var toggle = '<span class="collapse-toggle" onclick="toggleSidebar()" title="'+(SIDEBAR_COLLAPSED?'展开':'收起')+'">'+(SIDEBAR_COLLAPSED?'»':'«')+'</span>';
   return '<div class="sidebar'+(SIDEBAR_COLLAPSED?' collapsed':'')+'">'+toggle+brand+'<nav>'+nav+'</nav>'+(SIDEBAR_COLLAPSED?'':'<div class="sidebar-foot">GMC Network · 韩国医院端</div>')+'</div>';
 }
-function buildKrTopbar(title){
-  var a = currentAccount(), hasWork = canDo('krview') || canDo('krviewOwn');
-  return '<div class="topbar"><span class="title">'+t(title)+'</span><div class="actions">'+
+function krHeadIconsHtml(){
+  var hasWork = canDo('krview') || canDo('krviewOwn');
+  return '<div class="actions">'+
     (hasWork ? '<button class="icon-btn" onclick="krOpenDrawer()" aria-label="对话">💬<span class="badge kr-chat-badge" style="display:none;">0</span></button>'+
       '<button class="icon-btn" onclick="krToggleBell(event)" aria-label="通知">🔔<span class="badge kr-bell-badge" style="display:none;">0</span></button>' : '')+
-    '<span class="avatar" style="cursor:pointer;" onclick="toggleAvatarMenu(event)" title="'+(ME_NAME||'')+'">'+((ME_NAME||'?').charAt(0).toUpperCase())+'</span></div></div>';
+    '<span class="avatar" style="cursor:pointer;" onclick="toggleAvatarMenu(event)" title="'+(ME_NAME||'')+'">'+((ME_NAME||'?').charAt(0).toUpperCase())+'</span></div>';
 }
+function buildKrTopbar(title){ return ''; } /* CMD-1015-02：顶栏拿掉 */
 
 var KR_PAGE_TITLES = {'kr-dashboard':'工作台', 'kr-cases':'案件列表', 'kr-casedetail':'案件详情', 'kr-clients':'客人管理', 'kr-clientdetail':'客人详情', 'kr-subcase':'子案件', 'kr-notifications':'通知中心'};
 function krRenderPage(id){
@@ -292,7 +293,7 @@ function krCardHtml(card, rows){
   return '<div class="card" onclick="krGoCards(\''+card.key+'\')" title="'+krEsc(card.tip)+'" style="position:relative;padding:14px 16px;cursor:pointer;min-width:0;'+(warn?'border-color:#E8A8A0;':'')+'">'+(dot ? '<span title="有新进来的项目" style="position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:#E5484D;"></span>' : '')+
     '<div style="font-size:12px;color:var(--slate2);">'+t(card.label)+'</div>'+
     '<div style="font-size:28px;font-weight:700;margin:4px 0;color:'+(warn?'#B2453A':'var(--navy)')+';">'+hit.length+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);line-height:1.6;">'+sub+'</div></div>';
+    '<div style="font-size:11px;color:var(--muted);line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+krEsc(krClinics().map(function(cl){ return cl.name+' '+(per[cl.name]||0); }).join('  '))+'">'+sub+'</div></div>'; /* CMD-1015-02：和 IN 同高（一行，放不下省略） */
 }
 function krArrivalsHtml(rows){
   var list = rows.filter(KR_CARDS[4].test).sort(function(a,b){ return (a.c.krSchedule.confirmedTime||'').localeCompare(b.c.krSchedule.confirmedTime||''); });
@@ -306,9 +307,8 @@ function krArrivalsHtml(rows){
 function krOpenCase(clinicId, id){ if(typeof krShowCase==='function') krShowCase(clinicId, id); } /* 案件详情骨架在第五部分 */
 
 function krOffBar(hid){
-  var offs = krOffRows(hid, krToday());
-  return '<div class="card" style="padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;"><b>今日 OFF</b>'+
-    (offs.length ? offs.map(function(o){ return '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);">'+krEsc(o.who)+(o.note?' · '+krEsc(o.note):'')+'</span>'; }).join('') : '<span style="color:var(--muted);">没有人 OFF</span>')+'</div>';
+  var offs = krOffRows(hid, krToday()); if(!offs.length) return ''; /* 同 IN：没有人 OFF 就整行不显示；一行文字，不是卡片 */
+  return '<div style="font-size:13px;margin-top:-8px;"><b>今日 OFF：</b>'+offs.map(function(o){ return '<span style="margin-right:16px;"><span style="color:var(--muted);">'+(o.kind==='director' ? 'KR院长' : 'KR室长')+'</span> <b style="color:#C1454A;">'+krEsc(o.who)+'</b>'+(o.note?' <span style="color:var(--muted);">'+krEsc(o.note)+'</span>':'')+'</span>'; }).join('')+'</div>';
 }
 
 function krGreeting(){ var hr = nowDateObj().getHours(); return (hr < 12 ? '早上好' : hr < 18 ? '下午好' : '晚上好')+'，'+(ME_NAME||''); }
@@ -316,7 +316,8 @@ function krScrollCal(){ var el = document.getElementById('kr-cal'); if(el) el.sc
 function krRenderDashboard(){
   var el = document.getElementById('krdash-body'); if(!el) return;
   var hid = krHospitalIdOfMe(), h = krHData(), rows = krAllCases();
-  var head = '<div style="font-size:18px;font-weight:700;">'+krEsc(krGreeting())+' <span style="font-size:13px;font-weight:400;color:var(--muted);">'+krEsc(krHospitalName())+' · '+krToday()+'</span></div>';
+  var td0 = new Date(krToday()+'T00:00:00'); /* CMD-1015-02：问候行 + 右上日期照 IN 的排法（.dash-top / .dash-greet h1 / .dash-meta .date） */
+  var head = '<div class="dash-top"><div class="dash-greet"><h1>'+krEsc(krGreeting())+'</h1></div><div class="dash-meta"><div class="date">'+td0.getFullYear()+'年'+(td0.getMonth()+1)+'月'+td0.getDate()+'日（周'+krcDow(krToday())+'）</div><div class="weather">'+krEsc(krHospitalName())+'</div></div></div>';
   if(krIsDirector()){ el.innerHTML = head + krOffBar(hid) + (newCalOn() ? '' : krDirectorBlocks(rows)) + (newTodoOn() ? todoKrCalWrap(krCalendarHtml()) : krCalendarHtml()); return; }
   var banner = ''; /* CMD-1014-18 三·6：拿掉「确认今日院长日程」黄色横幅 */
   var cards = KR_CARDS.filter(function(c){ return !c.n; }).sort(function(a0,b0){ return (a0.ord||50)-(b0.ord||50); });
@@ -2069,16 +2070,17 @@ function krCalendarHtml(){
   var a = krcAnchor(), ev = krcEvents(), dirs = krcDirectors(), inp = 'padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;';
   var days = KRC.mode==='week' ? [0,1,2,3,4,5,6].map(function(i){ return krcAdd(a, i); }) : [a]; /* 周视图：今天在第一栏 */
   var title = KRC.mode==='month' ? (a.slice(0,4)+' 年 '+parseInt(a.slice(5,7),10)+' 月'+(relMonthLabel(a.slice(0,7), krToday().slice(0,7)) ? '（'+relMonthLabel(a.slice(0,7), krToday().slice(0,7))+'）' : '')) : (KRC.mode==='week' ? days[0].slice(5)+' ～ '+days[6].slice(5)+(relWeekLabel(days[0], krToday()) ? '（'+relWeekLabel(days[0], krToday())+'）' : '') : a+' 周'+krcDow(a)+(relDayLabel(relDayDiff(a, krToday())) ? '（'+relDayLabel(relDayDiff(a, krToday()))+'）' : ''));
-  var confirmBar = ''; /* CMD-1014-18 三·6：拿掉［确认今日院长日程］按钮和「已由 xx 确认」文字 */
-  var tabs = '<div class="cal-switch">'+['day','week','month'].map(function(m){ return '<span class="'+(KRC.mode===m?'active':'')+'" onclick="krcSet(\'mode\',\''+m+'\')">'+{day:'日',week:'周',month:'月'}[m]+'</span>'; }).join('')+'</div>'; /* CMD-1015-01：和 IN 一样的分段按钮 */
-  /* CMD-1015-01：第一层平铺 ［医院］［KD1 院长］［KO1 代表院长］… 并列，点一下切换；院长多时可横向滚动 */
+  var tabs = '<div class="cal-switch">'+['month','week','day'].map(function(m){ return '<span class="'+(KRC.mode===m?'active':'')+'" onclick="krcSet(\'mode\',\''+m+'\')">'+{day:'日',week:'周',month:'月'}[m]+'</span>'; }).join('')+'</div>'; /* CMD-1015-02：照 IN 的排法，顺序 月｜周｜日 */
   var layerSpan = function(v, txt, on){ return '<span class="'+(on?'active':'')+'" style="white-space:nowrap;" onclick="krcPick(\''+v+'\')">'+krEsc(txt)+'</span>'; };
+  var me0 = currentAccount(), viewSel = (me0 && me0.role==='kr_owner') ? '<select onchange="krcSetViewAll(this.value)" class="cal-nav-btn" style="padding:6px 9px;"><option value="me"'+(krcViewAll()?'':' selected')+'>看自己</option><option value="all"'+(krcViewAll()?' selected':'')+'>全部院长（只看）</option></select>' : '';
   var sel = (krcIsDirector() && !(newCalOn() && krcViewAll())) ? '' : '<div class="cal-switch" style="max-width:100%;overflow-x:auto;">'+layerSpan('__H','医院',KRC.layer!=='director')+dirs.map(function(n){ return layerSpan(n, n, KRC.layer==='director' && krcPersonName()===n); }).join('')+'</div>';
-  return '<div id="kr-cal" style="display:flex;flex-direction:column;gap:10px;"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span style="font-size:15px;font-weight:700;">日历</span><span style="font-size:11px;color:var(--muted);">韩国时间 · 只显示从 IN 转来的平台案件</span><span style="flex:1;"></span>'+confirmBar+'</div>'+
-    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+tabs+'<button class="btn-ghost" onclick="krcShift(-1)">‹</button><b style="font-size:13px;'+(KRC.mode==='month' ? 'cursor:pointer;" onclick="krcMonthPicker()" title="选择年月' : '')+'">'+title+'</b><button class="btn-ghost" onclick="krcShift(1)">›</button><button class="btn-ghost" onclick="krcToday()">今天</button>'+sel+
-    '<span style="font-size:11px;color:var(--muted);">图例：<span style="background:#F3DFD3;color:#8A4A2A;padding:0 5px;border-radius:3px;">到院施术</span> <span style="background:#E4E2DC;color:#777;padding:0 5px;border-radius:3px;">不可预约</span> <span style="background:#EDEAE2;color:var(--slate2);padding:0 5px;border-radius:3px;">OFF（固定栏）</span></span></div>'+
-    (KRC.pop ? krcPopHtml() : '')+(KRC.edit ? krcEditHtml() : '')+(KRC.mode==='month' ? krcMonthHtml(ev) : '<div class="krc-outwrap" style="height:calc(100vh - 330px);min-height:420px;overflow:auto;border-bottom:1px solid var(--line);">'+calOutBar('krc','b', KRC_NEED.b)+krcGridHtml(days, ev)+calOutBar('krc','a', KRC_NEED.a)+'</div>')+
-    (KRC.mode!=='month' ? '<div style="font-size:11px;color:var(--muted);">点空白格 → 加「不可预约」或标 OFF；点施术 / 子项 → 打开案件；点 OFF 标签可删除。</div>' : '')+'</div>';
+  var dot = function(c, t){ return '<span><span class="dotmark" style="background:'+c+';"></span>'+t+'</span>'; };
+  var legend = '<div class="cal-legend">'+dot('#8A4A2A','到院施术')+dot('#2F4F86','面诊')+dot('#2F6B4A','术后到店')+dot('#9A948B','不可预约')+dot('#C9C3B8','OFF（固定栏）')+'</div>';
+  var nav = '<div class="cal-nav"><button class="cal-nav-btn" onclick="krcShift(-1)">‹</button><b class="cal-day-title" style="font-size:13px;white-space:nowrap;'+(KRC.mode==='month' ? 'cursor:pointer;" onclick="krcMonthPicker()" title="选择年月' : '')+'">'+title+'</b><button class="cal-nav-btn" onclick="krcShift(1)">›</button><button class="cal-nav-btn cal-nav-today" onclick="krcToday()">今天</button></div>';
+  var memoBtn = newCalOn() ? '<button class="cal-nav-btn" onclick="krfxOpen()" title="新增备忘 / OFF">＋ memo</button>' : '';
+  /* CMD-1015-02：拿掉卡片标题「日历 · 韩国时间…」和底部说明；工具列 左 = 图例｜中 = 第一层｜右 = 月周日 → memo → ‹ 日期 › 今天（同 IN） */
+  return '<div id="kr-cal" class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;"><div class="cal-toolbar">'+legend+sel+viewSel+'<div style="display:flex;align-items:center;gap:14px;">'+tabs+memoBtn+nav+'</div></div>'+
+    (KRC.pop ? krcPopHtml() : '')+(KRC.edit ? krcEditHtml() : '')+(KRC.mode==='month' ? krcMonthHtml(ev) : '<div class="krc-outwrap" style="height:calc(100vh - 300px);min-height:420px;overflow:auto;border-bottom:1px solid var(--border2);">'+calOutBar('krc','b', KRC_NEED.b)+krcGridHtml(days, ev)+calOutBar('krc','a', KRC_NEED.a)+'</div>')+'</div>';
 }
 
 /* ---------- 三、KR 院长管理（KR-DOC-01）：院长名单 ≠ 院长账号；IN 选院长、诊疗方案署名、案例库、对话都读这份名单 ---------- */

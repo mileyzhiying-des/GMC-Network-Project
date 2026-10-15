@@ -379,3 +379,7 @@ body.kr-recwin #kr-rec-overlay .modal-box, body.kr-recwin #kr-pcb-overlay .modal
 .dayblk .event-chip{height:100%;margin:0;box-sizing:border-box;}
 
 .wk-outbar{grid-column:1/-1;text-align:center;font-size:11px;color:var(--muted);padding:3px 0;cursor:pointer;background:var(--neutral-25);} .wk-outbar:hover{color:var(--navy);} /* CMD-1015-01：营业前 / 后默认收起，点开显示 */
+
+.page-title-row{display:flex;align-items:center;gap:16px;} .page-title{margin:0;font-size:22px;font-weight:700;} /* CMD-1015-02：没有自己标题的页面补的第一行标题（同工作台问候行字号） */
+.head-actions{flex-shrink:0;display:flex;align-items:center;gap:18px;}
+.cal-nav-btn{white-space:nowrap;}
