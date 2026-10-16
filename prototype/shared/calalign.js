@@ -358,7 +358,7 @@ function krCapSlots(hid, ds){
   }
   return out;
 }
-function krCapUsed(slots, blocks){ var used = 0; blocks.forEach(function(b){ var s = timeToMin(b.time), e = timeToMin(b.end || minToTime(s+30)); slots.forEach(function(m){ if(s < m+30 && e > m) used++; }); }); return used; }
+function krCapUsed(slots, blocks){ var used = 0; blocks.forEach(function(b){ if(b && ((b.b && b.b.noCap) || b.noCap)) return; var s = timeToMin(b.time), e = timeToMin(b.end || minToTime(s+30)); slots.forEach(function(m){ if(s < m+30 && e > m) used++; }); }); return used; }
 function capHtml(used, cap, off){
   if(off) return '<br><span style="font-size:9px;font-weight:700;color:#B5483E;">OFF</span>';
   if(!cap || used < cap) return ''; /* CMD-1015-01：只在约满时写「约满」，不写已约数字 */

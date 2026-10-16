@@ -4035,6 +4035,7 @@ function itemDurMin(c, name){ var h = HOSPITAL_DATA[caseKrHospital(c)] || {proje
 function surgeryMinutes(c, extra, drop){
   var tot = 0;
   krActiveItems(c).forEach(function(it){ if(krIsMgmtItemC(it) || it.deferUse || (drop||[]).indexOf(it.name)>-1) return; tot += ((it.krAddOn || it.preBalanceAdd) && typeof it.extendMin==='number') ? it.extendMin : itemDurMin(c, it.name); }); /* 在韩增加的施术项目：延长多久由 KR 室长选（CMD-1015-24），不按项目时长自动相加 */
+  krActiveItems(c).forEach(function(it){ if(!krIsMgmtItemC(it) && !it.deferUse && !it.krAddOn && !it.preBalanceAdd && typeof it.extraMin==='number' && (drop||[]).indexOf(it.name)<0) tot += it.extraMin; }); /* 本次使用时给计划内施术项目选的延长（CMD-1015-30） */
   (extra||[]).forEach(function(n){ tot += itemDurMin(c, n); });
   return tot || 60;
 }
@@ -6652,17 +6653,35 @@ function coreUseTarget(c){
 }
 function mgmtUnitsOf(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && krIsMgmtItemC(it) && !it.cancelled && !it.swapped; }); }
 /* 管理项目［本次使用］：加进客人已到店的那一次案件；主案件 = 直接扣 1 次，子案件 = 加一行「使用」（逐行完成时扣）；施术项目同理加一行 */
-function coreUnitUseNow(c, name, by){
+/* 项目卡里一个项目和「今日案件」的关系（CMD-1015-30）：null = 没选进今日案件（可［本次使用］）；{type:'item'|'row', key, done} = 已在今日案件里（未完成可［本次取消］） */
+function coreTodayState(c, it){
+  var tg = coreUseTarget(c); if(!tg || !it) return null;
+  if(tg.key==='main'){
+    if(!c.krBalancePaid || c.krProcedureDone) return null;
+    if(krIsMgmtItemC(it)){ if(!it.heldOver || it.holdDone) return null; return (!c.todayPicked || (c.todayPickMgmt||[]).indexOf(it.name)>-1) ? {type:'item', key:it.name, done:false} : null; }
+    if(it.done) return {type:'item', key:it.name, done:true};
+    if(it.deferUse) return null;
+    if(it.krAddOn || it.preBalanceAdd){ return (c.subItems||[]).some(function(s){ return s.kind==='增加项目' && !s.visitKey && s.projectName===it.name && !s.skipped; }) ? {type:'item', key:it.name, done:false} : null; }
+    return {type:'item', key:it.name, done:false};
+  }
+  var row = (c.subItems||[]).filter(function(s){ return !s.skipped && ((s.holdUseOf===it.name && subCaseKey(s)===tg.key) || (s.kind==='增加项目' && s.visitKey===tg.key && s.projectName===it.name)); })[0];
+  return row ? {type:'row', key:row.id, done:!!row.done} : null;
+}
+function coreUnitUseNow(c, name, by, opt){
   var tg = coreUseTarget(c); if(!tg) return {ok:false, err:'没有客人已到店的案件'};
   var it = (c.procedureItems||[]).filter(function(x){ return x.name===name && x.origin==='KR' && !x.cancelled && !x.swapped; })[0]; if(!it) return {ok:false, err:'找不到项目'};
   if(it.pendingPay) return {ok:false, err:'待付款，付款后才能使用'};
   if(krIsMgmtItemC(it)){
     if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return {ok:false, err:'没有可用次数'};
-    if(tg.key==='main') return {ok:coreMgmtUse(c, name, by), key:'main'};
+    if(tg.key==='main'){ var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return x.name; }); c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==name; }).concat([name]); c.todayPicked = true; logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
     var rep = coreVisitRows(c, tg.key)[0], s = coreSubAdd(c, {kind:'术后管理记录', date:rep.date, time:rep.time||'', content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by); if(!s) return {ok:false};
     s.holdUseOf = name; s.arrived = true; s.simDay = true; s.src = 'use'; subCaseNos(c); logCaseEvent(c, by, '本次使用：'+name+' 加进 '+(tg.no||tg.key)); return {ok:true, key:tg.key};
   }
   if(it.done) return {ok:false, err:'已完成'};
+  if(tg.key==='main'){ /* 主案件：没选进今日的施术项目加回今日案件（计划内 = 取消 deferUse；在韩增加 = 补回今日行），延长多久由 KR 选 */
+    var ex = opt && typeof opt.ext==='number' ? opt.ext : undefined; it.deferUse = false; if(it.krAddOn || it.preBalanceAdd){ if(ex!==undefined) it.extendMin = ex; if(!(c.subItems||[]).some(function(s){ return s.kind==='增加项目' && !s.visitKey && s.projectName===name && !s.skipped; })){ if(!coreSubAdd(c, {kind:'增加项目', date:todayStr(), time:'', content:name, place:'KR', projectName:name, silent:true}, by)) return {ok:false}; } } else if(ex!==undefined) it.extraMin = ex;
+    syncSurgerySub(c); syncSurgeryBlock(c); logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+(ex ? '（延长 '+ex+' 分钟）' : '')); return {ok:true, key:'main'};
+  }
   var rep2 = tg.key==='main' ? null : coreVisitRows(c, tg.key)[0], s2 = coreSubAdd(c, {kind:'增加项目', date:rep2 ? rep2.date : todayStr(), time:rep2 ? (rep2.time||'') : '', content:name, place:'KR', projectName:name, silent:true}, by); if(!s2) return {ok:false};
   if(tg.key!=='main'){ s2.visitKey = tg.key; s2.arrived = true; } logCaseEvent(c, by, '本次使用：'+name+' 加进 '+(tg.no||tg.key)); return {ok:true, key:tg.key};
 }
