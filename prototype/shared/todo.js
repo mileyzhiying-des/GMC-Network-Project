@@ -93,7 +93,7 @@ function inTodoItems(){
   /* CMD-1014-16：IN 在 KR 日程占位的预约，KR 改时间 / 无法安排 → 重选时间 */
   try{ krbMine().filter(function(b){ return b.status==='reselect'; }).forEach(function(b){ out.push(todoMk('rebook', '重选时间：'+b.clientName+'（'+(b.reselectKind==='change' ? 'KR 建议改时间' : 'KR 无法安排')+'：'+(b.reselectReason||'—')+'）', null, b.date+' '+b.time, true, function(){ krBookReselectOpen(b.id); }, {name:b.clientName, no:''})); }); }catch(e){}
   /* 术后管理过了建议日期（CMD-1015-17）：留在原案件里，IN 待办「联络客人」，点了去案件的术后管理区块（IN-11） */
-  try{ postcareDueList().forEach(function(x){ out.push(todoMk('pcdue', '联络客人：术后管理已过建议日期 '+x.late+' 天（'+x.s.content+'）', x.c, x.s.date, true, todoInGo(x.c, 'kr'))); }); }catch(e){}
+  try{ postcareDueList().forEach(function(x){ out.push(todoMk('pcdue', '联络客人：术后管理已过建议日期 '+x.late+' 天（'+x.s.content+'）', x.c, x.s.date, true, function(){ openCaseDetail(x.c.id); goPostcareBlock(x.c.id); })); }); }catch(e){}
   /* 预约占位快过期（剩 5 分钟内） */
   (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var left = p.expiresAt - Date.now(); if(left>0 && left<=5*60000) out.push(todoMk('ph', '预约占位快过期：'+p.phone+' '+p.time, null, p.date+' '+p.time, false, function(){ todoGoPlaceholder(p); }, {name:p.phone})); /* IN-12：去工作台，日历上看那个占位 */ });
   /* 被 @ / 未接来电（读掉才消失） */

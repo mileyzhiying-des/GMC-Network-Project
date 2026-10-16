@@ -1389,4 +1389,45 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(c.procedureItems[0].heldOver && c.procedureItems[0].holdUsed===0 && c.subItems.length===0, '管理项目转在韩持有，进程行去掉'); ST.ok(!!c.surgeryDoneAt, '补上施术完成日'); ST.ok(notes.length===1, '迁移记一条备注');
   });
 
+  /* ================= CMD-1015-18 补齐 + KR「项目」tab 重组 ================= */
+  function pcCase(base){ var c = toConfirmed(base); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var rows = [], k0 = 0; pcUniqueEntries(c).forEach(function(e){ var x = e.x; for(var k = 0; k < (x.times||1); k++){ var where = (x.place==='either') ? 'IN' : 'KR'; rows.push({where:where, item:e.it.name, pcIdx:e.i, date:D(14+k0++), time:'10:00', mgmt:x.mgmt, name:x.name, innName:x.innName, day:null}); } }); corePcBooking(c, rows, ST.krBy); return c; }
+  ST.def('R18a','IN：术后管理来访默认接续到术后管理阶段的案件（突出）；通知 / 待办点进来滚到术后管理区块；术后管理不再发「转回印尼持有」（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = pcCase('R18a1'); ST.ok(ST.krCloseToday(c) && c.stage==='postcare', '先让案件进入术后管理阶段');
+    var c2 = ST.newRes('R18a2', {phone:clientPhoneOf(c.name)}); c2.visitPurpose = '术后管理'; var h = resumeBannerHtml(c2);
+    ST.ok(/已默认接续到术后管理阶段的案件/.test(h) && /✓ 默认/.test(h) && h.indexOf(c.caseNo)>-1 && /继续新案件/.test(h), '来访目的术后管理 + 有术后管理阶段的案件 → 默认接续并突出，仍可继续新案件');
+    c2.visitPurpose = '皮肤商谈'; ST.ok(!/✓ 默认/.test(resumeBannerHtml(c2)), '其他来访目的不突出');
+    ST.ok(typeof goPostcareBlock==='function' && /in-postcare-card/.test(inPostcareCardHtml(c)), '术后管理区块有锚点，goPostcareBlock 能滚过去');
+    ST.ok(!/转回印尼持有|转成持有/.test(JSON.stringify(c.logEntries||[])+JSON.stringify(NOTIFS.filter(function(n){ return n.caseId===c.id; }).map(function(n){ return n.text; }))), '没有发过「术后管理转回印尼持有」');
+    ST.ok(!NOTIFS.some(function(n){ return n.caseId===c.id && /案件结束|已结案/.test(n.text||''); }), 'IN-22：术后管理还没做完，不发「结案」通知');
+    ST.finishCare(c); ST.ok(isEnded(c) && NOTIFS.some(function(n){ return n.caseId===c.id && /已结案/.test(n.text||''); }), 'IN-22：术后管理全部做完才发「结案」通知');
+  });
+  ST.def('R18b','在韩加的管理项目付完款即在韩持有；서비스即时；使用扣次数；子案件整张卡（到店 → 选项目 → 已完成）（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = pcCase('R18b1'); var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0]; if(!ST.ok(!!lib, '没有管理项目')) return; var sp = lib.specs[0], loc = {projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price};
+    ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:loc}), '在韩加管理项目失败'); var it = c.procedureItems[c.procedureItems.length-1];
+    ST.ok(it.pendingPay && !it.heldOver && krItemStatus(it)==='待付款', '付款前显示待付款'); ST.ok(coreAddOnPaid(c, ST.krBy) && it.heldOver && !it.pendingPay && krItemStatus(it)==='持有中' && holdItemLeft(c, it)===1, '付完款即在韩持有，剩 1 次');
+    ST.ok(!(c.subItems||[]).some(function(s){ return s.kind==='增加项目' && s.projectName===it.name; }), '进程里的「增加项目」行拿掉');
+    var svc = Object.assign({}, loc, {service:true, price:0}); ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:svc}), '加서비스失败'); var sv = c.procedureItems[c.procedureItems.length-1];
+    ST.ok(sv.service && sv.heldOver, '서비스即时进在韩持有');
+    /* 子案件整张卡：到店前只显示预约；到店后选这次的项目 */
+    var rep = subCaseList(c).filter(function(r){ return r.place==='KR'; })[0]; if(!ST.ok(!!rep, '要有韩国术后管理的子案件')) return; var key = subCaseKey(rep);
+    ST.ok(!coreVisitArrive(c, key, ST.krBy), '没到预约当天不能到店'); coreSubSimDay(c, rep.id, ST.krBy); ST.ok(coreVisitArrive(c, key, ST.krBy) && coreVisitRows(c, key).every(function(s){ return s.arrived; }), '模拟到当日后［客人到店］');
+    var before = it.holdUsed||0; ST.ok(coreVisitDone(c, coreVisitRows(c, key).map(function(s){ return s.id; }), [it.name], ST.krBy) && (it.holdUsed||0)===before+1 && coreVisitRows(c, key).every(function(s){ return s.done; }), '选术后管理 + 管理项目 → 已完成：术后管理标完成、管理项目扣 1 次');
+    ST.ok(it.holdDone===true && krItemStatus(it)==='已用完', '用完变已用完');
+  });
+  ST.def('R18c','KR「项目」tab：项目卡（施术项目 N｜管理项目 N）+ 案件；没有「施术」tab、没有「手术项目」；各入口都到项目 tab 并展开对应那次（KM1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    ST.ok(KR_CASE_TABS.map(function(t0){ return t0.label; }).filter(function(x){ return x!=='关联案件'; }).join('｜')==='基础资料｜面诊｜项目｜附件｜Timeline', 'tab = 基础资料｜面诊｜项目｜附件｜Timeline');
+    var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }); })[0]; if(!ST.ok(!!r, '要有带韩国术后管理的案件（先在 A1 分页跑 R18a / R18b）')) return;
+    var key = subCaseKey(subCaseList(r.c).filter(function(s){ return s.place==='KR'; })[0]), sid = subCaseList(r.c).filter(function(s){ return s.place==='KR'; })[0].id;
+    krShowCase(r.clinicId, r.id); krSetCaseTab('proc'); ST.ok(KR_CASE.tab==='items', '旧的「施术」tab 并进「项目」');
+    var h = Store.withClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; return krTabItems(cc); });
+    ST.ok(/项目卡/.test(h) && /施术项目（\d+）/.test(h) && /管理项目（\d+）/.test(h) && /案件/.test(h) && !/手术项目/.test(h), '项目卡两页 + 案件区块，用词「施术项目」');
+    var inner = document.getElementById('krcase-body').innerText; ST.ok(!/手术项目/.test(inner) && !/赴韩项目\n/.test(inner), '页面里没有「手术项目」，也没有重复的赴韩项目列表');
+    var entries = [['日历 / 工作台', function(){ krOpenSubCard(r.clinicId, r.id, sid); }], ['医院设定冲突弹窗', function(){ hspGoCase(r.clinicId, r.id, sid); }], ['工作台今天列表(krOpenSub)', function(){ krOpenSub(r.clinicId, r.id, sid); }]];
+    entries.forEach(function(e){ KR_SUB_OPEN = {}; KR_CASE = {clinicId:'', id:'', tab:'basic'}; e[1](); ST.ok(KR_CASE.tab==='items' && KR_CASE.id===r.id && !!KR_SUB_OPEN[key], '入口「'+e[0]+'」→ 项目 tab 并展开对应那次'); });
+    krOpenSubCard(r.clinicId, r.id, sid); ST.ok(!!document.getElementById('kr-subrow-'+sid), '子案件卡片存在（点进来后滚动 / 高亮的目标）');
+  });
+
 })();

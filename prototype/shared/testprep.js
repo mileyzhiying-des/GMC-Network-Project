@@ -84,6 +84,24 @@
       c.krSchedule = {status:'pending', primary:D(10), backup:D(11), confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false};
       logCaseEvent(c, '测试准备', '测试准备：客人已付定金并递交施术日期（首选 '+D(10)+'，备选 '+D(11)+'），待 KR 确认施术时间'); mark(c); updateCaseStage(c);
       return {cl:cl, cases:[c], where:'KR（KM1 登录）', start:'案件 '+c.caseNo+' → 施术 tab：选日期、到院时间、地址 → 确认（可试非营业时间确认弹窗）。'}; },
+    pcStage: function(){ /* CMD-1015-18：施术完成、进了「术后管理」阶段：韩国 1 次（待到店）+ 回印尼 2 次（没做） */
+      var cl = mkClient('术后管理'); var c = krBase(cl); var items = withReport(c, [N1, N2]); pay(c, items);
+      var date = seedSurgeryDate(HID, DIRECTOR, D(-3), '11:00'); c.krSchedule = {status:'arrived', primary:date, backup:'', confirmedDate:date, confirmedTime:'11:00', address:'（测试准备）首尔市江南区', changePrimary:'', changeBackup:'', changeSubmitted:false};
+      c.hasArrived = true; c.krBalancePaid = true; c.krJudge = {result:'ok', settled:true, memo:'', by:COORD}; items.forEach(function(it){ it.done = true; });
+      var inn = localName('艺人水光焕肤'); c.pcBooked = true;
+      coreSubAdd(c, {kind:'术后管理记录', date:D(5), time:'10:00', content:'术后复诊（在韩国）', place:'KR', projectName:N1, pcb:true, silent:true}, COORD);
+      [D(2), D(3)].forEach(function(dt, k){ var s = coreSubAdd(c, {kind:'术后管理记录', date:dt, content:'术后管理（回印尼做：'+inn+'）', place:'IN', projectName:N1, pcb:true, silent:true, salt:'t'+k}, COORD); if(s){ s.innName = inn; s.careItem = N1; s.suggest = dt; } });
+      c.krProcedureDone = true; c.surgeryDoneAt = date;
+      logCaseEvent(c, '测试准备', '测试准备：施术已完成，进入术后管理阶段（韩国 1 次待到店 + 回印尼 2 次没做）'); mark(c); updateCaseStage(c);
+      return {cl:cl, cases:[c], where:'IN（A1）/ KR（KM1）', start:'案件 '+c.caseNo+'（阶段：术后管理）：IN 在案件里［做术后管理］（提前做要写原因）或［结束术后管理］；KR 在项目 tab 的子案件卡片里［客人到店］→ 选项目 → ［已完成］。'}; },
+    heldMg: function(){ /* CMD-1015-18：已付清尾款，有在韩持有的管理项目（剩 3 次）；术后管理没有 */
+      var cl = mkClient('在韩持有'); var c = krBase(cl); var items = withReport(c, [N1]); items[0].postcare = []; pay(c, items);
+      var date = seedSurgeryDate(HID, DIRECTOR, D(-1), '11:00'); c.krSchedule = {status:'arrived', primary:date, backup:'', confirmedDate:date, confirmedTime:'11:00', address:'（测试准备）首尔市江南区', changePrimary:'', changeBackup:'', changeSubmitted:false};
+      c.hasArrived = true; c.krBalancePaid = true; c.pcBooked = true; c.krJudge = {result:'ok', settled:true, memo:'', by:COORD};
+      var lib = (krLocalLib(HID)||[]).filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0];
+      if(lib){ var sp = lib.specs[0]; c.procedureItems.push({projectId:'lc:'+lib.id, name:lib.name+' · '+sp.label, price:sp.price*3, currency:'KRW', origin:'KR', done:true, batchId:'B1', local:true, mgmtPlan:true, mgmt:true, qty:3, heldOver:true, holdDone:false, holdUsed:0, heldAt:nowFullDt()}); }
+      logCaseEvent(c, '测试准备', '测试准备：已付清尾款，在韩持有管理项目 '+(lib ? lib.name : '')+'（剩 3 次）'); mark(c); updateCaseStage(c); try{ syncSurgerySub(c); }catch(e){}
+      return {cl:cl, cases:[c], where:'KR（KM1）', start:'案件 '+c.caseNo+' → 项目 tab：管理项目页显示剩余 3 次；案件区块［使用］扣 1 次；IN 在客户详情 / 案件里看得到项目和剩余次数（不显示金额）。'}; },
     stageC: function(){ var cl = mkClient('待到院'); var c = krBase(cl); var items = withReport(c, [N1, N2]); pay(c, items);
       var date = seedSurgeryDate(HID, DIRECTOR, D(8), '11:00'); c.krSchedule = {status:'confirmed', primary:date, backup:'', confirmedDate:date, confirmedTime:'11:00', address:'（测试准备）首尔市江南区', changePrimary:'', changeBackup:'', changeSubmitted:false};
       logCaseEvent(c, '测试准备', '测试准备：施术时间已确认 '+date+' 11:00，待客人到院（2 个赴韩项目，其中有术后管理）'); mark(c); updateCaseStage(c); try{ syncSurgeryBlock(c); }catch(e){} try{ syncSurgerySub(c); }catch(e){} /* 施术一行（项目进程里的「施术」子项） */
@@ -113,10 +131,10 @@
     };
   }
   MAKERS.r2_07 = oldCust('07', [['Yanti','sara'],['Zahra','queen'],['Rosa','zoe'],['Melati','yuki'],['Intan','olivia']], 'IN（A1）/ 客人预约页', 'Yanti = 有 3 个可退持有批次；Zahra = 只有持有（LHALa peel 剩 2 次、艺人水光焕肤 2 次）；Rosa = 同意书旧版本 v0.5（预约页验证后要重签）；Melati = 已有进行中案件（项目确认中）；Intan = 12 天前出过诊疗方案、客人不做项目。新增预约（手机号见下）→ 到店 → 基础资料。');
-  MAKERS.r2_09 = oldCust('09', [['Wati','c42']], 'IN（A1）', 'Wati：赴韩已结案，客人持有回印尼的术后管理（0 元，套餐内含）。新增预约 → 到店 → 本地管理 → 做术后管理。');
+  MAKERS.r2_09 = oldCust('09', [['Wati','pcStage']], 'IN（A1）/ KR（KM1）', 'Wati：施术已完成，案件在「术后管理」阶段，有回印尼的术后管理没做（建议日期临近）。IN：新增预约（来访目的选术后管理）→ 默认接续到这个案件 → ［做术后管理］。');
   var MAKERS_END = true;
-  var LABEL = {queen:'Queen（老客 + 有剩余持有项目）', zoe:'Zoe（老客 + 同意书旧版本）', yuki:'Yuki（已有进行中的案件）', sara:'Sara（老客 + 3 个可退批次）', olivia:'Olivia（上个月出过诊疗方案）', mini:'MINI（40 天前出过诊疗方案，已超过一个月）', c42:'第 42 条（赴韩已结案 + 回印尼术后管理持有）', stagePay:'已缴面诊费，待 KR 确认出报告时间', stageA:'面诊结束，待发送诊疗方案', stageB:'已付定金，待确认施术时间', stageC:'施术时间已确认，待到院'};
-  LABEL.r2_02 = '第 2 轮 02：待到院 ×4'; LABEL.r2_03 = '第 2 轮 03：已付定金 ×13'; LABEL.r2_07 = '第 2 轮 07：老客 ×5'; LABEL.r2_09 = '第 2 轮 09：回印尼术后管理';
+  var LABEL = {queen:'Queen（老客 + 有剩余持有项目）', zoe:'Zoe（老客 + 同意书旧版本）', yuki:'Yuki（已有进行中的案件）', sara:'Sara（老客 + 3 个可退批次）', olivia:'Olivia（上个月出过诊疗方案）', mini:'MINI（40 天前出过诊疗方案，已超过一个月）', c42:'第 42 条（赴韩已结案 + 回印尼术后管理没做，留在原案件）', stagePay:'已缴面诊费，待 KR 确认出报告时间', stageA:'面诊结束，待发送诊疗方案', stageB:'已付定金，待确认施术时间', stageC:'施术时间已确认，待到院'};
+  LABEL.r2_02 = '第 2 轮 02：待到院 ×4'; LABEL.r2_03 = '第 2 轮 03：已付定金 ×13'; LABEL.r2_07 = '第 2 轮 07：老客 ×5'; LABEL.r2_09 = '第 2 轮 09：术后管理阶段'; LABEL.pcStage = '术后管理阶段（韩国 1 + 回印尼 2 未做）'; LABEL.heldMg = '已付清尾款 + 在韩持有管理项目（剩 3 次）';
   window.TESTPREP_LABEL = LABEL; window.TESTPREP_MAKE = function(key, cfg){
     var keep = [HID, DIRECTOR, COORD, N1, N2];
     if(cfg){ HID = cfg.hid; DIRECTOR = cfg.director; COORD = cfg.coord; var ps = ((HOSPITAL_DATA[HID]||{}).projects||[]).filter(function(p){ return p.price>0; }); N1 = (ps[0]||{}).name; N2 = (ps[1]||ps[0]||{}).name; }

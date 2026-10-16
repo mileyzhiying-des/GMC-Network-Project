@@ -2921,7 +2921,16 @@ function openNotif(id, src){
     if(newTab) openCaseNewTab(n.caseId, '&chat=open'); else openCaseRoom(n.caseId);
     return;
   }
-  if(n.caseId){ if(newTab) openCaseNewTab(n.caseId); else openCaseDetail(n.caseId); }
+  if(n.caseId){
+    var pcGo = /术后管理/.test(n.text||'') && !/转回印尼持有/.test(n.text||'');
+    if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : ''); else { openCaseDetail(n.caseId); if(pcGo) goPostcareBlock(n.caseId); }
+  }
+}
+/* CMD-1015-18：术后管理类通知 / 待办点进来 → 案件的「赴韩施术计划」tab，滚到术后管理区块 */
+function goPostcareBlock(caseId){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  c.activeCaseTab = 'kr'; if(typeof renderCaseBody==='function') renderCaseBody(c);
+  setTimeout(function(){ var el = document.getElementById('in-postcare-card'); if(el && el.scrollIntoView) el.scrollIntoView({block:'start', behavior:'smooth'}); }, 80);
 }
 
 function openNotifDetail(n){
