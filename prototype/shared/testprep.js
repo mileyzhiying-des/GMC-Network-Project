@@ -64,10 +64,10 @@
       var cl = mkClient('Case42'); var c = krBase(cl); var items = withReport(c, [N1, N2]); pay(c, items);
       c.krSchedule = {status:'arrived', confirmedDate:D(-4), confirmedTime:'11:00', primary:D(-4), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; c.hasArrived = true; c.krBalancePaid = true; c.krJudge = {result:'ok', settled:true, memo:'', by:'KM1 室长'};
       items.forEach(function(it){ it.done = true; }); c.krProcedureDone = true; c.pcBooked = true;
-      var inn = localName('艺人水光焕肤'); var nb = grantHolding(cl.name, inn, '术后管理', c.id, D(-4), 3, false, {paid:0, list:0, pct:100, currency:'IDR'}); nb.pkg = true; nb.schedule = '术后第3天'; nb.prep = true;
-      c.innCare = {lines:[{item:items[0].name, name:'术后消肿管理', mgmt:'术后管理', innName:inn, times:3, day:'第3、5、7天', days:[3,5,7]}], status:'granted', at:nowFullDt()};
-      logCaseEvent(c, '测试准备', '测试准备：赴韩已完成，术后管理回印尼的部分已转为 0 元持有批次'); mark(c); finishCase(c, '未购买未使用');
-      return {cl:cl, cases:[c], where:'IN（A1）', start:'新增预约（手机号 '+cl.phone+'）→ 到店；客人持有「'+inn+'」3 次（术后管理 · 套餐内含 0 元），来自已结案赴韩案件 '+c.caseNo+'，可测术后管理预约 / 使用并自动关联原案件。'}; },
+      var inn = localName('艺人水光焕肤'); c.postcareEnded = {reason:'（测试准备）客人先回印尼', by:'测试准备', at:nowFullDt(), left:3}; c.subItems = c.subItems || [];
+      [3,5,7].forEach(function(n, k){ c.subItems.push({id:'tp'+k, no:c.caseNo+'-0'+(k+1), date:D(-4+n), content:'术后管理（回印尼做：'+inn+'）', kind:'术后管理记录', place:'IN', projectName:inn, done:false, suggest:D(-4+n), carried:true}); }); /* CMD-1015-17：术后管理留在原案件，不进持有 */
+      logCaseEvent(c, '测试准备', '测试准备：赴韩已完成并结束术后管理，回印尼的 3 次术后管理没做（留在原案件）'); mark(c); finishCase(c, '未购买未使用');
+      return {cl:cl, cases:[c], where:'IN（A1）', start:'新增预约（手机号 '+cl.phone+'）→ 到店；客户详情显示「'+inn+'」术后管理还剩 3 次（来自已结案赴韩案件 '+c.caseNo+'，免费不能退款）；开本地管理新案件，在「使用持有项目」里勾选使用并自动关联原案件。'}; },
     stagePay: function(){ var cl = mkClient('已付面诊费'); var c = krBase(cl); c.consultStatus = 'paid_waiting_kr'; logCaseEvent(c, '测试准备', '测试准备：客人已缴面诊费，待 KR 确认预计出报告时间'); mark(c); updateCaseStage(c);
       return {cl:cl, cases:[c], where:'KR（KM1 登录）', start:'案件 '+c.caseNo+' → 面诊 tab：确认预计出报告时间。'}; },
     stageW: function(){ var cl = mkClient('等待面诊'); var c = krBase(cl); c.consultStatus = 'awaiting_report'; c.consultAt = {date:D(1), time:'15:00'}; c.reportEta = D(2)+' 05:00';
