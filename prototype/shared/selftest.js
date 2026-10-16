@@ -1483,6 +1483,28 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var d2 = c.procedureItems[c.procedureItems.length-1]; ST.ok(d2.deferUse && !(c.subItems||[]).some(function(s){ return s.projectName===d2.name && !s.done && s.kind==='增加项目'; }) && surgeryMinutes(c)===surgeryMinutes(c, [], [d2.name]), '照加但不占这个时段，放在项目卡未使用');
     h.directorSchedule[dir] = h.directorSchedule[dir].filter(function(b){ return b.id!=='R22busy'; });
   });
+  ST.def('R23a','在韩增加 1 个睡眠麻醉施术 + 1 个管理项目，留给 KM1 看顶部提醒条（A1 分页，造数据）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = pcCase('R23a1'); ST.krCloseToday(c); var h = HOSPITAL_DATA[caseKrHospital(c)];
+    var sl = (h.projects||[]).filter(function(p){ return p.defaults && p.defaults.anes && p.defaults.anes!=='local' && !krActiveItems(c).some(function(it){ return it.name===p.name; }); })[0]; if(!ST.ok(!!sl, '要有睡眠 / 全麻的施术项目')) return;
+    KR_FORCE_CLASH = true; try{ ST.ok(coreAddOnItem(c, sl.name, ST.krBy, {anesthesia:{type:sl.defaults.anes, label:'睡眠麻醉', note:''}}), '加睡眠麻醉施术'); } finally { KR_FORCE_CLASH = false; }
+    var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0], sp = lib.specs[0];
+    ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:{projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price}}), '加管理项目'); ST.ok(pendingPayItems(c).length===2, '两项待付款');
+  });
+  ST.def('R23b','案件页最上面红色提醒条：待付款 → 待确认麻醉同意书 → 确认后消失；任何 tab 都看得到；项目 tab 里没有重复的红条（KM1 分页，先在 A1 跑 R23a）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return pendingPayItems(x.c).length>=2; })[0]; if(!ST.ok(!!r, '先在 A1 分页跑 R23a')) return;
+    var body = function(tab){ krShowCase(r.clinicId, r.id); krSetCaseTab(tab); return document.getElementById('krcase-body').innerText; };
+    var pos = function(){ var el = document.getElementById('krcase-body'), t = el.innerText; return {bar:t.indexOf('待付款'), tab:t.indexOf('基础资料')}; };
+    ['basic','items','log'].forEach(function(t){ var tx = body(t); ST.ok(/⚠ 待付款/.test(tx) && /在韩增加 2 项未付款/.test(tx) && /去付款/.test(tx), 'tab '+t+'：顶部「待付款」条在'); });
+    var tx0 = body('basic'); ST.ok(tx0.indexOf('待付款') < tx0.indexOf('基础资料', tx0.indexOf('待付款')) && tx0.indexOf('待付款') > tx0.indexOf(r.caseNo), '位置：页头下、tab 上');
+    ST.ok(!/未付款\n.*合计/.test(body('items')) && (body('items').match(/⚠ 待付款/g)||[]).length===1, '项目 tab 里原来的「未付款」条拿掉，只留最上面这一条');
+    ST.ok(!/待确认麻醉同意书/.test(body('basic')), '付款前没有同意书条'); krPayOpen(); ST.ok(/确认已付款/.test(document.getElementById('kr-pay-overlay').innerText), '［去付款］打开付款弹窗'); krPayConfirm();
+    var t1 = body('basic'); ST.ok(!/⚠ 待付款/.test(t1) && /⚠ 待确认麻醉同意书/.test(t1) && /确认/.test(t1), '付款后：变成「待确认麻醉同意书」条');
+    var row = null; Store.withClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; row = (cc.subItems||[]).filter(function(s){ return s.kind==='增加项目' && (cc.procedureItems||[]).some(function(it){ return it.name===s.projectName && it.consentPending; }); })[0]; ST.ok(!row || !coreSubDone(cc, row.id, 'x', []), '确认之前项目仍不能完成'); });
+    krAnesOpen(); ST.ok(/已在现场签署/.test(document.getElementById('kr-anes-overlay').innerText), '［确认］打开确认弹窗'); krAnesConfirm();
+    ST.ok(!/⚠ 待确认麻醉同意书/.test(body('timeline'.replace('timeline','log'))) && !/⚠ 待付款/.test(body('log')), '确认后条消失');
+  });
   ST.def('R22b','KM1：案件区块三组 + 抬头 + 行（项目类型｜内容｜地点｜状态｜备注｜操作）；所需术后管理一项一框；冲突询问弹窗两个按钮；增加项目里没有术后管理清单（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }) || Object.keys(x.c.visitEnds||{}).length; })[0]; if(!ST.ok(!!r, '要有带术后管理的案件（先在 A1 分页跑 R22a）')) return;

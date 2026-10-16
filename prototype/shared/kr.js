@@ -445,7 +445,7 @@ function krMut(fn){
     krAskClash(m, {proceed:function(){ KR_FORCE_CLASH = true; try{ krMut(fn); }finally{ KR_FORCE_CLASH = false; } },
       alt:kind==='add' ? function(){ KR_DEFER_ADD = true; try{ krMut(fn); }finally{ KR_DEFER_ADD = false; } } : null, altLabel:'不在这个时段', altHint:'项目一样加进来，不占这个时段，放在项目卡「未使用」稍后预约'});
   }
-  setTimeout(krAnesPrompt, 80); return r;
+  return r;
 }
 /* 时间冲突改成询问（CMD-1015-22，取代 21 的挡住 Modal）：［仍然进行］照排，日历标红框「时间冲突」；［不在这个时段］= 项目照加 / 改选别的时间或稍后预约；标不可预约 / OFF 只有［仍然进行］［取消］ */
 function krAskClash(msg, o){
@@ -712,7 +712,7 @@ function krProjCards(c){
   return krCardBox('<div style="display:flex;align-items:center;gap:12px;"><span>项目卡 <span style="font-weight:400;font-size:11px;color:var(--muted);">［本次使用］要有客人已到店的案件；［预约使用］按日期建立 / 并入子案件</span></span><span style="flex:1;"></span>'+addBtn+'</div>', '<div style="margin-bottom:6px;">'+seg+'</div>'+body)+krAddOnCard(c);
 }
 function krTabItems(c){
-  return krAnesBanner(c)+krProjCards(c)+'<div class="info-heading" style="margin:6px 2px 0;">案件 <span style="font-weight:400;font-size:11px;color:var(--muted);">施术当天是主案件，之后每一次来是一个子案件；到店后从项目卡里选这次要做的项目，按［已完成］</span></div>'+krTabProc(c);
+  return krProjCards(c)+'<div class="info-heading" style="margin:6px 2px 0;">案件 <span style="font-weight:400;font-size:11px;color:var(--muted);">施术当天是主案件，之后每一次来是一个子案件；到店后从项目卡里选这次要做的项目，按［已完成］</span></div>'+krTabProc(c);
 }
 /* ---- 施术 tab（KR-CASE-02 第 3 节）：按施术日期状态给不同内容 ---- */
 function krSchedDayHtml(c, date){
@@ -773,15 +773,28 @@ function krDoSchAdjust(){
   krMut(function(c){ return coreScheduleAdjust(c, t0, a, ME_NAME); });
 }
 /* 在韩加项后付：有待付款项目时施术 tab 最上方红色「未付款」（列出项目、金额、合计）+［已付款］（CMD-1012-15 一·3） */
-function krUnpaidBanner(c){
-  var its = pendingPayItems(c); if(!its.length) return '';
-  var tot = its.reduce(function(s, it){ return s + itemKrAmount(it); }, 0);
-  return '<div style="background:#FDECEA;border:1px solid #E5A19B;border-radius:12px;padding:14px 18px;margin-bottom:14px;"><div style="font-size:14px;font-weight:700;color:#B3261E;margin-bottom:8px;">未付款</div>'+
-    its.map(function(it){ return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span>'+krEsc(it.name)+(it.qty>1 ? ' ×'+it.qty : '')+'</span><span>'+formatCurrency(itemKrAmount(it),'KRW')+'</span></div>'; }).join('')+
-    '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;border-top:1px solid #E5A19B;margin-top:6px;padding-top:6px;"><span>合计</span><span>'+formatCurrency(tot,'KRW')+'</span></div>'+
-    '<div style="font-size:11px;color:#B3261E;margin-top:6px;">有待付款项目时不能结案；客人付款后点［已付款］，会生成一张结算单（IN 结算 tab 可见，来源「在韩加项」）。</div>'+
-    (krCan() ? '<div style="margin-top:8px;"><button class="btn-primary" onclick="krDoAddOnPaid()">已付款</button></div>' : '')+'</div>';
+/* CMD-1015-23：项目 tab / 主案件里原来的「未付款」红条拿掉，统一放在案件页最上面（krTopAlerts） */
+function krUnpaidBanner(c){ return ''; }
+var KR_ALERT_STYLE = 'background:#FDECEA;border:1px solid #E5A19B;border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;';
+/* 案件页最上面（页头下、tab 上）的红色提醒条：待付款（在韩增加）/ 待确认麻醉同意书；两件都有就叠放，处理完自动消失；只在 KR 端出现 */
+function krTopAlerts(c){
+  var out = '', pp = pendingPayItems(c), an = anesPendingItems(c), can = krCan();
+  if(pp.length){ var tot = pp.reduce(function(s, it){ return s + itemKrAmount(it); }, 0);
+    out += '<div style="'+KR_ALERT_STYLE+'"><span style="font-size:14px;font-weight:700;color:#B3261E;">⚠ 待付款</span><span style="flex:1;font-size:13px;">在韩增加 '+pp.length+' 项未付款：'+pp.map(function(it){ return krEsc(it.name)+(it.qty>1 ? ' ×'+it.qty : ''); }).join('、')+'（合计 '+formatCurrency(tot,'KRW')+'）</span>'+(can ? '<button class="btn-primary" style="padding:5px 16px;font-size:13px;" onclick="krPayOpen()">去付款</button>' : '')+'</div>'; }
+  if(an.length){ out += '<div style="'+KR_ALERT_STYLE+'"><span style="font-size:14px;font-weight:700;color:#B3261E;">⚠ 待确认麻醉同意书</span><span style="flex:1;font-size:13px;">'+an.map(function(it){ return krEsc(it.name)+'（'+krEsc((it.anesthesia||{}).label||'睡眠 / 全麻')+'）'; }).join('、')+' 尚未确认麻醉同意书</span>'+(can ? '<button class="btn-primary" style="padding:5px 16px;font-size:13px;" onclick="krAnesOpen()">确认</button>' : '')+'</div>'; }
+  return out ? '<div style="display:flex;flex-direction:column;gap:8px;margin:12px 0;">'+out+'</div>' : '';
 }
+/* ［去付款］：列出项目和金额，客人付款后点［确认已付款］→ 生成一张结算单（IN 结算 tab 可见，来源「在韩加项」） */
+function krPayOpen(){
+  if(!krCan()) return; var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r) return; var c = r.c, its = pendingPayItems(c); if(!its.length) return;
+  var tot = its.reduce(function(s, it){ return s + itemKrAmount(it); }, 0);
+  var ov = document.getElementById('kr-pay-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-pay-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:460px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">在韩增加项目付款</div>'+its.map(function(it){ return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;"><span>'+krEsc(it.name)+(it.qty>1 ? ' ×'+it.qty : '')+'</span><span>'+formatCurrency(itemKrAmount(it),'KRW')+'</span></div>'; }).join('')+
+    '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;border-top:1px solid var(--border2);margin-top:6px;padding-top:6px;"><span>合计</span><span>'+formatCurrency(tot,'KRW')+'</span></div><div style="font-size:11px;color:var(--muted);margin:8px 0 14px;">客人付款后点［确认已付款］，会生成一张结算单（IN 结算 tab 可见，来源「在韩加项」）；有待付款项目时不能结案。</div>'+
+    '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="krPayConfirm()">确认已付款</button><button class="btn-outline" style="flex:1;" onclick="document.getElementById(\'kr-pay-overlay\').classList.remove(\'open\')">取消</button></div></div>';
+  ov.style.zIndex = 100004; ov.classList.add('open');
+}
+function krPayConfirm(){ var ov = document.getElementById('kr-pay-overlay'); if(ov) ov.classList.remove('open'); krDoAddOnPaid(); }
 /* 待付款项目［修正］弹窗（CMD-1013-01）：只有 KR 室长（不含院长）；改项目 / 数量 / 金额 / 删除 */
 var KR_FIX = null;
 function krCanFix(){ var me = currentAccount(); return krCan() && !!me && !isKrDirectorLike(me); }
@@ -901,6 +914,7 @@ function krRenderCaseDetail(){
   if(!r){ el.innerHTML = '<div class="card" style="padding:24px;color:var(--slate2);"><button class="btn-ghost" onclick="goBack()">← 返回</button><div style="margin-top:12px;">这个案件不存在，或不在你可看的范围内（KR 只能看选了本医院、且已缴 / 免除面诊费的案件；院长只能看自己的案件）。</div></div>'; return; }
   var hasRel = !!(r.c.linkedCase && r.c.linkedCase.caseId); if(KR_CASE.tab==='related' && !hasRel) KR_CASE.tab = 'basic';
   var tabs = KR_CASE_TABS.filter(function(t0){ return t0.key!=='related' || hasRel; }).map(function(t0){ var on = KR_CASE.tab===t0.key; return '<button onclick="krSetCaseTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t(t0.label)+'</button>'; }).join('');
+  var alerts = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krTopAlerts(c) : ''; });
   var body = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? KR_TAB_FN[KR_CASE.tab](c) : ''; });
   el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+
       '<button class="btn-ghost" onclick="goBack()">← 返回</button>'+
@@ -908,7 +922,7 @@ function krRenderCaseDetail(){
       '<span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.stageText||r.label)+'</span>'+(r.hold ? ' '+KR_HOLD_TAG : '')+'<span style="flex:1;"></span>'+
       '<button class="btn-primary" onclick="krOpenCaseChat()">💬 对话</button></div>'+
     '<div class="card" style="padding:12px 20px;display:flex;gap:28px;flex-wrap:wrap;font-size:13px;"><span><span style="color:var(--muted);">来源诊所</span> <b>'+krEsc(r.clinicName)+'</b></span>'+(KR_CASE.tab==='consult' ? '' : '<span><span style="color:var(--muted);">院长</span> <b>'+krEsc(r.director||'—')+'</b></span>')+'<span><span style="color:var(--muted);">KR 室长</span> <b>'+krEsc(r.krCoordinator||'—')+'</b></span></div>'+
-    '<div style="display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap;">'+tabs+'</div>'+
+    alerts+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap;">'+tabs+'</div>'+
     '<div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>';
 }
 function krOpenCaseChat(){ if(typeof krOpenRoomFor==='function') krOpenRoomFor(KR_CASE.clinicId, KR_CASE.id); else alert('对话在第六部分实现'); }
@@ -2695,15 +2709,12 @@ function krDoAddonCommit(){
 }
 /* 麻醉同意书（睡眠 / 全麻）：付款之后确认「已在现场签署」；有待确认的项目时案件区块上方红条，付款后自动弹窗 */
 var KR_ANES_ASKED = {};
-function krAnesBanner(c){
-  var its = anesPendingItems(c); if(!its.length) return '';
-  return '<div class="card" style="padding:12px 16px;background:#FFF4E5;border:1px solid #F0C98A;"><div style="font-size:13px;font-weight:700;color:#A85A10;margin-bottom:4px;">麻醉同意书待确认（付款之后）</div><div style="font-size:12px;margin-bottom:8px;">'+its.map(function(it){ return krEsc(it.name)+'（'+krEsc((it.anesthesia||{}).label||'')+'）'; }).join('、')+'：要在现场签署后才能完成这些项目。</div>'+(krCan() ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="krAnesConfirm()">确认已在现场签署</button>' : '')+'</div>';
-}
+function krAnesPrompt(){ krAnesOpen(); }
 function krAnesConfirm(){ if(!krCan()) return; var m = document.getElementById('kr-anes-overlay'); if(m) m.classList.remove('open'); krMut(function(c){ return coreAnesConfirm(c, null, ME_NAME); }); }
-function krAnesPrompt(){
+function krAnesOpen(){
   if(CURRENT_PAGE_ID!=='kr-casedetail' || !krCan()) return; var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r) return;
   var its = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? anesPendingItems(c).map(function(it){ return it.name+'（'+((it.anesthesia||{}).label||'')+'）'; }) : []; }) || [];
-  var key = KR_CASE.id+':'+its.join('|'); if(!its.length || KR_ANES_ASKED[key]) return; KR_ANES_ASKED[key] = true;
+  if(!its.length) return;
   var ov = document.getElementById('kr-anes-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-anes-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">确认麻醉同意书</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">已付款。下面的项目是睡眠 / 全身麻醉，请确认已在现场签署麻醉同意书：<br><b>'+its.map(krEsc).join('<br>')+'</b></div><div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="krAnesConfirm()">已在现场签署</button><button class="btn-outline" style="flex:1;" onclick="document.getElementById(\'kr-anes-overlay\').classList.remove(\'open\')">稍后确认</button></div></div>';
   ov.style.zIndex = 100005; ov.classList.add('open');
