@@ -436,15 +436,6 @@
   ST.def('E7b','术后管理预约 — 回印尼做',function(){
     var c = toPaid('E7b'); ST.ok(corePcBooking(c, ST.pcRows(c, 'IN'), ST.krBy), '预约失败'); ST.ok((c.subItems||[]).some(function(s){ return s.pcb && s.place==='IN'; }), '应有回印尼做的子项'); ST.ok(!!c.innCare, '印尼部分应已转持有');
   });
-  ST.def('E7c','术后管理预约 — 请 IN 代约',function(){
-    var c = toPaid('E7c'); ST.ok(corePcBooking(c, ST.pcRows(c, 'ask'), ST.krBy), '预约失败'); ST.ok((c.subItems||[]).some(function(s){ return s.pcb && s.place==='IN' && s.informed; }), '应有已通知 IN 代约的子项'); ST.ok(ST.hasLog(c, /KR通知 IN 室长预约/), '缺通知记录');
-  });
-  ST.def('E7d','IN 代约成功（关联原案件）',function(){
-    var c = toPaid('E7d'); corePcBooking(c, ST.pcRows(c, 'ask'), ST.krBy); var s = (c.subItems||[]).filter(function(x){ return x.pcb && x.informed; })[0]; if(!ST.ok(!!s, '没有待代约的子项')) return;
-    openSubBookModal(c.id, s.id); var dt = null, tm = null; for(var k = 1; k < 12 && !dt; k++){ var d0 = D(k); ['10:00','11:00','15:30','16:00'].some(function(t0){ if(!slotBlockReason(d0, t0)){ dt = d0; tm = t0; return true; } return false; }); }
-    document.getElementById('sub-book-date').value = dt; document.getElementById('sub-book-time').innerHTML = '<option>'+tm+'</option>'; confirmSubBook();
-    ST.ok(ST.hasLog(c, /IN 室长预约了/), '缺代约记录'); ST.ok(!!s.booked, '子项应记录新案件号'); var nc = CASE_ITEMS.filter(function(x){ return x.caseNo===s.booked; })[0]; ST.ok(nc && nc.linkedCase && nc.linkedCase.caseId===c.id, '新案件应自动关联原案件'); if(nc) ST.track(nc);
-  });
   ST.def('E8','催办',function(){
     var c = ST.newRes('E8'); ST.arrive(c); ST.materials(c, {consult:true}); ST.payConsult(c); var d = new Date(Date.now()-3*3600000); c.consultPaidAt = d.toISOString().slice(0,10)+' '+d.toISOString().slice(11,16);
     ST.ok(!urgeInfo(c), '新规则：待确认面诊时间不再有 30 分钟的催办'); coreConfirmConsultTimes(c, todayStr(), '20:30', D(1)+' 05:00', ST.krBy); c.reportEta = D(-1)+' 05:00';  /* 新规则：等报告超过预计出报告时间才能催 */
@@ -1334,13 +1325,12 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.scheduleConfirm(c, 8); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); syncSurgerySub(c);
       return c;
     };
-    var c1 = mk('R16a1'); var surg = c1.subItems.filter(function(s){ return s.kind==='施术'; })[0], mg = c1.subItems.filter(function(s){ return s.mgmtPlan; })[0];
-    ST.ok(!!surg && !!mg && !/管理项目|·/.test(surg.content.replace(/施术：/,'').split('、').filter(function(n){ return n.indexOf(lib.name)>-1; }).join('')), '施术行不含管理项目，管理项目另有一行');
-    ST.ok(coreTodayDone(c1, [surg.id]) && krNotStartedItems(c1).some(function(it){ return it.mgmtPlan; }), '施术行标完成后，管理项目仍未完成');
-    ST.ok(coreTodayDone(c1, [mg.id]) && !krNotStartedItems(c1).some(function(it){ return it.mgmtPlan; }), '管理项目行标完成 → 管理项目完成');
-    var c2 = mk('R16a2'); var s2 = c2.subItems.filter(function(s){ return s.kind==='施术'; })[0]; coreTodayDone(c2, [s2.id]);
-    ST.ok(coreFinishToday(c2, ST.krBy), '结案失败'); var held = c2.procedureItems.filter(function(it){ return it.mgmtPlan && it.heldOver; })[0];
-    ST.ok(!!held && held.qty===3 && krHoldOpen(c2) && !c2.subItems.some(function(s){ return s.mgmtPlan; }), '没做完的管理项目转在韩持有（剩 3 次），进程行拿掉');
+    var c1 = mk('R16a1'); var surg = c1.subItems.filter(function(s){ return s.kind==='施术'; })[0];
+    var held = c1.procedureItems.filter(function(it){ return it.mgmtPlan; })[0];
+    ST.ok(!!surg && !!held && surg.content.indexOf(lib.name)<0, '施术行不含管理项目');
+    ST.ok(held.heldOver && held.qty===3 && krHoldOpen(c1), '付清尾款后管理项目就是在韩持有（剩 3 次）');
+    ST.ok(coreMgmtUse(c1, held.name, ST.krBy) && held.holdUsed===1 && !held.holdDone, '［使用］扣 1 次');
+    ST.ok(coreTodayDone(c1, [surg.id]) && krHoldOpen(c1), '施术行标完成后，持有管理项目仍在（结案不等持有用完）');
   });
   ST.def('R16b','KR 诊疗方案：没有共同术后管理；可选范围分施术 / 管理；管理项目 项目（规格）× 次数 × 间隔（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

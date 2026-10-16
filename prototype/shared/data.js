@@ -1295,6 +1295,7 @@ var CASE_TABS = [
   {key:'booked', label:'预约到店'},
   {key:'consult', label:'面诊安排'},
   {key:'travel', label:'赴韩施术'},
+  {key:'postcare', label:'术后管理'}, {key:'krmgmt', label:'在韩管理'}, /* CMD-1015-17 */
   {key:'local', label:'本地管理'}, /* 2026-09-30 总表：选择项目、本地管理 */
   {key:'closed', label:'已结案'},
   {key:'reportonly', label:'仅出报告'}, /* 2026-09-30：从已结案里独立出来，方便回访潜在客户 */
@@ -2478,7 +2479,22 @@ function consultIntentionCardHtml(c){
   return '<div class="card" style="padding:14px 24px;margin-bottom:12px;"><div class="info-heading" style="margin-bottom:8px;font-size:12px;">意向项目 / 预算（KR可见）</div>'+intentionInfoHtml(c)+'</div>';
 }
 
-function caseTimelineCardHtml(c){ return '<div class="card" style="padding:6px 20px;">'+((c.logEntries||[]).map(logLine).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">暂无记录</div>')+'</div>'; }
+/* Timeline 分页（CMD-1015-17）：全部 ｜ 主案件 ｜ -1 ｜ -2 …；子案件的记录同时汇总在「全部」里 */
+var TL_PAGE = {};
+function caseTimelineEntries(c, which){
+  subCaseNos(c); var reps = subCaseList(c), entries = (c.logEntries||[]);
+  var hit = function(e, rep){ var a = String(e.action||''); return subCaseRows(c, rep).some(function(s){ return (s.no && a.indexOf(s.no)>-1) || (s.dno && a.indexOf(s.dno)>-1) || (s.content && a.indexOf(s.content)>-1); }); };
+  if(!which || which==='all') return entries;
+  if(which==='main') return entries.filter(function(e){ return !reps.some(function(r){ return hit(e, r); }); });
+  var rep = reps.filter(function(r){ return r.dno===which; })[0]; return rep ? entries.filter(function(e){ return hit(e, rep); }) : [];
+}
+function timelineTabsHtml(c, fn){
+  subCaseNos(c); var reps = subCaseList(c); if(!reps.length) return '';
+  var cur = TL_PAGE[c.id] || 'all', tabs = [['all','全部'], ['main','主案件']].concat(reps.map(function(r){ return [r.dno, r.dno.replace(c.caseNo, '')]; }));
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px;">'+tabs.map(function(t0){ return '<span class="chip'+(cur===t0[0] ? ' active' : '')+'" onclick="'+fn+'(\''+c.id+'\',\''+t0[0]+'\')">'+t0[1]+'</span>'; }).join('')+'</div>';
+}
+function setTlPage(id, which){ TL_PAGE[id] = which; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
+function caseTimelineCardHtml(c){ var l = caseTimelineEntries(c, TL_PAGE[c.id] || 'all'); return '<div class="card" style="padding:6px 20px;">'+timelineTabsHtml(c, 'setTlPage')+(l.map(logLine).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">暂无记录</div>')+'</div>'; }
 function caseTabContentHtml(c){
   if(c.activeCaseTab==='consult' && c.consultRequested) return consultIntentionCardHtml(c)+consultTabHtml(c);
   normalizeCaseTab(c);
@@ -4128,14 +4144,13 @@ function corePcBooking(c, rows, by){
   if(!c.settlementDone || (c.krBalancePaid && !afterPay) || c.visitClosed) return false;
   c.subItems = (c.subItems||[]).filter(function(s){ return !(s.pcb && !s.done && !s.booked); });
   var cnt = {}; pcUniqueEntries(c).forEach(function(e0){ if(e0.x.place==='either' && e0.x.innName) cnt[e0.it.name+'|'+e0.i] = 0; }); /* 共同术后管理只按一份算 */
-  var inRows = [], inDaysMap = {};
+  var inDaysMap = {};
   rows.forEach(function(r, k){
     if(r.where==='IN'){
       cnt[r.item+'|'+r.pcIdx] = (cnt[r.item+'|'+r.pcIdx]||0) + 1;
       (inDaysMap[r.item+'|'+r.pcIdx] = inDaysMap[r.item+'|'+r.pcIdx] || []).push(r.day); /* 回印尼做的每一次对应的术后第 N 天 */
       var s = coreSubAdd(c, {kind:'术后管理记录', date:r.date, content:(r.mgmt||r.name)+'（回印尼做：'+r.innName+'）', place:'IN', pcb:true, silent:true, salt:'i'+k}, by);
       if(s){ s.innName = r.innName; s.careItem = r.item; s.suggest = r.date; } /* 回印尼做：date = KR 标注的建议日期；术后管理留在原案件（CMD-1015-17），不再转持有 */
-      if(r.askIn && s) inRows.push(s);
     } else {
       coreSubAdd(c, {kind:'术后管理记录', date:r.date, time:r.time, content:(r.mgmt||r.name)+(r.mgmt && r.mgmt!==r.name ? '（'+r.name+'，在韩国）' : '（在韩国）'), place:'KR', pcb:true, silent:true, salt:'k'+k}, by);
     }
@@ -4147,7 +4162,6 @@ function corePcBooking(c, rows, by){
   c.pcBooked = true;
   if(afterPay) finalizeInnCare(c); /* 付款后才定下回印尼做的次数：这时再把印尼部分转成客人持有项目 */
   logCaseEvent(c, by, 'KR完成术后管理预约：在韩国 '+rows.filter(function(r){ return r.where!=='IN'; }).length+' 次，回印尼做 '+rows.filter(function(r){ return r.where==='IN'; }).length+' 次');
-  inRows.forEach(function(s){ coreSubInform(c, s.id, by); });
   return true;
 }
 /* 「施术」那一行由案件自动产生（日期 = 已确认的施术日期，内容 = 施术项目），KR 不能手动新增、也不能改（CMD-1008-12 D4） */
@@ -4438,13 +4452,6 @@ function coreItemsDone(c, names, by){
   return true;
 }
 /* 客人回印尼后要做的子项：KR 通知 IN 室长预约（附子项内容）→ IN 点通知打开预约弹窗，新案件自动关联原赴韩案件 */
-function coreSubInform(c, id, by){
-  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.place==='KR') return false;
-  s.informed = true; s.informedAt = nowFullDt();
-  logCaseEvent(c, by, 'KR通知 IN 室长预约 '+s.no+'：'+s.date+' '+s.content);
-  pushNotif('赴韩施术','请 IN 帮忙预约：'+by+' / '+c.name+' 回印尼后需要做 '+s.no+'「'+s.content+'」（建议 '+s.date+'）', {caseId:c.id, link:{kind:'subBook', subId:s.id}});
-  return true;
-}
 /* 回诊时加做项目：KR 室长直接新增，另开新结算单、在韩国付款（不经过 IN 选择，原结算单不动）；IN 收到通知、只读可见 */
 function coreAddOnItem(c, projectName, by, opt){
   if(!c.hasArrived || c.visitClosed) return false;
@@ -4527,37 +4534,6 @@ function coreSubNote(c, id, text, by){
   return true;
 }
 /* IN：点「通知预约」的通知 → 预约弹窗（带入客人、来访目的），新案件自动关联原赴韩案件 */
-var SUB_BOOK = null;
-function openSubBookModal(caseId, subId){
-  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
-  var s = (c.subItems||[]).filter(function(x){ return x.id===subId; })[0]; if(!s) return;
-  SUB_BOOK = {caseId:caseId, subId:subId};
-  var ov = document.getElementById('sub-book-overlay');
-  if(!ov){ ov = document.createElement('div'); ov.id = 'sub-book-overlay'; ov.className = 'modal-overlay'; ov.onclick = function(e){ if(e.target===ov) closeSubBookModal(); }; document.body.appendChild(ov); }
-  var today = todayStr(), def = s.date > today ? s.date : today;
-  ov.innerHTML = '<div class="modal-box"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><span style="font-size:15px;font-weight:700;">预约来访（KR 通知：回印尼后要做）</span><span style="cursor:pointer;" onclick="closeSubBookModal()">✕</span></div>'+
-    '<div style="font-size:13px;line-height:1.8;margin-bottom:12px;"><b>'+c.name+'</b>（'+c.caseNo+'）<br>子项 '+s.no+'：'+s.content+'（KR 建议约 '+s.date+'）</div>'+
-    '<div class="field" style="margin-bottom:10px;"><label>日期</label><input type="date" id="sub-book-date" value="'+def+'" min="'+today+'"></div>'+
-    '<div class="field" style="margin-bottom:10px;"><label>时间</label><select id="sub-book-time">'+WK_HOURS.filter(slotBookable).map(function(t0){ return '<option>'+t0+'</option>'; }).join('')+'</select></div>'+
-    '<div class="field" style="margin-bottom:6px;"><label>来访目的</label><select id="sub-book-purpose"><option>术后管理</option><option>复诊</option></select></div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">生成的新案件会自动关联原赴韩案件 '+c.caseNo+'（原因随来访目的：术后管理 / 复诊）</div>'+
-    '<button class="btn-primary" style="width:100%;" onclick="confirmSubBook()">确认预约</button></div>';
-  ov.classList.add('open');
-}
-function closeSubBookModal(){ var ov = document.getElementById('sub-book-overlay'); if(ov) ov.classList.remove('open'); }
-function confirmSubBook(){
-  if(!SUB_BOOK) return;
-  var c = CASE_ITEMS.filter(function(x){ return x.id===SUB_BOOK.caseId; })[0], s = c && (c.subItems||[]).filter(function(x){ return x.id===SUB_BOOK.subId; })[0]; if(!s) return;
-  var date = document.getElementById('sub-book-date').value, time = document.getElementById('sub-book-time').value, purpose = document.getElementById('sub-book-purpose').value;
-  var why = slotBlockReason(date, time); if(why){ alert(why); return; }
-  var nc = createReservationCase(c.name, null, date, time, null, purpose);
-  nc.linkedCase = {caseId:c.id, reason:(purpose==='复诊' ? '复诊' : '术后管理'), auto:true};
-  s.booked = nc.caseNo;
-  logCaseEvent(c, actingName(), 'IN 室长预约了 '+s.no+'「'+s.content+'」：新案件 '+nc.caseNo+'（'+date+' '+time+'，'+purpose+'），已关联本案件');
-  logCaseEvent(nc, actingName(), '由赴韩案件 '+c.caseNo+' 的子项 '+s.no+'「'+s.content+'」预约，自动关联原案件');
-  closeSubBookModal(); renderCalendar(); if(typeof renderSubBookCard==='function') renderSubBookCard();
-  showToast('预约已生成', c.name+' · '+date+' '+time+'，新案件 '+nc.caseNo+' 已关联 '+c.caseNo, null);
-}
 
 /* 确认后修改日期：施术前2周内置灰不可点；月历默认打开原定日期所在月份（2026-09-29 第十轮修复） */
 function startKrScheduleChange(){

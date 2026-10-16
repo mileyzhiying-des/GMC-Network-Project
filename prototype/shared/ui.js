@@ -1031,6 +1031,8 @@ var CASE_ONLY_MINE = false;
 var CASE_HOSPITAL_FILTER = 'all'; /* 案件列表按医院筛选：all 或医院 ID（只列出本诊所对接的医院） */
 function setCaseHospitalFilter(v){ CASE_HOSPITAL_FILTER = v; buildCaseTabs(); renderCaseRows(); }
 
+var CASE_ROW_OPEN = {}, CASE_GRID = '1.0fr 1.0fr 0.85fr 1.5fr 1.0fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr';
+function caseRowToggle(id){ CASE_ROW_OPEN[id] = !CASE_ROW_OPEN[id]; renderCaseRows(); }
 function renderCaseRows(){
   var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return c.stage===CASE_TAB_FILTER; });
   if(CASE_REFUND_FILTER) items = items.filter(hasRefundMark);
@@ -1044,13 +1046,19 @@ function renderCaseRows(){
     var si = caseStageInfo(c);
     var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '')+(krHoldOpen(c) ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:10px;">在韩后续进行中</span>' : '');
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
-    /* 2026-10-08：待访问行内按钮已废弃；CMD-1008-13：当前状态拆成「阶段（彩色标签）+ 进程（文字）」，去掉「状态」栏和最右边「查看 →」，整行可点击（hover 浅粉色） */
-    return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:1.1fr 0.8fr 0.9fr 1.4fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr;cursor:pointer;"><span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
-      '<span style="font-size:12px;color:var(--slate2);">'+c.caseNo+'</span>'+
+    subCaseNos(c); var subs = subCaseList(c), open = !!CASE_ROW_OPEN[c.id];
+    /* CMD-1015-17：Case ID ｜ 客户姓名 ｜ 阶段 ｜ 进程 ｜ 财务 ｜ 对接院长 ｜ IN 室长 ｜ KR 室长 ｜ 开始时间 ｜ 更新时间；有子案件的 Case ID 前加 ▼，展开列出子案件（客户姓名留空、开始时间 = 到院时间） */
+    var main = '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;"><span style="font-size:12px;color:var(--slate2);">'+(subs.length ? '<span onclick="event.stopPropagation();caseRowToggle(\''+c.id+'\')" title="展开子案件" style="cursor:pointer;display:inline-block;width:16px;">'+(open ? '▲' : '▼')+'</span>' : '<span style="display:inline-block;width:16px;"></span>')+c.caseNo+'</span>'+
+      '<span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
       '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
       '<span style="font-size:12px;">'+si.proc+lmTag+'</span>'+
       '<span>'+financeCellHtml(c)+'</span>'+
-      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
+      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartText(c)+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
+    var subHtml = open ? subs.map(function(rep){
+      var grp = subCaseRows(c, rep), allDone = grp.every(function(s){ return s.done; });
+      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+rep.dno+'</span><span></span><span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">术后管理</span></span><span style="font-size:12px;">'+(rep.place==='IN' ? '印尼' : '韩国')+'：'+grp.map(function(s){ return s.content; }).join('；')+' · '+(allDone ? '已完成' : (grp.some(function(s){ return s.arrived; }) ? '已到店' : '待到店'))+'</span><span></span><span></span><span></span><span></span><span style="font-size:12px;color:var(--muted);">'+(rep.place==='IN' ? (rep.visitDate||rep.date) : rep.date+(rep.time ? ' '+rep.time : ''))+'</span><span style="font-size:12px;color:var(--muted);">'+(rep.doneAt ? fmtUtc(rep.doneAt) : '')+'</span></div>';
+    }).join('') : '';
+    return main+subHtml;
   }).join('');
 }
 
@@ -1309,7 +1317,7 @@ function inHandleCallSignal(sig){
 function simulatePeerDecline(){
   if(VIDEO_CALL.status!=='ringing') return;
   VIDEO_CALL.active = false; INVITE_KR_CONTEXT_CASE_ID = null; CHAT_VIDEO_CONTEXT_CASE_ID = null;
-  renderDashCallCard(); try{ renderSubBookCard(); }catch(e){} try{ renderPcDueCard(); }catch(e){} try{ renderDrawerList(); }catch(e){}
+  renderDashCallCard(); try{ renderDrawerList(); }catch(e){}
   clearTimeout(VIDEO_CALL.ringTimer);
   showToast('📞 对方已拒绝', callTitle()+' 的视频通话被对方拒绝了', null, {sticky:true});
   goBack();
@@ -1371,30 +1379,7 @@ function renderVideoPage(){
 
 /* 工作台顶部卡片：只在通话进行中出现（没有通话时不显示） */
 /* 工作台待办：KR 请 IN 帮忙预约的术后管理（回印尼做的子项，已通知、还没预约）；点［代约］打开预约弹窗，生成的新案件关联原案件（CMD-1012-02 D5） */
-function subBookTodos(){
-  var out = [];
-  CASE_ITEMS.forEach(function(c){ (c.subItems||[]).forEach(function(s){ if(s.informed && !s.booked && !s.done && s.place!=='KR') out.push({c:c, s:s}); }); });
-  return out;
-}
 /* IN 工作台：术后管理已过建议日期还没做的提醒（CMD-1013-06 一·4） */
-function renderPcDueCard(){
-  var el = document.getElementById('dash-pcdue-card'); if(!el) return;
-  el.style.display = 'none'; el.innerHTML = ''; return; /* CMD-1014-18 四·4：工作台不再有这张卡（回印尼的术后管理由客人持有 + 待办提醒，不再请 IN 帮忙预约） */
-  var list = postcareDueList();
-  if(!list.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
-  el.style.display = 'block';
-  el.innerHTML = '<div style="padding:14px 18px;"><div style="font-size:14px;font-weight:700;margin-bottom:8px;color:#C1454A;">术后管理已过建议日期<span class="status-pill" style="background:#FBE3E1;color:#C1454A;margin-left:8px;">'+list.length+'</span></div>'+
-    list.map(function(x){ return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="flex:1;"><b>'+x.name+'</b> · '+x.h.itemName+'（属于 '+x.sg.src.caseNo+'，建议 '+pcMD(x.sg.date)+'）<span style="color:#C1454A;">已过 '+x.late+' 天</span></span></div>'; }).join('')+'<div style="font-size:11px;color:var(--muted);margin-top:6px;">客人来店时在本地管理 / 持有项目使用里点［做术后管理］补做，会记「延后 N 天」。</div></div>';
-}
-function renderSubBookCard(){
-  var el = document.getElementById('dash-subbook-card'); if(!el) return;
-  el.style.display = 'none'; el.innerHTML = ''; return; /* CMD-1014-18 四·4：工作台不再有这张卡（回印尼的术后管理由客人持有 + 待办提醒，不再请 IN 帮忙预约） */
-  var list = subBookTodos();
-  if(!list.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
-  el.style.display = 'block';
-  el.innerHTML = '<div style="padding:14px 18px;"><div style="font-size:14px;font-weight:700;margin-bottom:8px;">待预约（KR 请帮忙预约术后管理）<span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);margin-left:6px;">'+list.length+'</span></div>'+
-    list.map(function(x){ return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="flex:1;"><b>'+x.c.name+'</b>（'+x.c.caseNo+'）· '+x.s.content+' · 建议 '+x.s.date+'</span><button class="btn-primary" style="padding:4px 12px;font-size:12px;" onclick="openSubBookModal(\''+x.c.id+'\',\''+x.s.id+'\')">代约</button></div>'; }).join('')+'</div>';
-}
 function renderDashCallCard(){
   var el = document.getElementById('dash-call-card'); if(!el) return;
   if(!VIDEO_CALL.active){ el.style.display = 'none'; el.innerHTML = ''; return; }
@@ -1444,24 +1429,10 @@ function renderReportPage(){
     '<div class="card" style="padding:28px 36px;max-width:820px;">'+reportDocHtml(c, REPORT_SHOW_ORIG)+'</div>';
 }
 
-function closeReportModal(){ document.getElementById('report-overlay').classList.remove('open'); }
 
 
 /* ---- info drawer ---- */
-function openCaseInfoDrawer(){
-  var c = getCurrentCase(); if(!c) return;
-  document.getElementById('peek-name').textContent = '姓名：'+c.name;
-  document.getElementById('peek-contact').textContent = '联系方式：'+caseBasic(c).contact;
-  document.getElementById('peek-director').textContent = (c.hospitalId ? '医院：'+hospitalName(c.hospitalId,'ko')+' · ' : '')+'对接院长：'+(c.director||'—');
-  document.getElementById('peek-viewall').onclick = function(){ closeCaseInfoDrawer(); openClientDetail(c.name, 'in-cases'); return false; };
-  document.getElementById('peek-overlay').classList.add('open');
-  document.getElementById('case-info-drawer').classList.add('open');
-}
 
-function closeCaseInfoDrawer(){
-  document.getElementById('peek-overlay').classList.remove('open');
-  document.getElementById('case-info-drawer').classList.remove('open');
-}
 
 
 /* ---- body dispatcher ---- */
@@ -2950,7 +2921,6 @@ function openNotif(id, src){
     if(newTab) openCaseNewTab(n.caseId, '&chat=open'); else openCaseRoom(n.caseId);
     return;
   }
-  if(k==='subBook'){ if(n.caseId) openSubBookModal(n.caseId, n.link.subId); return; } /* KR 通知预约 → 预约弹窗 */
   if(n.caseId){ if(newTab) openCaseNewTab(n.caseId); else openCaseDetail(n.caseId); }
 }
 
@@ -3469,7 +3439,7 @@ function refreshView(){
   if(isKrAccount()){ if(typeof krRefreshAll==='function') krRefreshAll(); return; } /* KR 端自己重画 */
   try{ toastNewNotifs(); }catch(e){} /* 别的分页产生的新通知 → toast（K-002） */
   try{ sweepStaleReceptions(true); }catch(e){} /* 接待中但心跳过期的案件退回待访问（CMD-1008-06） */
-  [['日历与今日区块',renderCalendar],['待预约提醒卡',renderSubBookCard],['术后管理过期提醒卡',renderPcDueCard],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['预约历史',renderResvHistory],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
+  [['日历与今日区块',renderCalendar],['客户管理',buildClients],['案件tab',buildCaseTabs],['案件列表',renderCaseRows],['案例库',renderLibrary],['项目库',renderProjLibrary],['通知中心',buildNotifications],['预约历史',renderResvHistory],['对话未读',updateChatBadge],['铃铛',updateBell]].forEach(function(m){
     try{ if(typeof m[1]==='function') m[1](); }catch(e){}
   });
   try{ refreshAdminPage(); }catch(e){} /* 管理类页面（账号状态等被别的标签页改了） */

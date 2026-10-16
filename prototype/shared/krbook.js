@@ -126,6 +126,7 @@ function coreBookConfirm(hid, id, by){
     var c = createReservationCase(b.clientName, null, b.date, b.time, '', '在韩到店·'+krbPurposeText(b.purpose));
     c.krVisit = {bookingId:b.id, hospitalId:hid, director:'', purpose:b.purpose, note:b.note||'', place:'KR 医院', confirmedBy:by, arrived:false, done:false};
     c.hospitalId = hid; c.director = ''; c.krCoordinator = c.krCoordinator || '';
+    updateCaseStage(c); /* CMD-1015-17：阶段 = 在韩管理（IN / KR 的案件管理都看得到） */
     logCaseEvent(c, by, 'KR 确认 IN 在 KR 医院日程的占位预约：'+b.date+' '+b.time+'（韩国）；到店目的：'+krbPurposeText(b.purpose)+'；地点 KR 医院；从预约到店开始');
     caseId = c.id;
     pushNotif('预约', 'KR 已确认预约：'+b.clientName+' · '+b.date+' '+b.time+'（韩国），已建立案件 '+(c.caseNo||'')+'（在韩到店）', {caseId:c.id, level:'info'});
@@ -153,7 +154,8 @@ function coreBookArrive(hid, id, by){
 }
 /* 使用在韩持有：这位客人在本诊所各案件里「在韩持有」的项目（还有剩余次数） */
 function krbHoldChoices(clinicId, clientName){
-  var out = []; Store.withClinic(clinicId, function(){ CASE_ITEMS.forEach(function(c){ if(c.name!==clientName || c.krVisit) return; (c.procedureItems||[]).forEach(function(it){ if(it.heldOver && !it.holdDone && holdItemLeft(c, it)>0) out.push({caseId:c.id, caseNo:c.caseNo, name:it.name, left:holdItemLeft(c, it)}); }); }); });
+  var out = []; Store.withClinic(clinicId, function(){ CASE_ITEMS.forEach(function(c){ if(c.name!==clientName || c.krVisit) return; (c.procedureItems||[]).forEach(function(it){ if(it.heldOver && !it.holdDone && holdItemLeft(c, it)>0) out.push({caseId:c.id, caseNo:c.caseNo, name:it.name, left:holdItemLeft(c, it)}); });
+    (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='KR' && s.hold && !s.done && !s.holdUseOf) out.push({caseId:c.id, caseNo:c.caseNo, name:s.content, left:1, rowId:s.id, care:true}); }); /* 结束术后管理后转在韩持有的韩国术后管理（免费） */ }); });
   return out;
 }
 /* 新做管理计价（四·3）：从 KR 项目库选项目 → 待付款 → 已付款；金额只存在预约记录里，KR 看得到，IN 的案件 / Timeline / 通知都不带金额 */
@@ -178,7 +180,8 @@ function coreBookDone(hid, id, did, by){
   if(did.kind==='care'){ if(!(b.fees||[]).length) return {ok:false, err:'请先选择管理项目并加入'}; if(b.fees.some(function(f){ return f.status!=='已付款'; })) return {ok:false, err:'还没付款：请先标记已付款'}; did.name = b.fees.map(function(f){ return f.name+(f.specLabel ? ' · '+f.specLabel : '')+(f.service ? '（서비스）' : ''); }).join('、'); }
   var text = '';
   Store.mutateClinic(b.clinicId, function(){
-    if(did.kind==='hold'){ var src = CASE_ITEMS.filter(function(x){ return x.id===did.caseId; })[0], it = src && (src.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===did.name; })[0];
+    if(did.kind==='hold'){ var src = CASE_ITEMS.filter(function(x){ return x.id===did.caseId; })[0], rowC = src && (src.subItems||[]).filter(function(x){ return x.hold && !x.done && x.content===did.name && x.kind==='术后管理记录'; })[0], it = rowC ? null : (src && (src.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===did.name; })[0]);
+      if(rowC){ rowC.done = true; rowC.doneAt = nowFullDt(); rowC.doneBy = by; rowC.visitDate = todayStr(); rowC.arrived = true; logCaseEvent(src, by, '使用在韩持有的术后管理「'+rowC.content+'」（在韩管理新案件 '+((CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]||{}).caseNo||'')+'）'); }
       if(it){ it.holdUsed = (it.holdUsed||0)+did.qty; if(it.holdUsed >= (it.qty||1)) it.holdDone = true; logCaseEvent(src, by, '使用在韩持有「'+it.name+'」'+did.qty+' 次（在韩到店预约，案件 '+((CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]||{}).caseNo||'')+'）'); } text = '使用在韩持有「'+did.name+'」'+did.qty+' 次'; }
     else if(did.kind==='care') text = '新做管理「'+did.name+'」';
     else text = '其他'+(did.note ? '：'+did.note : '');

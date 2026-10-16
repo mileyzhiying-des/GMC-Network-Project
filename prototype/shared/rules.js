@@ -764,4 +764,7 @@ function relDayDiff(ds, todayDs){ return Math.round((new Date(ds+'T00:00:00') - 
 
 /* CMD-1015-05 十一：案件管理按「最近更新」排序（最近有变动的在最上面）——取 Timeline 里最晚的一条时间；没有记录的排最后 */
 function caseUpdatedKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && e.dt > m) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
+/* 案件开始时间（CMD-1015-17）：Timeline 里最早的一条（UTC），没有就用预约来访时间；列表显示按页面时区换算 */
+function caseStartKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && (!m || e.dt < m)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
+function caseStartText(c){ var k0 = caseStartKey(c); return k0 ? (fmtUtc(k0) || k0) : '—'; }
 function caseUpdatedDesc(a, b){ return caseUpdatedKey(b).localeCompare(caseUpdatedKey(a)); }

@@ -36,8 +36,6 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
       <div id="dash-off-row" style="display:none;font-size:13px;margin-top:-8px;"></div>
 
       <div class="card" id="dash-call-card" style="display:none;"></div>
-      <div class="card" id="dash-subbook-card" style="display:none;"></div>
-      <div class="card" id="dash-pcdue-card" style="display:none;"></div>
 
       <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;">
         <div class="cal-toolbar">
@@ -109,7 +107,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
     <div class="content">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div class="tabs" id="case-tabs" style="flex:1;"></div><label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" id="only-mine" onchange="CASE_ONLY_MINE=this.checked;renderCaseRows();"> 仅看我的</label><button class="btn-ghost" onclick="simulateTimePass30()" title="原型演示：所有待访问案件按'过了预约时间30分钟还没点到访'处理">演示：模拟时间超过30分钟</button></div>
       <div class="card" style="padding:4px 20px;">
-        <div class="trow head" style="grid-template-columns:1.1fr 0.8fr 0.9fr 1.4fr 1.1fr 0.9fr 0.8fr 0.8fr 0.7fr;"><span>客户姓名</span><span>Case ID</span><span>阶段</span><span>进程</span><span>财务</span><span>对接院长</span><span>IN 室长</span><span>KR 室长</span><span>更新时间</span></div>
+        <div class="trow head" style="grid-template-columns:1.0fr 1.0fr 0.85fr 1.5fr 1.0fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr;"><span>Case ID</span><span>客户姓名</span><span>阶段</span><span>进程</span><span>财务</span><span>对接院长</span><span>IN 室长</span><span>KR 室长</span><span>开始时间</span><span>更新时间</span></div>
         <div id="case-rows"></div>
       </div>
     </div>
@@ -745,17 +743,6 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
     </div>
     <div id="new-staff-chat-list" style="margin-bottom:16px;"></div>
     <button class="btn-primary" style="width:100%;" onclick="confirmNewStaffChat()">确认</button>
-  </div>
-</div>
-
-<!-- ============ REPORT VIEW MODAL ============ -->
-<div class="modal-overlay" id="report-overlay" onclick="if(event.target===this) closeReportModal()">
-  <div class="modal-box" style="width:420px;max-height:80vh;overflow:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <span style="font-size:15px;font-weight:700;">面诊诊疗方案</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeReportModal()">✕</span>
-    </div>
-    <div id="report-body"></div>
   </div>
 </div>
 
