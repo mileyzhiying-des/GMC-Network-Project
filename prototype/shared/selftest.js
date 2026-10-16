@@ -1458,12 +1458,43 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     h.directorSchedule[who] = h.directorSchedule[who].filter(function(x){ return x.id!=='R21x1' && x.id!=='R21x2'; });
     krBlock('测试'); ST.ok(/知道了/.test(document.getElementById('kr-block-overlay').innerText) && document.querySelectorAll('#kr-block-overlay button').length===1, '冲突 Modal：只有［知道了］'); document.getElementById('kr-block-overlay').classList.remove('open');
   });
-  ST.def('R19b','KR 案件卡统一表格：抬头编号 + 状态；表头 时间｜项目类型｜内容｜状态｜地点｜完成时间｜备注；三种类型标签（KM1 分页）',function(){
+  ST.def('R22a','无限延期：术后管理退回未预约、全部延期 → 子案件结案；增加项目：麻醉同意书付款后确认；时间冲突询问两个分支（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = pcCase('R22a1'); ST.krCloseToday(c); subCaseNos(c); var reps = subCaseList(c).filter(function(r){ return r.place==='KR'; }); if(!ST.ok(reps.length>=2, '要有两个以上子案件')) return;
+    var k1 = subCaseKey(reps[0]), rows1 = coreVisitRows(c, k1).filter(function(s){ return !s.done; }), no1 = reps[0].dno;
+    var u0 = careUnits(c).unbooked.length; rows1.forEach(function(s){ ST.ok(coreRowPostpone(c, s.id, ST.krBy), '无限延期一行'); });
+    ST.ok(careUnits(c).rows.filter(function(r){ return r.s.skipped; }).length===rows1.length, '延期的术后管理退回项目卡「未预约」');
+    ST.ok(c.visitEnds && c.visitEnds[k1] && c.visitEnds[k1].reason==='全部延期' && !subCaseList(c).some(function(r){ return subCaseKey(r)===k1; }), '这个子案件里的项目全部延期 → 子案件结案（全部延期）');
+    var back = careUnits(c).rows.filter(function(r){ return r.s.skipped; })[0]; ST.ok(coreCareBook(c, back.item, 0, D(40), '10:00', 'KR', back.s.id, ST.krBy) && !back.s.skipped && back.s.date===D(40) && subCaseList(c).some(function(r){ return subCaseKey(r)==='KR|'+D(40); }), '重新预约：回到新日期的预约案件（原来那张「全部延期」留作记录）');
+    /* 增加项目：睡眠 / 全麻，付款后才确认麻醉同意书 */
+    var sleep = (HOSPITAL_DATA[caseKrHospital(c)].projects||[]).filter(function(p){ return p.defaults && p.defaults.anes && p.defaults.anes!=='local' && !krActiveItems(c).some(function(it){ return it.name===p.name; }); })[0];
+    var nm = sleep ? sleep.name : '埋线双眼皮', an = {type:'sleep', label:'睡眠麻醉', note:''}; KR_FORCE_CLASH = true;
+    try{ ST.ok(coreAddOnItem(c, nm, ST.krBy, {anesthesia:an}), '选项目 → 确认：不再要求勾选麻醉同意书'); } finally { KR_FORCE_CLASH = false; }
+    var it = c.procedureItems[c.procedureItems.length-1]; ST.ok(it.consentPending && it.pendingPay && !anesPendingItems(c).length, '付款前：待付款，同意书还不用确认');
+    ST.ok(coreAddOnPaid(c, ST.krBy) && anesPendingItems(c).length===1, '付款后：出现「待确认麻醉同意书」');
+    var row = (c.subItems||[]).filter(function(s){ return s.kind==='增加项目' && s.projectName===it.name; })[0]; ST.ok(!coreSubDone(c, row.id, ST.krBy, []), '确认麻醉同意书之前不能完成该项目');
+    ST.ok(coreAnesConfirm(c, null, ST.krBy) && !it.consentPending && c.anesthesiaConsent.projects.some(function(p){ return p.name===it.name; }), '确认已签署 → 记录同意书');
+    /* 冲突询问：先造一个会撞的不可预约，再加施术项目 */
+    var hid = caseKrHospital(c), ks = c.krSchedule, h = HOSPITAL_DATA[hid], dir = c.director, endBlk = timeToMin(ks.confirmedTime) + surgeryMinutes(c);
+    (h.directorSchedule[dir] = h.directorSchedule[dir]||[]).push({id:'R22busy', who:dir, date:ks.confirmedDate, time:minToTime(endBlk+10), end:minToTime(Math.min(1439, endBlk+70)), type:'不可预约', title:'不可预约', note:''});
+    var p2 = (h.projects||[]).filter(function(p){ return p.defaults && p.defaults.durMin>=60 && !krActiveItems(c).some(function(x){ return x.name===p.name; }); })[0]; if(!p2){ ST.ok(true, '没有第二个长时项目，跳过冲突分支'); return; }
+    KR_LAST_CONFLICT = ''; var n1 = c.procedureItems.length; ST.ok(!coreAddOnItem(c, p2.name, ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}}) && KR_LAST_CONFLICT && KR_CONFLICT_KIND==='add' && c.procedureItems.length===n1, '冲突时先询问（核心函数拒绝，标记为增加类）'); KR_LAST_CONFLICT = '';
+    KR_DEFER_ADD = true; try{ ST.ok(coreAddOnItem(c, p2.name, ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}}), '［不在这个时段］：项目照加'); } finally { KR_DEFER_ADD = false; }
+    var d2 = c.procedureItems[c.procedureItems.length-1]; ST.ok(d2.deferUse && !(c.subItems||[]).some(function(s){ return s.projectName===d2.name && !s.done && s.kind==='增加项目'; }) && surgeryMinutes(c)===surgeryMinutes(c, [], [d2.name]), '照加但不占这个时段，放在项目卡未使用');
+    h.directorSchedule[dir] = h.directorSchedule[dir].filter(function(b){ return b.id!=='R22busy'; });
+  });
+  ST.def('R22b','KM1：案件区块三组 + 抬头 + 行（项目类型｜内容｜地点｜状态｜备注｜操作）；所需术后管理一项一框；冲突询问弹窗两个按钮；增加项目里没有术后管理清单（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
-    var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }); })[0]; if(!ST.ok(!!r, '要有带韩国术后管理的案件（先在 A1 分页跑 R20a）')) return;
-    krShowCase(r.clinicId, r.id); krSetCaseTab('items'); var h = document.getElementById('krcase-body').innerText;
-    ST.ok(/时间\s*项目类型\s*内容\s*状态\s*地点\s*完成时间\s*备注/.test(h), '表头七列'); ST.ok(/主案件 · A\d+/.test(h) && /待到店|已到店|已完成/.test(h), '抬头：编号 + 到店状态');
-    ST.ok(!/今日项目/.test(h), '旧的「今日项目」表已取代'); ST.ok(/术后管理/.test(h) && /施术/.test(h), '类型标签');
+    var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }) || Object.keys(x.c.visitEnds||{}).length; })[0]; if(!ST.ok(!!r, '要有带术后管理的案件（先在 A1 分页跑 R22a）')) return;
+    krShowCase(r.clinicId, r.id); krSetCaseTab('items'); Store.withClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; krCaseCards(cc, true).forEach(function(cd){ KR_SUB_OPEN[cd.key] = true; }); }); krRenderCaseDetail(); var h = document.getElementById('krcase-body').innerText;
+    var endC = Store.withClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; return krCaseCards(cc, false).filter(function(x){ return x.kind==='end'; }); }); if(endC.length) ST.ok(endC[0].group==='done', '全部延期的子案件在完成案件里');
+    ST.ok(/今日案件|预约案件|完成案件/.test(h), '案件区块按状态分组'); ST.ok(/项目类型\s*内容\s*地点\s*状态\s*备注\s*操作/.test(h) && !/完成时间/.test(h), '表头：项目类型｜内容｜地点｜状态｜备注｜操作（没有时间 / 完成时间栏）');
+    ST.ok(/〔.* (预约|结束)〕|〔全部延期〕|【主案件】/.test(h), '时间写在抬头');
+    KR_AD.open = true; krRenderCaseDetail(); ST.ok(!/术后管理（免费，进项目进程/.test(document.getElementById('krcase-body').innerText), '增加项目底下的术后管理勾选清单已拿掉'); KR_AD.open = false;
+    var cand = krScopeCandidates(r.clinicId), p = cand.kr[0], dt = krDet(p.name); dt.pc = [{mgmt:'术后复诊', kr:'', inn:'', times:3, interval:2, place:'either', start:'3'}]; var ph = krProjDetailHtml(p, cand);
+    ST.ok(/类型/.test(ph) && /项目/.test(ph) && /次数/.test(ph) && /间隔/.test(ph) && /在哪做/.test(ph) && /第几天起/.test(ph) && /印尼对应项目/.test(ph) && /移除/.test(ph) && /border:1px solid/.test(ph), '所需术后管理：一项一个框，字段齐全');
+    krAskClash('测试冲突', {proceed:function(){ window.__askGo = 1; }, alt:function(){ window.__askAlt = 1; }, altLabel:'不在这个时段'}); var btns = document.querySelectorAll('#kr-block-overlay button'); ST.ok(btns.length===2 && /仍然进行/.test(btns[0].innerText) && /不在这个时段/.test(btns[1].innerText), '冲突询问：［仍然进行］［不在这个时段］'); btns[0].click(); ST.ok(window.__askGo===1, '［仍然进行］走 proceed');
+    krAskClash('测试冲突2', {proceed:function(){}}); var b2 = document.querySelectorAll('#kr-block-overlay button'); ST.ok(b2.length===2 && /取消/.test(b2[1].innerText), '标不可预约 / OFF：［仍然进行］［取消］'); document.getElementById('kr-block-overlay').classList.remove('open');
   });
   ST.def('R18c','KR「项目」tab：项目卡（施术项目 N｜管理项目 N）+ 案件；没有「施术」tab、没有「手术项目」；各入口都到项目 tab 并展开对应那次（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
