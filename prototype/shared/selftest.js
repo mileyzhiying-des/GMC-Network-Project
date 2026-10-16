@@ -1434,6 +1434,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     coreVisitSim(c, k3, ST.krBy); ST.ok(coreVisitArrive(c, k3, ST.krBy), '到店'); var r3 = coreVisitRows(c, k3)[0]; ST.ok(coreSubDone(c, r3.id, ST.krBy, []) && it.holdUsed===1 && (it.uses||[]).length===1, '完成：扣 1 次，记使用时间');
     coreVisitSim(c, k1, ST.krBy); ST.ok(coreVisitArrive(c, k1, ST.krBy) && coreUseTarget(c).key===k1, '到店后目标 = 这次到访');
   });
+  ST.def('R21a','院长同一时段只有一件事：在韩增加施术项目拉长施术块撞到不可预约 → 被挡；管理项目不占时长；标不可预约 / OFF 撞到安排 → 被挡（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = pcCase('R21a1'); var hid = caseKrHospital(c), ks = c.krSchedule, dir = c.director, h = HOSPITAL_DATA[hid], date = ks.confirmedDate;
+    var dur0 = surgeryMinutes(c), st0 = timeToMin(ks.confirmedTime), endBlk = st0 + dur0;
+    var extraN = (h.projects||[]).filter(function(p){ return p.name!==undefined && !krActiveItems(c).some(function(it){ return it.name===p.name; }) && p.defaults && p.defaults.durMin>=30; })[0]; if(!ST.ok(!!extraN, '找不到有时长的 KR 项目')) return;
+    var bs = {id:'R21busy', who:dir, date:date, time:minToTime(endBlk+10), end:minToTime(Math.min(1439, endBlk+70)), type:'不可预约', title:'不可预约', note:''}; (h.directorSchedule[dir] = h.directorSchedule[dir]||[]).push(bs);
+    KR_LAST_CONFLICT = ''; var n0 = krActiveItems(c).length; ST.ok(!coreAddOnItem(c, extraN.name, ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}}) && /不可预约/.test(KR_LAST_CONFLICT) && krActiveItems(c).length===n0, '在韩增加施术项目会拉长到不可预约 → 被挡，并写出撞到哪一件：'+KR_LAST_CONFLICT.slice(0,60)); KR_LAST_CONFLICT = '';
+    var lib = krLocalLib(hid).filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0], sp = lib.specs[0];
+    ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:{projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price}}), '管理项目照常能加'); ST.ok(surgeryMinutes(c)===dur0, '管理项目不占院长时长（'+dur0+' 分钟不变）');
+    syncSurgeryBlock(c); var blk = (h.directorSchedule[dir]||[]).filter(function(b){ return b.kind==='施术' && b.caseId===c.id; })[0]; ST.ok(!!blk && blk.end===minToTime(Math.min(1439, endBlk)), '施术块只按施术项目算：'+(blk&&blk.end));
+    var er = krBusySlotError(hid, dir, date, minToTime(st0+10), minToTime(st0+40)); ST.ok(/施术/.test(er), '在已有施术时段标不可预约 → 被挡：'+er);
+    var cl = directorClashList(hid, dir, date, st0, st0+30, {}); ST.ok(cl.some(function(x){ return x.what==='施术'; }), '标 OFF 的冲突检查会列出施术'); var se = krSurgerySlotError(hid, dir, date, minToTime(endBlk+20), 30, 'x:y', {allowOffHours:true}); ST.ok(/不可预约/.test(se), '别的案件排到不可预约时段 → 被挡');
+    h.directorSchedule[dir] = h.directorSchedule[dir].filter(function(b){ return b.id!=='R21busy'; });
+  });
+  ST.def('R21b','已重叠的数据：两个块都标红框「时间冲突」，不自动改动；施术块列表只写施术项目（KM1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var hid = krHospitalIdOfMe(), h = krHData(), who = krcDirectors()[0], d0 = D(70), mk = function(id, t, e){ return {id:id, who:who, date:d0, time:t, end:e, type:'不可预约', title:'不可预约', note:''}; };
+    var a = mk('R21x1', '14:00', '16:00'), b = mk('R21x2', '15:00', '17:00'); (h.directorSchedule[who] = h.directorSchedule[who]||[]).push(a, b);
+    var ca = krcBlockConflict({b:a}), cb = krcBlockConflict({b:b}); ST.ok(!!ca && !!cb, '两个重叠的块都被识别为冲突');
+    krcBlockHtml.call && ST.ok(/时间冲突/.test(krcBlockHtml({b:a, n:1, lane:0, label:''}, false)) && /D02B2B/.test(krcBlockHtml({b:b, n:1, lane:0, label:''}, false)), '日历块红框 + 写「时间冲突」');
+    ST.ok(h.directorSchedule[who].filter(function(x){ return x.id==='R21x1'; })[0].time==='14:00', '不自动改动任何一方');
+    h.directorSchedule[who] = h.directorSchedule[who].filter(function(x){ return x.id!=='R21x1' && x.id!=='R21x2'; });
+    krBlock('测试'); ST.ok(/知道了/.test(document.getElementById('kr-block-overlay').innerText) && document.querySelectorAll('#kr-block-overlay button').length===1, '冲突 Modal：只有［知道了］'); document.getElementById('kr-block-overlay').classList.remove('open');
+  });
   ST.def('R19b','KR 案件卡统一表格：抬头编号 + 状态；表头 时间｜项目类型｜内容｜状态｜地点｜完成时间｜备注；三种类型标签（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }); })[0]; if(!ST.ok(!!r, '要有带韩国术后管理的案件（先在 A1 分页跑 R20a）')) return;
