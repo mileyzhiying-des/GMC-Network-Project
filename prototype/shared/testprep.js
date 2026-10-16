@@ -79,7 +79,7 @@
     stageA: function(){ var cl = mkClient('面诊结束'); var c = krBase(cl); c.consultStatus = 'awaiting_report'; c.consultAt = {date:todayStr(), time:'11:00'}; c.consultStartedAt = nowFullDt(); c.consultContentAt = nowFullDt(); c.reportEta = D(1)+' 05:00';
       var v = ((HOSPITAL_DATA[HID].vault = HOSPITAL_DATA[HID].vault || {})[(c.clinicId||CURRENT_CLINIC_ID)+':'+c.id] = {audio:[], transcripts:[{id:'tr'+Date.now(), ts:nowFullDt(), by:DIRECTOR, mode:'manual', text:'（测试准备）面诊内容：建议假体隆鼻 + 鼻翼缩小。', demo:true}], drafts:[], history:[{ts:nowFullDt(), by:DIRECTOR, action:'测试准备：已上传面诊内容'}]});
       logCaseEvent(c, '测试准备', '测试准备：面诊已结束，院长已上传面诊内容，待 KR 室长发送诊疗方案'); mark(c); updateCaseStage(c);
-      return {cl:cl, cases:[c], where:'KR（KM1 登录）', start:'案件列表 / 工作台 → '+c.caseNo+' → 面诊 tab：AI 整理 → 勾选项目（可试共同术后管理）→ 发送诊疗方案。'}; },
+      return {cl:cl, cases:[c], where:'KR（KM1 登录）', start:'案件列表 / 工作台 → '+c.caseNo+' → 面诊 tab：AI 整理 → 勾选项目（施术项目 + 管理项目）→ 发送诊疗方案。'}; },
     stageB: function(){ var cl = mkClient('已付定金'); var c = krBase(cl); var items = withReport(c, [N1, N2]); pay(c, items);
       c.krSchedule = {status:'pending', primary:D(10), backup:D(11), confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false};
       logCaseEvent(c, '测试准备', '测试准备：客人已付定金并递交施术日期（首选 '+D(10)+'，备选 '+D(11)+'），待 KR 确认施术时间'); mark(c); updateCaseStage(c);

@@ -327,6 +327,16 @@ var Store = (function(){
       (c.procedureItems||[]).forEach(function(it){ clr(it.postcare); }); ((c.krScope||{}).items||[]).forEach(function(it){ clr(it.postcare); });
       if(n) ctx.note('IN 不再分配术后管理，已清掉 '+n+' 条旧的印尼分配');
     }},
+    {to:45, fn:function(c, ctx){ /* CMD-1015-16：拿掉「共同术后管理」——带 cid 的条目只留在第一个适用项目上（原来按一份算：排程 / 转持有只算一次），其他项目里的副本去掉，cid / applies 字段清掉；可选范围里的管理项目是新增结构（mgmt），旧案件没有，无需转换 */
+      var n = 0, seen = {};
+      var fix = function(list){ (list||[]).forEach(function(it){ if(!it || !it.postcare) return;
+        it.postcare = it.postcare.filter(function(x){ if(!x || !x.cid) return true; if(seen[c.id+'|'+x.cid]){ n++; return false; } seen[c.id+'|'+x.cid] = 1; return true; });
+        it.postcare.forEach(function(x){ if(x && x.cid){ delete x.cid; delete x.applies; } }); }); };
+      /* 三处各自按「第一次见到」去重；可选范围里的先处理，所以已选项目里的保留条目与可选范围一致即可：分开计数，避免互相吞掉 */
+      var run = function(list){ seen = {}; fix(list); };
+      run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
+      if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
+    }},
     {to:43, fn:function(c, ctx){ /* CMD-1014-16 四：只是补演示缺口（老板账号、C2 可退批次、H2 的两种状态案件）；用户案件无需改动 */ }},
     {to:41, fn:function(c, ctx){ /* 「消肿管理」改名「术后管理」；意向项目只留赴韩手术项目 */
       var fixPc = function(arr){ (arr||[]).forEach(function(x){ if(x && x.mgmt==='消肿管理') x.mgmt = '术后管理'; }); };
@@ -335,6 +345,7 @@ var Store = (function(){
       if((c.intentionProjects||[]).length){ var n0 = c.intentionProjects.length; c.intentionProjects = c.intentionProjects.filter(function(it){ return it.origin==='KR' && ['术后消肿管理','消肿管理','术后管理','拆线','术后复诊检查','术后复诊','伤口护理'].indexOf(it.name)<0; }); if(c.intentionProjects.length!==n0) ctx.note('意向项目只留赴韩手术项目，已去掉 '+(n0-c.intentionProjects.length)+' 个本地 / 术后管理项目'); }
     }}
   ];
+  window.GMC_MIGRATIONS = MIGRATIONS; /* 自测用：selftest R16c 直接跑迁移步骤 */
   function migrateHoldings(hs, fromVer, libIn){
     if(fromVer >= 37) return;
     Object.keys(hs).forEach(function(n){ (hs[n]||[]).forEach(function(h){

@@ -308,7 +308,7 @@
     var c = toConfirmed('D20'); ST.open(c); openCancelItems(); var cb = document.querySelector('.refund-cb'); if(!ST.ok(!!cb, '取消项目弹窗没有勾选框')) return; cb.checked = true;
     document.getElementById('refund-amount').value = '100000'; document.getElementById('refund-reason').value = '（自测）客人不做了'; confirmRefund();
     ST.ok(ST.hasLog(c, /取消项目"/), '缺取消项目记录'); ST.ok(krNotStartedItems(c).length===1, '应剩 1 个项目，实际 '+krNotStartedItems(c).length);
-    addMoreProjects(); var p = PROJECT_LIBRARY.filter(function(x){ return x.origin==='KR' && x.hospitalId==='H1' && x.name==='埋线双眼皮'; })[0]; toggleProject(p.id); confirmAddition(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment();
+    c.addingMore = true; c.recommended = []; var p = PROJECT_LIBRARY.filter(function(x){ return x.origin==='KR' && x.hospitalId==='H1' && x.name==='埋线双眼皮'; })[0]; toggleProject(p.id); confirmAddition(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment();
     ST.ok((c.settlementBatches||[]).length>=2, '应有第 2 张结算单，实际 '+(c.settlementBatches||[]).length);
   });
   ST.def('D21','KR 无法安排 → 重选日期',function(){
@@ -1299,6 +1299,60 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(krActiveItems(c).length){ var info = krBalanceInfo(c); if(info.diff>0){ ST.ok(settlementSummaryHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1 && settleTabTopHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '结算汇总 / 顶部一行能看到尾款金额'); ST.ok(krPlanMoneyLine(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '赴韩施术计划看得到尾款'); } }
       ST.ok(viewerTextFilter('尾款 ₩1,200,000')==='尾款 ₩1,200,000', 'IN 看得到尾款金额'); ST.ok(!/₩/.test(viewerTextFilter('在韩加项：玻尿酸，合计 ₩300,000')), '在韩加项金额 IN 仍看不到');
     } finally { CURRENT_CASE_ID = old; }
+  });
+
+  /* ================= CMD-1015-16 诊疗方案：施术 / 管理分类、拿掉共同术后管理 ================= */
+  ST.def('R16a','IN 选项目：管理项目 + 定金按全部赴韩项目 × 30% + 付完定金没有［+ 追加项目］ + 到院后标完成 / 转在韩持有（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0]; if(!ST.ok(!!lib, 'KR 本地管理项目库是空的')) return; var sp = lib.specs[0];
+    var mk = function(base){
+      var c = ST.newRes(base); ST.consultToReport(c);
+      var si = {name:lib.name+' · '+sp.label, price:sp.price*3, mgmt:true, localId:lib.id, specId:sp.id, specLabel:sp.label, unit:sp.price, qty:3, interval:2, note:''};
+      ST.ok(coreAddScopeItem(c, si, 'KM1 室长'), '补加管理项目到可选范围失败'); ST.open(c); c.activeCaseTab = 'kr'; c.projectOriginFilter = 'KR';
+      ST.ok(/管理项目/.test(projectPickerHtml(c, false)) && projectPickerHtml(c, false).indexOf(lib.name)>-1, '选项目里应有「管理项目」分组');
+      ['假体隆鼻','鼻翼缩小'].forEach(function(n){ var p = PROJECT_LIBRARY.filter(function(x){ return x.name===n && x.origin==='KR' && x.hospitalId==='H1'; })[0]; toggleProject(p.id); });
+      toggleProject(scopeMgmtPid(si)); ST.ok(c.recommended.length===3 && c.recommended.some(function(it){ return it.mgmtPlan && it.qty===3 && it.origin==='KR'; }), '三项都应进已选');
+      var bd = computeBatchBreakdown(c.recommended), tot = c.recommended.reduce(function(s2, it){ return s2 + it.price; }, 0);
+      ST.ok(bd.krTotal===tot && bd.krDeposit===Math.round(tot*KR_DEPOSIT_RATE), '定金 = 全部赴韩项目（施术 + 管理）× 30%，实际 '+bd.krDeposit+' / '+tot);
+      confirmProjectSelection(); settleProjects(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); ST.ok(c.settlementDone, '付定金失败');
+      ST.ok(!/\+ 追加项目/.test(krProcedureTabHtml(c)), '付完定金后不再有［+ 追加项目］');
+      ST.scheduleConfirm(c, 8); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); syncSurgerySub(c);
+      return c;
+    };
+    var c1 = mk('R16a1'); var surg = c1.subItems.filter(function(s){ return s.kind==='施术'; })[0], mg = c1.subItems.filter(function(s){ return s.mgmtPlan; })[0];
+    ST.ok(!!surg && !!mg && !/管理项目|·/.test(surg.content.replace(/施术：/,'').split('、').filter(function(n){ return n.indexOf(lib.name)>-1; }).join('')), '施术行不含管理项目，管理项目另有一行');
+    ST.ok(coreTodayDone(c1, [surg.id]) && krNotStartedItems(c1).some(function(it){ return it.mgmtPlan; }), '施术行标完成后，管理项目仍未完成');
+    ST.ok(coreTodayDone(c1, [mg.id]) && !krNotStartedItems(c1).some(function(it){ return it.mgmtPlan; }), '管理项目行标完成 → 管理项目完成');
+    var c2 = mk('R16a2'); var s2 = c2.subItems.filter(function(s){ return s.kind==='施术'; })[0]; coreTodayDone(c2, [s2.id]);
+    ST.ok(coreFinishToday(c2, ST.krBy), '结案失败'); var held = c2.procedureItems.filter(function(it){ return it.mgmtPlan && it.heldOver; })[0];
+    ST.ok(!!held && held.qty===3 && krHoldOpen(c2) && !c2.subItems.some(function(s){ return s.mgmtPlan; }), '没做完的管理项目转在韩持有（剩 3 次），进程行拿掉');
+  });
+  ST.def('R16b','KR 诊疗方案：没有共同术后管理；可选范围分施术 / 管理；管理项目 项目（规格）× 次数 × 间隔（KM1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    ST.ok(typeof krCommonBlock==='undefined' && typeof commonCareOf==='undefined' && typeof krScopeCommons==='undefined', '共同术后管理相关函数已拿掉');
+    var lib = krLocalLib(krHospitalIdOfMe()), p = lib.filter(function(x){ return !x.neg && x.specs && x.specs.length>1; })[0] || lib.filter(function(x){ return !x.neg; })[0]; if(!ST.ok(!!p, '没有管理项目')) return;
+    var st = {on:true, sid:p.specs[p.specs.length-1].id, qty:4, interval:3, manual:''}, it = krMgScopeItem(p, st, '备注');
+    ST.ok(it && it.mgmt && it.qty===4 && it.interval===3 && it.unit===p.specs[p.specs.length-1].price && it.price===it.unit*4 && it.name.indexOf(p.name+' · ')===0, '管理项目条目：规格单价 × 次数');
+    var one = krMgScopeItem(p, {sid:p.specs[0].id, qty:1, interval:9, manual:''}, ''); ST.ok(one.interval===0, '1 次不记间隔');
+    var neg = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.neg; })[0]; if(neg){ ST.ok(krMgScopeItem(neg, {sid:neg.specs[0].id, qty:1, interval:1, manual:''}, '')===null && krMgScopeItem(neg, {sid:neg.specs[0].id, qty:2, interval:1, manual:'50000'}, '').price===100000, '面议项目要手填单价'); }
+    var d = recSummaryData([{name:'假体隆鼻', stay:'7天', anesthesia:{label:'局部麻醉'}, postcare:[]}, it], ''); ST.ok(d.mgmt.length===1 && d.mgmt[0].qty===4 && d.rows.length===1, '推荐项目整理单独列管理项目，不算进推荐在韩天数'); ST.ok(/管理项目/.test(recSummaryHtml([it], '')), '只有管理项目也能生成整理');
+    var r = krAllCases().filter(function(x){ return x.c.consultStatus==='awaiting_report'; })[0];
+    if(r){ krShowCase(r.clinicId, r.id); var c = r.c, oldC = c.consultContentAt; c.consultContentAt = c.consultContentAt || nowFullDt(); KR_SUB = krSubBlank(krRecKey()); KR_SUB.text = '（自测）';
+      var h0 = krSubmitBlock(c); ST.ok(/施术项目/.test(h0) && /管理项目/.test(h0) && /disabled/.test(h0), '可选范围有两个分类；什么都没勾时发送置灰');
+      KR_SUB.mg[p.id] = {on:true, sid:p.specs[0].id, qty:2, interval:1, manual:''}; var h1 = krSubmitBlock(c); ST.ok(!/title="请选择院长推荐的项目"/.test(h1), '只勾管理项目也能发送（至少 1 项）'); KR_SUB.tab = 'mgmt'; ST.ok(/次/.test(krSubmitBlock(c)) && /只在韩国做/.test(krSubmitBlock(c)), '管理项目：规格 / 次数 / 间隔，只在韩国做');
+      KR_SUB = krSubBlank(''); c.consultContentAt = oldC; }
+    ST.ok(!/共同术后管理/.test(document.body.innerText), '页面上没有「共同术后管理」');
+  });
+
+  ST.def('R16c','迁移 45：旧案件的共同术后管理转成各项目自己的（任意分页）',function(){
+    var m = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===45; })[0]; if(!ST.ok(!!m, '没有 to:45 的迁移步骤')) return;
+    var cm = function(){ return {mgmt:'术后管理', name:'ONDA 提升', times:2, interval:1, place:'KR', startDay:3, cid:'cm1', applies:['腹部吸脂','大腿吸脂']}; };
+    var own = {mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7};
+    var c = {id:'rx', caseNo:'A9', krScope:{items:[{name:'腹部吸脂', postcare:[cm(), Object.assign({}, own)]}, {name:'大腿吸脂', postcare:[cm()]}]}, procedureItems:[{name:'腹部吸脂', postcare:[cm()]}, {name:'大腿吸脂', postcare:[cm()]}], recommended:[]};
+    var notes = []; m.fn(c, {note:function(t){ notes.push(t); }});
+    var a = c.krScope.items[0].postcare, b = c.krScope.items[1].postcare;
+    ST.ok(a.length===2 && b.length===0, '共同术后管理只留在第一个适用项目上，其余副本去掉：'+a.length+' / '+b.length); ST.ok(!JSON.stringify(c).match(/"cid"|"applies"/), 'cid / applies 字段清掉');
+    ST.ok(c.procedureItems[0].postcare.length===1 && c.procedureItems[1].postcare.length===0, '已选项目里同样处理'); ST.ok(notes.length===1 && /共同术后管理已转成/.test(notes[0]), '迁移备注写明处理方式');
   });
 
 })();

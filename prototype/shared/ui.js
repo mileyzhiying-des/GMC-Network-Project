@@ -2084,6 +2084,9 @@ function toggleProject(projectId){
   var idx = c.recommended.findIndex(function(it){ return it.projectId===projectId; });
   if(idx>-1){
     c.recommended.splice(idx,1);
+  } else if(/^lc:/.test(projectId)){ /* KR 诊疗方案里的管理项目（CMD-1015-16）：快照 = KR 填的 项目（规格）+ 次数 + 间隔；origin KR（算进赴韩定金），只在韩国做，到院后标完成 / 转在韩持有 */
+    var si = scopeMgmtItems(c).filter(function(x){ return scopeMgmtPid(x)===projectId; })[0]; if(!si) return;
+    c.recommended.push({projectId:projectId, name:si.name, price:si.price, currency:'KRW', origin:'KR', categoryId:null, local:true, mgmt:true, mgmtPlan:true, qty:si.qty, interval:si.interval, specLabel:si.specLabel, unit:si.unit, note:si.note||''});
   } else {
     var p = projById(projectId); if(!p) return;
     var item = p.origin==='IN' ? buildLocalItem(p) : {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId}; /* 本地项目：带入进行中的活动价（成交价快照） */
@@ -2112,7 +2115,7 @@ function settleProjects(batchId){
   var rows = '';
   if(batch.krTotal){
     rows += '<div><div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:6px;">赴韩项目（收预付金，尾款赴韩后支付）</div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>施术项目小计（术后管理含在套餐内，不另收费）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>赴韩项目小计（施术 + 管理；术后管理含在套餐内，不另收费）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px;"><span>定金（诊所收，'+Math.round(KR_DEPOSIT_RATE*100)+'%）</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后在医院支付，医院收）</span><span>'+formatCurrency(Math.max(0,(batch.krTotal||0)-(batch.krDeposit||0)),'KRW')+'</span></div></div>';
   }

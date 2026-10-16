@@ -714,3 +714,13 @@ prototype/shared/app.css  共用样式
 - **9 尾款 IN 看得到**：`viewerTextFilter` 不再把「尾款 ₩xx」改成「已付清」；结算单卡片、结算汇总行（`settlementSummaryHtml`）、结算 tab 顶部（`settleTabTopHtml`）、付款弹窗、待付款批次一行都显示尾款金额（项目合计 − 定金，在韩加项不计入）；赴韩施术计划「确认赴韩项目」卡下加一行「项目合计 / 定金 / 尾款」（`krPlanMoneyLine`）。选项目那处原来就有。**在韩加项金额 IN 仍看不到**。
 - 顺手修 S39 过期正则（取消通知文字改成「X 取消了 … 的预约」）；`selftest.js` 新增 R15a（来电）/ R15b（院长 4 卡，KD1 / KO1 分页）/ R15c（上传面诊通知 + 安排术后管理，KM1 分页）/ R15d（IN 五项）。
 - **测试教训**：`ST.cleanup` 还原的是「`ST.begin` 拍快照那一刻」的存档，所以**跑 `ST.ensureFixtures` 之前要先 `ST.begin()`**（或直接用 `ST.runAll`，它会先拍快照），否则夹具会被快照带进「还原后」的数据里。
+
+## CMD-1015-16 补充（2026-10-16，追加；取代 CMD-1013-03「共同术后管理」和 CMD-1015-05「补加可选项目可勾共同术后管理」的部分，旧文字保留作历史）
+- 基准 **d536c90**，单个提交，**未推送**，不带开关。**数据版本 44 → 45**（`store.js` `MIGRATIONS` 加 `to:45`；用户案件照 CMD-1012-09 规则保留并迁移）。
+- **拿掉共同术后管理**：KR 发送诊疗方案 / 补加里的蓝色块、适用项目勾选、至少勾 2 项的校验、`krCommonBlock` / `krCommonEntries` / `krScopeCommons` / `krAddJoin` / `krAddCmApply` / `krPcRowHtml` / `commonCareOf` 全部删除；`rules.js` 的 `pcUniqueEntries` 不再按 `cid` 去重，推荐项目整理（IN 选项目 / 赴韩施术计划 / 打印 / 诊疗方案）不再有「共同术后管理」段。每个施术项目的「所需术后管理」不动。**旧案件**：迁移 45 把带 `cid` 的条目只留在第一个适用项目上（原来排程 / 转持有就只算一份），其余项目里的副本去掉，`cid` / `applies` 清掉（可选范围、已选项目、待选项目三处各自处理），迁移备注写明案件号和去掉几条。
+- **可选范围分［施术项目］［管理项目］**（kr.js，`KR_SUB.tab` / `KR_SUB.mg`，`krSubBlank()` 统一初始化）：管理项目 = KR 本地管理项目库（`krLocalLib`，12 类、韩元、付费）；勾选后填 项目（规格）｜次数｜间隔（1 次不记间隔），面议项目要手填单价；只在韩国做、不选地点。条目存进 `krScope.items`：`{name:'项目 · 规格', price:单价×次数, mgmt:true, localId, specId, specLabel, unit, qty, interval, note}`；`krMgScopeItem(p, st, note)` 生成。发送条件至少勾 1 项（施术或管理都算）；推荐项目整理里「管理项目」单独一段（`recSummaryData` 的 `mgmt`，不算推荐在韩天数）。**［补加可选项目］** 用同一套表单（`krAddCardHtml` 分施术 / 管理两个 tab，管理项目可再补加其他规格），拿掉「是否要做共同术后管理」。
+- **IN 选项目**：赴韩项目里多一组「管理项目」（`scopeMgmtRowsHtml`，来自 KR 可选范围）；勾选 → `toggleProject('lc:本地项目id:规格id')` 进已选（`origin:'KR'`、`local:true`、`mgmt:true`、`mgmtPlan:true`、`qty`、`interval`，`isLocalKrItem` 认得）；**定金 = 全部赴韩项目（施术 + 管理）× 30%**（`computeBatchBreakdown` 本来就按所有 origin KR 项目算，这次只是改文案），其余为尾款。
+- **KR 到院后**：管理项目计划（`mgmtPlan`）在 `syncSurgerySub` 里各生成一行进程（kind「增加项目」+ `mgmtPlan:true`），今日项目里和施术一样勾选标完成（`coreSubDone` 增加项目行认 `mgmtPlan`；**施术行标完成不再带上管理项目**）；没做完点「是，结案」→ `coreFinishToday` 转在韩持有（`heldOver`，剩余次数 = `qty`），对应进程行拿掉（持有项目卡里显示）。管理项目不占院长施术时间（`surgeryMinutes` 跳过 `mgmtPlan`）。
+- **IN 付完定金后拿掉「确认赴韩项目」的［+ 追加项目］**：`krAddMoreHtml` / `addMoreProjects` 删除；要加赴韩项目请在对话里跟 KR 说，由 KR 到院当天添加（在韩加项）；本地项目仍用右上角［+ 添加本地管理］。
+- 我的判断（未经确认）：管理项目的「次数」按「同一规格买几次」算（价格 = 规格单价 × 次数）；只有管理项目、没有施术项目时，施术行写管理项目名（保证还能走施术日期流程）。
+- 测试：`selftest.js` 新增 R16a（IN 选项目 + 定金 + 无追加 + 标完成 / 转持有）、R16b（KR 表单，KM1 分页）、R16c（迁移 45）；D20 的「追加项目」改成直接置 `c.addingMore`（追加入口已拿掉）。`store.js` 暴露 `window.GMC_MIGRATIONS` 供 R16c 用。**CAL2 / CAL6 会被前面用例在 D(40) 留下的 OFF 影响**（KM1 分页连跑时先清掉 `HOSPITAL_DATA[h].offs` 里 D(40) 那天的条目再跑）。

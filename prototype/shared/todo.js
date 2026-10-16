@@ -417,7 +417,7 @@ function notifTodoKind(n){
 /* KR 结案弹窗：「未完成的 N 项会转入在韩持有」（N = 0 不显示）；与 coreFinishToday 实际转入的项一致 */
 function todayHeldCount(c){
   var info = todayFinishInfo(c); if(!info) return 0;
-  var n = info.undone.length;
+  var n = info.undone.filter(function(s){ return !s.mgmtPlan; }).length; /* 管理项目由下面的持有项目计数 */
   (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && !s.done && !s.hold && info.undone.indexOf(s)<0) n++; });
   krNotStartedItems(c).forEach(function(it){ if(isLocalKrItem(it) && !it.service) n++; });
   return n;
