@@ -1211,7 +1211,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__T2_BK1')||'null'); if(!ST.ok(!!rec, '先在 A1 分页跑 BK1a')) return; var hid = rec.hid;
     var bk = krbFind(hid, rec.id); if(!ST.ok(!!bk && bk.status==='pending', '占位应是待确认')) return;
     var res = coreBookConfirm(hid, bk.id, 'KM1 室长'); ST.ok(res.ok && !!res.caseId, 'KR 确认应成功并建案件：'+res.err); var v = Store.readClinic(rec.clinic), c = (v.CASE_ITEMS||[]).filter(function(x){ return x.id===res.caseId; })[0]; if(!ST.ok(!!c, '应建立新案件')) return;
-    ST.ok(c.krVisit && c.krVisit.hospitalId===hid && c.stage==='booked' && c.director===bk.director, '新案件：在韩到店、从预约到店开始、地点 KR 医院'); ST.ok(krAllCases().some(function(x){ return x.id===c.id; }), 'KR 案件列表应看得到这个案件');
+    ST.ok(c.krVisit && c.krVisit.hospitalId===hid && (c.stage==='booked' || c.stage==='krmgmt') && (c.director||'')===((bk.director||'')===KRB_HOSP ? '' : (bk.director||'')), '新案件：在韩到店、从预约到店开始、地点 KR 医院'); ST.ok(krAllCases().some(function(x){ return x.id===c.id; }), 'KR 案件列表应看得到这个案件');
     ST.ok(!coreBookDone(hid, bk.id, {kind:'other'}, 'KM1 室长').ok, '没到店不能标完成'); ST.ok(!coreBookArrive(hid, bk.id, 'KM1 室长'), 'CMD-1014-18：还没到预约当天不能标客人已到店'); ST.ok(coreBookSimDay(hid, bk.id) && coreBookArrive(hid, bk.id, 'KM1 室长'), '模拟到当日后标记客人已到店');
     ST.ok(!coreBookDone(hid, bk.id, {kind:'care', name:''}, 'KM1 室长').ok, '新做管理要选项目'); ST.ok(!coreBookDone(hid, bk.id, {kind:'hold', caseId:'x', name:'y'}, 'KM1 室长').ok, '使用持有要选项目');
     var lp = krLocalLib(hid).filter(function(p){ return !p.neg; })[0], sp0 = lp.specs[0];
@@ -1550,7 +1550,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R26b','KM1：Step 1 评估（已付定金项目框，没有项目卡）→ Step 2（添加项目 + 付清尾款，来源标注，没有行程确认勾选）→ Step 3 确认付款 → Step 4 勾今日项目 → 结算 tab（先在 A1 跑 R26a）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R26')||'null'); if(!ST.ok(!!rec, '先在 A1 分页跑 R26a')) return;
     var ra = krAllCases().filter(function(x){ return x.id===rec.a; })[0], rb = krAllCases().filter(function(x){ return x.id===rec.b; })[0]; if(!ST.ok(!!ra && !!rb, '找不到案件')) return;
-    krShowCase(ra.clinicId, ra.id); krSetCaseTab('items'); var t1 = document.getElementById('krcase-body').innerText;
+    krProjPage('surg'); krShowCase(ra.clinicId, ra.id); krSetCaseTab('items'); var t1 = document.getElementById('krcase-body').innerText;
     ST.ok(/院长评估结果/.test(t1) && !/到院与尾款/.test(t1) && !/麻醉|推荐在韩/.test(t1) && document.querySelectorAll('#krcase-body .card').length>=1 && /已付定金项目/.test(t1) && /施术项目/.test(t1) && /可以手术，原方案不变/.test(t1) && /确认评估结果/.test(t1) && /撤回.*已到医院/.test(t1), 'Step 1：已付定金项目框 + 三选一 + ［确认评估结果］［撤回已到医院］'); ST.ok(!/项目卡/.test(t1) && !/未开始/.test(t1), 'Step 1：不显示项目卡，没有「未开始」');
     krShowCase(rb.clinicId, rb.id); krSetCaseTab('items'); var t2 = document.getElementById('krcase-body').innerText;
     ST.ok(/已付定金项目/.test(t2) && /添加项目/.test(t2) && /付清尾款/.test(t2) && /已付定金/.test(t2) && /项目合计/.test(t2) && /已付定金（可抵）/.test(t2) && /尾款（在韩国补）/.test(t2) && /结算尾款/.test(t2), 'Step 2：已付定金项目 / 添加项目 / 付清尾款（合计 / 已付定金可抵 / 尾款）/ ［结算尾款］'); ST.ok(!/已和客人确认行程/.test(t2) && !/项目卡/.test(t2) && !/KR 判断/.test(t2) && /上一步/.test(t2), 'Step 2：没有「已和客人确认行程」勾选、没有「KR 判断」行，保留上一步');
@@ -1564,6 +1564,22 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var cbx = document.querySelector('#krcase-body input[type=checkbox]'); cbx.checked = true; cbx.onchange && cbx.onchange.call(cbx); ST.ok(/已勾选：1 个项目/.test(document.getElementById('krcase-body').innerText), '勾 1 个 → 已勾选：1 个项目'); krPickGo();
     krShowCase(rb.clinicId, rb.id); krSetCaseTab('items'); var t4 = document.getElementById('krcase-body').innerText; ST.ok(/今日案件/.test(t4) && !/今日进行项目/.test(t4), '今日进行 → 勾的变今日案件的行');
     krSetCaseTab('settle'); var t5 = document.getElementById('krcase-body').innerText; ST.ok(/定金（IN 收）/.test(t5) && /尾款（医院收）/.test(t5) && !/Rp\s*[\d.]+/.test(t5), '结算 tab：定金 / 尾款（韩元），没有印尼盾的面诊费 / 本地项目金额'); ST.ok(KR_CASE_TABS.map(function(x){ return x.label; }).filter(function(x){ return x!=='关联案件'; }).join('｜')==='基础资料｜面诊｜项目｜结算｜附件｜Timeline', 'tab = 基础资料｜面诊｜项目｜结算｜附件｜Timeline');
+  });
+  ST.def('R28a','术后管理分页数据：拆线（第7天）+ 术后复诊（第2天）+ 术后消肿管理 ×3（第3天起每隔2天），约消肿第 1 次（A1 分页，给 KM1 看）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = toConfirmed('R28a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var it = c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x); })[0];
+    it.postcare = [{mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7}, {mgmt:'术后复诊', name:'术后复诊检查', times:1, place:'KR', startDay:2}, {mgmt:'术后管理', name:'术后消肿管理', times:3, interval:2, place:'KR', startDay:3}];
+    var sd = c.krSchedule.confirmedDate, d3 = new Date(sd+'T00:00:00'); d3.setDate(d3.getDate()+3); var ds = d3.getFullYear()+'-'+('0'+(d3.getMonth()+1)).slice(-2)+'-'+('0'+d3.getDate()).slice(-2);
+    ST.ok(coreCareBook(c, it.name, 2, ds, '15:00', 'KR', null, ST.krBy), '约消肿管理第 1 次'); localStorage.setItem('__R28', JSON.stringify({id:c.id, sd:sd}));
+  });
+  ST.def('R28b','KM1：项目卡术后管理分页栏位（项目｜对应施术｜项目类型｜次数｜管理间隔｜建议日期｜Action），多次剩 / 共，按建议日期排序，没有购买时间（先在 A1 跑 R28a）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R28')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R28a')) return;
+    var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件')) return; krShowCase(r.clinicId, r.id); krSetCaseTab('items'); krProjPage('care'); var t0 = document.getElementById('krcase-body').innerText;
+    ST.ok(/项目\s*对应施术\s*项目类型\s*次数\s*管理间隔\s*建议日期/.test(t0) && !/购买时间/.test(t0), '栏位 = 项目｜对应施术｜项目类型｜次数｜管理间隔｜建议日期，没有购买时间');
+    ST.ok(/剩 2 \/ 共 3 次/.test(t0) && /3 天后起，每隔 2 天/.test(t0), '消肿管理约第 1 次后：剩 2 / 共 3 次、3 天后起，每隔 2 天');
+    var iF = t0.indexOf('术后复诊检查'), iX = t0.indexOf('术后消肿管理'), iC = t0.indexOf('拆线'); ST.ok(iF>-1 && iX>iF && iC>iX, '未预约按建议日期排序：术后复诊（+2）→ 消肿下一次（+5）→ 拆线（+7）');
+    var d5 = new Date(rec.sd+'T00:00:00'); d5.setDate(d5.getDate()+5); var s5 = String(d5.getFullYear()).slice(2)+'-'+('0'+(d5.getMonth()+1)).slice(-2)+'-'+('0'+d5.getDate()).slice(-2); ST.ok(t0.indexOf(s5)>-1, '消肿管理建议日期显示下一次（施术日 + 5 天 = '+s5+'）');
+    ST.ok(/已预约/.test(t0) && /预约时间/.test(t0) && /在韩国/.test(t0), '已预约组同栏位，预约时间；地点小标签');
   });
   ST.def('R22b','KM1：案件区块三组 + 抬头 + 行（项目类型｜内容｜地点｜状态｜备注｜操作）；所需术后管理一项一框；冲突询问弹窗两个按钮；增加项目里没有术后管理清单（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

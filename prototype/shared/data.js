@@ -6622,7 +6622,10 @@ function careUnits(c){
     (it.postcare||[]).forEach(function(x, i){ for(var k = 0; k < (x.times||1); k++) slots.push({it:it, x:x, i:i, k:k}); });
     while(mine.length < slots.length && pool.length) mine.push(pool.shift());
     mine.forEach(function(s){ res.rows.push({s:s, item:it.name}); });
-    slots.slice(mine.length).forEach(function(sl){ res.unbooked.push({item:it.name, it:it, x:sl.x, i:sl.i}); });
+    /* 已有的行按内容对上它属于哪一条所需术后管理（对不上的才占第一个空名额），剩下的才是未预约（CMD-1015-28） */
+    var left = slots.slice();
+    mine.forEach(function(s){ var k = -1; left.forEach(function(sl, n){ if(k<0 && (sl.x.mgmt||sl.x.name) && String(s.content||'').indexOf(sl.x.mgmt||sl.x.name)===0) k = n; }); left.splice(k<0 ? 0 : k, 1); });
+    left.forEach(function(sl){ res.unbooked.push({item:it.name, it:it, x:sl.x, i:sl.i}); });
   });
   pool.forEach(function(s){ res.rows.push({s:s, item:''}); });
   return res;

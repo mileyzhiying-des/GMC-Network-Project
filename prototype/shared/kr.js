@@ -652,6 +652,10 @@ function krBuyTime(c, it){ var b = (c.settlementBatches||[]).filter(function(x){
 function krPcGrid(){ return 'grid-template-columns:minmax(160px,1.6fr) 70px 96px 112px minmax(140px,auto);'; }
 function krPcHead(cols){ return '<div style="display:grid;'+krPcGrid()+'gap:8px;font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+cols.map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; }
 function krPcRow(name, type, cnt, time, ops, sub, pk){ return '<div style="display:grid;'+krPcGrid()+'gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border2);font-size:12px;"><span style="font-size:13px;">'+(pk ? '<input type="checkbox" '+(KR_PICK[pk.kind+':'+pk.name] ? 'checked ' : '')+'onchange="krTpToggle(\''+pk.kind+'\',\''+pk.name.replace(/\'/g,'')+'\',this.checked)" style="margin-right:6px;"> ' : '')+name+(sub ? '<div style="font-size:11px;color:var(--slate2);">'+sub+'</div>' : '')+'</span><span>'+krTypeTag(type)+'</span><span>'+cnt+'</span><span style="color:var(--slate2);">'+time+'</span><span style="text-align:right;white-space:nowrap;">'+ops+'</span></div>'; }
+/* 术后管理分页专用栏位（CMD-1015-28）：项目｜对应施术｜项目类型｜次数｜管理间隔｜建议日期（已预约 / 已完成换成预约时间 / 使用时间）｜Action */
+function krCareGrid(){ return 'grid-template-columns:minmax(110px,1.3fr) minmax(70px,1fr) 64px minmax(52px,.7fr) minmax(86px,1fr) 66px 112px;'; }
+function krCareHead(third){ return '<div style="display:grid;'+krCareGrid()+'gap:8px;font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+['项目','对应施术','项目类型','次数','管理间隔',third,''].map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; }
+function krCareRow(nm, surg, tp, cnt, iv, dt, ops){ return '<div style="display:grid;'+krCareGrid()+'gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border2);font-size:12px;"><span style="font-size:13px;">'+nm+'</span><span>'+surg+'</span><span>'+tp+'</span><span>'+cnt+'</span><span style="color:var(--slate2);">'+iv+'</span><span style="color:var(--slate2);">'+dt+'</span><span style="text-align:right;white-space:nowrap;">'+ops+'</span></div>'; }
 function krPcSec(title, cols, rows){ return rows.length ? '<div style="margin:10px 0 2px;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+rows.length+'</span></div>'+krPcHead(cols)+rows.join('') : ''; }
 function krBtn(txt, fn, on, tip){ return '<button class="btn-'+(on?'primary':'outline')+'" '+(on ? 'onclick="'+fn+'"' : 'disabled title="'+krEsc(tip||'')+'"')+' style="padding:3px 10px;font-size:11px;'+(on?'':'opacity:.4;cursor:not-allowed;')+'">'+txt+'</button>'; }
 function krViewBtn(key){ return '<a href="#" onclick="krViewCase(\''+String(key).replace(/'/g,'')+'\');return false;" style="font-size:12px;">查看案件</a>'; }
@@ -698,15 +702,31 @@ function krProjCards(c, opts){
   });
   var surgBody = krPcSec('未使用', ['项目','项目类型','次数','购买时间',''], sU)+krPcSec('已预约', ['项目','项目类型','次数','预约时间',''], sB)+krPcSec('已完成', ['项目','项目类型','次数','使用时间',''], sD)+(sC.length ? '<details style="margin-top:10px;"><summary style="font-size:12px;color:var(--slate2);cursor:pointer;">已取消 '+sC.length+'（默认收起）</summary>'+krPcHead(['项目','项目类型','次数','',''])+sC.join('')+'</details>' : '');
   /* ---- 术后管理 ---- */
-  var cu = careUnits(c), pU = [], pB = [], pD = [];
-  cu.unbooked.forEach(function(u){ var it = u.it; pU.push(krPcRow(krEsc(careUnitLabel(u.x)), '术后管理', '1 次', krBuyTime(c, it), can && paid && !c.visitClosed ? krBtn('预约时间', 'krBkdOpen(\'care\',\''+krEsc(it.name).replace(/'/g,'')+'\','+u.i+')', true) : krBtn('预约时间', '', false, paid ? '' : '付清尾款后才能预约'), '对应施术：'+krEsc(it.name))); });
+  var cu = careUnits(c), pU = [], pB = [], pD = [], sd0 = (c.krSchedule||{}).confirmedDate || '';
+  var careAdd = function(d, n){ if(!d) return ''; var t0 = new Date(d+'T00:00:00'); t0.setDate(t0.getDate()+n); var mm = t0.getMonth()+1, dd = t0.getDate(); return t0.getFullYear()+'-'+(mm<10?'0':'')+mm+'-'+(dd<10?'0':'')+dd; };
+  var xOf = function(it, s0){ return it && (it.postcare||[]).filter(function(p){ return (p.mgmt||p.name) && (s0.content||'').indexOf(p.mgmt||p.name)===0; })[0]; };
+  var nameOf = function(x){ return krEsc(x.name || x.mgmt || '') + ' <span class="status-pill" style="background:var(--border2);color:var(--slate2);font-size:10px;">'+(x.place==='either' ? '韩国或印尼' : '在韩国')+'</span>'; };
+  var intervalOf = function(x){ var d = pcDays(x)[0]; if(!d) return '—'; return (x.times||1)>1 ? d+' 天后起，每隔 '+(Math.max(1, parseInt(x.interval,10)||1))+' 天' : d+' 天后'; };
+  /* 未预约：同一施术项目里的同一条所需术后管理 = 一行（多次写 剩 / 共），建议日期 = 下一次；取消本次退回的行算进剩余 */
+  var groups = {}, order = [];
+  var gOf = function(it, i, x){ var k = it.name+'|'+i; if(!groups[k]){ groups[k] = {it:it, i:i, x:x, left:0, reuse:'', total:(x.times||1)}; order.push(k); } return groups[k]; };
+  cu.unbooked.forEach(function(u){ gOf(u.it, u.i, u.x).left++; });
   cu.rows.forEach(function(r){
-    var s = r.s, sub = r.item ? '对应施术：'+krEsc(r.item) : '', it = (c.procedureItems||[]).filter(function(x){ return x.name===r.item; })[0];
-    if(s.skipped){ var x = it && (it.postcare||[]).filter(function(p){ return (p.mgmt||p.name) && s.content.indexOf(p.mgmt||p.name)===0; })[0], idx = x ? it.postcare.indexOf(x) : 0; pU.push(krPcRow(krEsc(s.content), '术后管理', '1 次', it ? krBuyTime(c, it) : '—', can && paid ? krBtn('预约时间', 'krBkdOpen(\'care\',\''+krEsc(r.item).replace(/'/g,'')+'\','+idx+',\''+s.id+'\')', true) : '', sub+'（取消本次，待重新预约）')); return; }
-    if(s.done){ pD.push(krPcRow(krEsc(s.content), '术后管理', '1 次', s.doneAt ? krEsc(fmtUtc(s.doneAt).slice(2, 16)) : '—', krViewBtn(subCaseKey(s)), sub)); return; }
-    pB.push(krPcRow(krEsc(s.content), '术后管理', '1 次', krEsc(krShortDt(s.date, s.time||''))+(s.place==='IN' ? '（印尼建议日期）' : ''), (can && s.place!=='IN' && !s.arrived ? '<a href="#" onclick="krSubTimeOpen(\''+s.id+'\');return false;" style="font-size:12px;">修改时间</a>' : '')+(s.place!=='IN' ? ' '+krViewBtn(subCaseKey(s)) : ''), sub));
+    var s0 = r.s, it = (c.procedureItems||[]).filter(function(x0){ return x0.name===r.item; })[0], x = xOf(it, s0), idx = x ? it.postcare.indexOf(x) : 0;
+    if(s0.skipped && x){ var g = gOf(it, idx, x); g.left++; if(!g.reuse) g.reuse = s0.id; return; }
+    if(s0.skipped){ pU.push({key:'9999', html:krCareRow(krEsc(s0.content), r.item ? krEsc(r.item) : '—', '术后管理', '1 次', '—', '—', can && paid ? krBtn('预约时间', 'krBkdOpen(\'care\',\''+krEsc(r.item).replace(/'/g,'')+'\','+idx+',\''+s0.id+'\')', true) : '')}); return; }
+    var nm = x ? nameOf(x) : krEsc(s0.content), tp = x ? krEsc(x.mgmt || x.name || '术后管理') : '术后管理', iv = x ? intervalOf(x) : '—';
+    if(s0.done){ pD.push({key:(s0.doneAt||'')+s0.id, html:krCareRow(nm, krEsc(r.item||'—'), tp, '1 次', iv, s0.doneAt ? krEsc(fmtUtc(s0.doneAt).slice(2, 16)) : '—', krViewBtn(subCaseKey(s0)))}); return; }
+    pB.push({key:(s0.date||'')+(s0.time||'')+s0.id, html:krCareRow(nm, krEsc(r.item||'—'), tp, '1 次', iv, krEsc(krShortDt(s0.date, s0.time||''))+(s0.place==='IN' ? '（印尼建议日期）' : ''), (can && s0.place!=='IN' && !s0.arrived ? '<a href="#" onclick="krSubTimeOpen(\''+s0.id+'\');return false;" style="font-size:12px;">修改时间</a>' : '')+(s0.place!=='IN' ? ' '+krViewBtn(subCaseKey(s0)) : ''))});
   });
-  var careBody = krPcSec('未预约', ['项目','项目类型','次数','购买时间',''], pU)+krPcSec('已预约', ['项目','项目类型','次数','预约时间',''], pB)+krPcSec('已完成', ['项目','项目类型','次数','使用时间',''], pD);
+  order.forEach(function(k){
+    var g = groups[k]; if(g.left<=0) return; var x = g.x, days = pcDays(x), nextIdx = Math.min(Math.max(0, g.total-g.left), Math.max(0, days.length-1)), sug = days.length && sd0 ? careAdd(sd0, days[nextIdx]) : '';
+    var cnt = g.total>1 ? '剩 '+g.left+' / 共 '+g.total+' 次' : '1 次', nmEsc = krEsc(g.it.name).replace(/'/g,'');
+    var op = can && paid && !c.visitClosed ? krBtn('预约时间', 'krBkdOpen(\'care\',\''+nmEsc+'\','+g.i+(g.reuse ? ',\''+g.reuse+'\'' : '')+')', true) : krBtn('预约时间', '', false, paid ? '' : '付清尾款后才能预约');
+    pU.push({key:sug || '9999', html:krCareRow(nameOf(x), krEsc(g.it.name), krEsc(x.mgmt || x.name || '术后管理'), cnt, intervalOf(x), sug ? krEsc(sug.slice(2)) : '—', op)});
+  });
+  var careSec = function(title, third, arr){ arr.sort(function(a, b){ return a.key < b.key ? -1 : a.key > b.key ? 1 : 0; }); return arr.length ? '<div style="margin:10px 0 2px;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+arr.length+'</span></div>'+krCareHead(third)+arr.map(function(e){ return e.html; }).join('') : ''; };
+  var careBody = careSec('未预约', '建议日期', pU)+careSec('已预约', '预约时间', pB)+careSec('已完成', '使用时间', pD);
   /* ---- 管理项目 ---- */
   var mU = [], mB = [], mD = [];
   mgItems.filter(function(it){ return !it.cancelled && !it.swapped; }).forEach(function(it){
