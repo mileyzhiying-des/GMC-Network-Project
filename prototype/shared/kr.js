@@ -660,15 +660,14 @@ function krViewCase(key){
   setTimeout(function(){ var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, el = null; if(key==='main') el = document.getElementById('kr-maincard'); else { var rep = subCaseList(c).filter(function(r){ return subCaseKey(r)===key; })[0]; el = rep ? document.getElementById('kr-subrow-'+rep.id) : null; } if(el && el.scrollIntoView) el.scrollIntoView({block:'start', behavior:'smooth'}); }, 60);
 }
 function krUnitUseNow(name){ if(!krCan()) return; var r = null; krMut(function(c){ r = coreUnitUseNow(c, name, ME_NAME); if(!r.ok){ alert(r.err||'不能使用'); return false; } return true; }); }
-/* Step 4：勾选今日进行项目；"请勾选今日进行项目 ✅…"、"已勾选：N 个项目"［退回前页］［今日进行］ */
+/* Step 4：勾选今日进行项目；"今日进行项目"纵向列出已勾项、"已勾选：N 个项目"、只有［今日进行］（CMD-1015-27） */
 var KR_PICK = {}, KR_PICK_BACK = false;
 function krTpToggle(kind, name, on){ if(on) KR_PICK[kind+':'+name] = true; else delete KR_PICK[kind+':'+name]; krRenderCaseDetail(); }
 function krTodayPickBar(c){
   var keys = Object.keys(KR_PICK), n = keys.length, can = krCan();
-  return krCardBox('请勾选今日进行项目', (n ? '<div style="font-size:13px;line-height:1.9;">'+keys.map(function(x){ return '✅ '+krEsc(x.replace(/^(surg|mg):/,'')); }).join('　')+'</div>' : '<div style="font-size:12px;color:var(--muted);">还没勾选（在上面的项目卡里勾选施术项目 / 管理项目；术后管理用［预约时间］排）</div>')+
-    '<div style="display:flex;align-items:center;gap:12px;margin-top:10px;"><span style="font-size:13px;">已勾选：<b>'+n+'</b> 个项目</span><span style="flex:1;"></span>'+(can ? '<button class="btn-outline" style="padding:6px 16px;" onclick="krPickBack()">退回前页</button><button class="btn-primary" style="padding:6px 22px;" onclick="krPickGo()">今日进行</button>' : '')+'</div>');
+  return krCardBox('今日进行项目', (n ? '<div style="font-size:13px;line-height:2;">'+keys.map(function(x){ return '<div>✅ '+krEsc(x.replace(/^(surg|mg):/,''))+'</div>'; }).join('')+'</div>' : '<div style="font-size:12px;color:var(--muted);">还没勾选（在上面的项目卡里勾选施术项目 / 管理项目；术后管理用［预约时间］排）</div>')+
+    '<div style="display:flex;align-items:center;gap:12px;margin-top:10px;"><span style="font-size:13px;">已勾选：<b>'+n+'</b> 个项目</span><span style="flex:1;"></span>'+(can ? '<button class="btn-primary" style="padding:6px 22px;" onclick="krPickGo()">今日进行</button>' : '')+'</div>');
 }
-function krPickBack(){ KR_PICK = {}; krRenderCaseDetail(); } /* 尾款已付清，不能退回结算；退回 = 清掉勾选重新选 */
 function krPickGo(){
   if(!krCan()) return; var surg = [], mg = []; Object.keys(KR_PICK).forEach(function(x){ var m = /^(surg|mg):(.*)$/.exec(x); if(m){ (m[1]==='surg' ? surg : mg).push(m[2]); } });
   if(!surg.length && !mg.length){ alert('请先勾选今日进行的项目'); return; }
@@ -971,7 +970,7 @@ function krRenderCaseDetail(){
   el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+
       '<button class="btn-ghost" onclick="goBack()">← 返回</button>'+
       '<div style="font-size:18px;font-weight:700;">'+(krClientsAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+' <span style="font-size:13px;font-weight:400;color:var(--muted);">'+krEsc(r.caseNo)+'</span></div>'+
-      '<span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.stageText||r.label)+'</span>'+(r.hold ? ' '+KR_HOLD_TAG : '')+'<span style="flex:1;"></span>'+
+      '<span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.stageText||r.label)+'</span>'+'<span style="flex:1;"></span>'+
       '<button class="btn-primary" onclick="krOpenCaseChat()">💬 对话</button></div>'+
     '<div class="card" style="padding:12px 20px;display:flex;gap:28px;flex-wrap:wrap;font-size:13px;"><span><span style="color:var(--muted);">来源诊所</span> <b>'+krEsc(r.clinicName)+'</b></span>'+(KR_CASE.tab==='consult' ? '' : '<span><span style="color:var(--muted);">院长</span> <b>'+krEsc(r.director||'—')+'</b></span>')+'<span><span style="color:var(--muted);">KR 室长</span> <b>'+krEsc(r.krCoordinator||'—')+'</b></span></div>'+
     alerts+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap;">'+tabs+'</div>'+
@@ -2077,7 +2076,7 @@ function krDoSettle(){
   if(mode==='replace' && !adds.length && !lcs.length){ alert('请先选要更换成的项目（KR 项目库）'); return; }
   if(mode==='ok' && !pend.length && !adds.length) return;
   var addN = adds.map(function(a){ return a.name; }).concat(swaps.filter(function(s){ return s.to; }).map(function(s){ return s.to; })), dropN = mode==='replace' ? pend.map(function(it){ return it.name; }) : drops.concat(swaps.map(function(s){ return s.from; }));
-  var ext = KR_SETTLE_EXT, pm = (ext===undefined) ? coreProjectedConflict(c0, addN, dropN) : ''; if(pm){ krSlotAsk(pm, krDoSettle, {altLabel:'取消'}); return; } /* 没问过延长多久（更换等）仍按项目时长预估冲突；问过的已在结算前处理 */
+  var extMap = KR_ADJ.ext || {}, ext = adds.length ? adds.reduce(function(s0, a){ return s0 + (extMap[a.name]||0); }, 0) : undefined, pm = (ext===undefined) ? coreProjectedConflict(c0, addN, dropN) : ''; if(pm){ krSlotAsk(pm, krDoSettle, {altLabel:'取消'}); return; } /* 没问过延长多久（更换等）仍按项目时长预估冲突；问过的已在结算前处理 */
   KR_ARR.confirmTrip = false; KR_SETTLE_EXT = undefined; var forceExt = ext>0; if(forceExt) KR_FORCE_CLASH = true;
   var res = null;
   krMut(function(c){
@@ -2086,7 +2085,7 @@ function krDoSettle(){
       if(!coreCannotReplace(c, adds.map(function(a){ return a.name; }), byName, ME_NAME, lcs)) return false;
     } else {
       swaps.forEach(function(s){ coreSwapItem(c, s.from, s.to, ME_NAME, s.detail, s.local); });
-      adds.forEach(function(a, i2){ coreAddOnItem(c, a.name, ME_NAME, {anesthesia:a.detail.anesthesia, detail:a.detail, extendMin:(ext===undefined ? undefined : (i2===0 ? ext : 0))}); });
+      adds.forEach(function(a, i2){ coreAddOnItem(c, a.name, ME_NAME, {anesthesia:a.detail.anesthesia, detail:a.detail, extendMin:(ext===undefined ? undefined : (extMap[a.name]||0))}); });
       lcs.forEach(function(x){ coreAddOnItem(c, x.name, ME_NAME, {local:x}); });
       if(drops.length) coreMarkUnable(c, drops, (c.krJudge && c.krJudge.memo) || '评估调整', ME_NAME);
     }
@@ -2702,19 +2701,52 @@ function krWzBack(){
 }
 function krWzAdjBack(){ KR_ADJ.step = 'pick'; krRenderCaseDetail(); }
 /* Step 1 / 2 的「已付定金项目」框：施术项目 / 管理项目两个列表（不再每项一行 + 状态「未开始」，CMD-1015-26） */
-function krStepItemsCard(c){
+function krPaidBoxHtml(c){
   var its = krAllItems(c).filter(function(it){ return !it.cancelled && !it.swapped && !it.replacedBy && !it.pendingPay && !(it.preBalanceAdd || it.krAddOn) && !it.consentPending; });
-  var line = function(it){ var bits = itemMetaText(it); return '<div style="padding:5px 0;border-top:1px solid var(--border2);"><div style="font-size:13px;font-weight:600;">'+krEsc(it.name)+(it.qty>1 ? ' ×'+it.qty : '')+'</div>'+(bits.length ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;line-height:1.6;">'+bits.map(krEsc).join('　｜　')+'</div>' : '')+'</div>'; };
+  var line = function(it){ return '<div style="padding:2px 0;font-size:13px;">• '+krEsc(it.name)+(it.qty>1 ? ' ×'+it.qty : '')+'</div>'; };
   var surg = its.filter(function(it){ return !krIsMgmtItemC(it); }), mg = its.filter(krIsMgmtItemC);
-  var sec = function(t, arr){ return '<div style="font-size:12px;font-weight:700;margin:6px 0 2px;">'+t+' <span style="font-weight:400;color:var(--muted);">'+arr.length+'</span></div>'+(arr.length ? arr.map(line).join('') : '<div style="font-size:12px;color:var(--muted);padding:4px 0;">没有</div>'); };
-  return krCardBox('已付定金项目', sec('施术项目', surg)+sec('管理项目', mg));
+  var sec = function(t, arr){ return '<div style="font-size:12px;font-weight:700;margin:6px 0 2px;">'+t+' <span style="font-weight:400;color:var(--muted);">'+arr.length+'</span></div>'+(arr.length ? arr.map(line).join('') : '<div style="font-size:12px;color:var(--muted);padding:2px 0;">没有</div>'); };
+  return '<div style="border:1px solid var(--border2);border-radius:8px;padding:8px 14px 10px;margin-bottom:10px;"><div style="font-size:13px;font-weight:700;">已付定金项目</div>'+sec('施术项目', surg)+sec('管理项目', mg)+'</div>';
+}
+/* Step 到院前 / Step 2 的「已付定金项目」框：只列项目名（施术 / 管理两组，细节在项目卡里看，CMD-1015-27） */
+function krStepItemsCard(c){ return '<div class="card" style="padding:16px 22px;">'+krPaidBoxHtml(c).replace('margin-bottom:10px;', 'margin-bottom:0;')+'</div>'; }
+/* Step 1：一张卡「院长评估结果」= 已付定金项目框 + 三选一 + memo + 按钮 */
+function krStep1Card(c){
+  var can = krCan();
+  var body = krPaidBoxHtml(c)+(can ? ['ok','changed','cannot'].map(function(r){ return '<label style="display:block;margin:5px 0;font-size:13px;cursor:pointer;"><input type="radio" name="kr-judge" '+(KR_ARR.judge===r?'checked':'')+' onchange="krArrSet(\'judge\',\''+r+'\')"> '+KR_JUDGE_TEXT[r]+'</label>'; }).join('')+
+      '<textarea placeholder="'+(KR_ARR.judge && KR_ARR.judge!=='ok' ? 'memo（必填：原因 / 调整内容）' : 'memo（选填）')+'" oninput="KR_ARR.memo=this.value" style="width:100%;min-height:60px;margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;font-size:12px;">'+krEsc(KR_ARR.memo||'')+'</textarea>'+
+      '<div style="display:flex;gap:8px;margin-top:8px;"><button class="btn-primary" onclick="krDoJudge()">确认评估结果</button><button class="btn-ghost" onclick="krUnarrive()">撤回"已到医院"</button></div>' : krEmpty('等待院长评估结果（由 KR 室长记录）'));
+  return krCardBox('院长评估结果', body);
+}
+/* Step 2：「添加项目」框 = 已加的项目（施术 / 管理两组，只列名，可移除）+［添加项目］；加施术项目的当下问延长多久 */
+function krAddBoxHtml(c, can){
+  var names = Object.keys(KR_ADJ.adds), locs = KR_ADJ.locals.map(function(x, i){ return {x:x, i:i}; }), ext = KR_ADJ.ext || {};
+  var row = function(t, rm){ return '<div style="padding:2px 0;font-size:13px;">• '+t+(can ? ' <a href="#" onclick="'+rm+';return false;" style="font-size:12px;">移除</a>' : '')+'</div>'; };
+  var sec = function(t, arr){ return '<div style="font-size:12px;font-weight:700;margin:6px 0 2px;">'+t+' <span style="font-weight:400;color:var(--muted);">'+arr.length+'</span></div>'+(arr.length ? arr.join('') : '<div style="font-size:12px;color:var(--muted);padding:2px 0;">没有</div>'); };
+  var surgRows = names.map(function(n){ return row(krEsc(n)+(ext[n]>0 ? ' <span style="font-size:11px;color:var(--muted);">延长 +'+krMinText(ext[n])+'</span>' : ''), 'krChToggle(\'adj\',\''+krEsc(n).replace(/'/g,'')+'\',false)'); });
+  var mgRows = locs.map(function(e){ return row(krEsc(e.x.name+' · '+e.x.specLabel)+(e.x.service ? ' <span style="font-size:11px;color:#8F6F0C;">서비스</span>' : ''), 'krChDelLocal(\'adj\','+e.i+')'); });
+  return krCardBox('添加项目', sec('施术项目', surgRows)+sec('管理项目', mgRows)+(can ? '<div style="margin-top:8px;">'+(KR_ADJ.addOpen ? krAddChooser(c)+'<div style="margin-top:8px;"><button class="btn-ghost" onclick="KR_ADJ.addOpen=false;krRenderCaseDetail()">收起</button></div>' : '<button class="btn-outline" onclick="KR_ADJ.addOpen=true;krRenderCaseDetail()">添加项目</button>')+'</div>' : ''));
 }
 function krWzBackBar(label){ return '<div style="margin-top:10px;"><button class="btn-ghost" onclick="'+(label||'krWzBack()')+'">← 上一步</button></div>'; }
 /* 添加项目（可不加）：左选项目 / 右已选 + 结算，同 IN 本地选购版面；左侧分「施术项目」（KR 赴韩项目库）/「管理项目」（KR 本地管理项目库，韩元，收费；免费术后管理不在里面）；
    睡眠 / 全麻须勾麻醉同意书。sk = 'adj'（分步流程里的添加）/ 'ad'（施术中的「增加项目」卡，状态独立）（CMD-1013-06 三·1、三·4） */
 var KR_AD = {adds:{}, signed:{}, locals:[], care:{}, open:false};
 function krChS(sk){ return sk==='ad' ? KR_AD : KR_ADJ; }
-function krChToggle(sk, name, on){ var S = krChS(sk); if(on){ S.adds[name] = true; KR_SUB.detail[name] = KR_SUB.detail[name] || krDefaultsDetail(name); } else delete S.adds[name]; krRenderCaseDetail(); }
+function krChToggle(sk, name, on){
+  var S = krChS(sk);
+  if(on && sk==='adj'){ /* 分步流程里加施术项目：当下就问延长多久（CMD-1015-27，取代结算尾款时才问） */
+    var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c; krRenderCaseDetail();
+    krExtOpen(c, [name], function(ext){
+      var commit = function(){ S.adds[name] = true; S.ext = S.ext || {}; S.ext[name] = ext; KR_SUB.detail[name] = KR_SUB.detail[name] || krDefaultsDetail(name); krRenderCaseDetail(); };
+      var sum = ext; Object.keys(S.ext||{}).forEach(function(k){ if(k!==name) sum += S.ext[k]||0; });
+      var pm = ext>0 ? coreProjectedConflict(c, Object.keys(S.adds).concat([name]), [], sum) : '';
+      if(pm) krAskClash(pm, {proceed:commit, altLabel:'取消'}); else commit();
+    });
+    return;
+  }
+  if(on){ S.adds[name] = true; KR_SUB.detail[name] = KR_SUB.detail[name] || krDefaultsDetail(name); } else { delete S.adds[name]; if(S.ext) delete S.ext[name]; }
+  krRenderCaseDetail();
+}
 function krChAddLocal(sk){ var pk = krLpPick(sk); if(!pk) return; if(pk.p.neg && !(pk.price>0)){ alert('面议项目必须手动填价格（韩元）'); return; } krChS(sk).locals.push({name:pk.p.name, specLabel:pk.sp.label, price:pk.price, projectId:pk.p.id}); krRenderCaseDetail(); }
 function krChDelLocal(sk, i){ krChS(sk).locals.splice(i, 1); krRenderCaseDetail(); }
 /* 管理项目列表（同 IN 本地选购：每行一个项目，规格 / 次数行内选，可搜索；［加入］收费、［赠送］= 서비스 0 元）（CMD-1013-10 二） */
@@ -2852,8 +2884,6 @@ function krSettleConsentNames(c){
 }
 function krSettleOpen(mode){
   if(!krCan()) return; var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c; KR_SETTLE_MODE = mode;
-  var surgAdds = Object.keys(KR_ADJ.adds);
-  if(surgAdds.length && KR_SETTLE_EXT===undefined){ krExtOpen(c, surgAdds, function(ext){ KR_SETTLE_EXT = ext; var pm = ext>0 ? coreProjectedConflict(c, surgAdds, [], ext) : ''; if(pm) krAskClash(pm, {proceed:function(){ krSettleOpen(mode); }, altLabel:'取消'}); else krSettleOpen(mode); }); return; }
   var D0 = krWzSettleData(c, mode), consent = krSettleConsentNames(c);
   var ov = document.getElementById('kr-settle-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-settle-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   var surg = D0.lines.filter(function(l){ return !/（管理）|서비스/.test(l.t); }), mg = D0.lines.filter(function(l){ return /（管理）|서비스/.test(l.t); });
@@ -2861,10 +2891,10 @@ function krSettleOpen(mode){
   ov.innerHTML = '<div class="modal-box" style="width:500px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">确认付款（尾款）</div><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">医院收款；定金已由 IN 收取。</div>'+sec('施术项目', surg)+sec('管理项目', mg)+
     '<div style="border-top:1px solid var(--border2);margin-top:8px;padding-top:8px;font-size:13px;line-height:1.9;">项目合计 '+formatCurrency(D0.total,'KRW')+'<br>已付定金（可抵）'+formatCurrency(D0.info.effDeposit,'KRW')+'<br><b style="font-size:14px;">'+(D0.diff>=0 ? '尾款（在韩国补）' : '应退差额')+' '+formatCurrency(Math.abs(D0.diff),'KRW')+'</b></div>'+
     (consent.length ? '<div style="margin-top:12px;padding:10px 12px;background:#FFF4E5;border:1px solid #F0C98A;border-radius:8px;"><div style="font-size:13px;font-weight:700;color:#A85A10;margin-bottom:4px;">麻醉同意书</div>'+consent.map(function(n){ return '<div style="font-size:12px;">'+krEsc(n)+'</div>'; }).join('')+'<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:6px;cursor:pointer;"><input type="checkbox" id="kr-settle-consent"> 客人已签署麻醉同意书（不勾不能确认付款）</label></div>' : '')+
-    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" style="padding:8px 18px;" onclick="krSettleLater()">稍后付款</button><button class="btn-primary" style="padding:8px 22px;" onclick="krSettleConfirm()">确认付款</button></div></div>';
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" style="padding:8px 18px;" onclick="krSettleLater()">取消</button><button class="btn-primary" style="padding:8px 22px;" onclick="krSettleConfirm()">确认付款</button></div></div>';
   ov.style.zIndex = 100004; ov.classList.add('open'); KR_SETTLE_CONSENT = consent.length>0;
 }
-function krSettleLater(){ var ov = document.getElementById('kr-settle-overlay'); if(ov) ov.classList.remove('open'); KR_SETTLE_EXT = undefined; }
+function krSettleLater(){ var ov = document.getElementById('kr-settle-overlay'); if(ov) ov.classList.remove('open'); } /* 只关闭回 Step 2，尾款必须当下付（CMD-1015-27） */
 function krSettleConfirm(){
   if(KR_SETTLE_CONSENT){ var cb = document.getElementById('kr-settle-consent'); if(!cb || !cb.checked){ alert('请先勾选「客人已签署麻醉同意书」'); return; } }
   var ov = document.getElementById('kr-settle-overlay'); if(ov) ov.classList.remove('open'); KR_ARR.confirmTrip = true; krDoSettle();
@@ -2881,11 +2911,10 @@ function krWizard(c){
       (can ? '<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn-outline" onclick="krWzSet(\'edit\','+(!KR_WZ.edit)+')">修改</button><button class="btn-primary" onclick="krMarkArrived()">客人已到医院</button></div>' : krEmpty('客人到院后由 KR 室长标记'))+form);
     return out+items;
   }
-  if(!j) return items+krArrivalBlock(c); /* Step 2：施术项目 + 到院与尾款（选院长评估结果；非「原方案不变」memo 必填） */
+  if(!j) return st==='Arrived' ? krStep1Card(c) : items+krArrivalBlock(c); /* Step 1：一张卡「院长评估结果」（非「原方案不变」memo 必填） */
   var infoLine = krKV('KR 判断', KR_JUDGE_TEXT[j.result])+(j.memo ? krKV('memo', krEsc(j.memo)) : '');
   if(j.result==='ok'){ /* Step 3-1 */
-    var addCard = krCardBox('添加项目', can ? (KR_ADJ.addOpen ? krAddChooser(c)+'<div style="margin-top:8px;"><button class="btn-ghost" onclick="KR_ADJ.addOpen=false;krRenderCaseDetail()">收起</button></div>' : '<button class="btn-outline" onclick="KR_ADJ.addOpen=true;krRenderCaseDetail()">添加项目</button>') : krEmpty('由 KR 室长操作'));
-    return items+addCard+krCardBox('付清尾款', infoLine+(can ? krWzSettleCard(c, 'ok') : krEmpty('由 KR 室长操作')))+(can ? krWzBackBar() : '');
+    return items+krAddBoxHtml(c, can)+krCardBox('付清尾款', (can ? krWzSettleCard(c, 'ok') : krEmpty('由 KR 室长操作')))+(can ? krWzBackBar() : '');
   }
   if(j.result==='changed'){ /* Step 3-2 */
     var pend = krNotStartedItems(c), cand = krScopeCandidates(KR_CASE.clinicId);
