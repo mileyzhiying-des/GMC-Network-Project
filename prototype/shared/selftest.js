@@ -1575,11 +1575,49 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R28b','KM1：项目卡术后管理分页栏位（项目｜对应施术｜项目类型｜次数｜管理间隔｜建议日期｜Action），多次剩 / 共，按建议日期排序，没有购买时间（先在 A1 跑 R28a）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R28')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R28a')) return;
     var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件')) return; krShowCase(r.clinicId, r.id); krSetCaseTab('items'); krProjPage('care'); var t0 = document.getElementById('krcase-body').innerText;
-    ST.ok(/项目\s*对应施术\s*项目类型\s*次数\s*管理间隔\s*建议日期/.test(t0) && !/购买时间/.test(t0), '栏位 = 项目｜对应施术｜项目类型｜次数｜管理间隔｜建议日期，没有购买时间');
+    ST.ok(/项目\s*对应施术\s*次数\s*管理间隔\s*建议日期/.test(t0) && !/购买时间/.test(t0), '栏位 = 项目｜对应施术｜次数｜管理间隔｜建议日期（CMD-1015-29 拿掉项目类型），没有购买时间');
     ST.ok(/剩 2 \/ 共 3 次/.test(t0) && /3 天后起，每隔 2 天/.test(t0), '消肿管理约第 1 次后：剩 2 / 共 3 次、3 天后起，每隔 2 天');
     var iF = t0.indexOf('术后复诊检查'), iX = t0.indexOf('术后消肿管理'), iC = t0.indexOf('拆线'); ST.ok(iF>-1 && iX>iF && iC>iX, '未预约按建议日期排序：术后复诊（+2）→ 消肿下一次（+5）→ 拆线（+7）');
     var d5 = new Date(rec.sd+'T00:00:00'); d5.setDate(d5.getDate()+5); var s5 = String(d5.getFullYear()).slice(2)+'-'+('0'+(d5.getMonth()+1)).slice(-2)+'-'+('0'+d5.getDate()).slice(-2); ST.ok(t0.indexOf(s5)>-1, '消肿管理建议日期显示下一次（施术日 + 5 天 = '+s5+'）');
     ST.ok(/已预约/.test(t0) && /预约时间/.test(t0) && /在韩国/.test(t0), '已预约组同栏位，预约时间；地点小标签');
+  });
+  ST.def('R29a','今日进行后弹术后管理预约 + 今日案件行（A1 分页造两个案件：A = 约几项 / B = 稍后预约）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return; var ids = [];
+    ['R29aA','R29aB'].forEach(function(nm){
+      var c = toConfirmed(nm); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c);
+      c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x); }).forEach(function(it, n){ it.postcare = n===0 ? [{mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7}, {mgmt:'术后复诊', name:'术后复诊检查', times:1, place:'KR', startDay:2}, {mgmt:'术后管理', name:'术后消肿管理', times:3, interval:2, place:'either', innName:'消肿管理（印尼）', startDay:3}] : []; });
+      c.needTodayPick = true; c.todayPicked = false; ids.push(c.id);
+    });
+    localStorage.setItem('__R29', JSON.stringify({a:ids[0], b:ids[1]}));
+  });
+  ST.def('R29b','KM1：栏宽均分（术后管理分页没有项目类型）；今日进行 → 术后管理预约弹窗（约几项 / 印尼只记 / 稍后预约）；今日案件每行［操作完成］［今日取消］、施术一项一行（先在 A1 跑 R29a）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R29')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R29a')) return;
+    var ra = krAllCases().filter(function(x){ return x.id===rec.a; })[0], rb = krAllCases().filter(function(x){ return x.id===rec.b; })[0]; if(!ST.ok(!!ra && !!rb, '找不到案件')) return;
+    var gc = function(r){ return Store.withClinic(r.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; }); };
+    krShowCase(ra.clinicId, ra.id); krSetCaseTab('items'); krProjPage('surg'); var names = []; var pk = gc(ra).procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && !x.cancelled; }).map(function(x){ return x.name; }); pk.forEach(function(n){ KR_PICK['surg:'+n] = true; });
+    krPickGo(); krCareMiniOpen(); (function(){
+      var ov = document.getElementById('kr-caremini-overlay'); ST.ok(!!ov && ov.classList.contains('open') && /术后管理预约/.test(ov.innerText) && /项目[\s\S]*对应施术[\s\S]*建议日期[\s\S]*地点[\s\S]*时间/.test(ov.innerText) && /稍后预约/.test(ov.innerText) && /日程预约/.test(ov.innerText), '今日进行后弹术后管理预约（项目｜对应施术｜建议日期｜地点｜时间，［稍后预约］［日程预约］）'); ST.ok(KR_CM && KR_CM.rows.length===5, '未预约 5 项（拆线 / 术后复诊 / 消肿 ×3）：'+(KR_CM&&KR_CM.rows.length));
+      var iC = KR_CM.rows.findIndex(function(r){ return r.x.mgmt==='拆线'; }), iF = KR_CM.rows.findIndex(function(r){ return r.x.name==='术后复诊检查'; }), iX = KR_CM.rows.findIndex(function(r){ return r.x.name==='术后消肿管理'; });
+      krCareMiniSet(iC, 'time', '10:00'); krCareMiniSet(iF, 'time', '10:30'); krCareMiniSet(iX, 'place', 'IN'); krCareMiniGo(); var bo = document.getElementById('kr-block-overlay'); if(bo && bo.classList.contains('open') && /时间冲突/.test(bo.innerText)) window.__krAskGo('go');
+    })(); (function(){
+      var c = gc(ra), care = (c.subItems||[]).filter(function(x){ return x.kind==='术后管理记录' && !x.skipped; }); ST.ok(care.length===3 && care.filter(function(x){ return x.place==='IN'; }).length===1 && care.filter(function(x){ return x.place==='KR' && x.time; }).length===2, '日程预约：约了 3 项（韩国 2 + 印尼 1），没填的留着：'+care.length);
+      ST.ok(careUnits(c).unbooked.length===2, '没填的 2 个消肿留在项目卡未预约'); ST.ok(!document.getElementById('kr-caremini-overlay').classList.contains('open'), '弹窗已关闭');
+      ST.ok(care.some(function(x){ return x.place==='KR' && /术后预约/.test(visitSource(c, subCaseKey(x))) && x.src==='care'; }), '预约来源 = 术后预约');
+      ST.ok(typeof calendarEventsKr==='function' ? true : true, ''); krShowCase(ra.clinicId, ra.id); krSetCaseTab('items'); krProjPage('care'); var tc0 = document.getElementById('krcase-body').innerText, tc = tc0.slice(tc0.indexOf('项目卡'), tc0.indexOf('今日案件') > -1 ? tc0.indexOf('今日案件') : undefined); ST.ok(/已预约/.test(tc) && !/项目类型/.test(tc) && /项目\s*对应施术\s*次数\s*管理间隔\s*建议日期/.test(tc), '术后管理分页：没有项目类型，栏位 项目｜对应施术｜次数｜管理间隔｜建议日期');
+      krProjPage('surg'); var t1 = document.getElementById('krcase-body').innerText; var mc = document.getElementById('kr-maincard'); var mt = mc ? mc.parentElement.innerText : t1;
+      ST.ok(new RegExp('施术：'+pk[0]).test(mt) && new RegExp('施术：'+pk[1]).test(mt) && !/施术：[^\n]*、/.test(mt), '施术项目一项一行'); ST.ok((mt.match(/操作完成/g)||[]).length>=2 && (mt.match(/今日取消/g)||[]).length>=2, '每行［操作完成］［今日取消］');
+      ST.ok(!/修改时间/.test(mt) && !/预约后续到院/.test(mt), '今日案件行没有［修改时间］和「预约后续到院」');
+      krTodayCancel('item', pk[1], '施术：'+pk[1]); var tm = document.getElementById('kr-tc-overlay'); ST.ok(!!tm && tm.classList.contains('open') && /今天不做/.test(tm.innerText) && /退回项目卡/.test(tm.innerText), '今日取消先弹确认 Modal'); window.__krTcGo();
+    })(); (function(){
+      var c = gc(ra), it = c.procedureItems.filter(function(x){ return x.name===pk[1]; })[0]; ST.ok(it.deferUse && !it.done && !it.cancelled, '今日取消 = 退回项目卡（deferUse），不是取消项目、不退款'); var sr = (c.subItems||[]).filter(function(x){ return x.kind==='施术'; })[0]; ST.ok(sr && sr.content==='施术：'+pk[0], '施术行只剩没取消的：'+(sr&&sr.content));
+      var row = sr; krSurgItemDone(row.id, pk[0]);
+    })(); (function(){
+      var c = gc(ra), sr = (c.subItems||[]).filter(function(x){ return x.kind==='施术'; })[0]; ST.ok(sr && sr.done && c.procedureItems.filter(function(x){ return x.name===pk[0]; })[0].done, '最后一项做完 → 施术行完成');
+      /* B：稍后预约 */
+      krShowCase(rb.clinicId, rb.id); krSetCaseTab('items'); krProjPage('surg'); gc(rb).procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && !x.cancelled; }).forEach(function(x){ KR_PICK['surg:'+x.name] = true; }); krPickGo(); krCareMiniOpen();
+    })(); (function(){
+      var ov = document.getElementById('kr-caremini-overlay'); ST.ok(ov.classList.contains('open'), 'B 也弹窗'); krCareMiniClose(); var c = gc(rb); ST.ok((c.subItems||[]).filter(function(x){ return x.kind==='术后管理记录'; }).length===0 && careUnits(c).unbooked.length===5, '稍后预约：5 项都留在项目卡未预约');
+    })();
   });
   ST.def('R22b','KM1：案件区块三组 + 抬头 + 行（项目类型｜内容｜地点｜状态｜备注｜操作）；所需术后管理一项一框；冲突询问弹窗两个按钮；增加项目里没有术后管理清单（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

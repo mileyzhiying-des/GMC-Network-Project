@@ -6715,6 +6715,34 @@ function coreBookCancel(hid, id, kind, by){
   return {ok:true};
 }
 
+/* ============ CMD-1015-29：今日案件行的操作 = ［操作完成］［今日取消］ ============
+   施术项目一项一行（显示层按项目拆开，数据里仍是一条「施术」子项）：单项完成 coreSurgItemDone；最后一项完成时整条施术行完成
+   今日取消 = 今天不做了，退回项目卡（施术 / 管理 → 未使用；术后管理 → 未预约），不是取消项目、不退款 */
+function coreItemNote(c, name, text, by){
+  var it = (c.procedureItems||[]).filter(function(x){ return x.name===name && !x.cancelled && !x.swapped; })[0]; if(!it) return false;
+  it.todayNote = String(text||'').trim(); logCaseEvent(c, by, '备注（'+name+'）：'+(it.todayNote || '清空')); return true;
+}
+function surgPlanItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.cancelled && !it.swapped && !it.krAddOn && !it.preBalanceAdd && !krIsMgmtItemC(it) && !it.deferUse; }); }
+function coreSurgItemDone(c, rowId, name, by){
+  var s = (c.subItems||[]).filter(function(x){ return x.id===rowId; })[0]; if(!s || s.kind!=='施术' || s.done || !c.krBalancePaid) return false;
+  var it = surgPlanItems(c).filter(function(x){ return x.name===name && !x.done; })[0]; if(!it) return false;
+  it.done = true; logCaseEvent(c, by, 'KR标记施术项目已完成：'+name);
+  if(!surgPlanItems(c).some(function(x){ return !x.done; })){ if(!coreSubDone(c, rowId, by, [], true)) return true; krCloseIfDone(c); }
+  return true;
+}
+function coreTodayCancel(c, kind, key, by){
+  if(kind==='row') return coreRowCancel(c, key, by);
+  var it = (c.procedureItems||[]).filter(function(x){ return x.name===key && !x.cancelled && !x.swapped && !x.done; })[0]; if(!it) return false;
+  if(krIsMgmtItemC(it) && it.heldOver){
+    var all = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return x.name; });
+    c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all).filter(function(n){ return n!==key; }); c.todayPicked = true;
+  } else {
+    it.deferUse = true;
+    c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && !s.done && !s.visitKey && s.projectName===key); });
+  }
+  syncSurgerySub(c); syncSurgeryBlock(c); logCaseEvent(c, by, '今日取消：'+key+'（今天不做，退回项目卡）'); return true;
+}
+
 /* ============ CMD-1015-26 Step 4：付清尾款后勾选今日进行的项目 ============
    勾的施术 / 管理项目进今日案件（施术行写「施术：勾的项目」，管理项目一行一个）；没勾的留在项目卡「未使用」（施术项目标 deferUse：不占今日时段、不随施术行完成） */
 function coreTodayPick(c, surgNames, mgmtNames, by){
