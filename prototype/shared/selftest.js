@@ -944,7 +944,7 @@
     var r0 = rows.filter(function(r){ return r.c.consultStatus==='paid_waiting_kr'; })[0]; if(r0){ ST.ok(K(r0,'eta'), '前置：有确认出报告时间待办'); var before = items.length; Store.mutateClinic(r0.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; coreConfirmConsultTimes(cc, todayStr(), '14:30', D(1)+' 05:00', ST.krBy); }); items = krTodoItems(krAllCases()); ST.ok(!items.some(function(i){ return i.rowKey===r0.clinicId+':'+r0.id && i.kind==='eta'; }), '确认之后待办自动消失'); }
     /* 今日院长日程未确认 */
     ST.ok(!krTodoItems(krAllCases()).some(function(i){ return i.kind==='dayconf'; }) && !/确认今日院长日程/.test(document.body.innerText), 'CMD-1014-18：拿掉确认今日院长日程（待办 / 按钮）');
-    ST.ok(KRC.mode==='day' || KRC.mode==='week' || KRC.mode==='month', 'KRC 模式'); ST.ok(todayHeldLineHtml({})==='' || true, '');
+    ST.ok(KRC.mode==='day' || KRC.mode==='week' || KRC.mode==='month', 'KRC 模式');
   });
   ST.def('TDK2','KR 弹出提示分类（KM1）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
@@ -1001,7 +1001,7 @@
     var drs = hospitalDirectorNames(krHospitalIdOfMe()); drs.forEach(function(n){ ST.ok(krcCanEdit(n) === (krcIsDirector() ? n===me.name : true), me.id+' 对 '+n+' 的 OFF 修改权限'); });
     /* 月视图：月份显示 + 选年月 */
     krcSet('mode','month'); ST.ok(/\d+ 月/.test(document.getElementById('kr-cal').innerText), '月视图应显示月份'); krcMonthPicker(); ST.ok(document.getElementById('krc-month-overlay').classList.contains('open'), '点月份应弹出选年月'); krcPickMonth(parseInt(today.slice(0,4),10), 0); ST.ok(KRC.anchor.slice(5,7)==='01', '应能选 1 月'); krcToday(); krcSet('mode','day');
-    ST.ok(krHoldCard.toString().indexOf('krHuOpen')<0 && krHoldCard.toString().indexOf('安排使用')<0, 'KR 在韩持有不再有［安排使用］（规则变更，不带开关）');
+    ST.ok(krHoldCard.toString().indexOf('安排使用')<0, 'KR 在韩持有没有［安排使用］，只有［使用］和［预约后续到院］（CMD-1015-17）');
   });
   ST.def('CAL3','KR 待办：院长上传面诊内容 / KR 等院长上传（已超时）+ 两个 bug（KM1 / KD1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && /^(KM1|KD1)$/.test(me.id), '要在 KM1 / KD1 分页里跑')) return;
@@ -1358,6 +1358,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var a = c.krScope.items[0].postcare, b = c.krScope.items[1].postcare;
     ST.ok(a.length===2 && b.length===0, '共同术后管理只留在第一个适用项目上，其余副本去掉：'+a.length+' / '+b.length); ST.ok(!JSON.stringify(c).match(/"cid"|"applies"/), 'cid / applies 字段清掉');
     ST.ok(c.procedureItems[0].postcare.length===1 && c.procedureItems[1].postcare.length===0, '已选项目里同样处理'); ST.ok(notes.length===1 && /共同术后管理已转成/.test(notes[0]), '迁移备注写明处理方式');
+  });
+
+  /* ================= CMD-1015-17 术后管理阶段 / 子案件 / 在韩持有 ================= */
+  ST.def('R17a','阶段：没有术后管理施术做完直接结案；有术后管理进「术后管理」；IN 做术后管理提前要原因、做完才结案；子案件按（日期 + 地点）合并（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c0 = toConfirmed('R17a0'); ST.krArrive(c0); ST.krJudge(c0, 'ok'); ST.krPay(c0); syncSurgerySub(c0);
+    var hasCare = carePending(c0) || (c0.subItems||[]).some(function(s){ return s.kind==='术后管理记录'; });
+    if(!hasCare){ ST.ok(ST.krCloseToday(c0) && isEnded(c0), '没有术后管理：施术做完直接结案'); }
+    var c = toConfirmed('R17a1'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c);
+    ST.ok(corePcBooking(c, pcRows(c, 'IN'), ST.krBy), '术后管理预约失败'); ST.ok(ST.krCloseToday(c) && c.stage==='postcare' && !isEnded(c), '施术做完 → 进入术后管理阶段，不结案');
+    var rows = carePendingRows(c).filter(function(s){ return s.place==='IN'; }); if(!ST.ok(rows.length>0, '要有回印尼做的术后管理')) return;
+    var early = rows.filter(function(s){ return pcDaysLate(s.date)<0; })[0];
+    if(early){ ST.ok(!coreCareVisit(c, early.id, 'A1 室长', '').ok, '提前做必须写原因'); ST.ok(coreCareVisit(c, early.id, 'A1 室长', '（自测）客人提前回来').ok && early.done, '写了原因就能做'); }
+    carePendingRows(c).filter(function(s){ return s.place==='IN'; }).forEach(function(s){ coreCareVisit(c, s.id, 'A1 室长', '（自测）'); });
+    var krLeft = carePendingRows(c); if(krLeft.length){ ST.ok(!isEnded(c), '韩国的术后管理还没做完 → 不结案'); ST.finishCare(c); }
+    ST.ok(isEnded(c), '韩国 + 印尼都做完 → 结案');
+    var keys = {}; subCaseList(c).forEach(function(r){ keys[subCaseKey(r)] = (keys[subCaseKey(r)]||0)+1; }); ST.ok(Object.keys(keys).every(function(k){ return keys[k]===1; }), '同一天同一地点只算一个子案件');
+  });
+  ST.def('R17b','KR：子案件在施术 tab 卡片里展开、没有单独页面；案件列表 KR 财务只显示 KR 看得到的（KM1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    ST.ok(typeof krRenderSubcase==='undefined' && !document.getElementById('kr-subcase'), '子案件单独页面已拿掉');
+    ST.ok(typeof krSubCasesCard==='function' && typeof krFinanceHtml==='function', '施术 tab 子案件卡 / 财务栏函数存在');
+    var h = krFinanceHtml({stage:'krmgmt', consultStatus:'', consultFeeAmount:0, settlements:[]}); ST.ok(typeof h==='string' && !/Rp/.test(h), 'KR 财务栏不出现印尼盾金额');
+  });
+  ST.def('R17c','迁移 46：付清尾款的管理项目转在韩持有，旧「管理项目」进程行去掉（任意分页）',function(){
+    var m = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===46; })[0]; if(!ST.ok(!!m, '没有 to:46 的迁移步骤')) return;
+    var c = {id:'rz', caseNo:'A9', krBalancePaid:true, krProcedureDone:true, visitDate:'2026-01-01', procedureItems:[{name:'管理甲', mgmtPlan:true, qty:3, done:false}], subItems:[{id:'q1', kind:'增加项目', mgmtPlan:true, content:'管理甲'}]};
+    var notes = []; m.fn(c, {note:function(t){ notes.push(t); }});
+    ST.ok(c.procedureItems[0].heldOver && c.procedureItems[0].holdUsed===0 && c.subItems.length===0, '管理项目转在韩持有，进程行去掉'); ST.ok(!!c.surgeryDoneAt, '补上施术完成日'); ST.ok(notes.length===1, '迁移记一条备注');
   });
 
 })();

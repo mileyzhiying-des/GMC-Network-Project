@@ -724,3 +724,13 @@ prototype/shared/app.css  共用样式
 - **IN 付完定金后拿掉「确认赴韩项目」的［+ 追加项目］**：`krAddMoreHtml` / `addMoreProjects` 删除；要加赴韩项目请在对话里跟 KR 说，由 KR 到院当天添加（在韩加项）；本地项目仍用右上角［+ 添加本地管理］。
 - 我的判断（未经确认）：管理项目的「次数」按「同一规格买几次」算（价格 = 规格单价 × 次数）；只有管理项目、没有施术项目时，施术行写管理项目名（保证还能走施术日期流程）。
 - 测试：`selftest.js` 新增 R16a（IN 选项目 + 定金 + 无追加 + 标完成 / 转持有）、R16b（KR 表单，KM1 分页）、R16c（迁移 45）；D20 的「追加项目」改成直接置 `c.addingMore`（追加入口已拿掉）。`store.js` 暴露 `window.GMC_MIGRATIONS` 供 R16c 用。**CAL2 / CAL6 会被前面用例在 D(40) 留下的 OFF 影响**（KM1 分页连跑时先清掉 `HOSPITAL_DATA[h].offs` 里 D(40) 那天的条目再跑）。
+
+## CMD-1015-17 补充（2026-10-16，追加；旧文字保留作历史）
+- 基准 **7bc6d2f**，提交 cebe393（1/5 数据结构 + 子案件并入施术 tab）、3f0aece（2/5 案件列表 / Timeline / KR 财务 / 删遗留）、本提交（3/5 测试 + 文档）；**未推送**，不带开关；**数据版本 45 → 46**（保留用户案件，`MIGRATIONS` to:46 + `migrateCareHoldings`：旧术后管理持有批次转回原案件 IN 行、管理项目转在韩持有、补 `surgeryDoneAt`）。
+- **阶段**：新增「术后管理」（`c.stage==='postcare'`：施术完成且有术后管理）和「在韩管理」（`krmgmt`，KR 占位预约案件）；没有术后管理施术做完直接结案；施术当天不再有［是，结案］。韩国 + 印尼都做完才结案；［结束术后管理］（`coreEndPostcare`，原因必填，仅 IN）= 结案，没做的不作废：印尼的在客户详情 / 本地管理「使用持有项目」里列出（免费、不能退款），韩国的转在韩持有。
+- **术后管理不是持有项目**：留在原案件的 `subItems`（`kind:'术后管理记录'`，`place` KR / IN）；IN 在案件里［做术后管理］（`coreCareVisit`，提前做原因必填并通知 KR，延后标红 + IN / KR 待办）；付费管理项目付清尾款后就是在韩持有（`heldOver`，KR 按［使用］`coreMgmtUse` 扣次数，［预约后续到院］走 `krHuOpen`），结案不等持有用完；IN 看得到在韩持有（项目 + 剩余次数，不显示金额）。
+- **子案件**：每次新预约的到院一个，同一天同一地点合并（`subCaseKey` / `subCaseList` / `subCaseNo`，编号 -1 -2…）；施术当天 = 主案件；子案件不再是单独页面（`kr-subcase` 页和 `krOpenSub` 删除），在施术 tab 卡片里展开（IN `inPostcareCardHtml`，KR `krSubCasesCard`）；Timeline 分页 全部｜主案件｜-1｜-2（`setTlPage` / `krSetTlPage`）。
+- **案件列表**（IN 10 列 / KR 11 列保留来源诊所）：Case ID 加 ▼（`caseRowToggle` / `krRowToggle`）展开子案件，新增「开始时间」（`caseStartKey` / `caseStartText`），KR 财务栏只显示 KR 看得到的（`krFinanceHtml`）；tab 新增「术后管理」「在韩管理」；KR 施术 tab 第一张卡「施术预约」一行；KR 客人管理阶段规则 `krCliStageProc`；经营数据按施术完成日（`bizCaseMonth` 用 `surgeryDoneAt`）。
+- **删除遗留**（CMD-1015-13 保留的）：请 IN 帮忙预约整组（`openSubBookModal` / `coreSubInform` / `krSubInform` / `askIn` / 工作台待预约卡）、旧诊疗方案弹窗壳 `report-overlay`、案件信息抽屉 `peek-overlay`。仍保留：`krHuOpen` 一组（现在是［预约后续到院］）。
+- **测试**：selftest 新增 R17a（阶段 / 提前原因 / 结案 / 子案件合并）、R17b（KM1：无子案件页）、R17c（迁移 46）；改了 D18/D19/D23/F4/R16a/TDK1/CAL2，删 E7c/E7d。**R17a 要先 `ST.begin()` 再建案件；KR 分页别跑 IN 的案件用例（会报 style 为空）**。roletest 9 个账号（OWN/A1/A2/B1/KO1/KM1/KC1/KD1/KM2）全部 0 不符。
+- 我的判断（待确认）：［结束术后管理］只有 IN 有；只有管理项目的案件，施术行写管理项目名；KR 持有项目的［预约后续到院］沿用 `krHuOpen`。
