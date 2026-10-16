@@ -703,3 +703,14 @@ prototype/shared/app.css  共用样式
 - **四个测试开关已收掉**（新结案规则 / 新待办·通知 / 日历对齐 + 新待办 10/14 / 新样式）：保留「开」的逻辑，删掉「关」时的旧程序和旧样式；`newCloseOn` / `newTodoOn` / `newCalOn` / `DS_NEW` 不存在了，浏览器里的 `gmc_cfg_newclose|newtodo|newcal|newstyle` 启动时清掉、不再读取。**新写代码不要再加开关判断。** 基准 74e3676；提交 8ec4c80（新结案）/ fc0a101（新待办通知）/ 4730460（日历对齐）/ cb248dc（新样式），均未推送，数据版本不变（44）。`mainlineOngoing` 现在就是原来的「新」版；原来的旧版改名 `mainlineOngoingRepair`，只给 `repairWronglyClosedCases` 用。
 - `app.css` 里的旧色值仍靠 `dstyle.js` 运行时映射成语义变量（静态改写不在这次范围）。
 - **遗留弹窗清理**：删了 本地项目退款弹窗（`openHoldingRefundByIdx` / `openHoldingRefundModal` / `closeHoldingRefundModal` / `confirmHoldingRefund` / `HOLDING_REFUND_CTX` + in.html `holding-refund-overlay`）、主线完成（`krMainFinishBtn` / `krMainFinish` / `mainFinishInfo` / `coreMainFinish`）。**保留并列入汇报**：请 IN 帮忙预约（`openSubBookModal` 等，界面已无入口但 selftest 仍有用例）、report-overlay 壳、peek-overlay / 案件信息抽屉、`krHuOpen` 一组（selftest / store.js 仍引用）。
+
+## CMD-1015-15 补充（2026-10-16，追加；旧文字保留作历史）
+- 基准 **21cdc31**，单个提交，**未推送**，不带开关，数据版本不变（44）。第 2 轮修正 9 项：
+- **1 视频来电只通知被叫的室长**：`callTargets(cc, participants)`（data.js）算被叫人短名（呼叫名单里选了的 KR 室长 → 没选则负责该案件的 `krCoordinator` → 他今天整天 OFF 则当天上班的室长），写进来电信号 `sig.to`；`krCallRelevant` 只让 `sig.to` 里的室长响铃，**院长 / 代表院长一律不响**；`recordMissedCall` 只给被叫室长记一条指名的未接来电（`only`），不再有给院长的 `kmd_` 那条。旧信号没有 `to` 时仍给全体室长。
+- **2 院长工作台 4 张卡**（`todoKrDirCardsHtml`，kr.js `krRenderDashboard` 的院长分支）：待面诊（`upload` 待办改 cat `dconsult`，点了筛选待办）/ 待施术（新待办 `dsurg`：自己负责的全部已确认 / 已到院施术，`ref` 参考名单，点了待办栏显示灰色名单，分「今天 / 之后」`todoGroupOf` 返回 0/1/2）/ 恢复确认（占位，写「即将推出」、不可点，`todoCatCardsHtml` 里 key `soon`）/ 新消息。`TODO_REF_CATS` 加 `dsurg`。
+- **3 院长上传面诊后 KR 室长有提醒（bug）**：原因是通知文字「…上传了面诊内容，面诊结束：…→ 请发送诊疗方案」没被 `notifTodoKind` 的正则认成待办类，归成「消息」所以不弹；正则加了「请发送诊疗方案」。「发送诊疗方案」待办本来就有（`send`）。
+- **4 安排术后管理入口**：`krPcbNeed(c)`（尾款已付 + 没约完 + 有术后管理项目）；项目 tab「术后项目」卡和施术 tab（Confirmed / Arrived）都加［安排术后管理］（`krPcbNeedBar` / `krPcbNeedCard`），调原来的 `krPcbOpen()` 小窗口；约完 / 没付尾款不显示。
+- **5～8 IN**：「查看相关案例」移到每行最后（`localProjRowHtml`、赴韩项目行）；`setProjectOrigin('KR')` 把 `CASE_DISPLAY_CCY_KR` 重置成 `'KRW'`；赴韩施术 tab 的［已转告客人］［确认无变动］卡片按完就消失（`calRelayRecheckCards`，记录仍进 Timeline，KR 那边「日程确认」读 `c.recheck` 不变）；［打印］`printKrPlan` 先开预览窗口，顶部工具条［确认打印］［关闭］（打印时工具条隐藏），不再自动打印。
+- **9 尾款 IN 看得到**：`viewerTextFilter` 不再把「尾款 ₩xx」改成「已付清」；结算单卡片、结算汇总行（`settlementSummaryHtml`）、结算 tab 顶部（`settleTabTopHtml`）、付款弹窗、待付款批次一行都显示尾款金额（项目合计 − 定金，在韩加项不计入）；赴韩施术计划「确认赴韩项目」卡下加一行「项目合计 / 定金 / 尾款」（`krPlanMoneyLine`）。选项目那处原来就有。**在韩加项金额 IN 仍看不到**。
+- 顺手修 S39 过期正则（取消通知文字改成「X 取消了 … 的预约」）；`selftest.js` 新增 R15a（来电）/ R15b（院长 4 卡，KD1 / KO1 分页）/ R15c（上传面诊通知 + 安排术后管理，KM1 分页）/ R15d（IN 五项）。
+- **测试教训**：`ST.cleanup` 还原的是「`ST.begin` 拍快照那一刻」的存档，所以**跑 `ST.ensureFixtures` 之前要先 `ST.begin()`**（或直接用 `ST.runAll`，它会先拍快照），否则夹具会被快照带进「还原后」的数据里。

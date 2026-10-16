@@ -1683,11 +1683,31 @@ function recordMissedCall(sig){
   var h = HOSPITAL_DATA[sig.hospitalId]; if(!h) return;
   h.notifs = h.notifs || [];
   var txt = '未接来电：'+(sig.clinicName||'')+' · '+sig.name+'（'+sig.caseNo+'）的视频来电（'+(sig.from||'IN')+'）';
-  [['kmc_'+sig.id,'coord',null], (sig.director ? ['kmd_'+sig.id,'director',sig.director] : null)].forEach(function(x){
-    if(!x || h.notifs.some(function(n){ return n.id===x[0]; })) return;
-    h.notifs.unshift({id:x[0], ts:nowFullDt(), text:txt, clinicId:sig.clinicId, caseId:sig.caseId, to:x[1], director:x[2], kind:'missedcall', readBy:[]});
+  /* CMD-1015-15：只记给被呼叫的室长（sig.to），院长不收；旧信号没有 to 时记给全体室长 */
+  var tos = (sig.to && sig.to.length) ? sig.to : [null];
+  tos.forEach(function(short){
+    var acc = short ? (ACCOUNTS||[]).filter(function(a){ return a.hospitalId===sig.hospitalId && a.name && a.name.split(' ')[0]===short; })[0] : null;
+    var id = 'kmc_'+sig.id+(short ? '_'+short : '');
+    if(h.notifs.some(function(n){ return n.id===id; })) return;
+    var n0 = {id:id, ts:nowFullDt(), text:txt, clinicId:sig.clinicId, caseId:sig.caseId, to:'coord', kind:'missedcall', readBy:[]};
+    if(acc) n0.only = acc.name;
+    h.notifs.unshift(n0);
   });
   Store.touch();
+}
+/* 视频来电的被叫人（CMD-1015-15）：呼叫名单里选了的 KR 室长；没选 → 负责该案件的 KR 室长；他今天整天 OFF → 当天上班的室长；返回短名数组（'KM1'） */
+function callTargets(cc, participants){
+  var hid = caseKrHospital(cc); if(!hid) return [];
+  var all = (hospitalCoordinators(hid)||[]).map(function(n){ return n.split(' ')[0]; });
+  var picked = [];
+  (participants||[]).forEach(function(n){ var sh = String(n).split(' ')[0].replace(/（.*$/,''); if(all.indexOf(sh)>-1 && picked.indexOf(sh)<0) picked.push(sh); });
+  if(picked.length) return picked;
+  var today = todayStr();
+  var offToday = function(sh){ return ((HOSPITAL_DATA[hid]||{}).offs||[]).some(function(o){ return o.kind==='coord' && o.who && o.who.split(' ')[0]===sh && (!o.part || o.part==='全天') && offApplies(o, today); }); };
+  var resp = cc.krCoordinator ? cc.krCoordinator.split(' ')[0] : '';
+  if(resp && all.indexOf(resp)>-1 && !offToday(resp)) return [resp];
+  var work = all.filter(function(sh){ return !offToday(sh); });
+  return work.length ? [work[0]] : all.slice(0,1);
 }
 function callRingTimeout(sigId){
   if(!VIDEO_CALL.active || VIDEO_CALL.sigId!==sigId || VIDEO_CALL.status!=='ringing') return;
@@ -1703,7 +1723,7 @@ function startCall(kind, caseId, participants){
   var cc = caseId ? CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0] : null;
   if(kind!=='demo' && cc && caseKrHospital(cc)){ /* 呼叫 KR 一侧：该医院的 KR 室长 + 案件院长都会收到来电 */
     VIDEO_CALL.sigId = 'call'+Date.now()+Math.floor(Math.random()*1000);
-    writeCallSignal({id:VIDEO_CALL.sigId, status:'ringing', clinicId:CURRENT_CLINIC_ID, clinicName:(clinicById(CURRENT_CLINIC_ID)||{}).name||'', caseId:cc.id, caseNo:cc.caseNo||'', name:cc.name, hospitalId:caseKrHospital(cc), director:cc.director||'', from:ME_NAME, kind:kind, ts:Date.now()});
+    writeCallSignal({id:VIDEO_CALL.sigId, status:'ringing', clinicId:CURRENT_CLINIC_ID, clinicName:(clinicById(CURRENT_CLINIC_ID)||{}).name||'', caseId:cc.id, caseNo:cc.caseNo||'', name:cc.name, hospitalId:caseKrHospital(cc), director:cc.director||'', to:callTargets(cc, participants), from:ME_NAME, kind:kind, ts:Date.now()}); /* 院长不收来电（CMD-1015-15）：只通知被呼叫的室长 */
   }
   if(VIDEO_CALL.sigId){ var sid0 = VIDEO_CALL.sigId; VIDEO_CALL.ringTimer = setTimeout(function(){ callRingTimeout(sid0); }, CALL_RING_MS); } /* 响铃超时没人接 → 未接听 */
   INVITE_KR_CONTEXT_CASE_ID = (kind==='talk') ? caseId : null;
@@ -2905,7 +2925,7 @@ function localProjRowHtml(c, scope, p, ccy, forcedSpecId){
     : (u.promo ? '<span style="text-align:right;"><span style="color:var(--sage);font-weight:700;">'+displayAmount(u.price, 'IN', ccy)+'</span> <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本月</span><div style="font-size:11px;color:var(--muted);"><span style="text-decoration:line-through;">'+displayAmount(u.orig, 'IN', ccy)+'</span>　至 '+u.promo.to+'</div></span>'
       : '<span style="color:var(--slate2);">'+displayAmount(u.price, 'IN', ccy)+'</span>');
   return '<label class="loc-row" style="gap:8px;"><input type="checkbox" onchange="toggleLocalProject(\''+scope+'\',\''+p.id+'\')" '+(inCart?'checked':'')+'>'+
-    '<span style="flex-grow:1;">'+p.name+(p.opt ? ' <span style="font-size:10px;color:var(--muted);">使用时选'+p.opt.label+'</span>' : '')+(held>0 ? ' <span style="font-size:11px;color:var(--sage);">已持有 '+held+' 次</span>' : '')+projCasesLinkHtml(p.id)+'</span>'+sel+'<span style="min-width:96px;text-align:right;">'+price+'</span></label>';
+    '<span style="flex-grow:1;">'+p.name+(p.opt ? ' <span style="font-size:10px;color:var(--muted);">使用时选'+p.opt.label+'</span>' : '')+(held>0 ? ' <span style="font-size:11px;color:var(--sage);">已持有 '+held+' 次</span>' : '')+'</span>'+sel+'<span style="min-width:96px;text-align:right;">'+price+'</span>'+projCasesLinkHtml(p.id)+'</label>'; /* CMD-1015-15：「查看相关案例」放行尾，避免误点 */
 }
 function setLocalCat(cat){ var c = getCurrentCase(); if(!c) return; c.localCatFilter = cat; renderCaseBody(c); }
 function localCatalogHtml(c, scope, tab, q, ccy){
@@ -3012,7 +3032,7 @@ function unpaidBatchesHtml(c){
   if(!bs.length) return '';
   return '<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">'+bs.map(function(b){
     var parts = [];
-    if(b.krDeposit) parts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW'));
+    if(b.krDeposit) parts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'，尾款 '+formatCurrency(Math.max(0,(b.krTotal||0)-b.krDeposit),'KRW')+'（赴韩后医院收）');
     if(b.inTotal) parts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">批次 '+b.id+' 待付款（'+parts.join('、')+'）</span><button class="btn-primary" onclick="settleProjects(\''+b.id+'\')">确认付款</button></div>';
   }).join('')+'</div>';
@@ -3104,7 +3124,7 @@ function settleTabTopHtml(c){
   var refKrw = (c.refunds||[]).filter(function(r){ return (r.currency||'KRW')==='KRW'; }).reduce(function(s,r){ return s+(r.amount||0); }, 0);
   var refIdr = (c.refunds||[]).filter(function(r){ return r.currency==='IDR'; }).reduce(function(s,r){ return s+(r.amount||0); }, 0);
   var two = function(krw, idr){ var a = []; if(krw) a.push(formatCurrency(krw,'KRW')); if(idr) a.push(formatCurrency(idr,'IDR')); return a.join(' ＋ ') || '—'; };
-  var bal = !krActiveItems(c).length ? '—' : c.krBalancePaid ? '尾款已付清' : (info.diff>=0 ? '尾款未付' : '应退 '+formatCurrency(-info.diff,'KRW')); /* CMD-1014-16：KR 收的尾款金额 IN 不显示 */
+  var bal = !krActiveItems(c).length ? '—' : (info.diff>=0 ? formatCurrency(info.diff,'KRW')+'（'+(c.krBalancePaid ? '已付清' : '未付')+'）' : (c.krBalancePaid ? '已退差额 ' : '应退 ')+formatCurrency(-info.diff,'KRW')); /* CMD-1015-15：尾款金额 IN 看得到 */
   var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:14px;">'+
     cell('项目合计', two(hasKr ? info.total : 0, pd.inn))+cell('已收（诊所）', two(hasKr ? info.deposit : 0, pd.inn))+cell('已退', two(refKrw, refIdr))+cell('待收尾款（医院收）', bal)+'</div>';
@@ -3561,7 +3581,7 @@ function confirmAddition(){
   settleProjects();
 }
 
-function projCasesLinkHtml(pid){ return ' <a href="#" class="info-link" style="font-size:11px;white-space:nowrap;" onclick="event.stopPropagation();event.preventDefault();openProjectCasesNewTab(\''+pid+'\');return false;">查看相关案例 ↗</a>'; }
+function projCasesLinkHtml(pid){ return ' <a href="#" class="info-link" style="font-size:11px;white-space:nowrap;margin-left:10px;" onclick="event.stopPropagation();event.preventDefault();openProjectCasesNewTab(\''+pid+'\');return false;">查看相关案例 ↗</a>'; }
 
 function caseCcySwitchHtml(origin){
   var opts = origin==='KR' ? ['KRW','IDR','CNY'] : ['IDR','CNY'];
@@ -3612,7 +3632,7 @@ function projectPickerHtml(c, isAddition){
         var noteHtml = (p.krNote ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+p.krNote+'</div>' : '')+((p.krMeta||[]).length ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;line-height:1.6;">'+p.krMeta.join('<br>')+'</div>' : '');
         return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
           '<input type="checkbox" onchange="toggleProject(\''+p.id+'\')" '+(checked?'checked':'')+' style="margin-top:2px;">'+
-          '<span style="flex-grow:1;">'+p.name+projCasesLinkHtml(p.id)+noteHtml+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span></label>';
+          '<span style="flex-grow:1;">'+p.name+noteHtml+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span>'+projCasesLinkHtml(p.id)+'</label>';
       }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>');
     }
   } else {
@@ -3715,6 +3735,7 @@ function krRefundDeposit(kind){
 function setProjectOrigin(o){
   var c = getCurrentCase(); if(!c) return;
   c.projectOriginFilter = o;
+  if(o==='KR') CASE_DISPLAY_CCY_KR = 'KRW'; /* CMD-1015-15：切到赴韩项目默认显示韩币 ₩（再手动切才换） */
   renderCaseBody(c);
 }
 
@@ -4521,6 +4542,14 @@ function krProcedureTabHtml(c){
   if(sub==='timeline' && c.settlementDone) return '<div class="card" style="padding:22px 24px;">'+tabsHtml+krTimelineTabHtml(c)+'</div>';
   return krProcedureTabMain(c, tabsHtml);
 }
+/* CMD-1015-15：赴韩施术计划里 IN 也看得到定金 / 尾款（在韩加项的金额仍只有 KR 看得到：加项不计入） */
+function krPlanMoneyLine(c){
+  if(!krActiveItems(c).length) return '';
+  var info = krBalanceInfo(c);
+  var dep = '定金（诊所收） '+formatCurrency(info.deposit,'KRW');
+  var bal = info.diff>=0 ? '尾款（医院收） '+formatCurrency(info.diff,'KRW')+'（'+(c.krBalancePaid ? '已付清' : '未付')+'）' : (c.krBalancePaid ? '已退差额 ' : '应退差额 ')+formatCurrency(-info.diff,'KRW');
+  return '<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--slate2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border2);"><span>项目合计 '+formatCurrency(info.total,'KRW')+'</span><span>'+dep+'</span><span>'+bal+'</span></div>';
+}
 function krProcedureTabMain(c, tabsHtml){
   var ks = c.krSchedule;
   var st = scheduleState(c);
@@ -4608,7 +4637,7 @@ function krProcedureTabMain(c, tabsHtml){
   var recCard = recHtml ? '<div class="card" style="padding:16px 24px;"><div style="display:flex;align-items:center;cursor:pointer;" onclick="toggleKrPlanRec(\''+c.id+'\')"><b style="font-size:14px;flex:1;">推荐项目整理</b><span style="color:var(--muted);">'+(recOpen ? '收起 ▴' : '展开 ▾')+'</span></div>'+(recOpen ? recHtml.replace(/margin:10px 0;/,'margin:10px 0 0;') : '')+'</div>' : '';
   var noteBox = hasActive ? '<div style="margin-top:14px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">印尼室长备注</div><textarea rows="3" placeholder="印尼室长备注（选填，打印时一起印出）" onchange="setRecInNote(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;resize:vertical;">'+String(c.recInNote||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea></div>' : '';
   return (tabsHtml||'')+'<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;">'+subStatusRowHtml(caseSubStatusItems(c))+body+'</div>'+recCard+
-    '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;">确认赴韩项目</div>'+itemsHtml+noteBox+krAddMoreHtml(c)+innCareCardHtml(c)+'</div></div>';
+    '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;">确认赴韩项目</div>'+itemsHtml+krPlanMoneyLine(c)+noteBox+krAddMoreHtml(c)+innCareCardHtml(c)+'</div></div>';
 }
 
 function markConsultPaid(){
@@ -6449,7 +6478,10 @@ function printKrPlan(){
     '<h2>推荐项目整理</h2>'+(summary || '<div style="font-size:13px;">（暂无）</div>')+
     '<h2>确定的赴韩项目</h2>'+(rows || '<div style="font-size:13px;">（暂无）</div>')+
     (c.recInNote ? '<h2>印尼室长备注</h2><pre>'+e(c.recInNote)+'</pre>' : '')+
-    '<script>window.onload=function(){window.print();}<\/script></body></html>';
-  var w = window.open('', '_blank'); if(!w){ alert('浏览器拦截了打印窗口，请允许弹出窗口后重试'); return; }
+    '</body></html>';
+  /* CMD-1015-15：先预览，点［确认打印］后才打印（顶部工具条打印时不会印出来） */
+  html = html.replace('<body', '<body').replace('</style>', '@media print{.pv-bar{display:none !important;}} .pv-bar{position:sticky;top:0;background:#fff7ec;border-bottom:1px solid #e5d3b8;padding:10px 28px;margin:-28px -28px 18px;display:flex;gap:10px;align-items:center;font-size:13px;} .pv-bar button{padding:7px 16px;border-radius:6px;border:1px solid #9A6A4B;background:#9A6A4B;color:#fff;cursor:pointer;} .pv-bar button.o{background:#fff;color:#9A6A4B;}</style>');
+  html = html.replace(/<body([^>]*)>/, '<body$1><div class="pv-bar"><span style="flex:1;">打印预览：确认内容没问题后再打印</span><button onclick="window.print()">确认打印</button><button class="o" onclick="window.close()">关闭</button></div>');
+  var w = window.open('', '_blank'); if(!w){ alert('浏览器拦截了预览窗口，请允许弹出窗口后重试'); return; }
   w.document.write(html); w.document.close();
 }

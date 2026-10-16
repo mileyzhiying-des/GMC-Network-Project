@@ -720,7 +720,7 @@
     bkHomeBack(); bkHomeLookup(); BK.lkPhone = '+62 899-7777-5555'; BK.otp = {code:'0', exp:Date.now()+300000}; bkLkSend(true); var c2 = BK.otp.code; bkRender(); document.getElementById('bk-code').value = c2; bkLkVerify(); ST.ok(BK.mode==='lookupNone', '未登记号码应显示没有预约记录'); ST.ok(/去预约|Pesan|预约/.test(document.getElementById('bk-root').innerText), '应有［去预约］');
     /* 在我的预约里取消 → IN 收到一般消息 */
     var booked = CASE_ITEMS.filter(function(c){ return c.stage==='booked' && c.subState==='waiting' && clientByName(c.name) && customerCanCancel(c); })[0]; if(booked){
-      var n0 = NOTIFS.length; BK.mode = 'me'; BK.me = {at:Date.now(), phone:clientPhoneOf(booked.name), cancelled:[], confirm:null, msg:'', booked:null}; bkMeCancel(booked.id); ST.ok(booked.stage==='cancelled' || booked.subState==='cancelled', '取消后案件应为已取消'); ST.ok(NOTIFS.length>n0 && NOTIFS.some(function(n){ return /取消预约|客人取消/.test(n.text) && n.caseId===booked.id; }), 'IN 应收到「客人取消预约」通知');
+      var n0 = NOTIFS.length; BK.mode = 'me'; BK.me = {at:Date.now(), phone:clientPhoneOf(booked.name), cancelled:[], confirm:null, msg:'', booked:null}; bkMeCancel(booked.id); ST.ok(booked.stage==='cancelled' || booked.subState==='cancelled', '取消后案件应为已取消'); ST.ok(NOTIFS.length>n0 && NOTIFS.some(function(n){ return /取消预约|客人取消|取消了.*的预约/.test(n.text) && n.caseId===booked.id; }), 'IN 应收到「客人取消预约」通知');
     } else ST.note('没有可取消的待访问案件');
   });
 
@@ -1243,6 +1243,62 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     if(canDo('krwork')){ ST.ok(items.length>=1 && /确认预约时间/.test(items[0].text), 'KR 室长 / 管理者待办应有「确认预约时间」'); krBookOpen(pend.id); var bt = [].slice.call(document.querySelectorAll('#krb-kr-overlay button')).map(function(b){ return b.textContent; }); ST.ok(bt.indexOf('确认')>-1 && bt.indexOf('改时间')>-1 && bt.indexOf('无法安排')>-1, '预约窗应有［确认］［改时间］［无法安排］，实际 '+bt.join('/')); }
     else { ST.ok(items.length===0, '院长没有「确认预约时间」待办'); krBookOpen(pend.id); ST.ok([].slice.call(document.querySelectorAll('#krb-kr-overlay button')).every(function(b){ return !/^(确认|改时间|无法安排)$/.test(b.textContent); }), '院长看预约窗只读'); }
     var evs = krcEvents().surg.filter(function(x){ return x.b.type==='预约'; }); if(canDo('krwork')) ST.ok(evs.some(function(x){ return x.b.bookingId===pend.id && x.b.status==='待确认'; }), 'KR 日历应有虚线块');
+  });
+
+  /* ================= CMD-1015-15 第 2 轮修正 ================= */
+  ST.def('R15a','视频来电只通知被呼叫的室长，院长不收（任意账号分页）',function(){
+    var rows = (typeof krAllCases==='function' && isKrAccount()) ? krAllCases() : [];
+    var c = isKrAccount() ? (rows[0] && rows[0].c) : CASE_ITEMS.filter(function(x){ return caseKrHospital(x); })[0]; if(!ST.ok(!!c, '没有带医院的案件（先建夹具）')) return;
+    var hid = caseKrHospital(c), co = hospitalCoordinators(hid);
+    var t1 = callTargets(c, ['A1（印尼室长）', co[0]+'（韩国室长）']); ST.ok(t1.length===1 && t1[0]===co[0].split(' ')[0], '呼叫名单里选的 KR 室长就是被叫人，实际 '+t1.join(','));
+    var t2 = callTargets(c, ['A1（印尼室长）']); ST.ok(t2.length===1 && co.map(function(n){ return n.split(' ')[0]; }).indexOf(t2[0])>-1, '没选 → 负责 / 当天上班的室长，实际 '+t2.join(','));
+    var sig = {id:'r15a'+Date.now(), hospitalId:hid, clinicId:c.clinicId||CURRENT_CLINIC_ID, clinicName:'测试', caseId:c.id, caseNo:c.caseNo||'', name:c.name, director:c.director||'KD1 院长', to:t1, from:'A1 室长'};
+    var h = HOSPITAL_DATA[hid], n0 = (h.notifs||[]).length; recordMissedCall(sig);
+    var fresh = (h.notifs||[]).filter(function(n){ return n.id.indexOf('kmc_'+sig.id)===0 || n.id.indexOf('kmd_'+sig.id)===0; });
+    ST.ok(fresh.length===1 && fresh[0].to==='coord' && fresh[0].kind==='missedcall', '未接来电只记给被叫的室长一条，实际 '+fresh.length); ST.ok(!fresh.some(function(n){ return n.to==='director'; }), '院长不收未接来电');
+    var acc = ACCOUNTS.filter(function(a){ return a.hospitalId===hid && a.name.split(' ')[0]===t1[0]; })[0]; ST.ok(!acc || fresh[0].only===acc.name, '指名给 '+t1[0]);
+    h.notifs = h.notifs.filter(function(n){ return fresh.indexOf(n)<0; });
+    if(typeof krCallRelevant==='function') ST.ok(/院长 \/ 代表院长不接来电/.test(String(krCallRelevant)), '院长账号来电判断返回 false');
+  });
+  ST.def('R15b','院长工作台 4 张卡：待面诊 / 待施术 / 恢复确认（即将推出）/ 新消息（KD1 或 KO1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && /^kr_(director|owner)$/.test(me.role), '要在 KD1 / KO1 分页里跑')) return;
+    nav('kr-dashboard'); krRenderDashboard(); var el = document.getElementById('krdash-body'), tx = el.innerText;
+    ST.ok(/待面诊/.test(tx) && /待施术/.test(tx) && /恢复确认/.test(tx) && /新消息/.test(tx), '应有 4 张卡'); ST.ok(/即将推出/.test(tx), '恢复确认卡显示「即将推出」');
+    var cards = [].slice.call(el.querySelectorAll('.card[data-n]')).filter(function(x){ return /待面诊|待施术|恢复确认|新消息/.test(x.innerText.slice(0,12)); });
+    var soon = cards.filter(function(x){ return /恢复确认/.test(x.innerText); })[0]; ST.ok(!!soon && !soon.getAttribute('onclick'), '恢复确认不可点');
+    var items = todoItems(); var up = items.filter(function(i){ return i.kind==='upload'; }), ds = items.filter(function(i){ return i.kind==='dsurg'; });
+    ST.ok(up.every(function(i){ return i.cat==='dconsult'; }) && ds.every(function(i){ return i.cat==='dsurg' && i.ref; }), '待面诊 / 待施术分类正确，待施术是参考名单');
+    var cnt = function(label){ var d = cards.filter(function(x){ return x.innerText.indexOf(label)===0 || x.innerText.slice(0,10).indexOf(label)>-1; })[0]; return d ? parseInt(d.getAttribute('data-n'),10) : -1; };
+    ST.ok(cnt('待面诊')===up.filter(function(i){ return i.mine; }).length, '待面诊数字 = 待办里 upload 条数'); ST.ok(cnt('待施术')===ds.length, '待施术数字 = 自己负责的已确认施术 '+ds.length);
+    todoCardFilter('dsurg'); ST.ok(todoRefMode() && todoVisible(todoItems()).length===ds.length, '点待施术 → 待办栏显示灰色参考名单'); var pane = document.getElementById('todo-pane'); ST.ok(!ds.length || /今天|之后|昨日及更早/.test(pane.innerText), '名单分组'); todoSetKind('');
+    todoCardFilter('dconsult'); ST.ok(!todoRefMode() && todoVisible(todoItems()).every(function(i){ return i.kind==='upload'; }), '点待面诊 → 筛选待办'); todoSetKind('');
+    ST.ok(krCallRelevant({hospitalId:me.hospitalId, director:me.name, to:['KM1']})===false, '院长不响铃');
+  });
+  ST.def('R15c','院长上传面诊后 KR 室长有待办 + 弹一次；稍后预约后有［安排术后管理］入口（KM1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    ST.ok(notifTodoKind({text:'KD1 院长 上传了面诊内容，面诊结束：自测（A000999）→ 请发送诊疗方案', kind:'case'})==='todo', '上传面诊内容的通知弹一次');
+    var rows = krAllCases(), r = rows.filter(function(x){ return x.c.consultStatus==='awaiting_report'; })[0];
+    if(ST.ok(!!r, '没有等待报告的案件（stageW 夹具）')){ var c = r.c, old = c.consultContentAt; c.consultContentAt = nowFullDt(); var it = krTodoItems(rows).filter(function(i){ return i.kind==='send' && i.caseId===c.id; })[0]; ST.ok(!!it && /发送诊疗方案/.test(it.text), '上传后出现「发送诊疗方案」待办'); c.consultContentAt = old; }
+    var r2 = rows.filter(function(x){ return krActiveItems(x.c).some(function(i){ return (i.postcare||[]).length; }); })[0];
+    if(ST.ok(!!r2, '没有带术后管理的案件（stageC 夹具）')){ var c2 = r2.c, pb = c2.krBalancePaid, bk = c2.pcBooked; c2.krBalancePaid = true; c2.pcBooked = false;
+      ST.ok(krPcbNeed(c2) && /安排术后管理/.test(krTabItems(c2)), '项目 tab「术后项目」有［安排术后管理］'); var st = scheduleState(c2); if(st==='Confirmed' || st==='Arrived') ST.ok(/安排术后管理/.test(krTabProc(c2)), '施术 tab 也有');
+      c2.pcBooked = true; ST.ok(!krPcbNeed(c2) && !/安排术后管理/.test(krTabItems(c2)), '约完就不再出现'); c2.krBalancePaid = false; c2.pcBooked = false; ST.ok(!krPcbNeed(c2), '尾款没付不出现'); c2.krBalancePaid = pb; c2.pcBooked = bk; }
+  });
+  ST.def('R15d','IN 五项小修：案例链接在行尾 / 赴韩默认韩币 / 转告·确认卡片按完消失 / 打印先预览 / 尾款 IN 看得到（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var src = String(localProjRowHtml); ST.ok(src.indexOf('min-width:96px')>-1 && src.lastIndexOf('projCasesLinkHtml')>src.indexOf('min-width:96px'), '「查看相关案例」在价格后面（行尾）');
+    var sp = String(projectPickerHtml); ST.ok(sp.indexOf("displayAmount(p.price, p.origin, pickerCcy)+'</span>'+projCasesLinkHtml")>-1, '赴韩项目行同样在行尾');
+    var c = CASE_ITEMS.filter(function(x){ return x.krSchedule && x.krSchedule.status==='confirmed'; })[0] || CASE_ITEMS[0]; if(!ST.ok(!!c, '没有案件')) return; var old = CURRENT_CASE_ID; CURRENT_CASE_ID = c.id;
+    try{
+      CASE_DISPLAY_CCY_KR = 'IDR'; setProjectOrigin('KR'); ST.ok(CASE_DISPLAY_CCY_KR==='KRW', '切到赴韩项目默认韩币');
+      if(c.krSchedule && c.krSchedule.confirmedDate){ var k0 = c.relayTold, r0 = c.recheck, rl = c.relayAt; c.relayTold = null; c.recheck = null; var h0 = calRelayRecheckCards(c); ST.ok(/转告客人/.test(h0), '转告卡片先出现');
+        calRelayDone(c.id); ST.ok(!/已转告客人<\/button>/.test(calRelayRecheckCards(c)) && !/转告客人<\/div>/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /已转告客人/), '按完卡片消失，Timeline 有记录');
+        calRecheckOk(c.id); ST.ok(!/确认日程无变动<\/div>/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /确认客人日程无变动/), '确认无变动后卡片消失，Timeline 有记录'); c.relayTold = k0; c.recheck = r0; c.relayAt = rl; }
+      var w = window.open; var cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ if(krActiveItems(c).length) printKrPlan(); }finally{ window.open = w; }
+      if(cap) ST.ok(/确认打印/.test(cap) && !/window\.onload/.test(cap), '打印先预览：有［确认打印］按钮，不再自动打印');
+      if(krActiveItems(c).length){ var info = krBalanceInfo(c); if(info.diff>0){ ST.ok(settlementSummaryHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1 && settleTabTopHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '结算汇总 / 顶部一行能看到尾款金额'); ST.ok(krPlanMoneyLine(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '赴韩施术计划看得到尾款'); } }
+      ST.ok(viewerTextFilter('尾款 ₩1,200,000')==='尾款 ₩1,200,000', 'IN 看得到尾款金额'); ST.ok(!/₩/.test(viewerTextFilter('在韩加项：玻尿酸，合计 ₩300,000')), '在韩加项金额 IN 仍看不到');
+    } finally { CURRENT_CASE_ID = old; }
   });
 
 })();

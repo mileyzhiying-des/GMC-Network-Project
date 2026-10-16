@@ -118,9 +118,10 @@ function krRenderPage(id){
 var KR_CALL = {sig:null, state:'idle', startedAt:0, timer:null, muted:false}; /* state: idle | ringing | connected */
 function krCallRelevant(sig){
   var a = currentAccount(); if(!a || !a.hospitalId || a.hospitalId!==sig.hospitalId) return false;
-  if(a.role==='kr_manager' || a.role==='kr_general') return true; /* 本医院的 KR 室长 / 管理者 */
-  if(isKrDirectorLike(a)) return !!sig.director && a.name===sig.director; /* 院长：只有自己负责的案件 */
-  return false; /* 代表院长不接 */
+  if(a.role==='kr_manager' || a.role==='kr_general'){ /* 本医院的 KR 室长 / 管理者：呼叫名单里指定了人就只响指定的人 */
+    return !(sig.to && sig.to.length) || sig.to.indexOf((a.name||'').split(' ')[0])>-1;
+  }
+  return false; /* 院长 / 代表院长不接来电（CMD-1015-15） */
 }
 function krCallOverlay(){
   var ov = document.getElementById('kr-call-overlay');
@@ -297,7 +298,7 @@ function krRenderDashboard(){
   var hid = krHospitalIdOfMe(), h = krHData(), rows = krAllCases();
   var td0 = new Date(krToday()+'T00:00:00'); /* CMD-1015-02：问候行 + 右上日期照 IN 的排法（.dash-top / .dash-greet h1 / .dash-meta .date） */
   var head = '<div class="dash-top"><div class="dash-greet"><h1>'+krEsc(krGreeting())+'</h1></div><div class="dash-meta"><div class="date" data-clock="1">'+dashClockHtml()+'</div><div class="weather">☁ '+((TZ_INFO['Asia/Seoul']||{}).city||'首尔')+' '+((TZ_INFO['Asia/Seoul']||{}).temp||18)+'℃</div></div></div>';
-  if(krIsDirector()){ el.innerHTML = head + krOffBar(hid) + todoKrCalWrap(krCalendarHtml()); return; }
+  if(krIsDirector()){ el.innerHTML = head + krOffBar(hid) + todoKrDirCardsHtml() + todoKrCalWrap(krCalendarHtml()); return; } /* CMD-1015-15：院长也有 4 张卡 */
   var banner = ''; /* CMD-1014-18 三·6：拿掉「确认今日院长日程」黄色横幅 */
   el.innerHTML = head + krOffBar(hid) + banner + todoKrCardsHtml(rows) + todoKrCalWrap(krCalendarHtml()); /* CMD-1013-17：卡片 8→4 + 待办栏 */
 }
@@ -602,7 +603,7 @@ function krTabItems(c){
   }).join('') : krEmpty('还没有选择赴韩项目');
   var cares = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.hold; }).sort(function(a, b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''); });
   var careHtml = cares.length ? cares.map(function(s){ return '<div class="case-field-row" style="display:block;"><div style="display:flex;gap:8px;align-items:center;"><span style="width:150px;font-size:12px;color:var(--slate2);">'+krEsc((s.date||'')+(s.time ? ' '+s.time : ''))+'</span><span style="flex:1;font-size:13px;">'+krEsc(s.content)+'</span><span class="status-pill" style="background:'+(s.done?'var(--sage-bg)':'var(--border2)')+';color:'+(s.done?'var(--sage)':'var(--slate2)')+';">'+(s.done?'已完成':'未开始')+'</span></div>'+(s.note ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;">备注：'+krEsc(s.note)+'</div>' : '')+'</div>'; }).join('') : krEmpty('还没有术后管理预约（付清尾款后在术后管理预约里安排）');
-  return krCardBox('手术项目', rows)+krCardBox('术后项目', careHtml)+krHoldCard(c, 'items');
+  return krCardBox('手术项目', rows)+krCardBox('术后项目', krPcbNeedBar(c)+careHtml)+krHoldCard(c, 'items');
 }
 /* ---- 施术 tab（KR-CASE-02 第 3 节）：按施术日期状态给不同内容 ---- */
 function krSchedDayHtml(c, date){
@@ -720,7 +721,7 @@ function krTabProc(c){
   if(st==='Confirmed' || st==='Arrived'){
     var days = Math.round((new Date(ks.confirmedDate+'T00:00:00') - new Date(krToday()+'T00:00:00'))/86400000);
     var stText = st==='Arrived' ? (isEnded(c) ? '已结案' : '已到医院，施术流程进行中') : '时间已确认，待到院';
-    return ub+krCardBox('施术日期', krKV('施术日期', krEsc(ks.confirmedDate)+(st==='Confirmed' ? '（'+(days>0 ? '还有 '+days+' 天' : days===0 ? '就是今天' : '已过 '+(-days)+' 天')+'）' : ''))+krKV('到院时间', krEsc(ks.confirmedTime||'—'))+krKV('地址', krEsc(ks.address||'—'))+krKV('状态', stText)+(st==='Confirmed' ? krKV('日程确认', calRecheckText(c)) : ''))+krSubEntriesCard(c);
+    return ub+krCardBox('施术日期', krKV('施术日期', krEsc(ks.confirmedDate)+(st==='Confirmed' ? '（'+(days>0 ? '还有 '+days+' 天' : days===0 ? '就是今天' : '已过 '+(-days)+' 天')+'）' : ''))+krKV('到院时间', krEsc(ks.confirmedTime||'—'))+krKV('地址', krEsc(ks.address||'—'))+krKV('状态', stText)+(st==='Confirmed' ? krKV('日程确认', calRecheckText(c)) : ''))+krPcbNeedCard(c)+krSubEntriesCard(c);
   }
   var body = '';
   if(st==='Draft'){
@@ -1713,6 +1714,13 @@ function krAdjBlock(c, info){
     '<div style="margin-top:4px;">项目合计 '+formatCurrency(total+done,'KRW')+'；可抵定金 '+formatCurrency(info.effDeposit,'KRW')+'；<b>'+(diff>=0 ? '尾款（在韩国补）' : '应退差额')+' '+formatCurrency(Math.abs(diff),'KRW')+'</b></div>'+
     '<div style="font-size:11px;color:var(--muted);margin-top:4px;">点下面的［结算并标记已付款］后才会生效；付款后弹出术后管理预约（按最终项目）。</div></div>';
 }
+/* CMD-1015-15：付清尾款后选了「稍后预约」，之后从这里约：项目 tab「术后项目」卡 + 施术 tab 都有［安排术后管理］，打开原有的术后管理预约小窗口；只在尾款已付、还有没约的术后管理时出现 */
+function krPcbNeed(c){ return !!(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })); }
+function krPcbNeedBar(c){
+  if(!krPcbNeed(c) || !krCan()) return '';
+  return '<div style="display:flex;gap:10px;align-items:center;padding:8px 0;font-size:12px;color:#C26A1B;"><span style="flex:1;">还有术后管理没有预约</span><button class="btn-primary" onclick="krPcbOpen()">安排术后管理</button></div>';
+}
+function krPcbNeedCard(c){ var b = krPcbNeedBar(c); return b ? krCardBox('术后管理预约', b) : ''; }
 function krPcbButtonHtml(c){
   var j = c.krJudge || {};
   if(!c.krBalancePaid) return ''; /* 术后管理预约区块只在付清尾款后显示（CMD-1013-03） */
