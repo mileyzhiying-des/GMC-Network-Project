@@ -92,8 +92,8 @@ function inTodoItems(){
   });
   /* CMD-1014-16：IN 在 KR 日程占位的预约，KR 改时间 / 无法安排 → 重选时间 */
   try{ krbMine().filter(function(b){ return b.status==='reselect'; }).forEach(function(b){ out.push(todoMk('rebook', '重选时间：'+b.clientName+'（'+(b.reselectKind==='change' ? 'KR 建议改时间' : 'KR 无法安排')+'：'+(b.reselectReason||'—')+'）', null, b.date+' '+b.time, true, function(){ krBookReselectOpen(b.id); }, {name:b.clientName, no:''})); }); }catch(e){}
-  /* 术后管理过了建议日期（按客人，不属于某个案件） */
-  try{ postcareDueList().forEach(function(x){ out.push(Object.assign(todoMk('pcdue', '术后管理已过建议日期 '+x.late+' 天：'+x.h.itemName, null, '', true, function(){ openClientDetail(x.name, 'dashboard'); setTimeout(function(){ var el = document.getElementById('detail-holdings-block'); if(el && el.scrollIntoView) el.scrollIntoView({block:'start'}); }, 80); }), {name:x.name})); }); }catch(e){} /* IN-11：去客户详情 · 持有 */
+  /* 术后管理过了建议日期（CMD-1015-17）：留在原案件里，IN 待办「联络客人」，点了去案件的术后管理区块（IN-11） */
+  try{ postcareDueList().forEach(function(x){ out.push(todoMk('pcdue', '联络客人：术后管理已过建议日期 '+x.late+' 天（'+x.s.content+'）', x.c, x.s.date, true, todoInGo(x.c, 'kr'))); }); }catch(e){}
   /* 预约占位快过期（剩 5 分钟内） */
   (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var left = p.expiresAt - Date.now(); if(left>0 && left<=5*60000) out.push(todoMk('ph', '预约占位快过期：'+p.phone+' '+p.time, null, p.date+' '+p.time, false, function(){ todoGoPlaceholder(p); }, {name:p.phone})); /* IN-12：去工作台，日历上看那个占位 */ });
   /* 被 @ / 未接来电（读掉才消失） */
@@ -117,6 +117,7 @@ function krTodoItems(rows){
       var pp = pendingPayItems(c); if(pp.length) push(todoMk('pay', '在韩加项待付款：'+pp.map(function(i){ return i.name; }).join('、'), c, '', false, goCase('proc')));
       if(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, goCase('proc')));
     }
+    if(work){ (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0) push(todoMk('pcdue', '联络 IN 确认客人行程：术后管理已过建议日期 '+pcDaysLate(s.date)+' 天（'+s.content+'）', c, s.date, true, goCase('proc'))); }); } /* CMD-1015-17 */
     /* 院长：上传面诊内容（面诊已安排、院长还没上传） */
     if(isDir && c.consultStatus==='awaiting_report' && !c.consultContentAt) push(todoMk('upload', '上传面诊内容', c, todoEtaDue(c), reportOverdueNow(c), goCase('consult')));
     /* CMD-1015-15：院长「待施术」——自己负责的全部已确认（含已到院）施术，只当参考名单（点卡片才显示），按今天 / 之后分组 */
@@ -414,18 +415,6 @@ function notifTodoKind(n){
   return 'msg';
 }
 
-/* KR 结案弹窗：「未完成的 N 项会转入在韩持有」（N = 0 不显示）；与 coreFinishToday 实际转入的项一致 */
-function todayHeldCount(c){
-  var info = todayFinishInfo(c); if(!info) return 0;
-  var n = info.undone.filter(function(s){ return !s.mgmtPlan; }).length; /* 管理项目由下面的持有项目计数 */
-  (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && !s.done && !s.hold && info.undone.indexOf(s)<0) n++; });
-  krNotStartedItems(c).forEach(function(it){ if(isLocalKrItem(it) && !it.service) n++; });
-  return n;
-}
-function todayHeldLineHtml(c){
-  var n = todayHeldCount(c); if(!n) return '';
-  return '<div style="font-size:12px;color:var(--slate2);margin:2px 0 4px;">未完成的 '+n+' 项会转入在韩持有</div>';
-}
 
 /* 催办：待确认施术时间超过 1 个工作日（休诊日不算） */
 function todoWorkdaysSince(utcStr){

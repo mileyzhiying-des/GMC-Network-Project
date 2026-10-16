@@ -822,14 +822,17 @@ function renderClientHoldings(name){
   var el = document.getElementById('detail-holdings');
   if(!block || !el) return;
   var all = holdingsAllSorted(name).filter(function(h){ return holdingRemaining(h)>0; }); /* 项目层只列剩余>0；全部用完/已退款的项目去"本院项目记录"看 */
-  if(!all.length){ block.style.display = 'none'; el.innerHTML=''; return; }
+  /* CMD-1015-17：IN 也看得到在韩持有（付费管理项目，项目 + 剩余次数，不显示金额）；已结案案件剩下的术后管理标「术后管理」（免费、不能退款，再来做开本地管理新案件） */
+  var careLeft = clientCareLeft(name), krHeld = [];
+  CASE_ITEMS.forEach(function(c0){ if(c0.name!==name) return; (c0.procedureItems||[]).forEach(function(it){ if(it.heldOver && it.mgmtPlan && !it.holdDone) krHeld.push({c:c0, it:it}); }); });
+  var extraHtml = careLeft.map(function(e){ var late = pcDaysLate(e.s.date); return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+e.s.content+' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>'+(late>0 ? ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;font-size:10px;">已过建议日期 '+late+' 天</span>' : '')+'</span><span style="font-size:12px;color:var(--slate2);white-space:nowrap;">属于 '+e.c.caseNo+' · 建议 '+pcMD(e.s.date)+' · 免费，不能退款</span></div>'; }).join('')+
+    krHeld.map(function(e){ return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+e.it.name+' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:10px;">在韩持有</span></span><span style="font-size:12px;color:var(--slate2);white-space:nowrap;">剩余 '+((e.it.qty||1)-(e.it.holdUsed||0))+' 次（共 '+(e.it.qty||1)+' 次）· 来自 '+e.c.caseNo+' · 要用请在 KR 医院日程占位预约</span></div>'; }).join('');
+  if(!all.length && !extraHtml){ block.style.display = 'none'; el.innerHTML=''; return; }
   block.style.display = 'block';
   el.innerHTML = all.map(function(h, gi){
     var remaining = holdingRemaining(h), total = holdingTotal(h);
     var tags = (h.category==='术后管理'?' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>':'')+
       (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'');
-    var dueMax = 0; if(h.category==='术后管理') h.batches.forEach(function(b0){ if(b0.voided || b0.refund || b0.bought-b0.used<=0) return; var sg0 = pcBatchSuggest(b0); if(sg0) dueMax = Math.max(dueMax, pcDaysLate(sg0.date)); });
-    if(dueMax>0) tags += ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;font-size:10px;">已过建议日期 '+dueMax+' 天</span>';
     var open = !!HOLD_EXPAND[gi];
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
@@ -846,7 +849,7 @@ function renderClientHoldings(name){
       '<span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+h.itemName+tags+'</span>'+
       '<span style="font-size:12px;color:var(--slate2);white-space:nowrap;">剩余 '+remaining+' 次（共 '+total+' 次）</span>'+
       '<span style="font-size:11px;color:var(--slate);white-space:nowrap;">'+h.batches.length+' 批 '+(open?'▴':'▾')+'</span></div>'+batchRows+'</div>';
-  }).join('');
+  }).join('')+extraHtml;
 }
 
 /* 本院项目记录（2026-09-29 第十轮新增）：本地项目读CLIENT_HOLDINGS，赴韩项目读各案件procedureItems；
@@ -2005,7 +2008,7 @@ function confirmRefund(){
   closeRefundModal();
   if(mode0==='diffRefund'){ /* 尾款多退少补：退差额后视为尾款已结清 */
     c.krBalancePaid = true; if(c.krJudge) c.krJudge.settled = true;
-    if(finalizeInnCare(c).length){ logCaseEvent(c, actingName(), '行程已确认：术后管理印尼部分（套餐内含）已转为客人持有项目'); }
+    if(finalizeInnCare(c).length){ logCaseEvent(c, actingName(), '行程已确认：回印尼做的术后管理留在本案件（免费，不转持有）'); }
     buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
     return;
   }
@@ -3719,7 +3722,7 @@ var HEAD_TITLES = {'in-clients':'客户管理', 'in-cases':'案件管理', 'in-l
   'kr-cases':'案件管理', 'kr-clients':'客人管理', 'kr-notifications':'通知中心'};
 var HEAD_OWN = {'in-dashboard':'.dash-top', 'kr-dashboard':'.dash-top'};
 /* CMD-1015-03：二级页面（从一级页面点进去的）= 第一行「← 返回」+ 右边三个图标，第二行 = 页面自己原来的第一行；新标签页打开的页面（诊疗方案、上次项目史）按一级页面样式，不放返回 */
-var HEAD_L2 = {'in-casedetail':1, 'in-clientdetail':1, 'in-director':1, 'in-resvhistory':1, 'kr-casedetail':1, 'kr-clientdetail':1, 'kr-subcase':1};
+var HEAD_L2 = {'in-casedetail':1, 'in-clientdetail':1, 'in-director':1, 'in-resvhistory':1, 'kr-casedetail':1, 'kr-clientdetail':1};
 function headIconsHtml(){ return (isKrAccount() && typeof krHeadIconsHtml==='function') ? krHeadIconsHtml() : buildTopRightIcons(); }
 function headMount(){
   var pg = [].slice.call(document.querySelectorAll('.page')).filter(function(p){ return p.style.display!=='none' && p.querySelector('.content'); })[0]; if(!pg) return;

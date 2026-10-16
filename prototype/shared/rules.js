@@ -85,14 +85,22 @@ function caseStatusBadge(c){
 
 /* 阶段 + 进程（CMD-1008-13，IN-CASE-03 第 2 节）：案件列表"当前状态"拆成两栏——阶段（彩色标签，同顶部 tab）+ 进程（一般文字）。
    只是换一种显示：案件主状态（caseStatusLabel / stage / consultStatus / scheduleState）一概不改；KR 端仍用 caseStatusBadge。 */
-var STAGE_LABELS = {booked:'预约到店', consult:'面诊安排', travel:'赴韩施术', local:'本地管理', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'};
-var STAGE_TONE_LABEL = {booked:'待访问', consult:'面诊预约', travel:'施术预约', local:'选择项目', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'}; /* 借现有主状态取颜色，保证和 tab / 旧标签同色 */
+var STAGE_LABELS = {booked:'预约到店', consult:'面诊安排', travel:'赴韩施术', postcare:'术后管理', krmgmt:'在韩管理', local:'本地管理', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'};
+var STAGE_TONE_LABEL = {booked:'待访问', consult:'面诊预约', travel:'施术预约', postcare:'赴韩施术', krmgmt:'赴韩施术', local:'选择项目', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'}; /* 借现有主状态取颜色，保证和 tab / 旧标签同色 */
 function consultAtPassed(c){ /* KR 确认的面诊时间（韩国当地）是否已到 */
   if(!c.consultAt || !c.consultAt.date || !c.consultAt.time) return false;
   var u = utcStrParse(localToUtc(c.consultAt.date, c.consultAt.time, KR_TZ)); return !!u && u <= realNow();
 }
+/* 术后管理阶段的进程文字：还有几项没做（韩国 / 印尼）、下一次什么时候；印尼的过了建议日期标出来 */
+function postcareProcText(c){
+  var rows = carePendingRows(c), kr = rows.filter(function(s){ return s.place!=='IN'; }), inn = rows.filter(function(s){ return s.place==='IN'; });
+  if(!rows.length) return c.krBalancePaid && !c.pcBooked ? '待 KR 预约' : '等待完成';
+  var late = inn.filter(function(s){ return pcDaysLate(s.date)>0; }).length;
+  return rows.length+' 项待做（韩国 '+kr.length+' / 印尼 '+inn.length+'）'+(late ? ' · '+late+' 项已过建议日期' : '');
+}
 function caseProcessText(c){
-  if(c.krVisit && c.stage==='booked') return c.krVisit.arrived ? '在韩已到店' : '待在韩到店（KR 医院）';
+  if(c.krVisit && (c.stage==='booked' || c.stage==='krmgmt')) return c.krVisit.arrived ? '在韩已到店' : '待在韩到店（KR 医院）';
+  if(c.stage==='postcare') return postcareProcText(c);
   if(c.krVisit && c.krVisit.done && c.stage==='closed') return '在韩到店完成';
   if(c.stage==='booked') return c.subState==='arrived' ? '接待中' : '待访问';
   if(c.stage==='consult'){
@@ -159,6 +167,8 @@ function caseStatusLabel(c){
     if(c.consultStatus==='cancelled') return '面诊已取消';
     return '面诊预约';
   }
+  if(c.stage==='postcare') return '术后管理';
+  if(c.stage==='krmgmt') return '在韩管理';
   if(c.stage==='travel'){
     var st = scheduleState(c);
     return (st==='Draft' || st==='Pending') ? '施术预约' : '赴韩施术'; /* Confirmed/Changing/Arrived 都是赴韩施术（改期待确认期间主状态不变） */
@@ -203,6 +213,8 @@ function deriveCaseStage(c){
     var out = computeOutcome(c);
     return out==='closed' ? 'closed' : out==='reportonly' ? 'reportonly' : 'cancelled';
   }
+  if(c.krVisit) return 'krmgmt'; /* IN 在 KR 医院日程占位、KR 确认后开的新案件（CMD-1015-17：在韩管理阶段） */
+  if(c.krProcedureDone && c.settlementDone && typeof carePending==='function' && carePending(c)) return 'postcare'; /* 施术完成且还有术后管理没做完 */
   if(consultCarryStage(c)) return 'consult';
   if(c.mgmtActive) return 'local'; /* 使用项目后进入"本地管理" */
   if(c.settlementDone && krActiveItems(c).length>0) return 'travel'; /* 付款完成 → 施术预约；之后读施术日期卡片（Draft/Pending=施术预约，其余=赴韩施术） */

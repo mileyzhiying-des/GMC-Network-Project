@@ -337,6 +337,13 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:46, fn:function(c, ctx){ /* CMD-1015-17：付费管理项目付清尾款后就是在韩持有（不再有「管理项目」进程行）；术后管理持有批次转回原案件见 migrateCareHoldings */
+      var n = 0;
+      if(c.krBalancePaid){ (c.procedureItems||[]).forEach(function(it){ if(it.mgmtPlan && !it.heldOver && !it.cancelled && !it.swapped){ it.heldOver = true; it.holdDone = !!it.done && false; it.holdUsed = it.holdUsed||0; it.done = true; n++; } }); }
+      var before = (c.subItems||[]).length; c.subItems = (c.subItems||[]).filter(function(s){ return !(s.mgmtPlan && s.kind==='增加项目'); });
+      if(c.krProcedureDone && !c.surgeryDoneAt) c.surgeryDoneAt = (c.krSchedule && c.krSchedule.confirmedDate) || (c.visitDate||'');
+      if(n || before!==c.subItems.length) ctx.note('管理项目转成在韩持有 '+n+' 项（案件 '+(c.caseNo||c.id)+'）');
+    }},
     {to:43, fn:function(c, ctx){ /* CMD-1014-16 四：只是补演示缺口（老板账号、C2 可退批次、H2 的两种状态案件）；用户案件无需改动 */ }},
     {to:41, fn:function(c, ctx){ /* 「消肿管理」改名「术后管理」；意向项目只留赴韩手术项目 */
       var fixPc = function(arr){ (arr||[]).forEach(function(x){ if(x && x.mgmt==='消肿管理') x.mgmt = '术后管理'; }); };
@@ -345,7 +352,32 @@ var Store = (function(){
       if((c.intentionProjects||[]).length){ var n0 = c.intentionProjects.length; c.intentionProjects = c.intentionProjects.filter(function(it){ return it.origin==='KR' && ['术后消肿管理','消肿管理','术后管理','拆线','术后复诊检查','术后复诊','伤口护理'].indexOf(it.name)<0; }); if(c.intentionProjects.length!==n0) ctx.note('意向项目只留赴韩手术项目，已去掉 '+(n0-c.intentionProjects.length)+' 个本地 / 术后管理项目'); }
     }}
   ];
-  window.GMC_MIGRATIONS = MIGRATIONS; /* 自测用：selftest R16c 直接跑迁移步骤 */
+  window.GMC_MIGRATIONS = MIGRATIONS; window.GMC_MIGRATE_CARE = migrateCareHoldings; /* 自测用：selftest R16c 直接跑迁移步骤 */
+  /* CMD-1015-17：术后管理不是持有项目——「套餐内含」的 0 元术后管理持有批次转回原案件：已用的次数记成原案件里已做的印尼术后管理，没用的留成待做项（案件已结案的显示在客户详情）；批次从客户持有里拿掉 */
+  function migrateCareHoldings(hs, cases, fromVer, report){
+    if(fromVer >= 46) return;
+    Object.keys(hs).forEach(function(name){
+      hs[name] = (hs[name]||[]).filter(function(h){
+        if(h.category!=='术后管理') return true;
+        h.batches = (h.batches||[]).filter(function(b){
+          if(!b.pkg) return true; var src = cases.filter(function(c){ return c.id===b.caseId; })[0]; if(!src) return true;
+          src.subItems = src.subItems || [];
+          var rows = src.subItems.filter(function(s){ return s.kind==='术后管理记录' && s.place==='IN' && !s.holdUseOf && String(s.content||'').indexOf(h.itemName)>-1; }).sort(function(a, b2){ return (a.date||'').localeCompare(b2.date||''); });
+          var used = b.used||0, total = b.bought||used;
+          for(var i = rows.length; i < total; i++){ /* 老数据没有对应的行：按建议天数补 */
+            var dn = (b.scheduleDays||[])[i], dt = new Date(String((src.krSchedule&&src.krSchedule.confirmedDate)||b.date).slice(0,10)+'T00:00:00'); if(dn!=null) dt.setDate(dt.getDate()+dn);
+            var r0 = {id:'s'+Date.now()+Math.floor(Math.random()*1000)+i, no:(src.caseNo||'')+'-'+(90+i), date:dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'), content:'术后管理（回印尼做：'+h.itemName+'）', kind:'术后管理记录', place:'IN', projectName:'', done:false, doneAt:'', doneBy:'', informed:false, pcb:true};
+            src.subItems.push(r0); rows.push(r0);
+          }
+          rows.forEach(function(s, i){ s.innName = h.itemName; s.suggest = s.suggest || s.date; if(i < used){ s.done = true; s.visitDate = ((b.usages||[])[i]||{}).date || s.date; s.doneAt = s.visitDate+' 00:00'; s.doneBy = ((b.usages||[])[i]||{}).by || ''; s.arrived = true; } });
+          if(report) report.notes.push({caseNo:src.caseNo, name:name, notes:['术后管理持有批次「'+h.itemName+'」×'+total+'（已用 '+used+'）转回原案件的术后管理']});
+          return false;
+        });
+        return (h.batches||[]).length>0;
+      });
+      if(!(hs[name]||[]).length) delete hs[name];
+    });
+  }
   function migrateHoldings(hs, fromVer, libIn){
     if(fromVer >= 37) return;
     Object.keys(hs).forEach(function(n){ (hs[n]||[]).forEach(function(h){
@@ -433,7 +465,7 @@ var Store = (function(){
         (cl.consents||[]).forEach(function(t){ ex.consents = ex.consents||[]; if(!has(ex.consents, function(y){ return y.ts===t.ts; })) ex.consents.push(t); });
         (cl.beautyRecords||[]).forEach(function(t){ ex.beautyRecords = ex.beautyRecords||[]; if(!has(ex.beautyRecords, function(y){ return y.id===t.id; })) ex.beautyRecords.push(t); });
       });
-      migrateHoldings(cc.holdings, fromVer, libIn);
+      migrateHoldings(cc.holdings, fromVer, libIn); migrateCareHoldings(cc.holdings, cc.cases, fromVer, report);
       Object.keys(cc.holdings).forEach(function(n){
         var cur = v.CLIENT_HOLDINGS[n] = v.CLIENT_HOLDINGS[n] || [];
         (cc.holdings[n]||[]).forEach(function(h){ var ex = cur.filter(function(x){ return x.itemName===h.itemName; })[0]; if(ex) ex.batches = (ex.batches||[]).concat(h.batches||[]); else cur.push(h); });
