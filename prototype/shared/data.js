@@ -4119,12 +4119,12 @@ function subCaseKey(s){ return s.place+'|'+(s.place==='IN' ? (s.visitDate||s.dat
 function subCaseList(c){ /* 每一组取第一行当代表，按日期时间排序 */
   var seen = {}, reps = [];
   (c.subItems||[]).forEach(function(s){
-    if(s.kind!=='术后管理记录' || (s.place==='IN' && !s.done)) return;
+    if(s.kind!=='术后管理记录' || s.skipped || (s.place==='IN' && !s.done)) return;
     var k = subCaseKey(s); if(seen[k]) return; seen[k] = 1; reps.push(s);
   });
   return reps.sort(function(a, b){ return (a.place==='IN' ? (a.visitDate||a.date||'') : (a.date||'')).localeCompare(b.place==='IN' ? (b.visitDate||b.date||'') : (b.date||'')) || (a.time||'').localeCompare(b.time||'') || String(a.no).localeCompare(String(b.no)); });
 }
-function subCaseRows(c, rep){ var k = subCaseKey(rep); return (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !(s.place==='IN' && !s.done) && subCaseKey(s)===k; }); }
+function subCaseRows(c, rep){ var k = subCaseKey(rep); return (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.skipped && !(s.place==='IN' && !s.done) && subCaseKey(s)===k; }); }
 function subCaseNo(c, s){ var l = subCaseList(c), i = -1; l.forEach(function(r, n){ if(subCaseKey(r)===subCaseKey(s)) i = n; }); return i<0 ? '' : c.caseNo+'-'+(i+1); }
 function subCaseNos(c){ subCaseList(c).forEach(function(r, i){ subCaseRows(c, r).forEach(function(x){ x.dno = c.caseNo+'-'+(i+1); }); }); }
 function subNextNo(c){ var n = 0; (c.subItems||[]).forEach(function(s){ var m = String(s.no).match(/-(\d+)$/); if(m) n = Math.max(n, parseInt(m[1],10)); }); return c.caseNo+'-'+pad2(n+1); }
@@ -4385,7 +4385,37 @@ function coreTodayDone(c, ids, by){
   return n>0;
 }
 /* 子案件整张卡（CMD-1015-18）：一次到店 = 同一天同一地点的几行；到店 → 选这次做的（术后管理 + 持有管理项目扣次数）→ 已完成 */
-function coreVisitRows(c, key){ return (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !(s.place==='IN' && !s.done) && subCaseKey(s)===key; }); }
+function coreVisitRows(c, key){ return (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.skipped && !(s.place==='IN' && !s.done) && subCaseKey(s)===key; }); }
+/* CMD-1015-19：这次到访里新增的施术 / 管理项目（增加项目行，带 visitKey） */
+function coreVisitExtra(c, key){ return (c.subItems||[]).filter(function(s){ return s.kind==='增加项目' && s.visitKey===key; }); }
+function coreVisitSim(c, key, by){ var n = 0; coreVisitRows(c, key).forEach(function(s){ if(!s.done){ s.simDay = true; n++; } }); if(n) logCaseEvent(c, by, '（仅原型）模拟到当日：'+key.split('|')[1]); return n>0; }
+function coreVisitState(c, key){
+  var rows = coreVisitRows(c, key).concat(coreVisitExtra(c, key)); if(!rows.length) return 'pending';
+  if(rows.every(function(s){ return s.done; })) return 'done';
+  return rows.some(function(s){ return s.arrived || s.done; }) ? 'arrived' : 'pending';
+}
+function coreVisitConfirmed(c, key){ return !!(c.visits && c.visits[key] && c.visits[key].confirmed); }
+/* 客人到店后「确认这次要做的项目」：取消勾选的术后管理不进这次（仍在项目卡里待做）；从项目卡拉进来的未做术后管理改到今天；持有管理项目每项加一行「使用」 */
+function coreVisitConfirm(c, key, keepIds, pullIds, mgNames, by){
+  var rows = coreVisitRows(c, key).filter(function(s){ return !s.done; }), rep = coreVisitRows(c, key)[0]; if(!rep) return {ok:false, err:'找不到这次到访'};
+  var date = rep.date, time = rep.time || '', added = [];
+  var willDo = rows.filter(function(s){ return (keepIds||[]).indexOf(s.id)>-1; }).length + (pullIds||[]).length + (mgNames||[]).length + coreVisitExtra(c, key).filter(function(s){ return !s.done; }).length + coreVisitRows(c, key).filter(function(s){ return s.done; }).length;
+  if(!willDo) return {ok:false, err:'这次至少要做一个项目'}; /* 先检查再改，失败不留副作用 */
+  rows.forEach(function(s){ if((keepIds||[]).indexOf(s.id)<0){ s.skipped = true; s.arrived = false; added.push('取消 '+s.content); } });
+  (pullIds||[]).forEach(function(id){ var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.kind!=='术后管理记录') return; s.skipped = false; s.date = date; s.time = time || s.time; s.arrived = true; s.simDay = true; added.push('提前做 '+s.content); });
+  (mgNames||[]).forEach(function(n){ var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone && x.name===n; })[0]; if(!it || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return;
+    var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:n+'（持有项目使用）', place:'KR', projectName:n, silent:true}, by); if(!s) return; s.holdUseOf = n; s.arrived = true; s.simDay = true; added.push('使用 '+n); });
+  c.visits = c.visits || {}; c.visits[key] = {confirmed:true, at:nowFullDt(), by:by};
+  subCaseNos(c); logCaseEvent(c, by, '确认这次到访要做的项目（'+(rep.dno||key)+'）'+(added.length ? '：'+added.join('；') : ''));
+  return {ok:true};
+}
+/* 这次到访里新增施术 / 管理项目（先加进来，付款后才能完成；管理项目付款后变成这次的「使用」一行） */
+function coreVisitAddItem(c, key, projectName, opt, by){
+  var rep = coreVisitRows(c, key)[0]; if(!rep) return false; opt = Object.assign({}, opt, {date:rep.date});
+  var n0 = (c.subItems||[]).length; if(!coreAddOnItem(c, projectName, by, opt)) return false;
+  var subs = c.subItems.filter(function(s){ return s.kind==='增加项目' && !s.visitKey && !s.done; }), s = subs[subs.length-1]; if(s){ s.visitKey = key; s.arrived = true; s.visitTime = rep.time||''; }
+  return true;
+}
 function coreVisitArrive(c, key, by){ var ok = false; coreVisitRows(c, key).forEach(function(s){ if(!s.done && !s.arrived && coreSubArrived(c, s.id, by)) ok = true; }); return ok; }
 function coreVisitDone(c, careIds, mgmtNames, by){
   var ok = false;
@@ -4502,7 +4532,10 @@ function pendingPayItems(c){ return (c.procedureItems||[]).filter(function(it){ 
 function holdLocalAdd(c, it){
   if(it.heldOver || it.cancelled || it.swapped) return false;
   it.heldOver = true; it.holdDone = false; it.holdUsed = 0; it.done = true; it.heldAt = nowFullDt();
-  c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && s.projectName===it.name && !s.done); });
+  var gone = (c.subItems||[]).filter(function(s){ return s.kind==='增加项目' && s.projectName===it.name && !s.done; });
+  c.subItems = c.subItems.filter(function(s){ return gone.indexOf(s)<0; });
+  gone.forEach(function(g){ if(!g.visitKey) return; /* 在子案件里新增的管理项目：付款后成为这次到访里的一行「使用」，逐行完成时扣 1 次 */
+    var u = coreSubAdd(c, {kind:'术后管理记录', date:g.date, time:g.visitTime||'', content:it.name+'（持有项目使用）', place:'KR', projectName:it.name, silent:true}, ME_NAME||''); if(u){ u.holdUseOf = it.name; u.arrived = true; u.simDay = true; } });
   return true;
 }
 function coreAddOnPaid(c, by){
