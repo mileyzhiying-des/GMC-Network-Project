@@ -734,3 +734,12 @@ prototype/shared/app.css  共用样式
 - **删除遗留**（CMD-1015-13 保留的）：请 IN 帮忙预约整组（`openSubBookModal` / `coreSubInform` / `krSubInform` / `askIn` / 工作台待预约卡）、旧诊疗方案弹窗壳 `report-overlay`、案件信息抽屉 `peek-overlay`。仍保留：`krHuOpen` 一组（现在是［预约后续到院］）。
 - **测试**：selftest 新增 R17a（阶段 / 提前原因 / 结案 / 子案件合并）、R17b（KM1：无子案件页）、R17c（迁移 46）；改了 D18/D19/D23/F4/R16a/TDK1/CAL2，删 E7c/E7d。**R17a 要先 `ST.begin()` 再建案件；KR 分页别跑 IN 的案件用例（会报 style 为空）**。roletest 9 个账号（OWN/A1/A2/B1/KO1/KM1/KC1/KD1/KM2）全部 0 不符。
 - 我的判断（待确认）：［结束术后管理］只有 IN 有；只有管理项目的案件，施术行写管理项目名；KR 持有项目的［预约后续到院］沿用 `krHuOpen`。
+
+## CMD-1015-18 补充（2026-10-16，追加；旧文字保留作历史）
+- 基准 **aa8e977**，提交 9acb08a（1/2 代码）+ 本提交（2/2 文档）；**未推送**，不带开关；**数据版本不变（46）**，没有改资料结构（新增可空字段 / 行字段 `projectName` 在术后管理行上记所属施术项目，旧行没有就归「其他术后管理」）。
+- **KR 案件页 tab**：基础资料｜面诊｜**项目**｜附件｜Timeline（关联案件有往前关联才出现）；「施术」tab 删除，`krSetCaseTab('proc')` 与旧入口一律映射到 `items`。项目 tab = `krTabItems(c)` = **项目卡**（`krProjCards`：施术项目（N）｜管理项目（N）两页，`KR_PROJ_PAGE` / `krProjPage`；术后管理按 `projectName` 放在各自施术项目下，其余归「其他术后管理」；管理项目 = `krIsMgmtItem`（`mgmtPlan` / `service` / 本地管理项目），显示「待付款」/「剩余 x / n 次」/ 서비스「赠送 · 即时」/「已用完」）+ **案件**（原 `krTabProc`：主案件 + `krSubCasesCard` 子案件；到店后主案件不再显示 `krSurgHead` 预约栏；赴韩项目重复列表已拿掉）。用词一律「施术项目」。
+- **子案件整张卡**（`krSubCasesCard`）：到店前显示预约时间 +［客人到店］（`krSubVisitArrive` → `coreVisitArrive`，没到当天灰 +［模拟到当日］）；到店后不再显示预约栏，出现「这次要做的项目（从项目卡里选）」：这次的术后管理（默认勾）+ 有剩余次数的持有管理项目（勾 = 扣 1 次）+［已完成］（`krSubVisitDone` → `coreVisitDone`）。
+- **在韩加的管理项目**：`holdLocalAdd(c, it)`——付完款（`coreAddOnPaid` / 付尾款 `coreSettleBalance` 里 `mgmtPlan` 或本地管理项目）即 `heldOver`，进程里的「增加项目」行拿掉；서비스 加入时即时进持有（`coreAddOnItem` svc）；付款前显示待付款。
+- **IN 约术后管理默认接续**：`resumeBannerHtml`——来访目的 = 术后管理且客人有 `stage==='postcare'` 的案件 → 排最前、高亮「✓ 默认」+ 大号［接续］，标题改「已默认接续到术后管理阶段的案件」，仍有［继续新案件］。术后管理类通知 / IN 待办（过建议日期）点进来 → `goPostcareBlock(caseId)`（案件「赴韩施术计划」tab，滚到 `#in-postcare-card`）；新标签页参数 `?tab=kr&pc=1`。**通知核对**：结案通知只在 `finishCase`（术后管理全部做完 / ［结束术后管理］）发一次；「术后管理转回印尼持有」通知已不存在。
+- **一键准备**：新增 `pcStage`（术后管理阶段，韩国 1 + 回印尼 2 未做）、`heldMg`（已付清尾款 + 在韩持有管理项目剩 3 次）；`r2_09`（Wati）改成 `pcStage`；`c42` 改成「赴韩已结案 + 回印尼术后管理 3 次没做」（`postcareEnded` + IN 待做行，留在原案件）；其余全部复核可建。**测试覆盖页**新增 I 组（I1～I9，术后管理阶段 / 子案件 / 结束术后管理 / 再来开新案件 / 在韩管理 / ［使用］/ ▼ 与 Timeline 分页（I9 只能手动））。
+- **测试**：selftest 新增 R18a（默认接续 + 通知）、R18b（在韩加管理项目 → 持有 → 子案件整张卡）、R18c（KM1：tab、各入口展开）；A1 全套无真实失败，roletest 9 个账号 0 不符。**BK3 / S37 等换账号用例仍要在对应分页跑；CAL2 要先 `nav('kr-dashboard')`**。
