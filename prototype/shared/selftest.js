@@ -1413,30 +1413,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 子案件整张卡：到店前只显示预约；到店后选这次的项目 */
     var rep = subCaseList(c).filter(function(r){ return r.place==='KR'; })[0]; if(!ST.ok(!!rep, '要有韩国术后管理的子案件')) return; var key = subCaseKey(rep);
     ST.ok(!coreVisitArrive(c, key, ST.krBy), '没到预约当天不能到店'); coreSubSimDay(c, rep.id, ST.krBy); ST.ok(coreVisitArrive(c, key, ST.krBy) && coreVisitRows(c, key).every(function(s){ return s.arrived; }), '模拟到当日后［客人到店］');
-    ST.ok(coreVisitConfirm(c, key, coreVisitRows(c, key).map(function(s){ return s.id; }), [], [it.name], ST.krBy).ok, '确认这次要做的项目（术后管理 + 使用管理项目）');
+    ST.ok(coreUnitUseNow(c, it.name, ST.krBy).ok, '到店后［本次使用］把管理项目加进这次到访');
     var rows2 = coreVisitRows(c, key), use = rows2.filter(function(s){ return s.holdUseOf===it.name; })[0]; ST.ok(!!use && use.arrived, '管理项目加成这次到访里的一行「使用」');
     var before = it.holdUsed||0; rows2.forEach(function(s){ coreSubDone(c, s.id, ST.krBy, []); });
     ST.ok((it.holdUsed||0)===before+1 && rows2.every(function(s){ return s.done; }) && coreVisitState(c, key)==='done', '逐行完成：术后管理标完成、管理项目扣 1 次，整张卡「已完成」');
     ST.ok(it.holdDone===true && krItemStatus(it)==='已用完', '用完变已用完');
   });
-  ST.def('R19a','子案件：按日期自动建立；到店 → 确认（取消勾选 / 从项目卡拉进来）→ 增加项目 → 逐行完成（A1 分页）',function(){
+  ST.def('R20a','项目卡：术后管理［预约时间］→ 子案件（术后预约）→ 到店 → 管理项目［本次使用］→ 逐行完成；管理项目［预约使用］→ 管理预约；取消本次；待付款不能操作（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
-    var c = pcCase('R19a1'); subCaseNos(c); var reps = subCaseList(c).filter(function(r){ return r.place==='KR'; }); if(!ST.ok(reps.length>=2, '术后管理排了不同日期 → 自动出现多个子案件，实际 '+reps.length)) return;
-    var k1 = subCaseKey(reps[0]), k2 = subCaseKey(reps[1]); ST.ok(k1!==k2 && /-\d+$/.test(reps[0].dno||''), '每个日期一个子案件，编号 -1 -2');
-    ST.ok(coreVisitState(c, k1)==='pending', '到店前：待到店'); coreVisitSim(c, k1, ST.krBy); ST.ok(coreVisitArrive(c, k1, ST.krBy) && coreVisitState(c, k1)==='arrived' && !coreVisitConfirmed(c, k1), '客人到店 → 已到店，还没确认');
-    var r1 = coreVisitRows(c, k1), pull = coreVisitRows(c, k2)[0]; ST.ok(!coreVisitConfirm(c, k1, [], [], [], ST.krBy).ok, '这次至少要做一个项目');
-    var res = coreVisitConfirm(c, k1, r1.map(function(s){ return s.id; }), [pull.id], [], ST.krBy); ST.ok(res.ok, '确认失败：'+res.err); ST.ok(subCaseKey(pull)===k1 && pull.arrived && coreVisitConfirmed(c, k1), '从项目卡拉进来的未做术后管理改到这次');
-    ST.ok(coreVisitAddItem(c, k1, '埋线双眼皮', {anesthesia:{type:'local', label:'局部麻醉', note:''}}, ST.krBy), '新增施术项目'); var ex = coreVisitExtra(c, k1)[0]; ST.ok(!!ex && pendingPayItems(c).length===1, '新增的项目先待付款');
+    var c = pcCase('R20a1'); ST.krCloseToday(c); subCaseNos(c); var reps = subCaseList(c).filter(function(r){ return r.place==='KR'; }); if(!ST.ok(reps.length>=1, '要有韩国术后管理的子案件')) return; var k1 = subCaseKey(reps[0]);
+    ST.ok(visitSource(c, k1)==='术后预约', '术后管理预约产生的子案件：预约来源 = 术后预约');
+    var cu0 = careUnits(c), n0 = cu0.unbooked.length, row = coreVisitRows(c, k1)[0];
+    ST.ok(coreRowCancel(c, row.id, ST.krBy) && row.skipped, '取消本次 → 术后管理退回「未预约」'); ST.ok(careUnits(c).rows.some(function(r){ return r.s.skipped; }), '项目卡里出现未预约单元');
+    ST.ok(coreCareBook(c, careUnits(c).rows.filter(function(r){ return r.s.skipped; })[0].item, 0, row.date, row.time||'10:00', 'KR', row.id, ST.krBy) && !row.skipped && row.src==='care', '［预约时间］重新预约（并回原来的子案件）');
     var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0], sp = lib.specs[0];
-    ST.ok(coreVisitAddItem(c, k1, '', {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:{projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price}}, ST.krBy), '新增管理项目');
-    ST.ok(coreAddOnPaid(c, ST.krBy), '付款'); var use = coreVisitRows(c, k1).filter(function(s){ return s.holdUseOf; })[0]; ST.ok(!!use && use.arrived, '管理项目付款后变成这次的一行「使用」');
-    var all = coreVisitRows(c, k1).concat(coreVisitExtra(c, k1)).filter(function(s){ return !s.done; }); all.forEach(function(s){ coreSubDone(c, s.id, ST.krBy, []); });
-    ST.ok(coreVisitState(c, k1)==='done' && (c.procedureItems.filter(function(i){ return i.name===use.holdUseOf; })[0].holdUsed||0)===1, '逐行完成：管理项目扣 1 次，整张卡已完成');
-    ST.ok(subCaseList(c).filter(function(r){ return subCaseKey(r)===k2; }).length===0 || coreVisitRows(c, k2).length>0, '被拉走术后管理的那一天不再留空子案件');
+    ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:{projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price}}), '在韩加管理项目'); var it = c.procedureItems[c.procedureItems.length-1];
+    ST.ok(!coreUnitBookUse(c, it.name, D(30), '10:00', ST.krBy), '待付款：不能预约使用'); ST.ok(!coreUnitUseNow(c, it.name, ST.krBy).ok, '待付款 / 没人到店：不能本次使用');
+    ST.ok(coreAddOnPaid(c, ST.krBy) && it.heldOver, '付款后在韩持有'); ST.ok(coreUseTarget(c)===null && !coreUnitUseNow(c, it.name, ST.krBy).ok, '没有客人已到店时没有目标，［本次使用］不可用');
+    ST.ok(coreUnitBookUse(c, it.name, D(30), '11:00', ST.krBy), '［预约使用］'); var k3 = 'KR|'+D(30); ST.ok(visitSource(c, k3)==='管理预约' && coreVisitRows(c, k3).length===1, '新子案件：预约来源 = 管理预约');
+    coreVisitSim(c, k3, ST.krBy); ST.ok(coreVisitArrive(c, k3, ST.krBy), '到店'); var r3 = coreVisitRows(c, k3)[0]; ST.ok(coreSubDone(c, r3.id, ST.krBy, []) && it.holdUsed===1 && (it.uses||[]).length===1, '完成：扣 1 次，记使用时间');
+    coreVisitSim(c, k1, ST.krBy); ST.ok(coreVisitArrive(c, k1, ST.krBy) && coreUseTarget(c).key===k1, '到店后目标 = 这次到访');
   });
   ST.def('R19b','KR 案件卡统一表格：抬头编号 + 状态；表头 时间｜项目类型｜内容｜状态｜地点｜完成时间｜备注；三种类型标签（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
-    var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }); })[0]; if(!ST.ok(!!r, '要有带韩国术后管理的案件（先在 A1 分页跑 R19a）')) return;
+    var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }); })[0]; if(!ST.ok(!!r, '要有带韩国术后管理的案件（先在 A1 分页跑 R20a）')) return;
     krShowCase(r.clinicId, r.id); krSetCaseTab('items'); var h = document.getElementById('krcase-body').innerText;
     ST.ok(/时间\s*项目类型\s*内容\s*状态\s*地点\s*完成时间\s*备注/.test(h), '表头七列'); ST.ok(/主案件 · A\d+/.test(h) && /待到店|已到店|已完成/.test(h), '抬头：编号 + 到店状态');
     ST.ok(!/今日项目/.test(h), '旧的「今日项目」表已取代'); ST.ok(/术后管理/.test(h) && /施术/.test(h), '类型标签');
