@@ -4210,9 +4210,10 @@ function corePcBooking(c, rows, by){
 /* 「施术」那一行由案件自动产生（日期 = 已确认的施术日期，内容 = 施术项目），KR 不能手动新增、也不能改（CMD-1008-12 D4） */
 function syncSurgerySub(c){
   if(!c.settlementDone || !c.krSchedule || !c.krSchedule.confirmedDate || ['confirmed','change_pending','arrived'].indexOf(c.krSchedule.status)<0) return;
-  var names = krActiveItems(c).filter(function(it){ return !it.krAddOn && !it.preBalanceAdd && !it.swapped && !krIsMgmtItemC(it); }).map(function(it){ return it.name; });
-  if(!names.length) names = krActiveItems(c).filter(function(it){ return !it.krAddOn && !it.preBalanceAdd && !it.swapped; }).map(function(it){ return it.name; }); /* 只有管理项目：施术行写管理项目 */
-  if(!names.length) return;
+  var names = krActiveItems(c).filter(function(it){ return !it.krAddOn && !it.preBalanceAdd && !it.swapped && !krIsMgmtItemC(it) && !it.deferUse; }).map(function(it){ return it.name; });
+  var anySurg = krActiveItems(c).some(function(it){ return !krIsMgmtItemC(it) && !it.krAddOn && !it.preBalanceAdd; });
+  if(!names.length && !anySurg) names = krActiveItems(c).filter(function(it){ return !it.krAddOn && !it.preBalanceAdd && !it.swapped; }).map(function(it){ return it.name; }); /* 只有管理项目：施术行写管理项目 */
+  if(!names.length){ var sd = (c.subItems||[]).filter(function(x){ return x.kind==='施术' && !x.done; })[0]; if(sd && anySurg) c.subItems = c.subItems.filter(function(x){ return x!==sd; }); /* 诊疗方案里的施术项目今天都没选（Step 4）：施术行拿掉 */ return; }
   c.subItems = c.subItems || [];
   var s = c.subItems.filter(function(x){ return x.kind==='施术'; })[0], content = '施术：'+names.join('、');
   if(s){ if(s.done){ return; } s.date = c.krSchedule.confirmedDate; s.content = content; s.auto = true; }
@@ -4369,7 +4370,7 @@ function coreSettleBalance(c, by){
     pushNotif('赴韩施术','KR 判断需退尾款差额 '+formatCurrency(-info.diff,'KRW')+'：'+c.name+'，请按此金额操作退款', {caseId:c.id});
     return {ok:true, refund:true};
   }
-  c.krBalancePaid = true; j.settled = true; /* 付清尾款后分配锁定 */
+  c.krBalancePaid = true; c.krBalancePaidAt = nowFullDt(); j.settled = true; /* 付清尾款后分配锁定 */
   var inn = finalizeInnCare(c);
   var held = []; /* CMD-1015-17：付费管理项目付清尾款后就是在韩持有（持有管理项目，每项有［使用］扣次数），不再等结案时才转 */
   (c.procedureItems||[]).forEach(function(it){ if((it.mgmtPlan || isLocalKrItem(it)) && !it.done && !it.cancelled && !it.swapped){ holdLocalAdd(c, it); held.push(it.name+(it.qty>1 ? ' × '+it.qty+' 次' : '')); } });
@@ -4407,9 +4408,9 @@ function coreSubDone(c, id, by, itemNames, noClose){
   var picked = [];
   if(s.kind==='术后管理记录'){ if(!s.simDay && s.date && s.date > todayStr()) return false; if(!s.arrived) return false; } /* 术后管理：到当天 + ［客人已到］才能标完成（原型可用［模拟到当日］，CMD-1013-10 / 12） */
   if(s.kind==='施术'){ /* 施术行标完成 = 本次的施术项目都完成（增加项目各有自己的一行；不再弹「做了哪些项目」勾选，CMD-1013-10 一·4） */
-    picked = krNotStartedItems(c).filter(function(it){ return !it.krAddOn && !it.mgmtPlan; });
+    picked = krNotStartedItems(c).filter(function(it){ return !it.krAddOn && !it.mgmtPlan && !it.deferUse; }); /* Step 4 没勾的留在项目卡未使用 */
   } else if(s.kind==='增加项目'){ /* 增加项目：完成 = 这个加做的项目做完了 */
-    picked = krNotStartedItems(c).filter(function(it){ return it.name===s.projectName && (it.preBalanceAdd || it.krAddOn || it.mgmtPlan); });
+    picked = krNotStartedItems(c).filter(function(it){ return it.name===s.projectName && (it.preBalanceAdd || it.krAddOn || it.mgmtPlan || it.deferUse); });
   }
   s.done = true; s.doneAt = nowFullDt(); s.doneBy = by;
   if(s.surgUse) picked = krNotStartedItems(c).filter(function(it){ return it.name===s.surgUse; });
@@ -6709,4 +6710,23 @@ function coreBookCancel(hid, id, kind, by){
   b.status = 'cancelled'; (b.history = b.history||[]).push({ts:nowFullDt(), text:by+(kind==='noshow' ? ' 标记未到店' : ' 取消预约')}); krbBlockRemove(hid, id);
   Store.mutateClinic(b.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]; if(c){ c.subState = 'cancelled'; c.noShow = kind==='noshow'; c.cancelReason = kind==='noshow' ? '未到店' : '预约取消'; c.cancelBy = '室长'; updateCaseStage(c); logCaseEvent(c, by, kind==='noshow' ? '客人未到店（KR 医院）：已取消' : '预约取消（KR 医院）'); } });
   return {ok:true};
+}
+
+/* ============ CMD-1015-26 Step 4：付清尾款后勾选今日进行的项目 ============
+   勾的施术 / 管理项目进今日案件（施术行写「施术：勾的项目」，管理项目一行一个）；没勾的留在项目卡「未使用」（施术项目标 deferUse：不占今日时段、不随施术行完成） */
+function coreTodayPick(c, surgNames, mgmtNames, by){
+  if(!c.krBalancePaid || c.todayPicked) return {ok:false, err:'现在不能选今日项目'};
+  surgNames = surgNames||[]; mgmtNames = mgmtNames||[];
+  if(!surgNames.length && !mgmtNames.length) return {ok:false, err:'请至少勾选一个项目'};
+  var skipped = [];
+  (c.procedureItems||[]).forEach(function(it){
+    if(it.origin!=='KR' || it.cancelled || it.swapped || it.done || krIsMgmtItemC(it)) return;
+    if(surgNames.indexOf(it.name)>-1){ it.deferUse = false; }
+    else { it.deferUse = true; skipped.push(it.name); /* 没勾：留在项目卡 */ }
+  });
+  c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && !s.done && !s.visitKey && skipped.indexOf(s.projectName)>-1); }); /* 没勾的在韩增加项目：今日行拿掉 */
+  c.todayPickMgmt = mgmtNames.slice(); c.todayPicked = true; c.needTodayPick = false;
+  syncSurgerySub(c); syncSurgeryBlock(c);
+  logCaseEvent(c, by, '今日进行项目：施术 '+(surgNames.join('、')||'无')+(mgmtNames.length ? '；管理 '+mgmtNames.join('、') : '')+(skipped.length ? '；留在项目卡未使用：'+skipped.join('、') : ''));
+  updateCaseStage(c); return {ok:true};
 }

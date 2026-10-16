@@ -1533,6 +1533,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var okc = coreBookCancel(hid, pend[1].id, 'noshow', 'KM1 室长').ok, cc2 = Store.withClinic(cs2.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===cs2.id; })[0]; }); ST.ok(okc && cc2.subState==='cancelled' && cc2.cancelReason==='未到店', '未到店：案件取消（原因未到店）');
     coreBookSimDay(hid, b0.id); ST.ok(coreBookArrive(hid, b0.id, 'KM1 室长'), '到店'); krShowCase(cs.clinicId, cs.id); ST.ok(/基础资料/.test(document.getElementById('krcase-body').innerText), '到店后才进入完整案件页（有 tab）');
   });
+  ST.def('R26a','Step 4 今日进行项目：勾的进今日案件，没勾的留在项目卡未使用（A1 分页，另留两个到院中的案件给 KM1）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = toConfirmed('R26a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var h = HOSPITAL_DATA[caseKrHospital(c)];
+    var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0], sp = lib.specs[0];
+    KR_FORCE_CLASH = true; try{ ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:{projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price}}), '加管理项目'); var ex = (h.projects||[]).filter(function(p){ return p.defaults && p.defaults.durMin>=30 && !krActiveItems(c).some(function(it){ return it.name===p.name; }); })[0]; ST.ok(coreAddOnItem(c, ex.name, ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, extendMin:30}), '加施术'); } finally { KR_FORCE_CLASH = false; }
+    coreAddOnPaid(c, ST.krBy); var plan = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it) && !it.krAddOn && !it.preBalanceAdd; }); if(!ST.ok(plan.length>=2, '诊疗方案里要有两个施术项目')) return;
+    c.needTodayPick = true; c.todayPicked = false; ST.ok(!coreTodayPick(c, [], [], ST.krBy).ok, '至少勾一个'); var mgItem = c.procedureItems.filter(function(it){ return krIsMgmtItemC(it) && it.heldOver; })[0];
+    ST.ok(coreTodayPick(c, [plan[0].name], mgItem ? [mgItem.name] : [], ST.krBy).ok && c.todayPicked && !c.needTodayPick, '今日进行：勾 1 个施术 + 1 个管理项目');
+    ST.ok(plan[1].deferUse && !plan[0].deferUse, '没勾的施术项目留在项目卡「未使用」（deferUse）'); var row = (c.subItems||[]).filter(function(s){ return s.kind==='施术'; })[0]; ST.ok(row && row.content==='施术：'+plan[0].name, '施术行只写勾的项目：'+(row&&row.content));
+    ST.ok(!(c.subItems||[]).some(function(s){ return s.kind==='增加项目' && s.projectName===ex.name && !s.done; }) && c.procedureItems.filter(function(it){ return it.name===ex.name; })[0].deferUse, '没勾的在韩增加施术：今日行拿掉，留在项目卡');
+    ST.ok(coreSubDone(c, row.id, ST.krBy, []) && plan[0].done && !plan[1].done, '施术行完成只完成勾的项目');
+    /* 留两个到院中的案件给 KM1：A = 评估前；B = 评估「原方案不变」后、尾款前 */
+    var A = toConfirmed('R26aA'); ST.krArrive(A); var B = toConfirmed('R26aB'); ST.krArrive(B); ST.krJudge(B, 'ok'); ST.ok(!B.krBalancePaid && !!B.krJudge, '案件 B 停在 Step 2'); localStorage.setItem('__R26', JSON.stringify({a:A.id, b:B.id}));
+  });
+  ST.def('R26b','KM1：Step 1 评估（已付定金项目框，没有项目卡）→ Step 2（添加项目 + 付清尾款，来源标注，没有行程确认勾选）→ Step 3 确认付款 → Step 4 勾今日项目 → 结算 tab（先在 A1 跑 R26a）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R26')||'null'); if(!ST.ok(!!rec, '先在 A1 分页跑 R26a')) return;
+    var ra = krAllCases().filter(function(x){ return x.id===rec.a; })[0], rb = krAllCases().filter(function(x){ return x.id===rec.b; })[0]; if(!ST.ok(!!ra && !!rb, '找不到案件')) return;
+    krShowCase(ra.clinicId, ra.id); krSetCaseTab('items'); var t1 = document.getElementById('krcase-body').innerText;
+    ST.ok(/已付定金项目/.test(t1) && /施术项目/.test(t1) && /可以手术，原方案不变/.test(t1) && /确认评估结果/.test(t1) && /撤回.*已到医院/.test(t1), 'Step 1：已付定金项目框 + 三选一 + ［确认评估结果］［撤回已到医院］'); ST.ok(!/项目卡/.test(t1) && !/未开始/.test(t1), 'Step 1：不显示项目卡，没有「未开始」');
+    krShowCase(rb.clinicId, rb.id); krSetCaseTab('items'); var t2 = document.getElementById('krcase-body').innerText;
+    ST.ok(/已付定金项目/.test(t2) && /添加项目/.test(t2) && /付清尾款/.test(t2) && /已付定金/.test(t2) && /项目合计/.test(t2) && /已付定金（可抵）/.test(t2) && /尾款（在韩国补）/.test(t2) && /结算尾款/.test(t2), 'Step 2：已付定金项目 / 添加项目 / 付清尾款（合计 / 已付定金可抵 / 尾款）/ ［结算尾款］'); ST.ok(!/已和客人确认行程/.test(t2) && !/项目卡/.test(t2), 'Step 2：没有「已和客人确认行程」勾选，不显示项目卡');
+    krSettleOpen('ok'); var m = document.getElementById('kr-settle-overlay').innerText; ST.ok(/确认付款/.test(m) && /尾款（在韩国补）/.test(m) && /稍后付款/.test(m), 'Step 3：确认付款弹窗（尾款明细）'); krSettleConfirm();
+    var cb = Store.withClinic(rb.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===rb.id; })[0]; }); ST.ok(cb.krBalancePaid && cb.needTodayPick && !cb.todayPicked, '确认付款 = 付清尾款，进入 Step 4');
+    krShowCase(rb.clinicId, rb.id); krSetCaseTab('items'); var t3 = document.getElementById('krcase-body').innerText; ST.ok(/请勾选今日进行项目/.test(t3) && /已勾选：0 个项目/.test(t3) && /退回前页/.test(t3) && /今日进行/.test(t3) && document.querySelectorAll('#krcase-body input[type=checkbox]').length>0, 'Step 4：项目卡每行有勾选框 + 请勾选今日进行项目 + ［退回前页］［今日进行］');
+    var cbx = document.querySelector('#krcase-body input[type=checkbox]'); cbx.checked = true; cbx.onchange && cbx.onchange.call(cbx); ST.ok(/已勾选：1 个项目/.test(document.getElementById('krcase-body').innerText), '勾 1 个 → 已勾选：1 个项目'); krPickGo();
+    krShowCase(rb.clinicId, rb.id); krSetCaseTab('items'); var t4 = document.getElementById('krcase-body').innerText; ST.ok(/今日案件/.test(t4) && !/请勾选今日进行项目/.test(t4), '今日进行 → 勾的变今日案件的行');
+    krSetCaseTab('settle'); var t5 = document.getElementById('krcase-body').innerText; ST.ok(/定金（IN 收）/.test(t5) && /尾款（医院收）/.test(t5) && !/Rp\s*[\d.]+/.test(t5), '结算 tab：定金 / 尾款（韩元），没有印尼盾的面诊费 / 本地项目金额'); ST.ok(KR_CASE_TABS.map(function(x){ return x.label; }).filter(function(x){ return x!=='关联案件'; }).join('｜')==='基础资料｜面诊｜项目｜结算｜附件｜Timeline', 'tab = 基础资料｜面诊｜项目｜结算｜附件｜Timeline');
+  });
   ST.def('R22b','KM1：案件区块三组 + 抬头 + 行（项目类型｜内容｜地点｜状态｜备注｜操作）；所需术后管理一项一框；冲突询问弹窗两个按钮；增加项目里没有术后管理清单（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }) || Object.keys(x.c.visitEnds||{}).length; })[0]; if(!ST.ok(!!r, '要有带术后管理的案件（先在 A1 分页跑 R22a）')) return;
@@ -1548,7 +1576,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R18c','KR「项目」tab：项目卡（施术项目 N｜管理项目 N）+ 案件；没有「施术」tab、没有「手术项目」；各入口都到项目 tab 并展开对应那次（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
-    ST.ok(KR_CASE_TABS.map(function(t0){ return t0.label; }).filter(function(x){ return x!=='关联案件'; }).join('｜')==='基础资料｜面诊｜项目｜附件｜Timeline', 'tab = 基础资料｜面诊｜项目｜附件｜Timeline');
+    ST.ok(KR_CASE_TABS.map(function(t0){ return t0.label; }).filter(function(x){ return x!=='关联案件'; }).join('｜')==='基础资料｜面诊｜项目｜结算｜附件｜Timeline', 'tab = 基础资料｜面诊｜项目｜结算｜附件｜Timeline');
     var r = krAllCases().filter(function(x){ return subCaseList(x.c).some(function(s){ return s.place==='KR'; }); })[0]; if(!ST.ok(!!r, '要有带韩国术后管理的案件（先在 A1 分页跑 R18a / R18b）')) return;
     var key = subCaseKey(subCaseList(r.c).filter(function(s){ return s.place==='KR'; })[0]), sid = subCaseList(r.c).filter(function(s){ return s.place==='KR'; })[0].id;
     krShowCase(r.clinicId, r.id); krSetCaseTab('proc'); ST.ok(KR_CASE.tab==='items', '旧的「施术」tab 并进「项目」');
