@@ -248,7 +248,7 @@ function drNormalize(dr){
   dr.items = out; delete dr.career; delete dr.certs; delete dr.societies;
   return dr;
 }
-function hospitalDirectors(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; (h.directors||[]).forEach(drNormalize); return h.directors; }
+function hospitalDirectors(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; (h.directors||[]).forEach(drNormalize); h.directors.sort(function(a, b){ return (a.title==='代表院长' ? 0 : 1) - (b.title==='代表院长' ? 0 : 1); }); return h.directors; } /* CMD-1019-07：代表院长永远排最上面（稳定排序，其余保持原顺序）*/
 function drItemsOf(dr, cat){ drNormalize(dr); return (dr.items||[]).filter(function(x){ return x.cat===cat && String(x.text||'').trim(); }); }
 function drFindByName(name){ var r = null; Object.keys(HOSPITAL_DATA||{}).forEach(function(hid){ hospitalDirectors(hid).forEach(function(d){ if(!r && d.name===name) r = {dr:d, hid:hid}; }); }); return r; }
 function hospitalDirectorNames(hid){ return hospitalDirectors(hid).filter(function(d){ return d.active; }).map(function(d){ return d.name; }); } /* 启用的院长（停用的不出现在选项里） */
@@ -5113,7 +5113,22 @@ function sortedAfter(c){ return (c.afterPhotos||[]).slice().sort(function(a,b){ 
 
 function libCanEdit(source){ return (DEMO_ROLE==='in' && source==='local') || (DEMO_ROLE==='kr' && source==='travel'); }
 /* CMD-1014-16：案例库单一由 IN 管理（本地案例和赴韩施术案例都归 IN 诊所维护）；KR 一律只读 */
-function libCaseCanEdit(source){ return DEMO_ROLE==='in'; }
+/* CMD-1019-07：案例库 IN / KR 各自维护自己这边的案例（c.by = 'IN' | 'KR'，旧案例没有 by 算 IN）：只能编辑 / 删除自己的，对方的只读；院长 / 代表院长只读。
+   参数可以是案例对象，也可以是字符串 source（旧调用，当作 IN 的案例）；IN 的赴韩案例还记 fromClinic，同一医院对接的另一家诊所也只读。 */
+function libCaseCanEdit(c){
+  var o = (c && typeof c==='object') ? c : {source:c, by:'IN'}, by = o.by || 'IN';
+  if(DEMO_ROLE==='kr') return by==='KR' && typeof canDo==='function' && !!canDo('krshowedit');
+  return by==='IN' && (!o.fromClinic || o.fromClinic===CURRENT_CLINIC_ID);
+}
+function libCaseCanAdd(){ return DEMO_ROLE==='in' || (typeof canDo==='function' && !!canDo('krshowedit')); }
+function libByLabel(c){ return (c.by==='KR') ? 'KR' : 'IN'; }
+/* KR 端新增 / 修改 / 删除的案例要写回医院分区（KR 案例库里的 LIB_CASES 只是合成副本） */
+function libKrPersist(c, removeId){
+  if(DEMO_ROLE!=='kr' || typeof krHData!=='function') return;
+  var h = krHData(); h.libCases = h.libCases || []; var id = removeId || c.id, i = h.libCases.findIndex(function(x){ return x.id===id; });
+  if(removeId){ if(i>-1) h.libCases.splice(i, 1); } else if(i>-1) h.libCases[i] = c; else h.libCases.unshift(c);
+  if(typeof Store!=='undefined' && Store.touch) Store.touch();
+}
  /* IN 只能维护印尼管理；赴韩施术只有 KR 室长维护 */
 
 /* ---- 问题标签（印尼管理案例，手动维护） ---- */
@@ -5301,7 +5316,7 @@ function libDirectorClickable(c){ return c.source==='travel' && c.director && is
 
 function libCaseCardHtml(c){
   var recovery = sortedAfter(c).length ? recoveryText(sortedAfter(c).slice(-1)[0]) : '—';
-  var srcLabel = c.source==='travel' ? '医院案例' : '印尼案例';
+  var srcLabel = (c.source==='travel' ? '医院案例' : '印尼案例')+' · 来源 '+libByLabel(c);
   var srcColor = c.source==='travel' ? ['var(--sage-bg)','var(--sage)'] : ['var(--terracotta-bg)','var(--terracotta)'];
   var dirRow = '';
   if(c.source==='travel'){
@@ -5359,7 +5374,7 @@ function libThumbHtml(c, key){
 
 function libRenderDetail(){
   var c = libFindCase(LIB_STATE.caseId); if(!c) return '<div style="font-size:12px;color:var(--muted);">案例不存在（可能已删除）</div>';
-  var srcLabel = c.source==='travel' ? '医院案例' : '印尼案例';
+  var srcLabel = (c.source==='travel' ? '医院案例' : '印尼案例')+' · 来源 '+libByLabel(c);
   var srcColor = c.source==='travel' ? ['var(--sage-bg)','var(--sage)'] : ['var(--terracotta-bg)','var(--terracotta)'];
   var projLinks = (c.projectIds||[]).map(function(id){ var pr = projById(id); return pr ? '<a href="#" class="info-link" onclick="libOpenProject(\''+id+'\');return false;">'+pr.name+(pr.active?'':'（已非活性）')+'</a>' : ''; }).join('、');
   var dirHtml = c.source==='travel' ? (libDirectorClickable(c) ? '<a href="#" class="info-link" onclick="libOpenDirector(\''+c.director+'\');return false;">'+c.director+'</a>' : '<span style="color:var(--muted);">-</span>') : '';
@@ -5371,7 +5386,7 @@ function libRenderDetail(){
     cmp.map(function(k){ var o = libPhotoByKey(c,k); return '<div style="flex:1;min-width:200px;">'+libPhotoBox(o.ph,'100%','220px',o.cap)+'<div style="text-align:center;font-size:12px;margin-top:4px;">'+o.cap+'</div></div>'; }).join('')+'</div></div>'
     : '<div style="font-size:11px;color:var(--muted);margin-top:8px;">勾选两张照片的"对比"可以左右对比；点照片放大。</div>';
   var actions = '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openLibPresent()">展示模式</button>'+
-    (libCaseCanEdit(c.source) ? '<button class="btn-outline" onclick="openLibCaseModal(\''+c.id+'\')">编辑</button><button class="btn-outline" style="color:#C1454A;" onclick="deleteLibCase(\''+c.id+'\')">删除</button>' : '')+'</div>';
+    (libCaseCanEdit(c) ? '<button class="btn-outline" onclick="openLibCaseModal(\''+c.id+'\')">编辑</button><button class="btn-outline" style="color:#C1454A;" onclick="deleteLibCase(\''+c.id+'\')">删除</button>' : '')+'</div>';
   return '<div class="card" style="padding:22px 26px;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px;"><div><div style="font-size:20px;font-weight:700;margin-bottom:8px;">'+c.title+'</div>'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;"><span class="status-pill" style="background:'+srcColor[0]+';color:'+srcColor[1]+';">'+srcLabel+'</span>'+
     (c.source==='travel' ? '<span>院长：'+dirHtml+'</span>' : '')+'<span>项目：'+(projLinks||'—')+'</span>'+(tags ? '<span>问题：'+tags+'</span>' : '')+'</div></div>'+actions+'</div>'+
@@ -5450,10 +5465,11 @@ function saveLibCase(){
     var idx = LIB_CASES.findIndex(function(x){ return x.id===c.id; });
     if(idx>-1) LIB_CASES[idx] = c;
   } else {
-    c.id = newLibCaseId(); c.uploader = me; c.uploadedAt = nowFullDt(); c.editedBy = null; c.editedAt = null;
+    c.id = DEMO_ROLE==='kr' ? 'lck'+Date.now().toString(36) : newLibCaseId(); c.by = DEMO_ROLE==='kr' ? 'KR' : 'IN'; if(DEMO_ROLE!=='kr' && c.source==='travel') c.fromClinic = CURRENT_CLINIC_ID; c.uploader = me; c.uploadedAt = nowFullDt(); c.editedBy = null; c.editedAt = null;
     if(c.source==='local') c.clinicId = CURRENT_CLINIC_ID; else c.hospitalId = c.hospitalId || (DEMO_ROLE==='in' && typeof clinicHospital==='function' && clinicHospital(CURRENT_CLINIC_ID) ? clinicHospital(CURRENT_CLINIC_ID) : (LIB_HOSPITAL!=='all' ? LIB_HOSPITAL : 'H1')); /* 归属：印尼案例属于本诊所，赴韩案例属于医院 */
     LIB_CASES.unshift(c);
   }
+  libKrPersist(c);
   closeLibCaseModal();
   LIB_SEARCH = '';
   libOpenCase(c.id); /* 保存 → 案例详情页（Notion IN-SHOW-01） */

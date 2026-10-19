@@ -2283,7 +2283,7 @@ function renderLibrary(){
   var main = document.getElementById('lib-grid'); if(!main) return;
   var sel = document.getElementById('lib-role-select'); if(sel) sel.value = DEMO_ROLE;
   var addBtn = document.getElementById('lib-add-btn');
-  if(addBtn){ addBtn.textContent = '+ 新增案例'; addBtn.style.display = DEMO_ROLE==='in' ? '' : 'none'; } /* CMD-1014-16：KR 案例库只读，没有新增 */
+  if(addBtn){ addBtn.textContent = '+ 新增案例'; addBtn.style.display = libCaseCanAdd() ? '' : 'none'; } /* CMD-1019-07：IN / KR 各自维护自己的案例；院长只读 */
   var toggle = '<div class="cal-switch"><span class="'+(LIB_VIEW==='part'?'active':'')+'" onclick="setLibView(\'part\')">按部位</span><span class="'+(LIB_VIEW==='dir'?'active':'')+'" onclick="setLibView(\'dir\')">按院长</span><span class="'+(LIB_VIEW==='method'?'active':'')+'" onclick="setLibView(\'method\')">按施术 / 管理</span></div>';
   var f = document.getElementById('lib-filters');
   var searchBox = '<input type="text" id="lib-search" placeholder="搜索案例标题" value="'+LIB_SEARCH.replace(/"/g,'&quot;')+'" oninput="libSearchInput(this.value)" style="width:200px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;">';
@@ -2328,9 +2328,9 @@ function renderDirectorDetail(){
 }
 
 function deleteLibCase(id){
-  var c = libFindCase(id); if(!c || !libCaseCanEdit(c.source)) return;
+  var c = libFindCase(id); if(!c || !libCaseCanEdit(c)) return;
   if(!confirm('确认删除案例"'+c.title+'"？删除后不可恢复。')) return;
-  LIB_CASES = LIB_CASES.filter(function(x){ return x.id!==id; });
+  LIB_CASES = LIB_CASES.filter(function(x){ return x.id!==id; }); libKrPersist(null, id);
   if(CURRENT_PAGE_ID==='in-director') renderDirectorDetail();
   if(LIB_STATE.level==='detail') LIB_STATE.level = 'cases';
   renderLibrary();
@@ -2377,12 +2377,12 @@ var LIB_EDIT = null;
 
 function openLibCaseModal(caseId){
   if(caseId){
-    var c = libFindCase(caseId); if(!c || !libCaseCanEdit(c.source)) return;
+    var c = libFindCase(caseId); if(!c || !libCaseCanEdit(c)) return;
     LIB_EDIT = JSON.parse(JSON.stringify(c));
     LIB_EDIT.names = LIB_EDIT.names || {zh:c.title, ko:'', id:''};
     LIB_EDIT.consent = LIB_EDIT.consent || {signed:false, file:''};
   } else {
-    LIB_EDIT = {id:null, title:'', names:{zh:'',ko:'',id:''}, source:'local', projectIds:[], director:null, problemIds:[], beforePhotos:[], afterPhotos:[], consent:{signed:false, file:''}};
+    LIB_EDIT = {id:null, title:'', names:{zh:'',ko:'',id:''}, source:(DEMO_ROLE==='kr' ? 'travel' : 'local'), projectIds:[], director:null, problemIds:[], beforePhotos:[], afterPhotos:[], consent:{signed:false, file:''}};
   }
   renderLibCaseModal();
   document.getElementById('lib-case-overlay').classList.add('open');
@@ -2427,7 +2427,7 @@ function renderLibCaseModal(){
   var c = LIB_EDIT; if(!c) return;
   document.getElementById('lib-case-modal-title').textContent = c.id ? '编辑案例' : '新增案例';
   var isTravel = c.source==='travel';
-  var srcLabel = isTravel ? '赴韩施术案例（IN 维护，KR 只读）' : '本地项目案例（IN 维护）';
+  var srcLabel = isTravel ? '赴韩施术案例' : '本地项目案例（IN 维护）';
   var origin = isTravel ? 'KR' : 'IN';
   var projGroups = projLibCategories(origin).map(function(cat){
     var ps = PROJECT_LIBRARY.filter(function(pr){ return pr.categoryId===cat.id && (pr.active || c.projectIds.indexOf(pr.id)>-1); });
@@ -2435,13 +2435,13 @@ function renderLibCaseModal(){
     return '<div style="margin-bottom:8px;"><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">'+cat.label+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+
       ps.map(function(pr){ return '<span class="chip'+(c.projectIds.indexOf(pr.id)>-1?' active':'')+'" onclick="libToggleProject(\''+pr.id+'\')">'+pr.name+(pr.active?'':'（已非活性）')+'</span>'; }).join('')+'</div></div>';
   }).join('');
-  var dirOptions = '<option value=""'+(!c.director?' selected':'')+'>-</option>'+(function(){ var ns = []; linkedHospitalIds().forEach(function(h){ ns = ns.concat(hospitalDirectorNames(h)); }); return ns; })().map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+
+  var dirOptions = '<option value=""'+(!c.director?' selected':'')+'>-</option>'+(function(){ var ns = [], hs = DEMO_ROLE==='kr' ? [LIB_HOSPITAL] : linkedHospitalIds(); hs.forEach(function(h){ ns = ns.concat(hospitalDirectorNames(h)); }); return ns; })().map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+
     ((c.director && !isDirectorActive(c.director)) ? '<option selected value="'+c.director+'">'+c.director+'（已停用，显示为"-"）</option>' : '');
   var n = c.names;
   var nameInp = function(k, label){ return '<div class="case-field-row"><span class="fk">'+label+'</span><input type="text" value="'+(n[k]||'').replace(/"/g,'&quot;')+'" oninput="libEditName(\''+k+'\',this.value)" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'; };
   var missing = libEditMissing();
   document.getElementById('lib-case-body').innerHTML =
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">案例类型：'+(!c.id ? '<span class="chip'+(!isTravel?' active':'')+'" onclick="libEditSource(\'local\')">本地项目案例</span> <span class="chip'+(isTravel?' active':'')+'" onclick="libEditSource(\'travel\')">赴韩施术案例</span>' : srcLabel)+'</div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">案例类型：'+(!c.id && DEMO_ROLE!=='kr' ? '<span class="chip'+(!isTravel?' active':'')+'" onclick="libEditSource(\'local\')">本地项目案例</span> <span class="chip'+(isTravel?' active':'')+'" onclick="libEditSource(\'travel\')">赴韩施术案例</span>' : srcLabel)+'</div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">标题 <span style="color:var(--terracotta);">*</span> <span style="font-weight:400;color:var(--muted);">只填一种语言，其他语言 AI 翻译，可手动修改</span></div>'+
     nameInp('zh','中文')+nameInp('ko','한국어')+nameInp('id','Bahasa Indonesia')+
     '<div style="margin:6px 0 12px;"><button class="btn-ghost" style="font-size:11px;" onclick="libEditAiFill()">AI 翻译补全（演示）</button></div>'+

@@ -2668,8 +2668,8 @@ function krShowBind(){
 }
 ADMIN_RENDER.krshow = function(el){
   krShowBind();
-  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;"><div id="lib-filters" style="display:flex;flex-direction:column;gap:10px;flex-grow:1;min-width:280px;"></div></div>'+
-    '<div style="font-size:11px;color:var(--muted);">案例库由 IN 室长维护，KR 只读；这里看到的是本医院的赴韩施术案例和对接诊所的本地项目案例。</div><div id="lib-grid" style="margin-top:6px;"></div>';
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;"><div id="lib-filters" style="display:flex;flex-direction:column;gap:10px;flex-grow:1;min-width:280px;"></div>'+(canDo('krshowedit') ? '<button class="btn-primary" id="lib-add-btn" onclick="openLibCaseModal(null)">+ 新增案例</button>' : '')+'</div>'+
+    '<div style="font-size:11px;color:var(--muted);">案例库 IN 和 KR 各自维护自己的案例（来源标 IN / KR），自己的才能编辑 / 删除，对方的只读；'+(canDo('krshowedit') ? '' : '你的账号只能查看。')+'这里看到的是本医院的赴韩施术案例和对接诊所的本地项目案例。</div><div id="lib-grid" style="margin-top:6px;"></div>';
   renderLibrary();
 };
 

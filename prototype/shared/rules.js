@@ -592,10 +592,10 @@ var ROLE_PERMS = {
   general: {work:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true,  smslog:false},
   /* KR 医院账号（2026-10-06，Notion Accounts & Settings 第 7 节）：krwork = 处理案件（确认报告时间、上传诊疗方案、施术相关）；krview = 看所有案件；krviewOwn = 只看自己负责的；
      krsched = 日程/OFF；krdoctors = 院长名单/停用；krlib = 赴韩项目库（维护）；krshowview = 案例库只读（IN 统一维护，KR 全部只读，CMD-1014-16）；bizdata/accounts/clinic（= 医院设定）/oplog = 管理类。 */
-  kr_owner:    {work:false, krshowview:true, krwork:false, krview:false, krviewOwn:true, krsched:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
-  kr_manager:  {work:false, krshowview:true, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  krdoctors:true,  krlib:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
-  kr_general:  {work:false, krshowview:true, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  krdoctors:false, krlib:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false},
-  kr_director: {work:false, krshowview:true, krwork:false, krview:false, krviewOwn:true,  krsched:'own', krdoctors:false, krlib:false, bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false}
+  kr_owner:    {work:false, krshowview:true, krshowedit:false, krwork:false, krview:false, krviewOwn:true, krsched:true,  krdoctors:true,  krlib:false, bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
+  kr_manager:  {work:false, krshowview:true, krshowedit:true, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  krdoctors:true,  krlib:true,  bizdata:true,  accounts:true,  clinic:true,  oplog:true,  personal:true, smslog:false},
+  kr_general:  {work:false, krshowview:true, krshowedit:true, krwork:true,  krview:true,  krviewOwn:false, krsched:true,  krdoctors:false, krlib:true,  bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false},
+  kr_director: {work:false, krshowview:true, krshowedit:false, krwork:false, krview:false, krviewOwn:true,  krsched:'own', krdoctors:false, krlib:false, bizdata:false, accounts:false, clinic:false, oplog:false, personal:true, smslog:false}
 };
 /* 代表院长 = 院长 + 老板（CMD-1012-05 五）：院长功能（自己负责的案件、开始 / 录入面诊、自己的日程与 OFF）+ 保留老板的管理类页面 */
 function isKrDirectorLike(a){ return !!a && (a.role==='kr_director' || a.role==='kr_owner'); }

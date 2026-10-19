@@ -658,8 +658,8 @@
     var kn = krLocalLib(hid).map(function(p){ return p.name; }).sort().join('|'), inn = buildLocalProjects('IN').map(function(p){ return p.name; }).sort().join('|'); ST.ok(kn===inn, 'KR 本地管理项目库和 IN 应是同一份清单（项目名一致）');
     /* 案例库（CMD-1014-16）：IN 统一维护，KR 只读 */
     DEMO_ROLE = 'kr'; openAdminPage('krshow'); var lc0 = LIB_CASES[0];
-    ST.ok(!document.getElementById('lib-add-btn'), 'KR 案例库不应有［新增案例］按钮'); ST.ok(!libCaseCanEdit('travel') && !libCaseCanEdit('local'), 'KR 对任何案例都不能编辑');
-    if(lc0){ openLibCaseModal(lc0.id); ST.ok(LIB_EDIT===null, 'KR 点编辑不应打开编辑窗'); libOpenCase(lc0.id); ST.ok(!/编辑|删除/.test(document.getElementById('lib-grid').innerText), 'KR 案例详情页不应有［编辑］［删除］'); }
+    ST.ok(!!document.getElementById('lib-add-btn') === !!canDo('krshowedit'), 'KR 室长 / 管理者有［新增案例］，院长 / 代表院长没有（CMD-1019-07）'); ST.ok(!libCaseCanEdit('travel') && !libCaseCanEdit('local') && !libCaseCanEdit({source:'travel', by:'IN'}), 'KR 不能编辑 IN 的案例');
+    if(lc0){ openLibCaseModal(lc0.id); ST.ok(LIB_EDIT===null, 'KR 点 IN 案例的编辑不应打开编辑窗'); libOpenCase(lc0.id); ST.ok(!/编辑|删除/.test(document.getElementById('lib-grid').innerText), 'KR 案例详情页不应有［编辑］［删除］'); }
     ST.ok(LIB_CASES.some(function(x){ return x.source==='travel'; }) && LIB_CASES.some(function(x){ return x.source!=='travel'; }), 'KR 看到的 = 本医院赴韩案例 + 对接诊所的本地案例');
     var rec0 = null; try{ rec0 = JSON.parse(localStorage.getItem('__T2_LIB')||'null'); }catch(e){} if(rec0) ST.ok(LIB_CASES.some(function(x){ return x.id===rec0.id; }), 'IN（S36b）上传的赴韩案例 KR 应看得到（只读）');
     ST.note('IN 侧能否按项目找到该案例、「查看相关案例」链接：用 S36b 在 A1 分页另测');
@@ -1775,6 +1775,31 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(np && np.parts.join()==='f_jaw,f_chin' && PROJECT_CATEGORIES[np.categoryId].part==='f_jaw', '保存后分类 = 第一个部位（下颚），也对应下巴');
       openAdminPage('krsrvc'); var c3 = document.getElementById('krp-part-f_jaw'); ST.ok(c3 && c3.innerText.indexOf('部位测试项目')>-1 && !document.getElementById('krp-part-f_chin').innerText.includes('部位测试项目'), '列表放在第一个部位（下颚）里，下巴里不重复');
       krpDelete && (function(){ var l = krpProjects(); l.splice(l.indexOf(np), 1); Store.touch(); })(); 
+    }
+  });
+  ST.def('R37a','CMD-1019-07：案例库 IN / KR 各自维护、对方只读；院长只读；代表院长排最上面（IN 和 KM1 分页，先 KM1 再 A1）',function(){
+    var me = currentAccount(); if(!ST.ok(!!me, '要先登录')) return;
+    var h1 = hospitalDirectors('H1'); ST.ok(h1[0].title==='代表院长', 'KR 院长名单：代表院长永远排最上面（'+h1.map(function(d){ return d.name; }).join('、')+'）');
+    var dl = libDirectorsList(); ST.ok(!dl.length || dl[0].dr.title==='代表院长', '案例库按院长：代表院长在最前');
+    var cards = isKrAccount() ? 'KO1 代表院长 ↗ KD1 院长 ↗' : (function(){ var c0 = ST.newRes('R37d'); ST.arrive(c0); setNeedsConsult(true); return directorCardsHtml(c0); })(); var ko = cards.indexOf('KO1 代表院长 ↗'), kd = cards.indexOf('KD1 院长 ↗'); var koOff = directorTodayOff('H1', 'KO1 代表院长'); ST.ok(ko>-1 && kd>-1 && ((koOff && koOff.full) || ko<kd), 'IN 基础资料院长列表（没有苦恼部位时）代表院长在前（今天整天 OFF 的灰色排后，例外）');
+    if(isKrAccount()){
+      if(me.role==='kr_director' || me.role==='kr_owner'){
+        openAdminPage('krshow'); ST.ok(!document.getElementById('lib-add-btn') && !libCaseCanAdd() && !libCaseCanEdit({source:'travel', by:'KR'}) && /案例库/.test(document.querySelector('.sidebar, #sidebar, .sidebar-slot').innerText), '院长 / 代表院长：菜单有案例库，只读（没有新增，不能编辑）');
+        return;
+      }
+      openAdminPage('krshow'); ST.ok(!!document.getElementById('lib-add-btn') && libCaseCanAdd(), 'KR 室长：有［新增案例］');
+      openLibCaseModal(null); ST.ok(LIB_EDIT && LIB_EDIT.source==='travel' && /负责院长/.test(document.getElementById('lib-case-body').innerHTML) && !/本地项目案例<\/span>/.test(document.getElementById('lib-case-body').innerHTML), 'KR 新增案例：赴韩施术案例，可选负责院长，没有类型切换');
+      LIB_EDIT.names.zh = 'KR 自测案例'; LIB_EDIT.projectIds = [PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && !p.local && !isKrPostcareCat(p.categoryId); })[0].id]; LIB_EDIT.director = 'KD1 院长'; libAddDemoPhoto('after'); libSetRecovery(0, '1周'); libSetConsentSigned(true); libUseDemoConsent(); saveLibCase();
+      var kc = LIB_CASES.filter(function(c){ return c.title==='KR 自测案例'; })[0]; if(!ST.ok(!!kc && kc.by==='KR' && kc.director==='KD1 院长' && libCaseCanEdit(kc), '保存：来源 KR、负责院长 KD1、自己的案例可编辑')) return;
+      ST.ok(krHData().libCases.some(function(c){ return c.id===kc.id; }), '写回医院分区（IN 那边读得到）'); ST.ok(/来源 KR/.test(document.getElementById('lib-grid').innerText), '详情 / 卡片标「来源 KR」');
+      var inCase = LIB_CASES.filter(function(c){ return c.source==='travel' && (c.by||'IN')==='IN'; })[0]; ST.ok(!libCaseCanEdit(inCase), 'IN 的案例 KR 不能改');
+      localStorage.setItem('__R37', JSON.stringify({id:kc.id}));
+    } else {
+      var rec = JSON.parse(localStorage.getItem('__R37')||'null'); if(!rec){ ST.ok(true, '（先在 KM1 分页跑，看 KR 案例）'); return; }
+      var kc2 = LIB_CASES.filter(function(c){ return c.id===rec.id; })[0]; if(!ST.ok(!!kc2, 'IN 看得到 KR 新增的案例')) return;
+      ST.ok(!libCaseCanEdit(kc2), 'IN 不能改 KR 的案例'); nav('in-library'); libOpenCase(kc2.id); ST.ok(!/>编辑</.test(document.getElementById('lib-grid').innerHTML) && !/>删除</.test(document.getElementById('lib-grid').innerHTML) && /来源 KR/.test(document.getElementById('lib-grid').innerText), 'IN 看 KR 案例详情：没有编辑 / 删除，标来源 KR');
+      var mine = LIB_CASES.filter(function(c){ return c.by!=='KR' && c.source==='travel'; })[0]; ST.ok(!!mine && libCaseCanEdit(mine) && libCaseCanAdd(), 'IN 自己的案例可以编辑 / 新增');
+      localStorage.removeItem('__R37');
     }
   });
   ST.def('R32b','KM1：KR 面诊 tab 按部位显示（希望预期 / 预算在上）；院长账号也一样（先在 A1 跑 R32a）',function(){

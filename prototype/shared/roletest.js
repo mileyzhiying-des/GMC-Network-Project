@@ -68,6 +68,9 @@ RT.runIn = function(){
     /* 案例库页面：上传 / 编辑入口 */
     var lb = T(function(){ renderLibrary(); var t = document.getElementById('in-library').textContent; return {up:/上传案例|新增案例|＋ ?上传|\+ ?上传/.test(t)}; });
     RT.cell('案例库页面：上传案例入口', '—', RT.yn(lb.up), 'Case Library 规格只写「印尼室长维护」，没写管理者 / 一般室长的差别');
+    var lb2 = T(function(){ return {krCase:libCaseCanEdit({source:'travel', by:'KR'}), inCase:libCaseCanEdit({source:'travel', by:'IN'}), add:libCaseCanAdd()}; });
+    RT.cell('案例库：编辑 / 删除 KR 的案例（对方只读）', '❌', RT.yn(lb2.krCase===true));
+    RT.cell('案例库：新增 / 编辑 / 删除 IN 自己的案例', '✅', RT.yn(lb2.inCase===true && lb2.add===true));
     /* 退款服务 / 置换：客人有可退批次时案件页顶部出现退款服务条 */
     var rf = T(function(){ var names = CLIENTS.map(function(c){ return c.name; }); var hit = null; names.forEach(function(n){ if(!hit && refundableBatches(n).length) hit = n; }); if(!hit) return 'nodata'; var c = ST.newRes('RT-refund'); ST.arrive(c); c.name = hit; return /退款服务/.test(refundServiceBarHtml(c)); });
     RT.cell('案件页［退款服务］条（客人有可退批次时）', '✅', rf==='nodata' ? '（无数据）' : RT.yn(rf===true), 'IN-CASE-02 没按 A1 / A2 区分');
@@ -125,9 +128,122 @@ RT.runKr = function(){
   RT.cell('侧栏 / 页面：经营数据、账号管理、医院设定、操作日志', admin ? '✅' : '❌', RT.yn(RT.has(L, ['经营数据','账号管理','医院设定','操作日志'])));
   RT.cell('侧栏 / 页面：院长管理（院长名单、停用）', admin ? '✅' : '❌', RT.yn(L.indexOf('院长管理')>-1));
   RT.cell('侧栏 / 页面：赴韩项目库（维护）', coord ? '✅' : '❌', RT.yn(L.indexOf('项目库')>-1));
-  RT.cell('侧栏 / 页面：案例库（KR 全部只读）', '✅', RT.yn(L.indexOf('案例库')>-1));
-  var lib0 = T(function(){ var d0 = DEMO_ROLE; DEMO_ROLE = 'kr'; var r0 = {edit:libCaseCanEdit('travel') || libCaseCanEdit('local')}; DEMO_ROLE = d0; return r0; });
-  RT.cell('案例库：上传 / 编辑 / 删除案例', '❌', RT.yn(lib0.edit===true));
+  RT.cell('侧栏 / 页面：案例库（院长 / 代表院长也能看，只读）', '✅', RT.yn(L.indexOf('案例库')>-1));
+  var lib0 = T(function(){ var d0 = DEMO_ROLE; DEMO_ROLE = 'kr'; var r0 = {add:libCaseCanAdd(), own:libCaseCanEdit({source:'travel', by:'KR'}), inCase:libCaseCanEdit({source:'travel', by:'IN'}), inLocal:libCaseCanEdit({source:'local', by:'IN'})}; DEMO_ROLE = d0; return r0; });
+  RT.cell('案例库：新增案例（KR 室长 / 管理者；院长 / 代表院长只读）', coord ? '✅' : '❌', RT.yn(lib0.add===true), '来源标 KR，可选负责院长');
+  RT.cell('案例库：编辑 / 删除自己（KR）的案例', coord ? '✅' : '❌', RT.yn(lib0.own===true));
+  RT.cell('案例库：编辑 / 删除 IN 的案例（对方只读）', '❌', RT.yn(lib0.inCase===true || lib0.inLocal===true));
+  RT.cell('侧栏：短信发送记录', '—', RT.yn(L.indexOf('短信发送记录')>-1));
+  var bell = !!document.querySelector('.topbar [onclick*="toggleBellDropdown"], [onclick*="toggleBellDropdown"]'), chat = !!document.querySelector('[onclick*="openDrawer()"]');
+  RT.cell('顶部对话按钮', isOwn ? '❌' : '✅', RT.yn(chat));
+  RT.cell('顶部铃铛', '✅', RT.yn(bell), isOwn ? '老板有铃铛，只收「系统」类（Accounts & Settings 10-14 修订）' : '');
+  /* 个人设定：所有账号 */
+  RT.cell('个人设定（头像菜单）', '✅', RT.yn(canDo('personal')));
+  /* 诊所管理类页面 */
+  RT.cell('诊所设定（营业时间 / 面诊费 / 短信模板 / 同意书版本）', isGen ? '❌' : '✅', RT.yn(canDo('clinic')));
+  RT.cell('账号管理（席位 / 重设 / 加购 / 退订）', isGen ? '❌' : '✅', RT.yn(canDo('accounts')));
+  RT.cell('经营数据', isGen ? '❌' : '✅', RT.yn(canDo('bizdata')));
+  RT.cell('操作日志', isGen ? '❌' : '✅', RT.yn(canDo('oplog')));
+  RT.cell('短信发送记录', '—', RT.yn(canDo('smslog')));
+  /* 工作类 */
+  RT.cell('工作台 / 案件 / 客户 / 对话（处理客人和案件）', isOwn ? '❌' : '✅', RT.yn(canDo('work')));
+  /* 活动价 / 套餐：只有管理者新增 / 编辑 / 结束，一般室长只看 */
+  RT.cell('项目库：活动价 / 套餐 新增、编辑、结束', isMgr ? '✅' : (isGen ? '👁' : '❌'), isOwn ? '❌' : (canDo('promo') ? '✅' : '👁'));
+  /* 数据范围：只看到本诊所 */
+  if(canDo('work')){
+    var cid = a.clinicId || 'C1';
+    var bad = CASE_ITEMS.filter(function(c){ return c.clinicId && c.clinicId!==cid; }).length;
+    RT.cell('案件 / 客户范围：只有本诊所（'+cid+'）', '✅', RT.yn(bad===0 && CASE_ITEMS.length>0), '本诊所案件 '+CASE_ITEMS.length+' 个，别家 '+bad+' 个');
+    var shown = (document.getElementById('case-rows')||document.body).innerText;
+    /* 联系方式：IN 显示完整号码 */
+    var mp = typeof maskPhone==='function' ? maskPhone('+62 812-5555-0101') : '';
+    RT.cell('客人联系方式：完整显示（IN 不遮蔽）', '✅', RT.yn(!/\*/.test(clientPhoneOf((CASE_ITEMS[0]||{}).name)||'') ), 'KR 端遮蔽示例：'+mp);
+  }
+  /* 结束案件（付定金前、已到店、IN 一般室长 / 管理者；老板和 KR 不行） */
+  var probe = {subState:'arrived', stage:'waiting', clientName:'rt'};
+  var fake = null;
+  if(canDo('work')){
+    fake = (typeof ST!=='undefined' && ST.newRes) ? (function(){ var c = ST.newRes('RT-end'); ST.arrive(c); return c; })() : null;
+  }
+  var can = false;
+  if(fake) can = !!canEndCase(fake); else { var a2 = currentAccount(); can = !!a2 && a2.role.indexOf('kr_')!==0 && a2.role!=='owner' && canDo('work'); }
+  RT.cell('案件页［结束案件］（已到店、付定金前）', isOwn ? '❌' : '✅', RT.yn(can), fake ? '用测试案件 '+fake.caseNo : '（按函数判断）');
+  /* ---- 以下是行为级探测（真的渲染页面看按钮 / 调函数） ---- */
+  var T = function(f){ try{ return f(); }catch(e){ return 'ERR '+e; } };
+  if(canDo('work')){
+    /* 项目库页面：新增项目 / 活动价 / 套餐按钮 */
+    var pl = T(function(){ var el = document.getElementById('in-projectlibrary'), r = {}; setProjLibTab('IN'); r.np = /新增项目/.test(el.textContent) && !el.querySelector('button[disabled]:not(.x)') ; var add = [].slice.call(el.querySelectorAll('button')).filter(function(b){ return /新增项目/.test(b.textContent); })[0]; r.np = !!add && !add.disabled; setProjLibTab('promo'); r.promo = /新增活动价/.test(el.textContent); setProjLibTab('pkg'); r.pkg = /新增套餐/.test(el.textContent); setProjLibTab('KR'); var ka = [].slice.call(el.querySelectorAll('button')).filter(function(b){ return /新增项目/.test(b.textContent); })[0]; r.travelAdd = !!ka && !ka.disabled; return r; });
+    RT.cell('项目库页面：本地项目［新增项目］（本地项目由印尼室长维护）', '✅', RT.yn(pl.np), JSON.stringify(pl));
+    RT.cell('项目库页面：赴韩项目只读（IN 不能新增 / 编辑赴韩项目）', '👁', pl.travelAdd ? '✅' : '👁');
+    RT.cell('项目库页面：［新增活动价］［新增套餐］按钮', isMgr ? '✅' : '👁', (pl.promo && pl.pkg) ? '✅' : '👁');
+    /* 案例库页面：上传 / 编辑入口 */
+    var lb = T(function(){ renderLibrary(); var t = document.getElementById('in-library').textContent; return {up:/上传案例|新增案例|＋ ?上传|\+ ?上传/.test(t)}; });
+    RT.cell('案例库页面：上传案例入口', '—', RT.yn(lb.up), 'Case Library 规格只写「印尼室长维护」，没写管理者 / 一般室长的差别');
+    var lb2 = T(function(){ return {krCase:libCaseCanEdit({source:'travel', by:'KR'}), inCase:libCaseCanEdit({source:'travel', by:'IN'}), add:libCaseCanAdd()}; });
+    RT.cell('案例库：编辑 / 删除 KR 的案例（对方只读）', '❌', RT.yn(lb2.krCase===true));
+    RT.cell('案例库：新增 / 编辑 / 删除 IN 自己的案例', '✅', RT.yn(lb2.inCase===true && lb2.add===true));
+    /* 退款服务 / 置换：客人有可退批次时案件页顶部出现退款服务条 */
+    var rf = T(function(){ var names = CLIENTS.map(function(c){ return c.name; }); var hit = null; names.forEach(function(n){ if(!hit && refundableBatches(n).length) hit = n; }); if(!hit) return 'nodata'; var c = ST.newRes('RT-refund'); ST.arrive(c); c.name = hit; return /退款服务/.test(refundServiceBarHtml(c)); });
+    RT.cell('案件页［退款服务］条（客人有可退批次时）', '✅', rf==='nodata' ? '（无数据）' : RT.yn(rf===true), 'IN-CASE-02 没按 A1 / A2 区分');
+    /* 通知：当天上班的 IN 室长才收案件事件 */
+    var wk = T(function(){ return workingIN().indexOf(ME_NAME)>-1; }), off = T(function(){ return isOffOn(ME_NAME, todayStr()); });
+    RT.cell('通知：当天上班才收案件事件 / 设定更新（今天不 OFF 时收得到）', off===true ? '❌' : '✅', RT.yn(wk===true), '今天 OFF = '+off+'；workingIN = '+JSON.stringify(T(function(){ return workingIN(); })));
+  } else {
+    RT.cell('工作类页面：直接进入（nav 到案件页）被挡回自己的首页', '✅', '✅', '见下方「网址直入」实测');
+  }
+  if(canDo('work')){
+    var tk = T(function(){ return inTodoItems().map(function(x){ return x.kind; }); });
+    RT.cell('工作台待办栏：IN 待办（诊疗方案已到 / 待收款 / 转告客人 / 帮忙预约…）', '✅', RT.yn(Array.isArray(tk) && tk.length>0), '待办 '+(Array.isArray(tk)?tk.length:tk)+' 条；种类 '+JSON.stringify(Array.isArray(tk)?Array.from(new Set(tk)):tk));
+    RT.cell('工作台待办栏：没有 KR 才有的待办（确认出报告时间 / 发送诊疗方案 / 上传面诊内容）', '✅', RT.yn(Array.isArray(tk) && !tk.some(function(k){ return ['eta','send','upload','waitdir'].indexOf(k)>-1; })));
+  }
+  if(canDo('work')){
+    var mm = T(function(){ var d = todayStr(), r = {}; CAL_MEMOS.push({id:'rt-m1', date:d, type:'备忘', scope:'公开', role:'室长', person:'', author:'别人 室长', text:'RT公开'}); CAL_MEMOS.push({id:'rt-m2', date:d, type:'备忘', scope:'私人', role:'室长', person:'', author:'别人 室长', text:'RT私人'}); CAL_MEMOS.push({id:'rt-m3', date:d, type:'备忘', scope:'私人', role:'室长', person:'', author:ME_NAME, text:'RT我的私人'});
+      r.seePublic = memosOn(d).some(function(m){ return m.id==='rt-m1'; }); r.seePrivateOther = memosOn(d).some(function(m){ return m.id==='rt-m2'; }); r.seePrivateMine = memosOn(d).some(function(m){ return m.id==='rt-m3'; });
+      document.getElementById('memo-overlay').classList.remove('open'); openMemoModal('rt-m1'); r.editOther = document.getElementById('memo-overlay').classList.contains('open'); closeMemoModal(); openMemoModal('rt-m3'); r.editMine = document.getElementById('memo-overlay').classList.contains('open'); closeMemoModal();
+      for(var i = CAL_MEMOS.length-1; i>=0; i--) if(/^rt-m/.test(CAL_MEMOS[i].id)) CAL_MEMOS.splice(i,1); return r; });
+    RT.cell('日历 memo：看到别人写的「公开」memo', '✅', RT.yn(mm.seePublic));
+    RT.cell('日历 memo：看不到别人写的「私人」memo；自己的私人看得到', '✅', RT.yn(!mm.seePrivateOther && mm.seePrivateMine));
+    RT.cell('日历 memo：能改自己写的 / 不能改别人写的', '✅', RT.yn(mm.editMine && !mm.editOther), JSON.stringify(mm));
+  }
+  if(isOwn){
+    var on = T(function(){ var a0 = NOTIFS.length, old = ME_NAME; ME_NAME = 'A1 室长'; var nSys = pushNotif('系统','RT 系统类通知',{names:IN_COORDINATORS.slice(), silent:true, level:'info'}); var nCase = pushNotif('预约','RT 案件通知（老板不该收）',{names:IN_COORDINATORS.slice(), silent:true}); ME_NAME = old; var r0 = {sys:nSys.recipients.indexOf(old)>-1, cas:nCase.recipients.indexOf(old)>-1, shownInBell:myNotifs().some(function(n){ return n.id===nSys.id; })}; NOTIFS.splice(0, NOTIFS.length-a0); return r0; });
+    RT.cell('通知：收别人触发的「系统」类（设定更新、账号加购 / 退订）', '✅', RT.yn(on.sys && on.shownInBell), JSON.stringify(on));
+    RT.cell('通知：收案件类通知', '❌', RT.yn(on.cas));
+  }
+  if(!isOwn && canDo('work')){
+    var osys = T(function(){ var a0 = NOTIFS.length; var n0 = pushNotif('系统','RT 系统类通知',{names:IN_COORDINATORS.slice(), silent:true, level:'info'}); var ncase = pushNotif('预约','RT 案件通知',{silent:true}); var own = clinicAccounts().filter(function(x){ return x.role==='owner' && x.name; }).map(function(x){ return x.name; }); var r0 = {sysOwner:own.length ? own.every(function(nm){ return n0.recipients.indexOf(nm)>-1; }) : null, caseOwner:own.some(function(nm){ return ncase.recipients.indexOf(nm)>-1; })}; NOTIFS.splice(0, NOTIFS.length-a0); return r0; });
+    RT.cell('通知：老板收「系统」类、不收案件通知（由本账号触发时看老板的收件人）', osys.sysOwner===null ? '—' : '✅', osys.sysOwner===null ? '（本诊所没有老板账号）' : RT.yn(osys.sysOwner && !osys.caseOwner), JSON.stringify(osys));
+  }
+  if(canDo('accounts')){
+    var ac = T(function(){ openAdminPage('accounts'); var t = document.getElementById('in-admin').textContent; return {reset:/重设密码/.test(t), buy:/加购账号|加购/.test(t), unsub:/退订/.test(t)}; });
+    RT.cell('账号管理页：［重设密码］［加购账号］［退订］', '✅', RT.yn(ac.reset && ac.buy && ac.unsub), JSON.stringify(ac));
+    var needCode = T(function(){ BUY = {role:'manager', qty:1}; var r = buyNeedsOwnerCode(); return r; });
+    RT.cell('加购「管理者账号」需要老板验证码', isMgr ? '✅' : '❌', RT.yn(needCode===true), isOwn ? '老板自己加购不需要验证码' : '管理者加购要老板收验证码确认');
+  }
+  if(canDo('clinic')){
+    var cs = T(function(){ openAdminPage('clinic'); var t = document.getElementById('in-admin').textContent; return {save:/保存/.test(t), ratioReadonly:/赴韩定金比例/.test(t)}; });
+    RT.cell('诊所设定页：可保存；赴韩定金比例只读（不能由诊所改）', '✅', RT.yn(cs.save), JSON.stringify(cs));
+  }
+  return RT.R;
+};
+
+/* ---------------- KR 端（代表院长 KO1 / 管理者 KM1·KM2 / 一般室长 KC1·KC2 / 一般院长 KD1） ---------------- */
+RT.runKr = function(){
+  var a = currentAccount(), role = a.role, hid = krHospitalIdOfMe(), me = a.name;
+  var isOwn = role==='kr_owner', isMgr = role==='kr_manager', isGen = role==='kr_general', isDir = role==='kr_director';
+  var coord = isMgr || isGen, dirLike = isOwn || isDir, admin = isOwn || isMgr;
+  var T = function(f){ try{ return f(); }catch(e){ return 'ERR '+e; } };
+  var L = RT.navLabels();
+  RT.cell('侧栏：工作台 / 案件列表 / 通知中心', '✅', RT.yn(RT.has(L, ['工作台','案件管理','通知中心'])));
+  RT.cell('侧栏：客人管理（一般院长没有；代表院长可看，只读）', (coord || isOwn) ? '✅' : '❌', RT.yn(L.indexOf('客人管理')>-1));
+  RT.cell('侧栏 / 页面：经营数据、账号管理、医院设定、操作日志', admin ? '✅' : '❌', RT.yn(RT.has(L, ['经营数据','账号管理','医院设定','操作日志'])));
+  RT.cell('侧栏 / 页面：院长管理（院长名单、停用）', admin ? '✅' : '❌', RT.yn(L.indexOf('院长管理')>-1));
+  RT.cell('侧栏 / 页面：赴韩项目库（维护）', coord ? '✅' : '❌', RT.yn(L.indexOf('项目库')>-1));
+  RT.cell('侧栏 / 页面：案例库（院长 / 代表院长也能看，只读）', '✅', RT.yn(L.indexOf('案例库')>-1));
+  var lib0 = T(function(){ var d0 = DEMO_ROLE; DEMO_ROLE = 'kr'; var r0 = {add:libCaseCanAdd(), own:libCaseCanEdit({source:'travel', by:'KR'}), inCase:libCaseCanEdit({source:'travel', by:'IN'}), inLocal:libCaseCanEdit({source:'local', by:'IN'})}; DEMO_ROLE = d0; return r0; });
+  RT.cell('案例库：新增案例（KR 室长 / 管理者；院长 / 代表院长只读）', coord ? '✅' : '❌', RT.yn(lib0.add===true), '来源标 KR，可选负责院长');
+  RT.cell('案例库：编辑 / 删除自己（KR）的案例', coord ? '✅' : '❌', RT.yn(lib0.own===true));
+  RT.cell('案例库：编辑 / 删除 IN 的案例（对方只读）', '❌', RT.yn(lib0.inCase===true || lib0.inLocal===true));
   RT.cell('侧栏：短信发送记录', '—', RT.yn(L.indexOf('短信发送记录')>-1));
   var bell = !!document.querySelector('[onclick*="toggleBellDropdown"], [onclick*="krToggleBell"], .icon-btn[aria-label="通知"]'), chat = !!document.querySelector('[onclick*="krOpenDrawer"], [onclick*="openKrDrawer"], .icon-btn[aria-label="对话"]');
   RT.cell('顶部铃铛 + 对话', '✅', RT.yn(bell && chat), 'bell='+bell+' chat='+chat);
