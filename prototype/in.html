@@ -379,19 +379,6 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
   </div>
 </div>
 
-<!-- ============ 意向项目选择 MODAL（2026-09-29 新增，基础资料tab） ============ -->
-<div class="modal-overlay" id="intention-project-overlay" onclick="if(event.target===this) closeIntentionPickerModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="font-size:15px;font-weight:700;">选择意向项目</span>
-      <span style="cursor:pointer;color:var(--slate);" onclick="closeIntentionPickerModal()">✕</span>
-    </div>
-    <div id="intention-picker-tabs" style="display:flex;gap:8px;margin-bottom:12px;"></div>
-    <div id="intention-picker-list" style="max-height:360px;overflow-y:auto;"></div>
-    <button class="btn-primary" style="width:100%;margin-top:14px;" onclick="closeIntentionPickerModal()">完成</button>
-  </div>
-</div>
-
 <!-- ============ 取消接待确认 MODAL（2026-09-29 新增，基础资料tab · Case ID生成前） ============ -->
 <div class="modal-overlay" id="cancel-intake-overlay" onclick="if(event.target===this) closeCancelIntakeModal()">
   <div class="modal-box">

@@ -38,7 +38,6 @@
     if(o.consult===true || o.consult==='reuse'){ setNeedsConsult(o.consult); } else setNeedsConsult(false);
     if(o.consult===true || o.consult==='reuse'){
       c.hospitalId = c.hospitalId || caseHospitalId(c); if(o.director || !c.director) setCaseDirector(o.director || ST.freeDirector(c));
-      (o.intents || ['假体隆鼻']).forEach(function(n){ var p = intentSurgeryProjects(c).filter(function(x){ return x.name===n; })[0]; if(p && !(c.intentionProjects||[]).some(function(it){ return it.projectId===p.id; })) toggleIntentionProject(p.id); });
     }
     renderCaseBody(c);
     var b = document.getElementById('cf-expectation'); if(b) b.value = c.expectation;
@@ -246,7 +245,7 @@
   });
   ST.def('B12','本地案件中途增加面诊',function(){
     var c = ST.localCase('B12'); addConsult(); ST.ok(c.consultRequested && c.consultStatus==='awaiting_payment', '增加面诊后应待缴费');
-    ST.ok(ST.hasLog(c, /发起"增加面诊"/), '缺记录'); var t = consultTabHtml(c); ST.ok(/意向项目/.test(t) && /预算/.test(t), '增加面诊页应有意向项目 / 预算（同基础资料）');
+    ST.ok(ST.hasLog(c, /发起"增加面诊"/), '缺记录'); var t = consultTabHtml(c); ST.ok(!/意向项目/.test(t) && /预算/.test(t), '增加面诊页应有意向项目 / 预算（同基础资料）');
   });
 
   /* ================= C 面诊 / F 新流程 ================= */
@@ -1672,7 +1671,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R32a','CMD-1019-01：基础资料顺序 / 苦恼按部位卡片 / 必填校验 / 不面诊选填 / 旧案件转换（A1 分页；案件留给 KM1 看面诊 tab）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
-    var c = ST.newRes('R32a'); ST.arrive(c); var html = materialsCardHtml(c), ix = function(t){ return html.indexOf(t); };
+    var c = ST.newRes('R32a'); ST.arrive(c); setNeedsConsult(true); /* 选了面诊需求才展开苦恼（CMD-1019-02） */ var html = materialsCardHtml(c), ix = function(t){ return html.indexOf(t); };
     ST.ok(ix('关联之前案件')>-1 && ix('关联之前案件') < ix('메타뷰') && ix('메타뷰') < ix('面诊需求') && ix('面诊需求') < ix('苦恼 <') && ix('苦恼 <') < ix('希望预期') && ix('希望预期') < ix('预算') && ix('预算') < ix('上传附件') && ix('上传附件') < ix('医美史'), '顺序：关联之前案件 → 메타뷰 → 面诊需求 → 苦恼 → 希望预期 → 预算 → 上传附件 → 医美史');
     ST.ok(!/上传照片|上传视频<|id="cf-concern"/.test(html), '没有单独的「上传照片 / 上传视频」行和总的苦恼文字格');
     toggleConcernPart('eyes'); toggleConcernPart('nose'); var fm = concernFormHtml(c); ST.ok((c.concerns||[]).length===2 && /眼睛/.test(fm) && /鼻子/.test(fm) && /上方（眼睛往下看）/.test(fm) && /下方（仰拍鼻孔）/.test(fm) && /1200×1600/.test(fm), '选眼睛 + 鼻子 → 两张卡片，角度格子不同（眼睛 5 个、鼻子 6 个）');
@@ -1697,6 +1696,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件（已缴面诊费的面诊案件才在 KR 看得到）')) return; krShowCase(r.clinicId, r.id); krSetCaseTab('consult'); var t = document.getElementById('krcase-body').innerText;
     ST.ok(/客人资料（按部位）/.test(t) && /希望预期/.test(t) && /预算/.test(t) && /眼睛/.test(t) && /苦恼说明/.test(t) && /正面/.test(t) && /左 45 度/.test(t) && t.indexOf('希望预期') < t.indexOf('眼睛'), 'KR 面诊 tab：希望预期 / 预算在上，下面是按部位卡片（说明 / 视频 / 各角度照片）');
     var photo = [].slice.call(document.querySelectorAll('#krcase-body div')).filter(function(e){ return /concernZoom/.test(e.getAttribute('onclick')||''); })[0]; if(ST.ok(!!photo, '照片格子可点开放大')){ photo.click(); var zo = document.getElementById('concern-zoom-overlay'); ST.ok(zo && zo.classList.contains('open') && /眼睛/.test(zo.innerText), '点开放大'); zo.classList.remove('open'); }
+  });
+  ST.def('R33a','CMD-1019-02：没有意向项目栏 / 面诊需求选了才展开苦恼与希望预期（切换保留内容）/ 院长按苦恼部位排序 / 项目→部位对应（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.newRes('R33a'); ST.arrive(c); var h0 = materialsCardHtml(c);
+    ST.ok(!/意向项目/.test(h0) && typeof openIntentionPickerModal==='undefined' && !document.getElementById('intention-project-overlay'), '基础资料没有「意向项目」栏（含添加按钮和补充说明），选择弹窗也拿掉了');
+    ST.ok(/选择面诊需求后填写苦恼与希望预期/.test(h0) && !/选部位/.test(h0) && !/cf-expectation/.test(h0), '没选面诊需求：只有灰字，苦恼 / 希望预期没展开');
+    setNeedsConsult(true); var h1 = materialsCardHtml(c), ix = function(t){ return h1.indexOf(t); };
+    ST.ok(/选部位/.test(h1) && /cf-expectation/.test(h1) && ix('面诊需求') < ix('院长') && ix('院长') < ix('选部位') && ix('选部位') < ix('希望预期'), '选面诊：面诊需求 → 院长 → 苦恼 → 希望预期');
+    /* 内容保留 */
+    toggleConcernPart('eyes'); saveConcernDesc('eyes', '眼皮松弛'); mockUploadConcern('eyes', 'video'); c.expectation = '自然'; setNeedsConsult(false); var h2 = materialsCardHtml(c);
+    ST.ok(/选部位/.test(h2) && !/院长介绍/.test(h2) && /选填/.test(h2), '切到不面诊：苦恼 / 希望预期还在，没有院长，照片 / 视频选填'); setNeedsConsult(true);
+    ST.ok(c.concerns.length===1 && c.concerns[0].desc==='眼皮松弛' && !!c.concerns[0].video && c.expectation==='自然' && !/选填/.test(concernFormHtml(c).replace(/苦恼说明[^<]*/g, '')), '切回面诊：已填内容都还在，照片 / 视频又变必填');
+    /* 项目 → 部位 */
+    var P = function(n){ return projectPartsOf({name:n}); };
+    ST.ok(P('埋线双眼皮')[0]==='eyes' && P('开内眼角')[0]==='eyes' && P('眼袋去除（内切）')[0]==='eyes' && P('假体隆鼻')[0]==='nose' && P('鼻翼缩小')[0]==='nose' && P('鼻综合（假体+鼻尖）')[0]==='nose' && P('颧骨缩小')[0]==='face' && P('下颌角整形')[0]==='face' && P('下巴假体 / 颏成形')[0]==='face' && P('面部拉皮')[0]==='face' && P('自体脂肪移植（全脸）')[0]==='face' && P('假体隆胸')[0]==='body' && P('腹部吸脂')[0]==='body' && P('大腿吸脂')[0]==='body', '项目名 → 部位的默认对应');
+    ST.ok(projectPartsOf({name:'假体隆鼻', parts:['face']})[0]==='face' && projectPartsOf({name:'假体隆鼻', parts:['face']}).length===1, '项目自己勾选过的 parts 优先于默认对应');
+    /* 院长排序 */
+    var hid = caseHospitalId(c);
+    var names = hospitalDirectors(hid).filter(function(x){ return x.active; }).map(function(x){ return x.name; }), pos = function(html, n){ return html.indexOf('<div style="font-size:14px;font-weight:700;">'+n); };
+    c.concerns = []; toggleConcernPart('nose'); var hn = directorCardsHtml(c), pm = function(n){ return docPartMatch(hid, hospitalDirectors(hid).filter(function(x){ return x.name===n; })[0], c); };
+    var kd = names.filter(function(n){ return pm(n).parts.indexOf('nose')>-1; }), others = names.filter(function(n){ return kd.indexOf(n)<0; }), offOf = function(n){ var o = directorTodayOff(hid, n); return !!(o && o.full); };
+    if(kd.length && others.length && !offOf(kd[0]) && !offOf(others[0])) ST.ok(pos(hn, kd[0]) < pos(hn, others[0]), '客人选鼻子：擅长鼻部的院长（'+kd.join('、')+'）排前面');
+    else ST.ok(true, '（今天有院长整天 OFF，跳过「鼻子排前面」的位置断言）');
+    ST.ok(/擅长客人苦恼部位的排前面/.test(hn) && /★ 擅长客人苦恼部位（鼻子）/.test(hn) || kd.every(offOf), '提示文字改成「擅长客人苦恼部位的排前面」，标签写出对到的部位');
+    c.concerns = []; toggleConcernPart('face'); var hf = directorCardsHtml(c), fc = names.filter(function(n){ return pm(n).parts.indexOf('face')>-1; });
+    if(fc.length && names.length>1 && !offOf(fc[0]) && !names.filter(function(n){ return fc.indexOf(n)<0 && !offOf(n); }).some(function(n){ return pos(hf, n) < pos(hf, fc[0]); })) ST.ok(true, '客人选面部：擅长面部的院长排前面'); else if(!fc.length || offOf(fc[0])) ST.ok(true, '（今天擅长面部的院长整天 OFF，跳过）'); else ST.ok(false, '客人选面部：擅长面部的院长没排前面');
+    c.concerns = []; var h3 = directorCardsHtml(c); ST.ok(names.every(function(n){ return pos(h3, n)>-1; }), '没选部位 / 对不到：全部院长照原顺序列出');
+    var oldC = ST.newRes('R33aOld'); oldC.intentionProjects = [{projectId:'x', name:'假体隆鼻', origin:'KR'}]; ST.arrive(oldC); ST.ok(!/意向项目|假体隆鼻/.test(materialsCardHtml(oldC)) && !/意向项目/.test(intentionInfoHtml(oldC)) && oldC.intentionProjects.length===1, '旧案件已存的意向项目不删，只是不显示');
   });
   ST.def('R22b','KM1：案件区块三组 + 抬头 + 行（项目类型｜内容｜地点｜状态｜备注｜操作）；所需术后管理一项一框；冲突询问弹窗两个按钮；增加项目里没有术后管理清单（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

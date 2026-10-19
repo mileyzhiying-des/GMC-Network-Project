@@ -2137,17 +2137,8 @@ function relatedTabHtml(c){ /* 关联只往前：只显示本案件关联的旧�
     '<div style="font-size:11px;color:var(--muted);margin-top:12px;">只读：不改变被关联案件的状态、财务、结局，也不会在它的 Timeline 里新增记录。</div></div>';
 }
 
-/* 意向项目一行 / 预算一行：基础资料和「增加面诊」共用（CMD-1013-13 二·1） */
-function intentRowHtml(c){
-  var intentionChips = (c.intentionProjects||[]).map(function(it,idx){
-    return '<span class="chip active" style="display:inline-flex;align-items:center;gap:4px;">'+it.name+'<span style="cursor:pointer;" onclick="removeIntentionProject('+idx+');event.stopPropagation();">✕</span></span>';
-  }).join('');
-
-  return !intentKrAllowed(c) ? '' : '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">意向项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+
-      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;">'+intentionChips+'<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="openIntentionPickerModal()">+ 添加</button></div>'+
-      '<input type="text" id="cf-intention-note" placeholder="补充说明…" value="'+(c.intentionNote||'')+'" oninput="saveMaterialsDraft(\'intentionNote\',this.value)">'+
-      '</div></div>';
-}
+/* 预算一行：基础资料和「增加面诊」共用（CMD-1013-13 二·1；意向项目一行已在 CMD-1019-02 拿掉） */
+function intentRowHtml(c){ return ''; } /* CMD-1019-02：基础资料不再有「意向项目」，项目由面诊后院长 / 室长推荐（旧案件已存的意向项目不删，只是不显示） */
 function budgetRowHtml(c){
   return '<div class="case-field-row"><span class="fk">预算（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:8px;">'+
       '<span style="font-size:12px;color:var(--muted);">Rp</span><input type="number" id="cf-budget-min" placeholder="最低" value="'+(c.budgetMin||'')+'" style="width:120px;" oninput="saveBudgetDraft(\'budgetMin\',this.value)">'+
@@ -2265,6 +2256,12 @@ function concernBlockHtml(c, o){
   var budgetText = (c.budgetMin||c.budgetMax) ? (formatCurrency(c.budgetMin||0,'IDR')+' ～ '+(c.budgetMax ? formatCurrency(c.budgetMax,'IDR') : '不限')) : '—';
   return '<div style="font-size:13px;margin-bottom:4px;"><span style="color:var(--muted);font-size:12px;">希望预期　</span>'+(cesc(c.expectation||'') || '—')+'</div><div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">预算　</span>'+budgetText+'</div>'+concernCardsHtml(c, o);
 }
+/* 面诊需求选了才展开苦恼 + 希望预期；没选只显示灰字。切换面诊 / 不面诊时已填内容保留（只是照片 / 视频是否必填变了） */
+function consultChosen(c){ return c.needsConsult===true || c.needsConsult===false || c.needsConsult==='reuse'; }
+function concernExpectHtml(c){
+  if(!consultChosen(c)) return '<div class="case-field-row" style="border-bottom:none;"><span class="fk"></span><div style="flex-grow:1;font-size:12px;color:var(--muted);">选择面诊需求后填写苦恼与希望预期</div></div>';
+  return concernFormHtml(c)+'<div class="case-field-row"><span class="fk">希望预期 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-expectation" placeholder="客人希望达到的效果…" value="'+cesc(c.expectation||'')+'" oninput="saveMaterialsDraft(\'expectation\',this.value)"></div>';
+}
 function materialsCardHtml(c){
   syncDirectorChoice(c);
   var metaviewText = c.metaviewStatus==='ready'
@@ -2283,16 +2280,13 @@ function materialsCardHtml(c){
     ((ci0 && !ci0.overdue && ci0.newHistory) ? '<div style="font-size:11px;color:var(--terracotta);margin-top:6px;">有新增医美史，建议面诊（默认面诊并付费，室长可以改）</div>' : '')+
     ((ci0 && !ci0.overdue && !ci0.newHistory) ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">距原案件报告日期（'+ci0.reportDate+'）1个月内：可面诊（默认免除面诊费）/ 不面诊 / 沿用原诊疗方案</div>' : '');
 
-  var intentRow = intentRowHtml(c);
   return '<div class="card" style="padding:22px 24px;">'+
     resumeBannerHtml(c)+
     linkRowHtml(c)+
     '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
     directorRowHtml(c)+
-    intentRow+ /* 院长 / 意向项目跟在面诊需求后面（只有选面诊才出现） */
-    concernFormHtml(c)+
-    '<div class="case-field-row"><span class="fk">希望预期 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-expectation" placeholder="客人希望达到的效果…" value="'+cesc(c.expectation||'')+'" oninput="saveMaterialsDraft(\'expectation\',this.value)"></div>'+
+    concernExpectHtml(c)+ /* CMD-1019-02：苦恼 / 希望预期在面诊需求下面，选了面诊 / 不面诊才展开 */
     budgetRowHtml(c)+
     '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return f.label; }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>'+
     caseBeautyRowHtml(c).replace('<div class="case-field-row"', '<div class="case-field-row" style="border-bottom:none;"', 1)+
@@ -2324,7 +2318,7 @@ function intentionInfoHtml(c){
     return '<span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);margin-right:4px;">'+it.name+'</span>';
   }).join('') || '<span style="color:var(--muted);">—</span>';
   var budgetText = (c.budgetMin||c.budgetMax) ? (formatCurrency(c.budgetMin||0,'IDR')+' ～ '+(c.budgetMax?formatCurrency(c.budgetMax,'IDR'):'不限')) : '—';
-  var intentLine = !intentKrAllowed(c) ? '' : '<div class="case-field-row"><span class="fk">意向项目</span><div style="flex-grow:1;font-size:13px;">'+chips+(c.intentionNote?'<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+c.intentionNote+'</div>':'')+'</div></div>';
+  var intentLine = true ? '' : '<div class="case-field-row"><span class="fk">意向项目</span><div style="flex-grow:1;font-size:13px;">'+chips+(c.intentionNote?'<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+c.intentionNote+'</div>':'')+'</div></div>';
   return intentLine+
     '<div class="case-field-row"><span class="fk">预算</span><span style="flex-grow:1;font-size:13px;">'+budgetText+'</span></div>';
 }
@@ -2405,8 +2399,29 @@ function hospitalDirectorSelectHtml(c, onHospital, onDirector, selStyle){
   return {hosp:'', dir:dirSel, hid:hid, hl:null, lk:lk};
 }
 
-/* IN 选院长的介绍卡（KR-DOC-01 第 2 节）：照片 + 姓名 + 职称 + 经历 + 认证 + 擅长项目；全部院长都列出（停用的不列），擅长客人意向项目的排前面并标示 */
-function docIntentMatch(hid, dr, c){
+/* 赴韩施术项目 → 苦恼部位（CMD-1019-02）：项目自己的 `parts`（KR 项目库编辑里勾选）优先；没勾过的按项目名拟一版默认对应。部位 key 同 CONCERN_PARTS */
+var PROJECT_PART_RULES = [
+  ['eyes', /眼|双眼皮|眼袋|提眉|眉/],
+  ['nose', /鼻/],
+  ['mouth', /嘴|唇|口角|人中/],
+  ['body', /胸|吸脂|腹|大腿|手臂|臀|腰|身体/],
+  ['face', /颧|下颌|下巴|颏|拉皮|脂肪移植|轮廓|面部|苹果肌|全脸|额|太阳穴/]
+];
+function projectPartsOf(p){
+  if(!p) return [];
+  if(Array.isArray(p.parts)) return p.parts;
+  var out = []; PROJECT_PART_RULES.forEach(function(r){ if(r[1].test(p.name||'')) out.push(r[0]); });
+  return out;
+}
+/* 这位院长的擅长项目覆盖了客人选的哪些苦恼部位：返回 {parts:[部位key], specs:[擅长项目名]} */
+function docPartMatch(hid, dr, c){
+  var h = HOSPITAL_DATA[hid] || {projects:[]}, want = (c.concerns||[]).map(function(x){ return x.part; }), parts = [], specs = [];
+  (dr.specialties||[]).forEach(function(sn){ var p = (h.projects||[]).filter(function(x){ return x.name===sn; })[0], ps = projectPartsOf(p || {name:sn}); var hit = ps.filter(function(k){ return want.indexOf(k)>-1; }); if(hit.length){ specs.push(sn); hit.forEach(function(k){ if(parts.indexOf(k)<0) parts.push(k); }); } });
+  return {parts:parts, specs:specs};
+}
+/* IN 选院长的介绍卡（KR-DOC-01 第 2 节）：照片 + 姓名 + 职称 + 经历 + 认证 + 擅长项目；全部院长都列出（停用的不列），擅长客人苦恼部位的排前面并标示（CMD-1019-02，取代按意向项目）*/
+function docIntentMatch(hid, dr, c){ return docPartMatch(hid, dr, c).specs; }
+function docIntentMatchOld(hid, dr, c){
   var h = HOSPITAL_DATA[hid] || {projects:[]}, catOf = function(n){ var p = (h.projects||[]).filter(function(x){ return x.name===n; })[0]; var cc = p && (PROJECT_CATEGORIES[p.categoryId] || KR_CATEGORIES[p.categoryId]); return cc ? cc.label : ''; };
   var intents = (c.intentionProjects||[]).map(function(it){ var p = projById(it.projectId); var cc = p && PROJECT_CATEGORIES[p.categoryId]; return {name:it.name, cat:cc ? cc.label : ''}; });
   return (dr.specialties||[]).filter(function(sn){ return intents.some(function(it){ return it.name===sn || (it.cat && catOf(sn)===it.cat); }); });
@@ -2433,15 +2448,15 @@ function directorCardHtml(dr, hid, c, pickable, selected){
   var ph = directorAvatarHtml(dr, 54);
   var m = docIntentMatch(hid, dr, c), li = function(arr){ return (arr||[]).map(function(x){ return '<div>'+(x.when?x.when+'：':'')+(x.zh||x.ko)+'</div>'; }).join(''); };
   return '<div '+(pickable?'onclick="setCaseDirector(\''+dr.name+'\')" ':'')+'style="display:flex;gap:12px;padding:12px;border:1px solid '+(selected?'var(--terracotta)':'var(--border)')+';border-radius:10px;background:'+(selected?'var(--terracotta-bg)':'#fff')+';'+(pickable?'cursor:pointer;':'')+((off&&off.full)?'opacity:.5;filter:grayscale(1);cursor:not-allowed;':'')+'margin-top:8px;">'+ph+
-    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;">'+dr.name+' <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(off ? ' <span class="status-pill" style="background:#F6DCDC;color:#C1454A;">'+(off.full?'今日 OFF':'今天 '+off.text+' OFF（韩）')+'</span>' : '')+(m.length?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人意向项目</span>':'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
+    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;">'+dr.name+' <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(off ? ' <span class="status-pill" style="background:#F6DCDC;color:#C1454A;">'+(off.full?'今日 OFF':'今天 '+off.text+' OFF（韩）')+'</span>' : '')+(m.length?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人苦恼部位（'+docPartMatch(hid, dr, c).parts.map(function(k){ return concernPartDef(k).label; }).join('、')+'）</span>':'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
     (dr.career&&dr.career.length ? '<div style="color:var(--slate2);margin-top:3px;">'+li(dr.career)+'</div>' : '')+(dr.certs&&dr.certs.length ? '<div style="color:var(--slate2);margin-top:3px;"><b>认证</b> '+dr.certs.map(function(x){ return x.zh||x.ko; }).join('；')+'</div>' : '')+
     (dr.specialties&&dr.specialties.length ? '<div style="margin-top:4px;"><b>擅长</b> '+dr.specialties.map(function(sn){ return '<span class="chip'+(m.indexOf(sn)>-1?' active':'')+'" style="cursor:inherit;">'+sn+'</span>'; }).join('')+'</div>' : '')+'</div></div>';
 }
 function directorCardsHtml(c){
   var hid = caseHospitalId(c); if(!hid) return '';
   var lk = directorLockInfo(c), list = hospitalDirectors(hid).filter(function(x){ return x.active; });
-  list = list.map(function(dr, i){ return {dr:dr, m:docIntentMatch(hid, dr, c).length, i:i}; }).sort(function(a,b){ return (b.m>0)-(a.m>0) || a.i-b.i; });
-  return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">院长介绍'+(lk?'（已锁定原院长）':'（点卡片选择；擅长客人意向项目的排前面）')+'</div>'+list.map(function(x){ return directorCardHtml(x.dr, hid, c, !lk, c.director===x.dr.name); }).join('')+'</div>';
+  list = list.map(function(dr, i){ var pm = docPartMatch(hid, dr, c), off = directorTodayOff(hid, dr.name); return {dr:dr, m:pm.parts.length, ms:pm.specs.length, off:!!(off && off.full), i:i}; }).sort(function(a,b){ return (a.off-b.off) || (b.m-a.m) || (b.ms-a.ms) || a.i-b.i; }); /* 整天 OFF 的灰色排后；擅长的部位对到越多越前；对不到照原顺序 */
+  return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">院长介绍'+(lk?'（已锁定原院长）':'（点卡片选择；擅长客人苦恼部位的排前面）')+'</div>'+list.map(function(x){ return directorCardHtml(x.dr, hid, c, !lk, c.director===x.dr.name); }).join('')+'</div>';
 }
 function directorRowHtml(c){
   if(c.needsConsult!==true) return '';
@@ -2453,15 +2468,10 @@ function directorRowHtml(c){
   return '<div class="case-field-row" style="border-bottom:none;align-items:flex-start;"><span class="fk" style="padding-top:9px;">院长 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+hint+directorCardsHtml(c)+'</div></div>';
 }
 
-/* 没选「面诊」时意向项目只能选本地项目（赴韩项目要先面诊）；选了「面诊」或「沿用原诊疗方案」才能选赴韩项目（CMD-1012-08 一·2） */
-function intentKrAllowed(c){ return c.needsConsult===true || c.needsConsult==='reuse'; }
+/* （CMD-1019-02 起意向项目已拿掉；函数留着给旧调用兜底，恒为 false） */
+function intentKrAllowed(c){ return false; }
 function setNeedsConsult(val){
   var c=getCurrentCase(); if(!c) return;
-  if(val!==true && val!=='reuse' && (c.intentionProjects||[]).length){ /* 未选面诊：意向项目整个栏位不出现，已选的提示后清空（CMD-1012-12 三·1，取代 08 的「只能选本地项目」） */
-    var names = c.intentionProjects.map(function(it){ return it.name; });
-    c.intentionProjects = [];
-    alert('没选「面诊」，不需要填意向项目，已清空：'+names.join('、'));
-  }
   var ci = continuationInfo(c);
   if(ci && ci.overdue && val!==true) return; /* 超过1个月：只能面诊 */
   c.needsConsult = val;
@@ -2675,7 +2685,7 @@ function addConsult(){
   c.needsConsult = true;
   c.consultRequested = true;
   c.consultStatus = 'awaiting_payment';
-  c.addConsultMode = true; /* 面诊 tab 用和基础资料选面诊同一套顺序：意向项目 / 预算 → 院长 → 面诊费 → 确认（CMD-1013-13 二·1） */
+  c.addConsultMode = true; /* 面诊 tab 用和基础资料选面诊同一套顺序：预算 → 院长 → 面诊费 → 确认（CMD-1013-13 二·1） */
   recordConsultFee(c); /* 选面诊：把当下的面诊费记进案件 */
   c.activeCaseTab = 'consult';
   var hl0 = hospitalLockInfo(c); if(hl0) c.hospitalId = hl0.hospitalId; else if(!c.hospitalId) c.hospitalId = caseHospitalId(c);
@@ -2823,8 +2833,8 @@ function consultTabHtml(c){
   var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(c.consultStatus==='awaiting_payment'){
     if(c.addConsultMode){ /* 本地案件［增加面诊］：同基础资料选面诊的顺序和组件 */
-      return wrap(consultFeeCardHtml(fee, '', '', c)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先填意向项目 / 预算，选院长，再缴费或免除面诊费，最后点确认</div>'+
-        intentRowHtml(c)+budgetRowHtml(c)+directorRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true)+sub);
+      return wrap(consultFeeCardHtml(fee, '', '', c)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先填预算，选院长，再缴费或免除面诊费，最后点确认</div>'+
+        budgetRowHtml(c)+directorRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true)+sub);
     }
     return wrap(consultFeeCardHtml(fee, '', '', c)+consultFeeFormHtml(c)+sub);
   }
@@ -5781,6 +5791,7 @@ function ensureProjNames(p){
 
 function setProjName(lang, v){ ensureProjNames(PROJ_EDIT)[lang] = v; }
 
+function projPartsToggle(key){ var p = PROJ_EDIT; if(!p) return; var cur = projectPartsOf(p).slice(), i = cur.indexOf(key); if(i>-1) cur.splice(i,1); else cur.push(key); p.parts = cur; renderProjEditModal(); }
 function saveProj(){
   var p = PROJ_EDIT; if(!p) return;
   var price = Number(p.price);

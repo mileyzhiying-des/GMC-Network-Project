@@ -1593,45 +1593,7 @@ function openCaseChatNewTab(id){
   openCaseNewTab(id, '&chat=open');
 }
 
-/* 意向项目选择弹窗（2026-09-29 新增）：赴韩/本地项目都能多选，选中即时存进 c.intentionProjects（快照 name+origin） */
-var INTENTION_PICKER_FILTER = 'KR';
-
-/* 意向项目只列赴韩手术项目（CMD-1013-02 一）：没有本地项目，也没有消肿管理 / 拆线 / 术后复诊检查 / 伤口护理这几类术后管理（韩国术后管理分类、同名项目都不列） */
-var INTENT_EXCLUDE_NAMES = ['术后消肿管理', '消肿管理', '术后管理', '拆线', '术后复诊检查', '术后复诊', '伤口护理'];
-function intentSurgeryProjects(c){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && (!c.hospitalId || p.hospitalId===c.hospitalId) && !isKrPostcareCat(p.categoryId) && INTENT_EXCLUDE_NAMES.indexOf(p.name)<0; }); }
-function openIntentionPickerModal(){
-  var c0 = getCurrentCase(); INTENTION_PICKER_FILTER = 'KR';
-  renderIntentionPickerModal();
-  document.getElementById('intention-project-overlay').classList.add('open');
-}
-
-function closeIntentionPickerModal(){ document.getElementById('intention-project-overlay').classList.remove('open'); }
-
-function renderIntentionPickerModal(){
-  var c = getCurrentCase(); if(!c) return;
-  document.getElementById('intention-picker-tabs').innerHTML = '<span style="font-size:11px;color:var(--muted);">只列赴韩手术项目</span>';
-  var catalog = intentSurgeryProjects(c);
-  document.getElementById('intention-picker-list').innerHTML = catalog.map(function(p){
-    var checked = (c.intentionProjects||[]).some(function(it){ return it.projectId===p.id; });
-    return '<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
-      '<input type="checkbox" onchange="toggleIntentionProject(\''+p.id+'\')" '+(checked?'checked':'')+'>'+
-      '<span style="flex-grow:1;">'+p.name+'</span></label>';
-  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>';
-}
-
-function toggleIntentionProject(projectId){
-  var c = getCurrentCase(); if(!c) return;
-  c.intentionProjects = c.intentionProjects || [];
-  var idx = c.intentionProjects.findIndex(function(it){ return it.projectId===projectId; });
-  if(idx>-1) c.intentionProjects.splice(idx,1);
-  else {
-    var p = projById(projectId); if(!p) return;
-    if(p.origin!=='KR' || INTENT_EXCLUDE_NAMES.indexOf(p.name)>-1) return;
-    c.intentionProjects.push({projectId:p.id, name:p.name, origin:p.origin});
-  }
-  renderIntentionPickerModal();
-  renderCaseBody(c);
-}
+/* 意向项目选择弹窗（CMD-1019-02 起整个拿掉：基础资料不再有意向项目，项目由面诊后院长 / 室长推荐） */
 
 function simulateMetaviewReady(){
   var c = getCurrentCase(); if(!c || c.metaviewStatus==='ready' || c.metaviewStatus==='checking') return;
@@ -1656,7 +1618,6 @@ function confirmMaterials(){
   if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测');
   concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   if(!expectationVal) missing.push('希望预期');
-  if(intentKrAllowed(c) && !(c.intentionProjects||[]).length) missing.push('意向项目');
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
   if(c.needsConsult!==true && c.needsConsult!==false && !(c.needsConsult==='reuse' && reusableReportSrc(c))) missing.push('面诊需求');
@@ -1758,7 +1719,6 @@ function editConcernField(field){
 function confirmConsultFee(){
   var c = getCurrentCase(); if(!c) return;
   if(!c.hospitalId || !c.director){ alert('请先选择院长'); return; }
-  if(c.addConsultMode && intentKrAllowed(c) && !(c.intentionProjects||[]).length){ alert('请先填意向项目（至少一个）'); return; }
   var d = feeDraft(c);
   if(d.locked && d.mode==='waive'){ alert('距原案件报告日期已超过1个月，不能免除面诊费'); return; }
   if(d.mode==='paid'){ markConsultPaid(); return; }
@@ -2843,6 +2803,7 @@ function renderProjEditModal(){
     inp('zh')+inp('ko')+inp('id')+
     '<div style="margin:6px 0 10px;"><button class="btn-ghost" style="font-size:11px;" onclick="projAiFillNames()">AI 翻译补全（演示）</button></div>'+
     specEdHtml('PROJ_EDIT', 'renderProjEditModal()', currencyOf(p.origin), p)+
+    (p.origin==='KR' && !p.local ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">对应苦恼部位</span><div style="flex-grow:1;display:flex;gap:6px;flex-wrap:wrap;">'+CONCERN_PARTS.map(function(pt){ var on = projectPartsOf(p).indexOf(pt.key)>-1; return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="projPartsToggle(\''+pt.key+'\')">'+(on ? '✓ ' : '')+pt.label+'</button>'; }).join('')+'<div style="width:100%;font-size:11px;color:var(--muted);">IN 选院长时，擅长项目对到客人苦恼部位的院长排前面（没勾过的按项目名自动对应）</div></div></div>' : '')+
     '<div class="case-field-row"><span class="fk">分类</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="PROJ_EDIT.categoryId=this.value">'+
       cats.map(function(c){ return '<option value="'+c.id+'"'+(p.categoryId===c.id?' selected':'')+'>'+c.label+'</option>'; }).join('')+
     '</select></div>'+

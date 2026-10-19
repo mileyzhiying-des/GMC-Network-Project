@@ -845,3 +845,11 @@ prototype/shared/app.css  共用样式
 - **按部位显示（只读）**：`concernCardsHtml` / `concernBlockHtml`——IN 基础资料 tab（每张卡带［补充照片］［补充视频］，沿用 `supplementUpload`）、IN 面诊资料 tab 的「客人资料」卡（`consultIntentionCardHtml`：希望预期 / 预算在上，部位卡在下）、KR 面诊 tab 最上面新增「客人资料（按部位）」卡（`KR_TAB_FN.consult` 包了一层，院长账号一样）；照片格子带角度名，点开放大（`concernZoom`，原型占位图）。附件 tab 按部位列「眼睛视频」「眼睛照片（N 张）」。KR 基础资料 tab 的「本次需求」仍显示汇总文字（没改）。
 - **旧案件转换**：迁移 47 把 `concern` / `photoUploaded` / `videoUploaded` 转成一张「未分部位」卡片（`part:'legacy'`：说明 = 原苦恼文字，视频 = 「视频（旧资料）」，照片 = 一个「照片（旧资料）」占位，没有分角度）；没有苦恼资料的案件 `concerns=[]`；没迁移到的旧数据也能显示（`concernCards` 兜底合成同样的卡片）。取消接待 / 退回待访问时 `concerns` 清空。
 - 测试：selftest 新增 R32a（顺序 / 两张卡角度不同 / 缺一张照片不能提交 / 不面诊选填 / 完整提交同步汇总 / 旧案件转换）、R32b（KM1 / KD1：KR 面诊 tab 按部位显示、点开放大）；`ST.materials` 改成填 `concerns`；A1 全套 138 行、KM1 用例、BK 三段通过，roletest 9 个账号 0 不符。
+
+## CMD-1019-02 补充（2026-10-19，追加；取代 CMD-1019-01 里「面诊需求下面跟意向项目」和旧的「擅长客人意向项目的排前面」，旧文字保留作历史）
+- 基准 **fdd95ac**，单个提交，**未推送**，不带开关，数据版本不变（47；没有改资料结构，旧案件已存的 `intentionProjects` 不删，只是不显示 / 不必填）。
+- **拿掉基础资料的「意向项目」**：`intentRowHtml` 恒为空串；意向项目选择弹窗（`openIntentionPickerModal` 等 5 个函数 + in.html 弹窗）删除；缺项检查和「增加面诊」的「至少一个意向项目」检查删除；`intentionInfoHtml` 不再显示意向项目；`setNeedsConsult` 不再清意向项目；`intentKrAllowed` 留着恒返回 false（旧调用兜底）。「增加面诊」（面诊 tab 待缴费）现在是 预算 → 院长 → 面诊费。
+- **院长卡片按苦恼部位排序**：`projectPartsOf(p)`（项目自己的 `parts` 优先，没勾过的按项目名关键词默认对应，`PROJECT_PART_RULES`）；`docPartMatch(hid, dr, c)` 返回这位院长擅长项目覆盖了客人选的哪些部位；`directorCardsHtml` 排序 = 整天 OFF 的灰色排后 → 对到的部位越多越前 → 对到的擅长项目越多越前 → 原顺序；标签写「★ 擅长客人苦恼部位（鼻子）」，提示写「擅长客人苦恼部位的排前面」。KR / IN 项目库编辑（赴韩项目）新增「对应苦恼部位」多选（`projPartsToggle`，存 `p.parts`）；KR 院长管理里的擅长项目提示文字同步改。
+- **苦恼 / 希望预期移到面诊需求下面，选了才展开**：`concernExpectHtml`——没选面诊需求时只有灰字「选择面诊需求后填写苦恼与希望预期」；选了（面诊 / 不面诊 / 沿用原诊疗方案，`consultChosen`）才出现苦恼（面诊时院长在苦恼上面）和希望预期；来回切换已填内容保留，只改照片 / 视频是否必填。
+- **意向项目用到的地方清单**：基础资料输入行（拿掉）、意向项目选择弹窗（拿掉）、确认时缺项检查（拿掉）、增加面诊输入行与缺项检查（拿掉）、IN 面诊资料 tab / 基础资料 tab 只读展示 `intentionInfoHtml`（拿掉意向项目行，预算保留）、选院长排序与标签 `docIntentMatch`（改按苦恼部位）、KR 院长管理擅长提示文字（改）、`makeCase` / 取消接待 / 数据迁移 41 里对 `intentionProjects` 的清理（保留，只是旧数据维护）。**检查过没有用到**：KR 面诊 tab / 基础资料（本来就没显示）、诊疗方案 / AI 报告模板、案例库筛选、通知文案、客人预约页、测试覆盖页。
+- 测试：selftest 新增 R33a（没有意向项目栏 / 未选面诊只有灰字 / 切换保留内容 / 项目→部位对应 / 院长排序 / 旧案件意向项目不显示不删）；R32a 改成先选面诊需求；`ST.materials` 去掉意向项目；A1 全套 139 行、KM1 用例、BK 三段通过，roletest 9 个账号 0 不符。
