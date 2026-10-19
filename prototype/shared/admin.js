@@ -103,7 +103,7 @@ var CLINIC_DRAFT = null;
 var CLINIC_FIELD_LABELS = {
   name:'诊所名称', address:'地址', phone:'电话', city:'所在城市', tz:'时区', openTime:'营业开始', closeTime:'营业结束', bookFrom:'可预约最早时段', bookTo:'可预约最晚时段',
   lunchFrom:'午休开始', lunchTo:'午休结束', closedRules:'定期休诊', holdMinutes:'预约占位倒计时（分钟）', noShowMinutes:'未到店判定（分钟）', consultFee:'面诊费（印尼盾）',
-  slotCapacity:'每个时段的预约上限', remindBeforeHours:'提醒短信发送时间（预约前几小时）', privacyVersion:'同意书版本', privacyPolicy:'隐私政策'
+  slotCapacity:'每个时段的预约上限', remindBeforeHours:'提醒短信发送时间（预约前几小时）', privacyVersion:'同意书版本', privacyPolicy:'隐私政策', printPrep:'术前准备注意事项（赴韩施术计划打印）', printConfirm:'日程确认与变动（赴韩施术计划打印）'
 };
 var SMS_KIND_LABELS = {link:'预约链接短信', confirm:'预约确认短信', remind:'预约提醒短信', cancel:'预约取消短信', surgeryNotice:'施术日期通知（短信 / WhatsApp，中文）', surgeryRemind:'施术前提醒（短信 / WhatsApp，中文）'};
 function smsTplOf(d, k){ return d.sms[k]!==undefined ? d.sms[k] : (k==='surgeryNotice' ? SMS_SURGERY_NOTICE_ZH : (k==='surgeryRemind' ? SMS_SURGERY_REMIND_ZH : '')); } /* 旧设定里没有这两个模板时用默认值；变量：{clinic} {name} {coordinator} {date} {time} {hospital} {address} {anes} {phone} */ /* 旧设定里没有施术日期模板时用默认值 */
@@ -125,7 +125,7 @@ function closedRulesSet(rules, dow, mode, from, dflt){
   rules.sort(function(a,b){ return a.dow-b.dow; });
 }
 function clinicSetClosed(dow, mode, from){ closedRulesSet(CLINIC_DRAFT.closedRules, dow, mode, from, '16:00'); openAdminPage('clinic', true); }
-function clinicDraftFresh(){ CLINIC_DRAFT = JSON.parse(JSON.stringify(CLINIC_SETTINGS)); }
+function clinicDraftFresh(){ CLINIC_DRAFT = JSON.parse(JSON.stringify(CLINIC_SETTINGS)); if(CLINIC_DRAFT.printPrep===undefined) CLINIC_DRAFT.printPrep = PRINT_PREP_DEFAULT; if(CLINIC_DRAFT.printConfirm===undefined) CLINIC_DRAFT.printConfirm = PRINT_CONFIRM_DEFAULT; }
 ADMIN_RENDER.clinic = function(el, isRefresh){
   if(!CLINIC_DRAFT || !isRefresh) clinicDraftFresh();
   var d = CLINIC_DRAFT;
@@ -154,6 +154,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
         aField(t('每个时段的预约上限'), f('slotCapacity','number','min="1" max="50"'), '客户自助预约：时段预约数达到上限就不能再选')+
         aField(t('提醒短信发送时间')+' · '+t('预约开始前（小时）'), f('remindBeforeHours','number','min="1" max="72"'))), '赴韩定金比例：'+Math.round(KR_DEPOSIT_RATE*100)+'%（GMC 统一设定，这里只读、不能改）。')+
     aSection(t('短信模板'), sms, '可用变量：{clinic} 诊所名称、{name} 客人姓名、{time} 预约时间、{address} 地址、{phone} 电话、{url} 客人端网址、{code} 验证码（验证码短信格式固定，不在这里改）。')+
+    aSection('赴韩施术计划打印', aField('术前准备注意事项（一行一条）', '<textarea rows="5" data-k="printPrep" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.printPrep)+'</textarea>')+aField('日程确认与变动', '<textarea rows="4" data-k="printConfirm" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.printConfirm)+'</textarea>'), '打印给客人带去韩国用（不写金额）。「日程确认与变动」可用变量：{coordinator} 负责室长、{phone} 诊所电话；空腹小时数、护照提醒由系统按案件自动写。')+
     aSection(t('使用政策与同意书'),
       aGrid(2, aField(t('同意书版本'), f('privacyVersion'), '改版本后，客户详情「隐私协议」仍按客人签署时的版本显示')) +
       aField(t('隐私政策'), '<textarea rows="4" data-k="privacyPolicy" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.privacyPolicy)+'</textarea>'),
@@ -198,7 +199,8 @@ function clinicValidate(d){
   return '';
 }
 function clinicDiff(oldS, newS){
-  var ch = [], show = function(k, v){ if(k==='closedRules') return closedRulesText(v); if(k==='tz') return tzLabel(v); if(k==='consultFee') return fmtRp(v); return String(v); };
+  oldS = Object.assign({printPrep:PRINT_PREP_DEFAULT, printConfirm:PRINT_CONFIRM_DEFAULT}, oldS); /* 旧设定没有这两项 = 默认值，不算修改 */
+  var ch = [], show = function(k, v){ if(k==='printPrep' || k==='printConfirm') return '（已修改）'; if(k==='closedRules') return closedRulesText(v); if(k==='tz') return tzLabel(v); if(k==='consultFee') return fmtRp(v); return String(v); };
   Object.keys(CLINIC_FIELD_LABELS).forEach(function(k){
     if(JSON.stringify(oldS[k]) !== JSON.stringify(newS[k])) ch.push(CLINIC_FIELD_LABELS[k]+'：'+(k==='privacyPolicy' ? '（已修改）' : show(k, oldS[k])+' → '+show(k, newS[k])));
   });

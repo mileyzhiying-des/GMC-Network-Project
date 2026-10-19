@@ -1911,6 +1911,29 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
   });
 
+  ST.def('R44a','CMD-1019-15：赴韩施术计划打印改版（抬头 / 1 行程概要 / 2 施术项目 / 3 日程表 / 4 术前准备 / 5 日程确认与变动 / 6 备注；不写金额，没有面诊内容和推荐整理）（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.toConfirmed('R44a'); ST.open(c); var its = krActiveItems(c), ks = c.krSchedule;
+    its.forEach(function(it, k){ if(k===0) it.anesthesia = {type:'sleep', label:'睡眠麻醉', note:'', fast:6}; });
+    c.recInNote = '（自测）客人带轮椅'; ks.address = '';
+    var cl = clientByName(c.name); cl.passport = {text:'已登记', date:todayStr(), no:'P9999999', issue:'2020-01-01', expiry:(new Date(Date.now()+400*86400000)).toISOString().slice(0,10)};
+    var w = window.open, cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ printKrPlan(); } finally { window.open = w; }
+    var h = cap, txt = h.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, '|');
+    ST.ok(/确认打印/.test(h) && /赴韩施术计划/.test(h) && h.indexOf(c.name)>-1 && h.indexOf(c.caseNo)>-1 && h.indexOf(CLINIC_SETTINGS.name)>-1 && h.indexOf(CLINIC_SETTINGS.phone)>-1 && h.indexOf(actingName())>-1, '抬头：客人 / Case ID / 诊所 / 负责室长与联系方式；仍先预览');
+    ST.ok(/1　行程概要/.test(h) && /2　施术项目/.test(h) && /3　日程表/.test(h) && /4　术前准备/.test(h) && /5　日程确认与变动/.test(h) && /6　备注/.test(h), '六段都在');
+    ST.ok(!/院长面诊内容|推荐项目整理|印尼室长备注/.test(h), '拿掉院长面诊内容和推荐项目整理');
+    ST.ok(!/₩|Rp|¥|金额|定金|尾款/.test(h), '不写金额');
+    ST.ok(h.indexOf(ks.confirmedDate+' '+ks.confirmedTime+'（韩国时间）')>-1 && /印尼时间/.test(h) && h.indexOf(hospitalEn(c.hospitalId||'H1').name)>-1 && h.indexOf(hospitalEn(c.hospitalId||'H1').address)>-1 && /最早可回国日期/.test(h), '行程概要：韩 / 印时间、医院英文名、地址（栏空 = 英文地址）、建议在韩天数 + 最早回国日');
+    ST.ok(/麻醉：睡眠麻醉（需空腹 6 小时）/.test(txt) && /施术前 6 小时内禁止食用任何食物和饮品/.test(txt), '施术项目写麻醉方式；术前准备写空腹小时数');
+    ST.ok(/携带护照（有效至/.test(txt) && !/P9999999/.test(h), '携带护照提醒（不印护照号）');
+    cl.passport.expiry = '2021-01-01'; cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ printKrPlan(); } finally { window.open = w; } ST.ok(/color:#c00[^>]*>⚠ 携带护照/.test(cap), '护照已过期 / 施术前到期 → 标红提醒');
+    ST.ok(/穿宽松舒适的衣服/.test(h) && /施术前 2～3 天再次与您确认日程/.test(h) && h.indexOf('联系方式：'+CLINIC_SETTINGS.phone)>-1, '固定注意事项 / 日程确认与变动读诊所设定默认值');
+    ST.ok(/（自测）客人带轮椅/.test(h), '备注');
+    var sch = printPlanSchedule(c); ST.ok(sch.length>=1 && sch[0].what.indexOf('施术：')===0 && sch[0].d===ks.confirmedDate && sch.every(function(r, k){ return k===0 || (sch[k-1].d+' '+(sch[k-1].t||'99')) <= (r.d+' '+(r.t||'99')); }), '日程表按日期排，第一行是施术');
+    ST.ok(/以上为建议日期，以医院实际安排为准/.test(h), '注明以医院安排为准');
+    CLINIC_SETTINGS.printPrep = '自测注意事项一\n自测注意事项二'; CLINIC_SETTINGS.printConfirm = '自测确认 {coordinator} {phone}'; cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ printKrPlan(); } finally { window.open = w; delete CLINIC_SETTINGS.printPrep; delete CLINIC_SETTINGS.printConfirm; }
+    ST.ok(/自测注意事项一/.test(cap) && /自测注意事项二/.test(cap) && cap.indexOf('自测确认 '+actingName()+' '+CLINIC_SETTINGS.phone)>-1, '诊所设定里改了就按新的打印');
+  });
   ST.def('R43a','CMD-1019-14：到院地址默认英文地址可改；麻醉「需空腹（小时）」数字栏（睡眠 / 全麻才有，局麻没有）；旧备注迁移；多项目总提示（A1 / KM1 分页）',function(){
     var kr = isKrAccount();
     ST.ok(anesFastOf({type:'sleep', note:'需空腹 8 小时'})===8 && anesFastOf({type:'local', note:'需空腹 8 小时'})==='' && anesFastOf({type:'sleep', note:'', fast:6})===6 && anesFastOf({type:'sleep', note:'需空腹 8 小时', fast:''})===8 || true, '');

@@ -942,3 +942,9 @@ prototype/shared/app.css  共用样式
 - **到院地址**：KR 确认 / 修改施术时间的到院地址默认 = 医院英文地址（`krDefaultAddress()` 读 `hospitalEn`），KR 可改；发给客人的模板读 `ks.address`（空才退回医院英文地址）；KR 改了地址 → `surgMsgKey` 变 → 照旧「请重新发送」。
 - **麻醉「需空腹（小时）」**：新字段 `anesthesia.fast`（数字，选填）；KR 表单（发送诊疗方案 / 补加可选项目 / 到院添加、更换，共用 `krProjDetailHtml`）选睡眠 / 全麻才出现这一栏，局麻没有（`krAnesSet` 换麻醉方式会重画表单、局麻清空数字；`krDet.anesFast`，`anesFastClean(d)`）；规则 `anesFastOf(an)`（rules.js）：有 `fast` 键 = 以数字栏为准，没有这个键的旧数据才从备注读「空腹 N 小时」；`anesDisplay(an)` 显示麻醉时补「需空腹 N 小时」。项目默认资料 `p.defaults.anesNote` 带出到表单时用 `anesFastParse` 转数字。短信的麻醉行（`surgAnesText`）只读数字栏；多个项目时仍有总提示句。待付款在韩加项的［修正］保留原空腹数字（`coreAddOnEdit`）。**项目库默认资料编辑页没有加这一栏**（任务没写）。
 - 测试：selftest 新增 R43a；R42a / R41a / R15d 等按新弹窗改过。A1 全套在干净数据上只剩既有的 BK1c / BK2c / R21a。
+
+## CMD-1019-15 补充（2026-10-19，追加；取代 CMD-1015-15 的［打印］内容（面诊内容翻译版 + 推荐整理 + 确定项目 + 备注），旧文字保留作历史）
+- 基准 **f8f09fe**，单个提交，**未推送**，不带开关，**数据版本不变（52）**（诊所设定新字段按需读取，没有就用默认值）。
+- **IN 赴韩施术 tab［打印］**（data.js `printKrPlan`，仍先预览再［确认打印］）改成「给客人带去韩国用」，**不写金额、先只中文**：抬头（客人 / Case ID / 诊所 / 负责室长 `actingName()` 与诊所电话）→ 1 行程概要（到院日期时间韩国 / 印尼、医院英文名 `hospitalEn`、到院地址 `ks.address`（空退回医院英文地址）、建议在韩天数 = 施术项目 `stay` 最大值 + 最早可回国日期 = 施术日 + 天数）→ 2 施术项目（施术写麻醉方式 + 空腹小时，管理项目写 `mgmtQtyText`「N 份（共 M 次）」）→ 3 日程表（`printPlanSchedule(c)`：施术 + 术后管理（已预约用预约时间和地点，没预约 = 施术日 + 所需术后管理的第 N 天，地点「韩国」或「韩国或印尼（以预约为准）」）+ 管理项目（施术日 + 第一次使用天数 + 间隔，每次一行）；按日期时间排，表下注明「以上为建议日期，以医院实际安排为准」）→ 4 术前准备（空腹 `anesFastOf`、携带护照（`passportAlert`：过期 / 施术前到期 / 未登记红字提醒，不印护照号）、诊所设定里的固定注意事项）→ 5 日程确认与变动（诊所设定模板，变量 `{coordinator}` `{phone}`）→ 6 备注（IN 室长备注 `c.recInNote`）。拿掉了院长面诊内容、推荐项目整理。
+- **诊所设定新增「赴韩施术计划打印」两栏**：`CLINIC_SETTINGS.printPrep`（术前准备注意事项，一行一条，默认 `PRINT_PREP_DEFAULT`）、`printConfirm`（日程确认与变动，默认 `PRINT_CONFIRM_DEFAULT`）；旧设定没有这两个键时用默认值（`clinicDraftFresh` 补默认、`clinicDiff` 不把默认算修改）。
+- 测试：selftest 新增 R44a（抬头 / 六段 / 无金额 / 无面诊内容和推荐整理 / 麻醉与空腹 / 护照提醒与红字 / 日程表排序 / 诊所设定改了就按新的打印）。

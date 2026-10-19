@@ -181,6 +181,9 @@ var KR_TZ = 'Asia/Seoul'; /* 韩国医院时区 */
    赴韩定金比例不在这里（GMC 统一设定）。 */
 var SLOT_MIN = 30; /* 时段长度（分钟），固定 30（我的判断：设定里不提供修改） */
 /* 赴韩施术日期通知模板（印尼文 + 中文）。变量：{clinic} {name} {date} {time_kr} {time_id} {hospital} {address} {anes} {phone}；模板在诊所设定里可改，这里只是默认值 */
+/* CMD-1019-15：赴韩施术计划打印里的固定文字（诊所设定里可改；旧设定没有这两个键时用默认值）。{coordinator} 负责室长，{phone} 诊所电话 */
+var PRINT_PREP_DEFAULT = '穿宽松舒适的衣服\n当天不化妆，不戴隐形眼镜和首饰\n平常服用的药物、保健品请提前告诉我们\n施术后请安排人陪同或乘车离开，不要自己开车';
+var PRINT_CONFIRM_DEFAULT = '我们会在施术前 2～3 天再次与您确认日程。如果您的行程或时间有任何变动，请尽早通知我们，以便重新安排。\n负责室长：{coordinator}　联系方式：{phone}';
 var SMS_SURGERY_NOTICE_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术时间已确认。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
 var SMS_SURGERY_REMIND_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术项目将在两天后进行。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
 /* 模板版本：key = 诊所设定 sms 里的键；语言先只做中文（之后加印尼文 = 增加 zh 以外的键，如 surgeryNotice_id） */
@@ -205,6 +208,7 @@ function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分
     cancel:'【{clinic}】Halo {name}, reservasi {time} telah dibatalkan. Reservasi ulang: {url}　|　您 {time} 的预约已取消，重新预约：{url}',
     surgeryNotice:SMS_SURGERY_NOTICE_ZH, surgeryRemind:SMS_SURGERY_REMIND_ZH /* CMD-1019-13：赴韩施术日期通知 / 施术前提醒（短信 / WhatsApp 共用，先只做中文） */
   },
+  printPrep:PRINT_PREP_DEFAULT, printConfirm:PRINT_CONFIRM_DEFAULT, /* CMD-1019-15：赴韩施术计划打印的「术前准备注意事项」「日程确认与变动」 */
   privacyVersion:'v1.0',
   privacyPolicy:'本诊所仅为办理预约、接待和医美咨询收集您的个人资料与健康资料，并按《隐私/数据跨境使用授权同意书》约定处理；您可随时要求查看、更正或删除。',
   updatedAt:'', updatedBy:''
@@ -7019,18 +7023,62 @@ function markDemoCases(){ try{ (CASE_ITEMS||[]).forEach(function(c){ if(c.demo==
 
 
 /* CMD-1015-05 七：打印「赴韩施术计划」——院长面诊内容（印尼文翻译版，用现有演示翻译文字）+ 推荐项目整理 + 确定的赴韩项目内容 + 印尼室长备注；不印任何金额 */
+/* CMD-1019-15：赴韩施术计划打印 = 给客人带去韩国的（不写金额，先只中文）：抬头 / 1 行程概要 / 2 施术项目 / 3 日程表 / 4 术前准备 / 5 日程确认与变动 / 6 备注 */
+function printPlanDate(ds, n){ var t0 = new Date(ds+'T00:00:00'); t0.setDate(t0.getDate()+n); return t0.getFullYear()+'-'+pad2(t0.getMonth()+1)+'-'+pad2(t0.getDate()); }
+/* 日程表：施术、术后管理（已预约用预约时间，没预约 = 施术日 + 第 N 天）、管理项目（第一次使用 + 间隔）；按日期排 */
+function printPlanSchedule(c){
+  var ks = c.krSchedule || {}, base = ks.confirmedDate || '', rows = [], items = krActiveItems(c), surg = items.filter(function(it){ return !krIsMgmtItemC(it); });
+  if(base) rows.push({d:base, t:ks.confirmedTime||'', what:'施术：'+(surg.map(function(it){ return it.name; }).join('、') || '—'), place:'韩国'});
+  /* 术后管理：已预约的行用预约时间；其余按所需术后管理（第 N 天，多次按间隔）排建议日期 */
+  var booked = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.skipped && s.date; }), usedBk = {};
+  surg.forEach(function(it){ (it.postcare||[]).forEach(function(x){
+    var days = pcDays(x), nm = pcLabel(x); if(!days.length) days = [0];
+    days.forEach(function(dy, k){
+      var b = booked.filter(function(s){ return !usedBk[s.id] && s.projectName===it.name && String(s.content||'').indexOf(nm)===0; })[0];
+      if(b){ usedBk[b.id] = 1; rows.push({d:b.date, t:b.time||'', what:'术后管理：'+nm+'（'+it.name+'）', place:b.place==='IN' ? '印尼' : '韩国', booked:true}); }
+      else if(base && dy){ rows.push({d:printPlanDate(base, dy), t:'', what:'术后管理：'+nm+'（'+it.name+'）', place:x.place==='KR' ? '韩国' : '韩国或印尼（以预约为准）'}); }
+    });
+  }); });
+  items.filter(krIsMgmtItemC).forEach(function(it){
+    var total = Math.max(1, it.qty||1), itv = total>1 ? (it.interval||1) : 0, f0 = (it.firstDay===undefined || it.firstDay==='' || it.firstDay===null) ? null : Number(it.firstDay);
+    if(!base || f0===null) return;
+    for(var k = 0; k < total; k++) rows.push({d:printPlanDate(base, f0 + k*itv), t:'', what:'管理项目：'+it.name+(total>1 ? '（第 '+(k+1)+'/'+total+' 次）' : ''), place:'韩国'});
+  });
+  rows.sort(function(a, b){ return (a.d+' '+(a.t||'99:99')).localeCompare(b.d+' '+(b.t||'99:99')); });
+  return rows;
+}
 function printKrPlan(){
   var c = getCurrentCase(); if(!c) return; var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
-  var items = krActiveItems(c), scope = c.krScope || {};
-  var summary = recSummaryHtml(items.filter(function(it){ return !(it.krAddOn || it.preBalanceAdd || it.swappedFrom); }).map(function(it){ return {name:it.name, stay:it.stay, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), scope.overallNote, {print:false});
-  var consult = c.videoSummary || c.reportKo || '';
-  var rows = items.map(function(it){ return '<div style="padding:8px 0;border-top:1px solid #ddd;"><b>'+e(it.name)+'</b>'+itemMetaText(it).map(function(b){ return '<div style="font-size:13px;color:#444;margin-top:2px;">'+e(b)+'</div>'; }).join('')+'</div>'; }).join('');
-  var html = '<html><head><meta charset="utf-8"><title>赴韩施术计划</title><style>body{font-family:sans-serif;padding:28px;color:#222;line-height:1.6;} h1{font-size:20px;margin:0 0 4px;} h2{font-size:15px;margin:22px 0 8px;border-bottom:2px solid #333;padding-bottom:4px;} pre{white-space:pre-wrap;font-family:inherit;font-size:13px;}</style></head><body>'+
-    '<h1>赴韩施术计划</h1><div style="font-size:13px;color:#555;">'+e(c.name)+'　·　'+e(c.caseNo||'')+(c.krSchedule && c.krSchedule.confirmedDate ? '　·　施术日期 '+e(ksTimeText(c.krSchedule)) : '')+'</div>'+
-    '<h2>院长面诊内容（印尼文翻译版）</h2><pre>'+e(consult || '（暂无）')+'</pre>'+
-    '<h2>推荐项目整理</h2>'+(summary || '<div style="font-size:13px;">（暂无）</div>')+
-    '<h2>确定的赴韩项目</h2>'+(rows || '<div style="font-size:13px;">（暂无）</div>')+
-    (c.recInNote ? '<h2>印尼室长备注</h2><pre>'+e(c.recInNote)+'</pre>' : '')+
+  var items = krActiveItems(c), ks = c.krSchedule || {}, cl = clientByName(c.name), hid = c.hospitalId || clinicHospital(CURRENT_CLINIC_ID), en = hospitalEn(hid);
+  var surg = items.filter(function(it){ return !krIsMgmtItemC(it); }), mg = items.filter(krIsMgmtItemC), coord = actingName();
+  var fill = function(t){ return smsFill(t, {coordinator:coord, phone:CLINIC_SETTINGS.phone}); };
+  var lines = function(t){ return String(t||'').split('\n').filter(function(x){ return x.trim(); }); };
+  /* 1 行程概要 */
+  var local = ks.confirmedDate ? krToClinic(ks.confirmedDate, ks.confirmedTime||'00:00') : null;
+  var stay = surg.reduce(function(m, it){ var n = parseInt((String(it.stay||'').match(/\d+/)||[0])[0], 10) || 0; return Math.max(m, n); }, 0);
+  var sum = [];
+  sum.push(['到院日期时间', ks.confirmedDate ? e(ks.confirmedDate+' '+(ks.confirmedTime||'')+'（韩国时间）')+(local && ks.confirmedTime ? ' ／ '+e(local.date+' '+local.time)+'（印尼时间）' : '') : '（施术日期还没确认）']);
+  sum.push(['医院', e(en.name)]); sum.push(['到院地址', e(ks.address || en.address)]);
+  sum.push(['建议在韩天数', stay ? stay+' 天'+(ks.confirmedDate ? '，最早可回国日期：'+e(printPlanDate(ks.confirmedDate, stay)) : '') : '—']);
+  /* 2 施术项目：施术写麻醉方式，管理项目写 N 份（共 M 次） */
+  var itemRows = surg.map(function(it){ return '<tr><td>'+e(it.name)+'</td><td>'+(it.anesthesia ? '麻醉：'+e(it.anesthesia.label||'')+(anesFastOf(it.anesthesia) ? '（需空腹 '+anesFastOf(it.anesthesia)+' 小时）' : '') : '')+'</td></tr>'; }).concat(mg.map(function(it){ return '<tr><td>'+e(it.name)+'（管理项目）</td><td>'+e(mgmtQtyText(it))+'</td></tr>'; })).join('');
+  /* 3 日程表 */
+  var sch = printPlanSchedule(c).map(function(r){ return '<tr><td style="white-space:nowrap;">'+e(r.d)+(r.t ? ' '+e(r.t) : '')+'</td><td>'+e(r.what)+'</td><td>'+e(r.place)+'</td></tr>'; }).join('');
+  /* 4 术前准备 */
+  var fasts = surg.map(function(it){ return {n:it.name, h:anesFastOf(it.anesthesia)}; }).filter(function(x){ return x.h; }), prep = [];
+  if(fasts.length) prep = prep.concat(fasts.length===1 ? ['麻醉需空腹：'+e(fasts[0].n)+'，施术前 '+fasts[0].h+' 小时内禁止食用任何食物和饮品'] : fasts.map(function(x){ return '麻醉需空腹：'+e(x.n)+'，施术前 '+x.h+' 小时内禁止食用任何食物和饮品'; }));
+  var pa = passportAlert(c), pp = '携带护照'+(pa.level==='ok' ? '（有效至 '+e(passportOf(cl).expiry)+'）' : '');
+  prep.push(pa.level==='expired' || pa.level==='before' || pa.level==='none' ? '<b style="color:#c00;">⚠ 携带护照：'+e(pa.level==='none' ? '护照未登记，请尽快提供' : pa.text)+'</b>' : pp);
+  prep = prep.concat(lines(CLINIC_SETTINGS.printPrep!==undefined ? CLINIC_SETTINGS.printPrep : PRINT_PREP_DEFAULT).map(e));
+  var tpl = CLINIC_SETTINGS.printConfirm!==undefined ? CLINIC_SETTINGS.printConfirm : PRINT_CONFIRM_DEFAULT;
+  var html = '<html><head><meta charset="utf-8"><title>赴韩施术计划</title><style>body{font-family:sans-serif;padding:28px;color:#222;line-height:1.7;font-size:14px;} h1{font-size:22px;margin:0 0 4px;} h2{font-size:15px;margin:22px 0 8px;border-bottom:2px solid #333;padding-bottom:4px;} table{border-collapse:collapse;width:100%;} td,th{border:1px solid #ccc;padding:6px 10px;text-align:left;font-size:13px;vertical-align:top;} th{background:#f4f1ec;} ul{margin:4px 0;padding-left:20px;} .k{color:#555;width:110px;}</style></head><body>'+
+    '<h1>赴韩施术计划</h1><div style="font-size:13px;color:#444;">客人：'+e(c.name)+'　·　Case ID：'+e(c.caseNo||'')+'　·　'+e(CLINIC_SETTINGS.name)+'<br>负责室长：'+e(coord)+'　联系方式：'+e(CLINIC_SETTINGS.phone)+'</div>'+
+    '<h2>1　行程概要</h2><table>'+sum.map(function(r){ return '<tr><td class="k">'+r[0]+'</td><td>'+r[1]+'</td></tr>'; }).join('')+'</table>'+
+    '<h2>2　施术项目</h2>'+(itemRows ? '<table>'+itemRows+'</table>' : '<div>（暂无）</div>')+
+    '<h2>3　日程表</h2>'+(sch ? '<table><tr><th>日期</th><th>内容</th><th>地点</th></tr>'+sch+'</table>' : '<div>（施术日期确认后生成）</div>')+'<div style="font-size:12px;color:#666;margin-top:4px;">以上为建议日期，以医院实际安排为准。</div>'+
+    '<h2>4　术前准备</h2><ul>'+prep.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>'+
+    '<h2>5　日程确认与变动</h2>'+lines(fill(tpl)).map(function(x){ return '<div>'+e(x)+'</div>'; }).join('')+
+    '<h2>6　备注</h2><div style="white-space:pre-wrap;">'+(c.recInNote ? e(c.recInNote) : '—')+'</div>'+
     '</body></html>';
   /* CMD-1015-15：先预览，点［确认打印］后才打印（顶部工具条打印时不会印出来） */
   html = html.replace('<body', '<body').replace('</style>', '@media print{.pv-bar{display:none !important;}} .pv-bar{position:sticky;top:0;background:#fff7ec;border-bottom:1px solid #e5d3b8;padding:10px 28px;margin:-28px -28px 18px;display:flex;gap:10px;align-items:center;font-size:13px;} .pv-bar button{padding:7px 16px;border-radius:6px;border:1px solid #9A6A4B;background:#9A6A4B;color:#fff;cursor:pointer;} .pv-bar button.o{background:#fff;color:#9A6A4B;}</style>');
