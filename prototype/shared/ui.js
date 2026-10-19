@@ -1082,7 +1082,9 @@ function simulateTimePass30(){
   showToast('已模拟时间超过30分钟', n ? n+' 个待访问案件自动变为"已取消（未到店）"' : '没有待访问的案件', null);
 }
 
-function updateCaseStage(c){ c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c);
+function updateCaseStage(c){
+  if(c.krProcedureDone && !c.visitClosed && c.hasArrived && c.krBalancePaid && !c._ending && typeof todayOpenRows==='function' && todayOpenRows(c).length){ try{ coreReopenVisit(c, '系统', '今天还有待做项目'); }catch(e){} } /* 到院已结束但又有待做的（加项目 / 付款后）→ 自动重新打开（CMD-1019-22 八） */
+  c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c);
   if(!SEEDING && c.director && typeof syncSurgeryBlock==='function'){ try{ syncSurgeryBlock(c); }catch(e){} } /* 状态变化后施术块跟着更新（取消的不再占日程） */
   var fo = (typeof document!=='undefined') && document.getElementById('chat-float-overlay'); if(fo && fo.classList.contains('open') && typeof renderFloatMessages==='function'){ try{ renderFloatMessages(); }catch(e){} } }
 

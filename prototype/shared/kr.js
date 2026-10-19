@@ -181,7 +181,7 @@ window.addEventListener('storage', function(e){ if(e.key==='gmc_call' && e.newVa
 function krBoot(){
   try{ i18nStart(); }catch(e){}
   try{ if(krBackfillDurations()) Store.touch(); }catch(e){ console.error(e); }
-  try{ krClinics().forEach(function(cl){ Store.mutateClinic(cl.id, function(){ backfillLocalLib(); if(repairScheduleGaps()) Store.touch(); }); }); }catch(e){ console.error('[补本地项目库 / 施术子案件]', e); } try{ if(repairOffConflicts()) Store.touch(); }catch(e){ console.error('[院长 OFF 与施术冲突]', e); } /* 各来源诊所没有本地项目库的补上 */
+  try{ krClinics().forEach(function(cl){ Store.mutateClinic(cl.id, function(){ backfillLocalLib(); var rg = repairScheduleGaps(), rv = repairVisitState(); if(rg || rv) Store.touch(); }); }); }catch(e){ console.error('[补本地项目库 / 施术子案件]', e); } try{ if(repairOffConflicts()) Store.touch(); }catch(e){ console.error('[院长 OFF 与施术冲突]', e); } /* 各来源诊所没有本地项目库的补上 */
   document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
   var start = canDo('krview') || canDo('krviewOwn') ? 'kr-dashboard' : null; /* 地址带 ?case=诊所:案件号 时直接进详情 */
   if(!start){ location.replace(homeUrl()); return; }
@@ -708,9 +708,46 @@ function krMgHead(timeLabel){ return '<div style="display:grid;'+krMgGrid()+'gap
 function krMgRow(name, cnt, iv, sug, time, ops, pk){ return '<div style="display:grid;'+krMgGrid()+'gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border2);font-size:12px;"><span style="font-size:13px;">'+(pk ? '<input type="checkbox" '+(KR_PICK[pk.kind+':'+pk.name] ? 'checked ' : '')+'onchange="krTpToggle(\''+pk.kind+'\',\''+pk.name.replace(/\'/g,'')+'\',this.checked)" style="margin-right:6px;"> ' : '')+name+'</span><span>'+cnt+'</span><span style="color:var(--slate2);">'+iv+'</span><span style="color:var(--slate2);">'+sug+'</span><span style="color:var(--slate2);">'+time+'</span><span style="text-align:right;white-space:nowrap;">'+ops+'</span></div>'; }
 function krMgSec(title, timeLabel, rows){ return rows.length ? '<div style="margin:10px 0 2px;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+rows.length+'</span></div>'+krMgHead(timeLabel)+rows.join('') : ''; }
 function krMgIntervalText(it){ if(it.firstDay===undefined || it.firstDay===null || it.firstDay==='') return '—'; var f = Number(it.firstDay)===0 ? '当天' : it.firstDay+' 天后'; return (it.qty||1)>1 ? f+'起，每隔 '+(it.interval||1)+' 天' : f; }
-function krMgSuggest(c, it, nth){ if(it.firstDay===undefined || it.firstDay===null || it.firstDay==='') return ''; var base = ((c.krSchedule||{}).confirmedDate) || c.arrivedDay || ''; if(!base) return ''; var n = Number(it.firstDay) + nth*((it.qty||1)>1 ? (it.interval||1) : 0), t0 = new Date(base+'T00:00:00'); t0.setDate(t0.getDate()+n); var mm = t0.getMonth()+1, dd = t0.getDate(); return String(t0.getFullYear()).slice(2)+'-'+(mm<10?'0':'')+mm+'-'+(dd<10?'0':'')+dd; }
+function krMgSuggest(c, it, nth){
+  if(it.firstDay===undefined || it.firstDay===null || it.firstDay==='') return '';
+  var iv = (it.qty||1)>1 ? (it.interval||1) : 0, usedN = it.holdUsed||0, uses = it.uses||[], t0, n;
+  var fmt = function(d){ var mm = d.getMonth()+1, dd = d.getDate(); return String(d.getFullYear()).slice(2)+'-'+(mm<10?'0':'')+mm+'-'+(dd<10?'0':'')+dd; };
+  /* 管理间隔 / 建议日期只是建议（CMD-1019-22 一）：用过以后，后面的建议日期从「实际使用日」重新起算（使用日 + 间隔；一次用 N 次 = 同一天用了 N 次，下一次 = 使用日 + 间隔） */
+  if(usedN>0 && nth>=usedN && uses.length && uses[uses.length-1].at){ var ld = fmtUtc(uses[uses.length-1].at).slice(0, 10); t0 = new Date(ld+'T00:00:00'); t0.setDate(t0.getDate()+(nth-usedN+1)*iv); return fmt(t0); }
+  var base = ((c.krSchedule||{}).confirmedDate) || c.arrivedDay || ''; if(!base) return '';
+  n = Number(it.firstDay) + nth*iv; t0 = new Date(base+'T00:00:00'); t0.setDate(t0.getDate()+n); return fmt(t0);
+}
+/* 提前使用只写一行灰字，不拦、不弹确认 */
+function krEarlyHint(c, it){
+  if(!it || !it.heldOver) return '';
+  var sug = krMgSuggest(c, it, (it.holdUsed||0)+holdItemPlanned(c, it)); if(!sug) return '';
+  var ds = '20'+sug; if(ds <= todayStr()) return '';
+  return '<span class="kr-early" style="display:block;font-size:10px;color:var(--muted);font-weight:400;">建议 '+sug.slice(3).replace('-', '/')+' 起，今天提前使用</span>';
+}
+/* 已使用表：同一次用 N 次 = 同一个使用时间，合成一行 ×N（CMD-1019-22 三 / 四） */
+function krUseEntries(it){
+  var u = (it.uses||[]).map(function(x){ return {at:x.at||'', key:x.key||'main', qty:Math.max(1, parseInt(x.qty, 10)||1)}; }), sum = u.reduce(function(n, x){ return n+x.qty; }, 0), used = it.holdUsed||0;
+  if(sum < used){ if(u.length) u[u.length-1].qty += used-sum; else u.push({at:'', key:'main', qty:used-sum}); } /* 旧记录次数对不上：补到最后一条（同一个使用时间） */
+  var out = []; u.forEach(function(x){ var last = out[out.length-1]; if(last && last.key===x.key && last.at.slice(0,16)===x.at.slice(0,16) && x.at){ last.qty += x.qty; last.parts.push(x.qty); } else out.push({at:x.at, key:x.key, qty:x.qty, parts:[x.qty]}); });
+  return out;
+}
+function krVisitLabelByKey(c, key){
+  var ks = c.krSchedule||{};
+  if(!key || key==='main') return visitWhenLabel(mainVisitDay(c) || ks.confirmedDate || '', '', '')+' · 施术';
+  var rep = subCaseList(c).filter(function(r){ return subCaseKey(r)===key; })[0];
+  return rep ? visitWhenLabel(rep.date, '', '')+' · '+krVisitWhat(c, {kind:'sub', key:key}) : String(key).split('|')[1] || '—';
+}
+function krUsedGrid(){ return 'grid-template-columns:minmax(0,1.6fr) minmax(0,.7fr) minmax(0,1fr) minmax(0,1.5fr) 100px;'; }
+function krUsedHead(){ return '<div style="display:grid;'+krUsedGrid()+'gap:8px;font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+['项目','次数','使用时间','在哪次到院',''].map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; }
+function krUsedRow(c, it, e, nm){
+  var tm = e.at ? krEsc(fmtUtc(e.at).slice(2, 16)) : '—', exp = e.qty>1 ? '<details style="margin-top:2px;"><summary style="font-size:10px;color:var(--muted);cursor:pointer;list-style:none;">展开明细</summary>'+Array.apply(null, Array(e.qty)).map(function(_, i){ return '<div style="font-size:10px;color:var(--muted);">第 '+(i+1)+' 次 · '+tm+'</div>'; }).join('')+'</details>' : '';
+  return '<div style="display:grid;'+krUsedGrid()+'gap:8px;align-items:start;padding:7px 0;border-top:1px solid var(--border2);font-size:12px;"><span style="font-size:13px;">'+nm+(e.qty>1 ? ' <b>×'+e.qty+'</b>' : '')+exp+'</span><span>'+e.qty+' 次</span><span style="color:var(--slate2);">'+tm+'</span><span style="color:var(--slate2);">'+krEsc(krVisitLabelByKey(c, e.key))+'</span><span style="text-align:right;">'+krViewBtn(e.key||'main')+'</span></div>';
+}
 function krPcSec(title, cols, rows){ return rows.length ? '<div style="margin:10px 0 2px;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+rows.length+'</span></div>'+krPcHead(cols)+rows.join('') : ''; }
-function krBtn(txt, fn, on, tip){ return '<button class="btn-'+(on?'primary':'outline')+'" '+(on ? 'onclick="'+fn+'"' : 'disabled title="'+krEsc(tip||'')+'"')+' style="padding:3px 10px;font-size:11px;'+(on?'':'opacity:.4;cursor:not-allowed;')+'">'+txt+'</button>'; }
+function krBtn(txt, fn, on, tip){ /* 灰按钮旁边写原因（CMD-1019-22 六）：悬停 + 旁边小字 */
+  var b = '<button class="btn-'+(on?'primary':'outline')+'" '+(on ? 'onclick="'+fn+'"' : 'disabled title="'+krEsc(tip||'')+'"')+' style="padding:3px 10px;font-size:11px;'+(on?'':'opacity:.4;cursor:not-allowed;')+'">'+txt+'</button>';
+  return (!on && tip) ? b+' <span class="kr-why" style="font-size:10px;color:var(--muted);">'+krEsc(tip)+'</span>' : b;
+}
 function krViewBtn(key){ return '<a href="#" onclick="krViewCase(\''+String(key).replace(/'/g,'')+'\');return false;" style="font-size:12px;">查看案件</a>'; }
 function krViewCase(key){
   if(key!=='main') KR_SUB_OPEN[key] = true; krRenderCaseDetail();
@@ -731,7 +768,7 @@ var KR_PICK = {}, KR_PICK_BACK = false;
 function krTpToggle(kind, name, on){ if(on) KR_PICK[kind+':'+name] = true; else delete KR_PICK[kind+':'+name]; krRenderCaseDetail(); }
 function krTodayPickBar(c){
   var keys = Object.keys(KR_PICK), n = keys.length, can = krCan();
-  return krCardBox('今日进行项目', (n ? '<div style="font-size:13px;line-height:2;">'+keys.map(function(x){ var nm0 = x.replace(/^(surg|mg):/,''), it0 = /^mg:/.test(x) ? (c.procedureItems||[]).filter(function(y){ return y.name===nm0 && y.heldOver && !y.holdDone; })[0] : null; return '<div>✅ '+krEsc(buyName(nm0))+(it0 ? krQtyStepper(c, it0) : '')+'</div>'; }).join('')+'</div>' : '<div style="font-size:12px;color:var(--muted);">还没勾选（在上面的项目卡里勾选施术项目 / 管理项目；术后管理用［预约时间］排）</div>')+
+  return krCardBox('今日进行项目', (n ? '<div style="font-size:13px;line-height:2;">'+keys.map(function(x){ var nm0 = x.replace(/^(surg|mg):/,''), it0 = /^mg:/.test(x) ? (c.procedureItems||[]).filter(function(y){ return y.name===nm0 && y.heldOver && !y.holdDone; })[0] : null; return '<div>✅ '+krEsc(buyName(nm0))+(it0 ? krQtyStepper(c, it0)+krEarlyHint(c, it0) : '')+'</div>'; }).join('')+'</div>' : '<div style="font-size:12px;color:var(--muted);">还没勾选（在上面的项目卡里勾选施术项目 / 管理项目；术后管理用［预约时间］排）</div>')+
     '<div style="display:flex;align-items:center;gap:12px;margin-top:10px;"><span style="font-size:13px;">已勾选：<b>'+n+'</b> 个项目</span><span style="flex:1;"></span>'+(can ? '<button class="btn-primary" style="padding:6px 22px;" onclick="krPickGo()">今日进行</button>' : '')+'</div>');
 }
 function krPickGo(){
@@ -749,7 +786,7 @@ function krProjCards(c, opts){
     if(!can || pickMode) return '';
     var it1 = allItems.filter(function(x){ return x.name===name; })[0], st1 = (!pend && it1) ? coreTodayState(c, it1) : null; /* CMD-1015-30：已选进今日案件 → ［本次取消］（= 今日取消）；已完成无按钮 */
     if(st1) return st1.done ? '' : cancelBtn(name);
-    var okUse = !!tg && !pend, okBook = paid && !pend && !c.visitClosed, tip = pend ? '待付款，付款后才能操作' : '要有客人已到店的案件才能本次使用';
+    var itU = it1, leftU = itU && krIsMgmtItemC(itU) ? holdItemLeft(c, itU)-holdItemPlanned(c, itU) : 1, anesU = itU && itU.consentPending, okUse = !!tg && !pend && !anesU && leftU>0, okBook = paid && !pend && !c.visitClosed, tip = pend ? '待付款' : anesU ? '未签麻醉同意书' : !tg ? '客人未到店' : leftU<=0 ? '次数用完（剩余次数都已安排）' : '';
     return krBtn('本次使用', 'krUnitUseNow(\''+krEsc(name).replace(/'/g,'')+'\')', okUse, tip)+' '+krBtn('预约使用', 'krBkdOpen(\'use\',\''+krEsc(name).replace(/'/g,'')+'\')', okBook, pend ? tip : '付清尾款后才能预约');
   };
   /* ---- 施术项目 ---- */
@@ -775,11 +812,12 @@ function krProjCards(c, opts){
   var placeOf = function(x, s0){ var p = s0 ? (s0.place==='IN' ? '印尼' : '韩国') : (x.place==='either' ? '韩国或印尼' : '韩国'); return '<span class="status-pill" style="background:var(--border2);color:var(--slate2);font-size:10px;">'+p+'</span>'; };
   var intervalOf = function(x){ var d = pcDays(x)[0]; if(!d) return '—'; return (x.times||1)>1 ? d+' 天后起，每隔 '+(Math.max(1, parseInt(x.interval,10)||1))+' 天' : d+' 天后'; };
   /* 未预约：同一施术项目里的同一条所需术后管理 = 一行（多次写 剩 / 共），建议日期 = 下一次；取消本次退回的行算进剩余 */
-  var groups = {}, order = [];
+  var groups = {}, order = [], lastDone = {};
   var gOf = function(it, i, x){ var k = it.name+'|'+i; if(!groups[k]){ groups[k] = {it:it, i:i, x:x, left:0, reuse:'', total:(x.times||1)}; order.push(k); } return groups[k]; };
   cu.unbooked.forEach(function(u){ gOf(u.it, u.i, u.x).left++; });
   cu.rows.forEach(function(r){
     var s0 = r.s, it = (c.procedureItems||[]).filter(function(x0){ return x0.name===r.item; })[0], x = xOf(it, s0), idx = x ? it.postcare.indexOf(x) : 0;
+    if(s0.done && x && it){ var kk0 = it.name+'|'+idx, dd0 = s0.doneAt ? fmtUtc(s0.doneAt).slice(0, 10) : s0.date; if(!lastDone[kk0] || dd0 > lastDone[kk0]) lastDone[kk0] = dd0; } /* 建议日期只是建议：用过以后从实际使用日起算（CMD-1019-22 一） */
     if(s0.skipped && x){ var g = gOf(it, idx, x); g.left++; if(!g.reuse) g.reuse = s0.id; return; }
     if(s0.skipped){ pU.push({key:'9999', html:krCareRow(krEsc(s0.content), placeOf({}, s0), r.item ? krEsc(r.item) : '—', '1 次', '—', '—', can && paid ? krBtn('预约时间', 'krBkdOpen(\'care\',\''+krEsc(r.item).replace(/'/g,'')+'\','+idx+',\''+s0.id+'\')', true) : '')}); return; }
     var nm = (x ? nameOf(x) : krEsc(s0.content))+(r.item && s0.date ? ' <span style="font-size:11px;color:var(--muted);">（'+krEsc(r.item)+' · '+careDayText(c, r.item, s0.date)+'）</span>' : ''), tp = x ? krEsc(x.mgmt || x.name || '术后管理') : '术后管理', iv = x ? intervalOf(x) : '—';
@@ -787,7 +825,7 @@ function krProjCards(c, opts){
     pB.push({key:(s0.date||'')+(s0.time||'')+s0.id, html:krCareRow(nm, placeOf(x||{}, s0), krEsc(r.item||'—'), '1 次', iv, krEsc(krShortDt(s0.date, s0.time||''))+(s0.place==='IN' ? '（印尼建议日期）' : ''), (can && s0.place!=='IN' && !s0.arrived ? '<a href="#" onclick="krSubTimeOpen(\''+s0.id+'\');return false;" style="font-size:12px;">修改时间</a>' : '')+(s0.place!=='IN' ? ' '+krViewBtn(subCaseKey(s0)) : ''))});
   });
   order.forEach(function(k){
-    var g = groups[k]; if(g.left<=0) return; var x = g.x, days = pcDays(x), nextIdx = Math.min(Math.max(0, g.total-g.left), Math.max(0, days.length-1)), sug = days.length && itemSurgDate(c, g.it) ? careAdd(itemSurgDate(c, g.it), days[nextIdx]) : '';
+    var g = groups[k]; if(g.left<=0) return; var x = g.x, days = pcDays(x), nextIdx = Math.min(Math.max(0, g.total-g.left), Math.max(0, days.length-1)), sug = days.length && itemSurgDate(c, g.it) ? careAdd(itemSurgDate(c, g.it), days[nextIdx]) : ''; if(lastDone[g.it.name+'|'+g.i]) sug = careAdd(lastDone[g.it.name+'|'+g.i], Math.max(1, parseInt(x.interval, 10)||1));
     var cnt = g.total>1 ? '剩 '+g.left+' / 共 '+g.total+' 次' : '1 次', nmEsc = krEsc(g.it.name).replace(/'/g,'');
     var op = can && paid && !c.visitClosed ? krBtn('预约时间', 'krBkdOpen(\'care\',\''+nmEsc+'\','+g.i+(g.reuse ? ',\''+g.reuse+'\'' : '')+')', true) : krBtn('预约时间', '', false, paid ? '' : '付清尾款后才能预约');
     pU.push({key:sug || '9999', html:krCareRow(nameOf(x)+(days.length ? ' <span style="font-size:11px;color:var(--muted);">（'+krEsc(g.it.name)+' · 术后第 '+days[nextIdx]+' 天）</span>' : ''), placeOf(x, null), krEsc(g.it.name), cnt, intervalOf(x), sug ? krEsc(sug.slice(2)) : '—', op)});
@@ -802,10 +840,9 @@ function krProjCards(c, opts){
     var planned = (c.subItems||[]).filter(function(s){ return s.holdUseOf===it.name && !s.done && !s.skipped; }), left = holdItemLeft(c, it) - planned.length, used = (it.holdUsed||0);
     if(left>0 && !it.holdDone) mU.push(krMgRow(nm, '剩 '+left+' / 共 '+qty+' 次', ivT, krMgSuggest(c, it, used+planned.length) || '—', krBuyTime(c, it), useBtns(it.name, false), pickMode ? {kind:'mg', name:it.name} : null));
     planned.forEach(function(s, pi){ mB.push(krMgRow(nm, '1 次', ivT, krMgSuggest(c, it, used+pi) || '—', krEsc(krShortDt(s.date, s.time||'')), (can && !s.arrived ? '<a href="#" onclick="krSubTimeOpen(\''+s.id+'\');return false;" style="font-size:12px;">修改时间</a> ' : '')+krViewBtn(subCaseKey(s)))); });
-    var uses = (it.uses||[]).slice(); for(var q = uses.length; q < used; q++) uses.push({at:'', key:'main'});
-    uses.forEach(function(u, ui2){ mD.push(krMgRow(nm, '1 次', ivT, krMgSuggest(c, it, ui2) || '—', u.at ? krEsc(fmtUtc(u.at).slice(2, 16)) : '—', krViewBtn(u.key||'main'))); });
+    krUseEntries(it).forEach(function(e){ mD.push(krUsedRow(c, it, e, nm)); });
   });
-  var mgBody = krMgSec('未使用', '购买时间', mU)+krMgSec('已预约', '预约时间', mB)+krMgSec('已使用（一次一行）', '使用时间', mD);
+  var mgBody = krMgSec('未使用', '购买时间', mU)+krMgSec('已预约', '预约时间', mB)+(mD.length ? '<div style="margin:10px 0 2px;font-size:12px;font-weight:700;">已使用 <span style="font-weight:400;color:var(--muted);">'+mD.length+'</span></div>'+krUsedHead()+mD.join('') : '');
   var pg = KR_PROJ_PAGE==='mgmt' ? 'mgmt' : (KR_PROJ_PAGE==='care' ? 'care' : 'surg');
   var nSurg = surg.length - sC.length, nCare = cu.unbooked.length + cu.rows.length, nMg = mgItems.filter(function(it){ return !it.cancelled && !it.swapped; }).length;
   var seg = '<div class="cal-switch"><span class="'+(pg==='surg'?'active':'')+'" onclick="krProjPage(\'surg\')">施术项目（'+nSurg+'）</span><span class="'+(pg==='care'?'active':'')+'" onclick="krProjPage(\'care\')">术后管理（'+nCare+'）</span><span class="'+(pg==='mgmt'?'active':'')+'" onclick="krProjPage(\'mgmt\')">管理项目（'+nMg+'）</span></div>';
@@ -1063,6 +1100,7 @@ function krRenderCaseDetail(){
     '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.5;">'+krEsc(r.caseNo)+' · 来源诊所：'+krEsc(r.clinicName)+(KR_CASE.tab==='consult' ? '' : ' · 院长：'+krEsc(r.director||'—'))+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+'</div>'+
     alerts+arriveCards+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">'+tabs+'</div>'+
     '<div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>';
+  setTimeout(krEndAskCheck, 60); /* 行都做完 → 问「今天的项目都做完了吗？」（CMD-1019-22） */
 }
 /* KR 预约到店阶段的案件页（同 IN 干净版）：只有页头 + 状态卡「当前状态 预约到店 · 待访问」，右边［客人已到店］［预约修改］［未到店］［预约取消］；不显示 tab 和空的项目卡 / 案件区块 */
 function krCleanVisitPage(r){
@@ -2016,6 +2054,7 @@ function krCaseCardHtml(c, cd){
     var vsm = c.krProcedureDone ? 'done' : (c.hasArrived ? 'arrived' : 'pending');
     var pendToday = g==='today' && st==='Confirmed' && !c.hasArrived && !c.visitClosed; /* CMD-1019-18：到院前的今日案件卡只留一行，到院按钮在页头下的状态卡 */
     if(g!=='done' && st==='Confirmed' && can && !pendToday) btn = '<button class="'+(g==='today' ? 'btn-primary' : 'btn-outline')+'" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krMarkArrived()" title="'+(g==='today' ? '' : '还没到施术当天；客人提前到院时也可以先标记')+'">客人已到医院</button>';
+    if(g==='today' && vsm==='arrived') btn = krEndBtnHtml('main'); /* 到院卡上一直留［结束今日到院］（CMD-1019-22 七） */
     head = '<b>'+visitWhen+'</b> <span style="color:var(--slate2);font-size:12px;">· '+krEsc(krVisitWhat(c, cd))+'</span> '+krTblState({pending:'待到院', arrived:'已到院', done:'已完成'}[vsm], vsm);
     if(open && !pendToday){
       var rowsOnly = function(m){ return krMainRowsHtml(c, m); };
@@ -2031,6 +2070,7 @@ function krCaseCardHtml(c, cd){
     var vs = cd.vs, reached = grp.every(function(s){ return s.simDay || !s.date || s.date <= today; });
     var pendSub = g==='today' && vs==='pending'; /* CMD-1019-18：到店前只留一行，按钮在状态卡 */
     if(g==='today' && vs==='pending' && can && !pendSub) btn = reached ? '<button class="btn-primary" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krSubVisitArrive(\''+skey+'\')">客人到店</button>' : '<button class="btn-primary" disabled style="padding:5px 16px;font-size:13px;opacity:.4;cursor:not-allowed;" title="未到当天">客人到店</button> <a href="#" onclick="event.stopPropagation();krSubVisitSim(\''+skey+'\');return false;" style="font-size:11px;">模拟到当日（演示用）</a>';
+    if(g==='today' && vs==='arrived') btn = krEndBtnHtml(key);
     head = '<b>'+visitWhen+'</b> <span style="color:var(--slate2);font-size:12px;">· '+krEsc(krVisitWhat(c, cd))+'</span> '+krTblState({pending:'待到店', arrived:'已到店', done:'已完成'}[vs], vs);
     if(open && !pendSub) body = '<div style="margin:0 0 8px;padding:8px 14px;background:var(--surface2,#faf6ef);border-radius:8px;">'+krTblWrap(krTblHead()+grp.map(function(s){ return krTblRow(c, s, {can:can, mode:mode, canDone:can && vs!=='pending', doneFn:'krHoldSubDone', cancel:true}); }).join(''))+(g==='done' ? '' : '')+'<div style="font-size:12px;color:var(--slate2);margin-top:6px;">'+krEsc(c.director||'—')+'（院长）'+krSubTimelineHtml(c, rep)+'</div></div>';
   }
@@ -2048,12 +2088,50 @@ function krCaseGroupsHtml(c, withMain){
   return out || (withMain ? '' : '');
 }
 function krSubCasesCard(c){ return krCaseGroupsHtml(c, false); }
+/* ---- CMD-1019-22 七：到院结束 = 人工确认 ----
+   行都完成 / 取消后弹「今天的项目都做完了吗？」［还有项目］［今日完成］；到院卡上一直有［结束今日到院］；没结束的到院不会自动结束 */
+var KR_ENDASK_SHOWN = {};
+function krVisitDoneSig(c, key){
+  if(key==='main') return (c.subItems||[]).filter(function(s){ return !s.visitKey && s.done; }).length+'/'+Object.keys(c.todayMgmtDone||{}).length+'/'+((c.logEntries||[]).length);
+  return coreVisitRows(c, key).concat(coreVisitExtra(c, key)).filter(function(s){ return s.done; }).length+'';
+}
+function krEndAskKey(c){
+  if(c.hasArrived && !c.krProcedureDone && c.endAsk) return 'main';
+  var k = ''; c.visitEndedKeys = c.visitEndedKeys || {};
+  subCaseList(c).forEach(function(r){ var kk = subCaseKey(r); if(!k && r.place==='KR' && coreVisitState(c, kk)==='arrived' && coreVisitRows(c, kk).concat(coreVisitExtra(c, kk)).every(function(s){ return s.done; })) k = kk; });
+  return k;
+}
+function krEndAskCheck(){
+  if(CURRENT_PAGE_ID!=='kr-casedetail' || !krCan()) return;
+  var info = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c) return null; var k = krEndAskKey(c); return k ? {key:k, sig:krVisitDoneSig(c, k)} : null; });
+  if(!info) return; var sk = KR_CASE.id+'|'+info.key;
+  if(info.key==='main' ? KR_ENDASK_SHOWN[sk] : KR_ENDASK_SHOWN[sk]===info.sig) return; KR_ENDASK_SHOWN[sk] = info.sig;
+  krEndAskOpen(info.key, false);
+}
+function krEndAskOpen(key, manual){
+  if(!krCan()) return;
+  var left = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c) return []; return key==='main' ? todayOpenRows(c).map(function(x){ return buyName(x.name); }) : coreVisitRows(c, key).concat(coreVisitExtra(c, key)).filter(function(s){ return !s.done; }).map(function(s){ return buyName(s.content); }); }) || [];
+  var ov = document.getElementById('kr-endask-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-endask-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var k = String(key).replace(/'/g,'');
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">'+(manual ? '结束今日到院？' : '今天的项目都做完了吗？')+'</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">'+(left.length ? '还有 <b>'+left.length+'</b> 项没做完：'+left.map(krEsc).join('、')+'。结束后这些会退回项目卡（之后还能再约 / 再用）。' : (manual ? '这次到院的项目都做完了。' : '这次到院里的项目都已完成或取消。选［还有项目］可以继续加项目 / 本次使用；选［今日完成］这次到院就结束。'))+'</div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="krEndAskNo(\''+k+'\')">'+(manual ? '取消' : '还有项目')+'</button><button class="btn-primary" onclick="krEndAskYes(\''+k+'\')">'+(manual ? '结束今日到院' : '今日完成')+'</button></div></div>';
+  ov.style.zIndex = 100010; ov.classList.add('open');
+}
+function krEndAskNo(key){ var ov = document.getElementById('kr-endask-overlay'); if(ov) ov.classList.remove('open'); if(key==='main') krMut(function(c){ if(!c.endAsk) return false; c.endAsk = false; return true; }); }
+function krEndAskYes(key){
+  var ov = document.getElementById('kr-endask-overlay'); if(ov) ov.classList.remove('open');
+  krMut(function(c){ var r = key==='main' ? coreEndVisitToday(c, ME_NAME) : coreEndSubVisit(c, key, ME_NAME); if(!r.ok){ alert(r.err||'不能结束'); return false; } return true; });
+}
+function krEndBtnHtml(key){ return krCan() ? '<button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krEndAskOpen(\''+String(key).replace(/'/g,'')+'\', true)">结束今日到院</button>' : ''; }
 /* 主案件的行：施术 + 在韩增加（+ 持有的管理项目，今日） */
 function krMainRowsHtml(c, mode){
   var can = krCan(), paidOk = !!c.krBalancePaid, sortSubs = function(a, b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); };
   var subs = (c.subItems||[]).filter(function(s){ return s.kind!=='术后管理记录' && !s.visitKey; }).sort(sortSubs);
-  var held = mode==='done' ? '' : (c.procedureItems||[]).filter(function(it){ return it.heldOver && !it.holdDone && (!c.todayPicked || (c.todayPickMgmt||[]).indexOf(it.name)>-1); }).map(function(it){ var left = holdItemLeft(c, it), pl = holdItemPlanned(c, it), okUse = can && !c.visitClosed && c.krBalancePaid && left-pl>0 && mode==='today';
-    return '<div style="display:grid;grid-template-columns:'+KR_TBL_COLS+';gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span>'+krTypeTag('管理项目')+'</span><span style="font-size:13px;">'+krEsc(buyName(it.name))+(mode==='today' ? krQtyStepper(c, it) : '')+'</span><span>韩国</span><span style="color:var(--slate2);font-weight:600;">剩 '+left+' 次'+(pl ? '（已安排 '+pl+' 次）' : '')+'</span><span>'+(can && mode==='today' ? '<input value="'+krEsc(it.todayNote||'')+'" placeholder="备注" onchange="krItemNote(\''+krEsc(it.name).replace(/'/g,'')+'\',this.value)" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">' : '<span style="color:var(--slate2);">'+(it.todayNote ? krEsc(it.todayNote) : '—')+'</span>')+'</span><span style="text-align:right;white-space:nowrap;">'+(mode==='today' && can ? krBtn('操作完成', 'krMgmtUse(\''+krEsc(it.name).replace(/'/g,'')+'\')', okUse, '剩余次数都已安排')+' <button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="krTodayCancel(\'item\',\''+krEsc(it.name).replace(/'/g,'')+'\',\''+krEsc(it.name).replace(/'/g,'')+'\')">今日取消</button>' : '')+'</span></div>'; }).join('');
+  var held = (c.procedureItems||[]).filter(function(it){ return it.heldOver && (mgmtDoneToday(c, it.name) || (mode!=='done' && !it.holdDone && (!c.todayPicked || (c.todayPickMgmt||[]).indexOf(it.name)>-1))); }).map(function(it){
+    var left = holdItemLeft(c, it), pl = holdItemPlanned(c, it), dn = mgmtDoneToday(c, it.name), okUse = can && !c.visitClosed && c.krBalancePaid && left-pl>0 && mode==='today', nmq = krEsc(it.name).replace(/'/g,'');
+    var stTxt = dn ? '<span style="color:var(--sage);font-weight:600;">已完成'+((c.todayMgmtDone[it.name].qty||1)>1 ? ' ×'+c.todayMgmtDone[it.name].qty : '')+'（剩 '+left+' 次）</span>' : '<span style="color:var(--slate2);font-weight:600;">剩 '+left+' 次'+(pl ? '（已安排 '+pl+' 次）' : '')+'</span>';
+    var ops = (!dn && mode==='today' && can) ? krBtn('操作完成', 'krMgmtUse(\''+nmq+'\')', okUse, '次数用完（剩余次数都已安排）')+' <button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="krTodayCancel(\'item\',\''+nmq+'\',\''+nmq+'\')">今日取消</button>' : '';
+    return '<div style="display:grid;grid-template-columns:'+KR_TBL_COLS+';gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span>'+krTypeTag('管理项目')+'</span><span style="font-size:13px;">'+krEsc(buyName(it.name))+((!dn && mode==='today') ? krQtyStepper(c, it)+krEarlyHint(c, it) : '')+'</span><span>韩国</span>'+stTxt+'<span>'+((!dn && can && mode==='today') ? '<input value="'+krEsc(it.todayNote||'')+'" placeholder="备注" onchange="krItemNote(\''+nmq+'\',this.value)" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">' : '<span style="color:var(--slate2);">'+(it.todayNote ? krEsc(it.todayNote) : '—')+'</span>')+'</span><span style="text-align:right;white-space:nowrap;">'+ops+'</span></div>'; }).join('');
   if(!subs.length && !held) return krEmpty('施术一行会在施术时间确认后自动产生；增加项目在项目卡右上角［增加项目］');
   var rowsHtml = [];
   subs.forEach(function(s){
@@ -3045,17 +3123,20 @@ function krMinText(m){ var h = Math.floor(m/60), mm = m%60; return (h ? h+' 小�
 var KR_EXT = null;
 function krExtOpen(c, names, onPick){
   var ks = c.krSchedule || {}, st = timeToMin(ks.confirmedTime||'09:00'), dur = surgeryMinutes(c);
-  KR_EXT = {onPick:onPick, names:names, now:minToTime(st)+'–'+minToTime(Math.min(1439, st+dur)), dur:dur};
+  KR_EXT = {onPick:onPick, names:names, now:minToTime(st)+'–'+minToTime(Math.min(1439, st+dur)), dur:dur, sel:0};
   var ov = document.getElementById('kr-ext-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-ext-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
-  var b = function(label, m, primary){ return '<button class="'+(primary ? 'btn-primary' : 'btn-outline')+'" style="padding:8px 14px;font-size:13px;" onclick="krExtPick('+m+')">'+label+'</button>'; };
+  /* 单选：点选项只是选中，底部［取消］［确认］才执行（CMD-1019-22 五） */
+  var radio = function(label, v){ return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:13px;cursor:pointer;"><input type="radio" name="kr-ext" '+(v===0 ? 'checked ' : '')+'onchange="krExtSel('+v+')"> '+label+'</label>'; };
   ov.innerHTML = '<div class="modal-box" style="width:480px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">延长施术时间？</div><div style="font-size:13px;line-height:1.7;margin-bottom:12px;">施术时间：现在 <b>'+KR_EXT.now+'</b>（共 '+krMinText(dur)+'）。加了 <b>'+names.map(krEsc).join('、')+'</b> 要延长多久？<br><span style="font-size:11px;color:var(--muted);">不会自动按项目时长相加（麻醉等时间可以重叠），由你决定。</span></div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'+b('不延长', 0, true)+b('+30 分', 30)+b('+1 小时', 60)+b('+1 小时 30 分', 90)+'</div>'+
-    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;"><span style="font-size:13px;">自定义 +</span><input id="kr-ext-custom" type="number" min="5" step="5" placeholder="分钟" style="width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;"><span style="font-size:13px;">分</span><button class="btn-outline" style="padding:6px 12px;font-size:12px;" onclick="krExtCustom()">确定</button></div>'+
-    '<button class="btn-ghost" style="width:100%;" onclick="document.getElementById(\'kr-ext-overlay\').classList.remove(\'open\')">取消</button></div>';
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">'+radio('不延长', 0)+radio('+30 分', 30)+radio('+1 小时', 60)+radio('+1 小时 30 分', 90)+
+    '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:13px;"><input type="radio" name="kr-ext" onchange="krExtSel(-1)"> 自定义 + <input id="kr-ext-custom" type="number" min="5" step="5" placeholder="分钟" disabled style="width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;"> 分</label></div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="document.getElementById(\'kr-ext-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" onclick="krExtConfirm()">确认</button></div></div>';
   ov.style.zIndex = 100008; ov.classList.add('open');
 }
+function krExtSel(v){ if(!KR_EXT) return; KR_EXT.sel = v; var inp = document.getElementById('kr-ext-custom'); if(inp){ inp.disabled = v!==-1; if(v===-1) inp.focus(); } }
 function krExtPick(m){ var f = KR_EXT && KR_EXT.onPick; document.getElementById('kr-ext-overlay').classList.remove('open'); if(f) f(m); }
-function krExtCustom(){ var v = parseInt(document.getElementById('kr-ext-custom').value, 10); if(!(v>0)){ alert('请填延长的分钟数'); return; } krExtPick(v); }
+function krExtConfirm(){ if(!KR_EXT) return; var m = KR_EXT.sel; if(m===-1){ m = parseInt(document.getElementById('kr-ext-custom').value, 10); if(!(m>0)){ alert('请填延长的分钟数'); return; } } krExtPick(m); }
+function krExtCustom(){ krExtConfirm(); } /* 旧入口兜底 */
 /* 麻醉同意书（睡眠 / 全麻）：付款之后确认「已在现场签署」；有待确认的项目时案件区块上方红条，付款后自动弹窗 */
 var KR_ANES_ASKED = {};
 function krAnesPrompt(){ krAnesOpen(); }

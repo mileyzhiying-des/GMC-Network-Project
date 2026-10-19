@@ -31,6 +31,7 @@ function todoSeenBaseline(items){ var s = todoSeenLoad(); if(s.__init){ delete s
 function todoIsNew(it){ return !todoSeenLoad()[it.key]; }
 function todoMarkCaseSeen(caseId){ if(!caseId) return; var s = todoSeenLoad(), ch = false; Object.keys(s).forEach(function(){}); (TODO_LAST||[]).forEach(function(it){ if(it.caseId===caseId && !s[it.key]){ s[it.key] = 1; ch = true; } }); if(ch){ todoSeenSave(); try{ todoRefresh(); }catch(e){} } }
 var TODO_LAST = [], TODO_ACT_CASE = [];
+function todayShift(n){ return ymdAdd(todayStr(), n); }
 function todoMk(kind, text, c, due, over, go, extra){
   return Object.assign({kind:kind, stage:todoStageOf(kind, c), key:kind+'|'+(c ? c.id : '')+'|'+(c ? '' : String(text).replace(/（已超时）/g, '')), cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (c.caseNo||'') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
 }
@@ -126,6 +127,12 @@ function krTodoItems(rows){
     /* CMD-1015-15：院长「待施术」——自己负责的全部已确认（含已到院）施术，只当参考名单（点卡片才显示），按今天 / 之后分组 */
     if(isDir && me && r.director===me.name && c.krSchedule && ['confirmed','arrived'].indexOf(c.krSchedule.status)>-1 && c.krSchedule.confirmedDate && !c.visitClosed && !isEnded(c))
       push(todoMk('dsurg', '施术：'+krActiveItems(c).filter(function(i){ return !krIsMgmtItemC(i); }).map(function(i){ return i.name; }).join('、'), c, c.krSchedule.confirmedDate+' '+(c.krSchedule.confirmedTime||''), false, function(){ krOpenSubCard(r.clinicId, r.id); }));
+    /* CMD-1019-22 七：到院结束是人工确认——营业结束后没结束的不自动结束，第二天变待办「昨天的到院未结束」 */
+    if(work && !c.visitClosed){
+      var mvd = c.hasArrived && !c.krProcedureDone ? mainVisitDay(c) : '';
+      if(mvd && mvd < today) push(todoMk('endvisit', (mvd===todayShift(-1) ? '昨天' : mvd.slice(5).replace('-', '/')+' ')+'的到院未结束：确认是否结束', c, mvd, true, function(){ krOpenSubCard(r.clinicId, r.id); }));
+      subCaseList(c).forEach(function(rp){ var kk = subCaseKey(rp); if(rp.place==='KR' && rp.date && rp.date < today && coreVisitState(c, kk)==='arrived') push(todoMk('endvisit', (rp.date===todayShift(-1) ? '昨天' : rp.date.slice(5).replace('-', '/')+' ')+'的到院未结束：确认是否结束', c, rp.date, true, function(){ krOpenSubCard(r.clinicId, r.id, rp.id); }, {no:subCaseNo(c, rp)||c.caseNo})); });
+    }
     /* 今天到院 / 到店（院长账号看自己的案件） */
     var ks = c.krSchedule;
     if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed)

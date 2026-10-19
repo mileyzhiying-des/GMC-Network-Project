@@ -96,7 +96,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   /* 今日项目全勾 → 结案（KR 页面的［已完成］+［是，结案］） */
   ST.krCloseToday = function(c){
     var ids = (c.subItems||[]).filter(function(s){ return (s.kind==='施术' || s.kind==='增加项目') && !s.done; }).map(function(s){ return s.id; });
-    coreTodayDone(c, ids, ST.krBy); return !!c.krProcedureDone; /* CMD-1015-17：施术完成 → 有术后管理进术后管理阶段，没有直接结案 */
+    coreTodayDone(c, ids, ST.krBy); if(!c.krProcedureDone && c.endAsk) coreEndVisitToday(c, ST.krBy); /* CMD-1019-22：到院结束是人工确认——全部完成后弹窗问，这里模拟按［今日完成］ */
+    return !!c.krProcedureDone; /* CMD-1015-17：施术完成 → 有术后管理进术后管理阶段，没有直接结案 */
   };
   /* 把还没做的术后管理都做完（韩国：到当天 + 客人已到 + 标完成；印尼：IN 做术后管理，提前要写原因）→ 自动结案 */
   ST.finishCare = function(c){
@@ -104,6 +105,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
       if(s.place==='IN'){ var r = coreCareVisit(c, s.id, 'A1 室长', '（自测）客人提前回来'); ST.ok(r.ok, 'IN 做术后管理失败：'+(r.err||'')); }
       else { coreSubSimDay(c, s.id, ST.krBy); coreSubArrived(c, s.id, ST.krBy); coreSubDone(c, s.id, ST.krBy, []); }
     });
+    subCaseList(c).forEach(function(r){ var k = subCaseKey(r); if(r.place==='KR' && coreVisitState(c, k)==='arrived') coreEndSubVisit(c, k, ST.krBy); }); /* 其他到院也是人工结束 */
   };
   ST.tests = {};
   ST.run = function(id){ if(!ST.tests[id]) return null; return ST.T(id, ST.tests[id].title, ST.tests[id].fn); };
@@ -1421,7 +1423,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(coreUnitUseNow(c, it.name, ST.krBy).ok, '到店后［本次使用］把管理项目加进这次到访');
     var rows2 = coreVisitRows(c, key), use = rows2.filter(function(s){ return s.holdUseOf===it.name; })[0]; ST.ok(!!use && use.arrived, '管理项目加成这次到访里的一行「使用」');
     var before = it.holdUsed||0; rows2.forEach(function(s){ coreSubDone(c, s.id, ST.krBy, []); });
-    ST.ok((it.holdUsed||0)===before+1 && rows2.every(function(s){ return s.done; }) && coreVisitState(c, key)==='done', '逐行完成：术后管理标完成、管理项目扣 1 次，整张卡「已完成」');
+    ST.ok((it.holdUsed||0)===before+1 && rows2.every(function(s){ return s.done; }) && coreVisitState(c, key)==='arrived', '逐行完成：术后管理标完成、管理项目扣 1 次；行都完成但还没人工结束，到院仍是「已到店」'); ST.ok(coreEndSubVisit(c, key, ST.krBy).ok && coreVisitState(c, key)==='done', '人工结束这次到院 → 整张卡「已完成」');
     ST.ok(it.holdDone===true && krItemStatus(it)==='已用完', '用完变已用完');
   });
   ST.def('R20a','项目卡：术后管理［预约时间］→ 子案件（术后预约）→ 到店 → 管理项目［本次使用］→ 逐行完成；管理项目［预约使用］→ 管理预约；取消本次；待付款不能操作（A1 分页）',function(){
@@ -1434,7 +1436,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0], sp = lib.specs[0];
     ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:{projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price}}), '在韩加管理项目'); var it = c.procedureItems[c.procedureItems.length-1];
     ST.ok(!coreUnitBookUse(c, it.name, D(30), '10:00', ST.krBy), '待付款：不能预约使用'); ST.ok(!coreUnitUseNow(c, it.name, ST.krBy).ok, '待付款 / 没人到店：不能本次使用');
-    ST.ok(coreAddOnPaid(c, ST.krBy) && it.heldOver, '付款后在韩持有'); ST.ok(coreUseTarget(c)===null && !coreUnitUseNow(c, it.name, ST.krBy).ok, '没有客人已到店时没有目标，［本次使用］不可用');
+    ST.ok(coreAddOnPaid(c, ST.krBy) && it.heldOver, '付款后在韩持有'); ST.ok(!!coreUseTarget(c) && coreUseTarget(c).key==='main', '没有客人已到店的术后管理到院时：目标是今天已结束的到院（本次使用会自动重新打开，CMD-1019-22）');
     ST.ok(coreUnitBookUse(c, it.name, D(30), '11:00', ST.krBy), '［预约使用］'); var k3 = 'KR|'+D(30); ST.ok(visitSource(c, k3)==='管理预约' && coreVisitRows(c, k3).length===1, '新子案件：预约来源 = 管理预约');
     coreVisitSim(c, k3, ST.krBy); ST.ok(coreVisitArrive(c, k3, ST.krBy), '到店'); var r3 = coreVisitRows(c, k3)[0]; ST.ok(coreSubDone(c, r3.id, ST.krBy, []) && it.holdUsed===1 && (it.uses||[]).length===1, '完成：扣 1 次，记使用时间');
     coreVisitSim(c, k1, ST.krBy); ST.ok(coreVisitArrive(c, k1, ST.krBy) && coreUseTarget(c).key===k1, '到店后目标 = 这次到访');
@@ -1965,6 +1967,59 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var bt = readReceptionBeats(); bt[CURRENT_CLINIC_ID+':'+rc.id] = Date.now()-RECEPTION_BEAT_TTL+RECEPTION_LEAVE_GRACE; localStorage.setItem(RECEPTION_BEAT_KEY, JSON.stringify(bt)); sweepStaleReceptions(true); ST.ok(receptionOpen(rc), '离开页面后的宽限期内不退回（刷新 / 热更新回来还能保住）');
     bt[CURRENT_CLINIC_ID+':'+rc.id] = Date.now()-RECEPTION_BEAT_TTL-1000; localStorage.setItem(RECEPTION_BEAT_KEY, JSON.stringify(bt)); sweepStaleReceptions(true); ST.ok(!receptionOpen(rc), '真的没人了（心跳过期）才退回待访问'); ST.ok(RECEPTION_BEAT_TTL===90000, 'TTL 90 秒');
   });
+  ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = toConfirmed('R51a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid];
+    var lib = krLocalLib(hid).filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0], sp = lib.specs[0];
+    KR_FORCE_CLASH = true; try{ coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:{projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price}}); } finally { KR_FORCE_CLASH = false; }
+    coreAddOnPaid(c, ST.krBy); var m = c.procedureItems.filter(function(x){ return krIsMgmtItemC(x); })[0]; m.qty = 6; m.holdUsed = 0; m.firstDay = 3; m.interval = 6; m.copies = 2; m.specTimes = 3;
+    var surgN = c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && !x.cancelled; }).map(function(x){ return x.name; });
+    ST.ok(coreTodayPick(c, surgN, [m.name], ST.krBy).ok, '今日进行：施术 + 持有管理项目');
+    /* 二：施术都完成后，管理项目仍在到院卡里，到院不会自动结束 */
+    var ids = (c.subItems||[]).filter(function(s){ return (s.kind==='施术' || s.kind==='增加项目') && !s.done; }).map(function(s){ return s.id; }); coreTodayDone(c, ids, ST.krBy);
+    ST.ok(!c.krProcedureDone && !c.endAsk && todayOpenRows(c).some(function(x){ return x.held===m; }), '两个施术完成后：管理项目仍在到院卡里待做，到院没有自动结束、也没有弹窗');
+    var K = typeof krMgSuggest==='function';
+    /* 一 / 六：选了就能用，提前只灰字提示；按完成才扣，一次 2 次 */
+    if(K) ST.ok(/建议 \d\d\/\d\d 起，今天提前使用/.test(krEarlyHint(c, m)), '提前使用的灰色提示：'+krEarlyHint(c, m).replace(/<[^>]+>/g, ''));
+    coreTodayQtySet(c, m.name, 2); ST.ok(coreMgmtUse(c, m.name, ST.krBy) && m.holdUsed===2 && holdItemLeft(c, m)===4 && mgmtDoneToday(c, m.name), '完成 → 剩 4 / 共 6，到院卡里这一行变「已完成」');
+    var useDay = fmtUtc(m.uses[m.uses.length-1].at).slice(0, 10); if(K){ var nxt = krMgSuggest(c, m, 2); ST.ok('20'+nxt===ymdAdd(useDay, 6), '用 2 次后下一次建议日期 = 使用日 + 6 天：'+nxt+' vs '+ymdAdd(useDay, 6)); }
+    /* 三 / 四：已使用合成一行 ×2，旧记录次数对不上时补到同一个使用时间 */
+    if(K){ var es = krUseEntries(m); ST.ok(es.length===1 && es[0].qty===2, '同一次用 2 次 = 一行 ×2'); var u0 = m.uses[0].at; m.uses = [{at:u0, key:'main'}]; es = krUseEntries(m); ST.ok(es.length===1 && es[0].qty===2 && es[0].at===u0, '旧记录（只记了 1 条、已用 2 次）补成同一个使用时间的 ×2，没有「—」行'); }
+    /* 七：全部完成 → 问；还有项目 → 继续；今日完成 → 结束 */
+    ST.ok(c.endAsk && !c.krProcedureDone, '行都做完 → 弹窗问「今天的项目都做完了吗？」（endAsk），到院仍进行中');
+    ST.ok(!!coreUseTarget(c) && coreUseTarget(c).key==='main', '还没结束时可以继续加项目 / 本次使用');
+    var extra = (h.projects||[]).filter(function(p){ return p.name!==undefined && !krActiveItems(c).some(function(it){ return it.name===p.name; }); })[0];
+    KR_FORCE_CLASH = true; try{ ST.ok(coreAddOnItem(c, extra.name, ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}}), '继续加项目'); } finally { KR_FORCE_CLASH = false; }
+    ST.ok(!coreEndVisitToday(c, ST.krBy).ok, '有待付款的项目不能结束到院');
+    ST.ok(coreAddOnPaid(c, ST.krBy), '付款'); var rows2 = (c.subItems||[]).filter(function(s){ return s.kind==='增加项目' && !s.visitKey && !s.done && s.projectName===extra.name; }); ST.ok(rows2.length===1, '付款后新项目在到院卡里待做（有［完成］［取消］的行）');
+    c.endAsk = false; ST.ok(coreEndVisitToday(c, ST.krBy).ok && c.krProcedureDone, '［结束今日到院］：没做完的退回项目卡并结束');
+    ST.ok(c.procedureItems.filter(function(x){ return x.name===extra.name; })[0].deferUse, '没做完的项目退回项目卡（未使用）');
+    /* 八：结束后又有待做 → 自动重新打开，阶段退回；术后管理不能抢先进入 */
+    ST.ok(coreUseTarget(c) && coreUseTarget(c).key==='main', '今天结束后目标仍是今天的到院');
+    ST.ok(coreUnitUseNow(c, extra.name, ST.krBy, {ext:0}).ok && !c.krProcedureDone && ST.hasLog(c, /重新打开今日到院/), '结束后按［本次使用］→ 自动重新打开今日到院，Timeline 记「重新打开今日到院」');
+    ST.ok(c.stage==='travel', '页头阶段退回赴韩施术：'+c.stage);
+    /* 旧数据修复：到院被标结束但今天还有待做 */
+    c.krProcedureDone = true; c.stage = 'postcare'; ST.ok(repairVisitState()>=1 && !c.krProcedureDone && c.stage!=='postcare', '修复：到院显示结束但还有待做项目 → 重新打开，阶段回到赴韩施术（A000004 类）'); ST.ok(repairVisitState()===0, '修复函数幂等');
+    /* 六：灰按钮旁边写原因 */
+    if(K) ST.ok(/class="kr-why"[^>]*>待付款</.test(krBtn('本次使用', '', false, '待付款')) && /title="待付款"/.test(krBtn('本次使用', '', false, '待付款')), '灰掉的按钮：悬停 + 旁边小字写原因');
+    localStorage.setItem('__R51', JSON.stringify({id:c.id, m:m.name}));
+  });
+  ST.def('R51b','CMD-1019-22（KM1 分页）：已使用 ×N / 建议日期从实际使用日起算 / 灰按钮原因 / 昨天的到院未结束待办 / 结束到院按钮与弹窗 / 延长弹窗单选（先在 A1 跑 R51a）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R51')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R51a')) return;
+    var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件')) return; var gc = function(){ return Store.withClinic(r.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===rec.id; })[0]; }); };
+    var c = gc(), m = c.procedureItems.filter(function(x){ return x.name===rec.m; })[0]; var useDay = fmtUtc(m.uses[m.uses.length-1].at).slice(0, 10);
+    ST.ok('20'+krMgSuggest(c, m, 2)===ymdAdd(useDay, 6), '用过以后建议日期从实际使用日起算（使用日 + 间隔）');
+    krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); krProjPage('mgmt'); var tx = document.getElementById('krcase-body').innerText;
+    ST.ok(/项目\s*次数\s*使用时间\s*在哪次到院/.test(tx) && /×2/.test(tx), '已使用表：项目｜次数｜使用时间｜在哪次到院，同一次用 2 次合成一行 ×2，没有建议日期栏');
+    ST.ok(/查看案件/.test(tx), '已使用行有［查看案件］');
+    var ci = document.getElementById('krcase-body').innerHTML; ST.ok(/结束今日到院/.test(ci), '到院卡上有［结束今日到院］');
+    krEndAskOpen('main', true); var eo = document.getElementById('kr-endask-overlay'); ST.ok(eo && eo.classList.contains('open') && /结束今日到院？/.test(eo.innerText) && /取消/.test(eo.innerText), '手动结束弹窗：［取消］［结束今日到院］'); eo.classList.remove('open');
+    krEndAskOpen('main', false); ST.ok(/今天的项目都做完了吗？/.test(eo.innerText) && /还有项目/.test(eo.innerText) && /今日完成/.test(eo.innerText), '自动弹窗：今天的项目都做完了吗？［还有项目］［今日完成］'); eo.classList.remove('open');
+    krExtOpen(c, ['测试项目'], function(){}); var xo = document.getElementById('kr-ext-overlay'); ST.ok(xo.querySelectorAll('input[type=radio]').length===5 && xo.querySelector('input[type=radio]').checked && /取消/.test(xo.innerText) && /确认/.test(xo.innerText) && !/确定/.test(xo.innerText), '延长弹窗：5 个单选（默认不延长）+ 底部［取消］［确认］，没有自定义旁的［确定］'); ST.ok(xo.querySelector('#kr-ext-custom').disabled, '选自定义才能填分钟'); xo.classList.remove('open');
+    Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===rec.id; })[0]; cc.krArrivedDay = ymdAdd(todayStr(), -1); cc.krSchedule.confirmedDate = ymdAdd(todayStr(), -1); cc.krProcedureDone = false; return true; });
+    ST.ok(krTodoItems(krAllCases()).some(function(t){ return t.caseId===rec.id && /昨天的到院未结束/.test(t.text); }), 'KR 待办：昨天的到院未结束');
+  });
+
   ST.def('R48a','CMD-1019-19：KR 案件页页头——名字下一行灰色小字「Case ID · 来源诊所 · 院长 · KR 室长」（不是卡片），室长职称只写一次，状态卡紧接在下面（KM1 / KD1 分页）',function(){
     ST.ok(krCoordText('KM1 室长 실장')==='KM1 室长' && krCoordText('KM1 室长')==='KM1 室长', '旧数据「KM1 室长 실장」只留一次职称');
     var c0 = {krCoordinator:'KM1 室长 실장', hospitalId:'H1'}; syncKrCoordinator(c0); ST.ok(!/실장/.test(c0.krCoordinator), 'syncKrCoordinator 不再加 실장，旧值去掉');

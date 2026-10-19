@@ -214,7 +214,7 @@ function deriveCaseStage(c){
     return out==='closed' ? 'closed' : out==='reportonly' ? 'reportonly' : 'cancelled';
   }
   if(c.krVisit) return 'krmgmt'; /* IN 在 KR 医院日程占位、KR 确认后开的新案件（CMD-1015-17：在韩管理阶段） */
-  if(c.krProcedureDone && c.settlementDone && typeof carePending==='function' && carePending(c)) return 'postcare'; /* 施术完成且还有术后管理没做完 */
+  if(c.krProcedureDone && c.settlementDone && typeof carePending==='function' && carePending(c) && !(typeof todayOpenRows==='function' && todayOpenRows(c).length)) return 'postcare'; /* 今天还有待做项目时不能进术后管理阶段（CMD-1019-22 八） */ /* 施术完成且还有术后管理没做完 */
   if(consultCarryStage(c)) return 'consult';
   if(c.mgmtActive) return 'local'; /* 使用项目后进入"本地管理" */
   if(c.settlementDone && krActiveItems(c).length>0) return 'travel'; /* 付款完成 → 施术预约；之后读施术日期卡片（Draft/Pending=施术预约，其余=赴韩施术） */
