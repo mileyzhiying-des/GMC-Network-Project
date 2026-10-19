@@ -180,6 +180,8 @@ var KR_TZ = 'Asia/Seoul'; /* 韩国医院时区 */
    时区 tz 原来是 CLINIC_TZ + localStorage('gmc_tz')，现在搬到这里，CLINIC_TZ 只是它的镜像（applyClinicSettings 同步）。
    赴韩定金比例不在这里（GMC 统一设定）。 */
 var SLOT_MIN = 30; /* 时段长度（分钟），固定 30（我的判断：设定里不提供修改） */
+/* 赴韩施术日期通知模板（印尼文 + 中文）。变量：{clinic} {name} {date} {time_kr} {time_id} {hospital} {address} {anes} {phone}；模板在诊所设定里可改，这里只是默认值 */
+var SMS_SURGERY_DEFAULT = '【{clinic}】Halo {name}, jadwal operasi Anda di Korea: tanggal {date}, tiba di rumah sakit pukul {time_kr} (waktu Korea) / {time_id} (waktu Indonesia). Rumah sakit: {hospital}. Alamat: {address}. {anes}Hubungi klinik: {phone}　|　您好 {name}，赴韩施术日期 {date}，到院时间 {time_kr}（韩国时间）/ {time_id}（印尼时间），医院：{hospital}，地址：{address}。{anes}诊所联系方式：{phone}';
 function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分区里）；o 可覆盖名称、地址等 */
  var s = {
   name:'GMC 合作诊所（雅加达）', address:'Jl. Jenderal Sudirman Kav. 52, Jakarta Selatan', phone:'+62 21 5550 1234', city:'雅加达', tz:'Asia/Jakarta', /* tz 由地址/城市自动判定（clinicTzOf），不能手动改 */
@@ -196,7 +198,8 @@ function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分
     link:'您好，这里是GMC Network，麻烦点击链接填写基础信息，完成后即视为预约成功：',
     confirm:'【{clinic}】Halo {name}, reservasi Anda {time} sudah dikonfirmasi. Alamat: {address}, Telp: {phone}. Lihat/batalkan: {url}　|　您好 {name}，您已预约 {time}，地址：{address}。查看/取消预约：{url}',
     remind:'【{clinic}】Pengingat: reservasi {name} pada {time}. Alamat: {address}. Lihat/batalkan: {url}　|　提醒：您 {time} 有预约。查看/取消：{url}',
-    cancel:'【{clinic}】Halo {name}, reservasi {time} telah dibatalkan. Reservasi ulang: {url}　|　您 {time} 的预约已取消，重新预约：{url}'
+    cancel:'【{clinic}】Halo {name}, reservasi {time} telah dibatalkan. Reservasi ulang: {url}　|　您 {time} 的预约已取消，重新预约：{url}',
+    surgery:SMS_SURGERY_DEFAULT /* CMD-1019-12：赴韩施术日期通知（短信 / WhatsApp 共用） */
   },
   privacyVersion:'v1.0',
   privacyPolicy:'本诊所仅为办理预约、接待和医美咨询收集您的个人资料与健康资料，并按《隐私/数据跨境使用授权同意书》约定处理；您可随时要求查看、更正或删除。',
@@ -622,6 +625,12 @@ function passportOf(cl){ var p = (cl && cl.passport) || {}; return {no:p.no||'',
 function passportComplete(cl){ var p = passportOf(cl); return !!(p.no && p.issue && p.expiry); }
 function passportSurgeryDate(c){ var ks = c && c.krSchedule || {}; return ks.confirmedDate || ks.primary || ''; }
 /* level：none 未登记 / expired 已过期 / before 施术前到期 / ok */
+/* 赴韩定金结算单（含赴韩项目）但客人没登记护照：不能付款（CMD-1019-12 三） */
+function batchNeedsPassport(c, b){
+  if(!b || b.status!=='unpaid' || b.noDeposit || !b.krTotal) return false;
+  if(!(c.procedureItems||[]).some(function(it){ return it.batchId===b.id && it.origin==='KR'; })) return false;
+  return !passportComplete(clientByName(c.name));
+}
 function passportAlert(c){
   var cl = clientByName(c.name);
   if(!passportComplete(cl)) return {level:'none', text:'护照未登记'};
@@ -676,7 +685,7 @@ function projectNameOptions(){ return PROJECT_LIBRARY.filter(function(p){ return
 /* ---- 短信（演示：不真的发，全部记在 SMS_LOG；模板读诊所设定，验证码格式固定） ---- */
 var SMS_LOG = [];   /* {id, ts, to, kind, text, caseId} */
 var SMS_SEQ = 1;
-var SMS_KIND_NAMES = {code:'验证码', link:'预约链接', confirm:'预约确认', remind:'预约提醒', cancel:'预约取消'};
+var SMS_KIND_NAMES = {code:'验证码', link:'预约链接', confirm:'预约确认', remind:'预约提醒', cancel:'预约取消', surgery:'施术日期'};
 var SMS_CODE_FORMAT = '【GMC Network】Kode verifikasi / 验证码：{code}（5 menit / 5 分钟内有效）。Jangan beritahu siapa pun / 请勿告诉他人。';
 function bookingUrl(params){ return location.origin + '/booking.html?' + new URLSearchParams(Object.assign({clinic:CURRENT_CLINIC_ID}, params)).toString(); } /* 链接必须带诊所（?clinic=）；原型不带默认 C1，正式版没带应显示错误 */
 function caseViewUrl(c){ return bookingUrl({view:c.caseNo}); }
@@ -688,7 +697,7 @@ function logSms(kind, to, text, caseId){
 }
 /* 按类型发短信：code 用固定格式，其余读诊所设定的模板 */
 function sendSms(kind, to, vars, caseId){
-  var tpl = kind==='code' ? SMS_CODE_FORMAT : CLINIC_SETTINGS.sms[kind];
+  var tpl = kind==='code' ? SMS_CODE_FORMAT : (CLINIC_SETTINGS.sms[kind] || (kind==='surgery' ? SMS_SURGERY_DEFAULT : ''));
   var text = smsFill(tpl, Object.assign({clinic:CLINIC_SETTINGS.name, address:CLINIC_SETTINGS.address, phone:CLINIC_SETTINGS.phone}, vars||{}));
   return logSms(kind, to, text, caseId);
 }
@@ -3343,7 +3352,7 @@ function unpaidBatchesHtml(c){
     var parts = [];
     if(b.krDeposit) parts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'，尾款 '+formatCurrency(Math.max(0,(b.krTotal||0)-b.krDeposit),'KRW')+'（赴韩后医院收）');
     if(b.inTotal) parts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">批次 '+b.id+' 待付款（'+parts.join('、')+'）</span><button class="btn-primary" onclick="settleProjects(\''+b.id+'\')">确认付款</button></div>';
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">批次 '+b.id+' 待付款（'+parts.join('、')+'）</span>'+(batchNeedsPassport(c, b) ? '<span style="font-size:11px;color:#B3261E;font-weight:700;margin-right:8px;">护照未登记</span>' : '')+'<button class="btn-primary" onclick="settleProjects(\''+b.id+'\')">确认付款</button></div>';
   }).join('')+'</div>';
 }
 
@@ -4168,6 +4177,7 @@ function toggleAnesSign(on){ SETTLE_ANES_SIGNED = !!on; var b = document.getElem
 function confirmSettlementPayment(){
   var c = getCurrentCase(); if(!c) return;
   var batch = (c.settlementBatches||[]).filter(function(b){ return b.id===SETTLE_MODAL_BATCH_ID; })[0]; if(!batch) return;
+  if(batchNeedsPassport(c, batch)){ alert('护照未登记：请先登记护照再付款'); return; } /* CMD-1019-12：所有付款路径都生效 */
   /* 付定金前必须签署麻醉同意书（没签不能付） */
   var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; });
   var need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
@@ -4970,6 +4980,8 @@ function krPlanMoneyLine(c){
   var bal = info.diff>=0 ? '尾款（医院收） '+formatCurrency(info.diff,'KRW')+'（'+(c.krBalancePaid ? '已付清' : '未付')+'）' : (c.krBalancePaid ? '已退差额 ' : '应退差额 ')+formatCurrency(-info.diff,'KRW');
   return '<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--slate2);margin-top:10px;padding-top:10px;border-top:1px solid var(--border2);"><span>项目合计 '+formatCurrency(info.total,'KRW')+'</span><span>'+dep+'</span><span>'+bal+'</span></div>';
 }
+/* KR 回过日期（确认过时间 / 回过无法安排）才算「回过」；没回过之前客人不去 = ［取消赴韩］，回过之后才是［无法协调］ */
+function krScheduleReplied(c){ var ks = c.krSchedule || {}; return !!(ks.confirmedDate || ks.rejectNote); }
 function krProcedureTabMain(c, tabsHtml){
   var ks = c.krSchedule;
   var st = scheduleState(c);
@@ -4980,22 +4992,23 @@ function krProcedureTabMain(c, tabsHtml){
   if(hasActive && c.krBalancePaid && st==='Arrived'){ body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div><div style="font-size:12px;color:var(--sage);">✓ 已到院、尾款已付清（施术日期 '+ks.confirmedDate+'）；详细记录见「Timeline」。</div>'; }
   else if(hasActive){
     /* 施术日期卡片（Schedule）：Draft / Pending / Confirmed / Changing / Arrived，案件主状态直接读这里 */
+    var krBtn = krScheduleReplied(c) ? '无法协调' : '取消赴韩'; /* CMD-1019-12：KR 还没回过日期 = 客人决定不去了 → ［取消赴韩］；KR 回过日期 / 无法安排之后才是［无法协调］ */
     var canModify = ks && ks.status==='confirmed' && !c.hasArrived; /* 到医院前都可改日期（CMD-1012-13，拿掉施术前 2 周限制） */
     if(st==='Draft'){
       ks = ensureKrScheduleDraft(c);
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">只能选择KR室长已开放的日期（浅色为未开放）</div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">只能选择KR室长可接待的日期（浅色 = 休诊 / 约满 / 已过）</div>'+
         monthNav+
         krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+
-        '<div style="display:flex;gap:12px;margin-top:16px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">无法协调</button></div>'; /* ［无法协调］只在时间确认前（待递交 / 待确认）出现 */
+        '<div style="display:flex;gap:12px;margin-top:16px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">'+krBtn+'</button></div>'; /* ［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现 */
     } else if(st==='Pending'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
         '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待Kr室长确认</div>'+
         '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">等待 KR 室长选定日期、填到院时间和地址（或回复无法安排）</div>'+
-        '<button class="btn-outline" onclick="requestCannotCoordinate()">无法协调</button>';
+        '<button class="btn-outline" onclick="requestCannotCoordinate()">'+krBtn+'</button>';
     } else if(st==='Confirmed'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
-        '<div class="card" style="padding:14px 16px;margin-bottom:14px;">施术日期 '+ks.confirmedDate+'，到院时间 '+ksTimeText({confirmedDate:ks.confirmedDate, confirmedTime:ks.confirmedTime}).replace(ks.confirmedDate+' ','')+(ks.address?'，地址：'+ks.address:'')+'，请转告客人'+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+
+        '<div class="card" id="surg-send-row" style="padding:14px 16px;margin-bottom:14px;"><div style="display:flex;align-items:flex-start;gap:12px;"><div style="flex:1;">施术日期 '+ks.confirmedDate+'，到院时间 '+ksTimeText({confirmedDate:ks.confirmedDate, confirmedTime:ks.confirmedTime}).replace(ks.confirmedDate+' ','')+(ks.address?'，地址：'+ks.address:'')+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+surgSendHtml(c)+'</div></div>'+
         (c.hasArrived
           ? '<div style="font-size:12px;color:var(--terracotta);margin-bottom:12px;">KR 已在韩国重新预约施术时间；到过医院之后 IN 端不能再修改日期或取消项目，客人再到医院时由 KR 重新标记"已到医院"</div>'
           : '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">'+

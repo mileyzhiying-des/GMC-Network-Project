@@ -105,7 +105,8 @@ var CLINIC_FIELD_LABELS = {
   lunchFrom:'午休开始', lunchTo:'午休结束', closedRules:'定期休诊', holdMinutes:'预约占位倒计时（分钟）', noShowMinutes:'未到店判定（分钟）', consultFee:'面诊费（印尼盾）',
   slotCapacity:'每个时段的预约上限', remindBeforeHours:'提醒短信发送时间（预约前几小时）', privacyVersion:'同意书版本', privacyPolicy:'隐私政策'
 };
-var SMS_KIND_LABELS = {link:'预约链接短信', confirm:'预约确认短信', remind:'预约提醒短信', cancel:'预约取消短信'};
+var SMS_KIND_LABELS = {link:'预约链接短信', confirm:'预约确认短信', remind:'预约提醒短信', cancel:'预约取消短信', surgery:'赴韩施术日期通知（短信 / WhatsApp）'};
+function smsTplOf(d, k){ return d.sms[k]!==undefined ? d.sms[k] : (k==='surgery' ? SMS_SURGERY_DEFAULT : ''); } /* 旧设定里没有施术日期模板时用默认值 */
 var DOW_NAMES = ['周日','周一','周二','周三','周四','周五','周六'];
 
 /* 定期休诊编辑器（诊所设定 / KR 医院设定共用）：每个星期选「营业 / 整天休诊 / 从某时刻起休诊」 */
@@ -132,7 +133,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
   var tzTxt = tzLabel(clinicTzOf(d))+'，'+t('依地址自动判定'); /* 时区只读，由地址 / 城市自动判定 */
   var dow = closedRulesEditorHtml(d.closedRules, 'clinicSetClosed'); /* 定期休诊：每周固定，整天或从某时刻起 */
   var sms = Object.keys(SMS_KIND_LABELS).map(function(k){
-    return aField(SMS_KIND_LABELS[k], '<textarea rows="3" data-k="sms.'+k+'" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.sms[k])+'</textarea>'); }).join('');
+    return aField(SMS_KIND_LABELS[k], '<textarea rows="3" data-k="sms.'+k+'" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(smsTplOf(d, k))+'</textarea>'); }).join('');
   var hospBlock = linkedHospitals().map(function(h){
     var ds = hospitalDirectors(h.id).map(function(x){ return aEsc(x.name)+(x.active?'':'（'+t('已停用')+'）'); }).join('、');
     return '<div style="font-size:13px;line-height:2;padding:6px 0;border-bottom:1px solid var(--border2);"><b>'+t('韩国医院')+'：</b>'+aEsc(h.name.ko)+' / '+aEsc(h.name.en)+'<br><b>'+t('韩国室长')+'：</b>'+hospitalCoordinators(h.id).map(aEsc).join('、')+'<br><b>'+t('院长名单')+'：</b>'+ds+'</div>';
@@ -191,7 +192,7 @@ function clinicValidate(d){
   if(!num('slotCapacity',1,50)) return '每个时段的预约上限请填 1～50 的整数';
   if(!num('remindBeforeHours',1,72)) return '提醒短信发送时间请填 1～72 小时';
   var ks = Object.keys(SMS_KIND_LABELS);
-  for(var j=0;j<ks.length;j++) if(!String(d.sms[ks[j]]||'').trim()) return SMS_KIND_LABELS[ks[j]]+'的模板不能为空';
+  for(var j=0;j<ks.length;j++) if(!String(smsTplOf(d, ks[j])||'').trim()) return SMS_KIND_LABELS[ks[j]]+'的模板不能为空';
   if(!String(d.privacyVersion).trim()) return '同意书版本不能为空';
   if(!String(d.privacyPolicy).trim()) return '隐私政策不能为空';
   return '';

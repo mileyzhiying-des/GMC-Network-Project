@@ -811,15 +811,17 @@ function passportSave(cl, v, action){
 }
 var PASSPORT_CTX = null;
 /* 确认赴韩前的护照关：没有 → 必须填；已有 → 带出来让室长确认（可改）；填完才继续 cb */
-function passportGate(c, cb){
+function passportGate(c, cb, o){
   var cl = clientByName(c.name); if(!cl){ cb(); return; }
+  /* CMD-1019-12：已有护照 → 确认赴韩不弹窗，直接继续；只有护照已过期 / 施术前到期才弹窗提醒修改（取代 CMD-1019-11 的「每次都弹窗确认」）；付款关（missingOnly）只在没登记时弹 */
+  if(passportComplete(cl)){ var pa = passportAlert(c); if((o && o.missingOnly) || (pa.level!=='expired' && pa.level!=='before')){ cb(); return; } }
   if(window.GMC_PASSPORT_AUTO){ if(!passportComplete(cl)) passportSave(cl, {no:'T'+Math.floor(Math.random()*9e6+1e6), issue:'2020-01-01', expiry:'2040-01-01'}, '已登记护照'); cb(); return; }
   PASSPORT_CTX = {caseId:c.id, cb:cb};
   var has = passportComplete(cl);
   var ov = document.getElementById('passport-overlay');
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'passport-overlay'; ov.style.zIndex = 95; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+(has ? '确认护照信息' : '登记护照信息')+'</div>'+
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+(has ? '客人档案里已有护照，请确认（可修改）。' : '第一次确认赴韩，需要登记护照；之后会自动带出。')+'护照号不会出现在列表、通知和 Timeline。</div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+(has ? '护照需要更新' : '登记护照信息')+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+(has ? '客人档案里的护照'+(passportAlert(c).level==='expired' ? '已过期' : '在施术前到期')+'，请确认或更新。' : '第一次确认赴韩，需要登记护照；之后会自动带出，不再弹窗。')+'护照号不会出现在列表、通知和 Timeline。</div>'+
     passportFormHtml(cl, 'pp')+'<div id="pp-warn" style="font-size:12px;margin-top:8px;"></div><div id="pp-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="passportCancel()">取消</button><button class="btn-primary" onclick="passportConfirm()">确认并继续</button></div></div>';
   ov.classList.add('open'); passportWarnRefresh();
@@ -2070,7 +2072,7 @@ function confirmRefund(){
   var compMode = REFUND_METHOD==='comp' && ['normal','cannotCoordinate'].indexOf(mode0)>-1;
   if(compMode && !(amount>0)){ alert('转本地项目（置换）的金额要大于 0'); chosen.forEach(function(it){ if(names.indexOf(it.name)>-1) it.cancelled = false; }); return; }
   c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote, comp:compMode});
-  if(mode0==='cannotCoordinate') logCaseEvent(c, ME_NAME, '室长点［无法协调］：施术日期始终无法协调，取消全部未完成赴韩项目并退款'); /* 供测试覆盖页判断 D29（CMD-1012-06 补） */
+  if(mode0==='cannotCoordinate') logCaseEvent(c, ME_NAME, REFUND_CANCEL_KR ? '室长点［取消赴韩］：客人决定不赴韩（KR 还没回过日期），取消全部未完成赴韩项目并退款（后续照无法协调流程）' : '室长点［无法协调］：施术日期始终无法协调，取消全部未完成赴韩项目并退款'); /* 供测试覆盖页判断 D29（CMD-1012-06 补） */
   logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，'+(compMode ? '转本地置换 ' : '退款 '))+formatCurrency(amount,'KRW')+'，'+(compMode ? '置换' : '退款')+'原因：'+reason+(refNote ? '；备注：'+refNote : '')+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];
   closeRefundModal();
@@ -2182,6 +2184,8 @@ function settleProjects(batchId){
   var c = getCurrentCase(); if(!c) return;
   var batch = batchId ? (c.settlementBatches||[]).filter(function(b){ return b.id===batchId; })[0] : latestUnpaidBatch(c);
   if(!batch) return;
+  if(batchNeedsPassport(c, batch) && !window.GMC_PASSPORT_AUTO){ passportGate(c, function(){ settleProjects(batch.id); }, {missingOnly:true}); return; } /* CMD-1019-12：旧案件有定金结算单但没护照 → 先登记 */
+  if(batchNeedsPassport(c, batch)) passportGate(c, function(){}, {missingOnly:true});
   SETTLE_MODAL_BATCH_ID = batch.id;
   var rows = '';
   if(batch.krTotal){
@@ -2236,11 +2240,13 @@ function submitKrScheduleChangeDate(){
   renderCaseBody(c);
 }
 
+var REFUND_CANCEL_KR = false; /* CMD-1019-12：KR 还没回过日期时的「取消赴韩」（后续照无法协调流程，Timeline 用词不同） */
 function requestCannotCoordinate(){
   var c = getCurrentCase(); if(!c || c.hasArrived) return;
   var undoneKr = krNotStartedItems(c);
   if(!undoneKr.length) return;
-  if(!confirm('确认施术日期始终无法协调？将取消全部未完成赴韩项目并退款（金额和退款原因在下一步填写）。')) return;
+  REFUND_CANCEL_KR = !krScheduleReplied(c);
+  if(!confirm(REFUND_CANCEL_KR ? '确认取消赴韩（客人决定不去了）？将取消全部未完成赴韩项目并退款（金额和退款原因在下一步填写）。' : '确认施术日期始终无法协调？将取消全部未完成赴韩项目并退款（金额和退款原因在下一步填写）。')){ REFUND_CANCEL_KR = false; return; }
   openRefundModal(undoneKr, 'cannotCoordinate');
 }
 

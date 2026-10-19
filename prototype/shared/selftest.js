@@ -892,7 +892,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.ok(!urgeInfo(u), '还没超过预计出报告时间不能催'); u.reportEta = D(-1)+' 05:00'; ST.ok(has(u, 'waitkr') && !!urgeInfo(u), '超过预计出报告时间应可催办'); ST.ok(/已超时/.test(todoPaneHtml(inTodoItems())), '待办栏应有「已超时」分组');
     var pd = ST.newRes('TD1p'); ST.arrive(pd); ST.materials(pd,{consult:true}); ST.payConsult(pd); var d3 = new Date(Date.now()-3*3600000); pd.consultPaidAt = d3.toISOString().slice(0,10)+' '+d3.toISOString().slice(11,16); ST.ok(!urgeInfo(pd), '待确认面诊时间不再有 30 分钟的催办门槛');
     /* 转告客人：KR 确认施术时间后出现，打开赴韩施术 tab 后消失 */
-    var s = ST.toConfirmed('TD1s'); ST.ok(has(s,'relay'), 'KR 确认施术时间后应有「转告客人」待办'); ST.open(s); s.activeCaseTab = 'kr'; renderCaseBody(s); ST.ok(has(s,'relay'), '10/14 起：打开 tab 不算已转告，要按［已转告客人］'); calRelayDone(s.id); ST.ok(!has(s,'relay'), '已转告 / 打开 tab 后「转告客人」应消失');
+    var s = ST.toConfirmed('TD1s'); ST.ok(has(s,'relay'), 'KR 确认施术时间后应有「转告客人」待办'); ST.open(s); s.activeCaseTab = 'kr'; renderCaseBody(s); ST.ok(has(s,'relay'), '10/14 起：打开 tab 不算已转告，要按［发送给客人］'); openSurgMsg(s.id); confirmSurgMsg(); ST.ok(!has(s,'relay'), '发送给客人后「转告客人」应消失');
     /* 当天本地项目未标完成：营业结束前 1 小时出现，标完才消失 */
     var lp = ST.localProj('LHALa peel'), l = ST.localCase('TD1l'); ST.localPay(l, function(){ toggleLocalProject('main', lp.id); }); ST.useHold(l, 'main', lp.name, 1);
     var back = ST.shiftTo(12, 0); try{ ST.ok(!has(l,'local'), '营业结束前 1 小时之前不应出现'); } finally { back(); }
@@ -971,8 +971,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ['todo','visit','kr','msg'].forEach(function(k){ todoCardFilter(k); ST.ok(TODO_UI.kind===k, '4 张卡都应能筛选：'+k); }); todoSetKind('');
     /* 转告客人：按了［已转告客人］才消失，打开 tab 不算 */
     var c = ST.toConfirmed('CAL1'), has = function(k){ return inTodoItems().some(function(i){ return i.no===c.caseNo && i.kind===k; }); };
-    ST.ok(has('relay'), '前置：有转告客人待办'); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c); ST.ok(has('relay'), '打开 tab 不再算已转告'); ST.ok(/已转告客人/.test(document.getElementById('case-body').innerHTML), '赴韩施术 tab 应有［已转告客人］');
-    calRelayDone(c.id); ST.ok(!has('relay') && ST.hasLog(c, /已转告客人 KR 确认的施术时间/), '按了之后待办消失 + Timeline');
+    ST.ok(has('relay'), '前置：有转告客人待办'); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c); ST.ok(has('relay'), '打开 tab 不再算已转告'); ST.ok(/发送给客人/.test(document.getElementById('case-body').innerHTML) && !/已转告客人/.test(document.getElementById('case-body').innerHTML), '赴韩施术 tab 施术日期行有［发送给客人］（没有［已转告客人］）');
+    openSurgMsg(c.id); confirmSurgMsg(); ST.ok(!has('relay') && ST.hasLog(c, /已发送施术日期给客人/), '发送给客人之后待办消失 + Timeline');
     /* 赴韩施术前 2 天：确认日程有无变化（模拟时钟） */
     ST.ok(!has('recheck'), '8 天前不应有确认日程待办'); var ks = c.krSchedule, add = calDaysToSurgery(c) - 2, base = DEMO_SHIFT_MS;
     DEMO_SHIFT_MS = base + add*86400000;
@@ -1296,9 +1296,15 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var c = CASE_ITEMS.filter(function(x){ return x.krSchedule && x.krSchedule.status==='confirmed'; })[0] || CASE_ITEMS[0]; if(!ST.ok(!!c, '没有案件')) return; var old = CURRENT_CASE_ID; CURRENT_CASE_ID = c.id;
     try{
       CASE_DISPLAY_CCY_KR = 'IDR'; setProjectOrigin('KR'); ST.ok(CASE_DISPLAY_CCY_KR==='KRW', '切到赴韩项目默认韩币');
-      if(c.krSchedule && c.krSchedule.confirmedDate){ var k0 = c.relayTold, r0 = c.recheck, rl = c.relayAt; c.relayTold = null; c.recheck = null; var h0 = calRelayRecheckCards(c); ST.ok(/转告客人/.test(h0), '转告卡片先出现');
-        calRelayDone(c.id); ST.ok(!/已转告客人<\/button>/.test(calRelayRecheckCards(c)) && !/转告客人<\/div>/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /已转告客人/), '按完卡片消失，Timeline 有记录');
-        calRecheckOk(c.id); ST.ok(!/确认日程无变动<\/div>/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /确认客人日程无变动/), '确认无变动后卡片消失，Timeline 有记录'); c.relayTold = k0; c.recheck = r0; c.relayAt = rl; }
+      if(c.krSchedule && c.krSchedule.confirmedDate){ var k0 = c.relayTold, r0 = c.recheck, rl = c.relayAt, m0 = c.surgeryMsg; c.relayTold = null; c.recheck = null; c.surgeryMsg = null; var h0 = calRelayRecheckCards(c);
+        ST.ok(!/转告客人<\/div>/.test(h0) && !/已转告客人/.test(h0), 'CMD-1019-12：「转告客人」卡和［已转告客人］已拿掉');
+        ST.ok(/发送给客人/.test(surgSendHtml(c)) && !surgMsgSent(c), '施术日期那一行后面有［发送给客人］');
+        openSurgMsg(c.id); ST.ok(!!SURGMSG && /Halo/.test(SURGMSG.text) && SURGMSG.text.indexOf(c.krSchedule.confirmedDate)>-1 && SURGMSG.text.indexOf(c.krSchedule.confirmedTime)>-1, '预览有印尼文模板、日期、到院时间');
+        SURGMSG.method = 'WhatsApp'; confirmSurgMsg();
+        ST.ok(surgMsgSent(c) && /已发送（WhatsApp/.test(surgSendHtml(c)) && /再发一次/.test(surgSendHtml(c)) && ST.hasLog(c, /已发送施术日期给客人/) && SMS_LOG[0].kind==='surgery' && SMS_LOG[0].caseId===c.id, '发送后显示已发送（方式、时间）、可再发、记短信发送记录和 Timeline');
+        var ad0 = c.krSchedule.address; c.krSchedule.address = (ad0||'')+'（改）'; ST.ok(!surgMsgSent(c) && /日期已变更，请重新发送/.test(surgSendHtml(c)), 'KR 改地址 / 日期 / 时间后变回未发送并提示重新发送'); c.krSchedule.address = ad0;
+        ST.ok(surgMsgSent(c), '改回来仍算已发送（按当前日期 / 时间 / 地址比较）');
+        calRecheckOk(c.id); ST.ok(!/确认日程无变动<\/div>/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /确认客人日程无变动/), '确认无变动后卡片消失，Timeline 有记录'); c.relayTold = k0; c.recheck = r0; c.relayAt = rl; c.surgeryMsg = m0; }
       var w = window.open; var cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ if(krActiveItems(c).length) printKrPlan(); }finally{ window.open = w; }
       if(cap) ST.ok(/确认打印/.test(cap) && !/window\.onload/.test(cap), '打印先预览：有［确认打印］按钮，不再自动打印');
       if(krActiveItems(c).length){ var info = krBalanceInfo(c); if(info.diff>0){ ST.ok(settlementSummaryHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1 && settleTabTopHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '结算汇总 / 顶部一行能看到尾款金额'); ST.ok(krPlanMoneyLine(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '赴韩施术计划看得到尾款'); } }
@@ -1903,6 +1909,38 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/联系方式|\*\*\*\*|\+62 \d/.test(t2), 'KR 基础资料没有联系方式（含遮罩）');
       if(canDo('krwork')) ST.ok(/K7654321/.test(t2), 'KR 室长看得到护照'); else ST.ok(!/护照|K7654321/.test(t2), 'KR 院长 / 代表院长看不到护照');
     }
+  });
+
+  ST.def('R41a','CMD-1019-12：待递交日期卡［取消赴韩］（KR 回过日期后才是［无法协调］）；［发送给客人］；旧案件没护照不能付款；已有护照确认赴韩不弹窗（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    window.confirm = function(){ return true; };
+    var c = ST.newRes('R41a'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); c.activeCaseTab = 'kr';
+    var h = krProcedureTabHtml(c);
+    ST.ok(/递交施术日期/.test(h) && />取消赴韩</.test(h) && !/>无法协调</.test(h) && /浅色 = 休诊 \/ 约满 \/ 已过/.test(h) && !/浅色为未开放/.test(h), '待递交日期卡：［递交施术日期］［取消赴韩］，没有［无法协调］，提示改成「浅色 = 休诊 / 约满 / 已过」');
+    c.krSchedule.rejectNote = 'KR 无法安排（自测）'; h = krProcedureTabHtml(c); ST.ok(/>无法协调</.test(h) && !/>取消赴韩</.test(h), 'KR 回过「无法安排」之后才出现［无法协调］'); c.krSchedule.rejectNote = '';
+    requestCannotCoordinate(); document.getElementById('refund-reason').value = '（自测）客人不去了'; confirmRefund();
+    ST.ok(ST.hasLog(c, /点［取消赴韩］/) && !ST.hasLog(c, /点［无法协调］/), 'Timeline 用词「取消赴韩」');
+    /* 护照：已有护照不弹窗；旧案件没护照不能付款 */
+    var was = window.GMC_PASSPORT_AUTO;
+    try{
+      var d = ST.newRes('R41b'); ST.consultToReport(d); ST.open(d); d.activeCaseTab = 'kr'; d.projectOriginFilter = 'KR';
+      var p = PROJECT_LIBRARY.filter(function(x){ return x.name==='假体隆鼻' && x.origin==='KR' && x.hospitalId==='H1'; })[0]; toggleProject(p.id);
+      var cl = clientByName(d.name); cl.passport = {text:'已登记', date:todayStr(), no:'V1234567', issue:'2020-01-01', expiry:'2040-01-01'};
+      window.GMC_PASSPORT_AUTO = false; confirmProjectSelection();
+      ST.ok(!(document.getElementById('passport-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open') && (d.settlementBatches||[]).length===1, '已有（有效）护照：确认赴韩不弹窗，直接生成结算单');
+      cl.passport = {text:'未登记', date:'', no:'', issue:'', expiry:''}; var b = d.settlementBatches[0];
+      ST.ok(batchNeedsPassport(d, b) && /护照未登记/.test(settlementCardHtml(d, b)), '旧案件有定金结算单但没护照：待付款一行写「护照未登记」');
+      settleProjects(b.id); ST.ok(document.getElementById('passport-overlay').classList.contains('open') && !document.getElementById('settle-overlay').classList.contains('open'), '按［确认付款］先弹护照登记');
+      passportConfirm(); ST.ok(!document.getElementById('settle-overlay').classList.contains('open'), '没填不能付款');
+      var al = window.alert, msg = ''; window.alert = function(m){ msg = m; }; SETTLE_MODAL_BATCH_ID = b.id; window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); window.alert = al;
+      ST.ok(/护照未登记/.test(msg) && b.status==='unpaid', '直接付款也被挡');
+      document.getElementById('pp-pno').value = 'V7654321'; document.getElementById('pp-pis').value = '2020-01-01'; document.getElementById('pp-pex').value = '2040-01-01'; passportConfirm();
+      ST.ok(passportComplete(clientByName(d.name)) && document.getElementById('settle-overlay').classList.contains('open'), '登记后继续打开付款窗');
+      closeSettleModal();
+      /* 护照已过期才弹窗 */
+      cl.passport.expiry = '2021-01-01'; var d2 = ST.newRes('R41c'); d2.name = d.name; ST.open(d2); d2.recommended = [Object.assign({}, d.settlementBatches ? (d.procedureItems||[])[0] : {})]; var shown = false; passportGate(d2, function(){ shown = 'direct'; }); var ov = document.getElementById('passport-overlay');
+      ST.ok(shown!=='direct' && ov.classList.contains('open'), '护照已过期：确认赴韩才弹窗提醒更新'); passportCancel();
+    } finally { window.GMC_PASSPORT_AUTO = was; window.confirm = function(){ return true; }; }
   });
 
   ST.def('R32b','KM1：KR 面诊 tab 按部位显示（希望预期 / 预算在上）；院长账号也一样（先在 A1 跑 R32a）',function(){
