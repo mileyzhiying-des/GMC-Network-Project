@@ -2807,7 +2807,7 @@ function caseTimelineEntries(c, which){
 }
 function timelineTabsHtml(c, fn){
   subCaseNos(c); var reps = subCaseList(c); if(!reps.length) return '';
-  var cur = TL_PAGE[c.id] || 'all', tabs = [['all','全部'], ['main','主案件']].concat(reps.map(function(r){ return [r.dno, r.dno.replace(c.caseNo, '')]; }));
+  var cur = TL_PAGE[c.id] || 'all', tabs = [['all','全部'], ['main','第 1 次']].concat(reps.map(function(r){ return [r.dno, '第 '+visitOrdNum(r.dno)+' 次']; })); /* CMD-1019-20：全部｜第 1 次｜第 2 次｜第 3 次 */
   return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px;">'+tabs.map(function(t0){ return '<span class="chip'+(cur===t0[0] ? ' active' : '')+'" onclick="'+fn+'(\''+c.id+'\',\''+t0[0]+'\')">'+t0[1]+'</span>'; }).join('')+'</div>';
 }
 function setTlPage(id, which){ TL_PAGE[id] = which; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
@@ -3648,10 +3648,10 @@ function inPostcareCardHtml(c){
     var st = s.done ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">已完成</span>' : (s.place==='IN' ? '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">待做</span>'+(late>0 ? ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;">已过建议日期 '+late+' 天</span>' : '') : (s.arrived ? '<span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;">已到店</span>' : '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">待到店</span>'));
     var when = s.place==='IN' ? (s.done ? s.visitDate : '建议 '+pcMD(s.date)) : s.date+(s.time ? ' '+s.time : '');
     var btn = (s.place==='IN' && !s.done && canAct) ? '<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="openCareVisit(\''+s.id+'\')">做术后管理</button>' : '';
-    return '<div class="case-field-row" style="align-items:center;"><span style="width:70px;font-weight:700;font-size:12px;">'+(s.dno ? s.dno.replace(c.caseNo,'') : '')+'</span><span style="flex:1;font-size:13px;">'+s.content+'</span><span style="font-size:12px;color:var(--slate2);width:110px;">'+when+'</span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(s.place==='IN' ? '印尼' : '韩国')+'</span>'+st+btn+'</div>';
+    return '<div class="case-field-row" style="align-items:center;"><span style="width:86px;font-weight:700;font-size:12px;">'+(s.dno ? visitOrdText(s.dno) : '')+'</span><span style="flex:1;font-size:13px;">'+s.content+'</span><span style="font-size:12px;color:var(--slate2);width:110px;">'+when+'</span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(s.place==='IN' ? '印尼' : '韩国')+'</span>'+st+btn+'</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">'+(c.krBalancePaid && !c.pcBooked ? '术后管理还没预约（KR 在付清尾款后预约）' : '没有术后管理')+'</div>';
   var endBtn = (c.stage==='postcare' && !c.visitClosed) ? '<div style="margin-top:12px;"><button class="btn-outline" onclick="openEndPostcare()">结束术后管理</button> <span style="font-size:11px;color:var(--muted);">客人不再来做时按；案件结案，没做的不作废：印尼的显示在客户详情，以后再来做开新案件</span></div>' : '';
-  return '<div class="card" id="in-postcare-card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:6px;">术后管理</div><div style="font-size:11px;color:var(--muted);margin-bottom:8px;">免费、不显示价格、不能退款；每一次到院是一个子案件（同一天同一地点算一个）；韩国 + 印尼都做完案件才结案</div>'+list+endBtn+'</div>';
+  return '<div class="card" id="in-postcare-card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:6px;">术后管理</div><div style="font-size:11px;color:var(--muted);margin-bottom:8px;">免费、不显示价格、不能退款；每一次到院算一次（同一天同一地点算一次）；韩国 + 印尼都做完案件才结案</div>'+list+endBtn+'</div>';
 }
 /* 持有管理项目（在韩持有的付费管理项目）：IN 看得到项目和剩余次数，不显示金额；要用由 IN 在 KR 医院日程占位预约 */
 function inHoldMgmtHtml(c){
@@ -4570,7 +4570,7 @@ function subItemRowHtml(s, cells){
   var st = '<span class="status-pill" style="background:'+(s.done?'var(--sage-bg)':'var(--border2)')+';color:'+(s.done?'var(--sage)':'var(--slate2)')+';">'+(s.done?'已完成':'未开始')+'</span>'+(s.booked ? ' <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">已预约 '+s.booked+'</span>' : (s.informed ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">KR 已通知预约</span>' : ''));
   return '<div title="编号 '+s.no+'" style="display:grid;grid-template-columns:'+SUB_GRID_COLS+';gap:10px;align-items:center;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border2);">'+
     '<span>'+(cells.date || s.date)+'</span><span class="status-pill" style="background:'+kc[0]+';color:'+kc[1]+';justify-self:start;">'+subKindLabel(s.kind)+'</span>'+
-    '<span>'+(s.dno && s.kind!=='增加项目' ? '<b style="font-size:11px;color:var(--slate2);">'+s.dno+'</b> ' : '')+(cells.content || s.content)+'</span><span>'+st+'</span>'+
+    '<span>'+(s.dno && s.kind!=='增加项目' ? '<b style="font-size:11px;color:var(--slate2);" title="'+s.dno+'">'+visitOrdText(s.dno)+'</b> ' : '')+(cells.content || s.content)+'</span><span>'+st+'</span>'+
     '<span>'+(cells.place || '<span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+SUB_PLACE_LABEL[s.place]+'</span>')+'</span><span>'+(cells.ops || '')+'</span><span style="text-align:right;">'+(cells.done || '')+'</span></div>'+
     (s.note ? '<div style="font-size:12px;color:var(--slate2);margin:-2px 0 6px 104px;">'+(s.kind==='施术' ? '施术备注' : '备注')+'：'+String(s.note).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '');
 }
@@ -7197,7 +7197,7 @@ function coreRowPostpone(c, id, by){
   (c.visitPostponed = c.visitPostponed || {}); (c.visitPostponed[key] = c.visitPostponed[key] || []).push({content:s.content, place:s.place, kind:s.kind, holdUseOf:s.holdUseOf||'', surgUse:s.surgUse||'', note:s.note||''}); /* 留一份快照：之后重新预约这一行，「全部延期」那张卡仍看得到当时延期了什么 */
   var rest = coreVisitRows(c, key).filter(function(x){ return !x.done; }).length + coreVisitExtra(c, key).filter(function(x){ return !x.done && !x.skipped; }).length, doneAny = coreVisitRows(c, key).some(function(x){ return x.done; });
   if(!rest && !doneAny){ c.visitEnds = c.visitEnds || {}; c.visitEnds[key] = {reason:'全部延期', date:date, time:time, no:no||key, at:nowFullDt()}; }
-  subCaseNos(c); logCaseEvent(c, by, '无限延期：'+s.content+'（原 '+date+' '+time+'），退回项目卡，等客人确定后重新预约'+((!rest && !doneAny) ? '；这次预约的项目全部延期，子案件结案（全部延期）' : '')); return true;
+  subCaseNos(c); logCaseEvent(c, by, '无限延期：'+s.content+'（原 '+date+' '+time+'），退回项目卡，等客人确定后重新预约'+((!rest && !doneAny) ? '；这次预约的项目全部延期，这次到院结案（全部延期）' : '')); return true;
 }
 
 /* ---- KR 预约到店阶段的案件页（CMD-1015-24 五）：预约修改 / 未到店 / 预约取消（对应 IN 占位预约建出的在韩管理案件，客人还没到店） ---- */

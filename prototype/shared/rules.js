@@ -297,8 +297,12 @@ function viewerTextFilter(x){
   }
   return s;
 }
+/* CMD-1019-20：画面上不叫「主案件 / 子案件 / -1」，叫「第 N 次到院」（施术当天 = 第 1 次，-1 = 第 2 次…）；存档里的编号和资料结构名称不动 */
+function visitOrdNum(dno){ var m = /-(\d+)$/.exec(String(dno||'')); return m ? parseInt(m[1], 10)+1 : 1; }
+function visitOrdText(dno){ return '第 '+visitOrdNum(dno)+' 次到院'; }
+function visitWords(t){ return String(t==null ? '' : t).replace(/A\d{6}-(\d+)/g, function(m, n){ return '第 '+(parseInt(n, 10)+1)+' 次到院'; }); }
 function tzRender(t){
-  return viewerTextFilter(String(t==null ? '' : t).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）') : '—'; })
+  return viewerTextFilter(visitWords(String(t==null ? '' : t)).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）') : '—'; })
     .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; }));
 }
 /* 当地钟点（日期 + HH:mm，某时区的墙上时间）→ UTC 字符串（KR 室长输入的预计出报告时间等） */
