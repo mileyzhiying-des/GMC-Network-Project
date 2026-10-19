@@ -32,7 +32,7 @@
   ST.freeDirector = function(c){ var hid = caseHospitalId(c), ds = hospitalDirectorNames(hid); var ok = ds.filter(function(n){ var o = directorTodayOff(hid, n); return !(o && o.full); }); return ok.indexOf('KD1 院长')>-1 ? 'KD1 院长' : (ok[0] || 'KD1 院长'); };
   ST.materials = function(c, o){
     o = o || {}; ST.open(c);
-    c.metaviewStatus = 'ready'; c.photoUploaded = true; c.videoUploaded = true; c.concern = '（自测）苦恼'; c.expectation = '（自测）希望';
+    c.metaviewStatus = 'ready'; var pd0 = CONCERN_PARTS[0], ph0 = {}; pd0.angles.forEach(function(a){ ph0[a.id] = {name:'自测.jpg'}; }); c.concerns = [{part:pd0.key, desc:'（自测）苦恼', video:{name:'自测.mp4'}, photos:ph0}]; concernSync(c); c.expectation = '（自测）希望';
     if(o.link){ c.linkedCase = {caseId:o.link.caseId, reason:o.link.reason}; }
     renderCaseBody(c);
     if(o.consult===true || o.consult==='reuse'){ setNeedsConsult(o.consult); } else setNeedsConsult(false);
@@ -41,7 +41,7 @@
       (o.intents || ['假体隆鼻']).forEach(function(n){ var p = intentSurgeryProjects(c).filter(function(x){ return x.name===n; })[0]; if(p && !(c.intentionProjects||[]).some(function(it){ return it.projectId===p.id; })) toggleIntentionProject(p.id); });
     }
     renderCaseBody(c);
-    var a = document.getElementById('cf-concern'), b = document.getElementById('cf-expectation'); if(a) a.value = c.concern; if(b) b.value = c.expectation;
+    var b = document.getElementById('cf-expectation'); if(b) b.value = c.expectation;
     confirmMaterials(); return c;
   };
   ST.payConsult = function(c){ ST.open(c); c.activeCaseTab = 'consult'; confirmConsultFee(); };
@@ -1669,6 +1669,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var tx = document.getElementById('krcase-body').innerText; var mc = document.getElementById('kr-maincard'); var mt = mc ? mc.parentElement.innerText : tx; ST.ok(/施术：\s*鼻翼缩小|施术：[^\n]*鼻翼缩小/.test(mt) || mt.indexOf(plan[1])>-1, '今日案件里另一个还在');
     /* 取消另一个 → 其余都已完成，施术行跟着完成 */
     krTodayCancel('item', plan[1], plan[1]); window.__krTcGo(); var c2 = gc(); ST.ok(c2.procedureItems.filter(function(x){ return x.name===plan[1]; })[0].deferUse && (c2.subItems||[]).filter(function(x){ return x.kind==='施术'; })[0].done, '取消剩下的那个：回项目卡未使用，施术行因其余都完成而完成');
+  });
+  ST.def('R32a','CMD-1019-01：基础资料顺序 / 苦恼按部位卡片 / 必填校验 / 不面诊选填 / 旧案件转换（A1 分页；案件留给 KM1 看面诊 tab）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.newRes('R32a'); ST.arrive(c); var html = materialsCardHtml(c), ix = function(t){ return html.indexOf(t); };
+    ST.ok(ix('关联之前案件')>-1 && ix('关联之前案件') < ix('메타뷰') && ix('메타뷰') < ix('面诊需求') && ix('面诊需求') < ix('苦恼 <') && ix('苦恼 <') < ix('希望预期') && ix('希望预期') < ix('预算') && ix('预算') < ix('上传附件') && ix('上传附件') < ix('医美史'), '顺序：关联之前案件 → 메타뷰 → 面诊需求 → 苦恼 → 希望预期 → 预算 → 上传附件 → 医美史');
+    ST.ok(!/上传照片|上传视频<|id="cf-concern"/.test(html), '没有单独的「上传照片 / 上传视频」行和总的苦恼文字格');
+    toggleConcernPart('eyes'); toggleConcernPart('nose'); var fm = concernFormHtml(c); ST.ok((c.concerns||[]).length===2 && /眼睛/.test(fm) && /鼻子/.test(fm) && /上方（眼睛往下看）/.test(fm) && /下方（仰拍鼻孔）/.test(fm) && /1200×1600/.test(fm), '选眼睛 + 鼻子 → 两张卡片，角度格子不同（眼睛 5 个、鼻子 6 个）');
+    ST.ok(concernPartDef('eyes').angles.length===5 && concernPartDef('nose').angles.length===6 && concernPartDef('face').angles.length===5 && concernPartDef('mouth').angles.length===5 && concernPartDef('body').angles.length===4, '角度配置：眼 5 / 鼻 6 / 面 5 / 嘴 5 / 身 4');
+    saveConcernDesc('eyes', '眼皮松弛'); saveConcernDesc('nose', '鼻梁低'); setNeedsConsult(true); var m1 = concernMissing(c); ST.ok(m1.some(function(x){ return /眼睛：视频/.test(x); }) && m1.some(function(x){ return /眼睛：照片/.test(x); }) && m1.some(function(x){ return /鼻子：照片/.test(x); }), '面诊：缺视频 / 缺照片会列出来：'+m1.join('；'));
+    mockUploadConcern('eyes', 'video'); concernPartDef('eyes').angles.forEach(function(an){ mockUploadConcern('eyes', an.id); }); concernPartDef('nose').angles.slice(1).forEach(function(an){ mockUploadConcern('nose', an.id); }); mockUploadConcern('nose', 'video');
+    var m2 = concernMissing(c); ST.ok(m2.length===1 && /鼻子：照片（正面）/.test(m2[0]), '缺一张照片（鼻子正面）→ 缺项里只剩这一项：'+m2.join('；'));
+    c.expectation = '自然'; var ex = document.getElementById('cf-expectation'); if(ex) ex.value = '自然'; confirmMaterials(); ST.ok(!c.materialsConfirmed && document.getElementById('materials-missing-overlay').classList.contains('open') && /鼻子：照片/.test(document.getElementById('materials-missing-list').innerText), '缺一张照片不能提交（弹缺项）'); closeMaterialsMissing();
+    setNeedsConsult(false); ST.ok(concernMissing(c).length===0, '切到不面诊：照片 / 视频改选填（缺的那张不再算缺项）：'+concernMissing(c).join('；')); mockUploadConcern('nose', 'front');
+    /* 不面诊：去掉全部媒体也只缺说明 */
+    var x2 = ST.newRes('R32aB'); ST.arrive(x2); toggleConcernPart('face'); saveConcernDesc('face', '轮廓'); setNeedsConsult(false); ST.ok(concernMissing(x2).length===0, '不面诊：只填部位 + 说明（没传照片 / 视频）就够'); setNeedsConsult(true); ST.ok(concernMissing(x2).length>=2, '改回面诊：照片 / 视频又变必填');
+    /* 一个完整的面诊案件（给 KM1 看） */
+    var y = ST.newRes('R32aC'); ST.materials(y, {consult:true}); ST.payConsult(y); /* 缴面诊费后 KR 才看得到 */ ST.ok(y.materialsConfirmed && y.concerns.length===1 && /眼睛：/.test(y.concern) && y.photoUploaded && y.videoUploaded, '完整填写后能提交，concern 汇总文字 / photoUploaded / videoUploaded 同步：'+y.concern);
+    var ib = consultIntentionCardHtml(y); ST.ok(/希望预期/.test(ib) && /预算/.test(ib) && /眼睛/.test(ib) && /正面/.test(ib) && ib.indexOf('希望预期') < ib.indexOf('眼睛'), 'IN 面诊资料 tab：希望预期 / 预算在上，按部位卡片在下（带角度名）');
+    /* 旧案件转换 */
+    var mig = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===47; })[0]; if(ST.ok(!!mig, '迁移 47 存在')){ var old = {id:'old1', caseNo:'A9', concern:'旧苦恼文字', photoUploaded:true, videoUploaded:true}, notes = []; mig.fn(old, {note:function(t){ notes.push(t); }}); ST.ok(old.concerns.length===1 && old.concerns[0].part==='legacy' && old.concerns[0].desc==='旧苦恼文字' && !!old.concerns[0].video && /未分部位/.test(concernCardsHtml(old)), '旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片'); var old2 = {id:'old2', concern:'', photoUploaded:false, videoUploaded:false}; mig.fn(old2, {note:function(){}}); ST.ok(old2.concerns.length===0, '没有苦恼资料的案件 → 空'); }
+    var lg = {concern:'没迁移的旧案件', photoUploaded:true, videoUploaded:false}; ST.ok(/未分部位/.test(concernCardsHtml(lg)) && /没迁移的旧案件/.test(concernCardsHtml(lg)), '没迁移的旧案件也能正常显示（兜底合成「未分部位」卡）');
+    localStorage.setItem('__R32', JSON.stringify({id:y.id}));
+  });
+  ST.def('R32b','KM1：KR 面诊 tab 按部位显示（希望预期 / 预算在上）；院长账号也一样（先在 A1 跑 R32a）',function(){
+    var me = currentAccount(); if(!ST.ok(me && (me.id==='KM1' || me.id==='KD1'), '要在 KM1 / KD1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R32')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R32a')) return;
+    var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件（已缴面诊费的面诊案件才在 KR 看得到）')) return; krShowCase(r.clinicId, r.id); krSetCaseTab('consult'); var t = document.getElementById('krcase-body').innerText;
+    ST.ok(/客人资料（按部位）/.test(t) && /希望预期/.test(t) && /预算/.test(t) && /眼睛/.test(t) && /苦恼说明/.test(t) && /正面/.test(t) && /左 45 度/.test(t) && t.indexOf('希望预期') < t.indexOf('眼睛'), 'KR 面诊 tab：希望预期 / 预算在上，下面是按部位卡片（说明 / 视频 / 各角度照片）');
+    var photo = [].slice.call(document.querySelectorAll('#krcase-body div')).filter(function(e){ return /concernZoom/.test(e.getAttribute('onclick')||''); })[0]; if(ST.ok(!!photo, '照片格子可点开放大')){ photo.click(); var zo = document.getElementById('concern-zoom-overlay'); ST.ok(zo && zo.classList.contains('open') && /眼睛/.test(zo.innerText), '点开放大'); zo.classList.remove('open'); }
   });
   ST.def('R22b','KM1：案件区块三组 + 抬头 + 行（项目类型｜内容｜地点｜状态｜备注｜操作）；所需术后管理一项一框；冲突询问弹窗两个按钮；增加项目里没有术后管理清单（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

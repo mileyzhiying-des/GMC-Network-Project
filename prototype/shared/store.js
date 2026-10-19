@@ -337,6 +337,13 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:47, fn:function(c, ctx){ /* CMD-1019-01：整体苦恼 / 照片 / 视频 → 一张「未分部位」卡片（旧案件显示仍正常，说明沿用原苦恼文字，没有分角度的照片） */
+      if(Array.isArray(c.concerns) && c.concerns.length) return;
+      if(c.concern || c.photoUploaded || c.videoUploaded){
+        c.concerns = [{part:'legacy', desc:c.concern||'', video:c.videoUploaded ? {name:'视频（旧资料）'} : null, photos:c.photoUploaded ? {legacy:{name:'照片（旧资料）'}} : {}, legacy:true}];
+        ctx.note('苦恼转成「未分部位」卡片（案件 '+(c.caseNo||c.id)+'）');
+      } else c.concerns = [];
+    }},
     {to:46, fn:function(c, ctx){ /* CMD-1015-17：付费管理项目付清尾款后就是在韩持有（不再有「管理项目」进程行）；术后管理持有批次转回原案件见 migrateCareHoldings */
       var n = 0;
       if(c.krBalancePaid){ (c.procedureItems||[]).forEach(function(it){ if(it.mgmtPlan && !it.heldOver && !it.cancelled && !it.swapped){ it.heldOver = true; it.holdDone = !!it.done && false; it.holdUsed = it.holdUsed||0; it.done = true; n++; } }); }

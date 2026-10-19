@@ -988,7 +988,7 @@ function krTabLog(c){
 }
 function krSetTlPage(id, which){ TL_PAGE[id] = which; krRenderCaseDetail(); }
 function krTabVault(c){ return krIsMyCase(c) ? krVaultHtml(c) : krCardBox('KR 专用附件', krEmpty()); } /* 只有 KR 看得到，IN 端没有这个 tab */
-var KR_TAB_FN = {settle:krTabSettle, vault:krTabVault, basic:krTabBasic, consult:krTabConsult, items:krTabItems, proc:krTabProc, files:krTabFiles, related:krTabRelated, log:krTabLog};
+var KR_TAB_FN = {settle:krTabSettle, vault:krTabVault, basic:krTabBasic, consult:function(c){ return krCardBox('客人资料（按部位）', concernBlockHtml(c))+krTabConsult(c); }, /* CMD-1019-01：希望预期 / 预算 / 按部位的苦恼卡片 */  items:krTabItems, proc:krTabProc, files:krTabFiles, related:krTabRelated, log:krTabLog};
 
 function krRenderCaseDetail(){
   if(KR_CASE.tab==='proc') KR_CASE.tab = 'items';

@@ -1651,13 +1651,10 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
-  var concernVal = document.getElementById('cf-concern').value.trim();
   var expectationVal = document.getElementById('cf-expectation').value.trim();
   var missing = [];
   if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测');
-  if(!c.photoUploaded) missing.push('照片');
-  if(!c.videoUploaded) missing.push('视频');
-  if(!concernVal) missing.push('苦恼');
+  concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   if(!expectationVal) missing.push('希望预期');
   if(intentKrAllowed(c) && !(c.intentionProjects||[]).length) missing.push('意向项目');
   var ciM = continuationInfo(c);
@@ -1673,7 +1670,7 @@ function confirmMaterials(){
     document.getElementById('materials-missing-overlay').classList.add('open'); /* 缺必填项：弹 popup 提示哪几项没填 */
     return;
   }
-  c.concern = concernVal;
+  concernSync(c);
   c.expectation = expectationVal;
   c.materialsError = '';
   c.materialsConfirmed = true;
