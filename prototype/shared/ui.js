@@ -923,11 +923,11 @@ function beautyMetaText(r){
   return aEscC(r.source)+' · 登记 '+aEscC((r.addedAt||'').slice(0,10)||'—')+' · 案件 '+(c ? aEscC(c.caseNo) : '—')+(r.by ? ' · '+aEscC(r.by) : '');
 }
 function beautyListHtml(cl){
-  var rs = beautyRecordsOf(cl).slice().sort(function(a,b){ return (b.year*100+b.month)-(a.year*100+a.month); });
+  var rs = beautyRecordsOf(cl).slice().sort(function(a,b){ return beautySortKey(b)-beautySortKey(a); });
   if(!rs.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">暂无医美史记录</div>';
   return rs.map(function(r){
     var isNew = beautyRecordIsNew(r);
-    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:13px;flex-wrap:wrap;"><span style="color:var(--slate2);width:78px;flex-shrink:0;">'+beautyYm(r)+'</span><span style="flex:1;min-width:0;font-weight:700;">'+aEscC(r.project)+'</span>'+
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:13px;flex-wrap:wrap;"><span style="color:var(--slate2);width:84px;flex-shrink:0;">'+beautyYm(r)+'</span><span style="flex:1;min-width:0;font-weight:700;white-space:pre-wrap;">'+aEscC(r.project)+'</span>'+
       (isNew ? '<span class="status-pill" style="background:var(--terracotta);color:#fff;font-weight:700;">本次新增</span>' : '')+
       '<span style="flex-basis:100%;font-size:11px;color:var(--muted);padding-left:86px;">'+beautyMetaText(r)+'</span></div>'; /* 来源信息永久保留，显示在小字里 */
   }).join('');
@@ -944,23 +944,31 @@ function openBeautyAdd(caseId){
   BEAUTY_ADD_CASE = caseId || null;
   var ov = document.getElementById('beauty-add-overlay');
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'beauty-add-overlay'; ov.style.zIndex = 90; ov.onclick = function(e){ if(e.target===ov) closeBeautyAdd(); }; document.body.appendChild(ov); }
-  var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;';
-  ov.innerHTML = '<div class="modal-box" style="width:400px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">补登医美史（来源：室长登记）</div>'+
-    '<div class="field" style="margin-bottom:10px;"><label>时间（年 + 月）</label><input id="ba-ym" type="month" max="'+dateStr(demoNow()).slice(0,7)+'" style="'+inp+'"></div>'+
-    '<div class="field"><label>项目</label><input id="ba-project" type="text" list="ba-project-list" placeholder="从项目库选，或自由输入" style="'+inp+'"><datalist id="ba-project-list">'+projectNameOptions().map(function(n){ return '<option value="'+aEscC(n)+'">'; }).join('')+'</datalist></div>'+
+  var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;', now = demoNow(), y0 = now.getFullYear(), yrs = '', mons = '', days = '';
+  for(var yy = y0; yy >= y0-60; yy--) yrs += '<option value="'+yy+'">'+yy+'</option>';
+  for(var mm = 1; mm <= 12; mm++) mons += '<option value="'+mm+'">'+mm+' 月</option>';
+  for(var dd = 1; dd <= 31; dd++) days += '<option value="'+dd+'">'+dd+' 日</option>';
+  ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">补登医美史（来源：室长登记）</div>'+
+    '<div class="field" style="margin-bottom:10px;"><label>时间 <span style="color:var(--terracotta);">*</span>　<span style="font-weight:400;font-size:11px;color:var(--muted);">年、月必选，日选填（很多客人不记得哪天）</span></label><div style="display:flex;gap:8px;"><select id="ba-year" style="'+inp+'"><option value="">年</option>'+yrs+'</select><select id="ba-month" style="'+inp+'"><option value="">月</option>'+mons+'</select><select id="ba-day" style="'+inp+'"><option value="">日（选填）</option>'+days+'</select></div></div>'+
+    '<div class="field"><label>项目 <span style="color:var(--terracotta);">*</span></label><textarea id="ba-project" rows="3" placeholder="例：在雅加达某诊所做过埋线双眼皮，约 1 年前…" style="'+inp+'resize:vertical;min-height:72px;"></textarea></div>'+
     '<div id="ba-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="closeBeautyAdd()">取消</button><button class="btn-primary" onclick="saveBeautyAdd()">保存</button></div></div>';
   ov.classList.add('open');
 }
 function closeBeautyAdd(){ var ov = document.getElementById('beauty-add-overlay'); if(ov) ov.classList.remove('open'); }
 function saveBeautyAdd(){
-  var ym = document.getElementById('ba-ym').value, project = document.getElementById('ba-project').value.trim(), err = document.getElementById('ba-err');
+  var yv = (document.getElementById('ba-year')||{}).value, mv = (document.getElementById('ba-month')||{}).value, dv = (document.getElementById('ba-day')||{}).value, project = document.getElementById('ba-project').value.trim(), err = document.getElementById('ba-err');
   var c = BEAUTY_ADD_CASE ? CASE_ITEMS.filter(function(x){ return x.id===BEAUTY_ADD_CASE; })[0] : null;
   var name = c ? c.name : document.getElementById('detail-name').textContent, cl = clientByName(name);
-  if(!ym || !project){ err.textContent = '时间（年 + 月）和项目都要填'; err.style.display = 'block'; return; }
+  var bad = function(t){ err.textContent = t; err.style.display = 'block'; };
+  if(!yv || !mv || !project){ bad('年、月和项目都要填（日可以不填）'); return; }
+  var y = +yv, m = +mv, dd = dv ? +dv : null, now = demoNow();
+  if(dd && dd > new Date(y, m, 0).getDate()){ bad(y+' 年 '+m+' 月没有 '+dd+' 日'); return; }
+  if(y*100+m > now.getFullYear()*100+now.getMonth()+1){ bad('时间不能晚于这个月'); return; }
   if(!cl) return;
-  addBeautyRecord(cl, {year:+ym.slice(0,4), month:+ym.slice(5,7), project:project, source:'室长登记', caseId:c ? c.id : null, newCaseId:c ? c.id : null});
-  cl.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'补登医美史：'+ym+' '+project, dt:nowFullDt(), kind:'plain'});
+  addBeautyRecord(cl, {year:y, month:m, day:dd, project:project, source:'室长登记', caseId:c ? c.id : null, newCaseId:c ? c.id : null});
+  var ymText = y+'-'+('0'+m).slice(-2)+(dd ? '-'+('0'+dd).slice(-2) : '');
+  cl.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'补登医美史：'+ymText+' '+project, dt:nowFullDt(), kind:'plain'});
   closeBeautyAdd(); buildHistoryList(name); renderClientTimeline(name);
   if(c){ if(typeof continuationInfo==='function' && continuationInfo(c)) onNewHistoryChanged(); else renderCaseBody(c); }
 }
@@ -1071,7 +1079,32 @@ var INVITE_KR_CONTEXT_CASE_ID = null;
 
 var CHAT_VIDEO_CONTEXT_CASE_ID = null;
 
-function openCaseDetail(id, noPush){
+/* ============ CMD-1019-04：同一个案件用同一个有名字的分页打开 ============
+   所有进案件的入口（案件列表 / 工作台日历 / 待办 / 通知 / 客户详情 / 关联案件…）都走 openCaseDetail / openCaseNewTab：
+   window.open(url, 'gmc-in-诊所-案件') —— 这个案件已经在某个分页打开过，再点就沿用那个分页并切过去（那个分页按 url 里的 tab / pc / scroll 参数跳到这次点的位置），不再另开新分页；
+   浏览器不让开 / 切（返回 null）时退回在当前分页打开，同账号第二个分页的「这个案件已经在另一个分页打开」提示弹窗保留当备用。
+   测试脚本里 window.GMC_NO_TABS = true：入口一律在当前分页打开（旧行为），方便自动测试。 */
+function caseTabName(side, clinicId, id){ return 'gmc-'+side+'-'+(clinicId||'')+'-'+id; }
+function caseTabOpen(name, url){
+  if(window.GMC_NO_TABS) return null;
+  var w = null; try{ w = window.open(url, name); }catch(e){ w = null; }
+  if(w){ try{ w.focus(); }catch(e){} }
+  return w;
+}
+function caseAtExtra(o){ o = o||{}; return (o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.pc ? '&pc=1' : '')+(o.scroll ? '&scroll='+encodeURIComponent(o.scroll) : '')+(o.chat ? '&chat=open' : ''); }
+function applyCaseAt(id, o){
+  o = o||{}; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
+  if(o.tab){ c.activeCaseTab = o.tab; renderCaseBody(c); }
+  if(o.pc) goPostcareBlock(id);
+  if(o.scroll) setTimeout(function(){ var el = document.getElementById(o.scroll); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80);
+}
+function openCaseDetail(id, noPush, o){
+  o = o||{};
+  if(noPush || window.GMC_NO_TABS || o.here || (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===id)){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); return; }
+  var w = caseTabOpen(caseTabName('in', CURRENT_CLINIC_ID, id), caseUrl(id, caseAtExtra(o)));
+  if(!w){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); } /* 浏览器不让开新分页：退回当前分页 */
+}
+function openCaseDetailHere(id, noPush){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0];
   if(!c) return;
   if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID && CURRENT_CASE_ID!==id && !intakeLeaveOk()) return; /* 从接待中的案件页打开另一个案件：先确认 */
@@ -1585,7 +1618,7 @@ function caseUrl(id, extra){
   return location.pathname + '?case=' + encodeURIComponent(c ? (c.caseNo || c.id) : id) + (extra||'');
 }
 
-function openCaseNewTab(id, extra){ window.open(caseUrl(id, extra), '_blank'); }
+function openCaseNewTab(id, extra){ if(window.GMC_NO_TABS){ window.open(caseUrl(id, extra), '_blank'); return; } var w = caseTabOpen(caseTabName('in', CURRENT_CLINIC_ID, id), caseUrl(id, extra)); if(!w){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) openCaseDetailHere(id); } } /* CMD-1019-04：同一案件沿用已开分页 */
 
 function openCaseChatNewTab(id){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
@@ -1613,11 +1646,9 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
-  var expectationVal = document.getElementById('cf-expectation').value.trim();
   var missing = [];
   if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测');
   concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
-  if(!expectationVal) missing.push('希望预期');
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
   if(c.needsConsult!==true && c.needsConsult!==false && !(c.needsConsult==='reuse' && reusableReportSrc(c))) missing.push('面诊需求');
@@ -1632,7 +1663,6 @@ function confirmMaterials(){
     return;
   }
   concernSync(c);
-  c.expectation = expectationVal;
   c.materialsError = '';
   c.materialsConfirmed = true;
   c.materialsDate = todayStr();
@@ -2881,7 +2911,7 @@ function openNotif(id, src){
   }
   if(n.caseId){
     var pcGo = /术后管理/.test(n.text||'') && !/转回印尼持有/.test(n.text||'');
-    if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : ''); else { openCaseDetail(n.caseId); if(pcGo) goPostcareBlock(n.caseId); }
+    if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : ''); else openCaseDetail(n.caseId, false, {pc:pcGo});
   }
 }
 /* CMD-1015-18：术后管理类通知 / 待办点进来 → 案件的「赴韩施术计划」tab，滚到术后管理区块 */

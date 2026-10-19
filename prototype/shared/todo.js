@@ -34,7 +34,7 @@ var TODO_LAST = [], TODO_ACT_CASE = [];
 function todoMk(kind, text, c, due, over, go, extra){
   return Object.assign({kind:kind, stage:todoStageOf(kind, c), key:kind+'|'+(c ? c.id : '')+'|'+(c ? '' : String(text).replace(/（已超时）/g, '')), cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (c.caseNo||'') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
 }
-function todoInGo(c, tab){ return function(){ openCaseDetail(c.id); if(tab){ c.activeCaseTab = tab; renderCaseBody(c); } }; }
+function todoInGo(c, tab){ return function(){ openCaseDetail(c.id, false, {tab:tab}); }; }
 function todoInMine(c){ try{ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }catch(e){ return true; } }
 function todoEtaDue(c){ return c.reportEta ? fmtUtc(c.reportEta) : ''; }
 function todoCloseMinusHour(){ var m = timeToMin(CLINIC_SETTINGS.closeTime||'21:00') - 60; return m; }
@@ -44,7 +44,7 @@ function todoPayGo(c, b){
   if(/面诊费/.test(b)) return todoInGo(c, 'consult');
   var m = /批次 ([^）)]+)/.exec(b), bid = m ? m[1] : '', bt = (c.settlementBatches||[]).filter(function(x){ return x.id===bid; })[0];
   var hasKr = bt ? krAllItems(c).some(function(it){ return it.batchId===bid; }) : false;
-  return function(){ openCaseDetail(c.id); c.activeCaseTab = hasKr ? 'kr' : (bt ? 'localmgmt' : 'settle'); renderCaseBody(c); setTimeout(function(){ var el = document.getElementById('settle-card-'+bid); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80); };
+  return function(){ openCaseDetail(c.id, false, {tab:(hasKr ? 'kr' : (bt ? 'localmgmt' : 'settle')), scroll:'settle-card-'+bid}); };
 }
 function inTodoItems(){
   var out = [], now = nowDateObj(), today = todayStr(), nowMin = demoNow().getHours()*60 + demoNow().getMinutes();
@@ -93,7 +93,7 @@ function inTodoItems(){
   /* CMD-1014-16：IN 在 KR 日程占位的预约，KR 改时间 / 无法安排 → 重选时间 */
   try{ krbMine().filter(function(b){ return b.status==='reselect'; }).forEach(function(b){ out.push(todoMk('rebook', '重选时间：'+b.clientName+'（'+(b.reselectKind==='change' ? 'KR 建议改时间' : 'KR 无法安排')+'：'+(b.reselectReason||'—')+'）', null, b.date+' '+b.time, true, function(){ krBookReselectOpen(b.id); }, {name:b.clientName, no:''})); }); }catch(e){}
   /* 术后管理过了建议日期（CMD-1015-17）：留在原案件里，IN 待办「联络客人」，点了去案件的术后管理区块（IN-11） */
-  try{ postcareDueList().forEach(function(x){ out.push(todoMk('pcdue', '联络客人：术后管理已过建议日期 '+x.late+' 天（'+x.s.content+'）', x.c, x.s.date, true, function(){ openCaseDetail(x.c.id); goPostcareBlock(x.c.id); })); }); }catch(e){}
+  try{ postcareDueList().forEach(function(x){ out.push(todoMk('pcdue', '联络客人：术后管理已过建议日期 '+x.late+' 天（'+x.s.content+'）', x.c, x.s.date, true, function(){ openCaseDetail(x.c.id, false, {pc:true}); })); }); }catch(e){}
   /* 预约占位快过期（剩 5 分钟内） */
   (RESERVATION_PLACEHOLDERS||[]).forEach(function(p){ var left = p.expiresAt - Date.now(); if(left>0 && left<=5*60000) out.push(todoMk('ph', '预约占位快过期：'+p.phone+' '+p.time, null, p.date+' '+p.time, false, function(){ todoGoPlaceholder(p); }, {name:p.phone})); /* IN-12：去工作台，日历上看那个占位 */ });
   /* 被 @ / 未接来电（读掉才消失） */
@@ -106,7 +106,7 @@ function krTodoItems(rows){
   var meId = me ? me.id : '';
   rows.forEach(function(r){
     var c = r.c, mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name)), push = function(it){ it.mine = mine; it.rowKey = r.clinicId+':'+r.id; out.push(it); };
-    var goCase = function(tab){ return function(){ krShowCase(r.clinicId, r.id); krSetCaseTab(tab); }; };
+    var goCase = function(tab){ return function(){ krShowCase(r.clinicId, r.id, {tab:tab}); }; };
     if(work){
       if(c.consultStatus==='paid_waiting_kr') push(todoMk('eta', '确认预计出报告时间', c, '', false, goCase('consult')));
       if(c.consultStatus==='awaiting_report' && !c.consultContentAt){ var wo = reportOverdueNow(c); push(todoMk('waitdir', '等院长上传面诊'+(wo ? '（已超时）' : (c.consultStartedAt ? '（面诊中）' : '')), c, todoEtaDue(c), wo, goCase('consult'), {gray:!wo})); }
@@ -115,7 +115,7 @@ function krTodoItems(rows){
       if(c.stage==='travel' && scheduleState(c)==='Pending') push(todoMk('sched', '确认施术时间', c, (c.krSchedule||{}).primary||'', false, goCase('proc')));
       if(c.stage==='travel' && scheduleState(c)==='Changing') push(todoMk('change', '改期待确认', c, (c.krSchedule||{}).changePrimary||'', false, goCase('proc')));
       var pp = pendingPayItems(c); if(pp.length) push(todoMk('pay', '在韩加项待付款：'+pp.map(function(i){ return i.name; }).join('、'), c, '', false, goCase('proc')));
-      if(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, function(){ krShowCase(r.clinicId, r.id); krSetCaseTab('items'); krProjPage('care'); })); /* CMD-1015-31：直接到项目卡术后管理分页，用［预约时间］约 */
+      if(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'items', page:'care'}); })); /* CMD-1015-31：直接到项目卡术后管理分页，用［预约时间］约 */
     }
     if(work){ (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0) push(todoMk('pcdue', '联络 IN 确认客人行程：术后管理已过建议日期 '+pcDaysLate(s.date)+' 天（'+s.content+'）', c, s.date, true, goCase('proc'))); }); } /* CMD-1015-17 */
     /* 院长：上传面诊内容（面诊已安排、院长还没上传） */

@@ -83,12 +83,14 @@ document.addEventListener('DOMContentLoaded', function(){
   nav('in-dashboard');
   if(pg && pg.indexOf('admin-')===0){ openAdminPage(pg.slice(6)); return; } /* 无权限会被导回首页 */
   if(pg && document.getElementById(pg)) nav(pg);
+  if(pg==='in-director' && q.get('dir')){ try{ openDirectorDetail(q.get('dir')); }catch(e){ console.error('院长介绍页定位失败', e); } }
   if(cs){
     var c = CASE_ITEMS.filter(function(x){ return x.caseNo===cs || x.id===cs; })[0];
     if(!c){ alert('演示数据里找不到案件 '+cs+'（可能已被重置）'); return; }
-    openCaseDetail(c.id);
+    openCaseDetailHere(c.id);
     if(q.get('tab')){ c.activeCaseTab = q.get('tab'); renderCaseBody(c); }
     if(q.get('pc')) goPostcareBlock(c.id);
+    if(q.get('scroll')){ var sid = q.get('scroll'); setTimeout(function(){ var el = document.getElementById(sid); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 120); }
     if(q.get('chat')==='open') openCaseRoom(c.id);
   }
   if(pg==='in-library' && q.get('project')){ try{ libOpenProject(q.get('project')); }catch(e){ console.error('案例库定位失败', e); } }

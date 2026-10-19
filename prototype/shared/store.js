@@ -337,6 +337,15 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:49, fn:function(c, ctx){ /* CMD-1019-04：希望预期进每张部位卡片；旧案件的整体希望预期放进「未分部位」卡，有部位卡的放进苦恼总 memo（不丢） */
+      var cards = c.concerns || [], exp = String(c.expectation||'').trim();
+      if(cards.some(function(x){ return x.expect; })) return;
+      if(!cards.length){ if(exp){ c.concerns = [{part:'legacy', sub:'', desc:c.concern||'', expect:exp, video:null, photos:{}, legacy:true}]; ctx.note('希望预期放进「未分部位」卡（案件 '+(c.caseNo||c.id)+'）'); } return; }
+      var leg = cards.filter(function(x){ return x.part==='legacy'; })[0];
+      if(leg){ leg.expect = exp; if(exp) ctx.note('希望预期放进「未分部位」卡（案件 '+(c.caseNo||c.id)+'）'); }
+      else if(exp){ c.concernMemo = (c.concernMemo ? c.concernMemo+'；' : '')+'希望预期：'+exp; ctx.note('希望预期放进苦恼总 memo（案件 '+(c.caseNo||c.id)+'）'); }
+      cards.forEach(function(x){ if(x.expect===undefined) x.expect = ''; });
+    }},
     {to:48, fn:function(c, ctx){ /* CMD-1019-03：旧五个部位 → 新细部位：眼睛 / 鼻子 / 嘴巴 → 面部下同名；面部 → 面部整体；身体 → 身体（未细分）；已传照片按角度 id 保留（对得上的才留，对不上的不丢，仍在 photos 里） */
       var n = 0; (c.concerns||[]).forEach(function(x){ var k = {eyes:'f_eyes', nose:'f_nose', mouth:'f_mouth', face:'f_all', body:'b_all'}[x.part]; if(k){ x.part = k; x.sub = x.sub||''; n++; } else if(x.sub===undefined) x.sub = ''; });
       if(n) ctx.note('苦恼部位转成新细部位 '+n+' 个（案件 '+(c.caseNo||c.id)+'）');

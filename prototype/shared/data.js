@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 48; /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 49; /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -592,11 +592,12 @@ function addBeautyRecord(cl, o){
   cl.beautyRecords = cl.beautyRecords || [];
   /* 每一笔永久保留来源信息：来源 + 登记时间 + 所属案件 ID（室长登记的再加操作人，如"A1 室长（A1）"）；newCaseId 只管"本次新增"标记 */
   var staff = (o.source||'室长登记')==='室长登记';
-  var r = {id:'br'+Date.now()+Math.floor(Math.random()*1000), year:o.year, month:o.month, project:o.project, source:o.source||'室长登记', addedAt:nowFullDt(), caseId:o.caseId||null, by:staff ? accountLabel(currentAccountId()) : '', newCaseId:o.newCaseId||null};
+  var r = {id:'br'+Date.now()+Math.floor(Math.random()*1000), year:o.year, month:o.month, day:o.day||null, project:o.project, source:o.source||'室长登记', addedAt:nowFullDt(), caseId:o.caseId||null, by:staff ? accountLabel(currentAccountId()) : '', newCaseId:o.newCaseId||null};
   cl.beautyRecords.push(r); cl.updated = '刚刚';
   return r;
 }
-function beautyYm(r){ return r.year+'年'+r.month+'月'; }
+function beautyYm(r){ return r.year+'-'+('0'+r.month).slice(-2)+(r.day ? '-'+('0'+r.day).slice(-2) : ''); } /* 有日写 2024-03-15，没日写 2024-03（CMD-1019-04） */
+function beautySortKey(r){ return r.year*10000+r.month*100+(r.day||0); }
 /* "本次新增"标记：该案件还没结束、基础资料还没确认，才显示 */
 function beautyRecordIsNew(r){
   if(!r.newCaseId) return false;
@@ -2203,12 +2204,13 @@ function concernSortKey(x){ var d = concernPartDef(x.part), i = CONCERN_PARTS.in
 /* 旧案件（没有 concerns）：合成一张「未分部位」卡片；迁移 47 / 48 会把存档里的旧案件真正转成新结构 */
 function concernCards(c){
   if(Array.isArray(c.concerns) && c.concerns.length) return c.concerns;
-  if(c.concern || c.photoUploaded || c.videoUploaded) return [{part:'legacy', desc:c.concern||'', video:c.videoUploaded ? {name:'视频（旧资料）'} : null, photos:c.photoUploaded ? {legacy:{name:'照片（旧资料）'}} : {}, legacy:true}];
+  if(c.concern || c.expectation || c.photoUploaded || c.videoUploaded) return [{part:'legacy', desc:c.concern||'', expect:c.expectation||'', video:c.videoUploaded ? {name:'视频（旧资料）'} : null, photos:c.photoUploaded ? {legacy:{name:'照片（旧资料）'}} : {}, legacy:true}];
   return [];
 }
 function concernSync(c){
   var cards = c.concerns || [];
   c.concern = cards.map(function(x){ return concernCardFull(x)+'：'+(x.desc||''); }).join('；');
+  c.expectation = cards.map(function(x){ return concernCardFull(x)+'：'+(x.expect||''); }).join('；'); /* 汇总文字：给 KR 基础资料 / 韩文摘要等旧读法用（希望预期现在记在每张部位卡片里，CMD-1019-04） */
   c.photoUploaded = cards.some(function(x){ return Object.keys(x.photos||{}).length>0; });
   c.videoUploaded = cards.some(function(x){ return !!x.video; });
 }
@@ -2220,6 +2222,7 @@ function concernMissing(c){
   cards.forEach(function(x){
     var def = concernPartDef(x.part), nm = concernCardTitle(x);
     if(!String(x.desc||'').trim()) out.push(nm+'：苦恼说明');
+    if(!String(x.expect||'').trim()) out.push(nm+'：希望预期');
     if(concernMediaOptional(c)) return;
     if(!x.video) out.push(nm+'：视频');
     var miss = def.angles.filter(function(a){ return !(x.photos||{})[a.id]; }).map(function(a){ return a.label; });
@@ -2236,10 +2239,12 @@ function toggleConcernPart(key, sub){
   var c = getCurrentCase(); if(!c) return; c.concerns = c.concerns || []; sub = sub || '';
   var cid = key+(sub ? '|'+sub : ''), i = c.concerns.findIndex(function(x){ return concernCid(x)===cid; });
   if(i>-1){ var x0 = c.concerns[i]; if((x0.desc||x0.video||Object.keys(x0.photos||{}).length) && !confirm('取消「'+concernCardTitle(x0)+'」？已填的说明和上传的照片 / 视频会清掉')) return; c.concerns.splice(i, 1); }
-  else { c.concerns.push({part:key, sub:sub, desc:'', video:null, photos:{}}); c.concerns.sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }); }
+  else { c.concerns.push({part:key, sub:sub, desc:'', expect:'', video:null, photos:{}}); c.concerns.sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }); }
   var g = concernPartDef(key).group; if(g) CONCERN_OPEN[g] = true;
   concernSync(c); c.materialsError = ''; renderCaseBody(c);
 }
+function saveConcernExpect(cid, val){ var c = getCurrentCase(); if(!c) return; var x = concernFind(c, cid); if(x){ x.expect = val; concernSync(c); } }
+function saveConcernMemo(val){ var c = getCurrentCase(); if(!c) return; c.concernMemo = val; }
 function saveConcernDesc(cid, val){ var c = getCurrentCase(); if(!c) return; var x = concernFind(c, cid); if(x){ x.desc = val; concernSync(c); } } /* 只存草稿，不重渲染（输入不被打断） */
 function mockUploadConcern(cid, what){ /* what = 'video' 或 角度 id；原型里一次点击 = 传一个文件 */
   var c = getCurrentCase(); if(!c) return; var x = concernFind(c, cid); if(!x) return; var def = concernPartDef(x.part), tt = concernCardTitle(x).replace(/ · /g, '-');
@@ -2272,13 +2277,15 @@ function concernFormHtml(c){
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fff;">'+
       '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">'+cesc(concernCardTitle(x))+'</div>'+
       '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:7px;">苦恼说明 <span style="color:var(--terracotta);">*</span></span><textarea placeholder="为什么烦恼…" oninput="saveConcernDesc(\''+cq+'\',this.value)" style="flex:1;min-height:52px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(x.desc||'')+'</textarea></div>'+
+      '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:7px;">希望预期 <span style="color:var(--terracotta);">*</span></span><textarea placeholder="希望达到的效果…" oninput="saveConcernExpect(\''+cq+'\',this.value)" style="flex:1;min-height:40px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(x.expect||'')+'</textarea></div>'+
       '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:center;"><span style="min-width:70px;font-size:12px;">视频'+mark+'</span><span style="font-size:13px;">'+vid+'</span></div>'+
       '<div style="display:flex;gap:10px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:4px;">照片'+mark+'<div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.4;">'+CONCERN_PHOTO_SPEC+'<br>每个角度一张</div></span><div style="display:flex;flex-wrap:wrap;gap:8px;">'+slots+'</div></div></div>';
   };
   var groupsCards = CONCERN_GROUPS.concat([{key:'', label:'未分部位'}]).map(function(g){ var l = cards.filter(function(x){ return concernGroupOf(x)===g.key; }); return l.length ? '<div style="margin-top:12px;font-size:12px;font-weight:700;color:var(--slate2);">'+g.label+'</div>'+l.map(cardHtml).join('') : ''; }).join('');
   return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"><span style="font-size:12px;color:var(--muted);">先选大类（可都选）：</span>'+gChips+'</div>'+partsHtml+
     (cards.length ? groupsCards : '<div style="font-size:12px;color:var(--muted);margin-top:8px;">先选面部 / 身体，再选细部位；每个细部位一张卡片，填说明并上传视频、各角度照片。</div>')+
-    (opt ? '<div style="font-size:11px;color:var(--slate2);margin-top:8px;">选了「不面诊」：照片 / 视频改选填，苦恼说明仍必填。</div>' : '')+'</div></div>';
+    (cards.length>=2 ? '<div style="margin-top:12px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">苦恼总 memo（选填）</div><textarea placeholder="整体的想法 / 优先顺序…" oninput="saveConcernMemo(this.value)" style="width:100%;min-height:48px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(c.concernMemo||'')+'</textarea></div>' : '')+
+    (opt ? '<div style="font-size:11px;color:var(--slate2);margin-top:8px;">选了「不面诊」：照片 / 视频改选填，苦恼说明、希望预期仍必填。</div>' : '')+'</div></div>';
 }
 /* 按部位显示（只读）：基础资料 tab / IN 面诊资料 tab / KR 面诊 tab 共用，按「面部 / 身体」分两组；opts.supp = 每张卡带［补充上传］ */
 var CONCERN_ZOOM = null;
@@ -2302,6 +2309,7 @@ function concernCardsHtml(c, o){
         return '<div style="width:92px;border:1px solid var(--border2);border-radius:8px;padding:6px;text-align:center;font-size:11px;'+(f ? 'cursor:pointer;" onclick="concernZoom(\''+pk+'\',\''+a.id+'\')"' : 'color:var(--muted);"')+'><div style="font-weight:700;min-height:28px;">'+cesc(a.label)+'</div>'+(f ? '<div style="color:var(--sage);word-break:break-all;">'+cesc(f.name)+'</div>' : '未上传')+'</div>'; }).join('')+'</div>';
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+cesc(concernCardTitle(x))+(o.supp ? '<span style="float:right;font-weight:400;font-size:12px;"><a href="#" class="info-link" onclick="supplementUpload(\'photo\');return false;">补充照片</a>　<a href="#" class="info-link" onclick="supplementUpload(\'video\');return false;">补充视频</a></span>' : '')+'</div>'+
       '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">苦恼说明　</span>'+(cesc(x.desc||'') || '—')+'</div>'+
+      '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">希望预期　</span>'+(cesc(x.expect||'') || '—')+'</div>'+
       '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">视频　</span>'+vid+'</div>'+
       '<div style="font-size:13px;"><span style="color:var(--muted);font-size:12px;">照片　</span>'+photos+'</div></div>';
   };
@@ -2310,19 +2318,20 @@ function concernCardsHtml(c, o){
 /* 面诊资料类 tab 的「客人资料」卡：希望预期、预算区间放在按部位卡片上方 */
 function concernBlockHtml(c, o){
   var budgetText = (c.budgetMin||c.budgetMax) ? (formatCurrency(c.budgetMin||0,'IDR')+' ～ '+(c.budgetMax ? formatCurrency(c.budgetMax,'IDR') : '不限')) : '—';
-  return '<div style="font-size:13px;margin-bottom:4px;"><span style="color:var(--muted);font-size:12px;">希望预期　</span>'+(cesc(c.expectation||'') || '—')+'</div><div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">预算　</span>'+budgetText+'</div>'+concernCardsHtml(c, o);
+  var memo = String(c.concernMemo||'').trim();
+  return '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">预算　</span>'+budgetText+'</div>'+(memo ? '<div style="font-size:13px;margin-bottom:6px;padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;"><span style="color:var(--muted);font-size:12px;">苦恼总 memo　</span>'+cesc(memo)+'</div>' : '')+concernCardsHtml(c, o);
 }
 
 /* 面诊需求选了才展开苦恼 + 希望预期；没选只显示灰字。切换面诊 / 不面诊时已填内容保留（只是照片 / 视频是否必填变了） */
 function consultChosen(c){ return c.needsConsult===true || c.needsConsult===false || c.needsConsult==='reuse'; }
 function concernExpectHtml(c){
   if(!consultChosen(c)) return '<div class="case-field-row" style="border-bottom:none;"><span class="fk"></span><div style="flex-grow:1;font-size:12px;color:var(--muted);">选择面诊需求后填写苦恼与希望预期</div></div>';
-  return concernFormHtml(c)+'<div class="case-field-row"><span class="fk">希望预期 <span style="color:var(--terracotta);">*</span></span><input type="text" id="cf-expectation" placeholder="客人希望达到的效果…" value="'+cesc(c.expectation||'')+'" oninput="saveMaterialsDraft(\'expectation\',this.value)"></div>';
+  return concernFormHtml(c); /* 希望预期在每张部位卡片里、苦恼说明下面（CMD-1019-04） */
 }
 function materialsCardHtml(c){
   syncDirectorChoice(c);
   var metaviewText = c.metaviewStatus==='ready'
-    ? '<span style="font-weight:700;color:var(--sage);">已检测到</span> <a href="#" class="info-link">查看诊疗方案 ↗</a>'
+    ? '<span style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><span style="font-weight:700;color:var(--sage);">已检测到</span><a href="#" class="info-link" onclick="return false;">查看检测结果 ↗</a></span>'
     : c.metaviewStatus==='checking'
       ? '<span style="color:var(--terracotta);">检测中…</span>'
       : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>';
@@ -2342,8 +2351,8 @@ function materialsCardHtml(c){
     linkRowHtml(c)+
     '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
-    directorRowHtml(c)+
-    concernExpectHtml(c)+ /* CMD-1019-02：苦恼 / 希望预期在面诊需求下面，选了面诊 / 不面诊才展开 */
+    concernExpectHtml(c)+ /* CMD-1019-02：苦恼（含每个部位的希望预期、总 memo）在面诊需求下面，选了面诊 / 不面诊才展开 */
+    directorRowHtml(c)+ /* CMD-1019-04：院长在苦恼下面，按苦恼部位排好再选 */
     budgetRowHtml(c)+
     '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return f.label; }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>'+
     caseBeautyRowHtml(c).replace('<div class="case-field-row"', '<div class="case-field-row" style="border-bottom:none;"', 1)+
@@ -2527,12 +2536,17 @@ function directorTodayOff(hid, name){
   var full = offs.some(function(o){ return !o.part || o.part==='全天'; });
   return {full:full, part: full ? '全天' : offs.map(function(o){ return o.part; }).join('、'), text: full ? '' : offs.map(function(o){ var r = krHalfRange(hid, o.part); return r[0]+'–'+r[1]; }).join('、')}; /* CMD-1015-05 十二：text = 09:00–13:00（韩国时间） */
 }
+/* 院长头像 / 名字：新分页打开案例库里这位院长的介绍页（不影响选中；点卡片其他地方 = 选这位院长） */
+function openDirectorNewTab(name){
+  var url = location.pathname+'?page=in-director&dir='+encodeURIComponent(name), w = caseTabOpen('gmc-in-director-'+name, url);
+  if(!w && !window.GMC_NO_TABS) openDirectorDetail(name);
+}
 function directorCardHtml(dr, hid, c, pickable, selected){
   var off = directorTodayOff(hid, dr.name); if(off && off.full){ pickable = false; selected = false; }
-  var ph = directorAvatarHtml(dr, 54);
+  var ph = '<a href="#" title="在新分页打开院长介绍" onclick="event.stopPropagation();openDirectorNewTab(\''+dr.name+'\');return false;" style="flex-shrink:0;">'+directorAvatarHtml(dr, 54)+'</a>';
   var m = docIntentMatch(hid, dr, c), li = function(arr){ return (arr||[]).map(function(x){ return '<div>'+(x.when?x.when+'：':'')+(x.zh||x.ko)+'</div>'; }).join(''); };
   return '<div '+(pickable?'onclick="setCaseDirector(\''+dr.name+'\')" ':'')+'style="display:flex;gap:12px;padding:12px;border:1px solid '+(selected?'var(--terracotta)':'var(--border)')+';border-radius:10px;background:'+(selected?'var(--terracotta-bg)':'#fff')+';'+(pickable?'cursor:pointer;':'')+((off&&off.full)?'opacity:.5;filter:grayscale(1);cursor:not-allowed;':'')+'margin-top:8px;">'+ph+
-    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;">'+dr.name+' <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(off ? ' <span class="status-pill" style="background:#F6DCDC;color:#C1454A;">'+(off.full?'今日 OFF':'今天 '+off.text+' OFF（韩）')+'</span>' : '')+(m.length?(function(){ var pm = docPartMatch(hid, dr, c), nm = function(l){ return l.map(function(k){ return concernPartDef(k).label; }).join('、'); }; var gl = []; pm.half.forEach(function(k){ var g = (CONCERN_GROUPS.filter(function(y){ return y.key===partGroupOf(k); })[0]||{}).label; if(g && gl.indexOf(g)<0) gl.push(g); }); return pm.parts.length ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人苦恼部位（'+nm(pm.parts)+'）</span>' : (gl.length ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">◐ 擅长相近部位（'+gl.join('、')+'）</span>' : ''); })():'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
+    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;"><a href="#" title="在新分页打开院长介绍" onclick="event.stopPropagation();openDirectorNewTab(\''+dr.name+'\');return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+dr.name+' ↗</a> <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(off ? ' <span class="status-pill" style="background:#F6DCDC;color:#C1454A;">'+(off.full?'今日 OFF':'今天 '+off.text+' OFF（韩）')+'</span>' : '')+(m.length?(function(){ var pm = docPartMatch(hid, dr, c), nm = function(l){ return l.map(function(k){ return concernPartDef(k).label; }).join('、'); }; var gl = []; pm.half.forEach(function(k){ var g = (CONCERN_GROUPS.filter(function(y){ return y.key===partGroupOf(k); })[0]||{}).label; if(g && gl.indexOf(g)<0) gl.push(g); }); return pm.parts.length ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人苦恼部位（'+nm(pm.parts)+'）</span>' : (gl.length ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">◐ 擅长相近部位（'+gl.join('、')+'）</span>' : ''); })():'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
     (dr.career&&dr.career.length ? '<div style="color:var(--slate2);margin-top:3px;">'+li(dr.career)+'</div>' : '')+(dr.certs&&dr.certs.length ? '<div style="color:var(--slate2);margin-top:3px;"><b>认证</b> '+dr.certs.map(function(x){ return x.zh||x.ko; }).join('；')+'</div>' : '')+
     (dr.specialties&&dr.specialties.length ? '<div style="margin-top:4px;"><b>擅长</b> '+dr.specialties.map(function(sn){ return '<span class="chip'+(m.indexOf(sn)>-1?' active':'')+'" style="cursor:inherit;">'+sn+'</span>'; }).join('')+'</div>' : '')+'</div></div>';
 }
@@ -2690,7 +2704,7 @@ function attachmentsTabHtml(c){
 }
 
 function consultIntentionCardHtml(c){
-  return '<div class="card" style="padding:14px 24px;margin-bottom:12px;"><div class="info-heading" style="margin-bottom:8px;font-size:12px;">客人资料（KR可见）：希望预期 / 预算 / 按部位的苦恼</div>'+intentionInfoHtml(c).replace(/<div class="case-field-row"><span class="fk">预算<\/span>.*$/, '')+concernBlockHtml(c)+'</div>';
+  return '<div class="card" style="padding:14px 24px;margin-bottom:12px;"><div class="info-heading" style="margin-bottom:8px;font-size:12px;">客人资料（KR可见）：预算 / 苦恼总 memo / 按部位的苦恼与希望预期</div>'+intentionInfoHtml(c).replace(/<div class="case-field-row"><span class="fk">预算<\/span>.*$/, '')+concernBlockHtml(c)+'</div>';
 }
 
 /* Timeline 分页（CMD-1015-17）：全部 ｜ 主案件 ｜ -1 ｜ -2 …；子案件的记录同时汇总在「全部」里 */
@@ -2756,7 +2770,6 @@ function basicTabHtml(c){
   return '<div class="card" style="padding:4px 24px;">'+
     suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼</span><div style="flex-grow:1;padding-bottom:10px;">'+concernCardsHtml(c, {supp:true})+'</div></div>'+
-    '<div class="case-field-row"><span class="fk">期望</span><span style="flex-grow:1;font-size:13px;">'+(c.expectation||'—')+'</span><span class="fa"><a href="#" class="info-link">查看</a><a href="#" class="info-link" onclick="editConcernField(\'expectation\');return false;">修正</a></span></div>'+
     intentionInfoHtml(c)+
     '<div class="case-field-row" style="border-top:1px solid var(--border2);border-bottom:none;"><span class="fk">面诊</span><span style="flex-grow:1;font-size:13px;">'+consultLabel+(c.consultRequested?'（已申请）':'')+'</span></div>'+
     '</div>';
