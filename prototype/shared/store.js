@@ -338,6 +338,9 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:54, fn:function(c, ctx){ /* CMD-1019-23：持有管理项目的已使用只能来自到院卡里「操作完成」的行；没有完成行的使用记录（项目卡有已使用、到院卡没有对应行）去掉，次数改回 */
+      var notes = fixUseRecords(c); if(notes.length){ notes.forEach(function(t){ logCaseEvent(c, '系统', '修正使用记录：'+t); }); ctx.note('案件 '+(c.caseNo||'')+'：使用记录修正（'+notes.join('；')+'）'); }
+    }},
     {to:53, fn:function(c, ctx){ /* CMD-1019-17：建议在韩天数不能少于最少天数（必须在韩国的最后一项术后管理第 N 天 + 1，施术日 = 第 0 天）。旧案件天数不够的 → 自动提到最少天数并记进迁移备注（比最少多但没写停留原因的不改，显示时就不写原因） */
       var fixed = [], fix = function(it){
         if(!it || !it.stay || it.mgmt || it.mgmtPlan || it.service) return;

@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 53; /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 54; /* 54（CMD-1019-23）：已使用 / 剩余次数只从到院卡的完成行算，去掉没有完成行的假使用记录（A000004 的 ONDA ×2）；旧案件迁移并保留 */ /* 53 */ /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -4838,7 +4838,7 @@ function coreSubDone(c, id, by, itemNames, noClose){
   }
   s.done = true; s.doneAt = nowFullDt(); s.doneBy = by;
   if(s.surgUse) picked = krNotStartedItems(c).filter(function(it){ return it.name===s.surgUse; });
-  if(s.holdUseOf){ var hi = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===s.holdUseOf; })[0]; if(hi){ (hi.uses = hi.uses||[]).push({at:s.doneAt, key:subCaseKey(s), rowId:s.id}); hi.holdUsed = (hi.holdUsed||0)+1; if(hi.holdUsed >= (hi.qty||1)){ hi.holdDone = true; } } } /* 持有项目使用一次 */
+  if(s.holdUseOf){ var hi = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===s.holdUseOf; })[0]; if(hi){ holdUseRecord(c, hi, {at:s.doneAt, key:subCaseKey(s), rowId:s.id, qty:1}); } } /* 持有项目使用一次：只从到院卡里「操作完成」的行记（CMD-1019-23 二） */
   picked.forEach(function(it){ it.done = true; });
   s.doneItems = picked.map(function(it){ return it.name; });
   logCaseEvent(c, by, 'KR标记子项已完成 '+s.no+'：'+s.content+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''));
@@ -4880,12 +4880,54 @@ function coreSubArrived(c, id, by){
 /* 持有项目（在韩持有的已付管理项目）剩余次数；安排使用 = 排一个时间（进 KR 日历和当天工作台），客人到后才标完成 */
 function holdItemLeft(c, it){ return (it.qty||1) - (it.holdUsed||0); }
 function holdItemPlanned(c, it){ return (c.subItems||[]).filter(function(s){ return s.holdUseOf===it.name && !s.done && !s.skipped; }).length; }
+/* ---- CMD-1019-23 二：已使用 / 剩余次数只从到院卡里「操作完成」的行算（单一来源）----
+   it.uses = 每条对应到院卡里一行完成记录 {at, key(main / 地点|日期 / book|占位id), qty, rowId}；holdUsed / holdDone 一律由 uses 重新算（holdRecalc），不再有别处直接 holdUsed += n。
+   原来直接扣次数的地方：① coreMgmtUse（主到院按完成，直接加 holdUsed + 记 uses）② coreSubDone 里持有项目使用行（加 holdUsed + 记 uses）③ krbook.js 在韩到店预约完成时「使用在韩持有」只加 holdUsed、不记使用行 ④ 旧版（21 之前）主到院施术完成后持有管理项目被漏算 / 旧记录里有 holdUsed 没有对应完成行。 */
+function holdRecalc(it){ var n = (it.uses||[]).reduce(function(t, u){ return t+(parseInt(u.qty, 10)||1); }, 0); it.holdUsed = n; it.holdDone = n >= (it.qty||1); }
+function holdUseRecord(c, it, rec){ (it.uses = it.uses||[]).push({at:rec.at||nowFullDt(), key:rec.key||'main', qty:Math.max(1, parseInt(rec.qty, 10)||1), rowId:rec.rowId||''}); holdRecalc(it); }
+function holdUseUndo(c, it, pred){ var before = it.holdUsed||0; it.uses = (it.uses||[]).filter(function(u){ return !pred(u); }); holdRecalc(it); return before-(it.holdUsed||0); }
+/* 撤回到院卡里已完成的持有管理项目（主到院）：次数退回，这一行回到待做 */
+function coreMgmtUseUndo(c, name, by){
+  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===name; })[0]; if(!it || !mgmtDoneToday(c, name)) return false;
+  var back = holdUseUndo(c, it, function(u){ return (u.key||'main')==='main'; }); delete c.todayMgmtDone[name];
+  if(c.krProcedureDone && !c.visitClosed){ c.krProcedureDone = false; c.surgeryDoneAt = ''; } c.endAsk = false;
+  logCaseEvent(c, by, '撤回完成：'+buyName(name)+'，退回 '+back+' 次（剩 '+holdItemLeft(c, it)+' 次）'); updateCaseStage(c); return true;
+}
+/* 撤回子到院里已完成的使用行（持有管理项目）：次数退回，行回到待做 */
+function coreUseRowUndo(c, id, by){
+  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || !s.done || !s.holdUseOf) return false;
+  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===s.holdUseOf; })[0];
+  s.done = false; s.doneAt = ''; s.doneBy = ''; var back = it ? holdUseUndo(c, it, function(u){ return u.rowId===id; }) : 0;
+  if(c.visitEndedKeys) delete c.visitEndedKeys[subCaseKey(s)];
+  logCaseEvent(c, by, '撤回完成：'+buyName(s.holdUseOf)+'，退回 '+back+' 次'); updateCaseStage(c); return true;
+}
+/* 修复使用记录：项目卡有已使用、到院卡没有对应的完成行 → 去掉（A000004 的 ONDA 假「已使用 ×2」）；返回说明列表。迁移 54 和启动修复共用，幂等 */
+function fixUseRecords(c){
+  var notes = [];
+  (c.procedureItems||[]).forEach(function(it){
+    if(!it.heldOver) return; var used0 = it.holdUsed||0;
+    var uses = (it.uses||[]).map(function(u){ return Object.assign({}, u, {qty:Math.max(1, parseInt(u.qty, 10)||1)}); }), sum = uses.reduce(function(t, u){ return t+u.qty; }, 0);
+    if(sum < used0) uses.push({at:'', key:'main', qty:used0-sum, rowId:'', legacy:true}); /* 只记了次数没记使用行的旧数据 */
+    var keep = uses.filter(function(u){
+      var k = u.key||'main';
+      if(k==='main') return !!((c.todayMgmtDone||{})[it.name]) || !!c.krProcedureDone; /* 主到院：到院卡有完成行，或到院已结束（旧版按完成就已结束） */
+      if(/^book\|/.test(k)) return true;
+      return (c.subItems||[]).some(function(s){ return s.done && s.holdUseOf===it.name && (u.rowId ? s.id===u.rowId : subCaseKey(s)===k); });
+    });
+    var same = keep.length===(it.uses||[]).length && keep.every(function(u, i){ return !u.legacy; });
+    if(same && sum===used0) return;
+    it.uses = keep; keep.forEach(function(u){ delete u.legacy; }); holdRecalc(it);
+    keep.forEach(function(u){ if((u.key||'main')==='main' && c.krProcedureDone && !(c.todayMgmtDone||{})[it.name]){ (c.todayMgmtDone = c.todayMgmtDone||{})[it.name] = {qty:keep.filter(function(x){ return (x.key||'main')==='main'; }).reduce(function(t, x){ return t+x.qty; }, 0), at:u.at||'', again:false}; } });
+    if((it.holdUsed||0)!==used0){ notes.push(buyName(it.name)+'：已使用 '+used0+' 次没有到院卡的完成行，改回已用 '+(it.holdUsed||0)+' 次（剩 '+holdItemLeft(c, it)+' / 共 '+(it.qty||1)+' 次）'); }
+  });
+  return notes;
+}
 /* 持有管理项目（付费，付清尾款后就是在韩持有）：当天做 → KR 按［使用］扣一次（记在施术当天 / 主案件）；之后再来做 → 每次新预约 = 一个子案件，在子案件里［使用］扣次数（CMD-1015-17） */
 function coreMgmtUse(c, name, by, qty){
   var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone && x.name===name; })[0];
   if(!it || !c.krBalancePaid || holdItemLeft(c, it)<=0) return false;
   var left0 = holdItemLeft(c, it), q = Math.max(1, Math.min(parseInt(qty || it.todayQty, 10) || 1, left0)); /* 今日进行可选这次用几次（CMD-1019-21 六），默认 1，最多 = 剩余次数；按完成才扣 */
-  it.holdUsed = (it.holdUsed||0)+q; if(it.holdUsed >= (it.qty||1)) it.holdDone = true; (it.uses = it.uses||[]).push({at:nowFullDt(), key:'main', qty:q}); it.todayQty = 1;
+  holdUseRecord(c, it, {at:nowFullDt(), key:'main', qty:q}); it.todayQty = 1; /* 到院卡里这一行按［操作完成］才记（CMD-1019-23 二） */
   c.todayMgmtDone = c.todayMgmtDone || {}; var prevD = c.todayMgmtDone[it.name] || {qty:0}; c.todayMgmtDone[it.name] = {qty:prevD.qty+q, at:nowFullDt(), again:false};
   if(c.hasArrived && !c.krProcedureDone) krCloseIfDone(c); /* 这一行完成后，今天的行都做完了 → 问「今天的项目都做完了吗？」*/ /* 到院卡里这一行改成「已完成 ×N」，不再掉回项目卡（CMD-1019-22 二） */
   logCaseEvent(c, by, '使用 '+buyName(it.name)+' ×'+q+'（剩 '+holdItemLeft(c, it)+' 次'+(it.holdDone ? '，已用完' : '')+'）');
@@ -4960,10 +5002,7 @@ function coreReopenVisit(c, by, why){
 function repairVisitState(){
   var n = 0;
   (CASE_ITEMS||[]).forEach(function(c){
-    (c.procedureItems||[]).forEach(function(it){ /* 已使用记录次数对不上（一次用 N 次只记了 1 条）→ 补到同一个使用时间（CMD-1019-22 三） */
-      if(!it.heldOver || !it.uses || !it.uses.length) return; var sum = it.uses.reduce(function(t, u){ return t+(parseInt(u.qty, 10)||1); }, 0), used = it.holdUsed||0;
-      if(sum < used){ var lu = it.uses[it.uses.length-1]; lu.qty = (parseInt(lu.qty, 10)||1)+(used-sum); n++; }
-    });
+    var fx = fixUseRecords(c); if(fx.length){ fx.forEach(function(t){ logCaseEvent(c, '系统', '修正使用记录：'+t); }); n += fx.length; }
     if(c.krProcedureDone && !c.visitClosed && c.hasArrived && c.krBalancePaid && todayOpenRows(c).length){ c.krProcedureDone = false; c.surgeryDoneAt = ''; c.endAsk = false; logCaseEvent(c, '系统', '重新打开今日到院（修正旧数据：今天还有待做项目 '+todayOpenRows(c).map(function(x){ return x.name; }).join('、')+'）'); try{ updateCaseStage(c); }catch(e){} n++; }
   });
   return n;

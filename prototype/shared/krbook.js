@@ -182,7 +182,7 @@ function coreBookDone(hid, id, did, by){
   Store.mutateClinic(b.clinicId, function(){
     if(did.kind==='hold'){ var src = CASE_ITEMS.filter(function(x){ return x.id===did.caseId; })[0], rowC = src && (src.subItems||[]).filter(function(x){ return x.hold && !x.done && x.content===did.name && x.kind==='术后管理记录'; })[0], it = rowC ? null : (src && (src.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===did.name; })[0]);
       if(rowC){ rowC.done = true; rowC.doneAt = nowFullDt(); rowC.doneBy = by; rowC.visitDate = todayStr(); rowC.arrived = true; logCaseEvent(src, by, '使用在韩持有的术后管理「'+rowC.content+'」（在韩管理新案件 '+((CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]||{}).caseNo||'')+'）'); }
-      if(it){ it.holdUsed = (it.holdUsed||0)+did.qty; if(it.holdUsed >= (it.qty||1)) it.holdDone = true; logCaseEvent(src, by, '使用在韩持有「'+it.name+'」'+did.qty+' 次（在韩到店预约，案件 '+((CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]||{}).caseNo||'')+'）'); } text = '使用在韩持有「'+did.name+'」'+did.qty+' 次'; }
+      if(it){ holdUseRecord(src, it, {key:'book|'+b.id, qty:did.qty, rowId:b.id}); logCaseEvent(src, by, '使用在韩持有「'+it.name+'」'+did.qty+' 次（在韩到店预约，案件 '+((CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]||{}).caseNo||'')+'）'); } text = '使用在韩持有「'+did.name+'」'+did.qty+' 次'; }
     else if(did.kind==='care') text = '新做管理「'+did.name+'」';
     else text = '其他'+(did.note ? '：'+did.note : '');
     var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0];
