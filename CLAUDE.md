@@ -831,3 +831,9 @@ prototype/shared/app.css  共用样式
 - **⑤ 拿掉旧的「术后管理预约」卡片 +［安排术后管理］小窗口**：先全文搜索确认没有别处在用——用到的只有 `krPcbNeedCard`（施术 tab）、`krPcbButtonHtml`（`krArrivalBlock` 旧路径两处）、`?pcb=1&win=1` 地址参数、selftest R15c 一条断言，都已改；删除 `krPcbNeed` / `krPcbNeedBar` / `krPcbNeedCard` / `krPcbButtonHtml` / `krPcbBuild` / `krPcbOpen` / `krPcbOpenLocal` / `krPcbRender` / `krPcbSet` / `krPcbGroupTime` / `krPcbToggleSingle` / `krPcbClose` / `krPcbConfirm` / `KR_PCB`（`krInnDayStatus` 只被它们用，一并没了）。**保留** `data.js` 的 `corePcBooking`（核心函数，selftest 造「已预约的术后管理」夹具要用，界面已无入口）和工作台待办「安排术后管理」（提醒，点了去案件，不是预约入口）。术后管理预约入口现在只剩：今日进行后的弹窗（`krCareMiniOpen`）、项目卡术后管理分页的［预约时间］。
 - **⑥ 施术一项一行单独今日取消**：29 / 30 的做法本来就支持（显示层拆开，取消 = 该项目 `deferUse`，施术行内容只剩没取消的；`coreSurgItemDone` 单项完成；最后一个也取消时施术行 / 施术块一起拿掉），所以没有把数据拆成一项一条；本次补了截图验证（两个施术取消「鼻翼缩小」：另一个「假体隆鼻」留在今日案件，取消的回项目卡「未使用」［本次使用］［预约使用］）。
 - 测试：R15c 改成断言旧卡 / 小窗口已不存在；A1 全套、KM1 用例（BK 三段）通过，roletest 9 个账号 0 不符。**测试顺序教训**：BK1a 要有「有赴韩项目的客人」，清理后单跑要先带一个造案件的用例（如 R30a）。
+
+## CMD-1015-31 补充（2026-10-19，追加；旧文字保留作历史）
+- 基准 **689421c**（30 补做的 4～6 项已在 689421c：施术 / 管理分页拿掉项目类型、拿掉旧术后管理预约卡和 krPcbOpen 小窗口、施术一项一行单独取消），本次单个提交，**未推送**，不带开关，数据版本不变（46）。
+- **krPcbOpen 入口清单与改向**（689421c 已全删，本次补查"待办 / 通知跳转"）：原调用点 = ① 施术 tab 的「术后管理预约」卡（`krPcbNeedCard`，CMD-1015-15 加的 + 项目 tab「术后项目」卡里的入口）② `krArrivalBlock` 旧路径里的两处 `krPcbButtonHtml` ③ 地址参数 `?pcb=1&win=1`（`krPcbOpenLocal`）④ 工作台待办「安排术后管理」只是跳到案件（没调用 krPcbOpen）。**本次改向**：待办「安排术后管理」（`todo.js` `pcb`）→ 直接到项目 tab 的术后管理分页（`krProjPage('care')`）；术后管理类通知（`krNotifTarget` 'proc' + 文字含「术后管理」，`krOpenNotif`）→ 同样到术后管理分页，用［预约时间］约。
+- **施术一项一行单独今日取消 / 操作完成**：没有拆数据（不升级版本）——显示层按 `施术：A、B` 拆成一项一行；完成一个 = `coreSurgItemDone`（该项目 `done`，其余仍待做、施术行不完成，全部做完才完成）；取消一个 = `coreTodayCancel`（该项目 `deferUse`，回项目卡未使用，施术行只剩没取消的）。**本次补一个边界**：取消的是最后一个没做的、其余都已完成时，施术行跟着完成（`coreTodayCancel` 里 `coreSubDone` + `krCloseIfDone`），否则施术行会一直停在「待做」。
+- 测试：selftest 新增 R31a / R31b（先完成一个另一个仍待做、再取消剩下的 → 施术行完成；待办 / 通知 → 术后管理分页；施术 / 管理分页没有项目类型；旧卡和小窗口不存在）；A1 全套 136 行、KM1 用例、BK 三段通过，roletest 9 个账号 0 不符。

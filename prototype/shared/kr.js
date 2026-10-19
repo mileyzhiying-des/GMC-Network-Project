@@ -1073,7 +1073,7 @@ function krOpenNotif(id){
     krShowCase(n.clinicId, n.caseId);
     if(tg==='chat'){ setTimeout(function(){ try{ krOpenCaseChat(); }catch(e){} }, 0); }
     else if(tg==='proc' && /已到医院|评估|待付款|尾款|无法施术|更换项目/.test(n.text||'') && krSurgSub(krFindCase(n.clinicId, n.caseId).c)) krOpenSurgSub(n.clinicId, n.caseId);
-    else if(tg && tg!=='settings') krSetCaseTab(tg);
+    else if(tg && tg!=='settings'){ krSetCaseTab(tg); if(tg==='proc' && /术后管理/.test(n.text||'')) krProjPage('care'); } /* CMD-1015-31：术后管理类通知直接到项目卡术后管理分页 */
   } else if(tg==='chat' && typeof krOpenDrawer==='function'){ krOpenDrawer(); }
   else krRefreshAll();
 }

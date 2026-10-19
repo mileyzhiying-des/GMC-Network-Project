@@ -6759,7 +6759,10 @@ function coreTodayCancel(c, kind, key, by){
     it.deferUse = true;
     c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && !s.done && !s.visitKey && s.projectName===key); });
   }
-  syncSurgerySub(c); syncSurgeryBlock(c); logCaseEvent(c, by, '今日取消：'+key+'（今天不做，退回项目卡）'); return true;
+  syncSurgerySub(c); syncSurgeryBlock(c); logCaseEvent(c, by, '今日取消：'+key+'（今天不做，退回项目卡）');
+  var srow = (c.subItems||[]).filter(function(x){ return x.kind==='施术' && !x.done; })[0], rest = surgPlanItems(c); /* 取消的是最后一个没做的，其余都已完成 → 施术行跟着完成（CMD-1015-31） */
+  if(srow && rest.length && !rest.some(function(x){ return !x.done; })){ if(coreSubDone(c, srow.id, by, [], true)) krCloseIfDone(c); }
+  return true;
 }
 
 /* ============ CMD-1015-26 Step 4：付清尾款后勾选今日进行的项目 ============
