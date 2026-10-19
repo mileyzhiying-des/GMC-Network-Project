@@ -1686,7 +1686,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var x2 = ST.newRes('R32aB'); ST.arrive(x2); toggleConcernPart('f_all'); saveConcernDesc('f_all', '轮廓'); saveConcernExpect('f_all', '更立体'); setNeedsConsult(false); ST.ok(concernMissing(x2).length===0, '不面诊：只填部位 + 说明 + 希望预期（没传照片 / 视频）就够'); setNeedsConsult(true); ST.ok(concernMissing(x2).length>=2, '改回面诊：照片 / 视频又变必填');
     /* 一个完整的面诊案件（给 KM1 看） */
     var y = ST.newRes('R32aC'); ST.materials(y, {consult:true}); ST.payConsult(y); /* 缴面诊费后 KR 才看得到 */ ST.ok(y.materialsConfirmed && y.concerns.length===1 && /面部整体/.test(y.concern) && y.photoUploaded && y.videoUploaded, '完整填写后能提交，concern 汇总文字 / photoUploaded / videoUploaded 同步：'+y.concern);
-    var ib = consultIntentionCardHtml(y); ST.ok(/希望预期/.test(ib) && /预算/.test(ib) && /面部整体/.test(ib) && /正面/.test(ib) && ib.indexOf('希望预期') < ib.indexOf('面部整体'), 'IN 面诊资料 tab：希望预期 / 预算在上，按部位卡片在下（带角度名）');
+    y.activeCaseTab = 'consult'; var ib = caseTabContentHtml(y); ST.ok(!/客人资料|苦恼说明|希望预期/.test(ib), 'IN 面诊资料 tab：不再有客人资料块（CMD-1019-08，客人资料只放基础资料）'); y.activeCaseTab = 'basic';
     /* 旧案件转换 */
     var mig = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===47; })[0]; if(ST.ok(!!mig, '迁移 47 存在')){ var old = {id:'old1', caseNo:'A9', concern:'旧苦恼文字', photoUploaded:true, videoUploaded:true}, notes = []; mig.fn(old, {note:function(t){ notes.push(t); }}); ST.ok(old.concerns.length===1 && old.concerns[0].part==='legacy' && old.concerns[0].desc==='旧苦恼文字' && !!old.concerns[0].video && /未分部位/.test(concernCardsHtml(old)), '旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片'); var old2 = {id:'old2', concern:'', photoUploaded:false, videoUploaded:false}; mig.fn(old2, {note:function(){}}); ST.ok(old2.concerns.length===0, '没有苦恼资料的案件 → 空'); }
     var lg = {concern:'没迁移的旧案件', photoUploaded:true, videoUploaded:false}; ST.ok(/未分部位/.test(concernCardsHtml(lg)) && /没迁移的旧案件/.test(concernCardsHtml(lg)), '没迁移的旧案件也能正常显示（兜底合成「未分部位」卡）');
@@ -1802,10 +1802,51 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       localStorage.removeItem('__R37');
     }
   });
+  ST.def('R38a','CMD-1019-08：统一打开案件（登记 / 通知已开分页 / 不重复开）、院长默认基础资料、录入侧边栏（草稿 / 收起 / 离开确认 / 上传）、面诊卡折叠、客人资料只在基础资料、分页标题、弹窗阴影（IN 和 KM1 / KD1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(!!me, '要先登录')) return;
+    ST.ok(/--shadow-modal/.test(getComputedStyle(document.documentElement).getPropertyValue('--shadow-modal') ? '--shadow-modal' : '') && /72px/.test(getComputedStyle(document.documentElement).getPropertyValue('--shadow-modal')), 'Modal 阴影变量已加深一档（--shadow-modal 72px）');
+    gmcPageTitle(); ST.ok(new RegExp('^'+me.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+' · ').test(document.title) || document.title.indexOf(me.id+' · ')===0, '分页标题账号放最前面：'+document.title);
+    /* 统一打开：已有活着的分页 → 不再新开，通知那个分页 */
+    var oldNo = window.GMC_NO_TABS, oldOpen = window.open, calls = [], toasts = [], oldToast = window.showToast, msgs = [];
+    try{
+      window.GMC_NO_TABS = false; window.open = function(u, n){ calls.push({u:u, n:n}); return null; }; window.showToast = function(a, b){ toasts.push(a); };
+      try{ window.confirm = function(){ return true; }; nav(isKrAccount() ? 'kr-dashboard' : 'in-dashboard'); }catch(e){} /* 从工作台出发（当前不在这个案件页） */
+      var kr = isKrAccount(), side = kr ? 'kr' : 'in', cid = kr ? (krAllCases()[0]||{}).clinicId : CURRENT_CLINIC_ID, cs = kr ? (krAllCases()[0]||{}) : CASE_ITEMS[0];
+      var id0 = kr ? cs.id : (cs && cs.id); if(!id0){ ST.ok(true, '（没有案件，跳过打开测试）'); }
+      else {
+        var reg = caseRegRead(); reg[caseRegId(side, cid, id0)] = {tab:'other-tab', ts:Date.now()}; caseRegWrite(reg);
+        if(kr) krShowCase(cid, id0, {tab:'items'}); else openCaseDetail(id0, false, {tab:'kr'});
+        ST.ok(calls.every(function(x){ return x.u===''; }) && calls.length===1 && calls[0].n===caseTabName(side, cid, id0) && toasts.length===1, '已有活着的分页：只尝试切到已开的那个（window.open 空地址 + 分页名），不新开、不退回当前分页；切不过去时提示一句');
+        var reg2 = caseRegRead(); delete reg2[caseRegId(side, cid, id0)]; caseRegWrite(reg2);
+        calls.length = 0; toasts.length = 0; if(kr) krShowCase(cid, id0, {tab:'items'}); else openCaseDetail(id0, false, {tab:'kr'});
+        ST.ok(calls.length===1 && calls[0].n===caseTabName(side, cid, id0) && /case=/.test(calls[0].u), '没有已开分页：新开一个有名字的分页（地址带案件和位置）');
+      }
+    } finally { window.GMC_NO_TABS = oldNo; window.open = oldOpen; window.showToast = oldToast; }
+    ST.ok(/^gmc-(in|kr)-/.test(caseTabName('in','C1','x')) && caseTabName('kr','C1','x')==='gmc-kr-C1-x', '所有入口同一个分页名规则（端-诊所-案件）');
+    if(isKrAccount()){
+      var pw = krAllCases().filter(function(x){ return x.c.consultStatus==='paid_waiting_kr' && (!krIsDirector() || x.c.director===me.name); })[0]; if(pw && canDo('krwork')) Store.mutateClinic(pw.clinicId, function(){ var c1 = CASE_ITEMS.filter(function(x){ return x.id===pw.id; })[0]; coreConfirmConsultTimes(c1, todayStr(), '20:30', D(1)+' 05:00', me.name); }); /* 先把等确认时间的案件推到等待报告 */
+      var all0 = krAllCases().filter(function(x){ return x.c.consultRequested; }), r = all0.filter(function(x){ return x.c.consultStatus==='awaiting_report' && !x.c.consultContentAt && (!krIsDirector() || x.c.director===me.name); })[0] || all0[0]; if(!r){ ST.ok(true, '（没有面诊案件，跳过 KR 部分）'); return; }
+      if(krIsDirector()){ var dc = krAllCases().filter(function(x){ return x.c.director===me.name; })[0]; if(dc) ST.ok(krDefaultCaseTab(dc.clinicId, dc.id)==='basic', '院长进案件默认基础资料 tab'); }
+      krShowCase(r.clinicId, r.id, {here:true}); krSetCaseTab('consult'); var cb = document.getElementById('krcase-body').innerText; ST.ok(!/客人资料（按部位|苦恼说明/.test(cb), '面诊 tab 没有客人资料块'); krSetCaseTab('basic'); ST.ok(/客人资料（按部位/.test(document.getElementById('krcase-body').innerText), '基础资料 tab 有部位卡片');
+      if(krCanRecord(r.c) && !r.c.consultContentAt && r.c.consultStatus==='awaiting_report'){
+        var oc = window.confirm; window.confirm = function(){ return true; };
+        krRecOpenModal('manual', false); var sd = document.getElementById('kr-rec-side'); ST.ok(sd && sd.style.display!=='none' && document.body.classList.contains('kr-rec-open'), '录入侧边栏出现（右侧固定，左边让位）');
+        var ta = document.getElementById('kr-rec-text'); ta.value = '侧边栏草稿测试'; ta.dispatchEvent(new Event('input')); krSetCaseTab('files'); ST.ok(document.getElementById('kr-rec-text') && document.getElementById('kr-rec-text').value==='侧边栏草稿测试' && sd.style.display!=='none', '切 tab 侧边栏和文字保留');
+        krRecCollapse(true); ST.ok(/mini/.test(document.getElementById('kr-rec-side').className) && /草稿/.test(document.getElementById('kr-rec-side').innerText), '收起成窄条（写「草稿」）'); krRecCollapse(false); ST.ok(!!document.getElementById('kr-rec-text'), '展开');
+        KR_REC.recording = true; var cc = []; window.confirm = function(m){ cc.push(m); return false; }; nav('kr-dashboard'); ST.ok(CURRENT_PAGE_ID==='kr-casedetail' && /还在录音/.test(cc[0]||''), '录音中离开 → 确认，选否留在原地'); window.confirm = function(){ return true; }; nav('kr-dashboard'); ST.ok(CURRENT_PAGE_ID==='kr-dashboard' && !KR_REC.recording && !!localStorage.getItem(krRecDraftKey()), '确认离开：停止录音，文字存成草稿');
+        krShowCase(r.clinicId, r.id, {here:true}); krRecSideSync(); ST.ok(KR_REC_OPEN && KR_REC.collapsed && KR_REC.text==='侧边栏草稿测试' && /草稿/.test(document.getElementById('kr-rec-side').innerText), '再进案件：草稿还在（窄条）');
+        krRecCollapse(false); krRecUpload(); ST.ok(!KR_REC_OPEN && !localStorage.getItem(krRecDraftKey()) && !!krFindCase(r.clinicId, r.id).c.consultContentAt, '上传后侧边栏收起、草稿清掉、面诊结束');
+        krSetCaseTab('consult'); var fold = document.getElementById('krcase-body').innerText; ST.ok(/展开/.test(fold) && /已上传面诊内容，待整理诊疗方案/.test(fold) && !/修改预计时间/.test(fold), '面诊卡片折叠成一行（负责院长 · 小状态 + 展开），没有［修改预计时间］'); krConsultToggle(r.id); ST.ok(/修改预计时间|预计出报告时间/.test(document.getElementById('krcase-body').innerText), '展开后有时间和［修改预计时间］'); krConsultToggle(r.id);
+        window.confirm = oc;
+      }
+    } else {
+      var c0 = CASE_ITEMS.filter(function(x){ return x.consultRequested; })[0]; if(c0){ c0.activeCaseTab = 'consult'; ST.ok(!/客人资料|苦恼说明/.test(caseTabContentHtml(c0)), 'IN 面诊资料 tab 没有客人资料块'); c0.activeCaseTab = 'basic'; }
+    }
+  });
   ST.def('R32b','KM1：KR 面诊 tab 按部位显示（希望预期 / 预算在上）；院长账号也一样（先在 A1 跑 R32a）',function(){
     var me = currentAccount(); if(!ST.ok(me && (me.id==='KM1' || me.id==='KD1'), '要在 KM1 / KD1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R32')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R32a')) return;
-    var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件（已缴面诊费的面诊案件才在 KR 看得到）')) return; krShowCase(r.clinicId, r.id); krSetCaseTab('consult'); var t = document.getElementById('krcase-body').innerText;
-    ST.ok(/客人资料（按部位）/.test(t) && /预算/.test(t) && /面部整体/.test(t) && /面部/.test(t) && /苦恼说明/.test(t) && /希望预期/.test(t) && t.indexOf('苦恼说明') < t.indexOf('希望预期') && t.indexOf('预算') < t.indexOf('面部整体') && /正面/.test(t) && /左 45 度/.test(t), 'KR 面诊 tab：预算在上，按部位卡片（说明 → 希望预期 → 视频 → 照片）');
+    var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件（已缴面诊费的面诊案件才在 KR 看得到）')) return; krShowCase(r.clinicId, r.id); krSetCaseTab('consult'); var tc = document.getElementById('krcase-body').innerText; ST.ok(!/客人资料（按部位|苦恼说明/.test(tc), 'KR 面诊 tab：没有客人资料块（CMD-1019-08）'); krSetCaseTab('basic'); var t = document.getElementById('krcase-body').innerText;
+    ST.ok(/客人资料（按部位/.test(t) && /预算/.test(t) && /面部整体/.test(t) && /面部/.test(t) && /苦恼说明/.test(t) && /希望预期/.test(t) && t.indexOf('苦恼说明') < t.indexOf('希望预期') && t.indexOf('预算') < t.indexOf('面部整体') && /正面/.test(t) && /左 45 度/.test(t), 'KR 基础资料 tab：预算在上，按部位卡片（说明 → 希望预期 → 视频 → 照片）');
     var photo = [].slice.call(document.querySelectorAll('#krcase-body div')).filter(function(e){ return /concernZoom/.test(e.getAttribute('onclick')||''); })[0]; if(ST.ok(!!photo, '照片格子可点开放大')){ photo.click(); var zo = document.getElementById('concern-zoom-overlay'); ST.ok(zo && zo.classList.contains('open') && /面部整体/.test(zo.innerText), '点开放大'); zo.classList.remove('open'); }
   });
   ST.def('R33a','CMD-1019-02：没有意向项目栏 / 面诊需求选了才展开苦恼与希望预期（切换保留内容）/ 院长按苦恼部位排序 / 项目→部位对应（A1 分页）',function(){

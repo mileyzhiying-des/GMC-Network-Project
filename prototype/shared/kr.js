@@ -140,7 +140,7 @@ function krCallRender(){
   if(KR_CALL.state==='idle' || !sig){ ov.style.display = 'none'; ov.innerHTML = ''; return; }
   var title = sig.clinicName+' · '+sig.name+'（'+sig.caseNo+'）';
   if(KR_CALL.state==='ringing'){
-    ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:28px 32px;width:340px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);"><div style="font-size:36px;">📞</div><div style="font-size:16px;font-weight:800;margin:10px 0 4px;">'+krEsc(sig.from)+' 呼叫你</div><div style="font-size:12px;color:var(--slate2);margin-bottom:20px;">'+krEsc(title)+' · 视频沟通</div>'+
+    ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:28px 32px;width:340px;text-align:center;box-shadow:var(--shadow-modal,0 28px 72px rgba(0,0,0,.40));"><div style="font-size:36px;">📞</div><div style="font-size:16px;font-weight:800;margin:10px 0 4px;">'+krEsc(sig.from)+' 呼叫你</div><div style="font-size:12px;color:var(--slate2);margin-bottom:20px;">'+krEsc(title)+' · 视频沟通</div>'+
       '<div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;color:#C1454A;border-color:#C1454A;" onclick="krCallDecline()">拒绝</button><button class="btn-primary" style="flex:1;background:var(--sage);" onclick="krCallAccept()">接听</button></div></div>';
   } else {
     ov.style.background = '#1B2635';
@@ -189,8 +189,8 @@ function krBoot(){
   var q = new URLSearchParams(location.search).get('case');
   if(q){ var pr = q.split(':'); if(!krFindCase(pr[0], pr[1])){ location.replace(homeUrl()); return; } var qq = new URLSearchParams(location.search); KR_CASE = {clinicId:pr[0], id:pr[1], tab:(qq.get('tab')==='proc' ? 'items' : qq.get('tab'))||krDefaultCaseTab(pr[0], pr[1])}; if(qq.get('page')) KR_PROJ_PAGE = qq.get('page'); if(qq.get('sub')){ KR_SUB_HL = qq.get('sub'); krOpenSubHl(); } start = 'kr-casedetail'; }
   try{ if(sweepStaleSurgeryBlocks(function(cid, id){ var v = Store.readClinic(cid); return v ? (v.CASE_ITEMS||[]).filter(function(x){ return x.id===id; })[0] : null; })) Store.touch(); }catch(e){} /* 取消后还留着的施术块一次性清掉 */
-  if(new URLSearchParams(location.search).get('rec')) window.__krRecInTab = true;
-  if(new URLSearchParams(location.search).get('win')){ window.__krRecWin = true; document.body.classList.add('kr-recwin'); } /* 面诊录入独立小窗口：只显示录入弹窗 */ /* 录入输入页（院长开始面诊后新开的分页）：不参与「同一账号两分页」锁，和案件页属于同一次操作 */
+  /* CMD-1019-08：录入改右侧侧边栏，不再有独立录入分页 / 小窗口 */
+  /* 面诊录入独立小窗口：只显示录入弹窗 */ /* 录入输入页（院长开始面诊后新开的分页）：不参与「同一账号两分页」锁，和案件页属于同一次操作 */
   krRenderPage(start); showPage(start);
   if(KR_SUB_HL && start==='kr-casedetail') setTimeout(function(){ var rep = null; try{ rep = subCaseList(krFindCase(KR_CASE.clinicId, KR_CASE.id).c).filter(function(x){ return x.id===KR_SUB_HL; })[0]; }catch(e){} var el = rep ? document.getElementById('kr-subrow-'+rep.id) : null; if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 250);
   var recQ = new URLSearchParams(location.search).get('rec'); if(recQ && start==='kr-casedetail'){ setTimeout(function(){ try{ krSetCaseTab('consult'); krRecOpenModal(recQ==='voice' ? 'voice' : 'manual', new URLSearchParams(location.search).get('add')==='1'); }catch(e){} }, 200); }
@@ -413,19 +413,19 @@ function krRenderCaseRows(){
 /* ---------- 五、KR 案件详情骨架（KR-CASE-01 第 1 节）：现在全部只读，面诊/项目/施术的操作在后面几份指令里做 ---------- */
 var KR_CASE = {clinicId:'', id:'', tab:'basic'};
 var KR_CASE_TABS = [{key:'basic', label:'基础资料'}, {key:'consult', label:'面诊'}, {key:'items', label:'项目'}, {key:'settle', label:'结算'}, {key:'files', label:'附件'}, {key:'related', label:'关联案件'}, {key:'log', label:'Timeline'}]; /* 拿掉「KR 专用附件」，只留共用附件（CMD-1013-08 四·1） */
-function krDefaultCaseTab(clinicId, id){ var r0 = krFindCase(clinicId, id), c0 = r0 && r0.c; return (c0 && c0.consultRequested && !c0.reportReady && ['paid_waiting_kr','awaiting_report'].indexOf(c0.consultStatus)>-1) ? 'consult' : 'basic'; /* 2026-10-08：面诊进行中的案件，KR 室长点开直接进面诊 tab */ }
+function krApplyAt(o){ o = o||{}; if(o.tab) KR_CASE.tab = (o.tab==='proc' ? 'items' : o.tab); if(o.page) KR_PROJ_PAGE = o.page; if(o.sub){ KR_SUB_HL = o.sub; krOpenSubHl(); } krRenderCaseDetail(); if(o.sub) setTimeout(function(){ var el = document.getElementById('kr-subrow-'+o.sub); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80); } /* CMD-1019-08：别的入口再点这个案件 → 本分页跳到那个位置 */
+function krDefaultCaseTab(clinicId, id){ if(typeof krIsDirector==='function' && krIsDirector()) return 'basic'; /* 院长从待面诊 / 日历进案件：默认基础资料 tab（CMD-1019-08） */ var r0 = krFindCase(clinicId, id), c0 = r0 && r0.c; return (c0 && c0.consultRequested && !c0.reportReady && ['paid_waiting_kr','awaiting_report'].indexOf(c0.consultStatus)>-1) ? 'consult' : 'basic'; /* 2026-10-08：面诊进行中的案件，KR 室长点开直接进面诊 tab */ }
 /* CMD-1019-04：同一个案件用同一个有名字的分页打开（所有进案件的入口都走这里）；o = {tab, page（项目卡分页）, sub（高亮的子案件行）, here（强制在当前分页）} */
 function krShowCase(clinicId, id, o){
   o = o||{};
   var same = CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id===id && KR_CASE.clinicId===clinicId;
   if(window.GMC_NO_TABS || o.here || same){ krShowCaseHere(clinicId, id, o); return; }
   var url = location.pathname+'?case='+encodeURIComponent(clinicId+':'+id)+(o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.page ? '&page='+encodeURIComponent(o.page) : '')+(o.sub ? '&sub='+encodeURIComponent(o.sub) : '');
-  var w = caseTabOpen(caseTabName('kr', clinicId, id), url);
-  if(!w) krShowCaseHere(clinicId, id, o); /* 浏览器不让开 / 切：退回当前分页 */
+  caseGo('kr', clinicId, id, url, o, function(){ krShowCaseHere(clinicId, id, o); });
 }
 function krOpenSubHl(){ try{ var r = krFindCase(KR_CASE.clinicId, KR_CASE.id), rep = r && subCaseList(r.c).filter(function(x){ return x.id===KR_SUB_HL; })[0]; if(rep) KR_SUB_OPEN[subCaseKey(rep)] = true; }catch(e){} }
 function krShowCaseHere(clinicId, id, o){
-  o = o||{}; KR_SUB_HL = null; KR_CASE = {clinicId:clinicId, id:id, tab:krDefaultCaseTab(clinicId, id)};
+  o = o||{}; if(CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id && (KR_CASE.id!==id || KR_CASE.clinicId!==clinicId) && !krRecLeaveOk()) return; /* 同分页换案件 = 离开：录音中先确认（CMD-1019-08）*/ KR_SUB_HL = null; KR_CASE = {clinicId:clinicId, id:id, tab:krDefaultCaseTab(clinicId, id)};
   if(o.tab) KR_CASE.tab = (o.tab==='proc' ? 'items' : o.tab);
   if(o.page) KR_PROJ_PAGE = o.page;
   if(o.sub){ KR_SUB_HL = o.sub; krOpenSubHl(); }
@@ -447,7 +447,7 @@ function krTabBasic(c){
   }).join('') : krEmpty('没有医美史记录');
   return krCardBox('客户信息',
       krKV('客户姓名', krEsc(c.name))+krKV('性别', krEsc(b.gender))+krKV('出生日期', krEsc(b.dob))+krKV('联系方式', krEsc(maskPhone(b.contact))+' <span style="font-size:11px;color:var(--muted);">（联系方式由印尼室长处理，KR 端不显示）</span>')+krKV('病史 / 过敏史', krEsc(b.history)))+
-    krCardBox('本次需求', krKV('苦恼', krEsc(c.concern||'—'))+krKV('希望', krEsc(c.expectation||'—'))+krKV('预算', (c.budgetMin||c.budgetMax) ? fmtRp(c.budgetMin)+' ～ '+fmtRp(c.budgetMax) : '—'))+
+    krCardBox('客人资料（按部位：苦恼说明 / 希望预期 / 视频 / 照片）', concernBlockHtml(c))+
     krCardBox('医美史', beauty)+
     krCardBox('检测与上传', krUploadRow(c, '메타뷰 检测', '메타뷰 检测报告', c.metaviewStatus==='ready', '已检测到')+krUploadRow(c, '照片', '照片', c.photoUploaded, '✓ 已上传')+krUploadRow(c, '视频', '视频', c.videoUploaded, '✓ 已上传'));
 }
@@ -601,14 +601,18 @@ function krEtaBlock(c, change){
   return krCardBox('修改预计出报告时间（院长 '+krEsc(c.director||'—')+'）', krCan() ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;"><input type="date" id="kr-eta-d" value="'+base[0]+'" min="'+krToday()+'" style="'+inp+'"><select id="kr-eta-t" style="'+inp+'">'+krHourOptions(base[1], '00:00', '23:30')+'</select><button class="btn-primary" onclick="krDoEta(true)">确认修改</button><button class="btn-ghost" onclick="krSetEtaEdit(false)">取消</button></div>' : '<div style="font-size:12px;color:var(--muted);">预计出报告时间由 KR 室长修改，院长账号不能改。</div>');
 }
 var KR_ETA_EDIT = false;
+var KR_CONSULT_OPEN = {}; /* 面诊卡片折叠状态（界面状态，不存档）*/
+function krConsultToggle(id){ KR_CONSULT_OPEN[id] = !KR_CONSULT_OPEN[id]; krRenderCaseDetail(); }
 function krSetEtaEdit(v){ KR_ETA_EDIT = v; krRenderCaseDetail(); }
 function krEtaStatusBlock(c){
   var over = reportOverdueNow(c), started = !!c.consultStartedAt, ended = !!c.consultContentAt, canStart = krCanRecord(c) && !started && !ended;
+  /* CMD-1019-08：开始面诊之后 / 已上传面诊内容 → 折叠成一行「负责院长 · 当前小状态」+［展开］；面诊时间、预计出报告时间、倒计时、［修改预计时间］收进展开区 */
+  if((started || ended) && !KR_CONSULT_OPEN[c.id]) return krCardBox('面诊', '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:13px;"><b>'+krEsc(c.director||'—')+'</b> · '+(ended ? '已上传面诊内容，待整理诊疗方案' : '面诊中')+(over ? ' <span style="color:#C26A1B;">（已超过预计出报告时间）</span>' : '')+'</span><a href="#" class="info-link" onclick="krConsultToggle(\''+c.id+'\');return false;">展开</a></div>');
   /* 一张卡片：面诊时间 / 预计出报告时间 / 倒计时 / 当前小状态 /［开始面诊］/［修改预计时间］ */
   return krCardBox('面诊', krDirLine(c)+(c.consultAt ? krKV('面诊时间（韩国）', krEsc(c.consultAt.date+' '+c.consultAt.time)) : '')+krKV('预计出报告时间', krEsc(fmtUtc(c.reportEta) ? fmtUtc(c.reportEta)+'（韩国）' : '—'))+krKV('倒计时', over ? '<b style="color:#C26A1B;">已超过预计时间</b>' : krEsc(reportRemainingText(c)))+
     krKV('当前小状态', krSubHtml(caseSubStatusItems(c)) || '—')+
     (over ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-top:8px;">⏰ 已超过预计出报告时间，诊疗方案还没发送。请尽快发送，或修改预计时间（IN 端会收到通知）。</div>' : '')+
-    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">'+(canStart ? '<button class="btn-primary" onclick="krStartConsult()">开始面诊</button>' : '')+(krCan() && !KR_ETA_EDIT ? '<button class="btn-outline" onclick="krSetEtaEdit(true)">修改预计时间</button>' : '')+'</div>');
+    ((started || ended) ? '<div style="margin-top:10px;"><a href="#" class="info-link" onclick="krConsultToggle(\''+c.id+'\');return false;">收起</a></div>' : '')+'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">'+(canStart ? '<button class="btn-primary" onclick="krStartConsult()">开始面诊</button>' : '')+(krCan() && !KR_ETA_EDIT ? '<button class="btn-outline" onclick="krSetEtaEdit(true)">修改预计时间</button>' : '')+'</div>');
 }
 function krStartConsult(){
   if(krIsDirector()){ krStartChooseOpen(); return; } /* 院长账号：先弹窗选录入方式，再新分页打开输入页 */
@@ -619,15 +623,15 @@ function krStartChooseOpen(){
   var ov = document.getElementById('kr-start-overlay');
   if(!ov){ ov = document.createElement('div'); ov.id = 'kr-start-overlay'; ov.className = 'modal-overlay'; ov.onclick = function(e){ if(e.target===ov) ov.classList.remove('open'); }; document.body.appendChild(ov); }
   ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="display:flex;justify-content:space-between;margin-bottom:12px;"><b style="font-size:15px;">开始面诊</b><span style="cursor:pointer;" onclick="document.getElementById(\'kr-start-overlay\').classList.remove(\'open\')">✕</span></div>'+
-    '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">选择录入方式。确定后会弹出一个小的录入窗口，这个案件页保持不动，方便对照资料。</div>'+
+    '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">选择录入方式。确定后案件页右边会出现录入侧边栏，左边保持不动，可以一边看部位照片一边录。</div>'+
     '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="krStartWith(\'voice\')">🎙 语音录入</button><button class="btn-outline" style="flex:1;" onclick="krStartWith(\'manual\')">⌨ 手动输入</button></div></div>';
   ov.classList.add('open');
 }
 function krStartWith(mode){
   var ov = document.getElementById('kr-start-overlay'); if(ov) ov.classList.remove('open');
-  var w = window.open(krRecUrl(mode, false), 'krrec', 'popup=yes,width=640,height=720,left=120,top=60'); /* 必须在点击里同步打开，否则会被浏览器拦截；原案件页不跳转 */
   krMut(function(c){ return krCanRecord(c) ? coreStartConsult(c, ME_NAME) : false; });
-  if(!w) alert('浏览器拦截了弹出窗口：请允许弹出窗口，或在面诊 tab 点［录入面诊］');
+  krSetCaseTab('basic'); /* 左边看客人资料（部位照片等），右边侧边栏录入（CMD-1019-08） */
+  krRecOpenModal(mode, false);
 }
 /* 面诊卡片第一行「负责院长：KD1 院长」+［院长日程］（CMD-1012-08 二·1，取代原来的大字院长卡片） */
 function krDirLine(c){ return krKV('负责院长', krEsc(c.director||'—')+(c.director ? ' <button class="btn-outline" style="padding:2px 12px;font-size:12px;margin-left:8px;" onclick="krDirSchedPopup(\''+krEsc(c.director).replace(/'/g,'')+'\')">院长日程</button>' : '')); }
@@ -1006,7 +1010,7 @@ function krTabLog(c){
 }
 function krSetTlPage(id, which){ TL_PAGE[id] = which; krRenderCaseDetail(); }
 function krTabVault(c){ return krIsMyCase(c) ? krVaultHtml(c) : krCardBox('KR 专用附件', krEmpty()); } /* 只有 KR 看得到，IN 端没有这个 tab */
-var KR_TAB_FN = {settle:krTabSettle, vault:krTabVault, basic:krTabBasic, consult:function(c){ return krCardBox('客人资料（按部位）', concernBlockHtml(c))+krTabConsult(c); }, /* CMD-1019-01：希望预期 / 预算 / 按部位的苦恼卡片 */  items:krTabItems, proc:krTabProc, files:krTabFiles, related:krTabRelated, log:krTabLog};
+var KR_TAB_FN = {settle:krTabSettle, vault:krTabVault, basic:krTabBasic, consult:krTabConsult, /* CMD-1019-08：客人资料（按部位的苦恼卡片 / 预算）移到基础资料 tab，面诊 tab 只放面诊本身 */  items:krTabItems, proc:krTabProc, files:krTabFiles, related:krTabRelated, log:krTabLog};
 
 function krRenderCaseDetail(){
   if(KR_CASE.tab==='proc') KR_CASE.tab = 'items';
@@ -1296,46 +1300,68 @@ function krVaultLog(v, action){ v.history.push({ts:nowFullDt(), by:ME_NAME, acti
 var KR_REC = {caseKey:'', text:'', recording:false, demoVoice:false, rec:null, startedAt:0};
 var KR_DEMO_TRANSCRIPT = '턱선이 전반적으로 처지고 팔자주름이 깊습니다. 피부 탄력 저하가 중등도로 보이며, 우선 리프팅 위주로 시작하고 필요하면 윤곽 시술을 추가하는 것을 권합니다. 시술 후 2주간은 사우나와 격한 운동을 피하셔야 합니다. （演示用转写文字）';
 function krRecKey(){ return KR_CASE.clinicId+':'+KR_CASE.id; }
-function krRecReset(){ if(KR_REC.caseKey !== krRecKey()){ krRecStop(true); KR_REC = {caseKey:krRecKey(), text:'', recording:false, demoVoice:false, rec:null, startedAt:0}; } }
+function krRecReset(){ if(KR_REC.caseKey !== krRecKey()){ krRecStop(true); KR_REC = {caseKey:krRecKey(), text:'', recording:false, demoVoice:false, rec:null, startedAt:0}; KR_REC_OPEN = false; } }
 function krCanRecord(c){ var me = currentAccount(); return !!me && (canDo('krwork') || (isKrDirectorLike(me) && krIsMyCase(c))); }
-function krRecInput(v){ KR_REC.text = v; }
 
-/* 录入面诊（CMD-1008-12 C4；院长与 KR 室长相同）：点录入方式 → 弹窗；语音转写 / 手动输入都是可直接修改的输入框 →［上传内容］→ 内容以文字显示在「录入面诊」下方（存进 KR 专用附件仓库的转写记录，IN 看不到） */
+/* 录入面诊 / 增加内容（CMD-1019-08 改版：取代原来的弹窗 / 独立小窗口）：案件页右侧固定侧边栏（宽 400px，左边内容让位，可一边看部位照片一边录；小屏改成右侧滑出抽屉盖在内容上）。
+   院长与 KR 室长相同；内容 = 录音 / 停止、状态条、转写文字（可直接改）、［取消］［上传内容］，上传后自动收起；可收起成右侧窄条（「🎙 录音中」/「草稿」），点一下展开。
+   跟着这个案件：切 tab 不丢；离开 = 这个分页关掉或跳到别的页面（开别的案件分页不算离开，录音在原分页继续）；离开时在录音 → 确认；没上传的文字存成该案件草稿（localStorage），下次进来还在。 */
 var KR_REC_OPEN = false;
+function krRecDraftKey(){ var a = ''; try{ a = currentAccountId(); }catch(e){} return 'gmc_rec_draft|'+a+'|'+krRecKey(); }
+function krRecDraftSave(){ try{ if(KR_REC.text && KR_REC.text.trim()) localStorage.setItem(krRecDraftKey(), JSON.stringify({mode:KR_REC.mode||'manual', add:!!KR_REC.add, text:KR_REC.text, ts:Date.now()})); else localStorage.removeItem(krRecDraftKey()); }catch(e){} }
+function krRecDraftLoad(){ try{ return JSON.parse(localStorage.getItem(krRecDraftKey())||'null'); }catch(e){ return null; } }
+function krRecInput(v){ KR_REC.text = v; krRecDraftSave(); }
 function krRecRefresh(){ if(KR_REC_OPEN) krRecModalRender(); krRenderCaseDetail(); }
+function krRecSideEl(){ var el = document.getElementById('kr-rec-side'); if(!el){ el = document.createElement('div'); el.id = 'kr-rec-side'; document.body.appendChild(el); } return el; }
 function krRecModalRender(){
-  var ov = ensurePromoOverlay('kr-rec-overlay'), voice = KR_REC.mode==='voice', srOk = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  var el = krRecSideEl(), voice = KR_REC.mode==='voice', srOk = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  var onCase = CURRENT_PAGE_ID==='kr-casedetail' && KR_REC.caseKey===krRecKey();
+  if(!KR_REC_OPEN || !onCase){ el.style.display = 'none'; document.body.classList.remove('kr-rec-open', 'kr-rec-mini'); return; }
+  el.style.display = 'flex'; document.body.classList.add('kr-rec-open'); document.body.classList.toggle('kr-rec-mini', !!KR_REC.collapsed);
+  if(KR_REC.collapsed){
+    el.className = 'kr-rec-side mini'; el.innerHTML = '<div class="kr-rec-strip" onclick="krRecCollapse(false)" title="展开录入面诊"><span style="font-size:18px;">'+(KR_REC.recording ? '🎙' : '📝')+'</span><span class="kr-rec-strip-txt">'+(KR_REC.recording ? '录音中' : '草稿')+'</span></div>'; return;
+  }
   var tip = KR_REC.recording ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:8px;">🎙 录音中…'+(KR_REC.demoVoice ? '（演示：当前浏览器不支持语音识别，已填入演示文字）' : '（正在做语音转文字，韩语）')+'</div>' : (voice && !srOk ? '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">当前浏览器不支持语音识别，点开始录音会填入一段演示文字（可修改）。</div>' : '');
-  ov.firstChild.style.width = '560px';
-  ov.firstChild.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:12px;"><b style="font-size:15px;">'+(KR_REC.add ? (voice ? '增加内容（语音）' : '增加内容（手动）') : (voice ? '语音录入面诊' : '手动输入面诊'))+'</b><span style="cursor:pointer;" onclick="krRecCancel()">✕</span></div>'+tip+
+  var tx = document.getElementById('kr-rec-text'), had = tx && document.activeElement===tx, ss = had ? tx.selectionStart : 0, se = had ? tx.selectionEnd : 0;
+  el.className = 'kr-rec-side';
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><b style="font-size:15px;">'+(KR_REC.add ? (voice ? '增加内容（语音）' : '增加内容（手动）') : (voice ? '语音录入面诊' : '手动输入面诊'))+'</b><span style="display:flex;gap:12px;align-items:center;"><a href="#" class="info-link" style="font-size:12px;" onclick="krRecCollapse(true);return false;">收起 ›</a></span></div>'+tip+
     (voice ? '<div style="margin-bottom:8px;">'+(KR_REC.recording ? '<button class="btn-primary" onclick="krRecStop()">⏹ 停止录音</button>' : '<button class="btn-outline" onclick="krRecStart(\'voice\')">🎙 开始 / 继续录音</button>')+'</div>' : '')+
-    '<textarea id="kr-rec-text" oninput="krRecInput(this.value)" placeholder="面诊内容（语音转写或手动输入，可直接修改）" style="width:100%;min-height:200px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_REC.text)+'</textarea>'+
+    '<textarea id="kr-rec-text" oninput="krRecInput(this.value)" placeholder="面诊内容（语音转写或手动输入，可直接修改；没上传的内容会存成草稿）" style="flex:1;min-height:200px;width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;resize:none;">'+krEsc(KR_REC.text)+'</textarea>'+
     '<div style="display:flex;gap:10px;margin-top:12px;"><button class="btn-outline" style="flex:1;" onclick="krRecCancel()">取消</button><button class="btn-primary" style="flex:1;" onclick="krRecUpload()">上传内容</button></div>';
-  ov.classList.add('open');
+  if(had){ var t2 = document.getElementById('kr-rec-text'); if(t2){ t2.focus(); try{ t2.setSelectionRange(ss, se); }catch(e){} } }
 }
-/* 院长账号：［录入面诊］在新分页打开（地址带 rec=voice|manual，进页面后自动弹出录入窗口） */
-function krRecUrl(mode, add){ return location.pathname+'?case='+KR_CASE.clinicId+':'+KR_CASE.id+'&tab=consult&rec='+mode+(add ? '&add=1' : '')+'&win=1'; }
-/* 面诊录入 / 增加内容：只把录入弹窗内容用小尺寸独立窗口打开（window.open 弹出窗），原案件页不跳转；上传后原页面靠存档同步自动更新（CMD-1013-02 四） */
-function krRecNewTab(mode, add){
-  var w = window.open(krRecUrl(mode, add), 'krrec', 'popup=yes,width=640,height=720,left=120,top=60');
-  if(!w) alert('浏览器拦截了弹出窗口：请允许弹出窗口后再点一次');
-  return w;
+function krRecCollapse(v){ KR_REC.collapsed = !!v; krRecDraftSave(); krRecModalRender(); }
+/* 侧边栏跟着案件页：进案件页时有草稿 → 收起的「草稿」窄条；离开案件页 → 隐藏（录音要先确认） */
+function krRecSideSync(){
+  try{
+    var onCase = CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id;
+    if(onCase && KR_REC.caseKey!==krRecKey()){ krRecReset(); }
+    if(onCase && !KR_REC_OPEN && KR_REC.caseKey===krRecKey() && !KR_REC.text){ var d = krRecDraftLoad(); if(d && d.text && krCanRecord((krFindCase(KR_CASE.clinicId, KR_CASE.id)||{}).c||{})){ KR_REC.mode = d.mode; KR_REC.add = !!d.add; KR_REC.text = d.text; KR_REC.collapsed = true; KR_REC_OPEN = true; } }
+    var shown = !!(document.getElementById('kr-rec-side') && document.getElementById('kr-rec-side').style.display!=='none');
+    if((KR_REC_OPEN && onCase) !== shown || (KR_REC_OPEN && onCase && !document.getElementById('kr-rec-side'))) krRecModalRender();
+  }catch(e){}
+}
+/* 离开案件页（跳到别的页面 / 同分页开另一个案件）前：还在录音要确认；没上传的文字已经存成草稿 */
+function krRecLeaveOk(){
+  if(CURRENT_PAGE_ID!=='kr-casedetail' || !KR_REC_OPEN) return true;
+  if(KR_REC.recording){ if(!confirm('还在录音，确定离开吗？没上传的文字会存成这个案件的草稿。')) return false; krRecStop(true); }
+  krRecDraftSave(); KR_REC_OPEN = false; KR_REC.text = ''; KR_REC.collapsed = true; krRecModalRender(); return true; /* 文字在草稿里，下次进这个案件页以「草稿」窄条出现 */
 }
 function krRecOpenModal(mode, add){
-  if(!window.__krRecInTab){ krRecNewTab(mode, add); return; } /* 院长和 KR 室长一样：都在独立小窗口里录入 */
-  krRecReset(); KR_REC.mode = mode; KR_REC.add = !!add; KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false; KR_REC_OPEN = true;
-  krRecModalRender();
+  krRecReset(); var d = krRecDraftLoad();
+  KR_REC.mode = mode; KR_REC.add = !!add; KR_REC.startedAt = 0; KR_REC.demoVoice = false; KR_REC.collapsed = false;
+  KR_REC.text = (d && d.text && d.mode===mode && !!d.add===!!add) ? d.text : ''; /* 同方式的草稿接着写 */
+  KR_REC_OPEN = true; krRecModalRender();
   if(mode==='voice') krRecStart('voice');
 }
-function krRecCancel(){ krRecStop(true); KR_REC_OPEN = false; KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false; closePromoOverlay('kr-rec-overlay'); krRenderCaseDetail(); if(window.__krRecWin) window.close(); }
+function krRecCancel(){ krRecStop(true); KR_REC_OPEN = false; KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false; krRecDraftSave(); krRecModalRender(); krRenderCaseDetail(); }
 function krRecUpload(){
   if(!confirm(KR_REC.add ? '这一笔上传后不能再修改（之前的内容也不能改），确定要增加吗？' : '上传后内容不能再修改，确定要上传吗？')) return;
   krRecStop(false);
   var txt = krSaveTranscript(); if(!txt) return;
   krMut(function(c){ if(!c.consultStartedAt){ c.consultStartedAt = nowFullDt(); c.consultStartedBy = ME_NAME; } if(!c.consultContentAt){ c.consultContentAt = nowFullDt(); logCaseEvent(c, ME_NAME, '上传面诊内容，面诊结束'); updateCaseStage(c); pushKrNotif(caseKrHospital(c), ME_NAME+' 上传了面诊内容，面诊结束：'+c.name+'（'+(c.caseNo||'')+'）→ 请发送诊疗方案', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); pushNotif('面诊', '面诊结束：'+c.name+'（'+(c.caseNo||'')+'），等待诊疗方案', {caseId:c.id, level:'info'}); } }); /* 院长按［上传内容］：IN 案件列表的进程由「面诊中」变「等待报告」 */
-  KR_REC_OPEN = false; KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false;
-  closePromoOverlay('kr-rec-overlay'); Store.touch(); krRenderCaseDetail();
-  if(window.__krRecWin) setTimeout(function(){ window.close(); }, 150); /* 小窗口：上传后关闭，原页面自动更新 */
+  KR_REC_OPEN = false; KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false; krRecDraftSave();
+  krRecModalRender(); Store.touch(); krRenderCaseDetail(); /* 上传后侧边栏自动收起（关闭） */
 }
 function krRecStart(mode){
   if(mode==='manual'){ krRecOpenModal('manual'); return; }
@@ -3078,3 +3104,8 @@ function krRenderClientDetail(){
     krCardBox('本院施术记录', surgHtml)+
     '<div style="font-size:11px;color:var(--muted);">这里不显示 IN 的本地项目、IN 持有项目和诊所内部资料。</div></div>';
 }
+
+
+/* CMD-1019-08：录入侧边栏跟着案件页（草稿窄条 / 离开隐藏）；关分页时还在录音 → 浏览器自带确认（没上传的文字已存成草稿） */
+setInterval(function(){ try{ krRecSideSync(); }catch(e){} }, 700);
+window.addEventListener('beforeunload', function(e){ try{ if(KR_REC && KR_REC.recording){ krRecDraftSave(); e.preventDefault(); e.returnValue = '还在录音，确定离开吗？'; return e.returnValue; } krRecDraftSave(); }catch(x){} });

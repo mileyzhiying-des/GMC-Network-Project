@@ -2737,7 +2737,7 @@ function timelineTabsHtml(c, fn){
 function setTlPage(id, which){ TL_PAGE[id] = which; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
 function caseTimelineCardHtml(c){ var l = caseTimelineEntries(c, TL_PAGE[c.id] || 'all'); return '<div class="card" style="padding:6px 20px;">'+timelineTabsHtml(c, 'setTlPage')+(l.map(logLine).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">暂无记录</div>')+'</div>'; }
 function caseTabContentHtml(c){
-  if(c.activeCaseTab==='consult' && c.consultRequested) return consultIntentionCardHtml(c)+consultTabHtml(c);
+  if(c.activeCaseTab==='consult' && c.consultRequested) return consultTabHtml(c); /* CMD-1019-08：客人资料（苦恼部位卡片 / 预算）只放基础资料 tab，面诊 tab 不再重复 */
   normalizeCaseTab(c);
   if(c.activeCaseTab==='kr' && showKrTab(c)) return krTabContent(c);
   if(c.activeCaseTab==='localmgmt' && localCarried(c) && c.localMgmt) return localMgmtTabHtml(c); /* 继续选购 / 使用后进入本地管理流程 */

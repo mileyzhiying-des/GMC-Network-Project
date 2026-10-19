@@ -64,6 +64,7 @@ function nav(id){
   if(id !== CURRENT_PAGE_ID && !intakeLeaveOk()) return; /* 接待中未保存：先确认 */ /* KR 账号的页面权限在 kr.js 里判断 */ /* 没有日常工作权限的账号不能进工作类页面 */
   if(id === 'in-admin'){ openAdminPage(ADMIN_KEY || 'bizdata'); return; }
   if(id === CURRENT_PAGE_ID) return;
+  if(typeof krRecLeaveOk==='function' && !krRecLeaveOk()) return; /* KR 案件页：还在录音要先确认（CMD-1019-08）*/
   NAV_STACK.push(CURRENT_PAGE_ID);
   if(isKrAccount() && typeof krRenderPage==='function') krRenderPage(id); /* KR 页面先渲染内容 */
   showPage(id);
@@ -1091,6 +1092,51 @@ function caseTabOpen(name, url){
   if(w){ try{ w.focus(); }catch(e){} }
   return w;
 }
+/* ============ CMD-1019-08：统一打开案件 ============
+   所有端（IN / KR / 院长）所有入口（工作台卡片 / 日历 / 待办 / 通知 / 案件管理 / 客户详情 / 客人管理 / 对话里的案件链接…）都走 caseGo（经 openCaseDetail / krShowCase）：
+   同一账号、同一案件只能有一个分页——案件页每 3 秒在 localStorage 登记「账号|案件 → 分页」（caseRegBeat），并把自己的 window.name 设成统一的分页名；
+   再点同一案件：已有活着的分页 → BroadcastChannel 通知那个分页跳到这次要去的位置，并 window.open('', 名字) 尝试切到前台（不重新加载页面）；
+   浏览器不让切（Safari 等）→ 提示一句，那个分页已定位好；没有已开的分页才新开一个有名字的分页；连新开都被拦才退回当前分页（最后的备用）。
+   当前分页就是这个案件时只定位。「已在另一个分页打开」弹窗（presence）只在真的出现两个分页时才会出现。 */
+var CASE_REG_KEY = 'gmc_case_tabs', CASE_BC = null, CASE_REG_LIVE = 12000;
+function caseRegAcct(){ try{ return currentAccountId(); }catch(e){ return ME_NAME; } }
+function caseRegId(side, clinicId, id){ return caseRegAcct()+'|'+caseTabName(side, clinicId, id); }
+function caseRegRead(){ try{ return JSON.parse(localStorage.getItem(CASE_REG_KEY)||'{}') || {}; }catch(e){ return {}; } }
+function caseRegWrite(o){ try{ localStorage.setItem(CASE_REG_KEY, JSON.stringify(o)); }catch(e){} }
+function caseRegCurrent(){
+  if(window.__krRecInTab) return null;
+  try{
+    if(isKrAccount()) return (CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id) ? {side:'kr', clinicId:KR_CASE.clinicId, id:KR_CASE.id} : null;
+    return (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID) ? {side:'in', clinicId:CURRENT_CLINIC_ID, id:CURRENT_CASE_ID} : null;
+  }catch(e){ return null; }
+}
+function caseRegBeat(){
+  var cur = caseRegCurrent(), reg = caseRegRead(), now = Date.now();
+  Object.keys(reg).forEach(function(k){ if(reg[k].tab===TAB_ID || (now-reg[k].ts) > 60000) delete reg[k]; });
+  if(cur){ var nm = caseTabName(cur.side, cur.clinicId, cur.id); reg[caseRegId(cur.side, cur.clinicId, cur.id)] = {tab:TAB_ID, ts:now}; if(window.name!==nm) window.name = nm; }
+  else if(/^gmc-(in|kr)-/.test(window.name||'')) window.name = ''; /* 离开案件页：把分页名还回去，免得别的入口把这个分页当成案件分页 */
+  caseRegWrite(reg);
+}
+function caseApplyAt(cur, o){ if(cur.side==='kr'){ if(typeof krApplyAt==='function') krApplyAt(o); } else applyCaseAt(cur.id, o); }
+function caseGo(side, clinicId, id, url, o, here){
+  if(window.GMC_NO_TABS){ here(); return; }
+  var rid = caseRegId(side, clinicId, id), e = caseRegRead()[rid], name = caseTabName(side, clinicId, id);
+  if(e && e.tab!==TAB_ID && (Date.now()-e.ts) < CASE_REG_LIVE){
+    try{ if(CASE_BC) CASE_BC.postMessage({rid:rid, o:o||{}}); }catch(x){}
+    var w = null; try{ w = window.open('', name); }catch(x){ w = null; }
+    var blank = false; try{ blank = !!(w && w.location.href==='about:blank'); }catch(x){}
+    if(w && blank){ try{ w.close(); }catch(x){} w = null; }
+    if(w){ try{ w.focus(); }catch(x){} } else showToast('这个案件已在另一个分页打开', '那个分页已经跳到你要去的位置，请切换到那个分页继续（这个浏览器不允许自动切换）。');
+    return;
+  }
+  var w2 = caseTabOpen(name, url); if(!w2) here(); /* 连新开都被拦：退回当前分页（最后的备用） */
+}
+(function caseRegInit(){
+  try{ CASE_BC = new BroadcastChannel('gmc-case'); CASE_BC.onmessage = function(ev){ var m = ev.data||{}, cur = caseRegCurrent(); if(!cur || caseRegId(cur.side, cur.clinicId, cur.id)!==m.rid) return; try{ window.focus(); }catch(e){} try{ caseApplyAt(cur, m.o||{}); }catch(e){ console.error(e); } }; }catch(e){ CASE_BC = null; }
+  setInterval(function(){ try{ caseRegBeat(); }catch(e){} }, 3000);
+  window.addEventListener('pagehide', function(){ try{ var reg = caseRegRead(); Object.keys(reg).forEach(function(k){ if(reg[k].tab===TAB_ID) delete reg[k]; }); caseRegWrite(reg); }catch(e){} });
+  setTimeout(function(){ try{ caseRegBeat(); }catch(e){} }, 800);
+})();
 function caseAtExtra(o){ o = o||{}; return (o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.pc ? '&pc=1' : '')+(o.scroll ? '&scroll='+encodeURIComponent(o.scroll) : '')+(o.chat ? '&chat=open' : ''); }
 function applyCaseAt(id, o){
   o = o||{}; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
@@ -1101,8 +1147,7 @@ function applyCaseAt(id, o){
 function openCaseDetail(id, noPush, o){
   o = o||{};
   if(noPush || window.GMC_NO_TABS || o.here || (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===id)){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); return; }
-  var w = caseTabOpen(caseTabName('in', CURRENT_CLINIC_ID, id), caseUrl(id, caseAtExtra(o)));
-  if(!w){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); } /* 浏览器不让开新分页：退回当前分页 */
+  caseGo('in', CURRENT_CLINIC_ID, id, caseUrl(id, caseAtExtra(o)), o, function(){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); });
 }
 function openCaseDetailHere(id, noPush){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0];
@@ -1618,7 +1663,7 @@ function caseUrl(id, extra){
   return location.pathname + '?case=' + encodeURIComponent(c ? (c.caseNo || c.id) : id) + (extra||'');
 }
 
-function openCaseNewTab(id, extra){ if(window.GMC_NO_TABS){ window.open(caseUrl(id, extra), '_blank'); return; } var w = caseTabOpen(caseTabName('in', CURRENT_CLINIC_ID, id), caseUrl(id, extra)); if(!w){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) openCaseDetailHere(id); } } /* CMD-1019-04：同一案件沿用已开分页 */
+function openCaseNewTab(id, extra){ var q = new URLSearchParams(extra||''), o = {tab:q.get('tab')||'', pc:q.get('pc')==='1', scroll:q.get('scroll')||'', chat:q.get('chat')==='open'}; openCaseDetail(id, false, o); } /* CMD-1019-08：和 openCaseDetail 同一个入口 */ /* CMD-1019-04：同一案件沿用已开分页 */
 
 function openCaseChatNewTab(id){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
@@ -3601,7 +3646,7 @@ function presRender(){
   var ov = document.getElementById('case-lock-ov');
   if(blocked){
     if(!ov){ ov = document.createElement('div'); ov.id = 'case-lock-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(27,38,53,.5);display:flex;align-items:center;justify-content:center;'; document.body.appendChild(ov); }
-    ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 30px;width:380px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);"><div style="font-size:16px;font-weight:800;margin-bottom:8px;">这个案件已经在另一个分页打开</div><div style="font-size:12px;color:var(--slate2);line-height:1.7;margin-bottom:16px;">同一个账号同一时间只能在一个分页里处理同一个案件。在这里继续后，另一个分页会变成只读。</div><button class="btn-primary" style="width:100%;" onclick="presContinueHere()">在这里继续</button></div>';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 30px;width:380px;text-align:center;box-shadow:var(--shadow-modal,0 28px 72px rgba(0,0,0,.40));"><div style="font-size:16px;font-weight:800;margin-bottom:8px;">这个案件已经在另一个分页打开</div><div style="font-size:12px;color:var(--slate2);line-height:1.7;margin-bottom:16px;">同一个账号同一时间只能在一个分页里处理同一个案件。在这里继续后，另一个分页会变成只读。</div><button class="btn-primary" style="width:100%;" onclick="presContinueHere()">在这里继续</button></div>';
   } else if(ov) ov.remove();
   var pageEl = key ? document.getElementById(isKrAccount() ? 'kr-casedetail' : 'in-casedetail') : null, content = pageEl ? (pageEl.querySelector('.content') || pageEl) : null;
   var ban = document.getElementById('case-readonly-bar');
@@ -3674,7 +3719,7 @@ function opRender(key){
 function opTakeoverAsk(){
   var ov = document.getElementById('op-take-ov'); if(ov) ov.remove();
   ov = document.createElement('div'); ov.id = 'op-take-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(27,38,53,.5);display:flex;align-items:center;justify-content:center;';
-  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 30px;width:400px;box-shadow:0 24px 60px rgba(0,0,0,.3);"><div style="font-size:16px;font-weight:800;margin-bottom:8px;">当前案件正在被操作</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;margin-bottom:18px;">该案件正在由其他室长操作。继续操作后，你将获得操作权限，对方将切换为只读模式。</div><div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="document.getElementById(\'op-take-ov\').remove()">取消（只读）</button><button class="btn-primary" style="flex:1;" onclick="opTakeover()">接管操作</button></div></div>';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:26px 30px;width:400px;box-shadow:var(--shadow-modal,0 28px 72px rgba(0,0,0,.40));"><div style="font-size:16px;font-weight:800;margin-bottom:8px;">当前案件正在被操作</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;margin-bottom:18px;">该案件正在由其他室长操作。继续操作后，你将获得操作权限，对方将切换为只读模式。</div><div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="document.getElementById(\'op-take-ov\').remove()">取消（只读）</button><button class="btn-primary" style="flex:1;" onclick="opTakeover()">接管操作</button></div></div>';
   document.body.appendChild(ov);
 }
 function opTakeover(){
@@ -3797,3 +3842,23 @@ function headMount(){
   };
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
+
+
+/* CMD-1019-08：浏览器分页标题写账号（账号放最前面，分页窄时只看得到开头）+ 三端不同颜色字母的 favicon
+   一般页面「KM1 室长 · 工作台 – GMC KR」；案件分页「KM1 · 客人名（A000004）」；没登录 / 登录页不动 */
+function gmcPageTitle(){
+  try{
+    var a = currentAccount(); if(!a || /login\.html/.test(location.pathname)) return;
+    var kr = isKrAccount() || /kr\.html/.test(location.pathname), who = a.name || ME_NAME || a.id, cur = caseRegCurrent(), t0 = '';
+    if(cur){
+      var c0 = null; if(cur.side==='kr'){ var r0 = krFindCase(cur.clinicId, cur.id); c0 = r0 && r0.c; } else c0 = CASE_ITEMS.filter(function(x){ return x.id===cur.id; })[0];
+      if(c0) t0 = a.id+' · '+(c0.name||'')+'（'+(c0.caseNo||'')+'）';
+    }
+    if(!t0){ var act = document.querySelector('.sidebar .nav-item.active'), label = act ? act.textContent.replace(/\s+/g, ' ').trim() : ((typeof HEAD_TITLES!=='undefined' && HEAD_TITLES[CURRENT_PAGE_ID]) || ''); t0 = who+' · '+(label || '工作台')+' – '+(kr ? 'GMC KR' : 'GMC IN'); }
+    if(document.title!==t0) document.title = t0;
+    var dir = kr && isKrDirectorLike(a), letter = kr ? (dir ? 'D' : 'K') : 'I', col = kr ? (dir ? '#3F7F5C' : '#2F5F86') : '#9A6A4B';
+    var href = 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="'+col+'"/><text x="16" y="23" font-size="20" font-weight="700" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif">'+letter+'</text></svg>');
+    var lk = document.querySelector('link[rel="icon"]'); if(!lk){ lk = document.createElement('link'); lk.rel = 'icon'; document.head.appendChild(lk); } if(lk.getAttribute('href')!==href) lk.setAttribute('href', href);
+  }catch(e){}
+}
+setInterval(gmcPageTitle, 1000); setTimeout(gmcPageTitle, 600);

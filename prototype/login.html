@@ -257,7 +257,7 @@ renderDemo();
 function resetWithExportPrompt(){
   var ov = document.getElementById('reset-ov');
   if(!ov){ ov = document.createElement('div'); ov.id = 'reset-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(27,38,53,.45);display:flex;align-items:center;justify-content:center;'; document.body.appendChild(ov); }
-  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:24px 26px;width:420px;max-width:92vw;box-shadow:0 24px 60px rgba(0,0,0,.3);"><div style="font-size:16px;font-weight:800;margin-bottom:10px;">重置演示数据</div>'+
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;padding:24px 26px;width:420px;max-width:92vw;box-shadow:var(--shadow-modal,0 28px 72px rgba(0,0,0,.40));"><div style="font-size:16px;font-weight:800;margin-bottom:10px;">重置演示数据</div>'+
     '<button class="btn-primary" style="width:100%;text-align:left;padding:12px 14px;margin-bottom:10px;" onclick="resetDemoData(true)">① 只重置演示数据<div style="font-size:11px;font-weight:400;opacity:.85;margin-top:3px;">保留我的测试案件（案件、客人、持有项目、通知、对话、Timeline、轮次）</div></button>'+
     '<button class="btn-outline" style="width:100%;text-align:left;padding:12px 14px;margin-bottom:10px;" onclick="resetAllWithExport()">② 全部清空<div style="font-size:11px;font-weight:400;color:#C1454A;margin-top:3px;">连我的测试案件一起清掉；会先问要不要导出</div></button>'+
     '<button class="btn-ghost" style="width:100%;" onclick="document.getElementById(\'reset-ov\').remove()">取消</button>'+
