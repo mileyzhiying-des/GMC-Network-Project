@@ -76,6 +76,7 @@ var Store = (function(){
   }
   function afterLoad(){
     if(typeof ensureSeedAccounts === 'function') ensureSeedAccounts(); /* 新增的种子账号补进保留下来的账号里 */
+    if(typeof krPartsNormalize === 'function') try{ krPartsNormalize(); }catch(e){ console.warn('[存档] 赴韩项目分类整理失败', e); } /* CMD-1019-06：赴韩项目分类 = 苦恼部位（幂等） */
     if(typeof normClientNames === 'function') try{ normClientNames(); }catch(e){} /* 旧客户资料补上名 / 姓两栏 */
     ME_NAME = (currentAccount() || {name:''}).name || ''; /* 账号改过名字（个人设定/激活）后，名字要跟存档走 */
     if(typeof syncInCoordinators === 'function') syncInCoordinators(); /* IN 室长名单由账号算出，不存档 */
@@ -336,6 +337,12 @@ var Store = (function(){
       var run = function(list){ seen = {}; fix(list); };
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
+    }},
+    {to:50, fn:function(c, ctx){ /* CMD-1019-06：「下颌角整形」改名「下颚角整形」（案件里存的项目名同步）；赴韩项目分类改成苦恼部位由 krPartsNormalize 在读档后处理，案件不受影响 */
+      var n0 = 0, ren = function(it){ if(it && typeof it.name==='string' && it.name.indexOf('下颌角')>-1){ it.name = it.name.replace(/下颌角/g, '下颚角'); n0++; } };
+      ['recommended','procedureItems','intentionProjects','krProjects'].forEach(function(k){ (c[k]||[]).forEach(ren); });
+      ((c.krScope||{}).items||[]).forEach(ren); ((c.krScope||{}).addedItems||[]).forEach(ren);
+      if(n0) ctx.note('案件 '+(c.caseNo||'')+'：项目名「下颌角整形」改为「下颚角整形」（'+n0+' 处）');
     }},
     {to:49, fn:function(c, ctx){ /* CMD-1019-04：希望预期进每张部位卡片；旧案件的整体希望预期放进「未分部位」卡，有部位卡的放进苦恼总 memo（不丢） */
       var cards = c.concerns || [], exp = String(c.expectation||'').trim();

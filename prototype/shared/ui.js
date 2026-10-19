@@ -2522,6 +2522,7 @@ var CASE_DISPLAY_CCY_KR = 'KRW', CASE_DISPLAY_CCY_IN = 'IDR';
 
 /* ---- 项目库页面：赴韩项目 / 本地项目 / 非活性化 三个tab，各自单层分类筛选 ---- */
 var PROJLIB_TAB = 'KR';
+var PROJLIB_HOME = true; /* CMD-1019-06：进项目库先看到两张大卡（韩国施术 / 本地管理） */
 var PROJLIB_HOSPITAL = null; /* 赴韩项目 tab 当前看的医院（只列本诊所对接的医院） */
 function projLibHospital(){ var ids = linkedHospitalIds(); return (PROJLIB_HOSPITAL && ids.indexOf(PROJLIB_HOSPITAL)>-1) ? PROJLIB_HOSPITAL : (ids[0] || null); }
 function setProjLibHospital(h){ PROJLIB_HOSPITAL = h; PROJLIB_CAT_FILTER = 'all'; renderProjLibrary(); }
@@ -2530,8 +2531,29 @@ var PROJLIB_CAT_FILTER = 'all';
 
 var PROJLIB_Q = '';
 
+/* ---- CMD-1019-06：入口页（居中两张大卡：图标 + 标题 + 一句说明 + 标签）---- */
+function projLibEntryHtml(){
+  var nk = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && !isKrPostcareCat(p.categoryId) && p.hospitalId===projLibHospital(); }).length, nl = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; }).length;
+  var card = function(key, icon, title, desc, tag, tag2){
+    return '<div onclick="setProjLibEntry(\''+key+'\')" style="flex:1;min-width:260px;max-width:340px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:30px 26px;cursor:pointer;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.04);" onmouseover="this.style.borderColor=\'var(--terracotta)\'" onmouseout="this.style.borderColor=\'var(--border)\'">'+
+      '<div style="width:56px;height:56px;border-radius:50%;background:var(--terracotta-bg);color:var(--terracotta);display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 16px;">'+icon+'</div>'+
+      '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">'+title+'</div><div style="font-size:13px;color:var(--slate2);line-height:1.6;min-height:42px;">'+desc+'</div>'+
+      '<div style="margin-top:16px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;"><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+tag+'</span>'+(tag2 ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">'+tag2+'</span>' : '')+'</div></div>';
+  };
+  return '<div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap;padding:48px 0 24px;">'+
+    card('KR', '韩', '韩国施术', '合作医院的赴韩施术项目，按苦恼部位分类，价格按设定汇率换算（以韩币原价为准）', '只读', nk+' 个项目')+
+    card('IN', '本', '本地管理', '本诊所自己的本地项目：全部项目、本月活动、套餐、非活性化', '本诊所维护', nl+' 个项目')+'</div>';
+}
+function setProjLibEntry(k){ PROJLIB_HOME = false; PROJLIB_TAB = k; PROJLIB_CAT_FILTER = 'all'; PROJLIB_Q = ''; renderProjLibrary(); }
+function projLibBack(){ PROJLIB_HOME = true; renderProjLibrary(); }
+
 function renderProjLibrary(){
   var sel = document.getElementById('projlib-role-select'); if(sel) sel.value = DEMO_ROLE;
+  if(PROJLIB_HOME){ /* 入口页：没有 tab / 筛选 / 新增按钮 */
+    var t0 = document.getElementById('projlib-tabs'), f0 = document.getElementById('projlib-filters'), g0 = document.getElementById('projlib-grid'), a0 = document.getElementById('projlib-add-btn');
+    if(t0) t0.innerHTML = ''; if(f0) f0.innerHTML = ''; if(g0) g0.innerHTML = projLibEntryHtml(); if(a0) a0.style.display = 'none';
+    return;
+  }
   renderProjLibTabs();
   renderProjLibFilters();
   renderProjLibGrid();
@@ -2673,8 +2695,10 @@ function endPkg(id){
 
 function renderProjLibTabs(){
   var el = document.getElementById('projlib-tabs'); if(!el) return;
-  var tabs = [{k:'KR', label:'赴韩项目'+(DEMO_ROLE==='in'?'（只读）':'')}, {k:'IN', label:'本地项目'}].concat(DEMO_ROLE==='in' ? [{k:'promo', label:'本月活动'}, {k:'pkg', label:'套餐'}] : []).concat([{k:'inactive', label:'非活性化'}]); /* 2026-10-08：IN 加本月活动 / 套餐 */
-  el.innerHTML = tabs.map(function(t){
+  var back = '<a href="#" class="info-link" style="font-size:13px;margin-right:14px;align-self:center;" onclick="projLibBack();return false;">← 项目库</a>';
+  if(PROJLIB_TAB==='KR'){ el.innerHTML = back+'<b style="font-size:16px;">韩国施术</b> <span class="status-pill" style="background:var(--border2);color:var(--slate2);margin-left:8px;">只读</span>'; return; }
+  var tabs = [{k:'IN', label:'全部项目'}].concat(DEMO_ROLE==='in' ? [{k:'promo', label:'本月活动'}, {k:'pkg', label:'套餐'}] : []).concat([{k:'inactive', label:'非活性化'}]);
+  el.innerHTML = back+tabs.map(function(t){
     return '<span class="tab'+(PROJLIB_TAB===t.k?' active':'')+'" onclick="setProjLibTab(\''+t.k+'\')">'+t.label+'</span>';
   }).join('');
 }
@@ -2688,6 +2712,12 @@ function renderProjLibFilters(){
     el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><div style="display:flex;gap:8px;align-items:center;">'+search+
       '<span style="font-size:11px;color:var(--muted);">'+(PROJLIB_TAB==='promo' ? '活动价期间内，本地选购默认带入活动价；过期自动恢复原价' : '套餐不可退款；付款后拆成各项目的持有批次')+(mg ? '' : '　·　只有 IN 管理者能新增 / 编辑 / 结束')+'</span></div>'+
       (mg ? '<div style="display:flex;gap:8px;">'+(PROJLIB_TAB==='promo' ? '<button class="btn-outline" style="padding:6px 12px;font-size:12px;" onclick="doCopyLastMonthPromos()">复制上个月活动</button><button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="openPromoModal()">＋ 新增活动价</button>' : '<button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="openPkgModal()">＋ 新增套餐</button>')+'</div>' : '')+'</div>';
+    return;
+  }
+  if(PROJLIB_TAB==='KR'){ /* 韩国施术（只读）：搜索 + 部位钮（点了滚动到那张卡片，不是筛选）+ 汇率说明，没有币别下拉 */
+    var parts = krPartCardsData(function(){ return true; });
+    el.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+search+'<span style="font-size:11px;color:var(--muted);">价格按设定汇率换算（1 ₩ = '+FX_RATES.KRW_IDR+' Rp），以韩币原价为准</span></div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">'+parts.map(function(g){ return '<span class="chip" onclick="projLibScrollTo(\'pl-part-'+g.key+'\')">'+g.label+'</span>'; }).join('')+'</div>';
     return;
   }
   var origin = PROJLIB_TAB;
@@ -2756,8 +2786,8 @@ function renderProjLibGrid(){
   var q = (PROJLIB_Q||'').toLowerCase();
   var match = function(p){ return !q || p.name.toLowerCase().indexOf(q)>-1 || ((p.names||{}).ko||'').toLowerCase().indexOf(q)>-1 || ((p.names||{}).id||'').toLowerCase().indexOf(q)>-1; };
   if(PROJLIB_TAB==='inactive'){
-    var inactive = PROJECT_LIBRARY.filter(function(p){ return !p.active && match(p) && (p.origin!=='KR' || (p.hospitalId===projLibHospital() && !isKrPostcareCat(p.categoryId))); }); /* IN 不显示「韩国术后管理」（CMD-1012-01 L-002） */
-    var groups = [{origin:'KR', label:'赴韩项目'}, {origin:'IN', label:'本地项目'}];
+    var inactive = PROJECT_LIBRARY.filter(function(p){ return !p.active && match(p) && p.origin==='IN'; }); /* CMD-1019-06：本地管理里的非活性化只列本地项目 */
+    var groups = [{origin:'IN', label:'本地项目'}];
     el.innerHTML = groups.map(function(g){
       var items = inactive.filter(function(p){ return p.origin===g.origin; });
       if(!items.length) return '';
@@ -2768,6 +2798,7 @@ function renderProjLibGrid(){
   }
   if(PROJLIB_TAB==='promo'){ el.innerHTML = promoGridHtml(match); return; }
   if(PROJLIB_TAB==='pkg'){ el.innerHTML = pkgGridHtml(match); return; }
+  if(PROJLIB_TAB==='KR'){ el.innerHTML = krReadonlyLibHtml(match); return; }
   var origin = PROJLIB_TAB;
   var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active && match(p) && (origin!=='KR' || (p.hospitalId===projLibHospital() && !isKrPostcareCat(p.categoryId))); }); /* 赴韩项目：只看所选医院的 */
   if(PROJLIB_CAT_FILTER!=='all') items = items.filter(function(p){ return p.categoryId===PROJLIB_CAT_FILTER; });
@@ -2777,6 +2808,28 @@ function renderProjLibGrid(){
     (items.length ? catIds.map(function(cid){ var cat = PROJECT_CATEGORIES[cid]; return '<div style="font-size:12px;font-weight:700;color:var(--terracotta);padding:10px 0 2px;">'+(cat ? cat.label : '其他')+'</div>'+items.filter(function(p){ return p.categoryId===cid; }).map(projLibRowHtml).join(''); }).join('') : '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有符合条件的项目</div>')+
     '</div>';
 }
+
+/* 韩国施术（只读）：每个部位一张卡片（CONCERN_PARTS，面部 → 身体顺序），没有项目的部位不显示；多部位项目只放第一个部位 */
+function krPartCardsData(match){
+  var list = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && !p.local && !isKrPostcareCat(p.categoryId) && p.hospitalId===projLibHospital() && match(p); }), byPart = {};
+  list.forEach(function(p){ var k = krMainPartOf(p); (byPart[k] = byPart[k] || []).push(p); });
+  var out = []; CONCERN_GROUPS.forEach(function(g){ CONCERN_PARTS.filter(function(x){ return x.group===g.key && byPart[x.key]; }).forEach(function(x){ out.push({key:x.key, label:x.label, group:g.label, items:byPart[x.key]}); }); });
+  Object.keys(byPart).forEach(function(k){ if(!out.some(function(o){ return o.key===k; })) out.push({key:k, label:concernPartDef(k).label, group:'', items:byPart[k]}); });
+  return out;
+}
+function krIdrText(krw){ return formatCurrency(Math.round(krw*FX_RATES.KRW_IDR), 'IDR')+'（'+formatCurrency(krw, 'KRW')+'）'; }
+function krReadonlyLibHtml(match){
+  var cards = krPartCardsData(match);
+  if(!cards.length) return '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有符合条件的项目</div>';
+  var head = '<div class="case-field-row" style="font-size:11px;color:var(--muted);font-weight:700;"><span style="flex-grow:1;">项目名称</span><span style="width:260px;text-align:right;">价格</span><span style="width:260px;text-align:right;">使用情况</span></div>';
+  return cards.map(function(g){
+    return '<div id="pl-part-'+g.key+'" class="card" style="padding:4px 20px;margin-bottom:14px;"><div style="font-size:13px;font-weight:700;color:var(--terracotta);padding:12px 0 2px;">'+(g.group ? g.group+' · ' : '')+g.label+' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+g.items.length+' 个项目</span></div>'+head+g.items.map(function(p){
+      var u = projectUsage(p), nm = p.names ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;">'+(p.names.ko||'')+' · '+(p.names.id||'')+'</div>' : '';
+      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+p.name+nm+'</span><span style="width:260px;text-align:right;font-size:12px;">'+krIdrText(p.price)+'</span><span style="font-size:11px;color:var(--slate2);width:260px;text-align:right;white-space:nowrap;">进行中案件 '+u.cases+' 个 · 持有中批次 '+u.batches+' 个 · 案例 '+u.libCases+' 个</span></div>';
+    }).join('')+'</div>';
+  }).join('');
+}
+function projLibScrollTo(id){ var el = document.getElementById(id); if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth', block:'start'}); }
 
 function deactivateProj(id){
   var p = projById(id); if(!p) return;

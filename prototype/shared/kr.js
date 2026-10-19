@@ -2553,12 +2553,15 @@ function krpDeleteBlock(p){
 function krpOpen(id){
   var p = id==='new' ? null : krpProjects().filter(function(x){ return x.id===id; })[0];
   KRP.edit = id;
-  KRP.draft = p ? JSON.parse(JSON.stringify(p)) : {id:'', name:'', price:'', categoryId:krpCatId('眼部'), active:true, names:{zh:'', ko:'', id:''}};
+  KRP.draft = p ? JSON.parse(JSON.stringify(p)) : {id:'', name:'', price:'', categoryId:'', parts:[], active:true, names:{zh:'', ko:'', id:''}};
   KRP.draft.defaults = KRP.draft.defaults || {stay:'', durMin:'', anes:'local', anesNote:'', postcare:[]};
   KRP.draft.names = KRP.draft.names || {zh:KRP.draft.name, ko:'', id:''};
   krpRender();
 }
 function krpField(k, v){ KRP.draft[k] = v; }
+/* CMD-1019-06：分类 = 苦恼部位（面部 / 身体两行细部位，可多选，第一个为主分类）*/
+function krpPartToggle(key){ var d0 = KRP.draft, cur = (d0.parts||[]).slice(), i = cur.findIndex(function(k){ return partBase(k)===key; }); if(i>-1) cur.splice(i, 1); else cur.push(key); d0.parts = cur; krpRender(); }
+function krpPartMain(key){ var d0 = KRP.draft, cur = (d0.parts||[]).slice(), i = cur.findIndex(function(k){ return partBase(k)===key; }); if(i>0){ var x = cur.splice(i, 1)[0]; cur.unshift(x); d0.parts = cur; krpRender(); } }
 function krpName(k, v){ KRP.draft.names[k] = v; if(k==='ko'){ if(!KRP.draft.names.zh || KRP.draft.names._auto!==false){ KRP.draft.names.zh = KRP.draft.names.zh || demoTranslate(v,'ko','zh'); } KRP.draft.names.id = demoTranslate(v,'ko','id'); } }
 function krpDef(k, v){ KRP.draft.defaults[k] = v; }
 function krpPcAdd(){ KRP.draft.defaults.postcare.push({mgmt:'', kr:'', times:1, interval:1, place:'KR', start:''}); krpRender(); }
@@ -2572,11 +2575,13 @@ function krpSave(){
   if(!d0.name){ alert('请填项目名称（中文名，用来在 IN 端显示和对应）'); return; }
   if(!(price >= 0) || d0.price===''){ alert('请填价格（韩元）'); return; }
   if(list.some(function(x){ return x.name===d0.name && x.id!==KRP.edit; })){ alert('项目库里已经有同名项目'); return; }
+  if(!isKrPostcareCat(d0.categoryId) && !(d0.parts||[]).length){ alert('请选择苦恼部位（第一个为主分类）'); return; }
+  if(!isKrPostcareCat(d0.categoryId)){ d0.categoryId = krEnsurePartCat(partBase(d0.parts[0])); }
   if(!isKrPostcareCat(d0.categoryId) && !(Number(d0.defaults.durMin) > 0)){ alert('请填施术时长（分钟，必填）'); return; } /* 赴韩项目时长必填（CMD-1013-12 三） */
   d0.price = price; d0.defaults.durMin = Number(d0.defaults.durMin)||0;
   d0.defaults.postcare = d0.defaults.postcare.filter(function(x){ return x.kr; });
-  if(KRP.edit==='new'){ var np = makeProj(d0.name, price, 'KR', krpCatLabel({categoryId:d0.categoryId}), hid); np.categoryId = d0.categoryId; np.names = d0.names; np.defaults = d0.defaults; list.push(np); logOp('其他', '新增赴韩项目：'+np.name, '项目库'); }
-  else { var cur = list.filter(function(x){ return x.id===KRP.edit; })[0]; var oldPrice = cur.price; cur.name = d0.name; cur.price = price; cur.categoryId = d0.categoryId; cur.names = d0.names; cur.defaults = d0.defaults; logOp('其他', '修改赴韩项目：'+cur.name+(oldPrice!==price ? '（价格 '+oldPrice+' → '+price+'，已选进案件的快照不变）' : ''), '项目库'); }
+  if(KRP.edit==='new'){ var np = makeProj(d0.name, price, 'KR', krpCatLabel({categoryId:d0.categoryId}), hid); np.categoryId = d0.categoryId; np.parts = (d0.parts||[]).slice(); np.names = d0.names; np.defaults = d0.defaults; list.push(np); logOp('其他', '新增赴韩项目：'+np.name, '项目库'); }
+  else { var cur = list.filter(function(x){ return x.id===KRP.edit; })[0]; var oldPrice = cur.price; cur.name = d0.name; cur.price = price; cur.categoryId = d0.categoryId; cur.parts = (d0.parts||[]).slice(); cur.names = d0.names; cur.defaults = d0.defaults; logOp('其他', '修改赴韩项目：'+cur.name+(oldPrice!==price ? '（价格 '+oldPrice+' → '+price+'，已选进案件的快照不变）' : ''), '项目库'); }
   Store.touch(); KRP.edit = null; KRP.draft = null; krpRender();
 }
 function krpToggleActive(id){ var p = krpProjects().filter(function(x){ return x.id===id; })[0]; if(!p || !canDo('krlib')) return; p.active = !p.active; logOp('其他', (p.active?'重新启用':'非活性化')+'赴韩项目：'+p.name, '项目库'); Store.touch(); krpRender(); }
@@ -2587,8 +2592,9 @@ function krpEditor(){
   var post = krpProjects().filter(function(p){ return isKrPostcareCat(p.categoryId) && p.active; });
   var isPost = isKrPostcareCat(d0.categoryId);
   return krCardBox(KRP.edit==='new' ? '新增赴韩项目' : '编辑赴韩项目：'+krEsc(d0.name),
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><select onchange="krpField(\'categoryId\',this.value);krpRender()" style="'+inp+'">'+cats.map(function(k){ return '<option value="'+k+'"'+(d0.categoryId===k?' selected':'')+'>'+krEsc(KR_CATEGORIES[k].label)+'</option>'; }).join('')+'</select>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+(isPost ? '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">韩国术后管理</span>' : '')+
     '<input placeholder="中文名（IN 端显示）" value="'+krEsc(d0.names.zh)+'" oninput="krpName(\'zh\',this.value)" style="'+inp+'"><input placeholder="한국어" value="'+krEsc(d0.names.ko)+'" onchange="krpName(\'ko\',this.value);krpRender()" style="'+inp+'"><input placeholder="Indonesia（自动翻译，可改）" value="'+krEsc(d0.names.id)+'" oninput="krpName(\'id\',this.value)" style="'+inp+'"><input type="number" min="0" placeholder="价格（韩元）" value="'+krEsc(d0.price)+'" oninput="krpField(\'price\',this.value)" style="'+inp+'width:150px;"> ₩</div>'+
+    (isPost ? '' : '<div style="margin-top:10px;font-size:12px;"><div style="font-weight:700;margin-bottom:4px;">分类 = 苦恼部位 <span style="color:#C1454A;">*</span> <span style="font-weight:400;color:var(--muted);">可多选，第一个为主分类（列表放在那里）；点已选的「设为主」可换主分类</span></div>'+CONCERN_GROUPS.map(function(g){ return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px;"><b style="min-width:34px;">'+g.label+'</b>'+CONCERN_PARTS.filter(function(pt){ return pt.group===g.key && !pt.hidden; }).map(function(pt){ var idx = (d0.parts||[]).findIndex(function(k){ return partBase(k)===pt.key; }); return '<button class="'+(idx>-1?'chip active':'chip')+'" style="cursor:pointer;" onclick="krpPartToggle(\''+pt.key+'\')">'+(idx>-1 ? (idx===0 ? '★ ' : '✓ ') : '')+pt.label+'</button>'+(idx>0 ? '<a href="#" style="font-size:11px;" onclick="krpPartMain(\''+pt.key+'\');return false;">设为主</a>' : ''); }).join('')+'</div>'; }).join('')+'</div>')+
     (isPost ? '<div style="font-size:11px;color:var(--muted);margin-top:6px;">「韩国术后管理」分类：在韩国做的术后管理，只在 KR 写诊疗方案选"所需术后管理"时用，不用填默认资料。</div>' :
     '<div style="margin-top:10px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;"><div style="font-weight:700;margin-bottom:6px;">项目默认资料（KR 写诊疗方案 / 更换项目 / 补加时自动带入，可按客人调整）</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">推荐在韩时间 <input value="'+krEsc(df.stay)+'" oninput="krpDef(\'stay\',this.value)" placeholder="例如 7 天" style="'+inp+'width:90px;"> 施术时长 <span style="color:#C1454A;">*</span> <input type="number" min="15" step="15" placeholder="必填" value="'+krEsc(df.durMin)+'" oninput="krpDef(\'durMin\',this.value)" style="'+inp+'width:80px;"> 分钟 麻醉 <select onchange="krpDef(\'anes\',this.value)" style="'+inp+'">'+Object.keys(KR_ANES).map(function(k){ return '<option value="'+k+'"'+(df.anes===k?' selected':'')+'>'+KR_ANES[k]+'</option>'; }).join('')+'</select><input placeholder="麻醉备注" value="'+krEsc(df.anesNote)+'" oninput="krpDef(\'anesNote\',this.value)" style="'+inp+'min-width:180px;"></div>'+
@@ -2596,18 +2602,22 @@ function krpEditor(){
     '<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn-primary" onclick="krpSave()">保存</button><button class="btn-ghost" onclick="krpClose()">取消</button></div>');
 }
 ADMIN_RENDER.krsrvc = function(el){
-  var can = canDo('krlib'), all = krpProjects(), shown = all.filter(function(p){ return KRP.showInactive ? !p.active : p.active; }), cats = Object.keys(KR_CATEGORIES);
-  var group = cats.map(function(k){
-    var rows = shown.filter(function(p){ return p.categoryId===k; }); if(!rows.length) return '';
-    return '<div class="card" style="padding:8px 18px;"><div style="font-size:12px;font-weight:700;color:var(--terracotta);padding:6px 0;">'+krEsc(KR_CATEGORIES[k].label)+(KR_CATEGORIES[k].postcare?'（在韩国做的术后管理）':'')+'</div>'+rows.map(function(p){
-      var df = p.defaults, u = krpUsage(p), meta = df ? [KR_ANES[df.anes]||'', df.stay ? '在韩 '+df.stay : '', df.durMin ? df.durMin+' 分钟' : '', (df.postcare||[]).length ? '术后管理 '+df.postcare.length+' 项' : ''].filter(Boolean).join(' · ') : '';
-      return '<div class="case-field-row" style="font-size:13px;gap:10px;align-items:flex-start;"><div style="flex:1;"><b>'+krEsc(p.name)+'</b> <span style="color:var(--muted);font-size:11px;">'+krEsc((p.names||{}).ko||'')+'</span><div style="font-size:11px;color:var(--slate2);">'+(meta ? '默认：'+krEsc(meta) : '<span style="color:var(--muted);">没有默认资料</span>')+'</div><div style="font-size:11px;color:var(--muted);">使用中：进行中案件 '+u.cases.length+' · 案例 '+u.libCases+'</div></div><span style="min-width:110px;text-align:right;">'+(p.price===0 ? '免费' : formatCurrency(p.price,'KRW'))+'</span>'+
-        (can ? '<span style="display:flex;gap:6px;"><button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="krpOpen(\''+p.id+'\')">编辑</button><button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="krpToggleActive(\''+p.id+'\')">'+(p.active?'非活性化':'重新启用')+'</button>'+(!p.active ? '<button class="btn-ghost" style="padding:3px 10px;font-size:11px;'+(krpDeleteBlock(p)?'opacity:.4;':'')+'" onclick="krpDelete(\''+p.id+'\')" title="'+krEsc(krpDeleteBlock(p))+'">删除</button>' : '')+'</span>' : '')+'</div>';
-    }).join('')+'</div>';
-  }).join('');
-  el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('项目库')+' <span style="font-size:12px;font-weight:400;color:var(--muted);">赴韩项目 · 韩元 · 一个价格，所有对接诊所一样（IN 端可切换显示印尼盾 / 人民币）</span></div>'+
-    '<div style="display:flex;gap:8px;"><button class="chip'+(KRP.showInactive?'':' active')+'" onclick="KRP.showInactive=false;krpRender()">在用</button><button class="chip'+(KRP.showInactive?' active':'')+'" onclick="KRP.showInactive=true;krpRender()">非活性化</button><span style="flex:1;"></span>'+(can ? '<button class="btn-primary" onclick="krpOpen(\'new\')">+ 新增项目</button>' : '')+'</div>'+(KRP.draft ? krpEditor() : '')+(group || krEmpty('没有项目'))+
-    '<div style="font-size:11px;color:var(--muted);">改价格只影响之后新选的项目；已选进案件的快照不变。"在用" = 所有对接诊所的进行中案件 + 本医院案例库案例；还在用的不能删除。分类是全系统共用的标准部位。</div>'+
+  var can = canDo('krlib'), all = krpProjects(), shown = all.filter(function(p){ return KRP.showInactive ? !p.active : p.active; });
+  var rowHtml = function(p){
+    var df = p.defaults, u = krpUsage(p), meta = df ? [KR_ANES[df.anes]||'', df.stay ? '在韩 '+df.stay : '', df.durMin ? df.durMin+' 分钟' : '', (df.postcare||[]).length ? '术后管理 '+df.postcare.length+' 项' : ''].filter(Boolean).join(' · ') : '', other = projectPartsOf(p).slice(1).map(function(k){ return concernPartDef(partBase(k)).label; });
+    return '<div class="case-field-row" style="font-size:13px;gap:10px;align-items:flex-start;"><div style="flex:1;"><b>'+krEsc(p.name)+'</b> <span style="color:var(--muted);font-size:11px;">'+krEsc((p.names||{}).ko||'')+'</span>'+(other.length ? ' <span style="font-size:11px;color:var(--slate2);">也对应：'+krEsc(other.join('、'))+'</span>' : '')+'<div style="font-size:11px;color:var(--slate2);">'+(meta ? '默认：'+krEsc(meta) : '<span style="color:var(--muted);">没有默认资料</span>')+'</div><div style="font-size:11px;color:var(--muted);">使用中：进行中案件 '+u.cases.length+' · 案例 '+u.libCases+'</div></div><span style="min-width:110px;text-align:right;">'+(p.price===0 ? '免费' : formatCurrency(p.price,'KRW'))+'</span>'+
+      (can ? '<span style="display:flex;gap:6px;"><button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="krpOpen(\''+p.id+'\')">编辑</button><button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="krpToggleActive(\''+p.id+'\')">'+(p.active?'非活性化':'重新启用')+'</button>'+(!p.active ? '<button class="btn-ghost" style="padding:3px 10px;font-size:11px;'+(krpDeleteBlock(p)?'opacity:.4;':'')+'" onclick="krpDelete(\''+p.id+'\')" title="'+krEsc(krpDeleteBlock(p))+'">删除</button>' : '')+'</span>' : '')+'</div>';
+  };
+  /* CMD-1019-06：施术项目按苦恼部位分卡片（第一个部位为主分类），顶部部位钮点了滚动过去；「韩国术后管理」不是施术项目，单独放最后 */
+  var surg = shown.filter(function(p){ return !isKrPostcareCat(p.categoryId); }), post = shown.filter(function(p){ return isKrPostcareCat(p.categoryId); }), byPart = {};
+  surg.forEach(function(p){ var k = krMainPartOf(p); (byPart[k] = byPart[k] || []).push(p); });
+  var partList = []; CONCERN_GROUPS.forEach(function(g){ CONCERN_PARTS.filter(function(x){ return x.group===g.key && byPart[x.key]; }).forEach(function(x){ partList.push({key:x.key, label:x.label, group:g.label}); }); });
+  var group = partList.map(function(g){ return '<div id="krp-part-'+g.key+'" class="card" style="padding:8px 18px;"><div style="font-size:12px;font-weight:700;color:var(--terracotta);padding:6px 0;">'+krEsc(g.group+' · '+g.label)+' <span style="font-weight:400;color:var(--muted);">'+byPart[g.key].length+' 个项目</span></div>'+byPart[g.key].map(rowHtml).join('')+'</div>'; }).join('')+
+    (post.length ? '<div class="card" style="padding:8px 18px;"><div style="font-size:12px;font-weight:700;color:var(--terracotta);padding:6px 0;">韩国术后管理（在韩国做的术后管理，不是施术项目）</div>'+post.map(rowHtml).join('')+'</div>' : '');
+  var partBtns = partList.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+partList.map(function(g){ return '<span class="chip" onclick="projLibScrollTo(\'krp-part-'+g.key+'\')">'+krEsc(g.label)+'</span>'; }).join('')+'</div>' : '';
+  el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('项目库')+' <span style="font-size:12px;font-weight:400;color:var(--muted);">赴韩项目 · 韩元 · 一个价格，所有对接诊所一样（IN 端按设定汇率换算成印尼盾显示，以韩币原价为准）</span></div>'+
+    '<div style="display:flex;gap:8px;"><button class="chip'+(KRP.showInactive?'':' active')+'" onclick="KRP.showInactive=false;krpRender()">在用</button><button class="chip'+(KRP.showInactive?' active':'')+'" onclick="KRP.showInactive=true;krpRender()">非活性化</button><span style="flex:1;"></span>'+(can ? '<button class="btn-primary" onclick="krpOpen(\'new\')">+ 新增项目</button>' : '')+'</div>'+(KRP.draft ? krpEditor() : '')+partBtns+(group || krEmpty('没有项目'))+
+    '<div style="font-size:11px;color:var(--muted);">改价格只影响之后新选的项目；已选进案件的快照不变。"在用" = 所有对接诊所的进行中案件 + 本医院案例库案例；还在用的不能删除。分类 = 苦恼部位（和案例库 / IN 选院长用同一套），一个项目可对应多个部位，列表放在第一个部位里。</div>'+
     krlSectionHtml(can);
 };
 

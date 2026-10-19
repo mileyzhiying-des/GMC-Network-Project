@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 49; /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 50; /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -863,7 +863,7 @@ var CLIENTS = [
   {id:'cl5', name:'客人6', gender:'女', dob:'1996-09-06', phone:'+62 812-3000-0005', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
   {id:'cl6', name:'客人7', gender:'男', dob:'1999-02-13', phone:'+62 812-3000-0006', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
   {id:'cl7', name:'客人20', gender:'男', dob:'1985-07-20', phone:'+62 812-3000-0007', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[], createdBy:'A2 室长', updated:'3 天前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
-  {id:'cl8', name:'客人2', gender:'女', dob:'1988-12-27', phone:'+62 000-0000-0002', note:'无', beautyRecords:[{id:'bra1', year:2022, month:3, project:'热玛吉', source:'客人自填', addedAt:D(-17)+' 10:02', caseId:'ayu', newCaseId:null},{id:'bra2', year:2025, month:6, project:'肉毒（下颌线）', source:'客人自填', addedAt:D(-18)+' 10:02', caseId:'ayu', newCaseId:null}], history:'轻度哮喘；对海鲜过敏', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v0.9', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
+  {id:'cl8', name:'客人2', gender:'女', dob:'1988-12-27', phone:'+62 000-0000-0002', note:'无', beautyRecords:[{id:'bra1', year:2022, month:3, project:'热玛吉', source:'客人自填', addedAt:D(-17)+' 10:02', caseId:'ayu', newCaseId:null},{id:'bra2', year:2025, month:6, project:'肉毒（下颚线）', source:'客人自填', addedAt:D(-18)+' 10:02', caseId:'ayu', newCaseId:null}], history:'轻度哮喘；对海鲜过敏', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v0.9', ts:D(-20)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'昨天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-20)+' 10:02', kind:'plain'}]},
   {id:'cl9', name:'客人8', gender:'男', dob:'1991-05-09', phone:'+62 812-3000-0009', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-17)+' 10:02', source:'客户自助预约'}], createdBy:'A2 室长', updated:'2 小时前', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-17)+' 10:02', kind:'plain'}]},
   {id:'cl10', name:'客人10', gender:'女', dob:'1994-10-16', phone:'+62 812-3000-0010', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-18)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'刚刚', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-18)+' 10:02', kind:'plain'}]},
   {id:'cl11', name:'客人9', gender:'女', dob:'1997-03-23', phone:'+62 812-3000-0011', note:'无', history:'无', passport:{text:'已登记', date:D(-29)}, consents:[{version:'v1.0', ts:D(-19)+' 10:02', source:'客户自助预约'}], createdBy:'A1 室长', updated:'今天', fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'}, timeline:[{stage:'建档', actor:'客人', action:'建档 · 客户自助预约建档', dt:D(-19)+' 10:02', kind:'plain'}]},
@@ -1219,21 +1219,21 @@ var CASE_ITEMS = [
      本地项目现在不能退款，"部分退"这个终态只能从赴韩项目取消这条路径触发了） */
   makeCase({id:'wulan', name:'客人21', subState:'arrived', materialsConfirmed:true, caseNo:'A000011', updated:'5 天前',
     concern:'轮廓不对称', expectation:'希望改善轮廓线条', needsConsult:true, activeCaseTab:'kr', consultRequested:true, consultStatus:'report_ready', reportReady:true,
-    videoSummary:'建议下颌角整形+颧骨缩小联合方案改善轮廓。',
+    videoSummary:'建议下颚角整形+颧骨缩小联合方案改善轮廓。',
     consultFiles:[{label:'面诊诊疗方案'},{label:'院长面诊视频'},{label:'院长面诊文本（AI生成，仅供参考）'}],
-    krScope:{items:[{name:'下颌角整形', price:9000000, note:''},{name:'颧骨缩小', price:8000000, note:'不可与下颌角同时做'}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(-10)+' 09:00'},
+    krScope:{items:[{name:'下颚角整形', price:9000000, note:''},{name:'颧骨缩小', price:8000000, note:'不可与下颚角同时做'}], overallNote:'具体术式最终以到院评估为准', updatedAt:D(-10)+' 09:00'},
     projectsEnabled:true, projectsLocked:true, settlementDone:true, arrivedAtHospital:true, krBalancePaid:true, visitClosed:true,
     krProcedureDone:true,
     refunds:[{amount:2400000, currency:'KRW', reason:'客人检查后决定不做颧骨缩小', date:D(-7), items:['颧骨缩小'], batchIds:['B1']}],
     krSchedule:{status:'confirmed', confirmedDate:D(-5), confirmedTime:'11:00', primary:D(-5), backup:'', changePrimary:'', changeBackup:'', changeSubmitted:false},
-    procedureItems:[{name:'下颌角整形', origin:'KR', done:true, batchId:'B1'},{name:'颧骨缩小', origin:'KR', done:false, cancelled:true, batchId:'B1'}],
+    procedureItems:[{name:'下颚角整形', origin:'KR', done:true, batchId:'B1'},{name:'颧骨缩小', origin:'KR', done:false, cancelled:true, batchId:'B1'}],
     settlementBatches:[{id:'B1', orderedBy:'A1 室长', settledBy:'客人', time:D(-10)+' 09:00', status:'active',
       krTotal:17000000, krDeposit:5100000, krBalance:11900000, inTotal:0}],
     logEntries:[
       {stage:'预约到店', actor:'客人', action:'自助预约成功', dt:D(-17)+' 09:00'},
       {stage:'面诊安排', actor:'客人', action:'完成项目付款（批次 B1：赴韩预付金 ₩5,100,000），项目清单已锁定', dt:D(-10)+' 09:00'},
       {stage:'赴韩施术', actor:'A1 室长', action:'取消项目"颧骨缩小"，退款 ₩2,400,000，退款原因：客人检查后决定不做颧骨缩小', dt:D(-7)+' 09:00'},
-      {stage:'赴韩施术', actor:'KD1 院长', action:'已完成"下颌角整形"施术', dt:D(-5)+' 11:00'},
+      {stage:'赴韩施术', actor:'KD1 院长', action:'已完成"下颚角整形"施术', dt:D(-5)+' 11:00'},
       {stage:'赴韩施术', actor:'KD1 院长', action:'KR标记"施术完成"，案件已结案（退款记入财务字段）', dt:D(-5)+' 15:00'}
     ]}),
 
@@ -2187,7 +2187,7 @@ var CONCERN_PARTS = [
   {key:'f_cheek',     group:'face', label:'脸颊',     note:'含法令纹', angles:concernAngles(['front','lside','l45','r45','rside'])},
   {key:'f_mouth',     group:'face', label:'嘴巴',     note:'嘴唇', angles:concernAngles(['front','l45','r45','lside','rside'])},
   {key:'f_chin',      group:'face', label:'下巴',     angles:concernAngles(['front','lside','l45','r45','rside'])},
-  {key:'f_jaw',       group:'face', label:'下颚',     note:'下颌线', angles:concernAngles(['front','lside','l45','r45','rside'])},
+  {key:'f_jaw',       group:'face', label:'下颚',     note:'下颚线', angles:concernAngles(['front','lside','l45','r45','rside'])},
   {key:'f_ear',       group:'face', label:'耳朵',     angles:concernAngles(['front','lside','rside'])},
   /* 身体 */
   {key:'b_neck',      group:'body', label:'颈部',     angles:concernAngles(['front','lside','rside','back'])},
@@ -2488,7 +2488,7 @@ var PROJECT_PART_RULES = [
   ['f_mouth', /嘴|唇|口角|人中/],
   ['f_cheekbone', /颧/],
   ['f_cheek', /苹果肌|法令纹|脸颊/],
-  ['f_jaw', /下颌|下颚/],
+  ['f_jaw', /下颚|下颌/],
   ['f_chin', /下巴|颏/],
   ['f_ear', /耳/],
   ['f_all', /拉皮|轮廓|面部|全脸|脂肪移植/],
@@ -5607,6 +5607,33 @@ var PCAT = {};
 ['眼部','鼻部','轮廓','面部年轻化','胸部','身体'].forEach(function(l){ PCAT[l] = addProjCategory(l, 'KR'); });
 /* 「韩国术后管理」分类（2026-10-06，KR 端系列 4/5）：特殊标记 postcare:true——只在 KR 写诊疗方案选所需术后管理时用，IN 项目选择里不出现，案例库按部位没有案例所以也不显示 */
 PCAT['韩国术后管理'] = addProjCategory('韩国术后管理', 'KR'); PROJECT_CATEGORIES[PCAT['韩国术后管理']].postcare = true;
+/* CMD-1019-06：赴韩施术项目的分类 = 苦恼部位（CONCERN_PARTS，面部 / 身体细部位），拿掉旧分类（眼部 / 鼻部 / 轮廓 / 面部年轻化 / 胸部 / 身体）；项目的 p.parts 就是分类，第一个部位 = 主分类（列表放在那里），一个项目只维护一套。
+   p.categoryId = 'kp_部位key'（只给列表 / 案例库 / 院长擅长项目分组用）。幂等：种子生成时、读档后都会跑；对不到部位的项目归「面部整体」并记在 window.KR_PART_UNMAPPED。「韩国术后管理」分类保留（不是施术项目）。 */
+var KR_OLD_PART_MAP = {'眼部':['f_eyes'], '鼻部':['f_nose'], '轮廓':['f_cheekbone','f_jaw','f_chin'], '面部年轻化':['f_all'], '胸部':['b_chest'], '身体':['b_all']};
+function krEnsurePartCat(key){
+  var id = 'kp_'+key, c = PROJECT_CATEGORIES[id] || KR_CATEGORIES[id], def = concernPartDef(key);
+  if(!c) c = {id:id, label:def.label, origin:'KR', part:key};
+  c.label = def.label; c.part = key; PROJECT_CATEGORIES[id] = c; KR_CATEGORIES[id] = c; PCAT[c.label] = id;
+  return id;
+}
+function krPartsNormalize(){
+  var list = [], add = function(p){ if(p && p.origin==='KR' && !p.local && list.indexOf(p)<0) list.push(p); };
+  PROJECT_LIBRARY.forEach(add); Object.keys(HOSPITAL_DATA||{}).forEach(function(h){ (HOSPITAL_DATA[h].projects||[]).forEach(add); });
+  window.KR_PART_UNMAPPED = window.KR_PART_UNMAPPED || [];
+  list.forEach(function(p){
+    if(isKrPostcareCat(p.categoryId)) return;
+    var cur = PROJECT_CATEGORIES[p.categoryId] || KR_CATEGORIES[p.categoryId];
+    var parts = Array.isArray(p.parts) && p.parts.length ? p.parts.map(function(k){ return CONCERN_OLD_KEY[k] || k; }) : projectPartsOf({name:p.name});
+    if(!parts.length && cur && KR_OLD_PART_MAP[cur.label]) parts = KR_OLD_PART_MAP[cur.label].slice();
+    if(!parts.length){ parts = ['f_all']; if(window.KR_PART_UNMAPPED.indexOf(p.name)<0) window.KR_PART_UNMAPPED.push(p.name); }
+    if(parts.length && !concernPartDef(partBase(parts[0])).key) parts = ['f_all'];
+    p.parts = parts; p.categoryId = krEnsurePartCat(partBase(parts[0]));
+  });
+  /* 旧的非术后管理 KR 分类（没有 part）全部拿掉 */
+  Object.keys(KR_CATEGORIES).forEach(function(k){ var c = KR_CATEGORIES[k]; if(c && c.origin==='KR' && !c.postcare && !c.part){ delete KR_CATEGORIES[k]; delete PROJECT_CATEGORIES[k]; } });
+  Object.keys(PROJECT_CATEGORIES).forEach(function(k){ var c = PROJECT_CATEGORIES[k]; if(c && c.origin==='KR' && !c.postcare && !c.part) delete PROJECT_CATEGORIES[k]; });
+}
+function krMainPartOf(p){ return partBase((projectPartsOf(p)[0]) || 'f_all'); }
 function isKrPostcareCat(id){ var c = PROJECT_CATEGORIES[id] || KR_CATEGORIES[id]; return !!(c && c.postcare); }
 
 LOCAL_CATALOG.forEach(function(cat){ PCAT[cat.label] = addProjCategory(cat.label, 'IN'); }); /* IN 本地分类 = 清单 12 类（CMD-1012-04；原「术后管理」等旧分类已去掉） */
@@ -5636,7 +5663,7 @@ var PROJECT_LIBRARY = [
   makeProj('鼻翼缩小', 1500000, 'KR', '鼻部'),
   makeProj('鼻修复', 7000000, 'KR', '鼻部'),
   makeProj('颧骨缩小', 8000000, 'KR', '轮廓'),
-  makeProj('下颌角整形', 9000000, 'KR', '轮廓'),
+  makeProj('下颚角整形', 9000000, 'KR', '轮廓'),
   makeProj('下巴假体 / 颏成形', 4000000, 'KR', '轮廓'),
   makeProj('面部拉皮', 12000000, 'KR', '面部年轻化'),
   makeProj('自体脂肪移植（全脸）', 4500000, 'KR', '面部年轻化'),
@@ -5710,7 +5737,7 @@ buildLocalProjects('IN').forEach(function(p){ p.names = {zh:p.name, ko:p.name, i
   mk('假体隆鼻 基底改善','travel',['假体隆鼻'],'KD1 院长',[],['1个月','6个月'],'12');
   mk('鼻综合 鼻尖精修','travel',['鼻综合（假体+鼻尖）'],'H1 院长3',[],['3个月'],'10'); /* H1 院长3 已停用 → 院长显示"-" */
   mk('颧骨缩小 侧面轮廓','travel',['颧骨缩小'],'KD1 院长',[],['1周','3个月'],'09');
-  mk('下颌角整形联合方案','travel',['下颌角整形','颧骨缩小'],'KO1 代表院长',[],['1个月'],'08');
+  mk('下颚角整形联合方案','travel',['下颚角整形','颧骨缩小'],'KO1 代表院长',[],['1个月'],'08');
   mk('面部拉皮 提升','travel',['面部拉皮'],'KD1 院长',[],['3个月','6个月'],'07');
   mk('自体脂肪移植 面部填充','travel',['自体脂肪移植（全脸）'],'KO1 代表院长',[],['1个月'],'06');
   mk('LHALa peel 色素改善','local',['LHALa peel'],null,['色素沉着','暗沉'],['1周','1个月'],'15');
@@ -5821,7 +5848,7 @@ function copyLastMonthPromos(){
 }
 
 
-function setProjLibTab(t){ PROJLIB_TAB = t; PROJLIB_CAT_FILTER = 'all'; renderProjLibrary(); }
+function setProjLibTab(t){ PROJLIB_HOME = false; PROJLIB_TAB = t; PROJLIB_CAT_FILTER = 'all'; renderProjLibrary(); }
 
 function setProjLibCatFilter(id){ PROJLIB_CAT_FILTER = id; renderProjLibrary(); }
 
@@ -5831,6 +5858,7 @@ function setProjDisplayCcy(origin, ccy){
 }
 
 function projLibCategories(origin){
+  if(origin==='KR'){ var po = {}; CONCERN_PARTS.forEach(function(x, i){ po['kp_'+x.key] = i; }); return Object.keys(PROJECT_CATEGORIES).filter(function(id){ var c = PROJECT_CATEGORIES[id]; return c.origin==='KR' && !(c.postcare && DEMO_ROLE!=='kr'); }).sort(function(a, b){ return (po[a]===undefined ? 999 : po[a]) - (po[b]===undefined ? 999 : po[b]); }).map(function(id){ return PROJECT_CATEGORIES[id]; }); }
   return Object.keys(PROJECT_CATEGORIES).filter(function(id){ return PROJECT_CATEGORIES[id].origin===origin && !(PROJECT_CATEGORIES[id].postcare && DEMO_ROLE!=='kr'); }) /* 「韩国术后管理」只在 KR 端项目库出现（IN 不显示） */.map(function(id){ return PROJECT_CATEGORIES[id]; });
 }
 
@@ -6437,7 +6465,7 @@ function seedDoctorProfiles(){
     'H1 院长3':{nameEn:'', nameZh:'', title:'院长', color:'#C4C4C4', career:[['前','서울 소수 성형외과 원장（퇴직）']], certs:[], societies:[], specialties:['颧骨缩小']},
     'KO1 代表院长':{nameEn:'', nameZh:'', title:'代表院长', color:'#D3B8B8', career:[['现','서울 소수 성형외과 대표원장'],['前','압구정 소수 클리닉 원장']], certs:['Alma Accent Prime Key Doctor'], societies:['한국미용성형레이저의학회 회원'], specialties:['自体脂肪移植（全脸）','面部拉皮']},
     'H2 院长1':{nameEn:'', nameZh:'', title:'院长', color:'#B9C3D6', career:[['现','강남 뷰티의원 원장']], certs:['대한성형외과학회 전문의'], societies:['대한성형외과학회 정회원'], specialties:['切开双眼皮','假体隆鼻','鼻综合（假体+鼻尖）']},
-    'H2 院长2':{nameEn:'', nameZh:'', title:'院长', color:'#D6CDB9', career:[['现','강남 뷰티의원 원장']], certs:[], societies:[], specialties:['颧骨缩小','下颌角整形']},
+    'H2 院长2':{nameEn:'', nameZh:'', title:'院长', color:'#D6CDB9', career:[['现','강남 뷰티의원 원장']], certs:[], societies:[], specialties:['颧骨缩小','下颚角整形']},
     'H2 院长3':{nameEn:'', nameZh:'', title:'院长', color:'#C4C4C4', career:[['前','강남 뷰티의원 원장（퇴직）']], certs:[], societies:[], specialties:[]}
   };
   Object.keys(HOSPITAL_DATA).forEach(function(hid){
@@ -6462,7 +6490,7 @@ function seedProjectDefaults(){
     '鼻翼缩小':{stay:'5天', durMin:60, anes:'local', anesNote:'', postcare:[thread]},
     '鼻综合（假体+鼻尖）':{stay:'10天', durMin:150, anes:'sleep', anesNote:'需空腹 8 小时', postcare:[check, thread, swell]},
     '颧骨缩小':{stay:'10天', durMin:180, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread, {kr:'术后消肿管理', times:5, place:'either', day:'第3天'}]},
-    '下颌角整形':{stay:'10天', durMin:180, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread]},
+    '下颚角整形':{stay:'10天', durMin:180, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread]},
     '下巴假体 / 颏成形':{stay:'7天', durMin:90, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, thread]},
     '自体脂肪移植（全脸）':{stay:'7天', durMin:150, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, swell]},
     '面部拉皮':{stay:'14天', durMin:240, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread]}
@@ -6582,7 +6610,7 @@ function seedHospitalH2(){
     r[1].forEach(function(x){ var p = makeProj(x[0], x[1], 'KR', '韩国术后管理', r[0]); p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')}; PROJECT_LIBRARY.push(p); });
   });
   [['切开双眼皮',2200000,'眼部'],['埋线双眼皮',1200000,'眼部'],['双眼皮修复',3500000,'眼部'],['假体隆鼻',3000000,'鼻部'],['鼻综合（假体+鼻尖）',5800000,'鼻部'],
-   ['颧骨缩小',8500000,'轮廓'],['下颌角整形',9500000,'轮廓'],['面部提升线雕',6000000,'面部年轻化'],['自体脂肪移植（全脸）',5000000,'面部年轻化']].forEach(function(r){
+   ['颧骨缩小',8500000,'轮廓'],['下颚角整形',9500000,'轮廓'],['面部提升线雕',6000000,'面部年轻化'],['自体脂肪移植（全脸）',5000000,'面部年轻化']].forEach(function(r){
     var p = makeProj(r[0], r[1], 'KR', r[2], 'H2');
     p.names = {zh:p.name, ko:demoTranslate(p.name,'zh','ko'), id:demoTranslate(p.name,'zh','id')};
     PROJECT_LIBRARY.push(p);
@@ -6757,6 +6785,7 @@ function normalizeSeeds(){
   })();
   CLIENTS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; });
   CASE_ITEMS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; if(c.director && !c.hospitalId) c.hospitalId = 'H1'; });
+  krPartsNormalize(); /* CMD-1019-06：赴韩项目分类改成苦恼部位 */
   var inP = [], inC = [];
   PROJECT_LIBRARY.forEach(function(p){ if(p.origin==='KR'){ var h = HOSPITAL_DATA[p.hospitalId||'H1']; (h.projects = h.projects || []).push(p); } else { if(!p.clinicId) p.clinicId = 'C1'; inP.push(p); } });
   LIB_CASES.forEach(function(c){ if(c.source==='travel'){ var h = HOSPITAL_DATA[c.hospitalId||'H1']; (h.libCases = h.libCases || []).push(c); } else { if(!c.clinicId) c.clinicId = 'C1'; inC.push(c); } });

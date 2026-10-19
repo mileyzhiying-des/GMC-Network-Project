@@ -644,7 +644,7 @@
   ST.def('S36','KR 室长：赴韩项目库 + 案例库',function(){
     var me = currentAccount(); if(!ST.ok(me && canDo('krlib'), '这个账号没有项目库权限')) return;
     var hid = krHospitalIdOfMe();
-    krpOpen('new'); KRP.draft.names.zh = 'T2手术项目'; KRP.draft.names.ko = 'T2 수술'; KRP.draft.price = '3000000'; KRP.draft.defaults = {stay:'6天', durMin:'', anes:'sleep', anesNote:'需空腹', postcare:[]};
+    krpOpen('new'); KRP.draft.parts = ['f_eyes']; KRP.draft.names.zh = 'T2手术项目'; KRP.draft.names.ko = 'T2 수술'; KRP.draft.price = '3000000'; KRP.draft.defaults = {stay:'6天', durMin:'', anes:'sleep', anesNote:'需空腹', postcare:[]};
     window.__al = ''; krpSave(); ST.ok(KRP.edit==='new', '时长不填应不能保存（CMD-1013-12）'); KRP.draft.defaults.durMin = '75'; KRP.draft.defaults.postcare = [{mgmt:'术后管理', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}]; krpSave();
     var np = krpProjects().filter(function(x){ return x.name==='T2手术项目'; })[0]; if(!ST.ok(!!np, '新增手术项目应成功')) return; ST.ok(np.defaults.durMin===75 && np.defaults.anes==='sleep' && np.defaults.stay==='6天', '默认资料（时长 / 麻醉 / 在韩天数）应保存');
     ST.ok(krScopeCandidates(hid.replace('H','C') && 'C1').kr.some(function(x){ return x.name==='T2手术项目'; }), 'KR 给可选范围时应选得到新项目');
@@ -1745,6 +1745,38 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
     setLibView('part');
   });
+  ST.def('R36a','CMD-1019-06：IN 项目库入口两张卡 / 韩国施术按部位卡片 + Rp（₩）/ 本地管理 tab 名；KR 项目库按部位、新增选部位（IN 和 KM1 分页各跑一次）',function(){
+    var me = currentAccount(); if(!ST.ok(!!me, '要先登录')) return;
+    ST.ok(!Object.keys(KR_CATEGORIES).some(function(k){ var c = KR_CATEGORIES[k]; return !c.postcare && !c.part; }), '旧 KR 分类（眼部 / 鼻部 / 轮廓 / 面部年轻化 / 胸部 / 身体）已拿掉');
+    var krp = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && !p.local && !isKrPostcareCat(p.categoryId); });
+    ST.ok(krp.length && krp.every(function(p){ return (PROJECT_CATEGORIES[p.categoryId]||{}).part === krMainPartOf(p) && Array.isArray(p.parts); }), '每个赴韩项目的分类 = 它的第一个部位');
+    ST.ok(!PROJECT_LIBRARY.some(function(p){ return p.origin==='KR' && /下颌/.test(p.name); }) && PROJECT_LIBRARY.some(function(p){ return p.name==='下颚角整形'; }), '「下颌角整形」已改「下颚角整形」');
+    if(!isKrAccount()){
+      nav('in-projectlibrary'); PROJLIB_HOME = true; renderProjLibrary(); var el = document.getElementById('projlib-grid');
+      ST.ok(/韩国施术/.test(el.innerText) && /本地管理/.test(el.innerText) && /只读/.test(el.innerText) && document.getElementById('projlib-tabs').innerHTML==='', '入口页：两张大卡「韩国施术（只读）」「本地管理」，没有 tab');
+      setProjLibEntry('KR'); var t = document.getElementById('projlib-tabs').innerText, f = document.getElementById('projlib-filters'), g = document.getElementById('projlib-grid');
+      ST.ok(/项目库/.test(t) && !/赴韩项目/.test(t) && !f.querySelector('select') && /按设定汇率换算/.test(f.innerText), '韩国施术：有返回入口、没有币别下拉、顶部写按设定汇率换算');
+      ST.ok(/Rp [\d.]+（₩[\d,]+）/.test(g.innerText) && !/只读/.test(g.innerText) && !/分类/.test(g.querySelector('.card').innerText.split('\n').slice(1,3).join('')), '价格 = Rp 在前、₩ 在括号里；整页没有「只读」字样和分类栏');
+      var cards = [].slice.call(g.querySelectorAll('[id^="pl-part-"]')), btns = [].slice.call(f.querySelectorAll('.chip'));
+      ST.ok(cards.length>=3 && btns.length===cards.length && cards[0].id==='pl-part-f_all' || /^pl-part-f_/.test(cards[0].id), '每个部位一张卡片（面部在前），部位钮数量 = 卡片数');
+      var names = [].slice.call(g.querySelectorAll('.case-field-row')).map(function(r){ return r.innerText.split('\n')[0]; }).filter(function(n){ return n!=='项目名称'; }); ST.ok(names.length>0 && names.length===new Set(names).size, '一个项目只出现一次');
+      var multi = krp.filter(function(p){ return projectPartsOf(p).length>1; })[0]; var tmp = krp[0], keep = tmp.parts.slice(); tmp.parts = [keep[0]].concat(['f_nose'].filter(function(k){ return k!==keep[0]; })); renderProjLibGrid(); var c2 = [].slice.call(document.querySelectorAll('[id^="pl-part-"]')).filter(function(c){ return c.innerText.indexOf(tmp.name)>-1; }); ST.ok(c2.length===1 && c2[0].id==='pl-part-'+partBase(keep[0]), '多部位项目只放在第一个部位：'+tmp.name); tmp.parts = keep; renderProjLibGrid();
+      var before = window.scrollY, sc = document.querySelector('.main-col .content') || document.body; projLibScrollTo(cards[cards.length-1].id); ST.ok(true, '点部位钮 = 滚动（scrollIntoView，不是筛选）：卡片数不变 '+document.querySelectorAll('[id^="pl-part-"]').length);
+      ST.ok(document.querySelectorAll('[id^="pl-part-"]').length===cards.length, '点部位钮后卡片没有被筛掉');
+      setProjLibEntry('IN'); var tt = document.getElementById('projlib-tabs').innerText; ST.ok(/全部项目/.test(tt) && /本月活动/.test(tt) && /套餐/.test(tt) && /非活性化/.test(tt) && !/本地项目/.test(tt), '本地管理 tab：全部项目｜本月活动｜套餐｜非活性化');
+      ST.ok(projLibCategories('IN').length===12, '本地管理 12 类分类不动'); projLibBack(); ST.ok(/韩国施术/.test(document.getElementById('projlib-grid').innerText), '返回入口页');
+    } else {
+      if(!ST.ok(canDo('krlib'), '要在 KM1 分页跑')) return;
+      openAdminPage('krsrvc'); var body = document.getElementById('admin-body').innerText; ST.ok(/面部 · 眼睛/.test(body) && /面部 · 鼻子/.test(body) && /身体 · 胸部/.test(body), 'KR 项目库按部位分卡片');
+      ST.ok(document.querySelectorAll('[id^="krp-part-"]').length>=3 && document.querySelectorAll('#admin-body .chip[onclick^="projLibScrollTo"]').length>=3, 'KR 项目库有部位钮（点了滚动）');
+      krpOpen('new'); var ed = krpEditor(); ST.ok(/苦恼部位/.test(ed) && !/<select onchange="krpField\('categoryId'/.test(ed), '新增 / 编辑：选部位（面部 / 身体两行细部位），没有旧分类下拉');
+      KRP.draft.names.zh = '部位测试项目'; KRP.draft.price = '1000000'; KRP.draft.defaults.durMin = 60; var msgs = []; var oa = window.alert; window.alert = function(m){ msgs.push(m); }; krpSave(); window.alert = oa; ST.ok(/苦恼部位/.test(msgs.join('')) && krpProjects().every(function(p){ return p.name!=='部位测试项目'; }), '不选部位不能保存');
+      krpPartToggle('f_chin'); krpPartToggle('f_jaw'); krpPartMain('f_jaw'); ST.ok(KRP.draft.parts[0]==='f_jaw', '第一个为主分类（可设为主）'); krpSave(); var np = krpProjects().filter(function(p){ return p.name==='部位测试项目'; })[0];
+      ST.ok(np && np.parts.join()==='f_jaw,f_chin' && PROJECT_CATEGORIES[np.categoryId].part==='f_jaw', '保存后分类 = 第一个部位（下颚），也对应下巴');
+      openAdminPage('krsrvc'); var c3 = document.getElementById('krp-part-f_jaw'); ST.ok(c3 && c3.innerText.indexOf('部位测试项目')>-1 && !document.getElementById('krp-part-f_chin').innerText.includes('部位测试项目'), '列表放在第一个部位（下颚）里，下巴里不重复');
+      krpDelete && (function(){ var l = krpProjects(); l.splice(l.indexOf(np), 1); Store.touch(); })(); 
+    }
+  });
   ST.def('R32b','KM1：KR 面诊 tab 按部位显示（希望预期 / 预算在上）；院长账号也一样（先在 A1 跑 R32a）',function(){
     var me = currentAccount(); if(!ST.ok(me && (me.id==='KM1' || me.id==='KD1'), '要在 KM1 / KD1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R32')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R32a')) return;
     var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件（已缴面诊费的面诊案件才在 KR 看得到）')) return; krShowCase(r.clinicId, r.id); krSetCaseTab('consult'); var t = document.getElementById('krcase-body').innerText;
@@ -1764,7 +1796,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(c.concerns.length===1 && c.concerns[0].desc==='眼皮松弛' && !!c.concerns[0].video && c.concerns[0].expect==='自然' && !/选填/.test(concernFormHtml(c).replace(/苦恼说明[^<]*/g, '')), '切回面诊：已填内容都还在，照片 / 视频又变必填');
     /* 项目 → 部位 */
     var P = function(n){ return projectPartsOf({name:n}); };
-    ST.ok(P('埋线双眼皮')[0]==='f_eyes' && P('开内眼角')[0]==='f_eyes' && P('眼袋去除（内切）')[0]==='f_eyes' && P('假体隆鼻')[0]==='f_nose' && P('鼻翼缩小')[0]==='f_nose' && P('鼻综合（假体+鼻尖）')[0]==='f_nose' && P('颧骨缩小')[0]==='f_cheekbone' && P('下颌角整形')[0]==='f_jaw' && P('下巴假体 / 颏成形')[0]==='f_chin' && P('面部拉皮')[0]==='f_all' && P('自体脂肪移植（全脸）')[0]==='f_all' && P('假体隆胸')[0]==='b_chest' && P('腹部吸脂')[0]==='b_belly' && P('大腿吸脂')[0]==='b_leg:thigh', '项目名 → 细部位的默认对应');
+    ST.ok(P('埋线双眼皮')[0]==='f_eyes' && P('开内眼角')[0]==='f_eyes' && P('眼袋去除（内切）')[0]==='f_eyes' && P('假体隆鼻')[0]==='f_nose' && P('鼻翼缩小')[0]==='f_nose' && P('鼻综合（假体+鼻尖）')[0]==='f_nose' && P('颧骨缩小')[0]==='f_cheekbone' && P('下颚角整形')[0]==='f_jaw' && P('下巴假体 / 颏成形')[0]==='f_chin' && P('面部拉皮')[0]==='f_all' && P('自体脂肪移植（全脸）')[0]==='f_all' && P('假体隆胸')[0]==='b_chest' && P('腹部吸脂')[0]==='b_belly' && P('大腿吸脂')[0]==='b_leg:thigh', '项目名 → 细部位的默认对应');
     ST.ok(projectPartsOf({name:'假体隆鼻', parts:['f_chin']})[0]==='f_chin' && projectPartsOf({name:'假体隆鼻', parts:['f_chin']}).length===1 && projectPartsOf({name:'x', parts:['face']})[0]==='f_all', '项目自己勾选过的 parts 优先于默认对应（旧的五个部位 key 自动转新部位）');
     /* 院长排序 */
     var hid = caseHospitalId(c);
