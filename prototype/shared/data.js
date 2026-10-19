@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 47; /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 48; /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -2147,20 +2147,60 @@ function budgetRowHtml(c){
       '</div></div>';
 }
 
-/* ============ CMD-1019-01：苦恼按部位上传 ============
-   c.concerns = [{part:'eyes', desc:'苦恼说明', video:{name}|null, photos:{角度id:{name}}}]；c.concern（汇总文字）/ photoUploaded / videoUploaded 由 concernSync 算出，给旧代码和 KR 基础资料用。
-   部位与各部位需要上传的照片角度写成这份配置，之后要改只改这里（角度用 id 存，改名字不会丢已传的照片）。 */
+/* ============ CMD-1019-01 / 03：苦恼按部位上传 ============
+   先选大类（面部 / 身体）→ 再选细部位 → 每个细部位一张卡片（手臂 / 腿还要再选 大臂 / 小臂 / 整体 …，卡片标题「手臂 · 大臂」）。
+   c.concerns = [{part:'f_eyes', sub:'' , desc, video:{name}|null, photos:{角度id:{name}}}]；part = CONCERN_PARTS 里的 key，sub = 第三层选项 key（没有就空）；
+   c.concern（汇总文字）/ photoUploaded / videoUploaded 由 concernSync 算出，给旧代码和 KR 基础资料用。
+   部位、第三层选项、各部位要上传的照片角度全部写在这份配置里（暂定，之后会细化）；角度用 id 存，改名不会丢已传的照片。 */
+var CONCERN_ANGLE = {
+  front:'正面', lside:'左正侧', l45:'左 45 度', r45:'右 45 度', rside:'右正侧', back:'背面',
+  up:'上方（眼睛往下看）', down:'下方（眼睛往上看）', under:'下方（仰拍鼻孔）'
+};
+function concernAngles(ids){ return ids.map(function(id){ return {id:id, label:CONCERN_ANGLE[id]}; }); }
+var CONCERN_GROUPS = [{key:'face', label:'面部'}, {key:'body', label:'身体'}];
+var CONCERN_SUBS = {
+  arm:[{key:'upper', label:'大臂'}, {key:'fore', label:'小臂'}, {key:'all', label:'整体'}],
+  leg:[{key:'thigh', label:'大腿'}, {key:'calf', label:'小腿'}, {key:'all', label:'整体'}]
+};
 var CONCERN_PARTS = [
-  {key:'eyes', label:'眼睛', angles:[{id:'front', label:'正面'}, {id:'l45', label:'左 45 度'}, {id:'r45', label:'右 45 度'}, {id:'up', label:'上方（眼睛往下看）'}, {id:'down', label:'下方（眼睛往上看）'}]},
-  {key:'nose', label:'鼻子', angles:[{id:'front', label:'正面'}, {id:'lside', label:'左正侧'}, {id:'l45', label:'左 45 度'}, {id:'r45', label:'右 45 度'}, {id:'rside', label:'右正侧'}, {id:'under', label:'下方（仰拍鼻孔）'}]},
-  {key:'face', label:'面部', angles:[{id:'front', label:'正面'}, {id:'lside', label:'左正侧'}, {id:'l45', label:'左 45 度'}, {id:'r45', label:'右 45 度'}, {id:'rside', label:'右正侧'}]},
-  {key:'mouth', label:'嘴巴', angles:[{id:'front', label:'正面'}, {id:'l45', label:'左 45 度'}, {id:'r45', label:'右 45 度'}, {id:'lside', label:'左正侧'}, {id:'rside', label:'右正侧'}]},
-  {key:'body', label:'身体', angles:[{id:'front', label:'正面'}, {id:'lside', label:'左正侧'}, {id:'rside', label:'右正侧'}, {id:'back', label:'背面'}]}
+  /* 面部 */
+  {key:'f_all',       group:'face', label:'面部整体', note:'轮廓 / 皮肤', angles:concernAngles(['front','lside','l45','r45','rside'])},
+  {key:'f_forehead',  group:'face', label:'额头',     angles:concernAngles(['front','lside','l45','r45','rside'])},
+  {key:'f_temple',    group:'face', label:'太阳穴',   angles:concernAngles(['front','lside','l45','r45','rside'])},
+  {key:'f_eyes',      group:'face', label:'眼睛',     angles:concernAngles(['front','l45','r45','up','down'])},
+  {key:'f_nose',      group:'face', label:'鼻子',     angles:concernAngles(['front','lside','l45','r45','rside','under'])},
+  {key:'f_cheekbone', group:'face', label:'颧骨',     angles:concernAngles(['front','lside','l45','r45','rside'])},
+  {key:'f_cheek',     group:'face', label:'脸颊',     note:'含法令纹', angles:concernAngles(['front','lside','l45','r45','rside'])},
+  {key:'f_mouth',     group:'face', label:'嘴巴',     note:'嘴唇', angles:concernAngles(['front','l45','r45','lside','rside'])},
+  {key:'f_chin',      group:'face', label:'下巴',     angles:concernAngles(['front','lside','l45','r45','rside'])},
+  {key:'f_jaw',       group:'face', label:'下颚',     note:'下颌线', angles:concernAngles(['front','lside','l45','r45','rside'])},
+  {key:'f_ear',       group:'face', label:'耳朵',     angles:concernAngles(['front','lside','rside'])},
+  /* 身体 */
+  {key:'b_neck',      group:'body', label:'颈部',     angles:concernAngles(['front','lside','rside','back'])},
+  {key:'b_back',      group:'body', label:'肩背',     note:'肩膀 / 背部', angles:concernAngles(['front','lside','rside','back'])},
+  {key:'b_chest',     group:'body', label:'胸部',     angles:concernAngles(['front','l45','r45','lside','rside'])},
+  {key:'b_arm',       group:'body', label:'手臂',     subs:'arm', angles:concernAngles(['front','lside','rside','back'])},
+  {key:'b_belly',     group:'body', label:'腹部',     angles:concernAngles(['front','lside','rside'])},
+  {key:'b_waist',     group:'body', label:'腰部',     note:'含侧腰', angles:concernAngles(['front','lside','rside','back'])},
+  {key:'b_hip',       group:'body', label:'臀部',     angles:concernAngles(['back','lside','rside'])},
+  {key:'b_leg',       group:'body', label:'腿',       subs:'leg', angles:concernAngles(['front','lside','rside','back'])},
+  /* 旧资料用（选择界面不列）：01 / 02 的「身体」没细分 */
+  {key:'b_all',       group:'body', label:'身体（未细分）', hidden:true, angles:concernAngles(['front','lside','rside','back'])}
 ];
+/* 01 / 02 的旧五个部位 → 新部位（旧数据兜底显示 + 迁移 48 共用） */
+var CONCERN_OLD_KEY = {eyes:'f_eyes', nose:'f_nose', mouth:'f_mouth', face:'f_all', body:'b_all'};
 var CONCERN_PHOTO_SPEC = '白底，1200×1600px';
 function cesc(x){ return String(x==null ? '' : x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
-function concernPartDef(key){ return CONCERN_PARTS.filter(function(p){ return p.key===key; })[0] || {key:key, label:(key==='legacy' ? '未分部位' : key), angles:[]}; }
-/* 旧案件（没有 concerns）：合成一张「未分部位」卡片；迁移 47 会把存档里的旧案件真正转成这个样子 */
+function concernPartDef(key){
+  var k0 = CONCERN_OLD_KEY[key] || key;
+  return CONCERN_PARTS.filter(function(p){ return p.key===k0; })[0] || {key:key, group:'', label:(key==='legacy' ? '未分部位' : key), angles:[]};
+}
+function concernGroupOf(x){ var d = concernPartDef(x.part); return d.group || ''; }
+function concernCid(x){ return x.part+(x.sub ? '|'+x.sub : ''); }
+function concernCardTitle(x){ var d = concernPartDef(x.part), sub = x.sub && d.subs ? (CONCERN_SUBS[d.subs].filter(function(s){ return s.key===x.sub; })[0]||{}).label : ''; return d.label+(sub ? ' · '+sub : ''); }
+function concernCardFull(x){ var g = (CONCERN_GROUPS.filter(function(y){ return y.key===concernGroupOf(x); })[0]||{}).label; return (g ? g+' · ' : '')+concernCardTitle(x); }
+function concernSortKey(x){ var d = concernPartDef(x.part), i = CONCERN_PARTS.indexOf(d), si = d.subs ? CONCERN_SUBS[d.subs].findIndex(function(s){ return s.key===x.sub; }) : 0; return i*10+Math.max(0, si); }
+/* 旧案件（没有 concerns）：合成一张「未分部位」卡片；迁移 47 / 48 会把存档里的旧案件真正转成新结构 */
 function concernCards(c){
   if(Array.isArray(c.concerns) && c.concerns.length) return c.concerns;
   if(c.concern || c.photoUploaded || c.videoUploaded) return [{part:'legacy', desc:c.concern||'', video:c.videoUploaded ? {name:'视频（旧资料）'} : null, photos:c.photoUploaded ? {legacy:{name:'照片（旧资料）'}} : {}, legacy:true}];
@@ -2168,7 +2208,7 @@ function concernCards(c){
 }
 function concernSync(c){
   var cards = c.concerns || [];
-  c.concern = cards.map(function(x){ return concernPartDef(x.part).label+'：'+(x.desc||''); }).join('；');
+  c.concern = cards.map(function(x){ return concernCardFull(x)+'：'+(x.desc||''); }).join('；');
   c.photoUploaded = cards.some(function(x){ return Object.keys(x.photos||{}).length>0; });
   c.videoUploaded = cards.some(function(x){ return !!x.video; });
 }
@@ -2178,7 +2218,7 @@ function concernMissing(c){
   var out = [], cards = c.concerns || [];
   if(!cards.length) return ['苦恼（请先选部位）'];
   cards.forEach(function(x){
-    var def = concernPartDef(x.part), nm = def.label;
+    var def = concernPartDef(x.part), nm = concernCardTitle(x);
     if(!String(x.desc||'').trim()) out.push(nm+'：苦恼说明');
     if(concernMediaOptional(c)) return;
     if(!x.video) out.push(nm+'：视频');
@@ -2187,75 +2227,92 @@ function concernMissing(c){
   });
   return out;
 }
-function toggleConcernPart(key){
-  var c = getCurrentCase(); if(!c) return; c.concerns = c.concerns || [];
-  var i = c.concerns.findIndex(function(x){ return x.part===key; });
-  if(i>-1){ var x0 = c.concerns[i]; if((x0.desc||x0.video||Object.keys(x0.photos||{}).length) && !confirm('取消「'+concernPartDef(key).label+'」？已填的说明和上传的照片 / 视频会清掉')) return; c.concerns.splice(i, 1); }
-  else { c.concerns.push({part:key, desc:'', video:null, photos:{}}); c.concerns.sort(function(a, b){ return CONCERN_PARTS.findIndex(function(p){ return p.key===a.part; }) - CONCERN_PARTS.findIndex(function(p){ return p.key===b.part; }); }); }
+function concernFind(c, cid){ return (c.concerns||[]).filter(function(x){ return concernCid(x)===cid; })[0]; }
+var CONCERN_OPEN = {}, CONCERN_SUB_OPEN = {}; /* 界面状态：展开了哪个大类 / 哪个有第三层的部位 */
+function toggleConcernGroup(g){ var c = getCurrentCase(); if(!c) return; if((c.concerns||[]).some(function(x){ return concernGroupOf(x)===g; })) return; /* 已经有卡片的大类不能收起 */ CONCERN_OPEN[g] = !CONCERN_OPEN[g]; renderCaseBody(c); }
+function toggleConcernSubOpen(key){ var c = getCurrentCase(); if(!c) return; CONCERN_SUB_OPEN[key] = !CONCERN_SUB_OPEN[key]; renderCaseBody(c); }
+/* key = 部位 key；sub = 第三层选项 key（没有就不传）。点一次选上、再点一次取消（已填内容会清掉，先确认） */
+function toggleConcernPart(key, sub){
+  var c = getCurrentCase(); if(!c) return; c.concerns = c.concerns || []; sub = sub || '';
+  var cid = key+(sub ? '|'+sub : ''), i = c.concerns.findIndex(function(x){ return concernCid(x)===cid; });
+  if(i>-1){ var x0 = c.concerns[i]; if((x0.desc||x0.video||Object.keys(x0.photos||{}).length) && !confirm('取消「'+concernCardTitle(x0)+'」？已填的说明和上传的照片 / 视频会清掉')) return; c.concerns.splice(i, 1); }
+  else { c.concerns.push({part:key, sub:sub, desc:'', video:null, photos:{}}); c.concerns.sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }); }
+  var g = concernPartDef(key).group; if(g) CONCERN_OPEN[g] = true;
   concernSync(c); c.materialsError = ''; renderCaseBody(c);
 }
-function saveConcernDesc(key, val){ var c = getCurrentCase(); if(!c) return; var x = (c.concerns||[]).filter(function(y){ return y.part===key; })[0]; if(x){ x.desc = val; concernSync(c); } } /* 只存草稿，不重渲染（输入不被打断） */
-function mockUploadConcern(key, what){ /* what = 'video' 或 角度 id；原型里一次点击 = 传一个文件 */
-  var c = getCurrentCase(); if(!c) return; var x = (c.concerns||[]).filter(function(y){ return y.part===key; })[0]; if(!x) return; var def = concernPartDef(key);
-  if(what==='video') x.video = {name:def.label+'视频.mp4'};
-  else { var a = def.angles.filter(function(z){ return z.id===what; })[0]; x.photos = x.photos || {}; x.photos[what] = {name:def.label+'-'+(a ? a.label : what)+'.jpg'}; }
+function saveConcernDesc(cid, val){ var c = getCurrentCase(); if(!c) return; var x = concernFind(c, cid); if(x){ x.desc = val; concernSync(c); } } /* 只存草稿，不重渲染（输入不被打断） */
+function mockUploadConcern(cid, what){ /* what = 'video' 或 角度 id；原型里一次点击 = 传一个文件 */
+  var c = getCurrentCase(); if(!c) return; var x = concernFind(c, cid); if(!x) return; var def = concernPartDef(x.part), tt = concernCardTitle(x).replace(/ · /g, '-');
+  if(what==='video') x.video = {name:tt+'视频.mp4'};
+  else { var a = def.angles.filter(function(z){ return z.id===what; })[0]; x.photos = x.photos || {}; x.photos[what] = {name:tt+'-'+(a ? a.label : what)+'.jpg'}; }
   concernSync(c); c.materialsError = ''; renderCaseBody(c);
 }
-function clearConcernMedia(key, what){
-  var c = getCurrentCase(); if(!c) return; var x = (c.concerns||[]).filter(function(y){ return y.part===key; })[0]; if(!x) return;
+function clearConcernMedia(cid, what){
+  var c = getCurrentCase(); if(!c) return; var x = concernFind(c, cid); if(!x) return;
   if(what==='video') x.video = null; else if(x.photos) delete x.photos[what];
   concernSync(c); renderCaseBody(c);
 }
-/* 基础资料（确认前）里的「苦恼」：先选部位（可多选）→ 每个部位一张卡片：苦恼说明 / 视频 / 各角度照片（一个角度一个格子） */
+/* 基础资料（确认前）里的「苦恼」：先选大类（面部 / 身体，可都选）→ 细部位（可多选；手臂 / 腿再选 大臂 / 小臂 / 整体）→ 每个细部位一张卡片：苦恼说明 / 视频 / 各角度照片（一个角度一个格子） */
 function concernFormHtml(c){
   var opt = concernMediaOptional(c), cards = c.concerns || [], mark = opt ? '（选填）' : ' <span style="color:var(--terracotta);">*</span>';
-  var chips = CONCERN_PARTS.map(function(p){ var on = cards.some(function(x){ return x.part===p.key; }); return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleConcernPart(\''+p.key+'\')">'+(on ? '✓ ' : '')+p.label+'</button>'; }).join('');
-  var cardHtml = cards.map(function(x){
-    var def = concernPartDef(x.part), vid = x.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+cesc(x.video.name)+'</span> <a href="#" style="font-size:11px;" onclick="clearConcernMedia(\''+x.part+'\',\'video\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadConcern(\''+x.part+'\',\'video\')">上传视频</button>';
+  var gOpen = function(g){ return !!CONCERN_OPEN[g] || cards.some(function(x){ return concernGroupOf(x)===g; }); };
+  var gChips = CONCERN_GROUPS.map(function(g){ var n = cards.filter(function(x){ return concernGroupOf(x)===g.key; }).length; return '<button class="'+(gOpen(g.key) ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleConcernGroup(\''+g.key+'\')">'+g.label+(n ? '（'+n+'）' : '')+'</button>'; }).join('');
+  var partsHtml = CONCERN_GROUPS.filter(function(g){ return gOpen(g.key); }).map(function(g){
+    var chips = CONCERN_PARTS.filter(function(p){ return p.group===g.key && !p.hidden; }).map(function(p){
+      if(p.subs){ var n = cards.filter(function(x){ return x.part===p.key; }).length, open = !!CONCERN_SUB_OPEN[p.key] || n>0; return '<button class="'+(n ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleConcernSubOpen(\''+p.key+'\')">'+p.label+(n ? '（'+n+'）' : ' ▾')+'</button>'; }
+      var on = cards.some(function(x){ return x.part===p.key; }); return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleConcernPart(\''+p.key+'\')" title="'+cesc(p.note||'')+'">'+(on ? '✓ ' : '')+p.label+(p.note ? '<span style="font-size:10px;color:var(--muted);">（'+cesc(p.note)+'）</span>' : '')+'</button>'; }).join('');
+    var subRows = CONCERN_PARTS.filter(function(p){ return p.group===g.key && p.subs && (CONCERN_SUB_OPEN[p.key] || cards.some(function(x){ return x.part===p.key; })); }).map(function(p){
+      return '<div style="margin:4px 0 0 4px;font-size:12px;"><span style="color:var(--muted);">'+p.label+'：</span>'+CONCERN_SUBS[p.subs].map(function(s){ var on = !!concernFind(c, p.key+'|'+s.key); return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleConcernPart(\''+p.key+'\',\''+s.key+'\')">'+(on ? '✓ ' : '')+s.label+'</button>'; }).join(' ')+'</div>'; }).join('');
+    return '<div style="margin-top:8px;"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"><b style="font-size:12px;min-width:34px;">'+g.label+'</b>'+chips+'</div>'+subRows+'</div>'; }).join('');
+  var cardHtml = function(x){
+    var def = concernPartDef(x.part), cid = concernCid(x), cq = cid.replace(/'/g,''), vid = x.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+cesc(x.video.name)+'</span> <a href="#" style="font-size:11px;" onclick="clearConcernMedia(\''+cq+'\',\'video\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadConcern(\''+cq+'\',\'video\')">上传视频</button>';
     var slots = def.angles.map(function(a){ var f = (x.photos||{})[a.id];
       return '<div style="width:124px;border:1px '+(f ? 'solid var(--sage)' : 'dashed var(--border)')+';border-radius:8px;padding:8px;text-align:center;background:'+(f ? 'var(--sage-bg)' : 'var(--surface2,#faf6ef)')+';"><div style="font-size:12px;font-weight:700;margin-bottom:6px;min-height:30px;">'+cesc(a.label)+'</div>'+
-        (f ? '<div style="font-size:11px;color:var(--sage);word-break:break-all;">✓ '+cesc(f.name)+'</div><a href="#" style="font-size:11px;" onclick="clearConcernMedia(\''+x.part+'\',\''+a.id+'\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="mockUploadConcern(\''+x.part+'\',\''+a.id+'\')">上传</button>')+'</div>'; }).join('');
+        (f ? '<div style="font-size:11px;color:var(--sage);word-break:break-all;">✓ '+cesc(f.name)+'</div><a href="#" style="font-size:11px;" onclick="clearConcernMedia(\''+cq+'\',\''+a.id+'\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="mockUploadConcern(\''+cq+'\',\''+a.id+'\')">上传</button>')+'</div>'; }).join('');
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fff;">'+
-      '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">'+def.label+'</div>'+
-      '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:7px;">苦恼说明 <span style="color:var(--terracotta);">*</span></span><textarea placeholder="为什么烦恼…" oninput="saveConcernDesc(\''+x.part+'\',this.value)" style="flex:1;min-height:52px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(x.desc||'')+'</textarea></div>'+
+      '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">'+cesc(concernCardTitle(x))+'</div>'+
+      '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:7px;">苦恼说明 <span style="color:var(--terracotta);">*</span></span><textarea placeholder="为什么烦恼…" oninput="saveConcernDesc(\''+cq+'\',this.value)" style="flex:1;min-height:52px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(x.desc||'')+'</textarea></div>'+
       '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:center;"><span style="min-width:70px;font-size:12px;">视频'+mark+'</span><span style="font-size:13px;">'+vid+'</span></div>'+
       '<div style="display:flex;gap:10px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:4px;">照片'+mark+'<div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.4;">'+CONCERN_PHOTO_SPEC+'<br>每个角度一张</div></span><div style="display:flex;flex-wrap:wrap;gap:8px;">'+slots+'</div></div></div>';
-  }).join('');
-  return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"><span style="font-size:12px;color:var(--muted);">选部位（可多选）：</span>'+chips+'</div>'+
-    (cards.length ? cardHtml : '<div style="font-size:12px;color:var(--muted);margin-top:8px;">先选客人苦恼的部位，每个部位会出现一张卡片，填说明并上传视频、各角度照片。</div>')+
+  };
+  var groupsCards = CONCERN_GROUPS.concat([{key:'', label:'未分部位'}]).map(function(g){ var l = cards.filter(function(x){ return concernGroupOf(x)===g.key; }); return l.length ? '<div style="margin-top:12px;font-size:12px;font-weight:700;color:var(--slate2);">'+g.label+'</div>'+l.map(cardHtml).join('') : ''; }).join('');
+  return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"><span style="font-size:12px;color:var(--muted);">先选大类（可都选）：</span>'+gChips+'</div>'+partsHtml+
+    (cards.length ? groupsCards : '<div style="font-size:12px;color:var(--muted);margin-top:8px;">先选面部 / 身体，再选细部位；每个细部位一张卡片，填说明并上传视频、各角度照片。</div>')+
     (opt ? '<div style="font-size:11px;color:var(--slate2);margin-top:8px;">选了「不面诊」：照片 / 视频改选填，苦恼说明仍必填。</div>' : '')+'</div></div>';
 }
-/* 按部位显示（只读）：基础资料 tab / IN 面诊资料 tab / KR 面诊 tab 共用；opts.supp = 每张卡带［补充上传］ */
+/* 按部位显示（只读）：基础资料 tab / IN 面诊资料 tab / KR 面诊 tab 共用，按「面部 / 身体」分两组；opts.supp = 每张卡带［补充上传］ */
 var CONCERN_ZOOM = null;
-function concernZoom(partKey, what){
+function concernZoom(cid, what){
   var c = (typeof getCurrentCase==='function' ? getCurrentCase() : null) || (typeof KR_CASE!=='undefined' && typeof krFindCase==='function' && KR_CASE && KR_CASE.id ? (krFindCase(KR_CASE.clinicId, KR_CASE.id)||{}).c : null); if(!c) return;
-  var x = concernCards(c).filter(function(y){ return y.part===partKey; })[0]; if(!x) return; var def = concernPartDef(partKey), f = what==='video' ? x.video : (x.photos||{})[what]; if(!f) return;
-  var a = def.angles.filter(function(z){ return z.id===what; })[0], title = def.label+' · '+(what==='video' ? '视频' : (a ? a.label : '照片'));
+  var x = concernCards(c).filter(function(y){ return concernCid(y)===cid; })[0]; if(!x) return; var def = concernPartDef(x.part), f = what==='video' ? x.video : (x.photos||{})[what]; if(!f) return;
+  var a = def.angles.filter(function(z){ return z.id===what; })[0], title = concernCardFull(x)+' · '+(what==='video' ? '视频' : (a ? a.label : '照片'));
   var ov = document.getElementById('concern-zoom-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'concern-zoom-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   ov.innerHTML = '<div class="modal-box" style="width:420px;text-align:center;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>'+cesc(title)+'</b><span style="cursor:pointer;" onclick="document.getElementById(\'concern-zoom-overlay\').classList.remove(\'open\')">✕</span></div>'+
     '<div style="width:300px;height:'+(what==='video' ? 200 : 400)+'px;margin:0 auto;border:1px solid var(--border2);border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;">'+(what==='video' ? '▶ ' : '')+cesc(f.name)+'<br>（原型占位图'+(what==='video' ? '' : '，规格 '+CONCERN_PHOTO_SPEC)+'）</div></div>';
   ov.style.zIndex = 100020; ov.classList.add('open');
 }
 function concernCardsHtml(c, o){
-  o = o || {}; var cards = concernCards(c);
+  o = o || {}; var cards = concernCards(c).slice().sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); });
   if(!cards.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">没有苦恼资料</div>';
-  return cards.map(function(x){
-    var def = concernPartDef(x.part), pk = String(x.part).replace(/'/g,'');
+  var one = function(x){
+    var def = concernPartDef(x.part), cid = concernCid(x), pk = cid.replace(/'/g,'');
     var vid = x.video ? '<a href="#" class="info-link" onclick="concernZoom(\''+pk+'\',\'video\');return false;">▶ '+cesc(x.video.name)+'</a>' : '<span style="color:var(--muted);">—</span>';
     var photos = x.legacy ? (Object.keys(x.photos||{}).length ? '<span style="font-size:12px;color:var(--slate2);">'+cesc((x.photos.legacy||{}).name||'照片')+'（旧案件没有分角度）</span>' : '<span style="color:var(--muted);">—</span>') :
       '<div style="display:flex;flex-wrap:wrap;gap:8px;">'+def.angles.map(function(a){ var f = (x.photos||{})[a.id];
         return '<div style="width:92px;border:1px solid var(--border2);border-radius:8px;padding:6px;text-align:center;font-size:11px;'+(f ? 'cursor:pointer;" onclick="concernZoom(\''+pk+'\',\''+a.id+'\')"' : 'color:var(--muted);"')+'><div style="font-weight:700;min-height:28px;">'+cesc(a.label)+'</div>'+(f ? '<div style="color:var(--sage);word-break:break-all;">'+cesc(f.name)+'</div>' : '未上传')+'</div>'; }).join('')+'</div>';
-    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+cesc(def.label)+(o.supp ? '<span style="float:right;font-weight:400;font-size:12px;"><a href="#" class="info-link" onclick="supplementUpload(\'photo\');return false;">补充照片</a>　<a href="#" class="info-link" onclick="supplementUpload(\'video\');return false;">补充视频</a></span>' : '')+'</div>'+
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+cesc(concernCardTitle(x))+(o.supp ? '<span style="float:right;font-weight:400;font-size:12px;"><a href="#" class="info-link" onclick="supplementUpload(\'photo\');return false;">补充照片</a>　<a href="#" class="info-link" onclick="supplementUpload(\'video\');return false;">补充视频</a></span>' : '')+'</div>'+
       '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">苦恼说明　</span>'+(cesc(x.desc||'') || '—')+'</div>'+
       '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">视频　</span>'+vid+'</div>'+
       '<div style="font-size:13px;"><span style="color:var(--muted);font-size:12px;">照片　</span>'+photos+'</div></div>';
-  }).join('');
+  };
+  return CONCERN_GROUPS.concat([{key:'', label:'未分部位'}]).map(function(g){ var l = cards.filter(function(x){ return concernGroupOf(x)===g.key; }); return l.length ? '<div style="margin-top:10px;font-size:12px;font-weight:700;color:var(--slate2);">'+g.label+'</div>'+l.map(one).join('') : ''; }).join('');
 }
 /* 面诊资料类 tab 的「客人资料」卡：希望预期、预算区间放在按部位卡片上方 */
 function concernBlockHtml(c, o){
   var budgetText = (c.budgetMin||c.budgetMax) ? (formatCurrency(c.budgetMin||0,'IDR')+' ～ '+(c.budgetMax ? formatCurrency(c.budgetMax,'IDR') : '不限')) : '—';
   return '<div style="font-size:13px;margin-bottom:4px;"><span style="color:var(--muted);font-size:12px;">希望预期　</span>'+(cesc(c.expectation||'') || '—')+'</div><div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">预算　</span>'+budgetText+'</div>'+concernCardsHtml(c, o);
 }
+
 /* 面诊需求选了才展开苦恼 + 希望预期；没选只显示灰字。切换面诊 / 不面诊时已填内容保留（只是照片 / 视频是否必填变了） */
 function consultChosen(c){ return c.needsConsult===true || c.needsConsult===false || c.needsConsult==='reuse'; }
 function concernExpectHtml(c){
@@ -2399,25 +2456,52 @@ function hospitalDirectorSelectHtml(c, onHospital, onDirector, selStyle){
   return {hosp:'', dir:dirSel, hid:hid, hl:null, lk:lk};
 }
 
-/* 赴韩施术项目 → 苦恼部位（CMD-1019-02）：项目自己的 `parts`（KR 项目库编辑里勾选）优先；没勾过的按项目名拟一版默认对应。部位 key 同 CONCERN_PARTS */
+/* 赴韩施术项目 → 苦恼细部位（CMD-1019-02 / 03）：项目自己的 `parts`（项目库编辑里勾选）优先；没勾过的按项目名关键词拟一版默认对应（一个项目可以对应多个部位）。
+   部位值 = CONCERN_PARTS 的 key，腿 / 手臂可带第三层：'b_leg:thigh'。 */
 var PROJECT_PART_RULES = [
-  ['eyes', /眼|双眼皮|眼袋|提眉|眉/],
-  ['nose', /鼻/],
-  ['mouth', /嘴|唇|口角|人中/],
-  ['body', /胸|吸脂|腹|大腿|手臂|臀|腰|身体/],
-  ['face', /颧|下颌|下巴|颏|拉皮|脂肪移植|轮廓|面部|苹果肌|全脸|额|太阳穴/]
+  ['f_eyes', /眼|双眼皮|眼袋|提眉/],
+  ['f_forehead', /额|提眉/],
+  ['f_temple', /太阳穴/],
+  ['f_nose', /鼻/],
+  ['f_mouth', /嘴|唇|口角|人中/],
+  ['f_cheekbone', /颧/],
+  ['f_cheek', /苹果肌|法令纹|脸颊/],
+  ['f_jaw', /下颌|下颚/],
+  ['f_chin', /下巴|颏/],
+  ['f_ear', /耳/],
+  ['f_all', /拉皮|轮廓|面部|全脸|脂肪移植/],
+  ['b_neck', /颈/],
+  ['b_back', /肩|背/],
+  ['b_chest', /胸/],
+  ['b_arm', /手臂|大臂|小臂/],
+  ['b_belly', /腹/],
+  ['b_waist', /腰/],
+  ['b_hip', /臀/],
+  ['b_leg:thigh', /大腿/],
+  ['b_leg:calf', /小腿/]
 ];
 function projectPartsOf(p){
   if(!p) return [];
-  if(Array.isArray(p.parts)) return p.parts;
+  if(Array.isArray(p.parts)) return p.parts.map(function(k){ return CONCERN_OLD_KEY[k] || k; });
   var out = []; PROJECT_PART_RULES.forEach(function(r){ if(r[1].test(p.name||'')) out.push(r[0]); });
   return out;
 }
-/* 这位院长的擅长项目覆盖了客人选的哪些苦恼部位：返回 {parts:[部位key], specs:[擅长项目名]} */
+function partBase(k){ return String(k).split(':')[0]; }
+function partGroupOf(k){ return (concernPartDef(partBase(k)).group) || ''; }
+/* 这位院长的擅长项目对到客人选的哪些细部位：完全对到（同一个细部位）算 1，只对到同一大类（面部 / 身体）下别的细部位算 0.5（排在完全对到之后）。
+   返回 {parts:[完全对到的部位key], half:[只对到大类的部位key], specs:[对到的擅长项目名], score} */
 function docPartMatch(hid, dr, c){
-  var h = HOSPITAL_DATA[hid] || {projects:[]}, want = (c.concerns||[]).map(function(x){ return x.part; }), parts = [], specs = [];
-  (dr.specialties||[]).forEach(function(sn){ var p = (h.projects||[]).filter(function(x){ return x.name===sn; })[0], ps = projectPartsOf(p || {name:sn}); var hit = ps.filter(function(k){ return want.indexOf(k)>-1; }); if(hit.length){ specs.push(sn); hit.forEach(function(k){ if(parts.indexOf(k)<0) parts.push(k); }); } });
-  return {parts:parts, specs:specs};
+  var h = HOSPITAL_DATA[hid] || {projects:[]}, want = []; (c.concerns||[]).forEach(function(x){ if(want.indexOf(x.part)<0) want.push(x.part); });
+  var have = []; /* [{spec, keys}] */
+  (dr.specialties||[]).forEach(function(sn){ var p = (h.projects||[]).filter(function(x){ return x.name===sn; })[0]; have.push({spec:sn, keys:projectPartsOf(p || {name:sn}).map(partBase)}); });
+  var full = [], half = [], specs = [];
+  want.forEach(function(k){
+    var k0 = (CONCERN_OLD_KEY[k] || k), hit = have.filter(function(hv){ return hv.keys.indexOf(k0)>-1; });
+    if(hit.length){ full.push(k0); hit.forEach(function(hv){ if(specs.indexOf(hv.spec)<0) specs.push(hv.spec); }); return; }
+    var g = partGroupOf(k0), hh = have.filter(function(hv){ return g && hv.keys.some(function(x){ return partGroupOf(x)===g; }); });
+    if(hh.length){ half.push(k0); hh.forEach(function(hv){ if(specs.indexOf(hv.spec)<0) specs.push(hv.spec); }); }
+  });
+  return {parts:full, half:half, specs:specs, score:full.length + half.length*0.5};
 }
 /* IN 选院长的介绍卡（KR-DOC-01 第 2 节）：照片 + 姓名 + 职称 + 经历 + 认证 + 擅长项目；全部院长都列出（停用的不列），擅长客人苦恼部位的排前面并标示（CMD-1019-02，取代按意向项目）*/
 function docIntentMatch(hid, dr, c){ return docPartMatch(hid, dr, c).specs; }
@@ -2448,14 +2532,14 @@ function directorCardHtml(dr, hid, c, pickable, selected){
   var ph = directorAvatarHtml(dr, 54);
   var m = docIntentMatch(hid, dr, c), li = function(arr){ return (arr||[]).map(function(x){ return '<div>'+(x.when?x.when+'：':'')+(x.zh||x.ko)+'</div>'; }).join(''); };
   return '<div '+(pickable?'onclick="setCaseDirector(\''+dr.name+'\')" ':'')+'style="display:flex;gap:12px;padding:12px;border:1px solid '+(selected?'var(--terracotta)':'var(--border)')+';border-radius:10px;background:'+(selected?'var(--terracotta-bg)':'#fff')+';'+(pickable?'cursor:pointer;':'')+((off&&off.full)?'opacity:.5;filter:grayscale(1);cursor:not-allowed;':'')+'margin-top:8px;">'+ph+
-    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;">'+dr.name+' <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(off ? ' <span class="status-pill" style="background:#F6DCDC;color:#C1454A;">'+(off.full?'今日 OFF':'今天 '+off.text+' OFF（韩）')+'</span>' : '')+(m.length?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人苦恼部位（'+docPartMatch(hid, dr, c).parts.map(function(k){ return concernPartDef(k).label; }).join('、')+'）</span>':'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
+    '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;">'+dr.name+' <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(off ? ' <span class="status-pill" style="background:#F6DCDC;color:#C1454A;">'+(off.full?'今日 OFF':'今天 '+off.text+' OFF（韩）')+'</span>' : '')+(m.length?(function(){ var pm = docPartMatch(hid, dr, c), nm = function(l){ return l.map(function(k){ return concernPartDef(k).label; }).join('、'); }; var gl = []; pm.half.forEach(function(k){ var g = (CONCERN_GROUPS.filter(function(y){ return y.key===partGroupOf(k); })[0]||{}).label; if(g && gl.indexOf(g)<0) gl.push(g); }); return pm.parts.length ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人苦恼部位（'+nm(pm.parts)+'）</span>' : (gl.length ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">◐ 擅长相近部位（'+gl.join('、')+'）</span>' : ''); })():'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
     (dr.career&&dr.career.length ? '<div style="color:var(--slate2);margin-top:3px;">'+li(dr.career)+'</div>' : '')+(dr.certs&&dr.certs.length ? '<div style="color:var(--slate2);margin-top:3px;"><b>认证</b> '+dr.certs.map(function(x){ return x.zh||x.ko; }).join('；')+'</div>' : '')+
     (dr.specialties&&dr.specialties.length ? '<div style="margin-top:4px;"><b>擅长</b> '+dr.specialties.map(function(sn){ return '<span class="chip'+(m.indexOf(sn)>-1?' active':'')+'" style="cursor:inherit;">'+sn+'</span>'; }).join('')+'</div>' : '')+'</div></div>';
 }
 function directorCardsHtml(c){
   var hid = caseHospitalId(c); if(!hid) return '';
   var lk = directorLockInfo(c), list = hospitalDirectors(hid).filter(function(x){ return x.active; });
-  list = list.map(function(dr, i){ var pm = docPartMatch(hid, dr, c), off = directorTodayOff(hid, dr.name); return {dr:dr, m:pm.parts.length, ms:pm.specs.length, off:!!(off && off.full), i:i}; }).sort(function(a,b){ return (a.off-b.off) || (b.m-a.m) || (b.ms-a.ms) || a.i-b.i; }); /* 整天 OFF 的灰色排后；擅长的部位对到越多越前；对不到照原顺序 */
+  list = list.map(function(dr, i){ var pm = docPartMatch(hid, dr, c), off = directorTodayOff(hid, dr.name); return {dr:dr, m:pm.score, ms:pm.specs.length, off:!!(off && off.full), i:i}; }).sort(function(a,b){ return (a.off-b.off) || (b.m-a.m) || (b.ms-a.ms) || a.i-b.i; }); /* 整天 OFF 的灰色排后；擅长的部位对到越多越前；对不到照原顺序 */
   return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">院长介绍'+(lk?'（已锁定原院长）':'（点卡片选择；擅长客人苦恼部位的排前面）')+'</div>'+list.map(function(x){ return directorCardHtml(x.dr, hid, c, !lk, c.director===x.dr.name); }).join('')+'</div>';
 }
 function directorRowHtml(c){
@@ -2575,7 +2659,7 @@ function retentionLabel(f){
 function caseAttachments(c){
   var base = caseBaseDate(c), list = [];
   if(c.metaviewStatus==='ready') list.push({src:'基础资料', label:'메타뷰 检测报告', date:base});
-  if((c.concerns||[]).length){ c.concerns.forEach(function(x){ var def = concernPartDef(x.part); if(x.video) list.push({src:'基础资料', label:def.label+'视频', date:base}); var np = Object.keys(x.photos||{}).length; if(np) list.push({src:'基础资料', label:def.label+'照片（'+np+' 张）', date:base}); }); }
+  if((c.concerns||[]).length){ c.concerns.slice().sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }).forEach(function(x){ var nm = concernCardFull(x), np = Object.keys(x.photos||{}).length; if(x.video) list.push({src:'基础资料', label:nm+'视频', date:base, grp:concernGroupOf(x)}); if(np) list.push({src:'基础资料', label:nm+'照片（'+np+' 张）', date:base, grp:concernGroupOf(x)}); }); }
   else { if(c.photoUploaded) list.push({src:'基础资料', label:'照片', date:base});
   if(c.videoUploaded) list.push({src:'基础资料', label:'视频', date:base}); }
   (c.linkedFiles||[]).forEach(function(f){ list.push({src:'基础资料', label:f.label, date:f.date||base}); });
@@ -2590,10 +2674,12 @@ function caseAttachments(c){
 
 function attachmentsTabHtml(c){
   var files = caseAttachments(c);
+  var lastGrp = null;
   var rows = files.map(function(f){
+    var gh = ''; if(f.grp!==undefined && f.grp!==lastGrp){ lastGrp = f.grp; gh = '<div style="margin:10px 0 2px;font-size:12px;font-weight:700;color:var(--slate2);">基础资料 · '+((CONCERN_GROUPS.filter(function(g){ return g.key===f.grp; })[0]||{}).label||'苦恼')+'</div>'; } /* 按面部 / 身体分组（CMD-1019-03） */
     var tagBg = f.src==='面诊资料' ? 'var(--terracotta-bg)' : 'var(--blue-bg)';
     var tagFg = f.src==='面诊资料' ? 'var(--terracotta)' : 'var(--blue)';
-    return '<div class="case-field-row"><span class="status-pill" style="background:'+tagBg+';color:'+tagFg+';font-size:10px;margin-right:8px;">'+f.src+'</span>'+
+    return gh+'<div class="case-field-row"><span class="status-pill" style="background:'+tagBg+';color:'+tagFg+';font-size:10px;margin-right:8px;">'+f.src+'</span>'+
       '<span style="flex-grow:1;font-size:13px;">'+f.label+'</span>'+
       '<span class="status-pill" style="background:#EDEAE2;color:var(--muted);font-size:10px;margin-right:10px;">保存期限：'+retentionLabel(f)+'</span>'+
       '<span style="font-size:12px;color:var(--muted);margin-right:14px;">'+f.date+'</span>'+
@@ -5791,7 +5877,7 @@ function ensureProjNames(p){
 
 function setProjName(lang, v){ ensureProjNames(PROJ_EDIT)[lang] = v; }
 
-function projPartsToggle(key){ var p = PROJ_EDIT; if(!p) return; var cur = projectPartsOf(p).slice(), i = cur.indexOf(key); if(i>-1) cur.splice(i,1); else cur.push(key); p.parts = cur; renderProjEditModal(); }
+function projPartsToggle(key){ var p = PROJ_EDIT; if(!p) return; var cur = projectPartsOf(p).slice(), on = cur.some(function(k){ return partBase(k)===key; }); if(on) cur = cur.filter(function(k){ return partBase(k)!==key; }); else cur.push(key); p.parts = cur; renderProjEditModal(); }
 function saveProj(){
   var p = PROJ_EDIT; if(!p) return;
   var price = Number(p.price);

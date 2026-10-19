@@ -337,6 +337,10 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:48, fn:function(c, ctx){ /* CMD-1019-03：旧五个部位 → 新细部位：眼睛 / 鼻子 / 嘴巴 → 面部下同名；面部 → 面部整体；身体 → 身体（未细分）；已传照片按角度 id 保留（对得上的才留，对不上的不丢，仍在 photos 里） */
+      var n = 0; (c.concerns||[]).forEach(function(x){ var k = {eyes:'f_eyes', nose:'f_nose', mouth:'f_mouth', face:'f_all', body:'b_all'}[x.part]; if(k){ x.part = k; x.sub = x.sub||''; n++; } else if(x.sub===undefined) x.sub = ''; });
+      if(n) ctx.note('苦恼部位转成新细部位 '+n+' 个（案件 '+(c.caseNo||c.id)+'）');
+    }},
     {to:47, fn:function(c, ctx){ /* CMD-1019-01：整体苦恼 / 照片 / 视频 → 一张「未分部位」卡片（旧案件显示仍正常，说明沿用原苦恼文字，没有分角度的照片） */
       if(Array.isArray(c.concerns) && c.concerns.length) return;
       if(c.concern || c.photoUploaded || c.videoUploaded){
