@@ -338,6 +338,15 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:51, fn:function(c, ctx){ /* CMD-1019-10：KR 管理项目的数量 = 份数；规格里写「N次」的：总次数 = N × 份数（旧版把「次数」当成手填的份数，买「·3次」×1 只记成 1 次，持有 / 扣次数都少了）。旧 qty = 份数 → copies，qty 改成总次数 */
+      var fixed = 0, fix = function(it){
+        if(!it || !(it.mgmt || it.mgmtPlan || /^lc:/.test(String(it.projectId||'')) || it.local) || it.copies) return;
+        var m = String(it.specLabel || it.name || '').match(/(\d+)\s*次/), n = m ? parseInt(m[1], 10) : 1, cp = it.qty || 1;
+        it.copies = cp; it.specTimes = n; if(n>1){ it.qty = n*cp; fixed++; }
+      };
+      ['recommended','procedureItems'].forEach(function(k){ (c[k]||[]).forEach(fix); }); ((c.krScope||{}).items||[]).forEach(fix);
+      if(fixed) ctx.note('案件 '+(c.caseNo||'')+'：'+fixed+' 个带「N次」规格的管理项目，总次数改成 规格次数 × 份数');
+    }},
     {to:50, fn:function(c, ctx){ /* CMD-1019-06：「下颌角整形」改名「下颚角整形」（案件里存的项目名同步）；赴韩项目分类改成苦恼部位由 krPartsNormalize 在读档后处理，案件不受影响 */
       var n0 = 0, ren = function(it){ if(it && typeof it.name==='string' && it.name.indexOf('下颌角')>-1){ it.name = it.name.replace(/下颌角/g, '下颚角'); n0++; } };
       ['recommended','procedureItems','intentionProjects','krProjects'].forEach(function(k){ (c[k]||[]).forEach(ren); });

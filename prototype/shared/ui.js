@@ -2092,7 +2092,7 @@ function toggleProject(projectId){
     c.recommended.splice(idx,1);
   } else if(/^lc:/.test(projectId)){ /* KR 诊疗方案里的管理项目（CMD-1015-16）：快照 = KR 填的 项目（规格）+ 次数 + 间隔；origin KR（算进赴韩定金），只在韩国做，到院后标完成 / 转在韩持有 */
     var si = scopeMgmtItems(c).filter(function(x){ return scopeMgmtPid(x)===projectId; })[0]; if(!si) return;
-    c.recommended.push({projectId:projectId, name:si.name, price:si.price, currency:'KRW', origin:'KR', categoryId:null, local:true, mgmt:true, mgmtPlan:true, qty:si.qty, interval:si.interval, specLabel:si.specLabel, unit:si.unit, note:si.note||''});
+    c.recommended.push({projectId:projectId, name:si.name, price:si.price, currency:'KRW', origin:'KR', categoryId:null, local:true, mgmt:true, mgmtPlan:true, qty:si.qty, copies:si.copies, specTimes:si.specTimes, firstDay:si.firstDay, interval:si.interval, specLabel:si.specLabel, unit:si.unit, note:si.note||''});
   } else {
     var p = projById(projectId); if(!p) return;
     var item = p.origin==='IN' ? buildLocalItem(p) : {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId}; /* 本地项目：带入进行中的活动价（成交价快照） */
@@ -2705,7 +2705,7 @@ function renderPkgModal(){
   var e = PKG_EDIT, ov = ensurePromoOverlay('pkg-edit-overlay');
   var rows = e.items.map(function(it, i){
     return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><select style="flex:1;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;" onchange="PKG_EDIT.items['+i+'].projectId=this.value;PKG_EDIT.items['+i+'].specId=defaultSpecIdOf(this.value);renderPkgModal()">'+localProjectOptions(it.projectId)+'</select><select style="width:150px;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;" onchange="PKG_EDIT.items['+i+'].specId=this.value;renderPkgModal()">'+specOptions(it.projectId, it.specId)+'</select>'+
-      qtyInputHtml({value:it.qty||1, min:1, onchange:'PKG_EDIT.items['+i+'].qty=parseInt(this.value,10)||1;renderPkgModal()'})+'<span style="font-size:12px;">次</span>'+
+      qtyInputHtml({value:it.qty||1, min:1, unit:'份', onchange:'PKG_EDIT.items['+i+'].qty=parseInt(this.value,10)||1;renderPkgModal()'})+
       (e.items.length>1 ? '<a href="#" class="info-link" onclick="PKG_EDIT.items.splice('+i+',1);renderPkgModal();return false;">移除</a>' : '')+'</div>';
   }).join('');
   ov.firstChild.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:14px;"><b style="font-size:15px;">'+(e.id ? '编辑套餐' : '新增套餐')+'</b><span style="cursor:pointer;color:var(--slate);" onclick="closePromoOverlay(\'pkg-edit-overlay\')">✕</span></div>'+

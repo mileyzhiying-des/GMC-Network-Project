@@ -657,7 +657,7 @@
     /* 本地管理项目库：和 IN 同一份清单（项目名一致） */
     var kn = krLocalLib(hid).map(function(p){ return p.name; }).sort().join('|'), inn = buildLocalProjects('IN').map(function(p){ return p.name; }).sort().join('|'); ST.ok(kn===inn, 'KR 本地管理项目库和 IN 应是同一份清单（项目名一致）');
     /* 案例库（CMD-1014-16）：IN 统一维护，KR 只读 */
-    DEMO_ROLE = 'kr'; openAdminPage('krshow'); var lc0 = LIB_CASES[0];
+    DEMO_ROLE = 'kr'; openAdminPage('krshow'); var lc0 = LIB_CASES.filter(function(x){ return x.by!=='KR'; })[0]; /* IN 的案例（KR 自己新增的案例 KR 能编辑，CMD-1019-07） */
     ST.ok(!!document.getElementById('lib-add-btn') === !!canDo('krshowedit'), 'KR 室长 / 管理者有［新增案例］，院长 / 代表院长没有（CMD-1019-07）'); ST.ok(!libCaseCanEdit('travel') && !libCaseCanEdit('local') && !libCaseCanEdit({source:'travel', by:'IN'}), 'KR 不能编辑 IN 的案例');
     if(lc0){ openLibCaseModal(lc0.id); ST.ok(LIB_EDIT===null, 'KR 点 IN 案例的编辑不应打开编辑窗'); libOpenCase(lc0.id); ST.ok(!/编辑|删除/.test(document.getElementById('lib-grid').innerText), 'KR 案例详情页不应有［编辑］［删除］'); }
     ST.ok(LIB_CASES.some(function(x){ return x.source==='travel'; }) && LIB_CASES.some(function(x){ return x.source!=='travel'; }), 'KR 看到的 = 本医院赴韩案例 + 对接诊所的本地案例');
@@ -1311,7 +1311,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0]; if(!ST.ok(!!lib, 'KR 本地管理项目库是空的')) return; var sp = lib.specs[0];
     var mk = function(base){
       var c = ST.newRes(base); ST.consultToReport(c);
-      var si = {name:lib.name+' · '+sp.label, price:sp.price*3, mgmt:true, localId:lib.id, specId:sp.id, specLabel:sp.label, unit:sp.price, qty:3, interval:2, note:''};
+      var si = {name:lib.name+' · '+sp.label, price:sp.price*3, mgmt:true, localId:lib.id, specId:sp.id, specLabel:sp.label, unit:sp.price, qty:3, copies:3, specTimes:1, firstDay:1, interval:2, note:''};
       ST.ok(coreAddScopeItem(c, si, 'KM1 室长'), '补加管理项目到可选范围失败'); ST.open(c); c.activeCaseTab = 'kr'; c.projectOriginFilter = 'KR';
       ST.ok(/管理项目/.test(projectPickerHtml(c, false)) && projectPickerHtml(c, false).indexOf(lib.name)>-1, '选项目里应有「管理项目」分组');
       ['假体隆鼻','鼻翼缩小'].forEach(function(n){ var p = PROJECT_LIBRARY.filter(function(x){ return x.name===n && x.origin==='KR' && x.hospitalId==='H1'; })[0]; toggleProject(p.id); });
@@ -1334,15 +1334,15 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     ST.ok(typeof krCommonBlock==='undefined' && typeof commonCareOf==='undefined' && typeof krScopeCommons==='undefined', '共同术后管理相关函数已拿掉');
     var lib = krLocalLib(krHospitalIdOfMe()), p = lib.filter(function(x){ return !x.neg && x.specs && x.specs.length>1; })[0] || lib.filter(function(x){ return !x.neg; })[0]; if(!ST.ok(!!p, '没有管理项目')) return;
-    var st = {on:true, sid:p.specs[p.specs.length-1].id, qty:4, interval:3, manual:''}, it = krMgScopeItem(p, st, '备注');
-    ST.ok(it && it.mgmt && it.qty===4 && it.interval===3 && it.unit===p.specs[p.specs.length-1].price && it.price===it.unit*4 && it.name.indexOf(p.name+' · ')===0, '管理项目条目：规格单价 × 次数');
-    var one = krMgScopeItem(p, {sid:p.specs[0].id, qty:1, interval:9, manual:''}, ''); ST.ok(one.interval===0, '1 次不记间隔');
-    var neg = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.neg; })[0]; if(neg){ ST.ok(krMgScopeItem(neg, {sid:neg.specs[0].id, qty:1, interval:1, manual:''}, '')===null && krMgScopeItem(neg, {sid:neg.specs[0].id, qty:2, interval:1, manual:'50000'}, '').price===100000, '面议项目要手填单价'); }
-    var d = recSummaryData([{name:'假体隆鼻', stay:'7天', anesthesia:{label:'局部麻醉'}, postcare:[]}, it], ''); ST.ok(d.mgmt.length===1 && d.mgmt[0].qty===4 && d.rows.length===1, '推荐项目整理单独列管理项目，不算进推荐在韩天数'); ST.ok(/管理项目/.test(recSummaryHtml([it], '')), '只有管理项目也能生成整理');
+    var spL = p.specs[p.specs.length-1], st = {on:true, sid:spL.id, qty:4, first:2, interval:3, manual:''}, it = krMgScopeItem(p, st, '备注');
+    ST.ok(it && it.mgmt && it.copies===4 && it.qty===(spL.times||1)*4 && it.firstDay===2 && it.interval===3 && it.unit===spL.price && it.price===it.unit*4 && it.name.indexOf(p.name+' · ')===0, '管理项目条目：价格 = 规格单价 × 份数，总次数 = 规格次数 × 份数');
+    var one = krMgScopeItem(p, {sid:p.specs[0].id, qty:1, first:0, interval:9, manual:''}, ''); ST.ok(one.interval===(one.qty>1 ? 9 : 0) && one.firstDay===0, '总共只有 1 次不记间隔；第一次使用可填 0（当天）');
+    var neg = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.neg; })[0]; if(neg){ ST.ok(krMgScopeItem(neg, {sid:neg.specs[0].id, qty:1, first:1, interval:1, manual:''}, '')===null && krMgScopeItem(neg, {sid:neg.specs[0].id, qty:2, first:1, interval:1, manual:'50000'}, '').price===100000, '面议项目要手填单价'); }
+    var d = recSummaryData([{name:'假体隆鼻', stay:'7天', anesthesia:{label:'局部麻醉'}, postcare:[]}, it], ''); ST.ok(d.mgmt.length===1 && d.mgmt[0].qty===it.qty && d.rows.length===1, '推荐项目整理单独列管理项目，不算进推荐在韩天数'); ST.ok(/管理项目/.test(recSummaryHtml([it], '')), '只有管理项目也能生成整理');
     var r = krAllCases().filter(function(x){ return x.c.consultStatus==='awaiting_report'; })[0];
     if(r){ krShowCase(r.clinicId, r.id); var c = r.c, oldC = c.consultContentAt; c.consultContentAt = c.consultContentAt || nowFullDt(); KR_SUB = krSubBlank(krRecKey()); KR_SUB.text = '（自测）';
       var h0 = krSubmitBlock(c); ST.ok(/施术项目/.test(h0) && /管理项目/.test(h0) && /disabled/.test(h0), '可选范围有两个分类；什么都没勾时发送置灰');
-      KR_SUB.mg[p.id] = {on:true, sid:p.specs[0].id, qty:2, interval:1, manual:''}; var h1 = krSubmitBlock(c); ST.ok(!/title="请选择院长推荐的项目"/.test(h1), '只勾管理项目也能发送（至少 1 项）'); KR_SUB.tab = 'mgmt'; ST.ok(/次/.test(krSubmitBlock(c)) && /只在韩国做/.test(krSubmitBlock(c)), '管理项目：规格 / 次数 / 间隔，只在韩国做');
+      KR_SUB.mg[p.id] = {on:true, sid:p.specs[0].id, qty:2, first:1, interval:1, manual:''}; var h1 = krSubmitBlock(c); ST.ok(!/title="请选择院长推荐的项目"/.test(h1), '只勾管理项目也能发送（至少 1 项）'); KR_SUB.tab = 'mgmt'; var hh = krSubmitBlock(c); ST.ok(/第一次使用/.test(hh) && /份数：/.test(hh) && /价格：/.test(hh) && />份</.test(hh.replace(/\s/g,'')) === false || /份数：/.test(hh), '管理项目一行：规格｜第一次使用｜间隔｜份数｜价格'); ST.ok(!/只在韩国做<\/span><\/div>/.test(hh), '行里不写「只在韩国做」');
       KR_SUB = krSubBlank(''); c.consultContentAt = oldC; }
     ST.ok(!/共同术后管理/.test(document.body.innerText), '页面上没有「共同术后管理」');
   });
@@ -1842,6 +1842,31 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } else {
       var c0 = CASE_ITEMS.filter(function(x){ return x.consultRequested; })[0]; if(c0){ c0.activeCaseTab = 'consult'; ST.ok(!/客人资料|苦恼说明/.test(caseTabContentHtml(c0)), 'IN 面诊资料 tab 没有客人资料块'); c0.activeCaseTab = 'basic'; }
     }
+  });
+  ST.def('R39a','CMD-1019-10：管理项目数量改「份」（规格次数 × 份数 = 总次数）；1 份「·N次」→ 剩 N / 共 N、每次扣 1，2 份 = 共 2N；一行固定格式（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs.some(function(x){ return x.times===3; }); })[0]; if(!ST.ok(!!lib, 'KR 本地管理项目库里没有「·3次」的规格')) return; var sp = lib.specs.filter(function(x){ return x.times===3; })[0];
+    var hasKr = typeof krMgScopeItem==='function', mkI = function(cp, first, itv){ return {name:lib.name+' · '+sp.label, price:sp.price*cp, mgmt:true, localId:lib.id, specId:sp.id, specLabel:sp.label, unit:sp.price, qty:3*cp, copies:cp, specTimes:3, firstDay:first, interval:itv, note:''}; };
+    var one = hasKr ? krMgScopeItem(lib, {sid:sp.id, qty:1, first:1, interval:5, manual:''}, '') : mkI(1, 1, 5), two = hasKr ? krMgScopeItem(lib, {sid:sp.id, qty:2, first:0, interval:5, manual:''}, '') : mkI(2, 0, 5);
+    ST.ok(one.qty===3 && one.copies===1 && one.price===sp.price && one.interval===5 && one.firstDay===1, '1 份「·3次」= 总 3 次、价格 = 规格单价、带间隔');
+    ST.ok(two.qty===6 && two.copies===2 && two.price===sp.price*2 && two.firstDay===0, '2 份 = 共 6 次、价格 ×2、第一次使用可 0 天');
+    ST.ok(mgmtQtyText(one)==='1 份（共 3 次）' && mgmtQtyText(two)==='2 份（共 6 次）', '显示：1 份（共 3 次）');
+    if(hasKr){
+      var fz = {sid:'',manual:'',qty:'',first:'',interval:''}, html = krMgRowFields(lib, {sid:sp.id, qty:1, first:1, interval:5, manual:''}, fz, ''); ST.ok(/第一次使用/.test(html) && /间隔：/.test(html) && /份数：/.test(html) && /（3次）/.test(html) && /价格：/.test(html) && !/只在韩国做/.test(html), '一行：规格｜第一次使用 N 天后｜间隔 N 天（总次数 > 1 就出现）｜份数 N 份（M次）｜价格');
+      var sp1 = lib.specs.filter(function(x){ return !(x.times>1); })[0]; if(sp1){ ST.ok(!/间隔：/.test(krMgRowFields(lib, {sid:sp1.id, qty:1, first:1, interval:5, manual:''}, fz, '')), '总共只有 1 次时不显示间隔'); ST.ok(/间隔：/.test(krMgRowFields(lib, {sid:sp1.id, qty:2, first:1, interval:5, manual:''}, fz, '')), '2 份单次规格 = 共 2 次，显示间隔'); }
+    }
+    var c = ST.newRes('R39a'); ST.consultToReport(c); ST.ok(coreAddScopeItem(c, one, 'KM1 室长'), '补加到可选范围'); ST.open(c); c.activeCaseTab = 'kr'; c.projectOriginFilter = 'KR';
+    ['假体隆鼻'].forEach(function(n){ var p = PROJECT_LIBRARY.filter(function(x){ return x.name===n && x.origin==='KR' && x.hospitalId==='H1'; })[0]; toggleProject(p.id); }); toggleProject(scopeMgmtPid(one));
+    var rec = c.recommended.filter(function(it){ return it.mgmtPlan; })[0]; ST.ok(rec && rec.qty===3 && rec.copies===1 && rec.specTimes===3 && rec.firstDay===1, 'IN 选项目：快照带总次数 / 份数 / 第一次使用 / 间隔'); ST.ok(/1 份（共 3 次）/.test(projectPickerHtml(c, false)), 'IN 选项目一行写「1 份（共 3 次）」');
+    confirmProjectSelection(); settleProjects(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); ST.scheduleConfirm(c, 8); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); syncSurgerySub(c);
+    var held = c.procedureItems.filter(function(it){ return it.mgmtPlan; })[0]; ST.ok(held && held.heldOver && holdItemLeft(c, held)===3 && held.qty===3, '付清尾款后在韩持有 剩 3 / 共 3');
+    ST.ok(coreMgmtUse(c, held.name, ST.krBy) && holdItemLeft(c, held)===2, '用 1 次剩 2');
+    var h3 = ST.krBy; var pcards = null; try{ pcards = Store.withClinic(CURRENT_CLINIC_ID, function(){ return ''; }); }catch(e){}
+    /* 到院添加（locals 没带次数的旧入口）：按规格补次数 */
+    var c2 = ST.newRes('R39a2'); ST.consultToReport(c2); ST.open(c2); ['假体隆鼻'].forEach(function(n){ var p = PROJECT_LIBRARY.filter(function(x){ return x.name===n && x.origin==='KR' && x.hospitalId==='H1'; })[0]; toggleProject(p.id); }); confirmProjectSelection(); settleProjects(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); ST.scheduleConfirm(c2, 8); ST.krArrive(c2); ST.krJudge(c2, 'ok'); ST.krPay(c2); syncSurgerySub(c2);
+    ST.ok(coreAddOnItem(c2, lib.name, ST.krBy, {local:{name:lib.name, specLabel:sp.label, price:sp.price, projectId:lib.id}}), '到院添加管理项目（旧入口没带次数）'); var ni = c2.procedureItems.filter(function(it){ return it.local || /^lc:/.test(it.projectId||''); })[0]; ST.ok(ni && ni.qty===3, '按规格「·3次」补成总 3 次');
+    ST.ok(coreAddOnItem(c2, lib.name, ST.krBy, {local:{name:lib.name, specLabel:sp.label, price:sp.price*2, projectId:lib.id, qty:6, copies:2, specTimes:3, firstDay:0, interval:5}}), '到院添加 2 份'); var ni2 = c2.procedureItems.filter(function(it){ return (it.local || /^lc:/.test(it.projectId||'')) && it.qty===6; })[0]; ST.ok(!!ni2 && ni2.copies===2, '2 份 = 共 6 次');
+    var mig = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===51; })[0]; if(ST.ok(!!mig, '迁移 51 存在')){ var old = {id:'o51', caseNo:'A51', procedureItems:[{name:lib.name+' · '+sp.label, mgmtPlan:true, qty:2, price:100}], recommended:[], krScope:{items:[{name:'x', mgmt:true, specLabel:sp.label, qty:1}]}}, ns = []; mig.fn(old, {note:function(t0){ ns.push(t0); }}); ST.ok(old.procedureItems[0].qty===6 && old.procedureItems[0].copies===2 && old.krScope.items[0].qty===3, '迁移：旧 qty（当成份数）→ 总次数 = 规格次数 × 份数'); var again = JSON.stringify(old); mig.fn(old, {note:function(){}}); ST.ok(JSON.stringify(old)===again, '迁移幂等'); }
   });
   ST.def('R32b','KM1：KR 面诊 tab 按部位显示（希望预期 / 预算在上）；院长账号也一样（先在 A1 跑 R32a）',function(){
     var me = currentAccount(); if(!ST.ok(me && (me.id==='KM1' || me.id==='KD1'), '要在 KM1 / KD1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R32')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R32a')) return;

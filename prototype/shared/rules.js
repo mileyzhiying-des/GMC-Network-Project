@@ -28,7 +28,7 @@ function qtyInputHtml(o){
   var min = (o.min===undefined ? 0 : o.min), max = (o.max===undefined || o.max===null) ? '' : o.max;
   return '<span class="qty-box"><button type="button" tabindex="-1" onclick="qtyStep(this,-1)">−</button>'+
     '<input type="number" class="qty-in"'+(o.id?' id="'+o.id+'"':'')+' min="'+min+'"'+(max!=='' ? ' max="'+max+'"' : '')+' value="'+o.value+'" onchange="qtyClamp(this);'+(o.onchange||'')+'">'+
-    '<button type="button" tabindex="-1" onclick="qtyStep(this,1)">＋</button></span>';
+    '<button type="button" tabindex="-1" onclick="qtyStep(this,1)">＋</button></span>'+(o.unit ? '<span class="qty-unit" style="font-size:12px;margin-left:4px;">'+o.unit+'</span>' : ''); /* CMD-1019-10：数量单位统一写「份」，放在数字后面 */
 }
 function qtyClamp(el){
   var mn = parseInt(el.min, 10), mx = el.max==='' ? Infinity : parseInt(el.max, 10), v = parseInt(el.value, 10);
@@ -688,12 +688,17 @@ function pcUniqueEntries(c){
   krActiveItems(c).forEach(function(it){ (it.postcare||[]).forEach(function(x, i){ out.push({it:it, x:x, i:i}); }); });
   return out;
 }
+/* CMD-1019-10：管理项目的数量单位 = 「份」，写在数字后面；规格带次数（如「身体 60kj·3次」）时括号里写总次数 = 规格次数 × 份数。
+   项目条目：qty = 总次数（持有 / 扣次数一直读它）、copies = 份数、specTimes = 规格次数、firstDay = 第一次使用（施术日 / 到院日之后几天，0 = 当天）、interval = 间隔天数（总次数 > 1 才有） */
+function mgmtCopies(it){ if(it.copies) return it.copies; var st = it.specTimes||1; return st>1 ? Math.max(1, Math.round((it.qty||1)/st)) : (it.qty||1); }
+function mgmtQtyText(it){ var cp = mgmtCopies(it), tt = it.qty||1; return cp+' 份'+(tt!==cp ? '（共 '+tt+' 次）' : ''); }
+function mgmtScheduleText(it){ var tt = it.qty||1; return (it.firstDay!==undefined && it.firstDay!==null && it.firstDay!=='' ? '，第一次使用：'+(Number(it.firstDay)===0 ? '当天' : it.firstDay+' 天后') : '')+(tt>1 && it.interval ? '，每隔 '+it.interval+' 天' : ''); }
 function pcLineText(x){ return pcLabel(x)+' × '+x.times+(x.times>1 && x.interval ? '（每隔 '+x.interval+' 天）' : '')+(pcDayText(x) ? ' '+pcDayText(x) : '')+'｜'+(x.place==='KR' ? '必须在韩国' : '韩国或印尼都可'); }
 function itemMetaText(it){
   var bits = [];
   if(it.anesthesia) bits.push('麻醉：'+it.anesthesia.label+(it.anesthesia.note?'（'+it.anesthesia.note+'）':''));
   if(it.stay) bits.push('推荐在韩：'+it.stay);
-  if(it.mgmt) bits.push('管理项目：'+(it.qty||1)+' 次'+((it.qty||1)>1 && it.interval ? '，每隔 '+it.interval+' 天' : '')+'（付费，只在韩国做）');
+  if(it.mgmt) bits.push('管理项目：'+mgmtQtyText(it)+mgmtScheduleText(it)+'（付费）');
   (it.postcare||[]).forEach(function(x){ /* 术后管理挂在赴韩项目下显示（CMD-1008-12 C7）：每项标「在韩国 / 在印尼」，如「好莱坞焕肤（在印尼）」 */
     var where = (x.mgmt ? x.mgmt+'：' : '')+(x.place==='KR' ? x.name+'（在韩国，必须）' : (x.innName ? x.name+'（在韩国）或 '+x.innName+'（在印尼）' : x.name+'（在韩国；没有印尼对应项目）'));
     bits.push('术后管理：'+where+' × '+x.times+(x.times>1 && x.interval ? '（每隔 '+x.interval+' 天）' : '')+(pcDayText(x) ? '，'+pcDayText(x) : '')); });
@@ -709,7 +714,7 @@ function recSummaryData(items, overall){
     var pc = (it.postcare||[]).map(pcLineText);
     return {name:it.name, stay:it.stay ? recStayDays(it)+' 天' : '—', anes:an, pc:pc, note:it.note||''};
   });
-  return {days:days, rows:rows, overall:overall||'', mgmt:mg.map(function(it){ return {name:it.name, qty:it.qty||1, interval:it.interval||0, note:it.note||''}; })};
+  return {days:days, rows:rows, overall:overall||'', mgmt:mg.map(function(it){ return {name:it.name, qty:it.qty||1, copies:it.copies, specTimes:it.specTimes, firstDay:it.firstDay, interval:it.interval||0, note:it.note||''}; })};
 }
 function recSummaryHtml(items, overall, opt){
   opt = opt || {};
@@ -719,7 +724,7 @@ function recSummaryHtml(items, overall, opt){
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b style="font-size:13px;">推荐项目整理</b>'+(opt.print ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="printRecSummary()">打印</button>' : '')+'</div>'+
     '<div style="font-size:13px;margin:6px 0;">推荐在韩天数：<b>'+(d.days ? d.days+' 天' : '—')+'</b>（各项目最大值）</div>'+
     d.rows.map(function(r){ return '<div style="font-size:12px;padding:6px 0;border-top:1px solid var(--border2);"><b>'+e(r.name)+'</b>｜推荐在韩 '+e(r.stay)+'｜麻醉：'+e(r.anes)+(r.note ? '｜备注：'+e(r.note) : '')+(r.pc.length ? '<div style="color:var(--slate2);margin-top:2px;">术后管理：'+r.pc.map(e).join('；')+'</div>' : '<div style="color:var(--muted);margin-top:2px;">术后管理：无</div>')+'</div>'; }).join('')+
-    (d.mgmt.length ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding:6px 0;"><b>管理项目</b>（付费，只在韩国做）'+d.mgmt.map(function(m){ return '<div style="color:var(--slate2);margin-top:2px;">'+e(m.name)+' × '+m.qty+' 次'+(m.qty>1 && m.interval ? '（每隔 '+m.interval+' 天）' : '')+(m.note ? '｜'+e(m.note) : '')+'</div>'; }).join('')+'</div>' : '')+
+    (d.mgmt.length ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding:6px 0;"><b>管理项目</b>（付费，只在韩国做）'+d.mgmt.map(function(m){ return '<div style="color:var(--slate2);margin-top:2px;">'+e(m.name)+' × '+mgmtQtyText(m)+mgmtScheduleText(m)+(m.note ? '｜'+e(m.note) : '')+'</div>'; }).join('')+'</div>' : '')+
     (d.overall ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding-top:6px;margin-top:2px;">整体备注：'+e(d.overall)+'</div>' : '')+
     (opt.inNote ? '<div style="font-size:12px;padding-top:6px;margin-top:2px;">IN 室长备注：'+e(opt.inNote)+'</div>' : '')+'</div>';
 }

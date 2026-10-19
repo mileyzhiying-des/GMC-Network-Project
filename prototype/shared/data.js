@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 50; /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 51; /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -3130,7 +3130,7 @@ function serviceBlockHtml(c, scope){
   if(draft){
     var opts = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===draft.projectId?' selected':'')+'>'+p.name+'（'+fmtRp(p.price)+'）</option>'; }).join('');
     adder = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;"><select onchange="setSvcDraft(\'projectId\',this.value)" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;">'+opts+'</select>'+
-      qtyInputHtml({value:draft.qty, min:1, max:LOCAL_QTY_MAX, onchange:"setSvcDraft('qty',this.value)"})+'<span style="font-size:12px;">次</span>'+
+      qtyInputHtml({value:draft.qty, min:1, max:LOCAL_QTY_MAX, unit:'份', onchange:"setSvcDraft('qty',this.value)"})+
       '<button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="confirmSvcAdd()">添加</button><button class="btn-ghost" style="padding:5px 10px;font-size:12px;" onclick="cancelSvcAdd()">取消</button></div>';
   } else adder = '<button class="btn-ghost" style="margin-top:8px;padding:5px 12px;font-size:12px;" onclick="openSvcAdd(\''+scope+'\')">＋ 添加서비스</button>';
   return '<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);"><div style="font-size:12px;font-weight:700;color:var(--slate2);">서비스（赠送）</div>'+
@@ -3156,7 +3156,7 @@ function localRowHtml(c, scope, it){
   return '<div class="sel-row"><div class="sel-line">'+
     '<input type="checkbox" checked title="取消勾选即移除" onchange="removeLocalItem(\''+scope+'\',\''+k+'\')">'+
     '<div class="sel-name"><div>'+itemFullName(it)+tags+'</div>'+(sub ? '<div class="sel-sub">'+sub+'</div>' : '')+(it.neg ? '<div class="sel-sub"><input type="number" min="1" placeholder="面议：填价格（Rp）" value="'+(it.unitPrice>0 ? it.unitPrice : '')+'" onchange="setLocalManualPrice(\''+scope+'\',\''+k+'\',this.value)" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:150px;"></div>' : '')+'</div>'+
-    qtyInputHtml({value:qty, min:1, max:LOCAL_QTY_MAX, onchange:"setLocalItemField('"+scope+"','"+k+"','qty',this.value)"})+
+    qtyInputHtml({value:qty, min:1, max:LOCAL_QTY_MAX, unit:'份', onchange:"setLocalItemField('"+scope+"','"+k+"','qty',this.value)"})+
     (isSvc ? '' : '<span class="sel-disc"><input type="number" min="1" max="100" placeholder="折扣" title="填客人实付比例，80 = 8折；留空 = 不打折" value="'+(pct<100 ? pct : '')+'" onchange="setLocalItemField(\''+scope+'\',\''+k+'\',\'discountPct\',this.value)"><i>%</i>'+(discountText(pct) ? '<b class="sel-dtxt">= '+discountText(pct)+'</b>' : '')+'</span>')+
     '<span class="sel-amt">'+formatCurrency(line,'IDR')+'</span>'+
     '<button type="button" class="sel-note-btn" onclick="toggleItemNote(\''+scope+'\',\''+k+'\')">备注'+(it.itemNote ? ' ✓' : '')+'</button></div>'+
@@ -3936,7 +3936,7 @@ function scopeMgmtRowsHtml(c, selected, q, ccy){
   if(!list.length) return '';
   return '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:12px 0 2px;">管理项目（KR 本地管理项目，付费，只在韩国做）</div>'+list.map(function(si){
     var checked = selected.some(function(it){ return it.projectId===scopeMgmtPid(si); });
-    var meta = si.qty+' 次'+(si.qty>1 && si.interval ? '，每隔 '+si.interval+' 天' : '')+(si.note ? '｜'+si.note : '');
+    var meta = mgmtQtyText(si)+mgmtScheduleText(si)+(si.note ? '｜'+si.note : '');
     return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleProject(\''+scopeMgmtPid(si)+'\')" '+(checked?'checked':'')+' style="margin-top:2px;"><span style="flex-grow:1;">'+si.name+'<div style="font-size:11px;color:var(--slate2);margin-top:2px;">'+meta+'</div></span><span style="color:var(--slate2);">'+displayAmount(si.price, 'KR', ccy)+'</span></label>';
   }).join('');
 }
@@ -4770,6 +4770,8 @@ function coreAddOnItem(c, projectName, by, opt){
   /* 尾款付清后加的项目：先进进程标「待付款」，不立刻生成结算单；KR 点［已付款］时一次生成一张（CMD-1012-15 一·2） */
   var ni = {projectId:p.id, name:p.name, price:svc ? 0 : p.price, currency:currencyOf(p.origin), origin:'KR', categoryId:p.categoryId, done:false, batchId:(pre && !svc ? newId : ''), anesthesia:an};
   if(svc){ ni.service = true; ni.name = p.name+'（서비스）'; } else if(!pre) ni.pendingPay = true;
+  if(opt.local && p.local && !opt.local.qty){ try{ var lp0 = krLocalLib(caseKrHospital(c)).filter(function(x){ return x.id===opt.local.projectId || x.name===opt.local.name; })[0], sp0 = lp0 && lp0.specs.filter(function(x){ return x.label===opt.local.specLabel; })[0]; if(sp0 && sp0.times>1){ opt.local.specTimes = sp0.times; opt.local.qty = sp0.times; opt.local.copies = 1; } }catch(e){} } /* 旧入口（更换 / 调整方案里选的管理项目）没带次数：按规格里的「N次」补 */
+  if(opt.local && p.local){ ni.qty = opt.local.qty || 1; if(opt.local.copies) ni.copies = opt.local.copies; if(opt.local.specTimes) ni.specTimes = opt.local.specTimes; if(opt.local.firstDay!==undefined) ni.firstDay = opt.local.firstDay; if(opt.local.interval) ni.interval = opt.local.interval; ni.specLabel = opt.local.specLabel || ''; } /* CMD-1019-10：到院添加的管理项目：qty = 总次数（规格次数 × 份数）*/
   if(opt.detail){ if(opt.detail.stay) ni.stay = opt.detail.stay; if((opt.detail.postcare||[]).length) ni.postcare = opt.detail.postcare.map(function(x){ return Object.assign({inTimes:0}, x); }); } /* 增加的项目也带推荐在韩 / 所需术后管理 */
   if(pre) ni.preBalanceAdd = true; else ni.krAddOn = true;
   if(deferIt) ni.deferUse = true; else if(ext!==undefined && !svc && !p.local) ni.extendMin = ext; /* 延长多久（分钟），0 = 不延长 */
