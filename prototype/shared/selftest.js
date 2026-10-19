@@ -1911,6 +1911,28 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
   });
 
+  ST.def('R47a','CMD-1019-18：KR 案件页今天到院、客人还没到 → 页头下状态卡 +［客人已到医院］，tab 照常，今日案件卡只留一行；按到院 → 项目 tab Step 1；院长只看；非当天照旧（KM1 / KD1 分页）',function(){
+    if(!ST.ok(isKrAccount(), '要在 KR 分页里跑（KM1 / KD1）')) return;
+    var director = krIsDirector(), r = krAllCases().filter(function(x){ return x.c.stage==='travel' && scheduleState(x.c)==='Confirmed' && !x.c.hasArrived && (!director || x.c.director===currentAccount().name); })[0];
+    if(!r){ ST.ok(true, '（没有待到院的案件，跳过）'); return; }
+    var today = todayStr(), old = null;
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; old = c.krSchedule.confirmedDate; c.krSchedule.confirmedDate = today; return true; });
+    krShowCase(r.clinicId, r.id, {here:true, tab:'items'});
+    var h = document.getElementById('krcase-body').innerHTML, tx = document.getElementById('krcase-body').innerText;
+    ST.ok(/当前状态/.test(tx) && /赴韩施术 · 待到院/.test(tx) && /今天 .*（韩国）· 施术：/.test(tx), '页头下有状态卡：当前状态 + 今天 HH:mm（韩国）· 施术：…');
+    ST.ok(h.indexOf('当前状态') < h.indexOf('krSetCaseTab'), '状态卡在 tab 上面');
+    ST.ok(/krSetCaseTab\('basic'\)/.test(h) && /项目卡|施术项目/.test(tx), 'tab 和项目卡照常展开');
+    if(!director){
+      ST.ok(/客人已到医院/.test(tx) && /修改时间/.test(tx) && /备注/.test(tx) && (h.match(/onclick="krArriveMain\(\)"/g)||[]).length===1, '室长：［客人已到医院］［修改时间］［备注］，到院按钮只有一个');
+      ST.ok(!/已付定金项目/.test(tx) && /【主案件】/.test(tx), '今日案件卡只留一行（没有已付定金项目框）');
+      krArriveMain(); var tx2 = document.getElementById('krcase-body').innerText;
+      ST.ok(!/赴韩施术 · 待到院/.test(tx2) && KR_CASE.tab==='items' && /院长评估结果/.test(tx2), '按到院 → 状态卡消失，项目 tab 进 Step 1 院长评估');
+      Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; coreUnarrive(c, ME_NAME); return true; });
+    } else ST.ok(!/onclick="krArriveMain\(\)"/.test(h) && !/客人已到医院/.test(tx), '院长：状态卡只显示信息，没有按钮');
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.krSchedule.confirmedDate = krDateAdd(3); return true; });
+    krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); ST.ok(!/赴韩施术 · 待到院/.test(document.getElementById('krcase-body').innerText), '非当天：没有状态卡，照旧');
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.krSchedule.confirmedDate = old; return true; });
+  });
   ST.def('R46a','CMD-1019-17：建议在韩天数（施术日=第 0 天，自动带最少天数，不能少，多了要写停留原因）+ 最早回国日 + 项目库默认资料补空腹栏 / 天数 / 停留原因（A1 / KM1 分页）',function(){
     var kr = isKrAccount();
     var thread = {mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}, either = {mgmt:'术后管理', kr:'术后管理', times:3, interval:2, place:'either', start:'12'};
