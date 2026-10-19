@@ -28,7 +28,7 @@ function krAllCases(){
         if(!krCaseVisible(c, hid)) return;
         if(isKrDirectorLike(me) && c.director !== me.name) return; /* 院长只看自己的案件 */
         var badge = caseStatusBadge(c);
-        rows.push({hold:krHoldOpen(c), clinicId:cl.id, clinicName:cl.name, id:c.id, caseNo:c.caseNo, name:c.name, director:c.director||'', krCoordinator:c.krCoordinator||'',
+        rows.push({hold:krHoldOpen(c), clinicId:cl.id, clinicName:cl.name, id:c.id, caseNo:c.caseNo, name:c.name, director:c.director||'', krCoordinator:krCoordText(c.krCoordinator),
           updated:c.updated||'', start:caseStartText(c), fin:krFinanceHtml(c), inOps:caseOperators(c, true).inn.map(function(n){ return staffLabel(n); }).join('、'), subs:(function(){ subCaseNos(c); return subCaseList(c).map(function(rp){ var g = subCaseRows(c, rp); return {dno:rp.dno, place:rp.place, when:(rp.place==='IN' ? (rp.visitDate||rp.date) : rp.date+(rp.time ? ' '+rp.time : '')), text:g.map(function(s){ return s.content; }).join('；'), done:g.every(function(s){ return s.done; }), arrived:g.some(function(s){ return s.arrived; }), doneAt:rp.doneAt||''}; }); })(), noTimeline:!!(c.settlementDone && krActiveItems(c).length && !(c.subItems||[]).length && !isEnded(c)), subToday:(c.subItems||[]).filter(function(s){ return s.date===krToday() && !s.done; }).length, badge:caseStageBadge(c), label:badge[2], stageText:caseStageProcText(c), subItems:caseSubStatusItems(c), phoneMasked:maskPhone(clientPhoneOf(c.name)), c:c});
       });
     });
@@ -686,7 +686,7 @@ function krTabConsult(c){
     if(isContinuationConsult(c)) return out+krJudgeBlock(c); /* 延续既往面诊：先判断有无变动 */
     return out+((c.consultStartedAt || c.consultContentAt) ? krRecordBlock(c) : ''); /* 按［开始面诊］之前不显示「录入面诊」和「发送诊疗方案」（CMD-1012-08 二·2） */
   }
-  if(c.consultStatus==='report_ready') return head+krCardBox('报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(c.reportUploadedBy||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
+  if(c.consultStatus==='report_ready') return head+krCardBox('报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
   return head;
 }
 /* 项目 tab 三张卡（CMD-1013-11 三）：施术项目（赴韩手术 + 当天加的管理 / 서비스，加的标「在韩增加」）/ 术后项目（术后管理）/ 持有项目（在韩持有，没有就不显示）；不再有「KR 可选范围」卡 */
@@ -1059,10 +1059,10 @@ function krRenderCaseDetail(){
   var arriveCards = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krArriveCardsHtml(c) : ''; }); /* CMD-1019-18：今天有到院、客人还没到 → 页头下、tab 上的状态卡 */
   el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+
       '<button class="btn-ghost" onclick="goBack()">← 返回</button>'+
-      '<div style="font-size:18px;font-weight:700;">'+(krClientsAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+' <span style="font-size:13px;font-weight:400;color:var(--muted);">'+krEsc(r.caseNo)+'</span></div>'+
+      '<div style="font-size:18px;font-weight:700;">'+(krClientsAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+'</div>'+
       '<span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.stageText||r.label)+'</span>'+'<span style="flex:1;"></span>'+
       '<button class="btn-primary" onclick="krOpenCaseChat()">💬 对话</button></div>'+
-    '<div class="card" style="padding:12px 20px;display:flex;gap:28px;flex-wrap:wrap;font-size:13px;"><span><span style="color:var(--muted);">来源诊所</span> <b>'+krEsc(r.clinicName)+'</b></span>'+(KR_CASE.tab==='consult' ? '' : '<span><span style="color:var(--muted);">院长</span> <b>'+krEsc(r.director||'—')+'</b></span>')+'<span><span style="color:var(--muted);">KR 室长</span> <b>'+krEsc(r.krCoordinator||'—')+'</b></span></div>'+
+    '<div style="font-size:12px;color:var(--muted);margin:2px 0 0;line-height:1.6;">'+krEsc(r.caseNo)+' · 来源诊所：'+krEsc(r.clinicName)+(KR_CASE.tab==='consult' ? '' : ' · 院长：'+krEsc(r.director||'—'))+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+'</div>'+
     alerts+arriveCards+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap;">'+tabs+'</div>'+
     '<div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>';
 }
@@ -2067,7 +2067,7 @@ function krArriveCards(c){
 function krArriveCardsHtml(c){
   var cards = krArriveCards(c); if(!cards.length) return '';
   var can = krCan(), ks = c.krSchedule || {};
-  return '<div style="display:flex;flex-direction:column;gap:8px;margin:12px 0;">'+cards.map(function(cd){
+  return '<div style="display:flex;flex-direction:column;gap:8px;margin:-6px 0 2px;">'+cards.map(function(cd){
     var main = cd.kind==='main', key = String(cd.key).replace(/'/g,''), line, pill, btns = '';
     if(main){
       var names = (krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); }).map(function(it){ return it.name; }).join('、')) || '—';

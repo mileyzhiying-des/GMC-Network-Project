@@ -666,6 +666,8 @@ function seatSummary(){
 
 /* ---------- KR 端用的共用规则（2026-10-06，KR 端系列 2/5） ---------- */
 /* 手机号遮罩：KR 端所有位置都不显示客人的真实联系方式，只留国家码 → +62 000-****-****（真实联系方式由印尼室长处理） */
+/* KR 室长显示名：去掉旧数据里多余的「 실장」后缀（职称只写一次，如 KM1 室长） */
+function krCoordText(s){ return String(s||'').replace(/\s*실장\s*$/, ''); }
 function maskPhone(p){
   var m = String(p||'').match(/^\s*(\+\d{1,4})/);
   return (m ? m[1] : '+--') + ' 000-****-****';

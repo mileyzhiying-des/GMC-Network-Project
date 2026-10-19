@@ -1911,6 +1911,18 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
   });
 
+  ST.def('R48a','CMD-1019-19：KR 案件页页头——名字下一行灰色小字「Case ID · 来源诊所 · 院长 · KR 室长」（不是卡片），室长职称只写一次，状态卡紧接在下面（KM1 / KD1 分页）',function(){
+    ST.ok(krCoordText('KM1 室长 실장')==='KM1 室长' && krCoordText('KM1 室长')==='KM1 室长', '旧数据「KM1 室长 실장」只留一次职称');
+    var c0 = {krCoordinator:'KM1 室长 실장', hospitalId:'H1'}; syncKrCoordinator(c0); ST.ok(!/실장/.test(c0.krCoordinator), 'syncKrCoordinator 不再加 실장，旧值去掉');
+    if(!isKrAccount()){ return; }
+    var r = krAllCases()[0]; if(!r){ ST.ok(true, '（没有案件，跳过）'); return; }
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.krCoordinator = 'KM1 室长 실장'; return true; });
+    krShowCase(r.clinicId, r.id, {here:true, tab:'basic'}); var body = document.getElementById('krcase-body'), tx = body.innerText, h = body.innerHTML;
+    var line = [].slice.call(body.querySelectorAll('div')).filter(function(d){ return /来源诊所：/.test(d.textContent) && d.children.length===0; })[0];
+    ST.ok(!!line && line.textContent.indexOf(r.caseNo+' · 来源诊所：')===0 && /KR 室长：\S+ 室长$/.test(line.textContent) && !/실장/.test(tx.slice(0, 300)), '名字下一行小字：Case ID · 来源诊所 · 院长 · KR 室长，没有重复职称');
+    ST.ok(!/padding:12px 20px;display:flex;gap:28px/.test(h), '不再是卡片');
+    krSetCaseTab('consult'); var l2 = [].slice.call(document.getElementById('krcase-body').querySelectorAll('div')).filter(function(d){ return /来源诊所：/.test(d.textContent) && d.children.length===0; })[0]; ST.ok(!!l2 && !/ · 院长：/.test(l2.textContent), '面诊 tab 不重复写院长（面诊卡里有）');
+  });
   ST.def('R47a','CMD-1019-18：KR 案件页今天到院、客人还没到 → 页头下状态卡 +［客人已到医院］，tab 照常，今日案件卡只留一行；按到院 → 项目 tab Step 1；院长只看；非当天照旧（KM1 / KD1 分页）',function(){
     if(!ST.ok(isKrAccount(), '要在 KR 分页里跑（KM1 / KD1）')) return;
     var director = krIsDirector(), r = krAllCases().filter(function(x){ return x.c.stage==='travel' && scheduleState(x.c)==='Confirmed' && !x.c.hasArrived && (!director || x.c.director===currentAccount().name); })[0];

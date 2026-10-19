@@ -1852,7 +1852,7 @@ function simulateMissedCall(){
 function inviteKrVideo(name){
   /* 邀请室长视频是临时加开的一次沟通，不改变 consultStatus，但结束后要给该案件附上一份AI转写稿文件 */
   closeInviteKrModal();
-  startCall('talk', CURRENT_CASE_ID, [ME_NAME+'（印尼室长）', name+' 실장（韩国室长）']); /* 室长商谈：直接呼叫上传诊疗方案的KR室长 */
+  startCall('talk', CURRENT_CASE_ID, [ME_NAME+'（印尼室长）', name+'（韩国室长）']); /* 室长商谈：直接呼叫上传诊疗方案的KR室长 */
 }
 
 function endVideoConsult(){
@@ -1941,7 +1941,7 @@ function coreSubmitReport(c, rep, by){
   c.reportReady = true;
   c.consultStatus = 'report_ready';
   c.reportDate = todayStr();
-  c.reportUploadedBy = by + ' 실장';
+  c.reportUploadedBy = by; /* CMD-1019-19：「KM1 室长」本身已有职称，不再加「 실장」 */
   c.reportKo = rep.original;
   c.videoSummary = rep.zh;
   c.consultFiles = c.consultFiles || [];
@@ -6340,7 +6340,7 @@ function pushKrNotif(hid, text, opt){
   return n;
 }
 function krDirName(c){ return (c && c.director) || hospitalDirectorNames(caseKrHospital(c))[0] || 'KD1 院长'; }
-function syncKrCoordinator(c){ var hs = hospitalCoordinators(caseKrHospital(c)); if(hs.length && (!c.krCoordinator || hs.indexOf(c.krCoordinator.split(' ')[0])<0)) c.krCoordinator = hs[0]+' 실장'; }
+function syncKrCoordinator(c){ if(c.krCoordinator) c.krCoordinator = String(c.krCoordinator).replace(/\s*실장\s*$/, ''); /* 旧数据去掉多余的「 실장」 */ var hs = hospitalCoordinators(caseKrHospital(c)); if(hs.length && (!c.krCoordinator || hs.indexOf(c.krCoordinator.split(' ')[0])<0)) c.krCoordinator = hs[0]; }
 function krCoordinatorsOf(c){ return hospitalCoordinators(caseKrHospital(c)).slice(); }
 function allKrCoordinatorNames(){ var out = []; Object.keys(HOSPITAL_DATA).forEach(function(h){ out = out.concat(HOSPITAL_DATA[h].coordinators || []); }); return out; } /* 认操作人用：所有医院的 KR 室长 */
 /* 同事名单（新建对话房选人）：本诊所的 IN 室长 + 对接医院的 KR 室长、院长 */
@@ -6515,7 +6515,7 @@ function memberRowsHtml(){
       if(m.kr.length){
         html += head('韩国室长（全部）') + m.kr.map(function(n){
           var inRoom = c.krInRoom && krAcctId(n)===krEnterRoomName(c); /* 用账号编号比较（成员名「KM1 室长」≠ 「KM1」，J-003） */
-          return row(n+' 실장 · 韩国室长', n, '<span style="font-size:11px;margin-left:6px;color:'+(inRoom?'var(--sage)':'var(--muted)')+';">'+(inRoom?'已进入':'未进入')+'</span>');
+          return row(n+' · 韩国室长', n, '<span style="font-size:11px;margin-left:6px;color:'+(inRoom?'var(--sage)':'var(--muted)')+';">'+(inRoom?'已进入':'未进入')+'</span>');
         }).join('');
       }
       if(m.director) html += head('院长（选定院长，选定后不能更换）') + row(m.director+' · 院长', m.director, mute);
