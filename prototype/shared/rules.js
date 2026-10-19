@@ -704,26 +704,67 @@ function itemMetaText(it){
     bits.push('术后管理：'+where+' × '+x.times+(x.times>1 && x.interval ? '（每隔 '+x.interval+' 天）' : '')+(pcDayText(x) ? '，'+pcDayText(x) : '')); });
   return bits;
 }
+/* ---- CMD-1019-17：建议在韩天数（施术日 = 第 0 天） ----
+   最少天数 = 这个施术「必须在韩国」（place 不是 either）的术后管理里最后一次的第 N 天 + 1；没有 = 1 天。
+   entries 可以是表单行（start）或项目快照里的行（startDay / day）。KR 可以往上加、不能少于最少天数；比最少多要写「停留原因」。 */
+var STAY_REASON_TAGS = ['术后需静养', '不宜搭飞机', '消肿观察', '其他'];
+function stayMinOf(entries){
+  var best = {min:1, why:''};
+  (entries||[]).forEach(function(x){
+    if(!x || x.place==='either') return;
+    var st = x.startDay!==undefined && x.startDay!==null && x.startDay!=='' ? x.startDay : x.start;
+    var days = pcDays({startDay:st, day:x.day, times:x.times, interval:x.interval}); if(!days.length) return;
+    var last = days[days.length-1];
+    if(last+1 > best.min) best = {min:last+1, why:'第 '+last+' 天需在韩国'+(x.mgmt||x.name||'做术后管理')};
+  });
+  return best;
+}
+/* 停留原因 {tags:[], fly:'', note:''} → 文字：术后需静养、7 天内不宜搭飞机、…；其他 + 补充 */
+function stayReasonText(r){
+  if(!r) return ''; var out = [];
+  (r.tags||[]).forEach(function(t){ if(t==='不宜搭飞机') out.push((parseInt(r.fly,10)>0 ? parseInt(r.fly,10)+' 天内' : '')+'不宜搭飞机'); else if(t!=='其他') out.push(t); });
+  var note = String(r.note||'').trim(); if(note) out.push(note);
+  return out.join('、');
+}
+function stayReasonOk(r){ if(!r) return false; var tags = (r.tags||[]).length, note = String(r.note||'').trim(); if((r.tags||[]).indexOf('其他')>-1 && !note) return false; return !!(tags || note); }
+/* 一个施术项目的建议天数信息：days 建议天数、min 最少、why 为什么至少这么多、reason 为什么比最少还多 */
+function itemStayInfo(it){
+  var days = recStayDays(it), mi = stayMinOf(it.postcare), more = days > mi.min;
+  return {days:days, min:mi.min, why:mi.why, more:more, reason:more ? stayReasonText(it.stayReason) : ''};
+}
+/* 整趟：各施术项目的最大值；原因来自最大的那些项目（多个时合并，带项目名）。no 日期时 earliest 为空 */
+function stayPlanOf(items, base){
+  var rows = (items||[]).filter(function(it){ return !it.mgmt && !it.mgmtPlan && !it.service && it.stay; }).map(function(it){ var i = itemStayInfo(it); i.name = it.name; return i; });
+  if(!rows.length) return {days:0, earliest:'', reason:''};
+  var days = rows.reduce(function(m, x){ return Math.max(m, x.days); }, 0), top = rows.filter(function(x){ return x.days===days; });
+  var texts = top.map(function(x){ return x.more ? (x.reason || '') : x.why; }), uniq = texts.filter(function(t, i){ return t && texts.indexOf(t)===i; });
+  var parts = uniq.length<=1 ? uniq : top.map(function(x, i){ return texts[i] ? x.name+'：'+texts[i] : ''; }).filter(Boolean); /* 原因都一样就只写一次，不同才带项目名 */
+  var earliest = '';
+  if(base && days){ var t0 = new Date(base+'T00:00:00'); t0.setDate(t0.getDate()+days); earliest = t0.getFullYear()+'-'+('0'+(t0.getMonth()+1)).slice(-2)+'-'+('0'+t0.getDate()).slice(-2); }
+  return {days:days, earliest:earliest, reason:parts.filter(function(x, i){ return parts.indexOf(x)===i; }).join('；')};
+}
+/* 「建议在韩停留 8 天（最早 2026-11-08 可回国）：第 7 天需在韩国拆线」 */
+function stayLineText(p){ if(!p || !p.days) return ''; return '建议在韩停留 '+p.days+' 天'+(p.earliest ? '（最早 '+p.earliest+' 可回国）' : '')+(p.reason ? '：'+p.reason : ''); }
 /* 推荐项目整理（CMD-1012-02 B7）：根据选中的赴韩项目自动生成——推荐在韩天数 = 各项最大值；逐项「项目｜推荐在韩 N 天｜麻醉 + 备注｜术后管理明细」；整体备注 */
 function recStayDays(it){ var m = String(it.stay||'').match(/(\d+)/); return m ? parseInt(m[1], 10) : 0; }
-function recSummaryData(items, overall){
+function recSummaryData(items, overall, base){
   var mg = items.filter(function(it){ return it.mgmt; }); items = items.filter(function(it){ return !it.mgmt; }); /* 管理项目（KR 本地管理项目）单独列一段，不算推荐在韩天数 */
   var days = items.reduce(function(m, it){ return Math.max(m, recStayDays(it)); }, 0);
   var rows = items.map(function(it){
     var an = it.anesthesia ? anesDisplay(it.anesthesia) : '—';
     var pc = (it.postcare||[]).map(pcLineText);
-    return {name:it.name, stay:it.stay ? recStayDays(it)+' 天' : '—', anes:an, pc:pc, note:it.note||''};
+    return {name:it.name, stay:it.stay ? recStayDays(it)+' 天' : '—', stayWhy:it.stay ? (function(i){ return i.more ? i.reason : i.why; })(itemStayInfo(it)) : '', anes:an, pc:pc, note:it.note||''};
   });
-  return {days:days, rows:rows, overall:overall||'', mgmt:mg.map(function(it){ return {name:it.name, qty:it.qty||1, copies:it.copies, specTimes:it.specTimes, firstDay:it.firstDay, interval:it.interval||0, note:it.note||''}; })};
+  return {days:days, stay:stayPlanOf(items, base), rows:rows, overall:overall||'', mgmt:mg.map(function(it){ return {name:it.name, qty:it.qty||1, copies:it.copies, specTimes:it.specTimes, firstDay:it.firstDay, interval:it.interval||0, note:it.note||''}; })};
 }
 function recSummaryHtml(items, overall, opt){
   opt = opt || {};
-  var d = recSummaryData(items, overall), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var d = recSummaryData(items, overall, opt.base), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   if(!d.rows.length && !d.mgmt.length) return '';
   return '<div class="rec-summary" style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:10px 0;background:#fff;">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b style="font-size:13px;">推荐项目整理</b>'+(opt.print ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="printRecSummary()">打印</button>' : '')+'</div>'+
-    '<div style="font-size:13px;margin:6px 0;">推荐在韩天数：<b>'+(d.days ? d.days+' 天' : '—')+'</b>（各项目最大值）</div>'+
-    d.rows.map(function(r){ return '<div style="font-size:12px;padding:6px 0;border-top:1px solid var(--border2);"><b>'+e(r.name)+'</b>｜推荐在韩 '+e(r.stay)+'｜麻醉：'+e(r.anes)+(r.note ? '｜备注：'+e(r.note) : '')+(r.pc.length ? '<div style="color:var(--slate2);margin-top:2px;">术后管理：'+r.pc.map(e).join('；')+'</div>' : '<div style="color:var(--muted);margin-top:2px;">术后管理：无</div>')+'</div>'; }).join('')+
+    '<div style="font-size:13px;margin:6px 0;">'+(d.stay.days ? '<b>'+e(stayLineText(d.stay))+'</b>' : '推荐在韩天数：<b>—</b>')+' <span style="color:var(--muted);font-size:11px;">（各项目最大值；施术日 = 第 0 天）</span></div>'+
+    d.rows.map(function(r){ return '<div style="font-size:12px;padding:6px 0;border-top:1px solid var(--border2);"><b>'+e(r.name)+'</b>｜推荐在韩 '+e(r.stay)+(r.stayWhy ? '（'+e(r.stayWhy)+'）' : '')+'｜麻醉：'+e(r.anes)+(r.note ? '｜备注：'+e(r.note) : '')+(r.pc.length ? '<div style="color:var(--slate2);margin-top:2px;">术后管理：'+r.pc.map(e).join('；')+'</div>' : '<div style="color:var(--muted);margin-top:2px;">术后管理：无</div>')+'</div>'; }).join('')+
     (d.mgmt.length ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding:6px 0;"><b>管理项目</b>（付费，只在韩国做）'+d.mgmt.map(function(m){ return '<div style="color:var(--slate2);margin-top:2px;">'+e(m.name)+' × '+mgmtQtyText(m)+mgmtScheduleText(m)+(m.note ? '｜'+e(m.note) : '')+'</div>'; }).join('')+'</div>' : '')+
     (d.overall ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding-top:6px;margin-top:2px;">整体备注：'+e(d.overall)+'</div>' : '')+
     (opt.inNote ? '<div style="font-size:12px;padding-top:6px;margin-top:2px;">IN 室长备注：'+e(opt.inNote)+'</div>' : '')+'</div>';

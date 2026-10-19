@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 52; /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 53; /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -4919,7 +4919,7 @@ function coreAddOnEdit(c, idx, patch, by){
   var before = it.name+'（×'+(it.qty||1)+'，'+formatCurrency(it.price,'KRW')+'）', oldName = it.name;
   if(p.name!==it.name){ /* 换了项目：推荐在韩 / 所需术后管理按新项目的默认资料重新带入 */
     it.projectId = p.id; it.name = p.name; it.categoryId = p.categoryId; delete it.stay; delete it.postcare;
-    var df = p.defaults; if(df){ it.stay = df.stay; it.postcare = (df.postcare||[]).map(function(x){ var o = {mgmt:x.mgmt||'', name:x.kr, times:x.times, interval:x.times>1 ? (parseInt(x.interval,10)||1) : 0, place:x.place, startDay:parseInt(x.start,10)||0, innName:'', inTimes:0}; o.day = pcDayText(o); return o; }); }
+    var df = p.defaults; if(df){ it.stay = df.stay; if(df.stayReason) it.stayReason = JSON.parse(JSON.stringify(df.stayReason)); it.postcare = (df.postcare||[]).map(function(x){ var o = {mgmt:x.mgmt||'', name:x.kr, times:x.times, interval:x.times>1 ? (parseInt(x.interval,10)||1) : 0, place:x.place, startDay:parseInt(x.start,10)||0, innName:'', inTimes:0}; o.day = pcDayText(o); return o; }); }
   }
   it.qty = qty; it.price = amount; it.anesthesia = an;
   var cons = c.anesthesiaConsent; if(cons && cons.projects) cons.projects = cons.projects.filter(function(x){ return x.name!==oldName; });
@@ -5080,7 +5080,7 @@ function krProcedureTabMain(c, tabsHtml){
     '</div>';
   var unableBanner = '';
   var unableBtn = '';
-  var recHtml = hasActive ? recSummaryHtml(krActiveItems(c).filter(function(it){ return !(c.krScope && c.krScope.items && c.krScope.items.length) || !(it.krAddOn || it.preBalanceAdd || it.swappedFrom); }).map(function(it){ /* 推荐项目整理保持原诊疗方案：在韩加的（到院加项 / 施术中增加 / 更换）不混进来（CMD-1013-09 四） */ return {name:it.name, stay:it.stay, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), c.krScope && c.krScope.overallNote, {print:false}) : ''; /* 推荐项目整理 + ［打印］给客人（CMD-1012-02 C5）；IN 室长备注一起印出（CMD-1012-05 三·3） */
+  var recHtml = hasActive ? recSummaryHtml(krActiveItems(c).filter(function(it){ return !(c.krScope && c.krScope.items && c.krScope.items.length) || !(it.krAddOn || it.preBalanceAdd || it.swappedFrom); }).map(function(it){ /* 推荐项目整理保持原诊疗方案：在韩加的（到院加项 / 施术中增加 / 更换）不混进来（CMD-1013-09 四） */ return {name:it.name, stay:it.stay, stayReason:it.stayReason, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), c.krScope && c.krScope.overallNote, {print:false, base:(c.krSchedule||{}).confirmedDate||''}) : ''; /* 推荐项目整理 + ［打印］给客人（CMD-1012-02 C5）；IN 室长备注一起印出（CMD-1012-05 三·3） */
   /* CMD-1015-05 六：三张卡——① 小状态 + 施术日期 +［无法协调］/［取消项目］ ② 推荐项目整理（默认折叠） ③ 确认赴韩项目（每个项目完整内容）+ 印尼室长备注（约三行高）+［+ 追加项目］ */
   var recOpen = !!KR_PLAN_REC_OPEN[c.id];
   var recCard = recHtml ? '<div class="card" style="padding:16px 24px;"><div style="display:flex;align-items:center;cursor:pointer;" onclick="toggleKrPlanRec(\''+c.id+'\')"><b style="font-size:14px;flex:1;">推荐项目整理</b><span style="color:var(--muted);">'+(recOpen ? '收起 ▴' : '展开 ▾')+'</span></div>'+(recOpen ? recHtml.replace(/margin:10px 0;/,'margin:10px 0 0;') : '')+'</div>' : '';
@@ -6588,6 +6588,13 @@ function seedDoctorProfiles(){
 }
 seedDoctorProfiles();
 /* 赴韩项目默认资料（KR-SRVC-01）：所需术后管理 / 麻醉 / 推荐在韩时间 / 施术时长；KR 写诊疗方案、更换、补加、加做时自动带入 */
+/* CMD-1019-17：演示默认资料按新规则整理——建议天数不少于最少天数；比最少多的补一个默认停留原因「术后需静养」；睡眠 / 全麻的空腹小时从备注转过来 */
+function stayDefaultsFix(df){
+  var mi = stayMinOf(df.postcare), days = parseInt(df.stay,10)||0;
+  if(days && days < mi.min){ days = mi.min; df.stay = days+'天'; }
+  if(days > mi.min && !df.stayReason) df.stayReason = {tags:['术后需静养'], fly:'', note:''};
+  if(df.anes && df.anes!=='local' && df.anesFast===undefined) df.anesFast = anesFastParse(df.anesNote);
+}
 function seedProjectDefaults(){
   var swell = {mgmt:'术后管理', kr:'术后消肿管理', times:3, interval:2, start:3, place:'either', day:'第3、5、7天'}, thread = {mgmt:'拆线', kr:'拆线', times:1, place:'KR', start:7, day:'第7天'}, check = {mgmt:'术后复诊', kr:'术后复诊检查', times:1, place:'KR', start:2, day:'第2天'};
   var D0 = {
@@ -6602,7 +6609,7 @@ function seedProjectDefaults(){
     '自体脂肪移植（全脸）':{stay:'7天', durMin:150, anes:'sleep', anesNote:'需空腹 6 小时', postcare:[check, swell]},
     '面部拉皮':{stay:'14天', durMin:240, anes:'general', anesNote:'全麻需空腹 8 小时', postcare:[check, thread]}
   };
-  Object.keys(HOSPITAL_DATA).forEach(function(hid){ (HOSPITAL_DATA[hid].projects||[]).forEach(function(p){ var df = D0[p.name]; if(df && !p.defaults) p.defaults = JSON.parse(JSON.stringify(df)); }); });
+  Object.keys(HOSPITAL_DATA).forEach(function(hid){ (HOSPITAL_DATA[hid].projects||[]).forEach(function(p){ var df = D0[p.name]; if(df && !p.defaults){ p.defaults = JSON.parse(JSON.stringify(df)); stayDefaultsFix(p.defaults); } }); });
 }
 seedProjectDefaults();
 /* 演示案件的赴韩项目补上推荐在韩天数 / 麻醉 / 所需术后管理（从医院项目库默认资料带入；推荐项目整理才有内容，CMD-1012-14） */
@@ -6618,7 +6625,7 @@ function gmcFillKrMeta(cases){
       var p = (h.projects || []).filter(function(x){ return x.name===it.name && x.defaults; })[0], df = p && p.defaults;
       if(!df) Object.keys(HOSPITAL_DATA).some(function(k){ var q = (HOSPITAL_DATA[k].projects || []).filter(function(x){ return x.name===it.name && x.defaults; })[0]; if(q){ df = q.defaults; return true; } return false; }); /* 本医院项目库里没有这个项目（演示数据）：借用别家医院同名项目的默认资料 */
       if(!df) return;
-      it.stay = df.stay; it.anesthesia = {type:df.anes, label:ANES[df.anes], note:df.anesNote || '', fast:df.anes==='local' ? '' : anesFastParse(df.anesNote)};
+      it.stay = df.stay; if(df.stayReason) it.stayReason = JSON.parse(JSON.stringify(df.stayReason)); it.anesthesia = {type:df.anes, label:ANES[df.anes], note:df.anesNote || '', fast:df.anes==='local' ? '' : anesFastParse(df.anesNote)};
       it.postcare = (df.postcare || []).map(function(x){
         var o = {mgmt:x.mgmt || '', name:x.kr, times:x.times, interval:x.times>1 ? (parseInt(x.interval,10) || 1) : 0, place:x.place, startDay:parseInt(x.start,10) || 0, innName:'', inTimes:0};
         o.day = pcDayText(o); return o;
@@ -7055,11 +7062,11 @@ function printKrPlan(){
   var lines = function(t){ return String(t||'').split('\n').filter(function(x){ return x.trim(); }); };
   /* 1 行程概要 */
   var local = ks.confirmedDate ? krToClinic(ks.confirmedDate, ks.confirmedTime||'00:00') : null;
-  var stay = surg.reduce(function(m, it){ var n = parseInt((String(it.stay||'').match(/\d+/)||[0])[0], 10) || 0; return Math.max(m, n); }, 0);
+  var stayP = stayPlanOf(surg, ks.confirmedDate||''); /* CMD-1019-17：建议在韩天数 = 各施术项目最大值，最早回国日 = 施术日 + 天数，写原因 */
   var sum = [];
   sum.push(['到院日期时间', ks.confirmedDate ? e(ks.confirmedDate+' '+(ks.confirmedTime||'')+'（韩国时间）')+(local && ks.confirmedTime ? ' ／ '+e(local.date+' '+local.time)+'（印尼时间）' : '') : '（施术日期还没确认）']);
   sum.push(['医院', e(en.name)]); sum.push(['到院地址', e(ks.address || en.address)]);
-  sum.push(['建议在韩天数', stay ? stay+' 天'+(ks.confirmedDate ? '，最早可回国日期：'+e(printPlanDate(ks.confirmedDate, stay)) : '') : '—']);
+  sum.push(['建议在韩停留', stayP.days ? e(stayLineText(stayP).replace(/^建议在韩停留 /, '')) : '—']);
   /* 2 施术项目：施术写麻醉方式，管理项目写 N 份（共 M 次） */
   var itemRows = surg.map(function(it){ return '<tr><td>'+e(it.name)+'</td><td>'+(it.anesthesia ? '麻醉：'+e(it.anesthesia.label||'')+(anesFastOf(it.anesthesia) ? '（需空腹 '+anesFastOf(it.anesthesia)+' 小时）' : '') : '')+'</td></tr>'; }).concat(mg.map(function(it){ return '<tr><td>'+e(it.name)+'（管理项目）</td><td>'+e(mgmtQtyText(it))+'</td></tr>'; })).join('');
   /* 3 日程表 */

@@ -1911,6 +1911,40 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
   });
 
+  ST.def('R46a','CMD-1019-17：建议在韩天数（施术日=第 0 天，自动带最少天数，不能少，多了要写停留原因）+ 最早回国日 + 项目库默认资料补空腹栏 / 天数 / 停留原因（A1 / KM1 分页）',function(){
+    var kr = isKrAccount();
+    var thread = {mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}, either = {mgmt:'术后管理', kr:'术后管理', times:3, interval:2, place:'either', start:'12'};
+    ST.ok(stayMinOf([thread]).min===8 && /第 7 天需在韩国拆线/.test(stayMinOf([thread]).why), '必须在韩国的最后一项第 7 天拆线 → 最少 8 天');
+    ST.ok(stayMinOf([thread, either]).min===8 && stayMinOf([either]).min===1 && stayMinOf([]).min===1, '「韩国或印尼都可」不算；没有必须在韩国的 = 1 天');
+    ST.ok(stayMinOf([{place:'KR', times:3, interval:2, startDay:3, name:'术后管理'}]).min===8, '多次按间隔取最后一次（第 3、5、7 天 → 8 天）');
+    ST.ok(stayReasonText({tags:['术后需静养','不宜搭飞机'], fly:'7', note:'观察'})==='术后需静养、7 天内不宜搭飞机、观察' && !stayReasonOk({tags:['其他'], note:''}) && stayReasonOk({tags:['其他'], note:'x'}) && !stayReasonOk({tags:[], note:''}), '停留原因文字 / 「其他」要写补充');
+    var its = [{name:'A', stay:'8天', postcare:[{place:'KR', times:1, startDay:7, name:'拆线', mgmt:'拆线'}]}, {name:'B', stay:'10天', stayReason:{tags:['术后需静养']}, postcare:[{place:'KR', times:1, startDay:3, name:'拆线', mgmt:'拆线'}]}];
+    var p1 = stayPlanOf(its, '2026-11-01'); ST.ok(p1.days===10 && p1.earliest==='2026-11-11' && /术后需静养/.test(p1.reason) && /^建议在韩停留 10 天（最早 2026-11-11 可回国）：术后需静养/.test(stayLineText(p1)), '整趟取最大值，最早回国日 = 施术日 + 天数，原因来自最大的那项');
+    var p2 = stayPlanOf([its[0]], '2026-11-01'); ST.ok(p2.days===8 && p2.earliest==='2026-11-09' && /第 7 天需在韩国拆线/.test(stayLineText(p2)), '等于最少天数时写「第 7 天需在韩国拆线」');
+    var mig = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===53; })[0]; ST.ok(!!mig, '迁移 53 存在');
+    var notes = [], old = {caseNo:'M1', procedureItems:[{name:'x', stay:'5天', postcare:[{place:'KR', times:1, startDay:7, name:'拆线'}]}, {name:'y', stay:'12天', postcare:[{place:'KR', times:1, startDay:7}]}]}; mig.fn(old, {note:function(t){ notes.push(t); }});
+    ST.ok(old.procedureItems[0].stay==='8天' && old.procedureItems[1].stay==='12天' && notes.length===1 && /5 天 → 8 天/.test(notes[0]), '旧案件天数少于最少 → 提到最少并记迁移备注；多的不动');
+    if(!kr){
+      var c = ST.toConfirmed('R46a'); ST.open(c); var ks = c.krSchedule; krActiveItems(c).forEach(function(it, k){ it.stay = '8天'; it.postcare = [{place:'KR', times:1, startDay:7, name:'拆线', mgmt:'拆线'}]; if(k===0) it.stayReason = undefined; });
+      var plan = stayPlanOf(krActiveItems(c), ks.confirmedDate); ST.ok(plan.days===8 && plan.earliest===printPlanDate(ks.confirmedDate, 8), 'IN 算出最早回国日');
+      var w = window.open, cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ printKrPlan(); } finally { window.open = w; }
+      ST.ok(cap.indexOf('建议在韩停留')>-1 && cap.indexOf('8 天（最早 '+plan.earliest+' 可回国）')>-1 && /第 7 天需在韩国拆线/.test(cap), '打印行程概要：建议在韩停留 8 天（最早 X 可回国）：原因');
+      ST.ok(/建议在韩停留 8 天（最早 .* 可回国）：第 7 天需在韩国拆线/.test(recSummaryHtml(krActiveItems(c), '', {base:ks.confirmedDate}).replace(/<[^>]+>/g,'')), '推荐项目整理也写同样一行');
+    } else {
+      var nm = '__t46', d = krDet(nm); d.pc = [{mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}]; d.stay = ''; d.stayTouched = false; d.stayReason = {tags:[], fly:'', note:''};
+      var s0 = krStayCommit(nm, 'T'); ST.ok(!s0.err && s0.stay==='8天' && !s0.stayReason, '没填 = 自动带最少 8 天，不用写原因');
+      d.stay = '5'; d.stayTouched = true; var s1 = krStayCommit(nm, 'T'); ST.ok(/不能少于 8 天/.test(s1.err||'') && /第 7 天需在韩国拆线，至少 8 天/.test(s1.err||''), '填 5 被挡并写原因');
+      d.pc = [{mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'3'}]; d.stay = '8'; var s2 = krStayCommit(nm, 'T'); ST.ok(/请填写停留原因/.test(s2.err||''), '第 3 天拆线、天数填 8 → 必须写停留原因');
+      d.stayReason = {tags:['其他'], fly:'', note:''}; ST.ok(/停留原因/.test(krStayCommit(nm, 'T').err||''), '只选「其他」要写文字');
+      d.stayReason = {tags:['术后需静养','不宜搭飞机'], fly:'7', note:''}; var s3 = krStayCommit(nm, 'T'); ST.ok(!s3.err && s3.stay==='8天' && stayReasonText(s3.stayReason)==='术后需静养、7 天内不宜搭飞机', '写了原因就能提交');
+      var hh = krStayBlockHtml(nm, ''); ST.ok(/停留原因/.test(hh) && /不宜搭飞机/.test(hh) && /最少 <b>4<\/b> 天/.test(hh), '表单：多于最少天数时出现停留原因（快速选项 + 文字）');
+      krpOpen('new'); KRP.draft.defaults.anes = 'sleep'; var eh = krpEditor(); ST.ok(/需空腹 <input/.test(eh) && /建议在韩天数/.test(eh), '项目库默认资料有「需空腹（小时）」和「建议在韩天数」');
+      KRP.draft.defaults.anes = 'local'; ST.ok(!/需空腹 <input/.test(krpEditor()), '局麻没有空腹栏');
+      KRP.draft.defaults.postcare = [{mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}]; KRP.draft.defaults.stay = '5天'; ST.ok(/不能少于 8 天/.test(krpStayHtml(KRP.draft.defaults, '')), '默认资料天数少于最少 → 红字');
+      KRP.draft.defaults.stay = '9天'; ST.ok(/停留原因/.test(krpStayHtml(KRP.draft.defaults, '')), '默认资料天数多于最少 → 要写停留原因'); krpClose && krpClose();
+      var dd = krDefaultsDetail('假体隆鼻'); ST.ok(dd && 'stayReason' in dd && 'stayTouched' in dd, '默认资料带出时带上停留原因');
+    }
+  });
   ST.def('R45a','CMD-1019-16：施术前提醒发完卡片消失；施术日期发过不再［再发一次］；发过后 KR 改时间 → 红字 + ［已电话通知］（备注、Timeline、待办），没发过照旧发送；提醒发过后改时间同样走电话（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.toConfirmed('R45a'); ST.open(c); c.activeCaseTab = 'kr'; var ks = c.krSchedule, has = function(){ return inTodoItems().filter(function(i){ return i.no===c.caseNo && i.kind==='relay'; })[0]; };
@@ -1945,7 +1979,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/1　行程概要/.test(h) && /2　施术项目/.test(h) && /3　日程表/.test(h) && /4　术前准备/.test(h) && /5　日程确认与变动/.test(h) && /6　备注/.test(h), '六段都在');
     ST.ok(!/院长面诊内容|推荐项目整理|印尼室长备注/.test(h), '拿掉院长面诊内容和推荐项目整理');
     ST.ok(!/₩|Rp|¥|金额|定金|尾款/.test(h), '不写金额');
-    ST.ok(h.indexOf(ks.confirmedDate+' '+ks.confirmedTime+'（韩国时间）')>-1 && /印尼时间/.test(h) && h.indexOf(hospitalEn(c.hospitalId||'H1').name)>-1 && h.indexOf(hospitalEn(c.hospitalId||'H1').address)>-1 && /最早可回国日期/.test(h), '行程概要：韩 / 印时间、医院英文名、地址（栏空 = 英文地址）、建议在韩天数 + 最早回国日');
+    ST.ok(h.indexOf(ks.confirmedDate+' '+ks.confirmedTime+'（韩国时间）')>-1 && /印尼时间/.test(h) && h.indexOf(hospitalEn(c.hospitalId||'H1').name)>-1 && h.indexOf(hospitalEn(c.hospitalId||'H1').address)>-1 && /建议在韩停留/.test(h) && /最早 .* 可回国/.test(h), '行程概要：韩 / 印时间、医院英文名、地址（栏空 = 英文地址）、建议在韩天数 + 最早回国日');
     ST.ok(/麻醉：睡眠麻醉（需空腹 6 小时）/.test(txt) && /施术前 6 小时内禁止食用任何食物和饮品/.test(txt), '施术项目写麻醉方式；术前准备写空腹小时数');
     ST.ok(/携带护照（有效至/.test(txt) && !/P9999999/.test(h), '携带护照提醒（不印护照号）');
     cl.passport.expiry = '2021-01-01'; cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ printKrPlan(); } finally { window.open = w; } ST.ok(/color:#c00[^>]*>⚠ 携带护照/.test(cap), '护照已过期 / 施术前到期 → 标红提醒');

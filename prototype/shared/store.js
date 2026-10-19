@@ -338,6 +338,15 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:53, fn:function(c, ctx){ /* CMD-1019-17：建议在韩天数不能少于最少天数（必须在韩国的最后一项术后管理第 N 天 + 1，施术日 = 第 0 天）。旧案件天数不够的 → 自动提到最少天数并记进迁移备注（比最少多但没写停留原因的不改，显示时就不写原因） */
+      var fixed = [], fix = function(it){
+        if(!it || !it.stay || it.mgmt || it.mgmtPlan || it.service) return;
+        var days = recStayDays(it), mi = stayMinOf(it.postcare);
+        if(days && days < mi.min){ fixed.push(it.name+'：'+days+' 天 → '+mi.min+' 天'); it.stay = mi.min+'天'; }
+      };
+      ['recommended','procedureItems'].forEach(function(k){ (c[k]||[]).forEach(fix); }); ((c.krScope||{}).items||[]).forEach(fix);
+      if(fixed.length) ctx.note('案件 '+(c.caseNo||'')+'：建议在韩天数少于最少天数，已提到最少天数（'+fixed.join('；')+'）');
+    }},
     {to:52, fn:function(c, ctx){ /* CMD-1019-14：麻醉新增「需空腹（小时）」an.fast；睡眠 / 全麻的旧项目从备注「空腹 N 小时」转过来，局麻清空 */
       var n0 = 0, fix = function(it){ var an = it && it.anesthesia; if(!an || an.fast!==undefined) return; an.fast = (an.type && an.type!=='local') ? anesFastParse(an.note) : ''; if(an.fast!=='') n0++; };
       ['recommended','procedureItems'].forEach(function(k){ (c[k]||[]).forEach(fix); }); ((c.krScope||{}).items||[]).forEach(fix);
