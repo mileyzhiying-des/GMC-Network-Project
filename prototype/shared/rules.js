@@ -290,19 +290,38 @@ function viewerTextFilter(x){
   var s = String(x==null ? '' : x), kr = (typeof isKrAccount==='function' && isKrAccount());
   if(kr){
     if(/转本地置换|置换额度/.test(s)) s = '定金已转本地置换';
-    s = s.replace(/客人已缴面诊费/g,'客人已开始面诊').replace(/面诊费已免除/g,'面诊已开始').replace(/完成面诊费支付/g,'开始面诊').replace(/免除面诊费（原因：[^）]*）/g,'面诊已开始（免费）').replace(/免除面诊费/g,'面诊已开始（免费）').replace(/面诊费/g,'费用');
+    s = s.replace(/客人已缴面诊费/g,'客人已开始面诊').replace(/面诊费已免除/g,'面诊已开始').replace(/完成面诊费支付|面诊已确认并收款/g,'面诊已确认（已收款）').replace(/免除面诊费（原因：[^）]*）/g,'面诊已开始（免费）').replace(/免除面诊费/g,'面诊已开始（免费）').replace(/面诊费/g,'费用');
     s = s.replace(/Rp\.?\s?[\d.,]+/g,'').replace(/[\d.,]+\s?印尼盾/g,'');
   } else if(typeof isKrAccount==='function'){
     if(/在韩加项|在韩增加|在韩加做|韩国加做/.test(s)) s = s.replace(/[，,]\s*(合计\s*)?₩\s?[\d,]+/g,'').replace(/（金额\s*₩\s?[\d,]+[，,]?/g,'（').replace(/₩\s?[\d,]+/g,'');
   }
   return s;
 }
-/* CMD-1019-20：画面上不叫「主案件 / 子案件 / -1」，叫「第 N 次到院」（施术当天 = 第 1 次，-1 = 第 2 次…）；存档里的编号和资料结构名称不动 */
-function visitOrdNum(dno){ var m = /-(\d+)$/.exec(String(dno||'')); return m ? parseInt(m[1], 10)+1 : 1; }
-function visitOrdText(dno){ return '第 '+visitOrdNum(dno)+' 次到院'; }
-function visitWords(t){ return String(t==null ? '' : t).replace(/A\d{6}-(\d+)/g, function(m, n){ return '第 '+(parseInt(n, 10)+1)+' 次到院'; }); }
-function tzRender(t){
-  return viewerTextFilter(visitWords(String(t==null ? '' : t)).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）') : '—'; })
+/* CMD-1019-21：到院块不编号，用「日期（星期）时间 · 这次做什么」；今天写「今天 11:00」。存档里的子编号（A000001-1）和资料结构不动 */
+function visitOrdNum(dno){ var m = /-(\d+)$/.exec(String(dno||'')); return m ? parseInt(m[1], 10)+1 : 1; } /* 内部排序用，不再显示 */
+/* 购买后显示项目名：拿掉规格里的「·N次」（次数已经写在「次数」栏）；购买前（诊疗方案 / 补加 / 结算单选择）照旧 */
+function buyName(n){ return String(n==null ? '' : n).replace(/\s*[·・]\s*\d+\s*次(?=$|[\s（(×,，、；）)])/g, ''); }
+function visitWeekday(d){ var x = new Date(d+'T00:00:00'); return isNaN(x) ? '' : ['周日','周一','周二','周三','周四','周五','周六'][x.getDay()]; }
+function visitWhenLabel(date, time, today){
+  var d = date || ''; if(!d) return time || '';
+  if(d===today) return '今天'+(time ? ' '+time : '');
+  return d.slice(5).replace('-', '/')+'（'+visitWeekday(d).replace('周', '')+'）'+(time || '');
+}
+function visitOrdText(dno, c){ /* 兼容旧调用：有案件就写日期，没有就写「到院」 */
+  var rep = c && dno ? subCaseList(c).filter(function(r){ return r.dno===dno; })[0] : null;
+  return rep ? '到院（'+String(rep.date||'').slice(5).replace('-', '/')+'）' : '到院';
+}
+function visitWords(t){
+  return String(t==null ? '' : t).replace(/(A\d{6})-(\d+)/g, function(m, no, n){
+    var pool = (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).slice(); try{ if(typeof isKrAccount==='function' && isKrAccount() && typeof krAllCases==='function') krAllCases().forEach(function(r){ pool.push(r.c); }); }catch(e){}
+    var c = pool.filter(function(x){ return x && x.caseNo===no; })[0], dno = no+'-'+parseInt(n, 10);
+    if(c) try{ subCaseNos(c); }catch(e){}
+    var rep = c ? subCaseList(c).filter(function(r){ return r.dno===dno; })[0] : null;
+    return rep && rep.date ? '到院（'+rep.date.slice(5).replace('-', '/')+'）' : '到院';
+  });
+}
+function tzRender(t, noZone){
+  return viewerTextFilter(visitWords(String(t==null ? '' : t)).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(noZone ? '' : (typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）')) : '—'; })
     .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; }));
 }
 /* 当地钟点（日期 + HH:mm，某时区的墙上时间）→ UTC 字符串（KR 室长输入的预计出报告时间等） */
@@ -739,21 +758,31 @@ function itemStayInfo(it){
   return {days:days, min:mi.min, why:mi.why, more:more, reason:more ? stayReasonText(it.stayReason) : ''};
 }
 /* 整趟：各施术项目的最大值；原因来自最大的那些项目（多个时合并，带项目名）。no 日期时 earliest 为空 */
-function stayPlanOf(items, base){
-  var rows = (items||[]).filter(function(it){ return !it.mgmt && !it.mgmtPlan && !it.service && it.stay; }).map(function(it){ var i = itemStayInfo(it); i.name = it.name; return i; });
+function ymdAdd(ds, n){ var t = new Date(ds+'T00:00:00'); t.setDate(t.getDate()+n); return t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2); }
+function ymdDiff(a, b){ return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000); }
+/* CMD-1019-21 三：每个施术从「它自己的施术日」算起（dateOf(it) → 日期，没有就用 base）；最早可回国日 = 各施术「施术日 + 建议天数」里最晚的一个；
+   停留天数 = 最早可回国日 − 最早的施术日（只有一个施术日时和原来一样 = 各项目最大值）；原因取决定最早回国日的那些项目 */
+function stayPlanOf(items, base, dateOf){
+  var rows = (items||[]).filter(function(it){ return !it.mgmt && !it.mgmtPlan && !it.service && it.stay; }).map(function(it){ var i = itemStayInfo(it); i.name = it.name; i.date = (dateOf ? dateOf(it) : '') || base || ''; return i; });
   if(!rows.length) return {days:0, earliest:'', reason:''};
-  var days = rows.reduce(function(m, x){ return Math.max(m, x.days); }, 0), top = rows.filter(function(x){ return x.days===days; });
+  var dated = rows.every(function(x){ return x.date; });
+  var key = function(x){ return dated ? ymdAdd(x.date, x.days) : ''; };
+  var top, days, earliest = '';
+  if(dated){
+    earliest = rows.reduce(function(m, x){ var k = key(x); return k > m ? k : m; }, '');
+    top = rows.filter(function(x){ return key(x)===earliest; });
+    var first = rows.reduce(function(m, x){ return x.date < m ? x.date : m; }, rows[0].date);
+    days = ymdDiff(first, earliest);
+  } else { days = rows.reduce(function(m, x){ return Math.max(m, x.days); }, 0); top = rows.filter(function(x){ return x.days===days; }); }
   var texts = top.map(function(x){ return x.more ? (x.reason || '') : x.why; }), uniq = texts.filter(function(t, i){ return t && texts.indexOf(t)===i; });
   var parts = uniq.length<=1 ? uniq : top.map(function(x, i){ return texts[i] ? x.name+'：'+texts[i] : ''; }).filter(Boolean); /* 原因都一样就只写一次，不同才带项目名 */
-  var earliest = '';
-  if(base && days){ var t0 = new Date(base+'T00:00:00'); t0.setDate(t0.getDate()+days); earliest = t0.getFullYear()+'-'+('0'+(t0.getMonth()+1)).slice(-2)+'-'+('0'+t0.getDate()).slice(-2); }
   return {days:days, earliest:earliest, reason:parts.filter(function(x, i){ return parts.indexOf(x)===i; }).join('；')};
 }
 /* 「建议在韩停留 8 天（最早 2026-11-08 可回国）：第 7 天需在韩国拆线」 */
 function stayLineText(p){ if(!p || !p.days) return ''; return '建议在韩停留 '+p.days+' 天'+(p.earliest ? '（最早 '+p.earliest+' 可回国）' : '')+(p.reason ? '：'+p.reason : ''); }
 /* 推荐项目整理（CMD-1012-02 B7）：根据选中的赴韩项目自动生成——推荐在韩天数 = 各项最大值；逐项「项目｜推荐在韩 N 天｜麻醉 + 备注｜术后管理明细」；整体备注 */
 function recStayDays(it){ var m = String(it.stay||'').match(/(\d+)/); return m ? parseInt(m[1], 10) : 0; }
-function recSummaryData(items, overall, base){
+function recSummaryData(items, overall, base, dateOf){
   var mg = items.filter(function(it){ return it.mgmt; }); items = items.filter(function(it){ return !it.mgmt; }); /* 管理项目（KR 本地管理项目）单独列一段，不算推荐在韩天数 */
   var days = items.reduce(function(m, it){ return Math.max(m, recStayDays(it)); }, 0);
   var rows = items.map(function(it){
@@ -761,11 +790,11 @@ function recSummaryData(items, overall, base){
     var pc = (it.postcare||[]).map(pcLineText);
     return {name:it.name, stay:it.stay ? recStayDays(it)+' 天' : '—', stayWhy:it.stay ? (function(i){ return i.more ? i.reason : i.why; })(itemStayInfo(it)) : '', anes:an, pc:pc, note:it.note||''};
   });
-  return {days:days, stay:stayPlanOf(items, base), rows:rows, overall:overall||'', mgmt:mg.map(function(it){ return {name:it.name, qty:it.qty||1, copies:it.copies, specTimes:it.specTimes, firstDay:it.firstDay, interval:it.interval||0, note:it.note||''}; })};
+  return {days:days, stay:stayPlanOf(items, base, dateOf), rows:rows, overall:overall||'', mgmt:mg.map(function(it){ return {name:it.name, qty:it.qty||1, copies:it.copies, specTimes:it.specTimes, firstDay:it.firstDay, interval:it.interval||0, note:it.note||''}; })};
 }
 function recSummaryHtml(items, overall, opt){
   opt = opt || {};
-  var d = recSummaryData(items, overall, opt.base), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var d = recSummaryData(items, overall, opt.base, opt.dateOf), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   if(!d.rows.length && !d.mgmt.length) return '';
   return '<div class="rec-summary" style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:10px 0;background:#fff;">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b style="font-size:13px;">推荐项目整理</b>'+(opt.print ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="printRecSummary()">打印</button>' : '')+'</div>'+

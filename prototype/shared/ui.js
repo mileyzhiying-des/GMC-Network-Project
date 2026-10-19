@@ -53,10 +53,10 @@ function intakeLeaveOk(){
   return true;
 }
 function receptionBeatTick(){ var c = currentReceptionCase(); if(c) writeReceptionBeat(c); }
-function receptionLeaveNow(){ /* 关分页 / 刷新 / 离开页面：尽力当场退回待访问（做不到时由心跳过期兜底） */
+function receptionLeaveNow(){ /* 关分页 / 刷新 / 离开页面：不再当场退回（刷新、开发服务器热更新也会触发离开，当场退回会误伤）；
+  改成把心跳设成「约 20 秒后过期」，真关掉了由任意分页的扫描退回，刷新回来的页面马上写新心跳就保住（CMD-1019-21 五）*/
   var c = currentReceptionCase(); if(!c) return;
-  revertIntakeToWaiting(c, '接待未完成，退回待访问', '系统'); clearReceptionBeat(c);
-  try{ Store.save(); }catch(e){}
+  try{ var b = readReceptionBeats(); b[CURRENT_CLINIC_ID+':'+c.id] = Date.now() - RECEPTION_BEAT_TTL + RECEPTION_LEAVE_GRACE; localStorage.setItem(RECEPTION_BEAT_KEY, JSON.stringify(b)); }catch(e){}
 }
 
 function nav(id){
@@ -1132,7 +1132,7 @@ function renderCaseRows(){
       '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartText(c)+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
     var subHtml = open ? subs.map(function(rep){
       var grp = subCaseRows(c, rep), allDone = grp.every(function(s){ return s.done; });
-      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+visitOrdText(rep.dno)+' · '+String(rep.date||'').slice(5).replace('-','/')+' <span style="color:var(--muted);font-size:10px;">'+rep.dno+'</span></span><span></span><span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">术后管理</span></span><span style="font-size:12px;">'+(rep.place==='IN' ? '印尼' : '韩国')+'：'+grp.map(function(s){ return s.content; }).join('；')+' · '+(allDone ? '已完成' : (grp.some(function(s){ return s.arrived; }) ? '已到店' : '待到店'))+'</span><span></span><span></span><span></span><span></span><span style="font-size:12px;color:var(--muted);">'+(rep.place==='IN' ? (rep.visitDate||rep.date) : rep.date+(rep.time ? ' '+rep.time : ''))+'</span><span style="font-size:12px;color:var(--muted);">'+(rep.doneAt ? fmtUtc(rep.doneAt) : '')+'</span></div>';
+      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+'到院'+' · '+String(rep.date||'').slice(5).replace('-','/')+' <span style="color:var(--muted);font-size:10px;">'+rep.dno+'</span></span><span></span><span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">术后管理</span></span><span style="font-size:12px;">'+(rep.place==='IN' ? '印尼' : '韩国')+'：'+grp.map(function(s){ return s.content; }).join('；')+' · '+(allDone ? '已完成' : (grp.some(function(s){ return s.arrived; }) ? '已到店' : '待到店'))+'</span><span></span><span></span><span></span><span></span><span style="font-size:12px;color:var(--muted);">'+(rep.place==='IN' ? (rep.visitDate||rep.date) : rep.date+(rep.time ? ' '+rep.time : ''))+'</span><span style="font-size:12px;color:var(--muted);">'+(rep.doneAt ? fmtUtc(rep.doneAt) : '')+'</span></div>';
     }).join('') : '';
     return main+subHtml;
   }).join('');
@@ -1604,7 +1604,7 @@ function renderRefundService(){
   var inp = 'padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;';
   var rows = refundableBatches(c.name).map(function(x, i){
     var b = x.b, cur = b.currency || 'IDR', remain = b.bought-b.used, pct = (b.discountPct===undefined || b.discountPct===null) ? 100 : b.discountPct;
-    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:8px;"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" class="rs-cb" data-i="'+i+'" style="margin-top:3px;"><span style="flex:1;font-size:13px;"><b>'+x.h.itemName+'</b>'+(b.spec ? '（'+b.spec+'）' : '')+'<div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 已用 '+b.used+'/'+b.bought+'（剩余 '+remain+' 次将作废）'+
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:8px;"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" class="rs-cb" data-i="'+i+'" style="margin-top:3px;"><span style="flex:1;font-size:13px;"><b>'+x.h.itemName+'</b>'+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'<div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 已用 '+b.used+'/'+b.bought+'（剩余 '+remain+' 次将作废）'+
       (typeof b.paid==='number' ? '<br>当初实付 <b>'+formatCurrency(b.paid, cur)+'</b>'+(b.promo ? '（活动价）' : '')+(pct<100 && b.listPrice ? '　原价 '+formatCurrency(b.listPrice, cur)+'，'+discountText(pct) : '')+'；按剩余次数参考 '+formatCurrency(b.bought>0 ? Math.round(b.paid*remain/b.bought) : 0, cur) : '<br><span style="color:var(--muted);">没有记录当初实付，无法校验上限</span>')+'</div></span></label>'+
       '<div style="margin:6px 0 0 24px;font-size:12px;">退款金额（Rp，可为 0，不超过实付）：<input type="number" min="0" id="rs-amt-'+i+'" style="'+inp+'width:150px;"></div></div>';
   }).join('');
@@ -1632,7 +1632,7 @@ function confirmRefundService(){
     var b = p.x.b, h = p.x.h, amt = p.amt;
     b.voidedRemaining = b.bought-b.used; b.voided = true; b.refund = {amount:amt, currency:b.currency||'IDR', reason:reason, date:today, viaCaseId:c.id};
     var pc = CASE_ITEMS.filter(function(y){ return y.id===b.caseId; })[0];
-    var line = '退款服务：'+h.itemName+(b.spec ? '（'+b.spec+'）' : '')+'（'+b.date+' 购买，案件 '+caseNoLabel(b.caseId)+'，剩余 '+b.voidedRemaining+' 次作废），退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reason+'；办理案件 '+(c.caseNo||'');
+    var line = '退款服务：'+h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'（'+b.date+' 购买，案件 '+caseNoLabel(b.caseId)+'，剩余 '+b.voidedRemaining+' 次作废），退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reason+'；办理案件 '+(c.caseNo||'');
     if(pc){ pc.holdingRefunds = pc.holdingRefunds || []; pc.holdingRefunds.push({itemName:h.itemName, amount:amt, reason:reason, date:today, qty:b.voidedRemaining||0, viaCaseId:c.id}); logCaseEvent(pc, ME_NAME, line+'；退款记在本案件，结局不变'); }
     if(!pc || pc.id!==c.id) logCaseEvent(c, ME_NAME, line);
     if(cl){ cl.timeline = cl.timeline || []; cl.timeline.push({stage:'退款服务', actor:ME_NAME, actorId:currentAccountId(), action:line, dt:nowFullDt(), kind:'plain'}); }
@@ -2222,7 +2222,7 @@ function submitKrScheduleDate(){
   var ks = ensureKrScheduleDraft(c);
   if(!ks.primary){ alert('至少选择首选日期'); return; }
   ks.status = 'pending'; ks.rejectNote = '';
-  logCaseEvent(c, ME_NAME, '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'），等待Kr室长确认');
+  logCaseEvent(c, ME_NAME, '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'），等待KR 室长确认');
   try{ if(c.settlementDone) pushKrNotif(caseKrHospital(c), '施术日期待确认：'+c.name+'（'+(c.caseNo||'')+'）已递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){} /* 通知 KR 室长（CMD-1013-02 九） */
   updateCaseStage(c);
   buildCaseLog(c);
@@ -2234,7 +2234,7 @@ function submitKrScheduleChangeDate(){
   var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='change_pending') return;
   if(!c.krSchedule.changePrimary){ alert('至少选择新的首选日期'); return; }
   c.krSchedule.changeSubmitted = true;
-  logCaseEvent(c, ME_NAME, '提交新施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'），等待Kr室长确认');
+  logCaseEvent(c, ME_NAME, '提交新施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'），等待KR 室长确认');
   try{ pushKrNotif(caseKrHospital(c), '改期待确认：'+c.name+'（'+(c.caseNo||'')+'）提交了新的施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){}
   buildCaseLog(c);
   renderCaseBody(c);
@@ -2270,7 +2270,7 @@ function endCaseRows(c){
   var uses = (c.mgmtUses||[]).concat(c.localMgmt ? (c.localMgmt.mgmtUses||[]) : []).filter(function(u){ return localItemStatus(u)==='进行中'; });
   if(uses.length) rows.push({key:'inuse', info:'使用中的本地项目（'+uses.map(function(u){ return u.itemName+' ×'+u.qty; }).join('、')+'）：结束时标「取消」，次数归还客人持有（不是退款）；归还后想退款，可再用基础资料页的［退款服务］。'});
   refundableBatches(c.name).filter(function(x){ return x.b.caseId===c.id; }).forEach(function(x, i){
-    rows.push({key:'hold:'+x.h.itemName+':'+x.bi, hold:x, title:'本地项目：'+x.h.itemName+(x.b.spec ? '（'+x.b.spec+'）' : '')+' 剩余 '+(x.b.bought-x.b.used)+' 次', opts:[['keep','转持有（留给客人下次用）'],['refund','退款']]});
+    rows.push({key:'hold:'+x.h.itemName+':'+x.bi, hold:x, title:'本地项目：'+x.h.itemName+(x.b.spec ? '（'+buyName(x.b.spec)+'）' : '')+' 剩余 '+(x.b.bought-x.b.used)+' 次', opts:[['keep','转持有（留给客人下次用）'],['refund','退款']]});
   });
   return rows;
 }
@@ -2343,9 +2343,9 @@ function confirmEndCase(){
         var amt = Number(st.amt[r.key]);
         b.voidedRemaining = b.bought-b.used; b.voided = true; b.refund = {amount:amt, currency:b.currency||'IDR', reason:reasonText, date:today, viaCaseId:c.id};
         c.holdingRefunds = c.holdingRefunds || []; c.holdingRefunds.push({itemName:h.itemName, amount:amt, reason:reasonText, date:today, qty:b.voidedRemaining||0, viaCaseId:c.id});
-        logCaseEvent(c, by, '结束案件：退款 '+h.itemName+(b.spec ? '（'+b.spec+'）' : '')+'，剩余 '+b.voidedRemaining+' 次作废，退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reasonText);
+        logCaseEvent(c, by, '结束案件：退款 '+h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'，剩余 '+b.voidedRemaining+' 次作废，退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reasonText);
         done.push(h.itemName+' 已退款');
-      } else { logCaseEvent(c, by, '结束案件：'+h.itemName+(b.spec ? '（'+b.spec+'）' : '')+' 剩余 '+(b.bought-b.used)+' 次转为客人持有'); done.push(h.itemName+' 转持有'); }
+      } else { logCaseEvent(c, by, '结束案件：'+h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : '')+' 剩余 '+(b.bought-b.used)+' 次转为客人持有'); done.push(h.itemName+' 转持有'); }
     }
   });
   /* 使用中的本地项目：标取消，次数归还持有 */
