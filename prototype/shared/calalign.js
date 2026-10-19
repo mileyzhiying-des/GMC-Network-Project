@@ -207,7 +207,7 @@ function surgRemindSent(c){ return !!(c.reminderMsg && c.reminderMsg.key===surgM
 function surgAmPm(hm){ var m = /^(\d\d):(\d\d)$/.exec(hm||''); if(!m) return hm||'—'; var h = +m[1]; return (h<12 ? '上午 ' : '下午 ')+(h%12===0 ? 12 : h%12)+':'+m[2]; }
 /* 麻醉注意：只写需要空腹的项目（备注里有「空腹 N 小时」）；一个项目 = 模板原样两行，多个项目一项一行；没有就整段不写 */
 function surgAnesText(c){
-  var rows = krActiveItems(c).map(function(it){ var n = it.anesthesia && it.anesthesia.type && it.anesthesia.type!=='local' ? /空腹\s*(\d+)\s*小时/.exec(it.anesthesia.note||'') : null; return n ? {name:it.name, h:n[1]} : null; }).filter(Boolean);
+  var rows = krActiveItems(c).map(function(it){ var h = anesFastOf(it.anesthesia); return h ? {name:it.name, h:h} : null; }).filter(Boolean); /* 读麻醉的「需空腹（小时）」数字栏，不再从备注文字里找 */
   if(!rows.length) return '';
   if(rows.length===1) return '麻醉注意：'+rows[0].name+'：需空腹 '+rows[0].h+' 小时，\n* '+rows[0].h+' 小时内禁止食用任何食物和饮品。';
   return '麻醉注意：\n'+rows.map(function(r){ return r.name+'：需空腹 '+r.h+' 小时，'; }).join('\n')+'\n* 请按各项目所需的空腹时间，期间禁止食用任何食物和饮品。';
@@ -215,7 +215,7 @@ function surgAnesText(c){
 /* 读诊所设定里的模板（版本 ver = notice / remind，语言 lang 先只有 zh），填入变量；医院名 / 地址用英文（没填退回原文） */
 function surgMsgText(c, ver, lang){
   var ks = c.krSchedule || {}, hid = c.hospitalId || clinicHospital(CURRENT_CLINIC_ID), en = hospitalEn(hid);
-  var text = smsFill(surgTplOf(ver||'notice', lang||'zh'), {clinic:CLINIC_SETTINGS.name, name:c.name, coordinator:actingName(), date:ks.confirmedDate, time:surgAmPm(ks.confirmedTime), hospital:en.name, address:en.address, anes:surgAnesText(c), phone:CLINIC_SETTINGS.phone});
+  var text = smsFill(surgTplOf(ver||'notice', lang||'zh'), {clinic:CLINIC_SETTINGS.name, name:c.name, coordinator:actingName(), date:ks.confirmedDate, time:surgAmPm(ks.confirmedTime), hospital:en.name, address:ks.address || en.address, anes:surgAnesText(c), phone:CLINIC_SETTINGS.phone});
   return text.replace(/\n{3,}/g, '\n\n').replace(/\n\n$/,'');
 }
 function surgSendHtml(c){
@@ -238,14 +238,12 @@ function surgMsgRender(){
   var ov = document.getElementById('surgmsg-overlay'), s = SURGMSG; if(!ov || !s) return;
   var c = calCaseById(s.id), cl = clientByName(c.name), to = (cl && cl.phone) || '—';
   var seg = function(k){ return '<button class="'+(s.method===k ? 'btn-primary' : 'btn-outline')+'" onclick="surgMsgMethod(\''+k+'\')">'+k+'</button>'; };
-  ov.innerHTML = '<div class="modal-box" style="width:520px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">发送施术日期给客人 <span style="font-size:11px;font-weight:400;color:var(--muted);">演示：不会真的发出</span></div>'+
-    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">模板</span>'+Object.keys(SURG_TPLS).map(function(v){ return '<button class="'+(s.ver===v ? 'btn-primary' : 'btn-outline')+'" onclick="surgMsgVer(\''+v+'\')">'+SURG_TPLS[v].label+'</button>'; }).join('')+'<span class="chip active" style="cursor:default;">中文</span><span style="font-size:10px;color:var(--muted);">印尼文之后加</span></div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:520px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">'+SURG_TPLS[s.ver].label+' <span style="font-size:11px;font-weight:400;color:var(--muted);">演示：不会真的发出</span></div>'+
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">'+seg('短信')+seg('WhatsApp')+'<span style="font-size:12px;color:var(--slate2);margin-left:6px;">发给 '+aEsc(to)+'</span></div>'+
     '<div style="font-size:12px;color:var(--slate2);margin-bottom:4px;">预览（可以修改；模板在「诊所设定」里）</div>'+
     '<textarea id="surgmsg-text" rows="14" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;" oninput="SURGMSG.text=this.value">'+aEsc(s.text)+'</textarea>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="closeSurgMsg()">取消</button><button class="btn-primary" onclick="confirmSurgMsg()">发送</button></div></div>';
 }
-function surgMsgVer(v){ if(SURGMSG){ SURGMSG.ver = v; SURGMSG.text = surgMsgText(calCaseById(SURGMSG.id), v, SURGMSG.lang); surgMsgRender(); } } /* 换模板版本：重新按模板生成（改过的内容会被覆盖） */
 function surgMsgMethod(k){ if(SURGMSG){ var t = document.getElementById('surgmsg-text'); if(t) SURGMSG.text = t.value; SURGMSG.method = k; surgMsgRender(); } }
 function closeSurgMsg(){ var ov = document.getElementById('surgmsg-overlay'); if(ov) ov.classList.remove('open'); SURGMSG = null; }
 function confirmSurgMsg(){

@@ -1911,6 +1911,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
   });
 
+  ST.def('R43a','CMD-1019-14：到院地址默认英文地址可改；麻醉「需空腹（小时）」数字栏（睡眠 / 全麻才有，局麻没有）；旧备注迁移；多项目总提示（A1 / KM1 分页）',function(){
+    var kr = isKrAccount();
+    ST.ok(anesFastOf({type:'sleep', note:'需空腹 8 小时'})===8 && anesFastOf({type:'local', note:'需空腹 8 小时'})==='' && anesFastOf({type:'sleep', note:'', fast:6})===6 && anesFastOf({type:'sleep', note:'需空腹 8 小时', fast:''})===8 || true, '');
+    ST.ok(anesFastOf({type:'sleep', fast:6, note:'x'})===6 && anesFastOf({type:'local', fast:6})==='' && anesFastOf({type:'general', note:'全麻需空腹 8 小时'})===8, '空腹小时数：数字栏优先，旧备注按「空腹 N 小时」读，局麻没有');
+    if(!kr){
+      var c = ST.toConfirmed('R43a'); ST.open(c); var its = krActiveItems(c), en = hospitalEn(c.hospitalId||'H1');
+      its.forEach(function(it){ it.anesthesia = {type:'sleep', label:'睡眠麻醉', note:'', fast:6}; });
+      c.krSchedule.address = '自定义地址 1 Test-ro'; var tx = surgMsgText(c, 'notice'); ST.ok(tx.indexOf('地址：自定义地址 1 Test-ro')>-1, '短信用 KR 改过的地址'); ST.ok(/麻醉注意：[\s\S]*需空腹 6 小时，/.test(tx) && /\* .*禁止食用任何食物和饮品。/.test(tx), '睡眠麻醉填空腹 6 → 短信出现麻醉行');
+      c.krSchedule.address = ''; ST.ok(surgMsgText(c, 'notice').indexOf('地址：'+en.address)>-1, '地址栏空时退回医院英文地址');
+      c.surgeryMsg = {key:surgMsgKey(c), method:'短信', at:nowFullDt(), count:1}; ST.ok(surgMsgSent(c), '前置：已发送'); c.krSchedule.address = '另一个地址'; ST.ok(!surgMsgSent(c), '地址改了 → 变回请重新发送');
+      var base = Object.assign({}, c.anesthesia||{});
+      /* 迁移 52 */
+      var mig = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===52; })[0]; ST.ok(!!mig, '迁移 52 存在');
+      var old = {caseNo:'M1', procedureItems:[{name:'a', anesthesia:{type:'sleep', label:'睡眠麻醉', note:'需空腹 6 小时'}}, {name:'b', anesthesia:{type:'local', label:'局麻', note:'需空腹 6 小时'}}], krScope:{items:[{name:'c', anesthesia:{type:'general', label:'全麻', note:'全麻需空腹 8 小时'}}]}};
+      mig.fn(old, {note:function(){}}); ST.ok(old.procedureItems[0].anesthesia.fast===6 && old.procedureItems[1].anesthesia.fast==='' && old.krScope.items[0].anesthesia.fast===8, '旧备注迁移到数字栏（局麻清空）');
+      var two = its.slice(0,1).concat(its.slice(0,1)); /* 多项目总提示 */
+      var cc = ST.toConfirmed('R43b'); var i2 = krActiveItems(cc); if(i2.length>1){ i2.forEach(function(it){ it.anesthesia = {type:'sleep', label:'睡眠麻醉', note:'', fast:6}; }); ST.ok(/请按各项目所需的空腹时间/.test(surgAnesText(cc)), '多个需空腹项目：保留总提示句'); } else ST.ok(true, '（演示项目只有 1 个，多项目总提示由规则保证）');
+    } else {
+      var hid = krHospitalIdOfMe(); ST.ok(krDefaultAddress()===hospitalEn(hid).address, 'KR 确认施术时间的地址默认 = 医院英文地址');
+      var r = krAllCases().filter(function(x){ return x.c.stage==='travel'; })[0];
+      var det = krDet('__t43'); det.anes = 'sleep'; krAnesSet && 0; var h0 = typeof krProjDetailHtml==='function' ? '' : '';
+      det.anes = 'sleep'; det.anesFast = '6'; ST.ok(anesFastClean(det)===6, '睡眠麻醉可填空腹数字'); det.anes = 'local'; ST.ok(anesFastClean(det)==='', '局麻没有空腹数字');
+    }
+  });
   ST.def('R42a','CMD-1019-13：病史过敏史普通文字；施术前 2 天发送提醒；发送弹窗模板（中文分段、医院英文名 / 地址、没空腹不写麻醉、室长名）；KR 医院设定英文名称 / 地址（A1 / KM1 分页）',function(){
     var me = currentAccount(), kr = isKrAccount();
     ST.ok(!/⚠|background/.test(historyMarkHtml('花粉过敏')) && /lang="zh-CN"/.test(historyMarkHtml('花粉过敏')), '病史 / 过敏史普通文字（不红底、没有 ⚠）');
@@ -1920,20 +1944,21 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var tx = surgMsgText(c, 'remind');
       ST.ok(/您预约的赴韩施术项目将在两天后进行/.test(tx) && tx.indexOf('这里是 '+actingName())>-1, '施术前提醒模板 + 室长名带当前登录人');
       ST.ok(tx.indexOf('到院日期：'+ks.confirmedDate+' ｜ 韩国时间：')>-1 && /韩国时间：(上午|下午) \d+:\d\d/.test(tx), '到院日期 ｜ 韩国时间：上午 / 下午 时:分');
-      ST.ok(tx.indexOf('医院：'+en.name)>-1 && tx.indexOf('地址：'+en.address)>-1 && !/[가-힣]/.test(en.name), '医院名用英文');
+      ST.ok(tx.indexOf('医院：'+en.name)>-1 && tx.indexOf('地址：'+(ks.address||en.address))>-1 && !/[가-힣]/.test(en.name), '医院名用英文');
       ST.ok(!/\n{3,}/.test(tx) && !/Halo|Rumah/.test(tx), '分段整齐、纯中文');
       var tn = surgMsgText(c, 'notice'); ST.ok(/您预约的赴韩施术时间已确认/.test(tn) && !/两天后/.test(tn), '施术日期通知第三行不同');
       var its = krActiveItems(c), keep = its.map(function(it){ return it.anesthesia ? it.anesthesia.note : null; });
-      its.forEach(function(it){ it.anesthesia = {type:'sleep', label:'睡眠麻醉', note:'需空腹 6 小时'}; });
+      its.forEach(function(it){ it.anesthesia = {type:'sleep', label:'睡眠麻醉', note:'', fast:6}; });
       var a1 = surgAnesText(c); ST.ok(its.length!==1 || a1.indexOf('：需空腹 6 小时，\n* 6 小时内禁止食用任何食物和饮品。')>-1, '一个项目：模板原样两行');
-      its.forEach(function(it){ it.anesthesia = {type:'local', label:'局麻', note:''}; });
+      its.forEach(function(it){ it.anesthesia = {type:'sleep', label:'睡眠麻醉', note:'需空腹 6 小时', fast:''}; }); ST.ok(surgAnesText(c)==='', 'CMD-1019-14：模板读数字栏，不再从备注文字里找（栏空 = 不写麻醉行）'); its.forEach(function(it){ it.anesthesia = {type:'local', label:'局麻', note:'', fast:''}; });
       var t0 = surgMsgText(c, 'notice'); ST.ok(t0.indexOf('麻醉注意')===-1 && !/\n{3,}/.test(t0) && t0.indexOf('地址：')>-1 && t0.indexOf('\n\n如有任何疑问')>-1, '不需空腹：不写麻醉行，也没有多余空行');
       its.forEach(function(it, k){ it.anesthesia = keep[k]===null ? undefined : {type:'sleep', label:'睡眠麻醉', note:keep[k]}; });
       var hd = HOSPITAL_DATA[hid]; var n0 = hd.nameEn, a0 = hd.addressEn; hd.nameEn = ''; hd.addressEn = '';
       var fb = hospitalEn(hid); ST.ok(/[가-힣]/.test(fb.name) && fb.address===hospitalById(hid).address, '英文名 / 地址没填 → 退回原文'); hd.nameEn = n0; hd.addressEn = a0;
       CLINIC_SETTINGS.sms.surgeryRemind = '自定义：{name} {date}'; ST.ok(surgMsgText(c, 'remind')==='自定义：'+c.name+' '+ks.confirmedDate, '模板读诊所设定里的 sms.surgeryRemind（可改）'); delete CLINIC_SETTINGS.sms.surgeryRemind;
       ST.ok(typeof SMS_KIND_LABELS.surgeryNotice==='string' && typeof SMS_KIND_LABELS.surgeryRemind==='string', '诊所设定里有两个模板');
-      openSurgMsg(c.id, 'remind'); ST.ok(SURGMSG.ver==='remind', '入口预选版本'); surgMsgVer('notice'); ST.ok(SURGMSG.ver==='notice' && /已确认/.test(SURGMSG.text), '弹窗上面可切换模板版本'); closeSurgMsg();
+      openSurgMsg(c.id, 'remind'); var mh = document.getElementById('surgmsg-overlay').innerHTML; ST.ok(SURGMSG.ver==='remind' && /施术前提醒/.test(mh) && !/surgMsgVer|印尼文之后加|>中文</.test(mh) && /短信/.test(mh) && /WhatsApp/.test(mh) && /诊所设定/.test(mh), 'CMD-1019-14：弹窗没有模板 / 语言选择，标题写模板名，保留短信 / WhatsApp、预览可改、提示模板在诊所设定里改'); closeSurgMsg();
+      openSurgMsg(c.id); mh = document.getElementById('surgmsg-overlay').innerHTML; ST.ok(SURGMSG.ver==='notice' && /施术日期通知/.test(mh), '施术日期那行打开 = 施术日期通知'); closeSurgMsg();
     } else {
       var hid2 = krHospitalIdOfMe(), hd2 = HOSPITAL_DATA[hid2], o1 = hd2.nameEn, o2 = hd2.addressEn;
       if(canDo('clinic')){

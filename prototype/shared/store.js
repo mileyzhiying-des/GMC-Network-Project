@@ -338,6 +338,11 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:52, fn:function(c, ctx){ /* CMD-1019-14：麻醉新增「需空腹（小时）」an.fast；睡眠 / 全麻的旧项目从备注「空腹 N 小时」转过来，局麻清空 */
+      var n0 = 0, fix = function(it){ var an = it && it.anesthesia; if(!an || an.fast!==undefined) return; an.fast = (an.type && an.type!=='local') ? anesFastParse(an.note) : ''; if(an.fast!=='') n0++; };
+      ['recommended','procedureItems'].forEach(function(k){ (c[k]||[]).forEach(fix); }); ((c.krScope||{}).items||[]).forEach(fix);
+      if(n0) ctx.note('案件 '+(c.caseNo||'')+'：'+n0+' 个项目的空腹小时数从麻醉备注转到「需空腹（小时）」栏');
+    }},
     {to:51, fn:function(c, ctx){ /* CMD-1019-10：KR 管理项目的数量 = 份数；规格里写「N次」的：总次数 = N × 份数（旧版把「次数」当成手填的份数，买「·3次」×1 只记成 1 次，持有 / 扣次数都少了）。旧 qty = 份数 → copies，qty 改成总次数 */
       var fixed = 0, fix = function(it){
         if(!it || !(it.mgmt || it.mgmtPlan || /^lc:/.test(String(it.projectId||'')) || it.local) || it.copies) return;

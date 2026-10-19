@@ -696,7 +696,7 @@ function mgmtScheduleText(it){ var tt = it.qty||1; return (it.firstDay!==undefin
 function pcLineText(x){ return pcLabel(x)+' × '+x.times+(x.times>1 && x.interval ? '（每隔 '+x.interval+' 天）' : '')+(pcDayText(x) ? ' '+pcDayText(x) : '')+'｜'+(x.place==='KR' ? '必须在韩国' : '韩国或印尼都可'); }
 function itemMetaText(it){
   var bits = [];
-  if(it.anesthesia) bits.push('麻醉：'+it.anesthesia.label+(it.anesthesia.note?'（'+it.anesthesia.note+'）':''));
+  if(it.anesthesia) bits.push('麻醉：'+anesDisplay(it.anesthesia));
   if(it.stay) bits.push('推荐在韩：'+it.stay);
   if(it.mgmt) bits.push('管理项目：'+mgmtQtyText(it)+mgmtScheduleText(it)+'（付费）');
   (it.postcare||[]).forEach(function(x){ /* 术后管理挂在赴韩项目下显示（CMD-1008-12 C7）：每项标「在韩国 / 在印尼」，如「好莱坞焕肤（在印尼）」 */
@@ -710,7 +710,7 @@ function recSummaryData(items, overall){
   var mg = items.filter(function(it){ return it.mgmt; }); items = items.filter(function(it){ return !it.mgmt; }); /* 管理项目（KR 本地管理项目）单独列一段，不算推荐在韩天数 */
   var days = items.reduce(function(m, it){ return Math.max(m, recStayDays(it)); }, 0);
   var rows = items.map(function(it){
-    var an = it.anesthesia ? (it.anesthesia.label||'')+(it.anesthesia.note ? '（'+it.anesthesia.note+'）' : '') : '—';
+    var an = it.anesthesia ? anesDisplay(it.anesthesia) : '—';
     var pc = (it.postcare||[]).map(pcLineText);
     return {name:it.name, stay:it.stay ? recStayDays(it)+' 天' : '—', anes:an, pc:pc, note:it.note||''};
   });
@@ -752,6 +752,12 @@ function pcLinesHtml(c, it, fn){
 }
 /* 麻醉同意书（占位文案，等用户撰写；记录版本 + 签署时间存在案件上） */
 var ANES_CONSENT_VERSION = 'v0.1（占位文案）';
+/* CMD-1019-14：睡眠 / 全麻的「需空腹（小时）」数字（an.fast）；旧数据没有 fast 时从备注「空腹 N 小时」里读（迁移 52 也会写进去） */
+function anesFastParse(note){ var m = /空腹\s*(\d+)\s*小时/.exec(String(note||'')); return m ? parseInt(m[1], 10) : ''; }
+function anesFastOf(an){ if(!an || !an.type || an.type==='local') return ''; var f = an.fast!==undefined && an.fast!==null ? parseInt(an.fast, 10) : anesFastParse(an.note); /* fast 有这个键（含空）= 以数字栏为准；没有这个键的旧数据才读备注 */ return f>0 ? f : ''; }
+function anesFastClean(d){ if(!d || d.anes==='local') return ''; var f = parseInt(d.anesFast, 10); return f>0 ? f : ''; }
+/* 麻醉显示文字：麻醉方式（备注；有空腹小时数而备注里没写就补「需空腹 N 小时」） */
+function anesDisplay(an){ if(!an) return '—'; var f = anesFastOf(an), note = an.note||'', bits = [note]; if(f && !/空腹/.test(note)) bits.push('需空腹 '+f+' 小时'); bits = bits.filter(Boolean); return (an.label||'')+(bits.length ? '（'+bits.join('，')+'）' : ''); }
 function anesItemsOf(items){ return (items||[]).filter(function(it){ return it.origin==='KR' && it.anesthesia; }).map(function(it){ return {name:it.name, type:it.anesthesia.type, label:it.anesthesia.label, note:it.anesthesia.note||''}; }); }
 function anesNeeded(c, items){
   var list = anesItemsOf(items); if(!list.length) return [];
