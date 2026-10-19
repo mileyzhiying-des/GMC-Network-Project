@@ -1296,15 +1296,15 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var c = CASE_ITEMS.filter(function(x){ return x.krSchedule && x.krSchedule.status==='confirmed'; })[0] || CASE_ITEMS[0]; if(!ST.ok(!!c, '没有案件')) return; var old = CURRENT_CASE_ID; CURRENT_CASE_ID = c.id;
     try{
       CASE_DISPLAY_CCY_KR = 'IDR'; setProjectOrigin('KR'); ST.ok(CASE_DISPLAY_CCY_KR==='KRW', '切到赴韩项目默认韩币');
-      if(c.krSchedule && c.krSchedule.confirmedDate){ var k0 = c.relayTold, r0 = c.recheck, rl = c.relayAt, m0 = c.surgeryMsg; c.relayTold = null; c.recheck = null; c.surgeryMsg = null; var h0 = calRelayRecheckCards(c);
+      if(c.krSchedule && c.krSchedule.confirmedDate){ var k0 = c.relayTold, r0 = c.recheck, rl = c.relayAt, m0 = c.surgeryMsg; var ik0 = c.surgInformKey, rm0 = c.reminderMsg; c.relayTold = null; c.recheck = null; c.surgeryMsg = null; c.surgInformKey = null; c.reminderMsg = null; var h0 = calRelayRecheckCards(c);
         ST.ok(!/转告客人<\/div>/.test(h0) && !/已转告客人/.test(h0), 'CMD-1019-12：「转告客人」卡和［已转告客人］已拿掉');
         ST.ok(/发送给客人/.test(surgSendHtml(c)) && !surgMsgSent(c), '施术日期那一行后面有［发送给客人］');
         openSurgMsg(c.id); ST.ok(!!SURGMSG && /您预约的赴韩施术时间已确认/.test(SURGMSG.text) && SURGMSG.ver==='notice' && !/Halo/.test(SURGMSG.text) && SURGMSG.text.indexOf(hospitalEn(c.hospitalId||'H1').name)>-1 && SURGMSG.text.indexOf(c.krSchedule.confirmedDate)>-1 && SURGMSG.text.indexOf(surgAmPm(c.krSchedule.confirmedTime))>-1, '预览有印尼文模板、日期、到院时间');
         SURGMSG.method = 'WhatsApp'; confirmSurgMsg();
-        ST.ok(surgMsgSent(c) && /已发送（WhatsApp/.test(surgSendHtml(c)) && /再发一次/.test(surgSendHtml(c)) && ST.hasLog(c, /已发送施术日期通知给客人/) && SMS_LOG[0].kind==='surgery' && SMS_LOG[0].caseId===c.id, '发送后显示已发送（方式、时间）、可再发、记短信发送记录和 Timeline');
-        var ad0 = c.krSchedule.address; c.krSchedule.address = (ad0||'')+'（改）'; ST.ok(!surgMsgSent(c) && /日期已变更，请重新发送/.test(surgSendHtml(c)), 'KR 改地址 / 日期 / 时间后变回未发送并提示重新发送'); c.krSchedule.address = ad0;
-        ST.ok(surgMsgSent(c), '改回来仍算已发送（按当前日期 / 时间 / 地址比较）');
-        openSurgMsg(c.id, 'remind'); confirmSurgMsg(); ST.ok(surgRemindSent(c) && ST.hasLog(c, /已发送施术前提醒给客人/), '发送施术前提醒后记 Timeline'); c.relayTold = k0; c.recheck = r0; c.relayAt = rl; c.surgeryMsg = m0; }
+        ST.ok(surgMsgSent(c) && /已发送（WhatsApp/.test(surgSendHtml(c)) && !/再发一次/.test(surgSendHtml(c)) && ST.hasLog(c, /已发送施术日期通知给客人/) && SMS_LOG[0].kind==='surgery' && SMS_LOG[0].caseId===c.id, '发送后显示已发送（方式、时间）、没有再发一次、记短信发送记录和 Timeline');
+        var ad0 = c.krSchedule.address; c.krSchedule.address = (ad0||'')+'（改）'; ST.ok(!surgMsgSent(c) && surgChanged(c) && /请电话通知客人/.test(surgSendHtml(c)) && /已电话通知/.test(surgSendHtml(c)) && !/发送给客人/.test(surgSendHtml(c)), 'KR 改地址 / 日期 / 时间后：红字请电话通知 + ［已电话通知］，不重发'); c.krSchedule.address = ad0;
+        ST.ok(surgMsgSent(c), '改回来仍算已通知（按当前日期 / 时间 / 地址比较）');
+        openSurgMsg(c.id, 'remind'); confirmSurgMsg(); ST.ok(surgRemindSent(c) && ST.hasLog(c, /已发送施术前提醒给客人/), '发送施术前提醒后记 Timeline'); c.relayTold = k0; c.recheck = r0; c.relayAt = rl; c.surgeryMsg = m0; c.surgInformKey = ik0; c.reminderMsg = rm0; }
       var w = window.open; var cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ if(krActiveItems(c).length) printKrPlan(); }finally{ window.open = w; }
       if(cap) ST.ok(/确认打印/.test(cap) && !/window\.onload/.test(cap), '打印先预览：有［确认打印］按钮，不再自动打印');
       if(krActiveItems(c).length){ var info = krBalanceInfo(c); if(info.diff>0){ ST.ok(settlementSummaryHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1 && settleTabTopHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '结算汇总 / 顶部一行能看到尾款金额'); ST.ok(krPlanMoneyLine(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '赴韩施术计划看得到尾款'); } }
@@ -1911,6 +1911,28 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
   });
 
+  ST.def('R45a','CMD-1019-16：施术前提醒发完卡片消失；施术日期发过不再［再发一次］；发过后 KR 改时间 → 红字 + ［已电话通知］（备注、Timeline、待办），没发过照旧发送；提醒发过后改时间同样走电话（A1 分页）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.toConfirmed('R45a'); ST.open(c); c.activeCaseTab = 'kr'; var ks = c.krSchedule, has = function(){ return inTodoItems().filter(function(i){ return i.no===c.caseNo && i.kind==='relay'; })[0]; };
+    /* 没发过：KR 改时间照旧［发送给客人］ */
+    var t0 = ks.confirmedTime; ks.confirmedTime = ks.confirmedTime==='15:00' ? '16:00' : '15:00'; ST.ok(!surgChanged(c) && /发送给客人/.test(surgSendHtml(c)) && !/电话/.test(surgSendHtml(c)) && /发送给客人/.test(has().t || has().text || ''), '没发过：KR 改时间仍是［发送给客人］（待办也是发送）');
+    ks.confirmedTime = t0;
+    /* 发施术日期通知 → 只显示已发送 */
+    openSurgMsg(c.id); confirmSurgMsg(); var h1 = surgSendHtml(c); ST.ok(/✓ 已发送/.test(h1) && !/再发一次|发送给客人/.test(h1) && !has(), '发过之后只显示已发送，没有［再发一次］，待办消失');
+    /* KR 改时间 → 红字 + 已电话通知 + 待办 */
+    var old = surgMsgKey(c); ks.confirmedTime = ks.confirmedTime==='13:00' ? '14:00' : '13:00';
+    var h2 = surgSendHtml(c); ST.ok(surgChanged(c) && /⚠ 施术时间已变更（原 .+ → 新 .+），请电话通知客人/.test(h2) && /已电话通知/.test(h2) && !/openSurgMsg/.test(h2), '发过之后改时间：红字「施术时间已变更（原 → 新），请电话通知客人」+［已电话通知］，不重发');
+    var td = has(); ST.ok(!!td && /电话通知客人时间变更/.test(td.t || td.text || ''), '待办改成「电话通知客人时间变更」');
+    openSurgPhone(c.id); document.getElementById('surgph-note').value = '客人说新时间可以'; confirmSurgPhone();
+    ST.ok(!surgChanged(c) && /✓ 已电话通知/.test(surgSendHtml(c)) && /备注：客人说新时间可以/.test(surgSendHtml(c)) && ST.hasLog(c, /已电话通知客人：.*施术时间已变更.*备注：客人说新时间可以/) && !has(), '按完：已电话通知 + 备注 + Timeline，待办消失');
+    /* 施术前提醒：发完卡片消失；之后改时间也走电话 */
+    var base = DEMO_SHIFT_MS; DEMO_SHIFT_MS = base + (calDaysToSurgery(c)-2)*86400000;
+    try{
+      c.reminderMsg = null; ST.ok(/surg-remind-row/.test(calRelayRecheckCards(c)), '前置：施术前 2 天有提醒卡');
+      openSurgMsg(c.id, 'remind'); confirmSurgMsg(); ST.ok(!/surg-remind-row|已发送|再发一次/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /已发送施术前提醒给客人/) && SMS_LOG[0].kind==='surgeryRemind', '提醒发了之后卡片消失，记录留在 Timeline 和短信发送记录');
+      ks.confirmedTime = ks.confirmedTime==='10:30' ? '11:30' : '10:30'; ST.ok(surgChanged(c) && /请电话通知客人/.test(surgSendHtml(c)) && !/surg-remind-row/.test(calRelayRecheckCards(c)), '提醒发过之后改时间：同样走电话，不重发提醒');
+    } finally { DEMO_SHIFT_MS = base; }
+  });
   ST.def('R44a','CMD-1019-15：赴韩施术计划打印改版（抬头 / 1 行程概要 / 2 施术项目 / 3 日程表 / 4 术前准备 / 5 日程确认与变动 / 6 备注；不写金额，没有面诊内容和推荐整理）（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.toConfirmed('R44a'); ST.open(c); var its = krActiveItems(c), ks = c.krSchedule;
@@ -1943,7 +1965,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       its.forEach(function(it){ it.anesthesia = {type:'sleep', label:'睡眠麻醉', note:'', fast:6}; });
       c.krSchedule.address = '自定义地址 1 Test-ro'; var tx = surgMsgText(c, 'notice'); ST.ok(tx.indexOf('地址：自定义地址 1 Test-ro')>-1, '短信用 KR 改过的地址'); ST.ok(/麻醉注意：[\s\S]*需空腹 6 小时，/.test(tx) && /\* .*禁止食用任何食物和饮品。/.test(tx), '睡眠麻醉填空腹 6 → 短信出现麻醉行');
       c.krSchedule.address = ''; ST.ok(surgMsgText(c, 'notice').indexOf('地址：'+en.address)>-1, '地址栏空时退回医院英文地址');
-      c.surgeryMsg = {key:surgMsgKey(c), method:'短信', at:nowFullDt(), count:1}; ST.ok(surgMsgSent(c), '前置：已发送'); c.krSchedule.address = '另一个地址'; ST.ok(!surgMsgSent(c), '地址改了 → 变回请重新发送');
+      c.surgeryMsg = {key:surgMsgKey(c), method:'短信', at:nowFullDt(), count:1}; ST.ok(surgMsgSent(c), '前置：已发送'); c.krSchedule.address = '另一个地址'; ST.ok(!surgMsgSent(c) && surgChanged(c), '地址改了 → 改成电话通知，不是重发');
       var base = Object.assign({}, c.anesthesia||{});
       /* 迁移 52 */
       var mig = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===52; })[0]; ST.ok(!!mig, '迁移 52 存在');

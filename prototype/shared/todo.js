@@ -74,8 +74,11 @@ function inTodoItems(){
     if(ks && !ks.status && ks.rejectNote && c.settlementDone && krActiveItems(c).length)
       push(todoMk('resched', 'KR 无法安排所选日期：重选施术日期', c, '', false, todoInGo(c, 'kr')));
     /* KR 已确认施术时间 → 转告客人（打开该案件的赴韩施术 tab 即视为已看到，见 todoMarkRelay） */
-    if(scheduleState(c)==='Confirmed' && ks && !surgMsgSent(c)) /* CMD-1019-12：改成直接［发送给客人］，发送后（或 KR 改了日期 / 时间 / 地址又没重发之前）才算 */
-      push(todoMk('relay', (c.surgeryMsg ? '施术日期已变更：重新发送给客人（' : 'KR 已确认施术时间：发送给客人（')+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-send-row'}); }));
+    if(scheduleState(c)==='Confirmed' && ks && !surgMsgSent(c)){ /* CMD-1019-16：没通知过 =［发送给客人］；通知过之后 KR 又改了 = 电话通知客人时间变更（不重发） */
+      var gotoRow = function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-send-row'}); };
+      if(surgChanged(c)) push(todoMk('relay', '电话通知客人时间变更：'+surgChangeText(c), c, ks.confirmedDate, false, gotoRow));
+      else push(todoMk('relay', 'KR 已确认施术时间：发送给客人（'+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, gotoRow));
+    }
     /* 确认客人日程有无变化：赴韩施术前 2 天出现（CMD-1014-01 二·3） */
     if(calNeedsRecheck(c)) push(todoMk('recheck', '施术前提醒：发送给客人（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-remind-row'}); }));
     /* 待收款 */

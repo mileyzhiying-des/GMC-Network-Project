@@ -190,9 +190,8 @@ function calRelayRecheckCards(c){
   var out = '', d = calDaysToSurgery(c);
   /* CMD-1015-15：按了［已转告客人］［确认无变动］后卡片就消失，记录在 Timeline */
   /* CMD-1019-12：「转告客人」卡拿掉，改在施术日期那一行后面放［发送给客人］（surgSendHtml） */
-  if(d<=2){ /* CMD-1019-13：施术前 2 天 =［发送给客人］（施术前提醒）；客人说要改期照下面原来的改期流程 */
-    var rs = surgRemindSent(c);
-    out += '<div class="card" id="surg-remind-row" style="padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;"><div style="font-size:13px;font-weight:700;">施术前提醒</div><div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+(rs ? '<span style="color:var(--sage);">✓ 已发送（'+aEsc(c.reminderMsg.method)+'，'+aEsc(fmtUtc(c.reminderMsg.at))+'）</span>' : (c.reminderMsg ? '<span style="color:#B3261E;font-weight:700;">日期 / 时间 / 地址已变更，请重新发送</span>' : '施术前 2 天：发提醒给客人；客人说要改期，走下面原来的改期流程'))+'</div></div><button class="'+(rs ? 'btn-outline' : 'btn-primary')+'" onclick="openSurgMsg(\''+c.id+'\',\'remind\')">'+(rs ? '再发一次' : '发送给客人')+'</button> <span style="font-size:10px;color:var(--muted);">演示</span></div>';
+  if(d<=2 && !surgRemindSent(c)){ /* CMD-1019-13：施术前 2 天 =［发送给客人］（施术前提醒）；CMD-1019-16：发过之后卡片消失（记录留 Timeline 和短信发送记录） */
+    out += '<div class="card" id="surg-remind-row" style="padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;"><div style="font-size:13px;font-weight:700;">施术前提醒</div><div style="font-size:12px;color:var(--slate2);margin-top:2px;">施术前 2 天：发提醒给客人；客人说要改期，走下面原来的改期流程</div></div><button class="btn-primary" onclick="openSurgMsg(\''+c.id+'\',\'remind\')">发送给客人</button> <span style="font-size:10px;color:var(--muted);">演示</span></div>';
   }
   return out;
 }
@@ -200,9 +199,24 @@ function calCaseById(id){ return CASE_ITEMS.filter(function(x){ return x.id===id
 /* ---- CMD-1019-12：施术日期发送给客人（短信 / WhatsApp，原型模拟不真的发） ---- */
 /* 日期 / 时间 / 地址任一变了（KR 改了）就变回「未发送」 */
 function surgMsgKey(c){ var ks = c.krSchedule || {}; return [ks.confirmedDate||'', ks.confirmedTime||'', ks.address||''].join('|'); }
-function surgMsgSent(c){ return !!(c.surgeryMsg && c.surgeryMsg.key===surgMsgKey(c)); }
+/* CMD-1019-16：「通知过客人的那一版」= 施术日期通知 / 施术前提醒 / 电话通知里最近一次的 key（旧数据没有 surgInformKey 就取两条发送记录里较新的）。
+   从没通知过 → 发送给客人；通知过之后 KR 又改了日期 / 时间 / 地址 → 不重发，改成打电话（［已电话通知］） */
+function surgInformKey(c){
+  if(c.surgInformKey) return c.surgInformKey;
+  var a = c.surgeryMsg, b = c.reminderMsg, m = a && b ? ((a.at||'') >= (b.at||'') ? a : b) : (a || b);
+  return m ? m.key : '';
+}
+function surgMsgSent(c){ var k = surgInformKey(c); return !!k && k===surgMsgKey(c); } /* 当前这一版已经通知过客人 */
+function surgChanged(c){ var k = surgInformKey(c); return !!k && k!==surgMsgKey(c); } /* 通知过之后 KR 又改了 → 要电话通知 */
+function surgKeyText(k){ var p = String(k||'').split('|'); return (p[0]||'—')+' '+(p[1]||''); }
+function surgChangeText(c){
+  var o = String(surgInformKey(c)).split('|'), n = surgMsgKey(c).split('|'), bits = [];
+  if(o[0]!==n[0] || o[1]!==n[1]) bits.push('施术时间已变更（原 '+surgKeyText(surgInformKey(c)).trim()+' → 新 '+surgKeyText(surgMsgKey(c)).trim()+'，韩国时间）');
+  if(o[2]!==n[2]) bits.push('到院地址已变更（原 '+(o[2]||'—')+' → 新 '+(n[2]||'—')+'）');
+  return bits.join('；');
+}
 /* 模板读诊所设定 CLINIC_SETTINGS.sms.surgery（和其他短信模板同一处），填入变量 */
-function surgRemindSent(c){ return !!(c.reminderMsg && c.reminderMsg.key===surgMsgKey(c)); }
+function surgRemindSent(c){ return !!c.reminderMsg; } /* 施术前提醒发过一次就不再出现；之后改时间走电话 */
 /* 「上午 / 下午 时:分」：14:00 → 下午 2:00，09:30 → 上午 9:30 */
 function surgAmPm(hm){ var m = /^(\d\d):(\d\d)$/.exec(hm||''); if(!m) return hm||'—'; var h = +m[1]; return (h<12 ? '上午 ' : '下午 ')+(h%12===0 ? 12 : h%12)+':'+m[2]; }
 /* 麻醉注意：只写需要空腹的项目（备注里有「空腹 N 小时」）；一个项目 = 模板原样两行，多个项目一项一行；没有就整段不写 */
@@ -219,11 +233,36 @@ function surgMsgText(c, ver, lang){
   return text.replace(/\n{3,}/g, '\n\n').replace(/\n\n$/,'');
 }
 function surgSendHtml(c){
-  var sent = surgMsgSent(c), m = c.surgeryMsg, ro = c.hasArrived;
-  if(ro) return '';
-  var tag = '<span style="font-size:10px;color:var(--muted);">演示</span>';
-  if(sent) return '<div style="text-align:right;white-space:nowrap;"><div style="font-size:12px;color:var(--sage);font-weight:700;">✓ 已发送（'+aEsc(m.method)+'，'+aEsc(fmtUtc(m.at))+'）</div><button class="btn-outline" style="margin-top:6px;" onclick="openSurgMsg(\''+c.id+'\')">再发一次</button> '+tag+'</div>';
-  return '<div style="text-align:right;white-space:nowrap;">'+(m ? '<div style="font-size:12px;color:#B3261E;font-weight:700;margin-bottom:6px;">日期已变更，请重新发送</div>' : '')+'<button class="btn-primary" onclick="openSurgMsg(\''+c.id+'\')">发送给客人</button> '+tag+'</div>';
+  if(c.hasArrived) return '';
+  var tag = '<span style="font-size:10px;color:var(--muted);">演示</span>', box = function(x){ return '<div style="text-align:right;max-width:340px;">'+x+'</div>'; };
+  if(surgChanged(c)) return box('<div style="font-size:12px;color:#B3261E;font-weight:700;margin-bottom:6px;text-align:left;">⚠ '+aEsc(surgChangeText(c))+'，请电话通知客人</div><button class="btn-primary" onclick="openSurgPhone(\''+c.id+'\')">已电话通知</button>');
+  if(surgMsgSent(c)){ /* 发过之后只显示已发送，不再有［再发一次］ */
+    var ph = c.surgPhone && c.surgPhone.key===surgMsgKey(c) ? c.surgPhone : null, m = surgMsgOfKey(c);
+    return box('<div style="font-size:12px;color:var(--sage);font-weight:700;white-space:nowrap;">'+(ph ? '✓ 已电话通知（'+aEsc(fmtUtc(ph.at))+'）' : '✓ 已发送（'+aEsc(m.method)+'，'+aEsc(fmtUtc(m.at))+'）')+'</div>'+(ph && ph.note ? '<div style="font-size:11px;color:var(--muted);">备注：'+aEsc(ph.note)+'</div>' : ''));
+  }
+  return box('<button class="btn-primary" onclick="openSurgMsg(\''+c.id+'\')">发送给客人</button> '+tag);
+}
+/* 当前这一版是用哪次发送通知的（施术日期通知 / 施术前提醒） */
+function surgMsgOfKey(c){ var k = surgMsgKey(c); return [c.surgeryMsg, c.reminderMsg].filter(function(m){ return m && m.key===k; }).sort(function(a, b){ return (b.at||'') > (a.at||'') ? 1 : -1; })[0] || {method:'—', at:''}; }
+/* ［已电话通知］：小 Modal 可填一句备注（选填）→ 记 Timeline，待办消失 */
+var SURGPH = null;
+function openSurgPhone(id){
+  var c = calCaseById(id); if(!c) return; SURGPH = {id:id};
+  var ov = document.getElementById('surgph-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'surgph-overlay'; ov.style.zIndex = 95; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">已电话通知客人</div><div style="font-size:12px;color:var(--slate2);line-height:1.7;margin-bottom:8px;">'+aEsc(surgChangeText(c))+'</div>'+
+    '<textarea id="surgph-note" rows="3" placeholder="备注（选填，例如：客人已知晓、新时间可以）" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;"></textarea>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="closeSurgPhone()">取消</button><button class="btn-primary" onclick="confirmSurgPhone()">确认已电话通知</button></div></div>';
+  ov.classList.add('open');
+}
+function closeSurgPhone(){ var ov = document.getElementById('surgph-overlay'); if(ov) ov.classList.remove('open'); SURGPH = null; }
+function confirmSurgPhone(){
+  var s = SURGPH; if(!s) return; var c = calCaseById(s.id); if(!c) return; var n = (document.getElementById('surgph-note')||{}).value || '';
+  var txt = surgChangeText(c);
+  c.surgPhone = {key:surgMsgKey(c), from:surgInformKey(c), at:nowFullDt(), note:String(n).trim(), by:actingName()};
+  c.surgInformKey = surgMsgKey(c); c.relayTold = calKey(c); c.relayAt = c.surgPhone.at;
+  logCaseEvent(c, actingName(), '已电话通知客人：'+txt+(c.surgPhone.note ? '；备注：'+c.surgPhone.note : ''));
+  closeSurgPhone(); Store.touch(); buildCaseLog(c); renderCaseBody(c); try{ todoRefresh(); renderCalendar(); }catch(e){}
 }
 var SURGMSG = null;
 function openSurgMsg(id, ver){
@@ -253,9 +292,10 @@ function confirmSurgMsg(){
   var cl = clientByName(c.name), to = (cl && cl.phone) || '', remind = s.ver==='remind', tp = SURG_TPLS[s.ver];
   logSms(tp.kind, (s.method==='WhatsApp' ? 'WhatsApp ' : '')+to, s.text, c.id); /* 短信发送记录页：类型「施术日期通知 / 施术前提醒」 */
   var prev = remind ? c.reminderMsg : c.surgeryMsg, rec = {key:surgMsgKey(c), method:s.method, at:nowFullDt(), count:(prev ? (prev.count||1)+1 : 1)};
+  c.surgInformKey = rec.key; /* CMD-1019-16：这一版已通知客人；之后 KR 再改 = 电话通知 */
   if(remind){ c.reminderMsg = rec; c.recheck = {key:calKey(c), by:actingName(), at:rec.at, via:'施术前提醒'}; }
   else { c.surgeryMsg = rec; c.relayTold = calKey(c); c.relayAt = rec.at; } /* 通知发送 = 已转告：待办「转告客人」消失 */
-  logCaseEvent(c, actingName(), '已发送'+tp.label+'给客人（'+s.method+'，演示）：'+calKey(c)+'（韩国时间）'+(prev && prev.key!==rec.key ? '，日期 / 时间 / 地址变更后重新发送' : (prev ? '，再次发送' : '')));
+  logCaseEvent(c, actingName(), '已发送'+tp.label+'给客人（'+s.method+'，演示）：'+calKey(c)+'（韩国时间）'+(prev ? '，再次发送' : ''));
   closeSurgMsg(); Store.touch(); buildCaseLog(c); renderCaseBody(c); try{ todoRefresh(); renderCalendar(); }catch(e){}
   showToast('已发送'+tp.label+'（演示）', s.method+' → '+(to||'客人'), null);
 }
