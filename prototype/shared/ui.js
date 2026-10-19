@@ -721,14 +721,14 @@ function renderClientProfile(name){
   var consHtml = cons ? '已签署<span class="sub">个人资料收集同意 + 健康资料处理同意 · 同意书 '+aEscC(cons.version)+' · '+aEscC(cons.ts)+' · '+aEscC(cons.source)+'</span>' : '<span style="color:var(--muted);">未登记</span><span class="sub">到店后由室长当面签署正式同意书</span>';
   el.innerHTML = row('名 / 姓', aEscC(c.name)+'<span class="sub">名（必填）+ 姓（选填），显示“名 姓”</span>', 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+
     row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+
-    row('护照信息', aEscC(c.passport.text)+(c.passport.date?'<span class="sub">'+aEscC(c.passport.date)+'</span>':''), 'passport')+
+    row('护照信息', (passportComplete(c) ? '已登记 · '+aEscC(passportOf(c).no)+'<span class="sub">签发 '+aEscC(passportOf(c).issue)+' · 到期 '+aEscC(passportOf(c).expiry)+(passportOf(c).expiry<todayStr() ? ' <b style="color:#B3261E;">护照已过期</b>' : '')+'</span>' : '未登记<span class="sub">第一次确认赴韩时登记</span>'), 'passport')+
     row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+
     '<div class="field-row"><span class="fk">隐私协议</span><span class="fv">'+consHtml+'</span><span class="fa"></span></div>';
 }
 function aEscC(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 var CLIENT_FIELD_DEF = {
   name:{label:'名 / 姓', kind:'name2'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
-  gender:{label:'性别 / 出生日期', kind:'gender'}, passport:{label:'护照信息', kind:'text'}, phone:{label:'联系方式（手机号）', kind:'text'}
+  gender:{label:'性别 / 出生日期', kind:'gender'}, passport:{label:'护照信息', kind:'passport'}, phone:{label:'联系方式（手机号）', kind:'text'}
 };
 function openClientEdit(name, field){
   var c = clientByName(name), d = CLIENT_FIELD_DEF[field]; if(!c || !d) return;
@@ -738,6 +738,7 @@ function openClientEdit(name, field){
   var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;';
   var body = d.kind==='area' ? '<textarea id="ce-v" rows="3" style="'+inp+'">'+aEscC(c[field])+'</textarea>' :
     d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select><input id="ce-v2" type="date" value="'+aEscC(c.dob)+'" style="'+inp+'"></div>' :
+    d.kind==='passport' ? passportFormHtml(c, 'ce') :
     d.kind==='name2' ? '<div style="display:flex;gap:10px;"><input id="ce-fn" type="text" placeholder="名（必填）" value="'+aEscC(c.firstName!==undefined ? c.firstName : c.name)+'" style="'+inp+'"><input id="ce-ln" type="text" placeholder="姓（选填）" value="'+aEscC(c.lastName||'')+'" style="'+inp+'"></div>' :
     field==='phone' ? phoneInputHtml('ce-ph', c.phone) :
     '<input id="ce-v" type="text" value="'+aEscC(field==='passport' ? c.passport.text : c[field])+'" style="'+inp+'">';
@@ -750,6 +751,8 @@ function closeClientEdit(){ var ov = document.getElementById('client-edit-overla
 function saveClientEdit(){
   var x = CLIENT_EDIT; if(!x) return;
   var c = clientByName(x.name), d = CLIENT_FIELD_DEF[x.field]; if(!c) return;
+  if(x.field==='passport'){ var pe = passportFormRead('ce'); if(pe.err){ var ee = document.getElementById('ce-err'); ee.textContent = pe.err; ee.style.display = 'block'; return; }
+    var had = passportComplete(c); passportSave(c, pe.v, had ? '修改护照信息' : '已登记护照'); closeClientEdit(); refreshAfterClientEdit(c); return; }
   var v = x.field==='phone' ? phoneInputGet('ce-ph') : x.field==='name' ? joinName((document.getElementById('ce-fn')||{}).value, (document.getElementById('ce-ln')||{}).value) : (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
   var fail = function(m){ var e = document.getElementById('ce-err'); e.textContent = m; e.style.display = 'block'; };
   if(x.field==='name'){
@@ -766,8 +769,6 @@ function saveClientEdit(){
   } else if(x.field==='gender'){
     var dob = document.getElementById('ce-v2').value;
     oldTxt = c.gender+' · '+(c.dob||'—'); newTxt = v+' · '+(dob||'—'); c.gender = v; c.dob = dob;
-  } else if(x.field==='passport'){
-    oldTxt = c.passport.text; newTxt = v||'未登记'; c.passport.text = newTxt; c.passport.date = dateStr(demoNow());
   } else if(x.field==='phone'){
     if(!v) return fail('手机号不能为空');
     var other = clientByPhone(v); if(other && other.id!==c.id) return fail('这个手机号已登记为 '+other.name+'（一个手机号对应一位客人）');
@@ -776,8 +777,72 @@ function saveClientEdit(){
   if(oldTxt===newTxt){ closeClientEdit(); return; }
   c.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'修改「'+d.label+'」：'+oldTxt+' → '+newTxt, dt:nowFullDt(), kind:'plain'});
   c.updated = '刚刚';
-  closeClientEdit(); renderClientProfile(c.name); renderClientTimeline(c.name); renderClientRows();
+  closeClientEdit(); refreshAfterClientEdit(c);
+}
+/* 保存后刷新：客户详情 + 当前案件页（基础资料里的客人基本信息同步） */
+function refreshAfterClientEdit(c){
+  try{ renderClientProfile(c.name); }catch(e){}
+  try{ renderClientTimeline(c.name); }catch(e){}
+  try{ renderClientRows(); }catch(e){}
   try{ renderClientCases(c.name); }catch(e){}
+  try{ var cc = getCurrentCase(); if(cc && cc.name===c.name) renderCaseBody(cc); }catch(e){}
+}
+
+/* ---- CMD-1019-11：护照（客户档案里存一份：护照号 / 签发日 / 到期日，三项必填） ---- */
+function passportFormHtml(cl, pre){
+  var p = passportOf(cl), inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;';
+  return '<div style="display:flex;flex-direction:column;gap:8px;"><label style="font-size:12px;color:var(--slate2);">护照号 *<input id="'+pre+'-pno" type="text" value="'+aEscC(p.no)+'" style="'+inp+'" autocomplete="off"></label>'+
+    '<div style="display:flex;gap:10px;"><label style="flex:1;font-size:12px;color:var(--slate2);">起始日期（签发日）*<input id="'+pre+'-pis" type="date" value="'+aEscC(p.issue)+'" style="'+inp+'"></label>'+
+    '<label style="flex:1;font-size:12px;color:var(--slate2);">结束日期（到期日）*<input id="'+pre+'-pex" type="date" value="'+aEscC(p.expiry)+'" style="'+inp+'"></label></div></div>';
+}
+function passportFormRead(pre){
+  var g = function(k){ var e = document.getElementById(pre+'-'+k); return e ? String(e.value||'').trim() : ''; };
+  var v = {no:g('pno'), issue:g('pis'), expiry:g('pex')};
+  if(!v.no || !v.issue || !v.expiry) return {err:'护照号、起始日期、结束日期都要填'};
+  if(v.expiry <= v.issue) return {err:'结束日期必须晚于起始日期'};
+  if(v.issue > todayStr()) return {err:'起始日期不能晚于今天'};
+  return {v:v};
+}
+/* 写进客户档案；Timeline 只记「已登记护照 / 修改护照信息」，不带护照号 */
+function passportSave(cl, v, action){
+  cl.passport = {text:'已登记', date:todayStr(), no:v.no, issue:v.issue, expiry:v.expiry};
+  cl.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:action, dt:nowFullDt(), kind:'plain'});
+  cl.updated = '刚刚';
+}
+var PASSPORT_CTX = null;
+/* 确认赴韩前的护照关：没有 → 必须填；已有 → 带出来让室长确认（可改）；填完才继续 cb */
+function passportGate(c, cb){
+  var cl = clientByName(c.name); if(!cl){ cb(); return; }
+  if(window.GMC_PASSPORT_AUTO){ if(!passportComplete(cl)) passportSave(cl, {no:'T'+Math.floor(Math.random()*9e6+1e6), issue:'2020-01-01', expiry:'2040-01-01'}, '已登记护照'); cb(); return; }
+  PASSPORT_CTX = {caseId:c.id, cb:cb};
+  var has = passportComplete(cl);
+  var ov = document.getElementById('passport-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'passport-overlay'; ov.style.zIndex = 95; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+(has ? '确认护照信息' : '登记护照信息')+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+(has ? '客人档案里已有护照，请确认（可修改）。' : '第一次确认赴韩，需要登记护照；之后会自动带出。')+'护照号不会出现在列表、通知和 Timeline。</div>'+
+    passportFormHtml(cl, 'pp')+'<div id="pp-warn" style="font-size:12px;margin-top:8px;"></div><div id="pp-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="passportCancel()">取消</button><button class="btn-primary" onclick="passportConfirm()">确认并继续</button></div></div>';
+  ov.classList.add('open'); passportWarnRefresh();
+  ['pex','pis'].forEach(function(k){ var e = document.getElementById('pp-'+k); if(e) e.onchange = passportWarnRefresh; });
+}
+function passportWarnRefresh(){
+  var w = document.getElementById('pp-warn'); if(!w) return;
+  var ex = (document.getElementById('pp-pex')||{}).value || '', c = PASSPORT_CTX && CASE_ITEMS.filter(function(x){ return x.id===PASSPORT_CTX.caseId; })[0];
+  var t = '';
+  if(ex && ex < todayStr()) t = '护照已过期（到期 '+ex+'）';
+  else if(ex && c && passportSurgeryDate(c) && ex < passportSurgeryDate(c)) t = '护照在施术前到期（到期 '+ex+'，施术 '+passportSurgeryDate(c)+'）';
+  w.innerHTML = t ? '<span style="color:#B3261E;font-weight:700;">⚠ '+t+'</span>' : '';
+}
+function passportCancel(){ var ov = document.getElementById('passport-overlay'); if(ov) ov.classList.remove('open'); PASSPORT_CTX = null; }
+function passportConfirm(){
+  var x = PASSPORT_CTX; if(!x) return;
+  var c = CASE_ITEMS.filter(function(k){ return k.id===x.caseId; })[0], cl = c && clientByName(c.name); if(!cl) return;
+  var r = passportFormRead('pp'); if(r.err){ var e = document.getElementById('pp-err'); e.textContent = r.err; e.style.display = 'block'; return; }
+  var had = passportComplete(cl), old = passportOf(cl), changed = !had || old.no!==r.v.no || old.issue!==r.v.issue || old.expiry!==r.v.expiry;
+  var act = !had ? '已登记护照' : (changed ? '修改护照信息' : '已确认护照信息');
+  if(changed || !had) passportSave(cl, r.v, act);
+  logCaseEvent(c, actingName(), act+'（确认赴韩）');
+  passportCancel(); x.cb();
 }
 
 /* 客户级 Timeline 只记：建档 / 基础信息修改（含修正）/ 案件开始 / 案件结案（进行中显示"进行中"） */

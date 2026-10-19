@@ -586,7 +586,7 @@ function addClient(o){
   var ts = nowFullDt();
   if(o.firstName!==undefined) o.name = joinName(o.firstName, o.lastName);
   var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), clinicId:CURRENT_CLINIC_ID, name:o.name, firstName:(o.firstName!==undefined ? String(o.firstName).trim() : o.name), lastName:(o.firstName!==undefined ? String(o.lastName||'').trim() : ''), gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
-    passport:{text:'未登记', date:''}, beautyRecords:[], consents:o.consent ? [o.consent] : [], createdBy:o.createdBy||actingName(), updated:'刚刚',
+    passport:{text:'未登记', date:'', no:'', issue:'', expiry:''}, beautyRecords:[], consents:o.consent ? [o.consent] : [], createdBy:o.createdBy||actingName(), updated:'刚刚',
     fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'},
     timeline:[{stage:'建档', actor:o.createdBy||actingName(), actorId:(o.createdBy&&o.createdBy!==actingName()) ? undefined : currentAccountId(), action:'建档 · '+(o.source||'室长建档'), dt:ts, kind:'plain'}]};
   CLIENTS.unshift(c);
@@ -596,6 +596,57 @@ function addClient(o){
 function caseBasic(c){
   var cl = clientByName(c.name), b = c.basic || {};
   return {gender:cl ? cl.gender : (b.gender||'—'), dob:cl ? (cl.dob||'—') : (b.dob||'—'), contact:cl ? (cl.phone||'—') : (b.contact||'—'), history:cl ? (cl.history||'无') : (b.history||'无')};
+}
+
+
+/* ---- CMD-1019-11：客人基本信息（生日 + 年龄、病史 / 过敏史醒目）与护照 ---- */
+function ageOfDob(dob){
+  if(!/^\d{4}-\d\d-\d\d$/.test(dob||'')) return null;
+  var t = todayStr().split('-'), b = dob.split('-'), a = (+t[0]) - (+b[0]);
+  if((+t[1]) < (+b[1]) || ((+t[1]) === (+b[1]) && (+t[2]) < (+b[2]))) a--;
+  return a;
+}
+/* 生日 YY-MM-DD（N 岁）：没有生日写「—」 */
+function dobAgeText(dob){
+  var a = ageOfDob(dob); if(a===null) return '—';
+  return dob.slice(2)+'（'+a+' 岁）';
+}
+/* 病史 / 过敏史：有内容红底醒目「⚠ …」，没有写「无」 */
+function historyMarkHtml(h){
+  var t = String(h||'').trim();
+  if(!t || t==='无') return '<span>无</span>';
+  return '<span style="display:inline-block;padding:3px 10px;border-radius:6px;background:#FDECEA;color:#B3261E;font-weight:700;">⚠ '+aEscC(t)+'</span>';
+}
+/* 护照：存在客户档案 passport {text,date,no,issue,expiry}；旧数据只有 text（没有护照号）算未登记 */
+function passportOf(cl){ var p = (cl && cl.passport) || {}; return {no:p.no||'', issue:p.issue||'', expiry:p.expiry||''}; }
+function passportComplete(cl){ var p = passportOf(cl); return !!(p.no && p.issue && p.expiry); }
+function passportSurgeryDate(c){ var ks = c && c.krSchedule || {}; return ks.confirmedDate || ks.primary || ''; }
+/* level：none 未登记 / expired 已过期 / before 施术前到期 / ok */
+function passportAlert(c){
+  var cl = clientByName(c.name);
+  if(!passportComplete(cl)) return {level:'none', text:'护照未登记'};
+  var p = passportOf(cl);
+  if(p.expiry < todayStr()) return {level:'expired', text:'护照已过期（到期 '+p.expiry+'）'};
+  var sd = passportSurgeryDate(c);
+  if(sd && p.expiry < sd) return {level:'before', text:'护照在施术前到期（到期 '+p.expiry+'，施术 '+sd+'）'};
+  return {level:'ok', text:'有效至 '+p.expiry};
+}
+/* 护照可见范围：IN 室长（管理者 / 一般）、KR 室长（管理者 / 一般）；院长 / 代表院长 / IN 老板不可见 */
+function passportVisible(){ return canDo('work') || canDo('krwork'); }
+/* 一行护照状态（不含护照号，IN 赴韩施术计划 / KR 案件页提醒用）：过期或施术前到期红字 */
+function passportStatusHtml(c){
+  if(!passportVisible()) return '';
+  var a = passportAlert(c), bad = a.level==='expired' || a.level==='before' || a.level==='none';
+  return '<span style="font-size:12px;'+(bad ? 'color:#B3261E;font-weight:700;' : 'color:var(--slate2);')+'">'+(bad ? '⚠ ' : '护照：')+aEscC(a.text)+'</span>';
+}
+/* IN 基础资料最上面的「客人基本信息」：读客户档案（只存一份），［修改］写回档案 */
+function clientBasicBlockHtml(c){
+  var cl = clientByName(c.name); if(!cl) return '';
+  var nm = String(c.name).replace(/'/g, "\\'"), ed = !isEnded(c);
+  var row = function(k, v, field){ return '<div class="case-field-row"><span class="fk">'+k+'</span><span style="flex-grow:1;font-size:13px;">'+v+'</span>'+(ed && field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</div>'; };
+  return '<div style="margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);"><div class="info-heading" style="margin-bottom:4px;">客人基本信息 <span style="font-weight:400;font-size:11px;color:var(--muted);">来自客户档案，这里修改会同步到档案</span></div>'+
+    row('姓名', aEscC(cl.name), 'name')+row('性别', aEscC(cl.gender||'—'), 'gender')+row('生日', aEscC(dobAgeText(cl.dob)), 'gender')+
+    row('病史 / 过敏史', historyMarkHtml(cl.history), 'history')+row('联系方式', aEscC(cl.phone||'—'), 'phone')+'</div>';
 }
 
 /* ---- 医美史（结构化，2026-10-06）：客户档案里一笔一笔的记录 {id, year, month, project, source:'客人自填'|'室长登记', addedAt, newCaseId} ----
@@ -2361,6 +2412,7 @@ function materialsCardHtml(c){
 
   return '<div class="card" style="padding:22px 24px;">'+
     resumeBannerHtml(c)+
+    clientBasicBlockHtml(c)+ /* CMD-1019-11：客人基本信息在基础资料最上面 */
     linkRowHtml(c)+
     '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
@@ -2781,6 +2833,7 @@ function basicTabHtml(c){
   var metaviewText = c.metaviewStatus==='ready' ? '已检测到' : '待检测';
   var consultLabel = c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult===true ? '面诊' : '不需要面诊');
   return '<div class="card" style="padding:4px 24px;">'+
+    '<div style="padding-top:14px;">'+clientBasicBlockHtml(c)+'</div>'+
     suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼</span><div style="flex-grow:1;padding-bottom:10px;">'+concernCardsHtml(c, {supp:true})+'</div></div>'+
     intentionInfoHtml(c)+
@@ -3853,7 +3906,14 @@ function lmSettle(){
 function confirmProjectSelection(){
   var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return;
   if(cartTotals(c.recommended).onlyService){ alert('서비스需搭配付费项目'); return; }
-  var cpM = compPending(c, 'main'); if(cpM && cartTotals(c.recommended).total < cpM.credit){ alert('置换额度不退钱：还剩 '+formatCurrency(cpM.credit-cartTotals(c.recommended).total,'IDR')+'，请再加项目'); return; }
+  var cp0 = compPending(c, 'main'); if(cp0 && cartTotals(c.recommended).total < cp0.credit){ alert('置换额度不退钱：还剩 '+formatCurrency(cp0.credit-cartTotals(c.recommended).total,'IDR')+'，请再加项目'); return; }
+  /* CMD-1019-11：确认赴韩（选了赴韩项目、生成定金结算单）时要有护照：没有必须填，已有的带出来确认 */
+  if((c.recommended||[]).some(function(it){ return it.origin==='KR'; })) return passportGate(c, function(){ confirmProjectSelectionGo(); });
+  confirmProjectSelectionGo();
+}
+function confirmProjectSelectionGo(){
+  var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return;
+  var cpM = compPending(c, 'main');
   logCaseEvent(c, actingName(), '确认所选管理项目：'+c.recommended.map(function(it){ return it.name; }).join('、'));
   generateSettlementBatch(c);
   if(cpM){ var lb = c.settlementBatches[c.settlementBatches.length-1]; lb.compCredit = cpM.credit; }
@@ -4997,7 +5057,7 @@ function krProcedureTabMain(c, tabsHtml){
   var recCard = recHtml ? '<div class="card" style="padding:16px 24px;"><div style="display:flex;align-items:center;cursor:pointer;" onclick="toggleKrPlanRec(\''+c.id+'\')"><b style="font-size:14px;flex:1;">推荐项目整理</b><span style="color:var(--muted);">'+(recOpen ? '收起 ▴' : '展开 ▾')+'</span></div>'+(recOpen ? recHtml.replace(/margin:10px 0;/,'margin:10px 0 0;') : '')+'</div>' : '';
   var noteBox = hasActive ? '<div style="margin-top:14px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">印尼室长备注</div><textarea rows="3" placeholder="印尼室长备注（选填，打印时一起印出）" onchange="setRecInNote(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;resize:vertical;">'+String(c.recInNote||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea></div>' : '';
   return (tabsHtml||'')+'<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;">'+subStatusRowHtml(caseSubStatusItems(c))+body+'</div>'+recCard+
-    '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;">确认赴韩项目</div>'+itemsHtml+krPlanMoneyLine(c)+noteBox+innCareCardHtml(c)+'</div>'+inHoldMgmtHtml(c)+inPostcareCardHtml(c)+'</div>';
+    '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;">确认赴韩项目</div>'+itemsHtml+krPlanMoneyLine(c)+(passportVisible() ? '<div style="margin-top:8px;">'+passportStatusHtml(c)+'</div>' : '')+noteBox+innCareCardHtml(c)+'</div>'+inHoldMgmtHtml(c)+inPostcareCardHtml(c)+'</div>';
 }
 
 function markConsultPaid(){

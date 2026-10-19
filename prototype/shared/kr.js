@@ -438,6 +438,12 @@ function krCardBox(title, body){ return '<div class="card" style="padding:16px 2
 function krEmpty(txt){ return '<div style="padding:14px 0;color:var(--muted);font-size:13px;">'+(txt||'—')+'</div>'; }
 
 /* 各 tab 的内容（在 Store.withClinic 里调用，c 是该诊所分区里的案件） */
+/* 护照（只有 KR 室长 / 管理者看得到，院长 / 代表院长不显示）：护照号 + 签发 / 到期，过期或施术前到期红字 */
+function passportKrHtml(c, cl){
+  if(!passportComplete(cl)) return '<span style="color:#B3261E;font-weight:700;">⚠ IN 室长尚未登记护照</span>';
+  var p = passportOf(cl), a = passportAlert(c), bad = a.level==='expired' || a.level==='before';
+  return krEsc(p.no)+' <span style="font-size:11px;color:var(--muted);">签发 '+krEsc(p.issue)+' · 到期 '+krEsc(p.expiry)+'</span>'+(bad ? ' <b style="color:#B3261E;">⚠ '+krEsc(a.text.replace(/（.*$/,''))+'</b>' : '');
+}
 function krTabBasic(c){
   var b = caseBasic(c), cl = clientByName(c.name);
   var recs = beautyRecordsOf(cl).slice().sort(function(x,y){ return beautySortKey(y)-beautySortKey(x); });
@@ -446,7 +452,8 @@ function krTabBasic(c){
     return '<div class="case-field-row"><span style="min-width:90px;font-size:13px;">'+beautyYm(r)+'</span><span style="flex:1;font-size:13px;">'+krEsc(r.project)+'</span>'+(isNew?'<span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">本次新增</span>':'')+'<span style="font-size:11px;color:var(--muted);margin-left:8px;">'+krEsc(r.source)+'</span></div>';
   }).join('') : krEmpty('没有医美史记录');
   return krCardBox('客户信息',
-      krKV('客户姓名', krEsc(c.name))+krKV('性别', krEsc(b.gender))+krKV('出生日期', krEsc(b.dob))+krKV('联系方式', krEsc(maskPhone(b.contact))+' <span style="font-size:11px;color:var(--muted);">（联系方式由印尼室长处理，KR 端不显示）</span>')+krKV('病史 / 过敏史', krEsc(b.history)))+
+      krKV('客户姓名', krEsc(c.name))+krKV('性别', krEsc(b.gender))+krKV('生日（年龄）', krEsc(dobAgeText(cl ? cl.dob : '')))+krKV('病史 / 过敏史', historyMarkHtml(b.history))+
+      (passportVisible() ? krKV('护照', passportKrHtml(c, cl)) : ''))+
     krCardBox('客人资料（按部位：苦恼说明 / 希望预期 / 视频 / 照片）', concernBlockHtml(c))+
     krCardBox('医美史', beauty)+
     krCardBox('检测与上传', krUploadRow(c, '메타뷰 检测', '메타뷰 检测报告', c.metaviewStatus==='ready', '已检测到')+krUploadRow(c, '照片', '照片', c.photoUploaded, '✓ 已上传')+krUploadRow(c, '视频', '视频', c.videoUploaded, '✓ 已上传'));
@@ -859,6 +866,7 @@ var KR_ALERT_STYLE = 'background:#FDECEA;border:1px solid #E5A19B;border-radius:
 /* 案件页最上面（页头下、tab 上）的红色提醒条：待付款（在韩增加）/ 待确认麻醉同意书；两件都有就叠放，处理完自动消失；只在 KR 端出现 */
 function krTopAlerts(c){
   var out = '', pp = pendingPayItems(c), an = anesPendingItems(c), can = krCan();
+  if(passportVisible()){ var pa = passportAlert(c); if(pa.level==='expired' || pa.level==='before') out += '<div style="'+KR_ALERT_STYLE+'"><span style="font-size:14px;font-weight:700;color:#B3261E;">⚠ 护照</span><span style="flex:1;font-size:13px;">'+krEsc(pa.text)+'</span></div>'; }
   if(pp.length){ var tot = pp.reduce(function(s, it){ return s + itemKrAmount(it); }, 0);
     out += '<div style="'+KR_ALERT_STYLE+'"><span style="font-size:14px;font-weight:700;color:#B3261E;">⚠ 待付款</span><span style="flex:1;font-size:13px;">在韩增加 '+pp.length+' 项未付款：'+pp.map(function(it){ return krEsc(it.name)+(it.qty>1 ? ' ×'+it.qty : ''); }).join('、')+'（合计 '+formatCurrency(tot,'KRW')+'）</span>'+(can ? '<button class="btn-primary" style="padding:5px 16px;font-size:13px;" onclick="krPayOpen()">去付款</button>' : '')+'</div>'; }
   if(an.length){ out += '<div style="'+KR_ALERT_STYLE+'"><span style="font-size:14px;font-weight:700;color:#B3261E;">⚠ 待确认麻醉同意书</span><span style="flex:1;font-size:13px;">'+an.map(function(it){ return krEsc(it.name)+'（'+krEsc((it.anesthesia||{}).label||'睡眠 / 全麻')+'）'; }).join('、')+' 尚未确认麻醉同意书</span>'+(can ? '<button class="btn-primary" style="padding:5px 16px;font-size:13px;" onclick="krAnesOpen()">确认</button>' : '')+'</div>'; }

@@ -259,9 +259,9 @@ RT.runKr = function(){
   var openRow = rows.filter(function(r){ return r.caseNo==='A000002' || r.caseNo==='A000003'; })[0] || rows[0];
   var masked = null, consultBtns = [];
   if(openRow){
-    T(function(){ krShowCase(openRow.clinicId, openRow.id); krSetCaseTab('basic'); var t = document.getElementById('kr-casedetail').textContent; masked = (/\*\*\*\*/.test(t) && !/\+62 8\d\d-\d{4}-\d{4}/.test(t)); });
+    T(function(){ krShowCase(openRow.clinicId, openRow.id); krSetCaseTab('basic'); var t = document.getElementById('kr-casedetail').textContent; masked = (!/联系方式|\*\*\*\*/.test(t) && !/\+62 \d{3}-\d{4}-\d{4}/.test(t)); /* CMD-1019-11：KR 端不显示联系方式（连遮罩也没有） */ });
   }
-  RT.cell('客人联系方式遮蔽（+62 000-****-****）', '✅', RT.yn(masked===true), openRow ? '看的案件 '+openRow.caseNo : '');
+  RT.cell('客人联系方式完全不显示（CMD-1019-11）', '✅', RT.yn(masked===true), openRow ? '看的案件 '+openRow.caseNo : '');
   function borrow(st){ /* 院长名下没有这个状态的案件：临时把一个同状态案件的院长改成自己，测完改回 */
     var hit = null; krClinics().forEach(function(cl){ if(hit) return; Store.withClinic(cl.id, function(){ CASE_ITEMS.forEach(function(c){ if(!hit && krCaseVisible(c, hid) && c.consultRequested && c.consultStatus===st && (st!=='report_ready' || c.stage==='consult') && c.director!==me) hit = {cid:cl.id, id:c.id, old:c.director}; }); }); });
     if(!hit) return null; Store.mutateClinic(hit.cid, function(){ CASE_ITEMS.filter(function(x){ return x.id===hit.id; })[0].director = me; }); RT._borrowed = RT._borrowed || []; RT._borrowed.push(hit); rows = krAllCases(); return rows.filter(function(x){ return x.id===hit.id; })[0] || null; }

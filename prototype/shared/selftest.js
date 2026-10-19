@@ -3,7 +3,8 @@
    客人名字前加「T2-」；案件标 round=2。结果放在 ST.R（数组），ST.report() 返回 Markdown 表。 */
 (function(){
   var prevR = (window.ST && window.ST.R) || [];
-  var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
+  window.GMC_PASSPORT_AUTO = true; /* CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
+var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   window.GMC_NO_TABS = true; /* CMD-1019-04：自测里所有进案件的入口都在当前分页打开 */ window.confirm = function(){ return true; }; window.alert = function(m){ if(cur) cur.alerts.push(String(m)); }; window.open = function(){ return null; };
   try{ localStorage.setItem('gmc_cfg_round', '2'); }catch(e){}
   ST.today = function(){ return todayStr(); };
@@ -1868,6 +1869,42 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(coreAddOnItem(c2, lib.name, ST.krBy, {local:{name:lib.name, specLabel:sp.label, price:sp.price*2, projectId:lib.id, qty:6, copies:2, specTimes:3, firstDay:0, interval:5}}), '到院添加 2 份'); var ni2 = c2.procedureItems.filter(function(it){ return (it.local || /^lc:/.test(it.projectId||'')) && it.qty===6; })[0]; ST.ok(!!ni2 && ni2.copies===2, '2 份 = 共 6 次');
     var mig = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===51; })[0]; if(ST.ok(!!mig, '迁移 51 存在')){ var old = {id:'o51', caseNo:'A51', procedureItems:[{name:lib.name+' · '+sp.label, mgmtPlan:true, qty:2, price:100}], recommended:[], krScope:{items:[{name:'x', mgmt:true, specLabel:sp.label, qty:1}]}}, ns = []; mig.fn(old, {note:function(t0){ ns.push(t0); }}); ST.ok(old.procedureItems[0].qty===6 && old.procedureItems[0].copies===2 && old.krScope.items[0].qty===3, '迁移：旧 qty（当成份数）→ 总次数 = 规格次数 × 份数'); var again = JSON.stringify(old); mig.fn(old, {note:function(){}}); ST.ok(JSON.stringify(old)===again, '迁移幂等'); }
   });
+  ST.def('R40a','CMD-1019-11：基础资料「客人基本信息」（生日 YY-MM-DD（N 岁）、病史过敏史醒目、联系方式，修改同步档案）+ 确认赴韩时登记护照（第一次必填 → 之后带出；过期 / 施术前到期报红；KR 室长可见院长不可见；Timeline 不带护照号）（IN 分页跑 A1；KR 分页跑 KM1 / KD1）',function(){
+    var me = currentAccount(), kr = isKrAccount();
+    ST.ok(ageOfDob('1992-03-08')===(function(){ var t = todayStr().split('-'); var a = (+t[0])-1992; if((+t[1])<3 || ((+t[1])===3 && (+t[2])<8)) a--; return a; })(), '年龄按今天算');
+    ST.ok(/^92-03-08（\d+ 岁）$/.test(dobAgeText('1992-03-08')) && dobAgeText('')==='—', '生日显示 YY-MM-DD（N 岁）');
+    ST.ok(/无/.test(historyMarkHtml('无')) && !/⚠/.test(historyMarkHtml('无')) && /⚠ 青霉素/.test(historyMarkHtml('青霉素')), '病史 / 过敏史：无 = 写「无」，有内容 = 醒目');
+    if(!kr){
+      if(!ST.ok(!!me, '要先登录')) return;
+      var c = ST.newRes('P40'); ST.consultToReport(c); ST.open(c); var cl = clientByName(c.name); cl.history = '青霉素过敏'; cl.dob = '1992-03-08'; cl.passport = {text:'未登记', date:'', no:'', issue:'', expiry:''};
+      c.activeCaseTab = 'basic'; renderCaseBody(c); var tx = document.getElementById('case-body') ? document.getElementById('case-body').innerText : document.body.innerText;
+      ST.ok(/客人基本信息/.test(tx) && /92-03-08（\d+ 岁）/.test(tx) && /青霉素过敏/.test(tx) && tx.indexOf(cl.phone)>-1, 'IN 基础资料最上面有客人基本信息（生日 / 年龄 / 过敏 / 联系方式）');
+      openClientEdit(c.name, 'history'); document.getElementById('ce-v').value = '花粉过敏'; saveClientEdit(); ST.ok(clientByName(c.name).history==='花粉过敏', '这里修改 = 客户档案同步');
+      var cs = ['ok'];
+      c.activeCaseTab = 'kr'; c.projectOriginFilter = 'KR'; var p = PROJECT_LIBRARY.filter(function(x){ return x.name==='假体隆鼻' && x.origin==='KR' && x.hospitalId==='H1'; })[0]; toggleProject(p.id);
+      var was = window.GMC_PASSPORT_AUTO; window.GMC_PASSPORT_AUTO = false;
+      try{
+        confirmProjectSelection(); ST.ok(document.getElementById('passport-overlay').classList.contains('open') && !(c.settlementBatches||[]).length, '第一次确认赴韩：弹护照窗，没填之前不生成结算单');
+        passportConfirm(); ST.ok(!(c.settlementBatches||[]).length && document.getElementById('pp-err').style.display==='block', '三项必填，空着不能继续');
+        document.getElementById('pp-pno').value = 'E1234567'; document.getElementById('pp-pis').value = '2015-01-01'; document.getElementById('pp-pex').value = '2020-01-01'; passportConfirm();
+        ST.ok((c.settlementBatches||[]).length===1 && passportComplete(clientByName(c.name)), '填完（已过期也允许）→ 继续生成结算单');
+        ST.ok(passportAlert(c).level==='expired' && /护照已过期/.test(passportStatusHtml(c)), '过期报红');
+        ST.ok(!JSON.stringify(clientByName(c.name).timeline).includes('E1234567') && !JSON.stringify(c.logEntries).includes('E1234567') && !JSON.stringify(NOTIFS).includes('E1234567'), '护照号不进 Timeline / 通知');
+        var c2 = ST.newRes('P40b'); c2.name = c.name; ST.open(c2); passportGate(c2, function(){}); ST.ok(document.getElementById('pp-pno').value==='E1234567', '第二个赴韩案件自动带出护照');
+        passportCancel();
+        clientByName(c.name).passport.expiry = (new Date(Date.now()+30*86400000)).toISOString().slice(0,10); c.krSchedule = {status:'pending', primary:(new Date(Date.now()+60*86400000)).toISOString().slice(0,10), backup:''};
+        ST.ok(passportAlert(c).level==='before' && /护照在施术前到期/.test(passportStatusHtml(c)), '到期日早于施术日 → 施术前到期报红');
+      } finally { window.GMC_PASSPORT_AUTO = was; }
+    } else {
+      var r = krAllCases()[0]; if(!ST.ok(!!r, '没有可看的案件')) return;
+      Store.mutateClinic(r.clinicId, function(){ var c1 = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], cl1 = clientByName(c1.name); if(cl1){ cl1.history = '青霉素过敏'; cl1.passport = {text:'已登记', date:todayStr(), no:'K7654321', issue:'2020-01-01', expiry:'2040-01-01'}; } });
+      krShowCase(r.clinicId, r.id, {here:true}); krSetCaseTab('basic'); var t2 = document.getElementById('krcase-body').innerText;
+      ST.ok(/生日（年龄）/.test(t2) && /青霉素过敏/.test(t2), 'KR 基础资料有生日（年龄）和病史 / 过敏史');
+      ST.ok(!/联系方式|\*\*\*\*|\+62 \d/.test(t2), 'KR 基础资料没有联系方式（含遮罩）');
+      if(canDo('krwork')) ST.ok(/K7654321/.test(t2), 'KR 室长看得到护照'); else ST.ok(!/护照|K7654321/.test(t2), 'KR 院长 / 代表院长看不到护照');
+    }
+  });
+
   ST.def('R32b','KM1：KR 面诊 tab 按部位显示（希望预期 / 预算在上）；院长账号也一样（先在 A1 跑 R32a）',function(){
     var me = currentAccount(); if(!ST.ok(me && (me.id==='KM1' || me.id==='KD1'), '要在 KM1 / KD1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R32')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R32a')) return;
     var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件（已缴面诊费的面诊案件才在 KR 看得到）')) return; krShowCase(r.clinicId, r.id); krSetCaseTab('consult'); var tc = document.getElementById('krcase-body').innerText; ST.ok(!/客人资料（按部位|苦恼说明/.test(tc), 'KR 面诊 tab：没有客人资料块（CMD-1019-08）'); krSetCaseTab('basic'); var t = document.getElementById('krcase-body').innerText;
