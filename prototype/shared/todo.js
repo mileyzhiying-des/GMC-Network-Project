@@ -77,7 +77,7 @@ function inTodoItems(){
     if(scheduleState(c)==='Confirmed' && ks && !surgMsgSent(c)) /* CMD-1019-12：改成直接［发送给客人］，发送后（或 KR 改了日期 / 时间 / 地址又没重发之前）才算 */
       push(todoMk('relay', (c.surgeryMsg ? '施术日期已变更：重新发送给客人（' : 'KR 已确认施术时间：发送给客人（')+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-send-row'}); }));
     /* 确认客人日程有无变化：赴韩施术前 2 天出现（CMD-1014-01 二·3） */
-    if(calNeedsRecheck(c)) push(todoMk('recheck', '确认客人日程有无变化（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, todoInGo(c, 'kr')));
+    if(calNeedsRecheck(c)) push(todoMk('recheck', '施术前提醒：发送给客人（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-remind-row'}); }));
     /* 待收款 */
     closeBlockers(c).forEach(function(b){ push(todoMk('pay', '待收款：'+b, c, '', false, todoPayGo(c, b))); }); /* IN-08：点了去那张待付款结算单所在的 tab（赴韩施术计划 / 本地管理）并滚到那张结算单 */
     /* 当天本地项目未标完成：营业结束前 1 小时出现，标完才消失 */

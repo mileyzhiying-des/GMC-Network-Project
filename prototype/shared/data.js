@@ -181,7 +181,11 @@ var KR_TZ = 'Asia/Seoul'; /* 韩国医院时区 */
    赴韩定金比例不在这里（GMC 统一设定）。 */
 var SLOT_MIN = 30; /* 时段长度（分钟），固定 30（我的判断：设定里不提供修改） */
 /* 赴韩施术日期通知模板（印尼文 + 中文）。变量：{clinic} {name} {date} {time_kr} {time_id} {hospital} {address} {anes} {phone}；模板在诊所设定里可改，这里只是默认值 */
-var SMS_SURGERY_DEFAULT = '【{clinic}】Halo {name}, jadwal operasi Anda di Korea: tanggal {date}, tiba di rumah sakit pukul {time_kr} (waktu Korea) / {time_id} (waktu Indonesia). Rumah sakit: {hospital}. Alamat: {address}. {anes}Hubungi klinik: {phone}　|　您好 {name}，赴韩施术日期 {date}，到院时间 {time_kr}（韩国时间）/ {time_id}（印尼时间），医院：{hospital}，地址：{address}。{anes}诊所联系方式：{phone}';
+var SMS_SURGERY_NOTICE_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术时间已确认。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
+var SMS_SURGERY_REMIND_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术项目将在两天后进行。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
+/* 模板版本：key = 诊所设定 sms 里的键；语言先只做中文（之后加印尼文 = 增加 zh 以外的键，如 surgeryNotice_id） */
+var SURG_TPLS = {notice:{label:'施术日期通知', key:'surgeryNotice', kind:'surgery', defaults:{zh:SMS_SURGERY_NOTICE_ZH}}, remind:{label:'施术前提醒', key:'surgeryRemind', kind:'surgeryRemind', defaults:{zh:SMS_SURGERY_REMIND_ZH}}};
+function surgTplOf(ver, lang){ var t = SURG_TPLS[ver]; lang = lang || 'zh'; var k = t.key + (lang==='zh' ? '' : '_'+lang); return (CLINIC_SETTINGS.sms && CLINIC_SETTINGS.sms[k]) || t.defaults[lang] || t.defaults.zh; }
 function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分区里）；o 可覆盖名称、地址等 */
  var s = {
   name:'GMC 合作诊所（雅加达）', address:'Jl. Jenderal Sudirman Kav. 52, Jakarta Selatan', phone:'+62 21 5550 1234', city:'雅加达', tz:'Asia/Jakarta', /* tz 由地址/城市自动判定（clinicTzOf），不能手动改 */
@@ -199,7 +203,7 @@ function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分
     confirm:'【{clinic}】Halo {name}, reservasi Anda {time} sudah dikonfirmasi. Alamat: {address}, Telp: {phone}. Lihat/batalkan: {url}　|　您好 {name}，您已预约 {time}，地址：{address}。查看/取消预约：{url}',
     remind:'【{clinic}】Pengingat: reservasi {name} pada {time}. Alamat: {address}. Lihat/batalkan: {url}　|　提醒：您 {time} 有预约。查看/取消：{url}',
     cancel:'【{clinic}】Halo {name}, reservasi {time} telah dibatalkan. Reservasi ulang: {url}　|　您 {time} 的预约已取消，重新预约：{url}',
-    surgery:SMS_SURGERY_DEFAULT /* CMD-1019-12：赴韩施术日期通知（短信 / WhatsApp 共用） */
+    surgeryNotice:SMS_SURGERY_NOTICE_ZH, surgeryRemind:SMS_SURGERY_REMIND_ZH /* CMD-1019-13：赴韩施术日期通知 / 施术前提醒（短信 / WhatsApp 共用，先只做中文） */
   },
   privacyVersion:'v1.0',
   privacyPolicy:'本诊所仅为办理预约、接待和医美咨询收集您的个人资料与健康资料，并按《隐私/数据跨境使用授权同意书》约定处理；您可随时要求查看、更正或删除。',
@@ -235,6 +239,13 @@ var C3_CASE_IDS = ['budi', 'dinda', 'wulan', 'lina'];
 var CURRENT_CLINIC_ID = 'C1'; /* 当前页面所属诊所；在下面 currentAccount() 定义之后由 resolveClinicId() 重新计算 */
 function clinicById(id){ return CLINICS.filter(function(c){ return c.id===id; })[0] || null; }
 function hospitalById(id){ return HOSPITALS.filter(function(h){ return h.id===id; })[0] || null; }
+/* 医院英文名 / 英文地址（给客人的短信用）：KR 医院设定里填（HOSPITAL_DATA[h].nameEn / addressEn）；从没填过用演示默认值；清空了就退回原文（韩文） */
+var HOSPITAL_EN_DEMO = {H1:{name:'SOSU Plastic Surgery', address:'100 Apgujeong-ro, Gangnam-gu, Seoul'}, H2:{name:'Gangnam Beauty Clinic', address:'508 Nonhyeon-ro, Gangnam-gu, Seoul'}};
+function hospitalEn(id){
+  var h = hospitalById(id) || {name:{}, address:''}, hd = (typeof HOSPITAL_DATA!=='undefined' && HOSPITAL_DATA[id]) || {}, dm = HOSPITAL_EN_DEMO[id] || {};
+  var nm = hd.nameEn!==undefined ? hd.nameEn : dm.name, ad = hd.addressEn!==undefined ? hd.addressEn : dm.address;
+  return {name:String(nm||'').trim() || (h.name && h.name.ko) || '—', address:String(ad||'').trim() || h.address || '—'};
+}
 function hospitalName(id, lang){ var h = hospitalById(id); return h ? (h.name[lang||'ko'] || h.name.ko) : '—'; }
 function linkedHospitalIds(clinicId){ return CLINIC_HOSPITALS.filter(function(r){ return r.clinicId===(clinicId||CURRENT_CLINIC_ID); }).map(function(r){ return r.hospitalId; }); }
 function linkedHospitals(clinicId){ return linkedHospitalIds(clinicId).map(hospitalById).filter(Boolean); }
@@ -616,9 +627,9 @@ function dobAgeText(dob){
 }
 /* 病史 / 过敏史：有内容红底醒目「⚠ …」，没有写「无」 */
 function historyMarkHtml(h){
-  var t = String(h||'').trim();
-  if(!t || t==='无') return '<span>无</span>';
-  return '<span style="display:inline-block;padding:3px 10px;border-radius:6px;background:#FDECEA;color:#B3261E;font-weight:700;">⚠ '+aEscC(t)+'</span>';
+  var t = String(h||'').replace(/\u7121/g, '\u65e0').trim(); /* 繁体「無」统一成简体「无」 */
+  if(!t || t==='无') return '<span lang="zh-CN">无</span>';
+  return '<span lang="zh-CN">'+aEscC(t)+'</span>'; /* CMD-1019-13：普通文字，不标红 */
 }
 /* 护照：存在客户档案 passport {text,date,no,issue,expiry}；旧数据只有 text（没有护照号）算未登记 */
 function passportOf(cl){ var p = (cl && cl.passport) || {}; return {no:p.no||'', issue:p.issue||'', expiry:p.expiry||''}; }
@@ -685,7 +696,7 @@ function projectNameOptions(){ return PROJECT_LIBRARY.filter(function(p){ return
 /* ---- 短信（演示：不真的发，全部记在 SMS_LOG；模板读诊所设定，验证码格式固定） ---- */
 var SMS_LOG = [];   /* {id, ts, to, kind, text, caseId} */
 var SMS_SEQ = 1;
-var SMS_KIND_NAMES = {code:'验证码', link:'预约链接', confirm:'预约确认', remind:'预约提醒', cancel:'预约取消', surgery:'施术日期'};
+var SMS_KIND_NAMES = {code:'验证码', link:'预约链接', confirm:'预约确认', remind:'预约提醒', cancel:'预约取消', surgery:'施术日期通知', surgeryRemind:'施术前提醒'};
 var SMS_CODE_FORMAT = '【GMC Network】Kode verifikasi / 验证码：{code}（5 menit / 5 分钟内有效）。Jangan beritahu siapa pun / 请勿告诉他人。';
 function bookingUrl(params){ return location.origin + '/booking.html?' + new URLSearchParams(Object.assign({clinic:CURRENT_CLINIC_ID}, params)).toString(); } /* 链接必须带诊所（?clinic=）；原型不带默认 C1，正式版没带应显示错误 */
 function caseViewUrl(c){ return bookingUrl({view:c.caseNo}); }
@@ -697,7 +708,7 @@ function logSms(kind, to, text, caseId){
 }
 /* 按类型发短信：code 用固定格式，其余读诊所设定的模板 */
 function sendSms(kind, to, vars, caseId){
-  var tpl = kind==='code' ? SMS_CODE_FORMAT : (CLINIC_SETTINGS.sms[kind] || (kind==='surgery' ? SMS_SURGERY_DEFAULT : ''));
+  var tpl = kind==='code' ? SMS_CODE_FORMAT : (CLINIC_SETTINGS.sms[kind] || '');
   var text = smsFill(tpl, Object.assign({clinic:CLINIC_SETTINGS.name, address:CLINIC_SETTINGS.address, phone:CLINIC_SETTINGS.phone}, vars||{}));
   return logSms(kind, to, text, caseId);
 }
