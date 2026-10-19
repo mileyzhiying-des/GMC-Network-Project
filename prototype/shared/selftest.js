@@ -1287,8 +1287,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     if(ST.ok(!!r, '没有等待报告的案件（stageW 夹具）')){ var c = r.c, old = c.consultContentAt; c.consultContentAt = nowFullDt(); var it = krTodoItems(rows).filter(function(i){ return i.kind==='send' && i.caseId===c.id; })[0]; ST.ok(!!it && /发送诊疗方案/.test(it.text), '上传后出现「发送诊疗方案」待办'); c.consultContentAt = old; }
     var r2 = rows.filter(function(x){ return krActiveItems(x.c).some(function(i){ return (i.postcare||[]).length; }); })[0];
     if(ST.ok(!!r2, '没有带术后管理的案件（stageC 夹具）')){ var c2 = r2.c, pb = c2.krBalancePaid, bk = c2.pcBooked; c2.krBalancePaid = true; c2.pcBooked = false;
-      ST.ok(krPcbNeed(c2) && /安排术后管理/.test(krTabItems(c2)), '项目 tab「术后项目」有［安排术后管理］'); var st = scheduleState(c2); if(st==='Confirmed' || st==='Arrived') ST.ok(/安排术后管理/.test(krTabProc(c2)), '施术 tab 也有');
-      c2.pcBooked = true; ST.ok(!krPcbNeed(c2) && !/安排术后管理/.test(krTabItems(c2)), '约完就不再出现'); c2.krBalancePaid = false; c2.pcBooked = false; ST.ok(!krPcbNeed(c2), '尾款没付不出现'); c2.krBalancePaid = pb; c2.pcBooked = bk; }
+      ST.ok(typeof krPcbOpen==='undefined' && typeof krPcbNeed==='undefined' && !/安排术后管理/.test(krTabItems(c2)) && !/术后管理预约/.test(krTabItems(c2).replace(/术后管理预约[^<]*<\/b>/,'x')), 'CMD-1015-30：旧的「术后管理预约」卡和［安排术后管理］小窗口已拿掉，预约入口只剩今日进行后的弹窗和项目卡［预约时间］'); c2.krBalancePaid = pb; c2.pcBooked = bk; }
   });
   ST.def('R15d','IN 五项小修：案例链接在行尾 / 赴韩默认韩币 / 转告·确认卡片按完消失 / 打印先预览 / 尾款 IN 看得到（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;

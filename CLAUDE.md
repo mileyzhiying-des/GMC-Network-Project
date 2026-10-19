@@ -824,3 +824,10 @@ prototype/shared/app.css  共用样式
 - **术后管理不占院长时间**（取代 21 的相关规则）：［预约时间］（`krBkdOpen('care')`）、今日进行后的预约弹窗（`krCareMiniGo`）、修改时间（`krTimeEdit`，`KR_TE.care`）不选院长、不查院长冲突，只看医院休诊（`krbClosedText`，硬挡）和午休 / 营业时间外（`krOffHoursText`，确认后可约）；`krDayAgendaHtml` 不再列术后管理；KR 日历（`krcEvents`）术后管理挂在 `KRB_HOSP`（全院）画在医院层，带 `noCap`，`krCapUsed` 不计入约满。**持有项目使用（`holdUseOf`）和施术项目预约使用（`surgUse`）不在此列**，仍按原规则。
 - 测试：selftest 新增 R30a（A1 造案件）/ R30b（KM1：本次使用 / 本次取消 / 地点栏 / 和院长「不可预约」同时段的术后管理不询问冲突 / 日历医院层）；R28b / R29b 栏位断言加「地点」；R29b / R30b 的预约时间改在营业时间内（早于开门的时间会弹「营业时间外」确认）。A1 全套 + KM1 用例（BK 三段）通过，roletest 9 个账号 0 不符。
 - 我的判断（未经确认）：管理项目（持有）在主案件上［本次使用］= 加进今日案件，按今日行的［操作完成］才扣次数；术后管理预约在医院层显示「全院」，院长账号（KD1）日历看不到它。
+
+## CMD-1015-30 续（2026-10-19，Notion 任务页补了 4～6 项后重跑；追加；旧文字保留作历史）
+- 基准 **e7537ee**（1～3 项已在 e7537ee 做完），本次单个提交，**未推送**，不带开关，数据版本不变（46）。
+- **④ 施术 / 管理分页拿掉「项目类型」栏**（`krPcGrid` 4 栏：项目｜次数｜购买 / 预约 / 使用时间｜Action；`krPcHead` 过滤掉「项目类型」，`krPcRow` 不再画类型标签）。
+- **⑤ 拿掉旧的「术后管理预约」卡片 +［安排术后管理］小窗口**：先全文搜索确认没有别处在用——用到的只有 `krPcbNeedCard`（施术 tab）、`krPcbButtonHtml`（`krArrivalBlock` 旧路径两处）、`?pcb=1&win=1` 地址参数、selftest R15c 一条断言，都已改；删除 `krPcbNeed` / `krPcbNeedBar` / `krPcbNeedCard` / `krPcbButtonHtml` / `krPcbBuild` / `krPcbOpen` / `krPcbOpenLocal` / `krPcbRender` / `krPcbSet` / `krPcbGroupTime` / `krPcbToggleSingle` / `krPcbClose` / `krPcbConfirm` / `KR_PCB`（`krInnDayStatus` 只被它们用，一并没了）。**保留** `data.js` 的 `corePcBooking`（核心函数，selftest 造「已预约的术后管理」夹具要用，界面已无入口）和工作台待办「安排术后管理」（提醒，点了去案件，不是预约入口）。术后管理预约入口现在只剩：今日进行后的弹窗（`krCareMiniOpen`）、项目卡术后管理分页的［预约时间］。
+- **⑥ 施术一项一行单独今日取消**：29 / 30 的做法本来就支持（显示层拆开，取消 = 该项目 `deferUse`，施术行内容只剩没取消的；`coreSurgItemDone` 单项完成；最后一个也取消时施术行 / 施术块一起拿掉），所以没有把数据拆成一项一条；本次补了截图验证（两个施术取消「鼻翼缩小」：另一个「假体隆鼻」留在今日案件，取消的回项目卡「未使用」［本次使用］［预约使用］）。
+- 测试：R15c 改成断言旧卡 / 小窗口已不存在；A1 全套、KM1 用例（BK 三段）通过，roletest 9 个账号 0 不符。**测试顺序教训**：BK1a 要有「有赴韩项目的客人」，清理后单跑要先带一个造案件的用例（如 R30a）。
