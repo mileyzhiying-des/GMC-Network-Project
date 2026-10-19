@@ -2446,25 +2446,26 @@ function krdAccountOf(dr){
 function krdRender(){ ADMIN_RENDER.krdoctors(document.getElementById('admin-body')); }
 function krdOpen(id){
   var h = krHData(), dr = id==='new' ? null : krdDoctors().filter(function(x){ return x.id===id; })[0];
-  KRD.edit = id; KRD.draft = JSON.parse(JSON.stringify(dr || {id:'', name:'', nameEn:'', nameZh:'', title:'院长', color:'#C9B8A3', photo:'', career:[], certs:[], societies:[], specialties:[], active:true}));
+  KRD.edit = id; KRD.draft = JSON.parse(JSON.stringify(dr || {id:'', name:'', nameEn:'', nameZh:'', title:'院长', color:'#C9B8A3', photo:'', items:[], specialties:[], active:true}));
+  if(!KRD.draft.items) KRD.draft.items = []; if(!KRD.draft.specialties) KRD.draft.specialties = [];
   krdRender();
 }
 function krdClose(){ KRD.edit = null; KRD.draft = null; krdRender(); }
 function krdField(k, v){ KRD.draft[k] = v; }
-function krdItemAdd(list){ KRD.draft[list].push({ko:'', zh:'', id:'', auto:true, when:'现'}); krdRender(); }
-function krdItemDel(list, i){ KRD.draft[list].splice(i, 1); krdRender(); }
-/* 韩文改了 → 演示翻译自动更新印尼文 / 中文（没被手改过时）；之后可以直接改翻译 */
-function krdItemSet(list, i, k, v){
-  var it = KRD.draft[list][i]; it[k] = v;
-  if(k==='ko' && it.auto!==false){ it.zh = demoTranslate(v,'ko','zh'); it.id = demoTranslate(v,'ko','id'); krdRender(); }
-  else if(k==='zh' || k==='id') it.auto = false;
-}
-function krdSpecToggle(name, on){ var a = KRD.draft.specialties, i = a.indexOf(name); if(on && i<0) a.push(name); if(!on && i>-1) a.splice(i, 1); }
+/* CMD-1019-05：经历 / 学历 / 资格证：每行「类别｜内容」，内容照原文输入（不翻译），经历可标现 / 前；擅长项目每行从 KR 施术项目库选一个 */
+function krdItemAdd(){ KRD.draft.items.push({cat:'经历', when:'现', text:''}); krdRender(); }
+function krdItemDel(i){ KRD.draft.items.splice(i, 1); krdRender(); }
+function krdItemSet(i, k, v){ var it = KRD.draft.items[i]; it[k] = v; if(k==='cat'){ if(v==='经历' && !it.when) it.when = '现'; krdRender(); } }
+function krdSpecAdd(){ KRD.draft.specialties.push(''); krdRender(); }
+function krdSpecSet(i, v){ KRD.draft.specialties[i] = v; krdRender(); }
+function krdSpecDel(i){ KRD.draft.specialties.splice(i, 1); krdRender(); }
 function krdPhoto(input){ var f = input.files && input.files[0]; if(!f) return; var r = new FileReader(); r.onload = function(){ KRD.draft.photo = r.result; krdRender(); }; r.readAsDataURL(f); }
 function krdSave(){
   var h = krHData(), hid = krHospitalIdOfMe(), d0 = KRD.draft;
   if(!canDo('krdoctors')){ alert('只有代表院长、管理者可以编辑院长名单'); return; }
-  if(!(d0.name||'').trim()){ alert('请填韩文姓名（例如 KD1 院长）'); return; }
+  if(!(d0.name||'').trim()){ alert('请填院长名字（例如 KD1 院长）'); return; }
+  d0.items = (d0.items||[]).filter(function(x){ return String(x.text||'').trim(); }).map(function(x){ return {cat:x.cat, text:String(x.text).trim(), when:(x.cat==='经历' ? (x.when==='前' ? '前' : '现') : undefined)}; });
+  var sp = []; (d0.specialties||[]).forEach(function(n){ if(n && sp.indexOf(n)<0) sp.push(n); }); d0.specialties = sp;
   var list = krdDoctors();
   if(!KRD.edit || KRD.edit==='new'){
     if(list.some(function(x){ return x.name===d0.name.trim(); })){ alert('名单里已经有这位院长'); return; }
@@ -2482,33 +2483,38 @@ function krdToggleActive(id){
   if(dr.active && !confirm('停用后不再出现在 IN 的选院长选项里；已有案件照常显示名字，案例库显示"-"。确认停用？')) return;
   dr.active = !dr.active; logOp('其他', (dr.active ? '启用' : '停用')+'院长：'+dr.name, '院长管理'); Store.touch(); krdRender();
 }
-function krdListEditor(label, list, withWhen){
-  var inp = 'padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;';
-  return '<div style="margin:8px 0;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">'+label+'（韩文填写，自动演示翻译成中文 / 印尼文，可修改）</div>'+KRD.draft[list].map(function(it, i){
-    return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0;">'+(withWhen ? '<select onchange="krdItemSet(\''+list+'\','+i+',\'when\',this.value)" style="'+inp+'"><option'+(it.when==='现'?' selected':'')+'>现</option><option'+(it.when==='前'?' selected':'')+'>前</option></select>' : '')+
-      '<input value="'+krEsc(it.ko)+'" onchange="krdItemSet(\''+list+'\','+i+',\'ko\',this.value)" placeholder="한국어" style="'+inp+'flex:1;min-width:150px;"><input value="'+krEsc(it.zh)+'" oninput="krdItemSet(\''+list+'\','+i+',\'zh\',this.value)" placeholder="中文" style="'+inp+'width:150px;"><input value="'+krEsc(it.id)+'" oninput="krdItemSet(\''+list+'\','+i+',\'id\',this.value)" placeholder="Indonesia" style="'+inp+'width:150px;"><a href="#" onclick="krdItemDel(\''+list+'\','+i+');return false;">删除</a></div>';
-  }).join('')+'<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="krdItemAdd(\''+list+'\')">+ 添加</button></div>';
-}
+/* 编辑：左边照片（上传），右边固定高度（和照片一样）：最上面固定 名字｜职称，下面可滚动 */
+var KRD_H = 280;
 function krdEditor(){
-  var d0 = KRD.draft, inp = 'padding:6px 9px;border:1px solid var(--line);border-radius:7px;', hid = krHospitalIdOfMe();
+  var d0 = KRD.draft, inp = 'padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;', hid = krHospitalIdOfMe();
   var projs = ((HOSPITAL_DATA[hid]||{}).projects||[]).filter(function(p){ return p.active && !isKrPostcareCat(p.categoryId); });
-  var ph = d0.photo ? '<img src="'+d0.photo+'" style="width:64px;height:64px;border-radius:50%;object-fit:cover;">' : '<span class="ds-avl" style="width:64px;height:64px;border-radius:50%;background:'+(d0.color||'#ddd')+';display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:#fff;">'+krEsc((d0.name||'?').charAt(0))+'</span>';
+  var cats = []; projs.forEach(function(p){ var l = krpCatLabel(p); if(cats.indexOf(l)<0) cats.push(l); });
+  var specOpts = function(cur){ return '<option value="">选择施术项目</option>'+cats.map(function(l){ return '<optgroup label="'+krEsc(l)+'">'+projs.filter(function(p){ return krpCatLabel(p)===l; }).map(function(p){ return '<option value="'+krEsc(p.name)+'"'+(cur===p.name?' selected':'')+'>'+krEsc(p.name)+'</option>'; }).join('')+'</optgroup>'; }).join('')+(cur && !projs.some(function(p){ return p.name===cur; }) ? '<option value="'+krEsc(cur)+'" selected>'+krEsc(cur)+'（已不在项目库）</option>' : ''); };
+  var ph = d0.photo ? '<img src="'+d0.photo+'" style="width:100%;height:100%;object-fit:cover;">' : '<span class="ds-avl" style="width:100%;height:100%;background:'+(d0.color||'#ddd')+';display:flex;align-items:center;justify-content:center;font-size:44px;color:#fff;">'+krEsc((d0.name||'?').charAt(0))+'</span>';
+  var order = {'经历':0, '学历':1, '资格证':2};
+  var rows = d0.items.map(function(it, i){ return {it:it, i:i}; }).sort(function(a, b){ return (order[a.it.cat]-order[b.it.cat]) || (a.i-b.i); }).map(function(x){
+    var it = x.it, i = x.i;
+    return '<div style="display:flex;gap:6px;align-items:center;margin:5px 0;"><select onchange="krdItemSet('+i+',\'cat\',this.value)" style="'+inp+'width:84px;">'+DR_CATS.map(function(cn){ return '<option'+(it.cat===cn?' selected':'')+'>'+cn+'</option>'; }).join('')+'</select>'+
+      (it.cat==='经历' ? '<select onchange="krdItemSet('+i+',\'when\',this.value)" style="'+inp+'width:58px;"><option'+(it.when!=='前'?' selected':'')+'>现</option><option'+(it.when==='前'?' selected':'')+'>前</option></select>' : '')+
+      '<input value="'+krEsc(it.text)+'" oninput="krdItemSet('+i+',\'text\',this.value)" placeholder="内容（照原文输入）" style="'+inp+'flex:1;min-width:0;"><a href="#" onclick="krdItemDel('+i+');return false;" style="font-size:12px;">删除</a></div>';
+  }).join('');
+  var specRows = d0.specialties.map(function(n, i){ return '<div style="display:flex;gap:6px;align-items:center;margin:5px 0;"><select onchange="krdSpecSet('+i+',this.value)" style="'+inp+'flex:1;min-width:0;">'+specOpts(n)+'</select><a href="#" onclick="krdSpecDel('+i+');return false;" style="font-size:12px;">删除</a></div>'; }).join('');
   return krCardBox((KRD.edit==='new' ? '新增院长' : '编辑院长：'+krEsc(d0.name)),
-    '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">'+ph+'<label style="font-size:12px;">照片 <input type="file" accept="image/*" onchange="krdPhoto(this)"></label><span style="font-size:11px;color:var(--muted);">演示：上传的照片只存在内存里，刷新后消失</span></div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><input placeholder="韩文姓名（如 KD1 院长）" value="'+krEsc(d0.name)+'" oninput="krdField(\'name\',this.value)" '+(KRD.edit==='new'?'':'disabled ')+'style="'+inp+'"><input placeholder="English" value="'+krEsc(d0.nameEn)+'" oninput="krdField(\'nameEn\',this.value)" style="'+inp+'"><input placeholder="中文（可选）" value="'+krEsc(d0.nameZh)+'" oninput="krdField(\'nameZh\',this.value)" style="'+inp+'"><select onchange="krdField(\'title\',this.value)" style="'+inp+'"><option'+(d0.title==='院长'?' selected':'')+'>院长</option><option'+(d0.title==='代表院长'?' selected':'')+'>代表院长</option></select></div>'+
-    krdListEditor('经历（现 / 前）','career',true)+krdListEditor('认证资格','certs',false)+krdListEditor('学会 / 培训','societies',false)+
-    '<div style="margin:8px 0;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">擅长项目（选自本医院项目库；IN 选院长时擅长客人苦恼部位的排前面）</div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+projs.map(function(p){ return '<label style="font-size:12px;border:1px solid var(--line);border-radius:14px;padding:3px 10px;cursor:pointer;"><input type="checkbox" '+(d0.specialties.indexOf(p.name)>-1?'checked':'')+' onchange="krdSpecToggle(\''+krEsc(p.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(p.name)+'</label>'; }).join('')+'</div></div>'+
-    '<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn-primary" onclick="krdSave()">保存</button><button class="btn-ghost" onclick="krdClose()">取消</button></div>');
+    '<div style="display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;"><div style="width:210px;flex-shrink:0;"><div style="width:210px;height:'+KRD_H+'px;border-radius:12px;overflow:hidden;background:var(--border2);">'+ph+'</div><label style="display:block;margin-top:8px;font-size:12px;cursor:pointer;"><span class="btn-ghost" style="padding:5px 12px;display:inline-block;">上传照片</span><input type="file" accept="image/*" onchange="krdPhoto(this)" style="display:none;"></label></div>'+
+    '<div style="flex:1;min-width:300px;height:'+KRD_H+'px;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;"><div style="display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border2);flex-shrink:0;"><input placeholder="院长名字（如 KD1 院长）" value="'+krEsc(d0.name)+'" oninput="krdField(\'name\',this.value)" '+(KRD.edit==='new'?'':'disabled ')+'style="'+inp+'flex:1;min-width:0;font-weight:700;"><span style="color:var(--border);">｜</span><select onchange="krdField(\'title\',this.value)" style="'+inp+'">'+['院长','副院长','代表院长'].map(function(tn){ return '<option'+(d0.title===tn?' selected':'')+'>'+tn+'</option>'; }).join('')+'</select></div>'+
+    '<div style="flex:1;overflow-y:auto;padding:8px 14px 12px;"><div style="font-size:12px;font-weight:700;color:var(--slate2);">经历 / 学历 / 资格证</div>'+rows+'<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="krdItemAdd()">+ 增加内容</button>'+
+    '<div style="font-size:12px;font-weight:700;color:var(--slate2);margin-top:14px;border-top:1px solid var(--border2);padding-top:10px;">擅长项目 <span style="font-weight:400;color:var(--muted);">（从 KR 施术项目库选；IN 选院长时擅长客人苦恼部位的排前面）</span></div>'+specRows+'<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="krdSpecAdd()">+ 增加内容</button></div></div></div>'+
+    '<div style="display:flex;gap:8px;margin-top:12px;"><button class="btn-primary" onclick="krdSave()">保存</button><button class="btn-ghost" onclick="krdClose()">取消</button></div>');
 }
 ADMIN_RENDER.krdoctors = function(el){
   var can = canDo('krdoctors'), list = krdDoctors();
   el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('院长管理')+' <span style="font-size:12px;font-weight:400;color:var(--muted);">'+krEsc(krHospitalName())+' · 名单 ≠ 账号：IN 选院长、诊疗方案署名、案例库、对话都读这份名单</span></div>'+
     (can ? '<div><button class="btn-primary" onclick="krdOpen(\'new\')">+ 新增院长</button></div>' : '')+(KRD.draft ? krdEditor() : '')+
     list.map(function(dr){
-      var ph = dr.photo ? '<img src="'+dr.photo+'" style="width:52px;height:52px;border-radius:50%;object-fit:cover;">' : '<span class="ds-avl" style="width:52px;height:52px;border-radius:50%;background:'+(dr.color||'#ddd')+';display:inline-flex;align-items:center;justify-content:center;font-size:18px;color:#fff;flex-shrink:0;">'+krEsc(dr.name.charAt(0))+'</span>';
-      var li = function(arr){ return (arr||[]).map(function(x){ return '<div>'+(x.when?krEsc(x.when)+'：':'')+krEsc(x.ko)+' <span style="color:var(--muted);">'+krEsc(x.zh||'')+'</span></div>'; }).join(''); };
-      return '<div class="card" style="padding:14px 18px;display:flex;gap:14px;'+(dr.active?'':'opacity:.6;')+'">'+ph+'<div style="flex:1;font-size:12px;line-height:1.7;"><div style="font-size:14px;font-weight:700;">'+krEsc(dr.name)+' <span style="font-weight:400;color:var(--slate2);">'+krEsc(dr.nameEn||'')+(dr.nameZh?' / '+krEsc(dr.nameZh):'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+krEsc(dr.title||'院长')+'</span> <span class="status-pill" style="background:'+(dr.active?'var(--sage-bg)':'#EDEAE2')+';color:'+(dr.active?'var(--sage)':'var(--muted)')+';">'+(dr.active?'在职':'停用')+'</span></div>'+
-        '<div style="color:var(--muted);">'+krEsc(krdAccountOf(dr))+'</div>'+(dr.career&&dr.career.length?'<div style="margin-top:3px;"><b>经历</b>'+li(dr.career)+'</div>':'')+((dr.certs||[]).length?'<div><b>认证资格</b>'+li(dr.certs)+'</div>':'')+((dr.societies||[]).length?'<div><b>学会 / 培训</b>'+li(dr.societies)+'</div>':'')+((dr.specialties||[]).length?'<div style="margin-top:3px;"><b>擅长项目</b> '+dr.specialties.map(function(n){ return '<span class="chip" style="cursor:inherit;">'+krEsc(n)+'</span>'; }).join('')+'</div>':'')+'</div>'+
+      var ph = '<img src="'+directorPhotoSrc(dr)+'" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+      var li = function(cat, w){ return drItemsOf(dr, cat).map(function(x){ return '<div>'+(w ? krEsc(x.when==='前'?'前':'现')+'｜' : '')+krEsc(x.text)+'</div>'; }).join(''); };
+      return '<div class="card" style="padding:14px 18px;display:flex;gap:14px;'+(dr.active?'':'opacity:.6;')+'">'+ph+'<div style="flex:1;font-size:12px;line-height:1.7;"><div style="font-size:14px;font-weight:700;">'+krEsc(dr.name)+' <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+krEsc(dr.title||'院长')+'</span> <span class="status-pill" style="background:'+(dr.active?'var(--sage-bg)':'#EDEAE2')+';color:'+(dr.active?'var(--sage)':'var(--muted)')+';">'+(dr.active?'在职':'停用')+'</span></div>'+
+        '<div style="color:var(--muted);">'+krEsc(krdAccountOf(dr))+'</div>'+(drItemsOf(dr,'经历').length?'<div style="margin-top:3px;"><b>经历</b>'+li('经历',true)+'</div>':'')+(drItemsOf(dr,'学历').length?'<div><b>学历</b>'+li('学历')+'</div>':'')+(drItemsOf(dr,'资格证').length?'<div><b>资格证</b>'+li('资格证')+'</div>':'')+((dr.specialties||[]).length?'<div style="margin-top:3px;"><b>擅长项目</b> '+dr.specialties.map(function(n){ return '<span class="chip" style="cursor:inherit;">'+krEsc(n)+'</span>'; }).join('')+'</div>':'')+'</div>'+
         (can ? '<div style="display:flex;flex-direction:column;gap:6px;"><button class="btn-outline" onclick="krdOpen(\''+dr.id+'\')">编辑</button><button class="btn-ghost" onclick="krdToggleActive(\''+dr.id+'\')">'+(dr.active?'停用':'启用')+'</button></div>' : '')+'</div>';
     }).join('');
 };
@@ -2649,7 +2655,6 @@ function krShowBind(){
     (v.LIB_CASES||[]).forEach(function(c0){ if(c0.source!=='travel') cases.push(c0); }); });
   PROJECT_LIBRARY.length = 0; Array.prototype.push.apply(PROJECT_LIBRARY, projs);
   window.LIB_CASES = cases; /* 新数组：KR 改不到 IN 的案例 */
-  window.libDirectorClickable = function(){ return false; }; /* KR 端没有 IN 的"院长详情"页 */
 }
 ADMIN_RENDER.krshow = function(el){
   krShowBind();

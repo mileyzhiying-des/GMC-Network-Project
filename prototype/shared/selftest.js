@@ -620,9 +620,10 @@
         KRC.pop = {date:surg.date}; KRC.popForm = {who:surg.who, start:surg.time, end:surg.end, part:'全天'}; var n0 = (h.directorSchedule[surg.who]||[]).length; krcAddBusy(); ST.ok((h.directorSchedule[surg.who]||[]).length===n0, '与施术重叠的不可预约应被挡下');
         KRC.pop = {date:surg.date}; KRC.popForm = {who:surg.who, start:'10:00', end:'11:00', part:'全天'}; var o0 = (h.offs||[]).length; krcAddOff(); ST.ok((h.offs||[]).length===o0, '有施术的当天标全天 OFF 应被挡下');
       }
-      var free = null; for(var d1 = 20; d1 < 60 && !free; d1++){ var dd = D(d1); if(new Date(dd+'T00:00:00').getDay()!==0 && !((h.directorSchedule['KD1 院长']||[]).some(function(b){ return b.date===dd; }))) free = dd; }
+      var free = null; for(var d1 = 20; d1 < 60 && !free; d1++){ var dd = D(d1); if(new Date(dd+'T00:00:00').getDay()!==0 && !((h.directorSchedule['KD1 院长']||[]).some(function(b){ return b.date===dd; })) && !krBusySlotError(krHospitalIdOfMe(), 'KD1 院长', dd, '12:00', '12:30')) free = dd; /* 跳过 KD1 有 OFF 的日子（每周三） */ }
       KRC.pop = {date:free}; KRC.popForm = {who:'KD1 院长', start:'12:00', end:'12:30', part:'全天'}; var b0 = (h.directorSchedule['KD1 院长']||[]).length; krcAddBusy(); ST.ok((h.directorSchedule['KD1 院长']||[]).length===b0+1, '空的日子应能代登不可预约');
-      KRC.pop = {date:free}; KRC.popForm = {who:'KD1 院长', start:'12:00', end:'12:30', part:'上午'}; var o1 = (h.offs||[]).length; krcAddOff(); ST.ok((h.offs||[]).length===o1+1, '应能代登半天 OFF');
+      var free2 = null; for(var d2 = 21; d2 < 80 && !free2; d2++){ var d2s = D(d2); if(d2s!==free && new Date(d2s+'T00:00:00').getDay()!==0 && !krBusySlotError(krHospitalIdOfMe(), 'KD1 院长', d2s, '11:00', '13:00')) free2 = d2s; } /* 半天 OFF 另找一天，避开刚加的不可预约 */
+      KRC.pop = {date:free2}; KRC.popForm = {who:'KD1 院长', start:'12:00', end:'12:30', part:'上午'}; var o1 = (h.offs||[]).length; krcAddOff(); ST.ok((h.offs||[]).length===o1+1, '应能代登半天 OFF');
       /* 开放施术日期 */
       KRC.person = 'KD1 院长'; var arr0 = ((h.openDates||{})['KD1 院长']||[]).length; krcMonthClick(free); ST.ok(((h.openDates||{})['KD1 院长']||[]).length === arr0, '月视图点日期只进那一周，不再开放 / 关闭施术日期（CMD-1014-03 取消开放日期）'); KRC.person = 'all';
       /* 4 账号管理 */
@@ -1710,6 +1711,39 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 院长介绍新分页 */
       calls.length = 0; window.open = function(u, n){ calls.push({u:u, n:n}); return {focus:function(){}}; }; openDirectorNewTab('X院长'); ST.ok(calls.length===1 && /in-director/.test(calls[0].u) && /dir=/.test(calls[0].u), '院长介绍在新分页打开（页面 in-director + 院长名）：'+(calls[0]&&calls[0].u));
     } finally { window.open = oldOpen; window.GMC_NO_TABS = oldNo; }
+  });
+  ST.def('R35a','CMD-1019-05：案例库三种浏览 / 院长介绍页 / KR 院长资料登录（IN 和 KM1 分页各跑一次）',function(){
+    var me = currentAccount(); if(!ST.ok(!!me, '要先登录')) return;
+    /* 旧院长资料迁移（幂等） */
+    var old = {name:'旧院长', career:[{when:'现', ko:'서울 병원'}, {when:'前', ko:'부산 병원'}], certs:[{ko:'전문의'}], societies:[{ko:'학회 회원'}], specialties:['假体隆鼻']}; drNormalize(old); drNormalize(old);
+    ST.ok(old.items.length===4 && !old.career && drItemsOf(old,'经历')[1].when==='前' && drItemsOf(old,'资格证').length===2, '旧字段（现 / 前 / 认证 / 学会）迁移成新格式：'+JSON.stringify(old.items));
+    var z = libGroupCards('part'); ST.ok(z.length && z.every(function(g){ return g.zone==='面部' || g.zone==='身体'; }) && z[0].groups.every(function(g){ return /^part:/.test(g.id); }), '按部位 = 面部 / 身体下的细部位卡片（不再是旧分类）');
+    ST.ok(!libGroupCards('part').some(function(g){ return g.groups.some(function(x){ return /眼部|鼻部|面部年轻化|皮肤管理|轮廓$/.test(x.label); }); }), '旧分类名不再出现');
+    ST.ok(libProjParts({name:'未知项目', categoryId:'zz'}).join()==='f_all', '对不到部位的项目归面部整体');
+    ST.ok(libCasesOfGroup('part:f_eyes').length>0 && libCasesOfGroup('part:f_eyes').every(function(c){ return libCaseParts(c).indexOf('f_eyes')>-1; }), '眼睛卡片下的案例都带眼睛部位');
+    var dl = libDirectorsList(); ST.ok(dl.length>=2 && dl.every(function(x){ return x.dr.active; }), '按院长：每位在职院长一张卡');
+    setLibView('dir'); var home = libRenderHome(); ST.ok(/个案例/.test(home) && /libOpenDirector/.test(home), '按院长首页：卡片带案例数、可点');
+    var kd = hospitalDirectors('H1').filter(function(d){ return d.name==='KD1 院长'; })[0], html0 = directorIntroHtml('KD1 院长');
+    ST.ok(/经历/.test(html0) && /学历/.test(html0) && /资格证/.test(html0) && /擅长项目/.test(html0) && html0.indexOf('经历')<html0.indexOf('学历') && html0.indexOf('学历')<html0.indexOf('资格证') && html0.indexOf('资格证')<html0.indexOf('擅长项目') && /这位院长的案例/.test(html0), '院长介绍页：经历 → 学历 → 资格证 → 擅长项目 → 案例列表');
+    ST.ok(/<img src="[^"]+"[^>]*width:220px/.test(html0) || /width:220px;height:280px/.test(html0), '左边照片');
+    var card = directorCardHtml(kd, 'H1', {concerns:[]}, true, false); ST.ok(/openDirectorNewTab/.test(card) && /认证/.test(card) && /学历/.test(card), 'IN 基础资料院长卡：头像 / 名字新分页打开介绍页，带学历 / 认证');
+    if(isKrAccount()){
+      if(!ST.ok(canDo('krdoctors'), '要在 KM1 / KO1 分页跑编辑')) { setLibView('part'); return; }
+      krdOpen(kd.id); var n0 = KRD.draft.items.length, s0 = KRD.draft.specialties.length;
+      krdItemAdd(); krdItemSet(n0,'text','시험 병원 부원장'); krdItemAdd(); krdItemSet(n0+1,'text','시험 병원 과장'); krdItemSet(n0+1,'when','前'); krdItemAdd(); krdItemSet(n0+2,'cat','学历'); krdItemSet(n0+2,'text','시험대학교 박사'); krdItemAdd(); krdItemSet(n0+3,'cat','资格证'); krdItemSet(n0+3,'text','시험 전문의');
+      var pj = ((HOSPITAL_DATA.H1.projects)||[]).filter(function(p){ return p.active && !isKrPostcareCat(p.categoryId) && kd.specialties.indexOf(p.name)<0; }).slice(0,2); pj.forEach(function(p){ krdSpecAdd(); krdSpecSet(KRD.draft.specialties.length-1, p.name); });
+      var ed = krdEditor(); ST.ok(/上传照片/.test(ed) && /增加内容/.test(ed) && /院长<\/option><option[^>]*>副院长<\/option><option[^>]*>代表院长/.test(ed) && /overflow-y:auto/.test(ed), '编辑：左照片上传；右边固定高度，名字｜职称（院长 / 副院长 / 代表院长）在上，下面可滚动；［+ 增加内容］');
+      krdSave(); var kd2 = hospitalDirectors('H1').filter(function(d){ return d.name==='KD1 院长'; })[0];
+      ST.ok(kd2.items.length===n0+4 && kd2.specialties.length===s0+pj.length && drItemsOf(kd2,'经历').some(function(x){ return x.when==='前' && x.text==='시험 병원 과장'; }), '保存：加 2 条经历、1 条学历、1 条资格证、擅长项目');
+      var h1 = directorIntroHtml('KD1 院长'); ST.ok(/시험 병원 부원장/.test(h1) && /시험대학교 박사/.test(h1) && /시험 전문의/.test(h1), '介绍页显示新内容（照原文）');
+      openAdminPage('krshow'); libOpenDirector('KD1 院长'); ST.ok(LIB_STATE.level==='director' && /KD1 院长/.test(document.getElementById('lib-grid').innerText || ''), 'KR 案例库里能打开院长介绍页（IN 的 in-director 页在 KR 不存在）');
+      /* 还原 */ kd2.items = kd2.items.slice(0, n0); kd2.specialties = kd2.specialties.slice(0, s0); Store.touch();
+    } else {
+      openDirectorDetail('KD1 院长'); ST.ok(CURRENT_PAGE_ID==='in-director' && /KD1 院长/.test(document.getElementById('director-detail-info').innerText) && /这位院长的案例/.test(document.getElementById('director-detail-info').innerText), 'IN 院长介绍页（in-director）显示介绍 + 案例列表');
+      nav('in-library'); libOpenDirector('KD1 院长'); ST.ok(CURRENT_PAGE_ID==='in-director', 'IN 案例库按院长点进院长介绍页');
+      openLibCaseModal(); libEditSource('travel'); ST.ok(/负责院长/.test(document.getElementById('lib-case-body').innerHTML) && /KD1 院长/.test(document.getElementById('lib-case-body').innerHTML), 'IN 新增 / 编辑赴韩案例：有「负责院长」选择'); closeLibCaseModal();
+    }
+    setLibView('part');
   });
   ST.def('R32b','KM1：KR 面诊 tab 按部位显示（希望预期 / 预算在上）；院长账号也一样（先在 A1 跑 R32a）',function(){
     var me = currentAccount(); if(!ST.ok(me && (me.id==='KM1' || me.id==='KD1'), '要在 KM1 / KD1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R32')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R32a')) return;

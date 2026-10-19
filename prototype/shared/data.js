@@ -237,7 +237,20 @@ function linkedHospitalIds(clinicId){ return CLINIC_HOSPITALS.filter(function(r)
 function linkedHospitals(clinicId){ return linkedHospitalIds(clinicId).map(hospitalById).filter(Boolean); }
 function clinicHospital(clinicId){ var ids = linkedHospitalIds(clinicId); return ids[0] || null; } /* 这家诊所对接的那一家医院 */
 function hospitalLinked(hid, clinicId){ return linkedHospitalIds(clinicId).indexOf(hid) > -1; }
-function hospitalDirectors(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.directors : []; }
+/* CMD-1019-05：院长资料新格式 dr.items = [{cat:'经历'|'学历'|'资格证', text, when:'现'|'前'(只有经历)}]（内容照原文，不翻译）；旧的 career / certs / societies 在读取时自动迁移（幂等）*/
+var DR_CATS = ['经历', '学历', '资格证'];
+function drNormalize(dr){
+  if(!dr || dr.items) return dr;
+  var out = [], tx = function(x){ return (x && (x.ko || x.zh || x.id)) || (typeof x==='string' ? x : ''); };
+  (dr.career||[]).forEach(function(x){ var t0 = tx(x); if(t0) out.push({cat:'经历', when:(x.when==='前' ? '前' : '现'), text:t0}); });
+  (dr.certs||[]).forEach(function(x){ var t0 = tx(x); if(t0) out.push({cat:'资格证', text:t0}); });
+  (dr.societies||[]).forEach(function(x){ var t0 = tx(x); if(t0) out.push({cat:'资格证', text:t0}); }); /* 旧的「学会 / 培训」并入资格证 */
+  dr.items = out; delete dr.career; delete dr.certs; delete dr.societies;
+  return dr;
+}
+function hospitalDirectors(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; (h.directors||[]).forEach(drNormalize); return h.directors; }
+function drItemsOf(dr, cat){ drNormalize(dr); return (dr.items||[]).filter(function(x){ return x.cat===cat && String(x.text||'').trim(); }); }
+function drFindByName(name){ var r = null; Object.keys(HOSPITAL_DATA||{}).forEach(function(hid){ hospitalDirectors(hid).forEach(function(d){ if(!r && d.name===name) r = {dr:d, hid:hid}; }); }); return r; }
 function hospitalDirectorNames(hid){ return hospitalDirectors(hid).filter(function(d){ return d.active; }).map(function(d){ return d.name; }); } /* 启用的院长（停用的不出现在选项里） */
 function hospitalCoordinators(hid){ var h = HOSPITAL_DATA[hid]; return h ? h.coordinators : []; }
 /* 医院休诊日（2026-10-07，CMD-1007-03）：KR 室长在 KR 工作台日历登记整院休诊（可取消）；HOSPITAL_DATA[h].closedDates = [{id, date, by}]；IN 的 KR 医院日程视角和 KR 日历都读这里 */
@@ -2544,10 +2557,10 @@ function openDirectorNewTab(name){
 function directorCardHtml(dr, hid, c, pickable, selected){
   var off = directorTodayOff(hid, dr.name); if(off && off.full){ pickable = false; selected = false; }
   var ph = '<a href="#" title="在新分页打开院长介绍" onclick="event.stopPropagation();openDirectorNewTab(\''+dr.name+'\');return false;" style="flex-shrink:0;">'+directorAvatarHtml(dr, 54)+'</a>';
-  var m = docIntentMatch(hid, dr, c), li = function(arr){ return (arr||[]).map(function(x){ return '<div>'+(x.when?x.when+'：':'')+(x.zh||x.ko)+'</div>'; }).join(''); };
+  var m = docIntentMatch(hid, dr, c), li = function(arr){ return (arr||[]).map(function(x){ return '<div>'+(x.when?x.when+'｜':'')+cesc(x.text)+'</div>'; }).join(''); }; drNormalize(dr);
   return '<div '+(pickable?'onclick="setCaseDirector(\''+dr.name+'\')" ':'')+'style="display:flex;gap:12px;padding:12px;border:1px solid '+(selected?'var(--terracotta)':'var(--border)')+';border-radius:10px;background:'+(selected?'var(--terracotta-bg)':'#fff')+';'+(pickable?'cursor:pointer;':'')+((off&&off.full)?'opacity:.5;filter:grayscale(1);cursor:not-allowed;':'')+'margin-top:8px;">'+ph+
     '<div style="flex:1;font-size:12px;line-height:1.6;"><div style="font-size:14px;font-weight:700;"><a href="#" title="在新分页打开院长介绍" onclick="event.stopPropagation();openDirectorNewTab(\''+dr.name+'\');return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+dr.name+' ↗</a> <span style="font-weight:400;color:var(--slate2);">'+(dr.nameEn||'')+(dr.nameZh?' / '+dr.nameZh:'')+'</span> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(dr.title||'院长')+'</span>'+(off ? ' <span class="status-pill" style="background:#F6DCDC;color:#C1454A;">'+(off.full?'今日 OFF':'今天 '+off.text+' OFF（韩）')+'</span>' : '')+(m.length?(function(){ var pm = docPartMatch(hid, dr, c), nm = function(l){ return l.map(function(k){ return concernPartDef(k).label; }).join('、'); }; var gl = []; pm.half.forEach(function(k){ var g = (CONCERN_GROUPS.filter(function(y){ return y.key===partGroupOf(k); })[0]||{}).label; if(g && gl.indexOf(g)<0) gl.push(g); }); return pm.parts.length ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">★ 擅长客人苦恼部位（'+nm(pm.parts)+'）</span>' : (gl.length ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">◐ 擅长相近部位（'+gl.join('、')+'）</span>' : ''); })():'')+(selected?' <span class="status-pill" style="background:var(--terracotta);color:#fff;">已选</span>':'')+'</div>'+
-    (dr.career&&dr.career.length ? '<div style="color:var(--slate2);margin-top:3px;">'+li(dr.career)+'</div>' : '')+(dr.certs&&dr.certs.length ? '<div style="color:var(--slate2);margin-top:3px;"><b>认证</b> '+dr.certs.map(function(x){ return x.zh||x.ko; }).join('；')+'</div>' : '')+
+    (drItemsOf(dr,'经历').length ? '<div style="color:var(--slate2);margin-top:3px;">'+li(drItemsOf(dr,'经历'))+'</div>' : '')+(drItemsOf(dr,'学历').length ? '<div style="color:var(--slate2);margin-top:3px;"><b>学历</b> '+drItemsOf(dr,'学历').map(function(x){ return cesc(x.text); }).join('；')+'</div>' : '')+(drItemsOf(dr,'资格证').length ? '<div style="color:var(--slate2);margin-top:3px;"><b>认证</b> '+drItemsOf(dr,'资格证').map(function(x){ return cesc(x.text); }).join('；')+'</div>' : '')+
     (dr.specialties&&dr.specialties.length ? '<div style="margin-top:4px;"><b>擅长</b> '+dr.specialties.map(function(sn){ return '<span class="chip'+(m.indexOf(sn)>-1?' active':'')+'" style="cursor:inherit;">'+sn+'</span>'; }).join('')+'</div>' : '')+'</div></div>';
 }
 function directorCardsHtml(c){
@@ -5138,16 +5151,33 @@ function libPhotoBox(ph, w, h, cap){
   return '<div style="width:'+w+';height:'+h+';border-radius:10px;overflow:hidden;">'+inner+'</div>';
 }
 
-/* 部位/分类分组：按部位 = 赴韩项目各分类 + "皮肤管理"（全部本地项目）；按施术/管理 = 赴韩施术(赴韩分类) / 印尼管理(本地分类) */
+/* CMD-1019-05：按部位 = 苦恼部位分类（CONCERN_PARTS，面部 / 身体两组，各细部位一张卡）；案例的部位由项目的苦恼部位（projectPartsOf）带出。
+   旧分类（眼部 / 鼻部 / 轮廓 / 面部年轻化 / 皮肤管理）迁移对应：眼部→眼睛｜鼻部→鼻子｜轮廓→颧骨 + 下颚 + 下巴｜面部年轻化→面部整体｜皮肤管理→面部整体；
+   项目没有对应部位时（项目名对不到、分类也不在旧表里）一律归「面部整体」。按施术 / 管理 = 赴韩施术(赴韩分类) / 印尼管理(本地分类)；按院长 = 每位院长一张卡。 */
+var LIB_OLD_PART_MAP = {'眼部':['f_eyes'], '鼻部':['f_nose'], '轮廓':['f_cheekbone','f_jaw','f_chin'], '面部年轻化':['f_all'], '皮肤管理':['f_all']};
+function libProjParts(p){
+  var a = []; projectPartsOf(p).map(partBase).forEach(function(k){ if(a.indexOf(k)<0) a.push(k); });
+  if(!a.length){ var cc = PROJECT_CATEGORIES[p.categoryId] || KR_CATEGORIES[p.categoryId]; a = ((cc && LIB_OLD_PART_MAP[cc.label]) || []).slice(); }
+  return a.length ? a : ['f_all'];
+}
+function libCaseParts(c){
+  var a = []; (c.projectIds||[]).forEach(function(id){ var p = projById(id); if(p) libProjParts(p).forEach(function(k){ if(a.indexOf(k)<0) a.push(k); }); });
+  return a.length ? a : ['f_all'];
+}
 function libGroupProjects(groupId){
+  if(groupId.indexOf('part:')===0){ var k = groupId.slice(5); return PROJECT_LIBRARY.filter(function(p){ return libHospOk(p) && libProjParts(p).indexOf(k)>-1; }); }
   if(groupId==='skin') return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN'; });
   var catId = groupId.replace('cat:','');
   return PROJECT_LIBRARY.filter(function(p){ return p.categoryId===catId && libHospOk(p); });
 }
 
-function libGroupLabel(groupId){ return groupId==='skin' ? '皮肤管理' : ((PROJECT_CATEGORIES[groupId.replace('cat:','')]||{}).label || groupId); }
+function libGroupLabel(groupId){
+  if(groupId.indexOf('part:')===0) return concernPartDef(groupId.slice(5)).label;
+  return groupId==='skin' ? '皮肤管理' : ((PROJECT_CATEGORIES[groupId.replace('cat:','')]||{}).label || groupId);
+}
 
 function libCasesOfGroup(groupId){
+  if(groupId.indexOf('part:')===0){ var k = groupId.slice(5); return LIB_CASES.filter(function(c){ return libHospOk(c) && libCaseParts(c).indexOf(k)>-1; }); }
   var ids = libGroupProjects(groupId).map(function(p){ return p.id; });
   return LIB_CASES.filter(function(c){ return (c.projectIds||[]).some(function(x){ return ids.indexOf(x)>-1; }); });
 }
@@ -5157,12 +5187,51 @@ function libGroupCards(view){
   var kr = projLibCategories('KR').map(function(cat){ return {id:'cat:'+cat.id, label:cat.label}; });
   var inn = projLibCategories('IN').map(function(cat){ return {id:'cat:'+cat.id, label:cat.label}; });
   var fill = function(arr){ return arr.map(function(g){ g.cases = libCasesOfGroup(g.id); return g; }).filter(function(g){ return g.cases.length; }); };
-  if(view==='part') return [{zone:'', groups:fill(kr.concat([{id:'skin', label:'皮肤管理'}]))}];
+  if(view==='part') return CONCERN_GROUPS.map(function(gr){ return {zone:gr.label, groups:fill(CONCERN_PARTS.filter(function(x){ return x.group===gr.key && x.key!=='b_all'; }).map(function(x){ return {id:'part:'+x.key, label:x.label}; }))}; }).filter(function(z){ return z.groups.length; });
   return [{zone:'赴韩施术', groups:fill(kr)}, {zone:'印尼管理', groups:fill(inn)}];
 }
 
+/* 按院长：每位院长一张卡（照片、名字、职称、案例数）→ 点进院长介绍页 */
+function libDirectorsList(){
+  var hs = LIB_HOSPITAL!=='all' ? [LIB_HOSPITAL] : linkedHospitalIds(), out = [];
+  hs.forEach(function(h){ hospitalDirectors(h).forEach(function(d){ if(d.active) out.push({dr:d, hid:h}); }); });
+  return out;
+}
+function libCasesOfDirector(name){ return LIB_CASES.filter(function(c){ return libHospOk(c) && c.director===name; }); }
+function directorPhotoSrc(dr){
+  var a = ACCOUNTS.filter(function(x){ return x.hospitalId && x.name===dr.name; })[0];
+  return dr.photo || (a && a.photo && String(a.photo).indexOf('data:')===0 ? a.photo : '') || defaultAvatarUri(dr.color);
+}
+function libRenderDirHome(){
+  var list = libDirectorsList();
+  return '<div style="'+LIB_GRID_CSS+'">'+(list.map(function(x){
+    var cs = libCasesOfDirector(x.dr.name);
+    return '<div class="card" style="overflow:hidden;cursor:pointer;" onclick="libOpenDirector(\''+x.dr.name+'\')"><img src="'+directorPhotoSrc(x.dr)+'" style="width:100%;height:150px;object-fit:cover;display:block;">'+
+      '<div style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;"><span><b style="font-size:13px;">'+cesc(x.dr.name)+'</b><div style="font-size:11px;color:var(--slate2);">'+cesc(x.dr.title||'院长')+'</div></span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+cs.length+' 个案例</span></div></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);">没有院长</div>')+'</div>';
+}
+/* 院长介绍页（IN / KR 都能看）：左照片；右 名字｜职称 → 经历（现｜… / 前｜…）→ 学历 → 资格证 → 擅长项目，分组之间细线隔开；下面是这位院长的案例 */
+function directorIntroHtml(name){
+  var f = drFindByName(name);
+  if(!f) return '<div style="font-size:12px;color:var(--muted);">找不到这位院长</div>';
+  var dr = f.dr, sec = function(label, inner, first){ return '<div style="'+(first?'':'border-top:1px solid var(--border2);padding-top:12px;margin-top:12px;')+'"><div style="font-size:12px;font-weight:700;color:var(--slate2);margin-bottom:6px;">'+label+'</div>'+inner+'</div>'; };
+  var lines = function(cat, withWhen){ var a = drItemsOf(dr, cat); return a.length ? a.map(function(x){ return '<div style="font-size:13px;line-height:1.8;">'+(withWhen ? '<span style="color:var(--muted);">'+(x.when==='前'?'前':'现')+'｜</span>' : '')+cesc(x.text)+'</div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);">—</div>'; };
+  var specs = (dr.specialties||[]).length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+dr.specialties.map(function(n){ return '<span class="chip" style="cursor:inherit;">'+cesc(n)+'</span>'; }).join('')+'</div>' : '<div style="font-size:12px;color:var(--muted);">—</div>';
+  var cs = libCasesOfDirector(name);
+  return '<div class="card" style="padding:22px 26px;display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;"><img src="'+directorPhotoSrc(dr)+'" style="width:220px;height:280px;object-fit:cover;border-radius:12px;flex-shrink:0;">'+
+    '<div style="flex:1;min-width:280px;"><div style="font-size:20px;font-weight:700;margin-bottom:12px;">'+cesc(dr.name)+' <span style="color:var(--border);font-weight:400;">｜</span> <span style="font-size:15px;font-weight:600;color:var(--slate2);">'+cesc(dr.title||'院长')+'</span>'+(dr.active?'':' <span class="status-pill" style="background:#EDEAE2;color:var(--muted);">已停用</span>')+'</div>'+
+    sec('经历', lines('经历', true), true)+sec('学历', lines('学历'))+sec('资格证', lines('资格证'))+sec('擅长项目', specs)+'</div></div>'+
+    '<div style="font-size:14px;font-weight:700;margin:22px 0 12px;">这位院长的案例（'+cs.length+'）</div><div style="'+LIB_GRID_CSS+'">'+(cs.map(libCaseCardHtml).join('') || '<div style="grid-column:1/-1;font-size:12px;color:var(--muted);padding:20px 4px;">这位院长名下暂无案例</div>')+'</div>';
+}
+function libRenderDirector(){ return directorIntroHtml(LIB_STATE.directorName); }
+/* 从任何地方打开院长介绍页：IN = 院长详情页（in-director，页内）；KR = 案例库里的院长层级 */
+function libOpenDirector(name){
+  if(document.getElementById('in-director')) openDirectorDetail(name);
+  else libGo('director', {directorName:name, groupId:null, projectId:null, caseId:null});
+}
+
 function libGo(level, patch){
-  LIB_STATE = Object.assign({level:level, groupId:LIB_STATE.groupId, projectId:LIB_STATE.projectId, caseId:LIB_STATE.caseId, filters:{director:'all', problem:'all', recovery:'all'}, compare:[]}, patch||{});
+  LIB_STATE = Object.assign({level:level, groupId:LIB_STATE.groupId, projectId:LIB_STATE.projectId, caseId:LIB_STATE.caseId, directorName:LIB_STATE.directorName, filters:{director:'all', problem:'all', recovery:'all'}, compare:[]}, patch||{});
   renderLibrary();
 }
 
@@ -5170,7 +5239,8 @@ function setLibView(v){ LIB_VIEW = v; libGo('home', {groupId:null, projectId:nul
 
 function libOpenProject(pid){ /* 从任何地方直达某个项目的案例列表（案件里"查看相关案例"、详情页项目链接） */
   var pr = projById(pid); if(!pr) return;
-  var gid = pr.origin==='IN' ? (LIB_VIEW==='part' ? 'skin' : 'cat:'+pr.categoryId) : 'cat:'+pr.categoryId;
+  if(LIB_VIEW==='dir') LIB_VIEW = 'part'; /* 项目链接 → 回到按部位 */
+  var gid = LIB_VIEW==='part' ? 'part:'+libProjParts(pr)[0] : 'cat:'+pr.categoryId;
   if(CURRENT_PAGE_ID!=='in-library' && !(typeof krShowBind==='function' && CURRENT_PAGE_ID==='in-admin')) nav('in-library'); /* KR 端案例库在管理页壳里，不用跳转 */
   libGo('cases', {groupId:gid, projectId:pid, caseId:null});
 }
@@ -5179,7 +5249,8 @@ function libOpenCase(id){
   var c = LIB_CASES.filter(function(x){ return x.id===id; })[0]; if(!c) return;
   var pid = (c.projectIds||[])[0];
   var pr = pid ? projById(pid) : null;
-  var gid = LIB_STATE.groupId || (pr ? (pr.origin==='IN' ? (LIB_VIEW==='part'?'skin':'cat:'+pr.categoryId) : 'cat:'+pr.categoryId) : null);
+  if(LIB_VIEW==='dir'){ if(CURRENT_PAGE_ID!=='in-library' && !(typeof krShowBind==='function' && CURRENT_PAGE_ID==='in-admin')) nav('in-library'); libGo('detail', {groupId:null, projectId:null, caseId:id, directorName:c.director||null}); return; }
+  var gid = LIB_STATE.groupId || (pr ? (LIB_VIEW==='part' ? 'part:'+libProjParts(pr)[0] : 'cat:'+pr.categoryId) : null);
   var projectId = LIB_STATE.projectId || pid;
   if(CURRENT_PAGE_ID!=='in-library' && !(typeof krShowBind==='function' && CURRENT_PAGE_ID==='in-admin')) nav('in-library'); /* KR 端案例库在管理页壳里，不用跳转 */
   libGo('detail', {groupId:gid, projectId:projectId, caseId:id});
@@ -5188,7 +5259,9 @@ function libOpenCase(id){
 function libCrumbsHtml(){
   var st = LIB_STATE, crumbs = [{label:'案例库', fn:"setLibView(LIB_VIEW)"}];
   if(st.level!=='home'){
-    crumbs.push({label: LIB_VIEW==='part' ? '按部位' : '按施术 / 管理', fn:"libGo('home',{groupId:null,projectId:null,caseId:null})"});
+    crumbs.push({label: LIB_VIEW==='part' ? '按部位' : (LIB_VIEW==='dir' ? '按院长' : '按施术 / 管理'), fn:"libGo('home',{groupId:null,projectId:null,caseId:null})"});
+    if(LIB_VIEW==='dir' && (st.directorName)){ crumbs.push({label:st.directorName, fn: st.level==='detail' ? "libGo('director',{caseId:null})" : null}); }
+    if(st.level==='director' && LIB_VIEW!=='dir') crumbs.push({label:st.directorName, fn:null});
     if(st.groupId) crumbs.push({label:libGroupLabel(st.groupId), fn:"libGo('projects',{caseId:null,projectId:null})"});
     if(st.projectId && (st.level==='cases' || st.level==='detail')){ var pr = projById(st.projectId); crumbs.push({label:pr?pr.name:'项目', fn:"libGo('cases',{caseId:null})"}); }
     if(st.level==='detail'){ var c = LIB_CASES.filter(function(x){ return x.id===st.caseId; })[0]; crumbs.push({label:c?c.title:'案例', fn:null}); }
@@ -5209,6 +5282,7 @@ function libNodeCardHtml(label, cases, onclick, tag){
 }
 
 function libRenderHome(){
+  if(LIB_VIEW==='dir') return libRenderDirHome();
   var zones = libGroupCards(LIB_VIEW);
   return zones.map(function(z){
     return (z.zone ? '<div class="info-heading" style="margin:6px 0 10px;">'+z.zone+'</div>' : '')+
@@ -5232,7 +5306,7 @@ function libCaseCardHtml(c){
   var dirRow = '';
   if(c.source==='travel'){
     dirRow = '<div style="font-size:11px;color:var(--slate2);">医院：'+hospitalName(c.hospitalId||'H1','ko')+'</div>' + (libDirectorClickable(c)
-      ? '<div style="font-size:11px;color:var(--slate2);">院长：<a href="#" class="info-link" onclick="event.stopPropagation();openDirectorDetail(\''+c.director+'\');return false;">'+c.director+'</a></div>'
+      ? '<div style="font-size:11px;color:var(--slate2);">院长：<a href="#" class="info-link" onclick="event.stopPropagation();libOpenDirector(\''+c.director+'\');return false;">'+c.director+'</a></div>'
       : '<div style="font-size:11px;color:var(--muted);">院长：-</div>'); /* 不在名单上（停用/离职）显示"-"，不可点击 */
   }
   return '<div class="card" style="overflow:hidden;cursor:pointer;" onclick="libOpenCase(\''+c.id+'\')">'+libPhotoBox(libCoverPhoto(c),'100%','120px',c.title)+
@@ -5288,7 +5362,7 @@ function libRenderDetail(){
   var srcLabel = c.source==='travel' ? '医院案例' : '印尼案例';
   var srcColor = c.source==='travel' ? ['var(--sage-bg)','var(--sage)'] : ['var(--terracotta-bg)','var(--terracotta)'];
   var projLinks = (c.projectIds||[]).map(function(id){ var pr = projById(id); return pr ? '<a href="#" class="info-link" onclick="libOpenProject(\''+id+'\');return false;">'+pr.name+(pr.active?'':'（已非活性）')+'</a>' : ''; }).join('、');
-  var dirHtml = c.source==='travel' ? (libDirectorClickable(c) ? '<a href="#" class="info-link" onclick="openDirectorDetail(\''+c.director+'\');return false;">'+c.director+'</a>' : '<span style="color:var(--muted);">-</span>') : '';
+  var dirHtml = c.source==='travel' ? (libDirectorClickable(c) ? '<a href="#" class="info-link" onclick="libOpenDirector(\''+c.director+'\');return false;">'+c.director+'</a>' : '<span style="color:var(--muted);">-</span>') : '';
   var tags = (c.problemIds||[]).map(function(id){ return LIB_PROBLEMS[id] ? '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+LIB_PROBLEMS[id].label+'</span>' : ''; }).join(' ');
   var before = (c.beforePhotos||[]).map(function(_,i){ return libThumbHtml(c,'b'+i); }).join('') || '<span style="font-size:12px;color:var(--muted);">没有术前照片</span>';
   var after = sortedAfter(c).map(function(_,i){ return libThumbHtml(c,'a'+i); }).join('');
@@ -6356,6 +6430,7 @@ normalizeSeeds();
 /* 院长资料（KR-DOC-01 介绍卡）：名单 ≠ 账号。字段：nameEn / nameZh / title（代表院长|院长）/ photo / color / career[{when:现|前, ko, zh, id}] / certs[] / societies[]（{ko, zh, id}）/ specialties[项目名，选自本医院项目库]
    韩文填写，演示翻译成印尼文 / 中文，可修改（demoTranslate，不是真实翻译） */
 function trItem(ko){ return {ko:ko, zh:demoTranslate(ko,'ko','zh'), id:demoTranslate(ko,'ko','id')}; }
+var EDU_SEED = {'KD1 院长':'서울대학교 의과대학 졸업', 'KO1 代表院长':'연세대학교 의과대학 졸업', 'H2 院长1':'고려대학교 의과대학 졸업'}; /* 演示学历，照原文 */
 function seedDoctorProfiles(){
   var P = {
     'KD1 院长':{nameEn:'', nameZh:'', title:'院长', color:'#C9B8A3', career:[['现','서울 소수 성형외과 원장'],['前','강남 ID 병원 원장']], certs:['Ulthera 공식 인증의'], societies:['대한성형외과학회 정회원'], specialties:['假体隆鼻','鼻翼缩小','鼻综合（假体+鼻尖）']},
@@ -6371,8 +6446,8 @@ function seedDoctorProfiles(){
     h.directors.forEach(function(dr){
       var p = P[dr.name]; if(!p || dr.nameEn) return;
       dr.nameEn = p.nameEn; dr.nameZh = p.nameZh; dr.title = p.title; dr.color = p.color; dr.photo = '';
-      dr.career = p.career.map(function(c0){ var t0 = trItem(c0[1]); t0.when = c0[0]; return t0; });
-      dr.certs = p.certs.map(trItem); dr.societies = p.societies.map(trItem); dr.specialties = p.specialties.slice();
+      dr.items = p.career.map(function(c0){ return {cat:'经历', when:c0[0], text:c0[1]}; }).concat((EDU_SEED[dr.name] ? [{cat:'学历', text:EDU_SEED[dr.name]}] : []), p.certs.concat(p.societies).map(function(t0){ return {cat:'资格证', text:t0}; }));
+      delete dr.career; delete dr.certs; delete dr.societies; dr.specialties = p.specialties.slice();
     });
   });
 }

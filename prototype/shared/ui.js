@@ -2284,7 +2284,7 @@ function renderLibrary(){
   var sel = document.getElementById('lib-role-select'); if(sel) sel.value = DEMO_ROLE;
   var addBtn = document.getElementById('lib-add-btn');
   if(addBtn){ addBtn.textContent = '+ 新增案例'; addBtn.style.display = DEMO_ROLE==='in' ? '' : 'none'; } /* CMD-1014-16：KR 案例库只读，没有新增 */
-  var toggle = '<div class="cal-switch"><span class="'+(LIB_VIEW==='part'?'active':'')+'" onclick="setLibView(\'part\')">按部位</span><span class="'+(LIB_VIEW==='method'?'active':'')+'" onclick="setLibView(\'method\')">按施术 / 管理</span></div>';
+  var toggle = '<div class="cal-switch"><span class="'+(LIB_VIEW==='part'?'active':'')+'" onclick="setLibView(\'part\')">按部位</span><span class="'+(LIB_VIEW==='dir'?'active':'')+'" onclick="setLibView(\'dir\')">按院长</span><span class="'+(LIB_VIEW==='method'?'active':'')+'" onclick="setLibView(\'method\')">按施术 / 管理</span></div>';
   var f = document.getElementById('lib-filters');
   var searchBox = '<input type="text" id="lib-search" placeholder="搜索案例标题" value="'+LIB_SEARCH.replace(/"/g,'&quot;')+'" oninput="libSearchInput(this.value)" style="width:200px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;">';
   var hs = linkedHospitals(), hospSw = hs.length ? '<span style="display:inline-flex;gap:6px;align-items:center;"><span style="font-size:11px;color:var(--muted);">赴韩施术医院</span><span class="chip'+(LIB_HOSPITAL==='all'?' active':'')+'" onclick="setLibHospital(\'all\')">全部</span>'+hs.map(function(h){ return '<span class="chip'+(LIB_HOSPITAL===h.id?' active':'')+'" onclick="setLibHospital(\''+h.id+'\')">'+h.name.ko+'</span>'; }).join('')+'</span>' : '';
@@ -2307,25 +2307,24 @@ function renderLibMain(){
     return;
   }
   var lv = LIB_STATE.level;
-  main.innerHTML = lv==='home' ? libRenderHome() : (lv==='projects' ? libRenderProjects() : (lv==='cases' ? libRenderCases() : libRenderDetail()));
+  main.innerHTML = lv==='home' ? libRenderHome() : (lv==='projects' ? libRenderProjects() : (lv==='cases' ? libRenderCases() : (lv==='director' ? libRenderDirector() : libRenderDetail())));
 }
 
 /* 院长详情页（基础版）：这位院长名下的案例列表（点院长名进入；不在名单上的院长显示"-"，点不了） */
 var DIRECTOR_DETAIL_NAME = null;
 
-function openDirectorDetail(name){ DIRECTOR_DETAIL_NAME = name; renderDirectorDetail(); nav('in-director'); }
+function openDirectorDetail(name){
+  DIRECTOR_DETAIL_NAME = name;
+  if(document.getElementById('in-director')){ renderDirectorDetail(); nav('in-director'); }
+  else libGo('director', {directorName:name, groupId:null, projectId:null, caseId:null}); /* KR 端没有 in-director 页：在案例库里打开院长层级 */
+}
 
+/* CMD-1019-05：院长介绍页（左照片、右 名字｜职称 / 经历 / 学历 / 资格证 / 擅长项目，下面是名下案例），IN 页面和 KR 案例库共用 directorIntroHtml */
 function renderDirectorDetail(){
   var name = DIRECTOR_DETAIL_NAME; if(!name) return;
-  var cases = LIB_CASES.filter(function(c){ return c.director===name; });
-  var caseCount = CASE_ITEMS.filter(function(c){ return c.director===name; }).length;
-  document.getElementById('director-detail-name').textContent = name;
-  document.getElementById('director-detail-info').innerHTML =
-    '<div class="field-row"><span class="fk">姓名</span><span class="fv">'+name+'</span></div>'+
-    '<div class="field-row"><span class="fk">职称</span><span class="fv">院长</span></div>'+
-    '<div class="field-row"><span class="fk">案例库案例数</span><span class="fv">'+cases.length+'</span></div>'+
-    '<div class="field-row" style="border-bottom:none;"><span class="fk">对接案件数</span><span class="fv">'+caseCount+'</span></div>';
-  document.getElementById('director-detail-grid').innerHTML = cases.length ? cases.map(libCaseCardHtml).join('') : '<div style="grid-column:1/-1;font-size:12px;color:var(--muted);padding:20px 4px;">这位院长名下暂无案例</div>';
+  document.getElementById('director-detail-name').textContent = '院长介绍';
+  document.getElementById('director-detail-info').innerHTML = directorIntroHtml(name);
+  var g = document.getElementById('director-detail-grid'); if(g) g.innerHTML = '';
 }
 
 function deleteLibCase(id){
@@ -2447,7 +2446,7 @@ function renderLibCaseModal(){
     nameInp('zh','中文')+nameInp('ko','한국어')+nameInp('id','Bahasa Indonesia')+
     '<div style="margin:6px 0 12px;"><button class="btn-ghost" style="font-size:11px;" onclick="libEditAiFill()">AI 翻译补全（演示）</button></div>'+
     '<div style="margin:6px 0 10px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">项目 <span style="color:var(--terracotta);">*</span> <span style="font-weight:400;color:var(--muted);">来自项目库（'+(isTravel?'赴韩项目':'本地项目')+'），可多选；部位/分类由项目自动带出</span></div>'+projGroups+'</div>'+
-    (isTravel ? '<div class="case-field-row"><span class="fk">院长</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="libEditDirector(this.value)">'+dirOptions+'</select></div>' : '')+
+    (isTravel ? '<div class="case-field-row"><span class="fk">负责院长</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="libEditDirector(this.value)">'+dirOptions+'</select></div>' : '')+
     (!isTravel ? '<div style="margin:10px 0;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">问题（可多选）</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+
       Object.keys(LIB_PROBLEMS).map(function(id){ return '<span class="chip'+(c.problemIds.indexOf(id)>-1?' active':'')+'" onclick="libToggleProblem(\''+id+'\')">'+LIB_PROBLEMS[id].label+'</span>'; }).join('')+
       '<span class="chip" onclick="openLibProblemModal()">管理问题标签</span></div></div>' : '')+
