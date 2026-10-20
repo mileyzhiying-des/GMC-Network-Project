@@ -4727,6 +4727,20 @@ function visitCalBlocks(c){
   });
   return out;
 }
+/* CMD-1020-15：IN 工作台「KR 医院日程 N」——今天本诊所客人在 KR 医院发生的到院数（施术 / 面诊 / 术后 / 管理 / KR 占位预约；一次到院算一个、已取消不算；日期按韩国当地） */
+function krMainState(c){ return (c.krProcedureDone || c.visitClosed || c.stage==='closed') ? '已完成' : (c.hasArrived ? '已到医院' : '待到院'); }
+function krTodayArrivalCount(ds){
+  ds = ds || todayStr(); var n = 0;
+  CASE_ITEMS.forEach(function(c){
+    if(!c || c.stage==='cancelled') return; var ks = c.krSchedule || {}, hit = false;
+    if(ks.confirmedDate===ds && ['confirmed','arrived','change_pending'].indexOf(ks.status)>-1) hit = true;
+    if(!hit && c.consultAt && c.consultAt.date===ds && c.consultStatus!=='cancelled') hit = true;
+    if(!hit){ try{ hit = visitCalBlocks(c).some(function(v){ return v.date===ds; }); }catch(e){} }
+    if(!hit && c.krVisit && c.visitDate===ds) hit = true;
+    if(hit) n++;
+  });
+  return n;
+}
 /* CMD-1020-05：项目库「院长操作」设定（术后管理 / 管理项目都有；默认否；是 → 院长所需时间 dirMin，默认 30 分钟）；按名字查，找不到 = 否 */
 function dirOpInfo(hid, rawName){
   var base = String(rawName||'').split(' · ')[0].replace(/[（(].*$/, '').trim(), h = HOSPITAL_DATA[hid] || {};
@@ -4844,7 +4858,7 @@ function coreMarkArrived(c, by){
   c.krSchedule.status = 'arrived'; c.hasArrived = true; c.krArrivedDay = todayStr();
   updateCaseStage(c);
   logCaseEvent(c, by, 'KR标记"已到医院"');
-  pushNotif('赴韩施术','客人已到医院：'+c.name, {caseId:c.id});
+  var ks0 = c.krSchedule||{}; pushNotif('赴韩施术', c.name+' 已到医院（'+(c.director||'院长')+'，'+tkK(ks0.confirmedDate||todayStr(), ks0.confirmedTime||'')+'）', {caseId:c.id, level:'info'}); /* CMD-1020-15 三：只告知，不进待办 */
   return true;
 }
 var KR_JUDGE_TEXT = {ok:'可以手术，原方案不变', changed:'可以手术，但需要调整方案', cannot:'不建议手术'}; /* 院长评估结果（CMD-1012-02 D1）：除第一项外 memo 必填 */

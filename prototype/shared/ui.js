@@ -299,7 +299,8 @@ function krDayItems(ds){
         var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0], its = c ? krActiveItems(c) : [];
         label = (b.name||'')+' · '+(its.length ? its[0].name+(its.length>1 ? ' 等'+its.length+'项' : '') : '施术')+' · '+n;
       } /* 其他诊所客人的施术：IN 看不到任何信息——当作和「不可预约」一样的浅灰无字块（「全部」里不显示；单一院长才显示浅灰块） */
-      out.push({who:n, s:s, e:e, type:own ? 'surg' : 'busy', own:own, isRes:(b.kind==='施术' || b.kind==='面诊'), label:label, caseId:own ? b.caseId : null}); /* 不可预约：不写任何字 */
+      var stt = (own && c) ? krMainState(c) : ''; /* CMD-1020-15 三：块上加状态标签（待到院 / 已到医院 / 已完成） */
+      out.push({who:n, s:s, e:e, type:own ? 'surg' : 'busy', own:own, isRes:(b.kind==='施术' || b.kind==='面诊'), label:label, caseId:own ? b.caseId : null, state:stt}); /* 不可预约：不写任何字 */
     });
     (hd.offs||[]).forEach(function(o){
       if(!offApplies(o, ds) || o.who!==n || o.kind!=='director') return;
@@ -324,7 +325,7 @@ function krDayItems(ds){
       if(!care && dirs0.indexOf(who0)<0) return;
       var what = v.what.join('、')+(v.hasDirOp ? '（院长操作）' : ''), main = out.filter(function(x){ return x.type==='surg' && x.own && x.caseId===c.id; })[0];
       if(main){ main.label += ' · 同日：'+what; return; }
-      out.push({who:who0, s:timeToMin(v.time), e:timeToMin(v.end), type:v.hasSurg ? 'surg' : 'visit', own:true, isRes:!care, label:(c.name||'')+' · '+what+(care ? '' : ' · '+who0), caseId:c.id, done:v.done});
+      out.push({who:who0, s:timeToMin(v.time), e:timeToMin(v.end), type:v.hasSurg ? 'surg' : 'visit', own:true, isRes:!care, label:(c.name||'')+' · '+what+(care ? '' : ' · '+who0), caseId:c.id, done:v.done, state:(v.done ? '已完成' : (v.arrived ? (v.hasSurg ? '已到医院' : '已到店') : '待到院'))});
     });
   });
   CLINIC_HOSPITALS.filter(function(r){ return r.hospitalId===hidV; }).forEach(function(r){
@@ -357,7 +358,7 @@ function krBarChips(ds){
   return out.join('');
 }
 /* 周 / 日视图的 KR 医院日程：一个事占一整块（高度跨满所跨的时段，和本院日程事件块同一画法），重叠并排；整天 OFF 只在顶部固定栏，半天 OFF 画成一整块 */
-var KR_ROW_PX = 36;
+var KR_ROW_PX = 56; /* CMD-1020-15 二：和本院周视图每 30 分钟一格同高（.wk-cell 56px） */
 /* KR 周视图的时间轴行（CMD-1008-05）：医院营业时间（韩国时间）每 SLOT_MIN 一行；大字 = 换算成页面时区的时间，小字 = 韩国时间 */
 /* CMD-1015-01：IN 的 KR 医院日程也是营业时间外按需显示（这一周有预约落在营业前 / 后才展开，或点时间轴顶 / 底小条）；行 = 韩国时间 */
 var KR_ROWS_C = null;
@@ -394,7 +395,7 @@ function krDayColHtml(ds, items, baseMin, closedFrom, lunch, closedBefore, dirOf
   krLaneLayout(items).forEach(function(r0){
     var it = r0.it, s = Math.max(it.s, baseMin), e = Math.min(it.e, baseMin + total*SLOT_MIN); if(e <= s) return;
     var top = (s-baseMin)/SLOT_MIN*KR_ROW_PX, hgt = Math.max(16, (e-s)/SLOT_MIN*KR_ROW_PX - 2), w = 100/r0.n;
-    blocks += '<div'+(((it.type==='surg' || it.type==='book' || it.type==='visit') && it.own) ? '' : ' class="kr-busy"')+(it.type==='book' && it.own ? ' onclick="krBookBlockClick(\''+it.bookingId+'\')"' : (it.own && it.caseId ? ' onclick="openCaseDetail(\''+it.caseId+'\')"' : ''))+' title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:12px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
+    blocks += '<div'+(((it.type==='surg' || it.type==='book' || it.type==='visit') && it.own) ? '' : ' class="kr-busy"')+(it.type==='book' && it.own ? ' onclick="krBookBlockClick(\''+it.bookingId+'\')"' : (it.own && it.caseId ? ' onclick="openCaseDetail(\''+it.caseId+'\')"' : ''))+' title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:12px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+(it.state ? ' <span class="krb-st st-'+(it.state==='已完成' ? 'done' : (/^已到/.test(it.state) ? 'in' : 'wait'))+'">'+it.state+'</span>' : '')+'</div>';
   });
   var hatch = closedFrom ? '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(closedFrom)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;bottom:0;background:#F3F1EC;z-index:1;"></div>' : ''; /* 部分时段休诊：灰色斜纹 */
   var hatchB = closedBefore ? '<div title="医院休诊（半天营业）" style="position:absolute;left:0;right:0;top:0;height:'+Math.max(0, (timeToMin(closedBefore)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;z-index:1;"></div>' : '';
@@ -598,6 +599,7 @@ function renderMonthPickerMonths(){
 function pickMonth(y, m){ MONTH_OFFSET = (y-TODAY_DATE.getFullYear())*12 + (m-TODAY_DATE.getMonth()); document.getElementById('cal-month-overlay').classList.remove('open'); renderCalendar(); }
 function renderCalendar(){
   updateCalNavLabel();
+  var krTab = document.getElementById('cal-view-kr'); if(krTab){ var nTab = krTodayArrivalCount(); krTab.textContent = 'KR 医院日程'+(nTab ? ' '+nTab : ''); } /* CMD-1020-15 一：今天本诊所客人在 KR 的到院数，0 不显示 */
   renderTodayOff();
   if(CAL_MODE==='week') buildWeekGrid();
   else if(CAL_MODE==='month') buildMonthGrid();

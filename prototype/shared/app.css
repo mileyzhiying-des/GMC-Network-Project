@@ -466,3 +466,20 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 #kr-cal .krc-monthwrap .cal-cell{cursor:pointer;}
 .krc-offcol{position:absolute;left:0;right:0;z-index:1;pointer-events:none;display:flex;align-items:flex-start;justify-content:center;padding-top:6px;box-sizing:border-box;font-size:12px;font-weight:700;color:#B5483E;background:#E4E2DC;}
 .krc-busy.krc-offcol,.kr-busy.cal-offband{color:#B5483E !important;}
+
+/* CMD-1020-15 三：IN 的 KR 医院日程块上的到院状态标签 */
+.krb-st{display:inline-block;font-size:12px;font-weight:700;padding:0 6px;border-radius:4px;margin-left:2px;line-height:1.5;white-space:nowrap;}
+.krb-st.st-wait{background:#fff;color:var(--muted);border:1px solid var(--border);}
+.krb-st.st-in{background:#2F6B4A;color:#fff;}
+.krb-st.st-done{background:#EFEBE4;color:var(--muted);}
+
+/* CMD-1020-15 四六：KR 到院卡层级（1 级 = 今天的到院卡；2 级 = 已付定金项目 / 添加项目 / 付清尾款等；3 级 = 施术项目 N / 管理项目 N），卡间距、行间距，选择区最大高度 */
+.kr-l2{background:#fff;border:1px solid var(--border2);border-radius:10px;padding:16px 18px;margin-bottom:14px;}
+.kr-l2:last-child{margin-bottom:0;}
+.kr-l2-title{font-size:14px;font-weight:700;margin-bottom:10px;}
+.kr-l3{background:var(--bg-sidebar,#F6F3EE);border-radius:8px;padding:10px 14px;margin-top:10px;}
+.kr-l3:first-of-type{margin-top:0;}
+.kr-l3-title{font-size:13px;font-weight:700;margin-bottom:6px;}
+.kr-row{padding:6px 0;font-size:13px;line-height:1.5;}
+.kr-row+.kr-row{border-top:1px solid var(--border2);}
+.kr-chooser-scroll{max-height:360px;overflow-y:auto;padding-right:6px;}

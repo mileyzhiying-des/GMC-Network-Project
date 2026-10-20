@@ -124,7 +124,7 @@ function caseProcessText(c){
     if(st==='Pending') return '待确认施术时间';
     if(st==='Arrived'){
       var sg = (c.subItems||[]).filter(function(x){ return x.kind==='施术'; });
-      return (sg.length && sg.every(function(x){ return x.done; })) ? '在韩后续' : '在韩中（已到院）';
+      return (sg.length && sg.every(function(x){ return x.done; })) ? '在韩后续' : '在韩中（已到医院）'; /* CMD-1020-15：KR 标了已到医院，IN 案件页 / 列表同步写「已到医院」 */
     }
     return '时间已确认'; /* Confirmed / Changing */
   }

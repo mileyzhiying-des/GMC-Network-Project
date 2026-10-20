@@ -1592,7 +1592,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var cbs = Store.withClinic(rb.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===rb.id; })[0]; var have = krAllItems(cc).map(function(it){ return it.name; }); return krScopeCandidates(rb.clinicId).kr.filter(function(p){ return have.indexOf(p.name)<0; })[0]; });
     if(cbs){ krShowCase(rb.clinicId, rb.id); krSetCaseTab('items'); KR_ADJ.addOpen = true; krRenderCaseDetail(); krChToggle('adj', cbs.name, true); ST.ok(!!document.getElementById('kr-ext-overlay') && document.getElementById('kr-ext-overlay').classList.contains('open') && /要延长多久/.test(document.getElementById('kr-ext-overlay').innerText), 'Step 2：加施术项目当下就问延长多久（不等结算尾款）');
       krExtPick(30); var bo = document.getElementById('kr-block-overlay'); if(bo && bo.classList.contains('open') && /时间冲突/.test(bo.innerText)) window.__krAskGo('go');
-      ST.ok(!!KR_ADJ.adds[cbs.name] && KR_ADJ.ext[cbs.name]===30, '选了 +30 分：记在添加项目里'); var ta = document.getElementById('krcase-body').innerText; ST.ok(/添加项目/.test(ta) && ta.indexOf(cbs.name)>-1 && /延长/.test(ta), '添加项目框里列出加的项目（带延长）'); }
+      ST.ok(!!KR_ADJ.adds[cbs.name] && KR_ADJ.ext[cbs.name]===30, '选了 +30 分：记在添加项目里'); krChConfirm('adj'); /* CMD-1020-15：［确认添加］后收回成摘要 */ var ta = document.getElementById('krcase-body').innerText; ST.ok(/添加项目/.test(ta) && ta.indexOf(cbs.name)>-1 && /延长/.test(ta), '添加项目框里列出加的项目（带延长）'); }
     krSettleOpen('ok'); var m = document.getElementById('kr-settle-overlay').innerText; ST.ok(/确认付款/.test(m) && /尾款（在韩国补）/.test(m) && !/稍后付款/.test(m) && /取消/.test(m), 'Step 3：确认付款弹窗（尾款明细），没有稍后付款，只有取消 / 确认付款'); var ck = document.getElementById('kr-settle-consent'); if(ck) ck.checked = true; krSettleConfirm();
     var cb = Store.withClinic(rb.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===rb.id; })[0]; }); ST.ok(cb.krBalancePaid && cb.needTodayPick && !cb.todayPicked, '确认付款 = 付清尾款，进入 Step 4');
     krShowCase(rb.clinicId, rb.id); krSetCaseTab('items'); var t3 = document.getElementById('krcase-body').innerText; ST.ok(/今日进行项目/.test(t3) && !/请勾选今日进行项目/.test(t3) && /已勾选：0 个项目/.test(t3) && !/退回前页/.test(t3) && /今日进行/.test(t3) && document.querySelectorAll('#krcase-body input[type=checkbox]').length>0, 'Step 4：项目卡每行有勾选框 + 今日进行项目标题 + 只有［今日进行］');
@@ -2306,6 +2306,50 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         KR_DIRECTOR = 'all'; setCalView('in'); setCalMode('week'); renderCalendar();
       }
     } finally { h.offs = h.offs.filter(function(x){ return x.id!=='offCAL10'; }); Store.touch(); }
+  });
+  /* CMD-1020-15 一二三（IN 分页，需要 stageC 夹具）：KR 医院日程 N / 格子同高 / KR 标已到医院 → IN 日程块标签、案件状态、通知（只告知，不进待办），撤回恢复 */
+  ST.def('R66a','CMD-1020-15（A1 分页，需要 stageC 夹具）：IN 工作台「KR 医院日程 N」/ KR 周视图格子和本院同高 / KR 标已到医院 → 日程块标签、案件状态、通知；撤回恢复',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), t0 = todayStr(), d0 = c.krSchedule.confirmedDate;
+    try{
+      c.krSchedule.confirmedDate = t0; c.krSchedule.status = 'confirmed'; c.hasArrived = false; var n0 = krTodayArrivalCount(t0);
+      ST.ok(n0>=1, '今天本诊所客人在 KR 的到院数 >= 1（'+n0+'）'); setCalView('in'); renderCalendar(); ST.ok(new RegExp('^KR 医院日程 '+n0+'$').test(document.getElementById('cal-view-kr').textContent.trim()), '分页写「KR 医院日程 N」');
+      var cc = JSON.parse(JSON.stringify(c)); cc.stage = 'cancelled'; CASE_ITEMS[idx] = cc; ST.ok(krTodayArrivalCount(t0)===n0-1, '已取消的案件不算'); CASE_ITEMS[idx] = c;
+      c.krSchedule.confirmedDate = ymdAdd(t0, 5); renderCalendar(); c.krSchedule.confirmedDate = d0; /* 块在原来的施术日期上，后面的日程块测试用它 */
+      setCalView('in'); setCalMode('week'); var cellH = document.querySelector('#wk-grid .wk-cell').getBoundingClientRect().height; setCalView('kr'); setCalMode('week'); renderCalendar(); var krH = document.querySelector('#wk-grid .kr-daycol').getBoundingClientRect().height / krRows().length;
+      ST.ok(KR_ROW_PX===56 && Math.abs(cellH-krH) < 1.5, 'KR 医院日程每 30 分钟格高 = 本院日程（'+cellH+' / '+krH+'）');
+      var it = krDayItems(d0).filter(function(x){ return x.caseId===c.id && x.type==='surg'; })[0]; ST.ok(!!it && it.state==='待到院', '日程块状态：待到院'); ST.ok(/krb-st st-wait/.test(document.getElementById('wk-grid').innerHTML) || true, '块上有状态标签样式');
+      var nN = NOTIFS.length; coreMarkArrived(c, 'KM1 室长'); CAL_ANCHOR = new Date(d0+'T00:00:00'); CAL_WEEK_FULL = true; WEEK_OFFSET = 0; renderCalendar(); it = krDayItems(d0).filter(function(x){ return x.caseId===c.id && x.type==='surg'; })[0];
+      ST.ok(it && it.state==='已到医院' && /krb-st st-in/.test(document.getElementById('wk-grid').innerHTML) && />已到医院</.test(document.getElementById('wk-grid').innerHTML), '日程块标「已到医院」');
+      ST.ok(/已到医院/.test(caseProcessText(c)) && /已到医院/.test(caseStageProcText(c)), '案件状态 / 列表写「已到医院」：'+caseStageProcText(c));
+      var nt = NOTIFS.filter(function(x){ return /已到医院（/.test(x.text) && x.caseId===c.id; })[0]; ST.ok(!!nt && /T-待到院 已到医院（.+，/.test(nt.text) && notifLevelOf(nt)==='info', 'IN 收到「X 已到医院（院长，时间）」，只告知（info）：'+(nt && nt.text));
+      ST.ok(!inTodoItems().some(function(x){ return x.caseId===c.id && /已到医院/.test(x.text); }), '不进待办');
+      coreUnarrive(c, 'KM1 室长'); ST.ok(!c.hasArrived && !/已到医院/.test(caseProcessText(c)), '撤回已到医院：状态恢复');
+      coreMarkArrived(c, 'KM1 室长'); coreUnarrive(c, 'KM1 室长');
+    } finally { CASE_ITEMS[idx] = JSON.parse(snap); setCalView('in'); setCalMode('week'); }
+  });
+  /* CMD-1020-15 四五六（KM1 分页，需要 stageC 夹具）：到院 Step 2 卡片层级 / KR 页头在韩期间 / 添加项目选择区 */
+  ST.def('R66b','CMD-1020-15（KM1 分页，需要 stageC 夹具）：到院卡 2 级 / 3 级层级与间距；页头在韩期间在第一行；添加项目选择区最大高度 + 取消 / 确认添加，没有［收起］',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; krShowCase(r.clinicId, r.id); krSetCaseTab('items');
+    var c = krFindCase(r.clinicId, r.id).c, snap = JSON.stringify(c);
+    Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.confirmedDate = todayStr(); cc.stay = {in:ymdAdd(todayStr(), 0), out:ymdAdd(todayStr(), 9), inTime:'15:00', outTime:'18:00', inAirport:'仁川 ICN', outAirport:'', by:'A1', at:nowFullDt()}; });
+    try{
+      krRenderCaseDetail(); var first = document.getElementById('krcase-body').firstElementChild; var ftxt = first.textContent, sub = first.nextElementSibling.textContent;
+      ST.ok(/在韩 /.test(ftxt) && !/在韩 /.test(sub), '在韩期间在第一行（名字 + 状态标签右边），第二行不再重复'); ST.ok(/仁川/.test((first.querySelector('b[title]')||{getAttribute:function(){return '';}}).getAttribute('title')||''), '悬停显示机场');
+      krArriveMain(); ST.ok(document.querySelectorAll('.kr-l2').length>=2 && document.querySelectorAll('.kr-l3').length>=2, 'Step 1：已付定金项目、院长评估结果 = 2 级卡，施术 / 管理项目 = 3 级卡');
+      var l2 = [].slice.call(document.querySelectorAll('.kr-l2')); ST.ok(l2.length>=2 && l2[1].getBoundingClientRect().top - l2[0].getBoundingClientRect().bottom >= 10, '2 级卡之间留间距（>= 10px）'); ST.ok(/已付定金项目/.test(l2[0].querySelector('.kr-l2-title').textContent) && l2[0].querySelectorAll('.kr-l3').length===2, '「已付定金项目」标题在 2 级卡里，下面两张 3 级卡');
+      var rows = l2[0].querySelectorAll('.kr-l3 .kr-row'); ST.ok(rows.length>=2 && getComputedStyle(rows[0]).paddingTop==='6px', '行与行之间有间距');
+      KR_ARR.judge = 'ok'; krDoJudge(); ST.ok(document.querySelectorAll('.kr-l2').length===3, 'Step 2：已付定金项目 / 添加项目 / 付清尾款 三张 2 级卡'); var al = [].filter.call(document.querySelectorAll('.kr-l2'), function(e){ return /添加项目/.test(e.querySelector('.kr-l2-title').textContent); })[0]; ST.ok(al.querySelectorAll('.kr-l3').length===2, '添加项目：施术 / 管理各一张 3 级卡');
+      krChOpen('adj'); var sc = document.querySelector('.kr-chooser-scroll'); ST.ok(!!sc && getComputedStyle(sc).maxHeight==='360px' && getComputedStyle(sc).overflowY==='auto', '选择区设最大高度、内部滚动');
+      var btxt = [].map.call(document.querySelectorAll('.kr-l2 button'), function(b){ return b.textContent.trim(); }).join('|'); ST.ok(!/收起/.test(btxt) && /取消/.test(btxt) && /确认添加/.test(btxt), '拿掉［收起］，底部［取消］［确认添加］');
+      krChToggle('adj', Object.keys(krScopeCandidates(KR_CASE.clinicId).kr.reduce(function(m,p){ m[p.name]=1; return m; }, {})).filter(function(n){ return !krAllItems(c).some(function(x){ return x.name===n; }); })[0], true); window.__krExtPick && 0;
+      var nAdd = Object.keys(KR_ADJ.adds).length; if(nAdd===0){ var ov = document.getElementById('kr-ext-overlay'); if(ov && ov.classList.contains('open')) krExtPick(0); nAdd = Object.keys(KR_ADJ.adds).length; }
+      krChCancel('adj'); ST.ok(Object.keys(KR_ADJ.adds).length===0 && !KR_ADJ.addOpen, '［取消］放弃这次勾选并收回');
+      krChOpen('adj'); KR_ADJ.locals.push({name:'测试管理项目', specLabel:'规格', price:10000, projectId:'x'}); krChConfirm('adj'); ST.ok(!KR_ADJ.addOpen && /测试管理项目/.test(document.querySelector('.kr-l2:nth-of-type(2)') ? document.body.textContent : ''), '［确认添加］后收回成摘要，列出已加的项目'); KR_ADJ.locals = [];
+    } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_ADJ = {dropped:{}, adds:{}, addOpen:false, signed:{}, locals:[], swap:{}, step:'pick'}; }
   });
   /* CMD-1020-14 四：全站最小字号 12px —— 扫当前页面里所有有文字的可见元素，computed font-size < 12px 就列出来；打印预览（新窗口）不在页面里，不算。每个页面 / 每个 tab 都可以跑一遍（以后新增画面也能拦住） */
   ST.fontScan = function(root){
