@@ -1612,7 +1612,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(care.some(function(x){ return x.place==='KR' && /术后预约/.test(visitSource(c, subCaseKey(x))) && x.src==='care'; }), '预约来源 = 术后预约');
       ST.ok(typeof calendarEventsKr==='function' ? true : true, ''); krShowCase(ra.clinicId, ra.id); krSetCaseTab('items'); krProjPage('care'); var tc0 = document.getElementById('krcase-body').innerText, tc = tc0.slice(tc0.indexOf('项目卡'), tc0.indexOf('每次到院一张卡') > -1 ? tc0.indexOf('每次到院一张卡') : undefined); ST.ok(/已预约/.test(tc) && !/项目类型/.test(tc) && /项目\s*术后第 N 天\s*地点\s*次数\s*建议日期/.test(tc), '术后管理分页：没有项目类型，栏位 项目｜地点｜对应施术｜次数｜管理间隔｜建议日期');
       krProjPage('surg'); var t1 = document.getElementById('krcase-body').innerText; var mc = document.getElementById('kr-maincard'); var mt = mc ? mc.parentElement.innerText : t1;
-      ST.ok(new RegExp('施术：'+pk[0]).test(mt) && new RegExp('施术：'+pk[1]).test(mt) && !/施术：[^\n]*、/.test(mt), '施术项目一项一行'); ST.ok((mt.match(/操作完成/g)||[]).length>=2 && (mt.match(/今日取消/g)||[]).length>=2, '每行［操作完成］［今日取消］');
+      ST.ok(mt.indexOf('\n'+pk[0]+'\n')>-1 && mt.indexOf('\n'+pk[1]+'\n')>-1 && mt.indexOf(pk[0]+'、')<0, '施术项目一项一行（CMD-1020-06：只写名称，不再带「施术：」）'); ST.ok((mt.match(/操作完成/g)||[]).length>=2 && (mt.match(/今日取消/g)||[]).length>=2, '每行［操作完成］［今日取消］');
       ST.ok(!/修改时间/.test(mt) && !/预约后续到院/.test(mt), '今日案件行没有［修改时间］和「预约后续到院」');
       krTodayCancel('item', pk[1], '施术：'+pk[1]); var tm = document.getElementById('kr-tc-overlay'); ST.ok(!!tm && tm.classList.contains('open') && /今天不做/.test(tm.innerText) && /退回项目卡/.test(tm.innerText), '今日取消先弹确认 Modal'); window.__krTcGo();
     })(); (function(){
@@ -2090,6 +2090,29 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 施术 / 管理 tab 卡片样式 */
     krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krProjPage('surg'); var h1 = document.getElementById('krcase-body').innerHTML; krProjPage('mgmt'); var h2 = document.getElementById('krcase-body').innerHTML;
     ST.ok(/border-radius:\s*12px/.test(h1) && (!/管理项目（[1-9]/.test(document.getElementById('krcase-body').innerText) || /border-radius:\s*12px/.test(h2)), '施术 / 管理 tab 的分组表格装进圆角卡片');
+  });
+  ST.def('R57a','CMD-1020-06（KM1 分页，需要 pcStage 夹具）：到院卡白底 / 没有本次记录 / 名称 + 灰字 / 标题行院长 / 日志日期和阶段类别',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var gc = function(){ return Store.withClinic(r0.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); }, day = todayStr();
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.subItems = c.subItems.filter(function(x){ return !/^q\d/.test(x.id); }); c.logEntries = c.logEntries.filter(function(e){ return !/^R57/.test(e.stage||'') && !/R57测试/.test(e.action); });
+      if(!c.procedureItems.some(function(x){ return /^R57管理/.test(x.name); })) c.procedureItems.push({name:'R57管理项目', origin:'KR', mgmtPlan:true, heldOver:true, qty:3, holdUsed:0, price:0, batchId:'r57'});
+      var P = function(id, content, extra){ c.subItems.push(Object.assign({id:id, no:c.caseNo+'-9'+id.slice(-1), kind:'术后管理记录', place:'KR', date:day, time:'17:00', content:content, projectName:'假体隆鼻', arrived:true, simDay:true}, extra||{})); };
+      P('q51', '开内眼角（预约）', {surgUse:'开内眼角', director:c.director}); P('q52', '术后管理（术后复诊检查，在韩国）'); P('q53', 'R57管理项目（持有项目使用）', {holdUseOf:'R57管理项目', projectName:'R57管理项目'}); subCaseNos(c); return true; });
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); var body = document.getElementById('krcase-body'), card = [].slice.call(body.querySelectorAll('.card')).filter(function(x){ return /今天 17:00/.test(x.innerText); })[0];
+    ST.ok(!!card && card.style.background==='rgb(255, 255, 255)' && !/kr-sub-hl/.test(card.className), '今天到院卡白底，没有高亮 / 黄色底'); ST.ok(!/#faf6ef|surface2/.test(card.innerHTML), '卡里没有内层粉色底');
+    ST.ok(!/本次记录/.test(body.innerText) && !/（院长）/.test(card.innerText), '没有「本次记录」，表格下没有飘着的「院长」');
+    ST.ok(/院长：KD1/.test(card.innerText.split('\n').slice(0, 2).join(' ')) , '标题行写「院长：KD1」：'+card.innerText.split('\n')[0]);
+    var l1 = visitRowLabel(gc(), gc().subItems.filter(function(x){ return x.id==='q51'; })[0]), l2 = visitRowLabel(gc(), gc().subItems.filter(function(x){ return x.id==='q52'; })[0]), l3 = visitRowLabel(gc(), gc().subItems.filter(function(x){ return x.id==='q53'; })[0]);
+    ST.ok(l1.name==='开内眼角' && !l1.sub && l1.type==='施术', '施术：只写名称：'+l1.name+'/'+l1.sub); ST.ok(l2.type==='术后管理' && /^假体隆鼻 · 术后第 \d+ 天$/.test(l2.sub) && l2.name==='术后复诊检查', '术后管理：名称 + 「对应施术 · 术后第 N 天」：'+l2.name+'/'+l2.sub); ST.ok(l3.type==='管理项目' && /^剩 3 \/ 共 3 次$/.test(l3.sub), '管理项目：名称 + 「剩 N / 共 M 次」：'+l3.sub);
+    ST.ok(!/（预约）|（持有项目使用）|在韩国）/.test(card.innerText), '名称里没有（预约）（持有项目使用）在韩国 这类后缀');
+    /* 日志：日期取这一行自己的日期；阶段按项目类型 */
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; ['q51', 'q52', 'q53'].forEach(function(id){ var s0 = c.subItems.filter(function(x){ return x.id===id; })[0]; s0.arrived = false; s0.simDay = true; coreSubArrived(c, id, 'KM1 室长'); }); return true; });
+    var logs = gc().logEntries.slice(-3); ST.ok(logs.map(function(e){ return e.stage; }).join()==='施术,术后管理,管理项目', '日志阶段按项目类型：'+logs.map(function(e){ return e.stage; }).join());
+    ST.ok(logs.every(function(e){ return e.action.indexOf('到院（'+day.slice(5).replace('-', '/')+'）')>-1; }), '日志里的到院日期写对（'+day.slice(5)+'）：'+logs[0].action);
+    /* 旧记录：行号 -0N / -NN 不再被当成第 N 次到院（11/02 曾写成 11/07） */
+    var q = gc().subItems.filter(function(x){ return x.id==='q52'; })[0]; ST.ok(visitWords('客人已到：'+q.no+'「术后复诊检查」')==='客人已到：到院（'+day.slice(5).replace('-', '/')+'）「术后复诊检查」', '旧记录里的行号按那一行自己的日期显示');
+    ST.ok(/施术、术后管理、管理项目/.test(tlDateTitle(gc(), day)), 'Timeline 日期小标题按项目类型：'+tlDateTitle(gc(), day));
   });
   ST.def('R50a','CMD-1019-21：多施术日停留算法 / 术后第 N 天 / 购买后项目名 / 今日进行数量 / Timeline 整理 / 接待退回（A1 分页）',function(){
     /* 三：最早可回国日 = 各施术「施术日 + 建议天数」最晚的一个 */

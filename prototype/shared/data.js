@@ -2809,9 +2809,10 @@ function caseTimelineEntries(c, which){
    阶段条 + 类型筛选 + 显示系统记录；最新在上；按日期分组；每行 时间｜谁｜做了什么；同人同分钟同一件事合并、来回反复收成一行（可展开明细）。
    时间一律按看的人的时区（栏头注明）；阶段 / 类型都是显示时推算，不改存档里的记录 */
 var TL_UI = {};
-var TL_STAGES = ['预约到店', '面诊', '项目确认 / 结算', '赴韩施术', '术后管理', '在韩管理', '本地管理', '结案'];
+var TL_STAGES = ['预约到店', '面诊', '项目确认 / 结算', '赴韩施术', '术后管理', '管理项目', '在韩管理', '本地管理', '结案'];
 function tlStageOf(e){
   var st = String(e.stage||''), a = String(e.action||'');
+  if(st==='施术') return '赴韩施术'; /* CMD-1020-06：按项目类型标的记录（施术 / 术后管理 / 管理项目） */
   if(/^(面诊安排|待访问|预约)/.test(st) || st==='面诊') {
     if(/确认所选|生成结算单|结算|付款|定金|尾款|麻醉同意书|选择项目|所选项目/.test(a) && !/面诊费/.test(a)) return '项目确认 / 结算';
     return st==='面诊安排' || st==='面诊' ? '面诊' : '预约到店';
@@ -2876,7 +2877,8 @@ function tlMerge(list){
 function tlVisitDayText(c, ds){ /* 在韩期间的日期小标题：和到院卡一致「10/31（五）· 施术」 */
   var ks = c.krSchedule || {}, what = [];
   if(ks.confirmedDate && ks.confirmedDate===ds && (ks.status==='confirmed' || ks.status==='arrived' || c.krBalancePaid)) what.push('施术');
-  try{ subCaseNos(c); subCaseList(c).forEach(function(r){ if(r.date===ds && what.indexOf('术后管理')<0) what.push('术后管理'); }); }catch(e){}
+  try{ subCaseNos(c); visitCalBlocks(c).forEach(function(v){ if(v.date===ds) v.what.forEach(function(w){ if(what.indexOf(w)<0) what.push(w); }); }); }catch(e){} /* CMD-1020-06：这天做了什么按到院里的项目类型（施术 / 术后管理 / 管理项目） */
+  var order = ['施术', '术后管理', '管理项目']; what.sort(function(a, b){ return order.indexOf(a)-order.indexOf(b); });
   return what.join('、');
 }
 function tlDateTitle(c, ds){
@@ -3752,7 +3754,7 @@ function inPostcareCardHtml(c){
     var st = s.done ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">已完成</span>' : (s.place==='IN' ? '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">待做</span>'+(late>0 ? ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;">已过建议日期 '+late+' 天</span>' : '') : (s.arrived ? '<span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;">已到店</span>' : '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">待到店</span>'));
     var when = s.place==='IN' ? (s.done ? s.visitDate : '建议 '+pcMD(s.date)) : s.date+(s.time ? ' '+s.time : '');
     var btn = (s.place==='IN' && !s.done && canAct) ? '<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="openCareVisit(\''+s.id+'\')">做术后管理</button>' : '';
-    return '<div class="case-field-row" style="align-items:center;"><span style="width:86px;font-weight:700;font-size:12px;">'+(s.dno ? '到院' : '')+'</span><span style="flex:1;font-size:13px;">'+s.content+careDayTag(c, s)+'</span><span style="font-size:12px;color:var(--slate2);width:110px;">'+when+'</span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(s.place==='IN' ? '印尼' : '韩国')+'</span>'+st+btn+'</div>';
+    return '<div class="case-field-row" style="align-items:center;"><span style="width:86px;font-weight:700;font-size:12px;">'+(s.dno ? '到院' : '')+'</span><span style="flex:1;font-size:13px;">'+visitRowLabelHtml(c, s)+'</span><span style="font-size:12px;color:var(--slate2);width:110px;">'+when+'</span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+(s.place==='IN' ? '印尼' : '韩国')+'</span>'+st+btn+'</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">'+(c.krBalancePaid && !c.pcBooked ? '术后管理还没预约（KR 在付清尾款后预约）' : '没有术后管理')+'</div>';
   var endBtn = (c.stage==='postcare' && !c.visitClosed) ? '<div style="margin-top:12px;"><button class="btn-outline" onclick="openEndPostcare()">结束术后管理</button> <span style="font-size:11px;color:var(--muted);">客人不再来做时按；案件结案，没做的不作废：印尼的显示在客户详情，以后再来做开新案件</span></div>' : '';
   return '<div class="card" id="in-postcare-card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:6px;">术后管理</div><div style="font-size:11px;color:var(--muted);margin-bottom:8px;">免费、不显示价格、不能退款；每一次到院算一次（同一天同一地点算一次）；韩国 + 印尼都做完案件才结案</div>'+list+endBtn+'</div>';
@@ -4878,7 +4880,7 @@ function coreSubDone(c, id, by, itemNames, noClose){
   if(s.holdUseOf){ var hi = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===s.holdUseOf; })[0]; if(hi){ holdUseRecord(c, hi, {at:s.doneAt, key:subCaseKey(s), rowId:s.id, qty:1}); } } /* 持有项目使用一次：只从到院卡里「操作完成」的行记（CMD-1019-23 二） */
   picked.forEach(function(it){ it.done = true; });
   s.doneItems = picked.map(function(it){ return it.name; });
-  logCaseEvent(c, by, 'KR标记子项已完成 '+s.no+'：'+s.content+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''));
+  logCaseEvent(c, by, '完成：'+visitRowLabel(c, s).name+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''), rowStageLabel(c, s));
   if(!noClose) krCloseIfDone(c);
   return true;
 }
@@ -4912,7 +4914,7 @@ function coreVisitDone(c, careIds, mgmtNames, by){
 function coreSubArrived(c, id, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.arrived) return false;
   if(!s.simDay && s.date && s.date > todayStr()) return false;
-  s.arrived = true; s.arrivedAt = nowFullDt(); logCaseEvent(c, by, '客人已到：'+s.no+'「'+s.content+'」'); return true;
+  s.arrived = true; s.arrivedAt = nowFullDt(); logCaseEvent(c, by, '客人已到：到院（'+String(s.date||'').slice(5).replace('-', '/')+'）「'+visitRowLabel(c, s).name+'」', rowStageLabel(c, s)); return true;
 }
 /* 持有项目（在韩持有的已付管理项目）剩余次数；安排使用 = 排一个时间（进 KR 日历和当天工作台），客人到后才标完成 */
 function holdItemLeft(c, it){ return (it.qty||1) - (it.holdUsed||0); }
@@ -5079,7 +5081,7 @@ function coreSubTimeEdit(c, id, date, time, by){
   var before = (s.date||'')+(s.time ? ' '+s.time : '');
   s.date = date; s.time = time || s.time;
   c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); });
-  logCaseEvent(c, by, '改时间 '+s.no+'「'+s.content+'」：'+before+' → '+date+(s.time ? ' '+s.time : '')+(s.hold ? '（在韩持有）' : ''));
+  logCaseEvent(c, by, '改时间「'+visitRowLabel(c, s).name+'」：'+before+' → '+date+(s.time ? ' '+s.time : '')+(s.hold ? '（在韩持有）' : ''), rowStageLabel(c, s));
   pushNotif('赴韩施术', by+' 修改了 '+c.name+' 在韩到院时间：'+s.content+'，'+before+' → '+tkK(date, s.time||'')+'（韩国时间）', {caseId:c.id}); /* CMD-1020-04：改时间也通知 IN */
   return true;
 }
@@ -7334,6 +7336,33 @@ function careDayTag(c, s){
   if(!s || s.kind!=='术后管理记录' || !s.projectName) return '';
   var t = careDayText(c, s.projectName, s.date); return t ? ' <span style="font-size:11px;color:var(--muted);font-weight:400;">（'+String(s.projectName).replace(/&/g,'&amp;').replace(/</g,'&lt;')+' · '+t+'）</span>' : '';
 }
+/* CMD-1020-06：到院卡 / Timeline 里一行项目的统一写法 = 名称 + 一行灰字（三端一致）
+   施术：只写名称；术后管理：名称 + 灰字「对应施术 · 术后第 N 天」；管理项目：名称 + 灰字「剩 N / 共 M 次」；
+   地点另有一栏、名称里不写「在韩国」；不写「（预约）」「（持有项目使用）」这类来源后缀 */
+function visitRowType(c, s){
+  if(s.kind==='施术' || s.surgUse) return '施术';
+  if(s.holdUseOf) return '管理项目';
+  if(s.kind==='增加项目'){ var it = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName; })[0]; return (it && (it.mgmtPlan || isLocalKrItem(it) || it.service)) ? '管理项目' : '施术'; }
+  return '术后管理';
+}
+function visitRowLabel(c, s){
+  var type = visitRowType(c, s), clean = function(t){ return String(t||'').replace(/（(预约|持有项目使用)）/g, '').replace(/^施术：/, ''); }, name = '', sub = '';
+  if(type==='施术'){ name = s._item || s.surgUse || (s.kind==='增加项目' ? s.projectName : '') || clean(s.content); }
+  else if(type==='管理项目'){
+    var base = s.holdUseOf || s.projectName || clean(s.content), it = (c.procedureItems||[]).filter(function(x){ return x.name===base; })[0];
+    name = buyName(base); if(it){ var tot = it.qty || 1; sub = '剩 '+Math.max(0, holdItemLeft(c, it))+' / 共 '+tot+' 次'; }
+  } else {
+    var e = careEntryOfRow(c, s); name = e ? (e.x.name || e.x.mgmt) : clean(s.content).replace(/（.*$/, '');
+    var dt = s.projectName ? careDayText(c, s.projectName, s.date) : ''; sub = [s.projectName ? buyName(s.projectName) : '', dt].filter(Boolean).join(' · ');
+  }
+  return {type:type, name:name, sub:sub};
+}
+function visitRowLabelHtml(c, s){
+  var l = visitRowLabel(c, s), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  return e(l.name)+(l.sub ? '<div style="font-size:11px;color:var(--muted);font-weight:400;">'+e(l.sub)+'</div>' : '');
+}
+/* Timeline 记录的阶段标签按项目类型：施术 / 术后管理 / 管理项目 */
+function rowStageLabel(c, s){ return visitRowType(c, s); }
 function printKrPlan(){
   var c = getCurrentCase(); if(!c) return; var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   var items = krActiveItems(c), ks = c.krSchedule || {}, cl = clientByName(c.name), hid = c.hospitalId || clinicHospital(CURRENT_CLINIC_ID), en = hospitalEn(hid);
@@ -7404,12 +7433,12 @@ function coreCareBook(c, itemName, pcIdx, date, time, place, reuseId, by, opt){
   s.src = 'care'; if(inn){ s.innName = x.innName||''; s.careItem = itemName; s.suggest = date; }
   if(!inn && opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } else { s.dirOp = false; s.extendMin = 0; } /* CMD-1020-05：院长操作 */
   c.pcBooked = careUnits(c).unbooked.length===0 && careUnits(c).rows.every(function(r){ return !r.s.skipped; });
-  subCaseNos(c); logCaseEvent(c, by, '术后管理预约：'+content+'，'+date+(inn ? '（回印尼做，建议日期）' : ' '+time)); return true;
+  subCaseNos(c); logCaseEvent(c, by, '术后管理预约：'+(x.name||x.mgmt)+'，'+date+(inn ? '（回印尼做，建议日期）' : ' '+time), '术后管理'); return true;
 }
 /* CMD-1020-05：术后管理行对应的「所需术后管理」条目（按施术项目名 + 内容前缀对上；对不上返回 null） */
 function careEntryOfRow(c, s){
   var it = (c.procedureItems||[]).filter(function(x0){ return x0.name===s.projectName; })[0]; if(!it) return null;
-  var x = (it.postcare||[]).filter(function(p){ return (p.mgmt||p.name) && String(s.content||'').indexOf(p.mgmt||p.name)===0; })[0];
+  var ct = String(s.content||''), x = (it.postcare||[]).filter(function(p){ return p.name && p.mgmt && ct.indexOf('（'+p.name+'，')>-1; })[0] || (it.postcare||[]).filter(function(p){ return (p.mgmt||p.name) && ct.indexOf(p.mgmt||p.name)===0; })[0]; /* 内容写成「类型（具体项目，在韩国）」时先按具体项目对上，避免同一类型有多条时取错 */
   return x ? {it:it, x:x} : null;
 }
 /* 已预约的术后管理改成「回印尼做」：取消韩国这次到院（那次到院里没有别的项目就整张没了）、交给 IN（建议日期 = 原预约日期），Timeline 记一笔，IN 收通知 */
@@ -7455,7 +7484,7 @@ function coreUnitUseNow(c, name, by, opt){
     if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return {ok:false, err:'没有可用次数'};
     if(tg.key==='main'){ if(c.todayMgmtDone && c.todayMgmtDone[name]) c.todayMgmtDone[name].again = true; var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return x.name; }); c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==name; }).concat([name]); c.todayPicked = true; if(opt && opt.dirOp){ (c.todayDirOp = c.todayDirOp || {})[name] = {ext:opt.ext||0, min:opt.min||30, dir:opt.dir||c.director}; syncSurgeryBlock(c); } logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+((opt && opt.dirOp) ? '（院长操作'+(opt.ext ? '，延长 '+opt.ext+' 分钟' : '')+'）' : '')); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
     var rep = coreVisitRows(c, tg.key)[0], s = coreSubAdd(c, {kind:'术后管理记录', date:rep.date, time:rep.time||'', content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by); if(!s) return {ok:false};
-    s.holdUseOf = name; s.arrived = true; s.simDay = true; s.src = 'use'; if(opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } subCaseNos(c); logCaseEvent(c, by, '本次使用：'+name+' 加进 '+(tg.no||tg.key)+((opt && opt.dirOp) ? '（院长操作）' : '')); return {ok:true, key:tg.key};
+    s.holdUseOf = name; s.arrived = true; s.simDay = true; s.src = 'use'; if(opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } subCaseNos(c); logCaseEvent(c, by, '本次使用：'+buyName(name)+' 加进这次到院'+((opt && opt.dirOp) ? '（院长操作）' : ''), '管理项目'); return {ok:true, key:tg.key};
   }
   if(it.done) return {ok:false, err:'已完成'};
   if(tg.key==='main'){ /* 主案件：没选进今日的施术项目加回今日案件（计划内 = 取消 deferUse；在韩增加 = 补回今日行），延长多久由 KR 选 */
@@ -7475,7 +7504,7 @@ function coreUnitBookUse(c, name, date, time, by, director, opt){
   if(c.visitEnds) delete c.visitEnds[subCaseKey(s)];
   if(mg) s.holdUseOf = name; else { s.surgUse = name; if(director) s.director = director; } s.src = 'use';
   if(mg && opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } else if(opt && typeof opt.ext==='number' && !mg){ s.extendMin = opt.ext; } /* CMD-1020-05 */ s.hold = !!c.visitClosed; subCaseNos(c);
-  logCaseEvent(c, by, '预约时间：'+name+'，'+date+' '+time); return true;
+  logCaseEvent(c, by, '预约时间：'+buyName(name)+'，'+date+' '+time, mg ? '管理项目' : '施术'); return true;
 }
 /* 表里的行［取消本次］：退回项目卡（术后管理 = 未预约，管理 / 施术 = 未使用） */
 function coreRowCancel(c, id, by){

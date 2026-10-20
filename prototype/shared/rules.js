@@ -316,8 +316,10 @@ function visitOrdText(dno, c){ /* 兼容旧调用：有案件就写日期，没�
 function visitWords(t){
   return String(t==null ? '' : t).replace(/(A\d{6})-(\d+)/g, function(m, no, n){
     var pool = (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).slice(); try{ if(typeof isKrAccount==='function' && isKrAccount() && typeof krAllCases==='function') krAllCases().forEach(function(r){ pool.push(r.c); }); }catch(e){}
-    var c = pool.filter(function(x){ return x && x.caseNo===no; })[0], dno = no+'-'+parseInt(n, 10);
+    var cands = pool.filter(function(x){ return x && x.caseNo===no; }), c = cands.filter(function(x){ return (x.subItems||[]).some(function(r){ return r.no===m; }); })[0] || cands[0], dno = no+'-'+parseInt(n, 10); /* 案件号每家诊所各自从 A000001 起，同号的案件优先取那一行所在的 */
     if(c) try{ subCaseNos(c); }catch(e){}
+    /* CMD-1020-06：写成 -01 -02（两位）的是「行号」（subNextNo），不是到院编号；旧记录里行号 -03 曾被误当成第 3 次到院，日期写错（11/02 写成 11/07）→ 按行号找那一行自己的日期 */
+    if(c && n.length>=2){ var row = (c.subItems||[]).filter(function(r){ return r.no===m; })[0]; if(row) return row.date ? '到院（'+row.date.slice(5).replace('-', '/')+'）' : '到院'; }
     var rep = c ? subCaseList(c).filter(function(r){ return r.dno===dno; })[0] : null;
     return rep && rep.date ? '到院（'+rep.date.slice(5).replace('-', '/')+'）' : '到院';
   });
