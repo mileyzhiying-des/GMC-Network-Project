@@ -422,3 +422,14 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 @media (max-width:1000px){ body.kr-rec-open .main-col, body.kr-rec-open.kr-rec-mini .main-col{padding-right:0;} .kr-rec-side{box-shadow:-8px 0 32px rgba(0,0,0,.25);} .kr-rec-side.mini{box-shadow:-2px 0 10px rgba(0,0,0,.15);} }
 @keyframes krRecIn{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}
 .kr-rec-side:not(.mini){animation:krRecIn .18s ease-out;}
+
+/* CMD-1020-07：工作台右侧「待办 ｜ 未安排预约」分页 + 未安排预约列表 */
+.todo-tabs{display:inline-flex;gap:4px;}
+.todo-tab{padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;color:var(--slate2);background:transparent;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.todo-tab.on{background:var(--bg-sidebar,#EFEBE4);color:var(--navy,#3B2F2A);}
+.ub-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) 62px minmax(0,.9fr) 54px;gap:8px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:12px;cursor:pointer;}
+.ub-row.ub-head{font-size:11px;color:var(--muted);cursor:default;padding:6px 4px;}
+.ub-who{display:flex;flex-direction:column;gap:2px;}.ub-who span{font-size:11px;color:var(--muted);}
+.ub-item{font-size:13px;font-weight:600;}
+.ub-sug.over{color:#B3261E;font-weight:700;}
+.ub-src{font-size:11px;color:var(--slate2);}

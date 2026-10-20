@@ -2114,6 +2114,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var q = gc().subItems.filter(function(x){ return x.id==='q52'; })[0]; ST.ok(visitWords('客人已到：'+q.no+'「术后复诊检查」')==='客人已到：到院（'+day.slice(5).replace('-', '/')+'）「术后复诊检查」', '旧记录里的行号按那一行自己的日期显示');
     ST.ok(/施术、术后管理、管理项目/.test(tlDateTitle(gc(), day)), 'Timeline 日期小标题按项目类型：'+tlDateTitle(gc(), day));
   });
+  ST.def('R58a','CMD-1020-07（A1 分页，需要 pcStage 夹具）：IN「未安排预约」分页 / 来源 / ［预约］接续原案件 → 约好就消失 / 补发交给印尼通知 / 逾期变红 + 红点',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var today = todayStr(); localStorage.removeItem(todoUbSeenKey());
+    c.subItems.forEach(function(s){ if(s.place==='IN' && s.kind==='术后管理记录') s.notified = false; });
+    CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !x.careFor; });
+    ST.ok(repairHandToIn()>=1 && NOTIFS.some(function(n){ return /交给印尼/.test(n.text||''); }), '已经推给印尼、没通知过的补发一则（一次推好几项合成一则）'); ST.ok(repairHandToIn()===0, '补发幂等（每行只通知一次）');
+    var ub = todoUbItems().filter(function(u){ return u.caseId===c.id; }); ST.ok(ub.length>=2 && ub.every(function(u){ return u.source==='KR 交给印尼' && !!u.sub && !!u.sug; }), 'IN 未安排预约里有 KR 交给印尼的术后管理：来源「KR 交给印尼」、灰字、建议日期（'+ub.length+' 条）');
+    ST.ok(todoUbDot(ub), '新进来的亮红点'); TODO_UB_LAST = ub; todoUbSeenAll(); ST.ok(!todoUbDot(ub), '点开看过红点消失');
+    ub[0].sug = ymdAdd(today, -1); ub[0].over = true; ST.ok(todoUbDot(ub), '过了建议日期（逾期）再亮红点'); ST.ok(/class="ub-sug over"/.test(todoUbListHtml(ub)), '逾期的建议日期标红');
+    TODO_UI.tab = 'unbooked'; TODO_UI.mine = false; var html = todoPaneHtml(todoItems()); ST.ok(/待办 \d+[\s\S]*未安排预约 \d+/.test(html.replace(/<[^>]+>/g, '')) && /ub-row/.test(html), '标题行是两个并排分页，点未安排预约显示列表'); TODO_UI.tab = 'todo'; var h2 = todoPaneHtml(todoItems()); ST.ok(!/ub-row/.test(h2) && /todo-list/.test(h2), '默认 / 切回待办显示待办列表（未安排预约不进待办）'); ST.ok(!todoItems().some(function(it){ return /交给印尼|未安排/.test(it.text||''); }), '未安排预约不混进待办');
+    var key = ub[1].key.split('|').slice(2).join('|').replace(/^row\|/, '').replace(/^/, ''); var rowId = ub[1].key.indexOf('|row|')>-1 ? ub[1].key.split('|row|')[1] : ''; todoCareBookOpen(c.id, rowId); TODO_CB.date = ymdAdd(today, 3); while(visitWeekday(TODO_CB.date)==='周日') TODO_CB.date = ymdAdd(TODO_CB.date, 1); todoCareBookRender();
+    ST.ok(/术后管理/.test(document.getElementById('todo-cb-overlay').innerText) && /A000/.test(document.getElementById('todo-cb-overlay').innerText), '［预约］打开代约：来访目的术后管理、带出原案件和项目');
+    todoCareBookGo(); var rc = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; })[0]; ST.ok(!!rc && rc.visitPurpose==='术后管理' && rc.careFor.keys.indexOf(rowId)>-1, '生成接续原案件的预约（careFor）');
+    ST.ok(!todoUbItems().some(function(u){ return u.key===ub[1].key; }), '约好的这一项从未安排预约里消失'); ST.ok(todoUbItems().some(function(u){ return u.key===ub[0].key; }), '没约的那一项还在');
+    ST.ok(inPostcareCardHtml(c).indexOf('待在印尼做 · 建议')>-1, 'IN 术后管理卡里这一项写「待在印尼做 · 建议 MM/DD」');
+  });
+  ST.def('R58b','CMD-1020-07（KM1 分页，需要 pcStage 夹具）：KR「未安排预约」分页 / 预约弹窗选回印尼 → IN 收一则通知（一次几项合成一则）/ 已使用卡片',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var ub = todoUbItems(); ST.ok(ub.length>0 && ub.every(function(u){ return !!u.label && !!u.source; }), 'KR 未安排预约：在韩期间还没约的术后管理 / 管理项目，来源写诊所（'+ub.length+' 条）');
+    TODO_UI.tab = 'unbooked'; var h = todoPaneHtml(todoItems()); ST.ok(/未安排预约 \d+/.test(h.replace(/<[^>]+>/g, '')) && /预约<\/button>/.test(h), 'KR 工作台右侧有两个分页');
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.subItems = c.subItems.filter(function(x){ return !(x.kind==='术后管理记录' && x.place==='IN' && !x.done); }); return true; }); /* 让「韩国或印尼」的名额回到未预约，测试可重复跑 */
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krProjPage('care'); krCbOpen({all:true}); var hc = function(){ return Store.withClinic(r0.clinicId, function(){ return NOTIFS.filter(function(n){ return /交给印尼/.test(n.text||''); }).length; }); }, n0 = hc();
+    var ins = KR_CB.rows.filter(function(r){ return r.kind==='care' && r.canIn; }); ST.ok(ins.length>0, '有「韩国或印尼」的行'); KR_CB.rows.forEach(function(r){ r.checked = false; }); ins.slice(0, 2).forEach(function(r){ r.checked = true; r.place = 'IN'; }); var nIn = ins.slice(0, 2).length;
+    krCbGo(); var nts = Store.withClinic(r0.clinicId, function(){ return NOTIFS.filter(function(n){ return /交给印尼/.test(n.text||''); }).slice(0, 1); });
+    ST.ok(hc()===n0+1 && nts.length===1 && /交给印尼/.test(nts[0].text) && (nIn===1 ? /建议日期/.test(nts[0].text) : /\d 项术后管理交给印尼/.test(nts[0].text)), '预约弹窗一开始就选回印尼：IN 收一则（'+nIn+' 项合成一则）：'+(nts[0]&&nts[0].text||'').slice(0, 70));
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krProjPage('mgmt'); var mh = document.getElementById('krcase-body').innerHTML; ST.ok(!/已使用[\s\S]{0,200}<div style="display:grid;grid-template-columns:minmax\(0,1\.6fr\)/.test(mh) || /border:1px solid var\(--border2\);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;"><div style="display:grid;grid-template-columns:minmax\(0,1\.6fr\)/.test(mh) || !/已使用/.test(mh), '管理项目「已使用」表格装进圆角卡片（有已使用时）');
+  });
   ST.def('R50a','CMD-1019-21：多施术日停留算法 / 术后第 N 天 / 购买后项目名 / 今日进行数量 / Timeline 整理 / 接待退回（A1 分页）',function(){
     /* 三：最早可回国日 = 各施术「施术日 + 建议天数」最晚的一个 */
     var pcKR = function(day){ return [{mgmt:'拆线', name:'拆线', place:'KR', times:1, start:day}]; };
@@ -2163,7 +2192,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 二：施术都完成后，管理项目仍在到院卡里，到院不会自动结束 */
     var ids = (c.subItems||[]).filter(function(s){ return (s.kind==='施术' || s.kind==='增加项目') && !s.done; }).map(function(s){ return s.id; }); coreTodayDone(c, ids, ST.krBy);
     ST.ok(!c.krProcedureDone && !c.endAsk && todayOpenRows(c).some(function(x){ return x.held===m; }), '两个施术完成后：管理项目仍在到院卡里待做，到院没有自动结束、也没有弹窗');
-    var K = typeof krMgSuggest==='function';
+    var K = typeof krEarlyHint==='function';
     /* 一 / 六：选了就能用，提前只灰字提示；按完成才扣，一次 2 次 */
     if(K) ST.ok(/建议 \d\d\/\d\d 起，今天提前使用/.test(krEarlyHint(c, m)), '提前使用的灰色提示：'+krEarlyHint(c, m).replace(/<[^>]+>/g, ''));
     coreTodayQtySet(c, m.name, 2); ST.ok(coreMgmtUse(c, m.name, ST.krBy) && m.holdUsed===2 && holdItemLeft(c, m)===4 && mgmtDoneToday(c, m.name), '完成 → 剩 4 / 共 6，到院卡里这一行变「已完成」');

@@ -30,6 +30,7 @@ setInterval(function(){ try{ if(checkReminders()>0 && typeof refreshAdminPage===
 try{ if(repairWronglyClosedCases()) Store.touch(); }catch(e){ console.error('[修正误结案]', e); }
 try{ if(backfillLocalLib()) Store.touch(); }catch(e){ console.error('[补本地项目库]', e); }
 try{ var rg = repairScheduleGaps(), rv = repairVisitState(); if(rg || rv) Store.touch(); }catch(e){ console.error('[补施术子案件 / 地址]', e); }
+try{ if(repairHandToIn()) Store.touch(); }catch(e){ console.error('[补发交给印尼通知]', e); } /* CMD-1020-07 */
 try{ if(repairOffConflicts()) Store.touch(); }catch(e){ console.error('[院长 OFF 与施术冲突]', e); } /* CMD-1014-19 一·9 */ /* CMD-1014-01 四 */
 /* 每秒扫一遍占位倒计时：更新页面上的倒计时文字；超时的从占位里移除（时段自动空出），记入预约历史"占位失效" */
 setInterval(function(){
