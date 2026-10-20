@@ -786,8 +786,12 @@ function krProjCards(c, opts){
     if(!can || pickMode) return '';
     var it1 = allItems.filter(function(x){ return x.name===name; })[0], st1 = (!pend && it1) ? coreTodayState(c, it1) : null; /* CMD-1015-30：已选进今日案件 → ［本次取消］（= 今日取消）；已完成无按钮 */
     if(st1) return st1.done ? '' : cancelBtn(name);
-    var itU = it1, leftU = itU && krIsMgmtItemC(itU) ? holdItemLeft(c, itU)-holdItemPlanned(c, itU) : 1, anesU = itU && itU.consentPending, okUse = !!tg && !pend && !anesU && leftU>0, okBook = paid && !pend && !c.visitClosed, tip = pend ? '待付款' : anesU ? '未签麻醉同意书' : !tg ? '客人未到店' : leftU<=0 ? '次数用完（剩余次数都已安排）' : '';
-    return krBtn('本次使用', 'krUnitUseNow(\''+krEsc(name).replace(/'/g,'')+'\')', okUse, tip)+' '+krBtn('预约使用', 'krBkdOpen(\'use\',\''+krEsc(name).replace(/'/g,'')+'\')', okBook, pend ? tip : '付清尾款后才能预约');
+    var itU = it1, leftU = itU && krIsMgmtItemC(itU) ? holdItemLeft(c, itU)-holdItemPlanned(c, itU) : 1, anesU = itU && itU.consentPending;
+    /* CMD-1020-01：今天没有进行中的到院（客人没到院，或今天的到院已结束）→ 只留［预约时间］，不显示［本次使用］和「客人未到店」；有进行中的到院才显示［本次使用］，暂时不能用的灰按钮 + 原因 */
+    var active = !!tg && (tg.key==='main' ? !c.krProcedureDone : coreVisitState(c, tg.key)==='arrived');
+    var okUse = active && !pend && !anesU && leftU>0, okBook = paid && !pend && !c.visitClosed, tip = pend ? '待付款' : anesU ? '未签麻醉同意书' : leftU<=0 ? '次数用完（剩余次数都已安排）' : '';
+    var nq = krEsc(name).replace(/'/g,'');
+    return (active ? krBtn('本次使用', 'krUnitUseNow(\''+nq+'\')', okUse, tip)+' ' : '')+krBtn('预约时间', 'krBkdOpen(\'use\',\''+nq+'\')', okBook, pend ? '待付款' : '付清尾款后才能预约');
   };
   /* ---- 施术项目 ---- */
   var sU = [], sB = [], sD = [], sC = [];
@@ -834,9 +838,10 @@ function krProjCards(c, opts){
     if(!arr.length) return '';
     var gs = {}, ord = []; arr.forEach(function(e){ var k = e.surg||'其他术后管理'; if(!gs[k]){ gs[k] = {surg:k, sdate:e.sdate||'', rows:[]}; ord.push(k); } gs[k].rows.push(e); });
     ord.sort(function(a, b){ return (gs[a].sdate||'9999') < (gs[b].sdate||'9999') ? -1 : 1; });
-    return '<div style="margin:10px 0 2px;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+arr.length+'</span></div>'+krCareHead(third)+ord.map(function(k){
+    var allB = (withAll && can && paid && !c.visitClosed) ? '<button class="btn-outline" style="padding:2px 12px;font-size:11px;" onclick="krCbOpen({all:true})">全部预约</button>' : ''; /* ［全部预约］放在「未预约 N」那一行右边（CMD-1020-01）*/
+    return '<div style="display:flex;align-items:center;margin:10px 0 2px;font-size:12px;font-weight:700;"><span style="flex:1;">'+title+' <span style="font-weight:400;color:var(--muted);">'+arr.length+'</span></span>'+allB+'</div>'+krCareHead(third)+ord.map(function(k){
       var gg = gs[k]; gg.rows.sort(function(a, b){ return a.key < b.key ? -1 : a.key > b.key ? 1 : 0; });
-      var head = '<div style="display:flex;align-items:center;gap:10px;background:var(--bg-sidebar,#faf6ef);border-radius:6px;padding:5px 10px;margin-top:6px;font-size:12px;font-weight:700;"><span style="flex:1;">'+krEsc(buyName(gg.surg))+(gg.sdate ? ' · '+gg.sdate.slice(5).replace('-', '/')+' 施术' : '')+'</span>'+(withAll && can && paid && !c.visitClosed && gg.surg!=='其他术后管理' ? '<button class="btn-outline" style="padding:2px 10px;font-size:11px;" onclick="krCbOpen({surg:\''+krEsc(gg.surg).replace(/'/g,'')+'\'})">一起预约</button>' : '')+'</div>';
+      var head = '<div style="display:flex;align-items:center;gap:10px;background:var(--bg-sidebar,#faf6ef);border-radius:6px;padding:5px 10px;margin-top:6px;font-size:12px;font-weight:700;"><span style="flex:1;">'+krEsc(buyName(gg.surg))+(gg.sdate ? ' · '+gg.sdate.slice(5).replace('-', '/')+' 施术' : '')+'</span>'+'</div>';
       return head+gg.rows.map(function(e){ return e.html; }).join('');
     }).join('');
   };
@@ -855,10 +860,9 @@ function krProjCards(c, opts){
   var pg = KR_PROJ_PAGE==='mgmt' ? 'mgmt' : (KR_PROJ_PAGE==='care' ? 'care' : 'surg');
   var nSurg = surg.length - sC.length, nCare = cu.unbooked.length + cu.rows.length, nMg = mgItems.filter(function(it){ return !it.cancelled && !it.swapped; }).length;
   var seg = '<div class="cal-switch"><span class="'+(pg==='surg'?'active':'')+'" onclick="krProjPage(\'surg\')">施术项目（'+nSurg+'）</span><span class="'+(pg==='care'?'active':'')+'" onclick="krProjPage(\'care\')">术后管理（'+nCare+'）</span><span class="'+(pg==='mgmt'?'active':'')+'" onclick="krProjPage(\'mgmt\')">管理项目（'+nMg+'）</span></div>';
-  var allBtn = (pg==='care' && can && paid && !c.visitClosed && pU.length) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;margin-right:8px;" onclick="krCbOpen({all:true})">全部预约</button>' : '';
-  var addBtn = allBtn+((can && c.hasArrived && !c.visitClosed && c.krBalancePaid) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="KR_AD.open=!KR_AD.open;krRenderCaseDetail()">'+(KR_AD.open ? '收起' : '增加项目')+'</button>' : '');
+  var addBtn = ((can && c.hasArrived && !c.visitClosed && c.krBalancePaid) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="KR_AD.open=!KR_AD.open;krRenderCaseDetail()">'+(KR_AD.open ? '收起' : '增加项目')+'</button>' : '');
   var body = pg==='surg' ? (surgBody || krEmpty('这个案件没有施术项目')) : pg==='care' ? (careBody || krEmpty('这个案件没有术后管理')) : (mgBody || krEmpty('这个案件没有管理项目'));
-  return krCardBox('<div style="display:flex;align-items:center;gap:12px;"><span>项目卡 <span style="font-weight:400;font-size:11px;color:var(--muted);">［本次使用］要有客人已到店的案件；［预约使用］按日期建立 / 并入那天的到院</span></span><span style="flex:1;"></span>'+addBtn+'</div>', '<div style="margin-bottom:6px;">'+seg+'</div>'+body)+krAddOnCard(c);
+  return krCardBox('<div style="display:flex;align-items:center;gap:12px;"><span>项目卡 <span style="font-weight:400;font-size:11px;color:var(--muted);">［本次使用］只在客人已到院、到院进行中时出现；［预约时间］按日期建立 / 并入那天的到院</span></span><span style="flex:1;"></span>'+addBtn+'</div>', '<div style="margin-bottom:6px;">'+seg+'</div>'+body)+krAddOnCard(c);
 }
 function krTabItems(c){
   var st = scheduleState(c), caseHead = '<div class="info-heading" style="margin:6px 2px 0;">案件 <span style="font-weight:400;font-size:11px;color:var(--muted);">每次到院一张卡；到店后从项目卡里选这次要做的项目</span></div>';
@@ -2014,11 +2018,11 @@ function krBkdRender(){
   var ov = document.getElementById('kr-bkd-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-bkd-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, B = KR_BKD, inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
   var dirs = (typeof krcDirectors==='function') ? krcDirectors() : [c.director];
-  ov.innerHTML = '<div class="modal-box" style="width:480px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>'+(B.mode==='care' ? '预约时间' : '预约使用')+'：'+krEsc(B.name)+'</b><span style="cursor:pointer;" onclick="document.getElementById(\'kr-bkd-overlay\').classList.remove(\'open\')">✕</span></div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:480px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>'+'预约时间：'+krEsc(B.name)+'</b><span style="cursor:pointer;" onclick="document.getElementById(\'kr-bkd-overlay\').classList.remove(\'open\')">✕</span></div>'+
     (B.either ? '<div style="margin-bottom:8px;font-size:13px;"><label><input type="radio" name="bkd-place" '+(B.place==='KR'?'checked':'')+' onchange="KR_BKD.place=\'KR\';krBkdRender()"> 在韩国做</label>　<label><input type="radio" name="bkd-place" '+(B.place==='IN'?'checked':'')+' onchange="KR_BKD.place=\'IN\';krBkdRender()"> 回印尼做（只记建议日期）</label></div>' : '')+
     '<div style="display:flex;gap:8px;margin-bottom:10px;"><input type="date" value="'+B.date+'" min="'+todayStr()+'" onchange="KR_BKD.date=this.value;krBkdRender()" style="'+inp+'">'+(B.place==='IN' ? '' : '<select onchange="KR_BKD.time=this.value" style="'+inp+'">'+krTimeOptions(B.time)+'</select>')+(B.surg ? '<select onchange="KR_BKD.dir=this.value" style="'+inp+'">'+dirs.map(function(n){ return '<option'+(n===B.dir?' selected':'')+'>'+krEsc(n)+'</option>'; }).join('')+'</select>' : '')+'</div>'+
     (B.place==='IN' ? '' : (B.mode==='care' ? '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">术后管理由其他管理师做，不占院长时间；只检查医院休诊 / 营业时间。</div>' : '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">'+krEsc(B.dir||c.director||'—')+' '+krEsc(B.date)+' 当天的日程</div>'+krDayAgendaHtml(B.dir||c.director, B.date)))+
-    '<div style="display:flex;gap:8px;margin-top:14px;"><button class="btn-primary" style="flex:1;" onclick="krBkdSave()">确认预约</button><button class="btn-ghost" style="flex:1;" onclick="document.getElementById(\'kr-bkd-overlay\').classList.remove(\'open\')">取消</button></div></div>';
+    '<div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end;"><button class="btn-ghost" onclick="document.getElementById(\'kr-bkd-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" onclick="krBkdSave()">确认预约</button></div></div>';
   ov.classList.add('open');
 }
 function krBkdSave(){

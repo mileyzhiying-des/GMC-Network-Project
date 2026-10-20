@@ -7414,10 +7414,10 @@ function coreUnitBookUse(c, name, date, time, by, director){
   var mg = krIsMgmtItemC(it);
   if(mg){ if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return false; }
   else if(it.done) return false;
-  var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+(mg ? '（持有项目使用）' : '（预约使用）'), place:'KR', projectName:name, silent:true, salt:'b'+Math.floor(Math.random()*1e4)}, by); if(!s) return false;
+  var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+(mg ? '（持有项目使用）' : '（预约）'), place:'KR', projectName:name, silent:true, salt:'b'+Math.floor(Math.random()*1e4)}, by); if(!s) return false;
   if(c.visitEnds) delete c.visitEnds[subCaseKey(s)];
   if(mg) s.holdUseOf = name; else { s.surgUse = name; if(director) s.director = director; } s.src = 'use'; s.hold = !!c.visitClosed; subCaseNos(c);
-  logCaseEvent(c, by, '预约使用：'+name+'，'+date+' '+time); return true;
+  logCaseEvent(c, by, '预约时间：'+name+'，'+date+' '+time); return true;
 }
 /* 表里的行［取消本次］：退回项目卡（术后管理 = 未预约，管理 / 施术 = 未使用） */
 function coreRowCancel(c, id, by){
