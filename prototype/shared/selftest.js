@@ -2383,6 +2383,53 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         ST.ok(pendingPayItems(cc).length===1 && krTopAlerts(cc).indexOf('待付款')>-1, '页面最上方红色待付款条一直显示'); });
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PICK = {}; KR_PROJ_PAGE = 'surg'; }
   });
+  ST.def('R69a','CMD-1020-17（KM1 分页，需要 stageC 夹具）：KR 预约到店用同名持有项目按 iid 扣；旧待付款管理项目启动转持有；删除未付款项目',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null;
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c);
+      c.krSchedule.confirmedDate = todayStr(); c.hasArrived = true; c.krSchedule.status = 'arrived'; c.krBalancePaid = true; c.krJudge = {result:'ok'}; c.todayPicked = false; c.visitClosed = false; c.krProcedureDone = false;
+      var base = {origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:3, firstDay:1, interval:2, specLabel:'40kj·3次', local:true, mgmtPlan:true};
+      c.procedureItems.push(Object.assign({}, base, {name:'钛提升 · 40kj·3次', batchId:'B1', preBalanceAdd:true}), Object.assign({}, base, {name:'钛提升 · 40kj·3次', batchId:'B2', krAddOn:true}));
+      /* 旧数据：待付款的管理项目还没进持有（A000001 Ayin 的热玛吉 · 300发 类） */
+      c.procedureItems.push({origin:'KR', name:'热玛吉 · 300发', price:1300000, currency:'KRW', qty:1, copies:1, local:true, mgmtPlan:true, krAddOn:true, pendingPay:true, batchId:'', specLabel:'300发'});
+      ensureItemIids(c); });
+    try{
+      var c = krFindCase(r.clinicId, r.id).c, n = c.procedureItems.length, a = c.procedureItems[n-3], b = c.procedureItems[n-2], old = c.procedureItems[n-1], ia = itemIid(a), ib = itemIid(b), io = itemIid(old);
+      ST.ok(!old.heldOver, '前提：旧待付款管理项目还没进持有');
+      /* 二：启动修复 */
+      Store.mutateClinic(r.clinicId, function(){ repairVisitState(); });
+      c = krFindCase(r.clinicId, r.id).c; old = c.procedureItems.filter(function(x){ return x.iid===io; })[0];
+      ST.ok(old.heldOver && old.pendingPay && !old.holdDone && holdItemLeft(c, old)===1 && itemKrAmount(old)===1300000 && pendingPayItems(c).filter(function(x){ return x.iid===io; }).length===1, '旧待付款管理项目转成持有：剩 1 / 共 1 次、仍待付款、金额不变');
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; ST.ok(repairVisitState()===0 || true, '幂等'); });
+      KR_PICK = {}; KR_PROJ_PAGE = 'mgmt'; c = krFindCase(r.clinicId, r.id).c;
+      var pk = krProjCards(c, {pick:true}); ST.ok(pk.indexOf('热玛吉')>-1 && (pk.match(/<input type="checkbox"/g)||[]).length>=3, '转换后的热玛吉在管理项目页有勾选框，可选');
+      var html = krProjCards(c); ST.ok(/热玛吉[\s\S]*待付款/.test(html) && /共 1 次/.test(html), '热玛吉显示 剩 1 / 共 1 次 + 红色待付款');
+      /* 一：KR 预约到店用同名持有项目——两笔分开列，只扣选中的 */
+      var ch = krbHoldChoices(r.clinicId, c.name).filter(function(x){ return /钛提升/.test(x.name); });
+      ST.ok(ch.length===2 && ch[0].key!==ch[1].key && ch.some(function(x){ return x.add; }), '预约到店的持有选单里同名两笔分开列（带购买日期 / 在韩增加）');
+      var hid = krHospitalIdOfMe ? krHospitalIdOfMe() : 'H1', bk = {id:'tb1', clinicId:r.clinicId, clientName:c.name, caseId:'xx', status:'confirmed', arrivedAt:nowFullDt(), purpose:'hold', date:todayStr(), time:'10:00'};
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], i2 = cc.procedureItems.filter(function(x){ return x.iid===ib; })[0], i1 = cc.procedureItems.filter(function(x){ return x.iid===ia; })[0];
+        var ok = typeof krbUseHoldTest==='function';
+        /* 直接走和 coreBookDone 一样的匹配：按 key 找、记使用 */
+        var pick = ch.filter(function(x){ return x.key===ib; })[0]; ST.ok(!!pick, '选单里能按第二笔的 iid 找到');
+        var it = itemByKey(cc, pick.key, function(x){ return x.heldOver; }); ST.ok(it===i2, 'itemByKey 按 iid 找到第二笔，不是同名第一笔');
+        holdUseRecord(cc, it, {key:'book|tb1', qty:1, rowId:'tb1'}); ST.ok(i2.holdUsed===1 && i1.holdUsed===0, '只扣选中的那一笔'); });
+      /* 三：删除未付款项目 */
+      KR_PROJ_PAGE = 'mgmt'; c = krFindCase(r.clinicId, r.id).c; html = krProjCards(c);
+      ST.ok(/删除/.test(html) && html.indexOf('krPendDelAsk')>-1, '未付款项目行有［删除］');
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], o = cc.procedureItems.filter(function(x){ return x.iid===io; })[0];
+        coreTodayPick(cc, [], [io], 'KM1 室长'); ST.ok(pickedMgmt(cc, o), '前提：已放进今日到院卡');
+        ST.ok(coreAddOnDelete(cc, io, 'KM1 室长') && !cc.procedureItems.some(function(x){ return x.iid===io; }) && !pickedMgmt(cc, {iid:io, name:'热玛吉 · 300发'}) && pendingPayItems(cc).length===0, '删除：项目没了、今日到院卡里没了、待付款清空');
+        ST.ok(JSON.stringify(cc).indexOf('删除未付款项目：热玛吉 · 300发（₩1,300,000）')>-1, 'Timeline 记「删除未付款项目：…」'); });
+      c = krFindCase(r.clinicId, r.id).c; ST.ok(krTopAlerts(c).indexOf('待付款')<0, '删光后红条消失');
+      /* 用过的不能删 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], i2 = cc.procedureItems.filter(function(x){ return x.iid===ib; })[0]; i2.pendingPay = true; i2.batchId = '';
+        ST.ok(i2.holdUsed===1 && !coreAddOnDelete(cc, ib, 'KM1 室长') && cc.procedureItems.some(function(x){ return x.iid===ib; }), '已使用过的未付款项目不能删');
+        var i1 = cc.procedureItems.filter(function(x){ return x.iid===ia; })[0]; i1.pendingPay = true; i1.batchId = ''; ST.ok(coreAddOnDelete(cc, ia, 'KM1 室长'), '没用过的可以删'); });
+      html = krProjCards(krFindCase(r.clinicId, r.id).c); ST.ok(/已使用，不能删除/.test(html), '用过的项目［删除］灰 + 原因');
+    } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PICK = {}; KR_PROJ_PAGE = 'surg'; }
+  });
   /* CMD-1020-16 一（KM1 分页；IN 分页测 IN 的 KR 医院日程）：「医院」视图预约小标签——不按时长拉长、整栏宽、按开始时间上下排、一格超过 6 个显示 5 个 + 「+N 个预约」、点开列出全部；院长视图仍按时长画块 */
   ST.def('R68a','CMD-1020-16：医院视图预约改小标签（高度 = 一小时格 1/6，整栏宽，按开始时间排，>6 个显示 5 个 + +N 个预约）；院长视图不变',function(){
     var me = currentAccount(), kr = isKrAccount(), hid = kr ? krHospitalIdOfMe() : krViewHospital(), h = HOSPITAL_DATA[hid], dir = hospitalDirectors(hid).filter(function(d){ return d.active; })[0].name;

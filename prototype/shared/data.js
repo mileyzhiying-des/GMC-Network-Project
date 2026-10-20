@@ -5177,6 +5177,9 @@ function coreReopenVisit(c, by, why){
 function repairVisitState(){
   var n = 0;
   (CASE_ITEMS||[]).forEach(function(c){
+    (c.procedureItems||[]).forEach(function(it){ /* CMD-1020-17：旧的待付款管理项目（还没进持有）转成持有项目，只转换不删除；待付款标记和金额不变 */
+      if(it.pendingPay && !it.heldOver && !it.service && !it.cancelled && !it.swapped && krIsMgmtItemC(it) && holdLocalAdd(c, it)){ logCaseEvent(c, '系统', '修正旧数据：待付款管理项目「'+buyName(it.name)+'」转为持有项目（待付款不变）'); n++; }
+    });
     var fx = fixUseRecords(c); if(fx.length){ fx.forEach(function(t){ logCaseEvent(c, '系统', '修正使用记录：'+t); }); n += fx.length; }
     if(c.krProcedureDone && !c.visitClosed && c.hasArrived && c.krBalancePaid && todayOpenRows(c).length){ c.krProcedureDone = false; c.surgeryDoneAt = ''; c.endAsk = false; logCaseEvent(c, '系统', '重新打开今日到院（修正旧数据：今天还有待做项目 '+todayOpenRows(c).map(function(x){ return x.name; }).join('、')+'）'); try{ updateCaseStage(c); }catch(e){} n++; }
   });
@@ -5324,12 +5327,22 @@ function coreAddOnEdit(c, idx, patch, by){
   logCaseEvent(c, by, '待付款在韩加项修正：'+before+' → '+it.name+'（×'+qty+'，'+formatCurrency(amount,'KRW')+'）');
   return {ok:true};
 }
+function addOnUsed(c, it){ /* CMD-1020-17：已经用过（操作完成过 / 有使用记录）的项目不能删 */
+  if(!it) return false;
+  if(it.heldOver) return (it.holdUsed||0)>0 || (it.uses||[]).length>0 || !!tmdGet(c, it);
+  return !!it.done;
+}
 function coreAddOnDelete(c, idx, by){
-  var it = (c.procedureItems||[])[idx]; if(!it || !it.pendingPay || c.visitClosed) return false;
+  if(typeof idx==='string') idx = (c.procedureItems||[]).map(function(x){ return itemIid(x); }).indexOf(idx);
+  var it = (c.procedureItems||[])[idx]; if(!it || !it.pendingPay || c.visitClosed || addOnUsed(c, it)) return false;
+  var iid = itemIid(it);
+  c.todayPickMgmt = (c.todayPickMgmt||[]).filter(function(x){ return x!==iid && x!==it.name; });
+  if(c.todayMgmtDone) delete c.todayMgmtDone[iid];
+  c.subItems = (c.subItems||[]).filter(function(s){ return !(s.holdIid===iid && !s.done); }); /* 已放进今日到院卡、还没做的行一并拿掉 */
   c.procedureItems.splice(idx, 1);
   c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && s.projectName===it.name && !s.done); });
   if(c.anesthesiaConsent && c.anesthesiaConsent.projects) c.anesthesiaConsent.projects = c.anesthesiaConsent.projects.filter(function(x){ return x.name!==it.name; });
-  logCaseEvent(c, by, '待付款在韩加项删除：'+it.name+'（×'+(it.qty||1)+'，'+formatCurrency(it.price,'KRW')+'）');
+  logCaseEvent(c, by, '删除未付款项目：'+buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）');
   updateCaseStage(c);
   krCloseIfDone(c); /* 待付款删光、其余都完成 → 自动结案 */
   return true;
