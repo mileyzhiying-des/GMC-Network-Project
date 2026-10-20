@@ -1157,7 +1157,7 @@ function krRenderCaseDetail(){
       '<div style="font-size:18px;font-weight:700;">'+(krClientsAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+'</div>'+
       (arriveCards ? '' : '<span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.stageText||r.label)+'</span>')+'<span style="flex:1;"></span>'+
       '<button class="btn-primary" onclick="krOpenCaseChat()">💬 对话</button></div>'+
-    '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.5;">'+krEsc(r.caseNo)+' · 来源诊所：'+krEsc(r.clinicName)+(KR_CASE.tab==='consult' ? '' : ' · 院长：'+krEsc(r.director||'—'))+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.5;">'+krEsc(r.caseNo)+' · 来源诊所：'+krEsc(r.clinicName)+(KR_CASE.tab==='consult' ? '' : ' · 院长：'+krEsc(r.director||'—'))+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+(stayText(r.c) ? ' · <b style="color:var(--slate2);">在韩 '+krEsc(stayText(r.c))+'</b>' : '')+'</div>'+
     alerts+arriveCards+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">'+tabs+'</div>'+
     '<div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>';
   setTimeout(krEndAskCheck, 60); /* 行都做完 → 问「今天的项目都做完了吗？」（CMD-1019-22） */
@@ -1949,7 +1949,7 @@ function krTimeEditRender(){
   var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
   ov.innerHTML = '<div class="modal-box" style="width:460px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>改时间</b><span style="cursor:pointer;" onclick="document.getElementById(\'kr-te-overlay\').classList.remove(\'open\')">✕</span></div>'+
     (KR_TE.canIn ? '<div style="margin-bottom:10px;"><select onchange="KR_TE.toIn=(this.value===\'IN\');krTimeEditRender()" style="'+inp+'"><option value="KR"'+(KR_TE.toIn?'':' selected')+'>在韩国做</option><option value="IN"'+(KR_TE.toIn?' selected':'')+'>回印尼做</option></select>'+(KR_TE.toIn ? '<div style="font-size:12px;color:#C26A1B;margin-top:6px;">改成回印尼做：这次韩国到院会取消（那次到院里没有别的项目就整张取消），交给 IN 预约；IN 会收到通知。</div>' : '')+'</div>' : '')+'<div style="display:flex;gap:8px;margin-bottom:10px;'+(KR_TE.postpone || KR_TE.toIn ? 'opacity:.4;pointer-events:none;' : '')+'"><input type="date" value="'+KR_TE.date+'" min="'+krToday()+'" onchange="KR_TE.date=this.value;krTimeEditRender()" style="'+inp+'"><select onchange="KR_TE.time=this.value" style="'+inp+'">'+krTimeOptions(KR_TE.time)+'</select></div>'+(KR_TE.canPostpone ? '<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 10px;cursor:pointer;"><input type="checkbox" '+(KR_TE.postpone?'checked':'')+' onchange="KR_TE.postpone=this.checked;krTimeEditRender()"> <span><b>无限延期</b><br><span style="font-size:11px;color:var(--muted);">取消这次预约时间，项目退回项目卡「未预约 / 未使用」，等客人确定后再重新约；这个预约案件里的项目全部延期 = 子案件结案（全部延期）</span></span></label>' : '')+
-    (KR_TE.care ? '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">术后管理由其他管理师做，不占院长时间；只检查医院休诊 / 营业时间。</div>' : '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">'+krEsc(c.director||'—')+' '+krEsc(KR_TE.date)+' 当天的日程</div>'+krDayAgendaHtml(c.director, KR_TE.date))+
+    stayWarnHtml(c, KR_TE.date)+(KR_TE.care ? '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">术后管理由其他管理师做，不占院长时间；只检查医院休诊 / 营业时间。</div>' : '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">'+krEsc(c.director||'—')+' '+krEsc(KR_TE.date)+' 当天的日程</div>'+krDayAgendaHtml(c.director, KR_TE.date))+
     '<div style="display:flex;gap:8px;margin-top:14px;"><button class="btn-primary" style="flex:1;" onclick="krTimeEditSave()">确认</button><button class="btn-outline" onclick="document.getElementById(\'kr-te-overlay\').classList.remove(\'open\')">取消</button></div></div>';
   ov.classList.add('open');
 }
@@ -3032,10 +3032,10 @@ function krCbMgRows(m, qty, old){
 }
 function krCbOpen(filter){
   if(!krCan() || CURRENT_PAGE_ID!=='kr-casedetail') return; filter = filter || {all:true};
-  var hid = krHospitalIdOfMe(), info = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c && c.krBalancePaid && !c.visitClosed ? {slots:careSlotList(c), earliest:krCbEarliest(c), mg:krCbMgItems(c), director:c.director||'', visits:krCbVisits(c)} : null; });
+  var hid = krHospitalIdOfMe(), info = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c && c.krBalancePaid && !c.visitClosed ? {slots:careSlotList(c), earliest:stayOutDate(c), stayOut:stayOutIsSet(c), mg:krCbMgItems(c), director:c.director||'', visits:krCbVisits(c)} : null; });
   if(!info || (!info.slots.length && !info.mg.length)) return;
   var t0 = hospitalHours(hid).open || '11:00', picked = {};
-  KR_CB = {earliest:info.earliest, auto:!!filter.auto, t0:t0, mg:{}, director:info.director, visits:info.visits, rows:info.slots.map(function(sl, n){
+  KR_CB = {earliest:info.earliest, stayOut:info.stayOut, auto:!!filter.auto, t0:t0, mg:{}, director:info.director, visits:info.visits, rows:info.slots.map(function(sl, n){
     var sel = filter.surg ? sl.item===filter.surg : (filter.all && filter.tab!=='mgmt' && !filter.auto) ? true : (filter.one && sl.item===filter.one.item && sl.i===filter.one.i && !picked[sl.item+'|'+sl.i] && (!filter.one.reuse || sl.reuse===filter.one.reuse || !sl.reuse) ? (picked[sl.item+'|'+sl.i] = true) : false);
     return {kind:'care', item:sl.item, i:sl.i, x:sl.x, sug:sl.sug, sdate:sl.sdate, reuse:sl.reuse, canIn:sl.canIn, place:sl.place==='' ? 'KR' : sl.place, date:sl.sug || todayStr(), time:t0, checked:!!sel, dirOp:dirOpInfo(hid, sl.x.name), dir:info.director};
   })};
@@ -3074,7 +3074,7 @@ function krCbCheck(r){
     var vv = KR_CB && KR_CB.visits && KR_CB.visits['KR|'+r.date], ex = vv ? (vv.rowIds||[]) : [], e1 = krSurgerySlotError(hid, r.dir, r.date, r.time, r.dirOp.min, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true, use:true, exceptRowIds:ex});
     if(e1){ res.err = e1; return res; }
   }
-  if(KR_CB && KR_CB.earliest && r.date > KR_CB.earliest) res.warn = '晚于最早回国日 '+KR_CB.earliest.slice(5).replace('-', '/');
+  if(KR_CB && KR_CB.earliest && r.date > KR_CB.earliest) res.warn = KR_CB.stayOut ? '客人已离境（离境日 '+KR_CB.earliest.slice(5).replace('-', '/')+'）' : '晚于最早回国日 '+KR_CB.earliest.slice(5).replace('-', '/');
   return res;
 }
 function krCbRowName(r){ return r.kind==='mgmt' ? buyName(r.item) : (r.x.name||r.x.mgmt); }
@@ -3114,7 +3114,7 @@ function krCbRender(){
   var pv = krCbPreview(), nChecked = KR_CB.rows.filter(function(r){ return r.checked; }).length, nErr = KR_CB.rows.filter(function(r){ return r.checked && krCbCheck(r).err; }).length;
   var pvHtml = (pv.cards.length || pv.inn.length) ? '<div style="margin-top:12px;padding:10px 12px;background:var(--bg-sidebar,#faf6ef);border-radius:8px;font-size:12px;line-height:1.7;"><b>将建 '+pv.cards.filter(function(x){ return !x.merge; }).length+' 张到院卡'+(pv.cards.some(function(x){ return x.merge; }) ? '，并入已有到院 '+pv.cards.filter(function(x){ return x.merge; }).length+' 张' : '')+'</b>'+pv.cards.map(function(x){ return '<div>'+krEsc(visitWhenLabel(x.date, '', ''))+' · '+(x.care.length ? '术后管理：'+x.care.map(krEsc).join('、') : '')+(x.care.length && x.mgmt.length ? '；' : '')+(x.mgmt.length ? '管理项目：'+x.mgmt.map(krEsc).join('、') : '')+(x.merge ? '（那天已有到院，并入）' : '')+'</div>'; }).join('')+pv.inn.map(function(r){ return '<div style="color:var(--slate2);">回印尼做：'+krEsc(krCbRowName(r))+'（交给 IN）</div>'; }).join('')+'</div>' : '';
   ov.innerHTML = '<div class="modal-box" style="width:760px;max-width:96vw;max-height:86vh;overflow:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="font-size:15px;font-weight:700;">预约时间</span><span style="cursor:pointer;" onclick="krCbClose()">✕</span></div>'+
-    '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">'+(KR_CB.auto ? '今日项目已进行。' : '')+'勾选要约的项目；日期默认建议日期，可改。同一天的项目合成一次到院；预约默认不占院长时间，只检查医院休诊 / 营业时间；项目库里标了「院长操作」的项目要选院长、占院长时间。'+(KR_CB.earliest ? '　最早可回国日 '+krEsc(KR_CB.earliest.slice(5).replace('-', '/'))+'。' : '')+'</div>'+
+    '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">'+(KR_CB.auto ? '今日项目已进行。' : '')+'勾选要约的项目；日期默认建议日期，可改。同一天的项目合成一次到院；预约默认不占院长时间，只检查医院休诊 / 营业时间；项目库里标了「院长操作」的项目要选院长、占院长时间。'+(KR_CB.earliest ? '　'+(KR_CB.stayOut ? '离境日 ' : '最早可回国日 ')+krEsc(KR_CB.earliest.slice(5).replace('-', '/'))+'。' : '')+'</div>'+
     '<div style="font-size:12px;margin-bottom:2px;"><a href="#" onclick="krCbToggleAll(true);return false;">全选</a>　<a href="#" onclick="krCbToggleAll(false);return false;">全不选</a></div>'+out+pvHtml+
     '<div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end;"><button class="btn-ghost" onclick="krCbClose()">取消</button><button class="btn-primary" '+((nChecked && !nErr) ? '' : 'disabled style="opacity:.4;cursor:not-allowed;"')+' onclick="krCbGo()">确认预约'+(nChecked ? '（'+nChecked+'）' : '')+'</button></div></div>';
   ov.style.zIndex = 100003; ov.classList.add('open');

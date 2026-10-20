@@ -310,7 +310,7 @@ function todoUbKr(){
   var out = [], me = currentAccount(), meId = me ? me.id : '', today = todayStr();
   krAllCases().forEach(function(r){
     var c = r.c; if(c.visitClosed || isEnded(c) || !c.krBalancePaid) return;
-    var earliest = krCbEarliest(c); if(earliest && today > earliest) return; /* 客人在韩期间（到最早回国日为止） */
+    var earliest = stayOutDate(c); if(earliest && today > earliest) return; /* CMD-1020-11：客人在韩期间（到离境日为止；没填离境日用最早可回国日） */
     var mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name));
     careSlotList(c).forEach(function(sl){ /* 地点韩国，或韩国或印尼但还没决定 */
       var nm = (sl.x.name || sl.x.mgmt), sub = [buyName(sl.item), careDayText(c, sl.item, sl.sug)].filter(Boolean).join(' · ');

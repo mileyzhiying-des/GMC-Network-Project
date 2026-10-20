@@ -267,6 +267,7 @@ function confirmSurgPhone(){
 var SURGMSG = null;
 function openSurgMsg(id, ver){
   var c = calCaseById(id); if(!c || !c.krSchedule) return;
+  if(ver==='remind' && !stayFilled(c) && !window.GMC_STAY_AUTO){ openStayModal(id, {required:true, then:function(){ openSurgMsg(id, 'remind'); }}); return; } /* CMD-1020-11：施术前 2 天发提醒前在韩期间必填 */
   ver = ver || 'notice'; var prev = ver==='remind' ? c.reminderMsg : c.surgeryMsg;
   SURGMSG = {id:id, ver:ver, lang:'zh', method:(prev && prev.method) || '短信', text:surgMsgText(c, ver, 'zh')};
   var ov = document.getElementById('surgmsg-overlay');
@@ -488,4 +489,39 @@ function repairOffConflicts(){
     });
   });
   return n;
+}
+
+/* ---- CMD-1020-11：在韩期间输入（确认赴韩时可空 / 施术前提醒前必填 / 之后随时可改）---- */
+var STAY_CTX = null;
+function stayGate(c, cb){
+  if(window.GMC_STAY_AUTO || c.stay || c.stayAsked){ cb(); return; } /* GMC_STAY_AUTO：自测用，不弹在韩期间窗口 */
+  openStayModal(c.id, {initial:true, then:cb});
+}
+function openStayModal(caseId, o){
+  var c = calCaseById(caseId); if(!c) return; o = o || {}; STAY_CTX = {id:caseId, o:o};
+  var ov = document.getElementById('stay-overlay'); if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'stay-overlay'; ov.style.zIndex = 96; document.body.appendChild(ov); }
+  var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;', s = c.stay || {};
+  ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">在韩期间</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+(o.initial ? '客人在韩国的入境日 ～ 离境日。航班还没定可以先空着，之后随时能改。' : (o.required ? '施术前提醒需要先填在韩期间（入境日和离境日都要填）。' : '行程有变可以修改，修改后 KR 会收到通知。'))+'</div>'+
+    '<div style="display:flex;gap:10px;"><div style="flex:1;"><label style="font-size:12px;color:var(--slate2);">入境日</label><input type="date" id="stay-in" value="'+(s.in||'')+'" style="'+inp+'"></div><div style="flex:1;"><label style="font-size:12px;color:var(--slate2);">离境日</label><input type="date" id="stay-out" value="'+(s.out||'')+'" style="'+inp+'" onchange="stayWarnRefresh()"></div></div>'+
+    '<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '先空着' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
+  ov.classList.add('open'); stayWarnRefresh();
+}
+function stayWarnRefresh(){
+  var w = document.getElementById('stay-warn'), c = STAY_CTX && calCaseById(STAY_CTX.id); if(!w || !c) return;
+  var n = stayShortDays(c, (document.getElementById('stay-out')||{}).value||'');
+  w.innerHTML = n ? '<span style="color:#B3261E;font-weight:700;">⚠ 离境日比建议少 '+n+' 天（最早可回国日 '+stayMD(krCbEarliest(c))+'）</span>' : '';
+}
+function stayCancel(){
+  var x = STAY_CTX, ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null; if(!x) return;
+  var c = calCaseById(x.id); if(x.o.initial && c){ c.stayAsked = true; if(x.o.then) x.o.then(); } /* 先空着：只记「问过了」 */
+}
+function staySave(){
+  var x = STAY_CTX; if(!x) return; var c = calCaseById(x.id), e = document.getElementById('stay-err'); if(!c) return;
+  var inD = document.getElementById('stay-in').value, outD = document.getElementById('stay-out').value;
+  if(x.o.required && (!inD || !outD)){ e.textContent = '入境日和离境日都要填'; e.style.display = 'block'; return; }
+  var r = coreSetStay(c, inD, outD, actingName(), {initial:!!x.o.initial}); if(!r.ok){ e.textContent = r.err; e.style.display = 'block'; return; }
+  var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null;
+  if(x.o.then) x.o.then(); else { try{ renderCaseBody(c); }catch(er){} }
 }

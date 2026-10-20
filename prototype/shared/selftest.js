@@ -3,6 +3,7 @@
    客人名字前加「T2-」；案件标 round=2。结果放在 ST.R（数组），ST.report() 返回 Markdown 表。 */
 (function(){
   var prevR = (window.ST && window.ST.R) || [];
+  window.GMC_STAY_AUTO = true; /* CMD-1020-11：自测里确认赴韩 / 发施术前提醒不弹在韩期间窗口（R62a 单独打开测） */
   window.GMC_PASSPORT_AUTO = true; /* CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
 var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   window.GMC_NO_TABS = true; /* CMD-1019-04：自测里所有进案件的入口都在当前分页打开 */ window.confirm = function(){ return true; }; window.alert = function(m){ if(cur) cur.alerts.push(String(m)); }; window.open = function(){ return null; };
@@ -2167,6 +2168,40 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
     /* 基础资料护照栏 */
     var cl = clientByName(c.name), ps = cl.passport; cl.passport = {}; var bh = clientBasicBlockHtml(c); ST.ok(/护照/.test(bh) && /color:#B3261E[^>]*>⚠ 护照未登记/.test(bh), '基础资料护照栏：未登记报红'); cl.passport = ps;
+  });
+  ST.def('R62a','CMD-1020-11（A1 分页，需要 pcStage 夹具）：在韩期间 —— 确认赴韩时可先空着 / 施术前提醒前必填 / 离境日太早红字不拦 / 修改 → KR 收通知 + Timeline / 离境日判断「客人已回国」/ IN 项目卡显示',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), auto = window.GMC_STAY_AUTO; var hid = caseKrHospital(c), nN = function(){ return ((HOSPITAL_DATA[hid]||{}).notifs||[]).filter(function(n){ return /的在韩期间/.test(n.text||'') && String(n.text).indexOf(c.name)>-1; }).length; }; /* 通知列表有 200 条上限，所以按内容数，不数总长度 */
+    c.stay = null; c.stayAsked = false; window.GMC_STAY_AUTO = false; var got = 0; stayGate(c, function(){ got++; });
+    ST.ok(document.getElementById('stay-overlay').classList.contains('open') && got===0, '确认赴韩：弹出在韩期间窗口'); ST.ok(/先空着/.test(document.getElementById('stay-overlay').textContent), '可以先空着'); stayCancel(); ST.ok(got===1 && c.stayAsked===true && !c.stay, '先空着：继续确认赴韩，只记「问过了」'); got = 0; stayGate(c, function(){ got++; }); ST.ok(got===1 && !document.getElementById('stay-overlay').classList.contains('open'), '问过一次就不再弹');
+    var e0 = krCbEarliest(c); ST.ok(!!e0, '夹具有最早可回国日（'+e0+'）'); var n0 = nN();
+    var r1 = coreSetStay(c, '2026-12-10', '2026-12-05', 'A1 室长'); ST.ok(!r1.ok && !c.stay, '离境日早于入境日 → 不让存');
+    var inD = ymdAdd(e0, -10), outD = ymdAdd(e0, -3); coreSetStay(c, inD, outD, 'A1 室长', {initial:true}); ST.ok(stayFilled(c) && nN()===n0, '确认赴韩时填：存下，不通知 KR（还没到 KR 那一步）'); ST.ok(stayShortDays(c)===3, '离境日比最早可回国日早 3 天 → 红字「比建议少 3 天」（不拦）');
+    ST.ok(/在韩期间：<b>/.test(inProjectCardHtml(c)) && /比建议少 3 天/.test(inProjectCardHtml(c)), 'IN 项目卡显示在韩期间 + 红字提醒');
+    var outD2 = ymdAdd(e0, 2); coreSetStay(c, inD, outD2, 'A1 室长'); ST.ok(nN()===n0+1 && ST.hasLog(c, /修改在韩期间/), '之后修改 → KR 收通知 + Timeline 记一笔'); ST.ok(stayShortDays(c)===0, '离境日不早于最早可回国日 → 没有提醒');
+    /* 施术前提醒前必填 */
+    var ks = c.krSchedule || (c.krSchedule = {}); c.stay = null; c.reminderMsg = null; ks.confirmedDate = ks.confirmedDate || ymdAdd(todayStr(), 1); var ovm = document.getElementById('surgmsg-overlay'); if(ovm) ovm.classList.remove('open');
+    openSurgMsg(c.id, 'remind'); ST.ok(document.getElementById('stay-overlay').classList.contains('open') && !(document.getElementById('surgmsg-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open'), '没填在韩期间：不能发施术前提醒，先弹填写窗');
+    document.getElementById('stay-in').value = inD; document.getElementById('stay-out').value = ''; staySave(); ST.ok(/都要填/.test(document.getElementById('stay-err').textContent), '只填一个日期不行（必填两个）');
+    document.getElementById('stay-out').value = outD2; staySave(); ST.ok(stayFilled(c) && document.getElementById('surgmsg-overlay').classList.contains('open'), '填完后继续打开施术前提醒窗'); document.getElementById('surgmsg-overlay').classList.remove('open');
+    /* 离境日判断：离境日优先于最早可回国日 */
+    c.krSchedule.confirmedDate = ymdAdd(todayStr(), -60); c.stay = {in:ymdAdd(todayStr(), -61), out:ymdAdd(todayStr(), 3), by:'x', at:nowFullDt()}; ST.ok(careCustomerReturned(c)===false && stayOutDate(c)===c.stay.out, '离境日还没到 → 客人还在韩国（即使最早可回国日已过）'); c.stay.out = ymdAdd(todayStr(), -1); ST.ok(careCustomerReturned(c)===true, '离境日已过 → 客人已回国（可自动结案）'); c.stay = null; ST.ok(careCustomerReturned(c)===true, '没填离境日 → 退回用最早可回国日判断');
+    ST.ok(/客人已离境/.test(stayWarnHtml(Object.assign({}, c, {stay:{in:'', out:ymdAdd(todayStr(), 1)}}), ymdAdd(todayStr(), 5))) && stayWarnHtml(Object.assign({}, c, {stay:{in:'', out:ymdAdd(todayStr(), 9)}}), ymdAdd(todayStr(), 5))==='', '日期晚于离境日 → 橙字「客人已离境」，早于则没有');
+    window.GMC_STAY_AUTO = auto; CASE_ITEMS[idx] = JSON.parse(snap);
+  });
+  ST.def('R62b','CMD-1020-11（KM1 分页，需要 pcStage 夹具）：KR 案件页头显示在韩期间 / 预约弹窗晚于离境日橙字（不拦）/ 改时间橙字 / 未安排预约只列到离境日',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var out0 = ymdAdd(todayStr(), 3), snap = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return JSON.stringify(c.stay||null); });
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.stay = {in:ymdAdd(todayStr(), -5), out:out0, by:'A1 室长', at:nowFullDt()}; return true; });
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); ST.ok(new RegExp('在韩 '+stayMD(ymdAdd(todayStr(), -5))+' ～ '+stayMD(out0)).test(document.getElementById('krcase-body').textContent), 'KR 案件页头：「在韩 MM/DD ～ MM/DD」');
+    krProjPage('care'); krCbOpen({all:true}); ST.ok(KR_CB.stayOut===true && KR_CB.earliest===out0, '预约弹窗用离境日（不是最早可回国日）'); var late = KR_CB.rows.filter(function(r){ return r.kind==='care'; })[0];
+    if(late){ late.date = ymdAdd(out0, 2); var chk = krCbCheck ? krCbCheck(late) : null; ST.ok(!chk || !!chk.err || /客人已离境/.test(chk.warn||''), '日期晚于离境日 → 橙字「客人已离境」（只提醒不拦）'); }
+    var cb = document.getElementById('kr-cb-overlay'); if(cb) cb.classList.remove('open');
+    Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; ST.ok(stayWarnHtml(c, ymdAdd(out0, 1))!=='' && /客人已离境/.test(stayWarnHtml(c, ymdAdd(out0, 1))), '改时间窗里晚于离境日有橙字'); });
+    var todayN = function(){ return todoUbKr().filter(function(u){ return u.caseId===r0.id; }).length; }; ST.ok(todayN()>0, '客人还在韩国期间：未安排预约列出'); Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.stay.out = ymdAdd(todayStr(), -1); return true; }); ST.ok(todayN()===0, '离境日过了：未安排预约不再列');
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var o = JSON.parse(snap); if(o) c.stay = o; else delete c.stay; return true; });
   });
   ST.def('R61a','CMD-1020-10（A1 分页，需要 pcStage 夹具）：IN 客户详情统一结构 / 医美史合并并按实际日期分组 / 持有项目左右两张小卡 / 名称不带·N次',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;

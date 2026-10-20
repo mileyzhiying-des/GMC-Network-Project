@@ -3648,7 +3648,7 @@ function carePending(c){ /* CMD-1020-08：只有「韩国的」术后管理没�
   return !!(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; }));
 }
 /* 客人已回国：最早可回国日（stayPlan）已经过了；没有这个日期 = 还在韩国（不自动结） */
-function careCustomerReturned(c){ var e = ''; try{ e = krCbEarliest(c); }catch(x){} return !!(e && todayStr() > e); }
+function careCustomerReturned(c){ var e = ''; try{ e = stayOutDate(c); }catch(x){} return !!(e && todayStr() > e); } /* CMD-1020-11：离境日已过 = 客人已回国；没填离境日退回最早可回国日 */
 /* 韩国的术后管理已结束（做完 / 客人已回国）后，案件照常结案；还没做的：韩国的转 KR 在韩持有（hold），印尼的不作废（已有 place IN 的行；「韩国或印尼」没约的在回国日之后也转成印尼行，建议日期 = 原建议日期） */
 function careReturnSweep(){
   var n = 0;
@@ -3657,7 +3657,7 @@ function careReturnSweep(){
     if(!careCustomerReturned(c) || carePending(c) || subVisitAskEnd(c)) return;
     var left = carePendingRows(c).filter(function(s){ return s.place!=='IN'; }); left.forEach(function(s){ s.hold = true; });
     try{ careSlotList(c).filter(function(sl){ return sl.canIn; }).forEach(function(sl){ coreCareBook(c, sl.item, sl.i, sl.sug || todayStr(), '', 'IN', sl.reuse||'', '系统'); }); }catch(e){}
-    logCaseEvent(c, '系统', '客人已回国（最早可回国日 '+krCbEarliest(c)+' 已过），韩国的术后管理已结束，案件结案；没做的印尼术后管理不作废，转成客人持有'+(left.length ? '；韩国没做完的 '+left.length+' 项转在韩持有' : ''));
+    logCaseEvent(c, '系统', '客人已回国（'+(stayOutIsSet(c) ? '离境日 ' : '最早可回国日 ')+stayOutDate(c)+' 已过），韩国的术后管理已结束，案件结案；没做的印尼术后管理不作废，转成客人持有'+(left.length ? '；韩国没做完的 '+left.length+' 项转在韩持有' : ''));
     finishCase(c); n++;
   });
   return n;
@@ -4057,7 +4057,7 @@ function confirmProjectSelection(){
   if(cartTotals(c.recommended).onlyService){ alert('서비스需搭配付费项目'); return; }
   var cp0 = compPending(c, 'main'); if(cp0 && cartTotals(c.recommended).total < cp0.credit){ alert('置换额度不退钱：还剩 '+formatCurrency(cp0.credit-cartTotals(c.recommended).total,'IDR')+'，请再加项目'); return; }
   /* CMD-1019-11：确认赴韩（选了赴韩项目、生成定金结算单）时要有护照：没有必须填，已有的带出来确认 */
-  if((c.recommended||[]).some(function(it){ return it.origin==='KR'; })) return passportGate(c, function(){ confirmProjectSelectionGo(); });
+  if((c.recommended||[]).some(function(it){ return it.origin==='KR'; })) return passportGate(c, function(){ stayGate(c, function(){ confirmProjectSelectionGo(); }); }); /* CMD-1020-11：护照之后问在韩期间（可先空着） */
   confirmProjectSelectionGo();
 }
 function confirmProjectSelectionGo(){
@@ -7429,6 +7429,7 @@ function printKrPlan(){
   var sum = [];
   sum.push(['到院日期时间', ks.confirmedDate ? e(ks.confirmedDate+' '+(ks.confirmedTime||'')+'（韩国时间）')+(local && ks.confirmedTime ? ' ／ '+e(local.date+' '+local.time)+'（印尼时间）' : '') : '（施术日期还没确认）']);
   sum.push(['医院', e(en.name)]); sum.push(['到院地址', e(ks.address || en.address)]);
+  if(stayText(c)) sum.push(['在韩期间', e(stayText(c).replace(/ ～ /, ' ～ '))+(c.stay && c.stay.in && c.stay.out ? '（入境日 ～ 离境日）' : '')]);
   sum.push(['建议在韩停留', stayP.days ? e(stayLineText(stayP).replace(/^建议在韩停留 /, '')) : '—']);
   /* 2 施术项目：施术写麻醉方式，管理项目写 N 份（共 M 次） */
   var itemRows = surg.map(function(it){ return '<tr><td>'+e(it.name)+'</td><td>'+(it.anesthesia ? '麻醉：'+e(it.anesthesia.label||'')+(anesFastOf(it.anesthesia) ? '（需空腹 '+anesFastOf(it.anesthesia)+' 小时）' : '') : '')+'</td></tr>'; }).concat(mg.map(function(it){ return '<tr><td>'+e(it.name)+'（管理项目）</td><td>'+e(mgmtQtyText(it))+'</td></tr>'; })).join('');
@@ -7595,6 +7596,7 @@ function inProjectCardHtml(c){
   /* CMD-1020-09：三张大卡。① 项目卡 = 备注区 + 施术项目（折叠；不再放金额合计 / 护照提示，金额看「结算」tab，护照看基础资料）② 术后管理（韩国 / 印尼两张小卡）③ 管理项目（持有中 / 已完成两张小卡） */
   var card = function(inner){ return '<div class="card" style="padding:22px 24px;">'+inner+'</div>'; };
   var c1 = card('<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">项目卡</div><button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="IN_NOTE_OPEN=true;renderCaseBody(getCurrentCase())">增加备注</button></div>'+
+    '<div style="margin-top:8px;font-size:13px;">在韩期间：'+(stayText(c) ? '<b>'+stayText(c)+'</b>' : '<span style="color:var(--muted);">未填写</span>')+' <a href="#" class="info-link" onclick="openStayModal(\''+c.id+'\');return false;">'+(stayText(c) ? '修改' : '填写')+'</a>'+(stayShortDays(c) ? ' <span style="color:#B3261E;font-weight:700;">⚠ 离境日比建议少 '+stayShortDays(c)+' 天</span>' : '')+'</div>'+
     '<div style="margin-top:6px;">'+inNotesAreaHtml(c)+'</div>'+
     inSecTitle('施术项目', surg.length)+(surgRows ? inSmallCard(surgRows.replace(/border-top:1px solid var\(--border2\);padding:8px 0;/, 'padding:8px 0;')) : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有施术项目</div>'));
   var care = inCareCardsHtml(c, 'kr')+inCareCardsHtml(c, 'inn');
@@ -7946,4 +7948,35 @@ function renderClientDetailIn(name){
   var model = {mode:'IN', name:name, cl:cl, cases:CASE_ITEMS.filter(function(c){ return c.name===name; }), openCase:function(c){ return "openCaseDetail('"+c.id+"')"; }, addOnclick:cl ? "BEAUTY_ADD_KR=null;openBeautyAdd()" : ''};
   root.innerHTML = clientDetailBodyHtml(model);
   try{ renderClientHoldings(name); }catch(e){ console.error('[客户详情] 持有项目', e); }
+}
+
+/* ===== CMD-1020-11：在韩期间（入境日 ～ 离境日）=====
+   c.stay = {in, out, by, at}；IN 在「确认赴韩」时输入（航班没定可先空着，c.stayAsked 记「问过了」）；施术前 2 天发施术前提醒时必填；之后 IN 可改，改了 → KR 收通知 + Timeline。
+   用在：KR 案件页头显示、KR 预约弹窗 / ［修改时间］橙字「客人已离境」（不拦）、工作台「未安排预约」只列到离境日、自动结案（离境日已过）、打印行程概要。
+   没填离境日时仍用最早可回国日（krCbEarliest，施术日 + 建议天数）。 */
+function stayFilled(c){ return !!(c && c.stay && c.stay.in && c.stay.out); }
+function stayMD(d){ return d ? String(d).slice(5).replace('-', '/') : ''; }
+function stayText(c){ var s = c && c.stay; if(!s || (!s.in && !s.out)) return ''; return (stayMD(s.in)||'（未定）')+' ～ '+(stayMD(s.out)||'（未定）'); }
+function stayOutDate(c){ return (c && c.stay && c.stay.out) || krCbEarliest(c) || ''; } /* 判断「客人还在不在韩国」用：离境日，没填就退回最早可回国日 */
+function stayOutIsSet(c){ return !!(c && c.stay && c.stay.out); }
+/* 离境日比最早可回国日早几天（> 0 才有）：红字提醒「比建议少 N 天」，不拦 */
+function stayShortDays(c, outD){
+  var e = ''; try{ e = krCbEarliest(c); }catch(x){} outD = outD || (c.stay && c.stay.out) || ''; if(!e || !outD || outD >= e) return 0;
+  return Math.round((new Date(e+'T00:00:00Z') - new Date(outD+'T00:00:00Z')) / 86400000);
+}
+function stayWarnHtml(c, date){ /* KR 预约弹窗 / 改时间：日期晚于离境日 → 橙字，不拦（没填离境日时用最早可回国日） */
+  var o = stayOutDate(c); if(!o || !date || date <= o) return '';
+  return '<div style="font-size:12px;color:#C26A1B;margin:4px 0;">'+(stayOutIsSet(c) ? '客人已离境（离境日 '+stayMD(o)+'）' : '晚于最早可回国日 '+stayMD(o))+'</div>';
+}
+function coreSetStay(c, inD, outD, by, o){
+  inD = inD||''; outD = outD||'';
+  if(inD && outD && outD < inD) return {ok:false, err:'离境日不能早于入境日'};
+  var old = c.stay || {}, changed = (old.in||'')!==inD || (old.out||'')!==outD; c.stayAsked = true;
+  if(!changed) return {ok:true, changed:false};
+  var oldT = stayText(c) || '（空）';
+  c.stay = (inD || outD) ? {in:inD, out:outD, by:by, at:nowFullDt()} : null;
+  var newT = stayText(c) || '（空）', short = stayShortDays(c);
+  logCaseEvent(c, by, (oldT==='（空）' ? '填写在韩期间：' : '修改在韩期间：')+(oldT==='（空）' ? '' : oldT+' → ')+newT+(short ? '（离境日比建议少 '+short+' 天）' : ''), '赴韩施术');
+  if(!(o && o.initial)){ try{ pushKrNotif(caseKrHospital(c), by+(oldT==='（空）' ? ' 填写了 ' : ' 修改了 ')+c.name+'（'+(c.caseNo||'')+'）的在韩期间：'+(oldT==='（空）' ? '' : oldT+' → ')+newT, {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'stay'}); }catch(e){} }
+  return {ok:true, changed:true};
 }
