@@ -299,7 +299,7 @@ function krSurgerySlotErrorRaw(hid, director, date, time, durMin, exceptCaseKey,
   var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; }).filter(function(b){ return !((b.kind==='施术' || b.kind==='面诊') && exceptCaseKey && (b.clinicId+':'+b.caseId)===exceptCaseKey && (!opts || !opts.exceptKind || opts.exceptKind===b.kind)); })[0];
   /* 冲突说明（CMD-1013-11 一·5）：写清楚「到院时间 + 施术时长」和哪一段重叠 */
   var why = clash ? (opts && opts.use ? time+' 开始，使用约 '+(durMin||30)+' 分钟到 '+minToTime(e)+'，和 ' : time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 ')+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约' ? '已有'+clash.kind : '不可预约')+' 重叠' : '';
-  if(!clash && typeof krDirectorRowsAll==='function'){ var rw = krDirectorRowsAll(director).filter(function(r){ return r.date===date && r.time && timeToMin(r.time) < e && timeToMin(r.time)+30 > s && r.id!==(opts&&opts.exceptRowId); })[0]; if(rw) return time+' 开始会和 '+director+' '+rw.time+' 的术后管理（'+(rw.name||'')+'）重叠'; }
+  if(!clash && typeof krDirectorRowsAll==='function'){ var rw = krDirectorRowsAll(director).filter(function(r){ return r.date===date && r.time && timeToMin(r.time) < e && timeToMin(r.end||minToTime(timeToMin(r.time)+30)) > s && (function(){ var ids = String(r.id).split(','), ex = ((opts&&opts.exceptRowIds)||[]).concat((opts&&opts.exceptRowId) ? [opts.exceptRowId] : []); return !ids.some(function(x){ return ex.indexOf(x)>-1; }); })(); })[0]; if(rw) return time+' 开始会和 '+director+' '+rw.time+' 的术后管理（'+(rw.name||'')+'）重叠'; }
   if(clash && (clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约')) return why;
   if(clash && !(opts && opts.ignoreBusy)) return why;
   return '';
@@ -4460,6 +4460,8 @@ function surgeryMinutes(c, extra, drop){
   krActiveItems(c).forEach(function(it){ if(krIsMgmtItemC(it) || it.deferUse || (drop||[]).indexOf(it.name)>-1) return; tot += ((it.krAddOn || it.preBalanceAdd) && typeof it.extendMin==='number') ? it.extendMin : itemDurMin(c, it.name); }); /* 在韩增加的施术项目：延长多久由 KR 室长选（CMD-1015-24），不按项目时长自动相加 */
   krActiveItems(c).forEach(function(it){ if(!krIsMgmtItemC(it) && !it.deferUse && !it.krAddOn && !it.preBalanceAdd && typeof it.extraMin==='number' && (drop||[]).indexOf(it.name)<0) tot += it.extraMin; }); /* 本次使用时给计划内施术项目选的延长（CMD-1015-30） */
   (extra||[]).forEach(function(n){ tot += itemDurMin(c, n); });
+  Object.keys(c.todayDirOp||{}).forEach(function(k){ tot += (parseInt(c.todayDirOp[k].ext,10) || 0); }); /* 今天［本次使用］加进主到院的院长操作项目（CMD-1020-05） */
+  var md = (c.krSchedule||{}).confirmedDate; if(md) (c.subItems||[]).forEach(function(r){ if(r.dirOp && !r.surgUse && !r.skipped && r.date===md && r.place==='KR') tot += (parseInt(r.extendMin,10) || 0); }); /* CMD-1020-05：并进施术日到院的院长操作项目，室长选的延长 */
   return tot || 60;
 }
 /* 院长同一时段只能有一件事：施术 / 面诊 / 预约 / 不可预约 / OFF（以及指定了院长的术后管理行）任两件不能重叠；返回撞到的每一件 */
@@ -4476,7 +4478,7 @@ function directorClashList(hid, director, date, s, e, o){
     var rg = (of.part && of.part!=='全天') ? krHalfRange(hid, of.part) : ['00:00','24:00'], a = rg[0]==='00:00' ? 0 : timeToMin(rg[0]), z = rg[1]==='24:00' ? 1440 : timeToMin(rg[1]);
     if(a < e && z > s) out.push({what:'OFF', time:rg[0]==='00:00' ? '全天' : rg[0], end:rg[1]==='24:00' ? '' : rg[1], name:''});
   });
-  (o.rows||[]).forEach(function(r){ if(r.director===director && r.date===date && r.time && timeToMin(r.time) < e && timeToMin(r.time)+30 > s && r.id!==o.exceptRowId) out.push({what:'术后管理', time:r.time, end:minToTime(timeToMin(r.time)+30), name:r.name||''}); });
+  (o.rows||[]).forEach(function(r){ var re = r.end || minToTime(timeToMin(r.time||'00:00')+30); if(r.director===director && r.date===date && r.time && timeToMin(r.time) < e && timeToMin(re) > s && String(r.id).split(',').indexOf(o.exceptRowId||'~')<0) out.push({what:'院长操作', time:r.time, end:re, name:r.name||''}); });
   return out;
 }
 function clashLines(list){ return list.map(function(x){ return x.what+(x.time ? ' '+x.time+(x.end ? '–'+x.end : '') : '')+(x.name ? '（'+x.name+'）' : ''); }); }
@@ -4594,18 +4596,31 @@ function visitCalBlocks(c){
     if(rep.place!=='KR' || !rep.date || !rep.time) return;
     var rows = subCaseRows(c, rep).filter(function(x){ return x.date && x.time; }); if(!rows.length) return;
     var surgRows = rows.filter(function(x){ return !!x.surgUse; });
+    var dirRows = rows.filter(function(x){ return !x.surgUse && x.dirOp; }); /* CMD-1020-05：项目库里「院长操作 = 是」的术后管理 / 管理项目，按所需分钟占院长时间 */
     var careRows0 = rows.filter(function(x){ return !x.surgUse && !x.holdUseOf; }), mgRows = rows.filter(function(x){ return !!x.holdUseOf; });
     var what = [], names = [];
     if(surgRows.length){ what.push('施术'); surgRows.forEach(function(x){ names.push(x.surgUse); }); }
     if(careRows0.length){ what.push('术后管理'); careRows0.forEach(function(x){ names.push(x.projectName || x.content); }); }
     if(mgRows.length){ what.push('管理项目'); mgRows.forEach(function(x){ names.push(x.holdUseOf); }); }
-    var t0 = rows.map(function(x){ return x.time; }).sort()[0];
-    var dur = surgRows.length ? 60 : 30; /* 施术预约使用按 60 分钟占院长时间，其余 30 分钟 */
-    var dirRow = surgRows.filter(function(x){ return x.director; })[0] || mgRows.filter(function(x){ return x.director; })[0];
-    out.push({key:subCaseKey(rep), date:rep.date, time:t0, end:minToTime(Math.min(24*60-1, timeToMin(t0)+dur)), hasSurg:surgRows.length>0, what:what, names:names,
+    var occ = surgRows.concat(dirRows).sort(function(a, b){ return String(a.time).localeCompare(String(b.time)); });
+    var t0 = (occ.length ? occ : rows).map(function(x){ return x.time; }).sort()[0];
+    var dur = 30;
+    if(occ.length){ /* 第一个占院长时间的项目按它自己的时长（施术预约使用 60 分钟），第二个以后只加室长选的「延长」，不直接相加 */
+      dur = occ[0].surgUse ? 60 : (parseInt(occ[0].dirMin,10) || 30); occ.slice(1).forEach(function(x){ dur += (parseInt(x.extendMin,10) || 0); });
+      if(occ[0].surgUse) dur += (parseInt(occ[0].extendMin,10) || 0);
+    }
+    var dirRow = occ.filter(function(x){ return x.director; })[0] || mgRows.filter(function(x){ return x.director; })[0];
+    out.push({key:subCaseKey(rep), date:rep.date, time:t0, end:minToTime(Math.min(24*60-1, timeToMin(t0)+dur)), hasSurg:surgRows.length>0, hasDirOp:dirRows.length>0, occupies:occ.length>0, dirNames:dirRows.map(function(x){ if(x.holdUseOf) return x.holdUseOf; var m = String(x.content||'').match(/（([^，）]+)，在韩国）/); return m ? m[1] : (String(x.content||'').replace(/（.*$/, '') || x.projectName); }), what:what, names:names,
       director:(dirRow && dirRow.director) || c.director || '', done:rows.every(function(x){ return x.done; }), arrived:rows.some(function(x){ return x.arrived; }), rowIds:rows.map(function(x){ return x.id; }), firstId:rows[0].id});
   });
   return out;
+}
+/* CMD-1020-05：项目库「院长操作」设定（术后管理 / 管理项目都有；默认否；是 → 院长所需时间 dirMin，默认 30 分钟）；按名字查，找不到 = 否 */
+function dirOpInfo(hid, rawName){
+  var base = String(rawName||'').split(' · ')[0].replace(/[（(].*$/, '').trim(), h = HOSPITAL_DATA[hid] || {};
+  var p = (h.projects||[]).filter(function(x){ return isKrPostcareCat(x.categoryId) && (x.name===rawName || x.name===base); })[0];
+  if(!p){ var lib = (typeof krLocalLib==='function') ? krLocalLib(hid) : (h.localLib||[]); p = (lib||[]).filter(function(x){ return x.name===rawName || x.name===base; })[0]; }
+  return p && p.dirOp ? {on:true, min:Math.max(5, parseInt(p.dirMin,10) || 30)} : {on:false, min:0};
 }
 function subCaseRows(c, rep){ var k = subCaseKey(rep); return (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.skipped && !(s.place==='IN' && !s.done) && subCaseKey(s)===k; }); }
 /* 子案件编号：按日期顺序排；「全部延期」结案的那一张保留它的编号，不让后面的子案件顶替（CMD-1015-22） */
@@ -7380,15 +7395,32 @@ function careUnits(c){
 }
 function careUnitLabel(x){ return (x.mgmt||x.name)+(x.place==='KR' ? '（在韩国）' : ''); }
 /* 术后管理［预约时间］：按日期建立 / 并入子案件（同一天同一地点合成一个），预约来源 = 术后预约；reuseId = 取消本次后退回的那一行 */
-function coreCareBook(c, itemName, pcIdx, date, time, place, reuseId, by){
+function coreCareBook(c, itemName, pcIdx, date, time, place, reuseId, by, opt){
   var it = (c.procedureItems||[]).filter(function(x){ return x.name===itemName; })[0], x = it && (it.postcare||[])[pcIdx]; if(!it || !x || !date || !c.krBalancePaid) return false;
-  var inn = place==='IN' && x.innName, content = inn ? (x.mgmt||x.name)+'（回印尼做：'+x.innName+'）' : (x.mgmt||x.name)+(x.mgmt && x.mgmt!==x.name ? '（'+x.name+'，在韩国）' : '（在韩国）'), s;
+  var inn = place==='IN' && x.place==='either', content = inn ? (x.mgmt||x.name)+(x.innName ? '（回印尼做：'+x.innName+'）' : '（回印尼做）') : (x.mgmt||x.name)+(x.mgmt && x.mgmt!==x.name ? '（'+x.name+'，在韩国）' : '（在韩国）'), s;
   if(reuseId){ s = (c.subItems||[]).filter(function(r){ return r.id===reuseId; })[0]; if(!s) return false; s.skipped = false; s.arrived = false; s.simDay = false; s.date = date; s.time = inn ? '' : time; s.place = inn ? 'IN' : 'KR'; s.content = content; }
   else { s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:inn ? '' : time, content:content, place:inn ? 'IN' : 'KR', projectName:itemName, pcb:true, silent:true, salt:'u'+Math.floor(Math.random()*1e4)}, by); if(!s) return false; }
   s.postponed = false; s.postponedFrom = ''; if(c.visitEnds) delete c.visitEnds[subCaseKey(s)];
-  s.src = 'care'; if(inn){ s.innName = x.innName; s.careItem = itemName; s.suggest = date; }
+  s.src = 'care'; if(inn){ s.innName = x.innName||''; s.careItem = itemName; s.suggest = date; }
+  if(!inn && opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } else { s.dirOp = false; s.extendMin = 0; } /* CMD-1020-05：院长操作 */
   c.pcBooked = careUnits(c).unbooked.length===0 && careUnits(c).rows.every(function(r){ return !r.s.skipped; });
   subCaseNos(c); logCaseEvent(c, by, '术后管理预约：'+content+'，'+date+(inn ? '（回印尼做，建议日期）' : ' '+time)); return true;
+}
+/* CMD-1020-05：术后管理行对应的「所需术后管理」条目（按施术项目名 + 内容前缀对上；对不上返回 null） */
+function careEntryOfRow(c, s){
+  var it = (c.procedureItems||[]).filter(function(x0){ return x0.name===s.projectName; })[0]; if(!it) return null;
+  var x = (it.postcare||[]).filter(function(p){ return (p.mgmt||p.name) && String(s.content||'').indexOf(p.mgmt||p.name)===0; })[0];
+  return x ? {it:it, x:x} : null;
+}
+/* 已预约的术后管理改成「回印尼做」：取消韩国这次到院（那次到院里没有别的项目就整张没了）、交给 IN（建议日期 = 原预约日期），Timeline 记一笔，IN 收通知 */
+function coreCareToIn(c, id, by){
+  var s = (c.subItems||[]).filter(function(r){ return r.id===id; })[0]; if(!s || s.done || s.kind!=='术后管理记录' || s.place!=='KR' || s.holdUseOf || s.surgUse) return false;
+  var e = careEntryOfRow(c, s); if(!e || e.x.place!=='either') return false;
+  var nm = e.x.mgmt||e.x.name, oldD = s.date, oldT = s.time||'';
+  s.place = 'IN'; s.time = ''; s.content = nm+(e.x.innName ? '（回印尼做：'+e.x.innName+'）' : '（回印尼做）'); s.innName = e.x.innName||''; s.careItem = s.projectName; s.suggest = oldD; s.arrived = false; s.simDay = false; s.src = 'care';
+  subCaseNos(c); logCaseEvent(c, by, '术后管理改回印尼做：'+nm+'（原 '+oldD+' '+oldT+' 韩国到院已取消，交给 IN，建议日期 '+oldD+'）');
+  pushNotif('赴韩施术', by+' 把 '+c.name+' 的术后管理「'+nm+'」改成回印尼做（原 '+tkK(oldD, oldT)+' 的韩国到院已取消，建议日期 '+oldD+'），请 IN 预约', {caseId:c.id});
+  return true;
 }
 /* 谁正在到店：子案件里「已到店」的那一次，否则主案件（已到院、施术没做完）；都没有 = null（［本次使用］灰） */
 function coreUseTarget(c){
@@ -7421,9 +7453,9 @@ function coreUnitUseNow(c, name, by, opt){
   if(it.pendingPay) return {ok:false, err:'待付款，付款后才能使用'};
   if(krIsMgmtItemC(it)){
     if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return {ok:false, err:'没有可用次数'};
-    if(tg.key==='main'){ if(c.todayMgmtDone && c.todayMgmtDone[name]) c.todayMgmtDone[name].again = true; var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return x.name; }); c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==name; }).concat([name]); c.todayPicked = true; logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
+    if(tg.key==='main'){ if(c.todayMgmtDone && c.todayMgmtDone[name]) c.todayMgmtDone[name].again = true; var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return x.name; }); c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==name; }).concat([name]); c.todayPicked = true; if(opt && opt.dirOp){ (c.todayDirOp = c.todayDirOp || {})[name] = {ext:opt.ext||0, min:opt.min||30, dir:opt.dir||c.director}; syncSurgeryBlock(c); } logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+((opt && opt.dirOp) ? '（院长操作'+(opt.ext ? '，延长 '+opt.ext+' 分钟' : '')+'）' : '')); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
     var rep = coreVisitRows(c, tg.key)[0], s = coreSubAdd(c, {kind:'术后管理记录', date:rep.date, time:rep.time||'', content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by); if(!s) return {ok:false};
-    s.holdUseOf = name; s.arrived = true; s.simDay = true; s.src = 'use'; subCaseNos(c); logCaseEvent(c, by, '本次使用：'+name+' 加进 '+(tg.no||tg.key)); return {ok:true, key:tg.key};
+    s.holdUseOf = name; s.arrived = true; s.simDay = true; s.src = 'use'; if(opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } subCaseNos(c); logCaseEvent(c, by, '本次使用：'+name+' 加进 '+(tg.no||tg.key)+((opt && opt.dirOp) ? '（院长操作）' : '')); return {ok:true, key:tg.key};
   }
   if(it.done) return {ok:false, err:'已完成'};
   if(tg.key==='main'){ /* 主案件：没选进今日的施术项目加回今日案件（计划内 = 取消 deferUse；在韩增加 = 补回今日行），延长多久由 KR 选 */
@@ -7434,14 +7466,15 @@ function coreUnitUseNow(c, name, by, opt){
   if(tg.key!=='main'){ s2.visitKey = tg.key; s2.arrived = true; } logCaseEvent(c, by, '本次使用：'+name+' 加进 '+(tg.no||tg.key)); return {ok:true, key:tg.key};
 }
 /* 施术 / 管理项目［预约使用］：选日期时间 → 按日期建立 / 并入子案件，预约来源 = 管理预约（并入术后预约的那天则仍是术后预约） */
-function coreUnitBookUse(c, name, date, time, by, director){
+function coreUnitBookUse(c, name, date, time, by, director, opt){
   var it = (c.procedureItems||[]).filter(function(x){ return x.name===name && x.origin==='KR' && !x.cancelled && !x.swapped; })[0]; if(!it || it.pendingPay || !c.krBalancePaid || !date) return false;
   var mg = krIsMgmtItemC(it);
   if(mg){ if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return false; }
   else if(it.done) return false;
   var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+(mg ? '（持有项目使用）' : '（预约）'), place:'KR', projectName:name, silent:true, salt:'b'+Math.floor(Math.random()*1e4)}, by); if(!s) return false;
   if(c.visitEnds) delete c.visitEnds[subCaseKey(s)];
-  if(mg) s.holdUseOf = name; else { s.surgUse = name; if(director) s.director = director; } s.src = 'use'; s.hold = !!c.visitClosed; subCaseNos(c);
+  if(mg) s.holdUseOf = name; else { s.surgUse = name; if(director) s.director = director; } s.src = 'use';
+  if(mg && opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } else if(opt && typeof opt.ext==='number' && !mg){ s.extendMin = opt.ext; } /* CMD-1020-05 */ s.hold = !!c.visitClosed; subCaseNos(c);
   logCaseEvent(c, by, '预约时间：'+name+'，'+date+' '+time); return true;
 }
 /* 表里的行［取消本次］：退回项目卡（术后管理 = 未预约，管理 / 施术 = 未使用） */

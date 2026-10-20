@@ -320,11 +320,11 @@ function krDayItems(ds){
     if(c.stage==='cancelled' || caseKrHospital(c)!==hidV) return;
     visitCalBlocks(c).forEach(function(v){
       if(v.date!==ds) return;
-      var care = !v.hasSurg, who0 = care ? '' : (v.director || c.director || '');
+      var care = !v.occupies, who0 = care ? '' : (v.director || c.director || '');
       if(!care && dirs0.indexOf(who0)<0) return;
-      var what = v.what.join('、'), main = out.filter(function(x){ return x.type==='surg' && x.own && x.caseId===c.id; })[0];
+      var what = v.what.join('、')+(v.hasDirOp ? '（院长操作）' : ''), main = out.filter(function(x){ return x.type==='surg' && x.own && x.caseId===c.id; })[0];
       if(main){ main.label += ' · 同日：'+what; return; }
-      out.push({who:who0, s:timeToMin(v.time), e:timeToMin(v.end), type:care ? 'visit' : 'surg', own:true, isRes:!care, label:(c.name||'')+' · '+what+(care ? '' : ' · '+who0), caseId:c.id, done:v.done});
+      out.push({who:who0, s:timeToMin(v.time), e:timeToMin(v.end), type:v.hasSurg ? 'surg' : 'visit', own:true, isRes:!care, label:(c.name||'')+' · '+what+(care ? '' : ' · '+who0), caseId:c.id, done:v.done});
     });
   });
   CLINIC_HOSPITALS.filter(function(r){ return r.hospitalId===hidV; }).forEach(function(r){
@@ -334,7 +334,7 @@ function krDayItems(ds){
     (v0.CASE_ITEMS||[]).forEach(function(oc){
       if(oc.stage==='cancelled' || caseKrHospital(oc)!==hidV) return;
       var vs = []; try{ vs = visitCalBlocks(oc); }catch(e){ vs = []; }
-      vs.forEach(function(v){ if(v.date!==ds || !v.hasSurg) return; var w = v.director || oc.director || ''; if(dirs0.indexOf(w)<0) return; out.push({who:w, s:timeToMin(v.time), e:timeToMin(v.end), type:'busy', own:false, isRes:true, label:'', caseId:null}); });
+      vs.forEach(function(v){ if(v.date!==ds || !v.occupies) return; var w = v.director || oc.director || ''; if(dirs0.indexOf(w)<0) return; out.push({who:w, s:timeToMin(v.time), e:timeToMin(v.end), type:'busy', own:false, isRes:true, label:'', caseId:null}); });
     });
   });
   return out;

@@ -2051,6 +2051,46 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(cnt()===n0+1, '一次预约 4 项只发 1 条汇总通知（'+(cnt()-n0)+'）'); var txt = Store.withClinic(rec.clinicId, function(){ return NOTIFS[0].text||NOTIFS[0].body||''; }); ST.ok(/3 次到院/.test(tzRender(txt, true)) || /3 次到院/.test(txt), '汇总通知写明次数：'+String(txt).slice(0, 80));
     KRC.anchor = ''; KRC.mode = 'week'; ST.ok(new Date(krcAnchor()+'T00:00:00').getDay()===0, 'KR 周视图锚点 = 周日');
   });
+  ST.def('R56a','CMD-1020-05（KM1 分页）：术后预约弹窗「韩国或印尼」没有印尼对应项目也有在韩国做 / 回印尼做 + 已预约改回印尼；项目库院长操作；占院长时间 / 延长 / 院长提醒；施术 / 管理 tab 卡片',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑（需要 pcStage 夹具）')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var gc = function(){ return Store.withClinic(r0.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var set = function(f){ Store.mutateClinic(r0.clinicId, function(){ f(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); return true; }); };
+    var okDay = function(n){ var d = ymdAdd(todayStr(), n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
+    var hid = caseKrHospital(gc()), d1 = okDay(30), d2 = okDay(32);
+    set(function(c){ c.procedureItems.forEach(function(it){ (it.postcare||[]).forEach(function(x){ if(x.place==='either') x.innName = ''; }); }); c.subItems = (c.subItems||[]).filter(function(x){ return !(x.place==='IN') && x.id!=='dop1' && x.id!=='dop2' && x.date!==d1 && x.date!==d2; }); });
+    /* 二：没有印尼对应项目也有选项 */
+    var sl = Store.withClinic(r0.clinicId, function(){ return careSlotList(gc()); }).filter(function(x){ return x.x.place==='either'; });
+    ST.ok(sl.length>0 && sl.every(function(x){ return x.canIn; }), '地点「韩国或印尼」（没有印尼对应项目）每个名额都有「在韩国做 / 回印尼做」（canIn）');
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krProjPage('care'); krCbOpen({all:true}); var ov = document.getElementById('kr-cb-overlay');
+    ST.ok(/回印尼做/.test(ov.innerHTML) && /在韩国做/.test(ov.innerHTML), '预约弹窗里「韩国或印尼」行有地点下拉'); krCbClose();
+    set(function(c){ var it = c.procedureItems.filter(function(x){ return (x.postcare||[]).some(function(p){ return p.place==='either'; }); })[0], i = it.postcare.map(function(p){ return p.place; }).indexOf('either'); coreCareBook(c, it.name, i, d1, '', 'IN', '', ST.krBy); });
+    var rowIn = gc().subItems.filter(function(x){ return x.place==='IN' && /回印尼做/.test(x.content); })[0];
+    ST.ok(!!rowIn && !visitCalBlocks(gc()).some(function(v){ return v.date===d1; }), '选回印尼做：不建韩国到院，只留一条交给 IN 的行（没有印尼对应项目也行）：'+(rowIn&&rowIn.content));
+    /* 已预约改回印尼：取消韩国那次到院，Timeline + 通知 */
+    set(function(c){ var it = c.procedureItems.filter(function(x){ return (x.postcare||[]).some(function(p){ return p.place==='either'; }); })[0], i = it.postcare.map(function(p){ return p.place; }).indexOf('either'); coreCareBook(c, it.name, i, d2, '11:00', 'KR', '', ST.krBy); });
+    var kr0 = gc().subItems.filter(function(x){ return x.place==='KR' && x.date===d2 && /术后消肿管理/.test(x.content); })[0], nN0 = Store.withClinic(r0.clinicId, function(){ return NOTIFS.length; });
+    krSubTimeOpen(kr0.id); ST.ok(KR_TE.canIn && /回印尼做/.test(document.getElementById('kr-te-overlay').innerHTML), '［修改时间］弹窗里「韩国或印尼」的已预约行有地点选项');
+    KR_TE.toIn = true; krTimeEditSave();
+    var kr1 = gc().subItems.filter(function(x){ return x.id===kr0.id; })[0];
+    ST.ok(kr1.place==='IN' && !visitCalBlocks(gc()).some(function(v){ return v.date===d2; }), '改成回印尼：这次韩国到院取消（那次到院没有别的项目整张没了）'); ST.ok(/改回印尼做/.test(JSON.stringify(gc().logs||gc().timeline||gc())), 'Timeline 记了一笔');
+    ST.ok(Store.withClinic(r0.clinicId, function(){ return NOTIFS.length; })===nN0+1, 'IN 收到一条通知');
+    /* 三：项目库院长操作 */
+    var lib = krLocalLib(hid)[0]; ST.ok(!dirOpInfo(hid, lib.name).on, '默认院长操作 = 否'); lib.dirOp = true; lib.dirMin = 30; ST.ok(dirOpInfo(hid, lib.name).on && dirOpInfo(hid, lib.name).min===30, '设成「是」默认 30 分钟');
+    var post = krpProjects().filter(function(p){ return isKrPostcareCat(p.categoryId); })[0]; if(post){ krpOpen(post.id); ST.ok(/院长操作/.test(document.body.innerHTML), '术后管理项目编辑页有「院长操作」'); krpClose(); }
+    krlOpen(lib.id); ST.ok(/院长操作/.test(document.body.innerHTML), '管理项目编辑页有「院长操作」'); krlClose(); lib.dirOp = false;
+    /* 占院长时间 / 延长：直接造两条院长操作的行 */
+    set(function(c){ c.subItems.push({id:'dop1', no:c.caseNo+'-81', kind:'术后管理记录', place:'KR', date:d1, time:'11:00', content:'ONDA（持有项目使用）', projectName:'ONDA', holdUseOf:'ONDA', dirOp:true, director:c.director, dirMin:30, extendMin:0}); c.subItems.push({id:'dop2', no:c.caseNo+'-82', kind:'术后管理记录', place:'KR', date:d1, time:'11:30', content:'LDM（持有项目使用）', projectName:'LDM', holdUseOf:'LDM', dirOp:true, director:c.director, dirMin:30, extendMin:30}); subCaseNos(c); });
+    var vb = visitCalBlocks(gc()).filter(function(v){ return v.date===d1; })[0];
+    ST.ok(vb && vb.occupies && vb.hasDirOp && vb.director===gc().director && timeToMin(vb.end)-timeToMin(vb.time)===60, '同一次到院两个院长操作项目：第一个 30 分钟 + 第二个只加延长 30 = 60 分钟（不直接相加 60+）：'+(vb&&vb.time+'-'+vb.end));
+    var ev = krcEvents().surg.filter(function(x){ return x.b.caseId===r0.id && x.b.date===d1; }); ST.ok(ev.length===1 && ev[0].b.who===gc().director && /院长操作/.test(ev[0].label), 'KR 日历一个块，挂在院长名下，标「院长操作」');
+    var hit = krSurgerySlotError(hid, gc().director, d1, '11:15', 30, 'x:y', {allowOffHours:true, use:true}); ST.ok(!!hit, '该院长这个时段再排别的 → 冲突：'+String(hit).slice(0, 60));
+    /* 院长不是这位的 OFF 检查 */
+    var nn = Store.withClinic(r0.clinicId, function(){ return 0; });
+    /* 施术 / 管理 tab 卡片样式 */
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krProjPage('surg'); var h1 = document.getElementById('krcase-body').innerHTML; krProjPage('mgmt'); var h2 = document.getElementById('krcase-body').innerHTML;
+    ST.ok(/border-radius:\s*12px/.test(h1) && (!/管理项目（[1-9]/.test(document.getElementById('krcase-body').innerText) || /border-radius:\s*12px/.test(h2)), '施术 / 管理 tab 的分组表格装进圆角卡片');
+  });
   ST.def('R50a','CMD-1019-21：多施术日停留算法 / 术后第 N 天 / 购买后项目名 / 今日进行数量 / Timeline 整理 / 接待退回（A1 分页）',function(){
     /* 三：最早可回国日 = 各施术「施术日 + 建议天数」最晚的一个 */
     var pcKR = function(day){ return [{mgmt:'拆线', name:'拆线', place:'KR', times:1, start:day}]; };
