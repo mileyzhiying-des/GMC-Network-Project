@@ -545,9 +545,9 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     /* 客户详情：改基本信息、补登医美史 */
     openClientDetail(c.name, 'in-clients'); openClientEdit(c.name, 'history'); document.getElementById('ce-v').value = '（自测）无过敏'; saveClientEdit(); ST.ok(clientByName(c.name).history==='（自测）无过敏', '基本信息应能改');
     openBeautyAdd(null); var bae = document.getElementById('beauty-add-overlay').innerHTML; ST.ok(/id="ba-year"/.test(bae) && /id="ba-month"/.test(bae) && /id="ba-day"/.test(bae) && /<textarea id="ba-project"/.test(bae) && !/datalist/.test(bae) && /取消[\s\S]*保存/.test(bae), '补登医美史：年 / 月 / 日下拉 + 多行项目输入，没有项目库下拉，［取消］［保存］'); document.getElementById('ba-year').value = '2025'; saveBeautyAdd(); ST.ok(document.getElementById('ba-err').style.display==='block' && !beautyRecordsOf(clientByName(c.name)).some(function(r){ return r.project==='外院玻尿酸'; }), '只选年没选月不能保存'); document.getElementById('ba-month').value = '6'; document.getElementById('ba-project').value = '外院玻尿酸'; document.getElementById('ba-day').value = '31'; saveBeautyAdd(); ST.ok(document.getElementById('ba-err').style.display==='block', '6 月没有 31 日'); document.getElementById('ba-day').value = ''; saveBeautyAdd(); var br0 = beautyRecordsOf(clientByName(c.name)).filter(function(r){ return r.project==='外院玻尿酸'; })[0]; ST.ok(br0 && !br0.day && beautyYm(br0)==='2025-06' && br0.source==='室长登记', '日不填：保存成功，显示 2025-06（来源：室长登记）'); openBeautyAdd(null); document.getElementById('ba-year').value = '2024'; document.getElementById('ba-month').value = '3'; document.getElementById('ba-day').value = '15'; document.getElementById('ba-project').value = '在雅加达某诊所做过埋线双眼皮\n约 1 年前'; saveBeautyAdd(); var br1 = beautyRecordsOf(clientByName(c.name)).filter(function(r){ return /埋线双眼皮/.test(r.project); })[0]; ST.ok(br1 && br1.day===15 && beautyYm(br1)==='2024-03-15' && /\n/.test(br1.project), '有日：显示 2024-03-15，多行项目原样保存'); ST.ok(beautyRecordsOf(clientByName(c.name)).some(function(r){ return r.project==='外院玻尿酸'; }), '医美史应能补登（项目纯文字 + 年月）');
-    ST.ok(document.getElementById('history-list').innerText.indexOf(c.caseNo)>-1, '客户详情应列出案件（Case ID）');
+    ST.ok(document.getElementById('cli-cases').textContent.indexOf(c.caseNo)>-1, '客户详情「本院案件记录」应列出案件（Case ID）');
     /* 持有项目卡：按项目汇总、展开到批次 */
-    var hold = document.getElementById('detail-holdings') ? document.getElementById('detail-holdings').innerText : ''; ST.ok(hold.indexOf(p.name)>-1, '持有项目卡应按项目汇总'); ST.ok(!/退款/.test(hold), '客户详情持有项目卡不再有退款按钮（退款移到案件［退款服务］，CMD-1013-04）');
+    var hold = document.getElementById('detail-holdings') ? document.getElementById('detail-holdings').textContent : ''; ST.ok(hold.indexOf(p.name)>-1, '持有项目卡应按项目汇总'); ST.ok(!/退款/.test(hold), '客户详情持有项目卡不再有退款按钮（退款移到案件［退款服务］，CMD-1013-04）');
     /* 退款服务入口 */
     var c2 = ST.newRes('S32b', {phone:clientPhoneOf(c.name)}); ST.arrive(c2); ST.open(c2); openRefundService(); var rb = document.getElementById('refund-svc-overlay') ? document.getElementById('refund-svc-overlay').innerText : ''; ST.ok(/实付/.test(rb), '退款服务弹窗应显示当初实付'); closeRefundService();
     ST.ok(refundableBatches(c.name).every(function(x){ return !x.b.pkg && !x.b.pkgPaid && !x.b.service; }), '套餐 / 서비스 / 套餐内含批次不应可退款');
@@ -1130,7 +1130,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     var cr = clientCompCredits(c.name); ST.ok(cr.length===1 && cr[0].amount===credit && cr[0].fromCaseNo===c.caseNo, '先不换：额度存成客人的置换额度（来源原案件）');
     ST.ok(!hasRefundMark(c) && compSum(c)>0, '案件仍标置换、不标有退款'); ST.ok(krActiveItems(c).length===0, '赴韩全部取消，案件退回面诊级');
     ST.ok(canEndCase(c), '赴韩全部取消后出现［结束案件］');
-    openClientDetail(c.name); ST.ok(/置换额度/.test(document.getElementById('detail-holdings').innerText) && /不可退款/.test(document.getElementById('detail-holdings').innerText), '客户详情显示置换额度（不可退款）');
+    openClientDetail(c.name); ST.ok(/置换额度/.test(document.getElementById('detail-holdings').textContent) && /不可退款/.test(document.getElementById('detail-holdings').textContent), '客户详情显示置换额度（不可退款）');
     var d = ST.newRes('CP2b'); d.name = c.name; ST.arrive(d); ST.open(d); d.materialsConfirmed = true; d.consultRequested = false; d.localTrack = true; d.entryChoicePending = true; d.projectEntryMode = 'new'; d.projectOriginFilter = 'IN'; d.activeCaseTab = 'localmgmt'; renderCaseBody(d);
     ST.ok(/用置换额度换项目/.test(document.getElementById('case-body').innerText), '新案件本地选购画面出现［用置换额度换项目］');
     compUseCredit(cr[0].id, 'main'); ST.ok(!!d.comp && d.comp.fromCaseNo===c.caseNo, '用额度：记来源原案件号');
@@ -2167,6 +2167,51 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
     /* 基础资料护照栏 */
     var cl = clientByName(c.name), ps = cl.passport; cl.passport = {}; var bh = clientBasicBlockHtml(c); ST.ok(/护照/.test(bh) && /color:#B3261E[^>]*>⚠ 护照未登记/.test(bh), '基础资料护照栏：未登记报红'); cl.passport = ps;
+  });
+  ST.def('R61a','CMD-1020-10（A1 分页，需要 pcStage 夹具）：IN 客户详情统一结构 / 医美史合并并按实际日期分组 / 持有项目左右两张小卡 / 名称不带·N次',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var snapItems = JSON.stringify(c.procedureItems), snapSub = JSON.stringify(c.subItems), cl = clientByName(c.name), snapBeauty = JSON.stringify(cl.beautyRecords||[]);
+    var d1 = ymdAdd(todayStr(), -12), d2 = ymdAdd(todayStr(), -10), sur = c.procedureItems.filter(function(it){ return it.origin==='KR' && !krIsMgmtItemC(it); });
+    if(sur.length<2) return ST.ok(false, '夹具里至少要有 2 个施术项目');
+    sur[0].done = true; sur[0].doneAt = d1+' 03:00'; sur[1].done = true; sur[1].doneAt = d2+' 03:00';
+    var mg = {name:'ONDA 提升 · 身体 60kj·3次', origin:'KR', mgmtPlan:true, krAddOn:true, qty:6, heldOver:true, uses:[]}; c.procedureItems.push(mg); holdUseRecord(c, mg, {at:d2+' 04:00', key:'main', qty:2});
+    cl.beautyRecords = (cl.beautyRecords||[]).concat([{id:'brT1', year:2019, month:5, day:null, project:'外院测试：玻尿酸', source:'客人自填', addedAt:'2019-05-01 10:00', caseId:null, by:'', newCaseId:null}]);
+    openClientDetail(c.name, 'in-clients');
+    var root = document.getElementById('cli-root'), txt = root.textContent;
+    ST.ok(/正在进行案件/.test(txt) && document.querySelectorAll('#cli-root .tabs .tab').length===4, '正在进行案件 + 四个 tab'); var tl = [].map.call(document.querySelectorAll('#cli-root .tabs .tab'), function(x){ return x.textContent; }).join('|'); ST.ok(/基础信息\|持有项目 \d+\|本院案件记录 \d+\|Timeline/.test(tl), 'tab：基础信息｜持有项目 N｜本院案件记录 N｜Timeline（'+tl+'）');
+    ST.ok(!/医美史 · 案件记录|医美史 · 本院项目记录/.test(txt), '旧的两个医美史块已合并'); var hist = document.getElementById('history-list').textContent;
+    ST.ok(hist.indexOf(d1)>-1 && hist.indexOf(d2)>-1 && hist.indexOf(sur[0].name)>-1, '本院项目按实际做的日期分组（两个日期各一组）'); ST.ok(hist.indexOf(d2) < hist.indexOf(d1) && hist.indexOf(d1) < hist.indexOf('外院测试'), '合并后按时间排序，最新在上'); ST.ok(/外院/.test(hist) && /＋ 补登医美史/.test(hist), '外院补登标「外院」，有［补登医美史］');
+    ST.ok(/ONDA 提升 · 身体 60kj：2 次/.test(hist) && !/60kj·3次|×6/.test(hist), '管理项目写实际用了几次，不写「·3次」「×6」');
+    var left = document.getElementById('detail-holdings').textContent, right = document.getElementById('detail-holdings-kr').textContent;
+    ST.ok(/印尼本地持有/.test(document.getElementById('cli-pane-hold').textContent) && /韩国持有/.test(document.getElementById('cli-pane-hold').textContent), '持有项目：左印尼本地持有 / 右韩国持有'); ST.ok(/术后管理 · 来自 A\d+/.test(left) && /建议/.test(left), '左卡：交给印尼还没做的术后管理，标「术后管理 · 来自 A000xxx」写建议日期');
+    ST.ok(/ONDA 提升 · 身体 60kj/.test(right) && /剩余 4 \/ 共 6 次/.test(right) && !/·3次|要使用请由 IN 预约/.test(right), '右卡：韩国持有管理项目，剩余次数，名称不带·N次，没有旧说明'); ST.ok(/术后管理/.test(right) && /来自 A\d+/.test(right), '右卡也列韩国这边还没做的术后管理（来自哪个案件）');
+    var n = (tl.match(/持有项目 (\d+)/)||[])[1]; ST.ok(+n===(document.querySelectorAll('#detail-holdings > div').length + document.querySelectorAll('#detail-holdings-kr > div').length), 'tab 数字 = 两张小卡合计（'+n+'）');
+    cliSetTab('cases'); ST.ok(document.getElementById('cli-pane-cases').style.display!=='none' && document.getElementById('cli-cases').textContent.indexOf(c.caseNo)>-1, '本院案件记录 tab'); cliSetTab('tl'); ST.ok(/Case 开始/.test(document.getElementById('detail-log').textContent), 'Timeline tab 维持现状'); cliSetTab('basic');
+    ST.ok(/联系方式/.test(document.getElementById('detail-profile').textContent) && /护照/.test(document.getElementById('detail-profile').textContent), 'IN 基础信息有联系方式 / 护照');
+    c.procedureItems = JSON.parse(snapItems); c.subItems = JSON.parse(snapSub); cl.beautyRecords = JSON.parse(snapBeauty);
+  });
+  ST.def('R61b','CMD-1020-10（KM1 / KO1 分页，需要 pcStage 夹具）：KR 客户详情同一套结构 / 没有联系方式·特别备注·隐私协议·印尼本地持有 / 护照 KR 室长看得到 院长看不到 / KR 补登医美史 IN 看得到并标登记人',function(){
+    var me = currentAccount(); if(!ST.ok(me && (me.id==='KM1' || me.id==='KO1'), '要在 KM1 或 KO1 分页里跑')) return;
+    if(me.id==='KO1'){ /* 代表院长只看自己负责的案件，夹具案件不一定在列表里：直接在来源诊所分区里算客户详情，看护照 / 补登按钮的可见性 */
+      ST.ok(krClientsAllowed(), '代表院长可看客人管理（只读）');
+      var h0 = Store.withClinic('C1', function(){ var cl0 = clientByName('T-术后管理'); if(!cl0) return null; var cs = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理'; }); return clientDetailBodyHtml({mode:'KR', name:cl0.name, cl:cl0, cases:cs, clinicId:'C1', openCase:function(){ return 'void 0'; }, addOnclick:krCan() ? 'x' : ''}); });
+      if(!ST.ok(!!h0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+      ST.ok(!/护照/.test(h0) && !/补登医美史/.test(h0) && !/联系方式|印尼本地持有/.test(h0), '代表院长：看不到护照、没有［补登医美史］、没有联系方式 / 印尼本地持有'); return;
+    }
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    krOpenClient(krClientKeyFor(r0.clinicId, r0.name)); krRenderClientDetail(); var el = document.getElementById('krclientdetail-body'), txt = el.textContent;
+    ST.ok(/正在进行案件/.test(txt) && el.querySelectorAll('.tabs .tab').length===4, 'KR 客户详情：正在进行案件 + 四个 tab（同 IN）'); ST.ok(!/联系方式|特别备注|隐私协议|印尼本地持有|要使用请由 IN 预约/.test(txt), 'KR 看不到的藏起来：没有联系方式 / 特别备注 / 隐私协议 / 印尼本地持有 / 旧说明');
+    ST.ok(/韩国持有/.test(txt) && !/印尼本地/.test(txt), '持有项目只有「韩国持有」'); ST.ok(!/医美史 · 本院项目记录|本院施术记录|没有待做的术后管理/.test(txt), '旧的三块（术后管理 / 本院施术记录）已并进新结构');
+    if(me.id==='KM1'){
+      ST.ok(/护照/.test(document.getElementById('detail-profile').textContent), 'KR 室长看得到护照'); ST.ok(/＋ 补登医美史/.test(el.innerHTML), 'KR 室长有［补登医美史］');
+      krCliBeautyAdd(); document.getElementById('ba-year').value = String(demoNow().getFullYear()-2); document.getElementById('ba-month').value = '3'; document.getElementById('ba-project').value = 'KR 补登测试：水光'; saveBeautyAdd();
+      var cl2 = Store.readClinic(r0.clinicId).CLIENTS.filter(function(x){ return x.name===r0.name; })[0], rec = (cl2.beautyRecords||[]).filter(function(x){ return /KR 补登测试/.test(x.project); })[0];
+      ST.ok(!!rec && /KM1/.test(rec.by||'') && rec.source==='室长登记', 'KR 补登写进客户档案，记登记人（'+(rec&&rec.by)+'）'); ST.ok(/KR 补登测试/.test(document.getElementById('history-list').textContent), 'KR 页面马上看得到');
+      Store.mutateClinic(r0.clinicId, function(){ var x = clientByName(r0.name); x.beautyRecords = (x.beautyRecords||[]).filter(function(y){ return !/KR 补登测试/.test(y.project); }); x.timeline = (x.timeline||[]).filter(function(y){ return !/KR 补登测试/.test(y.action||''); }); return true; });
+    } else {
+      ST.ok(!/护照/.test(document.getElementById('detail-profile').textContent), '代表院长（院长）看不到护照'); ST.ok(!/补登医美史/.test(el.innerHTML), '代表院长只读，没有［补登医美史］');
+    }
   });
   ST.def('R59a','CMD-1020-08（A1 分页，需要 pcStage 夹具）：IN 赴韩施术 tab 项目卡 / 备注记录 / 拿掉结束术后管理 / 客人已回国结案、印尼的留在未安排预约 / 迁移 55',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;

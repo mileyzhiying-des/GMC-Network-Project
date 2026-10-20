@@ -735,22 +735,7 @@ var DETAIL_FROM = 'in-clients';
 /* ---- 客户详情"基础信息"：读真实客户档案（CLIENTS），［修改］存回客户并记入客户 Timeline（2026-10-06·K） ---- */
 var CLIENT_EDIT = null; /* {name, field} */
 function clientDobText(c){ return c.dob ? c.dob.replace(/^(\d{4})-(\d\d)-(\d\d)$/, '$1年$2月$3日') : '—'; }
-function renderClientProfile(name){
-  var el = document.getElementById('detail-profile'); if(!el) return;
-  var c = clientByName(name);
-  if(!c){ el.innerHTML = '<div style="padding:14px 0;font-size:12px;color:var(--muted);">没有找到这位客户的档案</div>'; return; }
-  var nm = String(name).replace(/'/g, "\\'");
-  var row = function(k, v, field, extra){
-    return '<div class="field-row"><span class="fk">'+k+'</span><span class="fv"'+(extra?' style="font-weight:400;"':'')+'>'+v+'</span><span class="fa">'+
-      (field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</span></div>'; };
-  var cons = (c.consents||[]).slice(-1)[0];
-  var consHtml = cons ? '已签署<span class="sub">个人资料收集同意 + 健康资料处理同意 · 同意书 '+aEscC(cons.version)+' · '+aEscC(cons.ts)+' · '+aEscC(cons.source)+'</span>' : '<span style="color:var(--muted);">未登记</span><span class="sub">到店后由室长当面签署正式同意书</span>';
-  el.innerHTML = row('名 / 姓', aEscC(c.name)+'<span class="sub">名（必填）+ 姓（选填），显示“名 姓”</span>', 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+
-    row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+
-    row('护照信息', (passportComplete(c) ? '已登记 · '+aEscC(passportOf(c).no)+'<span class="sub">签发 '+aEscC(passportOf(c).issue)+' · 到期 '+aEscC(passportOf(c).expiry)+(passportOf(c).expiry<todayStr() ? ' <b style="color:#B3261E;">护照已过期</b>' : '')+'</span>' : '未登记<span class="sub">第一次确认赴韩时登记</span>'), 'passport')+
-    row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+
-    '<div class="field-row"><span class="fk">隐私协议</span><span class="fv">'+consHtml+'</span><span class="fa"></span></div>';
-}
+function renderClientProfile(name){ renderClientDetailIn(name); } /* CMD-1020-10：客户详情整页由 renderClientDetailIn 一次画（data.js），这里只留旧名字兜底 */
 function aEscC(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 var CLIENT_FIELD_DEF = {
   name:{label:'名 / 姓', kind:'name2'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
@@ -873,33 +858,12 @@ function passportConfirm(){
   passportCancel(); x.cb();
 }
 
-/* 客户级 Timeline 只记：建档 / 基础信息修改（含修正）/ 案件开始 / 案件结案（进行中显示"进行中"） */
-function renderClientTimeline(name){
-  var cl = clientByName(name);
-  var log = (cl ? cl.timeline : []).slice();
-  CASE_ITEMS.filter(function(c){ return c.name===name; }).forEach(function(c){
-    var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt : D(0)+' 09:00';
-    log.push({stage:'案件开始', actor:'系统', action:'Case 开始 · '+c.caseNo, dt:first, kind:'case', caseId:c.id});
-    if(isEnded(c)){
-      var last = (c.logEntries&&c.logEntries.length) ? c.logEntries[c.logEntries.length-1].dt : first;
-      log.push({stage:'案件结案', actor:'系统', action:'Case 结案 · '+c.caseNo+'（'+terminalBadge(c)[2]+'）', dt:last, kind:'case', caseId:c.id});
-    } else {
-      log.push({stage:'案件进行中', actor:'系统', action:'Case '+c.caseNo+' · 进行中', dt:first, kind:'case', caseId:c.id});
-    }
-  });
-  log.sort(function(a,b){ return a.dt<b.dt ? 1 : -1; });
-  document.getElementById('detail-log').innerHTML = log.map(logLine).join('');
-}
+function renderClientTimeline(name){ renderClientDetailIn(name); }
 
 function openClientDetail(name, from){
   DETAIL_FROM = from || 'in-clients';
-  document.getElementById('detail-name').textContent = name;
-  renderClientProfile(name);
-  renderClientCases(name);
-  renderClientHoldings(name);
-  renderProjectHistory(name);
-  buildHistoryList(name);
-  renderClientTimeline(name);
+  CLI_TAB = 'basic'; /* 每次进客户详情先看「基础信息」 */
+  renderClientDetailIn(name);
   nav('in-clientdetail');
 }
 
@@ -917,12 +881,10 @@ function renderClientHoldings(name){
   if(!block || !el) return;
   var all = holdingsAllSorted(name).filter(function(h){ return holdingRemaining(h)>0; }); /* 项目层只列剩余>0；全部用完/已退款的项目去"本院项目记录"看 */
   /* CMD-1015-17：IN 也看得到在韩持有（付费管理项目，项目 + 剩余次数，不显示金额）；已结案案件剩下的术后管理标「术后管理」（免费、不能退款，再来做开本地管理新案件） */
-  var careLeft = clientCareLeft(name), krHeld = [];
-  CASE_ITEMS.forEach(function(c0){ if(c0.name!==name) return; (c0.procedureItems||[]).forEach(function(it){ if(it.heldOver && it.mgmtPlan && !it.holdDone) krHeld.push({c:c0, it:it}); }); });
-  var extraHtml = careLeft.map(function(e){ var late = pcDaysLate(e.s.date); return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+e.s.content+' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>'+(late>0 ? ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;font-size:10px;">已过建议日期 '+late+' 天</span>' : '')+'</span><span style="font-size:12px;color:var(--slate2);white-space:nowrap;">属于 '+e.c.caseNo+' · 建议 '+pcMD(e.s.date)+' · 免费，不能退款</span></div>'; }).join('')+
-    krHeld.map(function(e){ return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+e.it.name+' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:10px;">在韩持有</span></span><span style="font-size:12px;color:var(--slate2);white-space:nowrap;">剩余 '+((e.it.qty||1)-(e.it.holdUsed||0))+' 次（共 '+(e.it.qty||1)+' 次）· 来自 '+e.c.caseNo+' · 要用请在 KR 医院日程占位预约</span></div>'; }).join('');
-  if(!all.length && !extraHtml){ block.style.display = 'none'; el.innerHTML=''; return; }
+  var careLeft = clientCareLeftAll(name);
+  var extraHtml = careLeft.map(function(e){ var late = pcDaysLate(e.s.date); return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+e.s.content+' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>'+(late>0 ? ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;font-size:10px;">已过建议日期 '+late+' 天</span>' : '')+'</span><span style="font-size:12px;color:var(--slate2);white-space:nowrap;">术后管理 · 来自 '+e.c.caseNo+' · 建议 '+pcMD(e.s.date)+' · 免费，不能退款</span></div>'; }).join('');
   block.style.display = 'block';
+  if(!all.length && !extraHtml){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有印尼本地持有</div>'; return; }
   el.innerHTML = all.map(function(h, gi){
     var remaining = holdingRemaining(h), total = holdingTotal(h);
     var tags = (h.category==='术后管理'?' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>':'')+
@@ -949,38 +911,8 @@ function renderClientHoldings(name){
 /* 本院项目记录（2026-09-29 第十轮新增）：本地项目读CLIENT_HOLDINGS，赴韩项目读各案件procedureItems；
    按项目名分组，每个项目可展开看购买批次，批次里再看每次使用的案件+日期 */
 var PROJ_HIST_NAME = null, PROJ_HIST_TAB = {};
-
-function setProjHistTab(gi, tab){ PROJ_HIST_TAB[gi] = tab; renderProjectHistory(PROJ_HIST_NAME); var el = document.getElementById('proj-hist-'+gi); if(el) el.style.display='block'; }
-
-/* 医美史·本院项目记录（CMD-1013-12 一·3）：按「日期 + 案件」分组，最新在上；组头「日期 … Case ID」，下面列这次做完的项目；补登的外部项目单独成组（右侧写「外部项目」）；只列做完的 */
-function renderProjectHistory(name){
-  PROJ_HIST_NAME = name;
-  var el = document.getElementById('project-history-list');
-  if(!el) return;
-  var groups = {}, order = [];
-  var add = function(date, caseId, label, ext){
-    var key = (ext ? 'x|' : 'c|')+date+'|'+(caseId||''); if(!groups[key]){ groups[key] = {date:date, caseId:caseId, items:[], ext:!!ext}; order.push(key); }
-    groups[key].items.push(label);
-  };
-  getClientHoldings(name).forEach(function(h){
-    h.batches.forEach(function(b){ (b.usages||[]).forEach(function(u){ add(u.date, u.caseId, h.itemName+(b.spec ? ' · '+b.spec : '')+' × '+u.qty+' 次'+(u.opt ? '（'+u.opt+'）' : ''), false); }); });
-  });
-  CASE_ITEMS.filter(function(c){ return c.name===name; }).forEach(function(c){
-    var lastDt = (c.logEntries&&c.logEntries.length) ? c.logEntries[c.logEntries.length-1].dt.split(' ')[0] : '—';
-    var sd = (c.subItems||[]).filter(function(s){ return s.kind==='施术' && s.done && s.doneAt; })[0], dt = sd ? sd.doneAt.slice(0,10) : lastDt;
-    (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && it.done && !it.cancelled && !it.swapped; }).forEach(function(it){ add(dt, c.id, it.name+(it.qty>1 ? ' ×'+it.qty : ''), false); });
-  });
-  var cl = clientByName(name);
-  if(cl) beautyRecordsOf(cl).filter(function(r){ return r.source==='室长登记'; }).forEach(function(r){ add(r.year+'-'+pad2(r.month), '', r.project, true); });
-  order.sort(function(a, b){ return groups[b].date.localeCompare(groups[a].date); });
-  if(!order.length){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无项目记录</div>'; return; }
-  el.innerHTML = order.map(function(key){
-    var g = groups[key], cc = g.caseId ? CASE_ITEMS.filter(function(x){ return x.id===g.caseId; })[0] : null;
-    var right = g.ext ? '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">外部项目</span>' : (cc ? '<a href="#" class="info-link" onclick="openCaseDetail(\''+cc.id+'\');return false;" style="font-weight:700;">'+cc.caseNo+'</a>' : '');
-    return '<div class="field-row" style="flex-direction:column;align-items:flex-start;padding:8px 0;"><div style="display:flex;width:100%;justify-content:space-between;align-items:center;"><span class="fk" style="font-weight:700;">'+g.date+'</span>'+right+'</div>'+
-      g.items.map(function(x){ return '<div style="padding:3px 0;font-size:13px;">· '+aEscC(x)+'</div>'; }).join('')+'</div>';
-  }).join('');
-}
+function setProjHistTab(gi, tab){ PROJ_HIST_TAB[gi] = tab; }
+function renderProjectHistory(name){ renderClientDetailIn(name); } /* CMD-1020-10：并进「基础信息」里的医美史（外院补登 + 本院项目合并） */
 
 function toggleProjHistory(i){
   var el = document.getElementById('proj-hist-'+i); if(!el) return;
@@ -996,20 +928,7 @@ function subVisitText(c){
   var main = krAllItems(src).filter(function(it){ return !it.cancelled; }).map(function(it){ return it.name; }).join('、');
   return md+' '+(c.visitTime||'')+' 到店 · '+sub.content+'（来自 '+src.caseNo+(main ? ' '+main : '')+'）';
 }
-function renderClientCases(name){
-  /* "正在进行案件"只放没结束的：已结案、已取消（不管是预约阶段取消还是全退/部分退那两个终态）都不算"进行中" */
-  var mine = CASE_ITEMS.filter(function(c){ return c.name===name && !isEnded(c); });
-  var el = document.getElementById('detail-cases');
-  if(!el) return;
-  if(mine.length===0){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">当前没有进行中的案件</div>'; return; }
-  el.innerHTML = mine.map(function(c){
-    var b = caseStageBadge(c);
-    return '<div class="trow" style="grid-template-columns:1fr 1fr auto;">'+
-      '<span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';width:fit-content;">'+b[2]+'</span>'+
-      '<span style="font-size:12px;color:var(--slate2);">'+(subVisitText(c) || caseStatusSub(c))+'</span>'+
-      '<a href="#" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-size:12px;font-weight:700;">进入案件 →</a></div>';
-  }).join('');
-}
+function renderClientCases(name){ renderClientDetailIn(name); }
 
 /* 医美史记录列表（客户详情"医美史 · 案件记录"和案件基础资料共用）：年月 · 项目 · 来源 +"本次新增"标记 */
 function beautyMetaText(r){
@@ -1050,34 +969,30 @@ function openBeautyAdd(caseId){
   ov.classList.add('open');
 }
 function closeBeautyAdd(){ var ov = document.getElementById('beauty-add-overlay'); if(ov) ov.classList.remove('open'); }
+var BEAUTY_ADD_KR = null; /* CMD-1020-10：KR 室长在客人详情补登（{clinicId, name}），写进来源诊所分区里的客户档案 */
 function saveBeautyAdd(){
   var yv = (document.getElementById('ba-year')||{}).value, mv = (document.getElementById('ba-month')||{}).value, dv = (document.getElementById('ba-day')||{}).value, project = document.getElementById('ba-project').value.trim(), err = document.getElementById('ba-err');
-  var c = BEAUTY_ADD_CASE ? CASE_ITEMS.filter(function(x){ return x.id===BEAUTY_ADD_CASE; })[0] : null;
-  var name = c ? c.name : document.getElementById('detail-name').textContent, cl = clientByName(name);
   var bad = function(t){ err.textContent = t; err.style.display = 'block'; };
   if(!yv || !mv || !project){ bad('年、月和项目都要填（日可以不填）'); return; }
   var y = +yv, m = +mv, dd = dv ? +dv : null, now = demoNow();
   if(dd && dd > new Date(y, m, 0).getDate()){ bad(y+' 年 '+m+' 月没有 '+dd+' 日'); return; }
   if(y*100+m > now.getFullYear()*100+now.getMonth()+1){ bad('时间不能晚于这个月'); return; }
+  var ymText = y+'-'+('0'+m).slice(-2)+(dd ? '-'+('0'+dd).slice(-2) : '');
+  if(BEAUTY_ADD_KR){ /* KR 补登：actor = KR 账号，记录里带登记人；IN 打开客人档案就能看到 */
+    var kr = BEAUTY_ADD_KR, who = accountLabel(currentAccountId()), done = false;
+    Store.mutateClinic(kr.clinicId, function(){ var cl0 = clientByName(kr.name); if(!cl0) return false; addBeautyRecord(cl0, {year:y, month:m, day:dd, project:project, source:'室长登记', caseId:null, newCaseId:null}); cl0.timeline.push({stage:'基础信息修改', actor:who, actorId:currentAccountId(), action:'补登医美史：'+ymText+' '+project+'（KR 登记）', dt:nowFullDt(), kind:'plain'}); done = true; return true; });
+    if(!done){ bad('没有找到这位客户的档案'); return; }
+    closeBeautyAdd(); BEAUTY_ADD_KR = null; if(typeof krRenderClientDetail==='function') krRenderClientDetail(); return;
+  }
+  var c = BEAUTY_ADD_CASE ? CASE_ITEMS.filter(function(x){ return x.id===BEAUTY_ADD_CASE; })[0] : null;
+  var name = c ? c.name : document.getElementById('detail-name').textContent, cl = clientByName(name);
   if(!cl) return;
   addBeautyRecord(cl, {year:y, month:m, day:dd, project:project, source:'室长登记', caseId:c ? c.id : null, newCaseId:c ? c.id : null});
-  var ymText = y+'-'+('0'+m).slice(-2)+(dd ? '-'+('0'+dd).slice(-2) : '');
   cl.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'补登医美史：'+ymText+' '+project, dt:nowFullDt(), kind:'plain'});
-  closeBeautyAdd(); buildHistoryList(name); renderClientTimeline(name);
+  closeBeautyAdd(); renderClientDetailIn(name);
   if(c){ if(typeof continuationInfo==='function' && continuationInfo(c)) onNewHistoryChanged(); else renderCaseBody(c); }
 }
-function buildHistoryList(name){
-  var cl = name ? clientByName(name) : null;
-  var records = cl ? '<div class="info-card"><div style="padding:2px 0;">'+beautyListHtml(cl)+'</div></div>' : '';
-  var addBtn = document.getElementById('beauty-add-btn'); if(addBtn) addBtn.style.display = cl ? '' : 'none';
-  var own = name ? CASE_ITEMS.filter(function(c){ return c.name===name; }).map(function(c){
-    var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt.split(' ')[0] : '—';
-    var bd = caseStageBadge(c), lkSrc = (c.linkedCase && c.linkedCase.caseId) ? CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0] : null, lk = lkSrc ? '关联 '+lkSrc.caseNo+' · '+c.linkedCase.reason : '';
-    return '<div class="info-card"><div class="info-card-row"><div style="min-width:0;"><div class="value"><a href="#" class="info-link" onclick="openCaseDetail(\''+c.id+'\');return false;" style="font-weight:700;">'+c.caseNo+'</a></div><div class="sub">'+first+(lk ? ' · '+lk : '')+'</div></div>'+
-      '<span class="status-pill" style="background:'+bd[0]+';color:'+bd[1]+';">'+bd[2]+'</span></div></div>';
-  }).join('') : '';
-  document.getElementById('history-list').innerHTML = records + own;
-}
+function buildHistoryList(name){ renderClientDetailIn(name); }
 
 function buildDetailLog(){
   /* Client-level timeline only logs 4 kinds of events: 建档 / 基础信息修改 / Case 开始 / Case 结案.

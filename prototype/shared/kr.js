@@ -3482,32 +3482,15 @@ function krRenderClientDetail(){
   if(!krClientsAllowed() || !KR_CLI.sel){ el.innerHTML = '<div class="card" style="padding:24px;">'+back+'<div style="margin-top:12px;color:var(--slate2);">没有可看的客人。</div></div>'; return; }
   var m = krClientRows().filter(function(x){ return x.key===KR_CLI.sel; })[0];
   if(!m){ el.innerHTML = '<div class="card" style="padding:24px;">'+back+'<div style="margin-top:12px;color:var(--slate2);">这位客人在本院没有可看的案件。</div></div>'; return; }
-  var can = krCan(), cases = m.cases.slice().sort(function(a, b){ return String(b.caseNo).localeCompare(String(a.caseNo)); });
-  var caseRows = cases.map(function(r){ return '<div class="case-row-click case-field-row" style="cursor:pointer;" onclick="krShowCase(\''+r.clinicId+'\',\''+r.id+'\')"><span style="width:90px;font-weight:700;">'+krEsc(r.caseNo)+'</span><span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.stageText||r.label)+'</span>'+(r.hold ? ' '+KR_HOLD_TAG : '')+'<span style="flex:1;"></span><span style="font-size:12px;color:var(--muted);">院长 '+krEsc(r.director||'—')+'</span></div>'; }).join('');
-  /* 术后管理：各案件的在韩持有子项（到当天 +［客人已到］才能标完成，原型有［模拟到当日］）；持有项目：只列项目 + 剩余次数 +［安排使用］ */
-  var careRows = '', holdRows = '';
-  cases.forEach(function(r){
-    var c = r.c, cid = r.clinicId, id = r.id, act = function(fn, sid){ return 'krCliAct(\''+fn+'\',\''+cid+'\',\''+id+'\',\''+sid+'\')'; };
-    (c.subItems||[]).filter(function(s){ return s.hold && !s.done; }).forEach(function(s){
-      careRows += '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--border2);font-size:13px;flex-wrap:wrap;"><span style="width:90px;color:var(--muted);">'+krEsc(r.caseNo)+'</span><span style="width:140px;">'+krEsc((s.date||'')+(s.time ? ' '+s.time : ''))+'</span><span style="flex:1;min-width:160px;">'+krEsc(s.content)+(s.note ? '<div style="font-size:11px;color:var(--slate2);">备注：'+krEsc(s.note)+'</div>' : '')+'</span>'+
-        (can ? krCareActHtml(s, act)+'<a href="#" onclick="'+act('krSubNote', s.id)+';return false;" style="font-size:12px;">'+(s.note?'改备注':'备注')+'</a><a href="#" onclick="'+act('krSubTimeOpen', s.id)+';return false;" style="font-size:12px;">改时间</a>' : '')+'</div>';
-    });
-    (c.procedureItems||[]).filter(function(it){ return it.heldOver && !it.holdDone; }).forEach(function(it){
-      var left = holdItemLeft(c, it), pl = holdItemPlanned(c, it);
-      holdRows += '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="width:90px;color:var(--muted);">'+krEsc(r.caseNo)+'</span><span style="flex:1;">'+krEsc(it.name)+'</span><span style="color:var(--slate2);">剩余 '+left+' 次'+(pl ? '（已安排 '+pl+' 次）' : '')+'</span>'+(left-pl>0 ? '<span style="font-size:11px;color:var(--muted);">要使用请由 IN 预约</span>' : '')+'</div>';
-    });
+  /* CMD-1020-10：和 IN 同一套结构（clientDetailBodyHtml）；客户档案在来源诊所分区里，所以整页在 Store.withClinic 里算；KR 看不到的（联系方式 / 特别备注 / 隐私协议 / IN 本地持有）不画 */
+  var body = Store.withClinic(m.clinicId, function(){
+    var cl = clientByName(m.name), cases = m.cases.map(function(r){ return r.c; });
+    var model = {mode:'KR', name:m.name, cl:cl, cases:cases, clinicId:m.clinicId, openCase:function(c){ return "krShowCase('"+m.clinicId+"','"+c.id+"')"; }, addOnclick:(krCan() && cl) ? "krCliBeautyAdd()" : ''};
+    return {tags:clientTagsHtml(cl), html:clientDetailBodyHtml(model)};
   });
-  var surg = [];
-  cases.forEach(function(r){ (r.c.subItems||[]).filter(function(s){ return s.kind==='施术' && s.done; }).forEach(function(s){ surg.push({date:s.doneAt ? s.doneAt.slice(0,10) : (s.date||''), caseNo:r.caseNo, items:(s.doneItems||[]).join('、') || s.content, director:r.director||'—'}); }); });
-  surg.sort(function(a, b){ return b.date.localeCompare(a.date); });
-  var surgHtml = surg.length ? surg.map(function(x){ return '<div class="case-field-row"><span style="width:100px;">'+krEsc(x.date)+'</span><span style="width:90px;color:var(--muted);">'+krEsc(x.caseNo)+'</span><span style="flex:1;font-size:13px;">'+krEsc(x.items)+'</span><span style="font-size:12px;color:var(--muted);">院长 '+krEsc(x.director)+'</span></div>'; }).join('') : krEmpty('还没有施术记录');
-  el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+back+'<div style="font-size:18px;font-weight:700;">'+krEsc(m.name)+(m.dob && m.dob!=='—' ? ' <span style="font-size:12px;font-weight:400;color:var(--muted);">生日 '+krEsc(m.dob)+'</span>' : '')+'</div>'+(m.hold ? KR_HOLD_TAG : '')+'<span style="font-size:13px;color:var(--muted);">'+krEsc(m.clinicName)+' · 本院案件 '+m.cases.length+' 个</span></div>'+
-    '<div style="display:flex;flex-direction:column;gap:14px;">'+krCardBox('本院所有案件', caseRows)+
-    krCardBox('术后管理 <span style="font-weight:400;font-size:11px;color:var(--muted);">到当天 +［客人已到］才能标完成（原型有［模拟到当日］）</span>', careRows || krEmpty('没有待做的术后管理'))+
-    krCardBox('持有项目 <span style="font-weight:400;font-size:11px;color:var(--muted);">只列项目和剩余次数；要使用请由 IN 预约，预约后进 KR 日历，客人到后在术后管理里标完成</span>', holdRows || krEmpty('没有持有项目'))+
-    krCardBox('本院施术记录', surgHtml)+
-    '<div style="font-size:11px;color:var(--muted);">这里不显示 IN 的本地项目、IN 持有项目和诊所内部资料。</div></div>';
+  el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+back+'<div style="font-size:22px;font-weight:700;">'+krEsc(m.name)+'</div><div style="display:flex;gap:6px;">'+body.tags+'</div><span style="font-size:13px;color:var(--muted);">'+krEsc(m.clinicName)+' · 本院案件 '+m.cases.length+' 个</span><span style="flex:1;"></span><button class="btn-primary" onclick="krOpenNewStaffChat()">发起内部对话</button></div>'+body.html;
 }
+function krCliBeautyAdd(){ var m = krClientRows().filter(function(x){ return x.key===KR_CLI.sel; })[0]; if(!m) return; BEAUTY_ADD_KR = {clinicId:m.clinicId, name:m.name}; openBeautyAdd(null); } /* KR 补登医美史：写进来源诊所里的客户档案，登记人 = KR 账号 */
 
 
 /* CMD-1019-08：录入侧边栏跟着案件页（草稿窄条 / 离开隐藏）；关分页时还在录音 → 浏览器自带确认（没上传的文字已存成草稿） */

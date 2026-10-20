@@ -4932,7 +4932,7 @@ function coreSubDone(c, id, by, itemNames, noClose){
   s.done = true; s.doneAt = nowFullDt(); s.doneBy = by;
   if(s.surgUse) picked = krNotStartedItems(c).filter(function(it){ return it.name===s.surgUse; });
   if(s.holdUseOf){ var hi = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===s.holdUseOf; })[0]; if(hi){ holdUseRecord(c, hi, {at:s.doneAt, key:subCaseKey(s), rowId:s.id, qty:1}); } } /* 持有项目使用一次：只从到院卡里「操作完成」的行记（CMD-1019-23 二） */
-  picked.forEach(function(it){ it.done = true; });
+  picked.forEach(function(it){ it.done = true; if(!it.doneAt) it.doneAt = s.doneAt; });
   s.doneItems = picked.map(function(it){ return it.name; });
   logCaseEvent(c, by, '完成：'+visitRowLabel(c, s).name+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''), rowStageLabel(c, s));
   if(!noClose) krCloseIfDone(c);
@@ -5144,7 +5144,7 @@ function coreItemsDone(c, names, by){
   if(!c.krBalancePaid || c.visitClosed) return false;
   var picked = krNotStartedItems(c).filter(function(it){ return (names||[]).indexOf(it.name)>-1; });
   if(!picked.length) return false;
-  picked.forEach(function(it){ it.done = true; });
+  picked.forEach(function(it){ it.done = true; if(!it.doneAt) it.doneAt = s.doneAt; });
   logCaseEvent(c, by, 'KR标记项目已完成：'+picked.map(function(it){ return it.name; }).join('、'));
   krCloseIfDone(c);
   return true;
@@ -7747,7 +7747,7 @@ function surgPlanItems(c){ return (c.procedureItems||[]).filter(function(it){ re
 function coreSurgItemDone(c, rowId, name, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===rowId; })[0]; if(!s || s.kind!=='施术' || s.done || !c.krBalancePaid) return false;
   var it = surgPlanItems(c).filter(function(x){ return x.name===name && !x.done; })[0]; if(!it) return false;
-  it.done = true; logCaseEvent(c, by, 'KR标记施术项目已完成：'+name);
+  it.done = true; it.doneAt = nowFullDt(); logCaseEvent(c, by, 'KR标记施术项目已完成：'+name);
   if(!surgPlanItems(c).some(function(x){ return !x.done; })){ if(!coreSubDone(c, rowId, by, [], true)) return true; krCloseIfDone(c); }
   return true;
 }
@@ -7784,4 +7784,166 @@ function coreTodayPick(c, surgNames, mgmtNames, by){
   syncSurgerySub(c); syncSurgeryBlock(c);
   logCaseEvent(c, by, '今日进行项目：施术 '+(surgNames.join('、')||'无')+(mgmtNames.length ? '；管理 '+mgmtNames.join('、') : '')+(skipped.length ? '；留在项目卡未使用：'+skipped.join('、') : ''));
   updateCaseStage(c); return {ok:true};
+}
+
+/* ===== CMD-1020-10：IN / KR 客户详情统一结构 =====
+   客人名 · 基本标签 ［发起内部对话］ → 正在进行案件（固定在最上面）→ tab：基础信息｜持有项目 N｜本院案件记录 N｜Timeline。
+   IN（renderClientDetailIn）和 KR（kr.js krRenderClientDetail）用同一套 clientDetailBodyHtml(model)；model.mode 'IN' | 'KR'：
+   KR 看不到的藏起来不留空栏：联系方式 / 特别备注 / 隐私协议 / IN 本地项目和「印尼本地持有」小卡 / 客户档案修改记录；护照只有 KR 室长看得到（passportVisible），院长看不到。 */
+var CLI_TAB = 'basic', CLI_NAME = '';
+function cliSetTab(k){ CLI_TAB = k; if(typeof CURRENT_PAGE_ID!=='undefined' && CURRENT_PAGE_ID==='kr-clientdetail' && typeof krRenderClientDetail==='function') krRenderClientDetail(); else renderClientDetailIn(); }
+/* 没结案的印尼术后管理（已结案案件交给印尼的 + 还没结案、预约时选了回印尼的 + 地点只能在印尼的未预约名额）；IN 持有项目左卡用 */
+function clientCareLeftAll(name){
+  var out = [];
+  CASE_ITEMS.forEach(function(c){
+    if(c.name!==name || c.subState==='cancelled') return;
+    (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.skipped && !s.holdUseOf && !s.surgUse) out.push({c:c, s:s}); });
+    if(c.visitClosed) return;
+    try{ careUnits(c).unbooked.filter(function(u){ return u.x.place==='IN'; }).forEach(function(u){ var sd = itemSurgDate(c, u.it), dys = pcDays(u.x), sg = (sd && dys.length) ? ymdAdd(sd, dys[0]) : ''; out.push({c:c, s:{id:'unit|'+u.item+'|'+u.i, content:(u.x.name||u.x.mgmt), date:sg}}); }); }catch(e){}
+  });
+  return out;
+}
+/* 一个施术项目实际做完的日期（YYYY-MM-DD，页面时区）：优先 it.doneAt；旧数据没有就从 Timeline「施术项目已完成 / 本次完成项目」、预约施术行、施术行的完成时间推；最后才退回确认的施术日期 */
+function cliItemDoneDate(c, it){
+  var d = function(x){ return x ? fmtUtc(x).slice(0, 10) : ''; };
+  if(it.doneAt) return d(it.doneAt);
+  var nm = it.name, best = '';
+  (c.logEntries||[]).forEach(function(l){
+    var a = String(l.action||''), hit = a.indexOf('施术项目已完成：'+nm)>-1;
+    if(!hit && a.indexOf('本次完成项目：')>-1){ hit = a.split('本次完成项目：')[1].replace(/[）)]/g, '').split('、').indexOf(nm)>-1; }
+    if(hit && String(l.dt||'') > best) best = l.dt;
+  });
+  if(best) return d(best);
+  var r = (c.subItems||[]).filter(function(s){ return s.done && s.doneAt && (s.surgUse===nm || (s.doneItems||[]).indexOf(nm)>-1); })[0];
+  if(r) return d(r.doneAt);
+  return (c.krSchedule||{}).confirmedDate || '';
+}
+/* 本院做过的项目，按「实际做的日期 + 案件」分组（一次到院一组）：施术项目（做完的）、管理项目每次使用、术后管理（做完的）；
+   IN 另有印尼本地持有批次的使用记录；KR 只看韩国的（不含 IN 本地项目、印尼做的术后管理） */
+function cliProjectGroups(model){
+  var groups = {}, order = [], isKr = model.mode==='KR';
+  var add = function(date, c, label){ if(!date) date = '—'; var key = date+'|'+c.id; if(!groups[key]){ groups[key] = {date:date, caseId:c.id, c:c, items:[]}; order.push(key); } groups[key].items.push(label); };
+  model.cases.forEach(function(c){
+    krAllItems(c).forEach(function(it){
+      if(it.origin!=='KR' || it.cancelled || it.swapped) return;
+      if(krIsMgmtItemC(it)){ (it.uses||[]).forEach(function(u){ add(fmtUtc(u.at).slice(0, 10), c, buyName(it.name)+'：'+(u.qty||1)+' 次'); }); }
+      else if(it.done) add(cliItemDoneDate(c, it), c, buyName(it.name)+(it.qty>1 ? ' ×'+it.qty : ''));
+    });
+    (c.subItems||[]).forEach(function(s){
+      if(s.kind!=='术后管理记录' || !s.done || s.holdUseOf || s.surgUse) return;
+      if(isKr && s.place==='IN') return;
+      var lb = visitRowLabel(c, s); add(s.visitDate || (s.doneAt ? fmtUtc(s.doneAt).slice(0, 10) : s.date), c, '术后管理：'+lb.name+(s.place==='IN' ? '（印尼）' : ''));
+    });
+  });
+  if(!isKr){
+    getClientHoldings(model.name).forEach(function(h){
+      h.batches.forEach(function(b){ (b.usages||[]).forEach(function(u){ var cc = CASE_ITEMS.filter(function(x){ return x.id===u.caseId; })[0]; if(cc) add(u.date, cc, buyName(h.itemName)+(b.spec ? ' · '+b.spec : '')+'：'+u.qty+' 次'+(u.opt ? '（'+u.opt+'）' : '')); }); });
+    });
+  }
+  return order.map(function(k0){ return groups[k0]; });
+}
+function cliHistoryHtml(model){
+  var cl = model.cl, ent = [];
+  beautyRecordsOf(cl).forEach(function(r){ ent.push({key:beautySortKey(r), ext:r}); });
+  cliProjectGroups(model).forEach(function(g){ ent.push({key:parseInt(String(g.date).replace(/-/g, ''), 10)||0, g:g}); });
+  ent.sort(function(a, b){ return b.key - a.key; });
+  var add = (model.addOnclick ? '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="'+model.addOnclick+'">＋ 补登医美史</button>' : '');
+  var head = '<div style="display:flex;justify-content:space-between;align-items:center;margin:2px 0 10px;"><div class="info-heading" style="margin:0;">医美史 <span style="font-weight:400;font-size:11px;color:var(--muted);">外院补登 + 本院做过的项目，按时间排序（最新在上）</span></div>'+add+'</div>';
+  if(!ent.length) return head+'<div style="font-size:12px;color:var(--muted);padding:6px 0;">暂无医美史记录</div>';
+  return head+ent.map(function(e){
+    if(e.ext){ var r = e.ext, isNew = beautyRecordIsNew(r);
+      return '<div style="display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-top:1px solid var(--border2);font-size:13px;flex-wrap:wrap;"><span style="color:var(--slate2);width:90px;flex-shrink:0;">'+beautyYm(r)+'</span><span style="flex:1;min-width:0;"><b style="white-space:pre-wrap;">'+aEscC(r.project)+'</b> <span class="status-pill" style="background:var(--border2);color:var(--slate2);">外院</span>'+(isNew ? ' <span class="status-pill" style="background:var(--terracotta);color:#fff;font-weight:700;">本次新增</span>' : '')+'<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+beautyMetaText(r)+'</div></span></div>'; }
+    var g = e.g;
+    return '<div style="display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="color:var(--slate2);width:90px;flex-shrink:0;">'+g.date+'</span><span style="flex:1;min-width:0;">'+g.items.map(function(x){ return '<div>· '+aEscC(x)+'</div>'; }).join('')+'</span><a href="#" class="info-link" onclick="'+model.openCase(g.c)+';return false;" style="font-weight:700;white-space:nowrap;">'+aEscC(g.c.caseNo)+'</a></div>';
+  }).join('');
+}
+function cliProfileHtml(model){
+  var c = model.cl; if(!c) return '<div style="padding:14px 0;font-size:12px;color:var(--muted);">没有找到这位客户的档案</div>';
+  var isKr = model.mode==='KR', nm = String(c.name).replace(/'/g, "\\'");
+  var row = function(k, v, field, extra){ return '<div class="field-row"><span class="fk">'+k+'</span><span class="fv"'+(extra?' style="font-weight:400;"':'')+'>'+v+'</span><span class="fa">'+(!isKr && field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</span></div>'; };
+  var pass = passportVisible() ? row('护照信息', (passportComplete(c) ? '已登记 · '+aEscC(passportOf(c).no)+'<span class="sub">签发 '+aEscC(passportOf(c).issue)+' · 到期 '+aEscC(passportOf(c).expiry)+(passportOf(c).expiry<todayStr() ? ' <b style="color:#B3261E;">护照已过期</b>' : '')+'</span>' : '<span style="color:#B3261E;">⚠ 护照未登记</span>'+(isKr ? '' : '<span class="sub">第一次确认赴韩时登记</span>')), 'passport') : '';
+  if(isKr) return row('名 / 姓', aEscC(c.name))+row('性别 / 出生日期', aEscC(c.gender||'—')+' · '+clientDobText(c)+(c.dob ? '（'+dobAgeText(c.dob).replace(/^.*（/, '').replace(/）$/, '')+'）' : ''))+row('基础病史和过敏史', historyMarkHtml(c.history))+pass;
+  var cons = (c.consents||[]).slice(-1)[0];
+  var consHtml = cons ? '已签署<span class="sub">个人资料收集同意 + 健康资料处理同意 · 同意书 '+aEscC(cons.version)+' · '+aEscC(cons.ts)+' · '+aEscC(cons.source)+'</span>' : '<span style="color:var(--muted);">未登记</span><span class="sub">到店后由室长当面签署正式同意书</span>';
+  return row('名 / 姓', aEscC(c.name)+'<span class="sub">名（必填）+ 姓（选填），显示“名 姓”</span>', 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+pass+
+    row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+'<div class="field-row"><span class="fk">隐私协议</span><span class="fv">'+consHtml+'</span><span class="fa"></span></div>';
+}
+function cliOngoingHtml(model){
+  var mine = model.cases.filter(function(c){ return !isEnded(c); });
+  if(!mine.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">当前没有进行中的案件</div>';
+  return mine.map(function(c){ var b = caseStageBadge(c);
+    return '<div class="trow" style="grid-template-columns:1fr 1fr auto;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';width:fit-content;">'+b[2]+'</span><span style="font-size:12px;color:var(--slate2);">'+aEscC(model.mode==='IN' ? (subVisitText(c) || caseStatusSub(c)) : c.caseNo)+'</span><a href="#" onclick="'+model.openCase(c)+';return false;" style="font-size:12px;font-weight:700;">进入案件 →</a></div>'; }).join('');
+}
+/* 韩国持有：在韩买的管理项目（剩余次数、已安排的预约时间、来自哪个案件）+ 韩国这边还没做的术后管理（已预约写时间，没约写建议日期）；名称不写「·N次」 */
+function cliHoldKrRows(model){
+  var rows = [];
+  model.cases.forEach(function(c){
+    (c.procedureItems||[]).forEach(function(it){
+      if(!it.heldOver || it.holdDone || it.cancelled || !krIsMgmtItemC(it)) return;
+      var left = holdItemLeft(c, it), booked = (c.subItems||[]).filter(function(s){ return s.holdUseOf===it.name && !s.done && !s.skipped; }).sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+      rows.push({c:c, name:buyName(it.name), tag:'', left:'剩余 '+Math.max(0, left)+' / 共 '+(it.qty||1)+' 次', times:booked.map(function(s){ return String(s.date||'').slice(5).replace('-', '/')+(s.time ? ' '+s.time : ''); })});
+    });
+    (c.subItems||[]).forEach(function(s){
+      if(s.kind!=='术后管理记录' || s.place!=='KR' || s.done || s.skipped || s.holdUseOf || s.surgUse) return;
+      var lb = visitRowLabel(c, s); rows.push({c:c, name:lb.name, tag:'术后管理', left:lb.sub||'', times:[String(s.date||'').slice(5).replace('-', '/')+(s.time ? ' '+s.time : '')]});
+    });
+    try{ careSlotList(c).forEach(function(sl){ rows.push({c:c, name:sl.x.name||sl.x.mgmt, tag:'术后管理', left:careDayText(c, sl.item, sl.sug)||'', times:[], sug:sl.sug}); }); }catch(e){}
+  });
+  return rows;
+}
+function cliHoldKrHtml(model){
+  var rows = cliHoldKrRows(model);
+  if(!rows.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有韩国持有项目</div>';
+  return rows.map(function(r){
+    var tm = r.times.length ? r.times.map(aEscC).join('<br>') : (r.sug ? '<span style="color:var(--muted);">建议 '+aEscC(String(r.sug).slice(5).replace('-', '/'))+'</span>' : '<span style="color:var(--muted);">–</span>');
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:flex-start;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+aEscC(r.name)+(r.tag ? ' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">'+r.tag+'</span>' : '')+'<div style="font-size:11px;color:var(--muted);font-weight:400;">来自 '+aEscC(r.c.caseNo)+(r.left ? ' · '+aEscC(r.left) : '')+'</div></span><span style="font-size:12px;color:var(--slate2);text-align:right;min-width:92px;">'+tm+'</span></div>';
+  }).join('');
+}
+function cliHoldCount(model){
+  var n = cliHoldKrRows(model).length;
+  if(model.mode==='IN') n += holdingsAllSorted(model.name).filter(function(h){ return holdingRemaining(h)>0; }).length + clientCompCredits(model.name).length + clientCareLeftAll(model.name).length;
+  return n;
+}
+function cliCasesHtml(model){
+  var cs = model.cases.slice().sort(function(a, b){ return String(b.caseNo).localeCompare(String(a.caseNo)); });
+  if(!cs.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无案件记录</div>';
+  return cs.map(function(c){
+    var first = (c.logEntries&&c.logEntries[0]) ? fmtUtc(c.logEntries[0].dt).slice(0, 10) : '—', bd = caseStageBadge(c), lkSrc = (c.linkedCase && c.linkedCase.caseId) ? model.cases.filter(function(x){ return x.id===c.linkedCase.caseId; })[0] : null, lk = lkSrc ? '关联 '+lkSrc.caseNo+' · '+c.linkedCase.reason : '';
+    return '<div class="info-card" style="margin-bottom:10px;"><div class="info-card-row"><div style="min-width:0;"><div class="value"><a href="#" class="info-link" onclick="'+model.openCase(c)+';return false;" style="font-weight:700;">'+aEscC(c.caseNo)+'</a></div><div class="sub">'+first+(lk ? ' · '+aEscC(lk) : '')+(model.mode==='KR' && c.director ? ' · 院长 '+aEscC(c.director) : '')+'</div></div><span class="status-pill" style="background:'+bd[0]+';color:'+bd[1]+';">'+bd[2]+'</span></div></div>';
+  }).join('');
+}
+function cliTimelineHtml(model){
+  var log = (model.mode==='IN' && model.cl ? model.cl.timeline : []).slice();
+  model.cases.forEach(function(c){
+    var first = (c.logEntries&&c.logEntries[0]) ? c.logEntries[0].dt : D(0)+' 09:00';
+    log.push({stage:'案件开始', actor:'系统', action:'Case 开始 · '+c.caseNo, dt:first, kind:'case', caseId:c.id});
+    if(isEnded(c)){ var last = (c.logEntries&&c.logEntries.length) ? c.logEntries[c.logEntries.length-1].dt : first; log.push({stage:'案件结案', actor:'系统', action:'Case 结案 · '+c.caseNo+'（'+terminalBadge(c)[2]+'）', dt:last, kind:'case', caseId:c.id}); }
+    else log.push({stage:'案件进行中', actor:'系统', action:'Case '+c.caseNo+' · 进行中', dt:first, kind:'case', caseId:c.id});
+  });
+  log.sort(function(a, b){ return a.dt<b.dt ? 1 : -1; });
+  return '<div class="card" style="padding:6px 20px;" id="detail-log">'+log.map(logLine).join('')+'</div>';
+}
+function clientDetailBodyHtml(model){
+  var isKr = model.mode==='KR', nHold = cliHoldCount(model), nCases = model.cases.length;
+  var tabs = [['basic', '基础信息'], ['hold', '持有项目 '+nHold], ['cases', '本院案件记录 '+nCases], ['tl', 'Timeline']];
+  var tabbar = '<div class="tabs" style="margin-top:18px;">'+tabs.map(function(t0){ return '<span class="tab'+(CLI_TAB===t0[0] ? ' active' : '')+'" onclick="cliSetTab(\''+t0[0]+'\')">'+t0[1]+'</span>'; }).join('')+'</div>';
+  var pane = function(k, html){ return '<div id="cli-pane-'+k+'" style="'+(CLI_TAB===k ? '' : 'display:none;')+'margin-top:14px;">'+html+'</div>'; };
+  var holdHtml = isKr ? '<div class="card" style="padding:4px 20px;"><div class="info-heading" style="margin:12px 0 4px;">韩国持有</div>'+cliHoldKrHtml(model)+'</div>'
+    : '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;"><div id="detail-holdings-block"><div class="info-heading" style="margin-bottom:10px;">印尼本地持有</div><div class="card" style="padding:4px 20px;" id="detail-holdings"></div></div><div><div class="info-heading" style="margin-bottom:10px;">韩国持有</div><div class="card" style="padding:4px 20px;" id="detail-holdings-kr">'+cliHoldKrHtml(model)+'</div></div></div>';
+  return '<div><div class="info-heading" style="margin-bottom:10px;margin-top:14px;">正在进行案件</div><div class="card" style="padding:4px 20px;" id="detail-cases">'+cliOngoingHtml(model)+'</div></div>'+tabbar+
+    pane('basic', '<div class="card" style="padding:2px 20px;" id="detail-profile">'+cliProfileHtml(model)+'</div><div class="card" style="padding:12px 20px;margin-top:14px;" id="history-list">'+cliHistoryHtml(model)+'</div>')+
+    pane('hold', holdHtml)+pane('cases', '<div id="cli-cases">'+cliCasesHtml(model)+'</div>')+pane('tl', cliTimelineHtml(model));
+}
+function clientTagsHtml(cl){
+  if(!cl) return '';
+  var t0 = [cl.gender, cl.dob ? (dobAgeText(cl.dob).replace(/^.*（/, '').replace(/）$/, '')) : ''].filter(function(x){ return x && x!=='—'; });
+  return t0.map(function(x){ return '<span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+aEscC(x)+'</span>'; }).join(' ');
+}
+function renderClientDetailIn(name){
+  if(name) CLI_NAME = name; name = CLI_NAME; var root = document.getElementById('cli-root'); if(!root || !name) return;
+  var nameEl = document.getElementById('detail-name'); if(nameEl) nameEl.textContent = name;
+  var cl = clientByName(name), tg = document.getElementById('detail-tags'); if(tg) tg.innerHTML = clientTagsHtml(cl);
+  var model = {mode:'IN', name:name, cl:cl, cases:CASE_ITEMS.filter(function(c){ return c.name===name; }), openCase:function(c){ return "openCaseDetail('"+c.id+"')"; }, addOnclick:cl ? "BEAUTY_ADD_KR=null;openBeautyAdd()" : ''};
+  root.innerHTML = clientDetailBodyHtml(model);
+  try{ renderClientHoldings(name); }catch(e){ console.error('[客户详情] 持有项目', e); }
 }
