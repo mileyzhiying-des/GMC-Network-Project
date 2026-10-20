@@ -4695,7 +4695,7 @@ function krCbEarliest(c){
 }
 function krCbMgItems(c){
   return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && krIsMgmtItemC(it) && !it.cancelled && !it.swapped && it.heldOver && !it.holdDone && !it.pendingPay && holdItemLeft(c, it)-holdItemPlanned(c, it) > 0; }).map(function(it){
-    return {name:it.name, max:holdItemLeft(c, it)-holdItemPlanned(c, it), iv:((it.qty||1)>1 ? (it.interval||1) : 0), sugs:(function(){ var o = [], nth0 = (it.holdUsed||0)+holdItemPlanned(c, it); for(var k = 0; k < holdItemLeft(c, it)-holdItemPlanned(c, it); k++){ var sg = krMgSuggest(c, it, nth0+k); o.push(sg ? '20'+sg : ''); } return o; })()};
+    return {name:it.name, iid:itemIid(it), max:holdItemLeft(c, it)-holdItemPlanned(c, it), iv:((it.qty||1)>1 ? (it.interval||1) : 0), sugs:(function(){ var o = [], nth0 = (it.holdUsed||0)+holdItemPlanned(c, it); for(var k = 0; k < holdItemLeft(c, it)-holdItemPlanned(c, it); k++){ var sg = krMgSuggest(c, it, nth0+k); o.push(sg ? '20'+sg : ''); } return o; })()};
   });
 }
 
@@ -5001,7 +5001,7 @@ function coreSubDone(c, id, by, itemNames, noClose){
   }
   s.done = true; s.doneAt = nowFullDt(); s.doneBy = by;
   if(s.surgUse) picked = krNotStartedItems(c).filter(function(it){ return it.name===s.surgUse; });
-  if(s.holdUseOf){ var hi = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===s.holdUseOf; })[0]; if(hi){ holdUseRecord(c, hi, {at:s.doneAt, key:subCaseKey(s), rowId:s.id, qty:1}); } } /* 持有项目使用一次：只从到院卡里「操作完成」的行记（CMD-1019-23 二） */
+  if(s.holdUseOf){ var hi = rowItem(c, s); if(hi){ holdUseRecord(c, hi, {at:s.doneAt, key:subCaseKey(s), rowId:s.id, qty:1}); } } /* 持有项目使用一次：只从到院卡里「操作完成」的行记（CMD-1019-23 二） */
   picked.forEach(function(it){ it.done = true; if(!it.doneAt) it.doneAt = s.doneAt; });
   s.doneItems = picked.map(function(it){ return it.name; });
   logCaseEvent(c, by, '完成：'+visitRowLabel(c, s).name+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''), rowStageLabel(c, s));
@@ -5042,24 +5042,36 @@ function coreSubArrived(c, id, by){
 }
 /* 持有项目（在韩持有的已付管理项目）剩余次数；安排使用 = 排一个时间（进 KR 日历和当天工作台），客人到后才标完成 */
 function holdItemLeft(c, it){ return (it.qty||1) - (it.holdUsed||0); }
-function holdItemPlanned(c, it){ return (c.subItems||[]).filter(function(s){ return s.holdUseOf===it.name && !s.done && !s.skipped; }).length; }
+function holdItemPlanned(c, it){ return (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).length; }
 /* ---- CMD-1019-23 二：已使用 / 剩余次数只从到院卡里「操作完成」的行算（单一来源）----
    it.uses = 每条对应到院卡里一行完成记录 {at, key(main / 地点|日期 / book|占位id), qty, rowId}；holdUsed / holdDone 一律由 uses 重新算（holdRecalc），不再有别处直接 holdUsed += n。
    原来直接扣次数的地方：① coreMgmtUse（主到院按完成，直接加 holdUsed + 记 uses）② coreSubDone 里持有项目使用行（加 holdUsed + 记 uses）③ krbook.js 在韩到店预约完成时「使用在韩持有」只加 holdUsed、不记使用行 ④ 旧版（21 之前）主到院施术完成后持有管理项目被漏算 / 旧记录里有 holdUsed 没有对应完成行。 */
+/* CMD-1020-16 三：每一笔购买的项目有唯一 id（itemIid，懒生成并随案件存档；旧数据第一次用到时补上）。
+   勾选 / 今日进行 / 本次使用 / 预约时间 / 操作完成 / 撤回 / 扣次退次 都按这个 id 找项目；同名同规格的管理项目（付定金时选的 + 到院后加的）互不影响。
+   施术项目添加时已去重（项目库里同名的不能再加），术后管理按「施术项目名 + 第几条」唯一，所以只有管理项目会同名多笔。 */
+var IID_SEQ = 0;
+function itemIid(it){ if(!it) return ''; if(!it.iid) it.iid = 'i'+Date.now().toString(36)+(IID_SEQ++).toString(36)+Math.floor(Math.random()*46656).toString(36); return it.iid; }
+function ensureItemIids(c){ var seen = {}, used = {}; (c.procedureItems||[]).forEach(function(it){ if(it.iid) used[it.iid] = true; }); (c.procedureItems||[]).forEach(function(it){ var n = seen[it.name] = (seen[it.name]||0)+1; if(it.iid) return; var base = 'i'+(c.caseNo||c.id||'')+'-'+String(it.name||'').replace(/[^0-9a-zA-Z\u4e00-\u9fa5]/g,'').slice(0,12)+'-', id = base+n; while(used[id]) id = base+(++n); used[id] = true; it.iid = id; }); } /* 确定性：同名项目按出现顺序编号，存档后固定；删除项目后新增也不会撞号 */
+function itemByKey(c, key, pred){ var l = (c.procedureItems||[]).filter(pred || function(){ return true; }); return l.filter(function(x){ return x.iid && x.iid===key; })[0] || l.filter(function(x){ return x.name===key; })[0] || null; }
+function rowOwnedBy(it, s){ return !!s.holdUseOf && (s.holdIid ? s.holdIid===itemIid(it) : s.holdUseOf===it.name); }
+function rowItem(c, s){ return itemByKey(c, s.holdIid || s.holdUseOf, function(x){ return x.heldOver; }); }
+function tmdGet(c, it){ var m = c.todayMgmtDone||{}; return m[itemIid(it)] || m[it.name] || null; }
+function tmdKeyOf(c, it){ var m = c.todayMgmtDone||{}, k = itemIid(it); return m[k] ? k : (m[it.name] ? it.name : k); }
+function pickedMgmt(c, it){ var p = c.todayPickMgmt||[]; return p.indexOf(itemIid(it))>-1 || p.indexOf(it.name)>-1; }
 function holdRecalc(it){ var n = (it.uses||[]).reduce(function(t, u){ return t+(parseInt(u.qty, 10)||1); }, 0); it.holdUsed = n; it.holdDone = n >= (it.qty||1); }
 function holdUseRecord(c, it, rec){ (it.uses = it.uses||[]).push({at:rec.at||nowFullDt(), key:rec.key||'main', qty:Math.max(1, parseInt(rec.qty, 10)||1), rowId:rec.rowId||''}); holdRecalc(it); }
 function holdUseUndo(c, it, pred){ var before = it.holdUsed||0; it.uses = (it.uses||[]).filter(function(u){ return !pred(u); }); holdRecalc(it); return before-(it.holdUsed||0); }
 /* 撤回到院卡里已完成的持有管理项目（主到院）：次数退回，这一行回到待做 */
 function coreMgmtUseUndo(c, name, by){
-  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===name; })[0]; if(!it || !mgmtDoneToday(c, name)) return false;
-  var back = holdUseUndo(c, it, function(u){ return (u.key||'main')==='main'; }); delete c.todayMgmtDone[name];
+  var it = itemByKey(c, name, function(x){ return x.heldOver; }); if(!it || !mgmtDoneToday(c, it)) return false;
+  var back = holdUseUndo(c, it, function(u){ return (u.key||'main')==='main'; }); delete c.todayMgmtDone[tmdKeyOf(c, it)];
   if(c.krProcedureDone && !c.visitClosed){ c.krProcedureDone = false; c.surgeryDoneAt = ''; } c.endAsk = false;
-  logCaseEvent(c, by, '撤回完成：'+buyName(name)+'，退回 '+back+' 次（剩 '+holdItemLeft(c, it)+' 次）'); updateCaseStage(c); return true;
+  logCaseEvent(c, by, '撤回完成：'+buyName(it.name)+'，退回 '+back+' 次（剩 '+holdItemLeft(c, it)+' 次）'); updateCaseStage(c); return true;
 }
 /* 撤回子到院里已完成的使用行（持有管理项目）：次数退回，行回到待做 */
 function coreUseRowUndo(c, id, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || !s.done || !s.holdUseOf) return false;
-  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && x.name===s.holdUseOf; })[0];
+  var it = rowItem(c, s);
   s.done = false; s.doneAt = ''; s.doneBy = ''; var back = it ? holdUseUndo(c, it, function(u){ return u.rowId===id; }) : 0;
   if(c.visitEndedKeys) delete c.visitEndedKeys[subCaseKey(s)];
   logCaseEvent(c, by, '撤回完成：'+buyName(s.holdUseOf)+'，退回 '+back+' 次'); updateCaseStage(c); return true;
@@ -5073,39 +5085,39 @@ function fixUseRecords(c){
     if(sum < used0) uses.push({at:'', key:'main', qty:used0-sum, rowId:'', legacy:true}); /* 只记了次数没记使用行的旧数据 */
     var keep = uses.filter(function(u){
       var k = u.key||'main';
-      if(k==='main') return !!((c.todayMgmtDone||{})[it.name]) || !!c.krProcedureDone; /* 主到院：到院卡有完成行，或到院已结束（旧版按完成就已结束） */
+      if(k==='main') return !!tmdGet(c, it) || !!c.krProcedureDone; /* 主到院：到院卡有完成行，或到院已结束（旧版按完成就已结束） */
       if(/^book\|/.test(k)) return true;
-      return (c.subItems||[]).some(function(s){ return s.done && s.holdUseOf===it.name && (u.rowId ? s.id===u.rowId : subCaseKey(s)===k); });
+      return (c.subItems||[]).some(function(s){ return s.done && rowOwnedBy(it, s) && (u.rowId ? s.id===u.rowId : subCaseKey(s)===k); });
     });
     var same = keep.length===(it.uses||[]).length && keep.every(function(u, i){ return !u.legacy; });
     if(same && sum===used0) return;
     it.uses = keep; keep.forEach(function(u){ delete u.legacy; }); holdRecalc(it);
-    keep.forEach(function(u){ if((u.key||'main')==='main' && c.krProcedureDone && !(c.todayMgmtDone||{})[it.name]){ (c.todayMgmtDone = c.todayMgmtDone||{})[it.name] = {qty:keep.filter(function(x){ return (x.key||'main')==='main'; }).reduce(function(t, x){ return t+x.qty; }, 0), at:u.at||'', again:false}; } });
+    keep.forEach(function(u){ if((u.key||'main')==='main' && c.krProcedureDone && !tmdGet(c, it)){ (c.todayMgmtDone = c.todayMgmtDone||{})[itemIid(it)] = {qty:keep.filter(function(x){ return (x.key||'main')==='main'; }).reduce(function(t, x){ return t+x.qty; }, 0), at:u.at||'', again:false}; } });
     if((it.holdUsed||0)!==used0){ notes.push(buyName(it.name)+'：已使用 '+used0+' 次没有到院卡的完成行，改回已用 '+(it.holdUsed||0)+' 次（剩 '+holdItemLeft(c, it)+' / 共 '+(it.qty||1)+' 次）'); }
   });
   return notes;
 }
 /* 持有管理项目（付费，付清尾款后就是在韩持有）：当天做 → KR 按［使用］扣一次（记在施术当天 / 主案件）；之后再来做 → 每次新预约 = 一个子案件，在子案件里［使用］扣次数（CMD-1015-17） */
 function coreMgmtUse(c, name, by, qty){
-  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone && x.name===name; })[0];
+  var it = itemByKey(c, name, function(x){ return x.heldOver && !x.holdDone; });
   if(!it || !c.krBalancePaid || holdItemLeft(c, it)<=0) return false;
   var left0 = holdItemLeft(c, it), q = Math.max(1, Math.min(parseInt(qty || it.todayQty, 10) || 1, left0)); /* 今日进行可选这次用几次（CMD-1019-21 六），默认 1，最多 = 剩余次数；按完成才扣 */
   holdUseRecord(c, it, {at:nowFullDt(), key:'main', qty:q}); it.todayQty = 1; /* 到院卡里这一行按［操作完成］才记（CMD-1019-23 二） */
-  c.todayMgmtDone = c.todayMgmtDone || {}; var prevD = c.todayMgmtDone[it.name] || {qty:0}; c.todayMgmtDone[it.name] = {qty:prevD.qty+q, at:nowFullDt(), again:false};
+  c.todayMgmtDone = c.todayMgmtDone || {}; var prevD = tmdGet(c, it) || {qty:0}; c.todayMgmtDone[tmdKeyOf(c, it)] = {qty:prevD.qty+q, at:nowFullDt(), again:false};
   if(c.hasArrived && !c.krProcedureDone) krCloseIfDone(c); /* 这一行完成后，今天的行都做完了 → 问「今天的项目都做完了吗？」*/ /* 到院卡里这一行改成「已完成 ×N」，不再掉回项目卡（CMD-1019-22 二） */
   logCaseEvent(c, by, '使用 '+buyName(it.name)+' ×'+q+'（剩 '+holdItemLeft(c, it)+' 次'+(it.holdDone ? '，已用完' : '')+'）');
   return true;
 }
 /* 今日进行的数量（− 1 +）：1 ～ 剩余次数（扣掉已安排的）；术后管理 / 管理项目剩余 > 1 才出现 */
 function coreTodayQtySet(c, name, n){
-  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone && x.name===name; })[0]; if(!it) return false;
+  var it = itemByKey(c, name, function(x){ return x.heldOver && !x.holdDone; }); if(!it) return false;
   var max = Math.max(1, holdItemLeft(c, it)-holdItemPlanned(c, it)); it.todayQty = Math.max(1, Math.min(parseInt(n, 10)||1, max)); return true;
 }
 function coreHoldUseSchedule(c, name, date, time, by){
-  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone && x.name===name; })[0]; if(!it) return false;
+  var it = itemByKey(c, name, function(x){ return x.heldOver && !x.holdDone; }); if(!it) return false; name = it.name;
   if(holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return false;
   var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by);
-  if(!s) return false; s.hold = !!c.visitClosed; s.holdUseOf = name; /* 案件还在进行：这是一次新预约 = 子案件；结案后才是「在韩持有」 */
+  if(!s) return false; s.hold = !!c.visitClosed; s.holdUseOf = name; s.holdIid = itemIid(it); /* 案件还在进行：这是一次新预约 = 子案件；结案后才是「在韩持有」 */
   logCaseEvent(c, by, '安排使用持有项目「'+name+'」：'+date+' '+time); return true;
 }
 function coreSubSimDay(c, id, by){ var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done) return false; s.simDay = true; logCaseEvent(c, by, '（仅原型）模拟到当日：'+s.no+'「'+s.content+'」'); return true; }
@@ -5113,8 +5125,8 @@ function coreSubSimDay(c, id, by){ var s = (c.subItems||[]).filter(function(x){ 
 /* ---- CMD-1019-22 七 / 八：到院结束改人工确认 ----
    原来：施术 / 增加项目的行都完成 → 系统自动把今天的到院关掉（krProcedureDone）→ 之后付款 / 本次使用都不能用，在韩持有的管理项目（done 已被置 true）被漏算，从到院卡掉回项目卡。
    现在：行都完成 / 取消后只设 c.endAsk（弹窗问「今天的项目都做完了吗？」），［今日完成］ / ［结束今日到院］（coreEndVisitToday）才结束；结束后再加项目 / 付款 / 本次使用自动重新打开。 */
-function todayMgmtPicked(c){ return (c.procedureItems||[]).filter(function(it){ return it.heldOver && !it.holdDone && c.todayPicked && (c.todayPickMgmt||[]).indexOf(it.name)>-1 && !mgmtDoneToday(c, it.name); }); }
-function mgmtDoneToday(c, name){ var d = (c.todayMgmtDone||{})[name]; return !!(d && !d.again); }
+function todayMgmtPicked(c){ return (c.procedureItems||[]).filter(function(it){ return it.heldOver && !it.holdDone && c.todayPicked && pickedMgmt(c, it) && !mgmtDoneToday(c, it); }); }
+function mgmtDoneToday(c, k){ var it = (typeof k==='string') ? itemByKey(c, k) : k, d = it ? tmdGet(c, it) : (c.todayMgmtDone||{})[k]; return !!(d && !d.again); }
 function todayOpenRows(c){ /* 今天这次到院里还没做完的：施术 / 增加项目行 + 选进今日的持有管理项目 */
   var out = [];
   (c.subItems||[]).forEach(function(s){ if((s.kind==='施术' || s.kind==='增加项目') && !s.visitKey && !s.done && !s.skipped) out.push({row:s, name:String(s.content||'').replace(/^施术：/, '')}); });
@@ -5139,7 +5151,7 @@ function krCloseIfDone(c){
 /* 手动结束今天的到院（主案件）：还没做完的行先「今日取消」退回项目卡；有待付款项目不能结束 */
 function coreEndVisitToday(c, by){
   if(!c.hasArrived || c.krProcedureDone || c.visitClosed) return {ok:false, err:'今天的到院已经结束或还没到院'};
-  if(pendingPayItems(c).length) return {ok:false, err:'还有待付款的项目，先确认付款或修正后再结束'};
+  if(pendingPayItems(c).length) return {ok:false, err:'还有 '+formatCurrency(pendingPayItems(c).reduce(function(t, it){ return t+itemKrAmount(it); }, 0), 'KRW')+' 待付款，请先付款'};
   c._ending = true;
   try{
     var left = todayOpenRows(c).map(function(x){ return x.name; });
@@ -5196,7 +5208,7 @@ function krHoldList(c){
 }
 function krHoldOpen(c){ return krHoldList(c).length>0; }
 function coreHoldItemDone(c, name, by){
-  var it = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone && x.name===name; })[0]; if(!it) return false;
+  var it = itemByKey(c, name, function(x){ return x.heldOver && !x.holdDone; }); if(!it) return false;
   it.holdDone = true; logCaseEvent(c, by, '在韩持有完成：'+it.name); return true;
 }
 /* 改时间（术后管理记录 / 在韩持有）：日期 + 时间；记 Timeline */
@@ -5243,7 +5255,7 @@ function coreAddOnItem(c, projectName, by, opt){
   if(opt.detail){ if(opt.detail.stay) ni.stay = opt.detail.stay; if((opt.detail.postcare||[]).length) ni.postcare = opt.detail.postcare.map(function(x){ return Object.assign({inTimes:0}, x); }); } /* 增加的项目也带推荐在韩 / 所需术后管理 */
   if(pre) ni.preBalanceAdd = true; else ni.krAddOn = true;
   if(deferIt) ni.deferUse = true; else if(ext!==undefined && !svc && !p.local) ni.extendMin = ext; /* 延长多久（分钟），0 = 不延长 */
-  c.procedureItems.push(ni);
+  c.procedureItems.push(ni); itemIid(ni);
   if(an.type!=='local') ni.consentPending = true; /* CMD-1015-22：麻醉同意书移到付款之后确认（睡眠 / 全麻），见 coreAnesConfirm */
   c.settleTab = null;
   /* 子项：增加项目一行（地点韩国；日期默认今天） */
@@ -5252,6 +5264,7 @@ function coreAddOnItem(c, projectName, by, opt){
   var sub = {id:'s'+Date.now()+Math.floor(Math.random()*100), no:subNextNo(c), date:opt.date || todayStr(), content:((svc || p.local) ? ni.name : '施术：'+ni.name), kind:'增加项目', place:'KR', projectName:ni.name, done:false, doneAt:'', doneBy:'', informed:false};
   c.subItems.push(sub); c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || a.no.localeCompare(b.no); });
   if(svc) holdLocalAdd(c, ni); /* 서비스（赠送）：即时进在韩持有 */
+  else if(p.local && !pre && ni.pendingPay) holdLocalAdd(c, ni); /* CMD-1020-16 四：尾款付清后在韩加的管理项目，待付款也先进持有，可以先做；付款确认后只是去掉待付款标记 */
   var msg = pre ? 'KR增加项目："'+p.name+'"（与尾款一次结算，另开结算单 '+newId+' 计入尾款；付清尾款后再加的项目另开结算）' : 'KR增加项目："'+p.name+'"（尾款已付清，标「待付款」，KR 点［已付款］后生成结算单，原结算单不变）';
   logCaseEvent(c, by, msg);
   updateCaseStage(c);
@@ -5266,11 +5279,11 @@ function holdLocalAdd(c, it){
   var gone = (c.subItems||[]).filter(function(s){ return s.kind==='增加项目' && s.projectName===it.name && !s.done; });
   c.subItems = c.subItems.filter(function(s){ return gone.indexOf(s)<0; });
   gone.forEach(function(g){ if(!g.visitKey) return; /* 在子案件里新增的管理项目：付款后成为这次到访里的一行「使用」，逐行完成时扣 1 次 */
-    var u = coreSubAdd(c, {kind:'术后管理记录', date:g.date, time:g.visitTime||'', content:it.name+'（持有项目使用）', place:'KR', projectName:it.name, silent:true}, ME_NAME||''); if(u){ u.holdUseOf = it.name; u.arrived = true; u.simDay = true; } });
+    var u = coreSubAdd(c, {kind:'术后管理记录', date:g.date, time:g.visitTime||'', content:it.name+'（持有项目使用）', place:'KR', projectName:it.name, silent:true}, ME_NAME||''); if(u){ u.holdUseOf = it.name; u.holdIid = itemIid(it); u.arrived = true; u.simDay = true; } });
   return true;
 }
 /* 麻醉同意书（睡眠 / 全麻）：付款之后确认「已在现场签署」，才记录并允许完成该项目（同 IN 结算：选项目 → 确认 → 付款 → 麻醉同意书） */
-function anesPendingItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && it.consentPending && !it.pendingPay && !it.cancelled && !it.swapped && (c.krBalancePaid || it.batchId); }); }
+function anesPendingItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && it.consentPending && !it.cancelled && !it.swapped && (c.krBalancePaid || it.batchId); }); }
 function coreAnesConfirm(c, names, by){
   var its = anesPendingItems(c).filter(function(it){ return !names || names.indexOf(it.name)>-1; }); if(!its.length) return false;
   var prev = (c.anesthesiaConsent && c.anesthesiaConsent.projects) || [];
@@ -7441,7 +7454,7 @@ function printPlanSchedule(c){
   items.filter(krIsMgmtItemC).forEach(function(it){
     var total = Math.max(1, it.qty||1), itv = total>1 ? (it.interval||1) : 0, f0 = (it.firstDay===undefined || it.firstDay==='' || it.firstDay===null) ? null : Number(it.firstDay);
     if(!base || f0===null) return;
-    var bkd = (c.subItems||[]).filter(function(x){ return x.holdUseOf===it.name && !x.skipped && x.date; }).length; /* CMD-1020-04：已预约的次数用预约时间（下面单独列），建议日期只列没预约的 */
+    var bkd = (c.subItems||[]).filter(function(x){ return rowOwnedBy(it, x) && !x.skipped && x.date; }).length; /* CMD-1020-04：已预约的次数用预约时间（下面单独列），建议日期只列没预约的 */
     for(var k = bkd; k < total; k++) rows.push({d:printPlanDate(base, f0 + k*itv), t:'', what:'管理项目：'+it.name+(total>1 ? '（第 '+(k+1)+'/'+total+' 次）' : ''), place:'韩国'});
   });
   /* CMD-1020-04：KR 在韩预约的施术项目 / 管理项目到院（预约使用）也列进日程表 */
@@ -7482,7 +7495,7 @@ function visitRowLabel(c, s){
   var type = visitRowType(c, s), clean = function(t){ return String(t||'').replace(/（(预约|持有项目使用)）/g, '').replace(/^施术：/, ''); }, name = '', sub = '';
   if(type==='施术'){ name = s._item || s.surgUse || (s.kind==='增加项目' ? s.projectName : '') || clean(s.content); }
   else if(type==='管理项目'){
-    var base = s.holdUseOf || s.projectName || clean(s.content), it = (c.procedureItems||[]).filter(function(x){ return x.name===base; })[0];
+    var base = s.holdUseOf || s.projectName || clean(s.content), it = s.holdIid ? (itemByKey(c, s.holdIid) || (c.procedureItems||[]).filter(function(x){ return x.name===base; })[0]) : (c.procedureItems||[]).filter(function(x){ return x.name===base; })[0];
     name = buyName(base); if(it){ var tot = it.qty || 1; sub = '剩 '+Math.max(0, holdItemLeft(c, it))+' / 共 '+tot+' 次'; }
   } else {
     var e = careEntryOfRow(c, s); name = e ? (e.x.name || e.x.mgmt) : clean(s.content).replace(/（.*$/, '');
@@ -7650,7 +7663,7 @@ function inMgmtCardsHtml(c, mg){
   mg.forEach(function(it){
     if(it.cancelled) return;
     var left = holdItemLeft(c, it), isDone = it.holdDone || left<=0;
-    var booked = (c.subItems||[]).filter(function(s0){ return s0.holdUseOf===it.name && !s0.done && !s0.skipped; }).sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+    var booked = (c.subItems||[]).filter(function(s0){ return rowOwnedBy(it, s0) && !s0.done && !s0.skipped; }).sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
     if(!isDone || it.pendingPay) held.push({it:it, left:Math.max(0, left), booked:booked});
     (it.uses||[]).slice().sort(function(a, b){ return String(a.at||'').localeCompare(String(b.at||'')); }).forEach(function(u){ done.push({it:it, qty:u.qty||1, at:u.at||''}); });
   });
@@ -7739,25 +7752,24 @@ function coreTodayState(c, it){
   var tg = coreUseTarget(c); if(!tg || !it) return null;
   if(tg.key==='main'){
     if(!c.krBalancePaid || c.krProcedureDone) return null;
-    if(krIsMgmtItemC(it)){ if(!it.heldOver || it.holdDone) return null; return (!c.todayPicked || (c.todayPickMgmt||[]).indexOf(it.name)>-1) ? {type:'item', key:it.name, done:false} : null; }
+    if(krIsMgmtItemC(it)){ if(!it.heldOver || it.holdDone) return null; return (!c.todayPicked || pickedMgmt(c, it)) ? {type:'item', key:itemIid(it), done:false} : null; }
     if(it.done) return {type:'item', key:it.name, done:true};
     if(it.deferUse) return null;
     if(it.krAddOn || it.preBalanceAdd){ return (c.subItems||[]).some(function(s){ return s.kind==='增加项目' && !s.visitKey && s.projectName===it.name && !s.skipped; }) ? {type:'item', key:it.name, done:false} : null; }
     return {type:'item', key:it.name, done:false};
   }
-  var row = (c.subItems||[]).filter(function(s){ return !s.skipped && ((s.holdUseOf===it.name && subCaseKey(s)===tg.key) || (s.kind==='增加项目' && s.visitKey===tg.key && s.projectName===it.name)); })[0];
+  var row = (c.subItems||[]).filter(function(s){ return !s.skipped && ((rowOwnedBy(it, s) && subCaseKey(s)===tg.key) || (s.kind==='增加项目' && s.visitKey===tg.key && s.projectName===it.name)); })[0];
   return row ? {type:'row', key:row.id, done:!!row.done} : null;
 }
 function coreUnitUseNow(c, name, by, opt){
   var tg = coreUseTarget(c); if(!tg) return {ok:false, err:'没有客人已到店的案件'};
   if(tg.key==='main' && c.krProcedureDone) coreReopenVisit(c, by, '本次使用 '+buyName(name));
-  var it = (c.procedureItems||[]).filter(function(x){ return x.name===name && x.origin==='KR' && !x.cancelled && !x.swapped; })[0]; if(!it) return {ok:false, err:'找不到项目'};
-  if(it.pendingPay) return {ok:false, err:'待付款，付款后才能使用'};
+  var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return {ok:false, err:'找不到项目'}; var ik = itemIid(it); name = it.name;
   if(krIsMgmtItemC(it)){
     if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return {ok:false, err:'没有可用次数'};
-    if(tg.key==='main'){ if(c.todayMgmtDone && c.todayMgmtDone[name]) c.todayMgmtDone[name].again = true; var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return x.name; }); c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==name; }).concat([name]); c.todayPicked = true; if(opt && opt.dirOp){ (c.todayDirOp = c.todayDirOp || {})[name] = {ext:opt.ext||0, min:opt.min||30, dir:opt.dir||c.director}; syncSurgeryBlock(c); } logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+((opt && opt.dirOp) ? '（院长操作'+(opt.ext ? '，延长 '+opt.ext+' 分钟' : '')+'）' : '')); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
+    if(tg.key==='main'){ var dn0 = tmdGet(c, it); if(dn0) dn0.again = true; var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return itemIid(x); }); c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==ik && n!==name; }).concat([ik]); c.todayPicked = true; if(opt && opt.dirOp){ (c.todayDirOp = c.todayDirOp || {})[name] = {ext:opt.ext||0, min:opt.min||30, dir:opt.dir||c.director}; syncSurgeryBlock(c); } logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+((opt && opt.dirOp) ? '（院长操作'+(opt.ext ? '，延长 '+opt.ext+' 分钟' : '')+'）' : '')); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
     var rep = coreVisitRows(c, tg.key)[0], s = coreSubAdd(c, {kind:'术后管理记录', date:rep.date, time:rep.time||'', content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by); if(!s) return {ok:false};
-    s.holdUseOf = name; s.arrived = true; s.simDay = true; s.src = 'use'; if(opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } subCaseNos(c); logCaseEvent(c, by, '本次使用：'+buyName(name)+' 加进这次到院'+((opt && opt.dirOp) ? '（院长操作）' : ''), '管理项目'); return {ok:true, key:tg.key};
+    s.holdUseOf = name; s.holdIid = ik; s.arrived = true; s.simDay = true; s.src = 'use'; if(opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } subCaseNos(c); logCaseEvent(c, by, '本次使用：'+buyName(name)+' 加进这次到院'+((opt && opt.dirOp) ? '（院长操作）' : ''), '管理项目'); return {ok:true, key:tg.key};
   }
   if(it.done) return {ok:false, err:'已完成'};
   if(tg.key==='main'){ /* 主案件：没选进今日的施术项目加回今日案件（计划内 = 取消 deferUse；在韩增加 = 补回今日行），延长多久由 KR 选 */
@@ -7769,13 +7781,13 @@ function coreUnitUseNow(c, name, by, opt){
 }
 /* 施术 / 管理项目［预约使用］：选日期时间 → 按日期建立 / 并入子案件，预约来源 = 管理预约（并入术后预约的那天则仍是术后预约） */
 function coreUnitBookUse(c, name, date, time, by, director, opt){
-  var it = (c.procedureItems||[]).filter(function(x){ return x.name===name && x.origin==='KR' && !x.cancelled && !x.swapped; })[0]; if(!it || it.pendingPay || !c.krBalancePaid || !date) return false;
+  var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name; if(it.pendingPay || !c.krBalancePaid || !date) return false;
   var mg = krIsMgmtItemC(it);
   if(mg){ if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return false; }
   else if(it.done) return false;
   var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+(mg ? '（持有项目使用）' : '（预约）'), place:'KR', projectName:name, silent:true, salt:'b'+Math.floor(Math.random()*1e4)}, by); if(!s) return false;
   if(c.visitEnds) delete c.visitEnds[subCaseKey(s)];
-  if(mg) s.holdUseOf = name; else { s.surgUse = name; if(director) s.director = director; } s.src = 'use';
+  if(mg){ s.holdUseOf = name; s.holdIid = itemIid(it); } else { s.surgUse = name; if(director) s.director = director; } s.src = 'use';
   if(mg && opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } else if(opt && typeof opt.ext==='number' && !mg){ s.extendMin = opt.ext; } /* CMD-1020-05 */ s.hold = !!c.visitClosed; subCaseNos(c);
   logCaseEvent(c, by, '预约时间：'+buyName(name)+'，'+date+' '+time, mg ? '管理项目' : '施术'); return true;
 }
@@ -7821,7 +7833,7 @@ function coreBookCancel(hid, id, kind, by){
    施术项目一项一行（显示层按项目拆开，数据里仍是一条「施术」子项）：单项完成 coreSurgItemDone；最后一项完成时整条施术行完成
    今日取消 = 今天不做了，退回项目卡（施术 / 管理 → 未使用；术后管理 → 未预约），不是取消项目、不退款 */
 function coreItemNote(c, name, text, by){
-  var it = (c.procedureItems||[]).filter(function(x){ return x.name===name && !x.cancelled && !x.swapped; })[0]; if(!it) return false;
+  var it = itemByKey(c, name, function(x){ return !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name;
   it.todayNote = String(text||'').trim(); logCaseEvent(c, by, '备注（'+name+'）：'+(it.todayNote || '清空')); return true;
 }
 function surgPlanItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.cancelled && !it.swapped && !it.krAddOn && !it.preBalanceAdd && !krIsMgmtItemC(it) && !it.deferUse; }); }
@@ -7834,10 +7846,10 @@ function coreSurgItemDone(c, rowId, name, by){
 }
 function coreTodayCancel(c, kind, key, by){
   if(kind==='row') return coreRowCancel(c, key, by);
-  var it = (c.procedureItems||[]).filter(function(x){ return x.name===key && !x.cancelled && !x.swapped && (!x.done || (x.heldOver && !x.holdDone)); })[0]; if(!it) return false;
+  var it = itemByKey(c, key, function(x){ return !x.cancelled && !x.swapped && (!x.done || (x.heldOver && !x.holdDone)); }); if(!it) return false; var ik = itemIid(it); key = it.name;
   if(krIsMgmtItemC(it) && it.heldOver){
-    var all = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return x.name; });
-    c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all).filter(function(n){ return n!==key; }); c.todayPicked = true;
+    var all = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return itemIid(x); });
+    c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all).filter(function(n){ return n!==ik && n!==key; }); c.todayPicked = true;
   } else {
     it.deferUse = true;
     c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && !s.done && !s.visitKey && s.projectName===key); });
@@ -7863,7 +7875,7 @@ function coreTodayPick(c, surgNames, mgmtNames, by){
   c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && !s.done && !s.visitKey && skipped.indexOf(s.projectName)>-1); }); /* 没勾的在韩增加项目：今日行拿掉 */
   c.todayPickMgmt = mgmtNames.slice(); c.todayPicked = true; c.needTodayPick = false;
   syncSurgerySub(c); syncSurgeryBlock(c);
-  logCaseEvent(c, by, '今日进行项目：施术 '+(surgNames.join('、')||'无')+(mgmtNames.length ? '；管理 '+mgmtNames.join('、') : '')+(skipped.length ? '；留在项目卡未使用：'+skipped.join('、') : ''));
+  logCaseEvent(c, by, '今日进行项目：施术 '+(surgNames.join('、')||'无')+(mgmtNames.length ? '；管理 '+mgmtNames.map(function(k){ var x = itemByKey(c, k); return x ? x.name : k; }).join('、') : '')+(skipped.length ? '；留在项目卡未使用：'+skipped.join('、') : ''));
   updateCaseStage(c); return {ok:true};
 }
 
@@ -7961,7 +7973,7 @@ function cliHoldKrRows(model){
   model.cases.forEach(function(c){
     (c.procedureItems||[]).forEach(function(it){
       if(!it.heldOver || it.holdDone || it.cancelled || !krIsMgmtItemC(it)) return;
-      var left = holdItemLeft(c, it), booked = (c.subItems||[]).filter(function(s){ return s.holdUseOf===it.name && !s.done && !s.skipped; }).sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+      var left = holdItemLeft(c, it), booked = (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
       rows.push({c:c, name:buyName(it.name), tag:'', left:'剩余 '+Math.max(0, left)+' / 共 '+(it.qty||1)+' 次', times:booked.map(function(s){ return String(s.date||'').slice(5).replace('-', '/')+(s.time ? ' '+s.time : ''); })});
     });
     (c.subItems||[]).forEach(function(s){

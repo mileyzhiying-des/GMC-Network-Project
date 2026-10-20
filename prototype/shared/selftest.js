@@ -1196,7 +1196,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('CAL8','KR 日历医院 / 院长两层 + 约满标记 + 韩 / 印时间轴（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; nav('kr-dashboard'); KRC.layer = 'hospital'; krcSet('mode','day'); var cal = function(){ return document.getElementById('kr-cal'); };
     ST.ok(/医院/.test(cal().innerText) && !/各位院长/.test(cal().innerText) && cal().querySelectorAll('.cal-switch span').length>=5, '第一层平铺：医院 + 各位院长按钮并列，日 / 周 / 月是分段按钮'); ST.ok(!cal().querySelector('.krc-dirhead') && !cal().querySelector('.krc-busy'), '医院层日视图不分栏、不显示不可预约');
-    var one = [].slice.call(cal().querySelectorAll('[onclick*="krShowCase"],[onclick*="krOpenSurgSub"],[onclick*="krBookOpen"],[onclick*="krOpenSub"]')).filter(function(e){ return e.innerText; }); ST.ok(one.length===0 || one.every(function(e){ return /\d\d:\d\d · .+ · .+ · .+/.test(e.innerText.replace(/\n/g,' ')); }), '医院层每块一行：时间 · 客人 · 类型 · 院长');
+    var one = [].slice.call(cal().querySelectorAll('[onclick*="krShowCase"],[onclick*="krOpenSurgSub"],[onclick*="krBookOpen"],[onclick*="krOpenSub"]')).filter(function(e){ return e.innerText; }); ST.ok(one.length===0 || one.every(function(e){ return /\d\d:\d\d · .+ · .+/.test(e.innerText.replace(/\n/g,' ')); }), '医院层每块一行小标签：时间 · 客人 · 类型（CMD-1020-16，不再写院长）');
     ST.ok(/韩 \d\d:00/.test(cal().innerText) && /印 \d\d:00/.test(cal().innerText) && !/印尼\s*韩国/.test(cal().innerText.slice(0,300)), '时间轴每个时间前标韩 / 印，没有顶部小标题');
     ST.ok(KRC_PX>=CAL_DAY_PX, 'CMD-1015-02：KR 日视图格子高度 ≥ IN 最小值 44px/小时，并撑满卡片'); var ow = cal().querySelector('.krc-outwrap'); ST.ok(!!ow && ow.style.overflow==='auto' && /100vh/.test(ow.style.height), 'KR 日历撑满画面、栏内滚动'); ST.ok(!cal().querySelector('.krc-col-today') || getComputedStyle(cal().querySelector('.krc-col-today')).backgroundColor!==getComputedStyle(document.documentElement).getPropertyValue('--bg-brand-faint'), '今天不染整栏');
     krcSet('mode','week'); ST.ok(!/已约/.test(cal().innerText) && !/施术开放|未开放/.test(cal().innerText), 'CMD-1015-01：周视图不写已约数字（只有约满才写），没有施术开放');
@@ -1441,7 +1441,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = pcCase('R18b1'); var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0]; if(!ST.ok(!!lib, '没有管理项目')) return; var sp = lib.specs[0], loc = {projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price};
     ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:loc}), '在韩加管理项目失败'); var it = c.procedureItems[c.procedureItems.length-1];
-    ST.ok(it.pendingPay && !it.heldOver && krItemStatus(it)==='待付款', '付款前显示待付款'); ST.ok(coreAddOnPaid(c, ST.krBy) && it.heldOver && !it.pendingPay && krItemStatus(it)==='持有中' && holdItemLeft(c, it)===1, '付完款即在韩持有，剩 1 次');
+    ST.ok(it.pendingPay && it.heldOver && pendingPayItems(c).indexOf(it)>-1, '付款前标待付款（CMD-1020-16：先进持有，可以先做）'); ST.ok(coreAddOnPaid(c, ST.krBy) && it.heldOver && !it.pendingPay && krItemStatus(it)==='持有中' && holdItemLeft(c, it)===1, '付完款即在韩持有，剩 1 次');
     ST.ok(!(c.subItems||[]).some(function(s){ return s.kind==='增加项目' && s.projectName===it.name; }), '进程里的「增加项目」行拿掉');
     var svc = Object.assign({}, loc, {service:true, price:0}); ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:svc}), '加서비스失败'); var sv = c.procedureItems[c.procedureItems.length-1];
     ST.ok(sv.service && sv.heldOver, '서비스即时进在韩持有');
@@ -1463,7 +1463,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(coreCareBook(c, careUnits(c).rows.filter(function(r){ return r.s.skipped; })[0].item, 0, row.date, row.time||'10:00', 'KR', row.id, ST.krBy) && !row.skipped && row.src==='care', '［预约时间］重新预约（并回原来的子案件）');
     var lib = krLocalLib('H1').filter(function(p){ return !p.neg && p.specs && p.specs[0] && p.specs[0].price>0; })[0], sp = lib.specs[0];
     ST.ok(coreAddOnItem(c, '', ST.krBy, {anesthesia:{type:'local', label:'局部麻醉', note:''}, local:{projectId:lib.id, name:lib.name, specLabel:sp.label, price:sp.price}}), '在韩加管理项目'); var it = c.procedureItems[c.procedureItems.length-1];
-    ST.ok(!coreUnitBookUse(c, it.name, D(30), '10:00', ST.krBy), '待付款：不能预约使用'); ST.ok(!coreUnitUseNow(c, it.name, ST.krBy).ok, '待付款 / 没人到店：不能本次使用');
+    ST.ok(!coreUnitBookUse(c, it.name, D(30), '10:00', ST.krBy), '待付款：不能预约使用');
     ST.ok(coreAddOnPaid(c, ST.krBy) && it.heldOver, '付款后在韩持有'); ST.ok(!!coreUseTarget(c) && coreUseTarget(c).key==='main', '没有客人已到店的术后管理到院时：目标是今天已结束的到院（本次使用会自动重新打开，CMD-1019-22）');
     ST.ok(coreUnitBookUse(c, it.name, D(30), '11:00', ST.krBy), '［预约使用］'); var k3 = 'KR|'+D(30); ST.ok(visitSource(c, k3)==='管理预约' && coreVisitRows(c, k3).length===1, '新子案件：预约来源 = 管理预约');
     coreVisitSim(c, k3, ST.krBy); ST.ok(coreVisitArrive(c, k3, ST.krBy), '到店'); var r3 = coreVisitRows(c, k3)[0]; ST.ok(coreSubDone(c, r3.id, ST.krBy, []) && it.holdUsed===1 && (it.uses||[]).length===1, '完成：扣 1 次，记使用时间');
@@ -1505,7 +1505,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var sleep = (HOSPITAL_DATA[caseKrHospital(c)].projects||[]).filter(function(p){ return p.defaults && p.defaults.anes && p.defaults.anes!=='local' && !krActiveItems(c).some(function(it){ return it.name===p.name; }); })[0];
     var nm = sleep ? sleep.name : '埋线双眼皮', an = {type:'sleep', label:'睡眠麻醉', note:''}; KR_FORCE_CLASH = true;
     try{ ST.ok(coreAddOnItem(c, nm, ST.krBy, {anesthesia:an}), '选项目 → 确认：不再要求勾选麻醉同意书'); } finally { KR_FORCE_CLASH = false; }
-    var it = c.procedureItems[c.procedureItems.length-1]; ST.ok(it.consentPending && it.pendingPay && !anesPendingItems(c).length, '付款前：待付款，同意书还不用确认');
+    var it = c.procedureItems[c.procedureItems.length-1]; ST.ok(it.consentPending && it.pendingPay && anesPendingItems(c).length===1, '付款前：待付款，同意书也要确认（和付款无关，CMD-1020-16）');
     ST.ok(coreAddOnPaid(c, ST.krBy) && anesPendingItems(c).length===1, '付款后：出现「待确认麻醉同意书」');
     var row = (c.subItems||[]).filter(function(s){ return s.kind==='增加项目' && s.projectName===it.name; })[0]; ST.ok(!coreSubDone(c, row.id, ST.krBy, []), '确认麻醉同意书之前不能完成该项目');
     ST.ok(coreAnesConfirm(c, null, ST.krBy) && !it.consentPending && c.anesthesiaConsent.projects.some(function(p){ return p.name===it.name; }), '确认已签署 → 记录同意书');
@@ -1534,7 +1534,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ['basic','items','log'].forEach(function(t){ var tx = body(t); ST.ok(/⚠ 待付款/.test(tx) && /在韩增加 2 项未付款/.test(tx) && /去付款/.test(tx), 'tab '+t+'：顶部「待付款」条在'); });
     var tx0 = body('basic'); ST.ok(tx0.indexOf('待付款') < tx0.indexOf('基础资料', tx0.indexOf('待付款')) && tx0.indexOf('待付款') > tx0.indexOf(r.caseNo), '位置：页头下、tab 上');
     ST.ok(!/未付款\n.*合计/.test(body('items')) && (body('items').match(/⚠ 待付款/g)||[]).length===1, '项目 tab 里原来的「未付款」条拿掉，只留最上面这一条');
-    ST.ok(!/待确认麻醉同意书/.test(body('basic')), '付款前没有同意书条'); krPayOpen(); var pm = document.getElementById('kr-pay-overlay').innerText; ST.ok(/确认付款/.test(pm) && /施术项目/.test(pm) && /管理项目/.test(pm) && /麻醉同意书/.test(pm) && /稍后付款/.test(pm), '［去付款］打开确认付款 Modal：施术 / 管理分开 + 麻醉同意书块');
+    ST.ok(/待确认麻醉同意书/.test(body('basic')), '待付款时同意书条也在（CMD-1020-16：和付款无关）'); krPayOpen(); var pm = document.getElementById('kr-pay-overlay').innerText; ST.ok(/确认付款/.test(pm) && /施术项目/.test(pm) && /管理项目/.test(pm) && /麻醉同意书/.test(pm) && /稍后付款/.test(pm), '［去付款］打开确认付款 Modal：施术 / 管理分开 + 麻醉同意书块');
     var al = window.alert, said = ''; window.alert = function(m){ said = m; }; try{ krPayConfirm(); } finally { window.alert = al; } ST.ok(/麻醉同意书/.test(said) && pendingPayItems(krFindCase(r.clinicId, r.id).c).length>=2, '不勾麻醉同意书不能确认付款');
     document.getElementById('kr-pay-consent').checked = true; krPayConfirm();
     var t1 = body('basic'); ST.ok(!/⚠ 待付款/.test(t1) && !/⚠ 待确认麻醉同意书/.test(t1), '确认付款 = 付款 + 同意书一次记录：两条都消失');
@@ -2031,7 +2031,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/<button[^>]*>修改时间<\/button>/.test(care.h) && !/<a [^>]*>修改时间<\/a>/.test(care.h), '已预约行的［修改时间］是线框按钮，不是文字链接'); ST.ok(/<a [^>]*>查看案件<\/a>/.test(care.h), '［查看案件］仍是文字链接');
     var surg = html('surg'); ST.ok(/<button[^>]*>本次使用<\/button>/.test(surg.h) && /<button[^>]*>预约时间<\/button>/.test(surg.h) && svgN(surg.h.slice(0, surg.h.indexOf('每次到院一张卡')))===0, '施术项目：［本次使用］［预约时间］线框、没有图标');
     var mg = html('mgmt'); ST.ok(/未使用\s*\d+\s*全部预约/.test(mg.t), '管理项目：［全部预约］在「未使用 N」那一行右边'); ST.ok(/<button[^>]*>\s*<svg[\s\S]*?<\/svg>全部预约<\/button>/.test(mg.h) && /<button[^>]*>预约时间<\/button>/.test(mg.h), '管理项目：［全部预约］有日历图标、行内［预约时间］没有');
-    var mgName = gc().procedureItems.filter(function(x){ return krIsMgmtItemC(x); })[0].name;
+    var mgIt = gc().procedureItems.filter(function(x){ return krIsMgmtItemC(x); })[0], mgName = itemIid(mgIt), mgNm = mgIt.name; /* CMD-1020-16：管理项目按每笔唯一 id */
     krCbOpen({mgmtOne:mgName}); ST.ok(KR_CB.rows.filter(function(x){ return x.checked; }).length===1 && KR_CB.rows.filter(function(x){ return x.checked; })[0].kind==='mgmt', '管理项目单条［预约时间］：只勾那一条（同一个弹窗，里面也列出术后管理）'); ST.ok(KR_CB.rows.some(function(x){ return x.kind==='care'; }) && !document.getElementById('kr-bkd-overlay'), '没有单独的管理项目预约弹窗');
     krCbOpen({all:true, tab:'mgmt'}); var mrows = function(){ return KR_CB.rows.filter(function(x){ return x.kind==='mgmt'; }); }; ST.ok(mrows().length===1 && mrows()[0].checked && KR_CB.rows.filter(function(x){ return x.kind==='care' && x.checked; }).length===0, '［全部预约］（管理项目）：默认约 1 次、勾上，术后管理不勾');
     var max = KR_CB.mg[mgName].m.max; krCbMgQty(mgName, 1); krCbMgQty(mgName, 1); ST.ok(mrows().length===3 && /这次约[\s\S]*3[\s\S]*次/.test(document.getElementById('kr-cb-overlay').innerText), '选 3 次 → 展开 3 行');
@@ -2041,7 +2041,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var iA = KR_CB.rows.indexOf(mrows()[0]), iB = KR_CB.rows.indexOf(mrows()[1]), iC = KR_CB.rows.indexOf(mrows()[2]); krCbSet(iA, 'date', okDay(45)); krCbSet(iA, 'time', '12:00'); krCbSet(iB, 'date', okDay(45)); krCbSet(iB, 'time', '12:00'); krCbSet(iC, 'date', okDay(52)); krCbSet(iC, 'time', '12:00'); [iA, iB, iC].forEach(function(i){ krCbSet(i, 'checked', true); });
     var pv = krCbPreview(); ST.ok(pv.cards.length===2 && pv.cards[0].mgmt.length===1, '同一天合成一次到院，预览 2 张到院卡（管理项目）：'+JSON.stringify(pv.cards.map(function(x){ return x.date+':'+x.names.join('、'); })));
     krCbSet(iC, 'date', ymdAdd(okDay(52), 0)); var sun = ymdAdd(todayStr(), 40); while(visitWeekday(sun)!=='周日') sun = ymdAdd(sun, 1); krCbSet(iC, 'date', sun); ST.ok(/休诊/.test(krCbCheck(KR_CB.rows[iC]).err||'') && !KR_CB.rows[iC].checked, '休诊日：红字、自动不勾'); krCbSet(iC, 'date', okDay(52)); krCbSet(iC, 'checked', true);
-    var n0 = subCaseList(gc()).length, pl0 = holdItemPlanned(gc(), gc().procedureItems.filter(function(x){ return x.name===mgName; })[0]); krCbGo(); var c2 = gc(), it2 = c2.procedureItems.filter(function(x){ return x.name===mgName; })[0];
+    var n0 = subCaseList(gc()).length, pl0 = holdItemPlanned(gc(), gc().procedureItems.filter(function(x){ return x.name===mgNm; })[0]); krCbGo(); var c2 = gc(), it2 = c2.procedureItems.filter(function(x){ return x.name===mgNm; })[0];
     ST.ok(holdItemPlanned(c2, it2)===pl0+3 && subCaseList(c2).length===n0+2, '确认后约了 3 次，建出 2 张到院卡（同一天合并）');
   });
   ST.def('R55a','CMD-1020-04：一次到院一个块 / IN 的 KR 医院日程显示本诊所所有到院、其他诊所只有灰块 / 日期带星期 / 周日起周视图 / 打印日程含预约到院（A1 分页，给 KM1 看）',function(){
@@ -2343,13 +2343,72 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var l2 = [].slice.call(document.querySelectorAll('.kr-l2')); ST.ok(l2.length>=2 && l2[1].getBoundingClientRect().top - l2[0].getBoundingClientRect().bottom >= 10, '2 级卡之间留间距（>= 10px）'); ST.ok(/已付定金项目/.test(l2[0].querySelector('.kr-l2-title').textContent) && l2[0].querySelectorAll('.kr-l3').length===2, '「已付定金项目」标题在 2 级卡里，下面两张 3 级卡');
       var rows = l2[0].querySelectorAll('.kr-l3 .kr-row'); ST.ok(rows.length>=2 && getComputedStyle(rows[0]).paddingTop==='6px', '行与行之间有间距');
       KR_ARR.judge = 'ok'; krDoJudge(); ST.ok(document.querySelectorAll('.kr-l2').length===3, 'Step 2：已付定金项目 / 添加项目 / 付清尾款 三张 2 级卡'); var al = [].filter.call(document.querySelectorAll('.kr-l2'), function(e){ return /添加项目/.test(e.querySelector('.kr-l2-title').textContent); })[0]; ST.ok(al.querySelectorAll('.kr-l3').length===2, '添加项目：施术 / 管理各一张 3 级卡');
-      krChOpen('adj'); var sc = document.querySelector('.kr-chooser-scroll'); ST.ok(!!sc && getComputedStyle(sc).maxHeight==='360px' && getComputedStyle(sc).overflowY==='auto', '选择区设最大高度、内部滚动');
+      krChOpen('adj'); var sc = document.querySelector('.kr-ch-scroll'), chb = document.querySelector('.kr-chooser'); ST.ok(!!sc && !!chb && getComputedStyle(chb).height==='460px' && getComputedStyle(sc).overflowY==='auto' && !!document.querySelector('.kr-ch-right .kr-ch-foot button'), '选择区固定高度、左右两栏内部滚动，［取消］［确认添加］在右栏底部');
       var btxt = [].map.call(document.querySelectorAll('.kr-l2 button'), function(b){ return b.textContent.trim(); }).join('|'); ST.ok(!/收起/.test(btxt) && /取消/.test(btxt) && /确认添加/.test(btxt), '拿掉［收起］，底部［取消］［确认添加］');
       krChToggle('adj', Object.keys(krScopeCandidates(KR_CASE.clinicId).kr.reduce(function(m,p){ m[p.name]=1; return m; }, {})).filter(function(n){ return !krAllItems(c).some(function(x){ return x.name===n; }); })[0], true); window.__krExtPick && 0;
       var nAdd = Object.keys(KR_ADJ.adds).length; if(nAdd===0){ var ov = document.getElementById('kr-ext-overlay'); if(ov && ov.classList.contains('open')) krExtPick(0); nAdd = Object.keys(KR_ADJ.adds).length; }
       krChCancel('adj'); ST.ok(Object.keys(KR_ADJ.adds).length===0 && !KR_ADJ.addOpen, '［取消］放弃这次勾选并收回');
       krChOpen('adj'); KR_ADJ.locals.push({name:'测试管理项目', specLabel:'规格', price:10000, projectId:'x'}); krChConfirm('adj'); ST.ok(!KR_ADJ.addOpen && /测试管理项目/.test(document.querySelector('.kr-l2:nth-of-type(2)') ? document.body.textContent : ''), '［确认添加］后收回成摘要，列出已加的项目'); KR_ADJ.locals = [];
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_ADJ = {dropped:{}, adds:{}, addOpen:false, signed:{}, locals:[], swap:{}, step:'pick'}; }
+  });
+  /* CMD-1020-16 三四（KM1 分页，需要 stageC 夹具）：同名同规格的管理项目两笔各自勾选 / 今日进行 / 本次使用 / 预约 / 撤回 / 扣次互不影响；在韩增加标签；待付款先做规则 */
+  ST.def('R67a','CMD-1020-16（KM1 分页，需要 stageC 夹具）：同名管理项目按每一笔唯一 id；在韩增加标签；待付款可先做、不能结束到院',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null;
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c);
+      c.krSchedule.confirmedDate = todayStr(); c.hasArrived = true; c.krSchedule.status = 'arrived'; c.krBalancePaid = true; c.krJudge = {result:'ok'}; c.todayPicked = false; c.visitClosed = false; c.krProcedureDone = false;
+      var base = {origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:3, firstDay:1, interval:2, specLabel:'40kj·3次', local:true, mgmtPlan:true};
+      c.procedureItems.push(Object.assign({}, base, {name:'钛提升 · 40kj·3次', batchId:'B1', preBalanceAdd:true}), Object.assign({}, base, {name:'钛提升 · 40kj·3次', batchId:'B2', krAddOn:true}));
+      ensureItemIids(c); });
+    try{
+      var c = krFindCase(r.clinicId, r.id).c, a = c.procedureItems[c.procedureItems.length-2], b = c.procedureItems[c.procedureItems.length-1], ia = itemIid(a), ib = itemIid(b);
+      ST.ok(ia && ib && ia!==ib && a.name===b.name, '两笔同名同规格，各有唯一 id');
+      /* 勾选：只勾一个 */
+      KR_PICK = {}; KR_PROJ_PAGE = 'mgmt'; krTpToggle('mg', ia, true); var pk = krProjCards(c, {pick:true}); ST.ok((pk.match(/<input type="checkbox" checked/g)||[]).length===1 && (pk.match(/<input type="checkbox"/g)||[]).length>=2, '只勾其中一笔：两个勾选框里只有一个被勾上');
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], it1 = cc.procedureItems.filter(function(x){ return x.iid===ia; })[0], it2 = cc.procedureItems.filter(function(x){ return x.iid===ib; })[0];
+        ST.ok(coreTodayPick(cc, [], [ia], 'KM1 室长').ok && pickedMgmt(cc, it1) && !pickedMgmt(cc, it2) && todayMgmtPicked(cc).length===1 && todayMgmtPicked(cc)[0]===it1, '今日进行：只有被勾的那一笔进今日案件');
+        ST.ok(coreUnitUseNow(cc, ib, 'KM1 室长').ok && pickedMgmt(cc, it2) && pickedMgmt(cc, it1), '本次使用另一笔：加进今日案件，不影响第一笔');
+        ST.ok(coreMgmtUse(cc, ia, 'KM1 室长') && it1.holdUsed===1 && it2.holdUsed===0 && mgmtDoneToday(cc, it1) && !mgmtDoneToday(cc, it2), '操作完成第一笔：只扣第一笔的次数');
+        ST.ok(coreMgmtUseUndo(cc, ia, 'KM1 室长') && it1.holdUsed===0 && !mgmtDoneToday(cc, it1), '撤回第一笔：只退第一笔的次数');
+        ST.ok(coreMgmtUse(cc, ib, 'KM1 室长') && it2.holdUsed===1 && it1.holdUsed===0, '操作完成第二笔：只扣第二笔');
+        ST.ok(coreUnitBookUse(cc, ib, ymdAdd(todayStr(), 6), '12:00', 'KM1 室长', '', null) && holdItemPlanned(cc, it2)===1 && holdItemPlanned(cc, it1)===0 && cc.subItems.filter(function(s){ return s.holdIid===ib; }).length===1, '预约时间：只算在第二笔上');
+      });
+      c = krFindCase(r.clinicId, r.id).c; var html = krProjCards(c); KR_PROJ_PAGE = 'mgmt'; html = krProjCards(c);
+      ST.ok((html.match(/钛提升/g)||[]).length>=2 && (html.match(/在韩增加/g)||[]).length>=2, '两笔分开显示，不合并；两种在韩加的（到院添加 / 尾款后加）都标「在韩增加」'); KR_PROJ_PAGE = 'surg';
+      /* 待付款可以先做 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], it2 = cc.procedureItems.filter(function(x){ return x.iid===ib; })[0]; it2.pendingPay = true; it2.batchId = ''; it2.krAddOn = true; cc.krProcedureDone = false;
+        ST.ok(coreUnitUseNow(cc, ib, 'KM1 室长').ok, '待付款的项目可以本次使用（不再锁住）');
+        var e = coreEndVisitToday(cc, 'KM1 室长'); ST.ok(!e.ok && /待付款，请先付款/.test(e.err) && /₩/.test(e.err), '有待付款不能结束今日到院：'+e.err);
+        ST.ok(pendingPayItems(cc).length===1 && krTopAlerts(cc).indexOf('待付款')>-1, '页面最上方红色待付款条一直显示'); });
+    } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PICK = {}; KR_PROJ_PAGE = 'surg'; }
+  });
+  /* CMD-1020-16 一（KM1 分页；IN 分页测 IN 的 KR 医院日程）：「医院」视图预约小标签——不按时长拉长、整栏宽、按开始时间上下排、一格超过 6 个显示 5 个 + 「+N 个预约」、点开列出全部；院长视图仍按时长画块 */
+  ST.def('R68a','CMD-1020-16：医院视图预约改小标签（高度 = 一小时格 1/6，整栏宽，按开始时间排，>6 个显示 5 个 + +N 个预约）；院长视图不变',function(){
+    var me = currentAccount(), kr = isKrAccount(), hid = kr ? krHospitalIdOfMe() : krViewHospital(), h = HOSPITAL_DATA[hid], dir = hospitalDirectors(hid).filter(function(d){ return d.active; })[0].name;
+    var ds = ymdAdd(todayStr(), 50); while(hospitalClosedOn(hid, ds) || dirFullOff(hid, ds, dir)) ds = ymdAdd(ds, 1);
+    var cid = kr ? (krAllCases()[0] ? krAllCases()[0].clinicId : 'C1') : CURRENT_CLINIC_ID, ids = [];
+    h.directorSchedule = h.directorSchedule||{}; var arr = (h.directorSchedule[dir] = h.directorSchedule[dir]||[]);
+    var mk = function(t, e, nm){ var id = 'chip'+ids.length+Math.floor(Math.random()*1000); ids.push(id); arr.push({id:id, who:dir, date:ds, time:t, end:e, kind:'施术', type:'施术', title:'施术', name:nm, clinicId:cid, caseId:'x'+ids.length}); };
+    mk('15:00','21:00','apple A'); mk('15:30','21:30','Ayin AY'); mk('15:35','16:00','客人3'); mk('15:40','16:00','客人4'); mk('15:45','16:00','客人5'); mk('15:50','16:00','客人6'); mk('15:55','16:00','客人7');
+    try{
+      if(kr){
+        nav('kr-dashboard'); krcPick('__H'); krcSet('mode','week'); KRC.anchor = krcWeekStartMon(ds); krcRender(); var chips = [].filter.call(document.querySelectorAll('#kr-cal .krc-chip'), function(e){ return !e.classList.contains('krc-chip-more') && /客人|apple|Ayin/.test(e.textContent); });
+        ST.ok(chips.length===5, '同一小时格超过 6 个：只显示前 5 个小标签（'+chips.length+'）'); var more = document.querySelector('#kr-cal .krc-chip-more'); ST.ok(!!more && /\+2 个预约/.test(more.textContent), '第 6 行写「+2 个预约」');
+        var hpx = parseFloat(chips[0].style.height); ST.ok(Math.abs(hpx - (KRC_PX/6 - 1)) < 0.6 && KRC_PX===112, '标签高度 = 一小时格的 1/6（不按时长拉长）：'+hpx);
+        ST.ok(/^15:00 · apple A · 施术$/.test(chips[0].textContent.trim()) && /^15:30 · Ayin AY/.test(chips[1].textContent.trim()), '写「15:00 · apple A · 施术」，按开始时间上下排（apple A 在上，Ayin AY 在下）'); ST.ok(parseFloat(chips[1].style.top) > parseFloat(chips[0].style.top), '上下排，不左右并排');
+        ST.ok(/15:00～21:00/.test(chips[0].getAttribute('title')), '悬停显示完整时间段');
+        krcMoreOpen(ds, 15); var ov = document.getElementById('krc-more-overlay'); ST.ok(ov.classList.contains('open') && ov.querySelectorAll('.krc-chip-row').length===7, '点「+N 个预约」弹出小弹层列出这个小时的全部预约（7 个）'); ov.classList.remove('open');
+        krcSet('mode','day'); KRC.anchor = ds; krcRender(); ST.ok(document.querySelectorAll('#kr-cal .krc-chip').length>=5 && KRC_PX===112, '医院视图的日视图同样处理');
+        krcPick(dir); krcSet('mode','week'); KRC.anchor = krcWeekStartMon(ds); krcRender(); ST.ok(document.querySelectorAll('#kr-cal .krc-chip').length===0, '院长视图不变：仍按时长画块，没有小标签'); krcPick('__H');
+      } else {
+        setCalView('kr'); setKrDir('all'); setCalMode('week'); CAL_WEEK_FULL = true; CAL_ANCHOR = new Date(ds+'T00:00:00'); WEEK_OFFSET = 0; renderCalendar();
+        var inChips = [].filter.call(document.querySelectorAll('#wk-grid .krc-chip'), function(e){ return !e.classList.contains('krc-chip-more'); }); ST.ok(inChips.length===5 && /\+2 个预约/.test(document.querySelector('#wk-grid .krc-chip-more').textContent), 'IN 的 KR 医院日程「医院」视图同样：5 个小标签 + 「+2 个预约」');
+        krInMoreOpen(ds, Math.floor(timeToMin('15:00')/60)); ST.ok(document.getElementById('krin-more-overlay').querySelectorAll('.krc-chip-row').length===7, '点开列出这个小时的全部 7 个'); document.getElementById('krin-more-overlay').classList.remove('open');
+        setKrDir(dir); renderCalendar(); ST.ok(document.querySelectorAll('#wk-grid .krc-chip').length===0, 'IN 院长视图不用小标签');
+        KR_DIRECTOR = 'all'; setCalView('in'); setCalMode('week');
+      }
+    } finally { h.directorSchedule[dir] = (h.directorSchedule[dir]||[]).filter(function(b){ return ids.indexOf(b.id)<0; }); Store.touch(); }
   });
   /* CMD-1020-14 四：全站最小字号 12px —— 扫当前页面里所有有文字的可见元素，computed font-size < 12px 就列出来；打印预览（新窗口）不在页面里，不算。每个页面 / 每个 tab 都可以跑一遍（以后新增画面也能拦住） */
   ST.fontScan = function(root){

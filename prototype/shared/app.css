@@ -482,4 +482,13 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .kr-l3-title{font-size:13px;font-weight:700;margin-bottom:6px;}
 .kr-row{padding:6px 0;font-size:13px;line-height:1.5;}
 .kr-row+.kr-row{border-top:1px solid var(--border2);}
-.kr-chooser-scroll{max-height:360px;overflow-y:auto;padding-right:6px;}
+.kr-chooser{display:flex;gap:18px;height:460px;} /* CMD-1020-16 二：选择区固定高度，左右两栏各自内部滚动，［取消］［确认添加］固定在右栏底部 */
+.kr-ch-left{flex:1 1 300px;min-width:240px;display:flex;flex-direction:column;min-height:0;}
+.kr-ch-right{flex:2 1 400px;min-width:300px;display:flex;flex-direction:column;min-height:0;}
+.kr-ch-scroll{flex:1;min-height:0;overflow-y:auto;padding-right:6px;}
+.kr-ch-foot{display:flex;gap:10px;justify-content:flex-end;padding-top:10px;margin-top:8px;border-top:1px solid var(--border2);}
+
+/* CMD-1020-16 医院视图预约小标签（高度 = 一小时格 1/6，整栏宽，不按时长拉长） */
+.krc-chip{position:absolute;left:2px;right:2px;box-sizing:border-box;border-radius:4px;padding:0 6px;font-size:12px;line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;z-index:2;}
+.krc-chip-more{background:#fff;color:var(--action-primary,#9A6A4B);border:1px dashed var(--action-primary,#9A6A4B);font-weight:700;}
+.krc-chip-row{position:static;display:block;height:auto;line-height:26px;margin-bottom:6px;padding:0 10px;}

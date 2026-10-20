@@ -323,7 +323,7 @@ function todoUbKr(){
     krCbMgItems(c).forEach(function(m){
       var it = (c.procedureItems||[]).filter(function(x){ return x.name===m.name; })[0] || {};
       out.push({key:'ub|'+c.id+'|mg|'+m.name, caseId:c.id, clinicId:r.clinicId, name:c.name, no:c.caseNo, label:buyName(m.name), sub:'剩 '+m.max+' / 共 '+(it.qty||1)+' 次', sug:m.sugs[0]||'', source:r.clinicName||'—', mine:mine,
-        book:function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'items', page:'mgmt'}); setTimeout(function(){ krCbOpen({mgmtOne:m.name}); }, 120); }});
+        book:function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'items', page:'mgmt'}); setTimeout(function(){ krCbOpen({mgmtOne:m.iid||m.name}); }, 120); }});
     });
   });
   return out;
