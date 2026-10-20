@@ -272,7 +272,7 @@ function resetAllWithExport(){
 }
 /* 其他标签页重置演示数据后，本页的账号数据也要刷新 */
 function resetDemoData(keepUser){
-  gmcResetAll(keepUser ? '登录页：只重置演示数据（保留测试案件）' : '登录页：全部清空', !!keepUser); /* 先自动备份再清（CMD-1012-06）；keepUser = 保留我的测试案件（CMD-1012-09） */
+  gmcResetAll(keepUser ? '登录页：只重置演示数据（保留测试案件）' : '登录页：全部清空', !!keepUser, true); /* 先自动备份再清（CMD-1012-06）；keepUser = 保留我的测试案件（CMD-1012-09） */
   location.reload();
 }
 

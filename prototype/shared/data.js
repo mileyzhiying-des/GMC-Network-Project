@@ -88,9 +88,39 @@ try{ ['gmc_cfg_newclose','gmc_cfg_newtodo','gmc_cfg_newcal','gmc_cfg_newstyle'].
 function gmcClearTestKeys(){ try{ Object.keys(localStorage).filter(function(k){ return /^(rt_res_|rt_st_|__T2_)/.test(k); }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){} }
 /* 提取结果存起来；只有真的提取到案件才覆盖（手动「只重置演示数据」后重载会再走一次版本检查，那时存档已空，不能把刚存的清掉） */
 function gmcStoreCarry(carry){
-  if(!carry || (!carry.total && !carry.cfgN)) return;
-  try{ localStorage.setItem('gmc_cfg_carry', JSON.stringify(carry)); }
-  catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:carry.from, to:null, at:carry.at, migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'存档容量不够，用户案件没能保留（旧数据在自动备份里）'}]})); }catch(e2){} }
+  if(!carry || (!carry.total && !carry.cfgN)) return true;
+  try{ localStorage.setItem('gmc_cfg_carry', JSON.stringify(carry)); return true; }
+  catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:carry.from, to:null, at:carry.at, migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'存档容量不够，用户案件没能保留（旧数据在自动备份里）'}]})); }catch(e2){} return false; }
+}
+/* ===== CMD-1020-12：用户案件保护 =====
+   ① gmcUserSafeSave：任何会清存档的地方（重置 / 数据版本升级 / 测试清理 / 存档读不出来重建）之前，把用户案件单独存一份到 localStorage `gmc_cfg_usersafe`
+      （gmc_cfg_ 开头：重置不清；只留最近 2 份；每份 = 提取出的 carry）。恢复：控制台 gmcUserSafeRestore(0)（0 = 最新一份），然后刷新页面。
+   ② gmcResetAll 没有保留用户案件（全部清空）而现在有用户案件时，必须第三个参数传 true（登录页按钮确认后才传），否则拒绝。
+   ③ 数据版本升级：升级前后用户案件数量对不上（提取出错 / 数量不符 / 存不下）→ 停下来，不清存档、不写新版本，页面不写档并提示。 */
+function gmcUserCaseCountRaw(){
+  var n = 0;
+  Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_clinic_')===0; }).forEach(function(k){
+    try{ var p = JSON.parse(localStorage.getItem(k) || 'null'); if(p && p.vars && !p.partial) n += (p.vars.CASE_ITEMS||[]).filter(gmcIsUserCase).length; }catch(e){}
+  });
+  return n;
+}
+function gmcUserSafeSave(reason){
+  try{
+    var cry = gmcExtractUserCarry(); if(!cry.total && !cry.cfgN) return 0;
+    var list = []; try{ list = JSON.parse(localStorage.getItem('gmc_cfg_usersafe') || '[]'); }catch(e){}
+    list.unshift({at:new Date().toISOString(), reason:reason||'', total:cry.total, carry:cry}); list = list.slice(0, 2);
+    localStorage.setItem('gmc_cfg_usersafe', JSON.stringify(list)); return cry.total;
+  }catch(e){ console.error('[用户案件保护] 存安全备份失败', e); return -1; }
+}
+function gmcUserSafeList(){ try{ return JSON.parse(localStorage.getItem('gmc_cfg_usersafe') || '[]').map(function(x){ return {at:x.at, reason:x.reason, total:x.total}; }); }catch(e){ return []; } }
+function gmcUserSafeRestore(i){
+  var list = []; try{ list = JSON.parse(localStorage.getItem('gmc_cfg_usersafe') || '[]'); }catch(e){} var x = list[i||0]; if(!x){ console.error('没有这份安全备份'); return false; }
+  var bk = gmcBackupMake('恢复用户案件前'); gmcStoreCarry(x.carry);
+  Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
+  gmcBackupKeep(bk); console.log('[用户案件保护] 已恢复 '+x.total+' 个用户案件（'+x.at+'），刷新页面生效'); return x.total;
+}
+function gmcShowBlock(msg){
+  try{ window.GMC_NO_SAVE = true; var show = function(){ if(document.getElementById('gmc-block-bar')) return; var d = document.createElement('div'); d.id = 'gmc-block-bar'; d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:200000;background:#B3261E;color:#fff;padding:10px 16px;font-size:13px;font-weight:700;'; d.textContent = msg; (document.body || document.documentElement).appendChild(d); }; if(document.body) show(); else document.addEventListener('DOMContentLoaded', show); console.error(msg); }catch(e){}
 }
 function gmcCollectRaw(){ var o = {}; try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); }catch(e){} return o; }
 function gmcBackupMake(reason){
@@ -115,12 +145,14 @@ function gmcDownloadText(name, text, mime){
   var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:mime || 'application/json'})); a.download = name; (document.body || document.documentElement).appendChild(a); a.click();
   setTimeout(function(){ try{ URL.revokeObjectURL(a.href); a.remove(); }catch(e){} }, 1500);
 }
-function gmcResetAll(reason, keepUser){
+function gmcResetAll(reason, keepUser, confirmed){
+  if(!keepUser && confirmed!==true && gmcUserCaseCountRaw()>0){ console.error('[重置] 拒绝：现在有用户案件，「全部清空」会把它们删掉。要保留请用 gmcResetAll(原因, true)；确实要全部清空请第三个参数传 true（登录页按钮确认后才会传）'); return false; }
   var bk = gmcBackupMake(reason || '手动重置演示数据');
+  gmcUserSafeSave('重置前：'+(reason||'')); /* CMD-1020-12：用户案件单独存一份安全备份（不会被后面的重置清掉，也不会被普通备份覆盖） */
   if(keepUser){ try{ gmcStoreCarry(gmcExtractUserCarry()); }catch(e){} } /* ① 只重置演示数据：保留我的测试案件 */
   else { try{ localStorage.removeItem('gmc_cfg_carry'); }catch(e){} } /* ② 全部清空 */
   try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
-  gmcBackupKeep(bk); gmcClearTestKeys();
+  gmcBackupKeep(bk); gmcClearTestKeys(); return true;
 }
 (function(){
   try{
@@ -140,7 +172,16 @@ function gmcResetAll(reason, keepUser){
         }catch(e){ keptG = null; keptC = {}; }
       }
       var bkv = gmcBackupMake('演示数据版本升级 '+(localStorage.getItem('gmc_demo_ver')||'?')+' → '+DEMO_DATA_VERSION); /* 升级前自动备份旧数据 */
-      try{ var cry = gmcExtractUserCarry(); if((parseInt(localStorage.getItem('gmc_demo_ver'),10)||0) < 44) cry = gmcCarryDropCases(cry); gmcStoreCarry(cry); }catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:localStorage.getItem('gmc_demo_ver'), to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'提取用户案件时出错：'+e.message+'（旧数据在自动备份里）'}]})); }catch(e2){} } /* 用户新建的案件先存起来，新种子生成后合并回去（CMD-1012-09） */
+      /* CMD-1020-12：升级前后用户案件数量必须对得上，否则停下来（不清存档、不写新版本、页面不写档） */
+      var oldV = parseInt(localStorage.getItem('gmc_demo_ver'), 10) || 0, rawN = gmcUserCaseCountRaw(), cry = null, blockMsg = '';
+      try{ cry = gmcExtractUserCarry(); }catch(e){ blockMsg = '提取用户案件时出错：'+e.message; }
+      if(!blockMsg && oldV >= 44 && cry.total !== rawN) blockMsg = '用户案件数量对不上（存档里 '+rawN+' 个，提取出 '+cry.total+' 个）';
+      if(!blockMsg){ gmcUserSafeSave('升级 '+oldV+' → '+DEMO_DATA_VERSION+' 前'); if(oldV < 44) cry = gmcCarryDropCases(cry); if(!gmcStoreCarry(cry)) blockMsg = '存档容量不够，用户案件没能先存起来'; }
+      if(blockMsg){
+        window.GMC_UPGRADE_BLOCK = blockMsg; gmcBackupKeep(bkv);
+        try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:String(oldV), to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, blocked:true, failed:[{caseNo:'（全部）', name:'', reason:'升级已停止：'+blockMsg+'；存档没有被改动'}]})); }catch(e2){}
+        gmcShowBlock('数据升级已停止：'+blockMsg+'。存档没有被改动，也不会写档；请把这条告诉开发者（备份在 gmc_backup_*，用户案件另有 gmc_cfg_usersafe）。');
+      } else {
       Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
       gmcBackupKeep(bkv); gmcClearTestKeys();
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
@@ -148,6 +189,7 @@ function gmcResetAll(reason, keepUser){
       /* 保留下来的只是一部分变量；其余变量由 store.js 启动时按种子补齐（见 Store.init） */
       if(keptG) localStorage.setItem('gmc_state', JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), partial:true, vars:keptG}));
       Object.keys(keptC).forEach(function(k){ localStorage.setItem(k, JSON.stringify({ver:DEMO_DATA_VERSION, t:Date.now(), partial:true, vars:keptC[k]})); });
+      }
     }
   }catch(e){}
 })();
@@ -298,7 +340,7 @@ function krSurgerySlotErrorRaw(hid, director, date, time, durMin, exceptCaseKey,
   /* 同一位院长同一时间只能有一件事（KR-SCHD-01，2026-10-08）：不能和该院长的「不可预约」或别的施术重叠；不同院长之间可以重叠 */
   var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; }).filter(function(b){ return !((b.kind==='施术' || b.kind==='面诊') && exceptCaseKey && (b.clinicId+':'+b.caseId)===exceptCaseKey && (!opts || !opts.exceptKind || opts.exceptKind===b.kind)); })[0];
   /* 冲突说明（CMD-1013-11 一·5）：写清楚「到院时间 + 施术时长」和哪一段重叠 */
-  var why = clash ? (opts && opts.use ? time+' 开始，使用约 '+(durMin||30)+' 分钟到 '+minToTime(e)+'，和 ' : time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 ')+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约' ? '已有'+clash.kind : '不可预约')+' 重叠' : '';
+  var why = clash ? (opts && opts.use ? time+' 开始，使用约 '+(durMin||30)+' 分钟到 '+minToTime(e)+'，和 ' : time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 ')+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约' ? '已有'+clash.kind : '不可预约'+(clash.note ? ' · '+clash.note : ''))+' 重叠' : '';
   if(!clash && typeof krDirectorRowsAll==='function'){ var rw = krDirectorRowsAll(director).filter(function(r){ return r.date===date && r.time && timeToMin(r.time) < e && timeToMin(r.end||minToTime(timeToMin(r.time)+30)) > s && (function(){ var ids = String(r.id).split(','), ex = ((opts&&opts.exceptRowIds)||[]).concat((opts&&opts.exceptRowId) ? [opts.exceptRowId] : []); return !ids.some(function(x){ return ex.indexOf(x)>-1; }); })(); })[0]; if(rw) return time+' 开始会和 '+director+' '+rw.time+' 的术后管理（'+(rw.name||'')+'）重叠'; }
   if(clash && (clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约')) return why;
   if(clash && !(opts && opts.ignoreBusy)) return why;
@@ -3008,7 +3050,18 @@ function consultFeeCardHtml(status, extraText, actionsHtml, c){
   return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border2);">'+
     '<span style="font-size:13px;font-weight:700;">面诊费</span><span style="font-size:12px;color:var(--slate2);">'+fmtRp(c ? consultFeeOf(c) : CLINIC_SETTINGS.consultFee)+'</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+status+'</span>'+
     (extraText ? '<span style="font-size:11px;color:var(--muted);">'+extraText+'</span>' : '')+
-    (actionsHtml ? '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">'+actionsHtml+'</span>' : '')+'</div>';
+    (actionsHtml ? '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">'+actionsHtml+'</span>' : '')+'</div>'+wantConsultRowHtml(c, status);
+}
+/* CMD-1020-12 三·2：IN 交完（或免除）面诊费后可填「客人希望的面诊时间」（选填自由文字，之后可改；KR 确认面诊时间卡片最上面显示「客人希望：…」，KR 待办 / 通知也带这一句） */
+function wantConsultRowHtml(c, status){
+  if(!c || (status!=='已缴费' && status!=='已免除') || isEnded(c) || c.consultStatus==='report_ready') return '';
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 12px;"><span style="font-size:13px;font-weight:700;">客人希望的面诊时间</span><input id="want-consult" value="'+aEscC(c.wantConsult||'')+'" placeholder="选填，例：10/21 下午，或 10/22 全天" onchange="saveWantConsult(\''+c.id+'\', this.value)" style="flex:1;min-width:240px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>';
+}
+function saveWantConsult(id, val){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; val = String(val||'').trim().slice(0, 120);
+  if((c.wantConsult||'')===val) return; var had = !!c.wantConsult; c.wantConsult = val;
+  logCaseEvent(c, actingName(), val ? (had ? '修改' : '填写')+'客人希望的面诊时间：'+val : '清空客人希望的面诊时间', '面诊');
+  if(val){ try{ pushKrNotif(caseKrHospital(c), '客人希望的面诊时间：'+val+'（'+c.name+'，'+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} }
 }
 
 /* 等待报告的小状态（2026-10-02 面诊改版）：KR确认预计出报告时间后 ✓"预计 X 出报告"+倒计时（Success）；
@@ -4455,7 +4508,7 @@ function normSchedBlocks(hid){
       if(b.kind==='施术'){ b.type = '施术'; b.title = '施术'; }
       else if(b.kind==='预约'){ b.type = '预约'; b.title = '预约'; } /* CMD-1014-16：IN 在 KR 日程占位预约（待确认 / 已确认） */
       else if(b.kind==='面诊'){ b.type = '面诊'; b.title = '面诊'; } /* 2026-10-08（CMD-1008-12 C）：KR 室长确认的面诊时间也进院长日程，显示「面诊 · 客人 · 院长」 */
-      else { b.type = '不可预约'; b.title = '不可预约'; b.note = ''; delete b.kind; }
+      else { b.type = '不可预约'; b.title = '不可预约'; b.note = b.note || ''; delete b.kind; } /* CMD-1020-12：备注保留 */
     });
     var rest = arr.filter(function(b){ return b.type==='施术' || b.type==='面诊' || b.type==='预约'; }), busy = arr.filter(function(b){ return b.type!=='施术' && b.type!=='面诊' && b.type!=='预约'; }).sort(function(x,y){ return (x.date+x.time).localeCompare(y.date+y.time); }), merged = [];
     busy.forEach(function(b){ var p = merged[merged.length-1]; if(p && p.date===b.date && timeToMin(b.time) <= timeToMin(p.end)){ if(timeToMin(b.end) > timeToMin(p.end)) p.end = b.end; } else merged.push(b); });

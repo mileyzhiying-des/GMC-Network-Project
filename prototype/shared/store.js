@@ -550,6 +550,7 @@ var Store = (function(){
       });
       writeKey(KEY_G, JSON.stringify(g, replacer));
     }
+    window.GMC_CARRY_CHECK = {expect:carry.total||0, migrated:report.migrated, failed:report.failed.length}; /* CMD-1020-12：升级后数量核对用 */
     try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify(report)); localStorage.removeItem('gmc_cfg_carry'); }catch(e){}
   }
 
@@ -560,8 +561,9 @@ var Store = (function(){
   document.addEventListener('visibilitychange', function(){ if(document.hidden) save(); });
 
   init();
-  try{ carryRestore(); }catch(e){ console.warn('[迁移] 合并用户案件失败', e); try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:null, to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'合并出错：'+e.message+'（旧数据在自动备份里）'}]})); }catch(e2){} }
+  try{ carryRestore(); var cc0 = window.GMC_CARRY_CHECK; if(cc0 && cc0.expect !== cc0.migrated + cc0.failed) gmcShowBlock('升级后用户案件数量对不上（升级前 '+cc0.expect+' 个，迁移 '+cc0.migrated+' 个、失败 '+cc0.failed+' 个）。已停止写档；用户案件的安全备份在 gmc_cfg_usersafe，恢复用 gmcUserSafeRestore(0)。'); }catch(e){ console.warn('[迁移] 合并用户案件失败', e); try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:null, to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'合并出错：'+e.message+'（旧数据在自动备份里）'}]})); }catch(e2){} }
   if(!load()){ /* 读不出来（极少见：存档损坏）就用刚生成的种子重新写一遍 */
+    try{ var rawSafe = {}; Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ rawSafe[k] = localStorage.getItem(k); }); if(Object.keys(rawSafe).length) localStorage.setItem('gmc_cfg_rawsafe', JSON.stringify({at:new Date().toISOString(), data:rawSafe})); }catch(e){ console.error('[用户案件保护] 重建前存原始存档失败', e); } /* CMD-1020-12：重建前把原始存档原样存一份（gmc_cfg_rawsafe，恢复 = 把 data 里的键写回 localStorage） */
     try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
     init(); load();
   }
@@ -570,7 +572,7 @@ var Store = (function(){
 
 /* 重置演示数据：清掉所有 gmc_ 开头的存档，其他标签页收到通知后也会刷新 */
 function resetDemoData(){
-  gmcResetAll('手动重置演示数据'); /* 先自动备份再清（CMD-1012-06） */
+  if(gmcResetAll('手动重置演示数据', false, true)===false) return; /* 先自动备份再清（CMD-1012-06）；CMD-1020-12：用户点的重置，已在界面上确认 */
   location.reload();
 }
 

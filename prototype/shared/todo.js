@@ -28,8 +28,9 @@ var TODO_SEEN_SET = null;
 function todoSeenLoad(){ if(TODO_SEEN_SET) return TODO_SEEN_SET; TODO_SEEN_SET = {}; try{ var raw = localStorage.getItem(todoSeenKey()); if(raw) TODO_SEEN_SET = JSON.parse(raw); else TODO_SEEN_SET = {__init:1}; }catch(e){} return TODO_SEEN_SET; }
 function todoSeenSave(){ try{ localStorage.setItem(todoSeenKey(), JSON.stringify(TODO_SEEN_SET)); }catch(e){} }
 function todoSeenBaseline(items){ var s = todoSeenLoad(); if(s.__init){ delete s.__init; items.forEach(function(it){ s[it.key] = 1; }); todoSeenSave(); } }
-function todoIsNew(it){ return !todoSeenLoad()[it.key]; }
-function todoMarkCaseSeen(caseId){ if(!caseId) return; var s = todoSeenLoad(), ch = false; Object.keys(s).forEach(function(){}); (TODO_LAST||[]).forEach(function(it){ if(it.caseId===caseId && !s[it.key]){ s[it.key] = 1; ch = true; } }); if(ch){ todoSeenSave(); try{ todoRefresh(); }catch(e){} } }
+function todoIsNew(it){ var s = todoSeenLoad(); return !s[it.key] || (!!it.over && !s[it.key+'|over']); } /* CMD-1020-12：新的、或已逾期（逾期那一刻算新的）都亮红点，打开案件后消失 */
+function todoTabDot(vis){ return (vis||[]).some(todoIsNew); }
+function todoMarkCaseSeen(caseId){ if(!caseId) return; var s = todoSeenLoad(), ch = false; Object.keys(s).forEach(function(){}); (TODO_LAST||[]).forEach(function(it){ if(it.caseId===caseId && (!s[it.key] || (it.over && !s[it.key+'|over']))){ s[it.key] = 1; if(it.over) s[it.key+'|over'] = 1; ch = true; } }); if(ch){ todoSeenSave(); try{ todoRefresh(); }catch(e){} } }
 var TODO_LAST = [], TODO_ACT_CASE = [];
 function todayShift(n){ return ymdAdd(todayStr(), n); }
 function todoMk(kind, text, c, due, over, go, extra){
@@ -112,7 +113,7 @@ function krTodoItems(rows){
     var c = r.c, mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name)), push = function(it){ it.mine = mine; it.rowKey = r.clinicId+':'+r.id; out.push(it); };
     var goCase = function(tab){ return function(){ krShowCase(r.clinicId, r.id, {tab:tab}); }; };
     if(work){
-      if(c.consultStatus==='paid_waiting_kr') push(todoMk('eta', '确认预计出报告时间', c, '', false, goCase('consult')));
+      if(c.consultStatus==='paid_waiting_kr') push(todoMk('eta', '确认预计出报告时间'+(c.wantConsult ? '（客人希望：'+c.wantConsult+'）' : ''), c, '', false, goCase('consult')));
       if(c.consultStatus==='awaiting_report' && !c.consultContentAt){ var wo = reportOverdueNow(c); push(todoMk('waitdir', '等院长上传面诊'+(wo ? '（已超时）' : (c.consultStartedAt ? '（面诊中）' : '')), c, todoEtaDue(c), wo, goCase('consult'), {gray:!wo})); }
       if(c.consultStatus==='awaiting_report' && c.consultContentAt){ var over = reportOverdueNow(c); push(todoMk('send', '发送诊疗方案'+(over ? '（已超时）' : ''), c, todoEtaDue(c), over, goCase('consult'))); }
       if(c.urgedAt && ((c.consultStatus==='awaiting_report' && !c.reportReady) || c.consultStatus==='paid_waiting_kr' || scheduleState(c)==='Pending')) push(todoMk('urged', '被催办：请尽快处理', c, '', true, goCase(scheduleState(c)==='Pending' ? 'proc' : 'consult'), {pin:true}));
@@ -238,7 +239,7 @@ function todoPaneHtml(all){
   TODO_ACTS = []; TODO_ACT_CASE = []; TODO_LAST = all; todoSeenBaseline(all); todoStampAt(all);
   var vis = todoVisible(all), n = vis.length;
   var ubAll = []; try{ ubAll = todoUbItems(); }catch(e){ console.error('[未安排预约]', e); } var ubVis = ubAll.filter(function(it){ return !TODO_UI.mine || it.mine; }), ubTab = TODO_UI.tab==='unbooked' && !todoRefMode();
-  if(TODO_UI.collapsed) return '<button class="btn-outline todo-mini" onclick="todoToggle()">待办 '+n+(todoUbDot(ubAll) ? ' <span class="todo-newdot"></span>' : '')+'</button>';
+  if(TODO_UI.collapsed) return '<button class="btn-outline todo-mini" onclick="todoToggle()">待办 '+n+((todoUbDot(ubAll) || todoTabDot(vis)) ? ' <span class="todo-newdot"></span>' : '')+'</button>';
   var boxStyle = ' style="width:auto;"';
   var groups = [[0,'昨日及更早'],[1,'今天'],[2,'之后']];
   var body = groups.map(function(g){
@@ -249,7 +250,7 @@ function todoPaneHtml(all){
   var tag = (TODO_UI.kind && TODO_FILTERS[TODO_UI.kind]) ? '<span class="todo-tag">· '+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></span>' : '';
   var refMode = todoRefMode();
   /* CMD-1020-07：标题行两个并排分页「待办 N ｜ 未安排预约 N」，默认待办；数字一直显示，红点只在有新进来的或已逾期的未安排项目时亮 */
-  var tabs = '<span class="todo-tabs"><span class="todo-tab'+(ubTab ? '' : ' on')+'" onclick="todoSetTab(\'todo\')">待办 '+n+'</span><span class="todo-tab'+(ubTab ? ' on' : '')+'" onclick="todoSetTab(\'unbooked\')">未安排预约 '+ubVis.length+(todoUbDot(ubAll) ? '<span class="todo-newdot" title="有新的或已逾期的"></span>' : '')+'</span></span>';
+  var tabs = '<span class="todo-tabs"><span class="todo-tab'+(ubTab ? '' : ' on')+'" onclick="todoSetTab(\'todo\')">待办 '+n+(todoTabDot(vis) ? '<span class="todo-newdot" title="有新的或已逾期的待办"></span>' : '')+'</span><span class="todo-tab'+(ubTab ? ' on' : '')+'" onclick="todoSetTab(\'unbooked\')">未安排预约 '+ubVis.length+(todoUbDot(ubAll) ? '<span class="todo-newdot" title="有新的或已逾期的"></span>' : '')+'</span></span>';
   var headTitle = refMode ? '<b>'+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' '+n+'（参考）</b> <span onclick="todoSetKind(\'\')" title="回到待办" style="cursor:pointer;">✕</span>' : tabs+(ubTab ? '' : tag); /* CMD-1015-08：参考名单标题「今天来访 4（参考）✕」 */
   var inner = ubTab ? todoUbListHtml(ubVis) : ((TODO_UI.kind && !tag) ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+
     (vis.length ? '<div class="todo-row todo-headrow"><div>出现时间</div><div>阶段</div><div>进程</div><div>截止时间</div><div>状态</div><div>客人</div></div>' : '')+'<div class="todo-list">'+body+'</div>';

@@ -117,12 +117,36 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   ST.begin = function(){
     try{ if(localStorage.getItem('gmc_cfg_stsnap')) return false; var o = {}; Object.keys(localStorage).filter(function(k){ return /^gmc_(state|clinic_)/.test(k); }).forEach(function(k){ o[k] = localStorage.getItem(k); }); localStorage.setItem('gmc_cfg_stsnap', JSON.stringify(o)); return true; }catch(e){ console.warn('[测试] 快照失败', e); return false; }
   };
+  /* CMD-1020-12：测试清理只能动测试自己建的数据。测试建的案件 = 名字以 T- / T2- 开头，或带 prep:true；
+     还原快照之前先找出「快照之后新增、不是测试建的用户案件」（用户在别的分页 / 同一个浏览器里新建的），存一份安全备份，还原后再原样加回去；永远不丢。 */
+  ST.isTestCase = function(c){ return !!c && (c.prep===true || /^T2?-/.test(String(c.name||''))); };
+  ST.cleanupKeepPlan = function(snapObj){
+    var kept = {};
+    Object.keys(localStorage).filter(function(k){ return /^gmc_clinic_/.test(k); }).forEach(function(k){
+      var cur = null, sp = null; try{ cur = JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){} try{ sp = snapObj[k] ? JSON.parse(snapObj[k]) : null; }catch(e){}
+      if(!cur || !cur.vars) return; var snapIds = {}; ((sp && sp.vars && sp.vars.CASE_ITEMS) || []).forEach(function(c){ snapIds[c.id] = 1; });
+      var keep = (cur.vars.CASE_ITEMS || []).filter(function(c){ return gmcIsUserCase(c) && !snapIds[c.id] && !ST.isTestCase(c); }); if(!keep.length) return;
+      var names = {}; keep.forEach(function(c){ names[c.name] = 1; });
+      var holdings = {}; Object.keys(cur.vars.CLIENT_HOLDINGS || {}).forEach(function(n){ if(names[n]) holdings[n] = cur.vars.CLIENT_HOLDINGS[n]; });
+      kept[k] = {cases:keep, clients:(cur.vars.CLIENTS || []).filter(function(cl){ return names[cl.name]; }), holdings:holdings};
+    });
+    return kept;
+  };
   ST.cleanup = function(){
     var raw = localStorage.getItem('gmc_cfg_stsnap'); if(!raw) return false;
+    try{ if(!window.GMC_NO_SAVE && window.Store) Store.save(); }catch(e){} /* 先把内存里的新数据写进存档，才看得到用户新建的案件 */
+    var o = JSON.parse(raw), kept = ST.cleanupKeepPlan(o), nKept = Object.keys(kept).reduce(function(n, k){ return n + kept[k].cases.length; }, 0);
+    if(nKept){ try{ gmcUserSafeSave('测试清理前（快照之后新增的用户案件 '+nKept+' 个，会原样保留）'); }catch(e){} console.warn('[ST.cleanup] 保留快照之后新增的用户案件 '+nKept+' 个'); }
     window.GMC_NO_SAVE = true; /* store.js 的 save() 看到这个就不写档 */
-    var o = JSON.parse(raw);
     Object.keys(localStorage).filter(function(k){ return /^gmc_(state|clinic_)/.test(k); }).forEach(function(k){ localStorage.removeItem(k); });
     Object.keys(o).forEach(function(k){ localStorage.setItem(k, o[k]); });
+    Object.keys(kept).forEach(function(k){ /* 把用户新建的案件加回还原后的分区 */
+      try{ var p = JSON.parse(localStorage.getItem(k) || 'null'); if(!p || !p.vars) return; var v = p.vars; v.CASE_ITEMS = v.CASE_ITEMS || []; v.CLIENTS = v.CLIENTS || []; v.CLIENT_HOLDINGS = v.CLIENT_HOLDINGS || {};
+        kept[k].cases.forEach(function(c){ if(!v.CASE_ITEMS.some(function(x){ return x.id===c.id; })) v.CASE_ITEMS.push(c); });
+        kept[k].clients.forEach(function(cl){ if(!v.CLIENTS.some(function(x){ return x.name===cl.name; })) v.CLIENTS.push(cl); });
+        Object.keys(kept[k].holdings).forEach(function(n){ if(!v.CLIENT_HOLDINGS[n]) v.CLIENT_HOLDINGS[n] = kept[k].holdings[n]; });
+        localStorage.setItem(k, JSON.stringify(p)); }catch(e){ console.error('[ST.cleanup] 加回用户案件失败', k, e); }
+    });
     localStorage.removeItem('gmc_cfg_stsnap'); localStorage.removeItem('gmc_cfg_stfix'); try{ gmcClearTestKeys(); }catch(e){}
     setTimeout(function(){ location.reload(); }, 50); return true;
   };
@@ -2168,6 +2192,68 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
     /* 基础资料护照栏 */
     var cl = clientByName(c.name), ps = cl.passport; cl.passport = {}; var bh = clientBasicBlockHtml(c); ST.ok(/护照/.test(bh) && /color:#B3261E[^>]*>⚠ 护照未登记/.test(bh), '基础资料护照栏：未登记报红'); cl.passport = ps;
+  });
+  ST.def('R64a','CMD-1020-12（A1 分页，需要 stagePay 夹具）：IN 交完面诊费后「客人希望的面诊时间」（选填，可改）+ KR 收通知',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.consultStatus==='paid_waiting_kr' && /^T-/.test(x.name); })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var old = c.wantConsult, hid = caseKrHospital(c), nN = function(){ return ((HOSPITAL_DATA[hid]||{}).notifs||[]).filter(function(n){ return /客人希望的面诊时间/.test(n.text||'') && String(n.text).indexOf(c.name)>-1; }).length; };
+    var h = consultFeeCardHtml('已缴费', '', '', c); ST.ok(/id="want-consult"/.test(h) && /客人希望的面诊时间/.test(h) && /选填/.test(h), '已缴面诊费下面有「客人希望的面诊时间」（选填）');
+    ST.ok(!/want-consult/.test(consultFeeCardHtml('待缴费', '', '', c)), '没交面诊费时不显示');
+    var n0 = nN(); saveWantConsult(c.id, '10/21 下午，或 10/22 全天'); ST.ok(c.wantConsult==='10/21 下午，或 10/22 全天' && ST.hasLog(c, /填写客人希望的面诊时间/) && nN()===n0+1, '填了：存下 + Timeline + KR 收一条通知');
+    saveWantConsult(c.id, '10/23 全天'); ST.ok(c.wantConsult==='10/23 全天' && ST.hasLog(c, /修改客人希望的面诊时间/) && /10\/23/.test(consultFeeCardHtml('已缴费', '', '', c)), '之后可以修改'); saveWantConsult(c.id, ''); ST.ok(!c.wantConsult, '可以清空（选填）');
+    c.wantConsult = old;
+  });
+  ST.def('R64b','CMD-1020-12（KM1 分页，需要 stagePay 夹具）：KR 待办红点 / 客人希望 / 确认面诊时间卡片新排版 / 院长日程 7 天卡片 / 不可预约新写法',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.c.consultStatus==='paid_waiting_kr'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var hid = krHospitalIdOfMe(), dir = r0.c.director, ds = krToday(), old = r0.c.wantConsult, blk = {id:'sbR64', who:dir, date:ds, time:'15:30', end:'17:00', type:'不可预约', title:'不可预约', note:'院长出差'}, blk2 = {id:'sbR64b', who:dir, date:ds, time:'18:00', end:'19:00', type:'不可预约', title:'不可预约', note:''};
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.wantConsult = '10/21 下午，或 10/22 全天'; return true; });
+    var tabs0 = JSON.stringify(HOSPITAL_DATA[hid].directorSchedule[dir] || []); (HOSPITAL_DATA[hid].directorSchedule[dir] = HOSPITAL_DATA[hid].directorSchedule[dir] || []).push(blk, blk2);
+    try{
+      krShowCase(r0.clinicId, r0.id, {here:true, tab:'consult'}); var el = document.getElementById('krcase-body'), txt = el.textContent;
+      ST.ok(/客人希望：10\/21 下午，或 10\/22 全天/.test(txt), '确认面诊时间卡片最上面：「客人希望：…」');
+      ST.ok(/负责院长/.test(txt) && /院长日程/.test(txt) && /当天的日程/.test(txt) && /面诊时间/.test(txt) && /预计出报告时间/.test(txt) && /请选择客人面诊的日期和时间/.test(txt) && /请选择预计出报告的日期和时间/.test(txt), '新排版：负责院长 + ［院长日程］、当天的日程、左面诊时间 / 右预计出报告时间（带灰色说明）');
+      var btns = [].map.call(el.querySelectorAll('button'), function(b){ return b.textContent.trim(); }), card = [].filter.call(el.querySelectorAll('.card'), function(x){ return /确认面诊时间和预计出报告时间/.test(x.textContent); })[0];
+      var cb = card ? [].map.call(card.querySelectorAll('button'), function(b){ return b.textContent.trim(); }) : []; ST.ok(cb.indexOf('确认')>-1 && cb.indexOf('取消')===-1 && !/✕/.test(card ? card.textContent : ''), '底部只有［确认］（没有［取消］和 X）：'+cb.join('/'));
+      ST.ok(!/（手动）/.test(txt) && /不可预约 · 院长出差/.test(txt) && /15:30 ~ 17:00/.test(txt), '不可预约写「不可预约 · 备注」，拿掉（手动）');
+      var ag = krDayAgendaRows(dir, ds); var tags = ag.rows.map(function(r){ return r.tag; }); ST.ok(tags.indexOf('不可预约')>-1 && tags.indexOf('不可预约 · 院长出差')>-1, '没写备注只写「不可预约」'); ST.ok(ag.rows.filter(function(r){ return r.red; }).every(function(r){ return !/^(营业时间外|午休)/.test(r.tag); }) && ag.rows.filter(function(r){ return !r.red; }).every(function(r){ return /^(营业时间外|午休)/.test(r.tag); }), '不可预约的行红（浅红底 + 红字），营业时间外 / 午休灰');
+      krDirSchedPopup(dir); var pop = document.getElementById('kr-dirsched-overlay'), pt = pop.textContent; ST.ok(pop.querySelectorAll('div[style*="grid-template-columns:repeat(4"] > div').length===7, '院长日程弹窗：7 天各一张小卡，排成网格'); ST.ok(/全天可约/.test(pt) && /不可预约 · 院长出差/.test(pt) && !/没有日程/.test(pt), '没有安排的写「全天可约」（取代「没有日程」）；占掉的写清楚'); closePromoOverlay('kr-dirsched-overlay');
+      /* 整天 OFF 的那张整张浅红底 */
+      var offDs = krDateAdd(2), o = {id:'offR64', kind:'director', who:dir, date:offDs, part:'全天'}; (HOSPITAL_DATA[hid].offs = HOSPITAL_DATA[hid].offs || []).push(o);
+      try{ krDirSchedPopup(dir); var cards = [].slice.call(document.querySelectorAll('#kr-dirsched-overlay div[style*="grid-template-columns:repeat(4"] > div')), redCard = cards.filter(function(x){ return /OFF（全天）/.test(x.textContent); })[0]; ST.ok(!!redCard && /FDECEA|rgb\(253, 236, 234\)/i.test(redCard.getAttribute('style')||redCard.style.background), '整天 OFF 的卡整张浅红底，写原因（OFF（全天））'); }
+      finally{ HOSPITAL_DATA[hid].offs = HOSPITAL_DATA[hid].offs.filter(function(x){ return x.id!=='offR64'; }); closePromoOverlay('kr-dirsched-overlay'); }
+      /* 待办红点 */
+      var items = todoItems(), it = items.filter(function(x){ return x.kind==='eta' && x.caseId===r0.id; })[0]; ST.ok(!!it && /客人希望：10\/21/.test(it.label||it.text||JSON.stringify(it)), 'KR 待办里带「客人希望：…」');
+      if(it){ var s = todoSeenLoad(); delete s[it.key]; ST.ok(todoTabDot(todoVisible(items)) && /todo-newdot/.test(todoPaneHtml(items).split('未安排预约')[0]), '有没看过的新待办 → 「待办 N」亮红点'); todoMarkCaseSeen(r0.id); var s2 = todoSeenLoad(); ST.ok(!!s2[it.key] && !todoIsNew(it), '打开案件看过后这条不再亮'); }
+    } finally {
+      HOSPITAL_DATA[hid].directorSchedule[dir] = JSON.parse(tabs0); Store.touch();
+      Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; if(old) c.wantConsult = old; else delete c.wantConsult; return true; });
+    }
+  });
+  ST.def('R63a','CMD-1020-12（任意 IN 分页）：用户案件保护 —— 全部清空有用户案件时拒绝 / 重置前存安全备份 / 升级数量核对 / 测试清理只动测试自己建的数据',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = createReservationCase('手工保护案件', '', ymdAdd(todayStr(), 3), '11:00', '+62 811-5559-'+String(Math.floor(Math.random()*900+100)), '面诊商谈'), tc = ST.newRes('R63t'); Store.save();
+    try{
+      ST.ok(gmcIsUserCase(c) && ST.isTestCase(tc) && !ST.isTestCase(c), '手工案件 = 用户案件；测试建的（T2- 开头）= 测试案件');
+      var n0 = gmcUserCaseCountRaw(); ST.ok(n0>=1, '存档里数得到用户案件（'+n0+'）');
+      var before = Object.keys(localStorage).filter(function(k){ return /^gmc_(state|clinic_)/.test(k); }).map(function(k){ return k+':'+(localStorage.getItem(k)||'').length; }).join('|');
+      var origErr = console.error; var errs = 0; console.error = function(){ errs++; }; var r = gmcResetAll('R63a 拒绝测试', false); console.error = origErr;
+      var after = Object.keys(localStorage).filter(function(k){ return /^gmc_(state|clinic_)/.test(k); }).map(function(k){ return k+':'+(localStorage.getItem(k)||'').length; }).join('|');
+      ST.ok(r===false && errs===1 && before===after, '有用户案件时「全部清空」被拒绝，存档一个字节没动');
+      /* 快照之后新增的用户案件：清理计划会保留，测试建的不保留 */
+      var snap = {}; Object.keys(localStorage).filter(function(k){ return /^gmc_(state|clinic_)/.test(k); }).forEach(function(k){ snap[k] = localStorage.getItem(k); });
+      var c2 = createReservationCase('手工保护案件2', '', ymdAdd(todayStr(), 3), '12:00', '+62 811-5558-'+String(Math.floor(Math.random()*900+100)), '面诊商谈'); Store.save();
+      var plan = ST.cleanupKeepPlan(snap), keptNames = []; Object.keys(plan).forEach(function(k){ plan[k].cases.forEach(function(x){ keptNames.push(x.name); }); });
+      ST.ok(keptNames.indexOf('手工保护案件2')>-1 && keptNames.indexOf('手工保护案件')===-1 && keptNames.indexOf(tc.name)===-1, '测试清理计划：快照之后新增的用户案件保留；快照里已有的（还原后自然在）和测试建的不算（保留：'+keptNames.join('、')+'）');
+      /* 安全备份 */
+      var cnt = gmcUserSafeSave('R63a'); ST.ok(cnt>=2 && gmcUserSafeList()[0].total===cnt && gmcUserSafeList().length<=2, '用户案件安全备份：存下 '+cnt+' 个，最多留 2 份');
+      /* 升级数量核对：存档里的用户案件数 = 提取出的数量 */
+      var cry = gmcExtractUserCarry(); ST.ok(cry.total===gmcUserCaseCountRaw(), '升级前提取数量 = 存档里的数量（对得上才会升级，对不上就停）');
+      ST.ok(typeof gmcShowBlock==='function' && typeof gmcUserSafeRestore==='function', '停下来提示 / 恢复函数存在');
+    } finally {
+      for(var i = CASE_ITEMS.length-1; i >= 0; i--){ if(/^手工保护案件/.test(CASE_ITEMS[i].name) || CASE_ITEMS[i].name===tc.name) CASE_ITEMS.splice(i, 1); } for(var j = CLIENTS.length-1; j >= 0; j--){ if(/^手工保护案件/.test(CLIENTS[j].name) || CLIENTS[j].name===tc.name) CLIENTS.splice(j, 1); } try{ Store.save(); }catch(e){} /* 只删这个用例自己建的（当前诊所的内存数组），存档随后写入 */
+      try{ var l = JSON.parse(localStorage.getItem('gmc_cfg_usersafe')||'[]'); l = l.filter(function(x){ return x.reason!=='R63a'; }); localStorage.setItem('gmc_cfg_usersafe', JSON.stringify(l)); }catch(e){}
+    }
   });
   ST.def('R62a','CMD-1020-11（A1 分页，需要 pcStage 夹具）：在韩期间 —— 确认赴韩时可先空着 / 施术前提醒前必填 / 离境日太早红字不拦 / 修改 → KR 收通知 + Timeline / 离境日判断「客人已回国」/ IN 项目卡显示',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
