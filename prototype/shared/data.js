@@ -4201,7 +4201,7 @@ function scopeMgmtRowsHtml(c, selected, q, ccy){
   return '<div style="font-size:11px;font-weight:700;color:var(--muted);margin:12px 0 2px;">管理项目（KR 本地管理项目，付费，只在韩国做）</div>'+list.map(function(si){
     var checked = selected.some(function(it){ return it.projectId===scopeMgmtPid(si); });
     var meta = mgmtQtyText(si)+mgmtScheduleText(si)+(si.note ? '｜'+si.note : '');
-    return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleProject(\''+scopeMgmtPid(si)+'\')" '+(checked?'checked':'')+' style="margin-top:2px;"><span style="flex-grow:1;">'+si.name+'<div style="font-size:11px;color:var(--slate2);margin-top:2px;">'+meta+'</div></span><span style="color:var(--slate2);">'+displayAmount(si.price, 'KR', ccy)+'</span></label>';
+    return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleProject(\''+scopeMgmtPid(si)+'\')" '+(checked?'checked':'')+' style="margin-top:2px;"><span style="flex-grow:1;">'+si.name+'<div style="font-size:11px;color:var(--slate2);margin-top:2px;">'+meta+'</div></span><span style="color:var(--slate2);">'+krPickAmount(si.price, 'KR', ccy)+'</span></label>';
   }).join('');
 }
 function projectPickerHtml(c, isAddition){
@@ -4231,7 +4231,7 @@ function projectPickerHtml(c, isAddition){
         var noteHtml = (p.krNote ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'+p.krNote+'</div>' : '')+((p.krMeta||[]).length ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;line-height:1.6;">'+p.krMeta.join('<br>')+'</div>' : '');
         return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
           '<input type="checkbox" onchange="toggleProject(\''+p.id+'\')" '+(checked?'checked':'')+' style="margin-top:2px;">'+
-          '<span style="flex-grow:1;">'+p.name+noteHtml+'</span><span style="color:var(--slate2);">'+displayAmount(p.price, p.origin, pickerCcy)+'</span>'+projCasesLinkHtml(p.id)+'</label>';
+          '<span style="flex-grow:1;">'+p.name+noteHtml+'</span><span style="color:var(--slate2);">'+krPickAmount(p.price, p.origin, pickerCcy)+'</span>'+projCasesLinkHtml(p.id)+'</label>';
       }).join('') || (scopeMgmtItems(c).length ? '' : '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有匹配的项目</div>'))+scopeMgmtRowsHtml(c, selected, q, pickerCcy);
     }
   } else {
@@ -4327,7 +4327,7 @@ function krRefundDeposit(kind){
 function setProjectOrigin(o){
   var c = getCurrentCase(); if(!c) return;
   c.projectOriginFilter = o;
-  if(o==='KR') CASE_DISPLAY_CCY_KR = 'KRW'; /* CMD-1015-15：切到赴韩项目默认显示韩币 ₩（再手动切才换） */
+  if(o==='KR') CASE_DISPLAY_CCY_KR = 'IDR'; /* CMD-1020-13 四：切到赴韩项目默认显示印尼盾 Rp（₩ 韩元原价写在括号里；下拉仍可切韩元） */
   renderCaseBody(c);
 }
 
@@ -5346,11 +5346,18 @@ function cancelKrScheduleChange(){
 /* CMD-1015-16：付完定金后拿掉 IN「确认赴韩项目」的［+ 追加项目］——要加赴韩项目请在对话里跟 KR 说，由 KR 到院当天添加（在韩加项）；要加本地项目用右上角［+ 添加本地管理］ */
 var KR_PLAN_REC_OPEN = {}; /* 推荐项目整理卡片：默认折叠 */
 function toggleKrPlanRec(id){ KR_PLAN_REC_OPEN[id] = !KR_PLAN_REC_OPEN[id]; var c = getCurrentCase(); if(c) renderCaseBody(c); }
+/* CMD-1020-13 六：赴韩施术页左上角 = 建议在韩停留天数（取代原来的「赴韩施术计划」按钮）；IN 选施术日期时参考 */
+function krStayHint(c){
+  var surg = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); }), p = {days:0};
+  try{ p = stayPlanOf(surg, (c.krSchedule||{}).confirmedDate||'', function(it){ return itemSurgDate(c, it); }); }catch(e){}
+  if(!p.days) return '建议在韩停留天数：—';
+  return '建议在韩停留 '+p.days+' 天'+(p.reason ? '（'+aEscC(p.reason)+'）' : '')+' · 施术日 = 第 0 天';
+}
 function krProcedureTabHtml(c){
   var sub = c.krSubTab || 'main', st0 = scheduleState(c), kConfirmed = ['Confirmed','Changing','Arrived'].indexOf(st0)>-1 && !!(c.krSchedule && c.krSchedule.confirmedDate);
   if(sub==='timeline' && !kConfirmed) sub = 'main'; /* 在韩 timeline 要等 KR 确认施术时间后才出现 */
   var hasItems = krActiveItems(c).length>0;
-  var tabsHtml = c.settlementDone ? '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;"><span class="chip'+(sub==='main'?' active':'')+'" onclick="setKrSubTab(\'main\')">赴韩施术计划</span>'+(kConfirmed ? '<span class="chip'+(sub==='timeline'?' active':'')+'" onclick="setKrSubTab(\'timeline\')">在韩 timeline'+((c.subItems||[]).length?'（'+c.subItems.length+'）':'')+'</span>' : '')+'<span style="flex:1;"></span>'+(hasItems ? '<button class="btn-outline" style="padding:5px 12px;font-size:12px;" onclick="printKrPlan()">打印</button>' : '')+'</div>' : '';
+  var tabsHtml = c.settlementDone ? '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;"><span class="chip'+(sub==='main'?' active':'')+'" onclick="setKrSubTab(\'main\')" title="建议在韩停留天数（施术日 = 第 0 天），选施术日期时参考">'+krStayHint(c)+'</span>'+(kConfirmed ? '<span class="chip'+(sub==='timeline'?' active':'')+'" onclick="setKrSubTab(\'timeline\')">在韩 timeline'+((c.subItems||[]).length?'（'+c.subItems.length+'）':'')+'</span>' : '')+'<span style="flex:1;"></span>'+(hasItems ? '<button class="btn-outline" style="padding:5px 12px;font-size:12px;" onclick="printKrPlan()">打印</button>' : '')+'</div>' : '';
   if(sub==='timeline' && c.settlementDone) return '<div class="card" style="padding:22px 24px;">'+tabsHtml+krTimelineTabHtml(c)+'</div>';
   return krProcedureTabMain(c, tabsHtml);
 }
@@ -5449,7 +5456,7 @@ function krProcedureTabMain(c, tabsHtml){
   var recHtml = hasActive ? recSummaryHtml(krActiveItems(c).filter(function(it){ return !(c.krScope && c.krScope.items && c.krScope.items.length) || !(it.krAddOn || it.preBalanceAdd || it.swappedFrom); }).map(function(it){ /* 推荐项目整理保持原诊疗方案：在韩加的（到院加项 / 施术中增加 / 更换）不混进来（CMD-1013-09 四） */ return {name:it.name, stay:it.stay, stayReason:it.stayReason, anesthesia:it.anesthesia, postcare:it.postcare, note:it.itemNote||it.note||''}; }), c.krScope && c.krScope.overallNote, {print:false, base:(c.krSchedule||{}).confirmedDate||'', dateOf:function(it){ return itemSurgDate(c, it); }}) : ''; /* 推荐项目整理 + ［打印］给客人（CMD-1012-02 C5）；IN 室长备注一起印出（CMD-1012-05 三·3） */
   /* CMD-1015-05 六：三张卡——① 小状态 + 施术日期 +［无法协调］/［取消项目］ ② 推荐项目整理（默认折叠） ③ 确认赴韩项目（每个项目完整内容）+ 印尼室长备注（约三行高）+［+ 追加项目］ */
   var recOpen = !!KR_PLAN_REC_OPEN[c.id];
-  var recCard = recHtml ? '<div class="card" style="padding:16px 24px;"><div style="display:flex;align-items:center;cursor:pointer;" onclick="toggleKrPlanRec(\''+c.id+'\')"><b style="font-size:14px;flex:1;">推荐项目整理</b><span style="color:var(--muted);">'+(recOpen ? '收起 ▴' : '展开 ▾')+'</span></div>'+(recOpen ? recHtml.replace(/margin:10px 0;/,'margin:10px 0 0;') : '')+'</div>' : '';
+  var recCard = ''; /* CMD-1020-13 六：「推荐项目整理」整块折叠区拿掉（建议在韩天数放在页面左上角；每个项目的安排在项目卡里看） */
   var noteBox = hasActive ? '<div style="margin-top:14px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">印尼室长备注</div><textarea rows="3" placeholder="印尼室长备注（选填，打印时一起印出）" onchange="setRecInNote(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;resize:vertical;">'+String(c.recInNote||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea></div>' : '';
   return (tabsHtml||'')+'<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;">'+subStatusRowHtml(caseSubStatusItems(c))+body+'</div>'+recCard+
     inProjectCardHtml(c)+'</div>'; /* CMD-1020-09：三张大卡（项目卡 / 术后管理 / 管理项目），在韩持有项目大卡拿掉；备注框、结束术后管理都拿掉 */
@@ -5537,7 +5544,7 @@ function coreSetReportEta(c, eta, by, isChange){
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
     c.consultStatus = 'awaiting_report';
     logCaseEvent(c, by, 'KR确认预计出报告时间：'+tkU(eta));
-    pushNotif('面诊','KR 确认预计出报告时间：'+c.name+' '+tkU(eta), {caseId:c.id});
+    pushNotif('面诊', c.consultAt ? 'KR 已确认面诊时间：'+tkK(c.consultAt.date, c.consultAt.time)+'，预计 '+tkU(eta)+' 出报告（'+c.name+'，'+(c.caseNo||'')+'）' : 'KR 确认预计出报告时间：'+c.name+' '+tkU(eta), {caseId:c.id, level:'action'}); /* CMD-1020-13 一：IN 要转告客人，所以弹出并停留（手动确认），点开进案件 */
   }
   updateCaseStage(c);
   return true;
@@ -6237,6 +6244,8 @@ function groupThousands(intStr, sep){ return intStr.replace(/\B(?=(\d{3})+(?!\d)
 
 /* 显示币种切换：赴韩=韩元(原价)/印尼盾/人民币，本地=印尼盾(原价)/人民币。换算后的金额前面加"≈"，原币不加。
    target 由调用方传（项目库页面传 PROJ_DISPLAY_CCY_*，案件里的项目选择/结算传 CASE_DISPLAY_CCY_*），两处切换互不影响 */
+/* CMD-1020-13 四：赴韩项目选 Rp 时写成「Rp 25.000.000（₩2,500,000）」，和项目库一致；其他币种照旧 */
+function krPickAmount(amount, origin, target){ return (origin==='KR' && target==='IDR') ? krIdrText(amount) : displayAmount(amount, origin, target); }
 function displayAmount(amount, origin, target){
   var native = currencyOf(origin);
   target = target || native;
@@ -8009,7 +8018,9 @@ function renderClientDetailIn(name){
    没填离境日时仍用最早可回国日（krCbEarliest，施术日 + 建议天数）。 */
 function stayFilled(c){ return !!(c && c.stay && c.stay.in && c.stay.out); }
 function stayMD(d){ return d ? String(d).slice(5).replace('-', '/') : ''; }
-function stayText(c){ var s = c && c.stay; if(!s || (!s.in && !s.out)) return ''; return (stayMD(s.in)||'（未定）')+' ～ '+(stayMD(s.out)||'（未定）'); }
+function stayMDT(c, k){ var s = c && c.stay || {}; return stayMD(s[k]) + (s[k+'Time'] ? ' '+s[k+'Time'] : ''); }
+function stayText(c){ var s = c && c.stay; if(!s || (!s.in && !s.out)) return ''; return (stayMDT(c, 'in')||'（未定）')+' ～ '+(stayMDT(c, 'out')||'（未定）'); } /* 有时间就带时间：10/29 15:00 ～ 11/08 18:00 */
+function stayAirportTip(c){ var s = c && c.stay || {}; return [s.inAirport ? '入境机场：'+s.inAirport : '', s.outAirport ? '离境机场：'+s.outAirport : ''].filter(Boolean).join('；'); }
 function stayOutDate(c){ return (c && c.stay && c.stay.out) || krCbEarliest(c) || ''; } /* 判断「客人还在不在韩国」用：离境日，没填就退回最早可回国日 */
 function stayOutIsSet(c){ return !!(c && c.stay && c.stay.out); }
 /* 离境日比最早可回国日早几天（> 0 才有）：红字提醒「比建议少 N 天」，不拦 */
@@ -8022,14 +8033,14 @@ function stayWarnHtml(c, date){ /* KR 预约弹窗 / 改时间：日期晚于离
   return '<div style="font-size:12px;color:#C26A1B;margin:4px 0;">'+(stayOutIsSet(c) ? '客人已离境（离境日 '+stayMD(o)+'）' : '晚于最早可回国日 '+stayMD(o))+'</div>';
 }
 function coreSetStay(c, inD, outD, by, o){
-  inD = inD||''; outD = outD||'';
+  inD = inD||''; outD = outD||''; var ex = (o && o.ex) || {};
   if(inD && outD && outD < inD) return {ok:false, err:'离境日不能早于入境日'};
-  var old = c.stay || {}, changed = (old.in||'')!==inD || (old.out||'')!==outD; c.stayAsked = true;
+  var old = c.stay || {}, changed = (old.in||'')!==inD || (old.out||'')!==outD || (old.inTime||'')!==(ex.inTime||'') || (old.outTime||'')!==(ex.outTime||'') || (old.inAirport||'')!==(ex.inAirport||'') || (old.outAirport||'')!==(ex.outAirport||''); c.stayAsked = true;
   if(!changed) return {ok:true, changed:false};
   var oldT = stayText(c) || '（空）';
-  c.stay = (inD || outD) ? {in:inD, out:outD, by:by, at:nowFullDt()} : null;
-  var newT = stayText(c) || '（空）', short = stayShortDays(c);
-  logCaseEvent(c, by, (oldT==='（空）' ? '填写在韩期间：' : '修改在韩期间：')+(oldT==='（空）' ? '' : oldT+' → ')+newT+(short ? '（离境日比建议少 '+short+' 天）' : ''), '赴韩施术');
+  c.stay = (inD || outD) ? {in:inD, out:outD, inTime:ex.inTime||'', outTime:ex.outTime||'', inAirport:ex.inAirport||'', outAirport:ex.outAirport||'', by:by, at:nowFullDt()} : null; /* CMD-1020-13：加入境 / 离境时间（韩国当地）和机场（选填） */
+  var newT = stayText(c) || '（空）', short = stayShortDays(c), air = stayAirportTip(c);
+  logCaseEvent(c, by, (oldT==='（空）' ? '填写在韩期间：' : '修改在韩期间：')+(oldT==='（空）' ? '' : oldT+' → ')+newT+(air ? '（'+air+'）' : '')+(short ? '（离境日比建议少 '+short+' 天）' : ''), '赴韩施术');
   if(!(o && o.initial)){ try{ pushKrNotif(caseKrHospital(c), by+(oldT==='（空）' ? ' 填写了 ' : ' 修改了 ')+c.name+'（'+(c.caseNo||'')+'）的在韩期间：'+(oldT==='（空）' ? '' : oldT+' → ')+newT, {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'stay'}); }catch(e){} }
   return {ok:true, changed:true};
 }

@@ -93,6 +93,78 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
   </div>
 </div>
 </div>
+<!-- ============ CMD-1020-13 五：KR 对话窗口 = IN 同一个组件（同样的浮窗 / 引用到案件 / 文件 / 引用案件弹窗；kr.js 把 IN 的函数包进「来源诊所」的数据环境里运行） ============ -->
+<div class="chat-float-overlay" id="chat-float-overlay">
+  <div class="chat-float">
+    <div class="mac-bar">
+      <div class="mac-dots"><span style="background:#EF6A5F;"></span><span style="background:#F5BD4F;"></span><span style="background:#61C454;"></span></div>
+      <div class="mac-url">🌐 gmc.network</div>
+    </div>
+    <div class="float-head">
+      <div class="l">
+        <span class="sq-avt" id="float-avt" style="width:34px;height:34px;border-radius:10px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;">D</span>
+        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">KM1 室长 · 韩国室长</span> <span id="float-open-case" style="display:none;font-size:13px;color:var(--blue);font-weight:700;" title="新标签页打开案件页">↗</span> <span style="font-size:11px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 客人1 的面诊安排</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
+        <span style="cursor:pointer;" title="对话中的文件" onclick="openRoomFiles()">📁</span>
+        <span style="cursor:pointer;" title="搜索" onclick="toggleFloatSearch()">🔍</span>
+        <span id="float-mute-btn" style="cursor:pointer;" title="对自己关闭这个房间的提醒（被@照样提醒）" onclick="toggleMuteRoom()">🔕</span>
+        <span style="cursor:pointer;" onclick="closeFloat()">✕</span>
+      </div>
+      <div id="float-members-dd" style="display:none;position:absolute;top:100%;left:12px;z-index:8;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(27,38,53,.16);padding:8px 14px 12px;min-width:280px;max-height:340px;overflow:auto;"></div>
+    </div>
+    <div id="float-demo-bar" style="display:flex;gap:8px;padding:6px 18px;border-bottom:1px solid var(--border2);background:#FAF8F3;"></div>
+    <div class="float-search" id="float-search"><input type="text" id="float-search-input" placeholder="在对话中搜索…" oninput="renderFloatMessages()"></div>
+    <div id="chat-case-chip" style="display:none;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--terracotta-bg);"></div>
+    <div class="float-body" id="float-body"></div>
+    <div class="float-toolbar" id="float-toolbar"></div>
+    <div id="float-ref-chip" style="display:none;align-items:center;gap:8px;padding:8px 18px;border-top:1px solid var(--border);background:var(--white);"></div>
+    <div id="float-suggest" style="display:none;max-height:170px;overflow:auto;border-top:1px solid var(--border);background:#fff;"></div>
+    <div class="float-input">
+      <input type="text" id="float-input-box" placeholder="输入消息…（@ 选人，# 选案件）" oninput="floatInput()" onkeydown="floatKey(event)">
+      <button class="send-btn" onclick="sendFloatMsg()">➤</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="quote-overlay" onclick="if(event.target===this) closeQuoteModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">引用到案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeQuoteModal()">✕</span>
+    </div>
+    <div id="quote-preview" style="font-size:12px;color:var(--slate2);background:var(--border2);border-radius:8px;padding:8px 10px;margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">选择案件（只能选已有 Case ID 的案件）</div>
+    <div id="quote-case-list" style="max-height:220px;overflow:auto;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeQuoteModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmQuote()">确认引用</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="room-files-overlay" style="z-index:70;" onclick="if(event.target===this) closeRoomFiles()">
+  <div class="modal-box" style="width:420px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span id="room-files-title" style="font-size:15px;font-weight:700;">对话中的文件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRoomFiles()">✕</span>
+    </div>
+    <div id="room-files-body"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mention-case-overlay" style="z-index:70;" onclick="if(event.target===this) closeMentionCase()">
+  <div class="modal-box" style="width:420px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:15px;font-weight:700;">引用案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeMentionCase()">✕</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">选一个案件，案件 chip 会挂在输入框上方；写内容、发送后，这条消息会写入该案件（终态案件只挂不写入）。基础资料还没确认的案件也可以选</div>
+    <div id="mention-case-list" style="margin-bottom:6px;"></div>
+  </div>
+</div>
+
+
 <div id="toast-stack"></div>
 <script src="/shared/version.js"></script>
 <script src="/shared/rules.js"></script>

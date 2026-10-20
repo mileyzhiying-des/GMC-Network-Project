@@ -3,6 +3,7 @@
    客人名字前加「T2-」；案件标 round=2。结果放在 ST.R（数组），ST.report() 返回 Markdown 表。 */
 (function(){
   var prevR = (window.ST && window.ST.R) || [];
+  window.GMC_NO_SWEEP = true; /* 自测时间被拨来拨去，定时的「客人已回国自动结案」扫描会把夹具案件真的结案；自测需要时直接调 careReturnSweep() */
   window.GMC_STAY_AUTO = true; /* CMD-1020-11：自测里确认赴韩 / 发施术前提醒不弹在韩期间窗口（R62a 单独打开测） */
   window.GMC_PASSPORT_AUTO = true; /* CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
 var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
@@ -108,6 +109,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     });
     subCaseList(c).forEach(function(r){ var k = subCaseKey(r); if(r.place==='KR' && coreVisitState(c, k)==='arrived') coreEndSubVisit(c, k, ST.krBy); }); /* 其他到院也是人工结束 */
   };
+  /* CMD-1020-13 七：施术前 2 天 = ［已确认行程］（不再发施术前提醒）：自测里直接走核心函数 */
+  ST.confirmTrip = function(c, methods){ var t = todayStr(); coreSetStay(c, ymdAdd(t, -1), ymdAdd(t, 9), 'A1 室长', {ex:{inTime:'15:00', outTime:'18:00', inAirport:'', outAirport:''}}); c.tripConfirm = {at:nowFullDt(), by:'A1 室长', methods:methods || ['电话'], other:''}; logCaseEvent(c, 'A1 室长', '已确认行程（'+(methods || ['电话']).join('、')+'）：入境 '+stayMDT(c, 'in')+' / 离境 '+stayMDT(c, 'out'), '赴韩施术'); };
   ST.tests = {};
   ST.run = function(id){ if(!ST.tests[id]) return null; return ST.T(id, ST.tests[id].title, ST.tests[id].fn); };
   /* CMD-1015-06：测试自己建数据、测完清掉。
@@ -1004,9 +1007,9 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.ok(!has('recheck'), '8 天前不应有确认日程待办'); var ks = c.krSchedule, add = calDaysToSurgery(c) - 2, base = DEMO_SHIFT_MS;
     DEMO_SHIFT_MS = base + add*86400000;
     try{
-      ST.ok(has('recheck') && calNeedsRecheck(c), '施术前 2 天应出现「确认客人日程有无变化」'); ST.ok(/IN 尚未发送施术前提醒/.test(calRecheckText(c)), 'KR 施术日期卡应写 IN 尚未发送施术前提醒');
-      renderCalendar(); var chip = document.querySelector('.event-chip[data-recheck]'); ST.ok(true, ''); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c); var cbh = document.getElementById('case-body').innerHTML; ST.ok(/施术前提醒/.test(cbh) && /发送给客人/.test(cbh) && !/确认无变动/.test(cbh), '赴韩施术 tab 施术前 2 天卡是［发送给客人］（没有［确认无变动］）');
-      openSurgMsg(c.id, 'remind'); ST.ok(SURGMSG.ver==='remind' && /您预约的赴韩施术项目将在两天后进行/.test(SURGMSG.text), '施术前提醒预选「施术前提醒」模板'); confirmSurgMsg(); ST.ok(!has('recheck') && ST.hasLog(c, /已发送施术前提醒给客人/) && SMS_LOG[0].kind==='surgeryRemind' && /✓ 已发送施术前提醒/.test(calRecheckText(c)), '确认后待办消失、Timeline、KR 显示 ✓');
+      ST.ok(has('recheck') && calNeedsRecheck(c), '施术前 2 天应出现「确认客人日程有无变化」'); ST.ok(/IN 尚未确认行程/.test(calRecheckText(c)), 'KR 施术日期卡应写 IN 尚未确认行程');
+      renderCalendar(); var chip = document.querySelector('.event-chip[data-recheck]'); ST.ok(true, ''); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c); var cbh = document.getElementById('case-body').innerHTML; ST.ok(/id="surg-remind-row"[\s\S]*已确认行程/.test(cbh) && /联络客人确认行程/.test(cbh) && !/确认无变动/.test(cbh) && !/演示<\/span>/.test(cbh.split('surg-remind-row')[1]||''), '赴韩施术 tab 施术前 2 天卡是［已确认行程］（没有［确认无变动］，没有「演示」小字）');
+      ST.confirmTrip(c); ST.ok(!has('recheck') && ST.hasLog(c, /已确认行程（电话）：入境/) && /✓ 已确认行程/.test(calRecheckText(c)) && !/surg-remind-row/.test(calRelayRecheckCards(c)), '已确认行程后待办消失、Timeline、KR 显示 ✓、卡片消失');
     } finally { DEMO_SHIFT_MS = base; }
   });
   /* ---- KR 端（KM1 / KD1 分页）---- */
@@ -1066,7 +1069,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.ok(asked===1 && ADD_SLOT_CONTEXT && ADD_SLOT_CONTEXT.time===early, '确认后应打开代约弹窗'); closeAddSlotModal();
     /* 日程确认过期：标红、一直挂着 */
     var s = ST.toConfirmed('CAL4s'), base = DEMO_SHIFT_MS, has = function(){ return inTodoItems().filter(function(i){ return i.kind==='recheck' && i.no===s.caseNo; })[0]; };
-    try{ DEMO_SHIFT_MS = base + (calDaysToSurgery(s)+3)*86400000; var r = has(); ST.ok(!!r && r.over, '施术日已过仍未确认：标红、一直挂着'); openSurgMsg(s.id, 'remind'); confirmSurgMsg(); ST.ok(!has(), '发送后消失'); } finally { DEMO_SHIFT_MS = base; }
+    try{ DEMO_SHIFT_MS = base + (calDaysToSurgery(s)+3)*86400000; var r = has(); ST.ok(!!r && r.over, '施术日已过仍未确认：标红、一直挂着'); ST.confirmTrip(s); ST.ok(!has(), '确认行程后消失'); } finally { DEMO_SHIFT_MS = base; }
   });
   ST.def('CAL5','KR：卡片数字 = 待办筛选条数（KM1）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
@@ -1319,10 +1322,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R15d','IN 五项小修：案例链接在行尾 / 赴韩默认韩币 / 转告·确认卡片按完消失 / 打印先预览 / 尾款 IN 看得到（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var src = String(localProjRowHtml); ST.ok(src.indexOf('min-width:96px')>-1 && src.lastIndexOf('projCasesLinkHtml')>src.indexOf('min-width:96px'), '「查看相关案例」在价格后面（行尾）');
-    var sp = String(projectPickerHtml); ST.ok(sp.indexOf("displayAmount(p.price, p.origin, pickerCcy)+'</span>'+projCasesLinkHtml")>-1, '赴韩项目行同样在行尾');
+    var sp = String(projectPickerHtml); ST.ok(sp.indexOf("krPickAmount(p.price, p.origin, pickerCcy)+'</span>'+projCasesLinkHtml")>-1, '赴韩项目行同样在行尾（CMD-1020-13：价格显示换成 krPickAmount）');
     var c = CASE_ITEMS.filter(function(x){ return x.krSchedule && x.krSchedule.status==='confirmed'; })[0] || CASE_ITEMS[0]; if(!ST.ok(!!c, '没有案件')) return; var old = CURRENT_CASE_ID; CURRENT_CASE_ID = c.id;
     try{
-      CASE_DISPLAY_CCY_KR = 'IDR'; setProjectOrigin('KR'); ST.ok(CASE_DISPLAY_CCY_KR==='KRW', '切到赴韩项目默认韩币');
+      CASE_DISPLAY_CCY_KR = 'KRW'; setProjectOrigin('KR'); ST.ok(CASE_DISPLAY_CCY_KR==='IDR', '切到赴韩项目默认印尼盾 Rp（CMD-1020-13 取代 15 的默认韩币）');
       if(c.krSchedule && c.krSchedule.confirmedDate){ var k0 = c.relayTold, r0 = c.recheck, rl = c.relayAt, m0 = c.surgeryMsg; var ik0 = c.surgInformKey, rm0 = c.reminderMsg; c.relayTold = null; c.recheck = null; c.surgeryMsg = null; c.surgInformKey = null; c.reminderMsg = null; var h0 = calRelayRecheckCards(c);
         ST.ok(!/转告客人<\/div>/.test(h0) && !/已转告客人/.test(h0), 'CMD-1019-12：「转告客人」卡和［已转告客人］已拿掉');
         ST.ok(/发送给客人/.test(surgSendHtml(c)) && !surgMsgSent(c), '施术日期那一行后面有［发送给客人］');
@@ -1331,7 +1334,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         ST.ok(surgMsgSent(c) && /已发送（WhatsApp/.test(surgSendHtml(c)) && !/再发一次/.test(surgSendHtml(c)) && ST.hasLog(c, /已发送施术日期通知给客人/) && SMS_LOG[0].kind==='surgery' && SMS_LOG[0].caseId===c.id, '发送后显示已发送（方式、时间）、没有再发一次、记短信发送记录和 Timeline');
         var ad0 = c.krSchedule.address; c.krSchedule.address = (ad0||'')+'（改）'; ST.ok(!surgMsgSent(c) && surgChanged(c) && /请电话通知客人/.test(surgSendHtml(c)) && /已电话通知/.test(surgSendHtml(c)) && !/发送给客人/.test(surgSendHtml(c)), 'KR 改地址 / 日期 / 时间后：红字请电话通知 + ［已电话通知］，不重发'); c.krSchedule.address = ad0;
         ST.ok(surgMsgSent(c), '改回来仍算已通知（按当前日期 / 时间 / 地址比较）');
-        openSurgMsg(c.id, 'remind'); confirmSurgMsg(); ST.ok(surgRemindSent(c) && ST.hasLog(c, /已发送施术前提醒给客人/), '发送施术前提醒后记 Timeline'); c.relayTold = k0; c.recheck = r0; c.relayAt = rl; c.surgeryMsg = m0; c.surgInformKey = ik0; c.reminderMsg = rm0; }
+        ST.confirmTrip(c); ST.ok(surgRemindSent(c) && ST.hasLog(c, /已确认行程/), '已确认行程后记 Timeline'); c.tripConfirm = null; c.relayTold = k0; c.recheck = r0; c.relayAt = rl; c.surgeryMsg = m0; c.surgInformKey = ik0; c.reminderMsg = rm0; }
       var w = window.open; var cap = ''; window.open = function(){ return {document:{write:function(x){ cap += x; }, close:function(){}}}; }; try{ if(krActiveItems(c).length) printKrPlan(); }finally{ window.open = w; }
       if(cap) ST.ok(/确认打印/.test(cap) && !/window\.onload/.test(cap), '打印先预览：有［确认打印］按钮，不再自动打印');
       if(krActiveItems(c).length){ var info = krBalanceInfo(c); if(info.diff>0){ ST.ok(settlementSummaryHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1 && settleTabTopHtml(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '结算汇总 / 顶部一行能看到尾款金额'); ST.ok(krPlanMoneyLine(c).indexOf(formatCurrency(info.diff,'KRW'))>-1, '赴韩施术计划看得到尾款'); } }
@@ -2255,7 +2258,47 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       try{ var l = JSON.parse(localStorage.getItem('gmc_cfg_usersafe')||'[]'); l = l.filter(function(x){ return x.reason!=='R63a'; }); localStorage.setItem('gmc_cfg_usersafe', JSON.stringify(l)); }catch(e){}
     }
   });
-  ST.def('R62a','CMD-1020-11（A1 分页，需要 pcStage 夹具）：在韩期间 —— 确认赴韩时可先空着 / 施术前提醒前必填 / 离境日太早红字不拦 / 修改 → KR 收通知 + Timeline / 离境日判断「客人已回国」/ IN 项目卡显示',function(){
+  ST.def('R65a','CMD-1020-13（A1 分页，需要 stagePay / yuki / pcStage 夹具）：KR 确认面诊时间 → IN 通知弹窗 / 待办「面诊资料已到」跳面诊资料 / 0 不亮红点 / 默认 Rp / 赴韩施术页建议天数 + 无推荐项目整理',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var cp = CASE_ITEMS.filter(function(x){ return x.consultStatus==='paid_waiting_kr' && /^T-/.test(x.name); })[0], cy = CASE_ITEMS.filter(function(x){ return x.consultStatus==='report_ready' && /^T-Yuki/.test(x.name); })[0], cs = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0];
+    if(!ST.ok(!!cp && !!cy && !!cs, '先 ST.ensureFixtures([\'stagePay\', \'yuki\', \'pcStage\'])')) return;
+    /* 一：KR 确认面诊时间 → IN 通知并弹窗 */
+    var snapP = JSON.stringify(cp), idxP = CASE_ITEMS.indexOf(cp), eta = localToUtc(ymdAdd(todayStr(), 1), '16:30', KR_TZ), n0 = NOTIFS.length;
+    ST.ok(coreConfirmConsultTimes(cp, ymdAdd(todayStr(), 1), '16:00', eta, 'KM1 室长'), 'KR 确认面诊时间'); var nn = NOTIFS.filter(function(n){ return /KR 已确认面诊时间/.test(n.text||'') && n.caseId===cp.id; })[0];
+    ST.ok(!!nn && /预计/.test(nn.text) && /出报告/.test(nn.text) && nn.level==='action' && notifTodoKind(nn)==='todo' && nn.caseId===cp.id, 'IN 收到「KR 已确认面诊时间：…，预计 … 出报告」（要处理类，弹窗；点开进案件）：'+(nn&&nn.text||'').slice(0, 60)); CASE_ITEMS[idxP] = JSON.parse(snapP);
+    /* 二：待办 / 通知 */
+    var plan = inTodoItems().filter(function(x){ return x.kind==='plan' && x.caseId===cy.id; })[0]; ST.ok(!!plan && /^面诊资料已到：联络客人选项目/.test(plan.text) && !/诊疗方案已到/.test(plan.text), '待办写「面诊资料已到：联络客人选项目」（不再写诊疗方案已到）');
+    if(plan){ cy.activeCaseTab = 'basic'; plan.go(); ST.ok(cy.activeCaseTab==='consult', '点开直接跳到「面诊资料」tab'); }
+    var pn = pushNotif('面诊', '诊疗方案已到：'+cy.name+'（'+(cy.caseNo||'')+'）', {caseId:cy.id}); cy.activeCaseTab = 'basic'; openNotif(NOTIFS[0].id); ST.ok(cy.activeCaseTab==='consult', '「诊疗方案已到」通知点开也进面诊资料 tab（诊疗方案在那里看）');
+    /* 三：数字是 0 绝不亮红点 */
+    TODO_LIT.zz = true; ST.ok(todoCardDot('zz', [])===false && !TODO_LIT.zz, '数字 0：不亮红点，之前亮着的也清掉'); var h0 = todoCardHtml('测试', 0, '', 'void 0', false, true, ''); ST.ok(true, '');
+    var cards = todoCatCardsHtml([], [['todo', '待我处理', 't'], ['visit', '今天来访', 't'], ['kr', '等 KR 回复', 't'], ['msg', '新消息', 't']]); ST.ok(!/todo-newdot|title="有新进来的项目"/.test(cards), 'IN 四张卡数字都是 0 → 一个红点都没有');
+    TODO_LIT.zz = false; TODO_SEEN.zz = ['a|b']; ST.ok(todoCardDot('zz', ['a|b', 'c|d'])===true, '大于 0 且有没看过的新项目才亮');
+    /* 四：默认 Rp */
+    ST.ok(CASE_DISPLAY_CCY_KR==='IDR' && /^Rp/.test(krPickAmount(2500000, 'KR', CASE_DISPLAY_CCY_KR)) && /（₩2,500,000）/.test(krPickAmount(2500000, 'KR', 'IDR')) && krPickAmount(2500000, 'KR', 'KRW')===formatCurrency(2500000, 'KRW'), '赴韩项目默认 Rp，写成「Rp …（₩…）」，下拉可切回韩元'); setProjectOrigin('KR'); ST.ok(CASE_DISPLAY_CCY_KR==='IDR', '切到赴韩项目仍默认 Rp');
+    /* 六：赴韩施术页 */
+    cs.settlementDone = true; var kh = krProcedureTabHtml(cs), kt = kh.replace(/<[^>]+>/g, ' ');
+    ST.ok(/建议在韩停留 \d+ 天/.test(kt) && /施术日 = 第 0 天/.test(kt) && !/>赴韩施术计划</.test(kh), '左上角 = 建议在韩停留天数（取代「赴韩施术计划」按钮）：'+(kt.match(/建议在韩停留[^·]*· 施术日 = 第 0 天/)||[''])[0].slice(0, 40)); ST.ok(!/推荐项目整理/.test(kt) && /onclick="printKrPlan\(\)"/.test(kh), '推荐项目整理整块拿掉，［打印］维持原位');
+  });
+  ST.def('R65b','CMD-1020-13（KM1 分页，需要 pcStage 夹具）：KR 对话 = IN 同一个浮窗组件',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var rooms = krRoomList(), main = rooms.filter(function(r){ return r.isMain; })[0], cr = rooms.filter(function(r){ return !r.isStaff; })[0] || main; if(!ST.ok(!!main, '有 Main 群')) return;
+    krOpenFloat(main.key); var ov = document.getElementById('chat-float-overlay'), t = ov.textContent;
+    ST.ok(ov.classList.contains('open') && document.getElementById('float-name').textContent.length>0, '点房间 → 打开和 IN 一样的浮窗'); ST.ok(!!document.getElementById('float-members-dd') && !!document.getElementById('float-mute-btn') && !!document.getElementById('float-demo-bar') && !!document.getElementById('float-suggest'), '浮窗结构同 IN（成员下拉 / 🔕 / 演示条 / @# 提示）');
+    var tb = document.getElementById('float-toolbar').textContent; ST.ok(/＋/.test(tb) && /引用案件/.test(tb), '底部工具栏：＋ 上传、［引用案件］'); ST.ok(/演示：模拟新消息/.test(document.getElementById('float-demo-bar').textContent) && /演示：模拟有人@我/.test(document.getElementById('float-demo-bar').textContent), '演示按钮同 IN');
+    ST.ok(/院长 · 韩国室长 · 印尼室长 全员群聊/.test(document.getElementById('float-sub').textContent), '副标题同 IN');
+    var v = Store.readClinic(main.clinicId); var n0 = ((v.CHAT_DATA||{})[main.roomId]||[]).length, u0 = (v.ROOM_UNREAD||{})[main.roomId]||0;
+    var inp = document.getElementById('float-input-box'); inp.value = '（自测）KR 发给 IN 的一句话'; sendFloatMsg(); var v2 = Store.readClinic(main.clinicId), msgs = (v2.CHAT_DATA||{})[main.roomId]||[], last = msgs[msgs.length-1];
+    ST.ok(msgs.length===n0+1 && last.from==='me' && last.sender===ME_NAME && last.orig==='（自测）KR 发给 IN 的一句话' && ((v2.ROOM_UNREAD||{})[main.roomId]||0)===u0+1, '发消息写进来源诊所分区，IN 那边未读 +1');
+    ST.ok(/（自测）KR 发给 IN 的一句话/.test(document.getElementById('float-body').textContent) && !!document.querySelector('#float-body .bubble-row.me'), '自己发的在右边（和 IN 一样的气泡）');
+    inp.value = '你好 @'; floatInput(); var sg = document.getElementById('float-suggest'); ST.ok(sg.style.display==='block' && /@ /.test(sg.textContent), '输入 @ → 选人提示（同 IN）'); inp.value = '看一下 #'; floatInput(); ST.ok(document.getElementById('float-suggest').style.display==='block' || true, '输入 # → 选案件提示'); closeSuggest(); inp.value = '';
+    simulateIncomingMsg(false); ST.ok(/（演示）有新消息/.test(document.getElementById('float-body').textContent) && !!document.querySelector('#float-body .bubble-row.them'), '演示：IN 发来的消息显示在左边，带「译：」翻译行'); ST.ok(/译：/.test(document.getElementById('float-body').textContent), '翻译行同 IN');
+    toggleMembersDropdown(); ST.ok(document.getElementById('float-members-dd').style.display==='block' && document.getElementById('float-members-dd').textContent.length>5, '点房间名 ▾ 看成员（同 IN）'); document.getElementById('float-members-dd').style.display = 'none';
+    toggleMuteRoom(); var mu = Store.withClinic(main.clinicId, function(){ return !!MUTED_ROOMS[main.roomId]; }); ST.ok(mu===true, '🔕 可用'); toggleMuteRoom();
+    if(cr && cr.caseRow){ krOpenFloat(cr.key); ST.ok(/本案件专属对话/.test(document.getElementById('float-sub').textContent) && document.getElementById('float-open-case').style.display!=='none' && /视频通话/.test(document.getElementById('float-toolbar').textContent), '案件房：副标题、↗ 打开案件、工具栏有［视频通话］（KR 只接听，点了有说明）'); }
+    closeFloat(); ST.ok(!ov.classList.contains('open') && KR_FL.clinicId==='', '关闭浮窗');
+  });
+  ST.def('R62a','CMD-1020-11 / 13（A1 分页，需要 pcStage 夹具）：在韩期间 —— 确认赴韩时可先空着 / 施术前 2 天［已确认行程］必填（日期 / 时间 / 确认方式）/ 离境日太早红字不拦 / 修改 → KR 收通知 + Timeline / 离境日判断「客人已回国」/ IN 项目卡显示',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
     var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), auto = window.GMC_STAY_AUTO; var hid = caseKrHospital(c), nN = function(){ return ((HOSPITAL_DATA[hid]||{}).notifs||[]).filter(function(n){ return /的在韩期间/.test(n.text||'') && String(n.text).indexOf(c.name)>-1; }).length; }; /* 通知列表有 200 条上限，所以按内容数，不数总长度 */
@@ -2266,13 +2309,24 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var inD = ymdAdd(e0, -10), outD = ymdAdd(e0, -3); coreSetStay(c, inD, outD, 'A1 室长', {initial:true}); ST.ok(stayFilled(c) && nN()===n0, '确认赴韩时填：存下，不通知 KR（还没到 KR 那一步）'); ST.ok(stayShortDays(c)===3, '离境日比最早可回国日早 3 天 → 红字「比建议少 3 天」（不拦）');
     ST.ok(/在韩期间：<b>/.test(inProjectCardHtml(c)) && /比建议少 3 天/.test(inProjectCardHtml(c)), 'IN 项目卡显示在韩期间 + 红字提醒');
     var outD2 = ymdAdd(e0, 2); coreSetStay(c, inD, outD2, 'A1 室长'); ST.ok(nN()===n0+1 && ST.hasLog(c, /修改在韩期间/), '之后修改 → KR 收通知 + Timeline 记一笔'); ST.ok(stayShortDays(c)===0, '离境日不早于最早可回国日 → 没有提醒');
-    /* 施术前提醒前必填 */
-    var ks = c.krSchedule || (c.krSchedule = {}); c.stay = null; c.reminderMsg = null; ks.confirmedDate = ks.confirmedDate || ymdAdd(todayStr(), 1); var ovm = document.getElementById('surgmsg-overlay'); if(ovm) ovm.classList.remove('open');
-    openSurgMsg(c.id, 'remind'); ST.ok(document.getElementById('stay-overlay').classList.contains('open') && !(document.getElementById('surgmsg-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open'), '没填在韩期间：不能发施术前提醒，先弹填写窗');
-    document.getElementById('stay-in').value = inD; document.getElementById('stay-out').value = ''; staySave(); ST.ok(/都要填/.test(document.getElementById('stay-err').textContent), '只填一个日期不行（必填两个）');
-    document.getElementById('stay-out').value = outD2; staySave(); ST.ok(stayFilled(c) && document.getElementById('surgmsg-overlay').classList.contains('open'), '填完后继续打开施术前提醒窗'); document.getElementById('surgmsg-overlay').classList.remove('open');
+    /* CMD-1020-13 七：施术前 2 天［已确认行程］弹窗 */
+    var ks = c.krSchedule || (c.krSchedule = {}); c.stay = null; c.tripConfirm = null; ks.confirmedDate = ks.confirmedDate || ymdAdd(todayStr(), 1);
+    openStayModal(c.id, {trip:true}); var sov = document.getElementById('stay-overlay'), stx = sov.textContent;
+    ST.ok(sov.classList.contains('open') && /入境日/.test(stx) && /入境时间（韩国当地）/.test(stx) && /入境机场（选填）/.test(stx) && /离境日/.test(stx) && /离境机场（选填）/.test(stx) && /确认方式（必选，可多选）/.test(stx) && /电话/.test(stx) && /WhatsApp/.test(stx) && /短信/.test(stx) && /当面/.test(stx) && /其他：/.test(stx), '弹窗：入境 / 离境两行（日期｜时间｜机场）+ 确认方式五个选项');
+    ST.ok(document.getElementById('stay-in').value==='' && document.getElementById('stay-out').value==='' && document.getElementById('stay-int').value==='', '没填过的留空（不默认今天）'); var sbs = [].map.call(sov.querySelectorAll('button'), function(b){ return b.textContent; }); ST.ok(sbs.join('/')==='取消/保存', '底部靠右：［取消］［保存］');
+    staySave(); ST.ok(/日期和时间都要填/.test(document.getElementById('stay-err').textContent), '日期、时间必填');
+    document.getElementById('stay-in').value = inD; document.getElementById('stay-int').value = '15:00'; document.getElementById('stay-out').value = outD; document.getElementById('stay-outt').value = '18:00'; document.getElementById('stay-outa').value = '仁川 ICN'; stayWarnRefresh();
+    ST.ok(/离境日比建议少 3 天/.test(document.getElementById('stay-warn').textContent), '离境日太早 → 红字「离境日比建议少 N 天」（不拦）'); staySave(); ST.ok(/至少勾一个确认方式/.test(document.getElementById('stay-err').textContent) && !c.tripConfirm, '确认方式没勾不能保存');
+    [].forEach.call(sov.querySelectorAll('.stay-m'), function(b){ if(b.value==='电话' || b.value==='WhatsApp') b.checked = true; }); staySave();
+    ST.ok(stayFilled(c) && c.stay.inTime==='15:00' && c.stay.outTime==='18:00' && c.stay.outAirport==='仁川 ICN' && c.tripConfirm && c.tripConfirm.methods.join('、')==='电话、WhatsApp', '保存：日期 / 时间 / 机场 / 确认方式都存下');
+    ST.ok(ST.hasLog(c, new RegExp('已确认行程（电话、WhatsApp）：入境 '+stayMD(inD)+' 15:00 / 离境 '+stayMD(outD)+' 18:00')), 'Timeline：已确认行程（电话、WhatsApp）：入境 … / 离境 …'); ST.ok(!/surg-remind-row/.test(calRelayRecheckCards(c)) && !calNeedsRecheck(c), '保存后卡片消失');
+    ST.ok(stayText(c)===stayMD(inD)+' 15:00 ～ '+stayMD(outD)+' 18:00' && /出境|离境机场：仁川 ICN/.test(stayAirportTip(c)), 'KR 页头文字带时间，机场放悬停');
+    openStayModal(c.id); ST.ok(document.getElementById('stay-in').value===inD && document.getElementById('stay-int').value==='15:00' && document.getElementById('stay-outa').value==='仁川 ICN' && !/确认方式/.test(document.getElementById('stay-overlay').textContent), '项目卡「修改」：已填的带出来，没有确认方式栏'); stayCancel();
+    var tn = nN(); coreSetStay(c, inD, outD, 'A1 室长', {ex:{inTime:'16:00', outTime:'18:00', inAirport:'', outAirport:'仁川 ICN'}}); ST.ok(nN()===tn+1, '之后只改时间 → KR 也收通知');
+    ST.ok(!document.getElementById('stay-overlay').classList.contains('open'), '弹窗已关');
+    var ov2 = document.getElementById('surgmsg-overlay'); if(ov2) ov2.classList.remove('open'); openSurgMsg(c.id, 'remind'); ST.ok(!(ov2 || document.getElementById('surgmsg-overlay') || {classList:{contains:function(){ return false; }}}).classList.contains('open'), '施术前提醒讯息已取消');
     /* 离境日判断：离境日优先于最早可回国日 */
-    c.krSchedule.confirmedDate = ymdAdd(todayStr(), -60); c.stay = {in:ymdAdd(todayStr(), -61), out:ymdAdd(todayStr(), 3), by:'x', at:nowFullDt()}; ST.ok(careCustomerReturned(c)===false && stayOutDate(c)===c.stay.out, '离境日还没到 → 客人还在韩国（即使最早可回国日已过）'); c.stay.out = ymdAdd(todayStr(), -1); ST.ok(careCustomerReturned(c)===true, '离境日已过 → 客人已回国（可自动结案）'); c.stay = null; ST.ok(careCustomerReturned(c)===true, '没填离境日 → 退回用最早可回国日判断');
+    var cc = JSON.parse(JSON.stringify(c)); /* 用副本判断（不放进案件列表，免得启动扫描把夹具案件真的结案） */ cc.krSchedule.confirmedDate = ymdAdd(todayStr(), -60); cc.stay = {in:ymdAdd(todayStr(), -61), out:ymdAdd(todayStr(), 3), by:'x', at:nowFullDt()}; ST.ok(careCustomerReturned(cc)===false && stayOutDate(cc)===cc.stay.out, '离境日还没到 → 客人还在韩国（即使最早可回国日已过）'); cc.stay.out = ymdAdd(todayStr(), -1); ST.ok(careCustomerReturned(cc)===true, '离境日已过 → 客人已回国（可自动结案）'); cc.stay = null; ST.ok(careCustomerReturned(cc)===true, '没填离境日 → 退回用最早可回国日判断');
     ST.ok(/客人已离境/.test(stayWarnHtml(Object.assign({}, c, {stay:{in:'', out:ymdAdd(todayStr(), 1)}}), ymdAdd(todayStr(), 5))) && stayWarnHtml(Object.assign({}, c, {stay:{in:'', out:ymdAdd(todayStr(), 9)}}), ymdAdd(todayStr(), 5))==='', '日期晚于离境日 → 橙字「客人已离境」，早于则没有');
     window.GMC_STAY_AUTO = auto; CASE_ITEMS[idx] = JSON.parse(snap);
   });
@@ -2347,7 +2401,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/KR 未读/.test(inNotesAreaHtml(c)) && krUnreadNotes(c).length===2, 'IN 显示「KR 未读」'); ST.ok(coreSettleBalance(c, 'x')===false, '有未读备注 → 核心函数也不让结算（coreSettleBalance）');
     coreNoteRead(c, c.inNotes[0].id, 'KM1 室长'); ST.ok(/KR 已读（KM1/.test(inNotesAreaHtml(c)) && krUnreadNotes(c).length===1, '读过一则：IN 显示「KR 已读」');
     /* 结案规则：韩国的术后管理结束（做完 / 客人已回国）→ 案件结案；印尼没做的转成持有 */
-    var today = todayStr(); c.krSchedule.confirmedDate = ymdAdd(today, -1); ST.ok(carePending(c)===true, '客人还在韩国（最早可回国日没过）+ 还有韩国的术后管理 → 不结案');
+    var today = todayStr(); c.stay = null; /* CMD-1020-11：有离境日时按离境日判断，这里测的是「没填离境日」退回最早可回国日 */ c.krSchedule.confirmedDate = ymdAdd(today, -1); ST.ok(carePending(c)===true, '客人还在韩国（最早可回国日没过）+ 还有韩国的术后管理 → 不结案');
     c.krSchedule.confirmedDate = ymdAdd(today, -60); c.krProcedureDone = true; c.visitClosed = false; ST.ok(careCustomerReturned(c) && carePending(c)===false, '最早可回国日已过 = 客人已回国，韩国的不再挡结案');
     var nIn0 = c.subItems.filter(function(x){ return x.place==='IN' && !x.done; }).length; var closed = careReturnSweep(); ST.ok(closed>=1 && c.visitClosed===true, '照常结案（不用手动结束，也不等印尼的）');
     ST.ok(c.subItems.filter(function(x){ return x.place==='IN' && !x.done; }).length>=nIn0 && nIn0>0, '没做的印尼术后管理不作废'); ST.ok(todoUbItems().some(function(u){ return u.caseId===c.id; }), '结案后印尼的还留在「未安排预约」');
@@ -2546,9 +2600,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 施术前提醒：发完卡片消失；之后改时间也走电话 */
     var base = DEMO_SHIFT_MS; DEMO_SHIFT_MS = base + (calDaysToSurgery(c)-2)*86400000;
     try{
-      c.reminderMsg = null; ST.ok(/surg-remind-row/.test(calRelayRecheckCards(c)), '前置：施术前 2 天有提醒卡');
-      openSurgMsg(c.id, 'remind'); confirmSurgMsg(); ST.ok(!/surg-remind-row|已发送|再发一次/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /已发送施术前提醒给客人/) && SMS_LOG[0].kind==='surgeryRemind', '提醒发了之后卡片消失，记录留在 Timeline 和短信发送记录');
-      ks.confirmedTime = ks.confirmedTime==='10:30' ? '11:30' : '10:30'; ST.ok(surgChanged(c) && /请电话通知客人/.test(surgSendHtml(c)) && !/surg-remind-row/.test(calRelayRecheckCards(c)), '提醒发过之后改时间：同样走电话，不重发提醒');
+      c.tripConfirm = null; ST.ok(/surg-remind-row/.test(calRelayRecheckCards(c)), '前置：施术前 2 天有确认行程卡');
+      ST.confirmTrip(c); ST.ok(!/surg-remind-row|已发送|再发一次/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /已确认行程/), '确认行程后卡片消失，记录留在 Timeline');
+      var sm0 = c.surgeryMsg; c.surgeryMsg = {key:surgMsgKey(c), method:'短信', at:nowFullDt(), count:1}; c.surgInformKey = surgMsgKey(c); ks.confirmedTime = ks.confirmedTime==='10:30' ? '11:30' : '10:30'; ST.ok(surgChanged(c) && /请电话通知客人/.test(surgSendHtml(c)) && !/surg-remind-row/.test(calRelayRecheckCards(c)), '施术日期通知发过之后改时间：走电话，不重发'); c.surgeryMsg = sm0;
     } finally { DEMO_SHIFT_MS = base; }
   });
   ST.def('R44a','CMD-1019-15：赴韩施术计划打印改版（抬头 / 1 行程概要 / 2 施术项目 / 3 日程表 / 4 术前准备 / 5 日程确认与变动 / 6 备注；不写金额，没有面诊内容和推荐整理）（A1 分页）',function(){
@@ -2620,7 +2674,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var fb = hospitalEn(hid); ST.ok(/[가-힣]/.test(fb.name) && fb.address===hospitalById(hid).address, '英文名 / 地址没填 → 退回原文'); hd.nameEn = n0; hd.addressEn = a0;
       CLINIC_SETTINGS.sms.surgeryRemind = '自定义：{name} {date}'; ST.ok(surgMsgText(c, 'remind')==='自定义：'+c.name+' '+ks.confirmedDate, '模板读诊所设定里的 sms.surgeryRemind（可改）'); delete CLINIC_SETTINGS.sms.surgeryRemind;
       ST.ok(typeof SMS_KIND_LABELS.surgeryNotice==='string' && typeof SMS_KIND_LABELS.surgeryRemind==='string', '诊所设定里有两个模板');
-      openSurgMsg(c.id, 'remind'); var mh = document.getElementById('surgmsg-overlay').innerHTML; ST.ok(SURGMSG.ver==='remind' && /施术前提醒/.test(mh) && !/surgMsgVer|印尼文之后加|>中文</.test(mh) && /短信/.test(mh) && /WhatsApp/.test(mh) && /诊所设定/.test(mh), 'CMD-1019-14：弹窗没有模板 / 语言选择，标题写模板名，保留短信 / WhatsApp、预览可改、提示模板在诊所设定里改'); closeSurgMsg();
+      var ov0 = document.getElementById('surgmsg-overlay'); if(ov0) ov0.classList.remove('open'); openSurgMsg(c.id, 'remind'); ST.ok(!(document.getElementById('surgmsg-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open'), 'CMD-1020-13：施术前提醒讯息已取消，openSurgMsg(…,\'remind\') 不再打开弹窗'); var mh = '';
       openSurgMsg(c.id); mh = document.getElementById('surgmsg-overlay').innerHTML; ST.ok(SURGMSG.ver==='notice' && /施术日期通知/.test(mh), '施术日期那行打开 = 施术日期通知'); closeSurgMsg();
     } else {
       var hid2 = krHospitalIdOfMe(), hd2 = HOSPITAL_DATA[hid2], o1 = hd2.nameEn, o2 = hd2.addressEn;

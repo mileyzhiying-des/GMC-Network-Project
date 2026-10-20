@@ -2576,7 +2576,7 @@ function confirmLibProblemDelete(){
 
 var PROJ_DISPLAY_CCY_KR = 'KRW', PROJ_DISPLAY_CCY_IN = 'IDR';
  // 项目库页面自己的币种切换
-var CASE_DISPLAY_CCY_KR = 'KRW', CASE_DISPLAY_CCY_IN = 'IDR';
+var CASE_DISPLAY_CCY_KR = 'IDR', CASE_DISPLAY_CCY_IN = 'IDR'; /* CMD-1020-13：赴韩项目默认显示印尼盾 */
 
 
 /* ---- 项目库页面：赴韩项目 / 本地项目 / 非活性化 三个tab，各自单层分类筛选 ---- */
@@ -3022,7 +3022,8 @@ function openNotif(id, src){
   }
   if(n.caseId){
     var pcGo = /术后管理/.test(n.text||'') && !/转回印尼持有/.test(n.text||'');
-    if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : ''); else openCaseDetail(n.caseId, false, {pc:pcGo});
+    var planGo = /诊疗方案已到/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
+    if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : (planGo ? '&tab=consult' : '')); else openCaseDetail(n.caseId, false, pcGo ? {pc:true} : (planGo ? {tab:planGo} : {pc:pcGo}));
   }
 }
 /* CMD-1015-18：术后管理类通知 / 待办点进来 → 案件的「赴韩施术计划」tab，滚到术后管理区块 */

@@ -182,16 +182,16 @@ function calKey(c){ var ks = c.krSchedule; return ks ? ks.confirmedDate+' '+ks.c
 /* 赴韩施术前 2 天（含当天）、时间已确认、IN 还没确认「日程无变动」 */
 function calNeedsRecheck(c){
   if(!c || isEnded(c) || scheduleState(c)!=='Confirmed') return false;
-  var d = calDaysToSurgery(c); return d<=2 && !surgRemindSent(c); /* CMD-1019-13：施术前 2 天改成［发送给客人］（施术前提醒） */ /* 10/14：过期（施术日已到 / 已过）仍未确认 → 标红、一直挂着，直到确认或案件改期 / 取消 */
+  var d = calDaysToSurgery(c); return d<=2 && !c.tripConfirm; /* CMD-1019-13：施术前 2 天改成［发送给客人］（施术前提醒） */ /* 10/14：过期（施术日已到 / 已过）仍未确认 → 标红、一直挂着，直到确认或案件改期 / 取消 */
 }
-function calRecheckText(c){ return surgRemindSent(c) ? '✓ 已发送施术前提醒（IN · '+c.reminderMsg.at.slice(0,10)+'）' : 'IN 尚未发送施术前提醒'; }
+function calRecheckText(c){ return c.tripConfirm ? '✓ 已确认行程（IN · '+String(c.tripConfirm.at||'').slice(0,10)+'）' : 'IN 尚未确认行程'; } /* CMD-1020-13 七：施术前 2 天 = 联络客人确认行程（不再发提醒讯息） */
 function calRelayRecheckCards(c){
   if(scheduleState(c)!=='Confirmed' || !c.krSchedule) return '';
   var out = '', d = calDaysToSurgery(c);
   /* CMD-1015-15：按了［已转告客人］［确认无变动］后卡片就消失，记录在 Timeline */
   /* CMD-1019-12：「转告客人」卡拿掉，改在施术日期那一行后面放［发送给客人］（surgSendHtml） */
-  if(d<=2 && !surgRemindSent(c)){ /* CMD-1019-13：施术前 2 天 =［发送给客人］（施术前提醒）；CMD-1019-16：发过之后卡片消失（记录留 Timeline 和短信发送记录） */
-    out += '<div class="card" id="surg-remind-row" style="padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;"><div style="font-size:13px;font-weight:700;">施术前提醒</div><div style="font-size:12px;color:var(--slate2);margin-top:2px;">施术前 2 天：发提醒给客人；客人说要改期，走下面原来的改期流程</div></div><button class="btn-primary" onclick="openSurgMsg(\''+c.id+'\',\'remind\')">发送给客人</button> <span style="font-size:10px;color:var(--muted);">演示</span></div>';
+  if(d<=2 && !c.tripConfirm){ /* CMD-1020-13 七：施术前 2 天 = 联络客人确认行程（入境 / 离境），不再发施术前提醒讯息；保存后卡片消失，Timeline 记一笔 */
+    out += '<div class="card" id="surg-remind-row" style="padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;"><div style="font-size:13px;font-weight:700;">确认行程</div><div style="font-size:12px;color:var(--slate2);margin-top:2px;">施术前 2 天：联络客人确认行程（入境 / 离境）；客人说要改期，走下面原来的改期流程</div></div><button class="btn-primary" onclick="openStayModal(\''+c.id+'\', {trip:true})">已确认行程</button></div>';
   }
   return out;
 }
@@ -216,7 +216,7 @@ function surgChangeText(c){
   return bits.join('；');
 }
 /* 模板读诊所设定 CLINIC_SETTINGS.sms.surgery（和其他短信模板同一处），填入变量 */
-function surgRemindSent(c){ return !!c.reminderMsg; } /* 施术前提醒发过一次就不再出现；之后改时间走电话 */
+function surgRemindSent(c){ return !!c.tripConfirm; } /* 施术前提醒发过一次就不再出现；之后改时间走电话 */
 /* 「上午 / 下午 时:分」：14:00 → 下午 2:00，09:30 → 上午 9:30 */
 function surgAmPm(hm){ var m = /^(\d\d):(\d\d)$/.exec(hm||''); if(!m) return hm||'—'; var h = +m[1]; return (h<12 ? '上午 ' : '下午 ')+(h%12===0 ? 12 : h%12)+':'+m[2]; }
 /* 麻醉注意：只写需要空腹的项目（备注里有「空腹 N 小时」）；一个项目 = 模板原样两行，多个项目一项一行；没有就整段不写 */
@@ -267,7 +267,7 @@ function confirmSurgPhone(){
 var SURGMSG = null;
 function openSurgMsg(id, ver){
   var c = calCaseById(id); if(!c || !c.krSchedule) return;
-  if(ver==='remind' && !stayFilled(c) && !window.GMC_STAY_AUTO){ openStayModal(id, {required:true, then:function(){ openSurgMsg(id, 'remind'); }}); return; } /* CMD-1020-11：施术前 2 天发提醒前在韩期间必填 */
+  if(ver==='remind') return; /* CMD-1020-13 七：施术前提醒讯息已取消（改成［已确认行程］），只留施术日期确认后那一次［发送给客人］ */
   ver = ver || 'notice'; var prev = ver==='remind' ? c.reminderMsg : c.surgeryMsg;
   SURGMSG = {id:id, ver:ver, lang:'zh', method:(prev && prev.method) || '短信', text:surgMsgText(c, ver, 'zh')};
   var ov = document.getElementById('surgmsg-overlay');
@@ -491,8 +491,9 @@ function repairOffConflicts(){
   return n;
 }
 
-/* ---- CMD-1020-11：在韩期间输入（确认赴韩时可空 / 施术前提醒前必填 / 之后随时可改）---- */
-var STAY_CTX = null;
+/* ---- CMD-1020-11 / 13：在韩期间输入（确认赴韩时可空 / 项目卡随时可改 / 施术前 2 天［已确认行程］必填）----
+   两行：入境 = 入境日｜入境时间（韩国当地）｜入境机场（选填）；离境同。［已确认行程］多一栏「确认方式」（电话 / WhatsApp / 短信 / 当面 / 其他：文字，必选至少一个）。 */
+var STAY_CTX = null, TRIP_METHODS = ['电话', 'WhatsApp', '短信', '当面'];
 function stayGate(c, cb){
   if(window.GMC_STAY_AUTO || c.stay || c.stayAsked){ cb(); return; } /* GMC_STAY_AUTO：自测用，不弹在韩期间窗口 */
   openStayModal(c.id, {initial:true, then:cb});
@@ -500,10 +501,11 @@ function stayGate(c, cb){
 function openStayModal(caseId, o){
   var c = calCaseById(caseId); if(!c) return; o = o || {}; STAY_CTX = {id:caseId, o:o};
   var ov = document.getElementById('stay-overlay'); if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'stay-overlay'; ov.style.zIndex = 96; document.body.appendChild(ov); }
-  var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;', s = c.stay || {};
-  ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">在韩期间</div>'+
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+(o.initial ? '客人在韩国的入境日 ～ 离境日。航班还没定可以先空着，之后随时能改。' : (o.required ? '施术前提醒需要先填在韩期间（入境日和离境日都要填）。' : '行程有变可以修改，修改后 KR 会收到通知。'))+'</div>'+
-    '<div style="display:flex;gap:10px;"><div style="flex:1;"><label style="font-size:12px;color:var(--slate2);">入境日</label><input type="date" id="stay-in" value="'+(s.in||'')+'" style="'+inp+'"></div><div style="flex:1;"><label style="font-size:12px;color:var(--slate2);">离境日</label><input type="date" id="stay-out" value="'+(s.out||'')+'" style="'+inp+'" onchange="stayWarnRefresh()"></div></div>'+
+  var inp = 'padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;min-width:0;', s = c.stay || {}, tc = c.tripConfirm || {};
+  var row = function(k, lab){ return '<div style="display:grid;grid-template-columns:44px 1.3fr 1fr 1.2fr;gap:8px;align-items:end;margin-bottom:10px;"><b style="font-size:13px;padding-bottom:9px;">'+lab+'</b><div><label style="font-size:11px;color:var(--slate2);">'+lab+'日</label><input type="date" id="stay-'+k+'" value="'+(s[k]||'')+'" style="'+inp+'width:100%;" onchange="stayWarnRefresh()"></div><div><label style="font-size:11px;color:var(--slate2);">'+lab+'时间（韩国当地）</label><input type="time" id="stay-'+k+'t" value="'+(s[k+'Time']||'')+'" style="'+inp+'width:100%;"></div><div><label style="font-size:11px;color:var(--slate2);">'+lab+'机场（选填）</label><input id="stay-'+k+'a" value="'+aEscC(s[k+'Airport']||'')+'" placeholder="例：仁川 ICN" style="'+inp+'width:100%;"></div></div>'; };
+  var methods = o.trip ? '<div style="margin-top:4px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">确认方式（必选，可多选）</div><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px;">'+TRIP_METHODS.map(function(m, i){ return '<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" class="stay-m" value="'+m+'"'+((tc.methods||[]).indexOf(m)>-1 ? ' checked' : '')+'> '+m+'</label>'; }).join('')+'<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" id="stay-mo"'+(tc.other ? ' checked' : '')+'> 其他：<input id="stay-mot" value="'+aEscC(tc.other||'')+'" style="'+inp+'width:120px;padding:5px 8px;"></label></div></div>' : '';
+  var title = o.trip ? '确认行程' : '在韩期间', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定可以先空着，之后随时能改。' : '行程有变可以修改，修改后 KR 会收到通知。');
+  ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>'+row('in', '入境')+row('out', '离境')+methods+
     '<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '先空着' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
   ov.classList.add('open'); stayWarnRefresh();
@@ -518,10 +520,17 @@ function stayCancel(){
   var c = calCaseById(x.id); if(x.o.initial && c){ c.stayAsked = true; if(x.o.then) x.o.then(); } /* 先空着：只记「问过了」 */
 }
 function staySave(){
-  var x = STAY_CTX; if(!x) return; var c = calCaseById(x.id), e = document.getElementById('stay-err'); if(!c) return;
-  var inD = document.getElementById('stay-in').value, outD = document.getElementById('stay-out').value;
-  if(x.o.required && (!inD || !outD)){ e.textContent = '入境日和离境日都要填'; e.style.display = 'block'; return; }
-  var r = coreSetStay(c, inD, outD, actingName(), {initial:!!x.o.initial}); if(!r.ok){ e.textContent = r.err; e.style.display = 'block'; return; }
+  var x = STAY_CTX; if(!x) return; var c = calCaseById(x.id), e = document.getElementById('stay-err'), g = function(i){ return (document.getElementById(i)||{}).value||''; }; if(!c) return;
+  var d = {inD:g('stay-in'), outD:g('stay-out'), ex:{inTime:g('stay-int'), outTime:g('stay-outt'), inAirport:g('stay-ina').trim(), outAirport:g('stay-outa').trim()}}, methods = [], other = '';
+  var bad = function(t){ e.textContent = t; e.style.display = 'block'; };
+  if(x.o.trip){
+    if(!d.inD || !d.outD || !d.ex.inTime || !d.ex.outTime) return bad('入境、离境的日期和时间都要填');
+    [].forEach.call(document.querySelectorAll('#stay-overlay .stay-m'), function(b){ if(b.checked) methods.push(b.value); });
+    if((document.getElementById('stay-mo')||{}).checked){ other = g('stay-mot').trim(); if(!other) return bad('勾了「其他」要写是什么方式'); methods.push('其他：'+other); }
+    if(!methods.length) return bad('请至少勾一个确认方式');
+  }
+  var r = coreSetStay(c, d.inD, d.outD, actingName(), {initial:!!x.o.initial, ex:d.ex}); if(!r.ok) return bad(r.err);
+  if(x.o.trip){ c.tripConfirm = {at:nowFullDt(), by:actingName(), methods:methods, other:other}; logCaseEvent(c, actingName(), '已确认行程（'+methods.join('、')+'）：入境 '+stayMDT(c, 'in')+' / 离境 '+stayMDT(c, 'out'), '赴韩施术'); }
   var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null;
   if(x.o.then) x.o.then(); else { try{ renderCaseBody(c); }catch(er){} }
 }

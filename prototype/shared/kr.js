@@ -1165,7 +1165,7 @@ function krRenderCaseDetail(){
       '<div style="font-size:18px;font-weight:700;">'+(krClientsAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+'</div>'+
       (arriveCards ? '' : '<span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.stageText||r.label)+'</span>')+'<span style="flex:1;"></span>'+
       '<button class="btn-primary" onclick="krOpenCaseChat()">💬 对话</button></div>'+
-    '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.5;">'+krEsc(r.caseNo)+' · 来源诊所：'+krEsc(r.clinicName)+(KR_CASE.tab==='consult' ? '' : ' · 院长：'+krEsc(r.director||'—'))+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+(stayText(r.c) ? ' · <b style="color:var(--slate2);">在韩 '+krEsc(stayText(r.c))+'</b>' : '')+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.5;">'+krEsc(r.caseNo)+' · 来源诊所：'+krEsc(r.clinicName)+(KR_CASE.tab==='consult' ? '' : ' · 院长：'+krEsc(r.director||'—'))+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+(stayText(r.c) ? ' · <b style="color:var(--slate2);"'+(stayAirportTip(r.c) ? ' title="'+krEsc(stayAirportTip(r.c))+'"' : '')+'>在韩 '+krEsc(stayText(r.c))+'</b>' : '')+'</div>'+
     alerts+arriveCards+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">'+tabs+'</div>'+
     '<div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>';
   setTimeout(krEndAskCheck, 60); /* 行都做完 → 问「今天的项目都做完了吗？」（CMD-1019-22） */
@@ -3513,3 +3513,56 @@ function krCliBeautyAdd(){ var m = krClientRows().filter(function(x){ return x.k
 /* CMD-1019-08：录入侧边栏跟着案件页（草稿窄条 / 离开隐藏）；关分页时还在录音 → 浏览器自带确认（没上传的文字已存成草稿） */
 setInterval(function(){ try{ krRecSideSync(); }catch(e){} }, 700);
 window.addEventListener('beforeunload', function(e){ try{ if(KR_REC && KR_REC.recording){ krRecDraftSave(); e.preventDefault(); e.returnValue = '还在录音，确定离开吗？'; return e.returnValue; } krRecDraftSave(); }catch(x){} });
+
+/* ===== CMD-1020-13 五：KR 对话窗口 = IN 同一个组件 =====
+   原来 KR 的房间只是抽屉里的一个简版（没有顶部按钮 / 成员 / 🔕 / 文件 / 翻译行 / ［引用案件］/ @ # 提示 / 演示按钮）。
+   现在 KR 点房间 → 打开和 IN 完全一样的浮窗（kr.html 里复制了 IN 的浮窗 / 引用到案件 / 文件 / 引用案件弹窗，id 相同），
+   IN 的函数（openFloatingChat / renderFloatMessages / sendFloatMsg / floatInput …）原样复用：KR 房间在「来源诊所」的分区里，
+   所以每次调用都包进 Store.mutateClinic(来源诊所) 的数据环境（krFlCtx）里运行，改动随之存回来源诊所分区。
+   保留的差异（权限 / 角色本来就不同）：视频通话只能 IN 发起、KR 来电时接听；未读用 KR 自己的已读标记（chatRead）；演示按钮的「新消息」来自 IN 室长；点案件在 KR 案件页打开。 */
+var KR_FL = {clinicId:'', roomId:''}, KR_FL_DEPTH = 0;
+function krFlCtx(fn){
+  if(KR_FL_DEPTH>0 || !KR_FL.clinicId) return fn();
+  var ret; KR_FL_DEPTH++;
+  try{ Store.mutateClinic(KR_FL.clinicId, function(){ ret = fn(); return true; }); } finally { KR_FL_DEPTH--; }
+  return ret;
+}
+['renderFloatMessages', 'sendFloatMsg', 'floatInput', 'pickSuggest', 'sendRoomFile', 'openRoomFiles', 'openMentionCase', 'setRefChip', 'toggleMembersDropdown', 'openQuoteModal', 'confirmQuote', 'renderQuoteCaseList', 'renderFloatToolbar', 'renderChatCaseChip', 'toggleMuteRoom', 'gotoQuoteSource', 'renderRefChip', 'pickRefCase', 'openFloatingChat'].forEach(function(nm){
+  var o = window[nm]; if(typeof o!=='function') return;
+  window[nm] = function(){ var a = arguments, t = this; return krFlCtx(function(){ return o.apply(t, a); }); };
+});
+(function(){ /* 发消息：KR → IN 要给 IN 记未读；顶部 / 抽屉的刷新换成 KR 自己的 */
+  var send = sendFloatMsg;
+  sendFloatMsg = function(){ var rid = CURRENT_ROOM, n0 = ((CHAT_DATA||{})[rid]||[]).length; var r = send.apply(this, arguments); krFlCtx(function(){ if(((CHAT_DATA||{})[rid]||[]).length>n0){ ROOM_UNREAD[rid] = (ROOM_UNREAD[rid]||0)+1; } }); krFlRead(); return r; };
+})();
+function closeDrawer(){ krCloseChat(); } /* IN 的 openFloatingChat 会先关抽屉：KR 页面没有 IN 的抽屉，换成 KR 抽屉 */
+function renderDrawerList(){ if(KR_CHAT.open) krRenderChat(); }
+function updateChatBadge(){ try{ krUpdateBadges(); }catch(e){} }
+function closeFloat(){ var ov = document.getElementById('chat-float-overlay'); if(ov) ov.classList.remove('open'); krFlRead(); KR_FL.clinicId = ''; KR_FL.roomId = ''; try{ krUpdateBadges(); }catch(e){} }
+function openCaseNewTab(id){ var cid = KR_FL.clinicId; closeFloat(); krShowCase(cid, id); }
+function openCaseChatNewTab(id){ var cid = KR_FL.clinicId || (krAllCases().filter(function(r){ return r.id===id; })[0]||{}).clinicId; if(cid) krOpenFloat(cid+'|case-'+id); }
+function toolbarVideo(){ alert('视频通话由 IN 室长发起，KR 室长在来电时接听（来电会弹出提示）。'); }
+function toolbarVideoBlocked(){ toolbarVideo(); }
+(function(){ var base = msgView; msgView = function(m){ if(m && m.from==='them' && m.name===ME_NAME) return Object.assign({}, m, {from:'me', sender:ME_NAME}); return base(m); }; })(); /* 旧消息里 KR 自己发的（from 'them'）也显示在右边 */
+function simulateIncomingMsg(atMe){ /* 演示：IN 室长发来一条消息（KR 视角），@我一定提醒 */
+  krFlCtx(function(){
+    var roomId = CURRENT_ROOM, who = (IN_COORDINATORS && IN_COORDINATORS[0]) || 'A1 室长';
+    if(!CHAT_DATA[roomId]) CHAT_DATA[roomId] = [];
+    CHAT_DATA[roomId].push({day:KD(0), from:'me', sender:who, orig:(atMe ? '@'+ME_NAME+' ' : '')+'（演示）有新消息，请看一下。', trans:'（演示译文）请看一下。', time:nowTime(), ts:nowFullDt()});
+    renderFloatMessages();
+    if(atMe){ try{ pushKrNotif(krHospitalIdOfMe(), who+' 在「'+((roomById(roomId)||{}).name||roomId)+'」里 @ 了你', {only:ME_NAME, kind:'mention', clinicId:KR_FL.clinicId}); }catch(e){} }
+    else showToast('新消息 · '+((roomById(roomId)||{}).name||roomId), who+'：（演示）有新消息', null);
+  });
+  krFlRead();
+}
+function krFlRead(){ if(!KR_FL.clinicId || !KR_FL.roomId) return; var n = ((Store.readClinic(KR_FL.clinicId)||{}).CHAT_DATA||{})[KR_FL.roomId]; if(n) krMarkRead(KR_FL.clinicId+'|'+KR_FL.roomId, n.length); }
+function krOpenFloat(key){
+  var p = String(key).split('|'), cid = p[0], rid = p[1]; if(!cid || !rid) return;
+  krCloseBell(); krCloseChat(); KR_CHAT.room = null; KR_FL.clinicId = cid; KR_FL.roomId = rid;
+  openFloatingChat(rid, null, rid.indexOf('case-')===0 ? rid.slice(5) : null);
+  krFlRead(); try{ krUpdateBadges(); }catch(e){}
+}
+krPickRoom = function(key){ krOpenFloat(key); };
+krOpenRoomFor = function(clinicId, caseId){ krOpenFloat(clinicId+'|case-'+caseId); };
+(function(){ var base = krRefreshAll; krRefreshAll = function(){ base(); try{ var ov = document.getElementById('chat-float-overlay'); if(ov && ov.classList.contains('open') && KR_FL.clinicId && !(document.activeElement && document.activeElement.id==='float-input-box' && document.activeElement.value)){ renderFloatMessages(); krFlRead(); } }catch(e){} }; })(); /* 浮窗开着时，IN 发来的新消息即时显示 */
+(function(){ var o = krRenderChat; krRenderChat = function(se){ if(KR_CHAT.room){ var k = KR_CHAT.room; KR_CHAT.room = null; krOpenFloat(k); return; } return o.apply(this, arguments); }; })(); /* 旧入口（新建职员对话 / 通知）设了房间 → 一律开浮窗 */

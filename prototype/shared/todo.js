@@ -55,7 +55,7 @@ function inTodoItems(){
     var mine = todoInMine(c), push = function(it){ it.mine = mine; out.push(it); };
     /* 诊疗方案已到 → 联络客人选项目 */
     if(c.reportReady && c.projectsEnabled && c.consultStatus==='report_ready' && !c.endNote && !(c.settlementBatches||[]).length && !(c.recommended||[]).length && !c.localMgmt)
-      push(todoMk('plan', '诊疗方案已到：联络客人选项目', c, '', false, todoInGo(c, 'kr')));
+      push(todoMk('plan', '面诊资料已到：联络客人选项目', c, '', false, todoInGo(c, 'consult'))); /* CMD-1020-13 二：待办写「面诊资料已到」，点开进「面诊资料」tab（诊疗方案在那里看；选项目在赴韩施术 tab） */
     /* 等待报告超时 / 待确认施术时间超时 → 可催办 */
     var ug = urgeInfo(c);
     /* 10/14：今天来访（预约还没接待，一位一条）+ 等 KR 回复（没超时灰色，超时红 + ［催办］） */
@@ -82,7 +82,7 @@ function inTodoItems(){
       else push(todoMk('relay', 'KR 已确认施术时间：发送给客人（'+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, gotoRow));
     }
     /* 确认客人日程有无变化：赴韩施术前 2 天出现（CMD-1014-01 二·3） */
-    if(calNeedsRecheck(c)) push(todoMk('recheck', '施术前提醒：发送给客人（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-remind-row'}); }));
+    if(calNeedsRecheck(c)) push(todoMk('recheck', '施术前 2 天：联络客人确认行程（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-remind-row'}); }));
     /* 待收款 */
     closeBlockers(c).forEach(function(b){ push(todoMk('pay', '待收款：'+b, c, '', false, todoPayGo(c, b))); }); /* IN-08：点了去那张待付款结算单所在的 tab（赴韩施术计划 / 本地管理）并滚到那张结算单 */
     /* 当天本地项目未标完成：营业结束前 1 小时出现，标完才消失 */
@@ -389,6 +389,7 @@ function todoCardHtml(label, count, tip, onclick, warn, dot, sub){
 var TODO_SEEN = {}, TODO_LIT = {};
 /* 红点：有新进来的项目就亮，点卡片后才灭（刷新不会自己灭） */
 function todoCardDot(key, ids){
+  if(!ids.length){ TODO_LIT[key] = false; TODO_SEEN[key] = ids; return false; } /* CMD-1020-13 三：数字是 0 就绝不亮红点（也清掉之前亮着的） */
   var prev = TODO_SEEN[key]; TODO_SEEN[key] = ids;
   if(prev && ids.some(function(x){ return prev.indexOf(x)<0; })) TODO_LIT[key] = true;
   return !!TODO_LIT[key];
@@ -406,7 +407,7 @@ function todoCatCardsHtml(all, defs, noWrap){
     var sub = '';
     if(kr && list.length){ var per = {}; list.forEach(function(it){ var cid = (it.rowKey||'').split(':')[0]; if(cid) per[cid] = (per[cid]||0) + 1; }); sub = Object.keys(per).map(function(cid){ return '<span style="margin-right:10px;">'+todoEsc(names[cid]||cid)+' <b>'+per[cid]+'</b></span>'; }).join(''); }
     var dot = todoCardDot(d[0], list.map(function(it){ return it.cat+'|'+it.kind+'|'+it.no+'|'+it.text; }));
-    return todoCardHtml(d[1], list.length, d[2], 'todoCardFilter(\''+d[0]+'\')', warn, dot, sub);
+    return todoCardHtml(d[1], list.length, d[2], 'todoCardFilter(\''+d[0]+'\')', warn, dot && list.length>0, sub);
   }).join('');
   return noWrap ? inner : '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">'+inner+'</div>';
 }
@@ -481,7 +482,7 @@ function todoNowLineHtml(){ /* kr.js 的 krcGridHtml 在今天那一列里调用
 
 /* ---------------- 刷新 / 入口 ---------------- */
 function todoRefresh(){
-  try{ if(!todoIsKr() && typeof careReturnSweep==='function' && careReturnSweep()) Store.touch(); }catch(e){} /* CMD-1020-08：最早可回国日一过，韩国的术后管理已结束 → 案件结案 */
+  try{ if(!todoIsKr() && typeof careReturnSweep==='function' && !window.GMC_NO_SWEEP && careReturnSweep()) Store.touch(); }catch(e){} /* CMD-1020-08：最早可回国日一过，韩国的术后管理已结束 → 案件结案 */
   try{
     var all = todoItems(), p = document.getElementById('todo-pane');
     if(todoIsKr()){ if(p){ p.innerHTML = todoPaneHtml(all); p.style.cssText = 'flex:'+(TODO_UI.collapsed ? '0 0 auto' : '1 1 0')+';min-width:0;'; } return; }
@@ -527,7 +528,7 @@ function notifTodoKind(n){
   if(kd==='mention' || kd==='missedcall' || /@ 了你|未接来电/.test(tx)) return 'stay';
   if(n.popup==='confirm') return 'confirm'; /* CMD-1015-09：设定更新（IN-23 / KR-14）弹出并停留、手动确认（不是紧急，没有彩色图标） */
   if(n.popup==='once') return 'todo'; /* 今天的自助预约（IN-15 / IN-16）：弹一次、几秒后自动收起 */
-  if(/诊疗方案已到|请发送诊疗方案|等待报告超过|无法安排|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
+  if(/诊疗方案已到|KR 已确认面诊时间|请发送诊疗方案|等待报告超过|无法安排|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
   return 'msg';
 }
 
