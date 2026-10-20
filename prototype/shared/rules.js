@@ -302,6 +302,8 @@ function visitOrdNum(dno){ var m = /-(\d+)$/.exec(String(dno||'')); return m ? p
 /* 购买后显示项目名：拿掉规格里的「·N次」（次数已经写在「次数」栏）；购买前（诊疗方案 / 补加 / 结算单选择）照旧 */
 function buyName(n){ return String(n==null ? '' : n).replace(/\s*[·・]\s*\d+\s*次(?=$|[\s（(×,，、；）)])/g, ''); }
 function visitWeekday(d){ var x = new Date(d+'T00:00:00'); return isNaN(x) ? '' : ['周日','周一','周二','周三','周四','周五','周六'][x.getDay()]; }
+/* CMD-1020-04：日期带星期「2026/11/02（一）」 */
+function ymdWeekText(d){ if(!d) return ''; return d.replace(/-/g,'/')+'（'+visitWeekday(d).replace('周','')+'）'; }
 function visitWhenLabel(date, time, today){
   var d = date || ''; if(!d) return time || '';
   if(d===today) return '今天'+(time ? ' '+time : '');

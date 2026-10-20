@@ -39,7 +39,7 @@ function krcApplyRange(){
   if(CAL_OUT.krc.b || b!==null) a = Math.max(0, Math.min(open-120, b!==null ? b : open-120));
   if(CAL_OUT.krc.a || af!==null) z = Math.min(24*60, Math.max(close+120, af!==null ? af : close+120));
   KRC_H0 = Math.floor(a/60); KRC_H1 = Math.min(24, Math.ceil(z/60));
-  KRC_PX = KRC.mode==='day' ? calDayPx(KRC_H1-KRC_H0) : 112; /* CMD-1015-01·8：格子高度同 IN（日视图 44px/小时，周视图 56px/半小时） */
+  KRC_PX = KRC.mode==='day' ? calDayPx(KRC_H1-KRC_H0) : 112; /* CMD-1020-04：周视图每小时 112px = IN 本院周视图每 30 分钟 56px（.wk-cell min-height）；原先看到的 IN 76px 是 IN 默认日视图（calDayPx），现在两边默认都是周视图；CMD-1015-01·8：格子高度同 IN（日视图 44px/小时，周视图 56px/半小时） */
 }
 var KRC_NEED = {b:false, a:false};
 

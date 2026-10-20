@@ -400,9 +400,9 @@ function todoTick(){
 setInterval(todoTick, 30000);
 setInterval(function(){ try{ if(document.getElementById('todo-pane') && !document.hidden) todoRefresh(); }catch(e){} }, 5000);
 /* IN 启动：默认打开日视图 */
-function todoInBoot(){ if(todoIsKr()) return; try{ if(typeof setCalMode==='function') setCalMode('day'); }catch(e){ console.error('[默认日视图]', e); } }
+function todoInBoot(){ if(todoIsKr()) return; try{ if(typeof setCalMode==='function') setCalMode('week'); }catch(e){ console.error('[默认周视图]', e); } }
 /* KR：默认日视图（全部院长） */
-(function(){ try{ if(typeof KRC!=='undefined'){ KRC.mode = 'day'; KRC.person = 'all'; } }catch(e){} })();
+(function(){ try{ if(typeof KRC!=='undefined'){ KRC.mode = 'week'; KRC.person = 'all'; } }catch(e){} })();
 
 /* ---------------- 转告客人：打开该案件的赴韩施术 tab 即视为已看到 ---------------- */
 (function(){

@@ -2016,6 +2016,41 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var n0 = subCaseList(gc()).length, pl0 = holdItemPlanned(gc(), gc().procedureItems.filter(function(x){ return x.name===mgName; })[0]); krCbGo(); var c2 = gc(), it2 = c2.procedureItems.filter(function(x){ return x.name===mgName; })[0];
     ST.ok(holdItemPlanned(c2, it2)===pl0+3 && subCaseList(c2).length===n0+2, '确认后约了 3 次，建出 2 张到院卡（同一天合并）');
   });
+  ST.def('R55a','CMD-1020-04：一次到院一个块 / IN 的 KR 医院日程显示本诊所所有到院、其他诊所只有灰块 / 日期带星期 / 周日起周视图 / 打印日程含预约到院（A1 分页，给 KM1 看）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = toConfirmed('R55a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c);
+    var okDay = function(n){ var d = ymdAdd(todayStr(), n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
+    var d1 = okDay(6), d2 = okDay(11), nm = c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && !x.cancelled; })[0].name;
+    var add = function(id, date, time, content, extra){ var r = Object.assign({id:id, no:c.caseNo+'-'+id, kind:'术后管理记录', place:'KR', date:date, time:time, content:content, projectName:nm}, extra||{}); c.subItems.push(r); };
+    c.subItems = c.subItems||[]; add('p1', d1, '11:00', '拆线（在韩国）'); add('p2', d1, '11:30', '术后复诊（在韩国）'); add('p3', d2, '14:00', nm+'（预约）', {surgUse:nm, director:c.director}); add('p4', d2, '15:00', '拆线（在韩国）'); subCaseNos(c);
+    var vs = visitCalBlocks(c).filter(function(v){ return v.date===d1 || v.date===d2; });
+    ST.ok(vs.length===2, '同一天同地点的多条合成一次到院：2 个日期 = 2 个块（不是 4 个）'); var v1 = vs.filter(function(v){ return v.date===d1; })[0], v2 = vs.filter(function(v){ return v.date===d2; })[0];
+    ST.ok(!v1.hasSurg && v1.what.join('+')==='术后管理', '只有术后管理 = 术后到店（不占院长）'); ST.ok(v2.hasSurg && v2.what.join('+')==='施术+术后管理', '含施术预约使用 = 施术块，写「施术、术后管理」');
+    var dayItems = function(ds){ return krDayItems(ds).filter(function(x){ return x.own && x.caseId===c.id; }); };
+    CAL_VIEW = 'kr'; var a = dayItems(d1), b = dayItems(d2);
+    ST.ok(a.length===1 && a[0].type==='visit' && /术后管理/.test(a[0].label), 'IN 的 KR 医院日程：本诊所客人的术后到院显示出来（一个块）'); ST.ok(b.length===1 && b[0].type==='surg' && /施术、术后管理/.test(b[0].label), '含施术的到院 = 施术块，写这次做什么');
+    /* 其他诊所：含施术占院长时间的只有灰块，不带名字；术后到院不显示 */
+    var cid2 = CLINIC_HOSPITALS.filter(function(r){ return r.hospitalId===hid && r.clinicId!==CURRENT_CLINIC_ID; })[0];
+    if(ST.ok(!!cid2, '同一家医院有另一家对接诊所')){
+      var d3 = okDay(14), nb0 = krDayItems(d3).filter(function(x){ return x.type==='busy' && !x.own; }).length; Store.mutateClinic(cid2.clinicId, function(){ CASE_ITEMS.push({id:'zz55', caseNo:'ZZ55', name:'ZZ其他诊所客人', clinicId:cid2.clinicId, stage:'travel', director:c.director, hospitalId:hid, subItems:[{id:'z1', no:'ZZ55-1', kind:'术后管理记录', place:'KR', date:d3, time:'10:00', content:'x', surgUse:'x', director:c.director}, {id:'z2', no:'ZZ55-2', kind:'术后管理记录', place:'KR', date:d3, time:'16:00', content:'y'}]}); return true; });
+      var oth = krDayItems(d3); ST.ok(oth.some(function(x){ return x.type==='busy' && !x.own && !x.label; }), '其他诊所含施术的到院 = 无字灰块'); ST.ok(!oth.some(function(x){ return /ZZ/.test(x.label||''); }), '看不到其他诊所客人的名字'); ST.ok(oth.filter(function(x){ return x.type==='busy' && !x.own; }).length===nb0+1, '其他诊所含施术的那条显示灰块，只有术后到院的那条不显示（不占院长时间）');
+      Store.mutateClinic(cid2.clinicId, function(){ var i = CASE_ITEMS.map(function(x){ return x.id; }).indexOf('zz55'); if(i>-1) CASE_ITEMS.splice(i, 1); return true; });
+    }
+    ST.ok(ymdWeekText('2026-11-02')==='2026/11/02（一）', '日期带星期「2026/11/02（一）」'); WEEK_OFFSET = 0; CAL_WEEK_FULL = false; ST.ok(getWeekStart(0).getDay()===0, '周视图从周日起'); ST.ok(CAL_MODE==='week', 'IN 日历默认周视图');
+    var ps = printPlanSchedule(c); ST.ok(ps.some(function(r){ return r.d===d2 && /施术：/.test(r.what) && r.booked; }), '打印日程表含在韩预约的施术项目到院');
+    localStorage.setItem('__R55', JSON.stringify({id:c.id, clinicId:c.clinicId, d1:d1, d2:d2}));
+  });
+  ST.def('R55b','CMD-1020-04（KM1 分页）：KR 日历一次到院一个块 / 汇总通知只发一条 / 周视图默认周日起（先在 A1 跑 R55a）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R55')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R55a')) return;
+    var ev = krcEvents().surg.filter(function(x){ return x.b.caseId===rec.id && (x.b.date===rec.d1 || x.b.date===rec.d2); });
+    ST.ok(ev.length===2, 'KR 日历：两个到院日各一个块（共 '+ev.length+'）'); var e1 = ev.filter(function(x){ return x.b.date===rec.d1; })[0], e2 = ev.filter(function(x){ return x.b.date===rec.d2; })[0];
+    ST.ok(e1 && e1.b.type==='术后管理' && e2 && e2.b.type==='施术' && /施术、术后管理/.test(e2.label), '术后到店 = 绿色类型；含施术的到院 = 施术类型并写「施术、术后管理」');
+    var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0], cnt = function(){ return Store.withClinic(rec.clinicId, function(){ return NOTIFS.length; }); }, n0 = cnt();
+    var rows = [{date:rec.d1, time:'11:00', kind:'care', item:'a', x:{name:'拆线'}}, {date:rec.d1, time:'11:30', kind:'care', item:'a', x:{name:'术后复诊'}}, {date:rec.d2, time:'14:00', kind:'mgmt', item:'b'}, {date:ymdAdd(rec.d2, 2), time:'10:00', kind:'care', item:'a', x:{name:'拆线'}}];
+    Store.mutateClinic(rec.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===rec.id; })[0]; krCbNotifyIn(c, rows); return true; });
+    ST.ok(cnt()===n0+1, '一次预约 4 项只发 1 条汇总通知（'+(cnt()-n0)+'）'); var txt = Store.withClinic(rec.clinicId, function(){ return NOTIFS[0].text||NOTIFS[0].body||''; }); ST.ok(/3 次到院/.test(tzRender(txt, true)) || /3 次到院/.test(txt), '汇总通知写明次数：'+String(txt).slice(0, 80));
+    KRC.anchor = ''; KRC.mode = 'week'; ST.ok(new Date(krcAnchor()+'T00:00:00').getDay()===0, 'KR 周视图锚点 = 周日');
+  });
   ST.def('R50a','CMD-1019-21：多施术日停留算法 / 术后第 N 天 / 购买后项目名 / 今日进行数量 / Timeline 整理 / 接待退回（A1 分页）',function(){
     /* 三：最早可回国日 = 各施术「施术日 + 建议天数」最晚的一个 */
     var pcKR = function(day){ return [{mgmt:'拆线', name:'拆线', place:'KR', times:1, start:day}]; };

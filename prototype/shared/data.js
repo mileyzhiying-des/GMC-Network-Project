@@ -514,7 +514,7 @@ function resvHistoryRows(){
  /* 直接进工作台：今天在第一栏往后排7天；从月视图点某一周进来：完整一周（周一到周日） */
 function getWeekStart(offset){
   var d = new Date(CAL_WEEK_FULL && CAL_ANCHOR ? CAL_ANCHOR : TODAY_DATE);
-  if(CAL_WEEK_FULL){ var wd = d.getDay(); d.setDate(d.getDate() + (wd===0 ? -6 : 1-wd)); } /* 周一 */
+  d.setDate(d.getDate() - d.getDay()); /* CMD-1020-04：所有日历统一周日起（周日～周六），默认打开 = 今天所在的那一周 */
   d.setDate(d.getDate()+offset*7);
   return d;
 }
@@ -4585,6 +4585,28 @@ function subCaseList(c){ /* 每一组取第一行当代表，按日期时间排�
   });
   return reps.sort(function(a, b){ return (a.place==='IN' ? (a.visitDate||a.date||'') : (a.date||'')).localeCompare(b.place==='IN' ? (b.visitDate||b.date||'') : (b.date||'')) || (a.time||'').localeCompare(b.time||'') || String(a.no).localeCompare(String(b.no)); });
 }
+/* CMD-1020-04：日历上「一次到院 = 一个块」。同一天同地点（在韩国）的术后管理 / 管理项目 / 施术预约使用合成一次到院，
+   块里写这次做什么（施术、术后管理、管理项目）；含施术预约使用 = 施术块（占院长时间），否则是术后到店（不占院长）。
+   主施术当天的块来自 directorSchedule（kind 施术），这里不重复。 */
+function visitCalBlocks(c){
+  var out = [];
+  subCaseList(c).forEach(function(rep){
+    if(rep.place!=='KR' || !rep.date || !rep.time) return;
+    var rows = subCaseRows(c, rep).filter(function(x){ return x.date && x.time; }); if(!rows.length) return;
+    var surgRows = rows.filter(function(x){ return !!x.surgUse; });
+    var careRows0 = rows.filter(function(x){ return !x.surgUse && !x.holdUseOf; }), mgRows = rows.filter(function(x){ return !!x.holdUseOf; });
+    var what = [], names = [];
+    if(surgRows.length){ what.push('施术'); surgRows.forEach(function(x){ names.push(x.surgUse); }); }
+    if(careRows0.length){ what.push('术后管理'); careRows0.forEach(function(x){ names.push(x.projectName || x.content); }); }
+    if(mgRows.length){ what.push('管理项目'); mgRows.forEach(function(x){ names.push(x.holdUseOf); }); }
+    var t0 = rows.map(function(x){ return x.time; }).sort()[0];
+    var dur = surgRows.length ? 60 : 30; /* 施术预约使用按 60 分钟占院长时间，其余 30 分钟 */
+    var dirRow = surgRows.filter(function(x){ return x.director; })[0] || mgRows.filter(function(x){ return x.director; })[0];
+    out.push({key:subCaseKey(rep), date:rep.date, time:t0, end:minToTime(Math.min(24*60-1, timeToMin(t0)+dur)), hasSurg:surgRows.length>0, what:what, names:names,
+      director:(dirRow && dirRow.director) || c.director || '', done:rows.every(function(x){ return x.done; }), arrived:rows.some(function(x){ return x.arrived; }), rowIds:rows.map(function(x){ return x.id; }), firstId:rows[0].id});
+  });
+  return out;
+}
 function subCaseRows(c, rep){ var k = subCaseKey(rep); return (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.skipped && !(s.place==='IN' && !s.done) && subCaseKey(s)===k; }); }
 /* 子案件编号：按日期顺序排；「全部延期」结案的那一张保留它的编号，不让后面的子案件顶替（CMD-1015-22） */
 function subCaseNums(c){ var used = {}; Object.keys(c.visitEnds||{}).forEach(function(k){ used[c.visitEnds[k].no] = 1; }); var out = [], n = 0; subCaseList(c).forEach(function(){ do{ n++; }while(used[c.caseNo+'-'+n]); out.push(c.caseNo+'-'+n); }); return out; }
@@ -5043,7 +5065,7 @@ function coreSubTimeEdit(c, id, date, time, by){
   s.date = date; s.time = time || s.time;
   c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); });
   logCaseEvent(c, by, '改时间 '+s.no+'「'+s.content+'」：'+before+' → '+date+(s.time ? ' '+s.time : '')+(s.hold ? '（在韩持有）' : ''));
-  syncSurgeryBlock && 0;
+  pushNotif('赴韩施术', by+' 修改了 '+c.name+' 在韩到院时间：'+s.content+'，'+before+' → '+tkK(date, s.time||'')+'（韩国时间）', {caseId:c.id}); /* CMD-1020-04：改时间也通知 IN */
   return true;
 }
 /* 勾选项目标"已完成"（没有施术子项的项目、或子项都完成后剩下的项目） */
@@ -7269,8 +7291,11 @@ function printPlanSchedule(c){
   items.filter(krIsMgmtItemC).forEach(function(it){
     var total = Math.max(1, it.qty||1), itv = total>1 ? (it.interval||1) : 0, f0 = (it.firstDay===undefined || it.firstDay==='' || it.firstDay===null) ? null : Number(it.firstDay);
     if(!base || f0===null) return;
-    for(var k = 0; k < total; k++) rows.push({d:printPlanDate(base, f0 + k*itv), t:'', what:'管理项目：'+it.name+(total>1 ? '（第 '+(k+1)+'/'+total+' 次）' : ''), place:'韩国'});
+    var bkd = (c.subItems||[]).filter(function(x){ return x.holdUseOf===it.name && !x.skipped && x.date; }).length; /* CMD-1020-04：已预约的次数用预约时间（下面单独列），建议日期只列没预约的 */
+    for(var k = bkd; k < total; k++) rows.push({d:printPlanDate(base, f0 + k*itv), t:'', what:'管理项目：'+it.name+(total>1 ? '（第 '+(k+1)+'/'+total+' 次）' : ''), place:'韩国'});
   });
+  /* CMD-1020-04：KR 在韩预约的施术项目 / 管理项目到院（预约使用）也列进日程表 */
+  (c.subItems||[]).filter(function(x){ return !x.skipped && x.date && (x.surgUse || x.holdUseOf); }).forEach(function(x){ rows.push({d:x.date, t:x.time||'', what:(x.surgUse ? '施术：'+x.surgUse : '管理项目：'+x.holdUseOf), place:'韩国', booked:true}); });
   rows.sort(function(a, b){ return (a.d+' '+(a.t||'99:99')).localeCompare(b.d+' '+(b.t||'99:99')); });
   return rows;
 }
@@ -7425,7 +7450,7 @@ function coreRowCancel(c, id, by){
   if(s.holdUseOf || s.surgUse || (s.kind==='增加项目' && s.visitKey)){ c.subItems = c.subItems.filter(function(x){ return x!==s; }); }
   else if(s.kind==='术后管理记录'){ s.skipped = true; s.arrived = false; s.simDay = false; }
   else return false;
-  subCaseNos(c); logCaseEvent(c, by, '取消本次：'+s.content+'，退回项目卡'); return true;
+  subCaseNos(c); logCaseEvent(c, by, '取消本次：'+s.content+'，退回项目卡'); pushNotif('赴韩施术', by+' 取消了 '+c.name+' 的一次在韩到院安排：'+s.content+'（'+(s.date||'')+' '+(s.time||'')+'），项目退回项目卡', {caseId:c.id}); return true;
 }
 /* 预约来源：组里只要有术后管理预约的行 = 术后预约，否则 = 管理预约 */
 function visitSource(c, key){ var rows = coreVisitRows(c, key); return rows.some(function(s){ return !s.holdUseOf && !s.surgUse; }) ? '术后预约' : '管理预约'; }
@@ -7438,7 +7463,7 @@ function coreRowPostpone(c, id, by){
   (c.visitPostponed = c.visitPostponed || {}); (c.visitPostponed[key] = c.visitPostponed[key] || []).push({content:s.content, place:s.place, kind:s.kind, holdUseOf:s.holdUseOf||'', surgUse:s.surgUse||'', note:s.note||''}); /* 留一份快照：之后重新预约这一行，「全部延期」那张卡仍看得到当时延期了什么 */
   var rest = coreVisitRows(c, key).filter(function(x){ return !x.done; }).length + coreVisitExtra(c, key).filter(function(x){ return !x.done && !x.skipped; }).length, doneAny = coreVisitRows(c, key).some(function(x){ return x.done; });
   if(!rest && !doneAny){ c.visitEnds = c.visitEnds || {}; c.visitEnds[key] = {reason:'全部延期', date:date, time:time, no:no||key, at:nowFullDt()}; }
-  subCaseNos(c); logCaseEvent(c, by, '无限延期：'+s.content+'（原 '+date+' '+time+'），退回项目卡，等客人确定后重新预约'+((!rest && !doneAny) ? '；这次预约的项目全部延期，这次到院结案（全部延期）' : '')); return true;
+  subCaseNos(c); logCaseEvent(c, by, '无限延期：'+s.content+'（原 '+date+' '+time+'），退回项目卡，等客人确定后重新预约'+((!rest && !doneAny) ? '；这次预约的项目全部延期，这次到院结案（全部延期）' : '')); pushNotif('赴韩施术', by+' 取消了 '+c.name+' 的一次在韩到院（延期）：'+s.content+'（原 '+date+' '+time+'），等客人确定后重新预约', {caseId:c.id}); return true;
 }
 
 /* ---- KR 预约到店阶段的案件页（CMD-1015-24 五）：预约修改 / 未到店 / 预约取消（对应 IN 占位预约建出的在韩管理案件，客人还没到店） ---- */
