@@ -2129,7 +2129,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/术后管理/.test(document.getElementById('todo-cb-overlay').innerText) && /A000/.test(document.getElementById('todo-cb-overlay').innerText), '［预约］打开代约：来访目的术后管理、带出原案件和项目');
     todoCareBookGo(); var rc = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; })[0]; ST.ok(!!rc && rc.visitPurpose==='术后管理' && rc.careFor.keys.indexOf(rowId)>-1, '生成接续原案件的预约（careFor）');
     ST.ok(!todoUbItems().some(function(u){ return u.key===ub[1].key; }), '约好的这一项从未安排预约里消失'); ST.ok(todoUbItems().some(function(u){ return u.key===ub[0].key; }), '没约的那一项还在');
-    ST.ok(/建议 \d\d\/\d\d/.test(inCareCardsHtml(c, 'inn')) && /待预约|已约/.test(inCareCardsHtml(c, 'inn')), 'IN 赴韩施术 tab 的术后管理 · 印尼卡里这一项写灰字「建议 MM/DD」+ 状态（CMD-1020-08 取代 20-07 的术后管理卡写法）');
+    ST.ok(/建议 \d\d\/\d\d/.test(inCareCardsHtml(c, 'inn')) && /未预约|已预约/.test(inCareCardsHtml(c, 'inn')), 'IN 赴韩施术 tab 的术后管理 · 印尼卡里这一项写灰字「建议 MM/DD」+ 状态（CMD-1020-08 取代 20-07 的术后管理卡写法）');
   });
   ST.def('R58b','CMD-1020-07（KM1 分页，需要 pcStage 夹具）：KR「未安排预约」分页 / 预约弹窗选回印尼 → IN 收一则通知（一次几项合成一则）/ 已使用卡片',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
@@ -2143,13 +2143,38 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(hc()===n0+1 && nts.length===1 && /交给印尼/.test(nts[0].text) && (nIn===1 ? /建议日期/.test(nts[0].text) : /\d 项术后管理交给印尼/.test(nts[0].text)), '预约弹窗一开始就选回印尼：IN 收一则（'+nIn+' 项合成一则）：'+(nts[0]&&nts[0].text||'').slice(0, 70));
     krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krProjPage('mgmt'); var mh = document.getElementById('krcase-body').innerHTML; ST.ok(!/已使用[\s\S]{0,200}<div style="display:grid;grid-template-columns:minmax\(0,1\.6fr\)/.test(mh) || /border:1px solid var\(--border2\);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;"><div style="display:grid;grid-template-columns:minmax\(0,1\.6fr\)/.test(mh) || !/已使用/.test(mh), '管理项目「已使用」表格装进圆角卡片（有已使用时）');
   });
+  ST.def('R60a','CMD-1020-09（A1 分页，需要 pcStage 夹具）：IN 赴韩施术 tab 三张大卡 / 项目卡无金额无护照 / 术后管理栏位与三种状态 / 管理项目持有中·已完成 / 没有在韩持有项目卡 / 基础资料护照栏',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var html = inProjectCardHtml(c), txt = html.replace(/<[^>]+>/g, ' ');
+    ST.ok((html.match(/class="card"/g)||[]).length>=2, '至少两张大卡（项目卡 / 术后管理，有管理项目时三张）');
+    var first = html.split('术后管理</div>')[0].replace(/<[^>]+>/g, ' '); ST.ok(!/项目合计|定金|尾款/.test(first) && !/护照/.test(first), '项目卡：没有金额合计行，没有护照提示');
+    ST.ok(/施术项目/.test(txt) && /术后管理/.test(txt) && /术后管理免费、不显示价格、不能退款/.test(txt), '术后管理大卡标题下有说明文字');
+    var kr = inCareCardsHtml(c, 'kr'), inn = inCareCardsHtml(c, 'inn'), kt = kr.replace(/<[^>]+>/g, ' ');
+    ST.ok(/施术项目\s+术后管理项目\s+预约时间\s+状态\s+备注/.test(kt), '栏位：施术项目｜术后管理项目｜预约时间｜状态｜备注'); ST.ok(/术后第 \d+ 天/.test(kt + inn.replace(/<[^>]+>/g, ' ')), '备注写术后第 N 天');
+    ST.ok(!/待到店|待预约|待 KR 预约|已到店|已约</.test(kr+inn), '状态只有 已完成 / 已预约 / 未预约（没有旧叫法）'); ST.ok(/未预约|已预约|已完成/.test(kr+inn), '有新叫法的状态');
+    ST.ok(!/<button/.test(kr), '韩国小卡没有操作'); ST.ok(/预约<\/button>/.test(inn) || /修改时间<\/button>/.test(inn), '印尼小卡有操作栏：未预约 → ［预约］/ 已预约 → ［修改时间］');
+    ST.ok(!/在韩持有项目/.test(html) && typeof inHoldCardHtml==='undefined', '在韩持有项目大卡拿掉');
+    /* 管理项目：持有中 / 已完成；一次使用一行 */
+    var snap = JSON.stringify(c.procedureItems), mg = {name:'ONDA 提升 · 身体 60kj·3次', origin:'KR', mgmtPlan:true, krAddOn:true, qty:6, heldOver:true, uses:[]}; c.procedureItems.push(mg); /* 夹具里没有管理项目：临时加一个，最后还原 */
+    if(ST.ok(!!krIsMgmtItemC(mg), '临时管理项目被认成管理项目')){
+      mg.heldOver = true; mg.cancelled = false; mg.qty = 6; mg.uses = []; holdUseRecord(c, mg, {at:nowFullDt(), key:'main', qty:2}); holdUseRecord(c, mg, {at:nowFullDt(), key:'main', qty:1});
+      var h = inMgmtCardsHtml(c, [mg]), ht = h.replace(/<[^>]+>/g, ' ');
+      ST.ok(/持有中/.test(ht) && /已完成/.test(ht) && /管理项目\s+状态\s+剩余次数\s+预约时间/.test(ht) && /管理项目\s+状态\s+使用次数\s+使用时间/.test(ht), '持有中 / 已完成两张小卡，栏位对');
+      ST.ok(/3 \/ 6 次/.test(ht) && /2 次/.test(ht) && /1 次/.test(ht), '还有剩余的两边都出现；一次使用一行（2 次一行、1 次一行）'); ST.ok(!/·\d+次/.test(ht), '名称不带「·N次」');
+      mg.uses = []; holdUseRecord(c, mg, {at:nowFullDt(), key:'main', qty:6}); h = inMgmtCardsHtml(c, [mg]); ST.ok(/持有中\s*<span[^>]*>0</.test(h) && /已完成\s*<span[^>]*>1</.test(h), '用完的只在已完成');
+      c.procedureItems = JSON.parse(snap);
+    }
+    /* 基础资料护照栏 */
+    var cl = clientByName(c.name), ps = cl.passport; cl.passport = {}; var bh = clientBasicBlockHtml(c); ST.ok(/护照/.test(bh) && /color:#B3261E[^>]*>⚠ 护照未登记/.test(bh), '基础资料护照栏：未登记报红'); cl.passport = ps;
+  });
   ST.def('R59a','CMD-1020-08（A1 分页，需要 pcStage 夹具）：IN 赴韩施术 tab 项目卡 / 备注记录 / 拿掉结束术后管理 / 客人已回国结案、印尼的留在未安排预约 / 迁移 55',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
     var snap59 = JSON.stringify(c), idx59 = CASE_ITEMS.indexOf(c); /* 这个用例会让夹具案件结案、改备注，最后还原，免得影响后面的用例 */
     var html = inProjectCardHtml(c), txt = html.replace(/<[^>]+>/g, ' ');
     ST.ok(/项目卡/.test(txt) && /增加备注/.test(txt), '项目卡有［增加备注］'); ST.ok(/<details/.test(html) && /施术项目 /.test(txt), '施术项目默认折叠（details），只放施术'); ST.ok(!/ONDA|Tune/.test(html.split('管理项目')[0]) , '管理项目不混在施术里');
-    ST.ok(/术后管理 · 韩国/.test(txt) && /术后管理 · 印尼/.test(txt), '术后管理分韩国 / 印尼两张小卡'); ST.ok(!/到院<\/span>/.test(html) && !/做术后管理/.test(html) && !/结束术后管理/.test(html), '拿掉第一栏「到院」、［做术后管理］、［结束术后管理］');
+    ST.ok(/术后管理/.test(txt) && /韩国\s+\d/.test(txt) && /印尼\s+\d/.test(txt), '术后管理分韩国 / 印尼两张小卡'); ST.ok(!/<span>到院<\/span>/.test(html) && !/做术后管理/.test(html) && !/结束术后管理/.test(html), '拿掉第一栏「到院」、［做术后管理］、［结束术后管理］');
     var kr = inCareCardsHtml(c, 'kr'), inn = inCareCardsHtml(c, 'inn'); ST.ok(!/<button/.test(kr), '韩国小卡 IN 只能看（没有按钮）'); ST.ok(/预约<\/button>/.test(inn) && /建议 \d\d\/\d\d/.test(inn), '印尼小卡：没约 → ［预约］+ 灰字建议日期'); ST.ok(!/开内眼角|施术：/.test(kr+inn), '术后管理里不列施术');
     /* 备注记录 */
     c.inNotes = []; c.recInNote = ''; ST.ok(coreAddInNote(c, '第一则：客人带轮椅', 'A1 室长') && coreAddInNote(c, '第二则：需要接送', 'A1 室长') && c.inNotes.length===2, '可以写好几则备注'); ST.ok(c.recInNote==='第一则：客人带轮椅\n第二则：需要接送', '打印用的 recInNote = 全部备注拼起来');
