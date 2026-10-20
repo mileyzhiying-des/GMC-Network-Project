@@ -1958,7 +1958,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件')) return; var gc = function(){ return Store.withClinic(r.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===rec.id; })[0]; }); };
     krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); krProjPage('care'); var h = document.getElementById('krcase-body').innerHTML, tx = document.getElementById('krcase-body').innerText;
     ST.ok(/项目\s*术后第 N 天\s*地点\s*次数\s*建议日期/.test(tx) && !/对应施术/.test(tx), '栏位：项目｜术后第 N 天｜地点｜次数｜建议日期｜操作（没有「对应施术」栏）');
-    ST.ok(/ · \d\d\/\d\d 施术/.test(tx) && !/一起预约/.test(tx) && /未预约\s*\d+\s*全部预约/.test(tx), '分组标题只写「施术名 · 10/31 施术」（CMD-1020-01 拿掉［一起预约］），［全部预约］在「未预约 N」那一行右边');
+    ST.ok(/\d\d\/\d\d 施术/.test(tx) && !/一起预约/.test(tx) && /未预约\s*\d+\s*全部预约/.test(tx), '分组标题只写「施术名 · 10/31 施术」（CMD-1020-01 拿掉［一起预约］），［全部预约］在「未预约 N」那一行右边');
     var surgs = gc().procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && (x.postcare||[]).length; }).map(function(x){ return x.name; });
     krCbOpen({all:true}); ST.ok(KR_CB.rows.length===6 && KR_CB.rows.every(function(x){ return x.checked || krCbCheck(x).err; }), '［全部预约］：全勾（休诊日 / 营业时间外的行自动不勾），多次项目展开成多行（拆线 + 复诊 + 消肿 ×3 + 另一个拆线 = 6 行）：'+KR_CB.rows.length);
     var xs = KR_CB.rows.filter(function(x){ return x.x.name==='术后消肿管理'; }); ST.ok(xs.length===3 && xs[1].date===ymdAdd(xs[0].date, 2) && xs[2].date===ymdAdd(xs[0].date, 4), '消肿管理剩 3 次 → 三行，按间隔 2 天排好日期：'+xs.map(function(x){ return x.date; }).join(' / '));
