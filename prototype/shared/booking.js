@@ -400,11 +400,11 @@ function bkMeCalHtml(cl, cur){
   var evs = cur.map(function(c){ return {date:c.visitDate, text:bt('me.ev.visit')+' '+c.visitTime, kind:'visit'}; }).concat(bkKrCareEvents(cl).map(function(e){ return {date:e.date, text:bt('me.ev.care')+' '+e.text, kind:'care', done:e.done}; }));
   var first = new Date(y, m-1, 1), days = new Date(y, m, 0).getDate(), lead = first.getDay(), cells = '';
   var mm = pad2(m), dow = BOOK_LANG==='zh' ? ['日','一','二','三','四','五','六'] : ['M','S','S','R','K','J','S'];
-  cells += dow.map(function(d){ return '<div style="text-align:center;font-size:11px;color:var(--muted);">'+d+'</div>'; }).join('');
+  cells += dow.map(function(d){ return '<div style="text-align:center;font-size:12px;color:var(--muted);">'+d+'</div>'; }).join('');
   for(var i=0;i<lead;i++) cells += '<div></div>';
   for(var d=1; d<=days; d++){
     var ds = y+'-'+mm+'-'+pad2(d), es = evs.filter(function(e){ return e.date===ds; });
-    cells += '<div style="min-height:44px;border:1px solid var(--border);border-radius:6px;padding:2px 3px;font-size:11px;'+(ds===todayStr()?'border-color:var(--navy);':'')+'"><div style="color:var(--slate2);">'+d+'</div>'+es.map(function(e){ return '<div style="height:6px;border-radius:3px;margin-top:2px;background:'+(e.kind==='visit'?'#2F6FEB':(e.done?'#B9C4B5':'#C77B4A'))+';"></div>'; }).join('')+'</div>';
+    cells += '<div style="min-height:44px;border:1px solid var(--border);border-radius:6px;padding:2px 3px;font-size:12px;'+(ds===todayStr()?'border-color:var(--navy);':'')+'"><div style="color:var(--slate2);">'+d+'</div>'+es.map(function(e){ return '<div style="height:6px;border-radius:3px;margin-top:2px;background:'+(e.kind==='visit'?'#2F6FEB':(e.done?'#B9C4B5':'#C77B4A'))+';"></div>'; }).join('')+'</div>';
   }
   var nav = function(delta){ var dt = new Date(y, m-1+delta, 1); return dt.getFullYear()+'-'+pad2(dt.getMonth()+1); };
   var list = evs.filter(function(e){ return e.date.slice(0,7)===ym; }).sort(function(a,b){ return a.date.localeCompare(b.date); });
@@ -436,7 +436,7 @@ function bkRenderMe(){
   var past = clientPastRecords(cl);
   var pastHtml = past.length ? past.map(function(r){
     return '<div class="bk-info" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;gap:8px;"><b>'+bkH(r.date)+'</b><span>'+bkH(r.caseNo)+'</span></div>'+
-      '<div style="margin-top:4px;">'+bkH(r.did || '—')+(r.report ? ' <span style="font-size:11px;background:var(--sage-bg);color:var(--sage);border-radius:10px;padding:1px 8px;">'+bt('me.report')+'</span>' : '')+'</div>'+
+      '<div style="margin-top:4px;">'+bkH(r.did || '—')+(r.report ? ' <span style="font-size:12px;background:var(--sage-bg);color:var(--sage);border-radius:10px;padding:1px 8px;">'+bt('me.report')+'</span>' : '')+'</div>'+
       (r.hospital ? '<div style="font-size:12px;color:var(--slate2);margin-top:3px;">'+bt('me.hospital')+'：'+bkH(r.hospital)+'</div>' : '')+
       '<div style="font-size:12px;color:var(--slate2);margin-top:3px;">'+bt('me.paid')+'：'+bkH(bkMeMoney(r))+'</div></div>';
   }).join('')+(past.some(function(r){ return r.report; }) ? '<div class="bk-sub">'+bt('me.reportNote')+'</div>' : '') : '<div class="bk-sub">'+bt('me.noPast')+'</div>';

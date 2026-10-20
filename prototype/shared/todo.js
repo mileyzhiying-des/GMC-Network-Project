@@ -185,6 +185,8 @@ function todoStampAt(all){
 /* 显示的出现时间：超时且有截止时间 → 截止时间；否则第一次出现的时间 */
 function todoShownAt(it){ if(it.cat==='dsurg') return it.due || it.at || ''; return (it.over && it.due && it.due <= todoNowStr()) ? it.due : (it.at || ''); } /* 截止时间已过才改用截止时间；超时但「截止」是将来的日期（如施术日期）时仍用出现时间 */
 function todoFmtTime(s){ if(!s) return '—'; var d = s.slice(0,10), hm = s.length>=16 ? s.slice(11,16) : ''; if(d===todayStr()) return hm || '今天'; return s.slice(5,10)+(hm ? ' '+hm : ''); }
+/* CMD-1020-14 三：时间栏窄，日期和钟点上下两行（今天只写钟点），每行不换行 */
+function todoFmtTimeHtml(s){ if(!s) return '—'; var d = s.slice(0,10), hm = s.length>=16 ? s.slice(11,16) : ''; if(d===todayStr()) return todoEsc(hm || '今天'); return '<span class="tt-d">'+todoEsc(s.slice(5,10))+'</span>'+(hm ? '<span class="tt-t">'+todoEsc(hm)+'</span>' : ''); }
 function todoGroupOf(it){ var d = (todoShownAt(it)||'').slice(0,10) || todayStr(); if(it.cat==='dsurg') return d > todayStr() ? 2 : (d < todayStr() ? 0 : 1); return d < todayStr() ? 0 : 1; } /* CMD-1015-08：只留 昨日及更早 / 今天 */
 function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || ((b.over?1:0)-(a.over?1:0)) || (todoShownAt(a)||'9999').localeCompare(todoShownAt(b)||'9999'); }
 /* CMD-1014-01 二·1：点卡片 = 筛选待办栏（标题后出现「· 待我处理 ✕」，✕ 回到全部）；开关关闭时仍是 10/13 的 kind 相等判断 */
@@ -227,10 +229,10 @@ function todoRowHtml(it){
   var urgeBtn = it.urge ? '<button class="btn-primary todo-urge" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</button>' : '';
   var proc = String(it.text||'').replace(/（已超时）|\(已超时\)/g, '').trim();
   return '<div class="todo-row'+(it.pin?' pin':'')+(it.over?' is-over':'')+((it.ref || (todoRefMode() && !it.over))?' is-ref':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
-    '<div class="todo-at">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+todoEsc(todoFmtTime(todoShownAt(it)))+'</div>'+
-    '<div class="todo-stage">'+(it.pin?'📌 ':'')+todoEsc(it.stage||'—')+'</div>'+
-    '<div class="todo-text">'+todoEsc(proc)+'</div>'+
-    '<div class="todo-due'+(it.over?' over':'')+'">'+(it.due ? todoEsc(todoFmtTime(it.due)) : '—')+'</div>'+
+    '<div class="todo-at">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+todoFmtTimeHtml(todoShownAt(it))+'</div>'+
+    '<div class="todo-stage" title="'+todoEsc(it.stage||'')+'">'+(it.pin?'📌 ':'')+todoEsc(it.stage||'—')+'</div>'+
+    '<div class="todo-text" title="'+todoEsc(proc)+'">'+todoEsc(proc)+'</div>'+
+    '<div class="todo-due'+(it.over?' over':'')+'">'+(it.due ? todoFmtTimeHtml(it.due) : '—')+'</div>'+
     '<div class="todo-st '+st.cls+'">'+st.t+urgeBtn+'</div>'+
     '<div class="todo-who">'+(it.name ? '<b>'+todoEsc(it.name)+'</b>' : '<span style="color:var(--muted);">—</span>')+(it.no ? '<span>'+todoEsc(it.no)+'</span>' : '')+'</div></div>';
 }
@@ -273,8 +275,8 @@ function todoUbListHtml(list){
   var head = '<div class="ub-row ub-head"><div>客人</div><div>项目</div><div>建议日期</div><div>来源</div><div></div></div>';
   var body = rows.map(function(it){
     var i = TODO_ACTS.push(it.book) - 1; TODO_ACT_CASE[i] = it.caseId||'';
-    return '<div class="ub-row" onclick="todoGo('+i+')"><div class="ub-who"><b>'+todoEsc(it.name)+'</b><span>'+todoEsc(it.no||'')+'</span></div><div class="ub-item">'+todoEsc(it.label)+(it.sub ? '<div style="font-size:11px;color:var(--muted);font-weight:400;">'+todoEsc(it.sub)+'</div>' : '')+'</div>'+
-      '<div class="ub-sug'+(it.over ? ' over' : '')+'">'+todoUbMd(it.sug)+'</div><div class="ub-src">'+todoEsc(it.source)+'</div><div><button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="event.stopPropagation();todoGo('+i+')">预约</button></div></div>';
+    return '<div class="ub-row" onclick="todoGo('+i+')"><div class="ub-who"><b>'+todoEsc(it.name)+'</b><span>'+todoEsc(it.no||'')+'</span></div><div class="ub-item">'+todoEsc(it.label)+(it.sub ? '<div style="font-size:12px;color:var(--muted);font-weight:400;">'+todoEsc(it.sub)+'</div>' : '')+'</div>'+
+      '<div class="ub-sug'+(it.over ? ' over' : '')+'">'+todoUbMd(it.sug)+'</div><div class="ub-src">'+todoEsc(it.source)+'</div><div><button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="event.stopPropagation();todoGo('+i+')">预约</button></div></div>';
   }).join('');
   return rows.length ? head+'<div class="todo-list">'+body+'</div>' : '<div class="todo-empty">现在没有未安排的预约</div>';
 }
@@ -344,7 +346,7 @@ function todoCareBookRender(){
   ov.innerHTML = '<div class="modal-box" style="width:460px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b style="font-size:15px;">'+(B.edit ? '修改预约时间' : '预约术后管理')+'</b><span style="cursor:pointer;" onclick="todoCareBookClose()">✕</span></div>'+
     '<div style="font-size:13px;line-height:1.8;margin-bottom:8px;">客人 <b>'+todoEsc(c.name)+'</b>　接续原案件 <b>'+todoEsc(c.caseNo)+'</b><br>项目 <b>'+todoEsc(B.label)+'</b>'+(B.sub ? '<span style="color:var(--muted);font-size:12px;">（'+todoEsc(B.sub)+'）</span>' : '')+'<br>来访目的 <b>术后管理</b>　建议日期 '+todoUbMd(B.sug)+'</div>'+
     '<div style="display:flex;gap:8px;margin-bottom:6px;"><input type="date" value="'+B.date+'" min="'+todayStr()+'" onchange="TODO_CB.date=this.value;todoCareBookRender()" style="'+inp+'"><select onchange="TODO_CB.time=this.value" style="'+inp+'">'+(times.length ? times.map(function(t){ return '<option'+(t===B.time?' selected':'')+'>'+t+'</option>'; }).join('') : '<option value="">这天没有可约时间</option>')+'</select></div>'+
-    '<div style="font-size:11px;color:var(--slate2);margin-bottom:12px;">'+todoEsc(ymdWeekText(B.date))+'</div>'+
+    '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">'+todoEsc(ymdWeekText(B.date))+'</div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-ghost" onclick="todoCareBookClose()">取消</button><button class="btn-primary" '+(B.time ? '' : 'disabled style="opacity:.4;"')+' onclick="todoCareBookGo()">确认预约</button></div></div>';
   ov.classList.add('open');
 }
@@ -384,7 +386,7 @@ function todoCardHtml(label, count, tip, onclick, warn, dot, sub){
   return '<div class="card" data-n="'+count+'"'+(warn?' data-warn="1"':'')+' onclick="'+onclick+'" title="'+todoEsc(tip)+'" style="position:relative;padding:14px 16px;cursor:pointer;min-width:0;'+(warn?'border-color:#E8A8A0;':'')+'">'+(dot ? '<span title="有新进来的项目" style="position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:#E5484D;"></span>' : '')+
     '<div style="font-size:12px;color:var(--slate2);">'+label+'</div>'+
     '<div class="ds-cnum" style="font-size:28px;font-weight:700;margin:4px 0;color:'+(warn?'#B2453A':'var(--navy)')+';">'+count+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);line-height:1.6;">'+(sub||'&nbsp;')+'</div></div>';
+    '<div style="font-size:12px;color:var(--muted);line-height:1.6;">'+(sub||'&nbsp;')+'</div></div>';
 }
 var TODO_SEEN = {}, TODO_LIT = {};
 /* 红点：有新进来的项目就亮，点卡片后才灭（刷新不会自己灭） */
@@ -402,7 +404,7 @@ function todoCatCardsHtml(all, defs, noWrap){
   var vis = all.filter(function(it){ return !TODO_UI.mine || it.mine; }), kr = todoIsKr(), names = {};
   if(kr) krClinics().forEach(function(cl){ names[cl.id] = cl.name; });
   var inner = defs.map(function(d){
-    if(d[0]==='soon') return '<div class="card" data-n="0" title="'+todoEsc(d[2]||'')+'" style="position:relative;padding:14px 16px;min-width:0;opacity:.75;cursor:default;"><div style="font-size:12px;color:var(--slate2);">'+d[1]+'</div><div style="font-size:18px;font-weight:700;margin:10px 0 8px;color:var(--muted);">即将推出</div><div style="font-size:11px;color:var(--muted);line-height:1.6;">&nbsp;</div></div>';
+    if(d[0]==='soon') return '<div class="card" data-n="0" title="'+todoEsc(d[2]||'')+'" style="position:relative;padding:14px 16px;min-width:0;opacity:.75;cursor:default;"><div style="font-size:12px;color:var(--slate2);">'+d[1]+'</div><div style="font-size:18px;font-weight:700;margin:10px 0 8px;color:var(--muted);">即将推出</div><div style="font-size:12px;color:var(--muted);line-height:1.6;">&nbsp;</div></div>';
     var list = vis.filter(function(it){ return it.cat===d[0]; }), warn = list.some(function(it){ return it.over; }) && d[0]!=='msg';
     var sub = '';
     if(kr && list.length){ var per = {}; list.forEach(function(it){ var cid = (it.rowKey||'').split(':')[0]; if(cid) per[cid] = (per[cid]||0) + 1; }); sub = Object.keys(per).map(function(cid){ return '<span style="margin-right:10px;">'+todoEsc(names[cid]||cid)+' <b>'+per[cid]+'</b></span>'; }).join(''); }

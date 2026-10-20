@@ -372,11 +372,11 @@ function settlementCardHtml(c, b){
   }).join('');
   var localRows = locals.map(function(it){
     var rb = null; getClientHoldings(c.name).forEach(function(h){ if(h.itemName===it.name) h.batches.forEach(function(x){ if(x.caseId===c.id && x.refund && x.bought===(it.qty||1)*(it.specTimes||1)) rb = x.refund; }); });
-    var tag = it.kind==='package' ? ' <span style="font-size:10px;color:#C1454A;">套餐</span>' : (it.kind==='service' ? ' <span style="font-size:10px;color:var(--blue);">서비스</span>' : (it.promo || it.promoId ? ' <span style="font-size:10px;color:var(--sage);">本月</span>' : ''));
+    var tag = it.kind==='package' ? ' <span style="font-size:12px;color:#C1454A;">套餐</span>' : (it.kind==='service' ? ' <span style="font-size:12px;color:var(--blue);">서비스</span>' : (it.promo || it.promoId ? ' <span style="font-size:12px;color:var(--sage);">本月</span>' : ''));
     var held = b.status==='unpaid' ? '待付款' : '已转客户持有';
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+itemFullName(it)+tag+' ×'+(it.qty||1)+(discountText(it.discountPct)?'（'+discountText(it.discountPct)+'）':'')+'</span><span style="font-size:12px;color:var(--slate2);">'+formatCurrency(inLineTotal(it),'IDR')+' · 本地 · '+held+(rb?' · <b style="color:var(--terracotta);">'+'已退款 '+formatCurrency(rb.amount,'IDR')+'</b>':'')+'</span></div>';
   }).join('');
-  var grp = function(t){ return '<div style="font-size:11px;font-weight:700;color:var(--slate2);margin:8px 0 2px;">'+t+'</div>'; };
+  var grp = function(t){ return '<div style="font-size:12px;font-weight:700;color:var(--slate2);margin:8px 0 2px;">'+t+'</div>'; };
   var rows = (krRows && localRows) ? grp('赴韩项目（₩）')+krRows+grp('本地项目（Rp）')+localRows : (krRows + localRows);
   var amounts = [];
   if(b.addOn) amounts.push('韩国加做（KR 新增，另开结算单）：客人在韩国单独付款，医院收款（不进尾款应付额，算 KR 收入）；金额由医院收，这里不显示');
@@ -392,7 +392,7 @@ function settlementCardHtml(c, b){
     ? '<div style="display:flex;align-items:center;gap:10px;margin-top:10px;"><button class="btn-primary" onclick="settleProjects(\''+b.id+'\')">确认付款</button>'+(batchNeedsPassport(c, b) ? '<span style="font-size:12px;color:#B3261E;font-weight:700;">护照未登记（点确认付款先登记护照）</span>' : '')+'</div>'
     : (canCancel ? '<button class="btn-outline" style="margin-top:10px;" onclick="openCancelItems(\''+b.id+'\')">取消项目</button>' : '');
   return '<div id="settle-card-'+b.id+'" style="border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:12px;">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:13px;font-weight:700;">结算单 '+b.id+' <span style="font-weight:400;color:var(--muted);font-size:11px;">'+b.time+'</span></span><span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+st+'</span></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:13px;font-weight:700;">结算单 '+b.id+' <span style="font-weight:400;color:var(--muted);font-size:12px;">'+b.time+'</span></span><span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+st+'</span></div>'+
     (rows || '<div style="font-size:12px;color:var(--muted);">（项目明细略）</div>')+
     '<div style="font-size:12px;color:var(--slate2);margin-top:8px;">'+amounts.join('　')+'</div>'+refunds+actions+'</div>';
 }
@@ -403,7 +403,7 @@ function settlementSummaryHtml(c){
   var hasKr = krAllItems(c).length>0;
   var totalTxt = (hasKr ? formatCurrency(info.total,'KRW') : '') + ((hasKr && pd.inn>0) ? ' ＋ ' : '') + (pd.inn>0 ? formatCurrency(pd.inn,'IDR') : '') || '—';
   var balTxt = !krActiveItems(c).length ? '—' : (info.diff>=0 ? formatCurrency(info.diff,'KRW')+'（'+(c.krBalancePaid ? '已付清' : '未付')+'）' : (c.krBalancePaid ? '已退差额 ' : '应退 ')+formatCurrency(-info.diff,'KRW')); /* CMD-1015-15：尾款金额 IN 看得到 */
-  var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:11px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
+  var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:12px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
     cell('项目合计', totalTxt)+cell('已收定金（诊所收）', hasKr ? formatCurrency(info.deposit,'KRW') : '—')+cell('已退金额', ref>0 ? formatCurrency(ref,'KRW') : '—')+(compK>0 ? cell('已转置换', formatCurrency(compK,'KRW')) : '')+cell('应付尾款（医院收）', balTxt)+'</div>';
 }
@@ -430,10 +430,10 @@ function settlementItemRow(c, it, removable){
     var origPrice = it.price*qty;
     var priceHtml;
     if(removable) return localRowHtml(c, 'main', it); /* 2026-10-08：赴韩方案 / 本地选购的「已选择」统一一行（行首 checkbox / 次数 / 折扣 / 金额 / ［备注］） */
-      priceHtml = qty+'次'+(discountText(pct)?'，'+discountText(pct):'')+'　<b>'+formatCurrency(lineTotal,ccy)+'</b>'+(pct<100?' <span style="color:var(--muted);text-decoration:line-through;font-size:11px;">'+formatCurrency(origPrice,ccy)+'</span>':'');
+      priceHtml = qty+'次'+(discountText(pct)?'，'+discountText(pct):'')+'　<b>'+formatCurrency(lineTotal,ccy)+'</b>'+(pct<100?' <span style="color:var(--muted);text-decoration:line-through;font-size:12px;">'+formatCurrency(origPrice,ccy)+'</span>':'');
     var held = clientHeldRemaining(c.name, it.name);
-    var heldTag = held>0 ? ' <span style="font-size:11px;color:var(--sage);">持有 '+held+' 次</span>' : '';
-    var noteRow = removable ? '<div class="case-field-row" style="border-top:none;padding-top:0;padding-bottom:10px;"><input type="text" placeholder="备注（选填）" value="'+(it.itemNote||'')+'" onchange="setInItemField(\''+it.projectId+'\',\'itemNote\',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;"></div>' : '';
+    var heldTag = held>0 ? ' <span style="font-size:12px;color:var(--sage);">持有 '+held+' 次</span>' : '';
+    var noteRow = removable ? '<div class="case-field-row" style="border-top:none;padding-top:0;padding-bottom:10px;"><input type="text" placeholder="备注（选填）" value="'+(it.itemNote||'')+'" onchange="setInItemField(\''+it.projectId+'\',\'itemNote\',this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></div>' : '';
     return '<div class="case-field-row" style="flex-wrap:wrap;gap:6px;"><span style="flex-grow:1;font-size:13px;'+strike+'">'+itemFullName(it)+heldTag+'</span><span style="font-size:12px;display:flex;align-items:center;gap:4px;">'+priceHtml+'</span></div>'+noteRow;
   }
   if(removable) return '<div class="sel-row"><div class="sel-line"><input type="checkbox" checked title="取消勾选即移除" onchange="toggleProject(\''+it.projectId+'\')"><div class="sel-name"><div>'+it.name+'</div></div><span class="sel-amt">'+formatCurrency(it.price, ccy)+'</span></div></div>';
@@ -802,7 +802,7 @@ function recSummaryHtml(items, overall, opt){
   if(!d.rows.length && !d.mgmt.length) return '';
   return '<div class="rec-summary" style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:10px 0;background:#fff;">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b style="font-size:13px;">推荐项目整理</b>'+(opt.print ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="printRecSummary()">打印</button>' : '')+'</div>'+
-    '<div style="font-size:13px;margin:6px 0;">'+(d.stay.days ? '<b>'+e(stayLineText(d.stay))+'</b>' : '推荐在韩天数：<b>—</b>')+' <span style="color:var(--muted);font-size:11px;">（各项目最大值；施术日 = 第 0 天）</span></div>'+
+    '<div style="font-size:13px;margin:6px 0;">'+(d.stay.days ? '<b>'+e(stayLineText(d.stay))+'</b>' : '推荐在韩天数：<b>—</b>')+' <span style="color:var(--muted);font-size:12px;">（各项目最大值；施术日 = 第 0 天）</span></div>'+
     d.rows.map(function(r){ return '<div style="font-size:12px;padding:6px 0;border-top:1px solid var(--border2);"><b>'+e(r.name)+'</b>｜推荐在韩 '+e(r.stay)+(r.stayWhy ? '（'+e(r.stayWhy)+'）' : '')+'｜麻醉：'+e(r.anes)+(r.note ? '｜备注：'+e(r.note) : '')+(r.pc.length ? '<div style="color:var(--slate2);margin-top:2px;">术后管理：'+r.pc.map(e).join('；')+'</div>' : '<div style="color:var(--muted);margin-top:2px;">术后管理：无</div>')+'</div>'; }).join('')+
     (d.mgmt.length ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding:6px 0;"><b>管理项目</b>（付费，只在韩国做）'+d.mgmt.map(function(m){ return '<div style="color:var(--slate2);margin-top:2px;">'+e(m.name)+' × '+mgmtQtyText(m)+mgmtScheduleText(m)+(m.note ? '｜'+e(m.note) : '')+'</div>'; }).join('')+'</div>' : '')+
     (d.overall ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding-top:6px;margin-top:2px;">整体备注：'+e(d.overall)+'</div>' : '')+
@@ -818,14 +818,14 @@ function printRecSummary(){
 function itemArrangeHtml(it, full){
   var bits = itemMetaText(it).filter(function(b){ return full || b.indexOf('术后管理：')!==0; });
   if(!bits.length) return '';
-  return '<div style="flex-basis:100%;font-size:11px;color:var(--slate2);margin:2px 0 4px 2px;line-height:1.6;">'+bits.map(function(b){ return String(b).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }).join('<br>')+'</div>';
+  return '<div style="flex-basis:100%;font-size:12px;color:var(--slate2);margin:2px 0 4px 2px;line-height:1.6;">'+bits.map(function(b){ return String(b).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }).join('<br>')+'</div>';
 }
 function pcAllocEditable(c){ return !c.krBalancePaid && !isEnded(c); } /* 付尾款前都可以改 */
 /* 已选 / 结算单里每个赴韩项目下面的术后管理行：显示韩国 n + 印尼 m；可弹性的（且有印尼对应项目）IN 室长可调 */
 function pcLinesHtml(c, it, fn){
   /* IN 不再分配术后管理（CMD-1013-04 五）：只读显示 必须在韩国 / 韩国或印尼都可、次数、第 N 天起；「韩国或印尼都可」一律由 KR 在付清尾款后的预约弹窗决定 */
   if(!(it.postcare||[]).length) return '';
-  return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:11px;color:var(--slate2);"><div style="color:var(--muted);margin-bottom:2px;">术后管理（含在套餐内，不另收费；地点由 KR 在付清尾款后预约时决定）</div>'+it.postcare.map(function(x){
+  return '<div style="margin:-2px 0 8px 12px;padding:6px 10px;background:var(--bg2,#faf6ef);border-radius:8px;font-size:12px;color:var(--slate2);"><div style="color:var(--muted);margin-bottom:2px;">术后管理（含在套餐内，不另收费；地点由 KR 在付清尾款后预约时决定）</div>'+it.postcare.map(function(x){
     var head = (x.mgmt ? x.mgmt+'｜' : '')+x.name+' × '+x.times+' 次'+(pcDayText(x)?'（'+pcDayText(x)+'）':'');
     return '<div style="margin:3px 0;">'+head+'：'+(x.place==='KR' ? '必须在韩国' : '韩国或印尼都可')+'</div>';
   }).join('')+'</div>';

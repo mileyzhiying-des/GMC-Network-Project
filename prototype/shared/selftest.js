@@ -1217,7 +1217,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('BK1a','IN 在 KR 医院日程占位（A1 分页）：点空白时段 → 预约窗 → 挡住冲突 → 提交占位',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return; var hid = clinicHospital(CURRENT_CLINIC_ID);
     var cl = krbClients(); if(!ST.ok(cl.length>0, '需要有赴韩项目的客人')) return; var name = cl[0];
-    nav('in-dashboard'); setCalView('kr'); setCalMode('week'); var col = [].slice.call(document.querySelectorAll('.kr-daycol')).filter(function(e){ return e.getAttribute('data-ds')>todayStr() && !hospitalClosedOn(hid, e.getAttribute('data-ds')); })[0];
+    nav('in-dashboard'); setCalView('kr'); setCalMode('week'); var col = [].slice.call(document.querySelectorAll('.kr-daycol')).filter(function(e){ return e.getAttribute('data-ds')>todayStr() && !hospitalClosedOn(hid, e.getAttribute('data-ds')) && e.getAttribute('onclick'); })[0];
     ST.ok(!!col, 'KR 医院日程周视图应有可点的空白列'); var r = col.getBoundingClientRect(); col.dispatchEvent(new MouseEvent('click', {bubbles:true, clientX:r.left+8, clientY:r.top+KR_ROW_PX*2+3}));
     ST.ok(!!KRB && document.getElementById('krb-overlay').classList.contains('open'), '点空白时段应弹出预约窗');
     var busyCnt = 0; Object.keys(HOSPITAL_DATA[hid].directorSchedule).forEach(function(n){ (HOSPITAL_DATA[hid].directorSchedule[n]||[]).forEach(function(b){ if(b.type==='不可预约' && b.date>todayStr() && !busyCnt){ busyCnt = 1; KRB.client = name; KRB.date = b.date; KRB.time = b.time; krbSubmit(); ST.ok(KRB===null || !/不可预约|重叠|已有/.test(KRB.err||''), 'CMD-1014-18：占位只看医院营业 / 休诊，不再因院长不可预约挡住，实际：'+(KRB&&KRB.err)); var mk = krbList(hid).filter(function(x){ return x.clientName===name && x.date===b.date && x.time===b.time && x.status==='pending'; })[0]; if(mk) krBookCancel(mk.id); } }); });
@@ -2279,6 +2279,47 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 六：赴韩施术页 */
     cs.settlementDone = true; var kh = krProcedureTabHtml(cs), kt = kh.replace(/<[^>]+>/g, ' ');
     ST.ok(/建议在韩停留 \d+ 天/.test(kt) && /施术日 = 第 0 天/.test(kt) && !/>赴韩施术计划</.test(kh), '左上角 = 建议在韩停留天数（取代「赴韩施术计划」按钮）：'+(kt.match(/建议在韩停留[^·]*· 施术日 = 第 0 天/)||[''])[0].slice(0, 40)); ST.ok(!/推荐项目整理/.test(kt) && /onclick="printKrPlan\(\)"/.test(kh), '推荐项目整理整块拿掉，［打印］维持原位');
+  });
+  /* CMD-1020-14 一二：院长整天 OFF 整栏灰底 + 不能点；医院视图不灰；月视图 OFF / 休诊灰底、时段行（不写数字）、今天咖啡色圆圈（IN 分页测 IN；KM1 分页测 KR） */
+  ST.def('CAL10','CMD-1020-14：院长整天 OFF 整栏灰底写 OFF 不能建预约（医院视图不灰）；月视图灰底 / 时段行 / 今天圆圈 / IN 本院周日休诊',function(){
+    var kr = isKrAccount(), me = currentAccount(), hid = kr ? krHospitalIdOfMe() : krViewHospital(), h = HOSPITAL_DATA[hid], dir = hospitalDirectors(hid).filter(function(d){ return d.active; })[0].name;
+    var ds = ymdAdd(todayStr(), 9); while(hospitalClosedOn(hid, ds) || dirFullOff(hid, ds, dir)) ds = ymdAdd(ds, 1);
+    var o = {id:'offCAL10', date:ds, who:dir, kind:'director', part:'全天', note:'进修', by:me.id}; h.offs = h.offs||[]; h.offs.push(o);
+    try{
+      ST.ok(dirOffText(dirFullOff(hid, ds, dir))==='OFF · 进修' && dirFullOff(hid, ds, dir+'x')===null, '整天 OFF 判断 + 备注写法');
+      if(kr){
+        krcPick(dir); krcSet('mode','week'); KRC.anchor = krcWeekStartMon(ds); krcRender(); var col = [].filter.call(document.querySelectorAll('#kr-cal .krc-offcol'), function(e){ return /进修/.test(e.textContent); })[0];
+        ST.ok(!!col && /^OFF · 进修$/.test(col.textContent.trim()), 'KR 院长视图：整天 OFF 那一栏整栏灰底写「OFF · 备注」'); var cell = col && col.parentNode; ST.ok(cell && !cell.getAttribute('onclick') && !cell.getAttribute('onmousemove'), '那一栏不能点（没有点击 / 悬停加预约）');
+        krcPick('__H'); krcRender(); ST.ok(![].some.call(document.querySelectorAll('#kr-cal .krc-offcol'), function(e){ return /进修/.test(e.textContent); }), '医院视图同一天不灰整栏');
+        krcPick(dir); krcSet('mode','month'); KRC.anchor = ds.slice(0,8)+'01'; krcRender(); var mw = document.querySelector('.krc-monthwrap');
+        ST.ok(mw && mw.querySelectorAll('.cal-cell').length===42 && mw.querySelectorAll('.cal-today').length<=1, '月视图 6 行 42 格，今天只有一个圆圈'); var gcell = [].filter.call(mw.querySelectorAll('.cal-gray'), function(e){ return /OFF · 进修/.test(e.textContent); })[0]; ST.ok(!!gcell && !/OFF[\s\S]*OFF/.test(gcell.textContent), '院长整天 OFF 的那天灰底只写一次「OFF · 备注」');
+        ST.ok(!/项日程|不可预约 \d|施术 \d/.test(mw.textContent), '月视图不写数字（项日程 / 不可预约 2）');
+        krcPick('__H'); krcSet('mode','month'); krcRender(); ST.ok(![].some.call(document.querySelectorAll('.krc-monthwrap .cal-gray'), function(e){ return /进修/.test(e.textContent); }), '医院视图的月视图不因院长 OFF 灰掉');
+        krcSet('mode','week');
+      } else {
+        setCalView('kr'); setKrDir(dir); setCalMode('week'); CAL_WEEK_FULL = true; CAL_ANCHOR = new Date(ds+'T00:00:00'); WEEK_OFFSET = 0; renderCalendar();
+        var bd = [].filter.call(document.querySelectorAll('.cal-offband'), function(e){ return /进修/.test(e.textContent); })[0]; ST.ok(!!bd, 'IN 的 KR 医院日程院长视图：整天 OFF 整栏灰底写「OFF · 备注」'); ST.ok(bd && !bd.parentNode.getAttribute('onclick'), '那一栏不能点（不能建预约 / 占位）');
+        setKrDir('all'); renderCalendar(); ST.ok(![].some.call(document.querySelectorAll('.cal-offband'), function(e){ return /进修/.test(e.textContent); }), '医院视图不灰整栏');
+        setKrDir(dir); setCalMode('month'); MONTH_OFFSET = 0; renderCalendar(); var g = document.getElementById('cal-grid'); ST.ok(g.querySelectorAll('.cal-cell').length===42 && g.querySelectorAll('.cal-today').length<=1, 'IN 月视图 42 格，今天一个咖啡色圆圈');
+        ST.ok(!/项日程|不可预约 \d/.test(g.textContent), '月视图不写数字');
+        setCalView('in'); setCalMode('month'); renderCalendar(); g = document.getElementById('cal-grid'); var sun = [].filter.call(g.querySelectorAll('.cal-cell'), function(e){ return /休诊/.test(e.textContent); }); ST.ok(sun.length>=4 && sun.every(function(e){ return e.classList.contains('cal-gray'); }), 'IN 本院日程月视图：休诊日（周日）灰底写「休诊」');
+        KR_DIRECTOR = 'all'; setCalView('in'); setCalMode('week'); renderCalendar();
+      }
+    } finally { h.offs = h.offs.filter(function(x){ return x.id!=='offCAL10'; }); Store.touch(); }
+  });
+  /* CMD-1020-14 四：全站最小字号 12px —— 扫当前页面里所有有文字的可见元素，computed font-size < 12px 就列出来；打印预览（新窗口）不在页面里，不算。每个页面 / 每个 tab 都可以跑一遍（以后新增画面也能拦住） */
+  ST.fontScan = function(root){
+    var bad = {}, els = (root||document.body).querySelectorAll('*');
+    [].forEach.call(els, function(e){
+      if(/^(SCRIPT|STYLE|NOSCRIPT|HEAD|TITLE|META|LINK|OPTION)$/.test(e.tagName)) return;
+      var own = [].some.call(e.childNodes, function(n){ return n.nodeType===3 && n.textContent.trim(); }); if(!own) return;
+      if(!e.getClientRects().length) return;
+      var fs = parseFloat(getComputedStyle(e).fontSize); if(fs > 0 && fs < 12 && !(e.classList && e.classList.contains('ds-ic-t'))){ var k = (e.id ? '#'+e.id : '')+(e.className && typeof e.className==='string' ? '.'+e.className.trim().split(/\s+/).join('.') : '')+' '+fs+'px'; bad[e.tagName.toLowerCase()+k] = (bad[e.tagName.toLowerCase()+k]||0)+1; }
+    });
+    return bad;
+  };
+  ST.def('FS1','CMD-1020-14：全站最小字号 12px —— 当前页面上没有 computed font-size < 12px 的文字（逐页 / 逐 tab 跑；也扫弹窗）',function(){
+    var bad = ST.fontScan(); ST.ok(Object.keys(bad).length===0, '字号小于 12px 的元素：'+JSON.stringify(bad));
   });
   ST.def('R65b','CMD-1020-13（KM1 分页，需要 pcStage 夹具）：KR 对话 = IN 同一个浮窗组件',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

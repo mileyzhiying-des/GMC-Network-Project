@@ -5,10 +5,10 @@
 function aEsc(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function aSection(title, bodyHtml, note){
   return '<div class="card" style="padding:20px 24px;"><div style="font-size:14px;font-weight:700;margin-bottom:12px;">'+title+'</div>'+bodyHtml+
-    (note ? '<div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6;">'+note+'</div>' : '')+'</div>';
+    (note ? '<div style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6;">'+note+'</div>' : '')+'</div>';
 }
 function aField(label, inner, hint){
-  return '<div class="field" style="margin-bottom:12px;"><label>'+label+'</label>'+inner+(hint?'<div style="font-size:11px;color:var(--muted);margin-top:4px;">'+hint+'</div>':'')+'</div>';
+  return '<div class="field" style="margin-bottom:12px;"><label>'+label+'</label>'+inner+(hint?'<div style="font-size:12px;color:var(--muted);margin-top:4px;">'+hint+'</div>':'')+'</div>';
 }
 function aInput(attrs){ return '<input '+attrs+' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'; }
 function aGrid(cols, inner){ return '<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:0 16px;">'+inner+'</div>'; }
@@ -28,7 +28,7 @@ ADMIN_RENDER.personal = function(el){
   var profile =
     '<div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;"><span id="pf-photo">'+acctPhotoHtml(a, 64)+'</span>'+
     '<label class="btn-outline" style="cursor:pointer;padding:6px 12px;font-size:12px;">'+(isKrDirectorLike(currentAccount())?'上传头像':t('更换照片'))+'<input type="file" accept="image/*" style="display:none;" onchange="profilePhoto(this)"></label>'+
-    '<span style="font-size:11px;color:var(--muted);">'+accountLabel(a.id)+' · '+aEsc(ACCOUNT_ROLES[a.role])+'</span></div>'+
+    '<span style="font-size:12px;color:var(--muted);">'+accountLabel(a.id)+' · '+aEsc(ACCOUNT_ROLES[a.role])+'</span></div>'+
     aGrid(2, aField(t('姓名'), aInput('id="pf-name" value="'+aEsc(a.name)+'"'))+aField(t('职位'), '<select id="pf-pos" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+posOpts+'</select>')+
       aField(t('手机'), aInput('id="pf-phone" value="'+aEsc(a.phone)+'"'), '手机号只用来收验证码（激活、忘记密码）')) +
     '<div id="pf-err" class="error-text" style="display:none;margin-bottom:8px;"></div><button class="btn-primary" onclick="saveProfile()">'+t('保存资料')+'</button>';
@@ -37,7 +37,7 @@ ADMIN_RENDER.personal = function(el){
     return '<label style="display:flex;align-items:center;gap:10px;padding:7px 2px;font-size:13px;cursor:pointer;"><input type="radio" name="pf-lang" '+(k===curLang?'checked ':'')+'onchange="setMyLang(\''+k+'\')"> '+lang[k]+'</label>'; }).join('');
   var nt = a.notify || {push:true, sound:true};
   var notifyHtml =
-    '<label style="display:flex;align-items:center;gap:10px;padding:7px 2px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(nt.push!==false?'checked ':'')+'onchange="setMyNotify(\'push\',this.checked)"> '+t('推播通知')+'<span style="font-size:11px;color:var(--muted);">（关闭后右下角不再弹出提示，通知中心仍会记录）</span></label>'+
+    '<label style="display:flex;align-items:center;gap:10px;padding:7px 2px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(nt.push!==false?'checked ':'')+'onchange="setMyNotify(\'push\',this.checked)"> '+t('推播通知')+'<span style="font-size:12px;color:var(--muted);">（关闭后右下角不再弹出提示，通知中心仍会记录）</span></label>'+
     '<label style="display:flex;align-items:center;gap:10px;padding:7px 2px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(nt.sound!==false?'checked ':'')+'onchange="setMyNotify(\'sound\',this.checked)"> '+t('提示音')+'</label>';
   var pw =
     aGrid(3, aField(t('当前密码'), aInput('id="pw-old" type="password" autocomplete="off"'))+aField(t('新密码'), aInput('id="pw-new" type="password" autocomplete="off"'), '至少 6 位')+aField(t('确认新密码'), aInput('id="pw-new2" type="password" autocomplete="off"')))+
@@ -139,7 +139,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
     return '<div style="font-size:13px;line-height:2;padding:6px 0;border-bottom:1px solid var(--border2);"><b>'+t('韩国医院')+'：</b>'+aEsc(h.name.ko)+' / '+aEsc(h.name.en)+'<br><b>'+t('韩国室长')+'：</b>'+hospitalCoordinators(h.id).map(aEsc).join('、')+'<br><b>'+t('院长名单')+'：</b>'+ds+'</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);">（本诊所还没有对接的医院）</div>';
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('诊所设定')+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);">'+(CLINIC_SETTINGS.updatedAt ? '最后修改：'+aEsc(CLINIC_SETTINGS.updatedBy)+'　'+fmtUtc(CLINIC_SETTINGS.updatedAt) : '')+'</div></div>'+
+    '<div style="font-size:12px;color:var(--muted);">'+(CLINIC_SETTINGS.updatedAt ? '最后修改：'+aEsc(CLINIC_SETTINGS.updatedBy)+'　'+fmtUtc(CLINIC_SETTINGS.updatedAt) : '')+'</div></div>'+
     aSection(t('诊所资料'),
       aGrid(2, aField(t('诊所名称'), f('name'))+aField(t('电话'), f('phone'))+aField(t('地址'), f('address'))+aField(t('所在城市'), f('city'), '显示在工作台的天气旁')+
         aField(t('时区'), '<div style="padding:9px 12px;border:1px dashed var(--border);border-radius:8px;font-size:13px;color:var(--slate2);background:var(--sand);">'+aEsc(tzTxt)+'</div>', '日历按诊所所在时区显示，下面一行小字显示实际的韩国时间（改地址 / 所在城市会自动更新）'))) +
@@ -164,7 +164,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
       hospBlock, '来源：韩国端维护，这里只读；只列出本诊所对接的医院。')+
     '<div id="clinic-err" class="error-text" style="display:none;"></div>'+
     '<div style="display:flex;gap:10px;align-items:center;"><button class="btn-primary" onclick="saveClinicSettings()">'+t('保存设定')+'</button><button class="btn-outline" onclick="clinicDraftFresh();openAdminPage(\'clinic\',true)">'+t('取消')+'</button>'+
-    '<span style="font-size:11px;color:var(--muted);">'+t('保存后立即生效，并通知所有室长')+'</span></div>');
+    '<span style="font-size:12px;color:var(--muted);">'+t('保存后立即生效，并通知所有室长')+'</span></div>');
 };
 /* 草稿：path 形如 'name' 或 'sms.link' */
 function clinicSet(inp){
@@ -251,14 +251,14 @@ function acctRowsHtml(){
   var head = '<div class="trow head" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;"><span>账号 ID</span><span>类型</span><span>当前使用人</span><span>席位</span><span>状态</span></div>';
   return head + list.map(function(a){
     var who = a.status==='pending' ? '<span style="color:var(--muted);">（还没有使用人）</span>' :
-      '<span style="display:inline-flex;align-items:center;gap:10px;">'+acctPhotoHtml(a, 30)+'<span><b>'+aEsc(a.name)+'</b><span style="color:var(--muted);font-size:11px;margin-left:6px;">'+aEsc(a.position||'')+'</span></span></span>';
-    return '<div class="trow" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;cursor:pointer;" onclick="openAcctDetail(\''+a.id+'\')"><span><b>'+a.id+'</b>'+(a.id===me.id?'<span style="font-size:10px;color:var(--navy);margin-left:6px;">我</span>':'')+'</span><span>'+ROLE_SHORT[a.role]+'</span><span>'+who+'</span><span>'+(a.seat==='basic'?'基础':'加购')+'</span><span>'+acctStatusPill(a)+'</span></div>';
+      '<span style="display:inline-flex;align-items:center;gap:10px;">'+acctPhotoHtml(a, 30)+'<span><b>'+aEsc(a.name)+'</b><span style="color:var(--muted);font-size:12px;margin-left:6px;">'+aEsc(a.position||'')+'</span></span></span>';
+    return '<div class="trow" style="grid-template-columns:0.7fr 1fr 2.2fr 1fr 1fr;cursor:pointer;" onclick="openAcctDetail(\''+a.id+'\')"><span><b>'+a.id+'</b>'+(a.id===me.id?'<span style="font-size:12px;color:var(--navy);margin-left:6px;">我</span>':'')+'</span><span>'+ROLE_SHORT[a.role]+'</span><span>'+who+'</span><span>'+(a.seat==='basic'?'基础':'加购')+'</span><span>'+acctStatusPill(a)+'</span></div>';
   }).join('');
 }
 ADMIN_RENDER.accounts = function(el){
   var cnt = function(role, seat){ return clinicAccounts().filter(function(a){ return a.role===role && a.seat===seat && a.status!=='disabled'; }).length; };
   var addonMgr = cnt('manager','addon'), addonGen = cnt('general','addon'), pend = clinicAccounts().filter(function(a){ return a.status==='pending'; }).length;
-  var stat = function(label, big, sub){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:150px;"><div style="font-size:11px;color:var(--muted);">'+label+'</div><div style="font-size:22px;font-weight:700;margin:4px 0;">'+big+'</div><div style="font-size:11px;color:var(--slate2);">'+sub+'</div></div>'; };
+  var stat = function(label, big, sub){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:150px;"><div style="font-size:12px;color:var(--muted);">'+label+'</div><div style="font-size:22px;font-weight:700;margin:4px 0;">'+big+'</div><div style="font-size:12px;color:var(--slate2);">'+sub+'</div></div>'; };
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('账号管理')+'</div>'+
     '<button class="btn-primary" onclick="openBuyAccounts()">＋ 加购账号</button></div>'+
     '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+
@@ -268,7 +268,7 @@ ADMIN_RENDER.accounts = function(el){
       stat('待激活', pend+' 个', '已购买/已重设，等使用人激活')+
     '</div>'+
     '<div class="card" style="padding:4px 20px;">'+acctRowsHtml()+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);line-height:1.7;">点一行看使用人历史和该账号的操作记录。重设密码：账号变"待激活"，原使用人立即登出，下一位在登录页用"首次激活"接手（自己填手机号、设密码、填姓名/职位/证件照）；只能重设，不能替别人设密码。退订只对加购账号，立即停用，之前的记录保留。</div>';
+    '<div style="font-size:12px;color:var(--muted);line-height:1.7;">点一行看使用人历史和该账号的操作记录。重设密码：账号变"待激活"，原使用人立即登出，下一位在登录页用"首次激活"接手（自己填手机号、设密码、填姓名/职位/证件照）；只能重设，不能替别人设密码。退订只对加购账号，立即停用，之前的记录保留。</div>';
 };
 
 /* ---- 通用弹窗（账号详情、确认、加购共用一个壳） ---- */
@@ -416,20 +416,20 @@ ADMIN_RENDER.bizdata = function(el){
   cs.forEach(function(c){ var ops = caseOperators(c, true).inn; if(!ops.length) ops = ['（无操作记录）']; ops.forEach(function(n){ var o = perCoord[n] = perCoord[n] || {total:0, closed:0}; o.total++; if(c.stage==='closed') o.closed++; }); });
   var coordNames = Object.keys(perCoord).sort(function(a,b){ return perCoord[b].total - perCoord[a].total; });
   var maxC = Math.max.apply(null, [1].concat(coordNames.map(function(n){ return perCoord[n].total; })));
-  var tile = function(label, big, sub, color){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:140px;"><div style="font-size:11px;color:var(--muted);">'+label+'</div><div style="font-size:24px;font-weight:700;margin:4px 0;'+(color?'color:'+color+';':'')+'">'+big+'</div><div style="font-size:11px;color:var(--slate2);">'+sub+'</div></div>'; };
+  var tile = function(label, big, sub, color){ return '<div class="card" style="padding:14px 18px;flex:1;min-width:140px;"><div style="font-size:12px;color:var(--muted);">'+label+'</div><div style="font-size:24px;font-weight:700;margin:4px 0;'+(color?'color:'+color+';':'')+'">'+big+'</div><div style="font-size:12px;color:var(--slate2);">'+sub+'</div></div>'; };
   var bar = function(label, n, max, color, right){ return '<div style="display:flex;align-items:center;gap:12px;padding:7px 0;font-size:13px;"><span style="width:150px;flex-shrink:0;">'+label+'</span><span style="flex:1;background:var(--border2);border-radius:6px;height:12px;overflow:hidden;"><span style="display:block;height:100%;width:'+Math.round(n*100/max)+'%;background:'+color+';"></span></span><span style="width:110px;text-align:right;font-weight:700;">'+(right||n)+'</span></div>'; };
   var opts = '<option value="cur"'+(BIZ_MONTH==='cur'?' selected':'')+'>本月（'+curM+'）</option><option value="all"'+(BIZ_MONTH==='all'?' selected':'')+'>全部</option>'+
     monthList.filter(function(m){ return m!==curM; }).map(function(m){ return '<option value="'+m+'"'+(BIZ_MONTH===m?' selected':'')+'>'+m+'</option>'; }).join('');
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div style="font-size:18px;font-weight:700;">'+t('经营数据')+'</div>'+
     '<select onchange="bizSetMonth(this.value)" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+opts+'</select></div>'+
     '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('案件总数', cs.length, '按案件开始的月份统计')+tile('已结案', closed, '客人做了项目/有购买', 'var(--sage)')+tile('仅出报告', report, '只做了面诊出报告')+tile('已取消', cancelled, '未到店/取消/未购买')+tile('进行中', ongoing, '还没到终态')+'</div>'+
-    aSection('面诊 → 赴韩', '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end;"><div><div style="font-size:11px;color:var(--muted);">面诊案件</div><div style="font-size:24px;font-weight:700;">'+consultCases.length+'</div></div><div><div style="font-size:11px;color:var(--muted);">其中选了赴韩项目</div><div style="font-size:24px;font-weight:700;">'+travelCases.length+'</div></div><div><div style="font-size:11px;color:var(--muted);">赴韩比例</div><div style="font-size:24px;font-weight:700;color:var(--navy);">'+ratio+'%</div></div></div>',
+    aSection('面诊 → 赴韩', '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end;"><div><div style="font-size:12px;color:var(--muted);">面诊案件</div><div style="font-size:24px;font-weight:700;">'+consultCases.length+'</div></div><div><div style="font-size:12px;color:var(--muted);">其中选了赴韩项目</div><div style="font-size:24px;font-weight:700;">'+travelCases.length+'</div></div><div><div style="font-size:12px;color:var(--muted);">赴韩比例</div><div style="font-size:24px;font-weight:700;color:var(--navy);">'+ratio+'%</div></div></div>',
       '面诊案件 = 缴过面诊费、免除面诊费或已出诊疗方案的案件；赴韩比例 = 面诊案件里有赴韩项目的占比。')+
     aSection('收入（诊所收的部分，各币种分开，不相加）', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('面诊费', fmtRp(feeSum), feeCount+' 个案件缴费（各案件选面诊时锁定的金额加总）')+tile('本地项目', fmtRp(localSum), '本地项目已收款，含印尼加做的术后管理（印尼盾）')+tile('赴韩定金', formatCurrency(krDeposit,'KRW'), '诊所收的定金，扣除已退款（韩元）')+'</div>',
       '诊所收入 = 面诊费 + 赴韩定金 + 本地项目 + 印尼加做；赴韩尾款和韩国加做由医院收，算 KR 收入，不在这里。免除面诊费的案件不计收入；赴韩定金比例是演示占位值。')+
     aSection('每位室长处理的案件数', coordNames.length ? coordNames.map(function(n){ var o = perCoord[n]; return bar(staffLabel(n), o.total, maxC, 'var(--navy)', o.total+' 件 · 已结案 '+o.closed); }).join('') : '<div style="font-size:12px;color:var(--muted);">这个月份没有案件</div>',
       '按案件 Timeline 里的操作记录统计，一个案件有多位室长操作时每人各算一件。')+
-    '<div style="font-size:11px;color:var(--muted);">待讨论：具体要看哪些数字、是否要趋势图/导出（这是基础版）。</div>';
+    '<div style="font-size:12px;color:var(--muted);">待讨论：具体要看哪些数字、是否要趋势图/导出（这是基础版）。</div>';
 };
 
 /* ================= 操作日志（老板、管理者；A8） =================
@@ -469,7 +469,7 @@ ADMIN_RENDER.oplog = function(el){
     ((f.from||f.to) ? ' <a href="#" onclick="OPLOG_FILTER.from=\'\';OPLOG_FILTER.to=\'\';openAdminPage(\'oplog\',true);return false;" style="color:var(--navy);">清除日期</a>' : '')+'</div></div>'+subs+
     '<div class="card" style="padding:4px 20px;"><div class="trow head" style="grid-template-columns:1.1fr 1.3fr 0.8fr 4fr;"><span>时间</span><span>操作账号（当时使用人）</span><span>类型</span><span>内容</span></div>'+
     (tableRows || '<div style="padding:18px 0;font-size:12px;color:var(--muted);">没有符合条件的记录</div>')+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);">共 '+rows.length+' 条。姓名是操作当时的使用人；账号以后换了人，这里仍显示当时的名字。</div>';
+    '<div style="font-size:12px;color:var(--muted);">共 '+rows.length+' 条。姓名是操作当时的使用人；账号以后换了人，这里仍显示当时的名字。</div>';
 };
 
 
@@ -495,5 +495,5 @@ ADMIN_RENDER.smslog = function(el){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+chips+'</div>'+
     '<div class="card" style="padding:4px 20px;"><div class="trow head" style="grid-template-columns:1.1fr 1.2fr 0.8fr 0.8fr 4fr;"><span>时间</span><span>发给</span><span>类型</span><span>Case ID</span><span>内容</span></div>'+
     (tr || '<div style="padding:18px 0;font-size:12px;color:var(--muted);">还没有短信</div>')+'</div>'+
-    '<div style="font-size:11px;color:var(--muted);line-height:1.7;">共 '+rows.length+' 条（最多保留最近 300 条）。演示：短信没有真的发出。验证码格式固定；预约链接 / 确认 / 提醒 / 取消的模板在「诊所设定」里编辑。提醒短信按诊所设定的"预约开始前 '+CLINIC_SETTINGS.remindBeforeHours+' 小时"自动发送（演示时钟判断，IN 端页面打开时每 10 秒检查一次）。</div>';
+    '<div style="font-size:12px;color:var(--muted);line-height:1.7;">共 '+rows.length+' 条（最多保留最近 300 条）。演示：短信没有真的发出。验证码格式固定；预约链接 / 确认 / 提醒 / 取消的模板在「诊所设定」里编辑。提醒短信按诊所设定的"预约开始前 '+CLINIC_SETTINGS.remindBeforeHours+' 小时"自动发送（演示时钟判断，IN 端页面打开时每 10 秒检查一次）。</div>';
 };

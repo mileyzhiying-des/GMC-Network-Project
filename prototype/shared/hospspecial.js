@@ -12,7 +12,7 @@ function hspCalHtml(){
     var d = new Date(start); d.setDate(start.getDate()+i); var ds = dateStr(d), inM = d.getMonth()===first.getMonth(), sp = hospitalSpecial(hid, ds), rest = hspBaseRest(ds);
     var bg = sp ? (sp.mode==='open' ? 'var(--sage-bg)' : sp.mode==='closed' ? '#F6DCDC' : '#FBF0C9') : (rest ? '#EFEBE4' : '#fff');
     var tag = sp ? (sp.mode==='open' ? '特殊营业' : sp.mode==='closed' ? '临时休息' : '半天 '+sp.from+'–'+sp.to) : (rest ? '休' : '');
-    cells += '<div onclick="hspSelect(\''+ds+'\')" style="min-height:46px;padding:3px 5px;border:1px solid var(--line);background:'+bg+';cursor:pointer;font-size:11px;'+(inM ? '' : 'opacity:.45;')+(HSP.sel===ds ? 'outline:2px solid var(--navy);outline-offset:-2px;' : '')+(ds===today ? 'font-weight:700;' : '')+'"><div>'+d.getDate()+'</div><div style="font-size:9px;color:'+(sp ? '#8F6F0C' : 'var(--muted)')+';">'+tag+'</div></div>';
+    cells += '<div onclick="hspSelect(\''+ds+'\')" style="min-height:46px;padding:3px 5px;border:1px solid var(--line);background:'+bg+';cursor:pointer;font-size:12px;'+(inM ? '' : 'opacity:.45;')+(HSP.sel===ds ? 'outline:2px solid var(--navy);outline-offset:-2px;' : '')+(ds===today ? 'font-weight:700;' : '')+'"><div>'+d.getDate()+'</div><div style="font-size:12px;color:'+(sp ? '#8F6F0C' : 'var(--muted)')+';">'+tag+'</div></div>';
   }
   var panel = '';
   if(HSP.sel){
@@ -25,8 +25,8 @@ function hspCalHtml(){
   }
   return '<div style="margin:10px 0 12px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+t('特殊日子（点某天改营业 / 休息 / 半天营业）')+'</div>'+
     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><button class="btn-ghost" onclick="hspShift(-1)">‹</button><b style="font-size:13px;">'+ym+'</b><button class="btn-ghost" onclick="hspShift(1)">›</button></div>'+
-    '<div style="display:grid;grid-template-columns:repeat(7,1fr);">'+['日','一','二','三','四','五','六'].map(function(x){ return '<div style="text-align:center;font-size:11px;color:var(--muted);padding:3px;">周'+x+'</div>'; }).join('')+cells+'</div>'+panel+
-    '<div style="font-size:11px;color:var(--muted);margin-top:6px;">特殊日子优先于每周固定休诊：KR / 院长日历、IN 的 KR 医院日程（休诊窄列、半天营业浅灰）、IN 选施术日期、KR 确认时间都照这里判断。院长哪天能做手术 = 医院有营业的日子，扣掉这位院长的 OFF 和不可预约。</div></div>';
+    '<div style="display:grid;grid-template-columns:repeat(7,1fr);">'+['日','一','二','三','四','五','六'].map(function(x){ return '<div style="text-align:center;font-size:12px;color:var(--muted);padding:3px;">周'+x+'</div>'; }).join('')+cells+'</div>'+panel+
+    '<div style="font-size:12px;color:var(--muted);margin-top:6px;">特殊日子优先于每周固定休诊：KR / 院长日历、IN 的 KR 医院日程（休诊窄列、半天营业浅灰）、IN 选施术日期、KR 确认时间都照这里判断。院长哪天能做手术 = 医院有营业的日子，扣掉这位院长的 OFF 和不可预约。</div></div>';
 }
 function hspRefresh(){ openAdminPage('clinic', true); }
 function hspShift(n){ var d = new Date(hspYm()+'-01T00:00:00'); d.setMonth(d.getMonth()+n); HSP.ym = d.getFullYear()+'-'+pad2(d.getMonth()+1); HSP.sel = ''; hspRefresh(); }

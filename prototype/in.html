@@ -196,8 +196,8 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
         <button class="btn-outline" style="padding:6px 12px;font-size:12px;" onclick="markAllNotifRead()">全部标为已读</button>
       </div>
       <div class="card" style="padding:2px 18px;" id="notif-list"></div>
-      <div style="font-size:11px;color:var(--muted);">通知保留 90 天；一般对话消息不进通知中心，被 @ 才进；收件人按通知规则（案件事件 = 操作过且当天上班的室长）。</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="font-size:10px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
+      <div style="font-size:12px;color:var(--muted);">通知保留 90 天；一般对话消息不进通知中心，被 @ 才进；收件人按通知规则（案件事件 = 操作过且当天上班的室长）。</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--muted);background:var(--border2);padding:2px 8px;border-radius:999px;">演示用</span>
         <button class="btn-ghost" onclick="demoNotif('report')">诊疗方案已到</button><button class="btn-ghost" onclick="demoNotif('missed')">未接来电</button><button class="btn-ghost" onclick="demoNotif('at')">被 @</button>
         <button class="btn-ghost" onclick="demoNotif('system')">系统更新</button><button class="btn-ghost" onclick="demoNotif('noshow')">未到店</button><button class="btn-ghost" onclick="demoNotif('schedule')">KR确认施术时间</button><button class="btn-ghost" onclick="demoNotif('other')">只有 A2 室长 操作过的案件事件（我不会收到）</button></div>
     </div>
@@ -238,7 +238,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
         <div class="trow head" style="grid-template-columns:1.4fr 1fr 1.2fr 1fr;"><span>人名</span><span>Case ID</span><span>预约时间</span><span>类型</span></div>
         <div id="resv-rows"></div>
       </div>
-      <div style="font-size:11px;color:var(--muted);">类型：预约占位 / 占位失效 / 待访问 / 已到访 / 未到店 / 预约取消；占位类没有 Case ID（显示"-"）；预约取消保留原 Case ID；接续到访的显示原案件 ID、类型"已到访"。点有 Case ID 的行进入案件页。</div>
+      <div style="font-size:12px;color:var(--muted);">类型：预约占位 / 占位失效 / 待访问 / 已到访 / 未到店 / 预约取消；占位类没有 Case ID（显示"-"）；预约取消保留原 Case ID；接续到访的显示原案件 ID、类型"已到访"。点有 Case ID 的行进入案件页。</div>
     </div>
   </div>
 </section>
@@ -313,7 +313,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
     <div class="float-head">
       <div class="l">
         <span class="sq-avt" id="float-avt" style="width:34px;height:34px;border-radius:10px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;">D</span>
-        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">KM1 室长 · 韩国室长</span> <span id="float-open-case" style="display:none;font-size:13px;color:var(--blue);font-weight:700;" title="新标签页打开案件页">↗</span> <span style="font-size:11px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:11px;color:var(--muted);">关于 客人1 的面诊安排</div></div>
+        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">KM1 室长 · 韩国室长</span> <span id="float-open-case" style="display:none;font-size:13px;color:var(--blue);font-weight:700;" title="新标签页打开案件页">↗</span> <span style="font-size:12px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:12px;color:var(--muted);">关于 客人1 的面诊安排</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
         <span style="cursor:pointer;" title="对话中的文件" onclick="openRoomFiles()">📁</span>
@@ -431,7 +431,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
     <div style="font-size:15px;font-weight:700;margin-bottom:10px;">赴韩项目已全部取消并退款</div>
     <div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">这个案件里还有本地项目 / 术后管理项目：</div>
     <div id="local-keep-list" style="font-size:12px;color:var(--slate2);margin-bottom:10px;"></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">由室长决定：保留（之后问是否做本地项目），或按持有批次规则整批退款（金额 + 原因必填，只有没用过的批次可退）。</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">由室长决定：保留（之后问是否做本地项目），或按持有批次规则整批退款（金额 + 原因必填，只有没用过的批次可退）。</div>
     <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localKeepChoice('keep')">保留</button><button class="btn-outline" style="flex:1;" onclick="localKeepChoice('refund')">全部退款</button></div>
   </div>
 </div>
@@ -445,7 +445,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
     <div id="local-refund-all-rows" style="margin-bottom:10px;"></div>
     <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
     <textarea id="local-refund-all-reason" rows="2" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">整批退款、整批作废；用过的批次不能退（保留）。退完且本次没有购买 → 仅出报告。</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px;">整批退款、整批作废；用过的批次不能退（保留）。退完且本次没有购买 → 仅出报告。</div>
     <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" style="flex:1;" onclick="closeLocalRefundAll()">返回</button><button class="btn-primary" style="flex:1;" onclick="confirmLocalRefundAll()">确认退款</button></div>
   </div>
 </div>
@@ -523,7 +523,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
         <span style="cursor:pointer;color:var(--slate);font-size:13px;" onclick="rescheduleDayShift(1)">›</span>
       </div>
       <div id="reschedule-slots"></div>
-      <div id="reschedule-closed-note" style="font-size:11px;color:var(--muted);margin:14px 0;"></div>
+      <div id="reschedule-closed-note" style="font-size:12px;color:var(--muted);margin:14px 0;"></div>
       <button class="btn-primary" style="width:100%;" onclick="confirmReschedule()">预约</button>
     </div>
   </div>
@@ -602,7 +602,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
       <span style="font-size:15px;font-weight:700;">引用案件</span>
       <span style="cursor:pointer;color:var(--slate);" onclick="closeMentionCase()">✕</span>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">选一个案件，案件 chip 会挂在输入框上方；写内容、发送后，这条消息会写入该案件（终态案件只挂不写入）。基础资料还没确认的案件也可以选</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">选一个案件，案件 chip 会挂在输入框上方；写内容、发送后，这条消息会写入该案件（终态案件只挂不写入）。基础资料还没确认的案件也可以选</div>
     <div id="mention-case-list" style="margin-bottom:6px;"></div>
   </div>
 </div>
@@ -647,7 +647,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
       <span id="projcat-title" style="font-size:15px;font-weight:700;">管理分类</span>
       <span style="cursor:pointer;color:var(--slate);" onclick="closeProjCatModal()">✕</span>
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">分类下还有项目（包括已非活性化的）不能删除；IN 室长只能管理本地项目的分类。</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">分类下还有项目（包括已非活性化的）不能删除；IN 室长只能管理本地项目的分类。</div>
     <div id="projcat-body"></div>
   </div>
 </div>

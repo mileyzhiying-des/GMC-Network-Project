@@ -73,16 +73,16 @@ function buildDayGridNew(){
   var blocks = lay.map(function(r){ var x = r.it.x, w = 100 / Math.max(Math.max(1, CLINIC_SETTINGS.slotCapacity||1), r.n), /* CMD-1014-18：每块宽 = 1 / 诊所「每个时段上限」 */ top = (x.s - H0) * PX / 60, hgt = Math.max(18, (x.end - x.s) * PX / 60 - 2);
     return '<div class="dayblk" style="position:absolute;left:calc('+(r.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;overflow:hidden;z-index:2;">'+(x.more ? '<div class="wk-more" onclick="event.stopPropagation();openSlotList(\''+ds+'\',\''+x.more.hr+'\')">+'+x.more.n+' 更多</div>' : eventChipHtml(x.e,{day:true}))+'</div>'; }).join('');
   var lines = '', axis = '';
-  for(var m = H0; m < H1; m += 60){ lines += '<div style="position:absolute;left:0;right:0;top:'+((m-H0)*PX/60)+'px;border-top:1px solid #f0ece3;"></div>'; axis += '<div style="height:'+PX+'px;box-sizing:border-box;border-top:1px solid #eee;font-size:11px;color:var(--slate2);padding:2px 6px 0 0;text-align:right;"><b>印 '+minToTime(m)+'</b><span style="display:block;font-size:9px;color:var(--dim);">韩 '+krTimeOf(minToTime(m))+'</span></div>'; }
+  for(var m = H0; m < H1; m += 60){ lines += '<div style="position:absolute;left:0;right:0;top:'+((m-H0)*PX/60)+'px;border-top:1px solid #f0ece3;"></div>'; axis += '<div style="height:'+PX+'px;box-sizing:border-box;border-top:1px solid #eee;font-size:12px;color:var(--slate2);padding:2px 6px 0 0;text-align:right;"><b>印 '+minToTime(m)+'</b><span style="display:block;font-size:12px;color:var(--dim);">韩 '+krTimeOf(minToTime(m))+'</span></div>'; }
   var open0 = timeToMin(CLINIC_SETTINGS.openTime), close0 = timeToMin(CLINIC_SETTINGS.closeTime);
   if(open0 > H0) lines += '<div style="position:absolute;left:0;right:0;top:0;height:'+((open0-H0)*PX/60)+'px;background:var(--neutral-25);pointer-events:none;"></div>';
   if(close0 < H1) lines += '<div style="position:absolute;left:0;right:0;top:'+((close0-H0)*PX/60)+'px;bottom:0;background:var(--neutral-25);pointer-events:none;"></div>';
   var lf = timeToMin(CLINIC_SETTINGS.lunchFrom), lt = timeToMin(CLINIC_SETTINGS.lunchTo);
-  if(!closedDay && lt > lf) lines += '<div title="午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'" style="position:absolute;left:0;right:0;top:'+((lf-H0)*PX/60)+'px;height:14px;background:#F3F1EC;color:#b5b0a4;font-size:10px;text-align:center;pointer-events:none;z-index:1;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
+  if(!closedDay && lt > lf) lines += '<div title="午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'" style="position:absolute;left:0;right:0;top:'+((lf-H0)*PX/60)+'px;height:14px;background:#F3F1EC;color:#b5b0a4;font-size:12px;text-align:center;pointer-events:none;z-index:1;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
   if(closedDay) lines += '<div style="position:absolute;inset:0;background:#F3F1EC;pointer-events:none;z-index:1;"></div>';
   var h = '<div class="wk-scroll"><div class="wk-grid" id="day-grid" style="grid-template-columns:64px minmax(0,1fr);position:relative;">'+
     '<div class="wk-corner">'+axisHeadHtml()+'</div>'+
-    '<div class="wk-head'+(isToday?' today':'')+'">'+(d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(closedDay?'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>':inCapHeadHtml(ds))+'</div>'+
+    '<div class="wk-head'+(isToday?' today':'')+'">'+(d.getMonth()+1)+'.'+d.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(closedDay?'<br><span style="font-size:12px;color:var(--terracotta);font-weight:700;">休诊</span>':inCapHeadHtml(ds))+'</div>'+
     '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div><div class="wk-memo">'+memoCellHtml(ds)+'</div>'+
     calOutBar('in','b', calInNeed().b!==null)+'<div>'+axis+'</div>'+
     '<div id="day-col" data-h0="'+H0+'" style="position:relative;height:'+((H1-H0)*PX/60)+'px;background:#fff;border-left:1px solid var(--border2);border-bottom:1px solid var(--border2);cursor:cell;" onmousemove="calDayHover(this,event)" onmouseleave="calDayHoverOff(this)" onclick="calDayClick(\''+ds+'\',event,this)">'+lines+'<div class="krc-hl" style="display:none;position:absolute;left:0;right:0;height:'+(PX/2)+'px;background:rgba(229,72,77,.10);pointer-events:none;"></div>'+blocks+'</div>'+
@@ -113,7 +113,7 @@ function krcFixedHtml(ds, offs, memoPred){
     var mine = m.by===me.id;
     out += '<span class="krfx memo" title="'+krEsc(m.text)+'">'+(m.scope==='私人'?'🔒 ':'')+krEsc(m.text)+' <i>'+krEsc(m.author)+'</i>'+(mine ? ' <a href="#" onclick="krfxEditMemo(\''+m.id+'\');return false;">修改</a>' : '')+'</span>';
   });
-  return out || '<span style="font-size:10px;color:#ccc;">—</span>';
+  return out || '<span style="font-size:12px;color:#ccc;">—</span>';
 }
 var KRFX = null;
 function krfxWhoOptions(){ return krcIsDirector() ? [currentAccount().name] : krcDirectors(); }
@@ -234,11 +234,11 @@ function surgMsgText(c, ver, lang){
 }
 function surgSendHtml(c){
   if(c.hasArrived) return '';
-  var tag = '<span style="font-size:10px;color:var(--muted);">演示</span>', box = function(x){ return '<div style="text-align:right;max-width:340px;">'+x+'</div>'; };
+  var tag = '<span style="font-size:12px;color:var(--muted);">演示</span>', box = function(x){ return '<div style="text-align:right;max-width:340px;">'+x+'</div>'; };
   if(surgChanged(c)) return box('<div style="font-size:12px;color:#B3261E;font-weight:700;margin-bottom:6px;text-align:left;">⚠ '+aEsc(surgChangeText(c))+'，请电话通知客人</div><button class="btn-primary" onclick="openSurgPhone(\''+c.id+'\')">已电话通知</button>');
   if(surgMsgSent(c)){ /* 发过之后只显示已发送，不再有［再发一次］ */
     var ph = c.surgPhone && c.surgPhone.key===surgMsgKey(c) ? c.surgPhone : null, m = surgMsgOfKey(c);
-    return box('<div style="font-size:12px;color:var(--sage);font-weight:700;white-space:nowrap;">'+(ph ? '✓ 已电话通知（'+aEsc(fmtUtc(ph.at))+'）' : '✓ 已发送（'+aEsc(m.method)+'，'+aEsc(fmtUtc(m.at))+'）')+'</div>'+(ph && ph.note ? '<div style="font-size:11px;color:var(--muted);">备注：'+aEsc(ph.note)+'</div>' : ''));
+    return box('<div style="font-size:12px;color:var(--sage);font-weight:700;white-space:nowrap;">'+(ph ? '✓ 已电话通知（'+aEsc(fmtUtc(ph.at))+'）' : '✓ 已发送（'+aEsc(m.method)+'，'+aEsc(fmtUtc(m.at))+'）')+'</div>'+(ph && ph.note ? '<div style="font-size:12px;color:var(--muted);">备注：'+aEsc(ph.note)+'</div>' : ''));
   }
   return box('<button class="btn-primary" onclick="openSurgMsg(\''+c.id+'\')">发送给客人</button> '+tag);
 }
@@ -278,7 +278,7 @@ function surgMsgRender(){
   var ov = document.getElementById('surgmsg-overlay'), s = SURGMSG; if(!ov || !s) return;
   var c = calCaseById(s.id), cl = clientByName(c.name), to = (cl && cl.phone) || '—';
   var seg = function(k){ return '<button class="'+(s.method===k ? 'btn-primary' : 'btn-outline')+'" onclick="surgMsgMethod(\''+k+'\')">'+k+'</button>'; };
-  ov.innerHTML = '<div class="modal-box" style="width:520px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">'+SURG_TPLS[s.ver].label+' <span style="font-size:11px;font-weight:400;color:var(--muted);">演示：不会真的发出</span></div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:520px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">'+SURG_TPLS[s.ver].label+' <span style="font-size:12px;font-weight:400;color:var(--muted);">演示：不会真的发出</span></div>'+
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">'+seg('短信')+seg('WhatsApp')+'<span style="font-size:12px;color:var(--slate2);margin-left:6px;">发给 '+aEsc(to)+'</span></div>'+
     '<div style="font-size:12px;color:var(--slate2);margin-bottom:4px;">预览（可以修改；模板在「诊所设定」里）</div>'+
     '<textarea id="surgmsg-text" rows="14" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;" oninput="SURGMSG.text=this.value">'+aEsc(s.text)+'</textarea>'+
@@ -333,14 +333,14 @@ function krcOffPartText(o){
   /* 月视图：提示文字改成「点日期 = 进那一周」 */
   if(typeof krcMonthHtml==='function'){ var bm = krcMonthHtml; krcMonthHtml = function(){ var h = bm.apply(this, arguments); return h.replace(/点日期看当天；[^<]*|点日期 = 开放[^<]*/, '点日期 = 进那一周；营业 / 休诊 / 特殊营业只在医院设定里改。'); }; }
   /* 悬停加 OFF：「全天 / 指定时间」（取代上午 / 下午），指定时间用左边的开始–结束 */
-  if(typeof krcPopHtml==='function'){ var bp = krcPopHtml; krcPopHtml = function(){ var h = bp.apply(this, arguments); return h.replace('<option>全天</option><option>上午</option><option>下午</option>', '<option>全天</option><option>指定时间</option>').replace('标 OFF</button>', '标 OFF</button><span style="font-size:10px;color:var(--muted);">（指定时间 = 用左边的开始–结束）</span>'); }; }
+  if(typeof krcPopHtml==='function'){ var bp = krcPopHtml; krcPopHtml = function(){ var h = bp.apply(this, arguments); return h.replace('<option>全天</option><option>上午</option><option>下午</option>', '<option>全天</option><option>指定时间</option>').replace('标 OFF</button>', '标 OFF</button><span style="font-size:12px;color:var(--muted);">（指定时间 = 用左边的开始–结束）</span>'); }; }
   if(typeof krcAddOff==='function'){ var ba = krcAddOff; krcAddOff = function(){
     { var f = KRC.popForm; if(f.part==='指定时间'){ if(timeToMin(f.end) <= timeToMin(f.start)){ alert('结束时间要晚于开始时间'); return; } f.part = '指定'+f.start+'-'+f.end; } else if(f.part!=='全天') f.part = '全天'; }
     var r = ba.apply(this, arguments); KRC.popForm.part = '全天'; return r; }; }
   /* 代表院长：看自己 / 全部院长（只看不操作） */
   if(typeof krCalendarHtml==='function'){ var b2 = krCalendarHtml; krCalendarHtml = function(){
     var h = b2.apply(this, arguments); var me = currentAccount();
-    if(me && me.role==='kr_owner') h = h.replace('<span style="font-size:11px;color:var(--muted);">图例：', '<select onchange="krcSetViewAll(this.value)" style="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;"><option value="me"'+(krcViewAll()?'':' selected')+'>看自己</option><option value="all"'+(krcViewAll()?' selected':'')+'>全部院长（只看）</option></select><span style="font-size:11px;color:var(--muted);">图例：');
+    if(me && me.role==='kr_owner') h = h.replace('<span style="font-size:12px;color:var(--muted);">图例：', '<select onchange="krcSetViewAll(this.value)" style="padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;"><option value="me"'+(krcViewAll()?'':' selected')+'>看自己</option><option value="all"'+(krcViewAll()?' selected':'')+'>全部院长（只看）</option></select><span style="font-size:12px;color:var(--muted);">图例：');
     return h; }; }
 })();
 
@@ -381,7 +381,7 @@ function krfxRender(){
     (editing ? '' : '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">类型</div>'+radio('type','备忘','备忘',d.type==='备忘')+radio('type','OFF','OFF',d.type==='OFF')+'</div>')+
     (isOff ? offBlock : '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">可见范围</div>'+radio('scope','公开','公开',d.scope==='公开')+radio('scope','私人','私人',d.scope==='私人')+'</div>')+
     '<div class="field" style="margin-bottom:12px;"><label>'+(isOff?'备注（选填）':'内容')+'</label><input type="text" value="'+krEsc(d.text||'')+'" oninput="KRFX.text=this.value"></div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">作者：'+krEsc(ME_NAME)+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">作者：'+krEsc(ME_NAME)+'</div>'+
     '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="krfxSave()">保存</button>'+(editing ? '<button class="btn-outline" style="flex:1;color:#C1454A;border-color:#C1454A;" onclick="krfxDelete()">删除</button>' : '')+'</div></div>';
   ov.classList.add('open');
 }
@@ -454,9 +454,9 @@ function krCapSlots(hid, ds){
 }
 function krCapUsed(slots, blocks){ var used = 0; blocks.forEach(function(b){ if(b && ((b.b && b.b.noCap) || b.noCap)) return; var s = timeToMin(b.time), e = timeToMin(b.end || minToTime(s+30)); slots.forEach(function(m){ if(s < m+30 && e > m) used++; }); }); return used; }
 function capHtml(used, cap, off){
-  if(off) return '<br><span style="font-size:9px;font-weight:700;color:#B5483E;">OFF</span>';
+  if(off) return '<br><span style="font-size:12px;font-weight:700;color:#B5483E;">OFF</span>';
   if(!cap || used < cap) return ''; /* CMD-1015-01：只在约满时写「约满」，不写已约数字 */
-  return '<br><span style="font-size:9px;font-weight:700;color:#B5483E;">约满</span>';
+  return '<br><span style="font-size:12px;font-weight:700;color:#B5483E;">约满</span>';
 }
 function krCapDirOff(h, ds, name){ return (h.offs||[]).some(function(o){ return o.kind==='director' && o.who===name && offApplies(o, ds) && (!o.part || o.part==='全天'); }); }
 function krCapHeadHtml(ds, blocks, who){
@@ -502,7 +502,7 @@ function openStayModal(caseId, o){
   var c = calCaseById(caseId); if(!c) return; o = o || {}; STAY_CTX = {id:caseId, o:o};
   var ov = document.getElementById('stay-overlay'); if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'stay-overlay'; ov.style.zIndex = 96; document.body.appendChild(ov); }
   var inp = 'padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;min-width:0;', s = c.stay || {}, tc = c.tripConfirm || {};
-  var row = function(k, lab){ return '<div style="display:grid;grid-template-columns:44px 1.3fr 1fr 1.2fr;gap:8px;align-items:end;margin-bottom:10px;"><b style="font-size:13px;padding-bottom:9px;">'+lab+'</b><div><label style="font-size:11px;color:var(--slate2);">'+lab+'日</label><input type="date" id="stay-'+k+'" value="'+(s[k]||'')+'" style="'+inp+'width:100%;" onchange="stayWarnRefresh()"></div><div><label style="font-size:11px;color:var(--slate2);">'+lab+'时间（韩国当地）</label><input type="time" id="stay-'+k+'t" value="'+(s[k+'Time']||'')+'" style="'+inp+'width:100%;"></div><div><label style="font-size:11px;color:var(--slate2);">'+lab+'机场（选填）</label><input id="stay-'+k+'a" value="'+aEscC(s[k+'Airport']||'')+'" placeholder="例：仁川 ICN" style="'+inp+'width:100%;"></div></div>'; };
+  var row = function(k, lab){ return '<div style="display:grid;grid-template-columns:44px 1.3fr 1fr 1.2fr;gap:8px;align-items:end;margin-bottom:10px;"><b style="font-size:13px;padding-bottom:9px;">'+lab+'</b><div><label style="font-size:12px;color:var(--slate2);">'+lab+'日</label><input type="date" id="stay-'+k+'" value="'+(s[k]||'')+'" style="'+inp+'width:100%;" onchange="stayWarnRefresh()"></div><div><label style="font-size:12px;color:var(--slate2);">'+lab+'时间（韩国当地）</label><input type="time" id="stay-'+k+'t" value="'+(s[k+'Time']||'')+'" style="'+inp+'width:100%;"></div><div><label style="font-size:12px;color:var(--slate2);">'+lab+'机场（选填）</label><input id="stay-'+k+'a" value="'+aEscC(s[k+'Airport']||'')+'" placeholder="例：仁川 ICN" style="'+inp+'width:100%;"></div></div>'; };
   var methods = o.trip ? '<div style="margin-top:4px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">确认方式（必选，可多选）</div><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px;">'+TRIP_METHODS.map(function(m, i){ return '<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" class="stay-m" value="'+m+'"'+((tc.methods||[]).indexOf(m)>-1 ? ' checked' : '')+'> '+m+'</label>'; }).join('')+'<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" id="stay-mo"'+(tc.other ? ' checked' : '')+'> 其他：<input id="stay-mot" value="'+aEscC(tc.other||'')+'" style="'+inp+'width:120px;padding:5px 8px;"></label></div></div>' : '';
   var title = o.trip ? '确认行程' : '在韩期间', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定可以先空着，之后随时能改。' : '行程有变可以修改，修改后 KR 会收到通知。');
   ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>'+row('in', '入境')+row('out', '离境')+methods+

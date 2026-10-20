@@ -11,7 +11,7 @@ function openSlotList(ds, hr){
   var ov = document.getElementById('slot-list-overlay');
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'slot-list-overlay'; ov.style.zIndex = 70; ov.onclick = function(e){ if(e.target===ov) closeSlotList(); }; document.body.appendChild(ov); }
   ov.innerHTML = '<div class="modal-box" style="width:420px;max-height:80vh;overflow-y:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">'+dateLabel(ds)+' '+hr+' · '+evs.length+' 项日程</span><span style="cursor:pointer;color:var(--slate);" onclick="closeSlotList()">✕</span></div>'+
-    '<div class="slot-list-body" style="display:flex;flex-direction:column;gap:6px;">'+evs.map(function(e){ return '<div style="display:flex;gap:8px;align-items:stretch;"><span style="font-size:11px;color:var(--muted);width:38px;padding-top:4px;">'+e.time+'</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;">'+eventChipHtml(e)+'</div></div>'; }).join('')+'</div></div>';
+    '<div class="slot-list-body" style="display:flex;flex-direction:column;gap:6px;">'+evs.map(function(e){ return '<div style="display:flex;gap:8px;align-items:stretch;"><span style="font-size:12px;color:var(--muted);width:38px;padding-top:4px;">'+e.time+'</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;">'+eventChipHtml(e)+'</div></div>'; }).join('')+'</div></div>';
   ov.querySelector('.slot-list-body').addEventListener('click', function(e){ if(e.target.closest('.event-chip')) closeSlotList(); }, true); /* 捕获阶段：事件块自己的 onclick 会 stopPropagation，所以不能靠冒泡 */
   ov.classList.add('open');
 }
@@ -126,7 +126,7 @@ function buildSidebar(activePage){
   }).join('');
   var adminItems = ADMIN_PAGES.filter(function(p){ return !p.hidden && canDo(p.perm); });
   if(adminItems.length){
-    navHtml += (SIDEBAR_COLLAPSED || !navItems.length ? '' : '<div style="font-size:11px;color:var(--muted);padding:14px 14px 4px;">诊所管理</div>') + adminItems.map(function(p){
+    navHtml += (SIDEBAR_COLLAPSED || !navItems.length ? '' : '<div style="font-size:12px;color:var(--muted);padding:14px 14px 4px;">诊所管理</div>') + adminItems.map(function(p){
       var active = ('admin-'+p.key) === activePage ? ' active' : '';
       var inner = SIDEBAR_COLLAPSED ? '<span class="nav-icon">'+p.icon+'</span>' : '<span class="dot"></span><span>'+p.label+'</span>';
       return '<a class="nav-item'+active+'" href="#" title="'+p.label+'" onclick="openAdminPage(\''+p.key+'\');return false;">'+inner+'</a>';
@@ -227,9 +227,9 @@ function renderMemoBody(){
   document.getElementById('memo-body').innerHTML =
     '<div class="field" style="margin-bottom:12px;"><label>日期</label><input type="date" value="'+d.date+'" onchange="memoSet(\'date\',this.value)"></div>'+
     '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">类型</div>'+radio('type','备忘','备忘',d.type==='备忘')+radio('type','OFF','OFF',d.type==='OFF')+'</div>'+
-    '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">可见范围</div>'+radio('scope','公开','公开',d.scope==='公开')+radio('scope','私人','私人',d.scope==='私人',isOff)+(isOff?'<span style="font-size:11px;color:var(--muted);">OFF 固定公开</span>':'')+'</div>'+
+    '<div style="margin-bottom:12px;"><div style="font-size:12px;color:var(--slate);margin-bottom:4px;">可见范围</div>'+radio('scope','公开','公开',d.scope==='公开')+radio('scope','私人','私人',d.scope==='私人',isOff)+(isOff?'<span style="font-size:12px;color:var(--muted);">OFF 固定公开</span>':'')+'</div>'+
     '<div class="field" style="margin-bottom:12px;"><label>'+(isOff?'备注（选填）':'内容')+'</label><input type="text" value="'+(d.text||'').replace(/"/g,'&quot;')+'" oninput="memoSet(\'text\',this.value)" placeholder="'+(isOff?'例如：年假':'备忘内容')+'"></div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:12px;">作者：'+ME_NAME+(isOff?'（IN 室长的 OFF 从这里登记）':'')+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">作者：'+ME_NAME+(isOff?'（IN 室长的 OFF 从这里登记）':'')+'</div>'+
     (d.editId ? '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="saveMemoDraft()">保存</button><button class="btn-outline" style="flex:1;color:#C1454A;border-color:#C1454A;" onclick="deleteMemoDraft()">删除</button></div>' : '<button class="btn-primary" style="width:100%;" onclick="saveMemoDraft()">保存</button>');
 }
 
@@ -344,7 +344,7 @@ function krGridItems(ds){ var all = krViewIsAll(); return krDayItems(ds).filter(
 /* 固定栏写所有"不在"：整天 OFF 写「X OFF」；半休写「X HH:mm–HH:mm 不在」（时间换算成页面时区）；「全部」时室长 OFF 照旧；单一院长时只写该院长自己的 */
 /* 半天 OFF 对应的韩国时间段：跟着医院设定算（krHalfRange，data.js）：上午 = 营业开始→午休开始，下午 = 午休结束→营业结束 */
 function krBarChips(ds){
-  var chip = function(txt){ return '<span style="display:inline-block;background:#F3E3E1;color:#B5483E;border-radius:5px;padding:1px 6px;margin:1px;font-size:10px;">'+txt+'</span>'; };
+  var chip = function(txt){ return '<span style="display:inline-block;background:#F3E3E1;color:#B5483E;border-radius:5px;padding:1px 6px;margin:1px;font-size:12px;">'+txt+'</span>'; };
   var out = krDayItems(ds).filter(function(it){ return it.type==='off' && (!krViewIsAll() || (it.offKr && it.offKr.kind!=='director')); }).map(function(it){ /* 医院层只显示室长 OFF；院长层才显示院长 OFF */
     if(it.part==='全天') return chip(it.label);
     var h = krHalfRange(krViewHospital(), offPartArg(it.part)), a = krToClinic(ds, h[0]).time, z = krToClinic(ds, h[1]).time;
@@ -389,20 +389,21 @@ function krBlockStyle(it){
   return 'background:#F3F1EC;'; /* 不可预约：很浅的灰，不写字 */
 }
 /* 某一天的一整列：items（韩国时间分钟）按诊所行对应的韩国时间摆放；baseMin = 第一行对应的韩国时间 */
-function krDayColHtml(ds, items, baseMin, closedFrom, lunch, closedBefore){
+function krDayColHtml(ds, items, baseMin, closedFrom, lunch, closedBefore, dirOff){
   var total = krRows().length, h = total*KR_ROW_PX, blocks = '';
   krLaneLayout(items).forEach(function(r0){
     var it = r0.it, s = Math.max(it.s, baseMin), e = Math.min(it.e, baseMin + total*SLOT_MIN); if(e <= s) return;
     var top = (s-baseMin)/SLOT_MIN*KR_ROW_PX, hgt = Math.max(16, (e-s)/SLOT_MIN*KR_ROW_PX - 2), w = 100/r0.n;
-    blocks += '<div'+(((it.type==='surg' || it.type==='book' || it.type==='visit') && it.own) ? '' : ' class="kr-busy"')+(it.type==='book' && it.own ? ' onclick="krBookBlockClick(\''+it.bookingId+'\')"' : (it.own && it.caseId ? ' onclick="openCaseDetail(\''+it.caseId+'\')"' : ''))+' title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:11px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
+    blocks += '<div'+(((it.type==='surg' || it.type==='book' || it.type==='visit') && it.own) ? '' : ' class="kr-busy"')+(it.type==='book' && it.own ? ' onclick="krBookBlockClick(\''+it.bookingId+'\')"' : (it.own && it.caseId ? ' onclick="openCaseDetail(\''+it.caseId+'\')"' : ''))+' title="'+(it.label || '这段时间不可预约')+'" style="position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;box-sizing:border-box;border-radius:6px;padding:3px 6px;font-size:12px;line-height:1.3;overflow:hidden;z-index:2;'+krBlockStyle(it)+'">'+it.label+'</div>';
   });
   var hatch = closedFrom ? '<div title="医院休诊（定期休诊）" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(closedFrom)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;bottom:0;background:#F3F1EC;z-index:1;"></div>' : ''; /* 部分时段休诊：灰色斜纹 */
   var hatchB = closedBefore ? '<div title="医院休诊（半天营业）" style="position:absolute;left:0;right:0;top:0;height:'+Math.max(0, (timeToMin(closedBefore)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;z-index:1;"></div>' : '';
   var hr0 = hospitalHours(krViewHospital()), outBand = '';
   if(timeToMin(hr0.open) > baseMin) outBand += '<div title="营业时间外" style="position:absolute;left:0;right:0;top:0;height:'+((timeToMin(hr0.open)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;background:var(--neutral-25);pointer-events:none;z-index:0;"></div>';
   if(timeToMin(hr0.close) < baseMin + total*SLOT_MIN) outBand += '<div title="营业时间外" style="position:absolute;left:0;right:0;top:'+((timeToMin(hr0.close)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;bottom:0;background:var(--neutral-25);pointer-events:none;z-index:0;"></div>';
-  var lunchBand = lunch ? '<div title="午休" style="position:absolute;left:0;right:0;top:'+((timeToMin(lunch.from)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;height:'+((timeToMin(lunch.to)-timeToMin(lunch.from))/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;color:var(--dim);font-size:10px;text-align:center;line-height:16px;z-index:0;">午休</div>' : ''; /* 午休：浅灰窄带，文字浅色（时间由韩国时间换算成页面时区的行） */
-  return '<div class="kr-daycol" data-ds="'+ds+'" onclick="krBookCellClick(\''+ds+'\',event,this,'+baseMin+')" onmousemove="krBookHover(this,event,'+baseMin+')" onmouseleave="krBookHoverOff(this)" style="cursor:cell;position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+outBand+lunchBand+hatch+hatchB+blocks+'</div>';
+  var lunchBand = lunch ? '<div title="午休" style="position:absolute;left:0;right:0;top:'+((timeToMin(lunch.from)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;height:'+((timeToMin(lunch.to)-timeToMin(lunch.from))/SLOT_MIN*KR_ROW_PX)+'px;background:#F3F1EC;color:var(--dim);font-size:12px;text-align:center;line-height:16px;z-index:0;">午休</div>' : ''; /* 午休：浅灰窄带，文字浅色（时间由韩国时间换算成页面时区的行） */
+  var hrO = hospitalHours(krViewHospital()), offBand = dirOff ? '<div class="kr-busy cal-offband" title="'+calEsc(dirOffText(dirOff))+'" style="position:absolute;left:0;right:0;top:'+Math.max(0, (timeToMin(hrO.open)-baseMin)/SLOT_MIN*KR_ROW_PX)+'px;height:'+Math.max(0, (timeToMin(hrO.close)-Math.max(timeToMin(hrO.open), baseMin))/SLOT_MIN*KR_ROW_PX)+'px;z-index:1;pointer-events:none;"><b>'+calEsc(dirOffText(dirOff))+'</b></div>' : ''; /* CMD-1020-14：院长整天 OFF —— 营业时间内整栏灰底写 OFF，不能点 */
+  return '<div class="kr-daycol" data-ds="'+ds+'"'+(dirOff ? '' : ' onclick="krBookCellClick(\''+ds+'\',event,this,'+baseMin+')" onmousemove="krBookHover(this,event,'+baseMin+')" onmouseleave="krBookHoverOff(this)"')+' style="'+(dirOff ? 'cursor:not-allowed;' : 'cursor:cell;')+'position:relative;height:'+h+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#fff repeating-linear-gradient(to bottom, transparent, transparent '+(KR_ROW_PX-1)+'px, var(--border2) '+(KR_ROW_PX-1)+'px, var(--border2) '+KR_ROW_PX+'px);">'+outBand+lunchBand+hatch+hatchB+offBand+blocks+'</div>';
 }
 function krTimeColHtml(){
   return '<div>'+krRows().map(function(kr){ return '<div class="wk-time" style="height:'+KR_ROW_PX+'px;box-sizing:border-box;"><b style="color:var(--slate);">印 '+krToPageTime(kr)+'</b><span class="kr">韩 '+kr+'</span></div>'; }).join('')+'</div>';
@@ -415,6 +416,27 @@ function krOpenTag(ds){ /* CMD-1014-19 一·6：日期下写「已约 N / 上限
   var duty = names.filter(function(n){ return !krCapDirOff(hd, ds, n); }).length;
   return capHtml(krCapUsed(slots, blocks), slots.length*duty, false);
 }
+/* CMD-1020-14 月视图共用：今天 = 咖啡色实心圆圈 + 白字；有日程的日子一行一个时段（不写数字），放不下写「还有 N 项」 */
+function calEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function calDayNumHtml(n, isToday, inMonth){ return '<span class="cal-daynum'+(isToday?' cal-today':'')+'"'+(isToday ? '' : ' style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'"')+'>'+n+'</span>'; }
+function calMonthLinesHtml(lines, max){
+  max = max || 3; var ls = lines.slice().sort(function(a, b){ return (a.s||0)-(b.s||0); }), shown = ls.slice(0, ls.length > max ? max-1 : max), rest = ls.length-shown.length;
+  return shown.map(function(l){ return '<div class="cal-line'+(l.red?' red':'')+'" title="'+calEsc(l.t)+'">'+calEsc(l.t)+'</div>'; }).join('')+(rest>0 ? '<div class="cal-more">还有 '+rest+' 项</div>' : '');
+}
+/* IN 的 KR 医院日程月视图：某天的时段行（时间换算成诊所时间；IN 看不到不可预约的备注） */
+function krMonthLines(ds){
+  var all = krViewIsAll(), hid = krViewHospital(), hd = HOSPITAL_DATA[hid] || {offs:[]}, lines = [], tm = function(m){ return krToClinic(ds, minToTime(m)).time; };
+  krGridItems(ds).forEach(function(it){
+    var nm = String(it.label||'').split(' · ')[0];
+    if(it.type==='surg') lines.push({s:it.s, t:tm(it.s)+' 施术 · '+nm});
+    else if(it.type==='visit') lines.push({s:it.s, t:tm(it.s)+' 到院 · '+nm});
+    else if(it.type==='book') lines.push({s:it.s, t:tm(it.s)+' 预约 · '+nm});
+    else lines.push({s:it.s, t:tm(it.s)+'～'+tm(it.e)+' 不可预约'});
+  });
+  if(all) (hd.offs||[]).filter(function(o){ return o.kind==='coord' && offApplies(o, ds); }).forEach(function(o){ lines.push({s:-1, t:o.who+' OFF', red:true}); });
+  else krDayItems(ds).filter(function(x){ return x.type==='off' && x.part!=='全天'; }).forEach(function(x){ var h = krHalfRange(hid, offPartArg(x.part)); lines.push({s:timeToMin(h[0]), t:'OFF '+tm(timeToMin(h[0]))+'～'+tm(timeToMin(h[1])), red:true}); });
+  return lines;
+}
 function buildKrWeekGrid(){
   KR_ROWS_C = null;
   var start = getWeekStart(WEEK_OFFSET), days = [], hid = krViewHospital();
@@ -423,14 +445,14 @@ function buildKrWeekGrid(){
   var html = '<div class="wk-corner">'+axisHeadHtml()+'</div>', baseMin = timeToMin(krRows()[0]);
   days.forEach(function(dd){
     var ds = dateStr(dd), hclosed = hospitalClosedOn(hid, ds);
-    html += '<div class="wk-head'+(sameDate(dd, TODAY_DATE)?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(hclosed ? '<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>' : krOpenTag(ds))+'</div>';
+    html += '<div class="wk-head'+(sameDate(dd, TODAY_DATE)?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(ds)]+(hclosed ? '<br><span style="font-size:12px;color:var(--terracotta);font-weight:700;">休诊</span>' : krOpenTag(ds))+'</div>';
   });
   html += '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div>';
   days.forEach(function(dd){ var ds = dateStr(dd); html += '<div class="wk-memo">'+(hospitalClosedOn(hid, ds) ? '' : krBarChips(ds))+'</div>'; });
   html += calOutBar('kr','b', krRows().need.b!==null)+krTimeColHtml();
   days.forEach(function(dd){
     var ds = dateStr(dd);
-    html += hospitalClosedOn(hid, ds) ? '<div style="height:'+(krRows().length*KR_ROW_PX)+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#F3F1EC;"></div>' : krDayColHtml(ds, krGridItems(ds), baseMin, hospitalClosedFrom(hid, ds), hospitalLunch(hid), hospitalClosedBefore(hid, ds));
+    html += hospitalClosedOn(hid, ds) ? '<div style="height:'+(krRows().length*KR_ROW_PX)+'px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);background:#F3F1EC;"></div>' : krDayColHtml(ds, krGridItems(ds), baseMin, hospitalClosedFrom(hid, ds), hospitalLunch(hid), hospitalClosedBefore(hid, ds), krViewIsAll() ? null : dirFullOff(hid, ds, krViewDirs()[0]));
   });
   html += calOutBar('kr','a', krRows().need.a!==null);
   document.getElementById('wk-grid').innerHTML = html;
@@ -441,14 +463,11 @@ function buildKrMonthGrid(){
   var html = '';
   for(var i=0;i<42;i++){
     var ds = dateStr(cur), inMonth = cur.getMonth()===first.getMonth(), closed = hospitalClosedOn(hid, ds), body = '';
-    if(closed) body = '<div style="font-size:10px;font-weight:700;color:var(--terracotta);">休诊</div>';
-    else {
-      var its = krDayItems(ds), offs = its.filter(function(x){ return x.type==='off' && (!krViewIsAll() || (x.offKr && x.offKr.kind!=='director')); }), n = krGridItems(ds).length; /* 「全部」只数施术；单一院长数施术 + 不可预约 */
-      body = (offs.length ? '<div style="font-size:10px;font-weight:700;color:#B5483E;">'+offs.map(function(x){ return shortDir(x.who); }).filter(function(v, k, a){ return a.indexOf(v)===k; }).join('、')+' OFF</div>' : '')+
-        (n ? '<div style="font-size:12px;font-weight:700;color:var(--slate2);">'+n+' 项日程</div>' : '')+
-        (inMonth && !closed ? '<div>'+krOpenTag(ds).replace('<br>','')+'</div>' : '');
-    }
-    html += '<div class="cal-cell" style="'+(closed?'background:#EFEBE4;':'')+'" onclick="openWeekOf(\''+ds+'\')" title="点击进入这一周的周视图"><span style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'">'+cur.getDate()+'</span>'+body+'</div>';
+    var dOff = (!closed && !krViewIsAll()) ? dirFullOff(hid, ds, krViewDirs()[0]) : null; /* 院长整天 OFF：和休诊一样灰底写 OFF；医院视图不灰 */
+    if(closed) body = '<div class="cal-off">休诊</div>';
+    else if(dOff) body = '<div class="cal-off">OFF</div>';
+    else body = calMonthLinesHtml(krMonthLines(ds))+(inMonth && krOpenTag(ds) ? '<div>'+krOpenTag(ds).replace('<br>','')+'</div>' : '');
+    html += '<div class="cal-cell'+((closed||dOff)?' cal-gray':'')+'" onclick="openWeekOf(\''+ds+'\')" title="点击进入这一周的周视图">'+calDayNumHtml(cur.getDate(), sameDate(cur, TODAY_DATE), inMonth)+body+'</div>';
     cur.setDate(cur.getDate()+1);
   }
   grid.innerHTML = html;
@@ -478,7 +497,7 @@ function buildWeekGrid(){
   var html = '<div class="wk-corner">'+axisHeadHtml()+'</div>';
   days.forEach(function(dd,i){
     var isToday = sameDate(dd, TODAY_DATE);
-    html += '<div class="wk-head'+(isToday?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(dateStr(dd))]+(isRescheduleDateDisabled(dd)?'<br><span style="font-size:9px;color:var(--terracotta);font-weight:700;">休诊</span>':inCapHeadHtml(dateStr(dd)))+'</div>';
+    html += '<div class="wk-head'+(isToday?' today':'')+'">'+(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+DOW_CN[dowOfDate(dateStr(dd))]+(isRescheduleDateDisabled(dd)?'<br><span style="font-size:12px;color:var(--terracotta);font-weight:700;">休诊</span>':inCapHeadHtml(dateStr(dd)))+'</div>';
   });
   html += '<div class="wk-memo" style="font-weight:700;color:var(--slate2);">固定栏</div>';
   days.forEach(function(dd){ html += '<div class="wk-memo">'+memoCellHtml(dateStr(dd))+'</div>'; });
@@ -501,7 +520,7 @@ function buildWeekGrid(){
       var pastSlot = why==='past', closedDay = why==='closed', fullSlot = why==='full';
       var slotClick = why ? ((calOffHoursOk(ds,hr)) ? ' onclick="calOffHoursAdd(\''+ds+'\',\''+hr+'\')" title="营业时间外：点击代约（会再确认一次）"' : '') : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
       var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
-      var fullTag = fullSlot ? '<div style="font-size:10px;color:var(--muted);text-align:right;">已满</div>' : '';
+      var fullTag = fullSlot ? '<div style="font-size:12px;color:var(--muted);text-align:right;">已满</div>' : '';
       html += '<div class="wk-cell'+(why?'':' wk-cell-open')+(pastSlot?' wk-past':'')+((why==='lunch'||closedDay)?' wk-lunch':'')+(why==='outside'?' wk-outside':'')+(fullSlot?' wk-full':'')+(isNow?' wk-now':'')+(sameDate(days[d], TODAY_DATE)?' wk-tcol':'')+'"'+slotClick+'>'+chips+fullTag+'</div>';
     }
   });
@@ -519,10 +538,12 @@ function buildMonthGrid(){
   var cur = new Date(first); cur.setDate(1-startPad);
   for(var i=0;i<42;i++){
     var ds = dateStr(cur), inMonth = cur.getMonth()===first.getMonth();
-    var n = evs.filter(function(e){ return e.date===ds; }).length;
+    var closed = isRescheduleDateDisabled(cur); /* CMD-1020-14：按诊所设定的休诊日灰底 + 休诊（同周视图 / KR） */
     var offs = memosOn(ds).filter(function(m){ return m.type==='OFF'; }).map(function(m){ return m.person; });
-    var extra = (offs.length ? '<div style="font-size:10px;font-weight:700;color:var(--terracotta);">'+offs.join('、')+' OFF</div>' : '')+(inMonth && inCapHeadHtml(ds) ? '<div>'+inCapHeadHtml(ds).replace('<br>','')+'</div>' : '')+(n ? '<div style="font-size:12px;font-weight:700;color:var(--slate2);">'+n+' 项日程</div>' : '');
-    html += '<div class="cal-cell" onclick="openWeekOf(\''+ds+'\')" title="点击进入这一周的周视图"><span style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'">'+cur.getDate()+'</span>'+extra+'</div>';
+    var lines = evs.filter(function(e){ return e.date===ds; }).map(function(e){ return {s:timeToMin(e.time), t:e.time+' '+String(e.name||'')+(e.purpose ? ' · '+e.purpose : '')}; });
+    if(offs.length) lines.unshift({s:-1, t:offs.join('、')+' OFF', red:true});
+    var extra = closed ? '<div class="cal-off">休诊</div>' : calMonthLinesHtml(lines)+(inMonth && inCapHeadHtml(ds) ? '<div>'+inCapHeadHtml(ds).replace('<br>','')+'</div>' : '');
+    html += '<div class="cal-cell'+(closed?' cal-gray':'')+'" onclick="openWeekOf(\''+ds+'\')" title="点击进入这一周的周视图">'+calDayNumHtml(cur.getDate(), sameDate(cur, TODAY_DATE), inMonth)+extra+'</div>';
     cur.setDate(cur.getDate()+1);
   }
   grid.innerHTML = html;
@@ -608,16 +629,16 @@ function renderAddSlotBody(){
     var clientOptions = CLIENTS.map(function(c){ return '<option>'+c.name+'</option>'; }).join('');
     body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client">'+clientOptions+'</select></div>'+
       purposeSelectHtml('add-slot-purpose')+
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
     var link = bookingUrl({ph:'ph'+PLACEHOLDER_SEQ});
     body = '<div class="field" style="margin-bottom:12px;"><label>客人手机号</label><input type="text" id="add-slot-phone" placeholder="+62 812-xxxx-xxxx"></div>'+
       purposeSelectHtml('add-slot-purpose')+
       '<div class="field" style="margin-bottom:8px;"><label>短信内容</label><textarea id="add-slot-sms" rows="3" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+DEFAULT_SMS_TEMPLATE+'</textarea></div>'+
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">链接自动插入，不可删除：<b>'+link+'</b></div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">链接自动插入，不可删除：<b>'+link+'</b></div>'+
       '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate2);margin-bottom:14px;"><input type="checkbox" id="add-slot-save-default"> 保存为默认模板（只勾选才会覆盖默认，不勾只对本次生效）</label>'+
-      '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">发送后所选时段出现'+CLINIC_SETTINGS.holdMinutes+'分钟"预约占位"，客户在链接里填写完成后转为正式预约</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">发送后所选时段出现'+CLINIC_SETTINGS.holdMinutes+'分钟"预约占位"，客户在链接里填写完成后转为正式预约</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotNew(\''+link+'\')">发送链接</button>'+
       '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="openGuestFormFromSlot()">演示：客人到店自己填资料（打开预约页，时间 = 现在）</button>';
   }
@@ -754,7 +775,7 @@ function openClientEdit(name, field){
     field==='phone' ? phoneInputHtml('ce-ph', c.phone) :
     '<input id="ce-v" type="text" value="'+aEscC(field==='passport' ? c.passport.text : c[field])+'" style="'+inp+'">';
   ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">修改「'+d.label+'」</div>'+body+
-    '<div id="ce-err" class="error-text" style="display:none;margin-top:8px;"></div><div style="font-size:11px;color:var(--muted);margin-top:8px;">保存后写回客户档案，并记入客户 Timeline（操作人：'+aEscC(accountLabel(currentAccountId()))+'）。</div>'+
+    '<div id="ce-err" class="error-text" style="display:none;margin-top:8px;"></div><div style="font-size:12px;color:var(--muted);margin-top:8px;">保存后写回客户档案，并记入客户 Timeline（操作人：'+aEscC(accountLabel(currentAccountId()))+'）。</div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="closeClientEdit()">取消</button><button class="btn-primary" onclick="saveClientEdit()">保存</button></div></div>';
   ov.classList.add('open');
 }
@@ -882,19 +903,19 @@ function renderClientHoldings(name){
   var all = holdingsAllSorted(name).filter(function(h){ return holdingRemaining(h)>0; }); /* 项目层只列剩余>0；全部用完/已退款的项目去"本院项目记录"看 */
   /* CMD-1015-17：IN 也看得到在韩持有（付费管理项目，项目 + 剩余次数，不显示金额）；已结案案件剩下的术后管理标「术后管理」（免费、不能退款，再来做开本地管理新案件） */
   var careLeft = clientCareLeftAll(name);
-  var extraHtml = careLeft.map(function(e){ var late = pcDaysLate(e.s.date); return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+e.s.content+' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>'+(late>0 ? ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;font-size:10px;">已过建议日期 '+late+' 天</span>' : '')+'</span><span style="font-size:12px;color:var(--slate2);white-space:nowrap;">术后管理 · 来自 '+e.c.caseNo+' · 建议 '+pcMD(e.s.date)+' · 免费，不能退款</span></div>'; }).join('');
+  var extraHtml = careLeft.map(function(e){ var late = pcDaysLate(e.s.date); return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+e.s.content+' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">术后管理</span>'+(late>0 ? ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;font-size:12px;">已过建议日期 '+late+' 天</span>' : '')+'</span><span style="font-size:12px;color:var(--slate2);white-space:nowrap;">术后管理 · 来自 '+e.c.caseNo+' · 建议 '+pcMD(e.s.date)+' · 免费，不能退款</span></div>'; }).join('');
   block.style.display = 'block';
   if(!all.length && !extraHtml){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有印尼本地持有</div>'; return; }
   el.innerHTML = all.map(function(h, gi){
     var remaining = holdingRemaining(h), total = holdingTotal(h);
-    var tags = (h.category==='术后管理'?' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:10px;">术后管理</span>':'')+
-      (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">KR代收</span>':'');
+    var tags = (h.category==='术后管理'?' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">术后管理</span>':'')+
+      (h.krCollected?' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">KR代收</span>':'');
     var open = !!HOLD_EXPAND[gi];
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
-      var action = b.pkg ? '<span style="font-size:11px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (b.pkgPaid ? '<span style="font-size:11px;color:#C1454A;white-space:nowrap;">套餐 · 不可退款</span>' : (b.comp ? '<span style="font-size:11px;color:#8F6F0C;white-space:nowrap;">置换 · 不可退款</span>' : b.service ? '<span style="font-size:11px;color:var(--blue);white-space:nowrap;">서비스 · 不可退款</span>' : (st==='未使用' || st==='部分使用')
+      var action = b.pkg ? '<span style="font-size:12px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (b.pkgPaid ? '<span style="font-size:12px;color:#C1454A;white-space:nowrap;">套餐 · 不可退款</span>' : (b.comp ? '<span style="font-size:12px;color:#8F6F0C;white-space:nowrap;">置换 · 不可退款</span>' : b.service ? '<span style="font-size:12px;color:var(--blue);white-space:nowrap;">서비스 · 不可退款</span>' : (st==='未使用' || st==='部分使用')
         ? ''
-        : (b.refund ? '<span style="font-size:11px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '')));
+        : (b.refund ? '<span style="font-size:12px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '')));
       return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 8px 14px;border-top:1px dashed var(--border2);">'+
         '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · '+(b.pkg ? '套餐内含 · ' : '')+(b.pkgPaid ? '套餐「'+(b.pkgName||'')+'」· ' : '')+(b.comp ? '置换（赴韩定金转本地）· ' : '')+(b.service ? '서비스（赠送）· ' : '')+(b.promo ? '本月活动价 · ' : '')+'购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
         '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';white-space:nowrap;">'+st+'</span>'+
@@ -904,7 +925,7 @@ function renderClientHoldings(name){
       '<div style="display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="toggleHoldExpand('+gi+')">'+
       '<span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+h.itemName+tags+'</span>'+
       '<span style="font-size:12px;color:var(--slate2);white-space:nowrap;">剩余 '+remaining+' 次（共 '+total+' 次）</span>'+
-      '<span style="font-size:11px;color:var(--slate);white-space:nowrap;">'+h.batches.length+' 批 '+(open?'▴':'▾')+'</span></div>'+batchRows+'</div>';
+      '<span style="font-size:12px;color:var(--slate);white-space:nowrap;">'+h.batches.length+' 批 '+(open?'▴':'▾')+'</span></div>'+batchRows+'</div>';
   }).join('')+extraHtml;
 }
 
@@ -942,7 +963,7 @@ function beautyListHtml(cl){
     var isNew = beautyRecordIsNew(r);
     return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);font-size:13px;flex-wrap:wrap;"><span style="color:var(--slate2);width:84px;flex-shrink:0;">'+beautyYm(r)+'</span><span style="flex:1;min-width:0;font-weight:700;white-space:pre-wrap;">'+aEscC(r.project)+'</span>'+
       (isNew ? '<span class="status-pill" style="background:var(--terracotta);color:#fff;font-weight:700;">本次新增</span>' : '')+
-      '<span style="flex-basis:100%;font-size:11px;color:var(--muted);padding-left:86px;">'+beautyMetaText(r)+'</span></div>'; /* 来源信息永久保留，显示在小字里 */
+      '<span style="flex-basis:100%;font-size:12px;color:var(--muted);padding-left:86px;">'+beautyMetaText(r)+'</span></div>'; /* 来源信息永久保留，显示在小字里 */
   }).join('');
 }
 /* 案件基础资料里的"医美史"一行：列出客户的医美史（本次新增有明显标记）+ ［＋补登］（来源"室长登记"，记为这个案件的本次新增） */
@@ -950,7 +971,7 @@ function caseBeautyRowHtml(c){
   var cl = clientByName(c.name);
   return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:2px;">医美史</span><div style="flex-grow:1;">'+(cl ? beautyListHtml(cl) : '')+
     '<button class="btn-ghost" style="margin-top:8px;padding:4px 10px;font-size:12px;" onclick="openBeautyAdd(\''+c.id+'\')">＋ 补登医美史</button>'+
-    '<div style="font-size:11px;color:var(--muted);margin-top:6px;">客人在预约页新增的标"本次新增"，到店时请和客人确认；确认基础资料后标记消失。</div></div></div>';
+    '<div style="font-size:12px;color:var(--muted);margin-top:6px;">客人在预约页新增的标"本次新增"，到店时请和客人确认；确认基础资料后标记消失。</div></div></div>';
 }
 var BEAUTY_ADD_CASE = null;
 function openBeautyAdd(caseId){
@@ -962,7 +983,7 @@ function openBeautyAdd(caseId){
   for(var mm = 1; mm <= 12; mm++) mons += '<option value="'+mm+'">'+mm+' 月</option>';
   for(var dd = 1; dd <= 31; dd++) days += '<option value="'+dd+'">'+dd+' 日</option>';
   ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">补登医美史（来源：室长登记）</div>'+
-    '<div class="field" style="margin-bottom:10px;"><label>时间 <span style="color:var(--terracotta);">*</span>　<span style="font-weight:400;font-size:11px;color:var(--muted);">年、月必选，日选填（很多客人不记得哪天）</span></label><div style="display:flex;gap:8px;"><select id="ba-year" style="'+inp+'"><option value="">年</option>'+yrs+'</select><select id="ba-month" style="'+inp+'"><option value="">月</option>'+mons+'</select><select id="ba-day" style="'+inp+'"><option value="">日（选填）</option>'+days+'</select></div></div>'+
+    '<div class="field" style="margin-bottom:10px;"><label>时间 <span style="color:var(--terracotta);">*</span>　<span style="font-weight:400;font-size:12px;color:var(--muted);">年、月必选，日选填（很多客人不记得哪天）</span></label><div style="display:flex;gap:8px;"><select id="ba-year" style="'+inp+'"><option value="">年</option>'+yrs+'</select><select id="ba-month" style="'+inp+'"><option value="">月</option>'+mons+'</select><select id="ba-day" style="'+inp+'"><option value="">日（选填）</option>'+days+'</select></div></div>'+
     '<div class="field"><label>项目 <span style="color:var(--terracotta);">*</span></label><textarea id="ba-project" rows="3" placeholder="例：在雅加达某诊所做过埋线双眼皮，约 1 年前…" style="'+inp+'resize:vertical;min-height:72px;"></textarea></div>'+
     '<div id="ba-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="closeBeautyAdd()">取消</button><button class="btn-primary" onclick="saveBeautyAdd()">保存</button></div></div>';
@@ -1039,7 +1060,7 @@ function buildCaseTabs(){
   }).join('') + (function(){ /* 一诊所一医院：案件列表没有医院筛选 */
     return '';
     var hs = [];
-    return '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;"><span style="font-size:11px;color:var(--muted);">医院</span><span class="chip'+(CASE_HOSPITAL_FILTER==='all'?' active':'')+'" onclick="setCaseHospitalFilter(\'all\')">全部</span>'+
+    return '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center;"><span style="font-size:12px;color:var(--muted);">医院</span><span class="chip'+(CASE_HOSPITAL_FILTER==='all'?' active':'')+'" onclick="setCaseHospitalFilter(\'all\')">全部</span>'+
       hs.map(function(h){ return '<span class="chip'+(CASE_HOSPITAL_FILTER===h.id?' active':'')+'" onclick="setCaseHospitalFilter(\''+h.id+'\')">'+h.name.ko+'</span>'; }).join('')+'</span>';
   })() + '<span class="chip'+(CASE_REFUND_FILTER?' active':'')+'" style="margin-left:auto;" onclick="toggleRefundFilter()">有退款</span>';
 }
@@ -1063,7 +1084,7 @@ function renderCaseRows(){
   }
   document.getElementById('case-rows').innerHTML = items.map(function(c){
     var si = caseStageInfo(c);
-    var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:10px;">本地管理进行中</span>' : '')+(krHoldOpen(c) ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:10px;">在韩后续进行中</span>' : '');
+    var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+(krHoldOpen(c) ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:12px;">在韩后续进行中</span>' : '');
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
     subCaseNos(c); var subs = subCaseList(c), open = !!CASE_ROW_OPEN[c.id];
     /* CMD-1015-17：Case ID ｜ 客户姓名 ｜ 阶段 ｜ 进程 ｜ 财务 ｜ 对接院长 ｜ IN 室长 ｜ KR 室长 ｜ 开始时间 ｜ 更新时间；有子案件的 Case ID 前加 ▼，展开列出子案件（客户姓名留空、开始时间 = 到院时间） */
@@ -1075,7 +1096,7 @@ function renderCaseRows(){
       '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartText(c)+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
     var subHtml = open ? subs.map(function(rep){
       var grp = subCaseRows(c, rep), allDone = grp.every(function(s){ return s.done; });
-      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+'到院'+' · '+String(rep.date||'').slice(5).replace('-','/')+' <span style="color:var(--muted);font-size:10px;">'+rep.dno+'</span></span><span></span><span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">术后管理</span></span><span style="font-size:12px;">'+(rep.place==='IN' ? '印尼' : '韩国')+'：'+grp.map(function(s){ return s.content; }).join('；')+' · '+(allDone ? '已完成' : (grp.some(function(s){ return s.arrived; }) ? '已到店' : '待到店'))+'</span><span></span><span></span><span></span><span></span><span style="font-size:12px;color:var(--muted);">'+(rep.place==='IN' ? (rep.visitDate||rep.date) : rep.date+(rep.time ? ' '+rep.time : ''))+'</span><span style="font-size:12px;color:var(--muted);">'+(rep.doneAt ? fmtUtc(rep.doneAt) : '')+'</span></div>';
+      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+'到院'+' · '+String(rep.date||'').slice(5).replace('-','/')+' <span style="color:var(--muted);font-size:12px;">'+rep.dno+'</span></span><span></span><span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">术后管理</span></span><span style="font-size:12px;">'+(rep.place==='IN' ? '印尼' : '韩国')+'：'+grp.map(function(s){ return s.content; }).join('；')+' · '+(allDone ? '已完成' : (grp.some(function(s){ return s.arrived; }) ? '已到店' : '待到店'))+'</span><span></span><span></span><span></span><span></span><span style="font-size:12px;color:var(--muted);">'+(rep.place==='IN' ? (rep.visitDate||rep.date) : rep.date+(rep.time ? ' '+rep.time : ''))+'</span><span style="font-size:12px;color:var(--muted);">'+(rep.doneAt ? fmtUtc(rep.doneAt) : '')+'</span></div>';
     }).join('') : '';
     return main+subHtml;
   }).join('');
@@ -1189,10 +1210,10 @@ function renderCaseStatusBar(c){
   document.getElementById('case-status-bar').innerHTML =
     '<div class="card" style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'+
     '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--slate);">当前状态</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
-    (localMgmtTagOn(c) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:11px;">本地管理进行中</span>' : '')+
-    (c.visibleToKR ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:11px;" title="韩国侧可见（不面诊案件点增加面诊后、或使用术后管理项目关联后）">KR可见</span>' : '')+
-    (isEnded(c) ? '<span style="font-size:11px;color:var(--slate2);">'+(c.stage==='cancelled' ? '取消原因：'+endReasonText(c)+'　' : '')+financeLabel(c)+'</span>' : '')+
-    caseAbnormalTags(c).map(function(t){ return '<span class="status-pill" style="background:#F6DCDC;color:#C1454A;font-size:11px;">'+t+'</span>'; }).join('')+'</div>'+
+    (localMgmtTagOn(c) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+
+    (c.visibleToKR ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;" title="韩国侧可见（不面诊案件点增加面诊后、或使用术后管理项目关联后）">KR可见</span>' : '')+
+    (isEnded(c) ? '<span style="font-size:12px;color:var(--slate2);">'+(c.stage==='cancelled' ? '取消原因：'+endReasonText(c)+'　' : '')+financeLabel(c)+'</span>' : '')+
+    caseAbnormalTags(c).map(function(t){ return '<span class="status-pill" style="background:#F6DCDC;color:#C1454A;font-size:12px;">'+t+'</span>'; }).join('')+'</div>'+
     actionBtn+'</div>';
   renderCaseHeaderActions(c);
 }
@@ -1313,11 +1334,11 @@ function renderRescheduleTimePanel(){
     else if(selected) style += 'background:var(--navy);color:#fff;font-weight:700;cursor:pointer;';
     else style += 'background:var(--white);border:1px solid var(--border);color:var(--navy);cursor:pointer;';
     var onclick = off ? '' : ' onclick="pickRescheduleTime(\''+t+'\')"';
-    return '<div style="'+style+'"'+onclick+'>'+t+(why==='full' ? '<br><span style="font-size:10px;">已满</span>' : '')+'</div>';
+    return '<div style="'+style+'"'+onclick+'>'+t+(why==='full' ? '<br><span style="font-size:12px;">已满</span>' : '')+'</div>';
   }
   var amGrid = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">'+RESCHED_AM.map(slotBtn).join('')+'</div>';
   var pmGrid = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;">'+RESCHED_PM.map(slotBtn).join('')+'</div>';
-  var lunchDivider = '<div style="text-align:center;font-size:11px;color:var(--terracotta);margin:12px 0;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
+  var lunchDivider = '<div style="text-align:center;font-size:12px;color:var(--terracotta);margin:12px 0;">午休 '+CLINIC_SETTINGS.lunchFrom+'～'+CLINIC_SETTINGS.lunchTo+'</div>';
   document.getElementById('reschedule-slots').innerHTML = amGrid + lunchDivider + pmGrid;
   var cn = document.getElementById('reschedule-closed-note'); if(cn) cn.textContent = '定期休诊：'+closedRulesText(CLINIC_SETTINGS.closedRules)+'（诊所设定）';
 }
@@ -1432,13 +1453,13 @@ function renderVideoPage(){
     var sharing = v.shareBy && ((v.shareBy==='me' && isIn && n.indexOf(ME_NAME)>-1) || (v.shareBy==='peer' && !isIn));
     return '<div class="vc-tile" style="min-height:150px;'+(sharing?'outline:2px solid var(--sage);':'')+'"><span class="vc-label">'+n+'</span>'+
       '<div class="vc-avt" style="width:64px;height:64px;font-size:18px;background:'+(isIn?'var(--sage)':'#3B4A5A')+';opacity:'+(joined?1:.45)+';">'+callInitial(n)+'</div>'+
-      '<div style="font-size:11px;color:#9AA6B2;">'+(joined ? (sharing ? '🖥 正在共享屏幕' : (isIn && n.indexOf(ME_NAME)>-1 ? '客人在场，共用此画面' : '已加入')) : '呼叫中… 铃声响起')+'</div></div>';
+      '<div style="font-size:12px;color:#9AA6B2;">'+(joined ? (sharing ? '🖥 正在共享屏幕' : (isIn && n.indexOf(ME_NAME)>-1 ? '客人在场，共用此画面' : '已加入')) : '呼叫中… 铃声响起')+'</div></div>';
   }).join('');
-  var abbr = v.participants.map(function(n){ return '<span class="vc-avt" style="width:26px;height:26px;font-size:11px;background:#3B4A5A;border:2px solid #111826;margin-right:-6px;" title="'+n+'">'+callInitial(n)+'</span>'; }).join('');
+  var abbr = v.participants.map(function(n){ return '<span class="vc-avt" style="width:26px;height:26px;font-size:12px;background:#3B4A5A;border:2px solid #111826;margin-right:-6px;" title="'+n+'">'+callInitial(n)+'</span>'; }).join('');
   var tr = (v.transcript||[]).map(function(t){
     return t.manual
-      ? '<div style="align-self:flex-end;border:1px solid #3B4A5A;border-radius:12px;padding:8px 12px;max-width:80%;"><b style="font-size:11px;color:#9AA6B2;">'+t.name+'（手动输入）</b><div style="font-size:13px;">'+t.orig+'</div><div style="font-size:12px;color:#9AA6B2;">译：'+t.trans+'</div></div>'
-      : '<div><b style="font-size:11px;color:#9AA6B2;">'+t.name+'</b><div style="font-size:13px;">'+t.orig+'</div><div style="font-size:12px;color:#9AA6B2;">译：'+t.trans+'</div></div>';
+      ? '<div style="align-self:flex-end;border:1px solid #3B4A5A;border-radius:12px;padding:8px 12px;max-width:80%;"><b style="font-size:12px;color:#9AA6B2;">'+t.name+'（手动输入）</b><div style="font-size:13px;">'+t.orig+'</div><div style="font-size:12px;color:#9AA6B2;">译：'+t.trans+'</div></div>'
+      : '<div><b style="font-size:12px;color:#9AA6B2;">'+t.name+'</b><div style="font-size:13px;">'+t.orig+'</div><div style="font-size:12px;color:#9AA6B2;">译：'+t.trans+'</div></div>';
   }).join('') || '<div style="font-size:12px;color:#6B7A8D;">'+(ringing ? '等待对方加入…' : '开始说话后，这里显示 AI 实时转录')+'</div>';
   var demo = ringing
     ? '<button class="btn-ghost" onclick="simulatePeerJoin()">演示：模拟对方加入</button><button class="btn-ghost" onclick="simulatePeerDecline()">演示：模拟对方拒绝</button>'
@@ -1447,7 +1468,7 @@ function renderVideoPage(){
     '<div style="position:relative;background:rgba(17,24,38,.85);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2A3344;">'+
       '<div style="display:flex;align-items:center;gap:14px;"><span style="display:inline-flex;padding-left:6px;">'+abbr+'</span>'+
         '<span style="font-size:14px;font-weight:700;">'+callTitle()+' · 视频沟通</span>'+
-        '<span style="font-size:11px;color:#9AA6B2;border:1px solid #2A3344;border-radius:10px;padding:2px 8px;">院长可加入</span>'+
+        '<span style="font-size:12px;color:#9AA6B2;border:1px solid #2A3344;border-radius:10px;padding:2px 8px;">院长可加入</span>'+
         '<span style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;color:#E05A50;"><span style="width:8px;height:8px;border-radius:50%;background:#E05A50;"></span>录制中</span></div>'+
       '<div style="display:flex;align-items:center;gap:12px;"><span id="vc-timer" style="font-size:12px;color:#9AA6B2;">00:00:00</span>'+
         '<span class="vc-btn" title="静音" onclick="toggleMute()" style="'+(v.muted?'background:#C1454A;':'')+'">'+(v.muted?'🔇':'🎤')+'</span>'+
@@ -1472,7 +1493,7 @@ function renderDashCallCard(){
   var el = document.getElementById('dash-call-card'); if(!el) return;
   if(!VIDEO_CALL.active){ el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'block';
-  el.innerHTML = '<div class="consult-body"><span style="font-size:22px;">🎥</span><div><div style="font-size:14px;font-weight:700;">'+callTitle()+' · 视频沟通 进行中</div><div style="font-size:11px;color:var(--muted);">'+VIDEO_CALL.participants.join('、')+'</div></div>'+
+  el.innerHTML = '<div class="consult-body"><span style="font-size:22px;">🎥</span><div><div style="font-size:14px;font-weight:700;">'+callTitle()+' · 视频沟通 进行中</div><div style="font-size:12px;color:var(--muted);">'+VIDEO_CALL.participants.join('、')+'</div></div>'+
     '<div style="margin-left:auto;"><a class="btn-primary" href="#" onclick="rejoinCall();return false;" style="padding:9px 18px;">🎥 进入会议</a></div></div>';
 }
 
@@ -1609,7 +1630,7 @@ function renderCaseBody(c){
     el.innerHTML = '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:10px;">'+(c.noShow ? '未到店（已取消）' : '预约已取消')+'</div>'+
       '<div style="font-size:13px;color:var(--slate2);line-height:1.8;">性别：'+caseBasic(c).gender+'　出生日期：'+caseBasic(c).dob+'<br>联系方式：'+caseBasic(c).contact+'　病史过敏史：'+caseBasic(c).history+'</div>'+
-      '<div style="font-size:11px;color:var(--muted);margin-top:10px;">资料已保留，客人重新预约后可继续跟进</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-top:10px;">资料已保留，客人重新预约后可继续跟进</div>'+
       '</div>'+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>';
     return;
   }
@@ -1966,7 +1987,7 @@ function openRefundModal(items, mode, selectable, amountOverride){
     items.map(function(it,i){
     var cb = selectable ? '<input type="checkbox" class="refund-cb" value="'+i+'" onchange="refundRecalc()" style="margin-right:8px;">' : '';
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+cb+it.name+'</span><span style="font-size:12px;color:var(--muted);">参考预付金 '+formatCurrency(Math.round(it.price*KR_DEPOSIT_RATE),'KRW')+'</span></div>';
-  }).join('')+'<div style="font-size:11px;color:var(--muted);margin-top:6px;">退多少由室长决定（有的项目可退、有的不可退，金额可以为0），上面的预付金仅供参考</div>';
+  }).join('')+'<div style="font-size:12px;color:var(--muted);margin-top:6px;">退多少由室长决定（有的项目可退、有的不可退，金额可以为0），上面的预付金仅供参考</div>';
   document.getElementById('refund-amount').value = suggest;
   REFUND_METHOD = 'refund'; refundMethodRender();
   document.getElementById('refund-reason').value = '';
@@ -2065,7 +2086,7 @@ function localKeepChoice(kind){
   window.__LOCAL_REFUND_ROWS = rows;
   document.getElementById('local-refund-all-rows').innerHTML = rows.map(function(x,i){
     var pb = x.b, cur = pb.currency || 'IDR', pct = (pb.discountPct===undefined || pb.discountPct===null) ? 100 : pb.discountPct;
-    var paidLine = typeof pb.paid==='number' ? '<div style="font-size:11px;color:var(--slate2);margin-top:2px;">当初实付 <b>'+formatCurrency(pb.paid, cur)+'</b>'+(pb.spec ? '　规格：'+pb.spec : '')+(pct<100 && pb.listPrice ? '　原价 '+formatCurrency(pb.listPrice, cur)+'，'+discountText(pct) : '')+(pb.pkg ? '（套餐内含）' : '')+(pb.promo ? '（活动价）' : '')+'</div>' : '<div style="font-size:11px;color:var(--muted);margin-top:2px;">没有记录当初实付</div>';
+    var paidLine = typeof pb.paid==='number' ? '<div style="font-size:12px;color:var(--slate2);margin-top:2px;">当初实付 <b>'+formatCurrency(pb.paid, cur)+'</b>'+(pb.spec ? '　规格：'+pb.spec : '')+(pct<100 && pb.listPrice ? '　原价 '+formatCurrency(pb.listPrice, cur)+'，'+discountText(pct) : '')+(pb.pkg ? '（套餐内含）' : '')+(pb.promo ? '（活动价）' : '')+'</div>' : '<div style="font-size:12px;color:var(--muted);margin-top:2px;">没有记录当初实付</div>';
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+x.h.itemName+' ×'+x.b.bought+paidLine+'</span><span style="font-size:12px;">Rp <input type="number" min="0" id="lra-'+i+'" placeholder="金额" style="width:100px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></span></div>';
   }).join('');
   document.getElementById('local-refund-all-reason').value = '';
@@ -2149,7 +2170,7 @@ function settleProjects(batchId){
   var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; }), need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
   SETTLE_ANES_SIGNED = false;
   if(need.length){
-    rows += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#FBF6EA;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">麻醉同意书 <span style="font-weight:400;font-size:11px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
+    rows += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#FBF6EA;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">麻醉同意书 <span style="font-weight:400;font-size:12px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
       '<div style="font-size:12px;color:var(--slate2);line-height:1.8;">（文案待撰写，演示占位）客人已了解下列项目的麻醉方式并同意：<br>'+need.map(function(a){ return '· '+a.name+'：<b>'+a.label+'</b>'+(a.note?'（'+a.note+'）':''); }).join('<br>')+'</div>'+
       '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleAnesSign(this.checked)"> 客人已签署麻醉同意书（记录版本和时间）</label></div>';
   }
@@ -2346,7 +2367,7 @@ function renderLibrary(){
   var toggle = '<div class="cal-switch"><span class="'+(LIB_VIEW==='part'?'active':'')+'" onclick="setLibView(\'part\')">按部位</span><span class="'+(LIB_VIEW==='dir'?'active':'')+'" onclick="setLibView(\'dir\')">按院长</span><span class="'+(LIB_VIEW==='method'?'active':'')+'" onclick="setLibView(\'method\')">按施术 / 管理</span></div>';
   var f = document.getElementById('lib-filters');
   var searchBox = '<input type="text" id="lib-search" placeholder="搜索案例标题" value="'+LIB_SEARCH.replace(/"/g,'&quot;')+'" oninput="libSearchInput(this.value)" style="width:200px;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;">';
-  var hs = linkedHospitals(), hospSw = hs.length ? '<span style="display:inline-flex;gap:6px;align-items:center;"><span style="font-size:11px;color:var(--muted);">赴韩施术医院</span><span class="chip'+(LIB_HOSPITAL==='all'?' active':'')+'" onclick="setLibHospital(\'all\')">全部</span>'+hs.map(function(h){ return '<span class="chip'+(LIB_HOSPITAL===h.id?' active':'')+'" onclick="setLibHospital(\''+h.id+'\')">'+h.name.ko+'</span>'; }).join('')+'</span>' : '';
+  var hs = linkedHospitals(), hospSw = hs.length ? '<span style="display:inline-flex;gap:6px;align-items:center;"><span style="font-size:12px;color:var(--muted);">赴韩施术医院</span><span class="chip'+(LIB_HOSPITAL==='all'?' active':'')+'" onclick="setLibHospital(\'all\')">全部</span>'+hs.map(function(h){ return '<span class="chip'+(LIB_HOSPITAL===h.id?' active':'')+'" onclick="setLibHospital(\''+h.id+'\')">'+h.name.ko+'</span>'; }).join('')+'</span>' : '';
   if(f) f.innerHTML = '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">'+toggle+searchBox+(LIB_SEARCH ? '' : libCrumbsHtml())+'</div>';
   main.style.display = 'block'; main.style.marginTop = '22px';
   renderLibMain();
@@ -2491,7 +2512,7 @@ function renderLibCaseModal(){
   var projGroups = projLibCategories(origin).map(function(cat){
     var ps = PROJECT_LIBRARY.filter(function(pr){ return pr.categoryId===cat.id && (pr.active || c.projectIds.indexOf(pr.id)>-1); });
     if(!ps.length) return '';
-    return '<div style="margin-bottom:8px;"><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">'+cat.label+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+    return '<div style="margin-bottom:8px;"><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px;">'+cat.label+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+
       ps.map(function(pr){ return '<span class="chip'+(c.projectIds.indexOf(pr.id)>-1?' active':'')+'" onclick="libToggleProject(\''+pr.id+'\')">'+pr.name+(pr.active?'':'（已非活性）')+'</span>'; }).join('')+'</div></div>';
   }).join('');
   var dirOptions = '<option value=""'+(!c.director?' selected':'')+'>-</option>'+(function(){ var ns = [], hs = DEMO_ROLE==='kr' ? [LIB_HOSPITAL] : linkedHospitalIds(); hs.forEach(function(h){ ns = ns.concat(hospitalDirectorNames(h)); }); return ns; })().map(function(d){ return '<option'+(c.director===d?' selected':'')+'>'+d+'</option>'; }).join('')+
@@ -2500,10 +2521,10 @@ function renderLibCaseModal(){
   var nameInp = function(k, label){ return '<div class="case-field-row"><span class="fk">'+label+'</span><input type="text" value="'+(n[k]||'').replace(/"/g,'&quot;')+'" oninput="libEditName(\''+k+'\',this.value)" style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>'; };
   var missing = libEditMissing();
   document.getElementById('lib-case-body').innerHTML =
-    '<div style="font-size:11px;color:var(--muted);margin-bottom:14px;">案例类型：'+(!c.id && DEMO_ROLE!=='kr' ? '<span class="chip'+(!isTravel?' active':'')+'" onclick="libEditSource(\'local\')">本地项目案例</span> <span class="chip'+(isTravel?' active':'')+'" onclick="libEditSource(\'travel\')">赴韩施术案例</span>' : srcLabel)+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">案例类型：'+(!c.id && DEMO_ROLE!=='kr' ? '<span class="chip'+(!isTravel?' active':'')+'" onclick="libEditSource(\'local\')">本地项目案例</span> <span class="chip'+(isTravel?' active':'')+'" onclick="libEditSource(\'travel\')">赴韩施术案例</span>' : srcLabel)+'</div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">标题 <span style="color:var(--terracotta);">*</span> <span style="font-weight:400;color:var(--muted);">只填一种语言，其他语言 AI 翻译，可手动修改</span></div>'+
     nameInp('zh','中文')+nameInp('ko','한국어')+nameInp('id','Bahasa Indonesia')+
-    '<div style="margin:6px 0 12px;"><button class="btn-ghost" style="font-size:11px;" onclick="libEditAiFill()">AI 翻译补全（演示）</button></div>'+
+    '<div style="margin:6px 0 12px;"><button class="btn-ghost" style="font-size:12px;" onclick="libEditAiFill()">AI 翻译补全（演示）</button></div>'+
     '<div style="margin:6px 0 10px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">项目 <span style="color:var(--terracotta);">*</span> <span style="font-weight:400;color:var(--muted);">来自项目库（'+(isTravel?'赴韩项目':'本地项目')+'），可多选；部位/分类由项目自动带出</span></div>'+projGroups+'</div>'+
     (isTravel ? '<div class="case-field-row"><span class="fk">负责院长</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="libEditDirector(this.value)">'+dirOptions+'</select></div>' : '')+
     (!isTravel ? '<div style="margin:10px 0;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">问题（可多选）</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+
@@ -2547,7 +2568,7 @@ function renderLibProblemModal(){
       '<button class="btn-primary" style="width:100%;" onclick="confirmLibProblemDelete()">确认删除</button>';
   } else {
     html = Object.keys(LIB_PROBLEMS).map(function(id){
-      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+LIB_PROBLEMS[id].label+' <span style="font-size:11px;color:var(--muted);">'+libProblemCount(id)+' 个案例</span></span><span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="renameLibProblem(\''+id+'\');return false;">改名</a><a href="#" class="info-link" style="color:#C1454A;" onclick="deleteLibProblem(\''+id+'\');return false;">删除</a></span></div>';
+      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+LIB_PROBLEMS[id].label+' <span style="font-size:12px;color:var(--muted);">'+libProblemCount(id)+' 个案例</span></span><span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="renameLibProblem(\''+id+'\');return false;">改名</a><a href="#" class="info-link" style="color:#C1454A;" onclick="deleteLibProblem(\''+id+'\');return false;">删除</a></span></div>';
     }).join('')+'<div style="margin-top:12px;"><button class="btn-ghost" onclick="addLibProblemUI()">＋ 新增问题</button></div>';
   }
   document.getElementById('lib-node-action-body').innerHTML = html;
@@ -2634,10 +2655,10 @@ function promoStatusPill(x){ var st = promoStatusOf(x), c = PROMO_STATUS_STYLE[s
 function periodText(x){ return (x.from ? x.from : '即日起')+' ～ '+(x.to ? x.to : '不限'); }
 function promoGridHtml(match){
   var mg = canDo('promo'), rows = PROMOS.filter(function(p){ var pr = projById(p.projectId); return pr && match(pr); }).sort(function(a,b){ return (b.from||'').localeCompare(a.from||''); });
-  var head = '<div class="case-field-row" style="font-size:11px;color:var(--muted);font-weight:700;"><span style="flex-grow:1;">项目</span><span style="width:110px;text-align:right;">原价</span><span style="width:110px;text-align:right;">活动价</span><span style="width:190px;">期间</span><span style="width:70px;">状态</span><span style="width:100px;text-align:right;">操作</span></div>';
+  var head = '<div class="case-field-row" style="font-size:12px;color:var(--muted);font-weight:700;"><span style="flex-grow:1;">项目</span><span style="width:110px;text-align:right;">原价</span><span style="width:110px;text-align:right;">活动价</span><span style="width:190px;">期间</span><span style="width:70px;">状态</span><span style="width:100px;text-align:right;">操作</span></div>';
   var body = rows.map(function(p){
     var pr = projById(p.projectId), st = promoStatusOf(p);
-    var act = mg ? (st!=='已结束' ? '<a href="#" class="info-link" onclick="openPromoModal(\''+p.id+'\');return false;">编辑</a> <a href="#" class="info-link" onclick="endPromo(\''+p.id+'\');return false;">结束</a>' : '<a href="#" class="info-link" onclick="openPromoModal(\''+p.id+'\');return false;">编辑</a>') : '<span style="font-size:11px;color:var(--dim);">只读</span>';
+    var act = mg ? (st!=='已结束' ? '<a href="#" class="info-link" onclick="openPromoModal(\''+p.id+'\');return false;">编辑</a> <a href="#" class="info-link" onclick="endPromo(\''+p.id+'\');return false;">结束</a>' : '<a href="#" class="info-link" onclick="openPromoModal(\''+p.id+'\');return false;">编辑</a>') : '<span style="font-size:12px;color:var(--dim);">只读</span>';
     var psp = specById(pr, p.specId) || defaultSpec(pr);
     return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+pr.name+(psp ? ' · '+psp.label : '')+'</span><span style="width:110px;text-align:right;font-size:12px;color:var(--muted);text-decoration:line-through;">'+fmtRp(psp ? psp.price : pr.price)+'</span><span style="width:110px;text-align:right;font-size:13px;font-weight:700;">'+fmtRp(p.price)+'</span><span style="width:190px;font-size:12px;color:var(--slate2);">'+periodText(p)+'</span><span style="width:70px;">'+promoStatusPill(p)+'</span><span style="width:100px;text-align:right;font-size:12px;">'+act+'</span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">还没有活动价'+(mg ? '，点右上角［＋ 新增活动价］添加' : '')+'</div>';
@@ -2645,11 +2666,11 @@ function promoGridHtml(match){
 }
 function pkgGridHtml(match){
   var mg = canDo('promo'), rows = PACKAGES.filter(function(k){ return match({name:k.name+' '+packageItemsText(k), names:{}}); }).sort(function(a,b){ return (b.from||'').localeCompare(a.from||''); });
-  var head = '<div class="case-field-row" style="font-size:11px;color:var(--muted);font-weight:700;"><span style="width:150px;">名称</span><span style="flex-grow:1;">内含项目</span><span style="width:130px;text-align:right;">套餐价</span><span style="width:170px;">期间</span><span style="width:70px;">状态</span><span style="width:80px;text-align:right;">操作</span></div>';
+  var head = '<div class="case-field-row" style="font-size:12px;color:var(--muted);font-weight:700;"><span style="width:150px;">名称</span><span style="flex-grow:1;">内含项目</span><span style="width:130px;text-align:right;">套餐价</span><span style="width:170px;">期间</span><span style="width:70px;">状态</span><span style="width:80px;text-align:right;">操作</span></div>';
   var body = rows.map(function(k){
     var st = promoStatusOf(k);
-    var act = mg ? (st!=='已结束' ? '<a href="#" class="info-link" onclick="openPkgModal(\''+k.id+'\');return false;">编辑</a> <a href="#" class="info-link" onclick="endPkg(\''+k.id+'\');return false;">结束</a>' : '<a href="#" class="info-link" onclick="openPkgModal(\''+k.id+'\');return false;">编辑</a>') : '<span style="font-size:11px;color:var(--dim);">只读</span>';
-    return '<div class="case-field-row"><span style="width:150px;font-size:13px;font-weight:700;">'+k.name+' <span class="status-pill" style="background:#FBE9E7;color:#C1454A;font-size:10px;">不可退款</span></span><span style="flex-grow:1;font-size:12px;color:var(--slate2);">'+packageItemsText(k)+'</span><span style="width:130px;text-align:right;font-size:13px;font-weight:700;">'+fmtRp(k.price)+'<div style="font-size:10px;color:var(--muted);font-weight:400;">原价合计 '+fmtRp(packageListTotal(k))+'</div></span><span style="width:170px;font-size:12px;color:var(--slate2);">'+periodText(k)+'</span><span style="width:70px;">'+promoStatusPill(k)+'</span><span style="width:80px;text-align:right;font-size:12px;">'+act+'</span></div>';
+    var act = mg ? (st!=='已结束' ? '<a href="#" class="info-link" onclick="openPkgModal(\''+k.id+'\');return false;">编辑</a> <a href="#" class="info-link" onclick="endPkg(\''+k.id+'\');return false;">结束</a>' : '<a href="#" class="info-link" onclick="openPkgModal(\''+k.id+'\');return false;">编辑</a>') : '<span style="font-size:12px;color:var(--dim);">只读</span>';
+    return '<div class="case-field-row"><span style="width:150px;font-size:13px;font-weight:700;">'+k.name+' <span class="status-pill" style="background:#FBE9E7;color:#C1454A;font-size:12px;">不可退款</span></span><span style="flex-grow:1;font-size:12px;color:var(--slate2);">'+packageItemsText(k)+'</span><span style="width:130px;text-align:right;font-size:13px;font-weight:700;">'+fmtRp(k.price)+'<div style="font-size:12px;color:var(--muted);font-weight:400;">原价合计 '+fmtRp(packageListTotal(k))+'</div></span><span style="width:170px;font-size:12px;color:var(--slate2);">'+periodText(k)+'</span><span style="width:70px;">'+promoStatusPill(k)+'</span><span style="width:80px;text-align:right;font-size:12px;">'+act+'</span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">还没有套餐'+(mg ? '，点右上角［＋ 新增套餐］添加' : '')+'</div>';
   return '<div class="card" style="padding:4px 20px;">'+head+body+'</div>';
 }
@@ -2725,10 +2746,10 @@ function renderPkgModal(){
   ov.firstChild.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:14px;"><b style="font-size:15px;">'+(e.id ? '编辑套餐' : '新增套餐')+'</b><span style="cursor:pointer;color:var(--slate);" onclick="closePromoOverlay(\'pkg-edit-overlay\')">✕</span></div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">套餐名称</div><input type="text" value="'+(e.name||'').replace(/"/g,'&quot;')+'" oninput="PKG_EDIT.name=this.value" style="'+PM_INPUT+'">'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">内含项目 × 次数</div>'+rows+'<a href="#" class="info-link" style="font-size:12px;" onclick="var np=(PROJECT_LIBRARY.filter(function(p){return p.origin===\'IN\'&&p.active;})[0]||{}).id;PKG_EDIT.items.push({projectId:np,specId:defaultSpecIdOf(np),qty:1});renderPkgModal();return false;">＋ 添加内含项目</a>'+
-    '<div style="font-size:11px;color:var(--muted);margin:8px 0 12px;">原价合计 '+fmtRp(packageListTotal(e))+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin:8px 0 12px;">原价合计 '+fmtRp(packageListTotal(e))+'</div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">套餐价（Rp）</div><input type="number" min="0" value="'+(e.price===''?'':e.price)+'" oninput="PKG_EDIT.price=this.value" style="'+PM_INPUT+'">'+
     '<div style="display:flex;gap:10px;"><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">有效期开始（可空）</div><input type="date" value="'+(e.from||'')+'" onchange="PKG_EDIT.from=this.value" style="'+PM_INPUT+'"></div><div style="flex:1;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">有效期结束（可空）</div><input type="date" value="'+(e.to||'')+'" onchange="PKG_EDIT.to=this.value" style="'+PM_INPUT+'"></div></div>'+
-    '<div style="font-size:11px;color:var(--muted);margin:-4px 0 10px;">套餐不可退款：付款后拆成各项目的持有批次，批次标「套餐」，客户详情不显示退款按钮</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin:-4px 0 10px;">套餐不可退款：付款后拆成各项目的持有批次，批次标「套餐」，客户详情不显示退款按钮</div>'+
     (e.err ? '<div style="font-size:12px;color:#C1454A;margin-bottom:8px;">'+e.err+'</div>' : '')+
     '<div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="closePromoOverlay(\'pkg-edit-overlay\')">取消</button><button class="btn-primary" style="flex:1;" onclick="savePkg()">保存</button></div>';
   ov.classList.add('open');
@@ -2769,13 +2790,13 @@ function renderProjLibFilters(){
   if(PROJLIB_TAB==='promo' || PROJLIB_TAB==='pkg'){
     var mg = canDo('promo');
     el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><div style="display:flex;gap:8px;align-items:center;">'+search+
-      '<span style="font-size:11px;color:var(--muted);">'+(PROJLIB_TAB==='promo' ? '活动价期间内，本地选购默认带入活动价；过期自动恢复原价' : '套餐不可退款；付款后拆成各项目的持有批次')+(mg ? '' : '　·　只有 IN 管理者能新增 / 编辑 / 结束')+'</span></div>'+
+      '<span style="font-size:12px;color:var(--muted);">'+(PROJLIB_TAB==='promo' ? '活动价期间内，本地选购默认带入活动价；过期自动恢复原价' : '套餐不可退款；付款后拆成各项目的持有批次')+(mg ? '' : '　·　只有 IN 管理者能新增 / 编辑 / 结束')+'</span></div>'+
       (mg ? '<div style="display:flex;gap:8px;">'+(PROJLIB_TAB==='promo' ? '<button class="btn-outline" style="padding:6px 12px;font-size:12px;" onclick="doCopyLastMonthPromos()">复制上个月活动</button><button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="openPromoModal()">＋ 新增活动价</button>' : '<button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="openPkgModal()">＋ 新增套餐</button>')+'</div>' : '')+'</div>';
     return;
   }
   if(PROJLIB_TAB==='KR'){ /* 韩国施术（只读）：搜索 + 部位钮（点了滚动到那张卡片，不是筛选）+ 汇率说明，没有币别下拉 */
     var parts = krPartCardsData(function(){ return true; });
-    el.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+search+'<span style="font-size:11px;color:var(--muted);">价格按设定汇率换算（1 ₩ = '+FX_RATES.KRW_IDR+' Rp），以韩币原价为准</span></div>'+
+    el.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+search+'<span style="font-size:12px;color:var(--muted);">价格按设定汇率换算（1 ₩ = '+FX_RATES.KRW_IDR+' Rp），以韩币原价为准</span></div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">'+parts.map(function(g){ return '<span class="chip" onclick="projLibScrollTo(\'pl-part-'+g.key+'\')">'+g.label+'</span>'; }).join('')+'</div>';
     return;
   }
@@ -2810,7 +2831,7 @@ function renderProjCatModal(){
   document.getElementById('projcat-title').textContent = '管理分类 · '+(origin==='KR'?'赴韩项目':'本地项目');
   document.getElementById('projcat-body').innerHTML = projLibCategories(origin).map(function(cat){
     var n = PROJECT_LIBRARY.filter(function(p){ return p.categoryId===cat.id; }).length;
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+cat.label+' <span style="font-size:11px;color:var(--muted);">'+n+' 个项目</span></span>'+
+    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+cat.label+' <span style="font-size:12px;color:var(--muted);">'+n+' 个项目</span></span>'+
       '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="renameProjCategory(\''+cat.id+'\');return false;">改名</a>'+
       (n ? '<span style="color:var(--muted);cursor:not-allowed;" title="分类下还有项目（包括非活性化的），不能删除">删除</span>' : '<a href="#" class="info-link" onclick="deleteProjCategory(\''+cat.id+'\');return false;">删除</a>')+'</span></div>';
   }).join('')+'<div style="margin-top:12px;"><button class="btn-ghost" onclick="addProjCategoryUI(\''+origin+'\')">＋ 新增分类</button></div>';
@@ -2880,11 +2901,11 @@ function krIdrText(krw){ return formatCurrency(Math.round(krw*FX_RATES.KRW_IDR),
 function krReadonlyLibHtml(match){
   var cards = krPartCardsData(match);
   if(!cards.length) return '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">没有符合条件的项目</div>';
-  var head = '<div class="case-field-row" style="font-size:11px;color:var(--muted);font-weight:700;"><span style="flex-grow:1;">项目名称</span><span style="width:260px;text-align:right;">价格</span><span style="width:260px;text-align:right;">使用情况</span></div>';
+  var head = '<div class="case-field-row" style="font-size:12px;color:var(--muted);font-weight:700;"><span style="flex-grow:1;">项目名称</span><span style="width:260px;text-align:right;">价格</span><span style="width:260px;text-align:right;">使用情况</span></div>';
   return cards.map(function(g){
-    return '<div id="pl-part-'+g.key+'" class="card" style="padding:4px 20px;margin-bottom:14px;"><div style="font-size:13px;font-weight:700;color:var(--terracotta);padding:12px 0 2px;">'+(g.group ? g.group+' · ' : '')+g.label+' <span style="font-weight:400;font-size:11px;color:var(--muted);">'+g.items.length+' 个项目</span></div>'+head+g.items.map(function(p){
-      var u = projectUsage(p), nm = p.names ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;">'+(p.names.ko||'')+' · '+(p.names.id||'')+'</div>' : '';
-      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+p.name+nm+'</span><span style="width:260px;text-align:right;font-size:12px;">'+krIdrText(p.price)+'</span><span style="font-size:11px;color:var(--slate2);width:260px;text-align:right;white-space:nowrap;">进行中案件 '+u.cases+' 个 · 持有中批次 '+u.batches+' 个 · 案例 '+u.libCases+' 个</span></div>';
+    return '<div id="pl-part-'+g.key+'" class="card" style="padding:4px 20px;margin-bottom:14px;"><div style="font-size:13px;font-weight:700;color:var(--terracotta);padding:12px 0 2px;">'+(g.group ? g.group+' · ' : '')+g.label+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+g.items.length+' 个项目</span></div>'+head+g.items.map(function(p){
+      var u = projectUsage(p), nm = p.names ? '<div style="font-size:12px;color:var(--muted);margin-top:2px;">'+(p.names.ko||'')+' · '+(p.names.id||'')+'</div>' : '';
+      return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+p.name+nm+'</span><span style="width:260px;text-align:right;font-size:12px;">'+krIdrText(p.price)+'</span><span style="font-size:12px;color:var(--slate2);width:260px;text-align:right;white-space:nowrap;">进行中案件 '+u.cases+' 个 · 持有中批次 '+u.batches+' 个 · 案例 '+u.libCases+' 个</span></div>';
     }).join('')+'</div>';
   }).join('');
 }
@@ -2942,9 +2963,9 @@ function renderProjEditModal(){
   document.getElementById('proj-edit-body').innerHTML =
     '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">项目名称 <span style="color:#C1454A;">*</span> <span style="font-weight:400;color:var(--muted);">只填一种语言，其他语言用 AI 翻译，可手动修改</span></div>'+
     inp('zh')+inp('ko')+inp('id')+
-    '<div style="margin:6px 0 10px;"><button class="btn-ghost" style="font-size:11px;" onclick="projAiFillNames()">AI 翻译补全（演示）</button></div>'+
+    '<div style="margin:6px 0 10px;"><button class="btn-ghost" style="font-size:12px;" onclick="projAiFillNames()">AI 翻译补全（演示）</button></div>'+
     specEdHtml('PROJ_EDIT', 'renderProjEditModal()', currencyOf(p.origin), p)+
-    (p.origin==='KR' && !p.local ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">对应苦恼部位</span><div style="flex-grow:1;">'+CONCERN_GROUPS.map(function(g){ return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px;"><b style="font-size:12px;min-width:34px;">'+g.label+'</b>'+CONCERN_PARTS.filter(function(pt){ return pt.group===g.key && !pt.hidden; }).map(function(pt){ var cur = projectPartsOf(p), on = cur.some(function(k){ return partBase(k)===pt.key; }); return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="projPartsToggle(\''+pt.key+'\')">'+(on ? '✓ ' : '')+pt.label+'</button>'; }).join('')+'</div>'; }).join('')+'<div style="font-size:11px;color:var(--muted);">IN 选院长时，擅长项目对到客人苦恼部位的院长排前面（同一大类下别的细部位算对到一半；没勾过的按项目名自动对应）</div></div></div>' : '')+
+    (p.origin==='KR' && !p.local ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">对应苦恼部位</span><div style="flex-grow:1;">'+CONCERN_GROUPS.map(function(g){ return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px;"><b style="font-size:12px;min-width:34px;">'+g.label+'</b>'+CONCERN_PARTS.filter(function(pt){ return pt.group===g.key && !pt.hidden; }).map(function(pt){ var cur = projectPartsOf(p), on = cur.some(function(k){ return partBase(k)===pt.key; }); return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="projPartsToggle(\''+pt.key+'\')">'+(on ? '✓ ' : '')+pt.label+'</button>'; }).join('')+'</div>'; }).join('')+'<div style="font-size:12px;color:var(--muted);">IN 选院长时，擅长项目对到客人苦恼部位的院长排前面（同一大类下别的细部位算对到一半；没勾过的按项目名自动对应）</div></div></div>' : '')+
     '<div class="case-field-row"><span class="fk">分类</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="PROJ_EDIT.categoryId=this.value">'+
       cats.map(function(c){ return '<option value="'+c.id+'"'+(p.categoryId===c.id?' selected':'')+'>'+c.label+'</option>'; }).join('')+
     '</select></div>'+
@@ -2996,7 +3017,7 @@ function toggleBellDropdown(ev){
   d.onclick = function(e){ e.stopPropagation(); };
   d.innerHTML = '<div style="padding:10px 14px;font-size:12px;font-weight:700;border-bottom:1px solid var(--border2);">最近通知</div>'+
     (list.length ? list.map(function(n){
-      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'bell\')"><span>'+NOTIF_ICON[n.cat]+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(n.read[ME_NAME]?'500':'700')+';">'+tzRender(n.text)+'</div><div style="font-size:10px;color:var(--muted);">'+fmtUtc(n.ts)+'</div></div>'+(n.read[ME_NAME]?'':'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>')+'</div>';
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'bell\')"><span>'+NOTIF_ICON[n.cat]+'</span><div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:'+(n.read[ME_NAME]?'500':'700')+';">'+tzRender(n.text)+'</div><div style="font-size:12px;color:var(--muted);">'+fmtUtc(n.ts)+'</div></div>'+(n.read[ME_NAME]?'':'<span style="width:7px;height:7px;border-radius:50%;background:var(--terracotta);margin-top:5px;"></span>')+'</div>';
     }).join('') : '<div style="padding:14px;font-size:12px;color:var(--muted);">没有通知</div>')+
     (canDo('work') ? '<div style="padding:10px 14px;text-align:center;"><a href="#" class="info-link" onclick="closeBellDropdown();nav(\'in-notifications\');return false;">查看全部</a></div>' : '');
   document.body.appendChild(d);
@@ -3036,7 +3057,7 @@ function goPostcareBlock(caseId){
 function openNotifDetail(n){
   var d = n.detail || {title:'诊所设定更新', changes:[tzRender(n.text)], effective:''};
   document.getElementById('notif-detail-title').textContent = d.title;
-  document.getElementById('notif-detail-body').innerHTML = '<div style="margin-bottom:6px;"><b>改了什么</b></div>'+d.changes.map(function(x){ return '<div>• '+x+'</div>'; }).join('')+(d.effective ? '<div style="margin-top:10px;"><b>何时生效</b>　'+d.effective+'</div>' : '')+'<div style="margin-top:10px;font-size:11px;color:var(--muted);">发布于 '+n.ts+'；诊所所有 IN 室长都会收到，当时没上线的下次登录时弹出。</div>';
+  document.getElementById('notif-detail-body').innerHTML = '<div style="margin-bottom:6px;"><b>改了什么</b></div>'+d.changes.map(function(x){ return '<div>• '+x+'</div>'; }).join('')+(d.effective ? '<div style="margin-top:10px;"><b>何时生效</b>　'+d.effective+'</div>' : '')+'<div style="margin-top:10px;font-size:12px;color:var(--muted);">发布于 '+n.ts+'；诊所所有 IN 室长都会收到，当时没上线的下次登录时弹出。</div>';
   document.getElementById('notif-detail-overlay').classList.add('open');
 }
 
@@ -3049,7 +3070,7 @@ function renderNotifPage(){
   l.innerHTML = list.map(function(n){
     var c = n.caseId ? CASE_ITEMS.filter(function(x){ return x.id===n.caseId; })[0] : null, un = !n.read[ME_NAME];
     return '<div class="nrow" style="cursor:pointer;" onclick="openNotif(\''+n.id+'\',\'page\')"><span class="ndot" style="background:'+(un?'var(--terracotta)':'transparent')+';"></span><span style="font-size:18px;margin-right:4px;">'+NOTIF_ICON[n.cat]+'</span>'+
-      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(un?'700':'500')+';">'+tzRender(n.text)+'</div><div style="font-size:11px;color:var(--muted);">'+n.cat+(c&&c.caseNo ? ' · '+c.caseNo : '')+' · '+fmtUtc(n.ts)+' · 收件：'+n.recipients.join('、')+'</div></div>'+
+      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:'+(un?'700':'500')+';">'+tzRender(n.text)+'</div><div style="font-size:12px;color:var(--muted);">'+n.cat+(c&&c.caseNo ? ' · '+c.caseNo : '')+' · '+fmtUtc(n.ts)+' · 收件：'+n.recipients.join('、')+'</div></div>'+
       '<span class="status-pill" style="background:'+(un?'var(--terracotta-bg)':'var(--border2)')+';color:'+(un?'var(--terracotta)':'var(--muted)')+';">'+(un?'未读':'已读')+'</span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:16px 2px;">没有通知</div>';
 }
@@ -3139,7 +3160,7 @@ function renderDrawerList(){
   var html = '';
   var callLabel = VIDEO_CALL.active ? callTitle()+' · 视频沟通 进行中，点击重新加入' : '';
   if(VIDEO_CALL.active && (!q || callLabel.toLowerCase().indexOf(q)>-1)){ /* 置顶①：进行中的视频红卡片 */
-    html += '<div class="chat-card urgent" onclick="closeDrawer();rejoinCall();"><span class="sq-avt" style="background:#C1454A;">●</span><div><div style="font-size:13px;font-weight:700;color:#C1454A;">'+callLabel+'</div><div style="font-size:11px;color:var(--slate);">点击重新加入视频通话</div></div></div>';
+    html += '<div class="chat-card urgent" onclick="closeDrawer();rejoinCall();"><span class="sq-avt" style="background:#C1454A;">●</span><div><div style="font-size:13px;font-weight:700;color:#C1454A;">'+callLabel+'</div><div style="font-size:12px;color:var(--slate);">点击重新加入视频通话</div></div></div>';
   }
   var unreadDot = function(id){ var u = ROOM_UNREAD[id]||0; return u ? '<span class="badge" style="position:static;width:auto;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:inline-flex;margin-left:6px;">'+u+'</span>' : ''; };
   if(DRAWER_TAB==='case'){
@@ -3149,8 +3170,8 @@ function renderDrawerList(){
     items.forEach(function(c){
       var b = caseStageBadge(c), rid = getCaseRoomId(c.id);
       html += '<div class="chat-card" onclick="openCaseRoom(\''+c.id+'\')"><span class="sq-avt" style="background:var(--terracotta);">'+c.name.charAt(0).toUpperCase()+'</span>'+
-        '<div style="flex-grow:1;"><div style="font-size:13px;font-weight:700;">'+c.name+unreadDot(rid)+'</div><div style="font-size:11px;color:var(--muted);">Case：'+c.caseNo+'</div></div>'+
-        '<div style="text-align:right;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span><div style="font-size:11px;color:var(--muted);margin-top:4px;">'+((CHAT_DATA[rid]||[]).slice(-1)[0]||{}).time+'</div></div></div>';
+        '<div style="flex-grow:1;"><div style="font-size:13px;font-weight:700;">'+c.name+unreadDot(rid)+'</div><div style="font-size:12px;color:var(--muted);">Case：'+c.caseNo+'</div></div>'+
+        '<div style="text-align:right;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span><div style="font-size:12px;color:var(--muted);margin-top:4px;">'+((CHAT_DATA[rid]||[]).slice(-1)[0]||{}).time+'</div></div></div>';
     });
     if(!items.length) html += '<div style="font-size:12px;color:var(--muted);padding:16px 4px;">没有匹配的案件</div>';
   } else {
@@ -3159,7 +3180,7 @@ function renderDrawerList(){
     rooms.forEach(function(r){
       var pin = r.isMain ? '<span class="pin-icon">📌</span>' : '';
       var last = (CHAT_DATA[r.id]||[]).slice(-1)[0];
-      html += '<div class="chat-card" onclick="openFloatingChat(\''+r.id+'\')"><span class="sq-avt" style="background:'+r.color+';">'+r.init+'</span><div><div style="font-size:13px;font-weight:700;">'+pin+r.name+unreadDot(r.id)+'</div><div style="font-size:11px;color:var(--muted);">'+(last ? last.day+' '+last.time : r.date)+'</div></div></div>';
+      html += '<div class="chat-card" onclick="openFloatingChat(\''+r.id+'\')"><span class="sq-avt" style="background:'+r.color+';">'+r.init+'</span><div><div style="font-size:13px;font-weight:700;">'+pin+r.name+unreadDot(r.id)+'</div><div style="font-size:12px;color:var(--muted);">'+(last ? last.day+' '+last.time : r.date)+'</div></div></div>';
     });
   }
   document.getElementById('drawer-list').innerHTML = html;
@@ -3210,7 +3231,7 @@ function setRefChip(id){ REF_CHIP = id; renderRefChip(); var i = document.getEle
 function openMentionCase(){
   document.getElementById('mention-case-list').innerHTML = CASE_ITEMS.map(function(c){
     var b = caseStageBadge(c);
-    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 4px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border2);" onclick="pickRefCase(\''+c.id+'\')">'+c.name+' · '+(c.caseNo||'')+' <span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';font-size:10px;">'+b[2]+'</span></div>';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 4px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border2);" onclick="pickRefCase(\''+c.id+'\')">'+c.name+' · '+(c.caseNo||'')+' <span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';font-size:12px;">'+b[2]+'</span></div>';
   }).join('');
   document.getElementById('mention-case-overlay').classList.add('open');
 }
@@ -3296,7 +3317,7 @@ function openRoomFiles(){
   document.getElementById('room-files-title').textContent = '对话中的文件 · '+r.name;
   document.getElementById('room-files-body').innerHTML = msgs.map(function(m){
     var icon = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
-    return '<div class="case-field-row"><span style="font-size:18px;margin-right:8px;">'+icon+'</span><span style="flex-grow:1;font-size:13px;">'+m.fname+'<div style="font-size:11px;color:var(--muted);">'+(m.from==='me'?'A1 室长':(m.name||''))+' · '+m.day+' '+msgTime(m)+'</div></span>'+
+    return '<div class="case-field-row"><span style="font-size:18px;margin-right:8px;">'+icon+'</span><span style="flex-grow:1;font-size:13px;">'+m.fname+'<div style="font-size:12px;color:var(--muted);">'+(m.from==='me'?'A1 室长':(m.name||''))+' · '+m.day+' '+msgTime(m)+'</div></span>'+
       '<span class="fa" style="gap:12px;"><a href="#" class="info-link" onclick="return false;">预览</a><a href="#" class="info-link" onclick="return false;">下载</a></span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 2px;">这个房间里还没有发过文件、照片、视频</div>';
   document.getElementById('room-files-overlay').classList.add('open');
@@ -3346,7 +3367,7 @@ function renderChatCaseChip(){
   if(!c){ el.style.display='none'; return; }
   el.style.display='flex';
   var isRoom = CURRENT_ROOM.indexOf('case-')===0 && CURRENT_ROOM===getCaseRoomId(c.id);
-  el.innerHTML = '<span style="font-size:11px;">📎</span><span style="font-size:11px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>';
+  el.innerHTML = '<span style="font-size:12px;">📎</span><span style="font-size:12px;color:var(--terracotta);">已关联案件</span><b style="font-size:12px;color:var(--navy);flex-grow:1;">'+c.name+(c.caseNo?' · '+c.caseNo:'')+'</b>';
 }
 
 function closeFloat(){ document.getElementById('chat-float-overlay').classList.remove('open'); }
@@ -3362,17 +3383,17 @@ function renderFloatMessages(){
     var m = msgView(m0); /* 别的室长发的消息显示成"对方"气泡，名字保留发送当时的 */
     if(q && (m.orig||'').toLowerCase().indexOf(q)===-1) return;
     if(m.day !== lastDay){ html += '<div class="day-divider">'+m.day+'</div>'; lastDay = m.day; }
-    var qLink = CURRENT_ROOM.indexOf('case-')===0 ? '' : ' <a href="#" class="info-link" style="font-size:10px;" onclick="openQuoteModal('+i+');return false;">引用到案件</a>';
+    var qLink = CURRENT_ROOM.indexOf('case-')===0 ? '' : ' <a href="#" class="info-link" style="font-size:12px;" onclick="openQuoteModal('+i+');return false;">引用到案件</a>';
     html += '<span id="msg-'+i+'"></span>';
     if(m.kind==='file' && !m.notMine){
       var fic = {'文件':'📄', '照片':'🖼️', '视频':'🎞️'}[m.fileType] || '📄';
       html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+fic+' '+m.fname+'</div><span class="bubble-trans" style="text-align:right;">'+msgTime(m)+qLink+'</span></div></div>';
     } else if(m.kind==='sys'){
-      html += '<div style="text-align:center;font-size:11px;color:var(--muted);margin:8px 0;">'+m.orig+'</div>';
+      html += '<div style="text-align:center;font-size:12px;color:var(--muted);margin:8px 0;">'+m.orig+'</div>';
     } else if(m.kind==='quote'){
       /* 被引用的消息在案件房里显示为「发言人 ｜ 来源房间 ↗」+ 原文 + 译文；点来源房间打开那个房间并定位到这条消息 */
       var srcHtml = m.srcRoomId ? '<a href="#" class="info-link" onclick="gotoQuoteSource(\''+m.srcRoomId+'\','+m.srcIdx+');return false;">'+m.srcRoom+' ↗</a>' : m.srcRoom;
-      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me" style="background:var(--border2);color:var(--slate2);border-left:3px solid var(--terracotta);"><div style="font-size:11px;font-weight:700;margin-bottom:4px;">'+m.speaker+' ｜ '+srcHtml+'</div>'+m.orig+(m.trans ? '<div style="font-size:11px;color:var(--muted);margin-top:4px;">译：'+m.trans+'</div>' : '')+'</div><span class="bubble-trans" style="text-align:right;">引用于 '+msgTime(m)+'</span></div></div>';
+      html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me" style="background:var(--border2);color:var(--slate2);border-left:3px solid var(--terracotta);"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">'+m.speaker+' ｜ '+srcHtml+'</div>'+m.orig+(m.trans ? '<div style="font-size:12px;color:var(--muted);margin-top:4px;">译：'+m.trans+'</div>' : '')+'</div><span class="bubble-trans" style="text-align:right;">引用于 '+msgTime(m)+'</span></div></div>';
     } else if(m.from==='me'){
       html += '<div class="bubble-row me"><div class="bubble-col"><div class="bubble me">'+m.orig+'</div>'+(m.refCaseId ? refBarHtml(m.refCaseId) : '')+'<span class="bubble-trans" style="text-align:right;">'+msgTime(m)+qLink+'</span></div></div>';
     } else {
@@ -3437,7 +3458,7 @@ function renderMuteBtn(){
 
 function renderFloatDemoBar(){
   var el = document.getElementById('float-demo-bar'); if(!el) return;
-  el.innerHTML = '<button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="simulateIncomingMsg(false)">演示：模拟新消息</button><button class="btn-ghost" style="padding:3px 10px;font-size:11px;" onclick="simulateIncomingMsg(true)">演示：模拟有人@我</button>';
+  el.innerHTML = '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="simulateIncomingMsg(false)">演示：模拟新消息</button><button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="simulateIncomingMsg(true)">演示：模拟有人@我</button>';
 }
 
 /* 演示：别人发来一条消息。新消息按推播规则 + 🔕 决定是否弹提醒；@我 一定提醒（包括静音、不负责的案件） */
@@ -3587,7 +3608,7 @@ function toggleAvatarMenu(e){
   var m = document.createElement('div'); m.id = 'avatar-menu';
   m.style.cssText = 'position:fixed;top:'+(r.bottom+8)+'px;right:'+Math.max(12, window.innerWidth-r.right)+'px;z-index:80;background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);min-width:200px;overflow:hidden;';
   var item = function(label, fn){ return '<div style="padding:10px 16px;font-size:13px;cursor:pointer;" onmouseover="this.style.background=\'var(--border2)\'" onmouseout="this.style.background=\'\'" onclick="closeAvatarMenu();'+fn+'">'+label+'</div>'; };
-  m.innerHTML = '<div style="padding:12px 16px;border-bottom:1px solid var(--border2);"><div style="font-size:13px;font-weight:700;">'+accountLabel(a.id)+'</div><div style="font-size:11px;color:var(--muted);">'+ACCOUNT_ROLES[a.role]+(a.position?' · '+a.position:'')+'</div></div>'+
+  m.innerHTML = '<div style="padding:12px 16px;border-bottom:1px solid var(--border2);"><div style="font-size:13px;font-weight:700;">'+accountLabel(a.id)+'</div><div style="font-size:12px;color:var(--muted);">'+ACCOUNT_ROLES[a.role]+(a.position?' · '+a.position:'')+'</div></div>'+
     item('个人设置', 'openAdminPage(\'personal\')')+item('切换账号', 'switchAccount()')+item('退出登录', 'logout()');
   m.onclick = function(ev){ ev.stopPropagation(); };
   document.body.appendChild(m);
@@ -3625,7 +3646,7 @@ function presViewers(key){
 }
 function presTag(clinicId, caseId){
   var n = presViewers(clinicId+':'+caseId); if(!n.length) return '';
-  return ' <span class="pres-tag" style="font-size:11px;font-weight:400;color:#C26A1B;">'+n.join('、')+'正在处理</span>';
+  return ' <span class="pres-tag" style="font-size:12px;font-weight:400;color:#C26A1B;">'+n.join('、')+'正在处理</span>';
 }
 function presBeat(){
   var all = presRead(), key = presCaseKey(), now = Date.now(), changed = false;
@@ -3669,7 +3690,7 @@ function presRender(){
   if(ro && content){
     content.classList.add('case-ro'); content.inert = true;
     if(!ban){ ban = document.createElement('div'); ban.id = 'case-readonly-bar'; ban.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:90;background:#FFF4E0;border:1px solid #F0D9A8;color:#8A5A10;padding:8px 14px;border-radius:10px;font-size:12px;box-shadow:0 8px 20px rgba(0,0,0,.12);display:flex;gap:12px;align-items:center;'; document.body.appendChild(ban); }
-    ban.innerHTML = '这个案件已在另一个分页继续处理，本页只读（按钮已置灰）<button class="btn-outline" style="padding:3px 10px;font-size:11px;" onclick="presContinueHere()">在这里继续</button>';
+    ban.innerHTML = '这个案件已在另一个分页继续处理，本页只读（按钮已置灰）<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="presContinueHere()">在这里继续</button>';
   } else if(ban) ban.remove();
   var pb = document.getElementById('case-pres-bar'), others = key ? presViewers(key).filter(function(n){ return n!==ME_NAME; }) : [];
   if(others.length && !blocked){
