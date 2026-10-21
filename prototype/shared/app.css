@@ -492,3 +492,13 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .krc-chip{position:absolute;left:2px;right:2px;box-sizing:border-box;border-radius:4px;padding:0 6px;font-size:12px;line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;z-index:2;}
 .krc-chip-more{background:#fff;color:var(--action-primary,#9A6A4B);border:1px dashed var(--action-primary,#9A6A4B);font-weight:700;}
 .krc-chip-row{position:static;display:block;height:auto;line-height:26px;margin-bottom:6px;padding:0 10px;}
+
+/* CMD-1020-18：IN 未安排预约按客人折叠 */
+.ub-card{border:1px solid var(--border2);border-radius:10px;margin:8px 0;padding:0 10px 6px;background:#fff;}
+.ub-grp{display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;font-size:13px;}
+.ub-grp .ub-arrow{color:var(--muted);width:12px;}
+.ub-grp .ub-n{font-size:12px;color:var(--slate2);}.ub-grp .ub-n.over{color:#B3261E;font-weight:700;}
+.ub6{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 30px 50px 36px 52px;gap:6px;align-items:center;padding:7px 0;border-top:1px solid var(--border2);font-size:12px;}
+.ub6>div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ub6-head{color:var(--muted);border-top:none;padding:2px 0;}
+.ub6 .ub-sug.over{color:#B3261E;font-weight:700;}

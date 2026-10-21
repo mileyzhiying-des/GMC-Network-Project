@@ -145,8 +145,8 @@ function krTodoItems(rows){
   /* CMD-1014-16：IN 在 KR 日程占位的预约 → 确认预约时间；确认后的预约今天到店 */
   try{ var hidB = krHospitalIdOfMe(), meB = currentAccount(); (krbList(hidB)||[]).forEach(function(b){
     var cn = ((clinicById(b.clinicId)||{}).name)||'';
-    if(work && b.status==='pending') out.push(todoMk('bkconf', '确认预约时间（'+krbPurposeText(b.purpose)+'）· '+cn, null, b.date+' '+b.time, false, function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
-    if(b.status==='confirmed' && b.date===today && (work || (isKrDirectorLike(meB) && b.director===meB.name))) out.push(todoMk('today', todoNotArrivedOver(b.date, b.time, !!b.arrivedAt) ? '客人还没到：联络 IN 确认行程' : '今天到店：预约 · '+krbPurposeText(b.purpose), null, b.date+' '+b.time, todoNotArrivedOver(b.date, b.time, !!b.arrivedAt), function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
+    if(work && b.status==='pending') out.push(todoMk('bkconf', '确认预约时间（'+krbPurposeFull(b)+'）· '+cn, null, b.date+' '+b.time, false, function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
+    if(b.status==='confirmed' && b.date===today && (work || (isKrDirectorLike(meB) && b.director===meB.name))) out.push(todoMk('today', todoNotArrivedOver(b.date, b.time, !!b.arrivedAt) ? '客人还没到：联络 IN 确认行程' : '今天到店：预约 · '+krbPurposeFull(b), null, b.date+' '+b.time, todoNotArrivedOver(b.date, b.time, !!b.arrivedAt), function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
   }); }catch(e){}
   try{ krNotifUnread().forEach(function(n){ if(n.kind==='mention' || n.kind==='missedcall' || /@ 了你|未接来电/.test(n.text||'')) out.push(todoMk('stay', tzRender(n.text), null, '', false, function(){ krOpenNotif(n.id); })); }); }catch(e){}
   return out;
@@ -252,7 +252,7 @@ function todoPaneHtml(all){
   var tag = (TODO_UI.kind && TODO_FILTERS[TODO_UI.kind]) ? '<span class="todo-tag">· '+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></span>' : '';
   var refMode = todoRefMode();
   /* CMD-1020-07：标题行两个并排分页「待办 N ｜ 未安排预约 N」，默认待办；数字一直显示，红点只在有新进来的或已逾期的未安排项目时亮 */
-  var tabs = '<span class="todo-tabs"><span class="todo-tab'+(ubTab ? '' : ' on')+'" onclick="todoSetTab(\'todo\')">待办 '+n+(todoTabDot(vis) ? '<span class="todo-newdot" title="有新的或已逾期的待办"></span>' : '')+'</span><span class="todo-tab'+(ubTab ? ' on' : '')+'" onclick="todoSetTab(\'unbooked\')">未安排预约 '+ubVis.length+(todoUbDot(ubAll) ? '<span class="todo-newdot" title="有新的或已逾期的"></span>' : '')+'</span></span>';
+  var tabs = '<span class="todo-tabs"><span class="todo-tab'+(ubTab ? '' : ' on')+'" onclick="todoSetTab(\'todo\')">待办 '+n+(todoTabDot(vis) ? '<span class="todo-newdot" title="有新的或已逾期的待办"></span>' : '')+'</span><span class="todo-tab'+(ubTab ? ' on' : '')+'" onclick="todoSetTab(\'unbooked\')">未安排预约 '+todoUbCount(ubVis)+(todoUbDot(ubAll) ? '<span class="todo-newdot" title="有新的或已逾期的"></span>' : '')+'</span></span>';
   var headTitle = refMode ? '<b>'+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' '+n+'（参考）</b> <span onclick="todoSetKind(\'\')" title="回到待办" style="cursor:pointer;">✕</span>' : tabs+(ubTab ? '' : tag); /* CMD-1015-08：参考名单标题「今天来访 4（参考）✕」 */
   var inner = ubTab ? todoUbListHtml(ubVis) : ((TODO_UI.kind && !tag) ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+
     (vis.length ? '<div class="todo-row todo-headrow"><div>出现时间</div><div>阶段</div><div>进程</div><div>截止时间</div><div>状态</div><div>客人</div></div>' : '')+'<div class="todo-list">'+body+'</div>';
@@ -270,7 +270,11 @@ function todoUbSeenAll(){ var seen = todoUbSeenLoad(); (TODO_UB_LAST||[]).forEac
 var TODO_UB_LAST = [];
 function todoSetTab(t){ TODO_UI.tab = t==='unbooked' ? 'unbooked' : 'todo'; if(TODO_UI.tab==='unbooked') todoUbSeenAll(); todoSaveUi(); todoRefresh(); }
 function todoUbMd(d){ return d ? String(d).slice(5).replace('-', '/') : '—'; }
+var TODO_UB_OPEN = {};
+function todoUbToggle(id){ TODO_UB_OPEN[id] = TODO_UB_OPEN[id]===false ? true : false; todoRefresh(); }
+function todoUbCount(list){ return list.reduce(function(n, it){ return n+(it.n||1); }, 0); }
 function todoUbListHtml(list){
+  if(!todoIsKr()) return todoUbListInHtml(list);
   var rows = list.slice().sort(function(a, b){ return (a.sug||'9999').localeCompare(b.sug||'9999'); });
   var head = '<div class="ub-row ub-head"><div>客人</div><div>项目</div><div>建议日期</div><div>来源</div><div></div></div>';
   var body = rows.map(function(it){
@@ -280,6 +284,19 @@ function todoUbListHtml(list){
   }).join('');
   return rows.length ? head+'<div class="todo-list">'+body+'</div>' : '<div class="todo-empty">现在没有未安排的预约</div>';
 }
+/* CMD-1020-18：IN 的未安排预约（只放 KR 交给印尼 / 只能在印尼做的术后管理）按客人（案件）折叠：标题「客人名（Case ID）｜未预约 N ……［全部预约］」，展开每行 施术名称｜术后管理项目｜次数｜建议时间｜操作地点｜［预约］ */
+function todoUbListInHtml(list){
+  if(!list.length) return '<div class="todo-empty">现在没有未安排的预约</div>';
+  var order = [], by = {}; list.slice().sort(function(a, b){ return (a.sug||'9999').localeCompare(b.sug||'9999'); }).forEach(function(it){ if(!by[it.caseId]){ by[it.caseId] = []; order.push(it.caseId); } by[it.caseId].push(it); });
+  return '<div class="todo-list">'+order.map(function(cid){
+    var arr = by[cid], open = TODO_UB_OPEN[cid]!==false, anyOver = arr.some(function(x){ return x.over; });
+    var head = '<div class="ub-grp" onclick="todoUbToggle(\''+cid+'\')"><span class="ub-arrow">'+(open ? '▾' : '▸')+'</span><b>'+todoEsc(arr[0].name)+'（'+todoEsc(arr[0].no||'')+'）</b><span class="ub-n'+(anyOver ? ' over' : '')+'">未预约 '+todoUbCount(arr)+'</span><span style="flex:1;"></span><button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="event.stopPropagation();todoCbOpen(\''+cid+'\',\'*\')">全部预约</button></div>';
+    var rows = !open ? '' : '<div class="ub6 ub6-head"><div>施术名称</div><div>术后管理项目</div><div>次数</div><div>建议时间</div><div>地点</div><div></div></div>'+arr.map(function(it){
+      return '<div class="ub6"><div title="'+todoEsc(it.surg||'')+'">'+todoEsc(it.surg||'—')+'</div><div title="'+todoEsc(it.label)+'">'+todoEsc(it.label)+'</div><div>'+(it.n||1)+'</div><div class="ub-sug'+(it.over ? ' over' : '')+'">'+todoUbMd(it.sug)+'</div><div>'+todoEsc(it.place||'印尼')+'</div><div><button class="btn-outline" style="padding:3px 8px;font-size:12px;" onclick="todoCbOpen(\''+cid+'\',\''+String(it.gid).replace(/'/g,'')+'\')">预约</button></div></div>';
+    }).join('');
+    return '<div class="ub-card">'+head+rows+'</div>';
+  }).join('')+'</div>';
+}
 function todoUbItems(){
   var out = todoIsKr() ? todoUbKr() : todoUbIn(), today = todayStr();
   out.forEach(function(it){ it.over = !!(it.sug && it.sug < today); });
@@ -287,24 +304,24 @@ function todoUbItems(){
 }
 /* IN：这位客人有没有「接续原案件、包含这一项」的预约（IN 代约带 careFor 的，或客人自助预约了术后管理）；到院当天接续后也算 */
 function inCareBooked(c, key){ return !!inCareBooking(c, key); } /* CMD-1020-08：判断放在 data.js 的 inCareBooking（赴韩施术 tab、KR 项目卡也要用） */
+/* IN 的未安排预约分组：只放术后管理里「要在印尼做」的——KR 交给印尼的（预约时选印尼 / 后来改印尼）+ 地点本来就只能在印尼的名额；韩国持有的管理项目、本地持有的管理项目都不放（CMD-1020-18）。已有预约接续的不算 */
+function todoUbGroupsIn(c, closed){
+  var gs = {}, order = [];
+  var add = function(surg, name, bk, sug){ var gid = (surg||'')+'|'+name; if(!gs[gid]){ gs[gid] = {gid:gid, surg:surg||'', name:name, items:[]}; order.push(gid); } if(inCareBooked(c, bk)) return; gs[gid].items.push({bk:bk, sug:sug||''}); };
+  (c.subItems||[]).forEach(function(s){
+    if(s.kind!=='术后管理记录' || s.holdUseOf || s.surgUse || s.place!=='IN' || s.done || s.skipped) return;
+    var lb = visitRowLabel(c, s); add(s.projectName||'', lb.name, s.id, s.suggest || s.date);
+  });
+  if(!closed) careUnits(c).unbooked.filter(function(u){ return u.x.place==='IN'; }).forEach(function(u){ add(u.item, u.x.name || u.x.mgmt, careUnitKey(u), careUnitSug(c, u)); });
+  return order.map(function(g){ var o = gs[g]; o.items.sort(function(a, b){ return (a.sug||'9999').localeCompare(b.sug||'9999'); }); return o; }).filter(function(g){ return g.items.length; });
+}
 function todoUbIn(){
   var out = [];
   CASE_ITEMS.forEach(function(c){
     if(c.subState==='cancelled' || c.stage==='cancelled' || !c.krBalancePaid) return;
-    var closed = !!(c.visitClosed || isEnded(c)); /* CMD-1020-08：结案后没做的印尼术后管理转成客人持有，继续留在未安排预约 */
-    var mine = todoInMine(c);
-    var push = function(key, bookKey, label, sub, sug, source){ if(inCareBooked(c, bookKey)) return; out.push({key:'ub|'+c.id+'|'+key, caseId:c.id, name:c.name, no:c.caseNo, label:label, sub:sub, sug:sug||'', source:source, mine:mine, book:function(){ todoCareBookOpen(c.id, bookKey); }}); };
-    (c.subItems||[]).forEach(function(s){ /* KR 交给印尼的（一开始选回印尼 / 后来改成回印尼，不分先后） */
-      if(s.kind!=='术后管理记录' || s.holdUseOf || s.place!=='IN' || s.done || s.skipped) return;
-      var lb = visitRowLabel(c, s); push('row|'+s.id, s.id, lb.name, lb.sub, s.suggest || s.date, 'KR 交给印尼');
-    });
-    if(!closed) careUnits(c).unbooked.filter(function(u){ return u.x.place==='IN'; }).forEach(function(u){ /* 地点本来就只能在印尼做 */
-      var sd = itemSurgDate(c, u.it), dys = pcDays(u.x), sg = (sd && dys.length) ? ymdAdd(sd, dys[0]) : '';
-      push('unit|'+u.item+'|'+u.i, 'unit|'+u.item+'|'+u.i, u.x.name || u.x.mgmt, [buyName(u.item), careDayText(c, u.item, sg)].filter(Boolean).join(' · '), sg, '本院');
-    });
-    if(!closed) krCbMgItems(c).forEach(function(m){ /* 本院持有、有建议日期、还有剩余次数、还没约的管理项目 */
-      var sg = m.sugs[0] || ''; if(!sg) return; var it = (c.procedureItems||[]).filter(function(x){ return x.name===m.name; })[0] || {};
-      push('mg|'+m.name, 'mg|'+m.name, buyName(m.name), '剩 '+m.max+' / 共 '+(it.qty||1)+' 次', sg, '本院');
+    var closed = !!(c.visitClosed || isEnded(c)), mine = todoInMine(c); /* 结案后没做的印尼术后管理转成客人持有，继续留在未安排预约 */
+    todoUbGroupsIn(c, closed).forEach(function(g){
+      out.push({key:'ub|'+c.id+'|grp|'+g.gid, caseId:c.id, name:c.name, no:c.caseNo, surg:g.surg, label:g.name, n:g.items.length, sug:g.items[0].sug, place:'印尼', source:'KR 交给印尼', mine:mine, gid:g.gid, book:function(){ todoCbOpen(c.id, g.gid); }});
     });
   });
   return out;
@@ -321,8 +338,9 @@ function todoUbKr(){
         book:function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'items', page:'care'}); setTimeout(function(){ krCbOpen({one:{item:sl.item, i:sl.i, reuse:sl.reuse||''}}); }, 120); }});
     });
     krCbMgItems(c).forEach(function(m){
-      var it = (c.procedureItems||[]).filter(function(x){ return x.name===m.name; })[0] || {};
-      out.push({key:'ub|'+c.id+'|mg|'+m.name, caseId:c.id, clinicId:r.clinicId, name:c.name, no:c.caseNo, label:buyName(m.name), sub:'剩 '+m.max+' / 共 '+(it.qty||1)+' 次', sug:m.sugs[0]||'', source:r.clinicName||'—', mine:mine,
+      var it = itemByKey(c, m.iid||m.name) || {};
+      if(it.iid && pickedMgmt(c, it)) return; /* CMD-1020-18：已经加进今天到院（今日进行 / 本次使用）的不算未安排 */
+      out.push({key:'ub|'+c.id+'|mg|'+(m.iid||m.name), caseId:c.id, clinicId:r.clinicId, name:c.name, no:c.caseNo, label:buyName(m.name), sub:'剩 '+m.max+' / 共 '+(it.qty||1)+' 次', sug:m.sugs[0]||'', source:r.clinicName||'—', mine:mine,
         book:function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'items', page:'mgmt'}); setTimeout(function(){ krCbOpen({mgmtOne:m.iid||m.name}); }, 120); }});
     });
   });
@@ -332,6 +350,7 @@ function todoUbKr(){
 var TODO_CB = null;
 function todoCareBookOpen(caseId, key, editRc){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  if(!editRc){ var g0 = todoUbGroupsIn(c, !!(c.visitClosed || isEnded(c))).filter(function(g){ return g.items.some(function(x){ return x.bk===key; }); })[0]; if(g0) return todoCbOpen(caseId, g0.gid, key); } /* 项目卡里的单条［预约］也走新弹窗 */
   var it = (TODO_UB_LAST||[]).filter(function(x){ return x.caseId===caseId && x.key.indexOf('|'+key)>-1; })[0] || {label:'', sug:''};
   var d0 = it.sug && it.sug >= todayStr() ? it.sug : todayStr(), erc = editRc ? CASE_ITEMS.filter(function(x){ return x.id===editRc; })[0] : null; if(erc){ d0 = erc.visitDate; }
   if(!it.label){ var s0 = (c.subItems||[]).filter(function(x){ return x.id===key; })[0]; if(s0){ var lb = visitRowLabel(c, s0); it = {label:lb.name, sub:lb.sub, sug:s0.suggest||s0.date}; } }
@@ -359,6 +378,67 @@ function todoCareBookGo(){
   logCaseEvent(c, actingName(), '预约术后管理（接续本案件）：'+B.label+'，'+B.date+' '+B.time, '术后管理'); logCaseEvent(rc, actingName(), '预约术后管理，接续原案件 '+c.caseNo+'：'+B.label);
   todoCareBookClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){}
   showToast('预约已生成', c.name+' · '+B.date+' '+B.time+'（术后管理，接续 '+c.caseNo+'）', null);
+}
+
+/* ================= CMD-1020-18：IN 预约印尼术后管理弹窗（［全部预约］和单条［预约］共用） =================
+   每个项目一组；同一个项目有 N 次时：一行选「这一次预约做几次」（− n +）+ 日期 / 时间，还有剩就自动在下面生成下一行，直到分完或取消勾选；同一天合成一次到店 */
+var TODO_CB2 = null;
+function todoCbDefDate(sug){ var d = sug && sug >= todayStr() ? sug : todayStr(), n = 0; while(n++ < 30 && !todoCbTimes(d).length) d = ymdAdd(d, 1); return d; } /* 默认日期遇到休诊 / 约满就往后找到第一个能约的日子 */
+function todoCbTimes(date){ var ts = (WK_HOURS||[]).filter(function(t){ return !slotBlockReason(date, t); }); return ts; }
+function todoCbOpen(caseId, gid, onlyKey){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  var gs = todoUbGroupsIn(c, !!(c.visitClosed || isEnded(c))); if(!gs.length) return;
+  TODO_CB2 = {caseId:caseId, groups:gs.map(function(g){ var on = gid==='*' || g.gid===gid; return {gid:g.gid, surg:g.surg, name:g.name, keys:g.items, lines:[{on:on, qty:1, date:todoCbDefDate(g.items[0].sug), time:''}]}; })};
+  todoCbNormalize(); todoCbRender();
+}
+function todoCbNormalize(){
+  (TODO_CB2.groups||[]).forEach(function(g){
+    var total = g.keys.length, acc = 0, out = [];
+    for(var i = 0; i < g.lines.length; i++){ var l = g.lines[i]; if(acc>=total) break; if(l.on){ l.qty = Math.max(1, Math.min(parseInt(l.qty,10)||1, total-acc)); acc += l.qty; } out.push(l); }
+    g.lines = out; g.acc = acc;
+    var last = out[out.length-1]; if(last && last.on && acc<total) g.lines.push({on:true, qty:1, date:todoCbDefDate((g.keys[acc]||{}).sug), time:''}); /* 还有剩 → 自动生成下一行 */
+    g.lines.forEach(function(l){ var ts = todoCbTimes(l.date); if(ts.indexOf(l.time)<0) l.time = ts[0]||''; });
+  });
+}
+function todoCbSet(gi, li, k, v){ var l = TODO_CB2.groups[gi].lines[li]; if(k==='on') l.on = !!v; else if(k==='qty') l.qty = (parseInt(l.qty,10)||1)+v; else l[k] = v; todoCbNormalize(); todoCbRender(); }
+function todoCbRender(){
+  var B = TODO_CB2; if(!B) return; var c = CASE_ITEMS.filter(function(x){ return x.id===B.caseId; })[0]; if(!c){ TODO_CB2 = null; return; }
+  var ov = document.getElementById('todo-cb-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'todo-cb-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;', anyOn = false, bad = false;
+  var body = B.groups.map(function(g, gi){
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:10px;"><div style="font-size:13px;font-weight:700;">'+todoEsc(g.name)+' <span style="font-weight:400;color:var(--muted);font-size:12px;">'+(g.surg ? '对应施术 '+todoEsc(buyName(g.surg))+' · ' : '')+'共 '+g.keys.length+' 次未预约，已选 '+(g.acc||0)+' 次</span></div>'+
+      g.lines.map(function(l, li){
+        if(l.on) anyOn = true;
+        var ts = todoCbTimes(l.date), why = l.on && !ts.length; if(why) bad = true;
+        return '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;'+(l.on ? '' : 'opacity:.55;')+'"><input type="checkbox" '+(l.on ? 'checked ' : '')+'onchange="todoCbSet('+gi+','+li+',\'on\',this.checked)">'+
+          '<span style="white-space:nowrap;"><button class="btn-outline" style="padding:2px 9px;font-size:13px;" '+(l.on ? '' : 'disabled ')+'onclick="todoCbSet('+gi+','+li+',\'qty\',-1)">−</button> <b style="display:inline-block;min-width:22px;text-align:center;">'+l.qty+'</b> <button class="btn-outline" style="padding:2px 9px;font-size:13px;" '+(l.on ? '' : 'disabled ')+'onclick="todoCbSet('+gi+','+li+',\'qty\',1)">+</button> 次</span>'+
+          '<input type="date" value="'+l.date+'" min="'+todayStr()+'" style="'+inp+'" onchange="todoCbSet('+gi+','+li+',\'date\',this.value)"><select style="'+inp+'" onchange="todoCbSet('+gi+','+li+',\'time\',this.value)">'+(ts.length ? ts.map(function(t){ return '<option'+(t===l.time?' selected':'')+'>'+t+'</option>'; }).join('') : '<option value="">这天没有可约时间</option>')+'</select><span style="font-size:12px;color:var(--slate2);">'+todoEsc(ymdWeekText(l.date))+'</span></div>';
+      }).join('')+'</div>';
+  }).join('');
+  ov.innerHTML = '<div class="modal-box" style="width:600px;max-height:86vh;overflow:auto;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b style="font-size:15px;">预约印尼术后管理</b><span style="cursor:pointer;" onclick="todoCbClose()">✕</span></div>'+
+    '<div style="font-size:13px;line-height:1.8;margin-bottom:10px;">客人 <b>'+todoEsc(c.name)+'</b>　接续原案件 <b>'+todoEsc(c.caseNo)+'</b>　来访目的 <b>术后管理</b></div>'+body+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">同一天的项目合成一次到店；一个项目有多次时，选好这一次做几次，下面会自动生成下一次的预约行。</div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-outline" onclick="todoCbClose()">取消</button><button class="btn-primary" '+(anyOn && !bad ? '' : 'disabled style="opacity:.4;"')+' onclick="todoCbGo()">确认预约</button></div></div>';
+  ov.classList.add('open');
+}
+function todoCbClose(){ var ov = document.getElementById('todo-cb-overlay'); if(ov) ov.classList.remove('open'); TODO_CB2 = null; }
+function todoCbGo(){
+  var B = TODO_CB2; if(!B) return; var c = CASE_ITEMS.filter(function(x){ return x.id===B.caseId; })[0]; if(!c) return;
+  var buckets = {}, order = [], err = '';
+  B.groups.forEach(function(g){ var p = 0; g.lines.forEach(function(l){ if(!l.on) return;
+    if(!l.date || !l.time || slotBlockReason(l.date, l.time)){ err = '「'+g.name+'」'+(l.date||'')+' 这个时间不能约，请换一个'; return; }
+    var ks = g.keys.slice(p, p+l.qty).map(function(x){ return x.bk; }); p += l.qty;
+    if(!buckets[l.date]){ buckets[l.date] = {date:l.date, time:l.time, keys:[], labels:[]}; order.push(l.date); }
+    var bk = buckets[l.date]; ks.forEach(function(k){ bk.keys.push(k); }); bk.labels.push(g.name+(l.qty>1 ? ' ×'+l.qty : '')); }); });
+  if(err){ alert(err); return; }
+  if(!order.length) return;
+  var done = [];
+  order.forEach(function(ds){ var bk = buckets[ds]; /* 同一天合成一次到店 */
+    var rc = createReservationCase(c.name, null, bk.date, bk.time, null, '术后管理'); rc.careFor = {caseId:c.id, keys:bk.keys};
+    logCaseEvent(c, actingName(), '预约术后管理（接续本案件）：'+bk.labels.join('、')+'，'+bk.date+' '+bk.time, '术后管理'); logCaseEvent(rc, actingName(), '预约术后管理，接续原案件 '+c.caseNo+'：'+bk.labels.join('、'));
+    done.push(bk.date+' '+bk.time); });
+  todoCbClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){}
+  showToast('预约已生成', c.name+' · '+done.join('、')+'（术后管理，接续 '+c.caseNo+'）', null);
 }
 var TODO_KIND_LABEL = {dsurg:'待施术', dconsult:'待面诊', today:'今天到院 / 到店'};
 function todoToggle(){ TODO_UI.collapsed = !TODO_UI.collapsed; todoSaveUi(); todoRefresh(); }

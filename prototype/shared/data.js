@@ -7577,11 +7577,14 @@ function careUnits(c){
     /* 已有的行按内容对上它属于哪一条所需术后管理（对不上的才占第一个空名额），剩下的才是未预约（CMD-1015-28） */
     var left = slots.slice();
     mine.forEach(function(s){ var k = -1; left.forEach(function(sl, n){ if(k<0 && (sl.x.mgmt||sl.x.name) && String(s.content||'').indexOf(sl.x.mgmt||sl.x.name)===0) k = n; }); left.splice(k<0 ? 0 : k, 1); });
-    left.forEach(function(sl){ res.unbooked.push({item:it.name, it:it, x:sl.x, i:sl.i}); });
+    left.forEach(function(sl){ res.unbooked.push({item:it.name, it:it, x:sl.x, i:sl.i, k:sl.k}); });
   });
   pool.forEach(function(s){ res.rows.push({s:s, item:''}); });
   return res;
 }
+/* CMD-1020-18：同一条所需术后管理有多次名额时，每一次一个独立的预约 key（第 0 次沿用旧 key，旧预约不受影响）；建议日期按这一次是第几次算 */
+function careUnitKey(u){ var b = 'unit|'+u.item+'|'+u.i; return u.k ? b+'|'+u.k : b; }
+function careUnitSug(c, u){ var sd = itemSurgDate(c, u.it), dys = pcDays(u.x); return (sd && dys.length) ? ymdAdd(sd, dys[Math.min(u.k||0, dys.length-1)]) : ''; }
 function careUnitLabel(x){ return (x.mgmt||x.name)+(x.place==='KR' ? '（在韩国）' : ''); }
 /* 术后管理［预约时间］：按日期建立 / 并入子案件（同一天同一地点合成一个），预约来源 = 术后预约；reuseId = 取消本次后退回的那一行 */
 function coreCareBook(c, itemName, pcIdx, date, time, place, reuseId, by, opt){
@@ -7652,7 +7655,7 @@ function inCareEntries(c){
     push('kr', sl.item, sd, {k:sl.sug||'9999', name:sl.x.name||sl.x.mgmt, sub:careDayText(c, sl.item, sl.sug), time:sl.sug ? gray('建议 '+e(String(sl.sug).slice(5).replace('-', '/'))) : gray('—'), st:pill('未预约', 'var(--border2)', 'var(--slate2)'), ops:''});
   });
   cu.unbooked.filter(function(u){ return u.x.place==='IN'; }).forEach(function(u){ /* 地点只能在印尼的名额 */
-    var sd = itemSurgDate(c, u.it), dys = pcDays(u.x), sg = (sd && dys.length) ? ymdAdd(sd, dys[0]) : '', key = 'unit|'+u.item+'|'+u.i, bk = inCareBooking(c, key);
+    var sd = itemSurgDate(c, u.it), sg = careUnitSug(c, u), key = careUnitKey(u), bk = inCareBooking(c, key);
     push('inn', u.item, sd, {k:sg||'9999', name:u.x.name||u.x.mgmt, sub:careDayText(c, u.item, sg), time:bk ? e(String(bk.date).slice(5).replace('-', '/')) : gray('建议 '+e(String(sg).slice(5).replace('-', '/'))), st:bk ? pill('已预约', '#E8F0FB', '#2F5FA8') : pill('未预约', 'var(--border2)', 'var(--slate2)'), ops:bk ? '' : '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="todoCareBookOpen(\''+c.id+'\',\''+key+'\')">预约</button>'});
   });
   return out;
@@ -7905,7 +7908,7 @@ function clientCareLeftAll(name){
     if(c.name!==name || c.subState==='cancelled') return;
     (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.skipped && !s.holdUseOf && !s.surgUse) out.push({c:c, s:s}); });
     if(c.visitClosed) return;
-    try{ careUnits(c).unbooked.filter(function(u){ return u.x.place==='IN'; }).forEach(function(u){ var sd = itemSurgDate(c, u.it), dys = pcDays(u.x), sg = (sd && dys.length) ? ymdAdd(sd, dys[0]) : ''; out.push({c:c, s:{id:'unit|'+u.item+'|'+u.i, content:(u.x.name||u.x.mgmt), date:sg}}); }); }catch(e){}
+    try{ careUnits(c).unbooked.filter(function(u){ return u.x.place==='IN'; }).forEach(function(u){ var sd = itemSurgDate(c, u.it), dys = pcDays(u.x), sg = (sd && dys.length) ? ymdAdd(sd, dys[0]) : ''; out.push({c:c, s:{id:careUnitKey(u), content:(u.x.name||u.x.mgmt), date:sg}}); }); }catch(e){}
   });
   return out;
 }
