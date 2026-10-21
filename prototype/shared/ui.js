@@ -793,9 +793,9 @@ function openClientEdit(name, field){
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'client-edit-overlay'; ov.style.zIndex = 90; ov.onclick = function(e){ if(e.target===ov) closeClientEdit(); }; document.body.appendChild(ov); }
   var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;';
   var body = d.kind==='area' ? '<textarea id="ce-v" rows="3" style="'+inp+'">'+aEscC(c[field])+'</textarea>' :
-    d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select><input id="ce-v2" type="date" value="'+aEscC(c.dob)+'" style="'+inp+'"></div>' :
+    d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option value=""'+(c.gender!=='女' && c.gender!=='男' ? ' selected' : '')+'>请选择</option><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select><input id="ce-v2" type="date" value="'+aEscC(c.dob)+'" style="'+inp+'"></div>' :
     d.kind==='passport' ? passportFormHtml(c, 'ce') :
-    d.kind==='name2' ? '<div style="display:flex;gap:10px;"><input id="ce-fn" type="text" placeholder="名（必填）" value="'+aEscC(c.firstName!==undefined ? c.firstName : c.name)+'" style="'+inp+'"><input id="ce-ln" type="text" placeholder="姓（选填）" value="'+aEscC(c.lastName||'')+'" style="'+inp+'"></div>' :
+    d.kind==='name2' ? '<div style="display:flex;gap:10px;"><input id="ce-fn" type="text" placeholder="名（必填）" value="'+aEscC(c.firstName!==undefined ? c.firstName : c.name)+'" style="'+inp+'"><input id="ce-ln" type="text" placeholder="姓（必填）" value="'+aEscC(c.lastName||'')+'" '+(c.noLastName ? 'disabled ' : '')+'style="'+inp+(c.noLastName ? 'background:#EFEDE8;' : '')+'"></div><label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;"><input id="ce-nl" type="checkbox" '+(c.noLastName ? 'checked ' : '')+'onchange="var l=document.getElementById(\'ce-ln\');l.disabled=this.checked;l.style.background=this.checked?\'#EFEDE8\':\'\';if(this.checked)l.value=\'\';"> 我没有姓</label>' :
     field==='phone' ? phoneInputHtml('ce-ph', c.phone) :
     '<input id="ce-v" type="text" value="'+aEscC(field==='passport' ? c.passport.text : c[field])+'" style="'+inp+'">';
   ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:12px;">修改「'+d.label+'」</div>'+body+
@@ -809,13 +809,15 @@ function saveClientEdit(){
   var c = clientByName(x.name), d = CLIENT_FIELD_DEF[x.field]; if(!c) return;
   if(x.field==='passport'){ var pe = passportFormRead('ce'); if(pe.err){ var ee = document.getElementById('ce-err'); ee.textContent = pe.err; ee.style.display = 'block'; return; }
     var had = passportComplete(c); passportSave(c, pe.v, had ? '修改护照信息' : '已登记护照'); closeClientEdit(); refreshAfterClientEdit(c); return; }
-  var v = x.field==='phone' ? phoneInputGet('ce-ph') : x.field==='name' ? joinName((document.getElementById('ce-fn')||{}).value, (document.getElementById('ce-ln')||{}).value) : (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
+  var v = x.field==='phone' ? phoneInputGet('ce-ph') : x.field==='name' ? joinName((document.getElementById('ce-fn')||{}).value, (document.getElementById('ce-nl')||{}).checked ? '' : (document.getElementById('ce-ln')||{}).value) : (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
   var fail = function(m){ var e = document.getElementById('ce-err'); e.textContent = m; e.style.display = 'block'; };
   if(x.field==='name'){
-    if(!(document.getElementById('ce-fn')||{}).value.trim()) return fail('名不能为空（姓可以留空）');
+    var noL = !!(document.getElementById('ce-nl')||{}).checked;
+    if(!(document.getElementById('ce-fn')||{}).value.trim()) return fail('名不能为空');
+    if(!noL && !(document.getElementById('ce-ln')||{}).value.trim()) return fail('姓不能为空（没有姓请勾选“我没有姓”）');
     if(v!==c.name && clientByName(v)) return fail('已有同名的客户档案');
     oldTxt = c.name; newTxt = v;
-    c.firstName = document.getElementById('ce-fn').value.trim(); c.lastName = document.getElementById('ce-ln').value.trim();
+    c.firstName = document.getElementById('ce-fn').value.trim(); c.lastName = noL ? '' : document.getElementById('ce-ln').value.trim(); c.noLastName = noL;
     if(v!==c.name){
       CASE_ITEMS.forEach(function(cs){ if(cs.name===c.name) cs.name = v; });
       if(CLIENT_HOLDINGS[c.name]){ CLIENT_HOLDINGS[v] = CLIENT_HOLDINGS[c.name]; delete CLIENT_HOLDINGS[c.name]; }
@@ -824,6 +826,7 @@ function saveClientEdit(){
     }
   } else if(x.field==='gender'){
     var dob = document.getElementById('ce-v2').value;
+    if(!v) return fail('请选择性别'); if(!dob) return fail('请填写出生日期');
     oldTxt = c.gender+' · '+(c.dob||'—'); newTxt = v+' · '+(dob||'—'); c.gender = v; c.dob = dob;
   } else if(x.field==='phone'){
     if(!v) return fail('手机号不能为空');

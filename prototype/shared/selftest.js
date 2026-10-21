@@ -2417,18 +2417,32 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         holdUseRecord(cc, it, {key:'book|tb1', qty:1, rowId:'tb1'}); ST.ok(i2.holdUsed===1 && i1.holdUsed===0, '只扣选中的那一笔'); });
       /* 三：删除未付款项目 */
       KR_PROJ_PAGE = 'mgmt'; c = krFindCase(r.clinicId, r.id).c; html = krProjCards(c);
-      ST.ok(/删除/.test(html) && html.indexOf('krPendDelAsk')>-1, '未付款项目行有［删除］');
+      ST.ok(/取消<\/button>/.test(html) && html.indexOf('krPendDelAsk')>-1, '未付款项目行有［取消］');
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], o = cc.procedureItems.filter(function(x){ return x.iid===io; })[0];
         coreTodayPick(cc, [], [io], 'KM1 室长'); ST.ok(pickedMgmt(cc, o), '前提：已放进今日到院卡');
         ST.ok(coreAddOnDelete(cc, io, 'KM1 室长') && !cc.procedureItems.some(function(x){ return x.iid===io; }) && !pickedMgmt(cc, {iid:io, name:'热玛吉 · 300发'}) && pendingPayItems(cc).length===0, '删除：项目没了、今日到院卡里没了、待付款清空');
-        ST.ok(JSON.stringify(cc).indexOf('删除未付款项目：热玛吉 · 300发（₩1,300,000）')>-1, 'Timeline 记「删除未付款项目：…」'); });
+        ST.ok(JSON.stringify(cc).indexOf('取消未付款项目：热玛吉 · 300发（₩1,300,000）')>-1, 'Timeline 记「取消未付款项目：…」'); });
       c = krFindCase(r.clinicId, r.id).c; ST.ok(krTopAlerts(c).indexOf('待付款')<0, '删光后红条消失');
       /* 用过的不能删 */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], i2 = cc.procedureItems.filter(function(x){ return x.iid===ib; })[0]; i2.pendingPay = true; i2.batchId = '';
         ST.ok(i2.holdUsed===1 && !coreAddOnDelete(cc, ib, 'KM1 室长') && cc.procedureItems.some(function(x){ return x.iid===ib; }), '已使用过的未付款项目不能删');
         var i1 = cc.procedureItems.filter(function(x){ return x.iid===ia; })[0]; i1.pendingPay = true; i1.batchId = ''; ST.ok(coreAddOnDelete(cc, ia, 'KM1 室长'), '没用过的可以删'); });
-      html = krProjCards(krFindCase(r.clinicId, r.id).c); ST.ok(/已使用，不能删除/.test(html), '用过的项目［删除］灰 + 原因');
+      html = krProjCards(krFindCase(r.clinicId, r.id).c); ST.ok(/已使用，不能取消/.test(html), '用过的项目［取消］灰 + 原因');
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PICK = {}; KR_PROJ_PAGE = 'surg'; }
+  });
+  ST.def('R70a','CMD-1021-01（IN 分页）：客人资料名 / 姓 / 性别 / 出生日期必填，「我没有姓」姓可空；旧资料不拦',function(){
+    var nm = 'T-R70 '+Date.now().toString(36), cl = addClient({firstName:'T-R70', lastName:'Lim', phone:'+62 811-70'+String(Date.now()).slice(-6), gender:'女', dob:'1990-01-01', createdBy:'测试'});
+    var legacy = addClient({name:'T-R70Old '+Date.now().toString(36), phone:'+62 811-71'+String(Date.now()).slice(-6), createdBy:'测试'}); /* 旧资料：性别 —、生日空，不补不拦 */
+    ST.ok(legacy.gender==='—' && !legacy.dob && !legacy.noLastName, '旧资料缺的不补不拦');
+    var err = function(){ var e = document.getElementById('ce-err'); return e && e.style.display!=='none' ? e.textContent : ''; };
+    openClientEdit(cl.name, 'name'); document.getElementById('ce-ln').value = ''; saveClientEdit();
+    ST.ok(/姓不能为空/.test(err()), '姓空 + 没勾「我没有姓」→ 红字挡住：'+err());
+    var nl = document.getElementById('ce-nl'); nl.checked = true; nl.onchange && nl.onchange.call(nl); ST.ok(document.getElementById('ce-ln').disabled, '勾「我没有姓」→ 姓输入框变灰');
+    saveClientEdit(); var c2 = clientByName('T-R70'); ST.ok(!!c2 && c2.noLastName===true && c2.lastName==='' && c2.name==='T-R70', '勾了：显示名只用名，noLastName 记下');
+    openClientEdit('T-R70', 'gender'); document.getElementById('ce-v').value = ''; saveClientEdit(); ST.ok(/请选择性别/.test(err()), '性别空 → 挡住');
+    document.getElementById('ce-v').value = '女'; document.getElementById('ce-v2').value = ''; saveClientEdit(); ST.ok(/出生日期/.test(err()), '生日空 → 挡住');
+    openClientEdit(legacy.name, 'gender'); ST.ok(document.getElementById('ce-v').value==='', '旧资料编辑时性别默认「请选择」，要填了才能存');
+    closeClientEdit();
   });
   /* CMD-1020-16 一（KM1 分页；IN 分页测 IN 的 KR 医院日程）：「医院」视图预约小标签——不按时长拉长、整栏宽、按开始时间上下排、一格超过 6 个显示 5 个 + 「+N 个预约」、点开列出全部；院长视图仍按时长画块 */
   ST.def('R68a','CMD-1020-16：医院视图预约改小标签（高度 = 一小时格 1/6，整栏宽，按开始时间排，>6 个显示 5 个 + +N 个预约）；院长视图不变',function(){

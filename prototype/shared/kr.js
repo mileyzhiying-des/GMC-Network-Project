@@ -805,8 +805,10 @@ function krProjCards(c, opts){
   var cancelBtn = function(name){ var it0 = itOf(name), st0 = it0 ? coreTodayState(c, it0) : null; return (can && !pickMode && st0 && !st0.done) ? krBtn('本次取消', 'krTodayCancel(\''+st0.type+'\',\''+krEsc(String(st0.key)).replace(/'/g,'')+'\',\''+krEsc(it0.name).replace(/'/g,'')+'\')', true) : ''; };
   /* CMD-1020-17 三：未付款的项目行有［删除］（用过的灰 + 原因）；只有 KR 室长 */
   var delBtn = function(name){
-    var itD = itOf(name); if(!itD || !itD.pendingPay || pickMode || !krCanFix() || c.visitClosed) return '';
-    return addOnUsed(c, itD) ? krOutBtn('删除', '', false, '已使用，不能删除') : krOutBtn('删除', 'krPendDelAsk(\''+krEsc(itemIid(itD)).replace(/'/g,'')+'\')', true);
+    var itD = itOf(name); if(!itD || !itD.pendingPay) return ''; /* CMD-1021-01：待付款的项目一律在行最右边放［取消］（选今日项目的画面里也放）；没权限 / 用过的灰掉写原因 */
+    if(addOnUsed(c, itD)) return krOutBtn('取消', '', false, '已使用，不能取消');
+    if(!krCanFix()) return krOutBtn('取消', '', false, '只有 KR 室长可以取消');
+    return krOutBtn('取消', 'krPendDelAsk(\''+krEsc(itemIid(itD)).replace(/'/g,'')+'\')', true);
   };
   var useBtns = function(name, pend){ var a = useBtns0(name, pend), b = delBtn(name); return a+(a && b ? ' ' : '')+b; };
   var useBtns0 = function(name, pend){
@@ -1068,10 +1070,10 @@ function krPendDelAsk(iid){
   var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, it = itemByKey(c, iid); if(!it) return;
   var ov = document.getElementById('kr-block-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-block-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   window.__krPendDel = function(go){ ov.classList.remove('open'); if(go) krMut(function(c2){ return coreAddOnDelete(c2, iid, ME_NAME); }); };
-  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">删除未付款项目</div><div style="font-size:13px;line-height:1.7;margin-bottom:16px;">删除未付款项目：'+krEsc(buyName(it.name))+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）？</div><div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="__krPendDel(false)">取消</button><button class="btn-primary" style="flex:1;" onclick="__krPendDel(true)">删除</button></div></div>';
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">取消未付款项目</div><div style="font-size:13px;line-height:1.7;margin-bottom:16px;">取消未付款项目：'+krEsc(buyName(it.name))+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）？</div><div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="__krPendDel(false)">返回</button><button class="btn-primary" style="flex:1;" onclick="__krPendDel(true)">确认取消</button></div></div>';
   ov.style.zIndex = 100010; ov.classList.add('open');
 }
-function krFixDelete(){ if(!KR_FIX || !krCanFix() || !confirm('确认删除这个待付款项目？')) return; var idx = KR_FIX.idx; krFixClose(); krMut(function(c){ return coreAddOnDelete(c, idx, ME_NAME); }); }
+function krFixDelete(){ if(!KR_FIX || !krCanFix() || !confirm('确认取消这个未付款项目？')) return; var idx = KR_FIX.idx; krFixClose(); krMut(function(c){ return coreAddOnDelete(c, idx, ME_NAME); }); }
 function krDoAddOnPaid(){ if(!krCan()) return; krMut(function(c){ return coreAddOnPaid(c, ME_NAME); }); }
 function krSubNote(id){
   if(!krCan()) return;

@@ -648,7 +648,7 @@ function normClientNames(){ (CLIENTS||[]).forEach(function(c){ if(c.firstName===
 function addClient(o){
   var ts = nowFullDt();
   if(o.firstName!==undefined) o.name = joinName(o.firstName, o.lastName);
-  var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), clinicId:CURRENT_CLINIC_ID, name:o.name, firstName:(o.firstName!==undefined ? String(o.firstName).trim() : o.name), lastName:(o.firstName!==undefined ? String(o.lastName||'').trim() : ''), gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
+  var c = {id:'cl'+Date.now()+Math.floor(Math.random()*1000), clinicId:CURRENT_CLINIC_ID, name:o.name, firstName:(o.firstName!==undefined ? String(o.firstName).trim() : o.name), lastName:(o.firstName!==undefined ? String(o.lastName||'').trim() : ''), noLastName:!!o.noLastName, gender:o.gender||'—', dob:o.dob||'', phone:o.phone||'', note:'无', history:o.history||'无',
     passport:{text:'未登记', date:'', no:'', issue:'', expiry:''}, beautyRecords:[], consents:o.consent ? [o.consent] : [], createdBy:o.createdBy||actingName(), updated:'刚刚',
     fallback:{label:'资料录入', bg:'#E4E8ED', fg:'var(--slate2)'},
     timeline:[{stage:'建档', actor:o.createdBy||actingName(), actorId:(o.createdBy&&o.createdBy!==actingName()) ? undefined : currentAccountId(), action:'建档 · '+(o.source||'室长建档'), dt:ts, kind:'plain'}]};
@@ -812,7 +812,7 @@ function submitSelfBooking(f){
   var consent = {version:CLINIC_SETTINGS.privacyVersion, ts:nowFullDt(), source:'客户自助预约'};
   var cl = clientByPhone(f.phone), isNew = !cl;
   if(isNew){
-    cl = addClient({name:f.name, firstName:f.firstName, lastName:f.lastName, phone:f.phone, gender:f.gender, dob:f.dob, history:(f.history||'').trim()||'无', createdBy:'客人自助', source:'客户自助预约建档', consent:consent});
+    cl = addClient({name:f.name, firstName:f.firstName, lastName:f.lastName, noLastName:!!f.noLastName, phone:f.phone, gender:f.gender, dob:f.dob, history:(f.history||'').trim()||'无', createdBy:'客人自助', source:'客户自助预约建档', consent:consent});
   } else {
     /* 老客人资料有变化由室长到店接待时修改，预约页不提供修改：这里只记同意书（版本更新过才会重新勾选），不改客户档案 */
     if(f.consentGiven) cl.consents.push(consent);
@@ -5342,7 +5342,7 @@ function coreAddOnDelete(c, idx, by){
   c.procedureItems.splice(idx, 1);
   c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && s.projectName===it.name && !s.done); });
   if(c.anesthesiaConsent && c.anesthesiaConsent.projects) c.anesthesiaConsent.projects = c.anesthesiaConsent.projects.filter(function(x){ return x.name!==it.name; });
-  logCaseEvent(c, by, '删除未付款项目：'+buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）');
+  logCaseEvent(c, by, '取消未付款项目：'+buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）');
   updateCaseStage(c);
   krCloseIfDone(c); /* 待付款删光、其余都完成 → 自动结案 */
   return true;
