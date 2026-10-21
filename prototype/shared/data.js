@@ -2412,33 +2412,33 @@ function mockUploadRevisit(name, what){ var c = getCurrentCase(); if(!c) return;
 function clearRevisitMedia(name, what){ var c = getCurrentCase(); if(!c) return; var m = revisitMediaOf(c, name); if(!m) return; if(what==='video') m.video = null; else if(m.photos) delete m.photos[what]; renderCaseBody(c); }
 function revisitMediaCardsHtml(c){
   return (c.revisitMedia||[]).map(function(m){
-    var def = concernPartDef(m.part), nq = m.name.replace(/'/g,"\\'"), mark = ' <span style="color:var(--terracotta);">*</span>';
+    var sp = shootSpec(m.part, m.name), nq = m.name.replace(/'/g,"\\'"), mark = ' <span style="color:var(--terracotta);">*</span>';
     var vid = m.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+cesc(m.video.name)+'</span> <a href="#" style="font-size:12px;" onclick="clearRevisitMedia(\''+nq+'\',\'video\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadRevisit(\''+nq+'\',\'video\')">上传视频</button>';
-    var slots = def.angles.map(function(a){ var f = (m.photos||{})[a.id];
+    var slots = sp.angles.map(function(a){ var f = (m.photos||{})[a.id];
       return '<div style="width:124px;border:1px '+(f ? 'solid var(--sage)' : 'dashed var(--border)')+';border-radius:8px;padding:8px;text-align:center;background:'+(f ? 'var(--sage-bg)' : 'var(--surface2,#faf6ef)')+';"><div style="font-size:12px;font-weight:700;margin-bottom:6px;min-height:30px;">'+cesc(a.label)+'</div>'+(f ? '<div style="font-size:12px;color:var(--sage);word-break:break-all;">✓ '+cesc(f.name)+'</div><a href="#" style="font-size:12px;" onclick="clearRevisitMedia(\''+nq+'\',\''+a.id+'\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="mockUploadRevisit(\''+nq+'\',\''+a.id+'\')">上传</button>')+'</div>'; }).join('');
-    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">'+cesc(m.name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(def.label)+'</span></div>'+
-      '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:center;"><span style="min-width:70px;font-size:12px;">视频'+mark+'</span><span style="font-size:13px;">'+vid+'</span></div>'+
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;overflow:hidden;">'+cesc(m.name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(m.part).label)+'</span>'+shootRefBtn(m.part, m.name)+'</div>'+
+      (sp.video ? '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:center;"><span style="min-width:70px;font-size:12px;">视频'+mark+'</span><span style="font-size:13px;">'+vid+'</span></div>' : '')+
       '<div style="display:flex;gap:10px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:4px;">照片'+mark+'<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.4;">'+CONCERN_PHOTO_SPEC+'<br>每个角度一张</div></span><div style="display:flex;flex-wrap:wrap;gap:8px;">'+slots+'</div></div></div>'; }).join('');
 }
 /* 复诊的资料（只读，IN 基础资料 / KR 复诊面诊 / 院长恢复确认卡共用）：复诊想问的内容（走备注同一套自动翻译）+ 按项目分组的视频 / 照片 */
 function revisitNewStyle(c){ return isRevisitConsult(c) && (c.revisitQuestion!==undefined || (c.revisitMedia||[]).length); }
 function revisitBlockHtml(c, o){
   var viewer = (typeof isKrAccount==='function' && isKrAccount()) ? 'KR' : 'IN', q = String(c.revisitQuestion||'').trim();
-  var one = function(m){ var def = concernPartDef(m.part), pk = m.name.replace(/'/g,'');
+  var one = function(m){ var sp = shootSpec(m.part, m.name), pk = m.name.replace(/'/g,'');
     var vid = m.video ? '<span style="color:var(--sage);">▶ '+cesc(m.video.name)+'</span>' : '<span style="color:var(--muted);">—</span>';
-    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+cesc(m.name)+'</div><div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">视频　</span>'+vid+'</div><div style="font-size:13px;"><span style="color:var(--muted);font-size:12px;">照片　</span><div style="display:flex;flex-wrap:wrap;gap:8px;">'+def.angles.map(function(a){ var f = (m.photos||{})[a.id]; return '<div style="width:92px;border:1px solid var(--border2);border-radius:8px;padding:6px;text-align:center;font-size:12px;'+(f ? '' : 'color:var(--muted);')+'"><div style="font-weight:700;min-height:28px;">'+cesc(a.label)+'</div>'+(f ? '<div style="color:var(--sage);word-break:break-all;">'+cesc(f.name)+'</div>' : '未上传')+'</div>'; }).join('')+'</div></div></div>'; };
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+cesc(m.name)+'</div><div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">视频　</span>'+vid+'</div><div style="font-size:13px;"><span style="color:var(--muted);font-size:12px;">照片　</span><div style="display:flex;flex-wrap:wrap;gap:8px;">'+shootShowAngles(sp, m.photos).map(function(a){ var f = (m.photos||{})[a.id]; return '<div style="width:92px;border:1px solid var(--border2);border-radius:8px;padding:6px;text-align:center;font-size:12px;'+(f ? '' : 'color:var(--muted);')+'"><div style="font-weight:700;min-height:28px;">'+cesc(a.label)+'</div>'+(f ? '<div style="color:var(--sage);word-break:break-all;">'+cesc(f.name)+'</div>' : '未上传')+'</div>'; }).join('')+'</div></div></div>'; };
   return '<div style="font-size:12px;font-weight:700;margin:2px 0 4px;">复诊想问的内容</div><div style="padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;margin-bottom:6px;">'+(q ? noteTextHtml({id:'rq'+c.id, text:q, role:'IN'}, viewer) : '<span style="color:var(--muted);">—</span>')+'</div>'+((c.revisitMedia||[]).length ? (c.revisitMedia||[]).map(one).join('') : '<div style="font-size:12px;color:var(--muted);">没有按项目上传的视频 / 照片</div>');
 }
 
-function toggleRecoveryItem(name){ var c = getCurrentCase(); if(!c) return; c.recovery = c.recovery || []; var i = c.recovery.findIndex(function(r){ return r.name===name; }); if(i>-1){ if(Object.keys(c.recovery[i].photos||{}).length && !confirm('取消「'+name+'」？已上传的恢复照片会清掉')) return; c.recovery.splice(i,1); } else c.recovery.push({name:name, part:followItemPart(name), photos:{}}); renderCaseBody(c); }
-function mockUploadRecovery(name, angleId){ var c = getCurrentCase(); if(!c) return; var r = (c.recovery||[]).filter(function(x){ return x.name===name; })[0]; if(!r) return; r.photos = r.photos||{}; r.photos[angleId] = {name:'恢复_'+angleId+'.jpg'}; renderCaseBody(c); }
-function clearRecoveryPhoto(name, angleId){ var c = getCurrentCase(); if(!c) return; var r = (c.recovery||[]).filter(function(x){ return x.name===name; })[0]; if(r && r.photos) delete r.photos[angleId]; renderCaseBody(c); }
+function toggleRecoveryItem(name){ var c = getCurrentCase(); if(!c) return; c.recovery = c.recovery || []; var i = c.recovery.findIndex(function(r){ return r.name===name; }); if(i>-1){ if((Object.keys(c.recovery[i].photos||{}).length || c.recovery[i].video) && !confirm('取消「'+name+'」？已上传的恢复照片 / 视频会清掉')) return; c.recovery.splice(i,1); } else c.recovery.push({name:name, part:followItemPart(name), video:null, photos:{}}); renderCaseBody(c); }
+function mockUploadRecovery(name, angleId){ var c = getCurrentCase(); if(!c) return; var r = (c.recovery||[]).filter(function(x){ return x.name===name; })[0]; if(!r) return; if(angleId==='video'){ r.video = {name:'恢复视频.mp4'}; } else { r.photos = r.photos||{}; r.photos[angleId] = {name:'恢复_'+angleId+'.jpg'}; } renderCaseBody(c); }
+function clearRecoveryPhoto(name, angleId){ var c = getCurrentCase(); if(!c) return; var r = (c.recovery||[]).filter(function(x){ return x.name===name; })[0]; if(r){ if(angleId==='video') r.video = null; else if(r.photos) delete r.photos[angleId]; } renderCaseBody(c); }
 function cancelFollowupLink(){ setLinkedCase(''); }
 function recoveryCardHtml(c, src){
   var done = followDoneItems(src), sel = c.recovery || [];
   var chips = done.map(function(n){ var on = sel.some(function(r){ return r.name===n; }); return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleRecoveryItem(\''+n.replace(/'/g,"\\'")+'\')">'+(on ? '✓ ' : '')+cesc(n)+'</button>'; }).join(' ') || '<span style="font-size:12px;color:var(--muted);">关联案件没有做过的项目</span>';
-  var blocks = sel.map(function(r){ var def = concernPartDef(r.part), nq = r.name.replace(/'/g,"\\'");
-    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">'+cesc(r.name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(r.part).label)+'</span></div><div style="display:flex;flex-wrap:wrap;gap:8px;">'+def.angles.map(function(a){ var f = (r.photos||{})[a.id];
+  var blocks = sel.map(function(r){ var sp = shootSpec(r.part, r.name), nq = r.name.replace(/'/g,"\\'");
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;overflow:hidden;">'+cesc(r.name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(r.part).label)+'</span>'+shootRefBtn(r.part, r.name)+'</div>'+(sp.video ? '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:center;"><span style="min-width:70px;font-size:12px;">视频（选填）</span><span style="font-size:13px;">'+(r.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+cesc(r.video.name)+'</span> <a href="#" style="font-size:12px;" onclick="clearRecoveryPhoto(\''+nq+'\',\'video\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadRecovery(\''+nq+'\',\'video\')">上传视频</button>')+'</span></div>' : '')+'<div style="display:flex;flex-wrap:wrap;gap:8px;">'+sp.angles.map(function(a){ var f = (r.photos||{})[a.id];
       return '<div style="width:124px;border:1px '+(f ? 'solid var(--sage)' : 'dashed var(--border)')+';border-radius:8px;padding:8px;text-align:center;background:'+(f ? 'var(--sage-bg)' : 'var(--surface2,#faf6ef)')+';"><div style="font-size:12px;font-weight:700;margin-bottom:6px;min-height:30px;">'+cesc(a.label)+'</div>'+(f ? '<div style="font-size:12px;color:var(--sage);word-break:break-all;">✓ '+cesc(f.name)+'</div><a href="#" style="font-size:12px;" onclick="clearRecoveryPhoto(\''+nq+'\',\''+a.id+'\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="mockUploadRecovery(\''+nq+'\',\''+a.id+'\')">上传</button>')+'</div>'; }).join('')+'</div></div>'; }).join('');
   return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">术后恢复（选填）</span><div style="flex-grow:1;"><div style="font-size:12px;color:var(--muted);margin-bottom:6px;">选做过的项目，按对应部位的角度拍恢复照片（'+CONCERN_PHOTO_SPEC+'）；照片进附件，KR 看得到。</div><div style="display:flex;flex-wrap:wrap;gap:6px;">'+chips+'</div>'+blocks+'</div></div>';
 }
@@ -2450,7 +2450,7 @@ function followupCardsHtml(c){
   var body = '';
   if(c.needsConsult===true){
     var done = followDoneItems(src), sel = c.followProjects || [];
-    body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">这次要看的项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;">'+(done.map(function(n){ var on = sel.indexOf(n)>-1; return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleFollowProject(\''+n.replace(/'/g,"\\'")+'\')">'+(on ? '✓ ' : '')+cesc(n)+'</button>'; }).join(' ') || '<span style="font-size:12px;color:var(--muted);">关联案件没有做过的项目</span>')+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">从关联案件 '+cesc(src ? src.caseNo : '')+' 做过的项目里选。'+(c.director ? '院长沿用原案件：'+cesc(c.director)+'（不用选）' : '')+'；面诊费免除原因默认「复诊」。</div></div></div>'+'<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">复诊想问的内容 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><textarea placeholder="例：右边下颚还肿，想问是否正常…" oninput="saveRevisitQuestion(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(c.revisitQuestion||'')+'</textarea></div></div>'+revisitMediaCardsHtml(c);
+    body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">这次要看的项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;">'+(done.map(function(n){ var on = sel.indexOf(n)>-1; return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleFollowProject(\''+n.replace(/'/g,"\\'")+'\')">'+(on ? '✓ ' : '')+cesc(n)+'</button>'; }).join(' ') || '<span style="font-size:12px;color:var(--muted);">关联案件没有做过的项目</span>')+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">从关联案件 '+cesc(src ? src.caseNo : '')+' 做过的项目里选。'+(c.director ? '院长沿用原案件：'+cesc(c.director)+'（不用选）' : '')+'；面诊费免除原因默认「复诊」。</div>'+revisitMediaCardsHtml(c)+'</div></div>'+'<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">复诊想问的内容 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><textarea placeholder="例：右边下颚还肿，想问是否正常…" oninput="saveRevisitQuestion(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(c.revisitQuestion||'')+'</textarea></div></div>';
   } else if(c.needsConsult===false){
     body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼（选填）</span><div style="flex-grow:1;"><textarea placeholder="客人的苦恼…" oninput="saveConcernText(this.value)" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(concernTextOf(c))+'</textarea></div></div>'+recoveryCardHtml(c, src);
   } else body += '<div class="case-field-row" style="border-bottom:none;"><span class="fk"></span><div style="flex-grow:1;font-size:12px;color:var(--muted);">选择面诊需求后继续</div></div>';
@@ -2493,6 +2493,45 @@ function followupAskDone(link){
   if(link && ctx.sel){ setLinkedCase(ctx.sel); logCaseEvent(c, actingName(), '到店：选择关联之前案件 '+caseNoLabel(ctx.sel)+'，走术后 / 复诊来访流程'); buildCaseLog(c); renderCaseSubtitle(c); }
   else { logCaseEvent(c, actingName(), '到店：不关联之前案件，走一般流程'); buildCaseLog(c); renderCaseBody(c); }
 }
+/* ===== CMD-1021-22 部位拍摄要求（KR 项目库设定，IN 各上传卡读）=====
+   HOSPITAL_DATA[h].partShoot[部位 key] = {angles:[角度 id], video:bool, refs:{角度 id:{name}}, note}（没设过的部位 = 现有角度配置 + 需要视频）；
+   施术项目 p.shoot = null（跟部位）| {angles, video, refs, note}（本项目另设，部位设定改了没另设的项目跟着变）；管理项目没有这套设定。
+   上传时读项目库当前设定（不做快照）；角度改了，已上传的旧资料照旧显示、不要求补拍（显示时把旧角度并进来）。 */
+function shootHid(){ try{ if(typeof isKrAccount==='function' && isKrAccount()) return krHospitalIdOfMe(); }catch(e){} return clinicHospital(CURRENT_CLINIC_ID); }
+function shootDemoSeed(hid){
+  var h = HOSPITAL_DATA[hid]; if(!h || h._shootDemo) return; h._shootDemo = true; h.partShoot = h.partShoot || {};
+  if(!h.partShoot.f_cheekbone) h.partShoot.f_cheekbone = {angles:['front','lside','rside','l45','r45'], video:true, refs:{front:{name:'参考_颧骨_正面.jpg'}, lside:{name:'参考_颧骨_左正侧.jpg'}}, note:'头发扒到耳后，不戴首饰，表情自然放松'};
+  if(!h.partShoot.f_jaw) h.partShoot.f_jaw = {angles:['front','lside','rside','l45'], video:false, refs:{front:{name:'参考_下颚_正面.jpg'}}, note:'张嘴 / 闭嘴各一张'};
+  var jp = (h.projects||[]).filter(function(p){ return p.name==='下颚角整形'; })[0]; if(jp && !jp.shoot) jp.shoot = {angles:['front','lside','rside','l45','r45'], video:true, refs:{front:{name:'参考_下颚角整形_正面.jpg'}, l45:{name:'参考_下颚角整形_左45.jpg'}}, note:'张嘴 / 闭嘴各一张、头发扒到耳后'};
+}
+function shootProjOf(hid, name){ return ((HOSPITAL_DATA[hid]||{}).projects||[]).filter(function(p){ return p.name===name; })[0]; }
+function shootPartSetting(hid, part){ return (((HOSPITAL_DATA[hid]||{}).partShoot)||{})[partBase(concernPartDef(part).key||part)] || null; }
+function shootSpec(part, projName){
+  var hid = shootHid(); shootDemoSeed(hid);
+  var def = concernPartDef(part), p = projName ? shootProjOf(hid, projName) : null, src = (p && p.shoot) ? p.shoot : shootPartSetting(hid, part);
+  var angles = (src && Array.isArray(src.angles)) ? src.angles.filter(function(id){ return CONCERN_ANGLE[id]; }).map(function(id){ return {id:id, label:CONCERN_ANGLE[id]}; }) : def.angles;
+  return {angles:angles, video: src ? !!src.video : true, refs:(src && src.refs) || {}, note:(src && src.note) || '', own:!!(p && p.shoot), part:part};
+}
+function shootHasRef(sp){ return sp.angles.some(function(a){ return sp.refs[a.id]; }) || !!String(sp.note||'').trim(); }
+/* 显示（只读）用：当前设定的角度在前，已上传但不在当前设定里的旧角度并在后面 */
+function shootShowAngles(sp, photos){
+  var out = sp.angles.slice(); Object.keys(photos||{}).forEach(function(id){ if(!out.some(function(a){ return a.id===id; })) out.push({id:id, label:CONCERN_ANGLE[id] || id}); }); return out;
+}
+function shootRefBtn(part, projName){
+  var sp = shootSpec(part, projName), on = shootHasRef(sp), q = String(projName||'').replace(/'/g,"\\'");
+  return on ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;float:right;" onclick="shootRefOpen(\''+part+'\',\''+q+'\')">视角参考</button>'
+    : '<span title="KR 未提供视角参考" style="float:right;display:inline-block;"><button class="btn-outline" disabled style="padding:3px 10px;font-size:12px;opacity:.4;cursor:not-allowed;">视角参考</button></span>';
+}
+function shootRefOpen(part, projName){
+  var sp = shootSpec(part, projName), title = '视角参考 · '+(projName || concernPartDef(part).label), viewer = (typeof isKrAccount==='function' && isKrAccount()) ? 'KR' : 'IN';
+  var ov = document.getElementById('shoot-ref-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'shoot-ref-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:560px;max-width:92vw;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">'+cesc(title)+'</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;">'+sp.angles.map(function(a){ var r = sp.refs[a.id];
+      return '<div style="width:150px;border:1px solid var(--border2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">'+cesc(a.label)+'</div><div style="height:120px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;'+(r ? 'background:var(--sage-bg);color:var(--sage);word-break:break-all;padding:4px;' : 'background:#F1EEE8;color:var(--muted);')+'">'+(r ? cesc(r.name)+'<br>（原型占位图）' : '未提供参考图')+'</div></div>'; }).join('')+'</div>'+
+    (String(sp.note||'').trim() ? '<div style="font-size:12px;font-weight:700;margin:12px 0 4px;">KR 的说明</div><div style="padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;">'+noteTextHtml({id:'shn'+part+String(projName||''), text:sp.note, role:'KR'}, viewer)+'</div>' : '')+
+    '<div style="display:flex;justify-content:flex-end;margin-top:16px;"><button class="btn-outline" onclick="document.getElementById(\'shoot-ref-overlay\').classList.remove(\'open\')">关闭</button></div></div>';
+  ov.style.zIndex = 100030; ov.classList.add('open');
+}
 function concernMediaOptional(c){ return c.needsConsult===false; } /* 选「不面诊」：照片 / 视频改选填 */
 /* 缺哪些：返回文字列表（confirmMaterials 的缺项弹窗用） */
 function concernMissing(c){
@@ -2500,18 +2539,18 @@ function concernMissing(c){
   if(c.followup && c.needsConsult===false) return []; /* CMD-1021-18：术后来访不面诊 = 메타뷰 / 苦恼都选填 */
   if(c.followup && c.needsConsult===true){ /* CMD-1021-21 复诊：至少一个项目 + 复诊想问的内容必填；每个项目的视频 + 各角度照片沿用一般面诊部位卡的规则（必填，希望预期 / 苦恼部位不再要） */
     var o2 = []; if(!(c.followProjects||[]).length) o2.push('这次要看的项目（从做过的项目里选）'); if(!String(c.revisitQuestion||'').trim()) o2.push('复诊想问的内容');
-    (c.revisitMedia||[]).forEach(function(m){ var def = concernPartDef(m.part); if(!m.video) o2.push(m.name+'：视频'); var miss = def.angles.filter(function(a){ return !(m.photos||{})[a.id]; }).map(function(a){ return a.label; }); if(miss.length) o2.push(m.name+'：照片（'+miss.join('、')+'）'); });
+    (c.revisitMedia||[]).forEach(function(m){ var sp = shootSpec(m.part, m.name); if(sp.video && !m.video) o2.push(m.name+'：视频'); var miss = sp.angles.filter(function(a){ return !(m.photos||{})[a.id]; }).map(function(a){ return a.label; }); if(miss.length) o2.push(m.name+'：照片（'+miss.join('、')+'）'); });
     return o2;
   }
   if(c.needsConsult===false){ return String(concernTextOf(c)||'').trim() ? [] : ['苦恼（手写）']; } /* 不面诊：没有部位卡，只要手写苦恼 */
   if(!cards.length) return ['苦恼（请先选部位）'];
   cards.forEach(function(x){
-    var def = concernPartDef(x.part), nm = concernCardTitle(x);
+    var def = concernPartDef(x.part), sp = shootSpec(x.part), nm = concernCardTitle(x);
     if(!String(x.desc||'').trim()) out.push(nm+'：苦恼说明');
     if(!String(x.expect||'').trim()) out.push(nm+'：希望预期');
     if(concernMediaOptional(c)) return;
-    if(!x.video) out.push(nm+'：视频');
-    var miss = def.angles.filter(function(a){ return !(x.photos||{})[a.id]; }).map(function(a){ return a.label; });
+    if(sp.video && !x.video) out.push(nm+'：视频');
+    var miss = sp.angles.filter(function(a){ return !(x.photos||{})[a.id]; }).map(function(a){ return a.label; });
     if(miss.length) out.push(nm+'：照片（'+miss.join('、')+'）');
   });
   return out;
@@ -2556,15 +2595,15 @@ function concernFormHtml(c){
       return '<div style="margin:4px 0 0 4px;font-size:12px;"><span style="color:var(--muted);">'+p.label+'：</span>'+CONCERN_SUBS[p.subs].map(function(s){ var on = !!concernFind(c, p.key+'|'+s.key); return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleConcernPart(\''+p.key+'\',\''+s.key+'\')">'+(on ? '✓ ' : '')+s.label+'</button>'; }).join(' ')+'</div>'; }).join('');
     return '<div style="margin-top:8px;"><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"><b style="font-size:12px;min-width:34px;">'+g.label+'</b>'+chips+'</div>'+subRows+'</div>'; }).join('');
   var cardHtml = function(x){
-    var def = concernPartDef(x.part), cid = concernCid(x), cq = cid.replace(/'/g,''), vid = x.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+cesc(x.video.name)+'</span> <a href="#" style="font-size:12px;" onclick="clearConcernMedia(\''+cq+'\',\'video\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadConcern(\''+cq+'\',\'video\')">上传视频</button>';
-    var slots = def.angles.map(function(a){ var f = (x.photos||{})[a.id];
+    var def = concernPartDef(x.part), sp = shootSpec(x.part), cid = concernCid(x), cq = cid.replace(/'/g,''), vid = x.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+cesc(x.video.name)+'</span> <a href="#" style="font-size:12px;" onclick="clearConcernMedia(\''+cq+'\',\'video\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadConcern(\''+cq+'\',\'video\')">上传视频</button>';
+    var slots = sp.angles.map(function(a){ var f = (x.photos||{})[a.id];
       return '<div style="width:124px;border:1px '+(f ? 'solid var(--sage)' : 'dashed var(--border)')+';border-radius:8px;padding:8px;text-align:center;background:'+(f ? 'var(--sage-bg)' : 'var(--surface2,#faf6ef)')+';"><div style="font-size:12px;font-weight:700;margin-bottom:6px;min-height:30px;">'+cesc(a.label)+'</div>'+
         (f ? '<div style="font-size:12px;color:var(--sage);word-break:break-all;">✓ '+cesc(f.name)+'</div><a href="#" style="font-size:12px;" onclick="clearConcernMedia(\''+cq+'\',\''+a.id+'\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="mockUploadConcern(\''+cq+'\',\''+a.id+'\')">上传</button>')+'</div>'; }).join('');
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fff;">'+
-      '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">'+cesc(concernCardTitle(x))+'</div>'+
+      '<div style="font-size:13px;font-weight:700;margin-bottom:8px;overflow:hidden;">'+cesc(concernCardTitle(x))+shootRefBtn(x.part, '')+'</div>'+
       '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:7px;">苦恼说明 <span style="color:var(--terracotta);">*</span></span><textarea placeholder="为什么烦恼…" oninput="saveConcernDesc(\''+cq+'\',this.value)" style="flex:1;min-height:52px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(x.desc||'')+'</textarea></div>'+
       '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:7px;">希望预期'+(c.followup ? '（选填）' : ' <span style="color:var(--terracotta);">*</span>')+'</span><textarea placeholder="希望达到的效果…" oninput="saveConcernExpect(\''+cq+'\',this.value)" style="flex:1;min-height:40px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(x.expect||'')+'</textarea></div>'+
-      '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:center;"><span style="min-width:70px;font-size:12px;">视频'+(c.followup ? '（选填）' : mark)+'</span><span style="font-size:13px;">'+vid+'</span></div>'+
+      (sp.video ? '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:center;"><span style="min-width:70px;font-size:12px;">视频'+(c.followup ? '（选填）' : mark)+'</span><span style="font-size:13px;">'+vid+'</span></div>' : '')+
       '<div style="display:flex;gap:10px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:4px;">照片'+mark+'<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.4;">'+CONCERN_PHOTO_SPEC+'<br>每个角度一张</div></span><div style="display:flex;flex-wrap:wrap;gap:8px;">'+slots+'</div></div></div>';
   };
   var groupsCards = CONCERN_GROUPS.concat([{key:'', label:'未分部位'}]).map(function(g){ var l = cards.filter(function(x){ return concernGroupOf(x)===g.key; }); return l.length ? '<div style="margin-top:12px;font-size:12px;font-weight:700;color:var(--slate2);">'+g.label+'</div>'+l.map(cardHtml).join('') : ''; }).join('');
@@ -2591,10 +2630,10 @@ function concernCardsHtml(c, o){
   var cards = concernCards(c).slice().sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); });
   if(!cards.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">没有苦恼资料</div>';
   var one = function(x){
-    var def = concernPartDef(x.part), cid = concernCid(x), pk = cid.replace(/'/g,'');
+    var def = concernPartDef(x.part), sp = shootSpec(x.part), cid = concernCid(x), pk = cid.replace(/'/g,'');
     var vid = x.video ? '<a href="#" class="info-link" onclick="concernZoom(\''+pk+'\',\'video\');return false;">▶ '+cesc(x.video.name)+'</a>' : '<span style="color:var(--muted);">—</span>';
     var photos = x.legacy ? (Object.keys(x.photos||{}).length ? '<span style="font-size:12px;color:var(--slate2);">'+cesc((x.photos.legacy||{}).name||'照片')+'（旧案件没有分角度）</span>' : '<span style="color:var(--muted);">—</span>') :
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;">'+def.angles.map(function(a){ var f = (x.photos||{})[a.id];
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;">'+shootShowAngles(sp, x.photos).map(function(a){ var f = (x.photos||{})[a.id];
         return '<div style="width:92px;border:1px solid var(--border2);border-radius:8px;padding:6px;text-align:center;font-size:12px;'+(f ? 'cursor:pointer;" onclick="concernZoom(\''+pk+'\',\''+a.id+'\')"' : 'color:var(--muted);"')+'><div style="font-weight:700;min-height:28px;">'+cesc(a.label)+'</div>'+(f ? '<div style="color:var(--sage);word-break:break-all;">'+cesc(f.name)+'</div>' : '未上传')+'</div>'; }).join('')+'</div>';
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+cesc(concernCardTitle(x))+(o.supp ? '<span style="float:right;font-weight:400;font-size:12px;"><a href="#" class="info-link" onclick="supplementUpload(\'photo\');return false;">补充照片</a>　<a href="#" class="info-link" onclick="supplementUpload(\'video\');return false;">补充视频</a></span>' : '')+'</div>'+
       '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">苦恼说明　</span>'+(cesc(x.desc||'') || '—')+'</div>'+
@@ -2974,7 +3013,7 @@ function caseAttachments(c){
   else { if(c.photoUploaded) list.push({src:'基础资料', label:'照片', date:base});
   if(c.videoUploaded) list.push({src:'基础资料', label:'视频', date:base}); }
   (c.revisitMedia||[]).forEach(function(m){ var n = Object.keys(m.photos||{}).length; if(m.video) list.push({src:'基础资料', label:'复诊 · '+m.name+'视频', date:base}); if(n) list.push({src:'基础资料', label:'复诊 · '+m.name+'照片（'+n+' 张）', date:base}); }); /* CMD-1021-21：复诊按项目的视频 / 照片进附件 */
-  (c.recovery||[]).forEach(function(r){ var n = Object.keys(r.photos||{}).length; if(n) list.push({src:'基础资料', label:'术后恢复 · '+r.name+'照片（'+n+' 张）', date:base}); }); /* CMD-1021-18：术后恢复照片进附件，KR 看得到 */
+  (c.recovery||[]).forEach(function(r){ var n = Object.keys(r.photos||{}).length; if(r.video) list.push({src:'基础资料', label:'术后恢复 · '+r.name+'视频', date:base}); if(n) list.push({src:'基础资料', label:'术后恢复 · '+r.name+'照片（'+n+' 张）', date:base}); }); /* CMD-1021-18：术后恢复照片进附件，KR 看得到 */
   (c.linkedFiles||[]).forEach(function(f){ list.push({src:'基础资料', label:f.label, date:f.date||base}); });
   (c.manualAttachments||[]).forEach(function(f){ list.push({src:f.src||'基础资料', label:f.label, date:f.date||base}); });
   (c.consultFiles||[]).forEach(function(f){ list.push({src:'面诊资料', label:f.label, date:f.date||base}); });

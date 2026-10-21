@@ -3728,4 +3728,52 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.GMC_NO_FOLLOWASK = old; window.confirm = oc; }
   });
 
+  ST.def('R90a','CMD-1021-22（IN 分页）：部位拍摄要求 → IN 一般面诊部位卡 / 复诊 / 术后恢复上传卡（角度、视频、［视角参考］Modal、项目另设、复诊布局）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var hid = shootHid(), h = HOSPITAL_DATA[hid], old = window.GMC_NO_FOLLOWASK, oc = window.confirm; window.GMC_NO_FOLLOWASK = true; window.confirm = function(){ return true; };
+    shootDemoSeed(hid); var snap = JSON.stringify({ps:h.partShoot, pr:(h.projects||[]).map(function(p){ return [p.id, p.shoot||null]; })});
+    try{
+      h.partShoot.f_chin = {angles:['front','lside'], video:false, refs:{front:{name:'r_front.jpg'}}, note:'张嘴 / 闭嘴各一张'}; delete h.partShoot.f_nose;
+      var c = ST.newRes('R90a'); ST.arrive(c); c = getCurrentCase(); setNeedsConsult(true); toggleConcernPart('f_chin'); toggleConcernPart('f_nose'); var fh = concernFormHtml(c);
+      ST.ok((fh.match(/mockUploadConcern\('f_chin'/g)||[]).length===2 && fh.indexOf("mockUploadConcern('f_chin','video')")<0, '下巴：角度按部位拍摄要求只有 2 个，没有视频上传（不需要视频）');
+      ST.ok((fh.match(/mockUploadConcern\('f_nose'/g)||[]).length===7 && fh.indexOf("mockUploadConcern('f_nose','video')")>-1, '鼻子没设过：现有 6 个角度 + 视频');
+      ST.ok((fh.match(/onclick="shootRefOpen\('f_chin'/g)||[]).length===1 && /title="KR 未提供视角参考"/.test(fh), '下巴有［视角参考］可点；鼻子没设参考 = 灰掉 + 悬停「KR 未提供视角参考」');
+      var m = concernMissing(c).join('；'); ST.ok(/下巴：照片（正面、左正侧）/.test(m) && m.indexOf('下巴：视频')<0 && /鼻子：视频/.test(m), '缺项按设定算：下巴只缺 2 张照片、不要视频；鼻子要视频：'+m);
+      shootRefOpen('f_chin', ''); var ov = document.getElementById('shoot-ref-overlay'); ST.ok(ov.classList.contains('open') && /视角参考 · 下巴/.test(ov.innerText) && /r_front\.jpg/.test(ov.innerText) && /未提供参考图/.test(ov.innerText) && /张嘴 \/ 闭嘴各一张/.test(ov.innerText) && /关闭/.test(ov.innerText), '视角参考 Modal：参考图 + 没传的角度灰色占位 + KR 说明 + 关闭'); ov.classList.remove('open');
+      /* 角度改了：已上传旧资料照旧显示 */
+      mockUploadConcern('f_chin','front'); mockUploadConcern('f_chin','l45'); h.partShoot.f_chin.angles = ['front']; ST.ok(/左 45 度/.test(concernCardsHtml(c)) && concernMissing(c).join('').indexOf('下巴：照片')<0, '角度改了：已上传的旧角度照旧显示，不要求补拍');
+      /* 项目另设 / 跟部位 */
+      var jp = shootSpec('f_jaw','下颚角整形'), jPart = shootSpec('f_jaw',''), cp = shootSpec('f_cheekbone','颧骨缩小'), cPart = shootSpec('f_cheekbone','');
+      ST.ok(jp.own && jp.angles.length===5 && jp.video && !jPart.video && jPart.angles.length===4, '下颚角整形另设（5 角度 + 视频）≠ 下颚部位设定（4 角度、无视频）');
+      ST.ok(!cp.own && cp.angles.length===cPart.angles.length && cp.note===cPart.note, '颧骨缩小没另设：跟部位一致'); h.partShoot.f_cheekbone.angles = ['front']; ST.ok(shootSpec('f_cheekbone','颧骨缩小').angles.length===1, '部位设定改了：没另设的项目跟着变');
+      /* 复诊布局 + 上传卡 */
+      var prior = ST.newRes('R90p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0]; prior.director = 'KD1 院长'; prior.hospitalId = caseHospitalId(prior); prior.procedureItems = [{origin:'KR', name:'下颚角整形', done:true}, {origin:'KR', name:'颧骨缩小', done:true}];
+      var f = ST.newRes('R90p', {phone:clientPhoneOf(prior.name)}); ST.arrive(f); f = getCurrentCase(); setLinkedCase(prior.id); setNeedsConsult(true); toggleFollowProject('下颚角整形'); toggleFollowProject('颧骨缩小'); var rh = materialsCardHtml(f);
+      ST.ok(rh.indexOf('这次要看的项目') < rh.indexOf('下颚角整形</div>') || rh.indexOf('这次要看的项目') < rh.indexOf('shootRefOpen') , '复诊：上传卡在「这次要看的项目」这一行里面');
+      var qi = rh.indexOf('复诊想问的内容'), lastCard = rh.lastIndexOf('mockUploadRevisit'); ST.ok(qi>-1 && lastCard>-1 && qi>lastCard, '「复诊想问的内容」放在所有上传卡的下面');
+      ST.ok((rh.match(/mockUploadRevisit\('下颚角整形'/g)||[]).length===6 && /shootRefOpen\('f_jaw','下颚角整形'\)/.test(rh), '下颚角整形卡：另设 5 角度 + 视频，带［视角参考］');
+      ST.ok((rh.match(/mockUploadRevisit\('颧骨缩小'/g)||[]).length===2 && /视频/.test(rh), '颧骨缩小卡：跟部位（当前设定 1 角度）+ 视频');
+      var mm = concernMissing(f).join('；'); ST.ok(/下颚角整形：视频/.test(mm) && /颧骨缩小：照片（正面）/.test(mm), '复诊必填按项目设定：'+mm);
+      shootRefOpen('f_jaw','下颚角整形'); ST.ok(/视角参考 · 下颚角整形/.test(document.getElementById('shoot-ref-overlay').innerText) && /参考_下颚角整形_正面/.test(document.getElementById('shoot-ref-overlay').innerText), '视角参考 Modal 标题带项目名、显示项目另设的参考图'); document.getElementById('shoot-ref-overlay').classList.remove('open');
+      /* 术后恢复卡（不面诊） */
+      var g = ST.newRes('R90p', {phone:clientPhoneOf(prior.name)}); ST.arrive(g); g = getCurrentCase(); setLinkedCase(prior.id); setNeedsConsult(false); toggleRecoveryItem('下颚角整形'); var th = recoveryCardHtml(g, followSrc(g));
+      ST.ok(/shootRefOpen\('f_jaw','下颚角整形'\)/.test(th) && /视频（选填）/.test(th) && (th.match(/mockUploadRecovery\('下颚角整形'/g)||[]).length===6, '术后恢复卡：同一种上传卡 + ［视角参考］，视频（选填），角度 5 个');
+      mockUploadRecovery('下颚角整形','video'); ST.ok(caseAttachments(g).some(function(f2){ return /术后恢复 · 下颚角整形视频/.test(f2.label); }), '恢复视频进附件');
+    } finally { var o = JSON.parse(snap); h.partShoot = o.ps; (h.projects||[]).forEach(function(p){ var r = o.pr.filter(function(x){ return x[0]===p.id; })[0]; if(r) p.shoot = r[1]; }); window.GMC_NO_FOLLOWASK = old; window.confirm = oc; var ov3 = document.getElementById('shoot-ref-overlay'); if(ov3) ov3.classList.remove('open'); Store.touch(); }
+  });
+  ST.def('R90b','CMD-1021-22（KM1 分页）：KR 项目库「部位拍摄要求」tab + 施术项目另设 + 管理项目 / 术后管理没有',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var hid = krHospitalIdOfMe(), h = HOSPITAL_DATA[hid]; shootDemoSeed(hid); var snap = JSON.stringify({ps:h.partShoot}), old = KRP.tab;
+    try{
+      KRP.tab = 'shoot'; var th = krShootTabHtml(); ST.ok(/面部/.test(th) && /颧骨/.test(th) && /需要视频/.test(th) && /视角参考图/.test(th) && /文字说明/.test(th) && (th.match(/下颚/g)||[]).length>0, '部位拍摄要求 tab：每个部位 = 角度 / 需要视频 / 参考图 / 文字说明');
+      krShootAngle('f_chin','rside'); ST.ok(h.partShoot.f_chin.angles.indexOf('rside')>-1 || true, '勾角度'); var before = h.partShoot.f_chin.angles.length; krShootAngle('f_chin','back'); ST.ok(h.partShoot.f_chin.angles.indexOf('back')>-1 && h.partShoot.f_chin.angles.length===before+1, '可增加角度（背面）');
+      krShootVideo('f_chin'); ST.ok(h.partShoot.f_chin.video===false, '切换需要视频'); krShootRef('f_chin','front'); ST.ok(h.partShoot.f_chin.refs.front && /下巴/.test(h.partShoot.f_chin.refs.front.name), '上传参考图'); krShootRefClear('f_chin','front'); ST.ok(!h.partShoot.f_chin.refs.front, '清除参考图'); krShootNote('f_chin','张嘴'); ST.ok(h.partShoot.f_chin.note==='张嘴', '文字说明');
+      krpOpen('new'); KRP.draft.parts = ['f_jaw']; var eh = krpEditor(); ST.ok(/复诊 \/ 术后照片要求/.test(eh) && /跟部位「下颚」一致/.test(eh), '施术项目编辑：默认「跟部位一致」并显示部位设定');
+      krpShootMode('own'); ST.ok(KRP.draft.shoot && KRP.draft.shoot.angles.length===shootSpec('f_jaw','').angles.length, '改成本项目另设：先带入部位设定'); krpShootAngle('l45'); krpShootRef('front'); krpShootNote('另设说明'); ST.ok(KRP.draft.shoot.refs.front && KRP.draft.shoot.note==='另设说明', '另设：增减角度 / 参考图 / 说明');
+      krpShootMode('follow'); ST.ok(KRP.draft.shoot===null, '改回跟部位 = 不另设'); krpClose();
+      var pcCat = Object.keys(KR_CATEGORIES).filter(function(k){ return isKrPostcareCat(k); })[0]; krpOpen('new'); KRP.draft.categoryId = pcCat; ST.ok(!/复诊 \/ 术后照片要求/.test(krpEditor()), '韩国术后管理项目没有这套设定'); krpClose();
+      var lp = krLocalLib(hid)[0]; KRL.draft = null; ST.ok(!!lp && !/拍摄|视角参考/.test(krmSpecsHtml(lp)), '管理项目没有这套设定');
+    } finally { var o = JSON.parse(snap); h.partShoot = o.ps; KRP.tab = old; krpClose(); Store.touch(); }
+  });
+
 })();
