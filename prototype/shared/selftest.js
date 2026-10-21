@@ -2538,6 +2538,39 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var tn2 = krLocalLib(hid).filter(function(p){ return p.name==='钛提升'; })[0]; if(tn2) tn2.active = true; KRL.draft = null; KRL.edit = null; KRP.tab = 'surg'; KRP.part = ''; KRL.cat = ''; Store.touch();
     }
   });
+  ST.def('R73a','CMD-1021-03（KM1 分页，需要 stageC 夹具）：行备注存得住（不重画、完成后仍显示、增加项目行的备注搬到项目上）/ 项目进程 memo 不限次数记录 / 完成后可见可补写 / IN 只读 / 状态只写「已完成」',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, iid = '';
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c);
+      c.krSchedule.confirmedDate = todayStr(); c.hasArrived = true; c.krSchedule.status = 'arrived'; c.krBalancePaid = true; c.krJudge = {result:'ok'}; c.todayPicked = false; c.visitClosed = false; c.krProcedureDone = false; c.krProgressMemos = null; c.krProgressMemo = '';
+      c.procedureItems.push({origin:'KR', name:'钛提升 · 40kj·3次', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:3, firstDay:1, interval:2, local:true, mgmtPlan:true, batchId:'B1'}); ensureItemIids(c); iid = c.procedureItems[c.procedureItems.length-1].iid; });
+    var gc = function(){ return krFindCase(r.clinicId, r.id).c; };
+    try{
+      krShowCase(r.clinicId, r.id); krSetCaseTab('items');
+      var inp = document.querySelector('input[placeholder="备注"][onchange*="'+iid+'"]'); ST.ok(!!inp && /Enter/.test(inp.getAttribute('onkeydown')||''), '行备注输入框：离开输入框 / 按 Enter 保存');
+      krItemNote(iid, '钛提升备注A'); ST.ok(document.body.contains(inp) && gc().procedureItems.filter(function(x){ return x.iid===iid; })[0].todayNote==='钛提升备注A', '保存备注不整页重画（紧接着点［操作完成］不会被吃掉）');
+      krMgmtUse(iid); krSetCaseTab('items'); var txt = document.getElementById('kr-casedetail').innerText.replace(/\s+/g, ' ');
+      ST.ok(/钛提升备注A/.test(txt) && /已完成/.test(txt) && !/已完成\s*（剩/.test(txt) && !/已完成 ×/.test(txt), '完成后备注仍显示（只读）；状态只写「已完成」，不再写「（剩 N 次）」');
+      /* 增加项目行上写的备注，转成持有项目时搬到项目上 */
+      Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; var it2 = {origin:'KR', name:'热玛吉 · 300发', price:1300000, currency:'KRW', qty:1, copies:1, local:true, mgmtPlan:true, krAddOn:true, pendingPay:true, batchId:'', specLabel:'300发'}; c.procedureItems.push(it2); ensureItemIids(c); c.subItems.push({id:'tn1', no:'x-99', kind:'增加项目', projectName:'热玛吉 · 300发', content:'热玛吉 · 300发', date:todayStr(), note:'行备注X', done:false, place:'KR'}); holdLocalAdd(c, it2);
+        ST.ok(it2.todayNote==='行备注X' && !(c.subItems||[]).some(function(x){ return x.id==='tn1'; }), '增加项目行的备注转成持有项目时搬到项目上，不随行一起丢'); });
+      /* 项目进程 memo：连写 3 则 */
+      krSetCaseTab('items'); var ta = document.getElementById('kr-pmemo'); ST.ok(!!ta, '项目进程 memo：输入框 + ［保存］');
+      ['第一则：客人住酒店', '第二则：复诊提醒', '第三则：改约'].forEach(function(t0){ var el = document.getElementById('kr-pmemo'); el.value = t0; krMemoAdd(); });
+      var list = krMemoList(gc()); ST.ok(list.length===3 && list[0].text==='第三则：改约' && list[2].text==='第一则：客人住酒店' && list.every(function(m){ return !!m.at && /KM1/.test(m.by); }), '不限次数、最新在上，每则带时间 + 作者：'+list.map(function(m){ return m.text+'｜'+m.by; }).join(' / '));
+      var cardTxt = document.getElementById('kr-pmemo').closest('.card').innerText; ST.ok(/3 则/.test(cardTxt) && cardTxt.indexOf('第三则')<cardTxt.indexOf('第一则') && document.getElementById('kr-pmemo').value==='', '页面上列成一则一则，输入框清空可继续写');
+      ST.ok(JSON.stringify(gc()).split('项目进程 memo：').length-1>=3 && tlTypeOf({action:'项目进程 memo：x'})==='talk', '每则 memo 进 Timeline，类型归「沟通」');
+      /* 到院结束之后仍显示、仍可补写 */
+      Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.krProcedureDone = true; c.visitClosed = true; }); krSetCaseTab('items');
+      ST.ok(!!document.getElementById('kr-pmemo') && /第一则/.test(document.getElementById('kr-pmemo').closest('.card').innerText), '到院结束 / 已完成之后 memo 照样显示'); document.getElementById('kr-pmemo').value = '结束后补写'; krMemoAdd(); ST.ok(krMemoList(gc()).length===4 && krMemoList(gc())[0].text==='结束后补写', '完成后仍可补写');
+      /* IN 只读 */
+      ST.ok(/第三则/.test(krTimelineTabHtml(gc())) && !/textarea/.test(krTimelineTabHtml(gc())), 'IN 端（赴韩施术 tab 的项目进程）只读显示全部 memo');
+      /* 旧的单条 memo 迁成第一则 */
+      Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.krProgressMemos = null; c.krProgressMemo = '旧的 memo 文字'; }); ST.ok(krMemoList(gc())[0].text==='旧的 memo 文字', '旧 memo 未迁移前也能显示');
+      Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; ST.ok(migrateProgressMemo(c) && c.krProgressMemos.length===1 && c.krProgressMemos[0].text==='旧的 memo 文字' && !c.krProgressMemo && !migrateProgressMemo(c), '旧的单条 memo 迁成第一则（幂等）'); });
+    } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
   /* CMD-1020-16 一（KM1 分页；IN 分页测 IN 的 KR 医院日程）：「医院」视图预约小标签——不按时长拉长、整栏宽、按开始时间上下排、一格超过 6 个显示 5 个 + 「+N 个预约」、点开列出全部；院长视图仍按时长画块 */
   ST.def('R68a','CMD-1020-16：医院视图预约改小标签（高度 = 一小时格 1/6，整栏宽，按开始时间排，>6 个显示 5 个 + +N 个预约）；院长视图不变',function(){
     var me = currentAccount(), kr = isKrAccount(), hid = kr ? krHospitalIdOfMe() : krViewHospital(), h = HOSPITAL_DATA[hid], dir = hospitalDirectors(hid).filter(function(d){ return d.active; })[0].name;

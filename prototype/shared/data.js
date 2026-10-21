@@ -2870,7 +2870,7 @@ function tlStageOf(e){
 function tlTypeOf(e){
   var a = String(e.action||'');
   if(/金额|付款|定金|尾款|退款|结算|收款|Rp|₩|面诊费|置换|免除/.test(a)) return 'money';
-  if(/对话|来电|视频|通话|催办|电话|短信|发送给客人|通知客人|@|商谈|转告|提醒/.test(a)) return 'talk';
+  if(/对话|来电|视频|通话|催办|电话|短信|发送给客人|通知客人|@|商谈|转告|提醒|项目进程 memo/.test(a)) return 'talk'; /* memo 归「沟通」（CMD-1021-03） */
   if(/上传|基础资料|护照|补充|附件|메타뷰|医美史|同意书|诊疗方案|客人资料|病史|过敏/.test(a)) return 'data';
   return 'progress';
 }
@@ -4848,7 +4848,7 @@ function subItemRowHtml(s, cells){
 }
 function krTimelineTabHtml(c){
   subCaseNos(c);
-  var list = (c.subItems||[]).slice().sort(function(a, b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); }).map(function(s){ return subItemRowHtml(s); }).join('')+(c.krProgressMemo ? '<div style="font-size:12px;color:var(--slate2);margin-top:8px;white-space:pre-wrap;"><b>项目进程 memo：</b>'+String(c.krProgressMemo).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '');
+  var list = (c.subItems||[]).slice().sort(function(a, b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); }).map(function(s){ return subItemRowHtml(s); }).join('')+(krMemoList(c).length ? '<div style="margin-top:8px;"><b style="font-size:12px;">项目进程 memo（KR 写，只读）</b>'+krMemoList(c).map(function(m){ return '<div style="font-size:12px;padding:5px 0;border-top:1px solid var(--border2);"><span style="color:var(--muted);">'+(m.at ? fmtUtc(m.at).slice(2, 16) : '—')+' · '+String(m.by||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span><div style="color:var(--slate2);white-space:pre-wrap;">'+String(m.text).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div></div>'; }).join('')+'</div>' : '');
   return '<div class="info-heading" style="margin-bottom:8px;">项目进程（KR 室长整理，只读）</div>'+
     (list ? subGridHeadHtml()+list : '<div style="font-size:13px;color:var(--muted);padding:10px 0;">KR 还没有整理项目进程（付定金后由 KR 室长整理，整理好会通知你）</div>')+
     '<div style="font-size:12px;color:var(--muted);margin-top:10px;">可据此安排机票、住宿；客人端暂不显示。施术一行由案件自动产生；术后管理记录是免费的记录；增加项目是到院后加做、需要结账的项目。每一行是案件下的一个子项（编号 '+(c.caseNo||'A000001')+'-01、-02……，悬停可看）。</div>';
@@ -5183,6 +5183,7 @@ function repairVisitState(){
     (c.procedureItems||[]).forEach(function(it){ /* CMD-1020-17：旧的待付款管理项目（还没进持有）转成持有项目，只转换不删除；待付款标记和金额不变 */
       if(it.pendingPay && !it.heldOver && !it.service && !it.cancelled && !it.swapped && krIsMgmtItemC(it) && holdLocalAdd(c, it)){ logCaseEvent(c, '系统', '修正旧数据：待付款管理项目「'+buyName(it.name)+'」转为持有项目（待付款不变）'); n++; }
     });
+    if(migrateProgressMemo(c)) n++; /* CMD-1021-03：旧的项目进程 memo 迁成第一则记录 */
     var fx = fixUseRecords(c); if(fx.length){ fx.forEach(function(t){ logCaseEvent(c, '系统', '修正使用记录：'+t); }); n += fx.length; }
     if(c.krProcedureDone && !c.visitClosed && c.hasArrived && c.krBalancePaid && todayOpenRows(c).length){ c.krProcedureDone = false; c.surgeryDoneAt = ''; c.endAsk = false; logCaseEvent(c, '系统', '重新打开今日到院（修正旧数据：今天还有待做项目 '+todayOpenRows(c).map(function(x){ return x.name; }).join('、')+'）'); try{ updateCaseStage(c); }catch(e){} n++; }
   });
@@ -5283,6 +5284,7 @@ function holdLocalAdd(c, it){
   if(it.heldOver || it.cancelled || it.swapped) return false;
   it.heldOver = true; it.holdDone = false; it.holdUsed = 0; it.done = true; it.heldAt = nowFullDt();
   var gone = (c.subItems||[]).filter(function(s){ return s.kind==='增加项目' && s.projectName===it.name && !s.done; });
+  gone.forEach(function(g){ if(g.note && !it.todayNote) it.todayNote = g.note; }); /* CMD-1021-03：行上的备注搬到项目上（持有项目的到院卡行读 todayNote），不随行一起丢 */
   c.subItems = c.subItems.filter(function(s){ return gone.indexOf(s)<0; });
   gone.forEach(function(g){ if(!g.visitKey) return; /* 在子案件里新增的管理项目：付款后成为这次到访里的一行「使用」，逐行完成时扣 1 次 */
     var u = coreSubAdd(c, {kind:'术后管理记录', date:g.date, time:g.visitTime||'', content:it.name+'（持有项目使用）', place:'KR', projectName:it.name, silent:true}, ME_NAME||''); if(u){ u.holdUseOf = it.name; u.holdIid = itemIid(it); u.arrived = true; u.simDay = true; } });
@@ -7857,6 +7859,14 @@ function coreBookCancel(hid, id, kind, by){
 /* ============ CMD-1015-29：今日案件行的操作 = ［操作完成］［今日取消］ ============
    施术项目一项一行（显示层按项目拆开，数据里仍是一条「施术」子项）：单项完成 coreSurgItemDone；最后一项完成时整条施术行完成
    今日取消 = 今天不做了，退回项目卡（施术 / 管理 → 未使用；术后管理 → 未预约），不是取消项目、不退款 */
+/* CMD-1021-03：项目进程 memo = 不限次数的记录（时间 · 谁 · 内容，存在 c.krProgressMemos，旧的单条文字 c.krProgressMemo 迁成第一则）；KR 室长写，IN 只读 */
+function krMemoList(c){ var l = (c.krProgressMemos||[]).slice().reverse(); if(!l.length && c.krProgressMemo) l = [{id:'m0', at:'', by:'KR 室长', text:c.krProgressMemo}]; return l; } /* 最新在上 */
+function coreAddProgressMemo(c, text, by){
+  text = String(text||'').trim(); if(!text) return false; migrateProgressMemo(c);
+  (c.krProgressMemos = c.krProgressMemos||[]).push({id:'pm'+Date.now()+Math.floor(Math.random()*1000), at:nowFullDt(), by:by||'', text:text});
+  logCaseEvent(c, by, '项目进程 memo：'+text); return true;
+}
+function migrateProgressMemo(c){ if(!c.krProgressMemos && c.krProgressMemo){ c.krProgressMemos = [{id:'m0', at:'', by:'KR 室长', text:c.krProgressMemo}]; c.krProgressMemo = ''; return true; } return false; }
 function coreItemNote(c, name, text, by){
   var it = itemByKey(c, name, function(x){ return !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name;
   it.todayNote = String(text||'').trim(); logCaseEvent(c, by, '备注（'+name+'）：'+(it.todayNote || '清空')); return true;
