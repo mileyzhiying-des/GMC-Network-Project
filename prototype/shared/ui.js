@@ -95,7 +95,11 @@ function showPage(id){
 
 
 /* ================= sidebar / topbar for IN app ================= */
-var SIDEBAR_COLLAPSED = false;
+/* CMD-1021-08：窗口宽度 < 1536px 时侧边栏自动收成图标窄条；用户手动展开 / 收起后记住选择（localStorage gmc_cfg_sidebar：'1' 收起 / '0' 展开），之后不再跟着宽度走 */
+function sidebarPref(){ try{ return localStorage.getItem('gmc_cfg_sidebar'); }catch(e){ return null; } }
+function sidebarAutoState(){ var p = sidebarPref(); if(p==='1') return true; if(p==='0') return false; return window.innerWidth < 1536; }
+var SIDEBAR_COLLAPSED = sidebarAutoState();
+window.addEventListener('resize', function(){ var n = sidebarAutoState(); if(n!==SIDEBAR_COLLAPSED){ SIDEBAR_COLLAPSED = n; if(typeof refreshAllSidebars==='function' && document.querySelector('.sidebar-slot')) refreshAllSidebars(); } });
 
 var IN_NAV = [
   {id:'in-dashboard', key:'dashboard', label:'工作台', icon:'工'},
@@ -156,6 +160,7 @@ function openSidebarPage(id){
 
 function toggleSidebar(){
   SIDEBAR_COLLAPSED = !SIDEBAR_COLLAPSED;
+  try{ localStorage.setItem('gmc_cfg_sidebar', SIDEBAR_COLLAPSED ? '1' : '0'); }catch(e){}
   refreshAllSidebars();
 }
 
@@ -2151,7 +2156,7 @@ function toggleProject(projectId){
     c.recommended.splice(idx,1);
   } else if(/^lc:/.test(projectId)){ /* KR 诊疗方案里的管理项目（CMD-1015-16）：快照 = KR 填的 项目（规格）+ 次数 + 间隔；origin KR（算进赴韩定金），只在韩国做，到院后标完成 / 转在韩持有 */
     var si = scopeMgmtItems(c).filter(function(x){ return scopeMgmtPid(x)===projectId; })[0]; if(!si) return;
-    c.recommended.push({projectId:projectId, name:si.name, price:si.price, currency:'KRW', origin:'KR', categoryId:null, local:true, mgmt:true, mgmtPlan:true, qty:si.qty, copies:si.copies, specTimes:si.specTimes, firstDay:si.firstDay, interval:si.interval, specLabel:si.specLabel, unit:si.unit, note:si.note||''});
+    c.recommended.push({projectId:projectId, name:si.name, price:si.price, currency:'KRW', origin:'KR', categoryId:null, local:true, mgmt:true, mgmtPlan:true, qty:si.qty, copies:si.copies, specTimes:si.specTimes, firstDay:si.firstDay, interval:si.interval, intNa:!!si.intNa, specLabel:si.specLabel, unit:si.unit, note:si.note||''});
   } else {
     var p = projById(projectId); if(!p) return;
     var item = p.origin==='IN' ? buildLocalItem(p) : {projectId:p.id, name:p.name, price:p.price, currency:currencyOf(p.origin), origin:p.origin, categoryId:p.categoryId}; /* 本地项目：带入进行中的活动价（成交价快照） */
@@ -3918,7 +3923,7 @@ function gmcPageTitle(){
       var c0 = null; if(cur.side==='kr'){ var r0 = krFindCase(cur.clinicId, cur.id); c0 = r0 && r0.c; } else c0 = CASE_ITEMS.filter(function(x){ return x.id===cur.id; })[0];
       if(c0) t0 = a.id+' · '+(c0.name||'')+'（'+(c0.caseNo||'')+'）';
     }
-    if(!t0){ var act = document.querySelector('.sidebar .nav-item.active'), label = act ? act.textContent.replace(/\s+/g, ' ').trim() : ((typeof HEAD_TITLES!=='undefined' && HEAD_TITLES[CURRENT_PAGE_ID]) || ''); t0 = who+' · '+(label || '工作台')+' – '+(kr ? 'GMC KR' : 'GMC IN'); }
+    if(!t0){ var act = document.querySelector('.sidebar .nav-item.active'), label = act ? (act.getAttribute('title') || act.textContent).replace(/\s+/g, ' ').trim() : ((typeof HEAD_TITLES!=='undefined' && HEAD_TITLES[CURRENT_PAGE_ID]) || ''); t0 = who+' · '+(label || '工作台')+' – '+(kr ? 'GMC KR' : 'GMC IN'); }
     if(document.title!==t0) document.title = t0;
     var dir = kr && isKrDirectorLike(a), letter = kr ? (dir ? 'D' : 'K') : 'I', col = kr ? (dir ? '#3F7F5C' : '#2F5F86') : '#9A6A4B';
     var href = 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="'+col+'"/><text x="16" y="23" font-size="20" font-weight="700" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif">'+letter+'</text></svg>');

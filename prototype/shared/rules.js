@@ -721,7 +721,11 @@ function pcUniqueEntries(c){
    项目条目：qty = 总次数（持有 / 扣次数一直读它）、copies = 份数、specTimes = 规格次数、firstDay = 第一次使用（施术日 / 到院日之后几天，0 = 当天）、interval = 间隔天数（总次数 > 1 才有） */
 function mgmtCopies(it){ if(it.copies) return it.copies; var st = it.specTimes||1; return st>1 ? Math.max(1, Math.round((it.qty||1)/st)) : (it.qty||1); }
 function mgmtQtyText(it){ var cp = mgmtCopies(it), tt = it.qty||1; return cp+' 份'+(tt!==cp ? '（共 '+tt+' 次）' : ''); }
-function mgmtScheduleText(it){ var tt = it.qty||1; return (it.firstDay!==undefined && it.firstDay!==null && it.firstDay!=='' ? '，第一次使用：'+(Number(it.firstDay)===0 ? '当天' : it.firstDay+' 天后') : '')+(tt>1 && it.interval ? '，每隔 '+it.interval+' 天' : ''); }
+function mgmtScheduleText(it){ /* CMD-1021-08：术后第 N 天开始 / 建议间隔（无关 = 不限） */
+  var tt = it.qty||1, hasF = !(it.firstDay===undefined || it.firstDay===null || it.firstDay===''), hasAny = hasF || it.intNa || it.interval;
+  if(!hasAny) return '';
+  return '，'+(hasF ? '术后第 '+it.firstDay+' 天开始' : '开始时间无关')+(tt>1 ? (it.intNa ? '，间隔无关' : (it.interval ? '，建议间隔 '+it.interval+' 天' : '')) : '');
+}
 function pcLineText(x){ return pcLabel(x)+' × '+x.times+(x.times>1 && x.interval ? '（每隔 '+x.interval+' 天）' : '')+(pcDayText(x) ? ' '+pcDayText(x) : '')+'｜'+(x.place==='KR' ? '必须在韩国' : '韩国或印尼都可'); }
 function itemMetaText(it){
   var bits = [];
@@ -794,7 +798,7 @@ function recSummaryData(items, overall, base, dateOf){
     var pc = (it.postcare||[]).map(pcLineText);
     return {name:it.name, stay:it.stay ? recStayDays(it)+' 天' : '—', stayWhy:it.stay ? (function(i){ return i.more ? i.reason : i.why; })(itemStayInfo(it)) : '', anes:an, pc:pc, note:it.note||''};
   });
-  return {days:days, stay:stayPlanOf(items, base, dateOf), rows:rows, overall:overall||'', mgmt:mg.map(function(it){ return {name:it.name, qty:it.qty||1, copies:it.copies, specTimes:it.specTimes, firstDay:it.firstDay, interval:it.interval||0, note:it.note||''}; })};
+  return {days:days, stay:stayPlanOf(items, base, dateOf), rows:rows, overall:overall||'', mgmt:mg.map(function(it){ return {name:it.name, qty:it.qty||1, copies:it.copies, specTimes:it.specTimes, firstDay:it.firstDay, interval:it.interval||0, intNa:!!it.intNa, note:it.note||''}; })};
 }
 function recSummaryHtml(items, overall, opt){
   opt = opt || {};

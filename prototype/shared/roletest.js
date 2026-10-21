@@ -9,7 +9,7 @@ RT.cell = function(row, exp, act, note){
   RT.R.push({row:row, exp:exp, act:act, pass:(exp==='—' ? null : exp===act), note:note||''});
 };
 RT.yn = function(v){ return v ? '✅' : '❌'; };
-RT.navLabels = function(){ var o = [], seen = {}; [].slice.call(document.querySelectorAll('.sidebar nav .nav-item')).forEach(function(e){ var t = e.innerText.trim(); if(!seen[t]){ seen[t] = 1; o.push(t); } }); return o; };
+RT.navLabels = function(){ var o = [], seen = {}; [].slice.call(document.querySelectorAll('.sidebar nav .nav-item')).forEach(function(e){ var t = (e.getAttribute('title') || e.innerText).trim(); if(!seen[t]){ seen[t] = 1; o.push(t); } }); return o; };
 RT.has = function(labels, list){ return list.every(function(x){ return labels.indexOf(x)>-1; }); };
 RT.none = function(labels, list){ return list.every(function(x){ return labels.indexOf(x)<0; }); };
 RT.acct = function(){ var a = currentAccount(); return a ? a.id : ''; };
@@ -125,6 +125,9 @@ RT.runKr = function(){
   var L = RT.navLabels();
   RT.cell('侧栏：工作台 / 案件列表 / 通知中心', '✅', RT.yn(RT.has(L, ['工作台','案件管理','通知中心'])));
   RT.cell('侧栏：客人管理（一般院长没有；代表院长可看，只读）', (coord || isOwn) ? '✅' : '❌', RT.yn(L.indexOf('客人管理')>-1));
+  RT.cell('客人详情：能打开（普通院长不加菜单，只能从自己案件页点客人名，只读；CMD-1021-08）', (coord || isOwn || isDir) ? '✅' : '❌', RT.yn(typeof krClientDetailAllowed==='function' && krClientDetailAllowed()));
+  RT.cell('客人详情：能发起内部对话（院长不能）', (coord || isOwn) ? '✅' : '❌', RT.yn(krClientsAllowed()));
+  RT.cell('项目进程 memo：能写（院长 / 代表院长 / 室长；IN 只读，CMD-1021-08）', '✅', RT.yn(krCanMemo()));
   RT.cell('侧栏 / 页面：经营数据、账号管理、医院设定、操作日志', admin ? '✅' : '❌', RT.yn(RT.has(L, ['经营数据','账号管理','医院设定','操作日志'])));
   RT.cell('侧栏 / 页面：院长管理（院长名单、停用）', admin ? '✅' : '❌', RT.yn(L.indexOf('院长管理')>-1));
   RT.cell('侧栏 / 页面：赴韩项目库（维护）', coord ? '✅' : '❌', RT.yn(L.indexOf('项目库')>-1));
@@ -236,6 +239,9 @@ RT.runKr = function(){
   var L = RT.navLabels();
   RT.cell('侧栏：工作台 / 案件列表 / 通知中心', '✅', RT.yn(RT.has(L, ['工作台','案件管理','通知中心'])));
   RT.cell('侧栏：客人管理（一般院长没有；代表院长可看，只读）', (coord || isOwn) ? '✅' : '❌', RT.yn(L.indexOf('客人管理')>-1));
+  RT.cell('客人详情：能打开（普通院长不加菜单，只能从自己案件页点客人名，只读；CMD-1021-08）', (coord || isOwn || isDir) ? '✅' : '❌', RT.yn(typeof krClientDetailAllowed==='function' && krClientDetailAllowed()));
+  RT.cell('客人详情：能发起内部对话（院长不能）', (coord || isOwn) ? '✅' : '❌', RT.yn(krClientsAllowed()));
+  RT.cell('项目进程 memo：能写（院长 / 代表院长 / 室长；IN 只读，CMD-1021-08）', '✅', RT.yn(krCanMemo()));
   RT.cell('侧栏 / 页面：经营数据、账号管理、医院设定、操作日志', admin ? '✅' : '❌', RT.yn(RT.has(L, ['经营数据','账号管理','医院设定','操作日志'])));
   RT.cell('侧栏 / 页面：院长管理（院长名单、停用）', admin ? '✅' : '❌', RT.yn(L.indexOf('院长管理')>-1));
   RT.cell('侧栏 / 页面：赴韩项目库（维护）', coord ? '✅' : '❌', RT.yn(L.indexOf('项目库')>-1));

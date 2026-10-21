@@ -4665,13 +4665,17 @@ function subCaseList(c){ /* 每一组取第一行当代表，按日期时间排�
   return reps.sort(function(a, b){ return (a.place==='IN' ? (a.visitDate||a.date||'') : (a.date||'')).localeCompare(b.place==='IN' ? (b.visitDate||b.date||'') : (b.date||'')) || (a.time||'').localeCompare(b.time||'') || String(a.no).localeCompare(String(b.no)); });
 }
 /* CMD-1020-07：从 kr.js 搬到这里（IN 工作台「未安排预约」也要算建议日期；两边共用） */
+/* CMD-1021-08：案件里最后一个施术日（多个施术日从最后一个算）；没有施术的案件返回 '' */
+function mgLastSurgDate(c){ var best = ''; (c.procedureItems||[]).forEach(function(it){ if(it.cancelled || it.swapped || it.deferUse || krIsMgmtItemC(it)) return; var ds = itemSurgDate(c, it); if(ds && ds > best) best = ds; }); return best; }
+/* 管理项目建议日期：第一次 = 最后一个施术日 + 第一次使用 N 天（案件没有施术 / 第一次使用「无关」→ 不显示）；之后每次 = 上一次实际使用日 + 建议间隔（建议间隔「无关」→ 第二次起不显示）。只是建议 */
 function krMgSuggest(c, it, nth){
-  if(it.firstDay===undefined || it.firstDay===null || it.firstDay==='') return '';
-  var iv = (it.qty||1)>1 ? (it.interval||1) : 0, usedN = it.holdUsed||0, uses = it.uses||[], t0, n;
+  var iv = (it.qty||1)>1 ? (it.interval||1) : 0, usedN = it.holdUsed||0, uses = it.uses||[], t0, n, na = !!it.intNa;
   var fmt = function(d){ var mm = d.getMonth()+1, dd = d.getDate(); return String(d.getFullYear()).slice(2)+'-'+(mm<10?'0':'')+mm+'-'+(dd<10?'0':'')+dd; };
-  /* 管理间隔 / 建议日期只是建议（CMD-1019-22 一）：用过以后，后面的建议日期从「实际使用日」重新起算（使用日 + 间隔；一次用 N 次 = 同一天用了 N 次，下一次 = 使用日 + 间隔） */
-  if(usedN>0 && nth>=usedN && uses.length && uses[uses.length-1].at){ var ld = fmtUtc(uses[uses.length-1].at).slice(0, 10); t0 = new Date(ld+'T00:00:00'); t0.setDate(t0.getDate()+(nth-usedN+1)*iv); return fmt(t0); }
-  var base = ((c.krSchedule||{}).confirmedDate) || c.arrivedDay || ''; if(!base) return '';
+  /* 用过以后，后面的建议日期从「实际使用日」重新起算（使用日 + 间隔；一次用 N 次 = 同一天用了 N 次，下一次 = 使用日 + 间隔）（CMD-1019-22 一） */
+  if(usedN>0 && nth>=usedN && uses.length && uses[uses.length-1].at){ if(na) return ''; var ld = fmtUtc(uses[uses.length-1].at).slice(0, 10); t0 = new Date(ld+'T00:00:00'); t0.setDate(t0.getDate()+(nth-usedN+1)*iv); return fmt(t0); }
+  if(it.firstDay===undefined || it.firstDay===null || it.firstDay==='') return '';
+  if(nth>0 && na) return '';
+  var base = mgLastSurgDate(c); if(!base) return '';
   n = Number(it.firstDay) + nth*iv; t0 = new Date(base+'T00:00:00'); t0.setDate(t0.getDate()+n); return fmt(t0);
 }
 function careSlotList(c){
@@ -5258,7 +5262,7 @@ function coreAddOnItem(c, projectName, by, opt){
   var ni = {projectId:p.id, name:p.name, price:svc ? 0 : p.price, currency:currencyOf(p.origin), origin:'KR', categoryId:p.categoryId, done:false, batchId:(pre && !svc ? newId : ''), anesthesia:an};
   if(svc){ ni.service = true; ni.name = p.name+'（서비스）'; } else if(!pre) ni.pendingPay = true;
   if(opt.local && p.local && !opt.local.qty){ try{ var lp0 = krLocalLib(caseKrHospital(c)).filter(function(x){ return x.id===opt.local.projectId || x.name===opt.local.name; })[0], sp0 = lp0 && lp0.specs.filter(function(x){ return x.label===opt.local.specLabel; })[0]; if(sp0 && sp0.times>1){ opt.local.specTimes = sp0.times; opt.local.qty = sp0.times; opt.local.copies = 1; } }catch(e){} } /* 旧入口（更换 / 调整方案里选的管理项目）没带次数：按规格里的「N次」补 */
-  if(opt.local && p.local){ ni.qty = opt.local.qty || 1; if(opt.local.copies) ni.copies = opt.local.copies; if(opt.local.specTimes) ni.specTimes = opt.local.specTimes; if(opt.local.firstDay!==undefined) ni.firstDay = opt.local.firstDay; if(opt.local.interval) ni.interval = opt.local.interval; ni.specLabel = opt.local.specLabel || ''; } /* CMD-1019-10：到院添加的管理项目：qty = 总次数（规格次数 × 份数）*/
+  if(opt.local && p.local){ ni.qty = opt.local.qty || 1; if(opt.local.copies) ni.copies = opt.local.copies; if(opt.local.specTimes) ni.specTimes = opt.local.specTimes; if(opt.local.firstDay!==undefined) ni.firstDay = opt.local.firstDay; if(opt.local.interval) ni.interval = opt.local.interval; if(opt.local.intNa!==undefined) ni.intNa = !!opt.local.intNa; ni.specLabel = opt.local.specLabel || ''; } /* CMD-1019-10：到院添加的管理项目：qty = 总次数（规格次数 × 份数）*/
   if(opt.detail){ if(opt.detail.stay) ni.stay = opt.detail.stay; if((opt.detail.postcare||[]).length) ni.postcare = opt.detail.postcare.map(function(x){ return Object.assign({inTimes:0}, x); }); } /* 增加的项目也带推荐在韩 / 所需术后管理 */
   if(pre) ni.preBalanceAdd = true; else ni.krAddOn = true;
   if(deferIt) ni.deferUse = true; else if(ext!==undefined && !svc && !p.local) ni.extendMin = ext; /* 延长多久（分钟），0 = 不延长 */
@@ -7444,8 +7448,19 @@ function buildClinicSeed(cid){
 
 /* KR 的本地管理项目库（CMD-1012-04）：每家医院一份清单（韩元），KR 项目库页面「本地管理项目」组；缺的补上 */
 /* CMD-1021-02 演示数据：几个项目设成「院长操作」，规格间院长时间有的一样有的不一样（热玛吉 300发 30 / 600发 45 / 眼部 450发 45；ONDA 各规格 30）。只在项目从没设过（dirOp 为 undefined）时补，用户改过的不动 */
+/* CMD-1021-08：管理项目的「第一次使用（术后第 N 天开始）」和「建议间隔」存在项目库里（KR 项目库管理项目编辑页）：
+   项目层 firstNa / firstMode('all'|'spec') / firstAll、intNa / intMode / intAll；规格层 sp.firstDay / sp.interval（各规格分别设定时用）。
+   null = 无关。只是建议：预约时带出建议日期，实际预约可以随意改。 */
+function mgFirstOf(p, sp){ if(!p || p.firstNa) return null; var v = parseInt(p.firstMode==='spec' ? (sp ? sp.firstDay : '') : p.firstAll, 10); return isNaN(v) || v<0 ? null : v; }
+function mgIntervalOf(p, sp){ if(!p || p.intNa) return null; var v = parseInt(p.intMode==='spec' ? (sp ? sp.interval : '') : p.intAll, 10); return isNaN(v) || v<1 ? null : v; }
+/* 项目库里的规格 → 项目条目上的 firstDay / interval / intNa（付款后条目自带，不再回头读项目库） */
+function mgSchedOf(p, sp, total){ var f = mgFirstOf(p, sp), iv = mgIntervalOf(p, sp); return {firstDay:f===null ? '' : f, interval:(total>1 && iv!==null) ? iv : 0, intNa:iv===null}; }
+var DEMO_MGSCHED = {'ONDA 提升':{first:{all:14}, int:{all:14}}, '热玛吉':{first:{na:true}, int:{spec:{'300发':180, '600发':240, '眼部 225发':180, '眼部 450发':240}}}, '钛提升':{first:{all:7}, int:{na:true}}};
 var DEMO_DIROP = {'热玛吉':{min:30, specs:{'300发':30, '600发':45, '眼部 225发':30, '眼部 450发':45}}, 'ONDA 提升':{min:30, specs:{}}};
 function krLocalLib(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; if(!h.localLib){ h.localLib = buildLocalProjects('KR', hid); gmcStamp(h.localLib); }
+  if(!h._mgDemo){ h._mgDemo = 1; h.localLib.forEach(function(p){ if(p.firstMode!==undefined || p.firstNa!==undefined || p.intMode!==undefined || p.intNa!==undefined) return; var df = DEMO_MGSCHED[p.name] || {first:{all:7}, int:{all:7}};
+    if(df.first.na) p.firstNa = true; else { p.firstNa = false; p.firstMode = 'all'; p.firstAll = df.first.all; }
+    if(df.int.na) p.intNa = true; else if(df.int.spec){ p.intNa = false; p.intMode = 'spec'; (p.specs||[]).forEach(function(sp){ sp.interval = df.int.spec[sp.label] || 180; }); } else { p.intNa = false; p.intMode = 'all'; p.intAll = df.int.all; } }); }
   if(!h._dirDemo){ h._dirDemo = 1; h.localLib.forEach(function(p){ var df = DEMO_DIROP[p.name]; if(df && p.dirOp===undefined){ p.dirOp = true; p.dirMin = df.min; (p.specs||[]).forEach(function(sp){ if(df.specs[sp.label]) sp.dirMin = df.specs[sp.label]; }); } }); }
   return h.localLib; }
 /* 选择 / 新增时用的管理项目清单：不含非活性化的（按 id / 名字查已有项目仍用 krLocalLib） */
@@ -7476,10 +7491,10 @@ function printPlanSchedule(c){
     });
   }); });
   items.filter(krIsMgmtItemC).forEach(function(it){
-    var total = Math.max(1, it.qty||1), itv = total>1 ? (it.interval||1) : 0, f0 = (it.firstDay===undefined || it.firstDay==='' || it.firstDay===null) ? null : Number(it.firstDay);
+    var total = Math.max(1, it.qty||1), itv = total>1 ? (it.interval||1) : 0, na0 = !!it.intNa, f0 = (it.firstDay===undefined || it.firstDay==='' || it.firstDay===null) ? null : Number(it.firstDay);
     if(!base || f0===null) return;
     var bkd = (c.subItems||[]).filter(function(x){ return rowOwnedBy(it, x) && !x.skipped && x.date; }).length; /* CMD-1020-04：已预约的次数用预约时间（下面单独列），建议日期只列没预约的 */
-    for(var k = bkd; k < total; k++) rows.push({d:printPlanDate(base, f0 + k*itv), t:'', what:'管理项目：'+it.name+(total>1 ? '（第 '+(k+1)+'/'+total+' 次）' : ''), place:'韩国'});
+    for(var k = bkd; k < total; k++) if(k===0 || !na0) rows.push({d:printPlanDate(base, f0 + k*itv), t:'', what:'管理项目：'+it.name+(total>1 ? '（第 '+(k+1)+'/'+total+' 次）' : ''), place:'韩国'});
   });
   /* CMD-1020-04：KR 在韩预约的施术项目 / 管理项目到院（预约使用）也列进日程表 */
   (c.subItems||[]).filter(function(x){ return !x.skipped && x.date && (x.surgUse || x.holdUseOf); }).forEach(function(x){ rows.push({d:x.date, t:x.time||'', what:(x.surgUse ? '施术：'+x.surgUse : '管理项目：'+x.holdUseOf), place:'韩国', booked:true}); });
