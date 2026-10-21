@@ -721,11 +721,16 @@ function pcUniqueEntries(c){
    项目条目：qty = 总次数（持有 / 扣次数一直读它）、copies = 份数、specTimes = 规格次数、firstDay = 第一次使用（施术日 / 到院日之后几天，0 = 当天）、interval = 间隔天数（总次数 > 1 才有） */
 function mgmtCopies(it){ if(it.copies) return it.copies; var st = it.specTimes||1; return st>1 ? Math.max(1, Math.round((it.qty||1)/st)) : (it.qty||1); }
 function mgmtQtyText(it){ var cp = mgmtCopies(it), tt = it.qty||1; return cp+' 份'+(tt!==cp ? '（共 '+tt+' 次）' : ''); }
-function mgmtScheduleText(it){ /* CMD-1021-08：术后第 N 天开始 / 建议间隔（无关 = 不限） */
-  var tt = it.qty||1, hasF = !(it.firstDay===undefined || it.firstDay===null || it.firstDay===''), hasAny = hasF || it.intNa || it.interval;
-  if(!hasAny) return '';
-  return '，'+(hasF ? '术后第 '+it.firstDay+' 天开始' : '开始时间无关')+(tt>1 ? (it.intNa ? '，间隔无关' : (it.interval ? '，建议间隔 '+it.interval+' 天' : '')) : '');
+/* CMD-1021-14 三：「建议时间」统一写法：「术后第 N 天开始 · 间隔 K 天」；第一次无关 → 只写「间隔 K 天」；间隔无关 → 只写「术后第 N 天开始」；都无关 → 「—」。
+   「术后第 0 天」的来源：1021-08 之前 KR 表单里「第一次使用」输入框默认 0，旧案件的项目条目就存了 firstDay:0（那时没有「无关」选项，也没有 intNa 字段），旧显示照字面写成「术后第 0 天开始」。
+   现在：没有 intNa 字段（= 1021-08 之前建的条目）且 firstDay===0 → 当作「没填」，不写 0；之后新建的条目（有 intNa）里的 0 是真的「当天开始」，照写。 */
+function mgFirstOfItem(it){ var v = it ? it.firstDay : undefined; if(v===undefined || v===null || v==='') return null; if(Number(v)===0 && it.intNa===undefined) return null; return Number(v); }
+function mgSugText(it){
+  var f = mgFirstOfItem(it), tt = (it && it.qty) || 1, iv = (tt>1 && !it.intNa && it.interval) ? it.interval : null, bits = [];
+  if(f!==null) bits.push('术后第 '+f+' 天开始'); if(iv) bits.push('间隔 '+iv+' 天');
+  return bits.length ? bits.join(' · ') : '—';
 }
+function mgmtScheduleText(it){ var t = mgSugText(it); return t==='—' ? '' : '，'+t; }
 function pcLineText(x){ return pcLabel(x)+' × '+x.times+(x.times>1 && x.interval ? '（每隔 '+x.interval+' 天）' : '')+(pcDayText(x) ? ' '+pcDayText(x) : '')+'｜'+(x.place==='KR' ? '必须在韩国' : '韩国或印尼都可'); }
 function itemMetaText(it){
   var bits = [];

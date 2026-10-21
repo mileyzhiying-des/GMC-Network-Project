@@ -511,3 +511,14 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .kr-casebig>.info-heading{margin-top:0;}
 .kr-fld{position:relative;}
 .kr-fld input[type=date]::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;}
+
+/* CMD-1021-14：项目卡固定高度（约 6 行）内部滚动，小标题 / 表头 sticky；备注卡固定高度（3 条 + 按钮行） */
+.kr-pc-scroll{height:430px;overflow-y:auto;padding-right:4px;}
+.kr-pc-scroll .kr-pc-sec-title{position:sticky;top:0;background:#fff;z-index:3;padding:6px 0 4px;margin-top:0 !important;}
+.kr-pc-scroll .kr-pc-head{position:sticky;top:30px;background:#fff;z-index:2;}
+.kr-pc-block + .kr-pc-block{margin-top:6px;}
+.notes-compact{height:312px;display:flex;flex-direction:column;}
+.notes-list{flex:1;overflow:hidden;}
+.notes-btns{display:flex;gap:8px;justify-content:flex-end;padding-top:8px;min-height:34px;}
+.note-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.note-clamp > div{white-space:normal !important;}
