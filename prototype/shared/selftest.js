@@ -2559,7 +2559,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krSetCaseTab('items'); var ta = document.getElementById('kr-pmemo-main'); ST.ok(!!ta, '到院卡里有 memo 输入框 + ［保存］');
       ['第一则：客人住酒店', '第二则：复诊提醒', '第三则：中间补了 0.5ml 麻醉'].forEach(function(t0){ var el = document.getElementById('kr-pmemo-main'); el.value = t0; krMemoAdd('main'); });
       var list = krMemoList(gc(), 'main'); ST.ok(list.length===3 && list[0].text==='第三则：中间补了 0.5ml 麻醉' && list[2].text==='第一则：客人住酒店' && list.every(function(m){ return !!m.at && /KM1/.test(m.by) && m.vk==='main'; }), '不限次数、最新在上，每则带时间 + 账号名 + 属于哪次到院：'+list.map(function(m){ return m.text+'｜'+m.by; }).join(' / '));
-      var mcard = document.getElementById('kr-maincard'); ST.ok(!!mcard && /memo\s*3/.test(mcard.innerText) && /memo 3 则/.test(mcard.innerText.replace(/\s+/g, ' ')) && mcard.innerText.indexOf('第三则')<mcard.innerText.indexOf('第一则') && /\d\d\/\d\d \d\d:\d\d · KM1/.test(mcard.innerText) && document.getElementById('kr-pmemo-main').value==='', '到院卡标题 memo 3、列成一则一则（MM/DD HH:mm · KM1 室长 · 内容），输入框清空可继续写');
+      var mcard = document.getElementById('kr-maincard'); ST.ok(!!mcard && /备注：3/.test(mcard.innerText) && /memo 3 则/.test(mcard.innerText.replace(/\s+/g, ' ')) && mcard.innerText.indexOf('第三则')<mcard.innerText.indexOf('第一则') && /\d\d\/\d\d \d\d:\d\d · KM1/.test(mcard.innerText) && document.getElementById('kr-pmemo-main').value==='', '到院卡标题 memo 3、列成一则一则（MM/DD HH:mm · KM1 室长 · 内容），输入框清空可继续写');
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; coreAddProgressMemo(c, '另一次到院的 memo', 'KM1 室长', 'KR|2099-01-01'); });
       ST.ok(krMemoList(gc(), 'main').length===3 && krMemoList(gc(), 'KR|2099-01-01').length===1 && krMemoList(gc()).length===4, '每次到院各自的 memo 不串');
       krSetCaseTab('items'); var tot = document.getElementById('kr-pmemo-_'), totCard = tot && tot.closest('.card'), projCard = document.querySelector('#kr-casedetail .card'), big = document.querySelector('#kr-casedetail .kr-casebig');
@@ -2569,7 +2569,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(JSON.stringify(gc()).split('项目进程 memo：').length-1>=3 && tlTypeOf({action:'项目进程 memo：x'})==='talk', '每则 memo 进 Timeline，类型归「沟通」');
       /* 到院结束之后仍显示、仍可补写 */
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.krProcedureDone = true; c.visitClosed = true; }); krSetCaseTab('items'); KR_SUB_OPEN.main = true; krRenderCaseDetail();
-      ST.ok(/memo\s*3/.test(document.getElementById('kr-maincard').innerText), '到院结束 / 已完成之后，卡标题仍显示 memo 3（收起的卡也显示）'); var okd = document.getElementById('kr-pmemo-main'); ST.ok(!!okd, '展开已完成的到院卡：memo 输入框仍在，仍可补写'); okd.value = '结束后补写'; krMemoAdd('main'); ST.ok(krMemoList(gc(), 'main').length===4 && krMemoList(gc(), 'main')[0].text==='结束后补写', '完成后仍可补写');
+      ST.ok(/备注：3/.test(document.getElementById('kr-maincard').innerText), '到院结束 / 已完成之后，卡标题仍显示 memo 3（收起的卡也显示）'); var okd = document.getElementById('kr-pmemo-main'); ST.ok(!!okd, '展开已完成的到院卡：memo 输入框仍在，仍可补写'); okd.value = '结束后补写'; krMemoAdd('main'); ST.ok(krMemoList(gc(), 'main').length===4 && krMemoList(gc(), 'main')[0].text==='结束后补写', '完成后仍可补写');
       /* IN 只读 */
       ST.ok(/第三则/.test(krTimelineTabHtml(gc())) && !/textarea/.test(krTimelineTabHtml(gc())) && /\d\d\/\d\d \d\d:\d\d/.test(krTimelineTabHtml(gc())), 'IN 端（赴韩施术 tab 的项目进程）只读显示全部 memo，带时间 + 作者');
       /* 旧的单条 memo 迁成第一则 */
@@ -3165,6 +3165,22 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 取消购买弹窗用词 */
       KR_PROJ_PAGE = 'mgmt'; KR_CASE = {clinicId:r.clinicId, id:r.id, tab:'items'}; krPendDelAsk(itemIid(krFindCase(r.clinicId, r.id).c.procedureItems.filter(function(x){ return /热玛吉/.test(x.name); })[0])); var ov = document.getElementById('kr-block-overlay'); ST.ok(ov && /取消购买/.test(ov.textContent) && /确认取消购买/.test(ov.textContent), '弹窗用词：取消购买'); ov.classList.remove('open');
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PICK = {}; KR_PROJ_PAGE = 'surg'; }
+  });
+
+  /* CMD-1021-07（KM1 分页，需要 pcStage 夹具）：到院卡标题日期字号变小；已到蓝色留标题旁，待到店绿色 / 已完成灰色靠右；备注：N / 无 */
+  ST.def('R75a','CMD-1021-07（KM1 分页，需要 pcStage 夹具）：到院卡标题行日期字号 / 状态靠右配色 / 备注：N',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0] || krAllCases().filter(function(x){ return /^T-/.test(x.name) && (x.c.subItems||[]).length; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    window.GMC_NO_TABS = true; var c = krFindCase(r.clinicId, r.id).c, html = krCaseGroupsHtml(c, true), box = document.createElement('div'); box.innerHTML = html;
+    var cards = [].slice.call(box.querySelectorAll('.card'));
+    ST.ok(cards.length>=1 && cards.every(function(cd){ var b = cd.querySelector('b'); return b && /font-size:14px/.test(b.getAttribute('style')||''); }), '每张到院卡标题日期字号 14px：'+cards.length);
+    ST.ok(!/memo\s*\d/.test(cards.map(function(x){ return x.firstChild.textContent; }).join('')), '标题行没有「memo N」，改成「备注」');
+    var pills = [].slice.call(box.querySelectorAll('.status-pill')).filter(function(p){ return /待到店|待到院|已完成|已到店|已到院/.test(p.textContent); });
+    ST.ok(pills.length>=1, '有状态标签：'+pills.map(function(p){ return p.textContent; }).join('、'));
+    pills.forEach(function(p){ var blue = /已到店|已到院/.test(p.textContent), inHeadLeft = !!p.previousElementSibling && p.parentElement.style.flex==='1 1 0%' || p.closest('span[style*="flex:1"]'); ST.ok(blue ? !!inHeadLeft : !inHeadLeft, '「'+p.textContent+'」位置：'+(blue ? '蓝色留标题旁' : '靠右')); });
+    var done = pills.filter(function(p){ return p.textContent==='已完成'; })[0]; if(done) ST.ok(/var\(--sage\)/.test(done.getAttribute('style')||'') || /#/.test(done.getAttribute('style')||''), '已完成有颜色'); 
+    var wait = pills.filter(function(p){ return /待到/.test(p.textContent); })[0]; if(wait) ST.ok(/#E3F4E8/i.test(wait.getAttribute('style')||''), '待到店 / 待到院 = 浅绿');
+    ST.ok(/备注：(\d+|无)/.test(box.textContent) || !pills.some(function(p){ return /已完成|已到/.test(p.textContent); }), '已完成 / 已到的卡右边有「备注：N / 无」');
   });
 
 })();

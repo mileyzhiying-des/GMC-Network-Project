@@ -2117,7 +2117,7 @@ function krTblRow(c, s, o){
   var noteCell = (o.can && mode==='today' && !s.done) ? '<input value="'+krEsc(noteVal)+'" placeholder="备注" onchange="'+noteFn+'" onkeydown="if(event.key===\'Enter\'){this.blur();}" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">' : '<span style="color:var(--slate2);">'+(noteText || '—')+'</span>';
   return '<div style="display:grid;grid-template-columns:'+KR_TBL_COLS+';gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span>'+krTypeTag(type)+'</span><span style="font-size:13px;">'+visitRowLabelHtml(c, s)+'</span><span>'+noteCell+'</span><span>'+(s.place==='IN' ? '印尼' : '韩国')+'</span><span style="color:'+stColor+';font-weight:600;">'+stText+'</span><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">'+ops+'</span></div>';
 }
-function krTblState(txt, tone){ var st = {done:['var(--sage-bg)','var(--sage)'], arrived:['#E8F0FB','#2F5FA8'], pending:['var(--border2)','var(--slate2)']}[tone] || ['var(--border2)','var(--slate2)']; return '<span class="status-pill" style="background:'+st[0]+';color:'+st[1]+';">'+txt+'</span>'; }
+function krTblState(txt, tone){ var st = {done:['var(--sage-bg)','var(--sage)'], arrived:['#E8F0FB','#2F5FA8'], pending:['var(--border2)','var(--slate2)'], ok:['#E3F4E8','#2E7D4F']}[tone] || ['var(--border2)','var(--slate2)']; return '<span class="status-pill" style="background:'+st[0]+';color:'+st[1]+';">'+txt+'</span>'; }
 /* 预约使用 / 预约时间 对话框（项目卡）：日期 + 时间（+ 施术选院长；术后管理可选韩国 / 印尼）→ 按日期建立 / 并入子案件 */
 var KR_BKD = null;
 function krBkdOpen(mode, name, pcIdx, reuseId){
@@ -2185,13 +2185,13 @@ function krVisitDirTag(c, cd){
 function krCaseCardHtml(c, cd){
   var can = krCan(), g = cd.group, mode = g, key = cd.key, skey = String(key).replace(/'/g,''), st = scheduleState(c), today = todayStr();
   var when = krEsc(krShortDt(cd.date, cd.time)), visitWhen = krEsc(krVisitWhenText(cd, today)), src = cd.kind==='sub' ? '<span class="status-pill" style="background:#F3EFE7;color:var(--slate2);margin-left:6px;" title="预约来源">预约来源：'+visitSource(c, key)+'</span>' : '';
-  var open = g==='today' || (cd.kind==='main' && g==='booked' && KR_SUB_OPEN[key]!==false) || !!KR_SUB_OPEN[key] || (cd.rep && KR_SUB_HL===cd.rep.id), btn = '', head, body = '';
+  var open = g==='today' || (cd.kind==='main' && g==='booked' && KR_SUB_OPEN[key]!==false) || !!KR_SUB_OPEN[key] || (cd.rep && KR_SUB_HL===cd.rep.id), btn = '', head, body = '', stTxt = '', stTone = '';
   if(cd.kind==='main'){
     var vsm = c.krProcedureDone ? 'done' : (c.hasArrived ? 'arrived' : 'pending');
     var pendToday = g==='today' && st==='Confirmed' && !c.hasArrived && !c.visitClosed; /* CMD-1019-18：到院前的今日案件卡只留一行，到院按钮在页头下的状态卡 */
     if(g!=='done' && st==='Confirmed' && can && !pendToday) btn = '<button class="'+(g==='today' ? 'btn-primary' : 'btn-outline')+'" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krMarkArrived()" title="'+(g==='today' ? '' : '还没到施术当天；客人提前到院时也可以先标记')+'">客人已到医院</button>';
     if(g==='today' && vsm==='arrived') btn = krEndBtnHtml('main'); /* 到院卡上一直留［结束今日到院］（CMD-1019-22 七） */
-    head = '<b>'+visitWhen+'</b> <span style="color:var(--slate2);font-size:12px;">· '+krEsc(krVisitWhat(c, cd))+'</span>'+krVisitDirTag(c, cd)+' '+krTblState({pending:'待到院', arrived:'已到院', done:'已完成'}[vsm], vsm);
+    head = '<b style="font-size:14px;">'+visitWhen+'</b> <span style="color:var(--slate2);font-size:12px;">· '+krEsc(krVisitWhat(c, cd))+'</span>'+krVisitDirTag(c, cd); stTxt = {pending:'待到院', arrived:'已到院', done:'已完成'}[vsm]; stTone = vsm;
     if(open && !pendToday){
       var rowsOnly = function(m){ return krMainRowsHtml(c, m); };
       if(g==='today') body = (st==='Arrived' ? krSurgeryFlowHtml(c) : krUnpaidBanner(c)+krStepItemsCard(c)+rowsOnly('booked'));
@@ -2199,7 +2199,7 @@ function krCaseCardHtml(c, cd){
       if(KR_SUBV.edit && can && st==='Confirmed' && !pendToday) body += krSurgHead(c);
     }
   } else if(cd.kind==='end'){
-    head = '<b style="text-decoration:line-through;color:var(--muted);">'+visitWhen+'</b> <span style="color:var(--muted);font-size:12px;text-decoration:line-through;">· '+krEsc(krVisitWhat(c, cd))+'</span> <span style="color:var(--slate2);font-size:12px;">已取消（项目全部延期）</span> '+krTblState('全部延期', 'done');
+    head = '<b style="text-decoration:line-through;color:var(--muted);">'+visitWhen+'</b> <span style="color:var(--muted);font-size:12px;text-decoration:line-through;">· '+krEsc(krVisitWhat(c, cd))+'</span> <span style="color:var(--slate2);font-size:12px;">已取消（项目全部延期）</span>'; stTxt = '全部延期'; stTone = 'done';
     if(open){ var gone = ((c.visitPostponed||{})[key]||[]).map(function(x, i){ return {id:'', no:'', content:x.content, place:x.place, kind:x.kind, holdUseOf:x.holdUseOf, surgUse:x.surgUse, note:x.note, postponed:true, skipped:true}; }); body = '<div style="margin:0 0 8px;">'+krTblWrap(krTblHead()+gone.map(function(s){ return krTblRow(c, s, {can:false, mode:'done'}); }).join(''))+'</div>'; }
   } else {
     var rep = cd.rep, grp = coreVisitRows(c, key).concat(coreVisitExtra(c, key)).sort(function(a, b){ return (a.time||'').localeCompare(b.time||'') || String(a.no).localeCompare(String(b.no)); });
@@ -2207,13 +2207,17 @@ function krCaseCardHtml(c, cd){
     var pendSub = g==='today' && vs==='pending'; /* CMD-1019-18：到店前只留一行，按钮在状态卡 */
     if(g==='today' && vs==='pending' && can && !pendSub) btn = reached ? '<button class="btn-primary" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krSubVisitArrive(\''+skey+'\')">客人到店</button>' : '<button class="btn-primary" disabled style="padding:5px 16px;font-size:13px;opacity:.4;cursor:not-allowed;" title="未到当天">客人到店</button> <a href="#" onclick="event.stopPropagation();krSubVisitSim(\''+skey+'\');return false;" style="font-size:12px;">模拟到当日（演示用）</a>';
     if(g==='today' && vs==='arrived') btn = krEndBtnHtml(key);
-    head = '<b>'+visitWhen+'</b> <span style="color:var(--slate2);font-size:12px;">· '+krEsc(krVisitWhat(c, cd))+'</span>'+krVisitDirTag(c, cd)+' '+krTblState({pending:'待到店', arrived:'已到店', done:'已完成'}[vs], vs);
+    head = '<b style="font-size:14px;">'+visitWhen+'</b> <span style="color:var(--slate2);font-size:12px;">· '+krEsc(krVisitWhat(c, cd))+'</span>'+krVisitDirTag(c, cd); stTxt = {pending:'待到店', arrived:'已到店', done:'已完成'}[vs]; stTone = vs;
     if(open && !pendSub) body = '<div style="margin:0 0 8px;">'+krTblWrap(krTblHead()+grp.map(function(s){ return krTblRow(c, s, {can:can, mode:mode, canDone:can && vs!=='pending', doneFn:'krHoldSubDone', cancel:true}); }).join(''))+'</div>'; /* CMD-1020-06：拿掉表格下的「院长」和「本次记录」（都在 Timeline 里），院长写在标题行 */
   }
   var mvk = cd.kind==='main' ? 'main' : (cd.kind==='sub' ? key : null), mN = mvk===null ? 0 : krMemoList(c, mvk).length;
-  if(mN) head += ' <span class="status-pill" style="background:#F3EFE7;color:var(--slate2);">memo '+mN+'</span>'; /* 标题行显示 memo N（0 不显示），收起的卡也显示 */
+  /* CMD-1021-07：标题行最右边「备注：N / 无」（收起也显示；待到店 / 待到院且没有 memo 不显示）+ 状态标签；已到店 / 已到院（蓝）的标签留在标题旁 */
+  var noteH = (mvk!==null && (mN || stTone!=='pending')) ? '<span style="font-size:12px;color:var(--slate2);white-space:nowrap;">备注：'+(mN || '无')+'</span>' : '';
+  var stPill = stTxt ? krTblState(stTxt, stTone==='pending' ? 'ok' : stTone) : '', stLeft = stTone==='arrived';
+  if(stLeft) head += ' '+stPill;
+  btn = noteH+(stLeft ? '' : ' '+stPill)+(btn ? ' '+btn : '');
   if(open && mvk!==null && !(cd.kind==='main' && g==='today' && st==='Confirmed' && !c.hasArrived && !c.visitClosed) && !(cd.kind==='sub' && g==='today' && cd.vs==='pending')) body += krVisitMemoHtml(c, mvk);
-  return '<div id="'+(cd.rep ? 'kr-subrow-'+cd.rep.id : (cd.kind==='main' ? 'kr-maincard' : 'kr-endrow-'+skey))+'" class="card" style="padding:12px 18px;margin-bottom:10px;background:#fff;"><div '+(g==='today' ? '' : 'class="case-row-click" onclick="krSubToggle(\''+skey+'\')" style="cursor:pointer;"')+' style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '8' : '0')+'px;"><span style="width:14px;">'+(g==='today' ? '' : (open ? '▾' : '▸'))+'</span><span style="flex:1;">'+head+'</span>'+btn+'</div>'+body+'</div>';
+  return '<div id="'+(cd.rep ? 'kr-subrow-'+cd.rep.id : (cd.kind==='main' ? 'kr-maincard' : 'kr-endrow-'+skey))+'" class="card" style="padding:12px 18px;margin-bottom:10px;background:#fff;"><div '+(g==='today' ? '' : 'class="case-row-click" onclick="krSubToggle(\''+skey+'\')"')+' style="'+(g==='today' ? '' : 'cursor:pointer;')+'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '8' : '0')+'px;"><span style="width:14px;">'+(g==='today' ? '' : (open ? '▾' : '▸'))+'</span><span style="flex:1;">'+head+'</span>'+btn+'</div>'+body+'</div>';
 }
 function krCaseGroupsHtml(c, withMain){
   subCaseNos(c); var cards = krCaseCards(c, withMain), out = '';
