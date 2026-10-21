@@ -2460,6 +2460,7 @@ function followupCardsHtml(c){
     '<div class="case-field-row"><span class="fk">关联案件</span><span style="flex-grow:1;font-size:13px;">'+cesc(src ? src.caseNo+' · '+caseStageProcText(src) : '')+'</span><a href="#" class="info-link" onclick="cancelFollowupLink();return false;">取消关联（走一般流程）</a></div>'+
     '<div class="case-field-row"><span class="fk">메타뷰（选填）</span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+ /* CMD-1021-20：关联案件的 메타뷰 面诊 / 不面诊都选填，放面诊需求上方 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:10px;flex-wrap:wrap;">'+btn(true,'需要院长面诊（复诊）')+btn(false,'不面诊')+'</div></div></div>'+
+    (c.needsConsult===true ? wantDraftRowHtml(c) : '')+
     body+
     '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div></div>';
 }
@@ -2686,6 +2687,7 @@ function materialsCardHtml(c){
     linkRowHtml(c)+
     metaRow+ /* CMD-1021-20：一般案件 메타뷰 必填（面诊 / 不面诊都要），放在面诊需求上方 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
+    (c.needsConsult===true ? wantDraftRowHtml(c) : '')+ /* CMD-1021-23：选了面诊才有「客人希望的面诊时间」 */
     concernExpectHtml(c)+
     directorRowHtml(c)+
     budgetRowHtml(c)+
@@ -3262,15 +3264,31 @@ function consultFeeCardHtml(status, extraText, actionsHtml, c){
     (actionsHtml ? '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">'+actionsHtml+'</span>' : '')+'</div>'+wantConsultRowHtml(c, status);
 }
 /* CMD-1020-12 三·2：IN 交完（或免除）面诊费后可填「客人希望的面诊时间」（选填自由文字，之后可改；KR 确认面诊时间卡片最上面显示「客人希望：…」，KR 待办 / 通知也带这一句） */
-function wantConsultRowHtml(c, status){
-  if(!c || (status!=='已缴费' && status!=='已免除') || isEnded(c) || c.consultStatus==='report_ready') return '';
-  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 12px;"><span style="font-size:13px;font-weight:700;">客人希望的面诊时间</span><input id="want-consult" value="'+aEscC(c.wantConsult||'')+'" placeholder="选填，例：10/21 下午，或 10/22 全天" onchange="saveWantConsult(\''+c.id+'\', this.value)" style="flex:1;min-width:240px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></div>';
+/* CMD-1021-23：「客人希望的面诊时间」——填写在基础资料「到访目的」（选了面诊 / 复诊才有，选填一行文字），按［确认］随面诊资料一起送 KR（KR 确认面诊时间的卡片最上面显示）；
+   面诊资料 tab 改成只读 +［修改］：KR 确认面诊时间之前可改（改了 KR 收通知、进 Timeline），KR 确认之后锁住 */
+var WANT_EDIT = false;
+function wantDraftRowHtml(c){
+  return '<div class="case-field-row"><span class="fk">客人希望的面诊时间</span><div style="flex-grow:1;"><input value="'+aEscC(c.wantConsult||'')+'" placeholder="选填，例：15:00 之后、周六上午" oninput="saveWantDraft(this.value)" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div></div>';
 }
+function saveWantDraft(v){ var c = getCurrentCase(); if(c) c.wantConsult = String(v||'').slice(0, 120); }
+function wantConsultLocked(c){ return c.consultStatus!=='awaiting_payment' && c.consultStatus!=='paid_waiting_kr'; } /* KR 确认面诊时间之后（等待报告起）锁住 */
+function wantConsultRowHtml(c, status){
+  if(!c || status==='已取消' || isEnded(c) || c.consultStatus==='report_ready' || c.consultStatus==='cancelled') return '';
+  var locked = wantConsultLocked(c), val = String(c.wantConsult||'').trim(), cid = String(c.id).replace(/'/g,'');
+  var lab = '<span style="font-size:13px;font-weight:700;">客人希望的面诊时间</span>';
+  if(WANT_EDIT && !locked) return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 12px;">'+lab+'<input id="want-consult" value="'+aEscC(c.wantConsult||'')+'" placeholder="选填，例：15:00 之后、周六上午" style="flex:1;min-width:240px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><button class="btn-primary" style="padding:5px 14px;font-size:12px;" onclick="saveWantConsult(\''+cid+'\', document.getElementById(\'want-consult\').value);wantEditEnd()">保存</button><button class="btn-outline" style="padding:5px 14px;font-size:12px;" onclick="wantEditEnd()">取消</button></div>';
+  var btn = locked ? '<span title="KR 已确认面诊时间" style="display:inline-block;"><button class="btn-outline" disabled style="padding:3px 12px;font-size:12px;opacity:.4;cursor:not-allowed;">修改</button></span>' : '<button class="btn-outline" style="padding:3px 12px;font-size:12px;" onclick="wantEditStart()">修改</button>';
+  if(!val && locked) return '';
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 12px;">'+lab+'<span style="font-size:13px;color:'+(val ? 'var(--slate2)' : 'var(--muted)')+';">'+(val ? aEscC(val) : '—')+'</span>'+btn+'</div>';
+}
+function wantEditStart(){ WANT_EDIT = true; var c = getCurrentCase(); if(c) renderCaseBody(c); }
+function wantEditEnd(){ WANT_EDIT = false; var c = getCurrentCase(); if(c) renderCaseBody(c); }
 function saveWantConsult(id, val){
-  var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; val = String(val||'').trim().slice(0, 120);
+  var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c || wantConsultLocked(c)) return; val = String(val||'').trim().slice(0, 120);
   if((c.wantConsult||'')===val) return; var had = !!c.wantConsult; c.wantConsult = val;
   logCaseEvent(c, actingName(), val ? (had ? '修改' : '填写')+'客人希望的面诊时间：'+val : '清空客人希望的面诊时间', '面诊');
-  if(val){ try{ pushKrNotif(caseKrHospital(c), '客人希望的面诊时间：'+val+'（'+c.name+'，'+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} }
+  if(val && c.consultStatus==='paid_waiting_kr'){ try{ pushKrNotif(caseKrHospital(c), '客人希望的面诊时间'+(had ? '有修改' : '')+'：'+val+'（'+c.name+'，'+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} } /* 只告知；KR 还没看到案件（待缴费）时不发 */
+  buildCaseLog(c);
 }
 
 /* 等待报告的小状态（2026-10-02 面诊改版）：KR确认预计出报告时间后 ✓"预计 X 出报告"+倒计时（Success）；

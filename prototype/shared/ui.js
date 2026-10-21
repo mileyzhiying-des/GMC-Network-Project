@@ -1776,6 +1776,7 @@ function confirmMaterials(){
   }
   if(c.needsConsult===false){ c.concernText = concernTextOf(c); c.concern = c.concernText; c.expectation = ''; } else if(c.followup && c.needsConsult===true){ c.consultKind = '复诊'; c.concerns = []; c.concern = '【复诊 · 关联 '+(followSrc(c)||{}).caseNo+'；项目：'+(c.followProjects||[]).join('、')+'】'+String(c.revisitQuestion||'').trim(); c.expectation = ''; c.photoUploaded = (c.revisitMedia||[]).some(function(m){ return Object.keys(m.photos||{}).length>0; }); c.videoUploaded = (c.revisitMedia||[]).some(function(m){ return !!m.video; }); } else concernSync(c); /* 不面诊：苦恼 = 手写文字 */
   c.materialsError = '';
+  if(c.needsConsult!==true){ c.wantConsult = ''; } else { c.wantConsult = String(c.wantConsult||'').trim(); if(c.wantConsult) logCaseEvent(c, actingName(), '填写客人希望的面诊时间：'+c.wantConsult+'（随面诊资料送 KR）', '面诊'); } /* CMD-1021-23：不面诊没有；面诊 / 复诊的值随资料送 KR */
   c.materialsConfirmed = true;
   c.materialsDate = todayStr();
   applyCaseLink(c); /* Case ID 已在预约时生成，这里不再生成 */

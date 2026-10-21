@@ -2201,8 +2201,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.consultStatus==='paid_waiting_kr' && /^T-/.test(x.name); })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stagePay\'])')) return;
     var old = c.wantConsult, hid = caseKrHospital(c), nN = function(){ return ((HOSPITAL_DATA[hid]||{}).notifs||[]).filter(function(n){ return /客人希望的面诊时间/.test(n.text||'') && String(n.text).indexOf(c.name)>-1; }).length; };
-    var h = consultFeeCardHtml('已缴费', '', '', c); ST.ok(/id="want-consult"/.test(h) && /客人希望的面诊时间/.test(h) && /选填/.test(h), '已缴面诊费下面有「客人希望的面诊时间」（选填）');
-    ST.ok(!/want-consult/.test(consultFeeCardHtml('待缴费', '', '', c)), '没交面诊费时不显示');
+    var h = consultFeeCardHtml('已缴费', '', '', c); ST.ok(/客人希望的面诊时间/.test(h) && />修改</.test(h) && !/id="want-consult"/.test(h), 'CMD-1021-23：面诊资料 tab 改成只读 +［修改］（KR 确认前）');
+    WANT_EDIT = true; ST.ok(/id="want-consult"/.test(consultFeeCardHtml('已缴费', '', '', c)), '点［修改］出现输入框'); WANT_EDIT = false;
     var n0 = nN(); saveWantConsult(c.id, '10/21 下午，或 10/22 全天'); ST.ok(c.wantConsult==='10/21 下午，或 10/22 全天' && ST.hasLog(c, /填写客人希望的面诊时间/) && nN()===n0+1, '填了：存下 + Timeline + KR 收一条通知');
     saveWantConsult(c.id, '10/23 全天'); ST.ok(c.wantConsult==='10/23 全天' && ST.hasLog(c, /修改客人希望的面诊时间/) && /10\/23/.test(consultFeeCardHtml('已缴费', '', '', c)), '之后可以修改'); saveWantConsult(c.id, ''); ST.ok(!c.wantConsult, '可以清空（选填）');
     c.wantConsult = old;
@@ -3774,6 +3774,27 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var pcCat = Object.keys(KR_CATEGORIES).filter(function(k){ return isKrPostcareCat(k); })[0]; krpOpen('new'); KRP.draft.categoryId = pcCat; ST.ok(!/复诊 \/ 术后照片要求/.test(krpEditor()), '韩国术后管理项目没有这套设定'); krpClose();
       var lp = krLocalLib(hid)[0]; KRL.draft = null; ST.ok(!!lp && !/拍摄|视角参考/.test(krmSpecsHtml(lp)), '管理项目没有这套设定');
     } finally { var o = JSON.parse(snap); h.partShoot = o.ps; KRP.tab = old; krpClose(); Store.touch(); }
+  });
+
+  ST.def('R91a','CMD-1021-23（IN 分页）：客人希望的面诊时间——到访目的里（只有面诊 / 复诊）、确认随资料送 KR、面诊资料 tab 只读［修改］、KR 确认后锁住',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = true;
+    try{
+      var c = ST.newRes('R91a'); ST.arrive(c); c = getCurrentCase(); ST.ok(materialsCardHtml(c).indexOf('客人希望的面诊时间')<0, '没选面诊需求：没有这行');
+      setNeedsConsult(false); ST.ok(materialsCardHtml(c).indexOf('客人希望的面诊时间')<0, '不面诊：不显示');
+      setNeedsConsult(true); var h = materialsCardHtml(c); ST.ok(h.indexOf('客人希望的面诊时间')>h.indexOf('面诊需求') && h.indexOf('客人希望的面诊时间')<h.indexOf('先选大类'), '选了面诊：面诊需求下面多一行（选填）');
+      saveWantDraft('15:00 之后'); ST.ok(c.wantConsult==='15:00 之后', '输入存草稿');
+      var y = ST.newRes('R91b'); ST.materials(y, {consult:true}); y = CASE_ITEMS.filter(function(x){ return x.id===y.id; })[0]; y.wantConsult = '周六上午'; ST.open(y); y.materialsConfirmed = false; y.subState = 'arrived'; y.consultStatus = null; y.consultRequested = false;
+      setNeedsConsult(true); y.wantConsult = '周六上午'; confirmMaterials(); y = getCurrentCase();
+      ST.ok(y.materialsConfirmed && y.wantConsult==='周六上午' && ST.hasLog(y, /填写客人希望的面诊时间：周六上午/), '确认：随资料送 KR（值留在案件，Timeline 记一笔）');
+      var z = ST.newRes('R91c'); ST.arrive(z); z = getCurrentCase(); z.concerns = []; z.wantConsult = '不该留'; setNeedsConsult(false); z.concernText = '手写'; z.metaviewStatus = 'ready'; confirmMaterials(); z = getCurrentCase(); ST.ok(z.materialsConfirmed && !z.wantConsult, '不面诊确认后没有希望时间');
+      /* 面诊资料 tab：只读 + 修改，KR 确认前可改（KR 收通知），确认后锁 */
+      var w = ST.newRes('R91d'); ST.materials(w, {consult:true}); ST.payConsult(w); w = CASE_ITEMS.filter(function(x){ return x.id===w.id; })[0]; ST.open(w); w.wantConsult = '周日';
+      var tab = consultFeeCardHtml('已缴费', '', '', w); ST.ok(/周日/.test(tab) && />修改</.test(tab) && !/disabled/.test(tab) && !/id="want-consult"/.test(tab), '待 KR 确认：只读显示 +［修改］可点');
+      wantEditStart(); ST.ok(/id="want-consult"/.test(consultFeeCardHtml('已缴费', '', '', w)), '点［修改］出现输入框 + 保存 / 取消'); var hid = caseKrHospital(w), nN = function(){ return ((HOSPITAL_DATA[hid]||{}).notifs||[]).filter(function(n){ return /客人希望的面诊时间有修改/.test(n.text||'') && String(n.text).indexOf(w.name)>-1; }).length; }, n0 = nN();
+      saveWantConsult(w.id, '周日下午'); wantEditEnd(); ST.ok(w.wantConsult==='周日下午' && ST.hasLog(w, /修改客人希望的面诊时间：周日下午/) && nN()===n0+1, 'KR 确认前改：KR 收通知（只告知）+ Timeline');
+      w.consultStatus = 'awaiting_report'; var lk = consultFeeCardHtml('已缴费', '', '', w); ST.ok(/KR 已确认面诊时间/.test(lk) && /disabled/.test(lk), 'KR 确认之后：［修改］灰掉 + 悬停「KR 已确认面诊时间」'); saveWantConsult(w.id, '改不了'); ST.ok(w.wantConsult==='周日下午', '锁住后核心也不让改');
+    } finally { window.GMC_NO_FOLLOWASK = old; WANT_EDIT = false; }
   });
 
 })();
