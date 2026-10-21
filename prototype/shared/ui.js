@@ -1078,7 +1078,7 @@ function simulateTimePass30(){
 
 function updateCaseStage(c){
   if(typeof ensureItemIids==='function') ensureItemIids(c); /* CMD-1020-16 三：每笔购买的项目补唯一 id */
-  if(c.krProcedureDone && !c.visitClosed && c.hasArrived && c.krBalancePaid && !c._ending && typeof todayOpenRows==='function' && todayOpenRows(c).length){ try{ coreReopenVisit(c, '系统', '今天还有待做项目'); }catch(e){} } /* 到院已结束但又有待做的（加项目 / 付款后）→ 自动重新打开（CMD-1019-22 八） */
+  /* CMD-1021-11：拿掉「到院已结束但又有待做的 → 自动重新打开」；重新打开只有已完成到院卡的［增加项目］ */
   c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c);
   if(!SEEDING && c.director && typeof syncSurgeryBlock==='function'){ try{ syncSurgeryBlock(c); }catch(e){} } /* 状态变化后施术块跟着更新（取消的不再占日程） */
   var fo = (typeof document!=='undefined') && document.getElementById('chat-float-overlay'); if(fo && fo.classList.contains('open') && typeof renderFloatMessages==='function'){ try{ renderFloatMessages(); }catch(e){} } }

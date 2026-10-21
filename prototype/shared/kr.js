@@ -835,7 +835,8 @@ function krProjCards(c, opts){
     var payU = !!(itU && itU.pendingPay); /* CMD-1020-16 四：待付款的项目可以先做（勾选 / 今日进行 / 本次使用 / 操作完成），预约时间仍要付款后 */
     var okUse = active && !pend && !anesU && leftU>0, okBook = paid && !pend && !payU && !c.visitClosed, tip = anesU ? '未签麻醉同意书' : leftU<=0 ? '次数用完（剩余次数都已安排）' : '';
     var nq = krEsc(name).replace(/'/g,'');
-    return (active ? krOutBtn('本次使用', 'krUnitUseNow(\''+nq+'\')', okUse, tip)+' ' : '')+krOutBtn('预约时间', (itU && krIsMgmtItemC(itU) ? 'krCbOpen({mgmtOne:\''+nq+'\'})' : 'krBkdOpen(\'use\',\''+nq+'\')'), okBook, (pend || payU) ? '待付款，付款后才能预约' : '付清尾款后才能预约');
+    var doneTip = '今天的到院已完成，请先在到院卡按［增加项目］';
+    return (active ? krOutBtn('本次使用', 'krUnitUseNow(\''+nq+'\')', okUse, tip)+' ' : (anyVisitCompletedToday(c) && !pend ? krOutBtn('本次使用', '', false, doneTip)+' ' : ''))+krOutBtn('预约时间', (itU && krIsMgmtItemC(itU) ? 'krCbOpen({mgmtOne:\''+nq+'\'})' : 'krBkdOpen(\'use\',\''+nq+'\')'), okBook, (pend || payU) ? '待付款，付款后才能预约' : '付清尾款后才能预约');
   };
   /* ---- 施术项目 ---- */
   var sU = [], sB = [], sD = [], sC = [];
@@ -923,7 +924,7 @@ function krProjCards(c, opts){
   var nSurg = surg.length - sC.length, nCare = cu.unbooked.length + cu.rows.length, nMg = mgItems.filter(function(it){ return !it.cancelled && !it.swapped; }).length;
   var pill = function(k, label, n){ var on = pg===k; return '<span onclick="krProjPage(\''+k+'\')" style="cursor:pointer;padding:7px 18px;border-radius:999px;font-size:13px;font-weight:600;'+(on ? 'background:var(--navy,#3B2F2A);color:#fff;' : 'background:var(--bg-sidebar,#EFEBE4);color:var(--slate2);')+'">'+label+'（'+n+'）</span>'; };
   var seg = '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+pill('surg', '施术项目', nSurg)+pill('care', '术后管理', nCare)+pill('mgmt', '管理项目', nMg)+'</div>'; /* 胶囊 tab：选中实心深色、未选中浅色底（CMD-1020-02） */
-  var addBtn = ((can && c.hasArrived && !c.visitClosed && c.krBalancePaid) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="KR_AD.open=!KR_AD.open;krRenderCaseDetail()">'+(KR_AD.open ? '收起' : '增加项目')+'</button>' : '');
+  var addBtn = (can && c.hasArrived && !c.visitClosed && c.krBalancePaid && c.krProcedureDone && anyVisitCompletedToday(c)) ? krOutBtn('增加项目', '', false, '今天的到院已完成，请先在到院卡按［增加项目］') : ((can && c.hasArrived && !c.visitClosed && c.krBalancePaid && !c.krProcedureDone) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="KR_AD.open=!KR_AD.open;krRenderCaseDetail()">'+(KR_AD.open ? '收起' : '增加项目')+'</button>' : '');
   var body = pg==='surg' ? (surgBody || krEmpty('这个案件没有施术项目')) : pg==='care' ? (careBody || krEmpty('这个案件没有术后管理')) : (mgBody || krEmpty('这个案件没有管理项目'));
   return krCardBox('<div style="display:flex;align-items:center;gap:12px;"><span>项目卡 <span style="font-weight:400;font-size:12px;color:var(--muted);">［本次使用］只在客人已到院、到院进行中时出现；［预约时间］按日期建立 / 并入那天的到院</span></span><span style="flex:1;"></span>'+addBtn+'</div>', '<div style="margin-bottom:6px;">'+seg+'</div>'+body)+krAddOnCard(c);
 }
@@ -2200,6 +2201,21 @@ function krVisitDirTag(c, cd){
   else if(cd.kind==='sub'){ var v = visitCalBlocks(c).filter(function(x){ return x.key===cd.key; })[0]; dir = (v && v.occupies) ? (v.director || c.director) : ''; }
   return dir ? ' <span style="color:var(--slate2);font-size:12px;">· 院长：'+krEsc(String(dir).replace(/\s*院长$/, ''))+'</span>' : '';
 }
+/* CMD-1021-11：今天已完成的到院卡右下角［增加项目］（线框）；只有 KR 室长能按（院长 / 代表院长灰掉 + 悬停写原因）；当天 00:00（韩国时间）之后 / 案件已结案不再显示 */
+function krReopenFooter(c, cd, g){
+  if(g!=='done' || (cd.kind!=='main' && cd.kind!=='sub')) return '';
+  var key = cd.kind==='main' ? 'main' : cd.key; if(!visitCompletedToday(c, key)) return '';
+  var btn = krCan() ? krOutBtn('增加项目', 'event.stopPropagation();krReopenAdd(\''+String(key).replace(/'/g,'')+'\')', true) : krOutBtn('增加项目', '', false, '只有 KR 室长可以增加项目');
+  return '<div style="display:flex;justify-content:flex-end;margin-top:8px;">'+btn+'</div>';
+}
+function krReopenAdd(key){
+  if(!krCan()) return;
+  krMut(function(c){ var r = coreReopenVisitAt(c, key, ME_NAME); if(!r.ok){ setTimeout(function(){ krBlock(r.err); }, 0); return false; } return true; });
+  /* 重开后行都已完成，不要马上又弹「都做完了吗」：登记当前完成签名，之后有新的完成才再问 */
+  Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(c && key!=='main') KR_ENDASK_SHOWN[KR_CASE.id+'|'+key] = krVisitDoneSig(c, key); });
+  KR_PROJ_PAGE = 'surg'; if(key==='main') KR_AD.open = true; krSetCaseTab('items');
+  setTimeout(function(){ var el = document.querySelector('#kr-casedetail .kr-addon, #kr-casedetail .card'); if(el && el.scrollIntoView) el.scrollIntoView({block:'start'}); }, 80);
+}
 function krCaseCardHtml(c, cd){
   var can = krCan(), g = cd.group, mode = g, key = cd.key, skey = String(key).replace(/'/g,''), st = scheduleState(c), today = todayStr();
   var when = krEsc(krShortDt(cd.date, cd.time)), visitWhen = krEsc(krVisitWhenText(cd, today)), src = cd.kind==='sub' ? '<span class="status-pill" style="background:#F3EFE7;color:var(--slate2);margin-left:6px;" title="预约来源">预约来源：'+visitSource(c, key)+'</span>' : '';
@@ -2235,7 +2251,7 @@ function krCaseCardHtml(c, cd){
   if(stLeft) head += ' '+stPill;
   btn = noteH+(stLeft ? '' : ' '+stPill)+(btn ? ' '+btn : '');
   if(open && mvk!==null && !(cd.kind==='main' && g==='today' && st==='Confirmed' && !c.hasArrived && !c.visitClosed) && !(cd.kind==='sub' && g==='today' && cd.vs==='pending')) body += krVisitMemoHtml(c, mvk, g);
-  return '<div id="'+(cd.rep ? 'kr-subrow-'+cd.rep.id : (cd.kind==='main' ? 'kr-maincard' : 'kr-endrow-'+skey))+'" class="card" style="padding:12px 18px;margin-bottom:10px;background:#fff;"><div '+(g==='today' ? '' : 'class="case-row-click" onclick="krSubToggle(\''+skey+'\')"')+' style="'+(g==='today' ? '' : 'cursor:pointer;')+'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '8' : '0')+'px;"><span style="width:14px;">'+(g==='today' ? '' : (open ? '▾' : '▸'))+'</span><span style="flex:1;">'+head+'</span>'+btn+'</div>'+body+'</div>';
+  return '<div id="'+(cd.rep ? 'kr-subrow-'+cd.rep.id : (cd.kind==='main' ? 'kr-maincard' : 'kr-endrow-'+skey))+'" class="card" style="padding:12px 18px;margin-bottom:10px;background:#fff;"><div '+(g==='today' ? '' : 'class="case-row-click" onclick="krSubToggle(\''+skey+'\')"')+' style="'+(g==='today' ? '' : 'cursor:pointer;')+'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '8' : '0')+'px;"><span style="width:14px;">'+(g==='today' ? '' : (open ? '▾' : '▸'))+'</span><span style="flex:1;">'+head+'</span>'+btn+'</div>'+body+krReopenFooter(c, cd, g)+'</div>';
 }
 function krCaseGroupsHtml(c, withMain){
   subCaseNos(c); var cards = krCaseCards(c, withMain), out = '';
@@ -2271,7 +2287,7 @@ function krEndAskCheck(){
 /* 有待付款项目 → 拦下：DS 弹窗（按钮靠右）［返回］［去付款］；备注（整体 / 项目）不保存也不清空，付完款回来还在 */
 function krEndBlockModal(msg){
   var ov = document.getElementById('kr-endblock-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-endblock-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">还不能结束今日到院</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">'+krEsc(msg)+'<div style="font-size:12px;color:var(--muted);margin-top:6px;">已经写的备注不会丢，付完款回来还在。</div></div><div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="document.getElementById(\'kr-endblock-overlay\').classList.remove(\'open\')">返回</button><button class="btn-primary" onclick="document.getElementById(\'kr-endblock-overlay\').classList.remove(\'open\');krPayOpen()">去付款</button></div></div>';
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">还不能标记客人已离院</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">'+krEsc(msg)+'<div style="font-size:12px;color:var(--muted);margin-top:6px;">已经写的备注不会丢，付完款回来还在。</div></div><div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="document.getElementById(\'kr-endblock-overlay\').classList.remove(\'open\')">返回</button><button class="btn-primary" onclick="document.getElementById(\'kr-endblock-overlay\').classList.remove(\'open\');krPayOpen()">去付款</button></div></div>';
   ov.style.zIndex = 100020; ov.classList.add('open');
 }
 function krEndAskOpen(key, manual){
@@ -2281,8 +2297,8 @@ function krEndAskOpen(key, manual){
   var left = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c) return []; return key==='main' ? todayOpenRows(c).map(function(x){ return buyName(x.name); }) : coreVisitRows(c, key).concat(coreVisitExtra(c, key)).filter(function(s){ return !s.done; }).map(function(s){ return buyName(s.content); }); }) || [];
   var ov = document.getElementById('kr-endask-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-endask-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   var k = String(key).replace(/'/g,'');
-  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">'+(manual ? '结束今日到院？' : '今天的项目都做完了吗？')+'</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">'+(left.length ? '还有 <b>'+left.length+'</b> 项没做完：'+left.map(krEsc).join('、')+'。结束后这些会退回项目卡（之后还能再约 / 再用）。' : (manual ? '这次到院的项目都做完了。' : '这次到院里的项目都已完成或取消。选［还有项目］可以继续加项目 / 本次使用；选［今日完成］这次到院就结束。'))+'</div>'+
-    '<div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="krEndAskNo(\''+k+'\')">'+(manual ? '取消' : '还有项目')+'</button><button class="btn-primary" onclick="krEndAskYes(\''+k+'\')">'+(manual ? '结束今日到院' : '今日完成')+'</button></div></div>';
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">'+(manual ? '确认客人已离院？' : '今天的项目都做完了吗？')+'</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">'+(left.length ? '还有 <b>'+left.length+'</b> 项没做完：'+left.map(krEsc).join('、')+'。结束后这些会退回项目卡（之后还能再约 / 再用）。' : (manual ? '今天的到院将标为已完成。' : '这次到院里的项目都已完成或取消。选［还有项目］可以继续加项目 / 本次使用；选［客人已离院］这次到院就标为已完成。'))+'</div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="krEndAskNo(\''+k+'\')">'+(manual ? '取消' : '还有项目')+'</button><button class="btn-primary" onclick="krEndAskYes(\''+k+'\')">'+(manual ? '确认' : '客人已离院')+'</button></div></div>';
   ov.style.zIndex = 100010; ov.classList.add('open');
 }
 function krEndAskNo(key){ var ov = document.getElementById('kr-endask-overlay'); if(ov) ov.classList.remove('open'); if(key==='main') krMut(function(c){ if(!c.endAsk) return false; c.endAsk = false; return true; }); }
@@ -2290,7 +2306,7 @@ function krEndAskYes(key){
   var ov = document.getElementById('kr-endask-overlay'); if(ov) ov.classList.remove('open');
   krMut(function(c){ var r = key==='main' ? coreEndVisitToday(c, ME_NAME) : coreEndSubVisit(c, key, ME_NAME); if(!r.ok){ if(r.pending){ setTimeout(function(){ krEndBlockModal(r.err); }, 0); } else alert(r.err||'不能结束'); return false; } return true; });
 }
-function krEndBtnHtml(key){ return krCan() ? '<button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krEndAskOpen(\''+String(key).replace(/'/g,'')+'\', true)">结束今日到院</button>' : ''; }
+function krEndBtnHtml(key){ return krCan() ? '<button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krEndAskOpen(\''+String(key).replace(/'/g,'')+'\', true)">客人已离院</button>' : ''; }
 /* 主案件的行：施术 + 在韩增加（+ 持有的管理项目，今日） */
 function krMainRowsHtml(c, mode){
   var can = krCan(), paidOk = !!c.krBalancePaid, sortSubs = function(a, b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); };

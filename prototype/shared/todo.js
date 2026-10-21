@@ -133,8 +133,8 @@ function krTodoItems(rows){
     /* CMD-1019-22 七：到院结束是人工确认——营业结束后没结束的不自动结束，第二天变待办「昨天的到院未结束」 */
     if(work && !c.visitClosed){
       var mvd = c.hasArrived && !c.krProcedureDone ? mainVisitDay(c) : '';
-      if(mvd && mvd < today) push(todoMk('endvisit', (mvd===todayShift(-1) ? '昨天' : mvd.slice(5).replace('-', '/')+' ')+'的到院未结束：确认是否结束', c, mvd, true, function(){ krOpenSubCard(r.clinicId, r.id); }));
-      subCaseList(c).forEach(function(rp){ var kk = subCaseKey(rp); if(rp.place==='KR' && rp.date && rp.date < today && coreVisitState(c, kk)==='arrived') push(todoMk('endvisit', (rp.date===todayShift(-1) ? '昨天' : rp.date.slice(5).replace('-', '/')+' ')+'的到院未结束：确认是否结束', c, rp.date, true, function(){ krOpenSubCard(r.clinicId, r.id, rp.id); }, {no:subCaseNo(c, rp)||c.caseNo})); });
+      if(mvd && mvd < today) push(todoMk('endvisit', (mvd===todayShift(-1) ? '昨天' : mvd.slice(5).replace('-', '/')+' ')+'的到院还没标客人已离院：确认是否已离院', c, mvd, true, function(){ krOpenSubCard(r.clinicId, r.id); }));
+      subCaseList(c).forEach(function(rp){ var kk = subCaseKey(rp); if(rp.place==='KR' && rp.date && rp.date < today && coreVisitState(c, kk)==='arrived') push(todoMk('endvisit', (rp.date===todayShift(-1) ? '昨天' : rp.date.slice(5).replace('-', '/')+' ')+'的到院还没标客人已离院：确认是否已离院', c, rp.date, true, function(){ krOpenSubCard(r.clinicId, r.id, rp.id); }, {no:subCaseNo(c, rp)||c.caseNo})); });
     }
     /* 今天到院 / 到店（院长账号看自己的案件） */
     var ks = c.krSchedule;
