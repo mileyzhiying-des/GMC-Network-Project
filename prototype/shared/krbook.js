@@ -148,7 +148,9 @@ function coreBookConfirm(hid, id, by){
   if(bad){ krbBlockSync(hid, b); return {ok:false, err:bad}; }
   var caseId = '';
   Store.mutateClinic(b.clinicId, function(){
-    var c = createReservationCase(b.clientName, null, b.date, b.time, '', '在韩到店·'+krbPurposeFull(b));
+    var exK = CASE_ITEMS.filter(function(x){ return x.krVisit && !x.krVisit.arrived && !x.krVisit.done && x.name===b.clientName && x.visitDate===b.date && x.subState!=='cancelled' && !x.visitClosed; })[0]; /* CMD-1021-16 三：同一客人那天已有还没到的 KR 预约 → 合并（时间以原预约为准） */
+    var c = exK || createReservationCase(b.clientName, null, b.date, b.time, '', '在韩到院·'+krbPurposeFull(b));
+    if(exK){ b.time = exK.visitTime; exK.krVisit.items = (exK.krVisit.items||[]).concat(b.items||[]); logCaseEvent(exK, by, '同一天又有一笔 KR 预约（'+krbPurposeFull(b)+'）已合并到这次预约（时间以原预约 '+exK.visitTime+' 为准）'); caseId = exK.id; pushNotif('预约', 'KR 已确认预约：'+b.clientName+' · '+b.date+' '+exK.visitTime+'（韩国），已合并到案件 '+(exK.caseNo||'')+' 的预约', {caseId:exK.id, level:'info'}); return; }
     c.krVisit = {bookingId:b.id, hospitalId:hid, director:'', purpose:b.purpose, items:(b.items||[]).slice(), sub:b.sub||'', note:b.note||'', place:'KR 医院', confirmedBy:by, arrived:false, done:false};
     c.hospitalId = hid; c.director = ''; c.krCoordinator = c.krCoordinator || '';
     updateCaseStage(c); /* CMD-1015-17：阶段 = 在韩管理（IN / KR 的案件管理都看得到） */

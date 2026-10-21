@@ -1265,3 +1265,13 @@ prototype/shared/app.css  共用样式
 - **二 备注卡**：高度 = 标题行 + 3 条（每条按 2 行算，`.notes-list > div` 最小 75px，列表区固定 252px）+ 按钮行（固定 42px），刚好放得下，按钮行紧跟在第 3 条下面；少于 3 条空位在条目下方、按钮行位置不变；0 / 1 / 3 / 5 条同高（约 294px）。顺手修：按钮行里按钮被拉成竖的（`white-space:nowrap` + 固定行高）。
 - **三 案件区块不显示取消 / 未到院的到院卡**（`krCaseGroupsHtml`）：已取消（含全部延期，`kind:'end'`）和**客人没到院**（其他到院里状态仍是待到院、日期已经过了）的到院卡直接不显示，数字也不算它们；记录不删（Timeline、`visitEnds` / `visitPostponed` 都在），延期的项目照旧回到项目卡未使用；日历上的块不变。主到院（施术）过了日期没到院的卡**没有**隐藏（它是施术日期卡，还要能标到院 / 改期），待确认。
 - 测试：selftest 新增 R83a（今天到院已完成 → 改时间改到今天：专门提示 / 按钮 / 原弹窗还开着 / ［选其他日期］/［增加项目］重开 + 项目加进去 / 锁定只剩一个按钮 / 核心函数兜底不是时间冲突 / 案件区块没有取消卡 + 数字 / 备注卡 0·1·3·5 条同高）。R83a 要在刚建好的 pcStage 夹具上单独跑（别的用例会在同一个案件里留下今天的未完成行，导致「已完成」建不出来）。
+
+## CMD-1021-16 补充（2026-10-21，追加；取代 CMD-1015-17 / 1019-22 / 1020-08 / 1020-11 里「施术做完自动进术后管理 / 客人已回国自动结案 / 离境日过了自动结案」，旧文字保留作历史）
+- 基准 **fb34b5d**，单个提交，**未推送**，不带开关，**数据版本不变（55）**。
+- **Ayin AY 被自动结案的原因**：`careReturnSweep()`（启动 + 待办 5 秒刷新 + KR 启动都会跑）在「施术已完成、离境日 / 最早可回国日已过、没有挡结案的韩国术后管理」时直接 `finishCase`；另外 `krCloseIfDone` / `coreEndVisitToday` / `coreEndSubVisit` 在项目全做完时也会走 `finishCase`。**已全部拿掉**：`careReturnSweep` 删除；上述三处只 `updateCaseStage`；`careCustomerReturned` 只作提示不触发任何结案。Ayin 的案件没有改动。
+- **KR［韩国行程结束］**（data.js `tripOpenVisits / tripLastVisitDay / tripAskDue / tripLeftList / coreTripEnd / coreTripSnooze`，kr.js `krTripCardHtml / krTripOpen / krTripConfirm`）：所有已预约到院都完成且没有未来预约 → 医院营业开始时间起每天早上 KR 待办「韩国行程是否结束？」（`tripend`），［暂不结束］（`c.tripSnooze`）当天不再问、次日再问，离境日过了也不自动结束；KR 室长也可随时手动按案件页［韩国行程结束］（院长无）。确认 Modal「韩国行程结束 · 客人名」列出剩余项目：管理项目 / 只能在韩国做的术后管理 → 韩国持有；「韩国或印尼」的术后管理逐项［转去印尼］／［留在韩国持有］（默认转去印尼）；有待付款不能结束；按钮靠右［暂不结束］［确认结束］。结束后：没有转印尼的 → 直接结案；有转印尼的 → 案件进「术后管理（印尼）」，KR 显示「韩国行程已结束」且不能再建到院（`c.krTripEnded`，`canAddOnNow` 不再允许），IN 收通知。
+- **IN［结案］**（`inCareVisits / inCloseDue / coreInClose / inCloseOpen / inCloseLater / inCloseConfirm`）：术后管理（印尼）阶段，诊所营业开始时间起每天 IN 待办「是否结案？」（`inclose`），［暂不结案］次日再问；案件页状态栏手动［结案］；Modal 列出没做的印尼术后管理 → 转印尼持有（标「术后管理」，客户详情里可用），按钮［暂不结案］［确认结案］。
+- **KR 客人管理 / IN 客户详情「韩国持有」分三组**：施术项目 / 术后管理 / 管理项目，各带数量，空组不显示（`cliHoldKrHtml`，`cliHoldKrRows` 行带 `type`）。
+- **同一客人同一天只有一个预约**（没到店的）：`pendingResvSameDay(name, date)` / `krVisitTimeOnDate`；新的预约（未安排预约［预约］/ 全部预约、KR 预约弹窗与［修改时间］、IN 代约、占位预约确认、客人自助）若同一天已有还没到店的预约 → 合并进去、沿用原时间、toast「已合并到 X:XX 的预约」；已到店进行中 → 加进那次到院；已完成 → 走 CMD-1021-15 的提示；原本就重复的旧预约不动。
+- **CMD-1021-15 第 3 部分修正**：案件区块只隐藏「被清空」的到院卡（项目全部延期 / 改到别天），客人取消 / 未到店的卡恢复旧显示，日历不变（`krCaseGroupsHtml` 过滤 `cd.kind!=='end'`）。
+- 测试：selftest 新增 R84a；D18 / R17a / R18a / R59a 里原来期待自动结案的断言改成「不会自动结案 + `ST.tripClose`（走手动确认）」；R61a 选择器修正。KM1 / IN 批次、roletest KR 43 格 0 不符；测试数据已清（三家诊所案件 0）。

@@ -102,6 +102,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     return !!c.krProcedureDone; /* CMD-1015-17：施术完成 → 有术后管理进术后管理阶段，没有直接结案 */
   };
   /* 把还没做的术后管理都做完（韩国：到当天 + 客人已到 + 标完成；印尼：IN 做术后管理，提前要写原因）→ 自动结案 */
+  ST.tripClose = function(c){ /* CMD-1021-16：不再自动结案：KR［韩国行程结束］（默认转去印尼）+ IN［结案］ */ var r = coreTripEnd(c, ST.krBy, {}); if(!r.ok) return false; if(!isEnded(c)) r = coreInClose(c, 'A1 室长'); return isEnded(c); };
   ST.finishCare = function(c){
     carePendingRows(c).slice().forEach(function(s){
       if(s.place==='IN'){ var r = coreCareVisit(c, s.id, 'A1 室长', '（自测）客人提前回来'); ST.ok(r.ok, 'IN 做术后管理失败：'+(r.err||'')); }
@@ -326,7 +327,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     var c = toConfirmed('D18'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); ST.ok(ST.krCloseToday(c), '今日项目完成失败');
     ST.ok(c.stage==='postcare' && !!c.surgeryDoneAt && !isEnded(c), '施术完成且有术后管理 → 术后管理阶段，实际 '+c.stage);
     ST.ok(corePcBooking(c, pcRows(c, 'IN'), ST.krBy), '术后管理预约失败'); ST.ok(c.stage==='postcare' && carePendingRows(c).some(function(s){ return s.place==='IN'; }) && carePendingRows(c).some(function(s){ return s.place==='KR'; }), '韩国 + 印尼的术后管理都还没做');
-    ST.finishCare(c); ST.ok(isEnded(c) && c.stage==='closed', '术后管理全部做完 → 自动结案，实际 '+c.stage);
+    ST.finishCare(c); ST.ok(!isEnded(c) && c.stage==='postcare', 'CMD-1021-16：术后管理做完也不自动结案，实际 '+c.stage); ST.ok(ST.tripClose(c) && c.stage==='closed', 'KR［韩国行程结束］+ IN［结案］后结案，实际 '+c.stage);
     var sc = subCaseList(c); ST.ok(sc.length>=2 && subCaseNo(c, sc[0])===c.caseNo+'-1', '每次到院一个子案件（施术当天是主案件，不另编）');
   });
   function pcRows(c, inWhere){
@@ -1400,7 +1401,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c0 = toConfirmed('R17a0'); ST.krArrive(c0); ST.krJudge(c0, 'ok'); ST.krPay(c0); syncSurgerySub(c0);
     var hasCare = carePending(c0) || (c0.subItems||[]).some(function(s){ return s.kind==='术后管理记录'; });
-    if(!hasCare){ ST.ok(ST.krCloseToday(c0) && isEnded(c0), '没有术后管理：施术做完直接结案'); }
+    if(!hasCare){ ST.ok(ST.krCloseToday(c0) && !isEnded(c0), '没有术后管理：施术做完也不自动结案（CMD-1021-16）'); ST.ok(ST.tripClose(c0), '没有转去印尼的：KR［韩国行程结束］直接结案'); }
     var c = toConfirmed('R17a1'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c);
     ST.ok(corePcBooking(c, pcRows(c, 'IN'), ST.krBy), '术后管理预约失败'); ST.ok(ST.krCloseToday(c) && c.stage==='postcare' && !isEnded(c), '施术做完 → 进入术后管理阶段，不结案');
     var rows = carePendingRows(c).filter(function(s){ return s.place==='IN'; }); if(!ST.ok(rows.length>0, '要有回印尼做的术后管理')) return;
@@ -1408,7 +1409,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     if(early){ ST.ok(!coreCareVisit(c, early.id, 'A1 室长', '').ok, '提前做必须写原因'); ST.ok(coreCareVisit(c, early.id, 'A1 室长', '（自测）客人提前回来').ok && early.done, '写了原因就能做'); }
     carePendingRows(c).filter(function(s){ return s.place==='IN'; }).forEach(function(s){ coreCareVisit(c, s.id, 'A1 室长', '（自测）'); });
     var krLeft = carePendingRows(c); if(krLeft.length){ ST.ok(!isEnded(c), '韩国的术后管理还没做完 → 不结案'); ST.finishCare(c); }
-    ST.ok(isEnded(c), '韩国 + 印尼都做完 → 结案');
+    ST.ok(!isEnded(c) && ST.tripClose(c), '韩国 + 印尼都做完 → 不自动结案，KR［韩国行程结束］+ IN［结案］后结案');
     var keys = {}; subCaseList(c).forEach(function(r){ keys[subCaseKey(r)] = (keys[subCaseKey(r)]||0)+1; }); ST.ok(Object.keys(keys).every(function(k){ return keys[k]===1; }), '同一天同一地点只算一个子案件');
   });
   ST.def('R17b','KR：子案件在施术 tab 卡片里展开、没有单独页面；案件列表 KR 财务只显示 KR 看得到的（KM1 分页）',function(){
@@ -1435,7 +1436,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(typeof goPostcareBlock==='function' && /in-postcare-card/.test(inPostcareCardHtml(c)), '术后管理区块有锚点，goPostcareBlock 能滚过去');
     ST.ok(!/转回印尼持有|转成持有/.test(JSON.stringify(c.logEntries||[])+JSON.stringify(NOTIFS.filter(function(n){ return n.caseId===c.id; }).map(function(n){ return n.text; }))), '没有发过「术后管理转回印尼持有」');
     ST.ok(!NOTIFS.some(function(n){ return n.caseId===c.id && /案件结束|已结案/.test(n.text||''); }), 'IN-22：术后管理还没做完，不发「结案」通知');
-    ST.finishCare(c); ST.ok(isEnded(c) && NOTIFS.some(function(n){ return n.caseId===c.id && /已结案/.test(n.text||''); }), 'IN-22：术后管理全部做完才发「结案」通知');
+    ST.finishCare(c); ST.ok(!isEnded(c), '做完不自动结案'); ST.ok(ST.tripClose(c) && NOTIFS.some(function(n){ return n.caseId===c.id && /已结案/.test(n.text||''); }), 'IN-22：确认结案时才发「结案」通知');
   });
   ST.def('R18b','在韩加的管理项目付完款即在韩持有；서비스即时；使用扣次数；子案件整张卡（到店 → 选项目 → 已完成）（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
@@ -2700,7 +2701,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var left = document.getElementById('detail-holdings').textContent, right = document.getElementById('detail-holdings-kr').textContent;
     ST.ok(/印尼本地持有/.test(document.getElementById('cli-pane-hold').textContent) && /韩国持有/.test(document.getElementById('cli-pane-hold').textContent), '持有项目：左印尼本地持有 / 右韩国持有'); ST.ok(/术后管理 · 来自 A\d+/.test(left) && /建议/.test(left), '左卡：交给印尼还没做的术后管理，标「术后管理 · 来自 A000xxx」写建议日期');
     ST.ok(/ONDA 提升 · 身体 60kj/.test(right) && /剩余 4 \/ 共 6 次/.test(right) && !/·3次|要使用请由 IN 预约/.test(right), '右卡：韩国持有管理项目，剩余次数，名称不带·N次，没有旧说明'); ST.ok(/术后管理/.test(right) && /来自 A\d+/.test(right), '右卡也列韩国这边还没做的术后管理（来自哪个案件）');
-    var n = (tl.match(/持有项目 (\d+)/)||[])[1]; ST.ok(+n===(document.querySelectorAll('#detail-holdings > div').length + document.querySelectorAll('#detail-holdings-kr > div').length), 'tab 数字 = 两张小卡合计（'+n+'）');
+    var n = (tl.match(/持有项目 (\d+)/)||[])[1]; ST.ok(+n===(document.querySelectorAll('#detail-holdings > div').length + document.querySelectorAll('#detail-holdings-kr [style*="border-bottom"]').length), 'tab 数字 = 两张小卡合计（'+n+'）');
     cliSetTab('cases'); ST.ok(document.getElementById('cli-pane-cases').style.display!=='none' && document.getElementById('cli-cases').textContent.indexOf(c.caseNo)>-1, '本院案件记录 tab'); cliSetTab('tl'); ST.ok(/Case 开始/.test(document.getElementById('detail-log').textContent), 'Timeline tab 维持现状'); cliSetTab('basic');
     ST.ok(/联系方式/.test(document.getElementById('detail-profile').textContent) && /护照/.test(document.getElementById('detail-profile').textContent), 'IN 基础信息有联系方式 / 护照');
     c.procedureItems = JSON.parse(snapItems); c.subItems = JSON.parse(snapSub); cl.beautyRecords = JSON.parse(snapBeauty); c.krArrivedDay = snapDay;
@@ -2739,12 +2740,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     c.inNotes = []; c.recInNote = ''; ST.ok(coreAddInNote(c, '第一则：客人带轮椅', 'A1 室长') && coreAddInNote(c, '第二则：需要接送', 'A1 室长') && c.inNotes.length===2, '可以写好几则备注'); ST.ok(c.recInNote==='第一则：客人带轮椅\n第二则：需要接送', '打印用的 recInNote = 全部备注拼起来');
     ST.ok(/KR 未读/.test(inNotesAreaHtml(c)) && krUnreadNotes(c).length===2, 'IN 显示「KR 未读」'); ST.ok(coreSettleBalance(c, 'x')===false, '有未读备注 → 核心函数也不让结算（coreSettleBalance）');
     coreNoteRead(c, c.inNotes[0].id, 'KM1 室长'); ST.ok(/KR 已读（KM1/.test(inNotesAreaHtml(c)) && krUnreadNotes(c).length===1, '读过一则：IN 显示「KR 已读」');
-    /* 结案规则：韩国的术后管理结束（做完 / 客人已回国）→ 案件结案；印尼没做的转成持有 */
-    var today = todayStr(); c.stay = null; /* CMD-1020-11：有离境日时按离境日判断，这里测的是「没填离境日」退回最早可回国日 */ c.krSchedule.confirmedDate = ymdAdd(today, -1); ST.ok(carePending(c)===true, '客人还在韩国（最早可回国日没过）+ 还有韩国的术后管理 → 不结案');
-    c.krSchedule.confirmedDate = ymdAdd(today, -60); c.krProcedureDone = true; c.visitClosed = false; ST.ok(careCustomerReturned(c) && carePending(c)===false, '最早可回国日已过 = 客人已回国，韩国的不再挡结案');
-    var nIn0 = c.subItems.filter(function(x){ return x.place==='IN' && !x.done; }).length; var closed = careReturnSweep(); ST.ok(closed>=1 && c.visitClosed===true, '照常结案（不用手动结束，也不等印尼的）');
-    ST.ok(c.subItems.filter(function(x){ return x.place==='IN' && !x.done; }).length>=nIn0 && nIn0>0, '没做的印尼术后管理不作废'); ST.ok(todoUbItems().some(function(u){ return u.caseId===c.id; }), '结案后印尼的还留在「未安排预约」');
-    ST.ok(!/结束术后管理/.test(inProjectCardHtml(c)), '结案后也没有结束术后管理'); ST.ok(careReturnSweep()===0, '幂等');
+    /* CMD-1021-16：不再有任何自动结案——客人已回国（离境日 / 最早回国日已过）也不结案；要 KR［韩国行程结束］+（转印尼的）IN［结案］ */
+    var today = todayStr(); c.stay = null; c.krSchedule.confirmedDate = ymdAdd(today, -60); c.krProcedureDone = true; c.visitClosed = false; ST.ok(careCustomerReturned(c) && carePending(c)===true && typeof careReturnSweep==='undefined', '客人已回国也不自动结案：案件仍在术后管理阶段（careReturnSweep 已删除）');
+    var nIn0 = c.subItems.filter(function(x){ return x.place==='IN' && !x.done; }).length; ST.ok(c.visitClosed===false && nIn0>0, '没有结案，印尼的术后管理还在'); ST.ok(todoUbItems().some(function(u){ return u.caseId===c.id; }), '印尼的留在「未安排预约」');
+    ST.ok(!/结束术后管理/.test(inProjectCardHtml(c)), '也没有结束术后管理');
     /* 迁移 55 */
     CASE_ITEMS[idx59] = JSON.parse(snap59);
     var m55 = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===55; })[0]; if(ST.ok(!!m55, '迁移 55 存在')){ var old = {caseNo:'A9', recInNote:'旧备注', logEntries:[]}; m55.fn(old, {note:function(){}}); ST.ok(old.inNotes.length===1 && old.inNotes[0].text==='旧备注' && !old.inNotes[0].readAt, '旧「印尼室长备注」迁成第一则备注（未读）'); }
@@ -3524,6 +3523,54 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var h0 = hgt(0), h1 = hgt(1), h3 = hgt(3), h5 = hgt(5); ST.ok(h0.h===h1.h && h1.h===h3.h && h3.h===h5.h && h0.by===h3.by && h3.h>=270 && h3.h<=320, '备注卡高度固定（0 / 1 / 3 / 5 条一样），按钮行位置不变：'+[h0.h, h1.h, h3.h, h5.h].join('/')+' · '+h3.by);
       var it3 = document.querySelectorAll('#kr-casedetail .notes-list > div'); var lastBottom = Math.round(it3[it3.length-1].getBoundingClientRect().bottom), btnTop = Math.round(document.querySelector('#kr-casedetail .notes-btns').getBoundingClientRect().top); ST.ok(it3.length===3 && btnTop-lastBottom<=24, '3 条下面没有大块空白：第 3 条到按钮行 '+(btnTop-lastBottom)+'px');
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PROJ_PAGE = 'surg'; krDoneDayClose(); window.KR_DONEDAY = null; KR_LAST_CONFLICT = ''; }
+  });
+
+  /* CMD-1021-16（KM1 分页，需要 pcStage 夹具）：拿掉自动结案 / KR［韩国行程结束］/ IN［结案］/ KR 持有三组 / 同天预约合并 / 只隐藏被清空的到院卡 */
+  ST.def('R84a','CMD-1021-16（KM1 分页，需要 pcStage 夹具）：不再自动结案 + 韩国行程结束（每天问 / 手动 / 转印尼）+ IN 结案 + 持有三组 + 同天预约合并 + 只隐藏被清空的到院卡',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-术后管理/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, hid = krHospitalIdOfMe(), snapOpen = (HOSPITAL_DATA[hid]||{}).openTime, td = todayStr(), gc = function(){ return krFindCase(r.clinicId, r.id).c; };
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c); });
+    if(HOSPITAL_DATA[hid]) HOSPITAL_DATA[hid].openTime = '00:00';
+    var mut = function(f){ var out; Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    try{
+      /* 一：不再自动结案 */
+      mut(function(c){ c.krBalancePaid = true; c.krArrivedDay = ymdAdd(td, -3); c.krSchedule.confirmedDate = ymdAdd(td, -3); c.krProcedureDone = true; c.stay = {in:ymdAdd(td, -9), out:ymdAdd(td, -2)}; });
+      ST.ok(careCustomerReturned(gc()) && typeof careReturnSweep==='undefined' && !gc().visitClosed, '离境日已过也不自动结案（careReturnSweep 已删除）');
+      ST.ok(!gc().visitClosed && gc().stage==='postcare', '案件仍在术后管理阶段，进程「'+caseProcessText(gc())+'」');
+      /* 二：有未来预约不问 / 不能结束；取消后每天问 */
+      ST.ok(tripOpenVisits(gc()).length>0 && !tripAskDue(gc()) && coreTripEnd(JSON.parse(JSON.stringify(gc())), 'KM1 室长', {}).ok===false, '还有未来的预约：不问，也不能手动结束');
+      mut(function(c){ (c.subItems||[]).filter(function(s){ return s.place==='KR' && s.kind==='术后管理记录' && !s.done && !s.skipped; }).forEach(function(s){ coreRowCancel(c, s.id, 'KM1 室长'); }); });
+      ST.ok(tripOpenVisits(gc()).length===0 && tripAskDue(gc()), '到院都做完、没有未来预约、最后到院的第二天 → 该问了');
+      var it = krTodoItems(krAllCases()).filter(function(x){ return x.kind==='tripend' && x.caseId===r.id; })[0]; ST.ok(!!it && /韩国行程是否结束/.test(it.text), 'KR 室长待办「韩国行程是否结束？」');
+      mut(function(c){ coreTripSnooze(c, 'KM1 室长'); }); ST.ok(!tripAskDue(gc()), '［暂不结束］→ 当天不再问');
+      mut(function(c){ c.tripSnooze = ymdAdd(td, -1); }); ST.ok(tripAskDue(gc()), '第二天早上又问（每天都问）');
+      var plan = tripLeftList(gc()); ST.ok(plan.care.length+plan.mgmt.length>0, '剩下的项目：'+plan.care.length+' 项术后管理 + '+plan.mgmt.length+' 项管理项目');
+      /* 三：Modal + 转去印尼 */
+      krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); ST.ok(/韩国行程是否结束/.test(document.getElementById('kr-casedetail').innerText) && /韩国行程结束/.test(document.getElementById('kr-casedetail').innerText), '案件页有［韩国行程结束］');
+      krTripOpen(); var ov = document.getElementById('kr-trip-overlay'); ST.ok(ov && ov.classList.contains('open') && /韩国行程结束 · /.test(ov.textContent) && /暂不结束/.test(ov.textContent) && /确认结束/.test(ov.textContent), '确认 Modal：标题 / ［暂不结束］［确认结束］'); var hasSel = !!ov.querySelector('select'); ST.ok(!hasSel || ov.querySelector('select').value==='IN', '可以在印尼做的术后管理预设「转去印尼」'); krTripClose();
+      var rr = mut(function(c){ return coreTripEnd(c, 'KM1 室长', {}); }); var c1 = gc();
+      ST.ok(rr.ok && !!c1.krTripEnded, '确认结束：行程结束已记录');
+      if(rr.toIn || tripLeftList(c1).inRows){ ST.ok(!c1.visitClosed && c1.stage==='postcare' && /术后管理（印尼）/.test(caseProcessText(c1)), '有转去印尼的：案件继续，进程「术后管理（印尼）」：'+caseProcessText(c1)); }
+      else ST.ok(c1.visitClosed===true, '没有转去印尼的：直接结案');
+      ST.ok(!canAddOnNow(c1) && /韩国行程已结束/.test(krTripCardHtml(c1)), '行程结束后 KR 不能再建到院，页面写「韩国行程已结束」');
+      ST.ok(coreTripEnd(JSON.parse(JSON.stringify(c1)), 'KM1 室长', {}).ok===false, '不能重复结束');
+      /* 四：IN 结案 */
+      if(!c1.visitClosed){
+        mut(function(c){ c.krTripEnded.at = ymdAdd(td, -2)+' 03:00'; });
+        ST.ok(inCloseDue(gc()) && !tripAskDue(gc()), 'IN 术后来访都做完 / 没有未来预约 → 第二天早上 IN 该问「是否结案？」');
+        if(!isKrAccount()){ var it2 = inTodoItems().filter(function(x){ return x.kind==='inclose' && x.caseId===r.id; })[0]; ST.ok(!!it2, 'IN 待办「术后管理（印尼）是否结案？」'); }
+        var left = carePendingRows(gc()).filter(function(s){ return s.place==='IN'; }).length;
+        var cr = mut(function(c){ return coreInClose(c, 'A1 室长'); }); ST.ok(cr.ok && gc().visitClosed===true && gc().stage==='closed', 'IN［结案］→ 结案；剩下的 '+left+' 项印尼术后管理转成客人持有');
+      }
+      /* 五：持有三组 */
+      var model = {mode:'KR', cases:[Object.assign({}, gc(), {})], name:gc().name}; var html = cliHoldKrHtml(model); ST.ok(/管理项目|术后管理|施术项目/.test(html) && !/>None</.test(html), '韩国持有按组显示（小标题 + 件数）：'+(html.match(/(施术项目|术后管理|管理项目) </g)||[]).join(','));
+      /* 六：同天预约合并 / 只隐藏被清空的到院卡 */
+      var ex = createReservationCase('T-合并客人', null, td, '15:00', null, '面诊商谈'); ST.ok(pendingResvSameDay('T-合并客人', td)===ex && pendingResvSameDay('T-合并客人', ymdAdd(td, 1))===null, '同一客人同一天已有还没到的预约 → 找得到（要合并）'); ex.subState = 'arrived'; ST.ok(pendingResvSameDay('T-合并客人', td)===ex, '已到店进行中也合并'); ex.subState = 'cancelled'; ST.ok(pendingResvSameDay('T-合并客人', td)===null, '已取消的不算');
+      CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x!==ex; });
+      mut(function(c){ c.visitClosed = false; delete c.krTripEnded; c.visitEnds = c.visitEnds || {}; c.visitEnds['KR|'+ymdAdd(td, 30)] = {no:'x', date:ymdAdd(td, 30), time:'10:00'}; c.visitPostponed = c.visitPostponed || {}; c.visitPostponed['KR|'+ymdAdd(td, 30)] = []; });
+      ST.ok(!/全部延期/.test(krCaseGroupsHtml(gc(), true)), '被清空（全部延期）的到院卡不显示');
+    } finally { if(HOSPITAL_DATA[hid]) HOSPITAL_DATA[hid].openTime = snapOpen; Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); krTripClose(); }
   });
 
 })();

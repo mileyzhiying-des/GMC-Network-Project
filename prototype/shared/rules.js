@@ -94,9 +94,10 @@ function consultAtPassed(c){ /* KR 确认的面诊时间（韩国当地）是否
 /* 术后管理阶段的进程文字：还有几项没做（韩国 / 印尼）、下一次什么时候；印尼的过了建议日期标出来 */
 function postcareProcText(c){
   var rows = carePendingRows(c), kr = rows.filter(function(s){ return s.place!=='IN'; }), inn = rows.filter(function(s){ return s.place==='IN'; });
-  if(!rows.length) return c.krBalancePaid && !c.pcBooked ? '待 KR 预约' : '等待完成';
   var late = inn.filter(function(s){ return pcDaysLate(s.date)>0; }).length;
-  return rows.length+' 项待做（韩国 '+kr.length+' / 印尼 '+inn.length+'）'+(late ? ' · '+late+' 项已过建议日期' : '');
+  if(c.krTripEnded) return '术后管理（印尼）· '+(inn.length ? inn.length+' 项待做' : '等 IN 结案')+(late ? ' · '+late+' 项已过建议日期' : ''); /* CMD-1021-16 */
+  if(!rows.length) return c.krBalancePaid && !c.pcBooked ? '待 KR 预约' : '韩国行程中';
+  return '韩国行程中 · '+rows.length+' 项待做（韩国 '+kr.length+' / 印尼 '+inn.length+'）'+(late ? ' · '+late+' 项已过建议日期' : '');
 }
 function caseProcessText(c){
   if(c.krVisit && (c.stage==='booked' || c.stage==='krmgmt')) return c.krVisit.arrived ? '在韩已到院' : '待在韩到院（KR 医院）';
@@ -214,7 +215,7 @@ function deriveCaseStage(c){
     return out==='closed' ? 'closed' : out==='reportonly' ? 'reportonly' : 'cancelled';
   }
   if(c.krVisit) return 'krmgmt'; /* IN 在 KR 医院日程占位、KR 确认后开的新案件（CMD-1015-17：在韩管理阶段） */
-  if(c.krProcedureDone && c.settlementDone && typeof carePending==='function' && carePending(c) && !(typeof todayOpenRows==='function' && todayOpenRows(c).length)) return 'postcare'; /* 今天还有待做项目时不能进术后管理阶段（CMD-1019-22 八） */ /* 施术完成且还有术后管理没做完 */
+  if(c.krProcedureDone && c.settlementDone && typeof carePending==='function' && carePending(c) && !(typeof todayOpenRows==='function' && todayOpenRows(c).length)) return 'postcare'; /* CMD-1021-16：carePending = 韩国行程没结束，或结束后还有印尼的没做；不再自动结案 */ /* 今天还有待做项目时不能进术后管理阶段（CMD-1019-22 八） */ /* 施术完成且还有术后管理没做完 */
   if(consultCarryStage(c)) return 'consult';
   if(c.mgmtActive) return 'local'; /* 使用项目后进入"本地管理" */
   if(c.settlementDone && krActiveItems(c).length>0) return 'travel'; /* 付款完成 → 施术预约；之后读施术日期卡片（Draft/Pending=施术预约，其余=赴韩施术） */
