@@ -2422,13 +2422,13 @@ function followupCardsHtml(c){
     var done = followDoneItems(src), sel = c.followProjects || [];
     body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">这次要看的项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;">'+(done.map(function(n){ var on = sel.indexOf(n)>-1; return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleFollowProject(\''+n.replace(/'/g,"\\'")+'\')">'+(on ? '✓ ' : '')+cesc(n)+'</button>'; }).join(' ') || '<span style="font-size:12px;color:var(--muted);">关联案件没有做过的项目</span>')+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">从关联案件 '+cesc(src ? src.caseNo : '')+' 做过的项目里选。'+(c.director ? '院长沿用原案件：'+cesc(c.director)+'（不用选）' : '')+'；面诊费免除原因默认「复诊」。</div></div></div>'+concernFormHtml(c);
   } else if(c.needsConsult===false){
-    body += '<div class="case-field-row"><span class="fk">메타뷰（选填）</span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
-      '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼（选填）</span><div style="flex-grow:1;"><textarea placeholder="客人的苦恼…" oninput="saveConcernText(this.value)" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(concernTextOf(c))+'</textarea></div></div>'+recoveryCardHtml(c, src);
+    body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼（选填）</span><div style="flex-grow:1;"><textarea placeholder="客人的苦恼…" oninput="saveConcernText(this.value)" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(concernTextOf(c))+'</textarea></div></div>'+recoveryCardHtml(c, src);
   } else body += '<div class="case-field-row" style="border-bottom:none;"><span class="fk"></span><div style="flex-grow:1;font-size:12px;color:var(--muted);">选择面诊需求后继续</div></div>';
   return '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;justify-content:space-between;"><div class="info-heading" style="margin:0;">基本信息</div><a href="#" class="info-link" onclick="toggleBasicOpen();return false;">'+(c.basicOpen ? '收起' : '展开')+'</a></div>'+basic+'</div>'+
     '<div class="card" style="padding:22px 24px;margin-top:14px;"><div class="info-heading" style="margin-bottom:4px;">到访目的 <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">术后来访 · 关联 '+cesc(src ? src.caseNo : '')+'</span></div>'+
     guestConcernRowHtml(c)+
     '<div class="case-field-row"><span class="fk">关联案件</span><span style="flex-grow:1;font-size:13px;">'+cesc(src ? src.caseNo+' · '+caseStageProcText(src) : '')+'</span><a href="#" class="info-link" onclick="cancelFollowupLink();return false;">取消关联（走一般流程）</a></div>'+
+    '<div class="case-field-row"><span class="fk">메타뷰（选填）</span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+ /* CMD-1021-20：关联案件的 메타뷰 面诊 / 不面诊都选填，放面诊需求上方 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:10px;flex-wrap:wrap;">'+btn(true,'需要院长面诊（复诊）')+btn(false,'不面诊')+'</div></div></div>'+
     body+
     '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div></div>';
@@ -2614,8 +2614,8 @@ function materialsCardHtml(c){
     '<div class="card" style="padding:22px 24px;margin-top:14px;"><div class="info-heading" style="margin-bottom:4px;">到访目的</div>'+ /* 卡 2 到访目的 */
     guestConcernRowHtml(c)+
     linkRowHtml(c)+
+    metaRow+ /* CMD-1021-20：一般案件 메타뷰 必填（面诊 / 不面诊都要），放在面诊需求上方 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
-    (c.needsConsult===false ? metaRow : '')+ /* 不面诊才要 메타뷰 */
     concernExpectHtml(c)+
     directorRowHtml(c)+
     budgetRowHtml(c)+
@@ -3144,7 +3144,7 @@ function basicTabHtml(c){
   return '<div class="card" style="padding:18px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>'+ /* CMD-1021-17：基本信息 / 到访目的 两张卡 */
     '<div class="card" style="padding:4px 24px;margin-top:14px;"><div class="info-heading" style="margin:14px 0 4px;">到访目的</div>'+
     guestConcernRowHtml(c)+
-    (c.needsConsult===false ? suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready') : '')+
+    suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+ /* CMD-1021-20：메타뷰 面诊 / 不面诊都显示 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼</span><div style="flex-grow:1;padding-bottom:10px;">'+concernCardsHtml(c, {supp:c.needsConsult!==false})+'</div></div>'+
     intentionInfoHtml(c)+
     '<div class="case-field-row" style="border-top:1px solid var(--border2);border-bottom:none;"><span class="fk">面诊</span><span style="flex-grow:1;font-size:13px;">'+consultLabel+(c.consultRequested?'（已申请）':'')+'</span></div>'+

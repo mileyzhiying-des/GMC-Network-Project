@@ -1710,7 +1710,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R32a','CMD-1019-01：基础资料顺序 / 苦恼按部位卡片 / 必填校验 / 不面诊选填 / 旧案件转换（A1 分页；案件留给 KM1 看面诊 tab）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.newRes('R32a'); ST.arrive(c); setNeedsConsult(true); /* 选了面诊需求才展开苦恼（CMD-1019-02） */ toggleConcernPart('f_eyes'); var html = materialsCardHtml(c), ix = function(t){ return html.indexOf(t); }; toggleConcernPart('f_eyes'); /* 先选一个部位才有卡片（卡片里有希望预期），看完顺序再取消 */
-    ST.ok(ix('关联之前案件')>-1 && ix('关联之前案件') < ix('面诊需求') && ix('메타뷰')<0 && ix('面诊需求') < ix('苦恼 <') && ix('苦恼 <') < ix('希望预期') && ix('希望预期') < ix('院长介绍') && ix('院长介绍') < ix('预算') && ix('预算') < ix('上传附件') && ix('上传附件') < ix('医美史'), '顺序：关联之前案件 → 메타뷰 → 面诊需求 → 苦恼（含每张卡里的希望预期）→ 院长 → 预算 → 上传附件 → 医美史');
+    ST.ok(ix('关联之前案件')>-1 && ix('关联之前案件') < ix('메타뷰') && ix('메타뷰') < ix('面诊需求') && ix('面诊需求') < ix('苦恼 <') && ix('苦恼 <') < ix('希望预期') && ix('希望预期') < ix('院长介绍') && ix('院长介绍') < ix('预算') && ix('预算') < ix('上传附件') && ix('上传附件') < ix('医美史'), '顺序：关联之前案件 → 메타뷰 → 面诊需求 → 苦恼（含每张卡里的希望预期）→ 院长 → 预算 → 上传附件 → 医美史');
     ST.ok(!/id="cf-concern"|id="cf-expectation"/.test(html) && !/>上传照片<\/|>上传照片 </.test(html), '没有总的苦恼文字格和单独一行的希望预期（照片 / 视频上传在每张部位卡片里）');
     toggleConcernPart('f_eyes'); toggleConcernPart('f_nose'); var fm = concernFormHtml(c); ST.ok((c.concerns||[]).length===2 && /眼睛/.test(fm) && /鼻子/.test(fm) && /上方（眼睛往下看）/.test(fm) && /下方（仰拍鼻孔）/.test(fm) && /1200×1600/.test(fm), '选眼睛 + 鼻子 → 两张卡片，角度格子不同（眼睛 5 个、鼻子 6 个）');
     ST.ok(concernPartDef('f_eyes').angles.length===5 && concernPartDef('f_nose').angles.length===6 && concernPartDef('f_all').angles.length===5 && concernPartDef('f_mouth').angles.length===5 && concernPartDef('f_ear').angles.length===3 && concernPartDef('b_chest').angles.length===5 && concernPartDef('b_belly').angles.length===3 && concernPartDef('b_hip').angles.length===3 && concernPartDef('b_leg').angles.length===4 && concernPartDef('b_neck').angles.length===4, '角度配置：眼 5 / 鼻 6 / 面部整体 5 / 嘴 5 / 耳 3 / 胸 5 / 腹 3 / 臀 3 / 腿 4 / 颈 4');
@@ -3580,11 +3580,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(h0.indexOf('基本信息')>-1 && h0.indexOf('到访目的')>-1 && h0.indexOf('基本信息') < h0.indexOf('到访目的'), '两张卡：基本信息 在 到访目的 前');
     ST.ok((h0.match(/class="card"/g)||[]).length===2, '基础资料是两张卡');
     ST.ok(h0.indexOf('客人手写的苦恼')>-1 && h0.indexOf('客人手写的苦恼') < h0.indexOf('面诊需求') && h0.indexOf('鼻子不够挺')>-1, '客人手写苦恼在到访目的第一行（面诊需求之前）');
-    ST.ok(h0.indexOf('选择面诊需求后填写苦恼')>-1 && h0.indexOf('메타뷰')<0, '未选面诊需求：只有灰字，没有 메타뷰 / 苦恼');
+    ST.ok(h0.indexOf('选择面诊需求后填写苦恼')>-1 && h0.indexOf('메타뷰')>-1 && h0.indexOf('메타뷰')<h0.indexOf('面诊需求'), '未选面诊需求：只有灰字；메타뷰 在面诊需求上方（CMD-1021-20）');
     setNeedsConsult(true); var h1 = html();
-    ST.ok(h1.indexOf('先选大类')>-1 && h1.indexOf('院长')>-1 && h1.indexOf('메타뷰')<0 && h1.indexOf('苦恼 <span')>-1, '面诊：部位卡 + 院长，没有 메타뷰 / 手写框');
+    ST.ok(h1.indexOf('先选大类')>-1 && h1.indexOf('院长')>-1 && h1.indexOf('메타뷰')>-1 && h1.indexOf('苦恼 <span')>-1, '面诊：部位卡 + 院长，메타뷰 在上方，没有手写框');
     setNeedsConsult(false); var h2 = html();
-    ST.ok(h2.indexOf('메타뷰')>-1 && h2.indexOf('saveConcernText')>-1 && h2.indexOf('先选大类')<0 && h2.indexOf('院长 <span')<0, '不面诊：메타뷰 + 手写框，没有部位卡 / 院长');
+    ST.ok(h2.indexOf('메타뷰')>-1 && (h2.match(/메타뷰 <span/g)||[]).length===1 && h2.indexOf('메타뷰')<h2.indexOf('面诊需求') && h2.indexOf('saveConcernText')>-1 && h2.indexOf('先选大类')<0 && h2.indexOf('院长 <span')<0, '不面诊：메타뷰 + 手写框，没有部位卡 / 院长');
     ST.ok(h2.lastIndexOf('鼻子不够挺')>h2.indexOf('saveConcernText'), '手写框默认带入客人预约页手写的内容');
     saveConcernText('改过的苦恼'); ST.ok(concernTextOf(c)==='改过的苦恼', '手写框可改');
     c.concernText = '   '; ST.ok(concernMissing(c).length===1, '不面诊：手写苦恼空了算缺项');
@@ -3675,6 +3675,29 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     c.krScope = {items:[], overallNote:''}; c.recoveryResult = {result:'ok'}; c.revisitAck = false; c.projectsEnabled = true; c.reportReady = true;
     var it = inTodoItems().filter(function(x){ return x.kind==='plan' && x.no===c.caseNo; })[0]; ST.ok(!!it && /复诊评估已出/.test(it.text) && /恢复正常/.test(it.text), 'IN 待办：复诊评估已出：联络客人（恢复正常，不附项目方案）：'+(it&&it.text));
     it.go(); ST.ok(c.revisitAck===true && !inTodoItems().some(function(x){ return x.kind==='plan' && x.no===c.caseNo; }), '点开联络后，不附方案的待办消失');
+  });
+
+  ST.def('R88a','CMD-1021-20（IN 分页）：메타뷰 一般案件面诊 / 不面诊都必填（在面诊需求上方，只出现一次）；关联案件（术后 / 复诊）选填',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = true;
+    var oa = window.alert; window.alert = function(){};
+    try{
+      var c = ST.newRes('R88a'); ST.arrive(c); c = getCurrentCase(); c.metaviewStatus = 'idle'; toggleConcernPart('f_nose'); saveConcernDesc('f_nose','x'); saveConcernExpect('f_nose','y'); concernPartDef('f_nose').angles.forEach(function(a){ mockUploadConcern('f_nose', a.id); }); mockUploadConcern('f_nose','video');
+      var cnt = function(h){ return (h.match(/메타뷰 <span/g)||[]).length; };
+      [true, false].forEach(function(v){
+        setNeedsConsult(v); if(v===true){ c.hospitalId = c.hospitalId || caseHospitalId(c); setCaseDirector(ST.freeDirector(c)); } else c.concernText = '手写';
+        var h = materialsCardHtml(c); ST.ok(cnt(h)===1 && h.indexOf('메타뷰')<h.indexOf('面诊需求') && h.indexOf('关联之前案件')<h.indexOf('메타뷰'), (v ? '面诊' : '不面诊')+'：메타뷰 在关联之前案件之后、面诊需求之上，只一处，带 *');
+        confirmMaterials(); ST.ok(!c.materialsConfirmed && /메타뷰/.test(document.getElementById('materials-missing-list').innerText), (v ? '面诊' : '不面诊')+'：缺 메타뷰 不能确认'); closeMaterialsMissing();
+      });
+      c.metaviewStatus = 'ready'; confirmMaterials(); ST.ok(c.materialsConfirmed, '메타뷰 有了才能确认（不面诊）');
+      /* 关联案件：选填 */
+      var prior = ST.newRes('R88p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0]; prior.director = 'KD1 院长'; prior.hospitalId = caseHospitalId(prior); prior.procedureItems = [{origin:'KR', name:'隆鼻', done:true}];
+      var f = ST.newRes('R88p', {phone:clientPhoneOf(prior.name)}); ST.arrive(f); f = getCurrentCase(); f.metaviewStatus = 'idle'; setLinkedCase(prior.id);
+      var fh = materialsCardHtml(f); ST.ok(/메타뷰（选填）/.test(fh) && fh.indexOf('메타뷰')<fh.indexOf('面诊需求') && !/메타뷰 <span/.test(fh), '关联案件：메타뷰（选填），在面诊需求上方');
+      setNeedsConsult(false); ST.ok(concernMissing(f).length===0, '关联案件不面诊：没 메타뷰 也能确认（缺项里没有 메타뷰）'); confirmMaterials(); ST.ok(f.materialsConfirmed, '关联案件不面诊：没 메타뷰 确认成功');
+      var f2 = ST.newRes('R88p', {phone:clientPhoneOf(prior.name)}); ST.arrive(f2); f2 = getCurrentCase(); f2.metaviewStatus = 'idle'; setLinkedCase(prior.id); setNeedsConsult(true); toggleFollowProject('隆鼻'); toggleConcernPart('f_nose'); saveConcernDesc('f_nose','x'); concernPartDef('f_nose').angles.forEach(function(a){ mockUploadConcern('f_nose', a.id); });
+      confirmMaterials(); ST.ok(f2.materialsConfirmed && f2.needsConsult===true, '关联案件复诊：没 메타뷰 确认成功（选填）');
+    } finally { window.GMC_NO_FOLLOWASK = old; window.alert = oa; }
   });
 
 })();

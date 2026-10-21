@@ -1759,7 +1759,7 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var missing = [];
-  if(c.needsConsult===false && !c.followup && c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1021-17：면诊不用 메타뷰，不面诊才要 */
+  if(!c.followup && c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1021-20：一般案件 메타뷰 必填（面诊 / 不面诊都要）；关联案件（术后 / 复诊）选填 */
   concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
