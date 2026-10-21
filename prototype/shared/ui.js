@@ -1774,7 +1774,7 @@ function confirmMaterials(){
     document.getElementById('materials-missing-overlay').classList.add('open'); /* 缺必填项：弹 popup 提示哪几项没填 */
     return;
   }
-  if(c.needsConsult===false){ c.concernText = concernTextOf(c); c.concern = c.concernText; c.expectation = ''; } else { concernSync(c); if(c.followup && c.needsConsult===true){ c.consultKind = '复诊'; c.concern = '【复诊 · 关联 '+(followSrc(c)||{}).caseNo+'；项目：'+(c.followProjects||[]).join('、')+'】'+c.concern; } } /* 不面诊：苦恼 = 手写文字 */
+  if(c.needsConsult===false){ c.concernText = concernTextOf(c); c.concern = c.concernText; c.expectation = ''; } else if(c.followup && c.needsConsult===true){ c.consultKind = '复诊'; c.concerns = []; c.concern = '【复诊 · 关联 '+(followSrc(c)||{}).caseNo+'；项目：'+(c.followProjects||[]).join('、')+'】'+String(c.revisitQuestion||'').trim(); c.expectation = ''; c.photoUploaded = (c.revisitMedia||[]).some(function(m){ return Object.keys(m.photos||{}).length>0; }); c.videoUploaded = (c.revisitMedia||[]).some(function(m){ return !!m.video; }); } else concernSync(c); /* 不面诊：苦恼 = 手写文字 */
   c.materialsError = '';
   c.materialsConfirmed = true;
   c.materialsDate = todayStr();

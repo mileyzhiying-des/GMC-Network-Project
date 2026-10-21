@@ -2100,7 +2100,7 @@ function receptionOpen(c){ return !!c && c.stage==='booked' && c.subState==='arr
 function revertIntakeToWaiting(c, logText, actor){
   c.subState = 'waiting';
   c.metaviewStatus = 'idle'; c.photoUploaded = false; c.videoUploaded = false;
-  c.concern = ''; c.concerns = []; c.concernText = undefined; c.followup = false; c.followProjects = []; c.recovery = []; c.followupAsked = false; c.basicOpen = false; c.expectation = ''; c.intentionProjects = []; c.intentionNote = '';
+  c.concern = ''; c.concerns = []; c.concernText = undefined; c.followup = false; c.followProjects = []; c.recovery = []; c.revisitMedia = []; c.revisitQuestion = undefined; c.followupAsked = false; c.basicOpen = false; c.expectation = ''; c.intentionProjects = []; c.intentionNote = '';
   c.budgetMin = null; c.budgetMax = null; c.needsConsult = null; c.materialsError = '';
   updateCaseStage(c);
   logCaseEvent(c, actor, logText);
@@ -2132,7 +2132,7 @@ function confirmCancelIntake(){
   c.videoUploaded = false;
   c.concern = '';
   c.concerns = [];
-  c.followup = false; c.followProjects = []; c.recovery = []; c.followupAsked = false; c.basicOpen = false;
+  c.followup = false; c.followProjects = []; c.recovery = []; c.revisitMedia = []; c.revisitQuestion = undefined; c.followupAsked = false; c.basicOpen = false;
   c.expectation = '';
   c.intentionProjects = [];
   c.intentionNote = '';
@@ -2174,7 +2174,7 @@ function linkSuggestionHtml(c){
 function setLinkedCase(caseId){
   var c = getCurrentCase(); if(!c) return;
   c.linkedCase = caseId ? {caseId:caseId, reason:(c.linkedCase&&c.linkedCase.reason)||''} : null;
-  if(caseId){ c.followup = true; if(c.needsConsult==='reuse') c.needsConsult = null; c.linkedCase.reason = c.needsConsult===true ? '复诊' : '术后管理'; } else { c.followup = false; c.followProjects = []; } /* CMD-1021-18：选了关联案件 → 改走术后 / 复诊来访流程；不关联 → 一般流程 */
+  if(caseId){ c.followup = true; if(c.needsConsult==='reuse') c.needsConsult = null; c.linkedCase.reason = c.needsConsult===true ? '复诊' : '术后管理'; } else { c.followup = false; c.followProjects = []; c.revisitMedia = []; } /* CMD-1021-18：选了关联案件 → 改走术后 / 复诊来访流程；不关联 → 一般流程 */
   renderCaseBody(c);
 }
 
@@ -2399,7 +2399,37 @@ function followDoneItems(src){
 }
 function followItemPart(name){ var p = PROJECT_LIBRARY.filter(function(x){ return x.name===name && Array.isArray(x.parts) && x.parts.length; })[0], ps = projectPartsOf(p || {name:name}); return partBase(ps[0] || 'f_all'); }
 function toggleBasicOpen(){ var c = getCurrentCase(); if(!c) return; c.basicOpen = !c.basicOpen; renderCaseBody(c); }
-function toggleFollowProject(name){ var c = getCurrentCase(); if(!c) return; c.followProjects = c.followProjects || []; var i = c.followProjects.indexOf(name); if(i>-1) c.followProjects.splice(i,1); else c.followProjects.push(name); c.materialsError = ''; renderCaseBody(c); }
+/* CMD-1021-21：复诊每勾一个要看的项目就出现该项目的视频 + 各角度照片上传卡（c.revisitMedia = [{name, part, video, photos}]，角度读项目对应部位的配置，同 18 的术后恢复卡） */
+function revisitMediaOf(c, name){ return (c.revisitMedia||[]).filter(function(x){ return x.name===name; })[0]; }
+function toggleFollowProject(name){
+  var c = getCurrentCase(); if(!c) return; c.followProjects = c.followProjects || []; c.revisitMedia = c.revisitMedia || []; var i = c.followProjects.indexOf(name);
+  if(i>-1){ var m = revisitMediaOf(c, name); if(m && (m.video || Object.keys(m.photos||{}).length) && !confirm('取消「'+name+'」？已上传的视频 / 照片会清掉')) return; c.followProjects.splice(i,1); c.revisitMedia = c.revisitMedia.filter(function(x){ return x.name!==name; }); }
+  else { c.followProjects.push(name); c.revisitMedia.push({name:name, part:followItemPart(name), video:null, photos:{}}); }
+  c.materialsError = ''; renderCaseBody(c);
+}
+function saveRevisitQuestion(v){ var c = getCurrentCase(); if(!c) return; c.revisitQuestion = v; c.materialsError = ''; }
+function mockUploadRevisit(name, what){ var c = getCurrentCase(); if(!c) return; var m = revisitMediaOf(c, name); if(!m) return; if(what==='video') m.video = {name:'复诊视频.mp4'}; else { m.photos = m.photos||{}; m.photos[what] = {name:'复诊_'+what+'.jpg'}; } c.materialsError = ''; renderCaseBody(c); }
+function clearRevisitMedia(name, what){ var c = getCurrentCase(); if(!c) return; var m = revisitMediaOf(c, name); if(!m) return; if(what==='video') m.video = null; else if(m.photos) delete m.photos[what]; renderCaseBody(c); }
+function revisitMediaCardsHtml(c){
+  return (c.revisitMedia||[]).map(function(m){
+    var def = concernPartDef(m.part), nq = m.name.replace(/'/g,"\\'"), mark = ' <span style="color:var(--terracotta);">*</span>';
+    var vid = m.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+cesc(m.video.name)+'</span> <a href="#" style="font-size:12px;" onclick="clearRevisitMedia(\''+nq+'\',\'video\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadRevisit(\''+nq+'\',\'video\')">上传视频</button>';
+    var slots = def.angles.map(function(a){ var f = (m.photos||{})[a.id];
+      return '<div style="width:124px;border:1px '+(f ? 'solid var(--sage)' : 'dashed var(--border)')+';border-radius:8px;padding:8px;text-align:center;background:'+(f ? 'var(--sage-bg)' : 'var(--surface2,#faf6ef)')+';"><div style="font-size:12px;font-weight:700;margin-bottom:6px;min-height:30px;">'+cesc(a.label)+'</div>'+(f ? '<div style="font-size:12px;color:var(--sage);word-break:break-all;">✓ '+cesc(f.name)+'</div><a href="#" style="font-size:12px;" onclick="clearRevisitMedia(\''+nq+'\',\''+a.id+'\');return false;">重传</a>' : '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="mockUploadRevisit(\''+nq+'\',\''+a.id+'\')">上传</button>')+'</div>'; }).join('');
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:10px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">'+cesc(m.name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(def.label)+'</span></div>'+
+      '<div style="display:flex;gap:10px;margin-bottom:8px;align-items:center;"><span style="min-width:70px;font-size:12px;">视频'+mark+'</span><span style="font-size:13px;">'+vid+'</span></div>'+
+      '<div style="display:flex;gap:10px;align-items:flex-start;"><span style="min-width:70px;font-size:12px;padding-top:4px;">照片'+mark+'<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.4;">'+CONCERN_PHOTO_SPEC+'<br>每个角度一张</div></span><div style="display:flex;flex-wrap:wrap;gap:8px;">'+slots+'</div></div></div>'; }).join('');
+}
+/* 复诊的资料（只读，IN 基础资料 / KR 复诊面诊 / 院长恢复确认卡共用）：复诊想问的内容（走备注同一套自动翻译）+ 按项目分组的视频 / 照片 */
+function revisitNewStyle(c){ return isRevisitConsult(c) && (c.revisitQuestion!==undefined || (c.revisitMedia||[]).length); }
+function revisitBlockHtml(c, o){
+  var viewer = (typeof isKrAccount==='function' && isKrAccount()) ? 'KR' : 'IN', q = String(c.revisitQuestion||'').trim();
+  var one = function(m){ var def = concernPartDef(m.part), pk = m.name.replace(/'/g,'');
+    var vid = m.video ? '<span style="color:var(--sage);">▶ '+cesc(m.video.name)+'</span>' : '<span style="color:var(--muted);">—</span>';
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+cesc(m.name)+'</div><div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">视频　</span>'+vid+'</div><div style="font-size:13px;"><span style="color:var(--muted);font-size:12px;">照片　</span><div style="display:flex;flex-wrap:wrap;gap:8px;">'+def.angles.map(function(a){ var f = (m.photos||{})[a.id]; return '<div style="width:92px;border:1px solid var(--border2);border-radius:8px;padding:6px;text-align:center;font-size:12px;'+(f ? '' : 'color:var(--muted);')+'"><div style="font-weight:700;min-height:28px;">'+cesc(a.label)+'</div>'+(f ? '<div style="color:var(--sage);word-break:break-all;">'+cesc(f.name)+'</div>' : '未上传')+'</div>'; }).join('')+'</div></div></div>'; };
+  return '<div style="font-size:12px;font-weight:700;margin:2px 0 4px;">复诊想问的内容</div><div style="padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;margin-bottom:6px;">'+(q ? noteTextHtml({id:'rq'+c.id, text:q, role:'IN'}, viewer) : '<span style="color:var(--muted);">—</span>')+'</div>'+((c.revisitMedia||[]).length ? (c.revisitMedia||[]).map(one).join('') : '<div style="font-size:12px;color:var(--muted);">没有按项目上传的视频 / 照片</div>');
+}
+
 function toggleRecoveryItem(name){ var c = getCurrentCase(); if(!c) return; c.recovery = c.recovery || []; var i = c.recovery.findIndex(function(r){ return r.name===name; }); if(i>-1){ if(Object.keys(c.recovery[i].photos||{}).length && !confirm('取消「'+name+'」？已上传的恢复照片会清掉')) return; c.recovery.splice(i,1); } else c.recovery.push({name:name, part:followItemPart(name), photos:{}}); renderCaseBody(c); }
 function mockUploadRecovery(name, angleId){ var c = getCurrentCase(); if(!c) return; var r = (c.recovery||[]).filter(function(x){ return x.name===name; })[0]; if(!r) return; r.photos = r.photos||{}; r.photos[angleId] = {name:'恢复_'+angleId+'.jpg'}; renderCaseBody(c); }
 function clearRecoveryPhoto(name, angleId){ var c = getCurrentCase(); if(!c) return; var r = (c.recovery||[]).filter(function(x){ return x.name===name; })[0]; if(r && r.photos) delete r.photos[angleId]; renderCaseBody(c); }
@@ -2420,7 +2450,7 @@ function followupCardsHtml(c){
   var body = '';
   if(c.needsConsult===true){
     var done = followDoneItems(src), sel = c.followProjects || [];
-    body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">这次要看的项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;">'+(done.map(function(n){ var on = sel.indexOf(n)>-1; return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleFollowProject(\''+n.replace(/'/g,"\\'")+'\')">'+(on ? '✓ ' : '')+cesc(n)+'</button>'; }).join(' ') || '<span style="font-size:12px;color:var(--muted);">关联案件没有做过的项目</span>')+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">从关联案件 '+cesc(src ? src.caseNo : '')+' 做过的项目里选。'+(c.director ? '院长沿用原案件：'+cesc(c.director)+'（不用选）' : '')+'；面诊费免除原因默认「复诊」。</div></div></div>'+concernFormHtml(c);
+    body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">这次要看的项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;">'+(done.map(function(n){ var on = sel.indexOf(n)>-1; return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleFollowProject(\''+n.replace(/'/g,"\\'")+'\')">'+(on ? '✓ ' : '')+cesc(n)+'</button>'; }).join(' ') || '<span style="font-size:12px;color:var(--muted);">关联案件没有做过的项目</span>')+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">从关联案件 '+cesc(src ? src.caseNo : '')+' 做过的项目里选。'+(c.director ? '院长沿用原案件：'+cesc(c.director)+'（不用选）' : '')+'；面诊费免除原因默认「复诊」。</div></div></div>'+'<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">复诊想问的内容 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><textarea placeholder="例：右边下颚还肿，想问是否正常…" oninput="saveRevisitQuestion(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(c.revisitQuestion||'')+'</textarea></div></div>'+revisitMediaCardsHtml(c);
   } else if(c.needsConsult===false){
     body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼（选填）</span><div style="flex-grow:1;"><textarea placeholder="客人的苦恼…" oninput="saveConcernText(this.value)" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(concernTextOf(c))+'</textarea></div></div>'+recoveryCardHtml(c, src);
   } else body += '<div class="case-field-row" style="border-bottom:none;"><span class="fk"></span><div style="flex-grow:1;font-size:12px;color:var(--muted);">选择面诊需求后继续</div></div>';
@@ -2468,9 +2498,9 @@ function concernMediaOptional(c){ return c.needsConsult===false; } /* 选「不�
 function concernMissing(c){
   var out = [], cards = c.concerns || [];
   if(c.followup && c.needsConsult===false) return []; /* CMD-1021-18：术后来访不面诊 = 메타뷰 / 苦恼都选填 */
-  if(c.followup && c.needsConsult===true){ /* 复诊面诊：要看的项目 + 苦恼说明 + 各角度照片必填（视频 / 希望预期选填） */
-    var o2 = []; if(!(c.followProjects||[]).length) o2.push('这次要看的项目（从做过的项目里选）'); if(!cards.length) o2.push('面诊内容（请先选部位）');
-    cards.forEach(function(x){ var def = concernPartDef(x.part), nm = concernCardTitle(x); if(!String(x.desc||'').trim()) o2.push(nm+'：苦恼说明'); var miss = def.angles.filter(function(a){ return !(x.photos||{})[a.id]; }).map(function(a){ return a.label; }); if(miss.length) o2.push(nm+'：照片（'+miss.join('、')+'）'); });
+  if(c.followup && c.needsConsult===true){ /* CMD-1021-21 复诊：至少一个项目 + 复诊想问的内容必填；每个项目的视频 + 各角度照片沿用一般面诊部位卡的规则（必填，希望预期 / 苦恼部位不再要） */
+    var o2 = []; if(!(c.followProjects||[]).length) o2.push('这次要看的项目（从做过的项目里选）'); if(!String(c.revisitQuestion||'').trim()) o2.push('复诊想问的内容');
+    (c.revisitMedia||[]).forEach(function(m){ var def = concernPartDef(m.part); if(!m.video) o2.push(m.name+'：视频'); var miss = def.angles.filter(function(a){ return !(m.photos||{})[a.id]; }).map(function(a){ return a.label; }); if(miss.length) o2.push(m.name+'：照片（'+miss.join('、')+'）'); });
     return o2;
   }
   if(c.needsConsult===false){ return String(concernTextOf(c)||'').trim() ? [] : ['苦恼（手写）']; } /* 不面诊：没有部位卡，只要手写苦恼 */
@@ -2556,6 +2586,7 @@ function concernZoom(cid, what){
 }
 function concernCardsHtml(c, o){
   o = o || {};
+  if(revisitNewStyle(c)) return revisitBlockHtml(c, o); /* CMD-1021-21：复诊 = 想问的内容 + 按项目的视频 / 照片（不再是苦恼部位卡） */
   if(c.needsConsult===false){ var tx = String(concernTextOf(c)||'').trim(); return '<div style="font-size:13px;padding:6px 0;white-space:pre-wrap;">'+(tx ? cesc(tx) : '<span style="color:var(--muted);">—</span>')+'</div>'; } /* CMD-1021-17：不面诊 = 手写苦恼 */
   var cards = concernCards(c).slice().sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); });
   if(!cards.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">没有苦恼资料</div>';
@@ -2942,6 +2973,7 @@ function caseAttachments(c){
   if((c.concerns||[]).length){ c.concerns.slice().sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }).forEach(function(x){ var nm = concernCardFull(x), np = Object.keys(x.photos||{}).length; if(x.video) list.push({src:'基础资料', label:nm+'视频', date:base, grp:concernGroupOf(x)}); if(np) list.push({src:'基础资料', label:nm+'照片（'+np+' 张）', date:base, grp:concernGroupOf(x)}); }); }
   else { if(c.photoUploaded) list.push({src:'基础资料', label:'照片', date:base});
   if(c.videoUploaded) list.push({src:'基础资料', label:'视频', date:base}); }
+  (c.revisitMedia||[]).forEach(function(m){ var n = Object.keys(m.photos||{}).length; if(m.video) list.push({src:'基础资料', label:'复诊 · '+m.name+'视频', date:base}); if(n) list.push({src:'基础资料', label:'复诊 · '+m.name+'照片（'+n+' 张）', date:base}); }); /* CMD-1021-21：复诊按项目的视频 / 照片进附件 */
   (c.recovery||[]).forEach(function(r){ var n = Object.keys(r.photos||{}).length; if(n) list.push({src:'基础资料', label:'术后恢复 · '+r.name+'照片（'+n+' 张）', date:base}); }); /* CMD-1021-18：术后恢复照片进附件，KR 看得到 */
   (c.linkedFiles||[]).forEach(function(f){ list.push({src:'基础资料', label:f.label, date:f.date||base}); });
   (c.manualAttachments||[]).forEach(function(f){ list.push({src:f.src||'基础资料', label:f.label, date:f.date||base}); });
