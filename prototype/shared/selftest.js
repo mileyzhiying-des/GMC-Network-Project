@@ -35,7 +35,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   ST.freeDirector = function(c){ var hid = caseHospitalId(c), ds = hospitalDirectorNames(hid); var ok = ds.filter(function(n){ var o = directorTodayOff(hid, n); return !(o && o.full); }); return ok.indexOf('KD1 院长')>-1 ? 'KD1 院长' : (ok[0] || 'KD1 院长'); };
   ST.materials = function(c, o){
     o = o || {}; ST.open(c);
-    c.metaviewStatus = 'ready'; var pd0 = CONCERN_PARTS[0], ph0 = {}; pd0.angles.forEach(function(a){ ph0[a.id] = {name:'自测.jpg'}; }); c.concerns = [{part:pd0.key, desc:'（自测）苦恼', expect:'（自测）希望', video:{name:'自测.mp4'}, photos:ph0}]; concernSync(c); c.expectation = '（自测）希望';
+    c.metaviewStatus = 'ready'; c.concernText = '（自测）手写苦恼'; var pd0 = CONCERN_PARTS[0], ph0 = {}; pd0.angles.forEach(function(a){ ph0[a.id] = {name:'自测.jpg'}; }); c.concerns = [{part:pd0.key, desc:'（自测）苦恼', expect:'（自测）希望', video:{name:'自测.mp4'}, photos:ph0}]; concernSync(c); c.expectation = '（自测）希望';
     if(o.link){ c.linkedCase = {caseId:o.link.caseId, reason:o.link.reason}; }
     renderCaseBody(c);
     if(o.consult===true || o.consult==='reuse'){ setNeedsConsult(o.consult); } else setNeedsConsult(false);
@@ -1710,7 +1710,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R32a','CMD-1019-01：基础资料顺序 / 苦恼按部位卡片 / 必填校验 / 不面诊选填 / 旧案件转换（A1 分页；案件留给 KM1 看面诊 tab）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.newRes('R32a'); ST.arrive(c); setNeedsConsult(true); /* 选了面诊需求才展开苦恼（CMD-1019-02） */ toggleConcernPart('f_eyes'); var html = materialsCardHtml(c), ix = function(t){ return html.indexOf(t); }; toggleConcernPart('f_eyes'); /* 先选一个部位才有卡片（卡片里有希望预期），看完顺序再取消 */
-    ST.ok(ix('关联之前案件')>-1 && ix('关联之前案件') < ix('메타뷰') && ix('메타뷰') < ix('面诊需求') && ix('面诊需求') < ix('苦恼 <') && ix('苦恼 <') < ix('希望预期') && ix('希望预期') < ix('院长介绍') && ix('院长介绍') < ix('预算') && ix('预算') < ix('上传附件') && ix('上传附件') < ix('医美史'), '顺序：关联之前案件 → 메타뷰 → 面诊需求 → 苦恼（含每张卡里的希望预期）→ 院长 → 预算 → 上传附件 → 医美史');
+    ST.ok(ix('关联之前案件')>-1 && ix('关联之前案件') < ix('面诊需求') && ix('메타뷰')<0 && ix('面诊需求') < ix('苦恼 <') && ix('苦恼 <') < ix('希望预期') && ix('希望预期') < ix('院长介绍') && ix('院长介绍') < ix('预算') && ix('预算') < ix('上传附件') && ix('上传附件') < ix('医美史'), '顺序：关联之前案件 → 메타뷰 → 面诊需求 → 苦恼（含每张卡里的希望预期）→ 院长 → 预算 → 上传附件 → 医美史');
     ST.ok(!/id="cf-concern"|id="cf-expectation"/.test(html) && !/>上传照片<\/|>上传照片 </.test(html), '没有总的苦恼文字格和单独一行的希望预期（照片 / 视频上传在每张部位卡片里）');
     toggleConcernPart('f_eyes'); toggleConcernPart('f_nose'); var fm = concernFormHtml(c); ST.ok((c.concerns||[]).length===2 && /眼睛/.test(fm) && /鼻子/.test(fm) && /上方（眼睛往下看）/.test(fm) && /下方（仰拍鼻孔）/.test(fm) && /1200×1600/.test(fm), '选眼睛 + 鼻子 → 两张卡片，角度格子不同（眼睛 5 个、鼻子 6 个）');
     ST.ok(concernPartDef('f_eyes').angles.length===5 && concernPartDef('f_nose').angles.length===6 && concernPartDef('f_all').angles.length===5 && concernPartDef('f_mouth').angles.length===5 && concernPartDef('f_ear').angles.length===3 && concernPartDef('b_chest').angles.length===5 && concernPartDef('b_belly').angles.length===3 && concernPartDef('b_hip').angles.length===3 && concernPartDef('b_leg').angles.length===4 && concernPartDef('b_neck').angles.length===4, '角度配置：眼 5 / 鼻 6 / 面部整体 5 / 嘴 5 / 耳 3 / 胸 5 / 腹 3 / 臀 3 / 腿 4 / 颈 4');
@@ -1719,9 +1719,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var m2 = concernMissing(c); ST.ok(m2.length===1 && /鼻子：照片（正面）/.test(m2[0]), '缺一张照片（鼻子正面）→ 缺项里只剩这一项：'+m2.join('；'));
     confirmMaterials(); ST.ok(!c.materialsConfirmed && document.getElementById('materials-missing-overlay').classList.contains('open') && /鼻子：照片/.test(document.getElementById('materials-missing-list').innerText), '缺一张照片不能提交（弹缺项）'); closeMaterialsMissing();
     ST.ok(/苦恼总 memo/.test(concernFormHtml(c)), '选了 2 个以上部位：卡片下面有「苦恼总 memo」');
-    setNeedsConsult(false); ST.ok(concernMissing(c).length===0, '切到不面诊：照片 / 视频改选填（缺的那张不再算缺项）：'+concernMissing(c).join('；')); mockUploadConcern('f_nose', 'front');
+    setNeedsConsult(false); c.concernText = '（自测）手写'; ST.ok(concernMissing(c).length===0, '切到不面诊：只要手写苦恼（CMD-1021-17，不要部位卡 / 照片 / 视频）：'+concernMissing(c).join('；')); mockUploadConcern('f_nose', 'front');
     /* 不面诊：去掉全部媒体也只缺说明 */
-    var x2 = ST.newRes('R32aB'); ST.arrive(x2); toggleConcernPart('f_all'); saveConcernDesc('f_all', '轮廓'); saveConcernExpect('f_all', '更立体'); setNeedsConsult(false); ST.ok(concernMissing(x2).length===0, '不面诊：只填部位 + 说明 + 希望预期（没传照片 / 视频）就够'); setNeedsConsult(true); ST.ok(concernMissing(x2).length>=2, '改回面诊：照片 / 视频又变必填');
+    var x2 = ST.newRes('R32aB'); ST.arrive(x2); toggleConcernPart('f_all'); saveConcernDesc('f_all', '轮廓'); saveConcernExpect('f_all', '更立体'); setNeedsConsult(false); x2.concernText = '轮廓'; ST.ok(concernMissing(x2).length===0, '不面诊：只填手写苦恼就够（没有部位卡）'); setNeedsConsult(true); ST.ok(concernMissing(x2).length>=2, '改回面诊：照片 / 视频又变必填');
     /* 一个完整的面诊案件（给 KM1 看） */
     var y = ST.newRes('R32aC'); ST.materials(y, {consult:true}); ST.payConsult(y); /* 缴面诊费后 KR 才看得到 */ ST.ok(y.materialsConfirmed && y.concerns.length===1 && /面部整体/.test(y.concern) && y.photoUploaded && y.videoUploaded, '完整填写后能提交，concern 汇总文字 / photoUploaded / videoUploaded 同步：'+y.concern);
     y.activeCaseTab = 'consult'; var ib = caseTabContentHtml(y); ST.ok(!/客人资料|苦恼说明|希望预期/.test(ib), 'IN 面诊资料 tab：不再有客人资料块（CMD-1019-08，客人资料只放基础资料）'); y.activeCaseTab = 'basic';
@@ -1915,7 +1915,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(!ST.ok(!!me, '要先登录')) return;
       var c = ST.newRes('P40'); ST.consultToReport(c); ST.open(c); var cl = clientByName(c.name); cl.history = '青霉素过敏'; cl.dob = '1992-03-08'; cl.passport = {text:'未登记', date:'', no:'', issue:'', expiry:''};
       c.activeCaseTab = 'basic'; renderCaseBody(c); var tx = document.getElementById('case-body') ? document.getElementById('case-body').innerText : document.body.innerText;
-      ST.ok(/客人基本信息/.test(tx) && /92-03-08（\d+ 岁）/.test(tx) && /青霉素过敏/.test(tx) && tx.indexOf(cl.phone)>-1, 'IN 基础资料最上面有客人基本信息（生日 / 年龄 / 过敏 / 联系方式）');
+      ST.ok(/基本信息/.test(tx) && /92-03-08（\d+ 岁）/.test(tx) && /青霉素过敏/.test(tx) && tx.indexOf(cl.phone)>-1, 'IN 基础资料最上面有客人基本信息（生日 / 年龄 / 过敏 / 联系方式）');
       openClientEdit(c.name, 'history'); document.getElementById('ce-v').value = '花粉过敏'; saveClientEdit(); ST.ok(clientByName(c.name).history==='花粉过敏', '这里修改 = 客户档案同步');
       var cs = ['ok'];
       c.activeCaseTab = 'kr'; c.projectOriginFilter = 'KR'; var p = PROJECT_LIBRARY.filter(function(x){ return x.name==='假体隆鼻' && x.origin==='KR' && x.hospitalId==='H1'; })[0]; toggleProject(p.id);
@@ -3072,7 +3072,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/先选大类/.test(h1) && !/cf-expectation/.test(h1) && ix('面诊需求') < ix('先选大类') && ix('先选大类') < ix('希望预期') && ix('希望预期') < ix('院长介绍'), '选面诊：面诊需求 → 苦恼（卡片里有希望预期）→ 院长');
     /* 内容保留 */
     toggleConcernPart('f_eyes'); saveConcernDesc('f_eyes', '眼皮松弛'); mockUploadConcern('f_eyes', 'video'); saveConcernExpect('f_eyes', '自然'); setNeedsConsult(false); var h2 = materialsCardHtml(c);
-    ST.ok(/先选大类/.test(h2) && !/院长介绍/.test(h2) && /选填/.test(h2), '切到不面诊：苦恼 / 希望预期还在，没有院长，照片 / 视频选填'); setNeedsConsult(true);
+    ST.ok(!/先选大类/.test(h2) && /saveConcernText/.test(h2) && !/院长介绍/.test(h2), '切到不面诊（CMD-1021-17）：手写框，没有部位卡 / 院长'); setNeedsConsult(true); ST.ok(/先选大类/.test(materialsCardHtml(getCurrentCase())), '切回面诊：部位卡片还在');
     ST.ok(c.concerns.length===1 && c.concerns[0].desc==='眼皮松弛' && !!c.concerns[0].video && c.concerns[0].expect==='自然' && !/选填/.test(concernFormHtml(c).replace(/苦恼说明[^<]*/g, '')), '切回面诊：已填内容都还在，照片 / 视频又变必填');
     /* 项目 → 部位 */
     var P = function(n){ return projectPartsOf({name:n}); };
@@ -3571,6 +3571,28 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(function(c){ c.visitClosed = false; delete c.krTripEnded; c.visitEnds = c.visitEnds || {}; c.visitEnds['KR|'+ymdAdd(td, 30)] = {no:'x', date:ymdAdd(td, 30), time:'10:00'}; c.visitPostponed = c.visitPostponed || {}; c.visitPostponed['KR|'+ymdAdd(td, 30)] = []; });
       ST.ok(!/全部延期/.test(krCaseGroupsHtml(gc(), true)), '被清空（全部延期）的到院卡不显示');
     } finally { if(HOSPITAL_DATA[hid]) HOSPITAL_DATA[hid].openTime = snapOpen; Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); krTripClose(); }
+  });
+
+  ST.def('R85a','CMD-1021-17（IN 分页）：基础资料拆「基本信息」「到访目的」+ 客人手写苦恼 + 苦恼跟着面诊需求走',function(){
+    var c = ST.newRes('R85a'); c.visitNote = '鼻子不够挺，想自然一点'; ST.arrive(c); c = getCurrentCase();
+    var html = function(){ return materialsCardHtml(c); };
+    var h0 = html();
+    ST.ok(h0.indexOf('基本信息')>-1 && h0.indexOf('到访目的')>-1 && h0.indexOf('基本信息') < h0.indexOf('到访目的'), '两张卡：基本信息 在 到访目的 前');
+    ST.ok((h0.match(/class="card"/g)||[]).length===2, '基础资料是两张卡');
+    ST.ok(h0.indexOf('客人手写的苦恼')>-1 && h0.indexOf('客人手写的苦恼') < h0.indexOf('面诊需求') && h0.indexOf('鼻子不够挺')>-1, '客人手写苦恼在到访目的第一行（面诊需求之前）');
+    ST.ok(h0.indexOf('选择面诊需求后填写苦恼')>-1 && h0.indexOf('메타뷰')<0, '未选面诊需求：只有灰字，没有 메타뷰 / 苦恼');
+    setNeedsConsult(true); var h1 = html();
+    ST.ok(h1.indexOf('先选大类')>-1 && h1.indexOf('院长')>-1 && h1.indexOf('메타뷰')<0 && h1.indexOf('苦恼 <span')>-1, '面诊：部位卡 + 院长，没有 메타뷰 / 手写框');
+    setNeedsConsult(false); var h2 = html();
+    ST.ok(h2.indexOf('메타뷰')>-1 && h2.indexOf('saveConcernText')>-1 && h2.indexOf('先选大类')<0 && h2.indexOf('院长 <span')<0, '不面诊：메타뷰 + 手写框，没有部位卡 / 院长');
+    ST.ok(h2.lastIndexOf('鼻子不够挺')>h2.indexOf('saveConcernText'), '手写框默认带入客人预约页手写的内容');
+    saveConcernText('改过的苦恼'); ST.ok(concernTextOf(c)==='改过的苦恼', '手写框可改');
+    c.concernText = '   '; ST.ok(concernMissing(c).length===1, '不面诊：手写苦恼空了算缺项');
+    c.concernText = '改过的苦恼'; ST.ok(concernMissing(c).length===0, '不面诊：不要部位卡');
+    var c2 = ST.newRes('R85b'); ST.arrive(c2); c2 = getCurrentCase(); ST.ok(guestConcernRowHtml(c2)==='' && materialsCardHtml(c2).indexOf('客人手写的苦恼')<0, '客人没手写：不显示那一行');
+    var b = ST.newRes('R85c'); b.visitNote = '想变年轻'; ST.materials(b, {consult:false}); b = ST.open(b) && getCurrentCase();
+    ST.ok(b.materialsConfirmed && b.concern==='（自测）手写苦恼', '不面诊确认后 c.concern = 手写苦恼（KR 读这个）');
+    var bh = basicTabHtml(b); ST.ok(bh.indexOf('基本信息')>-1 && bh.indexOf('到访目的')>-1 && bh.indexOf('（自测）手写苦恼')>-1 && bh.indexOf('先选大类')<0, '确认后基础资料 tab 也是两张卡，苦恼显示手写');
   });
 
 })();

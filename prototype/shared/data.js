@@ -720,7 +720,7 @@ function clientBasicBlockHtml(c){
   var cl = clientByName(c.name); if(!cl) return '';
   var nm = String(c.name).replace(/'/g, "\\'"), ed = !isEnded(c);
   var row = function(k, v, field){ return '<div class="case-field-row"><span class="fk">'+k+'</span><span style="flex-grow:1;font-size:13px;">'+v+'</span>'+(ed && field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</div>'; };
-  return '<div style="margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);"><div class="info-heading" style="margin-bottom:4px;">客人基本信息 <span style="font-weight:400;font-size:12px;color:var(--muted);">来自客户档案，这里修改会同步到档案</span></div>'+
+  return '<div style="margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);"><div class="info-heading" style="margin-bottom:4px;">基本信息 <span style="font-weight:400;font-size:12px;color:var(--muted);">来自客户档案，这里修改会同步到档案</span></div>'+
     row('姓名', aEscC(cl.name), 'name')+row('性别', aEscC(cl.gender||'—'), 'gender')+row('生日', aEscC(dobAgeText(cl.dob)), 'gender')+
     row('病史 / 过敏史', historyMarkHtml(cl.history), 'history')+row('联系方式', aEscC(cl.phone||'—'), 'phone')+(passportVisible() ? row('护照', (function(){ var a = passportAlert(c), bad = a.level==='expired' || a.level==='before' || a.level==='none'; return '<span style="'+(bad ? 'color:#B3261E;font-weight:700;' : '')+'">'+(bad ? '⚠ ' : '')+aEscC(a.text)+'</span>'; })(), 'passport') : '')+'</div>';
 }
@@ -2097,7 +2097,7 @@ function receptionOpen(c){ return !!c && c.stage==='booked' && c.subState==='arr
 function revertIntakeToWaiting(c, logText, actor){
   c.subState = 'waiting';
   c.metaviewStatus = 'idle'; c.photoUploaded = false; c.videoUploaded = false;
-  c.concern = ''; c.concerns = []; c.expectation = ''; c.intentionProjects = []; c.intentionNote = '';
+  c.concern = ''; c.concerns = []; c.concernText = undefined; c.expectation = ''; c.intentionProjects = []; c.intentionNote = '';
   c.budgetMin = null; c.budgetMax = null; c.needsConsult = null; c.materialsError = '';
   updateCaseStage(c);
   logCaseEvent(c, actor, logText);
@@ -2368,10 +2368,19 @@ function concernSync(c){
   c.photoUploaded = cards.some(function(x){ return Object.keys(x.photos||{}).length>0; });
   c.videoUploaded = cards.some(function(x){ return !!x.video; });
 }
+/* CMD-1021-17：客人在预约页手写的苦恼（c.visitNote，只读参考）；「不面诊」时苦恼 = 메타뷰 + 手写文字框（c.concernText，没改过就默认带入预约页手写的内容） */
+function guestConcernText(c){ return String(c.visitNote||'').trim(); }
+function concernTextOf(c){ return c.concernText!==undefined && c.concernText!==null ? c.concernText : guestConcernText(c); }
+function saveConcernText(v){ var c = getCurrentCase(); if(!c) return; c.concernText = v; c.materialsError = ''; }
+function guestConcernRowHtml(c){
+  var t = guestConcernText(c); if(!t) return '';
+  return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk">客人手写的苦恼</span><div style="flex-grow:1;font-size:13px;white-space:pre-wrap;">'+cesc(t)+' <span style="font-size:12px;color:var(--muted);">（预约页填写，仅供参考）</span></div></div>';
+}
 function concernMediaOptional(c){ return c.needsConsult===false; } /* 选「不面诊」：照片 / 视频改选填 */
 /* 缺哪些：返回文字列表（confirmMaterials 的缺项弹窗用） */
 function concernMissing(c){
   var out = [], cards = c.concerns || [];
+  if(c.needsConsult===false){ return String(concernTextOf(c)||'').trim() ? [] : ['苦恼（手写）']; } /* 不面诊：没有部位卡，只要手写苦恼 */
   if(!cards.length) return ['苦恼（请先选部位）'];
   cards.forEach(function(x){
     var def = concernPartDef(x.part), nm = concernCardTitle(x);
@@ -2453,7 +2462,9 @@ function concernZoom(cid, what){
   ov.style.zIndex = 100020; ov.classList.add('open');
 }
 function concernCardsHtml(c, o){
-  o = o || {}; var cards = concernCards(c).slice().sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); });
+  o = o || {};
+  if(c.needsConsult===false){ var tx = String(concernTextOf(c)||'').trim(); return '<div style="font-size:13px;padding:6px 0;white-space:pre-wrap;">'+(tx ? cesc(tx) : '<span style="color:var(--muted);">—</span>')+'</div>'; } /* CMD-1021-17：不面诊 = 手写苦恼 */
+  var cards = concernCards(c).slice().sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); });
   if(!cards.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">没有苦恼资料</div>';
   var one = function(x){
     var def = concernPartDef(x.part), cid = concernCid(x), pk = cid.replace(/'/g,'');
@@ -2480,6 +2491,9 @@ function concernBlockHtml(c, o){
 function consultChosen(c){ return c.needsConsult===true || c.needsConsult===false || c.needsConsult==='reuse'; }
 function concernExpectHtml(c){
   if(!consultChosen(c)) return '<div class="case-field-row" style="border-bottom:none;"><span class="fk"></span><div style="flex-grow:1;font-size:12px;color:var(--muted);">选择面诊需求后填写苦恼与希望预期</div></div>';
+  if(c.needsConsult===false){ /* CMD-1021-17：不面诊 = 메타뷰 + 手写苦恼文字框（默认带入预约页手写的内容），没有部位卡、没有院长 */
+    return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><textarea placeholder="客人的苦恼…" oninput="saveConcernText(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(concernTextOf(c))+'</textarea><div style="font-size:12px;color:var(--muted);margin-top:4px;">默认带入客人在预约页手写的内容，可修改；不面诊不需要部位卡片和院长。</div></div></div>';
+  }
   return concernFormHtml(c); /* 希望预期在每张部位卡片里、苦恼说明下面（CMD-1019-04） */
 }
 function materialsCardHtml(c){
@@ -2500,14 +2514,16 @@ function materialsCardHtml(c){
     ((ci0 && !ci0.overdue && ci0.newHistory) ? '<div style="font-size:12px;color:var(--terracotta);margin-top:6px;">有新增医美史，建议面诊（默认面诊并付费，室长可以改）</div>' : '')+
     ((ci0 && !ci0.overdue && !ci0.newHistory) ? '<div style="font-size:12px;color:var(--muted);margin-top:6px;">距原案件报告日期（'+ci0.reportDate+'）1个月内：可面诊（默认免除面诊费）/ 不面诊 / 沿用原诊疗方案</div>' : '');
 
-  return '<div class="card" style="padding:22px 24px;">'+
-    resumeBannerHtml(c)+
-    clientBasicBlockHtml(c)+ /* CMD-1019-11：客人基本信息在基础资料最上面 */
+  var metaRow = '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>';
+  return resumeBannerHtml(c)+
+    '<div class="card" style="padding:22px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>'+ /* CMD-1021-17：卡 1 基本信息 */
+    '<div class="card" style="padding:22px 24px;margin-top:14px;"><div class="info-heading" style="margin-bottom:4px;">到访目的</div>'+ /* 卡 2 到访目的 */
+    guestConcernRowHtml(c)+
     linkRowHtml(c)+
-    '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;">'+needsConsultBody+'</div></div>'+
-    concernExpectHtml(c)+ /* CMD-1019-02：苦恼（含每个部位的希望预期、总 memo）在面诊需求下面，选了面诊 / 不面诊才展开 */
-    directorRowHtml(c)+ /* CMD-1019-04：院长在苦恼下面，按苦恼部位排好再选 */
+    (c.needsConsult===false ? metaRow : '')+ /* 不面诊才要 메타뷰 */
+    concernExpectHtml(c)+
+    directorRowHtml(c)+
     budgetRowHtml(c)+
     '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return f.label; }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>'+
     caseBeautyRowHtml(c).replace('<div class="case-field-row"', '<div class="case-field-row" style="border-bottom:none;"', 1)+
@@ -3028,10 +3044,11 @@ function supplementUpload(kind){
 function basicTabHtml(c){
   var metaviewText = c.metaviewStatus==='ready' ? '已检测到' : '待检测';
   var consultLabel = c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult===true ? '面诊' : '不需要面诊');
-  return '<div class="card" style="padding:4px 24px;">'+
-    '<div style="padding-top:14px;">'+clientBasicBlockHtml(c)+'</div>'+
-    suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+
-    '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼</span><div style="flex-grow:1;padding-bottom:10px;">'+concernCardsHtml(c, {supp:true})+'</div></div>'+
+  return '<div class="card" style="padding:18px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>'+ /* CMD-1021-17：基本信息 / 到访目的 两张卡 */
+    '<div class="card" style="padding:4px 24px;margin-top:14px;"><div class="info-heading" style="margin:14px 0 4px;">到访目的</div>'+
+    guestConcernRowHtml(c)+
+    (c.needsConsult===false ? suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready') : '')+
+    '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼</span><div style="flex-grow:1;padding-bottom:10px;">'+concernCardsHtml(c, {supp:c.needsConsult!==false})+'</div></div>'+
     intentionInfoHtml(c)+
     '<div class="case-field-row" style="border-top:1px solid var(--border2);border-bottom:none;"><span class="fk">面诊</span><span style="flex-grow:1;font-size:13px;">'+consultLabel+(c.consultRequested?'（已申请）':'')+'</span></div>'+
     '</div>';

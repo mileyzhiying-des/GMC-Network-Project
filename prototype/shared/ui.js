@@ -1759,7 +1759,7 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var missing = [];
-  if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测');
+  if(c.needsConsult===false && c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1021-17：면诊不用 메타뷰，不面诊才要 */
   concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
@@ -1774,7 +1774,7 @@ function confirmMaterials(){
     document.getElementById('materials-missing-overlay').classList.add('open'); /* 缺必填项：弹 popup 提示哪几项没填 */
     return;
   }
-  concernSync(c);
+  if(c.needsConsult===false){ c.concernText = concernTextOf(c); c.concern = c.concernText; c.expectation = ''; } else concernSync(c); /* 不面诊：苦恼 = 手写文字 */
   c.materialsError = '';
   c.materialsConfirmed = true;
   c.materialsDate = todayStr();
