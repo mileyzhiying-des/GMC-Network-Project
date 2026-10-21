@@ -119,7 +119,7 @@ function krTodoItems(rows){
       if(c.urgedAt && ((c.consultStatus==='awaiting_report' && !c.reportReady) || c.consultStatus==='paid_waiting_kr' || scheduleState(c)==='Pending')) push(todoMk('urged', '被催办：请尽快处理', c, '', true, goCase(scheduleState(c)==='Pending' ? 'proc' : 'consult'), {pin:true}));
       if(c.stage==='travel' && scheduleState(c)==='Pending') push(todoMk('sched', '确认施术时间', c, (c.krSchedule||{}).primary||'', false, goCase('proc')));
       if(c.stage==='travel' && scheduleState(c)==='Changing') push(todoMk('change', '改期待确认', c, (c.krSchedule||{}).changePrimary||'', false, goCase('proc')));
-      var pp = pendingPayItems(c); if(pp.length) push(todoMk('pay', '在韩加项待付款：'+pp.map(function(i){ return i.name; }).join('、'), c, '', false, goCase('proc')));
+      var pp = pendingPayItems(c); if(pp.length) push(todoMk('pay', '在韩加项待付款：'+pp.map(function(i){ return buyName(i.name); }).join('、'), c, '', false, goCase('proc')));
       if(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'items', page:'care'}); })); /* CMD-1015-31：直接到项目卡术后管理分页，用［预约时间］约 */
     }
     if(work){ (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0) push(todoMk('pcdue', '联络 IN 确认客人行程：术后管理已过建议日期 '+pcDaysLate(s.date)+' 天（'+s.content+'）', c, s.date, true, goCase('proc'))); }); } /* CMD-1015-17 */
@@ -219,6 +219,7 @@ function todoUrge(id){ var c = calCaseById(id); if(!c) return; var old = CURRENT
 /* CMD-1014-15 三：待办每行四栏对齐：事项｜预计时间｜状态｜客人名 + Case ID；状态 = 等待中（灰）/ 待处理 / 待接待 / 已超时（红 +［催办］）；事项文字统一正文色；没有期限写「—」 */
 function todoStatusOf(it){
   if(it.over) return {t:'已超时', cls:'over'};
+  if(it.kind==='pay') return {t:'待付款', cls:'todo'}; /* CMD-1021-09：KR 待办「在韩加项待付款」状态写待付款 */
   if(it.cat==='visit') return {t:'待接待', cls:'recv'};
   if(it.cat==='today2') return {t:'未到', cls:'wait'}; /* CMD-1015-08：今天到院 / 到店还没到（只在参考名单里出现） */
   if(it.gray || it.cat==='kr' || it.cat==='waiting') return {t:'等待中', cls:'wait'};
@@ -610,7 +611,7 @@ function notifTodoKind(n){
   if(kd==='mention' || kd==='missedcall' || /@ 了你|未接来电/.test(tx)) return 'stay';
   if(n.popup==='confirm') return 'confirm'; /* CMD-1015-09：设定更新（IN-23 / KR-14）弹出并停留、手动确认（不是紧急，没有彩色图标） */
   if(n.popup==='once') return 'todo'; /* 今天的自助预约（IN-15 / IN-16）：弹一次、几秒后自动收起 */
-  if(/诊疗方案已到|KR 已确认面诊时间|请发送诊疗方案|等待报告超过|无法安排|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
+  if(/诊疗方案已到|诊疗方案已出|KR 已确认面诊时间|请发送诊疗方案|等待报告超过|无法安排|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
   return 'msg';
 }
 

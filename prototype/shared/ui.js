@@ -390,8 +390,8 @@ function krLaneLayout(list){
 function axisHeadHtml(){ return ''; } /* CMD-1014-19：拿掉最上面「印尼 / 韩国」小标题，改成每个时间前标「印 / 韩」 */
 function krBlockStyle(it){
   if(it.type==='book') return it.pending ? 'background:#fff;color:var(--sage);border:1.5px dashed #3F7A55;font-weight:700;cursor:pointer;' : 'background:var(--sage-bg);color:var(--sage);border:1px solid #BFD3C5;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'; /* CMD-1014-16：IN 在 KR 日程占位预约：待 KR 确认 = 虚线块，确认后 = 实线块 */
-  if(it.type==='surg' && it.own) return 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;border-left:4px solid #B5703F;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;text-decoration:line-through;' : ''); /* CMD-1020-04：本诊所客人的施术 = KR 图例的施术色（原来是绿色，和术后到店分不开） */ /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
-  if(it.type==='visit' && it.own) return 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;text-decoration:line-through;' : ''); /* CMD-1020-04：本诊所客人的术后到院 / 管理到院（同 KR 图例的术后到店绿） */
+  if(it.type==='surg' && it.own) return 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;border-left:4px solid #B5703F;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的施术 = KR 图例的施术色（原来是绿色，和术后到店分不开） */ /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
+  if(it.type==='visit' && it.own) return 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的术后到院 / 管理到院（同 KR 图例的术后到店绿） */
   return 'background:#F3F1EC;'; /* 不可预约：很浅的灰，不写字 */
 }
 /* CMD-1020-16 一：IN 的 KR 医院日程「医院」视图同样用小标签（一小时格 = 两行 × KR_ROW_PX，标签高度 = 1/6 小时格，整栏宽，按开始时间上下排，超过 6 个显示 5 个 + 「+N 个预约」，点开小弹层列出全部） */
@@ -3076,7 +3076,7 @@ function openNotif(id, src){
   }
   if(n.caseId){
     var pcGo = /术后管理/.test(n.text||'') && !/转回印尼持有/.test(n.text||'');
-    var planGo = /诊疗方案已到/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
+    var planGo = /诊疗方案已[到出]/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
     if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : (planGo ? '&tab=consult' : '')); else openCaseDetail(n.caseId, false, pcGo ? {pc:true} : (planGo ? {tab:planGo} : {pc:pcGo}));
   }
 }
