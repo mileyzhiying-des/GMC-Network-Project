@@ -5,7 +5,7 @@
   var prevR = (window.ST && window.ST.R) || [];
   window.GMC_NO_SWEEP = true; /* 自测时间被拨来拨去，定时的「客人已回国自动结案」扫描会把夹具案件真的结案；自测需要时直接调 careReturnSweep() */
   window.GMC_STAY_AUTO = true; /* CMD-1020-11：自测里确认赴韩 / 发施术前提醒不弹在韩期间窗口（R62a 单独打开测） */
-  window.GMC_PASSPORT_AUTO = true; /* CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
+  window.GMC_PASSPORT_AUTO = true; window.GMC_NO_FOLLOWASK = true; /* CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
 var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   window.GMC_NO_TABS = true; /* CMD-1019-04：自测里所有进案件的入口都在当前分页打开 */ window.confirm = function(){ return true; }; window.alert = function(m){ if(cur) cur.alerts.push(String(m)); }; window.open = function(){ return null; };
   try{ localStorage.setItem('gmc_cfg_round', '2'); }catch(e){}
@@ -3593,6 +3593,51 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var b = ST.newRes('R85c'); b.visitNote = '想变年轻'; ST.materials(b, {consult:false}); b = ST.open(b) && getCurrentCase();
     ST.ok(b.materialsConfirmed && b.concern==='（自测）手写苦恼', '不面诊确认后 c.concern = 手写苦恼（KR 读这个）');
     var bh = basicTabHtml(b); ST.ok(bh.indexOf('基本信息')>-1 && bh.indexOf('到访目的')>-1 && bh.indexOf('（自测）手写苦恼')>-1 && bh.indexOf('先选大类')<0, '确认后基础资料 tab 也是两张卡，苦恼显示手写');
+  });
+
+  ST.def('R86a','CMD-1021-18（IN 分页）：到店关联弹窗 / 术后来访流程（基本信息折叠、复诊选做过的项目不选院长、不面诊术后恢复卡、本地管理分术后管理 / 本地管理）/ 不关联走一般流程',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var prior = ST.newRes('R86p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0];
+    prior.director = 'KD1 院长'; prior.hospitalId = caseHospitalId(prior);
+    prior.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; prior.subItems = [{id:'r86s1', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false}];
+    var ph = clientPhoneOf(prior.name), old = window.GMC_NO_FOLLOWASK;
+    try{
+      /* 1 到店弹窗：从未安排预约来的默认选对应案件 */
+      window.GMC_NO_FOLLOWASK = false;
+      var c = ST.newRes('R86p', {phone:ph, purpose:'术后管理'}); c.careFor = {caseId:prior.id, keys:['k']}; ST.open(c); markArrived(); c = getCurrentCase();
+      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否关联之前案件/.test(ov.innerText), '到店后弹「是否关联之前案件？」');
+      ST.ok(document.getElementById('fu-sel').value===prior.id, '从未安排预约约来的默认已选对应案件');
+      followupAskDone(true); c = getCurrentCase();
+      ST.ok(c.followup && c.linkedCase.caseId===prior.id && c.followupAsked, '确认关联 → 走术后来访流程');
+      var h = materialsCardHtml(c);
+      ST.ok(/术后来访 · 关联/.test(h) && /展开/.test(h) && h.indexOf('联系方式')<0, '基本信息默认折叠（没有联系方式行），到访目的标「术后来访 · 关联」');
+      ST.ok(h.indexOf('需要院长面诊（复诊）')>-1 && h.indexOf('不面诊')>-1 && h.indexOf('关联之前案件')<0 && h.indexOf('接续')<0, '面诊需求二选一，没有一般流程的关联下拉 / 接续条');
+      toggleBasicOpen(); ST.ok(/联系方式/.test(materialsCardHtml(c)), '点展开能看到基本信息');
+      /* 2 复诊：选做过的项目、不选院长、免面诊费 */
+      setNeedsConsult(true); h = materialsCardHtml(c);
+      ST.ok(h.indexOf('这次要看的项目')>-1 && h.indexOf('隆鼻')>-1 && h.indexOf('院长 <span')<0 && c.linkedCase.reason==='复诊', '复诊：从做过的项目里选，不选院长，关联原因 = 复诊');
+      ST.ok(concernMissing(c).some(function(x){ return /要看的项目/.test(x); }), '没选项目算缺项');
+      toggleFollowProject('隆鼻'); toggleConcernPart('f_nose'); saveConcernDesc('f_nose', '想再调整'); concernPartDef('f_nose').angles.forEach(function(a){ mockUploadConcern('f_nose', a.id); });
+      ST.ok(concernMissing(c).length===0, '苦恼说明 + 照片填完就够（视频 / 希望预期选填）：'+concernMissing(c).join('；'));
+      confirmMaterials(); c = getCurrentCase();
+      ST.ok(c.materialsConfirmed && c.needsConsult===true && c.director==='KD1 院长' && c.consultStatus==='awaiting_payment' && c.consultKind==='复诊' && /【复诊/.test(c.concern), '复诊确认：院长沿用原案件、进面诊缴费、标复诊、面诊内容带项目：'+c.director+'/'+c.consultStatus);
+      ST.ok(/复诊/.test(consultFeeFormHtml(c)), '面诊费免除原因有「复诊」');
+      /* 3 不面诊：术后恢复卡 + 本地管理两类 + 扣原案件 */
+      window.GMC_NO_FOLLOWASK = true;
+      var c2 = ST.newRes('R86p', {phone:ph}); ST.arrive(c2); c2 = getCurrentCase(); setLinkedCase(prior.id); setNeedsConsult(false); h = materialsCardHtml(c2);
+      ST.ok(c2.linkedCase.reason==='术后管理' && h.indexOf('术后恢复（选填）')>-1 && h.indexOf('필수')<0 && concernMissing(c2).length===0, '不面诊：메타뷰 / 苦恼选填，有「术后恢复」卡');
+      toggleRecoveryItem('隆鼻'); var rd = c2.recovery[0]; ST.ok(rd && rd.part && concernPartDef(rd.part).angles.length>0, '术后恢复：按项目对应部位的角度');
+      concernPartDef(rd.part).angles.forEach(function(a){ mockUploadRecovery('隆鼻', a.id); });
+      ST.ok(caseAttachments(c2).some(function(f){ return /术后恢复 · 隆鼻/.test(f.label); }), '恢复照片进附件');
+      confirmMaterials(); c2 = getCurrentCase(); ST.ok(c2.materialsConfirmed && c2.needsConsult===false && c2.activeCaseTab==='localmgmt', '不面诊确认 → 本地管理');
+      var lh = caseTabContentHtml(c2); ST.ok(/术后管理/.test(lh) && /术后复诊/.test(lh) && /做术后管理/.test(lh) && /本地管理/.test(lh), '本地管理分「术后管理 / 本地管理」两类');
+      openCareUse('main', prior.id, 'r86s1'); confirmCareUse();
+      var ps = (prior.subItems||[]).filter(function(x){ return x.id==='r86s1'; })[0]; ST.ok(ps.done && (c2.postcareUses||[]).length===1, '做完 → 原案件印尼术后管理标完成，本案件记术后管理使用');
+      /* 4 不关联走一般流程 */
+      window.GMC_NO_FOLLOWASK = false; var c3 = ST.newRes('R86p', {phone:ph}); ST.open(c3); markArrived(); followupAskDone(false); c3 = getCurrentCase();
+      ST.ok(!c3.followup && c3.followupAsked && materialsCardHtml(c3).indexOf('术后来访')<0 && materialsCardHtml(c3).indexOf('关联之前案件')>-1, '选「不关联」走一般流程');
+      setLinkedCase(prior.id); ST.ok(c3.followup, '一般来访在「关联之前案件」选了案件 → 改走术后来访流程'); cancelFollowupLink(); ST.ok(!c3.followup && !c3.linkedCase, '取消关联 → 回到一般流程');
+    } finally { window.GMC_NO_FOLLOWASK = old; var ov2 = document.getElementById('followup-overlay'); if(ov2) ov2.classList.remove('open'); }
   });
 
 })();

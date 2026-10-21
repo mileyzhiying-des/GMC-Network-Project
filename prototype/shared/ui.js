@@ -1714,7 +1714,7 @@ function renderCaseSubtitle(c){
   var html = (c.caseNo||'')+(c.director ? ' · 对接院长：'+c.director : '');
   if(c.linkedCase && c.linkedCase.caseId){
     var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
-    html += (html ? ' · ' : '')+'关联：<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
+    html += (html ? ' · ' : '')+(c.followup ? '术后来访 · 关联：' : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
   }
   el.innerHTML = html;
 }
@@ -1759,7 +1759,7 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var missing = [];
-  if(c.needsConsult===false && c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1021-17：면诊不用 메타뷰，不面诊才要 */
+  if(c.needsConsult===false && !c.followup && c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1021-17：면诊不用 메타뷰，不面诊才要 */
   concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
@@ -1774,7 +1774,7 @@ function confirmMaterials(){
     document.getElementById('materials-missing-overlay').classList.add('open'); /* 缺必填项：弹 popup 提示哪几项没填 */
     return;
   }
-  if(c.needsConsult===false){ c.concernText = concernTextOf(c); c.concern = c.concernText; c.expectation = ''; } else concernSync(c); /* 不面诊：苦恼 = 手写文字 */
+  if(c.needsConsult===false){ c.concernText = concernTextOf(c); c.concern = c.concernText; c.expectation = ''; } else { concernSync(c); if(c.followup && c.needsConsult===true){ c.consultKind = '复诊'; c.concern = '【复诊 · 关联 '+(followSrc(c)||{}).caseNo+'；项目：'+(c.followProjects||[]).join('、')+'】'+c.concern; } } /* 不面诊：苦恼 = 手写文字 */
   c.materialsError = '';
   c.materialsConfirmed = true;
   c.materialsDate = todayStr();
