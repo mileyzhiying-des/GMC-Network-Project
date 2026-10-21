@@ -3650,7 +3650,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/复诊/.test(caseStageInfo(gc()).proc) && !/恢复确认/.test(krTabConsult(gc())), '一般面诊：没有复诊标示 / 恢复确认卡');
       mut(function(c){ c.consultKind = '复诊'; c.followProjects = ['隆鼻']; c.linkedCase = {caseId:src.id, reason:'复诊'}; c.concerns = [{part:'f_nose', sub:'', desc:'想再调整', expect:'', video:null, photos:{front:{name:'a.jpg'}}}]; c.recovery = [{name:'隆鼻', part:'f_nose', photos:{front:{name:'r.jpg'}}}]; });
       ST.ok(/^复诊/.test(caseStageInfo(gc()).proc), '案件列表进程标「复诊」：'+caseStageInfo(gc()).proc);
-      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; var h = krTabConsult(gc());
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_RV_OPEN[cid+':'+r.id] = true; var h = krTabConsult(gc());
       ST.ok(/恢复确认/.test(h) && /复诊面诊/.test(h) && h.indexOf(src.caseNo)>-1 && /隆鼻/.test(h) && /想再调整/.test(h) && /恢复照片/.test(h) && /评估结论/.test(h), '恢复确认卡：关联案件 / 要看的项目 / IN 的说明照片 / 评估结论');
       mut(function(c){ c.concerns = []; c.revisitQuestion = '右边下颚还肿，想问是否正常'; c.revisitMedia = [{name:'隆鼻', part:'f_nose', video:{name:'v.mp4'}, photos:{front:{name:'p.jpg'}}}]; });
       var h2 = krTabConsult(gc()); ST.ok(/复诊想问的内容/.test(h2) && /右边下颚还肿/.test(h2) && /隆鼻/.test(h2) && /v\.mp4/.test(h2) && !/苦恼说明/.test(h2), '恢复确认卡：复诊想问的内容（走备注同一套翻译）+ 按项目的视频 / 照片，不再显示苦恼部位');
@@ -3795,6 +3795,37 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       saveWantConsult(w.id, '周日下午'); wantEditEnd(); ST.ok(w.wantConsult==='周日下午' && ST.hasLog(w, /修改客人希望的面诊时间：周日下午/) && nN()===n0+1, 'KR 确认前改：KR 收通知（只告知）+ Timeline');
       w.consultStatus = 'awaiting_report'; var lk = consultFeeCardHtml('已缴费', '', '', w); ST.ok(/KR 已确认面诊时间/.test(lk) && /disabled/.test(lk), 'KR 确认之后：［修改］灰掉 + 悬停「KR 已确认面诊时间」'); saveWantConsult(w.id, '改不了'); ST.ok(w.wantConsult==='周日下午', '锁住后核心也不让改');
     } finally { window.GMC_NO_FOLLOWASK = old; WANT_EDIT = false; }
+  });
+
+  ST.def('R92a','CMD-1021-24（KM1 分页，需要 stagePay 夹具）：KR 室长看复诊——先确认面诊时间、恢复确认卡折叠，确认后自动展开；复诊没有预算；室长代输入',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    mut(function(c){ c.consultKind = '复诊'; c.followProjects = ['隆鼻']; c.revisitQuestion = '右边下颚还肿，想问是否正常'; c.revisitMedia = [{name:'隆鼻', part:'f_nose', video:null, photos:{}}]; c.concerns = []; c.wantConsult = '周六上午'; });
+    KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; delete KR_RV_OPEN[cid+':'+r.id];
+    var h = krTabConsult(gc()); ST.ok(h.indexOf('确认面诊时间和预计出报告时间') > -1 && h.indexOf('客人希望：')>-1 && h.indexOf('确认面诊时间和预计出报告时间') < h.indexOf('恢复确认'), '还没确认时间：最上面是确认面诊时间的卡（客人希望在最上面），恢复确认卡在下面');
+    ST.ok(h.indexOf('评估结论')<0 && /展开/.test(h) && /右边下颚还肿/.test(h) && /隆鼻/.test(h) && h.indexOf('预算')<0, '恢复确认卡折叠成一行摘要（关联案件 · 项目 · 想问的内容前几个字）+［展开］；复诊不显示预算');
+    krRvToggle(); h = krTabConsult(gc()); ST.ok(h.indexOf('评估结论')>-1 && /收起/.test(h) && h.indexOf('预算')<0 && /待 KR 室长确认面诊时间/.test(h), '手动展开：显示全部，没有「预算 —」');
+    krRvToggle(); mut(function(c){ ST.krEta(c); }); delete KR_RV_OPEN[cid+':'+r.id]; h = krTabConsult(gc());
+    ST.ok(gc().consultStatus==='awaiting_report' && /评估结论/.test(h) && /等待院长复诊面诊/.test(h), '确认面诊时间之后：自动展开，状态「等待院长复诊面诊」');
+    mut(function(c){ c.consultStartedAt = nowFullDt(); }); h = krTabConsult(gc()); ST.ok(/录入恢复评估/.test(h), '开始面诊后：录入块叫「录入恢复评估（院长口述 / 室长代录）」，和面诊同一个');
+    krSetRecoveryResult('ok'); h = krTabConsult(gc()); ST.ok((gc().recoveryResult||{}).proxy===true && /评估人：KM1/.test(h) && /室长代输入/.test(h), '室长选评估结论：标「室长代输入」+ 评估人');
+    var v = krVault(cid, r.id, true); v.transcripts.push({id:'t1', ts:nowFullDt(), by:'KM1 室长', mode:'manual', text:'恢复良好'}); Store.touch(); h = krTabConsult(gc()); ST.ok(/恢复良好/.test(h) && /KM1 室长（室长代输入）/.test(h), '室长代录的内容标「室长代输入」、写是谁');
+  });
+  ST.def('R92b','CMD-1021-24（KD1 分页，需要 stagePay 夹具）：院长（原案件院长）看复诊——恢复确认卡计数 / 待办 / 录入 / 和室长同一份资料',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KD1', '要在 KD1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])（负责院长要是 KD1）')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    mut(function(c){ c.consultKind = '复诊'; c.followProjects = ['隆鼻']; c.revisitQuestion = '还肿'; c.concerns = []; c.revisitMedia = []; });
+    var items = function(k){ return krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+r.id && (!k || x.kind===k); }); };
+    ST.ok(items('recoverwait').length===1 && items('recoverwait')[0].cat==='drecover' && items('recover').length===0, 'KR 还没确认时间：院长「恢复确认」计数里先有这条（参考名单，等 KR 确认时间）');
+    var cards = todoKrDirCardsHtml(); ST.ok(/恢复确认/.test(cards) && /恢复确认<\/div><div class="ds-cnum"[^>]*>1</.test(cards), '院长工作台「恢复确认」卡计数 1');
+    mut(function(c){ ST.krEta(c); }); var it = items('recover')[0]; ST.ok(!!it && /复诊：上传恢复确认内容/.test(it.text) && it.cat==='drecover' && items('recoverwait').length===0 && !it.ref, '确认面诊时间之后：院长待办「复诊：上传恢复确认内容」（和一般面诊「上传面诊内容」同一时点），截止 = 预计出报告时间：'+(it&&it.due));
+    var blk = Store.withClinic(cid, function(){ var h = HOSPITAL_DATA[krHospitalIdOfMe()]||{}; return ((h.directorSchedule||{})[me.name]||[]).filter(function(b){ return b.caseId===r.id; })[0]; }); ST.ok(blk && blk.title==='复诊面诊' && blk.kind==='面诊', '院长日程里有「复诊面诊」块');
+    KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; mut(function(c){ c.consultStartedAt = nowFullDt(); }); var h = krTabConsult(gc());
+    ST.ok(/录入恢复评估/.test(h) && /评估结论/.test(h) && /krSetRecoveryResult/.test(h) && /等待院长复诊面诊/.test(h), '院长：录入恢复评估（语音 / 手动）+ 评估结论按钮可点');
+    krSetRecoveryResult('treat'); ST.ok((gc().recoveryResult||{}).by===me.name && !gc().recoveryResult.proxy && /评估人：KD1/.test(krTabConsult(gc())) && !/室长代输入/.test(krTabConsult(gc())), '院长自己选：评估人 KD1，不标室长代输入');
+    var v = krVault(cid, r.id, true); v.transcripts.push({id:'t9', ts:nowFullDt(), by:me.name, mode:'voice', text:'院长口述恢复评估'}); Store.touch(); ST.ok(/院长口述恢复评估/.test(krTabConsult(gc())), '录入内容两边同一份（vault 共用）');
   });
 
 })();

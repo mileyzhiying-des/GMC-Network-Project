@@ -2648,7 +2648,7 @@ function concernCardsHtml(c, o){
 function concernBlockHtml(c, o){
   var budgetText = (c.budgetMin||c.budgetMax) ? (formatCurrency(c.budgetMin||0,'IDR')+' ～ '+(c.budgetMax ? formatCurrency(c.budgetMax,'IDR') : '不限')) : '—';
   var memo = String(c.concernMemo||'').trim();
-  return '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">预算　</span>'+budgetText+'</div>'+(memo ? '<div style="font-size:13px;margin-bottom:6px;padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;"><span style="color:var(--muted);font-size:12px;">苦恼总 memo　</span>'+cesc(memo)+'</div>' : '')+concernCardsHtml(c, o);
+  return (isRevisitConsult(c) ? '' : '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">预算　</span>'+budgetText+'</div>')+(memo ? /* CMD-1021-24：复诊没有预算 */ '<div style="font-size:13px;margin-bottom:6px;padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;"><span style="color:var(--muted);font-size:12px;">苦恼总 memo　</span>'+cesc(memo)+'</div>' : '')+concernCardsHtml(c, o);
 }
 
 /* 面诊需求选了才展开苦恼 + 希望预期；没选只显示灰字。切换面诊 / 不面诊时已填内容保留（只是照片 / 视频是否必填变了） */
