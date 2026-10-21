@@ -99,7 +99,7 @@ function postcareProcText(c){
   return rows.length+' 项待做（韩国 '+kr.length+' / 印尼 '+inn.length+'）'+(late ? ' · '+late+' 项已过建议日期' : '');
 }
 function caseProcessText(c){
-  if(c.krVisit && (c.stage==='booked' || c.stage==='krmgmt')) return c.krVisit.arrived ? '在韩已到店' : '待在韩到店（KR 医院）';
+  if(c.krVisit && (c.stage==='booked' || c.stage==='krmgmt')) return c.krVisit.arrived ? '在韩已到院' : '待在韩到院（KR 医院）';
   if(c.stage==='postcare') return postcareProcText(c);
   if(c.krVisit && c.krVisit.done && c.stage==='closed') return '在韩到店完成';
   if(c.stage==='booked') return c.subState==='arrived' ? '接待中' : '待访问';
@@ -124,7 +124,7 @@ function caseProcessText(c){
     if(st==='Pending') return '待确认施术时间';
     if(st==='Arrived'){
       var sg = (c.subItems||[]).filter(function(x){ return x.kind==='施术'; });
-      return (sg.length && sg.every(function(x){ return x.done; })) ? '在韩后续' : '在韩中（已到医院）'; /* CMD-1020-15：KR 标了已到医院，IN 案件页 / 列表同步写「已到医院」 */
+      return (sg.length && sg.every(function(x){ return x.done; })) ? '在韩后续' : '在韩中（已到院）'; /* CMD-1020-15：KR 标了已到医院，IN 案件页 / 列表同步写「已到医院」 */
     }
     return '时间已确认'; /* Confirmed / Changing */
   }
@@ -271,7 +271,7 @@ function fmtUtcTime(s, tz){ var f = fmtUtc(s, tz); return f.length>=16 ? f.slice
    通知事件创建时记在 n.level（可在 opts.level 显式指定），没有记的（旧数据）按文字推断 */
 var NOTIF_ACTION_RE = /待确认|催办|诊疗方案已到|诊疗方案已出|无法安排|未接来电|@ 了你|调整了到院时间|请确认报告时间|请按此|重新选择/;
 var NOTIF_INFO_RE = /自助预约了|已填完预约资料|取消了.*的预约|客人自助预约|占位客人填完资料|客人到店自己填|客人改约|自行把预约时间|客人取消预约|修改了预计出报告时间|预约占位快过期|进入了|更新了诊所设定|加购/;
-function notifLevel(text){ var t0 = String(text||''); if(NOTIF_ACTION_RE.test(t0)) return 'action'; if(NOTIF_INFO_RE.test(t0)) return 'info'; return /已缴面诊费|免除|确认.*施术时间|确认预计出报告时间|已到医院|可以手术|不建议手术|施术完成|结案|仅出报告|已取消|未到店|付清尾款|更换项目|无法施术|重新预约了施术|术后管理已预约|增加项目|延续既往面诊判断|补加了可选项目|完成在韩子项|timeline/.test(t0) ? 'next' : 'info'; }
+function notifLevel(text){ var t0 = String(text||''); if(NOTIF_ACTION_RE.test(t0)) return 'action'; if(NOTIF_INFO_RE.test(t0)) return 'info'; return /已缴面诊费|免除|确认.*施术时间|确认预计出报告时间|已到(医)?院|可以手术|不建议手术|施术完成|结案|仅出报告|已取消|未到店|付清尾款|更换项目|无法施术|重新预约了施术|术后管理已预约|增加项目|延续既往面诊判断|补加了可选项目|完成在韩子项|timeline/.test(t0) ? 'next' : 'info'; }
 function notifLevelOf(n){ return (n && n.level) || notifLevel(n && n.text); }
 function tkU(s){ return s ? '⟦u:'+s+'⟧' : '—'; }
 function tkK(date, hm){ return '⟦k:'+date+'|'+(hm||'')+'⟧'; }

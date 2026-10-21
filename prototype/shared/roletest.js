@@ -282,7 +282,7 @@ RT.runKr = function(){
     if(!hit) return null; var borrowed = dirLike && hit.old!==me; if(borrowed) Store.mutateClinic(hit.cid, function(){ CASE_ITEMS.filter(function(x){ return x.id===hit.id; })[0].director = me; });
     var r0 = {no:hit.no}; try{ krOpenSurgSub(hit.cid, hit.id); var pg = document.querySelector('.page.active'); r0.btns = [].slice.call(pg.querySelectorAll('button')).map(function(b){ return b.textContent.trim(); }).filter(function(x){ return x && !/^[💬🔔]/.test(x); }); }catch(e){ r0.err = String(e); }
     if(borrowed) Store.mutateClinic(hit.cid, function(){ CASE_ITEMS.filter(function(x){ return x.id===hit.id; })[0].director = hit.old; }); return r0; });
-  RT.cell('施术子案件页：［客人已到医院］［修改时间］（施术 / 到院 / 评估 / 付尾款属于室长的操作）', coord ? '✅' : '❌', sub ? RT.yn(inList(sub.btns, '客人已到医院') && inList(sub.btns, '修改时间')) : '（无赴韩案件）', sub ? '案件 '+sub.no+' 的按钮：'+JSON.stringify(sub.btns) : '');
+  RT.cell('施术子案件页：［客人已到院］［修改时间］（施术 / 到院 / 评估 / 付尾款属于室长的操作）', coord ? '✅' : '❌', sub ? RT.yn(inList(sub.btns, '客人已到院') && inList(sub.btns, '修改时间')) : '（无赴韩案件）', sub ? '案件 '+sub.no+' 的按钮：'+JSON.stringify(sub.btns) : '');
   RT.cell('处理案件的总开关 krCan()（确认时间 / 提交诊疗方案 / 施术相关）', coord ? '✅' : '❌', RT.yn(krCan()));
   var firstCase = rows[0], rec = firstCase ? T(function(){ return krCanRecord(firstCase.c); }) : null;
   RT.cell('录入面诊（语音 / 手动）', '✅', RT.yn(rec===true), dirLike ? '院长只限自己负责的案件' : '');

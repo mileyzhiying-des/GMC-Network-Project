@@ -100,7 +100,7 @@
     ['E3','老客旧版同意书重签', byCase(function(c){ return c.consentResigned; }), '案件字段 consentResigned（CMD-1012-06 起记录）'],
     ['E4','占位链接提交', byCase(function(c){ return c.bookEntry==='link' || /通过预约链接填完资料/.test(((c.logEntries||[])[0]||{}).action||''); }), '第一条记录「通过预约链接填完资料」'],
     ['E5','占位超时', function(d){ return {hits:d.phHistory.filter(function(h){ return h.status==='占位失效'; }).map(function(h){ return {c:null, label:h.phone+' '+h.date+' '+h.time, dt:h.date}; })}; }, '预约占位历史「占位失效」'],
-    ['E6','已到医院撤回', logHit(/撤回"已到医院"/), 'Timeline「KR撤回已到医院」'],
+    ['E6','已到医院撤回', logHit(/撤回"已到(医)?院"/), 'Timeline「KR撤回已到医院」'],
     ['E7a','术后管理预约 — 在韩国', postBook(function(s){ return s.place==='KR'; }), '子项 pcb + place=KR'],
     ['E7b','术后管理预约 — 回印尼做', postBook(function(s){ return s.place==='IN'; }), '子项 pcb + place=IN'],
     ['E7c','术后管理预约 — 请 IN 代约', postBook(function(s){ return !!s.informed; }), '子项 pcb + informed'],

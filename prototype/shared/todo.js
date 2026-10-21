@@ -136,7 +136,7 @@ function krTodoItems(rows){
       if(mvd && mvd < today) push(todoMk('endvisit', (mvd===todayShift(-1) ? '昨天' : mvd.slice(5).replace('-', '/')+' ')+'的到院还没标客人已离院：确认是否已离院', c, mvd, true, function(){ krOpenSubCard(r.clinicId, r.id); }));
       subCaseList(c).forEach(function(rp){ var kk = subCaseKey(rp); if(rp.place==='KR' && rp.date && rp.date < today && coreVisitState(c, kk)==='arrived') push(todoMk('endvisit', (rp.date===todayShift(-1) ? '昨天' : rp.date.slice(5).replace('-', '/')+' ')+'的到院还没标客人已离院：确认是否已离院', c, rp.date, true, function(){ krOpenSubCard(r.clinicId, r.id, rp.id); }, {no:subCaseNo(c, rp)||c.caseNo})); });
     }
-    /* 今天到院 / 到店（院长账号看自己的案件） */
+    /* 今天到院（院长账号看自己的案件） */
     var ks = c.krSchedule;
     if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed)
       push(todoMk('today', todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived') ? '客人还没到：联络 IN 确认行程' : '今天到院：施术', c, today+' '+(ks.confirmedTime||''), todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived'), function(){ krOpenSubCard(r.clinicId, r.id); }, {no:(krSurgSub(c) ? subCaseNo(c, krSurgSub(c)) : '') || c.caseNo}));
@@ -152,7 +152,7 @@ function krTodoItems(rows){
   return out;
 }
 
-/* CMD-1015-08：过了到院 / 到店时间还没标到 = 超时（待办）；已到的不算 */
+/* CMD-1015-08：过了到院时间还没标到 = 超时（待办）；已到的不算 */
 function todoNotArrivedOver(ds, tm, arrived){ return !arrived && !!tm && todoNowStr() >= ds+' '+tm; }
 /* 待办 = 现在需要我动手做的事：状态「等待中 / 待接待」（没超时的 visit / kr / waiting / today2 类）不进待办栏，只在点卡片时当灰色参考名单显示（it.ref） */
 var TODO_REF_CATS = ['visit', 'kr', 'waiting', 'today2', 'dsurg'];
@@ -194,7 +194,7 @@ var TODO_FILTERS = {
   todo:   {label:'待我处理', fn:function(it){ return todoIsKr() ? it.kind!=='today' : true; }},
   visit:  {label:'今天来访', fn:function(it){ return (it.due||'').slice(0,10)===todayStr(); }},
   kr:     {label:'等 KR 回复', fn:function(it){ return ['urge','resched','relay','recheck'].indexOf(it.kind)>-1; }},
-  today2: {label:'今天到院 / 到店', fn:function(it){ return it.kind==='today'; }},
+  today2: {label:'今天到院', fn:function(it){ return it.kind==='today'; }},
   dconsult:{label:'待面诊', fn:function(it){ return it.kind==='upload'; }},
   dsurg:  {label:'待施术', fn:function(it){ return it.kind==='dsurg'; }},
   waiting:{label:'等待报告', fn:function(it){ return ['eta','send','urged','waitdir','upload'].indexOf(it.kind)>-1; }},
@@ -205,7 +205,7 @@ function todoKindOk(it){
   if(TODO_FILTERS[TODO_UI.kind]) return it.cat===TODO_UI.kind;
   return it.kind===TODO_UI.kind;
 }
-function todoRefMode(){ return TODO_REF_CATS.indexOf(TODO_UI.kind)>-1; } /* 点了「今天来访 / 等 KR 回复 / 今天到院·到店 / 等待报告」卡：待办栏改显示那份名单（灰色参考） */
+function todoRefMode(){ return TODO_REF_CATS.indexOf(TODO_UI.kind)>-1; } /* 点了「今天来访 / 等 KR 回复 / 今天到院 / 等待报告」卡：待办栏改显示那份名单（灰色参考） */
 function todoVisible(items){
   var ref = todoRefMode();
   return items.filter(function(it){ return (!TODO_UI.mine || it.mine) && todoKindOk(it) && (ref || !it.ref); });
@@ -221,7 +221,7 @@ function todoStatusOf(it){
   if(it.over) return {t:'已超时', cls:'over'};
   if(it.kind==='pay') return {t:'待付款', cls:'todo'}; /* CMD-1021-09：KR 待办「在韩加项待付款」状态写待付款 */
   if(it.cat==='visit') return {t:'待接待', cls:'recv'};
-  if(it.cat==='today2') return {t:'未到', cls:'wait'}; /* CMD-1015-08：今天到院 / 到店还没到（只在参考名单里出现） */
+  if(it.cat==='today2') return {t:'未到', cls:'wait'}; /* CMD-1015-08：今天到院还没到（只在参考名单里出现） */
   if(it.gray || it.cat==='kr' || it.cat==='waiting') return {t:'等待中', cls:'wait'};
   return {t:'待处理', cls:'todo'};
 }
@@ -441,7 +441,7 @@ function todoCbGo(){
   todoCbClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){}
   showToast('预约已生成', c.name+' · '+done.join('、')+'（术后管理，接续 '+c.caseNo+'）', null);
 }
-var TODO_KIND_LABEL = {dsurg:'待施术', dconsult:'待面诊', today:'今天到院 / 到店'};
+var TODO_KIND_LABEL = {dsurg:'待施术', dconsult:'待面诊', today:'今天到院'};
 function todoToggle(){ TODO_UI.collapsed = !TODO_UI.collapsed; todoSaveUi(); todoRefresh(); }
 function todoSetMine(v){ TODO_UI.mine = !!v; todoSaveUi(); todoRefresh(); }
 function todoSetKind(k){ TODO_UI.kind = k; if(k) TODO_UI.collapsed = false; todoSaveUi(); todoRefresh(); }
@@ -504,9 +504,9 @@ function todoMountInCards(){
 function todoInCardsHtml(all){
   return todoCatCardsHtml(all, [['todo','待我处理','要我现在动手的事（联络客人选项目、待收款、转告客人、确认日程…）'],['visit','今天来访','今天预约、还没接待的客人（一位一条；按了已到店 / 未到店就消失）'],['kr','等 KR 回复','等报告、等确认施术时间；没超时灰色，超时变红可催办'],['msg','新消息','未读的被 @、未接来电（看了就消失）']], true);
 }
-/* KR 四张：待我处理 / 今天到院、到店 / 等待报告（超时标红）/ 新消息 */
+/* KR 四张：待我处理 / 今天到院 / 等待报告（超时标红）/ 新消息 */
 function todoKrCardsHtml(rows){
-  return todoCatCardsHtml(todoItems(), [['todo','待我处理','要我现在处理的事（确认出报告时间、发送诊疗方案、确认施术时间、待付款、安排术后管理…）'],['today2','今天到院 / 到店','今天要来、还没按到院的施术和术后管理'],['waiting','等待报告','等院长上传面诊（超时变红）'],['msg','新消息','未读的被 @、未接来电（看了就消失）']]);
+  return todoCatCardsHtml(todoItems(), [['todo','待我处理','要我现在处理的事（确认出报告时间、发送诊疗方案、确认施术时间、待付款、安排术后管理…）'],['today2','今天到院','今天要来、还没按到院的施术和术后管理'],['waiting','等待报告','等院长上传面诊（超时变红）'],['msg','新消息','未读的被 @、未接来电（看了就消失）']]);
 }
 /* 院长工作台四张卡（CMD-1015-15）：待面诊 / 待施术 / 恢复确认（占位，即将推出）/ 新消息 */
 function todoKrDirCardsHtml(){

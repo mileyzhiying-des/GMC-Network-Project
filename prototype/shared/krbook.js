@@ -4,7 +4,7 @@
    日历上的块 = 院长日程里一条 kind:'预约' 的块（directorSchedule[院长]，bookingId 对应），待确认 = 虚线块，确认后 = 实线块；其他诊所的预约在 IN 端只显示浅灰无字。
    流程：IN 点 KR 医院日程周视图的空白时段 → 预约窗（客人只能选有赴韩项目的 / 来访目的 / 院长 / 备注；撞不可预约 / OFF / 休诊挡住并说明，午休 / 营业时间外弹确认）→ 占位（还不建案件）
    → KR 待办「确认预约时间」：［确认］= 正式预约 + 建立新案件（从预约到店开始，地点 KR 医院，c.krVisit，IN 和 KR 都看得到）+ IN 收到消息；改时间 /［无法安排］→ IN 待办「重选时间」
-   → 到那天 KR 日历点预约 →［客人已到店］→ 用持有 / 新做管理 / 其他 → ［标记完成］（案件结案：在韩到店完成）。
+   → 到那天 KR 日历点预约 →［客人已到院］→ 用持有 / 新做管理 / 其他 → ［标记完成］（案件结案：在韩到店完成）。
    我的判断（待确认）：新做管理在韩国收费，不进平台结算，只记录项目名；使用在韩持有 = 扣减客人在韩持有项目一次。 */
 var KRB_HOSP = '__全院'; /* CMD-1014-18 四·2：占位预约不选院长，块挂在「全院」下（directorSchedule[KRB_HOSP]） */
 var KRB_PURPOSE = {carebook:'在韩术后管理预约', holdbook:'在韩持有项目管理预约', newvisit:'新增访问', hold:'使用在韩持有', care:'新做管理', other:'其他'}; /* CMD-1020-18：IN 占位的来访目的只有前 3 个，后 3 个是旧数据 */
@@ -168,13 +168,13 @@ function coreBookReselect(hid, id, kind, reason, suggest, by){
   Store.mutateClinic(b.clinicId, function(){ pushNotif('预约', 'KR '+(kind==='change' ? '建议改预约时间' : '无法安排预约')+'：'+b.clientName+' · '+b.date+' '+b.time+'（韩国）；原因：'+(reason||'—')+'，请重选时间', {level:'action'}); });
   return {ok:true};
 }
-/* CMD-1014-18 四·18：还没到预约当天不能标「客人已到店」；原型用［模拟到当日］（b.simDay） */
+/* CMD-1014-18 四·18：还没到预约当天不能标「客人已到院」；原型用［模拟到当日］（b.simDay） */
 function coreBookSimDay(hid, id){ var b = krbFind(hid, id); if(!b || b.status!=='confirmed') return false; b.simDay = true; return true; }
 function krbArriveAllowed(b){ return b.simDay || b.date <= krToday(); }
 function coreBookArrive(hid, id, by){
   var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || b.arrivedAt || !krbArriveAllowed(b)) return false;
-  b.arrivedAt = nowFullDt(); (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 标记客人已到店'});
-  Store.mutateClinic(b.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]; if(c && c.krVisit){ c.krVisit.arrived = true; logCaseEvent(c, by, '客人已到店（KR 医院）'); } });
+  b.arrivedAt = nowFullDt(); (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 标记客人已到院'});
+  Store.mutateClinic(b.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]; if(c && c.krVisit){ c.krVisit.arrived = true; logCaseEvent(c, by, '客人已到院（KR 医院）'); } });
   return true;
 }
 /* 使用在韩持有：这位客人在本诊所各案件里「在韩持有」的项目（还有剩余次数） */
@@ -185,7 +185,7 @@ function krbHoldChoices(clinicId, clientName){
 }
 /* 新做管理计价（四·3）：从 KR 项目库选项目 → 待付款 → 已付款；金额只存在预约记录里，KR 看得到，IN 的案件 / Timeline / 通知都不带金额 */
 function coreBookFeeAdd(hid, id, item, by){
-  var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || !b.arrivedAt) return {ok:false, err:'要先标记客人已到店'};
+  var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || !b.arrivedAt) return {ok:false, err:'要先标记客人已到院'};
   if(!item || !item.name || (!item.service && !(item.price>0))) return {ok:false, err:'请选择项目并填写价格'};
   b.fees = b.fees || [];
   b.fees.push({name:item.name, specLabel:item.specLabel||'', price:item.service ? 0 : item.price, projectId:item.projectId||'', service:!!item.service, status:item.service ? '已付款' : '待付款'});
@@ -199,7 +199,7 @@ function coreBookFeePaid(hid, id, by){
 }
 function coreBookFeeRemove(hid, id, idx, by){ var b = krbFind(hid, id); if(!b || !b.fees || !b.fees[idx] || b.fees[idx].status!=='待付款') return {ok:false, err:'已付款的不能删除'}; b.fees.splice(idx, 1); return {ok:true}; }
 function coreBookDone(hid, id, did, by){
-  var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || !b.arrivedAt) return {ok:false, err:'要先标记客人已到店'};
+  var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || !b.arrivedAt) return {ok:false, err:'要先标记客人已到院'};
   did = did || {kind:krbDidDefault(b.purpose)};
   if(did.kind==='hold'){ var ch = krbHoldChoices(b.clinicId, b.clientName).filter(function(x){ return x.caseId===did.caseId && (did.key ? x.key===did.key : x.name===did.name); })[0]; if(!ch) return {ok:false, err:'请选择要使用的在韩持有项目'}; did.name = ch.name; did.key = ch.key; /* CMD-1020-17：按每笔购买的 iid 对，同名项目互不影响 */ did.qty = Math.max(1, parseInt(did.qty,10)||1); if(did.qty > ch.left) return {ok:false, err:'「'+did.name+'」只剩 '+ch.left+' 次'}; }
   if(did.kind==='care'){ if(!(b.fees||[]).length) return {ok:false, err:'请先选择管理项目并加入'}; if(b.fees.some(function(f){ return f.status!=='已付款'; })) return {ok:false, err:'还没付款：请先标记已付款'}; did.name = b.fees.map(function(f){ return f.name+(f.specLabel ? ' · '+f.specLabel : '')+(f.service ? '（서비스）' : ''); }).join('、'); }
@@ -228,7 +228,7 @@ function krBookOpen(id){
 function krbRenderKr(){
   var f = KRBK, hid = krHospitalIdOfMe(), b = f && krbFind(hid, f.id), ov = krbOverlay('krb-kr-overlay'); if(!b) return;
   var can = krCan(), cn = (clinicById(b.clinicId)||{}).name || '', inp = 'width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;';
-  var st = {pending:'待 KR 确认', confirmed:b.arrivedAt ? '已到店' : '已确认', reselect:'IN 重选时间中', done:'已完成', cancelled:'已取消', replaced:'已作废'}[b.status] || b.status;
+  var st = {pending:'待 KR 确认', confirmed:b.arrivedAt ? '已到院' : '已确认', reselect:'IN 重选时间中', done:'已完成', cancelled:'已取消', replaced:'已作废'}[b.status] || b.status;
   var head = '<div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b style="font-size:15px;">IN 预约（KR 医院）</b><span style="cursor:pointer;" onclick="document.getElementById(\'krb-kr-overlay\').classList.remove(\'open\')">✕</span></div>';
   var info = '<div style="font-size:13px;line-height:1.9;margin-bottom:10px;"><b>'+krbEsc(b.clientName)+'</b> · '+krbEsc(krbPurposeFull(b))+'（'+krbEsc(cn)+'）<br>'+krbEsc(b.date+' '+b.time)+'（韩国）<br>状态：<b>'+st+'</b>'+(b.note ? '<br>备注：'+krbEsc(b.note) : '')+'</div>'; /* 打开案件入口统一成下面的按钮 */
   var body = '';
@@ -239,9 +239,9 @@ function krbRenderKr(){
   } else if(b.status==='confirmed' && can){
     var viewBtn = b.caseId ? '<button class="btn-outline" style="flex:1;" onclick="krbOpenCase()">查看客人资料（打开案件）</button>' : '', closeBtn = '<button class="btn-ghost" style="flex:1;" onclick="document.getElementById(\'krb-kr-overlay\').classList.remove(\'open\')">关闭</button>';
     if(!b.arrivedAt){
-      /* CMD-1014-18 四·18：还没到预约当天不显示［客人已到店］，只有查看客人资料 / 关闭；到当天才出现（原型用［模拟到当日］） */
-      body = '<div style="display:flex;gap:8px;">'+(krbArriveAllowed(b) ? '<button class="btn-primary" style="flex:1;" onclick="krbDoArrive()">客人已到店</button>' : '')+viewBtn+closeBtn+'</div>'+
-        (krbArriveAllowed(b) ? '' : '<div style="margin-top:10px;font-size:12px;color:var(--muted);">还没到预约当天，到店当天才能标记客人已到店。 <a href="#" onclick="krbDoSimDay();return false;">［模拟到当日］</a>（原型）</div>');
+      /* CMD-1014-18 四·18：还没到预约当天不显示［客人已到院］，只有查看客人资料 / 关闭；到当天才出现（原型用［模拟到当日］） */
+      body = '<div style="display:flex;gap:8px;">'+(krbArriveAllowed(b) ? '<button class="btn-primary" style="flex:1;" onclick="krbDoArrive()">客人已到院</button>' : '')+viewBtn+closeBtn+'</div>'+
+        (krbArriveAllowed(b) ? '' : '<div style="margin-top:10px;font-size:12px;color:var(--muted);">还没到预约当天，到院当天才能标记客人已到院。 <a href="#" onclick="krbDoSimDay();return false;">［模拟到当日］</a>（原型）</div>');
     } else {
       var opts = krbHoldChoices(b.clinicId, b.clientName), cur = f.did==='hold' ? opts.filter(function(x){ return f.hold===x.caseId+'|'+x.key; })[0] : null;
       body = '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">做了什么</div><select style="'+inp+'margin-bottom:8px;" onchange="KRBK.did=this.value;krbRenderKr()"><option value="hold"'+(f.did==='hold' ? ' selected' : '')+'>使用在韩持有</option><option value="care"'+(f.did==='care' ? ' selected' : '')+'>新做管理</option><option value="other"'+(f.did==='other' ? ' selected' : '')+'>其他</option></select>'+

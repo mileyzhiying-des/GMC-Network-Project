@@ -390,8 +390,8 @@ function krLaneLayout(list){
 function axisHeadHtml(){ return ''; } /* CMD-1014-19：拿掉最上面「印尼 / 韩国」小标题，改成每个时间前标「印 / 韩」 */
 function krBlockStyle(it){
   if(it.type==='book') return it.pending ? 'background:#fff;color:var(--sage);border:1.5px dashed #3F7A55;font-weight:700;cursor:pointer;' : 'background:var(--sage-bg);color:var(--sage);border:1px solid #BFD3C5;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'; /* CMD-1014-16：IN 在 KR 日程占位预约：待 KR 确认 = 虚线块，确认后 = 实线块 */
-  if(it.type==='surg' && it.own) return 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;border-left:4px solid #B5703F;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的施术 = KR 图例的施术色（原来是绿色，和术后到店分不开） */ /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
-  if(it.type==='visit' && it.own) return 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的术后到院 / 管理到院（同 KR 图例的术后到店绿） */
+  if(it.type==='surg' && it.own) return 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;border-left:4px solid #B5703F;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的施术 = KR 图例的施术色（原来是绿色，和术后到院分不开） */ /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
+  if(it.type==='visit' && it.own) return 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的术后到院 / 管理到院（同 KR 图例的术后到院绿） */
   return 'background:#F3F1EC;'; /* 不可预约：很浅的灰，不写字 */
 }
 /* CMD-1020-16 一：IN 的 KR 医院日程「医院」视图同样用小标签（一小时格 = 两行 × KR_ROW_PX，标签高度 = 1/6 小时格，整栏宽，按开始时间上下排，超过 6 个显示 5 个 + 「+N 个预约」，点开小弹层列出全部） */
@@ -1233,7 +1233,7 @@ function renderCaseStatusBar(c){
   var b = caseStageBadge(c);
   var actionBtn = '';
   if(c.krVisit && c.stage==='booked'){ /* CMD-1014-16：在韩到店案件（KR 医院）：到店 / 完成由 KR 标记，IN 不接待、不判未到店 */
-    actionBtn = '<span style="font-size:12px;color:var(--slate2);">在韩到店预约（KR 医院）：'+(c.krVisit.arrived ? '客人已到店，等 KR 标记完成' : (c.visitDate+' '+c.visitTime+'（韩国）等 KR 标记客人到店'))+'</span>';
+    actionBtn = '<span style="font-size:12px;color:var(--slate2);">在韩到院预约（KR 医院）：'+(c.krVisit.arrived ? '客人已到院，等 KR 标记完成' : (c.visitDate+' '+c.visitTime+'（韩国）等 KR 标记客人到店'))+'</span>';
   } else if(c.stage==='booked' && c.subState==='waiting'){
     actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }

@@ -160,7 +160,7 @@ function krcNowFrameHtml(){
     krcApplyRange();
     var h = base.apply(this, arguments);
     h = h.replace('<button class="btn-ghost" onclick="krcToday()">今天</button>', krcTodayBtnHtml()+'<button class="btn-outline" onclick="krfxOpen()" title="新增备忘 / OFF">＋ memo</button>');
-    h = h.replace('图例：', '图例：<span style="background:#E3EAF6;color:#2F4F86;padding:0 5px;border-radius:3px;">面诊</span> <span style="background:#E4EEE7;color:#2F6B4A;padding:0 5px;border-radius:3px;">术后到店</span> ');
+    h = h.replace('图例：', '图例：<span style="background:#E3EAF6;color:#2F4F86;padding:0 5px;border-radius:3px;">面诊</span> <span style="background:#E4EEE7;color:#2F6B4A;padding:0 5px;border-radius:3px;">术后到院</span> ');
     return h;
   };
 })();
@@ -439,7 +439,7 @@ function memoOffSet(k, v){ MEMO_DRAFT[k] = v; if(k==='offMode') renderMemoBody()
 
 /* ================= CMD-1014-19：约满标记（取代「施术开放 / 未开放」） =================
    上限的算法：
-   · KR 医院层：已约 = 当天各客人预约块（面诊 / 施术 / 术后到店 / IN 占位）占用的「营业时间内、不含午休 / 休诊时段」的 30 分钟段数合计；上限 = 当天在岗院长数（没有整天 OFF 的）× 这些 30 分钟段数；
+   · KR 医院层：已约 = 当天各客人预约块（面诊 / 施术 / 术后到院 / IN 占位）占用的「营业时间内、不含午休 / 休诊时段」的 30 分钟段数合计；上限 = 当天在岗院长数（没有整天 OFF 的）× 这些 30 分钟段数；
    · KR 院长层：已约 = 这位院长的预约块 + 不可预约块占用的段数；上限 = 这些 30 分钟段数（整天 OFF = 「OFF」）；
    · IN 本院日程：已约 = 当天各时段的有效预约 + 占位数（不含取消 / 未到店）；上限 = 诊所设定「每个时段的预约上限」× 当天可约的 30 分钟时段数（营业时间内、不含午休，休诊日不显示）。
    已约 ≥ 上限 → 「约满」。 */
