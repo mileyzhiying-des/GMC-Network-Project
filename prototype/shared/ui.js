@@ -28,7 +28,7 @@ function openAdminPage(key, isRefresh){
   ADMIN_KEY = key;
   el.dataset.page = 'admin-'+key;
   HEAD_ADMIN_TITLE = adminPageLabel(p);
-  var body = document.getElementById('admin-body');
+  var body = document.getElementById('admin-body'); body.style.maxWidth = '1000px'; /* 项目库页面（krsrvc）自己改成全宽，其他管理页恢复 */
   if(ADMIN_RENDER[key]) ADMIN_RENDER[key](body, isRefresh);
   else body.innerHTML = '<div class="card" style="padding:28px;color:var(--slate2);line-height:1.8;">「'+adminPageLabel(p)+'」页面在后续部分实现。</div>';
   if(typeof adminBanner === 'function') body.insertAdjacentHTML('afterbegin', adminBanner());

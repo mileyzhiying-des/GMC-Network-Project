@@ -1678,7 +1678,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 术后管理：地点单独一栏 / 不占院长 */
     krProjPage('care'); var tc = txt(); tc = tc.slice(tc.indexOf('项目卡'), tc.indexOf('每次到院一张卡')>-1 ? tc.indexOf('每次到院一张卡') : undefined); ST.ok(/项目\s*术后第 N 天\s*地点\s*次数\s*建议日期/.test(tc), '术后管理分页栏位 = 项目｜地点｜对应施术｜次数｜管理间隔｜建议日期');
     var hid = krHospitalIdOfMe(), hd = krHData(), dir = gc().director, slot = careSlotList(gc())[0]; if(!ST.ok(!!slot, '有未预约的拆线')) return; (hd.directorSchedule[dir] = hd.directorSchedule[dir]||[]).push({id:'t30blk', kind:'不可预约', type:'不可预约', date:slot.sug, time:'12:00', end:'13:00', name:''});
-    krBkdOpen('care', slot.item, slot.i); var ix0 = KR_CB.rows.findIndex(function(r){ return r.checked; }); KR_CB.rows[ix0].date = slot.sug; KR_CB.rows[ix0].time = '12:00'; krCbRender(); ST.ok(/不占院长时间/.test(document.getElementById('kr-cb-overlay').innerText), '预约时间弹窗：不选院长、不显示院长日程'); krCbGo(); var bo = document.getElementById('kr-block-overlay'); ST.ok(!(bo && bo.classList.contains('open') && /时间冲突|重叠/.test(bo.innerText)), '和院长「不可预约」同时段：不询问冲突');
+    krBkdOpen('care', slot.item, slot.i); var ix0 = KR_CB.rows.findIndex(function(r){ return r.checked; }); KR_CB.rows[ix0].date = slot.sug; KR_CB.dayTime = KR_CB.dayTime||{}; KR_CB.dayTime[slot.sug] = '12:00'; krCbRender(); /* CMD-1021-02：时间按日期组走 */ ST.ok(/不占院长时间/.test(document.getElementById('kr-cb-overlay').innerText), '预约时间弹窗：不选院长、不显示院长日程'); krCbGo(); var bo = document.getElementById('kr-block-overlay'); ST.ok(!(bo && bo.classList.contains('open') && /时间冲突|重叠/.test(bo.innerText)), '和院长「不可预约」同时段：不询问冲突');
     var care = (gc().subItems||[]).filter(function(x){ return x.kind==='术后管理记录' && !x.skipped && !x.holdUseOf && !x.surgUse; }); ST.ok(care.length===1 && care[0].time==='12:00', '术后管理预约成功');
     KRC.layer = 'hospital'; var ev = krcEvents(); var cev = ev.surg.filter(function(x){ return x.b.type==='术后管理' && x.b.subId===care[0].id; })[0]; ST.ok(!!cev && cev.b.who===KRB_HOSP && cev.b.noCap===true, '日历：术后管理画在医院层（全院），不算院长约满');
     hd.directorSchedule[dir] = hd.directorSchedule[dir].filter(function(b){ return b.id!=='t30blk'; });
@@ -1995,11 +1995,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     krCbOpen({surg:surgs[0]}); ST.ok(careR().filter(function(x){ return x.item===surgs[0]; }).length===5 && KR_CB.rows.filter(function(x){ return x.checked; }).every(function(x){ return x.item===surgs[0]; }) && KR_CB.rows.filter(function(x){ return x.item===surgs[0] && !x.checked; }).every(function(x){ return krCbCheck(x).err; }), '［一起预约］：勾这个施术的全部（5 行，休诊日的行自动不勾），别的施术不勾');
     krCbOpen({all:true, tab:'care'}); var wk = KR_CB.rows[0]; var d0 = ymdAdd(todayStr(), 40); while(visitWeekday(d0)!=='周日') d0 = ymdAdd(d0, 1);
     krCbSet(0, 'date', d0); ST.ok(krCbCheck(KR_CB.rows[0]).err && /休诊/.test(krCbCheck(KR_CB.rows[0]).err), '休诊日：该行红字、不能约：'+krCbCheck(KR_CB.rows[0]).err);
-    krCbSet(0, 'date', ymdAdd(d0, 1)); krCbSet(0, 'time', '06:00'); ST.ok(/营业时间外/.test(krCbCheck(KR_CB.rows[0]).err||''), '营业时间外：红字不能约');
-    krCbSet(0, 'time', '12:00'); var e0 = KR_CB.earliest; if(e0){ krCbSet(0, 'date', ymdAdd(e0, 3)); var dd = ymdAdd(e0, 3); if(visitWeekday(dd)==='周日') krCbSet(0, 'date', ymdAdd(e0, 4)); ST.ok(/晚于最早回国日/.test(krCbCheck(KR_CB.rows[0]).warn||'') || !!krCbCheck(KR_CB.rows[0]).err, '晚于最早回国日：橙字提醒、不拦'); }
+    krCbSet(0, 'date', ymdAdd(d0, 1)); KR_CB.dayTime[KR_CB.rows[0].date] = '06:00'; krCbRender(); ST.ok(/营业时间外/.test(krCbCheck(KR_CB.rows[0]).err||''), '营业时间外：红字不能约');
+    KR_CB.dayTime[KR_CB.rows[0].date] = '12:00'; krCbRender(); var e0 = KR_CB.earliest; if(e0){ krCbSet(0, 'date', ymdAdd(e0, 3)); var dd = ymdAdd(e0, 3); if(visitWeekday(dd)==='周日') krCbSet(0, 'date', ymdAdd(e0, 4)); ST.ok(/晚于最早回国日/.test(krCbCheck(KR_CB.rows[0]).warn||'') || !!krCbCheck(KR_CB.rows[0]).err, '晚于最早回国日：橙字提醒、不拦'); }
     /* 同天合并：把前两行改成同一天 → 预览 1 张到院卡 */
     krCbOpen({all:true, tab:'care'}); var sd = ymdAdd(todayStr(), 30); while(visitWeekday(sd)==='周日') sd = ymdAdd(sd, 1); KR_CB.rows.forEach(function(x, i){ x.date = ymdAdd(sd, 0); x.time = '12:00'; x.checked = x.kind==='care' && i<2; }); krCbRender(); var pv = krCbPreview(); ST.ok(pv.cards.length===1 && pv.cards[0].names.length===2, '同一天的项目合成一次到院，预览：'+JSON.stringify(pv.cards.map(function(x){ return x.date+':'+x.names.join('、'); })));
-    ST.ok(/将建 1 张到院卡/.test(document.getElementById('kr-cb-overlay').innerText), '弹窗下方预览会建几张到院卡');
+    var cbTxt = document.getElementById('kr-cb-overlay').innerText; ST.ok(!/将建/.test(cbTxt) && cbTxt.indexOf(visitWhenLabel(sd, '', ''))>-1 && /术后管理：/.test(cbTxt), 'CMD-1021-02：预览只写每天一行，没有「将建 N 张到院卡」');
     var n0 = subCaseList(gc()).length; krCbGo(); var c2 = gc(); ST.ok(subCaseList(c2).filter(function(x){ return x.date===sd; }).length===1 && subCaseList(c2).length===n0+1 && careRows(c2).filter(function(x){ return x.date===sd; }).length===2, '确认后建出 1 张到院卡，里面 2 个术后管理');
     krCbOpen({all:true, tab:'care'}); var bk = KR_CB.rows.filter(function(x){ return x.kind==='care' && x.place==='KR' && x.x.name==='术后消肿管理'; })[0]; krCbSet(KR_CB.rows.indexOf(bk), 'place', 'IN'); ST.ok(KR_CB.rows[KR_CB.rows.indexOf(bk)].place==='IN', '选回印尼做 → 这里不约'); krCbClose();
   });
@@ -2495,6 +2495,48 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.hasArrived = true; c.krSchedule = c.krSchedule||{}; c.krSchedule.confirmedDate = todayStr(); c.krProcedureDone = false; c.visitClosed = false; coreTodayPick(c, [], [ia], 'KM1 室长'); });
       var mg2 = list().filter(function(u){ return /钛提升/.test(u.label); }); ST.ok(mg2.length===1, '已经加进今天到院（今日进行）的那一笔不再算未安排（剩 '+mg2.length+' 笔）');
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+  ST.def('R72b','CMD-1021-02（KM1 分页，需要 pcStage 夹具）：预约弹窗按天合并 / 按钮固定底部 / 无「将建 N 张」/ 院长时间按规格；KR 项目库三个 tab / 胶囊筛选 / 展开规格 / 非活性化',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var hid = krHospitalIdOfMe(), snapC = null;
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snapC = JSON.stringify(c); c.krBalancePaid = true; c.visitClosed = false; c.procedureItems = c.procedureItems.filter(function(i){ return !/^热玛吉/.test(i.name); });
+      var base = {origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:1, firstDay:1, interval:2, local:true, mgmtPlan:true};
+      c.procedureItems.push(Object.assign({}, base, {name:'热玛吉 · 600发', specLabel:'600发', batchId:'B1'}), Object.assign({}, base, {name:'热玛吉 · 300发', specLabel:'300发', batchId:'B2'})); ensureItemIids(c); });
+    var lib = krLocalLib(hid), hm = lib.filter(function(p){ return p.name==='热玛吉'; })[0], hmOld = JSON.stringify(hm);
+    try{
+      ST.ok(dirOpInfo(hid, '热玛吉 · 300发').min===30 && dirOpInfo(hid, '热玛吉 · 600发').min===45 && dirOpInfo(hid, 'ONDA 提升 · 脸部 40kj·1次').min===30, '院长时间按规格取：热玛吉 300发 30 / 600发 45，ONDA 各规格 30');
+      krShowCase(r.clinicId, r.id); krSetCaseTab('items'); krProjPage('care'); krCbOpen({all:true});
+      var ov = document.getElementById('kr-cb-overlay'), box = ov.querySelector('.modal-box'), kids = box.children, body = kids[1], foot = kids[kids.length-1];
+      ST.ok(getComputedStyle(box).display==='flex' && getComputedStyle(body).overflowY==='auto' && /取消[\s\S]*确认预约/.test(foot.innerText) && foot.getBoundingClientRect().bottom <= box.getBoundingClientRect().bottom+1, '［取消］［确认预约］固定在弹窗底端，中间自己滚动');
+      ST.ok(!/将建/.test(ov.innerText), '没有「将建 N 张到院卡」');
+      var dates = function(){ var m = {}; KR_CB.rows.forEach(function(x){ if(x.place!=='IN') m[x.date] = 1; }); return Object.keys(m).sort(); }, heads = function(){ return ov.querySelectorAll('[onchange^="krCbMoveDay"]').length; };
+      ST.ok(heads()===dates().length, '按日期分组：每个日期一组、每组一个日期 + 一个时间（'+heads()+' 组）');
+      var rows = KR_CB.rows.filter(function(x){ return x.kind==='care' && x.place!=='IN'; }), d1 = rows[0].date;
+      krCbSet(KR_CB.rows.indexOf(rows[1]), 'date', d1); ST.ok(KR_CB.rows.filter(function(x){ return x.place!=='IN' && x.date===d1; }).length>=2 && heads()===dates().length, '某一项改成同一天 → 移进那一天的组（同一天只选一次时间）');
+      krCbSetDay(d1, '14:30'); ST.ok(KR_CB.rows.filter(function(x){ return x.place!=='IN' && x.date===d1; }).every(function(x){ return x.time==='14:30'; }), '组里改时间 → 这一天的项目都跟着（一天一个时间）');
+      var nd = ymdAdd(d1, 5); krCbMoveDay(d1, nd); ST.ok(KR_CB.rows.filter(function(x){ return x.place!=='IN' && x.date===nd; }).length>=2 && KR_CB.dayTime[nd]==='14:30', '组里改日期 → 整组搬家，时间跟着');
+      var closedD = d1; while(visitWeekday(closedD)!=='周日') closedD = ymdAdd(closedD, 1); krCbMoveDay(nd, closedD); ST.ok(/休诊/.test(ov.innerText) && KR_CB.rows.filter(function(x){ return x.place!=='IN' && x.date===closedD; }).every(function(x){ return !x.checked; }), '休诊日 / 营业时间外：整组红字、不能约（自动不勾）');
+      var mg = KR_CB.rows.filter(function(x){ return x.kind==='mgmt'; }); ST.ok(mg.length>=2 && mg.some(function(x){ return x.dirOp.on && x.dirOp.min===45; }) && mg.some(function(x){ return x.dirOp.on && x.dirOp.min===30; }), '管理项目行的院长时间按规格：600发 45 分 / 300发 30 分');
+      krCbClose();
+      /* KR 项目库 */
+      openAdminPage('krsrvc'); var el = document.getElementById('admin-body'), tx = function(){ return el.innerText; };
+      ST.ok(/施术项目\s*\d+[\s\S]*管理项目\s*\d+[\s\S]*非活性化/.test(tx()) && el.style.maxWidth==='none' && !/本地管理项目/.test(tx()), '顶层三个 tab：施术项目｜管理项目｜非活性化；全宽；没有「本地管理项目」字样');
+      ST.ok(/面部整体[\s\S]*眼睛/.test(tx()) && el.querySelectorAll('.chip').length>=6, '施术项目 tab 下面是部位胶囊筛选');
+      krpSetPart('f_eyes'); ST.ok(/面部 · 眼睛/.test(tx()) && !/面部 · 面部整体/.test(tx()), '点部位胶囊 = 筛选'); krpSetPart('');
+      krpSetTab('mgmt'); var cats = []; krLocalLibOn(hid).forEach(function(p){ if(cats.indexOf(p.catLabel)<0) cats.push(p.catLabel); });
+      ST.ok(cats.length===12 && /提升仪器/.test(tx()) && /麻醉（附加项）/.test(tx()) && el.querySelectorAll('.chip').length>=15, '管理项目 tab 下面是 12 类胶囊筛选（'+cats.length+' 类）');
+      KRL.cat = '提升仪器'; krpRender(); ST.ok(/提升仪器/.test(tx()) && !/水光注射\s*\n/.test(tx().replace(/水光注射 \d+/g, '')), '点类别胶囊 = 筛选'); KRL.cat = '';
+      KRL.open[hm.id] = true; krlRender(); ST.ok(/规格[\s\S]*价格[\s\S]*第一次使用 \/ 间隔[\s\S]*院长所需时间/.test(tx()) && /45 分钟/.test(tx()) && /30 分钟/.test(tx()), '点项目展开规格：规格｜价格｜第一次使用 / 间隔｜院长所需时间（院长操作的才有）'); KRL.open[hm.id] = false; krlRender();
+      krlOpen(hm.id); ST.ok(/院长所需时间（按规格）/.test(tx()) && el.querySelectorAll('input[oninput^="KRL.draft.specs["]').length===hm.specs.length, '编辑：院长所需时间每个规格各自一栏'); KRL.draft.specs[0].dirMin = '50'; krlSave(); ST.ok(dirOpInfo(hid, '热玛吉 · '+hm.specs[0].label).min===50 && dirOpInfo(hid, '热玛吉 · 600发').min===45, '改某个规格的院长时间只影响这个规格');
+      var tn = krLocalLib(hid).filter(function(p){ return p.name==='钛提升'; })[0]; krlToggleActive(tn.id);
+      ST.ok(!krLocalLibOn(hid).some(function(p){ return p.id===tn.id; }), '非活性化的管理项目不能再被选'); krpSetTab('inactive'); ST.ok(/钛提升/.test(tx()) && /管理项目/.test(tx()), '非活性化 tab 两类都放，标类型');
+      krlToggleActive(tn.id); ST.ok(krLocalLibOn(hid).some(function(p){ return p.id===tn.id; }), '重新启用后回到管理项目');
+    } finally {
+      Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snapC); });
+      var idx = krLocalLib(hid).findIndex(function(p){ return p.name==='热玛吉'; }); if(idx>-1) krLocalLib(hid)[idx] = JSON.parse(hmOld);
+      var tn2 = krLocalLib(hid).filter(function(p){ return p.name==='钛提升'; })[0]; if(tn2) tn2.active = true; KRL.draft = null; KRL.edit = null; KRP.tab = 'surg'; KRP.part = ''; KRL.cat = ''; Store.touch();
+    }
   });
   /* CMD-1020-16 一（KM1 分页；IN 分页测 IN 的 KR 医院日程）：「医院」视图预约小标签——不按时长拉长、整栏宽、按开始时间上下排、一格超过 6 个显示 5 个 + 「+N 个预约」、点开列出全部；院长视图仍按时长画块 */
   ST.def('R68a','CMD-1020-16：医院视图预约改小标签（高度 = 一小时格 1/6，整栏宽，按开始时间排，>6 个显示 5 个 + +N 个预约）；院长视图不变',function(){

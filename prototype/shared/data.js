@@ -4746,7 +4746,10 @@ function dirOpInfo(hid, rawName){
   var base = String(rawName||'').split(' · ')[0].replace(/[（(].*$/, '').trim(), h = HOSPITAL_DATA[hid] || {};
   var p = (h.projects||[]).filter(function(x){ return isKrPostcareCat(x.categoryId) && (x.name===rawName || x.name===base); })[0];
   if(!p){ var lib = (typeof krLocalLib==='function') ? krLocalLib(hid) : (h.localLib||[]); p = (lib||[]).filter(function(x){ return x.name===rawName || x.name===base; })[0]; }
-  return p && p.dirOp ? {on:true, min:Math.max(5, parseInt(p.dirMin,10) || 30)} : {on:false, min:0};
+  if(!(p && p.dirOp)) return {on:false, min:0};
+  /* CMD-1021-02：管理项目按规格取院长时间（规格里单独填的优先；没填 = 项目层的默认值）；rawName 形如「热玛吉 · 300发」 */
+  var specLabel = String(rawName||'').split(' · ')[1], sp = specLabel ? (p.specs||[]).filter(function(s){ return s.label===specLabel; })[0] : null, mn = sp && parseInt(sp.dirMin,10) > 0 ? parseInt(sp.dirMin,10) : (parseInt(p.dirMin,10) || 30);
+  return {on:true, min:Math.max(5, mn)};
 }
 function subCaseRows(c, rep){ var k = subCaseKey(rep); return (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.skipped && !(s.place==='IN' && !s.done) && subCaseKey(s)===k; }); }
 /* 子案件编号：按日期顺序排；「全部延期」结案的那一张保留它的编号，不让后面的子案件顶替（CMD-1015-22） */
@@ -7438,7 +7441,13 @@ function buildClinicSeed(cid){
 
 
 /* KR 的本地管理项目库（CMD-1012-04）：每家医院一份清单（韩元），KR 项目库页面「本地管理项目」组；缺的补上 */
-function krLocalLib(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; if(!h.localLib){ h.localLib = buildLocalProjects('KR', hid); gmcStamp(h.localLib); } return h.localLib; }
+/* CMD-1021-02 演示数据：几个项目设成「院长操作」，规格间院长时间有的一样有的不一样（热玛吉 300发 30 / 600发 45 / 眼部 450发 45；ONDA 各规格 30）。只在项目从没设过（dirOp 为 undefined）时补，用户改过的不动 */
+var DEMO_DIROP = {'热玛吉':{min:30, specs:{'300发':30, '600发':45, '眼部 225发':30, '眼部 450发':45}}, 'ONDA 提升':{min:30, specs:{}}};
+function krLocalLib(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; if(!h.localLib){ h.localLib = buildLocalProjects('KR', hid); gmcStamp(h.localLib); }
+  if(!h._dirDemo){ h._dirDemo = 1; h.localLib.forEach(function(p){ var df = DEMO_DIROP[p.name]; if(df && p.dirOp===undefined){ p.dirOp = true; p.dirMin = df.min; (p.specs||[]).forEach(function(sp){ if(df.specs[sp.label]) sp.dirMin = df.specs[sp.label]; }); } }); }
+  return h.localLib; }
+/* 选择 / 新增时用的管理项目清单：不含非活性化的（按 id / 名字查已有项目仍用 krLocalLib） */
+function krLocalLibOn(hid){ return krLocalLib(hid).filter(function(p){ return p.active!==false; }); }
 Object.keys(HOSPITAL_DATA).forEach(function(h){ krLocalLib(h); });
 
 /* 演示案件标记（CMD-1012-06 补）：种子里建立的案件都带 demo:true；用户自己新建的案件（id 为 r+时间戳）没有这个标记，测试覆盖页只计算后者。
