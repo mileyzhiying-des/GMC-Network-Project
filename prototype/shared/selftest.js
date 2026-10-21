@@ -3640,4 +3640,41 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.GMC_NO_FOLLOWASK = old; var ov2 = document.getElementById('followup-overlay'); if(ov2) ov2.classList.remove('open'); }
   });
 
+  ST.def('R87a','CMD-1021-19（KM1 分页，需要 stagePay + stageC 夹具）：KR 复诊面诊——标示 / 院长恢复确认卡 / 评估结论 / 不附方案·附方案 / IN 需确认通知 / 院长恢复确认卡片 / 一般面诊不受影响',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var rows = krAllCases(), r = rows.filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0], src = rows.filter(function(x){ return /^T-待到院/.test(x.name); })[0];
+    if(!ST.ok(!!r && !!src, '先 ST.ensureFixtures([\'stagePay\',\'stageC\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var oa = window.alert, oc = window.confirm, alerts = []; window.alert = function(m){ alerts.push(String(m)); }; window.confirm = function(){ return true; };
+    try{
+      ST.ok(!/复诊/.test(caseStageInfo(gc()).proc) && !/恢复确认/.test(krTabConsult(gc())), '一般面诊：没有复诊标示 / 恢复确认卡');
+      mut(function(c){ c.consultKind = '复诊'; c.followProjects = ['隆鼻']; c.linkedCase = {caseId:src.id, reason:'复诊'}; c.concerns = [{part:'f_nose', sub:'', desc:'想再调整', expect:'', video:null, photos:{front:{name:'a.jpg'}}}]; c.recovery = [{name:'隆鼻', part:'f_nose', photos:{front:{name:'r.jpg'}}}]; });
+      ST.ok(/^复诊/.test(caseStageInfo(gc()).proc), '案件列表进程标「复诊」：'+caseStageInfo(gc()).proc);
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; var h = krTabConsult(gc());
+      ST.ok(/恢复确认/.test(h) && /复诊面诊/.test(h) && h.indexOf(src.caseNo)>-1 && /隆鼻/.test(h) && /想再调整/.test(h) && /恢复照片/.test(h) && /评估结论/.test(h), '恢复确认卡：关联案件 / 要看的项目 / IN 的说明照片 / 评估结论');
+      var ti = krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+r.id; }); ST.ok(ti.some(function(x){ return x.kind==='eta' && /复诊面诊/.test(x.text); }), 'KR 待办：复诊面诊：确认面诊时间和预计出评估时间');
+      mut(function(c){ ST.krEta(c); }); mut(function(c){ c.consultContentAt = nowFullDt(); c.consultStartedAt = nowFullDt(); });
+      ti = krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+r.id; }); ST.ok(ti.some(function(x){ return x.kind==='send' && /发送恢复评估/.test(x.text); }), 'KR 待办：发送恢复评估');
+      var blk = krSubmitBlock(gc()); ST.ok(/发送恢复评估/.test(blk) && /disabled/.test(blk), '没选评估结论：发送按钮灰');
+      KR_SUB = krSubBlank(krRecKey()); KR_SUB.text = '伤口恢复良好，继续观察'; krSubmitReport(); ST.ok(gc().consultStatus==='awaiting_report' && alerts.some(function(m){ return /评估结论/.test(m); }), '没选结论不能发送');
+      krSetRecoveryResult('treat'); ST.ok((gc().recoveryResult||{}).result==='treat', '选评估结论：需要处理');
+      krSubmitReport(); var c1 = gc(); ST.ok(c1.consultStatus==='report_ready' && (c1.krScope.items||[]).length===0 && /^【恢复评估：需要处理】/.test(c1.reportKo), '不附项目方案也能发送，报告带评估结论');
+      var nn = Store.withClinic(cid, function(){ return NOTIFS.filter(function(n){ return /复诊评估已出/.test(n.text) && /不附项目方案/.test(n.text); }).length; }); ST.ok(nn===1, 'IN 收一条「复诊评估已出」需确认通知（不附方案）');
+      /* 附方案：回到等待报告再发一次（核心函数） */
+      mut(function(c){ c.reportReady = false; c.consultStatus = 'awaiting_report'; });
+      mut(function(c){ coreSubmitReport(c, {original:'x', zh:'x', items:[{name:'隆鼻', price:1000000}], overallNote:'', files:[]}, 'KM1 室长'); });
+      var n2 = Store.withClinic(cid, function(){ return NOTIFS.filter(function(n){ return /复诊评估已出/.test(n.text) && /附项目方案/.test(n.text) && !/不附/.test(n.text); }).length; }); ST.ok(n2===1, '附项目方案：通知写「附项目方案」');
+      ST.ok(typeof NOTIF_ACTION_RE!=='undefined' && NOTIF_ACTION_RE.test('复诊评估已出：x') && notifTodoKind({text:'复诊评估已出：x', level:'action', popup:'confirm'})!=='info', '复诊评估已出是需确认类通知');
+      var dc = todoKrDirCardsHtml(); ST.ok(/恢复确认/.test(dc) && !/即将推出/.test(dc), '院长工作台「恢复确认」卡已启用（不再是即将推出）');
+      ST.ok(!!TODO_FILTERS.drecover, '待办筛选有「恢复确认」');
+    } finally { window.alert = oa; window.confirm = oc; }
+  });
+  ST.def('R87b','CMD-1021-19（IN 分页，接 R87a 留下的案件）：IN 待办「复诊评估已出」+ 点开后不附方案的消失',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.consultKind==='复诊' && x.consultStatus==='report_ready'; })[0]; if(!ST.ok(!!c, '先在 KM1 分页跑 R87a')) return;
+    c.krScope = {items:[], overallNote:''}; c.recoveryResult = {result:'ok'}; c.revisitAck = false; c.projectsEnabled = true; c.reportReady = true;
+    var it = inTodoItems().filter(function(x){ return x.kind==='plan' && x.no===c.caseNo; })[0]; ST.ok(!!it && /复诊评估已出/.test(it.text) && /恢复正常/.test(it.text), 'IN 待办：复诊评估已出：联络客人（恢复正常，不附项目方案）：'+(it&&it.text));
+    it.go(); ST.ok(c.revisitAck===true && !inTodoItems().some(function(x){ return x.kind==='plan' && x.no===c.caseNo; }), '点开联络后，不附方案的待办消失');
+  });
+
 })();

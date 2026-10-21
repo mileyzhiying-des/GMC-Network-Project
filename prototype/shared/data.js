@@ -2016,9 +2016,11 @@ function coreSubmitReport(c, rep, by){
   c.krScope = {items:rep.items, overallNote:rep.overallNote||'', updatedAt:nowFullDt()};
   c.projectsEnabled = true;
   c.projectOriginFilter = 'KR';
-  logCaseEvent(c, by, 'KR室长提交面诊诊疗方案，已出诊疗方案');
+  var rv = isRevisitConsult(c), rr = c.recoveryResult && c.recoveryResult.result, rrTxt = rr==='treat' ? '需要处理' : '恢复正常', hasPlan = (rep.items||[]).length>0;
+  logCaseEvent(c, by, rv ? 'KR室长提交复诊恢复评估：'+rrTxt+(hasPlan ? '，附项目方案' : '，不附项目方案') : 'KR室长提交面诊诊疗方案，已出诊疗方案');
   updateCaseStage(c);
-  pushNotif('面诊','诊疗方案已出：'+c.name+'（'+(c.caseNo||'')+'），请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'}); /* CMD-1021-09 四：需确认的弹窗（停住要按［确认］，点开进面诊资料）；原来是普通通知（弹一次 6 秒自动收起，容易错过） */
+  if(rv) pushNotif('面诊','复诊评估已出：'+c.name+'（'+(c.caseNo||'')+'）：'+rrTxt+(hasPlan ? '（附项目方案）' : '（不附项目方案）')+'，请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'});
+  else pushNotif('面诊','诊疗方案已出：'+c.name+'（'+(c.caseNo||'')+'），请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'}); /* CMD-1021-09 四：需确认的弹窗（停住要按［确认］，点开进面诊资料）；原来是普通通知（弹一次 6 秒自动收起，容易错过） */
   return true;
 }
 /* ---- 查看诊疗方案：格式化的报告视图，底部"查看方案"跳转项目列表 ---- */
@@ -5751,7 +5753,7 @@ function markConsultPaid(){
   var c = getCurrentCase(); if(!c) return;
   c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt(); /* 催办用：缴费后超过 30 分钟 KR 还没确认时间就可催办 */
   recordConsultFee(c); /* 正常情况下选面诊时已记；没有记录的老数据在缴费时补记 */
-  if(!SEEDING) pushKrNotif(caseKrHospital(c), '客人已缴面诊费：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), (isRevisitConsult(c) ? '客人已缴复诊面诊费：' : '客人已缴面诊费：')+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认'+(isRevisitConsult(c) ? '复诊面诊时间和预计出评估时间' : '报告时间'), {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
   ensureCaseRoom(c); /* CMD-1008-14：缴完面诊费自动建案件对话房（不通知、不响铃），KR 一开始就能在房里留言 */
   logCaseEvent(c, actingName(), '面诊已确认并收款，已在Main对话群自动通知'); /* 收款是 IN 室长在系统里记的，不是客人操作（CMD-1019-21 四） */
@@ -5763,7 +5765,7 @@ function markConsultPaid(){
 function applyWaiveFee(c, reason, note){
   c.consultFeeWaived = {reason: reason==='其他' ? '其他：'+note : reason, note:note};
   c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt(); /* 免除后照正常流程：待确认报告时间 */
-  if(!SEEDING) pushKrNotif(caseKrHospital(c), '面诊费已免除：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认报告时间', {caseId:c.id, kind:'consultpaid'});
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), (isRevisitConsult(c) ? '复诊面诊费已免除：' : '面诊费已免除：')+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认'+(isRevisitConsult(c) ? '复诊面诊时间和预计出评估时间' : '报告时间'), {caseId:c.id, kind:'consultpaid'});
   updateCaseStage(c);
   ensureCaseRoom(c); /* 免除面诊费同样自动建房 */
   logCaseEvent(c, actingName(), '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
@@ -5791,7 +5793,7 @@ function syncConsultBlock(c){
   if(!c.consultAt) return;
   var arr2 = (h.directorSchedule[c.director] = h.directorSchedule[c.director] || []);
   var st = c.consultAt.time, en = minToTime(Math.min(24*60-1, timeToMin(st)+consultBlockMinutes(c)));
-  arr2.push({id:'sb'+(SCHED_SEQ++)+Math.floor(Math.random()*1000), who:c.director, date:c.consultAt.date, time:st, end:en, type:'面诊', title:'面诊', note:'', kind:'面诊', caseId:c.id, clinicId:c.clinicId, name:c.name});
+  arr2.push({id:'sb'+(SCHED_SEQ++)+Math.floor(Math.random()*1000), who:c.director, date:c.consultAt.date, time:st, end:en, type:'面诊', title:(isRevisitConsult(c) ? '复诊面诊' : '面诊'), note:'', kind:'面诊', caseId:c.id, clinicId:c.clinicId, name:c.name});
 }
 function coreConfirmConsultTimes(c, consultDate, consultTime, etaUtc, by){
   if(!c || c.consultStatus!=='paid_waiting_kr') return false;
@@ -5800,7 +5802,7 @@ function coreConfirmConsultTimes(c, consultDate, consultTime, etaUtc, by){
   if(!ok) return false;
   logCaseEvent(c, by, 'KR确认面诊时间：'+consultDate+' '+consultTime+'（韩国时间，院长 '+(c.director||'—')+'）');
   syncConsultBlock(c);
-  if(c.director) pushKrNotif(caseKrHospital(c), '需要处理：'+consultDate+' '+consultTime+'（韩国时间）面诊 '+c.name+'（'+(c.caseNo||'')+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 通知该院长：几点要面诊哪位客人（CMD-1012-10 修改2） */
+  if(c.director) pushKrNotif(caseKrHospital(c), '需要处理：'+consultDate+' '+consultTime+'（韩国时间）'+(isRevisitConsult(c) ? '复诊面诊（恢复确认）' : '面诊')+' '+c.name+'（'+(c.caseNo||'')+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 通知该院长：几点要面诊哪位客人（CMD-1012-10 修改2） */
   return true;
 }
 /* 开始面诊：室长账号室长按、院长账号院长按，谁先按都算 → 小状态「面诊中」；上传内容 = 面诊结束（CMD-1012-05 一·2） */

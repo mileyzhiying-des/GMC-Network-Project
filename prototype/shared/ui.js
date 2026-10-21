@@ -3079,7 +3079,7 @@ function openNotif(id, src){
   }
   if(n.caseId){
     var pcGo = /术后管理/.test(n.text||'') && !/转回印尼持有/.test(n.text||'');
-    var planGo = /诊疗方案已[到出]/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
+    var planGo = /诊疗方案已[到出]|复诊评估已出/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
     if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : (planGo ? '&tab=consult' : '')); else openCaseDetail(n.caseId, false, pcGo ? {pc:true} : (planGo ? {tab:planGo} : {pc:pcGo}));
   }
 }
