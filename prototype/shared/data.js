@@ -4848,7 +4848,7 @@ function subItemRowHtml(s, cells){
 }
 function krTimelineTabHtml(c){
   subCaseNos(c);
-  var list = (c.subItems||[]).slice().sort(function(a, b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); }).map(function(s){ return subItemRowHtml(s); }).join('')+(krMemoList(c).length ? '<div style="margin-top:8px;"><b style="font-size:12px;">项目进程 memo（KR 写，只读）</b>'+krMemoList(c).map(function(m){ return '<div style="font-size:12px;padding:5px 0;border-top:1px solid var(--border2);"><span style="color:var(--muted);">'+(m.at ? fmtUtc(m.at).slice(2, 16) : '—')+' · '+String(m.by||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span><div style="color:var(--slate2);white-space:pre-wrap;">'+String(m.text).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div></div>'; }).join('')+'</div>' : '');
+  var list = (c.subItems||[]).slice().sort(function(a, b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); }).map(function(s){ return subItemRowHtml(s); }).join('')+(krMemoList(c).length ? '<div style="margin-top:8px;"><b style="font-size:12px;">项目进程 memo（KR 写，只读）</b>'+krMemoList(c).map(function(m){ return '<div style="font-size:12px;padding:5px 0;border-top:1px solid var(--border2);"><span style="color:var(--muted);">'+memoTimeText(m)+' · '+String(m.by||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span><div style="color:var(--slate2);white-space:pre-wrap;">'+String(m.text).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div></div>'; }).join('')+'</div>' : '');
   return '<div class="info-heading" style="margin-bottom:8px;">项目进程（KR 室长整理，只读）</div>'+
     (list ? subGridHeadHtml()+list : '<div style="font-size:13px;color:var(--muted);padding:10px 0;">KR 还没有整理项目进程（付定金后由 KR 室长整理，整理好会通知你）</div>')+
     '<div style="font-size:12px;color:var(--muted);margin-top:10px;">可据此安排机票、住宿；客人端暂不显示。施术一行由案件自动产生；术后管理记录是免费的记录；增加项目是到院后加做、需要结账的项目。每一行是案件下的一个子项（编号 '+(c.caseNo||'A000001')+'-01、-02……，悬停可看）。</div>';
@@ -7859,14 +7859,30 @@ function coreBookCancel(hid, id, kind, by){
 /* ============ CMD-1015-29：今日案件行的操作 = ［操作完成］［今日取消］ ============
    施术项目一项一行（显示层按项目拆开，数据里仍是一条「施术」子项）：单项完成 coreSurgItemDone；最后一项完成时整条施术行完成
    今日取消 = 今天不做了，退回项目卡（施术 / 管理 → 未使用；术后管理 → 未预约），不是取消项目、不退款 */
-/* CMD-1021-03：项目进程 memo = 不限次数的记录（时间 · 谁 · 内容，存在 c.krProgressMemos，旧的单条文字 c.krProgressMemo 迁成第一则）；KR 室长写，IN 只读 */
-function krMemoList(c){ var l = (c.krProgressMemos||[]).slice().reverse(); if(!l.length && c.krProgressMemo) l = [{id:'m0', at:'', by:'KR 室长', text:c.krProgressMemo}]; return l; } /* 最新在上 */
-function coreAddProgressMemo(c, text, by){
+/* CMD-1021-03 / 04：项目进程 memo = 不限次数的记录（时间 · 谁 · 内容，存在 c.krProgressMemos）；每则带 vk = 属于哪一次到院（'main' = 施术当天，其余 = 到院 key），'' = 案件层（Memo（总）里写的 / 判断不了的旧 memo）。KR 室长写，IN 只读 */
+/* memo 的时间：MM/DD HH:mm（保存时的时间），没有时间的（旧数据）写「—」 */
+function memoTimeText(m){ return m.at ? fmtUtc(m.at).slice(5, 16).replace('-', '/') : '—'; }
+function krMemoList(c, vk){ var l = (c.krProgressMemos||[]).slice().reverse(); if(!l.length && c.krProgressMemo) l = [{id:'m0', at:'', by:'KR 室长', text:c.krProgressMemo, vk:''}]; if(vk!==undefined) l = l.filter(function(m){ return (m.vk||'')===vk; }); return l; } /* 最新在上；vk 省略 = 全部 */
+function coreAddProgressMemo(c, text, by, vk){
   text = String(text||'').trim(); if(!text) return false; migrateProgressMemo(c);
-  (c.krProgressMemos = c.krProgressMemos||[]).push({id:'pm'+Date.now()+Math.floor(Math.random()*1000), at:nowFullDt(), by:by||'', text:text});
+  (c.krProgressMemos = c.krProgressMemos||[]).push({id:'pm'+Date.now()+Math.floor(Math.random()*1000), at:nowFullDt(), by:by||'', text:text, vk:vk||''});
   logCaseEvent(c, by, '项目进程 memo：'+text); return true;
 }
-function migrateProgressMemo(c){ if(!c.krProgressMemos && c.krProgressMemo){ c.krProgressMemos = [{id:'m0', at:'', by:'KR 室长', text:c.krProgressMemo}]; c.krProgressMemo = ''; return true; } return false; }
+/* 这则 memo 写入时在哪一次到院：按写入日期对上施术日 / 到院日；判断不了 = ''（放案件层） */
+function memoVisitGuess(c, m){
+  if(!m.at) return ''; var ds = fmtUtc(m.at).slice(0, 10), ks = c.krSchedule || {};
+  if(ks.confirmedDate && ks.confirmedDate===ds) return 'main';
+  var rep = (typeof subCaseList==='function' ? subCaseList(c) : []).filter(function(r){ return r.date===ds; })[0]; return rep ? subCaseKey(rep) : '';
+}
+function migrateProgressMemo(c){
+  var ch = false;
+  if(!c.krProgressMemos && c.krProgressMemo){ /* 旧的单条文字 → 第一则；时间 / 作者从 Timeline 里「项目进程 memo：…」那条找 */
+    var le = (c.logEntries||[]).filter(function(e){ return String(e.action||'')==='项目进程 memo：'+c.krProgressMemo; }).slice(-1)[0];
+    c.krProgressMemos = [{id:'m0', at:le ? le.dt : '', by:le ? (le.actor||'KR 室长') : 'KR 室长', text:c.krProgressMemo}]; c.krProgressMemo = ''; ch = true;
+  }
+  (c.krProgressMemos||[]).forEach(function(m){ if(m.vk===undefined){ m.vk = memoVisitGuess(c, m); ch = true; } });
+  return ch;
+}
 function coreItemNote(c, name, text, by){
   var it = itemByKey(c, name, function(x){ return !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name;
   it.todayNote = String(text||'').trim(); logCaseEvent(c, by, '备注（'+name+'）：'+(it.todayNote || '清空')); return true;
