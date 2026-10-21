@@ -2379,7 +2379,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 待付款可以先做 */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], it2 = cc.procedureItems.filter(function(x){ return x.iid===ib; })[0]; it2.pendingPay = true; it2.batchId = ''; it2.krAddOn = true; cc.krProcedureDone = false;
         ST.ok(coreUnitUseNow(cc, ib, 'KM1 室长').ok, '待付款的项目可以本次使用（不再锁住）');
-        var e = coreEndVisitToday(cc, 'KM1 室长'); ST.ok(!e.ok && /待付款，请先付款/.test(e.err) && /₩/.test(e.err), '有待付款不能结束今日到院：'+e.err);
+        var e = coreEndVisitToday(cc, 'KM1 室长'); ST.ok(!e.ok && /请先付款/.test(e.err) && /₩/.test(e.err), '有待付款不能结束今日到院：'+e.err);
         ST.ok(pendingPayItems(cc).length===1 && krTopAlerts(cc).indexOf('待付款')>-1, '页面最上方红色待付款条一直显示'); });
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PICK = {}; KR_PROJ_PAGE = 'surg'; }
   });
@@ -3358,6 +3358,31 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(function(c){ c.hasArrived = true; c.krProcedureDone = true; var ra = coreAddOnItem(c, '不存在的项目', 'KM1 室长', {}); ST.ok(ra===false, '主到院已完成：不能直接加项目'); });
       ST.ok(typeof coreReopenVisit==='undefined', '旧的自动重开入口 coreReopenVisit 已删除');
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+
+  /* CMD-1021-12（KM1 分页，需要 pcStage 夹具）：今天待到店的到院卡能展开、默认展开、有项目和［客人到店］，到店前没有［操作完成］，已预约的未来卡也能展开 */
+  ST.def('R80a','CMD-1021-12（KM1 分页，需要 pcStage 夹具）：待到店的到院卡可展开（今天默认展开）、显示项目和到店按钮、到店前不能操作完成',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, key = 'KR|'+todayStr(), fut = 'KR|'+ymdAdd(todayStr(), 9), ids = {};
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c); c.krBalancePaid = true;
+      var base = {origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:3, local:true, mgmtPlan:true, firstDay:'', interval:0, intNa:true, batchId:'B1'};
+      c.procedureItems.push(Object.assign({}, base, {name:'A项 · 3次'})); ensureItemIids(c); ids.a = itemIid(c.procedureItems.filter(function(x){ return /A项/.test(x.name); })[0]);
+      coreUnitBookUse(c, ids.a, todayStr(), '20:00', 'KM1 室长', '', null); coreUnitBookUse(c, ids.a, ymdAdd(todayStr(), 9), '20:00', 'KM1 室长', '', null); });
+    try{
+      var html = function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); return document.getElementById('kr-casedetail').innerHTML; };
+      var h = html(); var i = h.indexOf('krSubToggle(\''+key+'\')'); ST.ok(i>=0, '今天的到院卡标题可点（krSubToggle）');
+      var card = h.slice(i, h.indexOf('kr-subrow-', i+10) > 0 ? h.indexOf('kr-subrow-', i+10) : i+6000);
+      ST.ok(/▾/.test(card) && /A项/.test(card), '今天待到店的卡默认展开：有 ▾ 和项目');
+      ST.ok(/krSubVisitArrive/.test(card), '卡里有［客人到店］');
+      ST.ok(!/krHoldSubDone/.test(card) && !/操作完成/.test(card), '到店前没有［操作完成］');
+      krSubToggle(key); h = document.getElementById('kr-casedetail').innerHTML; ST.ok(/▸/.test(h.slice(h.indexOf('krSubToggle(\''+key+'\')'), h.indexOf('krSubToggle(\''+key+'\')')+900)) && !/krSubVisitArrive\(\'KR\|[^)]*\)[^]*?A项/.test(''), '点标题可以收起');
+      krSubToggle(key);
+      var h2 = html(); var j = h2.indexOf('krSubToggle(\''+fut+'\')'); ST.ok(j>=0 && /▸/.test(h2.slice(j, j+900)), '已预约的未来卡默认折叠');
+      krSubToggle(fut); h2 = document.getElementById('kr-casedetail').innerHTML; j = h2.indexOf('krSubToggle(\''+fut+'\')'); ST.ok(/▾/.test(h2.slice(j, j+900)) && /A项/.test(h2.slice(j, j+4000)), '点开后能看到项目');
+      krSubVisitArrive(key); h = document.getElementById('kr-casedetail').innerHTML; var k = h.indexOf('krSubToggle(\''+key+'\')');
+      ST.ok(coreVisitState(krFindCase(r.clinicId, r.id).c, key)==='arrived' && /krHoldSubDone/.test(h.slice(k, k+6000)), '按［客人到店］后变已到店，可操作');
+    } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); delete KR_SUB_OPEN[key]; delete KR_SUB_OPEN[fut]; }
   });
 
 })();
