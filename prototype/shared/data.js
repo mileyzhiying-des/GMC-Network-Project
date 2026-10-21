@@ -329,6 +329,13 @@ function dirOffText(o){ return 'OFF'+(o && String(o.note||'').trim() ? ' · '+St
 function offApplies(o, ds){ return o.weekly ? (o.dow === new Date(ds+'T00:00:00').getDay()) : o.date===ds; }
 /* KR 排施术时间的检查：整天休诊 / 休诊时段 / 院长 OFF 不能排；返回错误文字，'' = 可以（KR 端确认、调整、重新预约施术时间前调用） */
 function krHoursText(min){ var h = Math.round(min/6)/10; return (h===Math.floor(h) ? String(h) : h.toFixed(1))+' 小时'; }
+/* CMD-1021-15：这一天有已完成的到院吗？（主到院 key 'main'：krProcedureDone 且到院日 = 这天；其他到院 key 'KR|日期' 在 visitEndedKeys）。locked = 不是今天（当天 00:00 之后不能再重开）
+   原来排进已完成到院日时核心函数只设 KR_LAST_CONFLICT「那天的到院已完成…」，被 krMut 当成时间冲突弹出［仍然进行］［不在这个时段］；按［仍然进行］只是重跑一次、核心函数再拒绝一次（不会塞进已完成的到院），于是又弹一次同样的窗。 */
+function doneDayInfo(c, date){
+  if(!c || !date) return null; var key = '';
+  if(c.krProcedureDone && c.hasArrived && mainVisitDay(c)===date) key = 'main'; else if((c.visitEndedKeys||{})['KR|'+date]) key = 'KR|'+date;
+  return key ? {date:date, key:key, locked:date!==todayStr()} : null;
+}
 var KR_HARD_ERR = /医院定期休诊|休诊时段|营业时间内|午休时段|医院休诊日|到院已完成/;
 function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, opts){ var e = krSurgerySlotErrorRaw(hid, director, date, time, durMin, exceptCaseKey, opts); return (e && KR_FORCE_CLASH && !KR_HARD_ERR.test(e)) ? '' : e; } /* CMD-1015-22：冲突改成询问，［仍然进行］时跳过冲突类（休诊 / 营业时间类仍挡） */
 function krSurgerySlotErrorRaw(hid, director, date, time, durMin, exceptCaseKey, opts){
@@ -5269,7 +5276,7 @@ function inheritVisitArrival(c, s){
 }
 function coreSubTimeEdit(c, id, date, time, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.kind==='施术') return false;
-  if((c.visitEndedKeys||{})['KR|'+date] && subCaseKey(s)!=='KR|'+date){ window.KR_LAST_CONFLICT = '那天的到院已完成，请先在到院卡按［增加项目］'; return false; }
+  var ddT = doneDayInfo(c, date); if(ddT && subCaseKey(s)!=='KR|'+date){ window.KR_DONEDAY = ddT; window.KR_LAST_CONFLICT = '到院已完成'; return false; } /* 兜底：UI 入口先预检，走到这里由 krMut 弹专门提示 */
   var before = (s.date||'')+(s.time ? ' '+s.time : '');
   s.date = date; s.time = time || s.time; inheritVisitArrival(c, s);
   c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); });
@@ -7897,7 +7904,7 @@ function coreUnitUseNow(c, name, by, opt){
 function coreUnitBookUse(c, name, date, time, by, director, opt){
   var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name; if(it.pendingPay || !c.krBalancePaid || !date) return false;
   var mg = krIsMgmtItemC(it);
-  if((c.visitEndedKeys||{})['KR|'+date]){ window.KR_LAST_CONFLICT = '那天的到院已完成，请先在到院卡按［增加项目］'; return false; }
+  var ddU = doneDayInfo(c, date); if(ddU){ window.KR_DONEDAY = ddU; window.KR_LAST_CONFLICT = '到院已完成'; return false; }
   if(mg){ if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return false; }
   else if(it.done) return false;
   var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+(mg ? '（持有项目使用）' : '（预约）'), place:'KR', projectName:name, silent:true, salt:'b'+Math.floor(Math.random()*1e4)}, by); if(!s) return false;

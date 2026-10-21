@@ -485,8 +485,9 @@ function krTabBasic(c){
 function krCan(){ return canDo('krwork'); } /* 室长 / 管理者 */
 function krIsMyCase(c){ var me = currentAccount(); return !!me && (!isKrDirectorLike(me) || c.director===me.name); }
 function krMut(fn){
-  KR_LAST_CONFLICT = ''; KR_CONFLICT_KIND = '';
+  KR_LAST_CONFLICT = ''; KR_CONFLICT_KIND = ''; window.KR_DONEDAY = null;
   var r = Store.mutateClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? fn(c) : undefined; }); krRefreshAll();
+  if(window.KR_DONEDAY){ var ddm = window.KR_DONEDAY; window.KR_DONEDAY = null; KR_LAST_CONFLICT = ''; KR_CONFLICT_KIND = ''; krDoneDayAsk(ddm, function(){ krMut(function(c){ var rr = coreReopenVisitAt(c, ddm.key, ME_NAME); return rr.ok ? fn(c) : false; }); }, true); return r; } /* CMD-1021-15 */
   if(KR_LAST_CONFLICT){
     var m = KR_LAST_CONFLICT, kind = KR_CONFLICT_KIND; KR_LAST_CONFLICT = ''; KR_CONFLICT_KIND = '';
     krAskClash(m, {proceed:function(){ KR_FORCE_CLASH = true; try{ krMut(fn); }finally{ KR_FORCE_CLASH = false; } },
@@ -502,6 +503,25 @@ function krAskClash(msg, o){
   ov.innerHTML = '<div class="modal-box" style="width:460px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;color:#B3261E;">时间冲突</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap;margin-bottom:8px;">'+krEsc(msg)+'</div><div style="font-size:13px;font-weight:700;margin-bottom:6px;">仍要这样排吗？</div>'+(o.altHint ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">［不在这个时段］：'+krEsc(o.altHint)+'</div>' : '')+
     '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="__krAskGo(\'go\')">仍然进行</button><button class="btn-outline" style="flex:1;" onclick="__krAskGo(\'alt\')">'+(o.alt || o.altLabel ? krEsc(o.altLabel||'不在这个时段') : '取消')+'</button></div></div>';
   ov.style.zIndex = 100010; ov.classList.add('open');
+}
+/* CMD-1021-15：把项目排进「已完成的到院日」→ 专门提示（DS Modal，不再借用时间冲突弹窗）：
+   标题「今天的到院已完成」（不是今天写那天的日期）；内文「要把项目加进今天，请先在今天的到院卡按［增加项目］重新打开；或者改选其他日期。」；按钮靠右［选其他日期］［增加项目］（主按钮最右）；
+   ［增加项目］= 在这张已完成的到院卡按［增加项目］（重新打开，Timeline 记「重新打开到院（增加项目）」）并把正在改时间 / 预约的项目加进去，只有 KR 室长有；院长 / 代表院长只有［选其他日期］；
+   那天 00:00 以后（到院已锁定）：内文「那天的到院已结束，请选其他日期」，只留［选其他日期］。［选其他日期］= 关掉提示，原来的弹窗（修改时间 / 预约）还开着可以重选。 */
+var KR_DONEDAY_CTX = null;
+function krDoneDayAsk(info, retry, selfReopen){
+  KR_DONEDAY_CTX = {info:info, retry:retry, self:!!selfReopen};
+  var ov = document.getElementById('kr-doneday-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-doneday-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100014; document.body.appendChild(ov); }
+  var isToday = info.date===todayStr(), dtxt = String(info.date).slice(5).replace('-', '/'), canAdd = krCan() && !info.locked && !(typeof isKrDirectorLike==='function' && isKrDirectorLike());
+  ov.innerHTML = '<div class="modal-box" style="width:460px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">'+(isToday ? '今天的到院已完成' : dtxt+' 的到院已完成')+'</div><div style="font-size:13px;line-height:1.7;margin-bottom:16px;">'+(info.locked ? '那天的到院已结束，请选其他日期。' : '要把项目加进今天，请先在今天的到院卡按［增加项目］重新打开；或者改选其他日期。')+'</div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-outline" onclick="krDoneDayClose()">选其他日期</button>'+(canAdd ? '<button class="btn-primary" onclick="krDoneDayReopen()">增加项目</button>' : '')+'</div></div>';
+  ov.classList.add('open');
+}
+function krDoneDayClose(){ var ov = document.getElementById('kr-doneday-overlay'); if(ov) ov.classList.remove('open'); KR_DONEDAY_CTX = null; }
+function krDoneDayReopen(){
+  var x = KR_DONEDAY_CTX; krDoneDayClose(); if(!x || !krCan()) return;
+  if(x.self){ x.retry(); } else { var ok = false; krMut(function(c){ var rr = coreReopenVisitAt(c, x.info.key, ME_NAME); ok = rr.ok; return rr.ok; }); if(ok && x.retry) x.retry(); }
+  setTimeout(function(){ var el = x.info.key==='main' ? document.getElementById('kr-maincard') : (function(){ var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, rep = subCaseList(c).filter(function(r){ return subCaseKey(r)===x.info.key; })[0]; return rep ? document.getElementById('kr-subrow-'+rep.id) : null; })(); if(el && el.scrollIntoView) el.scrollIntoView({block:'start'}); }, 120);
 }
 /* 排 / 改时间用：冲突类 → 询问；休诊 / 营业时间类仍直接挡住；［仍然进行］重跑 retry 并跳过冲突检查 */
 function krSlotAsk(er, retry, o){
@@ -2064,6 +2084,7 @@ function krTimeEditSave(){
   if(KR_TE.postpone){ document.getElementById('kr-te-overlay').classList.remove('open'); krMut(function(c){ return coreRowPostpone(c, id, ME_NAME); }); return; }
   if(KR_TE.toIn){ document.getElementById('kr-te-overlay').classList.remove('open'); krMut(function(c){ return coreCareToIn(c, id, ME_NAME); }); return; }
   var c9 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s9 = (c9.subItems||[]).filter(function(x){ return x.id===id; })[0];
+  var ddk = doneDayInfo(c9, d); if(ddk && !(s9 && subCaseKey(s9)==='KR|'+d)){ krDoneDayAsk(ddk, krTimeEditSave); return; } /* 排进已完成的到院日（CMD-1021-15）：原弹窗保持打开 */
   if(KR_TE.care){ var hc9 = krbClosedText(krHospitalIdOfMe(), d, t0); if(hc9){ krBlock(hc9); return; } }
   if(s9 && s9.director){ var e9 = krSurgerySlotError(krHospitalIdOfMe(), s9.director, d, t0, s9.dirOp ? (parseInt(s9.dirMin,10)||30)+(parseInt(s9.extendMin,10)||0) : 30, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true, use:true, exceptRowId:id}); if(e9){ krSlotAsk(e9, krTimeEditSave); return; } }
   var go = function(){ document.getElementById('kr-te-overlay').classList.remove('open'); krMut(function(c){ return coreSubTimeEdit(c, id, d, t0, ME_NAME); }); };
@@ -2189,6 +2210,7 @@ function krBkdRender(){
 }
 function krBkdSave(){
   var B = KR_BKD; if(!B || !krCan()) return; var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c;
+  if(B.place!=='IN'){ var ddk = doneDayInfo(c0, B.date); if(ddk){ krDoneDayAsk(ddk, krBkdSave); return; } }
   var go = function(){ document.getElementById('kr-bkd-overlay').classList.remove('open'); krMut(function(c){ var ok = B.mode==='care' ? coreCareBook(c, B.name, B.pcIdx, B.date, B.time, B.place, B.reuseId, ME_NAME) : coreUnitBookUse(c, B.name, B.date, B.time, ME_NAME, B.surg ? B.dir : ''); if(!ok) alert('没有预约成功（项目状态已变化？）'); return ok; }); };
   if(B.place==='IN'){ go(); return; }
   if(B.mode==='care'){ var hc = krbClosedText(krHospitalIdOfMe(), B.date, B.time); if(hc){ krBlock(hc); return; } var oc = krOffHoursText(krHospitalIdOfMe(), B.date, B.time, 30); if(oc) krOffConfirm(oc+'（'+B.date+' '+B.time+'，韩国时间）', go); else go(); return; } /* CMD-1015-30：术后管理不占院长时间，只看医院 */
@@ -2297,7 +2319,7 @@ function krCaseCardHtml(c, cd){
   return '<div id="'+(cd.rep ? 'kr-subrow-'+cd.rep.id : (cd.kind==='main' ? 'kr-maincard' : 'kr-endrow-'+skey))+'" class="card" style="padding:12px 18px;margin-bottom:10px;background:#fff;"><div class="case-row-click" onclick="krSubToggle(\''+skey+'\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '8' : '0')+'px;"><span style="width:14px;">'+(open ? '▾' : '▸')+'</span><span style="flex:1;">'+head+'</span>'+btn+'</div>'+body+krReopenFooter(c, cd, g)+'</div>';
 }
 function krCaseGroupsHtml(c, withMain){
-  subCaseNos(c); var cards = krCaseCards(c, withMain), out = '';
+  subCaseNos(c); var today0 = todayStr(), cards = krCaseCards(c, withMain).filter(function(cd){ return !(cd.kind==='end' || (cd.kind==='sub' && cd.vs==='pending' && (cd.date||'') < today0)); }), out = ''; /* CMD-1021-15 三：已取消（含全部延期）/ 客人没到院的到院卡不显示（记录留在 Timeline） */
   var titles = {today:'今天', booked:'已预约', done:'已完成'}, sorters = {today:function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); }, booked:function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); }, done:function(a, b){ return (b.date+(b.time||'')).localeCompare(a.date+(a.time||'')); }};
   ['today','booked','done'].forEach(function(g){
     var l = cards.filter(function(x){ return x.group===g; }).sort(sorters[g]); if(!l.length) return;
@@ -3398,6 +3420,7 @@ function krCbRender(){
 function krCbGo(){
   if(!KR_CB || !krCan()) return; var rows = KR_CB.rows.filter(function(r){ return r.checked; });
   if(!rows.length) return; if(rows.some(function(r){ return krCbCheck(r).err; })){ alert('有项目不能约（红字），先取消勾选或改时间'); return; }
+  var cb0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, ddk = null; rows.forEach(function(r){ if(!ddk && r.place!=='IN'){ ddk = doneDayInfo(cb0, r.date); } }); if(ddk){ krDoneDayAsk(ddk, krCbGo); return; } /* CMD-1021-15：排进已完成的到院日 → 专门提示，原弹窗保持打开 */
   /* CMD-1020-05：同一天里院长操作项目——第一个按项目库的院长所需时间；第二个以后（含并进已有的施术日 / 院长操作到院）弹窗问要不要延长，一天问一次 */
   var byDay = {}, days = [];
   rows.forEach(function(r){ if(r.place==='IN' || !(r.dirOp && r.dirOp.on)){ r.ext = 0; return; } r.ext = 0; if(!byDay[r.date]){ byDay[r.date] = []; days.push(r.date); } byDay[r.date].push(r); });

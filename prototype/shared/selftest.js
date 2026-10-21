@@ -3488,4 +3488,42 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PROJ_PAGE = 'surg'; KR_AD = {adds:{}, signed:{}, locals:[], care:{}, open:false}; notesClose(); krUseQtyCancel(); }
   });
 
+  /* CMD-1021-15（KM1 分页，需要 pcStage 夹具）：排进已完成到院日 → 专门提示 / 备注卡高度 / 案件区块不显示取消 / 未到院的到院卡 */
+  ST.def('R83a','CMD-1021-15（KM1 分页，需要 pcStage 夹具）：排进已完成到院日的专门提示（选其他日期 / 增加项目）+ 备注卡高度固定 + 案件区块不显示取消 / 未到院的到院卡',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-术后管理/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, td = todayStr(), key = 'KR|'+td, ids = {};
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c); c.krBalancePaid = true;
+      var base = {origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:3, local:true, mgmtPlan:true, firstDay:1, interval:2, intNa:false, batchId:'B1'};
+      c.procedureItems.push(Object.assign({}, base, {name:'钛提升 · 40kj'})); ensureItemIids(c); ids.m = itemIid(c.procedureItems.filter(function(x){ return /钛提升/.test(x.name); })[0]);
+      coreUnitBookUse(c, ids.m, td, '20:00', 'KM1 室长', '', null); var row = c.subItems.filter(function(s){ return s.holdUseOf; })[0]; row.arrived = true; coreSubDone(c, row.id, 'KM1 室长', []); coreEndSubVisit(c, key, 'KM1 室长'); });
+    try{
+      var c0 = krFindCase(r.clinicId, r.id).c, care = c0.subItems.filter(function(s){ return s.kind==='术后管理记录' && !s.holdUseOf && !s.done; })[0]; if(!ST.ok(!!care, '夹具里要有一条还没做的术后管理')) return;
+      ST.ok(coreVisitState(c0, key)==='done' && !!doneDayInfo(c0, td) && doneDayInfo(c0, td).locked===false, '今天的到院已完成（可重开）');
+      /* 一：修改时间 → 专门提示 */
+      krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); krSubTimeOpen(care.id); KR_TE.date = td; KR_TE.time = '19:00'; krTimeEditRender(); krTimeEditSave();
+      var ov = document.getElementById('kr-doneday-overlay'), tx = ov ? ov.textContent : ''; ST.ok(ov && ov.classList.contains('open') && /今天的到院已完成/.test(tx) && /请先在今天的到院卡按［增加项目］重新打开；或者改选其他日期/.test(tx) && !/时间冲突|仍然进行/.test(tx), '专门提示：标题「今天的到院已完成」+ 新内文，不再是「时间冲突 / 仍然进行」');
+      var bs = [].slice.call(ov.querySelectorAll('button')).map(function(b){ return b.textContent; }); ST.ok(bs.join('|')==='选其他日期|增加项目' && ov.querySelector('button:last-child').className.indexOf('btn-primary')>-1, '按钮靠右：［选其他日期］［增加项目］（主按钮最右）');
+      ST.ok(document.getElementById('kr-te-overlay').classList.contains('open'), '原来的改时间弹窗还开着（可重选日期）'); ST.ok(!(krFindCase(r.clinicId, r.id).c.subItems.filter(function(s){ return s.id===care.id; })[0].date===td), '没有塞进已完成的到院');
+      krDoneDayClose(); ST.ok(document.getElementById('kr-te-overlay').classList.contains('open'), '［选其他日期］回到原来的弹窗');
+      krTimeEditSave(); krDoneDayReopen();
+      var c1 = krFindCase(r.clinicId, r.id).c, row1 = c1.subItems.filter(function(s){ return s.id===care.id; })[0]; ST.ok(coreVisitState(c1, key)==='arrived' && row1.date===td && ST.hasLog(c1, /重新打开到院（增加项目）/), '［增加项目］：今天的到院重开（Timeline 记「重新打开到院（增加项目）」），项目加进去了');
+      /* 二：锁定（不是今天）→ 只剩［选其他日期］ */
+      var yk = 'KR|'+ymdAdd(td, -2), ydd = {date:ymdAdd(td, -2), key:yk, locked:true}; krDoneDayAsk(ydd, function(){}); ov = document.getElementById('kr-doneday-overlay'); ST.ok(/的到院已完成/.test(ov.textContent) && /那天的到院已结束，请选其他日期/.test(ov.textContent) && ov.querySelectorAll('button').length===1 && /选其他日期/.test(ov.textContent), '已锁定：内文「那天的到院已结束」，只留［选其他日期］'); krDoneDayClose();
+      ST.ok(doneDayInfo(Object.assign({}, c1, {visitEndedKeys:(function(){ var o = {}; o[yk] = true; return o; })()}), ymdAdd(td, -2)).locked===true, '过了当天算锁定');
+      /* 三：核心函数兜底（没经过 UI 预检的入口）：不再设成时间冲突 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; coreEndSubVisit(cc, key, 'KM1 室长'); });
+      var rf; KR_LAST_CONFLICT = ''; window.KR_DONEDAY = null; Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; rf = coreUnitBookUse(cc, ids.m, td, '21:00', 'KM1 室长', '', null); });
+      ST.ok(rf===false && window.KR_DONEDAY && window.KR_DONEDAY.key===key && !/时间冲突/.test(KR_LAST_CONFLICT||''), '核心函数拒绝并标记「已完成到院日」（krMut 弹专门提示），不是时间冲突'); window.KR_DONEDAY = null; KR_LAST_CONFLICT = '';
+      /* 四：案件区块不显示取消 / 未到院的到院卡 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.visitEnds = cc.visitEnds || {}; cc.visitEnds['KR|'+ymdAdd(td, 20)] = {no:'x', date:ymdAdd(td, 20), time:'10:00'}; cc.visitPostponed = cc.visitPostponed || {}; cc.visitPostponed['KR|'+ymdAdd(td, 20)] = []; });
+      var before = (krFindCase(r.clinicId, r.id).c); var html = krCaseGroupsHtml(before, true); ST.ok(!/已取消（项目全部延期）|全部延期/.test(html), '案件区块没有划掉的「已取消（项目全部延期）」卡');
+      var nDone = (html.match(/已完成 <span[^>]*>(\d+)/)||[])[1]; var cards = krCaseCards(before, true).filter(function(cd){ return cd.group==='done' && cd.kind!=='end'; }); ST.ok(+nDone===cards.length, '「已完成 N」的数字不算被隐藏的卡：'+nDone+' / '+cards.length);
+      /* 五：备注卡高度固定（3 条 / 1 条 / 0 条一样高，按钮行位置不变） */
+      var hgt = function(n){ Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krProgressMemos = []; cc.inNotes = []; for(var i = 0; i < n; i++) coreAddProgressMemo(cc, '备注'+i, 'KM1 室长', ''); }); KR_PROJ_PAGE = 'surg'; krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); var nc = document.querySelector('#kr-casedetail .notes-compact'); return {h:Math.round(nc.getBoundingClientRect().height), by:Math.round(nc.querySelector('.notes-btns').getBoundingClientRect().top-nc.getBoundingClientRect().top)}; };
+      var h0 = hgt(0), h1 = hgt(1), h3 = hgt(3), h5 = hgt(5); ST.ok(h0.h===h1.h && h1.h===h3.h && h3.h===h5.h && h0.by===h3.by && h3.h>=270 && h3.h<=320, '备注卡高度固定（0 / 1 / 3 / 5 条一样），按钮行位置不变：'+[h0.h, h1.h, h3.h, h5.h].join('/')+' · '+h3.by);
+      var it3 = document.querySelectorAll('#kr-casedetail .notes-list > div'); var lastBottom = Math.round(it3[it3.length-1].getBoundingClientRect().bottom), btnTop = Math.round(document.querySelector('#kr-casedetail .notes-btns').getBoundingClientRect().top); ST.ok(it3.length===3 && btnTop-lastBottom<=24, '3 条下面没有大块空白：第 3 条到按钮行 '+(btnTop-lastBottom)+'px');
+    } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PROJ_PAGE = 'surg'; krDoneDayClose(); window.KR_DONEDAY = null; KR_LAST_CONFLICT = ''; }
+  });
+
 })();
