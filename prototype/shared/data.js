@@ -5347,7 +5347,7 @@ function coreAddOnDelete(c, idx, by){
   c.procedureItems.splice(idx, 1);
   c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && s.projectName===it.name && !s.done); });
   if(c.anesthesiaConsent && c.anesthesiaConsent.projects) c.anesthesiaConsent.projects = c.anesthesiaConsent.projects.filter(function(x){ return x.name!==it.name; });
-  logCaseEvent(c, by, '取消未付款项目：'+buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）');
+  logCaseEvent(c, by, '取消购买：'+buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）');
   updateCaseStage(c);
   krCloseIfDone(c); /* 待付款删光、其余都完成 → 自动结案 */
   return true;
