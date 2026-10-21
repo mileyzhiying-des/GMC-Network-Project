@@ -3277,4 +3277,45 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
 
+  /* CMD-1021-10（KM1 分页，需要 pcStage 夹具）：有待付款项目时［结束今日到院］必须被拦（主到院 / 其他到院都一样），稍后付款不改变状态，被拦时备注不丢，付款后能结束 */
+  ST.def('R78a','CMD-1021-10（KM1 分页，需要 pcStage 夹具）：待付款项目拦住结束今日到院（主 / 子到院、路径 A / B）、备注不丢、付款后可结束、结束后加待付款项目自动重开',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, key = '';
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c); c.krBalancePaid = true; c.hasArrived = true; c.krSchedule.status = 'arrived'; c.krSchedule.confirmedDate = ymdAdd(todayStr(), -3); c.krProcedureDone = true; c.visitClosed = false;
+      var base = {origin:'KR', price:300000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:1, copies:1, specTimes:1, local:true, mgmtPlan:true, firstDay:'', interval:0, intNa:true};
+      c.procedureItems.push(Object.assign({}, base, {name:'丽珠兰 S（手打） · 1cc·1次', krAddOn:true, pendingPay:true, batchId:''}), Object.assign({}, base, {name:'热拉提 · 300发', batchId:'B3', price:100000, pendingPay:false})); ensureItemIids(c);
+      var lz = c.procedureItems.filter(function(x){ return /丽珠兰/.test(x.name); })[0], h = c.procedureItems.filter(function(x){ return /热拉提/.test(x.name); })[0];
+      lz.pendingPay = false; coreUnitBookUse(c, itemIid(lz), todayStr(), '11:00', 'KM1 室长', '', null); lz.pendingPay = true; var row = c.subItems.filter(function(s){ return s.holdUseOf && s.date===todayStr(); })[0]; key = subCaseKey(row); row.arrived = true;
+      ST.ok(coreSubDone(c, row.id, 'KM1 室长', []), '待付款的项目可以先做完（这步本来就对）');
+      /* 备注：整体 + 项目 */ coreVisitNoteDraft(c, key, '整体备注：别丢'); row.note = '项目备注：别丢';
+    });
+    var gc = function(){ return krFindCase(r.clinicId, r.id).c; }, mut = function(f){ Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; f(c); }); };
+    try{
+      /* 路径 B：直接结束 → 被拦（子到院） */
+      var rb; mut(function(c){ rb = coreEndSubVisit(c, key, 'KM1 室长'); });
+      ST.ok(rb && !rb.ok && rb.pending && /还有未付款项目：丽珠兰 S（手打） · 1cc（₩300,000）/.test(rb.err) && /请先付款或取消购买/.test(rb.err), '路径 B：子到院被拦，提示项目 + 金额：'+(rb&&rb.err));
+      ST.ok(!(gc().visitEndedKeys||{})[key] && !visitNoteAuto(gc(), key) && gc().visitNoteDraft[key]==='整体备注：别丢' && gc().subItems.filter(function(s){ return s.holdUseOf && s.date===todayStr(); })[0].note==='项目备注：别丢', '被拦下：到院没结束，整体 / 项目备注都还在（不保存也不清空）');
+      /* 路径 A：去付款 → 稍后付款 → 结束 */
+      krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); krPayOpen(); ST.ok(document.getElementById('kr-pay-overlay').classList.contains('open'), '［去付款］弹出付款弹窗'); krPayLater();
+      ST.ok(pendingPayItems(gc()).length===1 && /待付款/.test(document.getElementById('kr-casedetail').innerText), '［稍后付款］只是关弹窗：仍待付款，红条照样显示');
+      var ra; mut(function(c){ ra = coreEndSubVisit(c, key, 'KM1 室长'); }); ST.ok(!ra.ok && ra.pending, '路径 A：稍后付款后结束仍被拦');
+      krEndAskOpen(key, true); var ov = document.getElementById('kr-endblock-overlay'); ST.ok(ov && ov.classList.contains('open') && /还有未付款项目/.test(ov.textContent) && /去付款/.test(ov.textContent) && /备注不会丢/.test(ov.textContent), '拦截弹窗：提示 + ［去付款］（DS 弹窗，按钮靠右）'); ov.classList.remove('open');
+      /* 主到院同样 */
+      mut(function(c){ c.krProcedureDone = false; }); var rm; mut(function(c){ rm = coreEndVisitToday(c, 'KM1 室长'); }); ST.ok(!rm.ok && rm.pending && !gc().krProcedureDone, '主到院结束也被拦（原来就有）');
+      /* 别的待付款项：施术加项也拦（pendingPayItems 同一来源） */
+      mut(function(c){ c.procedureItems.filter(function(x){ return x.pendingPay; }).forEach(function(x){ x.pendingPay = false; x.price = 1; }); c.procedureItems.push({origin:'KR', name:'双眼皮', price:1000000, currency:'KRW', qty:1, krAddOn:true, pendingPay:true, batchId:'', done:false}); ensureItemIids(c); });
+      var rs; mut(function(c){ rs = endBlockPending(c); }); ST.ok(rs && /双眼皮/.test(rs.err), '待付款的施术加项也拦：'+(rs&&rs.err));
+      ST.ok(krTopAlerts(gc()).indexOf('1,000,000')>-1 && !!rs, '红条上有金额 = 拦截判断（同一个 pendingPayItems）');
+      mut(function(c){ c.procedureItems = c.procedureItems.filter(function(x){ return x.name!=='双眼皮'; }); c.procedureItems.filter(function(x){ return /丽珠兰/.test(x.name); })[0].pendingPay = true; });
+      /* 付款后可以结束；备注随结束存 */
+      mut(function(c){ ST.ok(coreAddOnPaid(c, 'KM1 室长') || true, ''); });
+      ST.ok(pendingPayItems(gc()).length===0, '付款后不再待付款');
+      var re; mut(function(c){ re = coreEndSubVisit(c, key, 'KM1 室长'); }); ST.ok(re.ok && gc().visitEndedKeys[key] && visitNoteAuto(gc(), key) && visitNoteAuto(gc(), key).text==='整体备注：别丢', '付款后可以结束，整体备注随结束存成一则');
+      /* 结束后又有新的待做（待付款加项）→ 自动重新打开（子到院） */
+      mut(function(c){ var h2 = c.procedureItems.filter(function(x){ return /热拉提/.test(x.name); })[0]; coreUnitBookUse(c, itemIid(h2), todayStr(), '11:00', 'KM1 室长', '', null); });
+      var st2; mut(function(c){ st2 = coreVisitState(c, key); }); ST.ok(!(gc().visitEndedKeys||{})[key] && st2==='arrived', '已结束的到院：今天又有待做的行 → 自动重新打开');
+    } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+
 })();

@@ -5164,9 +5164,15 @@ function krCloseIfDone(c){
   return true;
 }
 /* 手动结束今天的到院（主案件）：还没做完的行先「今日取消」退回项目卡；有待付款项目不能结束 */
+/* CMD-1021-10：有待付款项目（红条上有金额的那一批 = pendingPayItems）就不能结束到院——主到院和其他到院（术后管理 / 管理项目预约）共用这一处。
+   原因：只有主到院的 coreEndVisitToday 有这道检查，coreEndSubVisit（1019-22 加的）从来没有，用户的到院是「管理项目」的预约到院（子到院）所以没被拦 */
+function endBlockPending(c){
+  var pp = pendingPayItems(c); if(!pp.length) return null;
+  return {ok:false, pending:true, items:pp.map(function(it){ return buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）'; }), err:'还有未付款项目：'+pp.map(function(it){ return buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）'; }).join('、')+'，请先付款或取消购买'};
+}
 function coreEndVisitToday(c, by){
   if(!c.hasArrived || c.krProcedureDone || c.visitClosed) return {ok:false, err:'今天的到院已经结束或还没到院'};
-  if(pendingPayItems(c).length) return {ok:false, err:'还有 '+formatCurrency(pendingPayItems(c).reduce(function(t, it){ return t+itemKrAmount(it); }, 0), 'KRW')+' 待付款，请先付款'};
+  var pb = endBlockPending(c); if(pb) return pb;
   c._ending = true;
   try{
     var left = todayOpenRows(c).map(function(x){ return x.name; });
@@ -5209,6 +5215,7 @@ function subVisitAskEnd(c){ /* 有已到店、行都做完但还没人工结束�
 function coreEndSubVisit(c, key, by){
   c.visitEndedKeys = c.visitEndedKeys || {};
   var rows = coreVisitRows(c, key).concat(coreVisitExtra(c, key)); if(!rows.length) return {ok:false, err:'找不到这次到院'};
+  var pb = endBlockPending(c); if(pb) return pb; /* 有待付款项目不能结束（CMD-1021-10） */
   if(rows.some(function(s){ return !s.done; })) { rows.filter(function(s){ return !s.done; }).forEach(function(s){ coreRowCancel(c, s.id, by); }); }
   c.visitEndedKeys[key] = true; c.endAsk = false; coreVisitNoteCommit(c, key, by);
   logCaseEvent(c, by, '结束今日到院（'+String(key).split('|')[1]+'）');

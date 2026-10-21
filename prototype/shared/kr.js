@@ -2268,8 +2268,16 @@ function krEndAskCheck(){
   if(info.key==='main' ? KR_ENDASK_SHOWN[sk] : KR_ENDASK_SHOWN[sk]===info.sig) return; KR_ENDASK_SHOWN[sk] = info.sig;
   krEndAskOpen(info.key, false);
 }
+/* 有待付款项目 → 拦下：DS 弹窗（按钮靠右）［返回］［去付款］；备注（整体 / 项目）不保存也不清空，付完款回来还在 */
+function krEndBlockModal(msg){
+  var ov = document.getElementById('kr-endblock-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-endblock-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">还不能结束今日到院</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">'+krEsc(msg)+'<div style="font-size:12px;color:var(--muted);margin-top:6px;">已经写的备注不会丢，付完款回来还在。</div></div><div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="document.getElementById(\'kr-endblock-overlay\').classList.remove(\'open\')">返回</button><button class="btn-primary" onclick="document.getElementById(\'kr-endblock-overlay\').classList.remove(\'open\');krPayOpen()">去付款</button></div></div>';
+  ov.style.zIndex = 100020; ov.classList.add('open');
+}
 function krEndAskOpen(key, manual){
   if(!krCan()) return;
+  var pb = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? endBlockPending(c) : null; });
+  if(pb){ var ov0 = document.getElementById('kr-endask-overlay'); if(ov0) ov0.classList.remove('open'); krEndBlockModal(pb.err); return; }
   var left = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c) return []; return key==='main' ? todayOpenRows(c).map(function(x){ return buyName(x.name); }) : coreVisitRows(c, key).concat(coreVisitExtra(c, key)).filter(function(s){ return !s.done; }).map(function(s){ return buyName(s.content); }); }) || [];
   var ov = document.getElementById('kr-endask-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-endask-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   var k = String(key).replace(/'/g,'');
@@ -2280,7 +2288,7 @@ function krEndAskOpen(key, manual){
 function krEndAskNo(key){ var ov = document.getElementById('kr-endask-overlay'); if(ov) ov.classList.remove('open'); if(key==='main') krMut(function(c){ if(!c.endAsk) return false; c.endAsk = false; return true; }); }
 function krEndAskYes(key){
   var ov = document.getElementById('kr-endask-overlay'); if(ov) ov.classList.remove('open');
-  krMut(function(c){ var r = key==='main' ? coreEndVisitToday(c, ME_NAME) : coreEndSubVisit(c, key, ME_NAME); if(!r.ok){ alert(r.err||'不能结束'); return false; } return true; });
+  krMut(function(c){ var r = key==='main' ? coreEndVisitToday(c, ME_NAME) : coreEndSubVisit(c, key, ME_NAME); if(!r.ok){ if(r.pending){ setTimeout(function(){ krEndBlockModal(r.err); }, 0); } else alert(r.err||'不能结束'); return false; } return true; });
 }
 function krEndBtnHtml(key){ return krCan() ? '<button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krEndAskOpen(\''+String(key).replace(/'/g,'')+'\', true)">结束今日到院</button>' : ''; }
 /* 主案件的行：施术 + 在韩增加（+ 持有的管理项目，今日） */
