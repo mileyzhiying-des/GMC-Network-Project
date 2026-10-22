@@ -2494,7 +2494,7 @@ function resumeDaysSince(src){ var a = new Date(resumeConsultDay(src)), b = new 
 function resumeOverdue(src){ var d = new Date(resumeConsultDay(src)); d.setMonth(d.getMonth()+3); return d < new Date(todayStr()); }
 function resumeCandidates(c, type){
   var prior = clientPriorCases(c);
-  if(type==='接续面诊') return prior.filter(function(x){ return x.reportReady && !x.krDepositPaid; });
+  if(type==='接续面诊') return prior.filter(function(x){ return x.stage==='reportonly' && x.reportReady && !x.revisitEval && !x.krDepositPaid; }); /* CMD-1022-09：只有结局是「仅出报告」的案件才能被接续面诊（进行中的不能；复诊评估案件不算） */
   return prior;
 }
 /* 弹窗里三道检查的结果：pass（三项都通过）/ fail（不能接续）/ incomplete（还没填完） */
@@ -2530,7 +2530,7 @@ function fuRender(){
       '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">接续类型（层级：复诊评估 ＞ 术后管理 ＞ 本地管理，选了上层里面可以做下层的事）</div>'+
       '<div style="display:flex;gap:14px;flex-wrap:wrap;">'+FU_TYPES.map(function(t0){ return radio('type', t0, t0, a.type===t0); }).join('')+'</div>'+
       '<select onchange="fuSet(\'sel\',this.value)" style="width:100%;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+(cand.length ? '' : '<option value="">（没有可接续的案件）</option>')+cand.map(function(x){ return '<option value="'+x.id+'"'+(x.id===a.sel ? ' selected' : '')+'>'+x.caseNo+' · '+caseStageProcText(x)+'</option>'; }).join('')+'</select>'+
-      (a.type==='接续面诊' && !cand.length ? '<div style="font-size:12px;color:#C1454A;margin-top:6px;">接续面诊需要原案件已出诊疗方案、还没付赴韩定金。</div>' : '')+'</div>';
+      (a.type==='接续面诊' && !cand.length ? '<div style="font-size:12px;color:#C1454A;margin-top:6px;">接续面诊只适用「仅出报告」的案件（已出诊疗方案、客人没做项目就结束的案件）。</div>' : '')+'</div>';
     if(a.type==='接续面诊' && src){
       var r = resumeChecksOf(a, src);
       body += '<div style="margin-top:8px;font-size:13px;font-weight:700;">接续前三道检查</div>'+
@@ -8791,7 +8791,7 @@ function revEvalResultHtml(c){
     '<div style="font-size:13px;color:var(--slate2);margin:8px 0 12px;line-height:1.7;">'+cesc(c.videoSummary||'')+'</div>';
   if(treat){
     h += '<div style="margin:10px 0;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">推荐的本地项目</div>'+(r.local ? noteTextHtml({id:'rvrec'+c.id, role:'KR', text:r.local}, 'IN') : '<div style="font-size:13px;color:var(--muted);">没有推荐的本地项目</div>')+
-      (r.suggestKr ? '<div style="margin-top:8px;font-size:13px;"><b>建议赴韩处理</b>'+(r.suggestKrNote ? '：'+cesc(r.suggestKrNote) : '')+'</div>' : '')+'</div>';
+      (r.suggestKr ? '<div style="margin-top:8px;font-size:13px;"><b>建议赴韩处理</b></div>'+(r.suggestKrNote ? noteTextHtml({id:'rvkr'+c.id, role:'KR', text:r.suggestKrNote}, 'IN') : '') : '')+'</div>';
   }
   var btns = '<button class="btn-primary" onclick="openReportModal()">查看复诊评估结果 →</button>';
   if(!ended){

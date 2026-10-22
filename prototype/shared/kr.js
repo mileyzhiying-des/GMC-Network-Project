@@ -4015,7 +4015,7 @@ krOpenRoomFor = function(clinicId, caseId){ krOpenFloat(clinicId+'|case-'+caseId
 function krVisitOrdinals(r){
   var mine = krAllCases().filter(function(x){ return x.clinicId===r.clinicId && x.name===r.name; });
   var key = caseStartKey(r.c), upto = mine.filter(function(x){ return caseStartKey(x.c) <= key; });
-  var isConsult = function(c){ return !!c.consultRequested && !isRevisitConsult(c) && !c.revisitEval; };
+  var isConsult = function(c){ return !!c.reportReady && !!c.consultRequested && !isRevisitConsult(c) && !c.revisitEval && !c.reuseReport && !(c.resumeFrom && c.resumeFrom.type==='接续面诊'); }; /* CMD-1022-09：以出过面诊报告（诊疗方案）的次数为准；接续面诊 / 复诊评估不算 */
   var isSurg = function(c){ return !!c.krDepositPaid || (c.krSchedule && ['confirmed','arrived'].indexOf(c.krSchedule.status)>-1); };
   return {consult:upto.filter(function(x){ return isConsult(x.c); }).length, surg:upto.filter(function(x){ return isSurg(x.c); }).length};
 }

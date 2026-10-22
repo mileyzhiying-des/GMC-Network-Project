@@ -60,6 +60,7 @@ function computeOutcome(c){
   if(caseWorkDone(c) || caseHasPurchase(c)) return 'closed';
   /* CMD-1013-16：手动结束（付定金前）时面诊费已缴 / 免除、报告还没出 → 仅出报告；标记 c.manualEnd 只在新规则开着时才会写入，之后切开关也不变 */
   if(c.manualEnd && !c.reportReady && c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) return 'reportonly';
+  if(isRevEval(c) && c.reportReady) return 'closed'; /* CMD-1022-09：复诊评估结束 = 已结案（不是仅出报告，以免被接续面诊选中） */
   return c.reportReady ? 'reportonly' : 'cancelled';
 }
 
@@ -150,6 +151,7 @@ function caseProcessText0(c){
   }
   if(c.stage==='local') return c.mgmtActive ? '本地管理中' : '选择项目';
   if(c.stage==='cancelled') return endReasonText(c);
+  if(c.stage==='closed' && isRevEval(c) && c.endNote==='复诊评估结束') return '复诊评估结束'; /* CMD-1022-09 */
   if(c.stage==='closed'){ /* 赴韩完成 / 本地完成 / 本地项目保留（取消赴韩后保留本地项目、本次没使用；CMD-1012-12 二） */
     if(c.krProcedureDone || krAllItems(c).some(function(it){ return it.done; })) return '赴韩完成';
     var kept = localPurchasedBatches(c);
