@@ -1689,7 +1689,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R31a','CMD-1015-31 数据（A1 分页：两个施术项目都选进今日案件 + 拆线未预约）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
-    var c = toConfirmed('R31a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var plan = c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x); });
+    var c = toConfirmed('R31a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); ST.preOpAll(c); var plan = c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x); });
     plan[0].postcare = [{mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7}]; c.needTodayPick = true; c.todayPicked = false;
     ST.ok(coreTodayPick(c, plan.map(function(x){ return x.name; }), [], ST.krBy).ok, '两个施术项目都选进今日案件'); localStorage.setItem('__R31', JSON.stringify({id:c.id}));
   });
@@ -2346,7 +2346,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krArriveMain(); ST.ok(document.querySelectorAll('.kr-l2').length>=2 && document.querySelectorAll('.kr-l3').length>=2, 'Step 1：已付定金项目、院长评估结果 = 2 级卡，施术 / 管理项目 = 3 级卡');
       var l2 = [].slice.call(document.querySelectorAll('.kr-l2')); ST.ok(l2.length>=2 && l2[1].getBoundingClientRect().top - l2[0].getBoundingClientRect().bottom >= 10, '2 级卡之间留间距（>= 10px）'); ST.ok(/已付定金项目/.test(l2[0].querySelector('.kr-l2-title').textContent) && l2[0].querySelectorAll('.kr-l3').length===2, '「已付定金项目」标题在 2 级卡里，下面两张 3 级卡');
       var rows = l2[0].querySelectorAll('.kr-l3 .kr-row'); ST.ok(rows.length>=2 && getComputedStyle(rows[0]).paddingTop==='6px', '行与行之间有间距');
-      KR_ARR.judge = 'ok'; krDoJudge(); ST.ok(document.querySelectorAll('.kr-l2').length===3, 'Step 2：已付定金项目 / 添加项目 / 付清尾款 三张 2 级卡'); var al = [].filter.call(document.querySelectorAll('.kr-l2'), function(e){ return /添加项目/.test(e.querySelector('.kr-l2-title').textContent); })[0]; ST.ok(al.querySelectorAll('.kr-l3').length===2, '添加项目：施术 / 管理各一张 3 级卡');
+      KR_ARR.judge = 'ok'; krDoJudge(); ST.ok(document.querySelectorAll('.kr-l2').length===4, 'Step 2：术前照片（CMD-1022-17）/ 已付定金项目 / 添加项目 / 付清尾款 四张 2 级卡'); var al = [].filter.call(document.querySelectorAll('.kr-l2'), function(e){ return /添加项目/.test(e.querySelector('.kr-l2-title').textContent); })[0]; ST.ok(al.querySelectorAll('.kr-l3').length===2, '添加项目：施术 / 管理各一张 3 级卡');
       krChOpen('adj'); var sc = document.querySelector('.kr-ch-scroll'), chb = document.querySelector('.kr-chooser'); ST.ok(!!sc && !!chb && getComputedStyle(chb).height==='460px' && getComputedStyle(sc).overflowY==='auto' && !!document.querySelector('.kr-ch-right .kr-ch-foot button'), '选择区固定高度、左右两栏内部滚动，［取消］［确认添加］在右栏底部');
       var btxt = [].map.call(document.querySelectorAll('.kr-l2 button'), function(b){ return b.textContent.trim(); }).join('|'); ST.ok(!/收起/.test(btxt) && /取消/.test(btxt) && /确认添加/.test(btxt), '拿掉［收起］，底部［取消］［确认添加］');
       krChToggle('adj', Object.keys(krScopeCandidates(KR_CASE.clinicId).kr.reduce(function(m,p){ m[p.name]=1; return m; }, {})).filter(function(n){ return !krAllItems(c).some(function(x){ return x.name===n; }); })[0], true); window.__krExtPick && 0;
@@ -2859,7 +2859,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var h = krPreOpBlock(krFindCase(r.clinicId, r.id).c); ST.ok(/术前照片/.test(h) && /视角参考|KR 未提供视角参考/.test(h), '到院卡里有术前照片区（每个施术项目一组，带［视角参考］）');
     ST.ok(dir ? !/krPreOpUpload\(/.test(h) : /krPreOpUpload\(/.test(h), dir ? '院长 / 代表院长只能看，没有上传按钮' : 'KR 室长有上传按钮');
     var body = document.getElementById('krcase-body').innerText; ST.ok(/术前照片/.test(body), '案件页里看得到术前照片区');
-    ST.ok(/请先上传术前照片/.test(document.getElementById('krcase-body').innerText), '没传完时施术的［操作完成］灰掉，旁边写原因「请先上传术前照片」');
+    if(!dir) ST.ok(/请先上传术前照片/.test(document.getElementById('krcase-body').innerText), '没传完时施术的［操作完成］灰掉，旁边写原因「请先上传术前照片」（院长没有操作列，只写还差什么）');
     if(!dir){ var c0 = krFindCase(r.clinicId, r.id).c, nm = preOpItems(c0)[0].name; krMut(function(c){ return coreSetPreOp(c, nm, preOpSpecOf(preOpItems(c)[0]).angles[0].id, ME_NAME); }); ST.ok(/请先上传术前照片|还差/.test(document.getElementById('krcase-body').innerText), '没传完提示「还差」/ 原因'); }
   });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
