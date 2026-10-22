@@ -1816,6 +1816,10 @@ function nowFullDt(){ var d = realNow(); return d.toISOString().slice(0,10)+' '+
 
 function logCaseEvent(c, actor, action, stage){
   c.logEntries = c.logEntries || [];
+  if(typeof revIntent==='function' && revIntent(c)){ /* CMD-1022-18：复诊评估的新记录不用「面诊」的字（旧记录不改） */
+    if(!stage && /^(面诊安排|面诊)$/.test(stageLogLabel(c))) stage = '复诊评估'; else if(stage==='面诊安排' || stage==='面诊') stage = '复诊评估';
+    action = String(action).replace('确认了메타뷰/照片/视频/苦恼/希望预期，复诊评估', '确认了复诊资料（想问的内容 / 项目照片 / 视频），复诊评估').replace(/客人希望的面诊时间/g, '客人希望的评估时间');
+  }
   var ent = {stage: stage || stageLogLabel(c), actor: actor, actorId: (actor===ME_NAME ? currentAccountId() : undefined), action: action, dt: nowFullDt()};
   if(typeof SEEDING==='undefined' || !SEEDING) Object.assign(ent, gmcVerStamp()); /* 演示种子不盖版本章 */
   c.logEntries.push(ent);
@@ -3171,7 +3175,7 @@ function caseTimelineEntries(c, which){
    阶段条 + 类型筛选 + 显示系统记录；最新在上；按日期分组；每行 时间｜谁｜做了什么；同人同分钟同一件事合并、来回反复收成一行（可展开明细）。
    时间一律按看的人的时区（栏头注明）；阶段 / 类型都是显示时推算，不改存档里的记录 */
 var TL_UI = {};
-var TL_STAGES = ['预约到店', '面诊', '项目确认 / 结算', '赴韩施术', '术后管理', '管理项目', '在韩管理', '本地管理', '结案'];
+var TL_STAGES = ['预约到店', '复诊评估', '面诊', '项目确认 / 结算', '赴韩施术', '术后管理', '管理项目', '在韩管理', '本地管理', '结案'];
 function tlStageOf(e){
   var st = String(e.stage||''), a = String(e.action||'');
   if(st==='施术') return '赴韩施术'; /* CMD-1020-06：按项目类型标的记录（施术 / 术后管理 / 管理项目） */
@@ -3400,7 +3404,7 @@ function saveWantConsult(id, val){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c || wantConsultLocked(c)) return; val = String(val||'').trim().slice(0, 120);
   if((c.wantConsult||'')===val) return; var had = !!c.wantConsult; c.wantConsult = val;
   logCaseEvent(c, actingName(), val ? (had ? '修改' : '填写')+'客人希望的面诊时间：'+val : '清空客人希望的面诊时间', '面诊');
-  if(val && c.consultStatus==='paid_waiting_kr'){ try{ pushKrNotif(caseKrHospital(c), '客人希望的面诊时间'+(had ? '有修改' : '')+'：'+val+'（'+c.name+'，'+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} } /* 只告知；KR 还没看到案件（待缴费）时不发 */
+  if(val && c.consultStatus==='paid_waiting_kr'){ try{ pushKrNotif(caseKrHospital(c), (isRevEval(c) ? '客人希望的评估时间' : '客人希望的面诊时间')+(had ? '有修改' : '')+'：'+val+'（'+c.name+'，'+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} } /* 只告知；KR 还没看到案件（待缴费）时不发 */
   buildCaseLog(c);
 }
 
@@ -8841,10 +8845,13 @@ function newCaseFromClient(name){
 function revEvalTabHtml(c){
   var st = revEvalProcText(c), src = followSrc(c);
   var tip = {'等确认时间':'等 KR 室长确认评估时间和结果时间（院长看资料后评估，不收费）', '等评估':'等院长评估（室长可代输入，需院长授意）', '评估中':'院长评估中', '评估完成 · 等 KR 传结果':'院长已评估，等 KR 室长传结果'}[st] || '';
-  var res = (c.reportReady || c.consultStatus==='report_ready') ? revEvalResultHtml(c) : '';
-  return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:12px;color:var(--muted);">'+(src ? '接续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
-    subStatusRowHtml([{kind:(c.reportReady ? 'Success' : 'Waiting'), text:st}])+(tip ? '<div style="font-size:13px;color:var(--slate2);margin-bottom:8px;">'+tip+'</div>' : '')+
-    (c.wantConsult ? '<div style="font-size:12px;color:var(--muted);">客人希望的时间：'+cesc(c.wantConsult)+'</div>' : '')+revCmpHtml(c)+res+'</div>';
+  var done = !!(c.reportReady || c.consultStatus==='report_ready'), res = done ? revEvalResultHtml(c) : ''; /* CMD-1022-18：IN 收到结果后，结果卡放最上面，下面是项目卡（胶囊［面诊］［术前］［本次］） */
+  var q = String(c.revisitQuestion||'').trim();
+  return '<div class="card" style="padding:22px 24px;">'+(done ? res+'<div style="height:10px;"></div>' : '')+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:12px;color:var(--muted);">'+(src ? '接续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
+    (done ? '' : subStatusRowHtml([{kind:'Waiting', text:st}])+(tip ? '<div style="font-size:13px;color:var(--slate2);margin-bottom:8px;">'+tip+'</div>' : ''))+
+    (c.wantConsult ? '<div style="font-size:12px;color:var(--muted);">客人希望的时间：'+cesc(c.wantConsult)+'</div>' : '')+
+    (q ? '<div style="font-size:12px;font-weight:700;margin:8px 0 4px;">复诊想问的内容</div><div style="padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;">'+cesc(q)+'</div>' : '')+
+    revProjCardsHtml(c)+'</div>';
 }
 /* IN 确认基础资料后把复诊评估送给 KR：不收面诊费，直接进「等 KR 确认评估时间」 */
 function startRevisitEval(c){
@@ -8985,6 +8992,60 @@ function revCmpHtml(c){
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 14px;margin-top:10px;background:#fff;"><div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="REVCMP_OPEN[\''+key.replace(/'/g,"\\'")+'\']='+(open ? 'false' : 'true')+';revCmpRefresh();"><b style="font-size:13px;">'+cesc(name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(followItemPart(name)).label)+'</span></b><span style="font-size:12px;color:var(--muted);">'+(open ? '收起 ▴' : '展开 ▾')+'</span></div>'+(open ? '<div style="margin-top:6px;">'+body+'</div>' : '')+'</div>';
   }).join('');
   return '<div class="revcmp"><div style="font-size:12px;color:var(--muted);">前后对比（投屏显示：照片只存在原案件 / 术后来访案件，这里只看）'+(orig ? ' · 接续 '+cesc(orig.caseNo) : '')+'</div>'+groups+'</div><!--/revcmp-->';
+}
+
+/* ===== CMD-1022-18 复诊评估项目卡（KR / 院长 / IN 共用）：每个「这次要看的项目」一张卡，项目名 · 部位 + 胶囊［面诊］［术前］［本次（默认）］+［视角参考］，下面是视频 + 按角度的照片 =====
+   面诊 = 原案件面诊时同部位的照片（投屏）；术前 = CMD-1022-17 施术当天拍的照片（投屏，存在原案件施术项目下）；本次 = 这次复诊上传的。
+   只读取显示、不复制；没有照片显示「—」；投屏照片标来源并可跳回案件；原本的「术后恢复（历次）」不显示。 */
+var REV_CAP = {};
+function revCapOf(c, name){ return REV_CAP[c.id+'|'+name] || 'now'; }
+function revCapSet(cid, name, cap){ REV_CAP[cid+'|'+name] = cap; revCmpRefresh(); }
+function revCapCollect(c, name, cap, all){
+  var orig = revCmpOrig(c, all), part = followItemPart(name), res = {video:null, byAngle:{}, other:[]}, vid = null;
+  var put = function(aid, ph){ var ok = shootSpec(part, name).angles.some(function(a){ return a.id===aid; }); if(ok){ (res.byAngle[aid] = res.byAngle[aid] || []).push(ph); } else res.other.push(Object.assign({label:CONCERN_ANGLE[aid] || aid}, ph)); };
+  if(cap==='face' && orig){
+    concernCards(orig).forEach(function(x){
+      var same = x.part!=='legacy' && partBase(x.part)===partBase(part), src = {srcId:orig.id, srcNo:orig.caseNo, srcText:'来自 '+orig.caseNo+' · '+revCmpMd(orig.visitDate)+' 面诊', title:name+' · 面诊'};
+      if(same && x.video && !res.video) res.video = Object.assign({name:x.video.name}, src);
+      Object.keys(x.photos||{}).forEach(function(aid){ var ph = Object.assign({name:x.photos[aid].name}, src); if(same) put(aid, ph); else if(x.part==='legacy') res.other.push(Object.assign({label:'旧案件照片'}, ph)); });
+    });
+  } else if(cap==='pre' && orig){
+    var it = (orig.procedureItems||[]).filter(function(x){ return x.name===name; })[0], po = it && it.preOp;
+    if(po){
+      var dtOf = function(f){ return f && f.at ? revCmpMd(String(fmtUtc(f.at)).slice(0, 10)) : ''; };
+      if(po.video) res.video = {name:po.video.name, srcId:orig.id, srcNo:orig.caseNo, srcText:'来自 '+orig.caseNo+' · '+dtOf(po.video)+' 术前（施术当天）', title:name+' · 术前'};
+      Object.keys(po.photos||{}).forEach(function(aid){ var f = po.photos[aid]; put(aid, {name:f.name, srcId:orig.id, srcNo:orig.caseNo, srcText:'来自 '+orig.caseNo+' · '+dtOf(f)+' 术前（施术当天）', title:name+' · 术前'}); });
+    }
+  } else if(cap==='now'){
+    var m = (c.revisitMedia||[]).filter(function(y){ return y.name===name; })[0];
+    if(m){ if(m.video) res.video = {name:m.video.name, srcText:'本次复诊', title:name+' · 本次', self:true}; Object.keys(m.photos||{}).forEach(function(aid){ put(aid, {name:m.photos[aid].name, srcText:'本次复诊', title:name+' · 本次', self:true}); }); }
+  }
+  return res;
+}
+function revProjCardsHtml(c){
+  if(!(c.followProjects||[]).length) return '';
+  var all = revCmpCasesOf(c), caps = [['face','面诊'], ['pre','术前'], ['now','本次']];
+  return '<!--revproj-->'+(c.followProjects||[]).map(function(name){
+    var cap = revCapOf(c, name), d = revCapCollect(c, name, cap, all), part = followItemPart(name), sp = shootSpec(part, name), nq = name.replace(/'/g,"\\'");
+    var capsH = caps.map(function(k){ var on = cap===k[0]; return '<button onclick="revCapSet(\''+c.id+'\',\''+nq+'\',\''+k[0]+'\')" style="padding:3px 12px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;cursor:pointer;">'+k[1]+'</button>'; }).join(' ');
+    var vidH = d.video ? (d.video.self ? '<span style="color:var(--sage);">▶ '+cesc(d.video.name)+'</span>' : '<span style="color:var(--sage);">▶ '+cesc(d.video.name)+'</span> '+revCmpSrcLine(c, d.video)) : '<span style="color:var(--muted);">—</span>';
+    var tiles = sp.angles.map(function(a){ var l = d.byAngle[a.id] || [];
+      return '<div style="width:132px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;'+(l.length ? '' : 'color:var(--muted);')+'"><div style="font-weight:700;min-height:28px;text-wrap:balance;">'+cesc(a.label)+'</div>'+(l.length ? l.map(function(ph){ return '<div style="cursor:pointer;color:var(--sage);word-break:break-all;" onclick="revCmpZoom(\''+String(ph.title).replace(/'/g,"\\'")+'\',\''+String(ph.name).replace(/'/g,"\\'")+'\')">'+cesc(ph.name)+'</div><div style="line-height:1.35;margin-bottom:4px;">'+revCmpSrcLine(c, ph)+'</div>'; }).join('') : '—')+'</div>'; }).join('');
+    var other = d.other.length ? '<div style="font-size:12px;font-weight:700;margin:8px 0 4px;">其他照片</div><div style="display:flex;flex-wrap:wrap;gap:8px;">'+d.other.map(function(ph){ return '<div style="width:132px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;"><div style="font-weight:700;">'+cesc(ph.label||'')+'</div><div style="color:var(--sage);word-break:break-all;">'+cesc(ph.name)+'</div><div>'+revCmpSrcLine(c, ph)+'</div></div>'; }).join('')+'</div>' : '';
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><b style="font-size:13px;">'+cesc(name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(part).label)+'</span></b><span style="display:inline-flex;gap:6px;">'+capsH+'</span><span style="margin-left:auto;">'+shootRefBtn(part, name)+'</span></div>'+
+      '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">视频　</span>'+vidH+'</div><div style="font-size:13px;"><span style="color:var(--muted);font-size:12px;">照片　</span><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">'+tiles+'</div>'+other+'</div></div>';
+  }).join('')+'<!--/revproj-->'; /* 胶囊 ［面诊］ 是任务指定的栏名，测试里「没有面诊字样」检查要先剔除这一块 */
+}
+function revCmpSrcLine(c, ph){
+  if(!ph.srcText) return '';
+  return (!ph.self && ph.srcId && revCmpSrcCanOpen(c, ph.srcId)) ? '<a href="#" class="info-link" style="font-size:12px;" onclick="revCmpGo(\''+(c.clinicId||'')+'\',\''+ph.srcId+'\');return false;">'+cesc(ph.srcText)+'</a>' : '<span style="font-size:12px;color:var(--muted);">'+cesc(ph.srcText)+'</span>';
+}
+/* 「接续 A000xxx · 原施术 颧骨缩小、下颚角整形（10/29）」一行 */
+function revSrcLineText(c){
+  var all = revCmpCasesOf(c), orig = revCmpOrig(c, all); if(!orig) return '';
+  var done = (orig.procedureItems||[]).filter(function(it){ return !it.cancelled && !it.swapped && !krIsMgmtItemC(it) && it.done; }), md = '';
+  try{ var d = done.length ? (done[0].doneAt ? String(fmtUtc(done[0].doneAt)).slice(0, 10) : ((orig.krSchedule||{}).confirmedDate || '')) : ''; md = d ? revCmpMd(d) : ''; }catch(e){}
+  return '接续 '+orig.caseNo+(done.length ? ' · 原施术 '+done.map(function(it){ return it.name; }).join('、')+(md ? '（'+md+'）' : '') : '');
 }
 function revCmpRefresh(){
   try{
