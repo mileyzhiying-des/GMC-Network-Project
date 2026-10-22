@@ -960,7 +960,7 @@ function krProjCards(c, opts){
     if(it.done){ dS.push(doneRow(SG, nm, cnt, '—', dn ? krEsc(visitAtText(c, rowVisitKey(c, dn), dn, dn.doneAt) || '—') : (it.doneAt ? krEsc(visitAtText(c, 'main', null, it.doneAt)) : '—'), dn ? rowVisitKey(c, dn) : 'main', krViewBtn(dn && dn.surgUse ? subCaseKey(dn) : 'main'))); return; }
     var pkS = pickMode ? {kind:'surg', name:it.name} : null;
     if(open){ sB.push(krPcRow(nm, '施术', cnt, krEsc(krShortDt(open.date, open.time || '')), (open.surgUse ? (can && !pickMode && !open.arrived ? krOutBtn('修改时间', 'krSubTimeOpen(\''+open.id+'\')', true) : krOutBtn('修改时间', '', false, !can ? '没有权限修改' : '客人已到院，不能修改时间')) : cancelBtn(it.name)), '', pkS, open.surgUse ? krViewBtn(subCaseKey(open)) : '', SG)); return; }
-    if(plan && !it.deferUse){ if(ks.confirmedDate && (ks.status==='confirmed' || ks.status==='arrived')) sB.push(krPcRow(nm, '施术', cnt, krEsc(krShortDt(ks.confirmedDate, ks.confirmedTime||'')), cancelBtn(it.name), '', pkS, '', SG)); else sU.push(krPcRow(nm, '施术', cnt, krBuyTime(c, it), '<span style="color:var(--muted);font-size:12px;">施术日期确认后在主案件做</span>', '', null, '', SG)); return; }
+    if(plan && !it.deferUse){ if(ks.confirmedDate && (ks.status==='confirmed' || ks.status==='arrived')) sB.push(krPcRow(nm, '施术', cnt, krEsc(krShortDt(ks.confirmedDate, ks.confirmedTime||'')), '', '', pkS, '', SG)); /* CMD-1022-14：施术项目没有［本次取消］ */ else sU.push(krPcRow(nm, '施术', cnt, krBuyTime(c, it), '<span style="color:var(--muted);font-size:12px;">施术日期确认后在主案件做</span>', '', null, '', SG)); return; }
     sU.push(krPcRow(nm, '施术', cnt, krBuyTime(c, it), useBtns(it.name, false), '', pkS, '', SG));
   });
   var surgBody = krPcSec('未使用', ['项目','项目类型','次数','购买时间',''], sU)+krPcSec('已预约', ['项目','项目类型','次数','预约时间',''], sB);
