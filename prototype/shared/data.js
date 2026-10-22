@@ -2624,15 +2624,18 @@ function shootRefBtn(part, projName){
     : '<span title="KR 未提供视角参考" style="float:right;display:inline-block;"><button class="btn-outline" disabled style="padding:3px 10px;font-size:12px;opacity:.4;cursor:not-allowed;">视角参考</button></span>';
 }
 function shootRefOpen(part, projName){
+  /* CMD-1022-16：［视角参考］改成右侧侧边栏（不是 Modal），不挡住上传卡，可以一边看参考一边传照片；id 沿用 shoot-ref-overlay，开 / 关仍是 .open */
   var sp = shootSpec(part, projName), title = '视角参考 · '+(projName || concernPartDef(part).label), viewer = (typeof isKrAccount==='function' && isKrAccount()) ? 'KR' : 'IN';
-  var ov = document.getElementById('shoot-ref-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'shoot-ref-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:560px;max-width:92vw;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">'+cesc(title)+'</div>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:10px;">'+sp.angles.map(function(a){ var r = sp.refs[a.id];
-      return '<div style="width:150px;border:1px solid var(--border2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">'+cesc(a.label)+'</div><div style="height:120px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;'+(r ? 'background:var(--sage-bg);color:var(--sage);word-break:break-all;padding:4px;' : 'background:#F1EEE8;color:var(--muted);')+'">'+(r ? cesc(r.name)+'<br>（原型占位图）' : '未提供参考图')+'</div></div>'; }).join('')+'</div>'+
-    (String(sp.note||'').trim() ? '<div style="font-size:12px;font-weight:700;margin:12px 0 4px;">KR 的说明</div><div style="padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;">'+noteTextHtml({id:'shn'+part+String(projName||''), text:sp.note, role:'KR'}, viewer)+'</div>' : '')+
-    '<div style="display:flex;justify-content:flex-end;margin-top:16px;"><button class="btn-outline" onclick="document.getElementById(\'shoot-ref-overlay\').classList.remove(\'open\')">关闭</button></div></div>';
-  ov.style.zIndex = 100030; ov.classList.add('open');
+  var ov = document.getElementById('shoot-ref-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'shoot-ref-overlay'; ov.className = 'shoot-ref-side'; document.body.appendChild(ov); }
+  ov.className = 'shoot-ref-side'+(ov.classList.contains('open') ? ' open' : '');
+  ov.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border2);"><b style="font-size:15px;">'+cesc(title)+'</b><span style="cursor:pointer;font-size:16px;" onclick="shootRefClose()">✕</span></div>'+
+    '<div style="padding:14px 16px;overflow:auto;flex:1;"><div style="display:flex;flex-wrap:wrap;gap:10px;">'+sp.angles.map(function(a){ var r = sp.refs[a.id];
+      return '<div style="width:150px;border:1px solid var(--border2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">'+cesc(a.label)+'</div><div style="height:120px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:12px;'+(r ? 'background:var(--sage-bg);color:var(--sage);word-break:break-all;padding:4px;">'+cesc(r.name) : 'background:var(--surface2,#faf6ef);color:var(--muted);">未提供参考图')+'</div></div>'; }).join('')+'</div>'+
+    (String(sp.note||'').trim() ? '<div style="font-size:12px;font-weight:700;margin:12px 0 4px;">KR 的说明</div><div style="padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;">'+noteTextHtml({id:'shn'+part+String(projName||''), text:sp.note, role:'KR'}, viewer)+'</div>' : '')+'</div>'+
+    '<div style="display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border2);"><button class="btn-outline" onclick="shootRefClose()">关闭</button></div>';
+  ov.classList.add('open');
 }
+function shootRefClose(){ var ov = document.getElementById('shoot-ref-overlay'); if(ov) ov.classList.remove('open'); }
 function concernMediaOptional(c){ return c.needsConsult===false; } /* 选「不面诊」：照片 / 视频改选填 */
 /* 缺哪些：返回文字列表（confirmMaterials 的缺项弹窗用） */
 function concernMissing(c){
@@ -8185,23 +8188,36 @@ function inProjectCardHtml(c){
   var items = krAllItems(c), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, pillStyle = {'待付款':['#FDECEA','#B3261E'], '未开始':['var(--terracotta-bg)','var(--terracotta)'], '已完成':['var(--sage-bg)','var(--sage)'], '已取消':['#EDEAE2','var(--muted)'], '已更换':['var(--blue-bg)','var(--blue)'], '持有中':['var(--blue-bg)','var(--blue)'], '已用完':['var(--sage-bg)','var(--sage)']};
   var group = function(list){ var gl = []; list.forEach(function(it){ var added = !!(it.krAddOn || it.preBalanceAdd || it.swappedFrom), g = (added && !it.cancelled) ? gl.filter(function(x){ return x.added && !x.it.cancelled && x.it.name===it.name; })[0] : null; if(g){ g.n += (it.qty||1); g.all.push(it); } else gl.push({it:it, n:(it.qty||1), all:[it], added:added}); }); return gl; };
   var surg = group(items.filter(function(it){ return !krIsMgmtItemC(it); })), mg = items.filter(function(it){ return krIsMgmtItemC(it); });
-  var surgRows = surg.map(function(g){
+  var surgRowOf = function(g){
     var it = g.it, stText = g.all.length>1 ? (g.all.every(function(x){ return x.done; }) ? '已完成' : (g.all.some(function(x){ return x.pendingPay; }) ? '待付款' : '未开始')) : krItemStatus(it), pc = pillStyle[stText] || pillStyle['未开始'];
     var nameHtml = it.replacedBy ? '<span style="text-decoration:line-through;color:var(--muted);">'+e(it.name)+'</span> → 更换为 <b>'+e(it.replacedBy)+'</b>' : '<span style="'+(it.cancelled?'text-decoration:line-through;color:var(--muted);':'')+'">'+e(it.name)+(g.n>1 ? ' ×'+g.n : '')+'</span>'+(g.added ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:12px;">在韩增加</span>' : '');
     var flags = krItemFlags(c, it).map(function(f){ return '<span class="status-pill" style="background:#FBF0C9;color:#A8740A;font-size:12px;margin-left:6px;">⚠ '+f+'</span>'; }).join('');
     return '<details style="border-top:1px solid var(--border2);padding:8px 0;"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;font-size:13px;"><span style="color:var(--muted);">▸</span><span style="flex:1;">'+nameHtml+flags+'</span><span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+stText+'</span></summary><div style="padding:6px 0 2px 22px;">'+itemArrangeHtml(it, true)+'</div></details>';
-  }).join('');
-  /* CMD-1020-09：三张大卡。① 项目卡 = 备注区 + 施术项目（折叠；不再放金额合计 / 护照提示，金额看「结算」tab，护照看基础资料）② 术后管理（韩国 / 印尼两张小卡）③ 管理项目（持有中 / 已完成两张小卡） */
+  };
+  /* CMD-1022-16：IN 项目卡比照 KR：四个 tab 施术项目｜术后管理｜在韩管理｜已完成（0 的灰掉，默认第一个有内容的）；备注独立成一张卡；项目卡固定高度（原来的 2/3）。IN 的可见范围 / 不显示金额等规则照旧 */
   var card = function(inner){ return '<div class="card" style="padding:22px 24px;">'+inner+'</div>'; };
+  var surgOpen = items.filter(function(it){ return !krIsMgmtItemC(it) && !it.done; }), surgDone = items.filter(function(it){ return !krIsMgmtItemC(it) && it.done && !it.cancelled; });
+  var careDone = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && s.done; });
+  var cu = careUnits(c), careN = cu.rows.filter(function(r){ return !r.s.done; }).length + cu.unbooked.length;
+  var mkRows = function(list){ var gs = surg.filter(function(g){ return g.all.some(function(x){ return list.indexOf(x)>-1; }); }); return gs.map(function(g){ return surgRowOf(g); }).join(''); };
+  var careDoneHtml = careDone.map(function(s){ var lb = visitRowLabel(c, s); return '<div style="padding:8px 0;font-size:13px;border-top:1px solid var(--border2);"><span style="color:var(--muted);font-size:12px;">术后管理</span>　'+e(lb.sub ? (s.projectName ? buyName(s.projectName)+' · ' : '')+lb.name : lb.name)+' <span style="font-size:12px;color:var(--muted);">· 完成 '+e(String(s.doneAt||s.date||'').slice(0,10))+'</span></div>'; }).join('');
+  var counts = {surg:surgOpen.length, care:careN, mg:mg.length, done:surgDone.length+careDone.length};
+  var cur = IN_PC_TAB[c.id]; if(!cur || !counts[cur]) cur = ['surg','care','mg','done'].filter(function(k){ return counts[k]>0; })[0] || 'surg';
+  var tabBtn = function(k, label){ var n = counts[k], on = cur===k; return '<button '+(n ? 'onclick="inPcTab(\''+c.id+'\',\''+k+'\')"' : 'disabled')+' style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : (n ? 'var(--slate2)' : 'var(--dim)'))+';font-size:13px;cursor:'+(n ? 'pointer' : 'not-allowed')+';opacity:'+(n ? 1 : .55)+';">'+label+' '+n+'</button>'; };
+  var body;
+  if(cur==='surg') body = surgOpen.length ? inSmallCard(mkRows(surgOpen).replace(/border-top:1px solid var\(--border2\);padding:8px 0;/, 'padding:8px 0;')) : '';
+  else if(cur==='care') body = '<div style="font-size:12px;color:var(--muted);margin:2px 0 6px;">术后管理免费、不显示价格、不能退款；韩国的由 KR 安排，印尼的由本院预约</div>'+inCareCardsHtml(c, 'kr')+inCareCardsHtml(c, 'inn');
+  else if(cur==='mg') body = inMgmtCardsHtml(c, mg);
+  else body = (surgDone.length ? inSecTitle('施术项目', surgDone.length)+inSmallCard(mkRows(surgDone).replace(/border-top:1px solid var\(--border2\);padding:8px 0;/, 'padding:8px 0;')) : '')+(careDone.length ? inSecTitle('术后管理', careDone.length)+inSmallCard(careDoneHtml) : '');
   var c1 = card('<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">项目卡</div></div>'+
     '<div style="margin-top:8px;font-size:13px;">在韩期间：'+(stayText(c) ? '<b>'+stayText(c)+'</b>' : '<span style="color:var(--muted);">未填写</span>')+' <a href="#" class="info-link" onclick="openStayModal(\''+c.id+'\');return false;">'+(stayText(c) ? '修改' : '填写')+'</a>'+(stayShortDays(c) ? ' <span style="color:#B3261E;font-weight:700;">⚠ 离境日比建议少 '+stayShortDays(c)+' 天</span>' : '')+'</div>'+
-    '<div style="margin-top:6px;">'+inNotesAreaHtml(c)+'</div>'+
-    inSecTitle('施术项目', surg.length)+(surgRows ? inSmallCard(surgRows.replace(/border-top:1px solid var\(--border2\);padding:8px 0;/, 'padding:8px 0;')) : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有施术项目</div>'));
-  var care = inCareCardsHtml(c, 'kr')+inCareCardsHtml(c, 'inn');
-  var c2 = card('<div style="font-size:14px;font-weight:700;">术后管理</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">术后管理免费、不显示价格、不能退款；韩国的由 KR 安排，印尼的由本院预约</div>'+care);
-  var c3 = mg.length ? card('<div style="font-size:14px;font-weight:700;">管理项目</div>'+inMgmtCardsHtml(c, mg)) : '';
-  return c1+c2+c3;
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+tabBtn('surg','施术项目')+tabBtn('care','术后管理')+tabBtn('mg','在韩管理')+tabBtn('done','已完成')+'</div>'+
+    '<div class="kr-pc-scroll">'+(body || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有项目</div>')+'</div>');
+  var cN = card('<div style="font-size:14px;font-weight:700;margin-bottom:6px;">备注</div>'+inNotesAreaHtml(c)); /* 备注独立成一张卡（CMD-1022-16） */
+  return c1+cN;
 }
+var IN_PC_TAB = {};
+function inPcTab(id, k){ IN_PC_TAB[id] = k; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
 /* CMD-1020-08：这一项印尼术后管理有没有「接续原案件」的预约（IN 代约带 careFor，或客人自助预约了术后管理，或当天已接续）；返回 {date,time,caseId} 或 null（IN / KR 页面通用） */
 function inCareBooking(c, key){
   var today = todayStr(), list = (typeof isKrAccount==='function' && isKrAccount()) ? ((Store.readClinic(c.clinicId)||{}).CASE_ITEMS||[]) : CASE_ITEMS, hit = null;
