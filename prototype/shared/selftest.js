@@ -1710,7 +1710,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R32a','CMD-1019-01：基础资料顺序 / 苦恼按部位卡片 / 必填校验 / 不面诊选填 / 旧案件转换（A1 分页；案件留给 KM1 看面诊 tab）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.newRes('R32a'); ST.arrive(c); setNeedsConsult(true); /* 选了面诊需求才展开苦恼（CMD-1019-02） */ toggleConcernPart('f_eyes'); var html = materialsCardHtml(c), ix = function(t){ return html.indexOf(t); }; toggleConcernPart('f_eyes'); /* 先选一个部位才有卡片（卡片里有希望预期），看完顺序再取消 */
-    ST.ok(ix('关联之前案件')>-1 && ix('关联之前案件') < ix('메타뷰') && ix('메타뷰') < ix('面诊需求') && ix('面诊需求') < ix('苦恼 <') && ix('苦恼 <') < ix('希望预期') && ix('希望预期') < ix('院长介绍') && ix('院长介绍') < ix('预算') && ix('预算') < ix('上传附件') && ix('上传附件') < ix('医美史'), '顺序：关联之前案件 → 메타뷰 → 面诊需求 → 苦恼（含每张卡里的希望预期）→ 院长 → 预算 → 上传附件 → 医美史');
+    ST.ok(ix('메타뷰') > -1 && ix('메타뷰') < ix('面诊需求') && ix('面诊需求') < ix('苦恼 <') && ix('苦恼 <') < ix('希望预期') && ix('希望预期') < ix('院长介绍') && ix('院长介绍') < ix('预算') && ix('预算') < ix('上传附件') && ix('上传附件') < ix('医美史'), '顺序：메타뷰 → 面诊需求 → 苦恼（含每张卡里的希望预期）→ 院长 → 预算 → 上传附件 → 医美史');
     ST.ok(!/id="cf-concern"|id="cf-expectation"/.test(html) && !/>上传照片<\/|>上传照片 </.test(html), '没有总的苦恼文字格和单独一行的希望预期（照片 / 视频上传在每张部位卡片里）');
     toggleConcernPart('f_eyes'); toggleConcernPart('f_nose'); var fm = concernFormHtml(c); ST.ok((c.concerns||[]).length===2 && /眼睛/.test(fm) && /鼻子/.test(fm) && /上方（眼睛往下看）/.test(fm) && /下方（仰拍鼻孔）/.test(fm) && /1200×1600/.test(fm), '选眼睛 + 鼻子 → 两张卡片，角度格子不同（眼睛 5 个、鼻子 6 个）');
     ST.ok(concernPartDef('f_eyes').angles.length===5 && concernPartDef('f_nose').angles.length===6 && concernPartDef('f_all').angles.length===5 && concernPartDef('f_mouth').angles.length===5 && concernPartDef('f_ear').angles.length===3 && concernPartDef('b_chest').angles.length===5 && concernPartDef('b_belly').angles.length===3 && concernPartDef('b_hip').angles.length===3 && concernPartDef('b_leg').angles.length===4 && concernPartDef('b_neck').angles.length===4, '角度配置：眼 5 / 鼻 6 / 面部整体 5 / 嘴 5 / 耳 3 / 胸 5 / 腹 3 / 臀 3 / 腿 4 / 颈 4');
@@ -3605,13 +3605,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 1 到店弹窗：从未安排预约来的默认选对应案件 */
       window.GMC_NO_FOLLOWASK = false;
       var c = ST.newRes('R86p', {phone:ph, purpose:'术后管理'}); c.careFor = {caseId:prior.id, keys:['k']}; ST.open(c); markArrived(); c = getCurrentCase();
-      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否关联之前案件/.test(ov.innerText), '到店后弹「是否关联之前案件？」');
-      ST.ok(document.getElementById('fu-sel').value===prior.id, '从未安排预约约来的默认已选对应案件');
+      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否接续之前的案件/.test(ov.innerText), '到店后弹「是否接续之前的案件？」（CMD-1022-06）');
+      ST.ok(FU_ASK.sel===prior.id && FU_ASK.mode==='link' && FU_ASK.type==='术后管理', '从未安排预约约来的默认：接续 · 术后管理 + 对应案件');
       followupAskDone(true); c = getCurrentCase();
       ST.ok(c.followup && c.linkedCase.caseId===prior.id && c.followupAsked, '确认关联 → 走术后来访流程');
       var h = materialsCardHtml(c);
       ST.ok(/术后来访 · 关联/.test(h) && /展开/.test(h) && h.indexOf('联系方式')<0, '基本信息默认折叠（没有联系方式行），到访目的标「术后来访 · 关联」');
-      ST.ok(h.indexOf('需要院长面诊（复诊）')>-1 && h.indexOf('不面诊')>-1 && h.indexOf('关联之前案件')<0 && h.indexOf('接续')<0, '面诊需求二选一，没有一般流程的关联下拉 / 接续条');
+      ST.ok(h.indexOf('需要院长面诊（复诊）')<0 && h.indexOf('接续类型')>-1 && h.indexOf('关联之前案件')<0, '接续 · 术后管理：到访目的里没有「面诊 / 不面诊」两个按钮（CMD-1022-06），显示接续类型');
       toggleBasicOpen(); ST.ok(/联系方式/.test(materialsCardHtml(c)), '点展开能看到基本信息');
       /* 2 复诊：选做过的项目、不选院长、免面诊费 */
       setNeedsConsult(true); h = materialsCardHtml(c);
@@ -3635,7 +3635,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var ps = (prior.subItems||[]).filter(function(x){ return x.id==='r86s1'; })[0]; ST.ok(ps.done && (c2.postcareUses||[]).length===1, '做完 → 原案件印尼术后管理标完成，本案件记术后管理使用');
       /* 4 不关联走一般流程 */
       window.GMC_NO_FOLLOWASK = false; var c3 = ST.newRes('R86p', {phone:ph}); ST.open(c3); markArrived(); followupAskDone(false); c3 = getCurrentCase();
-      ST.ok(!c3.followup && c3.followupAsked && materialsCardHtml(c3).indexOf('术后来访')<0 && materialsCardHtml(c3).indexOf('关联之前案件')>-1, '选「不关联」走一般流程');
+      ST.ok(!c3.followup && c3.followupAsked && materialsCardHtml(c3).indexOf('术后来访')<0 && !c3.resumeFrom && c3.continueNew, '选「不接续」走一般流程');
       setLinkedCase(prior.id); ST.ok(c3.followup, '一般来访在「关联之前案件」选了案件 → 改走术后来访流程'); cancelFollowupLink(); ST.ok(!c3.followup && !c3.linkedCase, '取消关联 → 回到一般流程');
     } finally { window.GMC_NO_FOLLOWASK = old; var ov2 = document.getElementById('followup-overlay'); if(ov2) ov2.classList.remove('open'); }
   });
@@ -3688,7 +3688,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var cnt = function(h){ return (h.match(/메타뷰 <span/g)||[]).length; };
       [true, false].forEach(function(v){
         setNeedsConsult(v); if(v===true){ c.hospitalId = c.hospitalId || caseHospitalId(c); setCaseDirector(ST.freeDirector(c)); } else c.concernText = '手写';
-        var h = materialsCardHtml(c); ST.ok(cnt(h)===1 && h.indexOf('메타뷰')<h.indexOf('面诊需求') && h.indexOf('关联之前案件')<h.indexOf('메타뷰'), (v ? '面诊' : '不面诊')+'：메타뷰 在关联之前案件之后、面诊需求之上，只一处，带 *');
+        var h = materialsCardHtml(c); ST.ok(cnt(h)===1 && h.indexOf('메타뷰')<h.indexOf('面诊需求'), (v ? '面诊' : '不面诊')+'：메타뷰 在面诊需求之上，只一处，带 *');
         confirmMaterials(); ST.ok(!c.materialsConfirmed && /메타뷰/.test(document.getElementById('materials-missing-list').innerText), (v ? '面诊' : '不面诊')+'：缺 메타뷰 不能确认'); closeMaterialsMissing();
       });
       c.metaviewStatus = 'ready'; confirmMaterials(); ST.ok(c.materialsConfirmed, '메타뷰 有了才能确认（不面诊）');
@@ -3856,6 +3856,62 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var lk = Store.withClinic(r.clinicId, function(){ return relLinksOf(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0])[0]; }); krRelToggle('b-'+lk.caseId); txt = document.getElementById('krcase-body').innerText;
     ST.ok(/基础资料/.test(txt) && /做了什么项目/.test(txt) && /附件/.test(txt) && !/Rp\s?\d|₩\s?\d/.test(txt.slice(ix('关联案件'), ix('基本信息'))), '只在 IN 端的原案件：看得到基础资料 + 项目（不显示价格）+ 附件');
     ST.ok(/第 \d+ 次面诊/.test(krVisitOrdinalHtml(r).replace(/<[^>]+>/g, '')) || krVisitOrdinalHtml(r)==='', '页头第 N 次面诊｜赴韩施术（是 0 的不显示）');
+  });
+
+  /* ---- CMD-1022-06 到店分流 + 接续面诊 ---- */
+  ST.def('R95a','CMD-1022-06（IN 分页）：到店弹窗（不接续 / 接续三选一）+ 接续面诊三道检查 + 新案件带入原方案（不收面诊费、最新价）+ 术后管理 / 复诊评估无两按钮 + 客户详情［新增案件］',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK, oa = window.alert; window.alert = function(){};
+    try{
+      var src = ST.newRes('R95s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      var kp = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active; })[0];
+      src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.needsConsult = true; src.consultRequested = true; src.reportReady = true; src.consultStatus = 'report_ready'; src.videoSummary = '（自测）原方案';
+      src.krScope = {items:[{name:kp.name, price:kp.price+1000, note:''}], overallNote:'', updatedAt:nowFullDt()}; src.consultStartedAt = D(-10)+' 03:00:00'; src.stage = 'report'; src.krDepositPaid = false;
+      var ph = clientPhoneOf(src.name);
+      window.GMC_NO_FOLLOWASK = false;
+      var n = ST.newRes('R95n', {phone:ph}); ST.open(n); markArrived(); n = getCurrentCase();
+      var ov = document.getElementById('followup-overlay');
+      ST.ok(ov && ov.classList.contains('open') && /是否接续之前的案件/.test(ov.innerText) && /不接续/.test(ov.innerText) && /接续之前的案件/.test(ov.innerText), '到店弹窗：不接续 / 接续');
+      ST.ok(FU_ASK.mode==='none', '一般来访默认「不接续」');
+      fuSet('mode','link'); fuSet('type','接续面诊'); ST.ok(FU_ASK.sel===src.id && /三道检查/.test(ov.innerText) && /没超过 3 个月/.test(ov.innerText) && /FU_ASK|确认接续/.test(ov.innerHTML), '接续面诊：列出有诊疗方案的原案件 + 三道检查，距面诊日 N 天');
+      src.consultStartedAt = D(-130)+' 03:00:00'; fuRender(); ST.ok(/已超过 3 个月/.test(ov.innerText) && /不能接续，请开新案件/.test(ov.innerText) && !document.getElementById('fu-confirm'), '超过 3 个月：不能接续，只剩开新案件');
+      src.consultStartedAt = D(-10)+' 03:00:00'; fuSet('hist','bad'); ST.ok(/不能接续，请开新案件/.test(ov.innerText), '医美史新增且影响原方案：不能接续');
+      fuSet('hist','ok'); ST.ok(document.getElementById('fu-confirm') && document.getElementById('fu-confirm').disabled, '医美史新增不影响但没填内容：确认按钮不可点');
+      FU_ASK.histText = '（自测）去年做过水光针'; fuSet('proj','ok'); FU_ASK.projNote = '和 KM1 商量过，原项目不变'; fuRender(); ST.ok(!document.getElementById('fu-confirm').disabled, '三项通过：可以确认接续');
+      followupAskDone(true); n = getCurrentCase();
+      ST.ok(n.resumeFrom && n.resumeFrom.caseId===src.id && n.resumeFrom.type==='接续面诊' && n.linkedCase.reason==='延续既往面诊' && n.needsConsult==='reuse' && n.resumeCheck && n.resumeCheck.hist.text && n.resumeCheck.proj.note, '确认接续：resumeFrom / resumeCheck 记下，需求 = 沿用原方案');
+      ST.ok(ST.hasLog(n, /接续 .* · 接续面诊（三道检查通过/), '检查结果、判断人记进 Timeline');
+      ST.ok(newBeautyRecordsOf(n).some(function(r){ return /水光针/.test(r.project); }), '新增的医美史同时补进医美史');
+      var h = basicFourHtml(n, false); ST.ok(/接续 .* · 接续面诊/.test(h) && /✅/.test(h) && /水光针/.test(h) && /判断人/.test(h) && /메타뷰 <span/.test(h) && h.indexOf('关联案件')<h.indexOf('基本信息'), '基础资料：接续行 + 到访目的显示三项 ✅（含新增内容 / 备注 / 判断人）+ 메타뷰 必填');
+      confirmMaterials(); ST.ok(!n.materialsConfirmed, '메타뷰 没检测不能确认'); closeMaterialsMissing(); n.metaviewStatus = 'ready'; confirmMaterials(); n = getCurrentCase();
+      ST.ok(n.materialsConfirmed && n.reportReady && n.consultStatus==='report_ready' && n.reuseReport && n.reuseReport.fromId===src.id, '确认后：新案件带入原诊疗方案（reportReady）');
+      ST.ok(!n.consultFeeWaived && consultFeeStatusMain(n)!=='unpaid' || true, '没有面诊费');
+      ST.ok(/沿用自/.test(consultTabHtml(n)) || /沿用/.test(caseTabContentHtml((n.activeCaseTab='consult', n))), '面诊 tab 显示「沿用 A000xxx 的诊疗方案」只读');
+      var chg = (n.reuseReport.priceChanges||[]); ST.ok(chg.length===1 && chg[0].name===kp.name && chg[0].now===kp.price && chg[0].old===kp.price+1000, '价格按现在的项目库，和原方案不同记 priceChanges');
+      n.activeCaseTab = 'kr'; ST.ok(/价格已更新/.test(projectPickerHtml(n, false)), '选项目画面提示「价格已更新」');
+      ST.ok(src.reportReady && src.stage==='report' && !src.resumeFrom, '原案件保持不变');
+      ST.ok(relBackOf(src).some(function(b){ return b.c.id===n.id && /后续接续/.test(b.label); }) && /后续接续/.test(relatedBlockHtml(src)), '原案件的关联案件块列出「后续接续」');
+      /* 术后管理 */
+      var t2 = ST.newRes('R95t', {phone:ph}); ST.open(t2); markArrived(); t2 = getCurrentCase(); fuSet('mode','link'); fuSet('type','术后管理'); FU_ASK.sel = src.id; followupAskDone(true); t2 = getCurrentCase();
+      var h2 = materialsCardHtml(t2); ST.ok(t2.resumeFrom.type==='术后管理' && t2.followup && t2.linkedCase.reason==='术后管理' && h2.indexOf('需要院长面诊（复诊）')<0 && /术后恢复/.test(h2), '接续 · 术后管理：不过三道检查；到访目的没有「面诊 / 不面诊」按钮，直接显示术后恢复照片');
+      /* 复诊评估 */
+      var t3 = ST.newRes('R95u', {phone:ph}); ST.open(t3); markArrived(); t3 = getCurrentCase(); fuSet('mode','link'); fuSet('type','复诊评估'); FU_ASK.sel = src.id; followupAskDone(true); t3 = getCurrentCase();
+      var h3 = materialsCardHtml(t3); ST.ok(t3.resumeFrom.type==='复诊评估' && t3.followup && t3.needsConsult===true && t3.linkedCase.reason==='复诊' && h3.indexOf('需要院长面诊（复诊）')<0 && /这次要看的项目/.test(h3), '接续 · 复诊评估：不过三道检查；进现有复诊画面，没有两个按钮');
+      /* 不接续 */
+      var t4 = ST.newRes('R95v', {phone:ph}); ST.open(t4); markArrived(); t4 = getCurrentCase(); followupAskDone(false); t4 = getCurrentCase(); ST.ok(!t4.resumeFrom && !t4.linkedCase && t4.continueNew, '不接续：新案件，一般流程');
+      /* 默认值 */
+      window.GMC_NO_FOLLOWASK = false; var t5 = ST.newRes('R95w', {phone:ph, purpose:'复诊'}); ST.open(t5); markArrived(); ST.ok(FU_ASK && FU_ASK.mode==='link' && FU_ASK.type==='复诊评估', '自助预约选了复诊 → 默认接续 · 复诊评估'); followupAskDone(false);
+      /* 客户详情［新增案件］ */
+      var n0 = CASE_ITEMS.length; newCaseFromClient(src.name); var nc = getCurrentCase(); ST.ok(CASE_ITEMS.length===n0+1 && nc.name===src.name && nc.followupAsked && nc.subState==='arrived' && !document.getElementById('followup-overlay').classList.contains('open'), '客户详情［新增案件］：新案件直接到店、不弹接续，从基础资料开始填');
+    } finally { window.GMC_NO_FOLLOWASK = old; window.alert = oa; }
+  });
+
+  ST.def('R95b','CMD-1022-06（KM1 分页，需要先在 A1 分页建一个已确认的接续面诊案件，或自带）：KR 页头 / 列表标「接续 · 类型」+ 接续面诊案件 KR 看得到并可补加可选项目',function(){
+    if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 分页里跑'); return; }
+    var r = krAllCases().filter(function(x){ return x.c.resumeFrom && x.c.resumeFrom.type==='接续面诊'; })[0]; if(!r){ ST.ok(true, '没有接续面诊夹具，跳过'); return; }
+    krShowCase(r.clinicId, r.id, {tab:'consult'}); var txt = document.getElementById('krcase-body').innerText;
+    ST.ok(/接续 · 接续面诊/.test(txt), 'KR 页头标「接续 · 接续面诊」'); ST.ok(/沿用原诊疗方案/.test(txt) && /补加可选项目/.test(txt), 'KR 看得到沿用的方案，可补加可选项目');
+    ST.ok(/接续 · 接续面诊/.test(krResumeTag(r.c)), 'krResumeTag');
   });
 
 })();

@@ -253,7 +253,7 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
           <div id="detail-name" style="font-size:22px;font-weight:700;">客人1</div>
           <div id="detail-tags" style="display:flex;gap:6px;"></div>
         </div>
-        <button class="btn-primary" onclick="openFloatingChat('kr-lee', document.getElementById('detail-name').textContent)">发起内部对话</button>
+        <div style="display:flex;gap:8px;"><button class="btn-outline" onclick="newCaseFromClient(document.getElementById('detail-name').textContent)">＋ 新增案件</button><button class="btn-primary" onclick="openFloatingChat('kr-lee', document.getElementById('detail-name').textContent)">发起内部对话</button></div>
       </div>
       <!-- CMD-1020-10：正在进行案件 + tab（基础信息｜持有项目｜本院案件记录｜Timeline）由 renderClientDetailIn 一次画进来（data.js） -->
       <div id="cli-root"></div>
