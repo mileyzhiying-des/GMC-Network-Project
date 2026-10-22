@@ -3930,7 +3930,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var i = caseStageInfo(n); ST.ok(i.stage==='复诊评估' && i.proc==='等确认时间', '状态「复诊评估 · 等确认时间」：'+i.stage+' · '+i.proc);
       ST.ok(!consultFeePaid(n) && financeResultOf(n)==='无收入', '不收费：财务栏无收入、面诊费不计');
       ST.ok(/复诊评估/.test(caseTabsHtml(n)) && caseTabsHtml(n).indexOf('面诊资料')<0, 'IN tab 叫「复诊评估」');
-      var th = caseTabContentHtml((n.activeCaseTab='consult', n)); ST.ok(!/面诊/.test(th.replace(/<[^>]+>/g,'')) && /不收费/.test(th) && /等确认时间/.test(th), '复诊评估 tab：没有面诊字样、没有面诊费卡');
+      var th = caseTabContentHtml((n.activeCaseTab='consult', n)); ST.ok(!/面诊/.test(th.replace(/<div class="revcmp">[\s\S]*?<!--\/revcmp-->/,'').replace(/<[^>]+>/g,'')) && /不收费/.test(th) && /等确认时间/.test(th), '复诊评估 tab：没有面诊字样、没有面诊费卡');
       ST.ok(!/面诊/.test(revEvalProcText(n)+i.stage+i.proc), '状态文字里没有「面诊」');
       ST.ok(ST.hasLog(n, /复诊评估已送出（不收费）/), 'Timeline 记送出');
       var o = ST.newRes('R96o', {phone:clientPhoneOf(src.name)}); o = CASE_ITEMS.filter(function(x){ return x.id===o.id; })[0]; o.consultKind = '复诊'; o.consultRequested = true; o.consultStatus = 'paid_waiting_kr'; o.stage = 'consult'; o.materialsConfirmed = true;
@@ -3945,7 +3945,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; krShowCase(cid, r.id, {tab:'consult', here:true});
       var tabs = KR_CASE_TABS.map(function(t0){ return (t0.key==='consult' && isRevEval(gc())) ? '复诊评估' : t0.label; }).join('|'); ST.ok(/复诊评估/.test(tabs), 'KR tab「复诊评估」');
-      var h = krTabConsult(gc()), txt = h.replace(/<[^>]+>/g, ' ');
+      var h = krTabConsult(gc()).replace(/<div class="revcmp">[\s\S]*?<!--\/revcmp-->/,''), txt = h.replace(/<[^>]+>/g, ' ');
       ST.ok(/确认评估时间和结果时间/.test(h) && /评估时间/.test(h) && /结果时间/.test(h) && !/面诊/.test(txt.replace(/院长日程[\s\S]*$/, '')), '确认评估时间和结果时间卡，没有面诊字样');
       var ti = krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+r.id; });
       ST.ok(ti.some(function(x){ return x.kind==='eta' && /复诊评估：确认评估时间和结果时间/.test(x.text) && x.stage==='待评估'; }), 'KR 待办标「待评估」：确认评估时间和结果时间');
@@ -3977,7 +3977,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(caseStageInfo(n).proc==='结果已到 · 需要处理' && caseStageInfo(n).stage==='复诊评估', '状态「复诊评估 · 结果已到」');
       var nt = NOTIFS.filter(function(x){ return /复诊评估结果已到/.test(x.text) && x.caseId===n.id; })[0]; ST.ok(nt && /有推荐的本地项目/.test(nt.text) && /建议赴韩/.test(nt.text) && notifTodoKind(nt)!=='info', 'IN 需确认通知：复诊评估结果已到（有推荐 / 建议赴韩）');
       var td = inTodoItems().filter(function(x){ return x.caseId===n.id; }); ST.ok(td.some(function(x){ return /复诊评估结果已到：联络客人/.test(x.text); }), 'IN 待办「复诊评估结果已到：联络客人」');
-      var th = caseTabContentHtml((n.activeCaseTab='consult', n)).replace(/<[^>]+>/g, ' ');
+      var th = caseTabContentHtml((n.activeCaseTab='consult', n)).replace(/<div class="revcmp">[\s\S]*?<!--\/revcmp-->/,'').replace(/<[^>]+>/g, ' ');
       ST.ok(/推荐/.test(th) && /消肿管理/.test(th) && /建议赴韩处理/.test(th) && !/面诊/.test(th), 'IN 复诊评估 tab：结果卡（推荐的本地项目走备注翻译 + 建议赴韩），没有面诊字样');
       var hh = caseTabContentHtml(n); ST.ok(/根据推荐选本地项目/.test(hh) && /另开新案件/.test(hh) && !/revEvalEnd/.test(hh), '动作：根据推荐选本地项目 / 另开新案件；［结束案件］只留页头状态卡上的一个（CMD-1022-12）');
       ST.ok(!showKrTab(n), '没有赴韩施术 tab（不能附赴韩项目）');
@@ -4039,6 +4039,43 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* ---- CMD-1022-12 支线修正 ---- */
+  ST.def('R100a','CMD-1022-13（IN 分页）：复诊评估前后对比——术前（原案件）｜术后恢复（历次）｜本次；只投屏不复制；来源可跳转；原案件换照片跟着变；对不上的进其他照片；缺栏 —',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK, oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+      var src = ST.newRes('R100s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.reportReady = true; src.consultStatus = 'report_ready'; src.projectsEnabled = true; src.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; src.consultRequested = true; src.visitDate = D(-60);
+      var ang = concernPartDef('f_nose').angles, a0 = ang[0].id, a1 = ang[1].id;
+      src.concerns = [{part:'f_nose', desc:'x', photos:(function(){ var o = {}; o[a0] = {name:'术前_正面.jpg'}; return o; })()}, {part:'legacy', desc:'旧', photos:{legacy:{name:'旧照片.jpg'}}}];
+      var n = ST.mkRevEval('R100n', src); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0];
+      var mk = function(tag, date, aid){ var x = ST.newRes(tag, {phone:clientPhoneOf(src.name)}); x = CASE_ITEMS.filter(function(y){ return y.id===x.id; })[0]; x.visitDate = date; x.linkedCase = {caseId:src.id, reason:'术后管理'}; x.recovery = [{name:'隆鼻', part:'f_nose', photos:(function(){ var o = {}; o[aid] = {name:'恢复_'+date+'.jpg'}; return o; })()}]; return x; };
+      var p1 = mk('R100p1', D(-30), a0), p2 = mk('R100p2', D(-10), a0);
+      var h = revCmpHtml(n);
+      ST.ok(/前后对比/.test(h) && /术前（原面诊）/.test(h) && /术后恢复（历次）/.test(h) && /本次复诊/.test(h), '三栏表头');
+      ST.ok(h.indexOf('术前_正面.jpg')>-1 && h.indexOf('来自 '+src.caseNo)>-1 && /面诊/.test(h), '术前来自原案件，标来源');
+      ST.ok(h.indexOf('恢复_'+D(-30)+'.jpg')>-1 && h.indexOf('恢复_'+D(-10)+'.jpg')>-1 && h.indexOf('术后来访')>-1, '术后恢复历次两张都显示，标术后来访');
+      ST.ok(h.indexOf('revCmpGo(')>-1 && h.indexOf(src.id)>-1, '来源可点跳回案件');
+      ST.ok(/其他照片/.test(h) && h.indexOf('旧照片.jpg')>-1, '未分部位旧照片进「其他照片」');
+      ST.ok(/—/.test(h), '缺栏显示 —');
+      ST.ok(JSON.stringify(n).indexOf('术前_正面.jpg')<0, '本次复诊案件里没有复制原案件照片（只投屏）');
+      src.concerns[0].photos[a0] = {name:'术前_换.jpg'};
+      h = revCmpHtml(n); ST.ok(h.indexOf('术前_换.jpg')>-1 && h.indexOf('术前_正面.jpg')<0, '原案件换照片，这边跟着更新');
+      ST.ok(revEvalTabHtml(n).indexOf('revcmp')>-1, 'IN 复诊评估 tab 里有对比区');
+      var cnt = (revCmpHtml(n).match(/<div style="display:grid/g)||[]).length; ST.ok(cnt>=2, '按角度一行');
+      ST.cleanupCases && 0;
+    }finally{ window.alert = oa; window.confirm = oc; window.GMC_NO_FOLLOWASK = old; }
+  });
+  ST.def('R100b','CMD-1022-13（KM1 / KD1 分页，要先在 A1 分页跑 R100a）：KR 复诊评估 tab 的前后对比（院长 / 室长），来源可跳转或不可点，原案件换照片跟着变',function(){
+    if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 / KD1 分页里跑'); return; }
+    var r = krAllCases().filter(function(x){ return x.c.revisitEval && /R100/.test(x.name) && (x.c.followProjects||[]).length; })[0]; if(!r){ ST.ok(false, '没有 R100 复诊评估夹具（先跑 R100a）'); return; }
+    var cid = r.clinicId;
+    KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; krShowCase(cid, r.id, {tab:'consult', here:true});
+    var h = krTabConsult(krFindCase(cid, r.id).c);
+    ST.ok(/前后对比/.test(h) && /术前（原面诊）/.test(h) && /术后恢复（历次）/.test(h) && /本次复诊/.test(h), 'KR：三栏对比');
+    ST.ok(h.indexOf('术前_换.jpg')>-1 && h.indexOf('恢复_')>-1, 'KR：术前 + 术后恢复照片都在');
+    ST.ok(/其他照片/.test(h) && h.indexOf('旧照片.jpg')>-1, 'KR：旧未分部位进其他照片');
+    ST.ok(h.indexOf('revCmpGo(')>-1 || h.indexOf('来自')>-1, 'KR：来源文字');
+  });
   ST.def('R99a','CMD-1022-12（IN 分页）：B1 接续面诊不收面诊费 / B5 候选只列赴韩已结束 / B4 复诊评估页头 / B7 旧黄条 / 结果卡 / 死代码隔离 + 印尼术后管理没做完 IN 手动结案',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };

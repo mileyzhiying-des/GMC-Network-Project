@@ -775,7 +775,8 @@ function krRecoveryCard(c){
     (isRevEval(c) && can && !isKrDirectorLike(currentAccount()) ? '<label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(c.revAuth ? 'checked ' : '')+'onchange="krRvAuth(this.checked)"><b>已得到院长授意</b> <span style="font-size:12px;color:var(--muted);">（室长代院长操作必须勾；记操作人和时间）</span></label>'+(c.revAuth ? '<div style="font-size:12px;color:var(--muted);margin-left:24px;">'+krEsc(c.revAuth.by)+' · '+krEsc(fmtUtc(c.revAuth.at))+'</div>' : '') : '')+'<div style="font-size:12px;font-weight:700;margin:14px 0 6px;">评估结论'+(can ? ' <span style="color:var(--terracotta);">*</span>' : '')+'</div><div style="display:flex;gap:10px;flex-wrap:wrap;">'+rb('ok','恢复正常')+rb('treat','需要处理')+'</div>'+(c.recoveryResult ? '<div style="font-size:12px;color:var(--muted);margin-top:4px;">评估人：'+krEsc(c.recoveryResult.by||'')+(c.recoveryResult.proxy ? '（室长代输入）' : '')+'</div>' : '')+
     '<div style="font-size:12px;color:var(--muted);margin-top:6px;">评估说明 = 下面录入的'+(isRevEval(c) ? '评估' : '面诊')+'内容（可语音）；需要处理时，室长可在发送时附项目方案，没有也可以不附。</div>');
 }
-function krTabConsult(c){
+function krTabConsult(c){ var cmp = (isRevEval(c) && typeof revCmpHtml==='function') ? revCmpHtml(c) : ''; return (cmp ? krCardBox('前后对比', cmp) : '')+krTabConsult0(c); }
+function krTabConsult0(c){
   var fee = consultFeeStatusMain(c), out = '';
   var head = (c.consultStatus==='paid_waiting_kr' || c.consultStatus==='awaiting_report') ? '' : krCardBox(isRevEval(c) ? '复诊评估' : '面诊', krDirLine(c)); /* 院长在面诊卡片第一行（进行中的状态在下面各自的卡片里）；面诊费卡片、当前小状态卡片已并进「面诊」卡片（CMD-1012-05） */
   if(c.reuseReport) return head+krCardBox('沿用原诊疗方案', krKV('来源', krEsc(c.reuseReport.caseNo)+'（'+krEsc(c.reuseReport.date||'')+'）')+krKV('报告', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');

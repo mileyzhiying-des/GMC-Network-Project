@@ -8734,7 +8734,7 @@ function revEvalTabHtml(c){
   var res = (c.reportReady || c.consultStatus==='report_ready') ? revEvalResultHtml(c) : '';
   return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:12px;color:var(--muted);">'+(src ? '接续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
     subStatusRowHtml([{kind:(c.reportReady ? 'Success' : 'Waiting'), text:st}])+(tip ? '<div style="font-size:13px;color:var(--slate2);margin-bottom:8px;">'+tip+'</div>' : '')+
-    (c.wantConsult ? '<div style="font-size:12px;color:var(--muted);">客人希望的时间：'+cesc(c.wantConsult)+'</div>' : '')+res+'</div>';
+    (c.wantConsult ? '<div style="font-size:12px;color:var(--muted);">客人希望的时间：'+cesc(c.wantConsult)+'</div>' : '')+revCmpHtml(c)+res+'</div>';
 }
 /* IN 确认基础资料后把复诊评估送给 KR：不收面诊费，直接进「等 KR 确认评估时间」 */
 function startRevisitEval(c){
@@ -8803,3 +8803,82 @@ function revEvalEnd(){
 }
 
 function revRecCardHtml(c){ return '<div class="card" style="padding:14px 20px;margin-bottom:14px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">复诊评估推荐的本地项目（KR · '+esc0((c.recoveryResult||{}).by||'')+'）</div>'+noteTextHtml({id:'rvrec'+c.id, role:'KR', text:c.revisitRec.local}, 'IN')+'</div>'; }
+
+/* ===== CMD-1022-13 复诊评估前后对比（投屏显示）=====
+   每个「这次要看的项目」一组，按角度一行：术前（原案件面诊）｜术后恢复（接续同一原案件的历次术后来访）｜本次复诊。
+   只读取原案件 / 术后来访案件的照片来显示，不复制、不新增数据（原案件补传 / 换照片，这里下次重画就跟着变）。 */
+var REVCMP_OPEN = {};
+function revCmpCasesOf(c){
+  if(typeof isKrAccount==='function' && isKrAccount() && c.clinicId){ try{ var v = Store.readClinic(c.clinicId); if(v && v.CASE_ITEMS) return v.CASE_ITEMS; }catch(e){} }
+  return CASE_ITEMS;
+}
+function revCmpOrig(c, all){
+  var id = (c.resumeFrom && c.resumeFrom.caseId) || (c.linkedCase && c.linkedCase.caseId); if(!id) return null;
+  return all.filter(function(x){ return x.id===id; })[0] || null;
+}
+function revCmpMd(d){ var m = String(d||'').match(/(\d{1,2})[-\/](\d{1,2})$/); return m ? (+m[1])+'/'+(+m[2]) : String(d||''); }
+function revCmpSrcCanOpen(c, id){
+  if(typeof isKrAccount==='function' && isKrAccount()) { try{ return !!krFindCase(c.clinicId, id); }catch(e){ return false; } }
+  return true;
+}
+function revCmpGo(clinicId, id){
+  if(typeof isKrAccount==='function' && isKrAccount()){ if(typeof krShowCase==='function') krShowCase(clinicId, id); }
+  else if(typeof openCaseDetail==='function') openCaseDetail(id);
+}
+function revCmpZoom(title, name){
+  var ov = document.getElementById('concern-zoom-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'concern-zoom-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:420px;text-align:center;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>'+cesc(title)+'</b><span style="cursor:pointer;" onclick="document.getElementById(\'concern-zoom-overlay\').classList.remove(\'open\')">✕</span></div>'+
+    '<div style="width:300px;height:400px;margin:0 auto;border:1px solid var(--border2);border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;">'+cesc(name)+'<br>（原型占位图）</div></div>';
+  ov.style.zIndex = 100020; ov.classList.add('open');
+}
+/* 收集一个项目的三栏照片：返回 {rows:[{id,label,pre:[],post:[],now:[]}], other:[{col,label,ph}]}；ph = {name, srcId, srcNo, srcText, title} */
+function revCmpCollect(c, name, all){
+  var orig = revCmpOrig(c, all), part = followItemPart(name), sp = shootSpec(part, name), rows = sp.angles.map(function(a){ return {id:a.id, label:a.label, pre:[], post:[], now:[]}; }), other = [];
+  var rowOf = function(id){ return rows.filter(function(r){ return r.id===id; })[0]; };
+  var put = function(col, aid, ph, aLabel){ var r = rowOf(aid); if(r) r[col].push(ph); else other.push({col:col, label:aLabel || CONCERN_ANGLE[aid] || aid, ph:ph}); };
+  if(orig){
+    concernCards(orig).forEach(function(x){
+      var same = x.part!=='legacy' && partBase(x.part)===partBase(part);
+      Object.keys(x.photos||{}).forEach(function(aid){
+        var ph = {name:x.photos[aid].name, srcId:orig.id, srcNo:orig.caseNo, srcText:'来自 '+orig.caseNo+' · '+revCmpMd(orig.visitDate)+' 面诊', title:name+' · 术前'};
+        if(same) put('pre', aid, ph); else if(x.part==='legacy' || partBase(x.part)===partBase(part)) other.push({col:'pre', label:(x.part==='legacy' ? '旧案件照片' : CONCERN_ANGLE[aid]||aid), ph:ph});
+      });
+    });
+    all.filter(function(x){ return x.id!==c.id && x.linkedCase && x.linkedCase.caseId===orig.id; }).sort(function(a, b){ return String(a.visitDate||'').localeCompare(String(b.visitDate||'')); }).forEach(function(x){
+      (x.recovery||[]).filter(function(r){ return r.name===name; }).forEach(function(r){
+        Object.keys(r.photos||{}).forEach(function(aid){ put('post', aid, {name:r.photos[aid].name, srcId:x.id, srcNo:x.caseNo, srcText:'来自 '+x.caseNo+' · '+revCmpMd(x.visitDate)+' 术后来访', title:name+' · 术后恢复 '+revCmpMd(x.visitDate), date:x.visitDate}); });
+      });
+    });
+  }
+  var m = (c.revisitMedia||[]).filter(function(y){ return y.name===name; })[0];
+  if(m) Object.keys(m.photos||{}).forEach(function(aid){ put('now', aid, {name:m.photos[aid].name, srcId:c.id, srcNo:c.caseNo, srcText:'本次复诊', title:name+' · 本次复诊', self:true}); });
+  return {rows:rows, other:other};
+}
+function revCmpTile(c, ph){
+  var link = (!ph.self && revCmpSrcCanOpen(c, ph.srcId)) ? '<a href="#" class="info-link" style="font-size:12px;" onclick="revCmpGo(\''+(c.clinicId||'')+'\',\''+ph.srcId+'\');return false;">'+cesc(ph.srcText)+'</a>' : '<span style="font-size:12px;color:var(--muted);">'+cesc(ph.srcText)+'</span>';
+  return '<div style="flex:0 0 112px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;background:#fff;"><div style="height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--sage);word-break:break-all;text-align:center;" onclick="revCmpZoom(\''+String(ph.title).replace(/'/g,"\\'")+'\',\''+String(ph.name).replace(/'/g,"\\'")+'\')">'+cesc(ph.name)+'</div><div style="line-height:1.35;margin-top:3px;">'+link+'</div></div>';
+}
+function revCmpCell(c, list){
+  return list.length ? '<div style="display:flex;gap:6px;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px;">'+list.map(function(p){ return revCmpTile(c, p); }).join('')+'</div>' : '<span style="color:var(--muted);">—</span>';
+}
+function revCmpHtml(c){
+  if(!isRevEval(c) || !(c.followProjects||[]).length) return '';
+  var all = revCmpCasesOf(c), orig = revCmpOrig(c, all);
+  var grid = 'display:grid;grid-template-columns:96px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start;';
+  var groups = (c.followProjects||[]).map(function(name){
+    var d = revCmpCollect(c, name, all), key = c.id+'|'+name, open = !(key in REVCMP_OPEN) || REVCMP_OPEN[key];
+    var rows = d.rows.filter(function(r){ return r.pre.length || r.post.length || r.now.length; });
+    var body = '<div style="'+grid+'font-size:12px;font-weight:700;color:var(--slate2);padding:6px 0;border-bottom:1px solid var(--border2);"><span>角度</span><span>术前（原面诊）</span><span>术后恢复（历次）</span><span>本次复诊</span></div>'+
+      rows.map(function(r){ return '<div style="'+grid+'padding:8px 0;border-bottom:1px solid var(--border2);"><span style="font-size:12px;font-weight:700;">'+cesc(r.label)+'</span>'+revCmpCell(c, r.pre)+revCmpCell(c, r.post)+revCmpCell(c, r.now)+'</div>'; }).join('');
+    if(d.other.length) body += '<div style="margin-top:10px;font-size:12px;font-weight:700;">其他照片</div>'+d.other.map(function(o){ var col = {pre:'术前（原面诊）', post:'术后恢复', now:'本次复诊'}[o.col]; return '<div style="'+grid+'padding:6px 0;border-bottom:1px solid var(--border2);"><span style="font-size:12px;">'+cesc(o.label)+'</span><span style="grid-column:2 / span 3;font-size:12px;color:var(--muted);">'+col+'</span><span style="grid-column:2 / span 3;display:flex;">'+revCmpTile(c, o.ph)+'</span></div>'; }).join('');
+    if(!rows.length && !d.other.length) body += '<div style="font-size:12px;color:var(--muted);padding:8px 0;">这个项目还没有任何照片</div>';
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 14px;margin-top:10px;background:#fff;"><div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="REVCMP_OPEN[\''+key.replace(/'/g,"\\'")+'\']='+(open ? 'false' : 'true')+';revCmpRefresh();"><b style="font-size:13px;">'+cesc(name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(followItemPart(name)).label)+'</span></b><span style="font-size:12px;color:var(--muted);">'+(open ? '收起 ▴' : '展开 ▾')+'</span></div>'+(open ? '<div style="margin-top:6px;">'+body+'</div>' : '')+'</div>';
+  }).join('');
+  return '<div class="revcmp"><div style="font-size:12px;color:var(--muted);">前后对比（投屏显示：照片只存在原案件 / 术后来访案件，这里只看）'+(orig ? ' · 接续 '+cesc(orig.caseNo) : '')+'</div>'+groups+'</div><!--/revcmp-->';
+}
+function revCmpRefresh(){
+  try{
+    if(typeof isKrAccount==='function' && isKrAccount()){ if(typeof krRenderCaseDetail==='function') krRenderCaseDetail(); }
+    else { var c = getCurrentCase(); if(c) renderCaseBody(c); }
+  }catch(e){}
+}
