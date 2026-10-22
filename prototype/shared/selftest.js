@@ -2899,7 +2899,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(!dir){ krRvAuth(false); alerts.length = 0; krRecOpenModal('manual'); ST.ok(alerts.some(function(m){ return /授意/.test(m); }), '室长代录评估内容也要先勾授意'); krRvAuth(true); }
       /* 发送不需要授权：拿掉授意后仍然可以发送（结论由评估带过来） */
       if(!dir) krRvAuth(true); krSetRecoveryResult('ok'); Store.mutateClinic(cid, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.revAuth = null; }); /* 授意只管录结论 / 录入；发送时不看授意 */
-      var hs = krTabConsult(gc()); ST.ok(/krSubmitReport\(\)/.test(hs) && !/disabled[^>]*发送复诊评估结果/.test(hs), '发送复诊评估结果不需要授权');
+      var hs = krTabConsult(gc()); if(!dir) ST.ok(/krSubmitReport\(\)/.test(hs) && !/disabled[^>]*发送复诊评估结果/.test(hs), '发送复诊评估结果不需要授权（只有 KR 室长发送，院长没有发送块）'); else ST.ok(!/krSubmitReport\(\)/.test(hs), '院长没有发送块');
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
