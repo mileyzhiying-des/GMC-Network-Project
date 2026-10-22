@@ -205,7 +205,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     var c1 = ST.newRes('A6'); ST.arrive(c1); ST.materials(c1, {consult:false}); noPurchaseThisTime(); ST.ok(isEnded(c1), '前一个案件应已结束');
     var c2 = ST.newRes('A6', {phone:clientPhoneOf(c1.name)}); ST.arrive(c2); ST.materials(c2, {consult:false, link:{caseId:c1.id, reason:'术后管理'}});
     ST.ok(c2.linkedCase && c2.linkedCase.caseId===c1.id, '应关联上一个案件'); ST.ok(ST.hasLog(c2, /关联之前案件/), '缺关联记录');
-    ST.ok(showRelatedTab(c2) && !showRelatedTab(c1), '只有往前关联的案件有关联 tab');
+    ST.ok(!showRelatedTab(c2) && !showRelatedTab(c1) && /关联案件/.test(basicFourHtml(getCurrentCase()&&getCurrentCase().id===c2.id ? c2 : c2, true)), '独立的关联案件 tab 已拿掉（CMD-1022-05）：关联案件改成基础资料第一块');
   });
 
 
@@ -3619,12 +3619,12 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(concernMissing(c).some(function(x){ return /要看的项目/.test(x); }), '没选项目算缺项');
       toggleFollowProject('隆鼻'); saveRevisitQuestion('右边还肿'); mockUploadRevisit('隆鼻','video'); concernPartDef(revisitMediaOf(c,'隆鼻').part).angles.forEach(function(a){ mockUploadRevisit('隆鼻', a.id); });
       ST.ok(concernMissing(c).length===0, '复诊想问的内容 + 项目的视频 / 照片填完就够：'+concernMissing(c).join('；'));
-      confirmMaterials(); c = getCurrentCase();
+      c.metaviewStatus = 'ready'; confirmMaterials(); c = getCurrentCase();
       ST.ok(c.materialsConfirmed && c.needsConsult===true && c.director==='KD1 院长' && c.consultStatus==='awaiting_payment' && c.consultKind==='复诊' && /【复诊/.test(c.concern) && /右边还肿/.test(c.concern), '复诊确认：院长沿用原案件、进面诊缴费、标复诊、面诊内容带项目：'+c.director+'/'+c.consultStatus);
       ST.ok(/复诊/.test(consultFeeFormHtml(c)), '面诊费免除原因有「复诊」');
       /* 3 不面诊：术后恢复卡 + 本地管理两类 + 扣原案件 */
       window.GMC_NO_FOLLOWASK = true;
-      var c2 = ST.newRes('R86p', {phone:ph}); ST.arrive(c2); c2 = getCurrentCase(); setLinkedCase(prior.id); setNeedsConsult(false); h = materialsCardHtml(c2);
+      var c2 = ST.newRes('R86p', {phone:ph}); ST.arrive(c2); c2 = getCurrentCase(); c2.metaviewStatus = 'ready'; setLinkedCase(prior.id); setNeedsConsult(false); h = materialsCardHtml(c2);
       ST.ok(c2.linkedCase.reason==='术后管理' && h.indexOf('术后恢复（选填）')>-1 && h.indexOf('필수')<0 && concernMissing(c2).length===0, '不面诊：메타뷰 / 苦恼选填，有「术后恢复」卡');
       toggleRecoveryItem('隆鼻'); var rd = c2.recovery[0]; ST.ok(rd && rd.part && concernPartDef(rd.part).angles.length>0, '术后恢复：按项目对应部位的角度');
       concernPartDef(rd.part).angles.forEach(function(a){ mockUploadRecovery('隆鼻', a.id); });
@@ -3695,10 +3695,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 关联案件：选填 */
       var prior = ST.newRes('R88p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0]; prior.director = 'KD1 院长'; prior.hospitalId = caseHospitalId(prior); prior.procedureItems = [{origin:'KR', name:'隆鼻', done:true}];
       var f = ST.newRes('R88p', {phone:clientPhoneOf(prior.name)}); ST.arrive(f); f = getCurrentCase(); f.metaviewStatus = 'idle'; setLinkedCase(prior.id);
-      var fh = materialsCardHtml(f); ST.ok(/메타뷰（选填）/.test(fh) && fh.indexOf('메타뷰')<fh.indexOf('面诊需求') && !/메타뷰 <span/.test(fh), '关联案件：메타뷰（选填），在面诊需求上方');
-      setNeedsConsult(false); ST.ok(concernMissing(f).length===0, '关联案件不面诊：没 메타뷰 也能确认（缺项里没有 메타뷰）'); confirmMaterials(); ST.ok(f.materialsConfirmed, '关联案件不面诊：没 메타뷰 确认成功');
+      var fh = materialsCardHtml(f); ST.ok(/메타뷰 <span/.test(fh) && !/메타뷰（选填）/.test(fh) && fh.indexOf('메타뷰')<fh.indexOf('面诊需求'), '关联案件：메타뷰 必填（CMD-1022-05：每次到院都必填），在面诊需求上方');
+      setNeedsConsult(false); confirmMaterials(); ST.ok(!f.materialsConfirmed, '关联案件不面诊：没 메타뷰 不能确认（CMD-1022-05）'); closeMaterialsMissing(); f.metaviewStatus = 'ready'; confirmMaterials(); ST.ok(f.materialsConfirmed, '关联案件不面诊：메타뷰 有了才能确认');
       var f2 = ST.newRes('R88p', {phone:clientPhoneOf(prior.name)}); ST.arrive(f2); f2 = getCurrentCase(); f2.metaviewStatus = 'idle'; setLinkedCase(prior.id); setNeedsConsult(true); toggleFollowProject('隆鼻'); saveRevisitQuestion('x'); mockUploadRevisit('隆鼻','video'); concernPartDef(revisitMediaOf(f2,'隆鼻').part).angles.forEach(function(a){ mockUploadRevisit('隆鼻', a.id); });
-      confirmMaterials(); ST.ok(f2.materialsConfirmed && f2.needsConsult===true, '关联案件复诊：没 메타뷰 确认成功（选填）');
+      confirmMaterials(); ST.ok(!f2.materialsConfirmed, '关联案件复诊：没 메타뷰 不能确认（CMD-1022-05）'); closeMaterialsMissing(); f2.metaviewStatus = 'ready'; confirmMaterials(); ST.ok(f2.materialsConfirmed && f2.needsConsult===true, '关联案件复诊：메타뷰 有了才能确认');
     } finally { window.GMC_NO_FOLLOWASK = old; window.alert = oa; }
   });
 
@@ -3708,7 +3708,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       var prior = ST.newRes('R89p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0]; prior.director = 'KD1 院长'; prior.hospitalId = caseHospitalId(prior);
       prior.procedureItems = [{origin:'KR', name:'隆鼻', done:true}, {origin:'KR', name:'双眼皮', done:true}];
-      var c = ST.newRes('R89p', {phone:clientPhoneOf(prior.name)}); ST.arrive(c); c = getCurrentCase(); setLinkedCase(prior.id); setNeedsConsult(true);
+      var c = ST.newRes('R89p', {phone:clientPhoneOf(prior.name)}); ST.arrive(c); c = getCurrentCase(); c.metaviewStatus = 'ready'; setLinkedCase(prior.id); setNeedsConsult(true);
       var h = materialsCardHtml(c); ST.ok(h.indexOf('先选大类')<0 && !/苦恼 <span/.test(h) && h.indexOf('复诊想问的内容')>-1 && h.indexOf('这次要看的项目')<h.indexOf('复诊想问的内容'), '复诊：没有苦恼行（无部位选择），「复诊想问的内容」在「这次要看的项目」下面');
       toggleFollowProject('隆鼻'); toggleFollowProject('双眼皮'); h = materialsCardHtml(c);
       ST.ok((c.revisitMedia||[]).length===2 && (h.match(/上传视频/g)||[]).length===2, '勾两个项目 → 两张上传卡（各有视频 + 角度照片）');
@@ -3718,7 +3718,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(concernMissing(c).length===0, '填完无缺项');
       toggleFollowProject('隆鼻'); ST.ok(!(c.followProjects||[]).length && concernMissing(c).some(function(x){ return /要看的项目/.test(x); }), '一个项目都不选算缺项（已上传的先确认再移掉）');
       toggleFollowProject('隆鼻'); saveRevisitQuestion('右边还肿'); mockUploadRevisit('隆鼻','video'); ang.forEach(function(a){ mockUploadRevisit('隆鼻', a.id); });
-      confirmMaterials(); c = getCurrentCase();
+      c.metaviewStatus = 'ready'; confirmMaterials(); c = getCurrentCase();
       ST.ok(c.materialsConfirmed && c.consultKind==='复诊' && /右边还肿/.test(c.concern) && (c.concerns||[]).length===0 && c.photoUploaded && c.videoUploaded, '确认：复诊 / concern = 想问的内容 / 没有苦恼部位卡');
       ST.ok(caseAttachments(c).some(function(f){ return /复诊 · 隆鼻视频/.test(f.label); }) && caseAttachments(c).some(function(f){ return /复诊 · 隆鼻照片/.test(f.label); }), '按项目的视频 / 照片进附件');
       var bh = basicTabHtml(c); ST.ok(/复诊想问的内容/.test(bh) && /右边还肿/.test(bh) && /隆鼻/.test(bh), '确认后基础资料 tab：想问的内容 + 按项目的视频 / 照片');
@@ -3826,6 +3826,36 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/录入恢复评估/.test(h) && /评估结论/.test(h) && /krSetRecoveryResult/.test(h) && /等待院长复诊面诊/.test(h), '院长：录入恢复评估（语音 / 手动）+ 评估结论按钮可点');
     krSetRecoveryResult('treat'); ST.ok((gc().recoveryResult||{}).by===me.name && !gc().recoveryResult.proxy && /评估人：KD1/.test(krTabConsult(gc())) && !/室长代输入/.test(krTabConsult(gc())), '院长自己选：评估人 KD1，不标室长代输入');
     var v = krVault(cid, r.id, true); v.transcripts.push({id:'t9', ts:nowFullDt(), by:me.name, mode:'voice', text:'院长口述恢复评估'}); Store.touch(); ST.ok(/院长口述恢复评估/.test(krTabConsult(gc())), '录入内容两边同一份（vault 共用）');
+  });
+
+  /* ---- CMD-1022-05 基础资料四块 ---- */
+  ST.def('R94a','CMD-1022-05（IN 分页）：基础资料四块 + 关联案件块（加 / 移除 / 被关联）+ 护照号｜有效期 + 메타뷰每次必填 + 一般案件原顺序不动',function(){
+    var o = ST.newRes('R94o'); ST.arrive(o); ST.materials(o, {consult:false}); o = CASE_ITEMS.filter(function(x){ return x.id===o.id; })[0];
+    var n = ST.newRes('R94n', {phone:clientPhoneOf(o.name)}); ST.arrive(n); n = getCurrentCase();
+    var h = basicFourHtml(n, false), ix = function(k){ return h.indexOf(k); };
+    ST.ok(ix('关联案件')>-1 && ix('关联案件')<ix('基本信息') && ix('基本信息')<ix('到访目的') && ix('到访目的')<ix('医美史') && ix('医美史')<ix('确认</button>'), '四块顺序：关联案件 → 基本信息 → 到访目的 → 医美史 → 确认按钮');
+    ST.ok((h.match(/基本信息/g)||[]).length===1 && (h.match(/medical/g)||[]).length===0, '基本信息只出现一次（没有重复卡）');
+    ST.ok(/添加关联/.test(h), 'IN 室长有［＋添加关联］');
+    REL_ADD_OPEN = true; renderCaseBody(n); relAdd(); n = getCurrentCase(); ST.ok((n.relLinks||[]).length===1 && n.relLinks[0].caseId===o.id, '添加关联：存进 relLinks'); ST.ok(ST.hasLog(n, /添加关联案件/), '添加关联记 Timeline');
+    ST.ok(/移除/.test(basicFourHtml(n, false)), '加进来的关联行可移除');
+    var hb = basicFourHtml(o, true); ST.ok(/被关联/.test(hb), '原案件的关联案件块列出被关联的案件（只读，没有移除）');
+    relRemove(o.id); n = getCurrentCase(); ST.ok(!(n.relLinks||[]).length && ST.hasLog(n, /移除关联案件/), '移除关联');
+    ST.ok(!/relatedTab|switchCaseTab\('related'\)/.test(caseTabsHtml(n)) && !showRelatedTab(n), '没有独立的「关联案件」tab');
+    var cl = clientByName(n.name); cl.passport = {no:'E1234567', issue:'2020-01-01', expiry:'2099-12-31'}; ST.ok(/E1234567｜有效期至 2099-12-31/.test(basicFourHtml(n, false)), '护照显示「号｜有效期至」');
+    ST.ok(/medicalHistory|医美史/.test(h) && /补登医美史/.test(h), '医美史独立一张卡，可补登');
+    n.metaviewStatus = 'checking'; n.followup = true; n.linkedCase = {caseId:o.id, reason:'术后管理'}; n.concerns = []; confirmMaterials();
+    ST.ok(!n.materialsConfirmed, '关联（术后 / 复诊）案件 메타뷰 没检测也不能确认（每次必填）'); n.followup = false; n.linkedCase = null;
+    var g = ST.newRes('R94g'); ST.arrive(g); var gh = materialsCardHtml(g); ST.ok(gh.indexOf('基本信息')>-1 && gh.indexOf('医美史')>-1, '直接调 materialsCardHtml 仍是原来的完整输出（旧调用 / 测试不受影响）');
+  });
+  ST.def('R94b','CMD-1022-05（KM1 分页，要先在 A1 分页跑 R94a 留下夹具；或自带 T2-R05 案件）：KR 基础资料四块 + 关联案件只读 + 只在 IN 端的原案件只看三样 + 页头第 N 次面诊',function(){
+    if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 分页里跑'); return; }
+    var r = krAllCases().filter(function(x){ return /R05|R94/.test(x.name) && x.c.relLinks && x.c.relLinks.length; })[0]; if(!r){ ST.ok(true, '没有带关联的夹具，跳过'); return; }
+    krShowCase(r.clinicId, r.id, {tab:'basic'}); var txt = document.getElementById('krcase-body').innerText, ix = function(k){ return txt.indexOf(k); };
+    ST.ok(ix('关联案件')>-1 && ix('关联案件')<ix('基本信息') && ix('基本信息')<ix('到访目的') && ix('到访目的')<ix('医美史'), 'KR 同一结构');
+    ST.ok(KR_CASE_TABS.every(function(t0){ return t0.key!=='related'; }), 'KR 没有独立关联案件 tab');
+    var lk = Store.withClinic(r.clinicId, function(){ return relLinksOf(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0])[0]; }); krRelToggle('b-'+lk.caseId); txt = document.getElementById('krcase-body').innerText;
+    ST.ok(/基础资料/.test(txt) && /做了什么项目/.test(txt) && /附件/.test(txt) && !/Rp\s?\d|₩\s?\d/.test(txt.slice(ix('关联案件'), ix('基本信息'))), '只在 IN 端的原案件：看得到基础资料 + 项目（不显示价格）+ 附件');
+    ST.ok(/第 \d+ 次面诊/.test(krVisitOrdinalHtml(r).replace(/<[^>]+>/g, '')) || krVisitOrdinalHtml(r)==='', '页头第 N 次面诊｜赴韩施术（是 0 的不显示）');
   });
 
 })();

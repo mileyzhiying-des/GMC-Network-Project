@@ -722,7 +722,7 @@ function clientBasicBlockHtml(c){
   var row = function(k, v, field){ return '<div class="case-field-row"><span class="fk">'+k+'</span><span style="flex-grow:1;font-size:13px;">'+v+'</span>'+(ed && field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</div>'; };
   return '<div style="margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);"><div class="info-heading" style="margin-bottom:4px;">基本信息 <span style="font-weight:400;font-size:12px;color:var(--muted);">来自客户档案，这里修改会同步到档案</span></div>'+
     row('姓名', aEscC(cl.name), 'name')+row('性别', aEscC(cl.gender||'—'), 'gender')+row('生日', aEscC(dobAgeText(cl.dob)), 'gender')+
-    row('病史 / 过敏史', historyMarkHtml(cl.history), 'history')+row('联系方式', aEscC(cl.phone||'—'), 'phone')+(passportVisible() ? row('护照', (function(){ var a = passportAlert(c), bad = a.level==='expired' || a.level==='before' || a.level==='none'; return '<span style="'+(bad ? 'color:#B3261E;font-weight:700;' : '')+'">'+(bad ? '⚠ ' : '')+aEscC(a.text)+'</span>'; })(), 'passport') : '')+'</div>';
+    row('病史 / 过敏史', historyMarkHtml(cl.history), 'history')+row('联系方式', aEscC(cl.phone||'—'), 'phone')+(passportVisible() ? row('护照', (function(){ var a = passportAlert(c), bad = a.level==='expired' || a.level==='before' || a.level==='none'; return '<span style="'+(bad ? 'color:#B3261E;font-weight:700;' : '')+'">'+(bad ? '⚠ ' : '')+aEscC(passportLineText(c, cl, a))+'</span>'; })(), 'passport') : '')+'</div>';
 }
 
 /* ---- 医美史（结构化，2026-10-06）：客户档案里一笔一笔的记录 {id, year, month, project, source:'客人自填'|'室长登记', addedAt, newCaseId} ----
@@ -2247,7 +2247,9 @@ function relatedSummaryHtml(c, other, reason, follower, origin){
   var row = function(k, v){ return '<div style="display:flex;gap:10px;font-size:12px;padding:3px 0;"><span style="color:var(--muted);min-width:96px;">'+k+'</span><span style="flex:1;color:var(--slate2);">'+v+'</span></div>'; };
   var statusTxt = caseStageProcText(other);
   var html = '';
-  if(reason==='复诊'){
+  if(reason==='关联' || reason==='被关联' || /^(后续)?接续/.test(reason||'')){ /* CMD-1022-05：轻量关联 / 被关联 / 接续：通用摘要（日期 / 面诊结论 / 项目 / 状态） */
+    html += row('日期', caseFirstDate(other))+row('面诊结论 / 报告摘要', other.reportReady ? (other.videoSummary||'已出诊疗方案') : '没有面诊诊疗方案')+row('使用的项目', caseProjectNames(other))+row('当前状态', statusTxt);
+  } else if(reason==='复诊'){
     html += row('日期', caseFirstDate(other))+row('面诊结论 / 报告摘要', other.reportReady ? (other.videoSummary||'已出诊疗方案') : '没有面诊诊疗方案')+row('使用的项目', caseProjectNames(other))+row('当前状态', statusTxt);
   } else if(reason==='术后管理'){
     if(other===follower){
@@ -2454,15 +2456,15 @@ function followupCardsHtml(c){
   } else if(c.needsConsult===false){
     body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼（选填）</span><div style="flex-grow:1;"><textarea placeholder="客人的苦恼…" oninput="saveConcernText(this.value)" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(concernTextOf(c))+'</textarea></div></div>'+recoveryCardHtml(c, src);
   } else body += '<div class="case-field-row" style="border-bottom:none;"><span class="fk"></span><div style="flex-grow:1;font-size:12px;color:var(--muted);">选择面诊需求后继续</div></div>';
-  return '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;justify-content:space-between;"><div class="info-heading" style="margin:0;">基本信息</div><a href="#" class="info-link" onclick="toggleBasicOpen();return false;">'+(c.basicOpen ? '收起' : '展开')+'</a></div>'+basic+'</div>'+
+  return (MAT_SPLIT ? '' : '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;justify-content:space-between;"><div class="info-heading" style="margin:0;">基本信息</div><a href="#" class="info-link" onclick="toggleBasicOpen();return false;">'+(c.basicOpen ? '收起' : '展开')+'</a></div>'+basic+'</div>')+
     '<div class="card" style="padding:22px 24px;margin-top:14px;"><div class="info-heading" style="margin-bottom:4px;">到访目的 <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">术后来访 · 关联 '+cesc(src ? src.caseNo : '')+'</span></div>'+
     guestConcernRowHtml(c)+
     '<div class="case-field-row"><span class="fk">关联案件</span><span style="flex-grow:1;font-size:13px;">'+cesc(src ? src.caseNo+' · '+caseStageProcText(src) : '')+'</span><a href="#" class="info-link" onclick="cancelFollowupLink();return false;">取消关联（走一般流程）</a></div>'+
-    '<div class="case-field-row"><span class="fk">메타뷰（选填）</span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+ /* CMD-1021-20：关联案件的 메타뷰 面诊 / 不面诊都选填，放面诊需求上方 */
+    '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+ /* CMD-1021-20：关联案件的 메타뷰 面诊 / 不面诊都选填，放面诊需求上方 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">面诊需求 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;gap:10px;flex-wrap:wrap;">'+btn(true,'需要院长面诊（复诊）')+btn(false,'不面诊')+'</div></div></div>'+
     (c.needsConsult===true ? wantDraftRowHtml(c) : '')+
     body+
-    '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div></div>';
+    (MAT_SPLIT ? (MAT_FOOT = matFootHtml(c), '') : matFootHtml(c))+'</div>';
 }
 /* 术后管理（本地管理 tab 上半）：客人所有案件里印尼的术后管理，做完记在原案件、扣原案件的印尼术后管理 */
 function followupCareCardHtml(c){
@@ -2660,6 +2662,9 @@ function concernExpectHtml(c){
   }
   return concernFormHtml(c); /* 希望预期在每张部位卡片里、苦恼说明下面（CMD-1019-04） */
 }
+/* CMD-1022-05：基础资料四块的外层 basicFourHtml() 调用 materialsCardHtml / followupCardsHtml 时把 MAT_SPLIT 设为真：这两个函数就不再画「基本信息」卡和医美史行，确认 / 取消接待按钮改存进 MAT_FOOT 由外层放在最后；不设时（旧调用、测试）输出和以前完全一样 */
+var MAT_SPLIT = false, MAT_FOOT = '';
+function matFootHtml(c){ return '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div>'; }
 function materialsCardHtml(c){
   syncDirectorChoice(c);
   if(followupOn(c)) return followupCardsHtml(c); /* CMD-1021-18：术后来访 / 复诊来访流程 */
@@ -2680,8 +2685,8 @@ function materialsCardHtml(c){
     ((ci0 && !ci0.overdue && !ci0.newHistory) ? '<div style="font-size:12px;color:var(--muted);margin-top:6px;">距原案件报告日期（'+ci0.reportDate+'）1个月内：可面诊（默认免除面诊费）/ 不面诊 / 沿用原诊疗方案</div>' : '');
 
   var metaRow = '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>';
-  return resumeBannerHtml(c)+
-    '<div class="card" style="padding:22px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>'+ /* CMD-1021-17：卡 1 基本信息 */
+  return (MAT_SPLIT ? '' : resumeBannerHtml(c))+
+    (MAT_SPLIT ? '' : '<div class="card" style="padding:22px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>')+ /* CMD-1021-17：卡 1 基本信息 */
     '<div class="card" style="padding:22px 24px;margin-top:14px;"><div class="info-heading" style="margin-bottom:4px;">到访目的</div>'+ /* 卡 2 到访目的 */
     guestConcernRowHtml(c)+
     linkRowHtml(c)+
@@ -2692,8 +2697,8 @@ function materialsCardHtml(c){
     directorRowHtml(c)+
     budgetRowHtml(c)+
     '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return f.label; }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>'+
-    caseBeautyRowHtml(c).replace('<div class="case-field-row"', '<div class="case-field-row" style="border-bottom:none;"', 1)+
-    '<div style="display:flex;justify-content:flex-end;align-items:center;gap:14px;margin-top:16px;"><span class="error-text" id="materials-error" style="display:'+(c.materialsError?'block':'none')+';">'+(c.materialsError||'')+'</span><button class="btn-outline" onclick="openCancelIntakeModal()">取消接待</button><button class="btn-primary" onclick="confirmMaterials()">确认</button></div>'+
+    (MAT_SPLIT ? '' : caseBeautyRowHtml(c).replace('<div class="case-field-row"', '<div class="case-field-row" style="border-bottom:none;"', 1))+
+    (MAT_SPLIT ? (MAT_FOOT = matFootHtml(c), '') : matFootHtml(c))+
     '</div>';
 }
 
@@ -3183,7 +3188,7 @@ function caseTabContentHtml(c){
   if(c.activeCaseTab==='related' && showRelatedTab(c)) return relatedTabHtml(c);
   if(c.activeCaseTab==='attachments' && c.materialsConfirmed) return attachmentsTabHtml(c);
   if(c.activeCaseTab==='timeline' && c.materialsConfirmed) return caseTimelineCardHtml(c);
-  return basicTabHtml(c);
+  return basicFourHtml(c, true);
 }
 
 
@@ -3214,7 +3219,7 @@ function supplementUpload(kind){
 function basicTabHtml(c){
   var metaviewText = c.metaviewStatus==='ready' ? '已检测到' : '待检测';
   var consultLabel = c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult===true ? '面诊' : '不需要面诊');
-  return '<div class="card" style="padding:18px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>'+ /* CMD-1021-17：基本信息 / 到访目的 两张卡 */
+  return (MAT_SPLIT ? '' : '<div class="card" style="padding:18px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>')+ /* CMD-1021-17：基本信息 / 到访目的 两张卡 */
     '<div class="card" style="padding:4px 24px;margin-top:14px;"><div class="info-heading" style="margin:14px 0 4px;">到访目的</div>'+
     guestConcernRowHtml(c)+
     suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+ /* CMD-1021-20：메타뷰 面诊 / 不面诊都显示 */
@@ -8553,4 +8558,86 @@ function coreSetStay(c, inD, outD, by, o){
   logCaseEvent(c, by, (oldT==='（空）' ? '填写在韩期间：' : '修改在韩期间：')+(oldT==='（空）' ? '' : oldT+' → ')+newT+(air ? '（'+air+'）' : '')+(short ? '（离境日比建议少 '+short+' 天）' : ''), '赴韩施术');
   if(!(o && o.initial)){ try{ pushKrNotif(caseKrHospital(c), by+(oldT==='（空）' ? ' 填写了 ' : ' 修改了 ')+c.name+'（'+(c.caseNo||'')+'）的在韩期间：'+(oldT==='（空）' ? '' : oldT+' → ')+newT, {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'stay'}); }catch(e){} }
   return {ok:true, changed:true};
+}
+
+
+/* ================= CMD-1022-05 基础资料四块：关联案件 / 基本信息 / 到访目的 / 医美史 =================
+   外层函数 basicFourHtml() 拼四块，「到访目的」仍由原来的 materialsCardHtml / followupCardsHtml / basicTabHtml 画（内部不动，只靠 MAT_SPLIT 开关省掉它们自带的基本信息卡、医美史行和按钮）。
+   关联 = 轻量参考（只是可点开的链接，不带资料、不改流程）：旧的单个 c.linkedCase 照旧读取（95 处引用不动），新增的关联行存 c.relLinks=[{caseId, by, at}]（可多个，只有 IN 室长能加 / 移除）；
+   接续行读 c.resumeFrom={caseId, type}（由 CMD-1022-06 写入，这里先只显示）。 */
+function relLinksOf(c){
+  var out = [];
+  if(c.linkedCase && c.linkedCase.caseId) out.push({caseId:c.linkedCase.caseId, reason:c.linkedCase.reason||'关联', auto:c.linkedCase.auto, kind:'legacy'});
+  (c.relLinks||[]).forEach(function(l){ if(!out.some(function(x){ return x.caseId===l.caseId; })) out.push({caseId:l.caseId, reason:'关联', kind:'rel', by:l.by, at:l.at}); });
+  if(c.resumeFrom && c.resumeFrom.caseId) out = out.filter(function(x){ return x.caseId!==c.resumeFrom.caseId; });
+  return out;
+}
+/* 谁关联 / 接续了本案件（只读，显示在原案件的关联案件块里） */
+function relBackOf(c){
+  return CASE_ITEMS.filter(function(x){ return x.id!==c.id && x.name===c.name; }).map(function(x){
+    if(x.resumeFrom && x.resumeFrom.caseId===c.id) return {c:x, label:'后续接续'+(x.resumeFrom.type ? ' · '+x.resumeFrom.type : '')};
+    if(relLinksOf(x).some(function(l){ return l.caseId===c.id; })) return {c:x, label:'被关联'};
+    return null;
+  }).filter(Boolean);
+}
+function relCandidates(c){
+  var have = {}; relLinksOf(c).forEach(function(l){ have[l.caseId] = 1; }); if(c.resumeFrom && c.resumeFrom.caseId) have[c.resumeFrom.caseId] = 1;
+  return clientPriorCases(c).filter(function(x){ return !have[x.id]; });
+}
+var REL_ADD_OPEN = false;
+function relatedBlockHtml(c){
+  var canEdit = canDo('work') && !isEnded(c) && !c.krVisit;
+  var rows = '';
+  var srcOf = function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; };
+  if(c.resumeFrom && c.resumeFrom.caseId){ var rs = srcOf(c.resumeFrom.caseId); if(rs) rows += relatedEntryHtml(c, rs, {reason:'接续 · '+(c.resumeFrom.type||'')}, c, rs, 'r-'+rs.id); }
+  relLinksOf(c).forEach(function(l){
+    var o = srcOf(l.caseId); if(!o) return;
+    var ent = relatedEntryHtml(c, o, {reason:l.reason, auto:l.auto}, c, o, 'b-'+o.id);
+    rows += (canEdit && l.kind==='rel') ? '<div style="display:flex;align-items:flex-start;gap:8px;"><div style="flex:1;min-width:0;">'+ent+'</div><a href="#" class="info-link" style="padding-top:12px;" onclick="relRemove(\''+o.id+'\');return false;">移除</a></div>' : ent;
+  });
+  relBackOf(c).forEach(function(b){ rows += relatedEntryHtml(c, b.c, {reason:b.label}, b.c, c, 'f-'+b.c.id); });
+  var cand = canEdit ? relCandidates(c) : [];
+  if(!rows && !cand.length) return '';
+  var add = '';
+  if(canEdit && cand.length){
+    add = REL_ADD_OPEN
+      ? '<span style="display:inline-flex;gap:6px;align-items:center;"><select id="rel-add-sel" style="padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;">'+cand.map(function(x){ return '<option value="'+x.id+'">'+x.caseNo+' · '+caseStageProcText(x)+'</option>'; }).join('')+'</select><button class="btn-primary" style="padding:4px 12px;font-size:12px;" onclick="relAdd()">添加</button><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="relAddToggle()">取消</button></span>'
+      : '<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="relAddToggle()">＋ 添加关联</button>';
+  }
+  return '<div class="card" style="padding:14px 24px;margin-bottom:14px;"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><div class="info-heading" style="margin:0;">关联案件 <span style="font-weight:400;font-size:12px;color:var(--muted);">只是参考链接，不带资料、不改流程'+(canEdit ? '' : '；只读')+'</span></div>'+add+'</div>'+
+    (rows || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">—</div>')+'</div>';
+}
+function relAddToggle(){ REL_ADD_OPEN = !REL_ADD_OPEN; var c = getCurrentCase(); if(c) renderCaseBody(c); }
+function relAdd(){
+  var c = getCurrentCase(), sel = document.getElementById('rel-add-sel'); if(!c || !sel || !sel.value || !canDo('work')) return;
+  var o = CASE_ITEMS.filter(function(x){ return x.id===sel.value; })[0]; if(!o) return;
+  c.relLinks = c.relLinks||[]; if(relLinksOf(c).some(function(l){ return l.caseId===o.id; })) return;
+  c.relLinks.push({caseId:o.id, by:ME_NAME, at:nowFullDt()});
+  logCaseEvent(c, actingName(), '添加关联案件 '+o.caseNo+'（仅参考）'); REL_ADD_OPEN = false;
+  buildCaseLog(c); renderCaseBody(c);
+}
+function relRemove(caseId){
+  var c = getCurrentCase(); if(!c || !canDo('work')) return;
+  var o = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0];
+  c.relLinks = (c.relLinks||[]).filter(function(l){ return l.caseId!==caseId; });
+  logCaseEvent(c, actingName(), '移除关联案件 '+(o ? o.caseNo : caseId));
+  buildCaseLog(c); renderCaseBody(c);
+}
+/* 护照一行：「号｜有效期至」（可见范围照旧由调用处判断）；过期 / 施术前到期另加红字提醒 */
+function passportLineText(c, cl, a){
+  a = a || passportAlert(c); if(a.level==='none') return a.text;
+  var p = passportOf(cl || clientByName(c.name));
+  return p.no+'｜有效期至 '+p.expiry+((a.level==='expired' || a.level==='before') ? '　'+a.text.replace(/（.*$/, '') : '');
+}
+function beautyCardHtml(c){
+  var cl = clientByName(c.name); if(!cl) return '';
+  var model = {mode:'IN', name:c.name, cl:cl, cases:CASE_ITEMS.filter(function(x){ return x.name===c.name; }), openCase:function(o){ return "openCaseDetail('"+o.id+"')"; }, addOnclick:isEnded(c) ? '' : "BEAUTY_ADD_KR=null;openBeautyAdd('"+c.id+"')"};
+  return '<div class="card" style="padding:18px 24px;margin-top:14px;">'+cliHistoryHtml(model)+'</div>';
+}
+function basicFourHtml(c, confirmed){
+  var core = '', foot = '';
+  MAT_SPLIT = true; MAT_FOOT = '';
+  try{ core = confirmed ? basicTabHtml(c) : materialsCardHtml(c); foot = MAT_FOOT; }finally{ MAT_SPLIT = false; MAT_FOOT = ''; }
+  var basic = '<div class="card" style="padding:22px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>';
+  return (confirmed ? '' : resumeBannerHtml(c))+relatedBlockHtml(c)+basic+core+beautyCardHtml(c)+foot; /* 接续提示条仍放最上面 */
 }

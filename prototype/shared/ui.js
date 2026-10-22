@@ -1037,7 +1037,7 @@ function saveBeautyAdd(){
     var kr = BEAUTY_ADD_KR, who = accountLabel(currentAccountId()), done = false;
     Store.mutateClinic(kr.clinicId, function(){ var cl0 = clientByName(kr.name); if(!cl0) return false; addBeautyRecord(cl0, {year:y, month:m, day:dd, project:project, source:'室长登记', caseId:null, newCaseId:null}); cl0.timeline.push({stage:'基础信息修改', actor:who, actorId:currentAccountId(), action:'补登医美史：'+ymText+' '+project+'（KR 登记）', dt:nowFullDt(), kind:'plain'}); done = true; return true; });
     if(!done){ bad('没有找到这位客户的档案'); return; }
-    closeBeautyAdd(); BEAUTY_ADD_KR = null; if(typeof krRenderClientDetail==='function') krRenderClientDetail(); return;
+    closeBeautyAdd(); BEAUTY_ADD_KR = null; if(typeof krRenderCaseDetail==='function' && typeof CURRENT_PAGE_ID!=='undefined' && CURRENT_PAGE_ID==='kr-casedetail') krRenderCaseDetail(); else if(typeof krRenderClientDetail==='function') krRenderClientDetail(); return; /* CMD-1022-05：KR 案件页基础资料里补登后留在案件页 */
   }
   var c = BEAUTY_ADD_CASE ? CASE_ITEMS.filter(function(x){ return x.id===BEAUTY_ADD_CASE; })[0] : null;
   var name = c ? c.name : document.getElementById('detail-name').textContent, cl = clientByName(name);
@@ -1671,7 +1671,7 @@ function renderCaseBody(c){
       '</div>'+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>';
     return;
   }
-  if(!c.materialsConfirmed){ el.innerHTML = refundServiceBarHtml(c)+materialsCardHtml(c)+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>'; return; } /* 基础资料确认前没有 tab，Timeline 仍挂在下面 */
+  if(!c.materialsConfirmed){ el.innerHTML = refundServiceBarHtml(c)+basicFourHtml(c, false)+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>'; return; } /* 基础资料确认前没有 tab，Timeline 仍挂在下面 */
   normalizeCaseTab(c);
   el.innerHTML = caseTabsHtml(c) + (c.activeCaseTab==='basic' ? refundServiceBarHtml(c) : '') + caseTabContentHtml(c);
 }
@@ -1760,7 +1760,7 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var missing = [];
-  if(!c.followup && c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1021-20：一般案件 메타뷰 必填（面诊 / 不面诊都要）；关联案件（术后 / 复诊）选填 */
+  if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1022-05：메타뷰 每次到院都必填（一般 / 复诊 / 术后 / 接续都一样），取代 CMD-1020-20 / 21 的「关联案件选填」 */
   concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
@@ -1812,7 +1812,7 @@ function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.loc
 
 function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0; }
 
-function showRelatedTab(c){ return !!(c.linkedCase && c.linkedCase.caseId); } /* 只有往前关联的案件才有关联案件 tab */
+function showRelatedTab(c){ return false; /* CMD-1022-05：独立的「关联案件」tab 拿掉，改成基础资料第一块（relatedBlockHtml） */ } /* 只有往前关联的案件才有关联案件 tab */
 
 /* ---- 案件终态（2026-10-02·六）：对话房整理进附件（对话记录（文本）+ 📁 里文件的链接，不复制文件；录像和AI文本本来就在面诊资料附件里），然后删除房间，
    对话抽屉里不再出现；作废的案件没有房间 ---- */
