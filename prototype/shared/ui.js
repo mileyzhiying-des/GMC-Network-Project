@@ -2286,7 +2286,7 @@ function openEndCase(){
   var c = getCurrentCase(); if(!c || !canEndCase(c)) return;
   END_CASE = {caseId:c.id, choice:{}, amt:{}, reason:'', note:''};
   /* CMD-1022-15：［客人离店］——系统先判断：没有剩下的项目（都做完、都付清）→ 直接离店并结束案件，不跳弹窗；还有没做完 / 没付款的 → 弹窗（列出剩下的项目、要选原因） */
-  var left = endCaseRows(c).filter(function(r){ return !r.info; });
+  var left = endCaseRows(c); /* 含「面诊还在等报告」这类只告知的行：这也算没做完，要弹窗选原因 */
   if(!left.length && !closeBlockers(c).length){ END_CASE.reason = '客人离店'; confirmEndCase(); return; }
   renderEndCase();
 }

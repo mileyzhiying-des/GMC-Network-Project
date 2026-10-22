@@ -847,13 +847,13 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
 
   /* ================= G 手动结束案件 + 新结案规则（CMD-1013-16；开关关闭时这些情况不适用，会被跳过）================= */
   ST.endCase = function(c, choices, reason, amts, note){
-    ST.open(c); openEndCase(); if(!END_CASE) return false;
+    ST.open(c); openEndCase(); if(!END_CASE) return isEnded(c); /* CMD-1022-15：没有剩余项目时［客人离店］直接结案 */
     Object.keys(choices||{}).forEach(function(k){ END_CASE.choice[k] = choices[k]; }); Object.keys(amts||{}).forEach(function(k){ END_CASE.amt[k] = amts[k]; });
     END_CASE.reason = reason || '客人不做了'; END_CASE.note = note || ''; confirmEndCase(); return true;
   };
   ST.def('G1','面诊等报告时手动结束 → 仅出报告，KR 之后的诊疗方案仍进案件',function(){
     var c = ST.newRes('G1'); ST.arrive(c); ST.materials(c,{consult:true}); ST.payConsult(c); coreConfirmConsultTimes(c, todayStr(), '20:30', D(1)+' 05:00', ST.krBy);
-    ST.open(c); ST.ok(canEndCase(c) && /结束案件/.test(document.getElementById('case-status-bar').innerHTML), '付定金前应显示［结束案件］');
+    ST.open(c); ST.ok(canEndCase(c) && /客人离店/.test(document.getElementById('case-status-bar').innerHTML), '付定金前应显示［客人离店］（CMD-1022-15 改名）');
     openEndCase(); var rows = endCaseRows(c); ST.ok(rows.some(function(r){ return r.key==='consult'; }), '弹窗应列出「面诊未出报告 → 照样等报告」'); closeEndCase();
     ST.endCase(c, {}, '失联'); ST.ok(c.stage==='reportonly', '面诊费已缴、报告未出就结束应是仅出报告，实际 '+c.stage); ST.ok(ST.hasLog(c, /手动结束案件（付定金前，当时：面诊等报告）：失联/), '缺手动结束记录');
     /* KR 之后仍可发送诊疗方案 */
@@ -863,7 +863,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   });
   ST.def('G2','项目确认中手动结束',function(){
     var c = ST.newRes('G2'); ST.consultToReport(c); ST.open(c); ST.ok(canEndCase(c), '项目确认中应可结束');
-    ST.endCase(c, {}, '其他', null, '客人说再想想'); ST.ok(c.stage==='reportonly', '出了报告没做项目 → 仅出报告，实际 '+c.stage); ST.ok(ST.hasLog(c, /当时：项目确认中）：其他：客人说再想想/), '缺记录');
+    ST.endCase(c, {}, '其他', null, '客人说再想想'); ST.ok(c.stage==='reportonly', '出了报告没做项目 → 仅出报告，实际 '+c.stage); ST.ok(ST.hasLog(c, /当时：项目确认中）：客人离店/), '没有剩余项目 → 直接离店，记录原因「客人离店」（CMD-1022-15）');
   });
   ST.def('G3','本地没用完就手动结束（转持有 / 退款）',function(){
     var p = ST.localProj('LHALa peel');
@@ -3863,7 +3863,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var o = ST.newRes('R94o'); ST.arrive(o); ST.materials(o, {consult:false}); o = CASE_ITEMS.filter(function(x){ return x.id===o.id; })[0];
     var n = ST.newRes('R94n', {phone:clientPhoneOf(o.name)}); ST.arrive(n); n = getCurrentCase();
     var h = basicFourHtml(n, false), ix = function(k){ return h.indexOf(k); };
-    ST.ok(ix('关联案件')>-1 && ix('关联案件')<ix('基本信息') && ix('基本信息')<ix('到访目的') && ix('到访目的')<ix('医美史') && ix('医美史')<ix('确认</button>'), '四块顺序：关联案件 → 基本信息 → 到访目的 → 医美史 → 确认按钮');
+    ST.ok(ix('关联案件')>-1 && ix('关联案件')<ix('基本信息') && ix('基本信息')<ix('到访目的') && ix('到访目的')<ix('医美史') && ix('确认</button>')<ix('医美史'), '四块顺序：关联案件 → 基本信息 → 到访目的 → 确认按钮 → 医美史（CMD-1022-15：确认移到医美史上面）');
     ST.ok((h.match(/基本信息/g)||[]).length===1 && (h.match(/medical/g)||[]).length===0, '基本信息只出现一次（没有重复卡）');
     ST.ok(/添加关联/.test(h), 'IN 室长有［＋添加关联］');
     REL_ADD_OPEN = true; renderCaseBody(n); relAdd(); n = getCurrentCase(); ST.ok((n.relLinks||[]).length===1 && n.relLinks[0].caseId===o.id, '添加关联：存进 relLinks'); ST.ok(ST.hasLog(n, /添加关联案件/), '添加关联记 Timeline');
@@ -4015,7 +4015,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 没推荐 → 结束 */
       var m = ST.mkRevEval('R97m', src); ST.krEta(m); coreStartConsult(m, 'KM1 室长'); m.consultContentAt = nowFullDt(); m.recoveryResult = {result:'ok', by:'KM1 室长', proxy:true, at:nowFullDt(), auth:{by:'KM1 室长', at:nowFullDt()}};
       coreSubmitReport(m, {original:'x', zh:'恢复良好', items:[], overallNote:'', files:[], recLocal:'', sugKr:false}, 'KM1 室长'); m = getCurrentCase(); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; ST.open(m);
-      var mh = caseTabContentHtml((m.activeCaseTab='consult', m)); ST.ok(/没有推荐，可以结束案件/.test(mh) && !/根据推荐选本地项目/.test(mh) && /恢复正常/.test(mh) && !/revEvalEnd/.test(mh), '没推荐：只写提示「没有推荐，可以结束案件」，结果卡里没有结束按钮');
+      var mh = caseTabContentHtml((m.activeCaseTab='consult', m)); ST.ok(/没有推荐，可以让客人离店/.test(mh) && !/根据推荐选本地项目/.test(mh) && /恢复正常/.test(mh) && !/revEvalEnd/.test(mh), '没推荐：只写提示「没有推荐，可以结束案件」，结果卡里没有结束按钮');
       revEvalEnd(); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; ST.ok(isEnded(m) && m.endNote==='复诊评估结束' && m.stage==='closed' && /已结案/.test(caseStageProcText(m)) && /复诊评估结束/.test(caseStageProcText(m)), '结束案件 = 已结案 · 复诊评估结束（CMD-1022-09，不是仅出报告）');
       ST.ok(resumeCandidates(ST.newRes('R97z', {phone:clientPhoneOf(src.name)}), '接续面诊').every(function(x){ return x.id!==m.id; }), '结束的复诊评估案件不会被接续面诊选中');
       /* 不收费 + 统计 */
