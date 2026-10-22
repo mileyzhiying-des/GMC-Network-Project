@@ -3126,6 +3126,7 @@ function caseAttachments(c){
   if(c.videoUploaded) list.push({src:'基础资料', label:'视频', date:base}); }
   (c.revisitMedia||[]).forEach(function(m){ var n = Object.keys(m.photos||{}).length; if(m.video) list.push({src:'基础资料', label:'复诊 · '+m.name+'视频', date:base}); if(n) list.push({src:'基础资料', label:'复诊 · '+m.name+'照片（'+n+' 张）', date:base}); }); /* CMD-1021-21：复诊按项目的视频 / 照片进附件 */
   (c.recovery||[]).forEach(function(r){ var n = Object.keys(r.photos||{}).length; if(r.video) list.push({src:'基础资料', label:'术后恢复 · '+r.name+'视频', date:base}); if(n) list.push({src:'基础资料', label:'术后恢复 · '+r.name+'照片（'+n+' 张）', date:base}); }); /* CMD-1021-18：术后恢复照片进附件，KR 看得到 */
+  if(typeof isKrAccount==='function' && isKrAccount()) (c.procedureItems||[]).forEach(function(it){ var po = it.preOp; if(!po) return; var n = Object.keys(po.photos||{}).length; if(po.video) list.push({src:'KR · 术前照片', label:'术前 · '+it.name+'视频', date:base}); if(n) list.push({src:'KR · 术前照片', label:'术前 · '+it.name+'照片（'+n+' 张）', date:base}); }); /* CMD-1022-17：施术当天术前照片只有 KR 的案件附件看得到（IN 只在复诊评估的术前胶囊里看） */
   (c.linkedFiles||[]).forEach(function(f){ list.push({src:'基础资料', label:f.label, date:f.date||base}); });
   (c.manualAttachments||[]).forEach(function(f){ list.push({src:f.src||'基础资料', label:f.label, date:f.date||base}); });
   (c.consultFiles||[]).forEach(function(f){ list.push({src:'面诊资料', label:f.label, date:f.date||base}); });
@@ -5279,6 +5280,7 @@ function coreJudge(c, result, by, memo){
   memo = String(memo||'').trim();
   if(result!=='ok' && !memo) return false; /* 除"原方案不变"外 memo 必填 */
   c.krJudge = {result:result, settled:false, memo:memo, by:by};
+  if(result==='ok' || result==='changed') c.preOpReq = true; /* CMD-1022-17：评估可以手术之后，施术项目要先传术前照片才能［操作完成］（只对这之后评估的案件生效，旧案件不要求补拍） */
   logCaseEvent(c, by, '院长评估结果：'+KR_JUDGE_TEXT[result]+(memo ? '；原因：'+memo : ''));
   pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' '+KR_JUDGE_TEXT[result]+(memo ? ' / 原因：'+memo : ''), {caseId:c.id});
   return true;
@@ -5314,7 +5316,7 @@ function coreCannotReplace(c, names, byName, by, locals){
   names.forEach(function(n){ var o = (byName||{})[n] || {}; if(ok && !coreAddOnItem(c, n, by, {anesthesia:o.anesthesia, signed:o.signed, detail:o.detail})) ok = false; });
   locals.forEach(function(x){ if(ok && !coreAddOnItem(c, x.name, by, {local:x})) ok = false; }); /* 管理项目（KR 本地管理项目库，韩元，收费） */
   if(!ok){ pend.forEach(function(it){ delete it.swapped; delete it.replacedBy; }); return false; }
-  j.replaced = true; delete j.refundKind; /* 院长评估仍保留「不建议手术 + memo」，不改记为需要调整方案（CMD-1013-04 四·1） */
+  j.replaced = true; delete j.refundKind; c.preOpReq = true; /* CMD-1022-17：更换项目后可以手术，同样要传术前照片 */ /* 院长评估仍保留「不建议手术 + memo」，不改记为需要调整方案（CMD-1013-04 四·1） */
   coreDropCareOf(c, origNames, by); syncSurgeryBlock(c); /* CMD-1022-14：院长占用时间按实际项目合计重算 */
   logCaseEvent(c, by, '取消项目 → 更换为 '+allNames.join('、')+'（原项目 '+origNames.join('、')+'；评估仍是「不建议手术」；不另算差价，尾款按最终项目合计 − 已付定金）');
   syncSurgerySub(c); updateCaseStage(c);
@@ -5397,7 +5399,7 @@ function subKrPending(c){ return (c.subItems||[]).filter(function(s){ return s.p
 /* 按钮点了不能没反应：说明这一行为什么暂时不能［操作完成］（和 coreSubDone 的拒绝条件一一对应），空 = 能做 */
 function coreSubDoneBlock(c, id){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s) return '找不到这一行';
-  if(s.done) return '已经完成了'; if(!c.krBalancePaid) return '客人还没付清尾款'; if(s.place==='IN') return '回印尼做的术后管理由 IN 完成';
+  if(s.done) return '已经完成了'; if(!c.krBalancePaid) return '客人还没付清尾款'; var pg = (s.kind==='施术' || s.kind==='增加项目') ? preOpGate(c, s.kind==='施术' ? krNotStartedItems(c).filter(function(it){ return !it.krAddOn && !it.mgmtPlan && !it.deferUse && !krIsMgmtItemC(it); }).map(function(it){ return it.name; }) : [s.projectName]) : ''; if(pg) return pg; if(s.place==='IN') return '回印尼做的术后管理由 IN 完成';
   if(s.kind==='增加项目' && (c.procedureItems||[]).some(function(it){ return it.name===s.projectName && it.consentPending; })) return '麻醉同意书还没确认';
   if(s.kind==='术后管理记录'){ if(!s.simDay && s.date && s.date > todayStr()) return '还没到预约当天（'+s.date+'）'; var key = subCaseKey(s); if(!s.arrived && !(c.subItems||[]).some(function(x){ return x!==s && !x.skipped && subCaseKey(x)===key && (x.arrived || x.done); })) return '客人还没到店，请先按［客人到店］'; }
   return '';
@@ -5408,6 +5410,7 @@ function coreSubDone(c, id, by, itemNames, noClose){
   if(s.kind==='增加项目' && (c.procedureItems||[]).some(function(it){ return it.name===s.projectName && it.consentPending; })) return false; /* 麻醉同意书还没确认 */
   var picked = [];
   if(s.kind==='术后管理记录'){ if(!s.simDay && s.date && s.date > todayStr()) return false; if(!s.arrived) inheritVisitArrival(c, s); if(!s.arrived) return false; } /* 这次到院已到店（别的行到店了）→ 这一行继承到店，不再被拒绝 */ /* 术后管理：到当天 + ［客人已到］才能标完成（原型可用［模拟到当日］，CMD-1013-10 / 12） */
+  if((s.kind==='施术' || s.kind==='增加项目') && preOpGate(c, s.kind==='施术' ? krNotStartedItems(c).filter(function(it){ return !it.krAddOn && !it.mgmtPlan && !it.deferUse && !krIsMgmtItemC(it); }).map(function(it){ return it.name; }) : [s.projectName])) return false; /* CMD-1022-17：施术项目没传完术前照片不能完成 */
   if(s.kind==='施术'){ /* 施术行标完成 = 本次的施术项目都完成（增加项目各有自己的一行；不再弹「做了哪些项目」勾选，CMD-1013-10 一·4） */
     picked = krNotStartedItems(c).filter(function(it){ return !it.krAddOn && !it.mgmtPlan && !it.deferUse; }); /* Step 4 没勾的留在项目卡未使用 */
   } else if(s.kind==='增加项目'){ /* 增加项目：完成 = 这个加做的项目做完了 */
@@ -8444,9 +8447,37 @@ function coreItemNote(c, name, text, by){
   it.todayNote = String(text||'').trim(); it.todayNoteBy = by; it.todayNoteAt = nowFullDt(); logCaseEvent(c, by, '备注（'+name+'）：'+(it.todayNote || '清空')); return true;
 }
 function surgPlanItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.cancelled && !it.swapped && !it.krAddOn && !it.preBalanceAdd && !krIsMgmtItemC(it) && !it.deferUse; }); }
+
+/* ===== CMD-1022-17 施术当天术前照片 =====
+   院长评估「可以手术」（原方案不变 / 需要调整方案 / 不建议手术后更换项目）之后，到院卡里出现「术前照片」区，每个施术项目一组；
+   KR 室长按该项目的拍摄要求（角度、是否要视频；没另设就跟部位）上传，院长 / 代表院长只能看；没传完不能按这个施术的［操作完成］。
+   照片存在原案件的施术项目下（it.preOp = {video, photos:{角度 id:{name, by, at}}}），供 CMD-1022-18 复诊评估的「术前」胶囊投屏读取。
+   c.preOpReq 只在这个功能上线之后评估的案件里为真；旧案件没有这个标记 → 照常显示、不要求补拍，已完成的施术不受影响。 */
+function preOpItems(c){ return krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it) && !it.deferUse && (!it.done || it.preOp); }); }
+function preOpSpecOf(it){ return shootSpec(followItemPart(it.name), it.name); }
+function preOpMissing(c, it){
+  if(!c.preOpReq || !it || it.done || krIsMgmtItemC(it) || it.deferUse) return [];
+  var sp = preOpSpecOf(it), po = it.preOp || {}, miss = [];
+  if(sp.video && !po.video) miss.push('视频');
+  sp.angles.forEach(function(a){ if(!(po.photos||{})[a.id]) miss.push(a.label); });
+  return miss;
+}
+function preOpGate(c, names){
+  var bad = (names||[]).filter(function(n){ var it = (c.procedureItems||[]).filter(function(x){ return x.name===n && !x.cancelled && !x.swapped; })[0]; return it && preOpMissing(c, it).length; });
+  return bad.length ? '请先上传术前照片（'+bad.join('、')+'）' : '';
+}
+function coreSetPreOp(c, name, what, by){
+  if(!c.preOpReq || !c.hasArrived) return false;
+  var it = krActiveItems(c).filter(function(x){ return x.name===name && !krIsMgmtItemC(x) && !x.done; })[0]; if(!it) return false;
+  it.preOp = it.preOp || {video:null, photos:{}}; var rec = {by:by, at:nowFullDt()};
+  if(what==='video') it.preOp.video = Object.assign({name:'术前视频.mp4'}, rec); else { var a = preOpSpecOf(it).angles.filter(function(x){ return x.id===what; })[0]; if(!a) return false; it.preOp.photos[what] = Object.assign({name:'术前_'+what+'.jpg'}, rec); }
+  logCaseEvent(c, by, '上传术前照片：'+name+'（'+(what==='video' ? '视频' : (CONCERN_ANGLE[what] || what))+'）', '赴韩施术');
+  return true;
+}
 function coreSurgItemDone(c, rowId, name, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===rowId; })[0]; if(!s || s.kind!=='施术' || s.done || !c.krBalancePaid) return false;
   var it = surgPlanItems(c).filter(function(x){ return x.name===name && !x.done; })[0]; if(!it) return false;
+  if(preOpGate(c, [name])) return false; /* CMD-1022-17：没传完术前照片不能完成 */
   it.done = true; it.doneAt = nowFullDt(); logCaseEvent(c, by, 'KR标记施术项目已完成：'+name);
   if(!surgPlanItems(c).some(function(x){ return !x.done; })){ if(!coreSubDone(c, rowId, by, [], true)) return true; krCloseIfDone(c); }
   return true;

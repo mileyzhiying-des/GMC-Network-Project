@@ -2249,8 +2249,9 @@ function krTblRow(c, s, o){
   var timeable = !s.done && (s.kind==='术后管理记录' || s.kind==='施术') && !s.arrived;
   var ops = '';
   if(o.can && mode==='today'){
-    var okDone = !s.done && !anes && o.canDone; /* CMD-1020-16 四：待付款也能先做；麻醉同意书仍要先确认 */
-    ops += krBtn('操作完成', (s._item ? 'krSurgItemDone(\''+s.id+'\',\''+krEsc(s._item).replace(/'/g,'')+'\')' : o.doneFn+'(\''+s.id+'\')'), okDone, s.done ? '' : (anes ? '先确认麻醉同意书' : '客人已到院后才能操作'))+' ';
+    var poTip = ''; if(!s.done && (s._item || s.kind==='施术' || s.kind==='增加项目')){ var poNames = s._item ? [s._item] : (s.kind==='增加项目' ? [s.projectName] : krNotStartedItems(c).filter(function(it){ return !it.krAddOn && !it.mgmtPlan && !it.deferUse && !krIsMgmtItemC(it); }).map(function(it){ return it.name; })); poTip = preOpGate(c, poNames) ? '请先上传术前照片' : ''; } /* CMD-1022-17 */
+    var okDone = !s.done && !anes && o.canDone && !poTip; /* CMD-1020-16 四：待付款也能先做；麻醉同意书仍要先确认 */
+    ops += krBtn('操作完成', (s._item ? 'krSurgItemDone(\''+s.id+'\',\''+krEsc(s._item).replace(/'/g,'')+'\')' : o.doneFn+'(\''+s.id+'\')'), okDone, s.done ? '' : (poTip || (anes ? '先确认麻醉同意书' : '客人已到院后才能操作')))+' ';
     if(!s.done && s.holdUseOf) ops += krRowQtyStepper(c, s);
     var surgRow = !!s._item || s.kind==='施术' || (s.kind==='增加项目' && !s.visitKey && (function(){ var it0 = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName; })[0]; return !!it0 && !krIsMgmtItemC(it0); })()); /* CMD-1022-14：施术项目没有［今日取消］，只能改期 */
     if(!s.done && !surgRow) ops += '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krTodayCancel(\''+(s._item || (s.kind==='增加项目' && !s.visitKey) ? 'item' : 'row')+'\',\''+(s._item ? krEsc(s._item).replace(/'/g,'') : (s.kind==='增加项目' && !s.visitKey ? krEsc(s.projectName).replace(/'/g,'') : s.id))+'\',\''+krEsc(s._item || s.content).replace(/'/g,'')+'\')">今日取消</button>';
@@ -2370,7 +2371,7 @@ function krCaseCardHtml(c, cd){
     head = '<b style="font-size:14px;">'+visitWhen+'</b> <span style="color:var(--slate2);font-size:12px;">· '+krEsc(krVisitWhat(c, cd))+'</span>'+krVisitDirTag(c, cd); stTxt = {pending:'待到院', arrived:'已到院', done:'已完成'}[vsm]; stTone = vsm;
     if(open){
       var rowsOnly = function(m){ return krMainRowsHtml(c, m); };
-      if(g==='today') body = (st==='Arrived' ? krSurgeryFlowHtml(c) : rowsOnly('booked')); /* 到院前：只列这次预约的项目，［客人已到院］在标题行 */
+      if(g==='today') body = (st==='Arrived' ? krPreOpBlock(c)+krSurgeryFlowHtml(c) : rowsOnly('booked')); /* 到院前：只列这次预约的项目，［客人已到院］在标题行 */
       else body = rowsOnly(g==='booked' ? 'booked' : 'done');
       if(KR_SUBV.edit && can && st==='Confirmed' && !pendToday) body += krSurgHead(c);
     }
@@ -2571,6 +2572,22 @@ function krOpenSubCard(clinicId, caseId, subId){
   }
   krShowCase(clinicId, caseId, {tab:'items', sub:hl});
   setTimeout(function(){ var el = hl ? document.getElementById('kr-subrow-'+hl) : null; if(el && el.scrollIntoView) el.scrollIntoView({block:'center', behavior:'smooth'}); }, 80);
+}
+
+/* CMD-1022-17：到院卡里的「术前照片」区——每个施术项目一组（视频 + 按角度的照片格），KR 室长上传，院长 / 代表院长只能看；没传完的项目不能按［操作完成］ */
+function krPreOpUpload(name, what){ if(!krCan() || krIsDirector()) return; krMut(function(c){ return coreSetPreOp(c, name, what, ME_NAME); }); }
+function krPreOpBlock(c){
+  if(!c.preOpReq || c.krProcedureDone) return '';
+  var items = preOpItems(c); if(!items.length) return '';
+  var canUp = krCan() && !krIsDirector();
+  var cards = items.map(function(it){
+    var sp = preOpSpecOf(it), po = it.preOp || {}, nq = it.name.replace(/'/g,"\\'"), miss = preOpMissing(c, it), mark = it.done ? '' : ' <span style="color:var(--terracotta);">*</span>';
+    var vid = sp.video ? '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;"><span style="min-width:60px;font-size:12px;">视频'+mark+'</span>'+(po.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+krEsc(po.video.name)+'</span>'+(canUp && !it.done ? ' <a href="#" style="font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\'video\');return false;">重传</a>' : '') : (canUp && !it.done ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\'video\')">上传视频</button>' : '<span style="color:var(--muted);">—</span>'))+'</div>' : '';
+    var slots = sp.angles.map(function(a){ var f = (po.photos||{})[a.id];
+      return '<div style="width:118px;border:1px '+(f ? 'solid var(--sage)' : 'dashed var(--border)')+';border-radius:8px;padding:8px;text-align:center;background:'+(f ? 'var(--sage-bg)' : 'var(--surface2,#faf6ef)')+';"><div style="font-size:12px;font-weight:700;margin-bottom:6px;min-height:30px;text-wrap:balance;">'+krEsc(a.label)+'</div>'+(f ? '<div style="font-size:12px;color:var(--sage);word-break:break-all;">✓ '+krEsc(f.name)+'</div>'+(canUp && !it.done ? '<a href="#" style="font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\''+a.id+'\');return false;">重传</a>' : '') : (canUp && !it.done ? '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\''+a.id+'\')">上传</button>' : '<span style="color:var(--muted);font-size:12px;">—</span>'))+'</div>'; }).join('');
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;overflow:hidden;">'+krEsc(it.name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+krEsc(concernPartDef(followItemPart(it.name)).label)+'</span>'+(it.done ? ' <span style="font-weight:400;font-size:12px;color:var(--sage);">已完成</span>' : (miss.length ? ' <span style="font-weight:400;font-size:12px;color:#C26A1B;">还差：'+krEsc(miss.join('、'))+'</span>' : ' <span style="font-weight:400;font-size:12px;color:var(--sage);">✓ 已传完</span>'))+shootRefBtn(followItemPart(it.name), it.name)+'</div>'+vid+'<div style="display:flex;flex-wrap:wrap;gap:8px;">'+slots+'</div></div>';
+  }).join('');
+  return '<div class="kr-l2" style="margin-bottom:10px;"><div style="font-size:13px;font-weight:700;">术前照片 <span style="font-weight:400;font-size:12px;color:var(--muted);">'+(canUp ? '按拍摄要求上传，没传完不能按施术的［操作完成］' : '院长 / 代表院长只能看，由 KR 室长上传')+'</span></div>'+cards+'</div>';
 }
 function krSurgeryFlowHtml(c){
   var st = scheduleState(c), ub = krUnpaidBanner(c);

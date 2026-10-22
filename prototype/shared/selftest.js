@@ -95,8 +95,11 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   ST.krArrive = function(c){ if(c.krSchedule) c.krSchedule.simDay = true; /* CMD-1021-13：到院只有当天能标，测试用模拟到当日 */ var ok = coreMarkArrived(c, ST.krBy); ST.ok(scheduleState(c)==='Arrived', '标已到院后应为 Arrived'); return ok; };
   ST.krJudge = function(c, r, memo){ var ok = coreJudge(c, r, ST.krBy, memo || (r==='ok' ? '' : '（自测）')); ST.ok(ok, '评估 '+r+' 失败'); return ok; };
   ST.krPay = function(c){ var res = coreSettleBalance(c, ST.krBy); ST.ok((res && res.ok) || c.krBalancePaid, '付清尾款失败'); return res; };
+  /* CMD-1022-17：施术前要先把术前照片传完（评估可以手术之后才有这个要求）；测试里一键补齐所有施术项目的术前照片 */
+  ST.preOpAll = function(c){ preOpItems(c).forEach(function(it){ if(it.done) return; var sp = preOpSpecOf(it); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); }); };
   /* 今日项目全勾 → 结案（KR 页面的［已完成］+［是，结案］） */
   ST.krCloseToday = function(c){
+    ST.preOpAll(c);
     var ids = (c.subItems||[]).filter(function(s){ return (s.kind==='施术' || s.kind==='增加项目') && !s.done; }).map(function(s){ return s.id; });
     coreTodayDone(c, ids, ST.krBy); if(!c.krProcedureDone && c.endAsk) coreEndVisitToday(c, ST.krBy); /* CMD-1019-22：到院结束是人工确认——全部完成后弹窗问，这里模拟按［今日完成］ */
     return !!c.krProcedureDone; /* CMD-1015-17：施术完成 → 有术后管理进术后管理阶段，没有直接结案 */
@@ -1366,7 +1369,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(!!surg && !!held && surg.content.indexOf(lib.name)<0, '施术行不含管理项目');
     ST.ok(held.heldOver && held.qty===3 && krHoldOpen(c1), '付清尾款后管理项目就是在韩持有（剩 3 次）');
     ST.ok(coreMgmtUse(c1, held.name, ST.krBy) && held.holdUsed===1 && !held.holdDone, '［使用］扣 1 次');
-    ST.ok(coreTodayDone(c1, [surg.id]) && krHoldOpen(c1), '施术行标完成后，持有管理项目仍在（结案不等持有用完）');
+    ST.preOpAll(c1); ST.ok(coreTodayDone(c1, [surg.id]) && krHoldOpen(c1), '施术行标完成后，持有管理项目仍在（结案不等持有用完）');
   });
   ST.def('R16b','KR 诊疗方案：没有共同术后管理；可选范围分施术 / 管理；管理项目 项目（规格）× 次数 × 间隔（KM1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
@@ -1579,7 +1582,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(coreTodayPick(c, [plan[0].name], mgItem ? [mgItem.name] : [], ST.krBy).ok && c.todayPicked && !c.needTodayPick, '今日进行：勾 1 个施术 + 1 个管理项目');
     ST.ok(plan[1].deferUse && !plan[0].deferUse, '没勾的施术项目留在项目卡「未使用」（deferUse）'); var row = (c.subItems||[]).filter(function(s){ return s.kind==='施术'; })[0]; ST.ok(row && row.content==='施术：'+plan[0].name, '施术行只写勾的项目：'+(row&&row.content));
     ST.ok(!(c.subItems||[]).some(function(s){ return s.kind==='增加项目' && s.projectName===ex.name && !s.done; }) && c.procedureItems.filter(function(it){ return it.name===ex.name; })[0].deferUse, '没勾的在韩增加施术：今日行拿掉，留在项目卡');
-    ST.ok(coreSubDone(c, row.id, ST.krBy, []) && plan[0].done && !plan[1].done, '施术行完成只完成勾的项目');
+    ST.preOpAll(c); ST.ok(coreSubDone(c, row.id, ST.krBy, []) && plan[0].done && !plan[1].done, '施术行完成只完成勾的项目');
     /* 留两个到院中的案件给 KM1：A = 评估前；B = 评估「原方案不变」后、尾款前 */
     var A = toConfirmed('R26aA'); ST.krArrive(A); var B = toConfirmed('R26aB'); ST.krArrive(B); ST.krJudge(B, 'ok'); ST.ok(!B.krBalancePaid && !!B.krJudge, '案件 B 停在 Step 2'); localStorage.setItem('__R26', JSON.stringify({a:A.id, b:B.id}));
   });
@@ -2830,6 +2833,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(ok0 && /^完成：/.test(last.action) && last.action.indexOf('本次完成项目')<0, '完成记录不再写「（本次完成项目：…）」：'+last.action);
     ST.ok(tzRender('a ⟦u:⟦u:2026-11-16 02:30⟧⟧').indexOf('⟦')<0, '嵌套的时间标记也能显示成时间');
   });
+  ST.def('R103a','CMD-1022-17（A1 分页）：施术当天术前照片——评估可以手术后要求，没传完不能完成施术；传完可以；旧案件不要求；术后 / 管理到院不受影响',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = toConfirmed('R103a0'); ST.krArrive(c); ST.ok(!c.preOpReq, '评估前没有术前照片要求'); ST.krJudge(c, 'ok'); ST.ok(c.preOpReq===true, '评估「可以手术」后出现要求'); ST.krPay(c);
+    var surgN = c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && !x.cancelled; }).map(function(x){ return x.name; });
+    ST.ok(coreTodayPick(c, surgN, [], ST.krBy).ok, '今日进行：两个施术'); var it0 = c.procedureItems.filter(function(x){ return x.name===surgN[0]; })[0], sp0 = preOpSpecOf(it0);
+    ST.ok(preOpMissing(c, it0).length===sp0.angles.length+(sp0.video ? 1 : 0), '没上传时缺：全部角度'+(sp0.video ? ' + 视频' : ''));
+    var srow = (c.subItems||[]).filter(function(x){ return x.kind==='施术' && !x.done; })[0];
+    ST.ok(!coreSurgItemDone(c, srow.id, surgN[0], ST.krBy) && !it0.done, '没传完 → 不能完成这个施术'); ST.ok(/请先上传术前照片/.test(coreSubDoneBlock(c, srow.id)), '拒绝原因「请先上传术前照片」');
+    sp0.angles.forEach(function(a){ coreSetPreOp(c, surgN[0], a.id, ST.krBy); }); ST.ok(preOpMissing(c, it0).length===(sp0.video ? 1 : 0), '传完照片后只差视频（如果要求视频）');
+    if(sp0.video) coreSetPreOp(c, surgN[0], 'video', ST.krBy); ST.ok(preOpMissing(c, it0).length===0, '传完 → 不缺'); ST.ok(ST.hasLog(c, /上传术前照片：/), 'Timeline 记上传');
+    ST.ok(coreSurgItemDone(c, srow.id, surgN[0], ST.krBy) && it0.done, '传完 → 可以完成');
+    ST.ok(!coreSurgItemDone(c, srow.id, surgN[1], ST.krBy), '第二个施术没传完仍不能完成');
+    ST.ok(JSON.stringify(preOpItems(c).map(function(x){ return x.name; })).indexOf(surgN[0])>-1, '已完成的施术仍显示它的术前照片');
+    /* 旧案件：没有 preOpReq → 不要求 */
+    var o = toConfirmed('R103o0'); ST.krArrive(o); ST.krJudge(o, 'ok'); ST.krPay(o); o.preOpReq = false; var on = o.procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && !x.cancelled; }).map(function(x){ return x.name; });
+    ST.ok(coreTodayPick(o, on, [], ST.krBy).ok, '旧案件今日进行'); var orow = (o.subItems||[]).filter(function(x){ return x.kind==='施术' && !x.done; })[0]; ST.ok(coreSurgItemDone(o, orow.id, on[0], ST.krBy), '旧案件（没有术前照片要求）照常可以完成，不要求补拍');
+    /* 留一个夹具给 R103b（KM1 / KD1 分页）：到院、评估可以手术、付尾款、今日进行，术前照片一张没传 */
+    var f = toConfirmed('R103f0'); ST.krArrive(f); ST.krJudge(f, 'ok'); ST.krPay(f); var fn = f.procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && !x.cancelled; }).map(function(x){ return x.name; }); coreTodayPick(f, fn, [], ST.krBy);
+  });
+  ST.def('R103b','CMD-1022-17（KM1 / KD1 分页，要先在 A1 分页跑 R103a）：术前照片区——KM1 能上传、没传完［操作完成］灰掉写原因；KD1 / KO1 只能看；术后 / 管理到院不受影响；案件附件只 KR 看得到',function(){
+    if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 / KD1 分页里跑'); return; }
+    var r = krAllCases().filter(function(x){ return /R103f/.test(x.name) && x.c.preOpReq && x.c.hasArrived && !x.c.krProcedureDone; })[0]; if(!ST.ok(!!r, '没有 R103f 夹具（先在 A1 跑 R103a）')) return;
+    var me = currentAccount(), dir = isKrDirectorLike(me); krShowCase(r.clinicId, r.id, {tab:'items', here:true});
+    var h = krPreOpBlock(krFindCase(r.clinicId, r.id).c); ST.ok(/术前照片/.test(h) && /视角参考|KR 未提供视角参考/.test(h), '到院卡里有术前照片区（每个施术项目一组，带［视角参考］）');
+    ST.ok(dir ? !/krPreOpUpload\(/.test(h) : /krPreOpUpload\(/.test(h), dir ? '院长 / 代表院长只能看，没有上传按钮' : 'KR 室长有上传按钮');
+    var body = document.getElementById('krcase-body').innerText; ST.ok(/术前照片/.test(body), '案件页里看得到术前照片区');
+    ST.ok(/请先上传术前照片/.test(document.getElementById('krcase-body').innerText), '没传完时施术的［操作完成］灰掉，旁边写原因「请先上传术前照片」');
+    if(!dir){ var c0 = krFindCase(r.clinicId, r.id).c, nm = preOpItems(c0)[0].name; krMut(function(c){ return coreSetPreOp(c, nm, preOpSpecOf(preOpItems(c)[0]).angles[0].id, ME_NAME); }); ST.ok(/请先上传术前照片|还差/.test(document.getElementById('krcase-body').innerText), '没传完提示「还差」/ 原因'); }
+  });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = toConfirmed('R51a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid];
@@ -2839,7 +2871,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var surgN = c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && !x.cancelled; }).map(function(x){ return x.name; });
     ST.ok(coreTodayPick(c, surgN, [m.name], ST.krBy).ok, '今日进行：施术 + 持有管理项目');
     /* 二：施术都完成后，管理项目仍在到院卡里，到院不会自动结束 */
-    var ids = (c.subItems||[]).filter(function(s){ return (s.kind==='施术' || s.kind==='增加项目') && !s.done; }).map(function(s){ return s.id; }); coreTodayDone(c, ids, ST.krBy);
+    var ids = (c.subItems||[]).filter(function(s){ return (s.kind==='施术' || s.kind==='增加项目') && !s.done; }).map(function(s){ return s.id; }); ST.preOpAll(c); coreTodayDone(c, ids, ST.krBy);
     ST.ok(!c.krProcedureDone && !c.endAsk && todayOpenRows(c).some(function(x){ return x.held===m; }), '两个施术完成后：管理项目仍在到院卡里待做，到院没有自动结束、也没有弹窗');
     var K = typeof krEarlyHint==='function';
     /* 一 / 六：选了就能用，提前只灰字提示；按完成才扣，一次 2 次 */
