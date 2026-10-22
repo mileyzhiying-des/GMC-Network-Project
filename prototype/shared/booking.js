@@ -198,10 +198,10 @@ function bkMismatch(isMe){
   BK.step = BK_STEPS.indexOf('phone'); BK.err = bt('phone.other'); bkRender();
 }
 
-/* ---- 第 4 步：来访目的（五选一 + 想咨询的内容选填） ---- */
+/* ---- 第 4 步：来访目的（第一次来：面诊商谈 / 皮肤管理；来过的：再加 术后管理 / 复诊评估；+ 想咨询的内容选填）CMD-1022-15 ---- */
 function bkStepPurpose(){
   var f = BK.f;
-  var opts = VISIT_PURPOSES.map(function(p){ return '<div class="bk-radio'+(f.purpose===p?' on':'')+'" onclick="bkPickPurpose(\''+p+'\')"><span>'+(f.purpose===p?'◉':'○')+'</span>'+bt('purpose.'+p)+'</div>'; }).join('');
+  var opts = visitPurposesFor(!!BK.client).map(function(p){ return '<div class="bk-radio'+(f.purpose===p?' on':'')+'" onclick="bkPickPurpose(\''+p+'\')"><span>'+(f.purpose===p?'◉':'○')+'</span>'+bt('purpose.'+p)+'</div>'; }).join('');
   return bkFrame('s.purpose', opts+bkField(bt('purpose.note'), '<textarea rows="3" oninput="bkSet(\'note\',this.value)">'+bkH(f.note)+'</textarea>')+bkNav('bkNextStep()', true));
 }
 function bkPickPurpose(p){ BK.f.purpose = p; bkRender(); }

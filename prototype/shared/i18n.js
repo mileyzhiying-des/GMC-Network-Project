@@ -144,6 +144,7 @@ var BOOK_DICT = {
   'purpose.皮肤商谈':{id:'Konsultasi kulit', zh:'皮肤商谈'},
   'purpose.术后管理':{id:'Perawatan pasca tindakan', zh:'术后管理'},
   'purpose.复诊':{id:'Kontrol ulang', zh:'复诊'},
+  'purpose.复诊评估':{id:'Evaluasi kontrol ulang', zh:'复诊评估'},
   'purpose.皮肤管理':{id:'Perawatan kulit', zh:'皮肤管理'},
   'purpose.note':{id:'Hal yang ingin dikonsultasikan (opsional)', zh:'想咨询的内容（选填）'},
   /* 5 健康资料 */

@@ -657,7 +657,7 @@ function renderAddSlotBody(){
   if(ADD_SLOT_MODE==='existing'){
     var clientOptions = CLIENTS.map(function(c){ return '<option>'+c.name+'</option>'; }).join('');
     body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client">'+clientOptions+'</select></div>'+
-      purposeSelectHtml('add-slot-purpose')+
+      purposeSelectHtml('add-slot-purpose', true)+'<div class="field" style="margin-bottom:12px;"><label>想咨询的内容（选填）</label><textarea id="add-slot-note" rows="2" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;"></textarea></div>'+
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
@@ -680,7 +680,7 @@ function confirmAddSlotExisting(){
   closeAddSlotModal();
   var exm = pendingResvSameDay(name, ADD_SLOT_CONTEXT.date); /* CMD-1021-16 三：同一客人那天已有还没到的预约 → 合并，不再建第二个 */
   if(exm){ logCaseEvent(exm, actingName(), '室长代约同一天：'+ADD_SLOT_CONTEXT.time+'（'+purpose+'）已合并到这次预约（时间以原预约 '+exm.visitTime+' 为准）'); renderCalendar(); showToast('已合并', name+' · '+mergeNoteText(exm), null); return; }
-  createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose);
+  var nc = createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose); var nt = (document.getElementById('add-slot-note')||{}).value; if(nc && nt && nt.trim()) nc.visitNote = nt.trim(); /* CMD-1022-15：代约也能写想咨询的内容 */
   renderCalendar();
   showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
 }
@@ -1239,7 +1239,7 @@ function renderCaseStatusBar(c){
   } else if(c.stage==='booked' && c.subState==='waiting'){
     actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
-  if(canEndCase(c)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">结束案件</button>';
+  if(canEndCase(c)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">客人离店</button>'; /* CMD-1022-15：取代［结束案件］ */
   if(c.krTripEnded && !c.visitClosed && c.stage==='postcare' && typeof canDo==='function' && canDo('work')) actionBtn += '<button class="btn-outline" onclick="inCloseOpen()">结案</button>'; /* CMD-1021-16：IN［结案］（术后管理（印尼）阶段） */
   var ug = urgeInfo(c);
   if(ug) actionBtn += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#C26A1B;">'+ug.label+'</span><button class="btn-primary" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>';
@@ -1671,7 +1671,11 @@ function renderCaseBody(c){
       '</div>'+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>';
     return;
   }
-  if(!c.materialsConfirmed){ el.innerHTML = refundServiceBarHtml(c)+basicFourHtml(c, false)+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>'; return; } /* 基础资料确认前没有 tab，Timeline 仍挂在下面 */
+  if(!c.materialsConfirmed){ /* CMD-1022-15：接待页分两个 tab：基础资料 / Timeline（附件等其他 tab 仍要基础资料确认后才有） */
+    var rt = c.activeCaseTab==='timeline' ? 'timeline' : 'basic';
+    var rtabs = '<div class="tabs" style="margin-bottom:4px;"><span class="tab'+(rt==='basic' ? ' active' : '')+'" onclick="switchCaseTab(\'basic\')">基础资料</span><span class="tab'+(rt==='timeline' ? ' active' : '')+'" onclick="switchCaseTab(\'timeline\')">Timeline</span></div>';
+    el.innerHTML = rtabs+(rt==='timeline' ? caseTimelineCardHtml(c) : refundServiceBarHtml(c)+basicFourHtml(c, false)); return;
+  }
   normalizeCaseTab(c);
   el.innerHTML = caseTabsHtml(c) + (c.activeCaseTab==='basic' ? refundServiceBarHtml(c) : '') + caseTabContentHtml(c);
 }
@@ -1812,7 +1816,7 @@ function showKrTab(c){ return (!!c.projectsEnabled && !!c.reportReady && !isRevE
 function showProjectsTab(c){ return showKrTab(c); } /* 旧名称，指向赴韩施术 */
 function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.localMgmt && (c.localMgmt.batches||[]).length); }
 
-function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0; }
+function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0 || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理')); } /* CMD-1022-15：选了术后管理 → 本地管理 tab 出现（术后管理，来自原案件） */
 
 function showRelatedTab(c){ return false; /* CMD-1022-05：独立的「关联案件」tab 拿掉，改成基础资料第一块（relatedBlockHtml） */ } /* 只有往前关联的案件才有关联案件 tab */
 
@@ -2281,6 +2285,9 @@ function endCaseRows(c){
 function openEndCase(){
   var c = getCurrentCase(); if(!c || !canEndCase(c)) return;
   END_CASE = {caseId:c.id, choice:{}, amt:{}, reason:'', note:''};
+  /* CMD-1022-15：［客人离店］——系统先判断：没有剩下的项目（都做完、都付清）→ 直接离店并结束案件，不跳弹窗；还有没做完 / 没付款的 → 弹窗（列出剩下的项目、要选原因） */
+  var left = endCaseRows(c).filter(function(r){ return !r.info; });
+  if(!left.length && !closeBlockers(c).length){ END_CASE.reason = '客人离店'; confirmEndCase(); return; }
   renderEndCase();
 }
 function renderEndCase(){
@@ -2295,12 +2302,12 @@ function renderEndCase(){
     return '<div style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;"><div style="font-size:13px;font-weight:600;">'+r.title+'</div>'+opts+amt+'</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">没有未处理的项目。</div>';
   var reasons = END_REASONS.map(function(x){ return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin-right:14px;"><input type="radio" name="ec-reason" '+(st.reason===x ? 'checked' : '')+' onchange="END_CASE.reason=\''+x+'\';endCaseUpdateBtn()">'+x+'</label>'; }).join('');
-  ov.innerHTML = '<div class="modal-box" style="width:520px;max-height:84vh;overflow:auto;"><div style="font-size:15px;font-weight:700;margin-bottom:4px;">结束案件</div>'+
-    '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">客人中途不做了 / 有事要走。付定金之前才能手动结束；下面没处理完的要逐项选好，钱清了才能确定。</div>'+html+
+  ov.innerHTML = '<div class="modal-box" style="width:520px;max-height:84vh;overflow:auto;"><div style="font-size:15px;font-weight:700;margin-bottom:4px;">客人离店</div>'+
+    '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">客人要离店了，下面是还没处理完的项目。付定金之前才能离店结案；要逐项选好，钱清了才能确定。</div>'+html+
     '<div style="margin:12px 0 6px;font-size:13px;font-weight:600;">结束原因（必填）</div><div>'+reasons+'</div>'+
     '<input type="text" placeholder="补充说明（选「其他」时必填）" value="'+(st.note||'').replace(/"/g,'&quot;')+'" oninput="END_CASE.note=this.value;endCaseUpdateBtn()" style="width:100%;margin-top:8px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;">'+
     '<div id="ec-hint" style="font-size:12px;color:#C26A1B;margin-top:8px;"></div>'+
-    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="closeEndCase()">返回</button><button id="ec-ok" class="btn-primary" onclick="confirmEndCase()">确定结束</button></div></div>';
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="closeEndCase()">返回</button><button id="ec-ok" class="btn-primary" onclick="confirmEndCase()">确定离店</button></div></div>';
   ov.classList.add('open'); endCaseUpdateBtn();
 }
 function endCaseSet(key, val){ END_CASE.choice[key] = val; renderEndCase(); }

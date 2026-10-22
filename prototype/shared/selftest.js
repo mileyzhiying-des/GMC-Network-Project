@@ -4106,6 +4106,50 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/其他照片/.test(h) && h.indexOf('旧照片.jpg')>-1, 'KR：旧未分部位进其他照片');
     ST.ok(h.indexOf('revCmpGo(')>-1 || h.indexOf('来自')>-1, 'KR：来源文字');
   });
+  ST.def('R102a','CMD-1022-15（A1 分页）：来访目的 / 到店弹窗灰掉 / 接续类型多选 / 术后管理来自原案件 / 接待页两 tab / 确认按钮在医美史上面 / 客人离店',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var oa = window.alert, oc = window.confirm, onf = window.GMC_NO_FOLLOWASK; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+      /* 1 来访目的 */
+      ST.ok(VISIT_PURPOSES.indexOf('皮肤商谈')<0 && VISIT_PURPOSES.indexOf('复诊评估')>-1 && visitPurposesFor(false).join('|')==='面诊商谈|皮肤管理' && visitPurposesFor(true).join('|')==='面诊商谈|皮肤管理|术后管理|复诊评估', '来访目的：第一次来 2 个，来过的 4 个，没有皮肤商谈');
+      ST.ok(!/皮肤商谈/.test(purposeSelectHtml('x', true)) && /复诊评估/.test(purposeSelectHtml('x', true)) && !/术后管理/.test(purposeSelectHtml('x', false)), 'IN 代约选项同规则');
+      /* 夹具：原案件（赴韩已结束，还有印尼术后管理没做）+ 新到店 */
+      var src = ST.newRes('R102s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.krTripEnded = true; src.krProcedureDone = true; src.stage = 'closed'; src.visitClosed = true; src.hasArrived = true;
+      src.subItems = [{id:'r102x', no:src.caseNo+'-01', kind:'术后管理记录', date:D(5), time:'', content:'术后消肿管理（回印尼做）', place:'IN', projectName:'隆鼻', done:false}];
+      var n = ST.newRes('R102n', {phone:clientPhoneOf(src.name)}); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0]; ST.open(n); window.GMC_NO_FOLLOWASK = false; markArrived(); n = getCurrentCase();
+      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open'), '到店弹窗打开');
+      /* 2 灰掉规则：没有仅出报告 → 接续面诊灰；赴韩已结束 → 复诊评估 / 术后管理可选 */
+      fuSet('mode', 'link'); var h = ov.innerHTML;
+      ST.ok(/disabled[^>]*onchange="fuSet\('type','接续面诊'\)"/.test(h) && !/disabled[^>]*onchange="fuSet\('type','复诊评估'\)"/.test(h), '没有仅出报告的案件 → 接续面诊灰掉，其余可选');
+      /* 3 多选 */
+      fuSet('type', '复诊评估'); fuSet('type', '术后管理'); ST.ok((FU_ASK.types||[]).slice().sort().join('+')==='复诊评估+术后管理' || FU_ASK.type==='复诊评估', '复诊评估 + 术后管理可以都选（'+JSON.stringify(FU_ASK.types)+'）');
+      var both = (FU_ASK.types||[]).length===2; fuSet('type', '复诊评估'); ST.ok((FU_ASK.types||[]).join('+')==='术后管理', '可以只选一个（取消复诊评估后剩术后管理）'); fuSet('type', '术后管理'); ST.ok((FU_ASK.types||[]).length===1, '至少留一个');
+      fuSet('type', '复诊评估'); FU_ASK.sel = src.id; followupAskDone(true); n = getCurrentCase();
+      ST.ok(n.resumeFrom && n.resumeFrom.types.join('+')==='术后管理+复诊评估' && n.resumeFrom.type==='复诊评估', '确认后记录 types，主类型 = 复诊评估：'+JSON.stringify(n.resumeFrom));
+      var h2 = basicFourHtml(n, false); ST.ok(/toggleResumeType\('术后管理'\)/.test(h2) && /toggleResumeType\('复诊评估'\)/.test(h2), '到访目的里可改接续类型（确认之前）');
+      toggleResumeType('复诊评估'); n = getCurrentCase(); ST.ok(n.resumeFrom.types.join('+')==='术后管理' && n.needsConsult===false, '到访目的里取消复诊评估 → 只剩术后管理');
+      toggleResumeType('复诊评估'); n = getCurrentCase(); ST.ok(n.resumeFrom.types.length===2 && n.needsConsult===true, '再勾上 → 复诊评估 + 术后管理');
+      /* 5 接待页两 tab + 6 确认按钮位置 */
+      renderCaseBody(n); var bodyEl = document.getElementById('case-body').innerHTML; ST.ok(/switchCaseTab\('timeline'\)/.test(bodyEl) && />基础资料</.test(bodyEl) && !/info-heading[^>]*>Timeline/.test(bodyEl), '接待页有 基础资料 / Timeline 两个 tab，Timeline 不再挂在下面');
+      var fi = bodyEl.indexOf('取消接待'), bi = bodyEl.indexOf('医美史'); ST.ok(fi>-1 && (bi<0 || fi<bodyEl.lastIndexOf('医美史')), '［确认］［取消接待］在医美史上面');
+      switchCaseTab('timeline'); ST.ok(/Timeline|记录|到店/.test(document.getElementById('case-body').innerText), 'Timeline tab 内容');
+      switchCaseTab('basic');
+      /* 4 术后管理来自原案件：确认复诊评估后本地管理 tab */
+      n.materialsConfirmed = true; n.revisitEval = {at:nowFullDt(), by:'x'}; n.consultRequested = true; n.consultStatus = 'paid_waiting_kr';
+      ST.ok(showLocalTab(n), '选了术后管理 → 有本地管理 tab');
+      n.activeCaseTab = 'localmgmt'; var lm = caseTabContentHtml(n); ST.ok(lm.indexOf('术后管理（来自 '+src.caseNo+'）')>-1 && /术后消肿管理/.test(lm), '本地管理 tab：术后管理（来自 '+src.caseNo+'）列出原案件交给印尼还没做的');
+      /* 原预约目的 */
+      n.careFor = {caseId:src.id, keys:['k']}; ST.ok(/原预约目的：术后管理/.test(basicFourHtml(n, true)), '基础资料标出「原预约目的：术后管理」'); n.careFor = null;
+      /* 7 客人离店 */
+      var c7 = ST.newRes('R102e'); ST.materials(c7, {consult:false}); c7 = CASE_ITEMS.filter(function(x){ return x.id===c7.id; })[0]; ST.open(c7); window.GMC_NO_FOLLOWASK = true; if(c7.subState!=='arrived') markArrived(); c7 = getCurrentCase();
+      ST.ok(canEndCase(c7), '接待中的案件有［客人离店］'); var bar = document.getElementById('case-actions') ? document.getElementById('case-actions').innerHTML : ''; ST.ok(!/>结束案件</.test(document.body.innerHTML) , '没有［结束案件］字样的按钮');
+      openEndCase(); ST.ok(isEnded(c7) || c7.visitClosed, '没有剩下的项目 → 直接离店并结束案件，不跳弹窗');
+      var c8 = ST.newRes('R102f'); ST.materials(c8, {consult:true}); c8 = CASE_ITEMS.filter(function(x){ return x.id===c8.id; })[0]; ST.open(c8); if(c8.subState!=='arrived') markArrived(); c8 = getCurrentCase(); c8.consultStatus = 'awaiting_payment'; c8.consultRequested = true;
+      openEndCase(); var eo = document.getElementById('end-case-overlay'); ST.ok(eo && eo.classList.contains('open') && /客人离店/.test(eo.innerText) && /面诊费/.test(eo.innerText), '还有没付款的 → 弹窗，标题「客人离店」，列出剩下的项目');
+      closeEndCase();
+    }finally{ window.alert = oa; window.confirm = oc; window.GMC_NO_FOLLOWASK = onf; }
+  });
   ST.def('R99a','CMD-1022-12（IN 分页）：B1 接续面诊不收面诊费 / B5 候选只列赴韩已结束 / B4 复诊评估页头 / B7 旧黄条 / 结果卡 / 死代码隔离 + 印尼术后管理没做完 IN 手动结案',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
