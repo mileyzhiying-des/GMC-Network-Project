@@ -2492,7 +2492,7 @@ function followupAskDone(link){
   var c = getCurrentCase(); if(!c || !ctx || c.id!==ctx.caseId) return;
   c.followupAsked = true;
   if(link && ctx.sel){ setLinkedCase(ctx.sel); logCaseEvent(c, actingName(), '到店：选择关联之前案件 '+caseNoLabel(ctx.sel)+'，走术后 / 复诊来访流程'); buildCaseLog(c); renderCaseSubtitle(c); }
-  else { logCaseEvent(c, actingName(), '到店：不关联之前案件，走一般流程'); buildCaseLog(c); renderCaseBody(c); }
+  else { c.continueNew = true; /* CMD-1022-04：选「不关联」= 开新案件，不再出现 1015-18 的「接续到原案件」条 */ logCaseEvent(c, actingName(), '到店：不关联之前案件，走一般流程'); buildCaseLog(c); renderCaseBody(c); }
 }
 /* ===== CMD-1021-22 部位拍摄要求（KR 项目库设定，IN 各上传卡读）=====
    HOSPITAL_DATA[h].partShoot[部位 key] = {angles:[角度 id], video:bool, refs:{角度 id:{name}}, note}（没设过的部位 = 现有角度配置 + 需要视频）；

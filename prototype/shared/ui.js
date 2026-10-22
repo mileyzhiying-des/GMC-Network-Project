@@ -1058,7 +1058,7 @@ function buildDetailLog(){
     {stage:'建档', actor:'A1 室长', action:'修改基础信息（补录护照信息、确认医美史）', dt:D(-3)+' 11:15', kind:'plain'},
     {stage:'预约到店', actor:'A1 室长', action:'Case 开始 · 预约到店', dt:D(-2)+' 09:05', kind:'case', caseId:'siti'}
   ];
-  document.getElementById('detail-log').innerHTML = log.map(logLine).join('');
+  var dl = document.getElementById('detail-log'); if(dl) dl.innerHTML = log.map(logLine).join(''); /* CMD-1022-04：页面上没有这个元素（客户详情改成 tab 结构后由 JS 画出）就跳过，不再报初始化失败 */
 }
 
 function rowMarkNoShow(caseId){
@@ -1589,6 +1589,7 @@ function refundableBatches(name){
 }
 function refundServiceBarHtml(c){
   if(isEnded(c) || c.visitClosed || c.subState==='cancelled' || !(c.stage==='booked' ? c.subState==='arrived' : true)) return '';
+  if(c.followup || c.linkedCase) return ''; /* CMD-1022-04：复诊 / 术后来访 / 接续类（有关联案件）不显示退款条；一般案件不变 */
   var n = refundableBatches(c.name).length; if(!n) return '';
   return '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn-outline" onclick="openRefundService()">退款服务（可退批次 '+n+' 个）</button></div>';
 }
