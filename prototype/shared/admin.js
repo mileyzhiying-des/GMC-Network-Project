@@ -406,7 +406,8 @@ ADMIN_RENDER.bizdata = function(el){
   var cs = CASE_ITEMS.filter(function(c){ return want==='all' || bizCaseMonth(c)===want; });
   var cnt = function(st){ return cs.filter(function(c){ return c.stage===st; }).length; };
   var closed = cnt('closed'), report = cnt('reportonly'), cancelled = cnt('cancelled'), ongoing = cs.length - closed - report - cancelled;
-  var consultCases = cs.filter(function(c){ return consultFeePaid(c) || c.consultFeeWaived || c.reportReady; });
+  var consultCases = cs.filter(function(c){ return !isRevEval(c) && (consultFeePaid(c) || c.consultFeeWaived || c.reportReady); }); /* CMD-1022-08：复诊评估不算面诊案件 */
+  var typeCnt = {}; CASE_TYPES.forEach(function(tp){ typeCnt[tp] = 0; }); cs.forEach(function(c){ typeCnt[caseTypeOf(c)]++; });
   var travelCases = consultCases.filter(function(c){ return krAllItems(c).length > 0; });
   var ratio = consultCases.length ? Math.round(travelCases.length*100/consultCases.length) : 0;
   var feeCases = cs.filter(consultFeePaid), feeCount = feeCases.length, feeSum = feeCases.reduce(function(s,c){ return s + (consultFeeOf(c)||0); }, 0); /* 加总各案件锁定的面诊费（CMD-1012-01 M-006） */
@@ -425,6 +426,7 @@ ADMIN_RENDER.bizdata = function(el){
     '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('案件总数', cs.length, '按案件开始的月份统计')+tile('已结案', closed, '客人做了项目/有购买', 'var(--sage)')+tile('仅出报告', report, '只做了面诊出报告')+tile('已取消', cancelled, '未到店/取消/未购买')+tile('进行中', ongoing, '还没到终态')+'</div>'+
     aSection('面诊 → 赴韩', '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end;"><div><div style="font-size:12px;color:var(--muted);">面诊案件</div><div style="font-size:24px;font-weight:700;">'+consultCases.length+'</div></div><div><div style="font-size:12px;color:var(--muted);">其中选了赴韩项目</div><div style="font-size:24px;font-weight:700;">'+travelCases.length+'</div></div><div><div style="font-size:12px;color:var(--muted);">赴韩比例</div><div style="font-size:24px;font-weight:700;color:var(--navy);">'+ratio+'%</div></div></div>',
       '面诊案件 = 缴过面诊费、免除面诊费或已出诊疗方案的案件；赴韩比例 = 面诊案件里有赴韩项目的占比。')+
+    aSection('案件类型', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+CASE_TYPES.map(function(tp){ return tile(tp, typeCnt[tp], tp==='新案件' ? '不接续的新案件' : (tp==='复诊评估' ? '不收面诊费' : '到店时选「接续」')); }).join('')+'</div>', '案件数按类型分开：新案件 / 接续面诊 / 术后管理 / 复诊评估（旧数据没有接续记录的，按关联原因归类，其余算新案件）。')+
     aSection('收入（诊所收的部分，各币种分开，不相加）', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('面诊费', fmtRp(feeSum), feeCount+' 个案件缴费（各案件选面诊时锁定的金额加总）')+tile('本地项目', fmtRp(localSum), '本地项目已收款，含印尼加做的术后管理（印尼盾）')+tile('赴韩定金', formatCurrency(krDeposit,'KRW'), '诊所收的定金，扣除已退款（韩元）')+'</div>',
       '诊所收入 = 面诊费 + 赴韩定金 + 本地项目 + 印尼加做；赴韩尾款和韩国加做由医院收，算 KR 收入，不在这里。免除面诊费的案件不计收入；赴韩定金比例是演示占位值。')+
     aSection('每位室长处理的案件数', coordNames.length ? coordNames.map(function(n){ var o = perCoord[n]; return bar(staffLabel(n), o.total, maxC, 'var(--navy)', o.total+' 件 · 已结案 '+o.closed); }).join('') : '<div style="font-size:12px;color:var(--muted);">这个月份没有案件</div>',

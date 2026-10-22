@@ -1808,7 +1808,7 @@ function confirmMaterials(){
 
 /* Tab 出现时机（IN-CASE-01）：项目列表=面诊案件报告出来后；本地管理=本地案件确认后，或面诊/赴韩案件点"+添加本地管理"后 */
 /* Tab 出现时机（CMD-1012-11）：赴韩施术 = 面诊案件出诊疗方案后（或已有赴韩项目）；本地管理 = 有本地项目；结算 = 有任何一张结算单。「项目列表」tab 已并入赴韩施术 / 本地管理 */
-function showKrTab(c){ return (!!c.projectsEnabled && !!c.reportReady) || (!!c.settlementDone && krAllItems(c).length>0); }
+function showKrTab(c){ return (!!c.projectsEnabled && !!c.reportReady && !isRevEval(c)) || (!!c.settlementDone && krAllItems(c).length>0); }
 function showProjectsTab(c){ return showKrTab(c); } /* 旧名称，指向赴韩施术 */
 function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.localMgmt && (c.localMgmt.batches||[]).length); }
 

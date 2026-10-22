@@ -3958,4 +3958,60 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.alert = oa; window.confirm = oc; }
   });
 
+  /* ---- CMD-1022-08 复诊评估结果与 IN 端 ---- */
+  ST.mkRevEval = function(tag, src){
+    var n = ST.newRes(tag, {phone:clientPhoneOf(src.name)}); ST.open(n); window.GMC_NO_FOLLOWASK = false; markArrived(); fuSet('mode','link'); fuSet('type','复诊评估'); FU_ASK.sel = src.id; followupAskDone(true); n = getCurrentCase();
+    toggleFollowProject('隆鼻'); saveRevisitQuestion('右边还肿'); mockUploadRevisit('隆鼻','video'); concernPartDef(revisitMediaOf(n,'隆鼻').part).angles.forEach(function(a){ mockUploadRevisit('隆鼻', a.id); }); n.metaviewStatus = 'ready'; confirmMaterials(); return getCurrentCase();
+  };
+  ST.def('R97a','CMD-1022-08（IN 分页）：复诊评估结果——推荐本地项目文字 / 建议赴韩 / IN 通知待办 / 根据推荐选本地项目 / 没推荐可结束 / 不收费 / 统计按类型；留一个等确认时间的夹具给 R97b',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK, oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+      var src = ST.newRes('R97s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.reportReady = true; src.consultStatus = 'report_ready'; src.projectsEnabled = true; src.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; src.consultRequested = true;
+      var n = ST.mkRevEval('R97n', src);
+      ST.ok(n.revisitEval && n.consultStatus==='paid_waiting_kr', '复诊评估夹具已送出');
+      ST.krEta(n); coreStartConsult(n, 'KM1 室长'); n.consultContentAt = nowFullDt(); n.recoveryResult = {result:'treat', by:'KM1 室长', proxy:true, at:nowFullDt(), auth:{by:'KM1 室长', at:nowFullDt()}};
+      var ok = coreSubmitReport(n, {original:'【复诊评估：需要处理】x', zh:'【复诊评估：需要处理】右边还肿，建议做消肿管理', items:[], overallNote:'', files:[], recLocal:'消肿管理 2～3 次、冷敷', sugKr:true, sugKrNote:'下颚需要再评估'}, 'KM1 室长');
+      ST.ok(ok && n.reportReady && n.revisitRec && n.revisitRec.local && n.revisitRec.suggestKr && !(n.krScope.items||[]).length, '传结果：推荐本地项目（文字）+ 建议赴韩，不附赴韩项目');
+      ST.ok(caseStageInfo(n).proc==='结果已到 · 需要处理' && caseStageInfo(n).stage==='复诊评估', '状态「复诊评估 · 结果已到」');
+      var nt = NOTIFS.filter(function(x){ return /复诊评估结果已到/.test(x.text) && x.caseId===n.id; })[0]; ST.ok(nt && /有推荐的本地项目/.test(nt.text) && /建议赴韩/.test(nt.text) && notifTodoKind(nt)!=='info', 'IN 需确认通知：复诊评估结果已到（有推荐 / 建议赴韩）');
+      var td = inTodoItems().filter(function(x){ return x.caseId===n.id; }); ST.ok(td.some(function(x){ return /复诊评估结果已到：联络客人/.test(x.text); }), 'IN 待办「复诊评估结果已到：联络客人」');
+      var th = caseTabContentHtml((n.activeCaseTab='consult', n)).replace(/<[^>]+>/g, ' ');
+      ST.ok(/推荐的本地项目/.test(th) && /消肿管理/.test(th) && /建议赴韩处理/.test(th) && !/面诊/.test(th), 'IN 复诊评估 tab：推荐的本地项目（走备注翻译）+ 建议赴韩，没有面诊字样');
+      var hh = caseTabContentHtml(n); ST.ok(/根据推荐选本地项目/.test(hh) && /另开新案件/.test(hh) && /结束案件/.test(hh), '三个动作：根据推荐选本地项目 / 另开新案件 / 结束案件');
+      ST.ok(!showKrTab(n), '没有赴韩施术 tab（不能附赴韩项目）');
+      revEvalStartLocal(); n = getCurrentCase(); ST.ok(n.localTrack && isLocalCase(n) && caseStageInfo(n).stage!=='复诊评估' && showLocalTab(n) && /本地/.test(projectPickerHtml(n, false)) && !/赴韩项目/.test(projectPickerHtml(n, false).replace(/<[^>]+>/g,' ').slice(0,300) || ''), '根据推荐选本地项目：进本地选购流程（只有本地项目）');
+      /* 没推荐 → 结束 */
+      var m = ST.mkRevEval('R97m', src); ST.krEta(m); coreStartConsult(m, 'KM1 室长'); m.consultContentAt = nowFullDt(); m.recoveryResult = {result:'ok', by:'KM1 室长', proxy:true, at:nowFullDt(), auth:{by:'KM1 室长', at:nowFullDt()}};
+      coreSubmitReport(m, {original:'x', zh:'恢复良好', items:[], overallNote:'', files:[], recLocal:'', sugKr:false}, 'KM1 室长'); m = getCurrentCase(); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; ST.open(m);
+      var mh = caseTabContentHtml((m.activeCaseTab='consult', m)); ST.ok(/结束案件/.test(mh) && !/根据推荐选本地项目/.test(mh) && /恢复正常/.test(mh), '没推荐：可结束案件');
+      revEvalEnd(); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; ST.ok(isEnded(m) && m.endNote==='复诊评估结束', '结束案件');
+      /* 不收费 + 统计 */
+      ST.ok(consultFeeOf(n)===0 && !consultFeePaid(n) && financeResultOf(m)==='无收入', '没有面诊费：面诊费金额 0、不计收入');
+      var types = {}; CASE_ITEMS.forEach(function(c){ var tp = caseTypeOf(c); types[tp] = (types[tp]||0)+1; }); ST.ok(types['复诊评估']>=2 && types['新案件']>=1 && CASE_TYPES.length===4, '统计按类型：新案件 / 接续面诊 / 术后管理 / 复诊评估');
+      ST.mkRevEval('R97k', src); /* 留给 KM1 分页的夹具（等确认时间） */
+    } finally { window.GMC_NO_FOLLOWASK = old; window.alert = oa; window.confirm = oc; }
+  });
+  ST.def('R97b','CMD-1022-08（KM1 分页，要先在 A1 分页跑 R97a）：院长确认 / 室长代操作必须勾授意 / 传结果块只有推荐本地项目 + 建议赴韩',function(){
+    if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 分页里跑'); return; }
+    var r = krAllCases().filter(function(x){ return x.c.revisitEval && x.c.consultStatus==='paid_waiting_kr' && /R97k|R97/.test(x.name); })[0]; if(!r){ ST.ok(true, '没有复诊评估夹具，跳过'); return; }
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var oa = window.alert, oc = window.confirm, alerts = []; window.alert = function(m){ alerts.push(String(m)); }; window.confirm = function(){ return true; };
+    try{
+      mut(function(c){ ST.krEta(c); coreStartConsult(c, 'KM1 室长'); c.consultContentAt = nowFullDt(); });
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_RV_OPEN[cid+':'+r.id] = true;
+      var h = krTabConsult(gc()); ST.ok(/已得到院长授意/.test(h), '室长代操作：有「已得到院长授意」勾选');
+      krSetRecoveryResult('treat'); ST.ok(!gc().recoveryResult && alerts.some(function(m){ return /已得到院长授意/.test(m); }), '不勾授意不能选评估结论');
+      krRvAuth(true); ST.ok(gc().revAuth && gc().revAuth.by==='KM1 室长' && gc().revAuth.at, '勾授意：记操作人和时间');
+      krSetRecoveryResult('treat'); var rr = gc().recoveryResult; ST.ok(rr && rr.result==='treat' && rr.proxy && rr.auth && rr.auth.by==='KM1 室长', '勾了授意才能选结论，结论带授意记录');
+      ST.ok(ST.hasLog(gc(), /室长代操作，已得到院长授意/), 'Timeline 记室长代操作 + 授意');
+      var blk = krSubmitBlock(gc()); ST.ok(/推荐的本地项目/.test(blk) && /建议赴韩处理/.test(blk) && !/赴韩项目（可选范围）|krPickToggle|可选范围/.test(blk), '传结果块：只有推荐本地项目 + 建议赴韩，不能附赴韩项目');
+      krSubSet('text', '伤口恢复良好，建议冷敷'); krSubSet('recLocal', '消肿管理 3 次'); krSubSet('sugKr', true); krSubmitReport();
+      var c1 = gc(); ST.ok(c1.reportReady && c1.revisitRec && c1.revisitRec.local==='消肿管理 3 次' && c1.revisitRec.suggestKr && (c1.krScope.items||[]).length===0 && /^【复诊评估：需要处理】/.test(c1.reportKo), '发送：结果 + 推荐文字 + 建议赴韩，不附项目');
+      krRvAuth(true);
+      var dirRows = null;
+    } finally { window.alert = oa; window.confirm = oc; }
+  });
+
 })();

@@ -108,6 +108,14 @@ function revEvalProcText(c){
   if(c.consultStatus==='awaiting_report'){ if(c.consultContentAt) return '评估完成 · 等 KR 传结果'; return c.consultStartedAt ? '评估中' : '等评估'; }
   return '等确认时间';
 }
+/* CMD-1022-08：案件类型（经营数据按类型统计） */
+var CASE_TYPES = ['新案件','接续面诊','术后管理','复诊评估'];
+function caseTypeOf(c){
+  if(c.resumeFrom && CASE_TYPES.indexOf(c.resumeFrom.type)>-1) return c.resumeFrom.type;
+  if(isRevEval(c)) return '复诊评估';
+  if(c.followup && c.linkedCase) return c.linkedCase.reason==='复诊' ? '复诊评估' : '术后管理';
+  return '新案件';
+}
 function revisitTag(c){ return isRevisitConsult(c) ? '复诊' : ''; }
 function caseProcessText(c){ var t = caseProcessText0(c); return (isRevisitConsult(c) && !isRevEval(c) && c.stage==='consult' && c.consultRequested && !c.reportReady && t && t.indexOf('复诊')!==0) ? '复诊 · '+t : t; }
 function caseProcessText0(c){

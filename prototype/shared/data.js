@@ -2012,14 +2012,15 @@ function coreSubmitReport(c, rep, by){
   c.videoSummary = rep.zh;
   c.consultFiles = c.consultFiles || [];
   (rep.files||[]).slice().reverse().forEach(function(f){ c.consultFiles.unshift({label:f, date:attDate()}); });
-  c.consultFiles.unshift({label:'面诊诊疗方案（院长口述 + 室长整理）', date:attDate()});
+  c.consultFiles.unshift({label:isRevEval(c) ? '复诊评估结果（院长口述 + 室长整理）' : '面诊诊疗方案（院长口述 + 室长整理）', date:attDate()});
+  if(isRevEval(c)) c.revisitRec = {local:rep.recLocal||'', suggestKr:!!rep.sugKr, suggestKrNote:rep.sugKrNote||'', by:by, at:nowFullDt()}; /* CMD-1022-08：推荐的本地项目（文字）/ 建议赴韩 */
   c.krScope = {items:rep.items, overallNote:rep.overallNote||'', updatedAt:nowFullDt()};
   c.projectsEnabled = true;
   c.projectOriginFilter = 'KR';
   var rv = isRevisitConsult(c), rr = c.recoveryResult && c.recoveryResult.result, rrTxt = rr==='treat' ? '需要处理' : '恢复正常', hasPlan = (rep.items||[]).length>0;
-  logCaseEvent(c, by, rv ? (isRevEval(c) ? 'KR室长提交复诊评估结果：' : 'KR室长提交复诊恢复评估：')+rrTxt+(hasPlan ? '，附项目方案' : '，不附项目方案') : 'KR室长提交面诊诊疗方案，已出诊疗方案');
+  logCaseEvent(c, by, rv ? (isRevEval(c) ? 'KR室长提交复诊评估结果：' : 'KR室长提交复诊恢复评估：')+rrTxt+(isRevEval(c) ? revRecText(c, '，') : (hasPlan ? '，附项目方案' : '，不附项目方案')) : 'KR室长提交面诊诊疗方案，已出诊疗方案');
   updateCaseStage(c);
-  if(rv) pushNotif('面诊',(isRevEval(c) ? '复诊评估结果已到：' : '复诊评估已出：')+c.name+'（'+(c.caseNo||'')+'）：'+rrTxt+(hasPlan ? '（附项目方案）' : '（不附项目方案）')+'，请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'});
+  if(rv) pushNotif('面诊',(isRevEval(c) ? '复诊评估结果已到：' : '复诊评估已出：')+c.name+'（'+(c.caseNo||'')+'）：'+rrTxt+(isRevEval(c) ? revRecText(c, '（', '）') : (hasPlan ? '（附项目方案）' : '（不附项目方案）'))+'，请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'});
   else pushNotif('面诊','诊疗方案已出：'+c.name+'（'+(c.caseNo||'')+'），请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'}); /* CMD-1021-09 四：需确认的弹窗（停住要按［确认］，点开进面诊资料）；原来是普通通知（弹一次 6 秒自动收起，容易错过） */
   return true;
 }
@@ -4585,7 +4586,7 @@ function scopeMgmtRowsHtml(c, selected, q, ccy){
 }
 function projectPickerHtml(c, isAddition){
   var selected = c.recommended || [];
-  var noKrPicker = isLocalCase(c) && !c.reportReady; /* 不面诊的本地案件（选择项目 / 本地管理）：选购只有本地项目，没有赴韩项目子 tab；面诊案件的项目列表 tab 不变（CMD-1008-07） */
+  var noKrPicker = isLocalCase(c) && (!c.reportReady || isRevEval(c)); /* CMD-1022-08：复诊评估案件选本地项目也只有本地项目 */ /* 不面诊的本地案件（选择项目 / 本地管理）：选购只有本地项目，没有赴韩项目子 tab；面诊案件的项目列表 tab 不变（CMD-1008-07） */
   if(noKrPicker) return localPurchaseHtml(c, 'main', isAddition); /* 不面诊的本地案件 → 独立的「本地选购」画面（CMD-1008-09） */
   var originFilter = c.projectOriginFilter || 'KR';
   var q = (c.projectSearch || '').toLowerCase();
@@ -8758,8 +8759,7 @@ function newCaseFromClient(name){
 function revEvalTabHtml(c){
   var st = revEvalProcText(c), src = followSrc(c);
   var tip = {'等确认时间':'等 KR 室长确认评估时间和结果时间（院长看资料后评估，不收费）', '等评估':'等院长评估（室长可代输入，需院长授意）', '评估中':'院长评估中', '评估完成 · 等 KR 传结果':'院长已评估，等 KR 室长传结果'}[st] || '';
-  var res = (c.reportReady || c.consultStatus==='report_ready') ? '<div style="margin-top:10px;font-size:13px;"><b>评估结论：</b>'+((c.recoveryResult||{}).result==='treat' ? '需要处理' : '恢复正常')+'</div>'+
-    '<div style="font-size:13px;color:var(--slate2);margin:8px 0 12px;line-height:1.7;">'+cesc(c.videoSummary||'')+'</div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-primary" onclick="openReportModal()">查看复诊评估结果 →</button></div>' : '';
+  var res = (c.reportReady || c.consultStatus==='report_ready') ? revEvalResultHtml(c) : '';
   return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:12px;color:var(--muted);">'+(src ? '接续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
     subStatusRowHtml([{kind:(c.reportReady ? 'Success' : 'Waiting'), text:st}])+(tip ? '<div style="font-size:13px;color:var(--slate2);margin-bottom:8px;">'+tip+'</div>' : '')+
     (c.wantConsult ? '<div style="font-size:12px;color:var(--muted);">客人希望的时间：'+cesc(c.wantConsult)+'</div>' : '')+res+'</div>';
@@ -8775,3 +8775,42 @@ function startRevisitEval(c){
 }
 
 function revIntent(c){ return isRevEval(c) || !!(c && c.resumeFrom && c.resumeFrom.type==='复诊评估'); } /* CMD-1022-07：复诊评估（含还没确认的接续 · 复诊评估） */
+
+/* CMD-1022-08：复诊评估结果里「推荐的本地项目 / 建议赴韩」一句话（通知 / 待办 / Timeline 共用） */
+function revRecText(c, pre, post){
+  var r = c.revisitRec || {}, parts = [];
+  if((c.recoveryResult||{}).result==='treat'){ parts.push(r.local ? '有推荐的本地项目' : '没有推荐项目'); if(r.suggestKr) parts.push('建议赴韩处理'); }
+  return parts.length ? (pre||'')+parts.join('，')+(post||'') : '';
+}
+
+/* CMD-1022-08：复诊评估结果（IN 看）+ 后续动作：有推荐 → 自己从本诊所本地项目库选项目（现有本地选购流程）/ 没推荐 → ［结束案件］/ 建议赴韩 → 客户详情［新增案件］另开新案件 */
+function revEvalResultHtml(c){
+  var r = c.revisitRec || {}, treat = (c.recoveryResult||{}).result==='treat', ended = isEnded(c) || c.visitClosed;
+  var rv = (c.recoveryResult||{}).auth;
+  var h = '<div style="margin-top:10px;font-size:13px;"><b>评估结论：</b>'+(treat ? '需要处理' : '恢复正常')+(c.recoveryResult && c.recoveryResult.proxy ? '　<span style="font-size:12px;color:var(--muted);">（室长代操作，已得到院长授意）</span>' : '')+'</div>'+
+    '<div style="font-size:13px;color:var(--slate2);margin:8px 0 12px;line-height:1.7;">'+cesc(c.videoSummary||'')+'</div>';
+  if(treat){
+    h += '<div style="margin:10px 0;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">推荐的本地项目</div>'+(r.local ? noteTextHtml({id:'rvrec'+c.id, role:'KR', text:r.local}, 'IN') : '<div style="font-size:13px;color:var(--muted);">没有推荐的本地项目</div>')+
+      (r.suggestKr ? '<div style="margin-top:8px;font-size:13px;"><b>建议赴韩处理</b>'+(r.suggestKrNote ? '：'+cesc(r.suggestKrNote) : '')+'</div>' : '')+'</div>';
+  }
+  var btns = '<button class="btn-primary" onclick="openReportModal()">查看复诊评估结果 →</button>';
+  if(!ended){
+    if(treat && r.local && !c.localTrack) btns += '<button class="btn-outline" onclick="revEvalStartLocal()">根据推荐选本地项目</button>';
+    if(treat && r.suggestKr) btns += '<button class="btn-outline" onclick="newCaseFromClient(\''+String(c.name).replace(/'/g,"\\'")+'\')">另开新案件（建议赴韩）</button>';
+    btns += '<button class="btn-outline" onclick="revEvalEnd()">结束案件</button>';
+  }
+  return h+'<div style="display:flex;gap:10px;flex-wrap:wrap;">'+btns+'</div>'+(treat && r.suggestKr ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">建议赴韩：先结束这个复诊，再用「另开新案件」（客户详情［新增案件］）开新案件，可在基础资料里关联本案件作参考。</div>' : '');
+}
+function revEvalStartLocal(){
+  var c = getCurrentCase(); if(!c || !isRevEval(c)) return;
+  c.localTrack = true; c.projectsEnabled = true; c.entryChoicePending = true; c.activeCaseTab = 'localmgmt';
+  logCaseEvent(c, actingName(), '复诊评估后：根据推荐在本案件选本地项目（走本地选购流程）', '本地管理');
+  updateCaseStage(c); renderCaseStatusBar(c); buildCaseLog(c); renderCaseBody(c);
+}
+function revEvalEnd(){
+  var c = getCurrentCase(); if(!c || !isRevEval(c)) return;
+  if(!confirm('确认结束这个复诊评估案件？')) return;
+  logCaseEvent(c, actingName(), '结束复诊评估案件');
+  c.endNote = '复诊评估结束';
+  autoFinish(c, '未购买未使用');
+}
