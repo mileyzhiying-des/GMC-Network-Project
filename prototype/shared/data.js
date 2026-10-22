@@ -4985,6 +4985,7 @@ function coreChangeConfirm(c, date, time, address, by){
   ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||ks.address||'';
   ks.changePrimary = ''; ks.changeBackup = ''; ks.changeSubmitted = false; ks.rejectNote = '';
   logCaseEvent(c, by, 'KR确认新施术时间（韩国时间）：'+oldD+' → '+date+' '+time);
+  coreShiftCareOnResched(c, oldD, date, by);
   pushNotif('赴韩施术','KR 确认新施术时间：'+c.name+' '+tkK(date, time), {caseId:c.id});
   syncSurgeryBlock(c); updateCaseStage(c);
   syncSurgerySub(c);
@@ -5247,6 +5248,7 @@ function coreMarkUnable(c, names, reason, by){
   if(!names.length || names.length>=pending.length) return false; /* 至少保留一个；全部不能做属于"不能施术" */
   pending.forEach(function(it){ if(names.indexOf(it.name)>-1){ it.cancelled = true; it.unable = true; it.unableReason = reason; } });
   logCaseEvent(c, by, 'KR标记无法施术：'+names.join('、')+'（项目→已取消）；原因：'+reason);
+  coreDropCareOf(c, names, by); syncSurgeryBlock(c); /* CMD-1022-14：院长占用时间按实际项目合计重算 */
   updateCaseStage(c);
   syncSurgerySub(c);
   return true;
@@ -5272,6 +5274,7 @@ function coreCannotReplace(c, names, byName, by, locals){
   locals.forEach(function(x){ if(ok && !coreAddOnItem(c, x.name, by, {local:x})) ok = false; }); /* 管理项目（KR 本地管理项目库，韩元，收费） */
   if(!ok){ pend.forEach(function(it){ delete it.swapped; delete it.replacedBy; }); return false; }
   j.replaced = true; delete j.refundKind; /* 院长评估仍保留「不建议手术 + memo」，不改记为需要调整方案（CMD-1013-04 四·1） */
+  coreDropCareOf(c, origNames, by); syncSurgeryBlock(c); /* CMD-1022-14：院长占用时间按实际项目合计重算 */
   logCaseEvent(c, by, '取消项目 → 更换为 '+allNames.join('、')+'（原项目 '+origNames.join('、')+'；评估仍是「不建议手术」；不另算差价，尾款按最终项目合计 − 已付定金）');
   syncSurgerySub(c); updateCaseStage(c);
   return true;
@@ -5292,6 +5295,7 @@ function coreSwapItem(c, itemName, altName, by, detail, local){
   c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（计入尾款）', time:nowFullDt(), status:'active', krTotal:amt, krDeposit:0, krBalance:amt, inTotal:0, noDeposit:true, swapOf:target.name});
   c.procedureItems.push(ni);
   c.settleTab = null;
+  coreDropCareOf(c, [target.name], by); syncSurgeryBlock(c); /* CMD-1022-14：院长占用时间按实际项目合计重算 */
   logCaseEvent(c, by, '更换项目："'+target.name+'" → "'+alt.name+'"（原项目留在原结算单标已更换；新项目另开结算单 '+newId+'，不收定金，金额计入尾款）');
   syncSurgerySub(c);
   return true;
@@ -5329,8 +5333,8 @@ function coreSettleBalance(c, by){ if(krUnreadNotes(c).length) return false; /* 
 /* KR 在韩重新预约施术时间：回到"施术时间已确认"（新时间），客人再到医院时 KR 重新标记已到医院；IN 不能改 */
 function coreRebook(c, date, time, by){
   if(!c.krSchedule || !isArrived(c) || (c.krJudge && (c.krJudge.result!=='cannot' || c.krJudge.replaced) && c.krJudge.settled)) return false;
-  var ks = c.krSchedule; ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time;
-  c.krJudge = null;
+  var ks = c.krSchedule, oldDR = ks.confirmedDate; ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time;
+  c.krJudge = null; coreShiftCareOnResched(c, oldDR, date, by);
   logCaseEvent(c, by, 'KR在韩国重新预约施术时间：'+date+' '+time+'（韩国时间；回到施术时间已确认，IN端显示更改时间）');
   pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' 在韩国重新预约了施术时间 '+tkK(date, time)+((c.krJudge&&c.krJudge.memo) ? ' / 原因：'+c.krJudge.memo : ''), {caseId:c.id});
   syncSurgeryBlock(c); updateCaseStage(c);
@@ -5373,7 +5377,7 @@ function coreSubDone(c, id, by, itemNames, noClose){
   if(s.holdUseOf){ var hi = rowItem(c, s); if(hi){ holdUseRecord(c, hi, {at:s.doneAt, key:subCaseKey(s), rowId:s.id, qty:Math.max(1, parseInt(s.useQty, 10)||1)}); } } /* 持有项目使用一次：只从到院卡里「操作完成」的行记（CMD-1019-23 二） */
   picked.forEach(function(it){ it.done = true; if(!it.doneAt) it.doneAt = s.doneAt; });
   s.doneItems = picked.map(function(it){ return it.name; });
-  logCaseEvent(c, by, '完成：'+visitRowLabel(c, s).name+(picked.length ? '（本次完成项目：'+s.doneItems.join('、')+'）' : ''), rowStageLabel(c, s));
+  logCaseEvent(c, by, '完成：'+(picked.length ? picked.map(function(it){ return buyName(it.name); }).join('、') : rowLogName(c, s)), rowStageLabel(c, s)); /* CMD-1022-14：不再写「完成：A（本次完成项目：B）」，写实际完成的项目 */
   if(!noClose) krCloseIfDone(c);
   return true;
 }
@@ -5407,7 +5411,7 @@ function coreVisitDone(c, careIds, mgmtNames, by){
 function coreSubArrived(c, id, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.arrived) return false;
   if(!s.simDay && s.date && s.date > todayStr()) return false;
-  s.arrived = true; s.arrivedAt = nowFullDt(); logCaseEvent(c, by, '客人已到：到院（'+String(s.date||'').slice(5).replace('-', '/')+'）「'+visitRowLabel(c, s).name+'」', rowStageLabel(c, s)); return true;
+  s.arrived = true; s.arrivedAt = nowFullDt(); logCaseEvent(c, by, '客人已到：到院（'+String(s.date||'').slice(5).replace('-', '/')+'）「'+rowLogName(c, s)+'」', rowStageLabel(c, s)); return true;
 }
 /* 持有项目（在韩持有的已付管理项目）剩余次数；安排使用 = 排一个时间（进 KR 日历和当天工作台），客人到后才标完成 */
 function holdItemLeft(c, it){ return (it.qty||1) - (it.holdUsed||0); }
@@ -5544,8 +5548,8 @@ function coreEndVisitToday(c, by){
   c._ending = true;
   try{
     var left = todayOpenRows(c).map(function(x){ return x.name; });
-    todayOpenRows(c).forEach(function(x){ if(x.held){ coreTodayCancel(c, 'item', x.held.name, by); } else if(x.row && x.row.kind==='增加项目'){ coreTodayCancel(c, 'item', x.name, by); } });
-    surgPlanItems(c).forEach(function(it){ if(!it.done && !it.deferUse){ coreTodayCancel(c, 'item', it.name, by); } });
+    todayOpenRows(c).forEach(function(x){ if(x.held){ coreTodayCancel(c, 'item', x.held.name, by, true); } else if(x.row && x.row.kind==='增加项目'){ coreTodayCancel(c, 'item', x.name, by, true); } });
+    surgPlanItems(c).forEach(function(it){ if(!it.done && !it.deferUse){ coreTodayCancel(c, 'item', it.name, by, true); } });
     (c.subItems||[]).forEach(function(s){ if(s.kind==='施术' && !s.done && !s.visitKey){ s.done = true; s.doneAt = nowFullDt(); s.doneBy = by; s.doneItems = s.doneItems || []; } });
     c.krProcedureDone = true; c.surgeryDoneAt = mainVisitDay(c) || todayStr(); c.endAsk = false; coreVisitNoteCommit(c, 'main', by); /* 统计按施术（到院）那天，不是点按钮的那天（CMD-1021-13 四） */ /* 整体备注随结束一起存（CMD-1021-09 六） */
     logCaseEvent(c, by, '客人已离院'+(left.length ? '（没做完的退回项目卡：'+left.join('、')+'）' : '')+'，进入术后管理阶段（等 KR 确认韩国行程是否结束）');
@@ -5621,7 +5625,7 @@ function coreSubTimeEdit(c, id, date, time, by){
   var before = (s.date||'')+(s.time ? ' '+s.time : '');
   s.date = date; s.time = time || s.time; inheritVisitArrival(c, s);
   c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||'') || a.no.localeCompare(b.no); });
-  logCaseEvent(c, by, '改时间「'+visitRowLabel(c, s).name+'」：'+before+' → '+date+(s.time ? ' '+s.time : '')+(s.hold ? '（在韩持有）' : ''), rowStageLabel(c, s));
+  logCaseEvent(c, by, '改时间「'+rowLogName(c, s)+'」：'+before+' → '+date+(s.time ? ' '+s.time : '')+(s.hold ? '（在韩持有）' : ''), rowStageLabel(c, s));
   pushNotif('赴韩施术', by+' 修改了 '+c.name+' 在韩到院时间：'+s.content+'，'+before+' → '+tkK(date, s.time||'')+'（韩国时间）', {caseId:c.id}); /* CMD-1020-04：改时间也通知 IN */
   return true;
 }
@@ -5916,7 +5920,7 @@ function markConsultPaid(){
   var c = getCurrentCase(); if(!c) return;
   c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt(); /* 催办用：缴费后超过 30 分钟 KR 还没确认时间就可催办 */
   recordConsultFee(c); /* 正常情况下选面诊时已记；没有记录的老数据在缴费时补记 */
-  if(!SEEDING) pushKrNotif(caseKrHospital(c), (isRevisitConsult(c) ? '客人已缴复诊面诊费：' : '客人已缴面诊费：')+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认'+(isRevisitConsult(c) ? '复诊面诊时间和预计出评估时间' : '报告时间'), {caseId:c.id, kind:'consultpaid'});
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), (isRevisitConsult(c) ? '客人已缴复诊面诊费：' : '客人已缴面诊费：')+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认'+(isRevisitConsult(c) ? '复诊面诊时间和预计出评估时间' : '报告时间'), {caseId:c.id, kind:'consultpaid', popup:'confirm', level:'action'});
   updateCaseStage(c); /* 缴费后离开"接待中"，进入面诊安排 */
   ensureCaseRoom(c); /* CMD-1008-14：缴完面诊费自动建案件对话房（不通知、不响铃），KR 一开始就能在房里留言 */
   logCaseEvent(c, actingName(), '面诊已确认并收款，已在Main对话群自动通知'); /* 收款是 IN 室长在系统里记的，不是客人操作（CMD-1019-21 四） */
@@ -5928,7 +5932,7 @@ function markConsultPaid(){
 function applyWaiveFee(c, reason, note){
   c.consultFeeWaived = {reason: reason==='其他' ? '其他：'+note : reason, note:note};
   c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt(); /* 免除后照正常流程：待确认报告时间 */
-  if(!SEEDING) pushKrNotif(caseKrHospital(c), (isRevisitConsult(c) ? '复诊面诊费已免除：' : '面诊费已免除：')+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认'+(isRevisitConsult(c) ? '复诊面诊时间和预计出评估时间' : '报告时间'), {caseId:c.id, kind:'consultpaid'});
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), (isRevisitConsult(c) ? '复诊面诊费已免除：' : '面诊费已免除：')+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认'+(isRevisitConsult(c) ? '复诊面诊时间和预计出评估时间' : '报告时间'), {caseId:c.id, kind:'consultpaid', popup:'confirm', level:'action'});
   updateCaseStage(c);
   ensureCaseRoom(c); /* 免除面诊费同样自动建房 */
   logCaseEvent(c, actingName(), '免除面诊费（原因：'+c.consultFeeWaived.reason+'）');
@@ -7940,6 +7944,8 @@ function visitRowLabel(c, s){
   }
   return {type:type, name:name, sub:sub};
 }
+/* CMD-1022-14：Timeline 里术后管理一行写出对应施术（例「颧骨缩小 · 术后复诊检查」）；施术 / 管理项目只写名称 */
+function rowLogName(c, s){ var l = visitRowLabel(c, s); return (l.type==='术后管理' && s.projectName) ? buyName(s.projectName)+' · '+l.name : l.name; }
 function visitRowLabelHtml(c, s){
   var l = visitRowLabel(c, s), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   return e(l.name)+(l.sub ? '<div style="font-size:12px;color:var(--muted);font-weight:400;">'+e(l.sub)+'</div>' : '');
@@ -8020,7 +8026,7 @@ function coreCareBook(c, itemName, pcIdx, date, time, place, reuseId, by, opt){
   s.src = 'care'; if(inn){ s.innName = x.innName||''; s.careItem = itemName; s.suggest = date; }
   if(!inn && opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } else { s.dirOp = false; s.extendMin = 0; } /* CMD-1020-05：院长操作 */
   c.pcBooked = careUnits(c).unbooked.length===0 && careUnits(c).rows.every(function(r){ return !r.s.skipped; });
-  subCaseNos(c); logCaseEvent(c, by, '术后管理预约：'+(x.name||x.mgmt)+'，'+date+(inn ? '（回印尼做，建议日期）' : ' '+time), '术后管理'); return true;
+  subCaseNos(c); logCaseEvent(c, by, '术后管理预约：'+buyName(itemName)+' · '+(x.name||x.mgmt)+'，'+date+(inn ? '（回印尼做，建议日期）' : ' '+time), '术后管理'); return true;
 }
 /* ===== CMD-1020-08：IN 备注记录 + KR 已读 =====
    c.inNotes = [{id, text, by, at(UTC), readAt, readBy}]；c.recInNote 保持 = 全部备注拼起来（打印 / 其他地方沿用）；IN 新增 → KR 收通知；KR 结算前（尾款 / 在韩加项）必须读过 */
@@ -8391,12 +8397,30 @@ function coreSurgItemDone(c, rowId, name, by){
   if(!surgPlanItems(c).some(function(x){ return !x.done; })){ if(!coreSubDone(c, rowId, by, [], true)) return true; krCloseIfDone(c); }
   return true;
 }
-function coreTodayCancel(c, kind, key, by){
+
+/* CMD-1022-14：施术项目被换掉 / 拿掉（3-3 更换、3-2 取消）= 这个施术不要了 → 它还没做的术后管理（已预约的行）一起取消；没预约的名额随项目一起消失（careUnits 只算有效项目） */
+function coreDropCareOf(c, names, by){
+  names = names||[]; var gone = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.done && !s.skipped && names.indexOf(s.projectName)>-1; });
+  if(!gone.length) return 0;
+  c.subItems = (c.subItems||[]).filter(function(s){ return gone.indexOf(s)<0; });
+  logCaseEvent(c, by, '施术项目「'+names.join('、')+'」不做了，它的术后管理一起取消（'+gone.length+' 项）', '术后管理');
+  return gone.length;
+}
+/* CMD-1022-14：施术改期 → 它已预约、还没做的术后管理日期一起重算（整体平移同样的天数）；没预约的建议日期本来就按施术日现算 */
+function coreShiftCareOnResched(c, oldD, newD, by){
+  var d = (oldD && newD) ? ymdDiff(oldD, newD) : 0; if(!d) return 0; var n = 0;
+  (c.subItems||[]).forEach(function(s){ if(s.kind!=='术后管理记录' || s.done || s.skipped || !s.date || !s.projectName) return; var it = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName; })[0]; if(!it || it.cancelled || it.swapped || (it.visitKey)) return; s.date = ymdAdd(s.date, d); if(s.suggest) s.suggest = ymdAdd(s.suggest, d); n++; });
+  if(n){ logCaseEvent(c, by, '施术改期 '+oldD+' → '+newD+'：已预约的术后管理 '+n+' 项日期一起顺延 '+d+' 天', '术后管理'); try{ syncSurgerySub(c); }catch(e){} }
+  return n;
+}
+function coreTodayCancel(c, kind, key, by, internal){
   if(kind==='row') return coreRowCancel(c, key, by);
   var it = itemByKey(c, key, function(x){ return !x.cancelled && !x.swapped && (!x.done || (x.heldOver && !x.holdDone)); }); if(!it) return false; var ik = itemIid(it); key = it.name;
+  if(!internal && !krIsMgmtItemC(it)) return false; /* CMD-1022-14：施术项目不能今日取消（只能改期；3-3 被换掉 / 拿掉 = 不要了，术后管理一起取消） */
   if(krIsMgmtItemC(it) && it.heldOver){
     var all = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return itemIid(x); });
     c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all).filter(function(n){ return n!==ik && n!==key; }); c.todayPicked = true;
+    if(c.todayDirOp){ delete c.todayDirOp[key]; delete c.todayDirOp[ik]; } /* CMD-1022-14：取消 = 院长操作延长的分钟一起拿掉，下次加回重新算 */
   } else {
     it.deferUse = true;
     c.subItems = (c.subItems||[]).filter(function(s){ return !(s.kind==='增加项目' && !s.done && !s.visitKey && s.projectName===key); });
@@ -8740,7 +8764,7 @@ function revEvalTabHtml(c){
 function startRevisitEval(c){
   c.revisitEval = {at:nowFullDt(), by:actingName()}; c.noConsultFee = true; c.consultFeeAmount = 0; c.consultRequested = true;
   c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt();
-  if(!SEEDING) pushKrNotif(caseKrHospital(c), '复诊评估已送出：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认评估时间和结果时间', {caseId:c.id, kind:'consultpaid'});
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), '复诊评估已送出：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认评估时间和结果时间', {caseId:c.id, kind:'consultpaid', popup:'confirm', level:'action'});
   updateCaseStage(c); ensureCaseRoom(c);
   logCaseEvent(c, actingName(), '复诊评估已送出（不收费），等 KR 确认评估时间和结果时间', '复诊评估');
   c.activeCaseTab = 'consult';

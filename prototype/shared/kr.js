@@ -937,7 +937,7 @@ function krProjCards(c, opts){
   var useBtns0 = function(name, pend){
     if(!can || pickMode) return '';
     var it1 = itOf(name), st1 = (!pend && it1) ? coreTodayState(c, it1) : null; /* CMD-1015-30：已选进今日案件 → ［本次取消］（= 今日取消）；已完成无按钮 */
-    if(st1) return st1.done ? '' : cancelBtn(name);
+    if(st1) return st1.done ? '' : ((it1 && !krIsMgmtItemC(it1)) ? '' : cancelBtn(name)); /* CMD-1022-14：施术项目没有［本次取消］ */
     var itU = it1, leftU = itU && krIsMgmtItemC(itU) ? holdItemLeft(c, itU)-holdItemPlanned(c, itU) : 1, anesU = itU && itU.consentPending;
     /* CMD-1020-01：今天没有进行中的到院（客人没到院，或今天的到院已结束）→ 只留［预约时间］，不显示［本次使用］和「客人未到店」；有进行中的到院才显示［本次使用］，暂时不能用的灰按钮 + 原因 */
     var active = !!tg && (tg.key==='main' ? !c.krProcedureDone : coreVisitState(c, tg.key)==='arrived');
@@ -2249,7 +2249,8 @@ function krTblRow(c, s, o){
     var okDone = !s.done && !anes && o.canDone; /* CMD-1020-16 四：待付款也能先做；麻醉同意书仍要先确认 */
     ops += krBtn('操作完成', (s._item ? 'krSurgItemDone(\''+s.id+'\',\''+krEsc(s._item).replace(/'/g,'')+'\')' : o.doneFn+'(\''+s.id+'\')'), okDone, s.done ? '' : (anes ? '先确认麻醉同意书' : '客人已到院后才能操作'))+' ';
     if(!s.done && s.holdUseOf) ops += krRowQtyStepper(c, s);
-    if(!s.done) ops += '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krTodayCancel(\''+(s._item || (s.kind==='增加项目' && !s.visitKey) ? 'item' : 'row')+'\',\''+(s._item ? krEsc(s._item).replace(/'/g,'') : (s.kind==='增加项目' && !s.visitKey ? krEsc(s.projectName).replace(/'/g,'') : s.id))+'\',\''+krEsc(s._item || s.content).replace(/'/g,'')+'\')">今日取消</button>';
+    var surgRow = !!s._item || s.kind==='施术' || (s.kind==='增加项目' && !s.visitKey && (function(){ var it0 = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName; })[0]; return !!it0 && !krIsMgmtItemC(it0); })()); /* CMD-1022-14：施术项目没有［今日取消］，只能改期 */
+    if(!s.done && !surgRow) ops += '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krTodayCancel(\''+(s._item || (s.kind==='增加项目' && !s.visitKey) ? 'item' : 'row')+'\',\''+(s._item ? krEsc(s._item).replace(/'/g,'') : (s.kind==='增加项目' && !s.visitKey ? krEsc(s.projectName).replace(/'/g,'') : s.id))+'\',\''+krEsc(s._item || s.content).replace(/'/g,'')+'\')">今日取消</button>';
     else if(s.holdUseOf) ops += '<a href="#" onclick="krUseUndo(\''+s.id+'\');return false;" style="font-size:12px;">撤回完成</a>'; /* 撤回：次数退回，行回到待做（CMD-1019-23 二） */
   } else if(o.can && mode==='booked'){
     if(timeable) ops += '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="'+(s.kind==='施术' ? 'krMainTimeEdit()' : 'krSubTimeOpen(\''+s.id+'\')')+'">修改时间</button> ';

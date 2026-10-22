@@ -348,7 +348,7 @@ function visitWords(t){
   });
 }
 function tzRender(t, noZone){
-  return viewerTextFilter(visitWords(String(t==null ? '' : t)).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(noZone ? '' : (typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）')) : '—'; })
+  return viewerTextFilter(visitWords(String(t==null ? '' : t).replace(/⟦u:(?=\s*⟦u:)/g, '').replace(/⟧(?=\s*⟧)/g, '')) /* CMD-1022-14：兜底，嵌套 / 重复的时间标记也能正常显示 */.replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(noZone ? '' : (typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）')) : '—'; })
     .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; }));
 }
 /* 当地钟点（日期 + HH:mm，某时区的墙上时间）→ UTC 字符串（KR 室长输入的预计出报告时间等） */
