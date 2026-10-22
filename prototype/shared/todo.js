@@ -21,7 +21,7 @@ var TODO_CAT = {bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'dconsult', recover:'drecover', recoverwait:'drecover', dsurg:'dsurg', dirop:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
 /* CMD-1015-05 九：第一栏「阶段｜待办事项」——阶段读案件的阶段（同案件列表），没有案件的按类型 */
 var TODO_STAGE_BY_KIND = {tripend:'术后管理', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
-function todoStageOf(kind, c){ if(TODO_STAGE_BY_KIND[kind]) return TODO_STAGE_BY_KIND[kind]; try{ if(c) return caseStageInfo(c).stage || ''; }catch(e){} return ''; }
+function todoStageOf(kind, c){ if(c && isRevEval(c) && ['eta','waitdir','send','recover','recoverwait'].indexOf(kind)>-1) return '待评估'; /* CMD-1022-07：复诊评估的待办标「待评估」 */ if(TODO_STAGE_BY_KIND[kind]) return TODO_STAGE_BY_KIND[kind]; try{ if(c) return caseStageInfo(c).stage || ''; }catch(e){} return ''; }
 /* 红点：新进来的待办亮红点，打开那个案件后灭（每个账号各自记；第一次打开先把现有的都当已看过） */
 function todoSeenKey(){ var id = ''; try{ id = currentAccountId() || ''; }catch(e){} return 'gmc_cfg_todoseen_'+id; }
 var TODO_SEEN_SET = null;
@@ -57,7 +57,7 @@ function inTodoItems(){
     if(inCloseDue(c)) push(todoMk('inclose', '术后管理（印尼）是否结案？', c, '', false, function(){ openCaseDetail(c.id); setTimeout(function(){ try{ inCloseOpen(); }catch(e){} }, 250); }));
     /* 诊疗方案已到 → 联络客人选项目 */
     if(c.reportReady && c.projectsEnabled && c.consultStatus==='report_ready' && !c.endNote && !(isRevisitConsult(c) && c.revisitAck && !(c.krScope&&c.krScope.items||[]).length) && !(c.settlementBatches||[]).length && !(c.recommended||[]).length && !c.localMgmt)
-      push(isRevisitConsult(c) ? todoMk('plan', '复诊评估已出：联络客人（'+((c.recoveryResult||{}).result==='treat' ? '需要处理' : '恢复正常')+((c.krScope&&c.krScope.items||[]).length ? '，附项目方案' : '，不附项目方案')+'）', c, '', false, function(){ c.revisitAck = true; try{ Store.touch(); }catch(e){} openCaseDetail(c.id, false, {tab:'consult'}); }) : todoMk('plan', '面诊资料已到：联络客人选项目', c, '', false, todoInGo(c, 'consult'))); /* CMD-1020-13 二：待办写「面诊资料已到」，点开进「面诊资料」tab（诊疗方案在那里看；选项目在赴韩施术 tab） */
+      push(isRevisitConsult(c) ? todoMk('plan', (isRevEval(c) ? '复诊评估结果已到：联络客人（' : '复诊评估已出：联络客人（')+((c.recoveryResult||{}).result==='treat' ? '需要处理' : '恢复正常')+((c.krScope&&c.krScope.items||[]).length ? '，附项目方案' : '，不附项目方案')+'）', c, '', false, function(){ c.revisitAck = true; try{ Store.touch(); }catch(e){} openCaseDetail(c.id, false, {tab:'consult'}); }) : todoMk('plan', '面诊资料已到：联络客人选项目', c, '', false, todoInGo(c, 'consult'))); /* CMD-1020-13 二：待办写「面诊资料已到」，点开进「面诊资料」tab（诊疗方案在那里看；选项目在赴韩施术 tab） */
     /* 等待报告超时 / 待确认施术时间超时 → 可催办 */
     var ug = urgeInfo(c);
     /* 10/14：今天来访（预约还没接待，一位一条）+ 等 KR 回复（没超时灰色，超时红 + ［催办］） */
@@ -115,9 +115,9 @@ function krTodoItems(rows){
     var c = r.c, mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name)), push = function(it){ it.mine = mine; it.rowKey = r.clinicId+':'+r.id; out.push(it); };
     var goCase = function(tab){ return function(){ krShowCase(r.clinicId, r.id, {tab:tab}); }; };
     if(work){
-      if(c.consultStatus==='paid_waiting_kr') push(todoMk('eta', (isRevisitConsult(c) ? '复诊面诊：确认面诊时间和预计出评估时间' : '确认预计出报告时间')+(c.wantConsult ? '（客人希望：'+c.wantConsult+'）' : ''), c, '', false, goCase('consult')));
-      if(c.consultStatus==='awaiting_report' && !c.consultContentAt){ var wo = reportOverdueNow(c); push(todoMk('waitdir', '等院长上传面诊'+(wo ? '（已超时）' : (c.consultStartedAt ? '（面诊中）' : '')), c, todoEtaDue(c), wo, goCase('consult'), {gray:!wo})); }
-      if(c.consultStatus==='awaiting_report' && c.consultContentAt){ var over = reportOverdueNow(c); push(todoMk('send', (isRevisitConsult(c) ? '发送恢复评估' : '发送诊疗方案')+(over ? '（已超时）' : ''), c, todoEtaDue(c), over, goCase('consult'))); }
+      if(c.consultStatus==='paid_waiting_kr') push(todoMk('eta', (isRevEval(c) ? '复诊评估：确认评估时间和结果时间' : isRevisitConsult(c) ? '复诊面诊：确认面诊时间和预计出评估时间' : '确认预计出报告时间')+(c.wantConsult ? '（客人希望：'+c.wantConsult+'）' : ''), c, '', false, goCase('consult')));
+      if(c.consultStatus==='awaiting_report' && !c.consultContentAt){ var wo = reportOverdueNow(c); push(todoMk('waitdir', (isRevEval(c) ? '等院长评估' : '等院长上传面诊')+(wo ? '（已超时）' : (c.consultStartedAt ? (isRevEval(c) ? '（评估中）' : '（面诊中）') : '')), c, todoEtaDue(c), wo, goCase('consult'), {gray:!wo})); }
+      if(c.consultStatus==='awaiting_report' && c.consultContentAt){ var over = reportOverdueNow(c); push(todoMk('send', (isRevEval(c) ? '发送复诊评估结果' : isRevisitConsult(c) ? '发送恢复评估' : '发送诊疗方案')+(over ? '（已超时）' : ''), c, todoEtaDue(c), over, goCase('consult'))); }
       if(c.urgedAt && ((c.consultStatus==='awaiting_report' && !c.reportReady) || c.consultStatus==='paid_waiting_kr' || scheduleState(c)==='Pending')) push(todoMk('urged', '被催办：请尽快处理', c, '', true, goCase(scheduleState(c)==='Pending' ? 'proc' : 'consult'), {pin:true}));
       if(c.stage==='travel' && scheduleState(c)==='Pending') push(todoMk('sched', '确认施术时间', c, (c.krSchedule||{}).primary||'', false, goCase('proc')));
       if(c.stage==='travel' && scheduleState(c)==='Changing') push(todoMk('change', '改期待确认', c, (c.krSchedule||{}).changePrimary||'', false, goCase('proc')));
@@ -126,8 +126,8 @@ function krTodoItems(rows){
     }
     if(work){ (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0) push(todoMk('pcdue', '联络 IN 确认客人行程：术后管理已过建议日期 '+pcDaysLate(s.date)+' 天（'+s.content+'）', c, s.date, true, goCase('proc'))); }); } /* CMD-1015-17 */
     /* 院长：上传面诊内容（面诊已安排、院长还没上传） */
-    if(isDir && c.consultStatus==='awaiting_report' && !c.consultContentAt) push(isRevisitConsult(c) ? todoMk('recover', '复诊：上传恢复确认内容（'+((c.followProjects||[]).join('、')||'复诊')+'）', c, todoEtaDue(c), reportOverdueNow(c), goCase('consult')) : todoMk('upload', '上传面诊内容', c, todoEtaDue(c), reportOverdueNow(c), goCase('consult'))); /* CMD-1021-19：复诊面诊 = 院长「恢复确认」，不算「待面诊」 */
-    if(isDir && isRevisitConsult(c) && c.consultStatus==='paid_waiting_kr') push(todoMk('recoverwait', '复诊面诊：等 KR 室长确认时间（'+((c.followProjects||[]).join('、')||'复诊')+'）', c, '', false, goCase('consult'))); /* CMD-1021-24：KR 还没确认时间也先让院长看到（计入「恢复确认」卡，参考名单，不进待办） */
+    if(isDir && c.consultStatus==='awaiting_report' && !c.consultContentAt) push(isRevisitConsult(c) ? todoMk('recover', (isRevEval(c) ? '复诊评估：上传评估（' : '复诊：上传恢复确认内容（')+((c.followProjects||[]).join('、')||'复诊')+'）', c, todoEtaDue(c), reportOverdueNow(c), goCase('consult')) : todoMk('upload', '上传面诊内容', c, todoEtaDue(c), reportOverdueNow(c), goCase('consult'))); /* CMD-1021-19：复诊面诊 = 院长「恢复确认」，不算「待面诊」 */
+    if(isDir && isRevisitConsult(c) && c.consultStatus==='paid_waiting_kr') push(todoMk('recoverwait', (isRevEval(c) ? '复诊评估：等 KR 室长确认评估时间（' : '复诊面诊：等 KR 室长确认时间（')+((c.followProjects||[]).join('、')||'复诊')+'）', c, '', false, goCase('consult'))); /* CMD-1021-24：KR 还没确认时间也先让院长看到（计入「恢复确认」卡，参考名单，不进待办） */
     /* CMD-1015-15：院长「待施术」——自己负责的全部已确认（含已到院）施术，只当参考名单（点卡片才显示），按今天 / 之后分组 */
     if(isDir && me && r.director===me.name && c.krSchedule && ['confirmed','arrived'].indexOf(c.krSchedule.status)>-1 && c.krSchedule.confirmedDate && !c.visitClosed && !isEnded(c))
       push(todoMk('dsurg', '施术：'+krActiveItems(c).filter(function(i){ return !krIsMgmtItemC(i); }).map(function(i){ return i.name; }).join('、'), c, c.krSchedule.confirmedDate+' '+(c.krSchedule.confirmedTime||''), false, function(){ krOpenSubCard(r.clinicId, r.id); }));
@@ -201,7 +201,7 @@ var TODO_FILTERS = {
   kr:     {label:'等 KR 回复', fn:function(it){ return ['urge','resched','relay','recheck'].indexOf(it.kind)>-1; }},
   today2: {label:'今天到院', fn:function(it){ return it.kind==='today'; }},
   dconsult:{label:'待面诊', fn:function(it){ return it.kind==='upload'; }},
-  drecover:{label:'恢复确认', fn:function(it){ return it.kind==='recover'; }},
+  drecover:{label:'待复诊', fn:function(it){ return it.kind==='recover'; }},
   dsurg:  {label:'待施术', fn:function(it){ return it.kind==='dsurg'; }},
   waiting:{label:'等待报告', fn:function(it){ return ['eta','send','urged','waitdir','upload','recover'].indexOf(it.kind)>-1; }},
   msg:    {label:'新消息', fn:function(it){ return it.kind==='stay'; }}
@@ -451,7 +451,7 @@ function todoCbGo(){
   todoCbClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){}
   showToast(mergedAny ? '已合并' : '预约已生成', c.name+' · '+done.join('、')+'（术后管理，接续 '+c.caseNo+'）', null);
 }
-var TODO_KIND_LABEL = {dsurg:'待施术', dconsult:'待面诊', drecover:'恢复确认', today:'今天到院'};
+var TODO_KIND_LABEL = {dsurg:'待施术', dconsult:'待面诊', drecover:'待复诊', today:'今天到院'};
 function todoToggle(){ TODO_UI.collapsed = !TODO_UI.collapsed; todoSaveUi(); todoRefresh(); }
 function todoSetMine(v){ TODO_UI.mine = !!v; todoSaveUi(); todoRefresh(); }
 function todoSetKind(k){ TODO_UI.kind = k; if(k) TODO_UI.collapsed = false; todoSaveUi(); todoRefresh(); }
@@ -520,7 +520,7 @@ function todoKrCardsHtml(rows){
 }
 /* 院长工作台四张卡（CMD-1015-15）：待面诊 / 待施术 / 恢复确认（占位，即将推出）/ 新消息 */
 function todoKrDirCardsHtml(){
-  return todoCatCardsHtml(todoItems(), [['dconsult','待面诊','自己负责、已排好面诊时间、还没上传面诊内容的案件（要动手的事，点了筛选待办）'],['dsurg','待施术','自己负责的全部已确认施术（点了看名单：今天 / 之后）'],['drecover','恢复确认','自己负责的复诊面诊（IN 复诊来访选了需要院长面诊）：看关联案件 / 要看的项目 / IN 上传的照片说明，写恢复评估（点了筛选待办）'],['msg','新消息','被 @ / 未接来电']]);
+  return todoCatCardsHtml(todoItems(), [['dconsult','待面诊','自己负责、已排好面诊时间、还没上传面诊内容的案件（要动手的事，点了筛选待办）'],['dsurg','待施术','自己负责的全部已确认施术（点了看名单：今天 / 之后）'],['drecover','待复诊','自己负责的复诊评估（含旧的复诊面诊）：看关联案件 / 要看的项目 / IN 上传的照片说明，写评估（点了筛选待办）'],['msg','新消息','被 @ / 未接来电']]);
 }
 function todoKrToday(){ if(typeof KRC!=='undefined'){ KRC.mode = 'day'; KRC.anchor = krToday(); KRC.person = 'all'; KRC.layer = 'hospital'; krcRender(); } }
 
@@ -620,7 +620,7 @@ function notifTodoKind(n){
   if(kd==='mention' || kd==='missedcall' || /@ 了你|未接来电/.test(tx)) return 'stay';
   if(n.popup==='confirm') return 'confirm'; /* CMD-1015-09：设定更新（IN-23 / KR-14）弹出并停留、手动确认（不是紧急，没有彩色图标） */
   if(n.popup==='once') return 'todo'; /* 今天的自助预约（IN-15 / IN-16）：弹一次、几秒后自动收起 */
-  if(/诊疗方案已到|诊疗方案已出|复诊评估已出|KR 已确认面诊时间|请发送诊疗方案|等待报告超过|无法安排|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
+  if(/诊疗方案已到|诊疗方案已出|复诊评估已出|复诊评估结果已到|KR 已确认面诊时间|KR 已确认评估时间|请发送诊疗方案|等待报告超过|无法安排|预约占位快过期|KR 确认(新)?施术时间|待收款|催办|已缴面诊费|面诊费已免除|需要处理|施术日期待确认|改期待确认|在韩加项/.test(tx) || kd==='urge' || kd==='consultpaid') return 'todo';
   return 'msg';
 }
 

@@ -3667,7 +3667,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(function(c){ coreSubmitReport(c, {original:'x', zh:'x', items:[{name:'隆鼻', price:1000000}], overallNote:'', files:[]}, 'KM1 室长'); });
       var n2 = Store.withClinic(cid, function(){ return NOTIFS.filter(function(n){ return /复诊评估已出/.test(n.text) && /附项目方案/.test(n.text) && !/不附/.test(n.text); }).length; }); ST.ok(n2===1, '附项目方案：通知写「附项目方案」');
       ST.ok(typeof NOTIF_ACTION_RE!=='undefined' && NOTIF_ACTION_RE.test('复诊评估已出：x') && notifTodoKind({text:'复诊评估已出：x', level:'action', popup:'confirm'})!=='info', '复诊评估已出是需确认类通知');
-      var dc = todoKrDirCardsHtml(); ST.ok(/恢复确认/.test(dc) && !/即将推出/.test(dc), '院长工作台「恢复确认」卡已启用（不再是即将推出）');
+      var dc = todoKrDirCardsHtml(); ST.ok(/待复诊/.test(dc) && !/即将推出/.test(dc), '院长工作台第三张卡改名「待复诊」（CMD-1022-07，取代「恢复确认」）');
       ST.ok(!!TODO_FILTERS.drecover, '待办筛选有「恢复确认」');
     } finally { window.alert = oa; window.confirm = oc; }
   });
@@ -3912,6 +3912,50 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     krShowCase(r.clinicId, r.id, {tab:'consult'}); var txt = document.getElementById('krcase-body').innerText;
     ST.ok(/接续 · 接续面诊/.test(txt), 'KR 页头标「接续 · 接续面诊」'); ST.ok(/沿用原诊疗方案/.test(txt) && /补加可选项目/.test(txt), 'KR 看得到沿用的方案，可补加可选项目');
     ST.ok(/接续 · 接续面诊/.test(krResumeTag(r.c)), 'krResumeTag');
+  });
+
+  /* ---- CMD-1022-07 复诊评估拆成独立状态 + 改名 ---- */
+  ST.def('R96a','CMD-1022-07（IN 分页）：接续 · 复诊评估：到访目的顺序 / 不收费 / 状态「复诊评估 · 等确认时间」/ IN tab「复诊评估」；旧复诊案件照旧',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK, oa = window.alert; window.alert = function(){};
+    try{
+      var src = ST.newRes('R96s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.reportReady = true; src.consultStatus = 'report_ready'; src.projectsEnabled = true; src.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; src.consultRequested = true;
+      window.GMC_NO_FOLLOWASK = false;
+      var n = ST.newRes('R96n', {phone:clientPhoneOf(src.name)}); ST.open(n); markArrived(); fuSet('mode','link'); fuSet('type','复诊评估'); FU_ASK.sel = src.id; followupAskDone(true); n = getCurrentCase();
+      var h = materialsCardHtml(n), ix = function(k){ return h.indexOf(k); };
+      ST.ok(h.indexOf('面诊需求')<0 && ix('这次要看的项目')>-1 && ix('复诊想问的内容')>ix('这次要看的项目') && ix('客人希望的评估时间')>ix('复诊想问的内容') && /메타뷰 <span/.test(h), '到访目的：要看的项目（含上传卡）→ 想问的内容 → 客人希望的评估时间，没有「面诊需求」，메타뷰 必填');
+      toggleFollowProject('隆鼻'); saveRevisitQuestion('右边还肿'); mockUploadRevisit('隆鼻','video'); concernPartDef(revisitMediaOf(n,'隆鼻').part).angles.forEach(function(a){ mockUploadRevisit('隆鼻', a.id); }); n.metaviewStatus = 'ready'; n.wantConsult = '下周'; confirmMaterials(); n = getCurrentCase();
+      ST.ok(n.materialsConfirmed && n.revisitEval && n.noConsultFee && n.consultStatus==='paid_waiting_kr' && n.consultFeeAmount===0, '确认：revisitEval，没有费用，直接送 KR（等确认评估时间）');
+      var i = caseStageInfo(n); ST.ok(i.stage==='复诊评估' && i.proc==='等确认时间', '状态「复诊评估 · 等确认时间」：'+i.stage+' · '+i.proc);
+      ST.ok(!consultFeePaid(n) && financeResultOf(n)==='无收入', '不收费：财务栏无收入、面诊费不计');
+      ST.ok(/复诊评估/.test(caseTabsHtml(n)) && caseTabsHtml(n).indexOf('面诊资料')<0, 'IN tab 叫「复诊评估」');
+      var th = caseTabContentHtml((n.activeCaseTab='consult', n)); ST.ok(!/面诊/.test(th.replace(/<[^>]+>/g,'')) && /不收费/.test(th) && /等确认时间/.test(th), '复诊评估 tab：没有面诊字样、没有面诊费卡');
+      ST.ok(!/面诊/.test(revEvalProcText(n)+i.stage+i.proc), '状态文字里没有「面诊」');
+      ST.ok(ST.hasLog(n, /复诊评估已送出（不收费）/), 'Timeline 记送出');
+      var o = ST.newRes('R96o', {phone:clientPhoneOf(src.name)}); o = CASE_ITEMS.filter(function(x){ return x.id===o.id; })[0]; o.consultKind = '复诊'; o.consultRequested = true; o.consultStatus = 'paid_waiting_kr'; o.stage = 'consult'; o.materialsConfirmed = true;
+      ST.ok(isRevisitConsult(o) && !isRevEval(o) && /^复诊 · /.test(caseProcessText(o)) && caseStageInfo(o).stage!=='复诊评估', '旧复诊案件（没有 revisitEval）照旧：复诊 · … / 面诊安排');
+    } finally { window.GMC_NO_FOLLOWASK = old; window.alert = oa; }
+  });
+  ST.def('R96b','CMD-1022-07（KM1 分页，要先在 A1 分页跑 R96a 留下夹具）：KR 复诊评估——tab / 确认评估时间和结果时间 / 待办标待评估 / 开始评估 / 传结果 / 院长卡待复诊 / 没有面诊字样',function(){
+    if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 分页里跑'); return; }
+    var r = krAllCases().filter(function(x){ return x.c.revisitEval; })[0]; if(!r){ ST.ok(true, '没有复诊评估夹具，跳过'); return; }
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; krShowCase(cid, r.id, {tab:'consult', here:true});
+      var tabs = KR_CASE_TABS.map(function(t0){ return (t0.key==='consult' && isRevEval(gc())) ? '复诊评估' : t0.label; }).join('|'); ST.ok(/复诊评估/.test(tabs), 'KR tab「复诊评估」');
+      var h = krTabConsult(gc()), txt = h.replace(/<[^>]+>/g, ' ');
+      ST.ok(/确认评估时间和结果时间/.test(h) && /评估时间/.test(h) && /结果时间/.test(h) && !/面诊/.test(txt.replace(/院长日程[\s\S]*$/, '')), '确认评估时间和结果时间卡，没有面诊字样');
+      var ti = krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+r.id; });
+      ST.ok(ti.some(function(x){ return x.kind==='eta' && /复诊评估：确认评估时间和结果时间/.test(x.text) && x.stage==='待评估'; }), 'KR 待办标「待评估」：确认评估时间和结果时间');
+      mut(function(c){ ST.krEta(c); }); h = krTabConsult(gc()); ST.ok(/开始评估/.test(h) && !/开始面诊/.test(h) && /评估时间（韩国）/.test(h.replace(/<[^>]+>/g,' ')) && caseStageInfo(gc()).proc==='等评估', '确认后：［开始评估］，状态「等评估」');
+      mut(function(c){ coreStartConsult(c, 'KM1 室长'); }); ST.ok(caseStageInfo(gc()).proc==='评估中', '开始评估 → 评估中');
+      mut(function(c){ c.consultContentAt = nowFullDt(); }); ST.ok(/评估完成/.test(caseStageInfo(gc()).proc), '上传评估内容 → 评估完成 · 等 KR 传结果');
+      ti = krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+r.id; }); ST.ok(ti.some(function(x){ return x.kind==='send' && /发送复诊评估结果/.test(x.text) && x.stage==='待评估'; }), 'KR 待办：发送复诊评估结果（待评估）');
+      var blk = krSubmitBlock(gc()); ST.ok(/发送复诊评估结果/.test(blk), '发送块叫「发送复诊评估结果」');
+      var dc = todoKrDirCardsHtml(); ST.ok(/待复诊/.test(dc) && /待面诊/.test(dc) && !/恢复确认/.test(dc), '院长工作台四张卡：待面诊｜待施术｜待复诊｜新消息');
+    } finally { window.alert = oa; window.confirm = oc; }
   });
 
 })();

@@ -100,8 +100,16 @@ function postcareProcText(c){
   return '韩国行程中 · '+rows.length+' 项待做（韩国 '+kr.length+' / 印尼 '+inn.length+'）'+(late ? ' · '+late+' 项已过建议日期' : '');
 }
 function isRevisitConsult(c){ return !!(c && c.consultKind==='复诊'); } /* CMD-1021-19：复诊面诊（IN 术后来访选「需要院长面诊（复诊）」） */
+/* CMD-1022-07：新的「接续 · 复诊评估」案件带 c.revisitEval（旧复诊案件没有 = 照旧叫复诊面诊 / 恢复确认）；复诊评估内部仍借用面诊的时间确认 / 录入 / 发送组件和 consultStatus 取值，但状态、名称、待办、计数、通知都按复诊评估单独显示 */
+function isRevEval(c){ return !!(c && c.revisitEval); }
+function revEvalProcText(c){
+  if(c.reportReady || c.consultStatus==='report_ready') return c.recoveryResult && c.recoveryResult.result==='treat' ? '结果已到 · 需要处理' : '结果已到';
+  if(c.consultStatus==='paid_waiting_kr') return '等确认时间';
+  if(c.consultStatus==='awaiting_report'){ if(c.consultContentAt) return '评估完成 · 等 KR 传结果'; return c.consultStartedAt ? '评估中' : '等评估'; }
+  return '等确认时间';
+}
 function revisitTag(c){ return isRevisitConsult(c) ? '复诊' : ''; }
-function caseProcessText(c){ var t = caseProcessText0(c); return (isRevisitConsult(c) && c.stage==='consult' && c.consultRequested && !c.reportReady && t && t.indexOf('复诊')!==0) ? '复诊 · '+t : t; }
+function caseProcessText(c){ var t = caseProcessText0(c); return (isRevisitConsult(c) && !isRevEval(c) && c.stage==='consult' && c.consultRequested && !c.reportReady && t && t.indexOf('复诊')!==0) ? '复诊 · '+t : t; }
 function caseProcessText0(c){
   if(c.krVisit && (c.stage==='booked' || c.stage==='krmgmt')) return c.krVisit.arrived ? '在韩已到院' : '待在韩到院（KR 医院）';
   if(c.stage==='postcare') return postcareProcText(c);
@@ -148,6 +156,7 @@ function caseStageInfo(c){
   var pr = caseProcessText(c);
   if(typeof isKrAccount==='function' && isKrAccount()) pr = String(pr).replace(/本地项目(全退|保留)|本地完成|本地项目[^，；·]*/g,'IN 已处理'); /* CMD-1014-16：KR 不显示 IN 本地项目的内容，只显示事件 */
   if(typeof isKrAccount==='function' && isKrAccount() && c.stage==='local'){ var kt = krLastStatusText(c); return {bg:'#EDEAE2', fg:'#6E665E', stage:'—', proc:kt}; } /* CMD-1014-18 四·1：KR 不显示 IN 的「本地管理」阶段，进程写和 KR 有关的最后状态 */
+  if(isRevEval(c) && c.stage==='consult' && !c.localAsk) return {bg:col[0], fg:col[1], stage:'复诊评估', proc:revEvalProcText(c)}; /* CMD-1022-07：复诊评估 · 等确认时间 / 等评估 / 评估中 / 结果已到 */
   return {bg:col[0], fg:col[1], stage:STAGE_LABELS[c.stage] || c.stage, proc:pr};
 }
 function krLastStatusText(c){
@@ -273,7 +282,7 @@ function fmtUtcTime(s, tz){ var f = fmtUtc(s, tz); return f.length>=16 ? f.slice
    新写含时间的通知 / Timeline 文字：用 tkU / tkK 生成标记，不要直接拼 fmtUtc(...) 或韩国钟点。 */
 /* 通知分级（Notification Center 2026-10-12）：action = 需要你处理（手动确认）；next = 进入下一阶段（手动确认）；info = 一般消息（6 秒自动消失，铃铛仍留记录）。
    通知事件创建时记在 n.level（可在 opts.level 显式指定），没有记的（旧数据）按文字推断 */
-var NOTIF_ACTION_RE = /待确认|催办|诊疗方案已到|诊疗方案已出|复诊评估已出|无法安排|未接来电|@ 了你|调整了到院时间|请确认报告时间|请按此|重新选择/;
+var NOTIF_ACTION_RE = /待确认|催办|诊疗方案已到|诊疗方案已出|复诊评估已出|复诊评估结果已到|KR 已确认评估时间|无法安排|未接来电|@ 了你|调整了到院时间|请确认报告时间|请按此|重新选择/;
 var NOTIF_INFO_RE = /自助预约了|已填完预约资料|取消了.*的预约|客人自助预约|占位客人填完资料|客人到店自己填|客人改约|自行把预约时间|客人取消预约|修改了预计出报告时间|预约占位快过期|进入了|更新了诊所设定|加购/;
 function notifLevel(text){ var t0 = String(text||''); if(NOTIF_ACTION_RE.test(t0)) return 'action'; if(NOTIF_INFO_RE.test(t0)) return 'info'; return /已缴面诊费|免除|确认.*施术时间|确认预计出报告时间|已到(医)?院|可以手术|不建议手术|施术完成|结案|仅出报告|已取消|未到店|付清尾款|更换项目|无法施术|重新预约了施术|术后管理已预约|增加项目|延续既往面诊判断|补加了可选项目|完成在韩子项|timeline/.test(t0) ? 'next' : 'info'; }
 function notifLevelOf(n){ return (n && n.level) || notifLevel(n && n.text); }

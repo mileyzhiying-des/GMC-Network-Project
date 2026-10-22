@@ -1785,6 +1785,8 @@ function confirmMaterials(){
   document.getElementById('case-chat-actions').style.display = 'flex';
   if(c.needsConsult==='reuse'){
     applyReuseReport(c); /* 沿用之前诊疗方案：不产生面诊费卡片，直接进入"项目确认中" */
+  } else if(c.needsConsult===true && c.followup && c.resumeFrom && c.resumeFrom.type==='复诊评估'){
+    startRevisitEval(c); /* CMD-1022-07：接续 · 复诊评估：不收面诊费，直接送 KR 确认评估时间 */
   } else if(c.needsConsult===true){
     /* 选了面诊，直接进面诊资料tab走缴费，不需要再多点一次"面诊申请" */
     c.consultRequested = true;
@@ -1799,7 +1801,7 @@ function confirmMaterials(){
   }
   updateCaseStage(c);
   renderCaseStatusBar(c);
-  logCaseEvent(c, ME_NAME, '确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：'+(c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊')));
+  logCaseEvent(c, ME_NAME, '确认了메타뷰/照片/视频/苦恼/希望预期，'+(c.revisitEval ? '' : '面诊需求：')+(c.revisitEval ? '复诊评估' : (c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊'))));
   buildCaseLog(c);
   renderCaseBody(c);
 }
@@ -3081,7 +3083,7 @@ function openNotif(id, src){
   }
   if(n.caseId){
     var pcGo = /术后管理/.test(n.text||'') && !/转回印尼持有/.test(n.text||'');
-    var planGo = /诊疗方案已[到出]|复诊评估已出/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
+    var planGo = /诊疗方案已[到出]|复诊评估已出|复诊评估结果已到/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
     if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : (planGo ? '&tab=consult' : '')); else openCaseDetail(n.caseId, false, pcGo ? {pc:true} : (planGo ? {tab:planGo} : {pc:pcGo}));
   }
 }

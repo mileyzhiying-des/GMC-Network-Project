@@ -618,10 +618,10 @@ function krConsultTimesBlock(c){
   var dis = can ? '' : ' disabled';
   var want = c.wantConsult ? '<div style="padding:10px 14px;border-radius:8px;background:#FFF7E3;border:1px solid #F0DFA6;font-size:13px;"><b>客人希望：</b>'+krEsc(c.wantConsult)+'</div>' : '';
   var form = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
-    box('面诊时间', '请选择客人面诊的日期和时间', '<input type="date" value="'+KR_CT.cd+'" min="'+krToday()+'" onchange="krCtSet(\'cd\',this.value)" style="'+inp+'"'+dis+'>', '<select onchange="krCtSet(\'ct\',this.value)" style="'+inp+'"'+dis+'>'+krHourOptions(KR_CT.ct, '06:00', '23:30')+'</select>')+
-    box('预计出报告时间', '请选择预计出报告的日期和时间', '<input type="date" value="'+KR_CT.ed+'" min="'+KR_CT.cd+'" onchange="krCtSet(\'ed\',this.value)" style="'+inp+'"'+dis+'>', '<select onchange="krCtSet(\'et\',this.value)" style="'+inp+'"'+dis+'>'+krHourOptions(KR_CT.et, '00:00', '23:30')+'</select>')+'</div>';
+    box(isRevEval(c) ? '评估时间' : '面诊时间', isRevEval(c) ? '请选择院长评估的日期和时间' : '请选择客人面诊的日期和时间', '<input type="date" value="'+KR_CT.cd+'" min="'+krToday()+'" onchange="krCtSet(\'cd\',this.value)" style="'+inp+'"'+dis+'>', '<select onchange="krCtSet(\'ct\',this.value)" style="'+inp+'"'+dis+'>'+krHourOptions(KR_CT.ct, '06:00', '23:30')+'</select>')+
+    box(isRevEval(c) ? '结果时间' : '预计出报告时间', isRevEval(c) ? '请选择预计出评估结果的日期和时间' : '请选择预计出报告的日期和时间', '<input type="date" value="'+KR_CT.ed+'" min="'+KR_CT.cd+'" onchange="krCtSet(\'ed\',this.value)" style="'+inp+'"'+dis+'>', '<select onchange="krCtSet(\'et\',this.value)" style="'+inp+'"'+dis+'>'+krHourOptions(KR_CT.et, '00:00', '23:30')+'</select>')+'</div>';
   var foot = can ? '<div style="border-top:1px solid var(--border2);padding-top:14px;display:flex;justify-content:flex-end;"><button class="btn-primary" onclick="krDoConfirmTimes()">确认</button></div>' : '<div style="font-size:12px;color:var(--muted);">面诊时间和预计出报告时间由 KR 室长确认，院长账号不能改。</div>';
-  return krCardBox('确认面诊时间和预计出报告时间', '<div style="display:flex;flex-direction:column;gap:10px;margin-top:6px;">'+want+top+form+foot+'</div>');
+  return krCardBox(isRevEval(c) ? '确认评估时间和结果时间' : '确认面诊时间和预计出报告时间', '<div style="display:flex;flex-direction:column;gap:10px;margin-top:6px;">'+want+top+form+foot+'</div>');
 }
 /* 院长某一天"几点～几点不行"：已有的施术 / 面诊 / 不可预约块 + 半天 OFF；整天 OFF / 医院休诊 = 整天不行 */
 function krDirUnavail(hid, director, date){
@@ -694,12 +694,12 @@ function krSetEtaEdit(v){ KR_ETA_EDIT = v; krRenderCaseDetail(); }
 function krEtaStatusBlock(c){
   var over = reportOverdueNow(c), started = !!c.consultStartedAt, ended = !!c.consultContentAt, canStart = krCanRecord(c) && !started && !ended;
   /* CMD-1019-08：开始面诊之后 / 已上传面诊内容 → 折叠成一行「负责院长 · 当前小状态」+［展开］；面诊时间、预计出报告时间、倒计时、［修改预计时间］收进展开区 */
-  if((started || ended) && !KR_CONSULT_OPEN[c.id]) return krCardBox('面诊', '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:13px;"><b>'+krEsc(c.director||'—')+'</b> · '+(ended ? '已上传面诊内容，待整理诊疗方案' : '面诊中')+(over ? ' <span style="color:#C26A1B;">（已超过预计出报告时间）</span>' : '')+'</span><a href="#" class="info-link" onclick="krConsultToggle(\''+c.id+'\');return false;">展开</a></div>');
+  if((started || ended) && !KR_CONSULT_OPEN[c.id]) return krCardBox(isRevEval(c) ? '复诊评估' : '面诊', '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:13px;"><b>'+krEsc(c.director||'—')+'</b> · '+(ended ? (isRevEval(c) ? '已上传评估内容，待传结果' : '已上传面诊内容，待整理诊疗方案') : (isRevEval(c) ? '评估中' : '面诊中'))+(over ? ' <span style="color:#C26A1B;">（已超过预计出报告时间）</span>' : '')+'</span><a href="#" class="info-link" onclick="krConsultToggle(\''+c.id+'\');return false;">展开</a></div>');
   /* 一张卡片：面诊时间 / 预计出报告时间 / 倒计时 / 当前小状态 /［开始面诊］/［修改预计时间］ */
-  return krCardBox('面诊', krDirLine(c)+(c.consultAt ? krKV('面诊时间（韩国）', krEsc(c.consultAt.date+' '+c.consultAt.time)) : '')+krKV('预计出报告时间', krEsc(fmtUtc(c.reportEta) ? fmtUtc(c.reportEta)+'（韩国）' : '—'))+krKV('倒计时', over ? '<b style="color:#C26A1B;">已超过预计时间</b>' : krEsc(reportRemainingText(c)))+
+  return krCardBox(isRevEval(c) ? '复诊评估' : '面诊', krDirLine(c)+(c.consultAt ? krKV(isRevEval(c) ? '评估时间（韩国）' : '面诊时间（韩国）', krEsc(c.consultAt.date+' '+c.consultAt.time)) : '')+krKV(isRevEval(c) ? '结果时间' : '预计出报告时间', krEsc(fmtUtc(c.reportEta) ? fmtUtc(c.reportEta)+'（韩国）' : '—'))+krKV('倒计时', over ? '<b style="color:#C26A1B;">已超过预计时间</b>' : krEsc(reportRemainingText(c)))+
     krKV('当前小状态', krSubHtml(caseSubStatusItems(c)) || '—')+
     (over ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-top:8px;">⏰ 已超过预计出报告时间，诊疗方案还没发送。请尽快发送，或修改预计时间（IN 端会收到通知）。</div>' : '')+
-    ((started || ended) ? '<div style="margin-top:10px;"><a href="#" class="info-link" onclick="krConsultToggle(\''+c.id+'\');return false;">收起</a></div>' : '')+'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">'+(canStart ? '<button class="btn-primary" onclick="krStartConsult()">开始面诊</button>' : '')+(krCan() && !KR_ETA_EDIT ? '<button class="btn-outline" onclick="krSetEtaEdit(true)">修改预计时间</button>' : '')+'</div>');
+    ((started || ended) ? '<div style="margin-top:10px;"><a href="#" class="info-link" onclick="krConsultToggle(\''+c.id+'\');return false;">收起</a></div>' : '')+'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">'+(canStart ? '<button class="btn-primary" onclick="krStartConsult()">'+(isRevEval(c) ? '开始评估' : '开始面诊')+'</button>' : '')+(krCan() && !KR_ETA_EDIT ? '<button class="btn-outline" onclick="krSetEtaEdit(true)">修改预计时间</button>' : '')+'</div>');
 }
 function krStartConsult(){
   if(krIsDirector()){ krStartChooseOpen(); return; } /* 院长账号：先弹窗选录入方式，再新分页打开输入页 */
@@ -744,6 +744,7 @@ function krDirSchedPopup(name){
 var KR_RV_OPEN = {};
 function krRvToggle(){ var key = KR_CASE.clinicId+':'+KR_CASE.id, c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, cur = (key in KR_RV_OPEN) ? KR_RV_OPEN[key] : c.consultStatus!=='paid_waiting_kr'; KR_RV_OPEN[key] = !cur; krRenderCaseDetail(); }
 function krSetRecoveryResult(v){ krMut(function(c){ if(!isRevisitConsult(c) || c.reportReady || !krCanRecord(c)) return false; c.recoveryResult = {result:v, by:ME_NAME, proxy:!isKrDirectorLike(currentAccount()), at:nowFullDt()}; logCaseEvent(c, ME_NAME, '恢复评估结论：'+(v==='treat' ? '需要处理' : '恢复正常')); return true; }); }
+function krRvTitle(c){ return isRevEval(c) ? '复诊评估' : '恢复确认 <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">复诊面诊</span>'; }
 function krRecoveryCard(c){
   if(!isRevisitConsult(c)) return '';
   var r0 = (c.linkedCase && c.linkedCase.caseId) ? krFindCase(KR_CASE.clinicId, c.linkedCase.caseId) : null, src = r0 && r0.c;
@@ -752,22 +753,22 @@ function krRecoveryCard(c){
   /* CMD-1021-24：KR 还没确认面诊时间时折叠成一行摘要（可手动展开）；确认之后自动展开，状态「等待院长复诊面诊」 */
   var rvKey = KR_CASE.clinicId+':'+KR_CASE.id, open = (rvKey in KR_RV_OPEN) ? KR_RV_OPEN[rvKey] : c.consultStatus!=='paid_waiting_kr';
   var toggle = '<a href="#" class="info-link" style="font-size:12px;font-weight:400;float:right;" onclick="krRvToggle();return false;">'+(open ? '收起' : '展开')+'</a>', q = String(c.revisitQuestion||'').trim();
-  if(!open) return krCardBox('恢复确认 <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">复诊面诊</span>'+toggle, '<div style="font-size:13px;color:var(--slate2);">'+(src ? krEsc(src.caseNo) : '—')+' · '+krEsc((c.followProjects||[]).join('、')||'—')+(q ? ' · '+krEsc(q.slice(0, 14))+(q.length>14 ? '…' : '') : '')+'</div>');
+  if(!open) return krCardBox(krRvTitle(c)+toggle, '<div style="font-size:13px;color:var(--slate2);">'+(src ? krEsc(src.caseNo) : '—')+' · '+krEsc((c.followProjects||[]).join('、')||'—')+(q ? ' · '+krEsc(q.slice(0, 14))+(q.length>14 ? '…' : '') : '')+'</div>');
   var rb = function(v, lb){ var on = rr===v; return can ? '<button class="'+(on ? 'btn-primary' : 'btn-outline')+'" onclick="krSetRecoveryResult(\''+v+'\')">'+(on ? '✅ ' : '')+lb+'</button>' : '<span class="status-pill" style="'+(on ? 'background:var(--sage-bg);color:var(--sage);' : 'opacity:.5;')+'">'+lb+'</span>'; };
   var recs = (c.recovery||[]).map(function(x){ return krEsc(x.name)+'（'+Object.keys(x.photos||{}).length+' 张恢复照片）'; }).join('、');
-  var stTxt = c.consultStatus==='awaiting_report' && !c.consultContentAt ? '<div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:6px;">等待院长复诊面诊'+(c.consultStartedAt ? '（面诊中）' : '')+'</div>' : (c.consultStatus==='paid_waiting_kr' ? '<div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:6px;">待 KR 室长确认面诊时间</div>' : '');
-  return krCardBox('恢复确认 <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">复诊面诊</span>'+toggle,
+  var stTxt = c.consultStatus==='awaiting_report' && !c.consultContentAt ? '<div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:6px;">'+(isRevEval(c) ? '等待院长评估' : '等待院长复诊面诊')+(c.consultStartedAt ? (isRevEval(c) ? '（评估中）' : '（面诊中）') : '')+'</div>' : (c.consultStatus==='paid_waiting_kr' ? '<div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:6px;">'+(isRevEval(c) ? '待 KR 室长确认评估时间' : '待 KR 室长确认面诊时间')+'</div>' : '');
+  return krCardBox(krRvTitle(c)+toggle,
     stTxt+krKV('关联案件', src ? krEsc(src.caseNo)+' · '+krEsc(caseStageProcText(src)) : '—')+
     krKV('原案件做过的施术', done || '—')+
     krKV('这次要看的项目', krEsc((c.followProjects||[]).join('、')) || '—')+
     (recs ? krKV('恢复照片', recs) : '')+
     '<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">IN 上传的说明 / 照片</div>'+concernBlockHtml(c, {})+
     '<div style="font-size:12px;font-weight:700;margin:14px 0 6px;">评估结论'+(can ? ' <span style="color:var(--terracotta);">*</span>' : '')+'</div><div style="display:flex;gap:10px;flex-wrap:wrap;">'+rb('ok','恢复正常')+rb('treat','需要处理')+'</div>'+(c.recoveryResult ? '<div style="font-size:12px;color:var(--muted);margin-top:4px;">评估人：'+krEsc(c.recoveryResult.by||'')+(c.recoveryResult.proxy ? '（室长代输入）' : '')+'</div>' : '')+
-    '<div style="font-size:12px;color:var(--muted);margin-top:6px;">评估说明 = 下面录入的面诊内容（可语音）；需要处理时，室长可在发送时附项目方案，没有也可以不附。</div>');
+    '<div style="font-size:12px;color:var(--muted);margin-top:6px;">评估说明 = 下面录入的'+(isRevEval(c) ? '评估' : '面诊')+'内容（可语音）；需要处理时，室长可在发送时附项目方案，没有也可以不附。</div>');
 }
 function krTabConsult(c){
   var fee = consultFeeStatusMain(c), out = '';
-  var head = (c.consultStatus==='paid_waiting_kr' || c.consultStatus==='awaiting_report') ? '' : krCardBox('面诊', krDirLine(c)); /* 院长在面诊卡片第一行（进行中的状态在下面各自的卡片里）；面诊费卡片、当前小状态卡片已并进「面诊」卡片（CMD-1012-05） */
+  var head = (c.consultStatus==='paid_waiting_kr' || c.consultStatus==='awaiting_report') ? '' : krCardBox(isRevEval(c) ? '复诊评估' : '面诊', krDirLine(c)); /* 院长在面诊卡片第一行（进行中的状态在下面各自的卡片里）；面诊费卡片、当前小状态卡片已并进「面诊」卡片（CMD-1012-05） */
   if(c.reuseReport) return head+krCardBox('沿用原诊疗方案', krKV('来源', krEsc(c.reuseReport.caseNo)+'（'+krEsc(c.reuseReport.date||'')+'）')+krKV('报告', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
   if(c.consultStatus==='paid_waiting_kr') return head+krConsultTimesBlock(c)+krRecoveryCard(c); /* CMD-1021-24：先确认面诊时间，恢复确认卡折叠在下面 */
   if(c.consultStatus==='awaiting_report'){
@@ -775,7 +776,7 @@ function krTabConsult(c){
     if(isContinuationConsult(c)) return out+krJudgeBlock(c); /* 延续既往面诊：先判断有无变动 */
     return out+((c.consultStartedAt || c.consultContentAt) ? krRecordBlock(c) : ''); /* 按［开始面诊］之前不显示「录入面诊」和「发送诊疗方案」（CMD-1012-08 二·2） */
   }
-  if(c.consultStatus==='report_ready') return head+krRecoveryCard(c)+krCardBox(isRevisitConsult(c) ? '恢复评估' : '报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
+  if(c.consultStatus==='report_ready') return head+krRecoveryCard(c)+krCardBox(isRevEval(c) ? '复诊评估结果' : isRevisitConsult(c) ? '恢复评估' : '报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
   return head;
 }
 /* 项目 tab 三张卡（CMD-1013-11 三）：施术项目（赴韩手术 + 当天加的管理 / 서비스，加的标「在韩增加」）/ 术后项目（术后管理）/ 持有项目（在韩持有，没有就不显示）；不再有「KR 可选范围」卡 */
@@ -1296,7 +1297,7 @@ function krRenderCaseDetail(){
   if(!r){ el.innerHTML = '<div class="card" style="padding:24px;color:var(--slate2);"><button class="btn-ghost" onclick="goBack()">← 返回</button><div style="margin-top:12px;">这个案件不存在，或不在你可看的范围内（KR 只能看选了本医院、且已缴 / 免除面诊费的案件；院长只能看自己的案件）。</div></div>'; return; }
   if(r.c.krVisit && !r.c.krVisit.arrived && r.c.subState!=='cancelled'){ el.innerHTML = krCleanVisitPage(r); return; } /* CMD-1015-24：预约到店阶段 = 干净版，到店后才是完整案件页 */
   if(KR_CASE.tab==='related') KR_CASE.tab = 'basic'; /* CMD-1022-05：独立的关联案件 tab 已拿掉（改成基础资料第一块） */
-  var tabs = KR_CASE_TABS.map(function(t0){ var on = KR_CASE.tab===t0.key; return '<button onclick="krSetCaseTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t(t0.label)+'</button>'; }).join('');
+  var tabs = KR_CASE_TABS.map(function(t0){ var on = KR_CASE.tab===t0.key; return '<button onclick="krSetCaseTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t((t0.key==='consult' && isRevEval(r.c)) ? '复诊评估' : t0.label)+'</button>'; }).join('');
   var alerts = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krTopAlerts(c)+krInNotesHtml(c) : ''; });
   var body = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? KR_TAB_FN[KR_CASE.tab](c) : ''; });
   var arriveCards = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krArriveCardsHtml(c) : ''; }); /* CMD-1019-18：今天有到院、客人还没到 → 页头下、tab 上的状态卡 */
@@ -1712,10 +1713,10 @@ function krRecordBlock(c){
   if(!krCanRecord(c)) return krCardBox('录入面诊', krEmpty('你的账号不能录入这个案件的面诊'));
   var v = krVault(KR_CASE.clinicId, KR_CASE.id, false);
   var entries = v.transcripts.map(function(x){ return '<div style="padding:10px 12px;margin-top:8px;background:var(--surface2,#faf6ef);border-radius:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">'+krEsc(fmtUtc(x.ts))+' · '+krEsc(x.by)+(isRevisitConsult(KR_CASEOBJ()) && !/院长/.test(x.by||'') ? '（室长代输入）' : '')+' · '+(x.mode==='voice' ? '语音录入' : '手动输入')+(x.demo ? '（演示文字）' : '')+'</div><div style="font-size:13px;white-space:pre-wrap;line-height:1.6;">'+krEsc(x.text)+'</div></div>'; }).join('');
-  var box = krCardBox(isRevisitConsult(c) ? '录入恢复评估（院长口述 / 室长代录）' : '录入面诊（院长口述 / 室长代录）',
+  var box = krCardBox(isRevEval(c) ? '录入评估内容（院长口述 / 室长代录）' : (isRevisitConsult(c) ? '录入恢复评估（院长口述 / 室长代录）' : '录入面诊（院长口述 / 室长代录）'),
     (c.consultContentAt
       ? '<div style="font-size:12px;color:var(--sage);margin-bottom:4px;">✓ 面诊内容已上传并锁住（不能修改）；还要补充时用下面的［增加内容］，每一笔都记时间和录入人。</div>'+(c.reportReady ? '' : '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="btn-outline" onclick="krRecOpenModal(\'voice\',true)">🎙 增加内容（语音）</button><button class="btn-outline" onclick="krRecOpenModal(\'manual\',true)">⌨ 增加内容（手动）</button></div>')
-      : '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn-outline" onclick="krRecOpenModal(\'voice\')">🎙 语音录入'+(isRevisitConsult(c) ? '评估' : '面诊')+'</button><button class="btn-outline" onclick="krRecOpenModal(\'manual\')">⌨ 手动输入'+(isRevisitConsult(c) ? '评估' : '面诊')+'</button></div>')+
+      : '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn-outline" onclick="krRecOpenModal(\'voice\')">🎙 语音录入'+(isRevEval(c) ? '评估内容' : (isRevisitConsult(c) ? '评估' : '面诊'))+'</button><button class="btn-outline" onclick="krRecOpenModal(\'manual\')">⌨ 手动输入'+(isRevEval(c) ? '评估内容' : (isRevisitConsult(c) ? '评估' : '面诊'))+'</button></div>')+
     (entries || '<div style="font-size:12px;color:var(--muted);margin-top:10px;">还没有录入内容：点上面的录入方式，在弹窗里录入或输入，再点［上传内容］，内容会以文字显示在这里。</div>')+
     '<div style="font-size:12px;color:var(--muted);margin-top:8px;">录入内容、原始录音和修改过程都进「KR 专用附件」tab（Timeline 旁边），只有 KR 看得到。</div>');
   return box+(typeof krSubmitBlock==='function' && canDo('krwork') ? (c.consultContentAt ? krSubmitBlock(c) : '') : '');
@@ -1892,7 +1893,7 @@ function krSubmitBlock(c){
   krSubReset(c);
   var cand = krScopeCandidates(KR_CASE.clinicId);
   var row = function(p, kind){ var on = !!KR_SUB.pick[p.name]; return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px;"><label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="krPickToggle(\''+krEsc(p.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(p.name)+' <span style="color:var(--muted);font-size:12px;">'+(kind==='kr' ? formatCurrency(p.price,'KRW') : '（在印尼，不显示价格）')+'</span></label><input placeholder="备注" value="'+krEsc(KR_SUB.notes[p.name]||'')+'" oninput="krNoteSet(\''+krEsc(p.name).replace(/'/g,'')+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;"></div>'+(on && kind==='kr' ? krProjDetailHtml(p, cand) : ''); };
-  return krCardBox(isRevisitConsult(c) ? '发送恢复评估（KR 室长整理，院长不能发送；项目方案可以不附）' : '发送诊疗方案（KR 室长整理，院长不能发送）',
+  return krCardBox(isRevEval(c) ? '发送复诊评估结果（KR 室长整理，院长不能发送）' : isRevisitConsult(c) ? '发送恢复评估（KR 室长整理，院长不能发送；项目方案可以不附）' : '发送诊疗方案（KR 室长整理，院长不能发送）',
     '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;"><div style="flex:1 1 200px;min-width:200px;">'+'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;flex-wrap:wrap;"><div style="font-size:12px;color:var(--slate2);">报告内容（韩文原文；AI 整理出重点后，请室长修改必要内容）</div><button class="btn-outline" onclick="krAiOrganize()">✨ AI 整理报告（演示）</button></div>'+
     '<textarea oninput="krSubSet(\'text\',this.value)" placeholder="还没有内容：先在上面录入面诊，点［AI 整理报告］整理出重点，再在这里修改；也可以直接写" style="width:100%;min-height:380px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.text)+'</textarea>'+
     '</div><div style="flex:2 1 400px;min-width:300px;">'+
@@ -1901,7 +1902,7 @@ function krSubmitBlock(c){
     '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">整体备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" onchange="krRenderCaseDetail()" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;">'+
     '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">附件</div>'+KR_SUB.files.map(function(f,i){ return '<div style="font-size:12px;padding:3px 0;">📎 '+krEsc(f)+' <a href="#" onclick="krDelFile('+i+');return false;">移除</a></div>'; }).join('')+
     '<div style="display:flex;gap:8px;margin-top:4px;"><input id="kr-file-name" placeholder="附件名称（演示：只记名称，不上传真实文件）" style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;"><button class="btn-outline" onclick="krAddFile()">添加</button></div>'+
-    '</div></div><div style="margin-top:16px;">'+(isRevisitConsult(c) ? (c.recoveryResult ? '<button class="btn-primary" onclick="krSubmitReport()">发送恢复评估</button>' : '<button class="btn-primary" disabled title="请先在上面「恢复确认」卡选评估结论" style="background:#C9C5BD;border-color:#C9C5BD;cursor:not-allowed;">发送恢复评估</button>') : '')+(isRevisitConsult(c) ? '' : cand.kr.concat(cand.postCat).some(function(p){ return KR_SUB.pick[p.name]; }) || krMgPicked().length ? '<button class="btn-primary" onclick="krSubmitReport()">发送诊疗方案</button>' : '<button class="btn-primary" disabled title="请选择院长推荐的项目" style="background:#C9C5BD;color:#fff;cursor:not-allowed;opacity:1;">发送诊疗方案</button>')+'</div>');
+    '</div></div><div style="margin-top:16px;">'+(isRevisitConsult(c) ? (c.recoveryResult ? '<button class="btn-primary" onclick="krSubmitReport()">'+(isRevEval(c) ? '发送复诊评估结果' : '发送恢复评估')+'</button>' : '<button class="btn-primary" disabled title="请先在上面「恢复确认」卡选评估结论" style="background:#C9C5BD;border-color:#C9C5BD;cursor:not-allowed;">发送恢复评估</button>') : '')+(isRevisitConsult(c) ? '' : cand.kr.concat(cand.postCat).some(function(p){ return KR_SUB.pick[p.name]; }) || krMgPicked().length ? '<button class="btn-primary" onclick="krSubmitReport()">发送诊疗方案</button>' : '<button class="btn-primary" disabled title="请选择院长推荐的项目" style="background:#C9C5BD;color:#fff;cursor:not-allowed;opacity:1;">发送诊疗方案</button>')+'</div>');
 }
 function krSubmitReport(){
   if(!krCan()) return; /* 院长不能提交 */
@@ -1932,7 +1933,7 @@ function krSubmitReport(){
   var v = krVault(KR_CASE.clinicId, KR_CASE.id, true), last = v.drafts.length ? v.drafts[v.drafts.length-1].text : '';
   if(text !== last){ v.drafts.push({id:'dr'+Date.now(), ts:nowFullDt(), by:ME_NAME, source:'KR 室长调整稿', text:text}); krVaultLog(v, '室长调整草稿（最终报告）'); }
   krVaultLog(v, '提交最终报告');
-  var rvPre = rv ? '【恢复评估：'+(c0.c.recoveryResult.result==='treat' ? '需要处理' : '恢复正常')+'】' : '';
+  var rvPre = rv ? '【'+(isRevEval(c0.c) ? '复诊评估' : '恢复评估')+'：'+(c0.c.recoveryResult.result==='treat' ? '需要处理' : '恢复正常')+'】' : '';
   var rep = {original:rvPre+text, zh:rvPre+krDemoZh(text), items:items, overallNote:(KR_SUB.overall||'').trim(), files:KR_SUB.files.slice()};
   var ok = krMut(function(c){ return coreSubmitReport(c, rep, ME_NAME); });
   KR_SUB = krSubBlank(''); KR_REC.caseKey = '';
@@ -2162,7 +2163,7 @@ function krDayAgendaRows(director, date){
   var cb1 = hospitalClosedBefore(hid, date); if(cb1) rows.push({a:hr.open, b:cb1, tag:'医院休诊'});
   var whole = '';
   ((h.offs||[]).filter(function(o){ return o.kind==='director' && o.who===director && offApplies(o, date); })).forEach(function(o){ if(!o.part || o.part==='全天') whole = 'OFF（全天）'; var rg = (o.part && o.part!=='全天') ? krHalfRange(hid, o.part) : [hr.open, hr.close]; rows.push({a:rg[0], b:rg[1], tag:'OFF（'+(o.part||'全天')+'）'}); });
-  ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date; }).forEach(function(b){ rows.push({a:b.time, b:b.end, tag:(function(){ var ty = b.type||b.kind; return (ty==='施术' || ty==='面诊') ? ty+' · '+(b.name||'客人') : krBusyLabel(b); })()}); });
+  ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date; }).forEach(function(b){ rows.push({a:b.time, b:b.end, tag:(function(){ var ty = b.type||b.kind; return (ty==='施术' || ty==='面诊') ? ((ty==='面诊' && b.title==='复诊评估') ? '复诊评估' : ty)+' · '+(b.name||'客人') : krBusyLabel(b); /* CMD-1022-07 */ })()}); });
   /* CMD-1020-05：占院长时间的到院（施术预约使用 / 院长操作项目）：来自所有对接诊所的案件 */
   krClinics().forEach(function(cl){ var v = Store.readClinic(cl.id) || {}; (v.CASE_ITEMS||[]).forEach(function(cs){ if(cs.hospitalId!==hid && caseKrHospital(cs)!==hid) return; visitCalBlocks(cs).forEach(function(vb){ if(vb.occupies && vb.director===director && vb.date===date && !vb.done) rows.push({a:vb.time, b:vb.end, tag:(vb.hasSurg ? '施术' : '院长操作')+' · '+cs.name}); }); }); });
   rows.sort(function(x, y){ return timeToMin(x.a) - timeToMin(y.a); });
@@ -2821,7 +2822,7 @@ function krcEvents(){
   var okWho = function(n){ return n===KRB_HOSP ? !(krcIsDirector() && !(krcViewAll())) : (who==='all' || n===who); }; /* CMD-1014-18：全院的占位预约不挂院长，室长 / 代表院长看全部时都显示 */
   var surg = [], busy = [];
   Object.keys(h.directorSchedule||{}).forEach(function(n){ if(!okWho(n)) return; (h.directorSchedule[n]||[]).forEach(function(b){
-    if(b.type==='面诊'){ var rc = rm[b.clinicId+':'+b.caseId]; if(krcIsDirector() && !rc && !(krcViewAll())) return; surg.push({b:b, row:rc, label:(b.title==='复诊面诊' ? '复诊' : '面诊')+' · '+(b.name||'')+' · '+n}); } /* 面诊预约（CMD-1008-12 C1）：「面诊 · 客人 · 院长」 */
+    if(b.type==='面诊'){ var rc = rm[b.clinicId+':'+b.caseId]; if(krcIsDirector() && !rc && !(krcViewAll())) return; surg.push({b:b, row:rc, label:((b.title==='复诊面诊' || b.title==='复诊评估') ? (b.title==='复诊评估' ? '复诊评估' : '复诊') : '面诊')+' · '+(b.name||'')+' · '+n}); } /* 面诊预约（CMD-1008-12 C1）：「面诊 · 客人 · 院长」 */
     else if(b.type==='预约'){ var rbk = rm[b.clinicId+':'+b.caseId] || null; surg.push({b:b, row:rbk, label:'预约 · '+(b.name||''), done:!!b.done}); } /* CMD-1014-16：IN 在 KR 日程占位 / 已确认的预约（krbook.js） */
     else if(b.type==='施术'){ var r = rm[b.clinicId+':'+b.caseId]; if(krcIsDirector() && !r && !(krcViewAll())) return; var items = r ? krActiveItems(r.c).filter(function(it){ return !krIsMgmtItemC(it); }).map(function(it){ return it.name; }).join('、') : ''; surg.push({b:b, row:r, label:(b.name||'')+' · '+(r ? r.clinicName : ((clinicById(b.clinicId)||{}).name||''))+(items ? ' · '+items : '')+((r && r.c.todayDirOp && Object.keys(r.c.todayDirOp).length) ? ' · 院长操作：'+Object.keys(r.c.todayDirOp).map(buyName).join('、') : '')}); }
     else busy.push(b);
@@ -2851,7 +2852,7 @@ function krcLanes(list){
 }
 /* CMD-1014-19 一·2：医院层每块一行「时间 · 客人 · 类型 · 院长」（IN 占位的院长写「全院」） */
 function krcOneLine(r0){
-  var b = r0.b, tp = b.title==='复诊面诊' ? '复诊' : b.type==='术后管理' ? (/持有/.test(r0.label||'') ? '持有使用' : '术后到院') : (b.type==='预约' ? '预约' : b.type);
+  var b = r0.b, tp = b.title==='复诊评估' ? '复诊评估' : b.title==='复诊面诊' ? '复诊' : b.type==='术后管理' ? (/持有/.test(r0.label||'') ? '持有使用' : '术后到院') : (b.type==='预约' ? '预约' : b.type);
   if(r0.visit) tp = r0.visit.what.join('、')+(r0.visit.hasDirOp ? '（院长操作）' : ''); /* CMD-1020-04：一次到院一个块，写这次做什么 */
   return '<span style="white-space:nowrap;"><b>'+krEsc(b.time)+'</b> · '+krEsc(b.name||'')+' · '+krEsc(tp)+' · '+krEsc((b.who===KRB_HOSP || !b.who) ? '全院' : b.who)+'</span>';
 }
