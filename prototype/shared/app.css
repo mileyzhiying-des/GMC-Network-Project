@@ -525,3 +525,8 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .notes-btns button{white-space:nowrap;flex:none;}
 .note-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .note-clamp > div{white-space:normal !important;}
+
+/* CMD-1022-12 B7：待办里客人名 / 案件号不截断（换行）；toast 改到左下，不盖住页头按钮 */
+.todo-row .todo-who b{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-all;}
+.todo-row .todo-who span{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-all;}
+#toast-stack{top:auto;right:auto;left:240px;bottom:24px;max-height:calc(100vh - 140px);}

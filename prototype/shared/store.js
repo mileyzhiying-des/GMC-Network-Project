@@ -29,7 +29,7 @@ var Store = (function(){
   }
   function keyC(cid){ return 'gmc_clinic_' + cid; }
   function pageClinic(){ return (typeof PAGE_CLINIC_ID !== 'undefined') ? PAGE_CLINIC_ID : null; } /* 这个页面所属的诊所（登录页 = null，只读写全局部分） */
-  function readRaw(key){ try{ var r = localStorage.getItem(key); return r ? JSON.parse(r, reviver) : null; }catch(e){ return null; } }
+  function readRaw(key){ try{ var r = localStorage.getItem(key); return r ? JSON.parse(r, reviver) : null; }catch(e){ (window.GMC_RAW_CORRUPT = window.GMC_RAW_CORRUPT || {})[key] = true; return null; } } /* CMD-1022-12：存档读得到字符串但解析失败 = 损坏，记下来，init() 不能拿种子覆盖它 */
   function pick(names){ var o = {}; names.forEach(function(n){ o[n] = window[n]; }); return o; }
   function assignInPlace(name, val){
     var cur = window[name];
@@ -105,6 +105,7 @@ var Store = (function(){
     if(document.body) make(); else document.addEventListener('DOMContentLoaded', make);
   }
   function writeKey(key, json){
+    if(window.GMC_LOAD_PROTECT) return; /* CMD-1022-12：读档失败保护中，不往存档里写任何东西（包括种子） */
     localStorage.setItem(key, json);
   }
   /* ---- 存档：只写变了的部分；写失败（容量超限等）→ 清掉存档，提示并停止存档 ---- */
@@ -165,12 +166,14 @@ var Store = (function(){
     CURRENT_CLINIC_ID = 'C1'; /* 此刻全局变量里还是 C1 的演示数据种子 */
     try{
       var g = readRaw(KEY_G);
-      if(!g || String(g.ver) !== String(DEMO_DATA_VERSION) || g.partial){
+      if(window.GMC_RAW_CORRUPT && window.GMC_RAW_CORRUPT[KEY_G]){ /* 全局存档损坏：不写种子，交给 load() 失败后的读档失败保护处理 */ }
+      else if(!g || String(g.ver) !== String(DEMO_DATA_VERSION) || g.partial){
         if(g && g.partial && g.vars) Object.keys(g.vars).forEach(function(n){ window[n] = g.vars[n]; }); /* 版本重置时保留的账号等 */
         if(typeof ensureSeedAccounts === 'function') ensureSeedAccounts();
         var snapC1 = null;
         CLINICS.forEach(function(cl){ /* 先写诊所分区（viewSplit 会把 KR 项拆回医院，全局部分要在它之后序列化） */
           var p = readRaw(keyC(cl.id));
+          if(window.GMC_RAW_CORRUPT && window.GMC_RAW_CORRUPT[keyC(cl.id)]) return; /* CMD-1022-12：这家诊所的存档损坏，不能拿种子覆盖 */
           if(p && String(p.ver)===String(DEMO_DATA_VERSION) && !p.partial && p.vars && p.vars.CASE_ITEMS) return;
           var vars;
           if(cl.id==='C1'){ var split = viewSplit(); vars = clinicVarsObj(split); try{ gmcFillKrMeta(vars.CASE_ITEMS); }catch(e){} }
@@ -186,6 +189,7 @@ var Store = (function(){
       } else {
         CLINICS.forEach(function(cl){ /* 全局在、某个诊所分区缺（或只剩保留下来的部分）→ 补齐这个分区 */
           var p = readRaw(keyC(cl.id));
+          if(window.GMC_RAW_CORRUPT && window.GMC_RAW_CORRUPT[keyC(cl.id)]) return; /* CMD-1022-12：这家诊所的存档损坏，不能拿种子覆盖 */
           if(p && String(p.ver)===String(DEMO_DATA_VERSION) && !p.partial && p.vars && p.vars.CASE_ITEMS) return;
           var vars = gmcWipeClinicVars((cl.id==='C1') ? clinicVarsObj(viewSplit()) : demoMarked(buildClinicSeed(cl.id)));
           if(p && p.vars) Object.keys(p.vars).forEach(function(n){ vars[n] = p.vars[n]; });
@@ -564,6 +568,18 @@ var Store = (function(){
   try{ carryRestore(); var cc0 = window.GMC_CARRY_CHECK; if(cc0 && cc0.expect !== cc0.migrated + cc0.failed) gmcShowBlock('升级后用户案件数量对不上（升级前 '+cc0.expect+' 个，迁移 '+cc0.migrated+' 个、失败 '+cc0.failed+' 个）。已停止写档；用户案件的安全备份在 gmc_cfg_usersafe，恢复用 gmcUserSafeRestore(0)。'); }catch(e){ console.warn('[迁移] 合并用户案件失败', e); try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:null, to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'合并出错：'+e.message+'（旧数据在自动备份里）'}]})); }catch(e2){} }
   if(!load()){ /* 读不出来（极少见：存档损坏）就用刚生成的种子重新写一遍 */
     try{ var rawSafe = {}; Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ rawSafe[k] = localStorage.getItem(k); }); if(Object.keys(rawSafe).length) localStorage.setItem('gmc_cfg_rawsafe', JSON.stringify({at:new Date().toISOString(), data:rawSafe})); }catch(e){ console.error('[用户案件保护] 重建前存原始存档失败', e); } /* CMD-1020-12：重建前把原始存档原样存一份（gmc_cfg_rawsafe，恢复 = 把 data 里的键写回 localStorage） */
+    /* CMD-1022-12 读档失败保护：原存档里有客人或案件 → 不清空、不写种子，页面提示「资料读取失败，已保留原资料，请勿重置」；没有客人案件才照旧用种子重建 */
+    var hasUser = false;
+    try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_clinic_')===0 || k.indexOf('gmc_state')===0; }).forEach(function(k){
+      var s = localStorage.getItem(k) || ''; try{ var p = JSON.parse(s), v = (p && p.vars) || {}; if((v.CASE_ITEMS && v.CASE_ITEMS.length) || (v.CLIENTS && v.CLIENTS.length)) hasUser = true; }catch(pe){ if(/"CASE_ITEMS":\[\{|"CLIENTS":\[\{|"caseNo"/.test(s)) hasUser = true; } /* 读不出来的存档：只要里面还能看到案件 / 客人的痕迹就当作有资料 */
+    }); }catch(e){ hasUser = true; }
+    if(hasUser){
+      window.GMC_LOAD_PROTECT = true; window.GMC_NO_SAVE = true;
+      console.error('[存档] 读取失败，但原存档里有客人 / 案件：不清空、不写种子；原档已备份在 gmc_cfg_rawsafe。请勿点「重置演示数据」。');
+      try{ if(typeof gmcShowBlock==='function') gmcShowBlock('资料读取失败，已保留原资料，请勿重置。（本页不会写档；原存档没有被改动，另有备份 gmc_cfg_rawsafe；请把这条告诉开发者）'); }catch(e2){}
+      try{ init(); }catch(e3){ console.error('[存档] 保护模式下生成内存种子失败', e3); }
+      return {save:function(){}, load:load, touch:function(){}, readClinic:readClinic, updateClinic:updateClinic, withClinic:withClinic, mutateClinic:mutateClinic, isDisabled:function(){ return true; }};
+    }
     try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
     init(); load();
   }

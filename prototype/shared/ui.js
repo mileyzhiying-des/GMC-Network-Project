@@ -1715,7 +1715,7 @@ function renderCaseSubtitle(c){
   var html = (c.caseNo||'')+(c.director ? ' · 对接院长：'+c.director : '');
   if(c.linkedCase && c.linkedCase.caseId){
     var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
-    html += (html ? ' · ' : '')+(c.followup ? '术后来访 · 关联：' : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
+    html += (html ? ' · ' : '')+(c.followup ? ((c.resumeFrom && c.resumeFrom.type==='复诊评估') || c.revisitEval ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
   }
   el.innerHTML = html;
 }
