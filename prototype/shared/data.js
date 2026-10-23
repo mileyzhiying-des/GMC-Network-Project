@@ -1607,7 +1607,8 @@ function finishCase(c, cancelReasonIfCancelled){
   var out = computeOutcome(c);
   c.cancelReason = out==='cancelled' ? (c.refundVisit ? '仅办理退款' : (cancelReasonIfCancelled || '未购买未使用')) : null; /* 这次到访只办了退款、没有其他购买或使用 → 已取消（仅办理退款） */
   updateCaseStage(c);
-  logCaseEvent(c, '系统', '案件结束：'+terminalBadge(c)[2]+(c.stage==='cancelled' ? '（'+endReasonText(c)+'）' : ''));
+  var tb0 = terminalBadge(c); if(!tb0) return; /* CMD-1023-02：主案件状态自动判断，没有真正结束（又有未做的事）就不记结束 */
+  logCaseEvent(c, '系统', '案件结束：'+tb0[2]+(c.stage==='cancelled' ? '（'+endReasonText(c)+'）' : ''));
   if(c.stage==='closed' && c.hasArrived && krAllItems(c).some(function(it){ return it.done; })) pushNotif('赴韩施术','施术完成，案件已结案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   if(typeof document!=='undefined' && document.getElementById('case-body')){ /* KR 页面没有 IN 的案件详情，不画 */
     buildCaseLog(c);
