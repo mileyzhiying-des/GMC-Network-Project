@@ -2898,14 +2898,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var h1 = krTabConsult(c1); ST.ok(/krRvConfirm\(\)/.test(h1) && /kr-rv-memo/.test(h1) && !/录入评估内容（院长口述/.test(h1), '恢复正常：memo 输入框 +［确认］，没有录入框');
       document.getElementById('kr-rv-memo').value = '一切正常，继续观察'; krRvConfirm(); var c2 = gc();
       ST.ok(!!c2.consultContentAt && c2.recoveryResult.memo==='一切正常，继续观察', '按［确认］→ 评估结束，memo 保存');
-      var h2 = krTabConsult(c2); ST.ok(/发送复诊评估结果/.test(h2) && !/已上传评估内容，待传结果/.test(h2), '确认后：评估内容 / 发送块在最上面，状态卡拿掉');
+      var h2 = krTabConsult(c2); ST.ok((dir ? !/krSubmitReport\(\)/.test(h2) : /发送复诊评估结果/.test(h2)) && !/已上传评估内容，待传结果/.test(h2), '确认后：状态卡拿掉；室长有发送块、院长没有（只有 KR 室长发送）');
       /* 需要处理：这时才弹录入 → 内容显示在评估结论下面 → 确认 */
       Store.mutateClinic(cid, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.consultContentAt = ''; cc.recoveryResult = null; });
       krRvPick('treat'); var ov = document.getElementById('kr-start-overlay'); ST.ok(gc().recoveryResult.result==='treat' && ov && ov.classList.contains('open') && /语音录入/.test(ov.innerText), '选「需要处理」→ 这时才弹「语音录入 / 手动输入」'); ov.classList.remove('open');
       ST.ok(KR_CASE.tab==='consult', '录入时页面不跳基础资料 tab');
       alerts.length = 0; krRvConfirm(); ST.ok(!gc().consultContentAt && alerts.some(function(m){ return /录入评估内容/.test(m); }), '需要处理但还没录入 → 不能确认');
       KR_REC.text = '评估内容：继续观察。'; KR_REC.mode = 'manual'; krSaveTranscript(); krRvConfirm(); ST.ok(!!gc().consultContentAt, '录完内容 → ［确认］→ 评估结束');
-      var h3 = krTabConsult(gc()); ST.ok(/评估内容：继续观察/.test(h3) && /发送复诊评估结果/.test(h3), '评估内容显示出来，可以发送（发送不要授权）');
+      var h3 = krTabConsult(gc()); ST.ok(/评估内容：继续观察/.test(h3) && (dir ? !/krSubmitReport\(\)/.test(h3) : /发送复诊评估结果/.test(h3)), '评估内容显示出来；室长可以发送（发送不要授权），院长没有发送块');
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
@@ -3814,7 +3814,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R87b','CMD-1021-19（IN 分页，接 R87a 留下的案件）：IN 待办「复诊评估已出」+ 点开后不附方案的消失',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
-    var c = CASE_ITEMS.filter(function(x){ return x.consultKind==='复诊' && x.consultStatus==='report_ready'; })[0]; if(!ST.ok(!!c, '先在 KM1 分页跑 R87a')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.consultKind==='复诊' && x.consultStatus==='report_ready' && !x.revisitEval; })[0]; if(!ST.ok(!!c, '先在 KM1 分页跑 R87a')) return; /* 复诊评估（revisitEval）案件另有流程，不取 */
     c.krScope = {items:[], overallNote:''}; c.recoveryResult = {result:'ok'}; c.revisitAck = false; c.projectsEnabled = true; c.reportReady = true;
     var it = inTodoItems().filter(function(x){ return x.kind==='plan' && x.no===c.caseNo; })[0]; ST.ok(!!it && /复诊评估已出/.test(it.text) && /恢复正常/.test(it.text), 'IN 待办：复诊评估已出：联络客人（恢复正常，不附项目方案）：'+(it&&it.text));
     it.go(); ST.ok(c.revisitAck===true && !inTodoItems().some(function(x){ return x.kind==='plan' && x.no===c.caseNo; }), '点开联络后，不附方案的待办消失');
@@ -4143,7 +4143,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
     var oa = window.alert, oc = window.confirm, alerts = []; window.alert = function(m){ alerts.push(String(m)); }; window.confirm = function(){ return true; };
     try{
-      mut(function(c){ ST.krEta(c); coreStartConsult(c, 'KM1 室长'); c.consultContentAt = nowFullDt(); });
+      mut(function(c){ ST.krEta(c); coreStartConsult(c, 'KM1 室长'); }); /* CMD-1022-19：授意要在评估内容上传前勾，这里不再先写 consultContentAt */
       KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_RV_OPEN[cid+':'+r.id] = true;
       var h = krTabConsult(gc()); ST.ok(/已得到院长授意/.test(h), '室长代操作：有「已得到院长授意」勾选');
       krSetRecoveryResult('treat'); ST.ok(!gc().recoveryResult && alerts.some(function(m){ return /已得到院长授意/.test(m); }), '不勾授意不能选评估结论');
