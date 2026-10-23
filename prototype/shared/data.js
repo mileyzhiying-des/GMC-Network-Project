@@ -8893,7 +8893,7 @@ function revResultCardHtml(c, viewer){
   } else rec = '<span style="color:var(--muted);">没有推荐</span>';
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;">'+cell('评估结论', '<b>'+(treat ? '需要处理' : '恢复正常')+'</b>')+cell('院长', who)+cell('评估时间', esc0(rr.at ? fmtUtc(rr.at) : '—'))+'</div>'+
     '<div style="margin-top:10px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">推荐</div>'+rec+'</div>'+
-    (c.videoSummary ? '<div style="font-size:13px;color:var(--slate2);margin-top:10px;line-height:1.7;">'+cesc(c.videoSummary)+'</div>' : '');
+    (function(){ var vs = String(c.videoSummary||''); if(!treat) vs = vs.replace(/\n*（演示翻译[^）]*）\s*$/, '').replace(/^【[^】]*】/, '').replace(/^\s*恢复正常[，,。:：]?\s*/, '').replace(/^恢复正常，无需处理$/, '').trim(); /* CMD-1022-20：恢复正常 → 结论 + 整理后的 memo；没有 memo 就只写恢复正常 */ return vs ? '<div style="font-size:13px;color:var(--slate2);margin-top:10px;line-height:1.7;white-space:pre-wrap;">'+cesc(vs)+'</div>' : ''; })();
 }
 function esc0(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function revResultOpen(){
@@ -9031,17 +9031,21 @@ function revCapCollect(c, name, cap, all){
   }
   return res;
 }
-function revProjCardsHtml(c){
+var REV_PROJ_OPEN = {};
+function revProjToggle(cid, name){ var k = cid+'|'+name; REV_PROJ_OPEN[k] = !REV_PROJ_OPEN[k]; revCmpRefresh(); }
+function revProjCardsHtml(c, opt){
+  opt = opt || {};
   if(!(c.followProjects||[]).length) return '';
   var all = revCmpCasesOf(c), caps = [['face','面诊'], ['pre','术前'], ['now','本次']];
   return '<!--revproj-->'+(c.followProjects||[]).map(function(name){
     var cap = revCapOf(c, name), d = revCapCollect(c, name, cap, all), part = followItemPart(name), sp = shootSpec(part, name), nq = name.replace(/'/g,"\\'");
+    if(opt.collapse && !REV_PROJ_OPEN[c.id+'|'+name]) return '<div style="border:1px solid var(--border2);border-radius:10px;padding:8px 14px;margin-top:8px;background:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="revProjToggle(\''+c.id+'\',\''+nq+'\')"><b style="font-size:13px;">'+cesc(name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">· '+cesc(concernPartDef(part).label)+'</span></b><span style="font-size:12px;color:var(--muted);">⬇️</span></div>'; /* CMD-1022-20：评估确认后项目卡默认折叠，点了才展开 */
     var capsH = caps.map(function(k){ var on = cap===k[0]; return '<button onclick="revCapSet(\''+c.id+'\',\''+nq+'\',\''+k[0]+'\')" style="padding:3px 12px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;cursor:pointer;">'+k[1]+'</button>'; }).join(' ');
     var vidH = d.video ? (d.video.self ? '<span style="color:var(--sage);">▶ '+cesc(d.video.name)+'</span>' : '<span style="color:var(--sage);">▶ '+cesc(d.video.name)+'</span> '+revCmpSrcLine(c, d.video)) : '<span style="color:var(--muted);">—</span>';
     var tiles = sp.angles.map(function(a){ var l = d.byAngle[a.id] || [];
       return '<div style="width:132px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;'+(l.length ? '' : 'color:var(--muted);')+'"><div style="font-weight:700;min-height:28px;text-wrap:balance;">'+cesc(a.label)+'</div>'+(l.length ? l.map(function(ph){ return '<div style="cursor:pointer;color:var(--sage);word-break:break-all;" onclick="revCmpZoom(\''+String(ph.title).replace(/'/g,"\\'")+'\',\''+String(ph.name).replace(/'/g,"\\'")+'\')">'+cesc(ph.name)+'</div><div style="line-height:1.35;margin-bottom:4px;">'+revCmpSrcLine(c, ph)+'</div>'; }).join('') : '—')+'</div>'; }).join('');
     var other = d.other.length ? '<div style="font-size:12px;font-weight:700;margin:8px 0 4px;">其他照片</div><div style="display:flex;flex-wrap:wrap;gap:8px;">'+d.other.map(function(ph){ return '<div style="width:132px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;"><div style="font-weight:700;">'+cesc(ph.label||'')+'</div><div style="color:var(--sage);word-break:break-all;">'+cesc(ph.name)+'</div><div>'+revCmpSrcLine(c, ph)+'</div></div>'; }).join('')+'</div>' : '';
-    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><b style="font-size:13px;">'+cesc(name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(part).label)+'</span></b><span style="display:inline-flex;gap:6px;">'+capsH+'</span><span style="margin-left:auto;">'+shootRefBtn(part, name)+'</span></div>'+
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><b style="font-size:13px;">'+cesc(name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(part).label)+'</span></b><span style="display:inline-flex;gap:6px;">'+capsH+'</span><span style="margin-left:auto;">'+shootRefBtn(part, name)+(opt.collapse ? ' <a href="#" class="info-link" style="font-size:12px;margin-left:8px;" onclick="revProjToggle(\''+c.id+'\',\''+nq+'\');return false;">收起 ⬆️</a>' : '')+'</span></div>'+
       '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">视频　</span>'+vidH+'</div><div style="font-size:13px;"><span style="color:var(--muted);font-size:12px;">照片　</span><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">'+tiles+'</div>'+other+'</div></div>';
   }).join('')+'<!--/revproj-->'; /* 胶囊 ［面诊］ 是任务指定的栏名，测试里「没有面诊字样」检查要先剔除这一块 */
 }

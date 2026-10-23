@@ -2941,6 +2941,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       hd.directorSchedule[who] = hd.directorSchedule[who].filter(function(b){ return b.caseId!=='zz'; });
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R106a','CMD-1022-20（KM1 / KD1 分页，要先在 A1 分页跑 R104a）：评估确认后——复诊评估卡在上（项目卡折叠）、发送块在下；恢复正常只有预览框（第一行「恢复正常」+ memo）、没 memo 也能直接发；需要处理保留评估说明格；发送按钮靠右；院长没有发送块',function(){
+    if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 / KD1 分页里跑'); return; }
+    var mk = function(){ return krAllCases().filter(function(x){ return x.c.revisitEval && /R104/.test(x.name) && x.c.consultStatus==='paid_waiting_kr'; })[0]; };
+    var r = mk(); if(!ST.ok(!!r, '没有 R104 夹具（先在 A1 跑 R104a）')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, alerts = [], oa = window.alert, oc = window.confirm; window.alert = function(m){ alerts.push(m); }; window.confirm = function(){ return true; };
+    try{
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; coreConfirmConsultTimes(c, todayStr(), '20:30', D(1)+' 05:00', ST.krBy); });
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; krShowCase(cid, r.id, {tab:'consult', here:true}); KR_RV_OPEN[cid+':'+r.id] = true; krRenderCaseDetail();
+      var dir = krIsDirector(); if(!dir) krRvAuth(true); krStartConsult(); krRvPick('ok');
+      /* 确认之前：项目卡仍展开 */
+      var hb = krTabConsult(gc()); ST.ok(/视频　/.test(hb) && /revCapSet\(/.test(hb), '评估确认之前项目卡仍展开（有胶囊、视频、照片）');
+      document.getElementById('kr-rv-memo').value = '  一切正常   继续观察 '; krRvConfirm();
+      var h = krTabConsult(gc()), iCard = h.indexOf('复诊评估<'), iSend = h.indexOf('发送复诊评估结果');
+      ST.ok(/⬇️/.test(h) && !/视频　/.test(h) && !/revCapSet\(/.test(h), '确认后项目卡默认折叠：每个项目一行「项目名 · 部位 ⬇️」，没有胶囊 / 视频 / 照片');
+      ST.ok(/评估人：/.test(h) && /恢复正常/.test(h), '评估结论显示：恢复正常 + 评估人'+(dir ? '' : '（室长代输入）'));
+      if(dir){ ST.ok(iSend<0 && !/krSubmitReport\(\)/.test(h), '院长只有卡、没有发送块'); return; }
+      ST.ok(iCard>-1 && iSend>iCard, '复诊评估卡在上、发送块在下');
+      ST.ok(!/评估说明（/.test(h) && /<textarea[^>]*oninput="krSubSet\('text'/.test(h) && gc() && KR_SUB.text.split('\n')[0]==='恢复正常' && KR_SUB.text.indexOf('一切正常')>-1, '恢复正常：没有「评估说明」大格，只有预览框，第一行「恢复正常」+ memo：'+JSON.stringify(KR_SUB.text));
+      ST.ok(/AI 整理/.test(h) && /justify-content:flex-end[^>]*><button class="btn-primary" onclick="krSubmitReport\(\)">发送复诊评估结果/.test(h), '标题右边［AI 整理］，［发送复诊评估结果］靠右');
+      krAiOrganize(); ST.ok(/一切正常 继续观察。/.test(KR_SUB.text) && KR_SUB.text.split('\n')[0]==='恢复正常', '［AI 整理］整理 memo（去多余空白、补句号）：'+JSON.stringify(KR_SUB.text));
+      krSubmitReport(); var c3 = gc(); ST.ok(c3.reportReady && /一切正常 继续观察。/.test(c3.videoSummary||''), '发送 → IN 结果卡的内容 = 结论 + 整理后的 memo：'+JSON.stringify(c3.videoSummary));
+      var card = revResultCardHtml(c3, 'IN'); ST.ok(/恢复正常/.test(card) && /一切正常 继续观察。/.test(card), 'IN 结果卡：结论 + 整理后的 memo');
+      /* 没写 memo 直接发送：只有「恢复正常」 */
+      Store.mutateClinic(cid, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.reportReady = false; cc.consultStatus = 'awaiting_report'; cc.recoveryResult = {result:'ok', by:'KM1 室长', proxy:true, at:nowFullDt(), auth:cc.revAuth || {by:'KM1 室长', at:nowFullDt()}}; cc.videoSummary = ''; });
+      KR_SUB = krSubBlank(krRecKey()); krShowCase(cid, r.id, {tab:'consult', here:true}); var h2 = krTabConsult(gc()); ST.ok(KR_SUB.text==='恢复正常', '没写 memo：预览框只有「恢复正常」，照样可以直接发送：'+JSON.stringify(KR_SUB.text));
+      krSubmitReport(); var c4 = gc(); ST.ok(c4.reportReady && !/white-space:pre-wrap/.test(revResultCardHtml(c4, 'IN')), '没有 memo：IN 结果卡只写结论，没有多余的说明段');
+    }finally{ window.alert = oa; window.confirm = oc; }
+  });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = toConfirmed('R51a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid];
