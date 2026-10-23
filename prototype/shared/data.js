@@ -9238,3 +9238,83 @@ function localPurchasedBatchesOf(m, ids){
   getClientHoldings(m.name).forEach(function(h){ h.batches.forEach(function(b){ if(ids.indexOf(b.caseId)>-1 && !b.kr) out.push({h:h, b:b}); }); });
   return out;
 }
+
+/* ===== CMD-1023-01 S3/S4：IN 主案件页——tab 基础资料｜流程｜子案件｜项目汇总｜结算｜附件｜Timeline =====
+   流程 tab = 原来的 面诊资料 / 赴韩施术 / 本地管理 三个 tab 内容收在一起（上面一排流程 chip 切换，里面的功能不变）；
+   子案件 tab = 一天一行；项目汇总 tab = 现算的项目表；子案件对象（mainId）自己打开仍是原来的接待页，顶上加一条"属于主案件"提示。 */
+var SUM_UI = {};
+function useV2Tabs(c){ return !!c && !!c.materialsConfirmed && !isChildVisit(c) && !isRevEval(c); }
+function flowTabKeys(c){
+  var out = [];
+  if(c.consultRequested) out.push({key:'consult', label:'面诊安排'});
+  if(showKrTab(c)) out.push({key:'kr', label:'赴韩施术'});
+  if(showLocalTab(c)) out.push({key:'localmgmt', label:'本地管理'});
+  return out;
+}
+function flowChipsHtml(c){
+  var chips = flowTabKeys(c).map(function(f){ var on = c.activeCaseTab===f.key; return '<span class="chip'+(on ? ' active' : '')+'" onclick="switchCaseTab(\''+f.key+'\')">'+f.label+'</span>'; });
+  flowsOf(c).filter(function(f){ return f.kind==='revisit'; }).forEach(function(f){ chips.push('<span class="chip" onclick="openCaseNewTab(\''+f.caseId+'\')" title="复诊评估在回来那天的子案件里">'+f.label+' ↗</span>'); });
+  return chips.length>1 ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px;">'+chips.join('')+'</div>' : '';
+}
+function visitStateText(m, v){
+  var ch = v.caseId!==m.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, today = todayStr();
+  if(ch){ if(ch.subState==='cancelled') return ch.noShow ? '未到店' : '已取消'; if(ch.leftStore || ch.visitClosed) return '客人已离店'; if(ch.subState==='waiting') return '待到店'; return '进行中'; }
+  return v.date<today ? '已结束' : (v.date===today ? '进行中' : '已预约');
+}
+function visitsTabHtml(c){
+  var vs = visitsOf(c), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var grid = 'display:grid;grid-template-columns:110px 80px 56px minmax(0,1.6fr) 90px minmax(0,.8fr) minmax(0,.8fr) 70px 70px 90px;gap:8px;align-items:center;';
+  var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border2);"><span>序号</span><span>日期</span><span>地点</span><span>业务类型</span><span>状态</span><span>财务</span><span>对接院长</span><span>开始</span><span>结束</span><span>更新</span></div>';
+  var rows = vs.map(function(v){
+    var ch = v.caseId!==c.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, tags = v.types.map(function(t0){ return '<span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);font-size:12px;margin-right:4px;">'+e(t0)+'</span>'; }).join('');
+    var last = ch && ch.logEntries && ch.logEntries.length ? String(ch.logEntries[ch.logEntries.length-1].dt||'').slice(5, 16) : '';
+    var go = ch ? 'openCaseNewTab(\''+ch.id+'\')' : 'switchCaseTab(\''+(v.place==='KR' ? (showKrTab(c) ? 'kr' : 'basic') : (c.consultRequested ? 'consult' : 'basic'))+'\')';
+    return '<div class="case-row-click" onclick="'+go+'" style="'+grid+'padding:9px 0;border-top:1px solid var(--border2);font-size:13px;cursor:pointer;"><span style="font-size:12px;">'+e(v.no)+'</span><span style="font-size:12px;">'+e(String(v.date).slice(5).replace('-', '/'))+'</span><span style="font-size:12px;">'+(v.place==='KR' ? '韩国' : '印尼')+'</span><span>'+tags+'</span><span style="font-size:12px;">'+visitStateText(c, v)+'</span><span style="font-size:12px;">'+(ch ? financeCellHtml(ch) : '—')+'</span><span style="font-size:12px;">'+e(c.director||'—')+'</span><span style="font-size:12px;">'+e(v.time||'—')+'</span><span style="font-size:12px;">—</span><span style="font-size:12px;">'+e(last||'—')+'</span></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">还没有子案件</div>';
+  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:6px;">子案件 <span style="font-weight:400;font-size:12px;color:var(--muted);">客人每来一天一个；点一行打开那一天</span></div><div style="overflow-x:auto;"><div style="min-width:900px;">'+head+rows+'</div></div></div>';
+}
+function summaryTabHtml(c){
+  var rows = summaryRowsOf(c), ui = SUM_UI[c.id] || (SUM_UI[c.id] = {type:'', status:'', open:{}}), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var types = ['赴韩施术', '在韩管理', '术后管理', '本地管理'], stats = ['未使用', '使用中', '已完成', '韩国持有', '印尼持有', '已取消', '已退款'];
+  var chip = function(k, v, label, on){ return '<span class="chip'+(on ? ' active' : '')+'" onclick="sumFilter(\''+c.id+'\',\''+k+'\',\''+v+'\')">'+label+'</span>'; };
+  var bar = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;"><span style="font-size:12px;color:var(--muted);">业务类型</span>'+chip('type', '', '全部', !ui.type)+types.map(function(t0){ return chip('type', t0, t0, ui.type===t0); }).join('')+'</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;"><span style="font-size:12px;color:var(--muted);">状态</span>'+chip('status', '', '全部', !ui.status)+stats.map(function(t0){ return chip('status', t0, t0, ui.status===t0); }).join('')+'</div>';
+  var grid = 'display:grid;grid-template-columns:minmax(0,1.8fr) 84px 84px 84px 80px 84px 80px;gap:8px;align-items:center;';
+  var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border2);"><span>项目名称</span><span>业务类型</span><span>购买时间</span><span>使用时间</span><span>使用次数</span><span>状态</span><span>操作</span></div>';
+  var md = function(d){ return d ? e(String(d).slice(5).replace('-', '/')) : '—'; };
+  var list = rows.filter(function(r){ return (!ui.type || r.type===ui.type) && (!ui.status || r.status===ui.status); });
+  var body = list.map(function(r, i){
+    var k = r.ref+'|'+r.name+'|'+i, open = !!ui.open[k], has = r.uses.length>0;
+    var main = '<div style="'+grid+'padding:9px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+(has ? '<span style="cursor:pointer;color:var(--muted);" onclick="sumToggle(\''+c.id+'\',\''+e(k).replace(/\'/g, '')+'\')">'+(open ? '▾' : '▸')+'</span> ' : '')+e(r.name)+'</span><span style="font-size:12px;">'+e(r.type)+'</span><span style="font-size:12px;">'+md(r.boughtAt)+'</span><span style="font-size:12px;">'+md(r.usedAt)+'</span><span style="font-size:12px;">'+r.used+' / '+r.total+'</span><span style="font-size:12px;">'+e(r.status)+'</span><span></span></div>';
+    var sub = open ? r.uses.map(function(u){ return '<div style="'+grid+'padding:6px 0;font-size:12px;background:var(--bg-sidebar,#faf6ef);"><span style="padding-left:22px;color:var(--muted);">使用 '+(u.qty||1)+' 次</span><span></span><span></span><span>'+md(u.date)+'</span><span></span><span>'+e(u.no||'')+'</span><span><a href="#" class="info-link" onclick="sumGoCase(\''+c.id+'\',\''+e(u.date)+'\');return false;">查看案件</a></span></div>'; }).join('') : '';
+    return main+sub;
+  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有符合的项目</div>';
+  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:8px;">项目汇总 <span style="font-weight:400;font-size:12px;color:var(--muted);">一个项目一行；展开看每次使用；复诊评估不是项目，不放这里</span></div>'+bar+'<div style="overflow-x:auto;"><div style="min-width:760px;">'+head+body+'</div></div></div>';
+}
+function sumFilter(id, k, v){ var ui = SUM_UI[id] || (SUM_UI[id] = {type:'', status:'', open:{}}); ui[k] = v; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
+function sumToggle(id, k){ var ui = SUM_UI[id] || (SUM_UI[id] = {type:'', status:'', open:{}}); ui.open[k] = !ui.open[k]; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
+function sumGoCase(id, date){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; var v = visitsOf(c).filter(function(x){ return x.date===date; })[0]; if(v && v.caseId!==c.id) openCaseNewTab(v.caseId); else { c.activeCaseTab = 'visits'; renderCaseBody(c); } }
+(function(){
+  var t0 = caseTabsHtml, c0 = caseTabContentHtml;
+  caseTabsHtml = function(c){
+    if(isChildVisit(c)){ var m = mainOf(c); return '<div style="font-size:12px;color:var(--slate2);background:var(--bg-sidebar,#f3efe6);border-radius:8px;padding:8px 12px;margin-bottom:8px;">子案件 '+cesc(c.caseNo)+' · 属于主案件 <a href="#" class="info-link" onclick="openCaseNewTab(\''+m.id+'\');return false;">'+cesc(m.caseNo)+'</a></div>'+t0.apply(this, arguments); }
+    if(!useV2Tabs(c)) return t0.apply(this, arguments);
+    normalizeCaseTab(c);
+    var at = c.activeCaseTab, flows = flowTabKeys(c), inFlow = flows.some(function(f){ return f.key===at; }), tab = function(k, label, on){ return '<span class="tab'+(on ? ' active' : '')+'" onclick="switchCaseTab(\''+k+'\')">'+label+'</span>'; };
+    var tabs = tab('basic', '基础资料', at==='basic');
+    if(flows.length || flowsOf(c).some(function(f){ return f.kind==='revisit'; })) tabs += '<span class="tab'+(inFlow ? ' active' : '')+'" onclick="switchCaseTab(\''+(flows[0] ? flows[0].key : 'visits')+'\')">流程</span>';
+    tabs += tab('visits', '子案件', at==='visits')+tab('summary', '项目汇总', at==='summary');
+    if(showSettleTab(c)) tabs += tab('settle', '结算', at==='settle');
+    tabs += tab('attachments', '附件', at==='attachments')+tab('timeline', 'Timeline', at==='timeline');
+    return '<div class="tabs" style="margin-bottom:4px;">'+tabs+'</div>';
+  };
+  caseTabContentHtml = function(c){
+    if(!useV2Tabs(c)) return c0.apply(this, arguments);
+    normalizeCaseTab(c);
+    var t = c.activeCaseTab;
+    if(t==='visits') return visitsTabHtml(c);
+    if(t==='summary') return summaryTabHtml(c);
+    if(['consult', 'kr', 'localmgmt'].indexOf(t)>-1) return flowChipsHtml(c)+c0.apply(this, arguments);
+    return c0.apply(this, arguments);
+  };
+})();

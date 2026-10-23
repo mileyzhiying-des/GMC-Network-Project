@@ -1110,6 +1110,7 @@ var CASE_ROW_OPEN = {}, CASE_GRID = '1.0fr 1.0fr 0.85fr 1.5fr 1.0fr 0.8fr 0.8fr 
 function caseRowToggle(id){ CASE_ROW_OPEN[id] = !CASE_ROW_OPEN[id]; renderCaseRows(); }
 function renderCaseRows(){
   var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return caseTabKey(c)===CASE_TAB_FILTER; });
+  items = items.filter(function(c){ return !isChildVisit(c); }); /* CMD-1023-01 S3：列表只列主案件，子案件展开看 */
   var hp = document.getElementById('case-head-proc'); if(hp) hp.textContent = CASE_TAB_FILTER==='all' ? '进程 / 结案类型' : (['closed','reportonly','cancelled'].indexOf(CASE_TAB_FILTER)>-1 ? '结案类型' : '进程'); /* CMD-1022-19 */
   if(CASE_REFUND_FILTER) items = items.filter(hasRefundMark);
   items = items.slice().sort(caseUpdatedDesc); /* CMD-1015-05 十一：最近更新的在上面 */
@@ -1122,7 +1123,7 @@ function renderCaseRows(){
     var si = caseStageInfo(c);
     var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+(krHoldOpen(c) ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:12px;">在韩后续进行中</span>' : '');
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
-    subCaseNos(c); var subs = subCaseList(c), open = !!CASE_ROW_OPEN[c.id];
+    var vsAll = visitsOf(c), subs = vsAll.length>1 ? vsAll : [], open = !!CASE_ROW_OPEN[c.id];
     /* CMD-1015-17：Case ID ｜ 客户姓名 ｜ 阶段 ｜ 进程 ｜ 财务 ｜ 对接院长 ｜ IN 室长 ｜ KR 室长 ｜ 开始时间 ｜ 更新时间；有子案件的 Case ID 前加 ▼，展开列出子案件（客户姓名留空、开始时间 = 到院时间） */
     var main = '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;"><span style="font-size:12px;color:var(--slate2);">'+(subs.length ? '<span onclick="event.stopPropagation();caseRowToggle(\''+c.id+'\')" title="展开到院记录" style="cursor:pointer;display:inline-block;width:16px;">'+(open ? '▲' : '▼')+'</span>' : '<span style="display:inline-block;width:16px;"></span>')+c.caseNo+'</span>'+
       '<span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
@@ -1130,9 +1131,9 @@ function renderCaseRows(){
       '<span style="font-size:12px;">'+(isEnded(c) ? caseEndTypeText(c) : si.proc)+lmTag+'</span>'+
       '<span>'+financeCellHtml(c)+'</span>'+
       '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartText(c)+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
-    var subHtml = open ? subs.map(function(rep){
-      var grp = subCaseRows(c, rep), allDone = grp.every(function(s){ return s.done; });
-      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+'到院'+' · '+String(rep.date||'').slice(5).replace('-','/')+' <span style="color:var(--muted);font-size:12px;">'+rep.dno+'</span></span><span></span><span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">术后管理</span></span><span style="font-size:12px;">'+(rep.place==='IN' ? '印尼' : '韩国')+'：'+grp.map(function(s){ return s.content; }).join('；')+' · '+(allDone ? '已完成' : (grp.some(function(s){ return s.arrived; }) ? '已到店' : '待到店'))+'</span><span></span><span></span><span></span><span></span><span style="font-size:12px;color:var(--muted);">'+(rep.place==='IN' ? (rep.visitDate||rep.date) : rep.date+(rep.time ? ' '+rep.time : ''))+'</span><span style="font-size:12px;color:var(--muted);">'+(rep.doneAt ? fmtUtc(rep.doneAt) : '')+'</span></div>';
+    var subHtml = open ? subs.map(function(v){
+      var ch = v.caseId!==c.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, tags = v.types.map(function(t0){ return '<span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);font-size:12px;margin-right:4px;">'+t0+'</span>'; }).join('');
+      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+(ch ? ch.id : c.id)+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+v.no+'</span><span style="font-size:12px;">'+String(v.date).slice(5).replace('-','/')+(v.time ? ' '+v.time : '')+'</span><span style="font-size:12px;">'+(v.place==='KR' ? '韩国' : '印尼')+'</span><span style="grid-column:span 3;">'+tags+'</span></div>';
     }).join('') : '';
     return main+subHtml;
   }).join('');

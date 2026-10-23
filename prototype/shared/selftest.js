@@ -2909,6 +2909,28 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R110a','CMD-1023-01 S3/S4（A1 分页）：主案件页 tab（基础资料｜流程｜子案件｜项目汇总｜结算｜附件｜Timeline）/ 流程 chip / 子案件表 / 项目汇总筛选展开 / 子记录提示 / 列表只列主案件并可展开',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var m = ST.newRes('R110m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];
+    m.visitDate = dateStr(new Date(demoNow().getTime()-12*86400000));
+    var ch = ST.newRes('R110m', {phone:clientPhoneOf(m.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.mainId = m.id; ch.caseNo = m.caseNo+'-02'; ch.visitDate = todayStr(); ch.visitTime = '10:00'; ch.needsConsult = false;
+    m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:m.visitDate+' 10:00'}, {origin:'KR', name:'ONDA 提升 · 身体 60kj·3次', mgmtPlan:true, qty:3, holdUsed:2, heldOver:true, uses:[{at:m.visitDate+' 10:00', qty:1}, {at:todayStr()+' 10:00', qty:1}]}];
+    ST.open(m); m = getCurrentCase(); m.activeCaseTab = 'basic';
+    var tabs = caseTabsHtml(m).replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
+    ST.ok(/基础资料\|(流程\|)?子案件\|项目汇总\|/.test(tabs) && /附件\|Timeline/.test(tabs), '主案件 tab：基础资料｜流程｜子案件｜项目汇总｜…｜附件｜Timeline：'+tabs);
+    ST.ok(tabs.indexOf('面诊资料')<0 && tabs.indexOf('赴韩施术')<0, '原来的面诊资料 / 赴韩施术 tab 收进「流程」');
+    m.activeCaseTab = 'visits'; var vh = caseTabContentHtml(m);
+    ST.ok(vh.indexOf(m.caseNo+'-01')>-1 && vh.indexOf(m.caseNo+'-02')>-1 && /序号/.test(vh) && /业务类型/.test(vh), '子案件表：序号 -01 / -02 + 栏位');
+    m.activeCaseTab = 'summary'; var sh = caseTabContentHtml(m);
+    ST.ok(/项目名称/.test(sh) && /业务类型/.test(sh) && /购买时间/.test(sh) && /使用次数/.test(sh) && sh.indexOf('隆鼻')>-1 && /2 \/ 3/.test(sh), '项目汇总：栏位 + 隆鼻 + ONDA 使用 2 / 3');
+    sumFilter(m.id, 'type', '在韩管理'); sh = caseTabContentHtml(m); ST.ok(sh.indexOf('隆鼻')<0 && sh.indexOf('ONDA')>-1, '按业务类型筛选');
+    sumFilter(m.id, 'type', ''); var rows = summaryRowsOf(m); var k = rows.filter(function(r){ return r.type==='在韩管理'; })[0]; sumToggle(m.id, 'item|'+k.name+'|'+rows.filter(function(r){ return r.ref==='item' || true; }).indexOf(k)); 
+    ST.ok(rows.some(function(r){ return r.uses.length===2; }), '展开行 = 每用一次一行');
+    ST.open(ch); ch = getCurrentCase(); ch.materialsConfirmed = true; ch.activeCaseTab = 'basic';
+    ST.ok(/属于主案件/.test(caseTabsHtml(ch)) && caseTabsHtml(ch).indexOf(m.caseNo)>-1, '子案件页顶部提示属于主案件');
+    CASE_TAB_FILTER = 'all'; CASE_ROW_OPEN[m.id] = true; renderCaseRows(); var rh = document.getElementById('case-rows'); 
+    if(rh){ var txt = rh.textContent; ST.ok(txt.indexOf(m.caseNo+'-01')>-1 && txt.indexOf(m.caseNo+'-02')>-1, '案件管理列表展开：主案件下列出各子案件'); ST.ok(rh.querySelectorAll('.case-row-click').length>0 && !(txt.split(ch.name).length>3), '列表里子记录不单独成行'); }
+  });
   ST.def('R109a','CMD-1023-01 S2（A1 分页）：到店后「接续」= 加入主案件成为子案件（mainId、案件号 主案件号-序号、序号退回）/ 候选不含子记录 / 来用本地项目加入本地主案件 / 接续到进行中主案件那天也算子案件',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var prior = ST.newRes('R109p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0];
