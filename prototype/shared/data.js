@@ -584,10 +584,9 @@ var PLACEHOLDER_HISTORY = [{id:'phx1', phone:'+62 812-3300-0099', date:D(-1), ti
 
 /* 日历事件：全部从案件数据实时算出来（一份数据，其他页面和日历不会各说各的）：
    预约来访 = 每个案件的 visitDate/visitTime；赴韩施术 = 案件里已确认的施术日期；预约占位 = RESERVATION_PLACEHOLDERS */
-function visitStateOf(c){
-  if(c.subState==='cancelled') return c.noShow ? '未到店' : '预约取消';
-  if(c.subState==='arrived' || c.hasArrived) return '已到访';
-  return '待访问';
+function visitStateOf(c){ /* CMD-1023-01 补 2：经 inVisitOf 读 */
+  var v = inVisitOf(c);
+  return v.state==='noShow' ? '未到店' : v.state==='cancelled' ? '预约取消' : v.state==='arrived' ? '已到访' : '待访问';
 }
 
 function calendarEvents(){
@@ -929,13 +928,18 @@ var DIRECTOR_LIST = DIRECTOR_INFO.filter(function(d){ return d.active; }).map(fu
    不经过占位；这里只做"开新案件"的预约来访——术后到院/使用持有项目也一律走这条开新案件（第十轮已确认） */
 /* ===== CMD-1021-16 三：同一客人没到店时一天只能有一个预约：约到某天时，那天已有「还没到」（待访问）或「已到店进行中」的预约 → 合并进去（一次到店，时间以原预约为准），提示「已合并到 X:XX 的预约」；
    那天已完成 → 照 15「今天的到院已完成」（KR 到院）。用户已有的重复预约不动（只管之后新建的）。 */
-function pendingResvSameDay(name, date, exceptId){
-  var cl = null; try{ cl = clientByName(name); }catch(e){} var nm = cl ? cl.name : name;
-  return CASE_ITEMS.filter(function(x){ return x.id!==exceptId && x.name===nm && x.visitDate===date && !x.krVisit && !x.visitClosed && x.subState!=='cancelled' && x.subState!=='noshow' && (x.subState==='waiting' || x.subState==='arrived'); })[0] || null;
+function pendingResvSameDay(name, date, exceptId){ /* CMD-1023-01 补 2：经 visitsOnDate（S1）读那一天的来访 */
+  var cl = null; try{ cl = clientByName(name); }catch(e){} var nm = cl ? cl.name : name, hit = null;
+  visitsOnDate(date, {place:'IN'}).forEach(function(v){
+    if(hit || v.name!==nm) return;
+    var r = CASE_ITEMS.filter(function(x){ return x.id===(v.rec||v.caseId); })[0]; if(!r || r.id===exceptId || r.krVisit) return;
+    var iv = inVisitOf(r); if(iv.left || (iv.state!=='waiting' && iv.state!=='arrived')) return; hit = r;
+  });
+  return hit;
 }
 /* KR：同一客人那天已有的到院（还没到 / 进行中）的时间；再往这天排项目 = 合并进去，时间以原到院为准（CMD-1021-16 三） */
 function krVisitTimeOnDate(c, date, exceptRowId){
-  var ks = c.krSchedule || {}; if(ks.confirmedDate===date && ks.confirmedTime && !c.krProcedureDone) return ks.confirmedTime;
+  var tp = tripOf(c); if(tp.date===date && tp.time && !tp.done) return tp.time;
   var rep = subCaseList(c).filter(function(r){ return r.place==='KR' && r.date===date && r.id!==exceptRowId && coreVisitState(c, subCaseKey(r))!=='done'; })[0];
   return rep && rep.time ? rep.time : '';
 }
@@ -3159,7 +3163,7 @@ function switchCaseTab(tab){
   renderCaseBody(c);
 }
 
-function relatedFollowers(c){ return CASE_ITEMS.filter(function(x){ return x.linkedCase && x.linkedCase.caseId===c.id; }); }
+function relatedFollowers(c){ return CASE_ITEMS.filter(function(x){ return relatedOf(x).linkedId===c.id; }); }
 
 function normalizeCaseTab(c){
   var t = c.activeCaseTab;
@@ -5648,7 +5652,7 @@ function todayOpenRows(c){ /* 今天这次到院里还没做完的：施术 / �
 }
 /* CMD-1021-13 三：［增加项目］（在韩加项入口）= 客人在韩期间、案件没结案就一直有；买了进持有 / 待付款，不动到院状态；离境日之后 / 已结案不显示 */
 function canAddOnNow(c){ return !!(c && !c.krTripEnded && c.hasArrived && c.krBalancePaid && !c.visitClosed && !isEnded(c) && !(stayOutIsSet(c) && stayOutDate(c) < todayStr())); }
-function mainVisitDay(c){ return c.krArrivedDay || (c.krSchedule||{}).confirmedDate || ''; }
+function mainVisitDay(c){ return tripOf(c).day; }
 /* CMD-1021-13 四：「使用时间 / 完成时间」= 实际做的那次到院的日期 + 到院时间，不是点［操作完成］的时间（点按钮的时间留在 Timeline）；旧数据显示时现算，不改存档 */
 function rowVisitKey(c, s){ if(!s) return 'main'; if(s.kind==='术后管理记录' || s.surgUse || s.holdUseOf) return subCaseKey(s); if(s.visitKey) return 'KR|'+s.date; return 'main'; }
 function visitAtParts(c, key, s){
@@ -9445,3 +9449,58 @@ function notifVisitTag(text, caseId){
     return text+' · 子案件 '+no;
   }catch(e){ return text; }
 }
+
+
+/* ===== CMD-1023-01 补 2：前端数据访问层（画面读「子案件 / 流程 / 关联 / 项目」一律走这里，不直接读旧字段；开发换后端时只需要实现这一层）=====
+   旧字段到访问器的对照见 docs/case-structure-v2/data-model.md。下面都是只读函数，不改数据。 */
+/* 一条接待记录自己的 IN 那一天：state = waiting（待到店）/ arrived / cancelled（预约取消）/ noShow（未到店） */
+function inVisitOf(c){
+  var st = c.subState || 'waiting';
+  var state = st==='cancelled' ? (c.noShow ? 'noShow' : 'cancelled') : (st==='arrived' || c.hasArrived) ? 'arrived' : 'waiting';
+  return {date:c.visitDate||'', time:c.visitTime||'', state:state, arrivedDay:c.arrivedDay||'', left:!!(c.leftStore || c.visitClosed), purpose:c.visitPurpose||'', krVisit:!!c.krVisit, cancelBy:c.cancelBy||''};
+}
+/* 全院某一天的所有到院（IN + KR），每条 = visitsOf 的一天 + 客人名 + 主案件 id；opts.place = 'IN' | 'KR' */
+function visitsOnDate(date, opts){
+  var out = [], place = opts && opts.place;
+  mainsOf().forEach(function(m){ visitsOf(m).forEach(function(v){ if(date && v.date!==date) return; if(place && v.place!==place) return; out.push(Object.assign({mainId:m.id, name:m.name}, v)); }); });
+  return out;
+}
+/* 某个韩国到院日里要做的项目行（在韩的术后管理 / 管理项目 / 持有使用行） */
+function visitRowsOf(m, v){ return (m.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.skipped && s.place==='KR' && s.date===v.date; }); }
+/* 赴韩施术流程：日期 / 到院 / 进度 */
+function tripOf(m){
+  var ks = m.krSchedule || {};
+  return {status:scheduleState(m), date:ks.confirmedDate||'', time:ks.confirmedTime||'', address:ks.address||'', arrived:!!m.hasArrived, arrivedDay:m.krArrivedDay||'', day:(m.krArrivedDay || ks.confirmedDate || ''), ended:!!m.krTripEnded, done:!!m.krProcedureDone, confirmed:!!ks.confirmedDate};
+}
+/* 流程当前步骤：consult = consultStatus；krTrip = scheduleState */
+function flowStepOf(m, kind){ return kind==='krTrip' ? scheduleState(m) : (m.consultStatus||''); }
+/* 复诊评估流程（挂在回来那天的接待记录上）；不是复诊评估返回 null */
+function revisitFlowOf(c){
+  if(!isRevEval(c)) return null;
+  var main = isChildVisit(c) ? mainOf(c) : (c.linkedCase && c.linkedCase.caseId ? CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0] : null);
+  var list = (main ? childVisitsOf(main) : []).filter(function(x){ return isRevEval(x); }).sort(function(a, b){ return String(a.visitDate||'').localeCompare(String(b.visitDate||'')); });
+  return {n:Math.max(1, list.indexOf(c)+1), result:(c.recoveryResult||{}).result||'', status:revEvalProcText(c), question:c.revisitQuestion||'', projects:c.followProjects||[], media:c.revisitMedia||[], mainId:main ? main.id : mainIdOf(c)};
+}
+/* 关联：linkedId = 主案件（或原案件）；resumeType = 接续类型；reason = 关联原因；lightLinkId = 复诊建议赴韩的轻关联 */
+function relatedOf(c){
+  var lk = c.linkedCase || null;
+  return {linkedId:lk ? lk.caseId : (isChildVisit(c) ? c.mainId : ''), mainId:isChildVisit(c) ? c.mainId : '', resumeType:c.resumeFrom ? c.resumeFrom.type : '', types:resumeTypesOf(c), reason:lk ? (lk.reason||'') : '', auto:!!(lk && lk.auto), followup:!!c.followup, revisit:!!c.revisitEval, lightLinkId:c.lightLink ? c.lightLink.caseId : ''};
+}
+/* 项目单元（项目汇总行 + 预约信息）：state = 未使用 / 已预约 / 使用中 / 已完成 / 持有 / 已取消 / 已转出 …；booked / bookedDate 来自在韩已排日期的术后管理行 */
+function projectUnitsOf(m, opts){
+  var rows = summaryRowsOf(m), care = (m.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.holdUseOf && !s.skipped; });
+  return rows.map(function(r){
+    var u = Object.assign({}, r), bk = null;
+    if(r.ref==='care'){ bk = care.filter(function(s){ return !s.done && s.date && (String(r.name).indexOf(String(s.content||'').replace(/（.*$/, ''))>-1); })[0] || null; }
+    u.booked = !!bk; u.bookedDate = bk ? bk.date : ''; u.state = (bk && r.status==='未使用') ? '已预约' : r.status;
+    return u;
+  }).filter(function(u){ return !(opts && opts.type) || u.type===opts.type; });
+}
+/* 客人的持有：IN = 印尼本地持有批次；KR = 在韩持有的管理项目（来自各主案件） */
+function clientHoldingsOf(name){
+  var kr = [];
+  mainsOf().filter(function(m){ return m.name===name; }).forEach(function(m){ (m.procedureItems||[]).forEach(function(it){ if(it.heldOver && !it.holdDone && !it.cancelled) kr.push({mainId:m.id, name:it.name, left:holdItemLeft(m, it), total:it.qty||1}); }); });
+  return {IN:getClientHoldings(name), KR:kr};
+}
+/* 客人未结束的主案件（已确认基础资料） */
+function openMainsOf(name){ return mainsOf().filter(function(m){ return m.name===name && m.materialsConfirmed && !isEnded(m); }); }

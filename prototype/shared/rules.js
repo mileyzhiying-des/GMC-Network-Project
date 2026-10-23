@@ -112,10 +112,11 @@ function revEvalProcText(c){
 }
 /* CMD-1022-08：案件类型（经营数据按类型统计） */
 var CASE_TYPES = ['新案件','接续面诊','术后管理','复诊评估'];
-function caseTypeOf(c){
-  if(c.resumeFrom && CASE_TYPES.indexOf(c.resumeFrom.type)>-1) return c.resumeFrom.type;
+function caseTypeOf(c){ /* CMD-1023-01 补 2：经 relatedOf 读 */
+  var r = relatedOf(c);
+  if(r.resumeType && CASE_TYPES.indexOf(r.resumeType)>-1) return r.resumeType;
   if(isRevEval(c)) return '复诊评估';
-  if(c.followup && c.linkedCase) return c.linkedCase.reason==='复诊' ? '复诊评估' : '术后管理';
+  if(r.followup && r.linkedId) return r.reason==='复诊' ? '复诊评估' : '术后管理';
   return '新案件';
 }
 function revisitTag(c){ return isRevisitConsult(c) ? '复诊' : ''; }
@@ -729,7 +730,7 @@ function krCaseVisible(c, hid){
   if(c && c.krVisit && c.krVisit.hospitalId===hid) return true; /* CMD-1014-16：IN 在 KR 日程占位、KR 确认后建的「在韩到店」案件，KR 和 IN 都看得到 */
   if(!c || c.hospitalId !== hid) return false;
   if(c.consultFeeWaived || c.reportReady || c.reuseReport) return true;
-  return !!c.consultRequested && ['paid_waiting_kr','awaiting_report','report_ready'].indexOf(c.consultStatus) > -1;
+  return !!c.consultRequested && ['paid_waiting_kr','awaiting_report','report_ready'].indexOf(flowStepOf(c, 'consult')) > -1; /* CMD-1023-01 补 2：经 flowStepOf 读 */
 }
 
 

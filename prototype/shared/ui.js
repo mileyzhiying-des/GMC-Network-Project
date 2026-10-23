@@ -1706,7 +1706,9 @@ function closeCancelIntakeModal(){
 
 /* 案件页头两行（CMD-1013-09 一）：第一行「客人名（点进客户详情）· 第 N 次来访」；第二行小字「Case ID · 对接院长」，不显示医院名 */
 function caseVisitNo(c){
-  if(c.subState!=='arrived') return 0; /* 本案件还没到店：不显示 */
+  if(inVisitOf(c).state!=='arrived') return 0; /* 本案件还没到店：不显示 */
+  var idx = (function(){ var list = []; mainsOf().filter(function(m){ return m.name===c.name; }).forEach(function(m){ visitsOf(m).forEach(function(v){ if(v.place!=='IN') return; var r = CASE_ITEMS.filter(function(x){ return x.id===(v.rec||v.caseId); })[0]; if(r && inVisitOf(r).state==='arrived') list.push({id:r.id, k:(v.date||'')+' '+(v.time||''), no:String(r.caseNo)}); }); }); list.sort(function(a, b){ return a.k.localeCompare(b.k) || a.no.localeCompare(b.no); }); return list.map(function(x){ return x.id; }).indexOf(c.id); })(); /* CMD-1023-01 补 2：经 visitsOf 数「第 N 次来访」 */
+  if(idx>-1) return idx+1;
   var list = CASE_ITEMS.filter(function(x){ return x.name===c.name && x.subState==='arrived'; }).sort(function(a, b){ return ((a.visitDate||'')+' '+(a.visitTime||'')).localeCompare((b.visitDate||'')+' '+(b.visitTime||'')) || String(a.caseNo).localeCompare(String(b.caseNo)); });
   return list.findIndex(function(x){ return x.id===c.id; })+1;
 }
@@ -1719,9 +1721,10 @@ function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;
   renderCaseTitle(c);
   var html = (c.caseNo||'')+(c.director ? ' · 对接院长：'+c.director : '');
-  if(c.linkedCase && c.linkedCase.caseId){
-    var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
-    html += (html ? ' · ' : '')+(c.followup ? ((c.resumeFrom && c.resumeFrom.type==='复诊评估') || c.revisitEval ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
+  var rel0 = relatedOf(c); /* CMD-1023-01 补 2：经 relatedOf 读关联 */
+  if(rel0.linkedId){
+    var src = CASE_ITEMS.filter(function(x){ return x.id===rel0.linkedId; })[0];
+    html += (html ? ' · ' : '')+(rel0.followup ? ((rel0.type==='复诊评估') || rel0.revisit ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+rel0.linkedId+'\');return false;">'+(src&&src.caseNo?src.caseNo:rel0.linkedId)+'</a>（'+rel0.reason+(rel0.auto?'，自动关联':'')+'）';
   }
   if(c.materialsConfirmed && !isChildVisit(c)){ try{ html += '<div style="margin-top:2px;">'+mainHeadLine(c)+'</div>'; }catch(e){} } /* CMD-1023-01 补 2：页头一行 从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
   el.innerHTML = html;

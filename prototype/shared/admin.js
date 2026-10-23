@@ -396,7 +396,7 @@ function buyPay(){
    具体要看哪些数字之后再讨论（Notion Accounts & Settings 第 6 节"待确认"）。口径是我的判断，见 docs/accounts-settings.md。 */
 var BIZ_MONTH = 'cur'; /* 'cur' 本月 / 'all' 全部 / 'YYYY-MM' */
 /* CMD-1015-17：营收、施术件数按「施术完成」那天算（不等结案）；还没施术完成的按案件开始那个月 */
-function bizCaseMonth(c){ if(c.surgeryDoneAt) return String(c.surgeryDoneAt).slice(0,7); var d = (c.logEntries && c.logEntries[0] && c.logEntries[0].dt) ? c.logEntries[0].dt.slice(0,10) : (c.visitDate || D(0)); return d.slice(0,7); }
+function bizCaseMonth(c){ if(c.surgeryDoneAt) return String(c.surgeryDoneAt).slice(0,7); var d = (c.logEntries && c.logEntries[0] && c.logEntries[0].dt) ? c.logEntries[0].dt.slice(0,10) : (inVisitOf(c).date || D(0)); return d.slice(0,7); }
 function bizSetMonth(v){ BIZ_MONTH = v; openAdminPage('bizdata', true); }
 ADMIN_RENDER.bizdata = function(el){
   var curM = D(0).slice(0,7);

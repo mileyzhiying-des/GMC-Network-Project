@@ -4151,7 +4151,7 @@ function krVisitOrdinalHtml(r){
 }
 
 /* CMD-1022-06：KR 案件列表 / 页头标「接续 · 类型」 */
-function krResumeTag(c){ return (c && c.resumeFrom) ? ' <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);white-space:nowrap;">接续 · '+krEsc(c.resumeFrom.type)+'</span>' : ''; }
+function krResumeTag(c){ var rt = c ? relatedOf(c).resumeType : ''; return rt ? ' <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);white-space:nowrap;">接续 · '+krEsc(rt)+'</span>' : ''; } /* CMD-1023-01 补 2：经 relatedOf 读 */
 
 /* CMD-1022-08：KR 传复诊评估结果。需要处理时可写「推荐的本地项目」（选填文字，不带价格，IN 看到时走备注同一套自动翻译）和「建议赴韩处理」（选填）；不能附赴韩项目 */
 function krRvSubmitBlock(c){
