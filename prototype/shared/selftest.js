@@ -4306,7 +4306,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 4 术后管理来自原案件：确认复诊评估后本地管理 tab */
       n.materialsConfirmed = true; n.revisitEval = {at:nowFullDt(), by:'x'}; n.consultRequested = true; n.consultStatus = 'paid_waiting_kr';
       ST.ok(showLocalTab(n), '选了术后管理 → 有本地管理 tab');
-      n.activeCaseTab = 'localmgmt'; var lm = caseTabContentHtml(n); ST.ok(lm.indexOf('术后管理（来自 '+src.caseNo+'）')>-1 && /术后消肿管理/.test(lm), '本地管理 tab：术后管理（来自 '+src.caseNo+'）列出原案件交给印尼还没做的');
+      n.activeCaseTab = 'localmgmt'; var lm = caseTabContentHtml(n); ST.ok(lm.indexOf('来自主案件 '+src.caseNo)>-1 && /术后消肿管理/.test(lm), '本地管理 tab：术后管理（来自 '+src.caseNo+'）列出原案件交给印尼还没做的');
       /* 原预约目的 */
       n.careFor = {caseId:src.id, keys:['k']}; ST.ok(/原预约目的：术后管理/.test(basicFourHtml(n, true)), '基础资料标出「原预约目的：术后管理」'); n.careFor = null;
       /* 7 客人离店 */
