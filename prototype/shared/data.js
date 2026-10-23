@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 55; /* 55（CMD-1020-08）：IN 备注改成备注记录（c.inNotes），旧「印尼室长备注」迁成第一则；*/ /* 54（CMD-1019-23）：已使用 / 剩余次数只从到院卡的完成行算，去掉没有完成行的假使用记录（A000004 的 ONDA ×2）；旧案件迁移并保留 */ /* 53 */ /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 56; /* 56（CMD-1023-01 S1）：案件结构 v2 数据层——每个案件补 mainId（指向主案件，自己 = 主案件）；旧的接续案件不转换，用户案件保留 */ /* 55 55（CMD-1020-08）：IN 备注改成备注记录（c.inNotes），旧「印尼室长备注」迁成第一则；*/ /* 54（CMD-1019-23）：已使用 / 剩余次数只从到院卡的完成行算，去掉没有完成行的假使用记录（A000004 的 ONDA ×2）；旧案件迁移并保留 */ /* 53 */ /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -9116,4 +9116,87 @@ function revCmpRefresh(){
     if(typeof isKrAccount==='function' && isKrAccount()){ if(typeof krRenderCaseDetail==='function') krRenderCaseDetail(); }
     else { var c = getCurrentCase(); if(c) renderCaseBody(c); }
   }catch(e){}
+}
+
+/* ===== CMD-1023-01 S1：案件结构 v2 数据层（分组式）=====
+   主案件 = 承载面诊 / 赴韩流程的案件对象（A000001）；子案件 = 一天一个（A000001-01…），编号现算不存。
+   IN 回来的那一天仍是 CASE_ITEMS 里的一条接待记录，带 mainId（指向主案件）；没有 mainId 的案件就是主案件本身。
+   流程（面诊安排 / 赴韩施术 / 复诊评估 #n）、项目汇总都是现算视图，不存。这一段只加不改，画面还没接。 */
+function mainIdOf(c){ return c ? (c.mainId || c.id) : ''; }
+function isChildVisit(c){ return !!c && !!c.mainId && c.mainId!==c.id; }
+function mainOf(c){ if(!isChildVisit(c)) return c; return CASE_ITEMS.filter(function(x){ return x.id===c.mainId; })[0] || c; }
+function childVisitsOf(m){ return m ? CASE_ITEMS.filter(function(x){ return x.mainId===m.id && x.id!==m.id; }) : []; }
+function mainsOf(list){ return (list || CASE_ITEMS).filter(function(x){ return !isChildVisit(x); }); }
+/* 一个主案件下所有"天"：主案件自己的 IN 日 + 在韩的天（施术日 / 术后管理 / 管理项目）+ IN 回来的天（子记录）；一天一个（同一天同地点合并） */
+function visitsOf(m){
+  var out = [];
+  var add = function(date, time, place, types, extra){
+    if(!date) return;
+    var k = date+'|'+place, v = out.filter(function(x){ return x.key===k; })[0];
+    if(!v){ v = {key:k, date:date, time:time||'', place:place, types:[], caseId:'', state:'', own:false}; out.push(v); }
+    types.forEach(function(t){ if(t && v.types.indexOf(t)<0) v.types.push(t); });
+    if(time && (!v.time || time < v.time)) v.time = time;
+    if(extra) Object.keys(extra).forEach(function(k2){ if(!v[k2]) v[k2] = extra[k2]; });
+  };
+  var typesOfRecord = function(x){
+    var t = [];
+    if(x.needsConsult!==false && !x.krVisit && !isRevEval(x) && !(x.followup && x.needsConsult===false)) t.push('面诊安排');
+    if(isRevEval(x) || (x.resumeFrom && hasResumeType(x, '复诊评估'))) t.push('复诊评估');
+    if(x.krVisit) t.push('在韩管理');
+    else if((x.resumeFrom && hasResumeType(x, '术后管理')) || (x.postcareUses||[]).length) t.push('术后管理');
+    if(x.localMgmt || localPurchasedBatches(x).length || (isLocalCase(x) && x.needsConsult===false && !x.followup)) t.push('本地管理');
+    return t;
+  };
+  if(m.visitDate) add(m.visitDate, m.visitTime, m.krVisit ? 'KR' : 'IN', typesOfRecord(m), {caseId:m.id, state:m.subState||'', own:true});
+  var sd = mainVisitDay(m); if(sd) add(sd, (m.krSchedule||{}).confirmedTime, 'KR', ['赴韩施术'], {caseId:m.id, own:true});
+  (m.subItems||[]).forEach(function(s){
+    if(s.kind!=='术后管理记录' || s.skipped) return;
+    var ty = visitRowType(m, s), t = ty==='管理项目' ? '在韩管理' : (ty==='施术' ? '赴韩施术' : '术后管理');
+    if(s.place==='IN'){ if(s.done) add(String(s.visitDate||s.doneAt||s.date||'').slice(0, 10), '', 'IN', [t], {caseId:m.id}); }
+    else add(s.date, s.time, 'KR', ty==='施术' ? [t] : [t, '在韩管理'].filter(function(x, i, a){ return a.indexOf(x)===i; }), {caseId:m.id, own:true});
+  });
+  childVisitsOf(m).forEach(function(ch){ if(ch.visitDate) add(ch.visitDate, ch.visitTime, 'IN', typesOfRecord(ch), {caseId:ch.id, state:ch.subState||''}); });
+  out.sort(function(a, b){ return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'') || (a.place===b.place ? 0 : (a.place==='IN' ? -1 : 1)); });
+  out.forEach(function(v, i){ v.seq = i+1; v.no = (m.caseNo||'')+'-'+(i+1<10 ? '0' : '')+(i+1); });
+  return out;
+}
+/* 流程（跨天）：面诊安排、赴韩施术、复诊评估 #n */
+function flowsOf(m){
+  var out = [];
+  if(!m.krVisit && m.needsConsult!==false && !isRevEval(m)) out.push({kind:'consult', label:'面诊安排', status:m.consultStatus||'', done:!!m.reportReady, caseId:m.id});
+  if((m.procedureItems||[]).some(function(it){ return it.origin==='KR'; }) || m.krDepositPaid) out.push({kind:'krTrip', label:'赴韩施术', status:m.scheduleState||'', tripEnded:!!m.krTripEnded, caseId:m.id});
+  var rv = childVisitsOf(m).concat(isRevEval(m) ? [m] : []).filter(function(x){ return isRevEval(x); }).sort(function(a, b){ return String(a.visitDate||'').localeCompare(String(b.visitDate||'')); });
+  rv.forEach(function(x, i){ out.push({kind:'revisit', n:i+1, label:'复诊评估 #'+(i+1), status:(x.recoveryResult||{}).result||'', caseId:x.id}); });
+  return out;
+}
+/* 项目汇总：项目名称｜业务类型｜购买时间｜使用时间｜使用次数｜状态；uses 是展开行（每用一次一行） */
+function summaryRowsOf(m){
+  var rows = [], day = function(t){ return String(t||'').slice(0, 10); };
+  var vlist = visitsOf(m), noOf = function(date){ var v = vlist.filter(function(x){ return x.date===date; })[0]; return v ? v.no : ''; };
+  var batchTime = function(it){ var b = (m.settlementBatches||[]).filter(function(x){ return x.id===it.batchId; })[0]; return day(b && b.time); };
+  (m.procedureItems||[]).forEach(function(it){
+    if(it.origin!=='KR') return;
+    var mg = krIsMgmtItemC(it), total = mg ? (it.qty||1) : 1, used = mg ? (it.holdUsed||0) : (it.done ? 1 : 0);
+    var st = it.cancelled ? '已取消' : (it.swapped || it.replacedBy) ? '已取消' : (it.heldOver && !it.holdDone && m.krTripEnded) ? '韩国持有' : used>=total ? '已完成' : used>0 ? '使用中' : '未使用';
+    var uses = mg ? (it.uses||[]).map(function(u){ var d = day(useVisitDate(m, u)); return {date:d, qty:u.qty||1, no:noOf(d), caseId:m.id}; }) : (it.done && it.doneAt ? [{date:day(it.doneAt), qty:1, no:noOf(day(it.doneAt)), caseId:m.id}] : []);
+    rows.push({name:buyName(it.name), type:mg ? '在韩管理' : '赴韩施术', boughtAt:batchTime(it), usedAt:uses.length ? uses[uses.length-1].date : '', used:used, total:total, status:st, uses:uses, ref:'item'});
+  });
+  (m.subItems||[]).forEach(function(s){
+    if(s.kind!=='术后管理记录' || s.holdUseOf || s.skipped) return;
+    var d = day(s.doneAt || s.visitDate || '');
+    var st = s.done ? '已完成' : (s.hold ? '韩国持有' : (s.place==='IN' && m.krTripEnded ? '印尼持有' : '未使用'));
+    rows.push({name:(s.projectName ? buyName(s.projectName)+' · ' : '')+String(s.content||'').replace(/（.*$/, ''), type:'术后管理', boughtAt:'', usedAt:s.done ? d : '', used:s.done ? 1 : 0, total:1, status:st, uses:s.done ? [{date:d, qty:1, no:noOf(d), caseId:m.id}] : [], ref:'care'});
+  });
+  var ids = [m.id].concat(childVisitsOf(m).map(function(x){ return x.id; }));
+  localPurchasedBatchesOf(m, ids).forEach(function(x){
+    var b = x.b, left = (b.bought||0)-(b.used||0), st = (b.refund || b.voided) ? '已退款' : (b.used||0)===0 ? '未使用' : left>0 ? '使用中' : '已完成';
+    var uses = (b.usages||[]).map(function(u){ var d = day(u.date || u.at); return {date:d, qty:u.qty||1, no:noOf(d), caseId:b.caseId}; });
+    rows.push({name:x.h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : ''), type:'本地管理', boughtAt:day(b.date), usedAt:uses.length ? uses[uses.length-1].date : '', used:b.used||0, total:b.bought||0, status:st, uses:uses, ref:'local'});
+  });
+  return rows;
+}
+function localPurchasedBatchesOf(m, ids){
+  var out = [];
+  getClientHoldings(m.name).forEach(function(h){ h.batches.forEach(function(b){ if(ids.indexOf(b.caseId)>-1 && !b.kr) out.push({h:h, b:b}); }); });
+  return out;
 }

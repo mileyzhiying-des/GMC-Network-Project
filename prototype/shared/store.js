@@ -342,6 +342,9 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:56, fn:function(c, ctx){ /* CMD-1023-01 S1：案件结构 v2——补 mainId（没有 = 自己是主案件）；旧的接续案件不转换，各自保持独立主案件 */
+      if(!c.mainId) c.mainId = c.id;
+    }},
     {to:55, fn:function(c, ctx){ /* CMD-1020-08：IN 室长备注改成备注记录（可写好几则、KR 已读）；原来的「印尼室长备注」内容迁成第一则备注（作者 IN 室长、未读） */
       if(c.recInNote && !(c.inNotes||[]).length){ c.inNotes = [{id:'n0', text:String(c.recInNote), by:'IN 室长', at:nowFullDt(), readAt:'', readBy:''}]; ctx.note('案件 '+(c.caseNo||'')+'：印尼室长备注迁成第一则备注'); }
     }},

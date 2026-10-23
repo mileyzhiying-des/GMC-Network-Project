@@ -2909,6 +2909,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R108a','CMD-1023-01 S1（A1 分页）：案件结构 v2 数据层——mainOf / visitsOf 编号 / flowsOf / summaryRowsOf / mainsOf / 迁移 56',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var m = ST.newRes('R108m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];
+    ST.ok(mainIdOf(m)===m.id && !isChildVisit(m) && mainOf(m)===m, '没有 mainId = 主案件本身');
+    m.visitDate = dateStr(new Date(demoNow().getTime()-20*86400000));
+    var d1 = m.visitDate;
+    var ch = ST.newRes('R108m', {phone:clientPhoneOf(m.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0];
+    ch.mainId = m.id; ch.visitDate = todayStr(); ch.visitTime = '10:30'; ch.needsConsult = false;
+    ST.ok(isChildVisit(ch) && mainOf(ch)===m && childVisitsOf(m).length===1 && mainsOf().indexOf(ch)<0 && mainsOf().indexOf(m)>-1, '子记录挂在主案件下，mainsOf 不含子记录');
+    var vs = visitsOf(m);
+    ST.ok(vs.length===2 && vs[0].date===d1 && vs[0].place==='IN' && vs[0].types.indexOf('面诊安排')>-1 && vs[1].caseId===ch.id, '两天：面诊日 + IN 回来的天，按日期排');
+    ST.ok(vs[0].no===m.caseNo+'-01' && vs[1].no===m.caseNo+'-02' && vs[1].seq===2, '编号 主案件号-序号 从 01 起');
+    ch.revisitEval = true; ch.resumeFrom = {caseId:m.id, type:'复诊评估', types:['复诊评估']};
+    ST.ok(visitsOf(m)[1].types.indexOf('复诊评估')>-1, '复诊评估记录的天带「复诊评估」标签');
+    var fl = flowsOf(m);
+    ST.ok(fl.some(function(f){ return f.kind==='consult'; }) && fl.filter(function(f){ return f.kind==='revisit'; }).length===1 && fl.filter(function(f){ return f.kind==='revisit'; })[0].n===1, '流程：面诊安排 + 复诊评估 #1');
+    m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:'2026-10-01 10:00', batchId:'b1'}, {origin:'KR', name:'ONDA 提升 · 身体 60kj·3次', mgmtPlan:true, qty:3, holdUsed:1, heldOver:true, uses:[{at:'2026-10-02 10:00', qty:1}]}];
+    m.subItems = [{id:'s108', kind:'术后管理记录', place:'KR', content:'拆线', projectName:'隆鼻', date:d1, done:true, doneAt:d1+' 10:00'}];
+    var rows = summaryRowsOf(m);
+    ST.ok(rows.length>=3 && rows.some(function(r){ return r.type==='赴韩施术' && r.status==='已完成'; }) && rows.some(function(r){ return r.type==='在韩管理' && r.status==='使用中' && r.used===1 && r.total===3 && r.uses.length===1; }) && rows.some(function(r){ return r.type==='术后管理' && r.status==='已完成'; }), '项目汇总：赴韩施术 / 在韩管理（1/3 使用中）/ 术后管理，各带状态与展开行');
+    ST.ok(flowsOf(m).some(function(f){ return f.kind==='krTrip'; }), '有赴韩项目 → 赴韩施术流程');
+    var mig = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===56; })[0]; ST.ok(!!mig, '迁移 56 存在');
+    if(mig){ var o = {id:'x108'}; mig.fn(o, {note:function(){}}); ST.ok(o.mainId==='x108', '迁移 56：补 mainId = 自己'); }
+  });
   ST.def('R107a','CMD-1022-21（A1 分页）：IN 接续案件本地管理 tab 项目卡——术后管理 / 本地管理两个 tab、今日 / 预约 / 未预约三组、栏位、操作、0 灰掉、没有已完成 tab、离店后只读、一般本地来访不动',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var prior = ST.newRes('R107p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0];
