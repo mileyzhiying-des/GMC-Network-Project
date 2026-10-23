@@ -104,6 +104,7 @@ function isRevisitConsult(c){ return !!(c && c.consultKind==='复诊'); } /* CMD
 /* CMD-1022-07：新的「接续 · 复诊评估」案件带 c.revisitEval（旧复诊案件没有 = 照旧叫复诊面诊 / 恢复确认）；复诊评估内部仍借用面诊的时间确认 / 录入 / 发送组件和 consultStatus 取值，但状态、名称、待办、计数、通知都按复诊评估单独显示 */
 function isRevEval(c){ return !!(c && c.revisitEval); }
 function revEvalProcText(c){
+  if(c.leftStore && !(c.reportReady || c.consultStatus==='report_ready')) return '客人已离店 · 等复诊评估结果'; /* CMD-1022-19：客人离店后 KR 照样继续评估 */
   if(c.reportReady || c.consultStatus==='report_ready') return c.recoveryResult && c.recoveryResult.result==='treat' ? '结果已到 · 需要处理' : '结果已到';
   if(c.consultStatus==='paid_waiting_kr') return '等确认时间';
   if(c.consultStatus==='awaiting_report'){ if(c.consultContentAt) return '评估完成 · 等 KR 传结果'; return c.consultStartedAt ? '评估中' : '等评估'; }
@@ -120,6 +121,7 @@ function caseTypeOf(c){
 function revisitTag(c){ return isRevisitConsult(c) ? '复诊' : ''; }
 function caseProcessText(c){ var t = caseProcessText0(c); return (isRevisitConsult(c) && !isRevEval(c) && c.stage==='consult' && c.consultRequested && !c.reportReady && t && t.indexOf('复诊')!==0) ? '复诊 · '+t : t; }
 function caseProcessText0(c){
+  if(isRevEval(c) && c.leftStore && !isEnded(c) && !(c.reportReady || c.consultStatus==='report_ready')) return '客人已离店 · 等复诊评估结果'; /* CMD-1022-19 */
   if(c.krVisit && (c.stage==='booked' || c.stage==='krmgmt')) return c.krVisit.arrived ? '在韩已到院' : '待在韩到院（KR 医院）';
   if(c.stage==='postcare') return postcareProcText(c);
   if(c.krVisit && c.krVisit.done && c.stage==='closed') return '在韩到店完成';
@@ -151,7 +153,7 @@ function caseProcessText0(c){
   }
   if(c.stage==='local') return c.mgmtActive ? '本地管理中' : '选择项目';
   if(c.stage==='cancelled') return endReasonText(c);
-  if(c.stage==='closed' && isRevEval(c) && (c.endNote==='复诊评估结束' || (!caseWorkDone(c) && !caseHasPurchase(c)))) return '复诊评估结束'; /* CMD-1022-09 / 12：页头［结束案件］结束的复诊评估案件也写「复诊评估结束」 */
+  if(c.stage==='closed' && isRevEval(c)) return '复诊评估结束'; /* CMD-1022-19：复诊案件结案一律写「复诊评估结束」（IN 在这个案件里做了本地项目也一样，不再显示「本地完成」） */ /* CMD-1022-09 / 12：页头［结束案件］结束的复诊评估案件也写「复诊评估结束」 */
   if(c.stage==='closed'){ /* 赴韩完成 / 本地完成 / 本地项目保留（取消赴韩后保留本地项目、本次没使用；CMD-1012-12 二） */
     if(c.krProcedureDone || krAllItems(c).some(function(it){ return it.done; })) return '赴韩完成';
     var kept = localPurchasedBatches(c);
@@ -891,3 +893,18 @@ function caseUpdatedKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(functi
 function caseStartKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && (!m || e.dt < m)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
 function caseStartText(c){ var k0 = caseStartKey(c); return k0 ? (fmtUtc(k0) || k0) : '—'; }
 function caseUpdatedDesc(a, b){ return caseUpdatedKey(b).localeCompare(caseUpdatedKey(a)); }
+
+/* CMD-1022-19：案件管理列表的 tab 归属：复诊评估案件（还没结束）单独一个「复诊评估」tab；结束的按结局进已结案 / 仅出报告 / 已取消 */
+function caseTabKey(c){ return (isRevEval(c) && !isEnded(c)) ? 'reveval' : c.stage; }
+/* CMD-1022-19：结束的案件，那一栏叫「结案类型」：已结案 = 赴韩完成 / 本地完成 / 复诊评估结束；仅出报告 = 客人不做了 / 失联 / 其他（说明）；已取消 = 未到店 / 客人取消预约 */
+function caseEndTypeText(c){
+  if(c.stage==='closed') return caseProcessText0(c);
+  if(c.stage==='reportonly'){
+    var mr = c.manualEnd && c.manualEnd.reason, note = c.manualEnd && c.manualEnd.note;
+    if(mr==='失联') return '失联';
+    if(mr==='其他') return '其他'+(note ? '（'+note+'）' : '');
+    return '客人不做了'; /* 客人不做项目 / 客人离店 / 手动结束选「客人不做了」 */
+  }
+  if(c.stage==='cancelled'){ if(c.subState==='cancelled') return c.noShow ? '未到店' : '客人取消预约'; return caseProcessText0(c); }
+  return caseProcessText0(c);
+}

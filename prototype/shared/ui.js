@@ -1109,7 +1109,8 @@ function setCaseHospitalFilter(v){ CASE_HOSPITAL_FILTER = v; buildCaseTabs(); re
 var CASE_ROW_OPEN = {}, CASE_GRID = '1.0fr 1.0fr 0.85fr 1.5fr 1.0fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr';
 function caseRowToggle(id){ CASE_ROW_OPEN[id] = !CASE_ROW_OPEN[id]; renderCaseRows(); }
 function renderCaseRows(){
-  var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return c.stage===CASE_TAB_FILTER; });
+  var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return caseTabKey(c)===CASE_TAB_FILTER; });
+  var hp = document.getElementById('case-head-proc'); if(hp) hp.textContent = CASE_TAB_FILTER==='all' ? '进程 / 结案类型' : (['closed','reportonly','cancelled'].indexOf(CASE_TAB_FILTER)>-1 ? '结案类型' : '进程'); /* CMD-1022-19 */
   if(CASE_REFUND_FILTER) items = items.filter(hasRefundMark);
   items = items.slice().sort(caseUpdatedDesc); /* CMD-1015-05 十一：最近更新的在上面 */
   if(CASE_ONLY_MINE) items = items.filter(function(c){ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }); /* 仅看我的：只显示我操作过的案件 */
@@ -1126,7 +1127,7 @@ function renderCaseRows(){
     var main = '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;"><span style="font-size:12px;color:var(--slate2);">'+(subs.length ? '<span onclick="event.stopPropagation();caseRowToggle(\''+c.id+'\')" title="展开到院记录" style="cursor:pointer;display:inline-block;width:16px;">'+(open ? '▲' : '▼')+'</span>' : '<span style="display:inline-block;width:16px;"></span>')+c.caseNo+'</span>'+
       '<span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
       '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
-      '<span style="font-size:12px;">'+si.proc+lmTag+'</span>'+
+      '<span style="font-size:12px;">'+(isEnded(c) ? caseEndTypeText(c) : si.proc)+lmTag+'</span>'+
       '<span>'+financeCellHtml(c)+'</span>'+
       '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartText(c)+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
     var subHtml = open ? subs.map(function(rep){
@@ -1239,7 +1240,7 @@ function renderCaseStatusBar(c){
   } else if(c.stage==='booked' && c.subState==='waiting'){
     actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
-  if(canEndCase(c)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">客人离店</button>'; /* CMD-1022-15：取代［结束案件］ */
+  if(canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>'; /* CMD-1022-15：取代［结束案件］；CMD-1022-19：复诊评估客人已离店、结果到了 → ［确认结案］，结果没到不显示 */
   if(c.krTripEnded && !c.visitClosed && c.stage==='postcare' && typeof canDo==='function' && canDo('work')) actionBtn += '<button class="btn-outline" onclick="inCloseOpen()">结案</button>'; /* CMD-1021-16：IN［结案］（术后管理（印尼）阶段） */
   var ug = urgeInfo(c);
   if(ug) actionBtn += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#C26A1B;">'+ug.label+'</span><button class="btn-primary" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>';
@@ -2268,7 +2269,7 @@ var END_REASONS = ['客人不做了', '失联', '其他'];
 function endCaseRows(c){
   var rows = [];
   if(c.consultRequested && c.consultStatus==='awaiting_payment') rows.push({key:'fee', title:'面诊费待缴', opts:[['pay','收款（客人已缴面诊费）'],['cancel','取消面诊']]});
-  else if(c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) rows.push({key:'consult', info:'面诊诊疗方案还没出：照样等报告。结束后结局算「仅出报告」，KR 之后发出的诊疗方案会放进这个已结束的案件（只读、可下载），新案件关联本案件也能看。'});
+  else if(!isRevEval(c) && c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) rows.push({key:'consult', info:'面诊诊疗方案还没出：照样等报告。结束后结局算「仅出报告」，KR 之后发出的诊疗方案会放进这个已结束的案件（只读、可下载），新案件关联本案件也能看。'});
   (c.settlementBatches||[]).forEach(function(b){
     if(b.status!=='unpaid') return;
     var opts = []; if(!(b.krDeposit>0)) opts.push(['pay','收款（标记已付款，本地项目转持有）']); opts.push(['cancel','取消该项目（撤销这张结算单）']);
@@ -2282,12 +2283,22 @@ function endCaseRows(c){
   });
   return rows;
 }
+/* CMD-1022-19：复诊评估还没出结果时［客人离店］：不结案，只记「客人已离店」；结果出来、IN 确认后才结案（结案类型「复诊评估结束」） */
+function revLeaveStore(c, note){
+  c.leftStore = {at:nowFullDt(), by:actingName()};
+  logCaseEvent(c, actingName(), '客人离店（复诊评估还没出结果，KR 照样继续评估，不结案）'+(note||''));
+  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  showToast('客人已离店', c.name+' · 等复诊评估结果，结果出来后再确认结案', null);
+}
 function openEndCase(){
   var c = getCurrentCase(); if(!c || !canEndCase(c)) return;
   END_CASE = {caseId:c.id, choice:{}, amt:{}, reason:'', note:''};
   /* CMD-1022-15：［客人离店］——系统先判断：没有剩下的项目（都做完、都付清）→ 直接离店并结束案件，不跳弹窗；还有没做完 / 没付款的 → 弹窗（列出剩下的项目、要选原因） */
   var left = endCaseRows(c); /* 含「面诊还在等报告」这类只告知的行：这也算没做完，要弹窗选原因 */
-  if(!left.length && !closeBlockers(c).length){ END_CASE.reason = '客人离店'; confirmEndCase(); return; }
+  if(!left.length && !closeBlockers(c).length){
+    if(isRevEval(c) && !c.reportReady){ END_CASE = null; revLeaveStore(c); return; } /* CMD-1022-19：复诊评估还没出结果 → 客人离店不结案（复诊评估不算没做完的项目），KR 照样继续评估 */
+    END_CASE.reason = '客人离店'; confirmEndCase(); return;
+  }
   renderEndCase();
 }
 function renderEndCase(){
@@ -2365,6 +2376,7 @@ function confirmEndCase(){
   });
   var left = closeBlockers(c);
   if(left.length){ alert('还有未处理的款项：'+left.join('、')+'，案件没有结束'); renderCaseStatusBar(c); renderCaseBody(c); return; }
+  if(isRevEval(c) && !c.reportReady){ revLeaveStore(c, '（其他项目已处理）'); return; } /* CMD-1022-19：复诊评估还没出结果 → 不结案 */
   c.manualEnd = {reason:st.reason, note:(st.note||'').trim(), by:by, at:nowFullDt()};
   c.endNote = '手动结束：'+reasonText;
   logCaseEvent(c, by, '手动结束案件（付定金前，当时：'+phase+'）：'+reasonText);
