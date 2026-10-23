@@ -2909,6 +2909,25 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R112a','CMD-1023-01 S6（A1 分页）：00:00 自动结束昨天的子案件 + 次日待办 / 术后管理超过建议日期一个月转管理项目（有 / 没有新主案件）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); };
+    var m = ST.newRes('R112m'); ST.materials(m, {consult:false}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; m.visitDate = dAgo(60);
+    m.subItems = [{id:'s112', kind:'术后管理记录', place:'IN', content:'术后复诊', date:dAgo(40), done:false}, {id:'s113', kind:'术后管理记录', place:'IN', content:'拆线', date:dAgo(5), done:false}];
+    var ch = ST.newRes('R112m', {phone:clientPhoneOf(m.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.mainId = m.id; ch.caseNo = m.caseNo+'-02'; ch.visitDate = dAgo(1); ch.arrivedDay = dAgo(1); ch.subState = 'arrived'; ch.materialsConfirmed = true;
+    ST.ok(visitSweep()===true && ch.autoEnded && ch.leftStore, '昨天的子案件到 00:00 自动结束（autoEnded + 离店）');
+    ST.ok(visitSweep()===false, '幂等：再跑不重复');
+    ST.ok(inTodoItems().some(function(x){ return x.kind==='visitend' && x.caseId===ch.id; }), '第二天 IN 待办「昨天已自动结束：确认」');
+    ch.autoAck = true; ST.ok(!inTodoItems().some(function(x){ return x.kind==='visitend' && x.caseId===ch.id; }), '确认后待办消失');
+    ST.ok(careOverMonthSweep()===true && m.subItems[0].transferred && m.subItems[0].done && !m.subItems[1].transferred, '术后管理超过一个月转出，没过一个月的不动');
+    var hs = (CLIENT_HOLDINGS[m.name]||[]).filter(function(h){ return /转入/.test(h.itemName); });
+    ST.ok(hs.length===1 && hs[0].batches[0].pkg && hs[0].batches[0].caseId===m.id, '没有新主案件 → 客人的印尼持有（免费、不能退款）');
+    ST.ok(summaryRowsOf(m).some(function(r){ return r.type==='术后管理' && r.status==='已转出'; }) && careOverMonthSweep()===false, '原主案件项目汇总显示已转出；幂等');
+    var m3 = ST.newRes('R112m', {phone:clientPhoneOf(m.name)}); m3 = CASE_ITEMS.filter(function(x){ return x.id===m3.id; })[0]; m3.materialsConfirmed = true; m3.visitDate = todayStr();
+    m.subItems.push({id:'s114', kind:'术后管理记录', place:'IN', content:'消肿管理', date:dAgo(45), done:false});
+    careOverMonthSweep(); var moved = m.subItems.filter(function(x){ return x.id==='s114'; })[0];
+    ST.ok(moved.transferred && moved.transferred.toId===m3.id && (m3.logEntries||[]).some(function(l){ return /转入/.test(l.action); }), '客人有进行中的另一个主案件 → 持有记在新主案件，新主案件记「转入」');
+  });
   ST.def('R111a','CMD-1023-01 S5（A1 分页）：钱——本地的钱记子案件、主案件结算 tab 汇总分「赴韩疗程」「本地」、子案件列表财务栏只看当天收的',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var m = ST.newRes('R111m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];

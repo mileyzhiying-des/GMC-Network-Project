@@ -51,6 +51,9 @@ function todoPayGo(c, b){
 function inTodoItems(){
   var out = [], now = nowDateObj(), today = todayStr(), nowMin = demoNow().getHours()*60 + demoNow().getMinutes();
   CASE_ITEMS.forEach(function(c){
+    if(c.autoEnded && !c.autoAck && c.subState!=='cancelled'){ /* CMD-1023-01 S6：昨天的子案件 00:00 已自动结束 → 第二天请室长确认 */
+      var it0 = todoMk('visitend', '子案件 '+(c.caseNo||'')+' 昨天已自动结束：确认（没做完的项目回到主案件「未做」）', c, '', false, function(){ c.autoAck = true; try{ Store.touch(); }catch(e){} openCaseDetail(c.id); }); it0.mine = todoInMine(c); out.push(it0);
+    }
     if(c.subState==='cancelled' || c.visitClosed || isEnded(c)) return;
     var mine = todoInMine(c), push = function(it){ it.mine = mine; out.push(it); };
     /* CMD-1021-16：术后管理（印尼）阶段：印尼的来访都做完、没有未来预约 → 第二天早上问「是否结案？」，每天问到确认 */

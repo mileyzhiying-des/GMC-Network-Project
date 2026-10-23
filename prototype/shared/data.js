@@ -8285,7 +8285,7 @@ function inProjectCardHtml(c){
   /* CMD-1022-16：IN 项目卡比照 KR：四个 tab 施术项目｜术后管理｜在韩管理｜已完成（0 的灰掉，默认第一个有内容的）；备注独立成一张卡；项目卡固定高度（原来的 2/3）。IN 的可见范围 / 不显示金额等规则照旧 */
   var card = function(inner){ return '<div class="card" style="padding:22px 24px;">'+inner+'</div>'; };
   var surgOpen = items.filter(function(it){ return !krIsMgmtItemC(it) && !it.done; }), surgDone = items.filter(function(it){ return !krIsMgmtItemC(it) && it.done && !it.cancelled; });
-  var careDone = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && s.done; });
+  var careDone = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && s.done && !s.transferred; });
   var cu = careUnits(c), careN = cu.rows.filter(function(r){ return !r.s.done; }).length + cu.unbooked.length;
   var mkRows = function(list){ var gs = surg.filter(function(g){ return g.all.some(function(x){ return list.indexOf(x)>-1; }); }); return gs.map(function(g){ return surgRowOf(g); }).join(''); };
   var careDoneHtml = careDone.map(function(s){ var lb = visitRowLabel(c, s); return '<div style="padding:8px 0;font-size:13px;border-top:1px solid var(--border2);"><span style="color:var(--muted);font-size:12px;">术后管理</span>　'+e(lb.sub ? (s.projectName ? buyName(s.projectName)+' · ' : '')+lb.name : lb.name)+' <span style="font-size:12px;color:var(--muted);">· 完成 '+e(String(s.doneAt||s.date||'').slice(0,10))+'</span></div>'; }).join('');
@@ -9181,7 +9181,7 @@ function visitsOf(m){
   (m.subItems||[]).forEach(function(s){
     if(s.kind!=='术后管理记录' || s.skipped) return;
     var ty = visitRowType(m, s), t = ty==='管理项目' ? '在韩管理' : (ty==='施术' ? '赴韩施术' : '术后管理');
-    if(s.place==='IN'){ if(s.done) add(String(s.visitDate||s.doneAt||s.date||'').slice(0, 10), '', 'IN', [t], {caseId:m.id}); }
+    if(s.place==='IN'){ if(s.done && !s.transferred) add(String(s.visitDate||s.doneAt||s.date||'').slice(0, 10), '', 'IN', [t], {caseId:m.id}); }
     else add(s.date, s.time, 'KR', ty==='施术' ? [t] : [t, '在韩管理'].filter(function(x, i, a){ return a.indexOf(x)===i; }), {caseId:m.id, own:true});
   });
   childVisitsOf(m).forEach(function(ch){ if(ch.visitDate) add(ch.visitDate, ch.visitTime, 'IN', typesOfRecord(ch), {caseId:ch.id, state:ch.subState||''}); });
@@ -9222,8 +9222,8 @@ function summaryRowsOf(m){
   (m.subItems||[]).forEach(function(s){
     if(s.kind!=='术后管理记录' || s.holdUseOf || s.skipped) return;
     var d = day(s.doneAt || s.visitDate || '');
-    var st = s.done ? '已完成' : (s.hold ? '韩国持有' : (s.place==='IN' && m.krTripEnded ? '印尼持有' : '未使用'));
-    rows.push({name:(s.projectName ? buyName(s.projectName)+' · ' : '')+String(s.content||'').replace(/（.*$/, ''), type:'术后管理', boughtAt:'', usedAt:s.done ? d : '', used:s.done ? 1 : 0, total:1, status:st, uses:s.done ? [{date:d, qty:1, no:noOf(d), caseId:m.id}] : [], ref:'care'});
+    var st = s.transferred ? '已转出' : s.done ? '已完成' : (s.hold ? '韩国持有' : (s.place==='IN' && m.krTripEnded ? '印尼持有' : '未使用'));
+    rows.push({name:(s.projectName ? buyName(s.projectName)+' · ' : '')+String(s.content||'').replace(/（.*$/, ''), type:'术后管理', boughtAt:'', usedAt:(s.done && !s.transferred) ? d : '', used:(s.done && !s.transferred) ? 1 : 0, total:1, status:st, uses:(s.done && !s.transferred) ? [{date:d, qty:1, no:noOf(d), caseId:m.id}] : [], ref:'care'});
   });
   var ids = [m.id].concat(childVisitsOf(m).map(function(x){ return x.id; }));
   localPurchasedBatchesOf(m, ids).forEach(function(x){
@@ -9346,3 +9346,42 @@ function mainMoneyTotals(m){
     return sum+h+kidsHtml;
   };
 })();
+
+
+/* ===== CMD-1023-01 S6：00:00 结束子案件 + 术后管理超过一个月转管理项目 =====
+   visitSweep：IN 回来的子案件（有 mainId）到了第二天（页面时区 todayStr）还没结束 → 自动结束（c.autoEnded）：客人标离店，没做完的项目回到主案件「未做」（项目 / 术后管理行本来就在主案件和客人持有里，不用搬），
+   款项没清 / 主线没完的不结案，只记原因；第二天早上 IN 待办 / 弹窗请室长确认（c.autoAck）。幂等，可重复跑。
+   careOverMonthSweep：主案件里「印尼的术后管理」超过建议日期一个月还没做 → 转成管理项目（仍免费、不能退款）：记成客人的印尼持有（带转出标记），原主案件行标已转出（当作完成、不再提醒），
+   下次开新主案件时客人持有里就有它；客人当时已经有进行中的另一个主案件 → 持有记在那个主案件上（「转入」），原主案件记「转出」。原主案件因此可以结案。 */
+function visitSweep(){
+  var today = todayStr(), changed = false;
+  CASE_ITEMS.forEach(function(ch){
+    if(!isChildVisit(ch) || ch.autoEnded || ch.subState!=='arrived' || !ch.materialsConfirmed || isEnded(ch) || ch.leftStore) return;
+    var day = ch.arrivedDay || ch.visitDate; if(!day || day>=today) return;
+    var bl = closeBlockers(ch); ch.autoEnded = {at:nowFullDt(), day:day, blockers:bl}; ch.leftStore = true; changed = true;
+    logCaseEvent(ch, '系统', '子案件 '+ch.caseNo+' 到 00:00 自动结束：没做完的项目回到主案件「未做」'+(bl.length ? '；还有未处理的款项（'+bl.join('、')+'），案件暂不结束' : ''));
+    if(!bl.length && !mainlineOngoing(ch)){ try{ finishCase(ch); }catch(e){ console.error('[子案件自动结案]', e); } }
+    try{ updateCaseStage(ch); }catch(e){}
+  });
+  return changed;
+}
+function careOverMonthSweep(){
+  var today = new Date(todayStr()+'T00:00:00'), changed = false;
+  mainsOf().forEach(function(m){
+    (m.subItems||[]).forEach(function(s){
+      if(s.kind!=='术后管理记录' || s.place!=='IN' || s.done || s.skipped || s.transferred) return;
+      var sg = String(s.suggest || s.date || '').slice(0, 10); if(!sg) return;
+      var lim = new Date(sg+'T00:00:00'); lim.setMonth(lim.getMonth()+1); if(lim >= today) return;
+      var m2 = CASE_ITEMS.filter(function(x){ return x!==m && !isChildVisit(x) && x.name===m.name && !isEnded(x) && x.materialsConfirmed; })[0] || null;
+      var nm = (s.projectName ? buyName(s.projectName)+' · ' : '')+String(s.content||'').replace(/（.*$/, '');
+      s.transferred = {at:nowFullDt(), toId:m2 ? m2.id : '', toNo:m2 ? m2.caseNo : ''}; s.done = true; s.doneAt = nowFullDt(); s.doneBy = '转出';
+      var hs = CLIENT_HOLDINGS[m.name] || (CLIENT_HOLDINGS[m.name] = []);
+      var h = hs.filter(function(x){ return x.itemName===nm+'（转入）'; })[0]; if(!h){ h = {itemName:nm+'（转入）', category:'管理项目', batches:[]}; hs.push(h); }
+      h.batches.push({caseId:m2 ? m2.id : m.id, date:todayStr(), bought:1, used:0, usages:[], pkg:true, transferFrom:m.caseNo, transferNo:m.caseNo});
+      logCaseEvent(m, '系统', '术后管理「'+nm+'」超过建议日期一个月没做，转成管理项目（免费）：已转出'+(m2 ? '，转入主案件 '+m2.caseNo : '，变成客人的印尼持有，下次开新案件时带进去'));
+      if(m2) logCaseEvent(m2, '系统', '转入：来自主案件 '+m.caseNo+' 的术后管理「'+nm+'」（超过建议日期一个月，已转成管理项目，免费）');
+      changed = true;
+    });
+  });
+  return changed;
+}
