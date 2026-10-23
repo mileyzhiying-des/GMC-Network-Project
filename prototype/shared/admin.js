@@ -403,7 +403,8 @@ ADMIN_RENDER.bizdata = function(el){
   var months = {}; months[curM] = 1; CASE_ITEMS.forEach(function(c){ months[bizCaseMonth(c)] = 1; });
   var monthList = Object.keys(months).sort().reverse();
   var want = BIZ_MONTH==='cur' ? curM : BIZ_MONTH;
-  var cs = CASE_ITEMS.filter(function(c){ return want==='all' || bizCaseMonth(c)===want; });
+  var cs = CASE_ITEMS.filter(function(c){ return want==='all' || bizCaseMonth(c)===want; }), csAll = cs;
+  cs = cs.filter(function(c){ return !isChildVisit(c); }); /* CMD-1023-01 S7：案件数 = 主案件（子案件不单独算），钱仍按各子案件当天收的加总 */
   var cnt = function(st){ return cs.filter(function(c){ return c.stage===st; }).length; };
   var closed = cnt('closed'), report = cnt('reportonly'), cancelled = cnt('cancelled'), ongoing = cs.length - closed - report - cancelled;
   var consultCases = cs.filter(function(c){ return !isRevEval(c) && (consultFeePaid(c) || c.consultFeeWaived || c.reportReady); }); /* CMD-1022-08：复诊评估不算面诊案件 */
@@ -412,7 +413,7 @@ ADMIN_RENDER.bizdata = function(el){
   var ratio = consultCases.length ? Math.round(travelCases.length*100/consultCases.length) : 0;
   var feeCases = cs.filter(consultFeePaid), feeCount = feeCases.length, feeSum = feeCases.reduce(function(s,c){ return s + (consultFeeOf(c)||0); }, 0); /* 加总各案件锁定的面诊费（CMD-1012-01 M-006） */
   var localSum = 0, krDeposit = 0;
-  cs.forEach(function(c){ var p = financePaid(c); localSum += p.inn; krDeposit += Math.max(0, p.kr - refundSum(c)); });
+  csAll.forEach(function(c){ var p = financePaid(c); localSum += p.inn; krDeposit += Math.max(0, p.kr - refundSum(c)); });
   var perCoord = {};
   cs.forEach(function(c){ var ops = caseOperators(c, true).inn; if(!ops.length) ops = ['（无操作记录）']; ops.forEach(function(n){ var o = perCoord[n] = perCoord[n] || {total:0, closed:0}; o.total++; if(c.stage==='closed') o.closed++; }); });
   var coordNames = Object.keys(perCoord).sort(function(a,b){ return perCoord[b].total - perCoord[a].total; });

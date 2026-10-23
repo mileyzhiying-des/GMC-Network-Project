@@ -3693,8 +3693,15 @@ function presMyAcct(){ try{ return currentAccountId(); }catch(e){ return ME_NAME
 function presCaseKey(){
   try{
     if(window.__krRecInTab) return null; /* 院长的面诊输入页（新分页）不登记「在看这个案件」，也不触发同一账号两分页锁 */
-    if(isKrAccount()) return (CURRENT_PAGE_ID==='kr-casedetail' && typeof KR_CASE!=='undefined' && KR_CASE && KR_CASE.id) ? KR_CASE.clinicId+':'+KR_CASE.id : null;
-    return (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID) ? CURRENT_CLINIC_ID+':'+CURRENT_CASE_ID : null;
+    /* CMD-1023-01 S7：操作锁 / 在线登记的粒度 = 主案件（同一个主案件的子案件页共用一把锁） */
+    if(isKrAccount()){
+      if(!(CURRENT_PAGE_ID==='kr-casedetail' && typeof KR_CASE!=='undefined' && KR_CASE && KR_CASE.id)) return null;
+      var kid = KR_CASE.id; try{ var kc = ((Store.readClinic(KR_CASE.clinicId)||{}).CASE_ITEMS||[]).filter(function(x){ return x.id===kid; })[0]; if(kc && kc.mainId) kid = kc.mainId; }catch(e2){}
+      return KR_CASE.clinicId+':'+kid;
+    }
+    if(!(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID)) return null;
+    var cc = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_CASE_ID; })[0];
+    return CURRENT_CLINIC_ID+':'+(cc && cc.mainId ? cc.mainId : CURRENT_CASE_ID);
   }catch(e){ return null; }
 }
 function presFresh(e){ return e && (Date.now() - e.ts) < PRES_TTL; }

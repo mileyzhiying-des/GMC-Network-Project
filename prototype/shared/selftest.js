@@ -2909,6 +2909,25 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R113a','CMD-1023-01 S7（KM1 分页，stageC 夹具）：KR 案件列表只列主案件（子案件在展开里，本地标签 / 钱 KR 看不到）/ KR 子案件、项目汇总 tab（不含本地）/ 操作锁粒度 = 主案件',async function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
+    await ST.ensureFixtures(['stageC']);
+    var rs = krAllCases(), r = rs.filter(function(x){ return /待到院/.test(x.name) || /stageC/i.test(x.name); })[0] || rs[0];
+    if(!ST.ok(r, '有可见案件')) return;
+    var cid = r.clinicId, mid = r.id;
+    Store.mutateClinic(cid, function(){
+      var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0];
+      var k = makeCase({id:'r113k', name:m.name, visitDate:todayStr(), visitTime:'10:00'}); k.caseNo = m.caseNo+'-09'; k.mainId = m.id; k.demo = false; k.materialsConfirmed = true; k.localMgmt = {active:false, ended:true, batches:[{id:'lb', time:todayStr()+' 11:00', inTotal:100000, items:[]}], mgmtUses:[]}; CASE_ITEMS.push(k);
+    });
+    try{
+      var rs2 = krAllCases(), mm = rs2.filter(function(x){ return x.id===mid; })[0];
+      ST.ok(!rs2.some(function(x){ return x.id==='r113k'; }) && mm && mm.kids.length===1 && mm.kids[0].no.indexOf('-09')>-1, '列表不单独列子案件，主案件带 kids');
+      ST.ok(mm.kids[0].types.indexOf('本地管理')<0, 'KR 看不到本地管理标签');
+      KR_CASE = {clinicId:cid, id:mid, tab:'visits'}; var h = Store.withClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0]; return krTabVisits(m)+krTabSummary(m); });
+      ST.ok(/子案件/.test(h) && /项目汇总/.test(h) && h.indexOf('本地管理')<0 && /只读/.test(h), 'KR 子案件 / 项目汇总 tab：印尼的天只读、没有本地管理');
+      ST.ok(KR_CASE_TABS.map(function(t0){ return t0.label; }).join('|').indexOf('子案件|项目汇总')>-1, 'KR tab 里有 子案件｜项目汇总');
+    } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.map(function(x){ return x.id; }).indexOf('r113k'); if(i>-1) CASE_ITEMS.splice(i, 1); }); }
+  });
   ST.def('R112a','CMD-1023-01 S6（A1 分页）：00:00 自动结束昨天的子案件 + 次日待办 / 术后管理超过建议日期一个月转管理项目（有 / 没有新主案件）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); };
