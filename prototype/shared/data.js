@@ -3541,7 +3541,7 @@ function consultSubItems(c){
 /* 面诊费表单（2026-10-01）：待缴费时可选"已缴费 / 免除面诊费"；关联原因是复诊/术后管理/延续既往面诊时默认预选"免除面诊费"+对应原因，室长可改，原因仍必填 */
 var WAIVE_REASON_BY_LINK = {'复诊':'复诊', '延续既往面诊':'延续既往面诊'};
  /* 2026-10-01 修正：术后管理不预选免除（术后管理不面诊，不会出现面诊费卡片）；下拉里其他选项保持不变 */
-var WAIVE_REASONS = ['复诊','延续既往面诊','其他'];
+var WAIVE_REASONS = ['复诊','延续既往面诊','复诊建议赴韩','其他'];
  /* 2026-10-02 面诊改版：去掉一项原因（一个案件只面诊一次）；术后管理不面诊，不在免除原因里 */
 function feeDraft(c){
   if(!c.feeDraft){
@@ -8913,11 +8913,17 @@ function reusePriceNoteHtml(c){
 }
 
 /* CMD-1022-06：客户详情［新增案件］——从基础信息开始填一个独立的新案件（例：术后管理时又想面诊新部位、复诊建议赴韩）；不弹「是否接续」，要关联之前的案件在基础资料第一块自己加 */
-function newCaseFromClient(name){
+function newCaseFromClient(name, fromId){
   var cl = clientByName(name); if(!cl || !canDo('work')) return;
   var now = demoNow(), mm = Math.floor(now.getMinutes()/30)*30, tm = ('0'+now.getHours()).slice(-2)+':'+('0'+mm).slice(-2);
   var c = createReservationCase(cl.name, null, todayStr(), tm, cl.phone||'', '面诊商谈');
   c.followupAsked = true; c.newFromClient = true;
+  var from = fromId ? CASE_ITEMS.filter(function(x){ return x.id===fromId; })[0] : null, fm = from ? mainOf(from) : null;
+  if(fm){ /* CMD-1023-01：复诊建议赴韩 = 新的主案件，轻关联原主案件（备注写原案件号，面诊费可免除：复诊建议赴韩） */
+    c.lightLink = {caseId:fm.id, caseNo:fm.caseNo, reason:'复诊建议赴韩'};
+    c.noteOverall = (c.noteOverall ? c.noteOverall+'\n' : '')+'复诊建议赴韩，之前的主案件：'+fm.caseNo;
+    logCaseEvent(c, actingName(), '复诊建议赴韩：新的主案件，轻关联原主案件 '+fm.caseNo);
+  }
   logCaseEvent(c, actingName(), '客户详情［新增案件］：直接到店，从基础信息开始填');
   openCaseDetail(c.id); markArrived();
 }
@@ -8988,7 +8994,7 @@ function revEvalResultHtml(c){
   var btns = '<button class="btn-primary" onclick="revResultOpen()">查看复诊评估结果 →</button>';
   if(!ended){
     if(treat && r.local && !c.localTrack) btns += '<button class="btn-outline" onclick="revEvalStartLocal()">根据推荐选本地项目</button>';
-    if(treat && r.suggestKr) btns += '<button class="btn-outline" onclick="newCaseFromClient(\''+String(c.name).replace(/'/g,"\\'")+'\')">另开新案件（建议赴韩）</button>';
+    if(treat && r.suggestKr) btns += '<button class="btn-outline" onclick="newCaseFromClient(\''+String(c.name).replace(/'/g,"\\'")+'\',\''+c.id+'\')">另开新案件（建议赴韩）</button>';
   }
   return '<div style="margin-top:10px;">'+revResultCardHtml(c, 'IN')+'</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">'+btns+'</div>'+
     (!ended && !hasRec ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">没有推荐，可以让客人离店（页头状态卡上的［客人离店］）。</div>' : '')+

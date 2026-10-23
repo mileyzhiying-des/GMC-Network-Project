@@ -2909,6 +2909,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R114a','CMD-1023-01 补（A1 分页）：复诊建议赴韩 = 新的主案件，轻关联原主案件（lightLink + 备注写原案件号 + 面诊费免除原因「复诊建议赴韩」）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var m = ST.newRes('R114m'); ST.materials(m, {consult:false}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];
+    var before = CASE_ITEMS.length; newCaseFromClient(m.name, m.id); var n = CASE_ITEMS.filter(function(x){ return x.lightLink && x.lightLink.caseId===m.id; })[0];
+    ST.ok(CASE_ITEMS.length===before+1 && n && !isChildVisit(n) && n.id!==m.id, '开了新的主案件（不是子案件）');
+    ST.ok(n.lightLink.caseNo===m.caseNo && /复诊建议赴韩/.test(n.noteOverall||'') && n.noteOverall.indexOf(m.caseNo)>-1, '轻关联 + 备注写上之前的案件号');
+    ST.ok(WAIVE_REASONS.indexOf('复诊建议赴韩')>-1, '面诊费免除原因有「复诊建议赴韩」');
+  });
   ST.def('R113a','CMD-1023-01 S7（KM1 分页，stageC 夹具）：KR 案件列表只列主案件（子案件在展开里，本地标签 / 钱 KR 看不到）/ KR 子案件、项目汇总 tab（不含本地）/ 操作锁粒度 = 主案件',async function(){
     var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
     await ST.ensureFixtures(['stageC']);
