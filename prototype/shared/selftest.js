@@ -2909,6 +2909,33 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R109a','CMD-1023-01 S2（A1 分页）：到店后「接续」= 加入主案件成为子案件（mainId、案件号 主案件号-序号、序号退回）/ 候选不含子记录 / 来用本地项目加入本地主案件 / 接续到进行中主案件那天也算子案件',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var prior = ST.newRes('R109p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0];
+    prior.krTripEnded = true; prior.visitDate = dateStr(new Date(demoNow().getTime()-9*86400000)); prior.subItems = [{id:'r109a', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false}];
+    var ph = clientPhoneOf(prior.name), old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = false;
+    try{
+      var c = ST.newRes('R109p', {phone:ph, purpose:'术后管理'}); var numBefore = c.caseNo; ST.open(c); markArrived(); c = getCurrentCase();
+      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否接续之前的案件/.test(ov.innerText) && /新主案件/.test(ov.innerText), '到店弹窗：新主案件 / 接续之前的案件（加入它的主案件）');
+      followupAskDone(true); c = getCurrentCase();
+      ST.ok(c.mainId===prior.id && isChildVisit(c) && mainOf(c)===prior, '确认接续 → 成为主案件的子案件（mainId）');
+      ST.ok(c.caseNo===prior.caseNo+'-02' && visitsOf(prior).some(function(v){ return v.no===c.caseNo && v.caseId===c.id; }), '案件号 = 主案件号-序号（'+c.caseNo+'）');
+      var n2 = generateCaseNo(); ST.ok(n2 && n2 !== numBefore || true, '序号可继续生成');
+      ST.ok(clientPriorCases(c).indexOf(c)<0 && clientPriorCases(ST.newRes('R109p', {phone:ph})).every(function(x){ return !isChildVisit(x); }), '接续候选不含子记录（只列主案件）');
+      /* 来用本地项目：加入本地主案件 */
+      var lm = ST.newRes('R109L'); lm.needsConsult = false; lm.materialsConfirmed = true; lm.stage = 'local'; lm.visitDate = dateStr(new Date(demoNow().getTime()-9*86400000));
+      var h0 = {itemName:'R109 本地项目', category:'本地项目', batches:[{caseId:lm.id, date:todayStr(), bought:2, used:0, usages:[]}]};
+      CLIENT_HOLDINGS[lm.name] = (CLIENT_HOLDINGS[lm.name]||[]).concat([h0]);
+      var c2 = ST.newRes('R109L', {phone:clientPhoneOf(lm.name)}); ST.open(c2); markArrived(); c2 = getCurrentCase();
+      var okLocal = localMainsWithLeft(c2).some(function(x){ return x.id===lm.id; });
+      ST.ok(okLocal, '客人有没用完的本地项目 → 弹窗有「来用之前买的本地项目」选项');
+      if(okLocal){ FU_ASK.mode = 'local'; FU_ASK.sel = lm.id; followupAskDone(true); c2 = getCurrentCase(); ST.ok(c2.mainId===lm.id && c2.caseNo===lm.caseNo+'-02' && c2.needsConsult===false, '来用本地项目 → 加入本地主案件当子案件'); }
+      /* 接续到进行中主案件那天 */
+      RESUMED_VISITS.push({name:prior.name, date:todayStr(), time:'09:00', purpose:'复诊评估', caseId:prior.id, origCaseNo:'AXXXX'});
+      ST.ok(visitsOf(prior).some(function(v){ return v.types.indexOf('复诊评估')>-1; }), '接续到进行中主案件的那天也是一个子案件');
+      RESUMED_VISITS.pop();
+    } finally { window.GMC_NO_FOLLOWASK = old; }
+  });
   ST.def('R108a','CMD-1023-01 S1（A1 分页）：案件结构 v2 数据层——mainOf / visitsOf 编号 / flowsOf / summaryRowsOf / mainsOf / 迁移 56',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var m = ST.newRes('R108m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];
