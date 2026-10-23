@@ -2909,6 +2909,19 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R111a','CMD-1023-01 S5（A1 分页）：钱——本地的钱记子案件、主案件结算 tab 汇总分「赴韩疗程」「本地」、子案件列表财务栏只看当天收的',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var m = ST.newRes('R111m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];
+    m.visitDate = dateStr(new Date(demoNow().getTime()-12*86400000));
+    var ch = ST.newRes('R111m', {phone:clientPhoneOf(m.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.mainId = m.id; ch.caseNo = m.caseNo+'-02'; ch.visitDate = todayStr(); ch.materialsConfirmed = true;
+    ch.localMgmt = {active:false, ended:true, batches:[{id:'lb1', time:todayStr()+' 11:00', inTotal:1500000, items:[{name:'LDM', qty:1}]}], mgmtUses:[]};
+    m.settlementBatches = [{id:'sb1', status:'active', krDeposit:900000, inTotal:0, time:m.visitDate+' 10:00', items:[]}];
+    var t = mainMoneyTotals(m); ST.ok(t.krDeposit===900000 && t.local===1500000 && t.localKids===1500000, '汇总：赴韩定金记主案件，本地 150 万记子案件');
+    ST.ok(showSettleTab(m), '子案件有本地结算 → 主案件有结算 tab');
+    ST.open(m); m = getCurrentCase(); var h = settleTabHtml(m);
+    ST.ok(/汇总（主案件/.test(h) && /赴韩疗程/.test(h) && /本地 · 子案件/.test(h) && h.indexOf(ch.caseNo)>-1, '结算 tab：汇总 + 赴韩疗程 + 本地（子案件）分栏');
+    var fin = visitsTabHtml(m); ST.ok(fin.indexOf(ch.caseNo)>-1 || fin.indexOf('-02')>-1, '子案件表有财务栏');
+  });
   ST.def('R110a','CMD-1023-01 S3/S4（A1 分页）：主案件页 tab（基础资料｜流程｜子案件｜项目汇总｜结算｜附件｜Timeline）/ 流程 chip / 子案件表 / 项目汇总筛选展开 / 子记录提示 / 列表只列主案件并可展开',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var m = ST.newRes('R110m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];

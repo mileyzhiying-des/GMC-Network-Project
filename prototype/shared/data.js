@@ -9318,3 +9318,31 @@ function sumGoCase(id, date){ var c = CASE_ITEMS.filter(function(x){ return x.id
     return c0.apply(this, arguments);
   };
 })();
+
+/* ===== CMD-1023-01 S5：钱 =====
+   本地项目的钱记当天子案件（子记录自己的结算单 / localMgmt.batches）；赴韩定金 / 尾款 / 在韩加项在主案件（赴韩施术流程）；面诊费在主案件。
+   主案件的结算 tab 汇总全部并分「赴韩疗程」「本地」两栏；子案件列表的财务栏只看当天收的。 */
+function childMoneyOf(m){
+  var out = [], ids = childVisitsOf(m);
+  ids.forEach(function(ch){ var p = financePaid(ch); if(p.inn>0 || (ch.settlementBatches||[]).length || (ch.localMgmt && (ch.localMgmt.batches||[]).length)) out.push({c:ch, inn:p.inn}); });
+  return out;
+}
+function mainMoneyTotals(m){
+  var p = financePaid(m), kids = childMoneyOf(m), localKids = kids.reduce(function(s, x){ return s+x.inn; }, 0);
+  return {krDeposit:p.kr, localMain:p.inn, localKids:localKids, local:p.inn+localKids, consultFee:(typeof consultFeeOf==='function' ? (consultFeeOf(m)||0) : 0)};
+}
+(function(){
+  var s0 = settleTabHtml, f0 = showSettleTab;
+  showSettleTab = function(c){ return f0.apply(this, arguments) || (!isChildVisit(c) && childMoneyOf(c).length>0); };
+  settleTabHtml = function(c){
+    var h = s0.apply(this, arguments);
+    if(isChildVisit(c) || !childVisitsOf(c).length) return h;
+    var kids = childMoneyOf(c), t = mainMoneyTotals(c);
+    var sum = '<div class="card" style="padding:16px 24px;margin-bottom:12px;"><div class="info-heading" style="margin-bottom:6px;">汇总（主案件 '+cesc(c.caseNo)+'）</div>'+
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;"><span><span style="color:var(--muted);font-size:12px;">赴韩疗程（定金 / 尾款 / 在韩加项，韩元，记在赴韩施术流程）</span><br><b>₩'+Number(t.krDeposit||0).toLocaleString()+'</b> 定金已收</span><span><span style="color:var(--muted);font-size:12px;">本地（各子案件当天收的，印尼盾）</span><br><b>'+formatCurrency(t.local, 'IDR')+'</b></span></div></div>';
+    var kidsHtml = kids.map(function(x){ return '<div class="card" style="padding:18px 24px;margin-top:12px;"><div class="info-heading" style="margin-bottom:8px;">本地 · 子案件 '+cesc(x.c.caseNo)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(x.c.visitDate||'')+' · 当天收 '+formatCurrency(x.inn, 'IDR')+'</span></div>'+
+      (x.c.settlementBatches||[]).map(function(b){ return settlementCardHtml(x.c, b); }).join('')+
+      (x.c.localMgmt ? (x.c.localMgmt.batches||[]).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">本地购买 '+cesc(b.time||'')+'</span><span style="font-size:12px;">'+(b.inTotal!==undefined ? formatCurrency(b.inTotal, 'IDR') : '')+'</span></div>'; }).join('') : '')+'</div>'; }).join('');
+    return sum+h+kidsHtml;
+  };
+})();
