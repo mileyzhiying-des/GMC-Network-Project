@@ -34,7 +34,7 @@ function todoMarkCaseSeen(caseId){ if(!caseId) return; var s = todoSeenLoad(), c
 var TODO_LAST = [], TODO_ACT_CASE = [];
 function todayShift(n){ return ymdAdd(todayStr(), n); }
 function todoMk(kind, text, c, due, over, go, extra){
-  return Object.assign({kind:kind, stage:todoStageOf(kind, c), key:kind+'|'+(c ? c.id : '')+'|'+(c ? '' : String(text).replace(/（已超时）/g, '')), cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (c.caseNo||'') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
+  return Object.assign({kind:kind, stage:todoStageOf(kind, c), key:kind+'|'+(c ? c.id : '')+'|'+(c ? '' : String(text).replace(/（已超时）/g, '')), cat:TODO_CAT[kind]||'todo', text:text, name:c ? c.name : '', no:c ? (visitNoFor(c) || c.caseNo || '') : '', caseId:c ? c.id : '', due:due||'', over:!!over, pin:false, mine:true, go:go||null}, extra||{});
 }
 function todoInGo(c, tab){ return function(){ openCaseDetail(c.id, false, {tab:tab}); }; }
 function todoInMine(c){ try{ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }catch(e){ return true; } }

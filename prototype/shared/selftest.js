@@ -2909,6 +2909,24 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R115a','CMD-1023-01 补 2（A1 分页）：日历 / 通知 / 待办按子案件、主案件页头一行、只有一个子案件时没有子案件 tab',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var m = ST.newRes('R115m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];
+    m.visitDate = dateStr(new Date(demoNow().getTime()-12*86400000)); m.visitTime = '10:00';
+    ST.open(m); m = getCurrentCase(); m.activeCaseTab = 'basic';
+    ST.ok(caseTabsHtml(m).indexOf('子案件')<0, '只有一个子案件：没有「子案件」tab，合在一页');
+    ST.ok(/从 \d\d\/\d\d 面诊开始/.test(mainHeadLine(m)) && /进行中：/.test(mainHeadLine(m)), '页头一行：从哪天面诊开始 · 进行中的流程');
+    var ch = ST.newRes('R115m', {phone:clientPhoneOf(m.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.mainId = m.id; ch.caseNo = m.caseNo+'-02'; ch.visitDate = todayStr(); ch.visitTime = '15:00'; ch.needsConsult = false;
+    ST.ok(!visitsOnlyOne(m) && caseTabsHtml(m).indexOf('子案件')>-1, '两个子案件：出现「子案件」tab');
+    ST.ok(/今天：/.test(mainHeadLine(m)) && mainHeadLine(m).indexOf(ch.caseNo)>-1, '页头显示今天的子案件号');
+    var evs = calendarEvents().filter(function(e){ return e.kind==='reservation' && e.name===m.name; });
+    ST.ok(evs.length===2 && evs.some(function(e){ return e.caseId===ch.id && e.no===ch.caseNo; }) && evs.some(function(e){ return e.caseId===m.id && e.no===m.caseNo+'-01'; }), '日历事件按子案件（visitsOf）：每天一个，带子案件号，点开是那一天的记录');
+    var n = pushNotif('案件', '测试通知（'+m.name+'）', {caseId:m.id, silent:true});
+    ST.ok(n.text.indexOf('子案件 ')>-1 && n.text.indexOf(m.caseNo+'-02')>-1, '通知文字标子案件号（主案件有多个子案件时）');
+    var n2 = pushNotif('案件', '测试通知（子）', {caseId:ch.id, silent:true}); ST.ok(n2.text.indexOf(ch.caseNo)>-1, '子记录的通知标自己的子案件号');
+    var it = todoMk('visit', '测试', ch, '', false, function(){}); ST.ok(it.no===ch.caseNo, '待办的案件号 = 子案件号');
+    ST.ok(visitNoFor(CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0])===m.caseNo+'-02', 'visitNoFor：主案件取今天的子案件号');
+  });
   ST.def('R114a','CMD-1023-01 补（A1 分页）：复诊建议赴韩 = 新的主案件，轻关联原主案件（lightLink + 备注写原案件号 + 面诊费免除原因「复诊建议赴韩」）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var m = ST.newRes('R114m'); ST.materials(m, {consult:false}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];

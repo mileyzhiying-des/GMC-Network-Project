@@ -1723,6 +1723,7 @@ function renderCaseSubtitle(c){
     var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
     html += (html ? ' · ' : '')+(c.followup ? ((c.resumeFrom && c.resumeFrom.type==='复诊评估') || c.revisitEval ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
   }
+  if(c.materialsConfirmed && !isChildVisit(c)){ try{ html += '<div style="margin-top:2px;">'+mainHeadLine(c)+'</div>'; }catch(e){} } /* CMD-1023-01 补 2：页头一行 从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
   el.innerHTML = html;
 }
 
@@ -3043,6 +3044,7 @@ function updateBell(){
 /* 生成通知：自动算收件人，收件人里有我就弹 toast（点 toast = 点这条通知） */
 function pushNotif(cat, text, opts){
   opts = opts || {};
+  text = notifVisitTag(text, opts.caseId); /* CMD-1023-01 补 2 */
   var c = opts.caseId ? CASE_ITEMS.filter(function(x){ return x.id===opts.caseId; })[0] : null;
   var rec;
   if(opts.names) rec = opts.names.slice();

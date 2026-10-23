@@ -592,8 +592,15 @@ function visitStateOf(c){
 
 function calendarEvents(){
   var evs = [];
+  /* CMD-1023-01 补 2：IN 的来访事件按子案件（visitsOf：一天一个）读；点开的是那一天的接待记录（rec） */
+  mainsOf().forEach(function(m){
+    visitsOf(m).forEach(function(v){
+      if(v.place!=='IN' || !v.time) return;
+      var rec = CASE_ITEMS.filter(function(x){ return x.id===(v.rec||v.caseId); })[0]; if(!rec || rec.krVisit || !rec.visitDate || !rec.visitTime) return;
+      evs.push({kind:'reservation', date:v.date, time:v.time, name:m.name, caseId:rec.id, purpose:rec.visitPurpose, vstate:visitStateOf(rec), ended:isEnded(rec), cancelBy:rec.cancelBy||'', no:v.no, types:v.types});
+    });
+  });
   CASE_ITEMS.forEach(function(c){
-    if(c.visitDate && c.visitTime && !c.krVisit) evs.push({kind:'reservation', date:c.visitDate, time:c.visitTime, name:c.name, caseId:c.id, purpose:c.visitPurpose, vstate:visitStateOf(c), ended:isEnded(c), cancelBy:c.cancelBy||''});
     var ks = c.krSchedule;
     if(ks && ks.confirmedDate && (ks.status==='confirmed' || ks.status==='arrived' || ks.status==='change_pending'))
       (function(){ var r = krToClinic(ks.confirmedDate, ks.confirmedTime||'14:00'); evs.push({kind:'travel', date:r.date, time:r.time, name:c.name, caseId:c.id, ended:isEnded(c)}); })(); /* KR 的到院时间换算成诊所时间 */
@@ -632,7 +639,7 @@ function eventChipHtml(e, opts){
     onclick = 'openPlaceholderModal(\''+e.phId+'\')';
   }
   var dashed = e.kind==='placeholder' ? 'border-style:dashed;' : '';
-  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+(e.purpose?' · '+e.purpose:'')+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'"><div class="l1">'+((opts && opts.day) ? e.time+'｜<b>'+l1+'</b>'+(l2 ? '｜'+l2 : '') : '<b>'+l1+'</b>'+(l2 ? ' · '+l2 : ''))+'</div></div>'; /* 每个预约一行："名字（粗体）· 来访目的" */
+  return '<div class="event-chip" title="'+e.time+' '+TYPE_LABEL[e.kind]+' · '+e.name+(e.purpose?' · '+e.purpose:'')+(e.no?' · '+e.no+(e.types&&e.types.length?'（'+e.types.join('、')+'）':''):'')+'" style="'+grey+dashed+'border-color:'+TYPE_COLOR[e.kind]+';background:'+TYPE_BG[e.kind]+';" onclick="event.stopPropagation();'+onclick+'"><div class="l1">'+((opts && opts.day) ? e.time+'｜<b>'+l1+'</b>'+(l2 ? '｜'+l2 : '') : '<b>'+l1+'</b>'+(l2 ? ' · '+l2 : ''))+'</div></div>'; /* 每个预约一行："名字（粗体）· 来访目的" */
 }
 
 function calPrev(){ if(CAL_MODE==='week') WEEK_OFFSET--; else if(CAL_MODE==='day') DAY_OFFSET--; else MONTH_OFFSET--; renderCalendar(); }
@@ -7293,6 +7300,7 @@ function pushKrNotif(hid, text, opt){
   var h = HOSPITAL_DATA[hid]; if(!h) return null;
   opt = opt || {};
   h.notifs = h.notifs || [];
+  text = notifVisitTag(text, opt.caseId); /* CMD-1023-01 补 2：通知按子案件——主案件有多个子案件时文字末尾标那一天的子案件号 */
   var n = {id:'kn'+Date.now()+Math.floor(Math.random()*1000), ts:opt.ts||nowFullDt(), text:text, clinicId:opt.clinicId||CURRENT_CLINIC_ID, caseId:opt.caseId||null, to:opt.to||'coord', director:opt.director||null, only:opt.only||null, popup:opt.popup||null, kind:opt.kind||'case', by:(typeof currentAccount==='function'&&currentAccount()?currentAccount().name:null), level:opt.level||notifLevel(text), readBy:[]};
   h.notifs.unshift(n); if(h.notifs.length>200) h.notifs.length = 200;
   return n;
@@ -9158,7 +9166,7 @@ function revCmpRefresh(){
    IN 回来的那一天仍是 CASE_ITEMS 里的一条接待记录，带 mainId（指向主案件）；没有 mainId 的案件就是主案件本身。
    流程（面诊安排 / 赴韩施术 / 复诊评估 #n）、项目汇总都是现算视图，不存。这一段只加不改，画面还没接。 */
 function mainIdOf(c){ return c ? (c.mainId || c.id) : ''; }
-function isChildVisit(c){ return !!c && !!c.mainId && c.mainId!==c.id; }
+function isChildVisit(c){ return !!c && !!c.mainId && c.mainId!==c.id && CASE_ITEMS.some(function(x){ return x.id===c.mainId; }); } /* 找不到主案件的（旧数据 / 被删）当主案件看，不会从列表里消失 */
 function mainOf(c){ if(!isChildVisit(c)) return c; return CASE_ITEMS.filter(function(x){ return x.id===c.mainId; })[0] || c; }
 function childVisitsOf(m){ return m ? CASE_ITEMS.filter(function(x){ return x.mainId===m.id && x.id!==m.id; }) : []; }
 function mainsOf(list){ return (list || CASE_ITEMS).filter(function(x){ return !isChildVisit(x); }); }
@@ -9182,7 +9190,7 @@ function visitsOf(m){
     if(x.localMgmt || localPurchasedBatches(x).length || (isLocalCase(x) && x.needsConsult===false && !x.followup)) t.push('本地管理');
     return t;
   };
-  if(m.visitDate) add(m.visitDate, m.visitTime, m.krVisit ? 'KR' : 'IN', typesOfRecord(m), {caseId:m.id, state:m.subState||'', own:true});
+  if(m.visitDate) add(m.visitDate, m.visitTime, m.krVisit ? 'KR' : 'IN', typesOfRecord(m), {caseId:m.id, rec:m.id, state:m.subState||'', own:true});
   var sd = mainVisitDay(m); if(sd) add(sd, (m.krSchedule||{}).confirmedTime, 'KR', ['赴韩施术'], {caseId:m.id, own:true});
   (m.subItems||[]).forEach(function(s){
     if(s.kind!=='术后管理记录' || s.skipped) return;
@@ -9190,7 +9198,7 @@ function visitsOf(m){
     if(s.place==='IN'){ if(s.done && !s.transferred) add(String(s.visitDate||s.doneAt||s.date||'').slice(0, 10), '', 'IN', [t], {caseId:m.id}); }
     else add(s.date, s.time, 'KR', ty==='施术' ? [t] : [t, '在韩管理'].filter(function(x, i, a){ return a.indexOf(x)===i; }), {caseId:m.id, own:true});
   });
-  childVisitsOf(m).forEach(function(ch){ if(ch.visitDate) add(ch.visitDate, ch.visitTime, 'IN', typesOfRecord(ch), {caseId:ch.id, state:ch.subState||''}); });
+  childVisitsOf(m).forEach(function(ch){ if(ch.visitDate) add(ch.visitDate, ch.visitTime, 'IN', typesOfRecord(ch), {caseId:ch.id, rec:ch.id, state:ch.subState||''}); });
   (typeof RESUMED_VISITS!=='undefined' ? RESUMED_VISITS : []).forEach(function(r){ /* 接续到进行中主案件的那一天（没有自己的记录）也是一个子案件 */
     if(r.caseId!==m.id || !r.date) return;
     var pt = r.purpose==='术后管理' ? ['术后管理'] : (r.purpose==='复诊评估' || r.purpose==='复诊' ? ['复诊评估'] : (r.purpose==='皮肤管理' ? ['本地管理'] : ['面诊安排']));
@@ -9309,7 +9317,8 @@ function sumGoCase(id, date){ var c = CASE_ITEMS.filter(function(x){ return x.id
     var at = c.activeCaseTab, flows = flowTabKeys(c), inFlow = flows.some(function(f){ return f.key===at; }), tab = function(k, label, on){ return '<span class="tab'+(on ? ' active' : '')+'" onclick="switchCaseTab(\''+k+'\')">'+label+'</span>'; };
     var tabs = tab('basic', '基础资料', at==='basic');
     if(flows.length || flowsOf(c).some(function(f){ return f.kind==='revisit'; })) tabs += '<span class="tab'+(inFlow ? ' active' : '')+'" onclick="switchCaseTab(\''+(flows[0] ? flows[0].key : 'visits')+'\')">流程</span>';
-    tabs += tab('visits', '子案件', at==='visits')+tab('summary', '项目汇总', at==='summary');
+    if(!visitsOnlyOne(c) || at==='visits') tabs += tab('visits', '子案件', at==='visits'); /* 只有一个子案件时合在一页，不多一层 */
+    tabs += tab('summary', '项目汇总', at==='summary');
     if(showSettleTab(c)) tabs += tab('settle', '结算', at==='settle');
     tabs += tab('attachments', '附件', at==='attachments')+tab('timeline', 'Timeline', at==='timeline');
     return '<div class="tabs" style="margin-bottom:4px;">'+tabs+'</div>';
@@ -9390,4 +9399,49 @@ function careOverMonthSweep(){
     });
   });
   return changed;
+}
+
+
+/* ===== CMD-1023-01 补 2：S1 数据层的补充读取函数（画面一律通过这里读「哪一天 / 哪个流程 / 从哪天开始」，不直接读旧字段）=====
+   rec = 这一天的接待记录（CASE_ITEMS 里的子记录或主案件自己，日历 / 待办 / 通知点开的就是它）；caseId = 这一天挂在哪个案件上（主案件）。 */
+function visitNoOf(m, date, place){ var v = visitsOf(m).filter(function(x){ return x.date===date && (!place || x.place===place); })[0]; return v ? v.no : ''; }
+function visitRecordId(v, m){ return (v && (v.rec || v.caseId)) || (m ? m.id : ''); }
+/* 子案件号（给通知 / 待办 / 到院卡加标签用）：子记录 = 自己的号；主案件只有 ≥2 个子案件时才返回「今天（没有就最近一天）」那一天的号，只有一天时不加标签 */
+function visitNoFor(c){
+  if(!c) return '';
+  if(isChildVisit(c)) return c.caseNo||'';
+  var vs = visitsOf(c); if(vs.length<2) return '';
+  var today = todayStr(), v = vs.filter(function(x){ return x.date===today; })[0] || vs.filter(function(x){ return x.date>today; })[0] || vs[vs.length-1];
+  return v ? v.no : '';
+}
+/* 从哪天面诊开始：第一个带「面诊安排」的 IN 天；没有面诊就是第一个子案件的日期 */
+function startDayOf(m){ var vs = visitsOf(m), v = vs.filter(function(x){ return x.types.indexOf('面诊安排')>-1; })[0] || vs[0]; return v ? v.date : (m.visitDate||''); }
+/* 当前进行中的流程（没结束的）：面诊安排没出报告、赴韩施术没完成、复诊评估没结果 */
+function ongoingFlowsOf(m){
+  return flowsOf(m).filter(function(f){
+    if(f.kind==='consult') return !f.done && !isEnded(m);
+    if(f.kind==='krTrip') return !m.krTripEnded && !m.krProcedureDone && !isEnded(m);
+    if(f.kind==='revisit'){ var r = CASE_ITEMS.filter(function(x){ return x.id===f.caseId; })[0]; return !!r && !r.reportReady && !isEnded(r); }
+    return false;
+  });
+}
+function flowDoneText(m){ var o = ongoingFlowsOf(m).map(function(f){ return f.label; }); return o.length ? o.join('、') : (isEnded(m) ? '已结束' : '没有进行中的流程'); }
+/* 主案件页头一行：从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
+function mainHeadLine(m){
+  var m0 = mainOf(m), sd = startDayOf(m0), vs = visitsOf(m0), today = todayStr(), tv = vs.filter(function(x){ return x.date===today; })[0];
+  var parts = [];
+  if(sd) parts.push('从 '+String(sd).slice(5).replace('-', '/')+' 面诊开始');
+  parts.push('进行中：'+flowDoneText(m0));
+  if(tv) parts.push('今天：'+tv.no+'（'+tv.types.join('、')+'）');
+  return parts.join(' · ');
+}
+function visitsOnlyOne(m){ return visitsOf(mainOf(m)).length<=1; }
+
+/* 通知文字末尾标子案件号（只有该主案件 ≥2 个子案件、文字里还没写这个号时才加）；通知落点仍是那条接待记录 / 主案件 */
+function notifVisitTag(text, caseId){
+  try{
+    var c = caseId ? CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0] : null; if(!c) return text;
+    var no = visitNoFor(c); if(!no || String(text).indexOf(no)>-1) return text;
+    return text+' · 子案件 '+no;
+  }catch(e){ return text; }
 }
