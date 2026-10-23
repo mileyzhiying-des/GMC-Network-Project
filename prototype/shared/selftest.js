@@ -915,7 +915,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   /* ================= 待办 / 通知调整（CMD-1013-17；关闭开关时检查「和 ed2a41d 一样」）================= */
   ST.shiftTo = function(h, m){ var base = DEMO_SHIFT_MS, n = demoNow(), t = new Date(n); t.setHours(h, m, 0, 0); DEMO_SHIFT_MS = base + (t - n); return function(){ DEMO_SHIFT_MS = base; }; };
   ST.def('TD1','待办生成与自动消失（IN）',function(){
-    var has = function(c, k){ return inTodoItems().some(function(i){ return i.no===c.caseNo && i.kind===k; }); };
+    var has = function(c, k){ return inTodoItems().some(function(i){ return i.caseId===c.id && i.kind===k; }); };
     var c = ST.newRes('TD1'); ST.consultToReport(c); ST.ok(has(c,'plan'), '诊疗方案已到应有「联络客人选项目」待办');
     ST.open(c); c.activeCaseTab = 'kr'; var p = PROJECT_LIBRARY.filter(function(x){ return x.origin==='KR' && x.hospitalId==='H1' && x.name==='假体隆鼻'; })[0]; toggleProject(p.id); confirmProjectSelection();
     ST.ok(!has(c,'plan') && has(c,'pay'), '选了项目后：计划待办消失、出现「待收款」'); reselectProjects(); ST.ok(!has(c,'pay'), '撤销待付款结算单后「待收款」消失');
@@ -1004,7 +1004,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     todoRefresh(); todoCardFilter('kr'); ST.ok(TODO_UI.kind==='kr' && /等 KR 回复/.test(document.getElementById('todo-pane').innerText) && /✕/.test(document.getElementById('todo-pane').innerText), '点卡片后待办标题应出现筛选标签'); todoSetKind(''); ST.ok(!/等 KR 回复 ✕/.test(document.getElementById('todo-pane').innerText), '✕ 回到全部');
     ['todo','visit','kr','msg'].forEach(function(k){ todoCardFilter(k); ST.ok(TODO_UI.kind===k, '4 张卡都应能筛选：'+k); }); todoSetKind('');
     /* 转告客人：按了［已转告客人］才消失，打开 tab 不算 */
-    var c = ST.toConfirmed('CAL1'), has = function(k){ return inTodoItems().some(function(i){ return i.no===c.caseNo && i.kind===k; }); };
+    var c = ST.toConfirmed('CAL1'), has = function(k){ return inTodoItems().some(function(i){ return i.caseId===c.id && i.kind===k; }); };
     ST.ok(has('relay'), '前置：有转告客人待办'); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c); ST.ok(has('relay'), '打开 tab 不再算已转告'); ST.ok(/发送给客人/.test(document.getElementById('case-body').innerHTML) && !/已转告客人/.test(document.getElementById('case-body').innerHTML), '赴韩施术 tab 施术日期行有［发送给客人］（没有［已转告客人］）');
     openSurgMsg(c.id); confirmSurgMsg(); ST.ok(!has('relay') && ST.hasLog(c, /已发送施术日期通知给客人/), '发送给客人之后待办消失 + Timeline');
     /* 赴韩施术前 2 天：确认日程有无变化（模拟时钟） */
@@ -1057,12 +1057,12 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     todoRefresh(); var cards = [].slice.call(document.getElementById('in-cards').children), order = ['todo','visit','kr','msg'];
     ST.ok(cards.length===4, 'IN 应有 4 张卡'); cards.forEach(function(card, i){ var n = parseInt(card.querySelector('div[style*="font-size:28px"]').textContent, 10); ST.ok(n===cats[order[i]], '卡片「'+order[i]+'」数字 '+n+' 应 = 待办筛选条数 '+cats[order[i]]); todoCardFilter(order[i]); var shown = todoVisible(inTodoItems()).length; ST.ok(shown===cats[order[i]], '点卡片后待办栏条数 '+shown+' 应 = '+cats[order[i]]); });
     todoSetKind('');
-    ST.ok(items.some(function(i){ return i.kind==='visit' && i.no===c1.caseNo && /\d\d:\d\d/.test(i.text) && i.text.indexOf(c1.name)>-1; }), '今天预约还没接待的客人应一位一条（时间 + 名字 + 来访目的）');
-    ST.arrive(c1); ST.ok(!inTodoItems().some(function(i){ return i.kind==='visit' && i.no===c1.caseNo; }), '按了已到店之后「今天来访」那条应消失');
+    ST.ok(items.some(function(i){ return i.kind==='visit' && i.caseId===c1.id && /\d\d:\d\d/.test(i.text) && i.text.indexOf(c1.name)>-1; }), '今天预约还没接待的客人应一位一条（时间 + 名字 + 来访目的）');
+    ST.arrive(c1); ST.ok(!inTodoItems().some(function(i){ return i.kind==='visit' && i.caseId===c1.id; }), '按了已到店之后「今天来访」那条应消失');
     /* 等 KR 回复：没超时灰色、超时红 + 催办 */
     var u = ST.newRes('CAL4u'); ST.arrive(u); ST.materials(u,{consult:true}); ST.payConsult(u); coreConfirmConsultTimes(u, todayStr(), '20:30', D(1)+' 05:00', ST.krBy);
-    var w = inTodoItems().filter(function(i){ return i.kind==='waitkr' && i.no===u.caseNo; })[0]; ST.ok(!!w && !w.over && w.gray && !w.urge, '没超时：灰色、无催办按钮');
-    u.reportEta = D(-1)+' 05:00'; w = inTodoItems().filter(function(i){ return i.kind==='waitkr' && i.no===u.caseNo; })[0]; ST.ok(!!w && w.over && w.urge, '超时：红色 + ［催办］'); ST.ok(/催办/.test(todoPaneHtml(inTodoItems())), '待办栏行里应有催办按钮');
+    var w = inTodoItems().filter(function(i){ return i.kind==='waitkr' && i.caseId===u.id; })[0]; ST.ok(!!w && !w.over && w.gray && !w.urge, '没超时：灰色、无催办按钮');
+    u.reportEta = D(-1)+' 05:00'; w = inTodoItems().filter(function(i){ return i.kind==='waitkr' && i.caseId===u.id; })[0]; ST.ok(!!w && w.over && w.urge, '超时：红色 + ［催办］'); ST.ok(/催办/.test(todoPaneHtml(inTodoItems())), '待办栏行里应有催办按钮');
     todoUrge(u.id); ST.ok(ST.hasLog(u, /催办 KR 室长/) && (HOSPITAL_DATA.H1.notifs||[]).some(function(n){ return n.kind==='urge' && n.caseId===u.id; }), '待办栏催办应通知 KR');
     /* 3 : 2 */
     var wrap = document.getElementById('cal-todo-wrap'), cal = wrap.firstElementChild, pane = document.getElementById('todo-pane'); ST.ok(cal.style.flex.indexOf('2')===0 && pane.style.flex.indexOf('1')===0, '日历 : 待办应是 2 : 1');
@@ -1072,7 +1072,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     var asked = 0, oc = window.confirm; window.confirm = function(m){ asked++; ST.ok(/营业时间外，确定预约吗？/.test(m), '确认文字'); return true; }; try{ calOffHoursAdd(ds, early); } finally { window.confirm = oc; }
     ST.ok(asked===1 && ADD_SLOT_CONTEXT && ADD_SLOT_CONTEXT.time===early, '确认后应打开代约弹窗'); closeAddSlotModal();
     /* 日程确认过期：标红、一直挂着 */
-    var s = ST.toConfirmed('CAL4s'), base = DEMO_SHIFT_MS, has = function(){ return inTodoItems().filter(function(i){ return i.kind==='recheck' && i.no===s.caseNo; })[0]; };
+    var s = ST.toConfirmed('CAL4s'), base = DEMO_SHIFT_MS, has = function(){ return inTodoItems().filter(function(i){ return i.kind==='recheck' && i.caseId===s.id; })[0]; };
     try{ DEMO_SHIFT_MS = base + (calDaysToSurgery(s)+3)*86400000; var r = has(); ST.ok(!!r && r.over, '施术日已过仍未确认：标红、一直挂着'); ST.confirmTrip(s); ST.ok(!has(), '确认行程后消失'); } finally { DEMO_SHIFT_MS = base; }
   });
   ST.def('CAL5','KR：卡片数字 = 待办筛选条数（KM1）',function(){
@@ -3267,7 +3267,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R45a','CMD-1019-16：施术前提醒发完卡片消失；施术日期发过不再［再发一次］；发过后 KR 改时间 → 红字 + ［已电话通知］（备注、Timeline、待办），没发过照旧发送；提醒发过后改时间同样走电话（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
-    var c = ST.toConfirmed('R45a'); ST.open(c); c.activeCaseTab = 'kr'; var ks = c.krSchedule, has = function(){ return inTodoItems().filter(function(i){ return i.no===c.caseNo && i.kind==='relay'; })[0]; };
+    var c = ST.toConfirmed('R45a'); ST.open(c); c.activeCaseTab = 'kr'; var ks = c.krSchedule, has = function(){ return inTodoItems().filter(function(i){ return i.caseId===c.id && i.kind==='relay'; })[0]; };
     /* 没发过：KR 改时间照旧［发送给客人］ */
     var t0 = ks.confirmedTime; ks.confirmedTime = ks.confirmedTime==='15:00' ? '16:00' : '15:00'; ST.ok(!surgChanged(c) && /发送给客人/.test(surgSendHtml(c)) && !/电话/.test(surgSendHtml(c)) && /发送给客人/.test(has().t || has().text || ''), '没发过：KR 改时间仍是［发送给客人］（待办也是发送）');
     ks.confirmedTime = t0;
@@ -4018,8 +4018,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.consultKind==='复诊' && x.consultStatus==='report_ready' && !x.revisitEval; })[0]; if(!ST.ok(!!c, '先在 KM1 分页跑 R87a')) return; /* 复诊评估（revisitEval）案件另有流程，不取 */
     c.krScope = {items:[], overallNote:''}; c.recoveryResult = {result:'ok'}; c.revisitAck = false; c.projectsEnabled = true; c.reportReady = true;
-    var it = inTodoItems().filter(function(x){ return x.kind==='plan' && x.no===c.caseNo; })[0]; ST.ok(!!it && /复诊评估已出/.test(it.text) && /恢复正常/.test(it.text), 'IN 待办：复诊评估已出：联络客人（恢复正常，不附项目方案）：'+(it&&it.text));
-    it.go(); ST.ok(c.revisitAck===true && !inTodoItems().some(function(x){ return x.kind==='plan' && x.no===c.caseNo; }), '点开联络后，不附方案的待办消失');
+    var it = inTodoItems().filter(function(x){ return x.kind==='plan' && x.caseId===c.id; })[0]; ST.ok(!!it && /复诊评估已出/.test(it.text) && /恢复正常/.test(it.text), 'IN 待办：复诊评估已出：联络客人（恢复正常，不附项目方案）：'+(it&&it.text));
+    it.go(); ST.ok(c.revisitAck===true && !inTodoItems().some(function(x){ return x.kind==='plan' && x.caseId===c.id; }), '点开联络后，不附方案的待办消失');
   });
 
   ST.def('R88a','CMD-1021-20（IN 分页）：메타뷰 一般案件面诊 / 不面诊都必填（在面诊需求上方，只出现一次）；关联案件（术后 / 复诊）选填',function(){
