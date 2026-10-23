@@ -2442,6 +2442,57 @@ function followupCardsHtml(c){
     (MAT_SPLIT ? (MAT_FOOT = matFootHtml(c), '') : matFootHtml(c))+'</div>';
 }
 /* 术后管理（本地管理 tab 上半）：客人所有案件里印尼的术后管理，做完记在原案件、扣原案件的印尼术后管理 */
+/* ===== CMD-1022-21：IN 接续案件（复诊评估 / 术后管理）本地管理 tab 的项目卡，比照 KR 项目卡：两个 tab［术后管理］［本地管理］（0 灰掉、默认第一个有内容的、固定高度内部滚动）；这次没有「已完成」tab ===== */
+var IN_CONT_TAB = {};
+function inContTab(id, k){ IN_CONT_TAB[id] = k; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
+function isContCase(c){ return !!c && ((isRevEval(c) && hasResumeType(c, '术后管理')) || (c.followup && isLocalCase(c))); }
+function inContBtn(what){ var c = getCurrentCase(); if(!c) return; if(c.localMgmt) lmContinue(what); else carriedContinue(what); }
+function inContUseNow(){ inContBtn('use'); }
+function inContCardHtml(c){
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, ro = isEnded(c) || c.visitClosed || !!c.leftStore, today = todayStr();
+  var src = followSrc(c), pill = function(t, bg, fg){ return '<span class="status-pill" style="background:'+bg+';color:'+fg+';">'+t+'</span>'; };
+  var rows = [];
+  CASE_ITEMS.forEach(function(x){ if(x.name!==c.name || x.id===c.id) return; careRows(x).forEach(function(s){ if(s.place==='IN' && !s.skipped && !s.done) rows.push({c:x, s:s, bk:inCareBooking(x, s.id)}); }); });
+  rows.sort(function(a, b){ return (b.c===src)-(a.c===src) || String(a.s.suggest||a.s.date||'').localeCompare(String(b.s.suggest||b.s.date||'')); });
+  var grp = {today:[], booked:[], none:[]};
+  rows.forEach(function(r){ (r.bk ? (String(r.bk.date)===today ? grp.today : grp.booked) : grp.none).push(r); });
+  var batches = localPurchasedBatches(c);
+  var counts = {care:rows.length, local:batches.length};
+  var cur = IN_CONT_TAB[c.id]; if(!cur || !counts[cur]) cur = ['care','local'].filter(function(k){ return counts[k]>0; })[0] || 'care';
+  var tabBtn = function(k, label){ var n = counts[k], on = cur===k; return '<button '+(n ? 'onclick="inContTab(\''+c.id+'\',\''+k+'\')"' : 'disabled')+' style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : (n ? 'var(--slate2)' : 'var(--dim)'))+';font-size:13px;cursor:'+(n ? 'pointer' : 'not-allowed')+';opacity:'+(n ? 1 : .55)+';">'+label+' '+n+'</button>'; };
+  var md = function(d){ return e(String(d||'').slice(5, 10).replace('-', '/')); };
+  var grid = 'display:grid;grid-template-columns:minmax(0,1.6fr) 90px minmax(0,1fr) 78px 150px;gap:8px;align-items:center;';
+  var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:4px 0;"><span>项目</span><span>术后第 N 天</span><span>建议日期</span><span>状态</span><span>操作</span></div>';
+  var careRow = function(r, kind){
+    var s = r.s, sg = s.suggest || s.date, late = pcDaysLate(sg), en = careEntryOfRow(r.c, s), nm = en ? (en.x.name||en.x.mgmt) : String(s.content||'').replace(/（.*$/, '');
+    var surgName = s.projectName ? buyName(s.projectName) : '', day = '';
+    try{ day = surgName ? careDayText(r.c, s.projectName, sg) : ''; }catch(_){ day = ''; }
+    var st = kind==='today' ? pill('今日', 'var(--terracotta-bg)', 'var(--terracotta)') : (kind==='booked' ? pill('已预约', '#E8F0FB', '#2F5FA8') : pill('未预约', 'var(--border2)', 'var(--slate2)'));
+    var bt = 'padding:3px 10px;font-size:12px;white-space:nowrap;', ops;
+    if(ro) ops = '<span style="font-size:12px;color:var(--muted);">只读</span>';
+    else if(kind==='today') ops = '<button class="btn-outline" style="'+bt+'" onclick="openCareUse(\'main\',\''+r.c.id+'\',\''+s.id+'\')">操作完成</button>';
+    else if(kind==='booked') ops = '<button class="btn-outline" style="'+bt+'" onclick="todoCareBookOpen(\''+r.c.id+'\',\''+s.id+'\',\''+(r.bk.caseId||'')+'\')">修改时间</button>';
+    else ops = '<button class="btn-outline" style="'+bt+'" onclick="todoCareBookOpen(\''+r.c.id+'\',\''+s.id+'\')">预约</button> <button class="btn-outline" style="'+bt+'" onclick="openCareUse(\'main\',\''+r.c.id+'\',\''+s.id+'\')">今天做</button>';
+    var dateTxt = kind==='none' ? md(sg) : md(r.bk.date)+(r.bk.time ? ' '+e(r.bk.time) : '');
+    var lateTxt = kind!=='booked' && late>0 ? ' <span style="color:#B3261E;font-size:12px;">已过 '+late+' 天</span>' : '';
+    return '<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+e(nm)+(surgName ? '<div style="font-size:12px;color:var(--muted);">对应施术 · '+e(surgName)+'</div>' : '')+'<div style="font-size:12px;color:var(--muted);">'+e(r.c.caseNo)+'</div></span><span style="font-size:12px;">'+e(day||'—')+'</span><span style="font-size:12px;">'+dateTxt+lateTxt+'</span><span>'+st+'</span><span style="display:flex;gap:6px;flex-wrap:wrap;">'+ops+'</span></div>';
+  };
+  var sec = function(title, list, kind){ return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+list.length+'</span></div>'+(list.length ? inSmallCard(head+list.map(function(r){ return careRow(r, kind); }).join('')) : '')+'</div>'; };
+  var body;
+  if(cur==='care') body = '<div style="font-size:12px;color:var(--muted);margin:2px 0 4px;">来自主案件'+(src ? ' '+e(src.caseNo) : '')+'；免费、不能退款；做完记在原案件，扣原案件的印尼术后管理（KR 在原案件里看得到次数被扣）</div>'+sec('今日项目', grp.today, 'today')+sec('预约项目', grp.booked, 'booked')+sec('未预约项目', grp.none, 'none');
+  else {
+    var g2 = 'display:grid;grid-template-columns:minmax(0,1.6fr) 110px 90px 190px;gap:8px;align-items:center;';
+    var h2 = '<div style="'+g2+'font-size:12px;color:var(--muted);padding:4px 0;"><span>项目</span><span>次数</span><span>购买时间</span><span>操作</span></div>';
+    var r2 = batches.map(function(x){ var b = x.b, left = Math.max(0, (b.bought||0)-(b.used||0));
+      var ops = ro ? '<span style="font-size:12px;color:var(--muted);">只读</span>' : '<button class="btn-outline" style="padding:3px 10px;font-size:12px;white-space:nowrap;'+(left ? '' : 'opacity:.5;')+'" '+(left ? 'onclick="inContUseNow()"' : 'disabled')+'>本日使用</button> <button class="btn-outline" style="padding:3px 10px;font-size:12px;white-space:nowrap;opacity:.5;" disabled title="本地项目暂时没有预约流程（沿用现有，这次没有新增）">预约时间</button>';
+      return '<div style="'+g2+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+e(x.h.itemName)+(b.spec ? '（'+e(buyName(b.spec))+'）' : '')+'</span><span style="font-size:12px;">剩 '+left+' / 共 '+(b.bought||0)+' 次</span><span style="font-size:12px;">'+md(b.date||b.boughtAt||'')+'</span><span style="display:flex;gap:6px;">'+ops+'</span></div>'; }).join('');
+    body = inSmallCard(h2+r2);
+  }
+  var topBtns = (ro || !localAddAllowed(c)) ? '' : '<button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="inContBtn(\'buy\')">继续选购</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="inContBtn(\'use\')">使用持有项目</button>';
+  return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">项目卡'+(src ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">（接续 '+e(src.caseNo)+'）</span>' : '')+'</div>'+topBtns+'</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+tabBtn('care','术后管理')+tabBtn('local','本地管理')+'</div>'+
+    '<div class="kr-pc-scroll">'+(body || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有项目</div>')+'</div></div>';
+}
 function followupCareCardHtml(c){
   var rows = [];
   CASE_ITEMS.forEach(function(x){ if(x.name!==c.name || x.id===c.id) return; careRows(x).forEach(function(s){ if(s.place==='IN' && !s.skipped) rows.push({c:x, s:s}); }); });
@@ -3287,12 +3338,12 @@ function caseTabContentHtml(c){
   if(c.activeCaseTab==='consult' && c.consultRequested) return consultTabHtml(c); /* CMD-1019-08：客人资料（苦恼部位卡片 / 预算）只放基础资料 tab，面诊 tab 不再重复 */
   normalizeCaseTab(c);
   if(c.activeCaseTab==='kr' && showKrTab(c)) return krTabContent(c);
-  if(c.activeCaseTab==='localmgmt' && localCarried(c) && c.localMgmt) return localMgmtTabHtml(c); /* 继续选购 / 使用后进入本地管理流程 */
+  if(c.activeCaseTab==='localmgmt' && localCarried(c) && c.localMgmt) return (isContCase(c) ? inContCardHtml(c) : '')+localMgmtTabHtml(c); /* 继续选购 / 使用后进入本地管理流程 */
   if(c.activeCaseTab==='localmgmt' && localCarried(c) && localMainDone(c)) return localCarriedDoneHtml(c); /* 本地项目都做完：列做过的项目 + 继续选购 / 使用（CMD-1013-14 一·2） */
-  if(c.activeCaseTab==='localmgmt' && c.followup && isLocalCase(c)) return followupCareCardHtml(c)+'<div class="info-heading" style="margin:16px 2px 8px;">本地管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">持有项目使用 / 新增项目</span></div>'+projectListTabHtml(c, true); /* CMD-1021-18：术后来访的本地管理分「术后管理 / 本地管理」两类 */
-  if(c.activeCaseTab==='localmgmt' && isRevEval(c) && hasResumeType(c, '术后管理') && !(isLocalCase(c) || localCarried(c))) return followupCareCardHtml(c)+(c.revisitRec && c.revisitRec.local ? revRecCardHtml(c) : ''); /* CMD-1022-15：复诊评估 + 术后管理：本地管理 tab 里先是「术后管理（来自 A000xxx）」 */
-  if(c.activeCaseTab==='localmgmt' && (isLocalCase(c) || localCarried(c))) return (isRevEval(c) && hasResumeType(c, '术后管理') ? followupCareCardHtml(c) : '')+(isRevEval(c) && c.revisitRec && c.revisitRec.local ? revRecCardHtml(c) : '')+projectListTabHtml(c, true); /* CMD-1022-12 B7：根据推荐选本地项目时，本地管理 tab 上方显示 KR 的推荐文字 */ /* 本地案件：选择项目→本地管理的完整流程（07） */
-  if(c.activeCaseTab==='localmgmt' && c.localMgmt) return localMgmtTabHtml(c);
+  if(c.activeCaseTab==='localmgmt' && c.followup && isLocalCase(c)) return inContCardHtml(c)+'<div class="info-heading" style="margin:16px 2px 8px;">本地管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">持有项目使用 / 新增项目</span></div>'+projectListTabHtml(c, true); /* CMD-1021-18：术后来访的本地管理分「术后管理 / 本地管理」两类 */
+  if(c.activeCaseTab==='localmgmt' && isRevEval(c) && hasResumeType(c, '术后管理') && !(isLocalCase(c) || localCarried(c))) return inContCardHtml(c)+(c.revisitRec && c.revisitRec.local ? revRecCardHtml(c) : ''); /* CMD-1022-15：复诊评估 + 术后管理：本地管理 tab 里先是「术后管理（来自 A000xxx）」 */
+  if(c.activeCaseTab==='localmgmt' && (isLocalCase(c) || localCarried(c))) return (isRevEval(c) && hasResumeType(c, '术后管理') ? inContCardHtml(c) : '')+(isRevEval(c) && c.revisitRec && c.revisitRec.local ? revRecCardHtml(c) : '')+projectListTabHtml(c, true); /* CMD-1022-12 B7：根据推荐选本地项目时，本地管理 tab 上方显示 KR 的推荐文字 */ /* 本地案件：选择项目→本地管理的完整流程（07） */
+  if(c.activeCaseTab==='localmgmt' && c.localMgmt) return (isContCase(c) ? inContCardHtml(c) : '')+localMgmtTabHtml(c);
   if(c.activeCaseTab==='localmgmt' && showLocalTab(c)) return localBoughtHtml(c);
   if(c.activeCaseTab==='settle' && showSettleTab(c)) return settleTabHtml(c);
   if(c.activeCaseTab==='related' && showRelatedTab(c)) return relatedTabHtml(c);

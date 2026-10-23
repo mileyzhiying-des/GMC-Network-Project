@@ -2909,6 +2909,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R107a','CMD-1022-21（A1 分页）：IN 接续案件本地管理 tab 项目卡——术后管理 / 本地管理两个 tab、今日 / 预约 / 未预约三组、栏位、操作、0 灰掉、没有已完成 tab、离店后只读、一般本地来访不动',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var prior = ST.newRes('R107p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0];
+    prior.subItems = [{id:'r107a', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false}, {id:'r107b', kind:'术后管理记录', place:'IN', content:'拆线', date:ST.dayStr ? ST.dayStr(5) : todayStr(), done:false}];
+    var ph = clientPhoneOf(prior.name), old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = true;
+    try{
+      var c = ST.newRes('R107p', {phone:ph}); ST.arrive(c); c = getCurrentCase(); c.metaviewStatus = 'ready'; setLinkedCase(prior.id); setNeedsConsult(false);
+      var h = inContCardHtml(c);
+      ST.ok(/项目卡/.test(h) && />术后管理 2</.test(h.replace(/\s+/g,'')) || /术后管理 2/.test(h), '两个 tab：术后管理 2');
+      ST.ok(/本地管理 0/.test(h) && /disabled/.test(h) && !/已完成 \d/.test(h), '本地管理 0 灰掉，没有「已完成」tab');
+      ST.ok(/今日项目/.test(h) && /预约项目/.test(h) && /未预约项目/.test(h) && /来自主案件/.test(h), '术后管理三组 + 来自主案件');
+      ST.ok(/术后第 N 天/.test(h) && />建议日期</.test(h) && />状态</.test(h) && />操作</.test(h), '栏位：项目｜术后第 N 天｜建议日期｜状态｜操作');
+      ST.ok(/openCareUse/.test(h) && />预约</.test(h), '未预约行有［预约］');
+      ST.ok(/kr-pc-scroll/.test(h), '固定高度内部滚动');
+      /* 本地管理 tab：有购买批次时列出 */
+      var hh = getClientHoldings(c.name); if(hh && hh[0]) hh[0].batches.push({caseId:c.id, date:todayStr(), bought:3, used:1, usages:[]});
+      var h2 = inContCardHtml(c); ST.ok(/本地管理 \d/.test(h2), '本地管理 tab 数字');
+      /* 离店后只读 */
+      c.leftStore = true; var h3 = inContCardHtml(c); ST.ok(!/onclick="openCareUse|todoCareBookOpen|inContBtn/.test(h3) && /只读/.test(h3), '客人离店后整张卡只读，没有操作按钮');
+      c.leftStore = false;
+      /* 一般本地来访不动 */
+      var c3 = ST.newRes('R107q', {phone:clientPhoneOf(prior.name)}); ST.arrive(c3); c3 = getCurrentCase(); ST.ok(!isContCase(c3), '一般本地来访不是接续案件，不显示新项目卡');
+    } finally { window.GMC_NO_FOLLOWASK = old; }
+  });
   ST.def('R105a','CMD-1022-19（A1 分页）：要看的项目只列施术 / 送出提示 / 复诊评估没出结果时客人离店不结案 / 术后管理只读 / 案件管理 tab 顺序与结案类型栏 / 日历块名称保留',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
@@ -3799,7 +3823,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       concernPartDef(rd.part).angles.forEach(function(a){ mockUploadRecovery('隆鼻', a.id); });
       ST.ok(caseAttachments(c2).some(function(f){ return /术后恢复 · 隆鼻/.test(f.label); }), '恢复照片进附件');
       confirmMaterials(); c2 = getCurrentCase(); ST.ok(c2.materialsConfirmed && c2.needsConsult===false && c2.activeCaseTab==='localmgmt', '不面诊确认 → 本地管理');
-      var lh = caseTabContentHtml(c2); ST.ok(/术后管理/.test(lh) && /术后复诊/.test(lh) && /做术后管理/.test(lh) && /本地管理/.test(lh), '本地管理分「术后管理 / 本地管理」两类');
+      var lh = caseTabContentHtml(c2); ST.ok(/术后管理/.test(lh) && /术后复诊/.test(lh) && /openCareUse/.test(lh) && /本地管理/.test(lh), '本地管理分「术后管理 / 本地管理」两类');
       openCareUse('main', prior.id, 'r86s1'); confirmCareUse();
       var ps = (prior.subItems||[]).filter(function(x){ return x.id==='r86s1'; })[0]; ST.ok(ps.done && (c2.postcareUses||[]).length===1, '做完 → 原案件印尼术后管理标完成，本案件记术后管理使用');
       /* 4 不关联走一般流程 */
