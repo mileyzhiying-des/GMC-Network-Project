@@ -2909,6 +2909,73 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R117a','CMD-1023-02（A1 分页）：到店弹窗期限（复诊超 3 个月灰掉 + 开新主案件轻关联）/ 仅出报告 3 个月内接续 → 同一主案件回到进行中 / 持有项目算在当初买的主案件 / 案件管理已完成 tab 默认 3 个月',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); }, old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = false;
+    try{
+      /* 复诊超过 3 个月 */
+      var p = ST.newRes('R117p'); ST.materials(p, {consult:true}); p = CASE_ITEMS.filter(function(x){ return x.id===p.id; })[0]; p.visitDate = dAgo(150); p.krProcedureDone = true; p.krTripEnded = {at:dAgo(100)+' 10:00'}; p.surgeryDoneAt = dAgo(120)+' 10:00'; p.stage = 'closed'; p.visitClosed = true;
+      var c = ST.newRes('R117p', {phone:clientPhoneOf(p.name), purpose:'复诊评估'}); ST.open(c); markArrived(); c = getCurrentCase();
+      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open'), '到店弹窗出现');
+      FU_ASK.mode = 'link'; FU_ASK.type = '复诊评估'; FU_ASK.types = ['复诊评估']; FU_ASK.sel = p.id; fuRender(); ov = document.getElementById('followup-overlay');
+      ST.ok(/超过 3 个月/.test(ov.innerText) && ov.querySelector('option[disabled]') && /开新主案件（轻关联原案件）/.test(ov.innerText), '超过 3 个月：选项灰掉写原因 + 「开新主案件（轻关联原案件）」按钮');
+      followupAskNewLight(); c = getCurrentCase();
+      ST.ok(c.lightLink && c.lightLink.caseId===p.id && !isChildVisit(c) && c.continueNew && /重新面诊/.test(c.noteOverall||''), '开了新主案件，轻关联原案件，备注写原案件号');
+      /* 仅出报告 3 个月内接续面诊 → 同一主案件回到进行中 */
+      var r = ST.newRes('R117r'); ST.materials(r, {consult:true}); r = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; r.visitDate = dAgo(40); r.reportReady = true; r.reportDate = dAgo(39); r.consultStartedAt = dAgo(40)+' 10:00'; r.consultAt = {date:dAgo(40), time:'10:00'}; r.stage = 'reportonly'; r.visitClosed = true; r.endNote = '客人不做';
+      ST.ok(joinWindowOf(r, '接续面诊').ok && mainStatusOf(r).status==='仅出报告', '仅出报告、3 个月内可接续');
+      var c2 = ST.newRes('R117r', {phone:clientPhoneOf(r.name)}); c2 = CASE_ITEMS.filter(function(x){ return x.id===c2.id; })[0]; ST.arrive(c2); c2 = CASE_ITEMS.filter(function(x){ return x.id===c2.id; })[0];
+      joinMain(c2, r); ST.ok(mainStatusOf(r).status==='进行中' && r.stage!=='reportonly' && isChildVisit(c2), '接续面诊 → 同一主案件，仅出报告回到进行中：'+r.stage);
+      /* 持有项目算在当初买的主案件 */
+      var h = ST.newRes('R117h'); ST.materials(h, {consult:true}); h = CASE_ITEMS.filter(function(x){ return x.id===h.id; })[0]; h.visitDate = dAgo(50); h.procedureItems = [{origin:'KR', name:'ONDA 提升 · 身体 60kj·3次', mgmtPlan:true, qty:3, holdUsed:1, heldOver:true}]; h.stage = 'closed'; h.visitClosed = true; h.krProcedureDone = true; h.krTripEnded = {at:dAgo(40)+' 10:00'};
+      ST.ok(mainHoldOf(h).length===1 && mainStatusText(h)==='已完成 · 有持有项目', '有持有项目：已完成 · 有持有项目');
+      var c3 = ST.newRes('R117h', {phone:clientPhoneOf(h.name)}); ST.open(c3); markArrived(); c3 = getCurrentCase();
+      ST.ok(localMainsWithLeft(c3).some(function(x){ return x.id===h.id; }), '用持有项目：当初买的主案件在候选里');
+      FU_ASK.mode = 'local'; FU_ASK.sel = h.id; followupAskDone(true); c3 = getCurrentCase();
+      ST.ok(c3.mainId===h.id && c3.caseNo===h.caseNo+'-02' && h.stage!=='closed', '加入当初买的主案件，主案件回到进行中：'+h.stage);
+      /* 案件管理已完成 tab：默认最近 3 个月，按最后来访日排 */
+      var o1 = ST.newRes('R117o'); ST.materials(o1, {consult:false}); o1 = CASE_ITEMS.filter(function(x){ return x.id===o1.id; })[0]; o1.stage = 'closed'; o1.visitClosed = true; o1.visitDate = dAgo(200);
+      var o2 = ST.newRes('R117q'); ST.materials(o2, {consult:false}); o2 = CASE_ITEMS.filter(function(x){ return x.id===o2.id; })[0]; o2.stage = 'closed'; o2.visitClosed = true; o2.visitDate = dAgo(10);
+      CASE_TAB_FILTER = 'closed'; CASE_DONE_RANGE.all = false; CASE_DONE_RANGE.from = ''; CASE_DONE_RANGE.to = ''; renderCaseRows(); var rh = document.getElementById('case-rows').textContent;
+      ST.ok(rh.indexOf('R117q')>-1 && rh.indexOf('R117o')<0 && /默认最近 3 个月/.test(rh), '已完成 tab 默认只显示最近 3 个月');
+      setDoneRange('all'); rh = document.getElementById('case-rows').textContent; ST.ok(rh.indexOf('R117o')>-1 && rh.indexOf('R117q')<rh.indexOf('R117o'), '选全部后更早的出现，按最后来访日排（新的在上）');
+      setDoneRange('recent'); CASE_TAB_FILTER = 'all';
+    } finally { window.GMC_NO_FOLLOWASK = old; }
+  });
+  ST.def('R116a','CMD-1023-02（A1 分页）：主案件 4 状态自动判断 / 没有［结案］按钮和每日结案待办 / 加子案件自动变回进行中 / 3 个月期限 / 持有项目归属 / 标题页头 / 流程 tab 一行一个 / 已完成 tab 默认 3 个月',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); };
+    /* 1 赴韩主案件：停在术后管理（印尼）→ 术后管理做完自动已完成（有持有项目） */
+    var m = ST.newRes('R116m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; m.visitDate = dAgo(60);
+    m.consultRequested = true; m.reportReady = true; m.reportDate = dAgo(58); m.consultStatus = 'report_ready'; m.settlementDone = true; m.krDepositPaid = true; m.krProcedureDone = true; m.hasArrived = true; m.krArrivedDay = dAgo(30);
+    m.krSchedule = {status:'arrived', confirmedDate:dAgo(30), confirmedTime:'10:00'}; m.surgeryDoneAt = dAgo(30)+' 10:00'; m.krTripEnded = {at:dAgo(25)+' 10:00', by:'KM1'};
+    m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:dAgo(30)+' 10:00'}, {origin:'KR', name:'ONDA 提升 · 身体 60kj·3次', mgmtPlan:true, qty:3, holdUsed:1, heldOver:true}];
+    m.subItems = [{id:'s116', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false}];
+    updateCaseStage(m); ST.ok(m.stage==='postcare' && mainStatusOf(m).status==='进行中' && /术后管理（印尼）1 项待做/.test(mainHeadLine(m)), '还有印尼术后管理没做 → 进行中，页头写「术后管理（印尼）1 项待做」：'+m.stage+' / '+mainHeadLine(m));
+    m.subItems[0].done = true; m.subItems[0].doneAt = nowFullDt(); updateCaseStage(m);
+    ST.ok(m.stage==='closed' && mainStatusOf(m).status==='已完成' && mainStatusText(m)==='已完成 · 有持有项目', '做完自动已完成，有持有项目：'+m.stage+' / '+mainStatusText(m));
+    ST.ok(mainHeadLine(m).indexOf('已完成')>-1 && terminalBadge(m)[2]==='已完成', '页头 / 徽章写已完成');
+    /* 2 没有结案按钮和每日结案待办 */
+    m.stage = 'postcare'; m.visitClosed = false; m.subItems[0].done = false;
+    ST.ok(!inTodoItems().some(function(i){ return i.kind==='inclose'; }), '没有「是否结案」每日待办');
+    m.subItems[0].done = true; updateCaseStage(m);
+    /* 3 加了新的子案件（3 个月内复诊）→ 变回进行中 */
+    ST.ok(joinWindowOf(m, '复诊评估').ok, '施术完成 30 天，复诊在 3 个月内');
+    var ch = ST.newRes('R116m', {phone:clientPhoneOf(m.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ST.arrive(ch); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0];
+    joinMain(ch, m); ST.ok(m.stage!=='closed' && mainStatusOf(m).status==='进行中', '加子案件后主案件回到进行中：'+m.stage);
+    /* 4 超过 3 个月 */
+    var m2 = ST.newRes('R116n'); ST.materials(m2, {consult:true}); m2 = CASE_ITEMS.filter(function(x){ return x.id===m2.id; })[0]; m2.surgeryDoneAt = dAgo(120)+' 10:00'; m2.krProcedureDone = true;
+    ST.ok(!joinWindowOf(m2, '复诊评估').ok && /超过 3 个月/.test(joinWindowOf(m2, '复诊评估').reason), '施术完成 120 天：复诊超过 3 个月，要重新面诊');
+    ST.ok(!joinWindowOf(CASE_ITEMS.filter(function(x){ return x.id===m2.id; })[0], '接续面诊').ok === resumeOverdue(m2), '接续面诊的期限从院长面诊日算');
+    /* 5 标题 */
+    ST.open(m); var tt = document.getElementById('case-title'); renderCaseTitle(m); ST.ok(tt && tt.textContent.indexOf('第')<0 && tt.textContent.indexOf(m.caseNo)>-1, '标题「客人名 · '+m.caseNo+'」没有「第 N 次来访」：'+(tt&&tt.textContent));
+    /* 6 流程 tab 一行一个流程 */
+    m.activeCaseTab = 'basic'; ST.ok(/>流程</.test(caseTabsHtml(m)) && !/>本地管理</.test(flowTabHtml(m,'')) , '流程 tab 里没有本地管理');
+    var rows = flowRowsOf(m); ST.ok(rows.some(function(r){ return r.kind==='consult'; }) && rows.some(function(r){ return r.kind==='krTrip' && r.done && /施术/.test(r.text) && /韩国行程结束/.test(r.text); }), '一行一个流程，赴韩施术 ✓ 已结束 带日期：'+rows.map(function(r){ return r.label+'='+r.text; }).join('；'));
+    var fh = flowTabHtml(m, ''); ST.ok(/已结束/.test(fh) && /展开/.test(fh), '行上有状态和［展开］');
+    /* 7 案件管理已完成 tab */
+    ST.ok(CASE_TABS.some(function(t0){ return t0.key==='closed' && t0.label==='已完成'; }), 'tab 叫已完成');
+  });
   ST.def('R115a','CMD-1023-01 补 2（A1 分页）：日历 / 通知 / 待办按子案件、主案件页头一行、只有一个子案件时没有子案件 tab',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var m = ST.newRes('R115m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0];

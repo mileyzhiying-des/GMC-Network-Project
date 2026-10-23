@@ -57,7 +57,7 @@ function inTodoItems(){
     if(c.subState==='cancelled' || c.visitClosed || isEnded(c)) return;
     var mine = todoInMine(c), push = function(it){ it.mine = mine; out.push(it); };
     /* CMD-1021-16：术后管理（印尼）阶段：印尼的来访都做完、没有未来预约 → 第二天早上问「是否结案？」，每天问到确认 */
-    if(inCloseDue(c)) push(todoMk('inclose', '术后管理（印尼）是否结案？', c, '', false, function(){ openCaseDetail(c.id); setTimeout(function(){ try{ inCloseOpen(); }catch(e){} }, 250); }));
+    if(false && inCloseDue(c)) push(todoMk('inclose', '术后管理（印尼）是否结案？', c, '', false, function(){ openCaseDetail(c.id); setTimeout(function(){ try{ inCloseOpen(); }catch(e){} }, 250); }));
     /* 诊疗方案已到 → 联络客人选项目 */
     if(c.reportReady && c.projectsEnabled && c.consultStatus==='report_ready' && !c.endNote && !(isRevisitConsult(c) && c.revisitAck && !(c.krScope&&c.krScope.items||[]).length) && !(c.settlementBatches||[]).length && !(c.recommended||[]).length && !c.localMgmt)
       push(isRevisitConsult(c) ? todoMk('plan', (isRevEval(c) ? '复诊评估结果已到：联络客人（' : '复诊评估已出：联络客人（')+((c.recoveryResult||{}).result==='treat' ? '需要处理' : '恢复正常')+(isRevEval(c) ? revRecText(c, '，') : ((c.krScope&&c.krScope.items||[]).length ? '，附项目方案' : '，不附项目方案'))+'）', c, '', false, function(){ c.revisitAck = true; try{ Store.touch(); }catch(e){} openCaseDetail(c.id, false, {tab:'consult'}); }) : todoMk('plan', '面诊资料已到：联络客人选项目', c, '', false, todoInGo(c, 'consult'))); /* CMD-1020-13 二：待办写「面诊资料已到」，点开进「面诊资料」tab（诊疗方案在那里看；选项目在赴韩施术 tab） */

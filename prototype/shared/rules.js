@@ -86,7 +86,7 @@ function caseStatusBadge(c){
 
 /* 阶段 + 进程（CMD-1008-13，IN-CASE-03 第 2 节）：案件列表"当前状态"拆成两栏——阶段（彩色标签，同顶部 tab）+ 进程（一般文字）。
    只是换一种显示：案件主状态（caseStatusLabel / stage / consultStatus / scheduleState）一概不改；KR 端仍用 caseStatusBadge。 */
-var STAGE_LABELS = {booked:'预约到店', consult:'面诊安排', travel:'赴韩施术', postcare:'术后管理', krmgmt:'在韩管理', local:'本地管理', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'};
+var STAGE_LABELS = {booked:'预约到店', consult:'面诊安排', travel:'赴韩施术', postcare:'术后管理', krmgmt:'在韩管理', local:'本地管理', closed:'已完成', reportonly:'仅出报告', cancelled:'已取消'};
 var STAGE_TONE_LABEL = {booked:'待访问', consult:'面诊预约', travel:'施术预约', postcare:'赴韩施术', krmgmt:'赴韩施术', local:'选择项目', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'}; /* 借现有主状态取颜色，保证和 tab / 旧标签同色 */
 function consultAtPassed(c){ /* KR 确认的面诊时间（韩国当地）是否已到 */
   if(!c.consultAt || !c.consultAt.date || !c.consultAt.time) return false;

@@ -1339,3 +1339,9 @@ prototype/shared/app.css  共用样式
 ## CMD-1023-01 案件结构 v2（2026-10-23，追加；分支 feature/case-structure-v2，基线标签 revisit-1022-done；旧文字保留作历史）
 - 分组式实作（数据版本 55 → 56，迁移只补 mainId）：主案件 = 承载面诊 / 赴韩的案件对象；IN 回来的天 = 带 `mainId` 的子记录（案件号 主案件号-序号，`joinMain`）；现算视图 `visitsOf / flowsOf / summaryRowsOf`（data.js 末尾）。S2 到店弹窗（新主案件 / 接续 / 来用本地项目）；S3+S4 IN 主案件页 tab 基础资料｜流程｜子案件｜项目汇总｜结算｜附件｜Timeline、列表只列主案件；S5 结算 tab 汇总分栏；S6 `visitSweep`（00:00 结束子案件）/ `careOverMonthSweep`（术后管理超一个月转管理项目）；S7 KR 列表 / 子案件 / 项目汇总 tab、经营数据案件数、操作锁粒度主案件；补：复诊建议赴韩 = 新主案件轻关联（`lightLink`）。
 - **没做完**：接续相关旧函数没删（子记录接待复用）；日历 / 待办 / 通知 / KR 到院卡 / KR 院长评估的落点没改按子案件；逐条交代表见 `docs/case-structure-v2/dispositions.md`（507 条：照旧 460〔其中「建议改、未做」183〕/ 改成新结构 47 / 拿掉 0）。规则盘点见同目录 inventory-A～E.md，计划见 plan.md。
+
+## CMD-1023-02 主案件 4 状态自动判断（2026-10-23，追加；分支 feature/case-structure-v2；旧文字保留作历史）
+- **主案件状态**（`mainStatusOf`，data.js 末尾）：进行中 / 已完成（有持有 = 「已完成 · 有持有项目」）/ 仅出报告 / 已取消；自动判断，**拿掉 IN［结案］按钮和每天早上「是否结案」待办**（`inCloseOpen` / `inCloseDue` / `coreInClose` 函数还在但没有入口；［韩国行程结束］保留）。内部 stage 仍是 closed / reportonly / cancelled，对外叫「已完成」；案件管理 tab 已结案 → 已完成、栏位「结案类型」→「结束方式」。
+- **自动改状态**：`mainAutoStatus`（updateCaseStage 末尾 + boot-in 每 5 秒 `mainAutoSweep` + joinMain 之后）：已完成 / 仅出报告又有未做的事或新子案件 → `reopenMain` 回到进行中（对话房恢复）；韩国行程已结束、术后管理都做完 → `mainAutoComplete` → finishCase。进行中判断 = 流程没结束 / 术后管理未预约或已预约（`pendingCareOf`）/ 今天或之后的预约（`activeVisitsOf`）。
+- **期限**：`joinWindowOf(src, type)`：接续面诊从院长面诊日算、复诊从施术完成日（`surgeryDoneDayOf`）算，3 个月内算同一主案件；超过 → 到店弹窗灰掉写原因，`followupAskNewLight` 开新主案件轻关联（`lightLink`）。持有项目（韩国 / 印尼 / 本地没用完）算在当初买的主案件（`mainHoldOf` / `localMainsWithLeft`），IN 在 KR 日程用持有项目的预约（krbook `holdbook` / `carebook`）同样加入当初的主案件。
+- **主案件页**：标题「客人名 · A000001」（拿掉第 N 次来访）；页头「进行中：流程 · 术后管理（印尼）N 项待做」；流程 tab = 一行一个流程可展开（`flowRowsOf` / `flowRowsHtml`，IN `flowTabHtml`、KR `krTabFlow`），本地管理不在流程 tab（IN 另有「本地管理」操作 tab）；案件管理已完成 tab 默认最近 3 个月、按最后来访日排（`CASE_DONE_RANGE`）。

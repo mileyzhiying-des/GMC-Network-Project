@@ -133,6 +133,6 @@ function autoNoShowSweep(){
   return n;
 }
 setInterval(function(){ try{ autoNoShowSweep(); }catch(e){ console.error('[未到店自动判定]', e); } }, 5000);
-setInterval(function(){ try{ var ch1 = visitSweep(), ch2 = careOverMonthSweep(); if(ch1 || ch2){ Store.touch(); if(typeof refreshView==='function') refreshView(); } }catch(e){ console.error('[00:00 结束子案件 / 术后管理转管理项目]', e); } }, 5000); /* CMD-1023-01 S6 */
+setInterval(function(){ try{ var ch1 = visitSweep(), ch2 = careOverMonthSweep(), ch3 = mainAutoSweep(); ch2 = ch2 || ch3; if(ch1 || ch2){ Store.touch(); if(typeof refreshView==='function') refreshView(); } }catch(e){ console.error('[00:00 结束子案件 / 术后管理转管理项目]', e); } }, 5000); /* CMD-1023-01 S6 */
 document.addEventListener('DOMContentLoaded', function(){ try{ if(visitSweep() | careOverMonthSweep()) Store.touch(); }catch(e){} });
 document.addEventListener('DOMContentLoaded', function(){ try{ autoNoShowSweep(); }catch(e){} });

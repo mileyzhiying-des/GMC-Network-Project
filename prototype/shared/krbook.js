@@ -153,6 +153,8 @@ function coreBookConfirm(hid, id, by){
     if(exK){ b.time = exK.visitTime; exK.krVisit.items = (exK.krVisit.items||[]).concat(b.items||[]); logCaseEvent(exK, by, '同一天又有一笔 KR 预约（'+krbPurposeFull(b)+'）已合并到这次预约（时间以原预约 '+exK.visitTime+' 为准）'); caseId = exK.id; pushNotif('预约', 'KR 已确认预约：'+b.clientName+' · '+b.date+' '+exK.visitTime+'（韩国），已合并到案件 '+(exK.caseNo||'')+' 的预约', {caseId:exK.id, level:'info'}); return; }
     c.krVisit = {bookingId:b.id, hospitalId:hid, director:'', purpose:b.purpose, items:(b.items||[]).slice(), sub:b.sub||'', note:b.note||'', place:'KR 医院', confirmedBy:by, arrived:false, done:false};
     c.hospitalId = hid; c.director = ''; c.krCoordinator = c.krCoordinator || '';
+    /* CMD-1023-02 二：用持有项目 / 做在韩术后管理的预约 → 算在当初买的主案件（加一个子案件）；全新访问 → 新的主案件 */
+    if(!exK && (b.purpose==='holdbook' || b.purpose==='carebook')){ var own = (b.items||[]).map(function(it){ return CASE_ITEMS.filter(function(x){ return x.id===it.caseId; })[0]; }).filter(Boolean)[0]; if(own && joinMain(c, own)) logCaseEvent(c, by, '用持有项目 / 术后管理的预约：算在当初的主案件 '+mainOf(own).caseNo+'，本次是它的子案件 '+c.caseNo); }
     updateCaseStage(c); /* CMD-1015-17：阶段 = 在韩管理（IN / KR 的案件管理都看得到） */
     logCaseEvent(c, by, 'KR 确认 IN 在 KR 医院日程的占位预约：'+b.date+' '+b.time+'（韩国）；到店目的：'+krbPurposeFull(b)+'；地点 KR 医院；从预约到店开始');
     caseId = c.id;
