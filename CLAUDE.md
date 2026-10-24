@@ -1353,3 +1353,11 @@ prototype/shared/app.css  共用样式
 - **P5**：`mainAttentionOf(m, side, items)`（今天来访＞等我处理＞等对方处理＞未预约/过期＞已完成）→ 列表「进程」只写一件 + 新栏「其他进行中」（IN / KR 列表）；`openVisitOf(recId)`（日历块 / 今天来访待办进当天）；KR `krOpenSubCard` 升级后进 `krOpenDay`。
 - **P6**：只有本地持有的主案件不再是接续候选（`localMainsWithLeft` 只剩有在韩持有的），改标新独立案件「来自 A000xxx 购买」（`markBoughtFrom` / `c.boughtFrom` / `localOnlyHoldMains`）；赴韩持有仍回原主案件（赴韩 ＞ 本地）；KR 客人已离院有没做完的项目 → 必选原因（`KR_LEAVE_REASONS`，Timeline「回到未预约；原因：…」）；00:00 自动结束文字改「回到未预约」；院长按［开始面诊］留在面诊 tab（取代 1019-08 切基础资料）。
 - 测试：selftest 新增 R118a R118b R119a R120b R121a；因 UI 有意改变而更新的断言：R60a R82a R59b R74a R110a R116a R109a(本地持有一段)。
+
+## CMD-1025-01 补充（2026-10-25，追加；取代 CMD-1019-08 / 1021-24 里一般面诊 KR 面诊 tab 的布局、CMD-1021-14 备注卡固定高度，旧文字保留作历史）
+- 基准 **d776cec**，单个提交（见 Notion 汇报），分支 feature/case-structure-v2，**未推送**，数据版本不变（56）。
+- **面诊 tab（KR 室长 / 院长，一般面诊 awaiting_report）** = `krConsultGeneral(c)`：面诊卡 `krConsultCardGen`（标题「面诊｜院长：KD1 院长」，院长账号只写「面诊」；标题行最右［开始面诊］；「预约面诊时间（韩国）… （距离预定时间 HH:mm）」；「预约报告时间（韩国）」只有室长看，旁有［修改］= 原来的［修改预计时间］，资料 `c.reportEta` 照旧保存；开始面诊后只留预约面诊时间 + 「录入面诊内容」［增加内容（语音）］［增加内容（手动）］+ 一笔笔记录，拿掉摘要卡 / 锁住提示 / KR 专用附件说明）在最上面，下面是「到访目的」卡 `krVisitPurposeCard`（메타뷰 检测 → 面部 / 身体部位卡 → 预算；`concernBlockHtml(c,{budgetLast:true, fold, foldKey})`；室长部位卡默认折叠 `KR_CN_OPEN`，开始面诊后整张默认折叠 `KR_VP_OPEN`，院长全展开没有按钮）。待确认时间（paid_waiting_kr）仍是 到访目的 → 确认时间卡。复诊评估 / 复诊面诊 / 沿用原方案 / 延续既往面诊仍走旧布局（`krTabConsult0`）。
+- **KR 术后管理 tab 只露出 2 项的原因**：独立 tab 复用了项目卡的固定高度滚动区（`.kr-pc-scroll` 287px，内容 964px），其余项目要在框里滚才看得到；不是读了不同清单。已去掉固定高度。KR 多次的术后管理仍合成一行「剩 N / 共 M 次」（IN 每次一行），两边是同一份资料（`careUnits`）。来源标签原来对所有项目写「印尼购买」（`krSrcTag` 只分在韩增加 / 其他）→ 术后管理改 `krCareSrc`：方案内含 / 在韩增加。
+- **付清尾款后才能预约术后管理**（`careBookBlock(c)` / `careBookBtn`，data.js）：KR 项目卡术后管理［预约时间］［全部预约］（`paid` = `krBalancePaid` 且行程没结束，原来就灰；本次把空着没渲染的［全部预约］也画成灰 + 提示）；IN 的术后管理 tab / 工作台「未安排预约」［预约］［全部预约］/ 本地管理接续里的［预约］灰 + 「付清尾款后才能预约」，`todoCbOpen` / `todoCareBookOpen`（新预约）也拒绝，改时间不拦；已结案的案件不受限。其他条件：核心 `coreCareBook` 本来就要 `c.krBalancePaid`；没有「施术完成后才能约」之类的条件。
+- **备注卡**（`notesCompactHtml(c, role, title)`）：没有备注只剩一行「备注 ……［增加备注］」；有备注全部列出（`.notes-list` 最高 3 则，超过在卡里滚动），不再只截 3 条；［查看全部］（> 3 则）保留。IN 项目卡里的备注卡同一个组件。
+- IN 接续弹窗（`fuRender`）拿掉标题下的灰字说明。`ST.krEta` 参数顺序修正（原来把日期塞成对象，面诊时间坏掉）。测试：selftest 新增 R122a / R123a / R123b。
