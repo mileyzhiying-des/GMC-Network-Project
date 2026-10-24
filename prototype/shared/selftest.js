@@ -1878,7 +1878,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         KR_REC.recording = true; var cc = []; window.confirm = function(m){ cc.push(m); return false; }; nav('kr-dashboard'); ST.ok(CURRENT_PAGE_ID==='kr-casedetail' && /还在录音/.test(cc[0]||''), '录音中离开 → 确认，选否留在原地'); window.confirm = function(){ return true; }; nav('kr-dashboard'); ST.ok(CURRENT_PAGE_ID==='kr-dashboard' && !KR_REC.recording && !!localStorage.getItem(krRecDraftKey()), '确认离开：停止录音，文字存成草稿');
         krShowCase(r.clinicId, r.id, {here:true}); krRecSideSync(); ST.ok(KR_REC_OPEN && KR_REC.collapsed && KR_REC.text==='侧边栏草稿测试' && /草稿/.test(document.getElementById('kr-rec-side').innerText), '再进案件：草稿还在（窄条）');
         krRecCollapse(false); krRecUpload(); ST.ok(!KR_REC_OPEN && !localStorage.getItem(krRecDraftKey()) && !!krFindCase(r.clinicId, r.id).c.consultContentAt, '上传后侧边栏收起、草稿清掉、面诊结束');
-        krSetCaseTab('consult'); var fold = document.getElementById('krcase-body').innerText; ST.ok(/展开/.test(fold) && /已上传面诊内容，待整理诊疗方案/.test(fold) && !/修改预计时间/.test(fold), '面诊卡片折叠成一行（负责院长 · 小状态 + 展开），没有［修改预计时间］'); krConsultToggle(r.id); ST.ok(/修改预计时间|预计出报告时间/.test(document.getElementById('krcase-body').innerText), '展开后有时间和［修改预计时间］'); krConsultToggle(r.id);
+        krSetCaseTab('consult'); var fold = document.getElementById('krcase-body').innerText; ST.ok(/预约面诊时间/.test(fold) && /增加内容/.test(fold) && !/修改预计时间/.test(fold) && !/待整理诊疗方案/.test(fold), '上传面诊内容后：面诊卡只剩预约面诊时间 + 录入内容（［增加内容］），没有［修改预计时间］（CMD-1025-01 取代旧的折叠成一行）');
         window.confirm = oc;
       }
     } else {
@@ -2928,6 +2928,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return;
     var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var snap122 = JSON.stringify(gc()); /* 夹具复原用：后面 R87a 等还要用这个案件 */
     mut(function(c){ c.needsConsult = true; c.consultKind = ''; c.metaviewStatus = 'ready'; c.photoUploaded = true; c.videoUploaded = true; c.concerns = [{part:'f_nose', sub:'', desc:'鼻梁低', expect:'自然', video:{name:'v.mp4'}, photos:{front:{name:'p1.jpg'}}}]; c.budgetMin = 1000000; c.budgetMax = 3000000; });
     KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_CN_OPEN = {}; KR_VP_OPEN = {}; var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
     var h = krTabConsult(gc()), t = txt(h);
@@ -2948,13 +2949,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     h = krTabConsult(gc()); t = txt(h);
     ST.ok(/面诊｜院长：/.test(t) && /录入面诊内容/.test(t) && /到访目的\s*展开/.test(t) && !/苦恼说明/.test(t), '室长开始面诊后：面诊卡同院长，到访目的整张默认折叠（标题行最右［展开］）');
     krVpToggle(r.id); t = txt(krTabConsult(gc())); ST.ok(/苦恼说明 鼻梁低/.test(t) && /折叠/.test(t), '点［展开］后显示到访目的');
-    KR_VP_OPEN = {};
+    KR_VP_OPEN = {}; window.krIsDirector = old;
+    Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap122); }); var v9 = krVault(cid, r.id, true); v9.transcripts = v9.transcripts.filter(function(x){ return x.id!=='t9'; }); Store.touch(); /* 复原夹具，不影响后面的用例 */
   });
   ST.def('R123a','CMD-1025-01 八～十（KM1 分页，stageC 夹具）：KR 术后管理 tab 列出全部（不套固定高度）、来源不再写「印尼购买」；付清尾款前［预约时间］［全部预约］灰 + 提示，付清后可按；备注卡空时一行、有备注每则长高（不限 3 则、卡里滚动）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return /待到院/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
     var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
-    KR_CASE = {clinicId:cid, id:r.id, tab:'postcare'}; var box = document.createElement('div'); mut(function(c){ c.krBalancePaid = false; });
+    KR_CASE = {clinicId:cid, id:r.id, tab:'postcare'}; var snap123 = JSON.stringify(gc()); var box = document.createElement('div'); mut(function(c){ c.krBalancePaid = false; });
     box.innerHTML = krTabPostcare(gc()); var tx = box.textContent.replace(/\s+/g, ' ');
     ST.ok(!box.querySelector('.kr-pc-scroll') && box.querySelectorAll('.kr-srctag').length >= 4 && /术后复诊检查/.test(tx) && /术后消肿管理/.test(tx) && (tx.match(/拆线/g)||[]).length >= 2, '术后管理 tab 不套固定高度，全部项目（两个施术的所有术后管理）都列出来：'+box.querySelectorAll('.kr-srctag').length+' 行');
     ST.ok(!/印尼购买/.test(tx) && /方案内含/.test(tx), '来源不再写「印尼购买」，写「方案内含」');
@@ -2969,10 +2971,12 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var d5 = document.createElement('div'); d5.innerHTML = notesCompactHtml(gc(), 'KR', '备注');
     ST.ok(d5.querySelectorAll('.notes-list > div').length === 5 && /查看全部（5）/.test(d5.textContent), '5 则备注：全部在卡里（max-height 内滚动），［查看全部］保留');
     mut(function(c){ c.krProgressMemos = []; });
+    Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap123); }); /* 复原夹具 */
   });
   ST.def('R123b','CMD-1025-01 一、九（A1 分页，stageC 夹具）：IN 接续弹窗拿掉灰字说明；付清尾款前 IN 的术后管理［预约］［全部预约］灰 + 提示，付清后可按',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var snap123b = JSON.stringify(c); /* 复原夹具：后面 KM1 的 R66b 等还要用这个案件 */
     c.krBalancePaid = false; ST.ok(careBookBlock(c)==='付清尾款后才能预约', '尾款没付清：careBookBlock 有提示');
     var u = careUnits(c).unbooked[0]; ST.ok(!!u, '有未预约名额'); var itm = (c.procedureItems||[])[0]; if(itm && itm.postcare && itm.postcare[0]) itm.postcare[0].place = 'IN';
     var h = inCareEntries(c), btn = JSON.stringify(h.inn).indexOf('disabled') > -1;
@@ -2982,6 +2986,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     c.krBalancePaid = true; ST.ok(careBookBlock(c)==='' && !/disabled/.test(todoUbListInHtml([{caseId:c.id, name:c.name, no:c.caseNo, gid:'g|x', label:'x', surg:'y', n:1, sug:'', place:'印尼'}])), '付清尾款后自动可以按');
     var src = fuRender.toString(); ST.ok(src.indexOf('来访目的：')<0 && src.indexOf('选「不接续」= 新主案件')<0, '接续弹窗里没有那行灰字说明');
     var d = document.createElement('div'); d.innerHTML = notesCompactHtml(c, 'IN', '备注'); ST.ok(!d.querySelector('.notes-list') || c.inNotes && c.inNotes.length, 'IN 备注卡：没有备注时只剩一行');
+    var i123 = CASE_ITEMS.indexOf(c); if(i123 > -1){ CASE_ITEMS[i123] = JSON.parse(snap123b); Store.touch(); } /* 复原夹具 */
   });
   ST.def('R120b','CMD-1023-03 P4（KM1 分页，stageC 夹具）：KR 子案件页——页头 / tab / 韩国那天的到院卡在这页 / 客人已到院 → 院长评估（Step 1）在这页做 / 子案件 tab 点一行进入 / 回到主案件 / 印尼的天只读',async function(){
     var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
