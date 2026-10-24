@@ -2909,6 +2909,46 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R120b','CMD-1023-03 P4（KM1 分页，stageC 夹具）：KR 子案件页——页头 / tab / 韩国那天的到院卡在这页 / 客人已到院 → 院长评估（Step 1）在这页做 / 子案件 tab 点一行进入 / 回到主案件 / 印尼的天只读',async function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
+    await ST.ensureFixtures(['stageC']);
+    var r = krAllCases().filter(function(x){ return /待到院/.test(x.name); })[0]; if(!ST.ok(!!r, '要有 stageC 夹具')) return;
+    var cid = r.clinicId, id = r.id, key = Store.withClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; var v = visitsOf(c).filter(function(x){ return x.types.indexOf('赴韩施术')>-1; })[0]; return v ? v.key : ''; });
+    if(!ST.ok(!!key, '主案件有赴韩施术那一天')) return;
+    krShowCase(cid, id); krSetCaseTab('visits'); var vt = document.getElementById('krcase-body').innerHTML; ST.ok(/krOpenDay\(/.test(vt) || !/子案件/.test(KR_CASE_TABS.map(function(t0){ return t0.label; }).join('')), '子案件 tab：点一行 → 子案件页');
+    krOpenDay(cid, id, key); var tx = document.getElementById('krcase-body').innerText;
+    ST.ok(KR_CASE.day===key && /回到主案件/.test(tx) && /到访/.test(tx) && /今日项目/.test(tx) && /赴韩施术/.test(tx), 'KR 子案件页：页头 + 回到主案件 + tab 到访｜今日项目：'+tx.slice(0, 120).replace(/\n/g, ' '));
+    ST.ok(/客人已到院|待到院|模拟到当日/.test(tx), '韩国那天的到院卡在这页（客人已到院按钮 / 待到院状态）');
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.krSchedule.simDay = true; });
+    krRenderCaseDetail(); var c0 = krFindCase(cid, id).c; if(!c0.hasArrived){ krArriveMain(); } krRenderCaseDetail(); tx = document.getElementById('krcase-body').innerText;
+    ST.ok(/院长评估/.test(tx), '客人已到院后：院长评估结果（Step 1）在子案件页做：'+tx.slice(0, 160).replace(/\n/g, ' '));
+    krDayTab('visit'); ST.ok(/院长|基础资料/.test(document.getElementById('krcase-body').innerText), '到访 tab');
+    krCloseDay(); ST.ok(!KR_CASE.day && /赴韩/.test(document.getElementById('krcase-body').innerText), '回到主案件');
+    krSetCaseTab('basic');
+  });
+  ST.def('R119a','CMD-1023-03 P3（A1 分页）：IN 子案件页——页头 / tab 到访｜今日项目｜结算｜附件｜Timeline / 子案件 tab 点一行进入 / 回到主案件 / 当天的钱 / 今日项目含复诊评估 + 流程连结 / 主案件自己的天',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); };
+    var m = ST.newRes('R119m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; m.visitDate = dAgo(60); m.visitTime = '10:00'; m.consultRequested = true; m.reportReady = true; m.settlementDone = true; m.krDepositPaid = true;
+    m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:dAgo(30)+' 10:00'}]; m.settlementBatches = [{id:'sb', status:'active', krDeposit:900000, inTotal:0, time:dAgo(60)+' 10:00', items:[]}];
+    var ch = ST.newRes('R119m', {phone:clientPhoneOf(m.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ST.arrive(ch); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.materialsConfirmed = true; joinMain(ch, m); ch.revisitEval = true; ch.needsConsult = true; ch.consultRequested = true; ch.resumeFrom = {caseId:m.id, type:'复诊评估', types:['复诊评估']};
+    ST.open(m); m = getCurrentCase(); m.activeCaseTab = 'visits';
+    var vt = caseTabContentHtml(m); ST.ok(/openSubcase\(/.test(vt), '子案件 tab：点一行 → 那一天的子案件页');
+    /* 子记录 = 子案件页 */
+    openCaseDetail(ch.id); var c = getCurrentCase(); ST.ok(c.id===ch.id && subPageActive(c), '打开子记录 = 子案件页');
+    var list = subTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); ST.ok(/^到访｜今日项目｜.*附件｜Timeline$/.test(list), '子案件页 tab：到访｜今日项目｜（结算）｜附件｜Timeline：'+list);
+    var h = subHeaderHtml(c); ST.ok(h.indexOf(c.caseNo)>-1 && /回到主案件/.test(h) && /今天做/.test(h) && /复诊评估/.test(h), '页头：子案件号 + 日期（地点）+ 今天做 + ［回到主案件］：'+h.replace(/<[^>]+>/g,' ').slice(0,120));
+    var ttl = document.getElementById('case-title'); renderCaseTitle(c); ST.ok(ttl && ttl.textContent.indexOf(c.caseNo)>-1 && /（印尼）/.test(ttl.textContent), '标题「客人 · 子案件号 · 日期（地点）」：'+(ttl&&ttl.textContent));
+    c.subTab = 'today'; var th = subPageHtml(c); ST.ok(th.indexOf('复诊')>-1 && /当天推进的流程/.test(th), '今日项目里有复诊评估 + 流程连结');
+    c.subTab = 'visit'; ST.ok(/来访目的/.test(subPageHtml(c)) && /基础资料 →/.test(subPageHtml(c)), '到访 tab：来访目的 + 连回主案件基础资料 / 面诊内容');
+    c.subTab = 'timeline'; ST.ok(subPageHtml(c).length>200, 'Timeline / 附件 tab 能渲染'); c.subTab = 'attachments'; ST.ok(subPageHtml(c).length>200, '附件');
+    closeSubcase(c.id); var back = getCurrentCase(); ST.ok(back.id===m.id && !subPageActive(back), '［回到主案件］回到主案件页');
+    /* 主案件自己的天 */
+    var own = visitsOf(m).filter(function(v){ return v.date===m.visitDate; })[0]; openSubcase(m.id, own.key); var mm = getCurrentCase(); ST.ok(subPageActive(mm) && SUBVIEW[mm.id], '主案件自己的天也是子案件页');
+    mm.subTab = 'settle'; var sh = subPageHtml(mm); ST.ok(/这一天收的钱/.test(sh) || /结算/.test(sh), '结算 = 当天收的钱（付定金那天）');
+    mm.subTab = 'today'; ST.ok(/今日项目/.test(subPageHtml(mm)), '今日项目');
+    closeSubcase(mm.id); ST.ok(!subPageActive(getCurrentCase()), '回到主案件');
+  });
   ST.def('R118a','CMD-1023-03 P1/P2（A1 分页）：没升级 = 一般案件页三种 tab / 升级 = 完整格式（没有流程 tab、✓ ●）/ 术后管理独立 tab / 复诊 tab / 页头小修',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); }, labels = function(c){ return caseTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); };

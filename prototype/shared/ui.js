@@ -1215,10 +1215,11 @@ function caseGo(side, clinicId, id, url, o, here){
   window.addEventListener('pagehide', function(){ try{ var reg = caseRegRead(); Object.keys(reg).forEach(function(k){ if(reg[k].tab===TAB_ID) delete reg[k]; }); caseRegWrite(reg); }catch(e){} });
   setTimeout(function(){ try{ caseRegBeat(); }catch(e){} }, 800);
 })();
-function caseAtExtra(o){ o = o||{}; return (o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.pc ? '&pc=1' : '')+(o.scroll ? '&scroll='+encodeURIComponent(o.scroll) : '')+(o.chat ? '&chat=open' : ''); }
+function caseAtExtra(o){ o = o||{}; return (o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.pc ? '&pc=1' : '')+(o.scroll ? '&scroll='+encodeURIComponent(o.scroll) : '')+(o.chat ? '&chat=open' : '')+(o.sub ? '&sub='+encodeURIComponent(o.sub) : ''); }
 function applyCaseAt(id, o){
   o = o||{}; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
-  if(o.tab){ c.activeCaseTab = o.tab; renderCaseBody(c); }
+  if(o.sub){ SUBVIEW[id] = {key:o.sub}; c.subTab = 'today'; renderCaseSubtitle(c); renderCaseBody(c); } else if(!isChildVisit(c) && SUBVIEW[id]){ delete SUBVIEW[id]; renderCaseSubtitle(c); renderCaseBody(c); } /* CMD-1023-03 P3：子案件页的位置带在地址里 */
+  if(o.tab){ if(SUBVIEW[id]) delete SUBVIEW[id]; c.activeCaseTab = o.tab; renderCaseSubtitle(c); renderCaseBody(c); }
   if(o.pc) goPostcareBlock(id);
   if(o.scroll) setTimeout(function(){ var el = document.getElementById(o.scroll); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80);
 }
@@ -1690,6 +1691,7 @@ function renderCaseBody(c){
     el.innerHTML = rtabs+(rt==='timeline' ? caseTimelineCardHtml(c) : refundServiceBarHtml(c)+basicFourHtml(c, false)); return;
   }
   normalizeCaseTab(c);
+  if(typeof subPageActive==='function' && subPageActive(c)){ el.innerHTML = subPageHtml(c); return; } /* CMD-1023-03 P3：子案件页 */
   el.innerHTML = caseTabsHtml(c) + (c.activeCaseTab==='basic' ? refundServiceBarHtml(c) : '') + caseTabContentHtml(c);
 }
 
@@ -1726,14 +1728,14 @@ function caseVisitNo(c){
 function openClientFromCase(){ var c = getCurrentCase(); if(c) openClientDetail(c.name, 'in-casedetail'); }
 function renderCaseTitle(c){
   var el = document.getElementById('case-title'); if(!el) return; var n = caseVisitNo(c);
-  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(mainOf(c).caseNo ? ' · '+mainOf(c).caseNo : ''); /* CMD-1023-02 三：标题「客人名 · A000001」，拿掉「第 N 次来访」；子案件页标主案件号 */
+  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(subPageActive(c) ? (function(){ var v = subCtxOf(c).v; return ' · '+(v.no||c.caseNo)+(v.date ? ' · '+String(v.date).slice(5).replace('-', '/')+'（'+(v.place==='KR' ? '韩国' : '印尼')+'）' : ''); })() : (mainOf(c).caseNo ? ' · '+mainOf(c).caseNo : '')); /* CMD-1023-02 三：标题「客人名 · A000001」，拿掉「第 N 次来访」；子案件页标主案件号 */
 }
 function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;
   renderCaseTitle(c);
   var html = (c.caseNo||'')+(c.director ? ' · 对接院长：'+c.director : '');
   var rel0 = relatedOf(c); /* CMD-1023-01 补 2：经 relatedOf 读关联 */
-  if(rel0.linkedId){
+  if(rel0.linkedId && !subPageActive(c)){
     var src = CASE_ITEMS.filter(function(x){ return x.id===rel0.linkedId; })[0];
     html += (html ? ' · ' : '')+(rel0.followup ? ((rel0.type==='复诊评估') || rel0.revisit ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+rel0.linkedId+'\');return false;">'+(src&&src.caseNo?src.caseNo:rel0.linkedId)+'</a>（'+rel0.reason+(rel0.auto?'，自动关联':'')+'）';
   }
@@ -1752,7 +1754,7 @@ function caseUrl(id, extra){
   return location.pathname + '?case=' + encodeURIComponent(c ? (c.caseNo || c.id) : id) + (extra||'');
 }
 
-function openCaseNewTab(id, extra){ var q = new URLSearchParams(extra||''), o = {tab:q.get('tab')||'', pc:q.get('pc')==='1', scroll:q.get('scroll')||'', chat:q.get('chat')==='open'}; openCaseDetail(id, false, o); } /* CMD-1019-08：和 openCaseDetail 同一个入口 */ /* CMD-1019-04：同一案件沿用已开分页 */
+function openCaseNewTab(id, extra){ var q = new URLSearchParams(extra||''), o = {tab:q.get('tab')||'', pc:q.get('pc')==='1', scroll:q.get('scroll')||'', chat:q.get('chat')==='open', sub:q.get('sub')||''}; openCaseDetail(id, false, o); } /* CMD-1019-08：和 openCaseDetail 同一个入口 */ /* CMD-1019-04：同一案件沿用已开分页 */
 
 function openCaseChatNewTab(id){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;

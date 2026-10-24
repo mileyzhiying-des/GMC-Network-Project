@@ -198,7 +198,7 @@ function krBoot(){
   if(!start){ location.replace(homeUrl()); return; }
   CURRENT_PAGE_ID = start;
   var q = new URLSearchParams(location.search).get('case');
-  if(q){ var pr = q.split(':'); if(!krFindCase(pr[0], pr[1])){ location.replace(homeUrl()); return; } var qq = new URLSearchParams(location.search); KR_CASE = {clinicId:pr[0], id:pr[1], tab:(qq.get('tab')==='proc' ? 'items' : qq.get('tab'))||krDefaultCaseTab(pr[0], pr[1])}; if(qq.get('page')) KR_PROJ_PAGE = qq.get('page'); if(qq.get('sub')){ KR_SUB_HL = qq.get('sub'); krOpenSubHl(); } start = 'kr-casedetail'; }
+  if(q){ var pr = q.split(':'); if(!krFindCase(pr[0], pr[1])){ location.replace(homeUrl()); return; } var qq = new URLSearchParams(location.search); KR_CASE = {clinicId:pr[0], id:pr[1], tab:(qq.get('tab')==='proc' ? 'items' : qq.get('tab'))||krDefaultCaseTab(pr[0], pr[1])}; if(qq.get('page')) KR_PROJ_PAGE = qq.get('page'); if(qq.get('sub')){ KR_SUB_HL = qq.get('sub'); krOpenSubHl(); } if(qq.get('day')){ KR_CASE.day = qq.get('day'); KR_CASE.subTab = 'today'; } start = 'kr-casedetail'; }
   try{ if(sweepStaleSurgeryBlocks(function(cid, id){ var v = Store.readClinic(cid); return v ? (v.CASE_ITEMS||[]).filter(function(x){ return x.id===id; })[0] : null; })) Store.touch(); }catch(e){} /* 取消后还留着的施术块一次性清掉 */
   /* CMD-1019-08：录入改右侧侧边栏，不再有独立录入分页 / 小窗口 */
   /* 面诊录入独立小窗口：只显示录入弹窗 */ /* 录入输入页（院长开始面诊后新开的分页）：不参与「同一账号两分页」锁，和案件页属于同一次操作 */
@@ -454,14 +454,14 @@ function krTabListOf(r){
   keys.push('files', 'log');
   return keys.map(function(kk){ var d = Object.assign({}, defs[kk]); if(info.up && info.marks[kk]) d.mark = info.marks[kk]; return d; });
 } /* 拿掉「KR 专用附件」，只留共用附件（CMD-1013-08 四·1） */
-function krApplyAt(o){ o = o||{}; if(o.tab) KR_CASE.tab = (o.tab==='proc' ? 'items' : o.tab); if(o.page) KR_PROJ_PAGE = o.page; if(o.sub){ KR_SUB_HL = o.sub; krOpenSubHl(); } krRenderCaseDetail(); if(o.sub) setTimeout(function(){ var el = document.getElementById('kr-subrow-'+o.sub); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80); } /* CMD-1019-08：别的入口再点这个案件 → 本分页跳到那个位置 */
+function krApplyAt(o){ o = o||{}; if(o.day){ KR_CASE.day = o.day; KR_CASE.subTab = 'today'; } else if(o.tab) KR_CASE.day = ''; if(o.tab) KR_CASE.tab = (o.tab==='proc' ? 'items' : o.tab); if(o.page) KR_PROJ_PAGE = o.page; if(o.sub){ KR_SUB_HL = o.sub; krOpenSubHl(); } krRenderCaseDetail(); if(o.sub) setTimeout(function(){ var el = document.getElementById('kr-subrow-'+o.sub); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80); } /* CMD-1019-08：别的入口再点这个案件 → 本分页跳到那个位置 */
 function krDefaultCaseTab(clinicId, id){ var r0 = krFindCase(clinicId, id), c0 = r0 && r0.c; /* CMD-1021-25：院长（含代表院长）点面诊 / 复诊（含恢复确认）也直接进面诊 tab，取代 CMD-1019-08 的默认基础资料；非面诊阶段的案件院长仍进基础资料 */ if(typeof krIsDirector==='function' && krIsDirector()) return (c0 && c0.consultRequested && !c0.reportReady && ['paid_waiting_kr','awaiting_report'].indexOf(c0.consultStatus)>-1) ? 'consult' : 'basic'; return (c0 && c0.consultRequested && !c0.reportReady && ['paid_waiting_kr','awaiting_report'].indexOf(c0.consultStatus)>-1) ? 'consult' : 'basic'; /* 2026-10-08：面诊进行中的案件，KR 室长点开直接进面诊 tab */ }
 /* CMD-1019-04：同一个案件用同一个有名字的分页打开（所有进案件的入口都走这里）；o = {tab, page（项目卡分页）, sub（高亮的子案件行）, here（强制在当前分页）} */
 function krShowCase(clinicId, id, o){
   o = o||{};
   var same = CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id===id && KR_CASE.clinicId===clinicId;
   if(window.GMC_NO_TABS || o.here || same){ krShowCaseHere(clinicId, id, o); return; }
-  var url = location.pathname+'?case='+encodeURIComponent(clinicId+':'+id)+(o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.page ? '&page='+encodeURIComponent(o.page) : '')+(o.sub ? '&sub='+encodeURIComponent(o.sub) : '');
+  var url = location.pathname+'?case='+encodeURIComponent(clinicId+':'+id)+(o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.page ? '&page='+encodeURIComponent(o.page) : '')+(o.sub ? '&sub='+encodeURIComponent(o.sub) : '')+(o.day ? '&day='+encodeURIComponent(o.day) : '');
   caseGo('kr', clinicId, id, url, o, function(){ krShowCaseHere(clinicId, id, o); });
 }
 function krOpenSubHl(){ try{ var r = krFindCase(KR_CASE.clinicId, KR_CASE.id), rep = r && subCaseList(r.c).filter(function(x){ return x.id===KR_SUB_HL; })[0]; if(rep) KR_SUB_OPEN[subCaseKey(rep)] = true; }catch(e){} }
@@ -470,9 +470,10 @@ function krShowCaseHere(clinicId, id, o){
   if(o.tab) KR_CASE.tab = (o.tab==='proc' ? 'items' : o.tab);
   if(o.page) KR_PROJ_PAGE = o.page;
   if(o.sub){ KR_SUB_HL = o.sub; krOpenSubHl(); }
+  if(o.day){ KR_CASE.day = o.day; KR_CASE.subTab = 'today'; }
   if(CURRENT_PAGE_ID==='kr-casedetail'){ krRenderCaseDetail(); } else nav('kr-casedetail');
 }
-function krSetCaseTab(k){ KR_CASE.tab = (k==='proc' ? 'items' : k); /* CMD-1015-18：施术 tab 并进「项目」 */ krRenderCaseDetail(); }
+function krSetCaseTab(k){ KR_CASE.day = ''; KR_CASE.tab = (k==='proc' ? 'items' : k); /* CMD-1015-18：施术 tab 并进「项目」 */ krRenderCaseDetail(); }
 
 function krKV(label, val){ return '<div class="field-row"><span class="fk">'+label+'</span><span class="fv" style="font-weight:400;">'+val+'</span><span class="fa"></span></div>'; }
 function krCardBox(title, body){ return '<div class="card" style="padding:16px 22px;">'+(title?'<div class="info-heading" style="margin-bottom:6px;">'+title+'</div>':'')+body+'</div>'; }
@@ -1407,7 +1408,7 @@ function krTabFlow(c){
 function krTabVisits(c){
   var vs = visitsOf(c), g = 'display:grid;grid-template-columns:110px 80px 56px minmax(0,1.8fr) 90px;gap:8px;align-items:center;';
   var rows = vs.map(function(v){ var tags = v.types.filter(function(t0){ return t0!=='本地管理'; }).map(function(t0){ return '<span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);font-size:12px;margin-right:4px;">'+krEsc(t0)+'</span>'; }).join('');
-    return '<div style="'+g+'padding:9px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="font-size:12px;">'+krEsc(v.no)+'</span><span style="font-size:12px;">'+krEsc(String(v.date).slice(5).replace('-', '/'))+'</span><span style="font-size:12px;">'+(v.place==='KR' ? '韩国' : '印尼')+'</span><span>'+(tags||'—')+'</span><span style="font-size:12px;">'+krEsc(visitStateText(c, v))+(v.place==='IN' ? ' <span style="color:var(--muted);">（只读）</span>' : '')+'</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">还没有子案件</div>';
+    return '<div class="case-row-click" onclick="krOpenDay(\''+KR_CASE.clinicId+'\',\''+KR_CASE.id+'\',\''+v.key+'\')" style="'+g+'padding:9px 0;border-top:1px solid var(--border2);font-size:13px;cursor:pointer;"><span style="font-size:12px;">'+krEsc(v.no)+'</span><span style="font-size:12px;">'+krEsc(String(v.date).slice(5).replace('-', '/'))+'</span><span style="font-size:12px;">'+(v.place==='KR' ? '韩国' : '印尼')+'</span><span>'+(tags||'—')+'</span><span style="font-size:12px;">'+krEsc(visitStateText(c, v))+(v.place==='IN' ? ' <span style="color:var(--muted);">（只读）</span>' : '')+'</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">还没有子案件</div>';
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:6px;">子案件 <span style="font-weight:400;font-size:12px;color:var(--muted);">客人每来一天一个；印尼的天只能看</span></div><div style="'+g+'font-size:12px;color:var(--muted);padding:6px 0;"><span>序号</span><span>日期</span><span>地点</span><span>业务类型</span><span>状态</span></div>'+rows+'</div>';
 }
 function krTabSummary(c){
@@ -1429,6 +1430,7 @@ function krRenderCaseDetail(){
   var tabs = kTabs.map(function(t0){ var on = KR_CASE.tab===t0.key; return '<button onclick="krSetCaseTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t((t0.key==='consult' && isRevEval(r.c)) ? '复诊评估' : t0.label)+(t0.mark ? ' <span style="font-size:12px;color:'+(t0.mark==='✓' ? 'var(--sage)' : 'var(--terracotta)')+';">'+t0.mark+'</span>' : '')+'</button>'; }).join('');
   var alerts = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krTopAlerts(c)+krInNotesHtml(c) : ''; });
   var body = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? KR_TAB_FN[KR_CASE.tab](c) : ''; });
+  var dayHtml = KR_CASE.day ? Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c && !isChildVisit(c) ? krSubPageHtml(c) : ''; }) : ''; /* CMD-1023-03 P4：子案件页 */
   var arriveCards = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krArriveCardsHtml(c) : ''; }); /* CMD-1019-18：今天有到院、客人还没到 → 页头下、tab 上的状态卡 */
   var tripCard = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krTripCardHtml(c) : ''; });
   el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+
@@ -1437,8 +1439,8 @@ function krRenderCaseDetail(){
       (arriveCards ? '' : '<span class="status-pill" style="background:'+r.badge[0]+';color:'+r.badge[1]+';">'+krEsc(r.stageText||r.label)+'</span>')+krResumeTag(r.c)+krVisitOrdinalHtml(r)+(stayText(r.c) ? '<b style="font-size:13px;color:var(--slate2);"'+(stayAirportTip(r.c) ? ' title="'+krEsc(stayAirportTip(r.c))+'"' : '')+'>在韩 '+krEsc(stayText(r.c))+'</b>' : '')+'<span style="flex:1;"></span>'+
       '<button class="btn-primary" onclick="krOpenCaseChat()">💬 对话</button></div>'+
     '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.5;">'+krEsc(r.caseNo)+' · 来源诊所：'+krEsc(r.clinicName)+(KR_CASE.tab==='consult' ? '' : ' · 院长：'+krEsc(r.director||'—'))+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+(isChildVisit(r.c) ? '' : '<br>'+krEsc((function(){ try{ return Store.withClinic(r.clinicId, function(){ return mainHeadLine(r.c); }); }catch(e){ return ''; } })()))+'</div>'+
-    alerts+arriveCards+tripCard+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">'+tabs+'</div>'+
-    '<div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>';
+    alerts+(dayHtml || (arriveCards+tripCard+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">'+tabs+'</div>'+
+    '<div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>'));
   setTimeout(krEndAskCheck, 60); /* 行都做完 → 问「今天的项目都做完了吗？」（CMD-1019-22） */
 }
 /* KR 预约到店阶段的案件页（同 IN 干净版）：只有页头 + 状态卡「当前状态 预约到店 · 待访问」，右边［客人已到院］［预约修改］［未到店］［预约取消］；不显示 tab 和空的项目卡 / 案件区块 */
@@ -4198,3 +4200,36 @@ function krRvSubmitBlock(c){
 
 /* CMD-1022-12：当前 KR 案件是不是复诊评估（弹窗 / 录入侧边栏的字样用） */
 function krRvNow(){ try{ var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); return !!(r && isRevEval(r.c)); }catch(e){ return false; } }
+
+
+/* ===== CMD-1023-03 P4：KR 子案件页（一天）=====
+   页头「客人 · A000001-05 · 11/14（韩国）· 今天做：…」+［回到主案件］+ 状态；韩国那天的到院操作（客人已到院 / 院长评估 / 术前照片 / 操作完成 / 增加项目 / 客人已离院）在这一页做——
+   今日项目 = 那一天的到院卡（krCaseCardHtml 原样，所有 core* / kr* 操作函数一个都没改，只是换了容器）+ 项目卡；到访 / 结算 / 附件 / Timeline。印尼的天 KR 只读。 */
+function krOpenDay(clinicId, id, key){ krShowCase(clinicId, id, {day:key}); }
+function krCloseDay(){ KR_CASE.day = ''; krRenderCaseDetail(); }
+function krDayTab(k){ KR_CASE.subTab = k; krRenderCaseDetail(); }
+function krSubTabsOf(c, v){ var out = [{key:'visit', label:'到访'}, {key:'today', label:'今日项目'}]; if(subDayMoney({m:c, v:v}).length) out.push({key:'settle', label:'结算'}); out.push({key:'files', label:'附件'}, {key:'log', label:'Timeline'}); return out; }
+function krSubPageHtml(c){
+  var v = visitsOf(c).filter(function(x){ return x.key===KR_CASE.day; })[0];
+  if(!v){ KR_CASE.day = ''; return ''; }
+  var tabsL = krSubTabsOf(c, v), cur = tabsL.some(function(t0){ return t0.key===KR_CASE.subTab; }) ? KR_CASE.subTab : 'today', today = todayStr(), isKr = v.place==='KR', st = visitStateText(c, v);
+  var head = '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krCloseDay()">← 回到主案件 '+krEsc(c.caseNo)+'</button><span style="font-size:13px;"><b>'+krEsc(v.no)+'</b> · '+krEsc(String(v.date).slice(5).replace('-', '/'))+'（'+(isKr ? '韩国' : '印尼')+'）</span><span style="font-size:12px;color:var(--slate2);">'+(v.date===today ? '今天做：' : '这天做：')+krEsc((v.types||[]).filter(function(t0){ return t0!=='本地管理'; }).join('、')||'—')+'</span><span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);">'+krEsc(st)+'</span>'+(isKr ? '' : '<span style="font-size:12px;color:var(--muted);">印尼的天，KR 只读</span>')+'</div>';
+  var tabsHtml = '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;margin-top:6px;">'+tabsL.map(function(t0){ var on = cur===t0.key; return '<button onclick="krDayTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t0.label+'</button>'; }).join('')+'</div>';
+  var body = '';
+  if(cur==='visit'){
+    var row = function(k0, v0){ return '<div class="field-row"><span class="fk">'+k0+'</span><span class="fv" style="font-weight:400;">'+v0+'</span><span class="fa"></span></div>'; };
+    body = krCardBox('到访 <span style="font-weight:400;font-size:12px;color:var(--muted);">基础资料、面诊内容在主案件</span>', row('日期', krEsc(v.date)+(v.time ? ' '+krEsc(v.time) : '')+'（'+(isKr ? '韩国' : '印尼')+'）')+row('这天做', krEsc((v.types||[]).filter(function(t0){ return t0!=='本地管理'; }).join('、')||'—'))+row('状态', krEsc(st))+row('院长', krEsc(c.director||'—'))+'<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krSetCaseTab(\'basic\')">基础资料 →</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krSetCaseTab(\'consult\')">面诊 →</button></div>');
+  } else if(cur==='today'){
+    if(!isKr){
+      body = krCardBox('今日项目', krEmpty('印尼的天：KR 只读，没有到院操作。'));
+    } else {
+      var cards = krCaseCards(c, true).filter(function(cd){ return cd.kind==='main' ? v.types.indexOf('赴韩施术')>-1 : cd.date===v.date; });
+      var pick = (scheduleState(c)==='Arrived' && c.needTodayPick && !c.todayPicked && !c.krProcedureDone);
+      body = (pick ? krProjCards(c, {pick:true})+krTodayPickBar(c) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick && v.date===today ? krProjCards(c) : '');
+    }
+  } else if(cur==='settle'){
+    body = KR_TAB_FN.settle(c);
+  } else if(cur==='files'){ body = KR_TAB_FN.files(c); }
+  else body = KR_TAB_FN.log(c);
+  return head+tabsHtml+'<div style="display:flex;flex-direction:column;gap:14px;">'+body+'</div>';
+}

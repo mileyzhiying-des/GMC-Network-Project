@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var c = CASE_ITEMS.filter(function(x){ return x.caseNo===cs || x.id===cs; })[0];
     if(!c){ alert('演示数据里找不到案件 '+cs+'（可能已被重置）'); return; }
     openCaseDetailHere(c.id);
+    if(q.get('sub')){ SUBVIEW[c.id] = {key:q.get('sub')}; c.subTab = 'today'; renderCaseSubtitle(c); renderCaseBody(c); }
     if(q.get('tab')){ c.activeCaseTab = q.get('tab'); renderCaseBody(c); }
     if(q.get('pc')) goPostcareBlock(c.id);
     if(q.get('scroll')){ var sid = q.get('scroll'); setTimeout(function(){ var el = document.getElementById(sid); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 120); }
