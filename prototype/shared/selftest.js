@@ -2909,6 +2909,19 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R121a','CMD-1023-03 P5（A1 分页，stageC 夹具）：列表进程只写一件 + 新栏「其他进行中」/ 优先级 / 点日历块进入口 openVisitOf / 升级后本地管理画面在项目汇总下',async function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    await ST.ensureFixtures(['stageC']);
+    var m = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!m, '要有 stageC 夹具')) return;
+    var a = mainAttentionOf(m, 'IN', inTodoItems());
+    ST.ok(a && a.text && a.rank>=1 && a.rank<=5 && Array.isArray(a.others), 'mainAttentionOf 返回 一件 + 其他列表：'+JSON.stringify(a));
+    nav('in-cases'); CASE_TAB_FILTER = 'all'; renderCaseRows();
+    ST.ok(/其他进行中/.test(document.getElementById('page-in-cases') ? document.getElementById('page-in-cases').innerText : document.body.innerText), '列表表头有「其他进行中」');
+    ST.ok(typeof openVisitOf==='function', '入口函数 openVisitOf 存在');
+    var done = CASE_ITEMS.filter(function(x){ return !isChildVisit(x) && mainStatusOf(x).status==='已完成'; })[0];
+    if(done) ST.ok(mainAttentionOf(done, 'IN', []).rank===5, '已完成 = 优先级⑤');
+    if(isUpgraded(m)){ m.localMgmt = m.localMgmt || {batches:[], mgmtUses:[]}; m.activeCaseTab = 'localmgmt'; openCaseDetail(m.id, true); var tx = document.getElementById('case-body') ? document.getElementById('case-body').innerText : ''; ST.ok(/项目汇总|本地|项目/.test(tx), '升级后本地管理画面放在项目汇总 tab 下'); }
+  });
   ST.def('R120b','CMD-1023-03 P4（KM1 分页，stageC 夹具）：KR 子案件页——页头 / tab / 韩国那天的到院卡在这页 / 客人已到院 → 院长评估（Step 1）在这页做 / 子案件 tab 点一行进入 / 回到主案件 / 印尼的天只读',async function(){
     var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
     await ST.ensureFixtures(['stageC']);

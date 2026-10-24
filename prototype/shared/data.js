@@ -627,11 +627,11 @@ function eventChipHtml(e, opts){
       var left = when.getTime() + noShowMs() - now.getTime();
       if(left > 0){ grey = ''; l2 += ' <b data-visit-countdown="'+when.getTime()+'" data-visit-case="'+(e.caseId||'')+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; } /* 30 分钟内未到访：保持亮色+倒计时 */
     }
-    onclick = e.caseId ? 'openCaseDetail(\''+e.caseId+'\')' : 'void(0)';
+    onclick = e.caseId ? 'openVisitOf(\''+e.caseId+'\')' : 'void(0)';
   } else if(e.kind==='travel'){
     l1 = e.name; l2 = '赴韩施术';
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
-    onclick = 'openCaseDetail(\''+e.caseId+'\')';
+    onclick = 'openVisitOf(\''+e.caseId+'\')';
   } else {
     var ph = RESERVATION_PLACEHOLDERS.filter(function(x){ return x.id===e.phId; })[0];
     l1 = e.name; l2 = (e.purpose||'占位')+' <span data-ph-countdown="'+e.phId+'">'+(ph?placeholderCountdownText(ph):'')+'</span>';
@@ -9418,7 +9418,9 @@ function inRevisitTabHtml(c){
     normalizeCaseTab(c); c.activeCaseTab = canonTabKey(c, c.activeCaseTab);
     var t = c.activeCaseTab, up = isUpgraded(c);
     if(t==='visits') return visitsTabHtml(c);
-    if(t==='summary') return summaryTabHtml(c);
+    if(t==='summary'){ /* 升级后本地管理不单独一个 tab：选购 / 使用画面放在项目汇总下面（有本地管理时） */
+      var lt0 = ''; if(c.localMgmt || showLocalTab(c) || isContCase(c)){ var sv0 = c.activeCaseTab; c.activeCaseTab = 'localmgmt'; try{ lt0 = c0.call(this, c); }finally{ c.activeCaseTab = sv0; } }
+      return summaryTabHtml(c)+(lt0 ? '<div style="margin-top:14px;">'+lt0+'</div>' : ''); }
     if(t==='postcare') return inPostcareTabHtml(c);
     if(t==='revisit') return inRevisitTabHtml(c);
     if(t==='consult') return !up && showKrTab(c) ? consultTabHtml(c)+krTabContent(c) : consultTabHtml(c); /* 没升级：选项目的卡也在面诊 tab（诊疗方案已出 → 客人选项目） */
@@ -9779,3 +9781,32 @@ function subPageHtml(c){
   return subHeaderHtml(c)+tabs+body;
 }
 function switchSubTab(k){ var c = getCurrentCase(); if(!c) return; c.subTab = k; renderCaseBody(c); }
+
+/* ===== CMD-1023-03 P5：案件管理列表的「进程」只写最该注意的一件（定稿第 8 节）=====
+   优先：① 今天来访 ② 等我处理 ③ 等对方处理 ④ 未预约 / 过期 ⑤ 已完成；其他进行中放另一栏。items = 这个主案件的待办（IN：inTodoItems；KR：krTodoItems） */
+function mainAttentionOf(m0, side, items){
+  var m = mainOf(m0), today = todayStr(), out = {rank:9, text:'', others:[]}, s = mainStatusOf(m), ids = [m.id].concat(childVisitsOf(m).map(function(x){ return x.id; }));
+  var mine = (items||[]).filter(function(i){ return ids.indexOf(i.caseId)>-1; });
+  var shorten = function(t){ return String(t||'').replace(/（已超时）/g, '').replace(/^.*?：/, function(x){ return x; }); };
+  var cands = [];
+  var tv = visitsOf(m).filter(function(v){ return v.date===today && (side==='KR' ? v.place==='KR' : v.place==='IN'); })[0];
+  if(tv && (side==='KR' || activeVisitsOf(m).some(function(v){ return v.date===today; }))) cands.push({rank:1, text:'今天'+(side==='KR' ? '到院' : '来访')+(tv.time ? ' '+tv.time : '')+'（'+tv.types.filter(function(t0){ return side!=='KR' || t0!=='本地管理'; }).join('、')+'）'});
+  mine.filter(function(i){ return !i.ref && i.cat!=='kr' && i.cat!=='waiting' && i.kind!=='visit' && i.kind!=='today'; }).forEach(function(i){ cands.push({rank:2, text:shorten(i.text), over:!!i.over}); });
+  mine.filter(function(i){ return i.ref || i.cat==='kr' || i.cat==='waiting'; }).forEach(function(i){ cands.push({rank:3, text:'等'+(side==='KR' ? ' IN ' : ' KR ')+'：'+shorten(i.text)}); });
+  var pc = pendingCareOf(m), unb = pc.filter(function(s0){ return !(s0.date && s0.date>=today) || s0.skipped; }), late = pc.filter(function(s0){ return pcDaysLate(s0.suggest||s0.date||today)>0; });
+  if(late.length) cands.push({rank:4, text:'术后管理过期 '+late.length+' 项'}); else if(unb.length || careUnits(m).unbooked.length) cands.push({rank:4, text:'术后管理未预约 '+(unb.length+careUnits(m).unbooked.length)+' 项'});
+  cands.sort(function(a, b){ return a.rank-b.rank; });
+  if(s.status==='已完成' || s.status==='仅出报告' || s.status==='已取消'){ out.rank = 5; out.text = mainStatusText(m); return out; }
+  if(cands.length){ out.rank = cands[0].rank; out.text = cands[0].text; out.over = !!cands[0].over; } else { out.rank = 5; out.text = s.ongoing.length ? s.ongoing[0].text : '进行中'; }
+  var seen = {}; seen[out.text] = 1;
+  s.ongoing.forEach(function(x){ if(!seen[x.text]){ seen[x.text] = 1; out.others.push(x.text); } });
+  cands.slice(1).forEach(function(x){ if(!seen[x.text]){ seen[x.text] = 1; out.others.push(x.text); } });
+  return out;
+}
+/* 入口：点今天来访相关 → 今天的子案件页（没升级的就是一般案件页）；点接待记录进去的永远是那一天 */
+function openVisitOf(recId){
+  var rec = CASE_ITEMS.filter(function(x){ return x.id===recId; })[0]; if(!rec) return;
+  var m = mainOf(rec); if(isChildVisit(rec) || !isUpgraded(m)){ openCaseDetail(rec.id); return; }
+  var v = visitsOf(m).filter(function(x){ return (x.rec||x.caseId)===rec.id; })[0] || visitsOf(m).filter(function(x){ return x.date===todayStr() && x.place==='IN'; })[0];
+  if(v) openSubcase(m.id, v.key); else openCaseDetail(rec.id);
+}

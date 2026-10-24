@@ -1110,7 +1110,7 @@ function setCaseHospitalFilter(v){ CASE_HOSPITAL_FILTER = v; buildCaseTabs(); re
 var CASE_DONE_RANGE = {from:'', to:'', all:false};
 function setDoneRange(k, v){ var r = CASE_DONE_RANGE; if(k==='recent'){ r.from = ''; r.to = ''; r.all = false; } else if(k==='all'){ r.all = true; r.from = ''; r.to = ''; } else { r[k] = v; if(k==='from') r.all = false; } renderCaseRows(); }
 function caseLastVisitDay(c){ var vs = visitsOf(mainOf(c)), last = vs.length ? vs[vs.length-1].date : ''; return last || String(c.visitDate||'') || String((c.logEntries&&c.logEntries.length ? c.logEntries[c.logEntries.length-1].dt : '')||'').slice(0, 10); }
-var CASE_ROW_OPEN = {}, CASE_GRID = '1.0fr 1.0fr 0.85fr 1.5fr 1.0fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr';
+var CASE_ROW_OPEN = {}, CASE_GRID = '1.0fr 1.0fr 0.85fr 1.5fr 1.2fr 1.0fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr';
 function caseRowToggle(id){ CASE_ROW_OPEN[id] = !CASE_ROW_OPEN[id]; renderCaseRows(); }
 function renderCaseRows(){
   var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return caseTabKey(c)===CASE_TAB_FILTER; });
@@ -1129,8 +1129,9 @@ function renderCaseRows(){
     document.getElementById('case-rows').innerHTML = doneBar+'<div style="font-size:12px;color:var(--muted);padding:20px 4px;">暂无案件</div>';
     return;
   }
+  var attTodo = []; try{ attTodo = inTodoItems(); }catch(e){}
   document.getElementById('case-rows').innerHTML = doneBar+items.map(function(c){
-    var si = caseStageInfo(c);
+    var si = caseStageInfo(c), att = isEnded(c) ? null : mainAttentionOf(c, 'IN', attTodo);
     var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+(krHoldOpen(c) ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:12px;">在韩后续进行中</span>' : '');
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
     var vsAll = visitsOf(c), subs = vsAll.length>1 ? vsAll : [], open = !!CASE_ROW_OPEN[c.id];
@@ -1138,7 +1139,8 @@ function renderCaseRows(){
     var main = '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;"><span style="font-size:12px;color:var(--slate2);">'+(subs.length ? '<span onclick="event.stopPropagation();caseRowToggle(\''+c.id+'\')" title="展开到院记录" style="cursor:pointer;display:inline-block;width:16px;">'+(open ? '▲' : '▼')+'</span>' : '<span style="display:inline-block;width:16px;"></span>')+c.caseNo+'</span>'+
       '<span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
       '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
-      '<span style="font-size:12px;">'+(isEnded(c) ? caseEndTypeText(c)+((c.stage==='closed' && !isChildVisit(c) && mainHoldOf(c).length) ? ' · 有持有项目' : '') : si.proc)+lmTag+'</span>'+
+      '<span style="font-size:12px;'+(att && att.over ? 'color:var(--feedback-error,#B3402E);' : '')+'" title="进程只写最该注意的一件">'+(isEnded(c) ? caseEndTypeText(c)+((c.stage==='closed' && !isChildVisit(c) && mainHoldOf(c).length) ? ' · 有持有项目' : '') : att.text)+lmTag+'</span>'+
+      '<span style="font-size:12px;color:var(--slate2);">'+(att && att.others.length ? att.others.join('<br>') : '—')+'</span>'+
       '<span>'+financeCellHtml(c)+'</span>'+
       '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartText(c)+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
     var subHtml = open ? subs.map(function(v){
