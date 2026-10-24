@@ -125,7 +125,7 @@ function krTodoItems(rows){
       if(c.stage==='travel' && scheduleState(c)==='Pending') push(todoMk('sched', '确认施术时间', c, (c.krSchedule||{}).primary||'', false, goCase('proc')));
       if(c.stage==='travel' && scheduleState(c)==='Changing') push(todoMk('change', '改期待确认', c, (c.krSchedule||{}).changePrimary||'', false, goCase('proc')));
       var pp = pendingPayItems(c); if(pp.length) push(todoMk('pay', '在韩加项待付款：'+pp.map(function(i){ return buyName(i.name); }).join('、'), c, '', false, goCase('proc')));
-      if(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'items', page:'care'}); })); /* CMD-1015-31：直接到项目卡术后管理分页，用［预约时间］约 */
+      if(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'postcare'}); })); /* CMD-1015-31：直接到项目卡术后管理分页，用［预约时间］约 */
     }
     if(work){ (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0) push(todoMk('pcdue', '联络 IN 确认客人行程：术后管理已过建议日期 '+pcDaysLate(s.date)+' 天（'+s.content+'）', c, s.date, true, goCase('proc'))); }); } /* CMD-1015-17 */
     /* 院长：上传面诊内容（面诊已安排、院长还没上传） */
@@ -345,7 +345,7 @@ function todoUbKr(){
     careSlotList(c).forEach(function(sl){ /* 地点韩国，或韩国或印尼但还没决定 */
       var nm = (sl.x.name || sl.x.mgmt), sub = [buyName(sl.item), careDayText(c, sl.item, sl.sug)].filter(Boolean).join(' · ');
       out.push({key:'ub|'+c.id+'|care|'+sl.item+'|'+sl.i+'|'+(sl.sug||'')+'|'+(sl.reuse||''), caseId:c.id, clinicId:r.clinicId, name:c.name, no:c.caseNo, label:nm, sub:sub, sug:sl.sug||'', source:r.clinicName||'—', mine:mine,
-        book:function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'items', page:'care'}); setTimeout(function(){ krCbOpen({one:{item:sl.item, i:sl.i, reuse:sl.reuse||''}}); }, 120); }});
+        book:function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'postcare'}); setTimeout(function(){ krCbOpen({one:{item:sl.item, i:sl.i, reuse:sl.reuse||''}}); }, 120); }});
     });
     krCbMgItems(c).forEach(function(m){
       var it = itemByKey(c, m.iid||m.name) || {};

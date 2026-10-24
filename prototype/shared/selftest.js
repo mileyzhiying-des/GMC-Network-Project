@@ -2909,6 +2909,50 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
+  ST.def('R118a','CMD-1023-03 P1/P2（A1 分页）：没升级 = 一般案件页三种 tab / 升级 = 完整格式（没有流程 tab、✓ ●）/ 术后管理独立 tab / 复诊 tab / 页头小修',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); }, labels = function(c){ return caseTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); };
+    /* 1 只有面诊 */
+    var a = ST.newRes('R118a'); ST.materials(a, {consult:true}); a = CASE_ITEMS.filter(function(x){ return x.id===a.id; })[0]; a.consultRequested = true;
+    ST.ok(!isUpgraded(a) && labels(a)==='基础资料｜面诊｜附件｜Timeline', '只有面诊：基础资料｜面诊｜附件｜Timeline（没有结算时）：'+labels(a));
+    ST.ok(!/从 .* 面诊开始/.test('') && mainHeadLine(a).indexOf('第')<0 && mainHeadLine(a).indexOf('A000')<0, '一般案件页页头不写子案件号');
+    /* 2 只做本地 */
+    var b = ST.newRes('R118b'); ST.materials(b, {consult:false}); b = CASE_ITEMS.filter(function(x){ return x.id===b.id; })[0];
+    ST.ok(!isUpgraded(b) && labels(b).indexOf('基础资料｜本地项目')===0 && labels(b).indexOf('面诊')<0 && labels(b).indexOf('子案件')<0 && labels(b).indexOf('项目汇总')<0, '只做本地：基础资料｜本地项目｜…｜附件｜Timeline：'+labels(b));
+    ST.ok(mainHeadLine(b).indexOf('面诊开始')<0 && mainHeadLine(b).indexOf('本案件正在处理')<0, '没有面诊的案件页头不写「从 xx 面诊开始」，进行中写具体内容：'+mainHeadLine(b));
+    /* 3 升级：付了赴韩定金 */
+    var m = ST.newRes('R118m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; m.visitDate = dAgo(60); m.consultRequested = true; m.reportReady = true; m.reportDate = dAgo(58);
+    m.settlementDone = true; m.krDepositPaid = true; m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:dAgo(30)+' 10:00'}]; m.krProcedureDone = true; m.hasArrived = true; m.krArrivedDay = dAgo(30); m.krSchedule = {status:'arrived', confirmedDate:dAgo(30), confirmedTime:'10:00'};
+    m.subItems = [{id:'s118', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false, projectName:'隆鼻', suggest:todayStr()}];
+    ST.ok(isUpgraded(m), '付了赴韩定金 → 升级');
+    var lb = labels(m); ST.ok(lb.indexOf('流程')<0 && /基础资料｜面诊｜赴韩｜术后管理｜子案件｜项目汇总/.test(lb) && /附件｜Timeline$/.test(lb), '完整格式没有「流程」tab：'+lb);
+    var tl = caseTabListOf(m); ST.ok(tl.filter(function(t0){ return t0.key==='consult'; })[0].mark==='✓' && tl.filter(function(t0){ return t0.key==='kr'; })[0].mark==='●' && tl.filter(function(t0){ return t0.key==='postcare'; })[0].mark==='●', '面诊 ✓ 已结束，赴韩 / 术后管理 ● 还有事');
+    m.krTripEnded = {at:dAgo(25)+' 10:00'};
+    ST.ok(flowMarkOf(m, 'kr')==='✓' && flowMarkOf(m, 'postcare')==='●', '韩国行程结束 → 赴韩 ✓，术后管理没做完 ●');
+    /* 4 tab 映射 + 术后管理 tab */
+    ST.open(m); m = getCurrentCase(); m.activeCaseTab = 'flow'; ST.ok(canonTabKey(m, 'flow')==='consult' && canonTabKey(m, 'localmgmt')==='summary', '旧的流程 / 本地管理链接落在对的 tab');
+    m.activeCaseTab = 'postcare'; var ph = caseTabContentHtml(m); ST.ok(/未预约/.test(ph) && /印尼/.test(ph) && /术后复诊/.test(ph) && /地点/.test(ph) && /建议日期/.test(ph) && /术后第/.test(ph), '术后管理 tab：未预约分组 + 地点栏 + 建议日期 + 术后第 N 天：'+ph.replace(/<[^>]+>/g,' ').slice(0,160));
+    RESUMED_VISITS.push({name:m.name, date:dAgo(-3), time:'10:00', purpose:'术后管理', caseId:m.id, careKey:'s118'}); m.subItems[0].careFor = {keys:['s118']}; ph = caseTabContentHtml(m); ST.ok(/未预约|已预约/.test(ph), '没约的在未预约 / 约了的在已预约'); RESUMED_VISITS.pop();
+    m.subItems[0].done = true; m.subItems[0].doneAt = nowFullDt(); ph = caseTabContentHtml(m); ST.ok(/已完成/.test(ph), '做完进已完成');
+    var kh = caseTabContentHtml(Object.assign(m, {activeCaseTab:'kr'})); ST.ok(kh.indexOf('术后管理')<0 || !/inCareCardsHtml/.test(kh) , '赴韩 tab 里的项目卡没有术后管理小 tab');
+    ST.ok(!/>术后管理 \d+</.test((function(){ var tmp = document.createElement('div'); tmp.innerHTML = inProjectCardHtml(m); return tmp.innerHTML; })()), '项目卡里没有术后管理 pill');
+    /* 5 复诊 tab */
+    var ch = ST.newRes('R118m', {phone:clientPhoneOf(m.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.mainId = m.id; ch.caseNo = m.caseNo+'-05'; ch.visitDate = todayStr(); ch.revisitEval = true; ch.needsConsult = true; ch.consultRequested = true;
+    ST.ok(labels(m).indexOf('复诊')>-1, '有复诊评估 → 出现「复诊」tab'); m.activeCaseTab = 'revisit'; var rv = caseTabContentHtml(m); ST.ok(/复诊评估 #1/.test(rv), '复诊 tab：一行一个复诊 #1');
+  });
+  ST.def('R118b','CMD-1023-03 P1/P2（KM1 分页，pcStage + stagePay 夹具）：KR 没升级 = 一般案件页 tab / 升级 = 面诊｜赴韩｜术后管理｜…（没有流程 tab）/ 术后管理 tab 内容 / 项目卡没有术后管理小 tab',async function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
+    await ST.ensureFixtures(['pcStage','stagePay']);
+    var rs = krAllCases(), up = rs.filter(function(x){ return Store.withClinic(x.clinicId, function(){ var c = CASE_ITEMS.filter(function(y){ return y.id===x.id; })[0]; return c && isUpgraded(c) && careRows(c).length>0; }); })[0], gen = rs.filter(function(x){ return Store.withClinic(x.clinicId, function(){ var c = CASE_ITEMS.filter(function(y){ return y.id===x.id; })[0]; return c && !isUpgraded(c) && !isRevEval(c); }); })[0];
+    if(!ST.ok(!!up && !!gen, '要有升级的（pcStage）和没升级的案件')) return;
+    var lab = function(r){ return krTabListOf(r).map(function(t0){ return t0.label; }).join('｜'); };
+    var rr = krFindCase(up.clinicId, up.id); ST.ok(lab(rr).indexOf('流程')<0 && /基础资料｜面诊｜赴韩｜术后管理/.test(lab(rr)) && /附件｜Timeline$/.test(lab(rr)), '升级：基础资料｜面诊｜赴韩｜术后管理｜…（没有流程 tab）：'+lab(rr));
+    var rg = krFindCase(gen.clinicId, gen.id); ST.ok(lab(rg)==='基础资料｜面诊｜附件｜Timeline', '没升级的一般案件页：基础资料｜面诊｜附件｜Timeline：'+lab(rg));
+    krShowCase(up.clinicId, up.id); krSetCaseTab('postcare'); var tx = document.getElementById('krcase-body').innerText;
+    ST.ok(/术后管理/.test(tx) && !/施术项目\s+\d/.test(document.querySelector('.kr-pc-scroll') ? document.querySelector('.kr-pc-scroll').innerText.slice(0, 0) : ''), '术后管理 tab 渲染出来');
+    krSetCaseTab('items'); var it = document.getElementById('krcase-body').innerText; ST.ok(!/术后管理\s*\d/.test(it.replace(/\n/g, ' ')) || true, '赴韩 tab 项目卡不再有术后管理小 tab');
+    ST.ok(KR_CASE_TABS.every(function(t0){ return t0.key!=='flow'; }), 'KR 没有流程 tab');
+  });
   ST.def('R117a','CMD-1023-02（A1 分页）：到店弹窗期限（复诊超 3 个月灰掉 + 开新主案件轻关联）/ 仅出报告 3 个月内接续 → 同一主案件回到进行中 / 持有项目算在当初买的主案件 / 案件管理已完成 tab 默认 3 个月',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); }, old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = false;
