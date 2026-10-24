@@ -2561,11 +2561,21 @@ function joinMain(c, src){
   return m;
 }
 /* 客人有本地项目还没用完的"本地主案件"（没有面诊、只做本地项目的主案件）→ 之后来用，开在它下面当子案件 */
-function localMainsWithLeft(c){ /* CMD-1023-02 二：用持有项目（韩国持有 / 印尼持有 / 本地买了没用完的）→ 算在当初买的主案件 */
-  return clientPriorCases(c).filter(function(x){ return mainHoldOf(x).length>0; });
+function localMainsWithLeft(c){ /* CMD-1023-03 P6：只有赴韩持有（在韩持有项）的主案件才算「回到当初的主案件」（赴韩 ＞ 本地）；只有本地持有的 → 新独立案件，标「来自 A000xxx 购买」（localOnlyHoldMains） */
+  return clientPriorCases(c).filter(function(x){ return mainHoldOf(x).some(function(h){ return h.kind==='KR'; }); });
+}
+function localOnlyHoldMains(c){
+  return clientPriorCases(c).filter(function(x){ var h = mainHoldOf(x); return h.length>0 && !h.some(function(y){ return y.kind==='KR'; }); });
+}
+function markBoughtFrom(c){ /* 到店时：客人有只在本地买的持有项目 → 这个案件是新的独立案件，标来自哪个主案件购买（不加入它） */
+  if(!c || c.boughtFrom || c.mainId && c.mainId!==c.id) return;
+  var l = localOnlyHoldMains(c).filter(function(x){ return x.id!==c.id; }); if(!l.length) return;
+  c.boughtFrom = l.map(function(x){ return x.caseNo; });
+  logCaseEvent(c, actingName(), '来自 '+c.boughtFrom.join('、')+' 购买的本地持有项目（新的独立案件，不加入原主案件）');
 }
 function followupAsk(c){
   if(window.GMC_NO_FOLLOWASK || !c || c.followupAsked || c.materialsConfirmed || (c.linkedCase && c.linkedCase.caseId) || c.resumeFrom) return;
+  try{ markBoughtFrom(c); }catch(e){ console.error('[来自购买标注]', e); }
   var prior = clientPriorCases(c); if(!prior.length && !localMainsWithLeft(c).length) return;
   var mode = 'none', type = '接续面诊', sel = '';
   if(c.careFor && c.careFor.caseId && prior.some(function(x){ return x.id===c.careFor.caseId; })){ mode = 'link'; type = '术后管理'; sel = c.careFor.caseId; } /* 从「未安排预约」约来的：默认接续 · 术后管理 + 对应案件 */
@@ -5712,7 +5722,7 @@ function endBlockPending(c){
   var pp = pendingPayItems(c); if(!pp.length) return null;
   return {ok:false, pending:true, items:pp.map(function(it){ return buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）'; }), err:'还有未付款项目：'+pp.map(function(it){ return buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）'; }).join('、')+'，请先付款或取消购买'};
 }
-function coreEndVisitToday(c, by){
+function coreEndVisitToday(c, by, reason){
   if(!c.hasArrived || c.krProcedureDone || c.visitClosed) return {ok:false, err:'今天的到院已经结束或还没到院'};
   var pb = endBlockPending(c); if(pb) return pb;
   c._ending = true;
@@ -5722,7 +5732,7 @@ function coreEndVisitToday(c, by){
     surgPlanItems(c).forEach(function(it){ if(!it.done && !it.deferUse){ coreTodayCancel(c, 'item', it.name, by, true); } });
     (c.subItems||[]).forEach(function(s){ if(s.kind==='施术' && !s.done && !s.visitKey){ s.done = true; s.doneAt = nowFullDt(); s.doneBy = by; s.doneItems = s.doneItems || []; } });
     c.krProcedureDone = true; c.surgeryDoneAt = mainVisitDay(c) || todayStr(); c.endAsk = false; coreVisitNoteCommit(c, 'main', by); /* 统计按施术（到院）那天，不是点按钮的那天（CMD-1021-13 四） */ /* 整体备注随结束一起存（CMD-1021-09 六） */
-    logCaseEvent(c, by, '客人已离院'+(left.length ? '（没做完的退回项目卡：'+left.join('、')+'）' : '')+'，进入术后管理阶段（等 KR 确认韩国行程是否结束）');
+    logCaseEvent(c, by, '客人已离院'+(left.length ? '（没做完的退回项目卡「未预约」：'+left.join('、')+(reason ? '；原因：'+reason : '')+'）' : '')+'，进入术后管理阶段（等 KR 确认韩国行程是否结束）');
   } finally { c._ending = false; }
   syncSurgerySub(c); syncSurgeryBlock(c);
   updateCaseStage(c); /* CMD-1021-16：不再自动结案 */
@@ -5756,13 +5766,13 @@ function subVisitAskEnd(c){ /* 有已到店、行都做完但还没人工结束�
   c.visitEndedKeys = c.visitEndedKeys || {};
   return subCaseList(c).some(function(r){ var k = subCaseKey(r); return r.place==='KR' && coreVisitState(c, k)==='arrived' && coreVisitRows(c, k).concat(coreVisitExtra(c, k)).every(function(s){ return s.done; }); });
 }
-function coreEndSubVisit(c, key, by){
+function coreEndSubVisit(c, key, by, reason){
   c.visitEndedKeys = c.visitEndedKeys || {};
   var rows = coreVisitRows(c, key).concat(coreVisitExtra(c, key)); if(!rows.length) return {ok:false, err:'找不到这次到院'};
   var pb = endBlockPending(c); if(pb) return pb; /* 有待付款项目不能结束（CMD-1021-10） */
   if(rows.some(function(s){ return !s.done; })) { rows.filter(function(s){ return !s.done; }).forEach(function(s){ coreRowCancel(c, s.id, by); }); }
   c.visitEndedKeys[key] = true; c.endAsk = false; coreVisitNoteCommit(c, key, by);
-  logCaseEvent(c, by, '客人已离院（'+String(key).split('|')[1]+'）');
+  logCaseEvent(c, by, '客人已离院（'+String(key).split('|')[1]+'）'+(reason ? '，没做完的项目回到「未预约」；原因：'+reason : ''));
   updateCaseStage(c);
   return {ok:true};
 }
@@ -9469,7 +9479,7 @@ function visitSweep(){
     if(!isChildVisit(ch) || ch.autoEnded || ch.subState!=='arrived' || !ch.materialsConfirmed || isEnded(ch) || ch.leftStore) return;
     var day = ch.arrivedDay || ch.visitDate; if(!day || day>=today) return;
     var bl = closeBlockers(ch); ch.autoEnded = {at:nowFullDt(), day:day, blockers:bl}; ch.leftStore = true; changed = true;
-    logCaseEvent(ch, '系统', '子案件 '+ch.caseNo+' 到 00:00 自动结束：没做完的项目回到主案件「未做」'+(bl.length ? '；还有未处理的款项（'+bl.join('、')+'），案件暂不结束' : ''));
+    logCaseEvent(ch, '系统', '子案件 '+ch.caseNo+' 到 00:00 自动结束：没做完的项目回到对应流程的「未预约」（原因：过了 00:00 自动结束，次日由室长确认）'+(bl.length ? '；还有未处理的款项（'+bl.join('、')+'），案件暂不结束' : ''));
     if(!bl.length && !mainlineOngoing(ch)){ try{ finishCase(ch); }catch(e){ console.error('[子案件自动结案]', e); } }
     try{ updateCaseStage(ch); }catch(e){}
   });
@@ -9630,6 +9640,7 @@ function mainHeadLine(m){
   var m0 = mainOf(m), s = mainStatusOf(m0), parts = [], hasConsult = !!m0.consultRequested || visitsOf(m0).some(function(v){ return v.types.indexOf('面诊安排')>-1; });
   if(hasConsult){ var sd = startDayOf(m0); if(sd) parts.push('从 '+String(sd).slice(5).replace('-', '/')+' 面诊开始'); } /* CMD-1023-03 小修：没有面诊就不写「从 xx 面诊开始」 */
   var ongoingText = s.ongoing.length ? s.ongoing.map(function(x){ return x.text; }).join(' · ') : (function(){ try{ var si = caseStageInfo(m0); return (si.stage||'')+(si.proc ? ' · '+si.proc : ''); }catch(e){ return '进行中'; } })(); /* 写具体内容，不写「本案件正在处理」 */
+  if(m0.boughtFrom && m0.boughtFrom.length) parts.push('来自 '+m0.boughtFrom.join('、')+' 购买');
   parts.push(s.status==='进行中' ? '进行中：'+ongoingText : mainStatusText(m0));
   if(isUpgraded(m0)){ var today = todayStr(), tv = visitsOf(m0).filter(function(x){ return x.date===today; })[0]; if(tv) parts.push('今天：'+tv.no+'（'+tv.types.join('、')+'）'); } /* 没升级的一般案件页不写子案件号 */
   return parts.join(' · ');

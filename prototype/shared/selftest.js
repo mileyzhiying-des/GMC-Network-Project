@@ -2181,7 +2181,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var html = inProjectCardHtml(c), txt = html.replace(/<[^>]+>/g, ' ');
     ST.ok((html.match(/class="card"/g)||[]).length>=2, '至少两张大卡（项目卡 / 术后管理，有管理项目时三张）');
     var first = html.split('术后管理</div>')[0].replace(/<[^>]+>/g, ' '); ST.ok(!/项目合计|定金|尾款/.test(first) && !/护照/.test(first), '项目卡：没有金额合计行，没有护照提示');
-    ST.ok(/施术项目/.test(txt) && /术后管理/.test(txt) && /术后管理免费、不显示价格、不能退款/.test(txt), '术后管理大卡标题下有说明文字');
+    ST.ok(/施术项目/.test(txt) && /术后管理/.test(txt) && /术后管理\s*免费、不显示价格、不能退款/.test(inPostcareTabHtml(c).replace(/<[^>]+>/g, ' ')), '1023-03：术后管理独立 tab 里有说明文字');
     var kr = inCareCardsHtml(c, 'kr'), inn = inCareCardsHtml(c, 'inn'), kt = kr.replace(/<[^>]+>/g, ' ');
     ST.ok(/施术项目\s+术后管理项目\s+预约时间\s+状态\s+备注/.test(kt), '栏位：施术项目｜术后管理项目｜预约时间｜状态｜备注'); ST.ok(/术后第 \d+ 天/.test(kt + inn.replace(/<[^>]+>/g, ' ')), '备注写术后第 N 天');
     ST.ok(!/待到店|待预约|待 KR 预约|已到店|已约</.test(kr+inn), '状态只有 已完成 / 已预约 / 未预约（没有旧叫法）'); ST.ok(/未预约|已预约|已完成/.test(kr+inn), '有新叫法的状态');
@@ -2758,7 +2758,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var nk0 = (HOSPITAL_DATA[krHospitalIdOfMe()].notifs||[]).filter(function(n){ return n.kind==='innote'; }).length;
     Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.inNotes = []; coreAddInNote(c, 'R59 备注：客人带轮椅', 'A1 室长'); return true; });
     ST.ok((HOSPITAL_DATA[krHospitalIdOfMe()].notifs||[]).filter(function(n){ return n.kind==='innote'; }).length===nk0+1, 'IN 新增备注 → KR 收到提醒（通知）');
-    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krProjPage('care'); var tx = document.getElementById('krcase-body').innerText;
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'postcare'}); var tx = document.getElementById('krcase-body').innerText;
     ST.ok(/IN 备注/.test(tx) && /已读/.test(tx), 'KR 案件页最上面有「IN 备注」卡和［已读］'); ST.ok(/交给印尼\s*\d/.test(tx), '术后管理 tab 有「交给印尼」组'); ST.ok(!/回印尼做（由 IN 约/.test(tx), '拿掉底部「回印尼做」卡');
     var hand = tx.slice(tx.indexOf('交给印尼')); ST.ok(/待 IN 预约/.test(hand) && !/预约时间\n/.test(hand.slice(0, 200)), '交给印尼组：项目｜术后第 N 天｜建议日期｜状态（待 IN 预约），KR 只能看');
     var booked = tx.slice(tx.indexOf('已预约'), tx.indexOf('交给印尼')).replace(/印尼购买/g, ''); ST.ok(!/印尼/.test(booked), '「已预约」里只留 KR 自己约的');
@@ -3067,7 +3067,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 5 标题 */
     ST.open(m); var tt = document.getElementById('case-title'); renderCaseTitle(m); ST.ok(tt && tt.textContent.indexOf('第')<0 && tt.textContent.indexOf(m.caseNo)>-1, '标题「客人名 · '+m.caseNo+'」没有「第 N 次来访」：'+(tt&&tt.textContent));
     /* 6 流程 tab 一行一个流程 */
-    m.activeCaseTab = 'basic'; ST.ok(/>流程</.test(caseTabsHtml(m)) && !/>本地管理</.test(flowTabHtml(m,'')) , '流程 tab 里没有本地管理');
+    m.activeCaseTab = 'basic'; ST.ok(!/>流程</.test(caseTabsHtml(m)) && !/>本地管理</.test(caseTabsHtml(m)), '1023-03：没有流程 tab，本地管理也不单独一个 tab');
     var rows = flowRowsOf(m); ST.ok(rows.some(function(r){ return r.kind==='consult'; }) && rows.some(function(r){ return r.kind==='krTrip' && r.done && /施术/.test(r.text) && /韩国行程结束/.test(r.text); }), '一行一个流程，赴韩施术 ✓ 已结束 带日期：'+rows.map(function(r){ return r.label+'='+r.text; }).join('；'));
     var fh = flowTabHtml(m, ''); ST.ok(/已结束/.test(fh) && /展开/.test(fh), '行上有状态和［展开］');
     /* 7 案件管理已完成 tab */
@@ -3158,7 +3158,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:m.visitDate+' 10:00'}, {origin:'KR', name:'ONDA 提升 · 身体 60kj·3次', mgmtPlan:true, qty:3, holdUsed:2, heldOver:true, uses:[{at:m.visitDate+' 10:00', qty:1}, {at:todayStr()+' 10:00', qty:1}]}];
     ST.open(m); m = getCurrentCase(); m.activeCaseTab = 'basic';
     var tabs = caseTabsHtml(m).replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
-    ST.ok(/基础资料\|(流程\|)?子案件\|项目汇总\|/.test(tabs) && /附件\|Timeline/.test(tabs), '主案件 tab：基础资料｜流程｜子案件｜项目汇总｜…｜附件｜Timeline：'+tabs);
+    ST.ok(/基础资料\|.*子案件\|项目汇总\|/.test(tabs) && !/流程/.test(tabs) && /附件\|Timeline/.test(tabs), '主案件 tab：基础资料｜流程｜子案件｜项目汇总｜…｜附件｜Timeline：'+tabs);
     ST.ok(tabs.indexOf('面诊资料')<0 && tabs.indexOf('赴韩施术')<0, '原来的面诊资料 / 赴韩施术 tab 收进「流程」');
     m.activeCaseTab = 'visits'; var vh = caseTabContentHtml(m);
     ST.ok(vh.indexOf(m.caseNo+'-01')>-1 && vh.indexOf(m.caseNo+'-02')>-1 && /序号/.test(vh) && /业务类型/.test(vh), '子案件表：序号 -01 / -02 + 栏位');
@@ -3190,9 +3190,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var h0 = {itemName:'R109 本地项目', category:'本地项目', batches:[{caseId:lm.id, date:todayStr(), bought:2, used:0, usages:[]}]};
       CLIENT_HOLDINGS[lm.name] = (CLIENT_HOLDINGS[lm.name]||[]).concat([h0]);
       var c2 = ST.newRes('R109L', {phone:clientPhoneOf(lm.name)}); ST.open(c2); markArrived(); c2 = getCurrentCase();
-      var okLocal = localMainsWithLeft(c2).some(function(x){ return x.id===lm.id; });
-      ST.ok(okLocal, '客人有没用完的本地项目 → 弹窗有「来用之前买的本地项目」选项');
-      if(okLocal){ FU_ASK.mode = 'local'; FU_ASK.sel = lm.id; followupAskDone(true); c2 = getCurrentCase(); ST.ok(c2.mainId===lm.id && c2.caseNo===lm.caseNo+'-02' && c2.needsConsult===false, '来用本地项目 → 加入本地主案件当子案件'); }
+      /* CMD-1023-03 P6：只有本地持有 → 新独立案件，标「来自 A000xxx 购买」，不加入原主案件 */
+      ST.ok(!localMainsWithLeft(c2).some(function(x){ return x.id===lm.id; }) && localOnlyHoldMains(c2).some(function(x){ return x.id===lm.id; }), '只有本地持有的主案件 → 不再是接续候选，算「本地持有」');
+      ST.ok(c2.boughtFrom && c2.boughtFrom.indexOf(lm.caseNo)>-1 && !isChildVisit(c2) && /来自 .*购买/.test(mainHeadLine(c2)), '新独立案件，页头标「来自 '+lm.caseNo+' 购买」：'+mainHeadLine(c2));
       /* 接续到进行中主案件那天 */
       RESUMED_VISITS.push({name:prior.name, date:todayStr(), time:'09:00', purpose:'复诊评估', caseId:prior.id, origCaseNo:'AXXXX'});
       ST.ok(visitsOf(prior).some(function(v){ return v.types.indexOf('复诊评估')>-1; }), '接续到进行中主案件的那天也是一个子案件');
@@ -3669,7 +3669,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); var mb = [].slice.call(box.querySelectorAll('button[disabled]')).filter(function(b){ return b.textContent==='修改时间'; })[0]; ST.ok(mb && /已到(店|院)/.test(mb.title), '不能改时间的行：［修改时间］灰 + tooltip，不是空的');
       /* 施术 / 术后管理 tab：来源标签 + 操作栏 + 其他栏 */
       KR_PROJ_PAGE = 'surg'; box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); ST.ok(box.querySelectorAll('.kr-srctag').length>=1 && /来源\s*项目\s*次数/.test(box.textContent) && /操作\s*其他/.test(box.textContent) && !/在韩增加/.test(box.textContent), '施术项目 tab：来源标签 + 操作栏 + 其他栏');
-      KR_PROJ_PAGE = 'care'; box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); ST.ok(box.querySelectorAll('.kr-srctag').length>=1 && /来源\s*项目\s*术后第 N 天\s*地点\s*次数\s*建议日期\s*操作\s*其他/.test(box.textContent), '术后管理 tab：来源标签（跟对应施术）+ 操作栏 + 其他栏');
+      KR_PROJ_PAGE = 'care'; box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c, {only:'care'}); ST.ok(box.querySelectorAll('.kr-srctag').length>=1 && /来源\s*项目\s*术后第 N 天\s*地点\s*次数\s*建议日期\s*操作\s*其他/.test(box.textContent), '术后管理 tab：来源标签（跟对应施术）+ 操作栏 + 其他栏');
       /* 取消购买弹窗用词 */
       KR_PROJ_PAGE = 'mgmt'; KR_CASE = {clinicId:r.clinicId, id:r.id, tab:'items'}; krPendDelAsk(itemIid(krFindCase(r.clinicId, r.id).c.procedureItems.filter(function(x){ return /热玛吉/.test(x.name); })[0])); var ov = document.getElementById('kr-block-overlay'); ST.ok(ov && /取消购买/.test(ov.textContent) && /确认取消购买/.test(ov.textContent), '弹窗用词：取消购买'); ov.classList.remove('open');
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PICK = {}; KR_PROJ_PAGE = 'surg'; }
@@ -3950,9 +3950,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 一：四个 tab */
       KR_PROJ_PAGE = 'surg'; krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); var box = document.getElementById('kr-casedetail'), tx = box.innerText;
       var tabs = [].slice.call(box.querySelectorAll('span[onclick^="krProjPage"], span[title="没有内容"]')); var labels = tabs.map(function(x){ return x.textContent; });
-      ST.ok(labels.length===4 && /施术项目（0）/.test(labels[0]) && /术后管理（/.test(labels[1]) && /管理项目（/.test(labels[2]) && /已完成（/.test(labels[3]), '四个 tab：施术｜术后管理｜管理项目｜已完成：'+labels.join(' / '));
+      ST.ok(labels.length===3 && /施术项目（0）/.test(labels[0]) && /管理项目（/.test(labels[1]) && /已完成（/.test(labels[2]), '1023-03：三个 tab：施术｜管理项目｜已完成（术后管理搬到独立 tab）：'+labels.join(' / '));
       ST.ok(tabs[0].getAttribute('title')==='没有内容' && !tabs[0].getAttribute('onclick'), '数量 0 的 tab 灰掉、不能点');
-      ST.ok(KR_PROJ_PAGE==='surg' && /术后管理（\d+）/.test(tx) && !!box.querySelector('.kr-pc-scroll'), '施术 0 → 默认打开第一个有内容的 tab（术后管理）；列表在固定高度滚动区里');
+      ST.ok(!!box.querySelector('.kr-pc-scroll'), '列表在固定高度滚动区里');
       ST.ok(!/已使用|已完成 \d/.test(box.querySelector('.kr-pc-scroll').innerText), '前三个 tab 里没有已使用 / 已完成');
       var sc = box.querySelector('.kr-pc-scroll'); ST.ok(!!sc && getComputedStyle(sc).overflowY==='auto' && sc.clientHeight>=250 && sc.clientHeight<=330, '项目卡固定高度、内部滚动（CMD-1022-16：原来的 2/3）：'+(sc && sc.clientHeight));
       KR_PROJ_PAGE = 'done'; krRenderCaseDetail(); box = document.getElementById('kr-casedetail'); ST.ok(/施术项目 \d/.test(box.querySelector('.kr-pc-scroll').innerText) || /术后管理 \d|管理项目 \d|还没有已完成/.test(box.querySelector('.kr-pc-scroll').innerText), '已完成 tab 按施术项目 / 术后管理 / 管理项目分组');

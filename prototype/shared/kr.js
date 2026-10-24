@@ -739,7 +739,7 @@ function krStartChooseOpen(){
 function krStartWith(mode){
   var ov = document.getElementById('kr-start-overlay'); if(ov) ov.classList.remove('open');
   krMut(function(c){ return krCanRecord(c) ? coreStartConsult(c, ME_NAME) : false; });
-  krSetCaseTab('basic'); /* 左边看客人资料（部位照片等），右边侧边栏录入（CMD-1019-08） */
+  krSetCaseTab('consult'); /* CMD-1023-03 小修：开始面诊后留在面诊 tab，右边侧边栏录入（取代 1019-08 的切到基础资料） */
   krRecOpenModal(mode, false);
 }
 /* 面诊卡片第一行「负责院长：KD1 院长」+［院长日程］（CMD-1012-08 二·1，取代原来的大字院长卡片） */
@@ -2565,13 +2565,17 @@ function krEndAskOpen(key, manual){
   var ov = document.getElementById('kr-endask-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-endask-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   var k = String(key).replace(/'/g,'');
   ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">'+(manual ? '确认客人已离院？' : '今天的项目都做完了吗？')+'</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">'+(left.length ? '还有 <b>'+left.length+'</b> 项没做完：'+left.map(krEsc).join('、')+'。结束后这些会退回项目卡（之后还能再约 / 再用）。' : (manual ? '今天的到院将标为已完成。' : '这次到院里的项目都已完成或取消。选［还有项目］可以继续加项目 / 本次使用；选［客人已离院］这次到院就标为已完成。'))+'</div>'+
+    (left.length ? '<div style="margin:-6px 0 14px;font-size:13px;">没做完的原因（必选）：<select id="kr-end-reason" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"><option value="">请选择</option>'+KR_LEAVE_REASONS.map(function(x){ return '<option>'+x+'</option>'; }).join('')+'</select><div style="font-size:12px;color:var(--muted);margin-top:4px;">没做完的项目回到对应流程的「未预约」，可以再约。</div></div>' : '')+
     '<div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="krEndAskNo(\''+k+'\')">'+(manual ? '取消' : '还有项目')+'</button><button class="btn-primary" onclick="krEndAskYes(\''+k+'\')">'+(manual ? '确认' : '客人已离院')+'</button></div></div>';
   ov.style.zIndex = 100010; ov.classList.add('open');
 }
 function krEndAskNo(key){ var ov = document.getElementById('kr-endask-overlay'); if(ov) ov.classList.remove('open'); if(key==='main') krMut(function(c){ if(!c.endAsk) return false; c.endAsk = false; return true; }); }
+var KR_LEAVE_REASONS = ['客人时间不够', '客人身体不适', '客人决定不做', '客人要改天再做', '其他'];
 function krEndAskYes(key){
+  var sel = document.getElementById('kr-end-reason'), reason = sel ? sel.value : '';
+  if(sel && !reason){ sel.style.borderColor = '#C1454A'; return; }
   var ov = document.getElementById('kr-endask-overlay'); if(ov) ov.classList.remove('open');
-  krMut(function(c){ var r = key==='main' ? coreEndVisitToday(c, ME_NAME) : coreEndSubVisit(c, key, ME_NAME); if(!r.ok){ if(r.pending){ setTimeout(function(){ krEndBlockModal(r.err); }, 0); } else alert(r.err||'不能结束'); return false; } return true; });
+  krMut(function(c){ var r = key==='main' ? coreEndVisitToday(c, ME_NAME, reason) : coreEndSubVisit(c, key, ME_NAME, reason); if(!r.ok){ if(r.pending){ setTimeout(function(){ krEndBlockModal(r.err); }, 0); } else alert(r.err||'不能结束'); return false; } return true; });
 }
 function krEndBtnHtml(key){ return krCan() ? '<button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krEndAskOpen(\''+String(key).replace(/'/g,'')+'\', true)">客人已离院</button>' : ''; }
 /* 主案件的行：施术 + 在韩增加（+ 持有的管理项目，今日） */

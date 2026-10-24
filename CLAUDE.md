@@ -1345,3 +1345,11 @@ prototype/shared/app.css  共用样式
 - **自动改状态**：`mainAutoStatus`（updateCaseStage 末尾 + boot-in 每 5 秒 `mainAutoSweep` + joinMain 之后）：已完成 / 仅出报告又有未做的事或新子案件 → `reopenMain` 回到进行中（对话房恢复）；韩国行程已结束、术后管理都做完 → `mainAutoComplete` → finishCase。进行中判断 = 流程没结束 / 术后管理未预约或已预约（`pendingCareOf`）/ 今天或之后的预约（`activeVisitsOf`）。
 - **期限**：`joinWindowOf(src, type)`：接续面诊从院长面诊日算、复诊从施术完成日（`surgeryDoneDayOf`）算，3 个月内算同一主案件；超过 → 到店弹窗灰掉写原因，`followupAskNewLight` 开新主案件轻关联（`lightLink`）。持有项目（韩国 / 印尼 / 本地没用完）算在当初买的主案件（`mainHoldOf` / `localMainsWithLeft`），IN 在 KR 日程用持有项目的预约（krbook `holdbook` / `carebook`）同样加入当初的主案件。
 - **主案件页**：标题「客人名 · A000001」（拿掉第 N 次来访）；页头「进行中：流程 · 术后管理（印尼）N 项待做」；流程 tab = 一行一个流程可展开（`flowRowsOf` / `flowRowsHtml`，IN `flowTabHtml`、KR `krTabFlow`），本地管理不在流程 tab（IN 另有「本地管理」操作 tab）；案件管理已完成 tab 默认最近 3 个月、按最后来访日排（`CASE_DONE_RANGE`）。
+
+## CMD-1023-03 补充（2026-10-24，追加；取代 CMD-1023-01/02 里流程 tab、「一个主案件页同一种 tab」的做法，旧文字保留作历史）
+- 分支 feature/case-structure-v2，基准 6b0cd6f；提交 P1+P2 7bb2c28、P3+P4 e98cfd3、P5 3efb64c、P6 见 git log；数据版本不变（56），只加可空字段（`c.boughtFrom`、`c.concerns` 等照旧）。
+- **P1/P2**：`isUpgraded(m)`（付赴韩定金 / 赴韩项目已结算 / 有子案件 / 到院≥2 天）决定 tab：未升级 = 一般案件页（基础资料｜面诊｜[本地项目]｜结算｜附件｜Timeline，无子案件号 / 项目汇总）；升级 = 基础资料｜面诊｜赴韩｜术后管理｜复诊｜子案件｜项目汇总｜结算｜附件｜Timeline（✓ ● 标记，没有流程 tab）；术后管理独立 tab（IN `inPostcareTabHtml`，KR `krProjCards(c,{only:'care'})`）；本地管理不单独一个 tab，升级后放在**项目汇总 tab 下面**（我的判断，回归发现缺口后补）。
+- **P3/P4 子案件页**：IN `openSubcase(mainId,key)` / `SUBVIEW` / `subPageHtml`（页头「客人 · A000001-05 · 11/14（地点）· 今天做：…」+［回到主案件］；tab 到访｜今日项目｜结算｜附件｜Timeline）；KR `krOpenDay` / `KR_CASE.day`（地址参数 `day`，IN 用 `sub`），韩国那天的到院卡、院长评估、增加项目、客人已离院等 core*/kr* 操作原样放在这一页；KR「赴韩」tab 里仍保留到院卡（待用户决定要不要删）。
+- **P5**：`mainAttentionOf(m, side, items)`（今天来访＞等我处理＞等对方处理＞未预约/过期＞已完成）→ 列表「进程」只写一件 + 新栏「其他进行中」（IN / KR 列表）；`openVisitOf(recId)`（日历块 / 今天来访待办进当天）；KR `krOpenSubCard` 升级后进 `krOpenDay`。
+- **P6**：只有本地持有的主案件不再是接续候选（`localMainsWithLeft` 只剩有在韩持有的），改标新独立案件「来自 A000xxx 购买」（`markBoughtFrom` / `c.boughtFrom` / `localOnlyHoldMains`）；赴韩持有仍回原主案件（赴韩 ＞ 本地）；KR 客人已离院有没做完的项目 → 必选原因（`KR_LEAVE_REASONS`，Timeline「回到未预约；原因：…」）；00:00 自动结束文字改「回到未预约」；院长按［开始面诊］留在面诊 tab（取代 1019-08 切基础资料）。
+- 测试：selftest 新增 R118a R118b R119a R120b R121a；因 UI 有意改变而更新的断言：R60a R82a R59b R74a R110a R116a R109a(本地持有一段)。
