@@ -519,9 +519,11 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .kr-pc-block + .kr-pc-block{margin-top:6px;}
 /* CMD-1021-15：备注卡高度 = 3 条（每条按 2 行算）+ 按钮行，刚好放得下；少于 3 条空位在条目下方、按钮行位置不变 */
 .notes-compact{display:flex;flex-direction:column;}
-.notes-list{height:126px;overflow-y:auto;} /* CMD-1022-16：备注卡 = 原来的一半，固定（多出来的在框内滚动） */
+.notes-list{max-height:258px;overflow-y:auto;} /* CMD-1025-01 十：最多露出 3 则，多的在卡里滚动 */
+.notes-head{display:flex;align-items:center;gap:10px;min-height:32px;}
+.notes-title{flex:1;font-size:14px;font-weight:700;}
 .notes-list > div{min-height:37px;box-sizing:border-box;}
-.notes-btns{display:flex;gap:8px;justify-content:flex-end;align-items:flex-start;padding-top:8px;height:42px;box-sizing:border-box;}
+.notes-btns{display:flex;gap:8px;justify-content:flex-end;align-items:center;}
 .notes-btns button{white-space:nowrap;flex:none;}
 .note-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .note-clamp > div{white-space:normal !important;}

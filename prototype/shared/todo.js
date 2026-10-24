@@ -300,9 +300,9 @@ function todoUbListInHtml(list){
   var order = [], by = {}; list.slice().sort(function(a, b){ return (a.sug||'9999').localeCompare(b.sug||'9999'); }).forEach(function(it){ if(!by[it.caseId]){ by[it.caseId] = []; order.push(it.caseId); } by[it.caseId].push(it); });
   return '<div class="todo-list">'+order.map(function(cid){
     var arr = by[cid], open = TODO_UB_OPEN[cid]!==false, anyOver = arr.some(function(x){ return x.over; });
-    var head = '<div class="ub-grp" onclick="todoUbToggle(\''+cid+'\')"><span class="ub-arrow">'+(open ? '▾' : '▸')+'</span><b>'+todoEsc(arr[0].name)+'（'+todoEsc(arr[0].no||'')+'）</b><span class="ub-n'+(anyOver ? ' over' : '')+'">未预约 '+todoUbCount(arr)+'</span><span style="flex:1;"></span><button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="event.stopPropagation();todoCbOpen(\''+cid+'\',\'*\')">全部预约</button></div>';
+    var head = '<div class="ub-grp" onclick="todoUbToggle(\''+cid+'\')"><span class="ub-arrow">'+(open ? '▾' : '▸')+'</span><b>'+todoEsc(arr[0].name)+'（'+todoEsc(arr[0].no||'')+'）</b><span class="ub-n'+(anyOver ? ' over' : '')+'">未预约 '+todoUbCount(arr)+'</span><span style="flex:1;"></span>'+(function(){ var c9 = CASE_ITEMS.filter(function(x){ return x.id===cid; })[0], b9 = careBookBlock(c9); return b9 ? '<button class="btn-outline" disabled title="'+b9+'" style="padding:3px 10px;font-size:12px;opacity:.45;cursor:not-allowed;" onclick="event.stopPropagation()">全部预约</button>' : '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="event.stopPropagation();todoCbOpen(\''+cid+'\',\'*\')">全部预约</button>'; })()+'</div>';
     var rows = !open ? '' : '<div class="ub6 ub6-head"><div>施术名称</div><div>术后管理项目</div><div>次数</div><div>建议时间</div><div>地点</div><div></div></div>'+arr.map(function(it){
-      return '<div class="ub6"><div title="'+todoEsc(it.surg||'')+'">'+todoEsc(it.surg||'—')+'</div><div title="'+todoEsc(it.label)+'">'+todoEsc(it.label)+'</div><div>'+(it.n||1)+'</div><div class="ub-sug'+(it.over ? ' over' : '')+'">'+todoUbMd(it.sug)+'</div><div>'+todoEsc(it.place||'印尼')+'</div><div><button class="btn-outline" style="padding:3px 8px;font-size:12px;" onclick="todoCbOpen(\''+cid+'\',\''+String(it.gid).replace(/'/g,'')+'\')">预约</button></div></div>';
+      return '<div class="ub6"><div title="'+todoEsc(it.surg||'')+'">'+todoEsc(it.surg||'—')+'</div><div title="'+todoEsc(it.label)+'">'+todoEsc(it.label)+'</div><div>'+(it.n||1)+'</div><div class="ub-sug'+(it.over ? ' over' : '')+'">'+todoUbMd(it.sug)+'</div><div>'+todoEsc(it.place||'印尼')+'</div><div>'+careBookBtn(CASE_ITEMS.filter(function(x){ return x.id===cid; })[0], '预约', 'todoCbOpen(\''+cid+'\',\''+String(it.gid).replace(/'/g,'')+'\')', 'padding:3px 8px;font-size:12px;')+'</div></div>';
     }).join('');
     return '<div class="ub-card">'+head+rows+'</div>';
   }).join('')+'</div>';
@@ -360,6 +360,7 @@ function todoUbKr(){
 var TODO_CB = null;
 function todoCareBookOpen(caseId, key, editRc){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  if(!editRc && careBookBlock(c)){ showToast('不能预约', careBookBlock(c)); return; } /* CMD-1025-01 九：只拦新预约，改时间不拦 */
   if(!editRc){ var g0 = todoUbGroupsIn(c, !!(c.visitClosed || isEnded(c))).filter(function(g){ return g.items.some(function(x){ return x.bk===key; }); })[0]; if(g0) return todoCbOpen(caseId, g0.gid, key); } /* 项目卡里的单条［预约］也走新弹窗 */
   var it = (TODO_UB_LAST||[]).filter(function(x){ return x.caseId===caseId && x.key.indexOf('|'+key)>-1; })[0] || {label:'', sug:''};
   var d0 = it.sug && it.sug >= todayStr() ? it.sug : todayStr(), erc = editRc ? CASE_ITEMS.filter(function(x){ return x.id===editRc; })[0] : null; if(erc){ d0 = erc.visitDate; }
@@ -399,6 +400,7 @@ function todoCbDefDate(sug){ var d = sug && sug >= todayStr() ? sug : todayStr()
 function todoCbTimes(date){ var ts = (WK_HOURS||[]).filter(function(t){ return !slotBlockReason(date, t); }); return ts; }
 function todoCbOpen(caseId, gid, onlyKey){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  if(careBookBlock(c)){ showToast('不能预约', careBookBlock(c)); return; } /* CMD-1025-01 九 */
   var gs = todoUbGroupsIn(c, !!(c.visitClosed || isEnded(c))); if(!gs.length) return;
   TODO_CB2 = {caseId:caseId, groups:gs.map(function(g){ var on = gid==='*' || g.gid===gid; return {gid:g.gid, surg:g.surg, name:g.name, keys:g.items, lines:[{on:on, qty:1, date:todoCbDefDate(g.items[0].sug), time:''}]}; })};
   todoCbNormalize(); todoCbRender();
