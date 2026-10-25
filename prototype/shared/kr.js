@@ -4275,7 +4275,10 @@ function krSubTabsOf(c, v){ var out = [{key:'visit', label:'到访'}, {key:'toda
 /* ===== CMD-1025-02：KR 子案件页（施术当天）重排 =====
    页头（客人名 面诊 N 次｜施术 M 次 在韩… ［对话］ / 来源诊所 · 院长 · KR 室长 / 主案件 A…）+ 状态列（当前状态 + 按钮）+ tab：到访｜项目方案｜术前状态｜进行项目｜结算｜附件｜Timeline（随进度出现）。
    不再有「今日项目」tab 里的到院卡这一层。术后管理 / 管理项目那几天、IN 子案件页不动。 */
-function krIsSurgDay(c, v){ return !!c && !!v && v.place==='KR' && (v.types||[]).indexOf('赴韩施术')>-1; }
+function krIsSurgDay(c, v){ /* 只有主案件的施术日（预定日或实际到院日）；同一天只含「施术项目预约使用」的到院不算（它没有评估 / 尾款这些流程，仍是原来的子案件页） */
+  if(!c || !v || v.place!=='KR' || (v.types||[]).indexOf('赴韩施术')<0) return false;
+  var ks = c.krSchedule || {}; return v.date===(c.krArrivedDay||'') || v.date===(ks.confirmedDate||'') || v.date===mainVisitDay(c);
+}
 function krSdPreOk(c){ return !!c.krBalancePaid && preOpItems(c).every(function(it){ return !preOpMissing(c, it).length; }); }
 function krSdTabs(c){
   var arrived = !!c.hasArrived, paid = !!c.krBalancePaid, j = c.krJudge, preOk = krSdPreOk(c), out = [{key:'visit', label:'到访'}, {key:'plan', label:'项目方案', mark: paid ? '✓' : (arrived ? '●' : '')}];
