@@ -1361,3 +1361,12 @@ prototype/shared/app.css  共用样式
 - **付清尾款后才能预约术后管理**（`careBookBlock(c)` / `careBookBtn`，data.js）：KR 项目卡术后管理［预约时间］［全部预约］（`paid` = `krBalancePaid` 且行程没结束，原来就灰；本次把空着没渲染的［全部预约］也画成灰 + 提示）；IN 的术后管理 tab / 工作台「未安排预约」［预约］［全部预约］/ 本地管理接续里的［预约］灰 + 「付清尾款后才能预约」，`todoCbOpen` / `todoCareBookOpen`（新预约）也拒绝，改时间不拦；已结案的案件不受限。其他条件：核心 `coreCareBook` 本来就要 `c.krBalancePaid`；没有「施术完成后才能约」之类的条件。
 - **备注卡**（`notesCompactHtml(c, role, title)`）：没有备注只剩一行「备注 ……［增加备注］」；有备注全部列出（`.notes-list` 最高 3 则，超过在卡里滚动），不再只截 3 条；［查看全部］（> 3 则）保留。IN 项目卡里的备注卡同一个组件。
 - IN 接续弹窗（`fuRender`）拿掉标题下的灰字说明。`ST.krEta` 参数顺序修正（原来把日期塞成对象，面诊时间坏掉）。测试：selftest 新增 R122a / R123a / R123b。
+
+## CMD-1025-02 补充（2026-10-25，追加；取代 CMD-1023-03 P4 里「子案件页只用一种版面（到访｜今日项目｜结算｜附件｜Timeline）」——只对 KR 的施术当天；旧文字保留作历史）
+- 基准 **f02f493**，单个提交，分支 feature/case-structure-v2，**未推送**，数据版本不变（56）。
+- **KR 子案件页（施术当天）重排**（kr.js `krSurgDayPage` / `krSurgDayHeader` / `krSdStatusBar` / `krSdTabs` / `krSdPlan` / `krSdRun` / `krSdAutoTab`）：页头三行（客人名 面诊：N 次｜施术：M 次 在韩… ［对话］ / 来源诊所 · 院长 · KR 室长 / 主案件 A…（点回主案件））；状态列「当前状态 待到院｜［客人已到院］［修改时间］［未到院］」→「已到院｜［客人已离院］」，右边「备注：N / 无」；tab 随进度出现：到院前 到访｜项目方案 → 按［客人已到院］＋附件｜Timeline → 尾款付清 ＋术前状态｜结算 → 术前照片传完 ＋进行项目；默认打开最新出现的 tab（刚到院 → 项目方案、尾款刚付完 → 术前状态…，`KR_CASE.sdSeen`）。项目方案 = 评估 → 确认 / 增加项目 → 付尾款（原 `krWizard`，到院前只列预定项目）；术前状态 = `krPreOpBlock(c,true)`；进行项目 = `krProgressBlock` + 备注 + 项目卡（Step 4 勾选今日项目的画面也在这里）。拿掉了今日项目 tab 里的到院卡这一层、「← 回到主案件」条、子案件页里的「从…面诊开始」行。术后管理 / 管理项目那几天、IN 子案件页不动。客人不是在预定日到院时，`KR_CASE.day` 跟着变成实际的施术日 key。
+- **［未到院］**（`coreTripNoShow`，只有施术当天、到院前）：记 `c.krNoShow` + Timeline + 通知 IN（action 级，请联络客人改期或取消赴韩），日期和项目不动。（我的判断：规格没写它做什么。）
+- **预约弹窗可约次数**（data.js `holdItemTodayPicked` / `holdItemBookable`）：可约 = 剩余 − 已排的预约行 − 今天已选进到院的次数（原来 `holdItemPlanned` 只数 `subItems` 里的行，主到院的［本次使用］是 `todayPickMgmt` + `todayQty`，不是行，所以今天已排的项目还会出现在弹窗、「可约 1 次」里）；用在 `krCbMgItems`、`coreHoldUseSchedule`、`coreUnitBookUse`、项目卡管理项目的［预约时间］和［全部预约］。IN 的预约弹窗只有术后管理（印尼），没有管理项目，所以不涉及这个问题。
+- **IN「未安排预约」尾款前不列术后管理**：`todoUbIn` 本来就有 `!c.krBalancePaid → return`（1025-01 汇报里我写「仍会列出」是错的），已加测试 R124c 确认；KR 的 `todoUbKr` 同样。
+- **演示按钮搬家**：案件页状态列和案件列表的［演示：模拟时间超过 30 分钟］拿掉（`simulateTimePass30` 函数留着没入口）；功能放到 `test-prep.html?demo=A1&act=noshow`（新页，列出「待访问」预约，可选一位直接判定未到店，或全部一起 = 原按钮的做法），登录页「🧪 测试覆盖」页里有三家诊所的入口。
+- 测试：selftest 新增 R124a（施术当天全流程）、R124b（可约次数）、R124c（IN 尾款前不列 + 按钮已拿掉）。

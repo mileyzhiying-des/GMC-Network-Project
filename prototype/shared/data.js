@@ -5232,8 +5232,8 @@ function krCbEarliest(c){
   try{ return stayPlanOf(surg, (c.krSchedule||{}).confirmedDate||'', function(it){ return itemSurgDate(c, it); }).earliest || ''; }catch(e){ return ''; }
 }
 function krCbMgItems(c){
-  return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && krIsMgmtItemC(it) && !it.cancelled && !it.swapped && it.heldOver && !it.holdDone && !it.pendingPay && holdItemLeft(c, it)-holdItemPlanned(c, it) > 0; }).map(function(it){
-    return {name:it.name, iid:itemIid(it), max:holdItemLeft(c, it)-holdItemPlanned(c, it), iv:((it.qty||1)>1 ? (it.interval||1) : 0), sugs:(function(){ var o = [], nth0 = (it.holdUsed||0)+holdItemPlanned(c, it); for(var k = 0; k < holdItemLeft(c, it)-holdItemPlanned(c, it); k++){ var sg = krMgSuggest(c, it, nth0+k); o.push(sg ? '20'+sg : ''); } return o; })()};
+  return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && krIsMgmtItemC(it) && !it.cancelled && !it.swapped && it.heldOver && !it.holdDone && !it.pendingPay && holdItemBookable(c, it) > 0; }).map(function(it){
+    return {name:it.name, iid:itemIid(it), max:holdItemBookable(c, it), iv:((it.qty||1)>1 ? (it.interval||1) : 0), sugs:(function(){ var o = [], nth0 = (it.holdUsed||0)+holdItemPlanned(c, it)+holdItemTodayPicked(c, it); for(var k = 0; k < holdItemBookable(c, it); k++){ var sg = krMgSuggest(c, it, nth0+k); o.push(sg ? '20'+sg : ''); } return o; })()};
   });
 }
 
@@ -5396,6 +5396,15 @@ function krTimelineTabHtml(c){
 /* CMD-1021-13 一：［客人已到院］只有到院当天能按（韩国医院当地日期，演示时钟有效）；原型用［模拟到当日］（ks.simDay）。原来主到院的 coreMarkArrived 一直没有日期检查（只有术后管理行 coreSubArrived 有），UI 上还特意写「客人提前到院时也可以先标记」（CMD-1013 起），所以未来的到院也能标 */
 function mainArriveBlock(c){ var ks = c.krSchedule||{}; if(ks.simDay) return ''; return (ks.confirmedDate && ks.confirmedDate > todayStr()) ? '只有到院当天可以标记客人已到院' : ''; }
 function coreMainSim(c, by){ var ks = c.krSchedule; if(!ks || ks.simDay) return false; ks.simDay = true; logCaseEvent(c, by, '模拟到当日（演示用）：施术到院'); return true; }
+/* CMD-1025-02：KR 子案件页（施术当天）状态列［未到院］——客人没来：记 Timeline + 通知 IN 室长联络客人（改期或取消赴韩）；日期、项目不动（取消照旧是 IN 的「取消赴韩」，改期照旧走 IN / KR 改日期） */
+function coreTripNoShow(c, by){
+  if(!c || c.hasArrived || c.krProcedureDone || scheduleState(c)!=='Confirmed' || c.krNoShow) return false;
+  var ks = c.krSchedule || {};
+  c.krNoShow = {at:nowFullDt(), by:by, date:ks.confirmedDate||''};
+  logCaseEvent(c, by, '客人未到院（施术日 '+(ks.confirmedDate||'—')+'）：已通知 IN 室长联络客人，改期或取消赴韩', '赴韩施术');
+  try{ pushNotif('赴韩施术', '客人未到院：'+c.name+'（'+(c.caseNo||'')+'）施术日 '+(ks.confirmedDate||'')+'，请联络客人，改期或取消赴韩', {caseId:c.id, level:'action', tab:'kr'}); }catch(e){}
+  return true;
+}
 function coreMarkArrived(c, by){
   if(mainArriveBlock(c)) return false;
   if(!c.settlementDone || isArrived(c) || !c.krSchedule || c.krSchedule.status!=='confirmed') return false;
@@ -5600,6 +5609,9 @@ function coreSubArrived(c, id, by){
 }
 /* 持有项目（在韩持有的已付管理项目）剩余次数；安排使用 = 排一个时间（进 KR 日历和当天工作台），客人到后才标完成 */
 function holdItemLeft(c, it){ return (it.qty||1) - (it.holdUsed||0); }
+/* CMD-1025-02 二：「可约次数」= 剩余 − 已排好的（预约行 + 今天已选进到院的次数）。原来 holdItemPlanned 只数 subItems 里的行，主到院的［本次使用］（todayPickMgmt + todayQty）不是行，没被扣掉，所以今天已排的还会出现在预约弹窗、「可约 N 次」里 */
+function holdItemTodayPicked(c, it){ return (pickedMgmt(c, it) && !tmdGet(c, it) && c.hasArrived && !c.krProcedureDone) ? Math.max(1, parseInt(it.todayQty, 10)||1) : 0; }
+function holdItemBookable(c, it){ return holdItemLeft(c, it)-holdItemPlanned(c, it)-holdItemTodayPicked(c, it); }
 function holdItemPlanned(c, it){ return (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).reduce(function(n, s){ return n+Math.max(1, parseInt(s.useQty, 10)||1); }, 0); } /* 一行可以代表 N 次（CMD-1021-14 四：本次使用选 N 次，合成一行 ×N） */
 /* ---- CMD-1019-23 二：已使用 / 剩余次数只从到院卡里「操作完成」的行算（单一来源）----
    it.uses = 每条对应到院卡里一行完成记录 {at, key(main / 地点|日期 / book|占位id), qty, rowId}；holdUsed / holdDone 一律由 uses 重新算（holdRecalc），不再有别处直接 holdUsed += n。
@@ -5677,7 +5689,7 @@ function coreTodayQtySet(c, name, n){
 }
 function coreHoldUseSchedule(c, name, date, time, by){
   var it = itemByKey(c, name, function(x){ return x.heldOver && !x.holdDone; }); if(!it) return false; name = it.name;
-  if(holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return false;
+  if(holdItemBookable(c, it) <= 0) return false;
   var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by);
   if(!s) return false; s.hold = !!c.visitClosed; s.holdUseOf = name; s.holdIid = itemIid(it); /* 案件还在进行：这是一次新预约 = 子案件；结案后才是「在韩持有」 */
   logCaseEvent(c, by, '安排使用持有项目「'+name+'」：'+date+' '+time); return true;
@@ -8455,7 +8467,7 @@ function coreUnitBookUse(c, name, date, time, by, director, opt){
   var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name; if(it.pendingPay || !c.krBalancePaid || !date) return false;
   var mg = krIsMgmtItemC(it);
   var ddU = doneDayInfo(c, date); if(ddU){ window.KR_DONEDAY = ddU; window.KR_LAST_CONFLICT = '到院已完成'; return false; }
-  if(mg){ if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return false; }
+  if(mg){ if(!it.heldOver || it.holdDone || holdItemBookable(c, it) <= 0) return false; }
   else if(it.done) return false;
   var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+(mg ? '（持有项目使用）' : '（预约）'), place:'KR', projectName:name, silent:true, salt:'b'+Math.floor(Math.random()*1e4)}, by); if(!s) return false;
   if(c.visitEnds) delete c.visitEnds[subCaseKey(s)]; inheritVisitArrival(c, s);

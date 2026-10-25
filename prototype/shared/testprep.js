@@ -141,8 +141,18 @@
     try{ var r = MAKERS[key](); touched.forEach(function(c){ (c.logEntries||[]).forEach(function(e){ e.prep = true; }); }); return r; }
     finally{ HID = keep[0]; DIRECTOR = keep[1]; COORD = keep[2]; N1 = keep[3]; N2 = keep[4]; }
   }; /* selftest / roletest 自建数据用 */
+  /* ===== CMD-1025-02：模拟未到店（超过 N 分钟）。可以选案件：只处理选中的那位（直接判定未到店，不动演示时钟）；或「全部待访问案件」= 原按钮的做法（演示时钟往后拨「未到店判定时间 + 1 分钟」，所有待访问案件一起判定） ===== */
+  window.npRender = function(){
+    var out = document.getElementById('out'), list = CASE_ITEMS.filter(function(c){ return c.stage==='booked' && c.subState==='waiting'; });
+    out.innerHTML = '<h2>模拟未到店（超过 '+Math.round(noShowMs()/60000)+' 分钟没点［已到店］）</h2><p class="muted">开发用。诊所：'+CURRENT_CLINIC_ID+'（以 '+((typeof currentAccount==='function' && currentAccount()) ? currentAccount().id : '?')+' 身份）。下面是「待访问」的预约；点一位 = 只把这位判定为「已取消（未到店）」，和系统每 5 秒自动判定的结果一样。</p>'+
+      (list.length ? '<div style="margin:10px 0;">'+list.map(function(c){ return '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #e5e9f0;"><span style="flex:1;"><b>'+c.name+'</b> <span class="muted">'+c.caseNo+' · '+(c.visitDate||'')+' '+(c.visitTime||'')+'</span></span><button class="btn-outline" onclick="npOne(\''+c.id+'\')">模拟这位未到店</button></div>'; }).join('')+'</div><button class="btn-primary" onclick="npAll()">全部待访问案件（演示时钟往后拨 '+Math.round(noShowMs()/60000+1)+' 分钟）</button>' : '<p>现在没有「待访问」的预约。</p>')+
+      '<p class="muted" style="margin-top:14px;">要换诊所：把地址里的 demo=A1 改成 B1（C2）/ D1（C3）。可以关掉这个页面。</p>';
+  };
+  window.npOne = function(id){ var ok = markNoShow(id, true); Store.touch(); setTimeout(function(){ Store.touch(); }, 300); npRender(); if(!ok) alert('这个案件已经不是待访问了'); };
+  window.npAll = function(){ DEMO_SHIFT_MS += noShowMs()+60000; var n = 0; CASE_ITEMS.slice().forEach(function(c){ if(markNoShow(c.id, true)) n++; }); Store.touch(); setTimeout(function(){ Store.touch(); }, 300); npRender(); alert(n ? n+' 个待访问案件已判定为未到店' : '没有待访问的案件'); };
   window.testPrepRun = function(){
     var key = qs('make'), out = document.getElementById('out');
+    if(qs('act')==='noshow'){ npRender(); return; } /* CMD-1025-02：模拟「过了预约时间 30 分钟还没到店」（原来在案件页状态列和案件列表上的演示按钮） */
     if(!MAKERS[key]){ out.innerHTML = '<p>没有这个选项：'+key+'</p>'; return; }
     try{
       var r = MAKERS[key]();

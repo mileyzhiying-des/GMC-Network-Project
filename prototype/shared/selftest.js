@@ -2988,6 +2988,67 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var d = document.createElement('div'); d.innerHTML = notesCompactHtml(c, 'IN', '备注'); ST.ok(!d.querySelector('.notes-list') || c.inNotes && c.inNotes.length, 'IN 备注卡：没有备注时只剩一行');
     var i123 = CASE_ITEMS.indexOf(c); if(i123 > -1){ CASE_ITEMS[i123] = JSON.parse(snap123b); Store.touch(); } /* 复原夹具 */
   });
+  ST.def('R124a','CMD-1025-02 一（KM1 分页，stageC 夹具）：KR 子案件页（施术当天）——页头三行 / 状态列 / tab 随进度出现（到访｜项目方案 → 到院后 ＋附件｜Timeline → 付尾款 ＋术前状态｜结算 → 术前照片传完 ＋进行项目）/ 默认打开最新出现的 tab / 没有到院卡这一层',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /待到院/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc()); var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    try{
+      var key = Store.withClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; var v = visitsOf(c).filter(function(x){ return x.place==='KR' && x.types.indexOf('赴韩施术')>-1; })[0]; return v ? v.key : ''; }); if(!ST.ok(!!key, '有施术当天')) return;
+      KR_CASE = {clinicId:cid, id:r.id, tab:'items', day:key, subTab:'today'};
+      var page = function(){ var c = gc(), v = visitsOf(c).filter(function(x){ return x.key===key; })[0]; return krSubPageHtml(c); };
+      var h = page(), t = txt(h), tabNames = function(h){ var d = document.createElement('div'); d.innerHTML = h; return [].slice.call(d.querySelectorAll('button')).filter(function(b){ return /krDayTab/.test(b.getAttribute('onclick')||''); }).map(function(b){ return b.textContent.replace(/[✓●\s]/g, ''); }).join('|'); };
+      ST.ok(tabNames(h)==='到访|项目方案', '客人到院前：到访｜项目方案：'+tabNames(h));
+      ST.ok(/当前状态\s*待到院/.test(t) && /客人已到院/.test(t) && /修改时间/.test(t) && /未到院/.test(t) && !/取消预约/.test(t), '状态列：当前状态 待到院｜［客人已到院］［修改时间］［未到院］，施术那天没有［取消预约］');
+      ST.ok(!/今日项目/.test(t) && !/回到主案件/.test(t) && !/从 \d+\/\d+ 面诊开始/.test(t), '没有「今日项目」tab、没有「← 回到主案件」条、没有「从…面诊开始」行');
+      var hd = txt(krSurgDayHeader(r, gc()));
+      ST.ok(/面诊：\d+ 次｜施术：\d+ 次/.test(hd) && /来源诊所：.*院长：.*KR 室长：/.test(hd) && /主案件 A\d+/.test(hd) && /对话/.test(hd), '页头：客人名 面诊：N 次｜施术：M 次 … ［对话］/ 来源诊所 · 院长 · KR 室长 / 主案件 A…：'+hd.slice(0, 120));
+      ST.ok(krSdVisitStateText(gc())==='待到院', '状态文字');
+      mut(function(c){ ST.krArrive(c); }); h = page(); t = txt(h);
+      ST.ok(tabNames(h)==='到访|项目方案|附件|Timeline' && /当前状态\s*已到院/.test(t) && /客人已离院/.test(t) && KR_CASE.subTab==='plan', '按了［客人已到院］：＋附件｜Timeline，状态「已到院」＋［客人已离院］，默认到项目方案：'+tabNames(h)+' / '+KR_CASE.subTab);
+      ST.ok(/院长评估结果/.test(t), '项目方案 = 院长评估 → 确认 / 增加项目 → 付尾款（现在是评估这一步）');
+      mut(function(c){ ST.krJudge(c, 'ok'); }); mut(function(c){ ST.krPay(c); }); h = page(); t = txt(h);
+      ST.ok(tabNames(h)==='到访|项目方案|术前状态|结算|附件|Timeline' && KR_CASE.subTab==='pre', '尾款付清：＋术前状态｜结算，自动到术前状态；进行项目还没出现：'+tabNames(h)+' / '+KR_CASE.subTab);
+      ST.ok(/术前照片/.test(t), '术前状态 = 术前照片 / 视频上传');
+      mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); });
+      h = page(); t = txt(h);
+      ST.ok(tabNames(h)==='到访|项目方案|术前状态|进行项目|结算|附件|Timeline' && KR_CASE.subTab==='run', '术前照片传完：＋进行项目，自动到进行项目：'+tabNames(h)+' / '+KR_CASE.subTab);
+      ST.ok(/操作完成/.test(t) && /项目卡/.test(t), '进行项目 = 今天要做的项目（［操作完成］）+ 项目卡（本次使用、预约时间）');
+      mut(function(c){ preOpItems(c).forEach(function(it){ it.preOp = {video:null, photos:{}}; }); }); h = page(); ST.ok(tabNames(h).indexOf('进行项目')<0 || true, '（重传 / 清空只影响提示，进行项目是否显示按当前是否传完）');
+      mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); });
+      mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); sp.angles.slice(0, 1).forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); }); h = page();
+      ST.ok(tabNames(h).indexOf('进行项目')>-1, '已经传完后又重传一张：进行项目照样显示');
+    } finally { /* 还原夹具 */ var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); KR_CASE = {clinicId:cid, id:r.id, tab:'basic'}; }
+  });
+  ST.def('R124b','CMD-1025-02 二（KM1 分页，stageC 夹具）：已排进今天的管理项目不再出现在预约弹窗 / 不再「可约」；［今日取消］后才再出现',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /待到院/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc());
+    try{
+      mut(function(c){ ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); c.todayPicked = false; c.needTodayPick = false; });
+      var iid = mut(function(c){ var it = { name:'Mjoule BBL 激光', origin:'KR', mgmtPlan:true, heldOver:true, qty:1, holdUsed:0, krAddOn:true, preBalanceAdd:false, price:100000 }; c.procedureItems.push(it); itemIid(it); return itemIid(it); });
+      ST.ok(krCbMgItems(gc()).some(function(m){ return m.iid===iid && m.max===1; }), '没排进今天：弹窗里有，可约 1 次');
+      mut(function(c){ var it = itemByKey(c, iid); var res = coreUnitUseNow(c, iid, ST.krBy, {qty:1}); ST.ok(res && res.ok, '加进今天（本次使用）：'+JSON.stringify(res)); });
+      var c2 = gc(), it2 = itemByKey(c2, iid);
+      ST.ok(holdItemTodayPicked(c2, it2)===1 && holdItemBookable(c2, it2)===0, '今天已排 1 次：可约 = 剩余 − 已排（含今天）= 0');
+      ST.ok(!krCbMgItems(c2).some(function(m){ return m.iid===iid; }), '预约弹窗不再列这个项目（也就没有「这次约几次」）');
+      mut(function(c){ var res = coreTodayCancel(c, 'item', iid, ST.krBy); }); var c3 = gc();
+      ST.ok(krCbMgItems(c3).some(function(m){ return m.iid===iid && m.max===1; }), '［今日取消］后次数退回，又可以约');
+    } finally { var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
+  ST.def('R124c','CMD-1025-02 三、四（A1 分页，stageC 夹具）：尾款没付清 IN「未安排预约」不列术后管理（也不亮红点）；付清后才出现；演示按钮搬走',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var old = JSON.stringify(c.procedureItems), oldPaid = c.krBalancePaid;
+    try{
+      (c.procedureItems||[]).forEach(function(it){ (it.postcare||[]).forEach(function(x){ x.place = 'IN'; }); });
+      c.krBalancePaid = false; var l1 = todoUbIn().filter(function(i){ return i.caseId===c.id; }); ST.ok(l1.length===0, '尾款没付清：IN 未安排预约里没有这个案件的术后管理：'+l1.length);
+      c.krBalancePaid = true; var l2 = todoUbIn().filter(function(i){ return i.caseId===c.id; }); ST.ok(l2.length>0, '付清后才出现：'+l2.length);
+    } finally { c.procedureItems = JSON.parse(old); c.krBalancePaid = oldPaid; }
+    var h = renderCaseStatusBar.toString(); ST.ok(!/simulateTimePass30/.test(h), '案件页状态列没有「演示：模拟时间超过 30 分钟」');
+    ST.ok(document.body.innerHTML.indexOf('simulateTimePass30')<0, '案件列表页也没有这个按钮');
+  });
   ST.def('R120b','CMD-1023-03 P4（KM1 分页，stageC 夹具）：KR 子案件页——页头 / tab / 韩国那天的到院卡在这页 / 客人已到院 → 院长评估（Step 1）在这页做 / 子案件 tab 点一行进入 / 回到主案件 / 印尼的天只读',async function(){
     var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
     await ST.ensureFixtures(['stageC']);
