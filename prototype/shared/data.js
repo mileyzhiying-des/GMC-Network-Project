@@ -10056,7 +10056,7 @@ function contCareName(r){ var en = null; try{ en = careEntryOfRow(r.c, r.s); }ca
 function openContModal(c){
   c = c || getCurrentCase(); if(!c || !contResume(c)) return;
   var rows = contTodayCareRows(c);
-  CONT_MODAL = {caseId:c.id, care:(c.careToday ? c.careToday.slice() : rows.map(function(r){ return r.s.id; }))};
+  CONT_MODAL = {caseId:c.id, care:rows.map(function(r){ return r.s.id; })}; /* CMD-1026-05：今日预约管理只看不能改，一律全部 */
   /* CMD-1026-04：今天有约好的术后管理 → 「术后管理」默认勾好、项目全勾；今天没有 → 灰掉不能勾 */
   var ts0 = resumeTypesOf(c).filter(function(x){ return x!=='接续面诊'; });
   if(rows.length && ts0.indexOf('术后管理')<0) ts0.push('术后管理');
@@ -10073,18 +10073,13 @@ function contSetTypes(c, ts){
 }
 function contToggleType(t){
   var c = getCurrentCase(); if(!c || !CONT_MODAL || !contResume(c)) return;
-  if(t==='术后管理' && !contTodayCareRows(c).length) return; /* 今天没有约好的术后管理：灰掉不能勾 */
+  if(t==='术后管理') return; /* CMD-1026-05：有约好的 = 默认勾好且不能取消；没有约 = 灰掉不能勾 */
   var ts = resumeTypesOf(c).filter(function(x){ return x!=='接续面诊'; }), i0 = ts.indexOf(t);
   if(i0>-1) ts.splice(i0, 1); else ts.push(t);
   if(t==='术后管理'){ var all = contTodayCareRows(c).map(function(r){ return r.s.id; }); CONT_MODAL.care = i0>-1 ? [] : all; } /* 勾上 = 今天约的全勾；取消 = 全不勾 */
   contSetTypes(c, ts); c.materialsError = ''; contRender();
 }
-function contToggleCare(id, on){
-  if(!CONT_MODAL) return; var i = CONT_MODAL.care.indexOf(id); if(on && i<0) CONT_MODAL.care.push(id); if(!on && i>-1) CONT_MODAL.care.splice(i, 1);
-  var c = getCurrentCase(); if(!c || !contResume(c)) return; var ts = resumeTypesOf(c).filter(function(x){ return x!=='接续面诊'; }), has = ts.indexOf('术后管理')>-1;
-  if(CONT_MODAL.care.length===0 && has){ ts.splice(ts.indexOf('术后管理'), 1); contSetTypes(c, ts); contRender(); } /* 项目全取消 → 上面的「术后管理」跟着取消（= 今天不做） */
-  else if(CONT_MODAL.care.length>0 && !has){ ts.push('术后管理'); contSetTypes(c, ts); contRender(); }
-}
+function contToggleCare(){} /* CMD-1026-05：今日预约管理只看不能改（保留空函数，旧调用不报错） */
 function contRender(){
   var ov = document.getElementById('cont-overlay'), c = getCurrentCase(), m = CONT_MODAL; if(!ov || !m || !c) return;
   if(!contResume(c) || c.id!==m.caseId){ contClose(); return; } /* 换了案件 / 接续资料已清掉：弹窗跟着关 */
@@ -10092,7 +10087,7 @@ function contRender(){
   var types = resumeTypesOf(c), has = function(t){ return types.indexOf(t)>-1; };
   var metaviewText = c.metaviewStatus==='ready' ? '<span style="font-weight:700;color:var(--sage);">已检测到</span>' : (c.metaviewStatus==='checking' ? '<span style="color:var(--terracotta);">检测中…</span>' : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>');
   var careRows = contTodayCareRows(c);
-  var chip = function(t){ var on = has(t), dis = (t==='术后管理' && !careRows.length); return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-right:16px;'+(dis ? 'opacity:.5;cursor:not-allowed;' : 'cursor:pointer;')+'"><input type="checkbox" '+(on ? 'checked ' : '')+(dis ? 'disabled ' : '')+'onchange="contToggleType(\''+t+'\')">'+t+(dis ? ' <span style="font-size:12px;color:var(--muted);">今天没有约好的术后管理</span>' : '')+'</label>'; };
+  var chip = function(t){ var on = has(t), dis = (t==='术后管理'); return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-right:16px;'+(dis ? (careRows.length ? 'cursor:not-allowed;' : 'opacity:.5;cursor:not-allowed;') : 'cursor:pointer;')+'"><input type="checkbox" '+(on ? 'checked ' : '')+(dis ? 'disabled ' : '')+'onchange="contToggleType(\''+t+'\')">'+t+(dis && !careRows.length ? ' <span style="font-size:12px;color:var(--muted);">今天没有约好的术后管理</span>' : (dis ? ' <span style="font-size:12px;color:var(--muted);">客人今天约了，不能取消</span>' : ''))+'</label>'; };
   var body = '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:2px;">接续项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;">'+chip('复诊评估')+chip('术后管理')+'</div></div></div>';
   if(has('复诊评估')){
@@ -10101,7 +10096,7 @@ function contRender(){
   }
   if(has('术后管理')){
     body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:2px;">今日预约管理</span><div style="flex-grow:1;">'+careRows.map(function(r){ var sg = r.s.suggest || r.s.date || '', surg = r.s.projectName ? buyName(r.s.projectName) : '';
-      return '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" '+(m.care.indexOf(r.s.id)>-1 ? 'checked ' : '')+'onchange="contToggleCare(\''+r.s.id+'\',this.checked)"><span>'+e(contCareName(r))+(surg ? ' <span style="font-size:12px;color:var(--muted);">对应施术 · '+e(surg)+'</span>' : '')+' <span style="font-size:12px;color:var(--muted);">· '+e(r.c.caseNo)+(sg ? ' · 建议 '+e(String(sg).slice(5).replace('-', '/')) : '')+'</span></span></label>'; }).join('')+'</div></div>';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;"><span style="color:var(--muted);">•</span><span>'+e(contCareName(r))+(surg ? ' <span style="font-size:12px;color:var(--muted);">对应施术 · '+e(surg)+'</span>' : '')+' <span style="font-size:12px;color:var(--muted);">· '+e(r.c.caseNo)+(sg ? ' · 建议 '+e(String(sg).slice(5).replace('-', '/')) : '')+'</span></span></div>'; }).join('')+'<div style="font-size:12px;color:var(--muted);margin-top:4px;">只看不能改；今天其实不做某一项，确认后在案件里处理</div></div></div>';
   }
   if(has('复诊评估')){ /* 询问问题 / 希望的评估时间：只有勾了复诊评估才出现 */
     body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">询问问题 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><textarea placeholder="例：右边下颚还肿，想问是否正常…" oninput="saveRevisitQuestion(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+e(c.revisitQuestion||'')+'</textarea></div></div>'+wantDraftRowHtml(c);

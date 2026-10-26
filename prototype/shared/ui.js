@@ -548,7 +548,11 @@ function buildWeekGrid(){
       var pastSlot = why==='past', closedDay = why==='closed', fullSlot = why==='full';
       var slotClick = why ? ((calOffHoursOk(ds,hr)) ? ' onclick="calOffHoursAdd(\''+ds+'\',\''+hr+'\')" title="营业时间外：点击代约（会再确认一次）"' : '') : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
       var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
-      var fullTag = fullSlot ? '<div style="font-size:12px;color:var(--muted);text-align:right;">已满</div>' : '';
+      var fullTag = '';
+      if(fullSlot){ /* CMD-1026-05：超额时左边写「3/2」；今天现在这个时段 + 下一个时段才有［＋加约］ */
+        var nB = slotBookingCount(ds, hr), capB = CLINIC_SETTINGS.slotCapacity||1, okB = calOverbookOk(ds, hr);
+        fullTag = '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">'+(nB>capB ? '<span style="font-weight:700;color:var(--terracotta);">'+nB+'/'+capB+'</span>' : '')+'<span style="flex:1;"></span><span>已满</span>'+(okB ? '<button class="btn-outline" style="padding:1px 8px;font-size:12px;" onclick="event.stopPropagation();calOverbookAsk(\''+ds+'\',\''+hr+'\')">＋加约</button>' : '')+'</div>';
+      }
       html += '<div class="wk-cell'+(why?'':' wk-cell-open')+(pastSlot?' wk-past':'')+((why==='lunch'||closedDay)?' wk-lunch':'')+(why==='outside'?' wk-outside':'')+(fullSlot?' wk-full':'')+(isNow?' wk-now':'')+(sameDate(days[d], TODAY_DATE)?' wk-tcol':'')+'"'+slotClick+'>'+chips+fullTag+'</div>';
     }
   });
@@ -674,13 +678,25 @@ function renderAddSlotBody(){
   document.getElementById('add-slot-body').innerHTML = modeTabs + body;
 }
 
+/* CMD-1026-05：已满的时段超额加约——只有「今天、现在这个时段 + 下一个时段」才可以（我的判断：时段 = 30 分钟，和预约规则同一套） */
+function calOverbookOk(ds, hr){
+  if(ds!==todayStr()) return false; var nowSlot = currentSlotNow().time, nx = minToTime(timeToMin(nowSlot)+SLOT_MIN);
+  return (hr===nowSlot || hr===nx) && slotBlockReason(ds, hr)==='full';
+}
+function calOverbookAsk(ds, hr){
+  if(!calOverbookOk(ds, hr)) return;
+  var n = slotBookingCount(ds, hr), cap = CLINIC_SETTINGS.slotCapacity||1;
+  if(!window.GMC_NO_CONFIRM && !confirm('这个时段已满（'+n+'/'+cap+'），确定要加约吗？')) return;
+  openAddSlotModal(ds, hr); ADD_SLOT_CONTEXT.overbook = {n:n, cap:cap};
+}
+function overbookNote(){ var o = ADD_SLOT_CONTEXT && ADD_SLOT_CONTEXT.overbook; return o ? '超额加约：'+ADD_SLOT_CONTEXT.date+' '+ADD_SLOT_CONTEXT.time+' 时段已满（'+o.n+'/'+o.cap+'），'+actingName()+' 加约' : ''; }
 function confirmAddSlotExisting(){
   var name = document.getElementById('add-slot-client').value;
   var purpose = document.getElementById('add-slot-purpose').value;
   closeAddSlotModal();
   var exm = pendingResvSameDay(name, ADD_SLOT_CONTEXT.date); /* CMD-1021-16 三：同一客人那天已有还没到的预约 → 合并，不再建第二个 */
   if(exm){ logCaseEvent(exm, actingName(), '室长代约同一天：'+ADD_SLOT_CONTEXT.time+'（'+purpose+'）已合并到这次预约（时间以原预约 '+exm.visitTime+' 为准）'); renderCalendar(); showToast('已合并', name+' · '+mergeNoteText(exm), null); return; }
-  var nc = createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose); var nt = (document.getElementById('add-slot-note')||{}).value; if(nc && nt && nt.trim()) nc.visitNote = nt.trim(); /* CMD-1022-15：代约也能写想咨询的内容 */
+  var nc = createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose); if(nc && overbookNote()) logCaseEvent(nc, actingName(), overbookNote(), '预约到店'); var nt = (document.getElementById('add-slot-note')||{}).value; if(nc && nt && nt.trim()) nc.visitNote = nt.trim(); /* CMD-1022-15：代约也能写想咨询的内容 */
   renderCalendar();
   showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
 }
@@ -695,6 +711,7 @@ function confirmAddSlotNew(link){
   var ph = {id:phId, date:ADD_SLOT_CONTEXT.date, time:ADD_SLOT_CONTEXT.time, phone:phone, link:link,
     smsText:smsBody, purpose:purpose, expiresAt:Date.now()+holdMs()};
   logSms('link', phone, smsBody+' '+link, null);
+  if(overbookNote()) logOp('其他', overbookNote(), '超额加约'); /* 占位还没有案件：记操作日志 */
   RESERVATION_PLACEHOLDERS.push(ph);
   closeAddSlotModal();
   renderCalendar();
@@ -1252,7 +1269,7 @@ function renderCaseStatusBar(c){
   if(c.krVisit && c.stage==='booked'){ /* CMD-1014-16：在韩到店案件（KR 医院）：到店 / 完成由 KR 标记，IN 不接待、不判未到店 */
     actionBtn = '<span style="font-size:12px;color:var(--slate2);">在韩到院预约（KR 医院）：'+(c.krVisit.arrived ? '客人已到院，等 KR 标记完成' : (c.visitDate+' '+c.visitTime+'（韩国）等 KR 标记客人到店'))+'</span>';
   } else if(c.stage==='booked' && c.subState==='waiting'){
-    actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
+    actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
   if(canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>'; /* CMD-1022-15：取代［结束案件］；CMD-1022-19：复诊评估客人已离店、结果到了 → ［确认结案］，结果没到不显示 */
   /* CMD-1023-02 一：拿掉 IN［结案］按钮——主案件的状态系统自动判断（进行中 / 已完成） */

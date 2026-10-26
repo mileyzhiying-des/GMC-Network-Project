@@ -2037,11 +2037,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var surg = html('surg'); ST.ok(/<button[^>]*>本次使用<\/button>/.test(surg.h) && /<button[^>]*>预约时间<\/button>/.test(surg.h) && svgN(surg.h.slice(0, surg.h.indexOf('每次到院一张卡')))===0, '施术项目：［本次使用］［预约时间］线框、没有图标');
     var mg = html('mgmt'); ST.ok(/未预约\s*\d+\s*全部预约/.test(mg.t), '1025-03 改：管理项目：［全部预约］在「未预约 N」那一行右边（原「未使用 N」）'); ST.ok(/<button[^>]*>\s*<svg[\s\S]*?<\/svg>全部预约<\/button>/.test(mg.h) && /<button[^>]*>预约时间<\/button>/.test(mg.h), '管理项目：［全部预约］有日历图标、行内［预约时间］没有');
     var mgIt = gc().procedureItems.filter(function(x){ return krIsMgmtItemC(x); })[0], mgName = itemIid(mgIt), mgNm = mgIt.name; /* CMD-1020-16：管理项目按每笔唯一 id */
-    krCbOpen({mgmtOne:mgName}); ST.ok(KR_CB.rows.some(function(x){ return x.kind==='mgmt' && x.checked; }) && KR_CB.rows.every(function(x){ return !!x.checked===(x.place==='IN' ? !!x.checked : !krCbCheck(x).err); }), '1025-03 改：管理项目单条［预约时间］：同一个弹窗，里面也列出术后管理，日期没问题的行都默认勾好（原来只勾那一条）'); ST.ok(KR_CB.rows.some(function(x){ return x.kind==='care'; }) && !document.getElementById('kr-bkd-overlay'), '没有单独的管理项目预约弹窗');
-    krCbOpen({all:true, tab:'mgmt'}); var mrows = function(){ return KR_CB.rows.filter(function(x){ return x.kind==='mgmt'; }); }; ST.ok(mrows().length===1 && mrows()[0].checked, '［全部预约］（管理项目）：默认约 1 次、勾上（1025-03：术后管理日期没问题的也默认勾好，不再要求不勾）');
+    krCbOpen({mgmtOne:mgName}); ST.ok(KR_CB.rows.some(function(x){ return x.kind==='mgmt'; }) && KR_CB.rows.every(function(x){ return !!x.checked===(x.place==='IN' ? !!x.checked : !krCbCheck(x).err); }), '1025-03 改：管理项目单条［预约时间］：同一个弹窗，里面也列出术后管理，日期没问题的行都默认勾好（原来只勾那一条）'); ST.ok(KR_CB.rows.some(function(x){ return x.kind==='care'; }) && !document.getElementById('kr-bkd-overlay'), '没有单独的管理项目预约弹窗');
+    krCbOpen({all:true, tab:'mgmt'}); var mrows = function(){ return KR_CB.rows.filter(function(x){ return x.kind==='mgmt'; }); }; ST.ok(mrows().length===1 && mrows()[0].checked===!krCbCheck(mrows()[0]).err, '［全部预约］（管理项目）：默认约 1 次、日期没问题的勾上（CMD-1026-05：建议日期落在休诊日 / 过去时按规则自动不勾）');
     var max = KR_CB.mg[mgName].m.max; krCbMgQty(mgName, 1); krCbMgQty(mgName, 1); ST.ok(mrows().length===3 && /这次约[\s\S]*3[\s\S]*次/.test(document.getElementById('kr-cb-overlay').innerText), '选 3 次 → 展开 3 行');
     krCbMgQty(mgName, 20); ST.ok(mrows().length===max, '最多 = 剩余次数（'+max+'）'); krCbMgQty(mgName, -20); krCbMgQty(mgName, 1); krCbMgQty(mgName, 1);
-    var dd = mrows().map(function(x){ return x.date; }); ST.ok(ymdDiff(dd[0], dd[1])===6 && ymdDiff(dd[1], dd[2])===6, '日期从建议日期起按管理间隔（6 天）排好：'+dd.join(' / ')); ST.ok(mrows().every(function(x){ return x.checked || krCbCheck(x).err; }), '展开的行跟着第 1 行的勾选（休诊日 / 营业时间外的行自动不勾）');
+    var dd = mrows().map(function(x){ return x.date; }); ST.ok(ymdDiff(dd[0], dd[1])===6 && ymdDiff(dd[1], dd[2])===6, '日期从建议日期起按管理间隔（6 天）排好：'+dd.join(' / ')); ST.ok(!mrows()[0].checked || mrows().every(function(x){ return x.checked || krCbCheck(x).err; }), '展开的行跟着第 1 行的勾选（第 1 行勾上时，其余日期没问题的也勾；休诊日 / 营业时间外的行自动不勾；第 1 行本身不能约则整组不勾）');
     var okDay = function(n){ var d = ymdAdd(todayStr(), n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
     var iA = KR_CB.rows.indexOf(mrows()[0]), iB = KR_CB.rows.indexOf(mrows()[1]), iC = KR_CB.rows.indexOf(mrows()[2]); krCbSet(iA, 'date', okDay(45)); krCbSet(iA, 'time', '12:00'); krCbSet(iB, 'date', okDay(45)); krCbSet(iB, 'time', '12:00'); krCbSet(iC, 'date', okDay(52)); krCbSet(iC, 'time', '12:00'); [iA, iB, iC].forEach(function(i){ krCbSet(i, 'checked', true); });
     KR_CB.rows.forEach(function(x, i){ if(x.kind==='care') krCbSet(i, 'checked', false); }); /* 1025-03：术后管理行默认也勾好，这里只测管理项目的合并 */ var pv = krCbPreview(); ST.ok(pv.cards.length===2 && pv.cards[0].mgmt.length===1, '同一天合成一次到院，预览 2 张到院卡（管理项目）：'+JSON.stringify(pv.cards.map(function(x){ return x.date+':'+x.names.join('、'); })));
@@ -3173,7 +3173,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(document.getElementById('followup-overlay').classList.contains('open'), '到店后问「是否接续之前的案件？」'); followupAskDone(true); c = getCurrentCase();
       var ov = document.getElementById('cont-overlay'), ot = ov ? ov.textContent : '';
       ST.ok(ov && ov.classList.contains('open') && /접续|接续/.test(ot) && /메타뷰/.test(ot) && /接续项目/.test(ot) && /复诊评估/.test(ot) && /术后管理/.test(ot), '确认接续后跳出弹窗：메타뷰 + 接续类型（复诊评估 / 术后管理）');
-      ST.ok(/今日预约管理/.test(ot) && /术后复诊/.test(ot) && ov.querySelectorAll('input[type=checkbox][onchange^="contToggleCare"]').length===1 && ov.querySelector('input[onchange^="contToggleCare"]').checked, '勾了术后管理：列出今天已经约好的术后管理，默认勾好');
+      ST.ok(/今日预约管理/.test(ot) && /术后复诊/.test(ot) && ov.querySelectorAll('input[onchange^="contToggleCare"]').length===0 && ov.querySelector('input[onchange="contToggleType(\'术后管理\')"]').checked, '（CMD-1026-05）术后管理默认勾好，今日预约管理只列出来没有勾选框');
       ST.ok(!/今天做|新增/.test(ot.replace(/要新买请在确认后用［增加项目］|不能在这里新增|没约过的不能在这里新增（要新买请在确认后用［增加项目］）|新增案件/g, '')), '不能在弹窗里新增没约过的');
       ST.ok(/取消接待/.test(ot) && c.subState==='arrived', '底部［取消接待］［确认］');
       var h0 = t(basicFourHtml(c, false)); ST.ok(/填写接续资料/.test(h0) && !/苦恼|面诊需求|到访目的/.test(h0.replace(/接续资料（메타뷰.*?确认后才会出现对应的tab。/, '')), '确认前基础资料只有基本信息 + 提示卡 + 医美史（没有到访目的 / 面诊需求）');
@@ -3186,7 +3186,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.careToday = []; var inc2 = inContCardHtml(c); ST.ok(/预约项目/.test(inc2), '没勾的留在预约项目');
       /* 只勾复诊评估 / 两个都勾 */
       var prior2 = mkPrior('R127q'), c2 = arrive(prior2, 'R127q', '复诊评估'); followupAskDone(true); c2 = getCurrentCase();
-      contToggleType('复诊评估'); contToggleType('术后管理'); c2 = getCurrentCase(); ST.ok(resumeTypesOf(c2).join()==='复诊评估', '切成只复诊评估');
+      contToggleType('复诊评估'); c2 = getCurrentCase(); ST.ok(resumeTypesOf(c2).indexOf('术后管理')>-1 && resumeTypesOf(c2).indexOf('复诊评估')>-1, '（CMD-1026-05）今天有约：术后管理取消不了，再勾复诊评估 → 两个'); contSetTypes(c2, ['复诊评估']); contRender(); /* 后面要测只复诊 */
       ST.ok(/这次要看的项目/.test(document.getElementById('cont-overlay').textContent) && /询问问题/.test(document.getElementById('cont-overlay').textContent) && /客人希望的评估时间/.test(document.getElementById('cont-overlay').textContent), '复诊评估：项目 / 视频照片 / 想问的内容 / 希望的评估时间都在弹窗里');
       contConfirm(); c2 = getCurrentCase(); ST.ok(!c2.materialsConfirmed && document.getElementById('cont-overlay').classList.contains('open'), '缺项（메타뷰 / 项目 / 想问的内容…）：不能确认，弹窗还开着');
       document.getElementById('materials-missing-overlay').classList.remove('open'); c2.metaviewStatus = 'ready'; fillRevisit(c2); contConfirm(); c2 = getCurrentCase();
@@ -3294,11 +3294,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 今天有约 */
       addRow('r130s1'); addRow('r130s2'); c = arrive(['r130s1']); ov = document.getElementById('cont-overlay');
       ST.ok(resumeTypesOf(c).indexOf('术后管理')>-1 && ov.querySelector('input[onchange="contToggleType(\'术后管理\')"]').checked, '今天有约好的：术后管理默认勾好');
-      var boxes = [].slice.call(ov.querySelectorAll('input[onchange^="contToggleCare"]')); ST.ok(/今日预约管理/.test(ovTxt()) && boxes.length>=1 && boxes.every(function(b){ return b.checked; }), '今日预约管理展开，项目全部默认勾好：'+boxes.length);
+      ST.ok(/今日预约管理/.test(ovTxt()) && ov.querySelectorAll('input[onchange^="contToggleCare"]').length===0, '（CMD-1026-05）今日预约管理只列出来，没有勾选框');
+      var tb = ov.querySelector('input[onchange="contToggleType(\'术后管理\')"]'); ST.ok(tb && tb.checked && tb.disabled, '术后管理默认勾好且不能取消');
+      contToggleType('术后管理'); ST.ok(resumeTypesOf(getCurrentCase()).indexOf('术后管理')>-1, '点它取消不了');
       ST.ok(!/询问问题/.test(ovTxt()) && !/客人希望的评估时间/.test(ovTxt()) && !/这次要看的项目/.test(ovTxt()), '只勾术后管理：询问问题 / 希望的评估时间 / 要看的项目都不出现');
-      boxes.forEach(function(b, i){ var id = b.getAttribute('onchange').match(/'([^']+)'/)[1]; contToggleCare(id, false); });
-      ST.ok(resumeTypesOf(getCurrentCase()).indexOf('术后管理')<0 && !document.getElementById('cont-overlay').querySelector('input[onchange="contToggleType(\'术后管理\')"]').checked, '项目全部取消 → 上面的术后管理跟着取消');
-      contToggleType('术后管理'); ST.ok(resumeTypesOf(getCurrentCase()).indexOf('术后管理')>-1 && CONT_MODAL.care.length>=1, '再勾术后管理 → 今天约的项目重新全勾');
+      ST.ok(CONT_MODAL.care.length>=1, '确认后记下的是今天约的全部');
       ST.ok(!/术后恢复照片/.test(ovTxt()), '没有术后恢复照片');
     } finally { try{ contClose(); }catch(e){} window.confirm = oc; window.GMC_NO_FOLLOWASK = old; }
   });
@@ -3308,6 +3308,47 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var r = krAllCases().filter(function(x){ return /^T-术后管理/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
     var t0 = krCaseGroupsHtml(krFindCase(r.clinicId, r.id).c, false).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     ST.ok(/预约中\s*\d/.test(t0) && !/已预约\s*\d/.test(t0), '分组标题是「预约中」，不再是「已预约」：'+(t0.match(/(今天|预约中|已预约|已完成)\s*\d/g)||[]).join(','));
+  });
+
+  ST.def('R131a','CMD-1026-05（A1 分页）：状态列没有［未到店］；自动未到店后项目退回未预约；工作台现在 / 下一时段满了才有［＋加约］、超额显示 3/2、Timeline 有记录',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var old = window.GMC_NO_CONFIRM; window.GMC_NO_CONFIRM = true;
+    try{
+      /* 1 状态列 */
+      var c = ST.newRes('R131a', {}); ST.open(c); renderCaseStatusBar(getCurrentCase()); var bar = document.getElementById('case-status-bar').innerHTML;
+      ST.ok(/客人已到店|客人已到店（仅来访当天）/.test(bar) && /预约修改/.test(bar) && /预约取消/.test(bar) && !/>未到店</.test(bar), '待访问状态列：［客人已到店］［预约修改］［预约取消］，没有［未到店］');
+      /* 2 自动未到店后项目退回（现状：inCareBooking 本来就忽略已取消的预约） */
+      var p0 = ST.newRes('R131p'); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.director = 'KD1 院长'; p0.hospitalId = caseHospitalId(p0);
+      p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true;
+      var fut = ymdAdd(todayStr(), 3); p0.subItems = [{id:'r131s', kind:'术后管理记录', place:'IN', content:'术后复诊', date:fut, suggest:fut, done:false, projectName:'隆鼻'}];
+      var bk = ST.newRes('R131p', {phone:clientPhoneOf(p0.name), purpose:'术后管理', date:todayStr()}); bk.careFor = {caseId:p0.id, keys:['r131s']};
+      ST.ok(!!inCareBooking(p0, 'r131s'), '约好后，这一项算已预约');
+      var ok = markNoShow(bk.id, true); ST.ok(ok && bk.stage==='cancelled' && bk.noShow, '过预约时间 30 分钟自动判未到店 → 预约取消');
+      ST.ok(!inCareBooking(p0, 'r131s'), '被取消的预约不再占着这一项');
+      ST.ok(todoUbGroupsIn(p0, false).some(function(g){ return g.items.some(function(x){ return x.bk==='r131s' || /术后复诊/.test(x.name||''); }); }) || careUnits(p0).unbooked.concat(careUnits(p0).rows.map(function(r){ return r; })).length>0, '项目回到「未预约」');
+      ST.ok(!(p0.subItems||[]).some(function(s){ return s.id==='r131s' && (s.skipped || s.done); }), '项目本身没有消失 / 没有被标完成');
+    } finally { window.GMC_NO_CONFIRM = old; }
+  });
+
+  ST.def('R131b','CMD-1026-05（A1 分页）：已满时段的［＋加约］（只有今天现在 / 下一时段）、3/2、Timeline',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var old = window.GMC_NO_CONFIRM, cap0 = CLINIC_SETTINGS.slotCapacity; window.GMC_NO_CONFIRM = true;
+    try{
+      CLINIC_SETTINGS.slotCapacity = 1;
+      var td = todayStr(), cur = currentSlotNow(), nx = minToTime(timeToMin(cur.time)+SLOT_MIN), far = minToTime(timeToMin(cur.time)+SLOT_MIN*3);
+      var mk = function(nm, time){ var c0 = createReservationCase(nm, null, td, time, null, '面诊商谈'); return c0; };
+      var h0 = demoNow().getHours(); if(!ST.ok(slotBlockReason(td, cur.time)!=='closed' && slotBlockReason(td, cur.time)!=='lunch' && slotBlockReason(td, cur.time)!=='outside', '现在在营业时间内才能测（现在 '+cur.time+'）')) return;
+      mk('R131b1', cur.time); mk('R131b2', nx); mk('R131b3', far);
+      ST.ok(slotBlockReason(td, cur.time)==='full' && calOverbookOk(td, cur.time) && calOverbookOk(td, nx), '现在 / 下一时段满了 → 可加约');
+      ST.ok(!calOverbookOk(td, far) && !calOverbookOk(ymdAdd(td, 1), cur.time), '更晚的时段 / 以后的日子满了就满了');
+      CAL_MODE = 'week'; try{ buildWeekGrid(); }catch(e){}
+      var g = document.getElementById('wk-grid').innerHTML; ST.ok(/＋加约/.test(g) && (g.match(/＋加约/g)||[]).length<=2, '周视图满的格子有［＋加约］（只有现在 / 下一时段）：'+(g.match(/＋加约/g)||[]).length);
+      calOverbookAsk(td, cur.time); ST.ok(document.getElementById('add-slot-overlay').classList.contains('open') && /预约空档/.test(document.getElementById('add-slot-title').textContent) && document.getElementById('add-slot-title').textContent.indexOf(cur.time)>-1, '确认后进入预约表单，时段已带好');
+      var n0 = slotBookingCount(td, cur.time); var cn = CLIENTS.filter(function(x){ return !pendingResvSameDay(x.name, td); })[0]; document.getElementById('add-slot-client').value = cn.name; var nm1 = cn.name; confirmAddSlotExisting();
+      ST.ok(slotBookingCount(td, cur.time)===n0+1 && n0+1>1, '加约后这个时段多 1 位（超过上限 1）');
+      CAL_MODE = 'week'; try{ buildWeekGrid(); }catch(e){} g = document.getElementById('wk-grid').innerHTML; ST.ok(new RegExp((n0+1)+'/1').test(g.replace(/<[^>]+>/g, '')), '超额后格子左边出现「'+(n0+1)+'/1」');
+      var nc = CASE_ITEMS.filter(function(x){ return x.name===nm1 && x.visitDate===td && x.visitTime===cur.time; }).pop(); ST.ok(!!nc && (nc.logEntries||[]).some(function(l){ return /超额加约/.test(l.action||''); }), 'Timeline 记了「超额加约」');
+    } finally { CLINIC_SETTINGS.slotCapacity = cap0; window.GMC_NO_CONFIRM = old; }
   });
 
   ST.def('R128c','CMD-1026-02 B（A1 分页）：项目汇总 = 项目卡结构（胶囊 + 分段 + 栏位），没有筛选行 / 本地项目卡 / 灰提示',function(){
