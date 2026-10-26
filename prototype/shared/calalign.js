@@ -504,10 +504,10 @@ function openStayModal(caseId, o){
   var inp = 'padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;min-width:0;', s = c.stay || {}, tc = c.tripConfirm || {};
   var row = function(k, lab){ return '<div style="display:grid;grid-template-columns:44px 1.3fr 1fr 1.2fr;gap:8px;align-items:end;margin-bottom:10px;"><b style="font-size:13px;padding-bottom:9px;">'+lab+'</b><div><label style="font-size:12px;color:var(--slate2);">'+lab+'日</label><input type="date" id="stay-'+k+'" value="'+(s[k]||'')+'" style="'+inp+'width:100%;" onchange="stayWarnRefresh()"></div><div><label style="font-size:12px;color:var(--slate2);">'+lab+'时间（韩国当地）</label><input type="time" id="stay-'+k+'t" value="'+(s[k+'Time']||'')+'" style="'+inp+'width:100%;"></div><div><label style="font-size:12px;color:var(--slate2);">'+lab+'机场（选填）</label><input id="stay-'+k+'a" value="'+aEscC(s[k+'Airport']||'')+'" placeholder="例：仁川 ICN" style="'+inp+'width:100%;"></div></div>'; };
   var methods = o.trip ? '<div style="margin-top:4px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">确认方式（必选，可多选）</div><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px;">'+TRIP_METHODS.map(function(m, i){ return '<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" class="stay-m" value="'+m+'"'+((tc.methods||[]).indexOf(m)>-1 ? ' checked' : '')+'> '+m+'</label>'; }).join('')+'<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" id="stay-mo"'+(tc.other ? ' checked' : '')+'> 其他：<input id="stay-mot" value="'+aEscC(tc.other||'')+'" style="'+inp+'width:120px;padding:5px 8px;"></label></div></div>' : '';
-  var title = o.trip ? '确认行程' : '在韩期间', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定可以先空着，之后随时能改。' : '行程有变可以修改，修改后 KR 会收到通知。');
+  var title = o.trip ? '确认行程' : '在韩期间', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定，可以点［出发前再确认］，之后随时能改。' : '行程有变可以修改，修改后 KR 会收到通知。');
   ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>'+row('in', '入境')+row('out', '离境')+methods+
     '<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
-    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '先空着' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '出发前再确认' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
   ov.classList.add('open'); stayWarnRefresh();
 }
 function stayWarnRefresh(){
@@ -517,7 +517,7 @@ function stayWarnRefresh(){
 }
 function stayCancel(){
   var x = STAY_CTX, ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null; if(!x) return;
-  var c = calCaseById(x.id); if(x.o.initial && c){ c.stayAsked = true; if(x.o.then) x.o.then(); } /* 先空着：只记「问过了」 */
+  var c = calCaseById(x.id); if(x.o.initial && c){ c.stayAsked = true; if(x.o.then) x.o.then(); } /* 出发前再确认（原「先空着」）：只记「问过了」 */
 }
 function staySave(){
   var x = STAY_CTX; if(!x) return; var c = calCaseById(x.id), e = document.getElementById('stay-err'), g = function(i){ return (document.getElementById(i)||{}).value||''; }; if(!c) return;

@@ -179,6 +179,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
 
   /*TESTS*/
   /* ================= A 到店前 / 接待 ================= */
+  /* CMD-1026-15 二：本地项目［结算］现在多一步付款确认；老用例（D28 / D30 / D31 / CP1 / R138a 等）直接调 lmSettle() 期待立刻完成 → 这里自动点［确认已付款］；要测确认本身的用例用 ST.lmSettleRaw（R141a） */
+  ST.lmSettleRaw = lmSettle; (function(){ var raw = lmSettle; lmSettle = function(){ raw.apply(this, arguments); if(typeof LM_PAY_PENDING!=='undefined' && LM_PAY_PENDING && !window.GMC_LM_PAY_MANUAL) lmPayConfirm(); }; })();
   ST.def('A1','室长取消预约',function(){
     var c = ST.newRes('A1'); ST.open(c); window.CANCEL_REASON = '客人要求取消'; confirmCancel();
     ST.ok(c.stage==='cancelled' || c.subState==='cancelled', '应为已取消，实际 '+c.stage+'/'+c.subState);
@@ -3451,6 +3453,41 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(k2.caseNo===p0.caseNo+'-08', '7：再来一个子记录 -08，不撞号：'+k2.caseNo);
     ST.ok(tzRender('复诊评估已送出：X（'+k2.caseNo+' · 11/26）').indexOf(k2.caseNo)>-1, '7：通知里的子案件号原样显示（不再换成「到院」）');
     ST.ok(relBackOf(p0).every(function(x){ return x.c.id!==k1.id && x.c.id!==k2.id; }), '8：关联案件不列自己的子案件');
+  });
+
+  ST.def('R141a','CMD-1026-15（A1 分页）：升级当天页头第三行今日进行中 + -01 子案件页项目卡 / 本地结算付款确认 / 在韩期间按钮文字 / 打印在施术日期卡右上 / 术后管理在韩·印尼胶囊',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }; var nm = 'R141', td = todayStr();
+    try{
+      var m = ST.newRes(nm, {purpose:'面诊商谈'}); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; m.subState = 'arrived'; m.arrivedDay = td; m.visitDate = td; m.visitTime = '10:30'; m.stage = 'consult';
+      m.krDepositPaid = true; m.settlementDone = true; m.procedureItems = [{origin:'KR', name:'隆鼻', batchId:'B1'}]; m.settlementBatches = [{id:'B1', status:'paid', krTotal:100, krDeposit:30, time:nowFullDt()}];
+      m.localMgmt = {active:true, ended:false, step:'afterBuyUse', mgmtUses:[], mgmtActive:false, batches:[{id:'L1', items:[{name:nm+'热玛吉', qty:1}], inTotal:100000, time:nowFullDt()}], cart:[]};
+      CLIENT_HOLDINGS[m.name] = (CLIENT_HOLDINGS[m.name]||[]).concat([{itemName:nm+'热玛吉', category:'本地项目', batches:[{caseId:m.id, date:td, bought:3, used:0, usages:[], paid:100000}]}]);
+      updateCaseStage(m); ST.open(m); renderCaseSubtitle(m); renderCaseStatusBar(m);
+      var sb = document.getElementById('case-status-bar').innerText; ST.ok(/今日进行中：.+-01（面诊安排 · 本地管理）/.test(sb) && sb.indexOf('下次预约')<0 && sb.indexOf('进入案件')>-1, '1：升级当天页头第三行「今日进行中：…-01（…）」+［进入案件］：'+sb.replace(/\n/g, ' '));
+      var no = visitsOf(m)[0].no; ST.ok(/-01$/.test(no), '1：升级当天 = -01：'+no);
+      openSubcase(m.id, visitsOf(m)[0].key); var bd = document.getElementById('case-body').innerText;
+      ST.ok(/剩余项目/.test(bd) && /本地管理 1/.test(bd) && bd.indexOf(nm+'热玛吉')>-1 && /本次使用/.test(bd), '1：-01 子案件页：今天买的本地项目在「剩余项目 · 本地管理 · 未使用」，有［本次使用］');
+      inUseOpen(); var ck = document.querySelector('#in-use-overlay .iu-hold-i, #in-use-overlay [id^="iu-hold-"]'); ST.ok(!!ck, '1：［本次使用］弹窗里能勾今天买的本地项目'); if(ck){ ck.checked = true; inUseConfirm(); ST.ok((m.localMgmt.mgmtUses||[]).length>0, '1：确认后进今日项目（mgmtUses）'); } else inUseClose();
+      /* 2 本地结算付款确认 */
+      m.localMgmt.ended = false; m.localMgmt.step = 'buy'; m.localMgmt.mgmtActive = false; m.localMgmt.addBuy = false; m.localMgmt.cart = [{name:nm+'水光', kind:'project', qty:1, price:200000, unitPrice:200000, discountPct:100}];
+      window.GMC_LM_PAY_MANUAL = true; var nb = (m.localMgmt.batches||[]).length, nlog = (m.logEntries||[]).length; ST.open(m); lmSettle();
+      var ov = document.getElementById('settle-overlay'), txt = ov.innerText; ST.ok(ov.classList.contains('open') && /确认客人已付款 Rp ?200\.000/.test(txt) && /取消/.test(txt) && /确认已付款/.test(txt), '2：本地项目［结算］→ 弹付款确认「确认客人已付款 Rp 200.000？」［取消］［确认已付款］：'+txt.replace(/\s+/g, ' ').slice(0, 120));
+      ST.ok((m.localMgmt.batches||[]).length===nb, '2：弹窗出来时还没记账'); lmPayCancel(); ST.ok(!ov.classList.contains('open') && (m.localMgmt.batches||[]).length===nb && m.localMgmt.cart.length===1 && !/结算付款/.test(JSON.stringify((m.logEntries||[]).slice(nlog))), '2：取消 → 回到选项目画面，购物车保留，什么都不记');
+      lmSettle(); lmPayConfirm(); window.GMC_LM_PAY_MANUAL = false; ST.ok((m.localMgmt.batches||[]).length===nb+1 && m.localMgmt.cart.length===0, '2：确认已付款 → 完成结算（转客户持有）');
+      /* 3 在韩期间按钮 */
+      openStayModal(m.id, {initial:true}); var sh = document.getElementById('stay-overlay').innerHTML; ST.ok(sh.indexOf('出发前再确认')>-1 && sh.indexOf('先空着')<0, '3：在韩期间弹窗按钮改［出发前再确认］，说明文字里也没有「先空着」'); stayCancel();
+      /* 4 打印 */
+      var kp = krProcedureTabHtml(m); ST.ok(/position:relative;">\s*<div style="position:absolute;top:16px;right:20px;"><button[^>]*printKrPlan/.test(kp), '4：［打印］在施术日期卡右上角');
+      /* 5 胶囊 */
+      m.subItems = [{id:'r141k', no:m.caseNo+'#k', kind:'术后管理记录', place:'KR', content:'拆线', date:ymdAdd(td, 7), done:false, projectName:'隆鼻'}]; var h1 = inPostcareTabHtml(m); ST.ok(h1.indexOf('在韩术后')<0 && h1.indexOf('印尼术后')<0, '5：只有韩国的术后管理 → 没有胶囊');
+      m.subItems.push({id:'r141i', no:m.caseNo+'#i', kind:'术后管理记录', place:'IN', content:'术后复诊', date:ymdAdd(td, 9), done:false, projectName:'隆鼻'});
+      var h2 = inPostcareTabHtml(m); ST.ok(h2.indexOf('在韩术后')>-1 && h2.indexOf('印尼术后')>-1 && h2.indexOf('在韩术后')<h2.indexOf('印尼术后'), '5：出现印尼的术后管理 → 上方胶囊「在韩术后｜印尼术后」（左右顺序）');
+      ST.ok(h2.indexOf('拆线')>-1 && h2.indexOf('术后复诊')<0, '5：韩国行程没结束 → 默认「在韩术后」，只列韩国的');
+      setInPcCap(m.id, 'inn'); var h3 = inPostcareTabHtml(m); ST.ok(h3.indexOf('术后复诊')>-1 && h3.indexOf('拆线')<0, '5：点「印尼术后」切换');
+      delete IN_PC_CAP[m.id]; m.krTripEnded = {at:nowFullDt()}; var h4 = inPostcareTabHtml(m); ST.ok(h4.indexOf('术后复诊')>-1 && h4.indexOf('拆线')<0, '5：韩国行程已结束 → 默认「印尼术后」'); m.krTripEnded = null;
+      m.subItems = m.subItems.filter(function(s){ return s.place==='IN'; }); var h5 = inPostcareTabHtml(m); ST.ok(h5.indexOf('在韩术后')<0, '5：只有印尼的 → 不出现胶囊（没有项目的胶囊不显示）');
+    } finally { window.alert = al; window.confirm = cf; }
   });
 
   ST.def('R140a','CMD-1026-14（KM1 分页，需要 pcStage 夹具）：复诊评估待办点了进主案件复诊 tab 并展开那一笔 / 韩国行程结束后联络 IN 提醒消失、多笔合成一条 / 提醒类有［已处理］、做事类没有 / 已处理后消失、Timeline 有记录、第二天不重新出现',function(){

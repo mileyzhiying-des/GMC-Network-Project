@@ -4866,6 +4866,24 @@ function lmSettle(){
   if(cartTotals(cart).onlyService){ alert('서비스需搭配付费项目'); return; }
   var total = cart.reduce(function(s,it){ return s + inLineTotal(it); }, 0);
   var cpL = compPending(c, 'lm'); if(cpL && total < cpL.credit){ alert('置换额度不退钱：还剩 '+formatCurrency(cpL.credit-total,'IDR')+'，请再加项目'); return; }
+  /* CMD-1026-15 二：本地项目结算完成前多一步付款确认（和赴韩定金 / 尾款等其他结算同一个确认付款弹窗 #settle-overlay）；取消 = 回到选项目画面，购物车保留，什么都不记 */
+  var pay = Math.max(0, total-(cpL ? cpL.credit : 0)), sb = document.getElementById('settle-breakdown'); if(!sb){ lmSettleDo(); return; }
+  SETTLE_MODAL_BATCH_ID = null; LM_PAY_PENDING = c.id;
+  sb.innerHTML = '<div><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">本地项目（收全款）</div>'+
+    (cpL ? '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>本地项目合计</span><span>'+formatCurrency(total,'IDR')+'</span></div><div style="display:flex;justify-content:space-between;font-size:13px;color:#8F6F0C;"><span>赴韩定金转本地置换</span><span>−'+formatCurrency(cpL.credit,'IDR')+'</span></div>' : '')+
+    '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;"><span>应付金额</span><span>'+formatCurrency(pay,'IDR')+'</span></div></div>'+
+    '<div style="font-size:13px;color:var(--slate2);">确认客人已付款 '+formatCurrency(pay,'IDR')+'？</div>'+
+    '<div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="lmPayCancel()">取消</button><button class="btn-primary" id="settle-pay-btn" style="flex:1;" onclick="lmPayConfirm()">确认已付款</button></div>';
+  document.getElementById('settle-overlay').classList.add('open');
+}
+var LM_PAY_PENDING = null;
+function lmPayCancel(){ LM_PAY_PENDING = null; try{ closeSettleModal(); }catch(e){} }
+function lmPayConfirm(){ var id = LM_PAY_PENDING; LM_PAY_PENDING = null; try{ closeSettleModal(); }catch(e){} var c = getCurrentCase(); if(!c || c.id!==id) return; lmSettleDo(); }
+function lmSettleDo(){
+  var c = getCurrentCase(); if(!c||!c.localMgmt) return;
+  var lm = c.localMgmt, cart = lm.cart||[], today = todayStr();
+  if(!cart.length) return;
+  var total = cart.reduce(function(s,it){ return s + inLineTotal(it); }, 0), cpL = compPending(c, 'lm');
   var beforeB = cpL ? holdingBatchSet(c) : null;
   var items = cart.map(function(it){ return {name:it.name, kind:it.kind||'project', qty:it.qty||1, price:it.price, unitPrice:it.unitPrice, discountPct:(it.discountPct===undefined||it.discountPct===null)?100:it.discountPct, itemNote:it.itemNote||'', promo:!!it.promoId, pkgItems:it.pkgItems, lineTotal:inLineTotal(it)}; });
   grantLocalItems(c, cart, today);
@@ -6293,7 +6311,7 @@ function krProcedureTabHtml(c){
   var sub = c.krSubTab || 'main', st0 = scheduleState(c), kConfirmed = ['Confirmed','Changing','Arrived'].indexOf(st0)>-1 && !!(c.krSchedule && c.krSchedule.confirmedDate);
   if(sub==='timeline' && !kConfirmed) sub = 'main'; /* 在韩 timeline 要等 KR 确认施术时间后才出现 */
   var hasItems = krActiveItems(c).length>0;
-  var tabsHtml = (c.settlementDone && hasItems) ? '<div style="display:flex;justify-content:flex-end;margin-bottom:12px;"><button class="btn-outline" style="padding:5px 12px;font-size:12px;" onclick="printKrPlan()">打印</button></div>' : ''; /* CMD-1025-04 B：拿掉「建议在韩停留」胶囊（搬进赴韩日程卡）和「在韩 timeline」胶囊（整体 Timeline 里已有）；只留［打印］ */
+  var tabsHtml = (c.settlementDone && hasItems) ? '<button class="btn-outline" style="padding:5px 12px;font-size:12px;" onclick="printKrPlan()">打印</button>' : ''; /* CMD-1025-04 B：拿掉「建议在韩停留」胶囊（搬进赴韩日程卡）和「在韩 timeline」胶囊（整体 Timeline 里已有）；只留［打印］ */
   return krProcedureTabMain(c, tabsHtml);
 }
 /* CMD-1015-15：赴韩施术计划里 IN 也看得到定金 / 尾款（在韩加项的金额仍只有 KR 看得到：加项不计入） */
@@ -6393,7 +6411,7 @@ function krProcedureTabMain(c, tabsHtml){
   var recOpen = !!KR_PLAN_REC_OPEN[c.id];
   var recCard = ''; /* CMD-1020-13 六：「推荐项目整理」整块折叠区拿掉（建议在韩天数放在页面左上角；每个项目的安排在项目卡里看） */
   var noteBox = hasActive ? '<div style="margin-top:14px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">印尼室长备注</div><textarea rows="3" placeholder="印尼室长备注（选填，打印时一起印出）" onchange="setRecInNote(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;resize:vertical;">'+String(c.recInNote||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea></div>' : '';
-  return (tabsHtml||'')+'<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;">'+subStatusRowHtml(caseSubStatusItems(c))+body+'</div>'+recCard+
+  return '<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;position:relative;">'+(tabsHtml ? '<div style="position:absolute;top:16px;right:20px;">'+tabsHtml+'</div>' : '')+subStatusRowHtml(caseSubStatusItems(c))+body+'</div>'+recCard+
     inStayCardHtml(c)+inProjectCardHtml(c)+'</div>'; /* CMD-1025-04 B：施术日期 → 客人赴韩日程 → 项目卡；CMD-1020-09：三张大卡（项目卡 / 术后管理 / 管理项目），在韩持有项目大卡拿掉；备注框、结束术后管理都拿掉 */
 }
 
@@ -9823,9 +9841,18 @@ function canonTabKey(c, k){
   return 'basic';
 }
 /* 术后管理 tab（IN）：今日 / 已预约 / 未预约 / 已完成，韩国 + 印尼都在这里（地点是一栏属性）；印尼的行 IN 能预约 / 修改时间 / 操作完成，韩国的只读 */
+var IN_PC_CAP = {};
+function setInPcCap(id, k){ IN_PC_CAP[id] = k; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
 function inPostcareTabHtml(c){
   var ent = inCareEntries(c), rows = [], e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   ['kr', 'inn'].forEach(function(kd){ ent[kd].forEach(function(g){ g.rows.forEach(function(r){ rows.push({place:kd==='inn' ? '印尼' : '韩国', surg:g.surg, sdate:g.sdate, r:r}); }); }); });
+  /* CMD-1026-15 五：出现印尼的术后管理（且韩国也有）→ 上方「在韩术后｜印尼术后」胶囊；默认：韩国行程还没结束 → 在韩术后，已结束 → 印尼术后；只有一边有就不出现胶囊 */
+  var nkr = rows.filter(function(x){ return x.place==='韩国'; }).length, ninn = rows.length-nkr, capHtml = '';
+  if(nkr && ninn){
+    var cap = IN_PC_CAP[c.id] || (c.krTripEnded ? 'inn' : 'kr'); rows = rows.filter(function(x){ return (x.place==='印尼') === (cap==='inn'); });
+    var pill = function(k, lab, n){ var on = cap===k; return '<span onclick="setInPcCap(\''+c.id+'\',\''+k+'\')" style="cursor:pointer;padding:6px 16px;border-radius:999px;font-size:13px;font-weight:700;'+(on ? 'background:var(--navy);color:#fff;' : 'background:var(--bg-sidebar,#f3efe8);color:var(--slate2);')+'">'+lab+' '+n+'</span>'; };
+    capHtml = '<div style="display:flex;gap:8px;margin:8px 0 4px;">'+pill('kr', '在韩术后', nkr)+pill('inn', '印尼术后', ninn)+'</div>';
+  }
   var grid = 'display:grid;grid-template-columns:minmax(0,1.6fr) 60px minmax(0,1fr) 78px 150px;gap:8px;align-items:center;';
   var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);"><span>项目（对应施术 · 术后管理项目）</span><span>地点</span><span>预约 / 建议日期</span><span>状态</span><span>操作</span></div>';
   var titles = {today:'今日', booked:'预约中', unbooked:'未预约', done:'已完成'}, body = ['today', 'booked', 'unbooked', 'done'].map(function(gk){
@@ -9833,7 +9860,7 @@ function inPostcareTabHtml(c){
     return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">'+titles[gk]+' <span style="font-weight:400;color:var(--muted);">'+list.length+'</span></div>'+inSmallCard(head.replace('border-bottom:1px solid var(--border2);', '')+list.map(function(x){ var r = x.r;
       return '<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span style="font-size:13px;">'+e(buyName(x.surg)||'其他术后管理')+' · '+e(r.name)+(r.sub ? '<div style="font-size:12px;color:var(--muted);">'+e(r.sub)+'</div>' : '')+'</span><span>'+x.place+'</span><span>'+r.time+'</span><span>'+r.st+'</span><span style="display:flex;gap:6px;">'+''+(r.ops||'')+'</span></div>'; }).join(''))+'</div>';
   }).join('');
-  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:4px;">术后管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">免费、不显示价格、不能退款；韩国的由 KR 安排（这里只读），印尼的由本院预约；全部做完、或超过建议日期一个月转成管理项目后结束</span></div>'+(body || '<div style="font-size:13px;color:var(--muted);padding:12px 0;">没有术后管理</div>')+'</div>';
+  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:4px;">术后管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">免费、不显示价格、不能退款；韩国的由 KR 安排（这里只读），印尼的由本院预约；全部做完、或超过建议日期一个月转成管理项目后结束</span></div>'+capHtml+(body || '<div style="font-size:13px;color:var(--muted);padding:12px 0;">没有术后管理</div>')+'</div>';
 }
 /* CMD-1026-08 一：到院当天的操作只在当天的子案件页做——主案件术后管理 tab「今日」行改［查看今天 →］（找得到今天 IN 的子案件才用；找不到仍保留旧按钮） */
 function careTodayKey(m){ var v = visitsOf(m).filter(function(x){ return x.date===todayStr() && x.place==='IN' && (x.rec||x.caseId)!==m.id; })[0]; return v ? v.key : ''; }
@@ -10233,6 +10260,9 @@ function subTodayTabHtml(c){
     if(isRevEval(c) || isContCase(c)){ parts.push(inContCardHtml(c)); } /* CMD-1026-12：复诊 / 继续的子记录页项目 = 今日项目 + 剩余项目两张卡（本地选购走弹窗） */
     else { var lt = ''; if(showLocalTab(c) || c.localMgmt){ var sv = c.activeCaseTab; c.activeCaseTab = 'localmgmt'; try{ lt = caseTabContentLegacy(c); }finally{ c.activeCaseTab = sv; } } if(lt) parts.push(lt); } /* CMD-1026-09 A2：复诊子案件即使还没有术后管理 / 本地项目，项目卡（入口［＋添加本地管理项目］）也要在 */
     if(!parts.length) parts.push('<div class="card" style="padding:22px 24px;font-size:13px;color:var(--muted);">这一天还没有项目。要做术后管理 / 本地项目，请在这里选购或使用，或回主案件的术后管理 tab 看还剩什么。</div>');
+  } else if(ctx.v.place==='IN' && ctx.v.date===todayStr() && (ctx.v.rec||ctx.v.caseId)===m.id && !isEnded(m)){
+    /* CMD-1026-15 一：升级当天（主案件自己的今天，-01）客人还在店：项目 = 今日项目 + 剩余项目两张卡（今天买的本地管理项目在「剩余项目 · 本地管理 · 未使用」，［本次使用］可用，［＋添加本地管理项目］弹本地选购） */
+    parts.push(inContCardHtml(m));
   } else {
     var d = ctx.v.date, rows = summaryRowsOf(m).filter(function(r){ return r.boughtAt===d || (r.uses||[]).some(function(u){ return u.date===d; }); });
     parts.push('<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:8px;">今日项目 <span style="font-weight:400;font-size:12px;color:var(--muted);">'+(ctx.v.place==='KR' ? '韩国这一天的到院操作由 KR 在 KR 端做，这里只读' : '这一天买的 / 做的项目')+'</span></div>'+(rows.length ? rows.map(function(r){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+e(r.name)+' <span style="font-size:12px;color:var(--muted);">· '+e(r.type)+'</span></span><span style="font-size:12px;color:var(--slate2);">'+e(r.status)+(r.boughtAt===d ? ' · 当天购买' : '')+'</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有记录</div>')+'</div>');
