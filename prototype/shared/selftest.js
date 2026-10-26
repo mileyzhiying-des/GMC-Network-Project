@@ -331,7 +331,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.ok(c.stage==='postcare' && !!c.surgeryDoneAt && !isEnded(c), '施术完成且有术后管理 → 术后管理阶段，实际 '+c.stage);
     ST.ok(corePcBooking(c, pcRows(c, 'IN'), ST.krBy), '术后管理预约失败'); ST.ok(c.stage==='postcare' && carePendingRows(c).some(function(s){ return s.place==='IN'; }) && carePendingRows(c).some(function(s){ return s.place==='KR'; }), '韩国 + 印尼的术后管理都还没做');
     ST.finishCare(c); ST.ok(!isEnded(c) && c.stage==='postcare', 'CMD-1021-16：术后管理做完也不自动结案，实际 '+c.stage); ST.ok(ST.tripClose(c) && c.stage==='closed', 'KR［韩国行程结束］+ IN［结案］后结案，实际 '+c.stage);
-    var sc = subCaseList(c); ST.ok(sc.length>=2 && subCaseNo(c, sc[0])===c.caseNo+'-1', '每次到院一个子案件（施术当天是主案件，不另编）');
+    var sc = subCaseList(c); ST.ok(sc.length>=2 && /^A\d{6}-\d{2}$/.test(subCaseNo(c, sc[0])) && c.dayNoOn && Object.keys(c.dayNos).length===new Set(Object.keys(c.dayNos).map(function(k){ return c.dayNos[k]; })).size, '每次到院（一天）一个号，两位数，不重号（CMD-1026-13：原为 -1；升级当天的印尼术后来访与升级日共用 -01）');
   });
   function pcRows(c, inWhere){
     var rows = [], k0 = 0;
@@ -3370,7 +3370,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     joinMain(c1, p0); joinMain(c2, p0); joinMain(c3, p0);
     ST.ok(num(c2)===num(c1)+1 && num(c3)===num(c2)+1, 'C：按确认先后连续编号（日期乱序也不跳号）：'+c1.caseNo+' '+c2.caseNo+' '+c3.caseNo);
     var keep = c1.caseNo; var c4 = mk(ymdAdd(td, 1)); joinMain(c4, p0); ST.ok(c1.caseNo===keep && num(c4)===num(c3)+1, 'C：已给的号不重编，新的 = 最大号 + 1');
-    var last = c4.caseNo; c4.mainId = ''; c4.caseNo = 'A000999'; var c5 = mk(ymdAdd(td, 3)); joinMain(c5, p0); ST.ok(c5.caseNo===last, 'C：取消最后一个后，下一次仍是同一个号（'+last+'）');
+    var last = c4.caseNo; c4.mainId = ''; c4.caseNo = 'A000999'; var c5 = mk(ymdAdd(td, 3)); joinMain(c5, p0); ST.ok(c5.caseNo!==last && num(c5)===num({caseNo:last})+1, 'C：CMD-1026-13：取消的号占位、不再重用，下一个 = 计数器 +1（'+last+' → '+c5.caseNo+'）；原：下一次仍是同一个号');
     /* B：页头三行 + 子案件列表 */
     var ch = c2; ch.visitDate = td; ch.visitTime = '11:00'; ch.subState = 'arrived'; ch.arrivedDay = td; ch.resumeFrom = {caseId:p0.id, type:'术后管理', types:['术后管理']}; ch.careFor = {caseId:p0.id, keys:[]};
     CASE_ITEMS.forEach(function(x){ if(x.mainId===p0.id && x.id!==ch.id && x.id!==c1.id){ x.subState = 'cancelled'; } });
@@ -3451,6 +3451,74 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(k2.caseNo===p0.caseNo+'-08', '7：再来一个子记录 -08，不撞号：'+k2.caseNo);
     ST.ok(tzRender('复诊评估已送出：X（'+k2.caseNo+' · 11/26）').indexOf(k2.caseNo)>-1, '7：通知里的子案件号原样显示（不再换成「到院」）');
     ST.ok(relBackOf(p0).every(function(x){ return x.c.id!==k1.id && x.c.id!==k2.id; }), '8：关联案件不列自己的子案件');
+  });
+
+  ST.def('R139a','CMD-1026-13（A1 分页）：子案件编号一天一个号——一般案件不编号 / 升级当天 -01 / 同一天同一个号 / 取消的号占位 / 项目行不再是子案件号',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var nm = 'R139', td = todayStr();
+    var m = ST.newRes(nm); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; m.visitDate = ymdAdd(td, -6); m.subState = 'arrived';
+    dayNoSync(m); ST.ok(!m.dayNoOn, '1：一般案件（没升级）不编号：dayNoOn='+m.dayNoOn);
+    m.krDepositPaid = true; m.settlementDone = true; m.procedureItems = [{origin:'KR', name:'隆鼻'}, {origin:'KR', name:'垫下巴'}]; dayNoSync(m);
+    ST.ok(m.dayNoOn && dayNoGet(m, m.visitDate, 'IN')===m.caseNo+'-01', '2：升级当天（面诊 / 付定金那天）= -01：'+JSON.stringify(m.dayNos));
+    var d1 = ymdAdd(td, 2), d2 = ymdAdd(td, 4); m.krSchedule = {status:'Confirmed', confirmedDate:d1, confirmedTime:'11:00'}; m.scheduleState = 'Confirmed'; dayNoSync(m);
+    coreSubAdd(m, {date:d1, content:'施术：隆鼻', kind:'施术', place:'KR', time:'11:00'}, 'T'); coreSubAdd(m, {date:d1, content:'施术：垫下巴', kind:'增加项目', place:'KR', time:'11:00'}, 'T');
+    ST.ok(dayNoGet(m, d1, 'KR')===m.caseNo+'-02', '3：KR 施术日 -02，两个施术项目同一个号：'+dayNoGet(m, d1, 'KR'));
+    ST.ok(m.subItems.every(function(x){ return x.no.indexOf('#')>0; }) && m.subItems[0].no!==m.subItems[1].no, '4：项目行的 no 只是内部行 id（带 #），不再是子案件号：'+m.subItems.map(function(x){ return x.no; }).join(','));
+    coreSubAdd(m, {date:d2, content:'拆线', kind:'术后管理记录', place:'KR', time:'10:00'}, 'T'); ST.ok(dayNoGet(m, d2, 'KR')===m.caseNo+'-03', '5：KR 术后 -03');
+    var k1 = ST.newRes(nm+'k1', {phone:clientPhoneOf(m.name)}); k1 = CASE_ITEMS.filter(function(x){ return x.id===k1.id; })[0]; k1.name = m.name; k1.visitDate = ymdAdd(td, 5); k1.needsConsult = false; joinMain(k1, m);
+    ST.ok(k1.caseNo===m.caseNo+'-04', '6：IN 来访子记录 -04（和 KR 到院共用一套）：'+k1.caseNo);
+    k1.subState = 'cancelled'; var k2 = ST.newRes(nm+'k2', {phone:clientPhoneOf(m.name)}); k2 = CASE_ITEMS.filter(function(x){ return x.id===k2.id; })[0]; k2.name = m.name; k2.visitDate = ymdAdd(td, 7); k2.needsConsult = false; joinMain(k2, m);
+    ST.ok(k2.caseNo===m.caseNo+'-05', '7：取消的号占位，不重用：'+k2.caseNo);
+    var k3 = ST.newRes(nm+'k3', {phone:clientPhoneOf(m.name)}); k3 = CASE_ITEMS.filter(function(x){ return x.id===k3.id; })[0]; k3.name = m.name; k3.visitDate = ymdAdd(td, 7); k3.needsConsult = false; joinMain(k3, m);
+    ST.ok(k3.caseNo===k2.caseNo, '8：同一天同一地点沿用同一个号：'+k3.caseNo);
+    var vs = visitsOf(m); ST.ok(vs.map(function(v){ return v.no; }).join()===[m.caseNo+'-01', m.caseNo+'-02', m.caseNo+'-03', m.caseNo+'-04', m.caseNo+'-05'].join(), '9：visitsOf 显示的号 = 登记表：'+vs.map(function(v){ return v.no; }).join());
+    ST.ok(tzRender('复诊评估已送出（'+m.caseNo+'-02）').indexOf(m.caseNo+'-02')>-1 && tzRender('x '+m.caseNo+'-02').indexOf('到院（')<0, '10：通知 / Timeline 里的号原样显示（不再换成「到院（日期）」）');
+    var no1 = dayNoAssign(m, d2, 'KR'); ST.ok(no1===m.caseNo+'-03' && m.dayNoSeq===5, '11：号给了不再改，计数器只增不减：seq='+m.dayNoSeq);
+    /* 旧主案件：已有旧编号 → 不重编 */
+    var o = ST.newRes(nm+'o'); ST.materials(o, {consult:false}); o = CASE_ITEMS.filter(function(x){ return x.id===o.id; })[0]; o.settlementDone = true; o.krDepositPaid = true; o.procedureItems = [{origin:'KR', name:'x'}]; o.subItems = [{id:'o1', no:o.caseNo+'-03', kind:'术后管理记录', place:'KR', content:'old', date:ymdAdd(td, 3), done:false}]; dayNoSync(o);
+    ST.ok(o.dayNoOn===false && o.subItems[0].no===o.caseNo+'-03', '12：旧资料（已有旧编号）不重编、不删：dayNoOn='+o.dayNoOn);
+  });
+
+  ST.def('R139b','CMD-1026-13（A1 分页）：退款按钮在汇总卡右端 / 到店对话框「退款」选项 / 客人页印尼本地持有［退款］、韩国持有没有',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, old = window.GMC_NO_FOLLOWASK; window.alert = function(){}; var nm = 'R139b', td = todayStr();
+    try{
+      var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -9);
+      CLIENT_HOLDINGS[p0.name] = [{itemName:'R139 婴儿针', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -9), bought:3, used:0, usages:[], paid:900000}, {caseId:p0.id, date:ymdAdd(td, -8), bought:2, used:0, usages:[], service:true}]}];
+      /* 2 汇总卡右端 */
+      p0.krDepositPaid = true; p0.settlementDone = true; p0.procedureItems = [{origin:'KR', name:'隆鼻'}]; p0.materialsConfirmed = true; dayNoSync(p0);
+      var ch = ST.newRes(nm+'c', {phone:clientPhoneOf(p0.name)}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.name = p0.name; ch.visitDate = td; ch.needsConsult = false; joinMain(ch, p0); ch.settlementBatches = [{id:'b1', time:td+' 10:00', inTotal:100000, paid:true}]; ch.financePaid = 100000;
+      var sh = settleTabHtml(p0); ST.ok(/justify-content:space-between[^>]*><div class="info-heading"[^>]*>汇总（主案件[^<]*<\/div><button[^>]*openRefundService\(\)/.test(sh), '2：退款按钮在「汇总」卡标题行最右端');
+      ST.ok(sh.split('退款服务（可退批次').length===2, '2：只有一个退款按钮');
+      var c0 = ST.newRes(nm+'r', {phone:clientPhoneOf(p0.name)}); c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.name = p0.name; ST.open(c0); c0.subState = 'arrived'; c0.arrivedDay = td; c0.stage = 'booked'; c0.materialsConfirmed = false; renderCaseBody(c0);
+      ST.ok(document.getElementById('case-body').innerHTML.indexOf('退款服务（可退批次')<0, '2：接待页顶部不再放退款按钮');
+      /* 3 对话框 */
+      window.GMC_NO_FOLLOWASK = false; c0.followupAsked = false; followupAsk(c0);
+      var ov = document.getElementById('followup-overlay'), html = ov.innerHTML; ST.ok(ov.classList.contains('open') && />退款</.test(html.replace(/<[^>]*>/g, '>')) || ov.innerText.indexOf('退款')>-1, '3：对话框有「退款」选项（有可退批次）');
+      var rb = [].filter.call(ov.querySelectorAll('input[name="mode"]'), function(x){ return /refund/.test(x.getAttribute('onchange')||''); })[0]; ST.ok(rb && !rb.disabled, '3：「退款」可选');
+      ST.ok([].slice.call(ov.querySelectorAll('input[name="mode"]')).pop()===rb, '3：「退款」放在最后');
+      var nCases = CASE_ITEMS.length; fuSet('mode', 'refund'); document.getElementById('fu-confirm').click();
+      var rs = document.getElementById('refund-svc-overlay'); ST.ok(rs && rs.classList.contains('open'), '3：选「退款」确认 → 退款弹窗真的出现'); ST.ok(CASE_ITEMS.length===nCases, '3：不开新案件');
+      ST.ok(rs.querySelectorAll('.rs-cb').length===1, '3：弹窗只列可退批次（服务赠送的批次不在）：'+rs.querySelectorAll('.rs-cb').length);
+      cancelRefundService(); ST.ok(document.getElementById('followup-overlay').classList.contains('open'), '3：取消退款回到对话框');
+      fuSet('mode', 'refund'); document.getElementById('fu-confirm').click();
+      rs.querySelector('.rs-cb').checked = true; document.getElementById('rs-amt-0').value = '800000'; document.getElementById('rs-reason').value = '测试退款'; confirmRefundService();
+      var b = CLIENT_HOLDINGS[p0.name][0].batches[0]; ST.ok(b.voided && b.refund && b.refund.amount===800000, '3：退款按现有规则作废该批次'); ST.ok((p0.holdingRefunds||[]).length===1, '3：钱记回当初购买的案件（holdingRefunds）');
+      ST.ok(/客人到店办退款/.test(JSON.stringify(c0.logEntries||[])), '3：Timeline 记「客人到店办退款」'); ST.ok(c0.endNote==='仅办理退款' && isEnded(c0), '3：这次预约收尾为仅办理退款：stage='+c0.stage);
+      ST.ok(CASE_ITEMS.length===nCases, '3：退完仍没有开新案件');
+      /* 无可退批次时灰掉 */
+      var c1 = ST.newRes(nm+'n'); c1 = CASE_ITEMS.filter(function(x){ return x.id===c1.id; })[0]; ST.open(c1); c1.subState = 'arrived'; c1.followupAsked = false; followupAsk(c1);
+      var rb1 = [].filter.call(document.getElementById('followup-overlay').querySelectorAll('input[name="mode"]'), function(x){ return /refund/.test(x.getAttribute('onchange')||''); })[0]; ST.ok(rb1 && rb1.disabled, '3：客人没有可退项目 → 「退款」灰掉');
+      document.getElementById('followup-overlay').classList.remove('open'); FU_ASK = null;
+      /* 客人页 */
+      CLIENT_HOLDINGS[p0.name].push({itemName:'R139 玻尿酸', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -3), bought:2, used:1, usages:[{}], paid:500000}, {caseId:p0.id, date:ymdAdd(td, -2), bought:1, used:0, usages:[], pkg:true}]});
+      document.body.insertAdjacentHTML('beforeend', '<div id="r139-host" style="display:none"><div id="detail-holdings-block"><div id="detail-holdings"></div></div></div>');
+      renderClientHoldings(p0.name); var hh = document.getElementById('detail-holdings'); HOLD_EXPAND = {}; HOLD_EXPAND[0] = true; HOLD_EXPAND[1] = true; renderClientHoldings(p0.name);
+      var btns = [].filter.call(document.querySelectorAll('#detail-holdings button'), function(x){ return /openHoldBatchRefund/.test(x.getAttribute('onclick')||''); }); ST.ok(btns.length===1, '3：客人页印尼本地持有：只有可退的批次有［退款］（部分使用的玻尿酸 1 个；套餐内含 / 已作废 / 赠送没有）：'+btns.length);
+      btns[0].click(); rs = document.getElementById('refund-svc-overlay'); ST.ok(rs.classList.contains('open') && rs.querySelectorAll('.rs-cb:checked').length===1, '3：点［退款］→ 同一个退款弹窗，预选那一批');
+      var hb = document.getElementById('r139-host'); if(hb) hb.remove(); closeRefundService(); REFUND_SVC = null;
+      ST.ok(!/openHoldBatchRefund|openRefundService/.test(String(cliHoldKrHtml)+String(cliHoldKrRows)), '3：韩国持有（cliHoldKrHtml / cliHoldKrRows）代码里没有［退款］入口');
+    } finally { window.alert = al; window.GMC_NO_FOLLOWASK = old; }
   });
 
   ST.def('R138a','CMD-1026-12（A1 分页）：子案件页 今日项目 + 剩余项目两张卡 / 本次使用勾选 / ＋添加本地管理项目弹窗真的出现 / 买完进未使用',function(){

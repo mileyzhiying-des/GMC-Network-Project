@@ -345,6 +345,7 @@ function visitWords(t){
     try{ var kp = (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).some(function(x){ return x && x.caseNo===m && x.mainId; }); if(!kp && typeof isKrAccount==='function' && isKrAccount() && typeof krAllCases==='function') kp = krAllCases().some(function(r0){ return (r0.kids||[]).some(function(k0){ return k0.no===m; }); }); if(kp) return m; }catch(e){}
     var pool = (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).slice(); try{ if(typeof isKrAccount==='function' && isKrAccount() && typeof krAllCases==='function') krAllCases().forEach(function(r){ pool.push(r.c); }); }catch(e){}
     var cands = pool.filter(function(x){ return x && x.caseNo===no; }), c = cands.filter(function(x){ return (x.subItems||[]).some(function(r){ return r.no===m; }); })[0] || cands[0], dno = no+'-'+parseInt(n, 10); /* 案件号每家诊所各自从 A000001 起，同号的案件优先取那一行所在的 */
+    if(c && c.dayNoOn) return m; /* CMD-1026-13：新主案件的 -NN 就是「一天一个号」，原样显示 */
     if(c) try{ subCaseNos(c); }catch(e){}
     /* CMD-1020-06：写成 -01 -02（两位）的是「行号」（subNextNo），不是到院编号；旧记录里行号 -03 曾被误当成第 3 次到院，日期写错（11/02 写成 11/07）→ 按行号找那一行自己的日期 */
     if(c && n.length>=2){ var row = (c.subItems||[]).filter(function(r){ return r.no===m; })[0]; if(row) return row.date ? '到院（'+row.date.slice(5).replace('-', '/')+'）' : '到院'; }

@@ -966,7 +966,7 @@ function renderClientHoldings(name){
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
       var action = b.pkg ? '<span style="font-size:12px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (b.pkgPaid ? '<span style="font-size:12px;color:#C1454A;white-space:nowrap;">套餐 · 不可退款</span>' : (b.comp ? '<span style="font-size:12px;color:#8F6F0C;white-space:nowrap;">置换 · 不可退款</span>' : b.service ? '<span style="font-size:12px;color:var(--blue);white-space:nowrap;">서비스 · 不可退款</span>' : (st==='未使用' || st==='部分使用')
-        ? ''
+        ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;white-space:nowrap;" onclick="openHoldBatchRefund(\''+String(name).replace(/\\/g,'\\\\').replace(/'/g,"\\\\'").replace(/"/g,'&quot;')+'\','+gi+','+bi+')">退款</button>'
         : (b.refund ? '<span style="font-size:12px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '')));
       return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 8px 14px;border-top:1px dashed var(--border2);">'+
         '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · '+(b.pkg ? '套餐内含 · ' : '')+(b.pkgPaid ? '套餐「'+(b.pkgName||'')+'」· ' : '')+(b.comp ? '置换（赴韩定金转本地）· ' : '')+(b.service ? '서비스（赠送）· ' : '')+(b.promo ? '本月活动价 · ' : '')+'购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
@@ -1099,6 +1099,7 @@ function simulateTimePass30(){
 function updateCaseStage(c){
   if(typeof ensureItemIids==='function') ensureItemIids(c); /* CMD-1020-16 三：每笔购买的项目补唯一 id */
   /* CMD-1021-11：拿掉「到院已结束但又有待做的 → 自动重新打开」；重新打开只有已完成到院卡的［增加项目］ */
+  if(!SEEDING && typeof dayNoSync==='function' && !isChildVisit(c)){ try{ dayNoSync(c); }catch(e){ console.error('[子案件编号]', e); } } /* CMD-1026-13：升级后开始一天一个号 */
   c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c);
   if(!SEEDING && typeof mainAutoStatus==='function' && !isChildVisit(c)){ try{ mainAutoStatus(c); }catch(e){ console.error('[主案件状态自动判断]', e); } } /* CMD-1023-02 一：主案件状态自动判断（没有［结案］按钮） */
   if(!SEEDING && c.director && typeof syncSurgeryBlock==='function'){ try{ syncSurgeryBlock(c); }catch(e){} } /* 状态变化后施术块跟着更新（取消的不再占日程） */
@@ -1638,33 +1639,48 @@ function refundServiceBarHtml(c){
   if(isEnded(c) || c.visitClosed || c.subState==='cancelled' || !(c.stage==='booked' ? c.subState==='arrived' : true)) return '';
   if(c.followup || c.linkedCase) return ''; /* CMD-1022-04：复诊 / 术后来访 / 继续类（有关联案件）不显示退款条；一般案件不变 */
   var n = refundableBatches(c.name).length; if(!n) return '';
-  return '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn-outline" onclick="openRefundService()">退款服务（可退批次 '+n+' 个）</button></div>';
+  return '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">'+refundBtnHtml(n)+'</div>';
 }
+/* CMD-1026-13 二：退款按钮本体（放在结算 tab「汇总」卡标题行最右端；没有汇总卡的放结算 tab 最上方靠右） */
+function refundBtnHtml(n){ return '<button class="btn-outline" onclick="openRefundService()">退款服务（可退批次 '+n+' 个）</button>'; }
 var REFUND_SVC = null;
-function openRefundService(){
-  var c = getCurrentCase(); if(!c) return;
-  REFUND_SVC = {caseId:c.id}; renderRefundService();
+function openRefundService(pre, name){ /* pre = 预选的批次对象（客人页持有项目的［退款］）；name 有值 = 从客人页来（没有当前案件） */
+  var c = getCurrentCase();
+  if(name){ REFUND_SVC = {caseId:null, name:name, pre:pre||null}; }
+  else { if(!c) return; REFUND_SVC = {caseId:c.id, name:c.name, pre:pre||null, fromDialog:!!(pre && pre==='dialog')}; if(pre==='dialog') REFUND_SVC.pre = null; }
+  renderRefundService();
+}
+/* 到店对话框选了「退款」→ 直接跳退款弹窗；取消退款回到对话框 */
+function openRefundFromDialog(){ var c = getCurrentCase(); if(!c) return; REFUND_SVC = {caseId:c.id, name:c.name, pre:null, fromDialog:true}; renderRefundService(); }
+function cancelRefundService(){
+  var ctx = REFUND_SVC; closeRefundService(); REFUND_SVC = null;
+  if(ctx && ctx.fromDialog){ var c = getCurrentCase(); if(c){ c.followupAsked = false; followupAsk(c); } }
+}
+/* 客人页印尼本地持有批次的［退款］：预选那一批，走同一个退款弹窗 */
+function openHoldBatchRefund(name, gi, bi){
+  var h = holdingsAllSorted(name).filter(function(x){ return holdingRemaining(x)>0; })[gi]; if(!h) return; var b = h.batches[bi]; if(!b) return; /* gi 是客人页「剩余 > 0」列表里的序号 */
+  openRefundService(b, name);
 }
 function renderRefundService(){
-  var c = getCurrentCase(); if(!c) return;
+  var ctx = REFUND_SVC || {}, c = ctx.caseId ? getCurrentCase() : {name:ctx.name, id:null}; if(!c) return;
   var ov = document.getElementById('refund-svc-overlay');
   if(!ov){ ov = document.createElement('div'); ov.id = 'refund-svc-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   var inp = 'padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;';
   var rows = refundableBatches(c.name).map(function(x, i){
     var b = x.b, cur = b.currency || 'IDR', remain = b.bought-b.used, pct = (b.discountPct===undefined || b.discountPct===null) ? 100 : b.discountPct;
-    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:8px;"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" class="rs-cb" data-i="'+i+'" style="margin-top:3px;"><span style="flex:1;font-size:13px;"><b>'+x.h.itemName+'</b>'+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'<div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 已用 '+b.used+'/'+b.bought+'（剩余 '+remain+' 次将作废）'+
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:8px;"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" class="rs-cb" data-i="'+i+'"'+(ctx.pre && ctx.pre===b ? ' checked' : '')+' style="margin-top:3px;"><span style="flex:1;font-size:13px;"><b>'+x.h.itemName+'</b>'+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'<div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 已用 '+b.used+'/'+b.bought+'（剩余 '+remain+' 次将作废）'+
       (typeof b.paid==='number' ? '<br>当初实付 <b>'+formatCurrency(b.paid, cur)+'</b>'+(b.promo ? '（活动价）' : '')+(pct<100 && b.listPrice ? '　原价 '+formatCurrency(b.listPrice, cur)+'，'+discountText(pct) : '')+'；按剩余次数参考 '+formatCurrency(b.bought>0 ? Math.round(b.paid*remain/b.bought) : 0, cur) : '<br><span style="color:var(--muted);">没有记录当初实付，无法校验上限</span>')+'</div></span></label>'+
       '<div style="margin:6px 0 0 24px;font-size:12px;">退款金额（Rp，可为 0，不超过实付）：<input type="number" min="0" id="rs-amt-'+i+'" style="'+inp+'width:150px;"></div></div>';
   }).join('');
-  ov.innerHTML = '<div class="modal-box" style="width:560px;max-height:84vh;overflow:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">退款服务</span><span style="cursor:pointer;" onclick="closeRefundService()">✕</span></div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:560px;max-height:84vh;overflow:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">退款服务</span><span style="cursor:pointer;" onclick="cancelRefundService()">✕</span></div>'+
     '<div style="font-size:12px;color:var(--slate2);margin-bottom:8px;">勾选要退的批次（可一次退多批）；退款后这一批作废、剩余次数归零；退款记在当初购买该批次的案件上。</div>'+(rows || '<div style="font-size:12px;color:var(--muted);">没有可退的批次</div>')+
     '<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">退款原因 <span style="color:#C1454A;">*</span></div><textarea id="rs-reason" rows="3" placeholder="请输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>'+
-    '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-primary" style="flex:1;" onclick="confirmRefundService()">确认退款</button><button class="btn-outline" onclick="closeRefundService()">取消</button></div></div>';
+    '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-primary" style="flex:1;" onclick="confirmRefundService()">确认退款</button><button class="btn-outline" onclick="cancelRefundService()">取消</button></div></div>';
   ov.classList.add('open');
 }
 function closeRefundService(){ var ov = document.getElementById('refund-svc-overlay'); if(ov) ov.classList.remove('open'); }
 function confirmRefundService(){
-  var c = getCurrentCase(); if(!c) return;
+  var ctx = REFUND_SVC || {}, c = ctx.caseId ? getCurrentCase() : (ctx.name ? {name:ctx.name, id:null, _client:true} : null); if(!c) return;
   var list = refundableBatches(c.name), picks = [];
   [].forEach.call(document.querySelectorAll('.rs-cb'), function(cb){ if(cb.checked){ var i = parseInt(cb.getAttribute('data-i'),10), x = list[i]; if(x) picks.push({x:x, i:i}); } });
   if(!picks.length){ alert('请至少勾选一个批次'); return; }
@@ -1682,12 +1698,19 @@ function confirmRefundService(){
     var pc = CASE_ITEMS.filter(function(y){ return y.id===b.caseId; })[0];
     var line = '退款服务：'+h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'（'+b.date+' 购买，案件 '+caseNoLabel(b.caseId)+'，剩余 '+b.voidedRemaining+' 次作废），退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reason+'；办理案件 '+(c.caseNo||'');
     if(pc){ pc.holdingRefunds = pc.holdingRefunds || []; pc.holdingRefunds.push({itemName:h.itemName, amount:amt, reason:reason, date:today, qty:b.voidedRemaining||0, viaCaseId:c.id}); logCaseEvent(pc, ME_NAME, line+'；退款记在本案件，结局不变'); }
-    if(!pc || pc.id!==c.id) logCaseEvent(c, ME_NAME, line);
+    if(c.id && (!pc || pc.id!==c.id)) logCaseEvent(c, ME_NAME, line);
     if(cl){ cl.timeline = cl.timeline || []; cl.timeline.push({stage:'退款服务', actor:ME_NAME, actorId:currentAccountId(), action:line, dt:nowFullDt(), kind:'plain'}); }
     names.push(h.itemName);
   });
+  closeRefundService(); REFUND_SVC = null;
+  if(c._client){ try{ renderClientDetailIn(c.name); }catch(e){} return; } /* CMD-1026-13：客人页持有项目的［退款］——只记在购买案件和客人 Timeline，不涉及当前案件 */
   c.refundVisit = {fromCaseId:picks[0].x.b.caseId, itemName:names.join('、'), amount:picks.reduce(function(s,p){ return s+p.amt; }, 0)};
-  closeRefundService();
+  if(ctx.fromDialog){ /* 到店对话框选「退款」：不开新案件；退完直接算客人离店、这次预约收尾（仅办理退款） */
+    c.followupAsked = true; c.continueNew = false; logCaseEvent(c, ME_NAME, '客人到店办退款：'+names.join('、'));
+    buildCaseLog(c); renderCaseBody(c);
+    c.endNote = '仅办理退款'; logCaseEvent(c, ME_NAME, '这次只办退款，案件结束'); autoFinish(c, '未购买未使用');
+    return;
+  }
   buildCaseLog(c); renderCaseBody(c);
   openRefundOnlyAsk();
 }
@@ -1721,7 +1744,7 @@ function renderCaseBody(c){
   if(!c.materialsConfirmed){ /* CMD-1022-15：接待页分两个 tab：基础资料 / Timeline（附件等其他 tab 仍要基础资料确认后才有） */
     var rt = c.activeCaseTab==='timeline' ? 'timeline' : 'basic';
     var rtabs = '<div class="tabs" style="margin-bottom:4px;"><span class="tab'+(rt==='basic' ? ' active' : '')+'" onclick="switchCaseTab(\'basic\')">基础资料</span><span class="tab'+(rt==='timeline' ? ' active' : '')+'" onclick="switchCaseTab(\'timeline\')">Timeline</span></div>';
-    el.innerHTML = rtabs+(rt==='timeline' ? caseTimelineCardHtml(c) : refundServiceBarHtml(c)+basicFourHtml(c, false)); return;
+    el.innerHTML = rtabs+(rt==='timeline' ? caseTimelineCardHtml(c) : basicFourHtml(c, false)); return;
   }
   normalizeCaseTab(c);
   if(typeof subPageActive==='function' && subPageActive(c)){ el.innerHTML = subPageHtml(c); return; } /* CMD-1023-03 P3：子案件页 */

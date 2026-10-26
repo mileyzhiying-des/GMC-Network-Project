@@ -2688,8 +2688,10 @@ function joinMain(c, src){
   var m = mainOf(src); if(!m || m.id===c.id) return null;
   var old = c.caseNo; c.mainId = m.id; if(!c._origCaseNo) c._origCaseNo = old; /* CMD-1026-01 二：取消接待时要还原原来的案件号 */
   /* CMD-1026-09 C：子案件号按确认继续（joinMain）的先后顺序一个接一个，下一个号 = 这个主案件现有最大号 + 1，不再按日期排序的位置；同一天已有这个主案件的另一笔来访 → 同一个子案件、同一个号；给了就不再改（已有的号不重编） */
+  dayNoSync(m); /* CMD-1026-13：先让主案件开始编号（升级当天 -01） */
   var vs0 = visitsOf(m), sameDay = vs0.filter(function(v){ return v.caseId!==c.id && v.date===c.visitDate && v.place==='IN'; })[0];
-  if(sameDay) c.caseNo = sameDay.no;
+  if(m.dayNoOn){ c.caseNo = dayNoAssign(m, c.visitDate, c.krVisit ? 'KR' : 'IN'); }
+  else if(sameDay) c.caseNo = sameDay.no;
   else { var mx1 = mainNoMax(m, c.id); c.caseNo = (m.caseNo||'')+'-'+pad2(mx1+1); } /* CMD-1026-11 七：和韩国行共用一套号 */
   if(old && old!==c.caseNo && old==='A'+String(CASE_NO_SEQ-1).padStart(6,'0')){ CASE_NO_SEQ--; c._seqBack = true; }
   try{ mainAutoStatus(m); }catch(e){ console.error('[加入主案件后状态自动判断]', e); } /* CMD-1023-02 一：加了新的子案件 → 主案件自动变回进行中 */
@@ -2774,8 +2776,9 @@ function fuRender(){
   var body = '<div style="font-size:15px;font-weight:700;margin-bottom:6px;">请选择本次服务类型</div>'+
     radio('mode','none','开始新的服务案件',a.mode==='none')+
     radio('mode','link','继续之前的服务案件',a.mode==='link', !canLink, '没有可以继续的案件')+
-    radio('mode','local','使用之前购买的项目',a.mode==='local', !locals.length, '没有可以使用的持有项目');
-  var ok = a.mode==='none';
+    radio('mode','local','使用之前购买的项目',a.mode==='local', !locals.length, '没有可以使用的持有项目')+
+    radio('mode','refund','退款',a.mode==='refund', !refundableBatches(c.name).length, '客人没有可以退款的项目'); /* CMD-1026-13 三：专门来退款，放最后 */
+  var ok = a.mode==='none' || a.mode==='refund';
   if(a.mode==='local'){
     if(!locals.some(function(x){ return x.m.id===a.sel; })) a.sel = locals.length ? locals[0].m.id : '';
     body += '<div style="margin:8px 0 6px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">还有没用完的项目</div><select onchange="fuSet(\'sel\',this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+locals.map(function(x){ return '<option value="'+x.m.id+'"'+(x.m.id===a.sel ? ' selected' : '')+'>'+x.m.caseNo+' · 持有：'+mainHoldOf(x.m).map(function(h){ return cesc(buyName(h.name))+' 剩 '+h.left; }).join('、')+(x.back ? '（回到这个主案件）' : '（新案件，标来源 '+x.m.caseNo+'）')+'</option>'; }).join('')+'</select></div>';
@@ -2804,7 +2807,7 @@ function fuRender(){
       ok = r.status==='pass';
     } else ok = !!src && (s.consult || s.care || s.revisit);
   }
-  var foot = '<button class="btn-primary" id="fu-confirm" '+(ok ? '' : 'disabled style="opacity:.4;cursor:not-allowed;" ')+'onclick="followupAskDone('+(a.mode==='none' ? 'false' : 'true')+')">确认</button>';
+  var foot = '<button class="btn-primary" id="fu-confirm" '+(ok ? '' : 'disabled style="opacity:.4;cursor:not-allowed;" ')+'onclick="'+(a.mode==='refund' ? 'followupRefundGo()' : 'followupAskDone('+(a.mode==='none' ? 'false' : 'true')+')')+'">确认</button>';
   ov.innerHTML = '<div class="modal-box" style="width:520px;max-height:86vh;overflow:auto;">'+body+'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;">'+foot+'</div></div>';
 }
 function fuRefreshBtn(){ var c = getCurrentCase(), a = FU_ASK, b = document.getElementById('fu-confirm'); if(!c || !a || !b) return; var src = fuCandsOf(c, a).filter(function(x){ return x.id===a.sel; })[0]; var ok = a.svc.consult ? (src && resumeChecksOf(a, src).status==='pass') : !!src; b.disabled = !ok; b.style.opacity = ok ? '' : '.4'; b.style.cursor = ok ? '' : 'not-allowed'; }
@@ -2831,6 +2834,12 @@ function followupAskNewLight(){
   c.followupAsked = true; c.continueNew = true;
   if(m){ c.lightLink = {caseId:m.id, caseNo:m.caseNo, reason:'复诊（超过 3 个月，重新面诊）'}; c.noteOverall = (c.noteOverall ? c.noteOverall+'\n' : '')+'复诊超过 3 个月，重新面诊；之前的主案件：'+m.caseNo; }
   logCaseEvent(c, actingName(), '到店：复诊超过 3 个月，重新面诊，开新的主案件'+(m ? '，轻关联原主案件 '+m.caseNo : '')); buildCaseLog(c); renderCaseBody(c);
+}
+/* CMD-1026-13 三：选「退款」→ 不开新案件，直接跳退款弹窗（退款照现有退款规则，钱记回当初买的案件）；取消退款回到这个对话框 */
+function followupRefundGo(){
+  var ov = document.getElementById('followup-overlay'), ctx = FU_ASK; if(ov) ov.classList.remove('open'); FU_ASK = null;
+  var c = getCurrentCase(); if(!c || !ctx || c.id!==ctx.caseId) return;
+  openRefundFromDialog();
 }
 function followupAskDone(link){
   var ov = document.getElementById('followup-overlay'), ctx = FU_ASK; if(ov) ov.classList.remove('open'); FU_ASK = null;
@@ -5523,7 +5532,7 @@ function dirOpInfo(hid, rawName){
 }
 function subCaseRows(c, rep){ var k = subCaseKey(rep); return (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.skipped && !(s.place==='IN' && !s.done) && subCaseKey(s)===k; }); }
 /* 子案件编号：按日期顺序排；「全部延期」结案的那一张保留它的编号，不让后面的子案件顶替（CMD-1015-22） */
-function subCaseNums(c){ var used = {}; Object.keys(c.visitEnds||{}).forEach(function(k){ used[c.visitEnds[k].no] = 1; }); var out = [], n = 0; subCaseList(c).forEach(function(){ do{ n++; }while(used[c.caseNo+'-'+n]); out.push(c.caseNo+'-'+n); }); return out; }
+function subCaseNums(c){ if(c.dayNoOn){ return subCaseList(c).map(function(r){ return dayNoGet(mainOf(c), r.place==='IN' ? (r.visitDate||r.date) : r.date, r.place) || ''; }); } var used = {}; Object.keys(c.visitEnds||{}).forEach(function(k){ used[c.visitEnds[k].no] = 1; }); var out = [], n = 0; subCaseList(c).forEach(function(){ do{ n++; }while(used[c.caseNo+'-'+n]); out.push(c.caseNo+'-'+n); }); return out; }
 function subCaseNo(c, s){ var l = subCaseList(c), nums = subCaseNums(c), i = -1; l.forEach(function(r, n){ if(subCaseKey(r)===subCaseKey(s)) i = n; }); return i<0 ? '' : nums[i]; }
 function subCaseNos(c){ var nums = subCaseNums(c); subCaseList(c).forEach(function(r, i){ subCaseRows(c, r).forEach(function(x){ x.dno = nums[i]; }); }); }
 /* CMD-1026-11 七：一个主案件下只有一套子案件号（-01、-02…，两位）：韩国到院的行（subItems[].no）和印尼来访的子记录（带 mainId 的 caseNo）共用——下一个号 = 这个主案件两边已用过的最大号 + 1（已取消的子记录、已存在的重号也算进去，不再重号）；给了不再改，已有资料不重编。
@@ -5535,7 +5544,41 @@ function mainNoMax(m, exceptId){
   try{ visitsOf(m).forEach(function(v){ if(v.rec===m.id) note(v.no); }); }catch(e){} /* 主案件自己的那一天（第一次来访）也是一个编号 */
   return mx;
 }
-function subNextNo(c){ return c.caseNo+'-'+pad2(mainNoMax(c)+1); }
+/* CMD-1026-13 一：子案件编号「一天一个号」。新的主案件（升级之后）：m.dayNoOn=true，m.dayNos={'日期|地点':'A000011-02'}，m.dayNoSeq=只增不减的计数器；
+   KR 到院和 IN 来访共用，同一天同一地点沿用同一个号，取消的号也占位、不重用，给了不再改；没升级的一般案件不编号；升级那一天（面诊 / 付定金当天）= -01。
+   项目行的 no 改成内部行 id（A000011#3，不再是子案件号）；旧主案件（已有旧编号）m.dayNoOn=false，仍按旧办法显示，不重编不删。 */
+function dayNoLegacy(m){
+  var pre = (m.caseNo||'')+'-';
+  return (m.subItems||[]).some(function(s){ return String(s.no||'').indexOf(pre)===0; }) || CASE_ITEMS.some(function(x){ return x.mainId===m.id && x.id!==m.id && String(x.caseNo||'').indexOf(pre)===0; });
+}
+function dayNoKey(date, place){ return String(date||'').slice(0,10)+'|'+(place||'IN'); }
+function dayNoAssign(m, date, place){
+  if(!m || !m.dayNoOn || !date) return '';
+  m.dayNos = m.dayNos || {}; var k = dayNoKey(date, place);
+  if(m.dayNos[k]) return m.dayNos[k];
+  m.dayNoSeq = (m.dayNoSeq||0)+1;
+  return (m.dayNos[k] = (m.caseNo||'')+'-'+pad2(m.dayNoSeq));
+}
+function dayNoGet(m, date, place){ return (m && m.dayNoOn && m.dayNos) ? (m.dayNos[dayNoKey(date, place)]||'') : ''; }
+/* 开始编号：升级后第一次调用时决定新 / 旧；升级当天 = -01；之后 visitsOf 里还没号的日子按日期补上 */
+function dayNoSync(m){
+  if(!m || isChildVisit(m)) return;
+  if(m.dayNoOn===false) return;
+  if(!m.dayNoOn){
+    if(!isUpgraded(m)) return;
+    if(dayNoLegacy(m)){ m.dayNoOn = false; return; }
+    m.dayNoOn = true; m.dayNos = m.dayNos||{}; m.dayNoSeq = m.dayNoSeq||0;
+    if(m.visitDate) dayNoAssign(m, m.visitDate, m.krVisit ? 'KR' : 'IN');
+  }
+  try{ visitsOf(m).filter(function(v){ return !dayNoGet(m, v.date, v.place); }).forEach(function(v){ dayNoAssign(m, v.date, v.place); }); }catch(e){}
+}
+/* 项目行的内部 id：新主案件用 A000011#3（不是子案件号）；旧主案件沿用旧的 -NN */
+function subNextNo(c){
+  if(c.dayNoOn){ var n = (c.subItems||[]).length+1; while((c.subItems||[]).some(function(x){ return x.no===c.caseNo+'#'+n; })) n++; return c.caseNo+'#'+n; }
+  return c.caseNo+'-'+pad2(mainNoMax(c)+1);
+}
+/* 这一行所在那一天的子案件号（新主案件）；旧主案件返回行自己的旧号 */
+function rowDayNo(c, s){ if(!c || !s) return ''; if(c.dayNoOn){ var m = mainOf(c); return dayNoGet(m, s.place==='IN' ? (s.visitDate||s.date) : s.date, s.place) || ''; } return s.no||''; }
 function coreSubAdd(c, o, by){
   if(!c.settlementDone) return false;
   c.subItems = c.subItems || [];
@@ -5545,8 +5588,9 @@ function coreSubAdd(c, o, by){
   if(o.time) s.time = o.time;
   if(o.pcb) s.pcb = true; /* 由「术后管理预约」弹窗产生 */
   c.subItems.push(s); c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || a.no.localeCompare(b.no); });
+  try{ dayNoSync(c); }catch(e){}
   if(o.silent) return s;
-  logCaseEvent(c, by, 'KR新增'+subKindLabel(s.kind)+' '+s.no+'：'+s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）');
+  logCaseEvent(c, by, 'KR新增'+subKindLabel(s.kind)+' '+(rowDayNo(c, s)||s.no)+'：'+s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）');
   return true;
 }
 /* 术后管理预约（CMD-1012-02 D4）：按术后管理设定逐条生成；rows = [{projectId, batchId, pcIdx, mgmt, name, innName, date, time, where:'KR'|'IN', askIn}]
@@ -5597,13 +5641,13 @@ function coreSubEdit(c, id, patch, by){
   var before = s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）';
   Object.keys(patch).forEach(function(k){ s[k] = patch[k]; });
   c.subItems.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || a.no.localeCompare(b.no); });
-  logCaseEvent(c, by, 'KR修改在韩子项 '+s.no+'：'+before+' → '+s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）');
+  logCaseEvent(c, by, 'KR修改在韩子项 '+(rowDayNo(c, s)||s.no)+'：'+before+' → '+s.date+' '+s.content+'（'+SUB_PLACE_LABEL[s.place]+'）');
   return true;
 }
 function coreSubDel(c, id, by){
   var i = (c.subItems||[]).findIndex(function(x){ return x.id===id; }); if(i<0 || c.subItems[i].done || c.subItems[i].kind==='施术' || c.subItems[i].kind==='增加项目') return false;
   var s = c.subItems.splice(i, 1)[0];
-  logCaseEvent(c, by, 'KR删除在韩子项 '+s.no+'：'+s.date+' '+s.content);
+  logCaseEvent(c, by, 'KR删除在韩子项 '+(rowDayNo(c, s)||s.no)+'：'+s.date+' '+s.content);
   return true;
 }
 /* IN 赴韩项目 tab 下的子 tab 切换 + 在韩 timeline（只读） */
@@ -5619,7 +5663,7 @@ function subItemRowHtml(s, cells){
   var pc = {KR:['var(--terracotta-bg)','var(--terracotta)'], IN:['var(--sage-bg)','var(--sage)'], either:['var(--blue-bg)','var(--blue)']}[s.place] || ['var(--border2)','var(--slate2)'];
   var kc = {'施术':['#F3DFD3','#8A4A2A'], '增加项目':['#FBF0C9','#8F6F0C'], '术后管理记录':['var(--blue-bg)','var(--blue)']}[subKindLabel(s.kind)];
   var st = '<span class="status-pill" style="background:'+(s.done?'var(--sage-bg)':'var(--border2)')+';color:'+(s.done?'var(--sage)':'var(--slate2)')+';">'+(s.done?'已完成':'未开始')+'</span>'+(s.booked ? ' <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">已预约 '+s.booked+'</span>' : (s.informed ? ' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;">KR 已通知预约</span>' : ''));
-  return '<div title="编号 '+s.no+'" style="display:grid;grid-template-columns:'+SUB_GRID_COLS+';gap:10px;align-items:center;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border2);">'+
+  return '<div title="'+(rowDayNo(c, s)||s.no)+'" style="display:grid;grid-template-columns:'+SUB_GRID_COLS+';gap:10px;align-items:center;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border2);">'+
     '<span>'+(cells.date || s.date)+'</span><span class="status-pill" style="background:'+kc[0]+';color:'+kc[1]+';justify-self:start;">'+subKindLabel(s.kind)+'</span>'+
     '<span>'+(s.dno && s.kind!=='增加项目' ? '<b style="font-size:12px;color:var(--slate2);" title="'+s.dno+'">到院</b> ' : '')+(cells.content || s.content)+'</span><span>'+st+'</span>'+
     '<span>'+(cells.place || '<span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+SUB_PLACE_LABEL[s.place]+'</span>')+'</span><span>'+(cells.ops || '')+'</span><span style="text-align:right;">'+(cells.done || '')+'</span></div>'+
@@ -9560,6 +9604,9 @@ function visitsOf(m){
   out.sort(function(a, b){ return a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||'') || (a.place===b.place ? 0 : (a.place==='IN' ? -1 : 1)); });
   out.forEach(function(v, i){
     v.seq = i+1; v.no = (m.caseNo||'')+'-'+(i+1<10 ? '0' : '')+(i+1);
+    if(m.dayNoOn){ /* CMD-1026-13：新主案件按「一天一个号」登记表显示；子记录到店时定下的号固定不变（来访日期之后被改也不跟着变） */
+      v.no = dayNoGet(m, v.date, v.place) || ''; var ch0 = v.caseId!==m.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null;
+      if(ch0 && isChildVisit(ch0) && String(ch0.caseNo||'').indexOf((m.caseNo||'')+'-')===0) v.no = ch0.caseNo; return; }
     var ch = v.caseId!==m.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null; /* 子记录到店时定下的编号固定不变 */
     if(ch && isChildVisit(ch) && String(ch.caseNo||'').indexOf((m.caseNo||'')+'-')===0) v.no = ch.caseNo;
   });
@@ -9873,7 +9920,13 @@ function mainMoneyTotals(m){
 (function(){
   var s1 = settleTabHtml, f1 = showSettleTab;
   showSettleTab = function(c){ return f1.apply(this, arguments) || (!!c.materialsConfirmed && refundServiceBarHtml(c)!==''); };
-  settleTabHtml = function(c){ return refundServiceBarHtml(c)+s1.apply(this, arguments); };
+  settleTabHtml = function(c){
+    var h = s1.apply(this, arguments), bar = refundServiceBarHtml(c); if(!bar) return h;
+    var n = refundableBatches(c.name).length, btn = refundBtnHtml(n), re = /<div class="info-heading" style="margin-bottom:6px;">(汇总（主案件 [^<]*）)<\/div>/;
+    /* CMD-1026-13 二：有「汇总」卡 → 退款按钮放在汇总卡标题行最右端；没有汇总卡 → 放结算 tab 最上方靠右（自己判断：结算卡不止一张时没有统一标题行） */
+    if(re.test(h)) return h.replace(re, '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div class="info-heading" style="margin-bottom:0;">$1</div>'+btn+'</div>');
+    return bar+h;
+  };
 })();
 
 
