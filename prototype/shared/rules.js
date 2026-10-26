@@ -339,10 +339,10 @@ function visitOrdText(dno, c){ /* 兼容旧调用：有案件就写日期，没�
   var rep = c && dno ? subCaseList(c).filter(function(r){ return r.dno===dno; })[0] : null;
   return rep ? '到院（'+String(rep.date||'').slice(5).replace('-', '/')+'）' : '到院';
 }
-/* CMD-1026-10 二：子案件号写进通知文字时，用不换行连字符（U+2011），不被 visitWords 当成「行号 / 到院编号」换成别的日期（子记录号 A000011-05 和主案件某一行的行号 A000011-05 会撞号） */
-function subNoTxt(c){ var n = (c && c.caseNo) || ''; return (c && typeof isChildVisit==='function' && isChildVisit(c)) ? n.replace(/-/g, '\u2011') : n; }
 function visitWords(t){
   return String(t==null ? '' : t).replace(/(A\d{6})-(\d+)/g, function(m, no, n){
+    /* CMD-1026-11 七：真有这个号的子记录（印尼来访）→ 原样显示，不再换成「到院（日期）」——一个主案件下只有一套号（新给的号不会和韩国行的行号撞）；旧资料里撞号的，子记录优先 */
+    try{ var kp = (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).some(function(x){ return x && x.caseNo===m && x.mainId; }); if(!kp && typeof isKrAccount==='function' && isKrAccount() && typeof krAllCases==='function') kp = krAllCases().some(function(r0){ return (r0.kids||[]).some(function(k0){ return k0.no===m; }); }); if(kp) return m; }catch(e){}
     var pool = (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).slice(); try{ if(typeof isKrAccount==='function' && isKrAccount() && typeof krAllCases==='function') krAllCases().forEach(function(r){ pool.push(r.c); }); }catch(e){}
     var cands = pool.filter(function(x){ return x && x.caseNo===no; }), c = cands.filter(function(x){ return (x.subItems||[]).some(function(r){ return r.no===m; }); })[0] || cands[0], dno = no+'-'+parseInt(n, 10); /* 案件号每家诊所各自从 A000001 起，同号的案件优先取那一行所在的 */
     if(c) try{ subCaseNos(c); }catch(e){}

@@ -856,7 +856,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   };
   ST.def('G1','面诊等报告时手动结束 → 仅出报告，KR 之后的诊疗方案仍进案件',function(){
     var c = ST.newRes('G1'); ST.arrive(c); ST.materials(c,{consult:true}); ST.payConsult(c); coreConfirmConsultTimes(c, todayStr(), '20:30', D(1)+' 05:00', ST.krBy);
-    ST.open(c); ST.ok(canEndCase(c) && /客人离店/.test(document.getElementById('case-status-bar').innerHTML), '付定金前应显示［客人离店］（CMD-1022-15 改名）');
+    ST.open(c); ST.ok(canEndCase(c) && /客人离店/.test(document.getElementById('case-chat-actions').innerHTML), '付定金前页头右上角应显示［客人离店］（CMD-1022-15 改名；CMD-1026-11 搬到右上角）');
     openEndCase(); var rows = endCaseRows(c); ST.ok(rows.some(function(r){ return r.key==='consult'; }), '弹窗应列出「面诊未出报告 → 照样等报告」'); closeEndCase();
     ST.endCase(c, {}, '失联'); ST.ok(c.stage==='reportonly', '面诊费已缴、报告未出就结束应是仅出报告，实际 '+c.stage); ST.ok(ST.hasLog(c, /手动结束案件（付定金前，当时：面诊等报告）：失联/), '缺手动结束记录');
     /* KR 之后仍可发送诊疗方案 */
@@ -3401,6 +3401,16 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.open(ch); inAddLocalProject(); ST.ok(!!ch.localMgmt && ch.localMgmt.step==='buy', 'A2：［＋ 添加本地管理项目］进入现有本地选购流程（step=buy）');
   });
 
+  ST.def('R137b','CMD-1026-11（KM1 分页，需要 pcStage 夹具）：KR 面诊报告出来后，面诊卡 + 到访目的合成一张（默认折叠，展开全部打开）',function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(r){ return !isRevEval(r.c) && (r.c.concerns||[]).length; })[0] || krAllCases()[0]; if(!ST.ok(!!r0, '没有案件')) return;
+    var cid = r0.clinicId, id = r0.id, h1, h2;
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.consultRequested = true; c.consultStatus = 'report_ready'; c.reportReady = true; c.reportDate = todayStr(); c.reportEta = nowFullDt(); c.revisitEval = null; c.consultKind = ''; c.reuseReport = null; c.needsConsult = true; });
+    Store.withClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; KR_CASE.clinicId = cid; KR_CASE.id = id; delete KR_RPTVP_OPEN[c.id]; h1 = krTabConsult(c); KR_RPTVP_OPEN[c.id] = true; h2 = krTabConsult(c); delete KR_RPTVP_OPEN[c.id]; });
+    ST.ok(/负责院长/.test(h1) && /面诊报告时间（韩国）/.test(h1) && /到访目的/.test(h1) && h1.indexOf('메타뷰')<0, '5：报告出来后一张面诊卡：负责院长 + 面诊报告时间 + 到访目的（默认折叠，没有메타뷰/部位内容）');
+    ST.ok(/메타뷰/.test(h2) && /预算|苦恼|希望预期/.test(h2) || /메타뷰/.test(h2), '5：展开后메타뷰、部位、预算全部打开');
+  });
+
   ST.def('R136a','CMD-1026-10（KM1 分页，需要 pcStage 夹具）：复诊评估送到 KR 有待办（OFF 不影响）/ 通知写子案件号和日期 / KR 状态标签优先 KR 的事 / 复诊 tab 卡片',function(){
     var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
     var rows0 = krAllCases(), r0 = rows0.filter(function(r){ return r.c.stage==='postcare' || (r.c.procedureItems||[]).length; })[0]; if(!ST.ok(!!r0, '没有 pcStage 夹具主案件')) return;
@@ -3418,11 +3428,38 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var row = krAllCases().filter(function(r){ return r.id===mid; })[0];
     ST.ok(row.krStage && row.krStage.stage==='复诊评估' && row.krStage.proc==='待确认时间', '3：KR 状态标签优先复诊评估 · 待确认时间：'+JSON.stringify(row.krStage));
     /* 通知文字 */
-    var txt = '复诊评估已送出：X（'+subNoTxt(kid)+' · 11/26 · 诊所）→ 请确认'; ST.ok(tzRender(txt).indexOf('到院（')<0 && tzRender(txt).indexOf('11/26')>-1, '2：通知里的子案件号不被换成「到院（日期）」：'+tzRender(txt));
+    var txt = '复诊评估已送出：X（'+kid.caseNo+' · 11/26 · 诊所）→ 请确认'; ST.ok(tzRender(txt).indexOf('到院（')<0 && tzRender(txt).indexOf('11/26')>-1, '2：通知里的子案件号不被换成「到院（日期）」：'+tzRender(txt));
     /* 复诊 tab */
     var h = Store.withClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0]; KR_CASE.clinicId = cid; return krTabRevisit(m); });
     ST.ok(/待确认时间/.test(h) && (h.match(/送出/g)||[]).length<=1 && /打开复诊评估/.test(h), '4：复诊 tab 标题行写状态，「送出」只出现一次，下面只放［打开复诊评估］');
     Store.mutateClinic(cid, function(){ CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!=='r136kid'; }); });
+  });
+
+  ST.def('R137a','CMD-1026-11（A1 分页）：一般案件无第三行 / 右上三按钮 / 催办只在面诊卡 / 无演示按钮 / 退款服务在结算 tab / 关联案件不列自己的子案件 / 子案件号一套',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var nm = 'R137', td = todayStr();
+    var c = ST.newRes(nm, {purpose:'面诊商谈'}); ST.materials(c, {consult:true}); c = CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; c.subState = 'arrived'; c.arrivedDay = td; c.stage = 'consult'; c.consultRequested = true; c.consultStatus = 'awaiting_report'; c.reportEta = ymdAdd(td, -1)+' 02:00'; c.consultFeeWaived = true;
+    ST.open(c); renderCaseSubtitle(c); renderCaseStatusBar(c);
+    var sb = document.getElementById('case-status-bar').innerText; ST.ok(sb.indexOf('下次预约')<0 && sb.indexOf('今日进行中')<0, '1：一般案件（没升级）不显示第三行：'+sb.slice(0, 40));
+    var ac = document.getElementById('case-chat-actions').innerText; ST.ok(ac.indexOf('客人离店')>-1 && ac.indexOf('客人离店')>ac.indexOf('添加本地管理'), '2：右上角按钮里有［客人离店］（在［添加本地管理］之后）：'+ac.replace(/\s+/g,' '));
+    ST.ok(sb.indexOf('催办')<0 && sb.indexOf('客人离店')<0, '2/3：页头下面没有［客人离店］和［催办］');
+    var ch = consultTabHtml(c); ST.ok(urgeInfo(c) ? /催办/.test(ch) : true, '3：面诊卡里「已超过预计时间」旁有［催办］（urgeInfo='+!!urgeInfo(c)+'）'); ST.ok(ch.indexOf('模拟时间超过预计')<0, '4：面诊卡没有［演示：模拟时间超过预计］');
+    /* 6 退款服务 */
+    CLIENT_HOLDINGS[c.name] = (CLIENT_HOLDINGS[c.name]||[]).concat([{itemName:'R137 婴儿针', category:'本地项目', batches:[{caseId:'x', date:ymdAdd(td, -5), bought:3, used:0, usages:[]}]}]);
+    c.needsConsult = false; c.consultRequested = false; c.stage = 'local'; c.consultStatus = null;
+    c.activeCaseTab = 'basic'; var bh = caseTabContentHtml(c); ST.ok(bh.indexOf('退款服务')<0, '6：基础资料 tab 没有［退款服务］');
+    ST.ok(showSettleTab(c), '6：有可退批次 → 结算 tab 出现'); ST.ok(settleTabHtml(c).indexOf('退款服务')>-1, '6：结算 tab 里有［退款服务］');
+    /* 7 + 8 */
+    var p0 = ST.newRes(nm+'m'); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20); p0.settlementDone = true; p0.krBalancePaid = true; p0.caseNo = p0.caseNo.split('-')[0];
+    p0.subItems = []; for(var i=0;i<4;i++){ p0.subItems.push({id:'r137s'+i, no:subNextNo(p0), kind:'术后管理记录', place:'KR', content:'x'+i, date:ymdAdd(td, -10+i), done:true}); }
+    ST.ok(p0.subItems[0].no.slice(-2)==='02' && p0.subItems[3].no.slice(-2)==='05', '7：主案件自己的那一天占 -01，韩国行接着 -02…-05');
+    var k1 = ST.newRes(nm+'k1', {phone:clientPhoneOf(p0.name)}); k1 = CASE_ITEMS.filter(function(x){ return x.id===k1.id; })[0]; k1.name = p0.name; k1.visitDate = ymdAdd(td, 1); k1.needsConsult = false; joinMain(k1, p0);
+    ST.ok(k1.caseNo===p0.caseNo+'-06', '7：印尼来访子记录接着拿 -06（和韩国行共用一套）：'+k1.caseNo);
+    k1.subState = 'cancelled'; var rowNo = subNextNo(p0); ST.ok(rowNo===p0.caseNo+'-07', '7：已取消的子记录也算已用，下一个韩国行 -07：'+rowNo);
+    var k2 = ST.newRes(nm+'k2', {phone:clientPhoneOf(p0.name)}); k2 = CASE_ITEMS.filter(function(x){ return x.id===k2.id; })[0]; k2.name = p0.name; k2.visitDate = ymdAdd(td, 2); k2.needsConsult = false; p0.subItems.push({id:'r137z', no:rowNo, kind:'术后管理记录', place:'KR', content:'z', date:ymdAdd(td, 3), done:false}); joinMain(k2, p0);
+    ST.ok(k2.caseNo===p0.caseNo+'-08', '7：再来一个子记录 -08，不撞号：'+k2.caseNo);
+    ST.ok(tzRender('复诊评估已送出：X（'+k2.caseNo+' · 11/26）').indexOf(k2.caseNo)>-1, '7：通知里的子案件号原样显示（不再换成「到院」）');
+    ST.ok(relBackOf(p0).every(function(x){ return x.c.id!==k1.id && x.c.id!==k2.id; }), '8：关联案件不列自己的子案件');
   });
 
   ST.def('R133a','CMD-1026-07（A1 分页）：第一个对话框重做——请选择本次服务类型、只有［确认］、本次服务内容勾选规则、第二个弹窗只按勾的内容展开',function(){
@@ -5029,7 +5066,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var chg = (n.reuseReport.priceChanges||[]); ST.ok(chg.length===1 && chg[0].name===kp.name && chg[0].now===kp.price && chg[0].old===kp.price+1000, '价格按现在的项目库，和原方案不同记 priceChanges');
       n.activeCaseTab = 'kr'; ST.ok(/价格已更新/.test(projectPickerHtml(n, false)), '选项目画面提示「价格已更新」');
       ST.ok(src.reportReady && src.stage==='reportonly' && !src.resumeFrom, '原案件保持「仅出报告」不变');
-      ST.ok(relBackOf(src).some(function(b){ return b.c.id===n.id && /后续继续/.test(b.label); }) && /后续继续/.test(relatedBlockHtml(src)), '原案件的关联案件块列出「后续继续」');
+      ST.ok(!relBackOf(src).some(function(b){ return b.c.id===n.id; }), '（CMD-1026-11 八）原案件自己的子案件不再列在关联案件里（改前：列出「后续继续」）');
       /* 术后管理 */
       var t2 = ST.newRes('R95t', {phone:ph}); ST.open(t2); markArrived(); t2 = getCurrentCase(); fuSet('mode','link'); fuSet('type','术后管理'); FU_ASK.sel = src.id; followupAskDone(true); t2 = getCurrentCase();
       var h2 = materialsCardHtml(t2), mt2 = document.getElementById('cont-overlay').textContent; ST.ok(t2.resumeFrom.type==='术后管理' && t2.followup && t2.linkedCase.reason==='术后管理' && h2.indexOf('需要院长面诊（复诊）')<0 && /메타뷰/.test(mt2) && !/继续项目/.test(mt2), '继续 · 术后管理：不过三道检查；没有「面诊 / 不面诊」按钮，继续资料在弹窗里（今天的术后管理）（CMD-1026-01）'); contClose();

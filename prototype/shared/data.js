@@ -2039,7 +2039,7 @@ function coreSubmitReport(c, rep, by){
   var rv = isRevisitConsult(c), rr = c.recoveryResult && c.recoveryResult.result, rrTxt = rr==='treat' ? '需要处理' : '恢复正常', hasPlan = (rep.items||[]).length>0;
   logCaseEvent(c, by, rv ? (isRevEval(c) ? 'KR室长提交复诊评估结果：' : 'KR室长提交复诊恢复评估：')+rrTxt+(isRevEval(c) ? revRecText(c, '，') : (hasPlan ? '，附项目方案' : '，不附项目方案')) : 'KR室长提交面诊诊疗方案，已出诊疗方案');
   updateCaseStage(c);
-  if(rv) pushNotif(isRevEval(c) ? '复诊评估' : '面诊',(isRevEval(c) ? '复诊评估结果已到：' : '复诊评估已出：')+c.name+'（'+subNoTxt(c)+'）：'+rrTxt+(isRevEval(c) ? revRecText(c, '（', '）') : (hasPlan ? '（附项目方案）' : '（不附项目方案）'))+'，请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'});
+  if(rv) pushNotif(isRevEval(c) ? '复诊评估' : '面诊',(isRevEval(c) ? '复诊评估结果已到：' : '复诊评估已出：')+c.name+'（'+(c.caseNo||'')+'）：'+rrTxt+(isRevEval(c) ? revRecText(c, '（', '）') : (hasPlan ? '（附项目方案）' : '（不附项目方案）'))+'，请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'});
   else pushNotif('面诊','诊疗方案已出：'+c.name+'（'+(c.caseNo||'')+'），请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'}); /* CMD-1021-09 四：需确认的弹窗（停住要按［确认］，点开进面诊资料）；原来是普通通知（弹一次 6 秒自动收起，容易错过） */
   return true;
 }
@@ -2622,9 +2622,7 @@ function joinMain(c, src){
   /* CMD-1026-09 C：子案件号按确认继续（joinMain）的先后顺序一个接一个，下一个号 = 这个主案件现有最大号 + 1，不再按日期排序的位置；同一天已有这个主案件的另一笔来访 → 同一个子案件、同一个号；给了就不再改（已有的号不重编） */
   var vs0 = visitsOf(m), sameDay = vs0.filter(function(v){ return v.caseId!==c.id && v.date===c.visitDate && v.place==='IN'; })[0];
   if(sameDay) c.caseNo = sameDay.no;
-  else { var pre = (m.caseNo||'')+'-', mx = 0, note = function(no){ if(String(no||'').indexOf(pre)===0){ var n0 = parseInt(String(no).slice(pre.length), 10); if(n0>mx) mx = n0; } };
-    vs0.forEach(function(v){ if(v.caseId!==c.id) note(v.no); }); CASE_ITEMS.forEach(function(x){ if(x.id!==c.id && x.mainId===m.id) note(x.caseNo); });
-    c.caseNo = pre+(mx+1<10 ? '0' : '')+(mx+1); }
+  else { var mx1 = mainNoMax(m, c.id); c.caseNo = (m.caseNo||'')+'-'+pad2(mx1+1); } /* CMD-1026-11 七：和韩国行共用一套号 */
   if(old && old!==c.caseNo && old==='A'+String(CASE_NO_SEQ-1).padStart(6,'0')){ CASE_NO_SEQ--; c._seqBack = true; }
   try{ mainAutoStatus(m); }catch(e){ console.error('[加入主案件后状态自动判断]', e); } /* CMD-1023-02 一：加了新的子案件 → 主案件自动变回进行中 */
   return m;
@@ -3342,7 +3340,7 @@ function switchCaseTab(tab){
   renderCaseBody(c);
 }
 
-function relatedFollowers(c){ return CASE_ITEMS.filter(function(x){ return relatedOf(x).linkedId===c.id; }); }
+function relatedFollowers(c){ return CASE_ITEMS.filter(function(x){ return relatedOf(x).linkedId===c.id && !(isChildVisit(x) && x.mainId===c.id); }); } /* CMD-1026-11 八：自己的子案件不算「关联案件」（在「子案件」tab 和各业务 tab 的列表里看） */
 
 function normalizeCaseTab(c){
   var t = c.activeCaseTab;
@@ -3674,7 +3672,7 @@ function saveWantConsult(id, val){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c || wantConsultLocked(c)) return; val = String(val||'').trim().slice(0, 120);
   if((c.wantConsult||'')===val) return; var had = !!c.wantConsult; c.wantConsult = val;
   logCaseEvent(c, actingName(), val ? (had ? '修改' : '填写')+'客人希望的面诊时间：'+val : '清空客人希望的面诊时间', '面诊');
-  if(val && c.consultStatus==='paid_waiting_kr'){ try{ pushKrNotif(caseKrHospital(c), (isRevEval(c) ? '客人希望的评估时间' : '客人希望的面诊时间')+(had ? '有修改' : '')+'：'+val+'（'+c.name+'，'+subNoTxt(c)+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} } /* 只告知；KR 还没看到案件（待缴费）时不发 */
+  if(val && c.consultStatus==='paid_waiting_kr'){ try{ pushKrNotif(caseKrHospital(c), (isRevEval(c) ? '客人希望的评估时间' : '客人希望的面诊时间')+(had ? '有修改' : '')+'：'+val+'（'+c.name+'，'+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} } /* 只告知；KR 还没看到案件（待缴费）时不发 */
   buildCaseLog(c);
 }
 
@@ -3793,7 +3791,7 @@ function consultTabHtml(c){
   if(c.reuseReport) return reuseReportHtml(c);
   var fee = consultFeeStatusMain(c);
   var waiverText = c.consultFeeWaived ? '原因：'+c.consultFeeWaived.reason : '';
-  var sub = subStatusRowHtml(consultSubItems(c));
+  var sub = subStatusRowHtml(consultSubItems(c)); var ugC = urgeInfo(c); if(ugC && c.consultStatus==='awaiting_report' && !c.reportReady) sub = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+sub+'<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>'; /* CMD-1026-11 三：催办放在「已超过预计时间」旁 */
   var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(c.consultStatus==='awaiting_payment'){
     if(c.addConsultMode){ /* 本地案件［增加面诊］：同基础资料选面诊的顺序和组件 */
@@ -3820,8 +3818,7 @@ function consultTabHtml(c){
     var tip = judging
       ? '延续既往面诊：等 KR 判断相对原诊疗方案有无变动（无变动→沿用原诊疗方案→项目确认中；有变动→由KR室长提交新诊疗方案）'
       : '等待 KR 室长整理并发送诊疗方案';
-    var btns = '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>查看诊疗方案 →</button>'+
-      '<button class="btn-ghost" onclick="simulateReportTimeout()">演示：模拟时间超过预计</button>'; /* 保留：这是演示时钟，不是 KR 的操作 */
+    var btns = '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>查看诊疗方案 →</button>'; /* CMD-1026-11 四：演示按钮「模拟时间超过预计」拿掉（用户自己调时间；simulateReportTimeout 函数留着给测试） */
     return wrap(feeCard+sub+
       '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">'+tip+(c.contJudged ? '（院长已判断：有变动）' : '')+'</div>'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+btns+'</div>');
@@ -5461,7 +5458,16 @@ function subCaseRows(c, rep){ var k = subCaseKey(rep); return (c.subItems||[]).f
 function subCaseNums(c){ var used = {}; Object.keys(c.visitEnds||{}).forEach(function(k){ used[c.visitEnds[k].no] = 1; }); var out = [], n = 0; subCaseList(c).forEach(function(){ do{ n++; }while(used[c.caseNo+'-'+n]); out.push(c.caseNo+'-'+n); }); return out; }
 function subCaseNo(c, s){ var l = subCaseList(c), nums = subCaseNums(c), i = -1; l.forEach(function(r, n){ if(subCaseKey(r)===subCaseKey(s)) i = n; }); return i<0 ? '' : nums[i]; }
 function subCaseNos(c){ var nums = subCaseNums(c); subCaseList(c).forEach(function(r, i){ subCaseRows(c, r).forEach(function(x){ x.dno = nums[i]; }); }); }
-function subNextNo(c){ var n = 0; (c.subItems||[]).forEach(function(s){ var m = String(s.no).match(/-(\d+)$/); if(m) n = Math.max(n, parseInt(m[1],10)); }); return c.caseNo+'-'+pad2(n+1); }
+/* CMD-1026-11 七：一个主案件下只有一套子案件号（-01、-02…，两位）：韩国到院的行（subItems[].no）和印尼来访的子记录（带 mainId 的 caseNo）共用——下一个号 = 这个主案件两边已用过的最大号 + 1（已取消的子记录、已存在的重号也算进去，不再重号）；给了不再改，已有资料不重编。
+   原来有三套：① 韩国行的行号（subNextNo，只数本案件 subItems）② 到院编号 dno（subCaseNums，每次到院一个 -1 -2…，显示时现算）③ 印尼子记录号（joinMain 取日期排序位置 / 最大号 + 1）；其中 ①③ 互相不知道对方，撞号（例 A000011-05）。 */
+function mainNoMax(m, exceptId){
+  var pre = (m.caseNo||'')+'-', mx = 0, note = function(no){ if(String(no||'').indexOf(pre)===0){ var n0 = parseInt(String(no).slice(pre.length), 10); if(n0>mx) mx = n0; } };
+  (m.subItems||[]).forEach(function(s){ note(s.no); });
+  CASE_ITEMS.forEach(function(x){ if(x.id!==exceptId && x.mainId===m.id) note(x.caseNo); });
+  try{ visitsOf(m).forEach(function(v){ if(v.rec===m.id) note(v.no); }); }catch(e){} /* 主案件自己的那一天（第一次来访）也是一个编号 */
+  return mx;
+}
+function subNextNo(c){ return c.caseNo+'-'+pad2(mainNoMax(c)+1); }
 function coreSubAdd(c, o, by){
   if(!c.settlementDone) return false;
   c.subItems = c.subItems || [];
@@ -6332,7 +6338,7 @@ function coreConfirmConsultTimes(c, consultDate, consultTime, etaUtc, by){
   if(!ok) return false;
   logCaseEvent(c, by, (isRevEval(c) ? 'KR确认评估时间：' : 'KR确认面诊时间：')+consultDate+' '+consultTime+'（韩国时间，院长 '+(c.director||'—')+'）');
   syncConsultBlock(c);
-  if(c.director) pushKrNotif(caseKrHospital(c), '需要处理：'+consultDate+' '+consultTime+'（韩国时间）'+(isRevEval(c) ? '复诊评估' : (isRevisitConsult(c) ? '复诊面诊（恢复确认）' : '面诊'))+' '+c.name+'（'+subNoTxt(c)+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 通知该院长：几点要面诊哪位客人（CMD-1012-10 修改2） */
+  if(c.director) pushKrNotif(caseKrHospital(c), '需要处理：'+consultDate+' '+consultTime+'（韩国时间）'+(isRevEval(c) ? '复诊评估' : (isRevisitConsult(c) ? '复诊面诊（恢复确认）' : '面诊'))+' '+c.name+'（'+(c.caseNo||'')+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 通知该院长：几点要面诊哪位客人（CMD-1012-10 修改2） */
   return true;
 }
 /* 开始面诊：室长账号室长按、院长账号院长按，谁先按都算 → 小状态「面诊中」；上传内容 = 面诊结束（CMD-1012-05 一·2） */
@@ -6341,8 +6347,8 @@ function coreStartConsult(c, by){
   c.consultStartedAt = nowFullDt(); c.consultStartedBy = by;
   logCaseEvent(c, by, isRevEval(c) ? '开始评估' : '开始面诊');
   updateCaseStage(c);
-  pushKrNotif(caseKrHospital(c), by+(isRevEval(c) ? ' 开始评估：' : ' 开始面诊：')+c.name+'（'+subNoTxt(c)+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'next'}); /* 开始面诊 → KR 室长（自己触发的不收，见 krNotifsForMe） */
-  pushNotif(isRevEval(c) ? '复诊评估' : '面诊', (isRevEval(c) ? '开始评估：' : '开始面诊：')+c.name+'（'+subNoTxt(c)+'）'+by, {caseId:c.id, level:'info'}); /* IN 一般消息 */
+  pushKrNotif(caseKrHospital(c), by+(isRevEval(c) ? ' 开始评估：' : ' 开始面诊：')+c.name+'（'+(c.caseNo||'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'next'}); /* 开始面诊 → KR 室长（自己触发的不收，见 krNotifsForMe） */
+  pushNotif(isRevEval(c) ? '复诊评估' : '面诊', (isRevEval(c) ? '开始评估：' : '开始面诊：')+c.name+'（'+(c.caseNo||'')+'）'+by, {caseId:c.id, level:'info'}); /* IN 一般消息 */
   return true;
 }
 function coreSetReportEta(c, eta, by, isChange){
@@ -6351,7 +6357,7 @@ function coreSetReportEta(c, eta, by, isChange){
     if(c.consultStatus!=='awaiting_report') return false;
     var old = c.reportEta || '—';
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
-    if(c.director && c.consultAt) pushKrNotif(caseKrHospital(c), '需要处理：'+(isRevEval(c) ? '复诊评估 ' : '面诊 ')+c.name+'（'+subNoTxt(c)+'）的时间有变动（'+(isRevEval(c) ? '评估 ' : '面诊 ')+c.consultAt.date+' '+c.consultAt.time+'，预计出'+(isRevEval(c) ? '评估结果 ' : '诊疗方案 ')+tkU(eta)+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 修改时间也通知院长 */
+    if(c.director && c.consultAt) pushKrNotif(caseKrHospital(c), '需要处理：'+(isRevEval(c) ? '复诊评估 ' : '面诊 ')+c.name+'（'+(c.caseNo||'')+'）的时间有变动（'+(isRevEval(c) ? '评估 ' : '面诊 ')+c.consultAt.date+' '+c.consultAt.time+'，预计出'+(isRevEval(c) ? '评估结果 ' : '诊疗方案 ')+tkU(eta)+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 修改时间也通知院长 */
     logCaseEvent(c, by, (isRevEval(c) ? 'KR修改结果时间：' : 'KR修改预计出报告时间：')+tkU(old)+' → '+tkU(eta));
     syncConsultBlock(c);
     pushNotif(isRevEval(c) ? '复诊评估' : '面诊',(isRevEval(c) ? 'KR 修改了结果时间：' : 'KR 修改了预计出报告时间：')+c.name+'（'+tkU(old)+' → '+tkU(eta)+'）', {caseId:c.id});
@@ -6361,7 +6367,7 @@ function coreSetReportEta(c, eta, by, isChange){
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
     c.consultStatus = 'awaiting_report';
     logCaseEvent(c, by, (isRevEval(c) ? 'KR确认结果时间：' : 'KR确认预计出报告时间：')+tkU(eta));
-    pushNotif(isRevEval(c) ? '复诊评估' : '面诊', c.consultAt ? (isRevEval(c) ? 'KR 已确认评估时间：' : 'KR 已确认面诊时间：')+tkK(c.consultAt.date, c.consultAt.time)+'，预计 '+tkU(eta)+(isRevEval(c) ? ' 出评估结果（' : ' 出报告（')+c.name+'，'+subNoTxt(c)+'）' : 'KR 确认预计出报告时间：'+c.name+' '+tkU(eta), {caseId:c.id, level:'action'}); /* CMD-1020-13 一：IN 要转告客人，所以弹出并停留（手动确认），点开进案件 */
+    pushNotif(isRevEval(c) ? '复诊评估' : '面诊', c.consultAt ? (isRevEval(c) ? 'KR 已确认评估时间：' : 'KR 已确认面诊时间：')+tkK(c.consultAt.date, c.consultAt.time)+'，预计 '+tkU(eta)+(isRevEval(c) ? ' 出评估结果（' : ' 出报告（')+c.name+'，'+(c.caseNo||'')+'）' : 'KR 确认预计出报告时间：'+c.name+' '+tkU(eta), {caseId:c.id, level:'action'}); /* CMD-1020-13 一：IN 要转告客人，所以弹出并停留（手动确认），点开进案件 */
   }
   updateCaseStage(c);
   return true;
@@ -9121,7 +9127,7 @@ function relLinksOf(c){
 }
 /* 谁关联 / 继续了本案件（只读，显示在原案件的关联案件块里） */
 function relBackOf(c){
-  return CASE_ITEMS.filter(function(x){ return x.id!==c.id && x.name===c.name; }).map(function(x){
+  return CASE_ITEMS.filter(function(x){ return x.id!==c.id && x.name===c.name && !(x.mainId===c.id && isChildVisit(x)); }).map(function(x){ /* CMD-1026-11 八：自己的子案件不列在关联案件里 */
     if(x.resumeFrom && x.resumeFrom.caseId===c.id) return {c:x, label:'后续继续'+(x.resumeFrom.type ? ' · '+x.resumeFrom.type : '')};
     if(relLinksOf(x).some(function(l){ return l.caseId===c.id; })) return {c:x, label:'被关联'};
     return null;
@@ -9219,7 +9225,7 @@ function revEvalTabHtml(c){
   var done = !!(c.reportReady || c.consultStatus==='report_ready'), res = done ? revEvalResultHtml(c) : ''; /* CMD-1022-18：IN 收到结果后，结果卡放最上面，下面是项目卡（胶囊［面诊］［术前］［本次］） */
   var q = String(c.revisitQuestion||'').trim();
   var open = !!REV_OPEN[c.id], stTxt = done ? '已出结果' : ({'等确认时间':'等待 KR 室长确认时间'}[st] || st); /* CMD-1026-09 A1：复诊评估卡默认收起，标题行状态文字跟实际状态变，最右［展开］ */
-  var head = '<div style="display:flex;align-items:center;gap:10px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:13px;font-weight:700;flex:1;">复诊评估 · '+cesc(stTxt)+'</span><button class="btn-outline" style="padding:3px 12px;font-size:12px;" onclick="toggleRevOpen(\''+c.id+'\')">'+(open ? '收起' : '展开')+'</button></div>';
+  var head = '<div style="display:flex;align-items:center;gap:10px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:13px;font-weight:700;flex:1;">复诊评估 · '+cesc(stTxt)+'</span>'+(urgeInfo(c) ? '<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button>' : '')+'<button class="btn-outline" style="padding:3px 12px;font-size:12px;" onclick="toggleRevOpen(\''+c.id+'\')">'+(open ? '收起' : '展开')+'</button></div>';
   return '<div class="card" style="padding:18px 24px;">'+(done ? res+'<div style="height:10px;"></div>' : '')+head+(open ? '<div style="margin-top:12px;">'+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:12px;color:var(--muted);">'+(src ? '继续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
     (done ? '' : subStatusRowHtml([{kind:'Waiting', text:st}])+(tip ? '<div style="font-size:13px;color:var(--slate2);margin-bottom:8px;">'+tip+'</div>' : ''))+
     (c.wantConsult ? '<div style="font-size:12px;color:var(--muted);">客人希望的时间：'+cesc(c.wantConsult)+'</div>' : '')+
@@ -9232,7 +9238,7 @@ function toggleRevOpen(id){ REV_OPEN[id] = !REV_OPEN[id]; var c = CASE_ITEMS.fil
 function startRevisitEval(c){
   c.revisitEval = {at:nowFullDt(), by:actingName()}; c.noConsultFee = true; c.consultFeeAmount = 0; c.consultRequested = true;
   c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt();
-  if(!SEEDING) pushKrNotif(caseKrHospital(c), '复诊评估已送出：'+c.name+'（'+subNoTxt(c)+(c.visitDate ? ' · '+String(c.visitDate).slice(5).replace('-', '/') : '')+' · '+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认评估时间和结果时间', {caseId:c.id, kind:'consultpaid', popup:'confirm', level:'action'});
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), '复诊评估已送出：'+c.name+'（'+(c.caseNo||'')+(c.visitDate ? ' · '+String(c.visitDate).slice(5).replace('-', '/') : '')+' · '+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认评估时间和结果时间', {caseId:c.id, kind:'consultpaid', popup:'confirm', level:'action'});
   updateCaseStage(c); ensureCaseRoom(c);
   logCaseEvent(c, actingName(), '复诊评估已送出（不收费），等 KR 确认评估时间和结果时间', '复诊评估');
   c.activeCaseTab = 'consult';
@@ -9794,6 +9800,12 @@ function mainMoneyTotals(m){
       (x.c.localMgmt ? (x.c.localMgmt.batches||[]).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">本地购买 '+cesc(b.time||'')+'</span><span style="font-size:12px;">'+(b.inTotal!==undefined ? formatCurrency(b.inTotal, 'IDR') : '')+'</span></div>'; }).join('') : '')+'</div>'; }).join('');
     return sum+h+kidsHtml;
   };
+})();
+/* CMD-1026-11 六：［退款服务］搬到结算 tab（接待中、基础资料还没确认时还没有 tab，仍留在接待页顶部）；有可退批次但没有结算单的案件，结算 tab 也会出现（里面只有退款服务） */
+(function(){
+  var s1 = settleTabHtml, f1 = showSettleTab;
+  showSettleTab = function(c){ return f1.apply(this, arguments) || (!!c.materialsConfirmed && refundServiceBarHtml(c)!==''); };
+  settleTabHtml = function(c){ return refundServiceBarHtml(c)+s1.apply(this, arguments); };
 })();
 
 

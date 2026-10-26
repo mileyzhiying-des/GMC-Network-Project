@@ -904,7 +904,17 @@ function krConsultGeneral(c){
   var started = !!c.consultStartedAt, ended = !!c.consultContentAt;
   return krConsultCardGen(c)+(KR_ETA_EDIT ? krEtaBlock(c, true) : '')+krVisitPurposeCard(c)+((ended && canDo('krwork') && typeof krSubmitBlock==='function') ? krSubmitBlock(c) : '');
 }
-function krTabConsult(c){ if(!isRevEval(c) && !isRevisitConsult(c) && !c.reuseReport && !isContinuationConsult(c) && c.consultStatus==='awaiting_report') return krConsultGeneral(c); /* CMD-1025-01：一般面诊等待报告 = 面诊卡放最上面，到访目的在下面 */ var cmp = ''; /* CMD-1022-18：1022-13 独立的「前后对比」卡拿掉（对比在项目卡的胶囊里） */ var vp = (isRevisitConsult(c) || c.reuseReport) ? '' : krVisitPurposeCard(c); /* CMD-1022-16：面诊 tab 最上面放到访目的（复诊评估 / 复诊面诊在恢复确认卡里已有，不重复） */ return vp+(cmp ? krCardBox('前后对比', cmp) : '')+krTabConsult0(c); }
+/* CMD-1026-11 五：一般面诊的报告出来之后，面诊卡和到访目的并成一张——负责院长［院长日程］、面诊报告时间（韩国）、到访目的（默认折叠，点开后메타뷰、各部位（说明 / 希望预期 / 视频 / 照片）、预算全部展开）；开始面诊前 / 面诊中不动；院长账号同样合成（我的判断：院长也需要看到这些资料） */
+var KR_RPTVP_OPEN = {};
+function krRptVpToggle(id){ KR_RPTVP_OPEN[id] = !KR_RPTVP_OPEN[id]; krRenderCaseDetail(); }
+function krConsultDoneCard(c){
+  var open = !!KR_RPTVP_OPEN[c.id], rt = c.reportEta ? fmtUtc(c.reportEta) : (c.reportDate||'—');
+  var vp = '<div style="margin-top:10px;border-top:1px solid var(--border2);padding-top:10px;"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:13px;font-weight:700;flex:1;">到访目的</span><a href="#" class="info-link" style="font-size:12px;" onclick="krRptVpToggle(\''+c.id+'\');return false;">'+(open ? '折叠' : '展开')+'</a></div>'+
+    (open ? '<div style="margin-top:8px;">'+krUploadRow(c, '메타뷰 检测', '메타뷰 检测报告', c.metaviewStatus==='ready', '已检测到')+concernBlockHtml(c, {budgetLast:true, fold:false})+'</div>' : '')+'</div>';
+  return krCardBox('面诊', krDirLine(c)+krKV('面诊报告时间（韩国）', krEsc(rt))+vp);
+}
+function krTabConsult(c){ if(!isRevEval(c) && !isRevisitConsult(c) && !c.reuseReport && !isContinuationConsult(c) && c.consultStatus==='report_ready') return krConsultDoneCard(c)+krCardBox('报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
+  if(!isRevEval(c) && !isRevisitConsult(c) && !c.reuseReport && !isContinuationConsult(c) && c.consultStatus==='awaiting_report') return krConsultGeneral(c); /* CMD-1025-01：一般面诊等待报告 = 面诊卡放最上面，到访目的在下面 */ var cmp = ''; /* CMD-1022-18：1022-13 独立的「前后对比」卡拿掉（对比在项目卡的胶囊里） */ var vp = (isRevisitConsult(c) || c.reuseReport) ? '' : krVisitPurposeCard(c); /* CMD-1022-16：面诊 tab 最上面放到访目的（复诊评估 / 复诊面诊在恢复确认卡里已有，不重复） */ return vp+(cmp ? krCardBox('前后对比', cmp) : '')+krTabConsult0(c); }
 function krTabConsult0(c){
   var fee = consultFeeStatusMain(c), out = '';
   var head = (c.consultStatus==='paid_waiting_kr' || c.consultStatus==='awaiting_report') ? '' : krCardBox(isRevEval(c) ? '复诊评估' : '面诊', krDirLine(c)); /* 院长在面诊卡片第一行（进行中的状态在下面各自的卡片里）；面诊费卡片、当前小状态卡片已并进「面诊」卡片（CMD-1012-05） */

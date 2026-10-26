@@ -1272,11 +1272,11 @@ function renderCaseStatusBar(c){
   } else if(c.stage==='booked' && c.subState==='waiting'){
     actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
-  if(canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>'; /* CMD-1022-15：取代［结束案件］；CMD-1022-19：复诊评估客人已离店、结果到了 → ［确认结案］，结果没到不显示 */
+  /* CMD-1026-11 二：［客人离店］/［确认结案］搬到页头右上角（renderCaseHeaderActions） */
   /* CMD-1023-02 一：拿掉 IN［结案］按钮——主案件的状态系统自动判断（进行中 / 已完成） */
   if(false) actionBtn += ''; /* CMD-1021-16：IN［结案］（术后管理（印尼）阶段） */
-  var ug = urgeInfo(c);
-  if(ug) actionBtn += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#C26A1B;">'+ug.label+'</span><button class="btn-primary" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>';
+  /* CMD-1026-11 三：［催办］只放面诊卡（该行「已超过预计时间」旁），页头下面不再重复（待办栏的催办不变） */
+  if(mainPageV2(c) && !isUpgraded(c)){ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; } /* CMD-1026-11 一：一般案件（没升级）本身就是今天的来访，不显示第三行 */
   if(mainPageV2(c)){ /* B1 第三行 */
     var m3 = c, tv = visitsOf(m3).filter(function(v){ return v.date===todayStr() && v.place==='IN'; })[0], line3 = '', btn3 = '';
     var activeV = activeVisitsOf(m3);
@@ -1313,7 +1313,8 @@ function renderCaseHeaderActions(c){
   if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c) && !(isChildVisit(c) && (isRevEval(c) || isContCase(c)))){ /* CMD-1026-09 A2：继续 / 复诊子案件页的入口只在项目卡里 */
     lmBtn = '<button class="btn-outline" onclick="addLocalMgmt()">+ 添加本地管理</button>';
   }
-  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' : '') + lmBtn + stageBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
+  var leaveBtn = (canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) ? '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>' : ''; /* CMD-1026-11 二：右上角依序 发起对话 · 添加本地管理 · 客人离店（只在客人在店时有） */
+  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' : '') + lmBtn + stageBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
 }
 
 var CANCEL_REASON = '';
@@ -1724,7 +1725,7 @@ function renderCaseBody(c){
   }
   normalizeCaseTab(c);
   if(typeof subPageActive==='function' && subPageActive(c)){ el.innerHTML = subPageHtml(c); return; } /* CMD-1023-03 P3：子案件页 */
-  el.innerHTML = caseTabsHtml(c) + (c.activeCaseTab==='basic' ? refundServiceBarHtml(c) : '') + caseTabContentHtml(c);
+  el.innerHTML = caseTabsHtml(c) + '' + caseTabContentHtml(c);
 }
 
 function resumeVisit(targetId){
