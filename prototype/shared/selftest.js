@@ -3455,6 +3455,47 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(relBackOf(p0).every(function(x){ return x.c.id!==k1.id && x.c.id!==k2.id; }), '8：关联案件不列自己的子案件');
   });
 
+  ST.def('R143a','CMD-1026-17（A1 分页）：IN 子案件页照这一天发生的事出现业务 tab——① 当天面诊 + 本地 + 付定金 ② B 线 -01 只面诊、-02 面诊 + 赴韩项目 ③ 韩国施术日（只读）④ 印尼术后管理 / 复诊评估日；没有「今日项目」tab',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }; var nm = 'R143', td = todayStr();
+    var tabsOf = function(){ return [].map.call(document.querySelectorAll('#case-body .tabs .tab'), function(x){ return x.innerText.trim(); }).join('|'); };
+    var btns = function(){ return [].map.call(document.querySelectorAll('#case-body button'), function(b){ return b.innerText.trim(); }).join(','); };
+    try{
+      /* ① 当天面诊 + 本地 + 付定金 */
+      var m = ST.newRes(nm+'a', {purpose:'面诊商谈'}); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; m.subState = 'arrived'; m.arrivedDay = td; m.visitDate = td; m.visitTime = '10:30'; m.stage = 'consult'; m.consultRequested = true; m.consultStatus = 'report_ready'; m.reportReady = true;
+      m.krDepositPaid = true; m.settlementDone = true; m.procedureItems = [{origin:'KR', name:nm+'埋线双眼皮', batchId:'B1'}]; m.settlementBatches = [{id:'B1', status:'paid', krTotal:100, krDeposit:30, time:nowFullDt()}];
+      m.localMgmt = {active:true, ended:false, step:'afterBuyUse', mgmtUses:[], mgmtActive:false, batches:[{id:'L1', items:[], inTotal:100000, time:nowFullDt()}], cart:[]};
+      CLIENT_HOLDINGS[m.name] = (CLIENT_HOLDINGS[m.name]||[]).concat([{itemName:nm+'热玛吉', category:'本地项目', batches:[{caseId:m.id, date:td, bought:3, used:0, usages:[], paid:100000}]}]);
+      updateCaseStage(m); ST.open(m); openSubcase(m.id, visitsOf(m)[0].key);
+      ST.ok(tabsOf()==='到访|面诊|赴韩项目|本地管理|结算|附件|Timeline', '①：到访｜面诊｜赴韩项目｜本地管理｜结算｜附件｜Timeline：'+tabsOf()); ST.ok(tabsOf().indexOf('今日项目')<0, '①：没有「今日项目」tab');
+      var cur = document.querySelector('#case-body .tabs .tab.active').innerText.trim(); ST.ok(cur==='面诊' || cur==='本地管理', '①：默认打开：'+cur);
+      switchSubTab('local'); var lt = document.getElementById('case-body').innerText; ST.ok(/今天用的本地项目/.test(lt) && /剩余项目/.test(lt) && lt.indexOf(nm+'热玛吉')>-1 && /本次使用/.test(btns()) && /添加本地管理项目/.test(btns()), '①：本地管理 tab：今天用的 + 剩余项目 + ［本次使用］［＋添加本地管理项目］');
+      switchSubTab('krproj'); ST.ok(/今日确定的赴韩项目/.test(document.getElementById('case-body').innerText) && document.getElementById('case-body').innerText.indexOf(nm+'埋线双眼皮')>-1, '①：赴韩项目 tab：确定的施术项目 + 定金已付 + 施术日期');
+      inUseOpen(); var ck = document.querySelector('#in-use-overlay [id^="iu-hold-"]'); ST.ok(!!ck, '①：［本次使用］仍可用'); if(ck){ ck.checked = true; inUseConfirm(); ST.ok((m.localMgmt.mgmtUses||[]).length>0, '①：本次使用确认后进「今天用的」'); switchSubTab('local'); ST.ok(/操作完成/.test(btns()) && /本次不做/.test(btns()), '①：今天用的有［操作完成］［本次不做］'); } else inUseClose();
+      m.leftStore = true; renderCaseBody(m); switchSubTab('local'); ST.ok(!/本次使用|添加本地管理项目|操作完成/.test(btns()) && tabsOf().indexOf('本地管理')>-1, '①：客人离店后内容仍在、只读'); m.leftStore = false;
+      /* ② B 线：-01 只面诊、-02 面诊 + 赴韩项目 */
+      var b = ST.newRes(nm+'b', {purpose:'面诊商谈'}); ST.materials(b, {consult:true}); b = CASE_ITEMS.filter(function(x){ return x.id===b.id; })[0]; b.subState = 'arrived'; b.arrivedDay = ymdAdd(td, -3); b.visitDate = ymdAdd(td, -3); b.visitTime = '10:00'; b.stage = 'consult'; b.consultRequested = true; b.consultStatus = 'report_ready'; b.reportReady = true; b.materialsConfirmed = true;
+      var k = ST.newRes(nm+'bk', {phone:clientPhoneOf(b.name), purpose:'面诊商谈'}); k = CASE_ITEMS.filter(function(x){ return x.id===k.id; })[0]; k.name = b.name; k.visitDate = td; k.visitTime = '14:00'; k.subState = 'arrived'; k.arrivedDay = td; k.materialsConfirmed = true; k.needsConsult = 'reuse'; k.consultRequested = true; k.resumeFrom = {caseId:b.id, type:'接续面诊', types:['接续面诊']}; k.linkedCase = {caseId:b.id, reason:'延续既往面诊'};
+      joinMain(k, b); b.krDepositPaid = true; b.settlementDone = true; b.procedureItems = [{origin:'KR', name:nm+'切开双眼皮', batchId:'B1'}]; b.settlementBatches = [{id:'B1', status:'paid', krTotal:100, krDeposit:30, time:nowFullDt()}]; updateCaseStage(b);
+      ST.ok(dayNoGet(b, b.visitDate, 'IN')===b.caseNo+'-01' && k.caseNo===b.caseNo+'-02', '②：B 线编号：11/30 = -01，12/03 = -02（升级后补 -01）：'+JSON.stringify(b.dayNos)+' '+k.caseNo);
+      ST.open(b); openSubcase(b.id, visitsOf(b)[0].key); ST.ok(tabsOf()==='到访|面诊|附件|Timeline', '②：-01（只面诊）：到访｜面诊｜附件｜Timeline（没有赴韩项目）：'+tabsOf());
+      ST.open(k); renderCaseBody(k); ST.ok(/^到访\|面诊\|赴韩项目/.test(tabsOf()), '②：-02（继续面诊 + 付定金）：到访｜面诊｜赴韩项目…：'+tabsOf());
+      /* ③ 韩国施术日（IN 看、只读） */
+      var kd = ymdAdd(td, 5), r = ST.newRes(nm+'r'); ST.materials(r, {consult:false}); r = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; r.visitDate = ymdAdd(td, -2); r.krDepositPaid = true; r.settlementDone = true; r.krBalancePaid = true; r.procedureItems = [{origin:'KR', name:nm+'隆鼻', batchId:'B1'}]; r.settlementBatches = [{id:'B1', status:'paid', krTotal:100, krDeposit:30, time:ymdAdd(td, -2)+' 10:00'}]; r.krSchedule = {status:'confirmed', confirmedDate:kd, confirmedTime:'11:00'}; r.scheduleState = 'Confirmed';
+      r.subItems = [{id:'r143a', no:'x#1', kind:'施术', place:'KR', content:'施术：隆鼻', date:kd, done:false}, {id:'r143b', no:'x#2', kind:'术后管理记录', place:'KR', content:'拆线', date:kd, time:'10:00', done:false, projectName:nm+'隆鼻'}, {id:'r143c', no:'x#3', kind:'术后管理记录', place:'KR', content:'ONDA 使用', date:kd, time:'10:30', done:false, holdUseOf:'ONDA', holdIid:'i1'}]; updateCaseStage(r);
+      var kv = visitsOf(r).filter(function(v){ return v.place==='KR' && v.date===kd; })[0]; ST.ok(!!kv, '③：有韩国那一天'); ST.open(r); openSubcase(r.id, kv.key);
+      ST.ok(tabsOf()==='到访|赴韩施术|术后管理|在韩管理|附件|Timeline', '③：韩国施术日：到访｜赴韩施术｜术后管理｜在韩管理｜附件｜Timeline：'+tabsOf());
+      switchSubTab('krsurg'); ST.ok(/只读/.test(document.getElementById('case-body').innerText) && !/操作完成|本次使用|预约时间/.test(btns()), '③：赴韩施术 tab 只读、没有操作按钮'); switchSubTab('care'); ST.ok(/拆线/.test(document.getElementById('case-body').innerText) && !/操作完成/.test(btns()), '③：术后管理 tab 只读'); switchSubTab('inkr'); ST.ok(/ONDA/.test(document.getElementById('case-body').innerText), '③：在韩管理 tab 列那天的管理项目');
+      /* ④ 印尼术后管理 / 复诊评估日 */
+      var p0 = ST.newRes(nm+'p'); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20); p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true; p0.hasArrived = true; p0.krDepositPaid = true;
+      p0.subItems = [{id:'r143p', kind:'术后管理记录', place:'IN', content:'术后复诊', date:td, done:false, projectName:'隆鼻'}];
+      var ch = ST.newRes(nm+'c', {phone:clientPhoneOf(p0.name), purpose:'复诊'}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.name = p0.name; ch.visitDate = td; ch.visitTime = '11:00'; ch.materialsConfirmed = true; ch.subState = 'arrived'; ch.arrivedDay = td; ch.needsConsult = true; joinMain(ch, p0); ch.revisitEval = {at:nowFullDt()}; ch.consultRequested = true; ch.consultStatus = 'paid_waiting_kr'; ch.resumeFrom = {caseId:p0.id, type:'复诊评估', types:['复诊评估','术后管理']}; ch.careToday = ['r143p'];
+      ST.open(ch); renderCaseBody(ch); ST.ok(tabsOf()==='到访|复诊评估|术后管理|附件|Timeline', '④：复诊评估日：到访｜复诊评估｜术后管理｜附件｜Timeline（没有本地管理 / 结算）：'+tabsOf());
+      switchSubTab('care'); ST.ok(/今天做的术后管理/.test(document.getElementById('case-body').innerText) && /操作完成/.test(btns()) && /本次不做/.test(btns()), '④：术后管理 tab：今天做的（［操作完成］［本次不做］）');
+      var hdr = document.getElementById('case-chat-actions').innerText; ST.ok(/添加本地管理/.test(hdr), '④：没有本地管理时入口在页头［添加本地管理］（不会有三个入口）');
+    } finally { window.alert = al; window.confirm = cf; }
+  });
+
   ST.def('R142a','CMD-1026-16（A1 分页）：升级当天 -01 子案件页——面诊 tab（和主案件同一份）/ 今日确定的赴韩项目卡 / 离店后仍看得到 / 到访 tab 不再叫人去主案件 / 子案件页没有「今日进行中」，主案件页有',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }; var nm = 'R142', td = todayStr();
@@ -3466,15 +3507,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       updateCaseStage(m); ST.open(m); renderCaseSubtitle(m); renderCaseStatusBar(m);
       ST.ok(/今日进行中/.test(document.getElementById('case-status-bar').innerText), '4：主案件页仍有「今日进行中」');
       var key = visitsOf(m)[0].key; openSubcase(m.id, key);
-      var tabs = [].map.call(document.querySelectorAll('#case-body .tabs .tab'), function(x){ return x.innerText.trim(); }); ST.ok(tabs.join('|')==='到访|面诊|今日项目|结算|附件|Timeline', '1：tab = 到访｜面诊｜今日项目｜结算｜附件｜Timeline：'+tabs.join('|'));
+      var tabs = [].map.call(document.querySelectorAll('#case-body .tabs .tab'), function(x){ return x.innerText.trim(); }); ST.ok(tabs.join('|')==='到访|面诊|赴韩项目|本地管理|结算|附件|Timeline', '1：tab = 到访｜面诊｜赴韩项目｜本地管理｜结算｜附件｜Timeline（CMD-1026-17；原：到访｜面诊｜今日项目｜结算｜附件｜Timeline）：'+tabs.join('|'));
       ST.ok(document.getElementById('case-status-bar').innerText.indexOf('今日进行中')<0, '4：子案件页不显示「今日进行中」');
       switchSubTab('consult'); var ch = document.getElementById('case-body').innerHTML, mh = consultTabHtml(m); ST.ok(ch.indexOf(mh.slice(0, 200))>-1 || ch.indexOf('面诊')>-1, '1：面诊 tab 内容 = 主案件面诊 tab（同一个 consultTabHtml）'); var tmp = document.createElement('div'); tmp.innerHTML = mh; ST.ok(document.getElementById('case-body').innerText.replace(/\s+/g, '').indexOf(tmp.innerText.replace(/\s+/g, ''))>-1, '1：和主案件面诊 tab 文字一致');
       switchSubTab('visit'); var vh = document.getElementById('case-body').innerText; ST.ok(vh.indexOf('去主案件看')<0 && vh.indexOf('基础资料 →')<0 && vh.indexOf('面诊内容 →')<0, '3：到访 tab 没有「去主案件看」和［基础资料 →］［面诊内容 →］'); ST.ok(/来访目的/.test(vh) && /到店状态/.test(vh) && /메타뷰/.test(vh) && /当天照片/.test(vh), '3：其他栏位照旧');
-      switchSubTab('today'); var th = document.getElementById('case-body').innerText; var iT = th.indexOf('今日项目'), iS = th.indexOf('今日确定的赴韩项目'), iR = th.lastIndexOf('剩余项目'); ST.ok(iT>-1 && iS>iT && iR>iS, '2：今日项目 → 今日确定的赴韩项目 → 剩余项目（从上到下）');
-      ST.ok(th.indexOf(nm+'埋线双眼皮')>-1 && th.indexOf(nm+'切开双眼皮')>-1 && /定金已付/.test(th) && /施术日期 待确认/.test(th), '2：卡里列今天确定的施术项目 + 定金已付 + 施术日期（待确认）');
-      ST.ok(/本次使用/.test(th), '2：客人还在店 → 剩余项目有［本次使用］');
-      m.leftStore = true; renderCaseBody(m); th = document.getElementById('case-body').innerText; ST.ok(th.indexOf('今日确定的赴韩项目')>-1 && th.indexOf('剩余项目')>-1 && th.indexOf(nm+'热玛吉')>-1, '2：客人离店后仍看得到三块'); ST.ok(![].some.call(document.querySelectorAll('#case-body button'), function(b){ return /本次使用|添加本地管理项目/.test(b.innerText); }), '2：离店后只读（没有操作按钮）');
-      m.leftStore = false; m.visitDate = ymdAdd(td, -1); m.krSchedule = {status:'Confirmed', confirmedDate:ymdAdd(td, 20), confirmedTime:'11:00'}; renderCaseBody(m); th = document.getElementById('case-body').innerText; ST.ok(/施术日期 .*-.*/.test(th) || th.indexOf('待确认')<0, '2：施术日期确定后显示日期'); 
+      switchSubTab('krproj'); var th = document.getElementById('case-body').innerText; ST.ok(th.indexOf('今日确定的赴韩项目')>-1 && th.indexOf(nm+'埋线双眼皮')>-1 && th.indexOf(nm+'切开双眼皮')>-1 && /定金已付/.test(th) && /施术日期 待确认/.test(th), '2：赴韩项目 tab：确定的施术项目 + 定金已付 + 施术日期（待确认）');
+      switchSubTab('local'); th = document.getElementById('case-body').innerText; ST.ok(/剩余项目/.test(th) && th.indexOf(nm+'热玛吉')>-1 && [].some.call(document.querySelectorAll('#case-body button'), function(b){ return /本次使用/.test(b.innerText); }), '2：本地管理 tab：剩余项目 + ［本次使用］（客人还在店）');
+      m.leftStore = true; renderCaseBody(m); switchSubTab('local'); th = document.getElementById('case-body').innerText; ST.ok(th.indexOf('剩余项目')>-1 && th.indexOf(nm+'热玛吉')>-1, '2：客人离店后本地管理仍看得到'); ST.ok(![].some.call(document.querySelectorAll('#case-body button'), function(b){ return /本次使用|添加本地管理项目/.test(b.innerText); }), '2：离店后只读（没有操作按钮）');
+      switchSubTab('krproj'); ST.ok(document.getElementById('case-body').innerText.indexOf('今日确定的赴韩项目')>-1, '2：离店后赴韩项目仍看得到'); m.leftStore = false; m.visitDate = ymdAdd(td, -1); m.krSchedule = {status:'Confirmed', confirmedDate:ymdAdd(td, 20), confirmedTime:'11:00'}; renderCaseBody(m); switchSubTab('krproj'); th = document.getElementById('case-body').innerText; ST.ok(/施术日期 .*-.*/.test(th) || th.indexOf('待确认')<0, '2：施术日期确定后显示日期'); 
       m.visitDate = td; m.krSchedule = null; closeSubcase(m.id); ST.ok(/今日进行中/.test(document.getElementById('case-status-bar').innerText), '4：回到主案件页「今日进行中」又出现');
     } finally { window.alert = al; window.confirm = cf; }
   });
@@ -3490,8 +3530,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       updateCaseStage(m); ST.open(m); renderCaseSubtitle(m); renderCaseStatusBar(m);
       var sb = document.getElementById('case-status-bar').innerText; ST.ok(/今日进行中：.+-01（面诊安排 · 本地管理）/.test(sb) && sb.indexOf('下次预约')<0 && sb.indexOf('进入案件')>-1, '1：升级当天页头第三行「今日进行中：…-01（…）」+［进入案件］：'+sb.replace(/\n/g, ' '));
       var no = visitsOf(m)[0].no; ST.ok(/-01$/.test(no), '1：升级当天 = -01：'+no);
-      openSubcase(m.id, visitsOf(m)[0].key); var bd = document.getElementById('case-body').innerText;
-      ST.ok(/剩余项目/.test(bd) && /本地管理 1/.test(bd) && bd.indexOf(nm+'热玛吉')>-1 && /本次使用/.test(bd), '1：-01 子案件页：今天买的本地项目在「剩余项目 · 本地管理 · 未使用」，有［本次使用］');
+      openSubcase(m.id, visitsOf(m)[0].key); switchSubTab('local'); var bd = document.getElementById('case-body').innerText;
+      ST.ok(/剩余项目/.test(bd) && /未使用项目/.test(bd) && bd.indexOf(nm+'热玛吉')>-1 && /本次使用/.test(bd), '1：-01 子案件页：今天买的本地项目在本地管理 tab 的「剩余项目 · 未使用项目」，有［本次使用］（CMD-1026-17；原：剩余项目 · 本地管理胶囊）');
       inUseOpen(); var ck = document.querySelector('#in-use-overlay .iu-hold-i, #in-use-overlay [id^="iu-hold-"]'); ST.ok(!!ck, '1：［本次使用］弹窗里能勾今天买的本地项目'); if(ck){ ck.checked = true; inUseConfirm(); ST.ok((m.localMgmt.mgmtUses||[]).length>0, '1：确认后进今日项目（mgmtUses）'); } else inUseClose();
       /* 2 本地结算付款确认 */
       m.localMgmt.ended = false; m.localMgmt.step = 'buy'; m.localMgmt.mgmtActive = false; m.localMgmt.addBuy = false; m.localMgmt.cart = [{name:nm+'水光', kind:'project', qty:1, price:200000, unitPrice:200000, discountPct:100}];
@@ -3799,17 +3839,17 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var vt = caseTabContentHtml(m); ST.ok(/openSubcase\(/.test(vt), '子案件 tab：点一行 → 那一天的子案件页');
     /* 子记录 = 子案件页 */
     openCaseDetail(ch.id); var c = getCurrentCase(); ST.ok(c.id===ch.id && subPageActive(c), '打开子记录 = 子案件页');
-    var list = subTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); ST.ok(/^到访｜今日项目｜.*附件｜Timeline$/.test(list), '子案件页 tab：到访｜今日项目｜（结算）｜附件｜Timeline：'+list);
+    var list = subTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); ST.ok(/^到访｜复诊评估｜.*附件｜Timeline$/.test(list) && list.indexOf('今日项目')<0, '子案件页 tab：到访｜复诊评估｜…｜附件｜Timeline，没有「今日项目」（CMD-1026-17；原：到访｜今日项目｜（结算）｜附件｜Timeline）：'+list);
     var h = subHeaderHtml(c); ST.ok(h.indexOf(c.caseNo)>-1 && /回到主案件/.test(h) && /今天做/.test(h) && /复诊评估/.test(h), '页头：子案件号 + 日期（地点）+ 今天做 + ［回到主案件］：'+h.replace(/<[^>]+>/g,' ').slice(0,120));
     var ttl = document.getElementById('case-title'); renderCaseTitle(c); ST.ok(ttl && ttl.textContent.indexOf(c.caseNo)>-1 && /（印尼）/.test(ttl.textContent), '标题「客人 · 子案件号 · 日期（地点）」：'+(ttl&&ttl.textContent));
-    c.subTab = 'today'; var th = subPageHtml(c); ST.ok(th.indexOf('复诊')>-1 && /当天推进的流程/.test(th), '今日项目里有复诊评估 + 流程连结');
+    c.subTab = 'rev'; var th = subPageHtml(c); ST.ok(th.indexOf('复诊')>-1, '复诊评估 tab 里有复诊评估卡（CMD-1026-17；原：今日项目里有复诊评估 + 流程连结）');
     c.subTab = 'visit'; ST.ok(/来访目的/.test(subPageHtml(c)) && !/基础资料 →/.test(subPageHtml(c)), '到访 tab：来访目的，不再有连回主案件的话和按钮（CMD-1026-16；原：连回主案件基础资料 / 面诊内容）');
     c.subTab = 'timeline'; ST.ok(subPageHtml(c).length>200, 'Timeline / 附件 tab 能渲染'); c.subTab = 'attachments'; ST.ok(subPageHtml(c).length>200, '附件');
     closeSubcase(c.id); var back = getCurrentCase(); ST.ok(back.id===m.id && !subPageActive(back), '［回到主案件］回到主案件页');
     /* 主案件自己的天 */
     var own = visitsOf(m).filter(function(v){ return v.date===m.visitDate; })[0]; openSubcase(m.id, own.key); var mm = getCurrentCase(); ST.ok(subPageActive(mm) && SUBVIEW[mm.id], '主案件自己的天也是子案件页');
     mm.subTab = 'settle'; var sh = subPageHtml(mm); ST.ok(/这一天收的钱/.test(sh) || /结算/.test(sh), '结算 = 当天收的钱（付定金那天）');
-    mm.subTab = 'today'; ST.ok(/今日项目/.test(subPageHtml(mm)), '今日项目');
+    mm.subTab = 'consult'; ST.ok(/>面诊</.test(subPageHtml(mm)), '主案件自己那天有面诊 tab（CMD-1026-17；原：今日项目）');
     closeSubcase(mm.id); ST.ok(!subPageActive(getCurrentCase()), '回到主案件');
   });
   ST.def('R118a','CMD-1023-03 P1/P2（A1 分页）：没升级 = 一般案件页三种 tab / 升级 = 完整格式（没有流程 tab、✓ ●）/ 术后管理独立 tab / 复诊 tab / 页头小修',function(){

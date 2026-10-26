@@ -1239,7 +1239,7 @@ function caseGo(side, clinicId, id, url, o, here){
 function caseAtExtra(o){ o = o||{}; return (o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.pc ? '&pc=1' : '')+(o.scroll ? '&scroll='+encodeURIComponent(o.scroll) : '')+(o.chat ? '&chat=open' : '')+(o.sub ? '&sub='+encodeURIComponent(o.sub) : ''); }
 function applyCaseAt(id, o){
   o = o||{}; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
-  if(o.sub){ SUBVIEW[id] = {key:o.sub}; c.subTab = 'today'; renderCaseSubtitle(c); renderCaseStatusBar(c); renderCaseBody(c); } else if(!isChildVisit(c) && SUBVIEW[id]){ delete SUBVIEW[id]; renderCaseSubtitle(c); renderCaseBody(c); } /* CMD-1023-03 P3：子案件页的位置带在地址里 */
+  if(o.sub){ SUBVIEW[id] = {key:o.sub}; c.subTab = ''; renderCaseSubtitle(c); renderCaseStatusBar(c); renderCaseBody(c); } else if(!isChildVisit(c) && SUBVIEW[id]){ delete SUBVIEW[id]; renderCaseSubtitle(c); renderCaseBody(c); } /* CMD-1023-03 P3：子案件页的位置带在地址里 */
   if(o.tab){ if(SUBVIEW[id]) delete SUBVIEW[id]; c.activeCaseTab = o.tab; renderCaseSubtitle(c); renderCaseStatusBar(c); renderCaseBody(c); }
   if(o.pc) goPostcareBlock(id);
   if(o.scroll) setTimeout(function(){ var el = document.getElementById(o.scroll); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80);
@@ -1314,8 +1314,8 @@ function renderCaseHeaderActions(c){
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
   var lmBtn = '';
-  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c) && !(isChildVisit(c) && (isRevEval(c) || isContCase(c)))){ /* CMD-1026-09 A2：继续 / 复诊子案件页的入口只在项目卡里 */
-    lmBtn = '<button class="btn-outline" onclick="addLocalMgmt()">+ 添加本地管理</button>';
+  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c) ){ /* CMD-1026-17：项目卡拆进各 tab 后，没有本地管理时入口回到页头；有了本地管理 tab 后入口在 tab 里 */
+    lmBtn = '<button class="btn-outline" onclick="'+(isChildVisit(c) && (isRevEval(c) || isContCase(c)) ? 'inAddLocalProject()' : 'addLocalMgmt()')+'">+ 添加本地管理</button>';
   }
   var leaveBtn = (canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) ? '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>' : ''; /* CMD-1026-11 二：右上角依序 发起对话 · 添加本地管理 · 客人离店（只在客人在店时有） */
   el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' : '') + lmBtn + stageBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
