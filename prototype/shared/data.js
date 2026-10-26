@@ -2395,6 +2395,7 @@ function concernPartDef(key){
 function concernGroupOf(x){ var d = concernPartDef(x.part); return d.group || ''; }
 function concernCid(x){ return x.part+(x.sub ? '|'+x.sub : ''); }
 function concernCardTitle(x){ var d = concernPartDef(x.part), sub = x.sub && d.subs ? (CONCERN_SUBS[d.subs].filter(function(s){ return s.key===x.sub; })[0]||{}).label : ''; return d.label+(sub ? ' · '+sub : ''); }
+function concernPvCat(c){ return (c && (c.revisitEval || isRevisitConsult(c))) ? '复诊' : '面诊'; }
 function concernCardFull(x){ var g = (CONCERN_GROUPS.filter(function(y){ return y.key===concernGroupOf(x); })[0]||{}).label; return (g ? g+' · ' : '')+concernCardTitle(x); }
 function concernSortKey(x){ var d = concernPartDef(x.part), i = CONCERN_PARTS.indexOf(d), si = d.subs ? CONCERN_SUBS[d.subs].findIndex(function(s){ return s.key===x.sub; }) : 0; return i*10+Math.max(0, si); }
 /* 旧案件（没有 concerns）：合成一张「未分部位」卡片；迁移 47 / 48 会把存档里的旧案件真正转成新结构 */
@@ -2623,62 +2624,91 @@ function markBoughtFrom(c){ /* 到店时：客人有只在本地买的持有项�
   c.boughtFrom = l.map(function(x){ return x.caseNo; });
   logCaseEvent(c, actingName(), '来自 '+c.boughtFrom.join('、')+' 购买的本地持有项目（新的独立案件，不加入原主案件）');
 }
+/* CMD-1026-07：第一个对话框重做——标题「请选择本次服务类型」；○开始新的服务案件 ○继续之前的服务案件 ○使用之前购买的项目；选「继续」后勾「本次服务内容」（面诊只能单选；术后管理 / 复诊评估可以都勾）+「选择之前的案件」下拉；只有一个［确认］。每次［客人已到店］都弹（没有可选的选项灰掉）。 */
+function fuAvail(c){
+  var tRows = []; try{ tRows = contTodayCareRows(c); }catch(e){}
+  var consultC = resumeCandidates(c, '接续面诊').filter(function(x){ return joinWindowOf(x, '接续面诊').ok; }); /* 仅出报告、距院长面诊日 3 个月内 */
+  var revisitC = resumeCandidates(c, '复诊术后').filter(function(x){ return joinWindowOf(x, '复诊评估').ok; }); /* 已完成的主案件、距施术完成日 3 个月内（超过的不列） */
+  var owners = {}; tRows.forEach(function(r){ owners[r.c.id] = 1; });
+  var careC = resumeCandidates(c, '复诊术后').filter(function(x){ return owners[x.id]; });
+  return {consultC:consultC, revisitC:revisitC, careC:careC, tRows:tRows, can:{consult:consultC.length>0, care:careC.length>0, revisit:revisitC.length>0}};
+}
+function fuCandsOf(c, a){
+  var av = fuAvail(c), s = a.svc || {};
+  if(s.consult) return av.consultC;
+  var sets = []; if(s.care) sets.push(av.careC); if(s.revisit) sets.push(av.revisitC);
+  if(!sets.length) return [];
+  var uni = [], seen = {}; sets.forEach(function(l){ l.forEach(function(x){ if(!seen[x.id]){ seen[x.id] = 1; uni.push(x); } }); });
+  if(sets.length>1){ var inter = sets[0].filter(function(x){ return sets[1].some(function(y){ return y.id===x.id; }); }); if(inter.length) return inter; }
+  return uni;
+}
+function fuSvcList(a){ var s = a.svc || {}, out = []; if(s.revisit) out.push('复诊评估'); if(s.care) out.push('术后管理'); return out; }
 function followupAsk(c){
   if(window.GMC_NO_FOLLOWASK || !c || c.followupAsked || c.materialsConfirmed || (c.linkedCase && c.linkedCase.caseId) || c.resumeFrom) return;
-  try{ markBoughtFrom(c); }catch(e){ console.error('[来自购买标注]', e); }
-  var prior = clientPriorCases(c); if(!prior.length && !localMainsWithLeft(c).length) return;
-  var mode = 'none', type = '接续面诊', sel = '', pre = '';
-  var tRows = []; try{ tRows = contTodayCareRows(c); }catch(e){}
-  var fol = resumeCandidates(c, '复诊术后'), rep0 = resumeCandidates(c, '接续面诊'), lastOf = function(l){ return l.length ? l[l.length-1].id : ''; };
-  /* CMD-1026-06：默认值——今天有约好的术后管理 → 继续之前的服务 + 复诊 / 术后管理，直接带出那个案件；从「未安排预约」约来 / 自助预约选了复诊·术后管理 → 同；其余不默认选继续 */
-  if(tRows.length){ mode = 'link'; type = '复诊术后'; sel = tRows[0].c.id; }
-  else if(c.careFor && c.careFor.caseId && prior.some(function(x){ return x.id===c.careFor.caseId; })){ mode = 'link'; type = '复诊术后'; sel = c.careFor.caseId; }
-  else if(c.visitPurpose==='复诊' || c.visitPurpose==='复诊评估'){ mode = 'link'; type = '复诊术后'; pre = '复诊评估'; sel = (prior.filter(function(x){ return x.stage==='postcare'; }).pop() || prior[prior.length-1]).id; }
-  else if(c.visitPurpose==='术后管理'){ mode = 'link'; type = '复诊术后'; sel = (prior.filter(function(x){ return x.stage==='postcare'; }).pop() || prior[prior.length-1]).id; }
-  if(mode==='link' && type==='复诊术后' && (c.visitPurpose==='复诊' || c.visitPurpose==='复诊评估')) pre = '复诊评估'; /* 来访目的选了复诊：第二个弹窗预选复诊评估（今天同时有约术后管理时术后管理照样默认勾好） */
-  /* 其余来访不默认选「继续」（mode 保持 none）；手动选「继续之前的服务」时，只有一种类型有可继续的案件就选那一种（fuSet） */
-  FU_ASK = {caseId:c.id, mode:mode, type:type, types:[type], pre:pre, sel:sel, hist:'none', histText:'', proj:'none', projNote:''};
+  var prior = clientPriorCases(c), av = fuAvail(c), mode = 'none', svc = {consult:false, care:false, revisit:false}, sel = '';
+  /* 默认：今天有约好的术后管理 → 继续 + 术后管理，直接带出那个案件；从「未安排预约」约来 / 自助预约选了复诊·术后管理 → 同；其余默认开始新的服务案件 */
+  if(av.tRows.length && av.can.care){ mode = 'link'; svc.care = true; sel = av.careC[0].id; }
+  else if(c.careFor && c.careFor.caseId && av.careC.concat(av.revisitC).some(function(x){ return x.id===c.careFor.caseId; })){ mode = 'link'; svc.care = av.can.care; svc.revisit = !av.can.care; sel = c.careFor.caseId; }
+  if(c.visitPurpose==='复诊' || c.visitPurpose==='复诊评估'){ if(av.can.revisit){ mode = 'link'; svc.revisit = true; if(!sel || !fuCandsOf(c, {svc:svc}).some(function(x){ return x.id===sel; })) sel = (fuCandsOf(c, {svc:svc}).filter(function(x){ return x.stage==='postcare'; }).pop() || fuCandsOf(c, {svc:svc}).slice(-1)[0] || {}).id || ''; } }
+  else if(c.visitPurpose==='术后管理' && mode==='none' && av.can.care){ mode = 'link'; svc.care = true; sel = av.careC[0].id; }
+  FU_ASK = {caseId:c.id, mode:mode, svc:svc, sel:sel, localSel:'', hist:'none', histText:'', proj:'none', projNote:''};
+  if(mode==='link' && !fuCandsOf(c, FU_ASK).some(function(x){ return x.id===sel; })) FU_ASK.sel = (fuCandsOf(c, FU_ASK).slice(-1)[0] || {}).id || '';
   var ov = document.getElementById('followup-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'followup-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   fuRender(); ov.classList.add('open');
 }
 function fuSet(k, v){
   if(!FU_ASK) return;
-  if(k==='type'){ /* CMD-1026-06：第一个对话框只选一层——继续面诊 / 复诊·术后管理（单选）；细项在第二个弹窗里勾 */
-    if(v==='复诊评估' || v==='术后管理'){ FU_ASK.pre = v; v = '复诊术后'; } /* 旧写法兼容（测试脚本 / 旧入口）：当作「复诊 / 术后管理」+ 预选这一项 */
-    FU_ASK.type = v; FU_ASK.types = [v]; if(v==='接续面诊') FU_ASK.pre = '';
-    var c0 = getCurrentCase(), l = c0 ? resumeCandidates(c0, v) : []; if(!l.some(function(x){ return x.id===FU_ASK.sel; })) FU_ASK.sel = l.length ? l[l.length-1].id : '';
+  var c = getCurrentCase(), a = FU_ASK;
+  if(k==='svc'){ /* v = '面诊' | '术后管理' | '复诊评估'：面诊单选（勾了面诊不能再勾另外两个）；术后管理有约好的不能取消 */
+    var s = a.svc, av = c ? fuAvail(c) : null;
+    if(v==='面诊'){ s.consult = !s.consult; if(s.consult){ s.care = false; s.revisit = false; } }
+    else if(v==='复诊评估'){ if(s.consult) return; s.revisit = !s.revisit; }
+    else if(v==='术后管理'){ if(s.consult || !av || !av.can.care) return; if(s.care) return; s.care = true; }
+    if(av && av.can.care && !s.consult) s.care = true; /* 今天有约的术后管理：默认勾好、不能取消 */
+    var l = c ? fuCandsOf(c, a) : []; if(!l.some(function(x){ return x.id===a.sel; })) a.sel = l.length ? l[l.length-1].id : '';
     fuRender(); return;
   }
-  if(k==='mode' && v==='link'){ var c1 = getCurrentCase(); if(c1 && !resumeCandidates(c1, FU_ASK.type).length){ var alt = FU_ASK.type==='接续面诊' ? '复诊术后' : '接续面诊'; if(resumeCandidates(c1, alt).length){ FU_ASK.mode = 'link'; fuSet('type', alt); return; } } }
-  FU_ASK[k] = v; if(k==='mode' && v==='link'){ var c2 = getCurrentCase(), l2 = c2 ? resumeCandidates(c2, FU_ASK.type) : []; if(!l2.some(function(x){ return x.id===FU_ASK.sel; })) FU_ASK.sel = l2.length ? l2[l2.length-1].id : ''; } fuRender();
+  if(k==='type'){ /* 旧写法兼容（测试脚本）：'接续面诊' / '复诊术后' / '复诊评估' / '术后管理' */
+    a.svc = {consult:v==='接续面诊', care:v==='术后管理', revisit:v==='复诊评估'}; if(v==='复诊术后') a.svc.revisit = false;
+    var l2 = c ? fuCandsOf(c, a) : []; if(!l2.some(function(x){ return x.id===a.sel; })) a.sel = l2.length ? l2[l2.length-1].id : '';
+    fuRender(); return;
+  }
+  if(k==='mode'){
+    a.mode = v;
+    if(v==='link' && c){ var av2 = fuAvail(c), s2 = a.svc; if(!s2.consult && !s2.care && !s2.revisit){ if(av2.can.care) s2.care = true; else if(av2.can.revisit) s2.revisit = true; else if(av2.can.consult) s2.consult = true; } if(av2.can.care && !s2.consult) s2.care = true; var l3 = fuCandsOf(c, a); if(!l3.some(function(x){ return x.id===a.sel; })) a.sel = l3.length ? l3[l3.length-1].id : ''; }
+    fuRender(); return;
+  }
+  a[k] = v; fuRender();
+}
+function fuLocalList(c){
+  return localMainsWithLeft(c).map(function(x){ return {m:x, back:true}; }).concat(localOnlyHoldMains(c).filter(function(x){ return !localMainsWithLeft(c).some(function(y){ return y.id===x.id; }); }).map(function(x){ return {m:x, back:false}; }));
 }
 function fuRender(){
   var ov = document.getElementById('followup-overlay'), a = FU_ASK, c = getCurrentCase(); if(!ov || !a || !c) return;
-  var radio = function(group, val, label, on, extra){ return '<label style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="radio" name="'+group+'" '+(on ? 'checked ' : '')+'onchange="fuSet(\''+group+'\',\''+val+'\')" style="margin-top:3px;"><span>'+label+(extra||'')+'</span></label>'; };
-  var canLinkAny = resumeCandidates(c, '接续面诊').length>0 || resumeCandidates(c, '复诊术后').length>0; /* 什么都不能继续 → 「继续之前的服务」灰掉 */
-  var body = '<div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+cesc(c.name)+' 是否继续之前的服务？</div>'+
-    radio('mode','none','不继续，开始新的服务',a.mode==='none')+(canLinkAny ? radio('mode','link','继续之前的服务',a.mode==='link') : '<label style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:13px;opacity:.4;cursor:not-allowed;" title="客人没有可以继续的服务"><input type="radio" disabled style="margin-top:3px;"><span>继续之前的服务</span></label>');
-  var localMains = localMainsWithLeft(c);
-  if(localMains.length) body += radio('mode','local','使用之前购买的项目',a.mode==='local');
-  var foot = '<button class="btn-outline" onclick="followupAskDone(false)">开始新的服务</button><button class="btn-primary" disabled style="opacity:.4;cursor:not-allowed;">确认继续</button>', ok = false;
+  var radio = function(group, val, label, on, off, tip){ return '<label style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:13px;'+(off ? 'opacity:.4;cursor:not-allowed;' : 'cursor:pointer;')+'"'+(off ? ' title="'+tip+'"' : '')+'><input type="radio" name="'+group+'" '+(on ? 'checked ' : '')+(off ? 'disabled ' : '')+'onchange="fuSet(\''+group+'\',\''+val+'\')" style="margin-top:3px;"><span>'+label+'</span></label>'; };
+  var av = fuAvail(c), locals = fuLocalList(c), canLink = av.can.consult || av.can.care || av.can.revisit;
+  var body = '<div style="font-size:15px;font-weight:700;margin-bottom:6px;">请选择本次服务类型</div>'+
+    radio('mode','none','开始新的服务案件',a.mode==='none')+
+    radio('mode','link','继续之前的服务案件',a.mode==='link', !canLink, '没有可以继续的案件')+
+    radio('mode','local','使用之前购买的项目',a.mode==='local', !locals.length, '没有可以使用的持有项目');
+  var ok = a.mode==='none';
   if(a.mode==='local'){
-    if(!localMains.some(function(x){ return x.id===a.sel; })) a.sel = localMains[0].id;
-    body += '<div style="margin:8px 0 6px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">还有没用完的项目</div><select onchange="fuSet(\'sel\',this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+localMains.map(function(x){ return '<option value="'+x.id+'"'+(x.id===a.sel ? ' selected' : '')+'>'+x.caseNo+' · 持有：'+mainHoldOf(x).map(function(h){ return cesc(buyName(h.name))+' 剩 '+h.left; }).join('、')+'</option>'; }).join('')+'</select></div>';
-    foot = '<button class="btn-outline" onclick="followupAskDone(false)">开始新的服务</button><button class="btn-primary" id="fu-confirm" onclick="followupAskDone(true)">确认继续</button>';
+    if(!locals.some(function(x){ return x.m.id===a.sel; })) a.sel = locals.length ? locals[0].m.id : '';
+    body += '<div style="margin:8px 0 6px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">还有没用完的项目</div><select onchange="fuSet(\'sel\',this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+locals.map(function(x){ return '<option value="'+x.m.id+'"'+(x.m.id===a.sel ? ' selected' : '')+'>'+x.m.caseNo+' · 持有：'+mainHoldOf(x.m).map(function(h){ return cesc(buyName(h.name))+' 剩 '+h.left; }).join('、')+(x.back ? '（回到这个主案件）' : '（新案件，标来源 '+x.m.caseNo+'）')+'</option>'; }).join('')+'</select></div>';
+    ok = !!a.sel;
   }
   if(a.mode==='link'){
-    var hasRep = resumeCandidates(c, '接续面诊').length>0, hasFol = resumeCandidates(c, '复诊术后').length>0;
-    var cand = resumeCandidates(c, a.type), src = cand.filter(function(x){ return x.id===a.sel; })[0] || null, wt = a.type==='复诊术后' ? (a.pre || '术后管理') : a.type;
-    /* 期限筛选——超过期限的灰掉写原因；复诊（到店目的选了复诊）超过 3 个月 → 重新面诊，开新主案件（轻关联原案件）；复诊 / 术后管理的细项在第二个弹窗里勾 */
-    var okC = cand.filter(function(x){ return joinWindowOf(x, wt).ok; }), overC = cand.filter(function(x){ return !joinWindowOf(x, wt).ok; });
-    if(src && !joinWindowOf(src, wt).ok){ a.sel = okC.length ? okC[okC.length-1].id : ''; src = okC.filter(function(x){ return x.id===a.sel; })[0] || null; }
-    a.lightSrc = (!okC.length && overC.length && wt==='复诊评估') ? overC[overC.length-1].id : '';
-    var lv = function(val, label, off, tip){ var on = a.type===val; return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;'+(off ? 'opacity:.4;cursor:not-allowed;' : 'cursor:pointer;')+'"'+(off ? ' title="'+tip+'"' : '')+'><input type="radio" name="futype" '+(on ? 'checked ' : '')+(off ? 'disabled ' : '')+'onchange="fuSet(\'type\',\''+val+'\')">'+label+'</label>'; };
+    var s = a.svc, cand = fuCandsOf(c, a), src = cand.filter(function(x){ return x.id===a.sel; })[0] || null;
+    var chk = function(key, label, on, off, tip){ return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;'+(off ? 'opacity:.45;cursor:not-allowed;' : 'cursor:pointer;')+'"'+(off ? ' title="'+tip+'"' : '')+'><input type="checkbox" '+(on ? 'checked ' : '')+(off ? 'disabled ' : '')+'onchange="fuSet(\'svc\',\''+key+'\')">'+label+(off && tip ? ' <span style="font-size:12px;color:var(--muted);">'+tip+'</span>' : '')+'</label>'; };
+    var careForced = av.can.care && !s.consult;
     body += '<div style="margin:8px 0 6px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;">'+
-      '<div style="display:flex;gap:18px;flex-wrap:wrap;">'+lv('接续面诊', '继续面诊', !hasRep, '客人没有「仅出报告」的案件')+lv('复诊术后', '复诊 / 术后管理', !hasFol, '客人没有可以继续的案件')+'</div>'+
-      '<select onchange="fuSet(\'sel\',this.value)" style="width:100%;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+(cand.length ? '' : '<option value="">（没有可继续的案件）</option>')+cand.map(function(x){ var w = joinWindowOf(x, wt); return '<option value="'+x.id+'"'+(x.id===a.sel ? ' selected' : '')+(w.ok ? '' : ' disabled')+'>'+x.caseNo+' · '+caseStageProcText(x)+(w.ok ? '' : '（'+w.reason+'）')+'</option>'; }).join('')+'</select>'+(a.lightSrc ? '<div style="font-size:12px;color:#C26A1B;margin-top:6px;">超过 3 个月，需要重新面诊：开新的服务，并关联原案件。</div>' : '')+
-      (a.type==='接续面诊' && !cand.length ? '<div style="font-size:12px;color:#C1454A;margin-top:6px;">继续面诊只适用「仅出报告」的案件（已出诊疗方案、客人没做项目就结束的案件）。</div>' : '')+'</div>';
-    if(a.type==='接续面诊' && src){
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">本次服务内容（面诊仅可单选；术后管理、复诊评估可以都勾）</div>'+
+      '<div style="display:flex;gap:18px;flex-wrap:wrap;">'+chk('面诊','面诊', s.consult, !av.can.consult || s.care || s.revisit, !av.can.consult ? '没有仅出报告的案件' : '')+
+        chk('术后管理','术后管理', s.care, !av.can.care || s.consult || (careForced && s.care), !av.can.care ? '今天没有约好的术后管理' : (careForced ? '客人今天约了，不能取消' : ''))+
+        chk('复诊评估','复诊评估', s.revisit, !av.can.revisit || s.consult, !av.can.revisit ? '没有可复诊的案件' : '')+'</div>'+
+      '<div style="font-size:12px;color:var(--muted);margin:8px 0 4px;">选择之前的案件</div>'+
+      '<select onchange="fuSet(\'sel\',this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"'+(cand.length ? '' : ' disabled')+'>'+(cand.length ? '' : '<option value="">'+((s.consult||s.care||s.revisit) ? '（没有符合的案件）' : '请选择')+'</option>')+cand.map(function(x){ return '<option value="'+x.id+'"'+(x.id===a.sel ? ' selected' : '')+'>'+x.caseNo+' · '+caseStageProcText(x)+'</option>'; }).join('')+'</select></div>';
+    if(s.consult && src){
       var r = resumeChecksOf(a, src);
       body += '<div style="margin-top:8px;font-size:13px;font-weight:700;">继续前三道检查</div>'+
         '<div style="padding:6px 0;font-size:13px;">① 距院长实际面诊日（'+cesc(resumeConsultDay(src))+'）'+r.days+' 天 · '+(r.over ? '<b style="color:#C1454A;">❌ 已超过 3 个月</b>' : '<b style="color:var(--sage);">✅ 没超过 3 个月</b>')+'</div>'+
@@ -2686,14 +2716,14 @@ function fuRender(){
           (a.hist==='ok' ? '<textarea placeholder="填写新增的医美史（会同时补进医美史）" oninput="FU_ASK.histText=this.value;fuRefreshBtn()" style="width:100%;min-height:52px;margin-top:4px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(a.histText||'')+'</textarea>' : '')+'</div>'+
         '<div style="padding:6px 0;font-size:13px;border-top:1px solid var(--border2);">③ 项目有变化吗？<span style="font-size:12px;color:var(--muted);">（有变化先用［发起对话］和 KR 室长商量）</span>'+radio('proj','none','没有变化',a.proj==='none')+radio('proj','ok','有变化，已和 KR 室长确认可继续',a.proj==='ok')+radio('proj','bad','有变化，未确认 / 需要调整',a.proj==='bad')+
           (a.proj==='ok' ? '<input placeholder="备注（和 KR 室长确认的内容）" value="'+cesc(a.projNote||'')+'" oninput="FU_ASK.projNote=this.value;fuRefreshBtn()" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">' : '')+'</div>';
-      if(r.status==='fail') body += '<div style="margin-top:6px;padding:8px 12px;background:#FDECEA;color:#C1454A;border-radius:8px;font-size:13px;font-weight:700;">不能继续，请开始新的服务（'+r.msg+'）</div>';
+      if(r.status==='fail') body += '<div style="margin-top:6px;padding:8px 12px;background:#FDECEA;color:#C1454A;border-radius:8px;font-size:13px;font-weight:700;">不能继续，请选「开始新的服务案件」（'+r.msg+'）</div>';
       ok = r.status==='pass';
-    } else ok = !!src;
-    foot = '<button class="btn-outline" onclick="followupAskDone(false)">开始新的服务</button>'+(a.lightSrc ? '<button class="btn-primary" onclick="followupAskNewLight()">开新的服务（关联原案件）</button>' : '')+((a.type==='接续面诊' && src && resumeChecksOf(a, src).status==='fail') ? '' : '<button class="btn-primary" id="fu-confirm" '+(ok ? '' : 'disabled style="opacity:.4;cursor:not-allowed;" ')+'onclick="followupAskDone(true)">确认继续</button>');
+    } else ok = !!src && (s.consult || s.care || s.revisit);
   }
+  var foot = '<button class="btn-primary" id="fu-confirm" '+(ok ? '' : 'disabled style="opacity:.4;cursor:not-allowed;" ')+'onclick="followupAskDone('+(a.mode==='none' ? 'false' : 'true')+')">确认</button>';
   ov.innerHTML = '<div class="modal-box" style="width:520px;max-height:86vh;overflow:auto;">'+body+'<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;">'+foot+'</div></div>';
 }
-function fuRefreshBtn(){ var c = getCurrentCase(), a = FU_ASK, b = document.getElementById('fu-confirm'); if(!c || !a || !b) return; var src = resumeCandidates(c, a.type).filter(function(x){ return x.id===a.sel; })[0]; var ok = a.type==='接续面诊' ? (src && resumeChecksOf(a, src).status==='pass') : !!src; b.disabled = !ok; b.style.opacity = ok ? '' : '.4'; b.style.cursor = ok ? '' : 'not-allowed'; }
+function fuRefreshBtn(){ var c = getCurrentCase(), a = FU_ASK, b = document.getElementById('fu-confirm'); if(!c || !a || !b) return; var src = fuCandsOf(c, a).filter(function(x){ return x.id===a.sel; })[0]; var ok = a.svc.consult ? (src && resumeChecksOf(a, src).status==='pass') : !!src; b.disabled = !ok; b.style.opacity = ok ? '' : '.4'; b.style.cursor = ok ? '' : 'not-allowed'; }
 /* CMD-1023-02 二：期限——继续面诊从院长面诊日算、复诊从施术完成日算，3 个月内算同一个主案件；超过就重新面诊、开新主案件（复诊轻关联原案件） */
 function surgeryDoneDayOf(m){
   var d = m.surgeryDoneAt ? String(m.surgeryDoneAt).slice(0, 10) : '';
@@ -2722,16 +2752,19 @@ function followupAskDone(link){
   var ov = document.getElementById('followup-overlay'), ctx = FU_ASK; if(ov) ov.classList.remove('open'); FU_ASK = null;
   var c = getCurrentCase(); if(!c || !ctx || c.id!==ctx.caseId) return;
   c.followupAsked = true;
-  if(link===true && ctx.mode==='local' && ctx.sel){ /* CMD-1023-01 S2：来用之前买的本地项目 → 加入那个本地主案件，当它的子案件，照一般本地流程 */
+  if(link===true && ctx.mode==='local' && ctx.sel){
     var lsrc = CASE_ITEMS.filter(function(x){ return x.id===ctx.sel; })[0]; if(!lsrc) return;
-    var lm = joinMain(c, lsrc); c.needsConsult = false;
-    logCaseEvent(c, actingName(), '到店：来用之前买的本地项目，加入主案件 '+(lm ? lm.caseNo : lsrc.caseNo)+'，本案件是它的子案件 '+c.caseNo); buildCaseLog(c); renderCaseSubtitle(c); renderCaseBody(c);
+    if(!localMainsWithLeft(c).some(function(x){ return x.id===lsrc.id; })){ /* CMD-1026-07：本地买的持有项目 → 开新案件，把要用的持有项目带进去，自动标来源（不加入原主案件） */
+      c.continueNew = true; c.boughtFrom = [lsrc.caseNo]; logCaseEvent(c, actingName(), '到店：使用之前购买的项目——来自 '+lsrc.caseNo+' 购买的本地持有项目（新的独立案件，不加入原主案件）'); buildCaseLog(c); renderCaseSubtitle(c); renderCaseBody(c);
+      return;
+    }
+    var lm = joinMain(c, lsrc); c.needsConsult = false; /* 赴韩主案件里的持有 → 回到那个主案件，加一个子案件 */
+    logCaseEvent(c, actingName(), '到店：使用之前购买的项目，加入主案件 '+(lm ? lm.caseNo : lsrc.caseNo)+'，本案件是它的子案件 '+c.caseNo); buildCaseLog(c); renderCaseSubtitle(c); renderCaseBody(c);
     return;
   }
   if(link===true && ctx.mode==='link' && ctx.sel){
-    var src = CASE_ITEMS.filter(function(x){ return x.id===ctx.sel; })[0], type = ctx.type; if(!src) return;
-    var ctxTypes = type==='复诊术后' ? (ctx.pre ? [ctx.pre] : []) : (ctx.types||[type]).slice(); /* CMD-1026-06：复诊 / 术后管理的细项在第二个弹窗里勾 */
-    if(type==='复诊术后') type = resumePrimaryType(ctxTypes);
+    var src = CASE_ITEMS.filter(function(x){ return x.id===ctx.sel; })[0]; if(!src) return;
+    var type = ctx.svc.consult ? '接续面诊' : resumePrimaryType(fuSvcList(ctx)), ctxTypes = ctx.svc.consult ? ['接续面诊'] : fuSvcList(ctx); /* CMD-1026-07：服务内容在第一个对话框勾好，第二个弹窗不再勾 */
     c.resumeFrom = {caseId:src.id, type:type, types:ctxTypes};
     var mainSrc = mainOf(src);
     if(type==='接续面诊'){
@@ -2744,7 +2777,7 @@ function followupAskDone(link){
     } else {
       c.needsConsult = (type==='复诊评估'); setLinkedCase(src.id);
       joinMain(c, src);
-      logCaseEvent(c, actingName(), '到店：继续之前的服务 '+src.caseNo+'（复诊 / 术后管理，细项在继续项目里确认）'); buildCaseLog(c); renderCaseSubtitle(c);
+      logCaseEvent(c, actingName(), '到店：继续之前的服务 '+src.caseNo+'（'+c.resumeFrom.types.join(' + ')+'）'); buildCaseLog(c); renderCaseSubtitle(c);
       openContModal(c); /* CMD-1026-01：继续资料集中在弹窗里填 */
     }
   } else { c.continueNew = true; /* CMD-1022-04：选「不继续」= 开新案件，不再出现 1015-18 的「继续到原案件」条 */ logCaseEvent(c, actingName(), '到店：不继续之前案件，走一般流程'); buildCaseLog(c); renderCaseBody(c); }
@@ -2911,12 +2944,37 @@ function concernFormHtml(c){
 }
 /* 按部位显示（只读）：基础资料 tab / IN 面诊资料 tab / KR 面诊 tab 共用，按「面部 / 身体」分两组；opts.supp = 每张卡带［补充上传］ */
 var CONCERN_ZOOM = null;
+/* CMD-1026-07 四：照片查看器——打开一张后，左右方向键 / 两侧箭头切上一张 / 下一张（同一页同一次来访的照片连在一起，跨部位），Esc 或 ✕ 关；标题带类别（面诊 / 术前 / 术后 / 复诊）+ 「3 / 10」。视频不放进来 */
+var PV = {list:[], idx:0};
+function pvAttr(cat, title, name, id){ return ' data-pv-cat="'+cesc(cat)+'" data-pv-title="'+cesc(title)+'" data-pv-name="'+cesc(name)+'"'+(id ? ' data-pv-id="'+cesc(id)+'"' : '')+' onclick="pvShow(this)"'; }
+function pvScope(el){ return (el && el.closest && el.closest('[data-pv-scope]')) || document.getElementById('kr-casedetail') || document.getElementById('case-body') || document.body; }
+function pvShow(el){
+  var sc = pvScope(el), els = [].slice.call(sc.querySelectorAll('[data-pv-name]')).filter(function(x){ return x===el || x.offsetParent!==null; });
+  PV.list = els.map(function(x){ return {cat:x.getAttribute('data-pv-cat')||'', title:x.getAttribute('data-pv-title')||'', name:x.getAttribute('data-pv-name')||''}; });
+  PV.idx = Math.max(0, els.indexOf(el)); pvRender();
+}
+function pvRender(){
+  var it = PV.list[PV.idx]; if(!it) return;
+  var ov = document.getElementById('concern-zoom-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'concern-zoom-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var n = PV.list.length, arrow = function(dir, show){ return '<span id="pv-'+(dir<0 ? 'prev' : 'next')+'" onclick="pvStep('+dir+')" style="width:36px;flex:none;text-align:center;font-size:28px;cursor:'+(show ? 'pointer' : 'default')+';color:'+(show ? 'var(--slate)' : 'transparent')+';user-select:none;">'+(dir<0 ? '‹' : '›')+'</span>'; };
+  ov.innerHTML = '<div class="modal-box" style="width:480px;text-align:center;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;gap:10px;"><b>'+cesc((it.cat ? it.cat+' · ' : '')+it.title)+'</b><span style="white-space:nowrap;"><span id="pv-count" style="font-size:12px;color:var(--muted);margin-right:12px;">'+(PV.idx+1)+' / '+n+'</span><span style="cursor:pointer;" onclick="pvClose()">✕</span></span></div>'+
+    '<div style="display:flex;align-items:center;">'+arrow(-1, PV.idx>0)+'<div style="flex:1;height:400px;margin:0 6px;border:1px solid var(--border2);border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;">'+cesc(it.name)+'<br>（原型占位图，规格 '+CONCERN_PHOTO_SPEC+'）</div>'+arrow(1, PV.idx<n-1)+'</div></div>';
+  ov.style.zIndex = 100020; ov.classList.add('open');
+}
+function pvStep(d){ var i = PV.idx+d; if(i<0 || i>=PV.list.length) return; PV.idx = i; pvRender(); }
+function pvClose(){ var ov = document.getElementById('concern-zoom-overlay'); if(ov) ov.classList.remove('open'); }
+document.addEventListener('keydown', function(ev){
+  var ov = document.getElementById('concern-zoom-overlay'); if(!ov || !ov.classList.contains('open') || !PV.list.length) return;
+  if(ev.key==='ArrowLeft'){ pvStep(-1); ev.preventDefault(); } else if(ev.key==='ArrowRight'){ pvStep(1); ev.preventDefault(); } else if(ev.key==='Escape'){ pvClose(); }
+});
 function concernZoom(cid, what){
+  if(what!=='video'){ var sc = document.getElementById('kr-casedetail') || document.getElementById('case-body') || document.body, el = [].slice.call(sc.querySelectorAll('[data-pv-id]')).filter(function(x){ return x.getAttribute('data-pv-id')===cid+'|'+what; })[0]; if(el){ pvShow(el); return; } }
   var c = (typeof getCurrentCase==='function' ? getCurrentCase() : null) || (typeof KR_CASE!=='undefined' && typeof krFindCase==='function' && KR_CASE && KR_CASE.id ? (krFindCase(KR_CASE.clinicId, KR_CASE.id)||{}).c : null); if(!c) return;
   var x = concernCards(c).filter(function(y){ return concernCid(y)===cid; })[0]; if(!x) return; var def = concernPartDef(x.part), f = what==='video' ? x.video : (x.photos||{})[what]; if(!f) return;
   var a = def.angles.filter(function(z){ return z.id===what; })[0], title = concernCardFull(x)+' · '+(what==='video' ? '视频' : (a ? a.label : '照片'));
   var ov = document.getElementById('concern-zoom-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'concern-zoom-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:420px;text-align:center;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>'+cesc(title)+'</b><span style="cursor:pointer;" onclick="document.getElementById(\'concern-zoom-overlay\').classList.remove(\'open\')">✕</span></div>'+
+  PV.list = []; /* 视频：照旧单独播放，不进连续翻 */
+  ov.innerHTML = '<div class="modal-box" style="width:420px;text-align:center;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>'+cesc(title)+'</b><span style="cursor:pointer;" onclick="pvClose()">✕</span></div>'+
     '<div style="width:300px;height:'+(what==='video' ? 200 : 400)+'px;margin:0 auto;border:1px solid var(--border2);border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;">'+(what==='video' ? '▶ ' : '')+cesc(f.name)+'<br>（原型占位图'+(what==='video' ? '' : '，规格 '+CONCERN_PHOTO_SPEC)+'）</div></div>';
   ov.style.zIndex = 100020; ov.classList.add('open');
 }
@@ -2932,7 +2990,7 @@ function concernCardsHtml(c, o){
     var vid = x.video ? '<a href="#" class="info-link" onclick="concernZoom(\''+pk+'\',\'video\');return false;">▶ '+cesc(x.video.name)+'</a>' : '<span style="color:var(--muted);">—</span>';
     var photos = x.legacy ? (Object.keys(x.photos||{}).length ? '<span style="font-size:12px;color:var(--slate2);">'+cesc((x.photos.legacy||{}).name||'照片')+'（旧案件没有分角度）</span>' : '<span style="color:var(--muted);">—</span>') :
       '<div style="display:flex;flex-wrap:wrap;gap:8px;">'+shootShowAngles(sp, x.photos).map(function(a){ var f = (x.photos||{})[a.id];
-        return '<div style="width:92px;border:1px solid var(--border2);border-radius:8px;padding:6px;text-align:center;font-size:12px;'+(f ? 'cursor:pointer;" onclick="concernZoom(\''+pk+'\',\''+a.id+'\')"' : 'color:var(--muted);"')+'><div style="font-weight:700;min-height:28px;">'+cesc(a.label)+'</div>'+(f ? '<div style="color:var(--sage);word-break:break-all;">'+cesc(f.name)+'</div>' : '未上传')+'</div>'; }).join('')+'</div>';
+        return '<div style="width:92px;border:1px solid var(--border2);border-radius:8px;padding:6px;text-align:center;font-size:12px;'+(f ? 'cursor:pointer;"'+pvAttr(concernPvCat(c), concernCardFull(x)+' · '+a.label, f.name, pk+'|'+a.id) : 'color:var(--muted);"')+'><div style="font-weight:700;min-height:28px;">'+cesc(a.label)+'</div>'+(f ? '<div style="color:var(--sage);word-break:break-all;">'+cesc(f.name)+'</div>' : '未上传')+'</div>'; }).join('')+'</div>';
     var fkey = (o.foldKey||'')+'|'+pk, fopen = !o.fold || !!KR_CN_OPEN[fkey]; /* CMD-1025-01 二：KR 室长的部位卡默认折叠（只显示苦恼说明 + 希望预期），点［展开］才显示视频 / 照片 */
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+cesc(concernCardTitle(x))+(o.fold ? '<span style="float:right;font-weight:400;font-size:12px;"><a href="#" class="info-link" onclick="krCnToggle(\''+fkey.replace(/'/g,'')+'\');return false;">'+(fopen ? '折叠' : '展开')+'</a></span>' : '')+(o.supp ? '<span style="float:right;font-weight:400;font-size:12px;"><a href="#" class="info-link" onclick="supplementUpload(\'photo\');return false;">补充照片</a>　<a href="#" class="info-link" onclick="supplementUpload(\'video\');return false;">补充视频</a></span>' : '')+'</div>'+
       '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">苦恼说明　</span>'+(cesc(x.desc||'') || '—')+'</div>'+
@@ -9238,17 +9296,16 @@ function revCmpGo(clinicId, id){
   if(typeof isKrAccount==='function' && isKrAccount()){ if(typeof krShowCase==='function') krShowCase(clinicId, id); }
   else if(typeof openCaseDetail==='function') openCaseDetail(id);
 }
-function revCmpZoom(title, name){
-  var ov = document.getElementById('concern-zoom-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'concern-zoom-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:420px;text-align:center;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>'+cesc(title)+'</b><span style="cursor:pointer;" onclick="document.getElementById(\'concern-zoom-overlay\').classList.remove(\'open\')">✕</span></div>'+
-    '<div style="width:300px;height:400px;margin:0 auto;border:1px solid var(--border2);border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;">'+cesc(name)+'<br>（原型占位图）</div></div>';
-  ov.style.zIndex = 100020; ov.classList.add('open');
+function revCmpZoom(title, name, angle){ /* 兜底（旧调用）：只开这一张；新的格子用 pvAttr，可连续翻 */
+  PV.list = [{cat:pvCatOfTitle(title), title:title+(angle ? ' · '+angle : ''), name:name}]; PV.idx = 0; pvRender();
 }
+function pvCatOfTitle(t){ t = String(t||''); return /术后/.test(t) ? '术后' : (/术前/.test(t) ? '术前' : (/本次|复诊/.test(t) ? '复诊' : '面诊')); }
+function revPvTitle(ph){ return String(ph.title||'').replace(/ · (术前|本次复诊)$/, '').replace(/ · 术后恢复.*$/, '')+(ph.angle ? ' · '+ph.angle : ''); }
 /* 收集一个项目的三栏照片：返回 {rows:[{id,label,pre:[],post:[],now:[]}], other:[{col,label,ph}]}；ph = {name, srcId, srcNo, srcText, title} */
 function revCmpCollect(c, name, all){
   var orig = revCmpOrig(c, all), part = followItemPart(name), sp = shootSpec(part, name), rows = sp.angles.map(function(a){ return {id:a.id, label:a.label, pre:[], post:[], now:[]}; }), other = [];
   var rowOf = function(id){ return rows.filter(function(r){ return r.id===id; })[0]; };
-  var put = function(col, aid, ph, aLabel){ var r = rowOf(aid); if(r) r[col].push(ph); else other.push({col:col, label:aLabel || CONCERN_ANGLE[aid] || aid, ph:ph}); };
+  var put = function(col, aid, ph, aLabel){ var r = rowOf(aid); ph.angle = r ? r.label : (aLabel || CONCERN_ANGLE[aid] || aid); if(r) r[col].push(ph); else other.push({col:col, label:aLabel || CONCERN_ANGLE[aid] || aid, ph:ph}); };
   if(orig){
     concernCards(orig).forEach(function(x){
       var same = x.part!=='legacy' && partBase(x.part)===partBase(part);
@@ -9269,7 +9326,7 @@ function revCmpCollect(c, name, all){
 }
 function revCmpTile(c, ph){
   var link = (!ph.self && revCmpSrcCanOpen(c, ph.srcId)) ? '<a href="#" class="info-link" style="font-size:12px;" onclick="revCmpGo(\''+(c.clinicId||'')+'\',\''+ph.srcId+'\');return false;">'+cesc(ph.srcText)+'</a>' : '<span style="font-size:12px;color:var(--muted);">'+cesc(ph.srcText)+'</span>';
-  return '<div style="flex:0 0 112px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;background:#fff;"><div style="height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--sage);word-break:break-all;text-align:center;" onclick="revCmpZoom(\''+String(ph.title).replace(/'/g,"\\'")+'\',\''+String(ph.name).replace(/'/g,"\\'")+'\')">'+cesc(ph.name)+'</div><div style="line-height:1.35;margin-top:3px;">'+link+'</div></div>';
+  return '<div style="flex:0 0 112px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;background:#fff;"><div style="height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--sage);word-break:break-all;text-align:center;" "'+pvAttr(pvCatOfTitle(ph.title), revPvTitle(ph), ph.name)+'>'+cesc(ph.name)+'</div><div style="line-height:1.35;margin-top:3px;">'+link+'</div></div>';
 }
 function revCmpCell(c, list){
   return list.length ? '<div style="display:flex;gap:6px;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px;">'+list.map(function(p){ return revCmpTile(c, p); }).join('')+'</div>' : '<span style="color:var(--muted);">—</span>';
@@ -9330,7 +9387,7 @@ function revProjCardsHtml(c, opt){
     var capsH = caps.map(function(k){ var on = cap===k[0]; return '<button onclick="revCapSet(\''+c.id+'\',\''+nq+'\',\''+k[0]+'\')" style="padding:3px 12px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;cursor:pointer;">'+k[1]+'</button>'; }).join(' ');
     var vidH = d.video ? (d.video.self ? '<span style="color:var(--sage);">▶ '+cesc(d.video.name)+'</span>' : '<span style="color:var(--sage);">▶ '+cesc(d.video.name)+'</span> '+revCmpSrcLine(c, d.video)) : '<span style="color:var(--muted);">—</span>';
     var tiles = sp.angles.map(function(a){ var l = d.byAngle[a.id] || [];
-      return '<div style="width:132px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;'+(l.length ? '' : 'color:var(--muted);')+'"><div style="font-weight:700;min-height:28px;text-wrap:balance;">'+cesc(a.label)+'</div>'+(l.length ? l.map(function(ph){ return '<div style="cursor:pointer;color:var(--sage);word-break:break-all;" onclick="revCmpZoom(\''+String(ph.title).replace(/'/g,"\\'")+'\',\''+String(ph.name).replace(/'/g,"\\'")+'\')">'+cesc(ph.name)+'</div><div style="line-height:1.35;margin-bottom:4px;">'+revCmpSrcLine(c, ph)+'</div>'; }).join('') : '—')+'</div>'; }).join('');
+      return '<div style="width:132px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;'+(l.length ? '' : 'color:var(--muted);')+'"><div style="font-weight:700;min-height:28px;text-wrap:balance;">'+cesc(a.label)+'</div>'+(l.length ? l.map(function(ph){ return '<div style="cursor:pointer;color:var(--sage);word-break:break-all;"'+pvAttr(pvCatOfTitle(ph.title), revPvTitle(Object.assign({}, ph, {angle:ph.angle||a.label})), ph.name)+'>'+cesc(ph.name)+'</div><div style="line-height:1.35;margin-bottom:4px;">'+revCmpSrcLine(c, ph)+'</div>'; }).join('') : '—')+'</div>'; }).join('');
     var other = d.other.length ? '<div style="font-size:12px;font-weight:700;margin:8px 0 4px;">其他照片</div><div style="display:flex;flex-wrap:wrap;gap:8px;">'+d.other.map(function(ph){ return '<div style="width:132px;border:1px solid var(--border2);border-radius:8px;padding:6px;font-size:12px;"><div style="font-weight:700;">'+cesc(ph.label||'')+'</div><div style="color:var(--sage);word-break:break-all;">'+cesc(ph.name)+'</div><div>'+revCmpSrcLine(c, ph)+'</div></div>'; }).join('')+'</div>' : '';
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-top:8px;background:#fff;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><b style="font-size:13px;">'+cesc(name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+cesc(concernPartDef(part).label)+'</span></b><span style="display:inline-flex;gap:6px;">'+capsH+'</span><span style="margin-left:auto;">'+shootRefBtn(part, name)+(opt.collapse ? ' <a href="#" class="info-link" style="font-size:12px;margin-left:8px;" onclick="revProjToggle(\''+c.id+'\',\''+nq+'\');return false;">收起 ⬆️</a>' : '')+'</span></div>'+
       '<div style="font-size:13px;margin-bottom:6px;"><span style="color:var(--muted);font-size:12px;">视频　</span>'+vidH+'</div><div style="font-size:13px;"><span style="color:var(--muted);font-size:12px;">照片　</span><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">'+tiles+'</div>'+other+'</div></div>';
@@ -10080,14 +10137,7 @@ function contSetTypes(c, ts){
   var type = resumePrimaryType(ts); c.resumeFrom = {caseId:c.resumeFrom.caseId, type:type, types:ts};
   c.needsConsult = ts.indexOf('复诊评估')>-1; c.followup = true; if(c.linkedCase) c.linkedCase.reason = c.needsConsult ? '复诊' : '术后管理';
 }
-function contToggleType(t){
-  var c = getCurrentCase(); if(!c || !CONT_MODAL || !contResume(c)) return;
-  if(t==='术后管理') return; /* CMD-1026-05：有约好的 = 默认勾好且不能取消；没有约 = 灰掉不能勾 */
-  var ts = resumeTypesOf(c).filter(function(x){ return x!=='接续面诊'; }), i0 = ts.indexOf(t);
-  if(i0>-1) ts.splice(i0, 1); else ts.push(t);
-  if(t==='术后管理'){ var all = contTodayCareRows(c).map(function(r){ return r.s.id; }); CONT_MODAL.care = i0>-1 ? [] : all; } /* 勾上 = 今天约的全勾；取消 = 全不勾 */
-  contSetTypes(c, ts); c.materialsError = ''; contRender();
-}
+function contToggleType(){} /* CMD-1026-07：服务内容在第一个对话框勾，第二个弹窗不能改（保留空函数，旧调用不报错） */
 function contToggleCare(){} /* CMD-1026-05：今日预约管理只看不能改（保留空函数，旧调用不报错） */
 function contRender(){
   var ov = document.getElementById('cont-overlay'), c = getCurrentCase(), m = CONT_MODAL; if(!ov || !m || !c) return;
@@ -10096,9 +10146,8 @@ function contRender(){
   var types = resumeTypesOf(c), has = function(t){ return types.indexOf(t)>-1; };
   var metaviewText = c.metaviewStatus==='ready' ? '<span style="font-weight:700;color:var(--sage);">已检测到</span>' : (c.metaviewStatus==='checking' ? '<span style="color:var(--terracotta);">检测中…</span>' : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>');
   var careRows = contTodayCareRows(c);
-  var chip = function(t){ var on = has(t), dis = (t==='术后管理'); return '<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-right:16px;'+(dis ? (careRows.length ? 'cursor:not-allowed;' : 'opacity:.5;cursor:not-allowed;') : 'cursor:pointer;')+'"><input type="checkbox" '+(on ? 'checked ' : '')+(dis ? 'disabled ' : '')+'onchange="contToggleType(\''+t+'\')">'+t+(dis && !careRows.length ? ' <span style="font-size:12px;color:var(--muted);">今天没有约好的术后管理</span>' : (dis ? ' <span style="font-size:12px;color:var(--muted);">客人今天约了，不能取消</span>' : ''))+'</label>'; };
-  var body = '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'+
-    '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:2px;">继续项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;">'+chip('复诊评估')+chip('术后管理')+'</div></div></div>';
+  var careRows = contTodayCareRows(c);
+  var body = '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'; /* CMD-1026-07：服务内容已在第一个对话框勾好，这里没有勾选框，只按勾的内容展开 */
   if(has('复诊评估')){
     var done = followDoneItems(src), sel = c.followProjects || [];
     body += '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">这次要看的项目 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;"><div style="display:flex;flex-wrap:wrap;gap:6px;">'+(done.map(function(n){ var on = sel.indexOf(n)>-1; return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="toggleFollowProject(\''+n.replace(/'/g,"\\'")+'\')">'+(on ? '✓ ' : '')+e(n)+'</button>'; }).join(' ') || '<span style="font-size:12px;color:var(--muted);">关联案件没有做过的项目</span>')+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">从关联案件 '+e(src ? src.caseNo : '')+' 做过的项目里选；复诊评估不收费'+(c.director ? '；院长沿用原案件：'+e(c.director) : '')+'</div>'+revisitMediaCardsHtml(c)+'</div></div>';

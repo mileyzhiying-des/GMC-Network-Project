@@ -502,7 +502,7 @@ function krTabBasic(c){
     krCardBox('', hist); /* CMD-1022-16：到访目的搬进面诊 tab 最上面（KR 室长 / 院长 / 代表院长），基础资料不再放 */
 }
 function krCaseBeautyAdd(){ BEAUTY_ADD_KR = {clinicId:KR_CASE.clinicId, name:(krFindCase(KR_CASE.clinicId, KR_CASE.id)||{}).name}; openBeautyAdd(null); }
-/* CMD-1022-05：关联案件块（KR 只读）。原案件是 KR 案件 → 直接看（摘要 + ［查看案件］）；原案件只在 IN 端 → 本案件送到韩国后，KR 看得到它的基础资料 + 做了什么项目（不显示价格）+ 附件。被关联 / 后续接续的案件只列一行 */
+/* CMD-1022-05：关联案件块（KR 只读）。原案件是 KR 案件 → 直接看（摘要 + ［查看案件］）；原案件只在 IN 端 → 本案件送到韩国后，KR 看得到它的基础资料 + 做了什么项目（不显示价格）+ 附件。被关联 / 后续继续的案件只列一行 */
 var KR_REL_OPEN = {};
 function krRelToggle(k){ KR_REL_OPEN[k] = !KR_REL_OPEN[k]; krRenderCaseDetail(); }
 function krRelBodyHtml(o, vis){
@@ -526,7 +526,7 @@ function krRelBlockHtml(c){
     return '<div style="border-bottom:1px solid var(--border2);"><div style="display:flex;align-items:center;gap:10px;padding:10px 0;'+(expand ? 'cursor:pointer;' : '')+'"'+(expand ? ' onclick="krRelToggle(\''+key+'\')"' : '')+'><span style="font-size:13px;font-weight:700;min-width:84px;">'+krEsc(o.caseNo)+'</span><span class="status-pill" style="background:var(--border2);color:var(--slate2);">'+krEsc(label)+'</span><span style="font-size:12px;color:var(--muted);flex:1;">'+krEsc(caseFirstDate(o))+'</span><span class="status-pill" style="background:'+bd[0]+';color:'+bd[1]+';">'+bd[2]+'</span>'+(expand ? '<span style="font-size:12px;color:var(--slate);">'+(open ? '▴' : '▾')+'</span>' : '')+'</div>'+
       (open ? '<div style="background:var(--border2);border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+krRelBodyHtml(o, vis)+'</div>' : '')+'</div>';
   };
-  if(c.resumeFrom && c.resumeFrom.caseId){ var rs = srcOf(c.resumeFrom.caseId); if(rs) rows += entry(rs, '接续 · '+(c.resumeFrom.type||''), 'r-'+rs.id, true); }
+  if(c.resumeFrom && c.resumeFrom.caseId){ var rs = srcOf(c.resumeFrom.caseId); if(rs) rows += entry(rs, '继续 · '+rsDisp(c.resumeFrom.type||''), 'r-'+rs.id, true); }
   relLinksOf(c).forEach(function(l){ var o = srcOf(l.caseId); if(o) rows += entry(o, l.reason, 'b-'+o.id, true); });
   relBackOf(c).forEach(function(b){ rows += entry(b.c, b.label, 'f-'+b.c.id, false); });
   if(!rows) return '';
@@ -801,7 +801,7 @@ function krRecoveryCard(c){
     '<div style="font-size:12px;color:var(--muted);margin-top:6px;">评估说明 = 下面录入的'+(isRevEval(c) ? '评估' : '面诊')+'内容（可语音）；需要处理时，室长可在发送时附项目方案，没有也可以不附。</div>');
 }
 
-/* ===== CMD-1022-18 复诊评估卡（KR 室长 / 院长 / 代表院长）：状态 → 一行「接续 A000xxx · 原施术 …（10/29）」→ 复诊想问的内容 → 每个项目一张卡（胶囊［面诊］［术前］［本次］）→ 评估结论 =====
+/* ===== CMD-1022-18 复诊评估卡（KR 室长 / 院长 / 代表院长）：状态 → 一行「继续 A000xxx · 原施术 …（10/29）」→ 复诊想问的内容 → 每个项目一张卡（胶囊［面诊］［术前］［本次］）→ 评估结论 =====
    评估结论：恢复正常 → 不用录入，可以写一句 memo；需要处理 → 展开「录入评估内容」（语音 / 手动）。授意：只有 KR 室长代录（结论 + 录入）时才要勾「已得到院长授意」，院长自己操作不用；发送不需要授权。 */
 function krRvMemo(v){ krMut(function(c){ if(!isRevEval(c) || c.reportReady || !c.recoveryResult || c.recoveryResult.result!=='ok') return false; var t = String(v||'').trim(); if(t===(c.recoveryResult.memo||'')) return false; c.recoveryResult.memo = t; logCaseEvent(c, ME_NAME, '复诊评估说明（恢复正常）：'+(t || '（清空）')); return true; }); }
 
@@ -2803,7 +2803,7 @@ function krPreOpBlock(c, force){
     var sp = preOpSpecOf(it), po = it.preOp || {}, nq = it.name.replace(/'/g,"\\'"), miss = preOpMissing(c, it), mark = it.done ? '' : ' <span style="color:var(--terracotta);">*</span>';
     var vid = sp.video ? '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;"><span style="min-width:60px;font-size:12px;">视频'+mark+'</span>'+(po.video ? '<span style="color:var(--sage);font-weight:700;">✓ '+krEsc(po.video.name)+'</span>'+(canUp && !it.done ? ' <a href="#" style="font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\'video\');return false;">重传</a>' : '') : (canUp && !it.done ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\'video\')">上传视频</button>' : '<span style="color:var(--muted);">—</span>'))+'</div>' : '';
     var slots = sp.angles.map(function(a){ var f = (po.photos||{})[a.id];
-      return '<div style="width:118px;border:1px '+(f ? 'solid var(--sage)' : 'dashed var(--border)')+';border-radius:8px;padding:8px;text-align:center;background:'+(f ? 'var(--sage-bg)' : 'var(--surface2,#faf6ef)')+';"><div style="font-size:12px;font-weight:700;margin-bottom:6px;min-height:30px;text-wrap:balance;">'+krEsc(a.label)+'</div>'+(f ? '<div style="font-size:12px;color:var(--sage);word-break:break-all;">✓ '+krEsc(f.name)+'</div>'+(canUp && !it.done ? '<a href="#" style="font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\''+a.id+'\');return false;">重传</a>' : '') : (canUp && !it.done ? '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\''+a.id+'\')">上传</button>' : '<span style="color:var(--muted);font-size:12px;">—</span>'))+'</div>'; }).join('');
+      return '<div style="width:118px;border:1px '+(f ? 'solid var(--sage)' : 'dashed var(--border)')+';border-radius:8px;padding:8px;text-align:center;background:'+(f ? 'var(--sage-bg)' : 'var(--surface2,#faf6ef)')+';"><div style="font-size:12px;font-weight:700;margin-bottom:6px;min-height:30px;text-wrap:balance;">'+krEsc(a.label)+'</div>'+(f ? '<div style="font-size:12px;color:var(--sage);word-break:break-all;cursor:pointer;"'+pvAttr('术前', it.name+' · '+a.label, f.name)+'>✓ '+krEsc(f.name)+'</div>'+(canUp && !it.done ? '<a href="#" style="font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\''+a.id+'\');return false;">重传</a>' : '') : (canUp && !it.done ? '<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="krPreOpUpload(\''+nq+'\',\''+a.id+'\')">上传</button>' : '<span style="color:var(--muted);font-size:12px;">—</span>'))+'</div>'; }).join('');
     return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 14px;margin-top:8px;background:#fff;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;overflow:hidden;">'+krEsc(it.name)+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+krEsc(concernPartDef(followItemPart(it.name)).label)+'</span>'+(it.done ? ' <span style="font-weight:400;font-size:12px;color:var(--sage);">已完成</span>' : (miss.length ? ' <span style="font-weight:400;font-size:12px;color:#C26A1B;">还差：'+krEsc(miss.join('、'))+'</span>' : ' <span style="font-weight:400;font-size:12px;color:var(--sage);">✓ 已传完</span>'))+shootRefBtn(followItemPart(it.name), it.name)+'</div>'+vid+'<div style="display:flex;flex-wrap:wrap;gap:8px;">'+slots+'</div></div>';
   }).join('');
   return krL2Box('术前照片 <span style="font-weight:400;font-size:12px;color:var(--muted);">'+(canUp ? '按拍摄要求上传，没传完不能按施术的［操作完成］' : '院长 / 代表院长只能看，由 KR 室长上传')+'</span>', cards); /* 和其他 2 级卡同样式 */
@@ -4258,7 +4258,7 @@ krOpenRoomFor = function(clinicId, caseId){ krOpenFloat(clinicId+'|case-'+caseId
 
 /* CMD-1022-05：KR 页头「第 N 次面诊｜第 N 次赴韩施术」——这位客人在本院累计到这个案件为止的次数（只数 KR 看得到的案件；复诊评估不算面诊；是 0 的那一项不显示）；点下去打开客户详情的「本院案件记录」 */
 function krVisitOrdinals(r){
-  /* CMD-1022-12 B6：面诊 = 这位客人在本院已出诊疗方案的次数（接续面诊 / 复诊评估不计）；施术 = 赴韩施术已完成的次数 */
+  /* CMD-1022-12 B6：面诊 = 这位客人在本院已出诊疗方案的次数（继续面诊 / 复诊评估不计）；施术 = 赴韩施术已完成的次数 */
   var mine = krAllCases().filter(function(x){ return x.clinicId===r.clinicId && x.name===r.name; });
   var isConsult = function(c){ return !!c.reportReady && !!c.consultRequested && !isRevisitConsult(c) && !c.revisitEval && !c.reuseReport && !(c.resumeFrom && c.resumeFrom.type==='接续面诊'); };
   var isSurg = function(c){ return !!c.krProcedureDone || !!c.surgeryDoneAt; };
@@ -4269,8 +4269,8 @@ function krVisitOrdinalHtml(r){
   return krClientDetailAllowed() ? '<a href="#" title="打开客户详情的本院案件记录" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));setTimeout(function(){ try{ cliSetTab(\'cases\'); }catch(e){} }, 80);return false;" style="font-size:13px;color:var(--slate2);text-decoration:underline dotted;">'+txt+'</a>' : '<span style="font-size:13px;color:var(--slate2);">'+txt+'</span>';
 }
 
-/* CMD-1022-06：KR 案件列表 / 页头标「接续 · 类型」 */
-function krResumeTag(c){ var rt = c ? relatedOf(c).resumeType : ''; return rt ? ' <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);white-space:nowrap;">接续 · '+krEsc(rt)+'</span>' : ''; } /* CMD-1023-01 补 2：经 relatedOf 读 */
+/* CMD-1022-06：KR 案件列表 / 页头标「继续 · 类型」 */
+function krResumeTag(c){ var rt = c ? relatedOf(c).resumeType : ''; return rt ? ' <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);white-space:nowrap;">继续 · '+krEsc(rsDisp(rt))+'</span>' : ''; } /* CMD-1023-01 补 2：经 relatedOf 读 */
 
 /* CMD-1022-08：KR 传复诊评估结果。需要处理时可写「推荐的本地项目」（选填文字，不带价格，IN 看到时走备注同一套自动翻译）和「建议赴韩处理」（选填）；不能附赴韩项目 */
 function krRvSubmitBlock(c){

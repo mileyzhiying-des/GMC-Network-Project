@@ -352,7 +352,7 @@ function visitWords(t){
 }
 function rsDisp(s){ return String(s==null?'':s).replace(/接续/g, '继续'); } /* CMD-1026-06：室长画面上「接续」一律写「继续」（数据值 '接续面诊' 不动，只在显示时换） */
 function tzRender(t, noZone){
-  if(typeof isKrAccount==='function' && !isKrAccount()) t = rsDisp(t); /* IN 端：旧 Timeline / 通知里存的「接续」也显示成「继续」；KR 端先不动 */
+  t = rsDisp(t); /* IN / KR 两边：旧 Timeline / 通知里存的「接续」也显示成「继续」（CMD-1026-07 起 KR 也换） */
   return viewerTextFilter(visitWords(String(t==null ? '' : t).replace(/⟦u:(?=\s*⟦u:)/g, '').replace(/⟧(?=\s*⟧)/g, '')) /* CMD-1022-14：兜底，嵌套 / 重复的时间标记也能正常显示 */.replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(noZone ? '' : (typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）')) : '—'; })
     .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; }));
 }
