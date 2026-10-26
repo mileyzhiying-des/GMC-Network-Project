@@ -1239,8 +1239,8 @@ function caseGo(side, clinicId, id, url, o, here){
 function caseAtExtra(o){ o = o||{}; return (o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.pc ? '&pc=1' : '')+(o.scroll ? '&scroll='+encodeURIComponent(o.scroll) : '')+(o.chat ? '&chat=open' : '')+(o.sub ? '&sub='+encodeURIComponent(o.sub) : ''); }
 function applyCaseAt(id, o){
   o = o||{}; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
-  if(o.sub){ SUBVIEW[id] = {key:o.sub}; c.subTab = 'today'; renderCaseSubtitle(c); renderCaseBody(c); } else if(!isChildVisit(c) && SUBVIEW[id]){ delete SUBVIEW[id]; renderCaseSubtitle(c); renderCaseBody(c); } /* CMD-1023-03 P3：子案件页的位置带在地址里 */
-  if(o.tab){ if(SUBVIEW[id]) delete SUBVIEW[id]; c.activeCaseTab = o.tab; renderCaseSubtitle(c); renderCaseBody(c); }
+  if(o.sub){ SUBVIEW[id] = {key:o.sub}; c.subTab = 'today'; renderCaseSubtitle(c); renderCaseStatusBar(c); renderCaseBody(c); } else if(!isChildVisit(c) && SUBVIEW[id]){ delete SUBVIEW[id]; renderCaseSubtitle(c); renderCaseBody(c); } /* CMD-1023-03 P3：子案件页的位置带在地址里 */
+  if(o.tab){ if(SUBVIEW[id]) delete SUBVIEW[id]; c.activeCaseTab = o.tab; renderCaseSubtitle(c); renderCaseStatusBar(c); renderCaseBody(c); }
   if(o.pc) goPostcareBlock(id);
   if(o.scroll) setTimeout(function(){ var el = document.getElementById(o.scroll); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80);
 }
@@ -1282,6 +1282,7 @@ function renderCaseStatusBar(c){
     var m3 = c, tv = visitsOf(m3).filter(function(v){ return v.date===todayStr() && v.place==='IN'; })[0], line3 = '', btn3 = '';
     var activeV = activeVisitsOf(m3);
     var selfNow = tv && (tv.rec||tv.caseId)===m3.id && (function(){ try{ var iv0 = inVisitOf(m3); return iv0.state==='arrived' && !iv0.left && !m3.autoEnded && !isEnded(m3); }catch(e){ return false; } })(); /* CMD-1026-15 一：升级当天主案件自己的那一天（-01，客人还在店）也算今日进行中 */
+    if(selfNow && SUBVIEW[m3.id]){ /* CMD-1026-16：子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
     if(selfNow){ line3 = '今日进行中：'+cesc(tv.no||'')+'（'+cesc(tv.types.join(' · '))+'）'; btn3 = '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+tv.key+'\')">进入案件</button>'; }
     else if(tv && activeV.some(function(v){ return v.key===tv.key; })){ var onSelf = (tv.rec||tv.caseId)===m3.id; line3 = onSelf ? '今天来访：'+cesc(tv.types.join(' · ')) : '今日进行中：'+cesc(tv.no||'')+'（'+cesc(tv.types.join(' · '))+'）'; if(!onSelf) btn3 = '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openVisitOf(\''+(tv.rec||tv.caseId)+'\')">进入案件</button>'; }
     else { var nx = activeV.filter(function(v){ return v.date>todayStr(); }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0]; line3 = '下次预约：'+(nx ? cesc(nx.date)+(nx.time ? ' '+cesc(nx.time) : '')+(nx.place==='KR' ? '（韩国）' : '') : '—'); }

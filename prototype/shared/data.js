@@ -2514,7 +2514,7 @@ function inContUseNow(){ inContBtn('use'); }
    卡 2「剩余项目」：标题行右边［＋ 添加本地管理项目］［本次使用］；胶囊 术后项目（预约项目 / 未预约项目）｜本地管理（未使用项目），没有项目的不显示。
    买完的本地项目先进「未使用」（不自动算今天用），要用走［本次使用］勾选。 */
 function inContModel(c){
-  var today = todayStr(), src = followSrc(c), ct = c.careToday, ro = isEnded(c) || c.visitClosed || !!c.leftStore, rows = [];
+  var today = todayStr(), src = followSrc(c), ct = c.careToday, ro = isEnded(c) || c.visitClosed || !!c.leftStore || (!isChildVisit(c) && !!c.visitDate && c.visitDate < today), rows = []; /* CMD-1026-16：主案件自己那天的页，客人离店 / 过了那天 → 只读 */
   CASE_ITEMS.forEach(function(x){ if(x.name!==c.name || x.id===c.id) return; careRows(x).forEach(function(s){ if(s.place!=='IN' || s.skipped) return; if(s.done && s.usedInCase!==c.id) return; rows.push({c:x, s:s, bk:inCareBooking(x, s.id)}); }); });
   rows.sort(function(a, b){ return (b.c===src)-(a.c===src) || String(a.s.suggest||a.s.date||'').localeCompare(String(b.s.suggest||b.s.date||'')); });
   var grp = {today:[], booked:[], none:[]};
@@ -2578,7 +2578,15 @@ function inContRestHtml(c, M){
   return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">剩余项目</div>'+topBtns+'</div>'+(pills ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+pills+'</div>' : '')+
     '<div class="kr-pc-scroll">'+(body || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有剩余项目</div>')+'</div></div>';
 }
-function inContCardHtml(c){ var M = inContModel(c); return inContTodayHtml(c, M)+'<div style="height:12px;"></div>'+inContRestHtml(c, M); }
+function inContCardHtml(c, mid){ var M = inContModel(c); return inContTodayHtml(c, M)+'<div style="height:12px;"></div>'+(mid ? mid+'<div style="height:12px;"></div>' : '')+inContRestHtml(c, M); }
+/* CMD-1026-16：今日确定的赴韩项目——这一天（当天付了赴韩定金的批次）确定的施术项目，只看；改日期 / 取消项目去赴韩 tab */
+function todaySureKrHtml(m, date){
+  var items = (m.procedureItems||[]).filter(function(it){ if(it.origin!=='KR' || it.cancelled || it.swapped || krIsMgmtItemC(it)) return false; var b = (m.settlementBatches||[]).filter(function(x){ return x.id===it.batchId; })[0]; return b && String(b.time||'').slice(0, 10)===date; });
+  if(!items.length) return '';
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, ks = m.krSchedule||{}, when = ks.confirmedDate ? ksTimeText(ks) : '待确认', paid = (m.settlementBatches||[]).some(function(b){ return String(b.time||'').slice(0, 10)===date && (b.krDeposit||0)>0 && b.status!=='unpaid'; });
+  return '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;"><b style="font-size:14px;">今日确定的赴韩项目 '+items.length+'</b><span style="flex:1;"></span><a href="#" class="info-link" style="font-size:12px;" onclick="subGoMain(\''+m.id+'\',\'kr\');return false;">去赴韩 tab 改日期 / 取消项目 →</a></div>'+
+    items.map(function(it){ return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="flex:1;min-width:0;">'+e(buyName(it.name))+'</span><span class="status-pill" style="background:'+(paid ? 'var(--sage-bg)' : 'var(--border2)')+';color:'+(paid ? 'var(--sage)' : 'var(--slate2)')+';">'+(paid ? '定金已付' : '定金待付')+'</span><span style="font-size:12px;color:var(--slate2);min-width:150px;text-align:right;">施术日期 '+e(when)+'</span></div>'; }).join('')+'</div>';
+}
 /* A3：［本次不做］（术后）——退回「未预约」：从今天要做的名单拿掉（已完成的不能退） */
 function careNotToday(caseId, rowId){ var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return; c.careToday = (c.careToday||[]).filter(function(i){ return i!==rowId; }); logCaseEvent(c, actingName(), '术后管理：本次不做，退回未预约'); buildCaseLog(c); renderCaseBody(c); }
 
@@ -10231,9 +10239,11 @@ function openSubcase(mainId, key){
   if(rec){ openCaseDetail(rec); return; } /* 这一天有自己的接待记录：打开它就是子案件页 */
   openCaseDetail(m.id, false, {sub:key});
 }
-function closeSubcase(id){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; var mid = isChildVisit(c) ? c.mainId : c.id; delete SUBVIEW[mid]; if(isChildVisit(c)) openCaseDetail(mid); else { renderCaseSubtitle(c); renderCaseBody(c); } }
+function closeSubcase(id){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; var mid = isChildVisit(c) ? c.mainId : c.id; delete SUBVIEW[mid]; if(isChildVisit(c)) openCaseDetail(mid); else { renderCaseSubtitle(c); renderCaseStatusBar(c); renderCaseBody(c); } }
 function subTabListOf(c){
-  var ctx = subCtxOf(c), out = [{key:'visit', label:'到访'}, {key:'today', label:'今日项目'}];
+  var ctx = subCtxOf(c), out = [{key:'visit', label:'到访'}], recX = ctx.isRec ? c : ctx.m;
+  if(recX.consultRequested && (ctx.v.types||[]).indexOf('面诊安排')>-1) out.push({key:'consult', label:'面诊'}); /* CMD-1026-16：这一天有做面诊才有面诊 tab */
+  out.push({key:'today', label:'今日项目'});
   if(ctx.isRec ? showSettleTab(c) : (subDayMoney(ctx).length>0)) out.push({key:'settle', label:'结算'});
   out.push({key:'attachments', label:'附件'}, {key:'timeline', label:'Timeline'});
   return out;
@@ -10248,11 +10258,11 @@ function subVisitTabHtml(c){
   var row = function(k, v){ return '<div class="case-field-row"><span class="fk">'+k+'</span><div style="flex-grow:1;font-size:13px;">'+v+'</div></div>'; };
   var meta = rec.metaviewStatus==='ready' ? '已检测到' : (rec.metaviewStatus ? e(rec.metaviewStatus) : '—');
   var photos = (rec.recovery||[]).reduce(function(n, x){ return n+Object.keys(x.photos||{}).length; }, 0)+(rec.revisitMedia||[]).reduce(function(n, x){ return n+Object.keys(x.photos||{}).length; }, 0);
-  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:10px;">到访 <span style="font-weight:400;font-size:12px;color:var(--muted);">基础资料、面诊内容不在这里重复，去主案件看</span></div>'+
+  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:10px;">到访</div>'+
     row('来访目的', e(rec.visitPurpose||'—'))+row('到店状态', e(visitStateText(m, ctx.v))+(iv.arrivedDay ? '（'+e(iv.arrivedDay)+' 到店）' : ''))+row('메타뷰', meta)+row('当天照片', photos ? photos+' 张（复诊 / 术后恢复）' : '—')+
-    '<div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="subGoMain(\''+c.id+'\',\'basic\')">基础资料 →</button>'+(m.consultRequested ? '<button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="subGoMain(\''+c.id+'\',\'consult\')">面诊内容 →</button>' : '')+'</div></div>';
+    '</div>';
 }
-function subGoMain(id, tab){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; var m = mainOf(c); delete SUBVIEW[m.id]; m.activeCaseTab = tab; if(isChildVisit(c)) openCaseDetail(m.id, false, {tab:tab}); else { renderCaseSubtitle(m); renderCaseBody(m); } }
+function subGoMain(id, tab){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; var m = mainOf(c); delete SUBVIEW[m.id]; m.activeCaseTab = tab; if(isChildVisit(c)) openCaseDetail(m.id, false, {tab:tab}); else { renderCaseSubtitle(m); renderCaseStatusBar(m); renderCaseBody(m); } }
 function subTodayTabHtml(c){
   var ctx = subCtxOf(c), m = ctx.m, parts = [], e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   if(ctx.isRec){
@@ -10260,9 +10270,9 @@ function subTodayTabHtml(c){
     if(isRevEval(c) || isContCase(c)){ parts.push(inContCardHtml(c)); } /* CMD-1026-12：复诊 / 继续的子记录页项目 = 今日项目 + 剩余项目两张卡（本地选购走弹窗） */
     else { var lt = ''; if(showLocalTab(c) || c.localMgmt){ var sv = c.activeCaseTab; c.activeCaseTab = 'localmgmt'; try{ lt = caseTabContentLegacy(c); }finally{ c.activeCaseTab = sv; } } if(lt) parts.push(lt); } /* CMD-1026-09 A2：复诊子案件即使还没有术后管理 / 本地项目，项目卡（入口［＋添加本地管理项目］）也要在 */
     if(!parts.length) parts.push('<div class="card" style="padding:22px 24px;font-size:13px;color:var(--muted);">这一天还没有项目。要做术后管理 / 本地项目，请在这里选购或使用，或回主案件的术后管理 tab 看还剩什么。</div>');
-  } else if(ctx.v.place==='IN' && ctx.v.date===todayStr() && (ctx.v.rec||ctx.v.caseId)===m.id && !isEnded(m)){
+  } else if(ctx.v.place==='IN' && (ctx.v.rec||ctx.v.caseId)===m.id){ /* CMD-1026-16：主案件自己那天（升级当天 -01）：离店 / 过了那天也看得到三块（只读） */
     /* CMD-1026-15 一：升级当天（主案件自己的今天，-01）客人还在店：项目 = 今日项目 + 剩余项目两张卡（今天买的本地管理项目在「剩余项目 · 本地管理 · 未使用」，［本次使用］可用，［＋添加本地管理项目］弹本地选购） */
-    parts.push(inContCardHtml(m));
+    parts.push(inContCardHtml(m, todaySureKrHtml(m, ctx.v.date)));
   } else {
     var d = ctx.v.date, rows = summaryRowsOf(m).filter(function(r){ return r.boughtAt===d || (r.uses||[]).some(function(u){ return u.date===d; }); });
     parts.push('<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:8px;">今日项目 <span style="font-weight:400;font-size:12px;color:var(--muted);">'+(ctx.v.place==='KR' ? '韩国这一天的到院操作由 KR 在 KR 端做，这里只读' : '这一天买的 / 做的项目')+'</span></div>'+(rows.length ? rows.map(function(r){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+e(r.name)+' <span style="font-size:12px;color:var(--muted);">· '+e(r.type)+'</span></span><span style="font-size:12px;color:var(--slate2);">'+e(r.status)+(r.boughtAt===d ? ' · 当天购买' : '')+'</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有记录</div>')+'</div>');
@@ -10280,7 +10290,7 @@ function subSettleTabHtml(c){
 function subPageHtml(c){
   var ctx = subCtxOf(c), list = subTabListOf(c), cur = c.subTab && list.some(function(t0){ return t0.key===c.subTab; }) ? c.subTab : 'today';
   var tabs = '<div class="tabs" style="margin-bottom:4px;">'+list.map(function(t1){ return '<span class="tab'+(t1.key===cur ? ' active' : '')+'" onclick="switchSubTab(\''+t1.key+'\')">'+t1.label+'</span>'; }).join('')+'</div>';
-  var body = cur==='visit' ? subVisitTabHtml(c) : cur==='today' ? subTodayTabHtml(c) : cur==='settle' ? subSettleTabHtml(c) : cur==='attachments' ? attachmentsTabHtml(ctx.isRec ? c : ctx.m) : caseTimelineCardHtml(ctx.isRec ? c : ctx.m);
+  var body = cur==='visit' ? subVisitTabHtml(c) : cur==='consult' ? consultTabHtml(ctx.isRec ? c : ctx.m) : cur==='today' ? subTodayTabHtml(c) : cur==='settle' ? subSettleTabHtml(c) : cur==='attachments' ? attachmentsTabHtml(ctx.isRec ? c : ctx.m) : caseTimelineCardHtml(ctx.isRec ? c : ctx.m);
   return subHeaderHtml(c)+tabs+body;
 }
 function switchSubTab(k){ var c = getCurrentCase(); if(!c) return; c.subTab = k; renderCaseBody(c); }
