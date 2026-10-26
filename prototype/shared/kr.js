@@ -2600,7 +2600,7 @@ function krCaseCardHtml(c, cd){
 }
 function krCaseGroupsHtml(c, withMain){
   subCaseNos(c); var today0 = todayStr(), cards = krCaseCards(c, withMain).filter(function(cd){ return cd.kind!=='end'; }), out = ''; /* CMD-1021-16 四：只隐藏「被清空」的到院卡（里面的项目全部延期 / 改到别天，kind:'end'）；客人取消预约、客人未到院的卡照旧显示（恢复 CMD-1021-15 之前）；数字不算被隐藏的；记录留在 Timeline */
-  var titles = {today:'今天', booked:'已预约', done:'已完成'}, sorters = {today:function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); }, booked:function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); }, done:function(a, b){ return (b.date+(b.time||'')).localeCompare(a.date+(a.time||'')); }};
+  var titles = {today:'今天', booked:'预约中', done:'已完成'}, sorters = {today:function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); }, booked:function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); }, done:function(a, b){ return (b.date+(b.time||'')).localeCompare(a.date+(a.time||'')); }};
   ['today','booked','done'].forEach(function(g){
     var l = cards.filter(function(x){ return x.group===g; }).sort(sorters[g]); if(!l.length) return;
     out += '<div style="margin:14px 2px 6px;font-size:13px;font-weight:700;">'+titles[g]+' <span style="font-weight:400;color:var(--muted);">'+l.length+'</span></div>'+l.map(function(cd){ return krCaseCardHtml(c, cd); }).join('');
