@@ -3321,6 +3321,43 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { CLINIC_SETTINGS.slotCapacity = cap0; window.GMC_NO_CONFIRM = old; }
   });
 
+  ST.def('R134a','CMD-1026-08（A1 分页）：主案件术后管理今日行［查看今天 →］/ 客人页子案件缩进 + 正在进行带案件号日期 / ［取消接待］不留子案件号 / 同一天不出第二笔预约',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK, nm = 'R134'; window.GMC_NO_CONFIRM = true;
+    try{
+      var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0];
+      p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true; p0.hasArrived = true;
+      p0.subItems = [{id:'r134s', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), time:'11:00', done:false, projectName:'隆鼻'}];
+      /* 4 + 5：到店→继续→取消接待 不留子案件号；再约同一天不多出第二笔 */
+      window.GMC_NO_FOLLOWASK = false;
+      var c = ST.newRes(nm, {phone:clientPhoneOf(p0.name), purpose:'术后管理'}); var no0 = c.caseNo; ST.open(c); markArrived();
+      FU_ASK.mode = 'link'; followupAskDone(true); c = getCurrentCase();
+      ST.ok(c.mainId===p0.id && c.caseNo!==no0, '确认继续后才有子案件号（'+no0+' → '+c.caseNo+'）');
+      confirmCancelIntake(); contClose(); c = CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0];
+      ST.ok(!c.mainId && c.caseNo===no0 && !isChildVisit(c) && c.subState==='waiting', '取消接待：子案件号还原、不再属于主案件、预约保留（待访问）');
+      var dup = pendingResvSameDay(c.name, c.visitDate); ST.ok(dup && dup.id===c.id, '同一天只剩这一笔待访问');
+      var n2 = CASE_ITEMS.filter(function(x){ return x.name===c.name && x.visitDate===c.visitDate && !isEnded(x) && !isChildVisit(x) && x.id!==p0.id; }).length; ST.ok(n2===1, '取消接待后同一天仍只有 1 笔预约：'+n2);
+      /* 预约修改改到已有预约的那天 → 拦住 */
+      var d3 = ymdAdd(todayStr(), 3), pa = ST.newRes(nm, {phone:clientPhoneOf(p0.name), purpose:'面诊商谈'}), pb = ST.newRes(nm, {phone:clientPhoneOf(p0.name), purpose:'面诊商谈'});
+      pa.visitDate = d3; pa.visitTime = '16:00'; pb.visitDate = ymdAdd(todayStr(), 5); pb.visitTime = '16:00';
+      var blocked = false, al = window.alert; window.alert = function(){ blocked = true; };
+      try{ RESCHED_CASE_ID = pb.id; RESCHED_SELECTED_DATE = new Date(d3+'T00:00:00'); RESCHED_SELECTED_TIME = '16:30'; confirmReschedule(); }catch(e){}
+      window.alert = al;
+      ST.ok(pb.visitDate===ymdAdd(todayStr(), 5), '预约修改改到已有预约的那天：被拦住，日期没变（alert 提示 = '+blocked+'）');
+      /* 1 主案件术后管理今日行 */
+      var m = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; m.visitDate = ymdAdd(todayStr(), -10);
+      var ch = CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; ch.visitDate = todayStr(); ch.visitTime = '11:00'; ch.mainId = m.id; ch.caseNo = m.caseNo+'-09'; ch.subState = 'arrived'; ch.arrivedDay = todayStr(); ch.materialsConfirmed = true;
+      ch.resumeFrom = {caseId:m.id, type:'术后管理', types:['术后管理']}; ch.careFor = {caseId:m.id, keys:[]};
+      var h = inPostcareTabHtml(m);
+      ST.ok(careTodayKey(m) && /查看今天 →/.test(h), '主案件术后管理今日行有［查看今天 →］（子案件 '+(careTodayKey(m)||'无')+'）');
+      /* 2 + 3 客人页 */
+      var all = CASE_ITEMS.filter(function(x){ return x.name===m.name; }), model = {mode:'IN', cases:all, openCase:function(x){ return "void 0"; }};
+      var kh = cliCasesHtml(model), iM = kh.indexOf(m.caseNo+'</a>'), iK = kh.indexOf(ch.caseNo+'</a>');
+      ST.ok(iM>-1 && iK>iM && /margin-left:28px/.test(kh) && kh.indexOf('└', iM)>iM, '客人页案件记录：子案件缩进放在所属主案件下面');
+      var oh = cliOngoingHtml(model); ST.ok(oh.indexOf(pa.caseNo+' · '+d3.slice(5).replace('-', '/')+' · ')>-1, '正在进行案件：每行前面有案件号 + 日期');
+    } finally { window.GMC_NO_FOLLOWASK = old; try{ contClose(); }catch(e){} var fo = document.getElementById('followup-overlay'); if(fo) fo.classList.remove('open'); }
+  });
+
   ST.def('R133a','CMD-1026-07（A1 分页）：第一个对话框重做——请选择本次服务类型、只有［确认］、本次服务内容勾选规则、第二个弹窗只按勾的内容展开',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var old = window.GMC_NO_FOLLOWASK, nm = 'R133a'; window.GMC_NO_CONFIRM = true;

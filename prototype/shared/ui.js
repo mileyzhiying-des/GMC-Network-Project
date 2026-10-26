@@ -1417,6 +1417,8 @@ function confirmReschedule(){
   var c = CASE_ITEMS.filter(function(x){ return x.id===RESCHED_CASE_ID; })[0]; if(!c) return;
   if(!RESCHED_SELECTED_TIME || slotBlockReason(dateStr(RESCHED_SELECTED_DATE), RESCHED_SELECTED_TIME, null, c.id)){ alert('请选择一个可约的时段（已过去、已满、休诊、午休的时间不能选）'); return; }
   var y = RESCHED_SELECTED_DATE.getFullYear(), m = RESCHED_SELECTED_DATE.getMonth()+1, d = RESCHED_SELECTED_DATE.getDate();
+  var nd0 = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d), dup = pendingResvSameDay(c.name, nd0, c.id); /* CMD-1026-08 五：同一客人同一天只能有一笔没到店的预约——预约修改改到已有预约的那天要拦住 */
+  if(dup){ alert('这位客人 '+nd0+' 已经有一笔 '+(dup.visitTime||'')+' 的预约（'+dup.caseNo+'），请改选其他日期，或先取消另一笔。'); return; }
   c.visitDate = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
   c.visitTime = RESCHED_SELECTED_TIME;
   closeRescheduleModal();

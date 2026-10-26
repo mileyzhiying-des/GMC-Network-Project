@@ -8968,7 +8968,7 @@ function cliOngoingHtml(model){
   var mine = model.cases.filter(function(c){ return !isEnded(c); });
   if(!mine.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">当前没有进行中的案件</div>';
   return mine.map(function(c){ var b = caseStageBadge(c);
-    return '<div class="trow" style="grid-template-columns:1fr 1fr auto;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';width:fit-content;">'+b[2]+'</span><span style="font-size:12px;color:var(--slate2);">'+aEscC(model.mode==='IN' ? (subVisitText(c) || caseStatusSub(c)) : c.caseNo)+'</span><a href="#" onclick="'+model.openCase(c)+';return false;" style="font-size:12px;font-weight:700;">进入案件 →</a></div>'; }).join('');
+    return '<div class="trow" style="grid-template-columns:1fr 1fr auto;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';width:fit-content;">'+b[2]+'</span><span style="font-size:12px;color:var(--slate2);">'+aEscC(model.mode==='IN' ? c.caseNo+(c.visitDate ? ' · '+String(c.visitDate).slice(5).replace('-', '/') : '')+' · '+(subVisitText(c) || caseStatusSub(c)) : c.caseNo)+'</span><a href="#" onclick="'+model.openCase(c)+';return false;" style="font-size:12px;font-weight:700;">进入案件 →</a></div>'; }).join('');
 }
 /* 韩国持有：在韩买的管理项目（剩余次数、已安排的预约时间、来自哪个案件）+ 韩国这边还没做的术后管理（已预约写时间，没约写建议日期）；名称不写「·N次」 */
 function cliHoldKrRows(model){
@@ -9006,11 +9006,18 @@ function cliHoldCount(model){
   return n;
 }
 function cliCasesHtml(model){
-  var cs = model.cases.slice().sort(function(a, b){ return String(b.caseNo).localeCompare(String(a.caseNo)); });
+  var all = model.cases.slice(), ids = {}; all.forEach(function(c){ ids[c.id] = 1; });
+  var isKid = function(c){ return model.mode==='IN' && isChildVisit(c) && ids[c.mainId]; }; /* CMD-1026-08 二：IN 子案件缩进放在所属主案件下面（默认全部展开；已取消的灰色） */
+  var cs = all.filter(function(c){ return !isKid(c); }).sort(function(a, b){ return String(b.caseNo).localeCompare(String(a.caseNo)); });
   if(!cs.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无案件记录</div>';
-  return cs.map(function(c){
+  var cardHtml = function(c, kid){
     var first = (c.logEntries&&c.logEntries[0]) ? fmtUtc(c.logEntries[0].dt).slice(0, 10) : '—', bd = caseStageBadge(c), lkSrc = (c.linkedCase && c.linkedCase.caseId) ? model.cases.filter(function(x){ return x.id===c.linkedCase.caseId; })[0] : null, lk = lkSrc ? '关联 '+lkSrc.caseNo+' · '+c.linkedCase.reason : '';
-    return '<div class="info-card" style="margin-bottom:10px;"><div class="info-card-row"><div style="min-width:0;"><div class="value"><a href="#" class="info-link" onclick="'+model.openCase(c)+';return false;" style="font-weight:700;">'+aEscC(c.caseNo)+'</a></div><div class="sub">'+first+(lk ? ' · '+aEscC(lk) : '')+(model.mode==='KR' && c.director ? ' · 院长 '+aEscC(c.director) : '')+'</div></div><span class="status-pill" style="background:'+bd[0]+';color:'+bd[1]+';">'+bd[2]+'</span></div></div>';
+    var gray = kid && (c.subState==='cancelled' || c.stage==='cancelled');
+    return '<div class="info-card" style="margin-bottom:10px;'+(kid ? 'margin-left:28px;' : '')+(gray ? 'opacity:.6;' : '')+'"><div class="info-card-row"><div style="min-width:0;"><div class="value">'+(kid ? '<span style="color:var(--muted);">└ </span>' : '')+'<a href="#" class="info-link" onclick="'+model.openCase(c)+';return false;" style="font-weight:700;">'+aEscC(c.caseNo)+'</a></div><div class="sub">'+(kid && c.visitDate ? aEscC(c.visitDate)+' · ' : '')+first+(lk ? ' · '+aEscC(lk) : '')+(model.mode==='KR' && c.director ? ' · 院长 '+aEscC(c.director) : '')+'</div></div><span class="status-pill" style="background:'+bd[0]+';color:'+bd[1]+';">'+bd[2]+'</span></div></div>';
+  };
+  return cs.map(function(c){
+    var kids = all.filter(function(k){ return isKid(k) && k.mainId===c.id; }).sort(function(a, b){ return String(a.caseNo).localeCompare(String(b.caseNo)); });
+    return cardHtml(c, false)+kids.map(function(k){ return cardHtml(k, true); }).join('');
   }).join('');
 }
 function cliTimelineHtml(model){
@@ -9681,10 +9688,13 @@ function inPostcareTabHtml(c){
   var titles = {today:'今日', booked:'预约中', unbooked:'未预约', done:'已完成'}, body = ['today', 'booked', 'unbooked', 'done'].map(function(gk){
     var list = rows.filter(function(x){ return x.r.grp===gk; }).sort(function(a, b){ return a.r.k < b.r.k ? -1 : (a.r.k > b.r.k ? 1 : 0); }); if(!list.length) return '';
     return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">'+titles[gk]+' <span style="font-weight:400;color:var(--muted);">'+list.length+'</span></div>'+inSmallCard(head.replace('border-bottom:1px solid var(--border2);', '')+list.map(function(x){ var r = x.r;
-      return '<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span style="font-size:13px;">'+e(buyName(x.surg)||'其他术后管理')+' · '+e(r.name)+(r.sub ? '<div style="font-size:12px;color:var(--muted);">'+e(r.sub)+'</div>' : '')+'</span><span>'+x.place+'</span><span>'+r.time+'</span><span>'+r.st+'</span><span style="display:flex;gap:6px;">'+(x.place==='印尼' && gk==='today' ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="todoCareDoToday(\''+c.id+'\',\''+(r.rowId||'')+'\')">操作完成</button>' : '')+(r.ops||'')+'</span></div>'; }).join(''))+'</div>';
+      return '<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span style="font-size:13px;">'+e(buyName(x.surg)||'其他术后管理')+' · '+e(r.name)+(r.sub ? '<div style="font-size:12px;color:var(--muted);">'+e(r.sub)+'</div>' : '')+'</span><span>'+x.place+'</span><span>'+r.time+'</span><span>'+r.st+'</span><span style="display:flex;gap:6px;">'+(x.place==='印尼' && gk==='today' ? (careTodayKey(c) ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="careViewToday(\''+c.id+'\')">查看今天 →</button>' : '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="todoCareDoToday(\''+c.id+'\',\''+(r.rowId||'')+'\')">操作完成</button>') : '')+(r.ops||'')+'</span></div>'; }).join(''))+'</div>';
   }).join('');
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:4px;">术后管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">免费、不显示价格、不能退款；韩国的由 KR 安排（这里只读），印尼的由本院预约；全部做完、或超过建议日期一个月转成管理项目后结束</span></div>'+(body || '<div style="font-size:13px;color:var(--muted);padding:12px 0;">没有术后管理</div>')+'</div>';
 }
+/* CMD-1026-08 一：到院当天的操作只在当天的子案件页做——主案件术后管理 tab「今日」行改［查看今天 →］（找得到今天 IN 的子案件才用；找不到仍保留旧按钮） */
+function careTodayKey(m){ var v = visitsOf(m).filter(function(x){ return x.date===todayStr() && x.place==='IN' && (x.rec||x.caseId)!==m.id; })[0]; return v ? v.key : ''; }
+function careViewToday(caseId){ var m = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!m) return; var k = careTodayKey(m); if(k) openSubcase(m.id, k); }
 function todoCareDoToday(caseId, rowId){ var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(c && rowId) openCareUse('main', c.id, rowId); }
 /* 复诊 tab：每次复诊一个流程行，展开 = 原来的复诊评估结果 + 打开那天的子案件 */
 function inRevisitTabHtml(c){
