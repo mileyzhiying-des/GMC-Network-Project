@@ -3084,8 +3084,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var h = krProjCards(gc()), t = txt(h); ST.ok(/未预约 1/.test(t) && /剩 2 \/ 共 2 次/.test(t) && !/已预约 \d/.test(t.split('未预约')[1].slice(0, 400).replace(/剩[\s\S]*/, '')) || true, '没排：只有「未预约」，剩 2 / 共 2 次');
       mut(function(c){ var res = coreUnitUseNow(c, iid, ST.krBy, {qty:1}); ST.ok(res && res.ok, '今天用 1 次：'+JSON.stringify(res)); });
       h = krProjCards(gc()); t = txt(h);
-      ST.ok(/未预约 1/.test(t) && /已预约 1/.test(t) && /剩 1 \/ 共 2 次/.test(t), '今天用 1 次：「未预约」剩 1 / 共 2 次，「已预约」多一行：'+t.slice(t.indexOf('未预约'), t.indexOf('未预约')+200));
-      var seg = h.slice(h.indexOf('已预约')); ST.ok(/本次取消/.test(seg) && !/建议时间/.test(txt(seg).slice(0, 120)) && !/建议日期/.test(txt(seg).slice(0, 120)), '已预约：操作［本次取消］，表头没有「建议时间」「建议日期」');
+      ST.ok(/未预约 1/.test(t) && /预约中 1/.test(t) && /剩 1 \/ 共 2 次/.test(t), '（CMD-1026-03：已预约→预约中）今天用 1 次：「未预约」剩 1 / 共 2 次，「预约中」多一行：'+t.slice(t.indexOf('未预约'), t.indexOf('未预约')+200));
+      var seg = h.slice(h.indexOf('预约中')); ST.ok(/本次取消/.test(seg) && !/建议时间/.test(txt(seg).slice(0, 120)) && !/建议日期/.test(txt(seg).slice(0, 120)), '预约中：操作［本次取消］，表头没有「建议时间」「建议日期」');
       ST.ok(!/今天提前使用|早于建议/.test(txt(seg)), '不加「早于建议日期」之类的小字');
       /* 预约弹窗 */
       mut(function(c){ c.stay = {in:ymdAdd(todayStr(), -1), out:ymdAdd(todayStr(), 2), by:'t', at:nowFullDt()}; });
@@ -3257,6 +3257,21 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       window.confirm = function(t){ asked = t; return true; }; contCancel();
       ST.ok(!ov.classList.contains('open') && !CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0].linkedCase, '确定 → 清空接续资料、弹窗关闭');
     } finally { window.GMC_NO_FOLLOWASK = old; window.confirm = oc; window.GMC_NO_CONFIRM = true; }
+  });
+
+  ST.def('R129a','CMD-1026-03（A1 分页，需要 pcStage 夹具）：项目汇总栏位统一（项目类型只在「全部」）、预约中、未预约同一项目一行',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return /^T-术后管理/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var us = sumUnitsOf(c), keys = {}, dup = false; us.filter(function(u){ return u.seg==='unbooked' && u.type==='术后管理'; }).forEach(function(u){ if(keys[u.name]) dup = true; keys[u.name] = 1; });
+    ST.ok(!dup, '未预约里同一个术后管理项目只有一行');
+    var care = us.filter(function(u){ return u.seg==='unbooked' && u.type==='术后管理'; })[0]; if(care) ST.ok(/^剩 \d+ \/ 共 \d+ 次$/.test(care.cnt), '写法「剩 N / 共 M 次」：'+care.cnt);
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
+    SUM_UI[c.id] = {cap:''}; var all = txt(summaryTabHtml(c));
+    ST.ok(/项目类型/.test(all) && !/业务类型|参考内容|建议日期/.test(all) && /使用参考/.test(all) && !/>已预约</.test(summaryTabHtml(c)), '「全部」有项目类型，没有旧栏名，分段名不是已预约');
+    var h = summaryTabHtml(c); ST.ok(h.indexOf('项目类型')>-1 && h.indexOf('项目类型') < h.indexOf('项目</span>', h.indexOf('项目类型')+4), '项目类型是第一栏');
+    ['赴韩项目', '在韩管理', '术后管理', '本地管理'].forEach(function(cap){ SUM_UI[c.id] = {cap:cap}; var hh = summaryTabHtml(c); if(/class="card"/.test(hh) && hh.indexOf('>'+cap+'（')>-1 && hh.indexOf('border-radius:999px')>-1){ var body = hh.slice(hh.indexOf('<div style="overflow-x:auto;">')); ST.ok(body.indexOf('项目类型')<0, '「'+cap+'」胶囊里没有项目类型栏'); } });
+    SUM_UI[c.id] = {cap:''};
+    ST.ok(/未预约/.test(all) || /预约中/.test(all) || /已使用/.test(all), '分段存在');
   });
 
   ST.def('R128c','CMD-1026-02 B（A1 分页）：项目汇总 = 项目卡结构（胶囊 + 分段 + 栏位），没有筛选行 / 本地项目卡 / 灰提示',function(){
@@ -4314,8 +4329,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 一：四个 tab */
       KR_PROJ_PAGE = 'surg'; krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); var box = document.getElementById('kr-casedetail'), tx = box.innerText;
       var tabs = [].slice.call(box.querySelectorAll('span[onclick^="krProjPage"], span[title="没有内容"]')); var labels = tabs.map(function(x){ return x.textContent; });
-      ST.ok(labels.length===3 && /施术项目（0）/.test(labels[0]) && /管理项目（/.test(labels[1]) && /已完成（/.test(labels[2]), '1023-03：三个 tab：施术｜管理项目｜已完成（术后管理搬到独立 tab）：'+labels.join(' / '));
-      ST.ok(tabs[0].getAttribute('title')==='没有内容' && !tabs[0].getAttribute('onclick'), '数量 0 的 tab 灰掉、不能点');
+      ST.ok(labels.length===2 && /管理项目（/.test(labels[0]) && /已完成（/.test(labels[1]), '（CMD-1025-04：数量 0 的 tab 不显示）tab：管理项目｜已完成：'+labels.join(' / '));
+      ST.ok(!tabs.some(function(x){ return /（0）/.test(x.textContent); }) && !!tabs[0].getAttribute('onclick'), '数量 0 的 tab 整个不显示，剩下的都能点');
       ST.ok(!!box.querySelector('.kr-pc-scroll'), '列表在固定高度滚动区里');
       ST.ok(!/已使用|已完成 \d/.test(box.querySelector('.kr-pc-scroll').innerText), '前三个 tab 里没有已使用 / 已完成');
       var sc = box.querySelector('.kr-pc-scroll'); ST.ok(!!sc && getComputedStyle(sc).overflowY==='auto' && sc.clientHeight>=250 && sc.clientHeight<=330, '项目卡固定高度、内部滚动（CMD-1022-16：原来的 2/3）：'+(sc && sc.clientHeight));
@@ -4338,7 +4353,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krUseQtyStep(1); krUseQtyStep(1); krUseQtyStep(1); ST.ok(KR_USEQ.n===KR_USEQ.max && KR_USEQ.max===3, '最多 = 剩余次数'); krUseQtyStep(-1); krUseQtyOk();
       var c1 = krFindCase(r.clinicId, r.id).c, it1 = c1.procedureItems.filter(function(x){ return /钛提升/.test(x.name); })[0], ur = c1.subItems.filter(function(s){ return s.holdIid===ik && !s.done; })[0];
       ST.ok(ur && ur.useQty===2 && holdItemLeft(c1, it1)===3, '选 2 次：合成一行 useQty=2，还没扣次数（剩 3）');
-      KR_PROJ_PAGE = 'mgmt'; krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); var ht = document.getElementById('kr-casedetail').innerText; var hs82 = ht.replace(/\s+/g, ' '); ST.ok(/剩 1 \/ 共 3 次/.test(hs82) && !/今天使用/.test(hs82) && /已预约 \d+/.test(hs82) && /钛提升 · 40kj[^]*?2 次/.test(hs82.slice(hs82.indexOf('已预约'))), '1025-03 改：「未预约」剩 1 / 共 3 次（今天用的 2 次不再算在里面），「已预约」多一行钛提升 2 次（原来写在同一行「今天使用 2 次」）');
+      KR_PROJ_PAGE = 'mgmt'; krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); var ht = document.getElementById('kr-casedetail').innerText; var hs82 = ht.replace(/\s+/g, ' '); ST.ok(/剩 1 \/ 共 3 次/.test(hs82) && !/今天使用/.test(hs82) && /预约中 \d+/.test(hs82) && /钛提升 · 40kj[^]*?2 次/.test(hs82.slice(hs82.indexOf('预约中'))), '1025-03 改：「未预约」剩 1 / 共 3 次（今天用的 2 次不再算在里面），「预约中」多一行钛提升 2 次（CMD-1026-03 改名；原来写在同一行「今天使用 2 次」）');
       var dk82 = Store.withClinic(r.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], v0 = visitsOf(c0).filter(function(x){ return x.place==='KR' && x.date===todayStr(); })[0]; return v0 ? v0.key : ''; }); krOpenDay(r.clinicId, r.id, dk82); ht = document.getElementById('kr-casedetail').innerText; krCloseDay(); /* 1023-03 补：到院卡在子案件页 */
       ST.ok(/钛提升 · 40kj ×2/.test(ht.replace(/\s+/g, ' ')), '到院卡里这一行写 ×2');
       krUseRowQty(ur.id, 3); ST.ok(krFindCase(r.clinicId, r.id).c.subItems.filter(function(s){ return s.id===ur.id; })[0].useQty===3, '到院卡里还没完成的行能改次数（合计不超过剩余）'); krUseRowQty(ur.id, 2);
@@ -4347,15 +4362,15 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; coreUseRowUndo(cc, ur.id, 'KM1 室长'); }); var c3 = krFindCase(r.clinicId, r.id).c; ST.ok(holdItemLeft(c3, c3.procedureItems.filter(function(x){ return /钛提升/.test(x.name); })[0])===3, '［撤回完成］N 次全部退回');
       var oneLeft = JSON.parse(JSON.stringify(c3)); oneLeft.procedureItems.forEach(function(x){ if(/钛提升/.test(x.name)){ x.qty = 1; x.holdUsed = 0; x.uses = []; } }); var it4 = oneLeft.procedureItems.filter(function(x){ return /钛提升/.test(x.name); })[0]; ST.ok(holdItemLeft(oneLeft, it4)===1, '剩 1 次不弹（只有剩余 ≥ 2 才弹）');
       /* 五：备注卡 */
-      KR_PROJ_PAGE = 'surg'; krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); var nc = document.querySelector('#kr-casedetail .notes-compact'); ST.ok(!!nc && nc.querySelectorAll('.notes-list > div').length===3, '备注卡只显示最新 3 条：'+(nc && nc.querySelectorAll('.notes-list > div').length));
+      KR_PROJ_PAGE = 'surg'; krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); var nc = document.querySelector('#kr-casedetail .notes-compact'); ST.ok(!!nc && nc.querySelectorAll('.notes-list > div').length===5 && nc.querySelector('.notes-list').clientHeight < nc.querySelector('.notes-list').scrollHeight, '（CMD-1026-03）备注全部列出，露出 3 则、超过在卡里滚动：'+(nc && nc.querySelectorAll('.notes-list > div').length));
       ST.ok(/备注5/.test(nc.innerText) && !/备注1/.test(nc.innerText.replace(/很长的内容/g, '')) || /备注5/.test(nc.innerText), '最新的在最上面');
       var bt = [].slice.call(nc.querySelectorAll('button')).map(function(b){ return b.textContent; }); ST.ok(bt.indexOf('增加备注')>-1 && bt.indexOf('查看全部（5）')>-1, '底部按钮：［增加备注］［查看全部（5）］：'+bt.join('/'));
-      var h1 = nc.getBoundingClientRect().height; ST.ok(h1>=140 && h1<=200, '备注卡固定高度（CMD-1022-16：减半）：'+Math.round(h1));
+      var h1 = nc.getBoundingClientRect().height; ST.ok(h1>=140 && h1<=360, '（CMD-1026-03）5 条备注：卡高度有上限（最多露出 3 则）：'+Math.round(h1));
       notesAllOpen('KR'); var nov = document.getElementById('notes-overlay'); ST.ok(nov.classList.contains('open') && /全部备注（5）/.test(nov.textContent) && nov.querySelectorAll('.modal-box > div:nth-child(2) > div').length===5 && /关闭/.test(nov.textContent), '［查看全部］Modal 列出 5 条 + ［关闭］'); notesClose();
       notesAddOpen('KR'); nov = document.getElementById('notes-overlay'); ST.ok(/增加备注 · /.test(nov.textContent), '［增加备注］Modal'); notesAddSave('KR'); ST.ok(/请填写备注内容/.test(document.getElementById('notes-add-err').textContent), '内容必填，空的红字');
       document.getElementById('notes-add-text').value = '新的一条整体备注'; notesAddSave('KR'); krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); nc = document.querySelector('#kr-casedetail .notes-compact'); ST.ok(/新的一条整体备注/.test(nc.querySelector('.notes-list > div').innerText) && /整体/.test(nc.querySelector('.notes-list > div').innerText) && /查看全部（6）/.test(nc.innerText), '保存后出现在最上面（类型「整体」），共 6 条');
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krProgressMemos = []; cc.inNotes = []; });
-      krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); nc = document.querySelector('#kr-casedetail .notes-compact'); var h0 = nc.getBoundingClientRect().height; ST.ok(Math.abs(h0-h1)<3 && /还没有备注/.test(nc.innerText) && !/查看全部/.test(nc.innerText), '0 条：高度不变，灰字「还没有备注」，没有［查看全部］：'+Math.round(h0));
+      krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); nc = document.querySelector('#kr-casedetail .notes-compact'); var h0 = nc.getBoundingClientRect().height; ST.ok(h0<h1 && h0<=70 && !nc.querySelector('.notes-list') && /增加备注/.test(nc.innerText) && !/查看全部/.test(nc.innerText), '（CMD-1026-03）0 条：只剩一行「备注 ……［增加备注］」，没有［查看全部］：'+Math.round(h0));
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PROJ_PAGE = 'surg'; KR_AD = {adds:{}, signed:{}, locals:[], care:{}, open:false}; notesClose(); krUseQtyCancel(); }
   });
 
@@ -4392,8 +4407,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var nDone = (html.match(/已完成 <span[^>]*>(\d+)/)||[])[1]; var cards = krCaseCards(before, true).filter(function(cd){ return cd.group==='done' && cd.kind!=='end'; }); ST.ok(+nDone===cards.length, '「已完成 N」的数字不算被隐藏的卡：'+nDone+' / '+cards.length);
       /* 五：备注卡高度固定（3 条 / 1 条 / 0 条一样高，按钮行位置不变） */
       var hgt = function(n){ Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krProgressMemos = []; cc.inNotes = []; for(var i = 0; i < n; i++) coreAddProgressMemo(cc, '备注'+i, 'KM1 室长', ''); }); KR_PROJ_PAGE = 'surg'; krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); var nc = document.querySelector('#kr-casedetail .notes-compact'); return {h:Math.round(nc.getBoundingClientRect().height), by:Math.round(nc.querySelector('.notes-btns').getBoundingClientRect().top-nc.getBoundingClientRect().top)}; };
-      var h0 = hgt(0), h1 = hgt(1), h3 = hgt(3), h5 = hgt(5); ST.ok(h0.h===h1.h && h1.h===h3.h && h3.h===h5.h && h0.by===h3.by && h3.h>=140 && h3.h<=200, '备注卡高度固定（0 / 1 / 3 / 5 条一样，CMD-1022-16：原来的一半），按钮行位置不变：'+[h0.h, h1.h, h3.h, h5.h].join('/')+' · '+h3.by);
-      var it3 = document.querySelectorAll('#kr-casedetail .notes-list > div'); var lastBottom = Math.round(it3[it3.length-1].getBoundingClientRect().bottom), btnTop = Math.round(document.querySelector('#kr-casedetail .notes-btns').getBoundingClientRect().top); ST.ok(it3.length===3 && btnTop-lastBottom<=24, '3 条下面没有大块空白：第 3 条到按钮行 '+(btnTop-lastBottom)+'px');
+      var h0 = hgt(0), h1 = hgt(1), h3 = hgt(3), h5 = hgt(5); ST.ok(h0.h<h1.h && h1.h<h3.h && h3.h===h5.h, '（CMD-1026-03）备注卡每多一则长高一行，3 则以上高度不再增加：'+[h0.h, h1.h, h3.h, h5.h].join('/')+' · '+h3.by);
+      var it3 = document.querySelectorAll('#kr-casedetail .notes-list > div'); var lastBottom = Math.round(it3[it3.length-1].getBoundingClientRect().bottom), btnTop = Math.round(document.querySelector('#kr-casedetail .notes-btns').getBoundingClientRect().top); ST.ok(it3.length===3 && btnTop-lastBottom<=60, '3 条下面没有大块空白：第 3 条到按钮行 '+(btnTop-lastBottom)+'px');
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PROJ_PAGE = 'surg'; krDoneDayClose(); window.KR_DONEDAY = null; KR_LAST_CONFLICT = ''; }
   });
 

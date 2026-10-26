@@ -1102,7 +1102,7 @@ function krProjCards(c, opts){
     if(plan && !it.deferUse){ if(ks.confirmedDate && (ks.status==='confirmed' || ks.status==='arrived')) sB.push(krPcRow(nm, '施术', cnt, krEsc(krShortDt(ks.confirmedDate, ks.confirmedTime||'')), '', '', pkS, '', SG)); /* CMD-1022-14：施术项目没有［本次取消］ */ else sU.push(krPcRow(nm, '施术', cnt, krBuyTime(c, it), '<span style="color:var(--muted);font-size:12px;">施术日期确认后在主案件做</span>', '', null, '', SG)); return; }
     sU.push(krPcRow(nm, '施术', cnt, krBuyTime(c, it), useBtns(it.name, false), '', pkS, '', SG));
   });
-  var surgBody = krPcSec('未使用', ['项目','项目类型','次数','购买时间',''], sU)+krPcSec('已预约', ['项目','项目类型','次数','预约时间',''], sB);
+  var surgBody = krPcSec('未使用', ['项目','项目类型','次数','购买时间',''], sU)+krPcSec('预约中', ['项目','项目类型','次数','预约时间',''], sB);
   var cancelSec = sC.length ? '<details style="margin-top:10px;"><summary style="font-size:12px;color:var(--slate2);cursor:pointer;">已取消 '+sC.length+'（默认收起）</summary>'+krPcHead(['项目','项目类型','次数','',''])+sC.join('')+'</details>' : '';
   /* ---- 术后管理 ---- */
   var cu = careUnits(c), pU = [], pB = [], pD = [], pI = [], sd0 = (c.krSchedule||{}).confirmedDate || '';
@@ -1158,7 +1158,7 @@ function krProjCards(c, opts){
       return '<div style="border:1px solid var(--border2);border-radius:12px;padding:14px 18px 8px;margin-top:10px;background:#fff;">'+head+'<div style="'+grid+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);"><span>项目</span><span>术后第 N 天</span><span>建议日期</span><span>状态</span><span>来源</span></div>'+gg.rows.map(function(e){ var t = tone[e.stTone]; return '<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span style="font-size:13px;">'+e.nm+'</span><span style="color:var(--slate2);">'+krEsc(String(e.day).replace(/^术后第 /, '第 '))+'</span><span>'+krEsc(e.sug ? e.sug.slice(5).replace('-', '/') : '—')+'</span><span><span class="status-pill" style="background:'+t[0]+';color:'+t[1]+';">'+krEsc(e.st)+'</span></span><span>'+(e.src||'')+'</span></div>'; }).join('')+'</div>'; }).join('');
     return '<div class="kr-pc-block"><div class="kr-pc-sec-title" style="display:flex;align-items:center;margin:12px 0 0;font-size:12px;font-weight:700;"><span style="flex:1;">交给印尼 <span style="font-weight:400;color:var(--muted);">'+arr.length+'</span></span></div>'+cards+'</div>';
   };
-  var careBody = careSec('未预约', '建议日期', pU, true)+careSec('已预约', '预约时间', pB)+handSec(pI);
+  var careBody = careSec('未预约', '建议日期', pU, true)+careSec('预约中', '预约时间', pB)+handSec(pI);
   /* ---- 管理项目 ---- */
   var mU = [], mB = [], mD = [];
   mgItems.filter(function(it){ return !it.cancelled && !it.swapped; }).forEach(function(it){
@@ -1178,7 +1178,7 @@ function krProjCards(c, opts){
     }
     krUseEntries(it).forEach(function(e){ dM.push(krUsedRow(c, it, e, nm)); });
   });
-  var mgBody = krMgSec(pickMode ? '未使用' : '未预约', '购买时间', mU, (can && paid && !c.visitClosed && !pickMode && mgItems.some(function(it){ return it.heldOver && !it.holdDone && !it.pendingPay && holdItemBookable(c, it)>0; })) ? krOutBtn('全部预约', 'krCbOpen({all:true, tab:\'mgmt\'})', true, '', true) : '')+(pickMode ? krMgSec('已预约', '预约时间', mB) : krMgSecB('已预约', mB)); /* CMD-1020-07：已使用也装进圆角卡 */
+  var mgBody = krMgSec(pickMode ? '未使用' : '未预约', '购买时间', mU, (can && paid && !c.visitClosed && !pickMode && mgItems.some(function(it){ return it.heldOver && !it.holdDone && !it.pendingPay && holdItemBookable(c, it)>0; })) ? krOutBtn('全部预约', 'krCbOpen({all:true, tab:\'mgmt\'})', true, '', true) : '')+(pickMode ? krMgSec('预约中', '预约时间', mB) : krMgSecB('预约中', mB)); /* CMD-1020-07：已使用也装进圆角卡 */
   /* CMD-1021-14 一：四个 tab：施术｜术后管理｜管理｜已完成；N = 0 的灰掉不能点；默认第一个还有内容的；前三个只放未使用 / 已预约；已完成按三组、每次实际使用一行 */
   dC.sort(function(a, b){ return a.key < b.key ? 1 : -1; });
   var nCnt = {surg:sU.length+sB.length, care:pU.length+pB.length+pI.length, mgmt:mU.length+mB.length, done:dS.length+dC.length+dM.length};

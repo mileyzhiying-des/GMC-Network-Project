@@ -8473,7 +8473,7 @@ function inProjectCardHtml(c){
     booked.sort(function(a, b){ return a.k < b.k ? -1 : 1; });
     var C2 = 'minmax(0,1.6fr) 56px minmax(0,1fr) 72px minmax(0,1fr) 84px', C3 = 'minmax(0,1.5fr) 92px minmax(0,1.2fr) 88px 72px minmax(0,1fr) 84px';
     var seg = function(title, n, inner){ return inSecTitle(title, n)+inSmallCard(inner); };
-    body = (booked.length ? seg('已预约', booked.length, hd(C2, ['项目','次数','预约时间','购买时间','备注','来源'])+booked.map(function(x){ return rw(C2, [nm(x.it), x.n+'', x.at, buyT(x.it), e(x.it.todayNote||''), srcT(x.it)]); }).join('')) : '')+
+    body = (booked.length ? seg('预约中', booked.length, hd(C2, ['项目','次数','预约时间','购买时间','备注','来源'])+booked.map(function(x){ return rw(C2, [nm(x.it), x.n+'', x.at, buyT(x.it), e(x.it.todayNote||''), srcT(x.it)]); }).join('')) : '')+
       (unbooked.length ? seg('未预约', unbooked.length, hd(C3, ['项目','次数','参考内容','建议日期','购买时间','备注','来源'])+unbooked.map(function(x){ var it = x.it, sg = ''; try{ sg = krMgSuggest(c, it, (it.holdUsed||0)+holdItemPlanned(c, it)) || ''; }catch(er){} return rw(C3, [nm(it)+(it.pendingPay ? ' <span class="status-pill" style="background:#FDECEA;color:#B3261E;font-size:12px;">待付款</span>' : ''), '剩 '+x.bk+' / 共 '+(it.qty||1)+' 次', e(mgSugText(it)||'—'), sg ? e(sg.slice(3).replace('-', '/')) : '—', buyT(it), e(it.todayNote||''), srcT(it)]); }).join('')) : '');
   } else if(cur==='done'){
     var C4 = 'minmax(0,1.6fr) 56px minmax(0,1fr) 72px minmax(0,1.2fr) 84px';
@@ -9489,8 +9489,8 @@ function sumUnitsOf(c){
     }
     var total = it.qty||1;
     (it.uses||[]).slice().sort(function(a, b2){ return String(a.at||'').localeCompare(String(b2.at||'')); }).forEach(function(u){ out.push({type:type, seg:'used', name:name, cnt:(u.qty||1)+' 次', at:useVisitDate(c, u), bought:bought, note:note, src:src}); });
-    (c.subItems||[]).filter(function(s0){ return rowOwnedBy(it, s0) && !s0.done && !s0.skipped; }).forEach(function(s0){ out.push({type:type, seg:'booked', name:name, cnt:Math.max(1, parseInt(s0.useQty,10)||1)+' 次', at:clk(s0.date, s0.time), bought:bought, note:note, src:src}); });
-    var tp = holdItemTodayPicked(c, it); if(tp>0) out.push({type:type, seg:'booked', name:name, cnt:tp+' 次', at:clk(mainVisitDay(c), ks.confirmedTime||''), bought:bought, note:note, src:src});
+    (c.subItems||[]).filter(function(s0){ return rowOwnedBy(it, s0) && !s0.done && !s0.skipped; }).forEach(function(s0){ out.push({type:type, seg:'booked', name:name, cnt:Math.max(1, parseInt(s0.useQty,10)||1)+' 次', at:clk(s0.date, s0.time), ref:mgSugText(it)||'—', bought:bought, note:note, src:src}); });
+    var tp = holdItemTodayPicked(c, it); if(tp>0) out.push({type:type, seg:'booked', name:name, cnt:tp+' 次', at:clk(mainVisitDay(c), ks.confirmedTime||''), ref:mgSugText(it)||'—', bought:bought, note:note, src:src});
     var bk = Math.max(0, holdItemBookable(c, it));
     if(bk>0 || it.pendingPay){ var sg = ''; try{ sg = krMgSuggest(c, it, (it.holdUsed||0)+holdItemPlanned(c, it)) || ''; }catch(e){} out.push({type:type, seg:'unbooked', name:name+(it.pendingPay ? '（待付款）' : ''), cnt:'剩 '+bk+' / 共 '+total+' 次', ref:mgSugText(it)||'—', sug:sg ? '20'+sg : '', bought:bought, note:note, src:src}); }
   });
@@ -9500,7 +9500,7 @@ function sumUnitsOf(c){
     var s0 = r.s; if(s0.skipped || s0.transferred) return;
     var en = null; try{ en = careEntryOfRow(c, s0); }catch(e){} var nm = en ? (en.x.name||en.x.mgmt) : String(s0.content||'').replace(/（.*$/, '');
     var sug = s0.suggest || s0.date || '', ref = '', surg = r.item || s0.projectName || ''; try{ ref = surg ? careDayText(c, surg, sug) : ''; }catch(e){}
-    var base = {type:'术后管理', name:(s0.projectName ? buyName(s0.projectName)+' · ' : '')+nm, cnt:'1 次', bought:'', note:s0.note||'', src:careSrc(surg)};
+    var base = {type:'术后管理', name:(s0.projectName ? buyName(s0.projectName)+' · ' : '')+nm, cnt:'1 次', ref:ref||'—', bought:'', note:s0.note||'', src:careSrc(surg)};
     if(s0.done) out.push(Object.assign({}, base, {seg:'used', at:s0.visitDate || day(s0.doneAt) || s0.date || ''}));
     else if(s0.place==='IN'){ var bk = inCareBooking(c, s0.id); if(bk) out.push(Object.assign({}, base, {seg:'booked', at:clk(bk.date, bk.time)})); else out.push(Object.assign({}, base, {seg:'unbooked', cnt:'剩 1 / 共 1 次', ref:ref||'—', sug:sug})); }
     else out.push(Object.assign({}, base, {seg:'booked', at:clk(s0.date, s0.time)}));
@@ -9513,9 +9513,20 @@ function sumUnitsOf(c){
     var b = x.b, nm = x.h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : ''), base = {type:'本地管理', name:nm, bought:day(b.date), note:'', src:'印尼购买'};
     if(b.refund || b.voided){ out.push(Object.assign({}, base, {seg:'cancel', cnt:(b.bought||0)+' 次', at:day((b.refund && (b.refund.date||b.refund.at)) || ''), tag:'已退款'})); return; }
     (b.usages||[]).forEach(function(u){ out.push(Object.assign({}, base, {seg:'used', cnt:(u.qty||1)+' 次', at:day(u.date || u.at)})); });
-    var left = (b.bought||0)-(b.used||0); if(left>0) out.push(Object.assign({}, base, {seg:'unbooked', cnt:'剩 '+left+' / 共 '+(b.bought||0)+' 次', ref:'—', sug:''}));
+    var left = (b.bought||0)-(b.used||0); if(left>0) out.push(Object.assign({}, base, {seg:'unbooked', cnt:'剩 '+left+' / 共 '+(b.bought||0)+' 次', ref:'—', sug:'', _l:left, _t:(b.bought||0)}));
   });
-  return out;
+  /* CMD-1026-03：未预约里同一个术后管理 / 本地项目合成一行（剩 N / 共 M 次；建议时间取最早的一次）；预约中 / 已使用照旧一次一行 */
+  var merged = [], mk = {};
+  out.forEach(function(u){
+    if(u.seg!=='unbooked' || (u.type!=='术后管理' && u.type!=='本地管理')){ merged.push(u); return; }
+    var key = u.type+'|'+u.name; var g = mk[key];
+    if(!g){ g = mk[key] = Object.assign({}, u, {_l:0, _t:0}); merged.push(g);
+      g._t = u.type==='术后管理' ? out.filter(function(x){ return x.type===u.type && x.name===u.name && x.seg!=='cancel'; }).length : 0; }
+    g._l += (u._l || 1); if(u.type==='本地管理') g._t += (u._t||0);
+    if(u.sug && (!g.sug || String(u.sug) < String(g.sug))){ g.sug = u.sug; g.ref = u.ref; }
+  });
+  merged.forEach(function(u){ if(u._l!=null && u.seg==='unbooked' && (u.type==='术后管理' || u.type==='本地管理')) u.cnt = '剩 '+u._l+' / 共 '+Math.max(u._t, u._l)+' 次'; });
+  return merged;
 }
 function summaryTabHtml(c){
   var units = sumUnitsOf(c), ui = SUM_UI[c.id] || (SUM_UI[c.id] = {cap:''}), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
@@ -9531,20 +9542,19 @@ function summaryTabHtml(c){
   var hd = function(cols, names){ return '<div style="'+G(cols)+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+names.map(function(n){ return '<span>'+n+'</span>'; }).join('')+'</div>'; };
   var rw = function(cols, cells){ return '<div style="'+G(cols)+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;">'+cells.map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; };
   var seg = function(title, n, inner){ return '<div style="margin:14px 0 0;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+n+'</span></div><div style="border:1px solid var(--border2);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;">'+inner+'</div>'; };
-  var tcol = all ? ' 84px' : '', ttag = function(u){ return all ? '<span style="font-size:12px;color:var(--slate2);">'+e(u.type)+'</span>' : null; };
-  var withType = function(names, cells, u){ if(!all) return [names, cells]; var n2 = names.slice(), c2 = cells.slice(); n2.splice(1, 0, '业务类型'); c2.splice(1, 0, ttag(u)); return [n2, c2]; };
+  var withType = function(names, cells, u){ if(!all) return [names, cells]; return [['项目类型'].concat(names), [u ? '<span style="font-size:12px;color:var(--slate2);">'+e(u.type)+'</span>' : ''].concat(cells)]; };
   var body = '';
   if(cur==='cancel'){
     var cc = 'minmax(0,1.8fr) 56px 84px 100px 76px 84px';
     body = seg('已取消 / 已退款', list.length, hd(cc, ['项目', '次数', '类型', '取消 / 退款时间', '购买时间', '来源'])+list.map(function(u){ return rw(cc, [e(u.name), e(u.cnt), '<span style="color:#B3261E;">'+e(u.tag||'已取消')+'</span>', md(u.at), md(u.bought), srcTag(u.src)]); }).join(''));
   } else {
     var un = list.filter(function(u){ return u.seg==='unbooked'; }), bo = list.filter(function(u){ return u.seg==='booked'; }), us = list.filter(function(u){ return u.seg==='used'; });
-    var colsU = all ? 'minmax(0,1.6fr) 84px 110px minmax(0,1.1fr) 84px 76px minmax(0,.9fr) 84px' : 'minmax(0,1.6fr) 110px minmax(0,1.1fr) 84px 76px minmax(0,.9fr) 84px';
-    var colsB = all ? 'minmax(0,1.6fr) 84px 56px 110px 76px minmax(0,.9fr) 84px' : 'minmax(0,1.6fr) 56px 110px 76px minmax(0,.9fr) 84px';
+    var tc = all ? '84px ' : '';
+    var colsU = tc+'minmax(0,1.6fr) 110px minmax(0,1.1fr) 76px 84px 84px', colsB = tc+'minmax(0,1.6fr) 56px 110px 76px minmax(0,1.1fr) 84px', colsD = tc+'minmax(0,1.6fr) 56px 110px 76px minmax(0,1fr) 84px';
     var seg1 = function(title, arr, names, cellsOf, cols){ if(!arr.length) return ''; return seg(title, arr.length, hd(cols, withType(names, [], arr[0])[0])+arr.map(function(u){ return rw(cols, withType(names, cellsOf(u), u)[1]); }).join('')); };
-    body = seg1('未预约', un, ['项目', '次数', '参考内容', '建议日期', '购买时间', '备注', '来源'], function(u){ return [e(u.name), e(u.cnt), e(u.ref||'—'), md(u.sug), md(u.bought), e(u.note||''), srcTag(u.src)]; }, colsU)+
-      seg1('已预约', bo, ['项目', '次数', '预约时间', '购买时间', '备注', '来源'], function(u){ return [e(u.name), e(u.cnt), md(u.at), md(u.bought), e(u.note||''), srcTag(u.src)]; }, colsB)+
-      seg1('已使用', us, ['项目', '次数', '使用时间', '购买时间', '备注', '来源'], function(u){ return [e(u.name), e(u.cnt), md(u.at), md(u.bought), e(u.note||''), srcTag(u.src)]; }, colsB);
+    body = seg1('未预约', un, ['项目', '次数', '使用参考', '购买时间', '建议时间', '来源'], function(u){ return [e(u.name), e(u.cnt), e(u.ref||'—'), md(u.bought), md(u.sug), srcTag(u.src)]; }, colsU)+
+      seg1('预约中', bo, ['项目', '次数', '预约时间', '购买时间', '使用参考', '来源'], function(u){ return [e(u.name), e(u.cnt), md(u.at), md(u.bought), e(u.ref||'—'), srcTag(u.src)]; }, colsB)+
+      seg1('已使用', us, ['项目', '次数', '使用时间', '购买时间', '备注内容', '来源'], function(u){ return [e(u.name), e(u.cnt), md(u.at), md(u.bought), e(u.note||''), srcTag(u.src)]; }, colsD);
   }
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:8px;">项目汇总</div>'+
     (units.length ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;">'+caps.map(function(k){ return capBtn(k[0], k[1]); }).join('')+'</div><div style="overflow-x:auto;"><div style="min-width:760px;">'+(body || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有项目</div>')+'</div></div>' : '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有项目</div>')+'</div>';
