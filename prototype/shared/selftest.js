@@ -199,10 +199,10 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     nav('in-clients'); ST.ok(c.subState==='waiting', '离开页面应退回待访问，实际 '+c.subState); ST.ok(ST.hasLog(c, /接待未完成，退回待访问/), '缺退回记录');
     var c2 = ST.newRes('A4b'); ST.arrive(c2); ST.open(c2); openCancelIntakeModal(); confirmCancelIntake(); ST.ok(c2.subState==='waiting' && ST.hasLog(c2, /取消接待，案件回到待访问/), '取消接待应回到待访问');
   });
-  ST.def('A5','接续另一个进行中案件 → 本案作废',function(){
+  ST.def('A5','继续另一个进行中案件 → 本案作废',function(){
     var c1 = ST.newRes('A5'); ST.arrive(c1); ST.materials(c1, {consult:false});
     var c2 = ST.newRes('A5', {phone:clientPhoneOf(c1.name)}); ST.arrive(c2); ST.ok(ongoingCasesOf(c2).length>0, '应检测到进行中的案件');
-    var n0 = CASE_ITEMS.length; resumeVisit(c1.id); ST.ok(CASE_ITEMS.indexOf(c2)<0 && CASE_ITEMS.length===n0-1, '新案件应作废并从列表移除'); ST.ok(ST.hasLog(c1, /接续到访/), '原案件缺「接续到访」');
+    var n0 = CASE_ITEMS.length; resumeVisit(c1.id); ST.ok(CASE_ITEMS.indexOf(c2)<0 && CASE_ITEMS.length===n0-1, '新案件应作废并从列表移除'); ST.ok(ST.hasLog(c1, /继续到访/), '原案件缺「继续到访」');
   });
   ST.def('A6','关联之前案件（复诊 / 术后管理）',function(){
     var c1 = ST.newRes('A6'); ST.arrive(c1); ST.materials(c1, {consult:false}); noPurchaseThisTime(); ST.ok(isEnded(c1), '前一个案件应已结束');
@@ -1430,11 +1430,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
 
   /* ================= CMD-1015-18 补齐 + KR「项目」tab 重组 ================= */
   function pcCase(base){ var c = toConfirmed(base); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var rows = [], k0 = 0; pcUniqueEntries(c).forEach(function(e){ var x = e.x; for(var k = 0; k < (x.times||1); k++){ var where = (x.place==='either') ? 'IN' : 'KR'; rows.push({where:where, item:e.it.name, pcIdx:e.i, date:D(14+k0++), time:'10:00', mgmt:x.mgmt, name:x.name, innName:x.innName, day:null}); } }); corePcBooking(c, rows, ST.krBy); return c; }
-  ST.def('R18a','IN：术后管理来访默认接续到术后管理阶段的案件（突出）；通知 / 待办点进来滚到术后管理区块；术后管理不再发「转回印尼持有」（A1 分页）',function(){
+  ST.def('R18a','IN：术后管理来访默认继续到术后管理阶段的案件（突出）；通知 / 待办点进来滚到术后管理区块；术后管理不再发「转回印尼持有」（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = pcCase('R18a1'); ST.ok(ST.krCloseToday(c) && c.stage==='postcare', '先让案件进入术后管理阶段');
     var c2 = ST.newRes('R18a2', {phone:clientPhoneOf(c.name)}); c2.visitPurpose = '术后管理'; var h = resumeBannerHtml(c2);
-    ST.ok(/已默认接续到术后管理阶段的案件/.test(h) && /✓ 默认/.test(h) && h.indexOf(c.caseNo)>-1 && /继续新案件/.test(h), '来访目的术后管理 + 有术后管理阶段的案件 → 默认接续并突出，仍可继续新案件');
+    ST.ok(/已默认继续到术后管理阶段的案件/.test(h) && /✓ 默认/.test(h) && h.indexOf(c.caseNo)>-1 && /继续新案件/.test(h), '来访目的术后管理 + 有术后管理阶段的案件 → 默认继续并突出，仍可继续新案件');
     c2.visitPurpose = '皮肤商谈'; ST.ok(!/✓ 默认/.test(resumeBannerHtml(c2)), '其他来访目的不突出');
     ST.ok(typeof goPostcareBlock==='function' && /in-postcare-card/.test(inPostcareCardHtml(c)), '术后管理区块有锚点，goPostcareBlock 能滚过去');
     ST.ok(!/转回印尼持有|转成持有/.test(JSON.stringify(c.logEntries||[])+JSON.stringify(NOTIFS.filter(function(n){ return n.caseId===c.id; }).map(function(n){ return n.text; }))), '没有发过「术后管理转回印尼持有」');
@@ -2147,7 +2147,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var q = gc().subItems.filter(function(x){ return x.id==='q52'; })[0]; ST.ok(visitWords('客人已到：'+q.no+'「术后复诊检查」')==='客人已到：到院（'+day.slice(5).replace('-', '/')+'）「术后复诊检查」', '旧记录里的行号按那一行自己的日期显示');
     ST.ok(/施术、术后管理、管理项目/.test(tlDateTitle(gc(), day)), 'Timeline 日期小标题按项目类型：'+tlDateTitle(gc(), day));
   });
-  ST.def('R58a','CMD-1020-07（A1 分页，需要 pcStage 夹具）：IN「未安排预约」分页 / 来源 / ［预约］接续原案件 → 约好就消失 / 补发交给印尼通知 / 逾期变红 + 红点',function(){
+  ST.def('R58a','CMD-1020-07（A1 分页，需要 pcStage 夹具）：IN「未安排预约」分页 / 来源 / ［预约］继续原案件 → 约好就消失 / 补发交给印尼通知 / 逾期变红 + 红点',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
     var today = todayStr(); localStorage.removeItem(todoUbSeenKey());
@@ -2160,7 +2160,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     TODO_UI.tab = 'unbooked'; TODO_UI.mine = false; var html = todoPaneHtml(todoItems()); ST.ok(/待办 \d+[\s\S]*未安排预约 \d+/.test(html.replace(/<[^>]+>/g, '')) && /ub-grp/.test(html), '标题行是两个并排分页，点未安排预约显示列表'); TODO_UI.tab = 'todo'; var h2 = todoPaneHtml(todoItems()); ST.ok(!/ub-grp/.test(h2) && /todo-list/.test(h2), '默认 / 切回待办显示待办列表（未安排预约不进待办）'); ST.ok(!todoItems().some(function(it){ return /交给印尼|未安排/.test(it.text||''); }), '未安排预约不混进待办');
     var gs = todoUbGroupsIn(c, false), g0 = gs[0], bk0 = g0.items[0].bk; todoCbOpen(c.id, g0.gid); TODO_CB2.groups[0].lines[0].date = (function(){ var d = ymdAdd(today, 3); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; })(); todoCbNormalize(); todoCbRender();
     ST.ok(/术后管理/.test(document.getElementById('todo-cb-overlay').innerText) && /A000/.test(document.getElementById('todo-cb-overlay').innerText), '［预约］打开代约：来访目的术后管理、带出原案件和项目');
-    todoCbGo(); var rc = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; })[0]; ST.ok(!!rc && rc.visitPurpose==='术后管理' && rc.careFor.keys.indexOf(bk0)>-1, '生成接续原案件的预约（careFor）');
+    todoCbGo(); var rc = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; })[0]; ST.ok(!!rc && rc.visitPurpose==='术后管理' && rc.careFor.keys.indexOf(bk0)>-1, '生成继续原案件的预约（careFor）');
     var after = todoUbGroupsIn(c, false); ST.ok(!after.some(function(g){ return g.items.some(function(x){ return x.bk===bk0; }); }), '约好的这一次从未安排预约里消失');
     ST.ok(/印尼\s*\d/.test(inCareCardsHtml(c, 'inn').replace(/<[^>]+>/g, ' ')) && /术后管理项目/.test(inCareCardsHtml(c, 'inn')), '（CMD-1026-04：该步骤时印尼的行已全部约好，没有未预约行可显示「建议」）术后管理印尼小卡仍在，栏位正确');
   });
@@ -2474,7 +2474,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 只勾这一个项目：同一天合成一次到店 */
     todoCbOpen(c.id, G.gid); TODO_CB2.groups.forEach(function(g){ if(g.gid!==G.gid) g.lines.forEach(function(l){ l.on = false; }); }); G = TODO_CB2.groups.filter(function(g){ return g.gid===G.gid; })[0]; G.lines[0].qty = 2; todoCbNormalize(); G.lines[0].date = wk(4); G.lines[1].date = wk(4); todoCbNormalize();
     CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.careFor && x.careFor.caseId===c.id); }); todoCbGo(); var made = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; });
-    ST.ok(made.length===1 && made[0].careFor.keys.length===3 && made[0].visitPurpose==='术后管理', '同一天的两行合成一次到店：1 张预约，接续原案件，带 3 个 key（实际 '+made.length+' 张，keys '+(made[0] ? made[0].careFor.keys.length : '-')+'，行 '+G.lines.map(function(l){ return l.qty+(l.on?"+":"-")+l.date; }).join(',')+'）');
+    ST.ok(made.length===1 && made[0].careFor.keys.length===3 && made[0].visitPurpose==='术后管理', '同一天的两行合成一次到店：1 张预约，继续原案件，带 3 个 key（实际 '+made.length+' 张，keys '+(made[0] ? made[0].careFor.keys.length : '-')+'，行 '+G.lines.map(function(l){ return l.qty+(l.on?"+":"-")+l.date; }).join(',')+'）');
     ST.ok(!todoUbGroupsIn(c, false).some(function(g){ return g.name==='IN 多次测试'; }), '3 次都约了 → 这个项目从未安排预约消失');
     /* 占位预约：3 个来访目的 */
     ST.ok(JSON.stringify(KRB_PURPOSE_NEW)==='["carebook","holdbook","newvisit"]' && KRB_NEWVISIT.join()==='术后复诊,皮肤管理,面诊商谈', '来访目的 3 个；新增访问下一层 术后复诊 / 皮肤管理 / 面诊商谈');
@@ -2908,7 +2908,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       alerts.length = 0; krRvConfirm(); ST.ok(!gc().consultContentAt && alerts.some(function(m){ return /录入评估内容/.test(m); }), '需要处理但还没录入 → 不能确认');
       KR_REC.text = '评估内容：继续观察。'; KR_REC.mode = 'manual'; krSaveTranscript(); krRvConfirm(); ST.ok(!!gc().consultContentAt, '录完内容 → ［确认］→ 评估结束');
       var h3 = krTabConsult(gc()); ST.ok(/评估内容：继续观察/.test(h3) && (dir ? !/krSubmitReport\(\)/.test(h3) : /发送复诊评估结果/.test(h3)), '评估内容显示出来；室长可以发送（发送不要授权），院长没有发送块');
-      var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /接续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行接续说明和评估结论');
+      var rc = krRevEvalCard(gc()); ST.ok(!/这次要看的项目|IN 上传的说明/.test(rc) && /评估结论/.test(rc) && /继续 A/.test(rc), '复诊评估卡：没有「这次要看的项目」一行，有一行继续说明和评估结论');
     }finally{ window.alert = oa; window.confirm = oc; }
   });
   ST.def('R121a','CMD-1023-03 P5（A1 分页，stageC 夹具）：列表进程只写一件 + 新栏「其他进行中」/ 优先级 / 点日历块进入口 openVisitOf / 升级后本地管理画面在项目汇总下',async function(){
@@ -2973,7 +2973,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     mut(function(c){ c.krProgressMemos = []; });
     Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap123); }); /* 复原夹具 */
   });
-  ST.def('R123b','CMD-1025-01 一、九（A1 分页，stageC 夹具）：IN 接续弹窗拿掉灰字说明；付清尾款前 IN 的术后管理［预约］［全部预约］灰 + 提示，付清后可按',function(){
+  ST.def('R123b','CMD-1025-01 一、九（A1 分页，stageC 夹具）：IN 继续弹窗拿掉灰字说明；付清尾款前 IN 的术后管理［预约］［全部预约］灰 + 提示，付清后可按',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
     var snap123b = JSON.stringify(c); /* 复原夹具：后面 KM1 的 R66b 等还要用这个案件 */
@@ -2984,7 +2984,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var gsr = todoUbListInHtml([{caseId:c.id, name:c.name, no:c.caseNo, gid:'g|x', label:'x', surg:'y', n:1, sug:'', place:'印尼'}]);
     ST.ok(/disabled/.test(gsr) && /付清尾款后才能预约/.test(gsr), '工作台「未安排预约」的［全部预约］［预约］灰 + 提示');
     c.krBalancePaid = true; ST.ok(careBookBlock(c)==='' && !/disabled/.test(todoUbListInHtml([{caseId:c.id, name:c.name, no:c.caseNo, gid:'g|x', label:'x', surg:'y', n:1, sug:'', place:'印尼'}])), '付清尾款后自动可以按');
-    var src = fuRender.toString(); ST.ok(src.indexOf('来访目的：')<0 && src.indexOf('选「不接续」= 新主案件')<0, '接续弹窗里没有那行灰字说明');
+    var src = fuRender.toString(); ST.ok(src.indexOf('来访目的：')<0 && src.indexOf('选「不继续」= 新主案件')<0, '继续弹窗里没有那行灰字说明');
     var d = document.createElement('div'); d.innerHTML = notesCompactHtml(c, 'IN', '备注'); ST.ok(!d.querySelector('.notes-list') || c.inNotes && c.inNotes.length, 'IN 备注卡：没有备注时只剩一行');
     var i123 = CASE_ITEMS.indexOf(c); if(i123 > -1){ CASE_ITEMS[i123] = JSON.parse(snap123b); Store.touch(); } /* 复原夹具 */
   });
@@ -3159,8 +3159,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krCbClose();
     } finally { var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); KR_CASE = {clinicId:cid, id:r.id, tab:'basic'}; KR_CB = null; }
   });
-  /* CMD-1026-01 一～三、五（A1 分页）：接续弹窗 / 依勾选显示 tab / 取消接待清干净 + 预约保留 / 一般面诊 Step 1 → Step 2 */
-  ST.def('R127a','CMD-1026-01 一（A1 分页）：接续 → 弹窗（메타뷰 + 接续类型 + 复诊项目资料 / 今天的术后管理）；确认后 tab：只复诊 / 只术后 / 两个都勾；基础资料只留基本信息和医美史；［修改］重开弹窗、KR 开始后不能改',function(){
+  /* CMD-1026-01 一～三、五（A1 分页）：继续弹窗 / 依勾选显示 tab / 取消接待清干净 + 预约保留 / 一般面诊 Step 1 → Step 2 */
+  ST.def('R127a','CMD-1026-01 一（A1 分页）：继续 → 弹窗（메타뷰 + 继续类型 + 复诊项目资料 / 今天的术后管理）；确认后 tab：只复诊 / 只术后 / 两个都勾；基础资料只留基本信息和医美史；［修改］重开弹窗、KR 开始后不能改',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var old = window.GMC_NO_FOLLOWASK, t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
     var tt = function(c0){ var d = document.createElement('div'); d.innerHTML = caseTabsHtml(c0); var tb = d.querySelector('.tabs'); return tb ? tb.textContent.replace(/\s+/g, '').replace(/[✓●]/g, '') : ''; };
@@ -3170,55 +3170,55 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       /* 只勾术后管理 */
       var prior = mkPrior('R127p'), c = arrive(prior, 'R127p', '术后管理');
-      ST.ok(document.getElementById('followup-overlay').classList.contains('open'), '到店后问「是否接续之前的案件？」'); followupAskDone(true); c = getCurrentCase();
+      ST.ok(document.getElementById('followup-overlay').classList.contains('open'), '到店后问「是否继续之前的案件？」'); followupAskDone(true); c = getCurrentCase();
       var ov = document.getElementById('cont-overlay'), ot = ov ? ov.textContent : '';
-      ST.ok(ov && ov.classList.contains('open') && /접续|接续/.test(ot) && /메타뷰/.test(ot) && /接续项目/.test(ot) && /复诊评估/.test(ot) && /术后管理/.test(ot), '确认接续后跳出弹窗：메타뷰 + 接续类型（复诊评估 / 术后管理）');
+      ST.ok(ov && ov.classList.contains('open') && /접续|继续/.test(ot) && /메타뷰/.test(ot) && /继续项目/.test(ot) && /复诊评估/.test(ot) && /术后管理/.test(ot), '确认继续后跳出弹窗：메타뷰 + 继续类型（复诊评估 / 术后管理）');
       ST.ok(/今日预约管理/.test(ot) && /术后复诊/.test(ot) && ov.querySelectorAll('input[onchange^="contToggleCare"]').length===0 && ov.querySelector('input[onchange="contToggleType(\'术后管理\')"]').checked, '（CMD-1026-05）术后管理默认勾好，今日预约管理只列出来没有勾选框');
       ST.ok(!/今天做|新增/.test(ot.replace(/要新买请在确认后用［增加项目］|不能在这里新增|没约过的不能在这里新增（要新买请在确认后用［增加项目］）|新增案件/g, '')), '不能在弹窗里新增没约过的');
       ST.ok(/取消接待/.test(ot) && c.subState==='arrived', '底部［取消接待］［确认］');
-      var h0 = t(basicFourHtml(c, false)); ST.ok(/填写接续资料/.test(h0) && !/苦恼|面诊需求|到访目的/.test(h0.replace(/接续资料（메타뷰.*?确认后才会出现对应的tab。/, '')), '确认前基础资料只有基本信息 + 提示卡 + 医美史（没有到访目的 / 面诊需求）');
+      var h0 = t(basicFourHtml(c, false)); ST.ok(/填写继续资料/.test(h0) && !/苦恼|面诊需求|到访目的/.test(h0.replace(/继续资料（메타뷰.*?确认后才会出现对应的tab。/, '')), '确认前基础资料只有基本信息 + 提示卡 + 医美史（没有到访目的 / 面诊需求）');
       c.metaviewStatus = 'ready'; contConfirm(); c = getCurrentCase();
-      ST.ok(c.materialsConfirmed && !(document.getElementById('cont-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open'), '确认 → 弹窗关闭、接续资料已确认');
+      ST.ok(c.materialsConfirmed && !(document.getElementById('cont-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open'), '确认 → 弹窗关闭、继续资料已确认');
       var tabs = tt(c); ST.ok(tabs==='基础资料术后管理附件Timeline', '只勾术后管理：基础资料｜术后管理｜附件｜Timeline：'+tabs);
-      var bt = t(basicFourHtml(c, true)); ST.ok(/基本信息/.test(bt) && !/到访目的|苦恼/.test(bt), '基础资料 tab（接续的案件）只留基本信息和医美史，到访目的卡拿掉');
+      var bt = t(basicFourHtml(c, true)); ST.ok(/基本信息/.test(bt) && !/到访目的|苦恼/.test(bt), '基础资料 tab（继续的案件）只留基本信息和医美史，到访目的卡拿掉');
       ST.ok((c.careToday||[]).length===1, '今天的术后管理已记下（careToday）');
       var inc = inContCardHtml(c); ST.ok(!/>修改</.test(inc) && !/今天做/.test(inc), '（CMD-1026-02）术后管理 tab 没有［修改］，没有「今天做」');
       c.careToday = []; var inc2 = inContCardHtml(c); ST.ok(/预约项目/.test(inc2), '没勾的留在预约项目');
       /* 只勾复诊评估 / 两个都勾 */
       var prior2 = mkPrior('R127q'), c2 = arrive(prior2, 'R127q', '复诊评估'); followupAskDone(true); c2 = getCurrentCase();
-      contToggleType('复诊评估'); c2 = getCurrentCase(); ST.ok(resumeTypesOf(c2).indexOf('术后管理')>-1 && resumeTypesOf(c2).indexOf('复诊评估')>-1, '（CMD-1026-05）今天有约：术后管理取消不了，再勾复诊评估 → 两个'); contSetTypes(c2, ['复诊评估']); contRender(); /* 后面要测只复诊 */
+      c2 = getCurrentCase(); contToggleType('术后管理'); ST.ok(resumeTypesOf(c2).indexOf('术后管理')>-1 && resumeTypesOf(c2).indexOf('复诊评估')>-1, '（CMD-1026-05/06）今天有约：术后管理取消不了；来访目的选了复诊 → 复诊评估已预选 → 两个'); contSetTypes(c2, ['复诊评估']); contRender(); /* 后面要测只复诊 */
       ST.ok(/这次要看的项目/.test(document.getElementById('cont-overlay').textContent) && /询问问题/.test(document.getElementById('cont-overlay').textContent) && /客人希望的评估时间/.test(document.getElementById('cont-overlay').textContent), '复诊评估：项目 / 视频照片 / 想问的内容 / 希望的评估时间都在弹窗里');
       contConfirm(); c2 = getCurrentCase(); ST.ok(!c2.materialsConfirmed && document.getElementById('cont-overlay').classList.contains('open'), '缺项（메타뷰 / 项目 / 想问的内容…）：不能确认，弹窗还开着');
       document.getElementById('materials-missing-overlay').classList.remove('open'); c2.metaviewStatus = 'ready'; fillRevisit(c2); contConfirm(); c2 = getCurrentCase();
       ST.ok(c2.materialsConfirmed && c2.revisitEval, '填完确认 → 复诊评估已送 KR');
       tabs = tt(c2); ST.ok(tabs==='基础资料复诊评估附件Timeline', '只勾复诊评估：基础资料｜复诊评估｜附件｜Timeline：'+tabs);
       ST.ok(!/>修改</.test(revEvalTabHtml(c2)) && typeof contLocked==='undefined', '（CMD-1026-02）复诊评估 tab 没有［修改］，弹窗确认后不能重开');
-      var prior3 = mkPrior('R127r'), c3 = arrive(prior3, 'R127r', '复诊评估'); followupAskDone(true); c3 = getCurrentCase(); contToggleType('复诊评估'); c3 = getCurrentCase();
+      var prior3 = mkPrior('R127r'), c3 = arrive(prior3, 'R127r', '复诊评估'); followupAskDone(true); c3 = getCurrentCase(); /* CMD-1026-06：来访目的选了复诊 → 第二个弹窗已预选复诊评估，今天有约的术后管理也默认勾好 → 已经是两个 */ c3 = getCurrentCase();
       ST.ok(resumeTypesOf(c3).length===2, '两个都勾：类型 = 复诊评估 + 术后管理');
       c3.metaviewStatus = 'ready'; fillRevisit(c3); contConfirm(); c3 = getCurrentCase(); tabs = tt(c3); ST.ok(tabs==='基础资料复诊评估术后管理附件Timeline', '两个都勾：基础资料｜复诊评估｜术后管理｜附件｜Timeline：'+tabs);
     } finally { window.GMC_NO_FOLLOWASK = old; var o = document.getElementById('cont-overlay'); if(o) o.classList.remove('open'); CONT_MODAL = null; }
   });
-  ST.def('R127b','CMD-1026-01 二、三（A1 分页）：弹窗没确认就取消 / 关掉 / 取消接待 → 接续资料全清（关联、案件号）；预约保留（今天已到过店不判未到店）；再按［客人已到店］重新问接续、接续可选',function(){
+  ST.def('R127b','CMD-1026-01 二、三（A1 分页）：弹窗没确认就取消 / 关掉 / 取消接待 → 继续资料全清（关联、案件号）；预约保留（今天已到过店不判未到店）；再按［客人已到店］重新问继续、继续可选',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var old = window.GMC_NO_FOLLOWASK;
     try{
       var p0 = ST.newRes('R127s'); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.director = 'KD1 院长'; p0.hospitalId = caseHospitalId(p0); p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.subItems = [{id:'r127sa', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false}]; p0.krTripEnded = true;
       var c = ST.newRes('R127s', {phone:clientPhoneOf(p0.name), purpose:'术后管理'}); c.careFor = {caseId:p0.id, keys:['r127sa']}; c.visitTime = '00:05'; var no0 = c.caseNo; ST.open(c); window.GMC_NO_FOLLOWASK = false; markArrived(); c = getCurrentCase(); followupAskDone(true); c = getCurrentCase();
-      ST.ok(c.resumeFrom && c.mainId && c.caseNo!==no0 && c.linkedCase, '接续后：有关联、加入了主案件、案件号变成子案件号（'+c.caseNo+'）');
+      ST.ok(c.resumeFrom && c.mainId && c.caseNo!==no0 && c.linkedCase, '继续后：有关联、加入了主案件、案件号变成子案件号（'+c.caseNo+'）');
       var ov = document.getElementById('cont-overlay'); ST.ok(ov.classList.contains('open'), '弹窗开着（还没确认）'); contCancel(); c = getCurrentCase();
       ST.ok(!document.getElementById('cont-overlay').classList.contains('open') && c.subState==='waiting' && c.stage==='booked', '弹窗没确认就取消：回到「预约到店 · 待访问」');
-      ST.ok(!c.resumeFrom && !c.linkedCase && !c.mainId && !c.followup && !c.followupAsked && c.caseNo===no0, '接续资料全部清掉：关联 / 接续类型 / 主案件 / 案件号还原（'+c.caseNo+'）');
-      ST.ok(relatedOf(c).linkedId===undefined || !relatedOf(c).linkedId, '页头不再写「关联：…」，关联案件也没有「接续」');
+      ST.ok(!c.resumeFrom && !c.linkedCase && !c.mainId && !c.followup && !c.followupAsked && c.caseNo===no0, '继续资料全部清掉：关联 / 继续类型 / 主案件 / 案件号还原（'+c.caseNo+'）');
+      ST.ok(relatedOf(c).linkedId===undefined || !relatedOf(c).linkedId, '页头不再写「关联：…」，关联案件也没有「继续」');
       autoNoShowSweep(); c = getCurrentCase(); ST.ok(c.subState==='waiting' && !c.noShow, '预约保留：取消接待后不会被自动判成未到店（今天已经到过店）');
-      markArrived(); ST.ok(document.getElementById('followup-overlay').classList.contains('open') && FU_ASK && FU_ASK.mode==='link', '再按［客人已到店］：重新问「是否接续之前的案件？」，接续可选');
-      ST.ok(!/opacity:\.4/.test(document.getElementById('followup-overlay').innerHTML.split('接续之前的案件（加入它的主案件）')[0].slice(-200)), '「接续之前的案件」没有变灰');
+      markArrived(); ST.ok(document.getElementById('followup-overlay').classList.contains('open') && FU_ASK && FU_ASK.mode==='link', '再按［客人已到店］：重新问「是否继续之前的案件？」，继续可选');
+      ST.ok(!/opacity:\.4/.test(document.getElementById('followup-overlay').innerHTML.split('继续之前的案件（加入它的主案件）')[0].slice(-200)), '「继续之前的案件」没有变灰');
       followupAskDone(false);
       /* ［取消接待］（确认弹窗）走同一条路 + 页面离开兜底 */
-      var c2 = ST.newRes('R127s', {phone:clientPhoneOf(p0.name), purpose:'术后管理'}); c2.careFor = {caseId:p0.id, keys:['r127sa']}; c2.visitTime = '00:10'; var n2 = c2.caseNo; ST.open(c2); markArrived(); followupAskDone(true); c2 = getCurrentCase(); ST.ok(!!c2.mainId, '第二个：接续');
+      var c2 = ST.newRes('R127s', {phone:clientPhoneOf(p0.name), purpose:'术后管理'}); c2.careFor = {caseId:p0.id, keys:['r127sa']}; c2.visitTime = '00:10'; var n2 = c2.caseNo; ST.open(c2); markArrived(); followupAskDone(true); c2 = getCurrentCase(); ST.ok(!!c2.mainId, '第二个：继续');
       confirmCancelIntake(); c2 = getCurrentCase(); ST.ok(!c2.resumeFrom && !c2.mainId && c2.caseNo===n2 && !document.getElementById('cont-overlay').classList.contains('open'), '［取消接待］：同样全清、弹窗关闭');
       markArrived(); followupAskDone(true); c2 = getCurrentCase(); revertIntakeToWaiting(c2, '离开页面', '系统'); ST.ok(!c2.resumeFrom && !c2.mainId && c2.caseNo===n2, '直接离开页面（心跳过期 / 关分页兜底）：同样全清');
-      /* ［取消接待］之后「接续」变灰的条件：客人没有可接续的案件（术后管理 / 复诊 = 原案件赴韩已结束或这次从「未安排预约」约来；接续面诊 = 仅出报告）；原因见汇报 */
-      var c3 = ST.newRes('R127s', {phone:clientPhoneOf(p0.name)}); p0.krTripEnded = false; ST.ok(resumeCandidates(c3, '术后管理').length===0, '原案件赴韩没结束、这次预约又没带 careFor：术后管理不能接续（变灰的条件）'); c3.careFor = {caseId:p0.id, keys:['r127sa']}; ST.ok(resumeCandidates(c3, '术后管理').length===1, '带 careFor（从未安排预约约来）：可以接续'); p0.krTripEnded = true;
+      /* ［取消接待］之后「继续」变灰的条件：客人没有可继续的案件（术后管理 / 复诊 = 原案件赴韩已结束或这次从「未安排预约」约来；继续面诊 = 仅出报告）；原因见汇报 */
+      var c3 = ST.newRes('R127s', {phone:clientPhoneOf(p0.name)}); p0.krTripEnded = false; ST.ok(resumeCandidates(c3, '术后管理').length===0, '原案件赴韩没结束、这次预约又没带 careFor：术后管理不能继续（变灰的条件）'); c3.careFor = {caseId:p0.id, keys:['r127sa']}; ST.ok(resumeCandidates(c3, '术后管理').length===1, '带 careFor（从未安排预约约来）：可以继续'); p0.krTripEnded = true;
     } finally { window.GMC_NO_FOLLOWASK = old; var o = document.getElementById('cont-overlay'); if(o) o.classList.remove('open'); CONT_MODAL = null; }
   });
   ST.def('R128a','CMD-1026-02 C（A1 分页）：离开日期过了 → KR 待办「是否结束」；IN 按［客人已到店］→ 这位客人没结束的韩国行程自动结束（不自动取消预约 / 项目）+ 通知 KR',function(){
@@ -3241,7 +3241,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { if(hd) hd.openTime = oldOpen; }
   });
 
-  ST.def('R128b','CMD-1026-02 A（A1 分页）：接续弹窗——没有术后恢复照片；取消接待先确认，确定 → 清空回待访问，取消 → 回弹窗',function(){
+  ST.def('R128b','CMD-1026-02 A（A1 分页）：继续弹窗——没有术后恢复照片；取消接待先确认，确定 → 清空回待访问，取消 → 回弹窗',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var old = window.GMC_NO_FOLLOWASK, oc = window.confirm, nm = 'R128bp';
     var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.director = 'KD1 院长'; p0.hospitalId = caseHospitalId(p0);
@@ -3254,7 +3254,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var asked = null; window.confirm = function(t){ asked = t; return false; }; window.GMC_NO_CONFIRM = false;
       contCancel(); ST.ok(/确定吗/.test(asked||'') && ov.classList.contains('open'), '取消接待先问；选取消 → 回弹窗');
       window.confirm = function(t){ asked = t; return true; }; contCancel();
-      ST.ok(!ov.classList.contains('open') && !CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0].linkedCase, '确定 → 清空接续资料、弹窗关闭');
+      ST.ok(!ov.classList.contains('open') && !CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0].linkedCase, '确定 → 清空继续资料、弹窗关闭');
     } finally { window.GMC_NO_FOLLOWASK = old; window.confirm = oc; window.GMC_NO_CONFIRM = true; }
   });
 
@@ -3273,7 +3273,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/未预约/.test(all) || /预约中/.test(all) || /已使用/.test(all), '分段存在');
   });
 
-  ST.def('R130a','CMD-1026-04（A1 分页）：接续弹窗重排——接续项目勾哪项展开哪项；今天有约好的术后管理默认勾好 / 没有灰掉；项目全取消术后管理跟着取消；询问问题和希望的评估时间只在勾了复诊时出现；至少勾一个',function(){
+  ST.def('R130a','CMD-1026-04（A1 分页）：继续弹窗重排——继续项目勾哪项展开哪项；今天有约好的术后管理默认勾好 / 没有灰掉；项目全取消术后管理跟着取消；询问问题和希望的评估时间只在勾了复诊时出现；至少勾一个',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var oc = window.confirm, old = window.GMC_NO_FOLLOWASK; var nm = 'R130a';
     var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.director = 'KD1 院长'; p0.hospitalId = caseHospitalId(p0);
@@ -3285,7 +3285,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 今天没约 */
       var c = arrive([]); var ov = document.getElementById('cont-overlay');
       ST.ok(/disabled[^>]*onchange="contToggleType\('术后管理'\)"/.test(ov.innerHTML) && /今天没有约好的术后管理/.test(ovTxt()), '今天没有约好的：术后管理灰掉并写原因');
-      ST.ok(/接续项目/.test(ovTxt()) && !/接续类型|可以都选，至少一个/.test(ovTxt()), '标题「接续项目」，长说明拿掉');
+      ST.ok(/继续项目/.test(ovTxt()) && !/继续类型|可以都选，至少一个/.test(ovTxt()), '标题「继续项目」，长说明拿掉');
       ST.ok(!/今日预约管理/.test(ovTxt()) && !/询问问题/.test(ovTxt()) && !/客人希望的评估时间/.test(ovTxt()), '没勾任何一项时什么都不展开');
       contToggleType('复诊评估'); ST.ok(/这次要看的项目/.test(ovTxt()) && /询问问题/.test(ovTxt()) && /客人希望的评估时间/.test(ovTxt()) && !/复诊想问的内容/.test(ovTxt()), '勾复诊评估：展开项目、询问问题、希望的评估时间');
       contToggleType('复诊评估'); ST.ok(resumeTypesOf(getCurrentCase()).length===0, '可以暂时一个都不勾');
@@ -3342,13 +3342,57 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(slotBlockReason(td, cur.time)==='full' && calOverbookOk(td, cur.time) && calOverbookOk(td, nx), '现在 / 下一时段满了 → 可加约');
       ST.ok(!calOverbookOk(td, far) && !calOverbookOk(ymdAdd(td, 1), cur.time), '更晚的时段 / 以后的日子满了就满了');
       CAL_MODE = 'week'; try{ buildWeekGrid(); }catch(e){}
-      var g = document.getElementById('wk-grid').innerHTML; ST.ok(/＋加约/.test(g) && (g.match(/＋加约/g)||[]).length<=2, '周视图满的格子有［＋加约］（只有现在 / 下一时段）：'+(g.match(/＋加约/g)||[]).length);
+      var g = document.getElementById('wk-grid').innerHTML; ST.ok(/＋加约/.test(g) && (g.match(/＋加约/g)||[]).length<=3, '周视图满的格子有［＋加约］（默认 1 小时范围，最多 3 格）：'+(g.match(/＋加约/g)||[]).length);
       calOverbookAsk(td, cur.time); ST.ok(document.getElementById('add-slot-overlay').classList.contains('open') && /预约空档/.test(document.getElementById('add-slot-title').textContent) && document.getElementById('add-slot-title').textContent.indexOf(cur.time)>-1, '确认后进入预约表单，时段已带好');
       var n0 = slotBookingCount(td, cur.time); var cn = CLIENTS.filter(function(x){ return !pendingResvSameDay(x.name, td); })[0]; document.getElementById('add-slot-client').value = cn.name; var nm1 = cn.name; confirmAddSlotExisting();
       ST.ok(slotBookingCount(td, cur.time)===n0+1 && n0+1>1, '加约后这个时段多 1 位（超过上限 1）');
       CAL_MODE = 'week'; try{ buildWeekGrid(); }catch(e){} g = document.getElementById('wk-grid').innerHTML; ST.ok(new RegExp((n0+1)+'/1').test(g.replace(/<[^>]+>/g, '')), '超额后格子左边出现「'+(n0+1)+'/1」');
       var nc = CASE_ITEMS.filter(function(x){ return x.name===nm1 && x.visitDate===td && x.visitTime===cur.time; }).pop(); ST.ok(!!nc && (nc.logEntries||[]).some(function(l){ return /超额加约/.test(l.action||''); }), 'Timeline 记了「超额加约」');
     } finally { CLINIC_SETTINGS.slotCapacity = cap0; window.GMC_NO_CONFIRM = old; }
+  });
+
+  ST.def('R132a','CMD-1026-06（A1 分页）：第一个对话框白话 + 继续项目只在第二个弹窗勾 + 今天有约术后管理默认带出案件 + 画面没有「接续」',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK, nm = 'R132a'; window.GMC_NO_CONFIRM = true;
+    var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.director = 'KD1 院长'; p0.hospitalId = caseHospitalId(p0);
+    p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true;
+    p0.subItems = [{id:'r132s', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false, projectName:'隆鼻'}];
+    try{
+      /* 今天有约（没有 careFor，像「重新约」的那笔）：自助预约选了术后管理，且还没接待 */
+      var c = ST.newRes(nm, {phone:clientPhoneOf(p0.name), purpose:'术后管理'}); ST.open(c); window.GMC_NO_FOLLOWASK = false; markArrived();
+      var ov = document.getElementById('followup-overlay'), tx = ov.innerText;
+      ST.ok(/是否继续之前的服务/.test(tx) && /不继续，开始新的服务/.test(tx) && /继续之前的服务/.test(tx) && !/新主案件|加入它的主案件|算在当初买的主案件/.test(tx), '标题和三个选项是白话，系统说明拿掉');
+      ST.ok(/开始新的服务/.test(ov.innerHTML) && /确认继续/.test(ov.innerHTML) && !/确认接续|不接续/.test(ov.innerHTML), '按钮［开始新的服务］［确认继续］');
+      ST.ok(FU_ASK.mode==='link' && FU_ASK.type==='复诊术后' && FU_ASK.sel===p0.id, '今天有约好的术后管理：默认继续之前的服务 + 复诊 / 术后管理，直接带出案件：'+FU_ASK.sel);
+      ST.ok(/继续面诊/.test(tx) && /复诊 \/ 术后管理/.test(tx) && !/术后管理<\/label>[\s\S]*复诊评估/.test(ov.innerHTML) && !/type="checkbox"/.test(ov.innerHTML), '第一层只有「继续面诊 / 复诊·术后管理」单选，没有复诊评估 / 术后管理勾选框');
+      followupAskDone(true); var c2 = getCurrentCase(); var m = document.getElementById('cont-overlay');
+      ST.ok(m && m.classList.contains('open') && /继续之前的服务 · /.test(m.innerText) && /继续项目/.test(m.innerText) && /今日预约管理/.test(m.innerText), '第二个弹窗：标题「继续之前的服务 · 客人」、「继续项目」、今日预约管理');
+      ST.ok(resumeTypesOf(c2).join()==='术后管理' && !/接续/.test(m.innerText), '术后管理默认勾好，细项只在这里勾；弹窗里没有「接续」');
+      confirmCancelIntake(); contClose(); followupAskDone(false);
+      /* 页面其他地方没有「接续」 */
+      var body = document.body.innerText; ST.ok(!/接续/.test(body.replace(/\s+/g,'')), '画面上没有「接续」二字');
+    } finally { window.GMC_NO_FOLLOWASK = old; try{ contClose(); }catch(e){} }
+  });
+
+  ST.def('R132b','CMD-1026-06（A1 分页）：加约范围是诊所设定（默认 1 小时，可改 30 分钟；一般室长不能改）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var cap0 = CLINIC_SETTINGS.slotCapacity, om0 = CLINIC_SETTINGS.overbookMinutes; window.GMC_NO_CONFIRM = true;
+    try{
+      ST.ok((om0===undefined || om0===60) && (defaultClinicSettings().overbookMinutes===60), '默认 1 小时');
+      CLINIC_SETTINGS.slotCapacity = 1; CLINIC_SETTINGS.overbookMinutes = 60;
+      var td = todayStr(), cur = currentSlotNow(), s1 = minToTime(timeToMin(cur.time)+30), s2 = minToTime(timeToMin(cur.time)+60), s3 = minToTime(timeToMin(cur.time)+90);
+      [cur.time, s1, s2, s3].forEach(function(t, i){ createReservationCase('R132b'+i, null, td, t, null, '面诊商谈'); });
+      var nd = demoNow(), nowMin = nd.getHours()*60+nd.getMinutes();
+      var exp = function(range){ var nd2 = demoNow(), nm2 = nd2.getHours()*60+nd2.getMinutes(), ns = timeToMin(currentSlotNow().time); return [cur.time, s1, s2, s3].filter(function(t){ return timeToMin(t)>=ns && timeToMin(t)<=nm2+range && slotBlockReason(td, t)==='full'; }); };
+      var got = function(){ return [cur.time, s1, s2, s3].filter(function(t){ return calOverbookOk(td, t); }); };
+      ST.ok(got().join()===exp(60).join() && got().length>0, '1 小时：现在这格 + 之后 1 小时内开始的格：'+got().join('/'));
+      CLINIC_SETTINGS.overbookMinutes = 30; ST.ok(got().join()===exp(30).join() && got().length>0, '30 分钟：范围缩小：'+got().join('/'));
+      CLINIC_SETTINGS.overbookMinutes = 120; ST.ok(got().join()===exp(120).join(), '2 小时：范围放大：'+got().join('/'));
+      /* 设定页：管理者能改，保存后生效；诊所设定页一般室长没有入口 */
+      openAdminPage('clinic'); var sel = document.querySelector('select[data-k="overbookMinutes"]'); ST.ok(!!sel && sel.value==='120', '诊所设定页有「可加约的时间范围」下拉，带出当前值');
+      sel.value = '30'; clinicSet(sel); ST.ok(CLINIC_DRAFT.overbookMinutes===30 && clinicValidate(CLINIC_DRAFT)==='', '改成 30 分钟，校验通过');
+      ST.ok(canDo('clinic') && !ROLE_PERMS.general.clinic && !(ROLE_PERMS.kr_general||{}).clinic, '只有管理者 / 老板有诊所设定权限，一般室长没有（页面不开放）');
+    } finally { CLINIC_SETTINGS.slotCapacity = cap0; CLINIC_SETTINGS.overbookMinutes = om0; if(om0===undefined) delete CLINIC_SETTINGS.overbookMinutes; CLINIC_DRAFT = null; try{ nav('in-dashboard'); }catch(e){} }
   });
 
   ST.def('R128c','CMD-1026-02 B（A1 分页）：项目汇总 = 项目卡结构（胶囊 + 分段 + 栏位），没有筛选行 / 本地项目卡 / 灰提示',function(){
@@ -3456,7 +3500,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     krSetCaseTab('items'); var it = document.getElementById('krcase-body').innerText; ST.ok(!/术后管理\s*\d/.test(it.replace(/\n/g, ' ')) || true, '赴韩 tab 项目卡不再有术后管理小 tab');
     ST.ok(KR_CASE_TABS.every(function(t0){ return t0.key!=='flow'; }), 'KR 没有流程 tab');
   });
-  ST.def('R117a','CMD-1023-02（A1 分页）：到店弹窗期限（复诊超 3 个月灰掉 + 开新主案件轻关联）/ 仅出报告 3 个月内接续 → 同一主案件回到进行中 / 持有项目算在当初买的主案件 / 案件管理已完成 tab 默认 3 个月',function(){
+  ST.def('R117a','CMD-1023-02（A1 分页）：到店弹窗期限（复诊超 3 个月灰掉 + 开新主案件轻关联）/ 仅出报告 3 个月内继续 → 同一主案件回到进行中 / 持有项目算在当初买的主案件 / 案件管理已完成 tab 默认 3 个月',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); }, old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = false;
     try{
@@ -3468,11 +3512,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/超过 3 个月/.test(ov.innerText) && ov.querySelector('option[disabled]') && /开新主案件（轻关联原案件）/.test(ov.innerText), '超过 3 个月：选项灰掉写原因 + 「开新主案件（轻关联原案件）」按钮');
       followupAskNewLight(); c = getCurrentCase();
       ST.ok(c.lightLink && c.lightLink.caseId===p.id && !isChildVisit(c) && c.continueNew && /重新面诊/.test(c.noteOverall||''), '开了新主案件，轻关联原案件，备注写原案件号');
-      /* 仅出报告 3 个月内接续面诊 → 同一主案件回到进行中 */
+      /* 仅出报告 3 个月内继续面诊 → 同一主案件回到进行中 */
       var r = ST.newRes('R117r'); ST.materials(r, {consult:true}); r = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; r.visitDate = dAgo(40); r.reportReady = true; r.reportDate = dAgo(39); r.consultStartedAt = dAgo(40)+' 10:00'; r.consultAt = {date:dAgo(40), time:'10:00'}; r.stage = 'reportonly'; r.visitClosed = true; r.endNote = '客人不做';
-      ST.ok(joinWindowOf(r, '接续面诊').ok && mainStatusOf(r).status==='仅出报告', '仅出报告、3 个月内可接续');
+      ST.ok(joinWindowOf(r, '接续面诊').ok && mainStatusOf(r).status==='仅出报告', '仅出报告、3 个月内可继续');
       var c2 = ST.newRes('R117r', {phone:clientPhoneOf(r.name)}); c2 = CASE_ITEMS.filter(function(x){ return x.id===c2.id; })[0]; ST.arrive(c2); c2 = CASE_ITEMS.filter(function(x){ return x.id===c2.id; })[0];
-      joinMain(c2, r); ST.ok(mainStatusOf(r).status==='进行中' && r.stage!=='reportonly' && isChildVisit(c2), '接续面诊 → 同一主案件，仅出报告回到进行中：'+r.stage);
+      joinMain(c2, r); ST.ok(mainStatusOf(r).status==='进行中' && r.stage!=='reportonly' && isChildVisit(c2), '继续面诊 → 同一主案件，仅出报告回到进行中：'+r.stage);
       /* 持有项目算在当初买的主案件 */
       var h = ST.newRes('R117h'); ST.materials(h, {consult:true}); h = CASE_ITEMS.filter(function(x){ return x.id===h.id; })[0]; h.visitDate = dAgo(50); h.procedureItems = [{origin:'KR', name:'ONDA 提升 · 身体 60kj·3次', mgmtPlan:true, qty:3, holdUsed:1, heldOver:true}]; h.stage = 'closed'; h.visitClosed = true; h.krProcedureDone = true; h.krTripEnded = {at:dAgo(40)+' 10:00'};
       ST.ok(mainHoldOf(h).length===1 && mainStatusText(h)==='已完成 · 有持有项目', '有持有项目：已完成 · 有持有项目');
@@ -3513,7 +3557,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* 4 超过 3 个月 */
     var m2 = ST.newRes('R116n'); ST.materials(m2, {consult:true}); m2 = CASE_ITEMS.filter(function(x){ return x.id===m2.id; })[0]; m2.surgeryDoneAt = dAgo(120)+' 10:00'; m2.krProcedureDone = true;
     ST.ok(!joinWindowOf(m2, '复诊评估').ok && /超过 3 个月/.test(joinWindowOf(m2, '复诊评估').reason), '施术完成 120 天：复诊超过 3 个月，要重新面诊');
-    ST.ok(!joinWindowOf(CASE_ITEMS.filter(function(x){ return x.id===m2.id; })[0], '接续面诊').ok === resumeOverdue(m2), '接续面诊的期限从院长面诊日算');
+    ST.ok(!joinWindowOf(CASE_ITEMS.filter(function(x){ return x.id===m2.id; })[0], '接续面诊').ok === resumeOverdue(m2), '继续面诊的期限从院长面诊日算');
     /* 5 标题 */
     ST.open(m); var tt = document.getElementById('case-title'); renderCaseTitle(m); ST.ok(tt && tt.textContent.indexOf('第')<0 && tt.textContent.indexOf(m.caseNo)>-1, '标题「客人名 · '+m.caseNo+'」没有「第 N 次来访」：'+(tt&&tt.textContent));
     /* 6 流程 tab 一行一个流程 */
@@ -3623,30 +3667,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     CASE_TAB_FILTER = 'all'; CASE_ROW_OPEN[m.id] = true; renderCaseRows(); var rh = document.getElementById('case-rows'); 
     if(rh){ var txt = rh.textContent; ST.ok(txt.indexOf(m.caseNo+'-01')>-1 && txt.indexOf(m.caseNo+'-02')>-1, '案件管理列表展开：主案件下列出各子案件'); ST.ok(rh.querySelectorAll('.case-row-click').length>0 && !(txt.split(ch.name).length>3), '列表里子记录不单独成行'); }
   });
-  ST.def('R109a','CMD-1023-01 S2（A1 分页）：到店后「接续」= 加入主案件成为子案件（mainId、案件号 主案件号-序号、序号退回）/ 候选不含子记录 / 来用本地项目加入本地主案件 / 接续到进行中主案件那天也算子案件',function(){
+  ST.def('R109a','CMD-1023-01 S2（A1 分页）：到店后「继续」= 加入主案件成为子案件（mainId、案件号 主案件号-序号、序号退回）/ 候选不含子记录 / 来用本地项目加入本地主案件 / 继续到进行中主案件那天也算子案件',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var prior = ST.newRes('R109p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0];
     prior.krTripEnded = true; prior.visitDate = dateStr(new Date(demoNow().getTime()-9*86400000)); prior.subItems = [{id:'r109a', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false}];
     var ph = clientPhoneOf(prior.name), old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = false;
     try{
       var c = ST.newRes('R109p', {phone:ph, purpose:'术后管理'}); var numBefore = c.caseNo; ST.open(c); markArrived(); c = getCurrentCase();
-      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否接续之前的案件/.test(ov.innerText) && /新主案件/.test(ov.innerText), '到店弹窗：新主案件 / 接续之前的案件（加入它的主案件）');
+      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否继续之前的案件/.test(ov.innerText) && /新主案件/.test(ov.innerText), '到店弹窗：新主案件 / 继续之前的案件（加入它的主案件）');
       followupAskDone(true); c = getCurrentCase();
-      ST.ok(c.mainId===prior.id && isChildVisit(c) && mainOf(c)===prior, '确认接续 → 成为主案件的子案件（mainId）');
+      ST.ok(c.mainId===prior.id && isChildVisit(c) && mainOf(c)===prior, '确认继续 → 成为主案件的子案件（mainId）');
       ST.ok(c.caseNo===prior.caseNo+'-02' && visitsOf(prior).some(function(v){ return v.no===c.caseNo && v.caseId===c.id; }), '案件号 = 主案件号-序号（'+c.caseNo+'）');
       var n2 = generateCaseNo(); ST.ok(n2 && n2 !== numBefore || true, '序号可继续生成');
-      ST.ok(clientPriorCases(c).indexOf(c)<0 && clientPriorCases(ST.newRes('R109p', {phone:ph})).every(function(x){ return !isChildVisit(x); }), '接续候选不含子记录（只列主案件）');
+      ST.ok(clientPriorCases(c).indexOf(c)<0 && clientPriorCases(ST.newRes('R109p', {phone:ph})).every(function(x){ return !isChildVisit(x); }), '继续候选不含子记录（只列主案件）');
       /* 来用本地项目：加入本地主案件 */
       var lm = ST.newRes('R109L'); lm.needsConsult = false; lm.materialsConfirmed = true; lm.stage = 'local'; lm.visitDate = dateStr(new Date(demoNow().getTime()-9*86400000));
       var h0 = {itemName:'R109 本地项目', category:'本地项目', batches:[{caseId:lm.id, date:todayStr(), bought:2, used:0, usages:[]}]};
       CLIENT_HOLDINGS[lm.name] = (CLIENT_HOLDINGS[lm.name]||[]).concat([h0]);
       var c2 = ST.newRes('R109L', {phone:clientPhoneOf(lm.name)}); ST.open(c2); markArrived(); c2 = getCurrentCase();
       /* CMD-1023-03 P6：只有本地持有 → 新独立案件，标「来自 A000xxx 购买」，不加入原主案件 */
-      ST.ok(!localMainsWithLeft(c2).some(function(x){ return x.id===lm.id; }) && localOnlyHoldMains(c2).some(function(x){ return x.id===lm.id; }), '只有本地持有的主案件 → 不再是接续候选，算「本地持有」');
+      ST.ok(!localMainsWithLeft(c2).some(function(x){ return x.id===lm.id; }) && localOnlyHoldMains(c2).some(function(x){ return x.id===lm.id; }), '只有本地持有的主案件 → 不再是继续候选，算「本地持有」');
       ST.ok(c2.boughtFrom && c2.boughtFrom.indexOf(lm.caseNo)>-1 && !isChildVisit(c2) && /来自 .*购买/.test(mainHeadLine(c2)), '新独立案件，页头标「来自 '+lm.caseNo+' 购买」：'+mainHeadLine(c2));
-      /* 接续到进行中主案件那天 */
+      /* 继续到进行中主案件那天 */
       RESUMED_VISITS.push({name:prior.name, date:todayStr(), time:'09:00', purpose:'复诊评估', caseId:prior.id, origCaseNo:'AXXXX'});
-      ST.ok(visitsOf(prior).some(function(v){ return v.types.indexOf('复诊评估')>-1; }), '接续到进行中主案件的那天也是一个子案件');
+      ST.ok(visitsOf(prior).some(function(v){ return v.types.indexOf('复诊评估')>-1; }), '继续到进行中主案件的那天也是一个子案件');
       RESUMED_VISITS.pop();
     } finally { window.GMC_NO_FOLLOWASK = old; }
   });
@@ -3674,7 +3718,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var mig = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===56; })[0]; ST.ok(!!mig, '迁移 56 存在');
     if(mig){ var o = {id:'x108'}; mig.fn(o, {note:function(){}}); ST.ok(o.mainId==='x108', '迁移 56：补 mainId = 自己'); }
   });
-  ST.def('R107a','CMD-1022-21（A1 分页）：IN 接续案件本地管理 tab 项目卡——术后管理 / 本地管理两个 tab、今日 / 预约 / 未预约三组、栏位、操作、0 灰掉、没有已完成 tab、离店后只读、一般本地来访不动',function(){
+  ST.def('R107a','CMD-1022-21（A1 分页）：IN 继续案件本地管理 tab 项目卡——术后管理 / 本地管理两个 tab、今日 / 预约 / 未预约三组、栏位、操作、0 灰掉、没有已完成 tab、离店后只读、一般本地来访不动',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var prior = ST.newRes('R107p'); ST.materials(prior, {consult:false}); prior = CASE_ITEMS.filter(function(x){ return x.id===prior.id; })[0];
     prior.subItems = [{id:'r107a', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false}, {id:'r107b', kind:'术后管理记录', place:'IN', content:'拆线', date:ST.dayStr ? ST.dayStr(5) : todayStr(), done:false}];
@@ -3695,7 +3739,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.leftStore = true; var h3 = inContCardHtml(c); ST.ok(!/onclick="openCareUse|todoCareBookOpen|inContBtn/.test(h3) && /只读/.test(h3), '客人离店后整张卡只读，没有操作按钮');
       c.leftStore = false;
       /* 一般本地来访不动 */
-      var c3 = ST.newRes('R107q', {phone:clientPhoneOf(prior.name)}); ST.arrive(c3); c3 = getCurrentCase(); ST.ok(!isContCase(c3), '一般本地来访不是接续案件，不显示新项目卡');
+      var c3 = ST.newRes('R107q', {phone:clientPhoneOf(prior.name)}); ST.arrive(c3); c3 = getCurrentCase(); ST.ok(!isContCase(c3), '一般本地来访不是继续案件，不显示新项目卡');
     } finally { window.GMC_NO_FOLLOWASK = old; }
   });
   ST.def('R105a','CMD-1022-19（A1 分页）：要看的项目只列施术 / 送出提示 / 复诊评估没出结果时客人离店不结案 / 术后管理只读 / 案件管理 tab 顺序与结案类型栏 / 日历块名称保留',function(){
@@ -4570,13 +4614,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 1 到店弹窗：从未安排预约来的默认选对应案件 */
       window.GMC_NO_FOLLOWASK = false;
       var c = ST.newRes('R86p', {phone:ph, purpose:'术后管理'}); c.careFor = {caseId:prior.id, keys:['k']}; ST.open(c); markArrived(); c = getCurrentCase();
-      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否接续之前的案件/.test(ov.innerText), '到店后弹「是否接续之前的案件？」（CMD-1022-06）');
-      ST.ok(FU_ASK.sel===prior.id && FU_ASK.mode==='link' && FU_ASK.type==='术后管理', '从未安排预约约来的默认：接续 · 术后管理 + 对应案件');
+      var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否继续之前的服务/.test(ov.innerText) && /开始新的服务/.test(ov.innerText) && /确认继续/.test(ov.innerText), '到店后弹「是否继续之前的服务？」，按钮［开始新的服务］［确认继续］（CMD-1026-06）');
+      ST.ok(FU_ASK.sel===prior.id && FU_ASK.mode==='link' && FU_ASK.type==='复诊术后', '从未安排预约约来的默认：继续之前的服务 + 复诊 / 术后管理 + 对应案件（CMD-1026-06）');
       followupAskDone(true); c = getCurrentCase();
       ST.ok(c.followup && c.linkedCase.caseId===prior.id && c.followupAsked, '确认关联 → 走术后来访流程');
       var h = materialsCardHtml(c), ovC = document.getElementById('cont-overlay');
-      ST.ok(ovC && ovC.classList.contains('open') && /接续项目/.test(ovC.textContent) && /填写接续资料/.test(h) && h.indexOf('联系方式')<0, '术后来访：接续资料在弹窗里，基础资料只有提示卡（没有到访目的）（CMD-1026-01）');
-      ST.ok(h.indexOf('需要院长面诊（复诊）')<0 && h.indexOf('关联之前案件')<0, '接续 · 术后管理：没有「面诊 / 不面诊」两个按钮（CMD-1022-06）');
+      ST.ok(ovC && ovC.classList.contains('open') && /继续项目/.test(ovC.textContent) && /填写继续资料/.test(h) && h.indexOf('联系方式')<0, '术后来访：继续资料在弹窗里，基础资料只有提示卡（没有到访目的）（CMD-1026-01）');
+      ST.ok(h.indexOf('需要院长面诊（复诊）')<0 && h.indexOf('关联之前案件')<0, '继续 · 术后管理：没有「面诊 / 不面诊」两个按钮（CMD-1022-06）');
       ST.ok(/联系方式/.test(basicFourHtml(c, false)), '基础资料里有基本信息'); contClose();
       /* 2 复诊：选做过的项目、不选院长、免面诊费（走「关联之前案件」旧入口：没有 resumeFrom，原来的到访目的卡） */
       window.GMC_NO_FOLLOWASK = true; c = ST.newRes('R86p', {phone:ph}); ST.arrive(c); c = getCurrentCase(); setLinkedCase(prior.id); setNeedsConsult(true); h = materialsCardHtml(c);
@@ -4600,7 +4644,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var ps = (prior.subItems||[]).filter(function(x){ return x.id==='r86s1'; })[0]; ST.ok(ps.done && (c2.postcareUses||[]).length===1, '做完 → 原案件印尼术后管理标完成，本案件记术后管理使用');
       /* 4 不关联走一般流程 */
       window.GMC_NO_FOLLOWASK = false; var c3 = ST.newRes('R86p', {phone:ph}); ST.open(c3); markArrived(); followupAskDone(false); c3 = getCurrentCase();
-      ST.ok(!c3.followup && c3.followupAsked && materialsCardHtml(c3).indexOf('术后来访')<0 && !c3.resumeFrom && c3.continueNew, '选「不接续」走一般流程');
+      ST.ok(!c3.followup && c3.followupAsked && materialsCardHtml(c3).indexOf('术后来访')<0 && !c3.resumeFrom && c3.continueNew, '选「不继续」走一般流程');
       setLinkedCase(prior.id); ST.ok(c3.followup, '一般来访在「关联之前案件」选了案件 → 改走术后来访流程'); cancelFollowupLink(); ST.ok(!c3.followup && !c3.linkedCase, '取消关联 → 回到一般流程');
     } finally { window.GMC_NO_FOLLOWASK = old; var ov2 = document.getElementById('followup-overlay'); if(ov2) ov2.classList.remove('open'); }
   });
@@ -4823,31 +4867,31 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/第 \d+ 次面诊/.test(krVisitOrdinalHtml(r).replace(/<[^>]+>/g, '')) || krVisitOrdinalHtml(r)==='', '页头第 N 次面诊｜赴韩施术（是 0 的不显示）');
   });
 
-  /* ---- CMD-1022-06 到店分流 + 接续面诊 ---- */
-  ST.def('R95a','CMD-1022-06（IN 分页）：到店弹窗（不接续 / 接续三选一）+ 接续面诊三道检查 + 新案件带入原方案（不收面诊费、最新价）+ 术后管理 / 复诊评估无两按钮 + 客户详情［新增案件］',function(){
+  /* ---- CMD-1022-06 到店分流 + 继续面诊 ---- */
+  ST.def('R95a','CMD-1022-06（IN 分页）：到店弹窗（不继续 / 继续三选一）+ 继续面诊三道检查 + 新案件带入原方案（不收面诊费、最新价）+ 术后管理 / 复诊评估无两按钮 + 客户详情［新增案件］',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var old = window.GMC_NO_FOLLOWASK, oa = window.alert; window.alert = function(){};
     try{
       var src = ST.newRes('R95s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
       var kp = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active; })[0];
       src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.needsConsult = true; src.consultRequested = true; src.reportReady = true; src.consultStatus = 'report_ready'; src.videoSummary = '（自测）原方案';
-      src.krScope = {items:[{name:kp.name, price:kp.price+1000, note:''}], overallNote:'', updatedAt:nowFullDt()}; src.consultStartedAt = D(-10)+' 03:00:00'; src.visitClosed = true; src.endNote = '客人不做项目'; src.stage = 'reportonly'; src.krDepositPaid = false; /* CMD-1022-09：接续面诊只能接续「仅出报告」的案件 */
+      src.krScope = {items:[{name:kp.name, price:kp.price+1000, note:''}], overallNote:'', updatedAt:nowFullDt()}; src.consultStartedAt = D(-10)+' 03:00:00'; src.visitClosed = true; src.endNote = '客人不做项目'; src.stage = 'reportonly'; src.krDepositPaid = false; /* CMD-1022-09：继续面诊只能继续「仅出报告」的案件 */
       var ph = clientPhoneOf(src.name);
       window.GMC_NO_FOLLOWASK = false;
       var n = ST.newRes('R95n', {phone:ph}); ST.open(n); markArrived(); n = getCurrentCase();
       var ov = document.getElementById('followup-overlay');
-      ST.ok(ov && ov.classList.contains('open') && /是否接续之前的案件/.test(ov.innerText) && /不接续/.test(ov.innerText) && /接续之前的案件/.test(ov.innerText), '到店弹窗：不接续 / 接续');
-      ST.ok(FU_ASK.mode==='none', '一般来访默认「不接续」');
-      fuSet('mode','link'); fuSet('type','接续面诊'); ST.ok(FU_ASK.sel===src.id && /三道检查/.test(ov.innerText) && /没超过 3 个月/.test(ov.innerText) && /FU_ASK|确认接续/.test(ov.innerHTML), '接续面诊：列出有诊疗方案的原案件 + 三道检查，距面诊日 N 天');
-      src.consultStartedAt = D(-130)+' 03:00:00'; fuRender(); ST.ok(/超过 3 个月/.test(ov.innerText) && !!ov.querySelector('option[disabled]') && !(document.getElementById('fu-confirm') && !document.getElementById('fu-confirm').disabled), '超过 3 个月（CMD-1023-02）：候选灰掉写原因，不能确认接续，只剩开新案件');
-      src.consultStartedAt = D(-10)+' 03:00:00'; FU_ASK.sel = src.id; fuRender(); fuSet('hist','bad'); ST.ok(/不能接续，请开新案件/.test(ov.innerText), '医美史新增且影响原方案：不能接续');
+      ST.ok(ov && ov.classList.contains('open') && /是否继续之前的服务/.test(ov.innerText) && /不继续，开始新的服务/.test(ov.innerText) && /继续之前的服务/.test(ov.innerText), '到店弹窗：不继续，开始新的服务 / 继续之前的服务（CMD-1026-06）');
+      ST.ok(FU_ASK.mode==='none', '一般来访默认「不继续」');
+      fuSet('mode','link'); fuSet('type','接续面诊'); ST.ok(FU_ASK.sel===src.id && /三道检查/.test(ov.innerText) && /没超过 3 个月/.test(ov.innerText) && /FU_ASK|确认继续/.test(ov.innerHTML), '继续面诊：列出有诊疗方案的原案件 + 三道检查，距面诊日 N 天');
+      src.consultStartedAt = D(-130)+' 03:00:00'; fuRender(); ST.ok(/超过 3 个月/.test(ov.innerText) && !!ov.querySelector('option[disabled]') && !(document.getElementById('fu-confirm') && !document.getElementById('fu-confirm').disabled), '超过 3 个月（CMD-1023-02）：候选灰掉写原因，不能确认继续，只剩开新案件');
+      src.consultStartedAt = D(-10)+' 03:00:00'; FU_ASK.sel = src.id; fuRender(); fuSet('hist','bad'); ST.ok(/不能继续，请开始新的服务/.test(ov.innerText), '医美史新增且影响原方案：不能继续（CMD-1026-06 文案）');
       fuSet('hist','ok'); ST.ok(document.getElementById('fu-confirm') && document.getElementById('fu-confirm').disabled, '医美史新增不影响但没填内容：确认按钮不可点');
-      FU_ASK.histText = '（自测）去年做过水光针'; fuSet('proj','ok'); FU_ASK.projNote = '和 KM1 商量过，原项目不变'; fuRender(); ST.ok(!document.getElementById('fu-confirm').disabled, '三项通过：可以确认接续');
+      FU_ASK.histText = '（自测）去年做过水光针'; fuSet('proj','ok'); FU_ASK.projNote = '和 KM1 商量过，原项目不变'; fuRender(); ST.ok(!document.getElementById('fu-confirm').disabled, '三项通过：可以确认继续');
       followupAskDone(true); n = getCurrentCase();
-      ST.ok(n.resumeFrom && n.resumeFrom.caseId===src.id && n.resumeFrom.type==='接续面诊' && n.linkedCase.reason==='延续既往面诊' && n.needsConsult==='reuse' && n.resumeCheck && n.resumeCheck.hist.text && n.resumeCheck.proj.note, '确认接续：resumeFrom / resumeCheck 记下，需求 = 沿用原方案');
-      ST.ok(ST.hasLog(n, /接续 .* · 接续面诊（三道检查通过/), '检查结果、判断人记进 Timeline');
+      ST.ok(n.resumeFrom && n.resumeFrom.caseId===src.id && n.resumeFrom.type==='接续面诊' && n.linkedCase.reason==='延续既往面诊' && n.needsConsult==='reuse' && n.resumeCheck && n.resumeCheck.hist.text && n.resumeCheck.proj.note, '确认继续：resumeFrom / resumeCheck 记下，需求 = 沿用原方案');
+      ST.ok(ST.hasLog(n, /继续 .* · 继续面诊（三道检查通过/), '检查结果、判断人记进 Timeline');
       ST.ok(newBeautyRecordsOf(n).some(function(r){ return /水光针/.test(r.project); }), '新增的医美史同时补进医美史');
-      var h = basicFourHtml(n, false); ST.ok(/接续 .* · 接续面诊/.test(h) && /✅/.test(h) && /水光针/.test(h) && /判断人/.test(h) && /메타뷰 <span/.test(h) && h.indexOf('关联案件')<h.indexOf('基本信息'), '基础资料：接续行 + 到访目的显示三项 ✅（含新增内容 / 备注 / 判断人）+ 메타뷰 必填');
+      var h = basicFourHtml(n, false); ST.ok(/继续 .* · 继续面诊/.test(h) && /✅/.test(h) && /水光针/.test(h) && /判断人/.test(h) && /메타뷰 <span/.test(h) && h.indexOf('关联案件')<h.indexOf('基本信息'), '基础资料：继续行 + 到访目的显示三项 ✅（含新增内容 / 备注 / 判断人）+ 메타뷰 必填');
       confirmMaterials(); ST.ok(!n.materialsConfirmed, '메타뷰 没检测不能确认'); closeMaterialsMissing(); n.metaviewStatus = 'ready'; confirmMaterials(); n = getCurrentCase();
       ST.ok(n.materialsConfirmed && n.reportReady && n.consultStatus==='report_ready' && n.reuseReport && n.reuseReport.fromId===src.id, '确认后：新案件带入原诊疗方案（reportReady）');
       ST.ok(!n.consultFeeWaived && consultFeeStatusMain(n)!=='unpaid' || true, '没有面诊费');
@@ -4855,32 +4899,32 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var chg = (n.reuseReport.priceChanges||[]); ST.ok(chg.length===1 && chg[0].name===kp.name && chg[0].now===kp.price && chg[0].old===kp.price+1000, '价格按现在的项目库，和原方案不同记 priceChanges');
       n.activeCaseTab = 'kr'; ST.ok(/价格已更新/.test(projectPickerHtml(n, false)), '选项目画面提示「价格已更新」');
       ST.ok(src.reportReady && src.stage==='reportonly' && !src.resumeFrom, '原案件保持「仅出报告」不变');
-      ST.ok(relBackOf(src).some(function(b){ return b.c.id===n.id && /后续接续/.test(b.label); }) && /后续接续/.test(relatedBlockHtml(src)), '原案件的关联案件块列出「后续接续」');
+      ST.ok(relBackOf(src).some(function(b){ return b.c.id===n.id && /后续继续/.test(b.label); }) && /后续继续/.test(relatedBlockHtml(src)), '原案件的关联案件块列出「后续继续」');
       /* 术后管理 */
       var t2 = ST.newRes('R95t', {phone:ph}); ST.open(t2); markArrived(); t2 = getCurrentCase(); fuSet('mode','link'); fuSet('type','术后管理'); FU_ASK.sel = src.id; followupAskDone(true); t2 = getCurrentCase();
-      var h2 = materialsCardHtml(t2), mt2 = document.getElementById('cont-overlay').textContent; ST.ok(t2.resumeFrom.type==='术后管理' && t2.followup && t2.linkedCase.reason==='术后管理' && h2.indexOf('需要院长面诊（复诊）')<0 && /接续项目/.test(mt2), '接续 · 术后管理：不过三道检查；没有「面诊 / 不面诊」按钮，接续资料在弹窗里（今天的术后管理）（CMD-1026-01）'); contClose();
+      var h2 = materialsCardHtml(t2), mt2 = document.getElementById('cont-overlay').textContent; ST.ok(t2.resumeFrom.type==='术后管理' && t2.followup && t2.linkedCase.reason==='术后管理' && h2.indexOf('需要院长面诊（复诊）')<0 && /继续项目/.test(mt2), '继续 · 术后管理：不过三道检查；没有「面诊 / 不面诊」按钮，继续资料在弹窗里（今天的术后管理）（CMD-1026-01）'); contClose();
       /* 复诊评估 */
       var t3 = ST.newRes('R95u', {phone:ph}); ST.open(t3); markArrived(); t3 = getCurrentCase(); fuSet('mode','link'); fuSet('type','复诊评估'); FU_ASK.sel = src.id; followupAskDone(true); t3 = getCurrentCase();
-      var h3 = materialsCardHtml(t3), mt3 = document.getElementById('cont-overlay').textContent; ST.ok(t3.resumeFrom.type==='复诊评估' && t3.followup && t3.needsConsult===true && t3.linkedCase.reason==='复诊' && h3.indexOf('需要院长面诊（复诊）')<0 && /这次要看的项目/.test(mt3), '接续 · 复诊评估：不过三道检查；复诊资料在弹窗里，没有两个按钮（CMD-1026-01）'); contClose();
-      /* 不接续 */
-      var t4 = ST.newRes('R95v', {phone:ph}); ST.open(t4); markArrived(); t4 = getCurrentCase(); followupAskDone(false); t4 = getCurrentCase(); ST.ok(!t4.resumeFrom && !t4.linkedCase && t4.continueNew, '不接续：新案件，一般流程');
+      var h3 = materialsCardHtml(t3), mt3 = document.getElementById('cont-overlay').textContent; ST.ok(t3.resumeFrom.type==='复诊评估' && t3.followup && t3.needsConsult===true && t3.linkedCase.reason==='复诊' && h3.indexOf('需要院长面诊（复诊）')<0 && /这次要看的项目/.test(mt3), '继续 · 复诊评估：不过三道检查；复诊资料在弹窗里，没有两个按钮（CMD-1026-01）'); contClose();
+      /* 不继续 */
+      var t4 = ST.newRes('R95v', {phone:ph}); ST.open(t4); markArrived(); t4 = getCurrentCase(); followupAskDone(false); t4 = getCurrentCase(); ST.ok(!t4.resumeFrom && !t4.linkedCase && t4.continueNew, '不继续：新案件，一般流程');
       /* 默认值 */
-      window.GMC_NO_FOLLOWASK = false; var t5 = ST.newRes('R95w', {phone:ph, purpose:'复诊'}); ST.open(t5); markArrived(); ST.ok(FU_ASK && FU_ASK.mode==='link' && FU_ASK.type==='复诊评估', '自助预约选了复诊 → 默认接续 · 复诊评估'); followupAskDone(false);
+      window.GMC_NO_FOLLOWASK = false; var t5 = ST.newRes('R95w', {phone:ph, purpose:'复诊'}); ST.open(t5); markArrived(); ST.ok(FU_ASK && FU_ASK.mode==='link' && FU_ASK.type==='复诊术后' && FU_ASK.pre==='复诊评估', '自助预约选了复诊 → 默认继续之前的服务 + 复诊 / 术后管理（第二个弹窗预选复诊评估）'); followupAskDone(false);
       /* 客户详情［新增案件］ */
-      var n0 = CASE_ITEMS.length; newCaseFromClient(src.name); var nc = getCurrentCase(); ST.ok(CASE_ITEMS.length===n0+1 && nc.name===src.name && nc.followupAsked && nc.subState==='arrived' && !document.getElementById('followup-overlay').classList.contains('open'), '客户详情［新增案件］：新案件直接到店、不弹接续，从基础资料开始填');
+      var n0 = CASE_ITEMS.length; newCaseFromClient(src.name); var nc = getCurrentCase(); ST.ok(CASE_ITEMS.length===n0+1 && nc.name===src.name && nc.followupAsked && nc.subState==='arrived' && !document.getElementById('followup-overlay').classList.contains('open'), '客户详情［新增案件］：新案件直接到店、不弹继续，从基础资料开始填');
     } finally { window.GMC_NO_FOLLOWASK = old; window.alert = oa; }
   });
 
-  ST.def('R95b','CMD-1022-06（KM1 分页，需要先在 A1 分页建一个已确认的接续面诊案件，或自带）：KR 页头 / 列表标「接续 · 类型」+ 接续面诊案件 KR 看得到并可补加可选项目',function(){
+  ST.def('R95b','CMD-1022-06（KM1 分页，需要先在 A1 分页建一个已确认的继续面诊案件，或自带）：KR 页头 / 列表标「继续 · 类型」+ 继续面诊案件 KR 看得到并可补加可选项目',function(){
     if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 分页里跑'); return; }
-    var r = krAllCases().filter(function(x){ return x.c.resumeFrom && x.c.resumeFrom.type==='接续面诊'; })[0]; if(!r){ ST.ok(true, '没有接续面诊夹具，跳过'); return; }
+    var r = krAllCases().filter(function(x){ return x.c.resumeFrom && x.c.resumeFrom.type==='接续面诊'; })[0]; if(!r){ ST.ok(true, '没有继续面诊夹具，跳过'); return; }
     krShowCase(r.clinicId, r.id, {tab:'consult'}); var txt = document.getElementById('krcase-body').innerText;
-    ST.ok(/接续 · 接续面诊/.test(txt), 'KR 页头标「接续 · 接续面诊」'); ST.ok(/沿用原诊疗方案/.test(txt) && /补加可选项目/.test(txt), 'KR 看得到沿用的方案，可补加可选项目');
-    ST.ok(/接续 · 接续面诊/.test(krResumeTag(r.c)), 'krResumeTag');
+    ST.ok(/继续 · 继续面诊/.test(txt), 'KR 页头标「继续 · 继续面诊」'); ST.ok(/沿用原诊疗方案/.test(txt) && /补加可选项目/.test(txt), 'KR 看得到沿用的方案，可补加可选项目');
+    ST.ok(/继续 · 继续面诊/.test(krResumeTag(r.c)), 'krResumeTag');
   });
 
   /* ---- CMD-1022-07 复诊评估拆成独立状态 + 改名 ---- */
-  ST.def('R96a','CMD-1022-07（IN 分页）：接续 · 复诊评估：到访目的顺序 / 不收费 / 状态「复诊评估 · 等确认时间」/ IN tab「复诊评估」；旧复诊案件照旧',function(){
+  ST.def('R96a','CMD-1022-07（IN 分页）：继续 · 复诊评估：到访目的顺序 / 不收费 / 状态「复诊评估 · 等确认时间」/ IN tab「复诊评估」；旧复诊案件照旧',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var old = window.GMC_NO_FOLLOWASK, oa = window.alert; window.alert = function(){};
     try{
@@ -4889,7 +4933,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       window.GMC_NO_FOLLOWASK = false;
       var n = ST.newRes('R96n', {phone:clientPhoneOf(src.name)}); ST.open(n); markArrived(); fuSet('mode','link'); fuSet('type','复诊评估'); FU_ASK.sel = src.id; followupAskDone(true); n = getCurrentCase();
       var h = document.getElementById('cont-overlay').textContent, ix = function(k){ return h.indexOf(k); };
-      ST.ok(h.indexOf('面诊需求')<0 && ix('这次要看的项目')>-1 && ix('询问问题')>ix('这次要看的项目') && ix('客人希望的评估时间')>ix('询问问题') && /메타뷰/.test(h) && /\*/.test(h), '接续弹窗：要看的项目（含上传卡）→ 想问的内容 → 客人希望的评估时间，没有「面诊需求」，메타뷰 必填（CMD-1026-01）');
+      ST.ok(h.indexOf('面诊需求')<0 && ix('这次要看的项目')>-1 && ix('询问问题')>ix('这次要看的项目') && ix('客人希望的评估时间')>ix('询问问题') && /메타뷰/.test(h) && /\*/.test(h), '继续弹窗：要看的项目（含上传卡）→ 想问的内容 → 客人希望的评估时间，没有「面诊需求」，메타뷰 必填（CMD-1026-01）');
       toggleFollowProject('隆鼻'); saveRevisitQuestion('右边还肿'); mockUploadRevisit('隆鼻','video'); concernPartDef(revisitMediaOf(n,'隆鼻').part).angles.forEach(function(a){ mockUploadRevisit('隆鼻', a.id); }); n.metaviewStatus = 'ready'; n.wantConsult = '下周'; confirmMaterials(); n = getCurrentCase();
       ST.ok(n.materialsConfirmed && n.revisitEval && n.noConsultFee && n.consultStatus==='paid_waiting_kr' && n.consultFeeAmount===0, '确认：revisitEval，没有费用，直接送 KR（等确认评估时间）');
       var i = caseStageInfo(n); ST.ok(i.stage==='复诊评估' && i.proc==='等确认时间', '状态「复诊评估 · 等确认时间」：'+i.stage+' · '+i.proc);
@@ -4952,10 +4996,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       coreSubmitReport(m, {original:'x', zh:'恢复良好', items:[], overallNote:'', files:[], recLocal:'', sugKr:false}, 'KM1 室长'); m = getCurrentCase(); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; ST.open(m);
       var mh = caseTabContentHtml((m.activeCaseTab='consult', m)); ST.ok(/没有推荐，可以让客人离店/.test(mh) && !/根据推荐选本地项目/.test(mh) && /恢复正常/.test(mh) && !/revEvalEnd/.test(mh), '没推荐：只写提示「没有推荐，可以结束案件」，结果卡里没有结束按钮');
       revEvalEnd(); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; ST.ok(isEnded(m) && m.endNote==='复诊评估结束' && m.stage==='closed' && /已完成/.test(caseStageProcText(m)) && /复诊评估结束/.test(caseStageProcText(m)), '结束案件 = 已结案 · 复诊评估结束（CMD-1022-09，不是仅出报告）');
-      ST.ok(resumeCandidates(ST.newRes('R97z', {phone:clientPhoneOf(src.name)}), '接续面诊').every(function(x){ return x.id!==m.id; }), '结束的复诊评估案件不会被接续面诊选中');
+      ST.ok(resumeCandidates(ST.newRes('R97z', {phone:clientPhoneOf(src.name)}), '接续面诊').every(function(x){ return x.id!==m.id; }), '结束的复诊评估案件不会被继续面诊选中');
       /* 不收费 + 统计 */
       ST.ok(consultFeeOf(n)===0 && !consultFeePaid(n) && financeResultOf(m)==='无收入', '没有面诊费：面诊费金额 0、不计收入');
-      var types = {}; CASE_ITEMS.forEach(function(c){ var tp = caseTypeOf(c); types[tp] = (types[tp]||0)+1; }); ST.ok(types['复诊评估']>=2 && types['新案件']>=1 && CASE_TYPES.length===4, '统计按类型：新案件 / 接续面诊 / 术后管理 / 复诊评估');
+      var types = {}; CASE_ITEMS.forEach(function(c){ var tp = caseTypeOf(c); types[tp] = (types[tp]||0)+1; }); ST.ok(types['复诊评估']>=2 && types['新案件']>=1 && CASE_TYPES.length===4, '统计按类型：新案件 / 继续面诊 / 术后管理 / 复诊评估');
       ST.ok(/建议赴韩处理/.test(caseTabContentHtml((n.activeCaseTab='consult', n)).replace(/<[^>]+>/g,' ')) || true, '');
       n.revisitRec.suggestKrNote = '下颚需要再评估'; var th2 = caseTabContentHtml((n.activeCaseTab='consult', n)); ST.ok(/译：/.test(th2.replace(/<[^>]+>/g,'')) && /查看原文/.test(th2), '建议赴韩的补充说明走备注自动翻译（译文 +［查看原文］）');
       ST.mkRevEval('R97k', src); /* 留给 KM1 分页的夹具（等确认时间） */
@@ -4983,7 +5027,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* ---- CMD-1022-09 支线小修 ---- */
-  ST.def('R98a','CMD-1022-09（IN 分页）：接续面诊只限「仅出报告」的案件',function(){
+  ST.def('R98a','CMD-1022-09（IN 分页）：继续面诊只限「仅出报告」的案件',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var oa = window.alert; window.alert = function(){};
     try{
@@ -4995,12 +5039,12 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!resumeCandidates(c, '术后管理').some(function(x){ return x.id===a.id; }) && !resumeCandidates(c, '复诊评估').some(function(x){ return x.id===a.id; }), '术后管理 / 复诊评估：赴韩没结束的案件不在候选里（CMD-1022-12 B5）'); a.krTripEnded = true; ST.ok(resumeCandidates(c, '术后管理').some(function(x){ return x.id===a.id; }) && resumeCandidates(c, '复诊评估').some(function(x){ return x.id===a.id; }), '韩国行程结束后才出现在候选里');
     } finally { window.alert = oa; }
   });
-  ST.def('R98b','CMD-1022-09（KM1 分页，要先在 A1 分页跑 R95a 留下夹具）：KR 页头第 N 次面诊以出报告数为准，接续面诊 / 复诊评估不算',function(){
+  ST.def('R98b','CMD-1022-09（KM1 分页，要先在 A1 分页跑 R95a 留下夹具）：KR 页头第 N 次面诊以出报告数为准，继续面诊 / 复诊评估不算',function(){
     if(typeof krAllCases!=='function'){ ST.ok(false, '要在 KM1 分页里跑'); return; }
-    var rows = krAllCases(), r = rows.filter(function(x){ return x.c.resumeFrom && x.c.resumeFrom.type==='接续面诊'; })[0]; if(!r){ ST.ok(true, '没有接续面诊夹具，跳过'); return; }
+    var rows = krAllCases(), r = rows.filter(function(x){ return x.c.resumeFrom && x.c.resumeFrom.type==='接续面诊'; })[0]; if(!r){ ST.ok(true, '没有继续面诊夹具，跳过'); return; }
     var o = krVisitOrdinals(r); var mine = rows.filter(function(x){ return x.clinicId===r.clinicId && x.name===r.name; });
     var reports = mine.filter(function(x){ return x.c.reportReady && x.c.consultRequested && !x.c.reuseReport && !x.c.revisitEval && !isRevisitConsult(x.c) && caseStartKey(x.c)<=caseStartKey(r.c); }).length;
-    ST.ok(o.consult===reports, '第 N 次面诊 = 出过面诊报告的次数（接续面诊自己不算）：'+o.consult+' / '+reports);
+    ST.ok(o.consult===reports, '第 N 次面诊 = 出过面诊报告的次数（继续面诊自己不算）：'+o.consult+' / '+reports);
   });
 
   /* ---- CMD-1022-12 支线修正 ---- */
@@ -5041,12 +5085,12 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; krShowCase(cid, r.id, {tab:'consult', here:true});
     var c0 = krFindCase(cid, r.id).c; KR_RV_OPEN[cid+':'+r.id] = true; delete REV_CAP[c0.id+'|隆鼻']; var h = krTabConsult(c0);
     ST.ok(/复诊评估/.test(h) && /revCapSet\(/.test(h) && h.indexOf('前后对比')<0 && h.indexOf('这次要看的项目')<0, 'KR：复诊评估卡有项目卡胶囊，没有独立前后对比卡 / 「这次要看的项目」一行（CMD-1022-18）');
-    ST.ok(/接续 A\d+ · 原施术 隆鼻/.test(h), 'KR：一行「接续 A000xxx · 原施术 …」');
+    ST.ok(/继续 A\d+ · 原施术 隆鼻/.test(h), 'KR：一行「继续 A000xxx · 原施术 …」');
     REV_CAP[c0.id+'|隆鼻'] = 'pre'; h = krTabConsult(c0); ST.ok(h.indexOf('施术当天_正面.jpg')>-1, 'KR：术前胶囊读到施术当天术前照片');
     REV_CAP[c0.id+'|隆鼻'] = 'face'; h = krTabConsult(c0); ST.ok(h.indexOf('术前_换.jpg')>-1 && h.indexOf('旧照片.jpg')>-1, 'KR：面诊胶囊 + 其他照片');
     delete REV_CAP[c0.id+'|隆鼻'];
   });
-  ST.def('R102a','CMD-1022-15（A1 分页）：来访目的 / 到店弹窗灰掉 / 接续类型多选 / 术后管理来自原案件 / 接待页两 tab / 确认按钮在医美史上面 / 客人离店',function(){
+  ST.def('R102a','CMD-1022-15（A1 分页）：来访目的 / 到店弹窗灰掉 / 继续类型多选 / 术后管理来自原案件 / 接待页两 tab / 确认按钮在医美史上面 / 客人离店',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var oa = window.alert, oc = window.confirm, onf = window.GMC_NO_FOLLOWASK; window.alert = function(){}; window.confirm = function(){ return true; };
     try{
@@ -5059,16 +5103,16 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       src.subItems = [{id:'r102x', no:src.caseNo+'-01', kind:'术后管理记录', date:D(5), time:'', content:'术后消肿管理（回印尼做）', place:'IN', projectName:'隆鼻', done:false}];
       var n = ST.newRes('R102n', {phone:clientPhoneOf(src.name)}); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0]; ST.open(n); window.GMC_NO_FOLLOWASK = false; markArrived(); n = getCurrentCase();
       var ov = document.getElementById('followup-overlay'); ST.ok(ov && ov.classList.contains('open'), '到店弹窗打开');
-      /* 2 灰掉规则：没有仅出报告 → 接续面诊灰；赴韩已结束 → 复诊评估 / 术后管理可选 */
+      /* 2 灰掉规则：没有仅出报告 → 继续面诊灰；赴韩已结束 → 复诊评估 / 术后管理可选 */
       fuSet('mode', 'link'); var h = ov.innerHTML;
-      ST.ok(/disabled[^>]*onchange="fuSet\('type','接续面诊'\)"/.test(h) && !/disabled[^>]*onchange="fuSet\('type','复诊评估'\)"/.test(h), '没有仅出报告的案件 → 接续面诊灰掉，其余可选');
+      ST.ok(/disabled[^>]*onchange="fuSet\('type','接续面诊'\)"/.test(h) && !/disabled[^>]*onchange="fuSet\('type','复诊评估'\)"/.test(h), '没有仅出报告的案件 → 继续面诊灰掉，其余可选');
       /* 3 多选 */
-      fuSet('type', '复诊评估'); fuSet('type', '术后管理'); ST.ok((FU_ASK.types||[]).slice().sort().join('+')==='复诊评估+术后管理' || FU_ASK.type==='复诊评估', '复诊评估 + 术后管理可以都选（'+JSON.stringify(FU_ASK.types)+'）');
-      var both = (FU_ASK.types||[]).length===2; fuSet('type', '复诊评估'); ST.ok((FU_ASK.types||[]).join('+')==='术后管理', '可以只选一个（取消复诊评估后剩术后管理）'); fuSet('type', '术后管理'); ST.ok((FU_ASK.types||[]).length===1, '至少留一个');
+      fuSet('type', '复诊术后'); var fh = document.getElementById('followup-overlay').innerHTML; ST.ok(FU_ASK.type==='复诊术后' && !/fuSet\('type','(复诊评估|术后管理)'\)/.test(fh) && /name="futype"/.test(fh), '（CMD-1026-06）第一个对话框只选一层（继续面诊 / 复诊·术后管理），没有复诊评估 / 术后管理勾选框');
+      fuSet('type', '接续面诊'); ST.ok(FU_ASK.type==='接续面诊', '单选：继续面诊'); fuSet('type', '复诊术后'); ST.ok(FU_ASK.type==='复诊术后', '单选：回到复诊 / 术后管理');
       fuSet('type', '复诊评估'); FU_ASK.sel = src.id; followupAskDone(true); n = getCurrentCase();
       ST.ok(n.resumeFrom && n.resumeFrom.types.join('+')==='复诊评估' && n.resumeFrom.type==='复诊评估' && /disabled[^>]*onchange="contToggleType\('术后管理'\)"/.test(document.getElementById('cont-overlay').innerHTML), '（CMD-1026-04）今天没有约好的术后管理：术后管理不默认勾、灰掉，只剩复诊评估：'+JSON.stringify(n.resumeFrom));
       contSetTypes(n, ['术后管理', '复诊评估']); contRender(); /* 后面的断言要两类都在 */
-      var h2 = document.getElementById('cont-overlay').innerHTML; ST.ok(/contToggleType\('术后管理'\)/.test(h2) && /contToggleType\('复诊评估'\)/.test(h2), '接续弹窗里可改接续类型（确认之前，CMD-1026-01）');
+      var h2 = document.getElementById('cont-overlay').innerHTML; ST.ok(/contToggleType\('术后管理'\)/.test(h2) && /contToggleType\('复诊评估'\)/.test(h2), '继续弹窗里可改继续类型（确认之前，CMD-1026-01）');
       contToggleType('复诊评估'); n = getCurrentCase(); ST.ok(n.resumeFrom.types.join('+')==='术后管理' && n.needsConsult===false, '弹窗里取消复诊评估 → 只剩术后管理');
       contToggleType('复诊评估'); n = getCurrentCase(); ST.ok(n.resumeFrom.types.length===2 && n.needsConsult===true, '再勾上 → 复诊评估 + 术后管理');
       /* 5 接待页两 tab + 6 确认按钮位置 */
@@ -5091,7 +5135,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       closeEndCase();
     }finally{ window.alert = oa; window.confirm = oc; window.GMC_NO_FOLLOWASK = onf; }
   });
-  ST.def('R99a','CMD-1022-12（IN 分页）：B1 接续面诊不收面诊费 / B5 候选只列赴韩已结束 / B4 复诊评估页头 / B7 旧黄条 / 结果卡 / 死代码隔离 + 印尼术后管理没做完 IN 手动结案',function(){
+  ST.def('R99a','CMD-1022-12（IN 分页）：B1 继续面诊不收面诊费 / B5 候选只列赴韩已结束 / B4 复诊评估页头 / B7 旧黄条 / 结果卡 / 死代码隔离 + 印尼术后管理没做完 IN 手动结案',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
     try{
@@ -5100,11 +5144,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.reportReady = true; src.consultStatus = 'report_ready'; src.consultRequested = true; src.needsConsult = true; src.visitClosed = true; src.endNote = '客人不做项目'; src.stage = 'reportonly'; src.consultStartedAt = D(-10)+' 03:00:00'; src.krScope = {items:[{name:kp.name, price:kp.price, note:''}], overallNote:'', updatedAt:nowFullDt()};
       var n = ST.newRes('R99n', {phone:clientPhoneOf(src.name)}); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0];
       n.resumeFrom = {caseId:src.id, type:'接续面诊'}; n.linkedCase = {caseId:src.id, reason:'延续既往面诊'}; n.reportReady = true; n.consultStatus = 'report_ready'; n.consultRequested = true; n.reuseReport = {fromId:src.id, caseNo:src.caseNo, date:todayStr()};
-      ST.ok(!consultFeePaid(n) && financeResultOf(n)==='无收入', 'B1：接续面诊案件不算面诊费（财务结果无收入）');
+      ST.ok(!consultFeePaid(n) && financeResultOf(n)==='无收入', 'B1：继续面诊案件不算面诊费（财务结果无收入）');
       ST.ok(consultFeePaid(src) === false || true, '');
       ST.ok(!resumeCandidates(n, '术后管理').some(function(x){ return x.id===src.id; }), 'B5：赴韩没结束的案件不在术后管理候选里');
       src.krTripEnded = true; ST.ok(resumeCandidates(n, '复诊评估').some(function(x){ return x.id===src.id; }), 'B5：赴韩结束后才出现在候选里');
-      ST.open(n); ST.ok(!/接续到原案件/.test(basicFourHtml(n, false)), 'B7：旧「接续到原案件」黄条不再出现');
+      ST.open(n); ST.ok(!/继续到原案件/.test(basicFourHtml(n, false)), 'B7：旧「继续到原案件」黄条不再出现');
       src.visitDate = dateStr(new Date(demoNow().getTime()-30*86400000)); /* 1023-03：主案件和子记录同一天同一地点会合并成一天，子案件页头认不出——测试里让主案件早 30 天 */ var rv = ST.mkRevEval('R99v', src); rv = CASE_ITEMS.filter(function(x){ return x.id===rv.id; })[0]; ST.open(rv); renderCaseSubtitle(rv);
       var sh99 = (document.getElementById('case-subtitle').innerText+' '+subHeaderHtml(rv).replace(/<[^>]+>/g, ' ')); ST.ok(/复诊评估/.test(sh99) && !/术后来访/.test(sh99), 'B4：复诊评估案件页头写「复诊评估」（1023-03：子记录是子案件页，页头在子案件页头里）');
       ST.ok(/复诊评估 · 关联/.test(materialsCardHtml(rv)) || /复诊评估/.test(materialsCardHtml(rv).replace(/<[^>]+>/g,'')), 'B4：到访目的写「复诊评估」');

@@ -60,7 +60,7 @@ function computeOutcome(c){
   if(caseWorkDone(c) || caseHasPurchase(c)) return 'closed';
   /* CMD-1013-16：手动结束（付定金前）时面诊费已缴 / 免除、报告还没出 → 仅出报告；标记 c.manualEnd 只在新规则开着时才会写入，之后切开关也不变 */
   if(c.manualEnd && !c.reportReady && c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) return 'reportonly';
-  if(isRevEval(c) && c.reportReady) return 'closed'; /* CMD-1022-09：复诊评估结束 = 已结案（不是仅出报告，以免被接续面诊选中） */
+  if(isRevEval(c) && c.reportReady) return 'closed'; /* CMD-1022-09：复诊评估结束 = 已结案（不是仅出报告，以免被继续面诊选中） */
   return c.reportReady ? 'reportonly' : 'cancelled';
 }
 
@@ -101,7 +101,7 @@ function postcareProcText(c){
   return '韩国行程中 · '+rows.length+' 项待做（韩国 '+kr.length+' / 印尼 '+inn.length+'）'+(late ? ' · '+late+' 项已过建议日期' : '');
 }
 function isRevisitConsult(c){ return !!(c && c.consultKind==='复诊'); } /* CMD-1021-19：复诊面诊（IN 术后来访选「需要院长面诊（复诊）」） */
-/* CMD-1022-07：新的「接续 · 复诊评估」案件带 c.revisitEval（旧复诊案件没有 = 照旧叫复诊面诊 / 恢复确认）；复诊评估内部仍借用面诊的时间确认 / 录入 / 发送组件和 consultStatus 取值，但状态、名称、待办、计数、通知都按复诊评估单独显示 */
+/* CMD-1022-07：新的「继续 · 复诊评估」案件带 c.revisitEval（旧复诊案件没有 = 照旧叫复诊面诊 / 恢复确认）；复诊评估内部仍借用面诊的时间确认 / 录入 / 发送组件和 consultStatus 取值，但状态、名称、待办、计数、通知都按复诊评估单独显示 */
 function isRevEval(c){ return !!(c && c.revisitEval); }
 function revEvalProcText(c){
   if(c.leftStore && !(c.reportReady || c.consultStatus==='report_ready')) return '客人已离店 · 等复诊评估结果'; /* CMD-1022-19：客人离店后 KR 照样继续评估 */
@@ -350,7 +350,9 @@ function visitWords(t){
     return rep && rep.date ? '到院（'+rep.date.slice(5).replace('-', '/')+'）' : '到院';
   });
 }
+function rsDisp(s){ return String(s==null?'':s).replace(/接续/g, '继续'); } /* CMD-1026-06：室长画面上「接续」一律写「继续」（数据值 '接续面诊' 不动，只在显示时换） */
 function tzRender(t, noZone){
+  if(typeof isKrAccount==='function' && !isKrAccount()) t = rsDisp(t); /* IN 端：旧 Timeline / 通知里存的「接续」也显示成「继续」；KR 端先不动 */
   return viewerTextFilter(visitWords(String(t==null ? '' : t).replace(/⟦u:(?=\s*⟦u:)/g, '').replace(/⟧(?=\s*⟧)/g, '')) /* CMD-1022-14：兜底，嵌套 / 重复的时间标记也能正常显示 */.replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(noZone ? '' : (typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）')) : '—'; })
     .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; }));
 }

@@ -680,8 +680,9 @@ function renderAddSlotBody(){
 
 /* CMD-1026-05：已满的时段超额加约——只有「今天、现在这个时段 + 下一个时段」才可以（我的判断：时段 = 30 分钟，和预约规则同一套） */
 function calOverbookOk(ds, hr){
-  if(ds!==todayStr()) return false; var nowSlot = currentSlotNow().time, nx = minToTime(timeToMin(nowSlot)+SLOT_MIN);
-  return (hr===nowSlot || hr===nx) && slotBlockReason(ds, hr)==='full';
+  if(ds!==todayStr()) return false; var nowSlot = currentSlotNow().time, nd = demoNow(), nowMin = nd.getHours()*60+nd.getMinutes(), range = CLINIC_SETTINGS.overbookMinutes||60, h = timeToMin(hr);
+  /* CMD-1026-06：现在这一格 + 从现在起 range 分钟内开始的时段（例：15:20、1 小时 → 15:00 / 15:30 / 16:00） */
+  return h>=timeToMin(nowSlot) && h<=nowMin+range && slotBlockReason(ds, hr)==='full';
 }
 function calOverbookAsk(ds, hr){
   if(!calOverbookOk(ds, hr)) return;
@@ -1622,7 +1623,7 @@ function refundableBatches(name){
 }
 function refundServiceBarHtml(c){
   if(isEnded(c) || c.visitClosed || c.subState==='cancelled' || !(c.stage==='booked' ? c.subState==='arrived' : true)) return '';
-  if(c.followup || c.linkedCase) return ''; /* CMD-1022-04：复诊 / 术后来访 / 接续类（有关联案件）不显示退款条；一般案件不变 */
+  if(c.followup || c.linkedCase) return ''; /* CMD-1022-04：复诊 / 术后来访 / 继续类（有关联案件）不显示退款条；一般案件不变 */
   var n = refundableBatches(c.name).length; if(!n) return '';
   return '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn-outline" onclick="openRefundService()">退款服务（可退批次 '+n+' 个）</button></div>';
 }
@@ -1717,10 +1718,10 @@ function renderCaseBody(c){
 function resumeVisit(targetId){
   var c = getCurrentCase(); if(!c || c.materialsConfirmed) return;
   var t = CASE_ITEMS.filter(function(x){ return x.id===targetId; })[0]; if(!t) return;
-  if(!confirm('接续到原案件 '+t.caseNo+'？本次新案件 '+c.caseNo+' 将作废（不留记录）。')) return;
+  if(!confirm('继续到原案件 '+t.caseNo+'？本次新案件 '+c.caseNo+' 将作废（不留记录）。')) return;
   RESUMED_VISITS.push({name:c.name, date:c.visitDate, time:c.visitTime, purpose:c.visitPurpose, caseId:t.id, origCaseNo:t.caseNo, voidedCaseNo:c.caseNo}); /* 日历上这条预约来访改挂到原案件，显示已到访 */
   CASE_ITEMS.splice(CASE_ITEMS.indexOf(c), 1);
-  logCaseEvent(t, ME_NAME, '接续到访「'+ME_NAME+'」 '+tkU(nowFullDt()));
+  logCaseEvent(t, ME_NAME, '继续到访「'+ME_NAME+'」 '+tkU(nowFullDt()));
   CASE_RETURN.length = 0;
   if(typeof buildCaseTabs==='function'){ buildCaseTabs(); renderCaseRows(); }
   openCaseDetail(t.id, true);
@@ -1802,7 +1803,7 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var missing = [];
-  if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1022-05：메타뷰 每次到院都必填（一般 / 复诊 / 术后 / 接续都一样），取代 CMD-1020-20 / 21 的「关联案件选填」 */
+  if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1022-05：메타뷰 每次到院都必填（一般 / 复诊 / 术后 / 继续都一样），取代 CMD-1020-20 / 21 的「关联案件选填」 */
   concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
@@ -1828,7 +1829,7 @@ function confirmMaterials(){
   if(c.needsConsult==='reuse'){
     applyReuseReport(c); /* 沿用之前诊疗方案：不产生面诊费卡片，直接进入"项目确认中" */
   } else if(c.needsConsult===true && c.followup && c.resumeFrom && c.resumeFrom.type==='复诊评估'){
-    startRevisitEval(c); /* CMD-1022-07：接续 · 复诊评估：不收面诊费，直接送 KR 确认评估时间 */
+    startRevisitEval(c); /* CMD-1022-07：继续 · 复诊评估：不收面诊费，直接送 KR 确认评估时间 */
   } else if(c.needsConsult===true){
     /* 选了面诊，直接进面诊资料tab走缴费，不需要再多点一次"面诊申请" */
     c.consultRequested = true;

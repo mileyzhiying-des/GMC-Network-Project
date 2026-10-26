@@ -103,7 +103,7 @@ var CLINIC_DRAFT = null;
 var CLINIC_FIELD_LABELS = {
   name:'诊所名称', address:'地址', phone:'电话', city:'所在城市', tz:'时区', openTime:'营业开始', closeTime:'营业结束', bookFrom:'可预约最早时段', bookTo:'可预约最晚时段',
   lunchFrom:'午休开始', lunchTo:'午休结束', closedRules:'定期休诊', holdMinutes:'预约占位倒计时（分钟）', noShowMinutes:'未到店判定（分钟）', consultFee:'面诊费（印尼盾）',
-  slotCapacity:'每个时段的预约上限', remindBeforeHours:'提醒短信发送时间（预约前几小时）', privacyVersion:'同意书版本', privacyPolicy:'隐私政策', printPrep:'术前准备注意事项（赴韩施术计划打印）', printConfirm:'日程确认与变动（赴韩施术计划打印）'
+  slotCapacity:'每个时段的预约上限', overbookMinutes:'可加约的时间范围（分钟）', remindBeforeHours:'提醒短信发送时间（预约前几小时）', privacyVersion:'同意书版本', privacyPolicy:'隐私政策', printPrep:'术前准备注意事项（赴韩施术计划打印）', printConfirm:'日程确认与变动（赴韩施术计划打印）'
 };
 var SMS_KIND_LABELS = {link:'预约链接短信', confirm:'预约确认短信', remind:'预约提醒短信', cancel:'预约取消短信', surgeryNotice:'施术日期通知（短信 / WhatsApp，中文）', surgeryRemind:'施术前提醒（短信 / WhatsApp，中文）'};
 function smsTplOf(d, k){ return d.sms[k]!==undefined ? d.sms[k] : (k==='surgeryNotice' ? SMS_SURGERY_NOTICE_ZH : (k==='surgeryRemind' ? SMS_SURGERY_REMIND_ZH : '')); } /* 旧设定里没有这两个模板时用默认值；变量：{clinic} {name} {coordinator} {date} {time} {hospital} {address} {anes} {phone} */ /* 旧设定里没有施术日期模板时用默认值 */
@@ -152,6 +152,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
       aGrid(3, aField(t('预约占位倒计时（分钟）'), f('holdMinutes','number','min="1" max="120"'), '默认 15')+aField(t('未到店判定（分钟）'), f('noShowMinutes','number','min="5" max="240"'), '默认 30')+
         aField(t('面诊费（印尼盾）'), f('consultFee','number','min="0" step="1000"'))+
         aField(t('每个时段的预约上限'), f('slotCapacity','number','min="1" max="50"'), '客户自助预约：时段预约数达到上限就不能再选')+
+        aField('可加约的时间范围', '<select data-k="overbookMinutes" onchange="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+[[30,'30 分钟'],[60,'1 小时（默认）'],[90,'1.5 小时'],[120,'2 小时']].map(function(o){ return '<option value="'+o[0]+'"'+((d.overbookMinutes||60)===o[0] ? ' selected' : '')+'>'+o[1]+'</option>'; }).join('')+'</select>', '工作台已满的时段：现在这一格 + 从现在起这个范围内开始的时段，可以［＋加约］（例：现在 15:20，1 小时 = 15:00、15:30、16:00 三格）')+
         aField(t('提醒短信发送时间')+' · '+t('预约开始前（小时）'), f('remindBeforeHours','number','min="1" max="72"'))), '赴韩定金比例：'+Math.round(KR_DEPOSIT_RATE*100)+'%（GMC 统一设定，这里只读、不能改）。')+
     aSection(t('短信模板'), sms, '可用变量：{clinic} 诊所名称、{name} 客人姓名、{time} 预约时间、{address} 地址、{phone} 电话、{url} 客人端网址、{code} 验证码（验证码短信格式固定，不在这里改）。')+
     aSection('赴韩施术计划打印', aField('术前准备注意事项（一行一条）', '<textarea rows="5" data-k="printPrep" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.printPrep)+'</textarea>')+aField('日程确认与变动', '<textarea rows="4" data-k="printConfirm" oninput="clinicSet(this)" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'+aEsc(d.printConfirm)+'</textarea>'), '打印给客人带去韩国用（不写金额）。「日程确认与变动」可用变量：{coordinator} 负责室长、{phone} 诊所电话；空腹小时数、护照提醒由系统按案件自动写。')+
@@ -169,7 +170,7 @@ ADMIN_RENDER.clinic = function(el, isRefresh){
 /* 草稿：path 形如 'name' 或 'sms.link' */
 function clinicSet(inp){
   var k = inp.getAttribute('data-k'), v = inp.value;
-  if(inp.type==='number') v = v==='' ? '' : Number(v);
+  if(inp.type==='number' || k==='overbookMinutes') v = v==='' ? '' : Number(v);
   if(k.indexOf('sms.')===0) CLINIC_DRAFT.sms[k.slice(4)] = v; else CLINIC_DRAFT[k] = v;
 }
 function clinicErr(msg){ var e = document.getElementById('clinic-err'); if(e){ e.textContent = msg; e.style.display = msg ? 'block' : 'none'; } }
@@ -191,6 +192,7 @@ function clinicValidate(d){
   if(!num('noShowMinutes',5,240)) return '未到店判定请填 5～240 之间的整数分钟';
   if(!num('consultFee',0,100000000)) return '面诊费请填不小于 0 的整数';
   if(!num('slotCapacity',1,50)) return '每个时段的预约上限请填 1～50 的整数';
+  if(d.overbookMinutes!==undefined && !num('overbookMinutes',30,240)) return '可加约的时间范围请选 30 分钟 ～ 2 小时';
   if(!num('remindBeforeHours',1,72)) return '提醒短信发送时间请填 1～72 小时';
   var ks = Object.keys(SMS_KIND_LABELS);
   for(var j=0;j<ks.length;j++) if(!String(smsTplOf(d, ks[j])||'').trim()) return SMS_KIND_LABELS[ks[j]]+'的模板不能为空';
@@ -427,7 +429,7 @@ ADMIN_RENDER.bizdata = function(el){
     '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('案件总数', cs.length, '按案件开始的月份统计')+tile('已结案', closed, '客人做了项目/有购买', 'var(--sage)')+tile('仅出报告', report, '只做了面诊出报告')+tile('已取消', cancelled, '未到店/取消/未购买')+tile('进行中', ongoing, '还没到终态')+'</div>'+
     aSection('面诊 → 赴韩', '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end;"><div><div style="font-size:12px;color:var(--muted);">面诊案件</div><div style="font-size:24px;font-weight:700;">'+consultCases.length+'</div></div><div><div style="font-size:12px;color:var(--muted);">其中选了赴韩项目</div><div style="font-size:24px;font-weight:700;">'+travelCases.length+'</div></div><div><div style="font-size:12px;color:var(--muted);">赴韩比例</div><div style="font-size:24px;font-weight:700;color:var(--navy);">'+ratio+'%</div></div></div>',
       '面诊案件 = 缴过面诊费、免除面诊费或已出诊疗方案的案件；赴韩比例 = 面诊案件里有赴韩项目的占比。')+
-    aSection('案件类型', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+CASE_TYPES.map(function(tp){ return tile(tp, typeCnt[tp], tp==='新案件' ? '不接续的新案件' : (tp==='复诊评估' ? '不收面诊费' : '到店时选「接续」')); }).join('')+'</div>', '案件数按类型分开：新案件 / 接续面诊 / 术后管理 / 复诊评估（旧数据没有接续记录的，按关联原因归类，其余算新案件）。')+
+    aSection('案件类型', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+CASE_TYPES.map(function(tp){ return tile(rsDisp(tp), typeCnt[tp], tp==='新案件' ? '不继续的新案件' : (tp==='复诊评估' ? '不收面诊费' : '到店时选「继续」')); }).join('')+'</div>', '案件数按类型分开：新案件 / 继续面诊 / 术后管理 / 复诊评估（旧数据没有继续记录的，按关联原因归类，其余算新案件）。')+
     aSection('收入（诊所收的部分，各币种分开，不相加）', '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+tile('面诊费', fmtRp(feeSum), feeCount+' 个案件缴费（各案件选面诊时锁定的金额加总）')+tile('本地项目', fmtRp(localSum), '本地项目已收款，含印尼加做的术后管理（印尼盾）')+tile('赴韩定金', formatCurrency(krDeposit,'KRW'), '诊所收的定金，扣除已退款（韩元）')+'</div>',
       '诊所收入 = 面诊费 + 赴韩定金 + 本地项目 + 印尼加做；赴韩尾款和韩国加做由医院收，算 KR 收入，不在这里。免除面诊费的案件不计收入；赴韩定金比例是演示占位值。')+
     aSection('每位室长处理的案件数', coordNames.length ? coordNames.map(function(n){ var o = perCoord[n]; return bar(staffLabel(n), o.total, maxC, 'var(--navy)', o.total+' 件 · 已结案 '+o.closed); }).join('') : '<div style="font-size:12px;color:var(--muted);">这个月份没有案件</div>',
