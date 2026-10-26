@@ -2039,7 +2039,7 @@ function coreSubmitReport(c, rep, by){
   var rv = isRevisitConsult(c), rr = c.recoveryResult && c.recoveryResult.result, rrTxt = rr==='treat' ? '需要处理' : '恢复正常', hasPlan = (rep.items||[]).length>0;
   logCaseEvent(c, by, rv ? (isRevEval(c) ? 'KR室长提交复诊评估结果：' : 'KR室长提交复诊恢复评估：')+rrTxt+(isRevEval(c) ? revRecText(c, '，') : (hasPlan ? '，附项目方案' : '，不附项目方案')) : 'KR室长提交面诊诊疗方案，已出诊疗方案');
   updateCaseStage(c);
-  if(rv) pushNotif(isRevEval(c) ? '复诊评估' : '面诊',(isRevEval(c) ? '复诊评估结果已到：' : '复诊评估已出：')+c.name+'（'+(c.caseNo||'')+'）：'+rrTxt+(isRevEval(c) ? revRecText(c, '（', '）') : (hasPlan ? '（附项目方案）' : '（不附项目方案）'))+'，请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'});
+  if(rv) pushNotif(isRevEval(c) ? '复诊评估' : '面诊',(isRevEval(c) ? '复诊评估结果已到：' : '复诊评估已出：')+c.name+'（'+subNoTxt(c)+'）：'+rrTxt+(isRevEval(c) ? revRecText(c, '（', '）') : (hasPlan ? '（附项目方案）' : '（不附项目方案）'))+'，请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'});
   else pushNotif('面诊','诊疗方案已出：'+c.name+'（'+(c.caseNo||'')+'），请联络客人确认', {caseId:c.id, level:'action', popup:'confirm'}); /* CMD-1021-09 四：需确认的弹窗（停住要按［确认］，点开进面诊资料）；原来是普通通知（弹一次 6 秒自动收起，容易错过） */
   return true;
 }
@@ -3674,7 +3674,7 @@ function saveWantConsult(id, val){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c || wantConsultLocked(c)) return; val = String(val||'').trim().slice(0, 120);
   if((c.wantConsult||'')===val) return; var had = !!c.wantConsult; c.wantConsult = val;
   logCaseEvent(c, actingName(), val ? (had ? '修改' : '填写')+'客人希望的面诊时间：'+val : '清空客人希望的面诊时间', '面诊');
-  if(val && c.consultStatus==='paid_waiting_kr'){ try{ pushKrNotif(caseKrHospital(c), (isRevEval(c) ? '客人希望的评估时间' : '客人希望的面诊时间')+(had ? '有修改' : '')+'：'+val+'（'+c.name+'，'+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} } /* 只告知；KR 还没看到案件（待缴费）时不发 */
+  if(val && c.consultStatus==='paid_waiting_kr'){ try{ pushKrNotif(caseKrHospital(c), (isRevEval(c) ? '客人希望的评估时间' : '客人希望的面诊时间')+(had ? '有修改' : '')+'：'+val+'（'+c.name+'，'+subNoTxt(c)+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'consultwant', level:'info'}); }catch(e){} } /* 只告知；KR 还没看到案件（待缴费）时不发 */
   buildCaseLog(c);
 }
 
@@ -6332,7 +6332,7 @@ function coreConfirmConsultTimes(c, consultDate, consultTime, etaUtc, by){
   if(!ok) return false;
   logCaseEvent(c, by, (isRevEval(c) ? 'KR确认评估时间：' : 'KR确认面诊时间：')+consultDate+' '+consultTime+'（韩国时间，院长 '+(c.director||'—')+'）');
   syncConsultBlock(c);
-  if(c.director) pushKrNotif(caseKrHospital(c), '需要处理：'+consultDate+' '+consultTime+'（韩国时间）'+(isRevEval(c) ? '复诊评估' : (isRevisitConsult(c) ? '复诊面诊（恢复确认）' : '面诊'))+' '+c.name+'（'+(c.caseNo||'')+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 通知该院长：几点要面诊哪位客人（CMD-1012-10 修改2） */
+  if(c.director) pushKrNotif(caseKrHospital(c), '需要处理：'+consultDate+' '+consultTime+'（韩国时间）'+(isRevEval(c) ? '复诊评估' : (isRevisitConsult(c) ? '复诊面诊（恢复确认）' : '面诊'))+' '+c.name+'（'+subNoTxt(c)+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 通知该院长：几点要面诊哪位客人（CMD-1012-10 修改2） */
   return true;
 }
 /* 开始面诊：室长账号室长按、院长账号院长按，谁先按都算 → 小状态「面诊中」；上传内容 = 面诊结束（CMD-1012-05 一·2） */
@@ -6341,8 +6341,8 @@ function coreStartConsult(c, by){
   c.consultStartedAt = nowFullDt(); c.consultStartedBy = by;
   logCaseEvent(c, by, isRevEval(c) ? '开始评估' : '开始面诊');
   updateCaseStage(c);
-  pushKrNotif(caseKrHospital(c), by+(isRevEval(c) ? ' 开始评估：' : ' 开始面诊：')+c.name+'（'+(c.caseNo||'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'next'}); /* 开始面诊 → KR 室长（自己触发的不收，见 krNotifsForMe） */
-  pushNotif(isRevEval(c) ? '复诊评估' : '面诊', (isRevEval(c) ? '开始评估：' : '开始面诊：')+c.name+'（'+(c.caseNo||'')+'）'+by, {caseId:c.id, level:'info'}); /* IN 一般消息 */
+  pushKrNotif(caseKrHospital(c), by+(isRevEval(c) ? ' 开始评估：' : ' 开始面诊：')+c.name+'（'+subNoTxt(c)+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'next'}); /* 开始面诊 → KR 室长（自己触发的不收，见 krNotifsForMe） */
+  pushNotif(isRevEval(c) ? '复诊评估' : '面诊', (isRevEval(c) ? '开始评估：' : '开始面诊：')+c.name+'（'+subNoTxt(c)+'）'+by, {caseId:c.id, level:'info'}); /* IN 一般消息 */
   return true;
 }
 function coreSetReportEta(c, eta, by, isChange){
@@ -6351,7 +6351,7 @@ function coreSetReportEta(c, eta, by, isChange){
     if(c.consultStatus!=='awaiting_report') return false;
     var old = c.reportEta || '—';
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
-    if(c.director && c.consultAt) pushKrNotif(caseKrHospital(c), '需要处理：'+(isRevEval(c) ? '复诊评估 ' : '面诊 ')+c.name+'（'+(c.caseNo||'')+'）的时间有变动（'+(isRevEval(c) ? '评估 ' : '面诊 ')+c.consultAt.date+' '+c.consultAt.time+'，预计出'+(isRevEval(c) ? '评估结果 ' : '诊疗方案 ')+tkU(eta)+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 修改时间也通知院长 */
+    if(c.director && c.consultAt) pushKrNotif(caseKrHospital(c), '需要处理：'+(isRevEval(c) ? '复诊评估 ' : '面诊 ')+c.name+'（'+subNoTxt(c)+'）的时间有变动（'+(isRevEval(c) ? '评估 ' : '面诊 ')+c.consultAt.date+' '+c.consultAt.time+'，预计出'+(isRevEval(c) ? '评估结果 ' : '诊疗方案 ')+tkU(eta)+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 修改时间也通知院长 */
     logCaseEvent(c, by, (isRevEval(c) ? 'KR修改结果时间：' : 'KR修改预计出报告时间：')+tkU(old)+' → '+tkU(eta));
     syncConsultBlock(c);
     pushNotif(isRevEval(c) ? '复诊评估' : '面诊',(isRevEval(c) ? 'KR 修改了结果时间：' : 'KR 修改了预计出报告时间：')+c.name+'（'+tkU(old)+' → '+tkU(eta)+'）', {caseId:c.id});
@@ -6361,7 +6361,7 @@ function coreSetReportEta(c, eta, by, isChange){
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
     c.consultStatus = 'awaiting_report';
     logCaseEvent(c, by, (isRevEval(c) ? 'KR确认结果时间：' : 'KR确认预计出报告时间：')+tkU(eta));
-    pushNotif(isRevEval(c) ? '复诊评估' : '面诊', c.consultAt ? (isRevEval(c) ? 'KR 已确认评估时间：' : 'KR 已确认面诊时间：')+tkK(c.consultAt.date, c.consultAt.time)+'，预计 '+tkU(eta)+(isRevEval(c) ? ' 出评估结果（' : ' 出报告（')+c.name+'，'+(c.caseNo||'')+'）' : 'KR 确认预计出报告时间：'+c.name+' '+tkU(eta), {caseId:c.id, level:'action'}); /* CMD-1020-13 一：IN 要转告客人，所以弹出并停留（手动确认），点开进案件 */
+    pushNotif(isRevEval(c) ? '复诊评估' : '面诊', c.consultAt ? (isRevEval(c) ? 'KR 已确认评估时间：' : 'KR 已确认面诊时间：')+tkK(c.consultAt.date, c.consultAt.time)+'，预计 '+tkU(eta)+(isRevEval(c) ? ' 出评估结果（' : ' 出报告（')+c.name+'，'+subNoTxt(c)+'）' : 'KR 确认预计出报告时间：'+c.name+' '+tkU(eta), {caseId:c.id, level:'action'}); /* CMD-1020-13 一：IN 要转告客人，所以弹出并停留（手动确认），点开进案件 */
   }
   updateCaseStage(c);
   return true;
@@ -9232,7 +9232,7 @@ function toggleRevOpen(id){ REV_OPEN[id] = !REV_OPEN[id]; var c = CASE_ITEMS.fil
 function startRevisitEval(c){
   c.revisitEval = {at:nowFullDt(), by:actingName()}; c.noConsultFee = true; c.consultFeeAmount = 0; c.consultRequested = true;
   c.consultStatus = 'paid_waiting_kr'; c.consultPaidAt = nowFullDt();
-  if(!SEEDING) pushKrNotif(caseKrHospital(c), '复诊评估已送出：'+c.name+'（'+c.caseNo+'，'+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认评估时间和结果时间', {caseId:c.id, kind:'consultpaid', popup:'confirm', level:'action'});
+  if(!SEEDING) pushKrNotif(caseKrHospital(c), '复诊评估已送出：'+c.name+'（'+subNoTxt(c)+(c.visitDate ? ' · '+String(c.visitDate).slice(5).replace('-', '/') : '')+' · '+((clinicById(c.clinicId)||{}).name||'')+'）→ 请确认评估时间和结果时间', {caseId:c.id, kind:'consultpaid', popup:'confirm', level:'action'});
   updateCaseStage(c); ensureCaseRoom(c);
   logCaseEvent(c, actingName(), '复诊评估已送出（不收费），等 KR 确认评估时间和结果时间', '复诊评估');
   c.activeCaseTab = 'consult';
@@ -10048,7 +10048,7 @@ function flowRowsHtml(m, opts){
   if(!rows.length) return '<div class="card" style="padding:22px 24px;"><div style="font-size:13px;color:var(--muted);">还没有流程（本地管理不是流程，在子案件和项目汇总里看）</div></div>';
   return '<div style="display:flex;flex-direction:column;gap:10px;">'+rows.map(function(r){
     var k = m.id+':'+r.key, open = (opts.forceOpen===r.key) || (FLOW_OPEN[k]===undefined ? !r.done : !!FLOW_OPEN[k]);
-    var pill = r.done ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">✓ 已结束</span>' : '<span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">进行中</span>';
+    var pTxt = (!r.done && opts.pillOf) ? opts.pillOf(r) : '', pill = r.done ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">✓ 已结束</span>' : '<span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">'+e(pTxt||'进行中')+'</span>'; /* CMD-1026-10 四：KR 复诊 tab 的标签写实际状态 */
     var head = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><b style="font-size:14px;min-width:92px;">'+e(r.label)+'</b>'+pill+'<span style="font-size:12px;color:var(--slate2);flex:1;min-width:200px;">'+e(r.text||'')+'</span><a href="#" class="info-link" style="font-size:12px;" onclick="'+(opts.toggle||'flowToggle')+'(\''+m.id+'\',\''+r.key+'\');return false;">'+(open ? '收起' : '展开')+'</a></div>';
     return '<div class="card" style="padding:14px 20px;">'+head+(open && opts.detail ? '<div style="margin-top:12px;">'+opts.detail(r)+'</div>' : '')+'</div>';
   }).join('')+'</div>';

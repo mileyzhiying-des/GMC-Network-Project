@@ -3401,6 +3401,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.open(ch); inAddLocalProject(); ST.ok(!!ch.localMgmt && ch.localMgmt.step==='buy', 'A2：［＋ 添加本地管理项目］进入现有本地选购流程（step=buy）');
   });
 
+  ST.def('R136a','CMD-1026-10（KM1 分页，需要 pcStage 夹具）：复诊评估送到 KR 有待办（OFF 不影响）/ 通知写子案件号和日期 / KR 状态标签优先 KR 的事 / 复诊 tab 卡片',function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
+    var rows0 = krAllCases(), r0 = rows0.filter(function(r){ return r.c.stage==='postcare' || (r.c.procedureItems||[]).length; })[0]; if(!ST.ok(!!r0, '没有 pcStage 夹具主案件')) return;
+    var cid = r0.clinicId, mid = r0.id, td = todayStr(), kid = null;
+    Store.mutateClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0]; if(!m) return;
+      kid = {id:'r136kid', name:m.name, clinicId:cid, hospitalId:m.hospitalId, director:m.director, mainId:m.id, caseNo:m.caseNo+'-77', visitDate:td, visitTime:'15:00', subState:'arrived', stage:'consult', needsConsult:true, materialsConfirmed:true, followup:true,
+        revisitEval:{at:nowFullDt()}, consultRequested:true, consultStatus:'paid_waiting_kr', noConsultFee:true, krCoordinator:m.krCoordinator, logEntries:[], resumeFrom:{caseId:m.id, type:'复诊评估', types:['复诊评估']}};
+      CASE_ITEMS.push(kid); });
+    var has = function(k){ return krTodoItems(krAllCases()).some(function(i){ return i.kind===k && i.caseId==='r136kid'; }); };
+    ST.ok(has('eta'), '1：复诊评估送到 KR → KR 室长有待办「确认评估时间和结果时间」（单独一行，客人名 + 子案件号）');
+    var it = krTodoItems(krAllCases()).filter(function(i){ return i.caseId==='r136kid'; })[0]; ST.ok(it && /确认评估时间/.test(it.text) && /-77/.test(it.no||''), '1：待办文字 + 子案件号：'+(it&&it.text)+' '+(it&&it.no));
+    /* OFF 规则：KM1 今天 OFF 也照样有（待办不看 OFF，这次没改规则） */
+    var hd = krHData(); hd.offs = hd.offs || []; var offId = 'r136off'; hd.offs.push({id:offId, kind:'coordinator', who:me.name, date:td, part:'全天', weekly:false}); Store.touch && Store.touch();
+    ST.ok(has('eta'), '1：KM1 当天 OFF 时待办仍在（OFF 不影响待办，规则未改）'); hd.offs = hd.offs.filter(function(o){ return o.id!==offId; });
+    var row = krAllCases().filter(function(r){ return r.id===mid; })[0];
+    ST.ok(row.krStage && row.krStage.stage==='复诊评估' && row.krStage.proc==='待确认时间', '3：KR 状态标签优先复诊评估 · 待确认时间：'+JSON.stringify(row.krStage));
+    /* 通知文字 */
+    var txt = '复诊评估已送出：X（'+subNoTxt(kid)+' · 11/26 · 诊所）→ 请确认'; ST.ok(tzRender(txt).indexOf('到院（')<0 && tzRender(txt).indexOf('11/26')>-1, '2：通知里的子案件号不被换成「到院（日期）」：'+tzRender(txt));
+    /* 复诊 tab */
+    var h = Store.withClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0]; KR_CASE.clinicId = cid; return krTabRevisit(m); });
+    ST.ok(/待确认时间/.test(h) && (h.match(/送出/g)||[]).length<=1 && /打开复诊评估/.test(h), '4：复诊 tab 标题行写状态，「送出」只出现一次，下面只放［打开复诊评估］');
+    Store.mutateClinic(cid, function(){ CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!=='r136kid'; }); });
+  });
+
   ST.def('R133a','CMD-1026-07（A1 分页）：第一个对话框重做——请选择本次服务类型、只有［确认］、本次服务内容勾选规则、第二个弹窗只按勾的内容展开',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var old = window.GMC_NO_FOLLOWASK, nm = 'R133a'; window.GMC_NO_CONFIRM = true;

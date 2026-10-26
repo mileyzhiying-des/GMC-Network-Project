@@ -111,7 +111,18 @@ function inTodoItems(){
   return out;
 }
 
+/* CMD-1026-10 一：复诊评估的状态（待确认时间 / 等评估 / 发结果）记在 IN 送出的那一天（带 mainId 的子记录）上，而 krAllCases 只列主案件，所以 KR 工作台一直看不到这些待办——把进行中的复诊评估子记录也当一行交给待办（点进去直接开那一笔复诊评估） */
+function krRevisitKidRows(rows){
+  var out = [];
+  (rows||[]).forEach(function(r){
+    if(!r.c || isChildVisit(r.c)) return;
+    var kids = Store.withClinic(r.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.mainId===r.id && x.id!==r.id && isRevEval(x) && !isEnded(x) && x.subState!=='cancelled' && x.stage!=='cancelled'; }); }) || [];
+    kids.forEach(function(ch){ var o = {}; Object.keys(r).forEach(function(k){ o[k] = r[k]; }); o.id = ch.id; o.caseNo = ch.caseNo; o.c = ch; o.director = ch.director || r.director; o.kidOf = r.id; out.push(o); });
+  });
+  return out;
+}
 function krTodoItems(rows){
+  rows = (rows||[]).concat(krRevisitKidRows(rows));
   var out = [], me = currentAccount(), today = krToday(), h = krHData(), isDir = krIsDirector(), work = canDo('krwork');
   var meId = me ? me.id : '';
   rows.forEach(function(r){
