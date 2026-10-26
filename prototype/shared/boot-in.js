@@ -122,7 +122,8 @@ window.addEventListener('pagehide', function(){ try{ receptionLeaveNow(); }catch
 function autoNoShowSweep(){
   var now = demoNow().getTime(), n = 0;
   CASE_ITEMS.slice().forEach(function(c){
-    if(c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime || c.krVisit) return; /* 在韩到店案件（KR 医院）不按诊所时间判未到店 */
+    if(c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime || c.krVisit) return;
+    if(c.arrivedDay===todayStr()) return; /* CMD-1026-01 三：今天已经到过店（［取消接待］只是退回待访问）不再按预约时间判未到店——原来取消接待后预约时间已过 30 分钟，5 秒内就被自动判成「未到店 / 已取消」 */ /* 在韩到店案件（KR 医院）不按诊所时间判未到店 */
     var when = new Date(c.visitDate+'T'+c.visitTime+':00').getTime();
     if(!isNaN(when) && when + noShowMs() <= now && markNoShow(c.id, true)) n++;
   });
