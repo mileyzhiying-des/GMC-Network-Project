@@ -2726,7 +2726,7 @@ function krTripCardHtml(c){
   if(!c.hasArrived || !c.krProcedureDone) return '';
   var due = tripAskDue(c), can = krCan();
   if(!can && !due) return '';
-  return '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><span style="font-size:13px;">'+(due ? '<b>韩国行程是否结束？</b> 到院都做完了，没有未来的预约' : '客人的韩国行程')+'</span><span style="flex:1;"></span>'+(can ? '<button class="btn-outline" style="padding:6px 16px;" onclick="krTripOpen()">韩国行程结束</button>' : '')+'</div>';
+  return '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><span style="font-size:13px;">'+(due ? '<b>韩国行程是否结束？</b> '+(tripAskWhy(c)==='left' ? '客人已过离开日期'+(tripLeftoverText(c) ? '（还有 '+tripLeftoverText(c)+'）' : '') : '到院都做完了，没有未来的预约') : '客人的韩国行程')+'</span><span style="flex:1;"></span>'+(can ? '<button class="btn-outline" style="padding:6px 16px;" onclick="krTripOpen()">韩国行程结束</button>' : '')+'</div>';
 }
 var KR_TRIP = null;
 function krTripOpen(){

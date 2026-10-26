@@ -143,7 +143,7 @@ function krTodoItems(rows){
       subCaseList(c).forEach(function(rp){ var kk = subCaseKey(rp); if(rp.place==='KR' && rp.date && rp.date < today && coreVisitState(c, kk)==='arrived') push(todoMk('endvisit', (rp.date===todayShift(-1) ? '昨天' : rp.date.slice(5).replace('-', '/')+' ')+'的到院还没标客人已离院：确认是否已离院', c, rp.date, true, function(){ krOpenSubCard(r.clinicId, r.id, rp.id); }, {no:subCaseNo(c, rp)||c.caseNo})); });
     }
     /* CMD-1021-16：每天早上问「韩国行程是否结束？」（到院都做完、没有未来预约；暂不结束 → 第二天再问；离境日过了照样问） */
-    if(work && tripAskDue(c)) push(todoMk('tripend', '韩国行程是否结束？', c, tripLastVisitDay(c), false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ try{ krTripOpen(); }catch(e){} }, 250); }));
+    if(work && tripAskDue(c)) push(todoMk('tripend', tripAskWhy(c)==='left' ? '韩国行程是否结束？（客人已过离开日期）' : '韩国行程是否结束？', c, tripLastVisitDay(c), false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ try{ krTripOpen(); }catch(e){} }, 250); }));
     /* 今天到院（院长账号看自己的案件） */
     var ks = c.krSchedule;
     if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed)
