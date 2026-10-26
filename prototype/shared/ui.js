@@ -1279,13 +1279,16 @@ function renderCaseStatusBar(c){
   /* CMD-1026-11 三：［催办］只放面诊卡（该行「已超过预计时间」旁），页头下面不再重复（待办栏的催办不变） */
   if(mainPageV2(c) && !isUpgraded(c)){ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; } /* CMD-1026-11 一：一般案件（没升级）本身就是今天的来访，不显示第三行 */
   if(mainPageV2(c)){ /* B1 第三行 */
-    var m3 = c, tv = visitsOf(m3).filter(function(v){ return v.date===todayStr() && v.place==='IN'; })[0], line3 = '', btn3 = '';
-    var activeV = activeVisitsOf(m3);
-    var selfNow = tv && (tv.rec||tv.caseId)===m3.id && (function(){ try{ var iv0 = inVisitOf(m3); return iv0.state==='arrived' && !iv0.left && !m3.autoEnded && !isEnded(m3); }catch(e){ return false; } })(); /* CMD-1026-15 一：升级当天主案件自己的那一天（-01，客人还在店）也算今日进行中 */
-    if(selfNow && SUBVIEW[m3.id]){ /* CMD-1026-16：子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
-    if(selfNow){ line3 = '今日进行中：'+cesc(tv.no||'')+'（'+cesc(tv.types.join(' · '))+'）'; btn3 = '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+tv.key+'\')">进入案件</button>'; }
-    else if(tv && activeV.some(function(v){ return v.key===tv.key; })){ var onSelf = (tv.rec||tv.caseId)===m3.id; line3 = onSelf ? '今天来访：'+cesc(tv.types.join(' · ')) : '今日进行中：'+cesc(tv.no||'')+'（'+cesc(tv.types.join(' · '))+'）'; if(!onSelf) btn3 = '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openVisitOf(\''+(tv.rec||tv.caseId)+'\')">进入案件</button>'; }
-    else { var nx = activeV.filter(function(v){ return v.date>todayStr(); }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0]; line3 = '下次预约：'+(nx ? cesc(nx.date)+(nx.time ? ' '+cesc(nx.time) : '')+(nx.place==='KR' ? '（韩国）' : '') : '—'); }
+    /* CMD-1026-19 B1：第三行经 daysOf 读——升级当天（主案件自己那天）、IN 子记录、韩国到院那天都认；韩国那天 IN 只读，按钮叫「查看内容」 */
+    var m3 = c, today3 = todayStr(), ds3 = daysOf(m3), line3 = '', btn3 = '', activeV = ds3.filter(function(v){ return v.live; });
+    var prog = ds3.filter(function(v){ return v.inProgress; })[0];
+    var tvIn = ds3.filter(function(v){ return v.date===today3 && v.place==='IN' && v.live; })[0], tvKr = ds3.filter(function(v){ return v.date===today3 && v.place==='KR' && v.live; })[0];
+    if(prog && SUBVIEW[m3.id]){ /* 子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
+    var tagOf = function(v){ return cesc(v.no||'')+'（'+cesc(v.types.join(' · '))+(v.place==='KR' ? ' · 韩国' : '')+'）'; };
+    if(prog){ line3 = '今日进行中：'+tagOf(prog); btn3 = prog.place==='KR' ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+prog.key+'\')">查看内容</button>' : ((prog.rec||prog.caseId)===m3.id ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+prog.key+'\')">进入案件</button>' : '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openVisitOf(\''+(prog.rec||prog.caseId)+'\')">进入案件</button>'); }
+    else if(tvIn){ line3 = ((tvIn.rec||tvIn.caseId)===m3.id ? '今天来访：' : '今天来访：')+cesc(tvIn.types.join(' · ')); }
+    else if(tvKr){ line3 = '今天在韩国到院：'+tagOf(tvKr); btn3 = '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+tvKr.key+'\')">查看内容</button>'; }
+    else { var nx = activeV.filter(function(v){ return v.date>today3; }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0]; line3 = '下次预约：'+(nx ? cesc(nx.date)+(nx.time ? ' '+cesc(nx.time) : '')+(nx.place==='KR' ? '（韩国）' : '') : '—'); }
     document.getElementById('case-status-bar').innerHTML = '<div class="card" style="padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><span style="font-size:13px;">'+line3+'</span>'+btn3+'</div>'+(actionBtn ? '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">'+actionBtn+'</div>' : '');
     renderCaseHeaderActions(c); return;
   }
@@ -1318,7 +1321,7 @@ function renderCaseHeaderActions(c){
     lmBtn = '<button class="btn-outline" onclick="'+(isChildVisit(c) && (isRevEval(c) || isContCase(c)) ? 'inAddLocalProject()' : 'addLocalMgmt()')+'">+ 添加本地管理</button>';
   }
   var leaveBtn = (canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) ? '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>' : ''; /* CMD-1026-11 二：右上角依序 发起对话 · 添加本地管理 · 客人离店（只在客人在店时有） */
-  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' : '') + lmBtn + stageBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
+  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">对话</button>' : '') + lmBtn + stageBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
 }
 
 var CANCEL_REASON = '';
@@ -1789,7 +1792,7 @@ function openClientFromCase(){ var c = getCurrentCase(); if(c) openClientDetail(
 function mainPageV2(c){ return !!c && !!c.materialsConfirmed && !isChildVisit(c) && !subPageActive(c) && !isRevEval(c) && useV2Tabs(c); }
 function renderCaseTitle(c){
   var el = document.getElementById('case-title'); if(!el) return; var n = caseVisitNo(c);
-  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(subPageActive(c) ? (function(){ var v = subCtxOf(c).v; return ' · '+(v.no||c.caseNo)+(v.date ? ' · '+String(v.date).slice(5).replace('-', '/')+'（'+(v.place==='KR' ? '韩国' : '印尼')+'）' : ''); })() : (!mainPageV2(c) && mainOf(c).caseNo ? ' · '+mainOf(c).caseNo : '')+(mainPageV2(c) ? ' <span class="status-pill" style="background:'+caseStageBadge(c)[0]+';color:'+caseStageBadge(c)[1]+';font-size:12px;font-weight:600;vertical-align:middle;margin-left:8px;">'+caseStageBadge(c)[2]+'</span>' : '')); /* CMD-1023-02 三：标题「客人名 · A000001」，拿掉「第 N 次来访」；子案件页标主案件号 */
+  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(subPageActive(c) ? (function(){ var v = subCtxOf(c).v; return ' · '+(v.no||c.caseNo)+(v.date ? ' · '+String(v.date).slice(5).replace('-', '/')+'（'+(v.place==='KR' ? '韩国' : '印尼')+'）' : ''); })() : (!mainPageV2(c) && mainOf(c).caseNo ? ' · '+mainOf(c).caseNo : '')+(mainPageV2(c) ? ' <span class="status-pill" style="background:'+caseStageBadge(c)[0]+';color:'+caseStageBadge(c)[1]+';font-size:12px;font-weight:600;vertical-align:middle;margin-left:8px;">'+caseStageBadge(c)[2]+'</span>'+(function(){ var k = caseCountsOf(c); return ' <span id="case-counts" style="font-size:13px;font-weight:400;color:var(--slate2);vertical-align:middle;margin-left:10px;">访问：'+k.visits+' 次｜面诊：'+k.consult+' 次｜施术：'+k.surg+' 次</span>'; })() : '')); /* CMD-1023-02 三：标题「客人名 · A000001」，拿掉「第 N 次来访」；子案件页标主案件号 */
 }
 function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;

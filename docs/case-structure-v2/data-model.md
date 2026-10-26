@@ -99,6 +99,7 @@ IN 回来的一天仍是 CASE_ITEMS 里的一条（保留接待所需字段）�
 | --- | --- |
 | `mainIdOf(c)` / `isChildVisit(c)` / `mainOf(c)` / `childVisitsOf(m)` / `mainsOf(list)` | 主 / 子关系 |
 | `visitsOf(m)` | 子案件列表（第四节） |
+| `daysOf(m)` / `dayStateOf(m,v)` | （CMD-1026-19）每一天 + 统一状态：`kind` IN/KR、`state` waiting/arrived/left/ended/cancelled/noShow、`live`、`inProgress`、`reached`；`activeVisitsOf` / `visitStateText` / 页头第三行 / 列表「今天来访」都读它 |
 | `visitsOnDate(date,{place})` | 全院某一天的所有到院（带客人名、主案件 id） |
 | `visitRowsOf(m, v)` | 某个韩国到院日里要做的项目行 |
 | `inVisitOf(c)` | 一条接待记录自己的 IN 那一天：`{date,time,state,arrivedDay,left,purpose,krVisit,cancelBy}` |
