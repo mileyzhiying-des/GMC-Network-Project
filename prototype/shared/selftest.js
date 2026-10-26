@@ -2182,7 +2182,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var html = inProjectCardHtml(c), txt = html.replace(/<[^>]+>/g, ' ');
     ST.ok((html.match(/class="card"/g)||[]).length>=2, '至少两张大卡（项目卡 / 术后管理，有管理项目时三张）');
     var first = html.split('术后管理</div>')[0].replace(/<[^>]+>/g, ' '); ST.ok(!/项目合计|定金|尾款/.test(first) && !/护照/.test(first), '项目卡：没有金额合计行，没有护照提示');
-    ST.ok(/施术项目/.test(txt) && /术后管理/.test(txt) && /术后管理\s*免费、不显示价格、不能退款/.test(inPostcareTabHtml(c).replace(/<[^>]+>/g, ' ')), '1023-03：术后管理独立 tab 里有说明文字');
+    ST.ok(/在韩管理|已完成|施术项目/.test(txt) && /术后管理\s*免费、不显示价格、不能退款/.test(inPostcareTabHtml(c).replace(/<[^>]+>/g, ' ')), '1023-03：术后管理独立 tab 里有说明文字');
     var kr = inCareCardsHtml(c, 'kr'), inn = inCareCardsHtml(c, 'inn'), kt = kr.replace(/<[^>]+>/g, ' ');
     ST.ok(/施术项目\s+术后管理项目\s+预约时间\s+状态\s+备注/.test(kt), '栏位：施术项目｜术后管理项目｜预约时间｜状态｜备注'); ST.ok(/术后第 \d+ 天/.test(kt + inn.replace(/<[^>]+>/g, ' ')), '备注写术后第 N 天');
     ST.ok(!/待到店|待预约|待 KR 预约|已到店|已约</.test(kr+inn), '状态只有 已完成 / 已预约 / 未预约（没有旧叫法）'); ST.ok(/未预约|已预约|已完成/.test(kr+inn), '有新叫法的状态');
@@ -2283,7 +2283,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(CASE_DISPLAY_CCY_KR==='IDR' && /^Rp/.test(krPickAmount(2500000, 'KR', CASE_DISPLAY_CCY_KR)) && /（₩2,500,000）/.test(krPickAmount(2500000, 'KR', 'IDR')) && krPickAmount(2500000, 'KR', 'KRW')===formatCurrency(2500000, 'KRW'), '赴韩项目默认 Rp，写成「Rp …（₩…）」，下拉可切回韩元'); setProjectOrigin('KR'); ST.ok(CASE_DISPLAY_CCY_KR==='IDR', '切到赴韩项目仍默认 Rp');
     /* 六：赴韩施术页 */
     cs.settlementDone = true; var kh = krProcedureTabHtml(cs), kt = kh.replace(/<[^>]+>/g, ' ');
-    ST.ok(/建议在韩停留 \d+ 天/.test(kt) && /施术日 = 第 0 天/.test(kt) && !/>赴韩施术计划</.test(kh), '左上角 = 建议在韩停留天数（取代「赴韩施术计划」按钮）：'+(kt.match(/建议在韩停留[^·]*· 施术日 = 第 0 天/)||[''])[0].slice(0, 40)); ST.ok(!/推荐项目整理/.test(kt) && /onclick="printKrPlan\(\)"/.test(kh), '推荐项目整理整块拿掉，［打印］维持原位');
+    var sk = inStayCardHtml(cs).replace(/<[^>]+>/g, ' '); ST.ok(/建议在韩停留 \d+ 天/.test(sk) && !/>赴韩施术计划</.test(kh) && !/在韩 timeline/.test(kh), '建议在韩停留天数搬进「客人赴韩日程」卡（CMD-1025-04 B），没有「在韩 timeline」胶囊：'+(sk.match(/建议在韩停留[^·]*/)||[''])[0].slice(0, 40)); ST.ok(!/推荐项目整理/.test(kt) && /onclick="printKrPlan\(\)"/.test(kh), '推荐项目整理整块拿掉，［打印］维持原位');
   });
   /* CMD-1020-14 一二：院长整天 OFF 整栏灰底 + 不能点；医院视图不灰；月视图 OFF / 休诊灰底、时段行（不写数字）、今天咖啡色圆圈（IN 分页测 IN；KM1 分页测 KR） */
   ST.def('CAL10','CMD-1020-14：院长整天 OFF 整栏灰底写 OFF 不能建预约（医院视图不灰）；月视图灰底 / 时段行 / 今天圆圈 / IN 本院周日休诊',function(){
@@ -2651,7 +2651,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var e0 = krCbEarliest(c); ST.ok(!!e0, '夹具有最早可回国日（'+e0+'）'); var n0 = nN();
     var r1 = coreSetStay(c, '2026-12-10', '2026-12-05', 'A1 室长'); ST.ok(!r1.ok && !c.stay, '离境日早于入境日 → 不让存');
     var inD = ymdAdd(e0, -10), outD = ymdAdd(e0, -3); coreSetStay(c, inD, outD, 'A1 室长', {initial:true}); ST.ok(stayFilled(c) && nN()===n0, '确认赴韩时填：存下，不通知 KR（还没到 KR 那一步）'); ST.ok(stayShortDays(c)===3, '离境日比最早可回国日早 3 天 → 红字「比建议少 3 天」（不拦）');
-    ST.ok(/在韩期间：<b>/.test(inProjectCardHtml(c)) && /比建议少 3 天/.test(inProjectCardHtml(c)), 'IN 项目卡显示在韩期间 + 红字提醒');
+    ST.ok(/到达日期/.test(inStayCardHtml(c)) && /比建议少 3 天/.test(inStayCardHtml(c)) && !/在韩期间：<b>/.test(inProjectCardHtml(c)), 'IN「客人赴韩日程」卡显示到达 / 离开日期 + 红字提醒（CMD-1025-04：从项目卡搬过来）');
     var outD2 = ymdAdd(e0, 2); coreSetStay(c, inD, outD2, 'A1 室长'); ST.ok(nN()===n0+1 && ST.hasLog(c, /修改在韩期间/), '之后修改 → KR 收通知 + Timeline 记一笔'); ST.ok(stayShortDays(c)===0, '离境日不早于最早可回国日 → 没有提醒');
     /* CMD-1020-13 七：施术前 2 天［已确认行程］弹窗 */
     var ks = c.krSchedule || (c.krSchedule = {}); c.stay = null; c.tripConfirm = null; ks.confirmedDate = ks.confirmedDate || ymdAdd(todayStr(), 1);
@@ -3094,6 +3094,68 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var okRows = KR_CB.rows.filter(function(x){ return x.place!=='IN' && !krCbCheck(x).err; }), badRows = KR_CB.rows.filter(function(x){ return x.place!=='IN' && krCbCheck(x).err; });
       ST.ok(okRows.every(function(x){ return x.checked; }) && badRows.every(function(x){ return !x.checked; }), '打开时：日期没问题的都勾好（'+okRows.length+'），有问题的不勾（'+badRows.length+'）');
       var bi = KR_CB.rows.indexOf(badRows[0]); if(bi>-1){ krCbSet(bi, 'date', todayStr()); ST.ok(KR_CB.rows[bi].checked, '把日期改对后自动勾上'); krCbSet(bi, 'checked', false); krCbSet(bi, 'date', ymdAdd(todayStr(), 1)); ST.ok(!KR_CB.rows[bi].checked, '自己取消的不再自动勾回'); }
+      krCbClose();
+    } finally { var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); KR_CASE = {clinicId:cid, id:r.id, tab:'basic'}; KR_CB = null; }
+  });
+  ST.def('R126a','CMD-1025-04 A（A1 分页）：一般面诊 tab——已出方案：第一张卡「已出方案」+［邀请室长商谈］，第二张卡「面诊诊疗报告」［下载］［查看方案］报告直接显示；拿掉面诊费 / 诊疗方案已到 / 附件说明；［邀请室长商谈］三种消失情况',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var c = ST.newRes('R126a'); ST.consultToReport(c); ST.open(c); c = getCurrentCase(); c.activeCaseTab = 'consult'; renderCaseBody(c);
+    var h = consultTabHtml(c), tx = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    ST.ok(/已出方案/.test(tx) && /邀请室长商谈/.test(tx) && /面诊诊疗报告/.test(tx) && />下载</.test(h) && />查看方案</.test(h), '两张卡：已出方案 + 邀请室长商谈 / 面诊诊疗报告 + 下载 + 查看方案');
+    ST.ok(/尊敬的|GMC NETWORK/.test(tx) && /主诊院长/.test(tx) && !/openReportModal/.test(h), '报告整张直接显示在 tab 里（抬头 / 客人信息 / 正文），没有跳页入口');
+    ST.ok(!/面诊费|诊疗方案已到|查看诊疗方案|面诊阶段产生的文件/.test(tx), '拿掉：面诊费一行、诊疗方案已到、查看诊疗方案、附件说明');
+    var tv = function(){ return consultTalkVisible(c); }; ST.ok(tv(), '没买项目、面诊那天还没过、客人没离店：显示');
+    c.consultAt = {date:ymdAdd(todayStr(), -2), time:'11:00'}; ST.ok(!tv(), '面诊那天过了午夜：不显示'); c.consultAt = {date:todayStr(), time:'11:00'}; ST.ok(tv(), '面诊就在今天：还显示');
+    c.leftStore = true; ST.ok(!tv(), '客人已离店：不显示'); c.leftStore = false;
+    c.settlementBatches = [{status:'active', krDeposit:100000, inTotal:0}]; ST.ok(!tv(), '已付定金：不显示'); c.settlementBatches = [{status:'active', krDeposit:0, inTotal:50000}]; ST.ok(!tv(), '已付款（本地）：不显示'); c.settlementBatches = [];
+    ST.ok(tv(), '都不满足时恢复显示'); reportViewPlan(); ST.ok(c.activeCaseTab==='consult' || c.activeCaseTab==='kr', '［查看方案］不跳页（没升级的案件选项目的卡就在面诊 tab 下面）');
+    /* 没出方案：维持原样 */
+    var c2 = ST.newRes('R126a2'); ST.open(c2); c2 = getCurrentCase(); c2.consultStatus = 'awaiting_report'; c2.reportReady = false; var h2 = consultTabHtml(c2).replace(/<[^>]+>/g, ' '); ST.ok(/等待|报告/.test(h2) && !/面诊诊疗报告/.test(h2), '还没出方案：维持现在的样子');
+  });
+  ST.def('R126b','CMD-1025-04 B、C（A1 分页，需要 pcStage 夹具）：IN 赴韩 tab——施术日期 → 客人赴韩日程卡 → 项目卡；没有项目的分类不显示；在韩管理已预约 / 未预约栏位；已完成分两段；来源最后一栏；没有 timeline 胶囊',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return /术后管理/.test(x.name) && x.settlementDone; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var sv = JSON.stringify({stay:c.stay, items:c.procedureItems, subs:c.subItems});
+    try{
+      c.stay = {in:'2026-11-17', inTime:'12:00', inAirport:'仁川', out:'2026-11-24', outTime:'01:30', outAirport:'金浦'};
+      var mk = function(n, o){ return Object.assign({name:n, origin:'KR', mgmtPlan:true, heldOver:true, qty:3, copies:1, firstDay:7, interval:7, intNa:false, holdUsed:0, krAddOn:true, uses:[]}, o||{}); };
+      c.procedureItems.push(mk('ONDA 提升 · 身体 60kj·3次')); c.procedureItems.push(mk('钛提升 · 40kj', {qty:2, holdUsed:1, uses:[{at:nowFullDt(), key:'main', qty:1}], krAddOn:false}));
+      c.subItems.push({id:'r126x', kind:'术后管理记录', holdUseOf:'ONDA 提升 · 身体 60kj·3次', place:'KR', date:ymdAdd(todayStr(), 6), time:'11:00', content:'ONDA 提升', done:false});
+      var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
+      var full = krProcedureTabHtml(c), ft = t(full);
+      ST.ok(full.indexOf('施术日期') < full.indexOf('客人赴韩日程') && full.indexOf('客人赴韩日程') < full.indexOf('项目卡'), '顺序：施术日期 → 客人赴韩日程 → 项目卡');
+      var sc = t(inStayCardHtml(c)); ST.ok(/到达日期2026-11-17 ?12:00/.test(sc) && /离开日期2026-11-24 ?01:30/.test(sc) && /机场：仁川/.test(sc) && /机场：金浦/.test(sc) && /修改/.test(sc) && /建议在韩停留\d+天/.test(sc), '赴韩日程卡：到达 / 离开 日期时间 + 机场 + ［修改］ + 建议在韩停留：'+sc.slice(0, 100));
+      ST.ok(!/在韩 timeline/.test(ft) && /打印/.test(ft) && !/在韩期间：/.test(t(inProjectCardHtml(c))), '没有「在韩 timeline」胶囊；［打印］保留；项目卡里不再有「在韩期间」');
+      var pc = inProjectCardHtml(c), pt = t(pc);
+      ST.ok(!/施术项目（/.test(pt) && /在韩管理（\d+）/.test(pt) && /已完成（\d+）/.test(pt), '施术项目 0（都做完了）→ 该分类不显示；有项目的显示：'+(pt.match(/(在韩管理|已完成)（\d+）/g)||[]).join(' '));
+      ST.ok(!/状态/.test(pt.replace(/待付款/g, '')), '拿掉「状态」栏');
+      var seg = pt.slice(pt.indexOf('已预约')); ST.ok(/项目次数预约时间购买时间备注来源/.test(pt) && !/建议日期/.test(pt.slice(pt.indexOf('已预约'), pt.indexOf('未预约'))), '已预约栏位：项目｜次数｜预约时间｜购买时间｜备注｜来源（没有参考内容 / 建议日期）');
+      ST.ok(/项目次数参考内容建议日期购买时间备注来源/.test(pt) && /剩\d+\/共\d+次/.test(pt) && /术后第7天开始/.test(pt), '未预约栏位：项目｜次数｜参考内容｜建议日期｜购买时间｜备注｜来源（次数写「剩 N / 共 M 次」）');
+      ST.ok(!/onclick="[^"]*(coreUnit|krCb|todoCb)/.test(pc), 'IN 在这里只看，没有操作按钮');
+      IN_PC_TAB[c.id] = 'done'; var dt = t(inProjectCardHtml(c)); ST.ok(/施术项目\d/.test(dt) && /在韩管理\d/.test(dt) && /项目次数使用时间购买时间备注来源/.test(dt), '已完成分「施术项目」「在韩管理」两段，栏位：项目｜次数｜使用时间｜购买时间｜备注｜来源');
+      delete IN_PC_TAB[c.id];
+      c.procedureItems = c.procedureItems.filter(function(x){ return false; }); var emp = t(inProjectCardHtml(c)); ST.ok(/没有项目/.test(emp) && !/（\d+）/.test(emp), '全部都没有项目：只写「没有项目」');
+    } finally { var o = JSON.parse(sv); c.stay = o.stay; c.procedureItems = o.items; c.subItems = o.subs; }
+  });
+  ST.def('R126c','CMD-1025-04 C、D（KM1 分页，需要 pcStage 夹具）：KR 项目卡没有项目的分类不显示、来源在最后一栏；预约弹窗有问题的项目单独圈成「需要处理」，改对日期后回到对应日期的组并勾上',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /术后管理/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, snap = JSON.stringify(gc()), t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    var mut = function(f){ Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; f(c); }); };
+    try{
+      KR_CASE = {clinicId:cid, id:r.id, tab:'items'};
+      var h = krProjCards(gc()), tx = t(h); ST.ok(!/施术项目（0）/.test(tx), '施术项目 0 → 不再显示灰掉的分类');
+      var heads = (h.match(/class="kr-pc-head"[^>]*>[\s\S]*?<\/div>/g)||[]).map(function(x){ return t(x); }); ST.ok(heads.length>0 && heads.every(function(x){ return /来源\s*$/.test(x); }), '各小卡表头「来源」都在最后一栏：'+heads.join(' / ').slice(0, 120));
+      mut(function(c){ c.stay = {in:ymdAdd(todayStr(), -1), out:ymdAdd(todayStr(), 1), by:'t', at:nowFullDt()}; });
+      krShowCase(cid, r.id, {here:true, tab:'postcare'}); krCbOpen({all:true, tab:'care'}); var ov = document.getElementById('kr-cb-overlay');
+      var bad = KR_CB.rows.filter(function(x){ return x.place!=='IN' && krCbCheck(x).err; }), okR = KR_CB.rows.filter(function(x){ return x.place!=='IN' && !krCbCheck(x).err; });
+      if(ST.ok(bad.length>0, '夹具里有离境后的项目（'+bad.length+'）')){
+        var pb = ov.querySelector('.krcb-prob'); ST.ok(!!pb && new RegExp('需要处理 '+bad.length+' 项').test(pb.textContent), '有问题的项目单独圈成一块「需要处理 N 项」');
+        ST.ok(!ov.querySelectorAll('.krcb-grp').length || [].every.call(ov.querySelectorAll('.krcb-grp'), function(g){ return !/已离境/.test(g.textContent); }), '正常日期组里不混问题项目');
+        ST.ok(okR.every(function(x){ return x.checked; }) && bad.every(function(x){ return !x.checked; }), '日期没问题的默认勾好，有问题的不勾');
+        var bi = KR_CB.rows.indexOf(bad[0]); krCbSet(bi, 'date', todayStr()); var pb2 = ov.querySelector('.krcb-prob');
+        ST.ok(KR_CB.rows[bi].checked && (!pb2 || new RegExp('需要处理 '+(bad.length-1)+' 项').test(pb2.textContent)), '改对日期后：自动勾上、从「需要处理」回到对应日期的组');
+      }
       krCbClose();
     } finally { var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); KR_CASE = {clinicId:cid, id:r.id, tab:'basic'}; KR_CB = null; }
   });
@@ -3810,7 +3872,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var key = subCaseKey(subCaseList(r.c).filter(function(s){ return s.place==='KR'; })[0]), sid = subCaseList(r.c).filter(function(s){ return s.place==='KR'; })[0].id;
     krShowCase(r.clinicId, r.id); krSetCaseTab('proc'); ST.ok(KR_CASE.tab==='items', '旧的「施术」tab 并进「项目」');
     var h = Store.withClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; return krTabItems(cc); });
-    ST.ok(/项目卡/.test(h) && /施术项目（\d+）/.test(h) && /管理项目（\d+）/.test(h) && /(案件|相关日程)/.test(h) && !/手术项目/.test(h), '项目卡（术后管理搬到独立 tab）+ 案件区块 / 相关日程，用词「施术项目」');
+    ST.ok(/项目卡/.test(h) && /(施术项目|管理项目|已完成)（\d+）/.test(h) && /(案件|相关日程)/.test(h) && !/手术项目/.test(h), '项目卡（术后管理搬到独立 tab）+ 案件区块 / 相关日程，用词「施术项目」');
     var inner = document.getElementById('krcase-body').innerText; ST.ok(!/手术项目/.test(inner) && !/赴韩项目\n/.test(inner), '页面里没有「手术项目」，也没有重复的赴韩项目列表');
     var entries = [['日历 / 工作台', function(){ krOpenSubCard(r.clinicId, r.id, sid); }], ['医院设定冲突弹窗', function(){ hspGoCase(r.clinicId, r.id, sid); }], ['工作台今天列表(krOpenSub)', function(){ krOpenSub(r.clinicId, r.id, sid); }]];
     entries.forEach(function(e){ KR_SUB_OPEN = {}; KR_CASE = {clinicId:'', id:'', tab:'basic'}; e[1](); ST.ok(KR_CASE.id===r.id && ((KR_CASE.tab==='items' && !!KR_SUB_OPEN[key]) || !!KR_CASE.day), '入口「'+e[0]+'」→ 赴韩 tab 并展开对应那次（升级后 = 那一天的子案件页）'); });
@@ -3835,9 +3897,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var heads = [].slice.call(box.querySelectorAll('div[style*="grid-template-columns"]')).filter(function(d){ return /来源/.test(d.textContent) && /其他/.test(d.textContent) && /项目/.test(d.textContent) && /次数/.test(d.textContent) && /操作/.test(d.textContent); });
       var hu = heads.filter(function(d){ return /建议时间/.test(d.textContent); }), hb = heads.filter(function(d){ return !/建议时间|建议日期/.test(d.textContent) && /预约时间/.test(d.textContent); });
       ST.ok(hu.length===1 && hu[0].children.length===8, '1025-03 改：「未预约」小卡表头 8 栏：来源｜项目｜次数｜建议时间｜…｜操作｜其他：'+hu.length);
-      ST.ok(hb.length===1 && /来源\s*项目\s*次数\s*预约时间\s*操作\s*其他/.test(hb[0].textContent), '1025-03 改：「已预约」小卡表头：来源｜项目｜次数｜预约时间｜操作｜其他（没有建议时间 / 建议日期）：'+(hb[0] ? hb[0].textContent : ''));
+      ST.ok(hb.length===1 && /项目\s*次数\s*预约时间\s*操作\s*其他\s*来源/.test(hb[0].textContent), '1025-04 改：「已预约」小卡表头：项目｜次数｜预约时间｜操作｜其他｜来源（来源放最后一栏，没有建议时间 / 建议日期）：'+(hb[0] ? hb[0].textContent : ''));
       var gcol = function(d){ var a = d.style.gridTemplateColumns.split(/\s+(?![^(]*\))/); return a.slice(-2).join(' '); }; ST.ok(hu[0] && hb[0] && gcol(hu[0])===gcol(hb[0]), '两张小卡最右「操作｜其他」两栏宽度一致，列对齐：'+(hu[0] && hb[0] ? gcol(hu[0])+' / '+gcol(hb[0]) : ''));
-      KR_PROJ_PAGE = 'done'; var bx2 = document.createElement('div'); bx2.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); KR_PROJ_PAGE = 'mgmt'; ST.ok(/来源\s*项目\s*次数\s*建议时间\s*使用时间\s*到院时间\s*操作\s*其他/.test(bx2.textContent) || !bx2.querySelector('.kr-pc-block'), '已完成 tab 的栏位：来源｜项目｜次数｜建议时间｜使用时间｜到院时间｜操作｜其他');
+      KR_PROJ_PAGE = 'done'; var bx2 = document.createElement('div'); bx2.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); KR_PROJ_PAGE = 'mgmt'; ST.ok(/项目\s*次数\s*建议时间\s*使用时间\s*到院时间\s*操作\s*其他\s*来源/.test(bx2.textContent) || !bx2.querySelector('.kr-pc-block'), '已完成 tab 的栏位（来源放最后一栏，CMD-1025-04）：项目｜次数｜建议时间｜使用时间｜到院时间｜操作｜其他｜来源');
       var tags = [].slice.call(box.querySelectorAll('.kr-srctag')); ST.ok(tags.some(function(t){ return t.textContent==='印尼购买'; }) && tags.some(function(t){ return t.textContent==='在韩购买'; }) && !/在韩增加/.test(box.textContent), '第一栏购买来源标签：印尼购买 / 在韩购买，名称后面没有「在韩增加」');
       ST.ok(/#E3EEFB/i.test(html) && /#E2F3E6/i.test(html), '印尼购买浅蓝底、在韩购买浅绿底');
       ST.ok(!box.querySelector('.kr-why'), '灰按钮旁边没有说明文字');
@@ -3848,8 +3910,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; (cc.subItems||[]).forEach(function(s){ if(s.holdIid) s.arrived = true; }); });
       box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); var mb = [].slice.call(box.querySelectorAll('button[disabled]')).filter(function(b){ return b.textContent==='修改时间'; })[0]; ST.ok(mb && /已到(店|院)/.test(mb.title), '不能改时间的行：［修改时间］灰 + tooltip，不是空的');
       /* 施术 / 术后管理 tab：来源标签 + 操作栏 + 其他栏 */
-      KR_PROJ_PAGE = 'surg'; box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); ST.ok(box.querySelectorAll('.kr-srctag').length>=1 && /来源\s*项目\s*次数/.test(box.textContent) && /操作\s*其他/.test(box.textContent) && !/在韩增加/.test(box.textContent), '施术项目 tab：来源标签 + 操作栏 + 其他栏');
-      KR_PROJ_PAGE = 'care'; box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c, {only:'care'}); ST.ok(box.querySelectorAll('.kr-srctag').length>=1 && /来源\s*项目\s*术后第 N 天\s*地点\s*次数\s*建议日期\s*操作\s*其他/.test(box.textContent), '术后管理 tab：来源标签（跟对应施术）+ 操作栏 + 其他栏');
+      KR_PROJ_PAGE = 'surg'; box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); ST.ok(box.querySelectorAll('.kr-srctag').length>=1 && /项目\s*次数/.test(box.textContent) && /操作\s*其他\s*来源/.test(box.textContent) && !/在韩增加/.test(box.textContent), '施术项目 tab：来源标签（最后一栏）+ 操作栏 + 其他栏');
+      KR_PROJ_PAGE = 'care'; box.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c, {only:'care'}); ST.ok(box.querySelectorAll('.kr-srctag').length>=1 && /项目\s*术后第 N 天\s*地点\s*次数\s*建议日期\s*操作\s*其他\s*来源/.test(box.textContent), '术后管理 tab：来源标签（跟对应施术，最后一栏）+ 操作栏 + 其他栏');
       /* 取消购买弹窗用词 */
       KR_PROJ_PAGE = 'mgmt'; KR_CASE = {clinicId:r.clinicId, id:r.id, tab:'items'}; krPendDelAsk(itemIid(krFindCase(r.clinicId, r.id).c.procedureItems.filter(function(x){ return /热玛吉/.test(x.name); })[0])); var ov = document.getElementById('kr-block-overlay'); ST.ok(ov && /取消购买/.test(ov.textContent) && /确认取消购买/.test(ov.textContent), '弹窗用词：取消购买'); ov.classList.remove('open');
     } finally { Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); KR_PICK = {}; KR_PROJ_PAGE = 'surg'; }
