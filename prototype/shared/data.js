@@ -2509,12 +2509,12 @@ function inContTab(id, k){ IN_CONT_TAB[id] = k; var c = CASE_ITEMS.filter(functi
 function isContCase(c){ return !!c && ((isRevEval(c) && hasResumeType(c, '术后管理')) || (c.followup && isLocalCase(c))); }
 function inContBtn(what){ var c = getCurrentCase(); if(!c) return; if(c.localMgmt) lmContinue(what); else carriedContinue(what); }
 function inContUseNow(){ inContBtn('use'); }
-function inContCardHtml(c){
-  /* CMD-1026-09 A：项目卡——入口只留一个［＋添加本地管理项目］；胶囊「术后管理 / 本地管理」没有项目就不显示；术后管理分 今日项目 / 预约项目（/ 未预约），本地管理分 今日项目 / 预约项目 / 未使用项目 */
-  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, ro = isEnded(c) || c.visitClosed || !!c.leftStore, today = todayStr();
-  var src = followSrc(c), pill = function(t, bg, fg){ return '<span class="status-pill" style="background:'+bg+';color:'+fg+';">'+t+'</span>'; };
-  var md = function(d){ return e(String(d||'').slice(5, 10).replace('-', '/')); };
-  var rows = [], ct = c.careToday; /* 继续弹窗里勾的「今天做」的术后管理 */
+/* ===== CMD-1026-12：子案件页项目 = 两张卡 =====
+   卡 1「今日项目」：今天要做的全部列一起（术后管理 + 本地管理，不分胶囊），栏位 项目类型｜项目｜对应施术｜次数｜预约时间｜操作；［操作完成］［本次不做］（术后 → 退回未预约；本地 → 次数归还持有，回到未使用）；做完的留在这张卡显示「已完成」。
+   卡 2「剩余项目」：标题行右边［＋ 添加本地管理项目］［本次使用］；胶囊 术后项目（预约项目 / 未预约项目）｜本地管理（未使用项目），没有项目的不显示。
+   买完的本地项目先进「未使用」（不自动算今天用），要用走［本次使用］勾选。 */
+function inContModel(c){
+  var today = todayStr(), src = followSrc(c), ct = c.careToday, ro = isEnded(c) || c.visitClosed || !!c.leftStore, rows = [];
   CASE_ITEMS.forEach(function(x){ if(x.name!==c.name || x.id===c.id) return; careRows(x).forEach(function(s){ if(s.place!=='IN' || s.skipped) return; if(s.done && s.usedInCase!==c.id) return; rows.push({c:x, s:s, bk:inCareBooking(x, s.id)}); }); });
   rows.sort(function(a, b){ return (b.c===src)-(a.c===src) || String(a.s.suggest||a.s.date||'').localeCompare(String(b.s.suggest||b.s.date||'')); });
   var grp = {today:[], booked:[], none:[]};
@@ -2525,51 +2525,119 @@ function inContCardHtml(c){
     else if(r.bk) (ct ? grp.booked : (String(r.bk.date)===today ? grp.today : grp.booked)).push(r);
     else grp.none.push(r);
   });
-  var batches = localPurchasedBatches(c);
-  var usedToday = [], unused = [];
-  getClientHoldings(c.name).forEach(function(h){ h.batches.forEach(function(b){ if(b.voided || b.refund || b.kr) return; var left = Math.max(0, (b.bought||0)-(b.used||0));
-    if(b.caseId!==c.id && (b.usages||[]).some(function(u){ return u.caseId===c.id; })) usedToday.push({h:h, b:b, left:left});
-    if(b.caseId!==c.id && left>0) unused.push({h:h, b:b, left:left}); }); });
-  var counts = {care:rows.length, local:batches.length+usedToday.length+unused.length};
-  var cur = IN_CONT_TAB[c.id]; if(!cur || !counts[cur]) cur = ['care','local'].filter(function(k){ return counts[k]>0; })[0] || '';
-  var tabBtn = function(k, label){ var n = counts[k], on = cur===k; if(!n) return ''; return '<button onclick="inContTab(\''+c.id+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--ink)')+';font-size:13px;cursor:pointer;">'+label+' '+n+'</button>'; };
-  var bt = 'padding:3px 10px;font-size:12px;white-space:nowrap;';
-  var grid = 'display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 70px minmax(0,1fr) 80px 110px 170px;gap:8px;align-items:center;';
-  var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:4px 0;"><span>项目</span><span>对应施术</span><span>次数</span><span>使用参考</span><span>建议时间</span><span>预约时间</span><span>操作</span></div>';
-  var careRow = function(r, kind){
-    var s = r.s, sg = s.suggest || s.date, late = pcDaysLate(sg), en = careEntryOfRow(r.c, s), nm = en ? (en.x.name||en.x.mgmt) : String(s.content||'').replace(/（.*$/, '');
-    var surgName = s.projectName ? buyName(s.projectName) : '', day = '';
-    try{ day = surgName ? careDayText(r.c, s.projectName, sg) : ''; }catch(_){ day = ''; }
-    var did = s.done && s.usedInCase===c.id, ops;
+  var uses = []; [['lm', c.localMgmt], ['main', localCarried(c) ? c : null]].forEach(function(p){ var ctx = p[1]; if(!ctx) return; (ctx.mgmtUses||[]).forEach(function(u, i){ if(localItemStatus(u)!=='已取消') uses.push({scope:p[0], i:i, u:u, st:localItemStatus(u)}); }); });
+  var unused = []; getClientHoldings(c.name).forEach(function(h){ if(h.category==='术后管理') return; h.batches.forEach(function(b){ if(b.voided || b.refund || b.kr) return; var left = Math.max(0, (b.bought||0)-(b.used||0)); if(left>0) unused.push({h:h, b:b, left:left}); }); });
+  return {src:src, ro:ro, grp:grp, uses:uses, unused:unused};
+}
+function inContTodayHtml(c, M){
+  M = M || inContModel(c);
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, bt = 'padding:3px 10px;font-size:12px;white-space:nowrap;', ro = M.ro;
+  var grid = 'display:grid;grid-template-columns:70px minmax(0,1.4fr) minmax(0,1fr) 70px 100px 170px;gap:8px;align-items:center;';
+  var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:4px 0;"><span>项目类型</span><span>项目</span><span>对应施术</span><span>次数</span><span>预约时间</span><span>操作</span></div>';
+  var pillT = function(t, bg, fg){ return '<span class="status-pill" style="background:'+bg+';color:'+fg+';">'+t+'</span>'; };
+  var out = [];
+  M.grp.today.forEach(function(r){
+    var s = r.s, en = careEntryOfRow(r.c, s), nm = en ? (en.x.name||en.x.mgmt) : String(s.content||'').replace(/（.*$/, ''), surgName = s.projectName ? buyName(s.projectName) : '', did = s.done && s.usedInCase===c.id, ops;
     if(did) ops = '<span style="font-size:12px;color:var(--sage);">已完成</span>';
     else if(ro) ops = '<span style="font-size:12px;color:var(--muted);">只读</span>';
-    else if(kind==='today') ops = '<button class="btn-outline" style="'+bt+'" onclick="openCareUse(\'main\',\''+r.c.id+'\',\''+s.id+'\')">操作完成</button> <button class="btn-outline" style="'+bt+'" onclick="careNotToday(\''+c.id+'\',\''+s.id+'\')">本次不做</button>';
-    else if(kind==='booked') ops = '<button class="btn-outline" style="'+bt+'" onclick="todoCareBookOpen(\''+r.c.id+'\',\''+s.id+'\',\''+(r.bk.caseId||'')+'\')">修改时间</button>';
-    else ops = careBookBtn(r.c, '预约', 'todoCareBookOpen(\''+r.c.id+'\',\''+s.id+'\')', bt)+(contResume(c) ? '' : ' <button class="btn-outline" style="'+bt+'" onclick="openCareUse(\'main\',\''+r.c.id+'\',\''+s.id+'\')">今天做</button>'); /* 继续里不能新增没约过的；旧的「关联之前案件」术后来访流程仍有「今天做」 */
-    var when = kind==='none' ? '<span style="color:var(--muted);">—</span>' : (kind==='today' ? '今天'+(r.bk.time ? ' '+e(r.bk.time) : '') : md(r.bk.date)+(r.bk.time ? ' '+e(r.bk.time) : ''));
-    var lateTxt = kind!=='booked' && !did && late>0 ? ' <span style="color:#B3261E;">已过 '+late+' 天</span>' : '';
+    else ops = '<button class="btn-outline" style="'+bt+'" onclick="openCareUse(\'main\',\''+r.c.id+'\',\''+s.id+'\')">操作完成</button> <button class="btn-outline" style="'+bt+'" onclick="careNotToday(\''+c.id+'\',\''+s.id+'\')">本次不做</button>';
+    out.push('<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+pillT('术后管理', 'var(--terracotta-bg)', 'var(--terracotta)')+'</span><span>'+e(nm)+'</span><span style="font-size:12px;">'+e(surgName||'—')+'</span><span style="font-size:12px;">1 次</span><span style="font-size:12px;">今天'+(r.bk && r.bk.time ? ' '+e(r.bk.time) : '')+'</span><span style="display:flex;gap:6px;flex-wrap:wrap;">'+ops+'</span></div>');
+  });
+  M.uses.forEach(function(x){
+    var u = x.u, ops = x.st==='已完成' ? '<span style="font-size:12px;color:var(--sage);">已完成</span>' : (ro ? '<span style="font-size:12px;color:var(--muted);">只读</span>' : '<button class="btn-outline" style="'+bt+'" onclick="markMgmtRows(\''+x.scope+'\',\'done\',false,'+x.i+')">操作完成</button> <button class="btn-outline" style="'+bt+'" onclick="markMgmtRows(\''+x.scope+'\',\'cancelled\',false,'+x.i+')">本次不做</button>');
+    out.push('<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+pillT('本地管理', 'var(--sage-bg)', 'var(--sage)')+'</span><span>'+e(u.itemName)+(u.opt ? ' <span style="font-size:12px;color:var(--muted);">'+e(u.opt)+'</span>' : '')+'</span><span style="font-size:12px;">—</span><span style="font-size:12px;">'+(u.qty||1)+' 次</span><span style="font-size:12px;">今天</span><span style="display:flex;gap:6px;flex-wrap:wrap;">'+ops+'</span></div>');
+  });
+  return '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;margin-bottom:6px;">今日项目'+(M.src ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">（继续 '+e(M.src.caseNo)+'）</span>' : '')+'</div>'+(out.length ? inSmallCard(head+out.join('')) : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">今天还没有要做的项目（到下面「剩余项目」按［本次使用］勾选）</div>')+'</div>';
+}
+function inContRestHtml(c, M){
+  M = M || inContModel(c);
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, ro = M.ro, bt = 'padding:3px 10px;font-size:12px;white-space:nowrap;';
+  var md = function(d){ return e(String(d||'').slice(5, 10).replace('-', '/')); };
+  var counts = {care:M.grp.booked.length+M.grp.none.length, local:M.unused.length};
+  var cur = IN_CONT_TAB[c.id]; if(!cur || !counts[cur]) cur = ['care','local'].filter(function(k){ return counts[k]>0; })[0] || '';
+  var tabBtn = function(k, label){ var n = counts[k], on = cur===k; if(!n) return ''; return '<button onclick="inContTab(\''+c.id+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--ink)')+';font-size:13px;cursor:pointer;">'+label+' '+n+'</button>'; };
+  var grid = 'display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 70px minmax(0,1fr) 80px 110px 110px;gap:8px;align-items:center;';
+  var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:4px 0;"><span>项目</span><span>对应施术</span><span>次数</span><span>使用参考</span><span>建议时间</span><span>预约时间</span><span>操作</span></div>';
+  var careRow = function(r, kind){
+    var s = r.s, sg = s.suggest || s.date, late = pcDaysLate(sg), en = careEntryOfRow(r.c, s), nm = en ? (en.x.name||en.x.mgmt) : String(s.content||'').replace(/（.*$/, ''), surgName = s.projectName ? buyName(s.projectName) : '', day = '';
+    try{ day = surgName ? careDayText(r.c, s.projectName, sg) : ''; }catch(_){ day = ''; }
+    var ops = ro ? '<span style="font-size:12px;color:var(--muted);">只读</span>' : (kind==='booked' ? '<button class="btn-outline" style="'+bt+'" onclick="todoCareBookOpen(\''+r.c.id+'\',\''+s.id+'\',\''+(r.bk.caseId||'')+'\')">修改时间</button>' : careBookBtn(r.c, '预约', 'todoCareBookOpen(\''+r.c.id+'\',\''+s.id+'\')', bt));
+    var when = kind==='booked' ? md(r.bk.date)+(r.bk.time ? ' '+e(r.bk.time) : '') : '<span style="color:var(--muted);">—</span>', lateTxt = kind!=='booked' && late>0 ? ' <span style="color:#B3261E;">已过 '+late+' 天</span>' : '';
     return '<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+e(nm)+'</span><span style="font-size:12px;">'+e(surgName||'—')+'</span><span style="font-size:12px;">1 次</span><span style="font-size:12px;">'+e(day||'—')+'</span><span style="font-size:12px;">'+md(sg)+lateTxt+'</span><span style="font-size:12px;">'+when+'</span><span style="display:flex;gap:6px;flex-wrap:wrap;">'+ops+'</span></div>';
   };
-  var sec = function(title, list, kind, hd, rowFn){ if(!list.length && kind==='l') return ''; return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+list.length+'</span></div>'+(list.length ? inSmallCard(hd+list.map(rowFn).join('')) : '')+'</div>'; }; /* 术后管理三段标题始终显示（含 0）；本地管理空的段不显示 */
+  var sec = function(title, list, hd, rowFn){ if(!list.length) return ''; return '<div style="margin-top:10px;"><div style="font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+list.length+'</span></div>'+inSmallCard(hd+list.map(rowFn).join(''))+'</div>'; };
   var body = '';
-  if(cur==='care') body = '<div style="font-size:12px;color:var(--muted);margin:2px 0 4px;">来自主案件'+(src ? ' '+e(src.caseNo) : '')+'；免费、不能退款；做完记在原案件，扣原案件的印尼术后管理（KR 在原案件里看得到次数被扣）</div>'+sec('今日项目', grp.today, 'today', head, function(r){ return careRow(r, 'today'); })+sec('预约项目', grp.booked, 'booked', head, function(r){ return careRow(r, 'booked'); })+sec('未预约', grp.none, 'none', head, function(r){ return careRow(r, 'none'); });
+  if(cur==='care') body = '<div style="font-size:12px;color:var(--muted);margin:2px 0 4px;">来自主案件'+(M.src ? ' '+e(M.src.caseNo) : '')+'；免费、不能退款；做完记在原案件，扣原案件的印尼术后管理（KR 在原案件里看得到次数被扣）</div>'+sec('预约项目', M.grp.booked, head, function(r){ return careRow(r, 'booked'); })+sec('未预约项目', M.grp.none, head, function(r){ return careRow(r, 'none'); });
   else if(cur==='local'){
-    var g2 = 'display:grid;grid-template-columns:minmax(0,1.6fr) 110px 90px 150px;gap:8px;align-items:center;';
-    var h2 = '<div style="'+g2+'font-size:12px;color:var(--muted);padding:4px 0;"><span>项目</span><span>次数</span><span>购买时间</span><span>操作</span></div>';
-    var useBtn = function(left){ return ro ? '<span style="font-size:12px;color:var(--muted);">只读</span>' : (left && localAddAllowed(c) ? '<button class="btn-outline" style="'+bt+'" onclick="inContUseNow()">使用持有项目</button>' : ''); };
-    var lrow = function(h, b, left, withUse){ return '<div style="'+g2+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+e(h.itemName)+(b.spec ? '（'+e(buyName(b.spec))+'）' : '')+'</span><span style="font-size:12px;">剩 '+left+' / 共 '+(b.bought||0)+' 次</span><span style="font-size:12px;">'+md(b.date||b.boughtAt||'')+'</span><span>'+(withUse ? useBtn(left) : '')+'</span></div>'; };
-    var todayL = batches.map(function(x){ return {h:x.h, b:x.b, left:Math.max(0, (x.b.bought||0)-(x.b.used||0)), use:true}; }).concat(usedToday.map(function(x){ return {h:x.h, b:x.b, left:x.left, use:false}; }));
-    body = sec('今日项目', todayL, 'l', h2, function(x){ return lrow(x.h, x.b, x.left, x.use); })+sec('未使用项目', unused, 'l', h2, function(x){ return lrow(x.h, x.b, x.left, true); });
+    var g2 = 'display:grid;grid-template-columns:minmax(0,1.6fr) 120px 100px;gap:8px;align-items:center;';
+    var h2 = '<div style="'+g2+'font-size:12px;color:var(--muted);padding:4px 0;"><span>项目</span><span>次数</span><span>购买时间</span></div>';
+    body = sec('未使用项目', M.unused, h2, function(x){ return '<div style="'+g2+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+e(x.h.itemName)+(x.b.spec ? '（'+e(buyName(x.b.spec))+'）' : '')+'</span><span style="font-size:12px;">剩 '+x.left+' / 共 '+(x.b.bought||0)+' 次</span><span style="font-size:12px;">'+md(x.b.date||x.b.boughtAt||'')+'</span></div>'; });
   }
-  var topBtns = (ro || !localAddAllowed(c)) ? '' : '<button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="inAddLocalProject()">＋ 添加本地管理项目</button>';
-  return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">项目卡'+(src ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">（继续 '+e(src.caseNo)+'）</span>' : '')+'</div>'+topBtns+'</div>'+
-    ((tabBtn('care','术后管理')+tabBtn('local','本地管理')) ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+tabBtn('care','术后管理')+tabBtn('local','本地管理')+'</div>' : '')+
-    '<div class="kr-pc-scroll">'+(body || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有项目</div>')+'</div></div>';
+  var topBtns = ro ? '' : (localAddAllowed(c) ? '<button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="inAddLocalProject()">＋ 添加本地管理项目</button>' : '')+'<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="inUseOpen()">本次使用</button>';
+  var pills = tabBtn('care','术后项目')+tabBtn('local','本地管理');
+  return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">剩余项目</div>'+topBtns+'</div>'+(pills ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+pills+'</div>' : '')+
+    '<div class="kr-pc-scroll">'+(body || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">没有剩余项目</div>')+'</div></div>';
 }
-/* CMD-1026-09 A2：项目卡唯一入口——走现有本地选购 / 付款流程（carriedContinue / lmContinue），不改主线 */
-function inAddLocalProject(){ var c = getCurrentCase(); if(!c || isEnded(c)) return; if(c.localMgmt) lmContinue('buy'); else carriedContinue('buy'); IN_CONT_TAB[c.id] = 'local'; renderCaseBody(c); }
-/* A3：［本次不做］（原［今日取消］）——退回「未预约」：从今天要做的名单拿掉（已完成的不能退） */
+function inContCardHtml(c){ var M = inContModel(c); return inContTodayHtml(c, M)+'<div style="height:12px;"></div>'+inContRestHtml(c, M); }
+/* A3：［本次不做］（术后）——退回「未预约」：从今天要做的名单拿掉（已完成的不能退） */
 function careNotToday(caseId, rowId){ var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return; c.careToday = (c.careToday||[]).filter(function(i){ return i!==rowId; }); logCaseEvent(c, actingName(), '术后管理：本次不做，退回未预约'); buildCaseLog(c); renderCaseBody(c); }
+
+/* ---- ［＋ 添加本地管理项目］：弹出本地选购弹窗（用现有 localPurchaseHtml(c,'lm') 的内容，选项目 → ［结算］ → 弹窗关掉；买完先进「未使用」） ---- */
+var LM_BUY_OPEN = '';
+function inAddLocalProject(){
+  var c = getCurrentCase(); if(!c || isEnded(c)) return;
+  if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; }
+  LM_BUY_OPEN = c.id; IN_CONT_TAB[c.id] = 'local';
+  if(c.localMgmt){ var lm = c.localMgmt; lm.addBuy = !!lm.mgmtActive; if(!lm.mgmtActive){ lm.step = 'buy'; lm.ended = false; lm.active = true; } logCaseEvent(c, actingName(), '本地管理：继续选购'); }
+  else carriedContinue('buy');
+  lmBuyModalRender();
+}
+function lmBuyModalRender(){
+  var c = getCurrentCase(), ov = document.getElementById('lm-buy-overlay');
+  var lm = c && c.localMgmt, keep = !!(c && LM_BUY_OPEN===c.id && lm && !lm.ended && (lm.step==='buy' || lm.addBuy));
+  if(!keep){ LM_BUY_OPEN = ''; if(ov) ov.classList.remove('open'); return; }
+  if(!ov){ ov = document.createElement('div'); ov.id = 'lm-buy-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 190; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:820px;max-width:94vw;max-height:88vh;overflow:auto;padding:22px 24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理项目 · '+cesc(c.name)+'</div><button class="btn-ghost" onclick="lmNoBuy()" title="关闭">✕</button></div>'+lmBuyHtml(c)+'</div>';
+  ov.classList.add('open');
+}
+(function(){ var r0 = renderCaseBody; renderCaseBody = function(c){ var r = r0.apply(this, arguments); try{ if(LM_BUY_OPEN) lmBuyModalRender(); }catch(e){ console.error('[本地选购弹窗重画]', e); } return r; }; })();
+
+/* ---- ［本次使用］：从「术后 · 未预约」和「本地管理 · 未使用」勾选今天要做的 → 移到今日项目（已经约在别天的预约项目不在这里选，改日子用［修改时间］） ---- */
+var IN_USE_CTX = null;
+function inUseOpen(){
+  var c = getCurrentCase(); if(!c) return; IN_USE_CTX = c.id;
+  var M = inContModel(c), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var careL = M.grp.none.map(function(r, i){ var s = r.s, en = careEntryOfRow(r.c, s), nm = en ? (en.x.name||en.x.mgmt) : String(s.content||'').replace(/（.*$/, ''), sn = s.projectName ? buyName(s.projectName) : '';
+    return '<label class="case-field-row" style="align-items:center;cursor:pointer;"><input type="checkbox" id="iu-care-'+i+'" data-id="'+r.s.id+'" style="flex-grow:0;margin-right:10px;"><span style="flex-grow:1;font-size:13px;">'+e(nm)+(sn ? ' <span style="font-size:12px;color:var(--muted);">对应施术 · '+e(sn)+'</span>' : '')+'</span><span style="font-size:12px;color:var(--muted);">术后管理 · 1 次</span></label>'; }).join('');
+  var seen = {}, holds = clientHoldingsSorted(c.name).filter(function(h){ return h.category!=='术后管理' && holdingRemaining(h)>0; });
+  var localL = holds.map(function(h, i){ var remaining = holdingRemaining(h), pr = PROJECT_LIBRARY.filter(function(p0){ return p0.origin==='IN' && p0.name===h.itemName; })[0];
+    var nb = h.batches.slice().sort(function(a,b){ return a.date<b.date?-1:1; }).filter(function(b){ return !b.voided && b.bought-b.used>0; })[0], ovals = pr && pr.opt && nb ? optValuesFor(pr, nb.spec) : [];
+    var optSel = ovals.length ? '<select id="iu-opt-'+i+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"><option value="">选择'+pr.opt.label+'</option>'+ovals.map(function(v){ return '<option>'+v+'</option>'; }).join('')+'</select>' : '';
+    return '<div class="case-field-row" style="align-items:center;"><input type="checkbox" id="iu-hold-'+i+'" data-name="'+e(h.itemName)+'" style="flex-grow:0;margin-right:10px;"><span style="flex-grow:1;font-size:13px;">'+e(h.itemName)+' <span style="font-size:12px;color:var(--muted);">本地管理</span></span><span style="display:flex;align-items:center;gap:8px;white-space:nowrap;">'+optSel+'<span style="font-size:12px;color:var(--slate2);">剩余 '+remaining+' 次</span>'+qtyInputHtml({id:'iu-qty-'+i, value:1, min:1, max:remaining})+'</span></div>'; }).join('');
+  var ov = document.getElementById('in-use-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'in-use-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 195; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:640px;max-width:94vw;max-height:86vh;overflow:auto;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">本次使用 · '+e(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">勾选今天要做的项目，确认后移到「今日项目」。已经约在别天的术后项目不在这里选，改日子请在预约项目里按［修改时间］。</div>'+
+    ((careL||localL) ? (careL ? '<div style="font-size:12px;font-weight:700;margin:6px 0 2px;">术后项目 · 未预约</div>'+careL : '')+(localL ? '<div style="font-size:12px;font-weight:700;margin:10px 0 2px;">本地管理 · 未使用</div>'+localL : '') : '<div style="font-size:13px;color:var(--muted);padding:12px 0;">没有可用的项目</div>')+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;"><button class="btn-outline" onclick="inUseClose()">取消</button><button class="btn-primary" onclick="inUseConfirm()">确认</button></div></div>';
+  ov.classList.add('open');
+}
+function inUseClose(){ var ov = document.getElementById('in-use-overlay'); if(ov) ov.classList.remove('open'); IN_USE_CTX = null; }
+function inUseConfirm(){
+  var c = getCurrentCase(); if(!c || IN_USE_CTX!==c.id) return;
+  var careIds = [], i, el;
+  for(i=0; (el = document.getElementById('iu-care-'+i)); i++){ if(el.checked) careIds.push(el.getAttribute('data-id')); }
+  var holds = clientHoldingsSorted(c.name).filter(function(h){ return h.category!=='术后管理' && holdingRemaining(h)>0; }), picks = [];
+  for(i=0; (el = document.getElementById('iu-hold-'+i)); i++){ if(el.checked){ var h = holds.filter(function(x){ return x.itemName===el.getAttribute('data-name'); })[0]; if(!h) continue; var oe = document.getElementById('iu-opt-'+i), qe = document.getElementById('iu-qty-'+i), qty = Math.min(parseInt(qe && qe.value, 10) || 1, holdingRemaining(h));
+      if(oe && !oe.value){ alert('「'+h.itemName+'」使用时要先选好选项（模式 / 部位 / 种类）'); return; } picks.push({h:h, qty:qty, opt:oe ? oe.value : '', oe:oe}); } }
+  if(!careIds.length && !picks.length){ alert('请至少勾选一项'); return; }
+  if(careIds.length){ c.careToday = (c.careToday||[]).concat(careIds.filter(function(id){ return (c.careToday||[]).indexOf(id)<0; })); logCaseEvent(c, actingName(), '本次使用：术后管理 '+careIds.length+' 项加进今日项目'); }
+  if(picks.length){
+    if(!c.localMgmt){ if(!localCarried(c)) c.localMgmt = {active:true, ended:false, step:'active', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}}; if(!c.localMgmtDay) c.localMgmtDay = todayStr(); }
+    var ctx = c.localMgmt || c, scope = c.localMgmt ? 'lm' : 'main', today = todayStr();
+    picks.forEach(function(p){ var actual = useHolding(c.name, p.h.itemName, c.id, today, p.qty, scope, p.opt); if(actual>0){ ctx.mgmtUses = ctx.mgmtUses || []; ctx.mgmtUses.push({itemName:p.h.itemName, qty:actual, date:today, opt:p.opt||undefined}); logCaseEvent(c, ME_NAME, '本地管理：本次使用了'+p.h.itemName+(p.opt ? '（'+p.opt+'）' : '')+' '+actual+'次，剩余'+holdingRemaining(p.h)+'次'); } });
+    ctx.mgmtActive = true; ctx.mgmtDone = false; ctx.mgmtStatus = null; ctx.addUse = false; if(scope==='lm'){ ctx.step = 'active'; ctx.ended = false; ctx.active = true; }
+  }
+  inUseClose(); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+}
 function followupCareCardHtml(c){
   var rows = [];
   CASE_ITEMS.forEach(function(x){ if(x.name!==c.name || x.id===c.id) return; careRows(x).forEach(function(s){ if(s.place==='IN' && !s.skipped) rows.push({c:x, s:s}); }); });
@@ -10109,8 +10177,8 @@ function subTodayTabHtml(c){
   var ctx = subCtxOf(c), m = ctx.m, parts = [], e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   if(ctx.isRec){
     if(isRevEval(c)) parts.push(revEvalTabHtml(c)); /* 当天推进的流程：复诊评估（评估卡原样沿用，操作都在这里） */
-    var lt = ''; if(showLocalTab(c) || isContCase(c) || c.localMgmt){ var sv = c.activeCaseTab; c.activeCaseTab = 'localmgmt'; try{ lt = caseTabContentLegacy(c); }finally{ c.activeCaseTab = sv; } }
-    if(lt){ if(isRevEval(c) && !isContCase(c) && !/项目卡/.test(lt)) parts.push(inContCardHtml(c)); parts.push(lt); } else if(isRevEval(c)) parts.push(inContCardHtml(c)); /* CMD-1026-09 A2：复诊子案件即使还没有术后管理 / 本地项目，项目卡（入口［＋添加本地管理项目］）也要在 */
+    if(isRevEval(c) || isContCase(c)){ parts.push(inContCardHtml(c)); } /* CMD-1026-12：复诊 / 继续的子记录页项目 = 今日项目 + 剩余项目两张卡（本地选购走弹窗） */
+    else { var lt = ''; if(showLocalTab(c) || c.localMgmt){ var sv = c.activeCaseTab; c.activeCaseTab = 'localmgmt'; try{ lt = caseTabContentLegacy(c); }finally{ c.activeCaseTab = sv; } } if(lt) parts.push(lt); } /* CMD-1026-09 A2：复诊子案件即使还没有术后管理 / 本地项目，项目卡（入口［＋添加本地管理项目］）也要在 */
     if(!parts.length) parts.push('<div class="card" style="padding:22px 24px;font-size:13px;color:var(--muted);">这一天还没有项目。要做术后管理 / 本地项目，请在这里选购或使用，或回主案件的术后管理 tab 看还剩什么。</div>');
   } else {
     var d = ctx.v.date, rows = summaryRowsOf(m).filter(function(r){ return r.boughtAt===d || (r.uses||[]).some(function(u){ return u.date===d; }); });

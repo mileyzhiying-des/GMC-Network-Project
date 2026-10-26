@@ -3390,15 +3390,6 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ch.revisitEval = {at:nowFullDt()}; ch.consultRequested = true; ch.consultStatus = 'paid_waiting_kr'; ch.revisitQuestion = '想问R135问题'; ch.careToday = ['r135s'];
     var rh = revEvalTabHtml(ch); ST.ok(/复诊评估 · 等待 KR 室长确认时间/.test(rh) && rh.indexOf('想问R135问题')<0 && />展开</.test(rh), 'A1：复诊评估卡默认收起，标题行带状态 +［展开］');
     toggleRevOpen(ch.id); ST.ok(revEvalTabHtml(ch).indexOf('想问R135问题')>-1, 'A1：展开后显示询问问题'); toggleRevOpen(ch.id);
-    var card = inContCardHtml(ch); ST.ok(/＋ 添加本地管理项目/.test(card) && !/继续选购/.test(card) && !/使用持有项目<\/button>/.test(card.replace(/[\s\S]*/,'')), 'A2：项目卡入口只有［＋ 添加本地管理项目］');
-    ST.ok(/今日项目/.test(card) && /操作完成/.test(card) && /本次不做/.test(card) && /对应施术/.test(card) && /使用参考/.test(card), 'A3：术后管理 今日项目 栏位 + ［操作完成］［本次不做］');
-    ST.ok(!/本地管理 \d/.test(card), 'A5：没有项目的「本地管理」胶囊不显示');
-    careNotToday(ch.id, 'r135s'); var card2 = inContCardHtml(ch); ST.ok(/未预约/.test(card2) && ch.careToday.indexOf('r135s')<0, 'A3：［本次不做］退回未预约');
-    ch.careToday = ['r135s']; var sI = p0.subItems.filter(function(x){ return x.id==='r135s'; })[0]; sI.done = true; sI.usedInCase = ch.id; var card3 = inContCardHtml(ch); ST.ok(/已完成/.test(card3) && card3.indexOf('onclick="careNotToday')<0, 'A3：今天做完留在今日项目显示已完成，没有按钮'); sI.done = false; delete sI.usedInCase;
-    CLIENT_HOLDINGS[p0.name] = (CLIENT_HOLDINGS[p0.name]||[]).concat([{itemName:'R135 热玛吉', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -3), bought:3, used:0, usages:[]}]}]);
-    var card4 = inContCardHtml(ch); ST.ok(/本地管理 \d/.test(card4), 'A4：有持有项目 → 本地管理胶囊出现');
-    IN_CONT_TAB[ch.id] = 'local'; card4 = inContCardHtml(ch); ST.ok(/未使用项目/.test(card4) && /使用持有项目/.test(card4), 'A4：本地管理 未使用项目 + ［使用持有项目］');
-    ST.open(ch); inAddLocalProject(); ST.ok(!!ch.localMgmt && ch.localMgmt.step==='buy', 'A2：［＋ 添加本地管理项目］进入现有本地选购流程（step=buy）');
   });
 
   ST.def('R137b','CMD-1026-11（KM1 分页，需要 pcStage 夹具）：KR 面诊报告出来后，面诊卡 + 到访目的合成一张（默认折叠，展开全部打开）',function(){
@@ -3460,6 +3451,45 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(k2.caseNo===p0.caseNo+'-08', '7：再来一个子记录 -08，不撞号：'+k2.caseNo);
     ST.ok(tzRender('复诊评估已送出：X（'+k2.caseNo+' · 11/26）').indexOf(k2.caseNo)>-1, '7：通知里的子案件号原样显示（不再换成「到院」）');
     ST.ok(relBackOf(p0).every(function(x){ return x.c.id!==k1.id && x.c.id!==k2.id; }), '8：关联案件不列自己的子案件');
+  });
+
+  ST.def('R138a','CMD-1026-12（A1 分页）：子案件页 今日项目 + 剩余项目两张卡 / 本次使用勾选 / ＋添加本地管理项目弹窗真的出现 / 买完进未使用',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }; var nm = 'R138', td = todayStr();
+    try{
+      var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20);
+      p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true; p0.hasArrived = true; p0.stage = 'travel'; p0.krDepositPaid = true;
+      p0.subItems = [{id:'r138a', kind:'术后管理记录', place:'IN', content:'术后复诊', date:td, done:false, projectName:'隆鼻'}, {id:'r138b', kind:'术后管理记录', place:'IN', content:'拆线', date:ymdAdd(td, 3), done:false, projectName:'隆鼻'}, {id:'r138c', kind:'术后管理记录', place:'IN', content:'消肿', date:ymdAdd(td, 6), done:false, projectName:'隆鼻'}];
+      CLIENT_HOLDINGS[p0.name] = (CLIENT_HOLDINGS[p0.name]||[]).concat([{itemName:'R138 热玛吉', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -9), bought:3, used:0, usages:[]}]}]);
+      var ch = ST.newRes(nm+'c', {phone:clientPhoneOf(p0.name), purpose:'复诊'}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.name = p0.name; ch.visitDate = td; ch.visitTime = '11:00'; ch.materialsConfirmed = true; ch.subState = 'arrived'; ch.arrivedDay = td; ch.needsConsult = true;
+      joinMain(ch, p0); ch.revisitEval = {at:nowFullDt()}; ch.consultRequested = true; ch.consultStatus = 'paid_waiting_kr'; ch.resumeFrom = {caseId:p0.id, type:'复诊评估', types:['复诊评估','术后管理']}; ch.careToday = ['r138a']; var bk = ST.newRes(nm+'b', {phone:clientPhoneOf(p0.name), purpose:'术后管理'}); bk = CASE_ITEMS.filter(function(x){ return x.id===bk.id; })[0]; bk.name = p0.name; bk.visitDate = ymdAdd(td, 3); bk.visitTime = '14:00'; bk.careFor = {caseId:p0.id, keys:['r138b']};
+      ST.open(ch); renderCaseBody(ch);
+      var M = inContModel(ch), t1 = inContTodayHtml(ch, M), t2 = inContRestHtml(ch, M);
+      ST.ok(/项目类型/.test(t1) && /对应施术/.test(t1) && /预约时间/.test(t1) && /术后管理/.test(t1) && /操作完成/.test(t1) && /本次不做/.test(t1) && t1.indexOf('R138 热玛吉')<0, '今日项目卡：栏位 + 术后管理一行［操作完成］［本次不做］，本地项目还没用不在这里');
+      ST.ok(/剩余项目/.test(t2) && /＋ 添加本地管理项目/.test(t2) && />本次使用</.test(t2) && /术后项目 \d/.test(t2) && /本地管理 \d/.test(t2), '剩余项目卡：标题行右边［＋ 添加本地管理项目］［本次使用］，胶囊 术后项目 / 本地管理');
+      ST.ok(/预约项目/.test(t2) && /修改时间/.test(t2), '术后项目：预约项目（拆线，另一天）+［修改时间］');
+      IN_CONT_TAB[ch.id] = 'local'; t2 = inContRestHtml(ch, inContModel(ch)); ST.ok(/未使用项目/.test(t2) && /R138 热玛吉/.test(t2) && t2.indexOf('使用持有项目')<0, '本地管理：未使用项目，没有［使用持有项目］');
+      /* 本次不做：术后退回未预约 */
+      careNotToday(ch.id, 'r138a'); var M2 = inContModel(ch); ST.ok(M2.grp.none.some(function(r){ return r.s.id==='r138a'; }) && !M2.grp.today.some(function(r){ return r.s.id==='r138a'; }), '术后［本次不做］退回未预约');
+      /* 本次使用勾选 */
+      inUseOpen(); var ov = document.getElementById('in-use-overlay'); ST.ok(ov && ov.classList.contains('open') && ov.innerText.indexOf('拆线')<0 && /术后项目 · 未预约/.test(ov.innerText) && /本地管理 · 未使用/.test(ov.innerText), '［本次使用］弹窗真的出现：列未预约术后 + 未使用本地，不含已约在别天的拆线');
+      document.getElementById('iu-care-0').checked = true; document.getElementById('iu-hold-0').checked = true; inUseConfirm();
+      var M3 = inContModel(ch); ST.ok(M3.grp.today.some(function(r){ return r.s.id==='r138a'; }) && M3.uses.length===1 && M3.uses[0].u.itemName==='R138 热玛吉', '勾选确认后移到今日项目：术后 + 本地');
+      var t3 = inContTodayHtml(ch, M3); ST.ok(/R138 热玛吉/.test(t3) && /本地管理/.test(t3), '今日项目卡里有本地管理一行');
+      markMgmtRows('lm', 'cancelled', false, 0); var M4 = inContModel(ch); ST.ok(M4.uses.length===0 && M4.unused.some(function(x){ return x.h.itemName==='R138 热玛吉' && x.left===3; }), '本地［本次不做］：次数归还，回到未使用');
+      /* 添加本地管理项目：弹窗真的出现 */
+      var pj = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active!==false; })[0];
+      inAddLocalProject(); var bov = document.getElementById('lm-buy-overlay');
+      ST.ok(bov && bov.classList.contains('open') && /添加本地管理项目/.test(bov.innerText) && /结算/.test(bov.innerText) && /本次不购买/.test(bov.innerText) && /全部项目/.test(bov.innerText), '［＋ 添加本地管理项目］弹出本地选购弹窗（含 全部项目 / ［结算］［本次不购买］）');
+      var bw = bov.getBoundingClientRect(); ST.ok(bw.width>200 && getComputedStyle(bov).display!=='none', '弹窗在画面上可见');
+      lmNoBuy(); bov = document.getElementById('lm-buy-overlay'); ST.ok(!bov || !bov.classList.contains('open'), '［本次不购买］直接关掉弹窗');
+      inAddLocalProject(); var lm = ch.localMgmt; ST.ok(lm && lm.step==='buy', '再次打开：本地管理在选购步骤');
+      lm.cart = [{kind:'project', key:pj.id, projectId:pj.id, name:pj.name, price:100000, unitPrice:100000, qty:1, discountPct:100}];
+      var n0 = (lm.batches||[]).length; lmSettle(); bov = document.getElementById('lm-buy-overlay');
+      ST.ok((lm.batches||[]).length===n0+1 && (!bov || !bov.classList.contains('open')), '［结算］付款后弹窗关掉');
+      var M5 = inContModel(ch); ST.ok(M5.unused.some(function(x){ return x.h.itemName===pj.name; }) && !M5.uses.some(function(x){ return x.u.itemName===pj.name; }), '买完的项目先在「本地管理 · 未使用」，不自动算今日使用');
+      ST.ok(showSettleTab(ch), '付款后「结算」tab 出现');
+    } finally { window.alert = al; window.confirm = cf; var b2 = document.getElementById('lm-buy-overlay'); if(b2) b2.classList.remove('open'); LM_BUY_OPEN = ''; try{ inUseClose(); }catch(e){} }
   });
 
   ST.def('R133a','CMD-1026-07（A1 分页）：第一个对话框重做——请选择本次服务类型、只有［确认］、本次服务内容勾选规则、第二个弹窗只按勾的内容展开',function(){
@@ -3893,11 +3923,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       var c = ST.newRes('R107p', {phone:ph}); ST.arrive(c); c = getCurrentCase(); c.metaviewStatus = 'ready'; setLinkedCase(prior.id); setNeedsConsult(false);
       var h = inContCardHtml(c);
-      ST.ok(/项目卡/.test(h) && />术后管理 2</.test(h.replace(/\s+/g,'')) || /术后管理 2/.test(h), '两个 tab：术后管理 2');
+      ST.ok(/剩余项目/.test(h) && /术后项目 2/.test(h), '（CMD-1026-12）剩余项目卡 胶囊：术后项目 2');
       ST.ok(!/本地管理 \d/.test(h) && !/已完成 \d/.test(h), '（CMD-1026-09）本地管理 0 不显示，没有「已完成」tab');
-      ST.ok(/今日项目/.test(h) && /预约项目/.test(h) && /未预约/.test(h) && /来自主案件/.test(h), '术后管理 今日 / 预约 / 未预约 + 来自主案件');
+      ST.ok(/今日项目/.test(h) && /未预约项目/.test(h) && /来自主案件/.test(h), '今日项目卡 + 剩余项目里 未预约项目（没有项目的分段不显示）+ 来自主案件');
       ST.ok(/>对应施术</.test(h) && />次数</.test(h) && />使用参考</.test(h) && />建议时间</.test(h) && />预约时间</.test(h) && />操作</.test(h), '（CMD-1026-09）栏位：项目｜对应施术｜次数｜使用参考｜建议时间｜预约时间｜操作');
-      ST.ok(/openCareUse/.test(h) && />预约</.test(h), '未预约行有［预约］');
+      ST.ok(/>预约</.test(h), '未预约行有［预约］');
       ST.ok(/kr-pc-scroll/.test(h), '固定高度内部滚动');
       /* 本地管理 tab：有购买批次时列出 */
       var hh = getClientHoldings(c.name); if(hh && hh[0]) hh[0].batches.push({caseId:c.id, date:todayStr(), bought:3, used:1, usages:[]}); else CLIENT_HOLDINGS[c.name] = (CLIENT_HOLDINGS[c.name]||[]).concat([{itemName:'R107 本地', category:'本地项目', batches:[{caseId:c.id, date:todayStr(), bought:3, used:1, usages:[]}]}]);
@@ -4806,7 +4836,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       concernPartDef(rd.part).angles.forEach(function(a){ mockUploadRecovery('隆鼻', a.id); });
       ST.ok(caseAttachments(c2).some(function(f){ return /术后恢复 · 隆鼻/.test(f.label); }), '恢复照片进附件');
       confirmMaterials(); c2 = getCurrentCase(); ST.ok(c2.materialsConfirmed && c2.needsConsult===false && c2.activeCaseTab==='localmgmt', '不面诊确认 → 本地管理');
-      var lh = caseTabContentHtml(c2); ST.ok(/术后管理/.test(lh) && /术后复诊/.test(lh) && /openCareUse/.test(lh) && /本地管理/.test(lh), '本地管理分「术后管理 / 本地管理」两类');
+      var lh = caseTabContentHtml(c2); ST.ok(/术后复诊/.test(lh) && />本次使用</.test(lh) && /今日项目/.test(lh) && /剩余项目/.test(lh), '（CMD-1026-12）项目分 今日项目 / 剩余项目 两张卡，未预约的术后管理用［本次使用］勾选');
       openCareUse('main', prior.id, 'r86s1'); confirmCareUse();
       var ps = (prior.subItems||[]).filter(function(x){ return x.id==='r86s1'; })[0]; ST.ok(ps.done && (c2.postcareUses||[]).length===1, '做完 → 原案件印尼术后管理标完成，本案件记术后管理使用');
       /* 4 不关联走一般流程 */
