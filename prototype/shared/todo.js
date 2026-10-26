@@ -121,13 +121,15 @@ function krRevisitKidRows(rows){
   });
   return out;
 }
+/* 复诊评估子记录在主案件「复诊评估 #n」流程里的 key（revisitN），用来展开那一笔 */
+function todoKidFlowKey(r){ return Store.withClinic(r.clinicId, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===r.kidOf; })[0]; var f = m ? flowsOf(m).filter(function(x){ return x.kind==='revisit' && x.caseId===r.id; })[0] : null; return f ? 'revisit'+f.n : ''; }) || ''; }
 function krTodoItems(rows){
   rows = (rows||[]).concat(krRevisitKidRows(rows));
   var out = [], me = currentAccount(), today = krToday(), h = krHData(), isDir = krIsDirector(), work = canDo('krwork');
   var meId = me ? me.id : '';
   rows.forEach(function(r){
     var c = r.c, mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name)), push = function(it){ it.mine = mine; it.rowKey = r.clinicId+':'+r.id; out.push(it); };
-    var goCase = function(tab){ return function(){ krShowCase(r.clinicId, r.id, {tab:tab}); }; };
+    var goCase = function(tab){ return function(){ if(r.kidOf){ krShowCase(r.clinicId, r.kidOf, {tab:'revisit', flow:todoKidFlowKey(r)}); return; } krShowCase(r.clinicId, r.id, {tab:tab}); }; }; /* CMD-1026-14 一：复诊评估子记录 KR 没有自己的案件页，点了进主案件的复诊 tab 并展开那一笔 */
     if(work){
       if(c.consultStatus==='paid_waiting_kr') push(todoMk('eta', (isRevEval(c) ? '复诊评估：确认评估时间和结果时间' : isRevisitConsult(c) ? '复诊面诊：确认面诊时间和预计出评估时间' : '确认预计出报告时间')+(c.wantConsult ? '（客人希望：'+c.wantConsult+'）' : ''), c, '', false, goCase('consult')));
       if(c.consultStatus==='awaiting_report' && !c.consultContentAt){ var wo = reportOverdueNow(c); push(todoMk('waitdir', (isRevEval(c) ? '等院长评估' : '等院长上传面诊')+(wo ? '（已超时）' : (c.consultStartedAt ? (isRevEval(c) ? '（评估中）' : '（面诊中）') : '')), c, todoEtaDue(c), wo, goCase('consult'), {gray:!wo})); }
@@ -136,9 +138,12 @@ function krTodoItems(rows){
       if(c.stage==='travel' && scheduleState(c)==='Pending') push(todoMk('sched', '确认施术时间', c, (c.krSchedule||{}).primary||'', false, goCase('proc')));
       if(c.stage==='travel' && scheduleState(c)==='Changing') push(todoMk('change', '改期待确认', c, (c.krSchedule||{}).changePrimary||'', false, goCase('proc')));
       var pp = pendingPayItems(c); if(pp.length) push(todoMk('pay', '在韩加项待付款：'+pp.map(function(i){ return buyName(i.name); }).join('、'), c, '', false, goCase('proc')));
-      if(c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'postcare'}); })); /* CMD-1015-31：直接到项目卡术后管理分页，用［预约时间］约 */
+      if(!c.krTripEnded && c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'postcare'}); })); /* CMD-1015-31：直接到项目卡术后管理分页，用［预约时间］约 */
     }
-    if(work){ (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0) push(todoMk('pcdue', '联络 IN 确认客人行程：术后管理已过建议日期 '+pcDaysLate(s.date)+' 天（'+s.content+'）', c, s.date, true, goCase('proc'))); }); } /* CMD-1015-17 */
+    /* CMD-1015-17 / CMD-1026-14：联络 IN 确认客人行程——韩国行程已结束（KR 按的或 IN 到访自动结束）后不再出现（客人已回印尼，回印尼做的术后管理由 IN 处理）；同一案件的多笔合成一条（原来每笔一条、key 相同所以显示两次）；［已处理］按行号 + 日期记，只压这一件事 */
+    if(work && !c.krTripEnded){ var pdRows = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0; });
+      if(pdRows.length){ var pdKey = 'pcdue|'+pdRows.map(function(s){ return s.id+'@'+s.date; }).join(','), pdLate = Math.max.apply(null, pdRows.map(function(s){ return pcDaysLate(s.date); })), pdOld = pdRows.slice().sort(function(a, b){ return String(a.date).localeCompare(String(b.date)); })[0];
+        if(!(c.todoAcks||{})[pdKey]){ var pdIt = todoMk('pcdue', '联络 IN 确认客人行程：术后管理已过建议日期 '+pdLate+' 天（'+pdRows.map(function(s){ return s.content; }).join('、')+'）', c, pdOld.date, true, goCase('proc')); pdIt.ack = true; pdIt.ackKey = pdKey; push(pdIt); } } }
     /* 院长：上传面诊内容（面诊已安排、院长还没上传） */
     if(isDir && c.consultStatus==='awaiting_report' && !c.consultContentAt) push(isRevisitConsult(c) ? todoMk('recover', (isRevEval(c) ? '复诊评估：上传评估（' : '复诊：上传恢复确认内容（')+((c.followProjects||[]).join('、')||'复诊')+'）', c, todoEtaDue(c), reportOverdueNow(c), goCase('consult')) : todoMk('upload', '上传面诊内容', c, todoEtaDue(c), reportOverdueNow(c), goCase('consult'))); /* CMD-1021-19：复诊面诊 = 院长「恢复确认」，不算「待面诊」 */
     if(isDir && isRevisitConsult(c) && c.consultStatus==='paid_waiting_kr') push(todoMk('recoverwait', (isRevEval(c) ? '复诊评估：等 KR 室长确认评估时间（' : '复诊面诊：等 KR 室长确认时间（')+((c.followProjects||[]).join('、')||'复诊')+'）', c, '', false, goCase('consult'))); /* CMD-1021-24：KR 还没确认时间也先让院长看到（计入「恢复确认」卡，参考名单，不进待办） */
@@ -157,9 +162,11 @@ function krTodoItems(rows){
     if(work && tripAskDue(c)) push(todoMk('tripend', tripAskWhy(c)==='left' ? '韩国行程是否结束？（客人已过离开日期）' : '韩国行程是否结束？', c, tripLastVisitDay(c), false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ try{ krTripOpen(); }catch(e){} }, 250); }));
     /* 今天到院（院长账号看自己的案件） */
     var ks = c.krSchedule;
-    if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed)
-      push(todoMk('today', todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived') ? '客人还没到：联络 IN 确认行程' : '今天到院：施术', c, today+' '+(ks.confirmedTime||''), todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived'), function(){ krOpenSubCard(r.clinicId, r.id); }, {no:(krSurgSub(c) ? subCaseNo(c, krSurgSub(c)) : '') || c.caseNo}));
-    krTodayVisits(c).forEach(function(s){ push(todoMk('today', todoNotArrivedOver(today, s.time, !!s.arrived) ? '客人还没到：联络 IN 确认行程' : '今天到店：'+(s.content||'术后管理'), c, today+' '+(s.time||''), todoNotArrivedOver(today, s.time, !!s.arrived), function(){ krOpenSubCard(r.clinicId, r.id, s.id); }, {no:subCaseNo(c, s) || c.caseNo})); });
+    if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed){
+      var nA = todoNotArrivedOver(today, ks.confirmedTime, ks.status==='arrived'), aKey = 'arrive|'+today+'|'+(ks.confirmedTime||'');
+      if(!(nA && ((c.todoAcks||{})[aKey] || c.krTripEnded))){ var tIt = todoMk('today', nA ? '客人还没到：联络 IN 确认行程' : '今天到院：施术', c, today+' '+(ks.confirmedTime||''), nA, function(){ krOpenSubCard(r.clinicId, r.id); }, {no:(krSurgSub(c) ? subCaseNo(c, krSurgSub(c)) : '') || c.caseNo}); if(nA){ tIt.ack = true; tIt.ackKey = aKey; } push(tIt); }
+    }
+    krTodayVisits(c).forEach(function(s){ var nV = todoNotArrivedOver(today, s.time, !!s.arrived), vKey = 'arrive|'+today+'|'+(s.time||'')+'|'+s.id; if(nV && ((c.todoAcks||{})[vKey] || c.krTripEnded)) return; var vIt = todoMk('today', nV ? '客人还没到：联络 IN 确认行程' : '今天到店：'+(s.content||'术后管理'), c, today+' '+(s.time||''), nV, function(){ krOpenSubCard(r.clinicId, r.id, s.id); }, {no:subCaseNo(c, s) || c.caseNo}); if(nV){ vIt.ack = true; vIt.ackKey = vKey; } push(vIt); });
   });
   /* CMD-1014-16：IN 在 KR 日程占位的预约 → 确认预约时间；确认后的预约今天到店 */
   try{ var hidB = krHospitalIdOfMe(), meB = currentAccount(); (krbList(hidB)||[]).forEach(function(b){
@@ -249,18 +256,36 @@ function todoRowHtml(it){
   var i = TODO_ACTS.push(it.go) - 1, st = todoStatusOf(it); TODO_ACT_CASE[i] = it.caseId||'';
   var urgeBtn = it.urge ? '<button class="btn-primary todo-urge" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</button>' : '';
   var proc = String(it.text||'').replace(/（已超时）|\(已超时\)/g, '').trim();
-  return '<div class="todo-row'+(it.pin?' pin':'')+(it.over?' is-over':'')+((it.ref || (todoRefMode() && !it.over && it.kind!=='recover'))?' is-ref':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
+  var ackBtn = (TODO_ANYACK ? '<div class="todo-ack">'+(it.ack ? '<button class="btn-outline" onclick="event.stopPropagation();todoAckOpen('+i+')">已处理</button>' : '')+'</div>' : '');
+  return '<div class="todo-row'+(TODO_ANYACK ? ' has-ack' : '')+(it.pin?' pin':'')+(it.over?' is-over':'')+((it.ref || (todoRefMode() && !it.over && it.kind!=='recover'))?' is-ref':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
     '<div class="todo-at">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+todoFmtTimeHtml(todoShownAt(it))+'</div>'+
     '<div class="todo-stage" title="'+todoEsc(it.stage||'')+'">'+(it.pin?'📌 ':'')+todoEsc(it.stage||'—')+'</div>'+
     '<div class="todo-text" title="'+todoEsc(proc)+'">'+todoEsc(proc)+'</div>'+
     '<div class="todo-due'+(it.over?' over':'')+'">'+(it.due ? todoFmtTimeHtml(it.due) : '—')+'</div>'+
     '<div class="todo-st '+st.cls+'">'+st.t+urgeBtn+'</div>'+
-    '<div class="todo-who">'+(it.name ? '<b>'+todoEsc(it.name)+'</b>' : '<span style="color:var(--muted);">—</span>')+(it.no ? '<span>'+todoEsc(it.no)+'</span>' : '')+'</div></div>';
+    '<div class="todo-who">'+(it.name ? '<b>'+todoEsc(it.name)+'</b>' : '<span style="color:var(--muted);">—</span>')+(it.no ? '<span>'+todoEsc(it.no)+'</span>' : '')+'</div>'+ackBtn+'</div>';
+}
+var TODO_ANYACK = false, TODO_ACK_CTX = null;
+/* CMD-1026-14 三：提醒联络类待办的［已处理］——可选填备注，确认后待办消失，记进案件 Timeline（谁 / 什么时候 / 备注）；记在案件 todoAcks 里按「这一件事」的 key，只压这一件，新的事（日期 / 行不同）不受影响 */
+function todoAckOpen(i){
+  var it = TODO_LAST.filter(function(x){ return x.go===TODO_ACTS[i]; })[0]; if(!it || !it.ack) return;
+  TODO_ACK_CTX = {key:it.ackKey, caseId:it.caseId, clinicId:(it.rowKey||'').split(':')[0], text:String(it.text||'').replace(/（已超时）/g, ''), name:it.name};
+  var ov = document.getElementById('todo-ack-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'todo-ack-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">已处理 · '+todoEsc(it.name||'')+'</div><div style="font-size:13px;color:var(--slate2);margin-bottom:10px;">'+todoEsc(TODO_ACK_CTX.text)+'</div><textarea id="todo-ack-note" rows="3" placeholder="备注（选填），例如：已联络，客人说回印尼做" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="todoAckClose()">取消</button><button class="btn-primary" onclick="todoAckSave()">确认已处理</button></div></div>';
+  ov.classList.add('open');
+}
+function todoAckClose(){ var ov = document.getElementById('todo-ack-overlay'); if(ov) ov.classList.remove('open'); TODO_ACK_CTX = null; }
+function todoAckSave(){
+  var x = TODO_ACK_CTX; if(!x) return; var note = (document.getElementById('todo-ack-note')||{}).value || ''; note = note.trim(); var by = actingName();
+  var doIt = function(){ var c = CASE_ITEMS.filter(function(y){ return y.id===x.caseId; })[0]; if(!c) return; c.todoAcks = c.todoAcks || {}; c.todoAcks[x.key] = {by:by, at:nowFullDt(), note:note}; logCaseEvent(c, by, '已处理提醒：'+x.text+(note ? '；备注：'+note : ''), '沟通'); };
+  try{ if(typeof isKrAccount==='function' && isKrAccount()) Store.mutateClinic(x.clinicId, doIt); else doIt(); }catch(e){ console.error('[已处理]', e); }
+  todoAckClose();
+  try{ if(typeof todoRefresh==='function') todoRefresh(); else if(typeof krRefreshAll==='function') krRefreshAll(); }catch(e){}
 }
 function todoGo(i){ var f = TODO_ACTS[i]; try{ var cid = (TODO_ACT_CASE||{})[i]; if(cid) todoMarkCaseSeen(cid); }catch(e){} if(f) try{ f(); }catch(e){ console.error('[待办跳转]', e); } }
 function todoPaneHtml(all){
   TODO_ACTS = []; TODO_ACT_CASE = []; TODO_LAST = all; todoSeenBaseline(all); todoStampAt(all);
-  var vis = todoVisible(all), n = vis.length;
+  var vis = todoVisible(all), n = vis.length; TODO_ANYACK = vis.some(function(it){ return it.ack; });
   var ubAll = []; try{ ubAll = todoUbItems(); }catch(e){ console.error('[未安排预约]', e); } var ubVis = ubAll.filter(function(it){ return !TODO_UI.mine || it.mine; }), ubTab = TODO_UI.tab==='unbooked' && !todoRefMode();
   if(TODO_UI.collapsed) return '<button class="btn-outline todo-mini" onclick="todoToggle()">待办 '+n+((todoUbDot(ubAll) || todoTabDot(vis)) ? ' <span class="todo-newdot"></span>' : '')+'</button>';
   var boxStyle = ' style="width:auto;"';
@@ -276,7 +301,7 @@ function todoPaneHtml(all){
   var tabs = '<span class="todo-tabs"><span class="todo-tab'+(ubTab ? '' : ' on')+'" onclick="todoSetTab(\'todo\')">待办 '+n+(todoTabDot(vis) ? '<span class="todo-newdot" title="有新的或已逾期的待办"></span>' : '')+'</span><span class="todo-tab'+(ubTab ? ' on' : '')+'" onclick="todoSetTab(\'unbooked\')">未安排预约 '+todoUbCount(ubVis)+(todoUbDot(ubAll) ? '<span class="todo-newdot" title="有新的或已逾期的"></span>' : '')+'</span></span>';
   var headTitle = refMode ? '<b>'+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' '+n+'（参考）</b> <span onclick="todoSetKind(\'\')" title="回到待办" style="cursor:pointer;">✕</span>' : tabs+(ubTab ? '' : tag); /* CMD-1015-08：参考名单标题「今天来访 4（参考）✕」 */
   var inner = ubTab ? todoUbListHtml(ubVis) : ((TODO_UI.kind && !tag) ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+
-    (vis.length ? '<div class="todo-row todo-headrow"><div>出现时间</div><div>阶段</div><div>进程</div><div>截止时间</div><div>状态</div><div>客人</div></div>' : '')+'<div class="todo-list">'+body+'</div>';
+    (vis.length ? '<div class="todo-row todo-headrow"><div>出现时间</div><div>阶段</div><div>进程</div><div>截止时间</div><div>状态</div><div>客人</div>'+(TODO_ANYACK ? '<div></div>' : '')+'</div>' : '')+'<div class="todo-list">'+body+'</div>';
   return '<div class="todo-box'+(refMode?' is-refmode':'')+'"'+boxStyle+'><div class="todo-head">'+headTitle+
     '<span class="todo-seg"><span class="'+(TODO_UI.mine?'':'on')+'" onclick="todoSetMine(false)">全部</span><span class="'+(TODO_UI.mine?'on':'')+'" onclick="todoSetMine(true)">只看我的</span></span>'+
     '<span class="todo-fold" onclick="todoToggle()" title="收起">⟩</span></div>'+inner+'</div>';

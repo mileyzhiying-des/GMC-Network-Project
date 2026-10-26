@@ -534,3 +534,7 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 #toast-stack{top:140px;right:24px;left:auto;bottom:auto;max-height:calc(100vh - 170px);} /* CMD-1022-16：右上角、页头（含案件页第二行按钮）下方，不挡按钮 */
 .shoot-ref-side{display:none;position:fixed;right:0;top:0;bottom:0;width:380px;max-width:92vw;z-index:100030;background:#fff;border-left:1px solid var(--border);box-shadow:-6px 0 24px rgba(0,0,0,.12);flex-direction:column;box-sizing:border-box;}
 .shoot-ref-side.open{display:flex;}
+
+/* CMD-1026-14：提醒联络类待办的［已处理］列 */
+.todo-row.has-ack{grid-template-columns:48px 54px minmax(0,1fr) 48px 46px 52px 64px;}
+.todo-row .todo-ack .btn-outline{padding:3px 8px;font-size:12px;white-space:nowrap;}

@@ -3453,6 +3453,36 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(relBackOf(p0).every(function(x){ return x.c.id!==k1.id && x.c.id!==k2.id; }), '8：关联案件不列自己的子案件');
   });
 
+  ST.def('R140a','CMD-1026-14（KM1 分页，需要 pcStage 夹具）：复诊评估待办点了进主案件复诊 tab 并展开那一笔 / 韩国行程结束后联络 IN 提醒消失、多笔合成一条 / 提醒类有［已处理］、做事类没有 / 已处理后消失、Timeline 有记录、第二天不重新出现',function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
+    window.GMC_NO_TABS = true; var rows0 = krAllCases(), r0 = rows0.filter(function(r){ return r.c.stage==='postcare' || (r.c.procedureItems||[]).length; })[0]; if(!ST.ok(!!r0, '没有 pcStage 夹具主案件')) return;
+    var cid = r0.clinicId, mid = r0.id, td = todayStr();
+    Store.mutateClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0]; if(!m) return;
+      CASE_ITEMS.push({id:'r140kid', name:m.name, clinicId:cid, hospitalId:m.hospitalId, director:m.director, mainId:m.id, caseNo:m.caseNo+'-88', visitDate:td, visitTime:'15:00', subState:'arrived', stage:'consult', needsConsult:true, materialsConfirmed:true, followup:true, revisitEval:{at:nowFullDt()}, consultRequested:true, consultStatus:'paid_waiting_kr', noConsultFee:true, krCoordinator:m.krCoordinator, logEntries:[], resumeFrom:{caseId:m.id, type:'复诊评估', types:['复诊评估']}});
+      m.krTripEnded = null; m.visitClosed = false; m.subItems = (m.subItems||[]).filter(function(s){ return s.id!=='r140a' && s.id!=='r140b'; }).concat([{id:'r140a', no:m.caseNo+'#a', kind:'术后管理记录', place:'IN', content:'术后复诊', date:ymdAdd(td, -4), done:false}, {id:'r140b', no:m.caseNo+'#b', kind:'术后管理记录', place:'IN', content:'拆线', date:ymdAdd(td, -3), done:false}]); });
+    /* 1 点进去 */
+    var it = krTodoItems(krAllCases()).filter(function(i){ return i.caseId==='r140kid' && i.kind==='eta'; })[0]; ST.ok(!!it, '1：复诊评估待办在');
+    it.go(); ST.ok(CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE.id===mid && KR_CASE.tab==='revisit', '1：点了进入 KR 主案件的复诊 tab：'+CURRENT_PAGE_ID+' '+(KR_CASE&&KR_CASE.tab));
+    ST.ok(FLOW_OPEN[mid+':revisit1'] && document.getElementById('kr-casedetail').innerText.indexOf('打开复诊评估')>-1, '1：直接展开那一笔复诊评估 #1（有［打开复诊评估］）');
+    ST.ok(!!krFindCase(cid, 'r140kid'), '1：［打开复诊评估］用的子记录号也能找到案件（原来找不到）'); krOpenCase(cid, 'r140kid'); ST.ok(KR_CASE.id==='r140kid', '1：能打开那一笔复诊评估页');
+    /* 2 提醒合成一条 */
+    var pc = krTodoItems(krAllCases()).filter(function(i){ return i.kind==='pcdue' && i.caseId===mid; }); ST.ok(pc.length===1 && /术后复诊/.test(pc[0].text) && /拆线/.test(pc[0].text), '2：同一案件两笔过期术后管理合成一条（原来两条同 key）：'+pc.length);
+    ST.ok(pc[0].ack && !it.ack, '3：提醒类有 ack 标记，做事类（确认评估时间）没有');
+    var html = todoPaneHtml(krTodoItems(krAllCases())); ST.ok(html.indexOf('todo-ack')>-1 && /openRefund|todoAckOpen/.test(html) && html.indexOf('已处理</button>')>-1, '3：待办栏里提醒行最右边有［已处理］');
+    var nAck = (html.match(/todoAckOpen\(/g)||[]).length, nWork = (html.match(/todo-row/g)||[]).length; ST.ok(nAck < nWork, '3：不是每行都有（做事类没有）：'+nAck+' / '+nWork);
+    TODO_ACK_CTX = {key:pc[0].ackKey, caseId:mid, clinicId:cid, text:pc[0].text, name:pc[0].name}; todoAckOpen; var nt = document.createElement('textarea'); nt.id = 'todo-ack-note'; nt.value = '已联络，客人说回印尼做'; document.body.appendChild(nt); todoAckSave(); nt.remove();
+    ST.ok(!krTodoItems(krAllCases()).some(function(i){ return i.kind==='pcdue' && i.caseId===mid; }), '3：按了已处理 → 待办消失');
+    var m1 = krAllCases().filter(function(r){ return r.id===mid; })[0].c; ST.ok(/已处理提醒/.test(JSON.stringify(m1.logEntries||[])) && /已联络，客人说回印尼做/.test(JSON.stringify(m1.logEntries||[])), '3：案件 Timeline 有记录（谁 / 什么时候 / 备注）');
+    var sh0 = window.DEMO_SHIFT_MS||0; DEMO_SHIFT_MS = sh0+86400000; var again = krTodoItems(krAllCases()).some(function(i){ return i.kind==='pcdue' && i.caseId===mid; }); DEMO_SHIFT_MS = sh0; ST.ok(!again, '3：第二天不会重新出现（ack 按那一件事的 key 记，不按日子）');
+    /* 新的一笔过期 → 是新的事，会出现 */
+    Store.mutateClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0]; m.subItems.push({id:'r140c', no:m.caseNo+'#c', kind:'术后管理记录', place:'IN', content:'消肿管理', date:ymdAdd(td, -2), done:false}); });
+    ST.ok(krTodoItems(krAllCases()).some(function(i){ return i.kind==='pcdue' && i.caseId===mid; }), '3：又有新的过期术后管理 → 是新的事，重新出现');
+    /* 2 韩国行程结束 */
+    Store.mutateClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0]; m.krTripEnded = {at:nowFullDt(), auto:'IN'}; });
+    ST.ok(!krTodoItems(krAllCases()).some(function(i){ return i.kind==='pcdue' && i.caseId===mid; }), '2：韩国行程已结束（IN 到访自动结束也算）→ 「联络 IN 确认客人行程」不再出现');
+    Store.mutateClinic(cid, function(){ CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!=='r140kid'; }); var m = CASE_ITEMS.filter(function(x){ return x.id===mid; })[0]; m.subItems = m.subItems.filter(function(s){ return !/^r140/.test(s.id); }); m.todoAcks = {}; m.krTripEnded = null; });
+  });
+
   ST.def('R139a','CMD-1026-13（A1 分页）：子案件编号一天一个号——一般案件不编号 / 升级当天 -01 / 同一天同一个号 / 取消的号占位 / 项目行不再是子案件号',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     window.GMC_NO_CONFIRM = true; var nm = 'R139', td = todayStr();
