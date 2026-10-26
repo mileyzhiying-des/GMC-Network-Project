@@ -1277,6 +1277,14 @@ function renderCaseStatusBar(c){
   if(false) actionBtn += ''; /* CMD-1021-16：IN［结案］（术后管理（印尼）阶段） */
   var ug = urgeInfo(c);
   if(ug) actionBtn += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#C26A1B;">'+ug.label+'</span><button class="btn-primary" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>';
+  if(mainPageV2(c)){ /* B1 第三行 */
+    var m3 = c, tv = visitsOf(m3).filter(function(v){ return v.date===todayStr() && v.place==='IN'; })[0], line3 = '', btn3 = '';
+    var activeV = activeVisitsOf(m3);
+    if(tv && activeV.some(function(v){ return v.key===tv.key; })){ var onSelf = (tv.rec||tv.caseId)===m3.id; line3 = onSelf ? '今天来访：'+cesc(tv.types.join(' · ')) : '今日进行中：'+cesc(tv.no||'')+'（'+cesc(tv.types.join(' · '))+'）'; if(!onSelf) btn3 = '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openVisitOf(\''+(tv.rec||tv.caseId)+'\')">进入案件</button>'; }
+    else { var nx = activeV.filter(function(v){ return v.date>todayStr(); }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0]; line3 = '下次预约：'+(nx ? cesc(nx.date)+(nx.time ? ' '+cesc(nx.time) : '')+(nx.place==='KR' ? '（韩国）' : '') : '—'); }
+    document.getElementById('case-status-bar').innerHTML = '<div class="card" style="padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><span style="font-size:13px;">'+line3+'</span>'+btn3+'</div>'+(actionBtn ? '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">'+actionBtn+'</div>' : '');
+    renderCaseHeaderActions(c); return;
+  }
   document.getElementById('case-status-bar').innerHTML =
     '<div class="card" style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'+
     '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--slate);">当前状态</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
@@ -1293,6 +1301,7 @@ function renderCaseStatusBar(c){
 function renderCaseHeaderActions(c){
   var el = document.getElementById('case-chat-actions'); if(!el) return;
   el.style.display = c.materialsConfirmed ? 'flex' : 'none';
+  el.style.alignSelf = mainPageV2(c) ? 'flex-end' : ''; /* B1：［发起对话］放在第二行最右 */
   if(!c.materialsConfirmed){ el.innerHTML=''; return; }
   var stageBtn = '';
   var notEnded = !isEnded(c);
@@ -1301,7 +1310,7 @@ function renderCaseHeaderActions(c){
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
   var lmBtn = '';
-  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c)){
+  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c) && !(isChildVisit(c) && (isRevEval(c) || isContCase(c)))){ /* CMD-1026-09 A2：继续 / 复诊子案件页的入口只在项目卡里 */
     lmBtn = '<button class="btn-outline" onclick="addLocalMgmt()">+ 添加本地管理</button>';
   }
   el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' : '') + lmBtn + stageBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
@@ -1348,8 +1357,8 @@ var RESCHED_SELECTED_DATE = null;
  /* Date */
 var RESCHED_SELECTED_TIME = null;
 
-function openRescheduleModal(){
-  var c = getCurrentCase(); if(!c) return;
+function openRescheduleModal(id){
+  var c = id ? CASE_ITEMS.filter(function(x){ return x.id===id; })[0] : getCurrentCase(); if(!c) return; /* CMD-1026-09 B2：主案件页的子案件列表直接改某个子案件的预约 */
   RESCHED_CASE_ID = c.id;
   RESCHED_SELECTED_DATE = c.visitDate ? new Date(c.visitDate+'T00:00:00') : new Date(demoNow().getFullYear(), demoNow().getMonth(), demoNow().getDate());
   RESCHED_SELECTED_TIME = c.visitTime || '';
@@ -1427,6 +1436,7 @@ function confirmReschedule(){
   if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id){
     renderCaseSubtitle(c);
   }
+  if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID && CURRENT_CASE_ID!==c.id){ var cur0 = getCurrentCase(); if(cur0) renderCaseBody(cur0); }
   if(CURRENT_PAGE_ID==='in-cases') renderCaseRows();
   showToast('预约已修改', c.name+' · '+c.visitDate+' '+c.visitTime, null);
 }
@@ -1748,9 +1758,11 @@ function caseVisitNo(c){
   return list.findIndex(function(x){ return x.id===c.id; })+1;
 }
 function openClientFromCase(){ var c = getCurrentCase(); if(c) openClientDetail(c.name, 'in-casedetail'); }
+/* CMD-1026-09 B1：主案件页头三行——第一行 客人名 + 状态标签；第二行 案件号 · 对接院长 + 最右［发起对话］；第三行（状态栏位置）今日进行中 / 下次预约。标题里不再带案件号，也拿掉「从…开始 · 进行中」那行和单独的「当前状态」卡 */
+function mainPageV2(c){ return !!c && !!c.materialsConfirmed && !isChildVisit(c) && !subPageActive(c) && !isRevEval(c) && useV2Tabs(c); }
 function renderCaseTitle(c){
   var el = document.getElementById('case-title'); if(!el) return; var n = caseVisitNo(c);
-  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(subPageActive(c) ? (function(){ var v = subCtxOf(c).v; return ' · '+(v.no||c.caseNo)+(v.date ? ' · '+String(v.date).slice(5).replace('-', '/')+'（'+(v.place==='KR' ? '韩国' : '印尼')+'）' : ''); })() : (mainOf(c).caseNo ? ' · '+mainOf(c).caseNo : '')); /* CMD-1023-02 三：标题「客人名 · A000001」，拿掉「第 N 次来访」；子案件页标主案件号 */
+  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(subPageActive(c) ? (function(){ var v = subCtxOf(c).v; return ' · '+(v.no||c.caseNo)+(v.date ? ' · '+String(v.date).slice(5).replace('-', '/')+'（'+(v.place==='KR' ? '韩国' : '印尼')+'）' : ''); })() : (!mainPageV2(c) && mainOf(c).caseNo ? ' · '+mainOf(c).caseNo : '')+(mainPageV2(c) ? ' <span class="status-pill" style="background:'+caseStageBadge(c)[0]+';color:'+caseStageBadge(c)[1]+';font-size:12px;font-weight:600;vertical-align:middle;margin-left:8px;">'+caseStageBadge(c)[2]+'</span>' : '')); /* CMD-1023-02 三：标题「客人名 · A000001」，拿掉「第 N 次来访」；子案件页标主案件号 */
 }
 function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;
@@ -1761,7 +1773,7 @@ function renderCaseSubtitle(c){
     var src = CASE_ITEMS.filter(function(x){ return x.id===rel0.linkedId; })[0];
     html += (html ? ' · ' : '')+(rel0.followup ? ((rel0.type==='复诊评估') || rel0.revisit ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+rel0.linkedId+'\');return false;">'+(src&&src.caseNo?src.caseNo:rel0.linkedId)+'</a>（'+rel0.reason+(rel0.auto?'，自动关联':'')+'）';
   }
-  if(c.materialsConfirmed && !isChildVisit(c)){ try{ html += '<div style="margin-top:2px;">'+mainHeadLine(c)+'</div>'; }catch(e){} } /* CMD-1023-01 补 2：页头一行 从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
+  if(c.materialsConfirmed && !isChildVisit(c) && !mainPageV2(c)){ try{ html += '<div style="margin-top:2px;">'+mainHeadLine(c)+'</div>'; }catch(e){} } /* CMD-1023-01 补 2：页头一行 从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
   el.innerHTML = html;
 }
 
