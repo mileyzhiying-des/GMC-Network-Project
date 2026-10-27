@@ -1269,9 +1269,11 @@ function renderCaseStatusBar(c){
   renderCaseStatusBar0(c);
   /* CMD-1026-20：这一天已过 00:00 关账、还没确认结束 → 状态条最上面一条锁住提示 + ［确认结束］ */
   try{
-    if(inDayLocked(c) && document.getElementById('case-status-bar')){
+    /* CMD-1027-08 三：红色条只在那一天的子案件页；升级后的主案件页只留第三行那条「待确认结束」。没升级的一般案件没有第三行，仍保留红色条 */
+    var redOk = !(mainPageV2(c) && isUpgraded(c) && !(typeof subPageActive==='function' && subPageActive(c)));
+    if(redOk && inDayLocked(c) && document.getElementById('case-status-bar')){
       var bar = document.getElementById('case-status-bar');
-      bar.innerHTML = '<div class="card" style="padding:10px 18px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #E8B4B0;background:#FDF3F2;"><span style="flex:1;font-size:13px;color:#B3261E;">🔒 '+cesc(inDayOf(c).slice(5).replace('-', '/'))+' '+cesc(c.caseNo||'')+' 已过 00:00 关账，待确认结束：这一天的内容已锁住（面诊 / 复诊评估报告除外）</span><button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openDayConfirm(\''+c.id+'\')">确认结束</button></div>'+bar.innerHTML;
+      bar.innerHTML = '<div class="card" style="padding:10px 18px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #E8B4B0;background:#FDF3F2;"><span style="flex:1;font-size:13px;color:#B3261E;">🔒 '+cesc(inDayOf(c).slice(5).replace('-', '/'))+' '+cesc(dayNoTxt(c))+' 已过 00:00 关账，待确认结束：这一天的内容已锁住（面诊 / 复诊评估报告除外）</span><button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openDayConfirm(\''+c.id+'\')">确认结束</button></div>'+bar.innerHTML;
     }
   }catch(e){ console.error(e); }
 }
@@ -1293,7 +1295,7 @@ function renderCaseStatusBar0(c){
     var m3 = c, today3 = todayStr(), ds3 = daysOf(m3), line3 = '', btn3 = '', activeV = ds3.filter(function(v){ return v.live; });
     var prog = ds3.filter(function(v){ return v.inProgress; })[0];
     var tvIn = ds3.filter(function(v){ return v.date===today3 && v.place==='IN' && v.live; })[0], tvKr = ds3.filter(function(v){ return v.date===today3 && v.place==='KR' && v.live; })[0];
-    if(prog && SUBVIEW[m3.id]){ /* 子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
+    if(SUBVIEW[m3.id] && (prog || ds3.some(function(v){ return v.state==='unconfirmed'; }))){ /* CMD-1027-08 三：子案件页上待确认结束只留红色条，不重复第三行；子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
     var tagOf = function(v){ return cesc(v.no||'')+'（'+cesc(v.types.join(' · '))+(v.place==='KR' ? ' · 韩国' : '')+'）'; };
     var unc = ds3.filter(function(v){ return v.state==='unconfirmed'; })[0];
     if(!prog && unc){ line3 = '待确认结束：'+cesc(String(unc.date).slice(5).replace('-', '/'))+' '+tagOf(unc); btn3 = unc.kind==='IN' ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openDayConfirm(\''+(unc.rec||unc.caseId)+'\')">确认结束</button>' : '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+unc.key+'\')">查看内容</button>'; }
