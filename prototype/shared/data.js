@@ -2069,7 +2069,7 @@ function reportToPdf(){
   if(w){ w.document.write(html); w.document.close(); w.focus(); setTimeout(function(){ w.print(); }, 300); } /* 演示：浏览器打印窗口选「另存为 PDF」；正式版由后端生成 */
   showToast('已存入附件', label, null);
 }
-function toggleReportOrig(){ REPORT_SHOW_ORIG = !REPORT_SHOW_ORIG; if(typeof renderReportPage==='function') renderReportPage(); var c = getCurrentCase(); if(c && typeof renderCaseBody==='function') renderCaseBody(c); }
+function toggleReportOrig(){ REPORT_SHOW_ORIG = !REPORT_SHOW_ORIG; if(document.getElementById('rptfull-overlay') && document.getElementById('rptfull-overlay').classList.contains('open')){ fullReportRender(); return; } if(typeof renderReportPage==='function') renderReportPage(); var c = getCurrentCase(); if(c && typeof renderCaseBody==='function') renderCaseBody(c); }
 /* CMD-1025-04 A：［查看方案］作用不变（原方案页右上［查看方案 →］）：没买项目 → 进去选购；买完 → 看已选项目（赴韩施术 tab）；没升级的案件选项目的卡就在面诊 tab 报告下面，所以滚过去 */
 function consultPlanOpen(c){ return !!(c.planViewed || (c.recommended||[]).length || c.settlementDone || (c.settlementBatches||[]).length || c.projectsLocked); } /* Step 2：按过［查看方案］或已经勾了 / 买了项目 */
 function toggleReportOpen(){ var c = getCurrentCase(); if(!c) return; var up = false; try{ up = isUpgraded(mainOf(c)); }catch(e){} c.reportOpen = !((c.reportOpen===undefined) ? (!consultPlanOpen(c) || up) : c.reportOpen); renderCaseBody(c); }
@@ -3915,6 +3915,7 @@ function consultTabHtml(c){
        Step 2（按了［查看方案］，或已经勾了项目 / 买了项目）= 报告折叠（标题行留［展开］）+ 下面出现赴韩方案卡，［查看方案］拿掉（升级后的案件仍保留，跳赴韩施术 tab）；离开再回来仍是 Step 2 */
     var talk = consultTalkVisible(c) ? '<button class="btn-outline" onclick="consultTalkShortcut()">邀请室长商谈</button>' : '';
     var step2 = consultPlanOpen(c), up = false; try{ up = isUpgraded(mainOf(c)); }catch(e){}
+    if(up) return consultReportV2Html(c, talk); /* CMD-1027-01 B：已升级的主案件 / 它的子案件 = 面诊卡 + 报告卡（摘要）+ 可选范围卡；一般案件不动 */
     var open = (c.reportOpen===undefined) ? (!step2 || up) : !!c.reportOpen; /* 升级后的案件照现在：报告默认展开 */
     var btns = '<button class="btn-outline" onclick="reportDownload()">下载</button>'+((!step2 || up) ? '<button class="btn-primary" onclick="reportViewPlan()">查看方案</button>' : '')+'<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="toggleReportOpen()">'+(open ? '收起' : '展开')+'</button>';
     return '<div class="card" style="padding:16px 22px;margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:15px;font-weight:700;">面诊</span><span class="status-pill" style="background:#E3F4E8;color:#2F7A4B;">已出方案</span>'+(talk ? '<span style="margin-left:auto;">'+talk+'</span>' : '')+'</div></div>'+
@@ -8798,7 +8799,8 @@ function coreTodayState(c, it){
   var row = (c.subItems||[]).filter(function(s){ return !s.skipped && ((rowOwnedBy(it, s) && subCaseKey(s)===tg.key) || (s.kind==='增加项目' && s.visitKey===tg.key && s.projectName===it.name)); })[0];
   return row ? {type:'row', key:row.id, done:!!row.done} : null;
 }
-function coreUnitUseNow(c, name, by, opt){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */
+function coreUnitUseNow(c, name, by, opt){ var r0 = coreUnitUseNow0(c, name, by, opt); if(r0 && r0.ok) window.KR_USED_NOW = true; return r0; }
+function coreUnitUseNow0(c, name, by, opt){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */
   var tg = coreUseTarget(c); if(!tg) return {ok:false, err:'没有客人已到店的案件'};
   var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return {ok:false, err:'找不到项目'}; var ik = itemIid(it); name = it.name;
   if(krIsMgmtItemC(it)){
@@ -10641,4 +10643,45 @@ function dayConfirmGo(){
   dayConfirmClose();
   try{ buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }catch(e){}
   try{ showToast('已确认结束', (c.name||'')+' · '+inDayOf(c).slice(5).replace('-', '/')+' '+(c.caseNo||''), null); }catch(e){}
+}
+
+
+/* ===== CMD-1027-01 B：IN 已升级案件的面诊 tab（报告出来之后）= 面诊卡 + 报告卡（提交 / AI 翻译摘要 / ［完整报告查看］弹窗）+ 可选范围卡（原［查看方案］）=====
+   可选范围只记面诊时的决定（c.krScope.items）：客人选了的标「已选」、后来取消的标「已选 · 已取消」、没选的灰色；在韩当场加买的项目不放进来（只在赴韩施术 tab 的项目卡）。
+   拿掉：［查看方案］、摊开 / 折叠的整份报告、报告卡上的［下载］［展开］。子案件页和主案件页面诊 tab 用同一个组件（consultTabHtml）。一般案件（没升级）不走这里。 */
+function consultReportV2Html(c, talk){
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, m = mainOf(c) || c;
+  var scope = (c.krScope && c.krScope.items) || [], mine = (m.procedureItems||[]).filter(function(it){ return it.origin==='KR'; });
+  var sel = function(x){ var it = mine.filter(function(p){ return p.name===x.name; })[0]; return it ? ((it.cancelled || it.swapped) ? 'cancelled' : 'on') : ''; };
+  var by = krCoordText(c.reportUploadedBy||'') || '—', summary = c.videoSummary || '';
+  var head = '<div class="card" style="padding:16px 22px;margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:15px;font-weight:700;">面诊</span><span class="status-pill" style="background:#E3F4E8;color:#2F7A4B;">已出方案</span>'+(talk ? '<span style="margin-left:auto;">'+talk+'</span>' : '')+'</div></div>';
+  var rep = '<div class="card" style="padding:18px 24px;margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:15px;font-weight:700;">报告</span><span style="font-size:12px;color:var(--slate2);">提交：'+e(c.reportDate||'—')+'，'+e(by)+'</span><button class="btn-outline" style="margin-left:auto;padding:4px 12px;font-size:12px;" onclick="openFullReport(\''+c.id+'\')">完整报告查看</button></div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">面诊摘要 <span class="status-pill" style="background:#EEF2FB;color:#3B5BA8;font-size:12px;font-weight:600;">AI 翻译</span></div><div style="font-size:13px;line-height:1.8;color:var(--navy);white-space:pre-wrap;">'+e(summary)+'</div></div>';
+  var rows = scope.length ? scope.map(function(x){
+    var st = sel(x), grey = !st, meta = []; try{ meta = itemMetaText(x); }catch(er){}
+    var tag = st==='on' ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">已选</span>' : (st==='cancelled' ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;">已选 · 已取消</span>' : '');
+    return '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--border2);'+(grey||st==='cancelled' ? 'color:var(--muted);' : '')+'"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;'+(st==='cancelled' ? 'text-decoration:line-through;' : '')+'">'+e(buyName(x.name))+' '+tag+'</div>'+(meta.length ? '<div style="font-size:12px;margin-top:3px;line-height:1.7;">'+meta.map(e).join('<br>')+'</div>' : '')+'</div><div style="font-size:13px;white-space:nowrap;">'+(x.price>0 ? e(krIdrText(x.price)) : '—')+'</div></div>';
+  }).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">院长没有建议项目</div>';
+  var scopeCard = '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><span style="font-size:15px;font-weight:700;">可选范围</span><span style="font-size:12px;color:var(--muted);">院长建议的项目（面诊时的决定）</span><a href="#" class="info-link" style="margin-left:auto;font-size:12px;" onclick="consultGoKr(\''+m.id+'\');return false;">看进度 → 赴韩施术</a></div>'+rows+'</div>';
+  return head+rep+scopeCard+'<div id="consult-after-report"></div>';
+}
+function consultGoKr(mainId){ try{ openCaseDetail(mainId, false, {tab:'kr'}); }catch(e){ console.error(e); } }
+function openFullReport(caseId){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  var ov = document.getElementById('rptfull-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'rptfull-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  ov.dataset.caseId = caseId; REPORT_SHOW_ORIG = false; fullReportRender();
+  ov.style.zIndex = 100020; ov.classList.add('open');
+}
+function fullReportRender(){
+  var ov = document.getElementById('rptfull-overlay'); if(!ov) return; var c = CASE_ITEMS.filter(function(x){ return x.id===ov.dataset.caseId; })[0]; if(!c) return;
+  ov.innerHTML = '<div class="modal-box" style="width:860px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0;overflow:hidden;"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 22px;border-bottom:1px solid var(--border2);"><b style="font-size:15px;">完整报告</b><span style="cursor:pointer;" onclick="closeFullReport()">✕</span></div>'+
+    '<div id="rp-body" style="flex:1;min-height:0;overflow-y:auto;padding:18px 28px;">'+reportDocHtml(c, REPORT_SHOW_ORIG, true)+'</div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 22px;border-top:1px solid var(--border2);"><button class="btn-outline" onclick="fullReportPrint(\'dl\')">下载</button><button class="btn-outline" onclick="fullReportPrint(\'pr\')">打印</button><button class="btn-primary" onclick="closeFullReport()">关闭</button></div></div>';
+}
+function closeFullReport(){ var ov = document.getElementById('rptfull-overlay'); if(ov) ov.classList.remove('open'); }
+/* 下载 / 打印：原型都走浏览器打印窗口（另存为 PDF = 下载）；正式版由后端生成文件 */
+function fullReportPrint(){
+  var ov = document.getElementById('rptfull-overlay'); var c = ov && CASE_ITEMS.filter(function(x){ return x.id===ov.dataset.caseId; })[0]; if(!c) return;
+  var html = '<html><head><meta charset="utf-8"><title>诊疗方案_'+(c.caseNo||'')+'</title><style>body{font-family:sans-serif;padding:32px;color:#1c2b40;} .no-print{display:none;} table{width:100%;} </style></head><body>'+reportDocHtml(c, false).replace(/<button[^>]*>.*?<\/button>/g,'')+'</body></html>';
+  var w = window.open('', '_blank'); if(w){ w.document.write(html); w.document.close(); w.focus(); setTimeout(function(){ w.print(); }, 300); }
 }

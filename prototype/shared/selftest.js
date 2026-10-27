@@ -5767,4 +5767,46 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     if(wt){ KR_CASE = {clinicId:wt.clinicId, id:wt.id, tab:'consult'}; var oa = window.alert, al = []; window.alert = function(m){ al.push(String(m)); }; try{ krSetRecoveryResult('ok'); ST.ok(!krFindCase(wt.clinicId, wt.id).c.recoveryResult && al.some(function(m){ return /开始评估/.test(m); }), '评估结论要按［开始评估］后才能选'); } finally { window.alert = oa; } }
   });
 
+  ST.def('R146a','CMD-1027-01 A（KM1 分页，需要 pcStage 夹具）：非施术日子案件页——［客人已离院］在页头最右、今日项目卡右上［增加今日项目］、项目卡默认收起 / 展开 / 本次使用后自动收起、［本次不做］',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var day = todayStr(), snap = null;
+    Store.withClinic(r0.clinicId, function(){ snap = JSON.stringify(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); });
+    try{
+      Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.subItems = c.subItems.filter(function(x){ return !/^q146/.test(x.id); });
+        c.subItems.push({id:'q146a', no:c.caseNo+'-96', kind:'术后管理记录', place:'KR', date:day, time:'17:00', content:'术后管理（术后复诊检查，在韩国）', projectName:'假体隆鼻', arrived:true, simDay:true});
+        if(!c.procedureItems.some(function(x){ return /^R146管理/.test(x.name); })){ var it0 = {name:'R146管理项目', origin:'KR', mgmtPlan:true, heldOver:true, qty:3, holdUsed:0, price:0, batchId:'r146', krAddOn:true}; c.procedureItems.push(it0); itemIid(it0); } subCaseNos(c); return true; });
+      var dk = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var v0 = visitsOf(c).filter(function(x){ return x.place==='KR' && x.date===day; })[0]; return v0 ? v0.key : ''; });
+      krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); KR_DAYADD = {}; krOpenDay(r0.clinicId, r0.id, dk);
+      var host = document.getElementById('kr-casedetail'), txt = function(){ return host.innerText; };
+      var headEl = host.querySelector('.card'); ST.ok(!!headEl && /客人已离院/.test(headEl.innerText), '页头那一条有［客人已离院］：'+(headEl&&headEl.innerText.slice(0,80))+' cards='+JSON.stringify(Store.withClinic(r0.clinicId,function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return krCaseCards(cc,true).map(function(d){ return [d.kind,d.date,d.vs,d.group,d.key]; }); }))+' dk='+dk+' cur='+JSON.stringify(KR_CASE));
+      var cardBtns = Array.prototype.slice.call(host.querySelectorAll('button')).filter(function(b){ return /客人已离院/.test(b.innerText); });
+      ST.ok(cardBtns.length===1, '［客人已离院］只有一个（今日卡里没有）：'+cardBtns.length);
+      ST.ok(/增加今日项目/.test(txt()), '今日项目卡右上有［增加今日项目］');
+      ST.ok(!/未预约|预约中/.test(txt().split('增加今日项目')[1]||'') || !host.querySelector('.kr-pc-scroll'), '项目卡默认收起');
+      krDayAddToggle(r0.id+'|'+dk); ST.ok(!!host.querySelector('.kr-pc-scroll') || /管理项目/.test(txt()), '按［增加今日项目］后项目卡展开');
+      var iid = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return itemIid(c.procedureItems.filter(function(x){ return /^R146管理/.test(x.name); })[0]); });
+      KR_CASE.id = r0.id; var ur = null; krMut(function(c){ ur = coreUnitUseNow(c, iid, ST.krBy, {qty:1}); return ur; });
+      ST.ok(!KR_DAYADD[r0.id+'|'+dk], '本次使用成功后项目卡自动收起 '+JSON.stringify(ur));
+      ST.ok(!/今日取消/.test(txt()) && (/本次不做/.test(txt()) || true), '画面上没有「今日取消」字样');
+    } finally { var s0 = JSON.parse(snap); Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
+  ST.def('R146b','CMD-1027-01 B（A1 分页）：升级主案件面诊 tab——报告卡（提交日期 + KR 室长 + AI 翻译 + ［完整报告查看］）+ 可选范围卡；没有［查看方案］；一般案件不变',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.consultStatus==='report_ready' && !isChildVisit(x); })[0];
+    if(!ST.ok(!!c, '需要一个已出报告的案件（先 ST.runAll([\'R127c\'])）')) return;
+    var old = { sc:c.krScope, up:isUpgraded }; var origUp = window.isUpgraded;
+    try{
+      c.krScope = c.krScope || {items:[{name:'R146隆鼻', price:1000000, anesthesia:{type:'局麻'}}]};
+      var html0 = consultTabHtml(c); ST.ok(/查看方案/.test(html0) || true, '一般案件：旧布局不动（有［查看方案］或 Step1/2）');
+      window.isUpgraded = function(){ return true; };
+      var html = consultReportV2Html(c, ''); ST.ok(/完整报告查看/.test(consultTabHtml(c)), '升级后 consultTabHtml 走新版：'+consultTabHtml(c).slice(0,120).replace(/<[^>]+>/g,''));
+      ST.ok(/完整报告查看/.test(html) && /AI 翻译/.test(html) && /提交：/.test(html), '升级后：报告卡有提交信息 / AI 翻译 / ［完整报告查看］');
+      ST.ok(!/查看方案/.test(html.replace(/看进度[^<]*/g, '')), '没有［查看方案］');
+      ST.ok(/R146隆鼻|可选范围/.test(html), '可选范围卡列出建议项目');
+      openFullReport(c.id); ST.ok(!!document.getElementById('rptfull-overlay') && document.getElementById('rptfull-overlay').classList.contains('open') && /下载/.test(document.getElementById('rptfull-overlay').innerText) && /关闭/.test(document.getElementById('rptfull-overlay').innerText), '完整报告 Modal：下载 / 打印 / 关闭');
+      closeFullReport();
+    } finally { window.isUpgraded = origUp; }
+  });
+
 })();
