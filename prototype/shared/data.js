@@ -9944,10 +9944,10 @@ function inRevisitTabHtml(c){
       var lt0 = ''; if(c.localMgmt || showLocalTab(c) || isContCase(c)){ var sv0 = c.activeCaseTab; c.activeCaseTab = 'localmgmt'; try{ lt0 = c0.call(this, c); }finally{ c.activeCaseTab = sv0; } }
       if(lt0===localBoughtHtml(c)) lt0 = ''; /* 只是只读的「本次购买」卡 = 汇总本身，不重复 */
       return summaryTabHtml(c)+(lt0 ? '<div style="margin-top:14px;">'+lt0+'</div>' : ''); }
-    if(t==='postcare') return tabVisitsHtml(c, t)+pcmHtml(c, 'IN'); /* CMD-1027-09：IN / KR 同一个组件 */
-    if(t==='revisit') return tabVisitsHtml(c, t)+inRevisitTabHtml(c);
-    if(t==='consult') return tabVisitsHtml(c, t)+(!up && showKrTab(c) && (c.consultStatus!=='report_ready' || consultPlanOpen(c)) ? consultTabHtml(c)+krTabContent(c) : consultTabHtml(c)); /* CMD-1026-01 五：报告刚出来（Step 1）不挂赴韩方案卡，按［查看方案］后才出现 */ /* 没升级：选项目的卡也在面诊 tab（诊疗方案已出 → 客人选项目） */
-    if(t==='kr') return tabVisitsHtml(c, t)+krTabContent(c);
+    if(t==='postcare') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('术后管理', function(){ return pcmHtml(c, 'IN'); }); /* CMD-1027-09：IN / KR 同一个组件 */
+    if(t==='revisit') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('复诊', function(){ return inRevisitTabHtml(c); });
+    if(t==='consult') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+(!up && showKrTab(c) && (c.consultStatus!=='report_ready' || consultPlanOpen(c)) ? consultTabHtml(c)+krTabContent(c) : consultTabHtml(c)); /* CMD-1026-01 五：报告刚出来（Step 1）不挂赴韩方案卡，按［查看方案］后才出现 */ /* 没升级：选项目的卡也在面诊 tab（诊疗方案已出 → 客人选项目） */
+    if(t==='kr') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('赴韩施术', function(){ return krTabContent(c); });
     return c0.apply(this, arguments);
   };
 })();
@@ -10406,7 +10406,7 @@ function subPageHtml(c){
   var ctx = subCtxOf(c), list = subTabListOf(c), cur = c.subTab && list.some(function(t0){ return t0.key===c.subTab; }) ? c.subTab : subDefaultTab(c, list);
   var tabs = '<div class="tabs" style="margin-bottom:4px;">'+list.map(function(t1){ return '<span class="tab'+(t1.key===cur ? ' active' : '')+'" onclick="switchSubTab(\''+t1.key+'\')">'+t1.label+'</span>'; }).join('')+'</div>';
   var links = ''; /* 当天推进的流程连结（保留） */
-  return subHeaderHtml(c)+tabs+subTabBodyHtml(c, cur);
+  return gmcSafe('子案件页头', function(){ return subHeaderHtml(c); })+tabs+gmcSafe('子案件内容', function(){ return subTabBodyHtml(c, cur); });
 }
 function switchSubTab(k){ var c = getCurrentCase(); if(!c) return; c.subTab = k; renderCaseBody(c); }
 

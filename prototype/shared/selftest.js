@@ -1859,8 +1859,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var kr = isKrAccount(), side = kr ? 'kr' : 'in', cid = kr ? (krAllCases()[0]||{}).clinicId : CURRENT_CLINIC_ID, cs = kr ? (krAllCases()[0]||{}) : CASE_ITEMS[0];
       var id0 = kr ? cs.id : (cs && cs.id); if(!id0){ ST.ok(true, '（没有案件，跳过打开测试）'); }
       else {
-        var reg = caseRegRead(); reg[caseRegId(side, cid, id0)] = {tab:'other-tab', ts:Date.now()}; caseRegWrite(reg);
-        if(kr) krShowCase(cid, id0, {tab:'items'}); else openCaseDetail(id0, false, {tab:'kr'});
+        var reg = caseRegRead(); reg[caseRegId(side, cid, id0)] = {tab:'other-tab', ts:Date.now()}; caseRegWrite(reg); window.GMC_CASEGO_SYNC = true; /* CMD-1027-10：对方回应才算真开着；这里当作回应了 */
+        try{ if(kr) krShowCase(cid, id0, {tab:'items'}); else openCaseDetail(id0, false, {tab:'kr'}); } finally { window.GMC_CASEGO_SYNC = false; }
         ST.ok(calls.every(function(x){ return x.u===''; }) && calls.length===1 && calls[0].n===caseTabName(side, cid, id0) && toasts.length===1, '已有活着的分页：只尝试切到已开的那个（window.open 空地址 + 分页名），不新开、不退回当前分页；切不过去时提示一句');
         var reg2 = caseRegRead(); delete reg2[caseRegId(side, cid, id0)]; caseRegWrite(reg2);
         calls.length = 0; toasts.length = 0; if(kr) krShowCase(cid, id0, {tab:'items'}); else openCaseDetail(id0, false, {tab:'kr'});
@@ -6396,5 +6396,86 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var nN1 = Store.withClinic(cid, function(){ return NOTIFS.filter(function(n){ return /个术后管理项目整天从/.test(n.text||n.msg||''); }).length; });
       ST.ok(nN1===1, 'IN 只收到一条汇总通知（不是每个项目一条）');
     } finally { window.alert = oa; window.confirm = oc; PCM_EDIT = null; PCM_CAP = {}; var ov = document.getElementById('pcm-edit-overlay'); if(ov) ov.classList.remove('open'); var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); var ri = CASE_ITEMS.findIndex(function(x){ return x.id===rcId; }); if(rcId && ri>-1) CASE_ITEMS.splice(ri, 1); NOTIFS = NOTIFS.filter(function(n){ return !/个术后管理项目整天从/.test(n.text||n.msg||''); }); }); }
+  });
+
+  /* ===== CMD-1027-10 ===== */
+  ST.def('R155a','CMD-1027-10（A1 分页，pcStage 夹具）：Fiona 型（升级主案件 · 两个施术 · 韩国 + 印尼术后管理 · 关账确认结束 · 子记录）IN 全部 tab / 子案件页都能进 · 人为让一块抛错 → 整页仍打开、那一块显示「这里出错了」并留控制台错误',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var snap = JSON.stringify(c), td = todayStr(), oa = window.alert, oc = window.confirm, ot = window.GMC_NO_TABS, ce = console.error, errLog = [], made = [];
+    window.alert = function(){}; window.confirm = function(){ return true; }; window.GMC_NO_TABS = true;
+    var saved = {pcmHtml:window.pcmHtml, subTabBodyHtml:window.subTabBodyHtml, renderCaseStatusBar0:window.renderCaseStatusBar0, buildCaseLog:window.buildCaseLog};
+    try{
+      c.krBalancePaid = true; c.stay = null;
+      var its = c.procedureItems.filter(function(it){ return it.origin==='KR'; });
+      for(var d = 1; d <= 9; d++){ var it = its[d%its.length], pcn = (it.postcare||[]).length || 1; coreCareBook(c, it.name, d%pcn, ymdAdd(td, d+1), '1'+(d%5)+':00', 'KR', '', 'KM1'); }
+      var inRow = (c.subItems||[]).filter(function(s){ return s.place==='IN' && !s.done; })[0];
+      var rc = ST.newRes('R155r', {phone:clientPhoneOf(c.name), date:ymdAdd(td, 4), time:'10:30'}); rc = CASE_ITEMS.filter(function(x){ return x.id===rc.id; })[0]; rc.name = c.name; rc.careFor = {caseId:c.id, keys:inRow ? [inRow.id] : []}; made.push(rc.id);
+      c.subItems.filter(function(s){ return s.kind==='术后管理记录' && s.place==='KR'; }).slice(0, 2).forEach(function(s){ s.done = true; s.doneAt = nowFullDt(); s.arrived = true; });
+      var day = ymdAdd(td, -1); c.arrivedDay = day; c.visitDate = day; c.subState = 'arrived'; c.dayNoOn = true; c.dayNos = {}; c.dayNoSeq = 0; dayNoSync(c); visitSweep(); c.dayConfirmed = {at:nowFullDt(), by:'A1', byId:'A1', used:[], back:[]}; c.leftStore = {at:nowFullDt(), by:'A1', confirmed:true};
+      var ch = ST.newRes('R155c', {phone:clientPhoneOf(c.name), date:ymdAdd(td, -1), time:'11:00'}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.name = c.name; ch.subState = 'arrived'; ch.arrivedDay = ymdAdd(td, -1); made.push(ch.id); ST.materials(ch, {consult:false}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.resumeFrom = {caseId:c.id, type:'术后管理', types:['术后管理']}; joinMain(ch, c);
+      /* 1 全部能进、tab 能切（含子案件页、子记录页） */
+      var bad = [];
+      var T = function(l, f){ try{ f(); }catch(e){ bad.push(l+': '+e.message); } };
+      T('open', function(){ nav('in-dashboard'); openCaseDetailHere(c.id); });
+      ST.ok(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id, 'Fiona 型主案件能打开');
+      caseTabListOf(c).forEach(function(t){ T('tab '+t.key, function(){ switchCaseTab(t.key); }); if(c.activeCaseTab!==t.key) bad.push('tab '+t.key+' 没切过去'); });
+      visitsOf(c).forEach(function(v){ T('sub '+v.key, function(){ openSubcase(c.id, v.key); var sc = getCurrentCase(); subTabListOf(sc).forEach(function(t){ switchSubTab(t.key); }); closeSubcase(sc.id); }); });
+      T('child', function(){ nav('in-dashboard'); openCaseDetailHere(ch.id); subTabListOf(getCurrentCase()).forEach(function(t){ switchSubTab(t.key); }); });
+      ST.ok(!bad.length, 'Fiona 型：主案件 / 每个 tab / 每一天的子案件页 / 子记录页都能进：'+bad.join(' | '));
+      /* 2 一块抛错 → 整页照样打开 */
+      console.error = function(){ errLog.push([].slice.call(arguments).map(String).join(' ')); };
+      nav('in-dashboard'); openCaseDetailHere(c.id); switchCaseTab('postcare'); window.pcmHtml = function(){ throw new Error('故意出错-术后管理'); }; window.GMC_BLOCK_ERRS = [];
+      switchCaseTab('postcare'); var body = document.getElementById('case-body').innerHTML;
+      ST.ok(/这里出错了（术后管理）/.test(body) && /class="tab/.test(body), '术后管理那一块出错：只有那一块显示「这里出错了」，tab 列表照常');
+      ST.ok(errLog.some(function(x){ return /术后管理 出错/.test(x); }) && window.GMC_BLOCK_ERRS.length>0, '错误留在控制台（console.error）+ 记在 GMC_BLOCK_ERRS');
+      window.pcmHtml = saved.pcmHtml; switchCaseTab('basic');
+      window.renderCaseStatusBar0 = function(){ throw new Error('故意出错-状态栏'); }; window.buildCaseLog = function(){ throw new Error('故意出错-Timeline'); };
+      nav('in-dashboard'); openCaseDetailHere(c.id);
+      ST.ok(CURRENT_PAGE_ID==='in-casedetail' && /class="tab/.test(document.getElementById('case-body').innerHTML), '状态栏 / Timeline 出错：案件页照样打开（原来整页卡在工作台）');
+      window.renderCaseStatusBar0 = saved.renderCaseStatusBar0; window.buildCaseLog = saved.buildCaseLog;
+      openSubcase(c.id, visitsOf(c)[0].key); window.subTabBodyHtml = function(){ throw new Error('故意出错-子案件内容'); }; renderCaseBody(getCurrentCase());
+      ST.ok(/这里出错了（子案件内容）/.test(document.getElementById('case-body').innerHTML) && /class="tab/.test(document.getElementById('case-body').innerHTML), '子案件页内容出错：页头 / tab 照常，内容块显示出错');
+      window.subTabBodyHtml = saved.subTabBodyHtml; closeSubcase(getCurrentCase().id);
+      console.error = ce;
+      /* 3 另一分页登记着、但没人回应 → 不再停在工作台 */
+    } catch(e){ ST.ok(false, '意外：'+String(e && e.message)); }
+    cleanup();
+    function cleanup(){
+      console.error = ce; window.alert = oa; window.confirm = oc; window.GMC_NO_TABS = ot; Object.keys(saved).forEach(function(k){ window[k] = saved[k]; });
+      try{ var rid2 = caseRegId('in', CURRENT_CLINIC_ID, c.id), rg = caseRegRead(); delete rg[rid2]; caseRegWrite(rg); }catch(e){}
+      delete SUBVIEW[c.id]; var s0 = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0);
+      made.forEach(function(id){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===id; }); if(i>-1) CASE_ITEMS.splice(i, 1); });
+    }
+  });
+
+  ST.def('R155b','CMD-1027-10（KM1 分页，pcStage 夹具）：KR 案件页 / 到院日页各 tab 能进 · 人为让一块抛错 → 整页仍打开、那一块显示「这里出错了」',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr(), ce = console.error, errLog = [], saved = {krTabPostcare:window.krTabPostcare, krMainHeader:window.krMainHeader, krTopAlerts:window.krTopAlerts};
+    var snap = JSON.stringify(Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }));
+    var btns = function(re){ return [].slice.call(document.querySelectorAll('#kr-casedetail button[onclick]')).filter(function(b){ return re.test(b.getAttribute('onclick')); }); };
+    try{
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.krBalancePaid = true; c.stay = null; var its = c.procedureItems.filter(function(it){ return it.origin==='KR'; });
+        for(var d = 1; d <= 6; d++){ var it = its[d%its.length], pcn = (it.postcare||[]).length || 1; coreCareBook(c, it.name, d%pcn, ymdAdd(td, d+1), '1'+(d%5)+':00', 'KR', '', 'KM1'); } });
+      KR_CASE.day = ''; var bad = [];
+      krShowCase(r0.clinicId, r0.id, {tab:'basic'});
+      var keys = []; btns(/^krSetCaseTab\(/).filter(function(b){ return /padding:8px 16px/.test(b.getAttribute('style')||''); }).forEach(function(b){ var k = b.getAttribute('onclick').match(/\('(\w+)'\)/)[1]; if(keys.indexOf(k)<0) keys.push(k); });
+      keys.forEach(function(k){ try{ krSetCaseTab(k); }catch(e){ bad.push(k+': '+e.message); } if(KR_CASE.tab!==k) bad.push(k+' 没切过去'); });
+      var dks = Store.withClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return visitsOf(c).filter(function(v){ return v.place==='KR'; }).map(function(v){ return v.key; }); });
+      dks.forEach(function(k){ try{ krShowCase(r0.clinicId, r0.id, {day:k}); }catch(e){ bad.push('day '+k+': '+e.message); } }); KR_CASE.day = '';
+      ST.ok(keys.length>=4 && !bad.length, 'Fiona 型 KR 案件页：每个 tab / 每一天的页都能进（'+keys.join('/')+(bad.length ? '：'+bad.join(' | ') : '')+'）');
+      /* 一块抛错 */
+      console.error = function(){ errLog.push([].slice.call(arguments).map(String).join(' ')); };
+      window.krTabPostcare = function(){ throw new Error('故意出错-KR 术后管理'); }; KR_TAB_FN.postcare = window.krTabPostcare; krShowCase(r0.clinicId, r0.id, {tab:'postcare'});
+      var h = document.getElementById('kr-casedetail').innerHTML;
+      ST.ok(/这里出错了（案件内容）/.test(h) && /krSetCaseTab/.test(h), 'KR 术后管理那一块出错：只有内容块显示「这里出错了」，页头 / tab 照常');
+      ST.ok(errLog.some(function(x){ return /案件内容 出错/.test(x); }), '错误留在控制台');
+      KR_TAB_FN.postcare = saved.krTabPostcare; window.krTabPostcare = saved.krTabPostcare;
+      window.krMainHeader = function(){ throw new Error('故意出错-页头'); }; krShowCase(r0.clinicId, r0.id, {tab:'basic'}); var h2 = document.getElementById('kr-casedetail').innerHTML;
+      ST.ok(h2.length>200 && /krSetCaseTab/.test(h2), '页头出错：整页仍打开（退回旧页头 + tab + 内容）');
+      window.krMainHeader = saved.krMainHeader; window.krTopAlerts = function(){ throw new Error('故意出错-提醒条'); }; krShowCase(r0.clinicId, r0.id, {tab:'basic'});
+      ST.ok(/krSetCaseTab/.test(document.getElementById('kr-casedetail').innerHTML), '提醒条出错：整页仍打开');
+    } finally { console.error = ce; Object.keys(saved).forEach(function(k){ window[k] = saved[k]; }); KR_TAB_FN.postcare = saved.krTabPostcare; KR_CASE.day = ''; var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); krShowCase(r0.clinicId, r0.id, {tab:'basic'}); }
   });
 })();

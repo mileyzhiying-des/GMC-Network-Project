@@ -1534,7 +1534,12 @@ function krTabSummary(c){
 }
 var KR_TAB_FN = {settle:krTabSettle, vault:krTabVault, basic:krTabBasic, consult:krTabConsult, /* CMD-1019-08：客人资料（按部位的苦恼卡片 / 预算）移到基础资料 tab，面诊 tab 只放面诊本身 */  items:krTabItems, postcare:krTabPostcare, revisit:krTabRevisit, visits:krTabVisits, summary:krTabSummary, proc:krTabProc, files:krTabFiles, related:krTabRelated, log:krTabLog};
 
-function krRenderCaseDetail(){
+/* CMD-1027-10：KR 案件页每一块各自保护——出错只那一块显示「这里出错了」（str = 空、obj = null 退回旧页头），整页照样打开 */
+function krWC(label, kind, fn){ return gmcSafe(label, function(){ return Store.withClinic(KR_CASE.clinicId, fn); }, kind==='html' ? undefined : (kind==='obj' ? null : '')); }
+function krRenderCaseDetail(){ /* CMD-1027-10：整页最外层保护——上面各块已各自 gmcSafe，这里兜底（连页头 / tab 列表出错也只显示一条错误 + ［返回］，不会卡住） */
+  try{ krRenderCaseDetail0(); }catch(e){ console.error('[KR 案件页 出错]', e); var el = document.getElementById('krcase-body'); if(el) el.innerHTML = '<div class="card" style="padding:24px;"><button class="btn-ghost" onclick="goBack()">← 返回</button><div class="gmc-block-err" style="margin-top:12px;color:#B3261E;">这个案件页的页头没能显示（详细错误在浏览器控制台）。可以点其他 tab 或返回。</div></div>'; }
+}
+function krRenderCaseDetail0(){
   if(KR_CASE.tab==='proc') KR_CASE.tab = 'items';
   var el = document.getElementById('krcase-body'); if(!el) return;
   var r = krFindCase(KR_CASE.clinicId, KR_CASE.id);
@@ -1544,14 +1549,14 @@ function krRenderCaseDetail(){
   if(KR_CASE.tab==='proc') KR_CASE.tab = 'items'; if(KR_CASE.tab==='related' || KR_CASE.tab==='flow') KR_CASE.tab = 'basic';
   if(!kTabs.some(function(t0){ return t0.key===KR_CASE.tab; })) KR_CASE.tab = (KR_CASE.tab==='items' && kTabs.some(function(t0){ return t0.key==='consult'; })) ? 'consult' : (revOnly ? 'consult' : 'basic');
   var tabs = kTabs.map(function(t0){ var on = KR_CASE.tab===t0.key; return '<button onclick="krSetCaseTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t((t0.key==='consult' && isRevEval(r.c)) ? '复诊评估' : t0.label)+(t0.mark ? ' <span style="font-size:12px;color:'+(t0.mark==='✓' ? 'var(--sage)' : 'var(--terracotta)')+';">'+t0.mark+'</span>' : '')+'</button>'; }).join('');
-  var alerts = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krTopAlerts(c)+krInNotesHtml(c) : ''; });
-  var body = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? KR_TAB_FN[KR_CASE.tab](c) : ''; });
-  var dayHtml = KR_CASE.day ? Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c && !isChildVisit(c) ? krSubPageHtml(c) : ''; }) : ''; /* CMD-1023-03 P4：子案件页 */
-  var arriveCards = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krArriveCardsHtml(c) : ''; }); /* CMD-1019-18：今天有到院、客人还没到 → 页头下、tab 上的状态卡 */
+  var alerts = krWC('提醒条', 'str', function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krTopAlerts(c)+krInNotesHtml(c) : ''; });
+  var body = krWC('案件内容', 'html', function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? KR_TAB_FN[KR_CASE.tab](c) : ''; });
+  var dayHtml = KR_CASE.day ? krWC('这一天的页面', 'html', function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c && !isChildVisit(c) ? krSubPageHtml(c) : ''; }) : ''; /* CMD-1023-03 P4：子案件页 */
+  var arriveCards = krWC('到院卡', 'str', function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? krArriveCardsHtml(c) : ''; }); /* CMD-1019-18：今天有到院、客人还没到 → 页头下、tab 上的状态卡 */
   var tripCard = ''; /* CMD-1027-04 一：「客人的韩国行程［韩国行程结束］」卡拿掉（krTripCardHtml 留着不再调用）；结束 / 重新打开都在［行程修正］里 */
-  var sdHdr = KR_CASE.day ? Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0], v = c && visitsOf(c).filter(function(x){ return x.key===KR_CASE.day; })[0]; return (c && !isChildVisit(c) && krIsSurgDay(c, v)) ? krSurgDayHeader(r, c) : ''; }) : ''; /* CMD-1025-02：施术当天的子案件页用自己的页头 */
+  var sdHdr = KR_CASE.day ? krWC('这一天的页头', 'str', function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0], v = c && visitsOf(c).filter(function(x){ return x.key===KR_CASE.day; })[0]; return (c && !isChildVisit(c) && krIsSurgDay(c, v)) ? krSurgDayHeader(r, c) : ''; }) : ''; /* CMD-1025-02：施术当天的子案件页用自己的页头 */
   if(sdHdr){ el.innerHTML = sdHdr+alerts+dayHtml; setTimeout(krEndAskCheck, 60); return; }
-  var mainNew = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return (c && !isChildVisit(c) && !KR_CASE.day) ? {hdr:krMainHeader(r, c), bar:krMainStatusBar(r, c)} : null; }); /* CMD-1025-03 四：主案件页新页头 + 状态列（取代名字旁的状态标签 / 到院状态卡 / 「从…面诊开始」行） */
+  var mainNew = krWC('主案件页头', 'obj', function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return (c && !isChildVisit(c) && !KR_CASE.day) ? {hdr:krMainHeader(r, c), bar:krMainStatusBar(r, c)} : null; }); /* CMD-1025-03 四：主案件页新页头 + 状态列（取代名字旁的状态标签 / 到院状态卡 / 「从…面诊开始」行） */
   if(mainNew){ el.innerHTML = mainNew.hdr+alerts+mainNew.bar+tripCard+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">'+tabs+'</div><div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>'; setTimeout(krEndAskCheck, 60); return; }
   var c = r.c; /* CMD-1026-14 一：旧页头（子记录 / 复诊评估页）里引用了没定义的 c，打开子记录页直接报错 */
   el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+

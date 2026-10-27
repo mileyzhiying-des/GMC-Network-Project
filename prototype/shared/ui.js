@@ -1220,6 +1220,21 @@ function caseApplyAt(cur, o){ if(cur.side==='kr'){ if(typeof krApplyAt==='functi
 function caseGo(side, clinicId, id, url, o, here){
   if(window.GMC_NO_TABS){ here(); return; }
   var rid = caseRegId(side, clinicId, id), e = caseRegRead()[rid], name = caseTabName(side, clinicId, id);
+  if(e && e.tab!==TAB_ID && (Date.now()-e.ts) < CASE_REG_LIVE && CASE_BC && !window.GMC_CASEGO_SYNC){ /* GMC_CASEGO_SYNC：自测钩子，当作对方一定回应（走原来的同步分支） */
+    /* CMD-1027-10：登记里写着「另一个分页开着这个案件」，但那个分页可能已经卡死 / 没人回应（登记 12 秒内还算有效）——先问一声，0.6 秒内没人回应就当它不在了：清掉登记，照常打开（原来这种情况会停在工作台，只弹一条提示） */
+    var answered = false, onp = function(ev){ if((ev.data||{}).pong===rid) answered = true; };
+    CASE_BC.addEventListener('message', onp);
+    try{ CASE_BC.postMessage({rid:rid, o:o||{}}); }catch(x){}
+    setTimeout(function(){
+      try{ CASE_BC.removeEventListener('message', onp); }catch(x){}
+      if(!answered){ try{ var reg = caseRegRead(); if(reg[rid] && reg[rid].tab!==TAB_ID){ delete reg[rid]; caseRegWrite(reg); } }catch(x){} var w3 = caseTabOpen(name, url); if(!w3) here(); return; }
+      var w = null; try{ w = window.open('', name); }catch(x){ w = null; }
+      var blank = false; try{ blank = !!(w && w.location.href==='about:blank'); }catch(x){}
+      if(w && blank){ try{ w.close(); }catch(x){} w = null; }
+      if(w){ try{ w.focus(); }catch(x){} } else showToast('这个案件已在另一个分页打开', '那个分页已经跳到你要去的位置，请切换到那个分页继续（这个浏览器不允许自动切换）。');
+    }, 600);
+    return;
+  }
   if(e && e.tab!==TAB_ID && (Date.now()-e.ts) < CASE_REG_LIVE){
     try{ if(CASE_BC) CASE_BC.postMessage({rid:rid, o:o||{}}); }catch(x){}
     var w = null; try{ w = window.open('', name); }catch(x){ w = null; }
@@ -1231,7 +1246,7 @@ function caseGo(side, clinicId, id, url, o, here){
   var w2 = caseTabOpen(name, url); if(!w2) here(); /* 连新开都被拦：退回当前分页（最后的备用） */
 }
 (function caseRegInit(){
-  try{ CASE_BC = new BroadcastChannel('gmc-case'); CASE_BC.onmessage = function(ev){ var m = ev.data||{}, cur = caseRegCurrent(); if(!cur || caseRegId(cur.side, cur.clinicId, cur.id)!==m.rid) return; try{ window.focus(); }catch(e){} try{ caseApplyAt(cur, m.o||{}); }catch(e){ console.error(e); } }; }catch(e){ CASE_BC = null; }
+  try{ CASE_BC = new BroadcastChannel('gmc-case'); CASE_BC.onmessage = function(ev){ var m = ev.data||{}, cur = caseRegCurrent(); if(m.pong || !cur || caseRegId(cur.side, cur.clinicId, cur.id)!==m.rid) return; try{ CASE_BC.postMessage({pong:m.rid}); }catch(e){} /* CMD-1027-10：回应「我真的开着这个案件」 */ try{ window.focus(); }catch(e){} try{ caseApplyAt(cur, m.o||{}); }catch(e){ console.error(e); } }; }catch(e){ CASE_BC = null; }
   setInterval(function(){ try{ caseRegBeat(); }catch(e){} }, 3000);
   window.addEventListener('pagehide', function(){ try{ var reg = caseRegRead(); Object.keys(reg).forEach(function(k){ if(reg[k].tab===TAB_ID) delete reg[k]; }); caseRegWrite(reg); }catch(e){} });
   setTimeout(function(){ try{ caseRegBeat(); }catch(e){} }, 800);
@@ -1244,10 +1259,16 @@ function applyCaseAt(id, o){
   if(o.pc) goPostcareBlock(id);
   if(o.scroll) setTimeout(function(){ var el = document.getElementById(o.scroll); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80);
 }
+/* CMD-1027-10：案件页「某一块出错不影响整页」——gmcSafe 把一块画面包起来：出错时只有这一块显示「这里出错了」，错误留在浏览器控制台，其余照常打开（IN + KR 案件页 / 子案件页共用） */
+function gmcSafe(label, fn, fallback){
+  try{ return fn(); }
+  catch(e){ console.error('[案件页 · '+label+' 出错]', e); try{ window.GMC_BLOCK_ERRS = (window.GMC_BLOCK_ERRS||[]).concat([{label:label, msg:String(e && e.message), at:Date.now()}]).slice(-50); }catch(x){} return fallback!==undefined ? fallback : '<div class="gmc-block-err" style="padding:12px 16px;margin:6px 0;border:1px solid #E5A19B;background:#FDF3F2;border-radius:10px;font-size:13px;color:#B3261E;">这里出错了（'+String(label).replace(/</g, '&lt;')+'）：这一块没能显示，其他部分照常。详细错误在浏览器控制台。</div>'; }
+}
+function gmcTry(label, fn){ try{ return fn(); }catch(e){ console.error('[案件页 · '+label+' 出错]', e); try{ window.GMC_BLOCK_ERRS = (window.GMC_BLOCK_ERRS||[]).concat([{label:label, msg:String(e && e.message), at:Date.now()}]).slice(-50); }catch(x){} } }
 function openCaseDetail(id, noPush, o){
   o = o||{};
-  if(noPush || window.GMC_NO_TABS || o.here || (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===id)){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); return; }
-  caseGo('in', CURRENT_CLINIC_ID, id, caseUrl(id, caseAtExtra(o)), o, function(){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); });
+  if(noPush || window.GMC_NO_TABS || o.here || (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===id)){ openCaseDetailHere(id, noPush); gmcTry('定位', function(){ applyCaseAt(id, o); }); return; }
+  caseGo('in', CURRENT_CLINIC_ID, id, caseUrl(id, caseAtExtra(o)), o, function(){ openCaseDetailHere(id, noPush); gmcTry('定位', function(){ applyCaseAt(id, o); }); });
 }
 function openCaseDetailHere(id, noPush){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0];
@@ -1257,16 +1278,16 @@ function openCaseDetailHere(id, noPush){
     CASE_RETURN.push(CURRENT_CASE_ID); NAV_STACK.push('in-casedetail'); /* 案件页 → 另一个案件页 */
   }
   CURRENT_CASE_ID = id;
-  renderCaseSubtitle(c);
-  document.getElementById('case-chat-actions').style.display = c.materialsConfirmed ? 'flex' : 'none'; /* 发起对话等按钮：基础资料确认后才显示 */
-  renderCaseStatusBar(c);
-  buildCaseLog(c);
-  renderCaseBody(c);
-  nav('in-casedetail');
+  gmcTry('标题', function(){ renderCaseSubtitle(c); });
+  gmcTry('对话按钮', function(){ document.getElementById('case-chat-actions').style.display = c.materialsConfirmed ? 'flex' : 'none'; }); /* 发起对话等按钮：基础资料确认后才显示 */
+  gmcTry('状态栏', function(){ renderCaseStatusBar(c); });
+  gmcTry('Timeline', function(){ buildCaseLog(c); });
+  gmcTry('案件内容', function(){ renderCaseBody(c); });
+  nav('in-casedetail'); /* 前面任何一块出错都不影响整页打开 */
 }
 
 function renderCaseStatusBar(c){
-  renderCaseStatusBar0(c);
+  gmcTry('状态栏主体', function(){ renderCaseStatusBar0(c); });
   /* CMD-1026-20：这一天已过 00:00 关账、还没确认结束 → 状态条最上面一条锁住提示 + ［确认结束］ */
   try{
     /* CMD-1027-08 三：红色条只在那一天的子案件页；升级后的主案件页只留第三行那条「待确认结束」。没升级的一般案件没有第三行，仍保留红色条 */
@@ -1767,8 +1788,8 @@ function renderCaseBody(c){
     el.innerHTML = rtabs+(rt==='timeline' ? caseTimelineCardHtml(c) : basicFourHtml(c, false)); return;
   }
   normalizeCaseTab(c);
-  if(typeof subPageActive==='function' && subPageActive(c)){ el.innerHTML = subPageHtml(c); return; } /* CMD-1023-03 P3：子案件页 */
-  el.innerHTML = caseTabsHtml(c) + '' + caseTabContentHtml(c);
+  if(typeof subPageActive==='function' && subPageActive(c)){ el.innerHTML = gmcSafe('子案件页', function(){ return subPageHtml(c); }); return; } /* CMD-1023-03 P3：子案件页 */
+  el.innerHTML = gmcSafe('tab 列表', function(){ return caseTabsHtml(c); }) + '' + gmcSafe('tab 内容', function(){ return caseTabContentHtml(c); });
 }
 
 function resumeVisit(targetId){
