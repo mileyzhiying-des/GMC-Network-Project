@@ -6043,4 +6043,82 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { try{ closeFullReport(); }catch(e){} var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
   });
 
+  ST.def('R151a','CMD-1027-06（A1 分页）：报告用逐项意见 / 下次复诊 / 注意事项 · IN 复诊卡「院长建议」+［预约复诊］弹窗（日期带好可改、约好显示已预约、无需复诊 / 旧资料不显示）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var oa = window.alert, oc = window.confirm, al = []; window.alert = function(m){ al.push(m); }; window.confirm = function(){ return true; };
+    try{
+      var src = ST.newRes('R151s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.reportReady = true; src.consultStatus = 'report_ready'; src.projectsEnabled = true; src.consultRequested = true; src.krTripEnded = true;
+      src.procedureItems = [{origin:'KR', name:'埋线双眼皮', price:1, done:true, doneAt:nowFullDt()}, {origin:'KR', name:'开内眼角', price:1, done:true, doneAt:nowFullDt()}];
+      var n = ST.mkRevEval('R151k', src); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0];
+      var sug = revNextCalc('1m', '', todayStr());
+      Object.assign(n, {consultStatus:'report_ready', reportReady:true, reportDate:todayStr(), reportUploadedBy:'KM1 室长', videoSummary:'恢复正常', reportKo:'정상입니다', followProjects:['埋线双眼皮', '开内眼角'], revisitQuestion:'还有点肿', director:src.director});
+      n.recoveryResult = {result:'ok', by:n.director||'KD1 院长', at:nowFullDt()}; n.revisitRec = {local:'', suggestKr:false};
+      n.revisitOpinions = [{name:'埋线双眼皮', text:'恢复良好，左眼稍微肿，属于正常范围', zh:'恢复良好，左眼稍微肿，属于正常范围'}, {name:'开内眼角', text:'内眼角轻微发红，继续观察', zh:'内眼角轻微发红，继续观察'}];
+      n.revisitNext = {type:'1m', label:'1 个月后', date:sug}; n.revisitNotes = {text:'两周内避免桑拿和剧烈运动', zh:'两周内避免桑拿和剧烈运动'};
+      /* 二：报告 */
+      var doc = revReportDocHtml(n, false, true);
+      ST.ok(/左眼稍微肿/.test(doc) && /内眼角轻微发红/.test(doc) && !/<td[^>]*>需要处理<\/td>/.test(doc), '二：评估项目表每行写各自的意见（不再都写同一个整体结论）');
+      ST.ok(/评估意见/.test(doc) && /下次复诊/.test(doc) && /1 个月后（约 /.test(doc) && /注意事项/.test(doc) && /两周内避免桑拿/.test(doc), '二：报告有「下次复诊」「注意事项」');
+      ST.ok(!/<img|照片/i.test(doc), '二：报告仍然没有照片');
+      var sm = revSummaryText(n); ST.ok(/左眼稍微肿/.test(sm) && /下次复诊：1 个月后/.test(sm) && /注意事项：两周内/.test(sm), '二：IN 报告卡摘要带逐项意见 / 下次复诊 / 注意事项');
+      var n2 = JSON.parse(JSON.stringify(n)); delete n2.revisitOpinions; delete n2.revisitNext; delete n2.revisitNotes;
+      var doc2 = revReportDocHtml(n2, false, true); ST.ok(/GMC NETWORK/.test(doc2) && !/下次复诊/.test(doc2) && !/注意事项/.test(doc2) && /需要处理|恢复正常/.test(doc2), '二：旧资料（只有整体结论）照 05 显示，不报错、不补');
+      ST.ok(!revNextRowHtml(n2) && !/院长建议：/.test(revEvalTabHtml(n2)), '三：旧资料没有「院长建议」行');
+      /* 三：院长建议 + 预约复诊 */
+      var tab = revEvalTabHtml(n); ST.ok(/院长建议：/.test(tab) && /1 个月后复诊（约 /.test(tab) && /预约复诊/.test(tab), '三：复诊卡有一行「院长建议：1 个月后复诊（约 MM/DD）」+［预约复诊］');
+      var n3 = JSON.parse(JSON.stringify(n)); n3.revisitNext = {type:'none', label:'无需复诊', date:''}; ST.ok(!revNextRowHtml(n3), '三：选「无需复诊」不显示这行');
+      var nbefore = CASE_ITEMS.length; revBookOpen(n.id); var ov = document.getElementById('rev-book-overlay');
+      ST.ok(ov && ov.classList.contains('open') && CASE_ITEMS.length===nbefore, '三：按［预约复诊］只是打开弹窗，不自动约');
+      var dIn = ov.querySelector('input[type=date]'); ST.ok(!!dIn && dIn.value>=sug, '三：日期带好建议日期（遇到休诊 / 约满往后找）：'+(dIn&&dIn.value)+' ≥ '+sug);
+      var d2 = ymdAdd(dIn.value, 1); var g = 0; while(g++<20 && !revBookTimes(d2).length) d2 = ymdAdd(d2, 1);
+      revBookSet('date', d2); var ts = revBookTimes(d2); ST.ok(ts.length>0 && REV_BOOK.date===d2, '三：室长可以改日期');
+      var t2 = ts[ts.length-1]; revBookSet('time', t2); ST.ok(REV_BOOK.time===t2, '三：室长可以改时间');
+      revBookGo(); var rc = CASE_ITEMS.filter(function(x){ return x.revisitFor && x.revisitFor.evalId===n.id; })[0];
+      ST.ok(!!rc && rc.visitPurpose==='复诊评估' && rc.visitDate===d2 && rc.visitTime===t2 && rc.revisitFor.caseId===mainOf(n).id, '三：确认后建一笔复诊预约（来访目的复诊评估，关联这个主案件，改过的日期 / 时间）');
+      var tab2 = revEvalTabHtml(n); ST.ok(/已预约复诊：/.test(tab2) && tab2.indexOf(t2)>-1 && !/onclick="revBookOpen/.test(tab2), '三：约好后这行变成「已预约复诊：MM/DD HH:mm」，没有［预约复诊］');
+      var dd = daysOf(mainOf(n)).filter(function(v){ return v.date===d2 && v.types.indexOf('复诊评估')>-1; })[0]; ST.ok(!!dd, '三：这笔预约在 daysOf（子案件 tab / 第三行）里算一天');
+      var old = window.GMC_NO_FOLLOWASK; window.GMC_NO_FOLLOWASK = false; try{ rc.subState = 'arrived'; rc.arrivedDay = todayStr(); rc.materialsConfirmed = false; followupAsk(rc); ST.ok(FU_ASK && FU_ASK.mode==='link' && FU_ASK.svc.revisit && FU_ASK.sel===mainOf(n).id, '三：客人到店时「继续之前的服务」默认选复诊评估 + 这个主案件'); }finally{ window.GMC_NO_FOLLOWASK = old; try{ document.getElementById('followup-overlay').classList.remove('open'); }catch(e){} rc.subState = 'waiting'; }
+      rc.subState = 'cancelled'; rc.stage = 'cancelled'; ST.ok(/预约复诊/.test(revEvalTabHtml(n)), '三：预约取消后又回到［预约复诊］');
+      /* 3 个月提示 */
+      var far = revNextCalc('date', ymdAdd(todayStr(), 130)); n.revisitNext = {type:'date', label:'指定日期', date:far}; revBookOpen(n.id);
+      ST.ok(/超过 3 个月/.test(document.getElementById('rev-book-overlay').innerText), '三：日期超过继续服务 3 个月 → 弹窗提示（不改规则）'); revBookClose();
+    }finally{ window.alert = oa; window.confirm = oc; try{ revBookClose(); }catch(e){} }
+  });
+  ST.def('R151b','CMD-1027-06（KM1 分页，pcStage 夹具）：KR 复诊评估逐项意见 / 下次复诊 / 注意事项 · AI 整理 · 发送前必填检查 · 报告用新栏位',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc()), oa = window.alert, oc = window.confirm, al = []; window.alert = function(m){ al.push(String(m)); }; window.confirm = function(){ return true; };
+    try{
+      mut(function(c){ Object.assign(c, {consultStatus:'awaiting_report', reportReady:false, revisitEval:{at:nowFullDt()}, followProjects:['埋线双眼皮', '开内眼角'], revisitQuestion:'右眼还有点肿', consultStartedAt:nowFullDt(), consultContentAt:nowFullDt(), director:c.director||'KD1 院长'}); c.recoveryResult = {result:'treat', by:'KD1 院长', at:nowFullDt()}; delete c.reportKo; delete c.videoSummary; delete c.consultKind; delete c.reuseReport; });
+      KR_CASE.clinicId = cid; KR_CASE.id = r0.id; KR_SUB = krSubBlank(''); krSubReset(gc());
+      var h = Store.withClinic(cid, function(){ return krSubmitBlock(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); });
+      ST.ok(/逐项评估意见/.test(h) && /埋线双眼皮/.test(h) && /开内眼角/.test(h) && /下次复诊时间/.test(h) && /注意事项/.test(h), '一：发送块有 逐项评估意见（每个项目一栏）/ 下次复诊时间 / 注意事项');
+      ST.ok(/增加内容（语音）/.test(h) && /增加内容（手动）/.test(h) && /AI 整理/.test(h), '一：录入方式和面诊一样（增加内容 语音 / 手动）+ AI 整理');
+      ST.ok(/'2w'|2 周后/.test(h) && /1 个月后/.test(h) && /3 个月后/.test(h) && /无需复诊/.test(h) && /指定日期/.test(h), '一：下次复诊时间选项 无需复诊 / 2 周后 / 1 个月后 / 3 个月后 / 指定日期');
+      /* 必填检查 */
+      KR_SUB.text = '评估内容'; krSubmitReport(); ST.ok(!gc().reportReady && al.some(function(m){ return /每个项目的评估意见/.test(m) && /埋线双眼皮/.test(m); }), '一：逐项意见没填 → 发送被拦下，提示还缺哪些项目');
+      krRvOpSet(0, '恢复良好，左眼稍微肿，属于正常范围'); al.length = 0; krSubmitReport(); ST.ok(!gc().reportReady && al.some(function(m){ return /开内眼角/.test(m); }), '一：只填一个项目 → 仍拦下');
+      krRvOpSet(1, '内眼角轻微发红，继续观察'); krSubSet('rvNextType', 'date'); al.length = 0; krSubmitReport(); ST.ok(!gc().reportReady && al.some(function(m){ return /指定日期/.test(m); }), '一：下次复诊选指定日期没选日期 → 拦下');
+      krSubSet('rvNextType', '1m'); krSubSet('rvNote', '两周内避免桑拿和剧烈运动'); al.length = 0; krSubmitReport();
+      var c1 = gc();
+      var ops = c1.revisitOpinions || []; ST.ok(ops.length===2 && ops[0].name==='埋线双眼皮' && ops[1].name==='开内眼角' && ops[0].text!==ops[1].text && /左眼稍微肿/.test(ops[0].text), '一：每个项目各自的意见存好了');
+      ST.ok(c1.revisitNext && c1.revisitNext.type==='1m' && c1.revisitNext.date===revNextCalc('1m', '', todayStr()) && c1.revisitNotes && /桑拿/.test(c1.revisitNotes.text), '一：下次复诊（1 个月后 + 日期）和注意事项存好了');
+      var doc = Store.withClinic(cid, function(){ return revReportDocHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0], false, true); });
+      ST.ok(/左眼稍微肿/.test(doc) && /内眼角轻微发红/.test(doc) && /下次复诊/.test(doc) && /注意事项/.test(doc) && !/<img/.test(doc), '二：报告里每项意见不同、有下次复诊和注意事项、没有照片');
+      var card = Store.withClinic(cid, function(){ return revResultCardHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0], 'KR'); });
+      ST.ok(/逐项评估意见/.test(card) && /下次复诊/.test(card) && /注意事项/.test(card), '二：KR 复诊评估结果卡也带这三样');
+      /* AI 整理 + 恢复正常分支 */
+      mut(function(c){ c.reportReady = false; c.consultStatus = 'awaiting_report'; c.recoveryResult = {result:'ok', by:'KD1 院长', at:nowFullDt(), memo:'埋线双眼皮 恢复很好'}; delete c.revisitOpinions; });
+      KR_SUB = krSubBlank(''); krSubReset(gc()); krAiOrganize();
+      var vv = KR_SUB.rvOp || {}; ST.ok(vv['埋线双眼皮'] && vv['开内眼角'] && /恢复很好/.test(vv['埋线双眼皮']), 'AI 整理（恢复正常）：从说明里整理出每个项目的意见：'+JSON.stringify(vv));
+      ST.ok(krZhShort(KR_RV_DEMO_OP)==='恢复良好，目前肿胀属于正常范围。', '演示译文：韩文演示句译成中文');
+      /* 旧资料不报错 */
+      mut(function(c){ delete c.revisitOpinions; delete c.revisitNext; delete c.revisitNotes; c.reportReady = true; c.consultStatus = 'report_ready'; c.reportDate = todayStr(); c.videoSummary = '恢复正常'; c.reportKo = '정상'; });
+      var legacy = Store.withClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return revReportDocHtml(c, false, true)+krTabConsult0(c); }); ST.ok(/复诊评估报告/.test(legacy), '旧资料（只有整体结论）KR 显示不报错');
+    } finally { window.alert = oa; window.confirm = oc; KR_SUB = krSubBlank(''); var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
+
 })();

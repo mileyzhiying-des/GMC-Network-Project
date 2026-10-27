@@ -1941,11 +1941,12 @@ function krAiOrganize(){
   { var rc = krFindCase(KR_CASE.clinicId, KR_CASE.id); /* CMD-1022-20：复诊评估恢复正常 = 只整理 memo（演示：去掉多余空白、补句号；正式版接 LLM） */
     if(rc && isRevEval(rc.c) && !(rc.c.recoveryResult && rc.c.recoveryResult.result==='treat')){
       var m0 = String((rc.c.recoveryResult||{}).memo || '').replace(/\s+/g, ' ').trim(); if(m0 && !/[。.!？?]$/.test(m0)) m0 += '。';
-      KR_SUB.rvInit = true; KR_SUB.text = '恢复正常'+(m0 ? '\n'+m0 : ''); Store.touch(); krRenderCaseDetail(); return;
+      KR_SUB.rvInit = true; KR_SUB.text = '恢复正常'+(m0 ? '\n'+m0 : ''); krRvOpFill(rc.c, m0); Store.touch(); krRenderCaseDetail(); return; /* CMD-1027-06：同时整理逐项意见 */
     } } /* AI 整理报告只在 KR 室长画面，院长画面没有 */
   var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!c0) return;
   var v0 = krVault(KR_CASE.clinicId, KR_CASE.id, false), joined = v0.transcripts.map(function(t){ return t.text; }).join('\n\n').trim();
   if(!joined){ alert('请先录入面诊并上传内容（点上面的［语音录入面诊］或［手动输入面诊］）'); return; }
+  { var rc2 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(rc2 && isRevEval(rc2.c)) krRvOpFill(rc2.c, joined); } /* CMD-1027-06 */
   var draft = '';
   Store.withClinic(KR_CASE.clinicId, function(){
     var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0], v = krVault(KR_CASE.clinicId, KR_CASE.id, true);
@@ -1982,7 +1983,7 @@ function krRecordBlock(c){
 
 
 /* ---------- 三、提交最终报告（只有 KR 室长 / 管理者） ---------- */
-function krSubBlank(key){ return {caseKey:key, text:null, pick:{}, notes:{}, overall:'', files:[], detail:{}, tab:'surg', mg:{}, mgq:''}; } /* tab = 可选范围分类［施术项目］［管理项目］；mg[本地项目 id] = {sid, qty, interval, manual}（CMD-1015-16） */
+function krSubBlank(key){ return {caseKey:key, text:null, pick:{}, notes:{}, overall:'', files:[], detail:{}, tab:'surg', mg:{}, mgq:'', rvOp:{}, rvNextType:'', rvNextDate:'', rvNote:''}; } /* tab = 可选范围分类［施术项目］［管理项目］；mg[本地项目 id] = {sid, qty, interval, manual}（CMD-1015-16） */
 var KR_SUB = krSubBlank(''); /* detail[项目名] = {stay, anes, anesNote, pc:[{kr, inn, times, place, day}]} */
 function krSubReset(c){
   if(KR_SUB.caseKey !== krRecKey()) KR_SUB = krSubBlank(krRecKey());
@@ -2166,8 +2167,13 @@ function krSubmitBlock(c){
 function krSubmitReport(){
   if(!krCan()) return; /* 院长不能提交 */
   var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!c0) return;
-  var rv = isRevisitConsult(c0.c), rvE = isRevEval(c0.c), text = (KR_SUB.text||'').trim(); if(!text && rvE && c0.c.recoveryResult && c0.c.recoveryResult.result==='ok') text = '恢复正常'+(c0.c.recoveryResult.memo ? '\n'+c0.c.recoveryResult.memo : ''); /* CMD-1022-18 / 20：恢复正常不用录入，说明取评估 memo */ if(!text){ alert(rv ? '恢复评估说明不能为空（先在上面录入面诊内容，再整理）' : '报告内容不能为空'); return; }
+  var rvE = isRevEval(c0.c), rv = isRevisitConsult(c0.c) || rvE, text /* CMD-1027-06：复诊评估子记录没有 consultKind，原来 rv 为假，发送会被「至少勾 1 个项目」拦下 */ = (KR_SUB.text||'').trim(); if(!text && rvE && c0.c.recoveryResult && c0.c.recoveryResult.result==='ok') text = '恢复正常'+(c0.c.recoveryResult.memo ? '\n'+c0.c.recoveryResult.memo : ''); /* CMD-1022-18 / 20：恢复正常不用录入，说明取评估 memo */ if(!text){ alert(rv ? '恢复评估说明不能为空（先在上面录入面诊内容，再整理）' : '报告内容不能为空'); return; }
   if(rv && !c0.c.recoveryResult){ alert('请先选评估结论（恢复正常 / 需要处理）'); return; }
+  if(rvE){ /* CMD-1027-06：必填检查——每个项目都要有评估意见；下次复诊选了指定日期要有日期 */
+    var miss = (c0.c.followProjects||[]).filter(function(n){ return !String((KR_SUB.rvOp||{})[n]||'').trim(); });
+    if(miss.length){ alert('请填写每个项目的评估意见（还缺：'+miss.map(buyName).join('、')+'）'); return; }
+    if(KR_SUB.rvNextType==='date' && !KR_SUB.rvNextDate){ alert('下次复诊选了「指定日期」，请选日期'); return; }
+  }
   var cand = krScopeCandidates(KR_CASE.clinicId), items = [];
   var bad = '';
   (rvE ? [] : cand.kr.concat(cand.postCat)).forEach(function(p){
@@ -2194,6 +2200,11 @@ function krSubmitReport(){
   krVaultLog(v, '提交最终报告');
   var rvPre = rv ? '【'+(isRevEval(c0.c) ? '复诊评估' : '恢复评估')+'：'+(c0.c.recoveryResult.result==='treat' ? '需要处理' : '恢复正常')+'】' : '';
   var rep = {recLocal:(rvE && c0.c.recoveryResult.result==='treat') ? String(KR_SUB.recLocal||'').trim() : '', sugKr:!!(rvE && c0.c.recoveryResult.result==='treat' && KR_SUB.sugKr), sugKrNote:String(KR_SUB.sugKrNote||'').trim(), original:rvPre+text, zh:rvPre+krDemoZh(text), items:items, overallNote:(KR_SUB.overall||'').trim(), files:KR_SUB.files.slice()};
+  if(rvE){ /* CMD-1027-06 */
+    rep.rvOp = (c0.c.followProjects||[]).map(function(n){ var t = String((KR_SUB.rvOp||{})[n]||'').trim(); return {name:n, text:t, zh:krZhShort(t)}; });
+    var nt = KR_SUB.rvNextType; rep.rvNext = nt ? {type:nt, label:REV_NEXT_LABEL[nt], date:revNextCalc(nt, KR_SUB.rvNextDate)} : null;
+    var nn = String(KR_SUB.rvNote||'').trim(); rep.rvNote = nn ? {text:nn, zh:krZhShort(nn)} : null;
+  }
   var ok = krMut(function(c){ return coreSubmitReport(c, rep, ME_NAME); });
   KR_SUB = krSubBlank(''); KR_REC.caseKey = '';
   Store.touch(); krRefreshAll();
@@ -4349,13 +4360,13 @@ function krResumeTag(c){ var rt = c ? relatedOf(c).resumeType : ''; return rt ? 
 
 /* CMD-1022-08：KR 传复诊评估结果。需要处理时可写「推荐的本地项目」（选填文字，不带价格，IN 看到时走备注同一套自动翻译）和「建议赴韩处理」（选填）；不能附赴韩项目 */
 function krRvSubmitBlock(c){
-  var treat = c.recoveryResult && c.recoveryResult.result==='treat', ok = !!c.recoveryResult;
+  var treat = c.recoveryResult && c.recoveryResult.result==='treat', ok = !!c.recoveryResult, extra = krRvExtraHtml(c); /* CMD-1027-06：逐项评估意见 / 下次复诊 / 注意事项 */
   var sendBtn = '<div style="margin-top:16px;display:flex;justify-content:flex-end;">'+(ok ? '<button class="btn-primary" onclick="krSubmitReport()">发送复诊评估结果</button>' : '<button class="btn-primary" disabled title="请先选评估结论" style="opacity:.4;cursor:not-allowed;">发送复诊评估结果</button>')+'</div>';
   var aiBtn = '<button class="btn-outline" onclick="krAiOrganize()">✨ AI 整理（演示）</button>';
   if(!treat){ /* CMD-1022-20：恢复正常只整理 memo：没有「评估说明」大格，只有一个预览框（第一行「恢复正常」，下面是 memo），没写 memo 就只有「恢复正常」，照样可以直接发送 */
     if(!KR_SUB.rvInit){ KR_SUB.rvInit = true; KR_SUB.text = '恢复正常'+(((c.recoveryResult||{}).memo) ? '\n'+c.recoveryResult.memo : ''); }
     return krCardBox('<span style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><span>发送复诊评估结果</span>'+aiBtn+'</span>',
-      '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">预览（发给 IN 的内容；室长可以再改）</div><textarea oninput="krSubSet(\'text\',this.value)" style="width:100%;min-height:90px;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.text||'')+'</textarea>'+sendBtn);
+      '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">预览（发给 IN 的内容；室长可以再改）</div><textarea oninput="krSubSet(\'text\',this.value)" style="width:100%;min-height:90px;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.text||'')+'</textarea>'+extra+sendBtn);
   }
   var right = '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">推荐的本地项目（选填，文字；不带价格，不能选赴韩项目）</div><textarea oninput="krSubSet(\'recLocal\',this.value)" placeholder="例：建议做消肿管理 2～3 次、冷敷" style="width:100%;min-height:90px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.recLocal||'')+'</textarea>'+
       '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;cursor:pointer;"><input type="checkbox" '+(KR_SUB.sugKr ? 'checked ' : '')+'onchange="krSubSet(\'sugKr\',this.checked);krRenderCaseDetail()"><b>建议赴韩处理</b> <span style="font-size:12px;color:var(--muted);">（选填）</span></label>'+
@@ -4363,7 +4374,7 @@ function krRvSubmitBlock(c){
   return krCardBox('<span style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><span>发送复诊评估结果</span>'+aiBtn+'</span>',
     '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;"><div style="flex:1 1 260px;min-width:240px;"><div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">评估说明（AI 从录入的内容整理，请室长修改必要内容）</div>'+
     '<textarea oninput="krSubSet(\'text\',this.value)" placeholder="还没有内容：点［AI 整理］从评估内容整理，再在这里修改；也可以直接写" style="width:100%;min-height:240px;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.text)+'</textarea></div>'+
-    '<div style="flex:1 1 260px;min-width:240px;">'+right+'</div></div>'+sendBtn);
+    '<div style="flex:1 1 260px;min-width:240px;">'+right+'</div></div>'+extra+sendBtn);
 }
 
 /* CMD-1022-12：当前 KR 案件是不是复诊评估（弹窗 / 录入侧边栏的字样用） */
@@ -4680,3 +4691,26 @@ function krRoWrap(c, html, v){
   var msg = st==='unconfirmed' ? '这一天已关账（待确认结束），只能看；请用页面上方的［确认结束］处理。' : '这一天已结束，只能看；要改请到主案件或对应那天的页。';
   return '<div data-kr-ro="1" style="font-size:12px;color:var(--slate2);background:var(--bg-sidebar,#f3efe6);border-radius:8px;padding:6px 12px;margin-bottom:8px;">'+msg+'</div>'+box.innerHTML;
 }
+
+
+/* ===== CMD-1027-06：KR 复诊评估补齐——逐项评估意见（必填）+ 整体结论（评估卡里的恢复正常 / 需要处理 + 推荐）+ 下次复诊时间（选填）+ 注意事项（选填）=====
+   录入方式和面诊一样（［增加内容（语音）］［增加内容（手动）］→ 侧边栏）；AI 整理（演示）从录入内容 / 说明整理出每个项目的意见，室长可以改；发送前检查必填。流程顺序（确认时间 → 院长评估 → 室长发送）不变。 */
+function krRvOpSet(i, v){ var c = (krFindCase(KR_CASE.clinicId, KR_CASE.id)||{}).c; if(!c) return; var n = (c.followProjects||[])[i]; if(!n) return; (KR_SUB.rvOp = KR_SUB.rvOp || {})[n] = v; }
+function krRvNextSet(v){ KR_SUB.rvNextType = v; if(v!=='date') KR_SUB.rvNextDate = ''; krRenderCaseDetail(); }
+function krRvExtraHtml(c){
+  var ps = c.followProjects || [], inp = 'width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;';
+  var rows = ps.length ? ps.map(function(n, i){ return '<div style="margin-bottom:8px;"><div style="font-size:13px;font-weight:700;margin-bottom:3px;">'+krEsc(buyName(n))+' <span style="color:#B3261E;">*</span></div><textarea oninput="krRvOpSet('+i+',this.value)" placeholder="这个项目的评估意见（例：恢复良好，左眼稍微肿，属于正常范围）" style="'+inp+'min-height:56px;">'+krEsc((KR_SUB.rvOp||{})[n]||'')+'</textarea></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);">IN 没有选具体项目，不需要逐项意见。</div>';
+  var sel = KR_SUB.rvNextType || '', opt = function(v, lb){ return '<option value="'+v+'"'+(sel===v ? ' selected' : '')+'>'+lb+'</option>'; };
+  return '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border2);"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;"><span style="font-size:13px;font-weight:700;flex:1;">逐项评估意见 <span style="font-size:12px;font-weight:400;color:var(--muted);">（必填；整体结论 = 上面评估卡里选的）</span></span>'+
+    '<button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krRecOpenModal(\'voice\',true)">增加内容（语音）</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krRecOpenModal(\'manual\',true)">增加内容（手动）</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krAiOrganize()">✨ AI 整理（演示）</button></div>'+rows+
+    '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;"><div style="flex:1 1 240px;"><div style="font-size:13px;font-weight:700;margin-bottom:4px;">下次复诊时间 <span style="font-size:12px;font-weight:400;color:var(--muted);">（选填）</span></div><div style="display:flex;gap:8px;align-items:center;"><select onchange="krRvNextSet(this.value)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+opt('', '不填')+opt('none', '无需复诊')+opt('2w', '2 周后')+opt('1m', '1 个月后')+opt('3m', '3 个月后')+opt('date', '指定日期')+'</select>'+(sel==='date' ? '<input type="date" min="'+todayStr()+'" value="'+krEsc(KR_SUB.rvNextDate||'')+'" onchange="krSubSet(\'rvNextDate\',this.value)" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">' : '')+'</div></div>'+
+    '<div style="flex:2 1 320px;"><div style="font-size:13px;font-weight:700;margin-bottom:4px;">注意事项 <span style="font-size:12px;font-weight:400;color:var(--muted);">（选填）</span></div><textarea oninput="krSubSet(\'rvNote\',this.value)" placeholder="例：两周内避免桑拿和剧烈运动" style="'+inp+'min-height:56px;">'+krEsc(KR_SUB.rvNote||'')+'</textarea></div></div></div>';
+}
+/* AI 整理出每个项目的意见（演示：从录入内容里找提到这个项目的一句，找不到按顺序取一句，都没有用演示句；正式版接 LLM）；原文韩文，译文走 KR_ZH_MAP */
+var KR_RV_DEMO_OP = '경과 양호하며 현재 부기는 정상 범위입니다.';
+function krRvOpFill(c, srcText){
+  var lines = String(srcText||'').split(/[\n。.!?？]+/).map(function(s){ return s.trim(); }).filter(Boolean), op = KR_SUB.rvOp = KR_SUB.rvOp || {};
+  (c.followProjects||[]).forEach(function(n, i){ var hit = lines.filter(function(l){ return l.indexOf(n)>-1; })[0]; op[n] = hit ? hit.replace(n, '').replace(/^[\s:：,，、]+/, '') || KR_RV_DEMO_OP : (lines.length ? lines[Math.min(i, lines.length-1)] : KR_RV_DEMO_OP); });
+}
+function krZhShort(t){ var o = String(t||''); KR_ZH_MAP.forEach(function(m){ o = o.split(m[0]).join(m[1]); }); return o; }
+KR_ZH_MAP.push([KR_RV_DEMO_OP, '恢复良好，目前肿胀属于正常范围。']);
