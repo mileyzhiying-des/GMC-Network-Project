@@ -6157,6 +6157,7 @@ function coreItemsDone(c, names, by){
 /* 回诊时加做项目：KR 室长直接新增，另开新结算单、在韩国付款（不经过 IN 选择，原结算单不动）；IN 收到通知、只读可见 */
 function coreAddOnItem(c, projectName, by, opt){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */
   if(!c.hasArrived || c.visitClosed) return false;
+  if(c.krBalancePaid && !(opt && opt.local) && !window.GMC_ALLOW_POSTADD){ window.KR_DENY_MSG = '付清尾款后不能再新增施术项目（施术只能在施术当天的项目方案里增减；客人想加做别的施术请重新走一次面诊）。这里只能增加管理项目。'; return false; } /* CMD-1027-03 二 */
   var visitDone = !!c.krProcedureDone; /* CMD-1021-13：到院已完成时照样能买（进持有 / 待付款），但不碰到院状态：不建今日行、不重开；要用时先在到院卡按［增加项目］重开（CMD-1021-11） */
   opt = opt || {};
   var an = opt.anesthesia || {type:'local', label:'局部麻醉', note:''};
