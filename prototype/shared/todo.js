@@ -166,7 +166,7 @@ function krTodoItems(rows){
       subCaseList(c).forEach(function(rp){ var kk = subCaseKey(rp); if(rp.place==='KR' && rp.date && rp.date < today && coreVisitState(c, kk)==='arrived') push(todoMk('endvisit', (rp.date===todayShift(-1) ? '昨天' : rp.date.slice(5).replace('-', '/')+' ')+'的到院还没标客人已离院：确认是否已离院', c, rp.date, true, function(){ krOpenSubCard(r.clinicId, r.id, rp.id); }, {no:subCaseNo(c, rp)||c.caseNo})); });
     }
     /* CMD-1021-16：每天早上问「韩国行程是否结束？」（到院都做完、没有未来预约；暂不结束 → 第二天再问；离境日过了照样问） */
-    if(work && tripAskDue(c)) push(todoMk('tripend', tripAskWhy(c)==='left' ? '韩国行程是否结束？（客人已过离开日期）' : '韩国行程是否结束？', c, tripLastVisitDay(c), false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ try{ krTripOpen(); }catch(e){} }, 250); }));
+    if(work && tripAskDue(c)) push(todoMk('tripend', '韩国行程是否结束？（离开日期没填）', c, tripLastVisitDay(c), false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ try{ krStayFixOpen(); }catch(e){} }, 250); })); /* CMD-1027-04 一：离开日期没填才问，点了打开［行程修正］弹窗 */
     /* 今天到院（院长账号看自己的案件） */
     var ks = c.krSchedule;
     if(ks && ['confirmed','arrived'].indexOf(ks.status)>-1 && ks.confirmedDate===today && !c.visitClosed){
@@ -644,6 +644,11 @@ function todoTick(){
     if(CAL_MODE==='week' || CAL_MODE==='day') todoPlaceInLine();
   }catch(e){}
 }
+function tripAutoTick(){ /* CMD-1027-04 一：过了离开日期 → 韩国行程自动结束（IN 页只扫本诊所；KR 页扫各来源诊所）。原型里要有人开着页面才会跑；正式版由后端 00:00 排程 */
+  try{ if(typeof todoIsKr==='function' && todoIsKr()){ krClinics().forEach(function(cl){ Store.mutateClinic(cl.id, function(){ if(tripAutoSweep()) Store.touch(); }); }); } else if(typeof tripAutoSweep==='function'){ if(tripAutoSweep()) Store.touch(); } }catch(e){ console.error('[行程自动结束]', e); }
+}
+setTimeout(tripAutoTick, 1500);
+setInterval(tripAutoTick, 30000);
 setInterval(todoTick, 30000);
 setInterval(function(){ try{ if(document.getElementById('todo-pane') && !document.hidden) todoRefresh(); }catch(e){} }, 5000);
 /* IN 启动：默认打开日视图 */

@@ -4446,7 +4446,7 @@ function tripAskWhy(c){
   if(c.tripSnooze && td <= c.tripSnooze) return ''; /* 暂不结束 → 当天不再问，第二天早上再问 */
   var hid = c.hospitalId || (typeof caseKrHospital==='function' ? caseKrHospital(c) : ''), hr = (typeof hospitalHours==='function' && hid) ? hospitalHours(hid) : {open:'09:00'};
   var now = demoNow(); if((now.getHours()*60+now.getMinutes()) < timeToMin((hr && hr.open) || '09:00')) return ''; /* 医院营业开始时（页面是 KR 时区） */
-  var out = (c.stay && c.stay.out) || ''; if(out && td > out) return 'left'; /* 离开日期的第二天起 */
+  var out = (c.stay && c.stay.out) || ''; if(out) return ''; /* CMD-1027-04 一：离开日期填了 = 到期自动结束（tripAutoSweep），不再有待办；只有离开日期没填才问 */
   if(tripOpenVisits(c).length || pendingPayItems(c).length) return '';
   var last = tripLastVisitDay(c); if(!last || td <= last) return ''; /* 最后一次到院的第二天起 */
   return 'done';
@@ -4477,9 +4477,9 @@ function coreTripEnd(c, by, choices, opts){
   choices = choices || {}; var L = tripLeftList(c), toIn = 0, hold = [];
   L.care.forEach(function(x){ var to = x.canIn ? (choices[x.k] || 'IN') : 'KR'; if(to==='IN'){ if(coreCareBook(c, x.item, x.i, x.sug || todayStr(), '', 'IN', x.reuse, by)) toIn++; else hold.push(x.name); } else hold.push(x.name); });
   L.mgmt.forEach(function(m){ hold.push(m.name+'（剩 '+m.left+' 次）'); });
-  c.krTripEnded = {at:nowFullDt(), by:by, toIn:toIn, hold:hold, inPending:toIn + L.inRows}; if(opts.auto) c.krTripEnded.auto = 'IN'; delete c.tripSnooze;
+  c.krTripEnded = {at:nowFullDt(), by:by, toIn:toIn, hold:hold, inPending:toIn + L.inRows}; if(opts.auto) c.krTripEnded.auto = opts.byDate ? 'DATE' : (opts.manual ? 'MANUAL' : 'IN'); delete c.tripSnooze;
   var stillOpen = opts.auto && (ov.length || pendingPayItems(c).length || carePendingRows(c).some(function(x){ return x.place==='KR' && !x.skipped; })); /* 自动结束：韩国还有没到的预约 / 没做完的，案件不结案，等 KR 室长处理 */
-  logCaseEvent(c, by, (opts.auto ? '客人已到 IN 店（'+(opts.caseNo||'')+' 到店），韩国行程自动算结束'+(opts.left ? '；韩国那边还有：'+opts.left+'（没有自动取消，请 KR 室长处理）' : '') : '韩国行程结束')+(toIn ? '：'+toIn+' 项术后管理转去印尼' : '')+(hold.length ? '；留在韩国持有：'+hold.join('、') : '')+((toIn + L.inRows) ? '；案件进入「术后管理（印尼）」' : (stillOpen ? '；案件继续（韩国那边还没处理完）' : '；案件结案')), '术后管理');
+  logCaseEvent(c, by, (opts.manual ? '行程修正：客人已离境，结束韩国行程；原因：'+(opts.reason||'')+(opts.left ? '；韩国那边还有：'+opts.left+'（没有自动取消，请 KR 室长处理）' : '') : opts.byDate ? '已过离开日期（'+((c.stay&&c.stay.out)||'')+'），韩国行程自动算结束'+(opts.left ? '；韩国那边还有：'+opts.left+'（没有自动取消，请 KR 室长处理）' : '') : opts.auto ? '客人已到 IN 店（'+(opts.caseNo||'')+' 到店），韩国行程自动算结束'+(opts.left ? '；韩国那边还有：'+opts.left+'（没有自动取消，请 KR 室长处理）' : '') : '韩国行程结束')+(toIn ? '：'+toIn+' 项术后管理转去印尼' : '')+(hold.length ? '；留在韩国持有：'+hold.join('、') : '')+((toIn + L.inRows) ? '；案件进入「术后管理（印尼）」' : (stillOpen ? '；案件继续（韩国那边还没处理完）' : '；案件结案')), '术后管理');
   if(toIn || L.inRows || stillOpen){ updateCaseStage(c); if(toIn + L.inRows>0){ try{ pushNotif('术后管理', '韩国行程已结束：'+c.name+'（'+(c.caseNo||'')+'），'+(toIn + L.inRows)+' 项术后管理转到印尼，请在「未安排预约」里预约', {caseId:c.id, level:'action'}); }catch(e){} } }
   else finishCase(c);
   return {ok:true, toIn:toIn, hold:hold.length, closed:!(toIn || L.inRows || stillOpen)};
@@ -4886,7 +4886,8 @@ function lmSettle(){
     '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;"><span>应付金额</span><span>'+formatCurrency(pay,'IDR')+'</span></div></div>'+
     '<div style="font-size:13px;color:var(--slate2);">确认客人已付款 '+formatCurrency(pay,'IDR')+'？</div>'+
     '<div style="display:flex;gap:10px;"><button class="btn-outline" style="flex:1;" onclick="lmPayCancel()">取消</button><button class="btn-primary" id="settle-pay-btn" style="flex:1;" onclick="lmPayConfirm()">确认已付款</button></div>';
-  document.getElementById('settle-overlay').classList.add('open');
+  var so = document.getElementById('settle-overlay'); so.style.zIndex = 100030; /* CMD-1027-04 四：付款确认弹窗原来 z-index 65，被选购弹窗（190）盖在下面，按［结算］看起来没反应 = 卡住；提到最上面 */
+  so.classList.add('open');
 }
 var LM_PAY_PENDING = null;
 function lmPayCancel(){ LM_PAY_PENDING = null; try{ closeSettleModal(); }catch(e){} }
@@ -8674,7 +8675,16 @@ function inProjectCardHtml(c){
   /* CMD-1025-04 B/C：分类 tab 施术项目 N｜在韩管理 N｜已完成 N，没有项目的分类整个不显示；栏位按各分类定（来源放最后一栏）；IN 只看，没有操作按钮 */
   var surgList = items.filter(function(it){ return !krIsMgmtItemC(it) && !it.done; }), mgList = mg.filter(function(it){ return !it.cancelled; });
   var mgUses = []; mgList.forEach(function(it){ (it.uses||[]).forEach(function(u){ mgUses.push({it:it, u:u}); }); });
-  var counts = {surg:surgList.length, mg:mgList.length, done:surgDone.length+mgUses.length};
+  /* CMD-1027-04 三：「在韩管理」胶囊数字原来是全部没取消的管理项目（含次数全用完的），列表只放预约中 / 未预约的 → 用完的项目有数字没内容；改成数字 = 列表里实际出现的项目数（先算好两段，再数） */
+  var mgBooked = [], mgUnbooked = [];
+  mgList.forEach(function(it){
+    var left0 = holdItemLeft(c, it), bk0 = Math.max(0, holdItemBookable(c, it));
+    (c.subItems||[]).filter(function(s0){ return rowOwnedBy(it, s0) && !s0.done && !s0.skipped; }).forEach(function(s0){ mgBooked.push({k:(s0.date||'')+(s0.time||''), it:it, n:Math.max(1, parseInt(s0.useQty,10)||1), at:md2(s0.date, s0.time)}); });
+    if(holdItemTodayPicked(c, it)>0) mgBooked.push({k:(mainVisitDay(c)||'')+(ks0.confirmedTime||''), it:it, n:holdItemTodayPicked(c, it), at:md2(mainVisitDay(c), ks0.confirmedTime)});
+    if(bk0>0 || it.pendingPay) mgUnbooked.push({it:it, bk:bk0, left:left0});
+  });
+  var mgShown = {}; mgBooked.concat(mgUnbooked).forEach(function(x){ mgShown[itemIid(x.it)||x.it.name] = 1; });
+  var counts = {surg:surgList.length, mg:Object.keys(mgShown).length, done:surgDone.length+mgUses.length};
   var cur = IN_PC_TAB[c.id]; if(!cur || !counts[cur]) cur = ['surg','mg','done'].filter(function(k){ return counts[k]>0; })[0] || '';
   var tabBtn = function(k, label){ var n = counts[k]; if(!n) return ''; var on = cur===k; return '<button onclick="inPcTab(\''+c.id+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;font-weight:700;cursor:pointer;">'+label+'（'+n+'）</button>'; };
   var G = function(cols){ return 'display:grid;grid-template-columns:'+cols+';gap:8px;align-items:center;'; };
@@ -8691,13 +8701,7 @@ function inProjectCardHtml(c){
     var C1 = 'minmax(0,1fr) minmax(0,1.6fr) 56px minmax(0,1.2fr) 84px';
     body = inSmallCard(hd(C1, ['预约时间','项目','次数','备注','来源'])+surgList.map(function(it){ return rw(C1, [mainT(it), nm(it)+krItemFlags(c, it).map(function(f){ return ' <span class="status-pill" style="background:#FBF0C9;color:#A8740A;font-size:12px;">⚠ '+f+'</span>'; }).join(''), (it.qty||1)+'', e(it.todayNote||it.itemNote||''), srcT(it)]); }).join(''));
   } else if(cur==='mg'){
-    var booked = [], unbooked = [];
-    mgList.forEach(function(it){
-      var left = holdItemLeft(c, it), bk = Math.max(0, holdItemBookable(c, it));
-      (c.subItems||[]).filter(function(s0){ return rowOwnedBy(it, s0) && !s0.done && !s0.skipped; }).forEach(function(s0){ booked.push({k:(s0.date||'')+(s0.time||''), it:it, n:Math.max(1, parseInt(s0.useQty,10)||1), at:md2(s0.date, s0.time)}); });
-      if(holdItemTodayPicked(c, it)>0) booked.push({k:(mainVisitDay(c)||'')+(ks0.confirmedTime||''), it:it, n:holdItemTodayPicked(c, it), at:md2(mainVisitDay(c), ks0.confirmedTime)});
-      if(bk>0 || it.pendingPay) unbooked.push({it:it, bk:bk, left:left});
-    });
+    var booked = mgBooked, unbooked = mgUnbooked;
     booked.sort(function(a, b){ return a.k < b.k ? -1 : 1; });
     var C2 = 'minmax(0,1.6fr) 56px minmax(0,1fr) 72px minmax(0,1fr) 84px', C3 = 'minmax(0,1.5fr) 92px minmax(0,1.2fr) 88px 72px minmax(0,1fr) 84px';
     var seg = function(title, n, inner){ return inSecTitle(title, n)+inSmallCard(inner); };
@@ -9634,6 +9638,8 @@ function visitsOf(m){
     else add(s.date, s.time, 'KR', ty==='施术' ? [t] : [t, '在韩管理'].filter(function(x, i, a){ return a.indexOf(x)===i; }), {caseId:m.id, own:true});
   });
   childVisitsOf(m).forEach(function(ch){ if(ch.visitDate) add(ch.visitDate, ch.visitTime, ch.krVisit ? 'KR' : 'IN', typesOfRecord(ch), {caseId:ch.id, rec:ch.id, state:ch.subState||''}); });
+  /* CMD-1027-04 二：从术后管理 tab /「未安排预约」［预约］约出来的印尼预约，客人到店之前是一个独立的预约案件（careFor 指向这个主案件、还没有 mainId），原来 visitsOf 只认带 mainId 的子记录 → 第三行 / 子案件 tab / 状态卡都读不到；这里让它先当一天（客人到店后 joinMain 给它 mainId，就走上面的子记录，不会重复） */
+  CASE_ITEMS.forEach(function(x){ if(!x.careFor || x.careFor.caseId!==m.id || x.id===m.id || x.mainId || x.subState==='cancelled' || x.stage==='cancelled' || !x.visitDate) return; add(x.visitDate, x.visitTime, 'IN', ['术后管理'], {caseId:x.id, rec:x.id, state:x.subState||''}); });
   (typeof RESUMED_VISITS!=='undefined' ? RESUMED_VISITS : []).forEach(function(r){ /* 继续到进行中主案件的那一天（没有自己的记录）也是一个子案件 */
     if(r.caseId!==m.id || !r.date) return;
     var pt = r.purpose==='术后管理' ? ['术后管理'] : (r.purpose==='复诊评估' || r.purpose==='复诊' ? ['复诊评估'] : (r.purpose==='皮肤管理' ? ['本地管理'] : ['面诊安排']));
@@ -10706,7 +10712,8 @@ function coreStayFix(c, inD, inT, outD, outT, reason, by){
   var newT = stayText(c);
   logCaseEvent(c, by, '行程修正：'+oldT+' → '+newT+'；原因：'+reason, '赴韩施术');
   try{ pushNotif('赴韩施术', c.name+' 的在韩期间已改为 '+newT+'（原 '+oldT+'），原因：'+reason, {caseId:c.id}); }catch(e){}
-  return {ok:true};
+  var reopened = false; try{ reopened = reopenTripIfNeeded(c, by); }catch(e){ console.error('[重新打开行程]', e); }
+  return {ok:true, reopened:reopened};
 }
 /* 三：子案件 tab 分四段（IN + KR 共用）：进行中（今日）/ 已预约 / 已完成 / 已取消（含未到；放最下面、灰色） */
 function daySectionsOf(c){
@@ -10722,3 +10729,37 @@ function daySectionsOf(c){
   return [{key:'live', title:'进行中（今日）', rows:A.sort(asc)}, {key:'booked', title:'已预约', rows:B.sort(asc)}, {key:'done', title:'已完成', rows:C.sort(asc)}, {key:'cancel', title:'已取消', note:'含未到', rows:D.sort(asc), grey:true}].filter(function(x){ return x.rows.length; });
 }
 function daySectionHeadHtml(sec){ return '<div style="font-size:13px;font-weight:700;margin:16px 0 2px;'+(sec.grey ? 'color:var(--muted);' : '')+'">'+sec.title+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+sec.rows.length+(sec.note ? ' · '+sec.note : '')+'</span></div>'; }
+
+
+/* ===== CMD-1027-04 一：韩国行程结束——拿掉卡；过了离开日期自动结束；手动只在［行程修正］弹窗里（离开日期没填时）；改晚离开日期 = 重新打开 ===== */
+function tripAutoByDateDue(c){
+  return !!(c && !c.krTripEnded && !c.visitClosed && !isEnded(c) && !c.krVisit && c.settlementDone && c.stay && c.stay.out && todayStr() > c.stay.out); /* 离开那天的第二天 00:00 之后（页面时区，演示时钟有效）——现算，谁开页面谁触发 */
+}
+function coreTripAutoByDate(c){
+  if(!tripAutoByDateDue(c)) return false;
+  var left = ''; try{ left = tripLeftoverText(c); }catch(e){}
+  var r = coreTripEnd(c, '系统（过离开日期）', {}, {auto:true, byDate:true, caseNo:c.caseNo, left:left}); if(!r || !r.ok) return false;
+  try{ pushKrNotif(caseKrHospital(c), '已过离开日期（'+c.stay.out+'），韩国行程已自动结束：'+c.name+'（'+(c.caseNo||'')+'）'+(left ? '。还有 '+left+'，请处理（系统没有自动取消）' : ''), {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action', kind:'tripend'}); }catch(e){ console.error('[自动结束通知 KR]', e); }
+  try{ pushNotif('赴韩施术', c.name+'（'+(c.caseNo||'')+'）已过离开日期（'+c.stay.out+'），韩国行程已自动结束'+(left ? '；韩国那边还有：'+left : ''), {caseId:c.id}); }catch(e){ console.error('[自动结束通知 IN]', e); }
+  return true;
+}
+function tripAutoSweep(){ var n = 0; CASE_ITEMS.slice().forEach(function(c){ if(isChildVisit(c)) return; try{ if(coreTripAutoByDate(c)) n++; }catch(e){ console.error('[行程自动结束]', e); } }); return n; }
+/* 手动结束（只在离开日期没填时，从［行程修正］弹窗里）：原因必填；不挡、不自动取消剩下的；通知 IN */
+function coreTripEndManual(c, reason, by){
+  reason = String(reason||'').trim(); if(!reason) return {ok:false, err:'请填写原因'};
+  if(c.krTripEnded) return {ok:false, err:'韩国行程已经结束'}; if(!c.settlementDone || c.krVisit) return {ok:false, err:'这个案件还没有韩国行程'};
+  if(c.stay && c.stay.out) return {ok:false, err:'离开日期已经填了（'+c.stay.out+'）：到期会自动结束；客人提早回国请把离开日期改早'};
+  var left = ''; try{ left = tripLeftoverText(c); }catch(e){}
+  var r = coreTripEnd(c, by, {}, {auto:true, manual:true, reason:reason, caseNo:c.caseNo, left:left}); if(!r || !r.ok) return r || {ok:false, err:'结束失败'};
+  try{ pushNotif('赴韩施术', by+' 结束了 '+c.name+'（'+(c.caseNo||'')+'）的韩国行程：客人已离境；原因：'+reason, {caseId:c.id}); }catch(e){}
+  return {ok:true};
+}
+/* 行程修正把离开日期改到今天或以后 / 清空 → 行程重新打开：韩国行程结束标记拿掉（KR 又能建到院 / 增加项目），案件阶段按现状重算，原来因为结束而结案的案件回到进行中；
+   不收回：已经转去印尼的术后管理保持在印尼；已经留在韩国持有的项目保持持有；自动取消过的东西没有（系统本来就没取消任何东西） */
+function reopenTripIfNeeded(c, by){
+  if(!c.krTripEnded) return false; var out = (c.stay && c.stay.out) || ''; if(out && out < todayStr()) return false;
+  var info = c.krTripEnded; delete c.krTripEnded; delete c.tripSnooze;
+  logCaseEvent(c, by, '重新打开韩国行程（离开日期改到 '+(out || '（空）')+'）：KR 可以再建到院 / 增加项目；案件阶段按现状重算；原来转去印尼的术后管理（'+(info.toIn||0)+' 项）保持在印尼，没有收回', '赴韩施术');
+  if(isEnded(c) || c.stage==='closed'){ try{ reopenMain(c, '韩国行程重新打开'); }catch(e){} } else updateCaseStage(c);
+  return true;
+}

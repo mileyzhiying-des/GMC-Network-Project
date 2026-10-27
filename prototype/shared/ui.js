@@ -1298,7 +1298,7 @@ function renderCaseStatusBar0(c){
     var unc = ds3.filter(function(v){ return v.state==='unconfirmed'; })[0];
     if(!prog && unc){ line3 = '待确认结束：'+cesc(String(unc.date).slice(5).replace('-', '/'))+' '+tagOf(unc); btn3 = unc.kind==='IN' ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openDayConfirm(\''+(unc.rec||unc.caseId)+'\')">确认结束</button>' : '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+unc.key+'\')">查看内容</button>'; }
     else if(prog){ line3 = '今日进行中：'+tagOf(prog); btn3 = prog.place==='KR' ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+prog.key+'\')">查看内容</button>' : ((prog.rec||prog.caseId)===m3.id ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+prog.key+'\')">进入案件</button>' : '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openVisitOf(\''+(prog.rec||prog.caseId)+'\')">进入案件</button>'); }
-    else if(tvIn){ line3 = ((tvIn.rec||tvIn.caseId)===m3.id ? '今天来访：' : '今天来访：')+cesc(tvIn.types.join(' · ')); }
+    else if(tvIn){ line3 = (tvIn.state==='waiting' && (tvIn.rec||tvIn.caseId)!==m3.id) ? '今日预约：'+cesc(tvIn.time||'')+'（'+cesc(tvIn.types.join(' · '))+'）' : '今天来访：'+cesc(tvIn.types.join(' · ')); } /* CMD-1027-04 二：约好了客人还没到 = 今日预约；到店后变今日进行中 */
     else if(tvKr){ line3 = '今天在韩国到院：'+tagOf(tvKr); btn3 = '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+tvKr.key+'\')">查看内容</button>'; }
     else { var nx = activeV.filter(function(v){ return v.date>today3; }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0]; line3 = '下次预约：'+(nx ? cesc(nx.date)+(nx.time ? ' '+cesc(nx.time) : '')+(nx.place==='KR' ? '（韩国）' : '') : '—'); }
     document.getElementById('case-status-bar').innerHTML = '<div class="card" style="padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><span style="font-size:13px;">'+line3+'</span>'+btn3+'</div>'+(actionBtn ? '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">'+actionBtn+'</div>' : '');
@@ -2318,7 +2318,7 @@ function settleProjects(batchId){
   document.getElementById('settle-overlay').classList.add('open');
 }
 
-function closeSettleModal(){ document.getElementById('settle-overlay').classList.remove('open'); }
+function closeSettleModal(){ var so = document.getElementById('settle-overlay'); so.classList.remove('open'); so.style.zIndex = ''; }
 
 function submitKrScheduleDate(){
   var c = getCurrentCase(); if(!c) return;
