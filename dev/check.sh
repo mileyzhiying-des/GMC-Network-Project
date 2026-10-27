@@ -23,3 +23,4 @@ used = set(re.findall(r"getElementById\('([^']+)'\)", js))
 miss = [u for u in used if u not in ids and not u.startswith(('hold-', 'mgmt-', 'pcs-', 'att-', 'cf-'))]
 print('missing DOM ids:', miss)
 PY
+echo "--- undef-check ---"; node dev/undef-check.mjs

@@ -6399,6 +6399,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* ===== CMD-1027-10 ===== */
+  /* CMD-1027-11：造「有预约中 / 今天已选进到院的在韩管理项目」的资料（inProjectCardHtml 的「在韩管理」段走到 md2 / ks0 那一行才会出现的情形） */
+  ST.addMgmtBooked = function(c){
+    var td = todayStr(), mg1 = {name:'ONDA 提升 · 身体 60kj', origin:'KR', mgmtPlan:true, krAddOn:true, qty:3, heldOver:true, uses:[], iid:'iT156a'}, mg2 = {name:'钛提升 · 40kj', origin:'KR', mgmtPlan:true, krAddOn:true, qty:2, heldOver:true, uses:[], iid:'iT156b', todayQty:1};
+    c.procedureItems.push(mg1, mg2); c.hasArrived = true; c.krProcedureDone = false; c.todayPickMgmt = (c.todayPickMgmt||[]).concat([mg2.iid, mg2.name]);
+    c.subItems = c.subItems||[]; c.subItems.push({id:'sT156a', no:(c.caseNo||'A')+'#156', kind:'术后管理记录', name:mg1.name, holdUseOf:mg1.name, holdIid:mg1.iid, place:'KR', date:ymdAdd(td, 3), time:'13:00', done:false, skipped:false, useQty:2});
+    return [mg1, mg2];
+  };
   ST.def('R155a','CMD-1027-10（A1 分页，pcStage 夹具）：Fiona 型（升级主案件 · 两个施术 · 韩国 + 印尼术后管理 · 关账确认结束 · 子记录）IN 全部 tab / 子案件页都能进 · 人为让一块抛错 → 整页仍打开、那一块显示「这里出错了」并留控制台错误',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
@@ -6408,6 +6415,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       c.krBalancePaid = true; c.stay = null;
       var its = c.procedureItems.filter(function(it){ return it.origin==='KR'; });
+      ST.addMgmtBooked(c); /* CMD-1027-11：Fiona 型 = 在韩管理项目有预约中的行 + 今天已选进到院 */
       for(var d = 1; d <= 9; d++){ var it = its[d%its.length], pcn = (it.postcare||[]).length || 1; coreCareBook(c, it.name, d%pcn, ymdAdd(td, d+1), '1'+(d%5)+':00', 'KR', '', 'KM1'); }
       var inRow = (c.subItems||[]).filter(function(s){ return s.place==='IN' && !s.done; })[0];
       var rc = ST.newRes('R155r', {phone:clientPhoneOf(c.name), date:ymdAdd(td, 4), time:'10:30'}); rc = CASE_ITEMS.filter(function(x){ return x.id===rc.id; })[0]; rc.name = c.name; rc.careFor = {caseId:c.id, keys:inRow ? [inRow.id] : []}; made.push(rc.id);
@@ -6449,6 +6457,26 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     }
   });
 
+  ST.def('R156a','CMD-1027-11（A1 分页，pcStage 夹具）：在韩管理项目有「预约中的行」+「今天已选进到院」时 IN 赴韩施术 tab 项目卡正常（原 md2 is not a function）· 没有「这里出错了」· 在韩管理胶囊有内容',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var snap = JSON.stringify(c), oa = window.alert, ce = console.error, errs = [];
+    console.error = function(){ errs.push([].slice.call(arguments).join(' ')); };
+    try{
+      var mgs = ST.addMgmtBooked(c), html = '', thrown = '';
+      try{ html = inProjectCardHtml(c); }catch(e){ thrown = String(e); }
+      ST.ok(!thrown, 'inProjectCardHtml 不抛错（原：md2 is not a function）'+(thrown? '：'+thrown : ''));
+      var txt = html.replace(/<[^>]+>/g, ' ');
+      IN_PC_TAB[c.id] = 'mgmt'; var h2 = ''; try{ h2 = inProjectCardHtml(c); }catch(e){ thrown = String(e); }
+      ST.ok(!thrown, '切到「在韩管理」胶囊也不抛错');
+      var t2 = h2.replace(/<[^>]+>/g, ' ');
+      ST.ok(/ONDA/.test(t2) && /钛提升/.test(t2), '在韩管理胶囊里列出两个管理项目（预约中的 + 今天已选进到院的）');
+      ST.ok(/\d\d\/\d\d\s*13:00/.test(t2), '预约中的那一笔写出预约时间（md2 格式 MM/DD HH:mm）');
+      c.activeCaseTab = 'kr'; var full = ''; try{ full = krTabContent(c); }catch(e){ thrown = String(e); }
+      ST.ok(!/这里出错了/.test(full) && !thrown, '整个赴韩施术 tab 没有「这里出错了」');
+      ST.ok(!errs.some(function(x){ return /案件页 ·/.test(x); }), '控制台没有「案件页 · … 出错」');
+    } finally { console.error = ce; window.alert = oa; var o = JSON.parse(snap); Object.keys(c).forEach(function(k){ if(!(k in o)) delete c[k]; }); Object.assign(c, o); Store.touch && Store.touch(); }
+  });
   ST.def('R155b','CMD-1027-10（KM1 分页，pcStage 夹具）：KR 案件页 / 到院日页各 tab 能进 · 人为让一块抛错 → 整页仍打开、那一块显示「这里出错了」',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;

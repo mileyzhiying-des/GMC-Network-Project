@@ -3174,7 +3174,6 @@ function saveBudgetDraft(field, val){
   c[field] = val==='' ? null : Number(val);
 }
 
-function setIntentionPickerFilter(o){ INTENTION_PICKER_FILTER = o; renderIntentionPickerModal(); }
 
 function removeIntentionProject(idx){
   var c = getCurrentCase(); if(!c) return;
@@ -8679,6 +8678,9 @@ function inProjectCardHtml(c){
   var surgList = items.filter(function(it){ return !krIsMgmtItemC(it) && !it.done; }), mgList = mg.filter(function(it){ return !it.cancelled; });
   var mgUses = []; mgList.forEach(function(it){ (it.uses||[]).forEach(function(u){ mgUses.push({it:it, u:u}); }); });
   /* CMD-1027-04 三：「在韩管理」胶囊数字原来是全部没取消的管理项目（含次数全用完的），列表只放预约中 / 未预约的 → 用完的项目有数字没内容；改成数字 = 列表里实际出现的项目数（先算好两段，再数） */
+  /* CMD-1027-11：md2 / ks0 必须在下面 forEach 之前定义（原来定义在后面，var 提升成 undefined → md2 is not a function） */
+  var md2 = function(d, t){ return d ? e(String(d).slice(5, 10).replace('-', '/')+(t ? ' '+t : '')) : '—'; };
+  var ks0 = c.krSchedule || {};
   var mgBooked = [], mgUnbooked = [];
   mgList.forEach(function(it){
     var left0 = holdItemLeft(c, it), bk0 = Math.max(0, holdItemBookable(c, it));
@@ -8694,11 +8696,10 @@ function inProjectCardHtml(c){
   var hd = function(cols, names){ return '<div style="'+G(cols)+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+names.map(function(n){ return '<span>'+n+'</span>'; }).join('')+'</div>'; };
   var rw = function(cols, cells){ return '<div style="'+G(cols)+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;">'+cells.map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; };
   var gray = function(t){ return '<span style="color:var(--muted);font-size:12px;">'+t+'</span>'; };
-  var md2 = function(d, t){ return d ? e(String(d).slice(5, 10).replace('-', '/')+(t ? ' '+t : '')) : '—'; };
   var buyT = function(it){ var b = (c.settlementBatches||[]).filter(function(x){ return x.id===it.batchId; })[0]; return b && b.time ? e(fmtUtc(b.time).slice(5, 10).replace('-', '/')) : '—'; };
   var srcT = function(it){ var kr = !!(it && (it.krAddOn || it.preBalanceAdd)); return '<span class="status-pill" style="display:inline-block;white-space:nowrap;font-size:12px;'+(kr ? 'background:#E2F3E6;color:#2E7D4F;' : 'background:#E3EEFB;color:#2F5FA8;')+'">'+(kr ? '在韩购买' : '印尼购买')+'</span>'; };
   var nm = function(it){ return (it.cancelled || it.replacedBy) ? '<span style="text-decoration:line-through;color:var(--muted);">'+e(buyName(it.name))+'</span>'+(it.replacedBy ? ' → <b>'+e(it.replacedBy)+'</b>' : ' '+gray('已取消')) : e(buyName(it.name)); };
-  var ks0 = c.krSchedule || {}, mainT = function(it){ var d = itemSurgDate(c, it); if(!d) return '—'; var t = (d===ks0.confirmedDate) ? (ks0.confirmedTime||'') : ''; if(t){ try{ var cl = krToClinic(d, t); return md2(cl.date, cl.time); }catch(x){} } return md2(d, t); };
+  var mainT = function(it){ var d = itemSurgDate(c, it); if(!d) return '—'; var t = (d===ks0.confirmedDate) ? (ks0.confirmedTime||'') : ''; if(t){ try{ var cl = krToClinic(d, t); return md2(cl.date, cl.time); }catch(x){} } return md2(d, t); };
   var body = '';
   if(cur==='surg'){
     var C1 = 'minmax(0,1fr) minmax(0,1.6fr) 56px minmax(0,1.2fr) 84px';
