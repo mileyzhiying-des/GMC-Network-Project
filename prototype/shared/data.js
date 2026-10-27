@@ -6275,6 +6275,7 @@ function coreAddOnDelete(c, idx, by){
 /* 施术备注：KR 室长 / 院长写，IN 只读（CMD-1012-15 一·6） */
 function coreSubNote(c, id, text, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s) return false; /* 备注：施术行 / 术后管理行 / 在韩持有都能写（KR 写，IN 只读） */
+  { var nk = rowVisitKey(c, s); if(!window.DAYCONFIRM_BYPASS && (noteVisitEnded(c, nk) || dayLockedKR(c, nk))) return false; } /* CMD-1027-02 四 */
   s.note = String(text||'').trim(); s.noteBy = by; s.noteAt = nowFullDt();
   logCaseEvent(c, by, (s.note ? '施术备注：'+s.note : '清空施术备注'));
   return true;
@@ -8904,7 +8905,8 @@ function migrateProgressMemo(c){
 function noteVisitEnded(c, vk){ return vk==='main' ? !!c.krProcedureDone : !!((c.visitEndedKeys||{})[vk]); }
 function visitNoteAuto(c, vk){ return (c.krProgressMemos||[]).filter(function(m){ return m.auto && (m.vk||'')===vk; })[0]; }
 function visitNoteText(c, vk){ var m = visitNoteAuto(c, vk); return m ? m.text : String((c.visitNoteDraft||{})[vk]||''); }
-function coreVisitNoteDraft(c, vk, text){ (c.visitNoteDraft = c.visitNoteDraft || {})[vk] = String(text||''); return true; }
+function coreVisitNoteDraft(c, vk, text){ if(noteVisitEnded(c, vk) || (!window.DAYCONFIRM_BYPASS && dayLockedKR(c, vk))) return false; /* CMD-1027-02 四：客人已离院 / 00:00 关账后不能再改 */
+  (c.visitNoteDraft = c.visitNoteDraft || {})[vk] = String(text||''); return true; }
 function coreVisitNoteCommit(c, vk, by){
   var t = String((c.visitNoteDraft||{})[vk]||'').trim(); if(c.visitNoteDraft) delete c.visitNoteDraft[vk];
   c.krProgressMemos = (c.krProgressMemos||[]).filter(function(m){ return !(m.auto && (m.vk||'')===vk); });
@@ -8958,6 +8960,7 @@ function caseNotesListHtml(c, viewerRole, o){
 }
 function coreItemNote(c, name, text, by){
   var it = itemByKey(c, name, function(x){ return !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name;
+  if(!window.DAYCONFIRM_BYPASS && (c.krProcedureDone || dayLockedKR(c, 'main'))) return false; /* CMD-1027-02 四：离院 / 关账后项目备注锁住 */
   it.todayNote = String(text||'').trim(); it.todayNoteBy = by; it.todayNoteAt = nowFullDt(); logCaseEvent(c, by, '备注（'+name+'）：'+(it.todayNote || '清空')); return true;
 }
 function surgPlanItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.cancelled && !it.swapped && !it.krAddOn && !it.preBalanceAdd && !krIsMgmtItemC(it) && !it.deferUse; }); }
@@ -9715,12 +9718,13 @@ function visitsTabHtml(c){
   var vs = visitsOf(c), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   var grid = 'display:grid;grid-template-columns:110px 80px 56px minmax(0,1.6fr) 90px minmax(0,.8fr) minmax(0,.8fr) 70px 70px 90px;gap:8px;align-items:center;';
   var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border2);"><span>序号</span><span>日期</span><span>地点</span><span>业务类型</span><span>状态</span><span>财务</span><span>对接院长</span><span>开始</span><span>结束</span><span>更新</span></div>';
-  var rows = vs.map(function(v){
+  var rowOf = function(v, grey){
     var ch = v.caseId!==c.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, tags = v.types.map(function(t0){ return '<span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);font-size:12px;margin-right:4px;">'+e(t0)+'</span>'; }).join('');
     var last = ch && ch.logEntries && ch.logEntries.length ? String(ch.logEntries[ch.logEntries.length-1].dt||'').slice(5, 16) : '';
     var go = 'openSubcase(\''+c.id+'\',\''+v.key+'\')'; /* CMD-1023-03 P3：点一行 → 那一天的子案件页 */
     return '<div class="case-row-click" onclick="'+go+'" style="'+grid+'padding:9px 0;border-top:1px solid var(--border2);font-size:13px;cursor:pointer;"><span style="font-size:12px;">'+e(v.no)+'</span><span style="font-size:12px;">'+e(String(v.date).slice(5).replace('-', '/'))+'</span><span style="font-size:12px;">'+(v.place==='KR' ? '韩国' : '印尼')+'</span><span>'+tags+'</span><span style="font-size:12px;">'+visitStateText(c, v)+'</span><span style="font-size:12px;">'+(ch ? financeCellHtml(ch) : '—')+'</span><span style="font-size:12px;">'+e(c.director||'—')+'</span><span style="font-size:12px;">'+e(v.time||'—')+'</span><span style="font-size:12px;">—</span><span style="font-size:12px;">'+e(last||'—')+'</span></div>';
-  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">还没有子案件</div>';
+  };
+  var secs = daySectionsOf(c), rows = secs.map(function(sec){ return daySectionHeadHtml(sec)+'<div'+(sec.grey ? ' style="opacity:.6;"' : '')+'>'+sec.rows.map(function(v){ return rowOf(v, sec.grey); }).join('')+'</div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">还没有子案件</div>'; /* CMD-1027-02 三：分四段 */
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:6px;">子案件 <span style="font-weight:400;font-size:12px;color:var(--muted);">客人每来一天一个；点一行打开那一天</span></div><div style="overflow-x:auto;"><div style="min-width:900px;">'+head+rows+'</div></div></div>';
 }
 /* ===== CMD-1026-02 B：项目汇总 tab 改成项目卡的结构（只能看，没有任何按钮）=====
@@ -10685,3 +10689,35 @@ function fullReportPrint(){
   var html = '<html><head><meta charset="utf-8"><title>诊疗方案_'+(c.caseNo||'')+'</title><style>body{font-family:sans-serif;padding:32px;color:#1c2b40;} .no-print{display:none;} table{width:100%;} </style></head><body>'+reportDocHtml(c, false).replace(/<button[^>]*>.*?<\/button>/g,'')+'</body></html>';
   var w = window.open('', '_blank'); if(w){ w.document.write(html); w.document.close(); w.focus(); setTimeout(function(){ w.print(); }, 300); }
 }
+
+
+/* ===== CMD-1027-02 ===== */
+/* 一：KR［行程修正］——改到达 / 离开的日期时间，原因必填；通知 IN 室长 + Timeline（客人提早回国就把离开日期改早） */
+function coreStayFix(c, inD, inT, outD, outT, reason, by){
+  reason = String(reason||'').trim(); inD = inD||''; outD = outD||''; inT = inT||''; outT = outT||'';
+  if(!reason) return {ok:false, err:'请填写更正原因'};
+  if(!inD && !outD) return {ok:false, err:'到达和离开至少要填一个日期'};
+  if(inD && outD && (outD+' '+(outT||'00:00')) < (inD+' '+(inT||'00:00'))) return {ok:false, err:'离开时间不能早于到达时间'};
+  var old = c.stay || {};
+  if((old.in||'')===inD && (old.out||'')===outD && (old.inTime||'')===inT && (old.outTime||'')===outT) return {ok:false, err:'日期时间没有变化'};
+  var oldT = stayText(c) || '（空）';
+  c.stay = {in:inD, out:outD, inTime:inT, outTime:outT, inAirport:old.inAirport||'', outAirport:old.outAirport||'', by:by, at:nowFullDt()};
+  var newT = stayText(c);
+  logCaseEvent(c, by, '行程修正：'+oldT+' → '+newT+'；原因：'+reason, '赴韩施术');
+  try{ pushNotif('赴韩施术', c.name+' 的在韩期间已改为 '+newT+'（原 '+oldT+'），原因：'+reason, {caseId:c.id}); }catch(e){}
+  return {ok:true};
+}
+/* 三：子案件 tab 分四段（IN + KR 共用）：进行中（今日）/ 已预约 / 已完成 / 已取消（含未到；放最下面、灰色） */
+function daySectionsOf(c){
+  var today = todayStr(), A = [], B = [], C = [], D = [];
+  daysOf(c).forEach(function(v){
+    var s = v.state;
+    if(s==='arrived' || s==='unconfirmed') A.push(v);
+    else if(s==='waiting' && v.date>=today) B.push(v);
+    else if(s==='left' || s==='ended') C.push(v);
+    else D.push(v);
+  });
+  var asc = function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); };
+  return [{key:'live', title:'进行中（今日）', rows:A.sort(asc)}, {key:'booked', title:'已预约', rows:B.sort(asc)}, {key:'done', title:'已完成', rows:C.sort(asc)}, {key:'cancel', title:'已取消', note:'含未到', rows:D.sort(asc), grey:true}].filter(function(x){ return x.rows.length; });
+}
+function daySectionHeadHtml(sec){ return '<div style="font-size:13px;font-weight:700;margin:16px 0 2px;'+(sec.grey ? 'color:var(--muted);' : '')+'">'+sec.title+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+sec.rows.length+(sec.note ? ' · '+sec.note : '')+'</span></div>'; }
