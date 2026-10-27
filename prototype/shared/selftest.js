@@ -6082,7 +6082,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       rc.subState = 'cancelled'; rc.stage = 'cancelled'; ST.ok(/预约复诊/.test(revEvalTabHtml(n)), '三：预约取消后又回到［预约复诊］');
       /* 3 个月提示 */
       var far = revNextCalc('date', ymdAdd(todayStr(), 130)); n.revisitNext = {type:'date', label:'指定日期', date:far}; revBookOpen(n.id);
-      ST.ok(/超过 3 个月/.test(document.getElementById('rev-book-overlay').innerText), '三：日期超过继续服务 3 个月 → 弹窗提示（不改规则）'); revBookClose();
+      var ovt = document.getElementById('rev-book-overlay').innerText; ST.ok(!/超过继续服务 3 个月|距施术完成日超过/.test(ovt) && /不受 3 个月继续限制/.test(ovt), '三（CMD-1027-07 改）：日期超过 3 个月 → 不再有黄字警告，改成一行「院长建议的复诊，会算在原主案件里」'); revBookClose();
     }finally{ window.alert = oa; window.confirm = oc; try{ revBookClose(); }catch(e){} }
   });
   ST.def('R151b','CMD-1027-06（KM1 分页，pcStage 夹具）：KR 复诊评估逐项意见 / 下次复诊 / 注意事项 · AI 整理 · 发送前必填检查 · 报告用新栏位',function(){
@@ -6119,6 +6119,63 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(function(c){ delete c.revisitOpinions; delete c.revisitNext; delete c.revisitNotes; c.reportReady = true; c.consultStatus = 'report_ready'; c.reportDate = todayStr(); c.videoSummary = '恢复正常'; c.reportKo = '정상'; });
       var legacy = Store.withClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return revReportDocHtml(c, false, true)+krTabConsult0(c); }); ST.ok(/复诊评估报告/.test(legacy), '旧资料（只有整体结论）KR 显示不报错');
     } finally { window.alert = oa; window.confirm = oc; KR_SUB = krSubBlank(''); var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
+
+  ST.def('R152a','CMD-1027-07（A1 分页）：院长建议的复诊（［预约复诊］建的预约）不受 3 个月继续限制——弹窗没警告 / 到店默认继续 + 复诊评估 + 带出原主案件 / 子案件号 / 主案件已完成时重新进行中 / 对照：自己走进来超过 3 个月仍不能继续 / 改期 · 取消重约关联不丢',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var oa = window.alert, oc = window.confirm, oo = window.GMC_NO_FOLLOWASK; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+      var src = ST.newRes('R152s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.reportReady = true; src.consultStatus = 'report_ready'; src.projectsEnabled = true; src.consultRequested = true; src.krTripEnded = true; src.krProcedureDone = true;
+      var old140 = ymdAdd(todayStr(), -140);
+      src.procedureItems = [{origin:'KR', name:'隆鼻', price:1, done:true, doneAt:old140+' 10:00'}];
+      src.stage = 'closed';
+      var n = ST.mkRevEval('R152k', src); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0];
+      Object.assign(n, {consultStatus:'report_ready', reportReady:true, reportDate:todayStr(), reportUploadedBy:'KM1 室长', videoSummary:'恢复正常', reportKo:'정상', followProjects:['隆鼻'], revisitQuestion:'还肿', director:src.director});
+      n.recoveryResult = {result:'ok', by:'KD1 院长', at:nowFullDt()}; n.revisitRec = {local:'', suggestKr:false};
+      n.revisitOpinions = [{name:'隆鼻', text:'恢复良好', zh:'恢复良好'}]; var far = ymdAdd(todayStr(), 100); n.revisitNext = {type:'3m', label:'3 个月后', date:far}; n.revisitNotes = null;
+      src.stage = 'closed'; src.krProcedureDone = true;
+      ST.ok(surgeryDoneDayOf(src)===old140 && !joinWindowOf(src, '复诊评估').ok, '前提：原主案件施术完成 140 天前，按旧规则（无预约）已超过 3 个月');
+      revBookOpen(n.id); var txt = document.getElementById('rev-book-overlay').innerText;
+      ST.ok(!/超过继续服务 3 个月|距施术完成日超过/.test(txt) && /不受 3 个月继续限制/.test(txt), '一：弹窗没有黄字警告，改成「院长建议的复诊，会算在原主案件里」');
+      var d2 = far; var g = 0; while(g++<40 && !revBookTimes(d2).length) d2 = ymdAdd(d2, 1); revBookSet('date', d2); var t2 = revBookTimes(d2)[0]; revBookSet('time', t2); revBookGo();
+      var rc = CASE_ITEMS.filter(function(x){ return x.revisitFor && x.revisitFor.evalId===n.id; })[0]; ST.ok(!!rc && rc.visitDate===d2, '一：超过 3 个月的日子也能约（revisitFor 关联原主案件）');
+      ST.ok(joinWindowOf(src, '复诊评估', rc).ok && !joinWindowOf(src, '复诊评估', null).ok, '一：对这笔预约 joinWindowOf 通过，其他来访仍超期');
+      /* 改期：关联不丢 */
+      var d3 = ymdAdd(d2, 3); rc.visitDate = d3; ST.ok(rc.revisitFor && rc.revisitFor.caseId===src.id && joinWindowOf(src, '复诊评估', rc).ok, '一：按［预约修改］改了日子，仍是院长建议的复诊');
+      /* 取消 → 回到预约复诊 → 重约一样算 */
+      rc.subState = 'cancelled'; rc.stage = 'cancelled'; ST.ok(/预约复诊/.test(revEvalTabHtml(n)), '一：预约取消 / 未到 → 回到［预约复诊］');
+      revBookOpen(n.id); revBookSet('date', d2); revBookSet('time', t2); revBookGo(); var rc2 = CASE_ITEMS.filter(function(x){ return x.revisitFor && x.revisitFor.evalId===n.id && x.stage!=='cancelled'; })[0];
+      ST.ok(!!rc2 && joinWindowOf(src, '复诊评估', rc2).ok, '一：重约一样算');
+      /* 拨到那天：客人到店 */
+      src.visitDate = ymdAdd(todayStr(), -141); src.arrivedDay = src.visitDate; src.leftStore = {at:nowFullDt(), by:'系统'}; n.visitDate = ymdAdd(todayStr(), -139); n.arrivedDay = n.visitDate; n.leftStore = {at:nowFullDt(), by:'系统'}; /* 第一次复诊评估那一天是 139 天前，不是今天（建夹具时是今天，会和这次到店同一天被合成一天） */
+      rc2.visitDate = todayStr(); rc2.subState = 'arrived'; rc2.arrivedDay = todayStr(); rc2.materialsConfirmed = false; rc2.hasArrived = true;
+      var av = fuAvail(rc2); ST.ok(av.can.revisit && av.revisitC.some(function(x){ return x.id===src.id; }), '一：到店时「继续」的复诊候选里有原主案件（超过 3 个月）');
+      window.GMC_NO_FOLLOWASK = false; followupAsk(rc2);
+      ST.ok(FU_ASK && FU_ASK.mode==='link' && FU_ASK.svc.revisit && FU_ASK.sel===src.id, '一：到店默认「继续之前的服务」+ 复诊评估 + 带出原主案件');
+      try{ document.getElementById('followup-overlay').classList.remove('open'); }catch(e){} FU_ASK = null;
+      joinMain(rc2, src); updateCaseStage(rc2); try{ mainAutoStatus(mainOf(src)); }catch(e){}
+      ST.ok(rc2.mainId===src.id && /^A\d+-\d\d$/.test(rc2.caseNo||''), '一：成为原主案件的子案件，编号照一天一个号：'+rc2.caseNo);
+      ST.ok(mainStatusOf(src).key!=='done' && src.stage!=='closed', '一：原主案件已完成 → 重新有进行中的事（回到进行中）：'+JSON.stringify(mainStatusOf(src)));
+      rc2.revisitEval = {at:nowFullDt()}; /* 真实流程里确认基础资料后由 startRevisitEval 写入 */
+      ST.ok(daysOf(src).some(function(v){ return v.date===todayStr() && v.types.indexOf('复诊评估')>-1; }), '二：这一天在子案件 tab / daysOf 里正常');
+      /* 对照：自己走进来，没有 revisitFor */
+      var walk = ST.newRes('R152w', {phone:clientPhoneOf(src.name)}); walk = CASE_ITEMS.filter(function(x){ return x.id===walk.id; })[0]; walk.name = src.name; walk.visitPurpose = '复诊';
+      src.krTripEnded = true; var av2 = fuAvail(walk); ST.ok(!av2.revisitC.some(function(x){ return x.id===src.id; }), '对照：客人自己走进来（没有这笔预约）超过 3 个月仍不能继续复诊');
+    } finally { window.alert = oa; window.confirm = oc; window.GMC_NO_FOLLOWASK = oo; try{ revBookClose(); }catch(e){} }
+  });
+  ST.def('R152b','CMD-1027-07（KM1 分页，pcStage 夹具）：超过 3 个月的院长建议复诊送到 KR——待办 / 复诊 tab / 编号正常',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, snap = JSON.stringify(Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; })), kidId = 'r152kid', cn = '';
+    try{
+      Store.mutateClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; m.procedureItems.forEach(function(it){ if(!krIsMgmtItemC(it)){ it.done = true; it.doneAt = ymdAdd(todayStr(), -140)+' 10:00'; } }); cn = m.caseNo+'-77';
+        CASE_ITEMS.push({id:kidId, name:m.name, clinicId:cid, hospitalId:m.hospitalId, director:m.director, mainId:m.id, caseNo:cn, visitDate:todayStr(), visitTime:'15:00', subState:'arrived', stage:'consult', needsConsult:true, materialsConfirmed:true, followup:true, revisitEval:{at:nowFullDt()}, consultRequested:true, consultStatus:'paid_waiting_kr', noConsultFee:true, krCoordinator:m.krCoordinator, logEntries:[], followProjects:['隆鼻'], revisitQuestion:'还肿', resumeFrom:{caseId:m.id, type:'复诊评估', types:['复诊评估']}, revisitFor:{caseId:m.id, evalId:kidId}}); });
+      var rows = krAllCases(), row = rows.filter(function(x){ return x.id===r0.id; })[0]; var its = krTodoItems(rows);
+      ST.ok(its.some(function(i){ return /复诊/.test(i.text||i.title||'') && String(i.caseId||'').length; }) || its.some(function(i){ return i.caseId===kidId || (i.kid && i.kid===kidId); }) , '待办里有这笔复诊评估（确认评估时间）');
+      var h = Store.withClinic(cid, function(){ var m = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return krTabFlow ? krTabFlow(m) : ''; });
+      ST.ok(h.indexOf(cn)>-1 || /复诊评估/.test(h), '复诊 tab 有这一笔：'+cn);
+    } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===kidId; }); if(i>-1) CASE_ITEMS.splice(i, 1); var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var s0 = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
   });
 
 })();

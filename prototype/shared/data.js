@@ -2683,7 +2683,7 @@ function resumeCandidates(c, type){
   var todayOwn = {}; try{ contTodayCareRows(c).forEach(function(r){ todayOwn[r.c.id] = 1; }); }catch(e){} /* 今天有约好的术后管理的案件一定是候选 */
   if(type==='接续面诊') return prior.filter(function(x){ return x.stage==='reportonly' && x.reportReady && !x.revisitEval && !x.krDepositPaid; }); /* CMD-1022-09：只有结局是「仅出报告」的案件才能被继续面诊（进行中的不能；复诊评估案件不算） */
   /* CMD-1022-12 B5：术后管理 / 复诊评估只能继续赴韩已结束的案件（KR 已按［韩国行程结束］；从「未安排预约」约来的，对应案件照样可选） */
-  return prior.filter(function(x){ return x.krTripEnded || (x.krProcedureDone && x.stage==='closed') || (c.careFor && c.careFor.caseId===x.id) || todayOwn[x.id]; });
+  return prior.filter(function(x){ return x.krTripEnded || (x.krProcedureDone && x.stage==='closed') || (c.careFor && c.careFor.caseId===x.id) || (c.revisitFor && c.revisitFor.caseId===x.id) || todayOwn[x.id]; }); /* CMD-1027-07：［预约复诊］建的预约关联的主案件一定是候选 */
 }
 /* 弹窗里三道检查的结果：pass（三项都通过）/ fail（不能继续）/ incomplete（还没填完） */
 function resumeChecksOf(a, src){
@@ -2725,7 +2725,7 @@ function markBoughtFrom(c){ /* 到店时：客人有只在本地买的持有项�
 function fuAvail(c){
   var tRows = []; try{ tRows = contTodayCareRows(c); }catch(e){}
   var consultC = resumeCandidates(c, '接续面诊').filter(function(x){ return joinWindowOf(x, '接续面诊').ok; }); /* 仅出报告、距院长面诊日 3 个月内 */
-  var revisitC = resumeCandidates(c, '复诊术后').filter(function(x){ return joinWindowOf(x, '复诊评估').ok; }); /* 已完成的主案件、距施术完成日 3 个月内（超过的不列） */
+  var revisitC = resumeCandidates(c, '复诊术后').filter(function(x){ return joinWindowOf(x, '复诊评估', c).ok; }); /* 已完成的主案件、距施术完成日 3 个月内（超过的不列） */
   var owners = {}; tRows.forEach(function(r){ owners[r.c.id] = 1; });
   var careC = resumeCandidates(c, '复诊术后').filter(function(x){ return owners[x.id]; });
   return {consultC:consultC, revisitC:revisitC, careC:careC, tRows:tRows, can:{consult:consultC.length>0, care:careC.length>0, revisit:revisitC.length>0}};
@@ -2828,8 +2828,9 @@ function surgeryDoneDayOf(m){
   if(!d){ (m.procedureItems||[]).forEach(function(it){ if(it.done && !it.cancelled && !krIsMgmtItemC(it) && it.doneAt && String(it.doneAt).slice(0, 10)>d) d = String(it.doneAt).slice(0, 10); }); }
   return d || tripOf(m).day || '';
 }
-function joinWindowOf(src, type){
+function joinWindowOf(src, type, visit){
   var m = mainOf(src);
+  if(type==='复诊评估' && visit && visit.revisitFor && m && visit.revisitFor.caseId===m.id) return {ok:true, reason:'', advised:true}; /* CMD-1027-07：院长建议的复诊（［预约复诊］建的预约）算在原主案件，不受 3 个月限制 */
   if(type==='接续面诊'){ return resumeOverdue(m) ? {ok:false, reason:'距院长面诊日超过 3 个月，需要重新面诊'} : {ok:true, reason:''}; }
   if(type==='复诊评估'){
     var d = surgeryDoneDayOf(m); if(!d) return {ok:true, reason:''};
@@ -10510,7 +10511,7 @@ function contConfirm(){
   var c = getCurrentCase(), m = CONT_MODAL; if(!c || !m) return;
   var ts = resumeTypesOf(c);
   if(!ts.length){ var er = document.getElementById('cont-error'); if(er){ er.textContent = '请至少勾选一个继续项目'; er.style.display = 'block'; } return; } /* 至少勾一个 */
-  if(ts.indexOf('复诊评估')>-1){ var s0 = followSrcById(c.resumeFrom.caseId) || followSrc(c); if(s0 && !joinWindowOf(s0, '复诊评估').ok){ var er2 = document.getElementById('cont-error'); if(er2){ er2.textContent = '复诊：'+joinWindowOf(s0, '复诊评估').reason+'；请取消，开始新的服务'; er2.style.display = 'block'; } return; } } /* CMD-1026-06：复诊超过 3 个月的检查挪到这里（第一个对话框只选一层） */
+  if(ts.indexOf('复诊评估')>-1){ var s0 = followSrcById(c.resumeFrom.caseId) || followSrc(c); if(s0 && !joinWindowOf(s0, '复诊评估', c).ok){ var er2 = document.getElementById('cont-error'); if(er2){ er2.textContent = '复诊：'+joinWindowOf(s0, '复诊评估', c).reason+'；请取消，开始新的服务'; er2.style.display = 'block'; } return; } } /* CMD-1026-06：复诊超过 3 个月的检查挪到这里（第一个对话框只选一层） */
   c.careToday = ts.indexOf('术后管理')>-1 ? m.care.slice() : [];
   confirmMaterials(); /* 缺项会弹原来的「还缺哪几项」提示（z-index 已调高） */
   if(c.materialsConfirmed){ contClose(); renderCaseBody(c); }
@@ -10882,7 +10883,7 @@ function revBookRender(){
   if(done){ var lim = new Date(done+'T00:00:00'); lim.setMonth(lim.getMonth()+3); over = lim < new Date(B.date+'T00:00:00'); }
   ov.innerHTML = '<div class="modal-box" style="width:460px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">预约复诊 · '+esc0(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">院长建议：'+esc0(revNextText(c))+'。日期已带好，可以改；确认后建一笔来访目的「复诊评估」的预约，关联案件 '+esc0(m.caseNo||'')+'。</div>'+
     '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;"><span style="width:50px;font-size:13px;">日期</span><input type="date" min="'+todayStr()+'" value="'+B.date+'" style="'+inp+'" onchange="revBookSet(\'date\',this.value)"><span style="width:10px;"></span><span style="font-size:13px;">时间</span><select style="'+inp+'" onchange="revBookSet(\'time\',this.value)">'+(ts.length ? ts.map(function(t){ return '<option'+(t===B.time ? ' selected' : '')+'>'+t+'</option>'; }).join('') : '<option value="">这天没有可约时间</option>')+'</select></div>'+
-    (over ? '<div style="font-size:12px;color:#8F6F0C;background:#FBF0C9;border-radius:8px;padding:6px 10px;margin-bottom:8px;">这个日期距施术完成日超过 3 个月：客人到店时按现有规则不能继续这个案件（会提示重新面诊 / 开新案件），预约本身可以建。</div>' : '')+
+    '<div style="font-size:12px;color:var(--muted);background:var(--bg-sidebar,#F3F1EC);border-radius:8px;padding:6px 10px;margin-bottom:8px;">院长建议的复诊，会算在原主案件里（不受 3 个月继续限制）。</div>'+
     '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="revBookClose()">取消</button><button class="btn-primary" '+(B.date && B.time ? 'onclick="revBookGo()"' : 'disabled style="opacity:.4;"')+'>确认预约</button></div></div>';
   ov.classList.add('open');
 }
