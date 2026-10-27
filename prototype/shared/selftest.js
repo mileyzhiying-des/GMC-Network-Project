@@ -4071,8 +4071,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(flowMarkOf(m, 'kr')==='✓' && flowMarkOf(m, 'postcare')==='●', '韩国行程结束 → 赴韩 ✓，术后管理没做完 ●');
     /* 4 tab 映射 + 术后管理 tab */
     ST.open(m); m = getCurrentCase(); m.activeCaseTab = 'flow'; ST.ok(canonTabKey(m, 'flow')==='consult' && canonTabKey(m, 'localmgmt')==='summary', '旧的流程 / 本地管理链接落在对的 tab');
-    m.activeCaseTab = 'postcare'; var ph = caseTabContentHtml(m); ST.ok(/未预约/.test(ph) && /印尼/.test(ph) && /术后复诊/.test(ph) && /地点/.test(ph) && /建议日期/.test(ph) && /术后第/.test(ph), '术后管理 tab：未预约分组 + 地点栏 + 建议日期 + 术后第 N 天：'+ph.replace(/<[^>]+>/g,' ').slice(0,160));
-    RESUMED_VISITS.push({name:m.name, date:dAgo(-3), time:'10:00', purpose:'术后管理', caseId:m.id, careKey:'s118'}); m.subItems[0].careFor = {keys:['s118']}; ph = caseTabContentHtml(m); ST.ok(/未预约|已预约/.test(ph), '没约的在未预约 / 约了的在已预约'); RESUMED_VISITS.pop();
+    m.activeCaseTab = 'postcare'; var ph = caseTabContentHtml(m); ST.ok(/未预约/.test(ph) && /术后复诊/.test(ph) && /施术项目/.test(ph) && /推荐内容/.test(ph) && /推荐时间/.test(ph) && /术后第/.test(ph), '术后管理 tab（CMD-1027-09 新栏位；原：地点 + 建议日期栏）：未预约分组 + 项目｜施术项目｜推荐内容｜次数｜推荐时间｜操作：'+ph.replace(/<[^>]+>/g,' ').slice(0,160));
+    RESUMED_VISITS.push({name:m.name, date:dAgo(-3), time:'10:00', purpose:'术后管理', caseId:m.id, careKey:'s118'}); m.subItems[0].careFor = {keys:['s118']}; ph = caseTabContentHtml(m); ST.ok(/未预约|预约中/.test(ph), '没约的在未预约 / 约了的在预约中（原：已预约）'); RESUMED_VISITS.pop();
     m.subItems[0].done = true; m.subItems[0].doneAt = nowFullDt(); ph = caseTabContentHtml(m); ST.ok(/已完成/.test(ph), '做完进已完成');
     var kh = caseTabContentHtml(Object.assign(m, {activeCaseTab:'kr'})); ST.ok(kh.indexOf('术后管理')<0 || !/inCareCardsHtml/.test(kh) , '赴韩 tab 里的项目卡没有术后管理小 tab');
     ST.ok(!/>术后管理 \d+</.test((function(){ var tmp = document.createElement('div'); tmp.innerHTML = inProjectCardHtml(m); return tmp.innerHTML; })()), '项目卡里没有术后管理 pill');
@@ -6317,4 +6317,84 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.GMC_STAY_AUTO = true; window.alert = oa; window.confirm = oc; KR_SUB = krSubBlank(''); KR_CASE.day = ''; restore(r0, snap0); restore(r1, snap1); }
   });
 
+
+  /* ===== CMD-1027-09 ===== */
+  ST.def('R154a','CMD-1027-09（A1 分页，pcStage 夹具）：IN 主案件术后管理 tab——胶囊 · 预约中按日期分组（标题行日期 + 地点 + 子案件号 +［查看案件］［修改时间］，IN 只能改印尼）· 未预约栏位与［预约时间］· 已完成按日期分组 · 没有状态 / 来源栏',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var snap = JSON.stringify(c), td = todayStr(), box = function(html){ var b = document.createElement('div'); b.innerHTML = html; return b; }, md0 = function(d){ return String(d).slice(5).replace('-', '/'); }, rcId = '';
+    var oa = window.alert; window.alert = function(){};
+    try{
+      c.krBalancePaid = true; c.procedureItems.filter(function(it){ return it.name==='假体隆鼻'; })[0].postcare[0].times = 3; /* 术后复诊检查 3 次：约 1 次，剩 2 / 共 3 */
+      var d1 = ymdAdd(td, 3), d2 = ymdAdd(td, 5);
+      ST.ok(coreCareBook(c, '假体隆鼻', 0, d1, '11:00', 'KR', '', 'KM1') && coreCareBook(c, '鼻翼缩小', 0, d2, '14:00', 'KR', '', 'KM1'), '前提：韩国约了两天；假体隆鼻的拆线没约（未预约）');
+      var inRow = (c.subItems||[]).filter(function(s){ return s.place==='IN' && !s.done; })[0], inRow2 = (c.subItems||[]).filter(function(s){ return s.place==='IN' && !s.done && s.id!==inRow.id; })[0];
+      var rc = ST.newRes('R154r', {phone:clientPhoneOf(c.name)}); rc = CASE_ITEMS.filter(function(x){ return x.id===rc.id; })[0]; rc.name = c.name; rc.visitDate = ymdAdd(td, 4); rc.visitTime = '10:30'; rc.careFor = {caseId:c.id, keys:[inRow.id]}; /* inRow2 不约 → 印尼未预约 */ rcId = rc.id;
+      var dRow = (c.subItems||[]).filter(function(s){ return s.place==='KR' && s.projectName==='鼻翼缩小'; })[0]; dRow.done = true; dRow.doneAt = nowFullDt(); dRow.arrived = true; dRow.note = '拆线顺利'; /* 一个韩国已完成 */
+      var h = pcmHtml(c, 'IN'), b = box(h), txt = b.innerText;
+      ST.ok(/在韩术后/.test(txt) && /印尼术后/.test(txt), '胶囊：在韩术后｜印尼术后（两边都有才出现）');
+      ST.ok(!/状态/.test(txt) && !/来源/.test(txt), '没有「状态」「来源」栏');
+      ST.ok(!/操作完成|本次不做/.test(txt), '主案件页不放到院操作');
+      /* 印尼术后（默认：韩国行程没结束 → 在韩术后；切到印尼） */
+      pcmSetCap('IN', c.id, 'IN'); window.PCM_CAP = PCM_CAP; var hI = pcmHtml(c, 'IN'), bI = box(hI), tI = bI.innerText;
+      ST.ok(/预约中/.test(tI) && /10:30/.test(tI) && /印尼/.test(tI), '印尼：预约中一组，标题行有时间 + 地点印尼');
+      var btnI = [].slice.call(bI.querySelectorAll('button')).map(function(x){ return x.textContent.trim(); });
+      ST.ok(btnI.indexOf('查看案件')>-1 && btnI.indexOf('修改时间')>-1, '印尼组标题行有［查看案件］［修改时间］（IN 能改印尼的）');
+      ST.ok(/项目\s*施术项目\s*推荐内容/.test(tI.replace(/\n/g, ' ')) , '预约中项目行栏位：项目｜施术项目｜推荐内容');
+      /* 韩国：IN 看得到，但没有［修改时间］；未预约没有［预约时间］ */
+      pcmSetCap('IN', c.id, 'KR'); var hK = pcmHtml(c, 'IN'), bK = box(hK), tK = bK.innerText, btnK = [].slice.call(bK.querySelectorAll('button')).map(function(x){ return x.textContent.trim(); });
+      ST.ok(/预约中/.test(tK) && /韩国/.test(tK), '韩国：预约中分组');
+      ST.ok(btnK.indexOf('修改时间')<0 && btnK.indexOf('预约时间')<0 && btnK.indexOf('查看案件')>-1, 'IN 看韩国：只有［查看案件］，没有［修改时间］［预约时间］');
+      ST.ok(!/已预约|待到店/.test(tK), '韩国：分段里不再有「已预约」状态标签');
+      var gh = [].slice.call(box(hK.split('>已完成 <')[0]).querySelectorAll('b')).map(function(x){ return x.textContent; }).filter(function(x){ return /（韩国）/.test(x); }); /* 只数预约中那一段（已完成另有自己的日期组） */
+      ST.ok(gh.length===2 && gh[0].indexOf(md0(d1))>-1, '预约中按日期分组：两个日期标题，早的在前：'+gh.join(' | '));
+      ST.ok(gh.every(function(x){ return /A000\d+-\d+/.test(x); }), '标题行带那一天的子案件号：'+gh.join(' | '));
+      /* 未预约栏位 */
+      ST.ok(/未预约/.test(tK) && /次数/.test(tK) && /推荐时间/.test(tK) && /操作/.test(tK), '未预约栏位：项目｜施术项目｜推荐内容｜次数｜推荐时间｜操作');
+      ST.ok(/剩 \d+ \/ 共 \d+/.test(tK) || /剩 \d+ \/ 共 \d+/.test(tI), '多次项目写「剩 N / 共 M」');
+      pcmSetCap('IN', c.id, 'IN'); var uI = box(pcmHtml(c, 'IN')); ST.ok([].slice.call(uI.querySelectorAll('button')).some(function(x){ return /预约时间/.test(x.textContent); }), '印尼未预约：IN 有［预约时间］（付清尾款前灰掉规则照旧）');
+      /* 已完成 */
+      pcmSetCap('IN', c.id, 'KR'); var tD = box(pcmHtml(c, 'IN')).innerText; ST.ok(/已完成/.test(tD) && /拆线顺利/.test(tD) && /备注/.test(tD), '已完成：按日期分组，栏位 项目｜施术项目｜备注，备注显示');
+      /* 整天一起改：IN 改印尼预约 */
+      ST.ok(typeof todoCareBookOpen==='function', 'IN 修改时间走原预约改时间弹窗（整张预约 = 整天）');
+    } finally { window.alert = oa; PCM_CAP = {}; var s0 = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); var ri = CASE_ITEMS.findIndex(function(x){ return x.id===rcId; }); if(rcId && ri>-1) CASE_ITEMS.splice(ri, 1); }
+  });
+
+  ST.def('R154b','CMD-1027-09（KM1 分页，pcStage 夹具）：KR 主案件术后管理 tab——和 IN 同一个组件（胶囊默认在韩术后）· KR 只能改 / 预约韩国的 · 整天一起改时间（同一天的项目一起移动，只发一条通知）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, snap = JSON.stringify(Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; })), td = todayStr();
+    var oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var box = function(html){ var b = document.createElement('div'); b.innerHTML = html; return b; }, rcId = '';
+    try{
+      var d1 = ymdAdd(td, 3), d1b = d1;
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.krBalancePaid = true; c.procedureItems.filter(function(it){ return it.name==='假体隆鼻'; })[0].postcare[0].times = 3;
+        coreCareBook(c, '假体隆鼻', 0, d1, '11:00', 'KR', '', 'KM1'); coreCareBook(c, '鼻翼缩小', 0, d1, '11:00', 'KR', '', 'KM1'); /* 同一天两个项目 */
+        var inRow = (c.subItems||[]).filter(function(s){ return s.place==='IN' && !s.done; })[0];
+        var rc = {id:'r154k', name:c.name, clinicId:c.clinicId, visitDate:ymdAdd(td, 4), visitTime:'10:30', stage:'booked', subState:'waiting', careFor:{caseId:c.id, keys:[inRow.id]}, logEntries:[]}; CASE_ITEMS.push(rc); rcId = rc.id; });
+      KR_CASE.clinicId = cid; KR_CASE.id = r0.id; KR_CASE.day = ''; delete PCM_CAP['KR:'+r0.id];
+      var h = Store.withClinic(cid, function(){ return pcmHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0], 'KR'); }), b = box(h), t = b.innerText, btns = [].slice.call(b.querySelectorAll('button')).map(function(x){ return x.textContent.trim(); });
+      ST.ok(/在韩术后/.test(t) && /印尼术后/.test(t), 'KR 也有胶囊：在韩术后｜印尼术后');
+      ST.ok(/预约中/.test(t) && btns.indexOf('查看案件')>-1 && btns.indexOf('修改时间')>-1, '默认在韩术后：预约中标题行有［查看案件］［修改时间］');
+      var gh = [].slice.call(box(h.split('>已完成 <')[0]).querySelectorAll('b')).map(function(x){ return x.textContent; }).filter(function(x){ return /（韩国）/.test(x); });
+      var md1 = String(d1).slice(5).replace('-', '/'), g1 = gh.filter(function(x){ return x.indexOf(md1)>-1; });
+      ST.ok(g1.length===1 && /A000\d+-\d+/.test(g1[0]), '同一天两个项目 = 一组，一个标题行带子案件号：'+gh.join(' | '));
+      ST.ok(btns.indexOf('预约时间')>-1 && /剩 \d \/ 共 3/.test(t), '未预约：［预约时间］在、多次项目写「剩 N / 共 3」');
+      ST.ok(!/状态|来源/.test(t), '没有状态 / 来源栏');
+      pcmSetCap('KR', r0.id, 'IN'); var hI = Store.withClinic(cid, function(){ return pcmHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0], 'KR'); }), bI = box(hI), btnI = [].slice.call(bI.querySelectorAll('button')).map(function(x){ return x.textContent.trim(); });
+      ST.ok(/10:30/.test(bI.innerText) && btnI.indexOf('修改时间')<0 && btnI.indexOf('预约时间')<0 && btnI.indexOf('查看案件')<0, 'KR 看印尼：能看到，但没有［修改时间］［预约时间］［查看案件］');
+      pcmSetCap('KR', r0.id, 'KR');
+      /* 整天一起改 */
+      var ids = Store.withClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return (c.subItems||[]).filter(function(s){ return s.place==='KR' && !s.done && s.date===d1; }).map(function(s){ return s.id; }); });
+      ST.ok(ids.length===2, '前提：那天有 2 个韩国术后管理行');
+      var d2 = ymdAdd(td, 6); var g = 0; while(g++<14 && (Store.withClinic(cid, function(){ return hospitalClosedOn(caseKrHospital(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]), d2); }))) d2 = ymdAdd(d2, 1);
+      pcmDayEditOpen(ids.join(',')); ST.ok(!!document.getElementById('pcm-edit-overlay') && document.getElementById('pcm-edit-overlay').classList.contains('open'), '［修改时间］打开整天改弹窗');
+      PCM_EDIT.date = d2; PCM_EDIT.time = krCbValidTimes(d2)[0] || '11:00'; var nN0 = Store.withClinic(cid, function(){ return NOTIFS.length; }); pcmDayEditSave();
+      var c2 = gc(), after = (c2.subItems||[]).filter(function(s){ return ids.indexOf(s.id)>-1; });
+      ST.ok(after.length===2 && after.every(function(s){ return s.date===d2; }) && after[0].time===after[1].time, '两个项目一起移到新日期 / 同一个时间：'+after.map(function(s){ return s.date+' '+s.time; }).join(' / '));
+      var nN1 = Store.withClinic(cid, function(){ return NOTIFS.filter(function(n){ return /个术后管理项目整天从/.test(n.text||n.msg||''); }).length; });
+      ST.ok(nN1===1, 'IN 只收到一条汇总通知（不是每个项目一条）');
+    } finally { window.alert = oa; window.confirm = oc; PCM_EDIT = null; PCM_CAP = {}; var ov = document.getElementById('pcm-edit-overlay'); if(ov) ov.classList.remove('open'); var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); var ri = CASE_ITEMS.findIndex(function(x){ return x.id===rcId; }); if(rcId && ri>-1) CASE_ITEMS.splice(ri, 1); NOTIFS = NOTIFS.filter(function(n){ return !/个术后管理项目整天从/.test(n.text||n.msg||''); }); }); }
+  });
 })();

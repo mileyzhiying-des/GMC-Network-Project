@@ -1509,7 +1509,7 @@ function krTabVault(c){ return krIsMyCase(c) ? krVaultHtml(c) : krCardBox('KR �
 /* CMD-1023-01 S7：KR 的子案件 / 项目汇总 tab（只读）——本地管理的项目和钱 KR 看不到；印尼的天只能看 */
 /* CMD-1023-02 三：KR 的流程 tab——一行一个流程，展开是简要说明 + 跳到对应 tab（操作都在面诊 / 项目 tab） */
 function krFlowToggle(id, key){ var k0 = id+':'+key, r = Store.withClinic(KR_CASE.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; return c0 ? flowRowsOf(c0).filter(function(x){ return x.key===key; })[0] : null; }), eff = FLOW_OPEN[k0]===undefined ? !(r && r.done) : FLOW_OPEN[k0]; FLOW_OPEN[k0] = !eff; krRenderCaseDetail(); }
-function krTabPostcare(c){ return krProjCards(c, {only:'care'})+krNotesCardHtml(c); } /* CMD-1023-03 P2：术后管理独立 tab（韩国 + 印尼，韩国的 KR 预约，印尼交给 IN 的只读） */
+function krTabPostcare(c){ return pcmHtml(c, 'KR')+krNotesCardHtml(c); } /* CMD-1027-09：和 IN 同一个组件 */ /* CMD-1023-03 P2：术后管理独立 tab（韩国 + 印尼，韩国的 KR 预约，印尼交给 IN 的只读） */
 function krTabRevisit(c){
   var rvTxt = {'等确认时间':'待确认时间', '等评估':'待评估', '评估中':'评估中', '评估完成 · 等 KR 传结果':'待发送结果'};
   return flowRowsHtml(c, {toggle:'krFlowToggle', filter:function(r){ return r.kind==='revisit'; }, pillOf:function(r){ var ch = CASE_ITEMS.filter(function(x){ return x.id===r.caseId; })[0]; if(!ch) return ''; var p = revEvalProcText(ch); return rvTxt[p] || p; }, detail:function(r){ return '<div><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krOpenCase(\''+KR_CASE.clinicId+'\',\''+r.caseId+'\')">打开复诊评估</button></div>'; }}); /* CMD-1026-10 四：标题行写状态 + 送出日，下面只放［打开复诊评估］ */
@@ -4733,3 +4733,28 @@ function krRvOpFill(c, srcText){
 }
 function krZhShort(t){ var o = String(t||''); KR_ZH_MAP.forEach(function(m){ o = o.split(m[0]).join(m[1]); }); return o; }
 KR_ZH_MAP.push([KR_RV_DEMO_OP, '恢复良好，目前肿胀属于正常范围。']);
+
+/* CMD-1027-09：术后管理「预约中」某一天整天一起改时间（KR 只能改韩国的；同一天的项目一起移动）。核心 coreSubTimeEdit 逐行改，通知只发一条 */
+var PCM_EDIT = null;
+function pcmDayEditOpen(idsCsv){
+  var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, ids = String(idsCsv).split(','), s = (c.subItems||[]).filter(function(x){ return x.id===ids[0]; })[0]; if(!s || !krCan()) return;
+  PCM_EDIT = {ids:ids, date:s.date||krToday(), time:s.time||'10:00'}; pcmDayEditRender();
+}
+function pcmDayEditRender(){
+  var E = PCM_EDIT; if(!E) return; var ov = document.getElementById('pcm-edit-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'pcm-edit-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, ts = krCbValidTimes(E.date); if(ts.indexOf(E.time)<0) ts = ts.concat([E.time]).sort(); var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="display:flex;justify-content:space-between;margin-bottom:10px;"><b>修改时间（整天一起改）</b><span style="cursor:pointer;" onclick="pcmDayEditClose()">✕</span></div><div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">这一天的 '+E.ids.length+' 个术后管理项目一起移到新的日期 / 时间。</div>'+
+    stayWarnHtml(c, E.date)+'<div style="display:flex;gap:10px;"><input type="date" value="'+E.date+'" onchange="PCM_EDIT.date=this.value;pcmDayEditRender()" style="'+inp+'"><select onchange="PCM_EDIT.time=this.value" style="'+inp+'">'+ts.map(function(t0){ return '<option'+(t0===E.time ? ' selected' : '')+'>'+t0+'</option>'; }).join('')+'</select></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="pcmDayEditClose()">取消</button><button class="btn-primary" onclick="pcmDayEditSave()">确认</button></div></div>';
+  ov.classList.add('open');
+}
+function pcmDayEditClose(){ var ov = document.getElementById('pcm-edit-overlay'); if(ov) ov.classList.remove('open'); PCM_EDIT = null; }
+function pcmDayEditSave(){
+  var E = PCM_EDIT; if(!E || !krCan()) return; var d = E.date, t0 = E.time, c9 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c;
+  var ddk = doneDayInfo(c9, d); if(ddk){ krDoneDayAsk(ddk, pcmDayEditSave); return; }
+  var ex = krVisitTimeOnDate(c9, d, E.ids[0]); if(ex && ex!==t0){ t0 = ex; E.time = ex; showToast('已合并', '那天已有到院：已合并到 '+ex+' 的到院（时间以原预约为准）', null); }
+  var hc = krbClosedText(krHospitalIdOfMe(), d, t0); if(hc){ krBlock(hc); return; }
+  var go = function(){ var ids = E.ids; pcmDayEditClose(); krMut(function(c){ var n = 0, from = ''; ids.forEach(function(id){ var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(s && !from) from = (s.date||'')+(s.time ? ' '+s.time : ''); if(coreSubTimeEdit(c, id, d, t0, ME_NAME, true)) n++; });
+      if(n) pushNotif('赴韩施术', ME_NAME+' 修改了 '+c.name+' 在韩到院时间：'+n+' 个术后管理项目整天从 '+from+' 改到 '+tkK(d, t0)+'（韩国时间）', {caseId:c.id}); return n>0; }); };
+  var off = krOffHoursText(krHospitalIdOfMe(), d, t0, 30); if(off) krOffConfirm(off+'（'+d+' '+t0+'，韩国时间）', go); else go();
+}
