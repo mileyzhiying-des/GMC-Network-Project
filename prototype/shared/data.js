@@ -2133,7 +2133,9 @@ function continueNewVisit(){
 function markArrived(){
   var c = getCurrentCase(); if(!c) return;
   if(c.visitDate && c.visitDate!==todayStr()){ alert('只有来访当天才能标记客人已到店（预约日期：'+c.visitDate+'）'); return; }
+  var blk = dayConfirmBlockFor(c); if(blk.length){ dayConfirmBlockModal(blk, 'IN'); return; } /* CMD-1026-20 三：上一天没确认结束，不能接待下一天 */
   c.subState = 'arrived'; c.arrivedDay = todayStr();
+  if(!c.leadIn){ c.leadIn = {name:actingName(), id:currentAccountId(), at:nowFullDt()}; } /* CMD-1026-20 二：按［客人已到店］的这位室长 = 这个案子的 IN 主跟室长 */
   try{ tripAutoEndOnArrive(c); }catch(e){ console.error('[IN 到访 → 韩国行程自动结束]', e); } /* CMD-1026-02 C2：先结束，这样「继续之前的案件」才选得到 */
   writeReceptionBeat(c); /* 接待开始：立刻写心跳 */
   renderCaseStatusBar(c);
@@ -2514,7 +2516,7 @@ function inContUseNow(){ inContBtn('use'); }
    卡 2「剩余项目」：标题行右边［＋ 添加本地管理项目］［本次使用］；胶囊 术后项目（预约项目 / 未预约项目）｜本地管理（未预约项目），没有项目的不显示。
    买完的本地项目先进「未使用」（不自动算今天用），要用走［本次使用］勾选。 */
 function inContModel(c){
-  var today = todayStr(), src = followSrc(c), ct = c.careToday, ro = isEnded(c) || c.visitClosed || !!c.leftStore || (!isChildVisit(c) && !!c.visitDate && c.visitDate < today), rows = []; /* CMD-1026-16：主案件自己那天的页，客人离店 / 过了那天 → 只读 */
+  var today = todayStr(), src = followSrc(c), ct = c.careToday, ro = isEnded(c) || c.visitClosed || !!c.leftStore || inDayLocked(c) || (!isChildVisit(c) && !!c.visitDate && c.visitDate < today), rows = []; /* CMD-1026-16：主案件自己那天的页，客人离店 / 过了那天 → 只读 */
   CASE_ITEMS.forEach(function(x){ if(x.name!==c.name || x.id===c.id) return; careRows(x).forEach(function(s){ if(s.place!=='IN' || s.skipped) return; if(s.done && s.usedInCase!==c.id) return; rows.push({c:x, s:s, bk:inCareBooking(x, s.id)}); }); });
   rows.sort(function(a, b){ return (b.c===src)-(a.c===src) || String(a.s.suggest||a.s.date||'').localeCompare(String(b.s.suggest||b.s.date||'')); });
   var grp = {today:[], booked:[], none:[]};
@@ -2588,12 +2590,12 @@ function todaySureKrHtml(m, date){
     items.map(function(it){ return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="flex:1;min-width:0;">'+e(buyName(it.name))+'</span><span class="status-pill" style="background:'+(paid ? 'var(--sage-bg)' : 'var(--border2)')+';color:'+(paid ? 'var(--sage)' : 'var(--slate2)')+';">'+(paid ? '定金已付' : '定金待付')+'</span><span style="font-size:12px;color:var(--slate2);min-width:150px;text-align:right;">施术日期 '+e(when)+'</span></div>'; }).join('')+'</div>';
 }
 /* A3：［本次不做］（术后）——退回「未预约」：从今天要做的名单拿掉（已完成的不能退） */
-function careNotToday(caseId, rowId){ var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return; c.careToday = (c.careToday||[]).filter(function(i){ return i!==rowId; }); logCaseEvent(c, actingName(), '术后管理：本次不做，退回未预约'); buildCaseLog(c); renderCaseBody(c); }
+function careNotToday(caseId, rowId){ var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */  c.careToday = (c.careToday||[]).filter(function(i){ return i!==rowId; }); logCaseEvent(c, actingName(), '术后管理：本次不做，退回未预约'); buildCaseLog(c); renderCaseBody(c); }
 
 /* ---- ［＋ 添加本地管理项目］：弹出本地选购弹窗（用现有 localPurchaseHtml(c,'lm') 的内容，选项目 → ［结算］ → 弹窗关掉；买完先进「未使用」） ---- */
 var LM_BUY_OPEN = '';
 function inAddLocalProject(){
-  var c = getCurrentCase(); if(!c || isEnded(c)) return;
+  var c = getCurrentCase(); if(!c || isEnded(c)) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */ 
   if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; }
   LM_BUY_OPEN = c.id; IN_CONT_TAB[c.id] = 'local';
   if(c.localMgmt){ var lm = c.localMgmt; lm.addBuy = !!lm.mgmtActive; if(!lm.mgmtActive){ lm.step = 'buy'; lm.ended = false; lm.active = true; } logCaseEvent(c, actingName(), '本地管理：继续选购'); }
@@ -2630,7 +2632,7 @@ function inUseOpen(){
 }
 function inUseClose(){ var ov = document.getElementById('in-use-overlay'); if(ov) ov.classList.remove('open'); IN_USE_CTX = null; }
 function inUseConfirm(){
-  var c = getCurrentCase(); if(!c || IN_USE_CTX!==c.id) return;
+  var c = getCurrentCase(); if(!c || IN_USE_CTX!==c.id) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */ 
   var careIds = [], i, el;
   for(i=0; (el = document.getElementById('iu-care-'+i)); i++){ if(el.checked) careIds.push(el.getAttribute('data-id')); }
   var holds = clientHoldingsSorted(c.name).filter(function(h){ return h.category!=='术后管理' && holdingRemaining(h)>0; }), picks = [];
@@ -4570,6 +4572,7 @@ function holdingsUseHtml(c, scope){
 var PC_USE = null;
 function openCareUse(scope, srcId, subId){
   var c0 = getCurrentCase(); if(c0 && (isEnded(c0) || c0.visitClosed || c0.leftStore)) return; /* CMD-1022-19：离店 / 结案后只读 */
+  if(c0 && inLockGuard(c0)) return; /* CMD-1026-20 */
   var c = getCurrentCase(), src = CASE_ITEMS.filter(function(x){ return x.id===srcId; })[0], s = src && (src.subItems||[]).filter(function(x){ return x.id===subId; })[0]; if(!c || !s || s.done) return;
   var delta = -pcDaysLate(s.date); PC_USE = {scope:scope, srcId:srcId, subId:subId, early:delta>0};
   var ov = document.getElementById('pc-use-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'pc-use-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
@@ -4581,7 +4584,7 @@ function openCareUse(scope, srcId, subId){
 }
 function closePostcareUse(){ var ov = document.getElementById('pc-use-overlay'); if(ov) ov.classList.remove('open'); }
 function confirmCareUse(){
-  var c = getCurrentCase(), ctx = PC_USE; if(!c || !ctx) return;
+  var c = getCurrentCase(), ctx = PC_USE; if(!c || !ctx) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */ 
   var src = CASE_ITEMS.filter(function(x){ return x.id===ctx.srcId; })[0], s = src && (src.subItems||[]).filter(function(x){ return x.id===ctx.subId; })[0]; if(!s || s.done) return;
   var delta = -pcDaysLate(s.date), reasonEl = document.getElementById('pc-use-reason'), reason = reasonEl ? reasonEl.value.trim() : '', by = actingName();
   if(delta>0 && !reason){ alert('提前做术后管理必须写原因'); return; }
@@ -4758,7 +4761,7 @@ function localCarriedDoneHtml(c){
     (localAddAllowed(c) ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="carriedContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="carriedContinue(\'use\')">继续使用持有项目</button></div>' : '<div style="font-size:12px;color:var(--muted);margin-top:12px;">本地管理只能在到店当天添加，今天不能再继续选购 / 使用。</div>')+'</div>';
 }
 function carriedContinue(what){
-  var c = getCurrentCase(); if(!c || c.localMgmt || isEnded(c)) return;
+  var c = getCurrentCase(); if(!c || c.localMgmt || isEnded(c)) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */ 
   if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; }
   c.localMgmt = {active:true, ended:false, step:what==='use' ? 'use' : 'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
   c.activeCaseTab = 'localmgmt'; logCaseEvent(c, actingName(), '本地管理：继续'+(what==='use' ? '使用持有项目' : '选购'));
@@ -4868,7 +4871,7 @@ function startCompPurchase(c, kwr, reason, names){
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 function lmSettle(){
-  var c = getCurrentCase(); if(!c||!c.localMgmt) return;
+  var c = getCurrentCase(); if(!c||!c.localMgmt) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */ 
   var lm = c.localMgmt, cart = lm.cart||[], today = todayStr();
   if(!cart.length) return;
   if(cartTotals(cart).onlyService){ alert('서비스需搭配付费项目'); return; }
@@ -5718,6 +5721,7 @@ function coreTripNoShow(c, by){
 }
 function coreMarkArrived(c, by){
   if(mainArriveBlock(c)) return false;
+  var kb0 = krUnconfirmedOther(c, 'main'); if(kb0.length){ window.KR_DAYBLOCK = kb0; return false; } /* CMD-1026-20 三：上一天没确认结束，不能接待下一天 */
   if(!c.settlementDone || isArrived(c) || !c.krSchedule || c.krSchedule.status!=='confirmed') return false;
   c.arrivedPrev = !!c.hasArrived; /* 撤回时恢复到院前的状态 */
   c.krSchedule.status = 'arrived'; c.hasArrived = true; c.krArrivedDay = todayStr();
@@ -5816,7 +5820,7 @@ function finalizeInnCare(c){
   if(inn.length && !c.innCare) c.innCare = {lines:inn, status:'kept', at:nowFullDt()}; /* CMD-1015-17：术后管理不是持有项目，回印尼做的留在原案件（印尼行 place IN，建议日期由 KR 标注），不再发 0 元持有批次 */
   return inn;
 }
-function coreSettleBalance(c, by){ if(krUnreadNotes(c).length) return false; /* CMD-1020-08：有未读 IN 备注先读过再结算 */
+function coreSettleBalance(c, by){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */ if(krUnreadNotes(c).length) return false; /* CMD-1020-08：有未读 IN 备注先读过再结算 */
   if(!isArrived(c) || c.krBalancePaid || !c.krJudge || c.krJudge.settled) return {ok:false};
   var j = c.krJudge; if(j.result!=='ok' && j.result!=='changed' && !(j.result==='cannot' && j.replaced)) return {ok:false};
   var info = krBalanceInfo(c);
@@ -5866,7 +5870,7 @@ function coreSubDoneBlock(c, id){
   return '';
 }
 function coreSubDone(c, id, by, itemNames, noClose){
-  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0];
+  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(krDayDeny(c, (s ? ((s.kind==='施术' || (s.kind==='增加项目' && !s.visitKey)) ? 'main' : subCaseKey(s)) : 'main'))) return false; /* CMD-1026-20：关账后锁住 */
   if(!s || s.done || !c.krBalancePaid || s.place==='IN') return false; /* 付清尾款（开始施术）之后才能逐个标完成；回印尼做的术后管理由 IN 做（coreCareVisit） */
   if(s.kind==='增加项目' && (c.procedureItems||[]).some(function(it){ return it.name===s.projectName && it.consentPending; })) return false; /* 麻醉同意书还没确认 */
   var picked = [];
@@ -5888,7 +5892,7 @@ function coreSubDone(c, id, by, itemNames, noClose){
 }
 /* 今日项目（施术 + 增加项目）：勾选后按［已完成］ → 勾的几行变已完成，不自动结案，由 KR 在弹窗里确认「今日的项目都已完成了吗」（CMD-1013-10 一·1） */
 function todayProjectSubs(c){ return (c.subItems||[]).filter(function(s){ return s.kind==='施术' || s.kind==='增加项目'; }); }
-function coreTodayDone(c, ids, by){
+function coreTodayDone(c, ids, by){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */
   var n = 0; (ids||[]).forEach(function(id){ if(coreSubDone(c, id, by, [], true)) n++; });
   if(n>0) krCloseIfDone(c); /* CMD-1015-17：按完最后一项自动进术后管理阶段，没有术后管理就结案；不再有「是，结案」 */
   return n>0;
@@ -5906,7 +5910,7 @@ function coreVisitState(c, key){
 }
 /* 客人到店后「确认这次要做的项目」：取消勾选的术后管理不进这次（仍在项目卡里待做）；从项目卡拉进来的未做术后管理改到今天；持有管理项目每项加一行「使用」 */
 /* 这次到访里新增施术 / 管理项目（先加进来，付款后才能完成；管理项目付款后变成这次的「使用」一行） */
-function coreVisitArrive(c, key, by){ var ok = false; coreVisitRows(c, key).forEach(function(s){ if(!s.done && !s.arrived && coreSubArrived(c, s.id, by)) ok = true; }); return ok; }
+function coreVisitArrive(c, key, by){ var kb0 = krUnconfirmedOther(c, key); if(kb0.length){ window.KR_DAYBLOCK = kb0; return false; } var ok = false; coreVisitRows(c, key).forEach(function(s){ if(!s.done && !s.arrived && coreSubArrived(c, s.id, by)) ok = true; }); return ok; }
 function coreVisitDone(c, careIds, mgmtNames, by){
   var ok = false;
   (mgmtNames||[]).forEach(function(n){ if(coreMgmtUse(c, n, by)) ok = true; });
@@ -5915,6 +5919,7 @@ function coreVisitDone(c, careIds, mgmtNames, by){
 }
 function coreSubArrived(c, id, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.arrived) return false;
+  var kb0 = krUnconfirmedOther(c, subCaseKey(s)); if(kb0.length){ window.KR_DAYBLOCK = kb0; return false; } /* CMD-1026-20 三 */
   if(!s.simDay && s.date && s.date > todayStr()) return false;
   s.arrived = true; s.arrivedAt = nowFullDt(); logCaseEvent(c, by, '客人已到：到院（'+String(s.date||'').slice(5).replace('-', '/')+'）「'+rowLogName(c, s)+'」', rowStageLabel(c, s)); return true;
 }
@@ -5978,7 +5983,7 @@ function fixUseRecords(c){
   return notes;
 }
 /* 持有管理项目（付费，付清尾款后就是在韩持有）：当天做 → KR 按［使用］扣一次（记在施术当天 / 主案件）；之后再来做 → 每次新预约 = 一个子案件，在子案件里［使用］扣次数（CMD-1015-17） */
-function coreMgmtUse(c, name, by, qty){
+function coreMgmtUse(c, name, by, qty){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */
   var it = itemByKey(c, name, function(x){ return x.heldOver && !x.holdDone; });
   if(!it || !c.krBalancePaid || holdItemLeft(c, it)<=0) return false;
   var left0 = holdItemLeft(c, it), q = Math.max(1, Math.min(parseInt(qty || it.todayQty, 10) || 1, left0)); /* 今日进行可选这次用几次（CMD-1019-21 六），默认 1，最多 = 剩余次数；按完成才扣 */
@@ -6050,7 +6055,7 @@ function endBlockPending(c){
   var pp = pendingPayItems(c); if(!pp.length) return null;
   return {ok:false, pending:true, items:pp.map(function(it){ return buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）'; }), err:'还有未付款项目：'+pp.map(function(it){ return buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）'; }).join('、')+'，请先付款或取消购买'};
 }
-function coreEndVisitToday(c, by, reason){
+function coreEndVisitToday(c, by, reason){ if(krDayDeny(c, 'main')) return {ok:false, err:'这一天已过 00:00 关账，请走「确认结束」'};
   if(!c.hasArrived || c.krProcedureDone || c.visitClosed) return {ok:false, err:'今天的到院已经结束或还没到院'};
   var pb = endBlockPending(c); if(pb) return pb;
   c._ending = true;
@@ -6094,7 +6099,7 @@ function subVisitAskEnd(c){ /* 有已到店、行都做完但还没人工结束�
   c.visitEndedKeys = c.visitEndedKeys || {};
   return subCaseList(c).some(function(r){ var k = subCaseKey(r); return r.place==='KR' && coreVisitState(c, k)==='arrived' && coreVisitRows(c, k).concat(coreVisitExtra(c, k)).every(function(s){ return s.done; }); });
 }
-function coreEndSubVisit(c, key, by, reason){
+function coreEndSubVisit(c, key, by, reason){ if(krDayDeny(c, key)) return {ok:false, err:'这一天已过 00:00 关账，请走「确认结束」'};
   c.visitEndedKeys = c.visitEndedKeys || {};
   var rows = coreVisitRows(c, key).concat(coreVisitExtra(c, key)); if(!rows.length) return {ok:false, err:'找不到这次到院'};
   var pb = endBlockPending(c); if(pb) return pb; /* 有待付款项目不能结束（CMD-1021-10） */
@@ -6149,7 +6154,7 @@ function coreItemsDone(c, names, by){
 }
 /* 客人回印尼后要做的子项：KR 通知 IN 室长预约（附子项内容）→ IN 点通知打开预约弹窗，新案件自动关联原赴韩案件 */
 /* 回诊时加做项目：KR 室长直接新增，另开新结算单、在韩国付款（不经过 IN 选择，原结算单不动）；IN 收到通知、只读可见 */
-function coreAddOnItem(c, projectName, by, opt){
+function coreAddOnItem(c, projectName, by, opt){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */
   if(!c.hasArrived || c.visitClosed) return false;
   var visitDone = !!c.krProcedureDone; /* CMD-1021-13：到院已完成时照样能买（进持有 / 待付款），但不碰到院状态：不建今日行、不重开；要用时先在到院卡按［增加项目］重开（CMD-1021-11） */
   opt = opt || {};
@@ -6213,7 +6218,7 @@ function coreAnesConfirm(c, names, by){
   c.anesthesiaConsent = {version:(c.anesthesiaConsent&&c.anesthesiaConsent.version)||'KR 现场签署', ts:nowFullDt(), by:by, projects:prev};
   logCaseEvent(c, by, '确认麻醉同意书已在现场签署：'+its.map(function(it){ return it.name+'（'+((it.anesthesia||{}).label||'')+'）'; }).join('、')); return true;
 }
-function coreAddOnPaid(c, by){ if(krUnreadNotes(c).length) return false; /* CMD-1020-08：有未读 IN 备注先读过再结算 */
+function coreAddOnPaid(c, by){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */ if(krUnreadNotes(c).length) return false; /* CMD-1020-08：有未读 IN 备注先读过再结算 */
   var items = pendingPayItems(c); if(!items.length || c.visitClosed) return false;
   var newId = 'B' + ((c.settlementBatches||[]).length + 1), amt = items.reduce(function(s, it){ return s + itemKrAmount(it); }, 0);
   c.settlementBatches.push({id:newId, orderedBy:'KR', settledBy:'KR（韩国付款）', time:nowFullDt(), status:'active', krTotal:amt, krDeposit:0, krBalance:amt, inTotal:0, noDeposit:true, addOn:true, addOnItems:items.map(function(it){ return it.name; })});
@@ -8793,7 +8798,7 @@ function coreTodayState(c, it){
   var row = (c.subItems||[]).filter(function(s){ return !s.skipped && ((rowOwnedBy(it, s) && subCaseKey(s)===tg.key) || (s.kind==='增加项目' && s.visitKey===tg.key && s.projectName===it.name)); })[0];
   return row ? {type:'row', key:row.id, done:!!row.done} : null;
 }
-function coreUnitUseNow(c, name, by, opt){
+function coreUnitUseNow(c, name, by, opt){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */
   var tg = coreUseTarget(c); if(!tg) return {ok:false, err:'没有客人已到店的案件'};
   var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return {ok:false, err:'找不到项目'}; var ik = itemIid(it); name = it.name;
   if(krIsMgmtItemC(it)){
@@ -8981,7 +8986,7 @@ function coreSetPreOp(c, name, what, by){
   logCaseEvent(c, by, '上传术前照片：'+name+'（'+(what==='video' ? '视频' : (CONCERN_ANGLE[what] || what))+'）', '赴韩施术');
   return true;
 }
-function coreSurgItemDone(c, rowId, name, by){
+function coreSurgItemDone(c, rowId, name, by){ if(krDayDeny(c, 'main')) return false; /* CMD-1026-20：关账后锁住 */
   var s = (c.subItems||[]).filter(function(x){ return x.id===rowId; })[0]; if(!s || s.kind!=='施术' || s.done || !c.krBalancePaid) return false;
   var it = surgPlanItems(c).filter(function(x){ return x.name===name && !x.done; })[0]; if(!it) return false;
   if(preOpGate(c, [name])) return false; /* CMD-1022-17：没传完术前照片不能完成 */
@@ -9025,7 +9030,7 @@ function coreTodayCancel(c, kind, key, by, internal){
 
 /* ============ CMD-1015-26 Step 4：付清尾款后勾选今日进行的项目 ============
    勾的施术 / 管理项目进今日案件（施术行写「施术：勾的项目」，管理项目一行一个）；没勾的留在项目卡「未使用」（施术项目标 deferUse：不占今日时段、不随施术行完成） */
-function coreTodayPick(c, surgNames, mgmtNames, by){
+function coreTodayPick(c, surgNames, mgmtNames, by){ if(krDayDeny(c, 'main')) return {ok:false, err:'这一天已过 00:00 关账，请先确认结束'};
   if(!c.krBalancePaid || c.todayPicked) return {ok:false, err:'现在不能选今日项目'};
   surgNames = surgNames||[]; mgmtNames = mgmtNames||[];
   if(!surgNames.length && !mgmtNames.length) return {ok:false, err:'请至少勾选一个项目'};
@@ -9700,6 +9705,7 @@ function visitStateText(m, v){ /* CMD-1026-19 B1：经 dayStateOf 读（主案�
   var d = dayStateOf(m, v), today = todayStr();
   if(d.state==='noShow') return '未到店'; if(d.state==='cancelled') return '已取消'; if(d.state==='left') return '客人已离店';
   if(d.state==='arrived') return '进行中';
+  if(d.state==='unconfirmed') return '待确认结束';
   if(d.state==='ended') return '已结束';
   return d.kind==='KR' ? '已预约' : (v.date<today ? '已结束' : '待到店');
 }
@@ -9974,34 +9980,25 @@ function mainMoneyTotals(m){
    careOverMonthSweep：主案件里「印尼的术后管理」超过建议日期一个月还没做 → 转成管理项目（仍免费、不能退款）：记成客人的印尼持有（带转出标记），原主案件行标已转出（当作完成、不再提醒），
    下次开新主案件时客人持有里就有它；客人当时已经有进行中的另一个主案件 → 持有记在那个主案件上（「转入」），原主案件记「转出」。原主案件因此可以结案。 */
 function visitSweep(){
-  var today = todayStr(), changed = false;
-  CASE_ITEMS.forEach(function(ch){
-    if(!isChildVisit(ch) || ch.autoEnded || ch.subState!=='arrived' || !ch.materialsConfirmed || isEnded(ch) || ch.leftStore) return;
-    var day = ch.arrivedDay || ch.visitDate; if(!day || day>=today) return;
-    var bl = closeBlockers(ch); ch.autoEnded = {at:nowFullDt(), day:day, blockers:bl}; ch.leftStore = true; changed = true;
-    logCaseEvent(ch, '系统', '子案件 '+ch.caseNo+' 到 00:00 自动结束：没做完的项目回到对应流程的「未预约」（原因：过了 00:00 自动结束，次日由室长确认）'+(bl.length ? '；还有未处理的款项（'+bl.join('、')+'），案件暂不结束' : ''));
-    if(!bl.length && !mainlineOngoing(ch)){ try{ finishCase(ch); }catch(e){ console.error('[子案件自动结案]', e); } }
-    try{ updateCaseStage(ch); }catch(e){}
-  });
-  /* CMD-1026-19 B2：主案件自己的那一天（升级之后）、韩国非施术日的到院，到 00:00 也自动结束（数据关闭用晚上 00:00）。
-     面诊 / 复诊评估报告还没出来的那一项继续开着（流程不受影响）。韩国施术当天（等于替 KR 室长按［客人已离院］：会设 krProcedureDone / 进术后管理 / 影响尾款后的主线）不在这里自动结束，见汇报。 */
-  CASE_ITEMS.forEach(function(m){
-    if(isChildVisit(m)) return;
-    if(m.autoEnded || m.subState!=='arrived' || !m.materialsConfirmed || isEnded(m) || m.leftStore || m.visitClosed || !m.visitDate || m.krVisit) return;
-    if(!isUpgraded(m)) return; /* 一般案件（没升级）没有「一天」的概念，不自动结束 */
-    var day = m.arrivedDay || m.visitDate; if(!day || day>=today) return;
-    var bl = closeBlockers(m); m.autoEnded = {at:nowFullDt(), day:day, blockers:bl}; m.leftStore = true; changed = true;
-    logCaseEvent(m, '系统', '主案件自己的那一天（'+day.slice(5).replace('-', '/')+'）到 00:00 自动结束：没做完的项目回到对应流程的「未预约」；面诊 / 复诊评估没出结果的继续开着'+(bl.length ? '；还有未处理的款项（'+bl.join('、')+'）' : ''));
-    try{ updateCaseStage(m); }catch(e){}
+  /* CMD-1026-20：00:00 不再自动结束，是「关账」——过了 00:00 还没按客人离店 / 离院的那一天锁住（状态「待确认结束」，Timeline 记一笔「00:00 关账」），
+     第二天早上提醒主跟室长确认（待办 + 页头 / 子案件页）；确认前除了面诊 / 复诊评估报告外那一天的内容都不能再改。锁住本身由 inDayLocked / dayLockedKR 现算（没人开页面也成立），这里只负责记 Timeline（一次）。 */
+  var changed = false;
+  CASE_ITEMS.forEach(function(c){
+    if(inDayLocked(c) && !c.dayLockedAt){
+      var day = inDayOf(c); c.dayLockedAt = {at:nowFullDt(), day:day}; changed = true;
+      logCaseEvent(c, '系统', '00:00 关账：'+day.slice(5).replace('-', '/')+' '+(c.caseNo||'')+' 这一天已锁住，待主跟室长确认结束（面诊 / 复诊评估报告不受影响）');
+      try{ updateCaseStage(c); }catch(e){}
+    }
   });
   CASE_ITEMS.forEach(function(m){
     if(isChildVisit(m) || m.krVisit) return;
-    subCaseList(m).forEach(function(r){
-      if(r.place!=='KR') return; var key = subCaseKey(r), day = String(key).split('|')[1]; if(!day || day>=today) return;
-      if(mainVisitDay(m)===day) return; /* 施术当天（同一天的术后管理行并在施术那次到院里）：见上，不自动结束 */
-      if(coreVisitState(m, key)!=='arrived') return; /* 只结束「客人到过」的；没到的不管 */
-      if(endBlockPending(m)) return; /* 有待付款项目的到院结束不了（和手动一样） */
-      var res = coreEndSubVisit(m, key, '系统', '过了 00:00 自动结束'); if(res && res.ok) changed = true;
+    var keys = []; if(dayLockedKR(m, 'main')) keys.push('main');
+    subCaseList(m).forEach(function(r){ if(r.place!=='KR') return; var k = subCaseKey(r); if(String(k).split('|')[1]!==mainVisitDay(m) && keys.indexOf(k)<0 && dayLockedKR(m, k)) keys.push(k); });
+    keys.forEach(function(k){
+      m.dayLocks = m.dayLocks || {}; if(m.dayLocks[k]) return; var day = k==='main' ? mainVisitDay(m) : String(k).split('|')[1];
+      m.dayLocks[k] = {at:nowFullDt(), day:day}; changed = true;
+      logCaseEvent(m, '系统', '00:00 关账：韩国到院 '+String(day).slice(5).replace('-', '/')+' 已锁住，待 KR 室长确认结束（项目有没有做、钱有没有收）');
+      try{ updateCaseStage(m); }catch(e){}
     });
   });
   return changed;
@@ -10135,26 +10132,26 @@ function dayStateOf(m, v){
     if(!rec) return {kind:'IN', state:(v.date<today ? 'ended' : 'waiting')};
     var iv = inVisitOf(rec);
     if(iv.state==='cancelled' || iv.state==='noShow') return {kind:'IN', state:iv.state};
-    if(iv.left || rec.autoEnded) return {kind:'IN', state:'left', reached:true};
-    if(iv.state==='arrived') return {kind:'IN', state:'arrived', reached:true};
+    if(iv.left || rec.autoEnded || rec.dayConfirmed) return {kind:'IN', state:'left', reached:true};
+    if(iv.state==='arrived') return {kind:'IN', state:(inDayLocked(rec) ? 'unconfirmed' : 'arrived'), reached:true}; /* CMD-1026-20：过了 00:00 还没确认结束 = 待确认结束（锁住） */
     return {kind:'IN', state:(v.date<today ? 'ended' : 'waiting')};
   }
   var tr = tripOf(m);
   if((v.types||[]).indexOf('赴韩施术')>-1 && tr.day===v.date){ /* 施术当天（KR 到院） */
     if(m.krProcedureDone) return {kind:'KR', state:'ended', surgery:true, reached:!!m.hasArrived};
-    if(m.hasArrived) return {kind:'KR', state:'arrived', surgery:true, reached:true};
+    if(m.hasArrived) return {kind:'KR', state:(dayLockedKR(m, 'main') ? 'unconfirmed' : 'arrived'), surgery:true, reached:true};
     return {kind:'KR', state:(v.date<today ? 'ended' : 'waiting'), surgery:true};
   }
   var k = 'KR|'+v.date, cs = coreVisitState(m, k);
   var kreach = coreVisitRows(m, k).some(function(s0){ return s0.arrived || s0.done; });
   if(cs==='done' || (m.visitEndedKeys||{})[k]) return {kind:'KR', state:'ended', reached:kreach};
-  if(cs==='arrived') return {kind:'KR', state:'arrived', reached:true};
+  if(cs==='arrived') return {kind:'KR', state:(dayLockedKR(m, k) ? 'unconfirmed' : 'arrived'), reached:true};
   return {kind:'KR', state:(v.date<today ? 'ended' : 'waiting')};
 }
 function daysOf(m){
   var today = todayStr();
   return visitsOf(m).map(function(v){
-    var d = dayStateOf(m, v), live = (d.state==='waiting' || d.state==='arrived') && v.date>=today;
+    var d = dayStateOf(m, v), live = ((d.state==='waiting' || d.state==='arrived') && v.date>=today) || d.state==='unconfirmed';
     return Object.assign({}, v, d, {live:live, inProgress:d.state==='arrived' && v.date===today});
   });
 }
@@ -10170,6 +10167,7 @@ function mainOngoingOf(m){
   var out = [];
   ongoingFlowsOf(m).forEach(function(f){ out.push({kind:'flow', text:f.label}); });
   var pc = pendingCareOf(m); if(pc.length){ var nIn = pc.filter(function(s){ return s.place==='IN'; }).length, nKr = pc.length-nIn; out.push({kind:'care', text:'术后管理'+(nIn && nKr ? '（印尼 '+nIn+'、韩国 '+nKr+' 项待做）' : (nIn ? '（印尼）'+nIn+' 项待做' : '（韩国）'+nKr+' 项待做'))}); }
+  daysOf(m).filter(function(v){ return v.state==='unconfirmed'; }).forEach(function(v){ out.push({kind:'unconfirmed', text:'待确认结束 '+(v.no||'')}); }); /* CMD-1026-20：关账后没确认的天，主案件不能算已完成 */
   var av = activeVisitsOf(m).filter(function(v){ return v.kind==='IN' && (v.rec||v.caseId)!==m.id; }); if(av.length) out.push({kind:'visit', text:av.length+' 个预约 / 来访'+(av[0].no ? '（'+av[0].no+'）' : '')}); /* 进行中状态只算 IN 子记录（韩国到院由赴韩流程 / 术后管理行表示，主案件自己那天不重复算） */
   return out;
 }
@@ -10512,3 +10510,135 @@ function contPendingHtml(c){
   var rcb0 = renderCaseBody;
   renderCaseBody = function(c){ var r = rcb0.apply(this, arguments); try{ if(CONT_MODAL && document.getElementById('cont-overlay') && document.getElementById('cont-overlay').classList.contains('open')) contRender(); }catch(e){ console.error('[继续弹窗重画]', e); } return r; };
 })();
+
+
+/* ===== CMD-1026-20：00:00 关账（锁住那一天）+ 第二天确认结束 + 上一天没结束不能接待下一天 =====
+   取代 CMD-1026-19 B2 的「00:00 自动结束」和 CMD-1023-01 S6 里 IN 子记录的 00:00 自动结束（autoEnded 只留给旧数据）。
+   ① 过了 00:00 还没按客人离店 / 离院的那一天 = 「待确认结束」，锁住：除面诊 / 复诊评估报告外那一天的内容不能再改（IN：本地项目选购 / 使用 / 操作完成 / 术后管理 / 本地项目收款；KR：操作完成 / 今日进行 / 加项目 / 收款 / 客人已离院）。
+   ② 第二天早上待办提醒主跟室长（IN = 按［客人已到店］的那位，存在案子上 c.leadIn；KR = 案件的 KR 室长）；主跟那天 OFF → 同诊所 / 医院的其他室长也在「只看我的」里看得到。确认时逐项处理项目 / 钱，确认完才真的结束，Timeline 记一笔。
+   ③ 客人有一天待确认结束时，同一端再按［客人已到店］/［客人已到院］会被拦下（IN 和 KR 各自算，同一个客人、同一家诊所 / 医院的全部案子）。
+   原型的 00:00 记录（visitSweep）要有人开着页面才跑；锁住本身是现算的（没人开页面也成立）；正式版由后端排程做。 */
+function inDayOf(c){ return c.arrivedDay || c.visitDate || ''; }
+function inDayLocked(c){
+  if(!c || c.krVisit || c.subState!=='arrived' || !c.materialsConfirmed || isEnded(c) || c.leftStore || c.visitClosed || c.dayConfirmed) return false;
+  var d = inDayOf(c); return !!d && d < todayStr();
+}
+function inLockGuard(c){
+  if(window.DAYCONFIRM_BYPASS || !inDayLocked(c)) return false;
+  alert('这一天（'+inDayOf(c).slice(5).replace('-', '/')+' '+(c.caseNo||'')+'）已过 00:00 关账，内容已锁住。请先确认这一天的结束（页头 / 待办里的［确认结束］）。');
+  return true;
+}
+/* IN 主跟室长：按［客人已到店］的那位（c.leadIn，主案件的优先）；旧案件没有就取第一条「标记客人已到店」的操作人，再退回案件负责室长 */
+function leadInOf(c){
+  var m = (typeof mainOf==='function' && mainOf(c)) || c;
+  if(m.leadIn && m.leadIn.name) return m.leadIn.name;
+  if(c.leadIn && c.leadIn.name) return c.leadIn.name;
+  var L = (m.logEntries||[]).filter(function(l){ return /标记客人已到店/.test(l.action||''); })[0]; if(L && L.actor) return L.actor;
+  return m.inCoordinator || c.inCoordinator || '';
+}
+function dayConfirmMineIn(c){ var lead = leadInOf(c); return !lead || lead===ME_NAME || (typeof isOffOn==='function' && isOffOn(lead, todayStr())); }
+function krLeadOf(c){ return String(krCoordText(c.krCoordinator)||'').split(' ')[0]; }
+function krCoordOffToday(c, sh){ var hid = caseKrHospital(c), today = todayStr(); return ((HOSPITAL_DATA[hid]||{}).offs||[]).some(function(o){ return o.kind==='coord' && o.who && o.who.split(' ')[0]===sh && (!o.part || o.part==='全天') && offApplies(o, today); }); }
+function dayConfirmMineKr(c, meId){ var lead = krLeadOf(c); return !lead || lead===meId || krCoordOffToday(c, lead); }
+/* KR 的「一天」锁：key = 'main'（施术当天）| 'KR|日期'（其他到院） */
+function dayLockedKR(c, key){
+  if(window.DAYCONFIRM_BYPASS || !c || isEnded(c) || c.visitClosed || c.krVisit) return false;
+  if(key==='main'){ var d = mainVisitDay(c); return !!c.hasArrived && !c.krProcedureDone && !!d && d < todayStr() && !(c.dayConfirmedKeys||{}).main; }
+  var day = String(key||'').split('|')[1]; if(!day || day >= todayStr()) return false;
+  if(day===mainVisitDay(c)) return false;
+  return coreVisitState(c, key)==='arrived' && !(c.visitEndedKeys||{})[key];
+}
+function krDayDeny(c, key){
+  if(!dayLockedKR(c, key)) return false;
+  var day = key==='main' ? mainVisitDay(c) : String(key).split('|')[1];
+  window.KR_DAYLOCK = {key:key, caseId:c.id, clinicId:c.clinicId, msg:String(day).slice(5).replace('-', '/')+' 的韩国到院已过 00:00 关账，内容已锁住（面诊 / 复诊评估报告除外）。请先确认这一天的结束。'};
+  return true;
+}
+/* 同一个客人（同一端）还没确认结束的天 */
+function dayConfirmBlockFor(c){
+  var out = [];
+  CASE_ITEMS.forEach(function(x){ if(x===c || x.name!==c.name) return; if(inDayLocked(x)) out.push({id:x.id, no:x.caseNo||'', date:inDayOf(x), side:'IN'}); });
+  return out;
+}
+function krUnconfirmedOther(c, exceptKey){
+  var out = [];
+  CASE_ITEMS.forEach(function(m){ if(m.name!==c.name || isChildVisit(m) || m.krVisit) return;
+    if(dayLockedKR(m, 'main') && !(m===c && exceptKey==='main')) out.push({id:m.id, clinicId:m.clinicId, no:m.caseNo||'', date:mainVisitDay(m), key:'main', side:'KR'});
+    subCaseList(m).forEach(function(r){ if(r.place!=='KR') return; var k = subCaseKey(r); if(String(k).split('|')[1]===mainVisitDay(m) || (m===c && k===exceptKey)) return; if(dayLockedKR(m, k) && !out.some(function(o){ return o.id===m.id && o.key===k; })) out.push({id:m.id, clinicId:m.clinicId, no:(m.caseNo||''), date:String(k).split('|')[1], key:k, side:'KR'}); });
+  });
+  return out;
+}
+function dayConfirmBlockModal(list, side){
+  var ov = document.getElementById('dayblk-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'dayblk-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, x = list[0];
+  window.__dayBlkGo = function(){ ov.classList.remove('open'); if(side==='IN'){ try{ openVisitOf(x.id); setTimeout(function(){ openDayConfirm(x.id); }, 120); }catch(er){ console.error(er); } } else { try{ krDayConfirmOpen(x.clinicId, x.id, x.key); }catch(er){ console.error(er); } } };
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">请先确认上一天的结束</div><div style="font-size:13px;line-height:1.8;margin-bottom:14px;">'+list.map(function(o){ return '请先确认 <b>'+e(String(o.date).slice(5).replace('-', '/'))+' '+e(o.no)+'</b> 的结束'; }).join('<br>')+'<br><span style="font-size:12px;color:var(--muted);">上一天没确认结束，后面的项目会整理不清；确认完才能接待这一天。</span></div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-ghost" onclick="document.getElementById(\'dayblk-overlay\').classList.remove(\'open\')">知道了</button><button class="btn-primary" onclick="__dayBlkGo()">去确认</button></div></div>';
+  ov.style.zIndex = 100020; ov.classList.add('open');
+}
+
+/* ---- IN：确认结束弹窗（逐项：用了 / 没用；还没付的钱：补收 / 取消该项目）---- */
+var DAYC = null;
+function dayConfirmItemsIn(c){
+  var rows = [], M = inContModel(c), nm = function(r){ var en = careEntryOfRow(r.c, r.s); return en ? (en.x.name||en.x.mgmt) : String(r.s.content||'').replace(/（.*$/, ''); };
+  M.grp.today.forEach(function(r){ if(r.s.done && r.s.usedInCase===c.id) return; rows.push({key:'care:'+r.c.id+':'+r.s.id, kind:'care', src:r.c.id, sid:r.s.id, label:'术后管理：'+nm(r)}); });
+  [['lm', c.localMgmt], ['main', c]].forEach(function(p){ var ctx = p[1]; if(!ctx || !ctx.mgmtUses) return; ctx.mgmtUses.forEach(function(u, i){ if(localItemStatus(u)==='进行中') rows.push({key:'use:'+p[0]+':'+i, kind:'use', scope:p[0], i:i, label:'本地项目：'+u.itemName+' ×'+u.qty}); }); });
+  return rows;
+}
+function openDayConfirm(caseId){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  if(!getCurrentCase() || getCurrentCase().id!==c.id){ try{ openVisitOf(c.id); }catch(e){} }
+  DAYC = {id:c.id, ch:{}}; dayConfirmRender();
+}
+function dayConfirmRender(){
+  if(!DAYC) return; var c = CASE_ITEMS.filter(function(x){ return x.id===DAYC.id; })[0]; if(!c) return;
+  var ov = document.getElementById('dayc-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'dayc-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, rows = dayConfirmItemsIn(c), unpaid = (c.settlementBatches||[]).filter(function(b){ return b.status==='unpaid'; });
+  var btn = function(k, v, label, on){ return '<button class="'+(on ? 'btn-primary' : 'btn-outline')+'" style="padding:3px 12px;font-size:12px;" onclick="dayConfirmChoose(\''+k+'\',\''+v+'\')">'+label+'</button>'; };
+  var itemsHtml = rows.length ? rows.map(function(r){ var ch = DAYC.ch[r.key]; return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border2);font-size:13px;"><span style="flex:1;">'+e(r.label)+'</span>'+btn(r.key, 'used', '用了', ch==='used')+btn(r.key, 'skip', '没用（退回未预约）', ch==='skip')+'</div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);padding:6px 0;">没有要确认的项目</div>';
+  var payHtml = unpaid.length ? unpaid.map(function(b){ var amt = [b.krDeposit>0 ? '定金 '+formatCurrency(b.krDeposit,'KRW') : '', b.inTotal>0 ? '本地 '+formatCurrency(b.inTotal,'IDR') : ''].filter(Boolean).join(' + '); return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border2);font-size:13px;color:#B3261E;"><span style="flex:1;">还没付：批次 '+e(b.id)+(amt ? '（'+e(amt)+'）' : '')+'</span>'+(b.krDeposit>0 ? '' : '<button class="btn-outline" style="padding:3px 12px;font-size:12px;" onclick="dayConfirmPay(\''+b.id+'\')">补收款</button>')+'<button class="btn-outline" style="padding:3px 12px;font-size:12px;" onclick="dayConfirmCancelBatch(\''+b.id+'\')">取消该项目</button></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);padding:6px 0;">没有未付的钱</div>';
+  var ready = rows.every(function(r){ return DAYC.ch[r.key]; }) && !unpaid.length;
+  ov.innerHTML = '<div class="modal-box" style="width:560px;max-width:96vw;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><b style="font-size:15px;">确认结束 · '+e(inDayOf(c).slice(5).replace('-', '/'))+' '+e(c.caseNo||'')+'（'+e(c.name)+'）</b><span style="cursor:pointer;" onclick="dayConfirmClose()">✕</span></div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">这一天已过 00:00 关账。逐项确认后，这一天才算真正结束（主跟室长：'+e(leadInOf(c)||'—')+'）。</div>'+
+    '<div style="font-size:12px;font-weight:700;margin-top:6px;">项目有没有用</div>'+itemsHtml+'<div style="font-size:12px;font-weight:700;margin-top:12px;">还没付的钱</div>'+payHtml+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;"><button class="btn-ghost" onclick="dayConfirmClose()">取消</button><button class="btn-primary" '+(ready ? '' : 'disabled style="opacity:.4;cursor:not-allowed;"')+' onclick="dayConfirmGo()">确认结束</button></div></div>';
+  ov.style.zIndex = 100020; ov.classList.add('open');
+}
+function dayConfirmClose(){ var ov = document.getElementById('dayc-overlay'); if(ov) ov.classList.remove('open'); DAYC = null; }
+function dayConfirmChoose(k, v){ if(!DAYC) return; DAYC.ch[k] = v; dayConfirmRender(); }
+function dayConfirmPay(bid){ if(!DAYC) return; var id = DAYC.id; dayConfirmClose(); window.DAYCONFIRM_BYPASS = true; try{ var c = getCurrentCase(); if(c && c.id===id) settleProjects(bid); }finally{ window.DAYCONFIRM_BYPASS = false; } }
+function dayConfirmCancelBatch(bid){
+  if(!DAYC) return; var c = CASE_ITEMS.filter(function(x){ return x.id===DAYC.id; })[0]; if(!c) return;
+  c.procedureItems = (c.procedureItems||[]).filter(function(it){ return it.batchId!==bid; });
+  c.settlementBatches = (c.settlementBatches||[]).filter(function(x){ return x.id!==bid; });
+  c.projectsLocked = c.settlementBatches.length>0; c.recommended = [];
+  logCaseEvent(c, actingName(), '确认结束时取消待收款的结算单（批次 '+bid+'）'); dayConfirmRender();
+}
+/* 确认：没用的退回未预约（次数归还持有）、用了的标完成；全部处理完 → 那一天才算结束（子案件 / 升级后的主案件记离店），Timeline 记谁、什么时候、哪些用了、哪些退回、钱怎么处理 */
+function dayConfirmGo(){
+  if(!DAYC) return; var c = CASE_ITEMS.filter(function(x){ return x.id===DAYC.id; })[0]; if(!c) return;
+  var rows = dayConfirmItemsIn(c), by = actingName(), used = [], back = [], cf = window.confirm, al = window.alert;
+  if(!rows.every(function(r){ return DAYC.ch[r.key]; }) || (c.settlementBatches||[]).some(function(b){ return b.status==='unpaid'; })) return;
+  window.DAYCONFIRM_BYPASS = true; window.confirm = function(){ return true; }; window.alert = function(){};
+  try{
+    rows.forEach(function(r){
+      var ch = DAYC.ch[r.key];
+      if(r.kind==='care'){
+        var src = CASE_ITEMS.filter(function(x){ return x.id===r.src; })[0], s = src && (src.subItems||[]).filter(function(x){ return x.id===r.sid; })[0]; if(!s) return;
+        if(ch==='used'){ s.done = true; s.doneAt = nowFullDt(); s.doneBy = by; s.visitDate = inDayOf(c); s.arrived = true; s.usedInCase = c.id; c.postcareUses = c.postcareUses||[]; c.postcareUses.push({itemName:s.content, date:inDayOf(c), srcCaseId:src.id, suggested:s.date, deltaDays:-pcDaysLate(s.date), reason:'', by:by, byId:currentAccountId()}); logCaseEvent(src, by, '术后管理：'+s.content+'（确认结束时标为已做，办理案件 '+(c.caseNo||'')+'）'); used.push(r.label); }
+        else { c.careToday = (c.careToday||[]).filter(function(i){ return i!==r.sid; }); back.push(r.label); }
+      } else {
+        var cur = getCurrentCase(); if(!cur || cur.id!==c.id){ try{ openVisitOf(c.id); }catch(e){} }
+        markMgmtRows(r.scope, ch==='used' ? 'done' : 'cancelled', false, r.i); (ch==='used' ? used : back).push(r.label);
+      }
+    });
+    c.dayConfirmed = {at:nowFullDt(), by:by, byId:currentAccountId(), used:used, back:back};
+    if(isChildVisit(c) || isUpgraded(c)) c.leftStore = {at:nowFullDt(), by:by, confirmed:true};
+    logCaseEvent(c, by, '确认结束 '+inDayOf(c).slice(5).replace('-', '/')+' '+(c.caseNo||'')+'：用了 '+(used.join('、')||'无')+'；没用（退回未预约）'+(back.join('、')||'无')+'；钱：'+(closeBlockers(c).length ? '还有未处理的款项' : '都已处理'));
+    if(isChildVisit(c) && !closeBlockers(c).length && !mainlineOngoing(c)){ try{ finishCase(c); }catch(e){ console.error(e); } }
+    try{ updateCaseStage(c); }catch(e){}
+  } finally { window.DAYCONFIRM_BYPASS = false; window.confirm = cf; window.alert = al; }
+  dayConfirmClose();
+  try{ buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); }catch(e){}
+  try{ showToast('已确认结束', (c.name||'')+' · '+inDayOf(c).slice(5).replace('-', '/')+' '+(c.caseNo||''), null); }catch(e){}
+}

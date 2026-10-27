@@ -127,3 +127,10 @@ IN 回来的一天仍是 CASE_ITEMS 里的一条（保留接待所需字段）�
 ## 九、还直接读旧字段的地方
 
 见 `audit-oldfields.md`（98 条画面入口的审计，含改动难度）。本次已改经访问层读的：`visitStateOf`、`pendingResvSameDay`、`krVisitTimeOnDate`、`mainVisitDay`、`relatedFollowers`、`caseVisitNo`、`renderCaseSubtitle`、`caseTypeOf`、`krCaseVisible`、`bizCaseMonth`、`krResumeTag`、`calendarEvents`。仍直接读旧字段的主要是：**写入口**（到店 / 完成 / 改时间等，换后端时整体换 API）和少数读取复杂的画面（KR 项目卡 `krProjCards`、`inTodoItems` / `krTodoItems` 待办生成、KR 到院卡分组 `krCaseGroupsHtml` 等），清单和理由在审计表里。
+
+
+## 十、交接备注（CMD-1026-20：00:00 关账）
+
+- 每一天（IN 子记录 / 主案件自己那天 / 韩国到院）过了当天 00:00（页面时区）还没按「客人离店 / 客人已离院」→ 状态「待确认结束」并**锁住**（除面诊 / 复诊评估报告外不能再改）；第二天早上提醒主跟室长（IN = 按「客人已到店」的室长 `leadIn`；KR = 案件的 KR 室长），主跟 OFF 时同诊所 / 医院其他室长也能处理；确认结束时逐项处理项目（没用 / 没做 → 回「未预约」，KR 施术没做 → 关联术后管理一起回未预约）和没付的钱，确认完才算真正结束。
+- 前端现在是**现算**（`inDayLocked` / `dayLockedKR`）；原型里 Timeline「00:00 关账」靠 IN 页面 5 秒扫描写，正式版由后端排程每天 00:00 写状态并生成提醒；锁住 / 解锁 / 确认的校验必须在后端接口做。
+- 同一个客人有一天待确认结束时，同一端不能接待下一天（IN 和 KR 各自算）。

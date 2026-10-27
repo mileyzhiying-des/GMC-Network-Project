@@ -1266,6 +1266,16 @@ function openCaseDetailHere(id, noPush){
 }
 
 function renderCaseStatusBar(c){
+  renderCaseStatusBar0(c);
+  /* CMD-1026-20：这一天已过 00:00 关账、还没确认结束 → 状态条最上面一条锁住提示 + ［确认结束］ */
+  try{
+    if(inDayLocked(c) && document.getElementById('case-status-bar')){
+      var bar = document.getElementById('case-status-bar');
+      bar.innerHTML = '<div class="card" style="padding:10px 18px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #E8B4B0;background:#FDF3F2;"><span style="flex:1;font-size:13px;color:#B3261E;">🔒 '+cesc(inDayOf(c).slice(5).replace('-', '/'))+' '+cesc(c.caseNo||'')+' 已过 00:00 关账，待确认结束：这一天的内容已锁住（面诊 / 复诊评估报告除外）</span><button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openDayConfirm(\''+c.id+'\')">确认结束</button></div>'+bar.innerHTML;
+    }
+  }catch(e){ console.error(e); }
+}
+function renderCaseStatusBar0(c){
   var b = caseStageBadge(c);
   var actionBtn = '';
   if(c.krVisit && c.stage==='booked'){ /* CMD-1014-16：在韩到店案件（KR 医院）：到店 / 完成由 KR 标记，IN 不接待、不判未到店 */
@@ -1285,7 +1295,9 @@ function renderCaseStatusBar(c){
     var tvIn = ds3.filter(function(v){ return v.date===today3 && v.place==='IN' && v.live; })[0], tvKr = ds3.filter(function(v){ return v.date===today3 && v.place==='KR' && v.live; })[0];
     if(prog && SUBVIEW[m3.id]){ /* 子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
     var tagOf = function(v){ return cesc(v.no||'')+'（'+cesc(v.types.join(' · '))+(v.place==='KR' ? ' · 韩国' : '')+'）'; };
-    if(prog){ line3 = '今日进行中：'+tagOf(prog); btn3 = prog.place==='KR' ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+prog.key+'\')">查看内容</button>' : ((prog.rec||prog.caseId)===m3.id ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+prog.key+'\')">进入案件</button>' : '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openVisitOf(\''+(prog.rec||prog.caseId)+'\')">进入案件</button>'); }
+    var unc = ds3.filter(function(v){ return v.state==='unconfirmed'; })[0];
+    if(!prog && unc){ line3 = '待确认结束：'+cesc(String(unc.date).slice(5).replace('-', '/'))+' '+tagOf(unc); btn3 = unc.kind==='IN' ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openDayConfirm(\''+(unc.rec||unc.caseId)+'\')">确认结束</button>' : '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+unc.key+'\')">查看内容</button>'; }
+    else if(prog){ line3 = '今日进行中：'+tagOf(prog); btn3 = prog.place==='KR' ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+prog.key+'\')">查看内容</button>' : ((prog.rec||prog.caseId)===m3.id ? '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+prog.key+'\')">进入案件</button>' : '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openVisitOf(\''+(prog.rec||prog.caseId)+'\')">进入案件</button>'); }
     else if(tvIn){ line3 = ((tvIn.rec||tvIn.caseId)===m3.id ? '今天来访：' : '今天来访：')+cesc(tvIn.types.join(' · ')); }
     else if(tvKr){ line3 = '今天在韩国到院：'+tagOf(tvKr); btn3 = '<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openSubcase(\''+m3.id+'\',\''+tvKr.key+'\')">查看内容</button>'; }
     else { var nx = activeV.filter(function(v){ return v.date>today3; }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0]; line3 = '下次预约：'+(nx ? cesc(nx.date)+(nx.time ? ' '+cesc(nx.time) : '')+(nx.place==='KR' ? '（韩国）' : '') : '—'); }
@@ -2031,7 +2043,7 @@ function noPurchaseThisTime(){
 
 /* 标记项目行：action 'done' / 'cancelled'；all=true 时作用于全部进行中的项目，否则作用于勾选的 */
 function markMgmtRows(scope, action, all, oneIdx){
-  var c = getCurrentCase(); if(!c) return;
+  var c = getCurrentCase(); if(!c) return; if(inLockGuard(c)) return; /* CMD-1026-20 */
   var ctx = ctxOf(c, scope); if(!ctx) return;
   var uses = ctx.mgmtUses||[];
   var idxs = oneIdx!==undefined ? [oneIdx] : all

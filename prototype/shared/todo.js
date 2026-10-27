@@ -17,7 +17,7 @@ function todoIsKr(){ try{ return isKrAccount(); }catch(e){ return false; } }
 /* ---------------- 待办条目 ----------------
    it = {kind, text, name, no, due('YYYY-MM-DD' 或 'YYYY-MM-DD HH:mm'，页面时区), over, pin, mine, go()} */
 /* CMD-1014-02：4 张卡 = 待办 4 类。每条待办恰好属于一类（待办总数 = 4 类加总，卡片数字 = 点下去筛出的条数） */
-var TODO_CAT = {bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
+var TODO_CAT = {dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'dconsult', recover:'drecover', recoverwait:'drecover', dsurg:'dsurg', dirop:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
 /* CMD-1015-05 九：第一栏「阶段｜待办事项」——阶段读案件的阶段（同案件列表），没有案件的按类型 */
 var TODO_STAGE_BY_KIND = {tripend:'术后管理', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
@@ -53,6 +53,10 @@ function inTodoItems(){
   CASE_ITEMS.forEach(function(c){
     if(c.autoEnded && !c.autoAck && c.subState!=='cancelled'){ /* CMD-1023-01 S6：昨天的子案件 00:00 已自动结束 → 第二天请室长确认 */
       var it0 = todoMk('visitend', '子案件 '+(c.caseNo||'')+' 昨天已自动结束：确认（没做完的项目回到主案件「未做」）', c, '', false, function(){ c.autoAck = true; try{ Store.touch(); }catch(e){} openCaseDetail(c.id); }); it0.mine = todoInMine(c); out.push(it0);
+    }
+    if(inDayLocked(c)){ /* CMD-1026-20：昨天（或更早）的一天已过 00:00 关账、还没确认结束 → 第二天早上提醒主跟室长；主跟 OFF 时同诊所其他室长也在「只看我的」里看得到 */
+      var itL = todoMk('dayconfirm', inDayOf(c).slice(5).replace('-', '/')+' '+(c.caseNo||'')+' 还没结束，请确认', c, '', true, function(){ openVisitOf(c.id); setTimeout(function(){ try{ openDayConfirm(c.id); }catch(e){ console.error(e); } }, 150); });
+      itL.mine = dayConfirmMineIn(c); out.push(itL);
     }
     if(c.subState==='cancelled' || c.visitClosed || isEnded(c)) return;
     var mine = todoInMine(c), push = function(it){ it.mine = mine; out.push(it); };
@@ -131,6 +135,9 @@ function krTodoItems(rows){
     var c = r.c, mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name)), push = function(it){ it.mine = mine; it.rowKey = r.clinicId+':'+r.id; out.push(it); };
     var goCase = function(tab){ return function(){ if(r.kidOf){ krShowCase(r.clinicId, r.kidOf, {tab:'revisit', flow:todoKidFlowKey(r)}); return; } krShowCase(r.clinicId, r.id, {tab:tab}); }; }; /* CMD-1026-14 一：复诊评估子记录 KR 没有自己的案件页，点了进主案件的复诊 tab 并展开那一笔 */
     if(work){
+      krLockedKeys(c).forEach(function(k0){ /* CMD-1026-20：关账后没确认结束的韩国到院 → 提醒 KR 主跟室长（他 OFF 时同医院其他室长也看得到） */
+        var day0 = k0==='main' ? mainVisitDay(c) : String(k0).split('|')[1], itK = todoMk('dayconfirm', String(day0).slice(5).replace('-', '/')+' '+(c.caseNo||'')+' 韩国到院还没结束，请确认', c, '', true, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ krDayConfirmOpen(r.clinicId, r.id, k0); }, 200); });
+        itK.mine = dayConfirmMineKr(c, meId); itK.rowKey = r.clinicId+':'+r.id; out.push(itK); });
       if(c.consultStatus==='paid_waiting_kr') push(todoMk('eta', (isRevEval(c) ? '复诊评估：确认评估时间和结果时间' : isRevisitConsult(c) ? '复诊面诊：确认面诊时间和预计出评估时间' : '确认预计出报告时间')+(c.wantConsult ? '（客人希望：'+c.wantConsult+'）' : ''), c, '', false, goCase('consult')));
       if(c.consultStatus==='awaiting_report' && !c.consultContentAt){ var wo = reportOverdueNow(c); push(todoMk('waitdir', (isRevEval(c) ? '等院长评估' : '等院长上传面诊')+(wo ? '（已超时）' : (c.consultStartedAt ? (isRevEval(c) ? '（评估中）' : '（面诊中）') : '')), c, todoEtaDue(c), wo, goCase('consult'), {gray:!wo})); }
       if(c.consultStatus==='awaiting_report' && c.consultContentAt){ var over = reportOverdueNow(c); push(todoMk('send', (isRevEval(c) ? '发送复诊评估结果' : isRevisitConsult(c) ? '发送恢复评估' : '发送诊疗方案')+(over ? '（已超时）' : ''), c, todoEtaDue(c), over, goCase('consult'))); }
