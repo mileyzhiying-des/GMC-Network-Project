@@ -494,6 +494,10 @@ function krShowCaseHere(clinicId, id, o){
 function krSetCaseTab(k){ KR_CASE.day = ''; KR_CASE.tab = (k==='proc' ? 'items' : k); /* CMD-1015-18：施术 tab 并进「项目」 */ krRenderCaseDetail(); }
 
 function krKV(label, val){ return '<div class="field-row"><span class="fk">'+label+'</span><span class="fv" style="font-weight:400;">'+val+'</span><span class="fa"></span></div>'; }
+function krCardBoxR(title, body, right){ return '<div class="card" style="padding:16px 22px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><div class="info-heading" style="margin:0;flex:1;">'+title+'</div>'+(right||'')+'</div>'+body+'</div>'; }
+/* CMD-1027-05 二：报告卡右上［查看报告］（KR 室长 / 院长都能看；弹窗和 IN 的完整报告同一个组件，KR 默认看原文，可切译文） */
+function krReportBtn(c){ return '<button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krOpenReport(\''+KR_CASE.clinicId+'\',\''+c.id+'\')">查看报告</button>'; }
+function krOpenReport(clinicId, id){ openFullReport(id, {clinicId:clinicId, viewer:'KR'}); }
 function krCardBox(title, body){ return '<div class="card" style="padding:16px 22px;">'+(title?'<div class="info-heading" style="margin-bottom:6px;">'+title+'</div>':'')+body+'</div>'; }
 /* CMD-1020-15 四：到院卡层级——今天的到院卡 = 1 级；里面「已付定金项目」「添加项目」「付清尾款」等 = 2 级卡（标题放在卡里，卡与卡之间留间距）；2 级卡里的「施术项目 N」「管理项目 N」= 3 级卡；每张卡里行与行之间留间距 */
 function krL2Box(title, body){ return '<div class="kr-l2">'+(title ? '<div class="kr-l2-title">'+title+'</div>' : '')+body+'</div>'; }
@@ -927,7 +931,7 @@ function krConsultDoneCard(c){
     (open ? '<div style="margin-top:8px;">'+krUploadRow(c, '메타뷰 检测', '메타뷰 检测报告', c.metaviewStatus==='ready', '已检测到')+concernBlockHtml(c, {budgetLast:true, fold:false})+'</div>' : '')+'</div>';
   return krCardBox('面诊', krDirLine(c)+krKV('面诊报告时间（韩国）', krEsc(rt))+vp);
 }
-function krTabConsult(c){ if(!isRevEval(c) && !isRevisitConsult(c) && !c.reuseReport && !isContinuationConsult(c) && c.consultStatus==='report_ready') return krConsultDoneCard(c)+krCardBox('报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
+function krTabConsult(c){ if(!isRevEval(c) && !isRevisitConsult(c) && !c.reuseReport && !isContinuationConsult(c) && c.consultStatus==='report_ready') return krConsultDoneCard(c)+krCardBoxR('报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')), krReportBtn(c))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
   if(!isRevEval(c) && !isRevisitConsult(c) && !c.reuseReport && !isContinuationConsult(c) && c.consultStatus==='awaiting_report') return krConsultGeneral(c); /* CMD-1025-01：一般面诊等待报告 = 面诊卡放最上面，到访目的在下面 */ var cmp = ''; /* CMD-1022-18：1022-13 独立的「前后对比」卡拿掉（对比在项目卡的胶囊里） */ var vp = (isRevisitConsult(c) || c.reuseReport) ? '' : krVisitPurposeCard(c); /* CMD-1022-16：面诊 tab 最上面放到访目的（复诊评估 / 复诊面诊在恢复确认卡里已有，不重复） */ return vp+(cmp ? krCardBox('前后对比', cmp) : '')+krTabConsult0(c); }
 function krTabConsult0(c){
   var fee = consultFeeStatusMain(c), out = '';
@@ -945,8 +949,8 @@ function krTabConsult0(c){
     if(isContinuationConsult(c)) return out+krJudgeBlock(c); /* 延续既往面诊：先判断有无变动 */
     return out+((c.consultStartedAt || c.consultContentAt) ? krRecordBlock(c) : ''); /* 按［开始面诊］之前不显示「录入面诊」和「发送诊疗方案」（CMD-1012-08 二·2） */
   }
-  if(c.consultStatus==='report_ready' && isRevEval(c)) return head+krCardBox('复诊评估结果', revResultCardHtml(c, 'KR'))+krRecoveryCard(c); /* CMD-1022-12 B2：结果卡重排，拿掉「补加可选项目」 */
-  if(c.consultStatus==='report_ready') return head+krRecoveryCard(c)+krCardBox(isRevEval(c) ? '复诊评估结果' : isRevisitConsult(c) ? '恢复评估' : '报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
+  if(c.consultStatus==='report_ready' && isRevEval(c)) return head+krCardBoxR('复诊评估结果', revResultCardHtml(c, 'KR'), krReportBtn(c))+krRecoveryCard(c); /* CMD-1022-12 B2：结果卡重排，拿掉「补加可选项目」 */
+  if(c.consultStatus==='report_ready') return head+krRecoveryCard(c)+krCardBoxR(isRevEval(c) ? '复诊评估结果' : isRevisitConsult(c) ? '恢复评估' : '报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')), krReportBtn(c))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
   return head;
 }
 /* 项目 tab 三张卡（CMD-1013-11 三）：施术项目（赴韩手术 + 当天加的管理 / 서비스，加的标「在韩增加」）/ 术后项目（术后管理）/ 持有项目（在韩持有，没有就不显示）；不再有「KR 可选范围」卡 */
@@ -2211,10 +2215,10 @@ function krJudge(changed){
 /* 项目确认中：已提交的诊疗方案和可选范围 + ［补加可选项目］（只增不减；院长不能补加） */
 function krAfterBlock(c){
   var items = (c.krScope && c.krScope.items) || [];
-  var list = items.length ? items.map(function(it){ return '<div class="case-field-row" style="font-size:13px;"><span style="flex:1;">'+krEsc(it.name)+(it.note?' <span style="color:var(--muted);font-size:12px;">'+krEsc(it.note)+'</span>':'')+krItemMetaHtml(it)+'</span><span style="color:var(--slate2);">'+(it.price!==undefined ? (isLocalProjectName(it.name) ? '' : formatCurrency(it.price,'KRW')) : '')+'</span></div>'; }).join('') : krEmpty('没有可选范围');
+  var list = recProjectsRowsHtml(c, 'KR'); /* CMD-1027-05 四：购买情况｜项目名｜术后管理｜价格 */
   var addable = '';
   if(krCan() && c.stage==='consult' && c.reportReady){ krSubReset(c); addable = krAddCardHtml(c, items); }
-  return krCardBox('可选范围（项目确认中）', list+addable);
+  return krCardBox('推荐项目', list+addable);
 }
 function isLocalProjectName(name){ return PROJECT_LIBRARY.some(function(p){ return p.name===name && p.origin==='IN'; }); }
 /* ---------- CMD-1015-05 四：［补加可选项目］展开一张卡片，栏位同发送诊疗方案（推荐在韩时间、麻醉、麻醉备注、所需术后管理）+ 可选共同术后管理（可和已有项目共用）；只能新增不能删除 ---------- */

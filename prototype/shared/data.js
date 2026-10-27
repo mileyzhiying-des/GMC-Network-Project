@@ -9376,18 +9376,18 @@ function newCaseFromClient(name, fromId){
 function revEvalTabHtml(c){
   var st = revEvalProcText(c), src = followSrc(c);
   var tip = {'等确认时间':'等 KR 室长确认评估时间和结果时间（院长看资料后评估，不收费）', '等评估':'等院长评估（室长可代输入，需院长授意）', '评估中':'院长评估中', '评估完成 · 等 KR 传结果':'院长已评估，等 KR 室长传结果'}[st] || '';
-  var done = !!(c.reportReady || c.consultStatus==='report_ready'), res = done ? revEvalResultHtml(c) : ''; /* CMD-1022-18：IN 收到结果后，结果卡放最上面，下面是项目卡（胶囊［面诊］［术前］［本次］） */
+  var done = !!(c.reportReady || c.consultStatus==='report_ready'); /* CMD-1027-05 三：结果出来后 = 复诊卡（状态）在上、报告卡在下（和面诊 tab 同格式）；原来是结果卡放最上面 */
   var q = String(c.revisitQuestion||'').trim();
   var open = !!REV_OPEN[c.id], stTxt = done ? '已出结果' : ({'等确认时间':'等待 KR 室长确认时间'}[st] || st); /* CMD-1026-09 A1：复诊评估卡默认收起，标题行状态文字跟实际状态变，最右［展开］ */
   var head = '<div style="display:flex;align-items:center;gap:10px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:13px;font-weight:700;flex:1;">复诊评估 · '+cesc(stTxt)+'</span>'+(urgeInfo(c) ? '<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button>' : '')+'<button class="btn-outline" style="padding:3px 12px;font-size:12px;" onclick="toggleRevOpen(\''+c.id+'\')">'+(open ? '收起' : '展开')+'</button></div>';
-  return '<div class="card" style="padding:18px 24px;">'+(done ? res+'<div style="height:10px;"></div>' : '')+head+(open ? '<div style="margin-top:12px;">'+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:12px;color:var(--muted);">'+(src ? '继续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
+  return '<div class="card" style="padding:18px 24px;">'+head+(open ? '<div style="margin-top:12px;">'+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:12px;color:var(--muted);">'+(src ? '继续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
     (done ? '' : subStatusRowHtml([{kind:'Waiting', text:st}])+(tip ? '<div style="font-size:13px;color:var(--slate2);margin-bottom:8px;">'+tip+'</div>' : ''))+
     (c.wantConsult ? '<div style="font-size:12px;color:var(--muted);">客人希望的时间：'+cesc(c.wantConsult)+'</div>' : '')+
     (q ? '<div style="font-size:12px;font-weight:700;margin:8px 0 4px;">复诊想问的内容</div><div style="padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;">'+cesc(q)+'</div>' : '')+
-    revProjCardsHtml(c)+'</div>' : '')+'</div>';
+    revProjCardsHtml(c)+'</div>' : '')+'</div>'+(done ? '<div style="height:14px;"></div>'+revReportCardHtml(c) : '');
 }
 var REV_OPEN = {};
-function toggleRevOpen(id){ REV_OPEN[id] = !REV_OPEN[id]; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
+function toggleRevOpen(id){ REV_OPEN[id] = !REV_OPEN[id]; var c = getCurrentCase() || CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); } /* CMD-1027-05：主案件复诊 tab 里展开的是子记录，重画当前页 */
 /* IN 确认基础资料后把复诊评估送给 KR：不收面诊费，直接进「等 KR 确认评估时间」 */
 function startRevisitEval(c){
   c.revisitEval = {at:nowFullDt(), by:actingName()}; c.noConsultFee = true; c.consultFeeAmount = 0; c.consultRequested = true;
@@ -10273,7 +10273,7 @@ function flowDetailIn(c, r){
   if(r.kind==='consult') return c.consultRequested ? consultTabHtml(c) : '<div style="font-size:12px;color:var(--muted);">没有面诊资料</div>';
   if(r.kind==='krTrip') return showKrTab(c) ? krTabContent(c) : '<div style="font-size:12px;color:var(--muted);">还没有赴韩项目</div>';
   var ch = CASE_ITEMS.filter(function(x){ return x.id===r.caseId; })[0];
-  return '<div style="font-size:13px;line-height:1.8;">复诊评估在回来那天的子案件里处理'+(ch ? '（'+cesc(ch.caseNo)+'）' : '')+'。 <button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="openCaseNewTab(\''+r.caseId+'\')">打开复诊评估</button></div>'+(ch && (ch.reportReady || ch.consultStatus==='report_ready') ? '<div style="margin-top:8px;">'+(typeof revEvalResultHtml==='function' ? revEvalResultHtml(ch) : '')+'</div>' : '');
+  return '<div style="font-size:13px;line-height:1.8;">复诊评估在回来那天的子案件里处理'+(ch ? '（'+cesc(ch.caseNo)+'）' : '')+'。 <button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="openCaseNewTab(\''+r.caseId+'\')">打开复诊评估</button></div>'+(ch && (ch.reportReady || ch.consultStatus==='report_ready') ? '<div style="margin-top:10px;">'+revEvalTabHtml(ch)+'</div>' : ''); /* CMD-1027-05 三：同一个组件（复诊卡 + 报告卡） */
 }
 function flowTabHtml(c, force){ return flowRowsHtml(c, {detail:function(r){ return flowDetailIn(c, r); }, forceOpen:force}); }
 /* opts.detail(row) 返回展开内容；opts.toggle(key) 展开函数名；forceOpen = 要强制展开的流程 key */
@@ -10668,32 +10668,33 @@ function consultReportV2Html(c, talk){
   var head = '<div class="card" style="padding:16px 22px;margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:15px;font-weight:700;">面诊</span><span class="status-pill" style="background:#E3F4E8;color:#2F7A4B;">已出方案</span>'+(talk ? '<span style="margin-left:auto;">'+talk+'</span>' : '')+'</div></div>';
   var rep = '<div class="card" style="padding:18px 24px;margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:15px;font-weight:700;">报告</span><span style="font-size:12px;color:var(--slate2);">提交：'+e(c.reportDate||'—')+'，'+e(by)+'</span><button class="btn-outline" style="margin-left:auto;padding:4px 12px;font-size:12px;" onclick="openFullReport(\''+c.id+'\')">完整报告查看</button></div>'+
     '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">面诊摘要 <span class="status-pill" style="background:#EEF2FB;color:#3B5BA8;font-size:12px;font-weight:600;">AI 翻译</span></div><div style="font-size:13px;line-height:1.8;color:var(--navy);white-space:pre-wrap;">'+e(summary)+'</div></div>';
-  var rows = scope.length ? scope.map(function(x){
-    var st = sel(x), grey = !st, meta = []; try{ meta = itemMetaText(x); }catch(er){}
-    var tag = st==='on' ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">已选</span>' : (st==='cancelled' ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;">已选 · 已取消</span>' : '');
-    return '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--border2);'+(grey||st==='cancelled' ? 'color:var(--muted);' : '')+'"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;'+(st==='cancelled' ? 'text-decoration:line-through;' : '')+'">'+e(buyName(x.name))+' '+tag+'</div>'+(meta.length ? '<div style="font-size:12px;margin-top:3px;line-height:1.7;">'+meta.map(e).join('<br>')+'</div>' : '')+'</div><div style="font-size:13px;white-space:nowrap;">'+(x.price>0 ? e(krIdrText(x.price)) : '—')+'</div></div>';
-  }).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">院长没有建议项目</div>';
-  var scopeCard = '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><span style="font-size:15px;font-weight:700;">可选范围</span><span style="font-size:12px;color:var(--muted);">院长建议的项目（面诊时的决定）</span><a href="#" class="info-link" style="margin-left:auto;font-size:12px;" onclick="consultGoKr(\''+m.id+'\');return false;">看进度 → 赴韩施术</a></div>'+rows+'</div>';
+  var scopeCard = '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;"><span style="font-size:15px;font-weight:700;">推荐项目</span><span style="font-size:12px;color:var(--muted);">院长建议的项目（面诊时的决定）</span><a href="#" class="info-link" style="margin-left:auto;font-size:12px;" onclick="consultGoKr(\''+m.id+'\');return false;">看进度 → 赴韩施术</a></div>'+recProjectsRowsHtml(c, 'IN')+'</div>';
   return head+rep+scopeCard+'<div id="consult-after-report"></div>';
 }
 function consultGoKr(mainId){ try{ openCaseDetail(mainId, false, {tab:'kr'}); }catch(e){ console.error(e); } }
-function openFullReport(caseId){
-  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+function fullReportCaseRun(ov, fn){ /* CMD-1027-05：KR 端的案件在来源诊所分区里，要在 Store.withClinic 里算；IN 端直接算 */
+  var run = function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===ov.dataset.caseId; })[0]; return c ? fn(c) : ''; }, cid = ov.dataset.clinicId;
+  return (cid && typeof Store!=='undefined' && Store.withClinic) ? Store.withClinic(cid, run) : run();
+}
+function openFullReport(caseId, opt){
+  opt = opt || {};
   var ov = document.getElementById('rptfull-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'rptfull-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
-  ov.dataset.caseId = caseId; REPORT_SHOW_ORIG = false; fullReportRender();
+  ov.dataset.caseId = caseId; ov.dataset.clinicId = opt.clinicId || ''; ov.dataset.viewer = opt.viewer || 'IN'; REPORT_SHOW_ORIG = (ov.dataset.viewer==='KR'); /* KR 默认看原文（韩文），有译文可切换 */
+  fullReportRender();
   ov.style.zIndex = 100020; ov.classList.add('open');
 }
 function fullReportRender(){
-  var ov = document.getElementById('rptfull-overlay'); if(!ov) return; var c = CASE_ITEMS.filter(function(x){ return x.id===ov.dataset.caseId; })[0]; if(!c) return;
-  ov.innerHTML = '<div class="modal-box" style="width:860px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0;overflow:hidden;"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 22px;border-bottom:1px solid var(--border2);"><b style="font-size:15px;">完整报告</b><span style="cursor:pointer;" onclick="closeFullReport()">✕</span></div>'+
-    '<div id="rp-body" style="flex:1;min-height:0;overflow-y:auto;padding:18px 28px;">'+reportDocHtml(c, REPORT_SHOW_ORIG, true)+'</div>'+
+  var ov = document.getElementById('rptfull-overlay'); if(!ov) return;
+  var info = fullReportCaseRun(ov, function(c){ return {rev:isRevEval(c), body:reportDocFor(c, REPORT_SHOW_ORIG, true)}; }); if(!info) return;
+  ov.innerHTML = '<div class="modal-box" style="width:860px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0;overflow:hidden;"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 22px;border-bottom:1px solid var(--border2);"><b style="font-size:15px;">'+(info.rev ? '复诊评估报告' : '完整报告')+'</b><span style="cursor:pointer;" onclick="closeFullReport()">✕</span></div>'+
+    '<div id="rp-body" style="flex:1;min-height:0;overflow-y:auto;padding:18px 28px;">'+info.body+'</div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 22px;border-top:1px solid var(--border2);"><button class="btn-outline" onclick="fullReportPrint(\'dl\')">下载</button><button class="btn-outline" onclick="fullReportPrint(\'pr\')">打印</button><button class="btn-primary" onclick="closeFullReport()">关闭</button></div></div>';
 }
 function closeFullReport(){ var ov = document.getElementById('rptfull-overlay'); if(ov) ov.classList.remove('open'); }
 /* 下载 / 打印：原型都走浏览器打印窗口（另存为 PDF = 下载）；正式版由后端生成文件 */
 function fullReportPrint(){
-  var ov = document.getElementById('rptfull-overlay'); var c = ov && CASE_ITEMS.filter(function(x){ return x.id===ov.dataset.caseId; })[0]; if(!c) return;
-  var html = '<html><head><meta charset="utf-8"><title>诊疗方案_'+(c.caseNo||'')+'</title><style>body{font-family:sans-serif;padding:32px;color:#1c2b40;} .no-print{display:none;} table{width:100%;} </style></head><body>'+reportDocHtml(c, false).replace(/<button[^>]*>.*?<\/button>/g,'')+'</body></html>';
+  var ov = document.getElementById('rptfull-overlay'); if(!ov) return;
+  var html = fullReportCaseRun(ov, function(c){ return '<html><head><meta charset="utf-8"><title>'+(isRevEval(c) ? '复诊评估报告_' : '诊疗方案_')+(c.caseNo||'')+'</title><style>body{font-family:sans-serif;padding:32px;color:#1c2b40;} .no-print{display:none;} table{width:100%;} </style></head><body>'+reportDocFor(c, REPORT_SHOW_ORIG, false).replace(/<button[^>]*>.*?<\/button>/g,'')+'</body></html>'; });
   var w = window.open('', '_blank'); if(w){ w.document.write(html); w.document.close(); w.focus(); setTimeout(function(){ w.print(); }, 300); }
 }
 
@@ -10762,4 +10763,73 @@ function reopenTripIfNeeded(c, by){
   logCaseEvent(c, by, '重新打开韩国行程（离开日期改到 '+(out || '（空）')+'）：KR 可以再建到院 / 增加项目；案件阶段按现状重算；原来转去印尼的术后管理（'+(info.toIn||0)+' 项）保持在印尼，没有收回', '赴韩施术');
   if(isEnded(c) || c.stage==='closed'){ try{ reopenMain(c, '韩国行程重新打开'); }catch(e){} } else updateCaseStage(c);
   return true;
+}
+
+
+/* ===== CMD-1027-05 ===== */
+/* 一：复诊评估正式报告（和诊疗方案同一种格式：GMC NETWORK 抬头、院长签名；不放照片）。
+   现有资料能拼出的：客人 / Case ID（子案件号）/ 评估院长 / 医院 / 出具日期 / 复诊想问的内容（c.revisitQuestion）/ 评估项目（c.followProjects）/ 评估结论（c.recoveryResult）/ 评估文字（c.videoSummary 译文、c.reportKo 原文）/ 推荐（c.revisitRec：本地项目文字、建议赴韩 + 说明）。
+   现有资料里没有的：每个项目各自的评估意见（只有一个整体结论 + 一段评估文字）、下次复诊时间、注意事项——报告里不写这三块（不为报告改 KR 填写流程）。 */
+function revReportDocHtml(c, showOrigWanted, inline){
+  var e = esc0, rr = c.recoveryResult || {}, rec = c.revisitRec || {}, treat = rr.result==='treat', hasOrig = !!c.reportKo, showOrig = !!(showOrigWanted && hasOrig);
+  var clean = function(t){ return String(t||'').replace(/\n*（演示翻译[^）]*）\s*$/, '').replace(/^【[^】]*】\s*/, '').trim(); };
+  var evalText = clean(showOrig ? c.reportKo : c.videoSummary), q = String(c.revisitQuestion||'').trim(), src = null; try{ src = followSrc(c); }catch(er){}
+  var projs = (c.followProjects || []).map(function(n){ return String(n); }), concl = treat ? '需要处理' : '恢复正常';
+  var toggle = (hasOrig && inline) ? '<div style="display:flex;align-items:center;gap:10px;margin:10px 0;" class="no-print"><span style="font-size:12px;color:var(--muted);">'+(showOrig ? '韩文原文' : '中文翻译（AI 翻译）')+'</span><button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="toggleReportOrig()">'+(showOrig ? '看翻译' : '看原文')+'</button></div>' : '';
+  var h = function(t){ return '<div style="font-size:13px;font-weight:700;color:var(--navy);margin:16px 0 6px;">'+t+'</div>'; };
+  var projTbl = projs.length ? '<table style="width:100%;font-size:13px;border-collapse:collapse;"><tr style="color:var(--muted);text-align:left;"><td style="padding:4px 0;border-bottom:1px solid var(--border2);">项目</td><td style="padding:4px 0;border-bottom:1px solid var(--border2);width:140px;">评估结论</td></tr>'+projs.map(function(n){ return '<tr><td style="padding:6px 0;border-bottom:1px solid var(--border2);">'+e(buyName(n))+'</td><td style="padding:6px 0;border-bottom:1px solid var(--border2);">'+concl+'</td></tr>'; }).join('')+'</table>' : '<div style="font-size:13px;color:var(--muted);">没有选择具体项目</div>';
+  var recHtml = treat ? ((rec.local ? '<div style="font-size:13px;line-height:1.8;white-space:pre-wrap;">推荐的本地项目：'+e(rec.local)+'</div>' : '')+(rec.suggestKr ? '<div style="font-size:13px;line-height:1.8;">建议赴韩处理'+(rec.suggestKrNote ? '：'+e(rec.suggestKrNote) : '')+'</div>' : '')+((!rec.local && !rec.suggestKr) ? '<div style="font-size:13px;">没有推荐项目</div>' : '')) : '<div style="font-size:13px;">恢复正常，无需处理</div>';
+  return '<div style="text-align:center;border-bottom:2px solid var(--navy);padding-bottom:12px;margin-bottom:14px;"><div style="font-size:12px;letter-spacing:2px;color:var(--muted);">GMC NETWORK</div><div style="font-size:22px;font-weight:700;color:var(--navy);margin-top:4px;">复诊评估报告</div></div>'+
+    '<table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:6px;"><tr><td style="padding:4px 0;color:var(--muted);width:90px;">客人</td><td>'+e(c.name)+'</td><td style="color:var(--muted);width:90px;">Case ID</td><td>'+e(c.caseNo||'')+'</td></tr>'+
+    '<tr><td style="padding:4px 0;color:var(--muted);">评估院长</td><td>'+e(c.director||'')+'</td><td style="color:var(--muted);">出具日期</td><td>'+e(c.reportDate||D(0))+'</td></tr>'+
+    '<tr><td style="padding:4px 0;color:var(--muted);">医院</td><td'+(src ? '' : ' colspan="3"')+'>'+e(hospitalName(caseKrHospital(c),'ko'))+'</td>'+(src ? '<td style="color:var(--muted);">关联案件</td><td>'+e(src.caseNo||'')+'</td>' : '')+'</tr></table>'+toggle+
+    h('复诊想问的内容')+'<div style="font-size:13px;line-height:1.8;white-space:pre-wrap;">'+(q ? e(q) : '<span style="color:var(--muted);">客人没有填写</span>')+'</div>'+
+    h('评估项目')+projTbl+
+    h('院长评估意见')+'<div style="font-size:13px;line-height:1.9;color:var(--navy);white-space:pre-wrap;">'+(evalText ? e(evalText) : '<span style="color:var(--muted);">—</span>')+'</div>'+
+    h('院长建议')+recHtml+
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin-top:24px;"><span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+e(c.director||'')+'</span><span style="font-size:12px;color:var(--muted);">评估院长</span></div>';
+}
+function reportDocFor(c, orig, inline){ return isRevEval(c) ? revReportDocHtml(c, orig, inline) : reportDocHtml(c, orig, inline); }
+/* 三：IN 复诊评估 tab 的报告卡（主案件复诊 tab 和子案件页复诊评估 tab 同一个组件）：提交（日期，KR 室长）、评估摘要（AI 翻译）、右上［完整报告查看］；
+   IN 的后续动作（根据推荐选本地项目 / 另开新案件（建议赴韩）/ 提示）沿用原来的，放在报告卡底部；「已送达客人」之类的状态 / 按钮复诊评估这边原来就没有，没有加 */
+function revSummaryText(c){
+  var rr = c.recoveryResult || {}, rec = c.revisitRec || {}, treat = rr.result==='treat';
+  var vs = String(c.videoSummary||'').replace(/\n*（演示翻译[^）]*）\s*$/, '').replace(/^【[^】]*】\s*/, '').replace(/^\s*恢复正常[，,。:：]?\s*/, '').replace(/^恢复正常，无需处理$/, '').trim();
+  var recTxt = treat ? ((rec.local ? '推荐的本地项目：'+rec.local : '')+(rec.suggestKr ? (rec.local ? '；' : '')+'建议赴韩处理'+(rec.suggestKrNote ? '（'+rec.suggestKrNote+'）' : '') : '')) : '';
+  return '评估结论：'+(treat ? '需要处理' : '恢复正常')+(vs ? '\n'+vs : '')+(recTxt ? '\n'+recTxt : (treat ? '\n没有推荐项目' : ''));
+}
+function revEvalActionsHtml(c){
+  var r = c.revisitRec || {}, treat = (c.recoveryResult||{}).result==='treat', ended = isEnded(c) || c.visitClosed, hasRec = treat && (r.local || r.suggestKr), btns = '';
+  if(!ended){
+    if(treat && r.local && !c.localTrack) btns += '<button class="btn-outline" onclick="revEvalStartLocal()">根据推荐选本地项目</button>';
+    if(treat && r.suggestKr) btns += '<button class="btn-outline" onclick="newCaseFromClient(\''+String(c.name).replace(/'/g,"\\'")+'\',\''+c.id+'\')">另开新案件（建议赴韩）</button>';
+  }
+  return (btns ? '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">'+btns+'</div>' : '')+
+    (!ended && !hasRec ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">没有推荐，可以让客人离店（页头状态卡上的［客人离店］）。</div>' : '')+
+    (treat && r.suggestKr ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">建议赴韩：先结束这个复诊评估，再用「另开新案件」（客户详情［新增案件］）开新案件，可在基础资料里关联本案件作参考。</div>' : '');
+}
+function revReportCardHtml(c){
+  var by = krCoordText(c.reportUploadedBy||'') || '—';
+  return '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:15px;font-weight:700;">报告</span><span style="font-size:12px;color:var(--slate2);">提交：'+esc0(c.reportDate||'—')+'，'+esc0(by)+'</span><button class="btn-outline" style="margin-left:auto;padding:4px 12px;font-size:12px;" onclick="openFullReport(\''+c.id+'\')">完整报告查看</button></div>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">评估摘要 <span class="status-pill" style="background:#EEF2FB;color:#3B5BA8;font-size:12px;font-weight:600;">AI 翻译</span></div><div style="font-size:13px;line-height:1.8;color:var(--navy);white-space:pre-wrap;">'+esc0(revSummaryText(c))+'</div>'+revEvalActionsHtml(c)+'</div>';
+}
+/* 四：「可选范围」改名「推荐项目」（KR 面诊 tab + IN 面诊 tab 共用）：购买情况｜项目名｜术后管理｜价格（最右）。
+   购买情况 = 已购买（项目在主案件里、对应结算单已付款）/ 未购买 / 已取消（买了又取消 / 被更换）；还没买之前（面诊刚出、等 IN 选项目）全部写「未购买」；在韩当场加买的项目不放进来 */
+function recBuyState(c, x){
+  var m = (typeof mainOf==='function' && mainOf(c)) || c, bs = m.settlementBatches || [], mine = (m.procedureItems||[]).filter(function(p){ return p.origin==='KR' && p.name===x.name && !p.krAddOn && !p.preBalanceAdd; });
+  if(mine.some(function(p){ if(p.cancelled || p.swapped) return false; var b = bs.filter(function(y){ return y.id===p.batchId; })[0]; return !(b && b.status==='unpaid'); })) return 'bought';
+  if(mine.some(function(p){ return p.cancelled || p.swapped; })) return 'cancelled';
+  return 'none';
+}
+function recProjectsRowsHtml(c, viewer){
+  var items = (c.krScope && c.krScope.items) || [], e = esc0, G = 'display:grid;grid-template-columns:84px minmax(0,1.5fr) minmax(0,1.6fr) '+(viewer==='KR' ? '120px' : '220px')+';gap:10px;align-items:start;';
+  if(!items.length) return '<div style="font-size:12px;color:var(--muted);padding:8px 0;">院长没有建议项目</div>';
+  var tagOf = function(st){ return st==='bought' ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">已购买</span>' : (st==='cancelled' ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;">已取消</span>' : '<span class="status-pill" style="background:var(--border2);color:var(--slate2);font-size:12px;">未购买</span>'); };
+  var head = '<div style="'+G+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);"><span>购买情况</span><span>项目名</span><span>术后管理</span><span style="text-align:right;">价格</span></div>';
+  return head+items.map(function(x){
+    var st = recBuyState(c, x), meta = []; try{ meta = itemMetaText(x).filter(function(t){ return t.indexOf('术后管理：')!==0; }); }catch(er){}
+    var pcs = (x.postcare||[]).map(function(p){ return e((p.name||p.mgmt||'术后管理')+' × '+(p.times||1)+(pcDayText(p) ? '（'+pcDayText(p)+'）' : '')); });
+    var price = !(x.price>0) ? '' : (viewer==='KR' ? (typeof isLocalProjectName==='function' && isLocalProjectName(x.name) ? '' : formatCurrency(x.price,'KRW')) : krIdrText(x.price));
+    return '<div style="'+G+'padding:10px 0;border-bottom:1px solid var(--border2);'+(st==='cancelled' ? 'color:var(--muted);' : '')+'"><span>'+tagOf(st)+'</span><div style="min-width:0;"><div style="font-size:13px;font-weight:700;'+(st==='cancelled' ? 'text-decoration:line-through;' : '')+'">'+e(buyName(x.name))+(x.note ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+e(x.note)+'</span>' : '')+'</div>'+(meta.length ? '<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.7;">'+meta.map(e).join('<br>')+'</div>' : '')+'</div><div style="font-size:13px;line-height:1.7;">'+(pcs.length ? pcs.join('<br>') : '<span style="color:var(--muted);">无</span>')+'</div><div style="font-size:13px;text-align:right;">'+e(price)+'</div></div>';
+  }).join('');
 }

@@ -5595,7 +5595,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(consultFeeOf(n)===0 && !consultFeePaid(n) && financeResultOf(m)==='无收入', '没有面诊费：面诊费金额 0、不计收入');
       var types = {}; CASE_ITEMS.forEach(function(c){ var tp = caseTypeOf(c); types[tp] = (types[tp]||0)+1; }); ST.ok(types['复诊评估']>=2 && types['新案件']>=1 && CASE_TYPES.length===4, '统计按类型：新案件 / 继续面诊 / 术后管理 / 复诊评估');
       ST.ok(/建议赴韩处理/.test(caseTabContentHtml((n.activeCaseTab='consult', n)).replace(/<[^>]+>/g,' ')) || true, '');
-      n.revisitRec.suggestKrNote = '下颚需要再评估'; var th2 = caseTabContentHtml((n.activeCaseTab='consult', n)); ST.ok(/译：/.test(th2.replace(/<[^>]+>/g,'')) && /查看原文/.test(th2), '建议赴韩的补充说明走备注自动翻译（译文 +［查看原文］）');
+      n.revisitRec.suggestKrNote = '下颚需要再评估'; var th2 = caseTabContentHtml((n.activeCaseTab='consult', n)); ST.ok(/下颚需要再评估/.test(th2.replace(/<[^>]+>/g,'')) && /AI 翻译/.test(th2) && /完整报告查看/.test(th2), '1027-05 改：建议赴韩的补充说明在报告卡「评估摘要（AI 翻译）」里，原文 / 译文在［完整报告查看］弹窗里切换（原：备注自动翻译 译文 +［查看原文］）');
       ST.mkRevEval('R97k', src); /* 留给 KM1 分页的夹具（等确认时间） */
     } finally { window.GMC_NO_FOLLOWASK = old; window.alert = oa; window.confirm = oc; }
   });
@@ -5804,7 +5804,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var html = consultReportV2Html(c, ''); ST.ok(/完整报告查看/.test(consultTabHtml(c)), '升级后 consultTabHtml 走新版：'+consultTabHtml(c).slice(0,120).replace(/<[^>]+>/g,''));
       ST.ok(/完整报告查看/.test(html) && /AI 翻译/.test(html) && /提交：/.test(html), '升级后：报告卡有提交信息 / AI 翻译 / ［完整报告查看］');
       ST.ok(!/查看方案/.test(html.replace(/看进度[^<]*/g, '')), '没有［查看方案］');
-      ST.ok(/R146隆鼻|可选范围/.test(html), '可选范围卡列出建议项目');
+      ST.ok(/R146隆鼻/.test(html) && /推荐项目/.test(html) && !/可选范围/.test(html), '1027-05 改：卡片叫「推荐项目」（原：可选范围），列出建议项目');
       openFullReport(c.id); ST.ok(!!document.getElementById('rptfull-overlay') && document.getElementById('rptfull-overlay').classList.contains('open') && /下载/.test(document.getElementById('rptfull-overlay').innerText) && /关闭/.test(document.getElementById('rptfull-overlay').innerText), '完整报告 Modal：下载 / 打印 / 关闭');
       closeFullReport();
     } finally { window.isUpgraded = origUp; }
@@ -5966,6 +5966,81 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(function(c){ delete c.krTripEnded; c.tripSnooze = ''; c.stay = {in:ymdAdd(td, -8), out:'', inTime:'', outTime:''}; c.krProcedureDone = true; c.settlementDone = true; c.visitClosed = false; });
       ST.ok(mut(function(c){ return tripAskWhy(c)!=='' || true; }) && (function(){ var c = gc(); c.stay.out = ymdAdd(td, 5); return tripAskWhy(c)===''; })(), '一：离开日期填了 → 不再有「韩国行程是否结束？」提醒');
     } finally { var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
+
+  ST.def('R150a','CMD-1027-05（A1 分页）：复诊评估正式报告（无照片）· IN 复诊 tab = 复诊卡 + 报告卡（主 / 子案件同一组件）· 面诊 tab 的「推荐项目」栏位与已购买 / 未购买 / 已取消',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+      var src = ST.newRes('R150s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.reportReady = true; src.consultStatus = 'report_ready'; src.projectsEnabled = true; src.consultRequested = true; src.krTripEnded = true;
+      src.procedureItems = [{origin:'KR', name:'隆鼻', price:2000000, done:true, doneAt:nowFullDt()}, {origin:'KR', name:'R150取消', price:500000, cancelled:true}];
+      src.krScope = {items:[{name:'隆鼻', price:2000000, anesthesia:{type:'local', label:'局部麻醉'}, postcare:[{name:'拆线', mgmt:'拆线', times:1, startDay:7, place:'KR'}]}, {name:'R150眼角', price:1000000, postcare:[]}, {name:'R150取消', price:500000, postcare:[]}], overallNote:''};
+      /* 四：推荐项目 */
+      var h4 = consultReportV2Html(src, '');
+      ST.ok(/推荐项目/.test(h4) && !/可选范围/.test(h4) && !/项目确认中/.test(h4), '四：IN 卡片叫「推荐项目」，没有「可选范围 / 项目确认中」');
+      ST.ok(/购买情况/.test(h4) && /项目名/.test(h4) && /术后管理/.test(h4) && /价格/.test(h4) && h4.indexOf('购买情况')<h4.indexOf('项目名') && h4.indexOf('项目名')<h4.indexOf('术后管理') && h4.indexOf('术后管理')<h4.lastIndexOf('价格'), '四：栏位顺序 购买情况｜项目名｜术后管理｜价格（最右）');
+      ST.ok(/已购买/.test(h4) && /未购买/.test(h4) && /已取消/.test(h4), '四：购买情况 已购买 / 未购买 / 已取消 都出现');
+      ST.ok(/拆线×1（第7天）/.test(h4.replace(/\s/g, '')) && />无</.test(h4), '四：术后管理写「拆线 × 1（第7天）」，没有术后管理的写「无」');
+      ST.ok(/Rp/.test(h4) && /₩/.test(h4), '四：IN 价格 印尼盾为主、韩元放括号');
+      ST.ok(/看进度 → 赴韩施术/.test(h4), '四：「看进度 → 赴韩施术」小链接保留');
+      src.procedureItems = []; var h4b = consultReportV2Html(src, ''); ST.ok(!/已购买/.test(h4b) && (h4b.match(/未购买/g)||[]).length===3, '四：还没买之前全部「未购买」');
+      src.procedureItems = [{origin:'KR', name:'隆鼻', price:2000000, done:true, doneAt:nowFullDt()}, {origin:'KR', name:'R150取消', price:500000, cancelled:true}];
+      /* 一 / 三：复诊评估记录 */
+      var n = ST.mkRevEval('R150k', src); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0];
+      Object.assign(n, {consultStatus:'report_ready', reportReady:true, reportDate:todayStr(), reportUploadedBy:'KM1 室长', videoSummary:'恢复正常，右眼肿胀已消退，建议继续观察。', reportKo:'오른쪽 눈 붓기가 가라앉았습니다. 경과 관찰을 권장합니다.', followProjects:['埋线双眼皮', '开内眼角'], revisitQuestion:'右眼还有点肿，需要再处理吗？', director:src.director});
+      n.recoveryResult = {result:'treat', by:n.director||'KD1 院长', at:nowFullDt()}; n.revisitRec = {local:'LDM 红血丝管理', suggestKr:true, suggestKrNote:'下颚角再处理'};
+      var doc = revReportDocHtml(n, false, true);
+      ST.ok(/GMC NETWORK/.test(doc) && /复诊评估报告/.test(doc) && doc.indexOf(n.caseNo)>-1, '一：抬头 GMC NETWORK + 复诊评估报告 + Case ID（子案件号 '+n.caseNo+'）');
+      ST.ok(/评估院长/.test(doc) && /出具日期/.test(doc) && /医院/.test(doc) && /客人/.test(doc), '一：客人 / 评估院长 / 医院 / 出具日期');
+      ST.ok(/复诊想问的内容/.test(doc) && /右眼还有点肿/.test(doc), '一：复诊想问的内容（客人当时问的）');
+      ST.ok(/评估项目/.test(doc) && /埋线双眼皮/.test(doc) && /开内眼角/.test(doc) && /需要处理/.test(doc), '一：评估项目 + 评估结论');
+      ST.ok(/院长评估意见/.test(doc) && /右眼肿胀已消退/.test(doc) && /AI 翻译/.test(doc) && /看原文/.test(doc), '一：中文翻译（AI 翻译）+［看原文］');
+      ST.ok(/院长建议/.test(doc) && /LDM 红血丝管理/.test(doc) && /建议赴韩处理：下颚角再处理/.test(doc), '一：院长建议（推荐本地项目 / 建议赴韩 + 说明）');
+      ST.ok(!/<img|照片|photo/i.test(doc), '一：报告里没有照片');
+      ST.ok(/오른쪽 눈/.test(revReportDocHtml(n, true, true)) && /看翻译/.test(revReportDocHtml(n, true, true)), '一：看原文 → 韩文原文 +［看翻译］');
+      ST.ok(new RegExp(esc0(n.director||'').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(doc) && /font-style:italic/.test(doc), '一：院长签名');
+      /* 三：子案件页复诊评估 tab */
+      var tab = revEvalTabHtml(n), iHead = tab.indexOf('复诊评估 ·'), iRep = tab.indexOf('>报告<');
+      ST.ok(iHead>-1 && iRep>iHead, '三：复诊卡在上、报告卡在下');
+      ST.ok(/提交：/.test(tab) && /KM1 室长/.test(tab) && /AI 翻译/.test(tab) && /评估摘要/.test(tab) && /完整报告查看/.test(tab), '三：报告卡 = 提交（日期，KR 室长）+ 评估摘要（AI 翻译）+［完整报告查看］');
+      ST.ok(/根据推荐选本地项目/.test(tab) && /另开新案件（建议赴韩）/.test(tab) && !/查看复诊评估结果/.test(tab), '三：IN 后续动作沿用、放在报告卡上；原「查看复诊评估结果 →」被［完整报告查看］取代');
+      ST.ok(!/<img/.test(tab), '三：报告卡没有照片');
+      openFullReport(n.id); var ov = document.getElementById('rptfull-overlay');
+      ST.ok(ov && ov.classList.contains('open') && /复诊评估报告/.test(ov.innerText) && /下载/.test(ov.innerText) && /打印/.test(ov.innerText) && /关闭/.test(ov.innerText), '三：［完整报告查看］弹出复诊评估报告，有［下载］［打印］［关闭］');
+      closeFullReport();
+      /* 主案件复诊 tab */
+      var m = mainOf(n); var fd = flowDetailIn(m, {kind:'revisit', caseId:n.id});
+      ST.ok(/完整报告查看/.test(fd) && /复诊评估 ·/.test(fd) && fd.indexOf('复诊评估 ·')<fd.indexOf('>报告<'), '三：主案件复诊 tab 同一个组件（复诊卡 + 报告卡）');
+      /* 结果没出来：照现在 */
+      n.consultStatus = 'paid_waiting_kr'; n.reportReady = false; var tab0 = revEvalTabHtml(n); ST.ok(!/完整报告查看/.test(tab0) && /等待 KR 室长确认时间/.test(tab0), '三：结果没出来 → 照现在的显示（没有报告卡）');
+    }finally{ window.alert = oa; window.confirm = oc; try{ closeFullReport(); }catch(e){} }
+  });
+  ST.def('R150b','CMD-1027-05（KM1 分页，pcStage 夹具）：KR 面诊 / 复诊报告卡［查看报告］（默认原文 / 可切译文 / 室长院长同一函数）· KR「推荐项目」',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc()), txt = function(h){ return String(h).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); };
+    try{
+      mut(function(c){ Object.assign(c, {consultStatus:'report_ready', reportReady:true, reportDate:todayStr(), reportUploadedBy:'KM1 室长', videoSummary:'面诊摘要中文', reportKo:'면담 요약 한국어', revisitEval:undefined, consultKind:undefined, reuseReport:undefined, director:c.director||'KD1 院长'}); delete c.revisitEval; delete c.consultKind; delete c.reuseReport; c.krScope = {items:[{name:'R150隆鼻', price:2000000, postcare:[{name:'拆线', mgmt:'拆线', times:1, startDay:7, place:'KR'}]}, {name:'R150眼角', price:1000000, postcare:[]}], overallNote:''}; c.procedureItems = (c.procedureItems||[]).filter(function(p){ return !/^R150/.test(p.name); }).concat([{origin:'KR', name:'R150隆鼻', price:2000000, batchId:'B1'}]); });
+      KR_CASE.clinicId = cid; KR_CASE.id = r0.id;
+      var h = Store.withClinic(cid, function(){ return krTabConsult(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); });
+      ST.ok(/查看报告/.test(h) && h.indexOf('查看报告')<h.indexOf('面诊摘要'), '二：面诊 tab 报告卡右上有［查看报告］');
+      ST.ok(/推荐项目/.test(h) && !/可选范围/.test(h) && /购买情况/.test(h) && /未购买/.test(h) && /拆线×1（第7天）/.test(txt(h).replace(/\s/g, '')), '四：KR 面诊 tab「推荐项目」栏位 + 购买情况 + 术后管理');
+      ST.ok(/₩/.test(h) && !/Rp\s/.test(txt(h)), '四：KR 价格显示韩元');
+      krOpenReport(cid, r0.id); var ov = document.getElementById('rptfull-overlay');
+      ST.ok(ov && ov.classList.contains('open') && /면담 요약 한국어/.test(ov.innerText) && /看翻译/.test(ov.innerText), '二：KR 弹窗默认原文（韩文），有［看翻译］');
+      ST.ok(/下载/.test(ov.innerText) && /打印/.test(ov.innerText) && /关闭/.test(ov.innerText), '二：弹窗有［下载］［打印］［关闭］');
+      toggleReportOrig(); ST.ok(/面诊摘要中文/.test(document.getElementById('rptfull-overlay').innerText), '二：切到译文');
+      closeFullReport();
+      ST.ok(!/krCan|krIsDirector|krCanFix/.test(krReportBtn.toString()), '二：室长和院长同一个按钮函数，没有权限判断');
+      /* 复诊评估结果卡 */
+      mut(function(c){ c.revisitEval = {at:nowFullDt()}; c.recoveryResult = {result:'treat', by:'KD1 院长', at:nowFullDt()}; c.revisitRec = {local:'LDM', suggestKr:false}; c.followProjects = ['埋线双眼皮']; c.revisitQuestion = '右眼还有点肿'; });
+      var h2 = Store.withClinic(cid, function(){ return krTabConsult(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); });
+      ST.ok(/复诊评估结果/.test(h2) && /查看报告/.test(h2), '二：复诊评估结果卡右上也有［查看报告］');
+      krOpenReport(cid, r0.id); ov = document.getElementById('rptfull-overlay'); ST.ok(/复诊评估报告/.test(ov.innerText) && !/<img/.test(ov.innerHTML), '二：弹窗是复诊评估报告（无照片）'); closeFullReport();
+    } finally { try{ closeFullReport(); }catch(e){} var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
   });
 
 })();
