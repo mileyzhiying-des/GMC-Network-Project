@@ -133,7 +133,7 @@ function krTodoItems(rows){
   var meId = me ? me.id : '';
   rows.forEach(function(r){
     var c = r.c, mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name)), push = function(it){ it.mine = mine; it.rowKey = r.clinicId+':'+r.id; out.push(it); };
-    var goCase = function(tab){ return function(){ if(r.kidOf){ krShowCase(r.clinicId, r.kidOf, {tab:'revisit', flow:todoKidFlowKey(r)}); return; } krShowCase(r.clinicId, r.id, {tab:tab}); }; }; /* CMD-1026-14 一：复诊评估子记录 KR 没有自己的案件页，点了进主案件的复诊 tab 并展开那一笔 */
+    var goCase = function(tab){ return function(){ if(r.kidOf){ krShowCase(r.clinicId, r.id, {tab:'consult'}); return; } /* CMD-1028-04 二：直接进这一笔复诊评估的子案件页 */ krShowCase(r.clinicId, r.id, {tab:tab}); }; }; /* CMD-1026-14 一：复诊评估子记录 KR 没有自己的案件页，点了进主案件的复诊 tab 并展开那一笔 */
     if(work){
       krLockedKeys(c).forEach(function(k0){ /* CMD-1026-20：关账后没确认结束的韩国到院 → 提醒 KR 主跟室长（他 OFF 时同医院其他室长也看得到） */
         var day0 = k0==='main' ? mainVisitDay(c) : String(k0).split('|')[1], itK = todoMk('dayconfirm', String(day0).slice(5).replace('-', '/')+' '+krDayNoTxt(c, k0)+' 韩国到院还没结束，请确认', c, '', true, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ krDayConfirmOpen(r.clinicId, r.id, k0); }, 200); });
@@ -433,7 +433,7 @@ function todoCareBookClose(){ var ov = document.getElementById('todo-cb-overlay'
 function todoCareBookGo(){
   var B = TODO_CB; if(!B || !B.time) return; var c = CASE_ITEMS.filter(function(x){ return x.id===B.caseId; })[0]; if(!c) return;
   if(slotBlockReason(B.date, B.time)){ alert('这个时间不能约，请换一个'); return; }
-  if(B.edit){ var erc = CASE_ITEMS.filter(function(x){ return x.id===B.edit; })[0]; if(erc){ var od = erc.visitDate+' '+erc.visitTime; erc.visitDate = B.date; erc.visitTime = B.time; logCaseEvent(c, actingName(), '修改术后管理预约时间：'+B.label+'，'+od+' → '+B.date+' '+B.time, '术后管理'); logCaseEvent(erc, actingName(), '预约修改：'+od+' → '+B.date+' '+B.time); todoCareBookClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){} return; } }
+  if(B.edit){ var erc = CASE_ITEMS.filter(function(x){ return x.id===B.edit; })[0]; if(erc){ var od = erc.visitDate+' '+erc.visitTime; erc.visitDate = B.date; erc.visitTime = B.time; try{ var mm1 = erc.mainId ? mainOf(erc) : c; if(mm1 && mm1.dayNoOn) dayNoSync(mm1); }catch(e){} logCaseEvent(c, actingName(), '修改术后管理预约时间：'+B.label+'，'+od+' → '+B.date+' '+B.time, '术后管理'); logCaseEvent(erc, actingName(), '预约修改：'+od+' → '+B.date+' '+B.time); todoCareBookClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){} return; } }
   var m0 = mainOf(c), exm = childResvOf(m0, B.date) || pendingResvSameDay(c.name, B.date), rc;
   if(exm && exm.mainId && exm.mainId!==m0.id) exm = null;
   if(exm && (exm.mainId===m0.id || !exm.careFor || exm.careFor.caseId===c.id)){ rc = exm; rc.careFor = {caseId:c.id, keys:((rc.careFor && rc.careFor.keys) || []).concat([B.key])}; logCaseEvent(c, actingName(), '预约术后管理（合并到当天已有的预约 '+exm.visitTime+'）：'+B.label+'，'+B.date, '术后管理'); logCaseEvent(rc, actingName(), '术后管理并入这次预约，继续原案件 '+c.caseNo+'：'+B.label); B.time = exm.visitTime; }

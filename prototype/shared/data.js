@@ -999,6 +999,7 @@ function simulateCustomerReschedule(caseId, newDow, newTime){
   var ws = new Date(c.visitDate+'T00:00:00'); ws.setDate(ws.getDate() - dowOfDate(c.visitDate));
   ws.setDate(ws.getDate()+DOW_CN.indexOf(newDow));
   c.visitDate = dateStr(ws); c.visitTime = newTime;
+  try{ var mm2 = c.mainId ? mainOf(c) : null; if(mm2 && mm2.dayNoOn) dayNoSync(mm2); }catch(e){} /* CMD-1028-04 一 */
   if(CAL_MODE==='week') buildWeekGrid();
   pushNotif('预约', '客人改约：'+c.name+' 原 '+oldLabel+' → 新 '+dateLabel(c.visitDate)+' '+newTime, {caseId:c.id, link:{kind:'resvHistory'}}); /* IN-17 */
 }
@@ -2783,7 +2784,11 @@ function joinMain(c, src){
   /* CMD-1026-09 C：子案件号按确认继续（joinMain）的先后顺序一个接一个，下一个号 = 这个主案件现有最大号 + 1，不再按日期排序的位置；同一天已有这个主案件的另一笔来访 → 同一个子案件、同一个号；给了就不再改（已有的号不重编） */
   dayNoSync(m); /* CMD-1026-13：先让主案件开始编号（升级当天 -01） */
   var vs0 = visitsOf(m), sameDay = vs0.filter(function(v){ return v.caseId!==c.id && v.date===c.visitDate && v.place==='IN'; })[0];
-  if(m.dayNoOn){ c.caseNo = dayNoAssign(m, c.visitDate, c.krVisit ? 'KR' : 'IN'); }
+  if(m.dayNoOn && c.preChild && String(c.caseNo||'').indexOf((m.caseNo||'')+'-')===0){ /* CMD-1028-04 一：从主案件约的预约建立时就有号，到店沿用（改过期也不换） */
+    var kk = dayNoKey(c.visitDate, c.krVisit ? 'KR' : 'IN'); m.dayNos = m.dayNos||{};
+    Object.keys(m.dayNos).forEach(function(o){ if(o!==kk && m.dayNos[o]===c.caseNo) delete m.dayNos[o]; });
+    m.dayNos[kk] = c.caseNo; }
+  else if(m.dayNoOn){ c.caseNo = dayNoAssign(m, c.visitDate, c.krVisit ? 'KR' : 'IN'); }
   else if(sameDay) c.caseNo = sameDay.no;
   else { var mx1 = mainNoMax(m, c.id); c.caseNo = (m.caseNo||'')+'-'+pad2(mx1+1); } /* CMD-1026-11 七：和韩国行共用一套号 */
   if(old && old!==c.caseNo && old==='A'+String(CASE_NO_SEQ-1).padStart(6,'0')){ CASE_NO_SEQ--; c._seqBack = true; }
@@ -5688,7 +5693,22 @@ function dayNoSync(m){
     m.dayNoOn = true; m.dayNos = m.dayNos||{}; m.dayNoSeq = m.dayNoSeq||0;
     if(m.visitDate) dayNoAssign(m, m.visitDate, m.krVisit ? 'KR' : 'IN');
   }
-  try{ visitsOf(m).filter(function(v){ return !dayNoGet(m, v.date, v.place); }).forEach(function(v){ dayNoAssign(m, v.date, v.place); }); }catch(e){}
+  try{ var vs0 = visitsOf(m); dayNoRelocate(m, vs0); vs0.filter(function(v){ return !dayNoGet(m, v.date, v.place); }).forEach(function(v){ dayNoAssign(m, v.date, v.place); }); }catch(e){}
+}
+/* CMD-1028-04 一：改期不换号。原来这里只会「没号的日子就占一个新号」，一笔预约 / 一天的项目改到新日期后，新日期没有号 → 又占一个新号（-09 改期变 -10），旧日期的号变成没人用的孤号。
+   现在先配对：登记表里「已经没有任何一天对应」的孤号（旧日期）→ 搬给新出现、还没号的日子——① 子记录：号 = 自己 caseNo 的那个孤号 ② 韩国的天：同一地点只有一个孤号、一个没号的日子（KR 整天改时间 / 到院改日子 / 行程修正提前做）。配不上（一个以上）才当新的一天给新号。 */
+function dayNoRelocate(m, vs){
+  if(!m || !m.dayNos) return;
+  var live = {}; vs.forEach(function(v){ live[dayNoKey(v.date, v.place)] = 1; });
+  var orphans = Object.keys(m.dayNos).filter(function(k){ return !live[k]; });
+  if(!orphans.length) return;
+  var un = vs.filter(function(v){ return !dayNoGet(m, v.date, v.place); });
+  un.forEach(function(v){
+    var ch = v.caseId!==m.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, own = (ch && isChildVisit(ch)) ? ch.caseNo : '', k = '';
+    if(own) k = orphans.filter(function(o){ return m.dayNos[o]===own; })[0] || '';
+    if(!k && v.place==='KR'){ var sp = orphans.filter(function(o){ return o.split('|')[1]===v.place; }), spUn = un.filter(function(u){ return u.place===v.place; }); if(sp.length===1 && spUn.length===1) k = sp[0]; }
+    if(k){ m.dayNos[dayNoKey(v.date, v.place)] = m.dayNos[k]; delete m.dayNos[k]; orphans.splice(orphans.indexOf(k), 1); }
+  });
 }
 /* 项目行的内部 id：新主案件用 A000011#3（不是子案件号）；旧主案件沿用旧的 -NN */
 function subNextNo(c){
@@ -9474,13 +9494,20 @@ function revEvalTabHtml(c){
   var tip = {'等确认时间':'等 KR 室长确认评估时间和结果时间（院长看资料后评估，不收费）', '等评估':'等院长评估（室长可代输入，需院长授意）', '评估中':'院长评估中', '评估完成 · 等 KR 传结果':'院长已评估，等 KR 室长传结果'}[st] || '';
   var done = !!(c.reportReady || c.consultStatus==='report_ready'); /* CMD-1027-05 三：结果出来后 = 复诊卡（状态）在上、报告卡在下（和面诊 tab 同格式）；原来是结果卡放最上面 */
   var q = String(c.revisitQuestion||'').trim();
-  var open = !!REV_OPEN[c.id], stTxt = done ? '已出结果' : ({'等确认时间':'等待 KR 室长确认时间'}[st] || st); /* CMD-1026-09 A1：复诊评估卡默认收起，标题行状态文字跟实际状态变，最右［展开］ */
-  var head = '<div style="display:flex;align-items:center;gap:10px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:13px;font-weight:700;flex:1;">复诊评估 · '+cesc(stTxt)+'</span>'+(urgeInfo(c) ? '<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button>' : '')+'<button class="btn-outline" style="padding:3px 12px;font-size:12px;" onclick="toggleRevOpen(\''+c.id+'\')">'+(open ? '收起' : '展开')+'</button></div>';
-  return '<div class="card" style="padding:18px 24px;">'+head+(done ? revNextRowHtml(c) : '')+(open ? '<div style="margin-top:12px;">'+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:12px;color:var(--muted);">'+(src ? '继续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
-    (done ? '' : subStatusRowHtml([{kind:'Waiting', text:st}])+(tip ? '<div style="font-size:13px;color:var(--slate2);margin-bottom:8px;">'+tip+'</div>' : ''))+
+  var stTxt = done ? '已出结果' : ({'等确认时间':'等待 KR 室长确认时间'}[st] || st);
+  /* CMD-1028-04 三：复诊卡 = 状态 + 继续哪个案件 + 复诊想问的内容，项目的照片 / 视频默认折叠（点开才看）；下面一定有报告卡（结果没到 = 等待评估结果（预计时间）+ 状态文字；到了 = 提交 + 摘要 +［完整报告查看］）。
+     05 没生效的原因：① 主案件复诊 tab（flowDetailIn）只在结果到了才放这个组件，结果没到只有一个［打开复诊评估］按钮；② 结果没到时本卡只有一张默认收起 / 展开后摊开全部照片的大卡，没有报告卡；③ 项目卡没折叠（revProjCardsHtml 没传 collapse） */
+  var head = '<div style="display:flex;align-items:center;gap:10px;"><span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);">复诊评估</span><span style="font-size:13px;font-weight:700;flex:1;">复诊评估 · '+cesc(stTxt)+'</span>'+(urgeInfo(c) ? '<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button>' : '')+'</div>';
+  return '<div class="card" style="padding:18px 24px;">'+head+(done ? revNextRowHtml(c) : '')+'<div style="margin-top:12px;">'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><span style="font-size:12px;color:var(--muted);">'+(src ? '继续 '+cesc(src.caseNo)+' · ' : '')+'不收费</span></div>'+
     (c.wantConsult ? '<div style="font-size:12px;color:var(--muted);">客人希望的时间：'+cesc(c.wantConsult)+'</div>' : '')+
     (q ? '<div style="font-size:12px;font-weight:700;margin:8px 0 4px;">复诊想问的内容</div><div style="padding:8px 10px;background:var(--surface2,#faf6ef);border-radius:8px;">'+cesc(q)+'</div>' : '')+
-    revProjCardsHtml(c)+'</div>' : '')+'</div>'+(done ? '<div style="height:14px;"></div>'+revReportCardHtml(c) : '');
+    revProjCardsHtml(c, {collapse:true})+'</div></div><div style="height:14px;"></div>'+(done ? revReportCardHtml(c) : revReportPendingHtml(c, st, tip));
+}
+/* 结果还没到：报告卡位置写「等待评估结果（预计 MM/DD HH:mm）」+ 现在的状态文字 */
+function revReportPendingHtml(c, st, tip){
+  var eta = c.reportEta ? fmtUtc(c.reportEta).slice(5).replace('-', '/') : '';
+  return '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;"><span style="font-size:15px;font-weight:700;">报告</span><span style="font-size:13px;color:var(--slate2);">等待评估结果'+(eta ? '（预计 '+cesc(eta)+'）' : '（KR 还没确认时间）')+'</span></div>'+subStatusRowHtml([{kind:'Waiting', text:st}])+(tip ? '<div style="font-size:13px;color:var(--slate2);margin-top:6px;">'+tip+'</div>' : '')+'</div>';
 }
 var REV_OPEN = {};
 function toggleRevOpen(id){ REV_OPEN[id] = !REV_OPEN[id]; var c = getCurrentCase() || CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); } /* CMD-1027-05：主案件复诊 tab 里展开的是子记录，重画当前页 */
@@ -10379,7 +10406,7 @@ function flowDetailIn(c, r){
   if(r.kind==='consult') return c.consultRequested ? consultTabHtml(c) : '<div style="font-size:12px;color:var(--muted);">没有面诊资料</div>';
   if(r.kind==='krTrip') return showKrTab(c) ? krTabContent(c) : '<div style="font-size:12px;color:var(--muted);">还没有赴韩项目</div>';
   var ch = CASE_ITEMS.filter(function(x){ return x.id===r.caseId; })[0];
-  return '<div style="font-size:13px;line-height:1.8;">复诊评估在回来那天的子案件里处理'+(ch ? '（'+cesc(ch.caseNo)+'）' : '')+'。 <button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="openCaseNewTab(\''+r.caseId+'\')">打开复诊评估</button></div>'+(ch && (ch.reportReady || ch.consultStatus==='report_ready') ? '<div style="margin-top:10px;">'+revEvalTabHtml(ch)+'</div>' : ''); /* CMD-1027-05 三：同一个组件（复诊卡 + 报告卡） */
+  return '<div style="font-size:13px;line-height:1.8;">复诊评估在回来那天的子案件里处理'+(ch ? '（'+cesc(ch.caseNo)+'）' : '')+'。 <button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="openCaseNewTab(\''+r.caseId+'\')">打开复诊评估</button></div>'+(ch ? '<div style="margin-top:10px;">'+revEvalTabHtml(ch)+'</div>' : ''); /* CMD-1028-04 三：结果没到也放同一个组件 */ /* CMD-1027-05 三：同一个组件（复诊卡 + 报告卡） */
 }
 function flowTabHtml(c, force){ return flowRowsHtml(c, {detail:function(r){ return flowDetailIn(c, r); }, forceOpen:force}); }
 /* opts.detail(row) 返回展开内容；opts.toggle(key) 展开函数名；forceOpen = 要强制展开的流程 key */

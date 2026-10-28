@@ -3640,8 +3640,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var ph = inPostcareTabHtml(p0); ST.ok(!/查看今天/.test(ph) && !/>操作完成</.test(ph), 'B3：术后管理 tab 今日行没有［查看今天 →］也没有［操作完成］');
     /* A：子案件页项目卡 */
     ch.revisitEval = {at:nowFullDt()}; ch.consultRequested = true; ch.consultStatus = 'paid_waiting_kr'; ch.revisitQuestion = '想问R135问题'; ch.careToday = ['r135s'];
-    var rh = revEvalTabHtml(ch); ST.ok(/复诊评估 · 等待 KR 室长确认时间/.test(rh) && rh.indexOf('想问R135问题')<0 && />展开</.test(rh), 'A1：复诊评估卡默认收起，标题行带状态 +［展开］');
-    toggleRevOpen(ch.id); ST.ok(revEvalTabHtml(ch).indexOf('想问R135问题')>-1, 'A1：展开后显示询问问题'); toggleRevOpen(ch.id);
+    var rh = revEvalTabHtml(ch); ST.ok(/复诊评估 · 等待 KR 室长确认时间/.test(rh) && rh.indexOf('想问R135问题')>-1 && />报告</.test(rh) && /等待评估结果/.test(rh), 'A1（CMD-1028-04 改）：复诊卡标题行带状态、想问的内容直接显示，下面是报告卡「等待评估结果」（原：默认收起 +［展开］）');
   });
 
   ST.def('R137b','CMD-1026-11（KM1 分页，需要 pcStage 夹具）：KR 面诊报告出来后，面诊卡 + 到访目的合成一张（默认折叠，展开全部打开）',function(){
@@ -4015,8 +4014,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       m.krTripEnded = null; m.visitClosed = false; m.subItems = (m.subItems||[]).filter(function(s){ return s.id!=='r140a' && s.id!=='r140b'; }).concat([{id:'r140a', no:m.caseNo+'#a', kind:'术后管理记录', place:'IN', content:'术后复诊', date:ymdAdd(td, -4), done:false}, {id:'r140b', no:m.caseNo+'#b', kind:'术后管理记录', place:'IN', content:'拆线', date:ymdAdd(td, -3), done:false}]); });
     /* 1 点进去 */
     var it = krTodoItems(krAllCases()).filter(function(i){ return i.caseId==='r140kid' && i.kind==='eta'; })[0]; ST.ok(!!it, '1：复诊评估待办在');
-    it.go(); ST.ok(CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE.id===mid && KR_CASE.tab==='revisit', '1：点了进入 KR 主案件的复诊 tab：'+CURRENT_PAGE_ID+' '+(KR_CASE&&KR_CASE.tab));
-    ST.ok(FLOW_OPEN[mid+':revisit1'] && document.getElementById('kr-casedetail').innerText.indexOf('打开复诊评估')>-1, '1：直接展开那一笔复诊评估 #1（有［打开复诊评估］）');
+    window.GMC_NO_TABS = true; it.go(); ST.ok(CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE.id===it.caseId && KR_CASE.tab==='consult', '1（CMD-1028-04 改：原来进主案件复诊 tab 展开 #1）：点了直接进这一笔复诊评估的子案件页：'+CURRENT_PAGE_ID+' '+(KR_CASE&&KR_CASE.tab));
+    ST.ok(/回到主案件/.test(document.getElementById('krcase-body').innerText), '1：子案件页版面有「← 回到主案件」');
     ST.ok(!!krFindCase(cid, 'r140kid'), '1：［打开复诊评估］用的子记录号也能找到案件（原来找不到）'); krOpenCase(cid, 'r140kid'); ST.ok(KR_CASE.id==='r140kid', '1：能打开那一笔复诊评估页');
     /* 2 提醒合成一条 */
     var pc = krTodoItems(krAllCases()).filter(function(i){ return i.kind==='pcdue' && i.caseId===mid; }); ST.ok(pc.length===1 && /术后复诊/.test(pc[0].text) && /拆线/.test(pc[0].text), '2：同一案件两笔过期术后管理合成一条（原来两条同 key）：'+pc.length);
@@ -4748,6 +4747,86 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var hl = krTabConsult(gc()); ST.ok(/旧资料/.test(hl) && /室长代录/.test(hl), '旧资料：页面标「室长代录（旧资料）」，不报错');
       krRvSetIdx('op', 0, '旧：恢复良好'); krRvSetIdx('op', 1, '旧：正常'); al.length = 0; krSubmitReport(); ST.ok(gc().reportReady && gc().revisitProxy===true, '旧资料：填完逐项意见就能发送，报告标代录');
     } finally { window.alert = oa; window.confirm = oc; var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
+  /* ===== CMD-1028-04 ===== */
+  ST.def('R163a','CMD-1028-04 一 三（A1 分页，pcStage 夹具；R104a 先跑过）：改期不换号（IN 改期 / 取消接待再到店 / KR 整天改日子）· IN 复诊评估 tab 复诊卡 + 报告卡（结果未到 / 已到）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor && !x.mainId; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var td = todayStr(), openDay = function(from){ var d = from; for(var i = 0; i < 60; i++){ if(todoCbTimes(d).length) return d; d = ymdAdd(d, 1); } return d; };
+    var snapKeys = {dayNoOn:c.dayNoOn, dayNos:c.dayNos, dayNoSeq:c.dayNoSeq};
+    try{
+      CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.mainId===c.id && x.preChild) && !x.careFor; });
+      c.dayNoOn = true; c.dayNos = {}; c.dayNoSeq = 0; (c.subItems||[]).forEach(function(x, i){ x.no = c.caseNo+'#'+(i+1); }); dayNoSync(c);
+      var d1 = openDay(ymdAdd(td, 4)), d2 = openDay(ymdAdd(d1, 2)), d3 = openDay(ymdAdd(d2, 2));
+      var rc = createChildReservation(c, d1, todoCbTimes(d1)[0], '术后管理', {careFor:{caseId:c.id, keys:['x']}}), no0 = rc.caseNo, seq0 = c.dayNoSeq;
+      ST.ok(new RegExp('^'+c.caseNo+'-\\d+$').test(no0) && c.dayNos[d1+'|IN']===no0, '约的时候给号：'+no0);
+      var rs = function(cc, d){ RESCHED_CASE_ID = cc.id; RESCHED_SELECTED_DATE = new Date(d+'T00:00:00'); RESCHED_SELECTED_TIME = todoCbTimes(d)[0]; confirmReschedule(); };
+      rs(rc, d2); dayNoSync(c);
+      ST.ok(rc.visitDate===d2 && rc.caseNo===no0 && c.dayNos[d2+'|IN']===no0 && !c.dayNos[d1+'|IN'] && c.dayNoSeq===seq0, '改期 '+d1+' → '+d2+'：号不变 '+rc.caseNo+'，新日期用原号、旧日期登记搬走、计数器没动（'+seq0+' → '+c.dayNoSeq+'）');
+      ST.ok(visitsOf(c).filter(function(v){ return v.caseId===rc.id; })[0].no===no0, 'visitsOf 也读原号');
+      rs(rc, d3); ST.ok(rc.caseNo===no0 && c.dayNos[d3+'|IN']===no0 && c.dayNoSeq===seq0, '再改一次期，号还是 '+no0);
+      /* 到店（joinMain 幂等）→ 取消接待 → 改期 → 再到店 */
+      rc.subState = 'arrived'; rc.hasArrived = true; joinMain(rc, c); ST.ok(rc.caseNo===no0 && c.dayNos[d3+'|IN']===no0, '到店后号不变');
+      var d4 = openDay(ymdAdd(d3, 2)); rs(rc, d4); joinMain(rc, c); dayNoSync(c);
+      ST.ok(rc.caseNo===no0 && c.dayNos[d4+'|IN']===no0 && c.dayNoSeq===seq0, '到店后再改期 + 重新到店：号还是 '+rc.caseNo);
+      /* 真的新建一天才给新号 */
+      var d5 = openDay(ymdAdd(d4, 3)), rc2 = createChildReservation(c, d5, todoCbTimes(d5)[0], '术后管理', {careFor:{caseId:c.id, keys:['y']}});
+      ST.ok(rc2.caseNo!==no0 && c.dayNoSeq===seq0+1, '新建的一天拿新号 '+rc2.caseNo);
+      /* KR 整天改日子：术后管理行 */
+      var row = {id:'r163', no:c.caseNo+'#99', date:ymdAdd(td, 20), time:'11:00', content:'术后管理（R163 拆线）', kind:'术后管理记录', place:'KR', projectName:'', done:false};
+      c.subItems = (c.subItems||[]).concat([row]); dayNoSync(c); var krNo = c.dayNos[row.date+'|KR'], seqK = c.dayNoSeq;
+      row.date = ymdAdd(td, 22); dayNoSync(c);
+      ST.ok(krNo && c.dayNos[row.date+'|KR']===krNo && !c.dayNos[ymdAdd(td, 20)+'|KR'] && c.dayNoSeq===seqK, 'KR 整天改日子：号不变 '+krNo);
+      c.subItems = c.subItems.filter(function(x){ return x.id!=='r163'; });
+      /* 三：IN 复诊评估 tab */
+      var ch = CASE_ITEMS.filter(function(x){ return isRevEval(x) && x.mainId && /R104/.test(x.name); })[0];
+      if(ST.ok(!!ch, '先在 A1 跑 R104a（造复诊评估子记录）')){
+        ch.reportReady = false; ch.consultStatus = 'paid_waiting_kr'; ch.reportEta = ''; var h0 = revEvalTabHtml(ch);
+        ST.ok(/复诊想问的内容/.test(h0) && !/视频　|revCapSet\(/.test(h0), '复诊卡：想问的内容在，项目照片 / 视频默认折叠（没有胶囊 / 视频 / 照片）');
+        ST.ok(/等待评估结果/.test(h0) && /KR 还没确认时间/.test(h0), '报告卡位置：结果没到 → 「等待评估结果」');
+        ch.consultStatus = 'awaiting_report'; ch.reportEta = D(1)+' 05:00:00'; var h1 = revEvalTabHtml(ch);
+        ST.ok(/等待评估结果（预计 \d\d\/\d\d \d\d:\d\d）/.test(h1), '确认时间之后写「等待评估结果（预计 MM/DD HH:mm）」');
+        ch.consultContentAt = nowFullDt(); ST.ok(/评估完成 · 等 KR 传结果/.test(revEvalTabHtml(ch)), '评估完成、KR 还没传：状态文字在报告卡里');
+        var mh = flowDetailIn(mainOf(ch), {kind:'revisit', caseId:ch.id}); ST.ok(/等待评估结果/.test(mh) && /打开复诊评估/.test(mh), '主案件复诊 tab 的展开：结果没到也是同一个组件');
+        ch.reportReady = true; ch.consultStatus = 'report_ready'; ch.reportDate = todayStr(); ch.reportUploadedBy = 'KM1 室长'; ch.recoveryResult = {result:'ok', by:'KD1 院长', at:nowFullDt()}; ch.videoSummary = '恢复正常'; ch.reportKo = '정상';
+        var h2 = revEvalTabHtml(ch); ST.ok(/提交：/.test(h2) && /AI 翻译/.test(h2) && /完整报告查看/.test(h2) && !/等待评估结果/.test(h2), '结果到了：提交 + 评估摘要（AI 翻译）+［完整报告查看］');
+        openFullReport(ch.id, {}); var ov = document.getElementById('rptfull-overlay'); ST.ok(!!ov && /下载/.test(ov.innerText) && /打印/.test(ov.innerText) && /关闭/.test(ov.innerText), '完整报告弹窗有 下载 / 打印 / 关闭'); if(ov) ov.classList.remove('open');
+      }
+    } finally { window.alert = oa; window.confirm = oc; c.dayNoOn = snapKeys.dayNoOn; c.dayNos = snapKeys.dayNos; c.dayNoSeq = snapKeys.dayNoSeq; CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.mainId===c.id && x.preChild); }); }
+  });
+  ST.def('R163b','CMD-1028-04 二 四（KM1 分页，要先在 A1 跑 R104a）：KR 点复诊评估待办 → 子案件页版面 · 发送后结果已发送（按钮消失 / 只读 / 标签 / 查看报告 / 修改纪录）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var cid = '', ch = null; krClinics().forEach(function(c0){ Store.withClinic(c0.id, function(){ CASE_ITEMS.forEach(function(x){ if(isRevEval(x) && x.mainId && /R104/.test(x.name) && !x.reportReady){ ch = x; cid = c0.id; } }); }); });
+    if(!ST.ok(!!ch, '先在 A1 跑 R104a')) return;
+    var id = ch.id, gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; }); };
+    var oa = window.alert, oc = window.confirm, al = []; window.alert = function(m){ al.push(String(m)); }; window.confirm = function(){ return true; };
+    var snap = JSON.stringify(gc()), body = function(){ return document.getElementById('krcase-body').innerText; };
+    try{
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.consultStatus = 'paid_waiting_kr'; c.reportReady = false; ['consultStartedAt', 'consultContentAt', 'revEval', 'recoveryResult', 'revAuth'].forEach(function(k){ delete c[k]; }); });
+      var tds = krTodoItems(krAllCases()).filter(function(i){ return i.caseId===id && i.kind==='eta'; });
+      ST.ok(tds.length===1, 'KR 待办里有这一笔复诊评估的「确认评估时间」');
+      if(tds[0]){ window.GMC_NO_TABS = true; tds[0].go(); }
+      ST.ok(CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE.id===id, '点待办 → 直接进这一笔复诊评估（案件 id = 子案件）');
+      ST.ok(/← 回到主案件 A\d+/.test(body()) && /· 今天做：复诊评估|今天做：复诊评估/.test(body()), '子案件页版面：「← 回到主案件」+「A…-NN · MM/DD（印尼）· 今天做：复诊评估」');
+      ST.ok(KR_CASE.tab==='consult' && /复诊评估/.test(body()), '默认打开复诊评估 tab');
+      ST.ok(!/继续 · 复诊评估/.test(body().split('\n').slice(0, 6).join('\n')) || /回到主案件/.test(body()), '不再是独立案件样的页头');
+      /* 发送流程：院长完成 → 室长改文字 → 发送 */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; ST.krEta(c); coreStartConsult(c, 'KD1 院长'); (c.followProjects||[]).forEach(function(n){ coreRvSet(c, 'op', n, '医生意见 '+n, 'KD1 院长', 'doctor'); }); c.recoveryResult = {result:'ok', by:'KD1 院长', at:nowFullDt()}; coreRvFinish(c, 'KD1 院长', 'doctor'); });
+      krRenderCaseDetail(); ST.ok(/评估完成 · 待室长发送/.test(body()) && /退回院长/.test(body()) && /发送复诊评估结果/.test(body()), '发送前：评估完成 · 待室长发送，有［退回院长］［发送］');
+      krRvEditIdx('op', 0, '室长润色后的意见');
+      var inN0 = (NOTIFS||[]).length; krSubmitReport();
+      var c1 = gc(); ST.ok(c1.reportReady && c1.consultStatus==='report_ready', '发送成功（状态写进去了）');
+      var b = body();
+      ST.ok(!/退回院长/.test(b) && !/发送复诊评估结果/.test(b) && !/AI 整理/.test(b), '［退回院长］［发送复诊评估结果］［AI 整理］消失');
+      ST.ok(/结果已发送 · \d\d-\d\d \d\d:\d\d · KM1/.test(b) && /查看报告/.test(b), '显示「结果已发送 · 时间 · 谁」+［查看报告］');
+      ST.ok(/复诊评估 · 结果已发送/.test(b), '页头标签 = 复诊评估 · 结果已发送');
+      ST.ok(/室长修改纪录（1 处）/.test(b), '室长修改纪录照样留着（只读）');
+      ST.ok(document.querySelectorAll('#krcase-body textarea').length===0 || !/krRvEditIdx/.test(document.getElementById('krcase-body').innerHTML), '文字变只读（没有可改的输入框）');
+      ST.ok(rvMode(c1)==='view' && krRvWorkBlock(c1)==='', '室长 / 院长都变只读（rvMode = view）');
+      al.length = 0; krSubmitReport(); ST.ok(al.length===1 && /发送没有成功/.test(al[0]) || al.length===0, '重复发送不会再报成功（失败有提示）');
+      var h = Store.withClinic(cid, function(){ return revEvalTabHtml(gc()); }); ST.ok(/完整报告查看/.test(h) && /室长改后/.test('室长改后') && /室长润色后的意见/.test(Store.withClinic(cid, function(){ return revSummaryText(gc()); })), 'IN 的报告卡 / 摘要读到结果（含室长改后的文字）');
+    } finally { window.GMC_NO_TABS = false; window.alert = oa; window.confirm = oc; var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
   });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
@@ -6018,7 +6097,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(JSON.stringify(n).indexOf('术前_正面.jpg')<0, '本次复诊案件里没有复制原案件照片（只投屏）');
       src.concerns[0].photos[a0] = {name:'术前_换.jpg'};
       h = revCmpHtml(n); ST.ok(h.indexOf('术前_换.jpg')>-1 && h.indexOf('术前_正面.jpg')<0, '原案件换照片，这边跟着更新');
-      REV_OPEN[n.id] = true; var th = revEvalTabHtml(n); ST.ok(/revCapSet\(/.test(th) && />面诊</.test(th) && />术前</.test(th) && />本次</.test(th) && th.indexOf('前后对比')<0 && th.indexOf('术后恢复（历次）')<0, 'IN 复诊评估 tab：项目卡有胶囊［面诊］［术前］［本次］，没有独立的前后对比 / 术后恢复（历次）（CMD-1022-18）');
+      REV_OPEN[n.id] = true; REV_PROJ_OPEN[n.id+'|隆鼻'] = true; /* CMD-1028-04：项目卡默认折叠，点开才看胶囊 / 照片 */ var th = revEvalTabHtml(n); ST.ok(/revCapSet\(/.test(th) && />面诊</.test(th) && />术前</.test(th) && />本次</.test(th) && th.indexOf('前后对比')<0 && th.indexOf('术后恢复（历次）')<0, 'IN 复诊评估 tab：项目卡有胶囊［面诊］［术前］［本次］，没有独立的前后对比 / 术后恢复（历次）（CMD-1022-18）');
       REV_CAP[n.id+'|隆鼻'] = 'pre'; th = revEvalTabHtml(n); ST.ok(th.indexOf('施术当天_正面.jpg')>-1 && /术前（施术当天）/.test(th), '术前胶囊：读原案件施术当天的术前照片（投屏，标来源）');
       REV_CAP[n.id+'|隆鼻'] = 'face'; th = revEvalTabHtml(n); ST.ok(th.indexOf('术前_换.jpg')>-1 && /面诊/.test(th) && th.indexOf('旧照片.jpg')>-1, '面诊胶囊：原案件面诊同部位照片，旧未分部位照片进其他照片');
       REV_CAP[n.id+'|隆鼻'] = 'now'; th = revEvalTabHtml(n); ST.ok(th.indexOf('复诊_')>-1 && /本次复诊/.test(th), '本次胶囊（默认）：这次上传的');

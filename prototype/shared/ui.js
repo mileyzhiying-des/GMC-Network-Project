@@ -1480,6 +1480,7 @@ function confirmReschedule(){
   c.visitDate = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
   c.visitTime = RESCHED_SELECTED_TIME;
   closeRescheduleModal();
+  try{ var mm0 = c.mainId ? mainOf(c) : null; if(mm0 && mm0.dayNoOn) dayNoSync(mm0); }catch(e){} /* CMD-1028-04 一：子案件改期，号跟着搬到新日期，不再占新号 */
   logCaseEvent(c, ME_NAME, '修改预约为 '+c.visitDate+' '+c.visitTime+'');
   buildCaseLog(c);
   if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id){

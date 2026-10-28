@@ -931,7 +931,9 @@ function krTabConsult0(c){
     if(isContinuationConsult(c)) return out+krJudgeBlock(c); /* 延续既往面诊：先判断有无变动 */
     return out+((c.consultStartedAt || c.consultContentAt) ? krRecordBlock(c) : ''); /* 按［开始面诊］之前不显示「录入面诊」和「发送诊疗方案」（CMD-1012-08 二·2） */
   }
-  if(c.consultStatus==='report_ready' && isRevEval(c)) return head+krCardBoxR('复诊评估结果', revResultCardHtml(c, 'KR'), krReportBtn(c))+krRecoveryCard(c); /* CMD-1022-12 B2：结果卡重排，拿掉「补加可选项目」 */
+  if(c.consultStatus==='report_ready' && isRevEval(c)){ /* CMD-1028-04 四：发送后——结果已发送：只读，没有［退回院长］［发送］［AI 整理］；显示已发送 · 时间 · 谁 +［查看报告］，室长修改纪录照样留着 */
+    var rrec = c.revisitRec || {}, sentLine = '<div style="font-size:13px;color:var(--sage);margin-bottom:8px;">✓ 结果已发送 · '+krEsc(rrec.at ? fmtUtc(rrec.at).slice(5) : (c.reportDate||''))+' · '+krEsc(krCoordText(rrec.by||c.reportUploadedBy||''))+(c.revisitProxy ? '（室长代录，院长口述）' : '')+'</div>';
+    return head+krCardBoxR('复诊评估结果', sentLine+revResultCardHtml(c, 'KR')+krRvEdLogHtml(c), krReportBtn(c))+krRecoveryCard(c); } /* CMD-1022-12 B2：结果卡重排，拿掉「补加可选项目」 */
   if(c.consultStatus==='report_ready') return head+krRecoveryCard(c)+krCardBoxR(isRevEval(c) ? '复诊评估结果' : isRevisitConsult(c) ? '恢复评估' : '报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')), krReportBtn(c))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');
   return head;
 }
@@ -1540,6 +1542,15 @@ function krRenderCaseDetail0(){
   if(sdHdr){ el.innerHTML = sdHdr+alerts+dayHtml; setTimeout(krEndAskCheck, 60); return; }
   var mainNew = krWC('主案件页头', 'obj', function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return (c && !isChildVisit(c) && !KR_CASE.day) ? {hdr:krMainHeader(r, c), bar:krMainStatusBar(r, c)} : null; }); /* CMD-1025-03 四：主案件页新页头 + 状态列（取代名字旁的状态标签 / 到院状态卡 / 「从…面诊开始」行） */
   if(mainNew){ el.innerHTML = mainNew.hdr+alerts+mainNew.bar+tripCard+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">'+tabs+'</div><div style="display:flex;flex-direction:column;gap:14px;">'+(body||'')+'</div>'; setTimeout(krEndAskCheck, 60); return; }
+  if(r.c.mainId && r.c.mainId!==r.c.id){ /* CMD-1028-04 二（不用 isChildVisit：它读当前诊所的 CASE_ITEMS，KR 页面这里不在来源诊所里）；KR 点复诊评估待办 / 打开复诊评估 → 子案件页版面（回到主案件 + 子案件号 · 日期（印尼）· 今天做：复诊评估），默认复诊评估 tab；其他 tab（基础资料 / 附件 / Timeline）本来就只读，KR 不能改 IN 的事 */
+    var hd = '';
+    try{ hd = Store.withClinic(r.clinicId, function(){
+      var ch = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0], mc = ch && CASE_ITEMS.filter(function(x){ return x.id===ch.mainId; })[0]; if(!ch || !mc) return '';
+      var vv = visitsOf(mc).filter(function(x){ return x.caseId===ch.id; })[0], types = vv ? (vv.types||[]).filter(function(t0){ return t0!=='本地管理'; }) : ['复诊评估'];
+      var dt = String(ch.visitDate||'').slice(5).replace('-', '/'), flow = ''; try{ flow = todoKidFlowKey({clinicId:r.clinicId, kidOf:mc.id, id:ch.id}); }catch(e){}
+      return '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krShowCase(\''+r.clinicId+'\',\''+mc.id+'\',{tab:\'revisit\'+\'\',flow:\''+flow+'\'})">← 回到主案件 '+krEsc(mc.caseNo)+'</button><span style="font-size:13px;"><b>'+krEsc(vv ? vv.no : ch.caseNo)+'</b> · '+krEsc(dt)+(ch.visitTime ? ' '+krEsc(ch.visitTime) : '')+'（印尼）· 今天做：'+krEsc(types.join('、')||'复诊评估')+'</span><span style="flex:1;"></span><span class="status-pill" style="background:'+((r.krStage && !isEnded(ch)) ? r.krStage.bg : r.badge[0])+';color:'+((r.krStage && !isEnded(ch)) ? r.krStage.fg : r.badge[1])+';">'+krEsc(ch.reportReady ? '复诊评估 · 结果已发送' : ((r.krStage && !isEnded(ch)) ? r.krStage.stage+' · '+r.krStage.proc : (r.stageText||r.label)))+'</span><span style="font-size:13px;">'+krEsc(r.name)+'</span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'; }); }catch(e){ console.error(e); }
+    if(hd){ el.innerHTML = hd+alerts+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;margin-top:6px;">'+tabs+'</div><div style="display:flex;flex-direction:column;gap:14px;margin-top:10px;">'+(body||'')+'</div>'; setTimeout(krEndAskCheck, 60); return; }
+  }
   var c = r.c; /* CMD-1026-14 一：旧页头（子记录 / 复诊评估页）里引用了没定义的 c，打开子记录页直接报错 */
   el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+
       '<button class="btn-ghost" onclick="goBack()">← 返回</button>'+
@@ -2192,6 +2203,7 @@ function krSubmitReport(){
     var nn = String(rvEff(c0.c, 'note')).trim(); rep.rvNote = nn ? {text:nn, zh:krZhShort(nn)} : null;
   }
   var ok = krMut(function(c){ return coreSubmitReport(c, rep, ME_NAME); });
+  if(ok===false || (ok!==true && ok!==undefined && !ok)) alert('发送没有成功：这个案件现在不是「等待评估结果」状态，或已经发送过。请刷新页面看最新状态。'); /* CMD-1028-04 四：发送失败不再静默 */
   KR_SUB = krSubBlank(''); KR_REC.caseKey = '';
   Store.touch(); krRefreshAll();
 }
