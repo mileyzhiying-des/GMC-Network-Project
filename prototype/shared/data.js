@@ -2650,6 +2650,7 @@ function inContRestHtml(c, M, kind){
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, ro = M.ro, bt = 'padding:3px 10px;font-size:12px;white-space:nowrap;';
   var md = function(d){ return e(String(d||'').slice(5, 10).replace('-', '/')); };
   var counts = {care:M.grp.booked.length+M.grp.none.length, local:M.unused.length};
+  if(!counts.care && !counts.local && (kind!=='local' || ro || !localAddAllowed(c))) return ''; /* CMD-1028-14 六：没有剩余项目就不显示「剩余项目」这张卡（连［本次使用］一起）；本地管理 tab 且还能添加时保留，免得没入口 */
   var cur = kind || IN_CONT_TAB[c.id]; if(!kind && (!cur || !counts[cur])) cur = ['care','local'].filter(function(k){ return counts[k]>0; })[0] || '';
   var tabBtn = function(k, label){ var n = counts[k], on = cur===k; if(!n) return ''; return '<button onclick="inContTab(\''+c.id+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--ink)')+';font-size:13px;cursor:pointer;">'+label+' '+n+'</button>'; };
   var grid = 'display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 70px minmax(0,1fr) 80px 110px 110px;gap:8px;align-items:center;';

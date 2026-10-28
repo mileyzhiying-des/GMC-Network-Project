@@ -5320,6 +5320,29 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ev.vstate = '已到访'; ST.ok(/grayscale/.test(eventChipHtml(ev)), '到店后变灰');
     } finally { TODO_UI.mine = oldMine; var back = JSON.parse(snap); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==m.id && x.mainId!==m.id; }).concat(back); try{ Store.touch(); }catch(e){} }
   });
+  ST.def('R177a','CMD-1028-14 六（A1 分页，pcStage 夹具）：子案件页「当前状态」写这一天实际在做的事（术后管理 · 进行中），不是主案件停在哪个阶段 · 没有剩余项目时不显示「剩余项目」卡',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
+    var m = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.mainId; })[0]; if(!ST.ok(!!m, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var td = todayStr(), snap = JSON.stringify(CASE_ITEMS.filter(function(x){ return x.id===m.id || x.mainId===m.id; })), oc = window.confirm; window.confirm = function(){ return true; };
+    try{
+      m.krBalancePaid = true; m.krTripEnded = null; m.visitClosed = false; m.stay = {in:ymdAdd(td, -3), out:ymdAdd(td, 60)}; m.stage = 'local'; m.dayConfirmed = true; m.localMgmt = m.localMgmt || {step:'buy', cart:[]};
+      var sg = m.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; })[0]; m.procedureItems.forEach(function(it){ if(it!==sg) it.postcare = []; });
+      sg.postcare = [{mgmt:'R177拆线', name:'R177拆线', times:1, interval:1, place:'either', innName:'R177印尼拆线', startDay:5}];
+      m.subItems = (m.subItems||[]).filter(function(x){ return x.kind!=='术后管理记录'; });
+      coreCareBook(m, sg.name, 0, td, '', 'IN', '', 'KM', null);
+      var row = m.subItems.filter(function(x){ return x.kind==='术后管理记录'; })[0];
+      var ch = createChildReservation(m, td, '00:05', '术后管理', {careFor:{caseId:m.id, keys:[row.id]}});
+      ch.subState = 'arrived'; ch.arrivedDay = td; ch.hasArrived = true; ch.materialsConfirmed = true; ch.needsConsult = false; ch.resumeFrom = {caseId:m.id, type:'术后管理', types:['术后管理']}; ch.careToday = [row.id];
+      var d = daysOf(m).filter(function(x){ return x.place==='IN' && x.date===td; })[0]; if(!ST.ok(!!d, '造出今天的 IN 子案件')) return;
+      openCaseDetail(m.id, false, {sub:d.key});
+      var bar = (document.getElementById('case-status-bar')||{}).textContent||'';
+      ST.ok(/当前状态/.test(bar) && /术后管理/.test(bar) && /进行中/.test(bar) && !/选择项目/.test(bar), '子案件页当前状态写这一天做的事和状态（实际：'+bar.replace(/\s+/g, ' ').slice(0, 60)+'）');
+      var M = inContModel(ch), full = inContRestHtml(ch, M, 'care'), hadRest = /剩余项目/.test(full);
+      /* 把这一天的术后管理做完 / 没有别的剩余 → 卡片不显示 */
+      row.done = true; var M2 = inContModel(ch), c2 = inContRestHtml(ch, M2, 'care');
+      ST.ok(!/剩余项目/.test(c2) && !/本次使用/.test(c2), '没有剩余项目时，「剩余项目」卡（含［本次使用］）整个不显示（原来有卡：'+hadRest+'）');
+    } finally { window.confirm = oc; try{ closeSubcase(m.id); }catch(e){} var back = JSON.parse(snap); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==m.id && x.mainId!==m.id; }).concat(back); try{ Store.touch(); }catch(e){} }
+  });
   ST.def('R176b','CMD-1028-14 五（KM1 分页）：KR 日历块只有已到院 / 已完成才变灰，过了时间没到院不灰；标了未到院划线',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var td = todayStr(), mk = function(extra){ var r0 = {b:{type:'施术', time:'00:10', end:'00:40', id:'t176', who:'KD1 院长', date:td, name:'T-176'}, lane:0, n:1, row:null, label:'x'}; for(var k in extra) r0[k] = extra[k]; return krcBlockHtml(r0, false); };

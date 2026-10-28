@@ -1301,7 +1301,9 @@ function renderCaseStatusBar(c){
   }catch(e){ console.error(e); }
 }
 function renderCaseStatusBar0(c){
-  var b = caseStageBadge(c);
+  var b = caseStageBadge(c), subDayOn = false;
+  /* CMD-1028-14 六：子案件页的「当前状态」写这一天实际在做的事（术后管理 · 进行中），不是主案件当前停在哪个阶段（原来显示「本地管理 · 选择项目」） */
+  try{ if(typeof subPageActive==='function' && subPageActive(c)){ var cx0 = subCtxOf(c), st0 = visitStateText(cx0.m, cx0.v), tone0 = {'进行中':['#E8F0FB','#2F5FA8'], '待确认结束':['#FDECEA','#B3261E'], '待到店':['#E3F4E8','#2E7D4F'], '已预约':['#E3F4E8','#2E7D4F']}[st0] || ['var(--border2)','var(--slate2)']; b = [tone0[0], tone0[1], ((cx0.v.types||[]).join('、') || '到访')+' · '+st0]; subDayOn = true; } }catch(e0){ console.error(e0); }
   var actionBtn = '';
   if(c.krVisit && c.stage==='booked'){ /* CMD-1014-16：在韩到店案件（KR 医院）：到店 / 完成由 KR 标记，IN 不接待、不判未到店 */
     actionBtn = '<span style="font-size:12px;color:var(--slate2);">在韩到院预约（KR 医院）：'+(c.krVisit.arrived ? '客人已到院，等 KR 标记完成' : (c.visitDate+' '+c.visitTime+'（韩国）等 KR 标记客人到店'))+'</span>';
@@ -1338,7 +1340,7 @@ function renderCaseStatusBar0(c){
   document.getElementById('case-status-bar').innerHTML =
     '<div class="card" style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'+
     '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--slate);">当前状态</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
-    (localMgmtTagOn(c) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+
+    (!subDayOn && localMgmtTagOn(c) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+
     (c.visibleToKR ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;" title="韩国侧可见（不面诊案件点增加面诊后、或使用术后管理项目关联后）">KR可见</span>' : '')+
     (isEnded(c) ? '<span style="font-size:12px;color:var(--slate2);">'+(c.stage==='cancelled' ? '取消原因：'+endReasonText(c)+'　' : '')+financeLabel(c)+'</span>' : '')+
     caseAbnormalTags(c).map(function(t){ return '<span class="status-pill" style="background:#F6DCDC;color:#C1454A;font-size:12px;">'+t+'</span>'; }).join('')+'</div>'+
