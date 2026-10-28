@@ -2447,6 +2447,49 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     openClientEdit(legacy.name, 'gender'); ST.ok(document.getElementById('ce-v').value==='', '旧资料编辑时性别默认「请选择」，要填了才能存');
     closeClientEdit();
   });
+  ST.def('R158a','CMD-1027-13（A1 分页，需要 pcStage 夹具）：IN 预约印尼术后管理弹窗按日期成小卡（一天一个时间）、改日期自动移卡、休诊进红框、午休要确认、同一天合成一次到店',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var today = todayStr(), wk = function(n){ var d = ymdAdd(today, n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; }, sun = (function(){ var d = ymdAdd(today, 2); while(visitWeekday(d)!=='周日') d = ymdAdd(d, 1); return d; })();
+    CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !x.careFor; }); c.krBalancePaid = true;
+    c.procedureItems.forEach(function(i){ i.postcare = (i.postcare||[]).filter(function(p){ return !/^R158/.test(p.name||''); }); });
+    var surgs = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); });
+    surgs[0].postcare = (surgs[0].postcare||[]).concat([{mgmt:'术后管理', name:'R158 消肿', times:1, interval:1, place:'IN', startDay:5}, {mgmt:'术后管理', name:'R158 拆线', times:1, interval:1, place:'IN', startDay:7}]);
+    var s1 = surgs[1] || surgs[0]; s1.postcare = (s1.postcare||[]).concat([{mgmt:'术后管理', name:'R158 复查', times:1, interval:1, place:'IN', startDay:6}]);
+    todoCbOpen(c.id, '*'); var B = TODO_CB2, names = B.groups.map(function(g){ return g.name; });
+    ST.ok(['R158 消肿','R158 拆线','R158 复查'].every(function(n){ return names.indexOf(n)>-1; }), '弹窗里有三个印尼术后管理项目');
+    var d1 = wk(3), d2 = wk(5), mine = B.groups.filter(function(g){ return /^R158/.test(g.name); }); /* 其余原有行先取消勾选，只看这三个 */
+    B.groups.forEach(function(g){ if(!/^R158/.test(g.name)) g.lines.forEach(function(l){ l.on = false; l.userOff = true; }); });
+    mine[0].lines[0].date = d1; mine[1].lines[0].date = d2; mine[2].lines[0].date = d1; todoCbNormalize(); todoCbRender();
+    var ov = document.getElementById('todo-cb-overlay'), grps = [].slice.call(ov.querySelectorAll('.krcb-grp')).filter(function(g){ return g.querySelectorAll('input[type=checkbox]:checked').length; });
+    ST.ok(grps.length===2, '三个项目分在两个日期 → 两张小卡（实际 '+grps.length+' 张）');
+    ST.ok(grps.every(function(g){ return g.querySelectorAll('select').length===1; }), '每张卡只有一个时间下拉（同一天只选一次）');
+    var g1 = ov.querySelector('.krcb-grp[data-date="'+d1+'"]'), txt1 = g1 ? g1.textContent : '';
+    ST.ok(g1 && /预约时间：/.test(txt1) && /R158 消肿/.test(txt1) && /R158 复查/.test(txt1) && !/R158 拆线/.test(txt1), '卡片标题「预约时间：MM/DD（周几）」，同一天的两个项目在同一张卡');
+    ST.ok(/项目[\s\S]*施术项目[\s\S]*推荐内容[\s\S]*推荐时间[\s\S]*次数[\s\S]*预约日期/.test(txt1) && /术后第 \d+ 天/.test(txt1), '栏位 项目｜施术项目｜推荐内容（术后第 N 天）｜推荐时间｜次数｜预约日期');
+    /* 改日期自动移卡 */
+    var gi2 = B.groups.indexOf(mine[1]); todoCbSet(gi2, 0, 'date', d1);
+    ov = document.getElementById('todo-cb-overlay'); var cards = [].slice.call(ov.querySelectorAll('.krcb-grp')).filter(function(g){ return g.querySelectorAll('input[type=checkbox]:checked').length; });
+    ST.ok(cards.length===1 && /R158 拆线/.test(cards[0].textContent), '把拆线改到 d1 → 自动移到 d1 的卡，d2 的卡消失');
+    todoCbSet(gi2, 0, 'date', d2); ov = document.getElementById('todo-cb-overlay'); ST.ok([].slice.call(ov.querySelectorAll('.krcb-grp')).filter(function(g){ return g.querySelectorAll('input[type=checkbox]:checked').length; }).length===2, '改回 d2 → 新增 d2 的卡');
+    /* 休诊日进红框 */
+    todoCbSet(gi2, 0, 'date', sun); ov = document.getElementById('todo-cb-overlay'); var pr = ov.querySelector('.krcb-prob');
+    ST.ok(!!pr && /需要处理 1 项/.test(pr.textContent) && /休诊日/.test(pr.textContent) && !B.groups[gi2].lines[0].on, '休诊日（周日）→ 红框「需要处理 1 项」，红字写休诊日，自动取消勾选');
+    todoCbSet(gi2, 0, 'date', d2); ov = document.getElementById('todo-cb-overlay'); ST.ok(!ov.querySelector('.krcb-prob') && B.groups[gi2].lines[0].on, '改回正常日期 → 红框消失并自动勾回');
+    /* 时间下拉：只列营业时间内；午休可选 */
+    var opts = [].slice.call(ov.querySelectorAll('.krcb-grp[data-date="'+d1+'"] select option')).map(function(o){ return o.value; });
+    ST.ok(opts.length>0 && opts.every(function(t){ return WK_HOURS.indexOf(t)>-1; }) && opts.some(function(t){ return slotIsLunch(t); }) && opts.indexOf('03:00')<0, '时间下拉只列营业时间内，午休也列（标午休）');
+    var lunchT = opts.filter(function(t){ return slotIsLunch(t); })[0]; todoCbSetDay(d1, lunchT);
+    var before = CASE_ITEMS.length, asked = 0, oc = window.confirm; window.confirm = function(m){ asked++; return false; };
+    todoCbGo(); ST.ok(asked===1 && CASE_ITEMS.length===before && !!TODO_CB2, '选午休时间 → 确认预约时跳「午休」确认，取消则不约');
+    window.confirm = function(m){ asked++; return true; };
+    todoCbGo(); window.confirm = oc;
+    var made = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; });
+    ST.ok(made.length===2, '确认后两个日期各合成一次到店（实际 '+made.length+' 张）');
+    var m1 = made.filter(function(x){ return x.visitDate===d1; })[0], m2 = made.filter(function(x){ return x.visitDate===d2; })[0];
+    ST.ok(m1 && m1.careFor.keys.length===2 && m1.visitTime===lunchT && m2 && m2.careFor.keys.length===1, 'd1 一次到店带 2 个项目、时间 = 卡里选的；d2 带 1 个');
+    CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.careFor && x.careFor.caseId===c.id); }); surgs[0].postcare = surgs[0].postcare.filter(function(p){ return !/^R158/.test(p.name); }); s1.postcare = s1.postcare.filter(function(p){ return !/^R158/.test(p.name); });
+  });
   ST.def('R71a','CMD-1020-18（A1 分页，需要 pcStage 夹具）：IN 未安排预约只放印尼术后管理、按客人折叠；多次项目分行预约；占位预约 3 个来访目的 + 勾选项目',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;

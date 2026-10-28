@@ -1620,3 +1620,9 @@ prototype/shared/app.css  共用样式
 - **四 有冲突不自动结束**：`tripAutoByDateDue` 加 `&& !tripDueConflict(c).length`（离开日期已过，但还有离开当天或之后的韩国预约、或已到院没结束的日子）→ 不自动结束；KR 待办新 kind `tripover`「客人离开日期已过（12/20），但还有 12/22 11:00、12/24 11:00，请确认客人是否已离境」，点了进项目 tab 并打开［行程修正］（走第三项的处理窗）；没有冲突的照 04 自动结束。
 - **五 行程已结束按到院先拦**：`coreMarkArrived` / `coreSubArrived`（`coreVisitArrive` 走它）在 `krTripEnded` 时设 `window.KR_TRIPBLOCK = tripEndedBlockText(c)` 并返回 false；`krMut` 弹 `krTripEndedModal`（「韩国行程已于 12/20 结束。客人还在韩国吗？请先［行程修正］」+［知道了］［行程修正］）；`krMarkArrived` 也先查一次。行程修正把离开日期改到今天或以后 → `reopenTripIfNeeded` 重新打开 → 才能标到院。
 - 测试：selftest 新增 R157a（KM1 分页，pcStage 夹具，五项各验证；用 54d29a4 代码跑失败）。
+
+## CMD-1027-13 补充（2026-10-28，追加；取代 CMD-1020-18 三里 IN 预约印尼术后管理弹窗「按项目分块、每行自己选日期 + 时间」，旧文字保留作历史）
+- 分支 feature/case-structure-v2，基准 a874c50（CMD-1027-12），单个提交，**未推送**，数据版本不变（56）。只改 IN（todo.js `todoCbOpen / todoCbNormalize / todoCbSet / todoCbSetDay / todoCbRender / todoCbGo`，新增 `todoCbTimes / todoCbDateErr / todoCbSnap / todoCbOptsHtml`）。
+- **按日期圈小卡**：一天一张卡（`.krcb-grp`），标题「预约时间：MM/DD（周几）［时间下拉］」，同一天只选一次时间（`TODO_CB2.dayTime[日期]`，取代每行的 time）；卡内表格 勾选｜项目｜施术项目｜推荐内容（术后第 N 天，`careDayText`）｜推荐时间｜次数（− N +，多次自动生成下一行，规则不变）｜预约日期；改某一行日期 → 自动移到那一天的卡（没有就新增）；日期有问题（休诊 / 已满 / 已过）的行单独圈红框「需要处理 N 项」（红字写原因，自动取消勾选，改对后自动勾回，自己取消的不勾回）；时间下拉只列营业时间内，午休列出（标「午休」），确认预约时跳「这是午休时间，确定预约吗？」；底部［取消］［确认预约（N）］；预览同一天并入已有预约。
+- **没有和 KR 共用组件**：KR 的 `krCbRender` 绑定 `KR_CB` 状态、离开日期、院长时间、地点、管理项目等大量 KR 专有逻辑，抽成共用组件改动面太大；这次 IN 自己实现，外观（`.kr-fld`、`.krcb-grp`、`.krcb-prob`）和规则（一天一个时间、红框、午休确认）对齐 KR；KR 弹窗未改。入口：未安排预约［预约］/［全部预约］、项目卡 / 术后管理 tab 的［预约］都经 `todoCbOpen`，一起变；修改时间的小弹窗（`todoCareBookOpen`）没动。
+- 测试：新增 R158a（A1，pcStage 夹具，单跑通过：两个日期两张卡 / 一卡一个时间 / 栏位 / 改日期移卡 / 周日休诊进红框 / 午休确认 / 同天合成一次到店）；A1 全套对照 a874c50：新增失败只有 R158a（整套里因夹具缺失失败，与其它 pcStage 用例同）。
