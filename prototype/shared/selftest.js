@@ -5288,6 +5288,51 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/在韩持有/.test(inMgmtTabHtml(c).replace(/<[^>]+>/g, ' ')), '付清尾款 / 转持有后状态变「在韩持有」');
     CLIENT_HOLDINGS[c.name] = []; c.procedureItems = c.procedureItems.filter(function(it){ return !/R172/.test(it.name); });
   });
+  /* CMD-1028-14 一、二：冲突弹窗文字 / 按钮；预约弹窗红框项目可直接［保留］；第一次填在韩期间也逐项选 */
+  ST.def('R173a','CMD-1028-14 一二（KM1 分页，pcStage 夹具）：冲突弹窗文字按类型 + 右对齐按钮；预约弹窗红框［保留］——处理完才能确认、全部保留只存保留；没填过在韩期间时也列出超出项目',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr(), oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var set = function(f){ Store.mutateClinic(cid, function(){ f(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); return true; }); };
+    var snap = JSON.stringify(gc());
+    try{
+      ST.ok(/^面诊 18:00～18:30，和 $/.test(krClashHead({what:'面诊'}, '18:00', 1110, 30)) && !/到院|施术/.test(krClashHead({what:'复诊评估'}, '18:00', 1110, 30)) && /使用 18:00～18:30/.test(krClashHead({use:true}, '18:00', 1110, 30)) && /到院，施术约/.test(krClashHead({}, '18:00', 1110, 60)), '冲突说明开头照类型写（面诊 / 复诊评估 / 使用 / 施术）');
+      krAskClash('面诊 18:00～18:30，和 KO1 代表院长 15:30–19:30 不可预约重叠', {proceed:function(){}, alt:null, altLabel:'不在这个时段'});
+      var ov = document.getElementById('kr-block-overlay'), bt = [].map.call(ov.querySelectorAll('button'), function(b){ return b.innerText; });
+      ST.ok(bt.join('|')==='取消|仍然进行' && /justify-content:flex-end/.test(ov.innerHTML), '按钮右对齐：左［取消］右［仍然进行］（没有「不在这个时段」）：'+bt.join('|')); ov.classList.remove('open');
+      /* 二：红框保留 */
+      var okDay = function(n){ var d = ymdAdd(td, n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
+      set(function(c){ c.krBalancePaid = true; c.krTripEnded = null; c.visitClosed = false; c.stayKeep = {}; c.stay = {in:ymdAdd(td, -1), out:okDay(2)}; c.krSchedule = c.krSchedule || {}; c.krSchedule.confirmedDate = ymdAdd(td, 1);
+        var sg = c.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; })[0]; c.procedureItems.forEach(function(it){ if(it!==sg) it.postcare = []; });
+        sg.postcare = [{mgmt:'R173拆线', name:'R173拆线', times:2, interval:1, place:'either', startDay:10}];
+        c.procedureItems = c.procedureItems.filter(function(it){ return !/^R173/.test(it.name||''); });
+        c.procedureItems.push({name:'R173 热玛吉 · 3次', origin:'KR', mgmtPlan:true, qty:3, heldOver:true, uses:[], iid:'iR173', interval:2, firstDay:7, intNa:false});
+        c.subItems = (c.subItems||[]).filter(function(x){ return x.kind!=='术后管理记录'; }); });
+      krShowCase(cid, r0.id, {here:true, tab:'postcare'}); krCbOpen({all:true});
+      var bad = KR_CB.rows.filter(function(r){ return krCbCheck(r).err; });
+      ST.ok(bad.length>=1, '离境日（'+gc().stay.out+'）之后的项目进红框：'+bad.length+' 项');
+      var btn = function(){ return [].filter.call(document.querySelectorAll('#kr-cb-overlay button'), function(b){ return /确认预约|确认保留/.test(b.innerText); })[0]; };
+      ST.ok(btn().disabled, '红框里还有没处理的 → ［确认预约］灰');
+      ST.ok(/保留/.test(document.querySelector('#kr-cb-overlay .krcb-prob').innerText), '红框每项都有［保留］');
+      KR_CB.rows.forEach(function(r, i){ if(krCbCheck(r).err) krCbKeep(i, true); });
+      ST.ok(!document.querySelector('#kr-cb-overlay .krcb-prob') && /保留 \d+ 项/.test(document.getElementById('kr-cb-overlay').innerText), '选了保留 → 移出「需要处理」，另放「保留 N 项」');
+      ST.ok(btn() && !btn().disabled && /确认预约/.test(btn().innerText), '红框处理完 → 按钮可按（其他勾选的照常约）');
+      KR_CB.rows.forEach(function(r, i){ krCbKeep(i, true); });
+      ST.ok(btn() && !btn().disabled && /确认保留/.test(btn().innerText), '全部都选保留 → 按钮写「确认保留」');
+      var before = (gc().subItems||[]).length; krCbGo();
+      var c = gc();
+      ST.ok(Object.keys(c.stayKeep||{}).length>=1 && (c.subItems||[]).length===before, '只存保留、没有建到院：'+JSON.stringify(c.stayKeep));
+      ST.ok(stayKeepN(c, 'mg|iR173')>=1 && krCbMgItems(c).filter(function(m){ return m.iid==='iR173'; }).reduce(function(n, m){ return n+m.max; }, 0) <= 3-stayKeepN(c, 'mg|iR173'), '保留的次数不进未安排预约');
+      ST.ok(/保留：/.test(JSON.stringify((c.logEntries||c.timeline||c.log||[]).slice(-6))), 'Timeline 记了保留');
+      /* 改日期那条路仍然可用：取消保留后红框回来 */
+      set(function(cc){ cc.stayKeep = {}; }); krCbOpen({all:true}); var iBad = KR_CB.rows.findIndex(function(r){ return krCbCheck(r).err; }); krCbKeep(iBad, true); krCbKeep(iBad, false);
+      ST.ok(!!document.querySelector('#kr-cb-overlay .krcb-prob'), '取消保留 → 回到红框'); krCbClose();
+      /* 第一次填（没有填过在韩期间）也列出超出项目 */
+      set(function(cc){ cc.stay = null; cc.stayKeep = {}; });
+      ST.ok(stayConflictInfo(gc(), okDay(2), '').length>=1, '没填过在韩期间、第一次填离境日 → 同样列出超出项目（逐项选择弹窗）：'+stayConflictInfo(gc(), okDay(2), '').length);
+    } finally { window.alert = oa; window.confirm = oc; Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); return true; }); try{ krCbClose(); }catch(e){} }
+  });
   ST.def('R170a','CMD-1028-12 二（任意分页）：离境当天改成提醒后确认——离境时间之前提醒、之后不能约；没填时间离境当天提醒；超出行程只算离境时间之后的',function(){
     var c = {stay:{in:'2030-01-01', out:'2030-01-10', outTime:'21:00'}, subItems:[
       {id:'a', kind:'术后管理记录', place:'KR', date:'2030-01-10', time:'11:00', done:false, skipped:false, arrived:false},

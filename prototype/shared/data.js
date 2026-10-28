@@ -9017,6 +9017,14 @@ function coreKeepSet(c, key, on, by){
   logCaseEvent(c, by, (on ? '保留：' : '取消保留：')+label+'（'+units+' 次'+(on ? '，不进未安排预约、不生成待办，KR 仍可手动预约' : '，回到未预约')+'）', p[0]==='care' ? '术后管理' : '管理项目');
   return true;
 }
+/* CMD-1028-14 二：预约弹窗红框里的项目直接选［保留］——存成保留（同一份 c.stayKeep：不进未安排预约、不生成待办、「保留 N」组）；counts = {key: 次数}，labels = {key: 显示名} */
+function coreKeepUnits(c, counts, labels, by){
+  var keys = Object.keys(counts||{}), done = [];
+  keys.forEach(function(k){ var n = counts[k]; if(n>0){ stayKeepAdd(c, k, n); done.push((labels[k]||k)+' × '+n); } });
+  if(!done.length) return false;
+  logCaseEvent(c, by, '保留：'+done.join('、')+'（预约时这几项不能约，直接保留；不进未安排预约、不生成待办，KR 仍可手动预约）', '术后管理');
+  return true;
+}
 function coreRowPostpone(c, id, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || (s.kind!=='术后管理记录' && s.kind!=='增加项目')) return false;
   var key = subCaseKey(s), no = s.dno||'', date = s.date, time = s.time||'';
