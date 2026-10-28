@@ -4502,6 +4502,15 @@ function krMainNextInfo(c){
   }
   return {text:'等待确认施术日期', btn:tabBtn('items')};
 }
+/* CMD-1027-14 五：待预约——KR 只放韩国的（［预约时间］打开预约弹窗）；只剩印尼的写「后续由 IN 安排」（不放按钮）；有今日 / 下次到访时跟在后面小字 */
+function krPendWrap(c){ return Store.withClinic(KR_CASE.clinicId, function(){ return mainPendingBook(c); }) || {inN:0, krN:0}; }
+function krPendSmall(c){ var P = krPendWrap(c); if(!P.krN && !P.inN) return ''; return '<span style="font-size:12px;color:var(--muted);margin-left:8px;">待预约：'+(P.krN ? '韩国术后管理 '+P.krN+' 项' : '')+(P.krN && P.inN ? '；' : '')+(P.inN ? '印尼 '+P.inN+' 项由 IN 安排' : '')+'</span>'; }
+function krPendRow(c, btn){
+  var P = krPendWrap(c);
+  if(P.krN) return '<b>待预约</b>：韩国术后管理 '+P.krN+' 项'+(P.krEarly ? '（最早建议 '+krEsc(P.krEarly.slice(5).replace('-', '/'))+'）' : '')+(P.inN ? '<span style="font-size:12px;color:var(--muted);margin-left:8px;">印尼 '+P.inN+' 项由 IN 安排</span>' : '')+'<span style="flex:1;"></span>'+(krCan() ? btn('预约时间', 'krCbOpen({all:true, tab:\'care\'})') : '');
+  if(P.inN) return '<b>后续由 IN 安排</b>：印尼术后管理 '+P.inN+' 项待预约';
+  return '';
+}
 function krMainStatusBar(r, c){ /* CMD-1027-02 二：两行——当前状态（进行中｜预约中）+ 今日到访 / 下次到访 / 后续日程：无；不再放原来的状态标签 */
   var today = todayStr(), cid = KR_CASE.clinicId, id = KR_CASE.id, days = daysOf(c).filter(function(v){ return v.state!=='cancelled' && v.state!=='noShow'; });
   var nLive = days.filter(function(v){ return v.state==='arrived' || v.state==='unconfirmed'; }).length, nBook = days.filter(function(v){ return v.state==='waiting' && v.date>=today; }).length;
@@ -4511,11 +4520,11 @@ function krMainStatusBar(r, c){ /* CMD-1027-02 二：两行——当前状态（
   var row2 = '', tdy = days.filter(function(v){ return v.date===today; }).sort(function(a, b){ return (a.time||'').localeCompare(b.time||''); });
   if(tdy.length){
     var v0 = tdy[0], allDone = tdy.every(function(v){ return v.state==='left' || v.state==='ended'; }), anyLive = tdy.some(function(v){ return v.state==='arrived' || v.state==='unconfirmed'; });
-    row2 = '<b>今日到访</b>（'+krEsc(Array.from(new Set(tdy.map(biz))).join(' · '))+'）<span style="margin-left:6px;">'+(anyLive ? '进行中' : (allDone ? '已完成' : '待到院'))+'</span>'+'<span style="flex:1;"></span>'+view(v0);
+    row2 = '<b>今日到访</b>（'+krEsc(Array.from(new Set(tdy.map(biz))).join(' · '))+'）<span style="margin-left:6px;">'+(anyLive ? '进行中' : (allDone ? '已完成' : '待到院'))+'</span>'+krPendSmall(c)+'<span style="flex:1;"></span>'+view(v0);
   } else {
     var nx = days.filter(function(v){ return v.state==='waiting' && v.date>today; }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0];
-    if(nx) row2 = '<b>下次到访</b>（'+krEsc(biz(nx))+'）'+krEsc(String(nx.date).slice(5).replace('-', '/'))+'<span style="flex:1;"></span>'+view(nx);
-    else if(days.length) row2 = '<b>后续日程：无</b>';
+    if(nx) row2 = '<b>下次到访</b>（'+krEsc(biz(nx))+'）'+krEsc(String(nx.date).slice(5).replace('-', '/'))+krPendSmall(c)+'<span style="flex:1;"></span>'+view(nx);
+    else if(days.length) row2 = krPendRow(c, btn) || '<b>后续日程：无</b>';
     else { var ni = krMainNextInfo(c); row2 = ni.text ? '<span>'+krEsc(ni.text)+'</span><span style="flex:1;"></span>'+(ni.btn||'') : '<b>后续日程：无</b>'; } /* 还没有任何到访（面诊 / 付定金阶段）：沿用 1025-03 的阶段句子 */
   }
   return '<div class="card" style="padding:12px 20px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+nLive+'｜预约中 '+nBook+'）</span><span style="flex:1;"></span>'+btn('查看', 'krSetCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:10px;">'+row2+'</div></div>';

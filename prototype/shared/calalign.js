@@ -529,8 +529,49 @@ function staySave(){
     if((document.getElementById('stay-mo')||{}).checked){ other = g('stay-mot').trim(); if(!other) return bad('勾了「其他」要写是什么方式'); methods.push('其他：'+other); }
     if(!methods.length) return bad('请至少勾一个确认方式');
   }
+  if(d.inD && d.outD && d.outD < d.inD) return bad('离境日不能早于入境日');
+  var finish = function(){ staySaveDo(x, c, d, methods, other, bad); };
+  if(d.outD && stayConflictInfo(c, d.outD).length){ inStayResGate(c, d, finish); return; } /* CMD-1027-14：离开日期之后还有韩国预约 → 先弹处理窗（和 KR 的行程修正同一套规则） */
+  finish();
+}
+function staySaveDo(x, c, d, methods, other, bad){
   var r = coreSetStay(c, d.inD, d.outD, actingName(), {initial:!!x.o.initial, ex:d.ex}); if(!r.ok) return bad(r.err);
   if(x.o.trip){ c.tripConfirm = {at:nowFullDt(), by:actingName(), methods:methods, other:other}; logCaseEvent(c, actingName(), '已确认行程（'+methods.join('、')+'）：入境 '+stayMDT(c, 'in')+' / 离境 '+stayMDT(c, 'out'), '赴韩施术'); }
   var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null;
   if(x.o.then) x.o.then(); else { try{ renderCaseBody(c); }catch(er){} }
+}
+
+
+/* ================= CMD-1027-14：IN 改在韩期间——离开当天及之后还有韩国预约 → 处理弹窗（对应 KR 的 krStayResolveGate / coreStayResolve，核心处理函数共用） =================
+   每一项必选：［回印尼做］（只有「韩国或印尼都可」的；取消这笔韩国预约，进「印尼术后 · 未预约」）/［保留］（取消这笔预约，项目留在「在韩术后 · 未预约」）/
+   ［请 KR 提前做］（韩国的预约由 KR 安排，IN 不直接改日子：预约原样不动，发通知给 KR + KR 待办，KR 改到离开前之前仍算冲突）。 */
+var IN_STAYRES = null;
+function inStayResGate(c, d, then){
+  var list = stayConflictInfo(c, d.outD); if(!list.length){ then(); return; }
+  IN_STAYRES = {caseId:c.id, vals:d, then:then, rows:list.map(function(f){ return {f:f, mode:''}; })};
+  inStayResRender();
+}
+function inStayResSet(i, v){ IN_STAYRES.rows[i].mode = v; inStayResRender(); }
+function inStayResRender(){
+  var S = IN_STAYRES; if(!S) return; var c = calCaseById(S.caseId); if(!c) return;
+  var ov = document.getElementById('in-stayres-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'in-stayres-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100030; document.body.appendChild(ov); }
+  var leave = stayLeaveWhen(c, S.vals.outD, (S.vals.ex||{}).outTime);
+  var rows = S.rows.map(function(r, i){
+    var f = r.f, radio = function(v, lb, dis, tip){ return '<label style="display:flex;gap:4px;align-items:center;'+(dis ? 'color:#A89F94;cursor:not-allowed;' : 'cursor:pointer;')+'"'+(tip ? ' title="'+tip+'"' : '')+'><input type="radio" name="isr'+i+'" '+(r.mode===v ? 'checked ' : '')+(dis ? 'disabled ' : '')+'onchange="inStayResSet('+i+',\''+v+'\')">'+lb+'</label>'; };
+    return '<div style="padding:10px 0;border-top:1px solid var(--border2);"><div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 110px;gap:8px;font-size:13px;align-items:center;"><span><b>'+cesc(f.name)+'</b></span><span style="font-size:12px;color:var(--slate2);">'+cesc(f.surg||'—')+'</span><span style="font-size:12px;">'+cesc(stayMD(f.date)+(f.time ? ' '+f.time : ''))+'</span></div>'+
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:12px;">'+radio('toIn', '回印尼做', !f.canIn, f.canIn ? '' : '必须在韩国做，不能回印尼')+radio('keep', '保留（取消这笔预约，项目留在未预约）')+radio('ask', '请 KR 提前做（通知 KR，预约暂时不动）')+'</div></div>';
+  }).join('');
+  var ok = S.rows.every(function(r){ return !!r.mode; });
+  ov.innerHTML = '<div class="modal-box" style="width:680px;max-width:96vw;max-height:86vh;overflow-y:auto;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">以下韩国预约在离开日期（'+cesc(leave)+'）之后，请决定怎么处理</div><div style="font-size:12px;color:var(--muted);margin-bottom:6px;">每一项都要选才能保存。韩国的预约由 KR 安排：IN 不直接改日子，选「请 KR 提前做」会通知 KR。也可以不改，取消后回去改离开日期。</div>'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 110px;gap:8px;font-size:12px;color:var(--muted);padding:4px 0;"><span>项目</span><span>施术项目</span><span>原本预约</span></div>'+rows+
+    '<div id="isr-err" style="font-size:12px;color:#B3261E;min-height:16px;margin-top:8px;"></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px;"><button class="btn-outline" onclick="inStayResCancel()">取消（回去改离开日期）</button><button class="btn-primary" '+(ok ? '' : 'disabled style="opacity:.5;cursor:not-allowed;" ')+'onclick="inStayResSave()">确认处理并保存</button></div></div>';
+  ov.classList.add('open');
+}
+function inStayResCancel(){ IN_STAYRES = null; var ov = document.getElementById('in-stayres-overlay'); if(ov) ov.classList.remove('open'); }
+function inStayResSave(){
+  var S = IN_STAYRES; if(!S) return; var c = calCaseById(S.caseId); if(!c) return; var picks = {}; S.rows.forEach(function(r){ picks[r.f.id] = {mode:r.mode}; });
+  var res = coreStayResolve(c, picks, S.vals.outD, (S.vals.ex||{}).outTime, actingName());
+  if(!res.ok){ var er = document.getElementById('isr-err'); if(er) er.textContent = res.err; return; }
+  var then = S.then; IN_STAYRES = null; var ov = document.getElementById('in-stayres-overlay'); if(ov) ov.classList.remove('open');
+  then();
 }
