@@ -11315,6 +11315,7 @@ function coreStayResolve(c, picks, outD, outT, by){
   for(var i = 0; i < infos.length; i++){
     var f = infos[i], p = (picks||{})[f.id]; if(!p || !p.mode) return {ok:false, err:'每一项都要选处理方式（'+f.name+'）'};
     if(p.mode==='toIn' && !f.canIn) return {ok:false, err:f.name+'必须在韩国做，不能回印尼'};
+    if(p.mode==='will' && !(f.unbooked && !f.date)) return {ok:false, err:f.name+'：「这趟还会做」只有没有建议日期的项目能选'}; /* CMD-1028-12 三 */
     if(p.mode==='ask' && !inSide) return {ok:false, err:f.name+'：请 KR 提前做只有 IN 端用'};
     if(p.mode==='early'){
       if(f.unbooked && f.vkind==='mg' && !c.krBalancePaid) return {ok:false, err:f.name+'：尾款付清后才能预约'};
@@ -11323,12 +11324,13 @@ function coreStayResolve(c, picks, outD, outT, by){
       var ce = (typeof krbClosedText==='function' && hid) ? krbClosedText(hid, p.date, p.time||'') : ''; if(ce) return {ok:false, err:f.name+'：'+ce};
     }
   }
-  var early = [], toIn = [], keep = [], ask = [], res = {ok:true}, oldOut = (c.stay && c.stay.out) || '';
+  var early = [], toIn = [], keep = [], ask = [], will = [], res = {ok:true}, oldOut = (c.stay && c.stay.out) || '';
   infos.forEach(function(f){
     var p = picks[f.id], label = (f.surg ? f.surg+' · ' : '')+f.name+(f.unbooked ? '（'+(f.date ? '建议 '+stayMD(f.date) : '无建议日期')+'，还没预约）' : '（原 '+stayMD(f.date)+(f.time ? ' '+f.time : '')+'）');
     if(f.unbooked){ /* CMD-1028-10 四：还没预约的项目——提前做 = 现在就约；回印尼做 = 交给印尼；保留 = 不进未安排预约，另放「保留」组 */
       if(p.mode==='early'){ var okE = f.vkind==='care' ? coreCareBook(c, f.item, f.i, p.date, p.time||'11:00', 'KR', f.reuse||'', by, null) : coreUnitBookUse(c, f.iid, p.date, p.time||'11:00', by, '', null); if(okE) early.push(label+' → '+stayMD(p.date)+' '+(p.time||'11:00')); }
       else if(p.mode==='toIn'){ if(f.vkind==='care' && coreCareBook(c, f.item, f.i, f.date||todayStr(), '', 'IN', f.reuse||'', by, null)) toIn.push(label); }
+      else if(p.mode==='will'){ will.push(label); } /* CMD-1028-12 三：维持未预约、留在 KR 工作台未安排预约；下次再改离开日期仍会再问（和保留不同） */
       else if(p.mode==='ask'){ ask.push(label+' → 请 KR 排在 '+stayMD(outD)+' 之前'); }
       else { stayKeepAdd(c, f.vkind==='care' ? 'care|'+f.item+'|'+f.i : 'mg|'+f.iid, 1); keep.push(label); }
       return;
@@ -11346,7 +11348,7 @@ function coreStayResolve(c, picks, outD, outT, by){
   });
   try{ subCaseNos(c); }catch(e){}
   if(toIn.length){ try{ handToInNotify(c, by); }catch(e){} }
-  var parts = []; if(early.length) parts.push('提前到离开前：'+early.join('、')); if(toIn.length) parts.push('转回印尼（进「印尼术后 · 未预约」）：'+toIn.join('、')); if(keep.length) parts.push('保留（已有预约的先取消；保留的项目不进未安排预约、不生成待办，另放「保留」组，KR 仍可手动预约）：'+keep.join('、')); if(ask.length) parts.push('请 KR 提前做（预约暂时不动，KR 处理前仍算冲突）：'+ask.join('、'));
+  var parts = []; if(early.length) parts.push('提前到离开前：'+early.join('、')); if(toIn.length) parts.push('转回印尼（进「印尼术后 · 未预约」）：'+toIn.join('、')); if(keep.length) parts.push('保留（已有预约的先取消；保留的项目不进未安排预约、不生成待办，另放「保留」组，KR 仍可手动预约）：'+keep.join('、')); if(will.length) parts.push('这趟还会做（之后再约，维持未预约）：'+will.join('、')); if(ask.length) parts.push('请 KR 提前做（预约暂时不动，KR 处理前仍算冲突）：'+ask.join('、'));
   res.summary = parts.join('；');
   if(parts.length){
     logCaseEvent(c, by, '离境日从 '+(oldOut ? stayMD(oldOut) : '未填')+' 改到 '+stayMD(outD)+'，超出行程的项目逐项处理（'+stayLeaveWhen(c, outD, outT)+' 之后）：'+res.summary, '赴韩施术');

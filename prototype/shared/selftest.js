@@ -5274,6 +5274,40 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     c.stay.outTime = '';
     ST.ok(!stayDayBlockText(c, '2030-01-10', '23:00') && /当天 离境|当天离境/.test(stayDayConfirmText(c, '2030-01-10', '23:00').replace(/\s+/g, ' ')) && stayConflictRows(c, '2030-01-10', '').map(function(s0){ return s0.id; }).join()==='c2', '没填离境时间：离境当天一样提醒（文字写「客人当天离境」），当天的不算超出');
   });
+  ST.def('R170b','CMD-1028-12 三（KM1 分页，pcStage 夹具）：改离开日期弹窗——显示新离境日期 + 时间、没建议日期的项目多「这趟还会做」（维持未预约、下次再问）、离境当天已约的不算超出',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr();
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var set = function(f){ Store.mutateClinic(cid, function(){ f(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); return true; }); };
+    var okDay = function(n){ var d = ymdAdd(td, n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
+    var snap = JSON.stringify(gc()), outD = okDay(5), sgName = '';
+    try{
+      set(function(c){ c.krBalancePaid = true; c.krTripEnded = null; c.visitClosed = false; c.stay = {in:ymdAdd(td, -1), out:ymdAdd(td, 60)}; c.krSchedule = c.krSchedule || {}; c.krSchedule.confirmedDate = ymdAdd(td, 1);
+        var sg = c.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; })[0]; sgName = sg.name; c.procedureItems.forEach(function(it){ if(it!==sg) it.postcare = []; });
+        sg.postcare = [{mgmt:'R170拆线', name:'R170拆线', times:1, place:'KR', startDay:12}];
+        c.procedureItems = c.procedureItems.filter(function(it){ return !/^R170/.test(it.name||''); });
+        c.procedureItems.push({name:'R170 热玛吉 · 2次', origin:'KR', mgmtPlan:true, qty:2, heldOver:true, uses:[], iid:'iR170', interval:2, firstDay:'', intNa:true});
+        c.subItems = (c.subItems||[]).filter(function(x){ return x.kind!=='术后管理记录'; }); });
+      set(function(c){ coreCareBook(c, sgName, 0, okDay(30), '12:00', 'KR', '', 'KM1 室长', null); });
+      var c = gc(), infos = stayConflictInfo(c, outD, '18:00');
+      ST.ok(infos.length===3 && infos.filter(function(f){ return f.unbooked && !f.date; }).length===2, '3 项：已约 1 + 没建议日期的管理项目 2：'+infos.map(function(f){ return f.name; }).join('/'));
+      /* 离境当天、离境时间之前已约的不算超出 */
+      set(function(c2){ coreCareBook(c2, sgName, 0, outD, '12:00', 'KR', '', 'KM1 室长', null); });
+      ST.ok(stayConflictInfo(gc(), outD, '18:00').filter(function(f){ return !f.unbooked && f.date===outD; }).length===0, '约在离境当天、离境时间（18:00）之前的已约项目不算超出');
+      KR_CASE = {clinicId:cid, id:r0.id, tab:'items'}; var g = krStayResolveGate('fix', {outD:outD, outT:'18:00', inD:ymdAdd(td, -1), inT:'', why:'x'}); ST.ok(g===true, '弹窗打开');
+      var ov = document.getElementById('kr-stayres-overlay'); ST.ok(!!ov && new RegExp(stayMD(outD)+' 18:00').test(ov.textContent) && /新的离境/.test(ov.textContent), '弹窗上方写出新的离境日期和时间');
+      ST.ok((ov.innerHTML.match(/'mode','will'/g)||[]).length===STAY_RES.rows.filter(function(r){ return r.f.unbooked && !r.f.date; }).length && STAY_RES.rows.length===3, '只有没建议日期的项目有「这趟还会做」');
+      krStayResCancel();
+      /* 选「这趟还会做」→ 维持未预约，留在未安排预约，下次再问 */
+      var pk = {}; stayConflictInfo(gc(), outD, '18:00').forEach(function(f){ pk[f.id] = {mode:f.unbooked && !f.date ? 'will' : 'keep'}; });
+      var res; set(function(c2){ res = coreStayResolve(c2, pk, outD, '18:00', 'KM1 室长'); }); ST.ok(res.ok && /这趟还会做/.test(res.summary), '处理成功：'+(res.err||res.summary));
+      c = gc(); ST.ok(krCbMgItems(c).length===1 && krCbMgItems(c)[0].max===2 && stayKeepN(c, 'mg|iR170')===0, '「这趟还会做」的维持未预约，没有进保留');
+      ST.ok(todoUbKr().some(function(x){ return x.caseId===c.id && /热玛吉/.test(x.label); }), '仍在 KR 工作台未安排预约');
+      ST.ok(stayConflictInfo(c, ymdAdd(outD, 1), '18:00').some(function(f){ return f.vkind==='mg'; }), '下次再改离开日期仍要再问');
+      set(function(c2){ coreCareBook(c2, sgName, 0, okDay(40), '12:00', 'KR', '', 'KM1 室长', null); }); var bad; set(function(c2){ var inf = stayConflictInfo(c2, outD, '18:00').filter(function(f){ return !f.unbooked; }), p2 = {}; inf.forEach(function(f){ p2[f.id] = {mode:'will'}; }); bad = coreStayResolve(c2, p2, outD, '18:00', 'KM1 室长'); }); ST.ok(bad && !bad.ok && /只有没有建议日期/.test(bad.err), '已约 / 有建议日期的项目不能选「这趟还会做」');
+    } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); CASE_ITEMS[i] = JSON.parse(snap); return true; }); try{ STAY_RES = null; }catch(e){} }
+  });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = toConfirmed('R51a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid];
