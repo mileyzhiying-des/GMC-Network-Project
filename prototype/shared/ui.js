@@ -388,10 +388,12 @@ function krLaneLayout(list){
 }
 /* 时间轴表头（和日期列头同一行）：「印尼」（大字）/「韩国」（小字），对应下面每一行的大字 / 小字；每一行时间本身不加标注 */
 function axisHeadHtml(){ return ''; } /* CMD-1014-19：拿掉最上面「印尼 / 韩国」小标题，改成每个时间前标「印 / 韩」 */
+/* CMD-1028-13 二：已完成 / 客人已到医院（已到店）的块变灰；还没到的照常 */
+function krItGrey(it){ return !!(it.done || /^(已到|已完成)/.test(it.state||'')); }
 function krBlockStyle(it){
   if(it.type==='book') return it.pending ? 'background:#fff;color:var(--sage);border:1.5px dashed #3F7A55;font-weight:700;cursor:pointer;' : 'background:var(--sage-bg);color:var(--sage);border:1px solid #BFD3C5;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'; /* CMD-1014-16：IN 在 KR 日程占位预约：待 KR 确认 = 虚线块，确认后 = 实线块 */
-  if(it.type==='surg' && it.own) return 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;border-left:4px solid #B5703F;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的施术 = KR 图例的施术色（原来是绿色，和术后到院分不开） */ /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
-  if(it.type==='visit' && it.own) return 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的术后到院 / 管理到院（同 KR 图例的术后到院绿） */
+  if(it.type==='surg' && it.own) return 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;border-left:4px solid #B5703F;font-weight:700;cursor:pointer;'+(krItGrey(it) ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的施术 = KR 图例的施术色（原来是绿色，和术后到院分不开） */ /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
+  if(it.type==='visit' && it.own) return 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'+(krItGrey(it) ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的术后到院 / 管理到院（同 KR 图例的术后到院绿） */
   return 'background:#F3F1EC;'; /* 不可预约：很浅的灰，不写字 */
 }
 /* CMD-1020-16 一：IN 的 KR 医院日程「医院」视图同样用小标签（一小时格 = 两行 × KR_ROW_PX，标签高度 = 1/6 小时格，整栏宽，按开始时间上下排，超过 6 个显示 5 个 + 「+N 个预约」，点开小弹层列出全部） */
@@ -449,15 +451,15 @@ function calEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/<
 function calDayNumHtml(n, isToday, inMonth){ return '<span class="cal-daynum'+(isToday?' cal-today':'')+'"'+(isToday ? '' : ' style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'"')+'>'+n+'</span>'; }
 function calMonthLinesHtml(lines, max){
   max = max || 3; var ls = lines.slice().sort(function(a, b){ return (a.s||0)-(b.s||0); }), shown = ls.slice(0, ls.length > max ? max-1 : max), rest = ls.length-shown.length;
-  return shown.map(function(l){ return '<div class="cal-line'+(l.red?' red':'')+'" title="'+calEsc(l.t)+'">'+calEsc(l.t)+'</div>'; }).join('')+(rest>0 ? '<div class="cal-more">还有 '+rest+' 项</div>' : '');
+  return shown.map(function(l){ return '<div class="cal-line'+(l.red?' red':'')+'" title="'+calEsc(l.t)+'"'+(l.g ? ' style="opacity:.5;filter:grayscale(1);"' : '')+'>'+calEsc(l.t)+'</div>'; }).join('')+(rest>0 ? '<div class="cal-more">还有 '+rest+' 项</div>' : '');
 }
 /* IN 的 KR 医院日程月视图：某天的时段行（时间换算成诊所时间；IN 看不到不可预约的备注） */
 function krMonthLines(ds){
   var all = krViewIsAll(), hid = krViewHospital(), hd = HOSPITAL_DATA[hid] || {offs:[]}, lines = [], tm = function(m){ return krToClinic(ds, minToTime(m)).time; };
   krGridItems(ds).forEach(function(it){
     var nm = String(it.label||'').split(' · ')[0];
-    if(it.type==='surg') lines.push({s:it.s, t:tm(it.s)+' 施术 · '+nm});
-    else if(it.type==='visit') lines.push({s:it.s, t:tm(it.s)+' 到院 · '+nm});
+    if(it.type==='surg') lines.push({s:it.s, t:tm(it.s)+' 施术 · '+nm, g:krItGrey(it)});
+    else if(it.type==='visit') lines.push({s:it.s, t:tm(it.s)+' 到院 · '+nm, g:krItGrey(it)});
     else if(it.type==='book') lines.push({s:it.s, t:tm(it.s)+' 预约 · '+nm});
     else lines.push({s:it.s, t:tm(it.s)+'～'+tm(it.e)+' 不可预约'});
   });
@@ -572,7 +574,7 @@ function buildMonthGrid(){
     var ds = dateStr(cur), inMonth = cur.getMonth()===first.getMonth();
     var closed = isRescheduleDateDisabled(cur); /* CMD-1020-14：按诊所设定的休诊日灰底 + 休诊（同周视图 / KR） */
     var offs = memosOn(ds).filter(function(m){ return m.type==='OFF'; }).map(function(m){ return m.person; });
-    var lines = evs.filter(function(e){ return e.date===ds; }).map(function(e){ return {s:timeToMin(e.time), t:e.time+' '+String(e.name||'')+(e.purpose ? ' · '+e.purpose : '')}; });
+    var lines = evs.filter(function(e){ return e.date===ds; }).map(function(e){ return {s:timeToMin(e.time), t:e.time+' '+String(e.name||'')+(e.purpose ? ' · '+e.purpose : ''), g:(e.vstate==='已到访' || !!e.ended)}; });
     if(offs.length) lines.unshift({s:-1, t:offs.join('、')+' OFF', red:true});
     var extra = closed ? '<div class="cal-off">休诊</div>' : calMonthLinesHtml(lines)+(inMonth && inCapHeadHtml(ds) ? '<div>'+inCapHeadHtml(ds).replace('<br>','')+'</div>' : '');
     html += '<div class="cal-cell'+(closed?' cal-gray':'')+'" onclick="openWeekOf(\''+ds+'\')" title="点击进入这一周的周视图">'+calDayNumHtml(cur.getDate(), sameDate(cur, TODAY_DATE), inMonth)+extra+'</div>';

@@ -623,6 +623,7 @@ function eventChipHtml(e, opts){
     l1 = (e.vstate==='未到店' || e.vstate==='预约取消') ? '<s>'+e.name+'</s>' : e.name;
     l2 = (e.purpose||'')+(e.n>1 ? '（'+e.n+' 项）' : '')+(e.vstate==='已到访' ? '（已到访）' : '')+(e.vstate==='未到店' ? ' 未到店' : '')+(e.vstate==='预约取消' ? (e.cancelBy==='客人' ? ' 客人取消预约' : ' 预约取消') : '');
     if(e.vstate==='预约取消') grey = 'opacity:.5;filter:grayscale(1);';
+    if(e.vstate==='已到访') grey = 'opacity:.5;filter:grayscale(1);'; /* CMD-1028-13 二：客人已到店，块就变灰（和已结束同一种灰）；撤回到店后 vstate 变回待访问，自然恢复 */
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     if(e.vstate==='待访问' && past){
       var left = when.getTime() + noShowMs() - now.getTime();
