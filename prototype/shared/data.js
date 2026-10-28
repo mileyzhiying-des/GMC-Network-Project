@@ -177,7 +177,7 @@ function gmcResetAll(reason, keepUser, confirmed){
       var oldV = parseInt(localStorage.getItem('gmc_demo_ver'), 10) || 0, rawN = gmcUserCaseCountRaw(), cry = null, blockMsg = '';
       try{ cry = gmcExtractUserCarry(); }catch(e){ blockMsg = '提取用户案件时出错：'+e.message; }
       if(!blockMsg && oldV >= 44 && cry.total !== rawN) blockMsg = '用户案件数量对不上（存档里 '+rawN+' 个，提取出 '+cry.total+' 个）';
-      if(!blockMsg){ gmcUserSafeSave('升级 '+oldV+' → '+DEMO_DATA_VERSION+' 前'); if(oldV < 44) cry = gmcCarryDropCases(cry); if(!gmcStoreCarry(cry)) blockMsg = '存档容量不够，用户案件没能先存起来'; }
+      if(!blockMsg){ gmcUserSafeSave('升级 '+oldV+' → '+DEMO_DATA_VERSION+' 前'); if(oldV < 44 || localStorage.getItem('gmc_cfg_wipecases')==='1'){ cry = gmcCarryDropCases(cry); localStorage.removeItem('gmc_cfg_wipecases'); } /* CMD-1028-07：测试覆盖页［清空案件和客人］——和 44 那次一样丢掉案件 / 客人，保留账号、诊所 / 医院设定、用户改过的项目库 / 活动价 / 案例（上一行先存了安全备份） */ if(!gmcStoreCarry(cry)) blockMsg = '存档容量不够，用户案件没能先存起来'; }
       if(blockMsg){
         window.GMC_UPGRADE_BLOCK = blockMsg; gmcBackupKeep(bkv);
         try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:String(oldV), to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, blocked:true, failed:[{caseNo:'（全部）', name:'', reason:'升级已停止：'+blockMsg+'；存档没有被改动'}]})); }catch(e2){}

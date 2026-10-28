@@ -723,6 +723,24 @@ function todoTick(){
 function tripAutoTick(){ /* CMD-1027-04 一：过了离开日期 → 韩国行程自动结束（IN 页只扫本诊所；KR 页扫各来源诊所）。原型里要有人开着页面才会跑；正式版由后端 00:00 排程 */
   try{ if(typeof todoIsKr==='function' && todoIsKr()){ krClinics().forEach(function(cl){ Store.mutateClinic(cl.id, function(){ if(tripAutoSweep()) Store.touch(); }); }); } else if(typeof tripAutoSweep==='function'){ if(tripAutoSweep()) Store.touch(); } }catch(e){ console.error('[行程自动结束]', e); }
 }
+/* CMD-1028-07 测试覆盖页拨演示时间（gmc_cfg_demotime 变了）→ 本分页立刻把 00:00 / 过离开日期 / 未到店 / 转管理项目等扫一遍（后台分页的定时器会被浏览器降速，storage 事件不会） */
+function demoJumpSweep(){
+  try{
+    if(typeof demoClockCfg==='function') DEMO_CLOCK_AT = 0;
+    tripAutoTick();
+    if(!(typeof todoIsKr==='function' && todoIsKr())){
+      var ch = 0;
+      if(typeof visitSweep==='function') ch |= visitSweep() ? 1 : 0;
+      if(typeof careOverMonthSweep==='function') ch |= careOverMonthSweep() ? 1 : 0;
+      if(typeof mainAutoSweep==='function') ch |= mainAutoSweep() ? 1 : 0;
+      if(typeof autoNoShowSweep==='function') ch |= autoNoShowSweep() ? 1 : 0;
+      if(ch){ Store.touch(); }
+    }
+    if(typeof refreshView==='function') refreshView();
+    if(typeof todoRefresh==='function' && document.getElementById('todo-pane')) todoRefresh();
+  }catch(e){ console.error('[演示时间跳天扫描]', e); }
+}
+try{ window.addEventListener('storage', function(e){ if(e.key === 'gmc_cfg_demotime') setTimeout(demoJumpSweep, 60); }); }catch(e){}
 setTimeout(tripAutoTick, 1500);
 setInterval(tripAutoTick, 30000);
 setInterval(todoTick, 30000);
