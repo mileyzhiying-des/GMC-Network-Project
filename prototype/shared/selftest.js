@@ -5289,6 +5289,29 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     CLIENT_HOLDINGS[c.name] = []; c.procedureItems = c.procedureItems.filter(function(it){ return !/R172/.test(it.name); });
   });
   /* CMD-1028-14 一、二：冲突弹窗文字 / 按钮；预约弹窗红框项目可直接［保留］；第一次填在韩期间也逐项选 */
+  ST.def('R174a','CMD-1028-14 三（KM1 分页，pcStage 夹具）：同一次到院里别的行已到院 / 做完后，另一行不再出「客人还没到」待办；真没到的仍出',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr();
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var set = function(f){ Store.mutateClinic(cid, function(){ f(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); return true; }); };
+    var notArr = function(){ var rows = krAllCases().filter(function(x){ return x.id===r0.id; }); return krTodoItems(rows).filter(function(it){ return /客人还没到/.test(it.text||it.title||''); }).length; };
+    var snap = JSON.stringify(gc());
+    try{
+      set(function(c){ c.krBalancePaid = true; c.krTripEnded = null; c.visitClosed = false; c.stay = {in:ymdAdd(td, -1), out:ymdAdd(td, 60)}; c.todoAcks = {};
+        var sg = c.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; })[0]; c.procedureItems.forEach(function(it){ if(it!==sg) it.postcare = []; });
+        sg.postcare = [{mgmt:'R174A', name:'R174A', times:2, interval:1, place:'KR', startDay:5}];
+        c.subItems = (c.subItems||[]).filter(function(x){ return x.kind!=='术后管理记录'; });
+        coreCareBook(c, sg.name, 0, td, '00:01', 'KR', '', 'KM1 室长', null); coreCareBook(c, sg.name, 0, td, '00:01', 'KR', '', 'KM1 室长', null); });
+      var c = gc(), rows = c.subItems.filter(function(x){ return x.kind==='术后管理记录' && x.date===td; });
+      if(!ST.ok(rows.length>=2, '造出同一次到院的两行')) return;
+      ST.ok(notArr()>=1, '都没到院时，过了时间仍出「客人还没到」');
+      set(function(c2){ c2.subItems.filter(function(x){ return x.kind==='术后管理记录' && x.date===td; })[0].arrived = true; });
+      ST.ok(notArr()===0, '这次到院里有一行已到院 → 另一行不再出「客人还没到」（实际 '+notArr()+'）');
+      set(function(c2){ c2.subItems.filter(function(x){ return x.kind==='术后管理记录' && x.date===td; }).forEach(function(x){ x.arrived = true; x.done = true; }); });
+      ST.ok(notArr()===0, '全部做完后没有「客人还没到」');
+    } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); if(i>=0) CASE_ITEMS[i] = JSON.parse(snap); return true; }); }
+  });
   ST.def('R173a','CMD-1028-14 一二（KM1 分页，pcStage 夹具）：冲突弹窗文字按类型 + 右对齐按钮；预约弹窗红框［保留］——处理完才能确认、全部保留只存保留；没填过在韩期间时也列出超出项目',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
