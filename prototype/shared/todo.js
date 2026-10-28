@@ -416,7 +416,7 @@ function todoUbKr(){
       var it = itemByKey(c, m.iid||m.name) || {};
       if(it.iid && pickedMgmt(c, it)) return; /* CMD-1020-18：已经加进今天到院（今日进行 / 本次使用）的不算未安排 */
       out.push(Object.assign({}, base, {kind:'mg', key:'ub|'+c.id+'|mg|'+(m.iid||m.name), label:buyName(m.name), n:1, left:m.max, sub:'剩 '+m.max+' / 共 '+(it.qty||1)+' 次', sug:m.sugs[0]||'', place:'韩国', allBook:mkAll,
-        book:function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'items', page:'mgmt'}); setTimeout(function(){ krCbOpen({mgmtOne:m.iid||m.name}); }, 120); }}));
+        book:function(){ krShowCase(r.clinicId, r.id, {here:true, tab:'kmgmt'}); setTimeout(function(){ krCbOpen({mgmtOne:m.iid||m.name}); }, 120); /* CMD-1028-09：管理项目的事点了进主案件 · 在韩管理 tab */ }}));
     });
   });
   return out;
