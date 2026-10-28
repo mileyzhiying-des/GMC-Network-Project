@@ -4281,7 +4281,8 @@ function krRenderClientDetail(){
   if(!m){ el.innerHTML = '<div class="card" style="padding:24px;">'+back+'<div style="margin-top:12px;color:var(--slate2);">这位客人在本院没有可看的案件。</div></div>'; return; }
   /* CMD-1020-10：和 IN 同一套结构（clientDetailBodyHtml）；客户档案在来源诊所分区里，所以整页在 Store.withClinic 里算；KR 看不到的（联系方式 / 特别备注 / 隐私协议 / IN 本地持有）不画 */
   var body = Store.withClinic(m.clinicId, function(){
-    var cl = clientByName(m.name), cases = m.cases.map(function(r){ return r.c; });
+    var cl = clientByName(m.name), cases = m.cases.map(function(r){ return r.c; }), ids0 = {}; cases.forEach(function(c){ ids0[c.id] = 1; });
+    CASE_ITEMS.forEach(function(k){ if(k.mainId && ids0[k.mainId] && krKidVisible(k)) cases.push(k); }); /* CMD-1028-05 三：KR 参与的子案件缩进显示 */
     var model = {mode:'KR', name:m.name, cl:cl, cases:cases, clinicId:m.clinicId, openCase:function(c){ return "krShowCase('"+m.clinicId+"','"+c.id+"')"; }, addOnclick:(krCan() && cl) ? "krCliBeautyAdd()" : ''};
     return {tags:clientTagsHtml(cl), html:clientDetailBodyHtml(model)};
   });

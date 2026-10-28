@@ -833,7 +833,7 @@ function submitSelfBooking(f){
     if(f.consentGiven) cl.consents.push(consent);
     cl.updated = '刚刚';
   }
-  var exSelf = pendingResvSameDay(cl.name, f.date), c = exSelf || createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose); /* CMD-1021-16 三：客人自助预约同一天已有还没到的预约 → 合并 */
+  var exSelf = pendingResvSameDay(cl.name, f.date), selfMain = (!exSelf && !isNew) ? mainForBookingPurpose(cl.name, f.purpose) : null, c = exSelf || (selfMain ? createChildReservation(selfMain, f.date, f.time, f.purpose, {phone:f.phone}) : createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose)); /* CMD-1021-16 三：客人自助预约同一天已有还没到的预约 → 合并 */
   if(exSelf){ f.time = exSelf.visitTime; logCaseEvent(exSelf, '客人', '客人自助预约同一天（'+f.purpose+'）已合并到这次预约（时间以原预约 '+exSelf.visitTime+' 为准）'); }
   c.visitNote = (f.note||'').trim() || c.visitNote || ''; c.bookEntry = f.entry; c.remindSent = false;
   /* 占位转预约：按占位 id，或同手机号 + 同一时段的占位一起收掉；预约历史里这行记为「已转预约」 */
@@ -844,7 +844,7 @@ function submitSelfBooking(f){
   c.bookClient = isNew ? 'new' : 'old'; c.consentResigned = !isNew && !!f.consentGiven; /* 记录：新客 / 老客、老客是否重签同意书（测试覆盖页用，CMD-1012-06） */
   /* 医美史（结构化）：年月 + 项目 + 来源"客人自填"；老客人新增的标"本次新增"（到店时室长在基础资料里看得到并确认；延续既往面诊的"有新增医美史"读它） */
   (f.beauty||[]).forEach(function(b){ if(b && b.ym && b.project) addBeautyRecord(cl, {year:+b.ym.slice(0,4), month:+b.ym.slice(5,7), project:b.project, source:'客人自填', caseId:c.id, newCaseId:isNew ? null : c.id}); });
-  if(exSelf){} else if(f.entry==='walkin') c.logEntries[0].action = '到店自己填资料（平板/手机）预约成功，生成 Case ID '+c.caseNo;
+  if(exSelf || selfMain){} else if(f.entry==='walkin') c.logEntries[0].action = '到店自己填资料（平板/手机）预约成功，生成 Case ID '+c.caseNo;
   else if(f.entry==='link') c.logEntries[0].action = '客人通过预约链接填完资料，预约成功，生成 Case ID '+c.caseNo;
   var when = dateLabel(f.date)+' '+f.time, tail = '：'+cl.name+'（'+c.caseNo+'）'+when+(c.visitNote ? ' · '+c.visitNote : '');
   var old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
@@ -9268,6 +9268,7 @@ function cliOngoingHtml(model){
 function cliHoldKrRows(model){
   var rows = [];
   model.cases.forEach(function(c){
+    if(isChildVisit(c)) return; /* 子案件没有自己的项目 */
     (c.procedureItems||[]).forEach(function(it){
       if(!krIsMgmtItemC(it) && it.origin==='KR' && it.deferUse && !it.done && !it.cancelled && !it.swapped && !it.pendingPay){ rows.push({c:c, name:buyName(it.name), tag:'施术项目', type:'surg', left:'已购买，还没做', times:[]}); return; } /* CMD-1021-16 二：施术项目（已买还没用的） */
       if(!it.heldOver || it.holdDone || it.cancelled || !krIsMgmtItemC(it)) return;
@@ -9299,9 +9300,17 @@ function cliHoldCount(model){
   if(model.mode==='IN') n += holdingsAllSorted(model.name).filter(function(h){ return holdingRemaining(h)>0; }).length + clientCompCredits(model.name).length + clientCareLeftAll(model.name).length;
   return n;
 }
+/* CMD-1028-05 三：KR 客人页能看到的子案件——只有 KR 参与的：送给 KR 的复诊评估、继续面诊（已缴 / 已免面诊费、送到 KR 的）；
+   纯 IN 的（只买本地项目、只做印尼术后管理、没送 KR 的预约、已取消的预约）不显示。韩国那几天不是子记录，在主案件里看。 */
+function krKidVisible(k){
+  if(!isChildVisit(k) || k.subState==='cancelled' || k.stage==='cancelled' || k.krVisit) return false;
+  if(isRevEval(k)) return !!(k.consultRequested || k.consultStatus);
+  if(hasResumeType(k, '接续面诊')) return !!k.consultRequested && k.consultStatus && k.consultStatus!=='awaiting_payment';
+  return false;
+}
 function cliCasesHtml(model){
   var all = model.cases.slice(), ids = {}; all.forEach(function(c){ ids[c.id] = 1; });
-  var isKid = function(c){ return model.mode==='IN' && isChildVisit(c) && ids[c.mainId]; }; /* CMD-1026-08 二：IN 子案件缩进放在所属主案件下面（默认全部展开；已取消的灰色） */
+  var isKid = function(c){ return isChildVisit(c) && ids[c.mainId]; }; /* CMD-1028-05 三：KR 客人页同样缩进显示子案件（model.cases 里只放跟 KR 有关的，见 krKidVisible） */ /* CMD-1026-08 二：IN 子案件缩进放在所属主案件下面（默认全部展开；已取消的灰色） */
   var cs = all.filter(function(c){ return !isKid(c); }).sort(function(a, b){ return String(b.caseNo).localeCompare(String(a.caseNo)); });
   if(!cs.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无案件记录</div>';
   var cardHtml = function(c, kid){
@@ -11283,6 +11292,18 @@ function mainStatusModel(c){
    现在：约的时候就是主案件的子案件（mainId = 主案件，案件号 = 主案件号-NN，建立预约时就给号，用 13 的一天一个号 dayNoAssign；旧主案件用 mainNoMax+1），不消耗新的 Case ID；
    preChild 标记它是「预约时就挂好的」：到店弹窗默认「继续之前的服务」+ 对应服务内容；取消接待不退出主案件。 */
 function childResvOf(m, date){ return childVisitsOf(m).filter(function(x){ return x.visitDate===date && !x.krVisit && x.subState==='waiting' && x.stage!=='cancelled' && x.preChild; })[0] || null; }
+/* CMD-1028-05 二：来访目的是「术后管理」「复诊评估」的预约，如果这位客人恰好只有一个对得上的主案件（术后管理：还有没做的术后管理；复诊评估：施术做完且在 3 个月内），预约直接挂在这个主案件下面（不占新 Case ID）；
+   有多个 / 没有对得上的 → 返回 null，保持独立的一般预约，到店时在服务类型对话框里选。 */
+function mainForBookingPurpose(name, purpose){
+  if(purpose!=='术后管理' && purpose!=='复诊评估') return null;
+  var cands = mainsOf().filter(function(m){ return m.name===name && m.materialsConfirmed && m.stage!=='cancelled' && !m.krVisit && !m.preChild; }).filter(function(m){
+    try{
+      if(purpose==='术后管理') return mainPendingBook(m).inN>0 || pendingCareOf(m).length>0;
+      return !!surgeryDoneDayOf(m) && joinWindowOf(m, '复诊评估').ok;
+    }catch(e){ return false; }
+  });
+  return cands.length===1 ? cands[0] : null;
+}
 function createChildReservation(m, date, time, purpose, ext){
   var rc = createReservationCase(m.name, null, date, time, null, purpose);
   if(rc.caseNo==='A'+String(CASE_NO_SEQ-1).padStart(6,'0')) CASE_NO_SEQ--; /* 不占新的 Case ID */
