@@ -870,8 +870,37 @@ function pcLinesHtml(c, it, fn){
     return '<div style="margin:3px 0;">'+head+'：'+(x.place==='KR' ? '必须在韩国' : '韩国或印尼都可')+'</div>';
   }).join('')+'</div>';
 }
-/* 麻醉同意书（占位文案，等用户撰写；记录版本 + 签署时间存在案件上） */
-var ANES_CONSENT_VERSION = 'v0.1（占位文案）';
+/* 麻醉同意书（记录版本 + 签署时间存在案件上）。CMD-1028-13：全文照 Notion「Data Retention & Consent」页「赴韩施术 · 麻醉事前说明与同意书（草案，2026-10-28）」，
+   草案待 KR 医院与法务确认，不取代医院正式同意书；该页没有写版本号，这里的版本标成「v0.2（草案 2026-10-28）」（取代原来的 v0.1 占位文案） */
+var ANES_CONSENT_VERSION = 'v0.2（草案 2026-10-28）';
+/* 「麻醉同意书」下划线链接：点了打开全文（只读）。items 可省略（弹窗自己从当前案件读） */
+function anesLink(label){ return '<a href="#" onclick="openAnesConsent();return false;" style="text-decoration:underline;color:inherit;" title="点开看全文">'+(label||'麻醉同意书')+'</a>'; }
+function anesCtxCase(){
+  try{ if(typeof isKrAccount==='function' && isKrAccount() && typeof KR_CASE!=='undefined' && KR_CASE && KR_CASE.id){ return Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? JSON.parse(JSON.stringify(c)) : null; }); } }catch(e){}
+  try{ return typeof getCurrentCase==='function' ? getCurrentCase() : null; }catch(e){ return null; }
+}
+function openAnesConsent(){
+  var c = anesCtxCase() || {}, esc = function(t){ return String(t==null?'':t).replace(/[&<>"]/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }, blank = '＿＿＿';
+  var its = []; try{ its = (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.cancelled && it.anesthesia && it.anesthesia.type && it.anesthesia.type!=='local'; }); }catch(e){}
+  var all = []; try{ all = (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.cancelled && !it.mgmtPlan && !it.service; }); }catch(e){}
+  var fastTxt = its.map(function(it){ var f = (typeof anesFastOf==='function') ? anesFastOf(it.anesthesia) : ''; return f ? esc(it.name)+' '+f : ''; }).filter(Boolean).join('；') || blank;
+  var anTxt = its.length ? its.map(function(it){ return esc(it.name)+'：'+esc((it.anesthesia||{}).label||''); }).join('；') : blank;
+  var ks = c.krSchedule || {}, sd = ks.confirmedDate || '';
+  var ov = document.getElementById('anes-text-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'anes-text-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var li = function(n, t){ return '<div style="margin:3px 0 3px 4px;">'+n+'. '+t+'</div>'; }, h = function(t){ return '<div style="font-weight:700;margin:12px 0 4px;">'+t+'</div>'; };
+  ov.innerHTML = '<div class="modal-box" style="width:560px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;"><div style="font-size:15px;font-weight:700;margin-bottom:2px;">麻醉事前说明与同意书 <span style="font-weight:400;font-size:12px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
+    '<div style="font-size:12px;background:#FFF4E5;border:1px solid #F0C98A;border-radius:8px;padding:8px 10px;margin:6px 0;line-height:1.6;">草案，待 KR 医院与法务确认后才能使用。韩国医院施术当天仍要签医院自己的正式同意书；本同意书是赴韩前的事前说明与确认，不能取代医院同意书。纸本签署，IN 室长在付定金前勾选「已签署」，系统记录版本与时间。</div>'+
+    '<div style="overflow:auto;font-size:13px;line-height:1.7;padding-right:4px;">'+
+    h('一、基本信息')+'<div>客人姓名：'+esc(c.name||blank)+'　案件编号：'+esc(c.caseNo||blank)+'<br>出生日期：'+esc((function(){ try{ var cl = (typeof clientByName==='function') ? clientByName(c.name) : null; return cl && cl.dob; }catch(e){ return ''; } })() || blank)+'　护照号码：'+blank+'（见客人基础资料）<br>施术医院：'+esc((typeof caseKrHospital==='function' && c.id ? (function(){ try{ return (HOSPITALS[caseKrHospital(c)]||{}).name||''; }catch(e){ return ''; } })() : '') || blank)+'　预定施术日期：'+esc(sd||blank)+'<br>施术项目：'+(all.length ? all.map(function(it){ return esc(it.name); }).join('、') : blank)+'<br>预定麻醉方式（局部麻醉 / 静脉镇静（睡眠麻醉）/ 全身麻醉）：'+anTxt+'</div>'+
+    h('二、我已了解的说明')+li(1,'麻醉的目的与方式')+li(2,'可能的副作用与风险：恶心、呕吐、头晕、喉咙不适、过敏反应；极少数情况可能出现呼吸抑制、心律不整等严重并发症')+li(3,'麻醉方式可能依院长当天的评估调整')+
+    h('三、我会遵守的事项')+li(4,'空腹：施术前 '+fastTxt+' 小时起禁食、禁水（依项目而定）')+li(5,'如实告知：病史、过敏史、正在使用的药物（含抗凝血药、减肥药、保健品）、怀孕可能、近期饮酒与吸烟')+li(6,'静脉镇静或全身麻醉后，当天不得自行驾车，需有同行人陪同')+li(7,'如因未如实告知或未遵守上述事项，导致无法施术或风险增加，我了解并接受其后果')+
+    h('四、施术当天')+'<div>院长会在施术前当面再次说明，我将另外签署医院的正式同意书；本同意书不取代医院同意书。</div>'+
+    h('五、紧急情况')+'<div>我同意医院在紧急情况下采取必要的医疗处置，必要时转送其他医疗机构。</div>'+
+    h('六、健康资料')+'<div>我同意将我的健康资料提供给韩国医院，用于本次面诊与施术（跨境提供）。</div>'+
+    h('七、语言')+'<div>以上内容已用中文向我说明，我已理解，并有机会提问。</div><div style="margin-top:12px;color:var(--muted);">客人签名 / 日期　　　　　　说明人（IN 室长）签名 / 日期</div></div>'+
+    '<div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn-primary" style="padding:8px 22px;" onclick="document.getElementById(\'anes-text-overlay\').classList.remove(\'open\')">关闭</button></div></div>';
+  ov.style.zIndex = 100020; ov.classList.add('open');
+}
 /* CMD-1019-14：睡眠 / 全麻的「需空腹（小时）」数字（an.fast）；旧数据没有 fast 时从备注「空腹 N 小时」里读（迁移 52 也会写进去） */
 function anesFastParse(note){ var m = /空腹\s*(\d+)\s*小时/.exec(String(note||'')); return m ? parseInt(m[1], 10) : ''; }
 function anesFastOf(an){ if(!an || !an.type || an.type==='local') return ''; var f = an.fast!==undefined && an.fast!==null ? parseInt(an.fast, 10) : anesFastParse(an.note); /* fast 有这个键（含空）= 以数字栏为准；没有这个键的旧数据才读备注 */ return f>0 ? f : ''; }

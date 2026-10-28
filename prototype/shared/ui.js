@@ -2339,9 +2339,9 @@ function settleProjects(batchId){
   var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; }), need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
   SETTLE_ANES_SIGNED = false;
   if(need.length){
-    rows += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#FBF6EA;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">麻醉同意书 <span style="font-weight:400;font-size:12px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
-      '<div style="font-size:12px;color:var(--slate2);line-height:1.8;">（文案待撰写，演示占位）客人已了解下列项目的麻醉方式并同意：<br>'+need.map(function(a){ return '· '+a.name+'：<b>'+a.label+'</b>'+(a.note?'（'+a.note+'）':''); }).join('<br>')+'</div>'+
-      '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleAnesSign(this.checked)"> 客人已签署麻醉同意书（记录版本和时间）</label></div>';
+    rows += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#FBF6EA;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+anesLink()+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
+      '<div style="font-size:12px;color:var(--slate2);line-height:1.8;">客人已了解下列项目的麻醉方式并同意（点上面的「麻醉同意书」看全文）：<br>'+need.map(function(a){ return '· '+a.name+'：<b>'+a.label+'</b>'+(a.note?'（'+a.note+'）':''); }).join('<br>')+'</div>'+
+      '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleAnesSign(this.checked)"> 客人已签署'+anesLink()+'（记录版本和时间）</label></div>';
   }
   rows += '<button class="btn-primary" id="settle-pay-btn" onclick="confirmSettlementPayment()"'+(need.length ? ' disabled style="opacity:.5;"' : '')+'>确认付款</button>';
   document.getElementById('settle-breakdown').innerHTML = rows;
