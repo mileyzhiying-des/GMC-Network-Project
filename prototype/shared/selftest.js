@@ -4925,6 +4925,50 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     KR_CLI.sel = row.key; krRenderClientDetail(); var el = document.getElementById('krclientdetail-body');
     ST.ok(el && /复诊评估/.test(el.textContent), '客人详情渲染出来，含「复诊评估」状态');
   });
+  /* ===== CMD-1028-08 ===== */
+  ST.def('R165a','CMD-1028-08 一（任意分页）：入境 / 离境日期年份保护——选择框带原型今天为准的 min/max · 年份离原型今天太远存不了 · 离境日前 / 当天 / 之后 · 跨年 · 演示时间开着和关掉',function(){
+    var oldShift = DEMO_SHIFT_MS, c = {id:'r165', name:'T-年份', caseNo:'A9', settlementDone:true, krSchedule:{confirmedDate:null}, stay:null};
+    try{
+      [0, 120*86400000].forEach(function(shift){
+        DEMO_SHIFT_MS = shift; var td = todayStr(), tag = shift ? '（演示时间 '+td+'）' : '（真实时间 '+td+'）';
+        var r = stayDateRange(); ST.ok(r.min===ymdAdd(td, -120) && r.max===ymdAdd(td, 730), '范围以原型今天为准'+tag);
+        ST.ok(stayRangeAttr().indexOf('min="'+r.min+'"')>-1, '选择框带 min / max'+tag);
+        var inD = ymdAdd(td, -3), outD = ymdAdd(td, 6), badOut = ymdAdd(td, -365);
+        ST.ok(!stayFillValidate(inD, '11:00', outD, '18:00'), '年份对的日期能存（到达前 3 天 · 离开后 6 天）'+tag);
+        ST.ok(/年份可能选错/.test(stayFillValidate(inD, '11:00', badOut, '')) || /不能早于/.test(stayFillValidate(inD, '11:00', badOut, '')), '离开日期差一年存不了'+tag);
+        ST.ok(/年份可能选错/.test(stayFixValidate({stay:null}, ymdAdd(td, -400), '', outD, '', '原因')), '到达日期差一年存不了（行程修正）'+tag);
+        ST.ok(!stayFixValidate({stay:null}, inD, '', outD, '', '原因'), '行程修正：年份对的能存'+tag);
+        var cc = {stay:null}; var res = coreSetStay(cc, inD, badOut, 'X'); ST.ok(!res.ok, 'IN 核心函数也拦（'+(res.err||'')+'）'+tag);
+        res = coreSetStay(cc, inD, outD, 'X', {initial:true}); ST.ok(res.ok && cc.stay.out===outD, 'IN 年份对的能存'+tag);
+        /* 重现现象：把离境日存成「去年的 02/10」（旧数据）→ 预约红框 / 待办提示；年份对 → 离境日前能约、当天和之后不能约 */
+        c.stay = {in:inD, out:badOut}; ST.ok(!!stayDayBlockText(c, td), '（旧的错误数据）离境日存成去年 → 今天也被挡，这就是大测里看到的现象'+tag);
+        ST.ok(/年份可能存错|太远/.test(staySuspect(c)), '旧的错误数据被识别出来，提示用行程修正'+tag);
+        c.stay = {in:inD, out:outD};
+        ST.ok(!stayDayBlockText(c, ymdAdd(outD, -1)) && !!stayDayBlockText(c, outD) && !!stayDayBlockText(c, ymdAdd(outD, 1)), '离境日前一天能约，当天和之后不能约'+tag);
+        ST.ok(!staySuspect(c), '年份对的不提示'+tag);
+        ST.ok(!tripAutoByDateDue(Object.assign({}, c, {krTripEnded:null, visitClosed:false, krVisit:false, stage:'travel'})) , '离境日前不自动结束'+tag);
+        /* 跨年：12 月入境、1 月离境 */
+        var y = +td.slice(0, 4), dec = (y)+'-12-28', jan = (y+1)+'-01-04'; DEMO_SHIFT_MS = shift + ((new Date(dec+'T12:00:00') - realNow())); var t2 = todayStr();
+        ST.ok(t2===dec || Math.abs(new Date(t2) - new Date(dec)) < 2*86400000, '拨到 12 月底做跨年（今天 '+t2+'）');
+        ST.ok(!stayFillValidate(dec, '09:00', jan, '10:00'), '跨年：12 月入境 / 1 月离境能存');
+        c.stay = {in:dec, out:jan}; ST.ok(!staySuspect(c) && !stayDayBlockText(c, (y+1)+'-01-03') && !!stayDayBlockText(c, jan), '跨年：1/3 能约，1/4（离境日）不能约');
+        DEMO_SHIFT_MS = shift;
+      });
+    } finally { DEMO_SHIFT_MS = oldShift; }
+  });
+  ST.def('R165b','CMD-1028-08 一（KM1 分页，pcStage 夹具）：KR 补填 / 行程修正弹窗的日期框带 min/max · 存错的旧数据页头标红',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr();
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.stay = {in:ymdAdd(td, -2), out:ymdAdd(td, -365), inTime:'11:00', outTime:'18:00'}; });
+    krShowCase(cid, r0.id, {here:true}); var h = document.getElementById('kr-casedetail').innerHTML;
+    ST.ok(/日期可能存错/.test(h), '存错的旧数据：KR 页头标红「日期可能存错」');
+    krStayFixOpen(); var ov = document.getElementById('kr-stayfix-overlay').innerHTML;
+    ST.ok(/type="date"[^>]*min="/.test(ov) || /min="[0-9-]+" max="[0-9-]+"/.test(ov), '行程修正的日期框带 min / max');
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.stay = {in:ymdAdd(td, -2), out:ymdAdd(td, 6), inTime:'11:00', outTime:'18:00'}; });
+    krShowCase(cid, r0.id, {here:true}); ST.ok(!/日期可能存错/.test(document.getElementById('kr-casedetail').innerHTML), '年份对的不标红');
+    krStayFixClose();
+  });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = toConfirmed('R51a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid];

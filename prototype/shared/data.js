@@ -8836,7 +8836,7 @@ function inStayInnerHtml(c){
   var line = function(lab, d, t, ap){ return '<div style="display:flex;gap:14px;font-size:13px;padding:3px 0;"><span style="width:76px;color:var(--muted);">'+lab+'</span><span>'+(d ? '<b>'+e(d+(t ? ' '+t : ''))+'</b>' : '<span style="color:var(--muted);">未填写</span>')+'</span><span style="color:var(--slate2);">机场：'+(ap ? e(ap) : '—')+'</span></div>'; };
   var short = stayShortDays(c);
   return line('到达', s.in, s.inTime, s.inAirport)+line('离开', s.out, s.outTime, s.outAirport)+
-    (short ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ 离境日比建议少 '+short+' 天</div>' : '')+
+    (staySuspect(c) ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ '+e(staySuspect(c))+'</div>' : '')+(short ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ 离境日比建议少 '+short+' 天</div>' : '')+
     '<div style="font-size:12px;color:var(--muted);margin-top:6px;">'+e(krStayHint(c).replace(/ · 施术日 = 第 0 天/, ''))+'</div>';
 }
 function inStayCardHtml(c){ /* 旧的单独一张卡（已不用，留给兼容） */
@@ -9363,6 +9363,19 @@ function renderClientDetailIn(name){
    c.stay = {in, out, by, at}；IN 在「确认赴韩」时输入（航班没定可先空着，c.stayAsked 记「问过了」）；施术前 2 天发施术前提醒时必填；之后 IN 可改，改了 → KR 收通知 + Timeline。
    用在：KR 案件页头显示、KR 预约弹窗 / ［修改时间］橙字「客人已离境」（不拦）、工作台「未安排预约」只列到离境日、自动结案（离境日已过）、打印行程概要。
    没填离境日时仍用最早可回国日（krCbEarliest，施术日 + 建议天数）。 */
+/* ===== CMD-1028-08 一：入境 / 离境日期的「年份」保护 =====
+   原因：入境 / 离境用浏览器自带的日期选择（<input type="date">），它的日历默认停在「真实今天」，不是原型时间（演示时间 / 拨时钟开着时两者差好几个月）；
+   在日历里点 02/10 就存成了「真实年份」的 02/10（例：演示时间 2027-02-04 时存成 2026-02-10），之后所有用离境日的地方（预约弹窗「离开当天及之后不能约」、待办「离开日期已过」、行程自动结束）都当成「早就过了」。
+   修：① 选择框带 min / max（以原型「今天」为准：今天前 120 天 ～ 后 730 天），日历默认就落在原型时间附近；② 存之前检查，年份离原型今天太远直接拦住并写明；③ 已经存错的旧数据不自动修，在 KR 页头 / IN 赴韩日程卡标红提示，请用［行程修正］。 */
+function stayDateRange(){ var t = todayStr(); return {min: ymdAdd(t, -120), max: ymdAdd(t, 730)}; }
+function stayRangeAttr(){ var r = stayDateRange(); return ' min="'+r.min+'" max="'+r.max+'"'; }
+function stayDateErr(lab, d){ if(!d) return ''; var r = stayDateRange(); if(d < r.min || d > r.max) return lab+' '+d+' 离原型今天（'+todayStr()+'）太远，年份可能选错了，请检查'; return ''; }
+function staySuspect(c){ /* 已存的在韩期间看起来存错了（年份不对 / 离开早于施术日期）→ 返回提示文字，没问题返回 '' */
+  var s = c && c.stay; if(!s || (!s.in && !s.out)) return '';
+  var e = stayDateErr('离开日期', s.out) || stayDateErr('到达日期', s.in); if(e) return e+'（用［行程修正］改）';
+  var sd = (c.krSchedule && c.krSchedule.confirmedDate) || ''; if(sd && s.out && s.out < sd) return '离开日期 '+s.out+' 早于施术日期 '+sd+'，年份可能存错（用［行程修正］改）';
+  return '';
+}
 function stayFilled(c){ return !!(c && c.stay && c.stay.in && c.stay.out); }
 function stayMD(d){ return d ? String(d).slice(5).replace('-', '/') : ''; }
 function stayMDT(c, k){ var s = c && c.stay || {}; return stayMD(s[k]) + (s[k+'Time'] ? ' '+s[k+'Time'] : ''); }
@@ -9382,6 +9395,7 @@ function stayWarnHtml(c, date){ /* KR 预约弹窗 / 改时间：日期晚于离
 function coreSetStay(c, inD, outD, by, o){
   inD = inD||''; outD = outD||''; var ex = (o && o.ex) || {};
   if(inD && outD && outD < inD) return {ok:false, err:'离境日不能早于入境日'};
+  var ye0 = stayDateErr('入境日', inD) || stayDateErr('离境日', outD); if(ye0) return {ok:false, err:ye0};
   var old = c.stay || {}, changed = (old.in||'')!==inD || (old.out||'')!==outD || (old.inTime||'')!==(ex.inTime||'') || (old.outTime||'')!==(ex.outTime||'') || (old.inAirport||'')!==(ex.inAirport||'') || (old.outAirport||'')!==(ex.outAirport||''); c.stayAsked = true;
   if(!changed) return {ok:true, changed:false};
   var oldT = stayText(c) || '（空）';
@@ -10893,6 +10907,7 @@ function stayFixValidate(c, inD, inT, outD, outT, reason){
   reason = String(reason||'').trim(); inD = inD||''; outD = outD||''; inT = inT||''; outT = outT||'';
   if(!reason) return '请填写更正原因';
   if(!inD && !outD) return '到达和离开至少要填一个日期';
+  var ye = stayDateErr('到达日期', inD) || stayDateErr('离开日期', outD); if(ye) return ye;
   if(inD && outD && (outD+' '+(outT||'00:00')) < (inD+' '+(inT||'00:00'))) return '离开时间不能早于到达时间';
   var old = c.stay || {};
   if((old.in||'')===inD && (old.out||'')===outD && (old.inTime||'')===inT && (old.outTime||'')===outT) return '日期时间没有变化';
@@ -10902,6 +10917,7 @@ function stayFillValidate(inD, inT, outD, outT){
   inD = inD||''; inT = inT||''; outD = outD||''; outT = outT||'';
   if(!inD || !inT) return '到达日期和时间必填';
   if(!outD) return '离开日期必填（用于「过了离开日期自动结束」）';
+  var ye = stayDateErr('到达日期', inD) || stayDateErr('离开日期', outD); if(ye) return ye;
   if((outD+' '+(outT||'23:59')) < (inD+' '+inT)) return '离开时间不能早于到达时间';
   return '';
 }

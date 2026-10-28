@@ -4634,7 +4634,7 @@ function krDayConfirmGo(){
 /* ===== CMD-1027-02 一：行程修正（取代页头旁单独改在韩期间；确认后通知 IN、Timeline 记一笔）===== */
 /* CMD-1027-08 五：页头在韩期间——主案件页和施术当天页一样：填了写「在韩 12/02 10:20 ～ 12/26 11:02」，没填（有韩国行程时）写「在韩：未填写」，后面接［行程修正］ */
 function krStayHeadHtml(c){
-  if(stayText(c)) return '<b style="font-size:13px;color:var(--slate2);"'+(stayAirportTip(c) ? ' title="'+krEsc(stayAirportTip(c))+'"' : '')+'>在韩 '+krEsc(stayText(c))+'</b>';
+  if(stayText(c)) return '<b style="font-size:13px;color:var(--slate2);"'+(stayAirportTip(c) ? ' title="'+krEsc(stayAirportTip(c))+'"' : '')+'>在韩 '+krEsc(stayText(c))+'</b>'+(staySuspect(c) ? ' <b style="font-size:12px;color:#B3261E;" title="'+krEsc(staySuspect(c))+'">⚠ 日期可能存错：'+krEsc(staySuspect(c))+'</b>' : '');
   if(c.settlementDone && !c.krVisit) return '<b style="font-size:13px;color:var(--muted);">在韩：未填写</b>';
   return '';
 }
@@ -4642,7 +4642,7 @@ function krStayHeadHtml(c){
 function krStayArriveOpen(){
   var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s = c.stay || {};
   var ov = document.getElementById('kr-stayarr-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-stayarr-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100014; document.body.appendChild(ov); }
-  var f = function(id, type, val, ph){ return '<input id="'+id+'" type="'+type+'" value="'+krEsc(val||'')+'"'+(ph ? ' placeholder="'+ph+'"' : '')+' style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;width:100%;box-sizing:border-box;">'; };
+  var f = function(id, type, val, ph){ return '<input id="'+id+'" type="'+type+'" value="'+krEsc(val||'')+'"'+(type==='date' ? stayRangeAttr() : '')+(ph ? ' placeholder="'+ph+'"' : '')+' style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;width:100%;box-sizing:border-box;">'; };
   var req = '<span style="color:#B3261E;">*</span>';
   ov.innerHTML = '<div class="modal-box" style="width:520px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">先补填在韩期间 · '+krEsc(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">IN 还没有填客人在韩国的期间。请补填后再标记客人已到院（韩国当地时间）；离开日期是为了让「过了离开日期自动结束韩国行程」能运作。</div>'+
     '<div style="display:grid;grid-template-columns:64px 1fr 1fr 1fr;gap:8px;align-items:center;font-size:13px;"><span></span><span style="font-size:12px;color:var(--muted);">日期</span><span style="font-size:12px;color:var(--muted);">时间</span><span style="font-size:12px;color:var(--muted);">机场（选填）</span>'+
@@ -4663,7 +4663,7 @@ function krStayArriveSave(){
 function krStayFixOpen(){
   if(!krCan()) return; var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s = c.stay || {};
   var ov = document.getElementById('kr-stayfix-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-stayfix-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100014; document.body.appendChild(ov); }
-  var f = function(id, type, val){ return '<input id="'+id+'" type="'+type+'" value="'+krEsc(val||'')+'" style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;">'; };
+  var f = function(id, type, val){ return '<input id="'+id+'" type="'+type+'" value="'+krEsc(val||'')+'"'+(type==='date' ? stayRangeAttr() : '')+' style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;">'; };
   ov.innerHTML = '<div class="modal-box" style="width:480px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">行程修正 · '+krEsc(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">更正客人在韩国的到达 / 离开日期时间（韩国当地时间）。客人提早回国就把离开日期改早；确认后会通知 IN 室长。</div>'+
     '<div style="display:grid;grid-template-columns:70px 1fr 1fr;gap:8px;align-items:center;font-size:13px;"><span>到达</span>'+f('sf-in-d', 'date', s.in)+f('sf-in-t', 'time', s.inTime)+'<span>离开</span>'+f('sf-out-d', 'date', s.out)+f('sf-out-t', 'time', s.outTime)+'</div>'+
     '<div style="font-size:13px;margin:12px 0 4px;">更正原因 <span style="color:#B3261E;">*</span></div><textarea id="sf-why" placeholder="例：客人提前回国 / 航班改期…" style="width:100%;box-sizing:border-box;min-height:60px;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;"></textarea>'+
