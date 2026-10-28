@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>测试覆盖（开发用）</title>
+<style>
+  body{font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;margin:0;background:#F4F6F9;color:#1c2b40;}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px;}
+  h1{font-size:20px;margin:0 0 4px;} .sub{font-size:12px;color:#6b7a90;margin-bottom:14px;}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;}
+  button,.btn{padding:8px 14px;border:1px solid #cfd6e0;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;}
+  button.p{background:#1c2b40;color:#fff;border-color:#1c2b40;}
+  select{padding:7px 10px;border:1px solid #cfd6e0;border-radius:8px;font-size:13px;}
+  .card{background:#fff;border-radius:12px;padding:14px 18px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .sum{font-size:22px;font-weight:800;} .grp{font-size:13px;font-weight:700;color:#C26A1B;margin:16px 0 4px;}
+  .row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #eef1f5;font-size:13px;}
+  .row:first-of-type{border-top:none;} .mk{width:22px;flex:none;} .id{width:38px;flex:none;color:#6b7a90;}
+  .muted{color:#6b7a90;font-size:12px;} a{color:#2F6FEB;text-decoration:none;} .warn{background:#FDEBD3;color:#A85A10;border-radius:8px;padding:8px 12px;font-size:12px;margin:8px 0;}
+  details summary{cursor:pointer;} .path{font-size:12px;line-height:1.7;color:#3b4b63;margin:4px 0 8px 12px;}
+  .pill{display:inline-block;padding:1px 8px;border-radius:10px;background:#E4E8ED;font-size:11px;margin-right:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧪 测试覆盖 <span class="muted">（开发用页面，不属于产品功能）</span></h1>
+  <div class="sub">直接读浏览器里的存档（只读，不会触发演示数据版本重置），按案件 Timeline / 状态记录判断「情况清单」里哪些已经测到。</div>
+  <div class="bar">
+    <span>数据来源：</span><select id="src" onchange="loadSource()"></select>
+    <button onclick="document.getElementById('imp').click()">导入导出文件…</button><input id="imp" type="file" accept=".json" style="display:none" onchange="importFile(this)">
+    <span style="flex:1"></span>
+    <button class="p" onclick="exportJson()">导出测试记录（JSON）</button>
+    <button onclick="exportMd()">导出可读版（Markdown）</button>
+    <button onclick="exportBackup()">导出完整备份（可恢复）</button>
+  </div>
+  <div class="bar" id="roundbar"></div>
+  <div id="notice"></div>
+  <div class="card" id="prep"><b>🧪 一键准备测试客人</b> <span class="muted">（点一项 → 新页面里自动建好客人和前置条件；客人名字加 T-；准备步骤不算覆盖；数据升级时和你的测试案件一样保留）</span>
+    <div class="grp">A. 故事线前置（只建前置，主要步骤自己走）</div>
+    <div class="bar">
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=queen">Queen · 老客 + 有剩余持有项目</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=zoe">Zoe · 老客 + 同意书旧版本</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=yuki">Yuki · 已有进行中的案件</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=sara">Sara · 有可退款批次（3 批）</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=olivia">Olivia · 上个月出过诊疗方案</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=mini">MINI · 40 天前出过诊疗方案（超过一个月）</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=c42">第 42 条 · 赴韩已结案 + 回印尼术后管理没做（留在原案件）</a>
+    </div>
+    <div class="grp">B. 直接跳到某个阶段（新客人 + 案件停在该阶段）</div>
+    <div class="bar">
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=stageA">面诊结束，待发送诊疗方案</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=stageB">已付定金，待确认施术时间</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=pcStage">术后管理阶段（韩国 1 + 回印尼 2 未做）</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=heldMg">已付清尾款 + 在韩持有管理项目</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=stageC">施术时间已确认，待到院</a>
+    </div>
+    <div class="grp">C. 第 2 轮一键准备（一个按钮建好这条故事线要的全部客人；名字固定 R2-xx，再按一次名字后加 (2)）</div>
+    <div class="bar">
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=r2_02">第 2 轮 02：待到院 ×4</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=r2_03">第 2 轮 03：已付定金 ×13</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=r2_07">第 2 轮 07：老客 ×5</a>
+      <a class="btn" target="_blank" href="/test-prep.html?demo=A1&make=r2_09">第 2 轮 09：回印尼术后管理</a>
+    </div>
+  </div>
+  <div class="card"><div class="sum" id="sum"></div><div class="muted" id="sumsub"></div></div>
+  <div id="checks"></div>
+  <h1 style="margin-top:26px;font-size:16px;">案件实际走过的路径</h1>
+  <div id="cases"></div>
+  <div class="card muted" id="unjudge"></div>
+</div>
+<script src="/shared/storepack.js"></script>
+<script src="/shared/version.js"></script>
+<script src="/shared/coverage.js"></script>
+</body>
+</html>

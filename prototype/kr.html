@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GMC Network · 韩国医院端</title>
+<link rel="stylesheet" href="/shared/app.css">
+<script src="/shared/storepack.js"></script>
+<script src="/shared/dstyle.js"></script>
+<script>
+/* 不要双击 html 打开：共享脚本用 /shared/ 绝对路径，file:// 下加载不到，各页面之间也不共用数据；请双击项目根目录的 start.command，用 http://localhost:3000 打开（所有页面必须用同一个地址，localhost 和 127.0.0.1 的数据是分开的） */
+if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', function(){ var d=document.createElement('div'); d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#C1454A;color:#fff;padding:14px 18px;font-size:14px;line-height:1.7;text-align:center;'; d.innerHTML='⚠️ 你是直接双击打开的网页，这样页面会不完整、各分页之间也不会同步。请关掉它，双击项目文件夹里的 <b>start.command</b>，用 <b>http://localhost:3000</b> 打开。'; document.body.appendChild(d); }); }
+</script>
+</head>
+<body>
+<script>try{ if(!sessionStorage.getItem("gmc_acct") && !/[?&]demo=/.test(location.search)) location.replace("/login.html"); }catch(e){}</script>
+<div id="app">
+
+<!-- KR 医院端（2026-10-06，KR 端系列 2/5）：大盘、案件列表、案件详情骨架、通知中心；管理类页面（医院设定、账号管理…）共用 #in-admin 壳 -->
+<section class="page in-shell active" id="kr-dashboard" data-page="krdash" style="display:flex;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krdash-body"></div></div>
+</section>
+
+<section class="page in-shell" id="kr-cases" data-page="krcases" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krcases-body"></div></div>
+</section>
+
+<section class="page in-shell" id="kr-casedetail" data-page="krcases" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krcase-body"></div></div>
+</section>
+
+<section class="page in-shell" id="kr-clients" data-page="krclients" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krclients-body"></div></div>
+</section>
+
+<section class="page in-shell" id="kr-clientdetail" data-page="krclients" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krclientdetail-body"></div></div>
+</section>
+
+
+
+<section class="page in-shell" id="kr-notifications" data-page="krnotifs" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="krnotifs-body" style="max-width:820px;"></div></div>
+</section>
+
+<section class="page in-shell" id="in-admin" data-page="admin" style="display:none;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col"><div class="topbar-slot"></div><div class="content" id="admin-body" style="max-width:1000px;"></div></div>
+</section>
+
+<!-- 案例库（KR-SHOW-01）沿用 IN 案例库的弹窗：新增/编辑案例、照片放大、展示模式 -->
+<!-- ============ LIBRARY: CASE FORM MODAL ============ -->
+<div class="modal-overlay" id="lib-case-overlay" onclick="if(event.target===this) closeLibCaseModal()">
+  <div class="modal-box" style="width:640px;max-width:92vw;max-height:88vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span id="lib-case-modal-title" style="font-size:15px;font-weight:700;">新增案例</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeLibCaseModal()">✕</span>
+    </div>
+    <div id="lib-case-body"></div>
+  </div>
+</div>
+<!-- ============ 案例库：照片放大 / 展示模式（2026-10-02） ============ -->
+<div class="modal-overlay" id="lib-viewer-overlay" style="z-index:95;" onclick="if(event.target===this) closeLibViewer()">
+  <div class="modal-box" style="width:min(720px,92vw);text-align:center;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><span id="lib-viewer-cap" style="font-size:13px;font-weight:700;"></span><span style="cursor:pointer;color:var(--slate);" onclick="closeLibViewer()">✕</span></div>
+    <div id="lib-viewer-body"></div>
+  </div>
+</div>
+<div id="lib-present-overlay" style="display:none;position:fixed;inset:0;background:#0D1420;z-index:99;flex-direction:column;align-items:center;justify-content:center;color:#fff;">
+  <span style="position:absolute;top:20px;right:28px;font-size:22px;cursor:pointer;" onclick="closeLibPresent()" title="关闭（Esc）">✕</span>
+  <div id="lib-present-cap" style="font-size:16px;font-weight:700;margin-bottom:14px;"></div>
+  <div style="display:flex;align-items:center;gap:24px;">
+    <span style="font-size:34px;cursor:pointer;user-select:none;" onclick="libPresentMove(-1)">‹</span>
+    <div id="lib-present-body" style="width:min(70vw,720px);height:min(70vh,520px);"></div>
+    <span style="font-size:34px;cursor:pointer;user-select:none;" onclick="libPresentMove(1)">›</span>
+  </div>
+  <div id="lib-present-count" style="margin-top:14px;font-size:12px;color:#9AA6B2;"></div>
+</div>
+<!-- ============ LIBRARY: NODE DELETE / BATCH MOVE MODAL ============ -->
+<div class="modal-overlay" id="lib-node-action-overlay" onclick="if(event.target===this) closeLibNodeActionModal()">
+  <div class="modal-box" style="width:400px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <span id="lib-node-action-title" style="font-size:15px;font-weight:700;">批量更改标签</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeLibNodeActionModal()">✕</span>
+    </div>
+    <div id="lib-node-action-body"></div>
+  </div>
+</div>
+</div>
+<!-- ============ CMD-1020-13 五：KR 对话窗口 = IN 同一个组件（同样的浮窗 / 引用到案件 / 文件 / 引用案件弹窗；kr.js 把 IN 的函数包进「来源诊所」的数据环境里运行） ============ -->
+<div class="chat-float-overlay" id="chat-float-overlay">
+  <div class="chat-float">
+    <div class="mac-bar">
+      <div class="mac-dots"><span style="background:#EF6A5F;"></span><span style="background:#F5BD4F;"></span><span style="background:#61C454;"></span></div>
+      <div class="mac-url">🌐 gmc.network</div>
+    </div>
+    <div class="float-head">
+      <div class="l">
+        <span class="sq-avt" id="float-avt" style="width:34px;height:34px;border-radius:10px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;">D</span>
+        <div><div id="float-name-wrap" style="cursor:pointer;" onclick="toggleMembersDropdown()" title="点击查看成员"><span id="float-name" style="font-size:14px;font-weight:700;">KM1 室长 · 韩国室长</span> <span id="float-open-case" style="display:none;font-size:13px;color:var(--blue);font-weight:700;" title="新标签页打开案件页">↗</span> <span style="font-size:12px;color:var(--slate);">▾</span></div><div id="float-sub" style="font-size:12px;color:var(--muted);">关于 客人1 的面诊安排</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;font-size:15px;color:var(--slate);">
+        <span style="cursor:pointer;" title="对话中的文件" onclick="openRoomFiles()">📁</span>
+        <span style="cursor:pointer;" title="搜索" onclick="toggleFloatSearch()">🔍</span>
+        <span id="float-mute-btn" style="cursor:pointer;" title="对自己关闭这个房间的提醒（被@照样提醒）" onclick="toggleMuteRoom()">🔕</span>
+        <span style="cursor:pointer;" onclick="closeFloat()">✕</span>
+      </div>
+      <div id="float-members-dd" style="display:none;position:absolute;top:100%;left:12px;z-index:8;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(27,38,53,.16);padding:8px 14px 12px;min-width:280px;max-height:340px;overflow:auto;"></div>
+    </div>
+    <div id="float-demo-bar" style="display:flex;gap:8px;padding:6px 18px;border-bottom:1px solid var(--border2);background:#FAF8F3;"></div>
+    <div class="float-search" id="float-search"><input type="text" id="float-search-input" placeholder="在对话中搜索…" oninput="renderFloatMessages()"></div>
+    <div id="chat-case-chip" style="display:none;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--terracotta-bg);"></div>
+    <div class="float-body" id="float-body"></div>
+    <div class="float-toolbar" id="float-toolbar"></div>
+    <div id="float-ref-chip" style="display:none;align-items:center;gap:8px;padding:8px 18px;border-top:1px solid var(--border);background:var(--white);"></div>
+    <div id="float-suggest" style="display:none;max-height:170px;overflow:auto;border-top:1px solid var(--border);background:#fff;"></div>
+    <div class="float-input">
+      <input type="text" id="float-input-box" placeholder="输入消息…（@ 选人，# 选案件）" oninput="floatInput()" onkeydown="floatKey(event)">
+      <button class="send-btn" onclick="sendFloatMsg()">➤</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="quote-overlay" onclick="if(event.target===this) closeQuoteModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:15px;font-weight:700;">引用到案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeQuoteModal()">✕</span>
+    </div>
+    <div id="quote-preview" style="font-size:12px;color:var(--slate2);background:var(--border2);border-radius:8px;padding:8px 10px;margin-bottom:12px;"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;">选择案件（只能选已有 Case ID 的案件）</div>
+    <div id="quote-case-list" style="max-height:220px;overflow:auto;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-outline" style="flex:1;" onclick="closeQuoteModal()">取消</button>
+      <button class="btn-primary" style="flex:1;" onclick="confirmQuote()">确认引用</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="room-files-overlay" style="z-index:70;" onclick="if(event.target===this) closeRoomFiles()">
+  <div class="modal-box" style="width:420px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span id="room-files-title" style="font-size:15px;font-weight:700;">对话中的文件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeRoomFiles()">✕</span>
+    </div>
+    <div id="room-files-body"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mention-case-overlay" style="z-index:70;" onclick="if(event.target===this) closeMentionCase()">
+  <div class="modal-box" style="width:420px;max-height:70vh;overflow:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:15px;font-weight:700;">引用案件</span>
+      <span style="cursor:pointer;color:var(--slate);" onclick="closeMentionCase()">✕</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">选一个案件，案件 chip 会挂在输入框上方；写内容、发送后，这条消息会写入该案件（终态案件只挂不写入）。基础资料还没确认的案件也可以选</div>
+    <div id="mention-case-list" style="margin-bottom:6px;"></div>
+  </div>
+</div>
+
+
+<div id="toast-stack"></div>
+<script src="/shared/version.js"></script>
+<script src="/shared/rules.js"></script>
+<script src="/shared/i18n.js"></script>
+<script src="/shared/ui.js"></script>
+<script src="/shared/data.js"></script>
+<script src="/shared/store.js"></script>
+<script src="/shared/admin.js"></script>
+<script src="/shared/kr.js"></script>
+<script src="/shared/todo.js"></script>
+<script src="/shared/krbook.js"></script>
+<script src="/shared/calalign.js"></script>
+<script src="/shared/hospspecial.js"></script>
+<script>
+window.GUARD_ROLES = ['kr_manager', 'kr_general', 'kr_director', 'kr_owner'];
+if(guardPage(window.GUARD_ROLES)){
+  document.addEventListener('DOMContentLoaded', function(){ try{ krBoot(); }catch(e){ console.error('[初始化失败] KR 端', e); } });
+  document.addEventListener('click', closeAvatarMenu);
+}
+</script>
+</body>
+</html>

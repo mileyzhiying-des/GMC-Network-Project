@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一键准备测试客人（开发用）</title>
+<link rel="stylesheet" href="/shared/app.css">
+<script src="/shared/storepack.js"></script>
+<script src="/shared/dstyle.js"></script>
+<style>
+  body{font-family:-apple-system,"PingFang SC",sans-serif;background:#F4F6F9;color:#1c2b40;margin:0;}
+  .w{max-width:640px;margin:40px auto;background:#fff;border-radius:14px;padding:24px 28px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .start{background:#FBF6EA;border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.7;} .muted{color:#6b7a90;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="w"><div id="out">正在准备…</div></div>
+<script src="/shared/version.js"></script>
+<script src="/shared/rules.js"></script>
+<script src="/shared/i18n.js"></script>
+<script src="/shared/ui.js"></script>
+<script src="/shared/data.js"></script>
+<script src="/shared/store.js"></script>
+<script src="/shared/testprep.js"></script>
+<script>window.addEventListener('load', function(){ setTimeout(testPrepRun, 100); });</script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GMC Network · 老板端</title>
+<link rel="stylesheet" href="/shared/app.css">
+<script src="/shared/storepack.js"></script>
+<script src="/shared/dstyle.js"></script>
+<script>
+/* 不要双击 html 打开：共享脚本用 /shared/ 绝对路径，file:// 下加载不到，各页面之间也不共用数据；请双击项目根目录的 start.command，用 http://localhost:3000 打开（所有页面必须用同一个地址，localhost 和 127.0.0.1 的数据是分开的） */
+if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', function(){ var d=document.createElement('div'); d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#C1454A;color:#fff;padding:14px 18px;font-size:14px;line-height:1.7;text-align:center;'; d.innerHTML='⚠️ 你是直接双击打开的网页，这样页面会不完整、各分页之间也不会同步。请关掉它，双击项目文件夹里的 <b>start.command</b>，用 <b>http://localhost:3000</b> 打开。'; document.body.appendChild(d); }); }
+</script>
+</head>
+<body>
+<script>try{ if(!sessionStorage.getItem("gmc_acct") && !/[?&]demo=/.test(location.search)) location.replace("/login.html"); }catch(e){}</script>
+<div id="app">
+<!-- 老板端（2026-10-06·A4）：没有工作台、案件、客户、对话；只有经营数据、账号管理、诊所设定、操作日志、个人设定（头像菜单）。内容由 ADMIN_RENDER 填入 -->
+<section class="page in-shell active" id="in-admin" data-page="admin" style="display:flex;">
+  <div class="sidebar-slot"></div>
+  <div class="main-col">
+    <div class="topbar-slot"></div>
+    <div class="content" id="admin-body" style="max-width:1000px;"></div>
+  </div>
+</section>
+</div>
+<div class="modal-overlay" id="notif-detail-overlay" style="z-index:85;" onclick="if(event.target===this) closeNotifDetail()">
+  <div class="modal-box" style="width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span id="notif-detail-title" style="font-size:15px;font-weight:700;">系统更新</span><span style="cursor:pointer;color:var(--slate);" onclick="closeNotifDetail()">✕</span></div>
+    <div id="notif-detail-body" style="font-size:13px;line-height:1.8;"></div>
+  </div>
+</div>
+<div id="toast-stack"></div>
+<script src="/shared/version.js"></script>
+<script src="/shared/rules.js"></script>
+<script src="/shared/i18n.js"></script>
+<script src="/shared/ui.js"></script>
+<script src="/shared/data.js"></script>
+<script src="/shared/store.js"></script>
+<script src="/shared/admin.js"></script>
+<script src="/shared/kr.js"></script>
+<script src="/shared/todo.js"></script>
+<script src="/shared/calalign.js"></script>
+<script src="/shared/hospspecial.js"></script>
+<script>
+window.GUARD_ROLES = ['owner', 'kr_owner'];
+if(guardPage(window.GUARD_ROLES)){
+  document.addEventListener('DOMContentLoaded', function(){
+    try{ i18nStart(); }catch(e){ console.error('[初始化失败] 多语言', e); }
+    document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
+    CURRENT_PAGE_ID = 'in-admin';
+    var pg = new URLSearchParams(location.search).get('page') || 'admin-bizdata';
+    openAdminPage(pg.indexOf('admin-')===0 ? pg.slice(6) : 'bizdata'); /* 无权限的页面会被导回首页 */
+  });
+  document.addEventListener('click', closeAvatarMenu);
+}
+</script>
+</body>
+</html>
