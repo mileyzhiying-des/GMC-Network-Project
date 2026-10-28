@@ -89,11 +89,12 @@ document.addEventListener('DOMContentLoaded', function(){
   if(cs){
     var c = CASE_ITEMS.filter(function(x){ return x.caseNo===cs || x.id===cs; })[0];
     if(!c){ alert('演示数据里找不到案件 '+cs+'（可能已被重置）'); return; }
-    openCaseDetailHere(c.id);
-    if(q.get('tab')){ c.activeCaseTab = q.get('tab'); renderCaseBody(c); }
-    if(q.get('pc')) goPostcareBlock(c.id);
+    gmcTry('打开案件', function(){ openCaseDetailHere(c.id); });
+    if(q.get('sub')) gmcTry('定位到某一天', function(){ SUBVIEW[c.id] = {key:q.get('sub')}; c.subTab = 'today'; renderCaseSubtitle(c); renderCaseBody(c); });
+    if(q.get('tab')) gmcTry('定位到 tab', function(){ c.activeCaseTab = q.get('tab'); renderCaseBody(c); });
+    if(q.get('pc')) gmcTry('定位到术后管理', function(){ goPostcareBlock(c.id); });
     if(q.get('scroll')){ var sid = q.get('scroll'); setTimeout(function(){ var el = document.getElementById(sid); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 120); }
-    if(q.get('chat')==='open') openCaseRoom(c.id);
+    if(q.get('chat')==='open') gmcTry('打开对话', function(){ openCaseRoom(c.id); });
   }
   if(pg==='in-library' && q.get('project')){ try{ libOpenProject(q.get('project')); }catch(e){ console.error('案例库定位失败', e); } }
 });
@@ -121,7 +122,8 @@ window.addEventListener('pagehide', function(){ try{ receptionLeaveNow(); }catch
 function autoNoShowSweep(){
   var now = demoNow().getTime(), n = 0;
   CASE_ITEMS.slice().forEach(function(c){
-    if(c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime || c.krVisit) return; /* 在韩到店案件（KR 医院）不按诊所时间判未到店 */
+    if(c.stage!=='booked' || c.subState!=='waiting' || !c.visitDate || !c.visitTime || c.krVisit) return;
+    if(c.arrivedDay===todayStr()) return; /* CMD-1026-01 三：今天已经到过店（［取消接待］只是退回待访问）不再按预约时间判未到店——原来取消接待后预约时间已过 30 分钟，5 秒内就被自动判成「未到店 / 已取消」 */ /* 在韩到店案件（KR 医院）不按诊所时间判未到店 */
     var when = new Date(c.visitDate+'T'+c.visitTime+':00').getTime();
     if(!isNaN(when) && when + noShowMs() <= now && markNoShow(c.id, true)) n++;
   });
@@ -133,4 +135,6 @@ function autoNoShowSweep(){
   return n;
 }
 setInterval(function(){ try{ autoNoShowSweep(); }catch(e){ console.error('[未到店自动判定]', e); } }, 5000);
+setInterval(function(){ try{ var ch1 = visitSweep(), ch2 = careOverMonthSweep(), ch3 = mainAutoSweep(); ch2 = ch2 || ch3; if(ch1 || ch2){ Store.touch(); if(typeof refreshView==='function') refreshView(); } }catch(e){ console.error('[00:00 结束子案件 / 术后管理转管理项目]', e); } }, 5000); /* CMD-1023-01 S6 */
+document.addEventListener('DOMContentLoaded', function(){ try{ if(visitSweep() | careOverMonthSweep()) Store.touch(); }catch(e){} });
 document.addEventListener('DOMContentLoaded', function(){ try{ autoNoShowSweep(); }catch(e){} });

@@ -60,6 +60,7 @@ function computeOutcome(c){
   if(caseWorkDone(c) || caseHasPurchase(c)) return 'closed';
   /* CMD-1013-16：手动结束（付定金前）时面诊费已缴 / 免除、报告还没出 → 仅出报告；标记 c.manualEnd 只在新规则开着时才会写入，之后切开关也不变 */
   if(c.manualEnd && !c.reportReady && c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) return 'reportonly';
+  if(isRevEval(c) && c.reportReady) return 'closed'; /* CMD-1022-09：复诊评估结束 = 已结案（不是仅出报告，以免被继续面诊选中） */
   return c.reportReady ? 'reportonly' : 'cancelled';
 }
 
@@ -85,7 +86,7 @@ function caseStatusBadge(c){
 
 /* 阶段 + 进程（CMD-1008-13，IN-CASE-03 第 2 节）：案件列表"当前状态"拆成两栏——阶段（彩色标签，同顶部 tab）+ 进程（一般文字）。
    只是换一种显示：案件主状态（caseStatusLabel / stage / consultStatus / scheduleState）一概不改；KR 端仍用 caseStatusBadge。 */
-var STAGE_LABELS = {booked:'预约到店', consult:'面诊安排', travel:'赴韩施术', postcare:'术后管理', krmgmt:'在韩管理', local:'本地管理', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'};
+var STAGE_LABELS = {booked:'预约到店', consult:'面诊安排', travel:'赴韩施术', postcare:'术后管理', krmgmt:'在韩管理', local:'本地管理', closed:'已完成', reportonly:'仅出报告', cancelled:'已取消'};
 var STAGE_TONE_LABEL = {booked:'待访问', consult:'面诊预约', travel:'施术预约', postcare:'赴韩施术', krmgmt:'赴韩施术', local:'选择项目', closed:'已结案', reportonly:'仅出报告', cancelled:'已取消'}; /* 借现有主状态取颜色，保证和 tab / 旧标签同色 */
 function consultAtPassed(c){ /* KR 确认的面诊时间（韩国当地）是否已到 */
   if(!c.consultAt || !c.consultAt.date || !c.consultAt.time) return false;
@@ -100,9 +101,28 @@ function postcareProcText(c){
   return '韩国行程中 · '+rows.length+' 项待做（韩国 '+kr.length+' / 印尼 '+inn.length+'）'+(late ? ' · '+late+' 项已过建议日期' : '');
 }
 function isRevisitConsult(c){ return !!(c && c.consultKind==='复诊'); } /* CMD-1021-19：复诊面诊（IN 术后来访选「需要院长面诊（复诊）」） */
+/* CMD-1022-07：新的「继续 · 复诊评估」案件带 c.revisitEval（旧复诊案件没有 = 照旧叫复诊面诊 / 恢复确认）；复诊评估内部仍借用面诊的时间确认 / 录入 / 发送组件和 consultStatus 取值，但状态、名称、待办、计数、通知都按复诊评估单独显示 */
+function isRevEval(c){ return !!(c && c.revisitEval); }
+function revEvalProcText(c){
+  if(c.leftStore && !(c.reportReady || c.consultStatus==='report_ready')) return '客人已离店 · 等复诊评估结果'; /* CMD-1022-19：客人离店后 KR 照样继续评估 */
+  if(c.reportReady || c.consultStatus==='report_ready') return c.recoveryResult && c.recoveryResult.result==='treat' ? '结果已到 · 需要处理' : '结果已到';
+  if(c.consultStatus==='paid_waiting_kr') return '等确认时间';
+  if(c.consultStatus==='awaiting_report'){ if(c.consultContentAt) return '评估完成 · 等 KR 传结果'; return c.consultStartedAt ? '评估中' : '等评估'; }
+  return '等确认时间';
+}
+/* CMD-1022-08：案件类型（经营数据按类型统计） */
+var CASE_TYPES = ['新案件','接续面诊','术后管理','复诊评估'];
+function caseTypeOf(c){ /* CMD-1023-01 补 2：经 relatedOf 读 */
+  var r = relatedOf(c);
+  if(r.resumeType && CASE_TYPES.indexOf(r.resumeType)>-1) return r.resumeType;
+  if(isRevEval(c)) return '复诊评估';
+  if(r.followup && r.linkedId) return r.reason==='复诊' ? '复诊评估' : '术后管理';
+  return '新案件';
+}
 function revisitTag(c){ return isRevisitConsult(c) ? '复诊' : ''; }
-function caseProcessText(c){ var t = caseProcessText0(c); return (isRevisitConsult(c) && c.stage==='consult' && c.consultRequested && !c.reportReady && t && t.indexOf('复诊')!==0) ? '复诊 · '+t : t; }
+function caseProcessText(c){ var t = caseProcessText0(c); return (isRevisitConsult(c) && !isRevEval(c) && c.stage==='consult' && c.consultRequested && !c.reportReady && t && t.indexOf('复诊')!==0) ? '复诊 · '+t : t; }
 function caseProcessText0(c){
+  if(isRevEval(c) && c.leftStore && !isEnded(c) && !(c.reportReady || c.consultStatus==='report_ready')) return '客人已离店 · 等复诊评估结果'; /* CMD-1022-19 */
   if(c.krVisit && (c.stage==='booked' || c.stage==='krmgmt')) return c.krVisit.arrived ? '在韩已到院' : '待在韩到院（KR 医院）';
   if(c.stage==='postcare') return postcareProcText(c);
   if(c.krVisit && c.krVisit.done && c.stage==='closed') return '在韩到店完成';
@@ -134,6 +154,7 @@ function caseProcessText0(c){
   }
   if(c.stage==='local') return c.mgmtActive ? '本地管理中' : '选择项目';
   if(c.stage==='cancelled') return endReasonText(c);
+  if(c.stage==='closed' && isRevEval(c)) return '复诊评估结束'; /* CMD-1022-19：复诊案件结案一律写「复诊评估结束」（IN 在这个案件里做了本地项目也一样，不再显示「本地完成」） */ /* CMD-1022-09 / 12：页头［结束案件］结束的复诊评估案件也写「复诊评估结束」 */
   if(c.stage==='closed'){ /* 赴韩完成 / 本地完成 / 本地项目保留（取消赴韩后保留本地项目、本次没使用；CMD-1012-12 二） */
     if(c.krProcedureDone || krAllItems(c).some(function(it){ return it.done; })) return '赴韩完成';
     var kept = localPurchasedBatches(c);
@@ -148,6 +169,7 @@ function caseStageInfo(c){
   var pr = caseProcessText(c);
   if(typeof isKrAccount==='function' && isKrAccount()) pr = String(pr).replace(/本地项目(全退|保留)|本地完成|本地项目[^，；·]*/g,'IN 已处理'); /* CMD-1014-16：KR 不显示 IN 本地项目的内容，只显示事件 */
   if(typeof isKrAccount==='function' && isKrAccount() && c.stage==='local'){ var kt = krLastStatusText(c); return {bg:'#EDEAE2', fg:'#6E665E', stage:'—', proc:kt}; } /* CMD-1014-18 四·1：KR 不显示 IN 的「本地管理」阶段，进程写和 KR 有关的最后状态 */
+  if(isRevEval(c) && c.stage==='consult' && !c.localAsk) return {bg:col[0], fg:col[1], stage:'复诊评估', proc:revEvalProcText(c)}; /* CMD-1022-07：复诊评估 · 等确认时间 / 等评估 / 评估中 / 结果已到 */
   return {bg:col[0], fg:col[1], stage:STAGE_LABELS[c.stage] || c.stage, proc:pr};
 }
 function krLastStatusText(c){
@@ -273,7 +295,7 @@ function fmtUtcTime(s, tz){ var f = fmtUtc(s, tz); return f.length>=16 ? f.slice
    新写含时间的通知 / Timeline 文字：用 tkU / tkK 生成标记，不要直接拼 fmtUtc(...) 或韩国钟点。 */
 /* 通知分级（Notification Center 2026-10-12）：action = 需要你处理（手动确认）；next = 进入下一阶段（手动确认）；info = 一般消息（6 秒自动消失，铃铛仍留记录）。
    通知事件创建时记在 n.level（可在 opts.level 显式指定），没有记的（旧数据）按文字推断 */
-var NOTIF_ACTION_RE = /待确认|催办|诊疗方案已到|诊疗方案已出|复诊评估已出|无法安排|未接来电|@ 了你|调整了到院时间|请确认报告时间|请按此|重新选择/;
+var NOTIF_ACTION_RE = /待确认|催办|诊疗方案已到|诊疗方案已出|复诊评估已出|复诊评估结果已到|KR 已确认评估时间|无法安排|未接来电|@ 了你|调整了到院时间|请确认报告时间|请按此|重新选择/;
 var NOTIF_INFO_RE = /自助预约了|已填完预约资料|取消了.*的预约|客人自助预约|占位客人填完资料|客人到店自己填|客人改约|自行把预约时间|客人取消预约|修改了预计出报告时间|预约占位快过期|进入了|更新了诊所设定|加购/;
 function notifLevel(text){ var t0 = String(text||''); if(NOTIF_ACTION_RE.test(t0)) return 'action'; if(NOTIF_INFO_RE.test(t0)) return 'info'; return /已缴面诊费|免除|确认.*施术时间|确认预计出报告时间|已到(医)?院|可以手术|不建议手术|施术完成|结案|仅出报告|已取消|未到店|付清尾款|更换项目|无法施术|重新预约了施术|术后管理已预约|增加项目|延续既往面诊判断|补加了可选项目|完成在韩子项|timeline/.test(t0) ? 'next' : 'info'; }
 function notifLevelOf(n){ return (n && n.level) || notifLevel(n && n.text); }
@@ -319,8 +341,11 @@ function visitOrdText(dno, c){ /* 兼容旧调用：有案件就写日期，没�
 }
 function visitWords(t){
   return String(t==null ? '' : t).replace(/(A\d{6})-(\d+)/g, function(m, no, n){
+    /* CMD-1026-11 七：真有这个号的子记录（印尼来访）→ 原样显示，不再换成「到院（日期）」——一个主案件下只有一套号（新给的号不会和韩国行的行号撞）；旧资料里撞号的，子记录优先 */
+    try{ var kp = (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).some(function(x){ return x && x.caseNo===m && x.mainId; }); if(!kp && typeof isKrAccount==='function' && isKrAccount() && typeof krAllCases==='function') kp = krAllCases().some(function(r0){ return (r0.kids||[]).some(function(k0){ return k0.no===m; }); }); if(kp) return m; }catch(e){}
     var pool = (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).slice(); try{ if(typeof isKrAccount==='function' && isKrAccount() && typeof krAllCases==='function') krAllCases().forEach(function(r){ pool.push(r.c); }); }catch(e){}
     var cands = pool.filter(function(x){ return x && x.caseNo===no; }), c = cands.filter(function(x){ return (x.subItems||[]).some(function(r){ return r.no===m; }); })[0] || cands[0], dno = no+'-'+parseInt(n, 10); /* 案件号每家诊所各自从 A000001 起，同号的案件优先取那一行所在的 */
+    if(c && c.dayNoOn) return m; /* CMD-1026-13：新主案件的 -NN 就是「一天一个号」，原样显示 */
     if(c) try{ subCaseNos(c); }catch(e){}
     /* CMD-1020-06：写成 -01 -02（两位）的是「行号」（subNextNo），不是到院编号；旧记录里行号 -03 曾被误当成第 3 次到院，日期写错（11/02 写成 11/07）→ 按行号找那一行自己的日期 */
     if(c && n.length>=2){ var row = (c.subItems||[]).filter(function(r){ return r.no===m; })[0]; if(row) return row.date ? '到院（'+row.date.slice(5).replace('-', '/')+'）' : '到院'; }
@@ -328,8 +353,10 @@ function visitWords(t){
     return rep && rep.date ? '到院（'+rep.date.slice(5).replace('-', '/')+'）' : '到院';
   });
 }
+function rsDisp(s){ return String(s==null?'':s).replace(/接续/g, '继续'); } /* CMD-1026-06：室长画面上「接续」一律写「继续」（数据值 '接续面诊' 不动，只在显示时换） */
 function tzRender(t, noZone){
-  return viewerTextFilter(visitWords(String(t==null ? '' : t)).replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(noZone ? '' : (typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）')) : '—'; })
+  t = rsDisp(t); /* IN / KR 两边：旧 Timeline / 通知里存的「接续」也显示成「继续」（CMD-1026-07 起 KR 也换） */
+  return viewerTextFilter(visitWords(String(t==null ? '' : t).replace(/⟦u:(?=\s*⟦u:)/g, '').replace(/⟧(?=\s*⟧)/g, '')) /* CMD-1022-14：兜底，嵌套 / 重复的时间标记也能正常显示 */.replace(/⟦u:([^⟧]*)⟧/g, function(m, u){ var f = fmtUtc(u); return f ? f+(noZone ? '' : (typeof isKrAccount==='function' && isKrAccount() ? '（韩国）' : '（印尼）')) : '—'; })
     .replace(/⟦k:([^|⟧]*)\|([^⟧]*)⟧/g, function(m, d, h){ return ksTimeText({confirmedDate:d, confirmedTime:h}) || d; }));
 }
 /* 当地钟点（日期 + HH:mm，某时区的墙上时间）→ UTC 字符串（KR 室长输入的预计出报告时间等） */
@@ -708,7 +735,7 @@ function krCaseVisible(c, hid){
   if(c && c.krVisit && c.krVisit.hospitalId===hid) return true; /* CMD-1014-16：IN 在 KR 日程占位、KR 确认后建的「在韩到店」案件，KR 和 IN 都看得到 */
   if(!c || c.hospitalId !== hid) return false;
   if(c.consultFeeWaived || c.reportReady || c.reuseReport) return true;
-  return !!c.consultRequested && ['paid_waiting_kr','awaiting_report','report_ready'].indexOf(c.consultStatus) > -1;
+  return !!c.consultRequested && ['paid_waiting_kr','awaiting_report','report_ready'].indexOf(flowStepOf(c, 'consult')) > -1; /* CMD-1023-01 补 2：经 flowStepOf 读 */
 }
 
 
@@ -872,3 +899,18 @@ function caseUpdatedKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(functi
 function caseStartKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && (!m || e.dt < m)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
 function caseStartText(c){ var k0 = caseStartKey(c); return k0 ? (fmtUtc(k0) || k0) : '—'; }
 function caseUpdatedDesc(a, b){ return caseUpdatedKey(b).localeCompare(caseUpdatedKey(a)); }
+
+/* CMD-1022-19：案件管理列表的 tab 归属：复诊评估案件（还没结束）单独一个「复诊评估」tab；结束的按结局进已结案 / 仅出报告 / 已取消 */
+function caseTabKey(c){ return (isRevEval(c) && !isEnded(c)) ? 'reveval' : c.stage; }
+/* CMD-1022-19：结束的案件，那一栏叫「结案类型」：已结案 = 赴韩完成 / 本地完成 / 复诊评估结束；仅出报告 = 客人不做了 / 失联 / 其他（说明）；已取消 = 未到店 / 客人取消预约 */
+function caseEndTypeText(c){
+  if(c.stage==='closed') return caseProcessText0(c);
+  if(c.stage==='reportonly'){
+    var mr = c.manualEnd && c.manualEnd.reason, note = c.manualEnd && c.manualEnd.note;
+    if(mr==='失联') return '失联';
+    if(mr==='其他') return '其他'+(note ? '（'+note+'）' : '');
+    return '客人不做了'; /* 客人不做项目 / 客人离店 / 手动结束选「客人不做了」 */
+  }
+  if(c.stage==='cancelled'){ if(c.subState==='cancelled') return c.noShow ? '未到店' : '客人取消预约'; return caseProcessText0(c); }
+  return caseProcessText0(c);
+}
