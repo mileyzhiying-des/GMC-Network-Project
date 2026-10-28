@@ -340,6 +340,14 @@ function doneDayInfo(c, date){
 }
 var KR_HARD_ERR = /医院定期休诊|休诊时段|营业时间内|午休时段|医院休诊日|到院已完成/;
 function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, opts){ var e = krSurgerySlotErrorRaw(hid, director, date, time, durMin, exceptCaseKey, opts); return (e && KR_FORCE_CLASH && !KR_HARD_ERR.test(e)) ? '' : e; } /* CMD-1015-22：冲突改成询问，［仍然进行］时跳过冲突类（休诊 / 营业时间类仍挡） */
+/* CMD-1028-14 一：冲突说明的开头照这件事的类型写——面诊 / 复诊评估写「面诊 18:00～18:30，和 …」（不出现「到院」「施术」），使用 / 院长操作写「使用 …」，只有真的排施术才写「到院，施术约 N 小时」 */
+function krClashHead(opts, time, e, durMin){
+  var rng = time+'～'+minToTime(e), w = opts && opts.what;
+  if(!w && opts && opts.exceptKind==='面诊') w = '面诊';
+  if(w) return w+' '+rng+'，和 ';
+  if(opts && opts.use) return '使用 '+rng+'（约 '+(durMin||30)+' 分钟），和 ';
+  return time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 ';
+}
 function krSurgerySlotErrorRaw(hid, director, date, time, durMin, exceptCaseKey, opts){
   var s = timeToMin(time), e = s + (durMin||60), lu = hospitalLunch(hid), hrs = hospitalHours(hid), soft = !!(opts && opts.allowOffHours); /* soft：午休 / 营业时间外不拦，由界面弹窗确认（CMD-1013-02 二） */
   if(!soft && (s < timeToMin(hrs.open) || e > timeToMin(hrs.close))) return '施术时间要在医院营业时间内（韩国 '+hrs.open+'–'+hrs.close+'）';
@@ -352,7 +360,7 @@ function krSurgerySlotErrorRaw(hid, director, date, time, durMin, exceptCaseKey,
   /* 同一位院长同一时间只能有一件事（KR-SCHD-01，2026-10-08）：不能和该院长的「不可预约」或别的施术重叠；不同院长之间可以重叠 */
   var clash = ((h.directorSchedule||{})[director]||[]).filter(function(b){ return b.date===date && timeToMin(b.time) < e && timeToMin(b.end) > s; }).filter(function(b){ return !((b.kind==='施术' || b.kind==='面诊') && exceptCaseKey && (b.clinicId+':'+b.caseId)===exceptCaseKey && (!opts || !opts.exceptKind || opts.exceptKind===b.kind)); })[0];
   /* 冲突说明（CMD-1013-11 一·5）：写清楚「到院时间 + 施术时长」和哪一段重叠 */
-  var why = clash ? (opts && opts.use ? time+' 开始，使用约 '+(durMin||30)+' 分钟到 '+minToTime(e)+'，和 ' : time+' 到院，施术约 '+krHoursText(durMin||60)+' 到 '+minToTime(e)+'，和 ')+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约' ? '已有'+clash.kind : '不可预约'+(clash.note ? ' · '+clash.note : ''))+' 重叠' : '';
+  var why = clash ? krClashHead(opts, time, e, durMin)+director+' '+clash.time+'–'+clash.end+' '+(clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约' ? '已有'+clash.kind : '不可预约'+(clash.note ? ' · '+clash.note : ''))+' 重叠' : '';
   if(!clash && typeof krDirectorRowsAll==='function'){ var rw = krDirectorRowsAll(director).filter(function(r){ return r.date===date && r.time && timeToMin(r.time) < e && timeToMin(r.end||minToTime(timeToMin(r.time)+30)) > s && (function(){ var ids = String(r.id).split(','), ex = ((opts&&opts.exceptRowIds)||[]).concat((opts&&opts.exceptRowId) ? [opts.exceptRowId] : []); return !ids.some(function(x){ return ex.indexOf(x)>-1; }); })(); })[0]; if(rw) return time+' 开始会和 '+director+' '+rw.time+' 的术后管理（'+(rw.name||'')+'）重叠'; }
   if(clash && (clash.kind==='施术' || clash.kind==='面诊' || clash.kind==='预约')) return why;
   if(clash && !(opts && opts.ignoreBusy)) return why;

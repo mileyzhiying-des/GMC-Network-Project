@@ -580,7 +580,7 @@ function krAskClash(msg, o){
   o = o || {}; var ov = document.getElementById('kr-block-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-block-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   window.__krAskGo = function(which){ ov.classList.remove('open'); var f = which==='go' ? o.proceed : (which==='alt' ? o.alt : null); if(f){ try{ f(); }catch(e){ console.error(e); } } };
   ov.innerHTML = '<div class="modal-box" style="width:460px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;color:#B3261E;">时间冲突</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap;margin-bottom:8px;">'+krEsc(msg)+'</div><div style="font-size:13px;font-weight:700;margin-bottom:6px;">仍要这样排吗？</div>'+(o.altHint ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">［不在这个时段］：'+krEsc(o.altHint)+'</div>' : '')+
-    '<div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="__krAskGo(\'go\')">仍然进行</button><button class="btn-outline" style="flex:1;" onclick="__krAskGo(\'alt\')">'+(o.alt || o.altLabel ? krEsc(o.altLabel||'不在这个时段') : '取消')+'</button></div></div>';
+    '<div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-outline" onclick="__krAskGo(\'cancel\')">取消</button>'+(o.alt ? '<button class="btn-outline" onclick="__krAskGo(\'alt\')">'+krEsc(o.altLabel||'不在这个时段')+'</button>' : '')+'<button class="btn-primary" onclick="__krAskGo(\'go\')">仍然进行</button></div></div>'; /* CMD-1028-14 一：右对齐，左［取消］、右主操作［仍然进行］（Popup 弹窗规则）；［不在这个时段］只在真的有这个选项（增加项目）时出现 */
   ov.style.zIndex = 100010; ov.classList.add('open');
 }
 /* CMD-1021-15：把项目排进「已完成的到院日」→ 专门提示（DS Modal，不再借用时间冲突弹窗）：
@@ -716,7 +716,7 @@ function krDoConfirmTimes(){
   if(eta <= nowFullDt()){ alert('预计出报告时间必须晚于现在'); return; }
   var rr = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!rr) return;
   var dur = (ed===cd) ? Math.min(240, Math.max(30, timeToMin(et)-timeToMin(ct))) : 30;
-  var er = krSurgerySlotError(krHospitalIdOfMe(), rr.c.director, cd, ct, dur, KR_CASE.clinicId+':'+KR_CASE.id, {exceptKind:'面诊', allowOffHours:true}); /* 同一位院长同一时间只能有一件事；午休 / 营业时间外只提醒 */
+  var er = krSurgerySlotError(krHospitalIdOfMe(), rr.c.director, cd, ct, dur, KR_CASE.clinicId+':'+KR_CASE.id, {exceptKind:'面诊', what:(isRevEval(rr.c) ? '复诊评估' : (isRevisitConsult(rr.c) ? '复诊面诊' : '面诊')), allowOffHours:true}); /* 同一位院长同一时间只能有一件事；午休 / 营业时间外只提醒 */
   if(er){ krSlotAsk(er, krDoConfirmTimes); return; }
   var go = function(){ KR_CT.caseKey = ''; krMut(function(c){ return coreConfirmConsultTimes(c, cd, ct, eta, ME_NAME); }); Store.touch(); krRefreshAll(); };
   var off = krOffHoursText(krHospitalIdOfMe(), cd, ct, dur); if(off) krOffConfirm(off+'（面诊 '+cd+' '+ct+'，韩国时间）', go); else go();
@@ -2435,7 +2435,7 @@ function krTimeEditSave(){
   var ddk = doneDayInfo(c9, d); if(ddk && !(s9 && subCaseKey(s9)==='KR|'+d)){ krDoneDayAsk(ddk, krTimeEditSave); return; }
   if(s9 && subCaseKey(s9)!=='KR|'+d && !KR_TE.toIn){ var exT9 = krVisitTimeOnDate(c9, d, id); if(exT9 && exT9!==t0){ t0 = exT9; KR_TE.time = exT9; showToast('已合并', '那天已有到院：已合并到 '+exT9+' 的到院（时间以原预约为准）', null); } } /* 排进已完成的到院日（CMD-1021-15）：原弹窗保持打开 */
   if(KR_TE.care){ var hc9 = krbClosedText(krHospitalIdOfMe(), d, t0); if(hc9){ krBlock(hc9); return; } }
-  if(s9 && s9.director){ var e9 = krSurgerySlotError(krHospitalIdOfMe(), s9.director, d, t0, s9.dirOp ? (parseInt(s9.dirMin,10)||30)+(parseInt(s9.extendMin,10)||0) : 30, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true, use:true, exceptRowId:id}); if(e9){ krSlotAsk(e9, krTimeEditSave); return; } }
+  if(s9 && s9.director){ var e9 = krSurgerySlotError(krHospitalIdOfMe(), s9.director, d, t0, s9.dirOp ? (parseInt(s9.dirMin,10)||30)+(parseInt(s9.extendMin,10)||0) : 30, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true, use:true, what:(s9.dirOp ? '院长操作' : ''), exceptRowId:id}); if(e9){ krSlotAsk(e9, krTimeEditSave); return; } }
   var go = function(){ document.getElementById('kr-te-overlay').classList.remove('open'); krMut(function(c){ return coreSubTimeEdit(c, id, d, t0, ME_NAME); }); };
   var off = krOffHoursText(krHospitalIdOfMe(), d, t0, 30); if(off) krOffConfirm(off+'（'+d+' '+t0+'，韩国时间）', go); else go();
 }
@@ -3857,7 +3857,7 @@ function krCbCheck(r){
   var de = krCbDateErr(r.date, r.time); if(de){ res.err = de; res.dateErr = true; res.fix = /请改时间/.test(de) ? 'time' : 'date'; return res; }
   if(krCbGone(r) && !(r.kind==='care' && r.canIn)){ res.err = krCbGoneText()+'，请改到离开前'; res.goneErr = true; res.fix = 'date'; return res; }
   if(r.dirOp && r.dirOp.on){ /* CMD-1020-05：院长操作 → 院长要有空（OFF / 已有施术或面诊重叠 → 红字不能约）；并进已有到院时和那次到院自己不算冲突 */
-    var vv = KR_CB && KR_CB.visits && KR_CB.visits['KR|'+r.date], ex = vv ? (vv.rowIds||[]) : [], e1 = krSurgerySlotError(hid, r.dir, r.date, r.time, r.dirOp.min, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true, use:true, exceptRowIds:ex});
+    var vv = KR_CB && KR_CB.visits && KR_CB.visits['KR|'+r.date], ex = vv ? (vv.rowIds||[]) : [], e1 = krSurgerySlotError(hid, r.dir, r.date, r.time, r.dirOp.min, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true, use:true, what:'院长操作', exceptRowIds:ex});
     if(e1){ res.err = e1+'，请改时间或换院长'; res.fix = 'time'; return res; }
   }
   if(KR_CB && KR_CB.earliest && r.date > KR_CB.earliest && !KR_CB.stayOut) res.warn = '晚于最早回国日 '+KR_CB.earliest.slice(5).replace('-', '/');
