@@ -5104,13 +5104,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       c.krBalancePaid = true; c.procedureItems = c.procedureItems.filter(function(it){ return !/^R167/.test(it.name||''); });
       c.procedureItems.push({name:'R167 管理甲 · 3次', origin:'KR', mgmtPlan:true, qty:3, heldOver:true, uses:[], iid:'iR167a'}, {name:'R167 管理乙', origin:'KR', mgmtPlan:true, krAddOn:true, qty:1, heldOver:true, uses:[], iid:'iR167b'});
-      var tabs = txt(caseTabsHtml(c)); ST.ok(/术后管理[\s\S]*在韩管理 ●/.test(tabs), 'IN tab 标签：术后管理 ｜ 在韩管理 ●');
+      var tabs = txt(caseTabsHtml(c)); ST.ok(/术后管理[\s\S]*管理项目 ●/.test(tabs), 'IN tab 标签：术后管理 ｜ 管理项目 ●（CMD-1028-13：IN 的 tab 改叫「管理项目」）');
       c.activeCaseTab = 'kmgmt'; var h = caseTabContentHtml(c), t0 = txt(h);
       ST.ok(/R167 管理甲/.test(t0) && /R167 管理乙/.test(t0) && /印尼购买/.test(t0) && /在韩购买/.test(t0), '内容：管理项目 + 来源栏（印尼购买 / 在韩购买）');
       ST.ok(!/krCbOpen|todoCbOpen|todoCareBookOpen/.test(h), 'IN 只读：没有预约 / 修改时间入口');
       c.activeCaseTab = 'kr'; var k = txt(caseTabContentHtml(c)); ST.ok(!/R167 管理/.test(k), '赴韩施术 tab 没有管理项目');
-      c.krTripEnded = {at:nowFullDt(), by:'x'}; ST.ok(/在韩管理 ✓/.test(txt(caseTabsHtml(c))), '行程结束后 tab 标 ✓，仍在');
-      c.procedureItems = c.procedureItems.filter(function(it){ return !/^R167/.test(it.name||''); }); ST.ok(!/在韩管理/.test(txt(caseTabsHtml(c))), '没有管理项目 → 没有这个 tab');
+      c.krTripEnded = {at:nowFullDt(), by:'x'}; ST.ok(/管理项目 ✓/.test(txt(caseTabsHtml(c))), '行程结束后 tab 标 ✓，仍在');
+      c.procedureItems = c.procedureItems.filter(function(it){ return !/^R167/.test(it.name||''); }); ST.ok(!/管理项目 [●✓]/.test(txt(caseTabsHtml(c))), '没有管理项目 → 没有这个 tab');
     } finally { var i = CASE_ITEMS.findIndex(function(x){ return x.id===c.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }
   });
   ST.def('R168a','CMD-1028-10 四（KM1 分页，pcStage 夹具）：改离境日——已约 + 还没预约（含无建议日期）的超出项目逐项选，保留不进未安排预约、另放保留组、KR 仍可约、行程结束照现有规则',function(){
@@ -5261,6 +5261,32 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       set(function(c2){ c2.subItems.forEach(function(x){ if(x.kind==='术后管理记录'){ x.done = true; x.skipped = false; } }); c2.procedureItems.forEach(function(it){ if(it.postcare) it.postcare = []; }); });
       c = gc(); var v2 = visitsOf(c).filter(function(x){ return x.date===dCare && x.place==='KR'; })[0]; ST.ok(Store.withClinic(cid, function(){ return krDayCareCardHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); })==='', '没有未做的术后管理 → 这块不显示');
     } finally { window.alert = oa; window.confirm = oc; KR_DAYADD = {}; Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); CASE_ITEMS[i] = JSON.parse(snap); return true; }); }
+  });
+  /* CMD-1028-13：麻醉同意书可点开 + 到店 / 到院块变灰 + IN「管理项目」tab / KR「在韩管理」一买就出现 */
+  ST.def('R172a','CMD-1028-13（A1 分页，stageC 夹具）：麻醉同意书链接 + 全文；已到店块变灰；IN「管理项目」tab（付定金起就列出、待付尾款；本地管理段 + 展开使用）',function(){
+    var c = CASE_ITEMS.filter(function(x){ return /^T-/.test(x.name) && x.settlementDone && !x.mainId; })[0]; ST.ok(!!c, '有 stageC 夹具案件'); if(!c) return;
+    /* 一 */
+    ST.ok(/text-decoration:underline/.test(anesLink()) && /openAnesConsent/.test(anesLink()), '「麻醉同意书」是带下划线的链接');
+    openCaseDetail(c.id); openAnesConsent(); var ov = document.getElementById('anes-text-overlay'), ot = ov.innerText;
+    ST.ok(ov.classList.contains('open') && /一、基本信息/.test(ot) && /七、语言/.test(ot) && /关闭/.test(ot) && /草案/.test(ot) && ot.indexOf(c.name)>-1, '弹窗：全文七段 + 草案提示 + 本案件资料 + ［关闭］');
+    ST.ok(/v0\.2/.test(ANES_CONSENT_VERSION) && ot.indexOf(ANES_CONSENT_VERSION)>-1, '版本号 '+ANES_CONSENT_VERSION); ov.classList.remove('open');
+    /* 二 */
+    var g = function(h){ return /grayscale/.test(h); }, td = todayStr();
+    ST.ok(g(eventChipHtml({kind:'reservation',date:td,time:'23:00',name:'x',vstate:'已到访'})) && !g(eventChipHtml({kind:'reservation',date:td,time:'23:00',name:'x',vstate:'待访问'})) && /<s>/.test(eventChipHtml({kind:'reservation',date:td,time:'23:00',name:'x',vstate:'未到店'})), 'IN 本院：已到访变灰、待访问不灰、未到店仍划掉');
+    ST.ok(g(krBlockStyle({type:'surg',own:true,state:'已到医院'})) && g(krBlockStyle({type:'visit',own:true,state:'已到店'})) && !g(krBlockStyle({type:'surg',own:true,state:'待到院'})), 'IN 的 KR 医院日程：已到院变灰，待到院不灰');
+    /* 三 */
+    var b0 = (c.settlementBatches||[])[0] || {};
+    c.procedureItems.push({name:'R172 管理甲 · 3次', origin:'KR', mgmtPlan:true, qty:3, copies:1, batchId:b0.id, price:100000});
+    CLIENT_HOLDINGS[c.name] = [{itemName:'R172 本地乙', batches:[{caseId:c.id, bought:3, used:1, date:td, spec:'', promo:true, usages:[{caseId:c.id, date:td, qty:1}]}]}];
+    var tabs = caseTabListOf(c).map(function(t0){ return t0.label; }).join('｜');
+    ST.ok(/术后管理.*管理项目.*子案件/.test(tabs) || /赴韩施术.*管理项目.*子案件/.test(tabs), 'IN tab 顺序含「管理项目」在子案件前（'+tabs+'）');
+    ST.ok(tabs.indexOf('在韩管理')<0, 'IN 的 tab 不再叫「在韩管理」');
+    var ht = inMgmtTabHtml(c).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    ST.ok(/R172 管理甲/.test(ht) && /待付尾款/.test(ht) && /剩 3 \/ 共 3 次/.test(ht), '在韩管理段：付定金起就列出，状态「待付尾款」');
+    ST.ok(/本地管理/.test(ht) && /R172 本地乙/.test(ht) && /剩 2 \/ 共 3 次/.test(ht) && /活动价/.test(ht) && /查看案件/.test(ht) && !/<button/.test(inMgmtTabHtml(c)), '本地管理段：剩余 / 购买日期 / 来源 / 展开看使用 + 查看案件；没有按钮');
+    c.krBalancePaid = true; (c.procedureItems.filter(function(it){ return /R172/.test(it.name); })[0]).heldOver = true;
+    ST.ok(/在韩持有/.test(inMgmtTabHtml(c).replace(/<[^>]+>/g, ' ')), '付清尾款 / 转持有后状态变「在韩持有」');
+    CLIENT_HOLDINGS[c.name] = []; c.procedureItems = c.procedureItems.filter(function(it){ return !/R172/.test(it.name); });
   });
   ST.def('R170a','CMD-1028-12 二（任意分页）：离境当天改成提醒后确认——离境时间之前提醒、之后不能约；没填时间离境当天提醒；超出行程只算离境时间之后的',function(){
     var c = {stay:{in:'2030-01-01', out:'2030-01-10', outTime:'21:00'}, subItems:[
