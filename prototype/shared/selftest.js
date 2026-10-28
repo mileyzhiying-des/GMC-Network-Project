@@ -2447,6 +2447,62 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     openClientEdit(legacy.name, 'gender'); ST.ok(document.getElementById('ce-v').value==='', '旧资料编辑时性别默认「请选择」，要填了才能存');
     closeClientEdit();
   });
+  ST.def('R160a','CMD-1028-01（A1 分页，pcStage 夹具）：从主案件约的预约直接是主案件的子案件（不另开案件号）· 客人页缩排 · 日历一天一格 · 到店对话框带出 · 取消 / 一般预约不变',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor && !x.mainId; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var oa = window.alert, oc = window.confirm, ofa = window.GMC_NO_FOLLOWASK; window.alert = function(){}; window.confirm = function(){ return true; };
+    var td = todayStr(), openDay = function(from){ var d = from; for(var i = 0; i < 40; i++){ if(todoCbTimes(d).length) return d; d = ymdAdd(d, 1); } return d; };
+    try{
+      CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !x.careFor && !(x.mainId===c.id && x.preChild); }); c.krBalancePaid = true; c.krTripEnded = c.krTripEnded || {at:nowFullDt()};
+      var d1 = openDay(ymdAdd(td, 3)), d2 = openDay(ymdAdd(d1, 1)), seq0 = CASE_NO_SEQ, n0 = CASE_ITEMS.length;
+      c.procedureItems.forEach(function(i){ i.postcare = (i.postcare||[]).filter(function(p){ return !/^R160/.test(p.name||''); }); });
+      var sg = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); }); sg[0].postcare = (sg[0].postcare||[]).concat([{mgmt:'术后管理', name:'R160 消肿', times:1, interval:1, place:'IN', startDay:5}, {mgmt:'术后管理', name:'R160 拆线', times:1, interval:1, place:'IN', startDay:7}]);
+      var gs = todoUbGroupsIn(c, false); if(!ST.ok(gs.length>=2, '夹具里有至少两个印尼未预约项目（'+gs.length+'）')) return;
+      todoCbOpen(c.id, '*'); var B = TODO_CB2;
+      B.groups.forEach(function(g, i){ g.lines.forEach(function(l){ l.date = (i % 2===0) ? d1 : d2; }); }); todoCbNormalize(); todoCbRender();
+      todoCbGo();
+      var kids = CASE_ITEMS.filter(function(x){ return x.mainId===c.id && x.preChild; });
+      ST.ok(kids.length===2, '两个日子 → 两个子案件（实际 '+kids.length+'）');
+      ST.ok(CASE_NO_SEQ===seq0 && CASE_ITEMS.filter(function(x){ return !x.mainId && x.id!==c.id && x.name===c.name && x.careFor; }).length===0, '没有新的 Case ID，也没有独立的预约案件');
+      ST.ok(kids.every(function(k){ return new RegExp('^'+c.caseNo+'-\\d+').test(k.caseNo) && isChildVisit(k) && k.subState==='waiting' && k.careFor && k.careFor.caseId===c.id; }), '子案件号 = 主案件号-NN（'+kids.map(function(k){ return k.caseNo; }).join('、')+'），状态已预约，careFor 指回主案件');
+      ST.ok(kids[0].caseNo!==kids[1].caseNo, '两天两个号');
+      var vs = visitsOf(c).filter(function(v){ return v.place==='IN' && (v.date===d1 || v.date===d2); });
+      ST.ok(vs.length===2 && vs.every(function(v){ return v.types.indexOf('术后管理')>-1; }), '主案件的 visitsOf 认得这两天（术后管理）');
+      /* 客人页缩排 */
+      var html = cliOngoingHtml({cases:CASE_ITEMS.filter(function(x){ return x.name===c.name; }), mode:'IN', openCase:function(x){ return ''; }});
+      ST.ok((html.match(/└/g)||[]).length>=2 && html.indexOf(c.caseNo)>-1, '客人页「正在进行案件」：这两天缩排在主案件底下（└），不是独立案件');
+      /* 日历一天一格 */
+      var evs = calendarEvents().filter(function(e){ return e.name===c.name && e.kind==='reservation' && (e.date===d1 || e.date===d2); });
+      var perDay = {}; evs.forEach(function(e){ perDay[e.date] = (perDay[e.date]||0)+1; });
+      ST.ok(perDay[d1]===1 && perDay[d2]===1, '日历每天只有一格（'+JSON.stringify(perDay)+'）');
+      var e1 = evs.filter(function(e){ return e.date===d1; })[0], chip = eventChipHtml(e1, {day:true}).replace(/<[^>]+>/g, ' ');
+      var nKeys = kids.filter(function(k){ return k.visitDate===d1; })[0].careFor.keys.length;
+      ST.ok(nKeys<2 || /术后管理（\d+ 项）/.test(chip), '格子标题写「术后管理（N 项）」：'+chip.replace(/\s+/g, ' ').slice(0, 60));
+      /* 到店：对话框直接带出 */
+      var k1 = kids.filter(function(k){ return k.visitDate===d1; })[0]; k1.visitDate = td; window.GMC_NO_FOLLOWASK = false; c.dayConfirmed = c.dayConfirmed || {at:nowFullDt()}; /* 夹具里主案件有一天「待确认结束」，会挡住下一天的接待 */
+      openCaseDetail(k1.id); markArrived();
+      ST.ok(!!FU_ASK && FU_ASK.mode==='link' && FU_ASK.sel===c.id && (FU_ASK.svc.care || FU_ASK.svc.revisit), '客人已到店 → 对话框默认「继续之前的服务」+ 服务内容，案件已选好（主案件 '+c.caseNo+'）');
+      followupAskDone(true);
+      ST.ok(k1.mainId===c.id && k1.caseNo===kids.filter(function(k){ return k.id===k1.id; })[0].caseNo && /^(术后管理|复诊评估)/.test(((k1.resumeFrom||{}).types||[])[0]||'术后管理'), '确认后仍是主案件的子案件，号不变（'+k1.caseNo+'）');
+      /* 取消接待不退出主案件 */
+      revertIntakeToWaiting(k1, '测试取消接待', 'A1');
+      ST.ok(k1.mainId===c.id && /-\d+$/.test(k1.caseNo) && k1.subState==='waiting', '取消接待 → 还是子案件、号不变、回到已预约');
+      /* 取消预约：号占位、项目退回未预约 */
+      var k2 = kids.filter(function(k){ return k.id!==k1.id; })[0], before = todoUbGroupsIn(c, false).reduce(function(a, g){ return a+g.items.length; }, 0), no2 = k2.caseNo;
+      openCaseDetail(k2.id); CANCEL_REASON = '客人取消'; confirmCancel();
+      var after = todoUbGroupsIn(c, false).reduce(function(a, g){ return a+g.items.length; }, 0);
+      ST.ok(k2.subState==='cancelled' && k2.caseNo===no2 && after>before, '预约取消：子案件号保留（占位）、项目退回未预约（'+before+' → '+after+'）');
+      /* 一般预约仍是独立预约 */
+      var gen = createReservationCase(c.name, null, ymdAdd(td, 9), '10:30', null, '面诊商谈');
+      ST.ok(!gen.mainId && !gen.preChild && CASE_NO_SEQ===seq0+1, '客人自己打电话约的一般预约：独立预约，拿新的 Case ID');
+      CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==gen.id; }); CASE_NO_SEQ = seq0;
+      /* 到店选「开始新的服务案件」→ 脱离主案件 */
+      var k3 = createChildReservation(c, ymdAdd(td, 11), '11:00', '术后管理', {careFor:{caseId:c.id, keys:[]}}); var no3 = k3.caseNo;
+      openCaseDetail(k3.id); k3.visitDate = td; k3.subState = 'arrived'; FU_ASK = {caseId:k3.id, mode:'none', svc:{}, sel:''}; followupAskDone(true);
+      ST.ok(!k3.mainId && !k3.preChild && k3.caseNo!==no3 && !/-\d+$/.test(k3.caseNo), '选「开始新的服务案件」→ 脱离主案件，变独立案件，拿新的 Case ID（'+k3.caseNo+'）');
+      c.procedureItems.forEach(function(i){ i.postcare = (i.postcare||[]).filter(function(p){ return !/^R160/.test(p.name||''); }); });
+    }finally{ window.alert = oa; window.confirm = oc; window.GMC_NO_FOLLOWASK = ofa; FU_ASK = null; }
+  });
   ST.def('R159a','CMD-1027-14（A1 分页，pcStage 夹具）：IN 改在韩期间也弹离开日期冲突处理窗（回印尼 / 保留 / 请 KR 提前做；必须在韩国不能回印尼；取消什么都不变；通知 KR）+ IN 主案件两行状态卡 + 待预约',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor && !x.mainId; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;

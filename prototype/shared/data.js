@@ -597,7 +597,7 @@ function calendarEvents(){
     visitsOf(m).forEach(function(v){
       if(v.place!=='IN' || !v.time) return;
       var rec = CASE_ITEMS.filter(function(x){ return x.id===(v.rec||v.caseId); })[0]; if(!rec || rec.krVisit || !rec.visitDate || !rec.visitTime) return;
-      evs.push({kind:'reservation', date:v.date, time:v.time, name:m.name, caseId:rec.id, purpose:rec.visitPurpose, vstate:visitStateOf(rec), ended:isEnded(rec), cancelBy:rec.cancelBy||'', no:v.no, types:v.types});
+      evs.push({kind:'reservation', date:v.date, time:v.time, name:m.name, caseId:rec.id, purpose:rec.visitPurpose, vstate:visitStateOf(rec), ended:isEnded(rec), cancelBy:rec.cancelBy||'', no:v.no, types:v.types, n:((rec.preChild && rec.careFor && rec.careFor.keys) ? rec.careFor.keys.length : 0)});
     });
   });
   CASE_ITEMS.forEach(function(c){
@@ -621,7 +621,7 @@ function eventChipHtml(e, opts){
   var l1, l2, onclick;
   if(e.kind==='reservation'){
     l1 = (e.vstate==='未到店' || e.vstate==='预约取消') ? '<s>'+e.name+'</s>' : e.name;
-    l2 = (e.purpose||'')+(e.vstate==='已到访' ? '（已到访）' : '')+(e.vstate==='未到店' ? ' 未到店' : '')+(e.vstate==='预约取消' ? (e.cancelBy==='客人' ? ' 客人取消预约' : ' 预约取消') : '');
+    l2 = (e.purpose||'')+(e.n>1 ? '（'+e.n+' 项）' : '')+(e.vstate==='已到访' ? '（已到访）' : '')+(e.vstate==='未到店' ? ' 未到店' : '')+(e.vstate==='预约取消' ? (e.cancelBy==='客人' ? ' 客人取消预约' : ' 预约取消') : '');
     if(e.vstate==='预约取消') grey = 'opacity:.5;filter:grayscale(1);';
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     if(e.vstate==='待访问' && past){
@@ -2154,7 +2154,7 @@ function clearResumeState(c){
   c.resumeFrom = null; c.resumeCheck = null; c.linkedCase = null; c.lightLink = null; c.continueNew = false; c.followup = false; c.followupAsked = false;
   c.followProjects = []; c.recovery = []; c.revisitMedia = []; c.revisitQuestion = undefined; c.wantConsult = ''; c.careToday = undefined; c.basicOpen = false; c.needsConsultTouched = false;
   if(c.reuseReport){ c.reuseReport = null; c.reportReady = false; c.reuseAfterConsult = false; c.linkedFiles = []; }
-  if(c.mainId && c.mainId!==c.id){ /* 加入过别的主案件：退出并还原案件号 */
+  if(c.mainId && c.mainId!==c.id && !c.preChild){ /* 加入过别的主案件：退出并还原案件号（CMD-1028-01：从主案件约的预约本来就是它的子案件，取消接待不退出） */
     delete c.mainId;
     if(c._origCaseNo){
       var clash = CASE_ITEMS.some(function(x){ return x!==c && x.caseNo===c._origCaseNo; });
@@ -2748,6 +2748,9 @@ function followupAsk(c){
   else if(c.careFor && c.careFor.caseId && av.careC.concat(av.revisitC).some(function(x){ return x.id===c.careFor.caseId; })){ mode = 'link'; svc.care = av.can.care; svc.revisit = !av.can.care; sel = c.careFor.caseId; }
   if(c.visitPurpose==='复诊' || c.visitPurpose==='复诊评估'){ if(av.can.revisit){ mode = 'link'; svc.revisit = true; if(c.revisitFor && fuCandsOf(c, {svc:svc}).some(function(x){ return x.id===c.revisitFor.caseId; })) sel = c.revisitFor.caseId; /* CMD-1027-06：预约复诊时就关联了主案件 */ if(!sel || !fuCandsOf(c, {svc:svc}).some(function(x){ return x.id===sel; })) sel = (fuCandsOf(c, {svc:svc}).filter(function(x){ return x.stage==='postcare'; }).pop() || fuCandsOf(c, {svc:svc}).slice(-1)[0] || {}).id || ''; } }
   else if(c.visitPurpose==='术后管理' && mode==='none' && av.can.care){ mode = 'link'; svc.care = true; sel = av.careC[0].id; }
+  if(c.preChild && c.mainId && prior.some(function(x){ return x.id===c.mainId; })){ /* CMD-1028-01：从主案件约的预约——「继续之前的服务」默认选好、对应的服务内容默认勾好、案件直接带出来 */
+    var ptypes = c.preTypes || []; mode = 'link'; sel = c.mainId; svc = {consult:false, care:ptypes.indexOf('术后管理')>-1, revisit:ptypes.indexOf('复诊评估')>-1};
+  }
   FU_ASK = {caseId:c.id, mode:mode, svc:svc, sel:sel, localSel:'', hist:'none', histText:'', proj:'none', projNote:''};
   if(mode==='link' && !fuCandsOf(c, FU_ASK).some(function(x){ return x.id===sel; })) FU_ASK.sel = (fuCandsOf(c, FU_ASK).slice(-1)[0] || {}).id || '';
   var ov = document.getElementById('followup-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'followup-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
@@ -2885,7 +2888,7 @@ function followupAskDone(link){
       logCaseEvent(c, actingName(), '到店：继续之前的服务 '+src.caseNo+'（'+c.resumeFrom.types.join(' + ')+'）'); buildCaseLog(c); renderCaseSubtitle(c);
       openContModal(c); /* CMD-1026-01：继续资料集中在弹窗里填 */
     }
-  } else { c.continueNew = true; /* CMD-1022-04：选「不继续」= 开新案件，不再出现 1015-18 的「继续到原案件」条 */ logCaseEvent(c, actingName(), '到店：不继续之前案件，走一般流程'); buildCaseLog(c); renderCaseBody(c); }
+  } else { if(c.preChild) detachPreChild(c); c.continueNew = true; /* CMD-1022-04：选「不继续」= 开新案件，不再出现 1015-18 的「继续到原案件」条 */ logCaseEvent(c, actingName(), '到店：不继续之前案件，走一般流程'); buildCaseLog(c); renderCaseBody(c); }
 }
 
 /* CMD-1022-15：到访目的里的继续类型——确认之前都能改：复诊评估 / 术后管理多选（至少留一个）；改成继续面诊要重新过三道检查（点［改为继续面诊］重开到店弹窗） */
@@ -9149,10 +9152,15 @@ function cliProfileHtml(model){
     row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+'<div class="field-row"><span class="fk">隐私协议</span><span class="fv">'+consHtml+'</span><span class="fa"></span></div>';
 }
 function cliOngoingHtml(model){
-  var mine = model.cases.filter(function(c){ return !isEnded(c); });
+  var mine = model.cases.filter(function(c){ return !isEnded(c) && c.subState!=='cancelled'; });
   if(!mine.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">当前没有进行中的案件</div>';
-  return mine.map(function(c){ var b = caseStageBadge(c);
-    return '<div class="trow" style="grid-template-columns:1fr 1fr auto;"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';width:fit-content;">'+b[2]+'</span><span style="font-size:12px;color:var(--slate2);">'+aEscC(model.mode==='IN' ? c.caseNo+(c.visitDate ? ' · '+String(c.visitDate).slice(5).replace('-', '/') : '')+' · '+(subVisitText(c) || caseStatusSub(c)) : c.caseNo)+'</span><a href="#" onclick="'+model.openCase(c)+';return false;" style="font-size:12px;font-weight:700;">进入案件 →</a></div>'; }).join('');
+  var rowOf = function(c, kid){ var b = caseStageBadge(c);
+    return '<div class="trow" style="grid-template-columns:1fr 1fr auto;'+(kid ? 'padding-left:26px;' : '')+'"><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';width:fit-content;">'+(kid ? '└ ' : '')+b[2]+'</span><span style="font-size:12px;color:var(--slate2);">'+aEscC(model.mode==='IN' ? c.caseNo+(c.visitDate ? ' · '+String(c.visitDate).slice(5).replace('-', '/') : '')+' · '+(subVisitText(c) || caseStatusSub(c)) : c.caseNo)+'</span><a href="#" onclick="'+model.openCase(c)+';return false;" style="font-size:12px;font-weight:700;">进入案件 →</a></div>'; };
+  /* CMD-1028-01：子案件（从主案件约的预约 / 继续的来访）缩排在所属主案件底下，不当成独立的「正在进行案件」 */
+  var mains = mine.filter(function(c){ return !isChildVisit(c); }), kids = mine.filter(function(c){ return isChildVisit(c); }), out = '';
+  mains.forEach(function(m){ out += rowOf(m, false); kids.filter(function(k){ return k.mainId===m.id; }).forEach(function(k){ out += rowOf(k, true); }); });
+  kids.filter(function(k){ return !mains.some(function(m){ return m.id===k.mainId; }); }).forEach(function(k){ out += rowOf(k, false); });
+  return out;
 }
 /* 韩国持有：在韩买的管理项目（剩余次数、已安排的预约时间、来自哪个案件）+ 韩国这边还没做的术后管理（已预约写时间，没约写建议日期）；名称不写「·N次」 */
 function cliHoldKrRows(model){
@@ -9630,6 +9638,7 @@ function visitsOf(m){
   };
   var typesOfRecord = function(x){
     var t = [];
+    if(x.preTypes && x.preTypes.length && !x.resumeFrom && !x.materialsConfirmed) return x.preTypes.slice(); /* CMD-1028-01：从主案件约的预约（预建子案件），到店前只算它约的那类 */
     if(x.needsConsult!==false && !x.krVisit && !isRevEval(x) && !(x.followup && x.needsConsult===false)) t.push('面诊安排');
     if(isRevEval(x) || (x.resumeFrom && hasResumeType(x, '复诊评估'))) t.push('复诊评估');
     if(x.krVisit) t.push('在韩管理');
@@ -10979,9 +10988,10 @@ function revBookGo(){
   var B = REV_BOOK; if(!B) return; var c = CASE_ITEMS.filter(function(x){ return x.id===B.evalId; })[0]; if(!c) return;
   if(revBookingOf(c)){ revBookClose(); return; }
   if(!B.date || !B.time || slotBlockReason(B.date, B.time)){ alert('这个时间不能约，请换一个'); return; }
-  var m = mainOf(c) || c, exm = pendingResvSameDay(c.name, B.date), rc;
+  var m = mainOf(c) || c, exm = childResvOf(m, B.date) || pendingResvSameDay(c.name, B.date), rc;
+  if(exm && exm.mainId && exm.mainId!==m.id) exm = null;
   if(exm){ rc = exm; rc.revisitFor = {caseId:m.id, evalId:c.id}; logCaseEvent(rc, actingName(), '预约复诊（并入当天已有的预约 '+(exm.visitTime||'')+'），关联案件 '+(m.caseNo||''), '预约到店'); logCaseEvent(c, actingName(), '预约复诊（并入当天已有的预约）：'+B.date+' '+(exm.visitTime||''), '复诊评估'); }
-  else { rc = createReservationCase(c.name, null, B.date, B.time, null, '复诊评估'); rc.revisitFor = {caseId:m.id, evalId:c.id};
+  else { rc = createChildReservation(m, B.date, B.time, '复诊评估', {revisitFor:{caseId:m.id, evalId:c.id}}); /* CMD-1028-01：直接是主案件的子案件 */
     logCaseEvent(c, actingName(), '预约复诊：'+B.date+' '+B.time+'（院长建议：'+revNextText(c)+'）', '复诊评估'); logCaseEvent(rc, actingName(), '预约复诊评估，关联案件 '+(m.caseNo||'')+'（院长建议：'+revNextText(c)+'）'); }
   revBookClose(); try{ renderCalendar(); }catch(e){} try{ var cur = getCurrentCase(); if(cur) renderCaseBody(cur); }catch(e){}
   try{ showToast('复诊预约已生成', c.name+' · '+B.date+' '+(exm ? (exm.visitTime||'') : B.time)+'（复诊评估）', null); }catch(e){}
@@ -11156,4 +11166,30 @@ function mainStatusModel(c){
   m.nx = days.filter(function(v){ return v.state==='waiting' && v.date>today; }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0] || null;
   m.pend = mainPendingBook(c);
   return m;
+}
+
+
+/* ================= CMD-1028-01：从主案件内容约的预约 = 直接建成该主案件的下一个子案件（不另开案件号） =================
+   原来（CMD-1027-04 补丁）：术后管理 / 复诊评估的预约在客人到店前是一笔独立的「预约到店」（新案件号 A000023…），到店选「继续之前的服务」才挂回主案件；
+   现在：约的时候就是主案件的子案件（mainId = 主案件，案件号 = 主案件号-NN，建立预约时就给号，用 13 的一天一个号 dayNoAssign；旧主案件用 mainNoMax+1），不消耗新的 Case ID；
+   preChild 标记它是「预约时就挂好的」：到店弹窗默认「继续之前的服务」+ 对应服务内容；取消接待不退出主案件。 */
+function childResvOf(m, date){ return childVisitsOf(m).filter(function(x){ return x.visitDate===date && !x.krVisit && x.subState==='waiting' && x.stage!=='cancelled' && x.preChild; })[0] || null; }
+function createChildReservation(m, date, time, purpose, ext){
+  var rc = createReservationCase(m.name, null, date, time, null, purpose);
+  if(rc.caseNo==='A'+String(CASE_NO_SEQ-1).padStart(6,'0')) CASE_NO_SEQ--; /* 不占新的 Case ID */
+  rc.mainId = m.id; rc.preChild = true; rc.preTypes = [purpose==='复诊评估' ? '复诊评估' : '术后管理'];
+  if(ext) Object.keys(ext).forEach(function(k){ rc[k] = ext[k]; });
+  try{ dayNoSync(m); }catch(e){}
+  rc.caseNo = m.dayNoOn ? dayNoAssign(m, date, 'IN') : (m.caseNo||'')+'-'+pad2(mainNoMax(m, rc.id)+1);
+  rc._origCaseNo = rc.caseNo; delete rc._seqBack;
+  if(rc.logEntries && rc.logEntries[0]) rc.logEntries[0].action = '室长代替预约（主案件 '+m.caseNo+' 的子案件 '+rc.caseNo+'）';
+  try{ mainAutoStatus(m); }catch(e){ console.error(e); }
+  return rc;
+}
+/* 到店时选「开始新的服务案件」→ 这笔预约脱离主案件，变成独立案件（拿新的 Case ID，不再关联） */
+function detachPreChild(c){
+  var old = c.caseNo, mainNo = ((CASE_ITEMS.filter(function(x){ return x.id===c.mainId; })[0])||{}).caseNo||'';
+  delete c.mainId; c.preChild = false; delete c.preTypes; c.careFor = null; c.revisitFor = null; delete c._origCaseNo;
+  c.caseNo = 'A'+String(CASE_NO_SEQ).padStart(6,'0'); CASE_NO_SEQ++;
+  logCaseEvent(c, actingName(), '到店：选「开始新的服务案件」——这笔预约不再是 '+mainNo+' 的子案件（原 '+old+'），改为独立案件 '+c.caseNo);
 }

@@ -434,10 +434,11 @@ function todoCareBookGo(){
   var B = TODO_CB; if(!B || !B.time) return; var c = CASE_ITEMS.filter(function(x){ return x.id===B.caseId; })[0]; if(!c) return;
   if(slotBlockReason(B.date, B.time)){ alert('这个时间不能约，请换一个'); return; }
   if(B.edit){ var erc = CASE_ITEMS.filter(function(x){ return x.id===B.edit; })[0]; if(erc){ var od = erc.visitDate+' '+erc.visitTime; erc.visitDate = B.date; erc.visitTime = B.time; logCaseEvent(c, actingName(), '修改术后管理预约时间：'+B.label+'，'+od+' → '+B.date+' '+B.time, '术后管理'); logCaseEvent(erc, actingName(), '预约修改：'+od+' → '+B.date+' '+B.time); todoCareBookClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){} return; } }
-  var exm = pendingResvSameDay(c.name, B.date), rc;
-  if(exm && (!exm.careFor || exm.careFor.caseId===c.id)){ rc = exm; rc.careFor = {caseId:c.id, keys:((rc.careFor && rc.careFor.keys) || []).concat([B.key])}; logCaseEvent(c, actingName(), '预约术后管理（合并到当天已有的预约 '+exm.visitTime+'）：'+B.label+'，'+B.date, '术后管理'); logCaseEvent(rc, actingName(), '术后管理并入这次预约，继续原案件 '+c.caseNo+'：'+B.label); B.time = exm.visitTime; }
-  else { rc = createReservationCase(c.name, null, B.date, B.time, null, '术后管理'); rc.careFor = {caseId:c.id, keys:[B.key]};
-  logCaseEvent(c, actingName(), '预约术后管理（继续本案件）：'+B.label+'，'+B.date+' '+B.time, '术后管理'); logCaseEvent(rc, actingName(), '预约术后管理，继续原案件 '+c.caseNo+'：'+B.label); exm = null; }
+  var m0 = mainOf(c), exm = childResvOf(m0, B.date) || pendingResvSameDay(c.name, B.date), rc;
+  if(exm && exm.mainId && exm.mainId!==m0.id) exm = null;
+  if(exm && (exm.mainId===m0.id || !exm.careFor || exm.careFor.caseId===c.id)){ rc = exm; rc.careFor = {caseId:c.id, keys:((rc.careFor && rc.careFor.keys) || []).concat([B.key])}; logCaseEvent(c, actingName(), '预约术后管理（合并到当天已有的预约 '+exm.visitTime+'）：'+B.label+'，'+B.date, '术后管理'); logCaseEvent(rc, actingName(), '术后管理并入这次预约，继续原案件 '+c.caseNo+'：'+B.label); B.time = exm.visitTime; }
+  else { rc = createChildReservation(m0, B.date, B.time, '术后管理', {careFor:{caseId:c.id, keys:[B.key]}});
+  logCaseEvent(c, actingName(), '预约术后管理（子案件 '+rc.caseNo+'）：'+B.label+'，'+B.date+' '+B.time, '术后管理'); logCaseEvent(rc, actingName(), '预约术后管理，主案件 '+c.caseNo+'：'+B.label); exm = null; }
   todoCareBookClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){}
   showToast(exm ? '已合并' : '预约已生成', exm ? c.name+' · '+mergeNoteText(exm) : c.name+' · '+B.date+' '+B.time+'（术后管理，继续 '+c.caseNo+'）', null);
 }
@@ -549,11 +550,12 @@ function todoCbGo(){
   if(lunch && !window.GMC_NO_CONFIRM && !confirm('这是午休时间，确定预约吗？')) return; /* CMD-1026-20：午休可强约，先确认 */
   var done = [], mergedAny = false;
   order.forEach(function(ds){ var bk = buckets[ds]; /* 同一天合成一次到店 */
-    var exm = pendingResvSameDay(c.name, bk.date), rc;
-    if(exm && (!exm.careFor || exm.careFor.caseId===c.id)){ rc = exm; rc.careFor = {caseId:c.id, keys:((rc.careFor && rc.careFor.keys) || []).concat(bk.keys)}; logCaseEvent(c, actingName(), '预约术后管理（合并到当天已有的预约 '+exm.visitTime+'）：'+bk.labels.join('、')+'，'+bk.date, '术后管理'); logCaseEvent(rc, actingName(), '术后管理并入这次预约，继续原案件 '+c.caseNo+'：'+bk.labels.join('、')); done.push(bk.date+' '+exm.visitTime+'（'+mergeNoteText(exm)+'）'); mergedAny = true; }
-    else { rc = createReservationCase(c.name, null, bk.date, bk.time, null, '术后管理'); rc.careFor = {caseId:c.id, keys:bk.keys};
-    logCaseEvent(c, actingName(), '预约术后管理（继续本案件）：'+bk.labels.join('、')+'，'+bk.date+' '+bk.time, '术后管理'); logCaseEvent(rc, actingName(), '预约术后管理，继续原案件 '+c.caseNo+'：'+bk.labels.join('、'));
-    done.push(bk.date+' '+bk.time); } });
+    var m = mainOf(c), exm = childResvOf(m, bk.date) || pendingResvSameDay(c.name, bk.date), rc;
+    if(exm && exm.mainId && exm.mainId!==m.id) exm = null; /* 同一天已有别的主案件的预约 → 各自挂在自己的主案件下，不合并 */
+    if(exm && (exm.mainId===m.id || !exm.careFor || exm.careFor.caseId===c.id)){ rc = exm; rc.careFor = {caseId:c.id, keys:((rc.careFor && rc.careFor.keys) || []).concat(bk.keys)}; logCaseEvent(c, actingName(), '预约术后管理（合并到当天已有的预约 '+exm.visitTime+'）：'+bk.labels.join('、')+'，'+bk.date, '术后管理'); logCaseEvent(rc, actingName(), '术后管理并入这次预约，继续原案件 '+c.caseNo+'：'+bk.labels.join('、')); done.push(bk.date+' '+exm.visitTime+'（'+mergeNoteText(exm)+'）'); mergedAny = true; }
+    else { rc = createChildReservation(m, bk.date, bk.time, '术后管理', {careFor:{caseId:c.id, keys:bk.keys}});
+    logCaseEvent(c, actingName(), '预约术后管理（子案件 '+rc.caseNo+'）：'+bk.labels.join('、')+'，'+bk.date+' '+bk.time, '术后管理'); logCaseEvent(rc, actingName(), '预约术后管理，主案件 '+c.caseNo+'：'+bk.labels.join('、'));
+    done.push(bk.date+' '+bk.time+' '+rc.caseNo); } });
   todoCbClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){}
   showToast(mergedAny ? '已合并' : '预约已生成', c.name+' · '+done.join('、')+'（术后管理，继续 '+c.caseNo+'）', null);
 }
