@@ -207,7 +207,7 @@ window.addEventListener('storage', function(e){ if(e.key==='gmc_call' && e.newVa
 function krBoot(){
   try{ i18nStart(); }catch(e){}
   try{ if(krBackfillDurations()) Store.touch(); }catch(e){ console.error(e); }
-  try{ krClinics().forEach(function(cl){ Store.mutateClinic(cl.id, function(){ backfillLocalLib(); var rg = repairScheduleGaps(), rv = repairVisitState(); if(rg || rv) Store.touch(); }); }); }catch(e){ console.error('[补本地项目库 / 施术子案件]', e); } try{ if(repairOffConflicts()) Store.touch(); }catch(e){ console.error('[院长 OFF 与施术冲突]', e); } /* 各来源诊所没有本地项目库的补上 */
+  try{ krClinics().forEach(function(cl){ Store.mutateClinic(cl.id, function(){ backfillLocalLib(); var rg = repairScheduleGaps(), rv = repairVisitState(), rr = repairRemovedItems(); if(rg || rv || rr) Store.touch(); }); }); }catch(e){ console.error('[补本地项目库 / 施术子案件]', e); } try{ if(repairOffConflicts()) Store.touch(); }catch(e){ console.error('[院长 OFF 与施术冲突]', e); } /* 各来源诊所没有本地项目库的补上 */
   document.querySelectorAll('.me-name').forEach(function(el){ el.textContent = ME_NAME; });
   var start = canDo('krview') || canDo('krviewOwn') ? 'kr-dashboard' : null; /* 地址带 ?case=诊所:案件号 时直接进详情 */
   if(!start){ location.replace(homeUrl()); return; }
@@ -2514,6 +2514,11 @@ function krRowQtyStepper(c, s){ /* 到院卡里还没完成的「使用」行也
   return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:4px;"><button class="btn-outline" style="padding:0 7px;font-size:13px;" '+(cur<=1 ? 'disabled ' : '')+'onclick="krUseRowQty(\''+s.id+'\','+(cur-1)+')">−</button><b style="min-width:16px;text-align:center;">'+cur+'</b><button class="btn-outline" style="padding:0 7px;font-size:13px;" '+(cur>=max ? 'disabled ' : '')+'onclick="krUseRowQty(\''+s.id+'\','+(cur+1)+')">+</button></span>';
 }
 function krUseRowQty(id, n){ if(!krCan()) return; krMut(function(c){ return coreUseRowQtySet(c, id, n); }); }
+/* CMD-1028-14 八：已取消 / 已更换的施术项目——灰色一行，写状态和原因，没有任何按钮 */
+function krRemovedRow(c, nm){
+  var rm = (c.procedureItems||[]).filter(function(x){ return x.name===nm && (x.cancelled || x.swapped); })[0] || {}, sw = !!rm.swapped, why = rm.unableReason || (rm.replacedBy ? '更换为 '+rm.replacedBy : '');
+  return '<div style="display:grid;grid-template-columns:'+KR_TBL_COLS+';gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border2);font-size:12px;color:var(--muted);"><span>'+krTypeTag('施术项目')+'</span><span style="font-size:13px;"><span style="text-decoration:line-through;">'+krEsc(buyName(nm))+'</span>'+(why ? '<div style="font-size:12px;">'+krEsc(why)+'</div>' : '')+'</span><span></span><span>韩国</span><span style="font-weight:600;">'+(sw ? '已更换' : '已取消')+'</span><span></span></div>';
+}
 function krTblRow(c, s, o){
   var mode = o.mode || 'today', type = krRowType(c, s);
   var pend = s.kind==='增加项目' && (c.procedureItems||[]).some(function(x){ return x.pendingPay && x.name===s.projectName && !x.cancelled; });
@@ -2749,6 +2754,7 @@ function krMainRowsHtml(c, mode){
     if(s.kind==='施术' && /^施术：/.test(s.content||'')){ /* CMD-1015-29：施术项目一项一行；每项可单独完成 / 今日取消 */
       String(s.content).replace(/^施术：/, '').split('、').filter(Boolean).forEach(function(nm){
         var it = (c.procedureItems||[]).filter(function(x){ return x.name===nm && !x.cancelled && !x.swapped; })[0], vdone = s.done || !!(it && it.done);
+        if(!it){ rowsHtml.push(krRemovedRow(c, nm)); return; } /* CMD-1028-14 八：已取消 / 已更换的项目不再显示成「待做」+［操作完成］，只留一行已取消 */
         rowsHtml.push(krTblRow(c, Object.assign({}, s, {content:'施术：'+nm, done:vdone, _item:nm}), o));
       });
     } else rowsHtml.push(krTblRow(c, s, o));

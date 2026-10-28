@@ -5381,6 +5381,45 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!revAddPossible(cur) && /复诊评估/.test(subVisitTabHtml(cur)), '之后不能重复增加，到访 tab 里复诊评估已勾（不可改）');
     } finally { window.confirm = oc; window.alert = oa; window.GMC_NO_INFO = ogi; try{ closeSubcase(m.id); }catch(e){} try{ inAddItemClose(); contClose(); }catch(e){} var back = JSON.parse(snap); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==m.id && x.mainId!==m.id; }).concat(back); try{ Store.touch(); }catch(e){} }
   });
+  ST.def('R179a','CMD-1028-14 八（A1 分页）：施术时间确认后 IN 取消其中一个项目——施术一行按剩下的项目重写、它的术后管理一起取消、麻醉同意书不用再确认',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑'))  return;
+    var c = ST.toConfirmed('R179A', ['切开双眼皮', '假体隆鼻']); ST.open(c);
+    var it1 = c.procedureItems.filter(function(i){ return i.name==='切开双眼皮'; })[0]; it1.consentPending = true; it1.postcare = [{mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7}];
+    c.krBalancePaid = true; var sd = c.krSchedule.confirmedDate; coreCareBook(c, '切开双眼皮', 0, ymdAdd(sd, 7), '15:00', 'KR', '', ST.krBy);
+    ST.ok((c.subItems||[]).some(function(s){ return s.kind==='术后管理记录' && s.projectName==='切开双眼皮'; }), '先约好切开双眼皮的拆线'); c.krBalancePaid = false;
+    var s0 = c.subItems.filter(function(s){ return s.kind==='施术'; })[0]; ST.ok(/切开双眼皮/.test(s0.content) && /假体隆鼻/.test(s0.content), '取消前施术一行写两个项目');
+    openCancelItems(); var cbs = Array.from(document.querySelectorAll('.refund-cb')); var idx = REFUND_PENDING_ITEMS.indexOf(it1); if(!ST.ok(idx>-1 && !!cbs[idx], '弹窗里有切开双眼皮')) return; cbs[idx].checked = true; refundRecalc();
+    document.getElementById('refund-amount').value = '100000'; document.getElementById('refund-reason').value = '到院后不能做'; confirmRefund();
+    var s1 = c.subItems.filter(function(s){ return s.kind==='施术'; })[0];
+    ST.ok(it1.cancelled && !/切开双眼皮/.test(s1.content) && /假体隆鼻/.test(s1.content), '施术一行改成只剩假体隆鼻（实际：'+s1.content+'）');
+    ST.ok(!(c.subItems||[]).some(function(s){ return s.kind==='术后管理记录' && s.projectName==='切开双眼皮' && !s.done; }), '切开双眼皮已约的术后管理一起取消');
+    ST.ok(!it1.consentPending && anesPendingItems(c).every(function(x){ return x.name!=='切开双眼皮'; }), '它的麻醉同意书不用再确认');
+    ST.ok(krActiveItems(c).every(function(x){ return x.name!=='切开双眼皮'; }), '项目汇总 / 尾款只算剩下的项目');
+    ST.ok(ST.hasLog(c, /术后管理一起取消/), 'Timeline 记了术后管理一起取消');
+  });
+  ST.def('R179b','CMD-1028-14 八（KM1 分页，pcStage 夹具）：KR 施术当天的进行项目——已取消 / 已更换的项目只显示一行「已取消」，没有［操作完成］；旧数据（施术一行还写着已取消项目）启动修复',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr();
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var set = function(f){ Store.mutateClinic(cid, function(){ return f(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); }); };
+    var snap = JSON.stringify(gc()), txt = function(h){ return String(h).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); };
+    try{
+      var names = []; set(function(c){ c.krBalancePaid = true; var its = c.procedureItems.filter(function(i){ return !krIsMgmtItemC(i) && !i.cancelled; }); names = its.map(function(i){ return i.name; });
+        if(its.length<2){ var cp = JSON.parse(JSON.stringify(its[0])); cp.name = '切开双眼皮R179'; c.procedureItems.push(cp); names.push(cp.name); }
+        c.hasArrived = true; c.krSchedule.status = 'arrived'; c.krSchedule.confirmedDate = td;
+        var s = c.subItems.filter(function(x){ return x.kind==='施术'; })[0]; if(!s){ s = {id:'s179', no:subNextNo(c), date:td, kind:'施术', place:'KR', projectName:'', done:false, auto:true}; c.subItems.push(s); }
+        s.done = false; s.date = td; s.content = '施术：'+names.slice(0, 2).join('、');
+        var gone = c.procedureItems.filter(function(i){ return i.name===names[0]; })[0]; gone.cancelled = true; gone.unable = true; gone.unableReason = '到院后不能做'; return true; });
+      var c = gc(), rows = Store.withClinic(cid, function(){ return krMainRowsHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0], 'today'); }), t = txt(rows);
+      var i0 = t.indexOf(names[0]); ST.ok(i0>-1 && /已取消/.test(t), '已取消的项目只显示一行「已取消」（'+t.slice(0, 80)+'）');
+      var rowOf0 = rows.split('<div style="display:grid').filter(function(x){ return x.indexOf(names[0])>-1; })[0] || ''; ST.ok(!/操作完成/.test(rowOf0) && /到院后不能做/.test(rowOf0), '这一行没有［操作完成］，写了原因');
+      ST.ok(names.length<2 || (t.indexOf(names[1])>-1 && /操作完成/.test(txt(rows.split('<div style="display:grid').filter(function(x){ return x.indexOf(names[1])>-1; })[0]||''))), '另一个项目仍可操作');
+      var n = 0; set(function(cc){ n = repairRemovedItems(); return true; }); c = gc(); var s2 = c.subItems.filter(function(x){ return x.kind==='施术'; })[0];
+      ST.ok(n>=1 && s2 && s2.content.indexOf(names[0])<0, '启动修复：施术一行不再写已取消的项目（'+(s2 ? s2.content : '')+'）');
+      n = 0; set(function(cc){ n = repairRemovedItems(); return true; }); ST.ok(n===0, '修复是幂等的');
+    } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); if(i>=0) CASE_ITEMS[i] = JSON.parse(snap); return true; }); }
+  });
   ST.def('R176b','CMD-1028-14 五（KM1 分页）：KR 日历块只有已到院 / 已完成才变灰，过了时间没到院不灰；标了未到院划线',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var td = todayStr(), mk = function(extra){ var r0 = {b:{type:'施术', time:'00:10', end:'00:40', id:'t176', who:'KD1 院长', date:td, name:'T-176'}, lane:0, n:1, row:null, label:'x'}; for(var k in extra) r0[k] = extra[k]; return krcBlockHtml(r0, false); };

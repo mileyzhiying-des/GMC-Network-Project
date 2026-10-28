@@ -2211,6 +2211,7 @@ function confirmRefund(){
   var compMode = REFUND_METHOD==='comp' && ['normal','cannotCoordinate'].indexOf(mode0)>-1;
   if(compMode && !(amount>0)){ alert('转本地项目（置换）的金额要大于 0'); chosen.forEach(function(it){ if(names.indexOf(it.name)>-1) it.cancelled = false; }); return; }
   c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote, comp:compMode});
+  try{ coreAfterItemsRemoved(c, names, ME_NAME); }catch(e){ console.error(e); } /* CMD-1028-14 八：施术一行 / 术后管理 / 麻醉同意书 / 院长占用时间一起收尾 */
   if(mode0==='cannotCoordinate') logCaseEvent(c, ME_NAME, REFUND_CANCEL_KR ? '室长点［取消赴韩］：客人决定不赴韩（KR 还没回过日期），取消全部未完成赴韩项目并退款（后续照无法协调流程）' : '室长点［无法协调］：施术日期始终无法协调，取消全部未完成赴韩项目并退款'); /* 供测试覆盖页判断 D29（CMD-1012-06 补） */
   logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，'+(compMode ? '转本地置换 ' : '退款 '))+formatCurrency(amount,'KRW')+'，'+(compMode ? '置换' : '退款')+'原因：'+reason+(refNote ? '；备注：'+refNote : '')+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];

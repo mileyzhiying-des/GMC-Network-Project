@@ -9198,6 +9198,29 @@ function coreSurgItemDone(c, rowId, name, by){ if(krDayDeny(c, 'main')) return f
 }
 
 /* CMD-1022-14：施术项目被换掉 / 拿掉（3-3 更换、3-2 取消）= 这个施术不要了 → 它还没做的术后管理（已预约的行）一起取消；没预约的名额随项目一起消失（careUnits 只算有效项目） */
+/* CMD-1028-14 八：施术项目被拿掉（取消 / 无法施术 / 更换）后的统一收尾——它的术后管理一起取消、麻醉同意书不用再确认、施术一行的内容 + 院长占用时间按剩下的项目重算。
+   原来只有 KR 评估那几条路（coreMarkUnable / coreCannotReplace / coreSwapItem）做了这些；IN 在施术时间确认后、到院前点［取消项目］只把项目标成已取消，施术一行还写着被取消的项目名，
+   KR 施术当天的「进行项目」就还显示它为「待做」+［操作完成］ */
+function coreAfterItemsRemoved(c, names, by){
+  names = (names||[]).filter(Boolean); if(!names.length) return 0;
+  var n = 0; try{ n = coreDropCareOf(c, names, by); }catch(e){ console.error(e); }
+  (c.procedureItems||[]).forEach(function(it){ if(names.indexOf(it.name)>-1) it.consentPending = false; });
+  try{ syncSurgerySub(c); }catch(e){ console.error(e); }
+  try{ syncSurgeryBlock(c); }catch(e){ console.error(e); }
+  return n;
+}
+/* 旧数据修复（启动执行，幂等）：施术一行（还没做）的内容里列着已取消 / 已更换的项目 → 按剩下的项目重写；这些项目还有没做的术后管理一起取消 */
+function repairRemovedItems(){
+  var fixed = 0;
+  (CASE_ITEMS||[]).forEach(function(c){
+    var s = (c.subItems||[]).filter(function(x){ return x.kind==='施术' && !x.done && /^施术：/.test(x.content||''); })[0]; if(!s) return;
+    var gone = String(s.content).replace(/^施术：/, '').split('、').filter(Boolean).filter(function(nm){ return !(c.procedureItems||[]).some(function(it){ return it.name===nm && !it.cancelled && !it.swapped; }) && (c.procedureItems||[]).some(function(it){ return it.name===nm && (it.cancelled || it.swapped); }); });
+    if(!gone.length) return;
+    coreAfterItemsRemoved(c, gone, '系统'); fixed++;
+    logCaseEvent(c, '系统', '修正旧数据：施术一行还写着已取消 / 已更换的项目「'+gone.join('、')+'」，已按剩下的项目重写（它们的术后管理一起取消）');
+  });
+  return fixed;
+}
 function coreDropCareOf(c, names, by){
   names = names||[]; var gone = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && !s.done && !s.skipped && names.indexOf(s.projectName)>-1; });
   if(!gone.length) return 0;
