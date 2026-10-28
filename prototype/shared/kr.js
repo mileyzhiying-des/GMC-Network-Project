@@ -3766,7 +3766,7 @@ function krCbOpen(filter){
   if(!info || (!info.slots.length && !info.mg.length)) return;
   var t0 = hospitalHours(hid).open || '11:00', picked = {};
   KR_CB = {earliest:info.earliest, stayOut:info.stayOut, leave:info.leave, auto:!!filter.auto, t0:t0, mg:{}, director:info.director, visits:info.visits, rows:info.slots.map(function(sl, n){
-    var sel = filter.surg ? sl.item===filter.surg : (filter.all && filter.tab!=='mgmt' && !filter.auto) ? true : (filter.one && sl.item===filter.one.item && sl.i===filter.one.i && !picked[sl.item+'|'+sl.i] && (!filter.one.reuse || sl.reuse===filter.one.reuse || !sl.reuse) ? (picked[sl.item+'|'+sl.i] = true) : false);
+    var sel = filter.surg ? sl.item===filter.surg : (filter.all && filter.tab!=='mgmt' && !filter.auto) ? true : (filter.one && sl.item===filter.one.item && sl.i===filter.one.i && (picked[sl.item+'|'+sl.i]||0) < (filter.one.n||1) && (!filter.one.reuse || sl.reuse===filter.one.reuse || !sl.reuse) ? (picked[sl.item+'|'+sl.i] = (picked[sl.item+'|'+sl.i]||0)+1) : false); /* CMD-1028-08：one.n = 未安排预约里同一个项目合成一行的次数，［预约］一次带上这几次 */
     return {kind:'care', item:sl.item, i:sl.i, x:sl.x, sug:sl.sug, sdate:sl.sdate, reuse:sl.reuse, canIn:sl.canIn, place:sl.place==='' ? 'KR' : sl.place, date:sl.sug || todayStr(), time:t0, checked:true, /* CMD-1025-03 三：打开时日期没问题的默认都勾好（日期有问题的 krCbRender 会自动取消，改对后自动勾上） */ dirOp:dirOpInfo(hid, sl.x.name), dir:info.director};
   })};
   info.mg.forEach(function(m){

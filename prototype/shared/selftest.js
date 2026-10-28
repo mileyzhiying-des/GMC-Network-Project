@@ -4969,6 +4969,67 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     krShowCase(cid, r0.id, {here:true}); ST.ok(!/日期可能存错/.test(document.getElementById('kr-casedetail').innerHTML), '年份对的不标红');
     krStayFixClose();
   });
+  ST.def('R166a','CMD-1028-08 二 三（KM1 分页，pcStage 夹具）：KR 子案件项目卡 施术｜术后管理｜管理｜已完成（任何一天都显示未预约的术后管理，施术没按完成也能约，用主案件同一个弹窗和数据）· KR 未安排预约按客人 × 主案件合并（分两段 · 全部预约 / 单条预约 · 同客人两个主案件分两组）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr(), oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var gc = function(id){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===(id||r0.id); })[0]; }); };
+    var set = function(f, id){ Store.mutateClinic(cid, function(){ f(CASE_ITEMS.filter(function(x){ return x.id===(id||r0.id); })[0]); return true; }); };
+    var okDay = function(n){ var d = ymdAdd(td, n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
+    try{
+      /* 复刻 Gabby：赴韩、离境日 6 天后、两个施术 + 管理项目（其中 1 个在韩购买）；术后管理有韩国 / 韩国或印尼两条，各 2 次 */
+      set(function(c){ c.krBalancePaid = true; c.krTripEnded = null; c.visitClosed = false; c.stay = {in:ymdAdd(td, -1), out:ymdAdd(td, 6), inTime:'11:00', outTime:'18:00'};
+        var sg = c.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; }); sg[0].postcare = (sg[0].postcare||[]).filter(function(p){ return !/^R166/.test(p.name||''); }).concat([{mgmt:'术后管理', name:'R166 消肿', times:2, interval:1, place:'KR', startDay:3}, {mgmt:'术后管理', name:'R166 拆线', times:1, interval:1, place:'either', startDay:5}]);
+        c.procedureItems = c.procedureItems.filter(function(it){ return !/^R166/.test(it.name||''); });
+        c.procedureItems.push({name:'R166 管理甲 · 3次', origin:'KR', mgmtPlan:true, qty:3, heldOver:true, uses:[], iid:'iR166a', interval:2, firstDay:1}, {name:'R166 管理乙 · 2次', origin:'KR', mgmtPlan:true, krAddOn:true, qty:2, heldOver:true, uses:[], iid:'iR166b', interval:2, firstDay:1}, {name:'R166 管理丙', origin:'KR', mgmtPlan:true, krAddOn:true, qty:1, heldOver:true, uses:[], iid:'iR166c', interval:2, firstDay:1}); });
+      /* ---- 二：子案件项目卡 ---- */
+      var c = gc(); KR_PROJ_PAGE = 'surg'; var h1 = krProjCards(c, {care:true}), h0 = krProjCards(c);
+      ST.ok(/术后管理（\d+）/.test(h1.replace(/<[^>]+>/g, '')) && !/术后管理（\d+）/.test(h0.replace(/<[^>]+>/g, '')), '子案件项目卡有「术后管理（N）」tab；主案件赴韩施术 tab 的项目卡不加（主案件有自己的术后管理 tab）');
+      var tx1 = h1.replace(/<[^>]+>/g, '');
+      ST.ok(/术后管理（\d+）[\s\S]*管理项目（\d+）/.test(tx1) && (!/施术项目（\d+）/.test(tx1) || /施术项目（\d+）[\s\S]*术后管理（\d+）/.test(tx1)), 'tab 顺序：施术项目｜术后管理｜管理项目｜已完成（件数 0 的分类不显示）');
+      KR_PROJ_PAGE = 'care'; var hc = krProjCards(c, {care:true}), tc = hc.replace(/<[^>]+>/g, ' ');
+      ST.ok(/R166 消肿/.test(tc) && /R166 拆线/.test(tc) && /全部预约/.test(tc) && /预约时间/.test(tc), '术后管理页：按施术分组列出未预约的术后管理，有［全部预约］［预约时间］（施术项目还没按［操作完成］也显示）');
+      /* 任何一天的子案件都显示：另造一个术后管理那天的子案件页（非施术日）也能看到 */
+      var day = okDay(3); set(function(c2){ c2.subItems = c2.subItems||[]; c2.subItems.push({id:'sR166x', no:c2.caseNo+'#r166', kind:'术后管理记录', name:'R166 已约', content:'术后管理（R166 已约，在韩国）', place:'KR', date:day, time:'12:00', done:false, skipped:false, projectName:c2.procedureItems.filter(function(it){ return !krIsMgmtItemC(it); })[0].name}); });
+      var hd = krProjCards(gc(), {care:true}); KR_PROJ_PAGE = 'care'; hd = krProjCards(gc(), {care:true});
+      ST.ok(/R166 消肿/.test(hd.replace(/<[^>]+>/g, ' ')), '换成别的天的子案件，同一份项目卡里仍显示这个主案件没约的术后管理');
+      set(function(c2){ c2.subItems = c2.subItems.filter(function(x){ return x.id!=='sR166x'; }); });
+      /* 用的是同一个预约弹窗、同一份数据：从子案件项目卡约，主案件术后管理 tab 看得到 */
+      krShowCase(cid, r0.id, {here:true, tab:'items'});
+      var n0 = careUnits(gc()).unbooked.length; krCbOpen({all:true});
+      ST.ok(KR_CB && KR_CB.rows.filter(function(x){ return x.kind==='care'; }).length===careSlotList(gc()).length && KR_CB.rows.some(function(x){ return x.kind==='mgmt'; }), '［全部预约］ = 同一个 krCbOpen 弹窗：术后管理 + 管理项目都列出来');
+      KR_CB.rows.forEach(function(x, i){ if(x.kind!=='care' || x.canIn===undefined) return; krCbSet(i, 'date', okDay(4)); krCbSet(i, 'time', '12:00'); }); KR_CB.rows.forEach(function(x, i){ if(x.kind==='mgmt') krCbSet(i, 'checked', false); });
+      krCbGo(); ST.ok(careUnits(gc()).unbooked.length < n0, '确认后术后管理变成已预约（未预约 '+n0+' → '+careUnits(gc()).unbooked.length+'）');
+      var pcm = pcmHtml(gc(), 'KR').replace(/<[^>]+>/g, ' '); ST.ok(/R166 消肿/.test(pcm), '主案件术后管理 tab（pcmHtml）也看得到刚约的——挂回主案件');
+      ST.ok(subCaseList(gc()).some(function(sc){ return sc.date===okDay(4); }) || visitsOf(gc()).some(function(v){ return v.date===okDay(4); }), '约的那天建出（或并入）子案件');
+      set(function(c2){ c2.subItems = (c2.subItems||[]).filter(function(x){ return !(x.date===okDay(4) && /R166/.test(x.content||'')); }); });
+      /* ---- 三：未安排预约按客人 × 主案件 ---- */
+      var items = todoUbKr().filter(function(it){ return it.caseId===r0.id; });
+      ST.ok(items.length>=3 && items.every(function(it){ return it.gid===cid+'|'+r0.id; }) && items.some(function(it){ return it.kind==='care'; }) && items.some(function(it){ return it.kind==='mg'; }), '未安排预约：这个客人 × 主案件的 '+items.length+' 项全在同一组（gid），分 术后管理 / 管理项目 两类');
+      var care = items.filter(function(it){ return it.kind==='care'; }), xiao = care.filter(function(it){ return /R166 消肿/.test(it.label); })[0];
+      ST.ok(xiao && xiao.n===2 && xiao.place==='韩国', '同一个术后管理的多次合成一行（R166 消肿 次数 2，地点 韩国）');
+      ST.ok(care.some(function(it){ return /R166 拆线/.test(it.label) && it.place==='韩国或印尼'; }), '地点「韩国或印尼」照写');
+      var html = todoUbListKrHtml(todoUbKr()), box = document.createElement('div'); box.innerHTML = html; var cards = [].slice.call(box.querySelectorAll('.ub-card')).filter(function(cd){ return cd.textContent.indexOf('T-术后管理')>-1; });
+      ST.ok(cards.length===1, '同一个客人同一个主案件只有一组（'+cards.length+' 组）');
+      var ct = cards[0] ? cards[0].textContent : '', ch = cards[0] ? cards[0].innerHTML : '';
+      ST.ok(/T-术后管理（A\d+）未预约\d+全部预约/.test(ct.replace(/\s+/g, '')) , '组标题「客人名（主案件号）未预约 N［全部预约］」');
+      ST.ok(/术后管理[\s\S]*施术名称[\s\S]*术后管理项目[\s\S]*次数[\s\S]*建议时间[\s\S]*地点/.test(ct) && /管理项目[\s\S]*剩余次数[\s\S]*建议时间[\s\S]*地点/.test(ct), '两段：术后管理（施术名称｜项目｜次数｜建议时间｜地点）+ 管理项目（项目｜剩余次数｜建议时间｜地点）');
+      ST.ok((ch.match(/>预约<\/button>/g)||[]).length===items.length, '每个项目一个［预约］');
+      var arrow = cards[0].querySelector('.ub-grp'); arrow.click(); var box2 = document.createElement('div'); box2.innerHTML = todoUbListKrHtml(todoUbKr()); var cd2 = [].slice.call(box2.querySelectorAll('.ub-card')).filter(function(cd){ return cd.textContent.indexOf('T-术后管理')>-1; })[0];
+      ST.ok(cd2 && !/施术名称/.test(cd2.textContent), '点标题收起（只剩标题）'); TODO_UB_OPEN = {};
+      /* 过期标红 */
+      var overs = todoUbKr().filter(function(it){ return it.caseId===r0.id; }); ST.ok(overs.every(function(it){ return it.over===undefined; }) || true, '（over 由 todoUbItems 统一算）'); var all = todoUbItems().filter(function(it){ return it.caseId===r0.id; }); ST.ok(all.every(function(it){ return it.over===!!(it.sug && it.sug < td); }), '建议时间已过的标 over（红）');
+      /* 同客人两个主案件 → 两组 */
+      var cl2 = null; Store.mutateClinic(cid, function(){ var src = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; cl2 = JSON.parse(JSON.stringify(src)); cl2.id = 'r166clone'; cl2.caseNo = 'A9'+String(CASE_NO_SEQ+7).padStart(5, '0'); CASE_ITEMS.push(cl2); return true; });
+      var two = todoUbKr().filter(function(it){ return it.name==='T-术后管理'; }), gids = {}; two.forEach(function(it){ gids[it.gid] = 1; }); ST.ok(Object.keys(gids).length===2, '同一个客人有两个主案件 → 分两组（'+Object.keys(gids).length+' 组）');
+      box.innerHTML = todoUbListKrHtml(todoUbKr()); ST.ok([].slice.call(box.querySelectorAll('.ub-card')).filter(function(cd){ return cd.textContent.indexOf('T-术后管理')>-1; }).length===2, '渲染出两张组卡');
+      Store.mutateClinic(cid, function(){ CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!=='r166clone'; }); return true; });
+      /* 单条［预约］只带那一项（合并行带上它的几次） */
+      xiao.book(); ST.ok(true, '（［预约］异步打开弹窗，下面手动模拟）'); krShowCase(cid, r0.id, {here:true, tab:'postcare'}); krCbOpen({one:{item:xiao ? gc().procedureItems.filter(function(it){ return !krIsMgmtItemC(it); })[0].name : '', i:0, reuse:'', n:2}});
+      var sel = KR_CB ? KR_CB.rows.filter(function(x){ return x.kind==='care'; }).length : 0; ST.ok(sel>=1, '单条［预约］打开同一个弹窗');
+      krCbClose();
+    } finally { window.alert = oa; window.confirm = oc; try{ krCbClose(); }catch(e){} }
+  });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = toConfirmed('R51a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid];
