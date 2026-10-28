@@ -1357,7 +1357,8 @@ function renderCaseHeaderActions(c){
   if(!c.materialsConfirmed){ el.innerHTML=''; return; }
   var stageBtn = '';
   var notEnded = !isEnded(c);
-  if(notEnded && c.needsConsult===false && !c.consultRequested){
+  var careDay = isChildVisit(c) && hasResumeType(c, '术后管理') && !isRevEval(c); /* CMD-1028-14 七：IN 术后管理那一天的子案件页 */
+  if(notEnded && c.needsConsult===false && !c.consultRequested && !isChildVisit(c)){ /* 子案件（一天）上不再有［增加面诊］——增加面诊是主案件的事；复诊评估 / 面诊在「到访」里选 */
     stageBtn = '<button class="btn-outline" onclick="addConsult()">增加面诊</button>';
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
@@ -1366,7 +1367,8 @@ function renderCaseHeaderActions(c){
     lmBtn = '<button class="btn-outline" onclick="'+(isChildVisit(c) && (isRevEval(c) || isContCase(c)) ? 'inAddLocalProject()' : 'addLocalMgmt()')+'">+ 添加本地管理</button>';
   }
   var leaveBtn = (canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) ? '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>' : ''; /* CMD-1026-11 二：右上角依序 发起对话 · 添加本地管理 · 客人离店（只在客人在店时有） */
-  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">对话</button>' : '') + lmBtn + stageBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
+  var itemBtn = (careDay && notEnded && !c.leftStore) ? '<button class="btn-outline" onclick="inAddItemOpen()">增加项目</button>' : ''; /* 对话｜增加项目｜客人离店 */
+  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">对话</button>' : '') + lmBtn + stageBtn + itemBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
 }
 
 var CANCEL_REASON = '';

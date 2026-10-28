@@ -5334,7 +5334,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var ch = createChildReservation(m, td, '00:05', '术后管理', {careFor:{caseId:m.id, keys:[row.id]}});
       ch.subState = 'arrived'; ch.arrivedDay = td; ch.hasArrived = true; ch.materialsConfirmed = true; ch.needsConsult = false; ch.resumeFrom = {caseId:m.id, type:'术后管理', types:['术后管理']}; ch.careToday = [row.id];
       var d = daysOf(m).filter(function(x){ return x.place==='IN' && x.date===td; })[0]; if(!ST.ok(!!d, '造出今天的 IN 子案件')) return;
-      openCaseDetail(m.id, false, {sub:d.key});
+      openSubcase(m.id, d.key);
       var bar = (document.getElementById('case-status-bar')||{}).textContent||'';
       ST.ok(/当前状态/.test(bar) && /术后管理/.test(bar) && /进行中/.test(bar) && !/选择项目/.test(bar), '子案件页当前状态写这一天做的事和状态（实际：'+bar.replace(/\s+/g, ' ').slice(0, 60)+'）');
       var M = inContModel(ch), full = inContRestHtml(ch, M, 'care'), hadRest = /剩余项目/.test(full);
@@ -5342,6 +5342,44 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       row.done = true; var M2 = inContModel(ch), c2 = inContRestHtml(ch, M2, 'care');
       ST.ok(!/剩余项目/.test(c2) && !/本次使用/.test(c2), '没有剩余项目时，「剩余项目」卡（含［本次使用］）整个不显示（原来有卡：'+hadRest+'）');
     } finally { window.confirm = oc; try{ closeSubcase(m.id); }catch(e){} var back = JSON.parse(snap); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==m.id && x.mainId!==m.id; }).concat(back); try{ Store.touch(); }catch(e){} }
+  });
+  ST.def('R178a','CMD-1028-14 七（A1 分页，pcStage 夹具）：术后管理那一天的子案件页头——没有［增加面诊］、有［增加项目］（顺序 对话｜增加项目｜客人离店）· 到访 tab 可勾［复诊评估］当场增加并送 KR',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
+    var m = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.mainId; })[0]; if(!ST.ok(!!m, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var td = todayStr(), snap = JSON.stringify(CASE_ITEMS.filter(function(x){ return x.id===m.id || x.mainId===m.id; })), oc = window.confirm, oa = window.alert, ogi = window.GMC_NO_INFO; window.confirm = function(){ return true; }; window.alert = function(){}; window.GMC_NO_INFO = true;
+    var btns = function(){ return Array.from(document.querySelectorAll('#case-chat-actions button')).map(function(b){ return b.textContent.trim(); }); };
+    try{
+      m.krBalancePaid = true; m.krTripEnded = null; m.visitClosed = false; m.stay = {in:ymdAdd(td, -3), out:ymdAdd(td, 60)}; m.stage = 'local'; m.dayConfirmed = true;
+      var sg = m.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; })[0]; m.procedureItems.forEach(function(it){ if(it!==sg) it.postcare = []; });
+      sg.postcare = [{mgmt:'R178拆线', name:'R178拆线', times:1, interval:1, place:'either', innName:'R178印尼拆线', startDay:5}];
+      m.subItems = (m.subItems||[]).filter(function(x){ return x.kind!=='术后管理记录'; });
+      coreCareBook(m, sg.name, 0, td, '', 'IN', '', 'KM', null);
+      var row = m.subItems.filter(function(x){ return x.kind==='术后管理记录'; })[0];
+      var ch = createChildReservation(m, td, '00:05', '术后管理', {careFor:{caseId:m.id, keys:[row.id]}});
+      ch.subState = 'arrived'; ch.arrivedDay = td; ch.hasArrived = true; ch.materialsConfirmed = true; ch.needsConsult = false; ch.followup = true; ch.resumeFrom = {caseId:m.id, type:'术后管理', types:['术后管理']}; ch.linkedCase = {caseId:m.id, reason:'术后管理'}; ch.careToday = [row.id]; ch.metaviewStatus = 'ready';
+      var d = daysOf(m).filter(function(x){ return x.place==='IN' && x.date===td; })[0]; if(!ST.ok(!!d, '造出今天的术后管理子案件')) return;
+      openSubcase(m.id, d.key);
+      var cur = getCurrentCase(); ST.ok(!!cur, '打开了子案件页');
+      var b1 = btns(); ST.ok(b1.indexOf('增加面诊')<0, '没有［增加面诊］（实际：'+b1.join('｜')+'）');
+      ST.ok(b1.indexOf('增加项目')>-1 && (b1.indexOf('对话')<0 || b1.indexOf('对话')<b1.indexOf('增加项目')) && (b1.indexOf('客人离店')<0 || b1.indexOf('增加项目')<b1.indexOf('客人离店')), '有［增加项目］，顺序 对话｜增加项目｜客人离店');
+      inAddItemOpen(); var ov = document.getElementById('in-additem-overlay');
+      ST.ok(!!ov && ov.classList.contains('open') && /购买本地项目/.test(ov.textContent) && /使用持有项目/.test(ov.textContent), '点［增加项目］弹出「购买本地项目 / 使用持有项目」');
+      inAddItemClose();
+      /* 到访 tab：来访目的里勾复诊评估 */
+      var vh = subVisitTabHtml(cur); ST.ok(/复诊评估/.test(vh) && /addRevisitToDay/.test(vh), '到访 tab 的来访目的里有［复诊评估］可勾');
+      addRevisitToDay(); var cov = document.getElementById('cont-overlay');
+      ST.ok(!!cov && cov.classList.contains('open') && /增加复诊评估/.test(cov.textContent) && /询问问题/.test(cov.textContent) && /确认增加复诊评估/.test(cov.textContent), '弹出「增加复诊评估」窗（这次要看的项目 / 询问问题）');
+      contConfirm(); var er = (document.getElementById('cont-error')||{}).textContent||''; ST.ok(/还缺/.test(er) && !cur.revisitEval, '什么都没填就确认：提示还缺什么，不送出');
+      contCancel(); ST.ok(!hasResumeType(cur, '复诊评估') && cur.needsConsult===false && !cur.revisitEval, '取消 = 还原（仍只有术后管理）');
+      /* 真的增加 */
+      addRevisitToDay(); var src = followSrc(cur) || m; var nm = (followDoneItems(src)||[])[0] || sg.name; cur.followProjects = [nm]; cur.revisitQuestion = '右边还肿，想问是否正常';
+      cur.revisitMedia = [{name:nm, part:'f_nose', video:{name:'v.mp4'}, photos:{}}]; var sp = shootSpec('f_nose', nm); (sp.angles||[]).forEach(function(a){ cur.revisitMedia[0].photos[a.id||a] = {name:'p.jpg'}; }); cur.revisitMedia[0].part = (revisitMediaOf(cur, nm)||{}).part || 'f_nose';
+      var mm = concernMissing(cur); if(mm.length){ ST.ok(false, '造资料后仍缺：'+mm.join('、')); return; }
+      contConfirm();
+      ST.ok(hasResumeType(cur, '复诊评估') && hasResumeType(cur, '术后管理') && !!cur.revisitEval && cur.consultStatus==='paid_waiting_kr', '确认后：来访目的 = 术后管理 + 复诊评估，已送 KR 等确认评估时间');
+      ST.ok(!document.getElementById('cont-overlay').classList.contains('open'), '弹窗已关');
+      ST.ok(!revAddPossible(cur) && /复诊评估/.test(subVisitTabHtml(cur)), '之后不能重复增加，到访 tab 里复诊评估已勾（不可改）');
+    } finally { window.confirm = oc; window.alert = oa; window.GMC_NO_INFO = ogi; try{ closeSubcase(m.id); }catch(e){} try{ inAddItemClose(); contClose(); }catch(e){} var back = JSON.parse(snap); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==m.id && x.mainId!==m.id; }).concat(back); try{ Store.touch(); }catch(e){} }
   });
   ST.def('R176b','CMD-1028-14 五（KM1 分页）：KR 日历块只有已到院 / 已完成才变灰，过了时间没到院不灰；标了未到院划线',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
