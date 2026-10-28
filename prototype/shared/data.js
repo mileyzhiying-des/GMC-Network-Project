@@ -2020,6 +2020,87 @@ function coreAddScopeItem(c, item, by){
 
 /* 提交最终报告（KR 室长 / 管理者，KR-CASE-01 第 3 节）：rep = {original:韩文原文, zh:演示翻译, items:[{name,price,note}]（赴韩项目 + 术后管理项目的可选范围）, overallNote, files:[附件名]}
    报告语言：存原文（c.reportKo）；IN 端显示翻译（c.videoSummary），可切换看原文。不碰界面，KR 页面在 Store.mutateClinic 里调用 */
+/* ===== CMD-1028-03：KR 复诊评估分工 =====
+   院长写内容（c.revEval.op / text / nextType / nextDate / note / recLocal / sugKr / sugKrNote）+ 整体结论（c.recoveryResult）→ ［完成评估］（consultContentAt）→ 室长整理文字（改动存 revEval.ed，纪录在 revEval.log，可看院长原文；
+   整体结论 / 下次复诊 / 是否建议赴韩是医疗判断，室长不能改）→ ［退回院长］（revEval.ret，写原因）→ 室长［发送复诊评估结果］。院长当天没用系统时，室长勾「已得到院长授意」可代录全部（revEval.role='proxy'，标注「室长代录（院长口述）」）。
+   旧资料：评估内容已上传（consultContentAt）但没有 revEval = 室长当时直接填的，当成代录处理（室长可填全部并发送），不报错。 */
+var RV_TEXT_FIELDS = {op:1, text:1, note:1, recLocal:1, sugKrNote:1};
+var RV_FIELD_LABEL = {op:'逐项评估意见', text:'评估说明', note:'注意事项', recLocal:'推荐的本地项目', sugKrNote:'建议赴韩的补充说明', nextType:'下次复诊', nextDate:'下次复诊日期', sugKr:'建议赴韩处理'};
+function rvEvalOf(c, create){
+  if(!c) return null;
+  if(!c.revEval && create) c.revEval = {op:{}, text:'', nextType:'', nextDate:'', note:'', recLocal:'', sugKr:false, sugKrNote:'', role:'', by:'', at:'', doneBy:'', doneAt:'', ed:{op:{}}, log:[], ret:[], retPending:null};
+  var r = c.revEval; if(!r) return null;
+  r.op = r.op || {}; r.ed = r.ed || {op:{}}; r.ed.op = r.ed.op || {}; r.log = r.log || []; r.ret = r.ret || [];
+  return r;
+}
+/* 有效值 = 室长改过的 ?? 院长写的 */
+function rvEff(c, f, name){
+  var r = rvEvalOf(c); if(!r) return (f==='sugKr') ? false : '';
+  if(f==='op'){ var o = r.ed.op[name]; return o!=null ? o : (r.op[name] || ''); }
+  var e = r.ed[f]; if(e!=null) return e;
+  return r[f]==null ? ((f==='sugKr') ? false : '') : r[f];
+}
+function rvOrig(c, f, name){ var r = rvEvalOf(c); if(!r) return ''; return f==='op' ? (r.op[name] || '') : (r[f]==null ? '' : r[f]); }
+function rvEdited(c, f, name){ var r = rvEvalOf(c); if(!r) return false; return f==='op' ? r.ed.op[name]!=null : r.ed[f]!=null; }
+function rvEditCount(c){ var r = rvEvalOf(c); if(!r) return 0; return Object.keys(r.ed.op).length + Object.keys(r.ed).filter(function(k){ return k!=='op'; }).length; }
+/* 必填：整体结论 + 每个项目的评估意见；下次复诊选了指定日期要有日期 */
+function rvMissing(c){
+  var out = [];
+  if(!c.recoveryResult || !c.recoveryResult.result) out.push('整体结论（恢复正常 / 需要处理）');
+  (c.followProjects || []).forEach(function(n){ if(!String(rvEff(c, 'op', n)).trim()) out.push('「'+buyName(n)+'」的评估意见'); });
+  if(rvEff(c, 'nextType')==='date' && !rvEff(c, 'nextDate')) out.push('下次复诊的日期');
+  return out;
+}
+function coreRvSet(c, f, name, val, by, role){ /* 作者（院长；或室长代录）写内容 */
+  if(!isRevEval(c) || c.reportReady) return false;
+  var r = rvEvalOf(c, true), v = (f==='sugKr') ? !!val : String(val==null ? '' : val);
+  if(f==='op'){ if((c.followProjects||[]).indexOf(name) < 0) return false; if((r.op[name]||'')===v) return false; r.op[name] = v; delete r.ed.op[name]; }
+  else { if(!(f in {text:1, note:1, recLocal:1, sugKrNote:1, nextType:1, nextDate:1, sugKr:1})) return false; if(r[f]===v) return false; r[f] = v; delete r.ed[f]; if(f==='nextType' && v!=='date'){ r.nextDate = ''; delete r.ed.nextDate; } }
+  r.at = nowFullDt(); r.by = by; if(!r.role) r.role = role || '';
+  if(c.consultContentAt){ r.log.push({at:r.at, by:by, kind:'author', field:f, name:name||''}); logCaseEvent(c, by, '评估完成后修改了「'+RV_FIELD_LABEL[f]+(name ? '：'+buyName(name) : '')+'」（'+(r.role==='proxy' ? '室长代录' : '院长')+'）'); }
+  return true;
+}
+function coreRvEdit(c, f, name, val, by){ /* 室长整理文字：只改文字表达，留纪录 */
+  var r = rvEvalOf(c);
+  if(!isRevEval(c) || c.reportReady || !c.consultContentAt || !r || r.role==='proxy' || !RV_TEXT_FIELDS[f]) return false;
+  var v = String(val==null ? '' : val), cur = String(rvEff(c, f, name)), orig = String(rvOrig(c, f, name));
+  if(v===cur) return false;
+  if(v===orig){ if(f==='op') delete r.ed.op[name]; else delete r.ed[f]; }
+  else { if(f==='op') r.ed.op[name] = v; else r.ed[f] = v; }
+  r.log.push({at:nowFullDt(), by:by, kind:'edit', field:f, name:name||'', from:cur, to:v});
+  logCaseEvent(c, by, '室长修改了评估文字「'+RV_FIELD_LABEL[f]+(name ? '：'+buyName(name) : '')+'」（系统留有纪录，可看院长原文）');
+  return true;
+}
+/* ［完成评估］：role = 'doctor' | 'proxy'；失败返回 {ok:false, err} */
+function coreRvFinish(c, by, role){
+  if(!isRevEval(c) || c.reportReady) return {ok:false, err:'这个案件现在不能完成评估'};
+  var miss = rvMissing(c); if(miss.length) return {ok:false, err:'还缺：'+miss.join('、')};
+  var r = rvEvalOf(c, true), now = nowFullDt(), first = !c.consultContentAt;
+  r.role = r.role==='proxy' ? 'proxy' : (role || 'doctor'); if(role==='proxy') r.role = 'proxy';
+  r.doneBy = by; r.doneAt = now; r.at = now; r.retPending = null;
+  if(c.recoveryResult && c.recoveryResult.result==='ok') c.recoveryResult.memo = r.text || '';
+  if(!c.consultStartedAt){ c.consultStartedAt = now; c.consultStartedBy = by; }
+  c.consultContentAt = c.consultContentAt || now;
+  if(first){
+    var treat = c.recoveryResult.result==='treat';
+    logCaseEvent(c, by, '评估完成（'+(r.role==='proxy' ? '室长代录（院长口述）' : '院长')+'）：'+(treat ? '需要处理' : '恢复正常')+'；待室长发送');
+    pushKrNotif(caseKrHospital(c), by+' 评估完成：'+c.name+'（'+(c.caseNo||'')+'）→ 请发送复诊评估结果', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
+    pushNotif('复诊评估', '评估完成：'+c.name+'（'+(c.caseNo||'')+'），等待复诊评估结果', {caseId:c.id, level:'info'});
+    updateCaseStage(c);
+  }
+  return {ok:true};
+}
+/* ［退回院长］：室长觉得有问题 → 填原因，回到「待院长评估」，院长待办出现 */
+function coreRvReturn(c, reason, by){
+  var r = rvEvalOf(c), why = String(reason||'').trim();
+  if(!isRevEval(c) || c.reportReady || !c.consultContentAt || !r || r.role==='proxy') return false;
+  if(!why) return false;
+  r.ret.push({at:nowFullDt(), by:by, reason:why}); r.retPending = {at:nowFullDt(), by:by, reason:why}; r.doneAt = ''; r.doneBy = '';
+  c.consultContentAt = '';
+  logCaseEvent(c, by, '退回院长重新评估：'+why);
+  pushKrNotif(caseKrHospital(c), by+' 把复诊评估退回：'+c.name+'（'+(c.caseNo||'')+'）：'+why, {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
+  updateCaseStage(c); return true;
+}
 function coreSubmitReport(c, rep, by){
   if(!c || c.consultStatus!=='awaiting_report') return false;
   syncKrCoordinator(c);
@@ -2032,6 +2113,7 @@ function coreSubmitReport(c, rep, by){
   c.consultFiles = c.consultFiles || [];
   (rep.files||[]).slice().reverse().forEach(function(f){ c.consultFiles.unshift({label:f, date:attDate()}); });
   c.consultFiles.unshift({label:isRevEval(c) ? '复诊评估结果（院长口述 + 室长整理）' : '面诊诊疗方案（院长口述 + 室长整理）', date:attDate()});
+  if(isRevEval(c)) c.revisitProxy = !!rep.proxy; /* CMD-1028-03：室长代录（院长口述）→ 报告签名处标注 */
   if(isRevEval(c)){ c.revisitOpinions = rep.rvOp || []; c.revisitNext = rep.rvNext || null; c.revisitNotes = rep.rvNote || null; } /* CMD-1027-06：逐项评估意见 / 下次复诊 / 注意事项（旧资料没有这三样，显示时当没有） */
   if(isRevEval(c)) c.revisitRec = {local:rep.recLocal||'', suggestKr:!!rep.sugKr, suggestKrNote:rep.sugKrNote||'', by:by, at:nowFullDt()}; /* CMD-1022-08：推荐的本地项目（文字）/ 建议赴韩 */
   c.krScope = {items:rep.items, overallNote:rep.overallNote||'', updatedAt:nowFullDt()};
@@ -10893,7 +10975,7 @@ function revReportDocHtml(c, showOrigWanted, inline){
     h('院长建议')+recHtml+
     (nxTxt ? h('下次复诊')+'<div style="font-size:13px;">'+e(nxTxt)+'</div>' : '')+
     (nt ? h('注意事项')+'<div style="font-size:13px;line-height:1.8;white-space:pre-wrap;">'+e(nt)+'</div>' : '')+
-    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin-top:24px;"><span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+e(c.director||'')+'</span><span style="font-size:12px;color:var(--muted);">评估院长</span></div>';
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin-top:24px;"><span style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;font-style:italic;color:var(--navy);">'+e(c.director||'')+'</span><span style="font-size:12px;color:var(--muted);">评估院长'+(c.revisitProxy ? '（室长代录，院长口述）' : '')+'</span></div>';
 }
 function reportDocFor(c, orig, inline){ return isRevEval(c) ? revReportDocHtml(c, orig, inline) : reportDocHtml(c, orig, inline); }
 /* 三：IN 复诊评估 tab 的报告卡（主案件复诊 tab 和子案件页复诊评估 tab 同一个组件）：提交（日期，KR 室长）、评估摘要（AI 翻译）、右上［完整报告查看］；
