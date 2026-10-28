@@ -10091,16 +10091,16 @@ var TAB_VISIT_TYPES = {consult:['面诊安排'], kr:['赴韩施术'], postcare:[
 var TAB_VISIT_FLOW = {kr:'surg', postcare:'care', kmgmt:'mgmt'}; /* CMD-1028-09：这三个流程 tab 按这一天里有没有这个流程的项目来列（dayFlowKinds），同一天有几种就在几个 tab 都出现 */
 function tabVisitsHtml(c, tab, side){ /* CMD-1027-12 一：side='KR' = KR 端同一个组件：韩国的天［查看内容］进那天的子案件页，印尼的天只列出来、不放按钮 */
   var want = TAB_VISIT_TYPES[tab]; if(!want || !isUpgraded(c)) return '';
-  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, rank = {'进行中':0, '已预约':1, '已完成':2}, list = [];
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, rank = {'进行中':0, '已预约':1, '已结束':2}, list = [];
   visitsOf(c).forEach(function(v){
     if(TAB_VISIT_FLOW[tab] ? !dayFlowKinds(c, v)[TAB_VISIT_FLOW[tab]] : !v.types.some(function(t0){ return want.indexOf(t0)>-1; })) return;
-    var st = visitStateText(c, v), grp = (st==='进行中') ? '进行中' : ((st==='已预约' || st==='待到店') ? '已预约' : ((st==='客人已离店' || st==='已结束') ? '已完成' : ''));
+    var st = visitStateText(c, v), grp = (st==='进行中') ? '进行中' : ((st==='已预约' || st==='待到店') ? '已预约' : ((st==='客人已离店' || st==='已结束') ? '已结束' : '')); /* CMD-1028-12 一：子案件结束的天标签一律写「已结束」 */
     if(!grp) return; /* 已取消 / 未到店 不放 */
     list.push({v:v, st:grp});
   });
   if(!list.length) return '';
   list.sort(function(a, b){ return rank[a.st]-rank[b.st] || (a.v.date+(a.v.time||'')).localeCompare(b.v.date+(b.v.time||'')); });
-  var bs = 'padding:3px 12px;font-size:12px;', col = {'进行中':['var(--terracotta-bg)', 'var(--terracotta)'], '已预约':['#E8F0FB', '#2F5FA8'], '已完成':['var(--border2)', 'var(--slate2)']};
+  var bs = 'padding:3px 12px;font-size:12px;', col = {'进行中':['var(--terracotta-bg)', 'var(--terracotta)'], '已预约':['#E8F0FB', '#2F5FA8'], '已结束':['var(--border2)', 'var(--slate2)']};
   return '<div class="card" style="padding:12px 20px;margin-bottom:12px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">相关子案件</div>'+list.map(function(x){ var v = x.v, rec = v.rec||v.caseId, canEdit = x.st==='已预约' && v.place==='IN' && rec && rec!==c.id;
     return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border2);font-size:13px;"><span class="status-pill" style="background:'+col[x.st][0]+';color:'+col[x.st][1]+';">'+x.st+'</span><span style="font-size:12px;min-width:92px;">'+e(v.date)+(v.time ? ' '+e(v.time) : '')+(v.place==='KR' ? '（韩国）' : '')+'</span><span style="flex:1;">'+v.types.map(e).join(' · ')+' <span style="font-size:12px;color:var(--muted);">'+e(v.no||'')+'</span></span>'+
       (side==='KR' ? (v.place==='KR' ? '<button class="btn-outline" style="'+bs+'" onclick="krOpenDay(\''+KR_CASE.clinicId+'\',\''+c.id+'\',\''+v.key+'\')">查看内容</button>' : '') : (canEdit ? '<button class="btn-outline" style="'+bs+'" onclick="openRescheduleModal(\''+rec+'\')">预约修改</button>' : '<button class="btn-outline" style="'+bs+'" onclick="openSubcase(\''+c.id+'\',\''+v.key+'\')">查看内容</button>'))+'</div>'; }).join('')+'</div>';
@@ -11003,7 +11003,7 @@ function daySectionsOf(c){
 /* CMD-1028-10 三：子案件 tab 的一行 = 相关子案件的行样式（状态标签｜日期时间（韩国 / 印尼）｜业务类型（·）｜子案件号灰字｜［查看内容］）；IN / KR 共用，goJs 是点［查看内容］/ 整行的动作 */
 function subVisitRowHtml(v, sec, goJs){
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, bs = 'padding:3px 12px;font-size:12px;';
-  var lab = {live:'进行中', booked:'已预约', done:'已完成'}[sec.key] || '已取消', colr = {'进行中':['var(--terracotta-bg)', 'var(--terracotta)'], '已预约':['#E8F0FB', '#2F5FA8'], '已完成':['var(--border2)', 'var(--slate2)']}[lab] || ['var(--border2)', 'var(--muted)'];
+  var lab = {live:'进行中', booked:'已预约', done:'已结束'}[sec.key] || '已取消', colr = {'进行中':['var(--terracotta-bg)', 'var(--terracotta)'], '已预约':['#E8F0FB', '#2F5FA8'], '已结束':['var(--border2)', 'var(--slate2)']}[lab] || ['var(--border2)', 'var(--muted)'];
   return '<div class="case-row-click" onclick="'+goJs+'" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border2);font-size:13px;cursor:pointer;"><span class="status-pill" style="background:'+colr[0]+';color:'+colr[1]+';min-width:48px;text-align:center;">'+e(v._lab || lab)+'</span><span style="font-size:12px;min-width:112px;">'+e(v.date)+(v.time ? ' '+e(v.time) : '')+(v.place==='KR' ? '（韩国）' : '（印尼）')+'</span><span style="flex:1;">'+(v.types||[]).filter(function(t0){ return t0!=='本地管理' || v.place==='IN'; }).map(e).join(' · ')+' <span style="font-size:12px;color:var(--muted);">'+e(v.no||'')+'</span></span><button class="btn-outline" style="'+bs+'" onclick="event.stopPropagation();'+goJs+'">查看内容</button></div>';
 }
 function daySectionHeadHtml(sec){ return '<div style="font-size:13px;font-weight:700;margin:16px 0 2px;'+(sec.grey ? 'color:var(--muted);' : '')+'">'+sec.title+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+sec.rows.length+(sec.note ? ' · '+sec.note : '')+'</span></div>'; }
