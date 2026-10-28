@@ -3157,7 +3157,7 @@ function krcEvents(){
     else busy.push(b);
   }); });
   /* 已完成的面诊 / 施术 / 在韩子项在日历上加删除线、颜色变淡（CMD-1013-08 五·1） */
-  surg.forEach(function(x){ var c0 = x.row && x.row.c; if(!c0) return; if(x.b.type==='面诊') x.done = !!c0.consultContentAt; else if(x.b.type==='施术' && !x.b.subId) { x.done = (c0.subItems||[]).some(function(s){ return s.kind==='施术' && s.done; }) || !!c0.krProcedureDone; x.arrived = !!(c0.hasArrived && !x.done); } }); /* CMD-1028-13 二：客人已到院 → 块变灰 */
+  surg.forEach(function(x){ var c0 = x.row && x.row.c; if(!c0) return; if(x.b.type==='面诊') x.done = !!c0.consultContentAt; else if(x.b.type==='施术' && !x.b.subId) { x.done = (c0.subItems||[]).some(function(s){ return s.kind==='施术' && s.done; }) || !!c0.krProcedureDone; x.arrived = !!(c0.hasArrived && !x.done); x.noShow = !!(c0.krNoShow && !c0.hasArrived && !x.done); } }); /* CMD-1028-13 二：客人已到院 → 块变灰 */
   /* CMD-1020-04：在韩到院（术后管理 / 管理项目 / 施术预约使用）一次到院 = 一个块（同一天同地点合并），块里写这次做什么；
      含施术 = 施术色并占院长时间；只有术后管理 / 管理项目 = 术后到院色（画在医院层，不占院长）；和主施术同一天的并进主施术块 */
   rows.forEach(function(r){ var c0 = r.c; if(!c0) return; visitCalBlocks(c0).forEach(function(v){
@@ -3195,7 +3195,7 @@ function krcBlockHtml(r0, showWho){
   if(r0.b.type==='预约' && typeof krbBlockHtml==='function') return krbBlockHtml(r0, showWho);
   var b = r0.b, isS = b.type==='施术' || b.type==='面诊' || b.type==='术后管理', isC = b.type==='面诊', isP = b.type==='术后管理', s = Math.max(timeToMin(b.time), KRC_H0*60), e = Math.min(timeToMin(b.end), KRC_H1*60); if(e <= s) e = s + 20;
   var w = 100 / r0.n, top = (s - KRC_H0*60) * KRC_PX / 60, hgt = Math.max(16, (e - s) * KRC_PX / 60 - 2);
-  var style = 'position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;border-radius:5px;padding:2px 5px;font-size:12px;line-height:1.3;overflow:hidden;cursor:pointer;z-index:2;'+(r0.done ? 'opacity:.5;filter:grayscale(1);' : ((krcIsPast(b) || r0.arrived) ? 'opacity:.5;filter:grayscale(1);' : ''))+(isP ? 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;' : isC ? 'background:#E3EAF6;color:#2F4F86;border:1px solid #A9BDE0;' : isS ? 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;' : 'background:#E4E2DC;color:#777;');
+  var style = 'position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;border-radius:5px;padding:2px 5px;font-size:12px;line-height:1.3;overflow:hidden;cursor:pointer;z-index:2;'+(r0.noShow ? 'opacity:.5;text-decoration:line-through;' : ((r0.done || r0.arrived) ? 'opacity:.5;filter:grayscale(1);' : ''))+(isP ? 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;' : isC ? 'background:#E3EAF6;color:#2F4F86;border:1px solid #A9BDE0;' : isS ? 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;' : 'background:#E4E2DC;color:#777;');
   var cfl = krcBlockConflict(r0); if(cfl){ style += 'border:2px solid #D02B2B;box-shadow:0 0 0 1px #D02B2B;'; }
   var click = isS && r0.row ? (isP ? 'krOpenSubCard(\''+r0.row.clinicId+'\',\''+r0.row.id+'\',\''+b.subId+'\')' : (b.type==='施术' ? 'krOpenSubCard(\''+r0.row.clinicId+'\',\''+r0.row.id+'\''+(b.subId ? ',\''+b.subId+'\'' : '')+')' : 'krShowCase(\''+r0.row.clinicId+'\',\''+r0.row.id+'\')')) : (isS ? '' : 'krcEdit(\''+b.id+'\')'); /* 术后管理 / 持有使用：点开弹出客人 / 项目 / 时间 +［客人已到院］（CMD-1013-13 三·1） */
   return '<div'+(isS ? '' : ' class="krc-busy"')+' onclick="event.stopPropagation();'+click+'" title="'+krEsc((cfl ? '时间冲突：和 '+cfl+' 重叠；点进去调整，系统不会自动改。\n' : '')+(isS ? b.time+'–'+b.end+' '+r0.label : krBusyLabel(b)+' '+b.time+'–'+b.end))+'" style="'+style+'">'+(cfl ? '<div style="color:#C1454A;font-weight:700;">⚠ 时间冲突</div>' : '')+(showWho && isS ? krcOneLine(r0) : (isS ? '<b>'+krEsc(b.time)+'</b> '+krEsc(r0.label)+(showWho ? '<br>'+krEsc(b.who) : '') : krEsc(krBusyLabel(b))+(showWho ? '<br>'+krEsc(b.who) : '')))+'</div>';
@@ -3206,7 +3206,7 @@ function krcSubChip(x){ var s = x.s, r = x.row; return '<div onclick="krShowCase
 function krcChipType(r0){ var b = r0.b, tp = b.type==='术后管理' ? (/持有/.test(r0.label||'') ? '持有使用' : '术后到院') : (b.type==='预约' ? '预约' : b.type); if(r0.visit) tp = r0.visit.what.join('、')+(r0.visit.hasDirOp ? '（院长操作）' : ''); return tp; }
 function krcChipStyle(r0){
   var b = r0.b, pend = b.type==='预约' && b.status==='待确认', c = b.type==='面诊' ? 'background:#E3EAF6;color:#2F4F86;border:1px solid #A9BDE0;' : (b.type==='术后管理' ? 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;' : (b.type==='预约' ? (pend ? 'background:#fff;color:#2F6B4A;border:1px dashed #3F7A55;' : 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;') : 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;'));
-  return c+((r0.done || r0.arrived) ? 'opacity:.5;filter:grayscale(1);' : (krcIsPast(b) ? 'opacity:.5;filter:grayscale(1);' : ''));
+  return c+(r0.noShow ? 'opacity:.5;text-decoration:line-through;' : ((r0.done || r0.arrived) ? 'opacity:.5;filter:grayscale(1);' : '')); /* CMD-1028-14 五：只有「已到院 / 已完成」才变灰；过了开始时间没到院仍是原色，标了未到院才划线 */
 }
 function krcChipClick(r0){
   var b = r0.b; if(b.type==='预约' && r0.b.bookingId) return 'krBookOpen(\''+b.bookingId+'\')'; if(!r0.row) return '';
@@ -3215,7 +3215,7 @@ function krcChipClick(r0){
   return 'krShowCase(\''+r0.row.clinicId+'\',\''+r0.row.id+'\')';
 }
 function krcChipEntries(ev, ds){
-  return ev.surg.filter(function(x){ return x.b.date===ds; }).map(function(x){ return {b:x.b, row:x.row, label:x.label, done:x.done, visit:x.visit}; }).sort(function(a, c){ return timeToMin(a.b.time)-timeToMin(c.b.time) || String(a.b.name||'').localeCompare(String(c.b.name||'')); });
+  return ev.surg.filter(function(x){ return x.b.date===ds; }).map(function(x){ return {b:x.b, row:x.row, label:x.label, done:x.done, arrived:x.arrived, noShow:x.noShow, visit:x.visit}; }).sort(function(a, c){ return timeToMin(a.b.time)-timeToMin(c.b.time) || String(a.b.name||'').localeCompare(String(c.b.name||'')); });
 }
 function krcChipText(r0){ return r0.b.time+' · '+(r0.b.name||'')+' · '+krcChipType(r0); }
 function krcChipTitle(r0){ return r0.b.time+'～'+r0.b.end+' '+(r0.label||'')+((r0.b.who && r0.b.who!==KRB_HOSP) ? '（'+r0.b.who+'）' : ''); }
@@ -3259,7 +3259,7 @@ function krcGridHtml(days, ev){
     r2 += '<div style="'+cell+'padding:2px;background:#faf8f3;border-top:1px solid var(--line);">'+(krcFixedHtml(ds, offs, who==='all' ? null : function(m){ return m.author===who; }))+'</div>';
     r3 += '<div style="'+cell+'padding:2px;border-top:1px solid var(--line);">'+subs.map(krcSubChip).join('')+'</div>';
     r4 += '<div'+(isToday && days.length>1?' class="krc-col-today"':'')+' style="'+cell+'position:relative;height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:#fff;border-top:1px solid var(--line);cursor:'+(dOff?'not-allowed':'cell')+';"'+(dOff ? '' : ' onmousemove="krcHover(this,event)" onmouseleave="krcHoverOff(this)" onclick="krcCellClick(\''+ds+'\',event,this)"')+'>'+(days.indexOf(krToday())>-1 ? (ds===days[0] ? todoNowLineHtml() : todoNowLineHtml().replace(/<span>[\s\S]*?<\/span>/, '')) : '')+'<div class="krc-hl" style="display:none;position:absolute;left:0;right:0;height:'+(KRC_PX/2)+'px;background:rgba(190,120,90,.12);pointer-events:none;"></div>'+lines+
-      (who==='all' ? krcChipsHtml(krcChipEntries(ev, ds), ds) : lanes.map(function(r0){ var x = r0.b._x; return krcBlockHtml(x ? {b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done} : r0, showWho); }).join(''))+'</div>';
+      (who==='all' ? krcChipsHtml(krcChipEntries(ev, ds), ds) : lanes.map(function(r0){ var x = r0.b._x; return krcBlockHtml(x ? {b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done, arrived:x.arrived, noShow:x.noShow} : r0, showWho); }).join(''))+'</div>';
   });
   r3 = ''; /* 子项行已废弃 */
   var cols = days.map(function(ds){ return hospitalClosedOn(krHospitalIdOfMe(), ds) ? 'minmax(0,.34fr)' : 'minmax(0,1fr)'; }).join(' '); /* 医院休诊日：整列 1/3 宽 */
@@ -3295,13 +3295,13 @@ function krcDayColsHtml(ds, ev){
     var nowHtml = isToday ? (i===0 ? todoNowLineHtml() : todoNowLineHtml().replace(/<span>[\s\S]*?<\/span>/, '')) + krcNowFrameHtml() : '';
     if(hc) r4 += '<div style="'+cell+'height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:'+hatch+';border-top:1px solid var(--line);"></div>';
     else r4 += '<div style="'+cell+'position:relative;height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:#fff;border-top:1px solid var(--line);cursor:cell;" onmousemove="krcHover(this,event)" onmouseleave="krcHoverOff(this)" onclick="krcCellClick(\''+ds+'\',event,this,\''+krEsc(name).replace(/\'/g,'')+'\')">'+nowHtml+'<div class="krc-hl" style="display:none;position:absolute;left:0;right:0;height:'+(KRC_PX/2)+'px;background:rgba(190,120,90,.12);pointer-events:none;"></div>'+lines+
-      lanes.map(function(r0){ var x = r0.b._x; return krcBlockHtml(x ? {b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done} : r0, false); }).join('')+'</div>';
+      lanes.map(function(r0){ var x = r0.b._x; return krcBlockHtml(x ? {b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done, arrived:x.arrived, noShow:x.noShow} : r0, false); }).join('')+'</div>';
   });
   var hospB = (typeof KRB_HOSP!=='undefined') ? ev.surg.filter(function(x){ return x.b.date===ds && x.b.who===KRB_HOSP; }).map(function(x){ return Object.assign({}, x.b, {_x:x}); }) : [];
   if(hospB.length){ /* CMD-1014-18 四·2：全院的占位预约没有院长，另放一栏「全院预约」 */
     r1 += '<div class="krc-dirhead" style="'+cell+'text-align:center;font-size:12px;font-weight:700;padding:6px 4px;white-space:nowrap;">全院预约</div>';
     r2 += '<div style="'+cell+'padding:2px;background:#faf8f3;border-top:1px solid var(--line);"></div>';
-    r4 += '<div style="'+cell+'position:relative;height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:#fff;border-top:1px solid var(--line);">'+(isToday ? todoNowLineHtml().replace(/<span>[\s\S]*?<\/span>/, '') : '')+lines+krcLanes(hospB).map(function(r0){ var x = r0.b._x; return krcBlockHtml({b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done}, false); }).join('')+'</div>';
+    r4 += '<div style="'+cell+'position:relative;height:'+((KRC_H1-KRC_H0)*KRC_PX)+'px;background:#fff;border-top:1px solid var(--line);">'+(isToday ? todoNowLineHtml().replace(/<span>[\s\S]*?<\/span>/, '') : '')+lines+krcLanes(hospB).map(function(r0){ var x = r0.b._x; return krcBlockHtml({b:r0.b, lane:r0.lane, n:r0.n, row:x.row, label:x.label, done:x.done, arrived:x.arrived, noShow:x.noShow}, false); }).join('')+'</div>';
     n++;
   }
   return '<div style="overflow-x:auto;flex-shrink:0;border:1px solid var(--line);border-radius:10px;"><div style="display:grid;grid-template-columns:44px repeat('+n+',minmax(180px,1fr));min-width:'+(44+180*n)+'px;">'+r1+rAll+r2+r4+'</div></div>';

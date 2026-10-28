@@ -71,7 +71,9 @@ function inTodoItems(){
 
       if(c.stage==='booked' && c.subState==='waiting' && c.visitDate===today && !c.krVisit){ /* CMD-1015-08：没到预约时间 = 参考名单（不进待办）；过了预约时间还没按已到店 / 未到店 = 待办「客人还没到：联络客人」 */
         var vdue = today+' '+(c.visitTime||''), vover = !!c.visitTime && todoNowStr() >= vdue;
-        push(todoMk('visit', vover ? '客人还没到：联络客人' : (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, vdue, vover, function(){ openVisitOf(c.id); }));
+        var vIt0 = todoMk('visit', vover ? '客人还没到：联络客人' : (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, vdue, vover, function(){ openVisitOf(c.id); });
+        push(vIt0); /* CMD-1028-14 五：今天要来的预约，谁都该看到——还没人接待过（没有操作记录）、或所属主案件是我的，都算「我的」；原来只认「我操作过这个预约」，代约出来的预约没人操作过，「只看我的」时今天来访就是 0 */
+        try{ var vMain = c.mainId ? mainOf(c) : null; if(!mine && (!caseOperators(c, true).inn.length || (vMain && todoInMine(vMain)))) vIt0.mine = true; }catch(e0){}
       }
       var wk = null;
       if(c.consultStatus==='paid_waiting_kr') wk = {t:'等 KR 确认出报告时间', due:'', tab:'consult'};
@@ -132,7 +134,7 @@ function krTodoItems(rows){
   var out = [], me = currentAccount(), today = krToday(), h = krHData(), isDir = krIsDirector(), work = canDo('krwork');
   var meId = me ? me.id : '';
   rows.forEach(function(r){
-    var c = r.c, mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name)), push = function(it){ it.mine = mine; it.rowKey = r.clinicId+':'+r.id; out.push(it); };
+    var c = r.c, mine = (String(r.krCoordinator||'').split(' ')[0]===meId) || (r.director===(me&&me.name)), push = function(it){ it.mine = mine || (it.kind==='today' && work && !String(r.krCoordinator||'').trim()); /* CMD-1028-14 五：还没有 KR 负责室长的案件，今天到院大家都看得到 */ it.rowKey = r.clinicId+':'+r.id; out.push(it); };
     var goCase = function(tab){ return function(){ if(r.kidOf){ krShowCase(r.clinicId, r.id, {tab:'consult'}); return; } /* CMD-1028-04 二：直接进这一笔复诊评估的子案件页 */ krShowCase(r.clinicId, r.id, {tab:tab}); }; }; /* CMD-1026-14 一：复诊评估子记录 KR 没有自己的案件页，点了进主案件的复诊 tab 并展开那一笔 */
     if(work){
       krLockedKeys(c).forEach(function(k0){ /* CMD-1026-20：关账后没确认结束的韩国到院 → 提醒 KR 主跟室长（他 OFF 时同医院其他室长也看得到） */
@@ -148,7 +150,7 @@ function krTodoItems(rows){
       if(!c.krTripEnded && c.krBalancePaid && !c.pcBooked && krActiveItems(c).some(function(it){ return (it.postcare||[]).length; })) push(todoMk('pcb', '安排术后管理', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'postcare'}); })); /* CMD-1015-31：直接到项目卡术后管理分页，用［预约时间］约 */
     }
     /* CMD-1015-17 / CMD-1026-14：联络 IN 确认客人行程——韩国行程已结束（KR 按的或 IN 到访自动结束）后不再出现（客人已回印尼，回印尼做的术后管理由 IN 处理）；同一案件的多笔合成一条（原来每笔一条、key 相同所以显示两次）；［已处理］按行号 + 日期记，只压这一件事 */
-    if(work && !c.krTripEnded){ var pdRows = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0; });
+    if(work && !c.krTripEnded){ var pdRows = (c.subItems||[]).filter(function(s){ return s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.skipped && !s.holdUseOf && !c.visitClosed && pcDaysLate(s.date)>0 && !inCareBooking(c, s.id); }); /* CMD-1028-14 五：IN 已经约好的（改时间后也一样）不算过期 */
       if(pdRows.length){ var pdKey = 'pcdue|'+pdRows.map(function(s){ return s.id+'@'+s.date; }).join(','), pdLate = Math.max.apply(null, pdRows.map(function(s){ return pcDaysLate(s.date); })), pdOld = pdRows.slice().sort(function(a, b){ return String(a.date).localeCompare(String(b.date)); })[0];
         if(!(c.todoAcks||{})[pdKey]){ var pdIt = todoMk('pcdue', '联络 IN 确认客人行程：术后管理已过建议日期 '+pdLate+' 天（'+pdRows.map(function(s){ return s.content; }).join('、')+'）', c, pdOld.date, true, goCase('proc')); pdIt.ack = true; pdIt.ackKey = pdKey; push(pdIt); } } }
     /* 院长：上传面诊内容（面诊已安排、院长还没上传） */

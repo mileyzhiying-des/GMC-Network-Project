@@ -635,7 +635,8 @@ function eventChipHtml(e, opts){
     if(e.ended) grey = 'opacity:.5;filter:grayscale(1);';
     if(e.vstate==='待访问' && past){
       var left = when.getTime() + noShowMs() - now.getTime();
-      if(left > 0){ grey = ''; l2 += ' <b data-visit-countdown="'+when.getTime()+'" data-visit-case="'+(e.caseId||'')+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; } /* 30 分钟内未到访：保持亮色+倒计时 */
+      if(!e.ended) grey = ''; /* CMD-1028-14 五：没到店的不变灰（过了 30 分钟由自动判定改成划线「未到店」）；只有真的到店 / 结束才灰 */
+      if(left > 0){ l2 += ' <b data-visit-countdown="'+when.getTime()+'" data-visit-case="'+(e.caseId||'')+'">'+Math.floor(left/60000)+'分'+pad2(Math.floor(left%60000/1000))+'秒</b>'; } /* 30 分钟内未到访：保持亮色+倒计时 */
     }
     onclick = e.caseId ? 'openVisitOf(\''+e.caseId+'\')' : 'void(0)';
   } else if(e.kind==='travel'){
@@ -4505,7 +4506,7 @@ function pcMD(ds){ return String(ds).slice(5,7)+'/'+String(ds).slice(8,10); }
 /* 已过建议日期还没做的印尼术后管理（进行中案件）：IN 待办「联络客人」 / KR 待办「联络 IN 确认客人行程」 */
 function postcareDueList(){
   var out = [];
-  CASE_ITEMS.forEach(function(c){ if(c.visitClosed || c.stage==='cancelled') return; (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.holdUseOf){ var late = pcDaysLate(s.date); if(late>0) out.push({c:c, s:s, late:late, name:c.name}); } }); });
+  CASE_ITEMS.forEach(function(c){ if(c.visitClosed || c.stage==='cancelled') return; (c.subItems||[]).forEach(function(s){ if(s.kind==='术后管理记录' && s.place==='IN' && !s.done && !s.skipped && !s.holdUseOf && !inCareBooking(c, s.id)){ var late = pcDaysLate(s.date); if(late>0) out.push({c:c, s:s, late:late, name:c.name}); } }); });
   return out;
 }
 /* 结案后剩下没做的印尼术后管理（客户详情标「术后管理」；以后再来做 = IN 开本地管理新案件，在「使用持有项目」里列出） */

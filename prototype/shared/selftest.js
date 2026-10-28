@@ -5289,6 +5289,44 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     CLIENT_HOLDINGS[c.name] = []; c.procedureItems = c.procedureItems.filter(function(it){ return !/R172/.test(it.name); });
   });
   /* CMD-1028-14 一、二：冲突弹窗文字 / 按钮；预约弹窗红框项目可直接［保留］；第一次填在韩期间也逐项选 */
+  ST.def('R176a','CMD-1028-14 五（A1 分页，pcStage 夹具）：已约好的印尼术后管理（含改时间后）不再出「过了建议日期、联络客人」· 今天的预约在「只看我的」下也算今天来访 · 过了开始时间没到店的块不变灰',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
+    var m = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.mainId; })[0]; if(!ST.ok(!!m, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var td = todayStr(), snap = JSON.stringify(CASE_ITEMS.filter(function(x){ return x.id===m.id || x.mainId===m.id; })), oldMine = TODO_UI.mine;
+    var cnt = function(k, id){ return inTodoItems().filter(function(i){ return i.kind===k && i.caseId===(id||m.id); }).length; };
+    try{
+      m.krBalancePaid = true; m.krTripEnded = null; m.visitClosed = false; m.stay = {in:ymdAdd(td, -3), out:ymdAdd(td, 60)};
+      var sg = m.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; })[0]; m.procedureItems.forEach(function(it){ if(it!==sg) it.postcare = []; });
+      sg.postcare = [{mgmt:'R176拆线', name:'R176拆线', times:1, interval:1, place:'either', innName:'R176印尼拆线', startDay:5}];
+      m.subItems = (m.subItems||[]).filter(function(x){ return x.kind!=='术后管理记录'; });
+      coreCareBook(m, sg.name, 0, ymdAdd(td, -1), '', 'IN', '', 'KM', null);
+      var row = m.subItems.filter(function(x){ return x.kind==='术后管理记录'; })[0];
+      ST.ok(cnt('pcdue')===1, '过了建议日期还没约 → 出「联络客人」待办');
+      var tm = '23:50', ch = createChildReservation(m, td, tm, '术后管理', {careFor:{caseId:m.id, keys:[row.id]}});
+      ST.ok(cnt('pcdue')===0, '约好之后（今天 23:50）不再出「已过建议日期」');
+      ch.visitDate = ymdAdd(td, 3); ST.ok(cnt('pcdue')===0, '改时间改到之后的日子仍没有');
+      ch.visitDate = td; ch.visitTime = pad2(Math.max(0, demoNow().getHours()-1))+':00'; ch.visitTime = '00:01';
+      ST.ok(cnt('pcdue')===0, '预约就是今天（已过开始时间、还没到店）也不算「过了建议日期」');
+      ch.subState = 'cancelled'; ST.ok(cnt('pcdue')===1, '预约取消后回到「过期」待办'); ch.subState = 'waiting';
+      /* 今天来访：只看我的 */
+      TODO_UI.mine = true; var it = inTodoItems().filter(function(i){ return i.kind==='visit' && i.caseId===ch.id; })[0];
+      ST.ok(!!it && it.mine, '今天的预约在「只看我的」下也算（没有人操作过时，大家都看得到）'); 
+      var cardTxt = todoInCardsHtml(inTodoItems()).replace(/<[^>]+>/g, '|'); ST.ok(/今天来访\|+[^|]*\|+[1-9]/.test(cardTxt) || /今天来访[^0-9]*[1-9]/.test(cardTxt), '「今天来访」卡不是 0（'+cardTxt.replace(/\|+/g, ' ').slice(0, 80)+'）');
+      /* 日历块：过了开始时间没到店不变灰，已到店才灰 */
+      var ev = calendarEvents().filter(function(e){ return e.caseId===ch.id; })[0];
+      ST.ok(!!ev && !/grayscale/.test(eventChipHtml(ev)), '过了开始时间、还没到店：日历块不变灰');
+      var nm = noShowMs; noShowMs = function(){ return 1000; };
+      ST.ok(!/grayscale/.test(eventChipHtml(ev)), '超过判定时间但还没被自动判定：仍不变灰'); noShowMs = nm;
+      ev.vstate = '已到访'; ST.ok(/grayscale/.test(eventChipHtml(ev)), '到店后变灰');
+    } finally { TODO_UI.mine = oldMine; var back = JSON.parse(snap); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==m.id && x.mainId!==m.id; }).concat(back); try{ Store.touch(); }catch(e){} }
+  });
+  ST.def('R176b','CMD-1028-14 五（KM1 分页）：KR 日历块只有已到院 / 已完成才变灰，过了时间没到院不灰；标了未到院划线',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var td = todayStr(), mk = function(extra){ var r0 = {b:{type:'施术', time:'00:10', end:'00:40', id:'t176', who:'KD1 院长', date:td, name:'T-176'}, lane:0, n:1, row:null, label:'x'}; for(var k in extra) r0[k] = extra[k]; return krcBlockHtml(r0, false); };
+    ST.ok(!/grayscale/.test(mk({})), '过了时间、没到院：不灰');
+    ST.ok(/grayscale/.test(mk({arrived:true})) && /grayscale/.test(mk({done:true})), '已到院 / 已完成：灰');
+    ST.ok(/line-through/.test(mk({noShow:true})) && !/line-through/.test(mk({done:true})), '未到院划线、已完成不划线');
+  });
   ST.def('R175a','CMD-1028-14 四（KD1 / KO1 分页）：院长待办只有面诊 / 复诊评估类 · 没有「未安排预约」分页 · 日历已到院 / 已完成的块变灰、不划线',function(){
     var me = currentAccount(); if(!ST.ok(me && isKrDirectorLike(me), '要在 KD1 或 KO1 分页里跑')) return;
     var rows = krAllCases(), items = krTodoItems(rows), okK = ['upload','recover','recoverwait','dsurg','stay'];
