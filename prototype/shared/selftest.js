@@ -1506,7 +1506,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var k1 = subCaseKey(reps[0]), rows1 = coreVisitRows(c, k1).filter(function(s){ return !s.done; }), no1 = reps[0].dno;
     var u0 = careUnits(c).unbooked.length; rows1.forEach(function(s){ ST.ok(coreRowPostpone(c, s.id, ST.krBy), '无限延期一行'); });
     ST.ok(careUnits(c).rows.filter(function(r){ return r.s.skipped; }).length===rows1.length, '延期的术后管理退回项目卡「未预约」');
-    ST.ok(c.visitEnds && c.visitEnds[k1] && c.visitEnds[k1].reason==='全部延期' && !subCaseList(c).some(function(r){ return subCaseKey(r)===k1; }), '这个子案件里的项目全部延期 → 子案件结案（全部延期）');
+    ST.ok(c.visitEnds && c.visitEnds[k1] && c.visitEnds[k1].reason==='全部保留' && !subCaseList(c).some(function(r){ return subCaseKey(r)===k1; }), '这个子案件里的项目全部延期 → 子案件结案（全部延期）');
     var back = careUnits(c).rows.filter(function(r){ return r.s.skipped; })[0]; ST.ok(coreCareBook(c, back.item, 0, D(40), '10:00', 'KR', back.s.id, ST.krBy) && !back.s.skipped && back.s.date===D(40) && subCaseList(c).some(function(r){ return subCaseKey(r)==='KR|'+D(40); }), '重新预约：回到新日期的预约案件（原来那张「全部延期」留作记录）');
     /* 增加项目：睡眠 / 全麻，付款后才确认麻醉同意书 */
     var sleep = (HOSPITAL_DATA[caseKrHospital(c)].projects||[]).filter(function(p){ return p.defaults && p.defaults.anes && p.defaults.anes!=='local' && !krActiveItems(c).some(function(it){ return it.name===p.name; }); })[0];
@@ -5308,6 +5308,47 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       set(function(c2){ coreCareBook(c2, sgName, 0, okDay(40), '12:00', 'KR', '', 'KM1 室长', null); }); var bad; set(function(c2){ var inf = stayConflictInfo(c2, outD, '18:00').filter(function(f){ return !f.unbooked; }), p2 = {}; inf.forEach(function(f){ p2[f.id] = {mode:'will'}; }); bad = coreStayResolve(c2, p2, outD, '18:00', 'KM1 室长'); }); ST.ok(bad && !bad.ok && /只有没有建议日期/.test(bad.err), '已约 / 有建议日期的项目不能选「这趟还会做」');
     } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); CASE_ITEMS[i] = JSON.parse(snap); return true; }); try{ STAY_RES = null; }catch(e){} }
   });
+  ST.def('R171a','CMD-1028-12 四（KM1 分页，pcStage 夹具）：手动［保留］［取消保留］（术后管理 / 管理项目，KR 才有）· 无限延期并入保留（同一份 c.stayKeep）· 旧的无限延期数据迁成保留 · IN 只读',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr();
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var set = function(f){ Store.mutateClinic(cid, function(){ f(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); return true; }); };
+    var okDay = function(n){ var d = ymdAdd(td, n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
+    var txt = function(h){ return String(h).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); };
+    var snap = JSON.stringify(gc()), sgName = '';
+    try{
+      set(function(c){ c.krBalancePaid = true; c.krTripEnded = null; c.visitClosed = false; c.stay = {in:ymdAdd(td, -1), out:ymdAdd(td, 60)}; c.krSchedule = c.krSchedule || {}; c.krSchedule.confirmedDate = ymdAdd(td, 1);
+        var sg = c.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; })[0]; sgName = sg.name; c.procedureItems.forEach(function(it){ if(it!==sg) it.postcare = []; });
+        sg.postcare = [{mgmt:'R171拆线', name:'R171拆线', times:3, interval:1, place:'KR', startDay:5}];
+        c.procedureItems = c.procedureItems.filter(function(it){ return !/^R171/.test(it.name||''); });
+        c.procedureItems.push({name:'R171 热玛吉 · 2次', origin:'KR', mgmtPlan:true, qty:2, heldOver:true, uses:[], iid:'iR171', interval:2, firstDay:3});
+        c.stayKeep = {}; c.subItems = (c.subItems||[]).filter(function(x){ return x.kind!=='术后管理记录'; }); });
+      KR_CASE = {clinicId:cid, id:r0.id, tab:'items'}; nav('kr-casedetail');
+      var c = gc(), ck = 'care|'+sgName+'|0', h = pcmHtml(c, 'KR');
+      ST.ok(/krKeepToggle\('care\|[^']*\|0',true\)/.test(h), 'KR 术后管理 tab：每个未预约的行有［保留］');
+      ST.ok(!/krKeepToggle/.test(pcmHtml(c, 'IN')), 'IN 只读：没有保留按钮');
+      var mg1 = krProjCards(c, {only:'mgmt'}); ST.ok(/krKeepToggle\('mg\|iR171',true\)/.test(mg1), '在韩管理 tab：管理项目未预约行有［保留］');
+      ST.ok(/krKeepToggle\('care\|/.test(krProjCards(c, {only:'care'})), '子案件项目卡（术后管理）也有［保留］');
+      krKeepToggle(ck, true); c = gc();
+      ST.ok(stayKeepN(c, ck)===3 && careSlotList(c).length===0 && careSlotList(c, {kept:true}).length===3, '［保留］→ 整行（3 次）进保留，不在未预约');
+      ST.ok(todoUbKr().filter(function(x){ return x.caseId===c.id && /R171拆线/.test(x.label); }).length===0 && mainPendingBook(c).krN===0, '不进未安排预约 / 待预约');
+      ST.ok(ST.hasLog(c, /保留：术后管理 .*R171拆线/), 'Timeline 记了谁保留了哪一项');
+      h = txt(pcmHtml(c, 'KR')); ST.ok(/保留 1/.test(h) && /取消保留/.test(h) && /预约时间/.test(h), '保留组每行有［预约时间］［取消保留］');
+      krKeepToggle(ck, false); c = gc(); ST.ok(stayKeepN(c, ck)===0 && careSlotList(c).length===3 && ST.hasLog(c, /取消保留：术后管理/), '［取消保留］→ 回到未预约，Timeline 记了');
+      krKeepToggle('mg|iR171', true); c = gc(); ST.ok(stayKeepN(c, 'mg|iR171')===2 && krCbMgItems(c).length===0 && /保留 2 \/ 共 2 次/.test(txt(krProjCards(c, {only:'mgmt'}))), '管理项目［保留］→ 保留组');
+      krKeepToggle('mg|iR171', false); c = gc(); ST.ok(krCbMgItems(c).length===1, '管理项目［取消保留］→ 回到未预约');
+      /* 无限延期并入保留：约一个 → 修改时间勾保留 */
+      set(function(c2){ coreCareBook(c2, sgName, 0, okDay(30), '12:00', 'KR', '', 'KM1 室长', null); }); c = gc();
+      var row = c.subItems.filter(function(x){ return x.kind==='术后管理记录' && !x.skipped; })[0], pp; set(function(c2){ pp = coreRowPostpone(c2, row.id, 'KM1 室长'); }); c = gc();
+      ST.ok(pp && stayKeepN(c, ck)===1 && ST.hasLog(c, /保留：.*取消这次预约/) && !ST.hasLog(c, /无限延期/), '修改时间里的「无限延期」= 保留：记进 c.stayKeep，Timeline 写「保留」');
+      krTimeEditRender && 0; var kte = (function(){ KR_TE = {id:row.id, date:okDay(31), time:'12:00', care:true, canIn:false, toIn:false, postpone:false, canPostpone:true}; krTimeEditRender(); return (document.getElementById('kr-te-overlay')||{}).innerText||''; })(); ST.ok(/保留/.test(kte) && !/无限延期/.test(kte), '改时间小弹窗的勾选改叫「保留」'); document.getElementById('kr-te-overlay').classList.remove('open');
+      /* 旧数据迁移 */
+      set(function(c2){ c2.stayKeep = {}; c2.subItems.forEach(function(x){ if(x.id===row.id){ x.kept = false; x.keepMig = false; x.postponed = true; x.skipped = true; } }); });
+      var mig; set(function(c2){ mig = migrateOldPostpone(c2); }); c = gc(); var again; set(function(c2){ again = migrateOldPostpone(c2); });
+      ST.ok(mig===1 && stayKeepN(c, ck)===1 && again===0, '旧的无限延期行 → 并进保留（只迁一次）：'+mig+'/'+again);
+    } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); CASE_ITEMS[i] = JSON.parse(snap); return true; }); try{ document.getElementById('kr-te-overlay').classList.remove('open'); }catch(e){} }
+  });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = toConfirmed('R51a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid];
@@ -6085,7 +6126,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var ex = createReservationCase('T-合并客人', null, td, '15:00', null, '面诊商谈'); ST.ok(pendingResvSameDay('T-合并客人', td)===ex && pendingResvSameDay('T-合并客人', ymdAdd(td, 1))===null, '同一客人同一天已有还没到的预约 → 找得到（要合并）'); ex.subState = 'arrived'; ST.ok(pendingResvSameDay('T-合并客人', td)===ex, '已到店进行中也合并'); ex.subState = 'cancelled'; ST.ok(pendingResvSameDay('T-合并客人', td)===null, '已取消的不算');
       CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x!==ex; });
       mut(function(c){ c.visitClosed = false; delete c.krTripEnded; c.visitEnds = c.visitEnds || {}; c.visitEnds['KR|'+ymdAdd(td, 30)] = {no:'x', date:ymdAdd(td, 30), time:'10:00'}; c.visitPostponed = c.visitPostponed || {}; c.visitPostponed['KR|'+ymdAdd(td, 30)] = []; });
-      ST.ok(!/全部延期/.test(krCaseGroupsHtml(gc(), true)), '被清空（全部延期）的到院卡不显示');
+      ST.ok(!/全部保留|全部延期/.test(krCaseGroupsHtml(gc(), true)), '被清空（全部保留）的到院卡不显示');
     } finally { if(HOSPITAL_DATA[hid]) HOSPITAL_DATA[hid].openTime = snapOpen; Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); krTripClose(); }
   });
 

@@ -6215,6 +6215,7 @@ function repairVisitState(){
     (c.procedureItems||[]).forEach(function(it){ /* CMD-1020-17：旧的待付款管理项目（还没进持有）转成持有项目，只转换不删除；待付款标记和金额不变 */
       if(it.pendingPay && !it.heldOver && !it.service && !it.cancelled && !it.swapped && krIsMgmtItemC(it) && holdLocalAdd(c, it)){ logCaseEvent(c, '系统', '修正旧数据：待付款管理项目「'+buyName(it.name)+'」转为持有项目（待付款不变）'); n++; }
     });
+    if(migrateOldPostpone(c)) n++; /* CMD-1028-12 四：旧的无限延期并进保留 */
     if(migrateProgressMemo(c)) n++; /* CMD-1021-03：旧的项目进程 memo 迁成第一则记录 */
     var fx = fixUseRecords(c); if(fx.length){ fx.forEach(function(t){ logCaseEvent(c, '系统', '修正使用记录：'+t); }); n += fx.length; }
   });
@@ -8983,14 +8984,39 @@ function coreRowCancel(c, id, by){
 function visitSource(c, key){ var rows = coreVisitRows(c, key); return rows.some(function(s){ return !s.holdUseOf && !s.surgUse; }) ? '术后预约' : '管理预约'; }
 
 /* 修改时间里勾「无限延期」：取消这次的预约时间，项目退回项目卡（术后管理 = 未预约，管理 / 施术 = 未使用）；这个子案件里的项目全部延期 → 子案件结案（visitEnds，抬头写「全部延期」），不是拿掉 */
+/* ===== CMD-1028-12 四：「无限延期」并入「保留」（同一份数据 c.stayKeep）=====
+   调查结果：CMD-1015-22 加的「无限延期」勾选一直还在［修改时间］小弹窗（krTimeEditRender，只给术后管理 / 增加项目行）里，没有被拿掉；用户看不到是因为 CMD-1027-09 把主案件「术后管理」tab 的［修改时间］换成了整天改时间弹窗（pcmDayEditOpen），那个弹窗没有这个勾选；只有子案件项目卡 / 到院卡里的单行［修改时间］还有。旧数据：延期的行存在 subItems 里（postponed:true + skipped:true + postponedFrom），快照在 c.visitPostponed[到院key]，全部延期的到院在 c.visitEnds[key].reason。
+   现在：叫「保留」，延期 / 保留都记 c.stayKeep；旧的无限延期行由 migrateOldPostpone 并进来。 */
+function stayKeepRow(c, s){ /* 把这一行对应的项目名额记进 c.stayKeep（术后管理按施术项目 + 第几条所需术后管理；管理项目按 iid）；施术项目的预约使用行不进保留组 */
+  try{
+    if(s.holdUseOf){ var mit = rowItem(c, s); if(mit && mit.iid){ stayKeepAdd(c, 'mg|'+mit.iid, 1); return true; } }
+    else if(!s.surgUse){ var en = careEntryOfRow(c, s), it = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName; })[0]; if(en && it){ stayKeepAdd(c, 'care|'+it.name+'|'+(it.postcare||[]).indexOf(en.x), 1); s.kept = true; return true; } }
+  }catch(e){ console.error(e); }
+  return false;
+}
+function stayKeepDec(c, key){ var n = stayKeepN(c, key); if(n<=0) return; if(n<=1) delete c.stayKeep[key]; else c.stayKeep[key] = n-1; }
+function migrateOldPostpone(c){ var n = 0; (c.subItems||[]).forEach(function(s){ if(s.postponed && s.skipped && !s.keepMig && !s.kept){ s.keepMig = true; if(stayKeepRow(c, s)) n++; } }); if(n) logCaseEvent(c, '系统', '修正旧数据：'+n+' 项原来的「无限延期」并入「保留」（不进未安排预约，KR 仍可手动预约）'); return n; }
+/* 手动［保留］／［取消保留］：key = 'care|施术项目|第几条' 或 'mg|iid'，整行（这个项目还没预约的全部次数）一起保留 / 取消保留 */
+function coreKeepSet(c, key, on, by){
+  var p = String(key).split('|'), units = 0, label = '';
+  if(p[0]==='care'){ var it = (c.procedureItems||[]).filter(function(x){ return x.name===p[1]; })[0], x = it && (it.postcare||[])[parseInt(p[2], 10)]; if(!it || !x) return false; units = careSlotList(c, {all:true}).filter(function(sl){ return sl.item===p[1] && String(sl.i)===p[2]; }).length; label = '术后管理 '+buyName(p[1])+' · '+(x.name||x.mgmt); }
+  else if(p[0]==='mg'){ var im = itemByKey(c, p[1]); if(!im) return false; units = Math.max(0, holdItemBookable(c, im)); label = '管理项目 '+buyName(im.name); }
+  else return false;
+  if(units<=0) return false;
+  if(on){ if(stayKeepN(c, key)>=units) return false; c.stayKeep = c.stayKeep || {}; c.stayKeep[key] = units; }
+  else { if(!stayKeepN(c, key)) return false; delete c.stayKeep[key]; }
+  logCaseEvent(c, by, (on ? '保留：' : '取消保留：')+label+'（'+units+' 次'+(on ? '，不进未安排预约、不生成待办，KR 仍可手动预约' : '，回到未预约')+'）', p[0]==='care' ? '术后管理' : '管理项目');
+  return true;
+}
 function coreRowPostpone(c, id, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || (s.kind!=='术后管理记录' && s.kind!=='增加项目')) return false;
   var key = subCaseKey(s), no = s.dno||'', date = s.date, time = s.time||'';
+  s.keepMig = true; stayKeepRow(c, s); /* CMD-1028-12 四：并入「保留」 */
   s.skipped = true; s.postponed = true; s.postponedFrom = key; s.arrived = false; s.simDay = false;
   (c.visitPostponed = c.visitPostponed || {}); (c.visitPostponed[key] = c.visitPostponed[key] || []).push({content:s.content, place:s.place, kind:s.kind, holdUseOf:s.holdUseOf||'', surgUse:s.surgUse||'', note:s.note||''}); /* 留一份快照：之后重新预约这一行，「全部延期」那张卡仍看得到当时延期了什么 */
   var rest = coreVisitRows(c, key).filter(function(x){ return !x.done; }).length + coreVisitExtra(c, key).filter(function(x){ return !x.done && !x.skipped; }).length, doneAny = coreVisitRows(c, key).some(function(x){ return x.done; });
-  if(!rest && !doneAny){ c.visitEnds = c.visitEnds || {}; c.visitEnds[key] = {reason:'全部延期', date:date, time:time, no:no||key, at:nowFullDt()}; }
-  subCaseNos(c); logCaseEvent(c, by, '无限延期：'+s.content+'（原 '+date+' '+time+'），退回项目卡，等客人确定后重新预约'+((!rest && !doneAny) ? '；这次预约的项目全部延期，这次到院结案（全部延期）' : '')); pushNotif('赴韩施术', by+' 取消了 '+c.name+' 的一次在韩到院（延期）：'+s.content+'（原 '+date+' '+time+'），等客人确定后重新预约', {caseId:c.id}); return true;
+  if(!rest && !doneAny){ c.visitEnds = c.visitEnds || {}; c.visitEnds[key] = {reason:'全部保留', date:date, time:time, no:no||key, at:nowFullDt()}; }
+  subCaseNos(c); logCaseEvent(c, by, '保留：'+s.content+'（原 '+date+' '+time+'），取消这次预约，项目退回项目卡「保留」，等客人确定后重新预约'+((!rest && !doneAny) ? '；这次预约的项目全部保留，这次到院结案（全部保留）' : '')); pushNotif('赴韩施术', by+' 取消了 '+c.name+' 的一次在韩到院（保留）：'+s.content+'（原 '+date+' '+time+'），等客人确定后重新预约', {caseId:c.id}); return true;
 }
 
 /* ---- KR 预约到店阶段的案件页（CMD-1015-24 五）：预约修改 / 未到店 / 预约取消（对应 IN 占位预约建出的在韩管理案件，客人还没到店） ---- */
@@ -11255,13 +11281,13 @@ function pcmHtml(c, side){
     var cnt = r.total>1 ? '剩 '+r.n+' / 共 '+r.total : '1 次', sg = r.sug ? e(md(r.sug)) : '—', op = '';
     if(r.place===mine && canAct && !locked){
       if(inTab) op = careBookBtn(c, '预约时间', 'todoCareBookOpen(\''+c.id+'\',\''+r.firstKey+'\')', 'padding:3px 12px;font-size:12px;');
-      else op = krOutBtn('预约时间', 'krCbOpen({one:{item:\''+e(r.item).replace(/'/g, '')+'\',i:'+r.i+(r.reuse ? ',reuse:\''+r.reuse+'\'' : '')+'}})', paid, paid ? '' : '付清尾款后才能预约');
+      else op = krOutBtn('预约时间', 'krCbOpen({one:{item:\''+e(r.item).replace(/'/g, '')+'\',i:'+r.i+(r.reuse ? ',reuse:\''+r.reuse+'\'' : '')+'}})', paid, paid ? '' : '付清尾款后才能预约')+krKeepBtn('care|'+e(r.item).replace(/'/g, '')+'|'+r.i, true); /* CMD-1028-12 四：每个未预约的行加［保留］ */
     }
     return tr([nmCell(r), surgCell(r), e(r.rec), e(cnt), sg, op], g6);
   });
   var kRows = K.map(function(r){ /* 保留：KR 仍可手动［预约时间］（约了就回到预约中） */
     var cnt = r.total>1 ? '保留 '+r.n+' / 共 '+r.total : '1 次', sg = r.sug ? e(md(r.sug)) : '—', op = '';
-    if(r.place===mine && !inTab && canAct && !locked) op = krOutBtn('预约时间', 'krCbOpen({kept:true, one:{item:\''+e(r.item).replace(/'/g, '')+'\',i:'+r.i+(r.reuse ? ',reuse:\''+r.reuse+'\'' : '')+'}})', paid, paid ? '' : '付清尾款后才能预约');
+    if(r.place===mine && !inTab && canAct && !locked) op = krOutBtn('预约时间', 'krCbOpen({kept:true, one:{item:\''+e(r.item).replace(/'/g, '')+'\',i:'+r.i+(r.reuse ? ',reuse:\''+r.reuse+'\'' : '')+'}})', paid, paid ? '' : '付清尾款后才能预约')+krKeepBtn('care|'+e(r.item).replace(/'/g, '')+'|'+r.i, false); /* CMD-1028-12 四：［取消保留］ */
     return tr([nmCell(r), surgCell(r), e(r.rec), e(cnt), sg, op], g6);
   });
   var dGroups = pcmGroups(D, true), doneHtml = dGroups.map(function(g, i){ return headRow(g, false)+(i===0 ? th(['项目', '施术项目', '备注'], g3) : '')+g.rows.map(function(r){ return tr([nmCell(r), surgCell(r), r.note ? e(r.note) : '<span style="color:var(--muted);">—</span>'], g3); }).join(''); }).join('');
@@ -11341,7 +11367,7 @@ function coreStayResolve(c, picks, outD, outT, by){
     else {
       var s = (c.subItems||[]).filter(function(x){ return x.id===f.id; })[0]; if(!s) return;
       /* 先记保留（要在改动行之前算它属于哪一条所需术后管理 / 哪个管理项目） */
-      try{ if(s.holdUseOf){ var mit = rowItem(c, s); if(mit && mit.iid) stayKeepAdd(c, 'mg|'+mit.iid, 1); } else if(!s.surgUse){ var en2 = careEntryOfRow(c, s), it2 = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName; })[0]; if(en2 && it2) stayKeepAdd(c, 'care|'+it2.name+'|'+(it2.postcare||[]).indexOf(en2.x), 1); } }catch(e){ console.error(e); }
+      stayKeepRow(c, s);
       if(s.holdUseOf || s.surgUse){ c.subItems = c.subItems.filter(function(x){ return x!==s; }); } else { s.skipped = true; s.kept = true; s.arrived = false; s.simDay = false; }
       keep.push(label);
     }
