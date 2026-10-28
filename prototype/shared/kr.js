@@ -2703,8 +2703,14 @@ function krEndBlockModal(msg){
   ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">还不能标记客人已离院</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">'+krEsc(msg)+'<div style="font-size:12px;color:var(--muted);margin-top:6px;">已经写的备注不会丢，付完款回来还在。</div></div><div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="document.getElementById(\'kr-endblock-overlay\').classList.remove(\'open\')">返回</button><button class="btn-primary" onclick="document.getElementById(\'kr-endblock-overlay\').classList.remove(\'open\');krPayOpen()">去付款</button></div></div>';
   ov.style.zIndex = 100020; ov.classList.add('open');
 }
-function krEndAskOpen(key, manual){
+/* CMD-1028-02：［客人已离院］先提醒这一天还没完成的事（只提醒、不挡）；有 → 弹提醒，［确认离开］后：还有没做完的项目 → 原来的确认窗（要选原因），否则直接标离院；没有 → 照旧 */
+function krLeaveAfterRemind(key, hasProj, txt){
+  krMut(function(c){ logCaseEvent(c, ME_NAME, '客人离院时仍有：'+txt); return true; });
+  if(hasProj) krEndAskOpen(key, true, true); else krEndAskYes(key);
+}
+function krEndAskOpen(key, manual, skipRemind){
   if(!krCan()) return;
+  if(manual && !skipRemind && !window.GMC_NO_LEAVEREMIND){ var lr = Store.withClinic(KR_CASE.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c0 ? krLeaveReminders(c0, key) : []; }) || []; if(lr.length){ var pb0 = Store.withClinic(KR_CASE.clinicId, function(){ var c1 = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c1 ? endBlockPending(c1) : null; }); if(!pb0){ leaveRemindOpen('KR', KR_CASE.id, lr, String(key).replace(/'/g,'')); return; } } } /* 有待付款的在韩加买仍走原来的拦截提示 */
   var pb = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? endBlockPending(c) : null; });
   if(pb){ var ov0 = document.getElementById('kr-endask-overlay'); if(ov0) ov0.classList.remove('open'); krEndBlockModal(pb.err); return; }
   var left = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c) return []; return key==='main' ? todayOpenRows(c).map(function(x){ return buyName(x.name); }) : coreVisitRows(c, key).concat(coreVisitExtra(c, key)).filter(function(s){ return !s.done; }).map(function(s){ return buyName(s.content); }); }) || [];

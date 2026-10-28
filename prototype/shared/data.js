@@ -11193,3 +11193,47 @@ function detachPreChild(c){
   c.caseNo = 'A'+String(CASE_NO_SEQ).padStart(6,'0'); CASE_NO_SEQ++;
   logCaseEvent(c, actingName(), '到店：选「开始新的服务案件」——这笔预约不再是 '+mainNo+' 的子案件（原 '+old+'），改为独立案件 '+c.caseNo);
 }
+
+
+/* ================= CMD-1028-02：客人离店（IN）/ 客人已离院（KR）前，提醒这一天还没完成的事（只提醒、不挡） =================
+   返回 [{text, go}]：文字要具体（写项目名、金额、日期）；go = 要附的［去处理］链接（JS 语句）。没有未完成的事 = 空数组 = 照现在直接离开。
+   IN：复诊评估结果没到 / 面诊报告没出 / 今天的项目没处理 / 钱没付 / 下一步没约（待预约、院长建议的复诊）；
+   KR：今天的项目没处理 / 钱没付（尾款、在韩加买） / 施术当天术后管理没约 / 在韩期间（离开日期）没填。 */
+function leaveRemindersIN(c){
+  var out = [], m = mainOf(c), e = function(t){ return String(t==null?'':t); };
+  try{
+    if((isRevEval(c) || hasResumeType(c, '复诊评估')) && !c.reportReady){
+      var st = c.consultStatus==='paid_waiting_kr' ? 'KR 还没确认评估时间' : (c.consultStatus==='awaiting_report' ? (c.consultStartedAt ? '院长评估中，结果还没发送' : '等院长评估') : 'KR 处理中');
+      out.push({text:'复诊评估结果还没到（'+st+'）'});
+    } else if(!isRevEval(c) && c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1){
+      out.push({text:'面诊诊疗方案还没出（'+(c.consultStartedAt ? '面诊已开始，诊疗方案还没发送' : (c.consultStatus==='paid_waiting_kr' ? 'KR 还没确认面诊时间' : '等面诊 / 等 KR 出方案'))+'）'});
+    }
+    var M = inContModel(c), care = M.grp.today.filter(function(r){ return !(r.s.done && r.s.usedInCase===c.id); });
+    if(care.length) out.push({text:'今天的术后管理还没处理：'+care.map(function(r){ var en = careEntryOfRow(r.c, r.s); return buyName(en ? (en.x.name||en.x.mgmt) : String(r.s.content||'').replace(/（.*$/, '')); }).join('、')+'（请按［操作完成］或［本次不做］）'});
+    var loc = M.uses.filter(function(u){ return u.st==='进行中'; });
+    if(loc.length) out.push({text:'本地管理项目还没标完成：'+loc.map(function(u){ return buyName(u.u.name || u.u.itemName || '本地项目'); }).join('、')});
+    var pay = [];
+    if(c.consultRequested && c.consultStatus==='awaiting_payment') pay.push('面诊费 '+fmtRp(consultFeeOf(c)));
+    (c.settlementBatches||[]).forEach(function(b){ if(b.status==='unpaid') pay.push('结算单 '+b.id+(b.inTotal ? '（'+fmtRp(b.inTotal)+'）' : '')+(b.krDeposit ? '（定金 ₩'+Number(b.krDeposit).toLocaleString('en-US')+'）' : '')); });
+    if(pay.length) out.push({text:'还有没付的钱：'+pay.join('、')});
+    var P = mainPendingBook(m);
+    if(P.inN>0 && (!P.inEarly || P.inEarly <= ymdAdd(todayStr(), 7))) out.push({text:'下一步还没约：印尼术后管理 '+P.inN+' 项'+(P.inEarly ? '（最早建议 '+P.inEarly.slice(5).replace('-', '/')+'）' : '')+'，客人在店里，趁现在约', go:"todoCbOpen('"+m.id+"','*')"});
+    childVisitsOf(m).concat([m]).filter(function(x){ return isRevEval(x) && x.reportReady && x.revisitNext && x.revisitNext.type && x.revisitNext.type!=='none' && !revBookingOf(x); }).forEach(function(x){
+      out.push({text:'院长建议 '+revNextText(x)+' 复诊，还没预约', go:"revBookOpen('"+x.id+"')"}); });
+  }catch(er){ console.error('[离店提醒]', er); }
+  return out;
+}
+function krLeaveReminders(c, key){
+  var out = [];
+  try{
+    var left = key==='main' ? todayOpenRows(c).map(function(x){ return buyName(x.name); }) : coreVisitRows(c, key).concat(coreVisitExtra(c, key)).filter(function(s){ return !s.done; }).map(function(s){ return buyName(s.content); });
+    if(left.length) out.push({text:'今天的项目还没处理：'+left.join('、')+'（结束后退回项目卡，可以再约 / 再用）', projects:true});
+    var pay = [];
+    if(key==='main' && c.hasArrived && !c.krBalancePaid){ var bi = krBalanceInfo(c); pay.push('尾款'+(bi.diff>0 ? ' ₩'+Number(bi.diff).toLocaleString('en-US') : '')); }
+    var pp = (typeof pendingPayItems==='function') ? pendingPayItems(c) : []; if(pp.length) pay.push('在韩加买 '+pp.map(function(it){ return buyName(it.name)+(it.price ? '（₩'+Number(it.price).toLocaleString('en-US')+'）' : ''); }).join('、'));
+    if(pay.length) out.push({text:'还有没付的钱：'+pay.join('、')});
+    if(key==='main' && !c.krTripEnded){ var n = careSlotList(c).length; if(n>0) out.push({text:'术后管理还有 '+n+' 项没预约，客人在院里，趁现在先约', go:"krCbOpen({all:true, tab:'care'})"}); }
+    if(!c.stay || !c.stay.out) out.push({text:'在韩期间（离开日期）还没填', go:'krStayFixOpen()'});
+  }catch(er){ console.error('[离院提醒]', er); }
+  return out;
+}

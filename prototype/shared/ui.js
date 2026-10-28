@@ -2413,8 +2413,26 @@ function revLeaveStore(c, note){
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
   showToast('客人已离店', c.name+' · 等复诊评估结果，结果出来后再确认结案', null);
 }
+/* CMD-1028-02：离店前先提醒这一天还没完成的事（只提醒、不挡）：有 → 弹「客人离开前请确认：」［返回处理］［确认离开］；没有 → 照旧直接走（不多一步） */
+var LEAVE_REM = null, LEAVE_OK = {};
+function leaveRemindOpen(side, id, list, key){
+  LEAVE_REM = {side:side, id:id, key:key||'', list:list};
+  var ov = document.getElementById('leave-remind-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'leave-remind-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100040; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:500px;max-width:94vw;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">客人离开前请确认：</div><div style="font-size:12px;color:var(--muted);margin-bottom:8px;">只是提醒，不会挡着客人离开。</div>'+
+    list.map(function(x){ return '<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--border2);font-size:13px;line-height:1.6;"><span style="flex:1;">• '+cesc(x.text)+'</span>'+(x.go ? '<button class="btn-outline" style="padding:2px 10px;font-size:12px;white-space:nowrap;" onclick="leaveRemindClose();'+x.go+'">去处理</button>' : '')+'</div>'; }).join('')+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="leaveRemindClose()">返回处理</button><button class="btn-primary" onclick="leaveRemindConfirm()">确认离开</button></div></div>';
+  ov.classList.add('open');
+}
+function leaveRemindClose(){ var ov = document.getElementById('leave-remind-overlay'); if(ov) ov.classList.remove('open'); LEAVE_REM = null; }
+function leaveRemindConfirm(){
+  var R = LEAVE_REM; if(!R) return; leaveRemindClose();
+  var txt = R.list.map(function(x){ return x.text.replace(/（[^）]*）$/, ''); }).join('；');
+  if(R.side==='IN'){ var c = CASE_ITEMS.filter(function(x){ return x.id===R.id; })[0]; if(!c) return; logCaseEvent(c, actingName(), '客人离店时仍有：'+txt); LEAVE_OK[c.id] = true; try{ openEndCase(); }finally{ delete LEAVE_OK[c.id]; } }
+  else krLeaveAfterRemind(R.key, R.list.some(function(x){ return x.projects; }), txt);
+}
 function openEndCase(){
   var c = getCurrentCase(); if(!c || !canEndCase(c)) return;
+  if(!LEAVE_OK[c.id] && !window.GMC_NO_LEAVEREMIND){ var lr = leaveRemindersIN(c); if(lr.length){ leaveRemindOpen('IN', c.id, lr); return; } }
   END_CASE = {caseId:c.id, choice:{}, amt:{}, reason:'', note:''};
   /* CMD-1022-15：［客人离店］——系统先判断：没有剩下的项目（都做完、都付清）→ 直接离店并结束案件，不跳弹窗；还有没做完 / 没付款的 → 弹窗（列出剩下的项目、要选原因） */
   var left = endCaseRows(c); /* 含「面诊还在等报告」这类只告知的行：这也算没做完，要弹窗选原因 */

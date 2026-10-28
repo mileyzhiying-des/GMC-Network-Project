@@ -6,7 +6,7 @@
   window.GMC_NO_SWEEP = true; /* 自测时间被拨来拨去，定时的「客人已回国自动结案」扫描会把夹具案件真的结案；自测需要时直接调 careReturnSweep() */
   window.GMC_STAY_AUTO = true; /* CMD-1020-11：自测里确认赴韩 / 发施术前提醒不弹在韩期间窗口（R62a 单独打开测） */
   window.GMC_ALLOW_POSTADD = true; /* CMD-1027-03：付清尾款后不能再加施术（正式规则）；这批旧用例要靠「付款后在韩加施术」造数据，自测里默认放行，R148a 里关掉测真规则 */
-  window.GMC_PASSPORT_AUTO = true; window.GMC_NO_FOLLOWASK = true; /* CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
+  window.GMC_PASSPORT_AUTO = true; window.GMC_NO_FOLLOWASK = true; window.GMC_NO_LEAVEREMIND = true; /* CMD-1028-02：自测里直接按离店不弹提醒窗，R161a/b 里临时打开；CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
 var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   window.GMC_NO_TABS = true; /* CMD-1019-04：自测里所有进案件的入口都在当前分页打开 */ window.confirm = function(){ return true; }; window.alert = function(m){ if(cur) cur.alerts.push(String(m)); }; window.open = function(){ return null; };
   try{ localStorage.setItem('gmc_cfg_round', '2'); }catch(e){}
@@ -2446,6 +2446,73 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     document.getElementById('ce-v').value = '女'; document.getElementById('ce-v2').value = ''; saveClientEdit(); ST.ok(/出生日期/.test(err()), '生日空 → 挡住');
     openClientEdit(legacy.name, 'gender'); ST.ok(document.getElementById('ce-v').value==='', '旧资料编辑时性别默认「请选择」，要填了才能存');
     closeClientEdit();
+  });
+  ST.def('R161a','CMD-1028-02（A1 分页，pcStage 夹具）：IN 按［客人离店］前提醒这一天没完成的事（具体文字、返回处理不离开、确认离开 + Timeline、没有未完成直接离开）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var m = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor && !x.mainId; })[0]; if(!ST.ok(!!m, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var oa = window.alert, oc = window.confirm, og = window.GMC_NO_LEAVEREMIND; window.alert = function(){}; window.confirm = function(){ return true; }; window.GMC_NO_LEAVEREMIND = false;
+    var td = todayStr(), mk = function(over){ var c = createReservationCase('T-离店提醒', null, td, '10:30', null, '面诊商谈'); c.subState = 'arrived'; c.arrivedDay = td; c.materialsConfirmed = true; c.needsConsult = false; Object.assign(c, over||{}); updateCaseStage(c); return c; };
+    var mkRem = function(c){ CURRENT_CASE_ID = c.id; return leaveRemindersIN(c); };
+    try{
+      CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.name!=='T-离店提醒'; });
+      /* 没有未完成的事 → 照旧直接离开 */
+      var c0 = mk({}); openCaseDetail(c0.id); ST.ok(canEndCase(c0) && leaveRemindersIN(c0).length===0, '没有未完成的事 → 提醒清单为空');
+      openEndCase(); ST.ok(!document.getElementById('leave-remind-overlay') || !document.getElementById('leave-remind-overlay').classList.contains('open'), '没有提醒窗，直接走原来的离店流程');
+      ST.ok(isEnded(c0) || !!c0.leftStore || c0.stage==='cancelled' || c0.stage==='closed' || c0.stage==='reportonly', '直接离开（案件结束）');
+      /* 面诊报告没出 + 面费没收 */
+      var c1 = mk({needsConsult:true, consultRequested:true, consultStatus:'awaiting_report', consultStartedAt:nowFullDt(), consultFeeAmount:300000});
+      var r1 = mkRem(c1); ST.ok(r1.some(function(x){ return /面诊诊疗方案还没出（面诊已开始/.test(x.text); }), '面诊已开始、方案没发：「面诊诊疗方案还没出（面诊已开始，诊疗方案还没发送）」');
+      c1.consultStatus = 'awaiting_payment'; ST.ok(mkRem(c1).some(function(x){ return /还有没付的钱：面诊费 Rp 300,000/.test(x.text); }), '面诊费没收：写金额（Rp 300,000）');
+      /* 弹窗：返回处理不离开；确认离开 + Timeline */
+      c1.consultStatus = 'awaiting_report'; openCaseDetail(c1.id); openEndCase();
+      var ov = document.getElementById('leave-remind-overlay'); ST.ok(ov && ov.classList.contains('open') && /客人离开前请确认/.test(ov.textContent) && /面诊诊疗方案还没出/.test(ov.textContent) && /返回处理/.test(ov.textContent) && /确认离开/.test(ov.textContent), '跳「客人离开前请确认：」，逐条列出，［返回处理］［确认离开］');
+      leaveRemindClose(); ST.ok(!c1.leftStore && !isEnded(c1) && !(document.getElementById('end-case-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open'), '［返回处理］不离开');
+      openEndCase(); leaveRemindConfirm();
+      ST.ok((c1.logEntries||[]).some(function(l){ return /客人离店时仍有：/.test(l.action||'') && /面诊诊疗方案还没出/.test(l.action||''); }), '［确认离开］→ Timeline 记「客人离店时仍有：…」');
+      var eo = document.getElementById('end-case-overlay'); ST.ok(isEnded(c1) || (eo && eo.classList.contains('open')), '确认离开后继续原来的离店流程（直接结束或弹原来的结案窗）');
+      closeEndCase();
+      /* 复诊评估结果没到 */
+      var c2 = mk({revisitEval:true, consultRequested:true, consultStatus:'paid_waiting_kr', needsConsult:true}); ST.ok(mkRem(c2).some(function(x){ return /复诊评估结果还没到（KR 还没确认评估时间）/.test(x.text); }), '复诊评估结果还没到（KR 还没确认评估时间）');
+      c2.consultStatus = 'awaiting_report'; ST.ok(mkRem(c2).some(function(x){ return /等院长评估/.test(x.text); }), '→ 等院长评估');
+      /* 未付结算单 */
+      var c3 = mk({settlementBatches:[{id:'B9', status:'unpaid', inTotal:2500000, krDeposit:0}]}); ST.ok(mkRem(c3).some(function(x){ return /结算单 B9（Rp 2,500,000）/.test(x.text); }), '结算单没付：写批次和金额');
+      /* 下一步没约 + 院长建议复诊没约 → 带［去处理］ */
+      m.krBalancePaid = true; var P = mainPendingBook(m);
+      if(P.inN>0){ var cn = mk({mainId:m.id, preChild:true, name:m.name}); var rn = leaveRemindersIN(cn); ST.ok(rn.some(function(x){ return /下一步还没约：印尼术后管理 \d+ 项/.test(x.text) && /todoCbOpen/.test(x.go||''); }) || (P.inEarly && P.inEarly > ymdAdd(td, 7)), '下一步还没约：印尼术后管理 N 项，附［去处理］→ 预约弹窗'); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==cn.id; }); }
+      var ev = CASE_ITEMS.filter(function(x){ return x.mainId===m.id && isRevEval(x); })[0]; if(!ev){ ev = createReservationCase(m.name, null, ymdAdd(td, -3), '10:00', null, '复诊评估'); ev.mainId = m.id; ev.revisitEval = true; ev.reportReady = true; ev.preChild = true; }
+      var oldNext = ev.revisitNext; ev.revisitNext = {type:'1m', label:'1 个月后', date:ymdAdd(td, 30)}; ev.reportReady = true; var cm = mk({mainId:m.id, preChild:true, name:m.name});
+      ST.ok(leaveRemindersIN(cm).some(function(x){ return /院长建议 .*复诊，还没预约/.test(x.text) && /revBookOpen/.test(x.go||''); }), '院长建议复诊还没预约：提醒 + ［去处理］→ ［预约复诊］');
+      CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==cm.id; }); ev.revisitNext = oldNext;
+    }finally{ window.alert = oa; window.confirm = oc; window.GMC_NO_LEAVEREMIND = og; leaveRemindClose(); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.name!=='T-离店提醒'; }); }
+  });
+  ST.def('R161b','CMD-1028-02（KM1 分页，pcStage 夹具）：KR 按［客人已离院］前提醒（今天的项目没处理 / 尾款 / 施术当天术后管理没约 / 在韩期间没填），确认离院 + Timeline，没有未完成直接走原来的确认窗',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr(), og = window.GMC_NO_LEAVEREMIND; window.GMC_NO_LEAVEREMIND = false;
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    try{
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.krBalancePaid = true; c.krTripEnded = null; c.stay = null; c.hasArrived = true; c.krProcedureDone = false; });
+      KR_CASE.clinicId = cid; KR_CASE.id = r0.id; KR_CASE.day = '';
+      var rem = Store.withClinic(cid, function(){ return krLeaveReminders(gc(), 'main'); });
+      ST.ok(rem.some(function(x){ return /在韩期间（离开日期）还没填/.test(x.text) && /krStayFixOpen/.test(x.go||''); }), '在韩期间没填：提醒 + ［去处理］→ 行程修正');
+      ST.ok(rem.some(function(x){ return /术后管理还有 \d+ 项没预约/.test(x.text) && /krCbOpen/.test(x.go||''); }) || Store.withClinic(cid, function(){ return careSlotList(gc()).length; })===0, '施术当天：术后管理没预约 → 提醒 + ［去处理］→ 预约弹窗');
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.krBalancePaid = false; });
+      var rem2 = Store.withClinic(cid, function(){ return krLeaveReminders(gc(), 'main'); }); ST.ok(rem2.some(function(x){ return /还有没付的钱：尾款/.test(x.text); }), '尾款没付：写「尾款 ₩…」');
+      var left = Store.withClinic(cid, function(){ return todayOpenRows(gc()).length; });
+      if(left>0) ST.ok(rem2.some(function(x){ return /今天的项目还没处理：/.test(x.text) && x.projects; }), '今天的项目没处理：列项目名');
+      /* 弹窗：有提醒 → 提醒窗；［返回处理］不离院；［确认离开］→ Timeline */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.krBalancePaid = true; c.stay = null; });
+      krEndAskOpen('main', true);
+      var ov = document.getElementById('leave-remind-overlay'); ST.ok(ov && ov.classList.contains('open') && /客人离开前请确认/.test(ov.textContent) && /确认离开/.test(ov.textContent) && /返回处理/.test(ov.textContent), '有未完成的事 → 跳「客人离开前请确认：」');
+      leaveRemindClose(); ST.ok(!gc().krProcedureDone, '［返回处理］不离院');
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; (c.subItems||[]).forEach(function(s){ if(s.date===td) s.done = true; }); });
+      var nLog = gc().logEntries.length; krEndAskOpen('main', true); leaveRemindConfirm();
+      ST.ok(gc().logEntries.slice(nLog).some(function(l){ return /客人离院时仍有：/.test(l.action||''); }), '［确认离开］→ Timeline 记「客人离院时仍有：…」');
+      /* 没有任何未完成：照旧的确认窗 */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.krTripEnded = {at:nowFullDt()}; c.stay = {in:td, out:ymdAdd(td, 5)}; c.krBalancePaid = true; });
+      var rem3 = Store.withClinic(cid, function(){ return krLeaveReminders(gc(), 'main').filter(function(x){ return !x.projects; }); });
+      ST.ok(rem3.length===0, '在韩期间填了、行程已结束、尾款付清 → 没有其它提醒');
+    }finally{ window.GMC_NO_LEAVEREMIND = og; leaveRemindClose(); }
   });
   ST.def('R160a','CMD-1028-01（A1 分页，pcStage 夹具）：从主案件约的预约直接是主案件的子案件（不另开案件号）· 客人页缩排 · 日历一天一格 · 到店对话框带出 · 取消 / 一般预约不变',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
