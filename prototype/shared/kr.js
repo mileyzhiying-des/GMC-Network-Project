@@ -1189,7 +1189,7 @@ function krProjCards(c, opts){
   var mU = [], mB = [], mD = [], mK = [];
   mgItems.filter(function(it){ return !it.cancelled && !it.swapped; }).forEach(function(it){
     var nm = krEsc(buyName(it.name)), qty = it.qty||1, ivT = krMgIntervalText(it), ik = itemIid(it), SG = krSrcTag(it);
-    if(!it.heldOver && !it.service){ mU.push(krMgRow(nm, (it.heldOver ? '' : mgmtQtyText(it)+' ')+'<span style="color:#B3261E;">待付款</span>', ivT, krMgSuggest(c, it, 0) || '—', krBuyTime(c, it), useBtns(ik, true), null, delBtn(ik), SG)); return; }
+    if(!it.heldOver && !it.service){ mU.push(krMgRow(nm, (it.heldOver ? '' : mgmtQtyText(it)+' ')+'<span style="color:#B3261E;">'+(it.pendingPay ? '待付款' : '待付尾款')+'</span>', ivT, krMgSuggest(c, it, 0) || '—', krBuyTime(c, it), useBtns(ik, true), null, delBtn(ik), SG)); return; }
     var planned = (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped && !s.useNow; }), plannedN = planned.reduce(function(n, s){ return n+Math.max(1, parseInt(s.useQty, 10)||1); }, 0), left = holdItemLeft(c, it) - plannedN, used = (it.holdUsed||0), todayN = mgTodayQty(c, it); /* 本次使用加进今天的行不算已预约：项目卡写「剩 3 / 共 3 次 · 今天使用 2 次」，做完（操作完成）才扣（CMD-1021-14 四） */
     if(pickMode){ /* 选今日进行项目的勾选画面：照旧一行 */
       if((left>0 || todayN>0) && !it.holdDone) mU.push(krMgRow(nm, '剩 '+left+' / 共 '+qty+' 次'+(todayN ? ' · 今天使用 '+todayN+' 次' : '')+(it.pendingPay ? ' <span style="color:#B3261E;">待付款</span>' : ''), ivT, krMgSuggest(c, it, used+plannedN) || '—', krBuyTime(c, it), useBtns(ik, false), {kind:'mg', name:ik}, delBtn(ik), SG));

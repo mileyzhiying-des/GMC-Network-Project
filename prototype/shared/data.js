@@ -10031,8 +10031,54 @@ function useV2Tabs(c){ return !!c && !!c.materialsConfirmed && !isChildVisit(c) 
 /* ===== CMD-1028-09：「在韩管理」升级成流程，主案件有自己的 tab（和术后管理平级）；赴韩施术 tab 只放施术 =====
    开始：管理项目付清尾款、转在韩持有时（在韩加购的从付款那天起；待付款的也先列出来）；结束：全部用完，或按了［韩国行程结束］（没用完的转韩国持有，tab 显示 ✓，不影响主案件变已完成——持有项目不算「该做的事」）。
    KR 可约；IN 只读（管理项目只在韩国做）。 */
-function mgmtFlowItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && krIsMgmtItemC(it) && !it.cancelled && !it.swapped && it.heldOver; }); }
+/* CMD-1028-13 三：付定金那天起就列出来（原来要等付清尾款 / 在韩加购才有 heldOver，付完定金到赴韩之前买了的管理项目哪里都看不到）；还没付尾款的标「待付尾款」、不能约 */
+function itemBatchPaid(c, it){ var b = (c.settlementBatches||[]).filter(function(x){ return x.id===it.batchId; })[0]; return b ? b.status!=='unpaid' : !!c.krDepositPaid; }
+function mgmtFlowItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && krIsMgmtItemC(it) && !it.cancelled && !it.swapped && (it.heldOver || ((it.mgmtPlan || isLocalKrItem(it)) && itemBatchPaid(c, it))); }); }
 function hasMgmtFlow(c){ return mgmtFlowItems(c).length>0; }
+/* IN 主案件「管理项目」tab 的本地管理段：这个主案件（含它的子记录）买的本地项目批次；KR 看不到 */
+function localMgmtBatchesOf(m){ var ids = [m.id].concat(childVisitsOf(m).map(function(x){ return x.id; })); return localPurchasedBatchesOf(m, ids); }
+function hasLocalMgmt(m){ try{ return localMgmtBatchesOf(m).length>0; }catch(e){ return false; } }
+function localBatchSrc(b){ return b.comp ? '置换' : b.service ? '서비스' : (b.pkg || b.pkgPaid) ? '套餐' : b.promo ? '活动价' : '单品'; }
+function inMgmtTabHtml(c){
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, md = function(d){ return e(String(d||'').slice(5, 10).replace('-', '/')); };
+  var G = function(cols){ return 'display:grid;grid-template-columns:'+cols+';gap:8px;align-items:center;'; };
+  var hd = function(cols, names){ return '<div style="'+G(cols)+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+names.map(function(n){ return '<span>'+n+'</span>'; }).join('')+'</div>'; };
+  var rw = function(cols, cells){ return '<div style="'+G(cols)+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;">'+cells.map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; };
+  var pill = function(t, bg, fg){ return '<span class="status-pill" style="background:'+bg+';color:'+fg+';white-space:nowrap;">'+t+'</span>'; };
+  var out = '', kr = mgmtFlowItems(c);
+  if(kr.length){
+    var C1 = 'minmax(0,1.6fr) 96px 96px minmax(0,1.3fr) 84px', ks = c.krSchedule || {};
+    var rows = kr.map(function(it){
+      var total = it.qty||1, left = Math.max(0, holdItemLeft(c, it)), iid = itemIid(it);
+      var booked = (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+      var times = booked.map(function(s){ return md(s.date)+(s.time ? ' '+e(s.time) : ''); });
+      if(holdItemTodayPicked(c, it)>0) times.unshift(md(mainVisitDay(c))+(ks.confirmedTime ? ' '+e(ks.confirmedTime) : ''));
+      var kept = it.heldOver ? Math.min(stayKeepN(c, 'mg|'+iid), Math.max(0, holdItemBookable(c, it))) : 0;
+      var st = it.pendingPay ? pill('待付款', '#FDECEA', '#B3261E') : (!it.heldOver ? pill('待付尾款', '#FDECEA', '#B3261E')
+        : (it.holdDone || left<=0) ? pill('已完成', 'var(--sage-bg)', 'var(--sage)')
+        : times.length ? pill('预约中', '#E8EEF6', '#2F5F86')
+        : kept>0 ? pill('保留', '#EFEBE4', 'var(--slate2)')
+        : c.krTripEnded ? pill('韩国持有', '#EFEBE4', 'var(--slate2)') : pill('在韩持有', '#E4EEE7', '#2F6B4A'));
+      var src = (it.krAddOn || it.preBalanceAdd) ? '在韩购买' : '印尼购买';
+      return rw(C1, [e(buyName(it.name))+(it.service ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">서비스</span>' : ''), '剩 '+left+' / 共 '+total+' 次', st, times.length ? times.join('、') : '<span style="color:var(--muted);">—</span>', src]);
+    }).join('');
+    out += '<div class="info-heading" style="margin:2px 0 4px;">在韩管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">管理项目只在韩国做，由 KR 预约（这里只读）；付定金起就列出来，付清尾款后 KR 才能约</span></div>'+inSmallCard(hd(C1, ['项目', '次数', '状态', '预约时间', '来源'])+rows);
+  }
+  var lb = []; try{ lb = localMgmtBatchesOf(c); }catch(er){}
+  if(lb.length){
+    var C2 = 'minmax(0,1.6fr) 96px 84px 84px', held = [], fin = [];
+    lb.forEach(function(x){ var b = x.b, left = (b.bought||0)-(b.used||0); ((b.refund || b.voided || left<=0) ? fin : held).push(x); });
+    var one = function(x){
+      var b = x.b, nm = x.h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : ''), left = (b.bought||0)-(b.used||0), us = (b.usages||[]).slice().sort(function(a, z){ return String(a.date||'').localeCompare(String(z.date||'')); });
+      var tag = (b.refund || b.voided) ? ' '+pill('已退款', '#EDEAE2', 'var(--muted)') : '';
+      var inner = us.length ? us.map(function(u){ return '<div style="display:flex;gap:12px;align-items:center;padding:4px 0;font-size:12px;"><span>'+md(u.date)+'</span><span>'+(u.qty||1)+' 次</span><a href="#" onclick="sumGoCase(\''+c.id+'\',\''+e(u.date)+'\');return false;" style="text-decoration:underline;">查看案件</a></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);padding:4px 0;">还没使用</div>';
+      return '<details style="border-top:1px solid var(--border2);padding:6px 0;"><summary style="cursor:pointer;list-style:none;'+G(C2)+'font-size:13px;"><span><span style="color:var(--muted);">▸</span> '+e(nm)+tag+'</span><span>剩 '+Math.max(0, left)+' / 共 '+(b.bought||0)+' 次</span><span>'+md(b.date)+'</span><span>'+localBatchSrc(b)+'</span></summary><div style="margin:4px 0 2px 18px;">'+inner+'</div></details>';
+    };
+    var sec = function(t, list){ return list.length ? inSecTitle(t, list.length)+inSmallCard(hd(C2, ['项目', '剩余次数', '购买日期', '来源'])+list.map(one).join('')) : ''; };
+    out += '<div class="info-heading" style="margin:'+(out ? '18px' : '2px')+' 0 4px;">本地管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">这个案件买的本地项目；使用在当天的子案件里按［本次使用］，这里只看（点开看每一次使用）</span></div>'+sec('持有中', held)+sec('已完成', fin);
+  }
+  return '<div class="card" style="padding:22px 24px;">'+(out || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有管理项目</div>')+'</div>';
+}
 /* 一个韩国 / 印尼的日子里有哪几种流程的项目（术后管理 / 在韩管理 / 赴韩施术）：每个流程 tab 的「相关子案件」只列有这个流程项目的那几天；同一天有几种就在几个 tab 都出现。业务类型标签（v.types）不变 */
 function dayFlowKinds(m, v){
   var k = {surg:false, care:false, mgmt:false}, types = v.types||[];
@@ -10050,11 +10096,11 @@ function dayFlowKinds(m, v){
   return k;
 }
 /* 流程 tab 上的标记：✓ 已结束 / ● 还有事 */
-function flowMarkOf(m, kind){
+function flowMarkOf(m, kind, side){
   var done = false;
   if(kind==='consult') done = !!(m.reportReady || m.consultStatus==='report_ready');
   else if(kind==='kr') done = !!m.krTripEnded;
-  else if(kind==='kmgmt') done = !!m.krTripEnded || mgmtFlowItems(m).every(function(it){ return !!it.holdDone || holdItemLeft(m, it)<=0; }); /* CMD-1028-09：全部用完，或按了韩国行程结束（没用完的转韩国持有） */
+  else if(kind==='kmgmt'){ done = !!m.krTripEnded || mgmtFlowItems(m).every(function(it){ return !!it.holdDone || holdItemLeft(m, it)<=0; }); if(side==='IN' && done){ try{ done = localMgmtBatchesOf(m).every(function(x){ return !!x.b.refund || !!x.b.voided || (x.b.bought||0)-(x.b.used||0)<=0; }); }catch(er){} } } /* CMD-1028-13：IN 的「管理项目」tab 另含本地管理，本地项目没用完也算 ● */ /* CMD-1028-09：全部用完，或按了韩国行程结束（没用完的转韩国持有） */
   else if(kind==='postcare') done = !pendingCareOf(m).length && !careUnits(m).unbooked.length; /* CMD-1026-19 B6：韩国和印尼的术后管理都做完（或过一个月转成管理项目）才 ✓，不再要求韩国行程已结束；IN / KR 两端同一个函数 */
   else if(kind==='revisit'){ var rv = childVisitsOf(m).filter(function(x){ return isRevEval(x); }); done = rv.length>0 && rv.every(function(x){ return !!(x.reportReady || x.consultStatus==='report_ready') || isEnded(x); }); }
   return done ? '✓' : '●';
@@ -10069,7 +10115,7 @@ function caseTabListOf(c){
     if(c.consultRequested) out.push({key:'consult', label:'面诊', mark:flowMarkOf(c, 'consult')});
     if(showKrTab(c) || (c.procedureItems||[]).some(function(it){ return it.origin==='KR'; })) out.push({key:'kr', label:'赴韩施术', mark:flowMarkOf(c, 'kr')});
     if(careRows(c).length || c.krProcedureDone || careUnits(c).unbooked.length) out.push({key:'postcare', label:'术后管理', mark:flowMarkOf(c, 'postcare')});
-    if(hasMgmtFlow(c)) out.push({key:'kmgmt', label:'在韩管理', mark:flowMarkOf(c, 'kmgmt')}); /* CMD-1028-09 */
+    if(hasMgmtFlow(c) || hasLocalMgmt(c)) out.push({key:'kmgmt', label:'管理项目', mark:flowMarkOf(c, 'kmgmt', 'IN')}); /* CMD-1028-13 三：IN 的「在韩管理」tab 改叫「管理项目」，里面分在韩管理 / 本地管理两段；KR 的 tab 仍叫「在韩管理」 */
     if(flowsOf(c).some(function(f){ return f.kind==='revisit'; })) out.push({key:'revisit', label:'复诊', mark:flowMarkOf(c, 'revisit')});
     out.push({key:'visits', label:'子案件'}, {key:'summary', label:'项目汇总'});
   }
@@ -10156,7 +10202,7 @@ function inRevisitTabHtml(c){
       if(lt0===localBoughtHtml(c)) lt0 = ''; /* 只是只读的「本次购买」卡 = 汇总本身，不重复 */
       return summaryTabHtml(c)+(lt0 ? '<div style="margin-top:14px;">'+lt0+'</div>' : ''); }
     if(t==='postcare') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('术后管理', function(){ return pcmHtml(c, 'IN'); }); /* CMD-1027-09：IN / KR 同一个组件 */
-    if(t==='kmgmt') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('在韩管理', function(){ return inProjectCardHtml(c, 'mgmt'); }); /* CMD-1028-09：IN 只读 */
+    if(t==='kmgmt') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('管理项目', function(){ return inMgmtTabHtml(c); }); /* CMD-1028-09：IN 只读 */
     if(t==='revisit') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('复诊', function(){ return inRevisitTabHtml(c); });
     if(t==='consult') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+(!up && showKrTab(c) && (c.consultStatus!=='report_ready' || consultPlanOpen(c)) ? consultTabHtml(c)+krTabContent(c) : consultTabHtml(c)); /* CMD-1026-01 五：报告刚出来（Step 1）不挂赴韩方案卡，按［查看方案］后才出现 */ /* 没升级：选项目的卡也在面诊 tab（诊疗方案已出 → 客人选项目） */
     if(t==='kr') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('赴韩施术', function(){ return krTabContent(c); });
