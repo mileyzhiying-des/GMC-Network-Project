@@ -178,6 +178,8 @@ var Store = (function(){
   }
   function writeKey(key, json){
     if(window.GMC_LOAD_PROTECT) return; /* CMD-1022-12：读档失败保护中，不往存档里写任何东西（包括种子） */
+    try{ if(window.GMC_EPOCH !== undefined && !window.GMC_EPOCH_STALE && (localStorage.getItem('gmc_cfg_epoch') || '') !== window.GMC_EPOCH){ /* CMD-1028-16：别的分页做过升级 / 清空 / 重置——本页内存里是旧资料，不能写回去，重新载入拿新的 */
+      window.GMC_EPOCH_STALE = true; window.GMC_NO_SAVE = true; console.warn('[存档] 存档已被升级 / 清空，本页旧资料不再写入，重新载入'); setTimeout(function(){ try{ location.reload(); }catch(e){} }, 50); return; } }catch(e0){}
     localStorage.setItem(key, json);
   }
   /* ---- 存档：只写变了的部分；写失败（容量超限等）→ 清掉存档，提示并停止存档 ---- */
@@ -575,8 +577,8 @@ var Store = (function(){
       if(i > -1){ target[i] = x; noteFn('更新'+label); } else { if(idPrefix && target.some(function(y){ return y.id===x.id; })) x.id = idPrefix + x.id; target.push(x); noteFn('新增'+label); } });
   }
   function carryRestore(){
-    var raw = null; try{ raw = localStorage.getItem('gmc_cfg_carry'); }catch(e){} if(!raw) return;
-    var carry = null; try{ carry = JSON.parse(raw); }catch(e){}
+    var raw = null; try{ raw = localStorage.getItem('gmc_cfg_carry'); }catch(e){} if(!raw && !window.GMC_CARRY_MEM) return;
+    var carry = null; try{ carry = raw ? JSON.parse(raw) : window.GMC_CARRY_MEM; }catch(e){} /* CMD-1028-16：存档空间不够时用户案件只放在内存里（已下载备份文件），同一次载入内写回新存档 */
     var report = {from:carry && carry.from, to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[], notes:[]};
     if(!carry || !carry.clinics){ try{ localStorage.removeItem('gmc_cfg_carry'); }catch(e){} return; }
     var fromVer = parseInt(carry.from, 10) || 0, g = readRaw(KEY_G), idMap = {};
@@ -651,7 +653,7 @@ var Store = (function(){
       writeKey(KEY_G, JSON.stringify(g, replacer));
     }
     window.GMC_CARRY_CHECK = {expect:carry.total||0, migrated:report.migrated, failed:report.failed.length}; /* CMD-1020-12：升级后数量核对用 */
-    try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify(report)); localStorage.removeItem('gmc_cfg_carry'); }catch(e){}
+    try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify(report)); localStorage.removeItem('gmc_cfg_carry'); window.GMC_CARRY_MEM = null; }catch(e){}
   }
 
   /* 操作之后（点击、输入、选择、键盘）稍后存档；另外每 2 秒兜底一次；页面离开/隐藏时再存一次 */

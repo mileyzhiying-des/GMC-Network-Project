@@ -246,6 +246,15 @@
     st.innerHTML = (active ? '<b style="color:#8F6F0C;">演示时间生效中</b>' : (c ? '演示时间已到恢复点，现在是真实时间' : '未设定，现在是真实时间'))+'　现在原型时间：韩国 <b>'+krStr(demoUtc)+'</b>（印尼 '+inStr(demoUtc)+'）'+(sh ? '　（含拨时钟按钮累计 '+(sh/3600000).toFixed(1)+' 小时）' : '')+(active && c.restoreUtc ? '　真实时间（韩国）'+krStr(c.restoreUtc)+' 自动恢复，还有 '+Math.max(0, Math.round((c.restoreUtc-now)/60000))+' 分钟' : '');
   }
   setInterval(function(){ try{ demoTimeTick(); }catch(e){} }, 1000);
+  /* CMD-1028-16：存档空间——已用 X MB / 约 5 MB（按字符算，localStorage 上限约 5.24M 字符）；超过 80% 变橙、90% 变红，并写上最大的几项 */
+  function storeLine(){
+    var el = document.getElementById('storebar'); if(!el) return; var rows = [], t = 0;
+    try{ for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i), n = k.length + (window.gmcRawGet ? window.gmcRawGet(k) : (localStorage.getItem(k)||'')).length; t += n; rows.push([k, n]); } }catch(e){}
+    var Q = 5242880, pct = Math.round(t / Q * 100), col = pct >= 90 ? '#B3261E' : pct >= 80 ? '#C26A1B' : 'inherit';
+    rows.sort(function(a, b){ return b[1] - a[1]; });
+    el.innerHTML = '存档空间：已用 <b style="color:'+col+'">'+(t/1048576).toFixed(1)+' MB</b> / 约 '+(Q/1048576).toFixed(0)+' MB（'+pct+'%）'+(pct >= 80 ? '　<span style="color:'+col+';font-weight:700;">'+(pct >= 90 ? '快满了：升级 / 清空前会先清掉旧的自动备份腾地方；还是不够时会请你先下载备份' : '偏多，建议先［导出完整备份］')+'</span>' : '')+'　<span style="color:var(--muted,#888);">最大：'+rows.slice(0, 3).map(function(r){ return r[0].replace(/^gmc_/, '')+' '+(r[1]/1048576).toFixed(2)+'MB'; }).join('、')+'</span>';
+  }
+  setInterval(function(){ try{ storeLine(); }catch(e){} }, 3000); setTimeout(function(){ try{ storeLine(); }catch(e){} }, 300);
   /* CMD-1028-07 ［到第二天 10:00］：一天 = 印尼时间 10:00 开始到第二天 00:00。按一次 = 先把演示时间拨到下一天 00:00:03（经过 00:00，让关账 / 过离开日期结束行程 / 未到店 / 转管理项目等照常发生），
      等各分页扫完，再拨到下一天 10:00（印尼 = 韩国 12:00），之后照常往前走。设定写 gmc_cfg_demotime，所有分页收到 storage 事件后立刻扫一遍（见 todo.js demoJumpSweep）。 */
   var JK = 7*3600000, WD = ['日','一','二','三','四','五','六'], JUMPING = false;
@@ -285,7 +294,10 @@
     if(!confirm('清空所有案件和客人？\n\n会先下载一份完整备份（JSON）。账号、诊所 / 医院设定、项目库、案例会保留，案件号从 A000001 重新开始。\n已打开的原型分页会自动刷新。')) return;
     try{ exportBackup(); }catch(e){ alert('导出备份失败，没有清空：'+e.message); return; }
     setTimeout(function(){ if(!confirm('备份已下载（请确认下载成功）。现在清空吗？')) return;
-      localStorage.setItem('gmc_cfg_wipecases', '1'); localStorage.removeItem('gmc_demo_ver');
+      /* CMD-1028-16：旗标写 'dl' = 已下载备份文件（升级路径据此允许在存档空间不够时继续清空）；存档快满时先删旧的自动备份腾出地方 */
+      var setFlag = function(){ localStorage.setItem('gmc_cfg_wipecases', 'dl'); };
+      try{ setFlag(); }catch(e0){ try{ Object.keys(localStorage).filter(function(k){ return /^gmc_backup_\d+$/.test(k); }).forEach(function(k){ localStorage.removeItem(k); }); setFlag(); }catch(e1){ alert('存档空间不够，没法设定清空。请先删掉一些东西再试。'); return; } }
+      localStorage.removeItem('gmc_demo_ver');
       alert('已设定清空。打开（或刷新）任一原型页面后生效；已打开的原型分页会自动刷新。'); }, 300);
   };
   window.fillRoundBar = fillRound;

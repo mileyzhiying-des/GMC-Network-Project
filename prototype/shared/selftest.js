@@ -5381,6 +5381,19 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!revAddPossible(cur) && /复诊评估/.test(subVisitTabHtml(cur)), '之后不能重复增加，到访 tab 里复诊评估已勾（不可改）');
     } finally { window.confirm = oc; window.alert = oa; window.GMC_NO_INFO = ogi; try{ closeSubcase(m.id); }catch(e){} try{ inAddItemClose(); contClose(); }catch(e){} var back = JSON.parse(snap); CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!==m.id && x.mainId!==m.id; }).concat(back); try{ Store.touch(); }catch(e){} }
   });
+  ST.def('R180a','CMD-1028-16（任意分页）：存档快满时的腾空间——只清能重建的、不改原 carry、显示存档空间',function(){
+    var keys = ['gmc_backup_111','gmc_cfg_usersafe','rt_res_X','gmc_cfg_stsnap','gmc_clinic_ZZ'], old = {}; keys.forEach(function(k){ old[k] = localStorage.getItem(k); });
+    try{
+      keys.forEach(function(k){ localStorage.setItem(k, 'x'); });
+      ST.ok(gmcFreeLevel(1) && localStorage.getItem('gmc_backup_111')===null && localStorage.getItem('gmc_cfg_usersafe')!==null, '第 1 层只清旧的自动备份');
+      ST.ok(gmcFreeLevel(2) && localStorage.getItem('rt_res_X')===null && localStorage.getItem('gmc_cfg_stsnap')===null && localStorage.getItem('gmc_cfg_usersafe')!==null, '第 2 层清测试缓存，用户案件安全备份还在');
+      ST.ok(gmcFreeLevel(3) && localStorage.getItem('gmc_cfg_usersafe')===null, '第 3 层才动用户案件安全备份（只在存 carry 时用）');
+      ST.ok(localStorage.getItem('gmc_clinic_ZZ')==='x', '任何一层都不碰诊所存档');
+    } finally { keys.forEach(function(k){ if(old[k]===null) localStorage.removeItem(k); else localStorage.setItem(k, old[k]); }); }
+    var c0 = {total:3, seq:5, cfg:{C1:{}}, clinics:{C1:{cases:[1,2,3]}}, hospitals:{H1:{}}}, o = gmcCarryDropCases(c0);
+    ST.ok(c0.total===3 && c0.clinics.C1.cases.length===3 && o.total===0 && o.clinics.C1.cases.length===0, '清空用的 carry 是新对象，原来的完整内容不被改（先存安全备份要用）');
+    ST.ok(/MB \/ 约 5 MB/.test(gmcUsedText()) && gmcUsedChars()>0, '存档空间文字');
+  });
   ST.def('R179a','CMD-1028-14 八（A1 分页）：施术时间确认后 IN 取消其中一个项目——施术一行按剩下的项目重写、它的术后管理一起取消、麻醉同意书不用再确认',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑'))  return;
     var c = ST.toConfirmed('R179A', ['切开双眼皮', '假体隆鼻']); ST.open(c);

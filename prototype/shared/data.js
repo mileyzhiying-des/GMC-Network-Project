@@ -78,19 +78,37 @@ function gmcExtractUserCarry(){
 /* CMD-1015-06：升级到 44 时一次性不保留任何案件 / 客人（项目库、活动价、套餐、案例、memo 里用户改过的仍照旧保留） */
 function gmcCarryDropCases(carry){
   if(!carry) return carry;
-  carry.total = 0; carry.seq = 0; carry.hospitals = {};
-  var cl = {}; Object.keys(carry.cfg || {}).forEach(function(cid){ cl[cid] = {cases:[], clients:[], holdings:{}, notifs:[], rooms:[], chat:{}, sms:[]}; });
-  carry.clinics = cl; return carry;
+  var o = Object.assign({}, carry); /* CMD-1028-16：不改原对象（升级路径还要用原来的完整内容先存安全备份） */
+  o.total = 0; o.seq = 0; o.hospitals = {};
+  var cl = {}; Object.keys(o.cfg || {}).forEach(function(cid){ cl[cid] = {cases:[], clients:[], holdings:{}, notifs:[], rooms:[], chat:{}, sms:[]}; });
+  o.clinics = cl; return o;
 }
 /* 测试脚本留在 localStorage 里的记录（不带 gmc_ 前缀，重置时一起清）：roletest 结果、selftest 跨账号暂存 */
 /* CMD-1015-13：四个试行开关已收掉，浏览器里存的开关设定不再读取，顺手清掉 */
 try{ ['gmc_cfg_newclose','gmc_cfg_newtodo','gmc_cfg_newcal','gmc_cfg_newstyle'].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
 function gmcClearTestKeys(){ try{ Object.keys(localStorage).filter(function(k){ return /^(rt_res_|rt_st_|__T2_)/.test(k); }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){} }
 /* 提取结果存起来；只有真的提取到案件才覆盖（手动「只重置演示数据」后重载会再走一次版本检查，那时存档已空，不能把刚存的清掉） */
-function gmcStoreCarry(carry){
+function gmcStoreCarry(carry, maxLevel){
   if(!carry || (!carry.total && !carry.cfgN)) return true;
-  try{ localStorage.setItem('gmc_cfg_carry', JSON.stringify(carry)); return true; }
-  catch(e){ try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:carry.from, to:null, at:carry.at, migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'存档容量不够，用户案件没能保留（旧数据在自动备份里）'}]})); }catch(e2){} return false; }
+  if(gmcSetRoom('gmc_cfg_carry', JSON.stringify(carry), maxLevel || 3)) return true; /* CMD-1028-16：空间不够先清掉能重建的东西（旧自动备份 / 测试缓存 / 旧的用户案件安全备份）再存 */
+  try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:carry.from, to:null, at:carry.at, migrated:0, failed:[{caseNo:'（全部）', name:'', reason:'存档容量不够，用户案件没能保留（旧数据在自动备份里）'}]})); }catch(e2){}
+  return false;
+}
+/* ===== CMD-1028-16：存档快满时的腾空间 =====
+   localStorage 约 5MB（按字符算）。升级 / 清空 / 重置要先把用户案件再存一份（gmc_cfg_carry），存档快满时存不下 → 以前直接「升级已停止」。
+   现在：先只清「能重建的」东西，一层一层来，够了就停：① 旧的自动备份 gmc_backup_*（升级时会重新做一份新的）② 测试缓存（rt_res_ / __T2_ / gmc_cfg_stsnap / gmc_cfg_stfix / gmc_cfg_rawsafe）
+   ③ 旧的用户案件安全备份 gmc_cfg_usersafe（只在存 gmc_cfg_carry 时用：carry 就是新的那一份）。**绝不动**当前存档（gmc_state / gmc_clinic_*）和用户案件。 */
+var GMC_QUOTA = 5242880;
+function gmcUsedChars(){ var t = 0; try{ for(var i = 0; i < localStorage.length; i++){ var k = localStorage.key(i); t += k.length + (typeof gmcRawGet==='function' ? gmcRawGet(k) : (localStorage.getItem(k)||'')).length; } }catch(e){} return t; }
+function gmcFreeLevel(n){
+  var ks = []; try{ ks = Object.keys(localStorage); }catch(e){}
+  var kill = n===1 ? ks.filter(function(k){ return /^gmc_backup_\d+$/.test(k); }) : n===2 ? ks.filter(function(k){ return /^(rt_res_|rt_st_|__T2_)/.test(k) || k==='gmc_cfg_stsnap' || k==='gmc_cfg_stfix' || k==='gmc_cfg_rawsafe'; }) : n===3 ? ks.filter(function(k){ return k==='gmc_cfg_usersafe'; }) : [];
+  kill.forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} }); return kill.length>0;
+}
+function gmcSetRoom(key, val, maxLevel){
+  try{ localStorage.setItem(key, val); return true; }catch(e){}
+  for(var lv = 1; lv <= (maxLevel || 2); lv++){ if(!gmcFreeLevel(lv)) continue; try{ localStorage.setItem(key, val); return true; }catch(e2){} }
+  return false;
 }
 /* ===== CMD-1020-12：用户案件保护 =====
    ① gmcUserSafeSave：任何会清存档的地方（重置 / 数据版本升级 / 测试清理 / 存档读不出来重建）之前，把用户案件单独存一份到 localStorage `gmc_cfg_usersafe`
@@ -104,12 +122,14 @@ function gmcUserCaseCountRaw(){
   });
   return n;
 }
-function gmcUserSafeSave(reason){
+function gmcUserSafeSave(reason, carryIn){
   try{
-    var cry = gmcExtractUserCarry(); if(!cry.total && !cry.cfgN) return 0;
+    var cry = carryIn || gmcExtractUserCarry(); if(!cry.total && !cry.cfgN) return 0;
     var list = []; try{ list = JSON.parse(localStorage.getItem('gmc_cfg_usersafe') || '[]'); }catch(e){}
-    list.unshift({at:new Date().toISOString(), reason:reason||'', total:cry.total, carry:cry}); list = list.slice(0, 2);
-    localStorage.setItem('gmc_cfg_usersafe', JSON.stringify(list)); return cry.total;
+    var ent = {at:new Date().toISOString(), reason:reason||'', total:cry.total, carry:cry};
+    var tries = [[ent].concat(list).slice(0, 2), [ent]]; /* 存不下就只留最新一份（旧的那份是同一批案件的较旧版本） */
+    for(var i = 0; i < tries.length; i++){ if(gmcSetRoom('gmc_cfg_usersafe', JSON.stringify(tries[i]), 2)) return cry.total; }
+    return -1;
   }catch(e){ console.error('[用户案件保护] 存安全备份失败', e); return -1; }
 }
 function gmcUserSafeList(){ try{ return JSON.parse(localStorage.getItem('gmc_cfg_usersafe') || '[]').map(function(x){ return {at:x.at, reason:x.reason, total:x.total}; }); }catch(e){ return []; } }
@@ -119,8 +139,17 @@ function gmcUserSafeRestore(i){
   Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
   gmcBackupKeep(bk); console.log('[用户案件保护] 已恢复 '+x.total+' 个用户案件（'+x.at+'），刷新页面生效'); return x.total;
 }
-function gmcShowBlock(msg){
-  try{ window.GMC_NO_SAVE = true; var show = function(){ if(document.getElementById('gmc-block-bar')) return; var d = document.createElement('div'); d.id = 'gmc-block-bar'; d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:200000;background:#B3261E;color:#fff;padding:10px 16px;font-size:13px;font-weight:700;'; d.textContent = msg; (document.body || document.documentElement).appendChild(d); }; if(document.body) show(); else document.addEventListener('DOMContentLoaded', show); console.error(msg); }catch(e){}
+function gmcUsedText(){ var u = gmcUsedChars(); return (u/1048576).toFixed(1)+' MB / 约 '+(GMC_QUOTA/1048576).toFixed(0)+' MB'; }
+function gmcShowBlock(msg, withDl){
+  try{ window.GMC_NO_SAVE = true; var show = function(){ if(document.getElementById('gmc-block-bar')) return; var d = document.createElement('div'); d.id = 'gmc-block-bar'; d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:200000;background:#B3261E;color:#fff;padding:10px 16px;font-size:13px;font-weight:700;line-height:1.7;';
+    d.appendChild(document.createTextNode(msg));
+    if(withDl){ /* CMD-1028-16：存档空间不够时的下一步——先下载备份，再继续（用户案件不会丢） */
+      var mk = function(label, fn, dis){ var b = document.createElement('button'); b.textContent = label; b.id = 'gmc-blk-'+(dis?'go':'dl'); b.style.cssText = 'margin-left:12px;padding:3px 12px;font-size:13px;border-radius:6px;border:1px solid #fff;background:#fff;color:#B3261E;cursor:pointer;font-weight:700;'; if(dis){ b.disabled = true; b.style.opacity = .5; b.style.cursor = 'not-allowed'; } b.onclick = fn; d.appendChild(b); return b; };
+      var go = null;
+      mk('下载备份', function(){ var bk = window.GMC_UPGRADE_BK || gmcBackupMake('升级前手动下载'); if(!bk){ alert('没有可下载的资料'); return; } gmcDownloadText(bk.name, bk.str); if(go){ go.disabled = false; go.style.opacity = 1; go.style.cursor = 'pointer'; } });
+      go = mk('继续升级', function(){ try{ sessionStorage.setItem('gmc_upgrade_ok', '1'); }catch(e){} location.reload(); }, true);
+    }
+    (document.body || document.documentElement).appendChild(d); }; if(document.body) show(); else document.addEventListener('DOMContentLoaded', show); console.error(msg); }catch(e){}
 }
 function gmcCollectRaw(){ var o = {}; try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ o[k] = localStorage.getItem(k); }); }catch(e){} return o; }
 function gmcBackupMake(reason){
@@ -150,10 +179,10 @@ function gmcResetAll(reason, keepUser, confirmed){
   if(!keepUser && confirmed!==true && gmcUserCaseCountRaw()>0){ console.error('[重置] 拒绝：现在有用户案件，「全部清空」会把它们删掉。要保留请用 gmcResetAll(原因, true)；确实要全部清空请第三个参数传 true（登录页按钮确认后才会传）'); return false; }
   var bk = gmcBackupMake(reason || '手动重置演示数据');
   gmcUserSafeSave('重置前：'+(reason||'')); /* CMD-1020-12：用户案件单独存一份安全备份（不会被后面的重置清掉，也不会被普通备份覆盖） */
-  if(keepUser){ try{ gmcStoreCarry(gmcExtractUserCarry()); }catch(e){} } /* ① 只重置演示数据：保留我的测试案件 */
+  if(keepUser){ var okc = false; try{ okc = gmcStoreCarry(gmcExtractUserCarry()); }catch(e){} if(!okc){ console.error('[重置] 存档空间不够，用户案件没能先存起来——已停止，什么都没清'); try{ alert('存档空间不够，没法先把用户案件存起来，所以没有重置（什么都没动）。请先到测试覆盖页下载完整备份。'); }catch(e2){} return false; } } /* ① 只重置演示数据：保留我的测试案件（CMD-1028-16：存不下就停，不能清了再说） */
   else { try{ localStorage.removeItem('gmc_cfg_carry'); }catch(e){} } /* ② 全部清空 */
   try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
-  gmcBackupKeep(bk); gmcClearTestKeys(); return true;
+  gmcBackupKeep(bk); gmcClearTestKeys(); try{ localStorage.setItem('gmc_cfg_epoch', String(Date.now())); }catch(e){} return true; /* CMD-1028-16：新纪元，重置前开着的旧分页不能再写回旧资料 */
 }
 (function(){
   try{
@@ -174,17 +203,28 @@ function gmcResetAll(reason, keepUser, confirmed){
       }
       var bkv = gmcBackupMake('演示数据版本升级 '+(localStorage.getItem('gmc_demo_ver')||'?')+' → '+DEMO_DATA_VERSION); /* 升级前自动备份旧数据 */
       /* CMD-1020-12：升级前后用户案件数量必须对得上，否则停下来（不清存档、不写新版本、页面不写档） */
-      var oldV = parseInt(localStorage.getItem('gmc_demo_ver'), 10) || 0, rawN = gmcUserCaseCountRaw(), cry = null, blockMsg = '';
+      var oldV = parseInt(localStorage.getItem('gmc_demo_ver'), 10) || 0, rawN = gmcUserCaseCountRaw(), cry = null, blockMsg = '', cryFull = null, safeN = 0, needDl = false;
+      var wipeFlag = localStorage.getItem('gmc_cfg_wipecases') || '', wipe = oldV < 44 || !!wipeFlag, ssOk = false; try{ ssOk = sessionStorage.getItem('gmc_upgrade_ok')==='1'; }catch(e){}
+      var insured = ssOk || wipeFlag==='dl'; /* 已下载完整备份文件（测试覆盖页清空时先下载；升级停下来时用户按过［下载备份］）= 有文件做保险 */
       try{ cry = gmcExtractUserCarry(); }catch(e){ blockMsg = '提取用户案件时出错：'+e.message; }
       if(!blockMsg && oldV >= 44 && cry.total !== rawN) blockMsg = '用户案件数量对不上（存档里 '+rawN+' 个，提取出 '+cry.total+' 个）';
-      if(!blockMsg){ gmcUserSafeSave('升级 '+oldV+' → '+DEMO_DATA_VERSION+' 前'); if(oldV < 44 || localStorage.getItem('gmc_cfg_wipecases')==='1'){ cry = gmcCarryDropCases(cry); localStorage.removeItem('gmc_cfg_wipecases'); } /* CMD-1028-07：测试覆盖页［清空案件和客人］——和 44 那次一样丢掉案件 / 客人，保留账号、诊所 / 医院设定、用户改过的项目库 / 活动价 / 案例（上一行先存了安全备份） */ if(!gmcStoreCarry(cry)) blockMsg = '存档容量不够，用户案件没能先存起来'; }
+      if(!blockMsg){
+        cryFull = cry; safeN = gmcUserSafeSave('升级 '+oldV+' → '+DEMO_DATA_VERSION+' 前', cry);
+        if(wipe){ cry = gmcCarryDropCases(cry); } /* CMD-1028-07：测试覆盖页［清空案件和客人］——丢掉案件 / 客人，保留账号、设定、用户改过的项目库 / 活动价 / 案例 */
+        /* 清空要丢案件：必须先有一份能找回的（安全备份存下了，或有下载的备份文件），否则停下来（不能没有任何备份就清） */
+        window.GMC_UPGRADE_INFO = {safeN:safeN, insured:insured, wipe:wipe, carryMem:false, total:cryFull.total}; /* 诊断用 */
+        if(wipe && cryFull.total>0 && safeN<=0 && !insured){ blockMsg = '存档空间不够，没法在清空 / 升级前先把 '+cryFull.total+' 个用户案件另存一份备份'; needDl = true; }
+        else if(!gmcStoreCarry(cry, wipe ? 2 : 3)){ if(insured || (wipe && safeN>0)){ window.GMC_CARRY_MEM = cry; window.GMC_UPGRADE_INFO.carryMem = true; } else { blockMsg = '存档空间不够，没法在升级前先把 '+(cry.total||0)+' 个用户案件另存一份'; needDl = true; } } /* 已下载备份文件：这次只把用户案件留在内存里完成升级（同一次载入内就写回新存档） */
+      }
       if(blockMsg){
-        window.GMC_UPGRADE_BLOCK = blockMsg; gmcBackupKeep(bkv);
+        window.GMC_UPGRADE_BLOCK = blockMsg; window.GMC_UPGRADE_BK = bkv; /* 当前存档没动，不用再存备份；下载按钮直接用内存里的这份 */
         try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify({from:String(oldV), to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, blocked:true, failed:[{caseNo:'（全部）', name:'', reason:'升级已停止：'+blockMsg+'；存档没有被改动'}]})); }catch(e2){}
-        gmcShowBlock('数据升级已停止：'+blockMsg+'。存档没有被改动，也不会写档；请把这条告诉开发者（备份在 gmc_backup_*，用户案件另有 gmc_cfg_usersafe）。');
+        gmcShowBlock('数据升级已停止：'+blockMsg+'。存档没有被改动（资料都还在），也不会写档。'+(needDl ? '请先按［下载备份］把资料存成文件，再按［继续升级］（用户案件不会丢）；' : '请把这条告诉开发者；')+'存档现在用了 '+gmcUsedText()+'。', needDl);
       } else {
       Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_')===0 && k.indexOf('gmc_backup_')!==0 && k.indexOf('gmc_cfg_')!==0; }).forEach(function(k){ localStorage.removeItem(k); });
       gmcBackupKeep(bkv); gmcClearTestKeys();
+      if(safeN<=0 && cryFull && cryFull.total>0) gmcUserSafeSave('升级 '+oldV+' → '+DEMO_DATA_VERSION+' 前（清出空间后补存）', cryFull); /* 清掉旧存档腾出空间后，再补存用户案件安全备份 */
+      try{ sessionStorage.removeItem('gmc_upgrade_ok'); localStorage.removeItem('gmc_cfg_wipecases'); localStorage.setItem('gmc_cfg_epoch', String(Date.now())); }catch(e){} /* 新纪元：升级 / 清空前就开着的旧分页不能再把旧资料写回 */
       localStorage.setItem('gmc_demo_ver', String(DEMO_DATA_VERSION));
       localStorage.setItem('gmc_struct_ver', String(ACCOUNT_STRUCT_VERSION));
       /* 保留下来的只是一部分变量；其余变量由 store.js 启动时按种子补齐（见 Store.init） */
@@ -197,6 +237,7 @@ function gmcResetAll(reason, keepUser, confirmed){
 
 
 
+try{ window.GMC_EPOCH = localStorage.getItem('gmc_cfg_epoch') || ''; }catch(e){ window.GMC_EPOCH = ''; } /* CMD-1028-16：这个分页载入时的「存档纪元」；升级 / 清空 / 重置会换新纪元，store.js 写档前核对 */
 /* ================= dashboard: calendar (month / week / day) ================= */
 var DOW_CN = ['一','二','三','四','五','六','日'];
 

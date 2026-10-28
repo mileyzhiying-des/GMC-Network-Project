@@ -1731,3 +1731,11 @@ prototype/shared/app.css  共用样式
 - **七** IN 术后管理那一天子案件页头：去掉［增加面诊］（所有子案件页头一律不出），加［增加项目］（`inAddItemOpen`：购买本地项目 / 使用持有项目；顺序 对话｜增加项目｜客人离店）；到访 tab 来访目的可勾［复诊评估］（`addRevisitToDay` / `revAddConfirm`：当场增加并送 KR，取消 = 还原；接待确认后来访目的本来不能改，所以放在到访 tab）。
 - **八（bug）** IN 在施术时间确认后、到院前点［取消项目］只把项目标成已取消（`ui.js confirmRefund`），施术一行（`kind:'施术'` 子项）内容不重写，KR 施术当天「进行项目」按这一行内容拆行，已取消的项目仍显示「待做」+［操作完成］。新增 `coreAfterItemsRemoved`（术后管理一起取消、麻醉同意书不用确认、施术一行 + 院长占用时间重算），IN 取消走它；KR 行显示加守卫（`krRemovedRow`：已取消 / 已更换只显示一行）；旧数据启动修复 `repairRemovedItems`（IN `boot-in.js` / KR `krBoot`，幂等）。KR 评估那几条路（无法施术 / 更换）原来就会收尾。
 - 测试：selftest 新增 R174a / R175a / R176a / R176b / R177a / R178a / R179a / R179b。
+
+## CMD-1028-16 补充（2026-10-28，追加；取代「升级前先把用户案件另存一份 carry 再清存档」在容量不够时直接停下的做法，旧文字保留作历史）
+- 基准 **12bb0e9**（CMD-1028-14），单个提交（见 Notion 汇报），分支 develop，**未推送**，数据版本不变（56）。
+- **原因**：升级 / ［清空案件和客人］要先把用户案件整份提取成 `gmc_cfg_carry` 再清存档；存档快满（实测填到 91%、560 个案件）时，carry 和正在用的存档大小差不多放不下两份，`gmcStoreCarry` 失败 → 停在「数据升级已停止」，清空同样（清空走同一条升级路径，旗标 `gmc_cfg_wipecases`）。另外多分页时旧分页可能把旧状态写回。
+- **修法（data.js / store.js / coverage.js）**：① 腾空间分层 `gmcFreeLevel(n)` / `gmcSetRoom(key,val,maxLevel)`：1 = 旧的自动备份 `gmc_backup_*`、2 = 测试缓存（`rt_res_` / `rt_st_` / `__T2_` / `gmc_cfg_stsnap` / `gmc_cfg_stfix` / `gmc_cfg_rawsafe`）、3 = 用户案件安全备份 `gmc_cfg_usersafe`（只在存 carry 时用，清空模式不动它）；**永远不碰 `gmc_state` / `gmc_clinic_*`**。② carry 存不下时：已有保险（下载过完整备份 `GMC_UPGRADE_BK`，或安全备份 `safeN>0`）→ carry 暂存内存 `window.GMC_CARRY_MEM`，`carryRestore` 从内存取；没有保险 → 停下，不动存档、不丢案件。③ 清空模式没有保险也停（`gmcCarryDropCases` 改为返回新对象，不改原 carry，先存完整安全备份）。④ 停下时红条（`gmcShowBlock`）写明原因 + 当前存档用量 +［下载备份］［继续升级］（下载后才能点；点了带 `sessionStorage gmc_upgrade_ok` 重载，清空的旗标 `gmc_cfg_wipecases` 到成功才移除）。⑤ 纪元守卫 `gmc_cfg_epoch` / `GMC_EPOCH`：升级 / 清空成功换新纪元，旧分页写档前发现纪元变了就不写、重载（`GMC_EPOCH_STALE`）。⑥ `gmcResetAll(…, true)` 保留用户案件时 carry 存不下会拒绝并提示先下载备份（什么都不动）。⑦ 测试覆盖页新增一行「存档空间：已用 X MB / 约 5 MB（pct%）」，≥80% 橙、≥90% 红 + 提示，列最大的 3 个键；［清空案件和客人］先下载完整备份再置旗标。
+- 实测（隔离端口，自建 560 案件填到 91%）：旧版本升级 → 红条停下，下载 + 继续后完成（版本 56、560 案件迁移、设定保留、新纪元）；清空 → 完成（案件 0、设定保留、备份保留）；无保险的清空 → 停下；正常容量升级 / 清空照旧；旧分页写回被纪元守卫挡住。
+- **我的判断（待确认）**：存档上限按约 5 MB（5,242,880 字符）估算；carry 暂存内存只在刷新前有效，所以必须先有下载文件 / 安全备份才允许。
+- 测试：selftest 新增 R180a（腾空间分层 / carry 不被改 / 用量文字）。
