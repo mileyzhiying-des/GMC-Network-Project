@@ -548,7 +548,11 @@ function buildWeekGrid(){
       var pastSlot = why==='past', closedDay = why==='closed', fullSlot = why==='full';
       var slotClick = why ? ((calOffHoursOk(ds,hr)) ? ' onclick="calOffHoursAdd(\''+ds+'\',\''+hr+'\')" title="营业时间外：点击代约（会再确认一次）"' : '') : ' onclick="openAddSlotModal(\''+ds+'\',\''+hr+'\')" title="点击预约这个空档"';
       var isNow = (ds===dateStr(nowD) && hr===nowSlot); /* 现在的时间点用彩色外框标出当前时段 */
-      var fullTag = fullSlot ? '<div style="font-size:12px;color:var(--muted);text-align:right;">已满</div>' : '';
+      var fullTag = '';
+      if(fullSlot){ /* CMD-1026-05：超额时左边写「3/2」；今天现在这个时段 + 下一个时段才有［＋加约］ */
+        var nB = slotBookingCount(ds, hr), capB = CLINIC_SETTINGS.slotCapacity||1, okB = calOverbookOk(ds, hr);
+        fullTag = '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">'+(nB>capB ? '<span style="font-weight:700;color:var(--terracotta);">'+nB+'/'+capB+'</span>' : '')+'<span style="flex:1;"></span><span>已满</span>'+(okB ? '<button class="btn-outline" style="padding:1px 8px;font-size:12px;" onclick="event.stopPropagation();calOverbookAsk(\''+ds+'\',\''+hr+'\')">＋加约</button>' : '')+'</div>';
+      }
       html += '<div class="wk-cell'+(why?'':' wk-cell-open')+(pastSlot?' wk-past':'')+((why==='lunch'||closedDay)?' wk-lunch':'')+(why==='outside'?' wk-outside':'')+(fullSlot?' wk-full':'')+(isNow?' wk-now':'')+(sameDate(days[d], TODAY_DATE)?' wk-tcol':'')+'"'+slotClick+'>'+chips+fullTag+'</div>';
     }
   });
@@ -657,7 +661,7 @@ function renderAddSlotBody(){
   if(ADD_SLOT_MODE==='existing'){
     var clientOptions = CLIENTS.map(function(c){ return '<option>'+c.name+'</option>'; }).join('');
     body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client">'+clientOptions+'</select></div>'+
-      purposeSelectHtml('add-slot-purpose')+
+      purposeSelectHtml('add-slot-purpose', true)+'<div class="field" style="margin-bottom:12px;"><label>想咨询的内容（选填）</label><textarea id="add-slot-note" rows="2" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;"></textarea></div>'+
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
@@ -674,15 +678,28 @@ function renderAddSlotBody(){
   document.getElementById('add-slot-body').innerHTML = modeTabs + body;
 }
 
+/* CMD-1026-05：已满的时段超额加约——只有「今天、现在这个时段 + 下一个时段」才可以（我的判断：时段 = 30 分钟，和预约规则同一套） */
+function calOverbookOk(ds, hr){
+  if(ds!==todayStr()) return false; var nowSlot = currentSlotNow().time, nd = demoNow(), nowMin = nd.getHours()*60+nd.getMinutes(), range = CLINIC_SETTINGS.overbookMinutes||60, h = timeToMin(hr);
+  /* CMD-1026-06：现在这一格 + 从现在起 range 分钟内开始的时段（例：15:20、1 小时 → 15:00 / 15:30 / 16:00） */
+  return h>=timeToMin(nowSlot) && h<=nowMin+range && slotBlockReason(ds, hr)==='full';
+}
+function calOverbookAsk(ds, hr){
+  if(!calOverbookOk(ds, hr)) return;
+  var n = slotBookingCount(ds, hr), cap = CLINIC_SETTINGS.slotCapacity||1;
+  if(!window.GMC_NO_CONFIRM && !confirm('这个时段已满（'+n+'/'+cap+'），确定要加约吗？')) return;
+  openAddSlotModal(ds, hr); ADD_SLOT_CONTEXT.overbook = {n:n, cap:cap};
+}
+function overbookNote(){ var o = ADD_SLOT_CONTEXT && ADD_SLOT_CONTEXT.overbook; return o ? '超额加约：'+ADD_SLOT_CONTEXT.date+' '+ADD_SLOT_CONTEXT.time+' 时段已满（'+o.n+'/'+o.cap+'），'+actingName()+' 加约' : ''; }
 function confirmAddSlotExisting(){
   var name = document.getElementById('add-slot-client').value;
   var purpose = document.getElementById('add-slot-purpose').value;
   closeAddSlotModal();
   var exm = pendingResvSameDay(name, ADD_SLOT_CONTEXT.date); /* CMD-1021-16 三：同一客人那天已有还没到的预约 → 合并，不再建第二个 */
   if(exm){ logCaseEvent(exm, actingName(), '室长代约同一天：'+ADD_SLOT_CONTEXT.time+'（'+purpose+'）已合并到这次预约（时间以原预约 '+exm.visitTime+' 为准）'); renderCalendar(); showToast('已合并', name+' · '+mergeNoteText(exm), null); return; }
-  createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose);
+  var pmain = mainForBookingPurpose(name, purpose), nc = pmain ? createChildReservation(pmain, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, purpose) : createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose); /* CMD-1028-05：术后管理 / 复诊评估且对得上唯一的主案件 → 直接是它的子案件 */ if(nc && overbookNote()) logCaseEvent(nc, actingName(), overbookNote(), '预约到店'); var nt = (document.getElementById('add-slot-note')||{}).value; if(nc && nt && nt.trim()) nc.visitNote = nt.trim(); /* CMD-1022-15：代约也能写想咨询的内容 */
   renderCalendar();
-  showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
+  showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+(pmain ? '，已加入主案件 '+pmain.caseNo+'（子案件 '+nc.caseNo+'）' : '，已生成 Case ID'), null);
 }
 
 function confirmAddSlotNew(link){
@@ -695,6 +712,7 @@ function confirmAddSlotNew(link){
   var ph = {id:phId, date:ADD_SLOT_CONTEXT.date, time:ADD_SLOT_CONTEXT.time, phone:phone, link:link,
     smsText:smsBody, purpose:purpose, expiresAt:Date.now()+holdMs()};
   logSms('link', phone, smsBody+' '+link, null);
+  if(overbookNote()) logOp('其他', overbookNote(), '超额加约'); /* 占位还没有案件：记操作日志 */
   RESERVATION_PLACEHOLDERS.push(ph);
   closeAddSlotModal();
   renderCalendar();
@@ -948,7 +966,7 @@ function renderClientHoldings(name){
     var batchRows = open ? h.batches.map(function(b,bi){
       var st = batchStatusOfHolding(b), col = HOLD_BATCH_COLORS[st];
       var action = b.pkg ? '<span style="font-size:12px;color:var(--sage);white-space:nowrap;">套餐内含</span>' : (b.pkgPaid ? '<span style="font-size:12px;color:#C1454A;white-space:nowrap;">套餐 · 不可退款</span>' : (b.comp ? '<span style="font-size:12px;color:#8F6F0C;white-space:nowrap;">置换 · 不可退款</span>' : b.service ? '<span style="font-size:12px;color:var(--blue);white-space:nowrap;">서비스 · 不可退款</span>' : (st==='未使用' || st==='部分使用')
-        ? ''
+        ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;white-space:nowrap;" onclick="openHoldBatchRefund(\''+String(name).replace(/\\/g,'\\\\').replace(/'/g,"\\\\'").replace(/"/g,'&quot;')+'\','+gi+','+bi+')">退款</button>'
         : (b.refund ? '<span style="font-size:12px;color:var(--terracotta);white-space:nowrap;">'+'已退款 '+formatCurrency(b.refund.amount,'IDR')+'</span>' : '')));
       return '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 8px 14px;border-top:1px dashed var(--border2);">'+
         '<div style="flex:1;min-width:0;font-size:12px;color:var(--slate2);line-height:1.6;">'+b.date+' · '+(b.pkg ? '套餐内含 · ' : '')+(b.pkgPaid ? '套餐「'+(b.pkgName||'')+'」· ' : '')+(b.comp ? '置换（赴韩定金转本地）· ' : '')+(b.service ? '서비스（赠送）· ' : '')+(b.promo ? '本月活动价 · ' : '')+'购买案件 '+caseNoLabel(b.caseId)+'<br>已用 '+b.used+'/'+b.bought+(b.schedule?'　进行时间：'+b.schedule:'')+'</div>'+
@@ -1037,7 +1055,7 @@ function saveBeautyAdd(){
     var kr = BEAUTY_ADD_KR, who = accountLabel(currentAccountId()), done = false;
     Store.mutateClinic(kr.clinicId, function(){ var cl0 = clientByName(kr.name); if(!cl0) return false; addBeautyRecord(cl0, {year:y, month:m, day:dd, project:project, source:'室长登记', caseId:null, newCaseId:null}); cl0.timeline.push({stage:'基础信息修改', actor:who, actorId:currentAccountId(), action:'补登医美史：'+ymText+' '+project+'（KR 登记）', dt:nowFullDt(), kind:'plain'}); done = true; return true; });
     if(!done){ bad('没有找到这位客户的档案'); return; }
-    closeBeautyAdd(); BEAUTY_ADD_KR = null; if(typeof krRenderClientDetail==='function') krRenderClientDetail(); return;
+    closeBeautyAdd(); BEAUTY_ADD_KR = null; if(typeof krRenderCaseDetail==='function' && typeof CURRENT_PAGE_ID!=='undefined' && CURRENT_PAGE_ID==='kr-casedetail') krRenderCaseDetail(); else if(typeof krRenderClientDetail==='function') krRenderClientDetail(); return; /* CMD-1022-05：KR 案件页基础资料里补登后留在案件页 */
   }
   var c = BEAUTY_ADD_CASE ? CASE_ITEMS.filter(function(x){ return x.id===BEAUTY_ADD_CASE; })[0] : null;
   var name = c ? c.name : document.getElementById('detail-name').textContent, cl = clientByName(name);
@@ -1058,7 +1076,7 @@ function buildDetailLog(){
     {stage:'建档', actor:'A1 室长', action:'修改基础信息（补录护照信息、确认医美史）', dt:D(-3)+' 11:15', kind:'plain'},
     {stage:'预约到店', actor:'A1 室长', action:'Case 开始 · 预约到店', dt:D(-2)+' 09:05', kind:'case', caseId:'siti'}
   ];
-  document.getElementById('detail-log').innerHTML = log.map(logLine).join('');
+  var dl = document.getElementById('detail-log'); if(dl) dl.innerHTML = log.map(logLine).join(''); /* CMD-1022-04：页面上没有这个元素（客户详情改成 tab 结构后由 JS 画出）就跳过，不再报初始化失败 */
 }
 
 function rowMarkNoShow(caseId){
@@ -1081,7 +1099,9 @@ function simulateTimePass30(){
 function updateCaseStage(c){
   if(typeof ensureItemIids==='function') ensureItemIids(c); /* CMD-1020-16 三：每笔购买的项目补唯一 id */
   /* CMD-1021-11：拿掉「到院已结束但又有待做的 → 自动重新打开」；重新打开只有已完成到院卡的［增加项目］ */
+  if(!SEEDING && typeof dayNoSync==='function' && !isChildVisit(c)){ try{ dayNoSync(c); }catch(e){ console.error('[子案件编号]', e); } } /* CMD-1026-13：升级后开始一天一个号 */
   c.stage = deriveCaseStage(c); c.financeResult = financeResultOf(c); if(isEnded(c)) archiveCaseRoom(c);
+  if(!SEEDING && typeof mainAutoStatus==='function' && !isChildVisit(c)){ try{ mainAutoStatus(c); }catch(e){ console.error('[主案件状态自动判断]', e); } } /* CMD-1023-02 一：主案件状态自动判断（没有［结案］按钮） */
   if(!SEEDING && c.director && typeof syncSurgeryBlock==='function'){ try{ syncSurgeryBlock(c); }catch(e){} } /* 状态变化后施术块跟着更新（取消的不再占日程） */
   var fo = (typeof document!=='undefined') && document.getElementById('chat-float-overlay'); if(fo && fo.classList.contains('open') && typeof renderFloatMessages==='function'){ try{ renderFloatMessages(); }catch(e){} } }
 
@@ -1106,32 +1126,45 @@ var CASE_ONLY_MINE = false;
 var CASE_HOSPITAL_FILTER = 'all'; /* 案件列表按医院筛选：all 或医院 ID（只列出本诊所对接的医院） */
 function setCaseHospitalFilter(v){ CASE_HOSPITAL_FILTER = v; buildCaseTabs(); renderCaseRows(); }
 
-var CASE_ROW_OPEN = {}, CASE_GRID = '1.0fr 1.0fr 0.85fr 1.5fr 1.0fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr';
+var CASE_DONE_RANGE = {from:'', to:'', all:false};
+function setDoneRange(k, v){ var r = CASE_DONE_RANGE; if(k==='recent'){ r.from = ''; r.to = ''; r.all = false; } else if(k==='all'){ r.all = true; r.from = ''; r.to = ''; } else { r[k] = v; if(k==='from') r.all = false; } renderCaseRows(); }
+function caseLastVisitDay(c){ var vs = visitsOf(mainOf(c)), last = vs.length ? vs[vs.length-1].date : ''; return last || String(c.visitDate||'') || String((c.logEntries&&c.logEntries.length ? c.logEntries[c.logEntries.length-1].dt : '')||'').slice(0, 10); }
+var CASE_ROW_OPEN = {}, CASE_GRID = '1.0fr 1.0fr 0.85fr 1.5fr 1.2fr 1.0fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr';
 function caseRowToggle(id){ CASE_ROW_OPEN[id] = !CASE_ROW_OPEN[id]; renderCaseRows(); }
 function renderCaseRows(){
-  var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return c.stage===CASE_TAB_FILTER; });
+  var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return caseTabKey(c)===CASE_TAB_FILTER; });
+  items = items.filter(function(c){ return !isChildVisit(c); }); /* CMD-1023-01 S3：列表只列主案件，子案件展开看 */
+  var hp = document.getElementById('case-head-proc'); if(hp) hp.textContent = CASE_TAB_FILTER==='all' ? '进程 / 结束方式' : (['closed','reportonly','cancelled'].indexOf(CASE_TAB_FILTER)>-1 ? '结束方式' : '进程'); /* CMD-1022-19 */
   if(CASE_REFUND_FILTER) items = items.filter(hasRefundMark);
   items = items.slice().sort(caseUpdatedDesc); /* CMD-1015-05 十一：最近更新的在上面 */
+  var doneBar = '';
+  if(CASE_TAB_FILTER==='closed'){ /* CMD-1023-02：已完成 tab 照最后来访日排，默认只显示最近 3 个月，更早的用日期筛选 */
+    var d3 = new Date(demoNow().getTime()); d3.setMonth(d3.getMonth()-3); var def3 = dateStr(d3), rg = CASE_DONE_RANGE, from = rg.all ? '' : (rg.from || def3), to = rg.to || '';
+    items = items.filter(function(c){ var d = caseLastVisitDay(c); return (!from || d>=from) && (!to || d<=to); }).sort(function(a, b){ return caseLastVisitDay(b).localeCompare(caseLastVisitDay(a)); });
+    doneBar = '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 4px 10px;font-size:12px;color:var(--slate2);"><span>按最后来访日排；'+(rg.all ? '显示全部' : (rg.from || rg.to ? '日期筛选' : '默认最近 3 个月'))+'</span><span>从 <input type="date" value="'+(rg.all ? '' : (rg.from || def3))+'" onchange="setDoneRange(\'from\', this.value)" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></span><span>到 <input type="date" value="'+(rg.to||'')+'" onchange="setDoneRange(\'to\', this.value)" style="padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></span><button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="setDoneRange(\'recent\')">最近 3 个月</button><button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="setDoneRange(\'all\')">全部</button></div>';
+  }
   if(CASE_ONLY_MINE) items = items.filter(function(c){ return caseOperators(c, true).inn.indexOf(ME_NAME)>-1; }); /* 仅看我的：只显示我操作过的案件 */
   if(items.length===0){
-    document.getElementById('case-rows').innerHTML = '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">暂无案件</div>';
+    document.getElementById('case-rows').innerHTML = doneBar+'<div style="font-size:12px;color:var(--muted);padding:20px 4px;">暂无案件</div>';
     return;
   }
-  document.getElementById('case-rows').innerHTML = items.map(function(c){
-    var si = caseStageInfo(c);
+  var attTodo = []; try{ attTodo = inTodoItems(); }catch(e){}
+  document.getElementById('case-rows').innerHTML = doneBar+items.map(function(c){
+    var si = caseStageInfo(c), att = isEnded(c) ? null : mainAttentionOf(c, 'IN', attTodo);
     var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+(krHoldOpen(c) ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:12px;">在韩后续进行中</span>' : '');
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
-    subCaseNos(c); var subs = subCaseList(c), open = !!CASE_ROW_OPEN[c.id];
+    var vsAll = visitsOf(c), subs = vsAll.length>1 ? vsAll : [], open = !!CASE_ROW_OPEN[c.id];
     /* CMD-1015-17：Case ID ｜ 客户姓名 ｜ 阶段 ｜ 进程 ｜ 财务 ｜ 对接院长 ｜ IN 室长 ｜ KR 室长 ｜ 开始时间 ｜ 更新时间；有子案件的 Case ID 前加 ▼，展开列出子案件（客户姓名留空、开始时间 = 到院时间） */
     var main = '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;"><span style="font-size:12px;color:var(--slate2);">'+(subs.length ? '<span onclick="event.stopPropagation();caseRowToggle(\''+c.id+'\')" title="展开到院记录" style="cursor:pointer;display:inline-block;width:16px;">'+(open ? '▲' : '▼')+'</span>' : '<span style="display:inline-block;width:16px;"></span>')+c.caseNo+'</span>'+
       '<span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
       '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
-      '<span style="font-size:12px;">'+si.proc+lmTag+'</span>'+
+      '<span style="font-size:12px;'+(att && att.over ? 'color:var(--feedback-error,#B3402E);' : '')+'" title="进程只写最该注意的一件">'+(isEnded(c) ? caseEndTypeText(c)+((c.stage==='closed' && !isChildVisit(c) && mainHoldOf(c).length) ? ' · 有持有项目' : '') : att.text)+lmTag+'</span>'+
+      '<span style="font-size:12px;color:var(--slate2);">'+(att && att.others.length ? att.others.join('<br>') : '—')+'</span>'+
       '<span>'+financeCellHtml(c)+'</span>'+
       '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartText(c)+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span></div>';
-    var subHtml = open ? subs.map(function(rep){
-      var grp = subCaseRows(c, rep), allDone = grp.every(function(s){ return s.done; });
-      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+'到院'+' · '+String(rep.date||'').slice(5).replace('-','/')+' <span style="color:var(--muted);font-size:12px;">'+rep.dno+'</span></span><span></span><span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">术后管理</span></span><span style="font-size:12px;">'+(rep.place==='IN' ? '印尼' : '韩国')+'：'+grp.map(function(s){ return s.content; }).join('；')+' · '+(allDone ? '已完成' : (grp.some(function(s){ return s.arrived; }) ? '已到店' : '待到店'))+'</span><span></span><span></span><span></span><span></span><span style="font-size:12px;color:var(--muted);">'+(rep.place==='IN' ? (rep.visitDate||rep.date) : rep.date+(rep.time ? ' '+rep.time : ''))+'</span><span style="font-size:12px;color:var(--muted);">'+(rep.doneAt ? fmtUtc(rep.doneAt) : '')+'</span></div>';
+    var subHtml = open ? subs.map(function(v){
+      var ch = v.caseId!==c.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, tags = v.types.map(function(t0){ return '<span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);font-size:12px;margin-right:4px;">'+t0+'</span>'; }).join('');
+      return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+(ch ? ch.id : c.id)+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+v.no+'</span><span style="font-size:12px;">'+String(v.date).slice(5).replace('-','/')+(v.time ? ' '+v.time : '')+'</span><span style="font-size:12px;">'+(v.place==='KR' ? '韩国' : '印尼')+'</span><span style="grid-column:span 3;">'+tags+'</span></div>';
     }).join('') : '';
     return main+subHtml;
   }).join('');
@@ -1187,6 +1220,21 @@ function caseApplyAt(cur, o){ if(cur.side==='kr'){ if(typeof krApplyAt==='functi
 function caseGo(side, clinicId, id, url, o, here){
   if(window.GMC_NO_TABS){ here(); return; }
   var rid = caseRegId(side, clinicId, id), e = caseRegRead()[rid], name = caseTabName(side, clinicId, id);
+  if(e && e.tab!==TAB_ID && (Date.now()-e.ts) < CASE_REG_LIVE && CASE_BC && !window.GMC_CASEGO_SYNC){ /* GMC_CASEGO_SYNC：自测钩子，当作对方一定回应（走原来的同步分支） */
+    /* CMD-1027-10：登记里写着「另一个分页开着这个案件」，但那个分页可能已经卡死 / 没人回应（登记 12 秒内还算有效）——先问一声，0.6 秒内没人回应就当它不在了：清掉登记，照常打开（原来这种情况会停在工作台，只弹一条提示） */
+    var answered = false, onp = function(ev){ if((ev.data||{}).pong===rid) answered = true; };
+    CASE_BC.addEventListener('message', onp);
+    try{ CASE_BC.postMessage({rid:rid, o:o||{}}); }catch(x){}
+    setTimeout(function(){
+      try{ CASE_BC.removeEventListener('message', onp); }catch(x){}
+      if(!answered){ try{ var reg = caseRegRead(); if(reg[rid] && reg[rid].tab!==TAB_ID){ delete reg[rid]; caseRegWrite(reg); } }catch(x){} var w3 = caseTabOpen(name, url); if(!w3) here(); return; }
+      var w = null; try{ w = window.open('', name); }catch(x){ w = null; }
+      var blank = false; try{ blank = !!(w && w.location.href==='about:blank'); }catch(x){}
+      if(w && blank){ try{ w.close(); }catch(x){} w = null; }
+      if(w){ try{ w.focus(); }catch(x){} } else showToast('这个案件已在另一个分页打开', '那个分页已经跳到你要去的位置，请切换到那个分页继续（这个浏览器不允许自动切换）。');
+    }, 600);
+    return;
+  }
   if(e && e.tab!==TAB_ID && (Date.now()-e.ts) < CASE_REG_LIVE){
     try{ if(CASE_BC) CASE_BC.postMessage({rid:rid, o:o||{}}); }catch(x){}
     var w = null; try{ w = window.open('', name); }catch(x){ w = null; }
@@ -1198,22 +1246,29 @@ function caseGo(side, clinicId, id, url, o, here){
   var w2 = caseTabOpen(name, url); if(!w2) here(); /* 连新开都被拦：退回当前分页（最后的备用） */
 }
 (function caseRegInit(){
-  try{ CASE_BC = new BroadcastChannel('gmc-case'); CASE_BC.onmessage = function(ev){ var m = ev.data||{}, cur = caseRegCurrent(); if(!cur || caseRegId(cur.side, cur.clinicId, cur.id)!==m.rid) return; try{ window.focus(); }catch(e){} try{ caseApplyAt(cur, m.o||{}); }catch(e){ console.error(e); } }; }catch(e){ CASE_BC = null; }
+  try{ CASE_BC = new BroadcastChannel('gmc-case'); CASE_BC.onmessage = function(ev){ var m = ev.data||{}, cur = caseRegCurrent(); if(m.pong || !cur || caseRegId(cur.side, cur.clinicId, cur.id)!==m.rid) return; try{ CASE_BC.postMessage({pong:m.rid}); }catch(e){} /* CMD-1027-10：回应「我真的开着这个案件」 */ try{ window.focus(); }catch(e){} try{ caseApplyAt(cur, m.o||{}); }catch(e){ console.error(e); } }; }catch(e){ CASE_BC = null; }
   setInterval(function(){ try{ caseRegBeat(); }catch(e){} }, 3000);
   window.addEventListener('pagehide', function(){ try{ var reg = caseRegRead(); Object.keys(reg).forEach(function(k){ if(reg[k].tab===TAB_ID) delete reg[k]; }); caseRegWrite(reg); }catch(e){} });
   setTimeout(function(){ try{ caseRegBeat(); }catch(e){} }, 800);
 })();
-function caseAtExtra(o){ o = o||{}; return (o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.pc ? '&pc=1' : '')+(o.scroll ? '&scroll='+encodeURIComponent(o.scroll) : '')+(o.chat ? '&chat=open' : ''); }
+function caseAtExtra(o){ o = o||{}; return (o.tab ? '&tab='+encodeURIComponent(o.tab) : '')+(o.pc ? '&pc=1' : '')+(o.scroll ? '&scroll='+encodeURIComponent(o.scroll) : '')+(o.chat ? '&chat=open' : '')+(o.sub ? '&sub='+encodeURIComponent(o.sub) : ''); }
 function applyCaseAt(id, o){
   o = o||{}; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
-  if(o.tab){ c.activeCaseTab = o.tab; renderCaseBody(c); }
+  if(o.sub){ SUBVIEW[id] = {key:o.sub}; c.subTab = ''; renderCaseSubtitle(c); renderCaseStatusBar(c); renderCaseBody(c); } else if(!isChildVisit(c) && SUBVIEW[id]){ delete SUBVIEW[id]; renderCaseSubtitle(c); renderCaseBody(c); } /* CMD-1023-03 P3：子案件页的位置带在地址里 */
+  if(o.tab){ if(SUBVIEW[id]) delete SUBVIEW[id]; c.activeCaseTab = o.tab; renderCaseSubtitle(c); renderCaseStatusBar(c); renderCaseBody(c); }
   if(o.pc) goPostcareBlock(id);
   if(o.scroll) setTimeout(function(){ var el = document.getElementById(o.scroll); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80);
 }
+/* CMD-1027-10：案件页「某一块出错不影响整页」——gmcSafe 把一块画面包起来：出错时只有这一块显示「这里出错了」，错误留在浏览器控制台，其余照常打开（IN + KR 案件页 / 子案件页共用） */
+function gmcSafe(label, fn, fallback){
+  try{ return fn(); }
+  catch(e){ console.error('[案件页 · '+label+' 出错]', e); try{ window.GMC_BLOCK_ERRS = (window.GMC_BLOCK_ERRS||[]).concat([{label:label, msg:String(e && e.message), at:Date.now()}]).slice(-50); }catch(x){} return fallback!==undefined ? fallback : '<div class="gmc-block-err" style="padding:12px 16px;margin:6px 0;border:1px solid #E5A19B;background:#FDF3F2;border-radius:10px;font-size:13px;color:#B3261E;">这里出错了（'+String(label).replace(/</g, '&lt;')+'）：这一块没能显示，其他部分照常。详细错误在浏览器控制台。</div>'; }
+}
+function gmcTry(label, fn){ try{ return fn(); }catch(e){ console.error('[案件页 · '+label+' 出错]', e); try{ window.GMC_BLOCK_ERRS = (window.GMC_BLOCK_ERRS||[]).concat([{label:label, msg:String(e && e.message), at:Date.now()}]).slice(-50); }catch(x){} } }
 function openCaseDetail(id, noPush, o){
   o = o||{};
-  if(noPush || window.GMC_NO_TABS || o.here || (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===id)){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); return; }
-  caseGo('in', CURRENT_CLINIC_ID, id, caseUrl(id, caseAtExtra(o)), o, function(){ openCaseDetailHere(id, noPush); applyCaseAt(id, o); });
+  if(noPush || window.GMC_NO_TABS || o.here || (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===id)){ openCaseDetailHere(id, noPush); gmcTry('定位', function(){ applyCaseAt(id, o); }); return; }
+  caseGo('in', CURRENT_CLINIC_ID, id, caseUrl(id, caseAtExtra(o)), o, function(){ openCaseDetailHere(id, noPush); gmcTry('定位', function(){ applyCaseAt(id, o); }); });
 }
 function openCaseDetailHere(id, noPush){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0];
@@ -1223,26 +1278,61 @@ function openCaseDetailHere(id, noPush){
     CASE_RETURN.push(CURRENT_CASE_ID); NAV_STACK.push('in-casedetail'); /* 案件页 → 另一个案件页 */
   }
   CURRENT_CASE_ID = id;
-  renderCaseSubtitle(c);
-  document.getElementById('case-chat-actions').style.display = c.materialsConfirmed ? 'flex' : 'none'; /* 发起对话等按钮：基础资料确认后才显示 */
-  renderCaseStatusBar(c);
-  buildCaseLog(c);
-  renderCaseBody(c);
-  nav('in-casedetail');
+  gmcTry('标题', function(){ renderCaseSubtitle(c); });
+  gmcTry('对话按钮', function(){ document.getElementById('case-chat-actions').style.display = c.materialsConfirmed ? 'flex' : 'none'; }); /* 发起对话等按钮：基础资料确认后才显示 */
+  gmcTry('状态栏', function(){ renderCaseStatusBar(c); });
+  gmcTry('Timeline', function(){ buildCaseLog(c); });
+  gmcTry('案件内容', function(){ renderCaseBody(c); });
+  nav('in-casedetail'); /* 前面任何一块出错都不影响整页打开 */
 }
 
 function renderCaseStatusBar(c){
+  gmcTry('状态栏主体', function(){ renderCaseStatusBar0(c); });
+  /* CMD-1026-20：这一天已过 00:00 关账、还没确认结束 → 状态条最上面一条锁住提示 + ［确认结束］ */
+  try{
+    /* CMD-1027-08 三：红色条只在那一天的子案件页；升级后的主案件页只留第三行那条「待确认结束」。没升级的一般案件没有第三行，仍保留红色条 */
+    var redOk = !(mainPageV2(c) && isUpgraded(c) && !(typeof subPageActive==='function' && subPageActive(c)));
+    if(redOk && inDayLocked(c) && document.getElementById('case-status-bar')){
+      var bar = document.getElementById('case-status-bar');
+      bar.innerHTML = '<div class="card" style="padding:10px 18px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid #E8B4B0;background:#FDF3F2;"><span style="flex:1;font-size:13px;color:#B3261E;">🔒 '+cesc(inDayOf(c).slice(5).replace('-', '/'))+' '+cesc(dayNoTxt(c))+' 已过 00:00 关账，待确认结束：这一天的内容已锁住（面诊 / 复诊评估报告除外）</span><button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="openDayConfirm(\''+c.id+'\')">确认结束</button></div>'+bar.innerHTML;
+    }
+  }catch(e){ console.error(e); }
+}
+function renderCaseStatusBar0(c){
   var b = caseStageBadge(c);
   var actionBtn = '';
   if(c.krVisit && c.stage==='booked'){ /* CMD-1014-16：在韩到店案件（KR 医院）：到店 / 完成由 KR 标记，IN 不接待、不判未到店 */
     actionBtn = '<span style="font-size:12px;color:var(--slate2);">在韩到院预约（KR 医院）：'+(c.krVisit.arrived ? '客人已到院，等 KR 标记完成' : (c.visitDate+' '+c.visitTime+'（韩国）等 KR 标记客人到店'))+'</span>';
   } else if(c.stage==='booked' && c.subState==='waiting'){
-    actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="rowMarkNoShow(CURRENT_CASE_ID);renderCaseStatusBar(getCurrentCase());renderCaseBody(getCurrentCase());buildCaseLog(getCurrentCase())">未到店</button><button class="btn-ghost" onclick="simulateTimePass30()">演示：模拟时间超过30分钟</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
+    actionBtn = '<div style="display:flex;gap:10px;">'+(c.visitDate===todayStr() ? '<button class="btn-primary" onclick="markArrived()">客人已到店</button>' : '<button class="btn-primary" disabled title="只有来访当天才能标记客人已到店" style="opacity:.45;cursor:not-allowed;">客人已到店（仅来访当天）</button>')+'<button class="btn-outline" onclick="openRescheduleModal()">预约修改</button><button class="btn-outline" onclick="openCancelModal()">预约取消</button></div>';
   }
-  if(canEndCase(c)) actionBtn += '<button class="btn-outline" onclick="openEndCase()">结束案件</button>';
-  if(c.krTripEnded && !c.visitClosed && c.stage==='postcare' && typeof canDo==='function' && canDo('work')) actionBtn += '<button class="btn-outline" onclick="inCloseOpen()">结案</button>'; /* CMD-1021-16：IN［结案］（术后管理（印尼）阶段） */
-  var ug = urgeInfo(c);
-  if(ug) actionBtn += '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:#C26A1B;">'+ug.label+'</span><button class="btn-primary" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>';
+  /* CMD-1026-11 二：［客人离店］/［确认结案］搬到页头右上角（renderCaseHeaderActions） */
+  /* CMD-1023-02 一：拿掉 IN［结案］按钮——主案件的状态系统自动判断（进行中 / 已完成） */
+  if(false) actionBtn += ''; /* CMD-1021-16：IN［结案］（术后管理（印尼）阶段） */
+  /* CMD-1026-11 三：［催办］只放面诊卡（该行「已超过预计时间」旁），页头下面不再重复（待办栏的催办不变） */
+  if(mainPageV2(c) && !isUpgraded(c)){ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; } /* CMD-1026-11 一：一般案件（没升级）本身就是今天的来访，不显示第三行 */
+  if(mainPageV2(c)){ /* B1 第三行 */
+    /* CMD-1026-19 B1：第三行经 daysOf 读——升级当天（主案件自己那天）、IN 子记录、韩国到院那天都认；韩国那天 IN 只读，按钮叫「查看内容」 */
+    var m3 = c, today3 = todayStr(), ds3 = daysOf(m3), line3 = '', btn3 = '', activeV = ds3.filter(function(v){ return v.live; });
+    var prog = ds3.filter(function(v){ return v.inProgress; })[0];
+    var tvIn = ds3.filter(function(v){ return v.date===today3 && v.place==='IN' && v.live; })[0], tvKr = ds3.filter(function(v){ return v.date===today3 && v.place==='KR' && v.live; })[0];
+    if(SUBVIEW[m3.id] && (prog || ds3.some(function(v){ return v.state==='unconfirmed'; }))){ /* CMD-1027-08 三：子案件页上待确认结束只留红色条，不重复第三行；子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
+    /* CMD-1027-14 五：IN 主案件「当前状态」改成和 KR 一样的两行状态卡（共用取数 mainStatusModel）：当前状态（进行中｜预约中）［查看］/ 待确认结束 · 今日到访 · 下次到访 · 待预约 · 后续日程：无 */
+    var M = mainStatusModel(m3), bt = function(label, on, pri){ return '<button class="'+(pri ? 'btn-primary' : 'btn-outline')+'" style="padding:6px 16px;font-size:13px;" onclick="'+on+'">'+label+'</button>'; };
+    var viewDay = function(v){ return bt('查看内容', ((v.rec||v.caseId)===m3.id || v.place==='KR') ? 'openSubcase(\''+m3.id+'\',\''+v.key+'\')' : 'openVisitOf(\''+(v.rec||v.caseId)+'\')'); };
+    var row2 = '', pdTxt = '', P = M.pend;
+    if(P.inN) pdTxt = '印尼术后管理 '+P.inN+' 项待预约'+(P.inEarly ? '（最早建议 '+cesc(P.inEarly.slice(5).replace('-', '/'))+'）' : '');
+    var pdSmall = pdTxt ? '<span style="font-size:12px;color:var(--muted);margin-left:8px;">待预约：'+pdTxt+(P.krN ? '；韩国 '+P.krN+' 项由 KR 安排' : '')+'</span>' : '';
+    if(M.unc){ var unc = M.unc; row2 = '<b style="color:#B3261E;">待确认结束</b>：'+cesc(String(unc.date).slice(5).replace('-', '/'))+' '+cesc(unc.no||'')+'（'+cesc(mainDayBiz(unc))+(unc.place==='KR' ? ' · 韩国' : '')+'）<span style="flex:1;"></span>'+(unc.kind==='IN' ? bt('确认结束', 'openDayConfirm(\''+(unc.rec||unc.caseId)+'\')', true) : viewDay(unc)); }
+    else if(M.tdy.length){ var v0 = M.tdy[0], allDone = M.tdy.every(function(v){ return v.state==='left' || v.state==='ended'; }), anyLive = M.tdy.some(function(v){ return v.state==='arrived'; });
+      row2 = '<b>今日到访</b>（'+cesc(Array.from(new Set(M.tdy.map(mainDayBiz))).join(' · '))+(M.tdy.some(function(v){ return v.place==='KR'; }) ? ' · 韩国' : '')+'）<span style="margin-left:6px;">'+(anyLive ? '进行中' : (allDone ? '已完成' : (v0.place==='KR' ? '待到院' : '待到店')))+'</span>'+pdSmall+'<span style="flex:1;"></span>'+viewDay(v0); }
+    else if(M.nx){ row2 = '<b>下次到访</b>（'+cesc(mainDayBiz(M.nx))+'）'+cesc(String(M.nx.date).slice(5).replace('-', '/'))+pdSmall+'<span style="flex:1;"></span>'+viewDay(M.nx); }
+    else if(P.inN){ row2 = '<b>待预约</b>：'+cesc(pdTxt)+(P.krN ? '<span style="font-size:12px;color:var(--muted);margin-left:8px;">韩国 '+P.krN+' 项由 KR 安排</span>' : '')+'<span style="flex:1;"></span>'+(careBookBlock(m3) ? '' : bt('预约', 'todoCbOpen(\''+m3.id+'\',\'*\')', true)); }
+    else if(P.krN){ row2 = '<b>待预约</b>：韩国术后管理 '+P.krN+' 项（由 KR 安排）'; }
+    else row2 = '<b>后续日程：无</b>';
+    document.getElementById('case-status-bar').innerHTML = '<div class="card" style="padding:12px 20px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+M.nLive+'｜预约中 '+M.nBook+'）</span><span style="flex:1;"></span>'+bt('查看', 'switchCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:10px;flex-wrap:wrap;">'+row2+'</div></div>'+(actionBtn ? '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">'+actionBtn+'</div>' : '');
+    renderCaseHeaderActions(c); return;
+  }
   document.getElementById('case-status-bar').innerHTML =
     '<div class="card" style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'+
     '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--slate);">当前状态</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
@@ -1259,6 +1349,7 @@ function renderCaseStatusBar(c){
 function renderCaseHeaderActions(c){
   var el = document.getElementById('case-chat-actions'); if(!el) return;
   el.style.display = c.materialsConfirmed ? 'flex' : 'none';
+  el.style.alignSelf = mainPageV2(c) ? 'flex-end' : ''; /* B1：［发起对话］放在第二行最右 */
   if(!c.materialsConfirmed){ el.innerHTML=''; return; }
   var stageBtn = '';
   var notEnded = !isEnded(c);
@@ -1267,10 +1358,11 @@ function renderCaseHeaderActions(c){
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
   var lmBtn = '';
-  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c)){
-    lmBtn = '<button class="btn-outline" onclick="addLocalMgmt()">+ 添加本地管理</button>';
+  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c) ){ /* CMD-1026-17：项目卡拆进各 tab 后，没有本地管理时入口回到页头；有了本地管理 tab 后入口在 tab 里 */
+    lmBtn = '<button class="btn-outline" onclick="'+(isChildVisit(c) && (isRevEval(c) || isContCase(c)) ? 'inAddLocalProject()' : 'addLocalMgmt()')+'">+ 添加本地管理</button>';
   }
-  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">发起对话</button>' : '') + lmBtn + stageBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
+  var leaveBtn = (canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) ? '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>' : ''; /* CMD-1026-11 二：右上角依序 发起对话 · 添加本地管理 · 客人离店（只在客人在店时有） */
+  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">对话</button>' : '') + lmBtn + stageBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
 }
 
 var CANCEL_REASON = '';
@@ -1314,8 +1406,8 @@ var RESCHED_SELECTED_DATE = null;
  /* Date */
 var RESCHED_SELECTED_TIME = null;
 
-function openRescheduleModal(){
-  var c = getCurrentCase(); if(!c) return;
+function openRescheduleModal(id){
+  var c = id ? CASE_ITEMS.filter(function(x){ return x.id===id; })[0] : getCurrentCase(); if(!c) return; /* CMD-1026-09 B2：主案件页的子案件列表直接改某个子案件的预约 */
   RESCHED_CASE_ID = c.id;
   RESCHED_SELECTED_DATE = c.visitDate ? new Date(c.visitDate+'T00:00:00') : new Date(demoNow().getFullYear(), demoNow().getMonth(), demoNow().getDate());
   RESCHED_SELECTED_TIME = c.visitTime || '';
@@ -1383,14 +1475,18 @@ function confirmReschedule(){
   var c = CASE_ITEMS.filter(function(x){ return x.id===RESCHED_CASE_ID; })[0]; if(!c) return;
   if(!RESCHED_SELECTED_TIME || slotBlockReason(dateStr(RESCHED_SELECTED_DATE), RESCHED_SELECTED_TIME, null, c.id)){ alert('请选择一个可约的时段（已过去、已满、休诊、午休的时间不能选）'); return; }
   var y = RESCHED_SELECTED_DATE.getFullYear(), m = RESCHED_SELECTED_DATE.getMonth()+1, d = RESCHED_SELECTED_DATE.getDate();
+  var nd0 = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d), dup = pendingResvSameDay(c.name, nd0, c.id); /* CMD-1026-08 五：同一客人同一天只能有一笔没到店的预约——预约修改改到已有预约的那天要拦住 */
+  if(dup){ alert('这位客人 '+nd0+' 已经有一笔 '+(dup.visitTime||'')+' 的预约（'+dup.caseNo+'），请改选其他日期，或先取消另一笔。'); return; }
   c.visitDate = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
   c.visitTime = RESCHED_SELECTED_TIME;
   closeRescheduleModal();
+  try{ var mm0 = c.mainId ? mainOf(c) : null; if(mm0 && mm0.dayNoOn) dayNoSync(mm0); }catch(e){} /* CMD-1028-04 一：子案件改期，号跟着搬到新日期，不再占新号 */
   logCaseEvent(c, ME_NAME, '修改预约为 '+c.visitDate+' '+c.visitTime+'');
   buildCaseLog(c);
   if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id){
     renderCaseSubtitle(c);
   }
+  if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID && CURRENT_CASE_ID!==c.id){ var cur0 = getCurrentCase(); if(cur0) renderCaseBody(cur0); }
   if(CURRENT_PAGE_ID==='in-cases') renderCaseRows();
   showToast('预约已修改', c.name+' · '+c.visitDate+' '+c.visitTime, null);
 }
@@ -1589,34 +1685,50 @@ function refundableBatches(name){
 }
 function refundServiceBarHtml(c){
   if(isEnded(c) || c.visitClosed || c.subState==='cancelled' || !(c.stage==='booked' ? c.subState==='arrived' : true)) return '';
+  if(c.followup || c.linkedCase) return ''; /* CMD-1022-04：复诊 / 术后来访 / 继续类（有关联案件）不显示退款条；一般案件不变 */
   var n = refundableBatches(c.name).length; if(!n) return '';
-  return '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn-outline" onclick="openRefundService()">退款服务（可退批次 '+n+' 个）</button></div>';
+  return '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">'+refundBtnHtml(n)+'</div>';
 }
+/* CMD-1026-13 二：退款按钮本体（放在结算 tab「汇总」卡标题行最右端；没有汇总卡的放结算 tab 最上方靠右） */
+function refundBtnHtml(n){ return '<button class="btn-outline" onclick="openRefundService()">退款服务（可退批次 '+n+' 个）</button>'; }
 var REFUND_SVC = null;
-function openRefundService(){
-  var c = getCurrentCase(); if(!c) return;
-  REFUND_SVC = {caseId:c.id}; renderRefundService();
+function openRefundService(pre, name){ /* pre = 预选的批次对象（客人页持有项目的［退款］）；name 有值 = 从客人页来（没有当前案件） */
+  var c = getCurrentCase();
+  if(name){ REFUND_SVC = {caseId:null, name:name, pre:pre||null}; }
+  else { if(!c) return; REFUND_SVC = {caseId:c.id, name:c.name, pre:pre||null, fromDialog:!!(pre && pre==='dialog')}; if(pre==='dialog') REFUND_SVC.pre = null; }
+  renderRefundService();
+}
+/* 到店对话框选了「退款」→ 直接跳退款弹窗；取消退款回到对话框 */
+function openRefundFromDialog(){ var c = getCurrentCase(); if(!c) return; REFUND_SVC = {caseId:c.id, name:c.name, pre:null, fromDialog:true}; renderRefundService(); }
+function cancelRefundService(){
+  var ctx = REFUND_SVC; closeRefundService(); REFUND_SVC = null;
+  if(ctx && ctx.fromDialog){ var c = getCurrentCase(); if(c){ c.followupAsked = false; followupAsk(c); } }
+}
+/* 客人页印尼本地持有批次的［退款］：预选那一批，走同一个退款弹窗 */
+function openHoldBatchRefund(name, gi, bi){
+  var h = holdingsAllSorted(name).filter(function(x){ return holdingRemaining(x)>0; })[gi]; if(!h) return; var b = h.batches[bi]; if(!b) return; /* gi 是客人页「剩余 > 0」列表里的序号 */
+  openRefundService(b, name);
 }
 function renderRefundService(){
-  var c = getCurrentCase(); if(!c) return;
+  var ctx = REFUND_SVC || {}, c = ctx.caseId ? getCurrentCase() : {name:ctx.name, id:null}; if(!c) return;
   var ov = document.getElementById('refund-svc-overlay');
   if(!ov){ ov = document.createElement('div'); ov.id = 'refund-svc-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   var inp = 'padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;';
   var rows = refundableBatches(c.name).map(function(x, i){
     var b = x.b, cur = b.currency || 'IDR', remain = b.bought-b.used, pct = (b.discountPct===undefined || b.discountPct===null) ? 100 : b.discountPct;
-    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:8px;"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" class="rs-cb" data-i="'+i+'" style="margin-top:3px;"><span style="flex:1;font-size:13px;"><b>'+x.h.itemName+'</b>'+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'<div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 已用 '+b.used+'/'+b.bought+'（剩余 '+remain+' 次将作废）'+
+    return '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:8px;"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" class="rs-cb" data-i="'+i+'"'+(ctx.pre && ctx.pre===b ? ' checked' : '')+' style="margin-top:3px;"><span style="flex:1;font-size:13px;"><b>'+x.h.itemName+'</b>'+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'<div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+b.date+' · 购买案件 '+caseNoLabel(b.caseId)+' · 已用 '+b.used+'/'+b.bought+'（剩余 '+remain+' 次将作废）'+
       (typeof b.paid==='number' ? '<br>当初实付 <b>'+formatCurrency(b.paid, cur)+'</b>'+(b.promo ? '（活动价）' : '')+(pct<100 && b.listPrice ? '　原价 '+formatCurrency(b.listPrice, cur)+'，'+discountText(pct) : '')+'；按剩余次数参考 '+formatCurrency(b.bought>0 ? Math.round(b.paid*remain/b.bought) : 0, cur) : '<br><span style="color:var(--muted);">没有记录当初实付，无法校验上限</span>')+'</div></span></label>'+
       '<div style="margin:6px 0 0 24px;font-size:12px;">退款金额（Rp，可为 0，不超过实付）：<input type="number" min="0" id="rs-amt-'+i+'" style="'+inp+'width:150px;"></div></div>';
   }).join('');
-  ov.innerHTML = '<div class="modal-box" style="width:560px;max-height:84vh;overflow:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">退款服务</span><span style="cursor:pointer;" onclick="closeRefundService()">✕</span></div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:560px;max-height:84vh;overflow:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">退款服务</span><span style="cursor:pointer;" onclick="cancelRefundService()">✕</span></div>'+
     '<div style="font-size:12px;color:var(--slate2);margin-bottom:8px;">勾选要退的批次（可一次退多批）；退款后这一批作废、剩余次数归零；退款记在当初购买该批次的案件上。</div>'+(rows || '<div style="font-size:12px;color:var(--muted);">没有可退的批次</div>')+
     '<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">退款原因 <span style="color:#C1454A;">*</span></div><textarea id="rs-reason" rows="3" placeholder="请输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>'+
-    '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-primary" style="flex:1;" onclick="confirmRefundService()">确认退款</button><button class="btn-outline" onclick="closeRefundService()">取消</button></div></div>';
+    '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-primary" style="flex:1;" onclick="confirmRefundService()">确认退款</button><button class="btn-outline" onclick="cancelRefundService()">取消</button></div></div>';
   ov.classList.add('open');
 }
 function closeRefundService(){ var ov = document.getElementById('refund-svc-overlay'); if(ov) ov.classList.remove('open'); }
 function confirmRefundService(){
-  var c = getCurrentCase(); if(!c) return;
+  var ctx = REFUND_SVC || {}, c = ctx.caseId ? getCurrentCase() : (ctx.name ? {name:ctx.name, id:null, _client:true} : null); if(!c) return;
   var list = refundableBatches(c.name), picks = [];
   [].forEach.call(document.querySelectorAll('.rs-cb'), function(cb){ if(cb.checked){ var i = parseInt(cb.getAttribute('data-i'),10), x = list[i]; if(x) picks.push({x:x, i:i}); } });
   if(!picks.length){ alert('请至少勾选一个批次'); return; }
@@ -1634,12 +1746,19 @@ function confirmRefundService(){
     var pc = CASE_ITEMS.filter(function(y){ return y.id===b.caseId; })[0];
     var line = '退款服务：'+h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'（'+b.date+' 购买，案件 '+caseNoLabel(b.caseId)+'，剩余 '+b.voidedRemaining+' 次作废），退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reason+'；办理案件 '+(c.caseNo||'');
     if(pc){ pc.holdingRefunds = pc.holdingRefunds || []; pc.holdingRefunds.push({itemName:h.itemName, amount:amt, reason:reason, date:today, qty:b.voidedRemaining||0, viaCaseId:c.id}); logCaseEvent(pc, ME_NAME, line+'；退款记在本案件，结局不变'); }
-    if(!pc || pc.id!==c.id) logCaseEvent(c, ME_NAME, line);
+    if(c.id && (!pc || pc.id!==c.id)) logCaseEvent(c, ME_NAME, line);
     if(cl){ cl.timeline = cl.timeline || []; cl.timeline.push({stage:'退款服务', actor:ME_NAME, actorId:currentAccountId(), action:line, dt:nowFullDt(), kind:'plain'}); }
     names.push(h.itemName);
   });
+  closeRefundService(); REFUND_SVC = null;
+  if(c._client){ try{ renderClientDetailIn(c.name); }catch(e){} return; } /* CMD-1026-13：客人页持有项目的［退款］——只记在购买案件和客人 Timeline，不涉及当前案件 */
   c.refundVisit = {fromCaseId:picks[0].x.b.caseId, itemName:names.join('、'), amount:picks.reduce(function(s,p){ return s+p.amt; }, 0)};
-  closeRefundService();
+  if(ctx.fromDialog){ /* 到店对话框选「退款」：不开新案件；退完直接算客人离店、这次预约收尾（仅办理退款） */
+    c.followupAsked = true; c.continueNew = false; logCaseEvent(c, ME_NAME, '客人到店办退款：'+names.join('、'));
+    buildCaseLog(c); renderCaseBody(c);
+    c.endNote = '仅办理退款'; logCaseEvent(c, ME_NAME, '这次只办退款，案件结束'); autoFinish(c, '未购买未使用');
+    return;
+  }
   buildCaseLog(c); renderCaseBody(c);
   openRefundOnlyAsk();
 }
@@ -1670,18 +1789,23 @@ function renderCaseBody(c){
       '</div>'+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>';
     return;
   }
-  if(!c.materialsConfirmed){ el.innerHTML = refundServiceBarHtml(c)+materialsCardHtml(c)+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>'; return; } /* 基础资料确认前没有 tab，Timeline 仍挂在下面 */
+  if(!c.materialsConfirmed){ /* CMD-1022-15：接待页分两个 tab：基础资料 / Timeline（附件等其他 tab 仍要基础资料确认后才有） */
+    var rt = c.activeCaseTab==='timeline' ? 'timeline' : 'basic';
+    var rtabs = '<div class="tabs" style="margin-bottom:4px;"><span class="tab'+(rt==='basic' ? ' active' : '')+'" onclick="switchCaseTab(\'basic\')">基础资料</span><span class="tab'+(rt==='timeline' ? ' active' : '')+'" onclick="switchCaseTab(\'timeline\')">Timeline</span></div>';
+    el.innerHTML = rtabs+(rt==='timeline' ? caseTimelineCardHtml(c) : basicFourHtml(c, false)); return;
+  }
   normalizeCaseTab(c);
-  el.innerHTML = caseTabsHtml(c) + (c.activeCaseTab==='basic' ? refundServiceBarHtml(c) : '') + caseTabContentHtml(c);
+  if(typeof subPageActive==='function' && subPageActive(c)){ el.innerHTML = gmcSafe('子案件页', function(){ return subPageHtml(c); }); return; } /* CMD-1023-03 P3：子案件页 */
+  el.innerHTML = gmcSafe('tab 列表', function(){ return caseTabsHtml(c); }) + '' + gmcSafe('tab 内容', function(){ return caseTabContentHtml(c); });
 }
 
 function resumeVisit(targetId){
   var c = getCurrentCase(); if(!c || c.materialsConfirmed) return;
   var t = CASE_ITEMS.filter(function(x){ return x.id===targetId; })[0]; if(!t) return;
-  if(!confirm('接续到原案件 '+t.caseNo+'？本次新案件 '+c.caseNo+' 将作废（不留记录）。')) return;
+  if(!confirm('继续到原案件 '+t.caseNo+'？本次新案件 '+c.caseNo+' 将作废（不留记录）。')) return;
   RESUMED_VISITS.push({name:c.name, date:c.visitDate, time:c.visitTime, purpose:c.visitPurpose, caseId:t.id, origCaseNo:t.caseNo, voidedCaseNo:c.caseNo}); /* 日历上这条预约来访改挂到原案件，显示已到访 */
   CASE_ITEMS.splice(CASE_ITEMS.indexOf(c), 1);
-  logCaseEvent(t, ME_NAME, '接续到访「'+ME_NAME+'」 '+tkU(nowFullDt()));
+  logCaseEvent(t, ME_NAME, '继续到访「'+ME_NAME+'」 '+tkU(nowFullDt()));
   CASE_RETURN.length = 0;
   if(typeof buildCaseTabs==='function'){ buildCaseTabs(); renderCaseRows(); }
   openCaseDetail(t.id, true);
@@ -1699,23 +1823,29 @@ function closeCancelIntakeModal(){
 
 /* 案件页头两行（CMD-1013-09 一）：第一行「客人名（点进客户详情）· 第 N 次来访」；第二行小字「Case ID · 对接院长」，不显示医院名 */
 function caseVisitNo(c){
-  if(c.subState!=='arrived') return 0; /* 本案件还没到店：不显示 */
+  if(inVisitOf(c).state!=='arrived') return 0; /* 本案件还没到店：不显示 */
+  var idx = (function(){ var list = []; mainsOf().filter(function(m){ return m.name===c.name; }).forEach(function(m){ visitsOf(m).forEach(function(v){ if(v.place!=='IN') return; var r = CASE_ITEMS.filter(function(x){ return x.id===(v.rec||v.caseId); })[0]; if(r && inVisitOf(r).state==='arrived') list.push({id:r.id, k:(v.date||'')+' '+(v.time||''), no:String(r.caseNo)}); }); }); list.sort(function(a, b){ return a.k.localeCompare(b.k) || a.no.localeCompare(b.no); }); return list.map(function(x){ return x.id; }).indexOf(c.id); })(); /* CMD-1023-01 补 2：经 visitsOf 数「第 N 次来访」 */
+  if(idx>-1) return idx+1;
   var list = CASE_ITEMS.filter(function(x){ return x.name===c.name && x.subState==='arrived'; }).sort(function(a, b){ return ((a.visitDate||'')+' '+(a.visitTime||'')).localeCompare((b.visitDate||'')+' '+(b.visitTime||'')) || String(a.caseNo).localeCompare(String(b.caseNo)); });
   return list.findIndex(function(x){ return x.id===c.id; })+1;
 }
 function openClientFromCase(){ var c = getCurrentCase(); if(c) openClientDetail(c.name, 'in-casedetail'); }
+/* CMD-1026-09 B1：主案件页头三行——第一行 客人名 + 状态标签；第二行 案件号 · 对接院长 + 最右［发起对话］；第三行（状态栏位置）今日进行中 / 下次预约。标题里不再带案件号，也拿掉「从…开始 · 进行中」那行和单独的「当前状态」卡 */
+function mainPageV2(c){ return !!c && !!c.materialsConfirmed && !isChildVisit(c) && !subPageActive(c) && !isRevEval(c) && useV2Tabs(c); }
 function renderCaseTitle(c){
   var el = document.getElementById('case-title'); if(!el) return; var n = caseVisitNo(c);
-  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(n ? ' · 第 '+n+' 次来访' : '');
+  el.innerHTML = '<a href="#" onclick="openClientFromCase();return false;" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">'+String(c.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a>'+(subPageActive(c) ? (function(){ var v = subCtxOf(c).v; return ' · '+(v.no||c.caseNo)+(v.date ? ' · '+String(v.date).slice(5).replace('-', '/')+'（'+(v.place==='KR' ? '韩国' : '印尼')+'）' : ''); })() : (!mainPageV2(c) && mainOf(c).caseNo ? ' · '+mainOf(c).caseNo : '')+(mainPageV2(c) ? ' <span class="status-pill" style="background:'+caseStageBadge(c)[0]+';color:'+caseStageBadge(c)[1]+';font-size:12px;font-weight:600;vertical-align:middle;margin-left:8px;">'+caseStageBadge(c)[2]+'</span>'+(function(){ var k = caseCountsOf(c); return ' <span id="case-counts" style="font-size:13px;font-weight:400;color:var(--slate2);vertical-align:middle;margin-left:10px;">访问：'+k.visits+' 次｜面诊：'+k.consult+' 次｜施术：'+k.surg+' 次</span>'; })() : '')); /* CMD-1023-02 三：标题「客人名 · A000001」，拿掉「第 N 次来访」；子案件页标主案件号 */
 }
 function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;
   renderCaseTitle(c);
   var html = (c.caseNo||'')+(c.director ? ' · 对接院长：'+c.director : '');
-  if(c.linkedCase && c.linkedCase.caseId){
-    var src = CASE_ITEMS.filter(function(x){ return x.id===c.linkedCase.caseId; })[0];
-    html += (html ? ' · ' : '')+(c.followup ? '术后来访 · 关联：' : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+c.linkedCase.caseId+'\');return false;">'+(src&&src.caseNo?src.caseNo:c.linkedCase.caseId)+'</a>（'+c.linkedCase.reason+(c.linkedCase.auto?'，自动关联':'')+'）';
+  var rel0 = relatedOf(c); /* CMD-1023-01 补 2：经 relatedOf 读关联 */
+  if(rel0.linkedId && !subPageActive(c)){
+    var src = CASE_ITEMS.filter(function(x){ return x.id===rel0.linkedId; })[0];
+    html += (html ? ' · ' : '')+(rel0.followup ? ((rel0.type==='复诊评估') || rel0.revisit ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+rel0.linkedId+'\');return false;">'+(src&&src.caseNo?src.caseNo:rel0.linkedId)+'</a>（'+rel0.reason+(rel0.auto?'，自动关联':'')+'）';
   }
+  if(c.materialsConfirmed && !isChildVisit(c) && !mainPageV2(c)){ try{ html += '<div style="margin-top:2px;">'+mainHeadLine(c)+'</div>'; }catch(e){} } /* CMD-1023-01 补 2：页头一行 从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
   el.innerHTML = html;
 }
 
@@ -1730,7 +1860,7 @@ function caseUrl(id, extra){
   return location.pathname + '?case=' + encodeURIComponent(c ? (c.caseNo || c.id) : id) + (extra||'');
 }
 
-function openCaseNewTab(id, extra){ var q = new URLSearchParams(extra||''), o = {tab:q.get('tab')||'', pc:q.get('pc')==='1', scroll:q.get('scroll')||'', chat:q.get('chat')==='open'}; openCaseDetail(id, false, o); } /* CMD-1019-08：和 openCaseDetail 同一个入口 */ /* CMD-1019-04：同一案件沿用已开分页 */
+function openCaseNewTab(id, extra){ var q = new URLSearchParams(extra||''), o = {tab:q.get('tab')||'', pc:q.get('pc')==='1', scroll:q.get('scroll')||'', chat:q.get('chat')==='open', sub:q.get('sub')||''}; openCaseDetail(id, false, o); } /* CMD-1019-08：和 openCaseDetail 同一个入口 */ /* CMD-1019-04：同一案件沿用已开分页 */
 
 function openCaseChatNewTab(id){
   var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return;
@@ -1759,7 +1889,7 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var missing = [];
-  if(!c.followup && c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1021-20：一般案件 메타뷰 必填（面诊 / 不面诊都要）；关联案件（术后 / 复诊）选填 */
+  if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1022-05：메타뷰 每次到院都必填（一般 / 复诊 / 术后 / 继续都一样），取代 CMD-1020-20 / 21 的「关联案件选填」 */
   concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
@@ -1784,6 +1914,8 @@ function confirmMaterials(){
   document.getElementById('case-chat-actions').style.display = 'flex';
   if(c.needsConsult==='reuse'){
     applyReuseReport(c); /* 沿用之前诊疗方案：不产生面诊费卡片，直接进入"项目确认中" */
+  } else if(c.needsConsult===true && c.followup && c.resumeFrom && c.resumeFrom.type==='复诊评估'){
+    startRevisitEval(c); /* CMD-1022-07：继续 · 复诊评估：不收面诊费，直接送 KR 确认评估时间 */
   } else if(c.needsConsult===true){
     /* 选了面诊，直接进面诊资料tab走缴费，不需要再多点一次"面诊申请" */
     c.consultRequested = true;
@@ -1798,20 +1930,20 @@ function confirmMaterials(){
   }
   updateCaseStage(c);
   renderCaseStatusBar(c);
-  logCaseEvent(c, ME_NAME, '确认了메타뷰/照片/视频/苦恼/希望预期，面诊需求：'+(c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊')));
+  logCaseEvent(c, ME_NAME, '确认了메타뷰/照片/视频/苦恼/希望预期，'+(c.revisitEval ? '' : '面诊需求：')+(c.revisitEval ? '复诊评估' : (c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊'))));
   buildCaseLog(c);
   renderCaseBody(c);
 }
 
 /* Tab 出现时机（IN-CASE-01）：项目列表=面诊案件报告出来后；本地管理=本地案件确认后，或面诊/赴韩案件点"+添加本地管理"后 */
 /* Tab 出现时机（CMD-1012-11）：赴韩施术 = 面诊案件出诊疗方案后（或已有赴韩项目）；本地管理 = 有本地项目；结算 = 有任何一张结算单。「项目列表」tab 已并入赴韩施术 / 本地管理 */
-function showKrTab(c){ return (!!c.projectsEnabled && !!c.reportReady) || (!!c.settlementDone && krAllItems(c).length>0); }
+function showKrTab(c){ return (!!c.projectsEnabled && !!c.reportReady && !isRevEval(c)) || (!!c.settlementDone && krAllItems(c).length>0); }
 function showProjectsTab(c){ return showKrTab(c); } /* 旧名称，指向赴韩施术 */
 function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.localMgmt && (c.localMgmt.batches||[]).length); }
 
-function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0; }
+function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0 || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理')); } /* CMD-1022-15：选了术后管理 → 本地管理 tab 出现（术后管理，来自原案件） */
 
-function showRelatedTab(c){ return !!(c.linkedCase && c.linkedCase.caseId); } /* 只有往前关联的案件才有关联案件 tab */
+function showRelatedTab(c){ return false; /* CMD-1022-05：独立的「关联案件」tab 拿掉，改成基础资料第一块（relatedBlockHtml） */ } /* 只有往前关联的案件才有关联案件 tab */
 
 /* ---- 案件终态（2026-10-02·六）：对话房整理进附件（对话记录（文本）+ 📁 里文件的链接，不复制文件；录像和AI文本本来就在面诊资料附件里），然后删除房间，
    对话抽屉里不再出现；作废的案件没有房间 ---- */
@@ -1941,7 +2073,7 @@ function noPurchaseThisTime(){
 
 /* 标记项目行：action 'done' / 'cancelled'；all=true 时作用于全部进行中的项目，否则作用于勾选的 */
 function markMgmtRows(scope, action, all, oneIdx){
-  var c = getCurrentCase(); if(!c) return;
+  var c = getCurrentCase(); if(!c) return; if(inLockGuard(c)) return; /* CMD-1026-20 */
   var ctx = ctxOf(c, scope); if(!ctx) return;
   var uses = ctx.mgmtUses||[];
   var idxs = oneIdx!==undefined ? [oneIdx] : all
@@ -2216,7 +2348,7 @@ function settleProjects(batchId){
   document.getElementById('settle-overlay').classList.add('open');
 }
 
-function closeSettleModal(){ document.getElementById('settle-overlay').classList.remove('open'); }
+function closeSettleModal(){ var so = document.getElementById('settle-overlay'); so.classList.remove('open'); so.style.zIndex = ''; }
 
 function submitKrScheduleDate(){
   var c = getCurrentCase(); if(!c) return;
@@ -2261,7 +2393,7 @@ var END_REASONS = ['客人不做了', '失联', '其他'];
 function endCaseRows(c){
   var rows = [];
   if(c.consultRequested && c.consultStatus==='awaiting_payment') rows.push({key:'fee', title:'面诊费待缴', opts:[['pay','收款（客人已缴面诊费）'],['cancel','取消面诊']]});
-  else if(c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) rows.push({key:'consult', info:'面诊诊疗方案还没出：照样等报告。结束后结局算「仅出报告」，KR 之后发出的诊疗方案会放进这个已结束的案件（只读、可下载），新案件关联本案件也能看。'});
+  else if(!isRevEval(c) && c.consultRequested && ['paid_waiting_kr','awaiting_report'].indexOf(c.consultStatus)>-1) rows.push({key:'consult', info:'面诊诊疗方案还没出：照样等报告。结束后结局算「仅出报告」，KR 之后发出的诊疗方案会放进这个已结束的案件（只读、可下载），新案件关联本案件也能看。'});
   (c.settlementBatches||[]).forEach(function(b){
     if(b.status!=='unpaid') return;
     var opts = []; if(!(b.krDeposit>0)) opts.push(['pay','收款（标记已付款，本地项目转持有）']); opts.push(['cancel','取消该项目（撤销这张结算单）']);
@@ -2275,9 +2407,40 @@ function endCaseRows(c){
   });
   return rows;
 }
+/* CMD-1022-19：复诊评估还没出结果时［客人离店］：不结案，只记「客人已离店」；结果出来、IN 确认后才结案（结案类型「复诊评估结束」） */
+function revLeaveStore(c, note){
+  c.leftStore = {at:nowFullDt(), by:actingName()};
+  logCaseEvent(c, actingName(), '客人离店（复诊评估还没出结果，KR 照样继续评估，不结案）'+(note||''));
+  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  showToast('客人已离店', c.name+' · 等复诊评估结果，结果出来后再确认结案', null);
+}
+/* CMD-1028-02：离店前先提醒这一天还没完成的事（只提醒、不挡）：有 → 弹「客人离开前请确认：」［返回处理］［确认离开］；没有 → 照旧直接走（不多一步） */
+var LEAVE_REM = null, LEAVE_OK = {};
+function leaveRemindOpen(side, id, list, key){
+  LEAVE_REM = {side:side, id:id, key:key||'', list:list};
+  var ov = document.getElementById('leave-remind-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'leave-remind-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100040; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:500px;max-width:94vw;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">客人离开前请确认：</div><div style="font-size:12px;color:var(--muted);margin-bottom:8px;">只是提醒，不会挡着客人离开。</div>'+
+    list.map(function(x){ return '<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--border2);font-size:13px;line-height:1.6;"><span style="flex:1;">• '+cesc(x.text)+'</span>'+(x.go ? '<button class="btn-outline" style="padding:2px 10px;font-size:12px;white-space:nowrap;" onclick="leaveRemindClose();'+x.go+'">去处理</button>' : '')+'</div>'; }).join('')+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="leaveRemindClose()">返回处理</button><button class="btn-primary" onclick="leaveRemindConfirm()">确认离开</button></div></div>';
+  ov.classList.add('open');
+}
+function leaveRemindClose(){ var ov = document.getElementById('leave-remind-overlay'); if(ov) ov.classList.remove('open'); LEAVE_REM = null; }
+function leaveRemindConfirm(){
+  var R = LEAVE_REM; if(!R) return; leaveRemindClose();
+  var txt = R.list.map(function(x){ return x.text.replace(/（[^）]*）$/, ''); }).join('；');
+  if(R.side==='IN'){ var c = CASE_ITEMS.filter(function(x){ return x.id===R.id; })[0]; if(!c) return; logCaseEvent(c, actingName(), '客人离店时仍有：'+txt); LEAVE_OK[c.id] = true; try{ openEndCase(); }finally{ delete LEAVE_OK[c.id]; } }
+  else krLeaveAfterRemind(R.key, R.list.some(function(x){ return x.projects; }), txt);
+}
 function openEndCase(){
   var c = getCurrentCase(); if(!c || !canEndCase(c)) return;
+  if(!LEAVE_OK[c.id] && !window.GMC_NO_LEAVEREMIND){ var lr = leaveRemindersIN(c); if(lr.length){ leaveRemindOpen('IN', c.id, lr); return; } }
   END_CASE = {caseId:c.id, choice:{}, amt:{}, reason:'', note:''};
+  /* CMD-1022-15：［客人离店］——系统先判断：没有剩下的项目（都做完、都付清）→ 直接离店并结束案件，不跳弹窗；还有没做完 / 没付款的 → 弹窗（列出剩下的项目、要选原因） */
+  var left = endCaseRows(c); /* 含「面诊还在等报告」这类只告知的行：这也算没做完，要弹窗选原因 */
+  if(!left.length && !closeBlockers(c).length){
+    if(isRevEval(c) && !c.reportReady){ END_CASE = null; revLeaveStore(c); return; } /* CMD-1022-19：复诊评估还没出结果 → 客人离店不结案（复诊评估不算没做完的项目），KR 照样继续评估 */
+    END_CASE.reason = '客人离店'; confirmEndCase(); return;
+  }
   renderEndCase();
 }
 function renderEndCase(){
@@ -2292,12 +2455,12 @@ function renderEndCase(){
     return '<div style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;"><div style="font-size:13px;font-weight:600;">'+r.title+'</div>'+opts+amt+'</div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">没有未处理的项目。</div>';
   var reasons = END_REASONS.map(function(x){ return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin-right:14px;"><input type="radio" name="ec-reason" '+(st.reason===x ? 'checked' : '')+' onchange="END_CASE.reason=\''+x+'\';endCaseUpdateBtn()">'+x+'</label>'; }).join('');
-  ov.innerHTML = '<div class="modal-box" style="width:520px;max-height:84vh;overflow:auto;"><div style="font-size:15px;font-weight:700;margin-bottom:4px;">结束案件</div>'+
-    '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">客人中途不做了 / 有事要走。付定金之前才能手动结束；下面没处理完的要逐项选好，钱清了才能确定。</div>'+html+
+  ov.innerHTML = '<div class="modal-box" style="width:520px;max-height:84vh;overflow:auto;"><div style="font-size:15px;font-weight:700;margin-bottom:4px;">客人离店</div>'+
+    '<div style="font-size:12px;color:var(--slate2);margin-bottom:12px;">客人要离店了，下面是还没处理完的项目。付定金之前才能离店结案；要逐项选好，钱清了才能确定。</div>'+html+
     '<div style="margin:12px 0 6px;font-size:13px;font-weight:600;">结束原因（必填）</div><div>'+reasons+'</div>'+
     '<input type="text" placeholder="补充说明（选「其他」时必填）" value="'+(st.note||'').replace(/"/g,'&quot;')+'" oninput="END_CASE.note=this.value;endCaseUpdateBtn()" style="width:100%;margin-top:8px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;">'+
     '<div id="ec-hint" style="font-size:12px;color:#C26A1B;margin-top:8px;"></div>'+
-    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="closeEndCase()">返回</button><button id="ec-ok" class="btn-primary" onclick="confirmEndCase()">确定结束</button></div></div>';
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="closeEndCase()">返回</button><button id="ec-ok" class="btn-primary" onclick="confirmEndCase()">确定离店</button></div></div>';
   ov.classList.add('open'); endCaseUpdateBtn();
 }
 function endCaseSet(key, val){ END_CASE.choice[key] = val; renderEndCase(); }
@@ -2355,6 +2518,7 @@ function confirmEndCase(){
   });
   var left = closeBlockers(c);
   if(left.length){ alert('还有未处理的款项：'+left.join('、')+'，案件没有结束'); renderCaseStatusBar(c); renderCaseBody(c); return; }
+  if(isRevEval(c) && !c.reportReady){ revLeaveStore(c, '（其他项目已处理）'); return; } /* CMD-1022-19：复诊评估还没出结果 → 不结案 */
   c.manualEnd = {reason:st.reason, note:(st.note||'').trim(), by:by, at:nowFullDt()};
   c.endNote = '手动结束：'+reasonText;
   logCaseEvent(c, by, '手动结束案件（付定金前，当时：'+phase+'）：'+reasonText);
@@ -3020,6 +3184,7 @@ function updateBell(){
 /* 生成通知：自动算收件人，收件人里有我就弹 toast（点 toast = 点这条通知） */
 function pushNotif(cat, text, opts){
   opts = opts || {};
+  text = notifVisitTag(text, opts.caseId); /* CMD-1023-01 补 2 */
   var c = opts.caseId ? CASE_ITEMS.filter(function(x){ return x.id===opts.caseId; })[0] : null;
   var rec;
   if(opts.names) rec = opts.names.slice();
@@ -3080,7 +3245,7 @@ function openNotif(id, src){
   }
   if(n.caseId){
     var pcGo = /术后管理/.test(n.text||'') && !/转回印尼持有/.test(n.text||'');
-    var planGo = /诊疗方案已[到出]|复诊评估已出/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
+    var planGo = /诊疗方案已[到出]|复诊评估已出|复诊评估结果已到/.test(n.text||'') ? 'consult' : ''; /* CMD-1020-13 二：诊疗方案已到 → 面诊资料 tab（诊疗方案在那里看） */
     if(newTab) openCaseNewTab(n.caseId, pcGo ? '&tab=kr&pc=1' : (planGo ? '&tab=consult' : '')); else openCaseDetail(n.caseId, false, pcGo ? {pc:true} : (planGo ? {tab:planGo} : {pc:pcGo}));
   }
 }
@@ -3670,8 +3835,15 @@ function presMyAcct(){ try{ return currentAccountId(); }catch(e){ return ME_NAME
 function presCaseKey(){
   try{
     if(window.__krRecInTab) return null; /* 院长的面诊输入页（新分页）不登记「在看这个案件」，也不触发同一账号两分页锁 */
-    if(isKrAccount()) return (CURRENT_PAGE_ID==='kr-casedetail' && typeof KR_CASE!=='undefined' && KR_CASE && KR_CASE.id) ? KR_CASE.clinicId+':'+KR_CASE.id : null;
-    return (CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID) ? CURRENT_CLINIC_ID+':'+CURRENT_CASE_ID : null;
+    /* CMD-1023-01 S7：操作锁 / 在线登记的粒度 = 主案件（同一个主案件的子案件页共用一把锁） */
+    if(isKrAccount()){
+      if(!(CURRENT_PAGE_ID==='kr-casedetail' && typeof KR_CASE!=='undefined' && KR_CASE && KR_CASE.id)) return null;
+      var kid = KR_CASE.id; try{ var kc = ((Store.readClinic(KR_CASE.clinicId)||{}).CASE_ITEMS||[]).filter(function(x){ return x.id===kid; })[0]; if(kc && kc.mainId) kid = kc.mainId; }catch(e2){}
+      return KR_CASE.clinicId+':'+kid;
+    }
+    if(!(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID)) return null;
+    var cc = CASE_ITEMS.filter(function(x){ return x.id===CURRENT_CASE_ID; })[0];
+    return CURRENT_CLINIC_ID+':'+(cc && cc.mainId ? cc.mainId : CURRENT_CASE_ID);
   }catch(e){ return null; }
 }
 function presFresh(e){ return e && (Date.now() - e.ts) < PRES_TTL; }
