@@ -2429,7 +2429,8 @@ function krTimeEditSave(){
   if(KR_TE.postpone){ document.getElementById('kr-te-overlay').classList.remove('open'); krMut(function(c){ return coreRowPostpone(c, id, ME_NAME); }); return; }
   if(KR_TE.toIn){ document.getElementById('kr-te-overlay').classList.remove('open'); krMut(function(c){ return coreCareToIn(c, id, ME_NAME); }); return; }
   var c9 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s9 = (c9.subItems||[]).filter(function(x){ return x.id===id; })[0];
-  var lbt = stayDayBlockText(c9, d); if(lbt){ krBlock(lbt); return; } /* CMD-1027-12 二 */
+  var lbt = stayDayBlockText(c9, d, t0); if(lbt){ krBlock(lbt); return; } /* CMD-1027-12 二；CMD-1028-12 二：离境当天、离境时间之前 = 提醒后确认 */
+  var cft = stayDayConfirmText(c9, d, t0); if(cft && KR_TE.stayOk!==d+' '+t0){ krOffConfirm(cft, function(){ KR_TE.stayOk = d+' '+t0; krTimeEditSave(); }); return; }
   var ddk = doneDayInfo(c9, d); if(ddk && !(s9 && subCaseKey(s9)==='KR|'+d)){ krDoneDayAsk(ddk, krTimeEditSave); return; }
   if(s9 && subCaseKey(s9)!=='KR|'+d && !KR_TE.toIn){ var exT9 = krVisitTimeOnDate(c9, d, id); if(exT9 && exT9!==t0){ t0 = exT9; KR_TE.time = exT9; showToast('已合并', '那天已有到院：已合并到 '+exT9+' 的到院（时间以原预约为准）', null); } } /* 排进已完成的到院日（CMD-1021-15）：原弹窗保持打开 */
   if(KR_TE.care){ var hc9 = krbClosedText(krHospitalIdOfMe(), d, t0); if(hc9){ krBlock(hc9); return; } }
@@ -2559,7 +2560,7 @@ function krBkdRender(){
 }
 function krBkdSave(){
   var B = KR_BKD; if(!B || !krCan()) return; var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c;
-  if(B.place!=='IN'){ var lbb = stayDayBlockText(c0, B.date); if(lbb){ krBlock(lbb); return; } var ddk = doneDayInfo(c0, B.date); if(ddk){ krDoneDayAsk(ddk, krBkdSave); return; } } /* CMD-1027-12 二 */
+  if(B.place!=='IN'){ var lbb = stayDayBlockText(c0, B.date, B.time); if(lbb){ krBlock(lbb); return; } var cfb = stayDayConfirmText(c0, B.date, B.time); if(cfb && B.stayOk!==B.date+' '+B.time){ krOffConfirm(cfb, function(){ B.stayOk = B.date+' '+B.time; krBkdSave(); }); return; } var ddk = doneDayInfo(c0, B.date); if(ddk){ krDoneDayAsk(ddk, krBkdSave); return; } } /* CMD-1027-12 二 */
   var go = function(){ document.getElementById('kr-bkd-overlay').classList.remove('open'); krMut(function(c){ var ok = B.mode==='care' ? coreCareBook(c, B.name, B.pcIdx, B.date, B.time, B.place, B.reuseId, ME_NAME) : coreUnitBookUse(c, B.name, B.date, B.time, ME_NAME, B.surg ? B.dir : ''); if(!ok) alert('没有预约成功（项目状态已变化？）'); return ok; }); };
   if(B.place==='IN'){ go(); return; }
   if(B.mode==='care'){ var hc = krbClosedText(krHospitalIdOfMe(), B.date, B.time); if(hc){ krBlock(hc); return; } var oc = krOffHoursText(krHospitalIdOfMe(), B.date, B.time, 30); if(oc) krOffConfirm(oc+'（'+B.date+' '+B.time+'，韩国时间）', go); else go(); return; } /* CMD-1015-30：术后管理不占院长时间，只看医院 */
@@ -3770,10 +3771,10 @@ function krCbMgRows(m, qty, old){
 }
 function krCbOpen(filter){
   if(!krCan() || CURRENT_PAGE_ID!=='kr-casedetail') return; filter = filter || {all:true};
-  var hid = krHospitalIdOfMe(), info = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c && c.krBalancePaid && !c.visitClosed ? {slots:careSlotList(c, (filter.kept || filter.one || filter.mgmtOne) ? {all:true} : undefined), earliest:stayOutDate(c), stayOut:stayOutIsSet(c), leave:stayLeaveWhen(c), mg:krCbMgItems(c, (filter.kept || filter.one || filter.mgmtOne) ? {all:true} : undefined), director:c.director||'', visits:krCbVisits(c)} : null; });
+  var hid = krHospitalIdOfMe(), info = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c && c.krBalancePaid && !c.visitClosed ? {outTime:(c.stay&&c.stay.outTime)||'', slots:careSlotList(c, (filter.kept || filter.one || filter.mgmtOne) ? {all:true} : undefined), earliest:stayOutDate(c), stayOut:stayOutIsSet(c), leave:stayLeaveWhen(c), mg:krCbMgItems(c, (filter.kept || filter.one || filter.mgmtOne) ? {all:true} : undefined), director:c.director||'', visits:krCbVisits(c)} : null; });
   if(!info || (!info.slots.length && !info.mg.length)) return;
   var t0 = hospitalHours(hid).open || '11:00', picked = {};
-  KR_CB = {earliest:info.earliest, stayOut:info.stayOut, leave:info.leave, auto:!!filter.auto, t0:t0, mg:{}, director:info.director, visits:info.visits, rows:info.slots.map(function(sl, n){
+  KR_CB = {outTime:info.outTime, earliest:info.earliest, stayOut:info.stayOut, leave:info.leave, auto:!!filter.auto, t0:t0, mg:{}, director:info.director, visits:info.visits, rows:info.slots.map(function(sl, n){
     var sel = filter.surg ? sl.item===filter.surg : (filter.all && filter.tab!=='mgmt' && !filter.auto) ? true : (filter.one && sl.item===filter.one.item && sl.i===filter.one.i && (picked[sl.item+'|'+sl.i]||0) < (filter.one.n||1) && (!filter.one.reuse || sl.reuse===filter.one.reuse || !sl.reuse) ? (picked[sl.item+'|'+sl.i] = (picked[sl.item+'|'+sl.i]||0)+1) : false); /* CMD-1028-08：one.n = 未安排预约里同一个项目合成一行的次数，［预约］一次带上这几次 */
     return {kind:'care', item:sl.item, i:sl.i, x:sl.x, sug:sl.sug, sdate:sl.sdate, reuse:sl.reuse, canIn:sl.canIn, place:sl.place==='' ? 'KR' : sl.place, date:sl.sug || todayStr(), time:t0, checked:true, /* CMD-1025-03 三：打开时日期没问题的默认都勾好（日期有问题的 krCbRender 会自动取消，改对后自动勾上） */ dirOp:dirOpInfo(hid, sl.x.name), dir:info.director};
   })};
@@ -3826,8 +3827,10 @@ function krCbSyncTimes(){
   KR_CB.rows.forEach(function(r){ var gone = krCbGone(r); if(r.kind==='care' && r.canIn){ if(gone && r.place!=='IN'){ r.place = 'IN'; r.autoIn = true; } else if(!gone && r.autoIn){ r.place = 'KR'; r.autoIn = false; } } });
   KR_CB.rows.forEach(function(r){ if(r.place==='IN') return; if(KR_CB.dayTime[r.date]===undefined) KR_CB.dayTime[r.date] = r.time || KR_CB.t0; KR_CB.dayTime[r.date] = krCbSnapTime(r.date, KR_CB.dayTime[r.date]); r.time = KR_CB.dayTime[r.date]; });
 }
-function krCbGone(r){ return !!(KR_CB && KR_CB.stayOut && KR_CB.earliest && r.date && r.date >= KR_CB.earliest); } /* CMD-1027-12 二：离开当天及之后都不能约（离开当天要留去机场的时间，整天不约） */
-function krCbGoneText(){ return '客人 '+(KR_CB.leave || KR_CB.earliest.slice(5).replace('-', '/'))+' 离开韩国，这天不能约'; }
+function krCbRel(r){ if(!(KR_CB && KR_CB.stayOut && KR_CB.earliest && r.date)) return 'before'; if(r.date < KR_CB.earliest) return 'before'; if(r.date > KR_CB.earliest) return 'after'; var tm = (KR_CB.dayTime||{})[r.date] || r.time; return (KR_CB.outTime && tm && tm >= KR_CB.outTime) ? 'after' : 'same'; }
+function krCbGone(r){ return krCbRel(r)==='after'; } /* CMD-1028-12 二：离境时间之后（含之后的日子）才不能约；离境当天、离境时间之前 = 'same'，确认预约时弹提醒（取代 CMD-1027-12 二「离开当天整天不约」） */
+function krCbGoneText(){ return '客人 '+(KR_CB.leave || KR_CB.earliest.slice(5).replace('-', '/'))+' 离开韩国，这个时间不能约'; }
+function krCbSameDayText(rows){ var r = rows.filter(function(x){ return x.place!=='IN' && krCbRel(x)==='same'; })[0]; return r ? '客人当天'+(KR_CB.outTime ? ' '+KR_CB.outTime : '')+' 离境，请确认来得及' : ''; }
 function krCbSet(i, k0, v){ var r = KR_CB.rows[i]; r[k0] = v; if(k0==='checked'){ r.userOff = !v; r.autoOff = false; } /* 自己取消的不再自动勾回去 */ if(k0==='date'){ r.time = (KR_CB.dayTime && KR_CB.dayTime[v]) || r.time; } krCbRender(); }
 function krCbSetDay(date, v){ KR_CB.dayTime[date] = v; krCbRender(); }
 function krCbMoveDay(date, nd){ if(!nd || nd===date) return; var keep = KR_CB.dayTime[nd]===undefined ? KR_CB.dayTime[date] : KR_CB.dayTime[nd]; KR_CB.rows.forEach(function(r){ if(r.place!=='IN' && r.date===date) r.date = nd; }); KR_CB.dayTime[nd] = keep; krCbRender(); }
@@ -3911,6 +3914,7 @@ function krCbRender(){
 function krCbGo(){
   if(!KR_CB || !krCan()) return; var rows = KR_CB.rows.filter(function(r){ return r.checked; });
   if(!rows.length) return; if(rows.some(function(r){ return krCbCheck(r).err; })){ alert('有项目不能约（红字），先取消勾选或改时间'); return; }
+  var sdt = krCbSameDayText(rows); if(sdt && !KR_CB.stayOk){ krOffConfirm(sdt, function(){ KR_CB.stayOk = true; krCbGo(); }); return; } /* CMD-1028-12 二：离境当天、离境时间之前——提醒，室长确认后才约 */
   if(!KR_CB.lunchOk && rows.some(krCbIsLunch)){ krOffConfirm('这是午休时间，确定预约吗？', function(){ KR_CB.lunchOk = true; krCbGo(); }); return; } /* CMD-1022-16 */
   var cb0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, ddk = null, mergedAt = []; rows.forEach(function(r){ if(!ddk && r.place!=='IN'){ ddk = doneDayInfo(cb0, r.date); } }); if(ddk){ krDoneDayAsk(ddk, krCbGo); return; }
   rows.forEach(function(r){ if(r.place!=='IN'){ var exT = krVisitTimeOnDate(cb0, r.date); if(exT && exT!==r.time){ r.time = exT; if(mergedAt.indexOf(r.date+' '+exT)<0) mergedAt.push(r.date+' '+exT); } } }); if(mergedAt.length) showToast('已合并', '同一天只有一次到院：已合并到 '+mergedAt.join('、')+' 的到院（时间以原预约为准）', null); /* CMD-1021-15：排进已完成的到院日 → 专门提示，原弹窗保持打开 */
@@ -4904,7 +4908,8 @@ function pcmDayEditRender(){
 function pcmDayEditClose(){ var ov = document.getElementById('pcm-edit-overlay'); if(ov) ov.classList.remove('open'); PCM_EDIT = null; }
 function pcmDayEditSave(){
   var E = PCM_EDIT; if(!E || !krCan()) return; var d = E.date, t0 = E.time, c9 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c;
-  var lbk = stayDayBlockText(c9, d); if(lbk){ krBlock(lbk); return; } /* CMD-1027-12 二：整天改时间也照离开日期挡 */
+  var lbk = stayDayBlockText(c9, d, t0); if(lbk){ krBlock(lbk); return; } /* CMD-1027-12 二：整天改时间也照离开日期挡 */
+  var cfk = stayDayConfirmText(c9, d, t0); if(cfk && E.stayOk!==d+' '+t0){ krOffConfirm(cfk, function(){ E.stayOk = d+' '+t0; pcmDayEditSave(); }); return; }
   var ddk = doneDayInfo(c9, d); if(ddk){ krDoneDayAsk(ddk, pcmDayEditSave); return; }
   var ex = krVisitTimeOnDate(c9, d, E.ids[0]); if(ex && ex!==t0){ t0 = ex; E.time = ex; showToast('已合并', '那天已有到院：已合并到 '+ex+' 的到院（时间以原预约为准）', null); }
   var hc = krbClosedText(krHospitalIdOfMe(), d, t0); if(hc){ krBlock(hc); return; }
@@ -4918,14 +4923,14 @@ function pcmDayEditSave(){
 var STAY_RES = null;
 function krStayResolveGate(kind, vals){ /* true = 有要处理的，已弹窗，调用方先别存 */
   var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c; if(!vals.outD) return false;
-  var list = stayConflictInfo(c, vals.outD); if(!list.length) return false;
+  var list = stayConflictInfo(c, vals.outD, vals.outT); if(!list.length) return false;
   STAY_RES = {kind:kind, vals:vals, rows:list.map(function(f){ return {f:f, mode:'', date:'', time:''}; })};
   krStayResRender(); return true;
 }
 function krStayResSet(i, k0, v){ var r = STAY_RES.rows[i]; r[k0] = v; if(k0==='mode' && v==='early' && !r.date){ r.date = ''; } if(k0==='date'){ r.time = krCbSnapTime(v, r.time || r.f.time || (hospitalHours(krHospitalIdOfMe()).open||'11:00')); } krStayResRender(); }
 function krStayResErr(r){
   if(r.mode==='early'){
-    if(!r.date) return '请选提前到哪天'; if(r.date >= STAY_RES.vals.outD) return '要在离开日期之前'; if(r.date < todayStr()) return '不能选过去的日子';
+    if(!r.date) return '请选提前到哪天'; if(stayRel(null, r.date, r.time||'', STAY_RES.vals.outD, STAY_RES.vals.outT||'')==='after') return '要在离开时间之前（离开当天、离开时间之前可以，保存时会提醒确认）'; if(r.date < todayStr()) return '不能选过去的日子';
     var er = krCbDateErr(r.date, r.time); if(er) return er;
   }
   return '';
@@ -4949,6 +4954,7 @@ function krStayResRender(){
 function krStayResCancel(){ STAY_RES = null; var ov = document.getElementById('kr-stayres-overlay'); if(ov) ov.classList.remove('open'); }
 function krStayResSave(){
   if(!STAY_RES || !krCan()) return; var S = STAY_RES, v = S.vals, picks = {}; S.rows.forEach(function(r){ picks[r.f.id] = {mode:r.mode, date:r.date, time:r.time}; });
+  var sdE = S.rows.filter(function(r){ return r.mode==='early' && stayRel(null, r.date, r.time||'', v.outD, v.outT||'')==='same'; })[0]; if(sdE && !S.sameOk){ krOffConfirm('客人当天'+(v.outT ? ' '+v.outT : '')+' 离境，请确认来得及', function(){ S.sameOk = true; krStayResSave(); }); return; } /* CMD-1028-12 二：提前做约在离境当天（离境时间之前）→ 提醒后确认 */
   var res = null, fin = null;
   krMut(function(c){
     res = coreStayResolve(c, picks, v.outD, v.outT, ME_NAME); if(!res.ok) return false;

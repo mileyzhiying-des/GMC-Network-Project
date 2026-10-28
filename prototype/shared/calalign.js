@@ -532,7 +532,7 @@ function staySave(){
   if(d.inD && d.outD && d.outD < d.inD) return bad('离境日不能早于入境日');
   var ye = stayDateErr('入境日', d.inD) || stayDateErr('离境日', d.outD); if(ye) return bad(ye);
   var finish = function(){ staySaveDo(x, c, d, methods, other, bad); };
-  if(d.outD && stayConflictInfo(c, d.outD).length){ inStayResGate(c, d, finish); return; } /* CMD-1027-14：离开日期之后还有韩国预约 → 先弹处理窗（和 KR 的行程修正同一套规则） */
+  if(d.outD && stayConflictInfo(c, d.outD, (d.ex||{}).outTime).length){ inStayResGate(c, d, finish); return; } /* CMD-1027-14：离开日期之后还有韩国预约 → 先弹处理窗（和 KR 的行程修正同一套规则） */
   finish();
 }
 function staySaveDo(x, c, d, methods, other, bad){
@@ -548,7 +548,7 @@ function staySaveDo(x, c, d, methods, other, bad){
    ［请 KR 提前做］（韩国的预约由 KR 安排，IN 不直接改日子：预约原样不动，发通知给 KR + KR 待办，KR 改到离开前之前仍算冲突）。 */
 var IN_STAYRES = null;
 function inStayResGate(c, d, then){
-  var list = stayConflictInfo(c, d.outD); if(!list.length){ then(); return; }
+  var list = stayConflictInfo(c, d.outD, (d.ex||{}).outTime); if(!list.length){ then(); return; }
   IN_STAYRES = {caseId:c.id, vals:d, then:then, rows:list.map(function(f){ return {f:f, mode:''}; })};
   inStayResRender();
 }

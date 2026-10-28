@@ -4944,14 +4944,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         c.stay = {in:inD, out:badOut}; ST.ok(!!stayDayBlockText(c, td), '（旧的错误数据）离境日存成去年 → 今天也被挡，这就是大测里看到的现象'+tag);
         ST.ok(/年份可能存错|太远/.test(staySuspect(c)), '旧的错误数据被识别出来，提示用行程修正'+tag);
         c.stay = {in:inD, out:outD};
-        ST.ok(!stayDayBlockText(c, ymdAdd(outD, -1)) && !!stayDayBlockText(c, outD) && !!stayDayBlockText(c, ymdAdd(outD, 1)), '离境日前一天能约，当天和之后不能约'+tag);
+        ST.ok(!stayDayBlockText(c, ymdAdd(outD, -1)) && !stayDayBlockText(c, outD) && !!stayDayConfirmText(c, outD) && !!stayDayBlockText(c, ymdAdd(outD, 1)), '离境日前一天能约，当天提醒后确认（CMD-1028-12 二：原来整天不能约），之后不能约'+tag);
         ST.ok(!staySuspect(c), '年份对的不提示'+tag);
         ST.ok(!tripAutoByDateDue(Object.assign({}, c, {krTripEnded:null, visitClosed:false, krVisit:false, stage:'travel'})) , '离境日前不自动结束'+tag);
         /* 跨年：12 月入境、1 月离境 */
         var y = +td.slice(0, 4), dec = (y)+'-12-28', jan = (y+1)+'-01-04'; DEMO_SHIFT_MS = shift + ((new Date(dec+'T12:00:00') - realNow())); var t2 = todayStr();
         ST.ok(t2===dec || Math.abs(new Date(t2) - new Date(dec)) < 2*86400000, '拨到 12 月底做跨年（今天 '+t2+'）');
         ST.ok(!stayFillValidate(dec, '09:00', jan, '10:00'), '跨年：12 月入境 / 1 月离境能存');
-        c.stay = {in:dec, out:jan}; ST.ok(!staySuspect(c) && !stayDayBlockText(c, (y+1)+'-01-03') && !!stayDayBlockText(c, jan), '跨年：1/3 能约，1/4（离境日）不能约');
+        c.stay = {in:dec, out:jan}; ST.ok(!staySuspect(c) && !stayDayBlockText(c, (y+1)+'-01-03') && !stayDayBlockText(c, jan) && !!stayDayConfirmText(c, jan) && !!stayDayBlockText(c, (y+1)+'-01-05'), '跨年：1/3 能约，1/4（离境日）提醒后确认，1/5 不能约');
         DEMO_SHIFT_MS = shift;
       });
     } finally { DEMO_SHIFT_MS = oldShift; }
@@ -5140,8 +5140,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var bad1; set(function(c2){ bad1 = coreStayResolve(c2, {}, outNew, '', 'KM1 室长'); }); ST.ok(bad1 && !bad1.ok, '一项都没选 → 不存');
       var pk = {}; infos.forEach(function(f){ pk[f.id] = {mode:'keep'}; }); pk[careK.id] = {mode:'toIn'};
       var bad2; set(function(c2){ bad2 = coreStayResolve(c2, pk, outNew, '', 'KM1 室长'); }); ST.ok(bad2 && !bad2.ok && /必须在韩国/.test(bad2.err), '必须在韩国的不能选回印尼：'+(bad2 && bad2.err));
-      pk[careK.id] = {mode:'early', date:outNew};
-      var bad3; set(function(c2){ bad3 = coreStayResolve(c2, pk, outNew, '', 'KM1 室长'); }); ST.ok(bad3 && !bad3.ok, '提前做的日期要在离境日之前');
+      pk[careK.id] = {mode:'early', date:ymdAdd(outNew, 1)};
+      var bad3; set(function(c2){ bad3 = coreStayResolve(c2, pk, outNew, '', 'KM1 室长'); }); ST.ok(bad3 && !bad3.ok, '提前做的日期要在离境时间之前（离境日之后的日子不行）');
       ST.ok(JSON.stringify(gc())===snap0, '被拒绝时数据一个字都没动');
       /* 三种选项各一次 */
       pk = {}; pk[bookedRow.id] = {mode:'keep'}; pk[careE.id] = {mode:'toIn'}; pk[careK.id] = {mode:'keep'}; pk[mgs[0].id] = {mode:'early', date:okDay(2), time:'12:00'}; pk[mgs[1].id] = {mode:'keep'}; pk[mgs[2].id] = {mode:'keep'};
@@ -5261,6 +5261,18 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       set(function(c2){ c2.subItems.forEach(function(x){ if(x.kind==='术后管理记录'){ x.done = true; x.skipped = false; } }); c2.procedureItems.forEach(function(it){ if(it.postcare) it.postcare = []; }); });
       c = gc(); var v2 = visitsOf(c).filter(function(x){ return x.date===dCare && x.place==='KR'; })[0]; ST.ok(Store.withClinic(cid, function(){ return krDayCareCardHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); })==='', '没有未做的术后管理 → 这块不显示');
     } finally { window.alert = oa; window.confirm = oc; KR_DAYADD = {}; Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); CASE_ITEMS[i] = JSON.parse(snap); return true; }); }
+  });
+  ST.def('R170a','CMD-1028-12 二（任意分页）：离境当天改成提醒后确认——离境时间之前提醒、之后不能约；没填时间离境当天提醒；超出行程只算离境时间之后的',function(){
+    var c = {stay:{in:'2030-01-01', out:'2030-01-10', outTime:'21:00'}, subItems:[
+      {id:'a', kind:'术后管理记录', place:'KR', date:'2030-01-10', time:'11:00', done:false, skipped:false, arrived:false},
+      {id:'b', kind:'术后管理记录', place:'KR', date:'2030-01-10', time:'21:30', done:false, skipped:false, arrived:false},
+      {id:'c2', kind:'术后管理记录', place:'KR', date:'2030-01-11', time:'11:00', done:false, skipped:false, arrived:false}]};
+    ST.ok(stayRel(c, '2030-01-09', '12:00')==='before' && stayRel(c, '2030-01-10', '11:00')==='same' && stayRel(c, '2030-01-10', '21:00')==='after' && stayRel(c, '2030-01-11', '11:00')==='after', '前一天 / 当天 11:00（21:00 飞）/ 当天 21:00 / 之后');
+    ST.ok(!stayDayBlockText(c, '2030-01-10', '11:00') && /当天 21:00 离境，请确认来得及/.test(stayDayConfirmText(c, '2030-01-10', '11:00')), '离境时间之前：不挡，提醒文字写离境时间');
+    ST.ok(/不能约/.test(stayDayBlockText(c, '2030-01-10', '21:00')) && /不能约/.test(stayDayBlockText(c, '2030-01-11', '09:00')), '离境时间之后（含之后的日子）：不能约');
+    ST.ok(stayConflictRows(c, '2030-01-10', '21:00').map(function(s0){ return s0.id; }).join()==='b,c2', '超出行程只算约在离境时间之后的：'+stayConflictRows(c, '2030-01-10', '21:00').map(function(s0){ return s0.id; }).join());
+    c.stay.outTime = '';
+    ST.ok(!stayDayBlockText(c, '2030-01-10', '23:00') && /当天 离境|当天离境/.test(stayDayConfirmText(c, '2030-01-10', '23:00').replace(/\s+/g, ' ')) && stayConflictRows(c, '2030-01-10', '').map(function(s0){ return s0.id; }).join()==='c2', '没填离境时间：离境当天一样提醒（文字写「客人当天离境」），当天的不算超出');
   });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
@@ -7379,7 +7391,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       nav('kr-casedetail'); KR_CASE.tab = 'postcare'; KR_CB = null; krCbOpen({all:true, tab:'care'});
       if(ST.ok(!!KR_CB && KR_CB.rows.length>0, '预约弹窗打开')){
         var r1 = KR_CB.rows.filter(function(r){ return r.kind==='care' && r.place!=='IN'; })[0] || KR_CB.rows[0]; r1.canIn = false; r1.place = 'KR';
-        r1.date = D0; var e0 = krCbCheck(r1); ST.ok(/客人 \d\d\/\d\d 11:00 离开韩国，这天不能约/.test(e0.err||''), '离开当天直接不能约：'+(e0.err||'（没挡）'));
+        r1.date = D0; var e0 = krCbCheck(r1); KR_CB.outTime = '15:00'; r1.time = '15:30'; KR_CB.dayTime[D0] = '15:30'; e0 = krCbCheck(r1); ST.ok(/客人 \d\d\/\d\d \d\d:\d\d 离开韩国，这个时间不能约/.test(e0.err||''), '离境当天、离境时间之后（15:30）不能约：'+(e0.err||'（没挡）'));
+        KR_CB.dayTime[D0] = '12:00'; r1.time = '12:00'; ST.ok(!krCbCheck(r1).err && /当天 15:00 离境，请确认来得及/.test(krCbSameDayText([r1])), '离境当天、离境时间之前（12:00）不挡，确认预约时弹提醒 CMD-1028-12 二');
+        r1.time = '12:00'; KR_CB.dayTime[D1] = '12:00';
         r1.date = D1; ST.ok(!!krCbCheck(r1).err && /离开韩国/.test(krCbCheck(r1).err), '离开之后也红字');
         r1.date = Dp; ST.ok(!(krCbCheck(r1).err||'') || !/离开韩国/.test(krCbCheck(r1).err), '离开之前不因为离开日期挡');
         krCbClose();
@@ -7391,7 +7405,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(ST.ok(!!rowId, '有一笔韩国预约可改时间')){
         PCM_EDIT = {ids:[rowId], date:D1, time:'12:00', canIn:false}; var beforeD = Store.withClinic(cid, function(){ return (gc().subItems||[]).filter(function(x){ return x.id===rowId; })[0].date; });
         try{ pcmDayEditSave(); }catch(e){}
-        var blkT = (document.getElementById('kr-block-overlay')||{}).innerText||''; ST.ok(/离开韩国，这天不能约/.test(blkT), '主案件术后管理整天［修改时间］也挡：'+blkT.slice(0, 40));
+        var blkT = (document.getElementById('kr-block-overlay')||{}).innerText||''; ST.ok(/离开韩国，这个时间不能约/.test(blkT), '主案件术后管理整天［修改时间］也挡：'+blkT.slice(0, 40));
         ST.ok(Store.withClinic(cid, function(){ return (gc().subItems||[]).filter(function(x){ return x.id===rowId; })[0].date; })===beforeD, '被挡时日期没动');
         var bk = document.getElementById('kr-block-overlay'); if(bk) bk.classList.remove('open');
       }
@@ -7420,7 +7434,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         var after = gc(); ST.ok(after.stay && after.stay.out===D0, '处理完保存了新离开日期');
         ST.ok(!stayConflictInfo(after, D0).length, '离开之后没有韩国预约了');
         ST.ok(after.subItems.filter(function(x){ return x.place==='IN' && x.src==='care'; }).length>=1 || !okAny, '选「回印尼做」的转成印尼术后 · 未预约（place IN）');
-        ST.ok(after.logEntries.some(function(l){ return /离开日期 .* 之后的韩国预约已处理/.test(String(l.text||l.action||'')); }), 'Timeline 记了一笔（写清楚提前 / 转印尼 / 保留）');
+        ST.ok(after.logEntries.some(function(l){ return /离境日从 .* 改到 .*逐项处理|离开日期 .* 之后的韩国预约已处理/.test(String(l.text||l.action||'')); }), 'Timeline 记了一笔（写清楚提前 / 转印尼 / 保留）');
         var nt = (typeof NOTIFS!=='undefined' ? NOTIFS.slice(0, NOTIFS.length-n0>0 ? NOTIFS.length-n0 : 8) : []).concat(NOTIFS.slice(-8)).filter(function(n){ return /调整了/.test(n.text||'') && /离开日期/.test(n.text||''); }); ST.ok(nt.length>=1 || true, 'IN 收通知（写清楚哪些转回印尼 / 提前 / 保留）');
       }
       /* ---- 4 过了离开日期、还有之后的预约 → 不自动结束 + KR 待办 ---- */

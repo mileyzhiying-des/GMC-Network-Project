@@ -11275,20 +11275,23 @@ function pcmHtml(c, side){
    三 补填 / 修改离开日期时，已经约好、排在离开当天或之后的韩国预约要先处理：提前做 / 回印尼做（只有「韩国或印尼都可」的术后管理）/ 保留（取消这笔预约，项目回到未预约）。
    四 离开日期已过、还有离开之后的预约（或到院没结束）→ 不自动结束，KR 待办问「客人是否已离境」。 五 行程已结束 → KR 按［客人已到院］先拦下。 */
 function stayLeaveWhen(c, outD, outT){ outD = outD || (c && c.stay && c.stay.out) || ''; outT = (outT===undefined ? (c && c.stay && c.stay.outTime) : outT) || ''; return outD ? stayMD(outD)+(outT ? ' '+outT : '') : ''; }
-function stayDayBlockText(c, date){ var s = c && c.stay; if(!s || !s.out || !date || date < s.out) return ''; return '客人 '+stayLeaveWhen(c)+' 离开韩国，这天不能约'; }
+/* CMD-1028-12 二：离开当天改成「提醒后由室长确认」——离境时间之后（含之后的日子）才不能约；离境当天、离境时间之前不硬挡，弹提醒、室长确认（没填离境时间只有日期：离境当天一样弹提醒）。系统不自己算来不来得及 */
+function stayRel(c, date, time, outD, outT){ var s = (c && c.stay) || {}; outD = outD===undefined ? s.out : outD; outT = outT===undefined ? s.outTime : outT; if(!outD || !date || date < outD) return 'before'; if(date > outD) return 'after'; return (outT && time && time >= outT) ? 'after' : 'same'; }
+function stayDayBlockText(c, date, time){ if(stayRel(c, date, time)!=='after') return ''; return '客人 '+stayLeaveWhen(c)+' 离开韩国，这个时间不能约'; }
+function stayDayConfirmText(c, date, time){ if(stayRel(c, date, time)!=='same') return ''; var t = c.stay && c.stay.outTime; return '客人当天'+(t ? ' '+t : '')+' 离境，请确认来得及'; }
 function tripEndedBlockText(c){ var d = (c.stay && c.stay.out) || String((c.krTripEnded && c.krTripEnded.at) || '').slice(0, 10); return '韩国行程已于 '+(d ? stayMD(d) : '（日期不详）')+' 结束。客人还在韩国吗？请先［行程修正］（把离开日期改到今天或以后，行程会重新打开）。'; }
 /* 排在离开当天或之后、还没做 / 没取消的韩国预约（术后管理预约 / 管理项目预约 / 施术项目预约使用）；已到院的不算（那是「到院没结束」，见 tripDueConflict） */
-function stayConflictRows(c, outD){
+function stayConflictRows(c, outD, outT){ /* CMD-1028-12 二：只有约在离境时间之后的才算超出（离境当天、离境时间之前的不算；没填离境时间 = 离境当天的不算） */
   if(!c || !outD) return [];
-  return (c.subItems||[]).filter(function(s){ return !s.done && !s.skipped && !s.arrived && s.place!=='IN' && s.date && s.date >= outD && s.kind==='术后管理记录'; });
+  return (c.subItems||[]).filter(function(s){ return !s.done && !s.skipped && !s.arrived && s.place!=='IN' && s.date && stayRel(c, s.date, s.time||'', outD, outT===undefined ? ((c.stay&&c.stay.outTime)||'') : outT)==='after' && s.kind==='术后管理记录'; });
 }
-function stayConflictInfo(c, outD){
-  var booked = stayConflictRows(c, outD).map(function(s){
+function stayConflictInfo(c, outD, outT){
+  var booked = stayConflictRows(c, outD, outT).map(function(s){
     var lb = visitRowLabel(c, s), en = (!s.holdUseOf && !s.surgUse) ? careEntryOfRow(c, s) : null;
     return {id:s.id, name:lb.name, surg:(lb.type==='术后管理' && s.projectName) ? buyName(s.projectName) : '', type:lb.type, date:s.date, time:s.time||'', canIn:!!(en && en.x.place==='either')};
   });
   /* CMD-1028-10 四：还没预约、建议日期在离开日期当天或之后（或根本没有建议日期，没法排）的术后管理 / 管理项目也列出来（没保留过的；已保留的不再问）；原来只列已经约好的 */
-  var unb = [], atOut = function(sug){ return !sug || sug >= outD; };
+  var unb = [], atOut = function(sug){ return !sug || sug > outD; }; /* CMD-1028-12 二：建议日期在离境当天不算超出（当天能不能做由室长约的时候确认）；没有建议日期的照样列（三） */
   if(c && outD && c.krBalancePaid){
     try{ var cnt = {}; careSlotList(c).forEach(function(sl){ if(sl.x.place==='IN') return; if(!atOut(sl.sug)) return; var n0 = cnt[sl.item+'|'+sl.i] = (cnt[sl.item+'|'+sl.i]||0)+1;
       unb.push({id:'u|care|'+sl.item+'|'+sl.i+'|'+n0, vkind:'care', item:sl.item, i:sl.i, reuse:sl.reuse||'', name:sl.x.name||sl.x.mgmt||'', surg:buyName(sl.item), type:'术后管理', date:sl.sug||'', time:'', unbooked:true, canIn:sl.x.place==='either'}); }); }catch(e){ console.error(e); }
@@ -11315,7 +11318,7 @@ function coreStayResolve(c, picks, outD, outT, by){
     if(p.mode==='ask' && !inSide) return {ok:false, err:f.name+'：请 KR 提前做只有 IN 端用'};
     if(p.mode==='early'){
       if(f.unbooked && f.vkind==='mg' && !c.krBalancePaid) return {ok:false, err:f.name+'：尾款付清后才能预约'};
-      if(!p.date || p.date >= outD) return {ok:false, err:f.name+'：提前做的日期要在离开日期之前'};
+      if(!p.date || stayRel(c, p.date, p.time||'', outD, outT)==='after') return {ok:false, err:f.name+'：提前做的日期要在离开时间之前'};
       if(p.date < todayStr()) return {ok:false, err:f.name+'：提前做的日期不能是过去'};
       var ce = (typeof krbClosedText==='function' && hid) ? krbClosedText(hid, p.date, p.time||'') : ''; if(ce) return {ok:false, err:f.name+'：'+ce};
     }
