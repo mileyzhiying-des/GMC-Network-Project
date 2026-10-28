@@ -1211,7 +1211,7 @@ function krProjCards(c, opts){
   if(opts.only==='care') return krCardBox('术后管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">韩国 + 印尼都在这里；韩国的由 KR 预约，印尼的由 IN 预约（这里只读）</span>', '<div>'+(careBody || krEmpty('这个案件没有术后管理'))+'</div>'); /* CMD-1023-03 P2；CMD-1025-01 八：独立 tab 不再套固定高度滚动区（原来只露出前 2 项） */
   /* CMD-1028-08 二：子案件的项目卡加回术后管理（主案件的赴韩施术 tab 不加，主案件有自己的术后管理 tab） */
   if(opts.noMgmt){ nCnt.mgmt = 0; nCnt.done = dS.length+dC.length; } /* CMD-1028-09：主案件「赴韩施术」tab 的项目卡只有施术项目（和已完成的施术）；管理项目搬到「在韩管理」tab */
-  var order4 = (opts.care ? ['surg', 'care', 'mgmt', 'done'] : (opts.noMgmt ? ['surg', 'done'] : ['surg', 'mgmt', 'done'])), pg = (order4.indexOf(KR_PROJ_PAGE)>-1 && nCnt[KR_PROJ_PAGE]>0) ? KR_PROJ_PAGE : (order4.filter(function(x){ return nCnt[x]>0; })[0] || 'done');
+  var order4 = (opts.care ? (opts.noCare ? ['surg', 'mgmt', 'done'] : ['surg', 'care', 'mgmt', 'done']) : (opts.noMgmt ? ['surg', 'done'] : ['surg', 'mgmt', 'done'])), pg = (order4.indexOf(KR_PROJ_PAGE)>-1 && nCnt[KR_PROJ_PAGE]>0) ? KR_PROJ_PAGE : (order4.filter(function(x){ return nCnt[x]>0; })[0] || 'done');
   var pill = function(kk, label){ var on = pg===kk, off = nCnt[kk]===0; if(off) return ''; /* CMD-1025-04 C：没有项目的分类整个不显示 */ return '<span '+(off ? 'title="没有内容" ' : 'onclick="krProjPage(\''+kk+'\')" ')+'style="'+(off ? 'cursor:not-allowed;opacity:.4;' : 'cursor:pointer;')+'padding:7px 18px;border-radius:999px;font-size:13px;font-weight:600;'+(on ? 'background:var(--navy,#3B2F2A);color:#fff;' : 'background:var(--bg-sidebar,#EFEBE4);color:var(--slate2);')+'">'+label+'（'+nCnt[kk]+'）</span>'; };
   var seg = '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+pill('surg', '施术项目')+(opts.care ? pill('care', '术后管理') : '')+pill('mgmt', '管理项目')+pill('done', '已完成')+'</div>';
   var doneSec = function(title, head, rows){ return rows.length ? '<div class="kr-pc-block"><div class="kr-pc-sec-title" style="margin:12px 0 0;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+rows.length+'</span></div><div style="border:1px solid var(--border2);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;">'+head+rows.join('')+'</div></div>' : ''; };
@@ -4533,6 +4533,12 @@ function krSurgDayHeader(r, c){
 }
 /* CMD-1027-01 A：非施术日子案件页的项目卡默认收起，按［增加今日项目］才展开；本次使用成功后自动收起 */
 var KR_DAYADD = {};
+/* CMD-1028-11：非施术日子案件页里一直显示的「术后管理」卡——内容同 CMD-1028-08 二（这个主案件还没约 / 没做完的术后管理：按施术分组、［全部预约］、在韩国做 / 回印尼做、已约［修改时间］、保留 N 组，同一个预约弹窗）；一天都没有未做的术后管理 → 不显示 */
+function krDayCareCardHtml(c){
+  var M; try{ M = pcmModel(c); }catch(e){ return ''; }
+  if(!(M.booked.length || M.unbooked.length || M.kept.length)) return '';
+  return krProjCards(c, {only:'care'});
+}
 function krDayAddToggle(k){ KR_DAYADD[k] = !KR_DAYADD[k]; krRenderCaseDetail(); }
 function krSubPageHtml(c){ return krRoWrap(c, krSubPageHtml0(c)); }
 function krSubPageHtml0(c){
@@ -4557,7 +4563,7 @@ function krSubPageHtml0(c){
       /* CMD-1027-01 A：非施术日——［客人已离院］在页头那一条最右边；今日项目卡右上放［增加今日项目］，项目卡平常不显示，按了才展开（本次使用后自动收起） */
       var dk = c.id+'|'+v.key, addOpen = !!KR_DAYADD[dk], canAdd = krCan() && v.date===today && cards.some(function(cd){ return cd.group==='today' && cd.vs==='arrived'; });
       cards = cards.map(function(cd){ return Object.assign({}, cd, {noEnd:true, extraBtn:(canAdd && cd.kind==='sub' ? '<button class="'+(addOpen ? 'btn-primary' : 'btn-outline')+'" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krDayAddToggle(\''+dk.replace(/'/g, '')+'\')">增加今日项目</button>' : '')}); });
-      body = (pick ? krProjCards(c, {pick:true})+krTodayPickBar(c) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick && v.date===today && addOpen ? krProjCards(c, {care:true}) : '');
+      body = (pick ? krProjCards(c, {pick:true})+krTodayPickBar(c) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick ? krDayCareCardHtml(c) : '')+(!pick && v.date===today && addOpen ? krProjCards(c, {care:true, noCare:true}) : ''); /* CMD-1028-11：非施术日术后管理一直显示（不用先点［增加今日项目］）；展开的项目卡里不再重复术后管理 tab */
     }
   } else if(cur==='settle'){
     body = KR_TAB_FN.settle(c);

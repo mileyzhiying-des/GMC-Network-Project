@@ -5227,6 +5227,41 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(ST.hasLog(c, /离境日从 .* 改到 .*逐项处理/), 'Timeline 记了');
     } finally { var i = CASE_ITEMS.findIndex(function(x){ return x.id===c.id; }); CASE_ITEMS[i] = JSON.parse(snap); try{ IN_STAYRES = null; var o = document.getElementById('in-stayres-overlay'); if(o) o.classList.remove('open'); }catch(e){} }
   });
+  ST.def('R169a','CMD-1028-11（KM1 分页，pcStage 夹具）：KR 非施术日子案件页——术后管理一直显示、可直接预约，不用点［增加今日项目］；没有未做的术后管理时不显示',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr(), oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var set = function(f){ Store.mutateClinic(cid, function(){ f(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); return true; }); };
+    var okDay = function(n){ var d = ymdAdd(td, n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
+    var txt = function(h){ return String(h).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); };
+    var snap = JSON.stringify(gc()), sgName = '';
+    try{
+      var dCare = okDay(12), dayHtml = function(key){ KR_CASE = {clinicId:cid, id:r0.id, tab:'items', day:key}; return Store.withClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return krSubPageHtml(c); }); };
+      set(function(c){ c.krBalancePaid = true; c.krTripEnded = null; c.visitClosed = false; c.stay = {in:ymdAdd(td, -1), out:ymdAdd(td, 60)};
+        var sg = c.procedureItems.filter(function(it){ return !krIsMgmtItemC(it) && !it.cancelled; })[0]; sgName = sg.name; c.procedureItems.forEach(function(it){ if(it!==sg) it.postcare = []; });
+        sg.postcare = [{mgmt:'R169拆线', name:'R169拆线', times:3, interval:1, place:'KR', startDay:5}];
+        c.subItems = (c.subItems||[]).filter(function(x){ return x.kind!=='术后管理记录'; });
+        coreCareBook(c, sgName, 0, dCare, '12:00', 'KR', '', 'KM1 室长', null); });
+      var c = gc(), v = visitsOf(c).filter(function(x){ return x.date===dCare && x.place==='KR'; })[0]; if(!ST.ok(!!v && !krIsSurgDay(c, v), '造出一个非施术日的术后管理日')) return;
+      KR_DAYADD = {}; var h = dayHtml(v.key), t0 = txt(h);
+      ST.ok(/术后管理/.test(t0) && /R169拆线/.test(t0) && /未预约/.test(t0) && /预约中/.test(t0), '不点任何按钮就看得到术后管理（预约中 + 未预约）');
+      ST.ok(/krCbOpen\(\{all:true, tab:'care'\}\)/.test(h) || /全部预约/.test(t0), '有［全部预约］');
+      ST.ok(/krCbOpen\(\{one:/.test(h) && /修改时间/.test(t0), '每行［预约时间］，已约的［修改时间］');
+      /* 约一个未预约的 → 主案件术后管理 tab、子案件 tab 看得到 */
+      set(function(c2){ coreCareBook(c2, sgName, 0, okDay(14), '12:00', 'KR', '', 'KM1 室长', null); });
+      c = gc(); ST.ok(/R169拆线/.test(txt(pcmHtml(c, 'KR'))) && daysOf(c).some(function(x){ return x.date===okDay(14) && x.place==='KR'; }) && /预约中/.test(txt(pcmHtml(c, 'KR'))), '约好后主案件术后管理 tab、子案件 tab 看得到');
+      /* 点开［增加今日项目］不重复出术后管理 tab */
+      var tdv = visitsOf(c).filter(function(x){ return x.date===td; })[0]; var key = v.key; KR_DAYADD[c.id+'|'+key] = true; var h2 = dayHtml(key);
+      ST.ok((h2.match(/术后管理 <span style="font-weight:400/g)||[]).length<=1, '展开项目卡时术后管理不重复显示');
+      /* 保留 N 组一起显示 */
+      set(function(c2){ stayKeepAdd(c2, 'care|'+sgName+'|0', 1); }); c = gc(); ST.ok(/保留/.test(txt(dayHtml(key))), '「保留 N」组一起显示');
+      set(function(c2){ c2.stayKeep = {}; });
+      /* 没有未做的术后管理 → 不显示 */
+      set(function(c2){ c2.subItems.forEach(function(x){ if(x.kind==='术后管理记录'){ x.done = true; x.skipped = false; } }); c2.procedureItems.forEach(function(it){ if(it.postcare) it.postcare = []; }); });
+      c = gc(); var v2 = visitsOf(c).filter(function(x){ return x.date===dCare && x.place==='KR'; })[0]; ST.ok(Store.withClinic(cid, function(){ return krDayCareCardHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); })==='', '没有未做的术后管理 → 这块不显示');
+    } finally { window.alert = oa; window.confirm = oc; KR_DAYADD = {}; Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); CASE_ITEMS[i] = JSON.parse(snap); return true; }); }
+  });
   ST.def('R51a','CMD-1019-22：到院结束人工确认（不自动结束）/ 持有管理项目不掉出到院卡 / 结束后重新打开 / 建议日期从实际使用日起算 / 已使用 ×N / 灰按钮写原因（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = toConfirmed('R51a0'); ST.krArrive(c); ST.krJudge(c, 'ok'); ST.krPay(c); var hid = caseKrHospital(c), h = HOSPITAL_DATA[hid];
