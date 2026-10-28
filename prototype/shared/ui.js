@@ -388,10 +388,12 @@ function krLaneLayout(list){
 }
 /* 时间轴表头（和日期列头同一行）：「印尼」（大字）/「韩国」（小字），对应下面每一行的大字 / 小字；每一行时间本身不加标注 */
 function axisHeadHtml(){ return ''; } /* CMD-1014-19：拿掉最上面「印尼 / 韩国」小标题，改成每个时间前标「印 / 韩」 */
+/* CMD-1028-13 二：已完成 / 客人已到医院（已到店）的块变灰；还没到的照常 */
+function krItGrey(it){ return !!(it.done || /^(已到|已完成)/.test(it.state||'')); }
 function krBlockStyle(it){
   if(it.type==='book') return it.pending ? 'background:#fff;color:var(--sage);border:1.5px dashed #3F7A55;font-weight:700;cursor:pointer;' : 'background:var(--sage-bg);color:var(--sage);border:1px solid #BFD3C5;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'; /* CMD-1014-16：IN 在 KR 日程占位预约：待 KR 确认 = 虚线块，确认后 = 实线块 */
-  if(it.type==='surg' && it.own) return 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;border-left:4px solid #B5703F;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的施术 = KR 图例的施术色（原来是绿色，和术后到院分不开） */ /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
-  if(it.type==='visit' && it.own) return 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'+(it.done ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的术后到院 / 管理到院（同 KR 图例的术后到院绿） */
+  if(it.type==='surg' && it.own) return 'background:#F3DFD3;color:#8A4A2A;border:1px solid #C9A38A;border-left:4px solid #B5703F;font-weight:700;cursor:pointer;'+(krItGrey(it) ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的施术 = KR 图例的施术色（原来是绿色，和术后到院分不开） */ /* 本诊所客人的施术：左侧深绿色条，可点进案件 */
+  if(it.type==='visit' && it.own) return 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;border-left:4px solid #3F7A55;font-weight:700;cursor:pointer;'+(krItGrey(it) ? 'opacity:.5;filter:grayscale(1);' : ''); /* CMD-1020-04：本诊所客人的术后到院 / 管理到院（同 KR 图例的术后到院绿） */
   return 'background:#F3F1EC;'; /* 不可预约：很浅的灰，不写字 */
 }
 /* CMD-1020-16 一：IN 的 KR 医院日程「医院」视图同样用小标签（一小时格 = 两行 × KR_ROW_PX，标签高度 = 1/6 小时格，整栏宽，按开始时间上下排，超过 6 个显示 5 个 + 「+N 个预约」，点开小弹层列出全部） */
@@ -449,15 +451,15 @@ function calEsc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/<
 function calDayNumHtml(n, isToday, inMonth){ return '<span class="cal-daynum'+(isToday?' cal-today':'')+'"'+(isToday ? '' : ' style="color:'+(inMonth?'var(--navy)':'var(--dim)')+'"')+'>'+n+'</span>'; }
 function calMonthLinesHtml(lines, max){
   max = max || 3; var ls = lines.slice().sort(function(a, b){ return (a.s||0)-(b.s||0); }), shown = ls.slice(0, ls.length > max ? max-1 : max), rest = ls.length-shown.length;
-  return shown.map(function(l){ return '<div class="cal-line'+(l.red?' red':'')+'" title="'+calEsc(l.t)+'">'+calEsc(l.t)+'</div>'; }).join('')+(rest>0 ? '<div class="cal-more">还有 '+rest+' 项</div>' : '');
+  return shown.map(function(l){ return '<div class="cal-line'+(l.red?' red':'')+'" title="'+calEsc(l.t)+'"'+(l.g ? ' style="opacity:.5;filter:grayscale(1);"' : '')+'>'+calEsc(l.t)+'</div>'; }).join('')+(rest>0 ? '<div class="cal-more">还有 '+rest+' 项</div>' : '');
 }
 /* IN 的 KR 医院日程月视图：某天的时段行（时间换算成诊所时间；IN 看不到不可预约的备注） */
 function krMonthLines(ds){
   var all = krViewIsAll(), hid = krViewHospital(), hd = HOSPITAL_DATA[hid] || {offs:[]}, lines = [], tm = function(m){ return krToClinic(ds, minToTime(m)).time; };
   krGridItems(ds).forEach(function(it){
     var nm = String(it.label||'').split(' · ')[0];
-    if(it.type==='surg') lines.push({s:it.s, t:tm(it.s)+' 施术 · '+nm});
-    else if(it.type==='visit') lines.push({s:it.s, t:tm(it.s)+' 到院 · '+nm});
+    if(it.type==='surg') lines.push({s:it.s, t:tm(it.s)+' 施术 · '+nm, g:krItGrey(it)});
+    else if(it.type==='visit') lines.push({s:it.s, t:tm(it.s)+' 到院 · '+nm, g:krItGrey(it)});
     else if(it.type==='book') lines.push({s:it.s, t:tm(it.s)+' 预约 · '+nm});
     else lines.push({s:it.s, t:tm(it.s)+'～'+tm(it.e)+' 不可预约'});
   });
@@ -572,7 +574,7 @@ function buildMonthGrid(){
     var ds = dateStr(cur), inMonth = cur.getMonth()===first.getMonth();
     var closed = isRescheduleDateDisabled(cur); /* CMD-1020-14：按诊所设定的休诊日灰底 + 休诊（同周视图 / KR） */
     var offs = memosOn(ds).filter(function(m){ return m.type==='OFF'; }).map(function(m){ return m.person; });
-    var lines = evs.filter(function(e){ return e.date===ds; }).map(function(e){ return {s:timeToMin(e.time), t:e.time+' '+String(e.name||'')+(e.purpose ? ' · '+e.purpose : '')}; });
+    var lines = evs.filter(function(e){ return e.date===ds; }).map(function(e){ return {s:timeToMin(e.time), t:e.time+' '+String(e.name||'')+(e.purpose ? ' · '+e.purpose : ''), g:(e.vstate==='已到访' || !!e.ended)}; });
     if(offs.length) lines.unshift({s:-1, t:offs.join('、')+' OFF', red:true});
     var extra = closed ? '<div class="cal-off">休诊</div>' : calMonthLinesHtml(lines)+(inMonth && inCapHeadHtml(ds) ? '<div>'+inCapHeadHtml(ds).replace('<br>','')+'</div>' : '');
     html += '<div class="cal-cell'+(closed?' cal-gray':'')+'" onclick="openWeekOf(\''+ds+'\')" title="点击进入这一周的周视图">'+calDayNumHtml(cur.getDate(), sameDate(cur, TODAY_DATE), inMonth)+extra+'</div>';
@@ -697,9 +699,9 @@ function confirmAddSlotExisting(){
   closeAddSlotModal();
   var exm = pendingResvSameDay(name, ADD_SLOT_CONTEXT.date); /* CMD-1021-16 三：同一客人那天已有还没到的预约 → 合并，不再建第二个 */
   if(exm){ logCaseEvent(exm, actingName(), '室长代约同一天：'+ADD_SLOT_CONTEXT.time+'（'+purpose+'）已合并到这次预约（时间以原预约 '+exm.visitTime+' 为准）'); renderCalendar(); showToast('已合并', name+' · '+mergeNoteText(exm), null); return; }
-  var nc = createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose); if(nc && overbookNote()) logCaseEvent(nc, actingName(), overbookNote(), '预约到店'); var nt = (document.getElementById('add-slot-note')||{}).value; if(nc && nt && nt.trim()) nc.visitNote = nt.trim(); /* CMD-1022-15：代约也能写想咨询的内容 */
+  var pmain = mainForBookingPurpose(name, purpose), nc = pmain ? createChildReservation(pmain, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, purpose) : createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose); /* CMD-1028-05：术后管理 / 复诊评估且对得上唯一的主案件 → 直接是它的子案件 */ if(nc && overbookNote()) logCaseEvent(nc, actingName(), overbookNote(), '预约到店'); var nt = (document.getElementById('add-slot-note')||{}).value; if(nc && nt && nt.trim()) nc.visitNote = nt.trim(); /* CMD-1022-15：代约也能写想咨询的内容 */
   renderCalendar();
-  showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+'，已生成 Case ID', null);
+  showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+(pmain ? '，已加入主案件 '+pmain.caseNo+'（子案件 '+nc.caseNo+'）' : '，已生成 Case ID'), null);
 }
 
 function confirmAddSlotNew(link){
@@ -1299,7 +1301,9 @@ function renderCaseStatusBar(c){
   }catch(e){ console.error(e); }
 }
 function renderCaseStatusBar0(c){
-  var b = caseStageBadge(c);
+  var b = caseStageBadge(c), subDayOn = false;
+  /* CMD-1028-14 六：子案件页的「当前状态」写这一天实际在做的事（术后管理 · 进行中），不是主案件当前停在哪个阶段（原来显示「本地管理 · 选择项目」） */
+  try{ if(typeof subPageActive==='function' && subPageActive(c)){ var cx0 = subCtxOf(c), st0 = visitStateText(cx0.m, cx0.v), tone0 = {'进行中':['#E8F0FB','#2F5FA8'], '待确认结束':['#FDECEA','#B3261E'], '待到店':['#E3F4E8','#2E7D4F'], '已预约':['#E3F4E8','#2E7D4F']}[st0] || ['var(--border2)','var(--slate2)']; b = [tone0[0], tone0[1], ((cx0.v.types||[]).join('、') || '到访')+' · '+st0]; subDayOn = true; } }catch(e0){ console.error(e0); }
   var actionBtn = '';
   if(c.krVisit && c.stage==='booked'){ /* CMD-1014-16：在韩到店案件（KR 医院）：到店 / 完成由 KR 标记，IN 不接待、不判未到店 */
     actionBtn = '<span style="font-size:12px;color:var(--slate2);">在韩到院预约（KR 医院）：'+(c.krVisit.arrived ? '客人已到院，等 KR 标记完成' : (c.visitDate+' '+c.visitTime+'（韩国）等 KR 标记客人到店'))+'</span>';
@@ -1336,7 +1340,7 @@ function renderCaseStatusBar0(c){
   document.getElementById('case-status-bar').innerHTML =
     '<div class="card" style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">'+
     '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--slate);">当前状态</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
-    (localMgmtTagOn(c) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+
+    (!subDayOn && localMgmtTagOn(c) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+
     (c.visibleToKR ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;" title="韩国侧可见（不面诊案件点增加面诊后、或使用术后管理项目关联后）">KR可见</span>' : '')+
     (isEnded(c) ? '<span style="font-size:12px;color:var(--slate2);">'+(c.stage==='cancelled' ? '取消原因：'+endReasonText(c)+'　' : '')+financeLabel(c)+'</span>' : '')+
     caseAbnormalTags(c).map(function(t){ return '<span class="status-pill" style="background:#F6DCDC;color:#C1454A;font-size:12px;">'+t+'</span>'; }).join('')+'</div>'+
@@ -1353,7 +1357,8 @@ function renderCaseHeaderActions(c){
   if(!c.materialsConfirmed){ el.innerHTML=''; return; }
   var stageBtn = '';
   var notEnded = !isEnded(c);
-  if(notEnded && c.needsConsult===false && !c.consultRequested){
+  var careDay = isChildVisit(c) && hasResumeType(c, '术后管理') && !isRevEval(c); /* CMD-1028-14 七：IN 术后管理那一天的子案件页 */
+  if(notEnded && c.needsConsult===false && !c.consultRequested && !isChildVisit(c)){ /* 子案件（一天）上不再有［增加面诊］——增加面诊是主案件的事；复诊评估 / 面诊在「到访」里选 */
     stageBtn = '<button class="btn-outline" onclick="addConsult()">增加面诊</button>';
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
@@ -1362,7 +1367,8 @@ function renderCaseHeaderActions(c){
     lmBtn = '<button class="btn-outline" onclick="'+(isChildVisit(c) && (isRevEval(c) || isContCase(c)) ? 'inAddLocalProject()' : 'addLocalMgmt()')+'">+ 添加本地管理</button>';
   }
   var leaveBtn = (canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) ? '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>' : ''; /* CMD-1026-11 二：右上角依序 发起对话 · 添加本地管理 · 客人离店（只在客人在店时有） */
-  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">对话</button>' : '') + lmBtn + stageBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
+  var itemBtn = (careDay && notEnded && !c.leftStore) ? '<button class="btn-outline" onclick="inAddItemOpen()">增加项目</button>' : ''; /* 对话｜增加项目｜客人离店 */
+  el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">对话</button>' : '') + lmBtn + stageBtn + itemBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
 }
 
 var CANCEL_REASON = '';
@@ -1480,6 +1486,7 @@ function confirmReschedule(){
   c.visitDate = y+'-'+(m<10?'0'+m:m)+'-'+(d<10?'0'+d:d);
   c.visitTime = RESCHED_SELECTED_TIME;
   closeRescheduleModal();
+  try{ var mm0 = c.mainId ? mainOf(c) : null; if(mm0 && mm0.dayNoOn) dayNoSync(mm0); }catch(e){} /* CMD-1028-04 一：子案件改期，号跟着搬到新日期，不再占新号 */
   logCaseEvent(c, ME_NAME, '修改预约为 '+c.visitDate+' '+c.visitTime+'');
   buildCaseLog(c);
   if(CURRENT_PAGE_ID==='in-casedetail' && CURRENT_CASE_ID===c.id){
@@ -2204,6 +2211,7 @@ function confirmRefund(){
   var compMode = REFUND_METHOD==='comp' && ['normal','cannotCoordinate'].indexOf(mode0)>-1;
   if(compMode && !(amount>0)){ alert('转本地项目（置换）的金额要大于 0'); chosen.forEach(function(it){ if(names.indexOf(it.name)>-1) it.cancelled = false; }); return; }
   c.refunds.push({amount:amount, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:!!c.hasArrived, note:refNote, comp:compMode});
+  try{ coreAfterItemsRemoved(c, names, ME_NAME); }catch(e){ console.error(e); } /* CMD-1028-14 八：施术一行 / 术后管理 / 麻醉同意书 / 院长占用时间一起收尾 */
   if(mode0==='cannotCoordinate') logCaseEvent(c, ME_NAME, REFUND_CANCEL_KR ? '室长点［取消赴韩］：客人决定不赴韩（KR 还没回过日期），取消全部未完成赴韩项目并退款（后续照无法协调流程）' : '室长点［无法协调］：施术日期始终无法协调，取消全部未完成赴韩项目并退款'); /* 供测试覆盖页判断 D29（CMD-1012-06 补） */
   logCaseEvent(c, ME_NAME, (mode0==='diffRefund' ? '按KR判断退还尾款差额 ' : '取消项目"'+names.join('、')+'"，'+(compMode ? '转本地置换 ' : '退款 '))+formatCurrency(amount,'KRW')+'，'+(compMode ? '置换' : '退款')+'原因：'+reason+(refNote ? '；备注：'+refNote : '')+(c.hasArrived ? '（金额按KR室长判断）' : ''));
   REFUND_PENDING_ITEMS = [];
@@ -2338,9 +2346,9 @@ function settleProjects(batchId){
   var batchKr = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='KR'; }), need = batch.noDeposit ? [] : anesNeeded(c, batchKr);
   SETTLE_ANES_SIGNED = false;
   if(need.length){
-    rows += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#FBF6EA;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">麻醉同意书 <span style="font-weight:400;font-size:12px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
-      '<div style="font-size:12px;color:var(--slate2);line-height:1.8;">（文案待撰写，演示占位）客人已了解下列项目的麻醉方式并同意：<br>'+need.map(function(a){ return '· '+a.name+'：<b>'+a.label+'</b>'+(a.note?'（'+a.note+'）':''); }).join('<br>')+'</div>'+
-      '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleAnesSign(this.checked)"> 客人已签署麻醉同意书（记录版本和时间）</label></div>';
+    rows += '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#FBF6EA;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+anesLink()+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+ANES_CONSENT_VERSION+'</span></div>'+
+      '<div style="font-size:12px;color:var(--slate2);line-height:1.8;">客人已了解下列项目的麻醉方式并同意（点上面的「麻醉同意书」看全文）：<br>'+need.map(function(a){ return '· '+a.name+'：<b>'+a.label+'</b>'+(a.note?'（'+a.note+'）':''); }).join('<br>')+'</div>'+
+      '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" onchange="toggleAnesSign(this.checked)"> 客人已签署'+anesLink()+'（记录版本和时间）</label></div>';
   }
   rows += '<button class="btn-primary" id="settle-pay-btn" onclick="confirmSettlementPayment()"'+(need.length ? ' disabled style="opacity:.5;"' : '')+'>确认付款</button>';
   document.getElementById('settle-breakdown').innerHTML = rows;
@@ -2413,8 +2421,26 @@ function revLeaveStore(c, note){
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
   showToast('客人已离店', c.name+' · 等复诊评估结果，结果出来后再确认结案', null);
 }
+/* CMD-1028-02：离店前先提醒这一天还没完成的事（只提醒、不挡）：有 → 弹「客人离开前请确认：」［返回处理］［确认离开］；没有 → 照旧直接走（不多一步） */
+var LEAVE_REM = null, LEAVE_OK = {};
+function leaveRemindOpen(side, id, list, key){
+  LEAVE_REM = {side:side, id:id, key:key||'', list:list};
+  var ov = document.getElementById('leave-remind-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'leave-remind-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100040; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:500px;max-width:94vw;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">客人离开前请确认：</div><div style="font-size:12px;color:var(--muted);margin-bottom:8px;">只是提醒，不会挡着客人离开。</div>'+
+    list.map(function(x){ return '<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--border2);font-size:13px;line-height:1.6;"><span style="flex:1;">• '+cesc(x.text)+'</span>'+(x.go ? '<button class="btn-outline" style="padding:2px 10px;font-size:12px;white-space:nowrap;" onclick="leaveRemindClose();'+x.go+'">去处理</button>' : '')+'</div>'; }).join('')+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="leaveRemindClose()">返回处理</button><button class="btn-primary" onclick="leaveRemindConfirm()">确认离开</button></div></div>';
+  ov.classList.add('open');
+}
+function leaveRemindClose(){ var ov = document.getElementById('leave-remind-overlay'); if(ov) ov.classList.remove('open'); LEAVE_REM = null; }
+function leaveRemindConfirm(){
+  var R = LEAVE_REM; if(!R) return; leaveRemindClose();
+  var txt = R.list.map(function(x){ return x.text.replace(/（[^）]*）$/, ''); }).join('；');
+  if(R.side==='IN'){ var c = CASE_ITEMS.filter(function(x){ return x.id===R.id; })[0]; if(!c) return; logCaseEvent(c, actingName(), '客人离店时仍有：'+txt); LEAVE_OK[c.id] = true; try{ openEndCase(); }finally{ delete LEAVE_OK[c.id]; } }
+  else krLeaveAfterRemind(R.key, R.list.some(function(x){ return x.projects; }), txt);
+}
 function openEndCase(){
   var c = getCurrentCase(); if(!c || !canEndCase(c)) return;
+  if(!LEAVE_OK[c.id] && !window.GMC_NO_LEAVEREMIND){ var lr = leaveRemindersIN(c); if(lr.length){ leaveRemindOpen('IN', c.id, lr); return; } }
   END_CASE = {caseId:c.id, choice:{}, amt:{}, reason:'', note:''};
   /* CMD-1022-15：［客人离店］——系统先判断：没有剩下的项目（都做完、都付清）→ 直接离店并结束案件，不跳弹窗；还有没做完 / 没付款的 → 弹窗（列出剩下的项目、要选原因） */
   var left = endCaseRows(c); /* 含「面诊还在等报告」这类只告知的行：这也算没做完，要弹窗选原因 */

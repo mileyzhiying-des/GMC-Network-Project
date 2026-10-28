@@ -13,6 +13,7 @@ var Store = (function(){
   var KEY_G = 'gmc_state';
   var disabled = false, stampDirty = false;   /* 容量超限后，这个页面不再存档 */
   var lastG = '', lastC = '';  /* 上次存档/读档时全局部分、本诊所分区的内容，用来判断有没有变化 */
+  var lastDiskG = null, lastDiskC = null; /* CMD-1028-05：本页上次读 / 写时磁盘上的原文；写之前发现磁盘上的原文变了 = 别的分页写过，先合并再写，不能整份覆盖 */
   var imgByValue = {}, imgById = {}, imgSeq = 0; /* 内存里的图片登记：data: 地址 ⇄ 编号 */
 
   function replacer(k, v){
@@ -59,20 +60,91 @@ var Store = (function(){
   }
 
   /* ---- 读档 ---- */
+  function applyGlobalVars(vars){ GLOBAL_VAR_NAMES.forEach(function(n){ if(vars.hasOwnProperty(n)) assignInPlace(n, vars[n]); }); }
+  function applyClinicVars(vars){
+    CLINIC_VAR_NAMES.forEach(function(n){ if(n!=='PROJECT_LIBRARY' && n!=='LIB_CASES' && n!=='PROJECT_CATEGORIES' && vars.hasOwnProperty(n)) assignInPlace(n, vars[n]); });
+    buildClinicViews(vars.PROJECT_LIBRARY || [], vars.LIB_CASES || [], vars.PROJECT_CATEGORIES || {});
+  }
   function loadGlobal(){
     var st = readRaw(KEY_G);
     if(!st || String(st.ver) !== String(DEMO_DATA_VERSION) || !st.vars || st.partial) return false;
     if(st.st!==1){ gmcStampHospitals(st.vars.HOSPITAL_DATA); stampDirty = true; } /* 旧存档：把现在的内容当作基准盖章 */
-    GLOBAL_VAR_NAMES.forEach(function(n){ if(st.vars.hasOwnProperty(n)) assignInPlace(n, st.vars[n]); });
+    applyGlobalVars(st.vars);
+    try{ lastDiskG = localStorage.getItem(KEY_G); }catch(e){}
     return true;
   }
   function loadClinic(cid){
     var st = readRaw(keyC(cid));
     if(!st || String(st.ver) !== String(DEMO_DATA_VERSION) || !st.vars || st.partial || !st.vars.CASE_ITEMS) return false;
     if(st.st!==1){ gmcStampVars(st.vars); stampDirty = true; }
-    CLINIC_VAR_NAMES.forEach(function(n){ if(n!=='PROJECT_LIBRARY' && n!=='LIB_CASES' && n!=='PROJECT_CATEGORIES' && st.vars.hasOwnProperty(n)) assignInPlace(n, st.vars[n]); });
-    buildClinicViews(st.vars.PROJECT_LIBRARY || [], st.vars.LIB_CASES || [], st.vars.PROJECT_CATEGORIES || {});
+    applyClinicVars(st.vars);
+    if(cid === pageClinic()){ try{ lastDiskC = localStorage.getItem(keyC(cid)); }catch(e){} }
     return true;
+  }
+
+  /* ---- CMD-1028-05：多分页「旧资料覆盖新资料」——存档合并 ----
+     原来：每个分页写的是「自己内存里的整份诊所分区」，最后写的赢。分页 A 读档后，分页 B（比如 KR 室长发送了复诊评估结果）写进新内容；A 的 storage 事件还没处理（或 A 里正好有未存的改动）时 A 存档，A 内存里的旧状态把 B 写的新内容整份盖掉。
+     现在：写之前比较磁盘原文和「本页上次读 / 写时的原文」，不一样 = 别的分页写过 → 三方合并（base = 本页上次同步时的内容，ours = 本页现在的内容，theirs = 磁盘上现在的内容）：
+       本页没改的地方用别人的，别人没改的地方用本页的，两边都改了同一处才以本页（刚操作的人）为准；有 id 的数组（案件、客户…）按 id 逐条合并，别人新增的案件不会被删，没有 id 的数组（Timeline 等）取并集。
+     正式版由后端的版本号 / 事务处理，这里只是原型的本地存档方案。 */
+  function jeq(a, b){ return a === b || JSON.stringify(a) === JSON.stringify(b); }
+  function isObj(x){ return x && typeof x === 'object' && !Array.isArray(x); }
+  function hasId(arr){ return arr.every(function(e){ return isObj(e) && (typeof e.id === 'string' || typeof e.id === 'number'); }); }
+  function mergeNode(b, o, t){
+    if(jeq(o, b)) return t;             /* 本页没改 → 用别人的 */
+    if(jeq(t, b)) return o;             /* 别人没改 → 用本页的 */
+    if(jeq(o, t)) return o;
+    if(isObj(o) && isObj(t)){
+      var bb = isObj(b) ? b : {}, r = {}, keys = {};
+      Object.keys(t).concat(Object.keys(o)).forEach(function(k){ keys[k] = 1; });
+      Object.keys(keys).forEach(function(k){
+        var hb = bb.hasOwnProperty(k), ho = o.hasOwnProperty(k), ht = t.hasOwnProperty(k);
+        if(ho && ht){ r[k] = mergeNode(bb[k], o[k], t[k]); }
+        else if(ho){ if(hb && jeq(o[k], bb[k])) return; r[k] = o[k]; }       /* 别人删了：本页没改过才跟着删 */
+        else if(ht){ if(hb && jeq(t[k], bb[k])) return; r[k] = t[k]; }       /* 本页删了：别人没改过才跟着删 */
+      });
+      return r;
+    }
+    if(Array.isArray(o) && Array.isArray(t)){
+      var ba = Array.isArray(b) ? b : [];
+      if(hasId(o) && hasId(t) && hasId(ba)){
+        var bm = {}, om = {}, tm = {}; ba.forEach(function(e){ bm[e.id] = e; }); o.forEach(function(e){ om[e.id] = e; }); t.forEach(function(e){ tm[e.id] = e; });
+        var out = [];
+        t.forEach(function(e){
+          var id = e.id;
+          if(om.hasOwnProperty(id)) out.push(mergeNode(bm[id], om[id], e));
+          else if(bm.hasOwnProperty(id) && jeq(e, bm[id])) return;            /* 本页删了、别人没改 → 删 */
+          else out.push(e);                                                    /* 别人新增 / 别人改过 → 留 */
+        });
+        o.forEach(function(e){
+          var id = e.id;
+          if(tm.hasOwnProperty(id)) return;
+          if(bm.hasOwnProperty(id) && jeq(e, bm[id])) return;                 /* 别人删了、本页没改 → 删 */
+          out.push(e);                                                         /* 本页新增 / 本页改过 → 留 */
+        });
+        return out;
+      }
+      var seen = {}; ba.concat(t).forEach(function(e){ seen[JSON.stringify(e)] = 1; });
+      var res = t.slice(); o.forEach(function(e){ var k = JSON.stringify(e); if(!seen[k]){ seen[k] = 1; res.push(e); } });  /* 没有 id 的数组：别人的 + 本页新增的 */
+      return res;
+    }
+    return o;                            /* 两边都改了同一个值：以本页为准 */
+  }
+  window.GMC_MERGE_LOG = window.GMC_MERGE_LOG || [];
+  /* 把磁盘上的内容（theirs）合并进本页：返回合并后的 vars（字符串 JSON 已按存档形态），失败返回 null */
+  function mergeDisk(kind, curRaw, baseStr, oursStr){
+    try{
+      var st = JSON.parse(curRaw);
+      if(!st || String(st.ver) !== String(DEMO_DATA_VERSION) || !st.vars || st.partial) return null;
+      var merged = mergeNode(baseStr ? JSON.parse(baseStr) : {}, JSON.parse(oursStr), st.vars);
+      window.GMC_MERGE_LOG.push({kind:kind, at:Date.now()}); if(window.GMC_MERGE_LOG.length > 50) window.GMC_MERGE_LOG.shift();
+      return JSON.stringify(merged);
+    }catch(e){ console.warn('[存档] 合并失败，退回整份写入', e); return null; }
+  }
+  /* 把合并结果装进内存（clinic / global） */
+  function adoptMerged(kind, mergedStr){
+    var vars = JSON.parse(mergedStr, reviver);
+    if(kind === 'g') applyGlobalVars(vars); else applyClinicVars(vars);
   }
   function afterLoad(){
     if(typeof ensureSeedAccounts === 'function') ensureSeedAccounts(); /* 新增的种子账号补进保留下来的账号里 */
@@ -106,6 +178,8 @@ var Store = (function(){
   }
   function writeKey(key, json){
     if(window.GMC_LOAD_PROTECT) return; /* CMD-1022-12：读档失败保护中，不往存档里写任何东西（包括种子） */
+    try{ if(window.GMC_EPOCH !== undefined && !window.GMC_EPOCH_STALE && (localStorage.getItem('gmc_cfg_epoch') || '') !== window.GMC_EPOCH){ /* CMD-1028-16：别的分页做过升级 / 清空 / 重置——本页内存里是旧资料，不能写回去，重新载入拿新的 */
+      window.GMC_EPOCH_STALE = true; window.GMC_NO_SAVE = true; console.warn('[存档] 存档已被升级 / 清空，本页旧资料不再写入，重新载入'); setTimeout(function(){ try{ location.reload(); }catch(e){} }, 50); return; } }catch(e0){}
     localStorage.setItem(key, json);
   }
   /* ---- 存档：只写变了的部分；写失败（容量超限等）→ 清掉存档，提示并停止存档 ---- */
@@ -131,9 +205,20 @@ var Store = (function(){
     }); }catch(e){}
   }
   function tryWrite(){
-    var snap = snapshot();
-    if(snap.g !== lastG){ writeKey(KEY_G, '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.g+'}'); lastG = snap.g; }
-    if(snap.c !== null && snap.c !== lastC){ writeKey(keyC(pageClinic()), '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.c+'}'); lastC = snap.c; }
+    var snap = snapshot(), merged = false;
+    /* CMD-1028-05：写之前先看磁盘有没有被别的分页改过（原文和本页上次读 / 写时不一样），改过就合并，不整份覆盖 */
+    if(snap.g !== lastG && lastG && lastDiskG !== null){
+      var curG = localStorage.getItem(KEY_G);
+      if(curG && curG !== lastDiskG){ var mg = mergeDisk('g', curG, lastG, snap.g); if(mg){ adoptMerged('g', mg); merged = true; } }
+    }
+    if(snap.c !== null && snap.c !== lastC && lastC && lastDiskC !== null){
+      var kc = keyC(pageClinic()), curC = localStorage.getItem(kc);
+      if(curC && curC !== lastDiskC){ var mc = mergeDisk('c', curC, lastC, snap.c); if(mc){ adoptMerged('c', mc); merged = true; } }
+    }
+    if(merged) snap = snapshot();
+    if(snap.g !== lastG || merged){ writeKey(KEY_G, '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.g+'}'); lastG = snap.g; try{ lastDiskG = localStorage.getItem(KEY_G); }catch(e){} }
+    if(snap.c !== null && (snap.c !== lastC || merged)){ writeKey(keyC(pageClinic()), '{"ver":'+DEMO_DATA_VERSION+',"t":'+Date.now()+',"st":1,"vars":'+snap.c+'}'); lastC = snap.c; try{ lastDiskC = localStorage.getItem(keyC(pageClinic())); }catch(e){} }
+    if(merged && typeof refreshView === 'function') setTimeout(function(){ try{ safeRefresh(refreshView); }catch(e){} }, 0); /* 合并进了别的分页的新内容，画面跟着刷新 */
   }
   function makeRoomAndRetry(){
     var steps = [function(){ dropBackups(true); }, function(){ pruneLive(1); }, function(){ pruneLive(2); }, function(){ pruneLive(3); }];
@@ -283,6 +368,11 @@ var Store = (function(){
     var cid = pageClinic();
     var tick = function(){ if(typeof remoteNotifTick === 'function') try{ remoteNotifTick(); }catch(err){} }; /* 通知弹出不能等画面重画：正在输入 / 有弹窗时画面会延后，但新通知必须马上弹（CMD-1012-08 第 0 条） */
     if(e.key === KEY_G && e.newValue){
+      var dirtyG = false; try{ dirtyG = lastG && snapshotG() !== lastG; }catch(err){}
+      if(dirtyG){ /* CMD-1028-05：同上，全局部分有未存的改动 → 合并 */
+        var baseG = lastG, mg2 = mergeDisk('g', e.newValue, baseG, snapshotG());
+        if(mg2){ adoptMerged('g', mg2); if(cid){ var inC2 = {}; Object.keys(PROJECT_CATEGORIES).forEach(function(k){ if(PROJECT_CATEGORIES[k].origin!=='KR') inC2[k] = PROJECT_CATEGORIES[k]; }); buildClinicViews(PROJECT_LIBRARY.filter(function(p){ return p.origin!=='KR'; }), LIB_CASES.filter(function(c){ return c.source!=='travel'; }), inC2); } lastDiskG = e.newValue; lastG = baseG; tick(); save(); if(typeof refreshView === 'function') safeRefresh(refreshView); return; }
+      }
       if(loadGlobal()){
         if(cid){ /* 医院资料变了：合成数组按新的医院资料重建（IN 项保持不变） */
           var inCats = {}; Object.keys(PROJECT_CATEGORIES).forEach(function(k){ if(PROJECT_CATEGORIES[k].origin!=='KR') inCats[k] = PROJECT_CATEGORIES[k]; });
@@ -295,6 +385,11 @@ var Store = (function(){
     } else if(!cid && e.key && e.key.indexOf('gmc_clinic_')===0 && e.newValue){ /* KR 页面没有自己的诊所：任何对接诊所的分区变了都要重画 */
       tick(); if(typeof krRefreshAll === 'function') safeRefresh(krRefreshAll);
     } else if(cid && e.key === keyC(cid) && e.newValue){
+      var dirtyC = false; try{ dirtyC = lastC && snapshot().c !== lastC; }catch(err){}
+      if(dirtyC){ /* CMD-1028-05：本页还有没存下去的改动（不能被别的分页的内容整份盖掉）→ 合并后马上存 */
+        var base = lastC, mc2 = mergeDisk('c', e.newValue, base, snapshot().c);
+        if(mc2){ adoptMerged('c', mc2); lastDiskC = e.newValue; lastC = base; tick(); save(); if(typeof refreshView === 'function') safeRefresh(refreshView); return; }
+      }
       if(loadClinic(cid)){ afterLoad(); tick(); if(typeof refreshView === 'function') safeRefresh(refreshView); }
     }
   });
@@ -482,8 +577,8 @@ var Store = (function(){
       if(i > -1){ target[i] = x; noteFn('更新'+label); } else { if(idPrefix && target.some(function(y){ return y.id===x.id; })) x.id = idPrefix + x.id; target.push(x); noteFn('新增'+label); } });
   }
   function carryRestore(){
-    var raw = null; try{ raw = localStorage.getItem('gmc_cfg_carry'); }catch(e){} if(!raw) return;
-    var carry = null; try{ carry = JSON.parse(raw); }catch(e){}
+    var raw = null; try{ raw = localStorage.getItem('gmc_cfg_carry'); }catch(e){} if(!raw && !window.GMC_CARRY_MEM) return;
+    var carry = null; try{ carry = raw ? JSON.parse(raw) : window.GMC_CARRY_MEM; }catch(e){} /* CMD-1028-16：存档空间不够时用户案件只放在内存里（已下载备份文件），同一次载入内写回新存档 */
     var report = {from:carry && carry.from, to:DEMO_DATA_VERSION, at:new Date().toISOString(), migrated:0, failed:[], notes:[]};
     if(!carry || !carry.clinics){ try{ localStorage.removeItem('gmc_cfg_carry'); }catch(e){} return; }
     var fromVer = parseInt(carry.from, 10) || 0, g = readRaw(KEY_G), idMap = {};
@@ -558,7 +653,7 @@ var Store = (function(){
       writeKey(KEY_G, JSON.stringify(g, replacer));
     }
     window.GMC_CARRY_CHECK = {expect:carry.total||0, migrated:report.migrated, failed:report.failed.length}; /* CMD-1020-12：升级后数量核对用 */
-    try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify(report)); localStorage.removeItem('gmc_cfg_carry'); }catch(e){}
+    try{ localStorage.setItem('gmc_cfg_migration', JSON.stringify(report)); localStorage.removeItem('gmc_cfg_carry'); window.GMC_CARRY_MEM = null; }catch(e){}
   }
 
   /* 操作之后（点击、输入、选择、键盘）稍后存档；另外每 2 秒兜底一次；页面离开/隐藏时再存一次 */
@@ -586,7 +681,7 @@ var Store = (function(){
     try{ Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_state')===0 || k.indexOf('gmc_clinic_')===0; }).forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}
     init(); load();
   }
-  return {save:save, load:load, touch:touch, readClinic:readClinic, updateClinic:updateClinic, withClinic:withClinic, mutateClinic:mutateClinic, isDisabled:function(){ return disabled; }};
+  return {mergeNode:mergeNode, save:save, load:load, touch:touch, readClinic:readClinic, updateClinic:updateClinic, withClinic:withClinic, mutateClinic:mutateClinic, isDisabled:function(){ return disabled; }};
 })();
 
 /* 重置演示数据：清掉所有 gmc_ 开头的存档，其他标签页收到通知后也会刷新 */

@@ -32,7 +32,9 @@
     <button class="p" onclick="exportJson()">导出测试记录（JSON）</button>
     <button onclick="exportMd()">导出可读版（Markdown）</button>
     <button onclick="exportBackup()">导出完整备份（可恢复）</button>
+    <button onclick="clearBusinessData()" style="color:#C1454A;" title="先下载完整备份，再清空所有案件和客人；基础设定保留，案件号从 A000001 重新开始">清空案件和客人（保留基础设定）</button>
   </div>
+  <div class="bar" id="storebar" style="font-size:13px;"></div>
   <div class="bar" id="roundbar"></div>
   <div id="notice"></div>
   <div class="card" id="noshow"><b>🧪 模拟未到店（超过 30 分钟）</b> <span class="muted">（原来在案件页状态列和案件列表上的「演示：模拟时间超过 30 分钟」按钮搬到这里：新页面里列出「待访问」的预约，可以选一位，或全部一起处理，用来测「超过 30 分钟自动未到店」）</span>
