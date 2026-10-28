@@ -293,7 +293,7 @@ function krbDoDone(){ var f = KRBK, did = f.did==='hold' ? {kind:'hold', caseId:
 function krbBlockHtml(r0, showWho){
   var b = r0.b, s = Math.max(timeToMin(b.time), KRC_H0*60), e = Math.min(timeToMin(b.end), KRC_H1*60); if(e <= s) e = s + 20;
   var w = 100 / r0.n, top = (s - KRC_H0*60) * KRC_PX / 60, hgt = Math.max(16, (e - s) * KRC_PX / 60 - 2), pend = b.status==='待确认', cn = (clinicById(b.clinicId)||{}).name || '';
-  var style = 'position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;border-radius:5px;padding:2px 5px;font-size:12px;line-height:1.3;overflow:hidden;cursor:pointer;z-index:2;'+(b.done ? 'opacity:.45;text-decoration:line-through;' : '')+
+  var style = 'position:absolute;left:calc('+(r0.lane*w)+'% + 1px);width:calc('+w+'% - 3px);top:'+top+'px;height:'+hgt+'px;border-radius:5px;padding:2px 5px;font-size:12px;line-height:1.3;overflow:hidden;cursor:pointer;z-index:2;'+((b.done || b.arrivedAt) ? 'opacity:.5;filter:grayscale(1);' : '')+
     (pend ? 'background:#fff;color:#2F6B4A;border:1.5px dashed #3F7A55;' : 'background:#E4EEE7;color:#2F6B4A;border:1px solid #B5D3C0;');
   var label = (pend ? '待 KR 确认 · ' : '预约 · ')+(b.name||'')+' · '+cn;
   return '<div onclick="event.stopPropagation();krBookOpen(\''+b.bookingId+'\')" title="'+krbEsc(b.time+'–'+b.end+' '+label)+'" style="'+style+'">'+(showWho ? krcOneLine(r0) : '<b>'+krbEsc(b.time)+'</b> '+krbEsc(label))+'</div>';

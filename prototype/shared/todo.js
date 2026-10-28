@@ -157,8 +157,7 @@ function krTodoItems(rows){
     /* CMD-1015-15：院长「待施术」——自己负责的全部已确认（含已到院）施术，只当参考名单（点卡片才显示），按今天 / 之后分组 */
     if(isDir && me && r.director===me.name && c.krSchedule && ['confirmed','arrived'].indexOf(c.krSchedule.status)>-1 && c.krSchedule.confirmedDate && !c.visitClosed && !isEnded(c))
       push(todoMk('dsurg', '施术：'+krActiveItems(c).filter(function(i){ return !krIsMgmtItemC(i); }).map(function(i){ return i.name; }).join('、'), c, c.krSchedule.confirmedDate+' '+(c.krSchedule.confirmedTime||''), false, function(){ krOpenSubCard(r.clinicId, r.id); }));
-    /* CMD-1020-05：院长操作的术后管理 / 管理项目到院 → 院长工作台今日提醒「11:00 客人 · ONDA 提升（院长操作）」 */
-    if(isDir && me && !c.visitClosed) visitCalBlocks(c).forEach(function(v){ if(v.hasDirOp && v.director===me.name && v.date===today && !v.done) push(todoMk('dirop', '院长操作：'+v.dirNames.map(buyName).join('、'), c, v.date+' '+v.time, false, function(){ krOpenSubCard(r.clinicId, r.id, v.firstId); })); });
+    /* CMD-1028-14 四：院长待办只有面诊 / 复诊评估（含参考名单），原来的「院长操作」提醒（CMD-1020-05）拿掉——院长操作的到院看日历 */
     /* CMD-1019-22 七：到院结束是人工确认——营业结束后没结束的不自动结束，第二天变待办「昨天的到院未结束」 */
     if(work && !c.visitClosed){
       var mvd = c.hasArrived && !c.krProcedureDone ? mainVisitDay(c) : '';
@@ -188,6 +187,7 @@ function krTodoItems(rows){
     if(b.status==='confirmed' && b.date===today && (work || (isKrDirectorLike(meB) && b.director===meB.name))) out.push(todoMk('today', todoNotArrivedOver(b.date, b.time, !!b.arrivedAt) ? '客人还没到：联络 IN 确认行程' : '今天到店：预约 · '+krbPurposeFull(b), null, b.date+' '+b.time, todoNotArrivedOver(b.date, b.time, !!b.arrivedAt), function(){ krBookOpen(b.id); }, {name:b.clientName, no:'', mine:true, rowKey:b.clinicId+':'}));
   }); }catch(e){}
   try{ krNotifUnread().forEach(function(n){ if(n.kind==='mention' || n.kind==='missedcall' || /@ 了你|未接来电/.test(n.text||'')) out.push(todoMk('stay', tzRender(n.text), null, '', false, function(){ krOpenNotif(n.id); })); }); }catch(e){}
+  if(isDir) out = out.filter(function(it){ return ['upload','recover','recoverwait','dsurg','stay'].indexOf(it.kind)>-1; }); /* CMD-1028-14 四：院长 / 代表院长——只留面诊、复诊评估、待施术参考名单和被 @ / 未接来电 */
   return out;
 }
 
@@ -299,7 +299,8 @@ function todoGo(i){ var f = TODO_ACTS[i]; try{ var cid = (TODO_ACT_CASE||{})[i];
 function todoPaneHtml(all){
   TODO_ACTS = []; TODO_ACT_CASE = []; TODO_LAST = all; todoSeenBaseline(all); todoStampAt(all);
   var vis = todoVisible(all), n = vis.length; TODO_ANYACK = vis.some(function(it){ return it.ack; });
-  var ubAll = []; try{ ubAll = todoUbItems(); }catch(e){ console.error('[未安排预约]', e); } var ubVis = ubAll.filter(function(it){ return !TODO_UI.mine || it.mine; }), ubTab = TODO_UI.tab==='unbooked' && !todoRefMode();
+  var ubAll = []; var noUb = todoIsKr() && typeof krIsDirector==='function' && krIsDirector(); /* CMD-1028-14 四：院长 / 代表院长没有「未安排预约」分页 */
+  if(!noUb) try{ ubAll = todoUbItems(); }catch(e){ console.error('[未安排预约]', e); } var ubVis = ubAll.filter(function(it){ return !TODO_UI.mine || it.mine; }), ubTab = TODO_UI.tab==='unbooked' && !noUb && !todoRefMode();
   if(TODO_UI.collapsed) return '<button class="btn-outline todo-mini" onclick="todoToggle()">待办 '+n+((todoUbDot(ubAll) || todoTabDot(vis)) ? ' <span class="todo-newdot"></span>' : '')+'</button>';
   var boxStyle = ' style="width:auto;"';
   var groups = [[0,'昨日及更早'],[1,'今天'],[2,'之后']];
@@ -311,7 +312,7 @@ function todoPaneHtml(all){
   var tag = (TODO_UI.kind && TODO_FILTERS[TODO_UI.kind]) ? '<span class="todo-tag">· '+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></span>' : '';
   var refMode = todoRefMode();
   /* CMD-1020-07：标题行两个并排分页「待办 N ｜ 未安排预约 N」，默认待办；数字一直显示，红点只在有新进来的或已逾期的未安排项目时亮 */
-  var tabs = '<span class="todo-tabs"><span class="todo-tab'+(ubTab ? '' : ' on')+'" onclick="todoSetTab(\'todo\')">待办 '+n+(todoTabDot(vis) ? '<span class="todo-newdot" title="有新的或已逾期的待办"></span>' : '')+'</span><span class="todo-tab'+(ubTab ? ' on' : '')+'" onclick="todoSetTab(\'unbooked\')">未安排预约 '+todoUbCount(ubVis)+(todoUbDot(ubAll) ? '<span class="todo-newdot" title="有新的或已逾期的"></span>' : '')+'</span></span>';
+  var tabs = '<span class="todo-tabs"><span class="todo-tab'+(ubTab ? '' : ' on')+'" onclick="todoSetTab(\'todo\')">待办 '+n+(todoTabDot(vis) ? '<span class="todo-newdot" title="有新的或已逾期的待办"></span>' : '')+'</span>'+(noUb ? '' : '<span class="todo-tab'+(ubTab ? ' on' : '')+'" onclick="todoSetTab(\'unbooked\')">未安排预约 '+todoUbCount(ubVis)+(todoUbDot(ubAll) ? '<span class="todo-newdot" title="有新的或已逾期的"></span>' : '')+'</span>')+'</span>';
   var headTitle = refMode ? '<b>'+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' '+n+'（参考）</b> <span onclick="todoSetKind(\'\')" title="回到待办" style="cursor:pointer;">✕</span>' : tabs+(ubTab ? '' : tag); /* CMD-1015-08：参考名单标题「今天来访 4（参考）✕」 */
   var inner = ubTab ? todoUbListHtml(ubVis) : ((TODO_UI.kind && !tag) ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+
     (vis.length ? '<div class="todo-row todo-headrow"><div>出现时间</div><div>阶段</div><div>进程</div><div>截止时间</div><div>状态</div><div>客人</div>'+(TODO_ANYACK ? '<div></div>' : '')+'</div>' : '')+'<div class="todo-list">'+body+'</div>';

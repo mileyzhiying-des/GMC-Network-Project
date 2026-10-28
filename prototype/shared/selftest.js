@@ -5289,6 +5289,19 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     CLIENT_HOLDINGS[c.name] = []; c.procedureItems = c.procedureItems.filter(function(it){ return !/R172/.test(it.name); });
   });
   /* CMD-1028-14 一、二：冲突弹窗文字 / 按钮；预约弹窗红框项目可直接［保留］；第一次填在韩期间也逐项选 */
+  ST.def('R175a','CMD-1028-14 四（KD1 / KO1 分页）：院长待办只有面诊 / 复诊评估类 · 没有「未安排预约」分页 · 日历已到院 / 已完成的块变灰、不划线',function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrDirectorLike(me), '要在 KD1 或 KO1 分页里跑')) return;
+    var rows = krAllCases(), items = krTodoItems(rows), okK = ['upload','recover','recoverwait','dsurg','stay'];
+    ST.ok(items.every(function(it){ return okK.indexOf(it.kind)>-1; }), '待办类型只剩面诊 / 复诊评估 / 待施术名单 / @（实际 '+items.map(function(it){ return it.kind; }).filter(function(k, i, a){ return a.indexOf(k)===i; }).join(',')+'）');
+    ST.ok(!items.some(function(it){ return it.kind==='dirop'; }), '没有「院长操作」待办');
+    var html = todoPaneHtml(items); ST.ok(!/未安排预约/.test(html) && /待办 \d+/.test(html), '待办栏没有「未安排预约」分页');
+    TODO_UI.tab = 'unbooked'; ST.ok(!/未安排预约/.test(todoPaneHtml(items)), '就算界面状态记着 unbooked，也不显示该分页'); TODO_UI.tab = 'todo';
+    var mk = function(extra){ var r0 = {b:{type:'施术', time:'10:00', end:'11:00', id:'t175', who:me.name, date:todayStr(), name:'T-175'}, lane:0, n:1, row:null, label:'x'}; for(var k in extra) r0[k] = extra[k]; return krcBlockHtml(r0, false); };
+    var hd = mk({done:true}), ha = mk({arrived:true}), hn = mk({});
+    ST.ok(!/line-through/.test(hd) && /grayscale/.test(hd), '已完成的块变灰，不划线');
+    ST.ok(!/line-through/.test(ha) && /grayscale/.test(ha), '已到院的块变灰，不划线');
+    ST.ok(!/grayscale/.test(hn.replace(/krcIsPast/, '')) || krcIsPast({date:todayStr(), time:'10:00', end:'11:00'}), '没到院的块不因为到院变灰');
+  });
   ST.def('R174a','CMD-1028-14 三（KM1 分页，pcStage 夹具）：同一次到院里别的行已到院 / 做完后，另一行不再出「客人还没到」待办；真没到的仍出',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
