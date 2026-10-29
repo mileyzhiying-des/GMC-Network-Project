@@ -7942,4 +7942,26 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(n.stage==='reportonly', '③ 客人不做项目 → 仅出报告');
     } finally { window.alert = al; window.confirm = cf; window.GMC_NO_FOLLOWASK = oldF; }
   });
+
+  /* CMD-1029-06 一（A1 分页）：「使用之前购买的项目」只列 IN 本地持有；只有赴韩疗程持有时灰掉并提示 */
+  ST.def('R184a','CMD-1029-06（A1 分页）：使用之前购买的项目只列 IN 本地持有 / 只有赴韩疗程持有时灰掉 + 小字提示 / 两种都有只列本地',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, oldF = window.GMC_NO_FOLLOWASK; window.alert = function(){}; var td = todayStr();
+    var mk = function(tag, local, trip){
+      var p0 = ST.newRes(tag); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20); p0.stage = 'closed'; p0.visitClosed = true;
+      if(local) CLIENT_HOLDINGS[p0.name] = [{itemName:tag+' 婴儿针', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -20), bought:3, used:1, usages:[], paid:900000}]}];
+      if(trip) p0.subItems = [{id:tag+'care', kind:'术后管理记录', place:'IN', content:'拆线', date:ymdAdd(td, -5), done:false, projectName:'隆鼻'}];
+      var c0 = ST.newRes(tag+'n', {phone:clientPhoneOf(p0.name)}); c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.name = p0.name; ST.open(c0); c0.subState = 'arrived'; c0.arrivedDay = td; c0.stage = 'booked'; c0.materialsConfirmed = false;
+      window.GMC_NO_FOLLOWASK = false; c0.followupAsked = false; followupAsk(c0); return c0;
+    };
+    try{
+      var c = mk('R184a', true, false), ov = document.getElementById('followup-overlay'); fuSet('mode', 'local');
+      ST.ok(fuHoldList(c).length===1 && /R184a 婴儿针/.test(ov.innerText), '只有本地持有：清单列出，可选');
+      c = mk('R184b', false, true); ov = document.getElementById('followup-overlay');
+      var r = [].filter.call(ov.querySelectorAll('input[type=radio]'), function(x){ return /local/.test(x.getAttribute('onchange')||''); })[0];
+      ST.ok(fuHoldList(c).length===0 && r && r.disabled && /要做术后管理请选「继续之前的服务案件」/.test(ov.innerText), '只有赴韩疗程持有（转到印尼的术后管理）：灰掉 + 小字提示');
+      c = mk('R184c', true, true); ov = document.getElementById('followup-overlay'); fuSet('mode', 'local');
+      ST.ok(fuHoldList(c).length===1 && !/术后管理 ·/.test(ov.innerText) && /R184c 婴儿针/.test(ov.innerText), '两种都有：只列本地持有，不列术后管理');
+    } finally { window.alert = al; window.GMC_NO_FOLLOWASK = oldF; }
+  });
 })();

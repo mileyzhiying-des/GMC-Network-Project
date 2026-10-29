@@ -2943,8 +2943,7 @@ function fuHoldList(c){
     var src = byId(b.caseId), m = src ? mainOf(src) : null;
     out.push({name:h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : ''), left:left, date:b.date||'', caseId:m ? m.id : b.caseId, caseNo:m ? m.caseNo : '', kind:'本地'});
   }); });
-  try{ clientCareLeftAll(c.name).forEach(function(x){ if(x.c.id===c.id) return; var m = mainOf(x.c);
-    out.push({name:'术后管理 · '+(x.s.content||''), left:1, date:x.c.visitDate||'', caseId:m.id, caseNo:m.caseNo, kind:'术后管理'}); }); }catch(e){}
+  /* CMD-1029-06 一：只列 IN 本地持有；转到印尼的术后管理等赴韩疗程的持有不列在这里（走「继续之前的服务案件 → 术后管理」回原主案件） */
   return out.sort(function(a, b){ return String(a.date).localeCompare(String(b.date)); });
 }
 function fuLocalList(c){
@@ -2958,6 +2957,7 @@ function fuRender(){
     radio('mode','none','开始新的服务案件',a.mode==='none')+
     radio('mode','link','继续之前的服务案件',a.mode==='link', !canLink, '没有可以继续的案件')+
     radio('mode','local','使用之前购买的项目',a.mode==='local', !fuHoldList(c).length, '没有可以使用的持有项目')+
+    (!fuHoldList(c).length && fuTripHoldOnly(c) ? '<div style="font-size:12px;color:var(--muted);margin:-2px 0 4px 26px;">要做术后管理请选「继续之前的服务案件」</div>' : '')+
     radio('mode','refund','退款',a.mode==='refund', !refundableBatches(c.name).length, '客人没有可以退款的项目'); /* CMD-1026-13 三：专门来退款，放最后 */
   var ok = a.mode==='none' || a.mode==='refund';
   if(a.mode==='local'){
@@ -11789,3 +11789,6 @@ function reuseHandOffToMain(c){
   logCaseEvent(m, actingName(), '继续面诊（'+(c.caseNo||'')+'）选了赴韩项目并付定金（沿用原方案，没有面诊费）');
   updateCaseStage(m);
 }
+
+/* CMD-1029-06 一：客人只有赴韩疗程的持有（在韩持有 / 转到印尼的术后管理）、没有 IN 本地持有 */
+function fuTripHoldOnly(c){ var any = false; try{ any = clientCareLeftAll(c.name).some(function(x){ return x.c.id!==c.id; }) || localMainsWithLeft(c).length>0; }catch(e){} return any; }
