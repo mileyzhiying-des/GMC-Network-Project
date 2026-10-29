@@ -7864,4 +7864,46 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         ST.ok(caseStageProcText(r0)==='已结束 · 仅办理退款' && /退款 Rp/.test(financeLabel(r0)) && caseTabKey(r0)==='closed', '三：列表用词 / 财务栏 / 归入已完成'); }
     } finally { window.alert = al; window.GMC_NO_FOLLOWASK = oldFa; }
   });
+
+  /* CMD-1029-04（A1 分页）：使用之前购买的项目的独立案件——本地项目 tab［购买其他项目］（用同一个本地选购画面）：① 先使用再购买 ② 先购买再一起使用 ③ 本次不使用、只购买 */
+  ST.def('R182a','CMD-1029-04（A1 分页）：使用之前购买的项目的案件 本地项目 tab 加［购买其他项目］（三种顺序）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm, oldF = window.GMC_NO_FOLLOWASK; window.alert = function(){}; window.confirm = function(){ return true; }; var td = todayStr();
+    var mk = function(tag){
+      var p0 = ST.newRes(tag); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20); p0.stage = 'closed'; p0.visitClosed = true;
+      CLIENT_HOLDINGS[p0.name] = [{itemName:tag+' 婴儿针', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -20), bought:3, used:1, usages:[], paid:900000}]}];
+      var c0 = ST.newRes(tag+'n', {phone:clientPhoneOf(p0.name)}); c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.name = p0.name; ST.open(c0); c0.subState = 'arrived'; c0.arrivedDay = td; c0.stage = 'booked'; c0.materialsConfirmed = false;
+      window.GMC_NO_FOLLOWASK = false; c0.followupAsked = false; followupAsk(c0); fuSet('mode', 'local'); followupAskDone(true);
+      c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.metaviewStatus = 'ready'; confirmMaterials(); switchCaseTab('localmgmt'); window.GMC_NO_FOLLOWASK = true; return {p0:p0, c0:c0};
+    };
+    var btns = function(){ return [].map.call(document.querySelectorAll('#case-body button'), function(b){ return b.innerText; }).join('|'); };
+    var cur = function(c){ return CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; };
+    var buy = function(){ var p = ST.localProj('LHALa peel'); usePrevBuy(); var open = document.getElementById('lm-buy-overlay').classList.contains('open'); toggleLocalProject('lm', p.id); lmSettle(); return open; };
+    var hold = function(c){ return getClientHoldings(c.name).map(function(h){ return h.itemName+':'+h.batches.map(function(b){ return (b.bought-b.used)+'/'+b.bought+'@'+(b.caseId===c.id ? '本案' : '旧'); }).join(','); }).join(' ; '); };
+    try{
+      /* ① 先使用，再购买 */
+      var A = mk('R182a'), c = A.c0; chooseProjectEntryMode('holdings');
+      ST.ok(/购买其他项目\|本次不使用\|使用项目$/.test(btns()), '①：按钮同一排，顺序［购买其他项目］［本次不使用］［使用项目］（主操作最右）：'+btns());
+      document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); c = cur(c);
+      ST.ok(c.mgmtActive && /购买其他项目/.test(btns()), '①：先使用后，使用中的面板仍有［购买其他项目］');
+      var op = buy(); c = cur(c);
+      ST.ok(op, '①：弹出和一般本地选购同一个选项目画面（lm-buy-overlay）'); ST.ok(!document.getElementById('lm-buy-overlay').classList.contains('open') && !isEnded(c), '①：付款后弹窗关掉，案件没有结束');
+      ST.ok(/婴儿针:1\/3@旧/.test(hold(c)) && /LHALa peel:1\/1@本案/.test(hold(c)), '①：旧的剩 1 次（用掉 1 次），新买的 1 次记在本案件：'+hold(c));
+      ST.ok(c.localMgmt && c.localMgmt.batches.length===1 && showSettleTab(c), '①：钱记在本案件的结算（结算 tab 出现）');
+      ST.ok(/购买于 /.test(holdingsUseHtml(c, 'main')) && holdingsUseHtml(c, 'main').indexOf('购买于 '+c.caseNo)>-1, '①：新买的项目写「购买于 '+c.caseNo+'」');
+      ST.ok(/Timeline|购买其他项目/.test('') || (c.logEntries||[]).some(function(e){ return /本地项目：购买其他项目/.test(e.action); }) && (c.logEntries||[]).some(function(e){ return /结算付款/.test(e.action); }), '①：Timeline 有「购买其他项目」和「结算付款」');
+      /* ② 先购买，再一起使用 */
+      var B = mk('R182b'); c = B.c0; chooseProjectEntryMode('holdings'); buy(); c = cur(c);
+      var tx = document.getElementById('case-body').innerText;
+      ST.ok(/婴儿针/.test(tx) && /LHALa peel/.test(tx) && /购买其他项目/.test(btns()), '②：买完回到「是否使用持有项目？」，新旧项目一起在清单里，［购买其他项目］还在');
+      for(var i = 0; document.getElementById('hold-check-main-'+i); i++) document.getElementById('hold-check-main-'+i).checked = true; submitHoldingsUse('main'); c = cur(c);
+      ST.ok((c.mgmtUses||[]).length===2 && /LHALa peel:0\/1@本案/.test(hold(c)) && /婴儿针:1\/3@旧/.test(hold(c)), '②：新旧一起使用，持有次数对：'+hold(c));
+      /* ③ 本次不使用，只购买（走一般本地选购画面） */
+      var C = mk('R182c'); c = C.c0; chooseProjectEntryMode('holdings'); notUseThisTime('main'); c = cur(c);
+      ST.ok(!isEnded(c) && c.projectEntryMode==='new' && /本地选购/.test(document.getElementById('case-body').innerText), '③：本次不使用后直接进入一般本地选购画面（案件没结束），可以只购买');
+      /* 不买就关弹窗：案件原样 */
+      var D = mk('R182d'); c = D.c0; chooseProjectEntryMode('holdings'); usePrevBuy(); lmNoBuy(); c = cur(c);
+      ST.ok(!c.localMgmt && !document.getElementById('lm-buy-overlay').classList.contains('open') && !isEnded(c), '关掉弹窗不购买：案件原样、没有留下本地管理记录');
+    } finally { window.alert = al; window.confirm = cf; window.GMC_NO_FOLLOWASK = oldF; }
+  });
 })();

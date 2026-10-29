@@ -4739,10 +4739,12 @@ function holdingsUseHtml(c, scope){
   return '<div class="card" style="padding:22px 24px;">'+
     '<div class="info-heading" style="margin-bottom:14px;">是否使用持有项目？</div>'+
     rows+
-    '<div style="display:flex;gap:10px;margin-top:16px;">'+
+    (usePrevBuyOk(c, scope)
+      ? '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;"><button class="btn-outline" onclick="usePrevBuy()">购买其他项目</button><button class="btn-outline" onclick="notUseThisTime(\''+scope+'\')">本次不使用</button>'+(holdings.some(function(h0){ return h0.category!=='术后管理'; }) ? '<button class="btn-primary" onclick="submitHoldingsUse(\''+scope+'\')">使用项目</button>' : '')+'</div></div>' /* CMD-1029-04：按钮同一排，主操作最右 */
+      : '<div style="display:flex;gap:10px;margin-top:16px;">'+
     (holdings.some(function(h0){ return h0.category!=='术后管理'; }) ? '<button class="btn-primary" style="flex-grow:1;" onclick="submitHoldingsUse(\''+scope+'\')">使用项目</button>' : '')+
     '<button class="btn-outline" style="flex-grow:1;" onclick="notUseThisTime(\''+scope+'\')">本次不使用</button>'+
-    '</div></div>';
+    '</div></div>');
 }
 
 /* ［做术后管理］（已结案案件剩下的，从本地管理新案件的「使用持有项目」里做）：记在原案件（KR 看得到），本案件自动关联原案件；提前做原因必填，原案件 KR 收到通知 */
@@ -4866,7 +4868,7 @@ function mgmtActiveHtml(c, scope){
     '<div style="font-size:12px;color:var(--muted);margin-top:8px;">每一行点［完成］或［取消］；［全部完成］把所有进行中的项目一次标完成。取消的次数归还到客户持有项目，<b>不是退款</b>。</div>'+
     '<div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--slate2);">同一次到店里还可以：</span>'+
     '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'use\')">继续使用持有项目</button>'+
-    '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'buy\')">继续选购项目</button></div>';
+    (usePrevBuyOk(c, scope) ? '<button class="btn-ghost" onclick="usePrevBuy()">购买其他项目</button>' : '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'buy\')">继续选购项目</button>')+'</div>';
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理</div>'+rows+btns+'</div>';
 }
 
@@ -4969,6 +4971,10 @@ function lmBuyHtml(c){ return localPurchaseHtml(c, 'lm', false); }
 
 function lmNoBuy(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return;
+  if(c.localMgmt.fromUsePrev){ /* CMD-1029-04：关掉弹窗 = 不购买，案件原样（买过的批次留在 c.localMgmt.batches 里记账，不结束案件） */
+    LM_BUY_OPEN = ''; if(lmNothingYet(c.localMgmt)) c.localMgmt = null; else { c.localMgmt.step = 'usePrevDone'; c.localMgmt.active = false; c.localMgmt.cart = []; }
+    var ov0 = document.getElementById('lm-buy-overlay'); if(ov0) ov0.classList.remove('open'); updateCaseStage(c); buildCaseLog(c); renderCaseBody(c); return;
+  }
   if(c.localMgmt.mgmtActive){ c.localMgmt.addBuy = false; renderCaseBody(c); return; } /* 本地管理进行中：只收起选购 */
   if(lmNothingYet(c.localMgmt)){ lmBackOut(c); return; } /* 什么都没买 / 没用：返回 */
   logCaseEvent(c, actingName(), '本地管理：本次不购买项目');
@@ -5079,7 +5085,8 @@ function lmSettleDo(){
   lm.batches.push({id:'L'+(lm.batches.length+1), items:items, inTotal:total, time:nowFullDt(), note:lm.noteIN||''});
   if(cpL) compFinalize(c, cpL, beforeB, total, lm.batches[lm.batches.length-1]);
   lm.cart = []; lm.noteIN = '';
-  if(lm.mgmtActive){ lm.addBuy = false; lm.addUse = true; } /* 本地管理进行中追加购买：付款后问是否继续使用 */
+  if(lm.fromUsePrev){ lm.step = 'usePrevDone'; lm.addBuy = false; lm.active = false; } /* CMD-1029-04：使用之前购买的项目的案件——买完弹窗关掉，回到「是否使用持有项目？」清单，新买的就在里面 */
+  else if(lm.mgmtActive){ lm.addBuy = false; lm.addUse = true; } /* 本地管理进行中追加购买：付款后问是否继续使用 */
   else lm.step = 'afterBuyUse'; /* 结算后：是否使用？ */
   logCaseEvent(c, actingName(), '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+(i.kind==='service' ? '（서비스）' : '')+' ×'+i.qty+(discountText(i.discountPct)?'（'+discountText(i.discountPct)+'）':''); }).join('、')+'），已转客户持有');
   updateCaseStage(c); buildCaseLog(c); renderCaseBody(c);
@@ -11740,4 +11747,17 @@ function usePrevCardsHtml(c){
     '<div class="card" style="padding:22px 24px;margin-top:14px;"><div class="info-heading" style="margin-bottom:4px;">到访目的 <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">来用之前购买的项目</span></div>'+
     guestConcernRowHtml(c)+metaRow+concernRow+budgetRowHtml(c)+att+
     (MAT_SPLIT ? (MAT_FOOT = matFootHtml(c), '') : matFootHtml(c))+'</div>';
+}
+
+/* ================= CMD-1029-04：「使用之前购买的项目」开的独立案件——本地项目 tab 的［购买其他项目］ ================= */
+/* 只给 usePrev 案件（主案件级的本地案件，scope main）；买东西用和一般本地选购同一个画面（localPurchaseHtml(c,'lm') 的弹窗，单品 / 活动价 / 套餐 / 서비스），
+   结算 = lmSettle（确认付款 → 变成客人持有 + 记在本案件的结算 tab），买完回到「是否使用持有项目？」清单里就能当天接着用 */
+function usePrevBuyOk(c, scope){ return !!c && !!c.usePrev && scope==='main' && !isEnded(c) && !c.visitClosed && c.subState!=='cancelled'; }
+function usePrevBuy(){
+  var c = getCurrentCase(); if(!c || !c.usePrev || isEnded(c)) return; if(inLockGuard(c)) return;
+  if(c.localMgmt && c.localMgmt.ended){ c.localMgmt.ended = false; c.localMgmt.active = true; }
+  if(!c.localMgmt) c.localMgmt = {active:true, ended:false, step:'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
+  c.localMgmt.step = 'buy'; c.localMgmt.addBuy = false; c.localMgmt.fromUsePrev = true;
+  LM_BUY_OPEN = c.id; logCaseEvent(c, actingName(), '本地项目：购买其他项目');
+  lmBuyModalRender();
 }
