@@ -4187,14 +4187,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var b2 = ST.newRes('R133bl', {phone:clientPhoneOf(bl.name)}); ST.open(b2); markArrived(); ov = document.getElementById('followup-overlay'); var c = getCurrentCase();
       var av = fuAvail(c); ST.ok(!av.can.consult && !av.can.revisit && !av.can.care, 'Belly 情况：只在本地买过、案件已结案 → 没有符合条件的案件（不是 3 个月规则的问题）');
       ST.ok(/disabled[^>]*onchange="fuSet\('mode','link'\)"/.test(ov.innerHTML) && !/disabled[^>]*onchange="fuSet\('mode','local'\)"/.test(ov.innerHTML), '「继续之前的服务案件」灰掉，「使用之前购买的项目」可选');
-      fuSet('mode','local'); ST.ok(FU_ASK.sel===bl.id && /新案件，标来源/.test(ov.innerText), '本地持有：写明「新案件，标来源」');
+      fuSet('mode','local'); ST.ok(/还没用完的项目/.test(ov.innerText) && !ov.querySelector('select'), '本地持有：只读清单（CMD-1029-03 四）');
       followupAskDone(true); c = getCurrentCase(); ST.ok(!isChildVisit(c) && !c.mainId && c.boughtFrom && c.boughtFrom.indexOf(bl.caseNo)>-1 && c.continueNew, '本地持有 → 开新案件（不加入原主案件），自动标来源 '+(c.boughtFrom||[]).join());
       /* 选「开始新的服务案件」不标来源 */
       var b3 = ST.newRes('R133bl', {phone:clientPhoneOf(bl.name)}); ST.open(b3); markArrived(); followupAskDone(false); ST.ok(!getCurrentCase().boughtFrom, '选开始新的服务案件：不标来源（持有项目仍可在本地管理里用）');
       /* 赴韩主案件里的持有 → 回原主案件 */
       var kr = ST.newRes('R133kr'); ST.materials(kr, {consult:false}); kr = CASE_ITEMS.filter(function(x){ return x.id===kr.id; })[0]; kr.procedureItems = [{origin:'KR', name:'美版超声刀', price:1, heldOver:true, mgmtPlan:true, qty:3, holdUsed:0, done:true}]; kr.krBalancePaid = true; kr.settlementDone = true; kr.stage = 'travel';
-      var k2 = ST.newRes('R133kr', {phone:clientPhoneOf(kr.name)}); ST.open(k2); markArrived(); fuSet('mode','local'); ST.ok(localMainsWithLeft(getCurrentCase()).some(function(x){ return x.id===kr.id; }) && /回到这个主案件/.test(document.getElementById('followup-overlay').innerText), '赴韩持有：写明「回到这个主案件」');
-      followupAskDone(true); ST.ok(getCurrentCase().mainId===kr.id && isChildVisit(getCurrentCase()), '赴韩持有 → 回到原主案件，加一个子案件');
+      var k2 = ST.newRes('R133kr', {phone:clientPhoneOf(kr.name)}); ST.open(k2); markArrived(); fuSet('mode','local'); ST.ok(localMainsWithLeft(getCurrentCase()).some(function(x){ return x.id===kr.id; }) && fuHoldList(getCurrentCase()).length===0, '赴韩持有：清单里不列（CMD-1029-03 四：韩国持有不列），「使用之前购买的项目」灰掉');
+      ST.ok(!kr.mainId && !isChildVisit(getCurrentCase()), '赴韩持有：来用不会加入原主案件（CMD-1029-03 五：一律开新独立案件）');
       /* 3 个月：超过的案件不列 */
       var rp = ST.newRes('R133rp'); ST.materials(rp, {consult:false}); rp = CASE_ITEMS.filter(function(x){ return x.id===rp.id; })[0]; rp.stage = 'reportonly'; rp.reportReady = true; rp.visitClosed = true; rp.endNote = '客人不做项目'; rp.krDepositPaid = false; rp.consultStartedAt = ymdAdd(todayStr(), -20)+' 03:00:00';
       var r2 = ST.newRes('R133rp', {phone:clientPhoneOf(rp.name)}); ST.open(r2); markArrived(); ST.ok(fuAvail(getCurrentCase()).can.consult, '仅出报告、3 个月内 → 可勾面诊'); followupAskDone(false);
@@ -4370,7 +4370,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var c3 = ST.newRes('R117h', {phone:clientPhoneOf(h.name)}); ST.open(c3); markArrived(); c3 = getCurrentCase();
       ST.ok(localMainsWithLeft(c3).some(function(x){ return x.id===h.id; }), '用持有项目：当初买的主案件在候选里');
       FU_ASK.mode = 'local'; FU_ASK.sel = h.id; followupAskDone(true); c3 = getCurrentCase();
-      ST.ok(c3.mainId===h.id && c3.caseNo===h.caseNo+'-02' && h.stage!=='closed', '加入当初买的主案件，主案件回到进行中：'+h.stage);
+      ST.ok(!c3.mainId && h.stage==='closed' && !CASE_ITEMS.some(function(x){ return x.mainId===h.id; }), '用持有项目（CMD-1029-03 五）：不加入当初买的主案件，原主案件仍是已完成：'+h.stage);
       /* 案件管理已完成 tab：默认最近 3 个月，按最后来访日排 */
       var o1 = ST.newRes('R117o'); ST.materials(o1, {consult:false}); o1 = CASE_ITEMS.filter(function(x){ return x.id===o1.id; })[0]; o1.stage = 'closed'; o1.visitClosed = true; o1.visitDate = dAgo(200);
       var o2 = ST.newRes('R117q'); ST.materials(o2, {consult:false}); o2 = CASE_ITEMS.filter(function(x){ return x.id===o2.id; })[0]; o2.stage = 'closed'; o2.visitClosed = true; o2.visitDate = dAgo(10);
