@@ -8069,6 +8069,46 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(refundMethodText({method:'其他', methodNote:'现金给门店'})==='其他（现金给门店）', '其他带说明显示');
     } finally { window.alert = al; window.confirm = cf; window.GMC_REFUND_METHOD_MANUAL = false; }
   });
+  ST.def('R195a','CMD-1029-11（IN 分页）：已登记老客人再预约——未满 21 岁每次再确认（未婚重新勾监护人、已婚带入）/ 满 21 岁不出现 / 没生日先补 / 预约页 + IN 代约老客',function(){
+    var td = todayStr(), y = +td.slice(0,4), SFX = Date.now().toString(36).slice(-4), seq = 0;
+    var ph = function(){ seq++; return '+62 814-'+String(Date.now()).slice(-6)+('00'+seq).slice(-2); };
+    var nextSlot = function(){ var d = new Date(td+'T00:00:00Z'); for(var k = 1; k < 40; k++){ d.setUTCDate(d.getUTCDate()+1); var ds = d.toISOString().slice(0,10); var ts = ['11:00','11:30','12:00','12:30','13:00','13:30','15:00','15:30','16:00','16:30','17:00','17:30']; for(var i = 0; i < ts.length; i++){ if(!slotBlockReason(ds, ts[i]) && !used[ds+ts[i]]){ used[ds+ts[i]] = 1; return {date:ds, time:ts[i]}; } } } return null; }, used = {};
+    var mkOld = function(tag, dob, mi){ var cl = addClient({name:'T-R195'+tag+SFX, phone:ph(), gender:'女', dob:dob, createdBy:'测试'}); if(mi) cl.minorInfo = mi; return cl; };
+    var book = function(cl, o){ var sl = nextSlot(); return submitSelfBooking(Object.assign({consentGiven:false, entry:'web', date:sl.date, time:sl.time, phone:cl.phone, name:cl.name, firstName:cl.name, lastName:'', gender:'女', dob:cl.dob, history:'', beauty:[], purpose:'面诊商谈', note:''}, o||{})); };
+    var oldMi = {bookedOn:'2025-01-01', ageAtBooking:18, marital:'未婚', guardianNotified:true, guardianAt:'2025-01-01 10:00'};
+    /* ① 满 21 岁：不问、标记不显示、记录保留 */
+    var a = mkOld('a', (y-30)+'-06-15', oldMi); ST.ok(!minorNeed(a).minor && !minorNeed(a).needDob, '已满 21 岁：不出现确认');
+    var ra = book(a); ST.ok(ra && ra.ok && JSON.stringify(a.minorInfo)===JSON.stringify(oldMi) && minorMarkText(a)==='', '满 21 岁：预约照样成功，标记不显示，旧记录保留不改');
+    /* ② 未满 21 岁、未婚：带入上次、要重新勾监护人 */
+    var b = mkOld('b', (y-18)+'-03-03', oldMi); ST.ok(minorNeed(b).minor && minorPrefill(b).marital==='未婚' && minorPrefill(b).guardianOk===false, '未满 21 岁：带入上次的婚姻状况，监护人勾选重置');
+    var rb0 = book(b, {marital:'未婚', guardianOk:false}); ST.ok(rb0 && rb0.ok===false && /监护人/.test(rb0.reason||''), '未婚没重新勾「已通知监护人」→ 不能预约');
+    ST.ok(b.minorInfo.bookedOn==='2025-01-01', '没通过时不改记录');
+    var rb = book(b, {marital:'未婚', guardianOk:true}); ST.ok(rb && rb.ok && b.minorInfo.bookedOn===td && b.minorInfo.guardianNotified && b.minorInfo.ageAtBooking===18 && b.minorInfo.guardianAt && b.minorInfo.guardianAt!==oldMi.guardianAt, '重新勾 → minorInfo 更新（这次的预约日、年龄、婚姻状况、勾选时间）');
+    ST.ok(rb.c.logEntries.some(function(e){ return /未满 21 岁（18 岁）再确认：未婚/.test(e.action); }), '预约 Timeline 记一笔');
+    ST.ok(/未满 21 岁 · 未婚 · 已通知监护人/.test(minorMarkText(b)), 'IN 标记显示');
+    /* ③ 已婚：带入已婚，不要监护人；可以改成未婚 */
+    var c = mkOld('c', (y-19)+'-05-05', {bookedOn:'2025-02-02', ageAtBooking:18, marital:'已婚', guardianNotified:false, guardianAt:''});
+    ST.ok(minorPrefill(c).marital==='已婚', '已婚：带入已婚'); var rc = book(c, {marital:'已婚'}); ST.ok(rc && rc.ok && c.minorInfo.marital==='已婚' && !c.minorInfo.guardianNotified && c.minorInfo.bookedOn===td, '已婚：不用勾监护人，记录更新');
+    var rc2 = book(c, {marital:'未婚', guardianOk:true}); ST.ok(rc2 && rc2.ok && c.minorInfo.marital==='未婚', '可以改成未婚（要勾监护人）');
+    var rc3 = book(c, {}); ST.ok(rc3 && rc3.ok===false && /婚姻/.test(rc3.reason||''), '没选婚姻状况 → 不能预约');
+    /* ④ 没有生日的旧资料：先补生日再判断 */
+    var d = mkOld('d', '', null); ST.ok(minorNeed(d).needDob, '没有生日：要先补');
+    var rd0 = book(d, {dob:''}); ST.ok(rd0 && rd0.ok===false && /生日/.test(rd0.reason||''), '没补生日不能预约');
+    var rd = book(d, {dob:(y-35)+'-01-01'}); ST.ok(rd && rd.ok && d.dob===(y-35)+'-01-01' && !d.minorInfo, '补了生日（满 21 岁）→ 存进档案、不问婚姻');
+    var d2 = mkOld('d2', '', null); var rd2 = book(d2, {dob:(y-17)+'-01-01', marital:'已婚'}); ST.ok(rd2 && rd2.ok && d2.minorInfo && d2.minorInfo.marital==='已婚', '补了生日（未满 21 岁）→ 接着问婚姻状况');
+    /* ⑤ IN 代约老客 */
+    var e = mkOld('e', (y-18)+'-03-03', oldMi), sl = nextSlot(); openAddSlotModal(sl.date, sl.time);
+    var sel = document.getElementById('add-slot-client'); sel.value = e.name; ADD_MINOR = {}; addSlotMinorRefresh();
+    var bx = document.getElementById('add-slot-minor').innerHTML; ST.ok(/未满 21 岁/.test(bx) && /name="add-slot-marital"/.test(bx) && /name="add-slot-marital" checked/.test(bx.replace(/\s+/g,' ').replace(/checked onchange/,'checked onchange')) , '代约老客：出现确认，婚姻状况带入上次');
+    ST.ok(!/add-slot-guardian/.test(bx) ? false : /add-slot-guardian"\s*onchange/.test(bx), '未婚：监护人没勾（每次重新勾）');
+    var al = [], al0 = window.alert; window.alert = function(m){ al.push(m); }; var n0 = CASE_ITEMS.length; confirmAddSlotExisting();
+    ST.ok(al.some(function(m){ return /监护人/.test(m); }) && CASE_ITEMS.length===n0, '代约：未婚没勾监护人 → 不能预约');
+    ADD_MINOR.guardianOk = true; confirmAddSlotExisting(); window.alert = al0;
+    var ce = CASE_ITEMS.filter(function(x){ return x.name===e.name; })[0]; ST.ok(ce && e.minorInfo.bookedOn===td && e.minorInfo.guardianNotified && ce.logEntries.some(function(x){ return /未满 21 岁（18 岁）再确认/.test(x.action); }), '代约：勾了 → 预约成功、记录更新、预约 Timeline 记一笔');
+    var f = mkOld('f', (y-30)+'-01-01', null), sl2 = nextSlot(); openAddSlotModal(sl2.date, sl2.time); document.getElementById('add-slot-client').value = f.name; ADD_MINOR = {}; addSlotMinorRefresh(); ST.ok(document.getElementById('add-slot-minor').innerHTML==='', '代约满 21 岁：不出现');
+    var g = mkOld('g', '', null), sl3 = nextSlot(); openAddSlotModal(sl3.date, sl3.time); document.getElementById('add-slot-client').value = g.name; ADD_MINOR = {}; addSlotMinorRefresh(); ST.ok(!!document.getElementById('add-slot-dob'), '代约没有生日：先补生日');
+    closeAddSlotModal();
+  });
   ST.def('R193a','CMD-1029-10（IN 分页）：NIK 格式 / 预约页选填 / 接待必填 / 查重 / 只显示后 4 码 / 只有管理者能改 / KR 各角色看不到',function(){
     var SFX = Date.now().toString(36).slice(-4), seq = 0, mkNik = function(){ seq++; return '3171'+String(Date.now()).slice(-8)+('0000'+seq).slice(-4); };
     /* ① 格式 */

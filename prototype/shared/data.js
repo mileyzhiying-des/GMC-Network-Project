@@ -744,6 +744,22 @@ function ageOnDate(dob, ds){
   return a;
 }
 function isMinorOn(dob, ds){ var a = ageOnDate(dob, ds); return a!==null && a < MINOR_AGE; }
+/* CMD-1029-11：已登记的老客人再预约——以「建立这次预约当天」（印尼时间）的年龄判断：旧资料没有生日 → 先补生日；未满 21 岁 → 要再确认婚姻状况（带入上次的选择，可改）、未婚的话这次要重新勾「已通知监护人」；满 21 岁不问（记录保留，标记不显示） */
+function minorNeed(cl){ if(!cl) return {needDob:false, minor:false}; if(!cl.dob) return {needDob:true, minor:false}; return {needDob:false, minor:isMinorOn(cl.dob, todayStr())}; }
+function minorPrefill(cl){ return {marital:(cl && cl.minorInfo && cl.minorInfo.marital) || '', guardianOk:false}; }
+/* 把这次的确认写进客户档案（dob 没有才补；minorInfo 每次更新）；返回 {ok, text} 或 {ok:false, err}。text 由调用方写进预约案件 Timeline */
+function applyMinorConfirm(cl, o){
+  o = o || {}; if(!cl) return {ok:false, err:'没有客户档案'};
+  if(!cl.dob){ if(!/^\d{4}-\d\d-\d\d$/.test(o.dob||'')) return {ok:false, err:'请先补填出生日期'}; if(o.dob > todayStr()) return {ok:false, err:'出生日期不能晚于今天'}; cl.dob = o.dob; cl.timeline.push({stage:'基础信息修改', actor:o.by||'客人自助', action:'补填出生日期（预约时）', dt:nowFullDt(), kind:'plain'}); }
+  if(!isMinorOn(cl.dob, todayStr())) return {ok:true, text:'', minor:false};
+  if(o.marital!=='已婚' && o.marital!=='未婚') return {ok:false, err:'请选择婚姻状况'};
+  if(o.marital==='未婚' && !o.guardianOk) return {ok:false, err:'请勾选「已通知监护人」'};
+  var age = ageOnDate(cl.dob, todayStr());
+  cl.minorInfo = {bookedOn:todayStr(), ageAtBooking:age, marital:o.marital, guardianNotified:(o.marital==='未婚'), guardianAt:(o.marital==='未婚' ? nowFullDt() : '')};
+  var text = '预约当天未满 21 岁（'+age+' 岁）再确认：'+(o.marital==='未婚' ? '未婚，已勾选「已通知监护人（父母或法定监护人）」' : '已婚');
+  cl.timeline.push({stage:'预约', actor:o.by||'客人自助', action:text, dt:nowFullDt(), kind:'plain'}); cl.updated = '刚刚';
+  return {ok:true, text:text, minor:true};
+}
 /* IN 看的标记：只有预约当天未满 21 岁、且客人现在还没满 21 岁才显示（记录保留）；旧客人没有记录 = 空 */
 function minorMarkText(cl){
   var m = cl && cl.minorInfo; if(!m) return '';
@@ -967,6 +983,8 @@ function submitSelfBooking(f){
     /* 老客人资料有变化由室长到店接待时修改，预约页不提供修改：这里只记同意书（版本更新过才会重新勾选），不改客户档案 */
     if(f.consentGiven) cl.consents.push(consent);
     cl.updated = '刚刚';
+    var mnOld = applyMinorConfirm(cl, {dob:f.dob, marital:f.marital, guardianOk:!!f.guardianOk, by:'客人自助'}); if(!mnOld.ok) return {ok:false, reason:mnOld.err}; /* CMD-1029-11：老客人未满 21 岁每次预约都再确认 */
+    var minorTxtOld = mnOld.text;
   }
   var exSelf = pendingResvSameDay(cl.name, f.date), selfMain = (!exSelf && !isNew) ? mainForBookingPurpose(cl.name, f.purpose) : null, c = exSelf || (selfMain ? createChildReservation(selfMain, f.date, f.time, f.purpose, {phone:f.phone}) : createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose)); /* CMD-1021-16 三：客人自助预约同一天已有还没到的预约 → 合并 */
   if(exSelf){ f.time = exSelf.visitTime; logCaseEvent(exSelf, '客人', '客人自助预约同一天（'+f.purpose+'）已合并到这次预约（时间以原预约 '+exSelf.visitTime+' 为准）'); }
@@ -979,6 +997,7 @@ function submitSelfBooking(f){
   c.bookClient = isNew ? 'new' : 'old'; c.consentResigned = !isNew && !!f.consentGiven; /* 记录：新客 / 老客、老客是否重签同意书（测试覆盖页用，CMD-1012-06） */
   /* 医美史（结构化）：年月 + 项目 + 来源"客人自填"；老客人新增的标"本次新增"（到店时室长在基础资料里看得到并确认；延续既往面诊的"有新增医美史"读它） */
   (f.beauty||[]).forEach(function(b){ if(b && b.ym && b.project) addBeautyRecord(cl, {year:+b.ym.slice(0,4), month:+b.ym.slice(5,7), project:b.project, source:'客人自填', caseId:c.id, newCaseId:isNew ? null : c.id}); });
+  if(minorTxtOld){ logCaseEvent(c, '客人', minorTxtOld); }
   if(isNew && cl.minorInfo){ var mi = cl.minorInfo, mtxt = '预约当天未满 21 岁（'+mi.ageAtBooking+' 岁）：'+(mi.marital==='未婚' ? '未婚，已勾选「已通知监护人（父母或法定监护人）」' : '已婚'); logCaseEvent(c, '客人', mtxt); cl.timeline.push({stage:'建档', actor:'客人自助', action:mtxt, dt:nowFullDt(), kind:'plain'}); }
   if(exSelf || selfMain){} else if(f.entry==='walkin') c.logEntries[0].action = '到店自己填资料（平板/手机）预约成功，生成 Case ID '+c.caseNo;
   else if(f.entry==='link') c.logEntries[0].action = '客人通过预约链接填完资料，预约成功，生成 Case ID '+c.caseNo;

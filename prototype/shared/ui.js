@@ -670,7 +670,7 @@ function renderAddSlotBody(){
   var body;
   if(ADD_SLOT_MODE==='existing'){
     var clientOptions = CLIENTS.map(function(c){ return '<option>'+c.name+'</option>'; }).join('');
-    body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client">'+clientOptions+'</select></div>'+
+    body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client" onchange="ADD_MINOR={};addSlotMinorRefresh()">'+clientOptions+'</select></div><div id="add-slot-minor"></div>'+
       purposeSelectHtml('add-slot-purpose', true)+'<div class="field" style="margin-bottom:12px;"><label>想咨询的内容（选填）</label><textarea id="add-slot-note" rows="2" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;"></textarea></div>'+
       '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
@@ -686,6 +686,23 @@ function renderAddSlotBody(){
       '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="openGuestFormFromSlot()">演示：客人到店自己填资料（打开预约页，时间 = 现在）</button>';
   }
   document.getElementById('add-slot-body').innerHTML = modeTabs + body;
+  if(ADD_SLOT_MODE==='existing'){ ADD_MINOR = {}; addSlotMinorRefresh(); }
+}
+/* CMD-1029-11：代约老客人——以建立预约当天（今天）算，没有生日要先补；未满 21 岁要再确认婚姻状况（带入上次）、未婚每次重新勾已通知监护人 */
+var ADD_MINOR = {};
+function addSlotMinorRefresh(){
+  var box = document.getElementById('add-slot-minor'), sel = document.getElementById('add-slot-client'); if(!box || !sel) return;
+  var cl = clientByName(sel.value), n = minorNeed(cl);
+  if(!cl || (!n.needDob && !n.minor)){ box.innerHTML = ''; return; }
+  if(ADD_MINOR.name!==cl.name){ var pf = minorPrefill(cl); ADD_MINOR = {name:cl.name, dob:'', marital:pf.marital, guardianOk:false}; }
+  var dob = cl.dob || ADD_MINOR.dob, minor = isMinorOn(dob, todayStr()), inp = 'padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;';
+  var h = '<div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--bg-sidebar,#F7F4EE);">';
+  if(n.needDob) h += '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">这位客人的出生日期还没有登记，请先补填（建立后不能修改）：</div><input type="date" id="add-slot-dob" value="'+aEscC(ADD_MINOR.dob)+'" max="'+todayStr()+'" style="'+inp+'margin-bottom:8px;" onchange="ADD_MINOR.dob=this.value;addSlotMinorRefresh()">';
+  if(minor){
+    h += '<div style="font-size:12px;color:#B3261E;font-weight:700;margin-bottom:6px;">预约当天未满 21 岁，请再确认（已带入上次的选择，可以改）：</div><div style="display:flex;gap:18px;font-size:13px;margin-bottom:6px;">'+['已婚','未婚'].map(function(v){ return '<label style="cursor:pointer;"><input type="radio" name="add-slot-marital" '+(ADD_MINOR.marital===v ? 'checked ' : '')+'onchange="ADD_MINOR.marital=\''+v+'\';addSlotMinorRefresh()"> '+v+'</label>'; }).join('')+'</div>'+
+      (ADD_MINOR.marital==='未婚' ? '<label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;"><input type="checkbox" id="add-slot-guardian" '+(ADD_MINOR.guardianOk ? 'checked ' : '')+'onchange="ADD_MINOR.guardianOk=this.checked"> 已通知监护人（父母或法定监护人）——每次预约都要重新勾</label>' : '');
+  }
+  box.innerHTML = h+'</div>';
 }
 
 /* CMD-1026-05：已满的时段超额加约——只有「今天、现在这个时段 + 下一个时段」才可以（我的判断：时段 = 30 分钟，和预约规则同一套） */
@@ -704,10 +721,14 @@ function overbookNote(){ var o = ADD_SLOT_CONTEXT && ADD_SLOT_CONTEXT.overbook; 
 function confirmAddSlotExisting(){
   var name = document.getElementById('add-slot-client').value;
   var purpose = document.getElementById('add-slot-purpose').value;
+  var mnCl = clientByName(name), mn = applyMinorConfirm(mnCl, {dob:ADD_MINOR.dob, marital:ADD_MINOR.marital, guardianOk:!!ADD_MINOR.guardianOk, by:actingName()}); /* CMD-1029-11：老客人未满 21 岁每次预约都再确认 */
+  if(!mn.ok){ alert(mn.err); return; }
   closeAddSlotModal();
   var exm = pendingResvSameDay(name, ADD_SLOT_CONTEXT.date); /* CMD-1021-16 三：同一客人那天已有还没到的预约 → 合并，不再建第二个 */
+  if(exm && mn.text) logCaseEvent(exm, actingName(), mn.text);
   if(exm){ logCaseEvent(exm, actingName(), '室长代约同一天：'+ADD_SLOT_CONTEXT.time+'（'+purpose+'）已合并到这次预约（时间以原预约 '+exm.visitTime+' 为准）'); renderCalendar(); showToast('已合并', name+' · '+mergeNoteText(exm), null); return; }
   var pmain = mainForBookingPurpose(name, purpose), nc = pmain ? createChildReservation(pmain, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, purpose) : createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose); /* CMD-1028-05：术后管理 / 复诊评估且对得上唯一的主案件 → 直接是它的子案件 */ if(nc && overbookNote()) logCaseEvent(nc, actingName(), overbookNote(), '预约到店'); var nt = (document.getElementById('add-slot-note')||{}).value; if(nc && nt && nt.trim()) nc.visitNote = nt.trim(); /* CMD-1022-15：代约也能写想咨询的内容 */
+  if(mn.text) logCaseEvent(nc, actingName(), mn.text);
   renderCalendar();
   showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+(pmain ? '，已加入主案件 '+pmain.caseNo+'（子案件 '+nc.caseNo+'）' : '，已生成 Case ID'), null);
 }

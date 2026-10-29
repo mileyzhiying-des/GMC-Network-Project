@@ -8,7 +8,7 @@
 var BK = null;
 /* 新客人 9 步：选时间 → 验证手机 → 个人资料 → 来访目的 → 病史/过敏史 → 医美史（可跳过）→ 同意 → 确认提交 → 完成
    老客人：选时间 → 验证手机 → 来访目的 → 医美史（可跳过）→（同意书版本更新过才有同意）→ 确认提交 → 完成（跳过个人资料和病史/过敏史） */
-var BK_STEPS = ['time','phone','profile','purpose','health','beauty','consent','confirm'];
+var BK_STEPS = ['time','phone','profile','minor','purpose','health','beauty','consent','confirm'];
 
 function bkH(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function bkDayLabel(ds){
@@ -60,7 +60,7 @@ function bkRender(keepScroll){
 /* 老客人（手机验证后认出）：跳过"个人资料"和"健康资料"（有变化由室长到店时修改）；已签过当前版本的同意书 → 也跳过"同意"；同意书版本更新过的（或新客人）才要勾选 */
 function bkLastConsent(){ var cl = BK.client; return cl ? (cl.consents||[]).slice(-1)[0] || null : null; }
 function bkNeedConsent(){ var last = bkLastConsent(); return !last || last.version !== CLINIC_SETTINGS.privacyVersion; }
-function bkSkipStep(s){ return (s==='time' && BK.entry==='walkin') || (s==='phone' && BK.verified) || (s==='profile' && !!BK.client && !BK.mismatch) || (s==='health' && !!BK.client) || (s==='consent' && !bkNeedConsent()); }
+function bkSkipStep(s){ return (s==='time' && BK.entry==='walkin') || (s==='phone' && BK.verified) || (s==='profile' && !!BK.client && !BK.mismatch) || (s==='minor' && !bkOldMinorStep()) || (s==='health' && !!BK.client) || (s==='consent' && !bkNeedConsent()); }
 function bkStepList(){ return BK_STEPS.filter(function(s){ return !bkSkipStep(s); }); }
 function bkFrame(titleKey, bodyHtml){
   /* 步骤条：已经验证过手机的仍然算一步（走过了）；被跳过的步骤（老客人的个人资料/病史、不需要的同意）不出现；取消后重新预约时手机早已验证，不算 */
@@ -92,7 +92,7 @@ function bkStepValid(s){
 function bkRefreshNext(){ var b = document.getElementById('bk-next'); if(b) b.disabled = !bkStepValid(BK_STEPS[BK.step]); }
 function bkRenderStep(){
   var s = BK_STEPS[BK.step];
-  var fn = {time:bkStepTime, phone:window.bkStepPhone, profile:window.bkStepProfile, purpose:window.bkStepPurpose, health:window.bkStepHealth, beauty:window.bkStepBeauty, consent:window.bkStepConsent, confirm:window.bkStepConfirm}[s];
+  var fn = {time:bkStepTime, phone:window.bkStepPhone, profile:window.bkStepProfile, minor:bkStepMinor, purpose:window.bkStepPurpose, health:window.bkStepHealth, beauty:window.bkStepBeauty, consent:window.bkStepConsent, confirm:window.bkStepConfirm}[s];
   return fn ? fn() : '';
 }
 
@@ -164,7 +164,7 @@ function bkVerify(){
 /* 手机号找老客人：有 → 第 3、5 步自动带出资料；没有 → 新客人 */
 function bkLoadClient(){
   var cl = clientByPhone(BK.f.phone); BK.client = cl;
-  if(cl){ var f = BK.f; f.phone = cl.phone; f.name = cl.name; f.firstName = cl.firstName!==undefined ? cl.firstName : cl.name; f.lastName = cl.lastName||''; f.gender = cl.gender==='男' ? '男' : (cl.gender==='女' ? '女' : ''); f.dob = cl.dob||''; f.history = cl.history==='无' ? '' : (cl.history||''); }
+  if(cl){ var f = BK.f; f.phone = cl.phone; f.name = cl.name; f.firstName = cl.firstName!==undefined ? cl.firstName : cl.name; f.lastName = cl.lastName||''; f.gender = cl.gender==='男' ? '男' : (cl.gender==='女' ? '女' : ''); f.dob = cl.dob||''; f.history = cl.history==='无' ? '' : (cl.history||''); var pf = minorPrefill(cl); f.marital = pf.marital; f.guardianOk = false; }
 }
 
 /* ---- 第 3 步：个人资料（新客人填姓名/性别/出生日期；老客人自动带出，确认即可；姓名和已登记的不同 → 问是不是本人） ---- */
@@ -181,7 +181,24 @@ function bkStepProfile(){
   return bkFrame('s.profile', body+bkNav('bkProfileNext()', true));
 }
 /* CMD-1029-07：未满 21 岁（以预约当天算）→ 婚姻状况；未婚 → 必勾已通知监护人。已登记的老客人不走这一步 */
-function bkMinor(){ return !BK.client && isMinorOn(BK.f.dob, todayStr()); }
+function bkMinor(){ return isMinorOn(BK.f.dob, todayStr()); }
+/* CMD-1029-11：已登记的老客人（不走个人资料步骤）——旧资料没有生日 → 先补生日；以这次预约当天算未满 21 岁 → 再确认婚姻状况（带入上次）、未婚要重新勾已通知监护人 */
+function bkOldMinorStep(){ if(!BK.client || BK.mismatch) return false; var n = minorNeed(BK.client); return n.needDob || n.minor; }
+function bkStepMinor(){
+  var f = BK.f, need = minorNeed(BK.client);
+  var body = '<div class="bk-info">'+bt(need.needDob ? 'minor.oldDob' : 'minor.oldHint')+'</div>'+
+    (need.needDob ? bkField(bt('profile.dob'), '<input type="date" value="'+bkH(f.dob)+'" max="'+dateStr(demoNow())+'" onchange="bkDobChange(this.value)">') : '')+bkMinorHtml();
+  return bkFrame('s.minor', body+bkNav('bkMinorNext()', true));
+}
+function bkMinorNext(){
+  var f = BK.f, need = minorNeed(BK.client);
+  if(need.needDob && !f.dob){ BK.err = bt('profile.errDob'); return bkRender(); }
+  if(bkMinor()){
+    if(!f.marital){ BK.err = bt('minor.errMarital'); return bkRender(); }
+    if(f.marital==='未婚' && !f.guardianOk){ BK.err = bt('minor.errGuardian'); return bkRender(); }
+  }
+  BK.err = ''; bkNextStep();
+}
 function bkDobChange(v){ BK.f.dob = v; if(!bkMinor()){ BK.f.marital = ''; BK.f.guardianOk = false; } BK.err = ''; bkRender(true); }
 function bkMaritalSet(v){ BK.f.marital = v; if(v!=='未婚') BK.f.guardianOk = false; BK.err = ''; bkRender(true); }
 function bkMinorHtml(){
@@ -304,6 +321,7 @@ function bkSubmit(){
   var f = BK.f, old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
   var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, firstName:f.firstName, lastName:f.lastName, noLastName:!!f.noLast, gender:f.gender, dob:f.dob, marital:f.marital, guardianOk:!!f.guardianOk, nik:f.nik,
     history:f.history, beauty:f.beauty, purpose:f.purpose, note:f.note, rebookFrom:old ? old.id : null});
+  if(!res.ok && res.reason && /[\u4e00-\u9fa5]/.test(res.reason)){ BK.err = res.reason; return bkRender(); } /* CMD-1029-11：年龄确认没填完（页面上本来已经挡住，这里是兜底） */
   if(!res.ok){ BK.err = bt('time.taken'); BK.f.time = ''; if(BK.entry!=='walkin') BK.step = 0; return bkRender(); }
   Store.save(); BK.done = res; bkMeStart(f.phone, res.c.id); bkRender();
 }
