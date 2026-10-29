@@ -2366,6 +2366,7 @@ function settleProjects(batchId){
       '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>赴韩项目小计（施术 + 管理；术后管理含在套餐内，不另收费）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px;"><span>定金（诊所收，'+Math.round(KR_DEPOSIT_RATE*100)+'%）</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后在医院支付，医院收）</span><span>'+formatCurrency(Math.max(0,(batch.krTotal||0)-(batch.krDeposit||0)),'KRW')+'</span></div></div>';
+    var pa = passportAlert(c); rows += '<div style="font-size:12px;margin-top:6px;'+(pa.level==='none' || pa.level==='expired' || pa.level==='before' ? 'color:#B3261E;' : 'color:var(--slate2);')+'">'+(pa.level==='ok' ? '护照：'+aEscC(pa.text) : '⚠ '+aEscC(pa.text))+'（护照不是付定金的必填项）　签证和入境由客人自行负责，请提醒客人。</div>'; /* CMD-1029-09 一 */
   }
   if(batch.inTotal){
     rows += '<div'+(batch.krTotal?' style="border-top:1px solid var(--border2);padding-top:14px;"':'')+'><div style="font-size:12px;font-weight:700;color:var(--sage);margin-bottom:6px;">本地项目（收全款）</div>'+

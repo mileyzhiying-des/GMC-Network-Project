@@ -1936,10 +1936,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.activeCaseTab = 'kr'; c.projectOriginFilter = 'KR'; var p = PROJECT_LIBRARY.filter(function(x){ return x.name==='假体隆鼻' && x.origin==='KR' && x.hospitalId==='H1'; })[0]; toggleProject(p.id);
       var was = window.GMC_PASSPORT_AUTO; window.GMC_PASSPORT_AUTO = false;
       try{
-        confirmProjectSelection(); ST.ok(document.getElementById('passport-overlay').classList.contains('open') && !(c.settlementBatches||[]).length, '第一次确认赴韩：弹护照窗，没填之前不生成结算单');
-        passportConfirm(); ST.ok(!(c.settlementBatches||[]).length && document.getElementById('pp-err').style.display==='block', '三项必填，空着不能继续');
-        document.getElementById('pp-pno').value = 'E1234567'; document.getElementById('pp-pis').value = '2015-01-01'; document.getElementById('pp-pex').value = '2020-01-01'; passportConfirm();
-        ST.ok((c.settlementBatches||[]).length===1 && passportComplete(clientByName(c.name)), '填完（已过期也允许）→ 继续生成结算单');
+        /* CMD-1029-09 一：付定金时护照不是必填——没填也生成结算单、不弹护照窗；有就填 */
+        confirmProjectSelection(); var ppo = document.getElementById('passport-overlay'); ST.ok(!(ppo && ppo.classList.contains('open')) && (c.settlementBatches||[]).length===1 && !passportComplete(clientByName(c.name)), '没填护照也能确认赴韩（不弹护照窗，生成结算单）');
+        ST.ok(!batchNeedsPassport(c, c.settlementBatches[0]), '没护照的定金结算单不再被拦');
+        passportSave(clientByName(c.name), {no:'E1234567', issue:'2015-01-01', expiry:'2020-01-01'}, '已登记护照');
         ST.ok(passportAlert(c).level==='expired' && /护照已过期/.test(passportStatusHtml(c)), '过期报红');
         ST.ok(!JSON.stringify(clientByName(c.name).timeline).includes('E1234567') && !JSON.stringify(c.logEntries).includes('E1234567') && !JSON.stringify(NOTIFS).includes('E1234567'), '护照号不进 Timeline / 通知');
         var c2 = ST.newRes('P40b'); c2.name = c.name; ST.open(c2); passportGate(c2, function(){}); ST.ok(document.getElementById('pp-pno').value==='E1234567', '第二个赴韩案件自动带出护照');
@@ -5861,13 +5861,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       window.GMC_PASSPORT_AUTO = false; confirmProjectSelection();
       ST.ok(!(document.getElementById('passport-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open') && (d.settlementBatches||[]).length===1, '已有（有效）护照：确认赴韩不弹窗，直接生成结算单');
       cl.passport = {text:'未登记', date:'', no:'', issue:'', expiry:''}; var b = d.settlementBatches[0];
-      ST.ok(batchNeedsPassport(d, b) && /护照未登记/.test(settlementCardHtml(d, b)), '旧案件有定金结算单但没护照：待付款一行写「护照未登记」');
-      settleProjects(b.id); ST.ok(document.getElementById('passport-overlay').classList.contains('open') && !document.getElementById('settle-overlay').classList.contains('open'), '按［确认付款］先弹护照登记');
-      passportConfirm(); ST.ok(!document.getElementById('settle-overlay').classList.contains('open'), '没填不能付款');
-      var al = window.alert, msg = ''; window.alert = function(m){ msg = m; }; SETTLE_MODAL_BATCH_ID = b.id; window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); window.alert = al;
-      ST.ok(/护照未登记/.test(msg) && b.status==='unpaid', '直接付款也被挡');
-      document.getElementById('pp-pno').value = 'V7654321'; document.getElementById('pp-pis').value = '2020-01-01'; document.getElementById('pp-pex').value = '2040-01-01'; passportConfirm();
-      ST.ok(passportComplete(clientByName(d.name)) && document.getElementById('settle-overlay').classList.contains('open'), '登记后继续打开付款窗');
+      ST.ok(!batchNeedsPassport(d, b) && !/护照未登记/.test(settlementCardHtml(d, b)), 'CMD-1029-09：没护照的定金结算单不再写「护照未登记」、不拦付款');
+      settleProjects(b.id); ST.ok(!document.getElementById('passport-overlay').classList.contains('open') && document.getElementById('settle-overlay').classList.contains('open'), '按［确认付款］直接打开付款窗（不弹护照登记）'); ST.ok(/不是付定金的必填项/.test(document.getElementById('settle-overlay').innerText) && /签证和入境由客人自行负责/.test(document.getElementById('settle-overlay').innerText), '付款窗有小字提醒签证 / 入境由客人负责');
       closeSettleModal();
       /* 护照已过期才弹窗 */
       cl.passport.expiry = '2021-01-01'; var d2 = ST.newRes('R41c'); d2.name = d.name; ST.open(d2); d2.recommended = [Object.assign({}, d.settlementBatches ? (d.procedureItems||[])[0] : {})]; var shown = false; passportGate(d2, function(){ shown = 'direct'; }); var ov = document.getElementById('passport-overlay');

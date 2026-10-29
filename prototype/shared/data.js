@@ -768,6 +768,7 @@ function passportSurgeryDate(c){ var ks = c && c.krSchedule || {}; return ks.con
 /* level：none 未登记 / expired 已过期 / before 施术前到期 / ok */
 /* 赴韩定金结算单（含赴韩项目）但客人没登记护照：不能付款（CMD-1019-12 三） */
 function batchNeedsPassport(c, b){
+  return false; /* CMD-1029-09 一：付定金时护照不是必填（有就填，没填也能付；过期 / 快到期只红字提醒）；以下旧判断保留作历史 */
   if(!b || b.status!=='unpaid' || b.noDeposit || !b.krTotal) return false;
   if(!(c.procedureItems||[]).some(function(it){ return it.batchId===b.id && it.origin==='KR'; })) return false;
   return !passportComplete(clientByName(c.name));
@@ -5120,7 +5121,7 @@ function confirmProjectSelection(){
   if(cartTotals(c.recommended).onlyService){ alert('서비스需搭配付费项目'); return; }
   var cp0 = compPending(c, 'main'); if(cp0 && cartTotals(c.recommended).total < cp0.credit){ alert('置换额度不退钱：还剩 '+formatCurrency(cp0.credit-cartTotals(c.recommended).total,'IDR')+'，请再加项目'); return; }
   /* CMD-1019-11：确认赴韩（选了赴韩项目、生成定金结算单）时要有护照：没有必须填，已有的带出来确认 */
-  if((c.recommended||[]).some(function(it){ return it.origin==='KR'; })) return passportGate(c, function(){ stayGate(c, function(){ confirmProjectSelectionGo(); }); }); /* CMD-1020-11：护照之后问在韩期间（可先空着） */
+  if((c.recommended||[]).some(function(it){ return it.origin==='KR'; })) return stayGate(c, function(){ confirmProjectSelectionGo(); }); /* CMD-1029-09 一：不再弹护照登记窗（不是必填） */  /* CMD-1020-11：护照之后问在韩期间（可先空着） */
   confirmProjectSelectionGo();
 }
 function confirmProjectSelectionGo(){
