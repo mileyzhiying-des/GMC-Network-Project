@@ -1778,3 +1778,10 @@ prototype/shared/app.css  共用样式
 - 改法：`consultTabHtml` 沿用方案且 `report_ready` 时走正常面诊的画面（面诊 + 已出方案 +「沿用自 A000xxx · 原方案 MM/DD · 不收面诊费」+ 报告卡［下载］［查看方案］［收起 / 展开］+ 小链接「查看原案件」+ 价格已更新提示）；`consultPlanOpen` 对沿用方案不把预填的 `recommended` 算 Step 2（要按［查看方案］才进）；`reuseStepOn(c)`（沿用方案的子记录、还没有结算单）时不走升级版只读，子案件页面诊 tab（`subTabBodyHtml`）Step 2 后面挂 `krTabContent`（同一个选项目区块）；方案页［查看方案 →］改接 `reportViewPlan()`；`applyReuseReport` 把 `c.reportDate` 设成原方案日期、`reuseReport.usedAt` 记沿用那天，方案页「出具日期」显示原日期 +「（沿用于 MM/DD）」。
 - **付定金后升级的是哪个案件**：主案件（被继续的原案件，例 A000010）。子记录（A000010-02）选项目、付定金，付款成功后 `reuseHandOffToMain(c)` 把赴韩项目和结算单整体交给主案件（批次号接着主案件往后排，`c.paidOnMain` 留说明），因为 KR 和主案件的赴韩施术 tab 都只读主案件；主案件进入赴韩施术阶段、定金记在主案件。选本地项目则留在子记录（客人持有）；客人不做 → 子记录仅出报告。
 - 测试：新增 R183a；回归对照 2aeeb1b 无新增失败。
+
+## CMD-1029-06 补充（2026-10-29，追加；取代 CMD-1029-03 第 4、5 部分里「赴韩疗程持有也列进『使用之前购买的项目』」、CMD-1029-04 我的判断 1「持有项目全部标完成自动结案」、CMD-1029-05 我的判断 1、2「继续面诊定金结算单交给主案件」，旧文字保留作历史）
+- 分支 V4，基准 705eb48 之前为 3072f21；四个提交：**一** 705eb48、**二** 82f69d6、**三** 4085265、**四** 3d7046d；**未推送**，数据版本不变（56，没有改资料结构，只加可空字段 `batch.viaCaseId/viaCaseNo`、`refund.method/methodNote`）。
+- **一** `fuHoldList` 只列 IN 本地持有（CLIENT_HOLDINGS）；只有赴韩疗程持有时「使用之前购买的项目」灰掉 + 小字「要做术后管理请选继续之前的服务案件」（`fuTripHoldOnly`）。
+- **二** `notUseThisTime` / `markMgmtRows`（本地案件持有项目都标完成、有购买或术后管理使用）不再 `autoFinish`，改 `localLeaveAsk(c)` 弹窗「今天的项目都做完了。客人是否已离店？」［还没离店］（案件照旧进行中，可继续购买，之后按页头［客人离店］）［已离店］（`localLeaveYes` → `autoFinish`，钱没清照旧不结）。主线还在进行（`mainlineOngoing`）的案件仍不结案。自测里 `localLeaveAsk` 默认自动答「已离店」（`GMC_LOCAL_LEAVE_MANUAL` 关掉测弹窗）。
+- **三** 退款服务弹窗加必填「退款方式」现金 / 转账 / QRIS / 其他（其他要说明）：`rsMethodPick` / `refundMethodText`（没有 = 「未记录」）；写进批次 `refund.method`、购买案件 `holdingRefunds`、两边 Timeline、仅办理退款 结算 tab。**结束案件弹窗里的批次退款（`confirmEndCase` 的 hold 退款）这次没加方式**（任务只写退款服务）。自测 `GMC_REFUND_METHOD_MANUAL`。
+- **四** `reuseHandOffToMain` 仍把赴韩项目和结算单放主案件 `settlementBatches`（和一般赴韩定金同一套存法），批次多记 `viaCaseId` = 付款那天的子记录；`dayPaidBatches(c)` 找回（旧资料没有 viaCaseId 时按 `paidOnMain.batches` 编号找，**所以旧资料不用搬**）；子案件页 `subDayTabs` 的「结算」tab 恢复、`subSettleTabHtml` 显示这一天的定金；主案件结算卡标题写「记在子案件 A…-02」。
