@@ -1737,9 +1737,14 @@ function renderRefundService(){
   ov.innerHTML = '<div class="modal-box" style="width:560px;max-height:84vh;overflow:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><span style="font-size:15px;font-weight:700;">退款服务</span><span style="cursor:pointer;" onclick="cancelRefundService()">✕</span></div>'+
     '<div style="font-size:12px;color:var(--slate2);margin-bottom:8px;">勾选要退的批次（可一次退多批）；退款后这一批作废、剩余次数归零；退款记在当初购买该批次的案件上。</div>'+(rows || '<div style="font-size:12px;color:var(--muted);">没有可退的批次</div>')+
     '<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">退款原因 <span style="color:#C1454A;">*</span></div><textarea id="rs-reason" rows="3" placeholder="请输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>'+
+    '<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">退款方式 <span style="color:#C1454A;">*</span></div><div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;">'+REFUND_PAY_METHODS.map(function(m){ return '<label style="cursor:pointer;"><input type="radio" name="rs-method" value="'+m+'" onchange="rsMethodPick()"> '+m+'</label>'; }).join('')+'</div><input id="rs-method-note" placeholder="选「其他」时请说明（必填）" style="display:none;margin-top:6px;width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;box-sizing:border-box;">'+
     '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-primary" style="flex:1;" onclick="confirmRefundService()">确认退款</button><button class="btn-outline" onclick="cancelRefundService()">取消</button></div></div>';
   ov.classList.add('open');
 }
+/* CMD-1029-06 三：退款方式（必填）：现金 / 转账 / QRIS / 其他（其他要写说明）；旧退款没有这个字段，显示「未记录」 */
+var REFUND_PAY_METHODS = ['现金','转账','QRIS','其他'];
+function rsMethodPick(){ var m = (document.querySelector('input[name="rs-method"]:checked')||{}).value, n = document.getElementById('rs-method-note'); if(n) n.style.display = (m==='其他') ? 'block' : 'none'; }
+function refundMethodText(rf){ if(!rf || !rf.method) return '未记录'; return rf.method + (rf.method==='其他' && rf.methodNote ? '（'+rf.methodNote+'）' : ''); }
 function closeRefundService(){ var ov = document.getElementById('refund-svc-overlay'); if(ov) ov.classList.remove('open'); }
 function confirmRefundService(){
   var ctx = REFUND_SVC || {}, c = ctx.caseId ? getCurrentCase() : (ctx.name ? {name:ctx.name, id:null, _client:true} : null); if(!c) return;
@@ -1747,6 +1752,9 @@ function confirmRefundService(){
   [].forEach.call(document.querySelectorAll('.rs-cb'), function(cb){ if(cb.checked){ var i = parseInt(cb.getAttribute('data-i'),10), x = list[i]; if(x) picks.push({x:x, i:i}); } });
   if(!picks.length){ alert('请至少勾选一个批次'); return; }
   var reason = document.getElementById('rs-reason').value.trim(); if(!reason){ alert('请填写退款原因'); return; }
+  var mEl = document.querySelector('input[name="rs-method"]:checked'), method = mEl ? mEl.value : '', methodNote = ((document.getElementById('rs-method-note')||{}).value||'').trim();
+  if(!method){ alert('请选择退款方式'); return; }
+  if(method==='其他' && !methodNote){ alert('退款方式选「其他」时请填写说明'); return; }
   for(var n = 0; n < picks.length; n++){
     var raw = document.getElementById('rs-amt-'+picks[n].i).value.trim(), amt = Number(raw), b = picks[n].x.b;
     if(raw==='' || isNaN(amt) || amt<0){ alert('请填写「'+picks[n].x.h.itemName+'」的退款金额（数字，可为 0）'); return; }
@@ -1756,10 +1764,10 @@ function confirmRefundService(){
   var names = [], today = todayStr(), cl = clientByName(c.name);
   picks.forEach(function(p){
     var b = p.x.b, h = p.x.h, amt = p.amt;
-    b.voidedRemaining = b.bought-b.used; b.voided = true; b.refund = {amount:amt, currency:b.currency||'IDR', reason:reason, date:today, viaCaseId:c.id};
+    b.voidedRemaining = b.bought-b.used; b.voided = true; b.refund = {amount:amt, currency:b.currency||'IDR', reason:reason, date:today, viaCaseId:c.id, method:method, methodNote:methodNote};
     var pc = CASE_ITEMS.filter(function(y){ return y.id===b.caseId; })[0];
-    var line = '退款服务：'+h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'（'+b.date+' 购买，案件 '+caseNoLabel(b.caseId)+'，剩余 '+b.voidedRemaining+' 次作废），退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reason+'；办理案件 '+(c.caseNo||'');
-    if(pc){ pc.holdingRefunds = pc.holdingRefunds || []; pc.holdingRefunds.push({itemName:h.itemName, amount:amt, reason:reason, date:today, qty:b.voidedRemaining||0, viaCaseId:c.id}); logCaseEvent(pc, ME_NAME, line+'；退款记在本案件，结局不变'); }
+    var line = '退款服务：'+h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : '')+'（'+b.date+' 购买，案件 '+caseNoLabel(b.caseId)+'，剩余 '+b.voidedRemaining+' 次作废），退款 '+formatCurrency(amt, b.currency||'IDR')+'，原因：'+reason+'，方式：'+refundMethodText({method:method, methodNote:methodNote})+'；办理案件 '+(c.caseNo||'');
+    if(pc){ pc.holdingRefunds = pc.holdingRefunds || []; pc.holdingRefunds.push({itemName:h.itemName, amount:amt, reason:reason, date:today, qty:b.voidedRemaining||0, viaCaseId:c.id, method:method, methodNote:methodNote}); logCaseEvent(pc, ME_NAME, line+'；退款记在本案件，结局不变'); }
     if(c.id && (!pc || pc.id!==c.id)) logCaseEvent(c, ME_NAME, line);
     if(cl){ cl.timeline = cl.timeline || []; cl.timeline.push({stage:'退款服务', actor:ME_NAME, actorId:currentAccountId(), action:line, dt:nowFullDt(), kind:'plain'}); }
     names.push(h.itemName);

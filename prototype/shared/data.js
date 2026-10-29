@@ -11723,7 +11723,7 @@ function refundOnlyBodyHtml(c){
         var b = x.b, rf = b.refund;
         return '<div style="padding:10px 0;border-top:1px solid var(--border2);font-size:13px;line-height:1.8;"><b>'+aEscC(x.h.itemName)+(b.spec ? '（'+aEscC(buyName(b.spec))+'）' : '')+'</b>　退款 <b>'+formatCurrency(rf.amount||0, rf.currency||b.currency||'IDR')+'</b>'+
           '<div style="color:var(--slate2);">当初实付 '+(typeof b.paid==='number' ? formatCurrency(b.paid, b.currency||'IDR') : '—')+'　购买 '+aEscC(b.date||'')+'　作废剩余 '+(b.voidedRemaining||0)+' 次</div>'+
-          '<div style="color:var(--slate2);">退款日期 '+aEscC(rf.date||'')+'　原因：'+aEscC(rf.reason||'—')+'　方式：系统未记录（只记金额和原因）</div>'+
+          '<div style="color:var(--slate2);">退款日期 '+aEscC(rf.date||'')+'　原因：'+aEscC(rf.reason||'—')+'　方式：'+aEscC(refundMethodText(rf))+'</div>'+
           '<div style="color:var(--slate2);">记回购买案件：<a href="#" class="info-link" onclick="openCaseDetail(\''+b.caseId+'\');return false;">'+aEscC(caseNoLabel(b.caseId))+'</a></div></div>';
       }).join('') : '<div style="font-size:13px;color:var(--muted);padding:10px 0;">没有找到这次办的退款批次（共 '+refundOnlyAmountText(c)+'，来源案件 '+aEscC(caseNoLabel((c.refundVisit||{}).fromCaseId))+'）</div>')+
       '<div style="padding-top:10px;border-top:1px solid var(--border2);font-size:13px;"><b>合计退款 '+refundOnlyAmountText(c)+'</b></div></div>';

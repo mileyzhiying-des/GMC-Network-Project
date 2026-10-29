@@ -183,6 +183,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   /* CMD-1026-15 二：本地项目［结算］现在多一步付款确认；老用例（D28 / D30 / D31 / CP1 / R138a 等）直接调 lmSettle() 期待立刻完成 → 这里自动点［确认已付款］；要测确认本身的用例用 ST.lmSettleRaw（R141a） */
   /* CMD-1029-06 二：本地案件持有项目用完不再自动结案、改弹「客人是否已离店？」；老用例的意思是「做完客人走了 → 结案」，所以默认自动回答［已离店］；R185a 设 GMC_LOCAL_LEAVE_MANUAL 测弹窗本身 */
   (function(){ var raw = localLeaveAsk; localLeaveAsk = function(c, r){ raw(c, r); if(!window.GMC_LOCAL_LEAVE_MANUAL) localLeaveYes(); }; })();
+  /* CMD-1029-06 三：退款方式必填；老用例没选，默认自动选「转账」，R186a 设 GMC_REFUND_METHOD_MANUAL 测校验本身 */
+  (function(){ var raw = confirmRefundService; confirmRefundService = function(){ if(!window.GMC_REFUND_METHOD_MANUAL && !document.querySelector('input[name="rs-method"]:checked')){ var r = document.querySelector('input[name="rs-method"][value="转账"]'); if(r) r.checked = true; } return raw.apply(this, arguments); }; })();
   ST.lmSettleRaw = lmSettle; (function(){ var raw = lmSettle; lmSettle = function(){ raw.apply(this, arguments); if(typeof LM_PAY_PENDING!=='undefined' && LM_PAY_PENDING && !window.GMC_LM_PAY_MANUAL) lmPayConfirm(); }; })();
   ST.def('A1','室长取消预约',function(){
     var c = ST.newRes('A1'); ST.open(c); window.CANCEL_REASON = '客人要求取消'; confirmCancel();
@@ -7994,5 +7996,29 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var d = mk('R185b'); mgmtComplete('main'); d = cur(d); localLeaveYes(); d = cur(d);
       ST.ok(isEnded(d), '［已离店］：走现有离店流程，案件结束');
     } finally { window.alert = al; window.confirm = cf; window.GMC_LOCAL_LEAVE_MANUAL = false; }
+  });
+  ST.def('R186a','CMD-1029-06（A1 分页）：退款服务加必填「退款方式」（现金/转账/QRIS/其他+说明）；仅办理退款 结算 tab / 购买案件 / Timeline 都带方式；旧退款显示「未记录」',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm, msgs = []; window.alert = function(m){ msgs.push(String(m)); }; window.confirm = function(){ return true; }; window.GMC_REFUND_METHOD_MANUAL = true;
+    try{
+      var c0 = ST.newRes('R186a'), p = ST.localProj('LHALa peel'); ST.arrive(c0); ST.materials(c0, {consult:false}); ST.localPay(c0, function(){ toggleLocalProject('main', p.id); }); ST.open(c0); notUseThisTime('main');
+      var c = ST.newRes('R186a', {phone:clientPhoneOf(c0.name)}); ST.arrive(c); ST.open(c); openRefundService();
+      var ov = document.getElementById('refund-svc-overlay'), labels = [].map.call(ov.querySelectorAll('input[name="rs-method"]'), function(x){ return x.value; }).join('|');
+      ST.ok(labels==='现金|转账|QRIS|其他', '退款方式四个选项：'+labels);
+      ov.querySelectorAll('.rs-cb').forEach(function(cb){ cb.checked = true; }); document.getElementById('rs-reason').value = '（自测）客人要求退款'; ov.querySelectorAll('[id^=rs-amt-]').forEach(function(i){ i.value = '100000'; });
+      msgs.length = 0; confirmRefundService(); ST.ok(msgs.some(function(m){ return /退款方式/.test(m); }), '没选方式不能确认：'+msgs.join('/'));
+      var b = refundableBatches(c.name)[0]; ST.ok(!!b && !b.b.voided, '没选方式时批次不能被作废');
+      ov.querySelector('input[name="rs-method"][value="其他"]').checked = true; rsMethodPick(); msgs.length = 0; confirmRefundService();
+      ST.ok(msgs.some(function(m){ return /说明/.test(m); }) && !b.b.voided, '选「其他」没写说明不能确认：'+msgs.join('/'));
+      ov.querySelector('input[name="rs-method"][value="转账"]').checked = true; rsMethodPick(); confirmRefundService();
+      ST.ok(b.b.voided && b.b.refund && b.b.refund.method==='转账', '确认后批次退款记录带方式：'+JSON.stringify(b.b.refund));
+      var pc = CASE_ITEMS.filter(function(x){ return x.id===b.b.caseId; })[0];
+      ST.ok(pc && (pc.holdingRefunds||[]).some(function(r){ return r.method==='转账'; }), '购买案件的退款记录带方式');
+      ST.ok(ST.hasLog(pc, /退款服务：.*方式：转账/), '购买案件 Timeline 带「方式：转账」'); ST.ok(ST.hasLog(c, /退款服务：.*方式：转账/) || pc.id===c.id, '办理案件 Timeline 带方式');
+      refundOnlyAnswer(true); c = CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; RO_TAB[c.id] = 'settle'; var html = refundOnlyBodyHtml(c);
+      ST.ok(/方式：转账/.test(html.replace(/<[^>]+>/g,'')), '仅办理退款的结算 tab 显示「方式：转账」');
+      b.b.refund.method = ''; ST.ok(/方式：未记录/.test(refundOnlyBodyHtml(c).replace(/<[^>]+>/g,'')), '旧退款（没有方式）显示「未记录」');
+      ST.ok(refundMethodText({method:'其他', methodNote:'现金给门店'})==='其他（现金给门店）', '其他带说明显示');
+    } finally { window.alert = al; window.confirm = cf; window.GMC_REFUND_METHOD_MANUAL = false; }
   });
 })();
