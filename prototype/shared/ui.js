@@ -828,7 +828,7 @@ function openClientEdit(name, field){
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'client-edit-overlay'; ov.style.zIndex = 90; ov.onclick = function(e){ if(e.target===ov) closeClientEdit(); }; document.body.appendChild(ov); }
   var inp = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;';
   var body = d.kind==='area' ? '<textarea id="ce-v" rows="3" style="'+inp+'">'+aEscC(c[field])+'</textarea>' :
-    d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option value=""'+(c.gender!=='女' && c.gender!=='男' ? ' selected' : '')+'>请选择</option><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select><input id="ce-v2" type="date" value="'+aEscC(c.dob)+'" style="'+inp+'"></div>' :
+    d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option value=""'+(c.gender!=='女' && c.gender!=='男' ? ' selected' : '')+'>请选择</option><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select>'+(c.dob ? '<span style="font-size:13px;align-self:center;color:var(--muted);">生日 '+aEscC(c.dob)+'（建立后不能修改）</span>' : '<input id="ce-v2" type="date" value="" style="'+inp+'">')+'</div>' :
     d.kind==='passport' ? passportFormHtml(c, 'ce') :
     d.kind==='name2' ? '<div style="display:flex;gap:10px;"><input id="ce-fn" type="text" placeholder="名（必填）" value="'+aEscC(c.firstName!==undefined ? c.firstName : c.name)+'" style="'+inp+'"><input id="ce-ln" type="text" placeholder="姓（必填）" value="'+aEscC(c.lastName||'')+'" '+(c.noLastName ? 'disabled ' : '')+'style="'+inp+(c.noLastName ? 'background:#EFEDE8;' : '')+'"></div><label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;"><input id="ce-nl" type="checkbox" '+(c.noLastName ? 'checked ' : '')+'onchange="var l=document.getElementById(\'ce-ln\');l.disabled=this.checked;l.style.background=this.checked?\'#EFEDE8\':\'\';if(this.checked)l.value=\'\';"> 我没有姓</label>' :
     field==='phone' ? phoneInputHtml('ce-ph', c.phone) :
@@ -860,7 +860,7 @@ function saveClientEdit(){
       document.getElementById('detail-name').textContent = v; HOLD_CARD_NAME = v;
     }
   } else if(x.field==='gender'){
-    var dob = document.getElementById('ce-v2').value;
+    var dob = c.dob || (document.getElementById('ce-v2')||{}).value;
     if(!v) return fail('请选择性别'); if(!dob) return fail('请填写出生日期');
     oldTxt = c.gender+' · '+(c.dob||'—'); newTxt = v+' · '+(dob||'—'); c.gender = v; c.dob = dob;
   } else if(x.field==='phone'){

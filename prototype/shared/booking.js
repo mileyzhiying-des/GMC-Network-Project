@@ -177,8 +177,18 @@ function bkStepProfile(){
   var body = (cl ? '<div class="bk-info">'+bt('profile.back')+'</div>' : '')+
     bkField(bt('profile.first'), bkInput('firstName','text','autocomplete="given-name"'))+bkField(bt('profile.last'), bkInput('lastName','text','autocomplete="family-name"'+(f.noLast ? ' disabled style="background:#EFEDE8;color:#8E857C;"' : ''))+'<label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px;"><input type="checkbox" '+(f.noLast ? 'checked ' : '')+'onchange="bkNoLast(this.checked)"> '+bt('profile.noLast')+'</label>')+
     bkField(bt('profile.gender'), '<select onchange="bkSet(\'gender\',this.value)"><option value="">'+bt('profile.pick')+'</option><option value="女"'+(f.gender==='女'?' selected':'')+'>'+bt('gender.f')+'</option><option value="男"'+(f.gender==='男'?' selected':'')+'>'+bt('gender.m')+'</option></select>')+
-    bkField(bt('profile.dob'), bkInput('dob','date','max="'+dateStr(demoNow())+'"'));
+    bkField(bt('profile.dob'), '<input type="date" value="'+bkH(f.dob)+'" max="'+dateStr(demoNow())+'" onchange="bkDobChange(this.value)">')+bkMinorHtml();
   return bkFrame('s.profile', body+bkNav('bkProfileNext()', true));
+}
+/* CMD-1029-07：未满 21 岁（以预约当天算）→ 婚姻状况；未婚 → 必勾已通知监护人。已登记的老客人不走这一步 */
+function bkMinor(){ return !BK.client && isMinorOn(BK.f.dob, todayStr()); }
+function bkDobChange(v){ BK.f.dob = v; if(!bkMinor()){ BK.f.marital = ''; BK.f.guardianOk = false; } BK.err = ''; bkRender(true); }
+function bkMaritalSet(v){ BK.f.marital = v; if(v!=='未婚') BK.f.guardianOk = false; BK.err = ''; bkRender(true); }
+function bkMinorHtml(){
+  if(!bkMinor()) return '';
+  var f = BK.f, radio = function(v, key){ return '<label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-right:18px;"><input type="radio" name="bk-marital" '+(f.marital===v ? 'checked ' : '')+'onchange="bkMaritalSet(\''+v+'\')"> '+bt(key)+'</label>'; };
+  return bkField(bt('minor.marital'), '<div style="display:flex;flex-wrap:wrap;">'+radio('已婚','minor.married')+radio('未婚','minor.single')+'</div>')+
+    (f.marital==='未婚' ? '<label style="display:flex;gap:8px;align-items:flex-start;margin:-4px 0 12px;font-size:14px;"><input type="checkbox" '+(f.guardianOk ? 'checked ' : '')+'onchange="BK.f.guardianOk=this.checked;BK.err=\'\';" style="margin-top:3px;"> <span>'+bt('minor.guardian')+'</span></label>' : '');
 }
 function bkNoLast(on){ BK.f.noLast = !!on; if(on) BK.f.lastName = ''; BK.err = ''; bkRender(); }
 function bkProfileNext(){
@@ -187,6 +197,10 @@ function bkProfileNext(){
   if(!f.noLast && !f.lastName){ BK.err = bt('profile.errLast'); return bkRender(); }
   if(!f.gender){ BK.err = bt('profile.errGender'); return bkRender(); }
   if(!f.dob){ BK.err = bt('profile.errDob'); return bkRender(); }
+  if(bkMinor()){
+    if(!f.marital){ BK.err = bt('minor.errMarital'); return bkRender(); }
+    if(f.marital==='未婚' && !f.guardianOk){ BK.err = bt('minor.errGuardian'); return bkRender(); }
+  }
   if(BK.client && f.name.toLowerCase() !== BK.client.name.toLowerCase() && !BK.mismatchOk){ BK.mismatch = true; BK.err = ''; return bkRender(); }
   BK.err = ''; bkNextStep();
 }
@@ -287,7 +301,7 @@ function bkStepConfirm(){
 }
 function bkSubmit(){
   var f = BK.f, old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
-  var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, firstName:f.firstName, lastName:f.lastName, noLastName:!!f.noLast, gender:f.gender, dob:f.dob,
+  var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, firstName:f.firstName, lastName:f.lastName, noLastName:!!f.noLast, gender:f.gender, dob:f.dob, marital:f.marital, guardianOk:!!f.guardianOk,
     history:f.history, beauty:f.beauty, purpose:f.purpose, note:f.note, rebookFrom:old ? old.id : null});
   if(!res.ok){ BK.err = bt('time.taken'); BK.f.time = ''; if(BK.entry!=='walkin') BK.step = 0; return bkRender(); }
   Store.save(); BK.done = res; bkMeStart(f.phone, res.c.id); bkRender();

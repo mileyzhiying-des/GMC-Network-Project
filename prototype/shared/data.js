@@ -735,6 +735,21 @@ function ageOfDob(dob){
   if((+t[1]) < (+b[1]) || ((+t[1]) === (+b[1]) && (+t[2]) < (+b[2]))) a--;
   return a;
 }
+/* CMD-1029-07：照生日算到某一天满几岁（算到月日）；未满 21 岁（以预约当天算）要选婚姻状况，未婚要确认已通知监护人 */
+var MINOR_AGE = 21;
+function ageOnDate(dob, ds){
+  if(!/^\d{4}-\d\d-\d\d$/.test(dob||'') || !/^\d{4}-\d\d-\d\d$/.test(ds||'')) return null;
+  var t = ds.split('-'), b = dob.split('-'), a = (+t[0]) - (+b[0]);
+  if((+t[1]) < (+b[1]) || ((+t[1]) === (+b[1]) && (+t[2]) < (+b[2]))) a--;
+  return a;
+}
+function isMinorOn(dob, ds){ var a = ageOnDate(dob, ds); return a!==null && a < MINOR_AGE; }
+/* IN 看的标记：只有预约当天未满 21 岁、且客人现在还没满 21 岁才显示（记录保留）；旧客人没有记录 = 空 */
+function minorMarkText(cl){
+  var m = cl && cl.minorInfo; if(!m) return '';
+  var now = ageOfDob(cl.dob); if(now===null || now >= MINOR_AGE) return '';
+  return '未满 21 岁 · '+(m.marital==='未婚' ? '未婚'+(m.guardianNotified ? ' · 已通知监护人（'+(m.guardianAt||'')+'）' : '') : '已婚');
+}
 /* 生日 YY-MM-DD（N 岁）：没有生日写「—」 */
 function dobAgeText(dob){
   var a = ageOfDob(dob); if(a===null) return '—';
@@ -780,7 +795,7 @@ function clientBasicBlockHtml(c){
   var nm = String(c.name).replace(/'/g, "\\'"), ed = !isEnded(c);
   var row = function(k, v, field){ return '<div class="case-field-row"><span class="fk">'+k+'</span><span style="flex-grow:1;font-size:13px;">'+v+'</span>'+(ed && field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</div>'; };
   return '<div style="margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);"><div class="info-heading" style="margin-bottom:4px;">基本信息 <span style="font-weight:400;font-size:12px;color:var(--muted);">来自客户档案，这里修改会同步到档案</span></div>'+
-    row('姓名', aEscC(cl.name), 'name')+row('性别', aEscC(cl.gender||'—'), 'gender')+row('生日', aEscC(dobAgeText(cl.dob)), 'gender')+
+    row('姓名', aEscC(cl.name), 'name')+row('性别', aEscC(cl.gender||'—'), 'gender')+row('生日', aEscC(dobAgeText(cl.dob))+(minorMarkText(cl) ? ' <span style="color:#B3261E;font-size:12px;font-weight:700;">'+aEscC(minorMarkText(cl))+'</span>' : ''), cl.dob ? '' : 'gender')+
     row('病史 / 过敏史', historyMarkHtml(cl.history), 'history')+row('联系方式', aEscC(cl.phone||'—'), 'phone')+(passportVisible() ? row('护照', (function(){ var a = passportAlert(c), bad = a.level==='expired' || a.level==='before' || a.level==='none'; return '<span style="'+(bad ? 'color:#B3261E;font-weight:700;' : '')+'">'+(bad ? '⚠ ' : '')+aEscC(passportLineText(c, cl, a))+'</span>'; })(), 'passport') : '')+'</div>';
 }
 
@@ -879,6 +894,8 @@ function submitSelfBooking(f){
   var cl = clientByPhone(f.phone), isNew = !cl;
   if(isNew){
     cl = addClient({name:f.name, firstName:f.firstName, lastName:f.lastName, noLastName:!!f.noLastName, phone:f.phone, gender:f.gender, dob:f.dob, history:(f.history||'').trim()||'无', createdBy:'客人自助', source:'客户自助预约建档', consent:consent});
+    /* CMD-1029-07：以建立预约当天（印尼时间）算；之后改到店日期不重算。旧客人没有这个记录就是空的 */
+    if(isMinorOn(f.dob, todayStr()) && f.marital){ cl.minorInfo = {bookedOn:todayStr(), ageAtBooking:ageOnDate(f.dob, todayStr()), marital:f.marital, guardianNotified:(f.marital==='未婚' ? !!f.guardianOk : false), guardianAt:(f.marital==='未婚' && f.guardianOk ? nowFullDt() : '')}; }
   } else {
     /* 老客人资料有变化由室长到店接待时修改，预约页不提供修改：这里只记同意书（版本更新过才会重新勾选），不改客户档案 */
     if(f.consentGiven) cl.consents.push(consent);
@@ -895,6 +912,7 @@ function submitSelfBooking(f){
   c.bookClient = isNew ? 'new' : 'old'; c.consentResigned = !isNew && !!f.consentGiven; /* 记录：新客 / 老客、老客是否重签同意书（测试覆盖页用，CMD-1012-06） */
   /* 医美史（结构化）：年月 + 项目 + 来源"客人自填"；老客人新增的标"本次新增"（到店时室长在基础资料里看得到并确认；延续既往面诊的"有新增医美史"读它） */
   (f.beauty||[]).forEach(function(b){ if(b && b.ym && b.project) addBeautyRecord(cl, {year:+b.ym.slice(0,4), month:+b.ym.slice(5,7), project:b.project, source:'客人自填', caseId:c.id, newCaseId:isNew ? null : c.id}); });
+  if(isNew && cl.minorInfo){ var mi = cl.minorInfo, mtxt = '预约当天未满 21 岁（'+mi.ageAtBooking+' 岁）：'+(mi.marital==='未婚' ? '未婚，已勾选「已通知监护人（父母或法定监护人）」' : '已婚'); logCaseEvent(c, '客人', mtxt); cl.timeline.push({stage:'建档', actor:'客人自助', action:mtxt, dt:nowFullDt(), kind:'plain'}); }
   if(exSelf || selfMain){} else if(f.entry==='walkin') c.logEntries[0].action = '到店自己填资料（平板/手机）预约成功，生成 Case ID '+c.caseNo;
   else if(f.entry==='link') c.logEntries[0].action = '客人通过预约链接填完资料，预约成功，生成 Case ID '+c.caseNo;
   var when = dateLabel(f.date)+' '+f.time, tail = '：'+cl.name+'（'+c.caseNo+'）'+when+(c.visitNote ? ' · '+c.visitNote : '');
@@ -9425,7 +9443,7 @@ function cliProfileHtml(model){
   if(isKr) return row('名 / 姓', aEscC(c.name))+row('性别 / 出生日期', aEscC(c.gender||'—')+' · '+clientDobText(c)+(c.dob ? '（'+dobAgeText(c.dob).replace(/^.*（/, '').replace(/）$/, '')+'）' : ''))+row('基础病史和过敏史', historyMarkHtml(c.history))+pass;
   var cons = (c.consents||[]).slice(-1)[0];
   var consHtml = cons ? '已签署<span class="sub">个人资料收集同意 + 健康资料处理同意 · 同意书 '+aEscC(cons.version)+' · '+aEscC(cons.ts)+' · '+aEscC(cons.source)+'</span>' : '<span style="color:var(--muted);">未登记</span><span class="sub">到店后由室长当面签署正式同意书</span>';
-  return row('名 / 姓', aEscC(c.name)+'<span class="sub">名（必填）+ 姓（选填），显示“名 姓”</span>', 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+pass+
+  return row('名 / 姓', aEscC(c.name)+'<span class="sub">名（必填）+ 姓（选填），显示“名 姓”</span>', 'name')+row('特别备注', aEscC(c.note||'无'), 'note', 1)+row('性别 / 出生日期', aEscC(c.gender)+' · '+clientDobText(c)+(minorMarkText(c) ? '<span class="sub" style="color:#B3261E;font-weight:700;">'+aEscC(minorMarkText(c))+'</span>' : '')+(c.dob ? '<span class="sub">生日建立后不能修改</span>' : ''), 'gender')+row('基础病史和过敏史', aEscC(c.history||'无'), 'history', 1)+pass+
     row('联系方式', aEscC(c.phone||'—')+'<span class="sub">手机号（一个手机号对应一位客人）</span>', 'phone')+'<div class="field-row"><span class="fk">隐私协议</span><span class="fv">'+consHtml+'</span><span class="fa"></span></div>';
 }
 function cliOngoingHtml(model){

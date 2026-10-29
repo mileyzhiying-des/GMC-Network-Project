@@ -2447,7 +2447,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var nl = document.getElementById('ce-nl'); nl.checked = true; nl.onchange && nl.onchange.call(nl); ST.ok(document.getElementById('ce-ln').disabled, '勾「我没有姓」→ 姓输入框变灰');
     saveClientEdit(); var c2 = clientByName('T-R70'); ST.ok(!!c2 && c2.noLastName===true && c2.lastName==='' && c2.name==='T-R70', '勾了：显示名只用名，noLastName 记下');
     openClientEdit('T-R70', 'gender'); document.getElementById('ce-v').value = ''; saveClientEdit(); ST.ok(/请选择性别/.test(err()), '性别空 → 挡住');
-    document.getElementById('ce-v').value = '女'; document.getElementById('ce-v2').value = ''; saveClientEdit(); ST.ok(/出生日期/.test(err()), '生日空 → 挡住');
+    /* CMD-1029-07：生日建立后不能改——有生日的客人编辑性别时没有生日输入框；没有生日的旧资料仍要填 */ ST.ok(!document.getElementById('ce-v2'), '有生日：编辑框没有生日输入栏（生日不能改）'); closeClientEdit(); openClientEdit(legacy.name, 'gender'); document.getElementById('ce-v').value = '女'; document.getElementById('ce-v2').value = ''; saveClientEdit(); ST.ok(/出生日期/.test(err()), '旧资料没有生日 → 仍要填，生日空挡住');
     openClientEdit(legacy.name, 'gender'); ST.ok(document.getElementById('ce-v').value==='', '旧资料编辑时性别默认「请选择」，要填了才能存');
     closeClientEdit();
   });
@@ -8028,5 +8028,23 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       b.b.refund.method = ''; ST.ok(/方式：未记录/.test(refundOnlyBodyHtml(c).replace(/<[^>]+>/g,'')), '旧退款（没有方式）显示「未记录」');
       ST.ok(refundMethodText({method:'其他', methodNote:'现金给门店'})==='其他（现金给门店）', '其他带说明显示');
     } finally { window.alert = al; window.confirm = cf; window.GMC_REFUND_METHOD_MANUAL = false; }
+  });
+  ST.def('R187a','CMD-1029-07（IN 分页）：满 21 岁算法 / 预约记录婚姻状况与监护人 / IN 标记 / 生日只读',function(){
+    var td = todayStr(), y = +td.slice(0,4), md = td.slice(5);
+    ST.ok(ageOnDate((y-21)+'-'+md, td)===21 && !isMinorOn((y-21)+'-'+md, td), '预约当天刚好 21 岁生日 = 满 21 岁');
+    var nextDay = (function(){ var d = new Date(td+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+1); return d.toISOString().slice(0,10); })();
+    ST.ok(ageOnDate((y-21)+nextDay.slice(4), td)===20 && isMinorOn((y-21)+nextDay.slice(4), td), '差一天满 21 岁 = 未满（算到月日）');
+    var SFX = Date.now().toString(36).slice(-4), ph = function(n){ return '+62 812-'+({a:'11',b:'22',c:'33',o:'44'}[n])+String(Date.now()).slice(-5); }, used = {}, nextSlot = function(){ for(var k = 1; k < 40; k++){ var d = D(k); for(var i = 0; i < WK_HOURS.length; i++){ var key = d+WK_HOURS[i]; if(!used[key] && !slotBlockReason(d, WK_HOURS[i])){ used[key] = 1; return {date:d, time:WK_HOURS[i]}; } } } return {date:D(60), time:'10:00'}; };
+    var mk = function(tag, dob, marital, ok){ var sl = nextSlot(), r = submitSelfBooking({consentGiven:true, entry:'web', date:sl.date, time:sl.time, phone:ph(tag), name:'T-R187'+tag+SFX, firstName:'T-R187'+tag+SFX, lastName:'', noLastName:true, gender:'女', dob:dob, marital:marital, guardianOk:ok, history:'', beauty:[], purpose:'面诊商谈', note:''}); return r.ok ? clientByName('T-R187'+tag+SFX) : null; };
+    var a = mk('a', (y-30)+'-06-15', '', false); ST.ok(a && !a.minorInfo, '满 21 岁：不记婚姻状况 / 监护人');
+    var b = mk('b', (y-19)+'-06-15', '已婚', false); ST.ok(b && b.minorInfo && b.minorInfo.marital==='已婚' && !b.minorInfo.guardianNotified, '未满 21 岁已婚：记已婚，不要监护人');
+    var c = mk('c', (y-19)+'-06-15', '未婚', true); ST.ok(c && c.minorInfo && c.minorInfo.guardianNotified && c.minorInfo.guardianAt, '未满 21 岁未婚：记已通知监护人 + 勾选时间');
+    ST.ok(/未满 21 岁 · 未婚 · 已通知监护人（/.test(minorMarkText(c)) && minorMarkText(b)==='未满 21 岁 · 已婚' && minorMarkText(a)==='', 'IN 标记文字');
+    var cs = CASE_ITEMS.filter(function(x){ return x.name===c.name; })[0]; ST.ok(cs && ST.hasLog(cs, /预约当天未满 21 岁.*已通知监护人/), '预约 Timeline 记一笔');
+    c.dob = (y-22)+'-01-01'; ST.ok(minorMarkText(c)==='', '客人之后满 21 岁：标记不再显示（记录保留：'+(!!c.minorInfo)+'）'); c.dob = (y-19)+'-06-15';
+    cs.visitDate = D(10); ST.ok(c.minorInfo.ageAtBooking===19, '改到店日期不重算');
+    var legacy = addClient({name:'T-R187Old '+Date.now().toString(36), phone:ph('o'), gender:'女', dob:(y-18)+'-01-01', createdBy:'测试'}); ST.ok(!legacy.minorInfo && minorMarkText(legacy)==='', '旧客人没有记录 = 空，不猜');
+    var html = clientBasicBlockHtml(cs).replace(/\s+/g,' '); var dobRow = html.split('生日')[1] || ''; ST.ok(/未满 21 岁 · 未婚/.test(html), '基础资料生日旁显示标记'); ST.ok(!/openClientEdit\([^)]*\)[^<]*<\/a>[^]*?病史/.test('') && !/生日<\/span><span[^>]*>[^<]*<\/span><a/.test(html), '生日那一行没有［修改］');
+    ST.ok(/openClientEdit\('[^']*','gender'\)/.test(html), '性别那一行的［修改］还在');
   });
 })();
