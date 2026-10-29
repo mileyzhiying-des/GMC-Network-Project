@@ -4139,7 +4139,7 @@ function headMount(){
   if(!content || !currentAccount()) return;
   var own = HEAD_OWN[id], title = HEAD_TITLES[id] || '';
   if(id==='in-admin' || (content.id==='admin-body')) title = HEAD_ADMIN_TITLE || title;
-  var mkActions = function(){ var tmp = document.createElement('div'); tmp.innerHTML = headIconsHtml(); var act = tmp.firstElementChild; if(act) act.classList.add('head-actions'); return act; };
+  var mkActions = function(){ var tmp = document.createElement('div'); tmp.innerHTML = headIconsHtml(); var act = tmp.firstElementChild; if(act){ act.classList.add('head-actions'); if(!HEAD_OWN[id]){ var ck = document.createElement('span'); ck.className = 'head-clock'; ck.setAttribute('data-clock','1'); ck.innerHTML = dashClockHtml(); act.insertBefore(ck, act.firstChild); } } return act; }; /* CMD-1029-12：工作台以外的页面，页头对话图标前面也放两边的时间（同一个 dashClockHtml，每秒走；天气只在工作台） */
   if(HEAD_L2[id]){
     row = content.querySelector(':scope > .page-head-row');
     if(!row){
