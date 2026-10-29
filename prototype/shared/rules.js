@@ -426,7 +426,7 @@ function settlementCardHtml(c, b){
     ? '<div style="display:flex;align-items:center;gap:10px;margin-top:10px;"><button class="btn-primary" onclick="settleProjects(\''+b.id+'\')">确认付款</button>'+(batchNeedsPassport(c, b) ? '<span style="font-size:12px;color:#B3261E;font-weight:700;">护照未登记（点确认付款先登记护照）</span>' : '')+'</div>'
     : (canCancel ? '<button class="btn-outline" style="margin-top:10px;" onclick="openCancelItems(\''+b.id+'\')">取消项目</button>' : '');
   return '<div id="settle-card-'+b.id+'" style="border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:12px;">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:13px;font-weight:700;">结算单 '+b.id+' <span style="font-weight:400;color:var(--muted);font-size:12px;">'+b.time+'</span></span><span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+st+'</span></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:13px;font-weight:700;">结算单 '+b.id+' <span style="font-weight:400;color:var(--muted);font-size:12px;">'+b.time+(b.viaCaseNo ? ' · 记在子案件 '+b.viaCaseNo : '')+'</span></span><span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+st+'</span></div>'+
     (rows || '<div style="font-size:12px;color:var(--muted);">（项目明细略）</div>')+
     '<div style="font-size:12px;color:var(--slate2);margin-top:8px;">'+amounts.join('　')+'</div>'+refunds+actions+'</div>';
 }

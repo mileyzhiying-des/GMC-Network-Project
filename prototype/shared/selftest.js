@@ -7936,6 +7936,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.open(n); n.activeCaseTab = 'kr'; confirmProjectSelection(); ST.ok(!!latestUnpaidBatch(n), '① 选赴韩项目 → 生成定金结算单'); settleProjects(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); n = getCurrentCase();
       var M = mainOf(n);
       ST.ok(M.settlementDone && krDepositPaid(M) && krActiveItems(M).length===1 && financePaid(M).kr>0 && !n.settlementBatches.length && !krAllItems(n).length && n.paidOnMain, '① 付定金成功、不收面诊费：赴韩项目和结算单记在主案件 '+M.caseNo+'，子记录 '+n.caseNo+' 只留说明');
+      /* CMD-1029-06 四：定金结算单记在付款那天的子记录（存法 = 主案件 settlementBatches + viaCaseId，和一般赴韩定金同一套），子案件页有「结算」tab，主案件结算 tab 汇总 */
+      var db = dayPaidBatches(n); ST.ok(db.length===1 && db[0].viaCaseId===n.id && db[0].krDeposit>0 && M.settlementBatches.indexOf(db[0])>-1, '④ 定金结算单带 viaCaseId = 付款那天的子记录，仍在主案件 settlementBatches 里（同一套存法）');
+      ST.ok(subTabListOf(n).some(function(t0){ return t0.key==='settle'; }), '④ 子案件页恢复「结算」tab');
+      var st4 = subSettleTabHtml(n).replace(/<[^>]+>/g, ' '); ST.ok(/结算单/.test(st4) && /赴韩定金/.test(st4) && !/已记在主案件/.test(st4), '④ 子案件「结算」tab 里是这一天的定金结算单');
+      ST.open(M); var mt4 = settleTabHtml(M).replace(/<[^>]+>/g, ' '); ST.ok(/结算单/.test(mt4) && /赴韩定金/.test(mt4) && mt4.indexOf('记在子案件 '+n.caseNo)>-1, '④ 主案件结算 tab 汇总带这笔定金，并写「记在子案件 '+n.caseNo+'」');
+      ST.ok(krBalanceInfo(M).deposit>0, '④ 主案件算尾款仍读得到这笔定金');
+      var vc = db[0].viaCaseId, vn = db[0].viaCaseNo; delete db[0].viaCaseId; delete db[0].viaCaseNo; ST.ok(dayPaidBatches(n).length===1 && subTabListOf(n).some(function(t0){ return t0.key==='settle'; }), '④ 旧资料（04 交接的，只有 paidOnMain、批次没有 viaCaseId）也能在子案件页找回这笔定金，不用搬'); db[0].viaCaseId = vc; db[0].viaCaseNo = vn;
+      ST.open(n);
       ST.ok(isUpgraded(M) && M.stage==='travel' && recBuyState(n, n.krScope.items[0])==='bought', '① 主案件 '+M.caseNo+' 升级（赴韩施术阶段），面诊页「购买情况」= 已购买');
       /* ② 本地 */
       var B = mk('R184'); n = B.n; ST.open(n); n.activeCaseTab = 'consult'; reportViewPlan(); n = getCurrentCase(); ST.open(n); n.activeCaseTab = 'kr';

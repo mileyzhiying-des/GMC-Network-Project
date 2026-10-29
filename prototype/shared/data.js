@@ -10726,7 +10726,7 @@ function subDayTabs(c){
     if(subKrRows(m, v, '术后管理').length) out.push({key:'care', label:'术后管理'});
     if(subKrRows(m, v, '管理项目').length) out.push({key:'inkr', label:'在韩管理'});
   }
-  var money = ctx.isRec ? showSettleTab(c) : (subDayMoney(ctx).length>0 || (!isKr && !!(rec.localMgmt && (rec.localMgmt.batches||[]).length)));
+  var money = ctx.isRec ? (showSettleTab(c) || dayPaidBatches(c).length>0) : (subDayMoney(ctx).length>0 || (!isKr && !!(rec.localMgmt && (rec.localMgmt.batches||[]).length)));
   if(money) out.push({key:'settle', label:'结算'});
   out.push({key:'attachments', label:'附件'}, {key:'timeline', label:'Timeline'});
   return out;
@@ -10734,6 +10734,12 @@ function subDayTabs(c){
 function subTabListOf(c){ return subDayTabs(c); }
 /* 默认打开：今天最需要操作的——术后管理 > 复诊评估 > 面诊 > 本地管理 > 赴韩项目 > 赴韩施术 > 在韩管理 > 到访 */
 function subDefaultTab(c, list){ var pri = ['care', 'rev', 'consult', 'local', 'krproj', 'krsurg', 'inkr', 'visit']; for(var k = 0; k < pri.length; k++){ if(list.some(function(t0){ return t0.key===pri[k]; })) return pri[k]; } return 'visit'; }
+/* CMD-1029-06 四：付款那天的子案件收的赴韩结算单（定金）：存在主案件 settlementBatches 里，viaCaseId = 这一天；旧资料（04 之前交接的）靠 paidOnMain.batches 的编号找 */
+function dayPaidBatches(c){
+  var m = mainOf(c); if(!m || m.id===c.id) return [];
+  var ids = (c.paidOnMain && c.paidOnMain.batches) || [];
+  return (m.settlementBatches||[]).filter(function(b){ return b.viaCaseId===c.id || (!b.viaCaseId && ids.indexOf(b.id)>-1); });
+}
 function subDayMoney(ctx){ var m = ctx.m, d = ctx.v.date, out = []; (m.settlementBatches||[]).forEach(function(b){ if(String(b.time||'').slice(0, 10)===d) out.push(b); }); return out; }
 function subHeaderHtml(c){
   var ctx = subCtxOf(c), v = ctx.v, st = visitStateText(ctx.m, v), today = todayStr();
@@ -10782,6 +10788,10 @@ function subTabBodyHtml(c, key){
 }
 function subSettleTabHtml(c){
   var ctx = subCtxOf(c);
+  if(ctx.isRec && dayPaidBatches(c).length){
+    var own = showSettleTab(c) ? settleTabHtml(c) : '';
+    return '<div class="card" style="padding:22px 24px;margin-bottom:12px;"><div class="info-heading" style="margin-bottom:8px;">结算 <span style="font-weight:400;font-size:12px;color:var(--muted);">这一天（'+cesc(c.caseNo||'')+'）收的赴韩定金；主案件 <a href="#" class="info-link" onclick="closeSubcase(\''+c.id+'\');return false;">'+cesc(ctx.m.caseNo)+'</a> 的结算 tab 会汇总</span></div>'+dayPaidBatches(c).map(function(b){ return settlementCardHtml(ctx.m, b); }).join('')+'</div>'+own;
+  }
   if(ctx.isRec) return showSettleTab(c) ? settleTabHtml(c) : '<div class="card" style="padding:22px 24px;font-size:13px;color:var(--muted);">'+(c.paidOnMain ? '这一天选的赴韩项目和付的定金已记在主案件 <a href="#" class="info-link" onclick="closeSubcase(\''+c.id+'\');return false;">'+cesc(c.paidOnMain.caseNo)+'</a> 的「结算」tab' : '这一天没有收钱')+'</div>';
   var bs = subDayMoney(ctx), lmB = (ctx.m.localMgmt && ctx.v.place==='IN' && (ctx.v.rec||ctx.v.caseId)===ctx.m.id) ? (ctx.m.localMgmt.batches||[]) : []; return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:8px;">结算 <span style="font-weight:400;font-size:12px;color:var(--muted);">这一天收的钱</span></div>'+((bs.length || lmB.length) ? bs.map(function(b){ return settlementCardHtml(ctx.m, b); }).join('')+lmB.map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">本地购买 '+cesc(b.time||'')+'</span><span style="font-size:12px;">'+(b.inTotal!==undefined ? formatCurrency(b.inTotal, 'IDR') : '')+'</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);">这一天没有收钱</div>')+'</div>';
 }
@@ -11777,7 +11787,7 @@ function reuseHandOffToMain(c){
   var m = mainOf(c); if(!m || m.id===c.id) return;
   m.settlementBatches = m.settlementBatches || []; m.procedureItems = m.procedureItems || [];
   var moved = [], idMap = {};
-  (c.settlementBatches||[]).forEach(function(b){ var nid = 'B'+(m.settlementBatches.length+1); idMap[b.id] = nid; b.id = nid; m.settlementBatches.push(b); moved.push(nid); });
+  (c.settlementBatches||[]).forEach(function(b){ var nid = 'B'+(m.settlementBatches.length+1); idMap[b.id] = nid; b.id = nid; b.viaCaseId = c.id; b.viaCaseNo = c.caseNo; m.settlementBatches.push(b); moved.push(nid); }); /* CMD-1029-06 四：结算单和一般赴韩定金同一套存法（在主案件 settlementBatches 里，带 time），多记 viaCaseId = 付款那天的子案件，子案件页「结算」tab 靠它找回自己那一天收的钱 */
   (c.procedureItems||[]).forEach(function(it){ if(it.batchId && idMap[it.batchId]) it.batchId = idMap[it.batchId]; m.procedureItems.push(it); });
   c.settlementBatches = []; c.procedureItems = []; c.recommended = [];
   ['anesthesiaConsent'].forEach(function(k){ if(c[k] && !m[k]) m[k] = c[k]; });
@@ -11785,7 +11795,7 @@ function reuseHandOffToMain(c){
   if(!m.reportReady){ m.reportReady = true; m.consultStatus = 'report_ready'; }
   c.paidOnMain = {mainId:m.id, caseNo:m.caseNo, batches:moved, at:nowFullDt()};
   ensureItemIids(m);
-  logCaseEvent(c, actingName(), '继续面诊选了赴韩项目并付定金：赴韩项目和结算单记在主案件 '+m.caseNo+'（之后的施术预约 / 尾款 / 术后管理都在主案件里）');
+  logCaseEvent(c, actingName(), '继续面诊选了赴韩项目并付定金：赴韩项目放在主案件 '+m.caseNo+'（之后的施术预约 / 尾款 / 术后管理都在主案件里），定金结算单记在这一天（'+(c.caseNo||'')+'）的「结算」tab');
   logCaseEvent(m, actingName(), '继续面诊（'+(c.caseNo||'')+'）选了赴韩项目并付定金（沿用原方案，没有面诊费）');
   updateCaseStage(m);
 }
