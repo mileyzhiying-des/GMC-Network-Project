@@ -7497,6 +7497,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!dh || /在韩 \d\d\/\d\d/.test(dh) && /行程修正/.test(dh), '五：施术当天页头同样显示在韩期间 + ［行程修正］'); KR_CASE.day = '';
       /* 六：没填在韩期间，按客人已到院被拦 */
       mut(r1, function(c){ delete c.stay; c.hasArrived = false; if(c.krSchedule) c.krSchedule.simDay = true; });
+      mut(r1, function(c){ var cl0 = clientByName(c.name); if(cl0) cl0.passport = {text:'已登记', date:'', no:'K153001', issue:'2020-01-01', expiry:'2040-01-01'}; }); /* CMD-1029-09 五：护照号码已有 → 只测补填在韩期间 */
       window.GMC_STAY_AUTO = false;
       ST.ok(stayNeedFillOnArrive(gc(r1)), '六：前提：有韩国行程、没填在韩期间、没标过到院');
       KR_CASE.clinicId = r1.clinicId; KR_CASE.id = r1.id; KR_CASE.day = ''; krMarkArrived();
@@ -8135,5 +8136,27 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         staySave(); ST.ok(k2.status==='pending' && !!d.tripConfirm && k2.tripState==='booked' && clientByName(d.name).passport.no==='Q1234567', '填完才递交成功，行程已定');
       }
     } finally { window.alert = al; window.GMC_TRIP_MANUAL = false; }
+  });
+  ST.def('R192b','CMD-1029-09 五（KM1 分页，stageC 夹具）：KR 按［客人已到院］时护照号码没填 → 必填（号码 + 效期）；已有的显示出来核对、不强制',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r1 = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r1, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var gc = function(r){ return Store.withClinic(r.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; }); };
+    var mut = function(r, f){ var out; Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc(r1)), clSnap = null, td = todayStr(), oc = window.confirm; window.confirm = function(){ return true; };
+    try{
+      mut(r1, function(c){ var cl = clientByName(c.name); clSnap = JSON.stringify(cl.passport); cl.passport = {text:'未登记', date:'', no:'', issue:'', expiry:''}; c.hasArrived = false; if(c.krSchedule) c.krSchedule.simDay = true; c.stay = {in:td, out:ymdAdd(td, 9), inTime:'10:00', outTime:'18:00', by:'x', at:nowFullDt()}; });
+      window.GMC_STAY_AUTO = false; KR_CASE.clinicId = r1.clinicId; KR_CASE.id = r1.id; KR_CASE.day = '';
+      ST.ok(!stayNeedFillOnArrive(gc(r1)) && krPassNeed(r1.clinicId, gc(r1)), '前提：在韩期间已填，但护照号码空');
+      krMarkArrived(); var ov = document.getElementById('kr-stayarr-overlay'); ST.ok(!gc(r1).hasArrived && ov && ov.classList.contains('open') && /请当场核对护照本人/.test(ov.innerText) && !!document.getElementById('sa-pno'), '按［客人已到院］被拦下，弹出护照栏（请当场核对护照本人）');
+      krStayArriveSave(); ST.ok(!gc(r1).hasArrived && /护照号码必填/.test(document.getElementById('sa-err').textContent), '号码没填 → 不让继续');
+      document.getElementById('sa-pno').value = 'KR777001'; krStayArriveSave(); ST.ok(!gc(r1).hasArrived && /护照效期必填/.test(document.getElementById('sa-err').textContent), '效期没填 → 不让继续');
+      document.getElementById('sa-pex').value = '2040-01-01'; krStayArriveSave(); var cl2 = Store.withClinic(r1.clinicId, function(){ return clientByName(gc(r1).name); });
+      ST.ok(gc(r1).hasArrived===true && cl2.passport.no==='KR777001' && cl2.passport.expiry==='2040-01-01', '填了号码 + 效期 → 存进客人档案并标已到院');
+      ST.ok(!JSON.stringify(gc(r1).logEntries).includes('KR777001') && !JSON.stringify(cl2.timeline).includes('KR777001'), '护照号不进 Timeline');
+      /* 已有号码：显示出来核对，不强制 */
+      mut(r1, function(c){ c.hasArrived = false; });
+      document.getElementById('kr-stayarr-overlay').classList.remove('open'); ST.ok(!krPassNeed(r1.clinicId, gc(r1)), '护照号码已有：不再要求填'); krMarkArrived(); ST.ok(!document.getElementById('kr-stayarr-overlay').classList.contains('open'), '护照号码已有：不弹填写窗，不强制重填');
+      mut(r1, function(c){ c.hasArrived = false; }); krStayArriveOpen(); ST.ok(/KR777001/.test(document.getElementById('kr-stayarr-overlay').innerText) && /已登记，不用重填/.test(document.getElementById('kr-stayarr-overlay').innerText), '（弹窗）已有的号码显示出来让 KR 核对'); document.getElementById('kr-stayarr-overlay').classList.remove('open');
+    } finally { window.confirm = oc; window.GMC_STAY_AUTO = true; Store.mutateClinic(r1.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]; var s0 = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); var cl = clientByName(c.name); if(cl && clSnap) cl.passport = JSON.parse(clSnap); }); }
   });
 })();

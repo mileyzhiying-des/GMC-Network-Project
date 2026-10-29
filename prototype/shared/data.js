@@ -11242,6 +11242,16 @@ function coreStayFix(c, inD, inT, outD, outT, reason, by){
   return {ok:true, reopened:reopened};
 }
 /* CMD-1027-08 六：KR 按［客人已到院］时在韩期间没填（有韩国行程、还没标过到院）→ 补填；通知 IN，Timeline 记一笔 */
+/* CMD-1029-09 五：KR 按［客人已到院］时护照号码还是空的 → 必填（号码 + 效期）；已有的显示出来让 KR 核对，不强制重填。只有看得到护照的 KR 室长（passportVisible）会被要求 */
+function passNeedOnArrive(c){ if(window.GMC_STAY_AUTO) return false; if(!c || c.krVisit || c.hasArrived || !c.settlementDone) return false; var cl = clientByName(c.name); return !!cl && !passportOf(cl).no; }
+function corePassportFill(c, no, expiry, by){
+  var cl = clientByName(c.name); if(!cl) return {ok:false, err:'找不到客人档案'}; no = String(no||'').trim(); expiry = String(expiry||'').trim();
+  if(!no) return {ok:false, err:'护照号码必填'}; if(!expiry) return {ok:false, err:'护照效期必填'};
+  var p0 = passportOf(cl); cl.passport = {text:'已登记', date:todayStr(), no:no, issue:p0.issue, expiry:expiry};
+  cl.timeline = cl.timeline || []; cl.timeline.push({stage:'基础信息修改', actor:by, action:'登记护照号码和效期（KR 到院当场核对）', dt:nowFullDt(), kind:'plain'});
+  logCaseEvent(c, by, '到院时登记护照号码和效期（已当场核对护照本人）');
+  return {ok:true};
+}
 function stayNeedFillOnArrive(c){ if(window.GMC_STAY_AUTO) return false; /* 自测钩子：测试默认不弹在韩期间窗口 */ return !!(c && c.settlementDone && !c.krVisit && !c.hasArrived && !stayFilled(c)); }
 function coreStayFill(c, inD, inT, outD, outT, inAp, outAp, by){
   inD = inD||''; inT = inT||''; outD = outD||''; outT = outT||'';

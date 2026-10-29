@@ -2986,7 +2986,7 @@ function krArrivalBlock(c){
   }
   return krCardBox('到院与尾款', body);
 }
-function krMarkArrived(){ if(!krCan()) return; var rr0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(rr0 && rr0.c.krTripEnded){ krTripEndedModal(tripEndedBlockText(rr0.c)); return; } /* CMD-1027-12 五：行程已结束 → 先拦下 */ if(rr0 && stayNeedFillOnArrive(rr0.c) && !mainArriveBlock(rr0.c)){ krStayArriveOpen(); return; } /* CMD-1027-08 六：在韩期间没填 → 先要求补填 */ var ok = false; krMut(function(c){ ok = coreMarkArrived(c, ME_NAME); return ok; }); if(!ok){ var rr = krFindCase(KR_CASE.clinicId, KR_CASE.id); var w = rr ? mainArriveBlock(rr.c) : ''; if(w) krBlock(w); } }
+function krMarkArrived(){ if(!krCan()) return; var rr0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(rr0 && rr0.c.krTripEnded){ krTripEndedModal(tripEndedBlockText(rr0.c)); return; } /* CMD-1027-12 五：行程已结束 → 先拦下 */ if(rr0 && (stayNeedFillOnArrive(rr0.c) || krPassNeed(KR_CASE.clinicId, rr0.c)) && !mainArriveBlock(rr0.c)){ krStayArriveOpen(); return; } /* CMD-1027-08 六：在韩期间没填 → 先要求补填 */ var ok = false; krMut(function(c){ ok = coreMarkArrived(c, ME_NAME); return ok; }); if(!ok){ var rr = krFindCase(KR_CASE.clinicId, KR_CASE.id); var w = rr ? mainArriveBlock(rr.c) : ''; if(w) krBlock(w); } }
 function krDoJudge(){
   if(!krCan() || !KR_ARR.judge){ alert('请先选择院长评估结果'); return; }
   var r0 = KR_ARR.judge, memo = (KR_ARR.memo||'').trim();
@@ -4679,24 +4679,36 @@ function krStayHeadHtml0(c){
   return '';
 }
 /* CMD-1027-08 六：KR 按［客人已到院］时在韩期间还没填 → 先跳弹窗补填（到达日期 + 时间、离开日期必填；离开时间、机场选填），填好才继续标已到院；已经填了就不跳 */
+/* CMD-1029-09 五：客户档案在来源诊所分区里，KR 页面要进那家诊所的分区才读得到护照 */
+function krPassNeed(clinicId, c){ return passportVisible() && Store.withClinic(clinicId, function(){ return passNeedOnArrive(c); }); }
+function krPassOf(clinicId, name){ return Store.withClinic(clinicId, function(){ return passportOf(clientByName(name)); }); }
 function krStayArriveOpen(){
-  var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s = c.stay || {};
+  var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s = c.stay || {}, needStay = stayNeedFillOnArrive(c), needPass = krPassNeed(KR_CASE.clinicId, c), pp = krPassOf(KR_CASE.clinicId, c.name);
   var ov = document.getElementById('kr-stayarr-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-stayarr-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100014; document.body.appendChild(ov); }
   var f = function(id, type, val, ph){ return '<input id="'+id+'" type="'+type+'" value="'+krEsc(val||'')+'"'+(type==='date' ? stayRangeAttr() : '')+(ph ? ' placeholder="'+ph+'"' : '')+' style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;width:100%;box-sizing:border-box;">'; };
   var req = '<span style="color:#B3261E;">*</span>';
-  ov.innerHTML = '<div class="modal-box" style="width:520px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">先补填在韩期间 · '+krEsc(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">IN 还没有填客人在韩国的期间。请补填后再标记客人已到院（韩国当地时间）；离开日期是为了让「过了离开日期自动结束韩国行程」能运作。</div>'+
+  var stayHtml = needStay ? '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">IN 还没有填客人在韩国的期间。请补填后再标记客人已到院（韩国当地时间）；离开日期是为了让「过了离开日期自动结束行程」和预约检查有依据。</div>'+
     '<div style="display:grid;grid-template-columns:64px 1fr 1fr 1fr;gap:8px;align-items:center;font-size:13px;"><span></span><span style="font-size:12px;color:var(--muted);">日期</span><span style="font-size:12px;color:var(--muted);">时间</span><span style="font-size:12px;color:var(--muted);">机场（选填）</span>'+
     '<span>到达 '+req+'</span>'+f('sa-in-d', 'date', s.in)+f('sa-in-t', 'time', s.inTime)+f('sa-in-a', 'text', s.inAirport, '例：仁川')+
-    '<span>离开 '+req+'</span>'+f('sa-out-d', 'date', s.out)+f('sa-out-t', 'time', s.outTime)+f('sa-out-a', 'text', s.outAirport, '例：仁川')+'</div>'+
+    '<span>离开 '+req+'</span>'+f('sa-out-d', 'date', s.out)+f('sa-out-t', 'time', s.outTime)+f('sa-out-a', 'text', s.outAirport, '例：仁川')+'</div>' : '';
+  var passHtml = needPass ? '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);font-size:13px;"><b>护照</b> <span style="font-size:12px;color:#B3261E;">客人的护照号码还没有登记，必填</span> <span style="font-size:12px;color:var(--muted);">请当场核对护照本人</span>'+
+    '<div style="display:grid;grid-template-columns:64px 1fr 1fr;gap:8px;align-items:center;margin-top:8px;"><span>号码 '+req+'</span>'+f('sa-pno', 'text', '', '护照号码')+'<span></span><span>效期 '+req+'</span>'+f('sa-pex', 'date', '')+'<span></span></div></div>'
+    : ((passportVisible() && pp.no) ? '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);font-size:13px;"><b>护照</b> 号码 '+krEsc(pp.no)+(pp.expiry ? '　效期 '+krEsc(pp.expiry) : '')+' <span style="font-size:12px;color:var(--muted);">请当场核对护照本人（已登记，不用重填）</span></div>' : '');
+  ov.innerHTML = '<div class="modal-box" style="width:520px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">'+(needStay ? '先补填在韩期间' : '登记护照')+' · '+krEsc(c.name)+'</div>'+stayHtml+passHtml+
     '<div id="sa-err" style="font-size:12px;color:#B3261E;min-height:16px;margin-top:8px;"></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;"><button class="btn-outline" onclick="document.getElementById(\'kr-stayarr-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" onclick="krStayArriveSave()">确认并标记客人已到院</button></div></div>';
   ov.classList.add('open');
 }
 function krStayArriveSave(){
-  if(!krCan()) return; var g = function(i){ var e = document.getElementById(i); return e ? e.value : ''; }, res = null;
-  var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, verr = stayFillValidate(g('sa-in-d'), g('sa-in-t'), g('sa-out-d'), g('sa-out-t'));
-  if(verr){ var er0 = document.getElementById('sa-err'); if(er0) er0.textContent = verr; return; }
-  if(krStayResolveGate('arrive', {inD:g('sa-in-d'), inT:g('sa-in-t'), outD:g('sa-out-d'), outT:g('sa-out-t'), inA:g('sa-in-a'), outA:g('sa-out-a')})) return; /* CMD-1027-12 三：离开之后已经约了韩国预约 → 先处理 */
-  krMut(function(c){ res = coreStayFill(c, g('sa-in-d'), g('sa-in-t'), g('sa-out-d'), g('sa-out-t'), g('sa-in-a'), g('sa-out-a'), ME_NAME); return res.ok; });
+  if(!krCan()) return; var g = function(i){ var e = document.getElementById(i); return e ? e.value : ''; }, res = null, er0 = document.getElementById('sa-err');
+  var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, needStay = stayNeedFillOnArrive(c0), needPass = krPassNeed(KR_CASE.clinicId, c0);
+  if(needStay){ var verr = stayFillValidate(g('sa-in-d'), g('sa-in-t'), g('sa-out-d'), g('sa-out-t')); if(verr){ if(er0) er0.textContent = verr; return; } }
+  if(needPass){ if(!g('sa-pno').trim()){ if(er0) er0.textContent = '护照号码必填（请当场核对护照本人）'; return; } if(!g('sa-pex')){ if(er0) er0.textContent = '护照效期必填'; return; } }
+  if(needStay && krStayResolveGate('arrive', {inD:g('sa-in-d'), inT:g('sa-in-t'), outD:g('sa-out-d'), outT:g('sa-out-t'), inA:g('sa-in-a'), outA:g('sa-out-a')})) return; /* CMD-1027-12 三：离开之后已经约了韩国预约 → 先处理 */
+  krMut(function(c){
+    res = needStay ? coreStayFill(c, g('sa-in-d'), g('sa-in-t'), g('sa-out-d'), g('sa-out-t'), g('sa-in-a'), g('sa-out-a'), ME_NAME) : {ok:true};
+    if(res.ok && needPass) res = corePassportFill(c, g('sa-pno'), g('sa-pex'), ME_NAME);
+    return res.ok;
+  });
   if(res && res.ok){ var ov = document.getElementById('kr-stayarr-overlay'); if(ov) ov.classList.remove('open'); krMarkArrived(); }
   else { var er = document.getElementById('sa-err'); if(er) er.textContent = (res && res.err) || '保存失败'; }
 }
