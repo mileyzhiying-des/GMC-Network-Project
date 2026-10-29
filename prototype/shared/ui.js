@@ -1855,10 +1855,11 @@ function renderCaseSubtitle(c){
   var el = document.getElementById('case-subtitle'); if(!el) return;
   renderCaseTitle(c);
   var html = (c.caseNo||'')+(c.director ? ' · 对接院长：'+c.director : '');
+  if(c.usePrev && (c.boughtFrom||[]).length) html += (html ? ' · ' : '')+'来自之前购买的项目（'+c.boughtFrom.map(function(no){ var s0 = CASE_ITEMS.filter(function(x){ return x.caseNo===no && x.name===c.name; })[0]; return s0 ? '<a href="#" class="info-link" onclick="openCaseDetail(\''+s0.id+'\');return false;">'+no+'</a>' : no; }).join('、')+'）'; /* CMD-1029-03 五 */
   var rel0 = relatedOf(c); /* CMD-1023-01 补 2：经 relatedOf 读关联 */
   if(rel0.linkedId && !subPageActive(c)){
     var src = CASE_ITEMS.filter(function(x){ return x.id===rel0.linkedId; })[0];
-    html += (html ? ' · ' : '')+(rel0.followup ? ((rel0.type==='复诊评估') || rel0.revisit ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+rel0.linkedId+'\');return false;">'+(src&&src.caseNo?src.caseNo:rel0.linkedId)+'</a>（'+rel0.reason+(rel0.auto?'，自动关联':'')+'）';
+    html += (html ? ' · ' : '')+(rel0.followup ? ((rel0.type==='复诊评估') || rel0.revisit ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+rel0.linkedId+'\');return false;">'+(src&&src.caseNo?src.caseNo:rel0.linkedId)+'</a>'+((rel0.reason||rel0.auto) ? '（'+(rel0.reason||'')+(rel0.auto?(rel0.reason?'，':'')+'自动关联':'')+'）' : '');
   }
   if(c.materialsConfirmed && !isChildVisit(c) && !mainPageV2(c)){ try{ html += '<div style="margin-top:2px;">'+mainHeadLine(c)+'</div>'; }catch(e){} } /* CMD-1023-01 补 2：页头一行 从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
   el.innerHTML = html;
@@ -1904,8 +1905,9 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var missing = [];
+  if(c.usePrev){ c.needsConsult = false; } /* CMD-1029-03 五：来用之前购买的项目——不面诊，只检查 메타뷰 */
   if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1022-05：메타뷰 每次到院都必填（一般 / 复诊 / 术后 / 继续都一样），取代 CMD-1020-20 / 21 的「关联案件选填」 */
-  concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
+  if(!c.usePrev) concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */
   if(c.needsConsult!==true && c.needsConsult!==false && !(c.needsConsult==='reuse' && reusableReportSrc(c))) missing.push('面诊需求');

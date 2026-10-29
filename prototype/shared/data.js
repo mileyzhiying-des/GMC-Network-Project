@@ -3029,14 +3029,15 @@ function followupAskDone(link){
   var ov = document.getElementById('followup-overlay'), ctx = FU_ASK; if(ov) ov.classList.remove('open'); FU_ASK = null;
   var c = getCurrentCase(); if(!c || !ctx || c.id!==ctx.caseId) return;
   c.followupAsked = true;
-  if(link===true && ctx.mode==='local' && ctx.sel){
-    var lsrc = CASE_ITEMS.filter(function(x){ return x.id===ctx.sel; })[0]; if(!lsrc) return;
-    if(!localMainsWithLeft(c).some(function(x){ return x.id===lsrc.id; })){ /* CMD-1026-07：本地买的持有项目 → 开新案件，把要用的持有项目带进去，自动标来源（不加入原主案件） */
-      c.continueNew = true; c.boughtFrom = [lsrc.caseNo]; logCaseEvent(c, actingName(), '到店：使用之前购买的项目——来自 '+lsrc.caseNo+' 购买的本地持有项目（新的独立案件，不加入原主案件）'); buildCaseLog(c); renderCaseSubtitle(c); renderCaseBody(c);
-      return;
-    }
-    var lm = joinMain(c, lsrc); c.needsConsult = false; /* 赴韩主案件里的持有 → 回到那个主案件，加一个子案件 */
-    logCaseEvent(c, actingName(), '到店：使用之前购买的项目，加入主案件 '+(lm ? lm.caseNo : lsrc.caseNo)+'，本案件是它的子案件 '+c.caseNo); buildCaseLog(c); renderCaseSubtitle(c); renderCaseBody(c);
+  if(link===true && ctx.mode==='local'){
+    /* CMD-1029-03 五：来用之前购买的项目——一律开新的独立案件（标「来自之前购买的项目」），不加入原主案件、不加子案件、不改原主案件任何状态；
+       原来的做法（CMD-1026-07）：持有在赴韩主案件里的 → joinMain 回到原主案件加子案件（已完成的主案件因此被重新打开、页头出现「关联：A000002 ()」），只有本地持有的才开新案件 */
+    var hl = fuHoldList(c), srcs = [], seen = {}; hl.forEach(function(x){ if(x.caseNo && !seen[x.caseNo]){ seen[x.caseNo] = 1; srcs.push(x); } });
+    c.continueNew = true; c.needsConsult = false; c.needsConsultTouched = true;
+    c.usePrev = {at:nowFullDt(), by:actingName(), from:srcs.map(function(x){ return x.caseNo; })};
+    c.boughtFrom = srcs.map(function(x){ return x.caseNo; });
+    c.relLinks = c.relLinks || []; srcs.forEach(function(x){ if(x.caseId && x.caseId!==c.id && !c.relLinks.some(function(l){ return l.caseId===x.caseId; })) c.relLinks.push({caseId:x.caseId, by:actingName(), at:nowFullDt()}); }); /* 「关联案件」卡照旧：只是参考链接 */
+    logCaseEvent(c, actingName(), '到店：使用之前购买的项目——新的独立案件'+(c.boughtFrom.length ? '，来自 '+c.boughtFrom.join('、')+' 购买' : '')+'（不加入原主案件，原主案件状态不变）'); buildCaseLog(c); renderCaseSubtitle(c); renderCaseBody(c);
     return;
   }
   if(link===true && ctx.mode==='link' && ctx.sel){
@@ -3303,6 +3304,7 @@ function materialsCardHtml(c){
   syncDirectorChoice(c);
   if(isResumeConsult(c)) return resumeConsultCardsHtml(c, false); /* CMD-1022-06：继续面诊 */
   if(followupOn(c)) return followupCardsHtml(c); /* CMD-1021-18：术后来访 / 复诊来访流程 */
+  if(c.usePrev) return usePrevCardsHtml(c); /* CMD-1029-03 五：来用之前购买的项目——到访目的只有四栏 */
   var metaviewText = c.metaviewStatus==='ready'
     ? '<span style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><span style="font-weight:700;color:var(--sage);">已检测到</span><a href="#" class="info-link" onclick="return false;">查看检测结果 ↗</a></span>'
     : c.metaviewStatus==='checking'
@@ -3866,7 +3868,7 @@ function basicTabHtml(c){
     suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+ /* CMD-1021-20：메타뷰 面诊 / 不面诊都显示 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼</span><div style="flex-grow:1;padding-bottom:10px;">'+concernCardsHtml(c, {supp:c.needsConsult!==false})+'</div></div>'+
     intentionInfoHtml(c)+
-    '<div class="case-field-row" style="border-top:1px solid var(--border2);border-bottom:none;"><span class="fk">面诊</span><span style="flex-grow:1;font-size:13px;">'+consultLabel+(c.consultRequested?'（已申请）':'')+'</span></div>'+
+    (c.usePrev ? '' : '<div class="case-field-row" style="border-top:1px solid var(--border2);border-bottom:none;"><span class="fk">面诊</span><span style="flex-grow:1;font-size:13px;">'+consultLabel+(c.consultRequested?'（已申请）':'')+'</span></div>')+
     '</div>';
 }
 
@@ -4723,7 +4725,7 @@ function holdingsUseHtml(c, scope){
     var nb = h.batches.slice().sort(function(a,b){ return a.date<b.date?-1:1; }).filter(function(b){ return !b.voided && b.bought-b.used>0; })[0], ovals = pr && pr.opt && nb ? optValuesFor(pr, nb.spec) : []; /* 按下一个会被扣的批次的规格给选项（全身等没有选项的不用选） */
     var optSel = ovals.length ? '<select id="hold-opt-'+scope+'-'+i+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"><option value="">选择'+pr.opt.label+'</option>'+ovals.map(function(v){ return '<option>'+v+'</option>'; }).join('')+'</select>' : '';
     return '<div class="case-field-row"><input type="checkbox" id="hold-check-'+scope+'-'+i+'" style="flex-grow:0;margin-right:10px;">'+
-      '<span style="flex-grow:1;font-size:13px;">'+h.itemName+tags+(holdingSchedule(h)?' <span style="font-size:12px;color:var(--terracotta);">进行时间：'+holdingSchedule(h)+'</span>':'')+'</span>'+
+      '<span style="flex-grow:1;font-size:13px;">'+h.itemName+tags+holdSrcTag(h)+(holdingSchedule(h)?' <span style="font-size:12px;color:var(--terracotta);">进行时间：'+holdingSchedule(h)+'</span>':'')+'</span>'+
       '<span style="display:flex;align-items:center;gap:8px;white-space:nowrap;">'+optSel+'<span style="font-size:12px;color:var(--slate2);">剩余 '+remaining+' 次</span>'+qtyInputHtml({id:'hold-qty-'+scope+'-'+i, value:1, min:1, max:remaining})+'</span>'+
       '</div>';
   }).join('');
@@ -11716,4 +11718,26 @@ function refundOnlyBodyHtml(c){
       '<div style="padding-top:10px;border-top:1px solid var(--border2);font-size:13px;"><b>合计退款 '+refundOnlyAmountText(c)+'</b></div></div>';
   } else body = caseTimelineCardHtml(c);
   return '<div class="tabs" style="margin-bottom:4px;">'+tabs+'</div>'+body;
+}
+
+/* ================= CMD-1029-03 五：来用之前购买的项目（新的独立案件） ================= */
+/* 持有项目行上写「购买于 A000002 · 10/09」——每一批原本在哪个案件买的（项目汇总 / 本地管理里都看得到） */
+function holdSrcTag(h){
+  var parts = [], seen = {};
+  (h.batches||[]).forEach(function(b){ if(b.voided || (b.bought-b.used)<=0) return; var s = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0], m = s ? mainOf(s) : null, no = m ? m.caseNo : ''; if(!no) return; var k = no+'|'+(b.date||''); if(seen[k]) return; seen[k] = 1; parts.push(no+' · '+String(b.date||'').slice(5).replace('-', '/')); });
+  return parts.length ? ' <span style="font-size:12px;color:var(--muted);">购买于 '+parts.map(cesc).join('、')+'</span>' : '';
+}
+/* 到访目的只放四栏：메타뷰（必填）｜苦恼（选填）｜预算（选填）｜上传附件（选填）；没有面诊需求 / 院长 / 部位卡片 */
+function usePrevCardsHtml(c){
+  var metaviewText = c.metaviewStatus==='ready'
+    ? '<span style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><span style="font-weight:700;color:var(--sage);">已检测到</span><a href="#" class="info-link" onclick="return false;">查看检测结果 ↗</a></span>'
+    : c.metaviewStatus==='checking' ? '<span style="color:var(--terracotta);">检测中…</span>'
+    : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>';
+  var metaRow = '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>';
+  var concernRow = '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼（选填）</span><div style="flex-grow:1;"><textarea placeholder="客人的苦恼…（可不填）" oninput="saveConcernText(this.value)" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(concernTextOf(c))+'</textarea></div></div>';
+  var att = '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return cesc(f.label); }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>';
+  return (MAT_SPLIT ? '' : '<div class="card" style="padding:22px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>')+
+    '<div class="card" style="padding:22px 24px;margin-top:14px;"><div class="info-heading" style="margin-bottom:4px;">到访目的 <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">来用之前购买的项目</span></div>'+
+    guestConcernRowHtml(c)+metaRow+concernRow+budgetRowHtml(c)+att+
+    (MAT_SPLIT ? (MAT_FOOT = matFootHtml(c), '') : matFootHtml(c))+'</div>';
 }
