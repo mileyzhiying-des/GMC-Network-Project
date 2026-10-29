@@ -2935,6 +2935,18 @@ function fuSet(k, v){
   }
   a[k] = v; fuRender();
 }
+/* CMD-1029-03 四：「使用之前购买的项目」只读清单——客人在 IN 这边还能用的（本地持有批次 + 转到印尼的术后管理），不同案件买的全列在一起；韩国持有不列。这里不选要用哪一项，进到案件后再按［本次使用］ */
+function fuHoldList(c){
+  var out = [], byId = function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; };
+  getClientHoldings(c.name).forEach(function(h){ (h.batches||[]).forEach(function(b){
+    var left = (b.bought||0)-(b.used||0); if(left<=0 || b.voided || b.refund) return;
+    var src = byId(b.caseId), m = src ? mainOf(src) : null;
+    out.push({name:h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : ''), left:left, date:b.date||'', caseId:m ? m.id : b.caseId, caseNo:m ? m.caseNo : '', kind:'本地'});
+  }); });
+  try{ clientCareLeftAll(c.name).forEach(function(x){ if(x.c.id===c.id) return; var m = mainOf(x.c);
+    out.push({name:'术后管理 · '+(x.s.content||''), left:1, date:x.c.visitDate||'', caseId:m.id, caseNo:m.caseNo, kind:'术后管理'}); }); }catch(e){}
+  return out.sort(function(a, b){ return String(a.date).localeCompare(String(b.date)); });
+}
 function fuLocalList(c){
   return localMainsWithLeft(c).map(function(x){ return {m:x, back:true}; }).concat(localOnlyHoldMains(c).filter(function(x){ return !localMainsWithLeft(c).some(function(y){ return y.id===x.id; }); }).map(function(x){ return {m:x, back:false}; }));
 }
@@ -2945,13 +2957,15 @@ function fuRender(){
   var body = '<div style="font-size:15px;font-weight:700;margin-bottom:6px;">请选择本次服务类型</div>'+
     radio('mode','none','开始新的服务案件',a.mode==='none')+
     radio('mode','link','继续之前的服务案件',a.mode==='link', !canLink, '没有可以继续的案件')+
-    radio('mode','local','使用之前购买的项目',a.mode==='local', !locals.length, '没有可以使用的持有项目')+
+    radio('mode','local','使用之前购买的项目',a.mode==='local', !fuHoldList(c).length, '没有可以使用的持有项目')+
     radio('mode','refund','退款',a.mode==='refund', !refundableBatches(c.name).length, '客人没有可以退款的项目'); /* CMD-1026-13 三：专门来退款，放最后 */
   var ok = a.mode==='none' || a.mode==='refund';
   if(a.mode==='local'){
-    if(!locals.some(function(x){ return x.m.id===a.sel; })) a.sel = locals.length ? locals[0].m.id : '';
-    body += '<div style="margin:8px 0 6px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">还有没用完的项目</div><select onchange="fuSet(\'sel\',this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+locals.map(function(x){ return '<option value="'+x.m.id+'"'+(x.m.id===a.sel ? ' selected' : '')+'>'+x.m.caseNo+' · 持有：'+mainHoldOf(x.m).map(function(h){ return cesc(buyName(h.name))+' 剩 '+h.left; }).join('、')+(x.back ? '（回到这个主案件）' : '（新案件，标来源 '+x.m.caseNo+'）')+'</option>'; }).join('')+'</select></div>';
-    ok = !!a.sel;
+    var hl = fuHoldList(c); if(!a.sel || !fuLocalList(c).some(function(x){ return x.m.id===a.sel; })) a.sel = hl.length ? hl[0].caseId : '';
+    body += '<div style="margin:8px 0 6px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:10px;"><div style="font-size:12px;color:var(--muted);margin-bottom:6px;">客人还没用完的项目（只读；要用哪一项，进到案件后再按［本次使用］选）</div>'+
+      '<div style="display:grid;grid-template-columns:minmax(0,1fr) 64px 92px;gap:4px 10px;font-size:12px;color:var(--muted);padding-bottom:4px;border-bottom:1px solid var(--border2);"><span>项目名称</span><span>剩几次</span><span>购买日期</span></div>'+
+      hl.map(function(x){ return '<div style="display:grid;grid-template-columns:minmax(0,1fr) 64px 92px;gap:4px 10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border2);"><span>'+cesc(x.name)+'</span><span>剩 '+x.left+' 次</span><span>'+cesc(x.date)+'</span></div>'; }).join('')+'</div>';
+    ok = hl.length>0;
   }
   if(a.mode==='link'){
     var s = a.svc, cand = fuCandsOf(c, a), src = cand.filter(function(x){ return x.id===a.sel; })[0] || null;
