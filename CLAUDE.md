@@ -1798,3 +1798,8 @@ prototype/shared/app.css  共用样式
 - 结束案件（`endCaseRows` / `confirmEndCase`）：拿掉退款选项，没用完的本地批次一律转客人持有——弹窗只有一行告知「还有 N 项没用完，会转成客人持有：项目 剩余 N 次。要退款之后到客人页用［退款服务］办」（row key `holdall`，`holds` 列表，无选项）；Timeline 仍记「转为客人持有」；`refundableBatches` 仍可退。
 - 赴韩取消退款弹窗（`confirmRefund`）：「处理方式」退钱 / 置换（原来叫「退款方式」，改名避免和新字段混）；退钱（含尾款差额退还 / 不能施术退定金）必填「退款方式」现金 / 转账 / QRIS / 其他（其他要说明），`REFUND_PAY` / `refundPayRender`，复用 06 的 `REFUND_PAY_METHODS` / `refundMethodText`；记 `c.refunds[].method/methodNote`、Timeline「方式：…」、结算单退款行（`settlementCardHtml`，旧资料「未记录」，置换不显示）。
 - 测试：selftest 新增 R188a；G3 改成「没有退款选项、一律转持有、客人页仍可退」；自测默认自动选「现金」（`GMC_REFUND_PAY_MANUAL` 关掉）。第 3 部分（其他退款入口盘点）只写在 Notion 汇报，没改代码。
+
+## CMD-1029-09 补充（2026-10-29，追加；取代 CMD-1020-13 / 1019-12 里「施术前 2 天确认行程」「付定金前必须登记护照」，旧文字保留作历史）
+- 分支 **V4**，基准 bc12bf5 之前；提交：一 bc12bf5、二 58bfa36、三 7756f1b、四 e82c788、五 f7badcd、测试修正 7c2690c。不推送不合并，数据版本不变（56，只新增可空字段 `krSchedule.tripState/confirmedOn/reconfirm`）。
+- **一** 付定金不再要护照（`batchNeedsPassport` 恒 false，付款窗加「签证和入境由客人自行负责」提醒；过期只红字）。**二** 递交施术日期必选行程状态（`setTripState`：已定 booked / 暂定 tentative，已定可填入境·离境）；KR 在页头、日期卡、日历块标「暂定」，不影响流程。**三** 施术前约 30 天 IN 待办「确认客人行程」（`reconfirm`；选项 照原日期 / 改期 / 取消赴韩 / 还没定，还没定 7 天前再问）。**四** `TRIP_CONFIRM_DAYS = 7`（calalign.js）取代所有「2 天」：待办出现、提醒、超时、文字、短信模板（七天后）；［已确认行程］必填 入境/离境 + 韩国时间 + 确认方式 + 护照号码（没有才填）；施术日本来不到 7 天 → 递交日期时 `submitKrScheduleDate` 先弹 `openStayModal(trip)`。**五** KR 按［客人已到院］时护照号码空 → 必填（`krPassNeed` / `krStayArriveOpen` / `corePassportFill`），已有号码只显示核对。
+- 测试钩子：`GMC_TRIP_MANUAL`（selftest 包装默认 tripState=tentative）、`GMC_TRIP_NO7`。新增 R189a/b、R190a、R191a、R192b；R40a/R41a 改可选护照；R42a/TD4 按 7 天改。
