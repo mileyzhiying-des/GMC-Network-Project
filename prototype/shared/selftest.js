@@ -1021,10 +1021,10 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.ok(has('relay'), '前置：有转告客人待办'); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c); ST.ok(has('relay'), '打开 tab 不再算已转告'); ST.ok(/发送给客人/.test(document.getElementById('case-body').innerHTML) && !/已转告客人/.test(document.getElementById('case-body').innerHTML), '赴韩施术 tab 施术日期行有［发送给客人］（没有［已转告客人］）');
     openSurgMsg(c.id); confirmSurgMsg(); ST.ok(!has('relay') && ST.hasLog(c, /已发送施术日期通知给客人/), '发送给客人之后待办消失 + Timeline');
     /* 赴韩施术前 2 天：确认日程有无变化（模拟时钟） */
-    ST.ok(!has('recheck'), '8 天前不应有确认日程待办'); var ks = c.krSchedule, add = calDaysToSurgery(c) - 2, base = DEMO_SHIFT_MS;
+    ST.ok(!has('recheck'), '8 天前不应有确认日程待办'); var ks = c.krSchedule, add = calDaysToSurgery(c) - TRIP_CONFIRM_DAYS, base = DEMO_SHIFT_MS;
     DEMO_SHIFT_MS = base + add*86400000;
     try{
-      ST.ok(has('recheck') && calNeedsRecheck(c), '施术前 2 天应出现「确认客人日程有无变化」'); ST.ok(/IN 尚未确认行程/.test(calRecheckText(c)), 'KR 施术日期卡应写 IN 尚未确认行程');
+      ST.ok(has('recheck') && calNeedsRecheck(c), '施术前 7 天应出现「确认客人行程」（CMD-1029-09 四：原来 2 天）'); ST.ok(/IN 尚未确认行程/.test(calRecheckText(c)), 'KR 施术日期卡应写 IN 尚未确认行程');
       renderCalendar(); var chip = document.querySelector('.event-chip[data-recheck]'); ST.ok(true, ''); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c); var cbh = document.getElementById('case-body').innerHTML; ST.ok(/id="surg-remind-row"[\s\S]*已确认行程/.test(cbh) && /联络客人确认行程/.test(cbh) && !/确认无变动/.test(cbh) && !/演示<\/span>/.test(cbh.split('surg-remind-row')[1]||''), '赴韩施术 tab 施术前 2 天卡是［已确认行程］（没有［确认无变动］，没有「演示」小字）');
       ST.confirmTrip(c); ST.ok(!has('recheck') && ST.hasLog(c, /已确认行程（电话）：入境/) && /✓ 已确认行程/.test(calRecheckText(c)) && !/surg-remind-row/.test(calRelayRecheckCards(c)), '已确认行程后待办消失、Timeline、KR 显示 ✓、卡片消失');
     } finally { DEMO_SHIFT_MS = base; }
@@ -5757,9 +5757,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     openSurgPhone(c.id); document.getElementById('surgph-note').value = '客人说新时间可以'; confirmSurgPhone();
     ST.ok(!surgChanged(c) && /✓ 已电话通知/.test(surgSendHtml(c)) && /备注：客人说新时间可以/.test(surgSendHtml(c)) && ST.hasLog(c, /已电话通知客人：.*施术时间已变更.*备注：客人说新时间可以/) && !has(), '按完：已电话通知 + 备注 + Timeline，待办消失');
     /* 施术前提醒：发完卡片消失；之后改时间也走电话 */
-    var base = DEMO_SHIFT_MS; DEMO_SHIFT_MS = base + (calDaysToSurgery(c)-2)*86400000;
+    var base = DEMO_SHIFT_MS; DEMO_SHIFT_MS = base + (calDaysToSurgery(c)-TRIP_CONFIRM_DAYS)*86400000;
     try{
-      c.tripConfirm = null; ST.ok(/surg-remind-row/.test(calRelayRecheckCards(c)), '前置：施术前 2 天有确认行程卡');
+      c.tripConfirm = null; ST.ok(/surg-remind-row/.test(calRelayRecheckCards(c)), '前置：施术前 7 天有确认行程卡');
       ST.confirmTrip(c); ST.ok(!/surg-remind-row|已发送|再发一次/.test(calRelayRecheckCards(c)) && ST.hasLog(c, /已确认行程/), '确认行程后卡片消失，记录留在 Timeline');
       var sm0 = c.surgeryMsg; c.surgeryMsg = {key:surgMsgKey(c), method:'短信', at:nowFullDt(), count:1}; c.surgInformKey = surgMsgKey(c); ks.confirmedTime = ks.confirmedTime==='10:30' ? '11:30' : '10:30'; ST.ok(surgChanged(c) && /请电话通知客人/.test(surgSendHtml(c)) && !/surg-remind-row/.test(calRelayRecheckCards(c)), '施术日期通知发过之后改时间：走电话，不重发'); c.surgeryMsg = sm0;
     } finally { DEMO_SHIFT_MS = base; }
@@ -8073,7 +8073,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       var c = ST.newRes('R189'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c);
       ST.ok(/行程状态/.test(document.getElementById('case-body').innerText) && /已定（机票已订）/.test(document.getElementById('case-body').innerText) && /暂定/.test(document.getElementById('case-body').innerText), '日期卡里有「行程状态」已定 / 暂定');
-      var ks = ensureKrScheduleDraft(c), td = todayStr(), dt = caseOpenDates(c).filter(function(x){ return x >= td; })[0]; ks.primary = dt;
+      var ks = ensureKrScheduleDraft(c), td = todayStr(), dt = caseOpenDates(c).filter(function(x){ return x >= ymdAdd(td, 10); })[0]; ks.primary = dt;
       msgs.length = 0; submitKrScheduleDate(); ST.ok(msgs.some(function(m){ return /行程状态/.test(m); }) && ks.status!=='pending', '没选行程状态不能递交');
       setTripState('booked'); ks.draftIn = dt; ks.draftOut = ''; msgs.length = 0; submitKrScheduleDate(); ST.ok(msgs.some(function(m){ return /一起填/.test(m); }) && ks.status!=='pending', '已定只填一个日期 → 提醒要一起填或都不填');
       setTripState('tentative'); submitKrScheduleDate(); ST.ok(ks.status==='pending' && ks.tripState==='tentative' && ST.hasLog(c, /行程暂定/), '选暂定可以递交，Timeline 记行程暂定');
@@ -8108,5 +8108,32 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var ch = mk('R190c', 60, 26); ST.open(ch); reconfirmPick(ch.id, 'change'); ST.ok(!has(ch) && ch.krSchedule.reconfirm.choice==='change' && ST.hasLog(ch, /要改期/), '改期：记录并进入改期流程（状态：'+scheduleState(ch)+'）');
     var cn = mk('R190d', 60, 26); ST.open(cn); reconfirmPick(cn.id, 'cancel'); ST.ok(!has(cn) && cn.krSchedule.reconfirm.choice==='cancel' && ST.hasLog(cn, /取消赴韩/), '取消赴韩：记录并打开取消项目流程'); try{ closeRefundModal(); }catch(e){}
     ST.ok(scheduleState(a)==='Confirmed' && !closeBlockers(a).length, '只提醒、不挡：日期状态不变');
+  });
+  ST.def('R191a','CMD-1029-09 四（A1 分页）：［已确认行程］从施术前 2 天改 7 天；护照号码没填必填；都填好了按一下；施术日不到 7 天 → 递交日期时一起填完',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    ST.ok(TRIP_CONFIRM_DAYS===7, '常数 = 7');
+    var c = toConfirmed('R191'), ks = c.krSchedule, base = todayStr(), set = function(d){ ks.confirmedDate = ymdAdd(base, d); c.tripConfirm = null; };
+    set(8); ST.ok(!calNeedsRecheck(c), '8 天前：还不出现'); set(7); ST.ok(calNeedsRecheck(c) && /surg-remind-row/.test(calRelayRecheckCards(c)) && /施术前 7 天/.test(calRelayRecheckCards(c)), '7 天前：出现卡片，文字写 7 天');
+    ST.ok(inTodoItems().some(function(i){ return i.caseId===c.id && i.kind==='recheck' && /施术前 7 天/.test(i.text); }), '待办「施术前 7 天：联络客人确认行程」'); set(3); ST.ok(calNeedsRecheck(c), '7 天内一直挂着');
+    var cl = clientByName(c.name); cl.passport = {text:'未登记', date:'', no:'', issue:'', expiry:''}; c.stay = null;
+    openStayModal(c.id, {trip:true}); var g = function(i){ return document.getElementById(i); };
+    ST.ok(!!g('stay-pno') && /还没填，必填/.test(g('stay-overlay').innerText) && /签证和入境由客人自行负责/.test(g('stay-overlay').innerText), '弹窗有护照号码栏（还没填 → 必填）');
+    g('stay-in').value = ymdAdd(base, 2); g('stay-out').value = ymdAdd(base, 12); g('stay-int').value = '10:00'; g('stay-outt').value = '18:00'; document.querySelector('#stay-overlay .stay-m').checked = true;
+    staySave(); ST.ok(/护照号码/.test(g('stay-err').textContent) && !c.tripConfirm, '护照号码没填：不能确认');
+    g('stay-pno').value = 'Z7654321'; staySave(); ST.ok(!!c.tripConfirm && clientByName(c.name).passport.no==='Z7654321' && ks.tripState==='booked', '填了护照号码 → 确认；行程状态变已定；护照号存档');
+    ST.ok(!JSON.stringify(c.logEntries).includes('Z7654321') && !JSON.stringify(cl.timeline).includes('Z7654321'), '护照号不进 Timeline');
+    c.tripConfirm = null; c.stay = null; openStayModal(c.id, {trip:true}); ST.ok(g('stay-pno').value==='Z7654321' && !/还没填，必填/.test(g('stay-overlay').innerText), '护照号码已有：带出来核对，不强制重填');
+    g('stay-in').value = ymdAdd(base, 2); g('stay-out').value = ymdAdd(base, 12); g('stay-int').value = '10:00'; g('stay-outt').value = '18:00'; document.querySelector('#stay-overlay .stay-m').checked = true; staySave(); ST.ok(!!c.tripConfirm, '前面都填好的，按一下确认就好');
+    /* 递交日期时：施术日不到 7 天 → 一起填完 */
+    var al = window.alert, msgs = []; window.alert = function(m){ msgs.push(String(m)); }; window.GMC_TRIP_MANUAL = true;
+    try{
+      var d = ST.newRes('R191b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻']); ST.open(d); d.activeCaseTab = 'kr'; var k2 = ensureKrScheduleDraft(d), near = caseOpenDates(d).filter(function(x){ return x >= base && x < ymdAdd(base, 7); })[0];
+      if(ST.ok(!!near, '找得到 7 天内的开放日期')){
+        clientByName(d.name).passport = {text:'未登记', date:'', no:'', issue:'', expiry:''}; k2.primary = near; k2.tripState = 'tentative';
+        submitKrScheduleDate(); ST.ok(g('stay-overlay').classList.contains('open') && /确认行程/.test(g('stay-overlay').innerText) && k2.status!=='pending', '施术日不到 7 天：递交时先弹整组必填（日期 / 时间 / 确认方式 / 护照号码）');
+        g('stay-in').value = ymdAdd(near, -1); g('stay-out').value = ymdAdd(near, 9); g('stay-int').value = '10:00'; g('stay-outt').value = '18:00'; document.querySelector('#stay-overlay .stay-m').checked = true; g('stay-pno').value = 'Q1234567';
+        staySave(); ST.ok(k2.status==='pending' && !!d.tripConfirm && k2.tripState==='booked' && clientByName(d.name).passport.no==='Q1234567', '填完才递交成功，行程已定');
+      }
+    } finally { window.alert = al; window.GMC_TRIP_MANUAL = false; }
   });
 })();

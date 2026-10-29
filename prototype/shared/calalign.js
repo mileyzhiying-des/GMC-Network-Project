@@ -177,13 +177,13 @@ function repairScheduleGaps(){
 }
 
 /* ---------------- IN：转告客人 + 确认客人日程有无变化（赴韩施术 tab 上方两张卡） ---------------- */
-var TRIP_CONFIRM_DAYS = 2; /* 「已确认行程」出现在施术前几天（CMD-1029-09 四改成 7） */
+var TRIP_CONFIRM_DAYS = 7; /* 「已确认行程」出现在施术前几天（最后卡线；CMD-1029-09 四：2 天 → 7 天） */
 function calDaysToSurgery(c){ var ks = c.krSchedule; if(!ks || !ks.confirmedDate) return 999; return Math.round((new Date(ks.confirmedDate+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/86400000); }
 function calKey(c){ var ks = c.krSchedule; return ks ? ks.confirmedDate+' '+ks.confirmedTime : ''; }
-/* 赴韩施术前 2 天（含当天）、时间已确认、IN 还没确认「日程无变动」 */
+/* 赴韩施术前 7 天（含当天）、时间已确认、IN 还没确认行程（CMD-1029-09 四：原来是 2 天） */
 function calNeedsRecheck(c){
   if(!c || isEnded(c) || scheduleState(c)!=='Confirmed') return false;
-  var d = calDaysToSurgery(c); return d<=2 && !c.tripConfirm; /* CMD-1019-13：施术前 2 天改成［发送给客人］（施术前提醒） */ /* 10/14：过期（施术日已到 / 已过）仍未确认 → 标红、一直挂着，直到确认或案件改期 / 取消 */
+  var d = calDaysToSurgery(c); return d<=TRIP_CONFIRM_DAYS && !c.tripConfirm; /* CMD-1019-13：施术前 2 天改成［发送给客人］（施术前提醒） */ /* 10/14：过期（施术日已到 / 已过）仍未确认 → 标红、一直挂着，直到确认或案件改期 / 取消 */
 }
 function calRecheckText(c){ return c.tripConfirm ? '✓ 已确认行程（IN · '+String(c.tripConfirm.at||'').slice(0,10)+'）' : 'IN 尚未确认行程'; } /* CMD-1020-13 七：施术前 2 天 = 联络客人确认行程（不再发提醒讯息） */
 /* CMD-1029-09 三：施术前约 1 个月（<= 30 天、> 7 天）、时间已确认、KR 确认时离施术日本来就 >= 30 天（旧资料没有确认日 = 不猜，不跳）、IN 还没处理 */
@@ -235,8 +235,8 @@ function calRelayRecheckCards(c){
   if(calNeedsReconfirm(c)) out += reconfirmCardHtml(c);
   /* CMD-1015-15：按了［已转告客人］［确认无变动］后卡片就消失，记录在 Timeline */
   /* CMD-1019-12：「转告客人」卡拿掉，改在施术日期那一行后面放［发送给客人］（surgSendHtml） */
-  if(d<=2 && !c.tripConfirm){ /* CMD-1020-13 七：施术前 2 天 = 联络客人确认行程（入境 / 离境），不再发施术前提醒讯息；保存后卡片消失，Timeline 记一笔 */
-    out += '<div class="card" id="surg-remind-row" style="padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;"><div style="font-size:13px;font-weight:700;">确认行程</div><div style="font-size:12px;color:var(--slate2);margin-top:2px;">施术前 2 天：联络客人确认行程（入境 / 离境）；客人说要改期，走下面原来的改期流程</div></div><button class="btn-primary" onclick="openStayModal(\''+c.id+'\', {trip:true})">已确认行程</button></div>';
+  if(d<=TRIP_CONFIRM_DAYS && !c.tripConfirm){ /* CMD-1020-13 七：施术前 2 天 = 联络客人确认行程（入境 / 离境），不再发施术前提醒讯息；保存后卡片消失，Timeline 记一笔 */
+    out += '<div class="card" id="surg-remind-row" style="padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:12px;"><div style="flex:1;"><div style="font-size:13px;font-weight:700;">确认行程</div><div style="font-size:12px;color:var(--slate2);margin-top:2px;">施术前 7 天（最后卡线）：联络客人确认行程（入境 / 离境 / 护照号码）；客人说要改期，走下面原来的改期流程</div></div><button class="btn-primary" onclick="openStayModal(\''+c.id+'\', {trip:true})">已确认行程</button></div>';
   }
   return out;
 }
@@ -549,8 +549,10 @@ function openStayModal(caseId, o){
   var inp = 'padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;min-width:0;', s = c.stay || {}, tc = c.tripConfirm || {};
   var row = function(k, lab){ return '<div style="display:grid;grid-template-columns:44px 1.3fr 1fr 1.2fr;gap:8px;align-items:end;margin-bottom:10px;"><b style="font-size:13px;padding-bottom:9px;">'+lab+'</b><div><label style="font-size:12px;color:var(--slate2);">'+lab+'日</label><input type="date" id="stay-'+k+'" value="'+(s[k]||'')+'"'+stayRangeAttr()+' style="'+inp+'width:100%;" onchange="stayWarnRefresh()"></div><div><label style="font-size:12px;color:var(--slate2);">'+lab+'时间（韩国当地）</label><input type="time" id="stay-'+k+'t" value="'+(s[k+'Time']||'')+'" style="'+inp+'width:100%;"></div><div><label style="font-size:12px;color:var(--slate2);">'+lab+'机场（选填）</label><input id="stay-'+k+'a" value="'+aEscC(s[k+'Airport']||'')+'" placeholder="例：仁川 ICN" style="'+inp+'width:100%;"></div></div>'; };
   var methods = o.trip ? '<div style="margin-top:4px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">确认方式（必选，可多选）</div><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px;">'+TRIP_METHODS.map(function(m, i){ return '<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" class="stay-m" value="'+m+'"'+((tc.methods||[]).indexOf(m)>-1 ? ' checked' : '')+'> '+m+'</label>'; }).join('')+'<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" id="stay-mo"'+(tc.other ? ' checked' : '')+'> 其他：<input id="stay-mot" value="'+aEscC(tc.other||'')+'" style="'+inp+'width:120px;padding:5px 8px;"></label></div></div>' : '';
-  var title = o.trip ? '确认行程' : '在韩期间', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定，可以点［出发前再确认］，之后随时能改。' : '行程有变可以修改，修改后 KR 会收到通知。');
-  ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>'+row('in', '入境')+row('out', '离境')+methods+
+  var pno0 = passportOf(clientByName(c.name)).no;
+  var pass = o.trip ? '<div style="margin-top:12px;font-size:12px;font-weight:700;">护照号码 '+(pno0 ? '<span style="font-weight:400;color:var(--sage);">已登记，可核对 / 修改</span>' : '<span style="color:#C1454A;">*</span> <span style="font-weight:400;color:var(--muted);">还没填，必填</span>')+'</div><input id="stay-pno" value="'+aEscC(pno0)+'" autocomplete="off" placeholder="护照号码" style="'+inp+'width:240px;margin-top:4px;"> <span style="font-size:12px;color:var(--muted);">签证和入境由客人自行负责，请提醒客人</span>' : '';
+  var title = o.trip ? '确认行程' : '在韩期间', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式，护照号码还没填的话必填。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定，可以点［出发前再确认］，之后随时能改。' : '行程有变可以修改，修改后 KR 会收到通知。');
+  ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>'+row('in', '入境')+row('out', '离境')+methods+pass+
     '<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '出发前再确认' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
   ov.classList.add('open'); stayWarnRefresh();
@@ -573,6 +575,7 @@ function staySave(){
     [].forEach.call(document.querySelectorAll('#stay-overlay .stay-m'), function(b){ if(b.checked) methods.push(b.value); });
     if((document.getElementById('stay-mo')||{}).checked){ other = g('stay-mot').trim(); if(!other) return bad('勾了「其他」要写是什么方式'); methods.push('其他：'+other); }
     if(!methods.length) return bad('请至少勾一个确认方式');
+    var pn = g('stay-pno').trim(); if(!pn) return bad('护照号码还没填，请填写'); d.pno = pn;
   }
   if(d.inD && d.outD && d.outD < d.inD) return bad('离境日不能早于入境日');
   var ye = stayDateErr('入境日', d.inD) || stayDateErr('离境日', d.outD); if(ye) return bad(ye);
@@ -582,7 +585,8 @@ function staySave(){
 }
 function staySaveDo(x, c, d, methods, other, bad){
   var r = coreSetStay(c, d.inD, d.outD, actingName(), {initial:!!x.o.initial, ex:d.ex}); if(!r.ok) return bad(r.err);
-  if(x.o.trip){ c.tripConfirm = {at:nowFullDt(), by:actingName(), methods:methods, other:other}; logCaseEvent(c, actingName(), '已确认行程（'+methods.join('、')+'）：入境 '+stayMDT(c, 'in')+' / 离境 '+stayMDT(c, 'out'), '赴韩施术'); }
+  if(x.o.trip && d.pno){ var cl0 = clientByName(c.name); if(cl0 && passportOf(cl0).no!==d.pno){ var p0 = passportOf(cl0); cl0.passport = {text:'已登记', date:todayStr(), no:d.pno, issue:p0.issue, expiry:p0.expiry}; cl0.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'登记护照号码（确认行程）', dt:nowFullDt(), kind:'plain'}); } }
+  if(x.o.trip){ if(c.krSchedule) c.krSchedule.tripState = 'booked'; c.tripConfirm = {at:nowFullDt(), by:actingName(), methods:methods, other:other}; logCaseEvent(c, actingName(), '已确认行程（'+methods.join('、')+'）：入境 '+stayMDT(c, 'in')+' / 离境 '+stayMDT(c, 'out'), '赴韩施术'); }
   var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null;
   if(x.o.then) x.o.then(); else { try{ renderCaseBody(c); }catch(er){} }
 }

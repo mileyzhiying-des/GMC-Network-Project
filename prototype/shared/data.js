@@ -269,7 +269,7 @@ var SLOT_MIN = 30; /* 时段长度（分钟），固定 30（我的判断：设�
 var PRINT_PREP_DEFAULT = '穿宽松舒适的衣服\n当天不化妆，不戴隐形眼镜和首饰\n平常服用的药物、保健品请提前告诉我们\n施术后请安排人陪同或乘车离开，不要自己开车';
 var PRINT_CONFIRM_DEFAULT = '我们会在施术前 2～3 天再次与您确认日程。如果您的行程或时间有任何变动，请尽早通知我们，以便重新安排。\n负责室长：{coordinator}　联系方式：{phone}';
 var SMS_SURGERY_NOTICE_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术时间已确认。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
-var SMS_SURGERY_REMIND_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术项目将在两天后进行。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
+var SMS_SURGERY_REMIND_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术项目将在七天后进行。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
 /* 模板版本：key = 诊所设定 sms 里的键；语言先只做中文（之后加印尼文 = 增加 zh 以外的键，如 surgeryNotice_id） */
 var SURG_TPLS = {notice:{label:'施术日期通知', key:'surgeryNotice', kind:'surgery', defaults:{zh:SMS_SURGERY_NOTICE_ZH}}, remind:{label:'施术前提醒', key:'surgeryRemind', kind:'surgeryRemind', defaults:{zh:SMS_SURGERY_REMIND_ZH}}};
 function surgTplOf(ver, lang){ var t = SURG_TPLS[ver]; lang = lang || 'zh'; var k = t.key + (lang==='zh' ? '' : '_'+lang); return (CLINIC_SETTINGS.sms && CLINIC_SETTINGS.sms[k]) || t.defaults[lang] || t.defaults.zh; }
@@ -9564,7 +9564,7 @@ function renderClientDetailIn(name){
 }
 
 /* ===== CMD-1020-11：在韩期间（入境日 ～ 离境日）=====
-   c.stay = {in, out, by, at}；IN 在「确认赴韩」时输入（航班没定可先空着，c.stayAsked 记「问过了」）；施术前 2 天发施术前提醒时必填；之后 IN 可改，改了 → KR 收通知 + Timeline。
+   c.stay = {in, out, by, at}；IN 在「确认赴韩」时输入（航班没定可先空着，c.stayAsked 记「问过了」）；施术前 7 天［已确认行程］时必填（CMD-1029-09 四）；之后 IN 可改，改了 → KR 收通知 + Timeline。
    用在：KR 案件页头显示、KR 预约弹窗 / ［修改时间］橙字「客人已离境」（不拦）、工作台「未安排预约」只列到离境日、自动结案（离境日已过）、打印行程概要。
    没填离境日时仍用最早可回国日（krCbEarliest，施术日 + 建议天数）。 */
 /* ===== CMD-1028-08 一：入境 / 离境日期的「年份」保护 =====

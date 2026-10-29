@@ -102,7 +102,7 @@ function inTodoItems(){
     /* CMD-1029-09 三：施术前约 1 个月（30 天）：联络客人确认行程；只提醒不挡 */
     if(calNeedsReconfirm(c)) push(todoMk('reconfirm', '施术前约 1 个月：联络客人确认行程（施术 '+ks.confirmedDate+'，还有 '+calDaysToSurgery(c)+' 天）', c, ks.confirmedDate, false, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-reconfirm-row'}); }));
     /* 确认客人日程有无变化：赴韩施术前 7 天出现（CMD-1014-01 二·3；CMD-1029-09 四：2 天 → 7 天） */
-    if(calNeedsRecheck(c)) push(todoMk('recheck', '施术前 2 天：联络客人确认行程（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-remind-row'}); }));
+    if(calNeedsRecheck(c)) push(todoMk('recheck', '施术前 7 天：联络客人确认行程（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-remind-row'}); }));
     /* 待收款 */
     closeBlockers(c).forEach(function(b){ push(todoMk('pay', '待收款：'+b, c, '', false, todoPayGo(c, b))); }); /* IN-08：点了去那张待付款结算单所在的 tab（赴韩施术计划 / 本地管理）并滚到那张结算单 */
     /* 当天本地项目未标完成：营业结束前 1 小时出现，标完才消失 */

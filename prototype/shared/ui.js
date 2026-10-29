@@ -2395,6 +2395,9 @@ function submitKrScheduleDate(){
   var c = getCurrentCase(); if(!c) return;
   var ks = ensureKrScheduleDraft(c);
   if(!ks.primary){ alert('至少选择首选日期'); return; }
+  /* CMD-1029-09 四：约的施术日本来就不到 7 天 → 递交日期时一起填完「已确认行程」那一组必填（入境 / 离境 + 韩国时间、确认方式、护照号码），行程自然是「已定」 */
+  var minD = (ks.backup && ks.backup < ks.primary) ? ks.backup : ks.primary, dLeft = Math.round((new Date(minD+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/86400000);
+  if(dLeft < TRIP_CONFIRM_DAYS && !c.tripConfirm && !window.GMC_TRIP_NO7){ openStayModal(c.id, {trip:true, then:function(){ submitKrScheduleDate(); }}); return; }
   if(!ks.tripState){ alert('请选择行程状态（已定 / 暂定）'); return; } /* CMD-1029-09 二 */
   if(ks.tripState==='booked' && (!!ks.draftIn !== !!ks.draftOut)){ alert('入境和离境日期要一起填，或都先不填'); return; }
   if(ks.tripState==='booked' && ks.draftIn && ks.draftOut){
