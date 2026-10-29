@@ -11662,3 +11662,6 @@ function krLeaveReminders(c, key){
   }catch(er){ console.error('[离院提醒]', er); }
   return out;
 }
+
+/* CMD-1029-03 二：案件已按「仅出报告」结束后方案才到——只有结束原因明确是「客人不做了 / 客人不做项目」才算客人已决定不做，其余（客人先回去、失联、其他）方案到了仍要联络客人 */
+function endedPlanDeclined(c){ return /客人不做了|客人不做项目/.test(String(c.endNote||'')); }

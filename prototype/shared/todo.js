@@ -58,6 +58,13 @@ function inTodoItems(){
       var itL = todoMk('dayconfirm', inDayOf(c).slice(5).replace('-', '/')+' '+dayNoTxt(c)+' 还没结束，请确认', c, '', true, function(){ openVisitOf(c.id); setTimeout(function(){ try{ openDayConfirm(c.id); }catch(e){ console.error(e); } }, 150); });
       itL.mine = dayConfirmMineIn(c); out.push(itL);
     }
+    /* CMD-1029-03 二：面诊/复诊评估的方案是在客人离店、案件已按「仅出报告」结束之后才到的——这时案件已是终态，下面的 return 会把「联络客人选项目」待办整个跳过（弹窗通知有、待办没有）。
+       规则：待办一直挂着，直到 IN 选了项目、或客人明确不做（结束原因是「客人不做了」/ 客人不做项目）、或室长按了［客人不做，仅出报告］；点了去那个案件的面诊 tab */
+    if(!c.mainId && c.subState!=='cancelled' && isEnded(c) && c.stage==='reportonly' && c.reportReady && c.consultStatus==='report_ready' && c.projectsEnabled && !endedPlanDeclined(c)
+       && !(c.settlementBatches||[]).length && !(c.recommended||[]).length && !c.localMgmt && !(c.todoAcks||{})['plandecl']){
+      var itP = todoMk('plan', '面诊资料已到：联络客人选项目（客人离店前方案还没出）', c, '', false, todoInGo(c, 'consult'));
+      itP.mine = todoInMine(c); itP.ack = true; itP.ackKey = 'plandecl'; itP.ackLabel = '客人不做'; out.push(itP);
+    }
     if(c.subState==='cancelled' || c.visitClosed || isEnded(c)) return;
     var mine = todoInMine(c), push = function(it){ it.mine = mine; out.push(it); };
     /* CMD-1021-16：术后管理（印尼）阶段：印尼的来访都做完、没有未来预约 → 第二天早上问「是否结案？」，每天问到确认 */
@@ -271,7 +278,7 @@ function todoRowHtml(it){
   var i = TODO_ACTS.push(it.go) - 1, st = todoStatusOf(it); TODO_ACT_CASE[i] = it.caseId||'';
   var urgeBtn = it.urge ? '<button class="btn-primary todo-urge" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</button>' : '';
   var proc = String(it.text||'').replace(/（已超时）|\(已超时\)/g, '').trim();
-  var ackBtn = (TODO_ANYACK ? '<div class="todo-ack">'+(it.ack ? '<button class="btn-outline" onclick="event.stopPropagation();todoAckOpen('+i+')">已处理</button>' : '')+'</div>' : '');
+  var ackBtn = (TODO_ANYACK ? '<div class="todo-ack">'+(it.ack ? '<button class="btn-outline" onclick="event.stopPropagation();todoAckOpen('+i+')">'+todoEsc(it.ackLabel||'已处理')+'</button>' : '')+'</div>' : '');
   return '<div class="todo-row'+(TODO_ANYACK ? ' has-ack' : '')+(it.pin?' pin':'')+(it.over?' is-over':'')+((it.ref || (todoRefMode() && !it.over && it.kind!=='recover'))?' is-ref':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
     '<div class="todo-at">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+todoFmtTimeHtml(todoShownAt(it))+'</div>'+
     '<div class="todo-stage" title="'+todoEsc(it.stage||'')+'">'+(it.pin?'📌 ':'')+todoEsc(it.stage||'—')+'</div>'+
