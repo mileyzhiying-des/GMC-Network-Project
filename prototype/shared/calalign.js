@@ -177,6 +177,7 @@ function repairScheduleGaps(){
 }
 
 /* ---------------- IN：转告客人 + 确认客人日程有无变化（赴韩施术 tab 上方两张卡） ---------------- */
+var TRIP_CONFIRM_DAYS = 2; /* 「已确认行程」出现在施术前几天（CMD-1029-09 四改成 7） */
 function calDaysToSurgery(c){ var ks = c.krSchedule; if(!ks || !ks.confirmedDate) return 999; return Math.round((new Date(ks.confirmedDate+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/86400000); }
 function calKey(c){ var ks = c.krSchedule; return ks ? ks.confirmedDate+' '+ks.confirmedTime : ''; }
 /* 赴韩施术前 2 天（含当天）、时间已确认、IN 还没确认「日程无变动」 */
@@ -185,9 +186,53 @@ function calNeedsRecheck(c){
   var d = calDaysToSurgery(c); return d<=2 && !c.tripConfirm; /* CMD-1019-13：施术前 2 天改成［发送给客人］（施术前提醒） */ /* 10/14：过期（施术日已到 / 已过）仍未确认 → 标红、一直挂着，直到确认或案件改期 / 取消 */
 }
 function calRecheckText(c){ return c.tripConfirm ? '✓ 已确认行程（IN · '+String(c.tripConfirm.at||'').slice(0,10)+'）' : 'IN 尚未确认行程'; } /* CMD-1020-13 七：施术前 2 天 = 联络客人确认行程（不再发提醒讯息） */
+/* CMD-1029-09 三：施术前约 1 个月（<= 30 天、> 7 天）、时间已确认、KR 确认时离施术日本来就 >= 30 天（旧资料没有确认日 = 不猜，不跳）、IN 还没处理 */
+function calNeedsReconfirm(c){
+  if(!c || isEnded(c) || scheduleState(c)!=='Confirmed' || c.hasArrived) return false;
+  var ks = c.krSchedule || {}; if(!ks.confirmedOn || ks.reconfirm || c.tripConfirm) return false;
+  var lead = Math.round((new Date(ks.confirmedDate+'T00:00:00') - new Date(ks.confirmedOn+'T00:00:00'))/86400000); if(lead < 30) return false;
+  var d = calDaysToSurgery(c); return d <= 30 && d > TRIP_CONFIRM_DAYS; /* 7 天内由「已确认行程」接手 */
+}
+function reconfirmCardHtml(c){
+  var d = calDaysToSurgery(c), b = function(k, lab, cls){ return '<button class="'+(cls||'btn-outline')+'" onclick="reconfirmPick(\''+c.id+'\',\''+k+'\')">'+lab+'</button>'; };
+  return '<div class="card" id="surg-reconfirm-row" style="padding:14px 20px;margin-bottom:12px;"><div style="font-size:13px;font-weight:700;">确认客人行程 <span style="font-weight:400;font-size:12px;color:var(--muted);">施术前约 1 个月（还有 '+d+' 天）· 只提醒、不挡</span></div><div style="font-size:12px;color:var(--slate2);margin:4px 0 10px;">联络客人，问行程有没有变（机票、签证、护照），然后选：</div><div style="display:flex;gap:10px;flex-wrap:wrap;">'+b('same','照原日期','btn-primary')+b('change','改期')+b('cancel','取消赴韩')+b('undecided','还没定')+'</div></div>';
+}
+function reconfirmDone(c, choice, txt){
+  var ks = c.krSchedule; ks.reconfirm = {choice:choice, at:nowFullDt(), by:actingName()};
+  logCaseEvent(c, actingName(), '确认客人行程（施术前约 1 个月）：'+txt, '赴韩施术');
+}
+function reconfirmPick(id, k){
+  var c = calCaseById(id); if(!c || !c.krSchedule) return;
+  if(k==='same'){ openReconfirmSame(id); return; }
+  if(k==='undecided'){ reconfirmDone(c, 'undecided', '客人还没定，先维持原日期（7 天前再问）'); updateCaseStage(c); try{ buildCaseLog(c); renderCaseBody(c); }catch(e){} return; }
+  if(k==='change'){ reconfirmDone(c, 'change', '客人要改期（走改期流程）'); if(getCurrentCase() && getCurrentCase().id===id){ startKrScheduleChange(); } return; }
+  if(k==='cancel'){ reconfirmDone(c, 'cancel', '客人要取消赴韩（走取消项目流程）'); if(getCurrentCase() && getCurrentCase().id===id){ openCancelItems(); } return; }
+}
+/* 照原日期：可顺便填入境 / 离境和护照号码（都不是必填） */
+function openReconfirmSame(id){
+  var c = calCaseById(id); if(!c) return; var s = c.stay || {}, cl = clientByName(c.name), inp = 'padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;';
+  var ov = document.getElementById('reconfirm-overlay'); if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'reconfirm-overlay'; ov.style.zIndex = 96; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:520px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">照原日期 · '+aEscC(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">客人说日期不变。下面可以顺便填（都不是必填）；填了入境 / 离境，行程状态会改成「已定」。</div>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--slate2);">入境日期 <input id="rc-in" type="date" value="'+aEscC(s.in||'')+'" '+stayRangeAttr()+' style="'+inp+'"> 离境日期 <input id="rc-out" type="date" value="'+aEscC(s.out||'')+'" '+stayRangeAttr()+' style="'+inp+'"></div>'+
+    '<div style="margin-top:10px;font-size:12px;color:var(--slate2);">护照号码 <input id="rc-pno" value="'+aEscC(passportOf(cl).no)+'" autocomplete="off" style="'+inp+'width:200px;"> <span style="color:var(--muted);">签证和入境由客人自行负责，请提醒客人</span></div>'+
+    '<div id="rc-err" class="error-text" style="display:none;margin-top:8px;"></div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="document.getElementById(\'reconfirm-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" onclick="reconfirmSameSave(\''+id+'\')">确认</button></div></div>';
+  ov.classList.add('open');
+}
+function reconfirmSameSave(id){
+  var c = calCaseById(id); if(!c) return; var g = function(i){ return String((document.getElementById(i)||{}).value||'').trim(); }, e = document.getElementById('rc-err'), bad = function(t){ e.textContent = t; e.style.display = 'block'; };
+  var inD = g('rc-in'), outD = g('rc-out'), pno = g('rc-pno');
+  if(!!inD !== !!outD) return bad('入境和离境日期要一起填，或都先不填');
+  if(inD){ var ye = stayDateErr('入境日', inD) || stayDateErr('离境日', outD); if(ye) return bad(ye); if(outD < inD) return bad('离境日不能早于入境日'); }
+  var bits = ['照原日期（施术 '+c.krSchedule.confirmedDate+'）'];
+  if(inD){ var r = coreSetStay(c, inD, outD, actingName(), {}); if(r && r.ok===false) return bad(r.err); bits.push('入境 '+inD+' / 离境 '+outD); c.krSchedule.tripState = 'booked'; }
+  if(pno){ var cl = clientByName(c.name); if(cl && passportOf(cl).no!==pno){ var p0 = passportOf(cl); cl.passport = {text:'已登记', date:todayStr(), no:pno, issue:p0.issue, expiry:p0.expiry}; cl.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'登记护照号码（确认客人行程）', dt:nowFullDt(), kind:'plain'}); bits.push('填了护照号码'); } }
+  document.getElementById('reconfirm-overlay').classList.remove('open');
+  reconfirmDone(c, 'same', bits.join('；')); updateCaseStage(c); try{ buildCaseLog(c); renderCaseBody(c); }catch(er){}
+}
 function calRelayRecheckCards(c){
   if(scheduleState(c)!=='Confirmed' || !c.krSchedule) return '';
   var out = '', d = calDaysToSurgery(c);
+  if(calNeedsReconfirm(c)) out += reconfirmCardHtml(c);
   /* CMD-1015-15：按了［已转告客人］［确认无变动］后卡片就消失，记录在 Timeline */
   /* CMD-1019-12：「转告客人」卡拿掉，改在施术日期那一行后面放［发送给客人］（surgSendHtml） */
   if(d<=2 && !c.tripConfirm){ /* CMD-1020-13 七：施术前 2 天 = 联络客人确认行程（入境 / 离境），不再发施术前提醒讯息；保存后卡片消失，Timeline 记一笔 */

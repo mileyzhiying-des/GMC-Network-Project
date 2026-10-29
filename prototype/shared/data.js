@@ -5624,7 +5624,7 @@ function syncSurgeryBlock(c){
 }
 function coreScheduleConfirm(c, date, time, address, by){
   var ks = c.krSchedule; if(!ks || ks.status!=='pending') return false;
-  ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||''; ks.rejectNote = '';
+  ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||''; ks.rejectNote = ''; ks.confirmedOn = todayStr(); ks.reconfirm = null; /* CMD-1029-09 三：KR 确认那天；施术日离这天不到 30 天的，不跳「施术前 1 个月确认行程」 */
   logCaseEvent(c, by, 'KR确认施术时间：'+date+' '+time+'（韩国时间）到院'+(address?'，地址：'+address:''));
   pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+tkK(date, time)+(address?'（'+address+'）':''), {caseId:c.id});
   syncSurgeryBlock(c); updateCaseStage(c);

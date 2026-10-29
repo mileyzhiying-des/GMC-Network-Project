@@ -187,6 +187,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   (function(){ var raw = confirmRefundService; confirmRefundService = function(){ if(!window.GMC_REFUND_METHOD_MANUAL && !document.querySelector('input[name="rs-method"]:checked')){ var r = document.querySelector('input[name="rs-method"][value="转账"]'); if(r) r.checked = true; } return raw.apply(this, arguments); }; })();
   /* CMD-1029-08：赴韩取消选「退钱」要选退款方式；老用例没选，默认自动选「现金」，R188a 设 GMC_REFUND_PAY_MANUAL 测校验本身 */
   (function(){ var raw = confirmRefund; confirmRefund = function(){ if(!window.GMC_REFUND_PAY_MANUAL && typeof REFUND_PAY!=='undefined' && !REFUND_PAY.m) REFUND_PAY = {m:'现金', note:''}; return raw.apply(this, arguments); }; })();
+  /* CMD-1029-09 二：递交施术日期必选行程状态；老用例没选，默认选「暂定」，R189a 设 GMC_TRIP_MANUAL 测校验本身 */
+  (function(){ var raw = submitKrScheduleDate; submitKrScheduleDate = function(){ var c = getCurrentCase(); if(c && !window.GMC_TRIP_MANUAL){ var ks = ensureKrScheduleDraft(c); if(!ks.tripState) ks.tripState = 'tentative'; } return raw.apply(this, arguments); }; })();
   ST.lmSettleRaw = lmSettle; (function(){ var raw = lmSettle; lmSettle = function(){ raw.apply(this, arguments); if(typeof LM_PAY_PENDING!=='undefined' && LM_PAY_PENDING && !window.GMC_LM_PAY_MANUAL) lmPayConfirm(); }; })();
   ST.def('A1','室长取消预约',function(){
     var c = ST.newRes('A1'); ST.open(c); window.CANCEL_REASON = '客人要求取消'; confirmCancel();
@@ -8067,7 +8069,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R189a','CMD-1029-09 二（A1 分页）：递交施术日期要选行程状态（已定 / 暂定）；已定可顺便填入境 / 离境；暂定给 KR 看',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
-    var al = window.alert, msgs = []; window.alert = function(m){ msgs.push(String(m)); };
+    var al = window.alert, msgs = []; window.alert = function(m){ msgs.push(String(m)); }; window.GMC_TRIP_MANUAL = true;
     try{
       var c = ST.newRes('R189'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c);
       ST.ok(/行程状态/.test(document.getElementById('case-body').innerText) && /已定（机票已订）/.test(document.getElementById('case-body').innerText) && /暂定/.test(document.getElementById('case-body').innerText), '日期卡里有「行程状态」已定 / 暂定');
@@ -8079,12 +8081,32 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       localStorage.setItem('__R189', JSON.stringify({id:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, date:dt}));
       var d = ST.newRes('R189b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻']); ST.open(d); d.activeCaseTab = 'kr'; var k2 = ensureKrScheduleDraft(d); k2.primary = dt; setTripState('booked'); k2.draftIn = dt; k2.draftOut = ymdAdd(dt, 8); submitKrScheduleDate();
       ST.ok(d.krSchedule.status==='pending' && d.krSchedule.tripState==='booked' && d.stay && d.stay.in===dt && d.stay.out===ymdAdd(dt, 8), '已定 + 入境 / 离境：递交时一起存进在韩期间');
-    } finally { window.alert = al; }
+    } finally { window.alert = al; window.GMC_TRIP_MANUAL = false; }
   });
   ST.def('R189b','CMD-1029-09 二（KM1 分页，先在 A1 跑 R189a）：KR 看得到「暂定」（页头 / 日期卡 / 日历块）',function(){
     var me = currentAccount(); if(!ST.ok(me && isKrAccount(), '要在 KR 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R189')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R189a')) return;
     var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件')) return;
     ST.ok(/暂定/.test(krStayHeadHtml(r.c).replace(/<[^>]+>/g, '')), 'KR 页头标「暂定」');
     krShowCase(r.clinicId, r.id); krSetCaseTab('items'); ST.ok(/暂定/.test(document.getElementById('krcase-body').innerText) || /暂定/.test(document.getElementById('kr-casedetail').innerText), 'KR 案件页里有「暂定」');
+  });
+  ST.def('R190a','CMD-1029-09 三（A1 分页）：施术前约 1 个月（30 天）出现「确认客人行程」待办 + 卡片，四个选项各一次；施术日本来 <30 天不跳；只提醒不挡',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var mk = function(tag, lead, d){ var c = toConfirmed(tag); var ks = c.krSchedule; var base = todayStr(); ks.confirmedDate = ymdAdd(base, d); ks.confirmedOn = ymdAdd(base, d - lead); ks.reconfirm = null; c.tripConfirm = null; c.krSchedule.tripState = 'tentative'; updateCaseStage(c); return c; };
+    var has = function(c){ return inTodoItems().some(function(i){ return i.caseId===c.id && i.kind==='reconfirm'; }); };
+    var a = mk('R190a', 60, 28); ST.ok(calNeedsReconfirm(a) && has(a), '确认时离施术 60 天、现在还有 28 天 → 出现「确认客人行程」待办');
+    var far = mk('R190f', 90, 45); ST.ok(!calNeedsReconfirm(far) && !has(far), '还有 45 天：还没到 30 天，不出现');
+    var short = mk('R190s', 20, 18); ST.ok(!calNeedsReconfirm(short) && !has(short), '施术日本来就不到 1 个月（确认时只有 20 天）→ 不跳');
+    var near = mk('R190n', 40, 1); ST.ok(!calNeedsReconfirm(near), '临近（已确认行程接手的天数内）由「已确认行程」接手，30 天待办不再出现');
+    var old = mk('R190o', 60, 25); delete old.krSchedule.confirmedOn; ST.ok(!calNeedsReconfirm(old), '旧资料没有确认日 → 不猜、不跳');
+    ST.open(a); a.activeCaseTab = 'kr'; renderCaseBody(a); var txt = document.getElementById('case-body').innerText; ST.ok(/确认客人行程/.test(txt) && /照原日期/.test(txt) && /改期/.test(txt) && /取消赴韩/.test(txt) && /还没定/.test(txt), '赴韩施术 tab 有卡片和四个选项');
+    reconfirmPick(a.id, 'undecided'); ST.ok(!has(a) && !calNeedsReconfirm(a) && ST.hasLog(a, /还没定/), '还没定：待办收掉、记 Timeline');
+    var b = mk('R190b', 60, 27); openReconfirmSame(b.id); ST.ok(!!document.getElementById('rc-pno') && !document.getElementById('rc-err').textContent, '照原日期：入境 / 离境 / 护照号码都是选填');
+    document.getElementById('rc-in').value = ymdAdd(todayStr(), 27); document.getElementById('rc-out').value = ymdAdd(todayStr(), 36); document.getElementById('rc-pno').value = 'X1234567'; reconfirmSameSave(b.id);
+    ST.ok(!has(b) && b.stay && b.stay.in===ymdAdd(todayStr(), 27) && clientByName(b.name).passport.no==='X1234567' && b.krSchedule.tripState==='booked' && ST.hasLog(b, /照原日期/), '照原日期 + 填了行程：存进在韩期间、行程状态改已定、护照号存档、记 Timeline');
+    ST.ok(!JSON.stringify(b.logEntries).includes('X1234567'), '护照号不进 Timeline');
+    var b2 = mk('R190b2', 60, 26); openReconfirmSame(b2.id); reconfirmSameSave(b2.id); ST.ok(!has(b2) && b2.krSchedule.reconfirm.choice==='same', '照原日期什么都不填也能确认');
+    var ch = mk('R190c', 60, 26); ST.open(ch); reconfirmPick(ch.id, 'change'); ST.ok(!has(ch) && ch.krSchedule.reconfirm.choice==='change' && ST.hasLog(ch, /要改期/), '改期：记录并进入改期流程（状态：'+scheduleState(ch)+'）');
+    var cn = mk('R190d', 60, 26); ST.open(cn); reconfirmPick(cn.id, 'cancel'); ST.ok(!has(cn) && cn.krSchedule.reconfirm.choice==='cancel' && ST.hasLog(cn, /取消赴韩/), '取消赴韩：记录并打开取消项目流程'); try{ closeRefundModal(); }catch(e){}
+    ST.ok(scheduleState(a)==='Confirmed' && !closeBlockers(a).length, '只提醒、不挡：日期状态不变');
   });
 })();

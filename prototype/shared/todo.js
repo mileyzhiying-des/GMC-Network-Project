@@ -17,7 +17,7 @@ function todoIsKr(){ try{ return isKrAccount(); }catch(e){ return false; } }
 /* ---------------- 待办条目 ----------------
    it = {kind, text, name, no, due('YYYY-MM-DD' 或 'YYYY-MM-DD HH:mm'，页面时区), over, pin, mine, go()} */
 /* CMD-1014-02：4 张卡 = 待办 4 类。每条待办恰好属于一类（待办总数 = 4 类加总，卡片数字 = 点下去筛出的条数） */
-var TODO_CAT = {dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
+var TODO_CAT = {dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', reconfirm:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'dconsult', recover:'drecover', recoverwait:'drecover', dsurg:'dsurg', dirop:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
 /* CMD-1015-05 九：第一栏「阶段｜待办事项」——阶段读案件的阶段（同案件列表），没有案件的按类型 */
 var TODO_STAGE_BY_KIND = {tripend:'术后管理', tripover:'术后管理', earlyask:'术后管理', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
@@ -99,7 +99,9 @@ function inTodoItems(){
       if(surgChanged(c)) push(todoMk('relay', '电话通知客人时间变更：'+surgChangeText(c), c, ks.confirmedDate, false, gotoRow));
       else push(todoMk('relay', 'KR 已确认施术时间：发送给客人（'+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, gotoRow));
     }
-    /* 确认客人日程有无变化：赴韩施术前 2 天出现（CMD-1014-01 二·3） */
+    /* CMD-1029-09 三：施术前约 1 个月（30 天）：联络客人确认行程；只提醒不挡 */
+    if(calNeedsReconfirm(c)) push(todoMk('reconfirm', '施术前约 1 个月：联络客人确认行程（施术 '+ks.confirmedDate+'，还有 '+calDaysToSurgery(c)+' 天）', c, ks.confirmedDate, false, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-reconfirm-row'}); }));
+    /* 确认客人日程有无变化：赴韩施术前 7 天出现（CMD-1014-01 二·3；CMD-1029-09 四：2 天 → 7 天） */
     if(calNeedsRecheck(c)) push(todoMk('recheck', '施术前 2 天：联络客人确认行程（施术 '+ks.confirmedDate+'）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-remind-row'}); }));
     /* 待收款 */
     closeBlockers(c).forEach(function(b){ push(todoMk('pay', '待收款：'+b, c, '', false, todoPayGo(c, b))); }); /* IN-08：点了去那张待付款结算单所在的 tab（赴韩施术计划 / 本地管理）并滚到那张结算单 */
@@ -241,7 +243,7 @@ function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || ((b.over?1:0)-(a.over
 var TODO_FILTERS = {
   todo:   {label:'待我处理', fn:function(it){ return todoIsKr() ? it.kind!=='today' : true; }},
   visit:  {label:'今天来访', fn:function(it){ return (it.due||'').slice(0,10)===todayStr(); }},
-  kr:     {label:'等 KR 回复', fn:function(it){ return ['urge','resched','relay','recheck'].indexOf(it.kind)>-1; }},
+  kr:     {label:'等 KR 回复', fn:function(it){ return ['urge','resched','relay','recheck','reconfirm'].indexOf(it.kind)>-1; }},
   today2: {label:'今天到院', fn:function(it){ return it.kind==='today'; }},
   dconsult:{label:'待面诊', fn:function(it){ return it.kind==='upload'; }},
   drecover:{label:'待复诊', fn:function(it){ return it.kind==='recover'; }},
