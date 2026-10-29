@@ -189,7 +189,15 @@ var WEEK_OFFSET = 0, MONTH_OFFSET = 0; /* 月视图：相对「今天所在月�
 var DAY_OFFSET = 0;
 
 function dashClockHtml(){ return dashClockText() + (demoTimeActive() ? ' <span class="demo-time-tag" title="现在不是真实时间（测试覆盖页可恢复）">演示时间</span>' : ''); } /* CMD-1015-11：不是真实时间时，时钟旁标「演示时间」 */
-function dashClockText(){ var t = demoNow(), p2 = function(n){ return (n<10?'0':'')+n; }; return p2(t.getFullYear()%100)+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate())+'（周'+DOW_CN[dowOfDate(dateStr(t))]+'）'+p2(t.getHours())+':'+p2(t.getMinutes())+':'+p2(t.getSeconds()); }
+function dashClockText(){ /* CMD-1029-03 一：同时显示两边的时间。IN「雅加达 10/29（周四） 11:10:15｜韩国 13:10」，KR「首尔 10/29（周四） 13:10:15｜印尼 11:10」；另一边跨日时加日期 */
+  var p2 = function(n){ return (n<10?'0':'')+n; }, now = realNow(), tz = pageTz(), krPage = (tz === 'Asia/Seoul');
+  var a = tzParts(now, tz), ad = a.y+'-'+p2(a.mo)+'-'+p2(a.d);
+  var city = ((TZ_INFO[tz] || {}).city || '').split('（')[0];
+  var otherTz = krPage ? 'Asia/Jakarta' : 'Asia/Seoul', b = tzParts(now, otherTz), bd = b.y+'-'+p2(b.mo)+'-'+p2(b.d);
+  var wd = DOW_CN[dowOfDate(ad)];
+  var other = (krPage ? '印尼 ' : '韩国 ') + (bd !== ad ? p2(b.mo)+'/'+p2(b.d)+' ' : '') + p2(b.h)+':'+p2(b.mi);
+  return city+' '+p2(a.mo)+'/'+p2(a.d)+'（周'+wd+'） '+p2(a.h)+':'+p2(a.mi)+':'+p2(a.s)+'｜'+other;
+}
 setInterval(function(){ try{ document.querySelectorAll('[data-clock]').forEach(function(e){ e.innerHTML = dashClockHtml(); }); }catch(x){} }, 1000);
 function applyTzSetting(){
   var o = TZ_INFO[CLINIC_TZ] || TZ_INFO['Asia/Jakarta'];
