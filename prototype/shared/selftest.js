@@ -966,7 +966,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     } finally { back(); }
   });
   ST.def('TD4','催办新门槛：待确认施术时间超过 1 个工作日',function(){
-    var c = ST.newRes('TD4'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); var ks = ensureKrScheduleDraft(c), od = caseOpenDates(c); ks.primary = od[0]; submitKrScheduleDate();
+    var c = ST.newRes('TD4'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); var ks = ensureKrScheduleDraft(c), od = caseOpenDates(c).filter(function(x){ return x >= ymdAdd(todayStr(), 10); }); ks.primary = od[0]; submitKrScheduleDate();
     ST.ok(scheduleState(c)==='Pending' && !urgeInfo(c), '刚递交的施术日期不能催');
     var old = new Date(Date.now()-4*86400000).toISOString(); c.logEntries.filter(function(e){ return /递交施术日期/.test(e.action); }).forEach(function(e){ e.dt = old.slice(0,10)+' '+old.slice(11,16); });
     var u = urgeInfo(c); ST.ok(!!u && /1 个工作日/.test(u.label), '超过 1 个工作日应可催办，实际 '+JSON.stringify(u));
@@ -5818,11 +5818,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     if(!kr){
       var c = ST.toConfirmed('R42a'); ST.open(c); var hid = c.hospitalId || 'H1', en = hospitalEn(hid), ks = c.krSchedule;
       var tx = surgMsgText(c, 'remind');
-      ST.ok(/您预约的赴韩施术项目将在两天后进行/.test(tx) && tx.indexOf('这里是 '+actingName())>-1, '施术前提醒模板 + 室长名带当前登录人');
+      ST.ok(/您预约的赴韩施术项目将在七天后进行/.test(tx) && tx.indexOf('这里是 '+actingName())>-1, '施术前提醒模板 + 室长名带当前登录人');
       ST.ok(tx.indexOf('到院日期：'+ks.confirmedDate+' ｜ 韩国时间：')>-1 && /韩国时间：(上午|下午) \d+:\d\d/.test(tx), '到院日期 ｜ 韩国时间：上午 / 下午 时:分');
       ST.ok(tx.indexOf('医院：'+en.name)>-1 && tx.indexOf('地址：'+(ks.address||en.address))>-1 && !/[가-힣]/.test(en.name), '医院名用英文');
       ST.ok(!/\n{3,}/.test(tx) && !/Halo|Rumah/.test(tx), '分段整齐、纯中文');
-      var tn = surgMsgText(c, 'notice'); ST.ok(/您预约的赴韩施术时间已确认/.test(tn) && !/两天后/.test(tn), '施术日期通知第三行不同');
+      var tn = surgMsgText(c, 'notice'); ST.ok(/您预约的赴韩施术时间已确认/.test(tn) && !/七天后/.test(tn), '施术日期通知第三行不同');
       var its = krActiveItems(c), keep = its.map(function(it){ return it.anesthesia ? it.anesthesia.note : null; });
       its.forEach(function(it){ it.anesthesia = {type:'sleep', label:'睡眠麻醉', note:'', fast:6}; });
       var a1 = surgAnesText(c); ST.ok(its.length!==1 || a1.indexOf('：需空腹 6 小时，\n* 6 小时内禁止食用任何食物和饮品。')>-1, '一个项目：模板原样两行');
