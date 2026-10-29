@@ -7823,4 +7823,45 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/krSetCaseTab/.test(document.getElementById('kr-casedetail').innerHTML), '提醒条出错：整页仍打开');
     } finally { console.error = ce; Object.keys(saved).forEach(function(k){ window[k] = saved[k]; }); KR_TAB_FN.postcare = saved.krTabPostcare; KR_CASE.day = ''; var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); krShowCase(r0.clinicId, r0.id, {tab:'basic'}); }
   });
+
+  /* CMD-1029-03（A1 分页）：一 页头两边时间 / 二 离店后方案到仍有待办 / 三 仅办理退款案件页 / 四 只读清单 / 五 来用之前购买的项目开新独立案件 */
+  ST.def('R181a','CMD-1029-03（A1 分页）：页头两边时间 / 离店后方案到仍有待办 / 仅办理退款案件页 / 持有只读清单 / 来用持有开新独立案件、原主案件不变',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert; window.alert = function(){}; var td = todayStr(), oldFa = window.GMC_NO_FOLLOWASK;
+    try{
+      var tx = dashClockText(); ST.ok(/^.+ \d\d\/\d\d（周.）\d\d:\d\d:\d\d｜韩国 /.test(tx.replace(/ (?=\d\d:)/g, ' ')) || /｜韩国 /.test(tx), '一：IN 页头「城市 日期 时间｜韩国 时间」：'+tx);
+      var plans = function(c){ return inTodoItems().filter(function(x){ return x.caseId===c.id && x.kind==='plan'; }).length; };
+      var b = ST.newRes('R181b'); ST.arrive(b); ST.materials(b, {consult:true}); ST.payConsult(b); coreConfirmConsultTimes(b, td, '20:30', D(1)+' 05:00', ST.krBy); coreStartConsult(b, 'KD1 院长'); b.consultContentAt = nowFullDt(); updateCaseStage(b);
+      ST.open(b); ST.endCase(b, {}, '其他', null, '先回去了'); coreSubmitReport(b, {original:'x', zh:'y', items:ST.krReportItems(['假体隆鼻']), overallNote:'', files:[]}, ST.krBy);
+      ST.ok(b.stage==='reportonly' && plans(b)===1, '二：客人先离店（仅出报告）后方案到——「联络客人选项目」待办仍在');
+      b.todoAcks = {plandecl:{by:'x', at:'x'}}; ST.ok(plans(b)===0, '二：按［客人不做］后消失');
+      var d = ST.newRes('R181d'); ST.arrive(d); ST.materials(d, {consult:true}); ST.payConsult(d); coreConfirmConsultTimes(d, td, '20:30', D(1)+' 05:00', ST.krBy); coreStartConsult(d, 'KD1 院长'); d.consultContentAt = nowFullDt(); updateCaseStage(d);
+      ST.open(d); ST.endCase(d, {}, '客人不做了', null, '不做'); coreSubmitReport(d, {original:'x', zh:'y', items:ST.krReportItems(['假体隆鼻']), overallNote:'', files:[]}, ST.krBy); ST.ok(plans(d)===0, '二：结束原因明确是「客人不做了」→ 没有待办');
+      /* 三 / 四 / 五 */
+      var p0 = ST.newRes('R181p'); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20); p0.stage = 'closed'; p0.visitClosed = true;
+      p0.procedureItems = [{origin:'KR', name:'ONDA 提升 · 身体 60kj·3次', mgmtPlan:true, qty:3, holdUsed:0, heldOver:true, done:true}];
+      CLIENT_HOLDINGS[p0.name] = [{itemName:'R181 婴儿针', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -20), bought:3, used:1, usages:[], paid:900000}]}];
+      var snap = function(m){ return JSON.stringify({stage:m.stage, vc:m.visitClosed, st:mainStatusOf(m).status, kids:CASE_ITEMS.filter(function(x){ return x.mainId===m.id; }).length, lk:m.linkedCase||null, logs:(m.logEntries||[]).length}); }, before = snap(p0);
+      var c0 = ST.newRes('R181n', {phone:clientPhoneOf(p0.name)}); c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.name = p0.name; ST.open(c0); c0.subState = 'arrived'; c0.arrivedDay = td; c0.stage = 'booked'; c0.materialsConfirmed = false;
+      window.GMC_NO_FOLLOWASK = false; c0.followupAsked = false; followupAsk(c0); fuSet('mode', 'local');
+      var ov = document.getElementById('followup-overlay');
+      ST.ok(!ov.querySelector('select') && /R181 婴儿针/.test(ov.innerText) && /剩 2 次/.test(ov.innerText) && !/ONDA/.test(ov.innerText), '四：只读清单（项目名 / 剩几次 / 购买日期），没有下拉、韩国持有不列');
+      followupAskDone(true); c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0];
+      ST.ok(c0.usePrev && !c0.mainId && !c0.linkedCase && c0.boughtFrom.length===1, '五：开新的独立案件（没有 mainId / linkedCase），标来自 '+(c0.boughtFrom||[]).join('、'));
+      ST.ok(snap(p0)===before, '五：原本的已完成主案件完全没变（状态 / 子案件 / 记录数）：'+snap(p0));
+      var sub = document.getElementById('case-subtitle').innerText; ST.ok(/来自之前购买的项目/.test(sub) && !/\(\)|（）/.test(sub), '五：页头写「来自之前购买的项目」，没有空括号：'+sub);
+      var bt = document.getElementById('case-body').innerText; ST.ok(!/面诊需求/.test(bt) && /메타뷰/.test(bt) && /苦恼/.test(bt) && /预算/.test(bt) && /上传附件/.test(bt), '五：到访目的四栏，没有面诊需求');
+      confirmMaterials(); ST.ok(!c0.materialsConfirmed && /메타뷰/.test(document.getElementById('materials-missing-list').innerText), '五：메타뷰 必填'); document.getElementById('materials-missing-overlay').classList.remove('open');
+      c0.metaviewStatus = 'ready'; confirmMaterials(); ST.ok(c0.materialsConfirmed && c0.needsConsult===false, '五：苦恼 / 预算 / 附件选填，메타뷰 有了即可确认');
+      ST.ok(/购买于 /.test(holdingsUseHtml(c0, 'main')), '五：持有项目行看得到原本在哪个案件买的');
+      var r0 = ST.newRes('R181r', {phone:clientPhoneOf(p0.name)}); r0 = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; r0.name = p0.name; ST.open(r0); r0.subState = 'arrived'; r0.arrivedDay = td; r0.stage = 'booked'; r0.materialsConfirmed = false;
+      REFUND_SVC = {caseId:r0.id, name:r0.name, pre:null, fromDialog:true}; openRefundService('dialog'); var cb = document.querySelector('.rs-cb'); ST.ok(!!cb, '三：有可退批次');
+      if(cb){ cb.checked = true; document.getElementById('rs-amt-0').value = '800000'; document.getElementById('rs-reason').value = '客人要求'; window.GMC_NO_FOLLOWASK = true; confirmRefundService(); r0 = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; ST.open(r0); renderCaseStatusBar(r0); renderCaseBody(r0);
+        var bar = document.getElementById('case-status-bar').innerText, body = document.getElementById('case-body'), tabs = [].map.call(body.querySelectorAll('.tab'), function(e){ return e.innerText; }).join('|');
+        ST.ok(/已结束 · 仅办理退款/.test(bar) && /退款 Rp/.test(bar) && !/已取消|无收入/.test(bar), '三：页头「已结束 · 仅办理退款」+ 退款金额：'+bar.replace(/\s+/g, ' '));
+        ST.ok(tabs==='基础资料|结算|Timeline' && !/到访目的|取消接待/.test(body.innerText), '三：tab 只有 基础资料|结算|Timeline，没有到访目的 / 取消接待：'+tabs);
+        roSetTab(r0.id, 'settle'); ST.ok(/退款 Rp 800\.000/.test(document.getElementById('case-body').innerText) && /记回购买案件/.test(document.getElementById('case-body').innerText), '三：结算 tab 写退了哪一批 / 多少钱 / 记回哪个案件');
+        ST.ok(caseStageProcText(r0)==='已结束 · 仅办理退款' && /退款 Rp/.test(financeLabel(r0)) && caseTabKey(r0)==='closed', '三：列表用词 / 财务栏 / 归入已完成'); }
+    } finally { window.alert = al; window.GMC_NO_FOLLOWASK = oldFa; }
+  });
 })();
