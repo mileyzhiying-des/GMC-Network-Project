@@ -185,6 +185,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   (function(){ var raw = localLeaveAsk; localLeaveAsk = function(c, r){ raw(c, r); if(!window.GMC_LOCAL_LEAVE_MANUAL) localLeaveYes(); }; })();
   /* CMD-1029-06 三：退款方式必填；老用例没选，默认自动选「转账」，R186a 设 GMC_REFUND_METHOD_MANUAL 测校验本身 */
   (function(){ var raw = confirmRefundService; confirmRefundService = function(){ if(!window.GMC_REFUND_METHOD_MANUAL && !document.querySelector('input[name="rs-method"]:checked')){ var r = document.querySelector('input[name="rs-method"][value="转账"]'); if(r) r.checked = true; } return raw.apply(this, arguments); }; })();
+  /* CMD-1029-08：赴韩取消选「退钱」要选退款方式；老用例没选，默认自动选「现金」，R188a 设 GMC_REFUND_PAY_MANUAL 测校验本身 */
+  (function(){ var raw = confirmRefund; confirmRefund = function(){ if(!window.GMC_REFUND_PAY_MANUAL && typeof REFUND_PAY!=='undefined' && !REFUND_PAY.m) REFUND_PAY = {m:'现金', note:''}; return raw.apply(this, arguments); }; })();
   ST.lmSettleRaw = lmSettle; (function(){ var raw = lmSettle; lmSettle = function(){ raw.apply(this, arguments); if(typeof LM_PAY_PENDING!=='undefined' && LM_PAY_PENDING && !window.GMC_LM_PAY_MANUAL) lmPayConfirm(); }; })();
   ST.def('A1','室长取消预约',function(){
     var c = ST.newRes('A1'); ST.open(c); window.CANCEL_REASON = '客人要求取消'; confirmCancel();
@@ -875,14 +877,16 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     var c = ST.newRes('G2'); ST.consultToReport(c); ST.open(c); ST.ok(canEndCase(c), '项目确认中应可结束');
     ST.endCase(c, {}, '其他', null, '客人说再想想'); ST.ok(c.stage==='reportonly', '出了报告没做项目 → 仅出报告，实际 '+c.stage); ST.ok(ST.hasLog(c, /当时：项目确认中）：客人离店/), '没有剩余项目 → 直接离店，记录原因「客人离店」（CMD-1022-15）');
   });
-  ST.def('G3','本地没用完就手动结束（转持有 / 退款）',function(){
+  ST.def('G3','本地没用完就手动结束（一律转持有，没有退款选项）',function(){
     var p = ST.localProj('LHALa peel');
-    var a = ST.localCase('G3a'); ST.localPay(a, function(){ toggleLocalProject('main', p.id); }); ST.open(a); openEndCase(); var ra = endCaseRows(a).filter(function(r){ return r.hold; }); closeEndCase();
-    ST.ok(ra.length===1, '应列出一个未用完的本地批次，实际 '+ra.length);
-    ST.endCase(a, (function(){ var o = {}; o[ra[0].key] = 'keep'; return o; })(), '客人不做了'); ST.ok(isEnded(a) && a.stage==='closed', '转持有 → 有购买 → 已结案，实际 '+a.stage); ST.ok(ST.hasLog(a, /转为客人持有/), '缺转持有记录');
-    var b = ST.localCase('G3b'); ST.localPay(b, function(){ toggleLocalProject('main', p.id); }); ST.open(b); openEndCase(); var rb = endCaseRows(b).filter(function(r){ return r.hold; }); closeEndCase();
-    var ch = {}, am = {}; ch[rb[0].key] = 'refund'; am[rb[0].key] = '100000';
-    ST.endCase(b, ch, '失联', am); ST.ok(isEnded(b), '退款后应结束'); ST.ok(rb[0].hold.b.voided && rb[0].hold.b.refund && rb[0].hold.b.refund.amount===100000, '批次应作废并记退款'); ST.ok(ST.hasLog(b, /结束案件：退款/), '缺退款记录');
+    var a = ST.localCase('G3a'); ST.localPay(a, function(){ toggleLocalProject('main', p.id); }); ST.open(a); openEndCase(); var ra = endCaseRows(a).filter(function(r){ return r.holds; });
+    var ov = document.getElementById('end-case-overlay'), txt = ov ? ov.innerText : '';
+    ST.ok(ra.length===1 && ra[0].holds.length===1, '应有一行告知「没用完的批次转持有」，实际 '+ra.length); ST.ok(/会转成客人持有/.test(txt) && /剩余 \d+ 次/.test(txt), '弹窗告知转持有并列出项目和剩余次数：'+txt.slice(0,120));
+    ST.ok(!/退款/.test((ov.innerHTML||'').replace(/退款服务/g,'').replace(/要退款的话/g,'')) && !ov.querySelector('input[name^="ec-hold"]'), '弹窗没有退款选项 / 金额输入'); ST.ok(!ra[0].opts, '该行没有选项');
+    closeEndCase(); var before = holdingRemaining(getClientHoldings(a.name).filter(function(h){ return h.itemName===p.name; })[0]);
+    ST.endCase(a, {}, '客人不做了'); ST.ok(isEnded(a) && a.stage==='closed', '一律转持有 → 有购买 → 已结案，实际 '+a.stage); ST.ok(ST.hasLog(a, /转为客人持有/), '缺转持有记录');
+    var h2 = getClientHoldings(a.name).filter(function(h){ return h.itemName===p.name; })[0]; ST.ok(h2 && holdingRemaining(h2)===before && before>0, '客人持有里仍有剩余次数：'+before);
+    ST.ok(refundableBatches(a.name).some(function(x){ return x.h.itemName===p.name; }), '客人页退款服务仍可退这一批（之后再办）');
   });
   ST.def('G4','有待收款时结束被挡 / 取消该项目后可结束',function(){
     var p = ST.localProj('LHALa peel'), c = ST.localCase('G4'); ST.open(c); c.activeCaseTab = 'localmgmt'; chooseProjectEntryMode('new'); toggleLocalProject('main', p.id); confirmProjectSelection();
@@ -8046,5 +8050,24 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var legacy = addClient({name:'T-R187Old '+Date.now().toString(36), phone:ph('o'), gender:'女', dob:(y-18)+'-01-01', createdBy:'测试'}); ST.ok(!legacy.minorInfo && minorMarkText(legacy)==='', '旧客人没有记录 = 空，不猜');
     var html = clientBasicBlockHtml(cs).replace(/\s+/g,' '); var dobRow = html.split('生日')[1] || ''; ST.ok(/未满 21 岁 · 未婚/.test(html), '基础资料生日旁显示标记'); ST.ok(!/openClientEdit\([^)]*\)[^<]*<\/a>[^]*?病史/.test('') && !/生日<\/span><span[^>]*>[^<]*<\/span><a/.test(html), '生日那一行没有［修改］');
     ST.ok(/openClientEdit\('[^']*','gender'\)/.test(html), '性别那一行的［修改］还在');
+  });
+  ST.def('R188a','CMD-1029-08（A1 分页，需要 toConfirmed 同款夹具）：赴韩取消选「退钱」要选退款方式（其他要说明），选置换不用；结算单 / Timeline 显示方式，旧资料「未记录」',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, msgs = []; window.alert = function(m){ msgs.push(String(m)); }; window.GMC_REFUND_PAY_MANUAL = true;
+    try{
+      var c = toConfirmed('R188'); ST.open(c); openCancelItems(); var ov = document.getElementById('refund-paymethod');
+      ST.ok(ov && /退款方式/.test(ov.innerText) && ['现金','转账','QRIS','其他'].every(function(m){ return ov.innerText.indexOf(m)>-1; }), '退钱：出现退款方式（现金 / 转账 / QRIS / 其他）');
+      document.querySelectorAll('.refund-cb').forEach(function(cb){ cb.checked = true; }); document.getElementById('refund-amount').value = '100000'; document.getElementById('refund-reason').value = '（自测）取消';
+      msgs.length = 0; confirmRefund(); ST.ok(msgs.some(function(m){ return /退款方式/.test(m); }) && !(c.refunds||[]).length, '没选方式不能确认：'+msgs.join('/'));
+      document.querySelector('input[name="refund-pay"][value="其他"]').click(); msgs.length = 0; confirmRefund(); ST.ok(msgs.some(function(m){ return /说明/.test(m); }) && !(c.refunds||[]).length, '选「其他」没写说明不能确认');
+      document.querySelector('input[name="refund-pay"][value="QRIS"]').click(); confirmRefund();
+      var rf = (c.refunds||[])[0]; ST.ok(rf && rf.method==='QRIS' && !rf.comp, '确认后退款记录带方式 QRIS');
+      ST.ok(ST.hasLog(c, /退款 .*方式：QRIS/), 'Timeline 带「方式：QRIS」');
+      var html = (c.settlementBatches||[]).map(function(b){ return settlementCardHtml(c, b); }).join('').replace(/<[^>]+>/g,' '); ST.ok(/方式：QRIS/.test(html), '结算单退款行显示方式：'+html.slice(0,160));
+      var old = {amount:1, reason:'旧', items:['x'], batchIds:[(c.settlementBatches[0]||{}).id], note:''}; c.refunds.push(old); html = (c.settlementBatches||[]).map(function(b){ return settlementCardHtml(c, b); }).join('').replace(/<[^>]+>/g,' '); ST.ok(/方式：未记录/.test(html), '旧退款没有方式 → 未记录');
+      var d = toConfirmed('R188b'); ST.open(d); openCancelItems(); document.querySelectorAll('.refund-cb').forEach(function(cb){ cb.checked = true; }); setRefundMethod('comp');
+      ST.ok(!document.querySelector('input[name="refund-pay"]'), '选置换：不出现退款方式'); document.getElementById('refund-amount').value = '100000'; document.getElementById('refund-reason').value = '（自测）置换'; msgs.length = 0; confirmRefund();
+      ST.ok(!msgs.some(function(m){ return /退款方式/.test(m); }) && (d.refunds||[])[0] && d.refunds[0].comp && !d.refunds[0].method, '置换不用填方式，记录里没有方式');
+    } finally { window.alert = al; window.GMC_REFUND_PAY_MANUAL = false; }
   });
 })();

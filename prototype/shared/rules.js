@@ -419,7 +419,7 @@ function settlementCardHtml(c, b){
   else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（诊所收）；尾款 '+formatCurrency(Math.max(0,(b.krTotal||0)-(b.krDeposit||0)),'KRW')+'（'+(c.krBalancePaid ? '已付清' : '未付')+'，赴韩后医院收）');
   if(b.inTotal) amounts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
   var refunds = (c.refunds||[]).filter(function(r){ return (r.batchIds||[]).indexOf(b.id)>-1; }).map(function(r){
-    return '<div style="font-size:12px;color:'+(r.comp ? '#8F6F0C' : 'var(--terracotta)')+';margin-top:4px;">'+(r.comp ? '转本地置换 ' : '退款 ')+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+(r.note ? '；备注：'+r.note : '')+'）</div>';
+    return '<div style="font-size:12px;color:'+(r.comp ? '#8F6F0C' : 'var(--terracotta)')+';margin-top:4px;">'+(r.comp ? '转本地置换 ' : '退款 ')+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+(r.comp ? '' : '；方式：'+(r.method ? r.method+(r.method==='其他' && r.methodNote ? '（'+r.methodNote+'）' : '') : '未记录'))+(r.note ? '；备注：'+r.note : '')+'）</div>';
   }).join('');
   var canCancel = b.status!=='unpaid' && krNotStartedItems(c).some(function(it){ return it.batchId===b.id; }) && !c.hasArrived && !c.visitClosed;
   var actions = b.status==='unpaid'
