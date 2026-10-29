@@ -1350,7 +1350,7 @@ function renderCaseStatusBar0(c){
     '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--slate);">当前状态</span><span class="status-pill" style="background:'+b[0]+';color:'+b[1]+';">'+b[2]+'</span>'+
     (!subDayOn && localMgmtTagOn(c) ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+
     (c.visibleToKR ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;" title="韩国侧可见（不面诊案件点增加面诊后、或使用术后管理项目关联后）">KR可见</span>' : '')+
-    (isEnded(c) ? '<span style="font-size:12px;color:var(--slate2);">'+(c.stage==='cancelled' ? '取消原因：'+endReasonText(c)+'　' : '')+financeLabel(c)+'</span>' : '')+
+    (isEnded(c) ? '<span style="font-size:12px;color:var(--slate2);">'+(c.stage==='cancelled' && !isRefundOnly(c) ? '取消原因：'+endReasonText(c)+'　' : '')+financeLabel(c)+'</span>' : '')+
     caseAbnormalTags(c).map(function(t){ return '<span class="status-pill" style="background:#F6DCDC;color:#C1454A;font-size:12px;">'+t+'</span>'; }).join('')+'</div>'+
     actionBtn+'</div>';
   renderCaseHeaderActions(c);
@@ -1803,6 +1803,7 @@ function renderCaseBody(c){
       '</div>'+'<div><div class="info-heading" style="margin:14px 0 10px;">Timeline</div>'+caseTimelineCardHtml(c)+'</div>';
     return;
   }
+  if(isRefundOnly(c)){ el.innerHTML = gmcSafe('仅办理退款', function(){ return refundOnlyBodyHtml(c); }); return; } /* CMD-1029-03 三：只剩 基础资料｜结算｜Timeline，没有到访目的 / 取消接待 / 确认 */
   if(!c.materialsConfirmed){ /* CMD-1022-15：接待页分两个 tab：基础资料 / Timeline（附件等其他 tab 仍要基础资料确认后才有） */
     var rt = c.activeCaseTab==='timeline' ? 'timeline' : 'basic';
     var rtabs = '<div class="tabs" style="margin-bottom:4px;"><span class="tab'+(rt==='basic' ? ' active' : '')+'" onclick="switchCaseTab(\'basic\')">基础资料</span><span class="tab'+(rt==='timeline' ? ' active' : '')+'" onclick="switchCaseTab(\'timeline\')">Timeline</span></div>';

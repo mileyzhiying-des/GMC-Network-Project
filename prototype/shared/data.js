@@ -1638,6 +1638,7 @@ function financeResultOf(c){
 }
 
 function financeLabel(c){
+  if(isRefundOnly(c)) return '退款 '+refundOnlyAmountText(c); /* CMD-1029-03 三：金额显示退款金额，不写「无收入」 */
   var f = financeResultOf(c), pd = financePaid(c), ref = refundSum(c), t = f;
   if(f==='有项目收入'){
     var parts = [];
@@ -1661,7 +1662,7 @@ function finishCase(c, cancelReasonIfCancelled){
   c.cancelReason = out==='cancelled' ? (c.refundVisit ? '仅办理退款' : (cancelReasonIfCancelled || '未购买未使用')) : null; /* 这次到访只办了退款、没有其他购买或使用 → 已取消（仅办理退款） */
   updateCaseStage(c);
   var tb0 = terminalBadge(c); if(!tb0) return; /* CMD-1023-02：主案件状态自动判断，没有真正结束（又有未做的事）就不记结束 */
-  logCaseEvent(c, '系统', '案件结束：'+tb0[2]+(c.stage==='cancelled' ? '（'+endReasonText(c)+'）' : ''));
+  logCaseEvent(c, '系统', '案件结束：'+tb0[2]+(c.stage==='cancelled' && !isRefundOnly(c) ? '（'+endReasonText(c)+'）' : ''));
   if(c.stage==='closed' && c.hasArrived && krAllItems(c).some(function(it){ return it.done; })) pushNotif('赴韩施术','施术完成，案件已结案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   if(typeof document!=='undefined' && document.getElementById('case-body')){ /* KR 页面没有 IN 的案件详情，不画 */
     buildCaseLog(c);
@@ -1710,6 +1711,7 @@ function scheduleState(c){
 /* 终态标签：只显示结局（2026-09-30：状态列只显示主状态/结局；取消原因、财务另外显示） */
 function terminalBadge(c){
   if(!isEnded(c)) return null;
+  if(isRefundOnly(c)){ var colR = toneColors('已结案'); return [colR[0],colR[1],'已结束 · 仅办理退款']; } /* CMD-1029-03 三 */
   var tl = c.stage==='closed' ? '已结案' : c.stage==='reportonly' ? '仅出报告' : '已取消', label = tl==='已结案' ? '已完成' : tl, col = toneColors(tl); /* CMD-1023-02：对外叫「已完成」，颜色沿用 */
   return [col[0],col[1],label];
 }
@@ -1759,6 +1761,7 @@ function recordConsultFee(c){ if(c && typeof c.consultFeeAmount!=='number') c.co
 /* 财务栏（2026-10-08，IN-CASE-03 第 2 节）：无收入显示"–"（面诊费已免除 = 无收入）；有收入时标签下方小字写金额：
    仅面诊费 = 本案件实缴面诊费；有项目收入 = 已付款金额（赴韩定金扣退款用韩元 + 本地项目用印尼盾，不换算、不含面诊费）；退款行照旧 */
 function financeCellHtml(c){
+  if(isRefundOnly(c)) return '<div style="font-size:12px;font-weight:700;">已退款</div><div style="font-size:12px;color:var(--terracotta);">'+refundOnlyAmountText(c)+'</div>'; /* CMD-1029-03 三 */
   var f = financeResultOf(c), pd = financePaid(c), ref = refundSum(c), amt = [];
   if(f==='有项目收入' || f==='全额退款'){
     if(pd.kr-ref>0) amt.push(formatCurrency(pd.kr-ref,'KRW'));
@@ -11665,3 +11668,38 @@ function krLeaveReminders(c, key){
 
 /* CMD-1029-03 二：案件已按「仅出报告」结束后方案才到——只有结束原因明确是「客人不做了 / 客人不做项目」才算客人已决定不做，其余（客人先回去、失联、其他）方案到了仍要联络客人 */
 function endedPlanDeclined(c){ return /客人不做了|客人不做项目/.test(String(c.endNote||'')); }
+
+/* ================= CMD-1029-03 三：仅办理退款的案件页（基础资料｜结算｜Timeline） ================= */
+/* 这次办的退款：批次上 refund.viaCaseId === 本案件；金额按币别分开写（不换算） */
+function refundOnlyRows(c){
+  var out = [];
+  getClientHoldings(c.name).forEach(function(h){ (h.batches||[]).forEach(function(b){ if(b.refund && b.refund.viaCaseId===c.id) out.push({h:h, b:b}); }); });
+  return out;
+}
+function refundOnlyAmountText(c){
+  var by = {}; refundOnlyRows(c).forEach(function(x){ var cur = x.b.refund.currency || x.b.currency || 'IDR'; by[cur] = (by[cur]||0) + (x.b.refund.amount||0); });
+  var keys = Object.keys(by); if(!keys.length && c.refundVisit) return formatCurrency(c.refundVisit.amount||0, 'IDR');
+  return keys.map(function(k){ return formatCurrency(by[k], k); }).join(' + ');
+}
+var RO_TAB = {};
+function roSetTab(id, t){ RO_TAB[id] = t; var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(c) renderCaseBody(c); }
+function refundOnlyBodyHtml(c){
+  var t = RO_TAB[c.id] || 'basic';
+  var tabs = [['basic','基础资料'],['settle','结算'],['timeline','Timeline']].map(function(x){ return '<span class="tab'+(t===x[0] ? ' active' : '')+'" onclick="roSetTab(\''+c.id+'\',\''+x[0]+'\')">'+x[1]+'</span>'; }).join('');
+  var body = '';
+  if(t==='basic'){
+    body = '<div class="card" style="padding:22px 24px;">'+clientBasicBlockHtml(c).replace('来自客户档案，这里修改会同步到档案','来自客户档案（只读）').replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>';
+  } else if(t==='settle'){
+    var rows = refundOnlyRows(c);
+    body = '<div class="card" style="padding:18px 24px;"><div class="info-heading" style="margin-bottom:8px;">退款记录 <span style="font-weight:400;font-size:12px;color:var(--muted);">这次到访只办理退款；钱记回当初购买的案件</span></div>'+
+      (rows.length ? rows.map(function(x){
+        var b = x.b, rf = b.refund;
+        return '<div style="padding:10px 0;border-top:1px solid var(--border2);font-size:13px;line-height:1.8;"><b>'+aEscC(x.h.itemName)+(b.spec ? '（'+aEscC(buyName(b.spec))+'）' : '')+'</b>　退款 <b>'+formatCurrency(rf.amount||0, rf.currency||b.currency||'IDR')+'</b>'+
+          '<div style="color:var(--slate2);">当初实付 '+(typeof b.paid==='number' ? formatCurrency(b.paid, b.currency||'IDR') : '—')+'　购买 '+aEscC(b.date||'')+'　作废剩余 '+(b.voidedRemaining||0)+' 次</div>'+
+          '<div style="color:var(--slate2);">退款日期 '+aEscC(rf.date||'')+'　原因：'+aEscC(rf.reason||'—')+'　方式：系统未记录（只记金额和原因）</div>'+
+          '<div style="color:var(--slate2);">记回购买案件：<a href="#" class="info-link" onclick="openCaseDetail(\''+b.caseId+'\');return false;">'+aEscC(caseNoLabel(b.caseId))+'</a></div></div>';
+      }).join('') : '<div style="font-size:13px;color:var(--muted);padding:10px 0;">没有找到这次办的退款批次（共 '+refundOnlyAmountText(c)+'，来源案件 '+aEscC(caseNoLabel((c.refundVisit||{}).fromCaseId))+'）</div>')+
+      '<div style="padding-top:10px;border-top:1px solid var(--border2);font-size:13px;"><b>合计退款 '+refundOnlyAmountText(c)+'</b></div></div>';
+  } else body = caseTimelineCardHtml(c);
+  return '<div class="tabs" style="margin-bottom:4px;">'+tabs+'</div>'+body;
+}

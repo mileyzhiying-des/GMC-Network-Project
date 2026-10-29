@@ -164,7 +164,10 @@ function caseProcessText0(c){
   if(c.stage==='reportonly') return c.endNote || '只出报告'; /* 仅出报告写原因 */
   return '';
 }
+/* CMD-1029-03 三：这次到访只办了退款（案件结束）。对外写「已结束 · 仅办理退款」（开发交接 05：退款完成后案件结束），不写「已取消」；内部 stage 仍是 cancelled（结局推算不变） */
+function isRefundOnly(c){ return !!c && c.stage==='cancelled' && c.subState!=='cancelled' && c.cancelReason==='仅办理退款' && !!c.refundVisit; }
 function caseStageInfo(c){
+  if(isRefundOnly(c)){ var colR = toneColors('已结案'); return {bg:colR[0], fg:colR[1], stage:'已结束', proc:'仅办理退款'}; }
   var col = toneColors(STAGE_TONE_LABEL[c.stage] || caseStatusLabel(c));
   var pr = caseProcessText(c);
   if(typeof isKrAccount==='function' && isKrAccount()) pr = String(pr).replace(/本地项目(全退|保留)|本地完成|本地项目[^，；·]*/g,'IN 已处理'); /* CMD-1014-16：KR 不显示 IN 本地项目的内容，只显示事件 */
@@ -930,7 +933,7 @@ function caseStartText(c){ var k0 = caseStartKey(c); return k0 ? (fmtUtc(k0) || 
 function caseUpdatedDesc(a, b){ return caseUpdatedKey(b).localeCompare(caseUpdatedKey(a)); }
 
 /* CMD-1022-19：案件管理列表的 tab 归属：复诊评估案件（还没结束）单独一个「复诊评估」tab；结束的按结局进已结案 / 仅出报告 / 已取消 */
-function caseTabKey(c){ return (isRevEval(c) && !isEnded(c)) ? 'reveval' : c.stage; }
+function caseTabKey(c){ return (isRevEval(c) && !isEnded(c)) ? 'reveval' : (isRefundOnly(c) ? 'closed' : c.stage); } /* CMD-1029-03 三：仅办理退款的案件算「已完成」那一类（对外是已结束） */
 /* CMD-1022-19：结束的案件，那一栏叫「结案类型」：已结案 = 赴韩完成 / 本地完成 / 复诊评估结束；仅出报告 = 客人不做了 / 失联 / 其他（说明）；已取消 = 未到店 / 客人取消预约 */
 function caseEndTypeText(c){
   if(c.stage==='closed') return caseProcessText0(c);
