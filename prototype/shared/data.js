@@ -4843,7 +4843,7 @@ function notUseThisTime(scope){
   if(ctx0 && ctx0.mgmtActive){ ctx0.addUse = false; renderCaseBody(c); return; } /* 本地管理进行中：只是不再追加使用 */
   if(scope==='lm') return lmNotUse(c);
   logCaseEvent(c, actingName(), '本次不使用任何持有项目');
-  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; } autoFinish(c); return; }
+  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; } localLeaveAsk(c); return; }
   c.projectEntryMode = 'new'; /* 是否选购？ */
   buildCaseLog(c);
   renderCaseBody(c);

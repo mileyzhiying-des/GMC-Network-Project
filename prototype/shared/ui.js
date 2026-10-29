@@ -2116,7 +2116,7 @@ function markMgmtRows(scope, action, all, oneIdx){
   ctx.mgmtActive = false; ctx.mgmtCancelling = false;
   if(scope==='lm') return afterLmFinished(c);
   if(mainlineOngoing(c)){ logCaseEvent(c, '系统', '本地管理已做完；面诊 / 赴韩还在进行，案件不自动结案'); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; }
-  autoFinish(c, '管理取消');
+  localLeaveAsk(c, '管理取消'); /* CMD-1029-06 二：持有项目都做完不再自动结案，改问客人是否已离店 */
 }
 
 function mgmtComplete(scope){
@@ -4125,3 +4125,19 @@ function gmcPageTitle(){
   }catch(e){}
 }
 setInterval(gmcPageTitle, 1000); setTimeout(gmcPageTitle, 600);
+
+/* CMD-1029-06 二：本地案件的持有项目都标完成（或本次不使用但已有购买）时，不自动结案——跳弹窗问「客人是否已离店？」
+   ［已离店］走现有［客人离店］流程（提醒 / 挡住规则照旧）→ 案件结束；［还没离店］案件照旧进行中，可以继续购买，走的时候按页头［客人离店］；那天没按的话 00:00 照现有关账规则。
+   对齐开发交接 05 的 5-2：一天到［客人离店］才结束。 */
+function localLeaveAsk(c, reason){
+  if(!c || isEnded(c)) return;
+  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  var ov = document.getElementById('local-leave-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'local-leave-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100050; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:420px;max-width:94vw;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:8px;">今天的项目都做完了</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;">客人是否已离店？<br><span style="font-size:12px;color:var(--muted);">还没离店可以继续购买其他项目；客人走的时候按页头［客人离店］。</span></div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;"><button class="btn-outline" onclick="localLeaveNo()">还没离店</button><button class="btn-primary" onclick="localLeaveYes()">已离店</button></div></div>';
+  ov.classList.add('open'); LOCAL_LEAVE_CID = c.id;
+}
+var LOCAL_LEAVE_CID = '';
+function localLeaveClose(){ var ov = document.getElementById('local-leave-overlay'); if(ov) ov.classList.remove('open'); }
+function localLeaveNo(){ var c = CASE_ITEMS.filter(function(x){ return x.id===LOCAL_LEAVE_CID; })[0]; localLeaveClose(); if(c) logCaseEvent(c, actingName(), '持有项目都做完了；客人还没离店，案件继续（可继续购买，客人走时按［客人离店］）'); if(c){ buildCaseLog(c); renderCaseBody(c); } }
+function localLeaveYes(){ var c = CASE_ITEMS.filter(function(x){ return x.id===LOCAL_LEAVE_CID; })[0]; localLeaveClose(); if(!c) return; autoFinish(c, '客人已离店'); }

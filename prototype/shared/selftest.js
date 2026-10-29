@@ -181,6 +181,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   /*TESTS*/
   /* ================= A 到店前 / 接待 ================= */
   /* CMD-1026-15 二：本地项目［结算］现在多一步付款确认；老用例（D28 / D30 / D31 / CP1 / R138a 等）直接调 lmSettle() 期待立刻完成 → 这里自动点［确认已付款］；要测确认本身的用例用 ST.lmSettleRaw（R141a） */
+  /* CMD-1029-06 二：本地案件持有项目用完不再自动结案、改弹「客人是否已离店？」；老用例的意思是「做完客人走了 → 结案」，所以默认自动回答［已离店］；R185a 设 GMC_LOCAL_LEAVE_MANUAL 测弹窗本身 */
+  (function(){ var raw = localLeaveAsk; localLeaveAsk = function(c, r){ raw(c, r); if(!window.GMC_LOCAL_LEAVE_MANUAL) localLeaveYes(); }; })();
   ST.lmSettleRaw = lmSettle; (function(){ var raw = lmSettle; lmSettle = function(){ raw.apply(this, arguments); if(typeof LM_PAY_PENDING!=='undefined' && LM_PAY_PENDING && !window.GMC_LM_PAY_MANUAL) lmPayConfirm(); }; })();
   ST.def('A1','室长取消预约',function(){
     var c = ST.newRes('A1'); ST.open(c); window.CANCEL_REASON = '客人要求取消'; confirmCancel();
@@ -7963,5 +7965,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c = mk('R184c', true, true); ov = document.getElementById('followup-overlay'); fuSet('mode', 'local');
       ST.ok(fuHoldList(c).length===1 && !/术后管理 ·/.test(ov.innerText) && /R184c 婴儿针/.test(ov.innerText), '两种都有：只列本地持有，不列术后管理');
     } finally { window.alert = al; window.GMC_NO_FOLLOWASK = oldF; }
+  });
+
+  /* CMD-1029-06 二（A1 分页）：本地案件持有项目都完成 → 不自动结案，弹「客人是否已离店？」 */
+  ST.def('R185a','CMD-1029-06（A1 分页）：本地案件持有项目用完 → 弹窗「客人是否已离店？」（还没离店 / 已离店）；不自动结案',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }; var td = todayStr();
+    var mk = function(tag){
+      var p0 = ST.newRes(tag); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20); p0.stage = 'closed'; p0.visitClosed = true;
+      CLIENT_HOLDINGS[p0.name] = [{itemName:tag+' 婴儿针', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -20), bought:3, used:1, usages:[], paid:900000}]}];
+      var c0 = ST.newRes(tag+'n', {phone:clientPhoneOf(p0.name)}); c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.name = p0.name; ST.open(c0); c0.subState = 'arrived'; c0.arrivedDay = td; c0.stage = 'booked'; c0.materialsConfirmed = false;
+      window.GMC_NO_FOLLOWASK = false; c0.followupAsked = false; followupAsk(c0); fuSet('mode', 'local'); followupAskDone(true);
+      c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.metaviewStatus = 'ready'; confirmMaterials(); switchCaseTab('localmgmt'); window.GMC_NO_FOLLOWASK = true; chooseProjectEntryMode('holdings');
+      document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); return CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0];
+    };
+    window.GMC_LOCAL_LEAVE_MANUAL = true;
+    var ovOpen = function(){ var o = document.getElementById('local-leave-overlay'); return !!(o && o.classList.contains('open')); };
+    var cur = function(c){ return CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; };
+    try{
+      var c = mk('R185a'); mgmtComplete('main'); c = cur(c);
+      ST.ok(ovOpen() && /客人是否已离店/.test(document.getElementById('local-leave-overlay').innerText) && !isEnded(c), '持有项目都标完成：弹「今天的项目都做完了。客人是否已离店？」，案件没有自动结案');
+      var btns = [].map.call(document.querySelectorAll('#local-leave-overlay button'), function(b){ return b.innerText; }).join('|'); ST.ok(btns==='还没离店|已离店', '按钮［还没离店］［已离店］，主操作最右：'+btns);
+      localLeaveNo(); c = cur(c);
+      ST.ok(!ovOpen() && !isEnded(c) && c.stage==='local', '［还没离店］：案件照旧进行中（'+c.stage+'）');
+      ST.ok(/本地选购/.test(document.getElementById('case-body').innerText), '还没离店：还可以继续购买（本地选购画面）');
+      ST.ok(canEndCase(c) && /客人离店/.test(document.getElementById('case-header-actions') ? document.getElementById('case-header-actions').innerText : document.body.innerText), '页头［客人离店］还在');
+      openEndCase(); c = cur(c); ST.ok(isEnded(c), '之后按［客人离店］才结束：'+c.stage);
+      var d = mk('R185b'); mgmtComplete('main'); d = cur(d); localLeaveYes(); d = cur(d);
+      ST.ok(isEnded(d), '［已离店］：走现有离店流程，案件结束');
+    } finally { window.alert = al; window.confirm = cf; window.GMC_LOCAL_LEAVE_MANUAL = false; }
   });
 })();
