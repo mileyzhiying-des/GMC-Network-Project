@@ -1792,3 +1792,9 @@ prototype/shared/app.css  共用样式
 - 记录：客户资料 `cl.minorInfo = {bookedOn, ageAtBooking, marital, guardianNotified, guardianAt}`（`submitSelfBooking` 建档时写；之后改到店日期不重算）；预约案件 Timeline 和客户 Timeline 各记一笔。IN `minorMarkText(cl)`：基础资料生日旁 / 客户档案「性别 / 出生日期」旁显示「未满 21 岁 · 未婚 · 已通知监护人（时间）」或「未满 21 岁 · 已婚」，客人现在满 21 岁后不再显示（记录保留）；KR 端不显示。
 - 生日建立后不能改：基础资料「生日」行没有［修改］；`openClientEdit('gender')` 对有生日的客人只改性别（生日只显示）；**没有生日的旧资料仍可补填**（我的判断）。
 - 测试：selftest 新增 R187a；R70a「生日空 → 挡住」改用没有生日的旧资料；预约页 UI 用 booking.html 脚本验证。
+
+## CMD-1029-08 补充（2026-10-29，追加；取代 CMD-1022-15 / 1026-20 里结束案件弹窗对没用完的批次「转持有 / 退款」二选一，旧文字保留作历史）
+- 分支 V4，提交 8363700（第 1、2 部分同一个提交），不推送不合并，数据版本不变（56）。**主原则：购买的项目不退款**；退款只从两处办：客人页退款服务（06 已加退款方式）、赴韩取消选「退钱」。
+- 结束案件（`endCaseRows` / `confirmEndCase`）：拿掉退款选项，没用完的本地批次一律转客人持有——弹窗只有一行告知「还有 N 项没用完，会转成客人持有：项目 剩余 N 次。要退款之后到客人页用［退款服务］办」（row key `holdall`，`holds` 列表，无选项）；Timeline 仍记「转为客人持有」；`refundableBatches` 仍可退。
+- 赴韩取消退款弹窗（`confirmRefund`）：「处理方式」退钱 / 置换（原来叫「退款方式」，改名避免和新字段混）；退钱（含尾款差额退还 / 不能施术退定金）必填「退款方式」现金 / 转账 / QRIS / 其他（其他要说明），`REFUND_PAY` / `refundPayRender`，复用 06 的 `REFUND_PAY_METHODS` / `refundMethodText`；记 `c.refunds[].method/methodNote`、Timeline「方式：…」、结算单退款行（`settlementCardHtml`，旧资料「未记录」，置换不显示）。
+- 测试：selftest 新增 R188a；G3 改成「没有退款选项、一律转持有、客人页仍可退」；自测默认自动选「现金」（`GMC_REFUND_PAY_MANUAL` 关掉）。第 3 部分（其他退款入口盘点）只写在 Notion 汇报，没改代码。
