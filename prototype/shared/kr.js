@@ -1425,7 +1425,7 @@ function krTabProc(c){
   } else if(st==='Pending'){
     var dates = [ks.primary].concat(ks.backup ? [ks.backup] : []);
     krSchReset(c, {pick:ks.primary, time:'10:00', address:krDefaultAddress()});
-    body = '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">IN 递交的日期（首选 / 备选）：选一个并填到院时间和地址，或回复无法安排。</div>'+(can ? krSchForm(c, dates, dates.map(function(d, i){ return i===0 ? '首选' : '备选'; }), 'krDoSchConfirm.bind(null,false)', 'krDoSchReject.bind(null,false)', '确认') : krEmpty('首选 '+krEsc(ks.primary)+(ks.backup?'，备选 '+krEsc(ks.backup):'')+'（院长账号不能确认）'));
+    body = '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">IN 递交的日期（首选 / 备选）：选一个并填到院时间和地址，或回复无法安排。行程状态：'+(tripStateOf(c)==='tentative' ? '<b style="color:#8F6F0C;">暂定</b>（客人还没订机票 / 办签证）' : tripStateOf(c)==='booked' ? '已定（机票已订）' : '—')+'</div>'+(can ? krSchForm(c, dates, dates.map(function(d, i){ return i===0 ? '首选' : '备选'; }), 'krDoSchConfirm.bind(null,false)', 'krDoSchReject.bind(null,false)', '确认') : krEmpty('首选 '+krEsc(ks.primary)+(ks.backup?'，备选 '+krEsc(ks.backup):'')+'（院长账号不能确认）'));
   } else if(st==='Changing'){
     if(ks.changeSubmitted){
       var nd = [ks.changePrimary].concat(ks.changeBackup ? [ks.changeBackup] : []);
@@ -2846,7 +2846,7 @@ function krArriveMemoSave(){ var v = (document.getElementById('kr-memo-text')||{
 function krSurgHead(c, onlyEdit){
   var ks = c.krSchedule, st = scheduleState(c), can = krCan(); KR_SUBV = KR_SUBV || {edit:false};
   var days = Math.round((new Date(ks.confirmedDate+'T00:00:00') - new Date(krToday()+'T00:00:00'))/86400000);
-  var line = krEsc(ks.confirmedDate+' '+(ks.confirmedTime||''))+(st==='Confirmed' ? '（'+(days>0 ? '还有 '+days+' 天' : days===0 ? '就是今天' : '已过 '+(-days)+' 天')+'）' : '')+(st==='Confirmed' ? ' <span style="font-size:12px;color:var(--muted);">'+krEsc(calRecheckText(c))+'</span>' : '');
+  var line = krEsc(ks.confirmedDate+' '+(ks.confirmedTime||''))+tripStateTagHtml(c)+(st==='Confirmed' ? '（'+(days>0 ? '还有 '+days+' 天' : days===0 ? '就是今天' : '已过 '+(-days)+' 天')+'）' : '')+(st==='Confirmed' ? ' <span style="font-size:12px;color:var(--muted);">'+krEsc(calRecheckText(c))+'</span>' : '');
   var btns = (st==='Confirmed' && can) ? '<div style="display:flex;gap:10px;margin-top:8px;">'+krArriveMainBtn(c, 'btn-primary', '6px 16px')+'<button class="btn-outline" onclick="KR_SUBV.edit=!KR_SUBV.edit;krRenderCaseDetail()">修改时间</button></div>' : '';
   var edit = '';
   if(KR_SUBV.edit && can && st==='Confirmed'){ krSchReset(c, {pick:ks.confirmedDate, time:ks.confirmedTime||'10:00', address:ks.address||krDefaultAddress()}); edit = '<div style="margin-top:12px;font-size:12px;color:var(--slate2);">同一天之内可调整到院时间和地址（IN 会收到通知）；日期要改请和 IN 室长沟通，由 IN 改。</div>'+krSurgeryHoursNote(c)+'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;"><select onchange="krSchSet(\'time\',this.value)" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;">'+krTimeOptionsFor(KR_SCH.time, c, ks.confirmedDate)+'</select><input value="'+krEsc(KR_SCH.address)+'" oninput="krSchSet(\'address\',this.value)" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;flex:1;min-width:260px;"><button class="btn-outline" onclick="krDoSchAdjust();KR_SUBV.edit=false;">保存调整</button></div>'; }
@@ -3162,6 +3162,7 @@ function krcEvents(){
     else if(b.type==='施术'){ var r = rm[b.clinicId+':'+b.caseId]; if(krcIsDirector() && !r && !(krcViewAll())) return; var items = r ? krActiveItems(r.c).filter(function(it){ return !krIsMgmtItemC(it); }).map(function(it){ return it.name; }).join('、') : ''; surg.push({b:b, row:r, label:(b.name||'')+' · '+(r ? r.clinicName : ((clinicById(b.clinicId)||{}).name||''))+(items ? ' · '+items : '')+((r && r.c.todayDirOp && Object.keys(r.c.todayDirOp).length) ? ' · 院长操作：'+Object.keys(r.c.todayDirOp).map(buyName).join('、') : '')}); }
     else busy.push(b);
   }); });
+  surg.forEach(function(x){ var c1 = x.row && x.row.c; if(x.b.type==='施术' && !x.b.subId && c1 && tripStateOf(c1)==='tentative') x.label = (x.label||'')+' · 暂定'; }); /* CMD-1029-09 二：暂定的施术块标「暂定」 */
   /* 已完成的面诊 / 施术 / 在韩子项在日历上加删除线、颜色变淡（CMD-1013-08 五·1） */
   surg.forEach(function(x){ var c0 = x.row && x.row.c; if(!c0) return; if(x.b.type==='面诊') x.done = !!c0.consultContentAt; else if(x.b.type==='施术' && !x.b.subId) { x.done = (c0.subItems||[]).some(function(s){ return s.kind==='施术' && s.done; }) || !!c0.krProcedureDone; x.arrived = !!(c0.hasArrived && !x.done); x.noShow = !!(c0.krNoShow && !c0.hasArrived && !x.done); } }); /* CMD-1028-13 二：客人已到院 → 块变灰 */
   /* CMD-1020-04：在韩到院（术后管理 / 管理项目 / 施术预约使用）一次到院 = 一个块（同一天同地点合并），块里写这次做什么；
@@ -3189,6 +3190,7 @@ function krcLanes(list){
 function krcOneLine(r0){
   var b = r0.b, tp = b.title==='复诊评估' ? '复诊评估' : b.title==='复诊面诊' ? '复诊' : b.type==='术后管理' ? (/持有/.test(r0.label||'') ? '持有使用' : '术后到院') : (b.type==='预约' ? '预约' : b.type);
   if(r0.visit) tp = r0.visit.what.join('、')+(r0.visit.hasDirOp ? '（院长操作）' : ''); /* CMD-1020-04：一次到院一个块，写这次做什么 */
+  if(b.type==='施术' && !b.subId && r0.row && r0.row.c && tripStateOf(r0.row.c)==='tentative') tp += '（暂定）';
   return '<span style="white-space:nowrap;"><b>'+krEsc(b.time)+'</b> · '+krEsc(b.name||'')+' · '+krEsc(tp)+' · '+krEsc((b.who===KRB_HOSP || !b.who) ? '全院' : b.who)+'</span>';
 }
 /* 已经重叠的（旧数据 / 别的路径产生的）：两个块都标红框「时间冲突」，不自动改动任何一方（CMD-1015-21） */
@@ -4668,6 +4670,10 @@ function krDayConfirmGo(){
 /* ===== CMD-1027-02 一：行程修正（取代页头旁单独改在韩期间；确认后通知 IN、Timeline 记一笔）===== */
 /* CMD-1027-08 五：页头在韩期间——主案件页和施术当天页一样：填了写「在韩 12/02 10:20 ～ 12/26 11:02」，没填（有韩国行程时）写「在韩：未填写」，后面接［行程修正］ */
 function krStayHeadHtml(c){
+  var __tt = (typeof tripStateTagHtml==='function' && tripStateOf(c)==='tentative') ? tripStateTagHtml(c) : ''; /* CMD-1029-09 二：暂定标记 */
+  var __r = krStayHeadHtml0(c); return (__r || __tt) ? (__tt + (__tt && __r ? ' ' : '') + __r) : '';
+}
+function krStayHeadHtml0(c){
   if(stayText(c)) return '<b style="font-size:13px;color:var(--slate2);"'+(stayAirportTip(c) ? ' title="'+krEsc(stayAirportTip(c))+'"' : '')+'>在韩 '+krEsc(stayText(c))+'</b>'+(staySuspect(c) ? ' <b style="font-size:12px;color:#B3261E;" title="'+krEsc(staySuspect(c))+'">⚠ 日期可能存错：'+krEsc(staySuspect(c))+'</b>' : '');
   if(c.settlementDone && !c.krVisit) return '<b style="font-size:13px;color:var(--muted);">在韩：未填写</b>';
   return '';

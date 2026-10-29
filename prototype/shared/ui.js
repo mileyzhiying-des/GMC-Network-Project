@@ -2395,9 +2395,16 @@ function submitKrScheduleDate(){
   var c = getCurrentCase(); if(!c) return;
   var ks = ensureKrScheduleDraft(c);
   if(!ks.primary){ alert('至少选择首选日期'); return; }
+  if(!ks.tripState){ alert('请选择行程状态（已定 / 暂定）'); return; } /* CMD-1029-09 二 */
+  if(ks.tripState==='booked' && (!!ks.draftIn !== !!ks.draftOut)){ alert('入境和离境日期要一起填，或都先不填'); return; }
+  if(ks.tripState==='booked' && ks.draftIn && ks.draftOut){
+    var ye = stayDateErr('入境日', ks.draftIn) || stayDateErr('离境日', ks.draftOut); if(ye){ alert(ye); return; }
+    if(ks.draftOut < ks.draftIn){ alert('离境日不能早于入境日'); return; }
+    var sr = coreSetStay(c, ks.draftIn, ks.draftOut, ME_NAME, {initial:true}); if(sr && sr.ok===false){ alert(sr.err); return; }
+  }
   ks.status = 'pending'; ks.rejectNote = '';
-  logCaseEvent(c, ME_NAME, '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'），等待KR 室长确认');
-  try{ if(c.settlementDone) pushKrNotif(caseKrHospital(c), '施术日期待确认：'+c.name+'（'+(c.caseNo||'')+'）已递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){} /* 通知 KR 室长（CMD-1013-02 九） */
+  logCaseEvent(c, ME_NAME, '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'；行程'+(ks.tripState==='booked' ? '已定（机票已订）' : '暂定')+'），等待KR 室长确认');
+  try{ if(c.settlementDone) pushKrNotif(caseKrHospital(c), '施术日期待确认：'+c.name+'（'+(c.caseNo||'')+'）已递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'；行程'+(ks.tripState==='booked' ? '已定' : '暂定')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){} /* 通知 KR 室长（CMD-1013-02 九） */
   updateCaseStage(c);
   buildCaseLog(c);
   renderCaseStatusBar(c);

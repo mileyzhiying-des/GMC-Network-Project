@@ -5446,6 +5446,16 @@ function nearestOpenMonth(fromDate, dates){
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
+/* CMD-1029-09 二：递交施术日期时选「行程状态」：已定（机票已订）/ 暂定；只是给 KR 看的标记，不影响流程。已定可顺便填入境 / 离境 */
+function tripStateOf(c){ return (c && c.krSchedule && c.krSchedule.tripState) || ''; }
+function tripStateTagHtml(c){ var t = tripStateOf(c); return t==='tentative' ? ' <span style="font-size:12px;font-weight:700;color:#8F6F0C;background:#FBF0C9;border-radius:4px;padding:1px 6px;">暂定</span>' : (t==='booked' ? ' <span style="font-size:12px;color:var(--sage);">行程已定</span>' : ''); }
+function setTripState(v){ var c = getCurrentCase(); if(!c) return; var ks = ensureKrScheduleDraft(c); ks.tripState = v; if(v!=='booked'){ ks.draftIn = ''; ks.draftOut = ''; } renderCaseBody(c); }
+function tripStateBlockHtml(c, ks){
+  var radio = function(v, lab){ return '<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-right:18px;cursor:pointer;"><input type="radio" name="trip-state" '+(ks.tripState===v ? 'checked ' : '')+'onchange="setTripState(\''+v+'\')"> '+lab+'</label>'; };
+  var inp = 'padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;';
+  return '<div style="margin-top:14px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">行程状态 <span style="color:#C1454A;">*</span> <span style="font-weight:400;font-size:12px;color:var(--muted);">给 KR 看的标记，不影响流程</span></div><div style="display:flex;flex-wrap:wrap;">'+radio('booked','已定（机票已订）')+radio('tentative','暂定（客人还没订机票 / 办签证）')+'</div>'+
+    (ks.tripState==='booked' ? '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:10px;font-size:12px;color:var(--slate2);">入境日期 <input type="date" value="'+aEscC(ks.draftIn||'')+'" '+stayRangeAttr()+' oninput="getCurrentCase().krSchedule.draftIn=this.value" style="'+inp+'"> 离境日期 <input type="date" value="'+aEscC(ks.draftOut||'')+'" '+stayRangeAttr()+' oninput="getCurrentCase().krSchedule.draftOut=this.value" style="'+inp+'"> <span style="color:var(--muted);">（选填，可以之后再填）</span></div>' : '')+'</div>';
+}
 function ensureKrScheduleDraft(c){
   if(!c.krSchedule) c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false};
   return c.krSchedule;
@@ -6597,11 +6607,11 @@ function krProcedureTabMain(c, tabsHtml){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">只能选择KR室长可接待的日期（浅色 = 休诊 / 约满 / 已过）</div>'+
         monthNav+
-        krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+
+        krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripStateBlockHtml(c, ks)+
         '<div style="display:flex;gap:12px;margin-top:16px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">'+krBtn+'</button></div>'; /* ［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现 */
     } else if(st==='Pending'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
-        '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待KR 室长确认</div>'+
+        '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待KR 室长确认'+tripStateTagHtml(c)+'</div>'+
         '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">等待 KR 室长选定日期、填到院时间和地址（或回复无法安排）</div>'+
         '<button class="btn-outline" onclick="requestCannotCoordinate()">'+krBtn+'</button>';
     } else if(st==='Confirmed'){

@@ -8065,4 +8065,26 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!msgs.some(function(m){ return /退款方式/.test(m); }) && (d.refunds||[])[0] && d.refunds[0].comp && !d.refunds[0].method, '置换不用填方式，记录里没有方式');
     } finally { window.alert = al; window.GMC_REFUND_PAY_MANUAL = false; }
   });
+  ST.def('R189a','CMD-1029-09 二（A1 分页）：递交施术日期要选行程状态（已定 / 暂定）；已定可顺便填入境 / 离境；暂定给 KR 看',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, msgs = []; window.alert = function(m){ msgs.push(String(m)); };
+    try{
+      var c = ST.newRes('R189'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c);
+      ST.ok(/行程状态/.test(document.getElementById('case-body').innerText) && /已定（机票已订）/.test(document.getElementById('case-body').innerText) && /暂定/.test(document.getElementById('case-body').innerText), '日期卡里有「行程状态」已定 / 暂定');
+      var ks = ensureKrScheduleDraft(c), td = todayStr(), dt = caseOpenDates(c).filter(function(x){ return x >= td; })[0]; ks.primary = dt;
+      msgs.length = 0; submitKrScheduleDate(); ST.ok(msgs.some(function(m){ return /行程状态/.test(m); }) && ks.status!=='pending', '没选行程状态不能递交');
+      setTripState('booked'); ks.draftIn = dt; ks.draftOut = ''; msgs.length = 0; submitKrScheduleDate(); ST.ok(msgs.some(function(m){ return /一起填/.test(m); }) && ks.status!=='pending', '已定只填一个日期 → 提醒要一起填或都不填');
+      setTripState('tentative'); submitKrScheduleDate(); ST.ok(ks.status==='pending' && ks.tripState==='tentative' && ST.hasLog(c, /行程暂定/), '选暂定可以递交，Timeline 记行程暂定');
+      ST.ok(/暂定/.test(document.getElementById('case-body').innerText), '递交后日期卡写「暂定」');
+      localStorage.setItem('__R189', JSON.stringify({id:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, date:dt}));
+      var d = ST.newRes('R189b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻']); ST.open(d); d.activeCaseTab = 'kr'; var k2 = ensureKrScheduleDraft(d); k2.primary = dt; setTripState('booked'); k2.draftIn = dt; k2.draftOut = ymdAdd(dt, 8); submitKrScheduleDate();
+      ST.ok(d.krSchedule.status==='pending' && d.krSchedule.tripState==='booked' && d.stay && d.stay.in===dt && d.stay.out===ymdAdd(dt, 8), '已定 + 入境 / 离境：递交时一起存进在韩期间');
+    } finally { window.alert = al; }
+  });
+  ST.def('R189b','CMD-1029-09 二（KM1 分页，先在 A1 跑 R189a）：KR 看得到「暂定」（页头 / 日期卡 / 日历块）',function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount(), '要在 KR 分页里跑')) return; var rec = JSON.parse(localStorage.getItem('__R189')||'null'); if(!ST.ok(!!rec, '先在 A1 跑 R189a')) return;
+    var r = krAllCases().filter(function(x){ return x.id===rec.id; })[0]; if(!ST.ok(!!r, '找不到案件')) return;
+    ST.ok(/暂定/.test(krStayHeadHtml(r.c).replace(/<[^>]+>/g, '')), 'KR 页头标「暂定」');
+    krShowCase(r.clinicId, r.id); krSetCaseTab('items'); ST.ok(/暂定/.test(document.getElementById('krcase-body').innerText) || /暂定/.test(document.getElementById('kr-casedetail').innerText), 'KR 案件页里有「暂定」');
+  });
 })();
