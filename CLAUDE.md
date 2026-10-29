@@ -1785,3 +1785,10 @@ prototype/shared/app.css  共用样式
 - **二** `notUseThisTime` / `markMgmtRows`（本地案件持有项目都标完成、有购买或术后管理使用）不再 `autoFinish`，改 `localLeaveAsk(c)` 弹窗「今天的项目都做完了。客人是否已离店？」［还没离店］（案件照旧进行中，可继续购买，之后按页头［客人离店］）［已离店］（`localLeaveYes` → `autoFinish`，钱没清照旧不结）。主线还在进行（`mainlineOngoing`）的案件仍不结案。自测里 `localLeaveAsk` 默认自动答「已离店」（`GMC_LOCAL_LEAVE_MANUAL` 关掉测弹窗）。
 - **三** 退款服务弹窗加必填「退款方式」现金 / 转账 / QRIS / 其他（其他要说明）：`rsMethodPick` / `refundMethodText`（没有 = 「未记录」）；写进批次 `refund.method`、购买案件 `holdingRefunds`、两边 Timeline、仅办理退款 结算 tab。**结束案件弹窗里的批次退款（`confirmEndCase` 的 hold 退款）这次没加方式**（任务只写退款服务）。自测 `GMC_REFUND_METHOD_MANUAL`。
 - **四** `reuseHandOffToMain` 仍把赴韩项目和结算单放主案件 `settlementBatches`（和一般赴韩定金同一套存法），批次多记 `viaCaseId` = 付款那天的子记录；`dayPaidBatches(c)` 找回（旧资料没有 viaCaseId 时按 `paidOnMain.batches` 编号找，**所以旧资料不用搬**）；子案件页 `subDayTabs` 的「结算」tab 恢复、`subSettleTabHtml` 显示这一天的定金；主案件结算卡标题写「记在子案件 A…-02」。
+
+## CMD-1029-07 补充（2026-10-29，追加；旧文字保留作历史）
+- 分支 V4，提交 81d6a2e（CLAUDE.md 文档另一个提交），不推送不合并，**数据版本不变（56）**（新增可空字段，旧客人没有 = 空，不猜，不用迁移）。
+- 客户预约页（booking.js，IN 室长代约新客也是开这个页）：新客人填完生日后 `bkMinor()`（`isMinorOn(dob, todayStr())`，data.js `ageOnDate` 算到月日，**以建立预约当天（印尼时间）为准**，满 21 岁生日当天算满 21）→ 未满 21 岁出现必选「婚姻状况 已婚 / 未婚」，选未婚再出现必勾「我已通知监护人（父母或法定监护人）」，没选 / 没勾红字挡住（`bkProfileNext`）；改生日 `bkDobChange` 重新判断，满 21 岁就收起并清掉选项。已登记的老客人不走这一步。
+- 记录：客户资料 `cl.minorInfo = {bookedOn, ageAtBooking, marital, guardianNotified, guardianAt}`（`submitSelfBooking` 建档时写；之后改到店日期不重算）；预约案件 Timeline 和客户 Timeline 各记一笔。IN `minorMarkText(cl)`：基础资料生日旁 / 客户档案「性别 / 出生日期」旁显示「未满 21 岁 · 未婚 · 已通知监护人（时间）」或「未满 21 岁 · 已婚」，客人现在满 21 岁后不再显示（记录保留）；KR 端不显示。
+- 生日建立后不能改：基础资料「生日」行没有［修改］；`openClientEdit('gender')` 对有生日的客人只改性别（生日只显示）；**没有生日的旧资料仍可补填**（我的判断）。
+- 测试：selftest 新增 R187a；R70a「生日空 → 挡住」改用没有生日的旧资料；预约页 UI 用 booking.html 脚本验证。
