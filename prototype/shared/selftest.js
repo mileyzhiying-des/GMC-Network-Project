@@ -437,8 +437,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.ok(ST.hasLog(c, /室长选择保留/) && ST.hasLog(c, /本次不使用任何持有项目/), '缺记录'); ST.ok(isEnded(c), '应结案（有购买），实际 '+c.stage);
   });
   ST.def('D28c','无法协调（有本地项目）→ 全退',function(){
-    var c = withLocal('D28c'); cancelAllKr(c, 'cannot'); localKeepChoice('refund'); document.querySelectorAll('[id^=lra-]').forEach(function(i){ i.value = '0'; }); document.getElementById('local-refund-all-reason').value = '（自测）'; confirmLocalRefundAll();
-    ST.ok(ST.hasLog(c, /室长选择全部退款/), '缺记录'); ST.ok(isEnded(c) && c.stage==='reportonly', '应为仅出报告，实际 '+c.stage);
+    var c = withLocal('D28c'); cancelAllKr(c, 'cannot'); localKeepChoice('refund'); localRefundAllToggle(true); document.querySelectorAll('input[id^=lra-][type=number]').forEach(function(i){ i.value = '0'; }); LOCAL_RF_PAY.m = '现金'; document.getElementById('local-refund-all-reason').value = '（自测）'; confirmLocalRefundAll();
+    ST.ok(ST.hasLog(c, /赴韩取消后本地项目退款（全部）/), '缺记录'); ST.ok(isEnded(c) && c.stage==='reportonly', '应为仅出报告，实际 '+c.stage);
   });
   ST.def('D31a','时间确认后取消全部赴韩（有本地项目）→ 保留并使用',function(){
     var c = withLocal('D31a'); cancelAllKr(c); localKeepChoice('keep'); localAskAnswer(true); var p = ST.localProj('LHALa peel'); chooseProjectEntryMode('holdings'); ST.useHold(c, 'main', p.name, 1); markMgmtRows('main', 'done', true);
@@ -448,8 +448,44 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     var c = withLocal('D31b'); cancelAllKr(c); localKeepChoice('keep'); localAskAnswer(true); chooseProjectEntryMode('holdings'); notUseThisTime('main'); ST.ok(isEnded(c) && ST.hasLog(c, /本次不使用任何持有项目/), '应结案并有记录');
   });
   ST.def('D31c','时间确认后取消全部赴韩（有本地项目）→ 全退',function(){
-    var c = withLocal('D31c'); cancelAllKr(c); localKeepChoice('refund'); document.querySelectorAll('[id^=lra-]').forEach(function(i){ i.value = '0'; }); document.getElementById('local-refund-all-reason').value = '（自测）'; confirmLocalRefundAll();
-    ST.ok(ST.hasLog(c, /室长选择全部退款/) && isEnded(c) && c.stage==='reportonly', '应为仅出报告');
+    var c = withLocal('D31c'); cancelAllKr(c); localKeepChoice('refund'); localRefundAllToggle(true); document.querySelectorAll('input[id^=lra-][type=number]').forEach(function(i){ i.value = '0'; }); LOCAL_RF_PAY.m = '现金'; document.getElementById('local-refund-all-reason').value = '（自测）'; confirmLocalRefundAll();
+    ST.ok(ST.hasLog(c, /赴韩取消后本地项目退款（全部）/) && isEnded(c) && c.stage==='reportonly', '应为仅出报告');
+  });
+  ST.def('R194a','CMD-1029-11（IN 分页）：赴韩全部取消后本地项目——全选退 / 只退其中一项 / 一项都不退；退款方式必填、记进 holdingRefunds、没勾的转持有',function(){
+    var alerts = [], al0 = window.alert; window.alert = function(m){ alerts.push(String(m)); };
+    var twoLocal = function(tag){ var c = withLocal(tag); var hs = getClientHoldings(c.name), h = hs.filter(function(x){ return x.batches.some(function(b){ return b.caseId===c.id; }); })[0], b0 = h.batches.filter(function(b){ return b.caseId===c.id; })[0]; var b1 = JSON.parse(JSON.stringify(b0)); b1.date = b0.date; h.batches.push(b1); return {c:c, h:h, b0:b0, b1:b1}; };
+    var fill = function(vals){ [].forEach.call(document.querySelectorAll('input[id^=lra-][type=number]'), function(el, i){ el.value = vals[i]===undefined ? '0' : vals[i]; }); document.getElementById('local-refund-all-reason').value = '（自测）客人不去了'; };
+    /* ① 全选退 */
+    var A = twoLocal('R194a'); cancelAllKr(A.c, 'cannot'); localKeepChoice('refund');
+    ST.ok(/全选/.test(document.getElementById('local-refund-all-rows').textContent) && document.querySelectorAll('.lra-cb').length===2, '列出可退批次，每行一个勾选框 + 上方「全选」');
+    ST.ok(/退款方式/.test(document.getElementById('local-refund-all-method').textContent), '有退款方式');
+    localRefundAllToggle(true); fill(['0','0']); alerts.length = 0; confirmLocalRefundAll();
+    ST.ok(!A.b0.voided && !A.b1.voided && alerts.some(function(m){ return /退款方式/.test(m); }), '勾了批次没选退款方式 → 不能退');
+    LOCAL_RF_PAY.m = '其他'; alerts.length = 0; confirmLocalRefundAll(); ST.ok(!A.b0.voided && alerts.some(function(m){ return /说明/.test(m); }), '选「其他」要写说明');
+    LOCAL_RF_PAY.m = '转账'; confirmLocalRefundAll();
+    ST.ok(A.b0.voided && A.b1.voided && A.b0.refund.method==='转账' && A.b1.refund.method==='转账', '全选：两批都退款并记退款方式');
+    var hr = (A.c.holdingRefunds||[]); ST.ok(hr.length===2 && hr.every(function(x){ return x.method==='转账'; }), '记进 holdingRefunds（和退款服务同一份纪录）');
+    ST.ok(clientByName(A.c.name).timeline.some(function(e){ return /赴韩取消后退款本地项目/.test(e.action) && /方式：转账/.test(e.action); }), '客户 Timeline 有退款纪录和方式');
+    ST.ok(ST.hasLog(A.c, /赴韩取消后本地项目退款（全部）/) && isEnded(A.c) && A.c.stage==='reportonly', '全部退完：仅出报告');
+    /* ② 只退其中一项 */
+    var B = twoLocal('R194b'); cancelAllKr(B.c, 'cannot'); localKeepChoice('refund');
+    document.querySelector('.lra-cb[data-i="0"]').checked = true; localRefundRowSync(); ST.ok(!document.getElementById('lra-all').checked, '只勾一项时「全选」不勾');
+    fill(['0','0']); LOCAL_RF_PAY.m = '现金'; confirmLocalRefundAll();
+    var vo = [B.b0, B.b1].filter(function(b){ return b.voided; }), keep = [B.b0, B.b1].filter(function(b){ return !b.voided; });
+    ST.ok(vo.length===1 && keep.length===1 && vo[0].refund.method==='现金', '只退勾选的一项');
+    ST.ok((B.c.holdingRefunds||[]).length===1, 'holdingRefunds 只有退的那一项');
+    ST.ok(getClientHoldings(B.c.name).some(function(h){ return h.batches.indexOf(keep[0])>-1 && !keep[0].voided && (keep[0].bought-keep[0].used)>0; }), '没勾的批次仍是客人持有（客人页看得到）');
+    ST.ok(B.c.localAsk===true && !isEnded(B.c) && ST.hasLog(B.c, /赴韩取消后本地项目退款（部分）.*没勾选的转为客人持有/), '部分退：接着问是否做本地项目，案件不结案');
+    document.getElementById('local-ask-overlay').classList.remove('open');
+    /* ③ 一项都不退 = 全部转持有 */
+    var C = twoLocal('R194c'); cancelAllKr(C.c, 'cannot'); localKeepChoice('refund'); fill(['0','0']); LOCAL_RF_PAY.m = '现金'; alerts.length = 0; confirmLocalRefundAll();
+    ST.ok(!C.b0.voided && !C.b1.voided && !(C.c.holdingRefunds||[]).length && !alerts.length, '一项都没勾：不退款、也不用填退款方式');
+    ST.ok(C.c.localAsk===true && ST.hasLog(C.c, /全部转为客人持有/), '全部转为客人持有');
+    document.getElementById('local-ask-overlay').classList.remove('open');
+    /* ④ 金额不能超过实付；用过的 / 套餐 / 置换批次不列 */
+    var D = twoLocal('R194d'); D.b0.used = 1; D.b1.pkg = true; cancelAllKr(D.c, 'cannot'); alerts.length = 0; localKeepChoice('refund');
+    ST.ok(alerts.some(function(m){ return /不能退款/.test(m); }) && D.c.localAsk===true, '用过的批次 / 套餐内含批次不列入可退（没有可退批次 → 只能保留）'); 
+    window.alert = al0; document.getElementById('local-refund-all-overlay').classList.remove('open'); document.getElementById('local-ask-overlay').classList.remove('open');
   });
 
   /* ================= E 其他功能 ================= */

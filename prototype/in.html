@@ -431,21 +431,22 @@ if(location.protocol==='file:'){ document.addEventListener('DOMContentLoaded', f
     <div style="font-size:15px;font-weight:700;margin-bottom:10px;">赴韩项目已全部取消并退款</div>
     <div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">这个案件里还有本地项目 / 术后管理项目：</div>
     <div id="local-keep-list" style="font-size:12px;color:var(--slate2);margin-bottom:10px;"></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">由室长决定：保留（之后问是否做本地项目），或按持有批次规则整批退款（金额 + 原因必填，只有没用过的批次可退）。</div>
-    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localKeepChoice('keep')">保留</button><button class="btn-outline" style="flex:1;" onclick="localKeepChoice('refund')">全部退款</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">由室长决定：全部保留（之后问是否做本地项目），或选择要退款的批次（可全选，也可只退其中几项；没勾选的转为客人持有；金额、退款方式、原因必填，只有没用过的单品批次可退）。</div>
+    <div style="display:flex;gap:10px;"><button class="btn-primary" style="flex:1;" onclick="localKeepChoice('keep')">保留</button><button class="btn-outline" style="flex:1;" onclick="localKeepChoice('refund')">选择退款</button></div>
   </div>
 </div>
 
 <div class="modal-overlay" id="local-refund-all-overlay">
   <div class="modal-box">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <span style="font-size:15px;font-weight:700;">本地项目 / 术后管理 全部退款</span>
+      <span style="font-size:15px;font-weight:700;">本地项目 / 术后管理 退款（可全选，也可逐项选）</span>
       <span style="cursor:pointer;color:var(--slate);" onclick="closeLocalRefundAll()">✕</span>
     </div>
     <div id="local-refund-all-rows" style="margin-bottom:10px;"></div>
     <div style="font-size:12px;font-weight:700;margin-bottom:6px;">退款原因 <span style="color:#C1454A;">*</span></div>
     <textarea id="local-refund-all-reason" rows="2" placeholder="请手动输入退款原因（必填）" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>
-    <div style="font-size:12px;color:var(--muted);margin-top:8px;">整批退款、整批作废；用过的批次不能退（保留）。退完且本次没有购买 → 仅出报告。</div>
+    <div id="local-refund-all-method" style="margin-top:10px;"></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px;">勾选的批次整批退款、整批作废；<b>没勾选的转为客人持有</b>（一项都不勾 = 全部转为客人持有）；用过的批次不能退。退款记进购买案件的退款纪录。</div>
     <div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" style="flex:1;" onclick="closeLocalRefundAll()">返回</button><button class="btn-primary" style="flex:1;" onclick="confirmLocalRefundAll()">确认退款</button></div>
   </div>
 </div>
