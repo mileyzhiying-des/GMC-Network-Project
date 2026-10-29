@@ -1680,7 +1680,7 @@ function openReportModal(){
 function renderReportPage(){
   var c = getCurrentCase(), el = document.getElementById('rp-body'); if(!c || !el) return;
   el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><button class="btn-outline" onclick="goBack()">← 返回案件</button>'+
-    '<div style="display:flex;gap:8px;"><button class="btn-outline" onclick="reportToPdf()">生成 PDF 并存入附件</button><button class="btn-primary" onclick="goBack();switchCaseTab(\'kr\')">查看方案 →</button></div></div>'+
+    '<div style="display:flex;gap:8px;"><button class="btn-outline" onclick="reportToPdf()">生成 PDF 并存入附件</button><button class="btn-primary" onclick="goBack();reportViewPlan()">查看方案 →</button></div></div>'+
     '<div class="card" style="padding:28px 36px;max-width:820px;">'+reportDocHtml(c, REPORT_SHOW_ORIG)+'</div>';
 }
 

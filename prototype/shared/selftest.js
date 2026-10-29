@@ -7906,4 +7906,40 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!c.localMgmt && !document.getElementById('lm-buy-overlay').classList.contains('open') && !isEnded(c), '关掉弹窗不购买：案件原样、没有留下本地管理记录');
     } finally { window.alert = al; window.confirm = cf; window.GMC_NO_FOLLOWASK = oldF; }
   });
+
+  /* CMD-1029-05（A1 分页）：继续面诊（沿用原方案）——面诊 tab 和正常面诊一样（报告 →［查看方案］→ 选项目），付定金后赴韩项目记在主案件 */
+  ST.def('R183a','CMD-1029-05（A1 分页）：继续面诊后面诊 tab = 报告 →［查看方案］→ 选项目（①赴韩付定金 ②本地 ③客人不做）；方案页日期显示原日期',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm, oldF = window.GMC_NO_FOLLOWASK; window.alert = function(){}; window.confirm = function(){ return true; };
+    var mk = function(tag){
+      var src = ST.newRes(tag+'s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      var kp = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active && p.hospitalId==='H1'; })[0];
+      src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.needsConsult = true; src.consultRequested = true; src.reportReady = true; src.consultStatus = 'report_ready'; src.videoSummary = '（自测）原方案'; src.reportDate = D(-31); src.visitDate = D(-31); src.arrivedDay = D(-31); src.hasArrived = true; src.subState = 'arrived';
+      src.krScope = {items:[{name:kp.name, price:kp.price, note:''}], overallNote:'', updatedAt:nowFullDt()}; src.consultStartedAt = D(-31)+' 03:00:00'; src.visitClosed = true; src.endNote = '客人不做项目'; src.stage = 'reportonly'; src.krDepositPaid = false;
+      var n = ST.newRes(tag+'n', {phone:clientPhoneOf(src.name)}); ST.open(n); window.GMC_NO_FOLLOWASK = false; markArrived(); n = getCurrentCase();
+      fuSet('mode', 'link'); fuSet('type', '接续面诊'); fuSet('hist', 'none'); fuSet('proj', 'none'); followupAskDone(true); n = getCurrentCase();
+      n.metaviewStatus = 'ready'; confirmMaterials(); n = getCurrentCase(); window.GMC_NO_FOLLOWASK = true; return {src:src, n:n, kp:kp};
+    };
+    var txt = function(){ return document.getElementById('case-body').innerText.replace(/\s+/g, ' '); };
+    try{
+      var A = mk('R183'), n = A.n; ST.open(n); n.activeCaseTab = 'consult'; renderCaseBody(n);
+      var t1 = txt();
+      ST.ok(/面诊诊疗报告/.test(t1) && /查看方案/.test(t1) && /沿用自 /.test(t1) && /不收面诊费/.test(t1) && !/只读 · 原诊疗方案日期/.test(t1) && !/已选择/.test(t1), 'Step 1：报告卡 +［查看方案］+「沿用自 … 不收面诊费」，没有旧的只读卡，还没有选项目区块');
+      ST.ok(/出具日期 <\/td><td>/.test('') || reportDocHtml(n, false).indexOf(D(-31))>-1 && /沿用于/.test(reportDocHtml(n, false)), '方案页出具日期 = 原方案日期，旁边注「沿用于 …」');
+      openReportModal(); ST.ok(/goBack\(\);reportViewPlan\(\)/.test(document.getElementById('rp-body').innerHTML), '诊疗方案页［查看方案 →］接到选项目（不再绕回）'); goBack();
+      reportViewPlan(); n = getCurrentCase(); var t2 = txt();
+      ST.ok(/赴韩方案/.test(t2) && /已选择/.test(t2) && /客人不做项目/.test(t2) && /서비스/.test(t2) && /埋线|[\u4e00-\u9fa5]/.test(A.kp.name) && t2.indexOf(A.kp.name)>-1, 'Step 2：和正常面诊同一个选项目区块（赴韩方案、已选择、서비스、客人不做项目），推荐项目来自原方案');
+      ST.open(n); n.activeCaseTab = 'kr'; confirmProjectSelection(); ST.ok(!!latestUnpaidBatch(n), '① 选赴韩项目 → 生成定金结算单'); settleProjects(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); n = getCurrentCase();
+      var M = mainOf(n);
+      ST.ok(M.settlementDone && krDepositPaid(M) && krActiveItems(M).length===1 && financePaid(M).kr>0 && !n.settlementBatches.length && !krAllItems(n).length && n.paidOnMain, '① 付定金成功、不收面诊费：赴韩项目和结算单记在主案件 '+M.caseNo+'，子记录 '+n.caseNo+' 只留说明');
+      ST.ok(isUpgraded(M) && M.stage==='travel' && recBuyState(n, n.krScope.items[0])==='bought', '① 主案件 '+M.caseNo+' 升级（赴韩施术阶段），面诊页「购买情况」= 已购买');
+      /* ② 本地 */
+      var B = mk('R184'); n = B.n; ST.open(n); n.activeCaseTab = 'consult'; reportViewPlan(); n = getCurrentCase(); ST.open(n); n.activeCaseTab = 'kr';
+      n.recommended = []; var lp = ST.localProj('LHALa peel'); toggleLocalProject('main', lp.id); confirmProjectSelection(); settleProjects(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); n = getCurrentCase();
+      ST.ok(getClientHoldings(n.name).some(function(h){ return h.itemName===lp.name && h.batches.some(function(b){ return b.caseId===n.id; }); }) && !krAllItems(mainOf(n)).length, '② 选本地：变成客人持有，记在本子记录，不动主案件赴韩项目');
+      /* ③ 客人不做 */
+      var C = mk('R185'); n = C.n; ST.open(n); n.activeCaseTab = 'consult'; reportViewPlan(); n = getCurrentCase(); noProjectForClient(); n = getCurrentCase();
+      ST.ok(n.stage==='reportonly', '③ 客人不做项目 → 仅出报告');
+    } finally { window.alert = al; window.confirm = cf; window.GMC_NO_FOLLOWASK = oldF; }
+  });
 })();

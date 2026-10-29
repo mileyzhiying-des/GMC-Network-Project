@@ -1772,3 +1772,9 @@ prototype/shared/app.css  共用样式
 ## CMD-1029-04 补充（2026-10-29，追加；旧文字保留作历史）
 - 分支 **V4**，基准 0380de9，不推送不合并，数据版本不变（56）。「使用之前购买的项目」开的独立案件（`c.usePrev`）本地项目 tab 的「是否使用持有项目？」清单加［购买其他项目］（`usePrevBuyOk` / `usePrevBuy`，data.js）：按钮同一排 ［购买其他项目］［本次不使用］［使用项目］（主操作最右，`holdingsUseHtml`）；打开和一般本地选购同一个弹窗（`lmBuyModalRender` + `localPurchaseHtml(c,'lm')`，单品 / 活动价 / 套餐 / 서비스），结算走 `lmSettle`（确认付款 → 客人持有 + 记在本案件 `c.localMgmt.batches`，结算 tab 出现）；买完弹窗关掉回到清单（`lm.fromUsePrev` / `step:'usePrevDone'`，`lmSettleDo` 与 `lmNoBuy` 各加一个分支），新买的项目当天可接着用，持有行写「购买于 本案件号」。已使用状态的面板（`mgmtActiveHtml`）里「继续选购项目」对这类案件改名［购买其他项目］走同一个弹窗；「本次不使用」后进入的就是一般本地选购画面（原有流程）。**到客人离店前**：本案件只要没结束就能按；但本地案件「持有项目全部标完成」时会按原规则自动结案（`markMgmtRows` → `autoFinish`），结案后没有入口——没改这条结案规则，见汇报。
 - 测试：新增 R182a；回归对照 0380de9：A1 全套只多 R182a，KM1 / KD1 批次一致（R83a 旧问题，两边同样失败），roletest 8 个账号 0 不符。
+
+## CMD-1029-05 补充（2026-10-29，追加；取代 CMD-1022-06 / 1019-xx 里「沿用原诊疗方案 = 面诊 tab 只读卡 `reuseReportHtml`」，旧文字保留作历史）
+- 分支 **V4**，基准 2aeeb1b，不推送不合并，数据版本不变（56）。**bug 原因**：继续面诊（沿用原方案）会 `joinMain`，原案件（仅出报告的主案件）因为有了这个子记录就算「升级」（`isUpgraded`），子记录的面诊 tab 在升级后走 `consultReportV2Html`（只读摘要，没有选项目区块），`consultTabHtml` 对沿用方案的案件更是先返回只读卡 `reuseReportHtml`；子案件页又没有「赴韩项目」tab（要先付定金才有），所以选项目的入口哪里都没有；方案页［查看方案 →］只是 `switchCaseTab('kr')`，又回到面诊 tab（绕圈）。
+- 改法：`consultTabHtml` 沿用方案且 `report_ready` 时走正常面诊的画面（面诊 + 已出方案 +「沿用自 A000xxx · 原方案 MM/DD · 不收面诊费」+ 报告卡［下载］［查看方案］［收起 / 展开］+ 小链接「查看原案件」+ 价格已更新提示）；`consultPlanOpen` 对沿用方案不把预填的 `recommended` 算 Step 2（要按［查看方案］才进）；`reuseStepOn(c)`（沿用方案的子记录、还没有结算单）时不走升级版只读，子案件页面诊 tab（`subTabBodyHtml`）Step 2 后面挂 `krTabContent`（同一个选项目区块）；方案页［查看方案 →］改接 `reportViewPlan()`；`applyReuseReport` 把 `c.reportDate` 设成原方案日期、`reuseReport.usedAt` 记沿用那天，方案页「出具日期」显示原日期 +「（沿用于 MM/DD）」。
+- **付定金后升级的是哪个案件**：主案件（被继续的原案件，例 A000010）。子记录（A000010-02）选项目、付定金，付款成功后 `reuseHandOffToMain(c)` 把赴韩项目和结算单整体交给主案件（批次号接着主案件往后排，`c.paidOnMain` 留说明），因为 KR 和主案件的赴韩施术 tab 都只读主案件；主案件进入赴韩施术阶段、定金记在主案件。选本地项目则留在子记录（客人持有）；客人不做 → 子记录仅出报告。
+- 测试：新增 R183a；回归对照 2aeeb1b 无新增失败。

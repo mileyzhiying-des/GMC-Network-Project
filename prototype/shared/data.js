@@ -2191,7 +2191,7 @@ function reportDocHtml(c, showOrigWanted, inline){
   var ks = c.krScope || {items:[], overallNote:''}, rec = recSummaryHtml(ks.items||[], ks.overallNote);
   return '<div style="text-align:center;border-bottom:2px solid var(--navy);padding-bottom:12px;margin-bottom:14px;"><div style="font-size:12px;letter-spacing:2px;color:var(--muted);">GMC NETWORK</div><div style="font-size:22px;font-weight:700;color:var(--navy);margin-top:4px;">诊疗方案</div></div>'+
     '<table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:14px;"><tr><td style="padding:4px 0;color:var(--muted);width:90px;">客人</td><td>'+esc(c.name)+'</td><td style="color:var(--muted);width:90px;">Case ID</td><td>'+esc(c.caseNo||'')+'</td></tr>'+
-    '<tr><td style="padding:4px 0;color:var(--muted);">主诊院长</td><td>'+esc(c.director||'')+'</td><td style="color:var(--muted);">出具日期</td><td>'+esc(c.reportDate||D(0))+'</td></tr>'+
+    '<tr><td style="padding:4px 0;color:var(--muted);">主诊院长</td><td>'+esc(c.director||'')+'</td><td style="color:var(--muted);">出具日期</td><td>'+esc(c.reportDate||(c.reuseReport&&c.reuseReport.date)||D(0))+(c.reuseReport && c.reuseReport.usedAt ? ' <span style="font-size:12px;color:var(--muted);">（沿用于 '+esc(String(c.reuseReport.usedAt).slice(5).replace('-', '/'))+'）</span>' : '')+'</td></tr>'+
     '<tr><td style="padding:4px 0;color:var(--muted);">医院</td><td colspan="3">'+esc(hospitalName(caseKrHospital(c),'ko'))+'</td></tr></table>'+toggle+
     '<div style="font-size:13px;line-height:1.9;color:var(--navy);margin-bottom:18px;">'+(showOrig ? '' : '尊敬的 '+esc(c.name)+'：<br><br>')+body+(showOrig ? '' : '<br><br>如有任何疑问，欢迎随时联系。')+'</div>'+
     (rec ? rec : '')+
@@ -2209,7 +2209,7 @@ function reportToPdf(){
 }
 function toggleReportOrig(){ REPORT_SHOW_ORIG = !REPORT_SHOW_ORIG; if(document.getElementById('rptfull-overlay') && document.getElementById('rptfull-overlay').classList.contains('open')){ fullReportRender(); return; } if(typeof renderReportPage==='function') renderReportPage(); var c = getCurrentCase(); if(c && typeof renderCaseBody==='function') renderCaseBody(c); }
 /* CMD-1025-04 A：［查看方案］作用不变（原方案页右上［查看方案 →］）：没买项目 → 进去选购；买完 → 看已选项目（赴韩施术 tab）；没升级的案件选项目的卡就在面诊 tab 报告下面，所以滚过去 */
-function consultPlanOpen(c){ return !!(c.planViewed || (c.recommended||[]).length || c.settlementDone || (c.settlementBatches||[]).length || c.projectsLocked); } /* Step 2：按过［查看方案］或已经勾了 / 买了项目 */
+function consultPlanOpen(c){ return !!(c.planViewed || (!c.reuseReport && (c.recommended||[]).length) || c.settlementDone || (c.settlementBatches||[]).length || c.projectsLocked); } /* Step 2：按过［查看方案］或已经勾了 / 买了项目 */
 function toggleReportOpen(){ var c = getCurrentCase(); if(!c) return; var up = false; try{ up = isUpgraded(mainOf(c)); }catch(e){} c.reportOpen = !((c.reportOpen===undefined) ? (!consultPlanOpen(c) || up) : c.reportOpen); renderCaseBody(c); }
 function reportViewPlan(){
   var c = getCurrentCase(); if(!c) return;
@@ -3575,7 +3575,8 @@ function applyReuseReport(c){
   c.consultStatus = 'report_ready';
   c.videoSummary = src.videoSummary || '';
   c.reportUploadedBy = src.reportUploadedBy || '';
-  c.reuseReport = {fromId:src.id, caseNo:src.caseNo, date:reportDateOf(src)};
+  c.reuseReport = {fromId:src.id, caseNo:src.caseNo, date:reportDateOf(src), usedAt:todayStr()};
+  c.reportDate = c.reuseReport.date; /* CMD-1029-05：方案的出具日期是原方案的日期，不是沿用那天 */
   /* 旧诊疗方案的方案：旧案件的赴韩项目名（不含已更换的原项目）；没有就取它的可选范围；价格按现在的项目库重新取 */
   var names = [];
   krAllItems(src).forEach(function(it){ if(!it.swapped && names.indexOf(it.name)<0) names.push(it.name); });
@@ -4051,7 +4052,7 @@ function reuseReportHtml(c){
 
 function consultTabHtml(c){
   if(isRevEval(c)) return revEvalTabHtml(c); /* CMD-1022-07：复诊评估 tab（没有面诊费卡） */
-  if(c.reuseReport) return reuseReportHtml(c);
+  if(c.reuseReport && c.consultStatus!=='report_ready') return reuseReportHtml(c); /* CMD-1029-05：沿用原方案后 consultStatus 是 report_ready，走下面和正常面诊同一个画面（报告 →［查看方案］→ 选项目）；只有异常状态才退回只读卡 */
   var fee = consultFeeStatusMain(c);
   var waiverText = c.consultFeeWaived ? '原因：'+c.consultFeeWaived.reason : '';
   var sub = subStatusRowHtml(consultSubItems(c)); var ugC = urgeInfo(c); if(ugC && c.consultStatus==='awaiting_report' && !c.reportReady) sub = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+sub+'<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="urgeKr()">'+(c.urgedAt ? '再次催办' : '催办')+'</button></div>'; /* CMD-1026-11 三：催办放在「已超过预计时间」旁 */
@@ -4091,11 +4092,13 @@ function consultTabHtml(c){
        Step 2（按了［查看方案］，或已经勾了项目 / 买了项目）= 报告折叠（标题行留［展开］）+ 下面出现赴韩方案卡，［查看方案］拿掉（升级后的案件仍保留，跳赴韩施术 tab）；离开再回来仍是 Step 2 */
     var talk = consultTalkVisible(c) ? '<button class="btn-outline" onclick="consultTalkShortcut()">邀请室长商谈</button>' : '';
     var step2 = consultPlanOpen(c), up = false; try{ up = isUpgraded(mainOf(c)); }catch(e){}
-    if(up) return consultReportV2Html(c, talk); /* CMD-1027-01 B：已升级的主案件 / 它的子案件 = 面诊卡 + 报告卡（摘要）+ 可选范围卡；一般案件不动 */
+    if(up && !reuseStepOn(c)) return consultReportV2Html(c, talk); /* CMD-1027-01 B：已升级的主案件 / 它的子案件 = 面诊卡 + 报告卡（摘要）+ 可选范围卡；一般案件不动 */
     var open = (c.reportOpen===undefined) ? (!step2 || up) : !!c.reportOpen; /* 升级后的案件照现在：报告默认展开 */
     var btns = '<button class="btn-outline" onclick="reportDownload()">下载</button>'+((!step2 || up) ? '<button class="btn-primary" onclick="reportViewPlan()">查看方案</button>' : '')+'<button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="toggleReportOpen()">'+(open ? '收起' : '展开')+'</button>';
-    return '<div class="card" style="padding:16px 22px;margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:15px;font-weight:700;">面诊</span><span class="status-pill" style="background:#E3F4E8;color:#2F7A4B;">已出方案</span>'+(talk ? '<span style="margin-left:auto;">'+talk+'</span>' : '')+'</div></div>'+
-      '<div class="card" style="padding:22px 28px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '12' : '0')+'px;"><span style="font-size:15px;font-weight:700;">面诊诊疗报告</span><span style="margin-left:auto;display:flex;gap:8px;align-items:center;">'+btns+'</span></div>'+
+    var ru = c.reuseReport, ruNote = ru ? '<span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">沿用自 '+cesc(ru.caseNo)+'</span><span style="font-size:12px;color:var(--muted);">原方案 '+cesc(String(ru.date||'').slice(5).replace('-', '/'))+(c.reuseAfterConsult ? ' · 面诊后院长判断无变动' : ' · 不收面诊费')+'</span>' : ''; /* CMD-1029-05：继续面诊（沿用原方案）旁边加注 */
+    var ruLink = ru ? '<a href="#" class="info-link" style="font-size:12px;" onclick="openCaseDetail(\''+ru.fromId+'\');return false;">查看原案件</a>' : '';
+    return '<div class="card" style="padding:16px 22px;margin-bottom:14px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:15px;font-weight:700;">面诊</span><span class="status-pill" style="background:#E3F4E8;color:#2F7A4B;">已出方案</span>'+ruNote+(talk ? '<span style="margin-left:auto;">'+talk+'</span>' : '')+'</div></div>'+
+      '<div class="card" style="padding:22px 28px;"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '12' : '0')+'px;"><span style="font-size:15px;font-weight:700;">面诊诊疗报告</span>'+ruLink+'<span style="margin-left:auto;display:flex;gap:8px;align-items:center;">'+btns+'</span></div>'+(ru ? reusePriceNoteHtml(c) : '')+
       (open ? '<div style="max-width:820px;">'+reportDocHtml(c, REPORT_SHOW_ORIG, true)+'</div>' : '')+'</div><div id="consult-after-report"></div>';
   }
   return '';
@@ -5394,6 +5397,7 @@ function confirmSettlementPayment(){
     }
     c.activeCaseTab = isLocalCase(c) ? 'localmgmt' : 'kr'; /* 本地案件的流程在本地管理tab里 */
   }
+  if(c.reuseReport && c.mainId && krActiveItems(c).length>0) reuseHandOffToMain(c); /* CMD-1029-05：继续面诊（沿用原方案）付定金后，赴韩项目 / 结算单交给主案件 */
   updateCaseStage(c);
   closeSettleModal();
   renderCaseStatusBar(c);
@@ -10762,7 +10766,7 @@ function subKrSurgHtml(m, v){
 function subTabBodyHtml(c, key){
   var ctx = subCtxOf(c), m = ctx.m, v = ctx.v, rec = ctx.isRec ? c : m, sp = '<div style="height:12px;"></div>';
   if(key==='visit') return subVisitTabHtml(c);
-  if(key==='consult') return consultTabHtml(rec);
+  if(key==='consult'){ var ch0 = consultTabHtml(rec); if(ctx.isRec && reuseStepOn(rec) && rec.consultStatus==='report_ready' && consultPlanOpen(rec) && showKrTab(rec)) ch0 += krTabContent(rec); return ch0; } /* CMD-1029-05：继续面诊（沿用原方案）的那一天，Step 2 在这里选项目，和正常面诊一样 */
   if(key==='krproj') return todaySureKrHtml(m, v.date);
   if(key==='krsurg') return subKrSurgHtml(m, v);
   if(key==='rev') return revEvalTabHtml(c);
@@ -10778,7 +10782,7 @@ function subTabBodyHtml(c, key){
 }
 function subSettleTabHtml(c){
   var ctx = subCtxOf(c);
-  if(ctx.isRec) return showSettleTab(c) ? settleTabHtml(c) : '<div class="card" style="padding:22px 24px;font-size:13px;color:var(--muted);">这一天没有收钱</div>';
+  if(ctx.isRec) return showSettleTab(c) ? settleTabHtml(c) : '<div class="card" style="padding:22px 24px;font-size:13px;color:var(--muted);">'+(c.paidOnMain ? '这一天选的赴韩项目和付的定金已记在主案件 <a href="#" class="info-link" onclick="closeSubcase(\''+c.id+'\');return false;">'+cesc(c.paidOnMain.caseNo)+'</a> 的「结算」tab' : '这一天没有收钱')+'</div>';
   var bs = subDayMoney(ctx), lmB = (ctx.m.localMgmt && ctx.v.place==='IN' && (ctx.v.rec||ctx.v.caseId)===ctx.m.id) ? (ctx.m.localMgmt.batches||[]) : []; return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:8px;">结算 <span style="font-weight:400;font-size:12px;color:var(--muted);">这一天收的钱</span></div>'+((bs.length || lmB.length) ? bs.map(function(b){ return settlementCardHtml(ctx.m, b); }).join('')+lmB.map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">本地购买 '+cesc(b.time||'')+'</span><span style="font-size:12px;">'+(b.inTotal!==undefined ? formatCurrency(b.inTotal, 'IDR') : '')+'</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);">这一天没有收钱</div>')+'</div>';
 }
 function subPageHtml(c){
@@ -11760,4 +11764,28 @@ function usePrevBuy(){
   c.localMgmt.step = 'buy'; c.localMgmt.addBuy = false; c.localMgmt.fromUsePrev = true;
   LM_BUY_OPEN = c.id; logCaseEvent(c, actingName(), '本地项目：购买其他项目');
   lmBuyModalRender();
+}
+
+/* CMD-1029-05：继续面诊（沿用原方案）的子记录，还没有结算单之前，面诊 tab 用和正常面诊一样的两步画面（报告 →［查看方案］→ 选项目）。
+   原因：主案件因为有了这个子记录就算「升级」（isUpgraded），升级版面诊 tab（consultReportV2Html）只读、没有选项目区块，子案件页也没有赴韩项目 tab，选项目的入口哪里都没有 */
+function reuseStepOn(c){ return !!(c && c.reuseReport && !(c.settlementBatches||[]).length && !c.settlementDone); }
+
+/* CMD-1029-05：继续面诊的那一天（子记录，沿用原方案）在子案件页里选项目、付定金；但赴韩的一切后续（KR 确认施术日期、到院、尾款、术后管理）都读主案件，
+   子记录里的赴韩项目 / 结算单 KR 看不到、主案件的赴韩施术 tab 也看不到，所以付款成功后把赴韩项目和结算单整体交给主案件（定金记在主案件上）。
+   子记录只留一条「已记在主案件」的说明；批次号接着主案件现有的往后排，不会撞号。面诊费不变（没有）。 */
+function reuseHandOffToMain(c){
+  var m = mainOf(c); if(!m || m.id===c.id) return;
+  m.settlementBatches = m.settlementBatches || []; m.procedureItems = m.procedureItems || [];
+  var moved = [], idMap = {};
+  (c.settlementBatches||[]).forEach(function(b){ var nid = 'B'+(m.settlementBatches.length+1); idMap[b.id] = nid; b.id = nid; m.settlementBatches.push(b); moved.push(nid); });
+  (c.procedureItems||[]).forEach(function(it){ if(it.batchId && idMap[it.batchId]) it.batchId = idMap[it.batchId]; m.procedureItems.push(it); });
+  c.settlementBatches = []; c.procedureItems = []; c.recommended = [];
+  ['anesthesiaConsent'].forEach(function(k){ if(c[k] && !m[k]) m[k] = c[k]; });
+  m.settlementDone = true; m.projectsEnabled = true; m.projectsLocked = true; m.projectOriginFilter = 'KR'; m.consultRequested = true; m.needsConsult = true;
+  if(!m.reportReady){ m.reportReady = true; m.consultStatus = 'report_ready'; }
+  c.paidOnMain = {mainId:m.id, caseNo:m.caseNo, batches:moved, at:nowFullDt()};
+  ensureItemIids(m);
+  logCaseEvent(c, actingName(), '继续面诊选了赴韩项目并付定金：赴韩项目和结算单记在主案件 '+m.caseNo+'（之后的施术预约 / 尾款 / 术后管理都在主案件里）');
+  logCaseEvent(m, actingName(), '继续面诊（'+(c.caseNo||'')+'）选了赴韩项目并付定金（沿用原方案，没有面诊费）');
+  updateCaseStage(m);
 }
