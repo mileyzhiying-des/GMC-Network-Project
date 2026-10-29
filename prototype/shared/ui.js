@@ -819,10 +819,11 @@ function renderClientProfile(name){ renderClientDetailIn(name); } /* CMD-1020-10
 function aEscC(s){ return String(s===undefined||s===null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 var CLIENT_FIELD_DEF = {
   name:{label:'名 / 姓', kind:'name2'}, note:{label:'特别备注', kind:'area'}, history:{label:'基础病史和过敏史', kind:'area'},
-  gender:{label:'性别 / 出生日期', kind:'gender'}, passport:{label:'护照信息', kind:'passport'}, phone:{label:'联系方式（手机号）', kind:'text'}
+  gender:{label:'性别 / 出生日期', kind:'gender'}, passport:{label:'护照信息', kind:'passport'}, phone:{label:'联系方式（手机号）', kind:'text'}, nik:{label:'身份证号（NIK）', kind:'nik'}
 };
 function openClientEdit(name, field){
   var c = clientByName(name), d = CLIENT_FIELD_DEF[field]; if(!c || !d) return;
+  if(field==='nik' && !nikCanEdit()) return;
   CLIENT_EDIT = {name:name, field:field};
   var ov = document.getElementById('client-edit-overlay');
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'client-edit-overlay'; ov.style.zIndex = 90; ov.onclick = function(e){ if(e.target===ov) closeClientEdit(); }; document.body.appendChild(ov); }
@@ -830,6 +831,7 @@ function openClientEdit(name, field){
   var body = d.kind==='area' ? '<textarea id="ce-v" rows="3" style="'+inp+'">'+aEscC(c[field])+'</textarea>' :
     d.kind==='gender' ? '<div style="display:flex;gap:10px;"><select id="ce-v" style="'+inp+'width:120px;"><option value=""'+(c.gender!=='女' && c.gender!=='男' ? ' selected' : '')+'>请选择</option><option'+(c.gender==='女'?' selected':'')+'>女</option><option'+(c.gender==='男'?' selected':'')+'>男</option></select>'+(c.dob ? '<span style="font-size:13px;align-self:center;color:var(--muted);">生日 '+aEscC(c.dob)+'（建立后不能修改）</span>' : '<input id="ce-v2" type="date" value="" style="'+inp+'">')+'</div>' :
     d.kind==='passport' ? passportFormHtml(c, 'ce') :
+    d.kind==='nik' ? '<div style="display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;color:var(--slate2);">原值 '+aEscC(c.nik||'—')+'（只有管理者能改，原值 → 新值记入操作日志）</div><input id="ce-nik" type="text" inputmode="numeric" maxlength="19" placeholder="新的 16 位数字" autocomplete="off" style="'+inp+'"><textarea id="ce-nikr" rows="2" placeholder="修改原因（必填）" style="'+inp+'"></textarea></div>' :
     d.kind==='name2' ? '<div style="display:flex;gap:10px;"><input id="ce-fn" type="text" placeholder="名（必填）" value="'+aEscC(c.firstName!==undefined ? c.firstName : c.name)+'" style="'+inp+'"><input id="ce-ln" type="text" placeholder="姓（必填）" value="'+aEscC(c.lastName||'')+'" '+(c.noLastName ? 'disabled ' : '')+'style="'+inp+(c.noLastName ? 'background:#EFEDE8;' : '')+'"></div><label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;"><input id="ce-nl" type="checkbox" '+(c.noLastName ? 'checked ' : '')+'onchange="var l=document.getElementById(\'ce-ln\');l.disabled=this.checked;l.style.background=this.checked?\'#EFEDE8\':\'\';if(this.checked)l.value=\'\';"> 我没有姓</label>' :
     field==='phone' ? phoneInputHtml('ce-ph', c.phone) :
     '<input id="ce-v" type="text" value="'+aEscC(field==='passport' ? c.passport.text : c[field])+'" style="'+inp+'">';
@@ -842,6 +844,7 @@ function closeClientEdit(){ var ov = document.getElementById('client-edit-overla
 function saveClientEdit(){
   var x = CLIENT_EDIT; if(!x) return;
   var c = clientByName(x.name), d = CLIENT_FIELD_DEF[x.field]; if(!c) return;
+  if(x.field==='nik'){ var nr = setClientNik(c, (document.getElementById('ce-nik')||{}).value, {reason:(document.getElementById('ce-nikr')||{}).value}); if(!nr.ok){ var en = document.getElementById('ce-err'); en.textContent = nr.err; en.style.display = 'block'; return; } closeClientEdit(); refreshAfterClientEdit(c); return; }
   if(x.field==='passport'){ var pe = passportFormRead('ce'); if(pe.err){ var ee = document.getElementById('ce-err'); ee.textContent = pe.err; ee.style.display = 'block'; return; }
     var had = passportComplete(c); passportSave(c, pe.v, had ? '修改护照信息' : '已登记护照'); closeClientEdit(); refreshAfterClientEdit(c); return; }
   var v = x.field==='phone' ? phoneInputGet('ce-ph') : x.field==='name' ? joinName((document.getElementById('ce-fn')||{}).value, (document.getElementById('ce-nl')||{}).checked ? '' : (document.getElementById('ce-ln')||{}).value) : (document.getElementById('ce-v').value||'').trim(), err = '', oldTxt = '', newTxt = '';
@@ -1913,6 +1916,7 @@ function closeMaterialsMissing(){ document.getElementById('materials-missing-ove
 function confirmMaterials(){
   var c = getCurrentCase(); if(!c) return;
   var missing = [];
+  var clN = clientByName(c.name); if(nikVisible() && clN && !clN.nik) missing.push('身份证号（NIK）'); /* CMD-1029-10：客人还没有 NIK → 接待时必填，没填不能确认 */
   if(c.usePrev){ c.needsConsult = false; } /* CMD-1029-03 五：来用之前购买的项目——不面诊，只检查 메타뷰 */
   if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1022-05：메타뷰 每次到院都必填（一般 / 复诊 / 术后 / 继续都一样），取代 CMD-1020-20 / 21 的「关联案件选填」 */
   if(!c.usePrev) concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */

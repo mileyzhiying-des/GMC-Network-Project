@@ -47,6 +47,9 @@ RT.runIn = function(){
     /* 联系方式：IN 显示完整号码 */
     var mp = typeof maskPhone==='function' ? maskPhone('+62 812-5555-0101') : '';
     RT.cell('客人联系方式：完整显示（IN 不遮蔽）', '✅', RT.yn(!/\*/.test(clientPhoneOf((CASE_ITEMS[0]||{}).name)||'') ), 'KR 端遮蔽示例：'+mp);
+    /* CMD-1029-10：身份证号（NIK）——IN 室长 / 管理者看得到（默认后 4 码），管理者才能改 */
+    RT.cell('客人身份证号（NIK）：看得到，默认只显示后 4 码', '✅', RT.yn(nikVisible()===true), 'IN 室长 / 管理者可见；老板不可见');
+    RT.cell('客人身份证号（NIK）：建立后修改（原因必填 + 记操作日志）', isMgr ? '✅' : '❌', RT.yn(nikCanEdit()), '只有 IN 管理者');
   }
   /* 结束案件（付定金前、已到店、IN 一般室长 / 管理者；老板和 KR 不行） */
   var probe = {subState:'arrived', stage:'waiting', clientName:'rt'};
@@ -161,6 +164,9 @@ RT.runKr = function(){
     /* 联系方式：IN 显示完整号码 */
     var mp = typeof maskPhone==='function' ? maskPhone('+62 812-5555-0101') : '';
     RT.cell('客人联系方式：完整显示（IN 不遮蔽）', '✅', RT.yn(!/\*/.test(clientPhoneOf((CASE_ITEMS[0]||{}).name)||'') ), 'KR 端遮蔽示例：'+mp);
+    /* CMD-1029-10：身份证号（NIK）——IN 室长 / 管理者看得到（默认后 4 码），管理者才能改 */
+    RT.cell('客人身份证号（NIK）：看得到，默认只显示后 4 码', '✅', RT.yn(nikVisible()===true), 'IN 室长 / 管理者可见；老板不可见');
+    RT.cell('客人身份证号（NIK）：建立后修改（原因必填 + 记操作日志）', isMgr ? '✅' : '❌', RT.yn(nikCanEdit()), '只有 IN 管理者');
   }
   /* 结束案件（付定金前、已到店、IN 一般室长 / 管理者；老板和 KR 不行） */
   var probe = {subState:'arrived', stage:'waiting', clientName:'rt'};
@@ -268,6 +274,10 @@ RT.runKr = function(){
     T(function(){ krShowCase(openRow.clinicId, openRow.id); krSetCaseTab('basic'); var t = document.getElementById('kr-casedetail').textContent; masked = (!/联系方式|\*\*\*\*/.test(t) && !/\+62 \d{3}-\d{4}-\d{4}/.test(t)); /* CMD-1019-11：KR 端不显示联系方式（连遮罩也没有） */ });
   }
   RT.cell('客人联系方式完全不显示（CMD-1019-11）', '✅', RT.yn(masked===true), openRow ? '看的案件 '+openRow.caseNo : '');
+  /* CMD-1029-10：KR 室长 / 院长 / 代表院长看不到身份证号（NIK）：权限判断 + 案件页 / 客人页实际画面 */
+  var nikSeen = null;
+  if(openRow){ T(function(){ krShowCase(openRow.clinicId, openRow.id); krSetCaseTab('basic'); var t = document.getElementById('kr-casedetail').textContent; nikSeen = /身份证号|NIK|KTP|KIA/.test(t); }); }
+  RT.cell('客人身份证号（NIK）：完全不显示（CMD-1029-10）', '❌', RT.yn(nikVisible()===true || nikSeen===true), '权限 nikVisible='+nikVisible()+'；案件页出现='+nikSeen);
   function borrow(st){ /* 院长名下没有这个状态的案件：临时把一个同状态案件的院长改成自己，测完改回 */
     var hit = null; krClinics().forEach(function(cl){ if(hit) return; Store.withClinic(cl.id, function(){ CASE_ITEMS.forEach(function(c){ if(!hit && krCaseVisible(c, hid) && c.consultRequested && c.consultStatus===st && (st!=='report_ready' || c.stage==='consult') && c.director!==me) hit = {cid:cl.id, id:c.id, old:c.director}; }); }); });
     if(!hit) return null; Store.mutateClinic(hit.cid, function(){ CASE_ITEMS.filter(function(x){ return x.id===hit.id; })[0].director = me; }); RT._borrowed = RT._borrowed || []; RT._borrowed.push(hit); rows = krAllCases(); return rows.filter(function(x){ return x.id===hit.id; })[0] || null; }

@@ -44,6 +44,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
       c.hospitalId = c.hospitalId || caseHospitalId(c); if(o.director || !c.director) setCaseDirector(o.director || ST.freeDirector(c));
     }
     renderCaseBody(c);
+    var clNk = clientByName(c.name); if(clNk && !clNk.nik && !o.noNik){ ST._nik = (ST._nik||0)+1; clNk.nik = ('9'+String(Date.now()).slice(-9)+('00000'+ST._nik).slice(-5)+'0').slice(0,16); } /* CMD-1029-10：接待时 NIK 必填，自测默认补一个唯一的 */
     confirmMaterials(); return c;
   };
   ST.payConsult = function(c){ ST.open(c); c.activeCaseTab = 'consult'; confirmConsultFee(); };
@@ -8030,6 +8031,62 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       b.b.refund.method = ''; ST.ok(/方式：未记录/.test(refundOnlyBodyHtml(c).replace(/<[^>]+>/g,'')), '旧退款（没有方式）显示「未记录」');
       ST.ok(refundMethodText({method:'其他', methodNote:'现金给门店'})==='其他（现金给门店）', '其他带说明显示');
     } finally { window.alert = al; window.confirm = cf; window.GMC_REFUND_METHOD_MANUAL = false; }
+  });
+  ST.def('R193a','CMD-1029-10（IN 分页）：NIK 格式 / 预约页选填 / 接待必填 / 查重 / 只显示后 4 码 / 只有管理者能改 / KR 各角色看不到',function(){
+    var SFX = Date.now().toString(36).slice(-4), seq = 0, mkNik = function(){ seq++; return '3171'+String(Date.now()).slice(-8)+('0000'+seq).slice(-4); };
+    /* ① 格式 */
+    ST.ok(!nikValid('123') && !nikValid('31710101010101ab') && !nikValid('317101010101010') && nikValid('3171010101010101') && nikValid('3171 0101 0101 0101'), 'NIK 格式：只能 16 位数字（空格 / 横线先去掉）');
+    ST.ok(/16/.test(nikCheck('123', null, false)) && nikCheck('', null, false)==='', '格式不对有红字文案；空 = 没填（选填）');
+    /* ② 预约页：选填，填了存档，重复的不存 */
+    var nextSlot = function(){ var d = new Date(todayStr()+'T00:00:00Z'); for(var k = 1; k < 40; k++){ d.setUTCDate(d.getUTCDate()+1); var ds = d.toISOString().slice(0,10); var ts = ['11:00','11:30','12:00','12:30','13:00','13:30','15:00','15:30','16:00','16:30','17:00','17:30']; for(var i = 0; i < ts.length; i++){ if(!slotBlockReason(ds, ts[i])) return {date:ds, time:ts[i]}; } } return null; };
+    var ph = function(n){ return '+62 813-'+n+String(Date.now()).slice(-5); }, nikA = mkNik(), used = [];
+    var book = function(tag, nik){ var sl = nextSlot(); var r = submitSelfBooking({consentGiven:true, entry:'web', date:sl.date, time:sl.time, phone:ph(tag), name:'T-R193'+tag+SFX, firstName:'T-R193'+tag+SFX, lastName:'', noLastName:true, gender:'女', dob:'1990-05-05', history:'', beauty:[], purpose:'面诊商谈', note:'', nik:nik}); return r && r.ok ? r : null; };
+    var rA = book('11', nikA), rB = book('22', ''), rC = book('33', nikA);
+    ST.ok(rA && rA.client.nik===nikA, '预约页填了 NIK → 客户档案存下来');
+    ST.ok(rB && !rB.client.nik, '预约页没填 → 没有 NIK（选填）');
+    ST.ok(rC && !rC.client.nik, '预约页填了已属于别人的 NIK → 不存（也不会透露是谁）');
+    var bkErr = nikCheck(nikA, null, true); ST.ok(/terdaftar/.test(bkErr) && bkErr.indexOf('T-R193')<0, '预约页重复提示不带对方名字：'+bkErr);
+    ST.ok(rA.client.timeline.every(function(e){ return String(e.action).indexOf(nikA)<0; }), '客户 Timeline 不带完整号码');
+    /* ③ 接待必填：没有 NIK 不能确认；填了才能确认 */
+    var c = ST.newRes('R193', {}); var cl = clientByName(c.name); delete cl.nik;
+    ST.materials(c, {noNik:true});
+    ST.ok(!c.materialsConfirmed, '客人没有 NIK → 不能确认基础资料');
+    var miss = (document.getElementById('materials-missing-list')||{}).innerHTML||''; ST.ok(/NIK/.test(miss), '缺项提示里有「身份证号（NIK）」');
+    document.getElementById('materials-missing-overlay').classList.remove('open');
+    var bh = clientBasicBlockHtml(c); ST.ok(/id="nik-in"/.test(bh) && /请看着客人的 KTP \/ KIA 当场输入/.test(bh), '基础资料有 NIK 输入栏 + 小字');
+    var el = document.getElementById('nik-in'); if(!el){ renderCaseBody(c); el = document.getElementById('nik-in'); }
+    if(el){ el.value = '123'; nikSaveInline(c.name); ST.ok(!clientByName(c.name).nik && /16/.test((document.getElementById('nik-err')||{}).textContent||''), '格式不对红字、不存'); }
+    var other = rA.client; var r0 = setClientNik(cl, nikA, {}); ST.ok(!r0.ok && /已属于客人 T-R193/.test(r0.err), '本诊所重复 NIK 不能存：'+r0.err);
+    var okNik = mkNik(); var r1 = setClientNik(cl, okNik, {}); ST.ok(r1.ok && cl.nik===okNik, '输入正确的 NIK → 存进客户档案');
+    ST.ok(cl.timeline.some(function(e){ return /登记身份证号（NIK，后 4 码 /.test(e.action) && String(e.action).indexOf(okNik)<0; }), '客户 Timeline 记登记（只写后 4 码）');
+    confirmMaterials(); ST.ok(c.materialsConfirmed, '有了 NIK → 可以确认基础资料');
+    /* ④ 显示：默认只显示后 4 码 */
+    var bh2 = clientBasicBlockHtml(c); ST.ok(bh2.indexOf(okNik)<0 && bh2.indexOf('••••••••••••'+okNik.slice(-4))>-1, '基础资料只显示后 4 码，页面里没有完整号码');
+    var sp = document.createElement('div'); sp.innerHTML = nikValueHtml(cl); document.body.appendChild(sp); nikToggle(sp.querySelector('a')); ST.ok(sp.querySelector('.nik-v').textContent===okNik, '点「显示」才看全部'); nikToggle(sp.querySelector('a')); ST.ok(sp.querySelector('.nik-v').textContent.indexOf('••••')===0, '再点收回'); sp.remove();
+    var ph2 = cliProfileHtml({cl:cl, mode:'IN', cases:[]}); ST.ok(ph2.indexOf(okNik)<0 && /身份证号（NIK）/.test(ph2), '客户档案只显示后 4 码');
+    /* ⑤ 旧客人没有 NIK：档案里提示下次接待补 */
+    var old = addClient({name:'T-R193Old'+SFX, phone:ph('44'), gender:'女', dob:'1991-01-01', createdBy:'测试'}); ST.ok(!old.nik, '旧客人没有 NIK = 空');
+    ST.ok(/未登记/.test(cliProfileHtml({cl:old, mode:'IN', cases:[]})), '客户档案写「未登记」，下次接待时补');
+    /* ⑥ 只有管理者能改 */
+    var ca0 = currentAccount, asRole = function(id){ currentAccount = function(){ return ACCOUNTS.filter(function(a){ return a.id===id; })[0]; }; };
+    asRole('A2'); ST.ok(!nikCanEdit() && nikVisible(), '一般室长：看得到、不能改');
+    var rg = setClientNik(cl, mkNik(), {reason:'测试'}); ST.ok(!rg.ok && /管理者/.test(rg.err) && cl.nik===okNik, '一般室长改不动');
+    ST.ok(cliProfileHtml({cl:cl, mode:'IN', cases:[]}).indexOf("'nik'")<0, '一般室长看不到［修改］');
+    currentAccount = ca0; ST.ok(nikCanEdit(), 'A1 管理者可以改');
+    ST.ok(cliProfileHtml({cl:cl, mode:'IN', cases:[]}).indexOf("'nik'")>-1, '管理者有［修改］');
+    var nw = mkNik(); var rn = setClientNik(cl, nw, {}); ST.ok(!rn.ok && /原因/.test(rn.err) && cl.nik===okNik, '改已有号码：原因必填');
+    var logN = ACCOUNT_LOG.length; var rm = setClientNik(cl, nw, {reason:'客人拿来的是新证件'}); ST.ok(rm.ok && cl.nik===nw, '管理者填原因后可以改');
+    var lg = ACCOUNT_LOG[0]; ST.ok(ACCOUNT_LOG.length===logN+1 && lg.text.indexOf(okNik)>-1 && lg.text.indexOf(nw)>-1 && /原因：客人拿来的是新证件/.test(lg.text) && lg.accountId==='A1' && lg.ts, '操作日志：原值 → 新值、谁、什么时候、原因');
+    ST.ok(cl.timeline.every(function(e){ return String(e.action).indexOf(nw)<0 && String(e.action).indexOf(okNik)<0; }), '客户 Timeline 不带完整号码');
+    openClientEdit(cl.name, 'nik'); ST.ok(!!document.getElementById('ce-nik') && !!document.getElementById('ce-nikr'), '修改弹窗有新号码 + 原因'); closeClientEdit();
+    /* ⑦ 其他角色看不到：KR 室长 / 院长 / 代表院长 / IN 老板 */
+    ['KM1','KC1','KD1','KO1','OWN'].forEach(function(id){
+      asRole(id);
+      ST.ok(!nikVisible(), id+'：看不到 NIK');
+      var a1 = clientBasicBlockHtml(c), a2 = cliProfileHtml({cl:cl, mode:'KR', cases:[]}), a3 = cliProfileHtml({cl:cl, mode:'IN', cases:[]});
+      ST.ok([a1, a2, a3].every(function(h){ return h.indexOf(nw)<0 && h.indexOf(nw.slice(-4))<0 && !/NIK/.test(h); }), id+'：基础资料 / 客户档案画面里没有 NIK');
+    });
+    currentAccount = ca0;
   });
   ST.def('R187a','CMD-1029-07（IN 分页）：满 21 岁算法 / 预约记录婚姻状况与监护人 / IN 标记 / 生日只读',function(){
     var td = todayStr(), y = +td.slice(0,4), md = td.slice(5);

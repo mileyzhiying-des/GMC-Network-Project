@@ -177,7 +177,7 @@ function bkStepProfile(){
   var body = (cl ? '<div class="bk-info">'+bt('profile.back')+'</div>' : '')+
     bkField(bt('profile.first'), bkInput('firstName','text','autocomplete="given-name"'))+bkField(bt('profile.last'), bkInput('lastName','text','autocomplete="family-name"'+(f.noLast ? ' disabled style="background:#EFEDE8;color:#8E857C;"' : ''))+'<label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px;"><input type="checkbox" '+(f.noLast ? 'checked ' : '')+'onchange="bkNoLast(this.checked)"> '+bt('profile.noLast')+'</label>')+
     bkField(bt('profile.gender'), '<select onchange="bkSet(\'gender\',this.value)"><option value="">'+bt('profile.pick')+'</option><option value="女"'+(f.gender==='女'?' selected':'')+'>'+bt('gender.f')+'</option><option value="男"'+(f.gender==='男'?' selected':'')+'>'+bt('gender.m')+'</option></select>')+
-    bkField(bt('profile.dob'), '<input type="date" value="'+bkH(f.dob)+'" max="'+dateStr(demoNow())+'" onchange="bkDobChange(this.value)">')+bkMinorHtml();
+    bkField(bt('profile.dob'), '<input type="date" value="'+bkH(f.dob)+'" max="'+dateStr(demoNow())+'" onchange="bkDobChange(this.value)">')+bkMinorHtml()+(cl ? '' : bkField(bt('nik.label'), bkInput('nik','text','inputmode="numeric" maxlength="19" autocomplete="off" placeholder="'+bkH(bt('nik.ph'))+'"')+'<div class="bk-sub" style="margin-top:6px;">'+bt('nik.hint')+'</div>'));
   return bkFrame('s.profile', body+bkNav('bkProfileNext()', true));
 }
 /* CMD-1029-07：未满 21 岁（以预约当天算）→ 婚姻状况；未婚 → 必勾已通知监护人。已登记的老客人不走这一步 */
@@ -197,6 +197,7 @@ function bkProfileNext(){
   if(!f.noLast && !f.lastName){ BK.err = bt('profile.errLast'); return bkRender(); }
   if(!f.gender){ BK.err = bt('profile.errGender'); return bkRender(); }
   if(!f.dob){ BK.err = bt('profile.errDob'); return bkRender(); }
+  if(!BK.client && nikClean(f.nik)){ var nerr = nikCheck(f.nik, null, true); if(nerr){ BK.err = nerr; return bkRender(); } } /* CMD-1029-10：选填；填了就要 16 位数字，且不能和已登记的客人重复（不透露对方是谁） */
   if(bkMinor()){
     if(!f.marital){ BK.err = bt('minor.errMarital'); return bkRender(); }
     if(f.marital==='未婚' && !f.guardianOk){ BK.err = bt('minor.errGuardian'); return bkRender(); }
@@ -301,7 +302,7 @@ function bkStepConfirm(){
 }
 function bkSubmit(){
   var f = BK.f, old = f.rebookFrom ? CASE_ITEMS.filter(function(x){ return x.id===f.rebookFrom; })[0] : null;
-  var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, firstName:f.firstName, lastName:f.lastName, noLastName:!!f.noLast, gender:f.gender, dob:f.dob, marital:f.marital, guardianOk:!!f.guardianOk,
+  var res = submitSelfBooking({consentGiven:bkNeedConsent(), entry:BK.entry==='view' ? 'web' : BK.entry, phId:f.phId, date:f.date, time:f.time, phone:f.phone, name:f.name, firstName:f.firstName, lastName:f.lastName, noLastName:!!f.noLast, gender:f.gender, dob:f.dob, marital:f.marital, guardianOk:!!f.guardianOk, nik:f.nik,
     history:f.history, beauty:f.beauty, purpose:f.purpose, note:f.note, rebookFrom:old ? old.id : null});
   if(!res.ok){ BK.err = bt('time.taken'); BK.f.time = ''; if(BK.entry!=='walkin') BK.step = 0; return bkRender(); }
   Store.save(); BK.done = res; bkMeStart(f.phone, res.c.id); bkRender();
