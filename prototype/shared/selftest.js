@@ -30,7 +30,8 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     c.round = 2; ST.track(c); return c;
   };
   ST.open = function(c){ openCaseDetail(c.id); return c; };
-  ST.arrive = function(c){ ST.open(c); markArrived(); return c; };
+  ST.autoNik = function(c){ var cl = clientByName(c.name); if(cl && !cl.nik){ ST._nik = (ST._nik||0)+1; cl.nik = ('9'+String(Date.now()).slice(-9)+('00000'+ST._nik).slice(-5)+'0').slice(0,16); } }; /* CMD-1029-10：接待时 NIK 必填，自测默认补一个唯一的 */
+  ST.arrive = function(c){ ST.open(c); markArrived(); if(!window.GMC_NIK_MANUAL) ST.autoNik(c); return c; };
   /* 填基础资料并确认：opts {consult:true|false|'reuse', intents:[项目名], link:{caseId, reason}, director:'KD1 院长'} */
   /* 今天整天 OFF 的院长不能选（演示数据里 KD1 有些天整天 OFF）：默认 KD1，他今天 OFF 就换名单里下一位 */
   ST.freeDirector = function(c){ var hid = caseHospitalId(c), ds = hospitalDirectorNames(hid); var ok = ds.filter(function(n){ var o = directorTodayOff(hid, n); return !(o && o.full); }); return ok.indexOf('KD1 院长')>-1 ? 'KD1 院长' : (ok[0] || 'KD1 院长'); };
