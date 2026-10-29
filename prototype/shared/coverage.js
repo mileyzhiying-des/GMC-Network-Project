@@ -228,22 +228,33 @@
     fillDemoTime();
   }
   /* CMD-1015-11 演示时间：以韩国时间设起点，之后照常往前走；到「真实时间」的恢复点自动恢复；［立刻恢复］。存 gmc_cfg_demotime，所有分页同步，和［模拟到隔天］叠加 */
-  var KST = 9*3600000;
+  var KST = 9*3600000, WD = ['日','一','二','三','四','五','六'];
   function krStr(utcMs){ var d = new Date(utcMs + KST), p = function(n){ return (n<10?'0':'')+n; }; return d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate())+' '+p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds()); }
   function inStr(utcMs){ return krStr(utcMs - KST + 7*3600000); } /* 印尼 UTC+7（雅加达；巴厘 +8 另算） */
   function krInputToUtc(v){ var m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(v||''); return m ? Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5]) - KST : 0; }
   function demoCfg(){ try{ return JSON.parse(localStorage.getItem('gmc_cfg_demotime') || 'null'); }catch(e){ return null; } }
   function stateShift(){ var g = pj(localStorage.getItem('gmc_state')); return g && g.vars ? (+g.vars.DEMO_SHIFT_MS || 0) : 0; }
+  /* CMD-1029-02：印尼 / 韩国两组时间并排、双向换算（时差 = 韩国 UTC+9 − 印尼 UTC+7 = 2 小时，印尼按雅加达；巴厘 +8 另算）；拿掉「自动恢复」，演示时间一直有效直到按［恢复真实时间］ */
+  function inInputToUtc(v){ var m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(v||''); return m ? Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5]) - 7*3600000 : 0; }
+  function toInput(utcMs, off){ return new Date(utcMs + off).toISOString().slice(0, 16); } /* datetime-local 用的 YYYY-MM-DDTHH:mm */
+  function wdOf(utcMs, off){ return WD[new Date(utcMs + off).getUTCDay()]; }
+  function mdhm(utcMs, off){ var d = new Date(utcMs + off), p = function(n){ return (n<10?'0':'')+n; }; return p(d.getUTCMonth()+1)+'/'+p(d.getUTCDate())+' '+p(d.getUTCHours())+':'+p(d.getUTCMinutes())+(off===KST?'':':'+p(d.getUTCSeconds())); }
   function fillDemoTime(){
-    var el = document.getElementById('roundbar'); if(!el) return; var c = demoCfg();
-    el.innerHTML += '<div id="demotime" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border,#ddd);border-radius:8px;"><b>演示时间</b> <span class="muted">（测试用：原型时间从下面的韩国时间开始照常往前走；所有分页同时生效、刷新不掉；到真实时间的恢复点自动恢复；右上时钟旁会标「演示时间」；和［模拟到隔天］等拨时钟按钮叠加）</span>'+
-      '<div style="margin-top:8px;">开始时间（韩国时间）：<input type="datetime-local" id="dt-start" value="'+(c && c.startKr ? c.startKr : '2026-10-15T12:00')+'"> 　到真实时间（韩国时间）：<input type="datetime-local" id="dt-restore" value="'+(c && c.restoreKr ? c.restoreKr : '2026-10-16T00:00')+'"> 自动恢复　<button onclick="demoTimeSet()">设定并开始</button> <button onclick="demoTimeReset()">立刻恢复真实时间</button> <button class="p" id="dt-next" onclick="demoNextDay()">到第二天 10:00</button> <button onclick="demoSetDay1()" title="把现在的演示日期记为第 1 天">今天 = 第 1 天</button></div><div id="dt-day" style="margin-top:6px;font-size:13px;"></div><div id="dt-status" style="margin-top:6px;font-size:12px;"></div></div>';
+    var el = document.getElementById('roundbar'); if(!el) return; var cur = curDemoUtc();
+    el.innerHTML += '<div id="demotime" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border,#ddd);border-radius:8px;"><b>演示时间</b> <span class="muted">（测试用：原型时间从下面设定的时间开始照常往前走，一直有效直到按［恢复真实时间］；印尼和韩国时间改一边另一边自动换算；所有分页同时生效、刷新不掉；右上时钟旁会标「演示时间」；和［模拟到隔天］等拨时钟按钮叠加）</span>'+
+      '<div id="dt-big" style="margin-top:8px;font-size:17px;font-weight:700;"></div>'+
+      '<div style="margin-top:8px;">印尼时间：<input type="datetime-local" id="dt-in" value="'+toInput(cur, 7*3600000)+'" oninput="demoFromIn()"> 　｜　韩国时间：<input type="datetime-local" id="dt-kr" value="'+toInput(cur, KST)+'" oninput="demoFromKr()"> 　<button onclick="demoTimeSet()">设定并开始</button></div>'+
+      '<div style="margin-top:8px;"><button class="p" id="dt-next" onclick="demoNextDay()" title="以现在的演示时间为准（没开演示就以真实的今天），先经过 00:00，再到下一天印尼 10:00（= 韩国 12:00）">到第二天 10:00（印尼）</button> <button onclick="demoSetDay1()" title="把现在的演示日期记为第 1 天">今天 = 第 1 天</button> 　<button onclick="demoTimeReset()">恢复真实时间</button> <span id="dt-real" style="font-size:13px;"></span></div>'+
+      '<div id="dt-day" style="margin-top:6px;font-size:13px;"></div></div>';
     demoTimeTick();
   }
+  window.demoFromIn = function(){ var u = inInputToUtc(document.getElementById('dt-in').value); if(u) document.getElementById('dt-kr').value = toInput(u, KST); };
+  window.demoFromKr = function(){ var u = krInputToUtc(document.getElementById('dt-kr').value); if(u) document.getElementById('dt-in').value = toInput(u, 7*3600000); };
+  function demoActive(){ var c = demoCfg(); return !!(c && c.startUtc && c.setAt) || stateShift() !== 0; }
   function demoTimeTick(){
-    var st = document.getElementById('dt-status'); if(!st) return; var c = demoCfg(), now = Date.now(), active = c && c.startUtc && c.setAt && !(c.restoreUtc && now >= c.restoreUtc), sh = stateShift();
-    var demoUtc = now + (active ? c.startUtc - c.setAt : 0) + sh;
-    st.innerHTML = (active ? '<b style="color:#8F6F0C;">演示时间生效中</b>' : (c ? '演示时间已到恢复点，现在是真实时间' : '未设定，现在是真实时间'))+'　现在原型时间：韩国 <b>'+krStr(demoUtc)+'</b>（印尼 '+inStr(demoUtc)+'）'+(sh ? '　（含拨时钟按钮累计 '+(sh/3600000).toFixed(1)+' 小时）' : '')+(active && c.restoreUtc ? '　真实时间（韩国）'+krStr(c.restoreUtc)+' 自动恢复，还有 '+Math.max(0, Math.round((c.restoreUtc-now)/60000))+' 分钟' : '');
+    var big = document.getElementById('dt-big'); if(!big) return; var sh = stateShift(), u = curDemoUtc(), now = Date.now(), act = demoActive();
+    big.innerHTML = act ? '<span style="color:#8F6F0C;">演示中</span> · 印尼 '+mdhm(u, 7*3600000)+'（周'+wdOf(u, 7*3600000)+'）｜韩国 '+mdhm(u, KST)+'（周'+wdOf(u, KST)+'）'+(sh ? '<span class="muted" style="font-size:12px;font-weight:400;">　（含拨时钟按钮累计 '+(sh/3600000).toFixed(1)+' 小时）</span>' : '') : '现在是真实时间　<span class="muted" style="font-size:13px;font-weight:400;">印尼 '+mdhm(now, 7*3600000)+'｜韩国 '+mdhm(now, KST)+'</span>';
+    var r = document.getElementById('dt-real'); if(r) r.innerHTML = '<span class="muted">真实时间：印尼 '+mdhm(now, 7*3600000)+'｜韩国 '+mdhm(now, KST)+'</span>';
   }
   setInterval(function(){ try{ demoTimeTick(); }catch(e){} }, 1000);
   /* CMD-1028-16：存档空间——已用 X MB / 约 5 MB（按字符算，localStorage 上限约 5.24M 字符）；超过 80% 变橙、90% 变红，并写上最大的几项 */
@@ -257,22 +268,35 @@
   setInterval(function(){ try{ storeLine(); }catch(e){} }, 3000); setTimeout(function(){ try{ storeLine(); }catch(e){} }, 300);
   /* CMD-1028-07 ［到第二天 10:00］：一天 = 印尼时间 10:00 开始到第二天 00:00。按一次 = 先把演示时间拨到下一天 00:00:03（经过 00:00，让关账 / 过离开日期结束行程 / 未到店 / 转管理项目等照常发生），
      等各分页扫完，再拨到下一天 10:00（印尼 = 韩国 12:00），之后照常往前走。设定写 gmc_cfg_demotime，所有分页收到 storage 事件后立刻扫一遍（见 todo.js demoJumpSweep）。 */
-  var JK = 7*3600000, WD = ['日','一','二','三','四','五','六'], JUMPING = false;
-  function curDemoUtc(){ var c = demoCfg(), now = Date.now(), active = c && c.startUtc && c.setAt && !(c.restoreUtc && now >= c.restoreUtc); return now + (active ? c.startUtc - c.setAt : 0) + stateShift(); }
+  var JK = 7*3600000, JUMPING = false;
+  function curDemoUtc(){ var c = demoCfg(), now = Date.now(), active = c && c.startUtc && c.setAt; return now + (active ? c.startUtc - c.setAt : 0) + stateShift(); } /* CMD-1029-02：旧存档里的 restoreUtc（自动恢复）一律忽略 */
   function jkDate(utcMs){ var d = new Date(utcMs + JK); return {y:d.getUTCFullYear(), mo:d.getUTCMonth(), d:d.getUTCDate(), wd:d.getUTCDay()}; }
   function jkKey(p){ return new Date(Date.UTC(p.y, p.mo, p.d)).toISOString().slice(0, 10); }
   function day1(){ try{ var o = JSON.parse(localStorage.getItem('gmc_cfg_demoday') || 'null'); return o && o.day1 ? o.day1 : ''; }catch(e){ return ''; } }
   function dayLine(){
-    var el = document.getElementById('dt-day'); if(!el) return; var c = demoCfg(), now = Date.now(), active = (c && c.startUtc && c.setAt && !(c.restoreUtc && now >= c.restoreUtc)) || stateShift();
+    var el = document.getElementById('dt-day'); if(!el) return; var c = demoCfg(), now = Date.now(), active = (c && c.startUtc && c.setAt) || stateShift();
     var p = jkDate(curDemoUtc()), key = jkKey(p), d1 = day1(), mm = ('0'+(p.mo+1)).slice(-2)+'/'+('0'+p.d).slice(-2);
     if(JUMPING){ el.innerHTML = '<b style="color:#8F6F0C;">正在经过 00:00，各分页扫描中…</b>'; return; }
     var n = d1 ? Math.round((Date.UTC.apply(null, key.split('-').map(function(x, i){ return i === 1 ? +x - 1 : +x; })) - Date.UTC.apply(null, d1.split('-').map(function(x, i){ return i === 1 ? +x - 1 : +x; }))) / 86400000) + 1 : 0;
     el.innerHTML = (active ? '' : '<span class="muted">（现在是真实时间）</span> ')+(d1 ? '<b>演示第 '+n+' 天 · '+mm+'（周'+WD[p.wd]+'）</b>' : '<b>演示日期 '+mm+'（周'+WD[p.wd]+'）</b> <span class="muted">还没记第 1 天：按［今天 = 第 1 天］或［设定并开始］</span>');
   }
   setInterval(function(){ try{ dayLine(); }catch(e){} }, 1000);
-  function setDemoClock(targetUtc){ /* 让演示时间 = targetUtc（含 DEMO_SHIFT_MS 的叠加）；保留还没到的自动恢复点 */
-    var old = demoCfg(), sh = stateShift(), s = targetUtc - sh, keepR = old && old.restoreUtc && old.restoreUtc > Date.now() ? old : null;
-    localStorage.setItem('gmc_cfg_demotime', JSON.stringify({startUtc:s, setAt:Date.now(), restoreUtc:keepR ? keepR.restoreUtc : 0, startKr:krStr(s).slice(0, 16).replace(' ', 'T'), restoreKr:keepR ? keepR.restoreKr : ''}));
+  function setDemoClock(targetUtc){ /* 让演示时间 = targetUtc（含 DEMO_SHIFT_MS 的叠加）；不再有自动恢复 */
+    var sh = stateShift(), st = targetUtc - sh;
+    localStorage.setItem('gmc_cfg_demotime', JSON.stringify({startUtc:st, setAt:Date.now(), restoreUtc:0, startKr:toInput(st, KST)}));
+  }
+  /* 弹窗（照 Popup 规则：按钮右对齐、主操作最右） */
+  function dtModal(msg, okLabel, onOk){
+    var old = document.getElementById('dt-modal'); if(old) old.remove();
+    var d = document.createElement('div'); d.id = 'dt-modal'; d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    d.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px 22px;max-width:460px;box-shadow:0 28px 72px rgba(0,0,0,.4);"><div style="line-height:1.6;font-size:14px;">'+msg+'</div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;"><button id="dt-m-cancel">取消</button><button class="p" id="dt-m-ok">'+okLabel+'</button></div></div>';
+    document.body.appendChild(d);
+    document.getElementById('dt-m-cancel').onclick = function(){ d.remove(); };
+    document.getElementById('dt-m-ok').onclick = function(){ d.remove(); onOk(); };
+  }
+  function backWarn(fromUtc, toUtc, onOk){ /* 往回调：先提醒 */
+    if(toUtc >= fromUtc){ onOk(); return; }
+    dtModal('时间会往回调（从 '+mdhm(fromUtc, 7*3600000)+' 回到 '+mdhm(toUtc, 7*3600000)+'，印尼），已经建的案件日期可能会对不上。建议先导出完整备份。', '仍然设定', onOk);
   }
   window.demoSetDay1 = function(){ localStorage.setItem('gmc_cfg_demoday', JSON.stringify({day1:jkKey(jkDate(curDemoUtc()))})); dayLine(); };
   window.demoNextDay = function(){
@@ -283,11 +307,16 @@
     setTimeout(function(){ setDemoClock(ten); JUMPING = false; if(b) b.disabled = false; demoTimeTick(); dayLine(); }, 4000);
   };
   window.demoTimeSet = function(){
-    var s = krInputToUtc((document.getElementById('dt-start')||{}).value), r = krInputToUtc((document.getElementById('dt-restore')||{}).value);
-    if(!s){ alert('请填开始时间（韩国时间）'); return; } if(r && r <= Date.now()){ alert('恢复时间（真实时间）已经过了，请改成将来的时间；或留空 = 不自动恢复'); return; }
-    localStorage.setItem('gmc_cfg_demotime', JSON.stringify({startUtc:s, setAt:Date.now(), restoreUtc:r || 0, startKr:document.getElementById('dt-start').value, restoreKr:document.getElementById('dt-restore').value})); localStorage.setItem('gmc_cfg_demoday', JSON.stringify({day1:jkKey(jkDate(s + stateShift()))})); demoTimeTick();
+    var s = krInputToUtc((document.getElementById('dt-kr')||{}).value);
+    if(!s){ alert('请填时间（印尼或韩国时间都可以）'); return; }
+    var go = function(){ setDemoClock(s); localStorage.setItem('gmc_cfg_demoday', JSON.stringify({day1:jkKey(jkDate(s))})); demoTimeTick(); dayLine(); };
+    backWarn(curDemoUtc(), s, go);
   };
-  window.demoTimeReset = function(){ localStorage.removeItem('gmc_cfg_demotime'); localStorage.removeItem('gmc_cfg_demoday'); demoTimeTick(); };
+  window.demoTimeReset = function(){
+    var go = function(){ localStorage.removeItem('gmc_cfg_demotime'); localStorage.removeItem('gmc_cfg_demoday'); demoTimeTick(); dayLine(); };
+    if(!demoActive()){ demoTimeTick(); return; }
+    var real = Date.now(); backWarn(curDemoUtc(), real, go);
+  };
   /* CMD-1028-07 清空案件和客人（保留基础设定）：先下载完整备份，再设「下次载入时丢掉案件 / 客人」旗标并删版本号；已打开的原型分页收到通知会自动刷新并执行（data.js 版本升级路径），
      账号、诊所 / 医院设定、项目库（含你改过的）、活动价、案例保留，案件号从 A000001 重新开始；清掉的案件另有一份安全备份 gmc_cfg_usersafe（控制台 gmcUserSafeRestore 可恢复） */
   window.clearBusinessData = function(){

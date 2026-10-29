@@ -279,7 +279,7 @@ function tzLabel(tz){ var m = tzOffsetMin(tz), h = m/60; return 'UTC'+(h>=0?'+':
    和 DEMO_SHIFT_MS（［模拟到隔天］等拨时钟按钮）叠加 */
 var DEMO_CLOCK_KEY = 'gmc_cfg_demotime', DEMO_CLOCK_CACHE = null, DEMO_CLOCK_AT = 0;
 function demoClockCfg(){ var n = Date.now(); if(DEMO_CLOCK_AT && n - DEMO_CLOCK_AT < 400) return DEMO_CLOCK_CACHE; DEMO_CLOCK_AT = n; try{ var raw = localStorage.getItem(DEMO_CLOCK_KEY); DEMO_CLOCK_CACHE = raw ? JSON.parse(raw) : null; }catch(e){ DEMO_CLOCK_CACHE = null; } return DEMO_CLOCK_CACHE; }
-function demoClockShiftMs(){ var c = demoClockCfg(); if(!c || !c.startUtc || !c.setAt) return 0; if(c.restoreUtc && Date.now() >= c.restoreUtc) return 0; return c.startUtc - c.setAt; }
+function demoClockShiftMs(){ var c = demoClockCfg(); if(!c || !c.startUtc || !c.setAt) return 0; return c.startUtc - c.setAt; } /* CMD-1029-02：不再有自动恢复，旧存档里的 restoreUtc 忽略；一直有效到手动恢复 */
 function demoTimeActive(){ return demoClockShiftMs() !== 0 || (+DEMO_SHIFT_MS || 0) !== 0; }
 try{ window.addEventListener('storage', function(e){ if(e.key === DEMO_CLOCK_KEY || e.key === null) DEMO_CLOCK_AT = 0; }); }catch(e){}
 function realNow(){ return new Date(Date.now() + demoClockShiftMs() + (+DEMO_SHIFT_MS || 0)); }
