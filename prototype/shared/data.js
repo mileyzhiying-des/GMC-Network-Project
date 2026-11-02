@@ -4889,12 +4889,14 @@ function holdingsUseHtml(c, scope){
   return '<div class="card" style="padding:22px 24px;">'+
     '<div class="info-heading" style="margin-bottom:14px;">是否使用持有项目？</div>'+
     rows+
-    (usePrevBuyOk(c, scope)
-      ? '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;"><button class="btn-outline" onclick="usePrevBuy()">购买其他项目</button><button class="btn-outline" onclick="notUseThisTime(\''+scope+'\')">本次不使用</button>'+(holdings.some(function(h0){ return h0.category!=='术后管理'; }) ? '<button class="btn-primary" onclick="submitHoldingsUse(\''+scope+'\')">使用项目</button>' : '')+'</div></div>' /* CMD-1029-04：按钮同一排，主操作最右 */
-      : '<div style="display:flex;gap:10px;margin-top:16px;">'+
-    (holdings.some(function(h0){ return h0.category!=='术后管理'; }) ? '<button class="btn-primary" style="flex-grow:1;" onclick="submitHoldingsUse(\''+scope+'\')">使用项目</button>' : '')+
-    '<button class="btn-outline" style="flex-grow:1;" onclick="notUseThisTime(\''+scope+'\')">本次不使用</button>'+
-    '</div></div>');
+    '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;"><button class="btn-outline" onclick="holdingsAddNew(\''+scope+'\')">新增项目</button><button class="btn-outline" onclick="notUseThisTime(\''+scope+'\')">本次不使用</button>'+(holdings.some(function(h0){ return h0.category!=='术后管理'; }) ? '<button class="btn-primary" onclick="submitHoldingsUse(\''+scope+'\')">使用项目</button>' : '')+'</div></div>'; /* CMD-1102-09 一：所有「是否使用持有项目？」都是［新增项目］［本次不使用］［使用项目］，主操作最右 */
+}
+/* ［新增项目］：和没有持有项目的客人一样的本地选购画面（不另做一套）；付清后变成持有，当天可接着用 */
+function holdingsAddNew(scope){
+  var c = getCurrentCase(); if(!c || isEnded(c)) return; if(inLockGuard(c)) return;
+  if(c.usePrev && scope==='main'){ usePrevBuy(); return; }
+  if(scope==='lm'){ var lm = c.localMgmt; if(!lm) return; lm.step = 'buy'; lm.ended = false; lm.active = true; logCaseEvent(c, actingName(), '本地管理：新增项目'); buildCaseLog(c); renderCaseBody(c); return; }
+  c.projectEntryMode = 'new'; logCaseEvent(c, actingName(), '本地项目：新增项目'); buildCaseLog(c); renderCaseBody(c);
 }
 
 /* ［做术后管理］（已结案案件剩下的，从本地管理新案件的「使用持有项目」里做）：记在原案件（KR 看得到），本案件自动关联原案件；提前做原因必填，原案件 KR 收到通知 */
@@ -4991,9 +4993,8 @@ function notUseThisTime(scope){
   if(scope==='lm') return lmNotUse(c);
   logCaseEvent(c, actingName(), '本次不使用任何持有项目');
   if(caseHasPurchase(c) || (c.postcareUses||[]).length){ if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; } localLeaveAsk(c); return; }
-  c.projectEntryMode = 'new'; /* 是否选购？ */
-  buildCaseLog(c);
-  renderCaseBody(c);
+  if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; }
+  localLeaveAsk(c, 'notuse'); /* CMD-1102-09 一：［本次不使用］= 客人要离开 → 问是否已离店；还没离店可以按［新增项目］ */
 }
 
 /* 本地管理面板：管理完成 / 管理取消（部分或全部，未做的次数归还持有，不是退款） */
@@ -5018,7 +5019,7 @@ function mgmtActiveHtml(c, scope){
     '<div style="font-size:12px;color:var(--muted);margin-top:8px;">每一行点［完成］或［取消］；［全部完成］把所有进行中的项目一次标完成。取消的次数归还到客户持有项目，<b>不是退款</b>。</div>'+
     '<div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--slate2);">同一次到店里还可以：</span>'+
     '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'use\')">继续使用持有项目</button>'+
-    (usePrevBuyOk(c, scope) ? '<button class="btn-ghost" onclick="usePrevBuy()">购买其他项目</button>' : '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'buy\')">继续选购项目</button>')+'</div>';
+    (usePrevBuyOk(c, scope) ? '<button class="btn-ghost" onclick="usePrevBuy()">新增项目</button>' : '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'buy\')">继续选购项目</button>')+'</div>';
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理</div>'+rows+btns+'</div>';
 }
 
@@ -11992,7 +11993,7 @@ function usePrevBuy(){
   if(c.localMgmt && c.localMgmt.ended){ c.localMgmt.ended = false; c.localMgmt.active = true; }
   if(!c.localMgmt) c.localMgmt = {active:true, ended:false, step:'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
   c.localMgmt.step = 'buy'; c.localMgmt.addBuy = false; c.localMgmt.fromUsePrev = true;
-  LM_BUY_OPEN = c.id; logCaseEvent(c, actingName(), '本地项目：购买其他项目');
+  LM_BUY_OPEN = c.id; logCaseEvent(c, actingName(), '本地项目：新增项目');
   lmBuyModalRender();
 }
 

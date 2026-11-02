@@ -4211,7 +4211,7 @@ function localLeaveAsk(c, reason){
   if(!c || isEnded(c)) return;
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
   var ov = document.getElementById('local-leave-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'local-leave-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100050; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:420px;max-width:94vw;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:8px;">今天的项目都做完了</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;">客人是否已离店？<br><span style="font-size:12px;color:var(--muted);">还没离店可以继续购买其他项目；客人走的时候按页头［客人离店］。</span></div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:420px;max-width:94vw;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:8px;">'+(reason==='notuse' ? '客人要离开了吗？' : '今天的项目都做完了')+'</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;">客人是否已离店？<br><span style="font-size:12px;color:var(--muted);">还没离店可以继续购买其他项目；客人走的时候按页头［客人离店］。</span></div>'+
     '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;"><button class="btn-outline" onclick="localLeaveNo()">还没离店</button><button class="btn-primary" onclick="localLeaveYes()">已离店</button></div></div>';
   ov.classList.add('open'); LOCAL_LEAVE_CID = c.id;
 }

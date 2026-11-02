@@ -7910,8 +7910,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.alert = al; window.GMC_NO_FOLLOWASK = oldFa; }
   });
 
-  /* CMD-1029-04（A1 分页）：使用之前购买的项目的独立案件——本地项目 tab［购买其他项目］（用同一个本地选购画面）：① 先使用再购买 ② 先购买再一起使用 ③ 本次不使用、只购买 */
-  ST.def('R182a','CMD-1029-04（A1 分页）：使用之前购买的项目的案件 本地项目 tab 加［购买其他项目］（三种顺序）',function(){
+  /* CMD-1029-04（A1 分页）：使用之前购买的项目的独立案件——本地项目 tab［新增项目］（用同一个本地选购画面）：① 先使用再购买 ② 先购买再一起使用 ③ 本次不使用、只购买 */
+  ST.def('R182a','CMD-1029-04（A1 分页）：使用之前购买的项目的案件 本地项目 tab 加［新增项目］（三种顺序）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm, oldF = window.GMC_NO_FOLLOWASK; window.alert = function(){}; window.confirm = function(){ return true; }; var td = todayStr();
     var mk = function(tag){
@@ -7928,24 +7928,25 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       /* ① 先使用，再购买 */
       var A = mk('R182a'), c = A.c0; chooseProjectEntryMode('holdings');
-      ST.ok(/购买其他项目\|本次不使用\|使用项目$/.test(btns()), '①：按钮同一排，顺序［购买其他项目］［本次不使用］［使用项目］（主操作最右）：'+btns());
+      ST.ok(/新增项目\|本次不使用\|使用项目$/.test(btns()), '①：按钮同一排，顺序［新增项目］［本次不使用］［使用项目］（主操作最右）：'+btns());
       document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); c = cur(c);
-      ST.ok(c.mgmtActive && /购买其他项目/.test(btns()), '①：先使用后，使用中的面板仍有［购买其他项目］');
+      ST.ok(c.mgmtActive && /新增项目/.test(btns()), '①：先使用后，使用中的面板仍有［新增项目］');
       var op = buy(); c = cur(c);
       ST.ok(op, '①：弹出和一般本地选购同一个选项目画面（lm-buy-overlay）'); ST.ok(!document.getElementById('lm-buy-overlay').classList.contains('open') && !isEnded(c), '①：付款后弹窗关掉，案件没有结束');
       ST.ok(/婴儿针:1\/3@旧/.test(hold(c)) && /LHALa peel:1\/1@本案/.test(hold(c)), '①：旧的剩 1 次（用掉 1 次），新买的 1 次记在本案件：'+hold(c));
       ST.ok(c.localMgmt && c.localMgmt.batches.length===1 && showSettleTab(c), '①：钱记在本案件的结算（结算 tab 出现）');
       ST.ok(/购买于 /.test(holdingsUseHtml(c, 'main')) && holdingsUseHtml(c, 'main').indexOf('购买于 '+c.caseNo)>-1, '①：新买的项目写「购买于 '+c.caseNo+'」');
-      ST.ok(/Timeline|购买其他项目/.test('') || (c.logEntries||[]).some(function(e){ return /本地项目：购买其他项目/.test(e.action); }) && (c.logEntries||[]).some(function(e){ return /结算付款/.test(e.action); }), '①：Timeline 有「购买其他项目」和「结算付款」');
+      ST.ok(/Timeline|新增项目/.test('') || (c.logEntries||[]).some(function(e){ return /本地项目：新增项目/.test(e.action); }) && (c.logEntries||[]).some(function(e){ return /结算付款/.test(e.action); }), '①：Timeline 有「新增项目」和「结算付款」');
       /* ② 先购买，再一起使用 */
       var B = mk('R182b'); c = B.c0; chooseProjectEntryMode('holdings'); buy(); c = cur(c);
       var tx = document.getElementById('case-body').innerText;
-      ST.ok(/婴儿针/.test(tx) && /LHALa peel/.test(tx) && /购买其他项目/.test(btns()), '②：买完回到「是否使用持有项目？」，新旧项目一起在清单里，［购买其他项目］还在');
+      ST.ok(/婴儿针/.test(tx) && /LHALa peel/.test(tx) && /新增项目/.test(btns()), '②：买完回到「是否使用持有项目？」，新旧项目一起在清单里，［新增项目］还在');
       for(var i = 0; document.getElementById('hold-check-main-'+i); i++) document.getElementById('hold-check-main-'+i).checked = true; submitHoldingsUse('main'); c = cur(c);
       ST.ok((c.mgmtUses||[]).length===2 && /LHALa peel:0\/1@本案/.test(hold(c)) && /婴儿针:1\/3@旧/.test(hold(c)), '②：新旧一起使用，持有次数对：'+hold(c));
       /* ③ 本次不使用，只购买（走一般本地选购画面） */
-      var C = mk('R182c'); c = C.c0; chooseProjectEntryMode('holdings'); notUseThisTime('main'); c = cur(c);
-      ST.ok(!isEnded(c) && c.projectEntryMode==='new' && /本地选购/.test(document.getElementById('case-body').innerText), '③：本次不使用后直接进入一般本地选购画面（案件没结束），可以只购买');
+      var C = mk('R182c'); c = C.c0; chooseProjectEntryMode('holdings'); window.GMC_LOCAL_LEAVE_MANUAL = true; notUseThisTime('main'); c = cur(c);
+      var lov = document.getElementById('local-leave-overlay'); ST.ok(!isEnded(c) && lov && lov.classList.contains('open') && /客人要离开了吗/.test(lov.innerText), '③ CMD-1102-09：本次不使用 = 客人要离开 → 先问「客人是否已离店？」，案件没结束');
+      localLeaveNo(); window.GMC_LOCAL_LEAVE_MANUAL = false; c = cur(c); ST.ok(!isEnded(c), '③：还没离店 → 案件继续，可以按［新增项目］');
       /* 不买就关弹窗：案件原样 */
       var D = mk('R182d'); c = D.c0; chooseProjectEntryMode('holdings'); usePrevBuy(); lmNoBuy(); c = cur(c);
       ST.ok(!c.localMgmt && !document.getElementById('lm-buy-overlay').classList.contains('open') && !isEnded(c), '关掉弹窗不购买：案件原样、没有留下本地管理记录');
@@ -8663,5 +8664,16 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var ok = '8' + String(Date.now()).slice(-8) + '7654321'; inp.value = ok; nikSaveInline(cl1.name, 'cont'); ST.ok(cl1.nik===ok, '16 位且不重复：保存成功');
       ST.ok(/16 digit/.test(nikCheck('123', null, true)) && /sekarang 3 digit/.test(nikCheck('123', null, true)), '预约页（印尼文）错误文字也写现在几位');
     } finally { host.remove(); }
+  });
+  ST.def('R208a','CMD-1102-09 一（A1 分页）：所有「是否使用持有项目？」三个按钮；［新增项目］进本地选购；［本次不使用］问是否已离店',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var p = ST.localProj('LHALa peel'), c0 = ST.localCase('R208a'); ST.localPay(c0, function(){ toggleLocalProject('main', p.id); }); ST.open(c0);
+    var c = ST.localCase('R208b'); c.name = c0.name; ST.open(c); c.entryChoicePending = true; c.projectEntryMode = 'holdings'; c.projectsLocked = false; c.recommended = [];
+    var h = holdingsUseHtml(c, 'main'), txt = h.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
+    ST.ok(/新增项目\|本次不使用\|使用项目/.test(txt) && h.indexOf('btn-primary')>h.indexOf('本次不使用'), '三个按钮，顺序［新增项目］［本次不使用］［使用项目］，主操作最右');
+    holdingsAddNew('main'); ST.ok(c.projectEntryMode==='new' && !isEnded(c), '［新增项目］：进入本地选购画面（projectEntryMode=new）');
+    c.projectEntryMode = 'holdings'; window.GMC_LOCAL_LEAVE_MANUAL = true; notUseThisTime('main');
+    var lov = document.getElementById('local-leave-overlay'); ST.ok(lov && lov.classList.contains('open') && !isEnded(c), '［本次不使用］：先问「客人是否已离店？」，案件还没结束');
+    localLeaveNo(); ST.ok(!isEnded(c), '还没离店：案件继续'); window.GMC_LOCAL_LEAVE_MANUAL = false;
   });
 })();
