@@ -5958,7 +5958,7 @@ function dayNoRelocate(m, vs){
 }
 /* 项目行的内部 id：新主案件用 A000011#3（不是子案件号）；旧主案件沿用旧的 -NN */
 function subNextNo(c){
-  if(c.dayNoOn){ var n = (c.subItems||[]).length+1; while((c.subItems||[]).some(function(x){ return x.no===c.caseNo+'#'+n; })) n++; return c.caseNo+'#'+n; }
+  if(c.dayNoOn){ var n = Math.max((c.subItems||[]).length, c.rowSeq||0)+1; while((c.subItems||[]).some(function(x){ return x.no===c.caseNo+'#'+n; })) n++; c.rowSeq = n; return c.caseNo+'#'+n; } /* CMD-1029-13：行 id 也只增不减（删掉最后一行后下一行不重用它的号） */
   return c.caseNo+'-'+pad2(mainNoNext(c));
 }
 /* 这一行所在那一天的子案件号（新主案件）；旧主案件返回行自己的旧号 */
