@@ -6032,8 +6032,8 @@ function corePcBooking(c, rows, by){
 function syncSurgerySub(c){
   if(!c.settlementDone || !c.krSchedule || !c.krSchedule.confirmedDate || ['confirmed','change_pending','arrived'].indexOf(c.krSchedule.status)<0) return;
   var names = krActiveItems(c).filter(function(it){ return !it.krAddOn && !it.preBalanceAdd && !it.swapped && !krIsMgmtItemC(it) && !it.deferUse; }).map(function(it){ return it.name; });
-  var anySurg = krActiveItems(c).some(function(it){ return !krIsMgmtItemC(it) && !it.krAddOn && !it.preBalanceAdd; });
-  if(!names.length && !anySurg) names = krActiveItems(c).filter(function(it){ return !it.krAddOn && !it.preBalanceAdd && !it.swapped; }).map(function(it){ return it.name; }); /* 只有管理项目：施术行写管理项目 */
+  /* CMD-1102-11 三：施术行只放施术项目，不混管理项目。原来 anySurg 排除了 preBalanceAdd / krAddOn 的施术项目（调整方案里取消原施术、尾款前新增施术时），误判成「没有施术项目」，把计划内管理项目写进施术行；
+     现在：新增的施术项目有自己的「增加项目」行，计划内施术项目都没了 → 施术行拿掉（下面 names 为空的分支）；真的只有管理项目时也不再把管理项目名写进施术行（原来的兜底取消）。 */
   if(!names.length){ var sd = (c.subItems||[]).filter(function(x){ return x.kind==='施术' && !x.done; })[0]; if(sd) c.subItems = c.subItems.filter(function(x){ return x!==sd; }); /* 诊疗方案里的施术项目今天都没选（Step 4）：施术行拿掉 */ return; }
   c.subItems = c.subItems || [];
   var s = c.subItems.filter(function(x){ return x.kind==='施术'; })[0], content = '施术：'+names.join('、');
@@ -6526,6 +6526,16 @@ function coreReopenVisitAt(c, key, by){
   logCaseEvent(c, by, '重新打开到院（增加项目）'); updateCaseStage(c); return {ok:true};
 }
 /* 数据修复（幂等）：到院已被标「结束」、但今天还有待做的行（A000004 类）→ 重新打开；不会重复记录 */
+/* CMD-1102-11 三：旧数据里施术行混进管理项目（Carry C A000844：「施术：热玛吉 · 300发」）→ 重写；只在内容真的变了才写一次 Timeline（幂等） */
+function repairSurgRowMix(c){
+  var row = (c.subItems||[]).filter(function(x){ return x.kind==='施术' && !x.done; })[0]; if(!row) return 0;
+  var names = String(row.content||'').replace(/^施术：/, '').split('、').filter(Boolean);
+  var mixed = names.some(function(nm){ var it = (c.procedureItems||[]).filter(function(x){ return x.name===nm; })[0]; return it && krIsMgmtItemC(it); }); if(!mixed) return 0;
+  var before = row.content; syncSurgerySub(c);
+  var after = ((c.subItems||[]).filter(function(x){ return x.kind==='施术' && !x.done; })[0] || {}).content || '';
+  if(after===before) return 0;
+  logCaseEvent(c, '系统', '修正旧数据：施术行不再混入管理项目（原「'+before+'」→ '+(after ? '「'+after+'」' : '拿掉，新增的施术项目有自己的行')+'）'); return 1;
+}
 function repairVisitState(){
   var n = 0;
   (CASE_ITEMS||[]).forEach(function(c){
@@ -6534,6 +6544,7 @@ function repairVisitState(){
     });
     if(migrateOldPostpone(c)) n++; /* CMD-1028-12 四：旧的无限延期并进保留 */
     n += mergeMainDayRows(c, '系统'); /* CMD-1102-11 二：同一天的第二张到院卡并回主到院 */
+    n += repairSurgRowMix(c); /* CMD-1102-11 三 */
     if(migrateProgressMemo(c)) n++; /* CMD-1021-03：旧的项目进程 memo 迁成第一则记录 */
     var fx = fixUseRecords(c); if(fx.length){ fx.forEach(function(t){ logCaseEvent(c, '系统', '修正使用记录：'+t); }); n += fx.length; }
   });

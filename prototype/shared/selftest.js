@@ -8762,4 +8762,28 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/已在 A9T211 到院/.test(o), '别的案件当天已到院：这个案件不能再约那一天：'+o);
     } finally { mut(function(c){ Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, JSON.parse(snap)); }); }
   });
+  ST.def('R212a','CMD-1102-11 三（KM1 分页，stageC 夹具）：调整方案取消原施术 + 尾款前新增施术：施术行不混管理项目；旧数据的混合行启动修复一次、幂等',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var cid = r.clinicId, td = todayStr(), snap = null; window.GMC_NO_TABS = true;
+    var mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    try{
+      var o = mut(function(c){ snap = JSON.stringify(c); c.krSchedule.confirmedDate = td; c.krSchedule.simDay = true;
+        c.procedureItems.push({name:'热玛吉 · 300发', origin:'KR', price:1300000, currency:'KRW', qty:1, copies:1, local:true, mgmtPlan:true, batchId:'B1', projectId:'lc:p96:sp197', specLabel:'300发'}); ensureItemIids(c); syncSurgerySub(c);
+        ST.krArrive(c); ST.krJudge(c, 'changed', '去');
+        var lib = PROJECT_LIBRARY.filter(function(x){ return x.active && x.origin==='KR' && (!c.hospitalId || x.hospitalId===c.hospitalId) && c.procedureItems.every(function(i){ return i.name!==x.name; }) && !/术后|拆线|复诊|消肿|护理/.test(x.name); })[0];
+        coreAddOnItem(c, lib.name, 'KM1 室长', {});
+        var plan = c.procedureItems.filter(function(i){ return i.origin==='KR' && !krIsMgmtItemC(i) && !i.preBalanceAdd && !i.cancelled; }).map(function(i){ return i.name; });
+        var ok = coreMarkUnable(c, plan, '去', 'KM1 室长');
+        var rows = c.subItems.filter(function(s){ return s.kind==='施术'; });
+        return {ok:ok, rows:rows.map(function(x){ return x.content; }), added:c.subItems.filter(function(s){ return s.kind==='增加项目'; }).map(function(x){ return x.content; }), lib:lib.name}; });
+      ST.ok(o.ok && !o.rows.some(function(t){ return /热玛吉/.test(t); }) && o.added.length===1, '取消原施术 + 尾款前新增施术：施术行里没有热玛吉（施术行：'+JSON.stringify(o.rows)+'；增加项目行：'+JSON.stringify(o.added)+'）');
+      /* 旧数据：混合行 */
+      var n1 = mut(function(c){ var row = c.subItems.filter(function(s){ return s.kind==='施术'; })[0];
+        if(!row){ row = {id:'sT212', no:c.caseNo+'#1', date:td, content:'', kind:'施术', place:'KR', projectName:'', done:false, auto:true}; c.subItems.push(row); }
+        row.content = '施术：热玛吉 · 300发'; var b = c.logEntries.length, n = repairSurgRowMix(c); return {n:n, logs:c.logEntries.length-b, now:(c.subItems.filter(function(s){ return s.kind==='施术'; })[0]||{}).content}; });
+      var n2 = mut(function(c){ var b = c.logEntries.length, n = repairSurgRowMix(c); return {n:n, logs:c.logEntries.length-b}; });
+      ST.ok(n1.n===1 && n1.logs===1 && !/热玛吉/.test(n1.now||'') && n2.n===0 && n2.logs===0, '旧的混合行：修复一次（一条 Timeline），第二次什么都不做：'+JSON.stringify([n1, n2]));
+    } finally { mut(function(c){ Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, JSON.parse(snap)); }); }
+  });
 })();
