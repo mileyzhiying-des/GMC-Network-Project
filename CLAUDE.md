@@ -1908,3 +1908,13 @@ prototype/shared/app.css  共用样式
   - 改：`todayOpenRows` 施术一行按项目拆开（已完成 / 已取消 / 管理类的不算没处理，`krDayConfirmRows` 本来就是这口径）；`krMainRowsHtml` 管理类项目不再按「施术项目」画（持有项目行显示）。
   - 两笔同名同时间的「预约中」（一笔印尼购买一笔在韩购买）不是重复预约：是两笔购买各约一次（`holdItemBookable` 按每笔 iid 算，同一笔不会被约两次）；同一天同地点合并成一次到院，所以显示两条。
   - **没有自动修已坏的状态**：用户的旧案件里如果有 `s.done` 被误设的施术行，需要看导出的 Timeline 再决定。测试：selftest R210a（旧代码跑 3 条失败，新代码通过）。
+
+## CMD-1102-11 补充（2026-11-02，追加；取代 CMD-1021-06「灰按钮只变灰，原因放 tooltip」、CMD-1020-04 / 1026-19 里「约在主到院当天会另生成 KR|同日期 的到院卡」，旧文字保留作历史）
+- 分支 **V4**，基准 df57211；提交：一 3ecc4b4、二 3a6298a、三 fc83571、四（见 git log）；不推送不合并；**数据版本不变（56）**，没有新字段（旧数据靠启动修复 `repairVisitState` 归位）。依据 Notion 开发交接 05 的 5-2「一天一个」；**不做「把 done 的两种含义拆开」**（另开任务）。
+- **规则**：同一个客人同一天只能有一个还没结束的到院。**到院 key 规则**（data.js `mainDayOpen` 上方注释）：`main` = 主到院（`mainVisitDay(c)` = `krArrivedDay` 或确认的施术日期，行 = 施术 / 增加项目，持有的管理项目靠 `todayPickMgmt` 进今日）；`KR|日期` = 其他韩国到院（`subCaseKey(s)`，术后管理记录 / 持有项目使用 / 施术预约使用行，同一天同地点一张卡）；`IN|日期` = 印尼来访；`rowVisitKey(c,s)` 决定行属于哪张卡。
+- **入口清单与处理**：① 管理 / 施术项目［预约时间］`coreUnitBookUse`（KR 预约弹窗 / 项目卡）：主到院进行中且约的是那一天 → **并入**（`mainDayAddMgmt` 进 `todayPickMgmt`，不建行，Timeline「预约时间：…——客人已在院，并入今天的进行项目」）；② 术后管理预约 `coreCareBook`（韩国）约在施术当天 → **拦住**，`KR_DENY_MSG`「客人今天在院做施术，术后管理请约施术之后的日期」；③ `coreHoldUseSchedule`（旧入口）同 `sameDayDenyText`；④ 同一客人别的案件当天已有主到院进行中 → 这三个入口都**拦住**「客人今天已在 A… 到院…」（`sameDayOtherOpenCase`）；⑤ 改时间 `coreSubTimeEdit` 把使用行改到进行中的主到院当天 → **并入**（`absorbRow`）；⑥ 客人到院那一刻 `coreMarkArrived` → `mergeMainDayRows` 把已有的同天使用行并回；⑦ 启动修复 `repairVisitState` → `mergeMainDayRows`；⑧ IN 预约类（日历代约 / 占位 / 自助 / 未安排预约［预约］/ 预约复诊 / KR 占位预约 / 预约改期）本来就走 `pendingResvSameDay` 同一天合并（CMD-1021-16 / 1026-08），没改；继续之前的服务 `joinMain` 同一天同地点沿用同一个号（`dayNoAssign`）；「使用之前购买的项目」开新案件 / 本地新增项目是 IN 当天同一案件内的操作，不生成新到院。
+- **［本次使用］**（`coreUnitUseNow0`）：这一项已有约在主到院当天的预约行 → 先 `absorbItemRows` 转成今天的进行项目，不再「没有可用次数」。
+- **三 `syncSurgerySub`**：不再有「只有管理项目时施术行写管理项目名」的兜底（也去掉 `anySurg`）；调整方案取消原施术、尾款前新增施术时施术行拿掉（新增的有自己的「增加项目」行）。`repairSurgRowMix`：旧数据的混合行重写，只在内容变了写一次 Timeline（幂等）。
+- **四 灰按钮写原因**：`krOutBtn`（项目卡三个 tab 的按钮）、`krLink`、到院卡的［客人已到院］灰按钮（`krArriveMainBtn` / `krArriveSubBtn`）旁边写一行小灰字（`.kr-btn-off` / `.kr-why`），悬停 title 保留；`krBtn` 本来就写。没动：整页只读（`krRoWrap`，CMD-1027-08 用户要求拿掉提示行）、表单里被禁用的输入框。
+- **「只灰一笔」查证**：［修改时间］灰 = 这一行 `arrived` 为真。把一整张卡标到院的 `coreVisitArrive` 会把同一张卡的所有未做行一起标；但**逐行标到院的入口有两个**：日历块弹窗［客人已到院］（`krVisitArrive` → `coreSubArrived(单行)`）和 `krCliAct('krSubArrived')`，只作用到点的那一行；`inheritVisitArrival` 只对被改时间 / 新建的那一行生效（别的行到店它才继承）。所以两笔同时间的行可以只灰一笔。
+- 测试：selftest 新增 R211a / R212a / R213a；因同一天并入而改的旧断言：R77b（约未来两天来测「并入已到店的到院」）、R79a（先让主到院结束，才会有 KR|今天 这张卡）、R74a（灰按钮旁边「没有说明文字」→「写说明文字」）。用 Carry C 备份（隔离端口导入）验证：启动修复后 A000844 只剩主到院一张卡，进行项目里有两行热玛吉（管理项目、［操作完成］），施术行混入已重写，Timeline 各写一次。
