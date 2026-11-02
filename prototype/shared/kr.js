@@ -4262,8 +4262,12 @@ function krOrigCard(c, j, goneFn){
   var its = krAllItems(c).filter(function(it){ return !it.cancelled && !it.swapped && !it.replacedBy && !it.pendingPay && !(it.preBalanceAdd || it.krAddOn) && !it.consentPending; });
   var line = function(it){ var g = goneFn && goneFn(it); return '<div class="kr-row">• <span'+(g ? ' style="color:var(--muted);"' : '')+'>'+krEsc(buyName(it.name))+(it.qty>1 ? ' ×'+it.qty : '')+'</span>'+(g ? ' <span style="color:var(--feedback-error,#B3402E);font-size:12px;">（取消）</span>' : '')+'</div>'; };
   var surg = its.filter(function(it){ return !krIsMgmtItemC(it); }), mg = its.filter(krIsMgmtItemC);
-  var judge = '<div class="kr-l3"><div class="kr-l3-title">到院判断</div><div class="kr-row"><b>'+KR_JUDGE_TEXT[j.result]+'</b></div>'+(j.memo ? '<div class="kr-row" style="color:var(--slate2);font-size:12px;">memo：'+krEsc(j.memo)+'</div>' : '')+'</div>';
-  return krL2Box('原本方案及判断', '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">原定项目</div>'+krL3Box('施术项目', surg.length, surg.map(line).join(''))+krL3Box('管理项目', mg.length, mg.map(line).join(''))+judge);
+  /* CMD-1102-04：三层——1 级「原本方案及判断」→ 2 级「原定项目」（里面 3 级 施术项目 N / 管理项目 N）+ 2 级「到院判断」（只有两行：「对接院长：判断结果」「原因：…」，没有更深的 card）；三种判断用同一个结构 */
+  var l3 = function(title, arr){ return '<div class="kr-l4"><div class="kr-l3-title">'+title+' <span style="font-weight:400;color:var(--muted);">'+arr.length+'</span></div>'+(arr.length ? arr.map(line).join('') : '<div class="kr-row" style="color:var(--muted);font-size:12px;">没有</div>')+'</div>'; };
+  var who = (c.director || '院长'), reason = String(j.memo||'').trim(); /* 对接院长 = c.director（没有就写「院长」）；「原因」就是原来的 memo 字段，只改显示文字 */
+  var plan = '<div class="kr-l3"><div class="kr-l3-title">原定项目</div>'+l3('施术项目', surg)+l3('管理项目', mg)+'</div>';
+  var judge = '<div class="kr-l3"><div class="kr-l3-title">到院判断</div><div class="kr-row"><b>'+krEsc(who)+'：'+KR_JUDGE_TEXT[j.result]+'</b></div><div class="kr-row">原因：'+(reason ? krEsc(reason) : '—')+'</div></div>';
+  return krL2Box('原本方案及判断', plan+judge);
 }
 function krAdjGo(step){ KR_ADJ.step = step; krRenderCaseDetail(); }
 function krAdjNext2(){

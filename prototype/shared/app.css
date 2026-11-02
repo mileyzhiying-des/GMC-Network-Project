@@ -556,3 +556,7 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 /* CMD-1102-02：未安排预约组标题里的客人名可点（打开案件） */
 .ub-name{color:var(--action-primary,#9A6A4B);text-decoration:underline;cursor:pointer;}
 .ub-name:hover{opacity:.8;}
+
+/* CMD-1102-04：1 级白底 → 2 级 .kr-l3（灰底）→ 3 级 .kr-l4（白底 + 细边线） */
+.kr-l4{background:#fff;border:1px solid var(--border2);border-radius:8px;padding:10px 14px;margin-top:10px;}
+.kr-l3 > .kr-l3-title + .kr-l4{margin-top:0;}
