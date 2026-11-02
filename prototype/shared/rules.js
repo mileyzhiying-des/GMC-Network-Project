@@ -926,7 +926,21 @@ function relMonthLabel(ym, todayYm){ var a = parseInt(ym.slice(0,4),10)*12 + par
 function relDayDiff(ds, todayDs){ return Math.round((new Date(ds+'T00:00:00') - new Date(todayDs+'T00:00:00')) / 86400000); }
 
 /* CMD-1015-05 十一：案件管理按「最近更新」排序（最近有变动的在最上面）——取 Timeline 里最晚的一条时间；没有记录的排最后 */
-function caseUpdatedKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && e.dt > m) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
+/* CMD-1102-02：「更新时间」= 最后一笔「真的有动作」的 Timeline 时间（UTC）。系统自动修正 / 关账提醒这类记录不算（它们每次打开页面 / 升级旧资料都可能新增，会把所有案件刷成「刚刚」）；没有记录就用预约来访时间 */
+function caseLogIsNoise(e){ var a = String((e && e.action)||''); return !!(e && e.actor==='系统' && /^(修正旧数据|修正使用记录|修正：|00:00 关账|已超过预计出报告时间)/.test(a)); }
+function caseUpdatedKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && e.dt > m && !caseLogIsNoise(e)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
+/* 更新时间显示（照演示时间 realNow 算，不用真实时间）：1 分钟内「刚刚」→「N 分钟前」→ 今天「今天 09:05」→ 今年「12/03」→ 往年「2026-10-28」；未来的时间（演示时间往回调）直接显示日期 */
+function caseUpdatedText(c){
+  var k = caseUpdatedKey(c); if(!k) return '—';
+  var d = utcStrParse(k); if(!d) return k;
+  var now = realNow(), diff = now.getTime() - d.getTime(), tz = pageTz(), pd = tzParts(d, tz), pn = tzParts(now, tz);
+  var md = pad2(pd.mo)+'/'+pad2(pd.d);
+  if(diff < 0) return pd.y===pn.y ? md : pd.y+'-'+md;
+  if(diff < 60000) return '刚刚';
+  if(diff < 3600000) return Math.floor(diff/60000)+' 分钟前';
+  if(pd.y===pn.y && pd.mo===pn.mo && pd.d===pn.d) return '今天 '+pad2(pd.h)+':'+pad2(pd.mi);
+  return pd.y===pn.y ? md : pd.y+'-'+md;
+}
 /* 案件开始时间（CMD-1015-17）：Timeline 里最早的一条（UTC），没有就用预约来访时间；列表显示按页面时区换算 */
 function caseStartKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && (!m || e.dt < m)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
 function caseStartText(c){ var k0 = caseStartKey(c); return k0 ? (fmtUtc(k0) || k0) : '—'; }
