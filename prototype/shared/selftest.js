@@ -8171,9 +8171,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(!c.materialsConfirmed, '客人没有 NIK → 不能确认基础资料');
     var miss = (document.getElementById('materials-missing-list')||{}).innerHTML||''; ST.ok(/NIK/.test(miss), '缺项提示里有「身份证号（NIK）」');
     document.getElementById('materials-missing-overlay').classList.remove('open');
-    var bh = clientBasicBlockHtml(c); ST.ok(/id="nik-in"/.test(bh) && /请看着客人的 KTP \/ KIA 当场输入/.test(bh), '基础资料有 NIK 输入栏 + 小字');
-    var el = document.getElementById('nik-in'); if(!el){ renderCaseBody(c); el = document.getElementById('nik-in'); }
-    if(el){ el.value = '123'; nikSaveInline(c.name); ST.ok(!clientByName(c.name).nik && /16/.test((document.getElementById('nik-err')||{}).textContent||''), '格式不对红字、不存'); }
+    var bh = clientBasicBlockHtml(c); ST.ok(/id="nik-in-p"/.test(bh) && /请看着客人的 KTP \/ KIA 当场输入/.test(bh), '基础资料有 NIK 输入栏 + 小字');
+    var el = document.getElementById('nik-in-p'); if(!el){ renderCaseBody(c); el = document.getElementById('nik-in-p'); }
+    if(el){ el.value = '123'; nikSaveInline(c.name, 'p'); ST.ok(!clientByName(c.name).nik && /16/.test((document.getElementById('nik-err-p')||{}).textContent||''), '格式不对红字、不存'); }
     var other = rA.client; var r0 = setClientNik(cl, nikA, {}); ST.ok(!r0.ok && /已属于客人 T-R193/.test(r0.err), '本诊所重复 NIK 不能存：'+r0.err);
     var okNik = mkNik(); var r1 = setClientNik(cl, okNik, {}); ST.ok(r1.ok && cl.nik===okNik, '输入正确的 NIK → 存进客户档案');
     ST.ok(cl.timeline.some(function(e){ return /登记身份证号（NIK，后 4 码 /.test(e.action) && String(e.action).indexOf(okNik)<0; }), '客户 Timeline 记登记（只写后 4 码）');
@@ -8643,5 +8643,24 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       resumeCandidates = function(){ return []; }; var a3 = fuAvail(c); ST.ok(!a3.can.revisit && !a3.noSurg, '没有候选案件：原来的「没有可复诊的案件」');
     } finally { resumeCandidates = rc0; joinWindowOf = jw0; }
     ST.ok(/这个案件还没有做过的施术/.test(String(fuRender)), '灰掉的原因文字：这个案件还没有做过的施术');
+  });
+  ST.def('R207a','CMD-1102-08 四（A1 分页）：NIK 保存——弹窗里和基础资料里的输入框 id 不再重复；15 / 17 位、重复、非数字都在输入框下面红字写原因；输入时显示位数；16 位可存',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c1 = ST.newRes('R207a'), c2 = ST.newRes('R207b'), cl1 = clientByName(c1.name), cl2 = clientByName(c2.name);
+    var dup = '9' + String(Date.now()).slice(-8) + '1234567'; cl2.nik = dup; cl1.nik = '';
+    var host = document.createElement('div'); host.id = 'r207-host'; host.innerHTML = nikInputRowHtml(cl1, true, 'p') + nikInputRowHtml(cl1, true, 'cont'); document.body.appendChild(host);
+    try{
+      var ids = {}; [].forEach.call(host.querySelectorAll('[id]'), function(e){ ids[e.id] = (ids[e.id]||0)+1; });
+      ST.ok(Object.keys(ids).every(function(k){ return ids[k]===1; }) && ids['nik-in-cont']===1 && ids['nik-in-p']===1, '两处输入框 / 错误行 id 都不重复（弹窗和基础资料同时在页面上）');
+      var inp = document.getElementById('nik-in-cont'), err = function(){ return (document.getElementById('nik-err-cont')||{}).textContent||''; }, cnt = function(){ return (document.getElementById('nik-cnt-cont')||{}).textContent||''; };
+      inp.value = '00000000000000023'; nikLive('cont'); ST.ok(cnt()==='17 / 16' && /17 位/.test(err()), '输入 17 位：即时显示「17 / 16」并红字（现在是 17 位）');
+      nikSaveInline(cl1.name, 'cont'); ST.ok(!cl1.nik && /正好 16 位数字（现在是 17 位）/.test(err()) && document.getElementById('nik-err-cont').style.display!=='none', '按保存：不存，输入框下面红字写原因');
+      inp.value = '123456789012345'; nikLive('cont'); nikSaveInline(cl1.name, 'cont'); ST.ok(!cl1.nik && /现在是 15 位/.test(err()), '15 位：红字 现在是 15 位');
+      inp.value = '12345678901234ab'; nikSaveInline(cl1.name, 'cont'); ST.ok(!cl1.nik && /只能是数字/.test(err()), '含字母：只能是数字');
+      inp.value = dup; nikSaveInline(cl1.name, 'cont'); ST.ok(!cl1.nik && /已属于客人/.test(err()), '重复 NIK：已属于客人 XXX');
+      inp.value = ''; nikSaveInline(cl1.name, 'cont'); ST.ok(!cl1.nik && /请填写身份证号/.test(err()), '空：请填写');
+      var ok = '8' + String(Date.now()).slice(-8) + '7654321'; inp.value = ok; nikSaveInline(cl1.name, 'cont'); ST.ok(cl1.nik===ok, '16 位且不重复：保存成功');
+      ST.ok(/16 digit/.test(nikCheck('123', null, true)) && /sekarang 3 digit/.test(nikCheck('123', null, true)), '预约页（印尼文）错误文字也写现在几位');
+    } finally { host.remove(); }
   });
 })();

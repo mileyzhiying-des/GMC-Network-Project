@@ -177,7 +177,7 @@ function bkStepProfile(){
   var body = (cl ? '<div class="bk-info">'+bt('profile.back')+'</div>' : '')+
     bkField(bt('profile.first'), bkInput('firstName','text','autocomplete="given-name"'))+bkField(bt('profile.last'), bkInput('lastName','text','autocomplete="family-name"'+(f.noLast ? ' disabled style="background:#EFEDE8;color:#8E857C;"' : ''))+'<label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px;"><input type="checkbox" '+(f.noLast ? 'checked ' : '')+'onchange="bkNoLast(this.checked)"> '+bt('profile.noLast')+'</label>')+
     bkField(bt('profile.gender'), '<select onchange="bkSet(\'gender\',this.value)"><option value="">'+bt('profile.pick')+'</option><option value="女"'+(f.gender==='女'?' selected':'')+'>'+bt('gender.f')+'</option><option value="男"'+(f.gender==='男'?' selected':'')+'>'+bt('gender.m')+'</option></select>')+
-    bkField(bt('profile.dob'), '<input type="date" value="'+bkH(f.dob)+'" max="'+dateStr(demoNow())+'" onchange="bkDobChange(this.value)">')+bkMinorHtml()+(cl ? '' : bkField(bt('nik.label'), bkInput('nik','text','inputmode="numeric" maxlength="19" autocomplete="off" placeholder="'+bkH(bt('nik.ph'))+'"')+'<div class="bk-sub" style="margin-top:6px;">'+bt('nik.hint')+'</div>'));
+    bkField(bt('profile.dob'), '<input type="date" value="'+bkH(f.dob)+'" max="'+dateStr(demoNow())+'" onchange="bkDobChange(this.value)">')+bkMinorHtml()+(cl ? '' : bkField(bt('nik.label'), bkInput('nik','text','inputmode="numeric" maxlength="19" autocomplete="off" placeholder="'+bkH(bt('nik.ph'))+'" oninput="bkNikLive(this)"')+'<div class="bk-sub" id="bk-nik-live" style="margin-top:6px;"></div><div class="bk-sub" style="margin-top:6px;">'+bt('nik.hint')+'</div>'));
   return bkFrame('s.profile', body+bkNav('bkProfileNext()', true));
 }
 /* CMD-1029-07：未满 21 岁（以预约当天算）→ 婚姻状况；未婚 → 必勾已通知监护人。已登记的老客人不走这一步 */
@@ -559,3 +559,10 @@ setInterval(function(){ if(BK && BK.mode==='me' && BK.me && !bkMeActive() && !BK
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bkInit); else bkInit();
 /* 别的标签页（IN 端）改了数据 → 本页重新读档并重画（例如时段被约满） */
 window.addEventListener('storage', function(){ setTimeout(function(){ var typing = document.activeElement && /^(input|textarea|select)$/i.test(document.activeElement.tagName); if(BK && BK.mode==='me' && BK.me && bkMeActive() && !typing && !document.getElementById('bk-code')){ bkRender(true); return; } /* 我的预约：IN 端改了案件状态/取消，客人端同步 */ if(BK && !BK.done && BK.entry!=='view' && BK_STEPS[BK.step]==='time') bkRender(); }, 80); /* 只在选时间那一步刷新（时段可能被约满），其他步骤不打断填写 */ });
+
+/* CMD-1102-08 四：NIK 输入时即时显示位数（N / 16），不足 / 超过 / 有非数字马上红字提示（不重画页面，免得输入框失焦） */
+function bkNikLive(el){
+  var d = document.getElementById('bk-nik-live'); if(!d) return; var v = nikClean(el.value), n = v.length;
+  if(!n){ d.textContent = ''; return; }
+  var bad = n>16 || /\D/.test(v); d.textContent = n+' / 16'+(bad ? ' — '+nikCheck(v, null, true) : ''); d.style.color = bad ? '#B3261E' : '';
+}

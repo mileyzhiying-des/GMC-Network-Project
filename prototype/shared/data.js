@@ -812,7 +812,11 @@ function nikOwner(nik, exceptId){ nik = nikClean(nik); if(!nik) return null; ret
 /* 返回错误文字（空 = 通过）；forBooking：客人自己在预约页填时不透露另一位客人的名字 */
 function nikCheck(raw, cl, forBooking){
   if(!nikClean(raw)) return '';
-  if(!nikValid(raw)) return forBooking ? 'Nomor KTP/KIA harus 16 digit angka.' : '身份证号（NIK）要 16 位数字';
+  if(!nikValid(raw)){
+    var cl0 = nikClean(raw), n0 = cl0.length, nonDigit = /\D/.test(cl0);
+    if(forBooking) return nonDigit ? 'Nomor KTP/KIA hanya boleh berisi angka (16 digit).' : 'Nomor KTP/KIA harus tepat 16 digit angka (sekarang '+n0+' digit).';
+    return nonDigit ? '身份证号（NIK）只能是数字，需要正好 16 位' : '身份证号需要正好 16 位数字（现在是 '+n0+' 位）';
+  }
   var o = nikOwner(raw, cl && cl.id);
   if(o) return forBooking ? 'Nomor ini sudah terdaftar. Kosongkan kolom ini atau hubungi klinik.' : '这个身份证号已属于客人 '+o.name;
   return '';
@@ -851,16 +855,25 @@ function nikValueHtml(cl){
   return '<span class="nik-v" data-cid="'+aEscC(cl.id)+'" data-shown="0" style="font-variant-numeric:tabular-nums;letter-spacing:.5px;">'+nikMask(cl.nik)+'</span> <a href="#" class="info-link" onclick="nikToggle(this);return false;">显示</a>';
 }
 /* 基础资料里一行 NIK 输入（客人还没有 NIK 时）：必填，当场看着 KTP / KIA 输入 */
-function nikInputRowHtml(cl, ed){
+function nikInputRowHtml(cl, ed, uid){
   if(!ed) return '<span style="color:#B3261E;">⚠ 未登记</span>';
-  var nm = String(cl.name).replace(/'/g, "\\'");
-  return '<span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;"><input id="nik-in" type="text" inputmode="numeric" maxlength="19" placeholder="16 位数字" autocomplete="off" style="width:190px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;" onkeydown="if(event.key===\'Enter\'){nikSaveInline(\''+nm+'\');}">'+
-    '<button class="btn-outline" onclick="nikSaveInline(\''+nm+'\')">保存</button><span id="nik-err" class="error-text" style="display:none;"></span></span><div style="font-size:12px;color:var(--muted);margin-top:3px;">请看着客人的 KTP / KIA 当场输入（必填，保存后才能确认基础资料）</div>';
+  /* CMD-1102-08 四：输入框 / 错误行的 id 带 uid——「继续之前的服务」弹窗和后面的基础资料页同时在页面上，原来两处都叫 nik-in / nik-err，保存读到的是弹窗后面那一个（空的），错误也写到被盖住的那个里，所以弹窗里按保存没反应 */
+  uid = uid || 'p'; var nm = String(cl.name).replace(/'/g, "\\'");
+  return '<span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;"><input id="nik-in-'+uid+'" type="text" inputmode="numeric" maxlength="19" placeholder="16 位数字" autocomplete="off" style="width:190px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;" oninput="nikLive(\''+uid+'\')" onkeydown="if(event.key===\'Enter\'){nikSaveInline(\''+nm+'\',\''+uid+'\');}">'+
+    '<span id="nik-cnt-'+uid+'" style="font-size:12px;color:var(--muted);min-width:46px;">0 / 16</span>'+
+    '<button class="btn-outline" onclick="nikSaveInline(\''+nm+'\',\''+uid+'\')">保存</button></span><div id="nik-err-'+uid+'" class="error-text" style="display:none;margin-top:4px;"></div><div style="font-size:12px;color:var(--muted);margin-top:3px;">请看着客人的 KTP / KIA 当场输入（必填，保存后才能确认基础资料）</div>';
 }
-function nikSaveInline(name){
-  var cl = clientByName(name), el = document.getElementById('nik-in'), er = document.getElementById('nik-err'); if(!cl || !el) return;
+/* 输入时即时显示位数；不足 / 超过时马上提示（红字） */
+function nikLive(uid){
+  var el = document.getElementById('nik-in-'+uid), cnt = document.getElementById('nik-cnt-'+uid), er = document.getElementById('nik-err-'+uid); if(!el) return;
+  var v = nikClean(el.value), n = v.length, bad = n>0 && (n!==16 || /\D/.test(v));
+  if(cnt){ cnt.textContent = n+' / 16'; cnt.style.color = bad && n>16 ? '#B3261E' : 'var(--muted)'; }
+  if(er){ if(n>16 || /\D/.test(v)){ er.textContent = nikCheck(v, null, false); er.style.display = 'block'; } else { er.textContent = ''; er.style.display = 'none'; } }
+}
+function nikSaveInline(name, uid){
+  uid = uid || 'p'; var cl = clientByName(name), el = document.getElementById('nik-in-'+uid), er = document.getElementById('nik-err-'+uid); if(!cl || !el) return;
   var r = setClientNik(cl, el.value, {});
-  if(!r.ok){ if(er){ er.textContent = r.err; er.style.display = 'inline'; } return; }
+  if(!r.ok){ if(er){ er.textContent = r.err; er.style.display = 'block'; } return; }
   refreshAfterClientEdit(cl);
 }
 
@@ -877,7 +890,7 @@ function clientBasicBlockHtml(c){
   var row = function(k, v, field){ return '<div class="case-field-row"><span class="fk">'+k+'</span><span style="flex-grow:1;font-size:13px;">'+v+'</span>'+(ed && field ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\''+field+'\');return false;">修改</a>' : '')+'</div>'; };
   return '<div style="margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);"><div class="info-heading" style="margin-bottom:4px;">基本信息 <span style="font-weight:400;font-size:12px;color:var(--muted);">来自客户档案，这里修改会同步到档案</span></div>'+
     row('姓名', aEscC(cl.name), 'name')+row('性别', aEscC(cl.gender||'—'), 'gender')+row('生日', aEscC(dobAgeText(cl.dob))+(minorMarkText(cl) ? ' <span style="color:#B3261E;font-size:12px;font-weight:700;">'+aEscC(minorMarkText(cl))+'</span>' : ''), cl.dob ? '' : 'gender')+
-    row('病史 / 过敏史', historyMarkHtml(cl.history), 'history')+row('联系方式', aEscC(cl.phone||'—'), 'phone')+(nikVisible() ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk">身份证号（NIK）'+(cl.nik ? '' : ' <span style="color:#B3261E;">*</span>')+'</span><span style="flex-grow:1;font-size:13px;">'+(cl.nik ? nikValueHtml(cl) : nikInputRowHtml(cl, ed))+'</span>'+(ed && cl.nik && nikCanEdit() ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\'nik\');return false;">修改</a>' : '')+'</div>' : '')+(passportVisible() ? row('护照', (function(){ var a = passportAlert(c), bad = a.level==='expired' || a.level==='before' || a.level==='none'; return '<span style="'+(bad ? 'color:#B3261E;font-weight:700;' : '')+'">'+(bad ? '⚠ ' : '')+aEscC(passportLineText(c, cl, a))+'</span>'; })(), 'passport') : '')+'</div>';
+    row('病史 / 过敏史', historyMarkHtml(cl.history), 'history')+row('联系方式', aEscC(cl.phone||'—'), 'phone')+(nikVisible() ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk">身份证号（NIK）'+(cl.nik ? '' : ' <span style="color:#B3261E;">*</span>')+'</span><span style="flex-grow:1;font-size:13px;">'+(cl.nik ? nikValueHtml(cl) : nikInputRowHtml(cl, ed, 'p'))+'</span>'+(ed && cl.nik && nikCanEdit() ? '<a href="#" class="info-link" onclick="openClientEdit(\''+nm+'\',\'nik\');return false;">修改</a>' : '')+'</div>' : '')+(passportVisible() ? row('护照', (function(){ var a = passportAlert(c), bad = a.level==='expired' || a.level==='before' || a.level==='none'; return '<span style="'+(bad ? 'color:#B3261E;font-weight:700;' : '')+'">'+(bad ? '⚠ ' : '')+aEscC(passportLineText(c, cl, a))+'</span>'; })(), 'passport') : '')+'</div>';
 }
 
 /* ---- 医美史（结构化，2026-10-06）：客户档案里一笔一笔的记录 {id, year, month, project, source:'客人自填'|'室长登记', addedAt, newCaseId} ----
@@ -11095,7 +11108,7 @@ function contRender(){
   var metaviewText = c.metaviewStatus==='ready' ? '<span style="font-weight:700;color:var(--sage);">已检测到</span>' : (c.metaviewStatus==='checking' ? '<span style="color:var(--terracotta);">检测中…</span>' : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>');
   var careRows = contTodayCareRows(c);
   var careRows = contTodayCareRows(c);
-  var clN2 = clientByName(c.name), nikRow = (nikVisible() && clN2 && !clN2.nik) ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk">身份证号（NIK） <span style="color:#B3261E;">*</span></span><div style="flex-grow:1;font-size:13px;">'+nikInputRowHtml(clN2, true)+'</div></div>' : ''; /* CMD-1029-10：继续的来访也要补 NIK */
+  var clN2 = clientByName(c.name), nikRow = (nikVisible() && clN2 && !clN2.nik) ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk">身份证号（NIK） <span style="color:#B3261E;">*</span></span><div style="flex-grow:1;font-size:13px;">'+nikInputRowHtml(clN2, true, 'cont')+'</div></div>' : ''; /* CMD-1029-10：继续的来访也要补 NIK */
   var body = nikRow+'<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>'; /* CMD-1026-07：服务内容已在第一个对话框勾好，这里没有勾选框，只按勾的内容展开 */
   if(has('复诊评估')){
     var done = followDoneItems(src), sel = c.followProjects || [];
