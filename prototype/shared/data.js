@@ -6425,7 +6425,14 @@ function todayMgmtPicked(c){ return (c.procedureItems||[]).filter(function(it){ 
 function mgmtDoneToday(c, k){ var it = (typeof k==='string') ? itemByKey(c, k) : k, d = it ? tmdGet(c, it) : (c.todayMgmtDone||{})[k]; return !!(d && !d.again); }
 function todayOpenRows(c){ /* 今天这次到院里还没做完的：施术 / 增加项目行 + 选进今日的持有管理项目 */
   var out = [];
-  (c.subItems||[]).forEach(function(s){ if((s.kind==='施术' || s.kind==='增加项目') && !s.visitKey && !s.done && !s.skipped) out.push({row:s, name:String(s.content||'').replace(/^施术：/, '')}); });
+  (c.subItems||[]).forEach(function(s){
+    if(!((s.kind==='施术' || s.kind==='增加项目') && !s.visitKey && !s.done && !s.skipped)) return;
+    if(s.kind==='施术' && /^施术：/.test(s.content||'')){ /* CMD-1102-09 四：施术一行按项目拆开，和进行项目表（一项一行）同一个口径：已完成 / 已取消 / 管理类的不算「没处理」 */
+      String(s.content).replace(/^施术：/, '').split('、').filter(Boolean).forEach(function(nm){ var it = (c.procedureItems||[]).filter(function(x){ return x.name===nm && !x.cancelled && !x.swapped; })[0]; if(it && (it.done || it.deferUse || krIsMgmtItemC(it))) return; if(!it) return; out.push({row:s, name:nm, item:it}); });
+      return;
+    }
+    out.push({row:s, name:String(s.content||'').replace(/^施术：/, '')});
+  });
   todayMgmtPicked(c).forEach(function(it){ out.push({held:it, name:it.name}); });
   return out;
 }

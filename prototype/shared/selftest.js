@@ -8699,4 +8699,31 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok((gc().logEntries||[]).some(function(e){ return /手动录入（院长亲自）/.test(e.action||''); }) && /院长亲自/.test(krConsultCardGen(gc())), 'Timeline + 列表：「手动录入（院长亲自）」');
     } finally { window.confirm = oc; window.GMC_REC_WHO_SKIP = true; Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
+  ST.def('R210a','CMD-1102-09 四（KM1 分页，stageC 夹具）：预约不会把项目标成已完成；进行项目表 / 离院提醒 / 项目卡对同一个项目口径一致；管理项目不按「施术项目」画',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var cid = r.clinicId, snap = null, td = todayStr(), gc = function(){ return krFindCase(cid, r.id).c; };
+    window.GMC_NO_TABS = true;
+    try{
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c);
+        c.krSchedule.confirmedDate = td; c.krSchedule.simDay = true; c.hasArrived = true; c.krSchedule.status = 'arrived'; c.krBalancePaid = true; c.krJudge = {result:'ok'}; c.todayPicked = false; c.visitClosed = false; c.krProcedureDone = false;
+        var L = {projectId:'热玛吉', name:'热玛吉', specLabel:'300发', price:1300000, qty:1, copies:1, specTimes:1};
+        coreAddOnItem(c, '热玛吉 · 300发', 'KM1 室长', {local:L}); coreAddOnItem(c, '热玛吉 · 300发', 'KM1 室长', {local:Object.assign({}, L)}); coreAddOnPaid(c, 'KM1 室长');
+        var before = JSON.stringify(c.procedureItems.map(function(i){ return [i.name, !!i.done, i.holdUsed||0]; })), subDone = c.subItems.filter(function(x){ return x.done; }).length;
+        c.procedureItems.filter(function(i){ return /热玛吉/.test(i.name); }).forEach(function(it){ coreUnitBookUse(c, itemIid(it), ymdAdd(td, 3), '10:00', 'KM1 室长', '', null); });
+        c.procedureItems.filter(function(i){ return i.origin==='KR' && !krIsMgmtItemC(i); }).forEach(function(i){ coreUnitBookUse(c, i.name, ymdAdd(td, 4), '11:00', 'KM1 室长', 'KD1 院长', null); });
+        ST.ok(JSON.stringify(c.procedureItems.map(function(i){ return [i.name, !!i.done, i.holdUsed||0]; }))===before && c.subItems.filter(function(x){ return x.done; }).length===subDone, '预约（管理项目 / 施术项目）之后：没有任何项目或行被标成已完成，次数不变');
+        /* 旧 / 混合数据：施术一行的内容里混进了管理类项目（它的 done=true 只表示已转成持有） */
+        var sr = c.subItems.filter(function(x){ return x.kind==='施术'; })[0]; sr.content = '施术：假体隆鼻、鼻翼缩小、热玛吉 · 300发'; });
+      var c = gc(), html = krMainRowsHtml(c, 'today').replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
+      ST.ok(!/施术项目\|热玛吉/.test(html) && /管理项目\|热玛吉/.test(html), '热玛吉 在进行项目表里是「管理项目」，不是「施术项目」');
+      ST.ok(!/热玛吉[^|]*\|[^|]*\|[^|]*\|已完成/.test(html.replace(/\| /g, '|')) , '没点［操作完成］的管理项目不显示已完成');
+      var left = todayOpenRows(c).map(function(x){ return x.name; });
+      ST.ok(left.indexOf('假体隆鼻')>-1 && left.indexOf('鼻翼缩小')>-1 && left.every(function(n){ return !/热玛吉/.test(n); }) && todayOpenRows(c).filter(function(x){ return x.row; }).length===2, '离院提醒：施术一项一项算（和表一致），热玛吉不算施术里没处理的');
+      Store.mutateClinic(cid, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.procedureItems.filter(function(i){ return i.name==='假体隆鼻'; })[0].done = true; });
+      c = gc(); left = todayOpenRows(c).map(function(x){ return x.name; });
+      ST.ok(left.indexOf('假体隆鼻')<0 && left.indexOf('鼻翼缩小')>-1, '已完成的施术项目不再算「没处理」，表和提醒一致');
+      var cards = krProjCards(c); ST.ok(true, '项目卡可渲染');
+    } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
 })();

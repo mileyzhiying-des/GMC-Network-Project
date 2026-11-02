@@ -2784,7 +2784,8 @@ function krMainRowsHtml(c, mode){
     if(s.kind==='施术' && /^施术：/.test(s.content||'')){ /* CMD-1015-29：施术项目一项一行；每项可单独完成 / 今日取消 */
       String(s.content).replace(/^施术：/, '').split('、').filter(Boolean).forEach(function(nm){
         var it = (c.procedureItems||[]).filter(function(x){ return x.name===nm && !x.cancelled && !x.swapped; })[0], vdone = s.done || !!(it && it.done);
-        if(!it){ rowsHtml.push(krRemovedRow(c, nm)); return; } /* CMD-1028-14 八：已取消 / 已更换的项目不再显示成「待做」+［操作完成］，只留一行已取消 */
+        if(!it){ rowsHtml.push(krRemovedRow(c, nm)); return; }
+        if(krIsMgmtItemC(it)) return; /* CMD-1102-09 四：管理类项目不按「施术项目」画（它的 done 只表示已转成持有），由下面持有项目行显示，类型和项目卡一致 */ /* CMD-1028-14 八：已取消 / 已更换的项目不再显示成「待做」+［操作完成］，只留一行已取消 */
         rowsHtml.push(krTblRow(c, Object.assign({}, s, {content:'施术：'+nm, done:vdone, _item:nm}), o));
       });
     } else rowsHtml.push(krTblRow(c, s, o));
