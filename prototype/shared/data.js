@@ -5556,12 +5556,12 @@ function nearestOpenMonth(fromDate, dates){
 /* CMD-1029-09 二：递交施术日期时选「行程状态」：已定（机票已订）/ 暂定；只是给 KR 看的标记，不影响流程。已定可顺便填入境 / 离境 */
 function tripStateOf(c){ return (c && c.krSchedule && c.krSchedule.tripState) || ''; }
 function tripStateTagHtml(c){ var t = tripStateOf(c); return t==='tentative' ? ' <span style="font-size:12px;font-weight:700;color:#8F6F0C;background:#FBF0C9;border-radius:4px;padding:1px 6px;">暂定</span>' : (t==='booked' ? ' <span style="font-size:12px;color:var(--sage);">行程已定</span>' : ''); }
-function setTripState(v){ var c = getCurrentCase(); if(!c) return; var ks = ensureKrScheduleDraft(c); ks.tripState = v; if(v!=='booked'){ ks.draftIn = ''; ks.draftOut = ''; } renderCaseBody(c); }
+function setTripState(v){ var c = getCurrentCase(); if(!c) return; var ks = ensureKrScheduleDraft(c); ks.tripState = v; renderCaseBody(c); }
 function tripStateBlockHtml(c, ks){
   var radio = function(v, lab){ return '<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-right:18px;cursor:pointer;"><input type="radio" name="trip-state" '+(ks.tripState===v ? 'checked ' : '')+'onchange="setTripState(\''+v+'\')"> '+lab+'</label>'; };
   var inp = 'padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;';
   return '<div style="margin-top:14px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">行程状态 <span style="color:#C1454A;">*</span> <span style="font-weight:400;font-size:12px;color:var(--muted);">给 KR 看的标记，不影响流程</span></div><div style="display:flex;flex-wrap:wrap;">'+radio('booked','已定（机票已订）')+radio('tentative','暂定（客人还没订机票 / 办签证）')+'</div>'+
-    (ks.tripState==='booked' ? '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:10px;font-size:12px;color:var(--slate2);">入境日期 <input type="date" value="'+aEscC(ks.draftIn||'')+'" '+stayRangeAttr()+' oninput="getCurrentCase().krSchedule.draftIn=this.value" style="'+inp+'"> 离境日期 <input type="date" value="'+aEscC(ks.draftOut||'')+'" '+stayRangeAttr()+' oninput="getCurrentCase().krSchedule.draftOut=this.value" style="'+inp+'"> <span style="color:var(--muted);">（选填，可以之后再填）</span></div>' : '')+'</div>';
+    '<div style="font-size:12px;color:var(--muted);margin-top:8px;">入境 / 离境日期和时间在「确认行程」窗口里填（施术日不到 7 天，递交时会弹出；7 天以上到时再确认）</div></div>';
 }
 function ensureKrScheduleDraft(c){
   if(!c.krSchedule) c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false};

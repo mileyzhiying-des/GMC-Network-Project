@@ -2946,7 +2946,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
     var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), auto = window.GMC_STAY_AUTO; var hid = caseKrHospital(c), nN = function(){ return ((HOSPITAL_DATA[hid]||{}).notifs||[]).filter(function(n){ return /的在韩期间/.test(n.text||'') && String(n.text).indexOf(c.name)>-1; }).length; }; /* 通知列表有 200 条上限，所以按内容数，不数总长度 */
     c.stay = null; c.stayAsked = false; window.GMC_STAY_AUTO = false; var got = 0; stayGate(c, function(){ got++; });
-    ST.ok(document.getElementById('stay-overlay').classList.contains('open') && got===0, '确认赴韩：弹出在韩期间窗口'); ST.ok(/先空着/.test(document.getElementById('stay-overlay').textContent), '可以先空着'); stayCancel(); ST.ok(got===1 && c.stayAsked===true && !c.stay, '先空着：继续确认赴韩，只记「问过了」'); got = 0; stayGate(c, function(){ got++; }); ST.ok(got===1 && !document.getElementById('stay-overlay').classList.contains('open'), '问过一次就不再弹');
+    ST.ok(got===1 && !document.getElementById('stay-overlay').classList.contains('open') && !c.stay, 'CMD-1102-07：确认赴韩不再弹在韩期间窗口，直接继续（入境 / 离境只在「确认行程」窗口填一次）');
     var e0 = krCbEarliest(c); ST.ok(!!e0, '夹具有最早可回国日（'+e0+'）'); var n0 = nN();
     var r1 = coreSetStay(c, '2026-12-10', '2026-12-05', 'A1 室长'); ST.ok(!r1.ok && !c.stay, '离境日早于入境日 → 不让存');
     var inD = ymdAdd(e0, -10), outD = ymdAdd(e0, -3); coreSetStay(c, inD, outD, 'A1 室长', {initial:true}); ST.ok(stayFilled(c) && nN()===n0, '确认赴韩时填：存下，不通知 KR（还没到 KR 那一步）'); ST.ok(stayShortDays(c)===3, '离境日比最早可回国日早 3 天 → 红字「比建议少 3 天」（不拦）');
@@ -8251,12 +8251,12 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/行程状态/.test(document.getElementById('case-body').innerText) && /已定（机票已订）/.test(document.getElementById('case-body').innerText) && /暂定/.test(document.getElementById('case-body').innerText), '日期卡里有「行程状态」已定 / 暂定');
       var ks = ensureKrScheduleDraft(c), td = todayStr(), dt = caseOpenDates(c).filter(function(x){ return x >= ymdAdd(td, 10); })[0]; ks.primary = dt;
       msgs.length = 0; submitKrScheduleDate(); ST.ok(msgs.some(function(m){ return /行程状态/.test(m); }) && ks.status!=='pending', '没选行程状态不能递交');
-      setTripState('booked'); ks.draftIn = dt; ks.draftOut = ''; msgs.length = 0; submitKrScheduleDate(); ST.ok(msgs.some(function(m){ return /一起填/.test(m); }) && ks.status!=='pending', '已定只填一个日期 → 提醒要一起填或都不填');
+      setTripState('booked'); ST.ok(!/入境日期/.test(document.getElementById('case-body').innerText), 'CMD-1102-07：行程状态下面没有入境 / 离境日期栏');
       setTripState('tentative'); submitKrScheduleDate(); ST.ok(ks.status==='pending' && ks.tripState==='tentative' && ST.hasLog(c, /行程暂定/), '选暂定可以递交，Timeline 记行程暂定');
       ST.ok(/暂定/.test(document.getElementById('case-body').innerText), '递交后日期卡写「暂定」');
       localStorage.setItem('__R189', JSON.stringify({id:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, date:dt}));
-      var d = ST.newRes('R189b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻']); ST.open(d); d.activeCaseTab = 'kr'; var k2 = ensureKrScheduleDraft(d); k2.primary = dt; setTripState('booked'); k2.draftIn = dt; k2.draftOut = ymdAdd(dt, 8); submitKrScheduleDate();
-      ST.ok(d.krSchedule.status==='pending' && d.krSchedule.tripState==='booked' && d.stay && d.stay.in===dt && d.stay.out===ymdAdd(dt, 8), '已定 + 入境 / 离境：递交时一起存进在韩期间');
+      var d = ST.newRes('R189b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻']); ST.open(d); d.activeCaseTab = 'kr'; var k2 = ensureKrScheduleDraft(d); k2.primary = dt; setTripState('booked'); window.GMC_TRIP_NO7 = true; submitKrScheduleDate(); window.GMC_TRIP_NO7 = false;
+      ST.ok(d.krSchedule.status==='pending' && d.krSchedule.tripState==='booked' && !d.stay, '已定：递交时不填入境 / 离境（7 天以上）');
     } finally { window.alert = al; window.GMC_TRIP_MANUAL = false; }
   });
   ST.def('R189b','CMD-1029-09 二（KM1 分页，先在 A1 跑 R189a）：KR 看得到「暂定」（页头 / 日期卡 / 日历块）',function(){

@@ -212,19 +212,17 @@ function reconfirmPick(id, k){
 function openReconfirmSame(id){
   var c = calCaseById(id); if(!c) return; var s = c.stay || {}, cl = clientByName(c.name), inp = 'padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;';
   var ov = document.getElementById('reconfirm-overlay'); if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'reconfirm-overlay'; ov.style.zIndex = 96; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:520px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">照原日期 · '+aEscC(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">客人说日期不变。下面可以顺便填（都不是必填）；填了入境 / 离境，行程状态会改成「已定」。</div>'+
-    '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--slate2);">入境日期 <input id="rc-in" type="date" value="'+aEscC(s.in||'')+'" '+stayRangeAttr()+' style="'+inp+'"> 离境日期 <input id="rc-out" type="date" value="'+aEscC(s.out||'')+'" '+stayRangeAttr()+' style="'+inp+'"></div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:520px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">照原日期 · '+aEscC(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">客人说日期不变。下面可以顺便填（都不是必填）；入境 / 离境在下面的窗口填（选填），填了行程状态会改成「已定」。</div>'+
+    '<div style="font-size:12px;color:var(--slate2);">入境 / 离境：<b>'+aEscC(stayText(c)||'还没填')+'</b> <button class="btn-outline" style="padding:4px 12px;font-size:12px;margin-left:8px;" onclick="openStayModal(\''+id+'\',{})">'+(stayFilled(c) ? '修改' : '填写（选填）')+'</button></div>'+
     '<div style="margin-top:10px;font-size:12px;color:var(--slate2);">护照号码 <input id="rc-pno" value="'+aEscC(passportOf(cl).no)+'" autocomplete="off" style="'+inp+'width:200px;"> <span style="color:var(--muted);">签证和入境由客人自行负责，请提醒客人</span></div>'+
     '<div id="rc-err" class="error-text" style="display:none;margin-top:8px;"></div><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="document.getElementById(\'reconfirm-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" onclick="reconfirmSameSave(\''+id+'\')">确认</button></div></div>';
   ov.classList.add('open');
 }
 function reconfirmSameSave(id){
   var c = calCaseById(id); if(!c) return; var g = function(i){ return String((document.getElementById(i)||{}).value||'').trim(); }, e = document.getElementById('rc-err'), bad = function(t){ e.textContent = t; e.style.display = 'block'; };
-  var inD = g('rc-in'), outD = g('rc-out'), pno = g('rc-pno');
-  if(!!inD !== !!outD) return bad('入境和离境日期要一起填，或都先不填');
-  if(inD){ var ye = stayDateErr('入境日', inD) || stayDateErr('离境日', outD); if(ye) return bad(ye); if(outD < inD) return bad('离境日不能早于入境日'); }
+  var pno = g('rc-pno');
   var bits = ['照原日期（施术 '+c.krSchedule.confirmedDate+'）'];
-  if(inD){ var r = coreSetStay(c, inD, outD, actingName(), {}); if(r && r.ok===false) return bad(r.err); bits.push('入境 '+inD+' / 离境 '+outD); c.krSchedule.tripState = 'booked'; }
+  if(stayFilled(c)){ bits.push('入境 / 离境 '+stayText(c)); c.krSchedule.tripState = 'booked'; }
   if(pno){ var cl = clientByName(c.name); if(cl && passportOf(cl).no!==pno){ var p0 = passportOf(cl); cl.passport = {text:'已登记', date:todayStr(), no:pno, issue:p0.issue, expiry:p0.expiry}; cl.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'登记护照号码（确认客人行程）', dt:nowFullDt(), kind:'plain'}); bits.push('填了护照号码'); } }
   document.getElementById('reconfirm-overlay').classList.remove('open');
   reconfirmDone(c, 'same', bits.join('；')); updateCaseStage(c); try{ buildCaseLog(c); renderCaseBody(c); }catch(er){}
@@ -540,12 +538,13 @@ function repairOffConflicts(){
    两行：入境 = 入境日｜入境时间（韩国当地）｜入境机场（选填）；离境同。［已确认行程］多一栏「确认方式」（电话 / WhatsApp / 短信 / 当面 / 其他：文字，必选至少一个）。 */
 var STAY_CTX = null, TRIP_METHODS = ['电话', 'WhatsApp', '短信', '当面'];
 function stayGate(c, cb){
+  cb(); return; /* CMD-1102-07 一：确认赴韩不再填入境 / 离境——只在「确认行程」窗口填一次（施术日不到 7 天递交日期时弹出，7 天前［已确认行程］必填） */
   if(window.GMC_STAY_AUTO || c.stay || c.stayAsked){ cb(); return; } /* GMC_STAY_AUTO：自测用，不弹在韩期间窗口 */
   openStayModal(c.id, {initial:true, then:cb});
 }
 function openStayModal(caseId, o){
   var c = calCaseById(caseId); if(!c) return; o = o || {}; STAY_CTX = {id:caseId, o:o};
-  var ov = document.getElementById('stay-overlay'); if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'stay-overlay'; ov.style.zIndex = 96; document.body.appendChild(ov); }
+  var ov = document.getElementById('stay-overlay'); if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'stay-overlay'; ov.style.zIndex = 97; document.body.appendChild(ov); }
   var inp = 'padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;min-width:0;', s = c.stay || {}, tc = c.tripConfirm || {};
   var row = function(k, lab){ return '<div style="display:grid;grid-template-columns:44px 1.3fr 1fr 1.2fr;gap:8px;align-items:end;margin-bottom:10px;"><b style="font-size:13px;padding-bottom:9px;">'+lab+'</b><div><label style="font-size:12px;color:var(--slate2);">'+lab+'日</label><input type="date" id="stay-'+k+'" value="'+(s[k]||'')+'"'+stayRangeAttr()+' style="'+inp+'width:100%;" onchange="stayWarnRefresh()"></div><div><label style="font-size:12px;color:var(--slate2);">'+lab+'时间（韩国当地）</label><input type="time" id="stay-'+k+'t" value="'+(s[k+'Time']||'')+'" style="'+inp+'width:100%;"></div><div><label style="font-size:12px;color:var(--slate2);">'+lab+'机场（选填）</label><input id="stay-'+k+'a" value="'+aEscC(s[k+'Airport']||'')+'" placeholder="例：仁川 ICN" style="'+inp+'width:100%;"></div></div>'; };
   var methods = o.trip ? '<div style="margin-top:4px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">确认方式（必选，可多选）</div><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px;">'+TRIP_METHODS.map(function(m, i){ return '<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" class="stay-m" value="'+m+'"'+((tc.methods||[]).indexOf(m)>-1 ? ' checked' : '')+'> '+m+'</label>'; }).join('')+'<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" id="stay-mo"'+(tc.other ? ' checked' : '')+'> 其他：<input id="stay-mot" value="'+aEscC(tc.other||'')+'" style="'+inp+'width:120px;padding:5px 8px;"></label></div></div>' : '';
