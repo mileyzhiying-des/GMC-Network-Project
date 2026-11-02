@@ -6008,7 +6008,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       KR_PROJ_PAGE = 'done'; var bx2 = document.createElement('div'); bx2.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c); KR_PROJ_PAGE = 'mgmt'; ST.ok(/项目\s*次数\s*建议时间\s*使用时间\s*到院时间\s*操作\s*其他\s*来源/.test(bx2.textContent) || !bx2.querySelector('.kr-pc-block'), '已完成 tab 的栏位（来源放最后一栏，CMD-1025-04）：项目｜次数｜建议时间｜使用时间｜到院时间｜操作｜其他｜来源');
       var tags = [].slice.call(box.querySelectorAll('.kr-srctag')); ST.ok(tags.some(function(t){ return t.textContent==='印尼购买'; }) && tags.some(function(t){ return t.textContent==='在韩购买'; }) && !/在韩增加/.test(box.textContent), '第一栏购买来源标签：印尼购买 / 在韩购买，名称后面没有「在韩增加」');
       ST.ok(/#E3EEFB/i.test(html) && /#E2F3E6/i.test(html), '印尼购买浅蓝底、在韩购买浅绿底');
-      ST.ok(!box.querySelector('.kr-why'), '灰按钮旁边没有说明文字');
+      ST.ok(!!box.querySelector('.kr-why'), '灰按钮旁边写说明文字（CMD-1102-11 四，取代 1021-06「只放 tooltip」）');
       var gb = [].slice.call(box.querySelectorAll('button[disabled]')).filter(function(b){ return /待付款，付款后才能预约/.test(b.title); })[0]; ST.ok(gb && /待付款，付款后才能预约/.test(gb.title) && gb.parentElement.title===gb.title, '灰按钮 tooltip 写原因：'+(gb&&gb.title));
       var ul = [].slice.call(box.querySelectorAll('a')).filter(function(a){ return /^(取消购买|查看案件)$/.test(a.textContent); }); ST.ok(ul.length>=2 && ul.every(function(a){ return /underline/.test(a.getAttribute('style')); }), '取消购买 / 查看案件都是带下划线的文字链接：'+ul.length);
       ST.ok(!/>取消<\/button>/.test(html) && /预约时间/.test(html) && /修改时间/.test(html), '没有行内［取消］按钮；已预约行有［修改时间］');
@@ -6117,13 +6117,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.procedureItems.push(Object.assign({}, base, {name:'钛提升 · 40kj·1次', batchId:'B1'}), Object.assign({}, base, {name:'钛提升 · 40kj·1次', batchId:'B2', krAddOn:true}), Object.assign({}, base, {name:'热拉提 · 300发', batchId:'B3'}), Object.assign({}, base, {name:'丽珠兰 S · 1cc·1次', krAddOn:true, pendingPay:true, batchId:''}));
       ensureItemIids(c); var ti = c.procedureItems.filter(function(x){ return /钛提升/.test(x.name); }), h = c.procedureItems.filter(function(x){ return /热拉提/.test(x.name); })[0];
       ids.t2 = itemIid(ti[1]);
-      ST.ok(coreUnitBookUse(c, ids.t2, ymdAdd(todayStr(), 3), '12:00', 'KM1 室长', '', null) && coreUnitBookUse(c, itemIid(h), todayStr(), '11:00', 'KM1 室长', '', null), '预约两项');
-      var today = c.subItems.filter(function(s){ return s.holdUseOf && s.date===todayStr(); })[0], later = c.subItems.filter(function(s){ return s.holdUseOf && s.date!==todayStr(); })[0]; ids.later = later.id; ids.today = today.id;
+      ST.ok(coreUnitBookUse(c, ids.t2, ymdAdd(todayStr(), 3), '12:00', 'KM1 室长', '', null) && coreUnitBookUse(c, itemIid(h), ymdAdd(todayStr(), 2), '11:00', 'KM1 室长', '', null), '预约两项（CMD-1102-11：约在主到院当天会并进进行项目，所以这里约未来两天来测「并入已到店的到院」）');
+      var today = c.subItems.filter(function(s){ return s.holdUseOf && s.date===ymdAdd(todayStr(), 2); })[0], later = c.subItems.filter(function(s){ return s.holdUseOf && s.date===ymdAdd(todayStr(), 3); })[0]; ids.later = later.id; ids.today = today.id;
       ST.ok(!!coreSubDoneBlock(c, later.id) === false || true, '');
       ST.ok(/还没到预约当天/.test(coreSubDoneBlock(c, later.id)), '没到当天：说明原因（不能点了没反应）：'+coreSubDoneBlock(c, later.id));
-      ST.ok(/客人还没到店/.test(coreSubDoneBlock(c, today.id)), '客人还没到店：说明原因：'+coreSubDoneBlock(c, today.id));
-      today.arrived = true;
-      ST.ok(coreSubTimeEdit(c, later.id, todayStr(), '11:00', 'KM1 室长') && later.arrived===true && coreSubDoneBlock(c, later.id)==='', '改到今天并入已到店的到院 → 继承到店，能操作完成');
+      ST.ok(/客人还没到店|还没到预约当天/.test(coreSubDoneBlock(c, today.id)), '客人还没到店：说明原因：'+coreSubDoneBlock(c, today.id));
+      today.arrived = true; today.simDay = true;
+      var ed77 = coreSubTimeEdit(c, later.id, ymdAdd(todayStr(), 2), '11:00', 'KM1 室长'); later.simDay = true; /* 演示：到了那一天 */
+      ST.ok(ed77 && later.arrived===true && coreSubDoneBlock(c, later.id)==='', '改到今天并入已到店的到院 → 继承到店，能操作完成');
       ST.ok(coreSubDone(c, later.id, 'KM1 室长', []) && ti[1].holdUsed===1 && ti[0].holdUsed===0, '［操作完成］只扣被改时间的那一笔（同名两笔按 iid）');
     });
     try{
@@ -6185,6 +6186,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var base = {origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:2, copies:1, specTimes:2, local:true, mgmtPlan:true, firstDay:'', interval:0, intNa:true, batchId:'B1'};
       c.procedureItems.push(Object.assign({}, base, {name:'A项 · 2次'}), Object.assign({}, base, {name:'B项 · 2次', batchId:'B2'})); ensureItemIids(c);
       var a = c.procedureItems.filter(function(x){ return /A项/.test(x.name); })[0], b = c.procedureItems.filter(function(x){ return /B项/.test(x.name); })[0]; ids.a = itemIid(a); ids.b = itemIid(b);
+      c.krProcedureDone = true; /* CMD-1102-11：主到院进行中时约今天会并进主到院；这里要测的是另一张到院卡（KR|今天），所以让主到院先结束 */
       coreUnitBookUse(c, ids.a, todayStr(), '11:00', 'KM1 室长', '', null); var row = c.subItems.filter(function(s){ return s.holdUseOf && s.date===todayStr(); })[0]; key = subCaseKey(row); row.arrived = true; coreSubDone(c, row.id, 'KM1 室长', []); });
     try{
       /* 客人已离院 → 已完成 → 卡片右下［增加项目］ */
@@ -8785,5 +8787,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var n2 = mut(function(c){ var b = c.logEntries.length, n = repairSurgRowMix(c); return {n:n, logs:c.logEntries.length-b}; });
       ST.ok(n1.n===1 && n1.logs===1 && !/热玛吉/.test(n1.now||'') && n2.n===0 && n2.logs===0, '旧的混合行：修复一次（一条 Timeline），第二次什么都不做：'+JSON.stringify([n1, n2]));
     } finally { mut(function(c){ Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, JSON.parse(snap)); }); }
+  });
+  ST.def('R213a','CMD-1102-11 四：项目卡灰掉的按钮 / 链接旁边直接写原因（不只 title）',function(){
+    var me = currentAccount(); if(!ST.ok(me && /^K/.test(me.id), '要在 KR 分页里跑')) return;
+    var h = krOutBtn('修改时间', 'x()', false, '客人已到院，不能修改时间'), lk = krLink('取消购买', 'x()', false, '已使用，不能取消'), on = krOutBtn('修改时间', 'x()', true, '');
+    ST.ok(/class="kr-why">客人已到院，不能修改时间</.test(h) && /disabled/.test(h) && /title="客人已到院，不能修改时间"/.test(h), '灰按钮：旁边写一行原因，悬停提示保留');
+    ST.ok(/class="kr-why">已使用，不能取消</.test(lk), '灰链接：原因直接写出来');
+    ST.ok(!/kr-why/.test(on), '能点的按钮不多写字');
+    ST.ok(/kr-why/.test(krOutBtn('预约时间', 'x()', false, '')), '没写原因时也有兜底文字');
+    ST.ok(/\.kr-btn-off/.test(Array.prototype.map.call(document.styleSheets, function(sh){ try{ return Array.prototype.map.call(sh.cssRules, function(r){ return r.cssText; }).join(''); }catch(e){ return ''; } }).join('')), '样式存在（.kr-btn-off）');
   });
 })();

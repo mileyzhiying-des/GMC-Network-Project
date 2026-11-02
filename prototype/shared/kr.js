@@ -1009,14 +1009,14 @@ function krBtn(txt, fn, on, tip){ /* 灰按钮旁边写原因（CMD-1019-22 六�
 }
 /* CMD-1020-02：项目卡按钮（三个 tab 一致）——线框按钮，比原来大一点；［预约时间］前面带日历图标；不加「…」更多菜单 */
 var KR_ICON_CAL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
-function krOutBtn(txt, fn, on, tip, icon){ /* CMD-1021-06：灰按钮只变灰，不在旁边写字；原因放 tooltip（悬停显示） */
+function krOutBtn(txt, fn, on, tip, icon){ /* CMD-1102-11 四：灰按钮旁边直接写一行原因小灰字（悬停 title 保留）；取代 CMD-1021-06「只放 tooltip」 */
   var st = 'padding:6px 14px;font-size:12px;border-radius:8px;white-space:nowrap;'+(on ? '' : 'opacity:.4;cursor:not-allowed;');
   var tp = krEsc(tip || '暂时不能操作');
   var b = '<button class="btn-outline" '+(on ? 'onclick="'+fn+'"' : 'disabled title="'+tp+'"')+' style="'+st+'">'+(icon ? KR_ICON_CAL : '')+txt+'</button>';
-  return on ? b : '<span title="'+tp+'" style="display:inline-block;">'+b+'</span>';
+  return on ? b : '<span class="kr-btn-off" title="'+tp+'">'+b+'<span class="kr-why">'+tp+'</span></span>';
 }
 /* 下划线文字链接（其他栏：取消购买 / 查看案件）；不能点时变灰 + tooltip */
-function krLink(txt, fn, on, tip){ return on ? '<a href="#" onclick="'+fn+';return false;" style="font-size:12px;text-decoration:underline;white-space:nowrap;">'+txt+'</a>' : '<span title="'+krEsc(tip || '暂时不能操作')+'" style="font-size:12px;text-decoration:underline;white-space:nowrap;color:var(--muted);cursor:not-allowed;">'+txt+'</span>'; }
+function krLink(txt, fn, on, tip){ return on ? '<a href="#" onclick="'+fn+';return false;" style="font-size:12px;text-decoration:underline;white-space:nowrap;">'+txt+'</a>' : '<span class="kr-btn-off" title="'+krEsc(tip || '暂时不能操作')+'"><span style="font-size:12px;text-decoration:underline;white-space:nowrap;color:var(--muted);cursor:not-allowed;">'+txt+'</span><span class="kr-why">'+krEsc(tip || '暂时不能操作')+'</span></span>'; } /* CMD-1102-11 四：原因直接写出来 */
 function krViewBtn(key){ return '<a href="#" onclick="krViewCase(\''+String(key).replace(/'/g,'')+'\');return false;" style="font-size:12px;text-decoration:underline;white-space:nowrap;">查看案件</a>'; }
 function krViewCase(key){
   if(key!=='main') KR_SUB_OPEN[key] = true; krRenderCaseDetail();
@@ -2609,12 +2609,12 @@ function krArriveMainBtn(c, cls, pad, fn){
   if(rebookActive(c)) return ''; /* CMD-1102-06：改期当天（客人其实已在医院）不出现［客人已到院］ */
   var why = mainArriveBlock(c), st = 'padding:'+pad+';font-size:13px;';
   if(!why) return '<button class="'+cls+'" style="'+st+'" onclick="event.stopPropagation();'+(fn||'krMarkArrived()')+'">客人已到院</button>';
-  return '<button class="'+cls+'" disabled style="'+st+'opacity:.4;cursor:not-allowed;" title="'+why+'">客人已到院</button> <a href="#" onclick="event.stopPropagation();krMainSim();return false;" style="font-size:12px;">模拟到当日（演示用）</a>';
+  return '<button class="'+cls+'" disabled style="'+st+'opacity:.4;cursor:not-allowed;" title="'+why+'">客人已到院</button> <span class="kr-why" style="font-size:12px;color:var(--muted);">'+why+'</span> <a href="#" onclick="event.stopPropagation();krMainSim();return false;" style="font-size:12px;">模拟到当日（演示用）</a>';
 }
 function krArriveSubBtn(key, reached, cls, pad, fn){
   var st = 'padding:'+pad+';font-size:13px;';
   if(reached) return '<button class="'+cls+'" style="'+st+'" onclick="event.stopPropagation();'+(fn||'krSubVisitArrive')+'(\''+key+'\')">客人已到院</button>';
-  return '<button class="'+cls+'" disabled style="'+st+'opacity:.4;cursor:not-allowed;" title="只有到院当天可以标记客人已到院">客人已到院</button> <a href="#" onclick="event.stopPropagation();krSubVisitSim(\''+key+'\');return false;" style="font-size:12px;">模拟到当日（演示用）</a>';
+  return '<button class="'+cls+'" disabled style="'+st+'opacity:.4;cursor:not-allowed;" title="只有到院当天可以标记客人已到院">客人已到院</button> <span class="kr-why" style="font-size:12px;color:var(--muted);">只有到院当天可以标记客人已到院</span> <a href="#" onclick="event.stopPropagation();krSubVisitSim(\''+key+'\');return false;" style="font-size:12px;">模拟到当日（演示用）</a>';
 }
 function krSubVisitSim(key){ if(!krCan()) return; krMut(function(c){ return coreVisitSim(c, key, ME_NAME); }); }
 /* ============ 案件区块分三组（CMD-1015-22）：今日案件 / 预约案件 / 完成案件；时间写在抬头，主案件和子案件同一套卡片 ============ */
