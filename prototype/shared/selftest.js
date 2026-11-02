@@ -8506,4 +8506,41 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     krRenderClients(); var t = document.getElementById('krclients-body').innerText; ST.ok(/更新时间/.test(t), 'KR 客人列表有「更新时间」列');
     var cr = krClientRows(); ST.ok(cr.every(function(m){ return typeof m.updKey==='string' && m.updKey; }), '每位客人有 updKey（本院可见案件里最新的真动作）');
   });
+  /* CMD-1102-06 */
+  ST.def('R200a','CMD-1102-06（KM1 分页，需要 stageC 夹具）：不建议手术 · 更换时间——当天只有［再次修改］、状态栏文字、卡片 1 不标取消、当天离院不退项目、新预约日才出现［客人已到院］；两处 Timeline 文字',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var mut = function(fn){ var out; Store.mutateClinic(r.clinicId, function(){ out = fn(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]); return true; }); return out; };
+    var d0 = todayStr(), d1 = ymdAdd(d0, 1);
+    mut(function(c){ c.krSchedule.confirmedDate = d0; c.krSchedule.simDay = true; if(!c.hasArrived) coreMarkArrived(c, ST.krBy); c.krJudge = null; coreJudge(c, 'cannot', ST.krBy, '（自测原因）'); return true; });
+    /* 退回评估重选的 Timeline 文字 */
+    mut(function(c){ coreJudgeRevert(c, ST.krBy); var t0 = (c.logEntries||[]).filter(function(e){ return /退回评估重选/.test(e.action); }).pop(); ST.ok(t0 && /（原因：（自测原因）\）/.test(t0.action) && !/memo/.test(t0.action), '退回评估重选写「（原因：…）」：'+(t0&&t0.action)); coreJudge(c, 'cannot', ST.krBy, '（自测原因）'); return true; });
+    var ok = mut(function(c){ return coreRebook(c, d1, '11:00', ST.krBy); }); ST.ok(ok, '更换时间应成功');
+    var dk = function(){ return Store.withClinic(r.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; var v0 = visitsOf(c0).filter(function(v){ return v.place==='KR' && (v.types||[]).indexOf('赴韩施术')>-1; })[0]; return v0 ? v0.key : ''; }); };
+    var T = function(){ return document.getElementById('krcase-body').innerText; }; krShowCase(r.clinicId, r.id, {day:dk()}); krDayTab('plan');
+    var t = T();
+    ST.ok(/原本方案及判断/.test(t) && /不建议手术/.test(t) && /（自测原因）/.test(t) && t.indexOf('（取消）')<0, '卡片 1 读存下来的判断，不标「（取消）」');
+    ST.ok(/已重新预约/.test(t) && /原预约时间/.test(t) && /再次修改/.test(t) && !/已在韩国重新预约施术时间；客人再到医院/.test(t), '卡片 2：已重新预约 / 原预约时间 / ［再次修改］，旧红字拿掉');
+    var btnTexts = Array.prototype.map.call(document.querySelectorAll('#krcase-body button'), function(b){ return b.innerText.trim(); });
+    ST.ok(btnTexts.indexOf('客人已到院')<0, '原预约当天不出现［客人已到院］：'+btnTexts.join('|'));
+    ST.ok(/今天 · 不建议手术，已改期/.test(t) && /客人已离院/.test(t), '状态栏：今天 · 不建议手术，已改期 MM/DD HH:mm，仍有［客人已离院］');
+    ST.ok(!/今天 11:00（韩国）· 施术/.test(t), '状态栏不再把新预约的时间当成今天');
+    /* 当天离院：只结束今天，项目不退回 */
+    var before = mut(function(c){ return surgPlanItems(c).filter(function(it){ return !it.deferUse; }).length; });
+    var res = mut(function(c){ return coreEndVisitToday(c, ST.krBy); }); ST.ok(res && res.ok, '当天［客人已离院］应成功');
+    mut(function(c){ ST.ok(!c.krProcedureDone && scheduleState(c)==='Confirmed' && !c.hasArrived && c.krSchedule.confirmedDate===d1, '没有进术后管理、施术日期仍是新预约日、等待新预约日到院'); ST.ok(surgPlanItems(c).filter(function(it){ return !it.deferUse; }).length===before && before>0, '施术项目没有被退回「未预约」'); return true; });
+    ST.ok(mut(function(c){ return (c.logEntries||[]).some(function(e){ return /客人已离院（不建议手术，已改期/.test(e.action); }); }), 'Timeline 记当天离院 + 已改期');
+    /* 新预约日之前没有按钮；到了新预约日出现 */
+    mut(function(c){ c.krSchedule.simDay = false; return true; }); krShowCase(r.clinicId, r.id, {day:dk()}); krDayTab('plan');
+    ST.ok(/已重新预约/.test(T()) && !Array.prototype.some.call(document.querySelectorAll('#krcase-body .card button, #krcase-body button'), function(b){ return b.innerText.trim()==='客人已到院' && !b.disabled; }), '新预约日之前［客人已到院］不可按');
+    mut(function(c){ c.krSchedule.confirmedDate = d0; return true; }); krShowCase(r.clinicId, r.id, {day:dk()}); krDayTab('plan');
+    ST.ok(Array.prototype.some.call(document.querySelectorAll('#krcase-body button'), function(b){ return b.innerText.trim()==='客人已到院'; }) && /再次修改/.test(T()), '到了新的预约日：［客人已到院］和［再次修改］一起出现');
+    mut(function(c){ c.krSchedule.simDay = true; return coreMarkArrived(c, ST.krBy); }); mut(function(c){ ST.ok(scheduleState(c)==='Arrived' && !c.krRebook && !!c.krRebookPrev, '按了之后正常进入到院，改期记录收进历史'); return true; });
+  });
+  ST.def('R200b','CMD-1102-06：改期当天过了 00:00 自动结束（不关账、不退项目）；确认结束 Timeline 没有项目时不写「用了 无」',function(){
+    var c = {id:'x1', name:'T-x', caseNo:'A9', hasArrived:true, krArrivedDay:ymdAdd(todayStr(), -1), krSchedule:{status:'confirmed', confirmedDate:todayStr(), confirmedTime:'11:00'}, krRebook:{judge:null, oldDate:ymdAdd(todayStr(),-1), oldTime:'10:00', newDate:todayStr(), newTime:'11:00', ended:false}, logEntries:[], subItems:[], recommended:[]};
+    ST.ok(dayLockedKR(c, 'main')===false, '改期当天不会被关账锁住');
+    coreRebookEndDay(c, '系统', true); ST.ok(c.krRebook.ended && !c.hasArrived && !c.krArrivedDay, '过 00:00 自动结束：回到新预约日待到院');
+    ST.ok((c.logEntries||[]).some(function(e){ return /过了 00:00，原预约日结束/.test(e.action); }), 'Timeline 记一笔');
+  });
 })();

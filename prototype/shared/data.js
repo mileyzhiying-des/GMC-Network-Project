@@ -6080,6 +6080,7 @@ function coreMarkArrived(c, by){
   if(c.krTripEnded){ window.KR_TRIPBLOCK = tripEndedBlockText(c); return false; } /* CMD-1027-12 五：行程已结束 → 先拦下，请先［行程修正］ */
   var kb0 = krUnconfirmedOther(c, 'main'); if(kb0.length){ window.KR_DAYBLOCK = kb0; return false; } /* CMD-1026-20 三：上一天没确认结束，不能接待下一天 */
   if(!c.settlementDone || isArrived(c) || !c.krSchedule || c.krSchedule.status!=='confirmed') return false;
+  if(c.krRebook){ c.krRebookPrev = c.krRebook; delete c.krRebook; } /* CMD-1102-06：新的预约日到院，改期记录收进历史 */
   c.arrivedPrev = !!c.hasArrived; /* 撤回时恢复到院前的状态 */
   c.krSchedule.status = 'arrived'; c.hasArrived = true; c.krArrivedDay = todayStr();
   updateCaseStage(c);
@@ -6123,7 +6124,7 @@ function coreJudgeRevert(c, by){
   var j = c.krJudge; if(!j || j.settled || c.krBalancePaid || c.visitClosed || isEnded(c)) return false;
   if(j.compId){ var cl0 = clientByName(c.name); if(cl0) cl0.compCredits = (cl0.compCredits||[]).filter(function(x){ return !(x.id===j.compId && !x.used); }); } /* CMD-1102-03：退回重选 → 这次转出的置换额度作废 */
   c.krJudge = null;
-  logCaseEvent(c, by, 'KR退回评估重选：原选择「'+KR_JUDGE_TEXT[j.result]+'」'+(j.memo ? '（memo：'+j.memo+'）' : '')+(j.refundKind ? '，原退定金判断（'+(j.refundKind==='all' ? '全部退回' : '不退')+'）作废' : '')+'；还没有结算，没有产生结算单');
+  logCaseEvent(c, by, 'KR退回评估重选：原选择「'+KR_JUDGE_TEXT[j.result]+'」'+(j.memo ? '（原因：'+j.memo+'）' : '')+(j.refundKind ? '，原退定金判断（'+(j.refundKind==='all' ? '全部退回' : '不退')+'）作废' : '')+'；还没有结算，没有产生结算单');
   updateCaseStage(c);
   return true;
 }
@@ -6200,7 +6201,9 @@ function coreSettleBalance(c, by){ if(krDayDeny(c, 'main')) return false; /* CMD
 /* KR 在韩重新预约施术时间：回到"施术时间已确认"（新时间），客人再到医院时 KR 重新标记已到医院；IN 不能改 */
 function coreRebook(c, date, time, by){
   if(!c.krSchedule || !isArrived(c) || (c.krJudge && (c.krJudge.result!=='cannot' || c.krJudge.replaced) && c.krJudge.settled)) return false;
-  var ks = c.krSchedule, oldDR = ks.confirmedDate; ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time;
+  var ks = c.krSchedule, oldDR = ks.confirmedDate, oldTR = ks.confirmedTime; ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time;
+  /* CMD-1102-06：更换时间后评估前的判断不能丢（卡片 1「原本方案及判断」要读它）；客人今天确实在医院（hasArrived / krArrivedDay 保留到今天结束），新的预约日另算 */
+  c.krRebook = {judge:(c.krJudge ? JSON.parse(JSON.stringify(c.krJudge)) : null), oldDate:oldDR, oldTime:oldTR, newDate:date, newTime:time, by:by, at:nowFullDt(), arrivedDay:c.krArrivedDay||todayStr(), ended:false};
   c.krJudge = null; coreShiftCareOnResched(c, oldDR, date, by);
   logCaseEvent(c, by, 'KR在韩国重新预约施术时间：'+date+' '+time+'（韩国时间；回到施术时间已确认，IN端显示更改时间）');
   pushNotif('赴韩施术','赴韩施术：'+by+' / '+c.name+' 在韩国重新预约了施术时间 '+tkK(date, time)+((c.krJudge&&c.krJudge.memo) ? ' / 原因：'+c.krJudge.memo : ''), {caseId:c.id});
@@ -6435,7 +6438,17 @@ function endBlockPending(c){
   var pp = pendingPayItems(c); if(!pp.length) return null;
   return {ok:false, pending:true, items:pp.map(function(it){ return buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）'; }), err:'还有未付款项目：'+pp.map(function(it){ return buyName(it.name)+'（'+formatCurrency(itemKrAmount(it),'KRW')+'）'; }).join('、')+'，请先付款或取消购买'};
 }
-function coreEndVisitToday(c, by, reason){ if(krDayDeny(c, 'main')) return {ok:false, err:'这一天已过 00:00 关账，请走「确认结束」'};
+/* CMD-1102-06：不建议手术 · 更换时间之后——原预约当天客人仍在医院（rebookActive），当天结束 / 过了 00:00 后才回到「新预约日待到院」 */
+function rebookActive(c){ return !!(c && c.krRebook && !c.krRebook.ended && c.hasArrived); }
+function coreRebookEndDay(c, by, auto){
+  if(!c || !c.krRebook || c.krRebook.ended) return false;
+  c.krRebook.ended = true; c.krRebook.endedAt = nowFullDt(); c.hasArrived = false; c.krArrivedDay = ''; c.endAsk = false;
+  logCaseEvent(c, by, (auto ? '过了 00:00，原预约日结束' : '客人已离院')+'（不建议手术，已改期 '+String(c.krRebook.newDate).slice(5).replace('-', '/')+' '+(c.krRebook.newTime||'')+'；施术项目仍保留，等新的预约日到院）', '赴韩施术');
+  try{ syncSurgeryBlock(c); }catch(e){}
+  updateCaseStage(c); return true;
+}
+function coreEndVisitToday(c, by, reason){ if(rebookActive(c)){ coreRebookEndDay(c, by, false); return {ok:true}; } /* CMD-1102-06：改期当天结束 = 只结束今天，不动项目、不进术后管理 */
+  if(krDayDeny(c, 'main')) return {ok:false, err:'这一天已过 00:00 关账，请走「确认结束」'};
   if(!c.hasArrived || c.krProcedureDone || c.visitClosed) return {ok:false, err:'今天的到院已经结束或还没到院'};
   var pb = endBlockPending(c); if(pb) return pb;
   c._ending = true;
@@ -10702,6 +10715,7 @@ function dayStateOf(m, v){
   }
   var tr = tripOf(m);
   if((v.types||[]).indexOf('赴韩施术')>-1 && tr.day===v.date){ /* 施术当天（KR 到院） */
+    if(rebookActive(m)) return {kind:'KR', state:(v.date<today ? 'ended' : 'arrived'), surgery:true, reached:true}; /* CMD-1102-06 */
     if(m.krProcedureDone) return {kind:'KR', state:'ended', surgery:true, reached:!!m.hasArrived};
     if(m.hasArrived) return {kind:'KR', state:(dayLockedKR(m, 'main') ? 'unconfirmed' : 'arrived'), surgery:true, reached:true};
     return {kind:'KR', state:(v.date<today ? 'ended' : 'waiting'), surgery:true};
@@ -11161,7 +11175,7 @@ function dayConfirmMineKr(c, meId){ var lead = krLeadOf(c); return !lead || lead
 /* KR 的「一天」锁：key = 'main'（施术当天）| 'KR|日期'（其他到院） */
 function dayLockedKR(c, key){
   if(window.DAYCONFIRM_BYPASS || !c || isEnded(c) || c.visitClosed || c.krVisit) return false;
-  if(key==='main'){ var d = mainVisitDay(c); return !!c.hasArrived && !c.krProcedureDone && !!d && d < todayStr() && !(c.dayConfirmedKeys||{}).main; }
+  if(key==='main'){ if(c.krRebook && !c.krRebook.ended) return false; var d = mainVisitDay(c); return !!c.hasArrived && !c.krProcedureDone && !!d && d < todayStr() && !(c.dayConfirmedKeys||{}).main; }
   var day = String(key||'').split('|')[1]; if(!day || day >= todayStr()) return false;
   if(day===mainVisitDay(c)) return false;
   return coreVisitState(c, key)==='arrived' && !(c.visitEndedKeys||{})[key];
@@ -11288,7 +11302,7 @@ function dayConfirmGo(){
     });
     c.dayConfirmed = {at:nowFullDt(), by:by, byId:currentAccountId(), used:used, back:back};
     if(isChildVisit(c) || isUpgraded(c)) c.leftStore = {at:nowFullDt(), by:by, confirmed:true};
-    logCaseEvent(c, by, '确认结束 '+inDayOf(c).slice(5).replace('-', '/')+' '+dayNoTxt(c)+'：用了 '+(used.join('、')||'无')+'；没用（退回未预约）'+(back.join('、')||'无')+'；钱：'+(closeBlockers(c).length ? '还有未处理的款项' : '都已处理'));
+    logCaseEvent(c, by, '确认结束 '+inDayOf(c).slice(5).replace('-', '/')+' '+dayNoTxt(c)+'：'+(used.length ? '用了 '+used.join('、') : '没有使用项目')+'；'+(back.length ? '没用（退回未预约）'+back.join('、') : '没有退回未预约的项目')+'；钱：'+(closeBlockers(c).length ? '还有未处理的款项' : '都已处理'));
     if(isChildVisit(c) && !closeBlockers(c).length && !mainlineOngoing(c)){ try{ finishCase(c); }catch(e){ console.error(e); } }
     try{ updateCaseStage(c); }catch(e){}
   } finally { window.DAYCONFIRM_BYPASS = false; window.confirm = cf; window.alert = al; }

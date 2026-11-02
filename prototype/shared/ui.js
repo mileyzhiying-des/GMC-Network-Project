@@ -1131,6 +1131,7 @@ function simulateTimePass30(){
 }
 
 function updateCaseStage(c){
+  if(c && c.krRebook && !c.krRebook.ended && c.hasArrived && c.krArrivedDay && c.krArrivedDay < todayStr() && typeof coreRebookEndDay==='function'){ try{ coreRebookEndDay(c, '系统', true); }catch(e){ console.error(e); } } /* CMD-1102-06：改期当天过了 00:00 自动结束，不进「关账」 */
   if(typeof ensureItemIids==='function') ensureItemIids(c); /* CMD-1020-16 三：每笔购买的项目补唯一 id */
   /* CMD-1021-11：拿掉「到院已结束但又有待做的 → 自动重新打开」；重新打开只有已完成到院卡的［增加项目］ */
   if(!SEEDING && typeof dayNoSync==='function' && !isChildVisit(c)){ try{ dayNoSync(c); }catch(e){ console.error('[子案件编号]', e); } } /* CMD-1026-13：升级后开始一天一个号 */
