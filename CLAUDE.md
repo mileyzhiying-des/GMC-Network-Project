@@ -1888,3 +1888,11 @@ prototype/shared/app.css  共用样式
 - **三 行程修正**：到达日期 / 时间已记录就只读（`stayFixValidate` 拒改）；旧资料没记过到达时间的这一次可补；离开日期 + 时间必填。数据仍是同一份 `c.stay`，IN 的确认行程窗口读的也是它。
 - **四 bug 原因**：保存时的「离境当天」确认窗（`krOffConfirm`）、冲突询问窗、已完成到院日提示等普通弹窗 z-index 65，被处理窗（100030）盖住 → 按保存看起来没反应（Ella：两项都提前到离境当天 → 弹确认窗被盖住）。修：这些弹窗层级提到 100100（app.css）；保存先在复本上试一遍（dry run，`krStayResRun`），失败在窗里红字写哪一行；`coreStayResolve` 排不进去会整体失败；新增 `krStayResClash`：只有占同一位院长时间（院长操作 / 施术预约使用）的才算重叠，同一天不占院长的术后管理本来合并不挡。成功 → 窗关闭 + toast。
 - 测试：新增 R201a / R202a / R203a；R190a、R189a、selftest 的 stayGate 断言按新规则改。
+
+## CMD-1102-08 补充（2026-11-02，追加；旧文字保留作历史）
+- 分支 **V4**，提交 3292379（一）、ac51484（二）、e654cb3（三）、06fa907（四）、之后一个修正 guard + 旧断言的提交；不推送不合并，**数据版本不变（56）**，只加可空字段 `c.addConsultRef`。
+- **一 自动结案 / 自动修正互相拉扯（bug）**：两条规则——① `mainAutoComplete`（主案件自动状态，`updateCaseStage` 末尾 + 每 5 秒 `mainAutoSweep`）在「韩国行程已结束 / 曾重新打开」且 `mainOngoingOf` 为空时 `finishCase`，而 `mainOngoingOf` 只看流程 / 术后管理 / 预约，**不看赴韩项目是否还没做完**（Fanny：施术退回未预约）；② 启动修复 `repairWronglyClosedCases`（boot-in 页面打开时跑）按 `mainlineOngoingRepair` 发现赴韩项目没做完 → 恢复进行中并记「修正」。于是每次打开页面：修复恢复 → 5 秒扫描又结案 → 各记一条 Timeline，成对重复，最后停在已完成。修：`mainAutoComplete` 在赴韩施术项目（不含持有管理项目）没做完时不结案；`finishCase` 状态没变（已 `visitClosed` 且 stage 相同）不再重复写「案件结束」。旧重复记录不删。**其他每次打开都跑的自动修正**（`repairVisitState` / `repairRemovedItems` / `repairScheduleGaps` / `repairHandToIn` / `repairOffConflicts`）已逐个看过：都只在条件真的命中、改完条件就不再成立时才写 Timeline（幂等），不会成对重复。
+- **二 增加面诊**：`addConsult()` 是所有入口的唯一函数（案件页头［增加面诊］、本地管理 tab 里的按钮；子案件页头早在 1028-14 拿掉，术后管理那天没有）；面诊 tab 的增加面诊页（`addConsultMode`）现在顺序 部位卡（`concernFormHtml`，和一般面诊同一套，说明 / 希望预期 / 照片 / 视频必填）→ 预算 → 院长 → 面诊费 → ［确认］；`confirmConsultFee` 在 `addConsultMode` 下用 `concernMissing` 拦。不面诊时填的苦恼文字存 `c.addConsultRef`，页上灰字参考，选第一个部位时带进说明（可改）。
+- **三 复诊评估**：`fuAvail` 的 `revisitC` 只含做过施术的案件（`followDoneItems` 非空）；候选案件都没做过施术 → `noSurg`，对话框里复诊评估灰掉并写「这个案件还没有做过的施术」。
+- **四 NIK**：原因——「继续之前的服务」弹窗里的 NIK 输入框和后面基础资料页的输入框 id 都叫 `nik-in` / `nik-err`，`getElementById` 取到页面里被弹窗盖住的那个（空的），保存得到「请填写身份证号」，错误又写进被盖住的那个里 → 弹窗里没有任何反应。修：id 带 uid（`nik-in-p` / `nik-in-cont`）；输入时 `nikLive` 显示「N / 16」并即时红字；错误文字写现在几位 / 只能是数字 / 已属于客人 XXX；预约页（印尼文）同样 `bkNikLive` + 写现在几位。
+- 测试：新增 R204a / R205a / R206a / R207a；旧断言改：R95a / R102a 夹具补一个做过的施术项目（复诊评估现在要求做过施术）、NIK 旧测试的 id（`nik-in-p`）。

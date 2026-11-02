@@ -10805,7 +10805,7 @@ function mainAutoComplete(m){
   if(isChildVisit(m) || isEnded(m) || !m.materialsConfirmed || m.subState==='cancelled') return false;
   if(!(m.krTripEnded || m.reopenedAt)) return false;
   if(mainOngoingOf(m).length) return false;
-  if(mainlineOngoingRepair(m)) return false; /* CMD-1102-08 一：赴韩项目还没做完（未开始 / 未完成）或面诊还在进行 → 不自动结案（原来先结案、启动修复再恢复，两条规则互相拉扯） */
+  if(!m.krProcedureDone && (krNotStartedItems(m).filter(function(it){ return !it.heldOver && !krIsMgmtItemC(it); }).length || (m.settlementDone && krActiveItems(m).filter(function(it){ return !it.heldOver && !krIsMgmtItemC(it); }).length))) return false; /* CMD-1102-08 一：赴韩项目还没做完（未开始 / 未完成）或面诊还在进行 → 不自动结案（原来先结案、启动修复再恢复，两条规则互相拉扯） */
   finishCase(m); return true;
 }
 /* 重新进行中：主案件已完成 / 仅出报告，又有新的子案件 / 未做的事（只对 closed 与 reportonly）；已取消不恢复 */

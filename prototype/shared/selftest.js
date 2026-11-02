@@ -6724,7 +6724,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var src = ST.newRes('R95s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
       var kp = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && p.active; })[0];
       src.director = ST.freeDirector(src); src.hospitalId = caseHospitalId(src); src.needsConsult = true; src.consultRequested = true; src.reportReady = true; src.consultStatus = 'report_ready'; src.videoSummary = '（自测）原方案';
-      src.krScope = {items:[{name:kp.name, price:kp.price+1000, note:''}], overallNote:'', updatedAt:nowFullDt()}; src.consultStartedAt = D(-10)+' 03:00:00'; src.visitClosed = true; src.endNote = '客人不做项目'; src.stage = 'reportonly'; src.krDepositPaid = false; /* CMD-1022-09：继续面诊只能继续「仅出报告」的案件 */
+      src.krScope = {items:[{name:kp.name, price:kp.price+1000, note:''}], overallNote:'', updatedAt:nowFullDt()}; src.consultStartedAt = D(-10)+' 03:00:00'; src.procedureItems = [{origin:'KR', name:kp.name, done:true}]; src.visitClosed = true; src.endNote = '客人不做项目'; src.stage = 'reportonly'; src.krDepositPaid = false; /* CMD-1022-09：继续面诊只能继续「仅出报告」的案件 */
       var ph = clientPhoneOf(src.name);
       window.GMC_NO_FOLLOWASK = false;
       var n = ST.newRes('R95n', {phone:ph}); ST.open(n); markArrived(); n = getCurrentCase();
@@ -6948,6 +6948,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/皮肤商谈/.test(purposeSelectHtml('x', true)) && /复诊评估/.test(purposeSelectHtml('x', true)) && !/术后管理/.test(purposeSelectHtml('x', false)), 'IN 代约选项同规则');
       /* 夹具：原案件（赴韩已结束，还有印尼术后管理没做）+ 新到店 */
       var src = ST.newRes('R102s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.procedureItems = [{origin:'KR', name:'隆鼻', done:true}];
       src.krTripEnded = true; src.krProcedureDone = true; src.stage = 'closed'; src.visitClosed = true; src.hasArrived = true;
       src.subItems = [{id:'r102x', no:src.caseNo+'-01', kind:'术后管理记录', date:D(5), time:'', content:'术后消肿管理（回印尼做）', place:'IN', projectName:'隆鼻', done:false}];
       var n = ST.newRes('R102n', {phone:clientPhoneOf(src.name)}); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0]; ST.open(n); window.GMC_NO_FOLLOWASK = false; markArrived(); n = getCurrentCase();
