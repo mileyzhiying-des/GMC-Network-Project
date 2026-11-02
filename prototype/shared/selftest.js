@@ -8442,6 +8442,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     judge('cannot'); t = T(); ST.ok(/不建议手术/.test(t) && /更换时间/.test(t) && /取消项目/.test(t), '不建议手术：卡片 2 先选 更换时间 / 取消项目');
     krWzSet('cannotOpt', 'cancel'); t = T(); ST.ok(/更换项目（含定金置换）/.test(t) && /全部退回/.test(t) && /部分退回/.test(t) && !/不退/.test(t) && t.indexOf('（取消）')>-1, '取消项目后三选一，没有「不退」，卡片 1 全部标「（取消）」');
     krWzSet('cannotOpt', 'replace'); ST.ok(document.querySelectorAll('#krcase-body .kr-chooser').length===1 && !Array.prototype.some.call(document.querySelectorAll('#krcase-body .kr-chooser button'), function(b){ return b.innerText==='施术项目'; }) && !(document.getElementById('kr-ext-overlay') && document.getElementById('kr-ext-overlay').classList.contains('open')), '更换项目：选择器只有管理项目、没有施术 tab、不弹「延长施术时间」');
+    var chBtns = [].slice.call(document.querySelectorAll('#krcase-body .kr-chooser .kr-ch-left > div:first-child button')); ST.ok(chBtns.length===1 && chBtns[0].innerText==='管理项目' && /不再手术，只能换成管理项目/.test(T()) && !/勾选 = 加入/.test(T()), 'CMD-1102-04：更换项目选择器 = 只有「管理项目」一颗胶囊 + 搜索 + 小灰字提示');
+    var sc = T(); ST.ok(!/施术项目\s*0/.test(sc) && /项目合计/.test(sc) && /结算尾款/.test(sc) && !!document.querySelector('#krcase-body .kr-chooser'), '选择器下面没有「施术项目 0 / 管理项目 0」灰卡，只留一行合计 + ［结算尾款］');
+    var kb = document.querySelector('#krcase-body .kr-l2'); ST.ok(!!kb && kb.querySelectorAll('.kr-l3').length===2 && kb.querySelectorAll('.kr-l4').length===2 && /\S+ 院长：不建议手术|院长：不建议手术/.test(kb.innerText) && /原因：/.test(kb.innerText) && !/memo|KR 判断/.test(kb.innerText), 'CMD-1102-04：卡片 1 三层（1 级 → 2 级 原定项目 / 到院判断 → 3 级 施术 / 管理）；判断行「院长：结果」+「原因：」');
     krWzSet('cannotOpt', 'part'); t = T(); ST.ok(/退回金额/.test(t) && !!document.querySelector('#krcase-body textarea[placeholder*="必填"]') && /剩下的定金会转成置换额度/.test(t), '部分退回：金额 + memo 必填 + 说明转置换额度');
     krWzSet('cannotOpt', 'refund'); t = T(); ST.ok(/全部退回定金/.test(t), '全部退回'); 
     mut(function(c){ if(c.krJudge) coreJudgeRevert(c, ST.krBy); return true; });
