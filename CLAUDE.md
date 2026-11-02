@@ -1896,3 +1896,15 @@ prototype/shared/app.css  共用样式
 - **三 复诊评估**：`fuAvail` 的 `revisitC` 只含做过施术的案件（`followDoneItems` 非空）；候选案件都没做过施术 → `noSurg`，对话框里复诊评估灰掉并写「这个案件还没有做过的施术」。
 - **四 NIK**：原因——「继续之前的服务」弹窗里的 NIK 输入框和后面基础资料页的输入框 id 都叫 `nik-in` / `nik-err`，`getElementById` 取到页面里被弹窗盖住的那个（空的），保存得到「请填写身份证号」，错误又写进被盖住的那个里 → 弹窗里没有任何反应。修：id 带 uid（`nik-in-p` / `nik-in-cont`）；输入时 `nikLive` 显示「N / 16」并即时红字；错误文字写现在几位 / 只能是数字 / 已属于客人 XXX；预约页（印尼文）同样 `bkNikLive` + 写现在几位。
 - 测试：新增 R204a / R205a / R206a / R207a；旧断言改：R95a / R102a 夹具补一个做过的施术项目（复诊评估现在要求做过施术）、NIK 旧测试的 id（`nik-in-p`）。
+
+## CMD-1102-09 补充（2026-11-02，追加；取代 CMD-1029-04 里本地项目「是否使用持有项目？」的［购买其他项目］、CMD-1012-08 / 1013-02 里室长录入面诊不分谁录，旧文字保留作历史）
+- 分支 **V4**，基准 30ff014；提交：一 f17f78a、二三 7a98ad7、四 909f732（文档另一个提交）；不推送不合并，**数据版本不变（56）**（没有新字段）。
+- **一** 本地项目「是否使用持有项目？」永远是三个按钮 ［新增项目］［本次不使用］［使用项目］（`holdingsUseHtml`，没有可用持有项目时［使用项目］不出现）；［新增项目］（`holdingsAddNew`）打开和没有持有项目的客人同一个本地选购画面，付款后成为持有可当天使用；［购买其他项目］全部改名［新增项目］（`usePrevBuy` 同入口）；［本次不使用］（`notUseThisTime`）没有购买且主线不在进行时弹「客人要离开了吗？」（`localLeaveAsk(c,'notuse')`），只有「已离店」才结案。适用所有会问持有项目的本地案件。
+- **二** 院长自己按［开始面诊］（`consultStartedBy` 含「院长」，`krDirStarted`）后，室长页面（面诊卡 `krConsultCardGen`、录入块 `krRecordBlock`）没有［增加内容（语音 / 手动）］，只显示「院长已接手录入，这里只读」；室长代按的开始保留按钮；院长自己的页面不变（`krRecBtnsOk`）。
+- **三** 室长按［增加内容］先弹「是否是院长亲自录入？」（`krRecWhoAsk`，`#kr-recwho-overlay`，二选一，没选［确认］灰）；选择记在 `KR_REC.who`（self / proxy）：转写记录署名院长、`rec` 记录入人、`who` 记方式（`krSaveTranscript`），Timeline「KD1 院长 · 语音录入（KM1 室长代录）」或「… 手动录入（院长亲自）」（`krRecUpload`），列表里也带标签（`krRecWhoTag`）。院长账号和复诊评估（`revEval`）不问。自测钩子 `window.GMC_REC_WHO_SKIP`（selftest.js 开头默认 true；R209a 关掉测弹窗）。
+- **四（bug）预约后项目显示已完成 / 离院提醒与表不一致 / 热玛吉类型不一致**：
+  - 没能用自建数据重现「预约把项目标成已完成」：管理项目 / 施术项目预约（`coreUnitBookUse`，含同时两笔同名）之后 `it.done` / 行 `done` / 次数全不变（R210a 锁住）。
+  - 查到的真问题是口径不一致：① 持有的管理项目 `it.done=true` 只表示「已转成持有」（`holdLocalAdd`），但进行项目表的施术一行按项目拆开时用 `vdone = s.done || it.done`，行内容里混进管理类项目（旧 / 混合数据）就把它按「施术项目」画成已完成+灰；② 离院提醒（`krLeaveReminders` / `krEndAskOpen`）用 `todayOpenRows`，把整条施术行当一项（「A、B、热玛吉」），不看每个项目是否做完；③ 项目卡按 `krIsMgmtItemC` 把它放在管理项目，表按行的 `kind` 判断类型。
+  - 改：`todayOpenRows` 施术一行按项目拆开（已完成 / 已取消 / 管理类的不算没处理，`krDayConfirmRows` 本来就是这口径）；`krMainRowsHtml` 管理类项目不再按「施术项目」画（持有项目行显示）。
+  - 两笔同名同时间的「预约中」（一笔印尼购买一笔在韩购买）不是重复预约：是两笔购买各约一次（`holdItemBookable` 按每笔 iid 算，同一笔不会被约两次）；同一天同地点合并成一次到院，所以显示两条。
+  - **没有自动修已坏的状态**：用户的旧案件里如果有 `s.done` 被误设的施术行，需要看导出的 Timeline 再决定。测试：selftest R210a（旧代码跑 3 条失败，新代码通过）。
