@@ -8334,4 +8334,48 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(r1, function(c){ c.hasArrived = false; }); krStayArriveOpen(); ST.ok(/KR777001/.test(document.getElementById('kr-stayarr-overlay').innerText) && /已登记，不用重填/.test(document.getElementById('kr-stayarr-overlay').innerText), '（弹窗）已有的号码显示出来让 KR 核对'); document.getElementById('kr-stayarr-overlay').classList.remove('open');
     } finally { window.confirm = oc; window.GMC_STAY_AUTO = true; Store.mutateClinic(r1.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]; var s0 = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); var cl = clientByName(c.name); if(cl && clSnap) cl.passport = JSON.parse(clSnap); }); }
   });
+  /* CMD-1102-02 */
+  ST.def('R197a','CMD-1102-02（A1 分页，需要 pcStage 夹具）：①未安排预约客人名可点进案件 ②更新时间只看真动作、按演示时间显示、各 tab 新→旧 ③继续面诊付定金后「面诊资料已到」待办消失',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    /* ② 更新时间 */
+    var mk = function(logs){ return {id:'x', logEntries:logs, visitDate:'2020-01-01', visitTime:'10:00'}; };
+    var now = realNow(), u = function(ms){ return new Date(now.getTime()+ms).toISOString().slice(0,16).replace('T',' '); };
+    ST.ok(caseUpdatedText(mk([{dt:u(-20000), actor:'A1 室长', action:'做了点事'}]))==='刚刚', '刚做的动作 = 刚刚');
+    ST.ok(/^5 分钟前$/.test(caseUpdatedText(mk([{dt:u(-5*60000-1000), actor:'A1 室长', action:'x'}]))), '5 分钟前');
+    ST.ok(/^今天 \d\d:\d\d$/.test(caseUpdatedText(mk([{dt:u(-3*3600000), actor:'A1 室长', action:'x'}]))) || caseUpdatedText(mk([{dt:u(-3*3600000), actor:'A1 室长', action:'x'}]))!=='刚刚', '几小时前不写刚刚');
+    ST.ok(/^\d\d\/\d\d$|^\d{4}-\d\d\/\d\d$/.test(caseUpdatedText(mk([{dt:u(-9*86400000), actor:'A1 室长', action:'x'}]))), '几天前写日期：'+caseUpdatedText(mk([{dt:u(-9*86400000), actor:'A1 室长', action:'x'}])));
+    ST.ok(caseUpdatedText(mk([{dt:u(-400*86400000), actor:'A1 室长', action:'x'}])).length===10, '去年写完整日期');
+    ST.ok(caseUpdatedText(mk([{dt:u(2*86400000), actor:'A1 室长', action:'x'}]))!=='刚刚', '未来时间不写刚刚');
+    var oldLog = {dt:u(-30*86400000), actor:'A1 室长', action:'确认了基础资料'}, noise = {dt:u(-1000), actor:'系统', action:'修正旧数据：xxx'};
+    ST.ok(caseUpdatedKey(mk([oldLog, noise]))===oldLog.dt, '系统「修正旧数据」不刷新更新时间');
+    ST.ok(caseUpdatedKey(mk([oldLog, {dt:u(-2000), actor:'系统', action:'00:00 关账：…'}]))===oldLog.dt, '00:00 关账提醒也不刷新');
+    ST.ok(caseUpdatedKey(mk([oldLog, {dt:u(-2000), actor:'A1 室长', action:'付款'}]))!==oldLog.dt, '真动作会刷新');
+    var a = mk([{dt:u(-86400000), actor:'A1 室长', action:'x'}]), b = mk([{dt:u(-3600000), actor:'A1 室长', action:'x'}]), cc = mk([{dt:u(-5*86400000), actor:'A1 室长', action:'x'}]);
+    ST.ok([a, cc, b].sort(caseUpdatedDesc).map(function(x){ return x===b ? 'b' : (x===a ? 'a' : 'c'); }).join('')==='bac', '更新时间新 → 旧排序');
+    var oldShift = DEMO_SHIFT_MS; DEMO_SHIFT_MS = 2*86400000; try{ ST.ok(caseUpdatedText(mk([{dt:u(2*86400000-20000), actor:'A1 室长', action:'x'}]))==='刚刚', '拨演示时间后按演示时间算'); } finally { DEMO_SHIFT_MS = oldShift; }
+    /* 列表渲染不再是写死的「刚刚」 */
+    var cs = CASE_ITEMS.filter(function(x){ return !isChildVisit(x); }); ST.ok(cs.every(function(x){ return typeof caseUpdatedText(x)==='string'; }), '每个案件都算得出更新时间');
+    /* ③ 待办 */
+    var base = ST.newRes('R197'); ST.materials(base, {consult:false}); base = CASE_ITEMS.filter(function(x){ return x.id===base.id; })[0];
+    base.reportReady = true; base.projectsEnabled = true; base.consultStatus = 'report_ready'; base.consultRequested = true; base.needsConsult = true; base.stage = 'consult'; base.visitClosed = false; base.endNote = '';
+    base.settlementBatches = []; base.recommended = []; base.localMgmt = null; base.paidOnMain = null;
+    var has = function(){ return inTodoItems().some(function(it){ return it.kind==='plan' && it.caseId===base.id; }); };
+    ST.ok(has(), '还没选项目：有「面诊资料已到」待办');
+    base.paidOnMain = {mainId:'m', caseNo:'A1', batches:['B1']}; ST.ok(!has(), '继续面诊选了项目并付定金（项目交给主案件）后，这条待办消失');
+    base.paidOnMain = null;
+    /* ① 未安排预约客人名 */
+    var cin = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0];
+    if(cin){ cin.krBalancePaid = true; var html = todoUbListInHtml([{caseId:cin.id, gid:'g', name:cin.name, no:cin.caseNo, label:'拆线', surg:'隆鼻', n:1, sug:todayStr(), place:'印尼'}]);
+      ST.ok(/class="ub-name"/.test(html) && /openCaseDetail\('/.test(html), 'IN：客人名是可点的链接（打开案件）'); var m = html.match(/<a class="ub-name"[^>]*onclick="([^"]*)"/); ST.ok(!!m && /stopPropagation/.test(m[1]) && !/todoUbToggle/.test(m[1]), '点名字不触发展开 / 收起');
+      ST.ok(/tab:\\?'postcare/.test(html), '停在术后管理 tab'); }
+  });
+  ST.def('R197b','CMD-1102-02（KM1 分页，需要 pcStage 夹具）：KR 未安排预约客人名可点进主案件（只有术后管理 → 术后管理 tab；只有管理项目 → 在韩管理 tab；两种都有 → 第一个）；KR 列表更新时间不是「刚刚」',function(){
+    var r = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var list = todoUbKr(); var mine = list.filter(function(x){ return x.caseId===r.c.id; }); if(!ST.ok(mine.length>0, '有未安排预约')) return;
+    var html = todoUbListKrHtml(mine); ST.ok(/class="ub-name"/.test(html), '客人名是链接');
+    var care = mine.filter(function(x){ return x.kind==='care'; }), mg = mine.filter(function(x){ return x.kind==='mg'; });
+    var called = []; var old = krShowCase; krShowCase = function(a, b, o){ called.push(o && o.tab); }; try{ mine[0].nameCare(); mine[0].nameMg(); } finally { krShowCase = old; }
+    ST.ok(called[0]==='postcare' && called[1]==='kmgmt', '名字的跳转：术后管理 → postcare，在韩管理 → kmgmt：'+called.join(','));
+    ST.ok(krAllCases().every(function(x){ return x.updated!=='刚刚' || (Math.abs(realNow().getTime() - (utcStrParse(caseUpdatedKey(x.c))||new Date(0)).getTime()) < 60000); }), 'KR 列表的更新时间不是写死的「刚刚」');
+  });
 })();
