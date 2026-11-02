@@ -268,7 +268,7 @@ var Store = (function(){
           gmcStampVars(vars);
           writeKey(keyC(cl.id), wrap(vars));
         });
-        gmcWipeHospitals(HOSPITAL_DATA); CASE_NO_SEQ = 1;
+        gmcWipeHospitals(HOSPITAL_DATA); CASE_NO_SEQ = 1; try{ localStorage.removeItem(CASE_NO_KEY); }catch(e){}
         gmcStampHospitals(HOSPITAL_DATA);
         writeKey(KEY_G, wrap(pick(GLOBAL_VAR_NAMES)));
       } else {

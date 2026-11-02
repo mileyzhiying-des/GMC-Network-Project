@@ -349,7 +349,18 @@
       mgHtml = '<div class="warn" style="'+(bad.length ? '' : 'background:#E7F3EC;color:#2F6B4A;')+'">数据版本 '+esc(mg.from||'?')+' → '+esc(mg.to||'?')+'（'+esc((mg.at||'').slice(0,19).replace('T',' '))+'）：用户案件已迁移 '+mg.migrated+' 个'+(bad.length ? '；<b>以下案件未能迁移：</b>'+bad.map(function(f){ return esc((f.caseNo||'')+' '+(f.name||'')+'（'+f.reason+'）'); }).join('；')+'。它们没有丢，仍在升级前的自动备份里（下拉选「自动备份」查看 / 导出）。' : '。')+
         ((mg.notes||[]).length ? '<div style="margin-top:4px;">迁移备注：'+mg.notes.map(function(x){ return esc(x.caseNo+' '+x.name+'：'+x.notes.join('、')); }).join('；')+'</div>' : '')+'</div>';
     }
-    document.getElementById('notice').innerHTML = mgHtml+(n ? '<div class="warn">ℹ 最近一次自动备份：'+esc(n.name)+'（'+esc(n.reason)+'，'+esc(new Date(n.t).toLocaleString())+'）。浏览器里存了一份（最近 3 份），下拉里选它即可查看；需要文件时点「导出完整备份」自己下载。</div>' : '');
+    /* CMD-1029-13：重复的案件号（CMD-1029-13 修好之前留下的撞号旧资料）——只提醒、列出案件，不自动改号（改号会动到用户案件，处理方式见汇报） */
+    var dupHtml = '';
+    try{
+      var seen = {}, dups = {};
+      Object.keys(localStorage).filter(function(k){ return k.indexOf('gmc_clinic_')===0; }).forEach(function(k){
+        var p = pj(localStorage.getItem(k)); if(!p || !p.vars) return; var cid = k.replace('gmc_clinic_','');
+        (p.vars.CASE_ITEMS||[]).forEach(function(x){ if(!x.caseNo) return; var e = {clinic:cid, name:x.name, no:x.caseNo, state:(x.subState==='cancelled'||x.stage==='cancelled') ? '已取消' : (x.mainId ? '子案件' : ''), main:!!x.mainId}; (seen[x.caseNo] = seen[x.caseNo] || []).push(e); if(seen[x.caseNo].length>1) dups[x.caseNo] = seen[x.caseNo]; });
+      });
+      var dk = Object.keys(dups).sort();
+      if(dk.length) dupHtml = '<div class="warn"><b>⚠ 发现重复的案件号（'+dk.length+' 个）</b>——这是修复「案件号撞号」之前留下的旧资料，系统不会自动改号：'+dk.map(function(no){ return '<div style="margin-top:4px;"><b>'+esc(no)+'</b>：'+dups[no].map(function(e){ return esc(e.name+'（'+e.clinic+(e.state ? '，'+e.state : '')+'）'); }).join(' ＋ ')+'</div>'; }).join('')+'<div style="margin-top:6px;color:#8F6F0C;">建议：确认哪一个是后来的案件，请开发在后台把它改成新号（并在两边 Timeline 记一笔）；新建的案件不会再重复。</div></div>';
+    }catch(e){}
+    document.getElementById('notice').innerHTML = dupHtml+mgHtml+(n ? '<div class="warn">ℹ 最近一次自动备份：'+esc(n.name)+'（'+esc(n.reason)+'，'+esc(new Date(n.t).toLocaleString())+'）。浏览器里存了一份（最近 3 份），下拉里选它即可查看；需要文件时点「导出完整备份」自己下载。</div>' : '');
   }
   window.loadSource = function(){
     var v = document.getElementById('src').value;

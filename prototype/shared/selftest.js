@@ -8069,6 +8069,47 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(refundMethodText({method:'其他', methodNote:'现金给门店'})==='其他（现金给门店）', '其他带说明显示');
     } finally { window.alert = al; window.confirm = cf; window.GMC_REFUND_METHOD_MANUAL = false; }
   });
+  ST.def('R196a','CMD-1029-13（A1 分页）：案件号只增不减——预约并进主案件 / 取消接待 / 从主案件约的预约之后，再建新预约号码都不重复；批次号不重用；多分页共用计数器',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var old = window.GMC_NO_FOLLOWASK, nm = 'R196'; window.GMC_NO_CONFIRM = true;
+    var uniq = function(msg){ var seen = {}, d = []; CASE_ITEMS.forEach(function(x){ if(!x.caseNo) return; if(seen[x.caseNo]) d.push(x.caseNo); seen[x.caseNo] = 1; }); ST.ok(!d.length, msg+'：案件号没有重复'+(d.length ? '（'+d.join('、')+'）' : '')); };
+    try{
+      var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0];
+      p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true; p0.hasArrived = true;
+      p0.subItems = [{id:'r196s', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), time:'11:00', done:false, projectName:'隆鼻'}];
+      /* ① 重现：预约（拿一般案件号）→ 到店继续并进主案件 → 另一位客人再建预约，不能拿到同一个号 */
+      window.GMC_NO_FOLLOWASK = false;
+      var c = ST.newRes(nm, {phone:clientPhoneOf(p0.name), purpose:'术后管理'}); var no0 = c.caseNo, seq0 = CASE_NO_SEQ; ST.ok(/^A\d{6}$/.test(no0), '预约时拿到一般案件号 '+no0);
+      ST.open(c); markArrived(); FU_ASK.mode = 'link'; followupAskDone(true); c = getCurrentCase();
+      ST.ok(c.mainId===p0.id && c.caseNo!==no0 && /-\d\d$/.test(c.caseNo), '并进主案件：改为子案件号 '+c.caseNo);
+      ST.ok(CASE_NO_SEQ >= seq0, '计数器没有回退（'+seq0+' → '+CASE_NO_SEQ+'）');
+      ST.ok((c.formerCaseNos||[]).indexOf(no0)>-1, '被并掉的 '+no0+' 留作别名');
+      ST.ok(ST.hasLog(c, new RegExp('预约时的 '+no0+' 已并入 '+p0.caseNo+'，改为 '+c.caseNo.replace(/[-]/g,'[-]'))), 'Timeline：预约时的 '+no0+' 已并入 '+p0.caseNo+'，改为 '+c.caseNo);
+      var other = createReservationCase('T-R196Other'+Date.now().toString(36).slice(-4), null, todayStr(), '17:30', '+62 816-'+String(Date.now()).slice(-7), '面诊商谈');
+      ST.ok(other.caseNo!==no0 && other.caseNo!==c.caseNo, '另一位客人的新预约拿新号 '+other.caseNo+'（不是 '+no0+'）'); uniq('并进主案件后建新预约');
+      ST.ok(CASE_ITEMS.filter(function(x){ return (x.formerCaseNos||[]).indexOf(no0)>-1 || x.caseNo===no0; }).length===1, '搜 '+no0+' 只指向并进的子案件（#选单搜得到）');
+      /* ② 取消接待：还原原号，原号一直没发给别人 */
+      confirmCancelIntake(); contClose(); c = CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0];
+      ST.ok(!c.mainId && c.caseNo===no0 && (c.formerCaseNos||[]).indexOf(no0)<0, '取消接待：原号 '+no0+' 还原');
+      var o2 = createReservationCase('T-R196Other2'+Date.now().toString(36).slice(-4), null, todayStr(), '17:00', '+62 816-'+String(Date.now()+1).slice(-7), '面诊商谈'); ST.ok(o2.caseNo!==no0, '还原之后再建新预约，号码也不重复'); uniq('取消接待后建新预约');
+      /* ③ 从主案件约的预约（createChildReservation）：不占一般案件号，也不回退计数器 */
+      var seq1 = CASE_NO_SEQ, ch = createChildReservation(p0, todayStr(), '16:30', '术后管理');
+      ST.ok(CASE_NO_SEQ===seq1 && /-\d\d$/.test(ch.caseNo), '主案件下的预约直接是子案件号 '+ch.caseNo+'，不占一般案件号');
+      var o3 = createReservationCase('T-R196Other3'+Date.now().toString(36).slice(-4), null, todayStr(), '16:00', '+62 816-'+String(Date.now()+2).slice(-7), '面诊商谈'); ST.ok(o3.caseNo!==ch.caseNo && /^A\d{6}$/.test(o3.caseNo), '之后的新预约拿新的一般案件号 '+o3.caseNo); uniq('主案件下约预约后建新预约');
+      /* ④ 子案件号：旧主案件（没有一天一个号）取消接待退出后，下一个子案件不重用那个号 */
+      var s1 = ST.newRes(nm+'b'); var pre = p0.caseNo+'-', mx = mainNoMax(p0);
+      var nA = mainNoNext(p0), nB = mainNoNext(p0); ST.ok(nB===nA+1 && nA>mx, '子案件号高水位：连续取号不重复（'+nA+'、'+nB+'）');
+      /* ⑤ 批次号：删掉未付款批次后下一个不重用 */
+      var bc = {settlementBatches:[{id:'B1'},{id:'B2'}], procedureItems:[], recommended:[]}; var b3 = nextBatchId(bc); bc.settlementBatches = bc.settlementBatches.filter(function(x){ return x.id!=='B2'; }); var b4 = nextBatchId(bc);
+      ST.ok(b3==='B3' && b4==='B4', '批次号只增不减：删掉未付款批次后下一个是 '+b4+'（不是 B2）');
+      /* ⑥ 多分页：别的分页把共用计数器推高之后，本分页取号不会比它低 */
+      var base = Math.max(CASE_NO_SEQ, parseInt(localStorage.getItem(CASE_NO_KEY),10)||0), fake = base + 7;
+      localStorage.setItem(CASE_NO_KEY, String(fake)); var n1 = generateCaseNo(); ST.ok(n1==='A'+String(fake).padStart(6,'0'), '别的分页已发到 '+(fake-1)+' → 本分页取 '+n1);
+      var n2 = generateCaseNo(); ST.ok(n2!==n1 && parseInt(localStorage.getItem(CASE_NO_KEY),10)===fake+2, '连续取号不重复，并立刻写回共用计数器');
+      /* ⑦ 旧资料里已经撞号的：coverage 页只提醒，不自动改（这里只确认取号不会再造出重复） */
+      uniq('全部');
+    } finally { window.GMC_NO_FOLLOWASK = old; }
+  });
   ST.def('R195a','CMD-1029-11（IN 分页）：已登记老客人再预约——未满 21 岁每次再确认（未婚重新勾监护人、已婚带入）/ 满 21 岁不出现 / 没生日先补 / 预约页 + IN 代约老客',function(){
     var td = todayStr(), y = +td.slice(0,4), SFX = Date.now().toString(36).slice(-4), seq = 0;
     var ph = function(){ seq++; return '+62 814-'+String(Date.now()).slice(-6)+('00'+seq).slice(-2); };

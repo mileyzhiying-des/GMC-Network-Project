@@ -1613,11 +1613,28 @@ CASE_ITEMS.forEach(function(c){ var v = DEMO_VISITS[c.id]; if(v){ c.visitDate = 
 
 CASE_ITEMS.filter(function(c){ return c.id==='bayu'; }).forEach(function(c){ c.noShow = true; });
 
+/* CMD-1029-13：案件号用「只增不减」的计数器发号，发出去就永远不重用（并进主案件、取消、未到店、取消接待都不放回）。
+   原来的 bug：预约先拿了一般案件号（例 A000016），客人到店「继续」→ joinMain 把它换成子案件号 A000010-02，发现旧号 = 刚发出的最后一个（SEQ-1）就把计数器减 1（CASE_NO_SEQ--）放回去，
+   下一个预约（Jenny J）又拿到 A000016；createChildReservation 也有同样的 CASE_NO_SEQ-- 。现在计数器只加不减：
+   取号 = max(本分页计数器, 浏览器里共用的 gmc_caseseq, 本诊所现有最大号 + 1)，取完立刻写回 gmc_caseseq，所以多个分页同时建预约也不会拿到同一个号（跨诊所也一样，计数器是全局的）。 */
+var CASE_NO_KEY = 'gmc_caseseq';
+function caseNoMaxExisting(){ var mx = 0; try{ CASE_ITEMS.forEach(function(x){ var m = /^A(\d{6})$/.exec(x.caseNo||''); if(m && +m[1]>mx) mx = +m[1]; (x.formerCaseNos||[]).forEach(function(o){ var m2 = /^A(\d{6})$/.exec(o); if(m2 && +m2[1]>mx) mx = +m2[1]; }); }); }catch(e){} return mx; }
 function generateCaseNo(){
-  var n = 'A' + String(CASE_NO_SEQ).padStart(6,'0');
-  CASE_NO_SEQ++;
-  return n;
+  if(window.CASENO_SKIP) return '待分配'; /* 从主案件约的预约（createChildReservation）一开始就是子案件号，不占一般案件号 */
+  var disk = 0; try{ disk = parseInt(localStorage.getItem(CASE_NO_KEY), 10) || 0; }catch(e){}
+  var s = Math.max(CASE_NO_SEQ, disk, caseNoMaxExisting()+1);
+  CASE_NO_SEQ = s + 1;
+  try{ localStorage.setItem(CASE_NO_KEY, String(s+1)); }catch(e){}
+  return 'A' + String(s).padStart(6,'0');
 }
+/* 批次号（B1、B2…）：每个案件自己的只增不减计数器 c.batchSeq（原来是「现有批次个数 + 1」，未付款批次被删掉后下一个又拿到同一个号） */
+function nextBatchId(c){
+  var mx = c.batchSeq || 0; (c.settlementBatches||[]).forEach(function(b){ var m = /^B(\d+)$/.exec(b.id||''); if(m && +m[1]>mx) mx = +m[1]; });
+  (c.procedureItems||[]).concat(c.recommended||[]).forEach(function(it){ var m = /^B(\d+)$/.exec(it.batchId||''); if(m && +m[1]>mx) mx = +m[1]; });
+  c.batchSeq = mx + 1; return 'B' + c.batchSeq;
+}
+/* 旧主案件（没有「一天一个号」）的子案件号：高水位 m.subSeq，取消接待退出主案件的号也不会被下一个子案件拿走 */
+function mainNoNext(m, exceptId){ var n = Math.max(mainNoMax(m, exceptId), m.subSeq||0) + 1; m.subSeq = n; return n; }
 
 var CASE_TABS = [
   {key:'all', label:'全部'},
@@ -2399,8 +2416,9 @@ function clearResumeState(c){
     delete c.mainId;
     if(c._origCaseNo){
       var clash = CASE_ITEMS.some(function(x){ return x!==c && x.caseNo===c._origCaseNo; });
-      if(clash){ c.caseNo = 'A'+String(CASE_NO_SEQ).padStart(6,'0'); CASE_NO_SEQ++; }
-      else { c.caseNo = c._origCaseNo; if(c._seqBack && 'A'+String(CASE_NO_SEQ).padStart(6,'0')===c._origCaseNo) CASE_NO_SEQ++; }
+      if(clash){ c.caseNo = generateCaseNo(); } /* 只会出现在 CMD-1029-13 之前留下的撞号旧资料里 */
+      else { c.caseNo = c._origCaseNo; } /* 原号一直留着没发给别人，直接还原 */
+      c.formerCaseNos = (c.formerCaseNos||[]).filter(function(x){ return x!==c.caseNo; });
     }
   }
   delete c._origCaseNo; delete c._seqBack;
@@ -2962,8 +2980,12 @@ function joinMain(c, src){
     m.dayNos[kk] = c.caseNo; }
   else if(m.dayNoOn){ c.caseNo = dayNoAssign(m, c.visitDate, c.krVisit ? 'KR' : 'IN'); }
   else if(sameDay) c.caseNo = sameDay.no;
-  else { var mx1 = mainNoMax(m, c.id); c.caseNo = (m.caseNo||'')+'-'+pad2(mx1+1); } /* CMD-1026-11 七：和韩国行共用一套号 */
-  if(old && old!==c.caseNo && old==='A'+String(CASE_NO_SEQ-1).padStart(6,'0')){ CASE_NO_SEQ--; c._seqBack = true; }
+  else if(c.preChild && String(c.caseNo||'').indexOf((m.caseNo||'')+'-')===0){} /* 从主案件约的预约本来就有子案件号，到店沿用 */
+  else { c.caseNo = (m.caseNo||'')+'-'+pad2(mainNoNext(m, c.id)); } /* CMD-1026-11 七：和韩国行共用一套号；CMD-1029-13：高水位，退出过的号不重用 */
+  if(old && old!==c.caseNo && /^A\d{6}$/.test(old)){ /* CMD-1029-13：预约时拿的一般案件号不放回计数器，留作别名（搜得到，指向子案件） */
+    c.formerCaseNos = c.formerCaseNos || []; if(c.formerCaseNos.indexOf(old)<0) c.formerCaseNos.push(old);
+    logCaseEvent(c, actingName(), '预约时的 '+old+' 已并入 '+m.caseNo+'，改为 '+c.caseNo+'（'+old+' 不再发给别的案件，搜 '+old+' 可以找到这个子案件）');
+  }
   try{ mainAutoStatus(m); }catch(e){ console.error('[加入主案件后状态自动判断]', e); } /* CMD-1023-02 一：加了新的子案件 → 主案件自动变回进行中 */
   return m;
 }
@@ -5240,7 +5262,7 @@ function reselectProjects(){
   updateCaseStage(c); renderCaseStatusBar(c); buildCaseLog(c); renderCaseBody(c);
 }
 function generateSettlementBatch(c){
-  var batchId = 'B' + ((c.settlementBatches||[]).length + 1);
+  var batchId = nextBatchId(c);
   var b = computeBatchBreakdown(c.recommended);
   var newItems = c.recommended.map(function(it){ return Object.assign({}, it, {done:false, batchId:batchId}); });
   c.settlementBatches = c.settlementBatches || [];
@@ -5937,7 +5959,7 @@ function dayNoRelocate(m, vs){
 /* 项目行的内部 id：新主案件用 A000011#3（不是子案件号）；旧主案件沿用旧的 -NN */
 function subNextNo(c){
   if(c.dayNoOn){ var n = (c.subItems||[]).length+1; while((c.subItems||[]).some(function(x){ return x.no===c.caseNo+'#'+n; })) n++; return c.caseNo+'#'+n; }
-  return c.caseNo+'-'+pad2(mainNoMax(c)+1);
+  return c.caseNo+'-'+pad2(mainNoNext(c));
 }
 /* 这一行所在那一天的子案件号（新主案件）；旧主案件返回行自己的旧号 */
 function rowDayNo(c, s){ if(!c || !s) return ''; if(c.dayNoOn){ var m = mainOf(c); return dayNoGet(m, s.place==='IN' ? (s.visitDate||s.date) : s.date, s.place) || ''; } return s.no||''; }
@@ -11766,12 +11788,11 @@ function mainForBookingPurpose(name, purpose){
   return cands.length===1 ? cands[0] : null;
 }
 function createChildReservation(m, date, time, purpose, ext){
-  var rc = createReservationCase(m.name, null, date, time, null, purpose);
-  if(rc.caseNo==='A'+String(CASE_NO_SEQ-1).padStart(6,'0')) CASE_NO_SEQ--; /* 不占新的 Case ID */
+  window.CASENO_SKIP = true; var rc; try{ rc = createReservationCase(m.name, null, date, time, null, purpose); } finally { window.CASENO_SKIP = false; } /* 不占一般案件号（CMD-1029-13：不再「先拿号再减回去」） */
   rc.mainId = m.id; rc.preChild = true; rc.preTypes = [purpose==='复诊评估' ? '复诊评估' : '术后管理'];
   if(ext) Object.keys(ext).forEach(function(k){ rc[k] = ext[k]; });
   try{ dayNoSync(m); }catch(e){}
-  rc.caseNo = m.dayNoOn ? dayNoAssign(m, date, 'IN') : (m.caseNo||'')+'-'+pad2(mainNoMax(m, rc.id)+1);
+  rc.caseNo = m.dayNoOn ? dayNoAssign(m, date, 'IN') : (m.caseNo||'')+'-'+pad2(mainNoNext(m, rc.id));
   rc._origCaseNo = rc.caseNo; delete rc._seqBack;
   if(rc.logEntries && rc.logEntries[0]) rc.logEntries[0].action = '室长代替预约（主案件 '+m.caseNo+' 的子案件 '+rc.caseNo+'）';
   try{ mainAutoStatus(m); }catch(e){ console.error(e); }
@@ -11781,7 +11802,7 @@ function createChildReservation(m, date, time, purpose, ext){
 function detachPreChild(c){
   var old = c.caseNo, mainNo = ((CASE_ITEMS.filter(function(x){ return x.id===c.mainId; })[0])||{}).caseNo||'';
   delete c.mainId; c.preChild = false; delete c.preTypes; c.careFor = null; c.revisitFor = null; delete c._origCaseNo;
-  c.caseNo = 'A'+String(CASE_NO_SEQ).padStart(6,'0'); CASE_NO_SEQ++;
+  c.caseNo = generateCaseNo();
   logCaseEvent(c, actingName(), '到店：选「开始新的服务案件」——这笔预约不再是 '+mainNo+' 的子案件（原 '+old+'），改为独立案件 '+c.caseNo);
 }
 
@@ -11913,7 +11934,7 @@ function reuseHandOffToMain(c){
   var m = mainOf(c); if(!m || m.id===c.id) return;
   m.settlementBatches = m.settlementBatches || []; m.procedureItems = m.procedureItems || [];
   var moved = [], idMap = {};
-  (c.settlementBatches||[]).forEach(function(b){ var nid = 'B'+(m.settlementBatches.length+1); idMap[b.id] = nid; b.id = nid; b.viaCaseId = c.id; b.viaCaseNo = c.caseNo; m.settlementBatches.push(b); moved.push(nid); }); /* CMD-1029-06 四：结算单和一般赴韩定金同一套存法（在主案件 settlementBatches 里，带 time），多记 viaCaseId = 付款那天的子案件，子案件页「结算」tab 靠它找回自己那一天收的钱 */
+  (c.settlementBatches||[]).forEach(function(b){ var nid = nextBatchId(m); idMap[b.id] = nid; b.id = nid; b.viaCaseId = c.id; b.viaCaseNo = c.caseNo; m.settlementBatches.push(b); moved.push(nid); }); /* CMD-1029-06 四：结算单和一般赴韩定金同一套存法（在主案件 settlementBatches 里，带 time），多记 viaCaseId = 付款那天的子案件，子案件页「结算」tab 靠它找回自己那一天收的钱 */
   (c.procedureItems||[]).forEach(function(it){ if(it.batchId && idMap[it.batchId]) it.batchId = idMap[it.batchId]; m.procedureItems.push(it); });
   c.settlementBatches = []; c.procedureItems = []; c.recommended = [];
   ['anesthesiaConsent'].forEach(function(k){ if(c[k] && !m[k]) m[k] = c[k]; });

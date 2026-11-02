@@ -3467,7 +3467,7 @@ function renderDrawerList(){
   var unreadDot = function(id){ var u = ROOM_UNREAD[id]||0; return u ? '<span class="badge" style="position:static;width:auto;min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:inline-flex;margin-left:6px;">'+u+'</span>' : ''; };
   if(DRAWER_TAB==='case'){
     var items = CASE_ITEMS.filter(function(c){ return CHAT_DATA.hasOwnProperty(getCaseRoomId(c.id)); })
-      .filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || (c.caseNo && c.caseNo.toLowerCase().indexOf(q)>-1); })
+      .filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || (c.caseNo && c.caseNo.toLowerCase().indexOf(q)>-1) || (c.formerCaseNos||[]).some(function(o){ return o.toLowerCase().indexOf(q)>-1; }); })
       .sort(function(a,b){ return roomLastKey(getCaseRoomId(b.id)) - roomLastKey(getCaseRoomId(a.id)); }); /* 其他房间按最新消息排序 */
     items.forEach(function(c){
       var b = caseStageBadge(c), rid = getCaseRoomId(c.id);
@@ -3550,7 +3550,7 @@ function floatInput(){
   if(!mt){ closeSuggest(); return; }
   var kind = mt[2], q = mt[3].toLowerCase(), items;
   if(kind==='#'){
-    items = CASE_ITEMS.filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || (c.caseNo||'').toLowerCase().indexOf(q)>-1; }).slice(0,8)
+    items = CASE_ITEMS.filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || (c.caseNo||'').toLowerCase().indexOf(q)>-1 || (c.formerCaseNos||[]).some(function(o){ return o.toLowerCase().indexOf(q)>-1; }); }).slice(0,8)
       .map(function(c){ return {kind:'#', key:c.id, label:'# '+c.name+' · '+(c.caseNo||'')}; });
   } else {
     items = atCandidates().filter(function(n){ return !q || n.toLowerCase().indexOf(q)>-1; }).slice(0,8).map(function(n){ return {kind:'@', key:n, label:'@ '+n}; });
