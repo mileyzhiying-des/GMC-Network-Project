@@ -2044,6 +2044,7 @@ function editConcernField(field){
 
 function confirmConsultFee(){
   var c = getCurrentCase(); if(!c) return;
+  if(c.addConsultMode){ var cm = concernMissing(c); if(cm.length){ alert('增加面诊的资料还没填完（部位卡和照片 / 视频必填）：\n· '+cm.join('\n· ')); return; } } /* CMD-1102-08 二 */
   if(!c.hospitalId || !c.director){ alert('请先选择院长'); return; }
   var d = feeDraft(c);
   if(d.locked && d.mode==='waive'){ alert('距原案件报告日期已超过1个月，不能免除面诊费'); return; }

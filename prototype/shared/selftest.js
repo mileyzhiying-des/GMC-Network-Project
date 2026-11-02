@@ -8612,4 +8612,21 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     finishCase(c); var k1 = n(/案件结束/); finishCase(c); finishCase(c);
     ST.ok(n(/案件结束/)===k1, '状态没变时 finishCase 不重复写「案件结束」（'+k1+' → '+n(/案件结束/)+'）');
   });
+  ST.def('R205a','CMD-1102-08 二（A1 分页）：增加面诊补齐部位卡 + 照片（必填）；没填不能确认；不面诊时的苦恼文字带进第一张部位卡',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.localCase('R205'); c.concerns = []; c.concernText = '（自测）不面诊时写的苦恼'; var al = window.alert, msgs = []; window.alert = function(m){ msgs.push(String(m)); };
+    try{
+      addConsult(); var t = consultTabHtml(c);
+      ST.ok(/苦恼 \/ 期望部位/.test(t) && /不面诊时填的苦恼/.test(t) && /预算/.test(t), '增加面诊页有部位卡区 + 参考文字 + 预算');
+      ST.ok(t.indexOf('苦恼 / 期望部位') < t.lastIndexOf('预算') && t.lastIndexOf('预算') < t.lastIndexOf('面诊取消'), '顺序：部位卡 → 预算 → … → 确认');
+      c.hospitalId = c.hospitalId || caseHospitalId(c); setCaseDirector(ST.freeDirector(c)); msgs.length = 0; confirmConsultFee();
+      ST.ok(msgs.some(function(m){ return /部位卡和照片/.test(m); }) && c.consultStatus==='awaiting_payment', '没填部位卡：不能确认，提示缺项');
+      var pd = CONCERN_PARTS.filter(function(p){ return !p.hidden && !p.subs; })[0]; toggleConcernPart(pd.key);
+      ST.ok(c.concerns.length===1 && c.concerns[0].desc==='（自测）不面诊时写的苦恼', '第一张部位卡的说明带入不面诊时的苦恼文字');
+      msgs.length = 0; confirmConsultFee(); ST.ok(msgs.length && c.consultStatus==='awaiting_payment', '只有说明、没有希望预期 / 照片：仍不能确认');
+      var x = c.concerns[0]; x.expect = '（自测）希望'; x.video = {name:'v.mp4'}; var sp = shootSpec(x.part); x.photos = {}; sp.angles.forEach(function(a){ x.photos[a.id] = {name:'p.jpg'}; }); if(!sp.video) x.video = null; concernSync(c);
+      msgs.length = 0; confirmConsultFee(); ST.ok(!msgs.length && c.consultStatus!=='awaiting_payment', '部位卡 + 照片都填好：可以确认（'+c.consultStatus+'）');
+      ST.ok(c.visibleToKR && (c.concerns||[]).length===1 && Object.keys(c.concerns[0].photos).length>0, 'KR 能读到的资料里有部位卡和照片');
+    } finally { window.alert = al; }
+  });
 })();

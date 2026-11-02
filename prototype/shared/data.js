@@ -3300,7 +3300,7 @@ function toggleConcernPart(key, sub){
   var c = getCurrentCase(); if(!c) return; c.concerns = c.concerns || []; sub = sub || '';
   var cid = key+(sub ? '|'+sub : ''), i = c.concerns.findIndex(function(x){ return concernCid(x)===cid; });
   if(i>-1){ var x0 = c.concerns[i]; if((x0.desc||x0.video||Object.keys(x0.photos||{}).length) && !confirm('取消「'+concernCardTitle(x0)+'」？已填的说明和上传的照片 / 视频会清掉')) return; c.concerns.splice(i, 1); }
-  else { c.concerns.push({part:key, sub:sub, desc:'', expect:'', video:null, photos:{}}); c.concerns.sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }); }
+  else { c.concerns.push({part:key, sub:sub, desc:(!c.concerns.length && c.addConsultRef) ? c.addConsultRef : '', expect:'', video:null, photos:{}}); c.concerns.sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }); }
   var g = concernPartDef(key).group; if(g) CONCERN_OPEN[g] = true;
   concernSync(c); c.materialsError = ''; renderCaseBody(c);
 }
@@ -4007,6 +4007,8 @@ function addConsult(){
   var c = getCurrentCase(); if(!c) return;
   c.visibleToKR = true; /* 点了增加面诊，案件对韩国侧从此可见 */
   if(c.settlementDone || c.mgmtActive) c.addedConsultAfterLocal = true; /* 付款后增加面诊：已买的本地项目照常使用 */
+  if(c.needsConsult===false){ var ref0 = String(concernTextOf(c)||'').trim(); if(ref0) c.addConsultRef = ref0; } /* CMD-1102-08 二：不面诊时填的苦恼文字当第一张部位卡的参考带进来（可改） */
+  c.concerns = c.concerns || [];
   c.needsConsult = true;
   c.consultRequested = true;
   c.consultStatus = 'awaiting_payment';
@@ -4187,7 +4189,9 @@ function consultTabHtml(c){
   var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(c.consultStatus==='awaiting_payment'){
     if(c.addConsultMode){ /* 本地案件［增加面诊］：同基础资料选面诊的顺序和组件 */
-      return wrap(consultFeeCardHtml(fee, '', '', c)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先填预算，选院长，再缴费或免除面诊费，最后点确认</div>'+
+      var refBox = c.addConsultRef ? '<div style="font-size:12px;color:var(--muted);background:var(--bg-sidebar,#F3EFE6);border-radius:8px;padding:8px 10px;margin-bottom:8px;">不面诊时填的苦恼（参考，选好第一个部位后会带进部位卡，可以改）：'+cesc(c.addConsultRef)+'</div>' : '';
+      return wrap(consultFeeCardHtml(fee, '', '', c)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先选苦恼部位并填说明 / 希望预期 / 上传照片和视频（必填，和一般面诊同一套），再填预算（选填）、选院长，再缴费或免除面诊费，最后点确认</div>'+
+        '<div style="margin-bottom:10px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">苦恼 / 期望部位 <span style="color:var(--terracotta);">*</span></div>'+refBox+concernFormHtml(c)+'</div>'+
         budgetRowHtml(c)+directorRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true)+sub);
     }
     return wrap(consultFeeCardHtml(fee, '', '', c)+consultFeeFormHtml(c)+sub);
