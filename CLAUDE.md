@@ -19,7 +19,7 @@
    **【Notion 写入规则】（2026-10-07，CMD-1007-00）**
    - 你对 Notion 原则上只读
    - 唯一例外：Dashboard 下的「Code 任务」数据库，只能做两件事：① 修改任务的「状态」栏位；② 在任务正文的「📥 汇报」区写入内容
-   - 不能改「📤 指令」区，不能新建或删除任务，不能改其他任何 Notion 页面
+   - 不能改「📤 指令」区，不能新建或删除任务，不能改其他任何 Notion 页面（**2026-11-02 起 Code 任务行多可改「影响后端」「影响的动作」两栏**，见下面「固定规则：写汇报时要填…」）
    - 收到"去看 Code 任务"时，按编号顺序执行所有「待执行」任务；跳过「已作废」
    - 开始做时把状态改成「执行中」；动手前需要确认的事项写在汇报区，状态改成「待确认」后停下；做完改成「完成」
    - 若任务有「取代」栏位，以新任务为准
@@ -32,6 +32,14 @@
 - 不属于任何任务的修改，写进**最相关的那个任务**。
 - 有问题要问用户时，也写进汇报区，并把任务状态改成「待确认」。
 - **不要只写在对话或 CLAUDE.md 里**（CLAUDE.md 是离线备份，Notion 汇报区才是用户看的地方）。
+
+**【固定规则：写汇报时要填「影响后端」「影响的动作」两栏】（2026-11-02，CMD-1102-01，用户要求，和上面「修改必须写进 Notion 汇报区」同级；已和开发交接，启用 Dashboard「交接后的变更同步机制」）/ Rule: fill the "影响后端" and "影响的动作" columns whenever you write a report (2026-11-02, CMD-1102-01)**
+- 每个任务写汇报时，**都要填 Notion「Code 任务」这一行的「影响后端」和「影响的动作」两栏**（这是 Code 除了「状态」和「📥 汇报」区以外，唯一可以改的两栏；上面「Notion 写入规则」里的“只能改状态和汇报区”由此放宽到这两栏，其他栏位和「📤 指令」区仍然不能改）。/ In every report, also fill the two columns "影响后端" (affects backend) and "影响的动作" (affected actions) on the task's row — besides "状态" and the "📥 汇报" section, these are the only fields Code may edit.
+  - **只改画面层**（样式、文案、排版、显示位置）→ 影响后端 = **否**。/ UI-layer only (style, copy, layout, placement) → 影响后端 = No.
+  - **动到资料层**（新增或修改栏位、新增动作、改动作的时机或条件、改计算方式、改权限、改自动规则、改发号方式）→ 影响后端 = **是**，并在「影响的动作」写出影响哪个动作。/ Data-layer changes (new or changed fields, new actions, changed timing or conditions of an action, changed calculations, permissions, automatic rules, numbering) → 影响后端 = Yes, and name the affected action(s) in "影响的动作".
+  - **动作名称**以 Notion「开发交接」05 的动作卡为准；05 还没写到的，写动作描述（例：「KR 按［客人已到院］」）。/ Use the action names from the action cards in Notion "开发交接" 05; if 05 does not cover it yet, write a short description of the action (e.g. "KR 按［客人已到院］").
+  - 如果任务建立时这两栏**已经填了**，照实际做的结果**核对**，不对就改正，并在汇报里写一句。/ If the task row already has them filled, check against what was actually done; correct them if wrong and say so in one line of the report.
+  - **启用前（2026-11-02 之前）的任务不补填。** / Tasks before 2026-11-02 are not back-filled.
 
 > 以上规则和下面文档里其他部分有冲突时，以这一节为准（2026-09-29 用户要求置顶）。下面正文里的"项目运行、构建、代码结构"等技术设定原样保留（本来就是简体中文写的），历史沿革内容不删除，仅供参照。
 
@@ -1833,3 +1841,6 @@ prototype/shared/app.css  共用样式
 - **各种编号的发号方式**：一般案件号 A000xxx = 全局计数器（上面）✓；子案件号 -NN（新主案件 `dayNoOn`）= `dayNoSeq` 只增不减，同一天同地点共用一个号（设计如此，所以同一主案件同一天的几笔来访子案件号相同）✓；子案件号（旧主案件）原来 `mainNoMax+1`（取消接待退出后会重用）→ 改 `mainNoNext`（`m.subSeq` 高水位）；项目行 id（A000011#3）→ `c.rowSeq` 高水位；结算批次号 B1… 原来「现有批次个数 + 1」（未付款批次被删后会重用）→ `nextBatchId`（`c.batchSeq` 只增不减，`generateSettlementBatch` 和 `reuseHandOffToMain` 都用）；本地管理批次 L1…（`lm.batches` 随 `c.localMgmt` 一次性对象，只在一次本地管理流程内用，没改）；持有批次没有编号（对象引用）；案件 / 客户 id = 时间戳 + 随机数（不是计数器，同一毫秒同一随机数才会撞，没改）；`PLACEHOLDER_SEQ`（预约占位）是每家诊所一个计数器，两个分页同时建占位仍可能拿到同一个（没改，列出）。
 - **旧资料**：不自动改号。测试覆盖页顶部新增提醒（`fillSources`）：扫浏览器里所有诊所分区，同一个案件号出现两次以上就列出「号码：客人（诊所，状态）＋ …」。建议处理：确认哪一个是后来的案件，请开发在后台把后来的那个改成新号（同时在两边 Timeline 记一笔、保留旧号作别名）；系统不自动改是因为改号会动到用户案件。
 - 测试：新增 R196a（重现：预约 → 并进主案件 → 另一位客人新预约号码不重复；取消接待 / 主案件下约预约后再建新预约；子案件号 / 批次号高水位；共用计数器被别的分页推高后取号不会更低）。**测试工具说明**：回归用的无头 Chrome 脚本（scratchpad 里的 cdp3.js / runall.sh 等）被清掉了，这次重写了；A1 全套对照基线 782ffc2 用同一套脚本，失败集合完全一致（R21a、R132b 在基线上今天也失败：与日期 / 时间有关）；KM1 / KD1 批次与基线一致（缺夹具的用例两边同样失败）；roletest 8 个账号 0 不符。
+
+## CMD-1102-01 补充（2026-11-02，追加；旧文字保留作历史）
+- 只改 CLAUDE.md，不改产品代码，分支 V4。在最上面的「固定规则」区新增「写汇报时要填『影响后端』『影响的动作』两栏」（中英并列），并在「Notion 写入规则」里注明 Code 任务行除「状态」「📥 汇报」外多可改这两栏；规则内容：只改画面层 = 影响后端「否」；动到资料层（栏位、动作及其时机 / 条件、计算、权限、自动规则、发号方式）= 「是」并写影响的动作；动作名以 Notion「开发交接」05 动作卡为准，没有就写动作描述；任务建立时已填的要核对并在汇报写一句；2026-11-02 之前的任务不补填。
