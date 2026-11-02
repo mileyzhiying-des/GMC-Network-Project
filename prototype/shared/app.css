@@ -552,3 +552,7 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .head-clock .demo-time-tag{margin-left:6px;}
 @media (max-width:1180px){ .head-clock{max-width:260px;} }
 @media (max-width:980px){ .head-clock{display:none;} }
+
+/* CMD-1102-02：未安排预约组标题里的客人名可点（打开案件） */
+.ub-name{color:var(--action-primary,#9A6A4B);text-decoration:underline;cursor:pointer;}
+.ub-name:hover{opacity:.8;}
