@@ -928,10 +928,18 @@ function relDayDiff(ds, todayDs){ return Math.round((new Date(ds+'T00:00:00') - 
 /* CMD-1015-05 十一：案件管理按「最近更新」排序（最近有变动的在最上面）——取 Timeline 里最晚的一条时间；没有记录的排最后 */
 /* CMD-1102-02：「更新时间」= 最后一笔「真的有动作」的 Timeline 时间（UTC）。系统自动修正 / 关账提醒这类记录不算（它们每次打开页面 / 升级旧资料都可能新增，会把所有案件刷成「刚刚」）；没有记录就用预约来访时间 */
 function caseLogIsNoise(e){ var a = String((e && e.action)||''); return !!(e && e.actor==='系统' && /^(修正旧数据|修正使用记录|修正：|00:00 关账|已超过预计出报告时间)/.test(a)); }
-function caseUpdatedKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && e.dt > m && !caseLogIsNoise(e)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
-/* 更新时间显示（照演示时间 realNow 算，不用真实时间）：1 分钟内「刚刚」→「N 分钟前」→ 今天「今天 09:05」→ 今年「12/03」→ 往年「2026-10-28」；未来的时间（演示时间往回调）直接显示日期 */
-function caseUpdatedText(c){
-  var k = caseUpdatedKey(c); if(!k) return '—';
+function caseLogKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && e.dt > m && !caseLogIsNoise(e)) m = e.dt; }); return m; } /* 自己的最后一笔真动作（没有就空） */
+/* CMD-1102-05：主案件的更新时间 = 主案件自己 + 它所有子记录里最新的真动作（子记录动作发生在 -05 / -02 上，主案件也要排上来）；子记录行自己仍只看自己。KR 页面的 CASE_ITEMS 不是来源诊所的分区，KR 列表在读每个来源诊所分区时就把结果存进行里（updKey） */
+function caseUpdatedKey(c){ var m = caseLogKey(c); if(c && !c.mainId && typeof childVisitsOf==='function'){ try{ childVisitsOf(c).forEach(function(k){ var x = caseLogKey(k); if(x > m) m = x; }); }catch(e){} } return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
+/* 客人的更新时间 = 名下所有案件（含子记录）最新的真动作 + 客人页上记了 Timeline 的动作（改基础资料 / 退款等）；都没有就用建档（客户 Timeline 最早一笔） */
+function clientUpdatedKey(cl){
+  if(!cl) return ''; var m = '', first = '';
+  (typeof CASE_ITEMS!=='undefined' ? CASE_ITEMS : []).forEach(function(x){ if(x.name===cl.name){ var k = caseLogKey(x); if(k > m) m = k; } });
+  (cl.timeline||[]).forEach(function(e){ if(!e.dt) return; if(!first || e.dt < first) first = e.dt; if(e.dt > m && !caseLogIsNoise(e)) m = e.dt; });
+  return m || first;
+}
+function updatedTextOfKey(k){
+  if(!k) return '—';
   var d = utcStrParse(k); if(!d) return k;
   var now = realNow(), diff = now.getTime() - d.getTime(), tz = pageTz(), pd = tzParts(d, tz), pn = tzParts(now, tz);
   var md = pad2(pd.mo)+'/'+pad2(pd.d), full = pd.y+'-'+pad2(pd.mo)+'-'+pad2(pd.d);
@@ -941,6 +949,8 @@ function caseUpdatedText(c){
   if(pd.y===pn.y && pd.mo===pn.mo && pd.d===pn.d) return '今天 '+pad2(pd.h)+':'+pad2(pd.mi);
   return pd.y===pn.y ? md : full;
 }
+function caseUpdatedText(c){ return updatedTextOfKey(caseUpdatedKey(c)); }
+function clientUpdatedText(cl){ return updatedTextOfKey(clientUpdatedKey(cl)); }
 /* 案件开始时间（CMD-1015-17）：Timeline 里最早的一条（UTC），没有就用预约来访时间；列表显示按页面时区换算 */
 function caseStartKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && (!m || e.dt < m)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
 function caseStartText(c){ var k0 = caseStartKey(c); return k0 ? (fmtUtc(k0) || k0) : '—'; }

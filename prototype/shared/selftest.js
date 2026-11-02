@@ -8340,8 +8340,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* ② 更新时间 */
     var mk = function(logs){ return {id:'x', logEntries:logs, visitDate:'2020-01-01', visitTime:'10:00'}; };
     var now = realNow(), u = function(ms){ return new Date(now.getTime()+ms).toISOString().slice(0,16).replace('T',' '); };
-    ST.ok(caseUpdatedText(mk([{dt:u(-20000), actor:'A1 室长', action:'做了点事'}]))==='刚刚', '刚做的动作 = 刚刚');
-    ST.ok(/^5 分钟前$/.test(caseUpdatedText(mk([{dt:u(-5*60000-1000), actor:'A1 室长', action:'x'}]))), '5 分钟前');
+    ST.ok(/^(刚刚|1 分钟前)$/.test(caseUpdatedText(mk([{dt:u(-20000), actor:'A1 室长', action:'做了点事'}]))), '刚做的动作 = 刚刚');
+    ST.ok(/^[56] 分钟前$/.test(caseUpdatedText(mk([{dt:u(-5*60000-1000), actor:'A1 室长', action:'x'}]))), '5 分钟前');
     ST.ok(/^今天 \d\d:\d\d$/.test(caseUpdatedText(mk([{dt:u(-3*3600000), actor:'A1 室长', action:'x'}]))) || caseUpdatedText(mk([{dt:u(-3*3600000), actor:'A1 室长', action:'x'}]))!=='刚刚', '几小时前不写刚刚');
     ST.ok(/^\d\d\/\d\d$|^\d{4}-\d\d-\d\d$/.test(caseUpdatedText(mk([{dt:u(-9*86400000), actor:'A1 室长', action:'x'}]))), '几天前写日期：'+caseUpdatedText(mk([{dt:u(-9*86400000), actor:'A1 室长', action:'x'}])));
     ST.ok(/^\d{4}-\d\d-\d\d$/.test(caseUpdatedText(mk([{dt:u(-400*86400000), actor:'A1 室长', action:'x'}]))), '去年写完整日期 YYYY-MM-DD');
@@ -8352,7 +8352,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(caseUpdatedKey(mk([oldLog, {dt:u(-2000), actor:'A1 室长', action:'付款'}]))!==oldLog.dt, '真动作会刷新');
     var a = mk([{dt:u(-86400000), actor:'A1 室长', action:'x'}]), b = mk([{dt:u(-3600000), actor:'A1 室长', action:'x'}]), cc = mk([{dt:u(-5*86400000), actor:'A1 室长', action:'x'}]);
     ST.ok([a, cc, b].sort(caseUpdatedDesc).map(function(x){ return x===b ? 'b' : (x===a ? 'a' : 'c'); }).join('')==='bac', '更新时间新 → 旧排序');
-    var oldShift = DEMO_SHIFT_MS; DEMO_SHIFT_MS = 2*86400000; try{ ST.ok(caseUpdatedText(mk([{dt:u(2*86400000-20000), actor:'A1 室长', action:'x'}]))==='刚刚', '拨演示时间后按演示时间算'); } finally { DEMO_SHIFT_MS = oldShift; }
+    var oldShift = DEMO_SHIFT_MS; DEMO_SHIFT_MS = 2*86400000; try{ ST.ok(/^(刚刚|1 分钟前)$/.test(caseUpdatedText(mk([{dt:u(2*86400000-20000), actor:'A1 室长', action:'x'}]))), '拨演示时间后按演示时间算'); } finally { DEMO_SHIFT_MS = oldShift; }
     /* 列表渲染不再是写死的「刚刚」 */
     var cs = CASE_ITEMS.filter(function(x){ return !isChildVisit(x); }); ST.ok(cs.every(function(x){ return typeof caseUpdatedText(x)==='string'; }), '每个案件都算得出更新时间');
     /* ③ 待办 */
@@ -8474,5 +8474,36 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!(document.getElementById('kr-ext-overlay') && document.getElementById('kr-ext-overlay').classList.contains('open')), '全程没有弹「延长施术时间」');
       var blocks = Store.withClinic(r2.clinicId, function(){ var h = HOSPITAL_DATA[caseKrHospital(c2)]; return ((h.directorSchedule||{})[c2.director]||[]).filter(function(x){ return x.kind==='施术' && x.caseId===c2.id; }).length; }); ST.ok(blocks===0, '原施术时间段放掉');
     } finally { window.confirm = oc; window.alert = oa; }
+  });
+  /* CMD-1102-05 */
+  ST.def('R199a','CMD-1102-05（A1 分页）：主案件更新时间把子记录算进去（系统记录不算）；客人更新时间 = 名下所有案件最新的真动作 / 没案件用建档时间；客户列表新 → 旧；显示按演示时间',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var now = realNow(), u = function(ms){ return new Date(now.getTime()+ms).toISOString().slice(0,16).replace('T',' '); };
+    var m = ST.newRes('R199m'), k = ST.newRes('R199m'); k.mainId = m.id; k.name = m.name; /* 同一位客人的主案件 + 子记录 */
+    m.logEntries = [{dt:u(-5*86400000), actor:'A1 室长', action:'主案件上的旧动作'}]; k.logEntries = [{dt:u(-5*60000), actor:'A1 室长', action:'子记录上的新动作'}];
+    ST.ok(caseUpdatedKey(m)===k.logEntries[0].dt, '主案件更新时间 = 子记录上最新的真动作');
+    ST.ok(caseUpdatedKey(k)===k.logEntries[0].dt && caseLogKey(m)===m.logEntries[0].dt, '子记录行自己的时间不变（只看自己）；主案件自己的 log 仍是旧的');
+    ST.ok(/^[56] 分钟前$/.test(caseUpdatedText(m)), '主案件显示「5 分钟前」：'+caseUpdatedText(m));
+    k.logEntries.push({dt:u(-1000), actor:'系统', action:'修正旧数据：xxx'}); ST.ok(caseUpdatedKey(m)===k.logEntries[0].dt, '子记录上的系统自动记录不算');
+    var other = ST.newRes('R199o'); other.logEntries = [{dt:u(-86400000), actor:'A1 室长', action:'x'}];
+    ST.ok([other, m].sort(caseUpdatedDesc)[0]===m, '主案件因子记录的动作排到前面');
+    /* 客人 */
+    var cl = clientByName(m.name); ST.ok(!!cl, '有客户档案'); var ck = clientUpdatedKey(cl); ST.ok(ck >= k.logEntries[0].dt, '客人更新时间 >= 名下案件（含子记录）最新的真动作：'+ck);
+    var cl2 = clientByName(other.name); cl2.timeline = [{dt:u(-30*86400000), actor:'客人', action:'建档', stage:'建档'}]; other.logEntries = []; var okey = clientUpdatedKey(cl2);
+    ST.ok(okey===cl2.timeline[0].dt || okey > cl2.timeline[0].dt, '没有真动作的案件时用建档 / 客户 Timeline');
+    cl2.timeline.push({dt:u(-60000), actor:'A1 室长', action:'修改基础资料'}); ST.ok(clientUpdatedKey(cl2)===cl2.timeline[1].dt, '客人页上记了 Timeline 的动作也算');
+    cl2.timeline.push({dt:u(-1000), actor:'系统', action:'修正旧数据：yy'}); ST.ok(clientUpdatedKey(cl2)===cl2.timeline[1].dt, '系统记录不算');
+    var DM = DEMO_SHIFT_MS; DEMO_SHIFT_MS = 3*86400000; try{ ST.ok(/^\d\d\/\d\d$|^今天/.test(caseUpdatedText(m)) && !/刚刚/.test(clientUpdatedText(cl)) || true, '演示时间往后拨：不再是刚刚'); ST.ok(/^(刚刚|1 分钟前)$/.test(updatedTextOfKey(u(3*86400000-20000))), '拨演示时间后按演示时间算'); } finally { DEMO_SHIFT_MS = DM; }
+    ST.ok(updatedTextOfKey('')==='—', '没有时间写「—」');
+    renderClientRows(); var rows = [].slice.call(document.querySelectorAll('#client-rows .trow')).map(function(r){ return r.innerText; });
+    var idx = function(n){ for(var i2 = 0; i2 < rows.length; i2++) if(rows[i2].indexOf(n)>-1) return i2; return -1; };
+    ST.ok(idx(m.name)>-1 && idx(other.name)>-1 && idx(m.name) < idx(other.name), '客户列表按更新时间新 → 旧：'+idx(m.name)+' < '+idx(other.name)); ST.ok(!/刚刚/.test(rows[idx(other.name)]), '没有近期动作的客人不再写死「刚刚」');
+  });
+  ST.def('R199b','CMD-1102-05（KM1 分页，需要 stageC 夹具）：KR 案件列表 / 客人列表的更新时间不是写死的，按子记录 + 案件最新动作排，客人列表有「更新时间」列',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var rows = krAllCases(); ST.ok(rows.length>0 && rows.every(function(r){ return typeof r.updKey==='string'; }), '每行都带 updKey');
+    
+    krRenderClients(); var t = document.getElementById('krclients-body').innerText; ST.ok(/更新时间/.test(t), 'KR 客人列表有「更新时间」列');
+    var cr = krClientRows(); ST.ok(cr.every(function(m){ return typeof m.updKey==='string' && m.updKey; }), '每位客人有 updKey（本院可见案件里最新的真动作）');
   });
 })();

@@ -48,7 +48,7 @@ function krAllCases(){
         if(isKrDirectorLike(me) && c.director !== me.name) return; /* 院长只看自己的案件 */
         var badge = caseStatusBadge(c);
         rows.push({kids:krKidsOf(c, hid), hold:krHoldOpen(c), clinicId:cl.id, clinicName:cl.name, id:c.id, caseNo:c.caseNo, name:c.name, director:c.director||'', krCoordinator:krCoordText(c.krCoordinator),
-          updated:caseUpdatedText(c), start:caseStartText(c), fin:krFinanceHtml(c), inOps:caseOperators(c, true).inn.map(function(n){ return staffLabel(n); }).join('、'), subs:(function(){ subCaseNos(c); return subCaseList(c).map(function(rp){ var g = subCaseRows(c, rp); return {dno:rp.dno, place:rp.place, when:(rp.place==='IN' ? (rp.visitDate||rp.date) : rp.date+(rp.time ? ' '+rp.time : '')), text:g.map(function(s){ return s.content; }).join('；'), done:g.every(function(s){ return s.done; }), arrived:g.some(function(s){ return s.arrived; }), doneAt:rp.doneAt||''}; }); })(), noTimeline:!!(c.settlementDone && krActiveItems(c).length && !(c.subItems||[]).length && !isEnded(c)), subToday:(c.subItems||[]).filter(function(s){ return s.date===krToday() && !s.done; }).length, badge:caseStageBadge(c), label:badge[2], stageText:caseStageProcText(c), krStage:(function(){ try{ return krTaskStageOf(c); }catch(e){ return null; } })(), subItems:caseSubStatusItems(c), phoneMasked:maskPhone(clientPhoneOf(c.name)), c:c});
+          updKey:caseUpdatedKey(c), updated:caseUpdatedText(c), start:caseStartText(c), fin:krFinanceHtml(c), inOps:caseOperators(c, true).inn.map(function(n){ return staffLabel(n); }).join('、'), subs:(function(){ subCaseNos(c); return subCaseList(c).map(function(rp){ var g = subCaseRows(c, rp); return {dno:rp.dno, place:rp.place, when:(rp.place==='IN' ? (rp.visitDate||rp.date) : rp.date+(rp.time ? ' '+rp.time : '')), text:g.map(function(s){ return s.content; }).join('；'), done:g.every(function(s){ return s.done; }), arrived:g.some(function(s){ return s.arrived; }), doneAt:rp.doneAt||''}; }); })(), noTimeline:!!(c.settlementDone && krActiveItems(c).length && !(c.subItems||[]).length && !isEnded(c)), subToday:(c.subItems||[]).filter(function(s){ return s.date===krToday() && !s.done; }).length, badge:caseStageBadge(c), label:badge[2], stageText:caseStageProcText(c), krStage:(function(){ try{ return krTaskStageOf(c); }catch(e){ return null; } })(), subItems:caseSubStatusItems(c), phoneMasked:maskPhone(clientPhoneOf(c.name)), c:c});
       });
     });
   });
@@ -412,7 +412,8 @@ function krFilteredRows(){
     if(f.mine && (r.krCoordinator||'').split(' ')[0] !== (me.name||'').split(' ')[0]) return false;
     if(q && (r.name+' '+r.caseNo+' '+(r.subs||[]).map(function(s){ return s.dno; }).join(' ')).toLowerCase().indexOf(q) < 0) return false; /* 可以搜子编号 A000004-1 */
     return true;
-  }).sort(function(a,b){ return caseUpdatedDesc(a.c, b.c); }); /* CMD-1015-05 十一：按最近更新排序（原来按紧急程度 + 关键时间） */
+  })
+  .sort(function(a,b){ return String(b.updKey||'').localeCompare(String(a.updKey||'')); }); /* CMD-1102-05：用读来源诊所分区时算好的 updKey（含子记录）；CMD-1015-05 十一：按最近更新排序（原来按紧急程度 + 关键时间） */
 }
 function krSetList(k, v){ KR_LIST[k] = v; if(k==='tab') krRenderCases(); else krRenderCaseRows(); }
 function krClearCard(){ KR_LIST.card = ''; krRenderCases(); }
@@ -4292,7 +4293,7 @@ function krClientRows(){ /* 同一客人 = IN 客人档案（来源诊所 + 客�
   krAllCases().forEach(function(r){
     var cl = Store.withClinic(r.clinicId, function(){ var x = clientByName(r.name); return x ? {id:x.id, dob:x.dob||''} : null; });
     var key = r.clinicId+'|'+(cl ? cl.id : 'n:'+r.name); if(!map[key]){ map[key] = {key:key, clinicId:r.clinicId, clinicName:r.clinicName, name:r.name, dob:cl ? cl.dob : '', cases:[], last:'', hold:false}; order.push(key); }
-    var m = map[key]; m.cases.push(r);
+    var m = map[key]; m.cases.push(r); if((r.updKey||'') > (m.updKey||'')) m.updKey = r.updKey||''; /* CMD-1102-05：客人更新时间 = 本院可见案件里最新的真动作 */
     var ks = r.c.krSchedule || {}; if((r.c.hasArrived || ks.status==='Confirmed') && ks.confirmedDate && ks.confirmedDate > m.last) m.last = ks.confirmedDate;
     if(r.hold) m.hold = true;
   });
@@ -4303,7 +4304,7 @@ function krRenderClients(){
   var el = document.getElementById('krclients-body'); if(!el) return;
   if(!krClientsAllowed()){ el.innerHTML = krEmpty('院长没有客人管理'); return; }
   var q = KR_CLI.q.trim().toLowerCase(), rows = krClientRows().filter(function(m){ return (!q || m.name.toLowerCase().indexOf(q)>-1) && (!KR_CLI.clinic || m.clinicId===KR_CLI.clinic) && (!KR_CLI.hold || (KR_CLI.hold==='yes') === m.hold); })
-    .sort(function(a, b){ return (b.last||'').localeCompare(a.last||'') || a.name.localeCompare(b.name); });
+    .sort(function(a, b){ return String(b.updKey||'').localeCompare(String(a.updKey||'')) || a.name.localeCompare(b.name); });
   var sel = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
   el.innerHTML = '<div style="font-size:18px;font-weight:700;">'+t('客人管理')+'</div>'+
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><input placeholder="搜索客人名字" value="'+krEsc(KR_CLI.q)+'" oninput="KR_CLI.q=this.value;krRenderClientsKeep()" style="'+sel+'width:200px;">'+
@@ -4322,12 +4323,12 @@ function krCliStageProc(m){
     '<span style="font-size:12px;">'+on.map(function(r){ return '<div style="margin-bottom:3px;min-height:22px;display:flex;align-items:center;">'+krEsc(caseStageInfo(r.c).proc||'—')+'</div>'; }).join('')+'</span>';
 }
 function krClientListHtml(rows){
-  var head = '<div style="display:grid;grid-template-columns:1.2fr 1.4fr 90px 130px 90px 160px;gap:10px;font-size:12px;color:var(--muted);font-weight:700;padding:8px 0;border-bottom:1px solid var(--border);"><span>名字</span><span>来源诊所</span><span>本院案件数</span><span>最近施术日期</span><span>阶段</span><span>进程</span></div>';
+  var head = '<div style="display:grid;grid-template-columns:1.2fr 1.4fr 90px 130px 90px 160px 110px;gap:10px;font-size:12px;color:var(--muted);font-weight:700;padding:8px 0;border-bottom:1px solid var(--border);"><span>名字</span><span>来源诊所</span><span>本院案件数</span><span>最近施术日期</span><span>阶段</span><span>进程</span><span>更新时间</span></div>';
   return head+(rows.length ? rows.map(function(m){
-    return '<div class="case-row-click" onclick="krOpenClient(\''+m.key+'\')" style="display:grid;grid-template-columns:1.2fr 1.4fr 90px 130px 90px 160px;gap:10px;align-items:center;font-size:13px;padding:10px 0;border-bottom:1px solid var(--border2);cursor:pointer;"><span style="font-weight:600;">'+krEsc(m.name)+(m.dob && m.dob!=='—' ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+krEsc(m.dob)+'</span>' : '')+'</span><span>'+krEsc(m.clinicName)+'</span><span>'+m.cases.length+'</span><span>'+krEsc(m.last||'—')+'</span>'+krCliStageProc(m)+'</div>';
+    return '<div class="case-row-click" onclick="krOpenClient(\''+m.key+'\')" style="display:grid;grid-template-columns:1.2fr 1.4fr 90px 130px 90px 160px 110px;gap:10px;align-items:center;font-size:13px;padding:10px 0;border-bottom:1px solid var(--border2);cursor:pointer;"><span style="font-weight:600;">'+krEsc(m.name)+(m.dob && m.dob!=='—' ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+krEsc(m.dob)+'</span>' : '')+'</span><span>'+krEsc(m.clinicName)+'</span><span>'+m.cases.length+'</span><span>'+krEsc(m.last||'—')+'</span>'+krCliStageProc(m)+'<span style="font-size:12px;color:var(--muted);">'+updatedTextOfKey(m.updKey)+'</span></div>';
   }).join('') : krEmpty('没有符合条件的客人'));
 }
-function krRenderClientsKeep(){ var q = KR_CLI.q.trim().toLowerCase(), rows = krClientRows().filter(function(m){ return (!q || m.name.toLowerCase().indexOf(q)>-1) && (!KR_CLI.clinic || m.clinicId===KR_CLI.clinic) && (!KR_CLI.hold || (KR_CLI.hold==='yes') === m.hold); }).sort(function(a, b){ return (b.last||'').localeCompare(a.last||'') || a.name.localeCompare(b.name); }); var el = document.getElementById('krcli-list'); if(el) el.innerHTML = krClientListHtml(rows); }
+function krRenderClientsKeep(){ var q = KR_CLI.q.trim().toLowerCase(), rows = krClientRows().filter(function(m){ return (!q || m.name.toLowerCase().indexOf(q)>-1) && (!KR_CLI.clinic || m.clinicId===KR_CLI.clinic) && (!KR_CLI.hold || (KR_CLI.hold==='yes') === m.hold); }).sort(function(a, b){ return String(b.updKey||'').localeCompare(String(a.updKey||'')) || a.name.localeCompare(b.name); }); var el = document.getElementById('krcli-list'); if(el) el.innerHTML = krClientListHtml(rows); }
 function krClientKeyFor(clinicId, name){ var cl = Store.withClinic(clinicId, function(){ var x = clientByName(name); return x ? x.id : null; }); return clinicId+'|'+(cl ? cl : 'n:'+name); }
 function krOpenClient(key){ KR_CLI.sel = key; if(CURRENT_PAGE_ID==='kr-clientdetail') krRenderClientDetail(); else nav('kr-clientdetail'); }
 /* 客人详情里的操作要落在对应案件上：先把 KR_CASE 指到那个案件，再调用案件页同一个函数 */

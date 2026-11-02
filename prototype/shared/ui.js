@@ -817,14 +817,14 @@ function buildClients(){ renderClientRows(); }
 
 function renderClientRows(){
   var q = ((document.getElementById('client-search')||{}).value||'').trim().toLowerCase();
-  document.getElementById('client-rows').innerHTML = CLIENTS.filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || normPhoneKey(c.phone).indexOf(normPhoneKey(q)||'#')>-1; }).map(function(c){
+  document.getElementById('client-rows').innerHTML = CLIENTS.filter(function(c){ return !q || c.name.toLowerCase().indexOf(q)>-1 || normPhoneKey(c.phone).indexOf(normPhoneKey(q)||'#')>-1; }).sort(function(a, b){ return clientUpdatedKey(b).localeCompare(clientUpdatedKey(a)); }).map(function(c){ /* CMD-1102-05：客户按更新时间新 → 旧 */
     var s = clientCaseStatus(c), nm = c.name.replace(/'/g,"\\'");
     var on = CASE_ITEMS.filter(function(x){ return x.name===c.name && !isEnded(x); }), dash = '<span style="font-size:12px;color:var(--muted);">—</span>'; /* CMD-1014-09：阶段 + 进程，只显示进行中的案件，没有就「—」 */
     return '<div class="trow" style="grid-template-columns:1.4fr 0.9fr 1.3fr 1.3fr 0.9fr 0.9fr auto;"><b style="font-size:13px;cursor:pointer;" onclick="openClientDetail(\''+nm+'\',\'in-clients\')">'+c.name+'</b>'+
       '<span>'+(on.length ? on.map(function(x){ var si = caseStageInfo(x); return '<div style="margin-bottom:3px;"><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></div>'; }).join('') : dash)+'</span>'+
       '<span style="font-size:12px;">'+(on.length ? on.map(function(x){ return '<div style="margin-bottom:3px;min-height:22px;display:flex;align-items:center;">'+(caseStageInfo(x).proc||'—')+'</div>'; }).join('') : dash)+'</span>'+
       '<span>'+s.finance+'</span>'+
-      '<span style="font-size:12px;">'+c.createdBy+'</span><span style="font-size:12px;color:var(--muted);">'+c.updated+'</span>'+
+      '<span style="font-size:12px;">'+c.createdBy+'</span><span style="font-size:12px;color:var(--muted);">'+clientUpdatedText(c)+'</span>'+
       '<a href="#" onclick="openClientDetail(\''+nm+'\',\'in-clients\');return false;" style="font-size:12px;font-weight:700;">查看 →</a></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:20px 4px;">'+(CLIENTS.length ? '没有匹配的客户' : '暂无客户')+'</div>'; /* CMD-1015-06：空状态 */
 }
