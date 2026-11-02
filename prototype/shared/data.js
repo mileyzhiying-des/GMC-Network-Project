@@ -6108,6 +6108,7 @@ function coreMarkArrived(c, by){
   c.krSchedule.status = 'arrived'; c.hasArrived = true; c.krArrivedDay = todayStr();
   updateCaseStage(c);
   logCaseEvent(c, by, 'KR标记"已到院"');
+  mergeMainDayRows(c, by, '到院：同一天已有的预约并入主到院'); /* CMD-1102-11 二 */
   var ks0 = c.krSchedule||{}; pushNotif('赴韩施术', c.name+' 已到院（'+(c.director||'院长')+'，'+tkK(ks0.confirmedDate||todayStr(), ks0.confirmedTime||'')+'）', {caseId:c.id, level:'info'}); /* CMD-1020-15 三：只告知，不进待办 */
   return true;
 }
@@ -6532,6 +6533,7 @@ function repairVisitState(){
       if(it.pendingPay && !it.heldOver && !it.service && !it.cancelled && !it.swapped && krIsMgmtItemC(it) && holdLocalAdd(c, it)){ logCaseEvent(c, '系统', '修正旧数据：待付款管理项目「'+buyName(it.name)+'」转为持有项目（待付款不变）'); n++; }
     });
     if(migrateOldPostpone(c)) n++; /* CMD-1028-12 四：旧的无限延期并进保留 */
+    n += mergeMainDayRows(c, '系统'); /* CMD-1102-11 二：同一天的第二张到院卡并回主到院 */
     if(migrateProgressMemo(c)) n++; /* CMD-1021-03：旧的项目进程 memo 迁成第一则记录 */
     var fx = fixUseRecords(c); if(fx.length){ fx.forEach(function(t){ logCaseEvent(c, '系统', '修正使用记录：'+t); }); n += fx.length; }
   });
@@ -6577,6 +6579,7 @@ function inheritVisitArrival(c, s){
 }
 function coreSubTimeEdit(c, id, date, time, by, quiet){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || s.done || s.kind==='施术') return false;
+  if((s.holdUseOf || s.surgUse) && !s.arrived && mainDayOpen(c, date) && absorbRow(c, Object.assign(s, {date:date, time:time||s.time}), by, '改时间到今天')) return true; /* CMD-1102-11 二 */
   var ddT = doneDayInfo(c, date); if(ddT && subCaseKey(s)!=='KR|'+date){ window.KR_DONEDAY = ddT; window.KR_LAST_CONFLICT = '到院已完成'; return false; } /* 兜底：UI 入口先预检，走到这里由 krMut 弹专门提示 */
   var before = (s.date||'')+(s.time ? ' '+s.time : '');
   s.date = date; s.time = time || s.time; inheritVisitArrival(c, s);
@@ -9262,9 +9265,10 @@ function coreUnitUseNow0(c, name, by, opt){ if(krDayDeny(c, 'main')) return fals
   var tg = coreUseTarget(c); if(!tg) return {ok:false, err:'没有客人已到店的案件'};
   var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return {ok:false, err:'找不到项目'}; var ik = itemIid(it); name = it.name;
   if(krIsMgmtItemC(it)){
+    if(tg.key==='main' && it.heldOver && !it.holdDone) absorbItemRows(c, it, by); /* CMD-1102-11 二：这一项已有约在今天的预约行 → 先转成今天的进行项目，不再拒绝「没有可用次数」 */
     if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return {ok:false, err:'没有可用次数'};
     var qmax = Math.max(1, holdItemLeft(c, it) - holdItemPlanned(c, it)), qn = Math.max(1, Math.min(parseInt(opt && opt.qty, 10)||1, qmax)); /* CMD-1021-14 四：本次使用选 N 次 */
-    if(tg.key==='main'){ it.todayQty = qn; var dn0 = tmdGet(c, it); if(dn0) dn0.again = true; var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return itemIid(x); }); c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==ik && n!==name; }).concat([ik]); c.todayPicked = true; if(opt && opt.dirOp){ (c.todayDirOp = c.todayDirOp || {})[name] = {ext:opt.ext||0, min:opt.min||30, dir:opt.dir||c.director}; syncSurgeryBlock(c); } logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+((opt && opt.dirOp) ? '（院长操作'+(opt.ext ? '，延长 '+opt.ext+' 分钟' : '')+'）' : '')); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
+    if(tg.key==='main'){ mainDayAddMgmt(c, it, qn, opt); logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+((opt && opt.dirOp) ? '（院长操作'+(opt.ext ? '，延长 '+opt.ext+' 分钟' : '')+'）' : '')); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
     var rep = coreVisitRows(c, tg.key)[0], s = coreSubAdd(c, {kind:'术后管理记录', date:rep.date, time:rep.time||'', content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by); if(!s) return {ok:false};
     s.holdUseOf = name; s.holdIid = ik; s.arrived = true; s.simDay = true; s.src = 'use'; s.useNow = true; if(qn>1) s.useQty = qn; /* useNow = 本次使用加进来的行（项目卡写「今天使用 N 次」，不算已预约） */ if(opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } subCaseNos(c); logCaseEvent(c, by, '本次使用：'+buyName(name)+' 加进这次到院'+((opt && opt.dirOp) ? '（院长操作）' : ''), '管理项目'); return {ok:true, key:tg.key};
   }
@@ -9276,6 +9280,37 @@ function coreUnitUseNow0(c, name, by, opt){ if(krDayDeny(c, 'main')) return fals
   var rep2 = tg.key==='main' ? null : coreVisitRows(c, tg.key)[0], s2 = coreSubAdd(c, {kind:'增加项目', date:rep2 ? rep2.date : todayStr(), time:rep2 ? (rep2.time||'') : '', content:name, place:'KR', projectName:name, silent:true}, by); if(!s2) return {ok:false};
   if(tg.key!=='main'){ s2.visitKey = tg.key; s2.arrived = true; } logCaseEvent(c, by, '本次使用：'+name+' 加进 '+(tg.no||tg.key)); return {ok:true, key:tg.key};
 }
+/* ===== CMD-1102-11 二：约在主到院那一天的管理 / 施术项目并进主到院的进行项目 ===== */
+function mainDayAddMgmt(c, it, qn, opt){ /* 持有的管理项目加进今日案件（= ［本次使用］的主到院分支）；按［操作完成］才扣次数 */
+  var ik = itemIid(it), name = it.name; it.todayQty = qn; var dn0 = tmdGet(c, it); if(dn0) dn0.again = true;
+  var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return itemIid(x); });
+  c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==ik && n!==name; }).concat([ik]); c.todayPicked = true;
+  if(opt && opt.dirOp){ (c.todayDirOp = c.todayDirOp || {})[name] = {ext:opt.ext||0, min:opt.min||30, dir:opt.dir||c.director}; syncSurgeryBlock(c); }
+}
+function absorbRow(c, s, by, why){ /* 一行「持有项目使用 / 施术预约使用」改成今天的进行项目；返回是否真的改了 */
+  if(!s || s.done || s.skipped || s.kind!=='术后管理记录' || s.place!=='KR' || !(s.holdUseOf || s.surgUse)) return false;
+  if(!mainDayOpen(c, s.date) || krDayDeny(c, 'main')) return false;
+  if(s.holdUseOf){
+    var it = rowItem(c, s); if(!it || it.holdDone || !it.heldOver) return false;
+    var qn = Math.max(1, parseInt(s.useQty, 10)||1);
+    c.subItems = c.subItems.filter(function(x){ return x!==s; });
+    var room = Math.max(1, holdItemLeft(c, it) - holdItemPlanned(c, it)); mainDayAddMgmt(c, it, Math.min(qn, room), s.dirOp ? {dirOp:true, ext:s.extendMin, min:s.dirMin, dir:s.director} : null);
+    logCaseEvent(c, by, (why||'预约改为今天使用')+'：'+buyName(it.name)+'（'+s.date+(s.time ? ' '+s.time : '')+' 的预约，客人已在院，并入今天的进行项目）', '管理项目'); return true;
+  }
+  var si = (c.procedureItems||[]).filter(function(x){ return x.name===s.surgUse && x.origin==='KR' && !x.cancelled && !x.swapped; })[0]; if(!si || si.done) return false;
+  c.subItems = c.subItems.filter(function(x){ return x!==s; });
+  si.deferUse = false; if(typeof s.extendMin==='number' && s.extendMin) si.extraMin = s.extendMin;
+  if((si.krAddOn || si.preBalanceAdd) && !(c.subItems||[]).some(function(x){ return x.kind==='增加项目' && !x.visitKey && x.projectName===si.name && !x.skipped; })) coreSubAdd(c, {kind:'增加项目', date:todayStr(), time:'', content:si.name, place:'KR', projectName:si.name, silent:true}, by);
+  syncSurgerySub(c); syncSurgeryBlock(c);
+  logCaseEvent(c, by, (why||'预约改为今天使用')+'：'+buyName(si.name)+'（'+s.date+(s.time ? ' '+s.time : '')+' 的预约，客人已在院，并入今天的进行项目）', '施术'); return true;
+}
+function absorbItemRows(c, it, by){ /* 这个项目已有的、约在主到院当天的预约行 → 全部并进今天 */
+  var n = 0; (c.subItems||[]).slice().forEach(function(s){ if(s.holdUseOf && rowOwnedBy(it, s) && absorbRow(c, s, by, '本次使用：已有的预约改为今天使用')) n++; }); return n;
+}
+function mergeMainDayRows(c, by, why){ /* 启动修复 / 客人到院时：所有约在主到院当天的使用行并进主到院；真的改了才写 Timeline（absorbRow 里） */
+  var n = 0; (c.subItems||[]).slice().forEach(function(s){ if((s.holdUseOf || s.surgUse) && absorbRow(c, s, by, why||'修正旧数据：同一天的第二张到院卡并回主到院')) n++; });
+  if(n) updateCaseStage(c); return n;
+}
 /* 施术 / 管理项目［预约使用］：选日期时间 → 按日期建立 / 并入子案件，预约来源 = 管理预约（并入术后预约的那天则仍是术后预约） */
 function coreUnitBookUse(c, name, date, time, by, director, opt){
   var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name; if(it.pendingPay || !c.krBalancePaid || !date) return false;
@@ -9284,6 +9319,11 @@ function coreUnitBookUse(c, name, date, time, by, director, opt){
   var ddU = doneDayInfo(c, date); if(ddU){ window.KR_DONEDAY = ddU; window.KR_LAST_CONFLICT = '到院已完成'; return false; }
   if(mg){ if(!it.heldOver || it.holdDone || holdItemBookable(c, it) <= 0) return false; }
   else if(it.done) return false;
+  if(mainDayOpen(c, date) && !krDayDeny(c, 'main')){ /* CMD-1102-11 二：客人已在院、约的是今天 → 并进主到院的进行项目，不再生出 KR|今天 第二张卡 */
+    if(mg){ mainDayAddMgmt(c, it, 1, opt); }
+    else { it.deferUse = false; if(opt && typeof opt.ext==='number') it.extraMin = opt.ext; if(it.krAddOn || it.preBalanceAdd){ if(!(c.subItems||[]).some(function(x){ return x.kind==='增加项目' && !x.visitKey && x.projectName===name && !x.skipped; })) coreSubAdd(c, {kind:'增加项目', date:todayStr(), time:'', content:name, place:'KR', projectName:name, silent:true}, by); } syncSurgerySub(c); syncSurgeryBlock(c); }
+    logCaseEvent(c, by, '预约时间：'+buyName(name)+'，'+date+' '+time+'——客人已在院，并入今天的进行项目（不另开到院）', mg ? '管理项目' : '施术'); updateCaseStage(c); return true;
+  }
   var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+(mg ? '（持有项目使用）' : '（预约）'), place:'KR', projectName:name, silent:true, salt:'b'+Math.floor(Math.random()*1e4)}, by); if(!s) return false;
   if(c.visitEnds) delete c.visitEnds[subCaseKey(s)]; inheritVisitArrival(c, s);
   if(mg){ s.holdUseOf = name; s.holdIid = itemIid(it); } else { s.surgUse = name; if(director) s.director = director; } s.src = 'use';

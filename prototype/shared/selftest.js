@@ -8726,4 +8726,40 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var cards = krProjCards(c); ST.ok(true, '项目卡可渲染');
     } finally { Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
+  ST.def('R211a','CMD-1102-11 一二（KM1 分页，stageC 夹具）：客人已到院时约在今天的管理项目并进主到院进行项目；旧的 KR|今天 卡启动修复归位；已有预约行按［本次使用］转成今天进行项目；术后管理约今天被拦并写原因',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var cid = r.clinicId, td = todayStr(), snap = null, strip = function(h){ return String(h).replace(/<[^>]+>/g, '|').replace(/\|+/g, '|'); };
+    window.GMC_NO_TABS = true; var L = {projectId:'热玛吉', name:'热玛吉', specLabel:'300发', price:1300000, qty:1, copies:1, specTimes:1};
+    var mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    try{
+      mut(function(c){ snap = JSON.stringify(c); c.krSchedule.confirmedDate = td; c.krSchedule.simDay = true; ST.krArrive(c); ST.krJudge(c, 'ok');
+        c.procedureItems.push({name:'热玛吉 · 300发', origin:'KR', price:1300000, currency:'KRW', qty:1, copies:1, local:true, mgmtPlan:true, batchId:'B1', projectId:'lc:p96:sp197', specLabel:'300发'}); ensureItemIids(c);
+        coreAddOnItem(c, '热玛吉 · 300发', 'KM1 室长', {local:Object.assign({}, L)}); ST.krPay(c);
+        var sg = c.procedureItems.filter(function(i){ return i.origin==='KR' && !krIsMgmtItemC(i) && !i.cancelled; }).map(function(i){ return i.name; }); coreTodayPick(c, sg, [], 'KM1 室长'); });
+      /* 二·1 约今天两笔 */
+      var res = mut(function(c){ return c.procedureItems.filter(function(i){ return /热玛吉/.test(i.name); }).map(function(it){ return coreUnitBookUse(c, itemIid(it), td, '10:00', 'KM1 室长', '', null); }); });
+      var c1 = krFindCase(cid, r.id).c, cards = krCaseCards(c1, true).filter(function(cd){ return cd.key==='KR|'+td; }), html = strip(krMainRowsHtml(c1, 'today'));
+      ST.ok(res[0] && res[1] && !cards.length && !(c1.subItems||[]).some(function(x){ return x.holdUseOf; }), '约今天两笔：成功，不再多出 KR|今天 的第二张卡，也没有预约行');
+      ST.ok((html.match(/管理项目\|热玛吉/g)||[]).length===2 && (html.match(/操作完成/g)||[]).length>=4, '主到院进行项目表里有两行热玛吉（管理项目），都有［操作完成］');
+      ST.ok(mut(function(c){ var it = c.procedureItems.filter(function(i){ return /热玛吉/.test(i.name); })[0]; return !it.holdUsed && pickedMgmt(c, it); }), '预约不扣次数、不标完成，只进今日进行');
+      /* 旧数据：同一天的第二张卡（Carry C 型）→ 启动修复归位，幂等 */
+      mut(function(c){ c.todayPickMgmt = []; c.procedureItems.filter(function(i){ return /热玛吉/.test(i.name); }).forEach(function(it, k){ c.subItems.push({id:'sT211'+k, no:c.caseNo+'#9'+k, kind:'术后管理记录', content:it.name+'（持有项目使用）', date:td, time:'10:00', place:'KR', projectName:it.name, holdUseOf:it.name, holdIid:itemIid(it), src:'use', done:false, skipped:false}); }); });
+      ST.ok(krCaseCards(krFindCase(cid, r.id).c, true).some(function(cd){ return cd.key==='KR|'+td; }), '前提：旧数据里有 KR|今天 第二张卡');
+      var n1 = mut(function(c){ var before = c.logEntries.length; var n = mergeMainDayRows(c, '系统'); return {n:n, logs:c.logEntries.length-before}; }), n2 = mut(function(c){ var before = c.logEntries.length; var n = mergeMainDayRows(c, '系统'); return {n:n, logs:c.logEntries.length-before}; });
+      ST.ok(n1.n===2 && n1.logs===2 && n2.n===0 && n2.logs===0, '修复：两行并回主到院，只写一次 Timeline，第二次什么都不做：'+JSON.stringify([n1, n2]));
+      var c2 = krFindCase(cid, r.id).c; ST.ok(!krCaseCards(c2, true).some(function(cd){ return cd.key==='KR|'+td; }) && (strip(krMainRowsHtml(c2, 'today')).match(/管理项目\|热玛吉/g)||[]).length===2, '归位后只剩主到院一张卡，进行项目里有两行热玛吉');
+      /* 二·3 已有预约行时按［本次使用］ */
+      mut(function(c){ c.todayPickMgmt = []; var it = c.procedureItems.filter(function(i){ return /热玛吉/.test(i.name); })[0]; c.subItems.push({id:'sT211x', no:c.caseNo+'#99', kind:'术后管理记录', content:it.name+'（持有项目使用）', date:td, time:'10:00', place:'KR', projectName:it.name, holdUseOf:it.name, holdIid:itemIid(it), src:'use', done:false, skipped:false}); });
+      var u = mut(function(c){ var it = c.procedureItems.filter(function(i){ return /热玛吉/.test(i.name); })[0]; return coreUnitUseNow(c, itemIid(it), 'KM1 室长'); });
+      ST.ok(u && u.ok && mut(function(c){ var it = c.procedureItems.filter(function(i){ return /热玛吉/.test(i.name); })[0]; return pickedMgmt(c, it) && !(c.subItems||[]).some(function(x){ return x.id==='sT211x'; }); }), '已有预约行按［本次使用］：转成今天的进行项目，不再「没有可用次数」');
+      /* 一：术后管理约施术当天被拦并写原因 */
+      var care = mut(function(c){ var it = c.procedureItems.filter(function(i){ return (i.postcare||[]).length && !krIsMgmtItemC(i); })[0]; window.KR_DENY_MSG = ''; var ok = it ? coreCareBook(c, it.name, 0, td, '12:00', 'KR', '', 'KM1 室长') : null; return {ok:ok, msg:window.KR_DENY_MSG}; });
+      ST.ok(care.ok===false && /施术之后的日期/.test(care.msg), '术后管理约在施术当天：被拦并写清原因：'+care.msg);
+      /* 一：别的案件当天已到院，这个案件不能再约那一天 */
+      var o = mut(function(c){ var oc = JSON.parse(JSON.stringify(c)); oc.id = 'rT211o'; oc.caseNo = 'A9T211'; oc.subItems = []; CASE_ITEMS.push(oc);
+        var it = c.procedureItems.filter(function(i){ return /热玛吉/.test(i.name); })[0]; var msg = sameDayDenyText(Object.assign({}, c, {hasArrived:false}), td, 'use'); CASE_ITEMS.splice(CASE_ITEMS.indexOf(oc), 1); return msg; });
+      ST.ok(/已在 A9T211 到院/.test(o), '别的案件当天已到院：这个案件不能再约那一天：'+o);
+    } finally { mut(function(c){ Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, JSON.parse(snap)); }); }
+  });
 })();
