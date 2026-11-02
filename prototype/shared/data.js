@@ -5578,6 +5578,7 @@ function krScheduleMonthShift(dir){
 function pickKrDate(pf, bf, y, m, d){
   var dateStr = fmtDateYMD(y,m,d);
   var c = getCurrentCase(); if(!c) return;
+  if(dateStr <= todayStr()) return; /* CMD-1102-07 二：从明天开始 */
   if(caseOpenDates(c).indexOf(dateStr)===-1) return; /* 未开放的日期不可选（只看该案件所选院长开放的日期） */
   var ks = ensureKrScheduleDraft(c);
   /* CMD-1015-05 五：先点选 1～2 天；再点已选的日期取消；已选 2 天时点别的日期 = 替换备选；只选 1 天 = 自动首选；哪一天是首选用格子左上角的「✅ 首选日」勾选 */
@@ -5608,7 +5609,7 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
     cells.map(function(d){
       if(!d) return '<div></div>';
       var dateStr = fmtDateYMD(y,m,d);
-      var open = openDatesNow.indexOf(dateStr)>-1 && dateStr >= todayStr(); /* 今天以前的日期置灰不可选（CMD-1012-05 三·1） */
+      var open = openDatesNow.indexOf(dateStr)>-1 && dateStr > todayStr(); /* 今天及以前的日期置灰不可选（CMD-1012-05 三·1；CMD-1102-07 二：从明天开始） */
       var style = 'position:relative;min-height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;', lab = '';
       if(!open) style += 'color:var(--dim);background:var(--bg-sidebar,#F7F4F0);';
       else if(dateStr===primaryVal){ style += 'background:#F6C9CF;border:1px solid #E5A3AC;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;color:#A8323F;">✅ 首选日</span>'; }

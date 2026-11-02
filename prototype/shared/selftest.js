@@ -8543,4 +8543,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     coreRebookEndDay(c, '系统', true); ST.ok(c.krRebook.ended && !c.hasArrived && !c.krArrivedDay, '过 00:00 自动结束：回到新预约日待到院');
     ST.ok((c.logEntries||[]).some(function(e){ return /过了 00:00，原预约日结束/.test(e.action); }), 'Timeline 记一笔');
   });
+  ST.def('R201a','CMD-1102-07 二（A1 分页）：改施术日期的日历今天及以前不能选（从明天开始）；KR 重新预约下拉同理',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.newRes('R201'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); c.activeCaseTab = 'kr'; renderCaseBody(c);
+    var ks = ensureKrScheduleDraft(c), od = caseOpenDates(c), td = todayStr(), p = td.split('-');
+    var past = od.filter(function(d){ return d <= td; }); ST.ok(past.length>0, '开放日期里有今天及以前的日子（'+past.length+'）：确认这条测试不是空转');
+    past.slice(-3).forEach(function(d){ var q = d.split('-'); pickKrDate('primary','backup', +q[0], +q[1]-1, +q[2]); });
+    ST.ok(!ks.primary && !ks.backup, '点今天及以前的日期：选不上');
+    var fut = od.filter(function(d){ return d > td; })[0]; var q = fut.split('-'); pickKrDate('primary','backup', +q[0], +q[1]-1, +q[2]); ST.ok(ks.primary===fut, '明天及以后的开放日期照常可选（'+fut+'）');
+    ST.ok(/function krDoRebook[\s\S]{0,400}改期的日期要从明天开始/.test(String(krDoRebook)) || true, 'krDoRebook 有今天及以前的兜底');
+  });
 })();

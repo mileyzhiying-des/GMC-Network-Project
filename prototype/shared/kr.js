@@ -2973,7 +2973,7 @@ function krArrivalBlock(c){
       '<textarea placeholder="'+(KR_ARR.judge && KR_ARR.judge!=='ok' ? 'memo（必填：原因 / 调整内容）' : 'memo（选填）')+'" oninput="KR_ARR.memo=this.value" style="width:100%;min-height:60px;margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;font-size:12px;">'+krEsc(KR_ARR.memo||'')+'</textarea>'+
       '<div style="display:flex;gap:8px;margin-top:8px;"><button class="btn-primary" onclick="krDoJudge()">确认评估结果</button><button class="btn-ghost" onclick="krUnarrive()">撤回"已到院"</button></div>' : krEmpty('等待院长评估结果（由 KR 室长记录）');
   } else if(j && j.result==='cannot' && !j.replaced){
-    var od = caseOpenDates(c).filter(function(d){ return d >= krToday(); });
+    var od = caseOpenDates(c).filter(function(d){ return d > krToday(); }); /* CMD-1102-07 二：改期日期从明天开始（照演示时间） */
     body = krKV('院长评估结果', KR_JUDGE_TEXT.cannot)+(j.memo ? krKV('memo', krEsc(j.memo)) : '')+(j.refundKind ? krKV('定金', (j.refundKind==='all' ? '全部退回' : '不退')+'（已通知 IN 室长按此操作；操作后案件变为仅出报告）') :
       (can ? '<div style="margin-top:10px;font-size:13px;font-weight:700;">① 能否更改时间后继续？能 → 在韩国重新预约</div>'+(KR_ARR.rebookDate ? '<div style="margin-top:6px;">'+krEsc(c.director||'')+' 当天的日程</div>'+krDirDayText(krHospitalIdOfMe(), c.director, KR_ARR.rebookDate) : '')+'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0 12px;"><select onchange="krArrSet(\'rebookDate\',this.value)" style="'+inp+'"><option value="">选择开放日期</option>'+od.map(function(d){ return '<option'+(KR_ARR.rebookDate===d?' selected':'')+'>'+d+'</option>'; }).join('')+'</select><select onchange="krArrSet(\'rebookTime\',this.value)" style="'+inp+'">'+krTimeOptions(KR_ARR.rebookTime)+'</select><button class="btn-outline" onclick="krDoRebook()">重新预约施术时间</button></div>'+
         '<div style="font-size:13px;font-weight:700;">② 不能 → 退定金（由 KR 判断，IN 室长操作）</div><div style="display:flex;gap:8px;margin-top:6px;"><button class="btn-outline" onclick="krDoRefundDecision(\'all\')">全部退回</button><button class="btn-outline" onclick="krDoRefundDecision(\'none\')">不退</button></div>' : krEmpty('等待 KR 室长处理')));
@@ -3059,7 +3059,7 @@ function krDoSettle(){
   KR_ADJ = {dropped:{}, adds:{}, addOpen:false, signed:{}, locals:[], swap:{}, step:'pick'}; KR_WZ.cannotOpt = ''; KR_WZ.cannotSub = '';
 }
 function krDoRebook(){
-  if(!krCan() || !KR_ARR.rebookDate){ alert('请选择新的施术日期'); return; } var d = KR_ARR.rebookDate, t0 = KR_ARR.rebookTime;
+  if(!krCan() || !KR_ARR.rebookDate){ alert('请选择新的施术日期'); return; } var d = KR_ARR.rebookDate, t0 = KR_ARR.rebookTime; if(d <= krToday()){ alert('改期的日期要从明天开始，请重新选择'); return; }
   var rr = krFindCase(KR_CASE.clinicId, KR_CASE.id), dur0 = rr ? surgeryMinutes(rr.c) : 60, er = rr ? krSurgerySlotError(krHospitalIdOfMe(), rr.c.director, d, t0, dur0, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true}) : ''; if(er){ krSlotAsk(er, krDoRebook); return; }
   var go = function(){ krMut(function(c){ return coreRebook(c, d, t0, ME_NAME); }); };
   var off = krOffHoursText(krHospitalIdOfMe(), d, t0, dur0); if(off) krOffConfirm(off+'（更换时间 '+d+' '+t0+'，韩国时间）', go); else go(); /* 和确认面诊 / 施术时间同一套（CMD-1013-04 四·3） */
@@ -4254,7 +4254,7 @@ function krWizard(c){
   var optHtml = can ? '<div style="margin:8px 0;"><label style="margin-right:18px;cursor:pointer;"><input type="radio" name="kr-cn" '+(opt==='time'?'checked':'')+' onchange="krWzSet(\'cannotOpt\',\'time\')"> 更换时间</label><label style="cursor:pointer;"><input type="radio" name="kr-cn" '+(cancelMode?'checked':'')+' onchange="krWzSet(\'cannotOpt\',\'cancel\')"> 取消项目</label></div>' : krEmpty('等待 KR 室长处理');
   var sub = '', inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
   if(can && opt==='time'){
-    var od = caseOpenDates(c).filter(function(d){ return d >= krToday(); });
+    var od = caseOpenDates(c).filter(function(d){ return d > krToday(); }); /* CMD-1102-07 二：改期日期从明天开始（照演示时间） */
     sub = (KR_ARR.rebookDate ? '<div style="margin-top:6px;font-size:12px;">'+krEsc(c.director||'')+' 当天的日程</div>'+krDirDayText(krHospitalIdOfMe(), c.director, KR_ARR.rebookDate) : '<div style="font-size:12px;color:var(--slate2);">选一个院长可约的日期和时间，重新预约施术：</div>')+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0 4px;"><select onchange="krArrSet(\'rebookDate\',this.value)" style="'+inp+'"><option value="">选择开放日期</option>'+od.map(function(d){ return '<option'+(KR_ARR.rebookDate===d?' selected':'')+'>'+d+'</option>'; }).join('')+'</select><select onchange="krArrSet(\'rebookTime\',this.value)" style="'+inp+'">'+krTimeOptions(KR_ARR.rebookTime)+'</select></div><div style="display:flex;justify-content:flex-end;"><button class="btn-primary" onclick="krDoRebook()">确认</button></div>';
   } else if(cancelMode){
