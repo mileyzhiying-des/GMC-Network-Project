@@ -8629,4 +8629,19 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(c.visibleToKR && (c.concerns||[]).length===1 && Object.keys(c.concerns[0].photos).length>0, 'KR 能读到的资料里有部位卡和照片');
     } finally { window.alert = al; }
   });
+  ST.def('R206a','CMD-1102-08 三（A1 分页）：没有做过施术的案件 → 复诊评估灰掉并写原因；做过的可选',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.newRes('R206'); var rc0 = resumeCandidates, jw0 = joinWindowOf;
+    var noSurg = {id:'ns1', caseNo:'A9001', name:c.name, procedureItems:[{name:'埋线双眼皮', origin:'KR', cancelled:true, swapped:true}, {name:'热玛吉 · 300发', mgmtPlan:true, done:false}]};
+    var hasSurg = {id:'hs1', caseNo:'A9002', name:c.name, procedureItems:[{name:'假体隆鼻', origin:'KR', done:true}]};
+    try{
+      joinWindowOf = function(){ return {ok:true}; };
+      resumeCandidates = function(){ return [noSurg]; }; var a1 = fuAvail(c);
+      ST.ok(!a1.can.revisit && a1.noSurg===true, '只有没做过施术的案件：复诊评估不可选，noSurg 标记');
+      resumeCandidates = function(){ return [noSurg, hasSurg]; }; var a2 = fuAvail(c);
+      ST.ok(a2.can.revisit && a2.revisitC.length===1 && a2.revisitC[0].id==='hs1' && !a2.noSurg, '有做过施术的案件：照常可选，没做过的不列');
+      resumeCandidates = function(){ return []; }; var a3 = fuAvail(c); ST.ok(!a3.can.revisit && !a3.noSurg, '没有候选案件：原来的「没有可复诊的案件」');
+    } finally { resumeCandidates = rc0; joinWindowOf = jw0; }
+    ST.ok(/这个案件还没有做过的施术/.test(String(fuRender)), '灰掉的原因文字：这个案件还没有做过的施术');
+  });
 })();

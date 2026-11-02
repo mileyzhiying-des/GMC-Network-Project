@@ -3008,10 +3008,12 @@ function markBoughtFrom(c){ /* 到店时：客人有只在本地买的持有项�
 function fuAvail(c){
   var tRows = []; try{ tRows = contTodayCareRows(c); }catch(e){}
   var consultC = resumeCandidates(c, '接续面诊').filter(function(x){ return joinWindowOf(x, '接续面诊').ok; }); /* 仅出报告、距院长面诊日 3 个月内 */
-  var revisitC = resumeCandidates(c, '复诊术后').filter(function(x){ return joinWindowOf(x, '复诊评估', c).ok; }); /* 已完成的主案件、距施术完成日 3 个月内（超过的不列） */
+  var revisitAll = resumeCandidates(c, '复诊术后').filter(function(x){ return joinWindowOf(x, '复诊评估', c).ok; }); /* 已完成的主案件、距施术完成日 3 个月内（超过的不列） */
+  var revisitC = revisitAll.filter(function(x){ return followDoneItems(x).length>0; }); /* CMD-1102-08 三：复诊评估只列做过施术的案件（要看的项目只能从做过的施术里选） */
+  var noSurg = revisitAll.length>0 && !revisitC.length;
   var owners = {}; tRows.forEach(function(r){ owners[r.c.id] = 1; });
   var careC = resumeCandidates(c, '复诊术后').filter(function(x){ return owners[x.id]; });
-  return {consultC:consultC, revisitC:revisitC, careC:careC, tRows:tRows, can:{consult:consultC.length>0, care:careC.length>0, revisit:revisitC.length>0}};
+  return {consultC:consultC, revisitC:revisitC, noSurg:noSurg, careC:careC, tRows:tRows, can:{consult:consultC.length>0, care:careC.length>0, revisit:revisitC.length>0}};
 }
 function fuCandsOf(c, a){
   var av = fuAvail(c), s = a.svc || {};
@@ -3103,7 +3105,7 @@ function fuRender(){
       '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">本次服务内容（面诊仅可单选；术后管理、复诊评估可以都勾）</div>'+
       '<div style="display:flex;gap:18px;flex-wrap:wrap;">'+chk('面诊','面诊', s.consult, !av.can.consult || s.care || s.revisit, !av.can.consult ? '没有仅出报告的案件' : '')+
         chk('术后管理','术后管理', s.care, !av.can.care || s.consult || (careForced && s.care), !av.can.care ? '今天没有约好的术后管理' : (careForced ? '客人今天约了，不能取消' : ''))+
-        chk('复诊评估','复诊评估', s.revisit, !av.can.revisit || s.consult, !av.can.revisit ? '没有可复诊的案件' : '')+'</div>'+
+        chk('复诊评估','复诊评估', s.revisit, !av.can.revisit || s.consult, !av.can.revisit ? (av.noSurg ? '这个案件还没有做过的施术' : '没有可复诊的案件') : '')+'</div>'+
       '<div style="font-size:12px;color:var(--muted);margin:8px 0 4px;">选择之前的案件</div>'+
       '<select onchange="fuSet(\'sel\',this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"'+(cand.length ? '' : ' disabled')+'>'+(cand.length ? '' : '<option value="">'+((s.consult||s.care||s.revisit) ? '（没有符合的案件）' : '请选择')+'</option>')+cand.map(function(x){ return '<option value="'+x.id+'"'+(x.id===a.sel ? ' selected' : '')+'>'+x.caseNo+' · '+caseStageProcText(x)+'</option>'; }).join('')+'</select></div>';
     if(s.consult && src){
