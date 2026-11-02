@@ -8600,4 +8600,16 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         krStayResCancel(); }
     } finally { window.alert = oa; window.confirm = oc; var of = document.getElementById('kr-off-overlay'); if(of) of.classList.remove('open'); }
   });
+  ST.def('R204a','CMD-1102-08 一（A1 分页）：赴韩项目还没做完时不自动结案；反复扫描 Timeline 不重复；finishCase 状态没变不重复记',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.newRes('R204'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c);
+    c.krTripEnded = {at:nowFullDt()}; c.reopenedAt = nowFullDt(); c.materialsConfirmed = true;
+    var n = function(re){ return (c.logEntries||[]).filter(function(e){ return re.test(e.action||''); }).length; };
+    ST.ok(mainlineOngoingRepair(c), '前提：赴韩项目还没做完');
+    for(var i = 0; i < 5; i++){ mainAutoStatus(c); try{ repairWronglyClosedCases(); }catch(e){} }
+    ST.ok(!c.visitClosed && !isEnded(c) && n(/案件结束/)===0 && n(/修正：本地管理做完/)===0, '5 次扫描 + 修复：不结案、没有「案件结束」/「修正」记录');
+    c.krProcedureDone = true; c.settlementDone = true; (c.procedureItems||[]).forEach(function(it){ it.done = true; });
+    finishCase(c); var k1 = n(/案件结束/); finishCase(c); finishCase(c);
+    ST.ok(n(/案件结束/)===k1, '状态没变时 finishCase 不重复写「案件结束」（'+k1+' → '+n(/案件结束/)+'）');
+  });
 })();

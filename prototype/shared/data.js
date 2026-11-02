@@ -1776,6 +1776,7 @@ function financeLabel(c){
 /* 进入终态时，该客户名下还没到店的后续预约（待访问）全部自动取消（Notion；"关联"口径是我的判断：同一客户的待访问案件，见待确认清单） */
 /* 2026-10-05：已删除 cancelFollowUpReservations——一个案件结束不影响同一客人的其他预约 */
 function finishCase(c, cancelReasonIfCancelled){
+  var wasStage = c.stage, wasClosed = !!c.visitClosed; /* CMD-1102-08 一：状态没变就不重复写「案件结束」 */
   c.visitClosed = true;
   c.entryChoicePending = false; c.mgmtActive = false; c.mgmtCancelling = false; c.localAsk = false;
   if(c.localMgmt){ c.localMgmt.active = false; c.localMgmt.mgmtCancelling = false; }
@@ -1783,6 +1784,7 @@ function finishCase(c, cancelReasonIfCancelled){
   c.cancelReason = out==='cancelled' ? (c.refundVisit ? '仅办理退款' : (cancelReasonIfCancelled || '未购买未使用')) : null; /* 这次到访只办了退款、没有其他购买或使用 → 已取消（仅办理退款） */
   updateCaseStage(c);
   var tb0 = terminalBadge(c); if(!tb0) return; /* CMD-1023-02：主案件状态自动判断，没有真正结束（又有未做的事）就不记结束 */
+  if(wasClosed && wasStage===c.stage) return;
   logCaseEvent(c, '系统', '案件结束：'+tb0[2]+(c.stage==='cancelled' && !isRefundOnly(c) ? '（'+endReasonText(c)+'）' : ''));
   if(c.stage==='closed' && c.hasArrived && krAllItems(c).some(function(it){ return it.done; })) pushNotif('赴韩施术','施术完成，案件已结案：'+c.name+'（'+(c.caseNo||'')+'）', {caseId:c.id});
   if(typeof document!=='undefined' && document.getElementById('case-body')){ /* KR 页面没有 IN 的案件详情，不画 */
@@ -10784,6 +10786,7 @@ function mainAutoComplete(m){
   if(isChildVisit(m) || isEnded(m) || !m.materialsConfirmed || m.subState==='cancelled') return false;
   if(!(m.krTripEnded || m.reopenedAt)) return false;
   if(mainOngoingOf(m).length) return false;
+  if(mainlineOngoingRepair(m)) return false; /* CMD-1102-08 一：赴韩项目还没做完（未开始 / 未完成）或面诊还在进行 → 不自动结案（原来先结案、启动修复再恢复，两条规则互相拉扯） */
   finishCase(m); return true;
 }
 /* 重新进行中：主案件已完成 / 仅出报告，又有新的子案件 / 未做的事（只对 closed 与 reportonly）；已取消不恢复 */
