@@ -6,7 +6,7 @@
   window.GMC_NO_SWEEP = true; /* 自测时间被拨来拨去，定时的「客人已回国自动结案」扫描会把夹具案件真的结案；自测需要时直接调 careReturnSweep() */
   window.GMC_STAY_AUTO = true; /* CMD-1020-11：自测里确认赴韩 / 发施术前提醒不弹在韩期间窗口（R62a 单独打开测） */
   window.GMC_ALLOW_POSTADD = true; /* CMD-1027-03：付清尾款后不能再加施术（正式规则）；这批旧用例要靠「付款后在韩加施术」造数据，自测里默认放行，R148a 里关掉测真规则 */
-  window.GMC_PASSPORT_AUTO = true; window.GMC_NO_FOLLOWASK = true; window.GMC_NO_LEAVEREMIND = true; /* CMD-1028-02：自测里直接按离店不弹提醒窗，R161a/b 里临时打开；CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
+  window.GMC_PASSPORT_AUTO = true; window.GMC_REC_WHO_SKIP = true; window.GMC_NO_FOLLOWASK = true; window.GMC_NO_LEAVEREMIND = true; /* CMD-1028-02：自测里直接按离店不弹提醒窗，R161a/b 里临时打开；CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
 var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   window.GMC_NO_TABS = true; /* CMD-1019-04：自测里所有进案件的入口都在当前分页打开 */ window.confirm = function(){ return true; }; window.alert = function(m){ if(cur) cur.alerts.push(String(m)); }; window.open = function(){ return null; };
   try{ localStorage.setItem('gmc_cfg_round', '2'); }catch(e){}
@@ -8675,5 +8675,28 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     c.projectEntryMode = 'holdings'; window.GMC_LOCAL_LEAVE_MANUAL = true; notUseThisTime('main');
     var lov = document.getElementById('local-leave-overlay'); ST.ok(lov && lov.classList.contains('open') && !isEnded(c), '［本次不使用］：先问「客人是否已离店？」，案件还没结束');
     localLeaveNo(); ST.ok(!isEnded(c), '还没离店：案件继续'); window.GMC_LOCAL_LEAVE_MANUAL = false;
+  });
+  ST.def('R209a','CMD-1102-09 二三（KM1 分页，stagePay 夹具）：院长自己开始面诊后室长页面没有录入按钮（室长代按的保留）；室长录入先问是否院长亲自，署名 + Timeline',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; f(c); }); };
+    var snap = JSON.stringify(gc()); var oc = window.confirm; window.confirm = function(){ return true; };
+    try{
+      mut(function(c){ c.needsConsult = true; c.consultStatus = 'awaiting_report'; c.consultAt = {date:todayStr(), time:'11:00'}; c.reportEta = ymdAdd(todayStr(),1)+' 03:00'; c.consultStartedAt = nowFullDt(); c.consultStartedBy = 'KD1 院长'; c.consultContentAt = ''; c.reportReady = false; });
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; var t1 = krConsultCardGen(gc());
+      ST.ok(!/增加内容（语音）|增加内容（手动）/.test(t1) && /院长已接手录入/.test(t1), '院长自己开始面诊后：室长页面没有［增加内容］，只读提示');
+      mut(function(c){ c.consultStartedBy = 'KM1 室长'; });
+      var t2 = krConsultCardGen(gc()); ST.ok(/增加内容（语音）/.test(t2) && /增加内容（手动）/.test(t2), '室长代按的开始：两个按钮保留');
+      window.GMC_REC_WHO_SKIP = false; krRecOpenModal('manual', false);
+      var ov = document.getElementById('kr-recwho-overlay'); ST.ok(ov && ov.classList.contains('open') && /是否是院长亲自录入/.test(ov.innerText) && /院长亲自录入/.test(ov.innerText) && /室长代录/.test(ov.innerText), '室长按［增加内容］：先弹「是否是院长亲自录入？」二选一');
+      ST.ok([].some.call(ov.querySelectorAll('button.btn-primary'), function(b){ return b.disabled; }), '没选之前［确认］灰');
+      krRecWhoSet('proxy'); krRecWhoGo(); ST.ok(KR_REC_OPEN && KR_REC.who==='proxy', '确认后才开始录入');
+      KR_REC.text = '鼻梁需要垫高'; krRecUpload();
+      var v = krVault(cid, r.id, false), t9 = v.transcripts[v.transcripts.length-1];
+      ST.ok(t9.by===(gc().director||'KM1 室长') && t9.rec==='KM1 室长' && t9.who==='proxy', '内容署名院长、录入人 KM1、标代录');
+      ST.ok((gc().logEntries||[]).some(function(e){ return /手动录入（KM1 室长代录）/.test(e.action||''); }), 'Timeline：「院长 · 手动录入（KM1 室长代录）」');
+      krRecOpenModal('manual', true); krRecWhoSet('self'); krRecWhoGo(); KR_REC.text = '补充：自然一点'; krRecUpload();
+      ST.ok((gc().logEntries||[]).some(function(e){ return /手动录入（院长亲自）/.test(e.action||''); }) && /院长亲自/.test(krConsultCardGen(gc())), 'Timeline + 列表：「手动录入（院长亲自）」');
+    } finally { window.confirm = oc; window.GMC_REC_WHO_SKIP = true; Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
 })();

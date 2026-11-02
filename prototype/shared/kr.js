@@ -896,8 +896,8 @@ function krConsultCardGen(c){
     if(!dir) body += krKV('预约报告时间（韩国）', (eta ? krEsc(fmtUtc(c.reportEta))+'（'+krCdText(eta-now)+'）' : '—')+((krCan() && !KR_ETA_EDIT) ? ' <button class="btn-outline" style="padding:2px 12px;font-size:12px;margin-left:8px;" onclick="krSetEtaEdit(true)">修改</button>' : '')); /* 预约报告时间的资料照旧保存（IN 等待报告 / 催办要用），院长不显示；［修改］= 原来的［修改预计时间］ */
   } else if(canRec){
     var v = krVault(KR_CASE.clinicId, KR_CASE.id, false);
-    var entries = v.transcripts.map(function(x){ return '<div style="padding:10px 12px;margin-top:8px;background:var(--surface2,#faf6ef);border-radius:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">'+krEsc(fmtUtc(x.ts).slice(2))+' · '+krEsc(x.by)+' · '+(x.mode==='voice' ? '语音录入' : '手动输入')+(x.demo ? '（演示文字）' : '')+'</div><div style="font-size:13px;white-space:pre-wrap;line-height:1.6;">'+krEsc(x.text)+'</div></div>'; }).join('');
-    body += '<div style="margin-top:10px;font-size:13px;font-weight:700;">录入面诊内容</div>'+(c.reportReady ? '' : '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;"><button class="btn-outline" onclick="krRecOpenModal(\'voice\','+(ended ? 'true' : 'false')+')">🎙 增加内容（语音）</button><button class="btn-outline" onclick="krRecOpenModal(\'manual\','+(ended ? 'true' : 'false')+')">⌨ 增加内容（手动）</button></div>')+entries;
+    var entries = v.transcripts.map(function(x){ return '<div style="padding:10px 12px;margin-top:8px;background:var(--surface2,#faf6ef);border-radius:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">'+krEsc(fmtUtc(x.ts).slice(2))+' · '+krEsc(x.by)+' · '+(x.mode==='voice' ? '语音录入' : '手动输入')+krRecWhoTag(x)+(x.demo ? '（演示文字）' : '')+'</div><div style="font-size:13px;white-space:pre-wrap;line-height:1.6;">'+krEsc(x.text)+'</div></div>'; }).join('');
+    body += '<div style="margin-top:10px;font-size:13px;font-weight:700;">录入面诊内容</div>'+((c.reportReady || !krRecBtnsOk(c)) ? (c.reportReady ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;">院长已接手录入，这里只读</div>') : '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;"><button class="btn-outline" onclick="krRecOpenModal(\'voice\','+(ended ? 'true' : 'false')+')">🎙 增加内容（语音）</button><button class="btn-outline" onclick="krRecOpenModal(\'manual\','+(ended ? 'true' : 'false')+')">⌨ 增加内容（手动）</button></div>')+entries;
   }
   return '<div class="card" style="padding:16px 22px;">'+head+body+'</div>';
 }
@@ -1890,10 +1890,34 @@ function krRecLeaveOk(){
   if(KR_REC.recording){ if(!confirm('还在录音，确定离开吗？没上传的文字会存成这个案件的草稿。')) return false; krRecStop(true); }
   krRecDraftSave(); KR_REC_OPEN = false; KR_REC.text = ''; KR_REC.collapsed = true; krRecModalRender(); return true; /* 文字在草稿里，下次进这个案件页以「草稿」窄条出现 */
 }
+/* CMD-1102-09 二：院长自己按了［开始面诊］之后，室长页面的录入按钮消失（院长接过去了，室长只读）；室长代按开始的保留 */
+function krDirStarted(c){ return !!(c && c.consultStartedAt && /院长/.test(String(c.consultStartedBy||''))); }
+function krRecBtnsOk(c){ return krIsDirector() || !krDirStarted(c); }
+function krRecWhoTag(x){ return x && x.who==='self' ? '（院长亲自）' : (x && x.who==='proxy' ? '（'+krEsc(x.rec||'室长')+'代录）' : ''); }
+/* CMD-1102-09 三：室长按［增加内容］先问是否院长亲自录入 */
+var KR_REC_WHO = null;
 function krRecOpenModal(mode, add){
+  var rc0 = null; try{ rc0 = krFindCase(KR_CASE.clinicId, KR_CASE.id); }catch(e){}
+  if(!krIsDirector() && rc0 && !isRevEval(rc0.c) && !window.GMC_REC_WHO_SKIP){ krRecWhoAsk(mode, add); return; }
+  krRecOpenModal0(mode, add, '');
+}
+function krRecWhoAsk(mode, add){
+  KR_REC_WHO = {mode:mode, add:add, who:''};
+  var ov = document.getElementById('kr-recwho-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-recwho-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100040; document.body.appendChild(ov); }
+  krRecWhoRender(); ov.classList.add('open');
+}
+function krRecWhoSet(w){ KR_REC_WHO.who = w; krRecWhoRender(); }
+function krRecWhoRender(){
+  var ov = document.getElementById('kr-recwho-overlay'), W = KR_REC_WHO; if(!ov || !W) return;
+  var radio = function(v, t, sub){ return '<label style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;cursor:pointer;"><input type="radio" name="recwho" '+(W.who===v ? 'checked ' : '')+'onchange="krRecWhoSet(\''+v+'\')"><span><b style="font-size:13px;">'+t+'</b><br><span style="font-size:12px;color:var(--muted);">'+sub+'</span></span></label>'; };
+  ov.innerHTML = '<div class="modal-box" style="width:440px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:8px;">是否是院长亲自录入？</div>'+radio('self','院长亲自录入','院长本人说 / 写，室长只是帮忙操作设备')+radio('proxy','室长代录','院长口述，已得到院长授意')+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="document.getElementById(\'kr-recwho-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" '+(W.who ? '' : 'disabled style="opacity:.5;cursor:not-allowed;" ')+'onclick="krRecWhoGo()">确认</button></div></div>';
+}
+function krRecWhoGo(){ var W = KR_REC_WHO; if(!W || !W.who) return; document.getElementById('kr-recwho-overlay').classList.remove('open'); krRecOpenModal0(W.mode, W.add, W.who); }
+function krRecOpenModal0(mode, add, who){
   try{ var rc = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(rc && isRevEval(rc.c) && !krIsDirector() && !rc.c.revAuth){ alert('室长代院长录入评估内容，必须先勾选「已得到院长授意」'); return; } }catch(e){} /* CMD-1022-18：只有室长代录才要授意（院长自己不用） */
   krRecReset(); var d = krRecDraftLoad();
-  KR_REC.mode = mode; KR_REC.add = !!add; KR_REC.startedAt = 0; KR_REC.demoVoice = false; KR_REC.collapsed = false;
+  KR_REC.mode = mode; KR_REC.add = !!add; KR_REC.who = who || ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false; KR_REC.collapsed = false;
   KR_REC.text = (d && d.text && d.mode===mode && !!d.add===!!add) ? d.text : ''; /* 同方式的草稿接着写 */
   KR_REC_OPEN = true; krRecModalRender();
   if(mode==='voice') krRecStart('voice');
@@ -1903,12 +1927,13 @@ function krRecUpload(){
   if(!confirm(KR_REC.add ? '这一笔上传后不能再修改（之前的内容也不能改），确定要增加吗？' : '上传后内容不能再修改，确定要上传吗？')) return;
   krRecStop(false);
   var txt = krSaveTranscript(); if(!txt) return;
-  krMut(function(c){ if(isRevEval(c)) return true; /* CMD-1022-19：复诊评估录完内容只是保存，按评估卡里的［确认］才算评估结束 */ if(!c.consultStartedAt){ c.consultStartedAt = nowFullDt(); c.consultStartedBy = ME_NAME; } if(!c.consultContentAt){ c.consultContentAt = nowFullDt(); logCaseEvent(c, ME_NAME, isRevEval(c) ? '上传评估内容，评估结束' : '上传面诊内容，面诊结束'); updateCaseStage(c); pushKrNotif(caseKrHospital(c), ME_NAME+(isRevEval(c) ? ' 上传了评估内容，评估结束：' : ' 上传了面诊内容，面诊结束：')+c.name+'（'+(c.caseNo||'')+'）→ '+(isRevEval(c) ? '请发送复诊评估结果' : '请发送诊疗方案'), {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); pushNotif(isRevEval(c) ? '复诊评估' : '面诊', (isRevEval(c) ? '评估结束：' : '面诊结束：')+c.name+'（'+(c.caseNo||'')+'）'+(isRevEval(c) ? '，等待复诊评估结果' : '，等待诊疗方案'), {caseId:c.id, level:'info'}); } }); /* 院长按［上传内容］：IN 案件列表的进程由「面诊中」变「等待报告」 */
+  var whoNow = KR_REC.who, modeNow = KR_REC.mode;
+  krMut(function(c){ if(whoNow) logCaseEvent(c, ME_NAME, (c.director||'院长')+' · '+(modeNow==='voice' ? '语音录入' : '手动录入')+(whoNow==='self' ? '（院长亲自）' : '（'+ME_NAME+'代录）')); if(isRevEval(c)) return true; /* CMD-1022-19：复诊评估录完内容只是保存，按评估卡里的［确认］才算评估结束 */ if(!c.consultStartedAt){ c.consultStartedAt = nowFullDt(); c.consultStartedBy = ME_NAME; } if(!c.consultContentAt){ c.consultContentAt = nowFullDt(); logCaseEvent(c, ME_NAME, isRevEval(c) ? '上传评估内容，评估结束' : '上传面诊内容，面诊结束'); updateCaseStage(c); pushKrNotif(caseKrHospital(c), ME_NAME+(isRevEval(c) ? ' 上传了评估内容，评估结束：' : ' 上传了面诊内容，面诊结束：')+c.name+'（'+(c.caseNo||'')+'）→ '+(isRevEval(c) ? '请发送复诊评估结果' : '请发送诊疗方案'), {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); pushNotif(isRevEval(c) ? '复诊评估' : '面诊', (isRevEval(c) ? '评估结束：' : '面诊结束：')+c.name+'（'+(c.caseNo||'')+'）'+(isRevEval(c) ? '，等待复诊评估结果' : '，等待诊疗方案'), {caseId:c.id, level:'info'}); } }); /* 院长按［上传内容］：IN 案件列表的进程由「面诊中」变「等待报告」 */
   KR_REC_OPEN = false; KR_REC.text = ''; KR_REC.startedAt = 0; KR_REC.demoVoice = false; krRecDraftSave();
   krRecModalRender(); Store.touch(); krRenderCaseDetail(); /* 上传后侧边栏自动收起（关闭） */
 }
 function krRecStart(mode){
-  if(mode==='manual'){ krRecOpenModal('manual'); return; }
+  if(mode==='manual'){ krRecOpenModal0('manual', KR_REC.add, KR_REC.who); return; }
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   KR_REC.startedAt = KR_REC.startedAt || Date.now();
   if(!SR){ /* 浏览器不支持语音识别：用演示文字代替 */
@@ -1937,7 +1962,8 @@ function krRecStop(silent){
 function krSaveTranscript(){
   var txt = (KR_REC.text||'').trim(); if(!txt){ alert('还没有内容'); return null; }
   var v = krVault(KR_CASE.clinicId, KR_CASE.id, true), mode = KR_REC.mode==='voice' ? 'voice' : 'manual';
-  v.transcripts.push({id:'tr'+Date.now(), ts:nowFullDt(), by:ME_NAME, mode:mode, text:txt, demo:!!KR_REC.demoVoice});
+  var dn = KR_REC.who ? ((KR_CASEOBJ()||{}).director || ME_NAME) : ME_NAME; /* 室长录入：署名院长，另记录入人和是否代录 */
+  v.transcripts.push({id:'tr'+Date.now(), ts:nowFullDt(), by:dn, rec:ME_NAME, who:KR_REC.who||'', mode:mode, text:txt, demo:!!KR_REC.demoVoice});
   krVaultLog(v, (mode==='voice' ? '语音录入面诊并上传内容' : '手动输入面诊并上传内容')+'（'+txt.length+' 字）');
   Store.touch(); return txt;
 }
@@ -1975,13 +2001,14 @@ function krRecordBlock(c){
   krRecReset();
   if(!krCanRecord(c)) return krCardBox('录入面诊', krEmpty('你的账号不能录入这个案件的面诊'));
   var v = krVault(KR_CASE.clinicId, KR_CASE.id, false);
-  var entries = v.transcripts.map(function(x){ return '<div style="padding:10px 12px;margin-top:8px;background:var(--surface2,#faf6ef);border-radius:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">'+krEsc(fmtUtc(x.ts))+' · '+krEsc(x.by)+(isRevisitConsult(KR_CASEOBJ()) && !/院长/.test(x.by||'') ? '（室长代输入）' : '')+' · '+(x.mode==='voice' ? '语音录入' : '手动输入')+(x.demo ? '（演示文字）' : '')+'</div><div style="font-size:13px;white-space:pre-wrap;line-height:1.6;">'+krEsc(x.text)+'</div></div>'; }).join('');
+  var entries = v.transcripts.map(function(x){ return '<div style="padding:10px 12px;margin-top:8px;background:var(--surface2,#faf6ef);border-radius:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:4px;">'+krEsc(fmtUtc(x.ts))+' · '+krEsc(x.by)+(isRevisitConsult(KR_CASEOBJ()) && !/院长/.test(x.by||'') ? '（室长代输入）' : '')+' · '+(x.mode==='voice' ? '语音录入' : '手动输入')+krRecWhoTag(x)+(x.demo ? '（演示文字）' : '')+'</div><div style="font-size:13px;white-space:pre-wrap;line-height:1.6;">'+krEsc(x.text)+'</div></div>'; }).join('');
   var box = krCardBox(isRevEval(c) ? '录入评估内容（院长口述 / 室长代录）' : (isRevisitConsult(c) ? '录入恢复评估（院长口述 / 室长代录）' : '录入面诊（院长口述 / 室长代录）'),
     (c.consultContentAt
       ? '<div style="font-size:12px;color:var(--sage);margin-bottom:4px;">✓ '+(isRevEval(c) ? '评估内容' : '面诊内容')+'已上传并锁住（不能修改）；还要补充时用下面的［增加内容］，每一笔都记时间和录入人。</div>'+(c.reportReady ? '' : '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="btn-outline" onclick="krRecOpenModal(\'voice\',true)">🎙 增加内容（语音）</button><button class="btn-outline" onclick="krRecOpenModal(\'manual\',true)">⌨ 增加内容（手动）</button></div>')
       : '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn-outline" onclick="krRecOpenModal(\'voice\')">🎙 语音录入'+(isRevEval(c) ? '评估内容' : (isRevisitConsult(c) ? '评估' : '面诊'))+'</button><button class="btn-outline" onclick="krRecOpenModal(\'manual\')">⌨ 手动输入'+(isRevEval(c) ? '评估内容' : (isRevisitConsult(c) ? '评估' : '面诊'))+'</button></div>')+
     (entries || '<div style="font-size:12px;color:var(--muted);margin-top:10px;">还没有录入内容：点上面的录入方式，在弹窗里录入或输入，再点［上传内容］，内容会以文字显示在这里。</div>')+
     '<div style="font-size:12px;color:var(--muted);margin-top:8px;">录入内容、原始录音和修改过程都进「KR 专用附件」tab（Timeline 旁边），只有 KR 看得到。</div>');
+  if(!isRevEval(c) && !krRecBtnsOk(c)) box = box.replace(/<div style="display:flex;gap:8px;flex-wrap:wrap;(?:margin-top:8px;)?"><button class="btn-outline" onclick="krRecOpenModal[\s\S]*?<\/button><\/div>/g, '<div style="font-size:12px;color:var(--muted);margin-top:6px;">院长已接手录入，这里只读</div>'); /* CMD-1102-09 二 */
   return box+(typeof krSubmitBlock==='function' && canDo('krwork') ? (c.consultContentAt ? krSubmitBlock(c) : '') : '');
 }
 
@@ -4939,7 +4966,7 @@ function krRvWorkBlock(c){
   var ret = (r && r.retPending) ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;"><b>室长已退回</b>（'+krEsc(r.retPending.by)+' · '+krEsc(fmtUtc(r.retPending.at).slice(5))+'）：'+krEsc(r.retPending.reason)+'</div>' : '';
   var doneLine = done ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">评估人：'+krRvAuthorWho(c)+' · '+krEsc(fmtUtc(r ? (r.doneAt||c.consultContentAt) : c.consultContentAt).slice(5))+'</div>' : '';
   var tr = (function(){ try{ var v = krVault(KR_CASE.clinicId, KR_CASE.id, false); return v.transcripts||[]; }catch(e){ return []; } })();
-  var trHtml = tr.length ? '<details style="margin-bottom:10px;"><summary style="font-size:12px;cursor:pointer;color:var(--slate2);">'+(mode==='editor' ? '院长录入的内容' : '已录入的内容')+'（'+tr.length+' 笔）</summary>'+tr.map(function(x){ return '<div style="padding:8px 10px;margin-top:6px;background:var(--surface2,#faf6ef);border-radius:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+krEsc(fmtUtc(x.ts).slice(5))+' · '+krEsc(x.by)+(!/院长/.test(x.by||'') ? '（室长代输入）' : '')+' · '+(x.mode==='voice' ? '语音录入' : '手动输入')+(x.demo ? '（演示文字）' : '')+'</div><div style="font-size:13px;white-space:pre-wrap;line-height:1.6;">'+krEsc(x.text)+'</div></div>'; }).join('')+'</details>' : '';
+  var trHtml = tr.length ? '<details style="margin-bottom:10px;"><summary style="font-size:12px;cursor:pointer;color:var(--slate2);">'+(mode==='editor' ? '院长录入的内容' : '已录入的内容')+'（'+tr.length+' 笔）</summary>'+tr.map(function(x){ return '<div style="padding:8px 10px;margin-top:6px;background:var(--surface2,#faf6ef);border-radius:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+krEsc(fmtUtc(x.ts).slice(5))+' · '+krEsc(x.by)+(!/院长/.test(x.by||'') ? '（室长代输入）' : '')+' · '+(x.mode==='voice' ? '语音录入' : '手动输入')+krRecWhoTag(x)+(x.demo ? '（演示文字）' : '')+'</div><div style="font-size:13px;white-space:pre-wrap;line-height:1.6;">'+krEsc(x.text)+'</div></div>'; }).join('')+'</details>' : '';
   var body = '';
   if(mode==='author'){
     var rec = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krRecOpenModal(\'voice\','+(tr.length ? 'true' : 'false')+')">🎙 增加内容（语音）</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krRecOpenModal(\'manual\','+(tr.length ? 'true' : 'false')+')">⌨ 增加内容（手动）</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krRvAiOrganize()">✨ AI 整理（演示）</button></div>';
