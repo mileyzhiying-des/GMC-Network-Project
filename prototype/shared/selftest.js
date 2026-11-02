@@ -8343,8 +8343,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(caseUpdatedText(mk([{dt:u(-20000), actor:'A1 室长', action:'做了点事'}]))==='刚刚', '刚做的动作 = 刚刚');
     ST.ok(/^5 分钟前$/.test(caseUpdatedText(mk([{dt:u(-5*60000-1000), actor:'A1 室长', action:'x'}]))), '5 分钟前');
     ST.ok(/^今天 \d\d:\d\d$/.test(caseUpdatedText(mk([{dt:u(-3*3600000), actor:'A1 室长', action:'x'}]))) || caseUpdatedText(mk([{dt:u(-3*3600000), actor:'A1 室长', action:'x'}]))!=='刚刚', '几小时前不写刚刚');
-    ST.ok(/^\d\d\/\d\d$|^\d{4}-\d\d\/\d\d$/.test(caseUpdatedText(mk([{dt:u(-9*86400000), actor:'A1 室长', action:'x'}]))), '几天前写日期：'+caseUpdatedText(mk([{dt:u(-9*86400000), actor:'A1 室长', action:'x'}])));
-    ST.ok(caseUpdatedText(mk([{dt:u(-400*86400000), actor:'A1 室长', action:'x'}])).length===10, '去年写完整日期');
+    ST.ok(/^\d\d\/\d\d$|^\d{4}-\d\d-\d\d$/.test(caseUpdatedText(mk([{dt:u(-9*86400000), actor:'A1 室长', action:'x'}]))), '几天前写日期：'+caseUpdatedText(mk([{dt:u(-9*86400000), actor:'A1 室长', action:'x'}])));
+    ST.ok(/^\d{4}-\d\d-\d\d$/.test(caseUpdatedText(mk([{dt:u(-400*86400000), actor:'A1 室长', action:'x'}]))), '去年写完整日期 YYYY-MM-DD');
     ST.ok(caseUpdatedText(mk([{dt:u(2*86400000), actor:'A1 室长', action:'x'}]))!=='刚刚', '未来时间不写刚刚');
     var oldLog = {dt:u(-30*86400000), actor:'A1 室长', action:'确认了基础资料'}, noise = {dt:u(-1000), actor:'系统', action:'修正旧数据：xxx'};
     ST.ok(caseUpdatedKey(mk([oldLog, noise]))===oldLog.dt, '系统「修正旧数据」不刷新更新时间');

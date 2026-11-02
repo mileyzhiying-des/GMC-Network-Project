@@ -934,12 +934,12 @@ function caseUpdatedText(c){
   var k = caseUpdatedKey(c); if(!k) return '—';
   var d = utcStrParse(k); if(!d) return k;
   var now = realNow(), diff = now.getTime() - d.getTime(), tz = pageTz(), pd = tzParts(d, tz), pn = tzParts(now, tz);
-  var md = pad2(pd.mo)+'/'+pad2(pd.d);
-  if(diff < 0) return pd.y===pn.y ? md : pd.y+'-'+md;
+  var md = pad2(pd.mo)+'/'+pad2(pd.d), full = pd.y+'-'+pad2(pd.mo)+'-'+pad2(pd.d);
+  if(diff < 0) return pd.y===pn.y ? md : full;
   if(diff < 60000) return '刚刚';
   if(diff < 3600000) return Math.floor(diff/60000)+' 分钟前';
   if(pd.y===pn.y && pd.mo===pn.mo && pd.d===pn.d) return '今天 '+pad2(pd.h)+':'+pad2(pd.mi);
-  return pd.y===pn.y ? md : pd.y+'-'+md;
+  return pd.y===pn.y ? md : full;
 }
 /* 案件开始时间（CMD-1015-17）：Timeline 里最早的一条（UTC），没有就用预约来访时间；列表显示按页面时区换算 */
 function caseStartKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && (!m || e.dt < m)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
