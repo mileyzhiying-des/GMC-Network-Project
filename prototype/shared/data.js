@@ -6411,6 +6411,7 @@ function coreTodayQtySet(c, name, n){
 }
 function coreHoldUseSchedule(c, name, date, time, by){
   var it = itemByKey(c, name, function(x){ return x.heldOver && !x.holdDone; }); if(!it) return false; name = it.name;
+  var dnH = sameDayDenyText(c, date, 'use'); if(dnH){ window.KR_DENY_MSG = dnH; return false; }
   if(holdItemBookable(c, it) <= 0) return false;
   var s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:time, content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by);
   if(!s) return false; s.hold = !!c.visitClosed; s.holdUseOf = name; s.holdIid = itemIid(it); /* 案件还在进行：这是一次新预约 = 子案件；结案后才是「在韩持有」 */
@@ -6439,6 +6440,24 @@ function todayOpenRows(c){ /* 今天这次到院里还没做完的：施术 / �
 /* CMD-1021-13 三：［增加项目］（在韩加项入口）= 客人在韩期间、案件没结案就一直有；买了进持有 / 待付款，不动到院状态；离境日之后 / 已结案不显示 */
 function canAddOnNow(c){ return !!(c && !c.krTripEnded && c.hasArrived && c.krBalancePaid && !c.visitClosed && !isEnded(c) && !(stayOutIsSet(c) && stayOutDate(c) < todayStr())); }
 function mainVisitDay(c){ return tripOf(c).day; }
+/* ===== CMD-1102-11 一：同一个客人同一天只能有一个还没结束的到院 =====
+   到院的 key 规则（现有代码）：
+   · 'main'            = 主到院（施术当天）。时间 / 日期 = mainVisitDay(c)（krArrivedDay 或确认的施术日期）；行 = kind 施术 / 增加项目（无 visitKey），持有的管理项目靠 todayPickMgmt 进今日。
+   · 'KR|日期'          = 其他韩国到院（subCaseKey(s)：术后管理记录行、管理项目「持有项目使用」行、施术项目预约使用行，同一天同地点一张卡）。
+   · 'IN|日期'          = 印尼来访（IN 子记录）。
+   · rowVisitKey(c,s)  = 行属于哪张卡（术后管理记录 / surgUse / holdUseOf → subCaseKey；带 visitKey 的增加项目 → 'KR|日期'；其余 'main'）。
+   规则：① 主到院进行中（mainDayOpen）的那一天，不能再有 'KR|同一天' 的第二张卡——管理 / 施术项目的预约并进主到院的进行项目；术后管理（术后第 0 天）没有意义，拦住并写清原因。
+        ② 同一个客人别的案件当天已有主到院进行中 → 这个案件不能再约那一天（拦住并写原因）。 */
+function mainDayOpen(c, date){ return !!(c && date && c.hasArrived && !c.krProcedureDone && !c.visitClosed && !isEnded(c) && !rebookActive(c) && date===mainVisitDay(c)); }
+function sameDayOtherOpenCase(c, date){
+  if(!c || !date) return null;
+  return (CASE_ITEMS||[]).filter(function(x){ return x!==c && x.id!==c.id && x.name===c.name && !x.mainId && mainDayOpen(x, date); })[0] || null;
+}
+function sameDayDenyText(c, date, what){
+  if(mainDayOpen(c, date) && what==='care') return '客人今天（'+String(date).slice(5).replace('-', '/')+'）在院做施术，术后管理请约施术之后的日期（术后第 1 天起）';
+  var o = sameDayOtherOpenCase(c, date); if(o) return '客人今天已在 '+(o.caseNo||'另一个案件')+' 到院，同一天只能有一个没结束的到院，请把这项并进那个案件';
+  return '';
+}
 /* CMD-1021-13 四：「使用时间 / 完成时间」= 实际做的那次到院的日期 + 到院时间，不是点［操作完成］的时间（点按钮的时间留在 Timeline）；旧数据显示时现算，不改存档 */
 function rowVisitKey(c, s){ if(!s) return 'main'; if(s.kind==='术后管理记录' || s.surgUse || s.holdUseOf) return subCaseKey(s); if(s.visitKey) return 'KR|'+s.date; return 'main'; }
 function visitAtParts(c, key, s){
@@ -8962,6 +8981,7 @@ function careUnitLabel(x){ return (x.mgmt||x.name)+(x.place==='KR' ? '（在韩�
 /* 术后管理［预约时间］：按日期建立 / 并入子案件（同一天同一地点合成一个），预约来源 = 术后预约；reuseId = 取消本次后退回的那一行 */
 function coreCareBook(c, itemName, pcIdx, date, time, place, reuseId, by, opt){
   var it = (c.procedureItems||[]).filter(function(x){ return x.name===itemName; })[0], x = it && (it.postcare||[])[pcIdx]; if(!it || !x || !date || !c.krBalancePaid) return false;
+  if(place!=='IN'){ var dnC = sameDayDenyText(c, date, 'care'); if(dnC){ window.KR_DENY_MSG = dnC; return false; } } /* CMD-1102-11 一 */
   var inn = place==='IN' && x.place==='either', content = inn ? (x.mgmt||x.name)+(x.innName ? '（回印尼做：'+x.innName+'）' : '（回印尼做）') : (x.mgmt||x.name)+(x.mgmt && x.mgmt!==x.name ? '（'+x.name+'，在韩国）' : '（在韩国）'), s;
   if(reuseId){ s = (c.subItems||[]).filter(function(r){ return r.id===reuseId; })[0]; if(!s) return false; s.skipped = false; s.kept = false; s.arrived = false; s.simDay = false; s.date = date; s.time = inn ? '' : time; s.place = inn ? 'IN' : 'KR'; s.content = content; }
   else { s = coreSubAdd(c, {kind:'术后管理记录', date:date, time:inn ? '' : time, content:content, place:inn ? 'IN' : 'KR', projectName:itemName, pcb:true, silent:true, salt:'u'+Math.floor(Math.random()*1e4)}, by); if(!s) return false; }
@@ -9259,6 +9279,7 @@ function coreUnitUseNow0(c, name, by, opt){ if(krDayDeny(c, 'main')) return fals
 /* 施术 / 管理项目［预约使用］：选日期时间 → 按日期建立 / 并入子案件，预约来源 = 管理预约（并入术后预约的那天则仍是术后预约） */
 function coreUnitBookUse(c, name, date, time, by, director, opt){
   var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name; if(it.pendingPay || !c.krBalancePaid || !date) return false;
+  var dnU = sameDayDenyText(c, date, 'use'); if(dnU){ window.KR_DENY_MSG = dnU; return false; } /* CMD-1102-11 一：同一客人同一天只有一个没结束的到院 */
   var mg = krIsMgmtItemC(it);
   var ddU = doneDayInfo(c, date); if(ddU){ window.KR_DONEDAY = ddU; window.KR_LAST_CONFLICT = '到院已完成'; return false; }
   if(mg){ if(!it.heldOver || it.holdDone || holdItemBookable(c, it) <= 0) return false; }
