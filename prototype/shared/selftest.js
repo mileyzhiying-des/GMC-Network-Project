@@ -8072,7 +8072,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R196a','CMD-1029-13（A1 分页）：案件号只增不减——预约并进主案件 / 取消接待 / 从主案件约的预约之后，再建新预约号码都不重复；批次号不重用；多分页共用计数器',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var old = window.GMC_NO_FOLLOWASK, nm = 'R196'; window.GMC_NO_CONFIRM = true;
-    var uniq = function(msg){ var seen = {}, d = []; CASE_ITEMS.forEach(function(x){ if(!x.caseNo) return; if(seen[x.caseNo]) d.push(x.caseNo); seen[x.caseNo] = 1; }); ST.ok(!d.length, msg+'：案件号没有重复'+(d.length ? '（'+d.join('、')+'）' : '')); };
+    var uniq = function(msg){ var seen = {}, d = []; CASE_ITEMS.forEach(function(x){ if(!/^A\d{6}$/.test(x.caseNo||'')) return; /* 只查一般案件号（同一个主案件同一天的几笔来访按设计共用一个子案件号） */ if(seen[x.caseNo]) d.push(x.caseNo); seen[x.caseNo] = 1; }); ST.ok(!d.length, msg+'：案件号没有重复'+(d.length ? '（'+d.join('、')+'）' : '')); };
     try{
       var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0];
       p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true; p0.hasArrived = true;
