@@ -11360,11 +11360,16 @@ function fullReportPrint(){
 /* CMD-1027-12 三：校验抽出来（处理弹窗要在真正保存之前先确认能存） */
 function stayFixValidate(c, inD, inT, outD, outT, reason){
   reason = String(reason||'').trim(); inD = inD||''; outD = outD||''; inT = inT||''; outT = outT||'';
-  if(!reason) return '请填写更正原因';
-  if(!inD && !outD) return '到达和离开至少要填一个日期';
-  var ye = stayDateErr('到达日期', inD) || stayDateErr('离开日期', outD); if(ye) return ye;
-  if(inD && outD && (outD+' '+(outT||'00:00')) < (inD+' '+(inT||'00:00'))) return '离开时间不能早于到达时间';
   var old = c.stay || {};
+  /* CMD-1102-07 三：到达日期 / 时间只读（之前写过的就不能改）；旧资料到达从来没记过时间 → 这一次允许补填，补完之后只读；离开日期 + 时间都必填 */
+  if(old.in && inD!==old.in) return '到达日期已记录（'+old.in+'），不能修改';
+  if(old.inTime && inT!==old.inTime) return '到达时间已记录（'+old.inTime+'），不能修改';
+  if(!old.in && !inD) return '到达日期还没记录，请补填';
+  if(!outD) return '离开日期必填';
+  if(!outT) return '离开时间必填';
+  if(!reason) return '请填写更正原因';
+  var ye = stayDateErr('到达日期', inD) || stayDateErr('离开日期', outD); if(ye) return ye;
+  if(inD && outD && (outD+' '+outT) < (inD+' '+(inT||'00:00'))) return '离开时间不能早于到达时间';
   if((old.in||'')===inD && (old.out||'')===outD && (old.inTime||'')===inT && (old.outTime||'')===outT) return '日期时间没有变化';
   return '';
 }
@@ -11732,6 +11737,12 @@ function tripDueConflict(c){
   return list.filter(function(x, i){ return list.indexOf(x)===i; });
 }
 /* 处理 picks = {行id:{mode:'early'|'toIn'|'keep', date, time}}：先全部校验、都通过才改；通知 IN 只发一条 */
+/* CMD-1102-07 四：处理窗保存失败时的说明——把底层记在全局的冲突 / 已完成到院日等原因收成一句话（并清掉，免得 krMut 另外弹窗） */
+function stayResWhy(f, what){
+  var m = window.KR_LAST_CONFLICT || '', dd = window.KR_DONEDAY ? '那天的到院已完成，请选其他日期' : '';
+  window.KR_LAST_CONFLICT = ''; window.KR_CONFLICT_KIND = ''; window.KR_DONEDAY = null; window.KR_DAYLOCK = null; window.KR_DAYBLOCK = null;
+  return '「'+f.name+'」'+what+(m ? '：'+String(m).replace(/\s+/g, ' ') : (dd ? '：'+dd : '，请换一个时间'));
+}
 function coreStayResolve(c, picks, outD, outT, by){
   var infos = stayConflictInfo(c, outD), hid = ''; try{ hid = caseKrHospital(c); }catch(e){}
   var inSide = (typeof isKrAccount==='function') && !isKrAccount(); /* CMD-1027-14：IN 端也走这个处理——［提前做］改成「请 KR 提前做」（韩国的预约由 KR 安排，IN 不直接改） */
@@ -11747,11 +11758,12 @@ function coreStayResolve(c, picks, outD, outT, by){
       var ce = (typeof krbClosedText==='function' && hid) ? krbClosedText(hid, p.date, p.time||'') : ''; if(ce) return {ok:false, err:f.name+'：'+ce};
     }
   }
-  var early = [], toIn = [], keep = [], ask = [], will = [], res = {ok:true}, oldOut = (c.stay && c.stay.out) || '';
+  var early = [], toIn = [], keep = [], ask = [], will = [], res = {ok:true}, oldOut = (c.stay && c.stay.out) || '', stayResFail = null;
   infos.forEach(function(f){
+    if(stayResFail) return;
     var p = picks[f.id], label = (f.surg ? f.surg+' · ' : '')+f.name+(f.unbooked ? '（'+(f.date ? '建议 '+stayMD(f.date) : '无建议日期')+'，还没预约）' : '（原 '+stayMD(f.date)+(f.time ? ' '+f.time : '')+'）');
     if(f.unbooked){ /* CMD-1028-10 四：还没预约的项目——提前做 = 现在就约；回印尼做 = 交给印尼；保留 = 不进未安排预约，另放「保留」组 */
-      if(p.mode==='early'){ var okE = f.vkind==='care' ? coreCareBook(c, f.item, f.i, p.date, p.time||'11:00', 'KR', f.reuse||'', by, null) : coreUnitBookUse(c, f.iid, p.date, p.time||'11:00', by, '', null); if(okE) early.push(label+' → '+stayMD(p.date)+' '+(p.time||'11:00')); }
+      if(p.mode==='early'){ var okE = f.vkind==='care' ? coreCareBook(c, f.item, f.i, p.date, p.time||'11:00', 'KR', f.reuse||'', by, null) : coreUnitBookUse(c, f.iid, p.date, p.time||'11:00', by, '', null); if(okE) early.push(label+' → '+stayMD(p.date)+' '+(p.time||'11:00')); else { stayResFail = {ok:false, err:stayResWhy(f, '提前做排不进 '+stayMD(p.date)+' '+(p.time||'11:00')), rowId:f.id}; } }
       else if(p.mode==='toIn'){ if(f.vkind==='care' && coreCareBook(c, f.item, f.i, f.date||todayStr(), '', 'IN', f.reuse||'', by, null)) toIn.push(label); }
       else if(p.mode==='will'){ will.push(label); } /* CMD-1028-12 三：维持未预约、留在 KR 工作台未安排预约；下次再改离开日期仍会再问（和保留不同） */
       else if(p.mode==='ask'){ ask.push(label+' → 请 KR 排在 '+stayMD(outD)+' 之前'); }
@@ -11759,7 +11771,7 @@ function coreStayResolve(c, picks, outD, outT, by){
       return;
     }
     if(p.mode==='ask'){ var sa = (c.subItems||[]).filter(function(x){ return x.id===f.id; })[0]; if(sa){ sa.earlyAsk = {by:by, at:nowFullDt(), before:outD}; ask.push(label+' → 请改到 '+stayMD(outD)+' 之前'); } }
-    else if(p.mode==='early'){ if(coreSubTimeEdit(c, f.id, p.date, p.time||f.time, by, true)) early.push(label+' → '+stayMD(p.date)+' '+(p.time||f.time)); }
+    else if(p.mode==='early'){ if(coreSubTimeEdit(c, f.id, p.date, p.time||f.time, by, true)) early.push(label+' → '+stayMD(p.date)+' '+(p.time||f.time)); else if(!stayResFail) stayResFail = {ok:false, err:stayResWhy(f, '改到 '+stayMD(p.date)+' '+(p.time||f.time)+' 没成功'), rowId:f.id}; }
     else if(p.mode==='toIn'){ if(coreCareToIn(c, f.id, by, true)) toIn.push(label); }
     else {
       var s = (c.subItems||[]).filter(function(x){ return x.id===f.id; })[0]; if(!s) return;
@@ -11769,6 +11781,7 @@ function coreStayResolve(c, picks, outD, outT, by){
       keep.push(label);
     }
   });
+  if(stayResFail) return stayResFail; /* CMD-1102-07 四：有一项排不进去 → 整个失败，调用方要先在复本上试（dry run），再决定要不要真的存；错误写明是哪一行 */
   try{ subCaseNos(c); }catch(e){}
   if(toIn.length){ try{ handToInNotify(c, by); }catch(e){} }
   var parts = []; if(early.length) parts.push('提前到离开前：'+early.join('、')); if(toIn.length) parts.push('转回印尼（进「印尼术后 · 未预约」）：'+toIn.join('、')); if(keep.length) parts.push('保留（已有预约的先取消；保留的项目不进未安排预约、不生成待办，另放「保留」组，KR 仍可手动预约）：'+keep.join('、')); if(will.length) parts.push('这趟还会做（之后再约，维持未预约）：'+will.join('、')); if(ask.length) parts.push('请 KR 提前做（预约暂时不动，KR 处理前仍算冲突）：'+ask.join('、'));

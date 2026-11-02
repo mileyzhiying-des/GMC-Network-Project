@@ -1880,3 +1880,11 @@ prototype/shared/app.css  共用样式
 - **改法**：`coreRebook` 存 `c.krRebook = {judge(改期前的判断), oldDate/oldTime, newDate/newTime, arrivedDay, ended}`；`rebookActive(c)` = 改期当天客人仍在医院。当天：卡片 1 `krOrigCard` 读存下来的判断（不标取消）+ 卡片 2「施术日期」（已重新预约 / 原预约时间 / ［再次修改］，`krRebookCards`），`krArriveMainBtn` 在 `rebookActive` 时返回空（不出［客人已到院］），状态栏写「今天 · 不建议手术，已改期 MM/DD HH:mm」；［客人已离院］= `coreRebookEndDay`（只结束今天：`hasArrived` / `krArrivedDay` 清掉，不动项目、不进术后管理）；过了 00:00 没按也自动结束（`updateCaseStage` 开头；`dayLockedKR` / `dayStateOf` 对改期当天不关账）。新预约日：卡片 1 + 卡片 2（［再次修改］+ 日期到了才有的［客人已到院］），按了走正常施术当天流程，改期记录收进 `krRebookPrev`。
 - Timeline 小文字（只改新记录）：退回评估重选「（memo：…）」→「（原因：…）」；确认结束没有项目时写「没有使用项目；没有退回未预约的项目」（IN `dayConfirmGo` 和 KR `krDayConfirmGo` 两处），有项目照旧列名字。
 - 测试：新增 R200a（KM1，stageC 夹具）、R200b；回归对照 a9be253：A1 全套失败集合一致（基线多一个 R200b），KM1 / KD1 批次一致，roletest 0 不符。
+
+## CMD-1102-07 补充（2026-11-02，追加；取代 CMD-1029-09 二 / CMD-1020-13 里「递交施术日期表单里填入境 / 离境」「确认赴韩弹在韩期间窗口」，旧文字保留作历史）
+- 分支 **V4**，提交 592f27d（一）、7c2690c 之后的 7c2690c→见 git log（二）、三四合并为一个提交（两部分改的是同几个函数，没法干净拆开）；不推送不合并，**数据版本不变（56）**。
+- **一 入境 / 离境只在「确认行程」窗口填**：行程状态只剩已定 / 暂定（拿掉 `draftIn` / `draftOut` 两栏和递交时的校验）；`stayGate`（确认赴韩）变成直接继续；1 个月前的「照原日期」窗只剩护照号 + 一个［填写 / 修改］按钮打开同一个窗口。**剩下的入口**：施术日不到 7 天递交时 / 7 天前［已确认行程］（`openStayModal(trip)`，必填）、赴韩日程卡［修改］（修正用）、KR 到院补填（`krStayArriveOpen`，旧资料没填过时的补救）、KR［行程修正］。
+- **二 改期日期从明天开始**：KR 不建议手术 → 更换时间的下拉（两处）、`krDoRebook` 兜底、IN 施术日期日历（`krDateCalendarGridHtml` / `pickKrDate`）都 `> todayStr()`（演示时钟）。
+- **三 行程修正**：到达日期 / 时间已记录就只读（`stayFixValidate` 拒改）；旧资料没记过到达时间的这一次可补；离开日期 + 时间必填。数据仍是同一份 `c.stay`，IN 的确认行程窗口读的也是它。
+- **四 bug 原因**：保存时的「离境当天」确认窗（`krOffConfirm`）、冲突询问窗、已完成到院日提示等普通弹窗 z-index 65，被处理窗（100030）盖住 → 按保存看起来没反应（Ella：两项都提前到离境当天 → 弹确认窗被盖住）。修：这些弹窗层级提到 100100（app.css）；保存先在复本上试一遍（dry run，`krStayResRun`），失败在窗里红字写哪一行；`coreStayResolve` 排不进去会整体失败；新增 `krStayResClash`：只有占同一位院长时间（院长操作 / 施术预约使用）的才算重叠，同一天不占院长的术后管理本来合并不挡。成功 → 窗关闭 + toast。
+- 测试：新增 R201a / R202a / R203a；R190a、R189a、selftest 的 stayGate 断言按新规则改。

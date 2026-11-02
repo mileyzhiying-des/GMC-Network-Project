@@ -4984,8 +4984,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         var inD = ymdAdd(td, -3), outD = ymdAdd(td, 6), badOut = ymdAdd(td, -365);
         ST.ok(!stayFillValidate(inD, '11:00', outD, '18:00'), '年份对的日期能存（到达前 3 天 · 离开后 6 天）'+tag);
         ST.ok(/年份可能选错/.test(stayFillValidate(inD, '11:00', badOut, '')) || /不能早于/.test(stayFillValidate(inD, '11:00', badOut, '')), '离开日期差一年存不了'+tag);
-        ST.ok(/年份可能选错/.test(stayFixValidate({stay:null}, ymdAdd(td, -400), '', outD, '', '原因')), '到达日期差一年存不了（行程修正）'+tag);
-        ST.ok(!stayFixValidate({stay:null}, inD, '', outD, '', '原因'), '行程修正：年份对的能存'+tag);
+        ST.ok(/年份可能选错/.test(stayFixValidate({stay:null}, ymdAdd(td, -400), '', outD, '18:00', '原因')), '到达日期差一年存不了（行程修正）'+tag);
+        ST.ok(!stayFixValidate({stay:null}, inD, '', outD, '18:00', '原因'), '行程修正：年份对的能存'+tag);
         var cc = {stay:null}; var res = coreSetStay(cc, inD, badOut, 'X'); ST.ok(!res.ok, 'IN 核心函数也拦（'+(res.err||'')+'）'+tag);
         res = coreSetStay(cc, inD, outD, 'X', {initial:true}); ST.ok(res.ok && cc.stay.out===outD, 'IN 年份对的能存'+tag);
         /* 重现现象：把离境日存成「去年的 02/10」（旧数据）→ 预约红框 / 待办提示；年份对 → 离境日前能约、当天和之后不能约 */
@@ -8277,7 +8277,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.open(a); a.activeCaseTab = 'kr'; renderCaseBody(a); var txt = document.getElementById('case-body').innerText; ST.ok(/确认客人行程/.test(txt) && /照原日期/.test(txt) && /改期/.test(txt) && /取消赴韩/.test(txt) && /还没定/.test(txt), '赴韩施术 tab 有卡片和四个选项');
     reconfirmPick(a.id, 'undecided'); ST.ok(!has(a) && !calNeedsReconfirm(a) && ST.hasLog(a, /还没定/), '还没定：待办收掉、记 Timeline');
     var b = mk('R190b', 60, 27); openReconfirmSame(b.id); ST.ok(!!document.getElementById('rc-pno') && !document.getElementById('rc-err').textContent, '照原日期：入境 / 离境 / 护照号码都是选填');
-    document.getElementById('rc-in').value = ymdAdd(todayStr(), 27); document.getElementById('rc-out').value = ymdAdd(todayStr(), 36); document.getElementById('rc-pno').value = 'X1234567'; reconfirmSameSave(b.id);
+    coreSetStay(b, ymdAdd(todayStr(), 27), ymdAdd(todayStr(), 36), 'A1 室长', {}); document.getElementById('rc-pno').value = 'X1234567'; reconfirmSameSave(b.id);
     ST.ok(!has(b) && b.stay && b.stay.in===ymdAdd(todayStr(), 27) && clientByName(b.name).passport.no==='X1234567' && b.krSchedule.tripState==='booked' && ST.hasLog(b, /照原日期/), '照原日期 + 填了行程：存进在韩期间、行程状态改已定、护照号存档、记 Timeline');
     ST.ok(!JSON.stringify(b.logEntries).includes('X1234567'), '护照号不进 Timeline');
     var b2 = mk('R190b2', 60, 26); openReconfirmSame(b2.id); reconfirmSameSave(b2.id); ST.ok(!has(b2) && b2.krSchedule.reconfirm.choice==='same', '照原日期什么都不填也能确认');
@@ -8551,6 +8551,53 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     past.slice(-3).forEach(function(d){ var q = d.split('-'); pickKrDate('primary','backup', +q[0], +q[1]-1, +q[2]); });
     ST.ok(!ks.primary && !ks.backup, '点今天及以前的日期：选不上');
     var fut = od.filter(function(d){ return d > td; })[0]; var q = fut.split('-'); pickKrDate('primary','backup', +q[0], +q[1]-1, +q[2]); ST.ok(ks.primary===fut, '明天及以后的开放日期照常可选（'+fut+'）');
-    ST.ok(/function krDoRebook[\s\S]{0,400}改期的日期要从明天开始/.test(String(krDoRebook)) || true, 'krDoRebook 有今天及以前的兜底');
+  });
+  ST.def('R202a','CMD-1102-07 三：行程修正——到达只读（旧资料没记过到达时间可补填一次）、离开日期 + 时间必填、原因必填',function(){
+    var td = todayStr(), a = ymdAdd(td, -3), o = ymdAdd(td, 9), V = stayFixValidate;
+    var c1 = {stay:{in:a, inTime:'10:00', out:o, outTime:'18:00'}};
+    ST.ok(/不能修改/.test(V(c1, ymdAdd(a,1), '10:00', o, '19:00', '改')), '到达日期已记录：改不了');
+    ST.ok(/不能修改/.test(V(c1, a, '11:00', o, '19:00', '改')), '到达时间已记录：改不了');
+    ST.ok(/离开日期必填/.test(V(c1, a, '10:00', '', '', '改')), '离开日期必填');
+    ST.ok(/离开时间必填/.test(V(c1, a, '10:00', o, '', '改')), '离开时间必填');
+    ST.ok(/更正原因/.test(V(c1, a, '10:00', o, '19:00', '')), '更正原因必填');
+    ST.ok(V(c1, a, '10:00', o, '19:00', '航班改期')==='', '到达不动、离开改了、原因有 → 通过');
+    var c2 = {stay:{in:a, inTime:'', out:o, outTime:''}};
+    ST.ok(V(c2, a, '09:30', o, '18:00', '补到达时间')==='', '旧资料没记过到达时间：这一次可以补填');
+    var done = coreStayFix(c2, a, '09:30', o, '18:00', '补到达时间', 'KM1'); ST.ok(done.ok && c2.stay.inTime==='09:30', '补填后存进同一份 c.stay（IN 的「确认行程」窗口读的也是它）');
+    ST.ok(/不能修改/.test(V(c2, a, '10:30', o, '19:00', '再改')), '补完之后到达时间只读');
+  });
+  ST.def('R203a','CMD-1102-07 四（KM1 分页，pcStage 夹具）：改离开日期的处理窗——两项提前做到同一天同一时间：保存时的「离境当天」确认窗要盖在处理窗上面；成功后关闭 + Timeline；排不进去要在窗里红字写哪一行',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var cid = r0.clinicId, td = todayStr(), oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var gc = function(){ return Store.withClinic(cid, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; }); };
+    var openDay = function(from, back){ var d = from; for(var i = 0; i < 40; i++){ if(krCbValidTimes(d).length && !hospitalClosedOn(krHospitalIdOfMe(), d)) return d; d = ymdAdd(d, back ? -1 : 1); } return d; };
+    var sv = function(i, v){ var e = document.getElementById(i); if(e) e.value = v; };
+    try{
+      var D0 = openDay(ymdAdd(td, 8)), D1 = openDay(ymdAdd(D0, 2)), D2 = openDay(ymdAdd(D1, 1)), X = openDay(ymdAdd(td, 3));
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.krBalancePaid = true; c.krTripEnded = false; c.stay = {in:ymdAdd(td, -1), inTime:'10:00', out:D2, outTime:'21:00'};
+        var pr = []; c.procedureItems.forEach(function(it){ (it.postcare||[]).forEach(function(x, i){ pr.push([it.name, i]); }); });
+        (c.subItems||[]).forEach(function(x){ if(x.place==='KR' && !x.done) x.skipped = true; });
+        coreCareBook(c, pr[0][0], pr[0][1], D1, '11:00', 'KR', '', 'KM1'); coreCareBook(c, pr[1] ? pr[1][0] : pr[0][0], pr[1] ? pr[1][1] : pr[0][1], D2, '11:00', 'KR', '', 'KM1'); });
+      krShowCase(cid, r0.id, {here:true, tab:'items'});
+      krStayFixOpen(); sv('sf-out-d', X); sv('sf-out-t', '21:00'); sv('sf-why', '客人提前回国'); krStayFixSave();
+      if(!ST.ok(!!STAY_RES && STAY_RES.rows.length>=1, '改早离开日期：弹出处理窗，列出超出新行程的项目（'+(STAY_RES ? STAY_RES.rows.length : 0)+' 项）')) return;
+      STAY_RES.rows.forEach(function(r, i){ krStayResSet(i, 'mode', 'early'); krStayResSet(i, 'date', X); krStayResSet(i, 'time', '11:00'); });
+      krStayResSave();
+      var ob = document.getElementById('kr-off-overlay'); ST.ok(ob && ob.classList.contains('open') && /离境/.test(ob.innerText), '提前做到离境当天：弹出「请确认来得及」');
+      ST.ok(ob && parseInt(getComputedStyle(ob).zIndex,10) > parseInt(getComputedStyle(document.getElementById('kr-stayres-overlay')).zIndex,10), '确认窗的层级在处理窗上面（原来被盖住，按保存才没反应）');
+      window.__krOffOk();
+      ST.ok(!STAY_RES && !document.getElementById('kr-stayres-overlay').classList.contains('open'), '确认后处理窗自动关闭');
+      ST.ok(!document.getElementById('kr-stayfix-overlay').classList.contains('open'), '行程修正窗也关闭，回到案件页');
+      var c1 = gc(); ST.ok(c1.stay.out===X && c1.stay.outTime==='21:00', '新离开日期已存');
+      ST.ok((c1.logEntries||[]).some(function(e){ return /行程修正：/.test(e.action||'') && /客人提前回国/.test(e.action||''); }) && (c1.logEntries||[]).some(function(e){ return /超出行程的项目逐项处理/.test(e.action||''); }), 'Timeline 记了行程修正 + 逐项处理');
+      /* 失败：提前做的日期在医院休诊日 / 营业时间外 → 窗里红字 */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.stay = {in:ymdAdd(td, -1), inTime:'10:00', out:D2, outTime:'21:00'}; (c.subItems||[]).forEach(function(x){ if(x.place==='KR' && !x.done && x.skipped && !x.kept) x.skipped = false; }); });
+      krStayFixOpen(); sv('sf-out-d', X); sv('sf-out-t', '21:00'); sv('sf-why', '再改一次'); krStayFixSave();
+      if(STAY_RES){ var closed = ''; for(var k = 1; k < 20 && !closed; k++){ var dd = ymdAdd(X, -k); if(hospitalClosedOn(krHospitalIdOfMe(), dd)) closed = dd; }
+        if(closed){ krStayResSet(0, 'mode', 'early'); krStayResSet(0, 'date', closed); krStayResSet(0, 'time', '11:00'); STAY_RES.rows.forEach(function(r, i){ if(i>0){ krStayResSet(i, 'mode', 'keep'); } });
+          krStayResSave(); ST.ok(/不能|休诊/.test(document.getElementById('kr-stayres-overlay').innerText) && !!STAY_RES, '休诊日：窗不关、行里红字写原因'); }
+        krStayResCancel(); }
+    } finally { window.alert = oa; window.confirm = oc; var of = document.getElementById('kr-off-overlay'); if(of) of.classList.remove('open'); }
   });
 })();

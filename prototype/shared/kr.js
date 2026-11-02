@@ -4762,9 +4762,9 @@ function krStayArriveSave(){
 function krStayFixOpen(){
   if(!krCan()) return; var c = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s = c.stay || {};
   var ov = document.getElementById('kr-stayfix-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-stayfix-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100014; document.body.appendChild(ov); }
-  var f = function(id, type, val){ return '<input id="'+id+'" type="'+type+'" value="'+krEsc(val||'')+'"'+(type==='date' ? stayRangeAttr() : '')+' style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;">'; };
-  ov.innerHTML = '<div class="modal-box" style="width:480px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">行程修正 · '+krEsc(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">更正客人在韩国的到达 / 离开日期时间（韩国当地时间）。客人提早回国就把离开日期改早；确认后会通知 IN 室长。</div>'+
-    '<div style="display:grid;grid-template-columns:70px 1fr 1fr;gap:8px;align-items:center;font-size:13px;"><span>到达</span>'+f('sf-in-d', 'date', s.in)+f('sf-in-t', 'time', s.inTime)+'<span>离开</span>'+f('sf-out-d', 'date', s.out)+f('sf-out-t', 'time', s.outTime)+'</div>'+
+  var f = function(id, type, val, ro){ return '<input id="'+id+'" type="'+type+'" value="'+krEsc(val||'')+'"'+(type==='date' ? stayRangeAttr() : '')+(ro ? ' readonly tabindex="-1" title="到达已记录，不能修改"' : '')+' style="padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;'+(ro ? 'background:var(--bg-sidebar,#F3EFE6);color:var(--slate2);cursor:not-allowed;' : '')+'">'; };
+  ov.innerHTML = '<div class="modal-box" style="width:480px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">行程修正 · '+krEsc(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">更正客人的离开日期和时间（韩国当地时间，都必填）。到达已记录的不能改；旧资料没记过到达时间的，这一次可以补填。客人提早回国就把离开日期改早；确认后会通知 IN 室长。</div>'+
+    '<div style="display:grid;grid-template-columns:70px 1fr 1fr;gap:8px;align-items:center;font-size:13px;"><span>到达</span>'+f('sf-in-d', 'date', s.in, !!s.in)+f('sf-in-t', 'time', s.inTime, !!s.inTime)+'<span>离开 <span style="color:#B3261E;">*</span></span>'+f('sf-out-d', 'date', s.out)+f('sf-out-t', 'time', s.outTime)+'</div>'+
     '<div style="font-size:13px;margin:12px 0 4px;">更正原因 <span style="color:#B3261E;">*</span></div><textarea id="sf-why" placeholder="例：客人提前回国 / 航班改期…" style="width:100%;box-sizing:border-box;min-height:60px;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:13px;"></textarea>'+
     '<div id="sf-err" style="font-size:12px;color:#B3261E;min-height:16px;margin-top:6px;"></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;"><button class="btn-outline" onclick="krStayFixClose()">取消</button><button class="btn-primary" onclick="krStayFixSave()">确认</button></div>'+
     (c.krTripEnded ? '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border2);font-size:12px;color:var(--slate2);">韩国行程已结束。如果客人其实还在韩国，把离开日期改到今天或以后，行程会重新打开（KR 可再建到院；转去印尼的术后管理保持在印尼，不收回）。</div>' : '')+
@@ -5012,8 +5012,26 @@ function krStayResErr(r){
   if(r.mode==='early'){
     if(!r.date) return '请选提前到哪天'; if(stayRel(null, r.date, r.time||'', STAY_RES.vals.outD, STAY_RES.vals.outT||'')==='after') return '要在离开时间之前（离开当天、离开时间之前可以，保存时会提醒确认）'; if(r.date < todayStr()) return '不能选过去的日子';
     var er = krCbDateErr(r.date, r.time); if(er) return er;
+    var cl = krStayResClash(r); if(cl) return cl;
   }
   return '';
+}
+/* CMD-1102-07 四：只有「占院长时间」的项目（院长操作 / 施术预约使用）才会和别人重叠——先看这位院长那天原有的安排，再看这个窗口里别的提前做的项目是不是也要占同一位院长的同一段时间。
+   不占院长时间的术后管理（拆线等）同一天本来就合并成一次到院，不算重叠，不挡。 */
+function krStayResDirMin(s){ return s.dirOp ? (parseInt(s.dirMin,10)||30)+(parseInt(s.extendMin,10)||0) : 30; }
+function krStayResClash(r){
+  if(!STAY_RES || r.mode!=='early' || !r.date || !(r.time||r.f.time)) return '';
+  var rc = krFindCase(KR_CASE.clinicId, KR_CASE.id), c = rc && rc.c; if(!c) return '';
+  var tm = r.time || r.f.time, s = (c.subItems||[]).filter(function(x){ return x.id===r.f.id; })[0]; if(!s || !s.director) return '';
+  var min = krStayResDirMin(s), hid = krHospitalIdOfMe();
+  var e = krSurgerySlotError(hid, s.director, r.date, tm, min, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true, use:true, what:(s.dirOp ? '院长操作' : ''), exceptRowId:r.f.id});
+  if(e) return '「'+r.f.name+'」'+String(e).replace(/\s+/g, ' ');
+  var a0 = timeToMin(tm), a1 = a0 + min, hit = '';
+  STAY_RES.rows.forEach(function(o){
+    if(hit || o===r || o.mode!=='early' || o.date!==r.date) return; var os = (c.subItems||[]).filter(function(x){ return x.id===o.f.id; })[0]; if(!os || os.director!==s.director) return;
+    var b0 = timeToMin(o.time || o.f.time || ''), b1 = b0 + krStayResDirMin(os); if(a0 < b1 && b0 < a1) hit = '「'+r.f.name+'」和「'+o.f.name+'」同一时间都要占 '+s.director+' 的时间，请错开（'+tm+'～'+minToTime(a1)+' 与 '+(o.time||o.f.time)+'～'+minToTime(b1)+'）';
+  });
+  return hit;
 }
 function krStayResRender(){
   if(!STAY_RES) return; var S = STAY_RES, ov = document.getElementById('kr-stayres-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-stayres-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100030; document.body.appendChild(ov); }
@@ -5032,18 +5050,30 @@ function krStayResRender(){
   ov.classList.add('open');
 }
 function krStayResCancel(){ STAY_RES = null; var ov = document.getElementById('kr-stayres-overlay'); if(ov) ov.classList.remove('open'); }
+/* CMD-1102-07 四：保存先在复本上试一遍（dry run）——成功才真的存；失败一律在弹窗里用红字写原因（哪一行、为什么），不再没反应。
+   （原因：保存时的「离境当天」确认窗 / 时间冲突询问窗 / 已完成到院日提示窗都是普通弹窗，层级比这个处理窗低，被盖住了，所以按了保存看起来没有任何反应。） */
+function krStayResShowErr(t){ var er = document.getElementById('sr-err'); if(er) er.textContent = t || ''; }
+function krStayResRun(c, S, picks){
+  var v = S.vals; window.KR_LAST_CONFLICT = ''; window.KR_DONEDAY = null;
+  var res = coreStayResolve(c, picks, v.outD, v.outT, ME_NAME); if(!res.ok) return res;
+  var fin = S.kind==='fix' ? coreStayFix(c, v.inD, v.inT, v.outD, v.outT, v.why, ME_NAME) : coreStayFill(c, v.inD, v.inT, v.outD, v.outT, v.inA, v.outA, ME_NAME);
+  if(!fin || !fin.ok) return {ok:false, err:(fin && fin.err) || '保存失败'};
+  return {ok:true, fin:fin};
+}
 function krStayResSave(){
   if(!STAY_RES || !krCan()) return; var S = STAY_RES, v = S.vals, picks = {}; S.rows.forEach(function(r){ picks[r.f.id] = {mode:r.mode, date:r.date, time:r.time}; });
+  krStayResShowErr('');
+  for(var i = 0; i < S.rows.length; i++){ var why = krStayResErr(S.rows[i]); if(!S.rows[i].mode){ krStayResShowErr('「'+S.rows[i].f.name+'」还没选处理方式'); return; } if(why){ krStayResShowErr(why); return; } }
   var sdE = S.rows.filter(function(r){ return r.mode==='early' && stayRel(null, r.date, r.time||'', v.outD, v.outT||'')==='same'; })[0]; if(sdE && !S.sameOk){ krOffConfirm('客人当天'+(v.outT ? ' '+v.outT : '')+' 离境，请确认来得及', function(){ S.sameOk = true; krStayResSave(); }); return; } /* CMD-1028-12 二：提前做约在离境当天（离境时间之前）→ 提醒后确认 */
-  var res = null, fin = null;
-  krMut(function(c){
-    res = coreStayResolve(c, picks, v.outD, v.outT, ME_NAME); if(!res.ok) return false;
-    fin = S.kind==='fix' ? coreStayFix(c, v.inD, v.inT, v.outD, v.outT, v.why, ME_NAME) : coreStayFill(c, v.inD, v.inT, v.outD, v.outT, v.inA, v.outA, ME_NAME);
-    return !!(fin && fin.ok);
-  });
-  if(res && !res.ok){ var er = document.getElementById('sr-err'); if(er) er.textContent = res.err; return; }
+  var dry = Store.withClinic(KR_CASE.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c0) return {ok:false, err:'找不到这个案件'}; try{ return krStayResRun(JSON.parse(JSON.stringify(c0)), S, picks); }catch(e){ console.error('[行程修正 dry run]', e); return {ok:false, err:'保存时出错：'+(e && e.message || e)}; } });
+  window.KR_LAST_CONFLICT = ''; window.KR_DONEDAY = null;
+  if(!dry || !dry.ok){ krStayResShowErr((dry && dry.err) || '保存没有成功，请检查每一行'); return; }
+  var res = null;
+  krMut(function(c){ res = krStayResRun(c, S, picks); return !!(res && res.ok); });
+  if(!res || !res.ok){ krStayResShowErr((res && res.err) || '保存没有成功，请再试一次'); return; }
   STAY_RES = null; var ov = document.getElementById('kr-stayres-overlay'); if(ov) ov.classList.remove('open');
-  if(fin && fin.ok){ if(S.kind==='fix') krStayFixClose(); else { var o2 = document.getElementById('kr-stayarr-overlay'); if(o2) o2.classList.remove('open'); krMarkArrived(); } }
+  if(S.kind==='fix'){ krStayFixClose(); try{ showToast('已保存', '行程修正已存好，超出行程的项目已按你的选择处理，已通知 IN 室长', null); }catch(e){} }
+  else { var o2 = document.getElementById('kr-stayarr-overlay'); if(o2) o2.classList.remove('open'); krMarkArrived(); }
 }
 function krTripEndedModal(text){
   var ov = document.getElementById('kr-tripblk-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-tripblk-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }

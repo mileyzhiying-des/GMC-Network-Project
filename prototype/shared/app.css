@@ -560,3 +560,6 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 /* CMD-1102-04：1 级白底 → 2 级 .kr-l3（灰底）→ 3 级 .kr-l4（白底 + 细边线） */
 .kr-l4{background:#fff;border:1px solid var(--border2);border-radius:8px;padding:10px 14px;margin-top:10px;}
 .kr-l3 > .kr-l3-title + .kr-l4{margin-top:0;}
+
+/* CMD-1102-07 四：行程处理窗（z-index 100030）上面再弹的确认 / 冲突询问 / 提示窗必须在它上面，否则被盖住、按保存没反应 */
+#kr-off-overlay,#kr-block-overlay,#kr-doneday-overlay,#kr-daylock-overlay,#kr-tripblk-overlay,#dayblk-overlay,#kr-ext-overlay{z-index:100100 !important;}
