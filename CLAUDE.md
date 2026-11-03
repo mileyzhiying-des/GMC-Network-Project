@@ -1940,3 +1940,13 @@ prototype/shared/app.css  共用样式
 - **只读**：`ADMIN_RENDER.krsrvc` 本来就用 `can = canDo('krlib')` 决定新增 / 编辑 / 停用 / 删除按钮（没权限是不出现，不是灰掉）；本次在函数入口再挡：`krpOpen` / `krpDelete` / `krlOpen` 没有 `krlib` 直接返回（`krpToggleActive` / `krlToggleActive` / `krpSave` / `krlSave` / `krShoot*` 原来就判断）。价格是项目库本身的定价（韩元），案件里的定金 / 尾款 / 在韩加项金额院长仍看不到（`viewerTextFilter` 等没改）。
 - **面诊内容录入**：`krRecordBlock` 上方一行［查看项目库］，录入侧边栏（`krRecModalRender`）标题行也有；点开 = 右侧只读侧边栏 `#kr-lib-side`（`krLibSideOpen` / `krLibSideSet` / `krLibSideRender`，状态 `KRLIB_SIDE`）：施术项目｜术后管理｜管理项目三个 tab、按分类 / 部位胶囊、搜索、价格；不能在里面选项目；关掉不影响录入内容（录入文字在 `KR_REC`，是另一个元素）；离开案件页自动收起（`krRecSideSync`）；录入侧边栏展开 / 收起时位置跟着让位。
 - 测试：新增 R216a（KR 分页，KD1 / KO1 / KM1 各跑）；roletest 院长对项目库的旧断言「项目库（维护）院长 ❌」改成「所有 KR 角色可看 ✅」，新增「新增 / 编辑 / 停用按钮（院长 / 代表院长不出现）」「显示价格」两格。
+
+## CMD-1103-02 补充（2026-11-03，追加；取代 CMD-1102-11 / 1019-22 里「离院时没做的施术静静退回『未预约』」、CMD-1014-16 / 1020-18 里 IN 占位的三个来访目的，旧文字保留作历史）
+- 分支 **V4**，基准 6a17b82，代码提交 a4feb5b；不推送不合并；**数据版本 56 → 57**（`MIGRATIONS` to:57 → `oldLeaveToRebookWait`：旧资料里「离院后回到未预约（`deferUse`）」的施术项目转成「待重新预约」，Timeline 记一笔，迁移备注列案号；用户案件照旧保留）。用户确认过的「到院当天」主线改动。
+- **一 锁离院**：KR［客人已离院］在院长评估（`krJudge`）完成前灰掉并写「请先完成到院评估」（不适合手术的在评估里选「不建议手术」）；`coreEndVisitToday` 返回 `evalFirst`。评估后如果当天施术都做完，照旧；其他日子的预约、管理项目、持有项目不挡；待付款仍挡。
+- **二 离院原因**：评估完成后还有施术没做 → 弹窗（kr.js `krLeaveWhyOpen`，`#kr-leave-overlay`）逐项选原因（`LEAVE_REASONS`）：身体不适 → 重新预约（当场约：日期必须在明天或以后、在客人在韩期间内、避开院长日程冲突；或之后再约 = 新状态「待重新预约」`it.rebookWait`）；客人本人放弃 → 取消项目（更换项目 / 全部退回 / 部分退回，没退的钱转置换额度，KR 只记判断，IN 照退款流程办）；其他 → memo 必填，再选重新预约或取消。校验 `leaveValidate`，错误红字写在弹窗里；Timeline 只记一条。系统结束 / 确认结束（`by==='系统'` 或 `DAYCONFIRM_BYPASS`）不弹窗，没做的一律标「待重新预约」。自测钩子 `GMC_LEAVE_SKIP`（selftest 默认 true；R217a 里临时关掉）。
+- **待重新预约**：`rebookWaitItems(c)` / `surgUndone(c)`（data.js）；项目卡施术 tab 单独一组「待重新预约」，KR 待办 kind `rebookwait`（点了进项目 tab）；约上时间（`coreUnitBookUse` 或 IN 占位被 KR 确认）后 `rebookWait` 自动清掉，待办消失；已付的钱保留，案件继续。
+- **三 B50 来回结案（Fanny A000010）**：`repairWronglyClosedCases`（`mainlineOngoingRepair`）和 `mainAutoComplete` 现在共用同一个「赴韩施术没做完」判断 `surgUndone`，不再带 `!krProcedureDone` 前提 → 恢复进行中后不会在同一次 `updateCaseStage` 里又被结案。在备份 gmc-export-2026-11-02-07-58-28.json（隔离端口）上验证：升级 56 → 57，用户案件 25 → 25，迁移 25、失败 0；Fanny A000010 转了 2 个「待重新预约」（埋线双眼皮、开内眼角），状态停在术后管理，20 秒内 Timeline 不再新增（151 条不变）。
+- **四 IN 占位（krbook.js）**：客人名单只含「韩国行程没结束」的（`krbClients`/`krbMainCases`）；来访目的只有两个（`KRB_PURPOSE_NEW`）：关联之前案件（选主案件 → 三组可混选：待重新预约施术 / 已完成施术的韩国术后管理（「对应施术 · 术后第 N 天」）/ 韩国持有管理项目；空组不显示，全空的案件下拉灰掉）、新增访问；旧的「在韩术后管理预约 / 持有项目管理预约」只用来显示旧占位。占位日期限制在入境～离境（`krbDateInput`），没有在韩期间 → 日期灰掉写「请先确认客人行程」。KR 确认（`coreBookConfirm`）：关联案件时算在该主案件的子案件，待重新预约的施术用 `coreUnitBookUse` 约上时间（待办消失）。
+- 我的判断（未经确认）：关联之前案件里勾的术后管理 / 持有管理项目，KR 确认时只记在预约上，没有自动建成预约行（到院时照旧流程做）；当场约时院长默认用案件的对接院长。
+- 测试：selftest 新增 R217a（KM1，stageC）、R217b（A1，stageC）。
