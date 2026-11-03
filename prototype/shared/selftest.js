@@ -4172,6 +4172,27 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.alert = al; }
   });
 
+  ST.def('R215a','CMD-1103-03（A1 分页）：［视角参考］——眼睛等部位有参考图 / 项目另设没传图退回部位 / 灰掉时写原因 / 各上传卡都能按',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var hid = shootHid(), h = HOSPITAL_DATA[hid]; shootDemoSeed(hid);
+    var miss = CONCERN_PARTS.filter(function(p){ return p.key!=='b_all' && p.angles.length && !shootHasRef(shootSpec(p.key, '')); }).map(function(p){ return p.key; });
+    ST.ok(miss.length===0, '每个部位都有视角参考（没有的：'+miss.join(',')+'）');
+    var sp = shootSpec('f_eyes', '切开双眼皮'); ST.ok(shootHasRef(sp) && sp.angles.map(function(a){ return a.id; }).join()==='front,l45,r45,up,down' && sp.angles.every(function(a){ return sp.refs[a.id]; }), '眼睛：正面 / 左 45 / 右 45 / 上方 / 下方 五个角度都有示范图');
+    ST.ok(followItemPart('切开双眼皮')==='f_eyes' && followItemPart('假体隆鼻')==='f_nose', '项目跟着自己的部位走（切开双眼皮 → 眼睛，假体隆鼻 → 鼻子）');
+    var s2 = shootSpec('f_nose', '假体隆鼻'); ST.ok(shootHasRef(s2) && s2.refs.front && s2.refs.front.name.indexOf('鼻')>-1 && sp.refs.front.name!==s2.refs.front.name, '换一个部位的项目，示范图跟着换');
+    /* 项目另设但没传图 → 退回部位的图 */
+    var pr = {id:'r215p', name:'R215 项目', shoot:{angles:['front','l45'], video:false, refs:{}, note:''}}; (h.projects = h.projects||[]).push(pr);
+    try{ var s3 = shootSpec('f_eyes', 'R215 项目'); ST.ok(s3.own && s3.angles.length===2 && shootHasRef(s3), '项目另设没传图：角度用项目的，参考图退回部位的'); } finally { h.projects = h.projects.filter(function(x){ return x!==pr; }); }
+    /* 各上传卡的按钮 */
+    var c = {id:'r215c', name:'R215', concerns:[{part:'f_eyes', desc:'x', photos:{}, video:null}], revisitMedia:[{name:'切开双眼皮', part:'f_eyes', video:null, photos:{}}], recovery:[{name:'切开双眼皮', part:'f_eyes', photos:{}}], followProjects:['切开双眼皮'], needsConsult:true};
+    var cf = concernFormHtml(c), rv = revisitMediaCardsHtml(c), rc = recoveryCardHtml(c);
+    [['一般面诊 / 增加面诊（部位卡）', cf], ['复诊评估（每项目上传卡）', rv], ['术后恢复卡', rc]].forEach(function(x){ ST.ok(/onclick="shootRefOpen\(/.test(x[1]) && !/<button[^>]*disabled[^>]*>视角参考/.test(x[1]), x[0]+'：［视角参考］能按'); });
+    shootRefOpen('f_eyes', '切开双眼皮'); var ov = document.getElementById('shoot-ref-overlay'); ST.ok(ov && ov.classList.contains('open') && ov.innerText.indexOf('正面')>-1 && ov.innerText.indexOf('上方')>-1 && ov.innerText.indexOf('下方')>-1 && ov.innerText.indexOf('未提供参考图')<0, '点开：眼睛各角度都有示范图（没有「未提供」）'); shootRefClose();
+    /* 真没有设定的部位：灰掉 + 写原因 */
+    var bak = h.partShoot.f_eyes; delete h.partShoot.f_eyes;
+    try{ var g = shootRefBtn('f_eyes', '切开双眼皮'); ST.ok(/disabled/.test(g) && /还没有为「眼睛」设定视角参考/.test(g), '没有示范图的部位：按钮灰 + 悬停写原因（眼睛 + 去哪设）'); } finally { h.partShoot.f_eyes = bak; }
+  });
+
   ST.def('R138a','CMD-1026-12（A1 分页）：子案件页 今日项目 + 剩余项目两张卡 / 本次使用勾选 / ＋添加本地管理项目弹窗真的出现 / 买完进未使用',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }; var nm = 'R138', td = todayStr();
@@ -6618,7 +6639,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var c = ST.newRes('R90a'); ST.arrive(c); c = getCurrentCase(); setNeedsConsult(true); toggleConcernPart('f_chin'); toggleConcernPart('f_nose'); var fh = concernFormHtml(c);
       ST.ok((fh.match(/mockUploadConcern\('f_chin'/g)||[]).length===2 && fh.indexOf("mockUploadConcern('f_chin','video')")<0, '下巴：角度按部位拍摄要求只有 2 个，没有视频上传（不需要视频）');
       ST.ok((fh.match(/mockUploadConcern\('f_nose'/g)||[]).length===7 && fh.indexOf("mockUploadConcern('f_nose','video')")>-1, '鼻子没设过：现有 6 个角度 + 视频');
-      ST.ok((fh.match(/onclick="shootRefOpen\('f_chin'/g)||[]).length===1 && /title="KR 未提供视角参考"/.test(fh), '下巴有［视角参考］可点；鼻子没设参考 = 灰掉 + 悬停「KR 未提供视角参考」');
+      ST.ok((fh.match(/onclick="shootRefOpen\('f_chin'/g)||[]).length===1 && /title="KR 还没有为「鼻子」设定视角参考/.test(fh), '下巴有［视角参考］可点；鼻子没设参考 = 灰掉 + 悬停写原因（KR 还没有为「鼻子」设定视角参考…）');
       var m = concernMissing(c).join('；'); ST.ok(/下巴：照片（正面、左正侧）/.test(m) && m.indexOf('下巴：视频')<0 && /鼻子：视频/.test(m), '缺项按设定算：下巴只缺 2 张照片、不要视频；鼻子要视频：'+m);
       shootRefOpen('f_chin', ''); var ov = document.getElementById('shoot-ref-overlay'); ST.ok(ov.classList.contains('open') && /视角参考 · 下巴/.test(ov.innerText) && /r_front\.jpg/.test(ov.innerText) && /未提供参考图/.test(ov.innerText) && /张嘴 \/ 闭嘴各一张/.test(ov.innerText) && /关闭/.test(ov.innerText), '视角参考 Modal：参考图 + 没传的角度灰色占位 + KR 说明 + 关闭'); ov.classList.remove('open');
       /* 角度改了：已上传旧资料照旧显示 */

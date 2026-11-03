@@ -3257,6 +3257,11 @@ function shootDemoSeed(hid){
   var h = HOSPITAL_DATA[hid]; if(!h || h._shootDemo) return; h._shootDemo = true; h.partShoot = h.partShoot || {};
   if(!h.partShoot.f_cheekbone) h.partShoot.f_cheekbone = {angles:['front','lside','rside','l45','r45'], video:true, refs:{front:{name:'参考_颧骨_正面.jpg'}, lside:{name:'参考_颧骨_左正侧.jpg'}}, note:'头发扒到耳后，不戴首饰，表情自然放松'};
   if(!h.partShoot.f_jaw) h.partShoot.f_jaw = {angles:['front','lside','rside','l45'], video:false, refs:{front:{name:'参考_下颚_正面.jpg'}}, note:'张嘴 / 闭嘴各一张'};
+  if(!h._shootDemo2){ /* CMD-1103-03：其余部位也补一份演示用的视角参考（每个默认角度一张占位图）；只补没设过的部位，KR 自己设的不动；真实示范图由 KR 在项目库「部位拍摄要求」上传 */
+    h._shootDemo2 = true;
+    CONCERN_PARTS.forEach(function(pd){ if(pd.key==='b_all' || !(pd.angles||[]).length || h.partShoot[pd.key]) return;
+      var refs = {}; pd.angles.forEach(function(a){ refs[a.id] = {name:'参考_'+pd.label+'_'+a.label+'.jpg'}; });
+      h.partShoot[pd.key] = {angles:pd.angles.map(function(a){ return a.id; }), video:true, refs:refs, note:''}; }); }
   var jp = (h.projects||[]).filter(function(p){ return p.name==='下颚角整形'; })[0]; if(jp && !jp.shoot) jp.shoot = {angles:['front','lside','rside','l45','r45'], video:true, refs:{front:{name:'参考_下颚角整形_正面.jpg'}, l45:{name:'参考_下颚角整形_左45.jpg'}}, note:'张嘴 / 闭嘴各一张、头发扒到耳后'};
 }
 function shootProjOf(hid, name){ return ((HOSPITAL_DATA[hid]||{}).projects||[]).filter(function(p){ return p.name===name; })[0]; }
@@ -3265,7 +3270,10 @@ function shootSpec(part, projName){
   var hid = shootHid(); shootDemoSeed(hid);
   var def = concernPartDef(part), p = projName ? shootProjOf(hid, projName) : null, src = (p && p.shoot) ? p.shoot : shootPartSetting(hid, part);
   var angles = (src && Array.isArray(src.angles)) ? src.angles.filter(function(id){ return CONCERN_ANGLE[id]; }).map(function(id){ return {id:id, label:CONCERN_ANGLE[id]}; }) : def.angles;
-  return {angles:angles, video: src ? !!src.video : true, refs:(src && src.refs) || {}, note:(src && src.note) || '', own:!!(p && p.shoot), part:part};
+  /* CMD-1103-03：项目另设（p.shoot）里没传的参考图 / 说明，退回部位的设定（原来整个换成项目的，项目没传图就灰掉） */
+  var ps0 = (p && p.shoot) ? shootPartSetting(hid, part) : null, refs0 = {}, k;
+  if(ps0 && ps0.refs) for(k in ps0.refs) refs0[k] = ps0.refs[k]; if(src && src.refs) for(k in src.refs) refs0[k] = src.refs[k];
+  return {angles:angles, video: src ? !!src.video : true, refs:refs0, note:(src && src.note) || (ps0 && ps0.note) || '', own:!!(p && p.shoot), part:part};
 }
 function shootHasRef(sp){ return sp.angles.some(function(a){ return sp.refs[a.id]; }) || !!String(sp.note||'').trim(); }
 /* 显示（只读）用：当前设定的角度在前，已上传但不在当前设定里的旧角度并在后面 */
@@ -3275,7 +3283,7 @@ function shootShowAngles(sp, photos){
 function shootRefBtn(part, projName){
   var sp = shootSpec(part, projName), on = shootHasRef(sp), q = String(projName||'').replace(/'/g,"\\'");
   return on ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;float:right;" onclick="shootRefOpen(\''+part+'\',\''+q+'\')">视角参考</button>'
-    : '<span title="KR 未提供视角参考" style="float:right;display:inline-block;"><button class="btn-outline" disabled style="padding:3px 10px;font-size:12px;opacity:.4;cursor:not-allowed;">视角参考</button></span>';
+    : '<span title="KR 还没有为「'+cesc(concernPartDef(part).label)+'」设定视角参考（KR 项目库 → 部位拍摄要求）" style="float:right;display:inline-block;"><button class="btn-outline" disabled style="padding:3px 10px;font-size:12px;opacity:.4;cursor:not-allowed;">视角参考</button></span>';
 }
 function shootRefOpen(part, projName){
   /* CMD-1022-16：［视角参考］改成右侧侧边栏（不是 Modal），不挡住上传卡，可以一边看参考一边传照片；id 沿用 shoot-ref-overlay，开 / 关仍是 .open */
