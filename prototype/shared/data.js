@@ -11453,7 +11453,7 @@ function fullReportRender(){
   var ov = document.getElementById('rptfull-overlay'); if(!ov) return;
   var info = fullReportCaseRun(ov, function(c){ return {rev:isRevEval(c), body:reportDocFor(c, REPORT_SHOW_ORIG, true)}; }); if(!info) return;
   ov.innerHTML = '<div class="modal-box" style="width:860px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0;overflow:hidden;"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 22px;border-bottom:1px solid var(--border2);"><b style="font-size:15px;">'+(info.rev ? '复诊评估报告' : '完整报告')+'</b><span style="cursor:pointer;" onclick="closeFullReport()">✕</span></div>'+
-    '<div id="rp-body" style="flex:1;min-height:0;overflow-y:auto;padding:18px 28px;">'+info.body+'</div>'+
+    '<div id="rptfull-body" style="flex:1;min-height:0;overflow-y:auto;padding:18px 28px;">'+info.body+'</div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 22px;border-top:1px solid var(--border2);"><button class="btn-outline" onclick="fullReportPrint(\'dl\')">下载</button><button class="btn-outline" onclick="fullReportPrint(\'pr\')">打印</button><button class="btn-primary" onclick="closeFullReport()">关闭</button></div></div>';
 }
 function closeFullReport(){ var ov = document.getElementById('rptfull-overlay'); if(ov) ov.classList.remove('open'); }
