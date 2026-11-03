@@ -2902,7 +2902,7 @@ function lmBuyModalRender(){
 (function(){ var r0 = renderCaseBody; renderCaseBody = function(c){ var r = r0.apply(this, arguments); try{ if(LM_BUY_OPEN) lmBuyModalRender(); }catch(e){ console.error('[本地选购弹窗重画]', e); } return r; }; })();
 
 /* ---- ［本次使用］：从「术后 · 未预约」和「本地管理 · 未使用」勾选今天要做的 → 移到今日项目（已经约在别天的预约项目不在这里选，改日子用［修改时间］） ---- */
-var IN_USE_CTX = null;
+var IN_USE_CTX = null, IN_USE_LIST = null;
 function inUseOpen(){
   var c = getCurrentCase(); if(!c) return; IN_USE_CTX = c.id;
   var M = inContModel(c), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
@@ -2913,21 +2913,29 @@ function inUseOpen(){
     var nb = h.batches.slice().sort(function(a,b){ return a.date<b.date?-1:1; }).filter(function(b){ return !b.voided && b.bought-b.used>0; })[0], ovals = pr && pr.opt && nb ? optValuesFor(pr, nb.spec) : [];
     var optSel = ovals.length ? '<select id="iu-opt-'+i+'" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"><option value="">选择'+pr.opt.label+'</option>'+ovals.map(function(v){ return '<option>'+v+'</option>'; }).join('')+'</select>' : '';
     return '<div class="case-field-row" style="align-items:center;"><input type="checkbox" id="iu-hold-'+i+'" data-name="'+e(h.itemName)+'" style="flex-grow:0;margin-right:10px;"><span style="flex-grow:1;font-size:13px;">'+e(h.itemName)+' <span style="font-size:12px;color:var(--muted);">本地管理</span></span><span style="display:flex;align-items:center;gap:8px;white-space:nowrap;">'+optSel+'<span style="font-size:12px;color:var(--slate2);">剩余 '+remaining+' 次</span>'+qtyInputHtml({id:'iu-qty-'+i, value:1, min:1, max:remaining})+'</span></div>'; }).join('');
+  IN_USE_LIST = {care:M.grp.none.map(function(r){ return r.s.id; }), holds:holds.map(function(h){ return h.itemName; })}; /* CMD-1102-12：确认时按这份名单读，不重新算 */
   var ov = document.getElementById('in-use-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'in-use-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 195; document.body.appendChild(ov); }
   ov.innerHTML = '<div class="modal-box" style="width:640px;max-width:94vw;max-height:86vh;overflow:auto;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">本次使用 · '+e(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">勾选今天要做的项目，确认后移到「今日项目」。已经约在别天的术后项目不在这里选，改日子请在预约项目里按［修改时间］。</div>'+
     ((careL||localL) ? (careL ? '<div style="font-size:12px;font-weight:700;margin:6px 0 2px;">术后项目 · 未预约</div>'+careL : '')+(localL ? '<div style="font-size:12px;font-weight:700;margin:10px 0 2px;">本地管理 · 未预约</div>'+localL : '') : '<div style="font-size:13px;color:var(--muted);padding:12px 0;">没有可用的项目</div>')+
-    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;"><button class="btn-outline" onclick="inUseClose()">取消</button><button class="btn-primary" onclick="inUseConfirm()">确认</button></div></div>';
+    '<div id="iu-err" style="display:none;color:#B3261E;font-size:13px;margin-top:12px;"></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;"><button class="btn-outline" onclick="inUseClose()">取消</button><button class="btn-primary" onclick="inUseConfirm()">确认</button></div></div>';
   ov.classList.add('open');
 }
+function inUseErr(msg){ var el = document.querySelector('#in-use-overlay #iu-err'); if(el){ el.textContent = msg; el.style.display = msg ? 'block' : 'none'; } else if(msg) alert(msg); } /* 失败提示写在弹窗里（红字） */
 function inUseClose(){ var ov = document.getElementById('in-use-overlay'); if(ov) ov.classList.remove('open'); IN_USE_CTX = null; }
 function inUseConfirm(){
   var c = getCurrentCase(); if(!c || IN_USE_CTX!==c.id) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */ 
-  var careIds = [], i, el;
-  for(i=0; (el = document.getElementById('iu-care-'+i)); i++){ if(el.checked) careIds.push(el.getAttribute('data-id')); }
-  var holds = clientHoldingsSorted(c.name).filter(function(h){ return h.category!=='术后管理' && holdingRemaining(h)>0; }), picks = [];
-  for(i=0; (el = document.getElementById('iu-hold-'+i)); i++){ if(el.checked){ var h = holds.filter(function(x){ return x.itemName===el.getAttribute('data-name'); })[0]; if(!h) continue; var oe = document.getElementById('iu-opt-'+i), qe = document.getElementById('iu-qty-'+i), qty = Math.min(parseInt(qe && qe.value, 10) || 1, holdingRemaining(h));
-      if(oe && !oe.value){ alert('「'+h.itemName+'」使用时要先选好选项（模式 / 部位 / 种类）'); return; } picks.push({h:h, qty:qty, opt:oe ? oe.value : '', oe:oe}); } }
-  if(!careIds.length && !picks.length){ alert('请至少勾选一项'); return; }
+  /* CMD-1102-12：只在弹窗里找勾选框（不受页面上别处同 id 元素影响），按打开时记下的名单对应，不靠 id 连续、不重新算名单 */
+  var ov = document.getElementById('in-use-overlay'), careIds = [], picks = [], L = IN_USE_LIST || {care:[], holds:[]}, i, el;
+  if(!ov) return; inUseErr('');
+  for(i=0; i<L.care.length; i++){ el = ov.querySelector('#iu-care-'+i); if(el && el.checked) careIds.push(L.care[i]); }
+  var holds = clientHoldingsSorted(c.name).filter(function(h){ return h.category!=='术后管理' && holdingRemaining(h)>0; });
+  for(i=0; i<L.holds.length; i++){ el = ov.querySelector('#iu-hold-'+i); if(!el || !el.checked) continue;
+    var nm0 = L.holds[i], h = holds.filter(function(x){ return x.itemName===nm0; })[0];
+    if(!h){ inUseErr('「'+nm0+'」现在没有剩余次数，请关掉弹窗重新打开'); return; }
+    var oe = ov.querySelector('#iu-opt-'+i), qe = ov.querySelector('#iu-qty-'+i), qty = Math.min(parseInt(qe && qe.value, 10) || 1, holdingRemaining(h));
+    if(oe && !oe.value){ inUseErr('「'+h.itemName+'」使用时要先选好选项（模式 / 部位 / 种类）'); return; }
+    picks.push({h:h, qty:qty, opt:oe ? oe.value : '', oe:oe}); }
+  if(!careIds.length && !picks.length){ inUseErr('请至少勾选一项'); return; }
   if(careIds.length){ c.careToday = (c.careToday||[]).concat(careIds.filter(function(id){ return (c.careToday||[]).indexOf(id)<0; })); logCaseEvent(c, actingName(), '本次使用：术后管理 '+careIds.length+' 项加进今日项目'); }
   if(picks.length){
     if(!c.localMgmt){ if(!localCarried(c)) c.localMgmt = {active:true, ended:false, step:'active', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}}; if(!c.localMgmtDay) c.localMgmtDay = todayStr(); }

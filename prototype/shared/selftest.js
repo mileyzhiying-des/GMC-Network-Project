@@ -4151,6 +4151,27 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.alert = al; window.GMC_NO_FOLLOWASK = old; }
   });
 
+  ST.def('R214a','CMD-1102-12（A1 分页）：［本次使用］弹窗——页面上别处有同 id 的元素也不受影响 / 什么都不勾 → 弹窗里红字（不弹浏览器提示框）/ 勾一项（数量 2）确认 → 进今日项目、弹窗关',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, alerts = []; window.alert = function(m){ alerts.push(m); }; var nm = 'R214', td = todayStr();
+    try{
+      var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = td; p0.subState = 'arrived'; p0.arrivedDay = td; p0.materialsConfirmed = true;
+      CLIENT_HOLDINGS[p0.name] = (CLIENT_HOLDINGS[p0.name]||[]).concat([{itemName:'R214 甲', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -9), bought:3, used:0, usages:[]}]}, {itemName:'R214 乙', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -9), bought:3, used:0, usages:[]}]}]);
+      ST.open(p0); renderCaseBody(p0);
+      /* 页面上别处放几个同 id 的假元素（没勾的），模拟重复 id */
+      document.body.insertAdjacentHTML('afterbegin', '<div id="r214-dup"><input type="checkbox" id="iu-hold-0"><input type="checkbox" id="iu-hold-1"><input type="checkbox" id="iu-care-0"></div>');
+      inUseOpen(); var ov = document.getElementById('in-use-overlay');
+      inUseConfirm(); var er = ov.querySelector('#iu-err');
+      ST.ok(alerts.length===0 && er && er.style.display!=='none' && /请至少勾选一项/.test(er.textContent), '什么都不勾 → 弹窗里红字「请至少勾选一项」，没有浏览器提示框（alert 次数 '+alerts.length+'）');
+      ST.ok(ov.classList.contains('open'), '失败时弹窗不关');
+      ov.querySelector('#iu-hold-1').checked = true; var q = ov.querySelector('#iu-qty-1'); q.value = 2;
+      inUseConfirm();
+      ST.ok(!ov.classList.contains('open') && alerts.length===0, '勾第二项（数量 2）→ 确认 → 弹窗关闭（即使页面上有同 id 的没勾元素）');
+      var used = (p0.localMgmt && p0.localMgmt.mgmtUses || p0.mgmtUses || []); ST.ok(used.some(function(u){ return u.itemName==='R214 乙' && u.qty===2; }), '进今日项目：R214 乙 ×2');
+      var d = document.getElementById('r214-dup'); if(d) d.remove();
+    } finally { window.alert = al; }
+  });
+
   ST.def('R138a','CMD-1026-12（A1 分页）：子案件页 今日项目 + 剩余项目两张卡 / 本次使用勾选 / ＋添加本地管理项目弹窗真的出现 / 买完进未使用',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }; var nm = 'R138', td = todayStr();
