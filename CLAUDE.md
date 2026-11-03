@@ -1918,3 +1918,11 @@ prototype/shared/app.css  共用样式
 - **四 灰按钮写原因**：`krOutBtn`（项目卡三个 tab 的按钮）、`krLink`、到院卡的［客人已到院］灰按钮（`krArriveMainBtn` / `krArriveSubBtn`）旁边写一行小灰字（`.kr-btn-off` / `.kr-why`），悬停 title 保留；`krBtn` 本来就写。没动：整页只读（`krRoWrap`，CMD-1027-08 用户要求拿掉提示行）、表单里被禁用的输入框。
 - **「只灰一笔」查证**：［修改时间］灰 = 这一行 `arrived` 为真。把一整张卡标到院的 `coreVisitArrive` 会把同一张卡的所有未做行一起标；但**逐行标到院的入口有两个**：日历块弹窗［客人已到院］（`krVisitArrive` → `coreSubArrived(单行)`）和 `krCliAct('krSubArrived')`，只作用到点的那一行；`inheritVisitArrival` 只对被改时间 / 新建的那一行生效（别的行到店它才继承）。所以两笔同时间的行可以只灰一笔。
 - 测试：selftest 新增 R211a / R212a / R213a；因同一天并入而改的旧断言：R77b（约未来两天来测「并入已到店的到院」）、R79a（先让主到院结束，才会有 KR|今天 这张卡）、R74a（灰按钮旁边「没有说明文字」→「写说明文字」）。用 Carry C 备份（隔离端口导入）验证：启动修复后 A000844 只剩主到院一张卡，进行项目里有两行热玛吉（管理项目、［操作完成］），施术行混入已重写，Timeline 各写一次。
+
+## CMD-1102-12 补充（2026-11-03，追加；取代 CMD-1020-xx 里 IN［本次使用］弹窗「按 id 连续往下找勾选框」的读法，旧文字保留作历史）
+- 分支 **V4**，基准 aacaf8b；提交 db25ee0（1～4）、a5e8e1a（3 的重复 id）；不推送不合并，**数据版本不变（56）**。第 5 部分只查不改，没有改产品代码。
+- **［本次使用］弹窗（data.js `inUseOpen` / `inUseConfirm`）**：没能用自建数据 / 备份重现「勾了却说请至少勾选一项」（弹窗内 id 没有重复，页面其他地方也没有 `iu-*`）。原来的读法有三个脆弱点：`document.getElementById` 在整个页面找（页面上任何同 id 元素都会盖住）、`for(i=0; el=getElementById(...); i++)` 遇到第一个缺的 id 就停、确认时重新算名单再按名字对。改成：只在 `#in-use-overlay` 里找（`ov.querySelector`）、按打开时记下的名单 `IN_USE_LIST` 对应、失败提示写进弹窗里的红字 `#iu-err`（`inUseErr`），不再用 `alert`。
+- **重复 id 清单**：静态 id 在多处出现的有 `pc-use-reason`（两个术后管理弹窗，同一时间只开一个）、`consult-after-report`（面诊 tab 两个版本，互斥）、`settle-pay-btn`（同一个付款弹窗两种内容）、`ce-v`（三个分支，互斥）、`rp-body`（报告页 in.html 里一个，data.js 完整报告弹窗又一个，**会同时存在，已把弹窗的改名 `rptfull-body`**）；动态 id 前缀（`iu-care-` 等 20 个）都只有一个生成处。IN 和 KR 的 chat / lib / float 等重复是 in.html 与 kr.html 各一份，不在同一页面。
+- **alert 清单**：全站仍有约 186 处 `alert(`（kr.js 92、ui.js 54、data.js 27、calalign.js 7、todo.js 2、krbook.js / hospspecial.js 各 1），多数是表单校验（"请填…""请先勾选…"）；本次只改了［本次使用］弹窗，其他没动。
+- 测试：新增 R214a。
+- **第 5 部分结论（B，结构性缺口）**：repairWronglyClosedCases 与 mainAutoComplete 的判断不一致——前者看 `krNotStartedItems`（含 `deferUse` 回到未预约的项目）认为案件还在进行并重开，后者的 CMD-1102-08 保护写成 `!m.krProcedureDone && …`，`krProcedureDone=true` 时保护整段跳过，于是重开时 repair 自己调的 `updateCaseStage` 立刻又 `finishCase`。详见 Notion CMD-1102-12 汇报。
