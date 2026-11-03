@@ -1926,3 +1926,10 @@ prototype/shared/app.css  共用样式
 - **alert 清单**：全站仍有约 186 处 `alert(`（kr.js 92、ui.js 54、data.js 27、calalign.js 7、todo.js 2、krbook.js / hospspecial.js 各 1），多数是表单校验（"请填…""请先勾选…"）；本次只改了［本次使用］弹窗，其他没动。
 - 测试：新增 R214a。
 - **第 5 部分结论（B，结构性缺口）**：repairWronglyClosedCases 与 mainAutoComplete 的判断不一致——前者看 `krNotStartedItems`（含 `deferUse` 回到未预约的项目）认为案件还在进行并重开，后者的 CMD-1102-08 保护写成 `!m.krProcedureDone && …`，`krProcedureDone=true` 时保护整段跳过，于是重开时 repair 自己调的 `updateCaseStage` 立刻又 `finishCase`。详见 Notion CMD-1102-12 汇报。
+
+## CMD-1103-03 补充（2026-11-03，追加；取代 CMD-1021-22 里「上传卡［视角参考］只有 KR 设过的部位才可点」，旧文字保留作历史）
+- 分支 **V4**，基准 13db164；代码提交见下一行 git log；不推送不合并，**数据版本不变（56）**。
+- **灰掉的原因**：不是按项目找图找错——`followItemPart('切开双眼皮')` 正确得到眼睛（`f_eyes`），灰是因为 `HOSPITAL_DATA[h].partShoot` 里只有颧骨 / 下颚有演示参考图（`shootDemoSeed`），眼睛等其他部位 KR 没设过，`shootHasRef` 为假。**一般面诊的部位卡对眼睛一样是灰的**（用户看到的「照旧能用」是颧骨 / 下颚）。
+- 修：① `shootDemoSeed` 再补一次（`h._shootDemo2`）：每个苦恼部位（除旧资料 `b_all`）没设过的就补一份演示参考（默认角度各一张占位图 `参考_部位_角度.jpg`，需要视频），KR 自己设的不动；真实示范图仍由 KR 在项目库「部位拍摄要求」上传。② `shootSpec`：项目另设（`p.shoot`）里没传的参考图 / 说明退回部位的（原来整个换成项目的，项目没传图就灰）。③ 灰按钮悬停写原因「KR 还没有为「眼睛」设定视角参考（KR 项目库 → 部位拍摄要求）」。
+- 上传卡入口清单：一般面诊 / 增加面诊（`concernFormHtml` 的部位卡）、复诊评估每项目卡（`revisitMediaCardsHtml`，部位取 `followItemPart`）、术后恢复卡（`recoveryCardHtml`）、复诊评估结果里的项目卡（`revProjCardsHtml`）、KR 术前照片（`krPreOpBlock`）全部走同一个 `shootRefBtn`；继续面诊没有上传卡（沿用原资料）；主案件页 / 客人页进入复诊评估是同一个弹窗 / 页面。
+- 测试：新增 R215a；R90a 的悬停文字断言改成新的原因文字。
