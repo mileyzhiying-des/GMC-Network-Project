@@ -4172,6 +4172,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.alert = al; }
   });
 
+  var RT_navHas = function(l){ var inList = ADMIN_PAGES.some(function(p){ return !p.hidden && canDo(p.perm) && p.label===l; }); var dom = document.getElementById('sidebar') || document.querySelector('.sidebar'); return inList && (!dom || dom.innerText.indexOf(l)>-1 || dom.innerHTML.indexOf(l)>-1); };
+  ST.def('R216a','CMD-1103-01（KR 分页：KD1 / KO1 / KM1 各跑一次）：院长 / 代表院长能看项目库（只读、有价格）/ 编辑函数入口挡住 / 面诊录入里的［查看项目库］侧边栏',function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount(), '要在 KR 分页里跑')) return;
+    var dir = me.role==='kr_director' || me.role==='kr_owner', coord = !dir;
+    ST.ok(canDo('krlibview'), '所有 KR 角色都有项目库查看权限');
+    ST.ok(RT_navHas('项目库'), '导航有「项目库」');
+    var el = document.createElement('div'); ADMIN_RENDER.krsrvc(el); var h = el.innerHTML;
+    ST.ok(/₩\s?[\d,]{4,}/.test(h) || /₩/.test(h), '项目库显示价格');
+    var btn = /krpOpen\(|krlOpen\(|krpToggleActive|krlToggleActive|krpDelete/.test(h);
+    ST.ok(coord ? btn : !btn, coord ? '室长 / 管理者：有新增 / 编辑 / 停用按钮' : '院长 / 代表院长：一个新增 / 编辑 / 停用按钮都不出现');
+    if(dir){
+      var n0 = krpProjects().length, first = krpProjects()[0], pr0 = first && first.price, act0 = first && first.active;
+      krpOpen('new'); ST.ok(!KRP.draft, '院长调 krpOpen 打不开编辑'); if(first){ krpToggleActive(first.id); krpDelete(first.id); }
+      ST.ok(krpProjects().length===n0 && (!first || (first.price===pr0 && first.active===act0)), '院长调 停用 / 删除函数也改不了');
+      var l0 = krLocalLib(krHospitalIdOfMe())[0]; if(l0){ var a0 = l0.active; krlOpen(l0.id); krlToggleActive(l0.id); ST.ok(!KRL.draft && l0.active===a0, '院长调管理项目的编辑 / 停用函数也改不了'); }
+    }
+    /* 侧边栏 */
+    KR_REC = KR_REC || {}; KR_REC.text = '面诊内容 abc'; krLibSideOpen(); var sd = document.getElementById('kr-lib-side');
+    ST.ok(sd && sd.style.display!=='none' && /项目库（只读）/.test(sd.innerText) && /₩/.test(sd.innerText) && !/编辑|停用|新增/.test(sd.innerText), '侧边栏打开：只读、有价格、没有编辑按钮');
+    var all0 = document.querySelectorAll('#krlib-list b').length; var nm = (document.querySelector('#krlib-list b')||{}).textContent || '';
+    krLibSideSet('q', nm.slice(0, 2)); var some = document.querySelectorAll('#krlib-list b').length; krLibSideSet('q', '不存在的项目xyz'); var none = document.querySelectorAll('#krlib-list b').length;
+    ST.ok(all0>0 && some>0 && some<=all0 && none===0, '能搜索（'+all0+' → '+some+' → '+none+'）'); krLibSideSet('q', '');
+    krLibSideSet('tab', 'mgmt'); ST.ok(document.querySelectorAll('#krlib-list b').length>0 && /₩/.test(document.getElementById('krlib-list').innerText), '管理项目页有项目和价格');
+    krLibSideSet('tab', 'post'); krLibSideSet('tab', 'surg');
+    krLibSideClose(); ST.ok(sd.style.display==='none' && KR_REC.text==='面诊内容 abc', '关掉后录入的内容还在');
+    ST.ok(String(krRecordBlock).indexOf('krLibBtnRow')>-1 && String(krRecModalRender).indexOf('krLibSideOpen')>-1, '录入块和录入侧边栏都有［查看项目库］');
+    ST.ok(/查看项目库/.test(krLibBtnRow()), '按钮文字');
+  });
+
   ST.def('R215a','CMD-1103-03（A1 分页）：［视角参考］——眼睛等部位有参考图 / 项目另设没传图退回部位 / 灰掉时写原因 / 各上传卡都能按',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var hid = shootHid(), h = HOSPITAL_DATA[hid]; shootDemoSeed(hid);

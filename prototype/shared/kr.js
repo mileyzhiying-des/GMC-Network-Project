@@ -1867,17 +1867,18 @@ function krRecModalRender(){
   var tip = KR_REC.recording ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:8px;">🎙 录音中…'+(KR_REC.demoVoice ? '（演示：当前浏览器不支持语音识别，已填入演示文字）' : '（正在做语音转文字，韩语）')+'</div>' : (voice && !srOk ? '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">当前浏览器不支持语音识别，点开始录音会填入一段演示文字（可修改）。</div>' : '');
   var tx = document.getElementById('kr-rec-text'), had = tx && document.activeElement===tx, ss = had ? tx.selectionStart : 0, se = had ? tx.selectionEnd : 0;
   el.className = 'kr-rec-side';
-  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><b style="font-size:15px;">'+(KR_REC.add ? (voice ? '增加内容（语音）' : '增加内容（手动）') : (voice ? '语音录入'+(krRvNow() ? '评估内容' : '面诊') : '手动输入'+(krRvNow() ? '评估内容' : '面诊')))+'</b><span style="display:flex;gap:12px;align-items:center;"><a href="#" class="info-link" style="font-size:12px;" onclick="krRecCollapse(true);return false;">收起 ›</a></span></div>'+tip+
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><button class="btn-outline" style="padding:3px 10px;font-size:12px;order:2;" onclick="krLibSideOpen()">查看项目库</button><b style="font-size:15px;">'+(KR_REC.add ? (voice ? '增加内容（语音）' : '增加内容（手动）') : (voice ? '语音录入'+(krRvNow() ? '评估内容' : '面诊') : '手动输入'+(krRvNow() ? '评估内容' : '面诊')))+'</b><span style="display:flex;gap:12px;align-items:center;"><a href="#" class="info-link" style="font-size:12px;" onclick="krRecCollapse(true);return false;">收起 ›</a></span></div>'+tip+
     (voice ? '<div style="margin-bottom:8px;">'+(KR_REC.recording ? '<button class="btn-primary" onclick="krRecStop()">⏹ 停止录音</button>' : '<button class="btn-outline" onclick="krRecStart(\'voice\')">🎙 开始 / 继续录音</button>')+'</div>' : '')+
     '<textarea id="kr-rec-text" oninput="krRecInput(this.value)" placeholder="'+(krRvNow() ? '评估内容' : '面诊内容')+'（语音转写或手动输入，可直接修改；没上传的内容会存成草稿）" style="flex:1;min-height:200px;width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;resize:none;">'+krEsc(KR_REC.text)+'</textarea>'+
     '<div style="display:flex;gap:10px;margin-top:12px;"><button class="btn-outline" style="flex:1;" onclick="krRecCancel()">取消</button><button class="btn-primary" style="flex:1;" onclick="krRecUpload()">上传内容</button></div>';
   if(had){ var t2 = document.getElementById('kr-rec-text'); if(t2){ t2.focus(); try{ t2.setSelectionRange(ss, se); }catch(e){} } }
 }
-function krRecCollapse(v){ KR_REC.collapsed = !!v; krRecDraftSave(); krRecModalRender(); }
+function krRecCollapse(v){ KR_REC.collapsed = !!v; krRecDraftSave(); krRecModalRender(); if(typeof KRLIB_SIDE!=='undefined' && KRLIB_SIDE.open) krLibSideRender(); }
 /* 侧边栏跟着案件页：进案件页时有草稿 → 收起的「草稿」窄条；离开案件页 → 隐藏（录音要先确认） */
 function krRecSideSync(){
   try{
     var onCase = CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id;
+    if(typeof KRLIB_SIDE!=='undefined' && KRLIB_SIDE.open && !onCase) krLibSideClose(); /* 离开案件页就收起项目库侧边栏 */
     if(onCase && KR_REC.caseKey!==krRecKey()){ krRecReset(); }
     if(onCase && !KR_REC_OPEN && KR_REC.caseKey===krRecKey() && !KR_REC.text){ var d = krRecDraftLoad(); if(d && d.text && krCanRecord((krFindCase(KR_CASE.clinicId, KR_CASE.id)||{}).c||{})){ KR_REC.mode = d.mode; KR_REC.add = !!d.add; KR_REC.text = d.text; KR_REC.collapsed = true; KR_REC_OPEN = true; } }
     var shown = !!(document.getElementById('kr-rec-side') && document.getElementById('kr-rec-side').style.display!=='none');
@@ -2009,7 +2010,7 @@ function krRecordBlock(c){
     (entries || '<div style="font-size:12px;color:var(--muted);margin-top:10px;">还没有录入内容：点上面的录入方式，在弹窗里录入或输入，再点［上传内容］，内容会以文字显示在这里。</div>')+
     '<div style="font-size:12px;color:var(--muted);margin-top:8px;">录入内容、原始录音和修改过程都进「KR 专用附件」tab（Timeline 旁边），只有 KR 看得到。</div>');
   if(!isRevEval(c) && !krRecBtnsOk(c)) box = box.replace(/<div style="display:flex;gap:8px;flex-wrap:wrap;(?:margin-top:8px;)?"><button class="btn-outline" onclick="krRecOpenModal[\s\S]*?<\/button><\/div>/g, '<div style="font-size:12px;color:var(--muted);margin-top:6px;">院长已接手录入，这里只读</div>'); /* CMD-1102-09 二 */
-  return box+(typeof krSubmitBlock==='function' && canDo('krwork') ? (c.consultContentAt ? krSubmitBlock(c) : '') : '');
+  return krLibBtnRow()+box+(typeof krSubmitBlock==='function' && canDo('krwork') ? (c.consultContentAt ? krSubmitBlock(c) : '') : '');
 }
 
 
@@ -3593,6 +3594,7 @@ function krpDeleteBlock(p){
   return '';
 }
 function krpOpen(id){
+  if(!canDo('krlib')){ return; } /* CMD-1103-01：院长 / 代表院长只能看项目库，函数入口也挡住 */
   var p = id==='new' ? null : krpProjects().filter(function(x){ return x.id===id; })[0];
   KRP.edit = id;
   KRP.draft = p ? JSON.parse(JSON.stringify(p)) : {id:'', name:'', price:'', categoryId:'', parts:[], active:true, names:{zh:'', ko:'', id:''}};
@@ -3659,7 +3661,7 @@ function krpSave(){
   Store.touch(); KRP.edit = null; KRP.draft = null; krpRender();
 }
 function krpToggleActive(id){ var p = krpProjects().filter(function(x){ return x.id===id; })[0]; if(!p || !canDo('krlib')) return; p.active = !p.active; logOp('其他', (p.active?'重新启用':'非活性化')+'赴韩项目：'+p.name, '项目库'); Store.touch(); krpRender(); }
-function krpDelete(id){ var p = krpProjects().filter(function(x){ return x.id===id; })[0]; if(!p) return; var why = krpDeleteBlock(p); if(why){ alert('不能删除：'+why); return; } if(!confirm('删除「'+p.name+'」？')) return; var l = krpProjects(); l.splice(l.indexOf(p), 1); logOp('其他', '删除赴韩项目：'+p.name, '项目库'); Store.touch(); krpRender(); }
+function krpDelete(id){ if(!canDo('krlib')) return; var p = krpProjects().filter(function(x){ return x.id===id; })[0]; if(!p) return; var why = krpDeleteBlock(p); if(why){ alert('不能删除：'+why); return; } if(!confirm('删除「'+p.name+'」？')) return; var l = krpProjects(); l.splice(l.indexOf(p), 1); logOp('其他', '删除赴韩项目：'+p.name, '项目库'); Store.touch(); krpRender(); }
 function krpToggleShow(){ KRP.showInactive = !KRP.showInactive; krpRender(); }
 function krpEditor(){
   var d0 = KRP.draft, df = d0.defaults, inp = 'padding:6px 9px;border:1px solid var(--line);border-radius:7px;', cats = Object.keys(KR_CATEGORIES);
@@ -3732,7 +3734,7 @@ ADMIN_RENDER.krsrvc = function(el){
 var KRL = {open:{}, draft:null, edit:null, cat:''};
 function krlRender(){ ADMIN_RENDER.krsrvc(document.getElementById('admin-body')); }
 function krlToggle(id){ KRL.open[id] = !KRL.open[id]; krlRender(); }
-function krlOpen(id){ var p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===id; })[0]; if(!p) return; KRL.edit = id; KRL.draft = {name:p.name, firstNa:!!p.firstNa, firstMode:p.firstMode||'all', firstAll:p.firstAll===undefined ? '' : p.firstAll, intNa:!!p.intNa, intMode:p.intMode||'all', intAll:p.intAll===undefined ? '' : p.intAll, durMin:p.durMin||'', dirOp:!!p.dirOp, dirMin:p.dirMin||30, specs:p.specs.map(function(s){ return Object.assign({}, s); }), neg:!!p.neg, opt:p.opt ? {label:p.opt.label, rules:(p.opt.rules||[{match:'*', values:p.opt.values||[]}]).map(function(r){ return {match:r.match, values:r.values.slice()}; })} : null, err:''}; krlRender(); }
+function krlOpen(id){ if(!canDo('krlib')) return; var p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===id; })[0]; if(!p) return; KRL.edit = id; KRL.draft = {name:p.name, firstNa:!!p.firstNa, firstMode:p.firstMode||'all', firstAll:p.firstAll===undefined ? '' : p.firstAll, intNa:!!p.intNa, intMode:p.intMode||'all', intAll:p.intAll===undefined ? '' : p.intAll, durMin:p.durMin||'', dirOp:!!p.dirOp, dirMin:p.dirMin||30, specs:p.specs.map(function(s){ return Object.assign({}, s); }), neg:!!p.neg, opt:p.opt ? {label:p.opt.label, rules:(p.opt.rules||[{match:'*', values:p.opt.values||[]}]).map(function(r){ return {match:r.match, values:r.values.slice()}; })} : null, err:''}; krlRender(); }
 function krlClose(){ KRL.edit = null; KRL.draft = null; krlRender(); }
 function krlSave(){
   var p = krLocalLib(krHospitalIdOfMe()).filter(function(x){ return x.id===KRL.edit; })[0]; if(!p || !canDo('krlib')) return;
@@ -5107,4 +5109,42 @@ function krTripEndedModal(text){
   var ov = document.getElementById('kr-tripblk-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-tripblk-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
   ov.innerHTML = '<div class="modal-box" style="width:460px;max-width:94vw;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">韩国行程已结束</div><div style="font-size:13px;line-height:1.8;margin-bottom:14px;">'+krEsc(text)+'</div><div style="display:flex;gap:10px;justify-content:flex-end;"><button class="btn-ghost" onclick="document.getElementById(\'kr-tripblk-overlay\').classList.remove(\'open\')">知道了</button><button class="btn-primary" onclick="document.getElementById(\'kr-tripblk-overlay\').classList.remove(\'open\');krStayFixOpen()">行程修正</button></div></div>';
   ov.style.zIndex = 100020; ov.classList.add('open');
+}
+
+
+/* ===== CMD-1103-01：面诊内容录入里的［查看项目库］——右侧只读侧边栏（搜索 / 按分类看，含价格），不在这里选项目；关掉不影响录入内容 ===== */
+var KRLIB_SIDE = {open:false, tab:'surg', q:'', cat:''};
+function krLibBtnRow(){ return '<div style="display:flex;justify-content:flex-end;margin-bottom:6px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krLibSideOpen()">查看项目库</button></div>'; }
+function krLibSideEl(){ var el = document.getElementById('kr-lib-side'); if(!el){ el = document.createElement('div'); el.id = 'kr-lib-side'; el.style.cssText = 'position:fixed;top:0;bottom:0;width:420px;max-width:92vw;z-index:75;background:#fff;border-left:1px solid var(--border);box-shadow:-6px 0 24px rgba(0,0,0,.14);display:none;flex-direction:column;'; document.body.appendChild(el); } return el; }
+function krLibSideOpen(){ KRLIB_SIDE.open = true; krLibSideRender(); }
+function krLibSideClose(){ KRLIB_SIDE.open = false; var el = krLibSideEl(); el.style.display = 'none'; }
+function krLibRows(){
+  var hid = krHospitalIdOfMe(), tab = KRLIB_SIDE.tab, q = String(KRLIB_SIDE.q||'').trim().toLowerCase(), out = [];
+  var won = function(n){ return '₩'+Number(n||0).toLocaleString('en-US'); };
+  if(tab==='mgmt'){
+    krLocalLib(hid).filter(function(p){ return p.active!==false; }).forEach(function(p){ var ps = (p.specs||[]).map(function(s){ return s.price; }).filter(function(x){ return x>0; });
+      out.push({cat:p.catLabel||'', name:p.name, price:ps.length ? (Math.min.apply(null, ps)===Math.max.apply(null, ps) ? won(ps[0]) : won(Math.min.apply(null, ps))+' ～ '+won(Math.max.apply(null, ps))) : '面议', meta:(p.specs||[]).map(function(s){ return s.label; }).join('、')}); });
+  } else {
+    krpProjects().filter(function(p){ return p.active; }).forEach(function(p){ var post = isKrPostcareCat(p.categoryId); if((tab==='post') !== post) return; var df = p.defaults;
+      out.push({cat:post ? '' : concernPartDef(partBase(krMainPartOf(p))).label, name:p.name, price:post ? '免费' : won(p.price), meta:df ? [KR_ANES[df.anes]||'', df.stay ? '在韩 '+df.stay : '', df.durMin ? df.durMin+' 分钟' : ''].filter(Boolean).join(' · ') : ''}); });
+  }
+  return out.filter(function(r){ return !q || (r.name+r.cat+r.meta).toLowerCase().indexOf(q)>-1; });
+}
+function krLibSideList(){
+  var rows = krLibRows(), cats = []; rows.forEach(function(r){ if(r.cat && cats.indexOf(r.cat)<0) cats.push(r.cat); });
+  var cur = KRLIB_SIDE.cat; if(cur && cats.indexOf(cur)<0) cur = KRLIB_SIDE.cat = '';
+  var chips = cats.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"><button class="chip'+(!cur ? ' active' : '')+'" onclick="krLibSideSet(\'cat\',\'\')">全部</button>'+cats.map(function(c0){ return '<button class="chip'+(cur===c0 ? ' active' : '')+'" onclick="krLibSideSet(\'cat\',this.getAttribute(\'data-c\'))" data-c="'+krEsc(c0)+'">'+krEsc(c0)+'</button>'; }).join('')+'</div>' : '';
+  var list = rows.filter(function(r){ return !cur || r.cat===cur; });
+  return chips+(list.length ? list.map(function(r){ return '<div style="padding:8px 0;border-bottom:1px solid var(--border2);font-size:13px;"><div style="display:flex;gap:10px;"><b style="flex:1;">'+krEsc(r.name)+'</b><span style="white-space:nowrap;">'+krEsc(r.price)+'</span></div>'+(r.meta ? '<div style="font-size:12px;color:var(--muted);margin-top:2px;">'+krEsc(r.meta)+'</div>' : '')+'</div>'; }).join('') : krEmpty('没有符合的项目'));
+}
+function krLibSideSet(k, v){ KRLIB_SIDE[k] = v; if(k==='tab') KRLIB_SIDE.cat = ''; if(k==='q'){ var l = document.getElementById('krlib-list'); if(l) l.innerHTML = krLibSideList(); return; } krLibSideRender(); }
+function krLibSideRender(){
+  var el = krLibSideEl(); if(!KRLIB_SIDE.open){ el.style.display = 'none'; return; }
+  var right = document.body.classList.contains('kr-rec-open') ? (document.body.classList.contains('kr-rec-mini') ? 44 : 400) : 0, t0 = KRLIB_SIDE.tab;
+  el.style.right = right+'px'; el.style.display = 'flex';
+  var tb = function(k, l){ return '<button class="chip'+(t0===k ? ' active' : '')+'" onclick="krLibSideSet(\'tab\',\''+k+'\')">'+l+'</button>'; };
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border2);"><b style="font-size:15px;">项目库（只读）</b><span style="cursor:pointer;font-size:16px;" onclick="krLibSideClose()">✕</span></div>'+
+    '<div style="padding:12px 16px;overflow:auto;flex:1;"><div style="font-size:12px;color:var(--muted);margin-bottom:8px;">只能查看，不能在这里选项目；正式选项目由 KR 室长发诊疗方案时做。</div><div style="display:flex;gap:6px;margin-bottom:8px;">'+tb('surg','施术项目')+tb('post','术后管理')+tb('mgmt','管理项目')+'</div>'+
+    '<input id="krlib-q" type="text" placeholder="搜索项目" value="'+krEsc(KRLIB_SIDE.q)+'" oninput="krLibSideSet(\'q\',this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:8px;"><div id="krlib-list">'+krLibSideList()+'</div></div>'+
+    '<div style="display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border2);"><button class="btn-outline" onclick="krLibSideClose()">关闭</button></div>';
 }

@@ -133,7 +133,10 @@ RT.runKr = function(){
   RT.cell('项目进程 memo：能写（院长 / 代表院长 / 室长；IN 只读，CMD-1021-08）', '✅', RT.yn(krCanMemo()));
   RT.cell('侧栏 / 页面：经营数据、账号管理、医院设定、操作日志', admin ? '✅' : '❌', RT.yn(RT.has(L, ['经营数据','账号管理','医院设定','操作日志'])));
   RT.cell('侧栏 / 页面：院长管理（院长名单、停用）', admin ? '✅' : '❌', RT.yn(L.indexOf('院长管理')>-1));
-  RT.cell('侧栏 / 页面：赴韩项目库（维护）', coord ? '✅' : '❌', RT.yn(L.indexOf('项目库')>-1));
+  RT.cell('侧栏 / 页面：项目库（所有 KR 角色可看，CMD-1103-01；院长 / 代表院长只看）', '✅', RT.yn(L.indexOf('项目库')>-1));
+  var plib = T(function(){ var el = document.createElement('div'); ADMIN_RENDER.krsrvc(el); var h = el.innerHTML; return {edit:/krpOpen\(/.test(h) || /krlOpen\(/.test(h), tog:/krpToggleActive|krlToggleActive/.test(h), price:/₩\s?[\d,]{4,}/.test(h)}; });
+  RT.cell('项目库页面：新增 / 编辑 / 停用按钮（院长 / 代表院长不出现）', coord ? '✅' : '❌', RT.yn(plib && (plib.edit || plib.tog)), JSON.stringify(plib));
+  RT.cell('项目库页面：显示价格', '✅', RT.yn(plib && plib.price));
   RT.cell('侧栏 / 页面：案例库（院长 / 代表院长也能看，只读）', '✅', RT.yn(L.indexOf('案例库')>-1));
   var lib0 = T(function(){ var d0 = DEMO_ROLE; DEMO_ROLE = 'kr'; var r0 = {add:libCaseCanAdd(), own:libCaseCanEdit({source:'travel', by:'KR'}), inCase:libCaseCanEdit({source:'travel', by:'IN'}), inLocal:libCaseCanEdit({source:'local', by:'IN'})}; DEMO_ROLE = d0; return r0; });
   RT.cell('案例库：新增案例（KR 室长 / 管理者；院长 / 代表院长只读）', coord ? '✅' : '❌', RT.yn(lib0.add===true), '来源标 KR，可选负责院长');
@@ -250,7 +253,10 @@ RT.runKr = function(){
   RT.cell('项目进程 memo：能写（院长 / 代表院长 / 室长；IN 只读，CMD-1021-08）', '✅', RT.yn(krCanMemo()));
   RT.cell('侧栏 / 页面：经营数据、账号管理、医院设定、操作日志', admin ? '✅' : '❌', RT.yn(RT.has(L, ['经营数据','账号管理','医院设定','操作日志'])));
   RT.cell('侧栏 / 页面：院长管理（院长名单、停用）', admin ? '✅' : '❌', RT.yn(L.indexOf('院长管理')>-1));
-  RT.cell('侧栏 / 页面：赴韩项目库（维护）', coord ? '✅' : '❌', RT.yn(L.indexOf('项目库')>-1));
+  RT.cell('侧栏 / 页面：项目库（所有 KR 角色可看，CMD-1103-01；院长 / 代表院长只看）', '✅', RT.yn(L.indexOf('项目库')>-1));
+  var plib = T(function(){ var el = document.createElement('div'); ADMIN_RENDER.krsrvc(el); var h = el.innerHTML; return {edit:/krpOpen\(/.test(h) || /krlOpen\(/.test(h), tog:/krpToggleActive|krlToggleActive/.test(h), price:/₩\s?[\d,]{4,}/.test(h)}; });
+  RT.cell('项目库页面：新增 / 编辑 / 停用按钮（院长 / 代表院长不出现）', coord ? '✅' : '❌', RT.yn(plib && (plib.edit || plib.tog)), JSON.stringify(plib));
+  RT.cell('项目库页面：显示价格', '✅', RT.yn(plib && plib.price));
   RT.cell('侧栏 / 页面：案例库（院长 / 代表院长也能看，只读）', '✅', RT.yn(L.indexOf('案例库')>-1));
   var lib0 = T(function(){ var d0 = DEMO_ROLE; DEMO_ROLE = 'kr'; var r0 = {add:libCaseCanAdd(), own:libCaseCanEdit({source:'travel', by:'KR'}), inCase:libCaseCanEdit({source:'travel', by:'IN'}), inLocal:libCaseCanEdit({source:'local', by:'IN'})}; DEMO_ROLE = d0; return r0; });
   RT.cell('案例库：新增案例（KR 室长 / 管理者；院长 / 代表院长只读）', coord ? '✅' : '❌', RT.yn(lib0.add===true), '来源标 KR，可选负责院长');
