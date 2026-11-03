@@ -6531,8 +6531,8 @@ function leaveSurgItems(c){
 }
 function leaveBypass(by){ return by==='系统' || !!window.DAYCONFIRM_BYPASS || !!window.GMC_LEAVE_SKIP; }
 /* 离院原因逐项检查（只检查不改）；返回错误文字，空 = 通过。leave = [{name, reason, memo, act:'rebook'|'cancel', when:'now'|'later', date, time, dir, dec:'all'|'part'|'swap', amt, dmemo}] */
-function leaveValidate(c, leave){
-  var items = leaveSurgItems(c), hid = caseKrHospital(c), booked = [];
+function leaveValidate(c, leave, names){ /* CMD-1103-05：names = 只检查这几项（隔天确认时，已标完成的不算） */
+  var items = leaveSurgItems(c).filter(function(x){ return !names || names.indexOf(x.name)>-1; }), hid = caseKrHospital(c), booked = [];
   for(var i = 0; i < items.length; i++){
     var it = items[i], r = (leave||[]).filter(function(x){ return x.name===it.name; })[0], nm = buyName(it.name);
     if(!r || !r.reason) return '「'+nm+'」请选择没做的原因';
@@ -6577,7 +6577,8 @@ function coreEndVisitToday(c, by, reason, leave){ if(rebookActive(c)){ coreReboo
   var bypass = leaveBypass(by);
   if(!bypass && !krEvalDone(c)) return {ok:false, evalFirst:true, err:'请先完成到院评估（不适合做手术的，请在评估里选「不建议手术」）'};
   var pb = endBlockPending(c); if(pb) return pb;
-  var surgLeft = bypass ? [] : leaveSurgItems(c);
+  var hasLeave = !!(leave && leave.length); /* CMD-1103-05：隔天确认（bypass）时带了原因也照原因处理 */
+  var surgLeft = (bypass && !hasLeave) ? [] : leaveSurgItems(c);
   if(surgLeft.length){
     if(!leave) return {ok:false, needLeave:true, items:surgLeft.map(function(x){ return x.name; }), err:'今天还有施术没做完，请逐项选择没做的原因'};
     var ve = leaveValidate(c, leave); if(ve) return {ok:false, err:ve};
@@ -6588,7 +6589,7 @@ function coreEndVisitToday(c, by, reason, leave){ if(rebookActive(c)){ coreReboo
     todayOpenRows(c).forEach(function(x){ if(x.held){ coreTodayCancel(c, 'item', x.held.name, by, true); } else if(x.row && x.row.kind==='增加项目'){ coreTodayCancel(c, 'item', x.name, by, true); } });
     surgPlanItems(c).forEach(function(it){ if(!it.done && !it.deferUse){
       var r = (leave||[]).filter(function(x){ return x.name===it.name; })[0];
-      if(r && !bypass){ var act = r.reason===LEAVE_REASONS[0] ? 'rebook' : (r.reason===LEAVE_REASONS[1] ? 'cancel' : r.act); if(act==='cancel'){ cancels.push({it:it, r:r}); return; } coreTodayCancel(c, 'item', it.name, by, true); it.rebookWait = {at:nowFullDt(), by:by, reason:r.reason, memo:String(r.memo||'').trim()}; rebooks.push({it:it, r:r}); }
+      if(r && (!bypass || hasLeave)){ var act = r.reason===LEAVE_REASONS[0] ? 'rebook' : (r.reason===LEAVE_REASONS[1] ? 'cancel' : r.act); if(act==='cancel'){ cancels.push({it:it, r:r}); return; } coreTodayCancel(c, 'item', it.name, by, true); it.rebookWait = {at:nowFullDt(), by:by, reason:r.reason, memo:String(r.memo||'').trim()}; rebooks.push({it:it, r:r}); }
       else { coreTodayCancel(c, 'item', it.name, by, true); it.rebookWait = {at:nowFullDt(), by:by, reason:bypass ? '确认结束 / 系统结束时没做' : (reason||''), memo:''}; sysWait.push(it.name); }
     } });
     (c.subItems||[]).forEach(function(s){ if(s.kind==='施术' && !s.done && !s.visitKey){ s.done = true; s.doneAt = nowFullDt(); s.doneBy = by; s.doneItems = s.doneItems || []; } });
@@ -9497,6 +9498,7 @@ function coreBookChange(hid, id, date, time, by){
 }
 function coreBookCancel(hid, id, kind, by){
   var b = krbFind(hid, id); if(!b || b.status!=='confirmed' || b.arrivedAt) return {ok:false, err:'这笔预约已经不能取消'};
+  if(b.linked){ var lc = coreBookCancelLinked(hid, b, by); if(!lc.ok) return lc; b.status = 'cancelled'; (b.history = b.history||[]).push({ts:nowFullDt(), text:by+' 取消预约（项目已退回原状态）'}); krbBlockRemove(hid, id); return {ok:true}; } /* CMD-1103-05 */
   b.status = 'cancelled'; (b.history = b.history||[]).push({ts:nowFullDt(), text:by+(kind==='noshow' ? ' 标记未到店' : ' 取消预约')}); krbBlockRemove(hid, id);
   Store.mutateClinic(b.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===b.caseId; })[0]; if(c){ c.subState = 'cancelled'; c.noShow = kind==='noshow'; c.cancelReason = kind==='noshow' ? '未到店' : '预约取消'; c.cancelBy = '室长'; updateCaseStage(c); logCaseEvent(c, by, kind==='noshow' ? '客人未到店（KR 医院）：已取消' : '预约取消（KR 医院）'); } });
   return {ok:true};

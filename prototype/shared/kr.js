@@ -4714,10 +4714,20 @@ function krDayConfirmRender(){
 function krDayConfirmClose(){ var ov = document.getElementById('kr-dayc-overlay'); if(ov) ov.classList.remove('open'); KDC = null; }
 function krDayConfirmChoose(k, v){ if(!KDC) return; KDC.ch[k] = v; krDayConfirmRender(); }
 function krDayConfirmGo(){
-  if(!KDC || !krCan()) return; var K = KDC, by = ME_NAME;
+  if(!KDC || !krCan()) return; var K = KDC;
+  /* CMD-1103-05：主到院里还有施术选了「没做」→ 先弹和离院一样的原因窗（评估没做完的也一样），选完才真的确认 */
+  if(K.key==='main'){
+    var skipItems = Store.withClinic(K.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===K.id; })[0]; if(!c) return []; return krDayConfirmRows(c, K.key).filter(function(r){ return r.kind==='surg' && K.ch[r.key]!=='done'; }).map(function(r){ var it = (c.procedureItems||[]).filter(function(x){ return x.name===r.name && !x.done && !x.cancelled; })[0]; return {name:r.name, price:it ? itemKrAmount(it) : 0}; }); });
+    if(skipItems.length){ krLeaveWhyOpen(skipItems, {K:K}); return; }
+  }
+  krDayConfirmRun(K, null);
+}
+function krDayConfirmRun(K, leave){
+  var by = ME_NAME, errOut = '';
   Store.mutateClinic(K.clinicId, function(){
     var c = CASE_ITEMS.filter(function(x){ return x.id===K.id; })[0]; if(!c) return;
     var rows = krDayConfirmRows(c, K.key); if(!rows.every(function(r){ return K.ch[r.key]; }) || pendingPayItems(c).length) return;
+    if(leave){ var skipNames = rows.filter(function(r){ return r.kind==='surg' && K.ch[r.key]!=='done'; }).map(function(r){ return r.name; }); window.DAYCONFIRM_BYPASS = true; try{ errOut = leaveValidate(c, leave, skipNames); } finally { window.DAYCONFIRM_BYPASS = false; } if(errOut) return false; }
     var done = [], skip = [], night = K.key==='main' ? mainVisitDay(c) : String(K.key).split('|')[1];
     window.DAYCONFIRM_BYPASS = true;
     try{
@@ -4728,13 +4738,15 @@ function krDayConfirmGo(){
           if(r.kind==='surg'){
             var it = (c.procedureItems||[]).filter(function(x){ return x.name===r.name && !x.done && !x.cancelled; })[0]; if(!it) return;
             if(ch==='done'){ it.done = true; it.doneAt = nowFullDt(); logCaseEvent(c, by, 'KR确认施术项目已完成（关账后确认）：'+r.name); surgDone++; done.push(r.label); }
-            else { coreTodayCancel(c, 'item', r.name, by, true); it.rebookWait = {at:nowFullDt(), by:by, reason:'关账后确认：没做', memo:''}; (c.subItems||[]).forEach(function(s0){ if(s0.kind==='术后管理记录' && s0.projectName===r.name && !s0.done && !s0.skipped) coreRowCancel(c, s0.id, by); }); surgSkip++; skip.push(r.label+'（术后管理一起回到未预约）'); }
+            else if(leave){ surgSkip++; skip.push(r.label); /* 原因窗选的结果交给 coreEndVisitToday 处理（重新预约 / 取消项目） */ }
+            else { coreTodayCancel(c, 'item', r.name, by, true); it.rebookWait = {at:nowFullDt(), by:by, reason:'关账后确认：没做（未选原因）', memo:''}; (c.subItems||[]).forEach(function(s0){ if(s0.kind==='术后管理记录' && s0.projectName===r.name && !s0.done && !s0.skipped) coreRowCancel(c, s0.id, by); }); surgSkip++; skip.push(r.label+'（术后管理一起回到未预约）'); }
           } else {
             if(ch==='done'){ coreMgmtUse(c, r.name, by, 1); done.push(r.label); } else { coreTodayCancel(c, 'item', r.name, by, true); skip.push(r.label); }
           }
         });
         var anyDone = surgDone>0 || (c.procedureItems||[]).some(function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped && x.done && !krIsMgmtItemC(x); });
-        if(anyDone || !surgSkip){ var er = coreEndVisitToday(c, by, '关账后确认'); if(!er.ok){ c.krProcedureDone = true; c.surgeryDoneAt = night; } }
+        if(anyDone || !surgSkip || leave){ var er = coreEndVisitToday(c, by, '关账后确认', leave || undefined); if(!er.ok){ errOut = er.err || ''; c.krProcedureDone = true; c.surgeryDoneAt = night; }
+          if(leave){ (c.procedureItems||[]).forEach(function(it0){ if(it0.rebookWait && !it0.done && !it0.cancelled){ (c.subItems||[]).forEach(function(s0){ if(s0.kind==='术后管理记录' && s0.projectName===it0.name && !s0.done && !s0.skipped) coreRowCancel(c, s0.id, by); }); } }); } }
         else { c.krSchedule = c.krSchedule || {}; c.krSchedule.status = 'confirmed'; c.hasArrived = false; c.krArrivedDay = ''; c.krProcedureDone = false; logCaseEvent(c, by, '关账后确认：施术项目都没做，回到「施术时间已确认」，请改日期或取消项目'); }
         c.dayConfirmedKeys = c.dayConfirmedKeys || {}; c.dayConfirmedKeys.main = {at:nowFullDt(), by:by};
       } else {
@@ -4750,6 +4762,7 @@ function krDayConfirmGo(){
     return true;
   });
   krDayConfirmClose(); try{ krRefreshAll(); }catch(e){}
+  return errOut;
 }
 
 
@@ -5160,8 +5173,8 @@ function krLibSideRender(){
 
 /* ===== CMD-1103-02 二：［客人已离院］——评估完成后，今天还有施术没按［操作完成］ → 逐项选没做的原因 ===== */
 var KR_LV = {rows:[], err:''};
-function krLeaveWhyOpen(items){
-  KR_LV = {err:'', rows:items.map(function(x){ return {name:x.name, price:x.price, reason:'', memo:'', act:'', when:'later', date:'', time:'', dir:'', dec:'', amt:'', dmemo:''}; })};
+function krLeaveWhyOpen(items, ctx){ /* ctx = {K} 时是「隔天确认前一天」 */
+  KR_LV = {err:'', ctx:ctx||null, rows:items.map(function(x){ return {name:x.name, price:x.price, reason:'', memo:'', act:'', when:'later', date:'', time:'', dir:'', dec:'', amt:'', dmemo:''}; })};
   krLeaveWhyRender();
 }
 function krLvAct(r){ return r.reason===LEAVE_REASONS[0] ? 'rebook' : (r.reason===LEAVE_REASONS[1] ? 'cancel' : r.act); }
@@ -5191,16 +5204,22 @@ function krLvRowHtml(r, i, c0){
 }
 function krLeaveWhyRender(){
   var ov = document.getElementById('kr-leave-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-leave-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
-  var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c;
-  ov.innerHTML = '<div class="modal-box" style="width:660px;max-width:94vw;max-height:88vh;overflow:auto;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">确认客人已离院 · 今天还有施术没做</div><div style="font-size:12px;color:var(--muted);">逐项选择没做的原因；选好之后案件继续进行，已付的钱不动。</div>'+
+  var K0 = KR_LV.ctx ? KR_LV.ctx.K : null, c0 = K0 ? krFindCase(K0.clinicId, K0.id).c : krFindCase(KR_CASE.clinicId, KR_CASE.id).c;
+  ov.innerHTML = '<div class="modal-box" style="width:660px;max-width:94vw;max-height:88vh;overflow:auto;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">'+(K0 ? '确认结束 · 那一天还有施术没做' : '确认客人已离院 · 今天还有施术没做')+'</div><div style="font-size:12px;color:var(--muted);">逐项选择没做的原因；选好之后案件继续进行，已付的钱不动。</div>'+
     KR_LV.rows.map(function(r, i){ return krLvRowHtml(r, i, c0); }).join('')+
     '<div id="kr-lv-err" style="color:#B3261E;font-size:13px;margin-top:12px;'+(KR_LV.err ? '' : 'display:none;')+'">'+krEsc(KR_LV.err)+'</div>'+
-    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-ghost" onclick="krLeaveWhyClose()">取消</button><button class="btn-primary" onclick="krLeaveWhyGo()">确认客人已离院</button></div></div>';
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-ghost" onclick="krLeaveWhyClose()">取消</button><button class="btn-primary" onclick="krLeaveWhyGo()">'+(K0 ? '确认结束' : '确认客人已离院')+'</button></div></div>';
   ov.style.zIndex = 100010; ov.classList.add('open');
 }
 function krLeaveWhyClose(){ var ov = document.getElementById('kr-leave-overlay'); if(ov) ov.classList.remove('open'); }
 function krLeaveWhyGo(){
   if(!krCan()) return; var res = null;
+  if(KR_LV.ctx){ /* CMD-1103-05：隔天确认前一天——日期从确认当天的明天起（leaveValidate 里 d > todayStr()），超出在韩期间的只能之后再约或取消项目 */
+    var K = KR_LV.ctx.K, leave = KR_LV.rows.map(function(r){ return {name:r.name, reason:r.reason, memo:r.memo, act:krLvAct(r), when:r.when, date:r.date, time:r.time, dir:r.dir, dec:r.dec, amt:r.amt, dmemo:r.dmemo}; });
+    var errT = krDayConfirmRun(K, leave);
+    if(errT){ KR_LV.err = errT; krLeaveWhyRender(); return; }
+    krLeaveWhyClose(); return;
+  }
   krMut(function(c){ res = coreEndVisitToday(c, ME_NAME, '', KR_LV.rows.map(function(r){ return {name:r.name, reason:r.reason, memo:r.memo, act:krLvAct(r), when:r.when, date:r.date, time:r.time, dir:r.dir, dec:r.dec, amt:r.amt, dmemo:r.dmemo}; })); if(!res.ok) return false; return true; });
   if(res && !res.ok){ KR_LV.err = res.err || '不能结束'; if(res.pending){ krLeaveWhyClose(); krEndBlockModal(res.err); } else krLeaveWhyRender(); return; }
   krLeaveWhyClose();

@@ -8940,4 +8940,82 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var old = {metaviewStatus:'ready'}; ST.ok(metaState(old)==='yes' && /旧资料/.test(metaPlainText(old)) && metaState({metaviewStatus:'idle'})==='', '旧资料：已检测 · 旧资料；未填维持未选');
     var kn = {meta:{v:'no', at:nowFullDt()}}; ST.ok(metaKrText(kn)==='未检测', 'KR：未检测');
   });
+
+  ST.def('R219a','CMD-1103-05（KM1，pcStage 夹具）：关联之前案件的占位 KR 确认后真的约上（待重新预约施术 + 术后管理 + 持有管理项目）；KR 取消 → 回原状态；约不上整笔回滚',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var hid = caseKrHospital(Store.withClinic(r.clinicId, function(){ return CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; }));
+    var mut = function(fn){ var out; Store.mutateClinic(r.clinicId, function(){ out = fn(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]); return true; }); return out; };
+    var rd = function(fn){ return Store.withClinic(r.clinicId, function(){ return fn(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]); }); };
+    var td = todayStr();
+    mut(function(c){ c.krBalancePaid = true; c.stay = {in:ymdAdd(td,-1), inTime:'10:00', out:ymdAdd(td,40), outTime:'18:00'}; delete c.krTripEnded;
+      var sr = {name:'T219右眼修复', origin:'KR', price:500000, iid:'iT219s', deferUse:true, rebookWait:{at:nowFullDt(), by:'KM1', reason:'身体不适', memo:''}}; c.procedureItems.push(sr);
+      c.procedureItems.push({name:'热玛吉 · 300发', origin:'KR', mgmtPlan:true, krAddOn:true, qty:3, heldOver:true, uses:[], iid:'iT219h'}); return true; });
+    var day = null, tm = '11:30', dirs0 = rd(function(c){ return [c.director, 'KD1 院长']; }); for(var d = 4; d < 25 && !day; d++){ var ds = ymdAdd(td, d); if(hospitalClosedOn(hid, ds) || rd(function(c){ return sameDayDenyText(c, ds, 'care'); })) continue; ['10:00','11:30','15:00','16:30','12:00','18:00'].forEach(function(t0){ if(day) return; if(dirs0.every(function(dr){ return !krSurgerySlotError(hid, dr, ds, t0, 90, 'x:y', {allowOffHours:true}); })){ day = ds; tm = t0; } }); } if(!ST.ok(!!day, '找到可约日')) return;
+    var g = rd(function(c){ return krbGroups(c.id); });
+    ST.ok(g.surg.length>=1 && g.hold.some(function(x){ return /热玛吉/.test(x.label); }), '三组里有待重新预约施术 + 持有管理项目：surg '+g.surg.length+' care '+g.care.length+' hold '+g.hold.length);
+    var items = g.surg.concat(g.care.slice(0,1), g.hold.filter(function(x){ return /热玛吉/.test(x.label); }));
+    var nCases = rd(function(){ return CASE_ITEMS.length; });
+    var mk = function(date){ var b = {id:'kbT219'+Math.floor(Math.random()*1e6), clinicId:r.clinicId, clientName:r.name, purpose:'linkcase', linkCaseId:r.id, linkCaseNo:'', items:items.map(function(x){ return Object.assign({}, x); }), sub:'', director:'', date:date, time:tm, end:minToTime(timeToMin(tm)+30), note:'', status:'pending', by:'A1 室长', createdAt:nowFullDt(), caseId:'', history:[]}; krbList(hid).push(b); return b; };
+    /* 约不上：周日（医院休诊）→ 占位仍待确认，项目没动 */
+    var sun = null; for(var d2 = 4; d2 < 30 && !sun; d2++){ var ds2 = ymdAdd(td, d2); if(hospitalClosedOn(hid, ds2)) sun = ds2; }
+    if(sun){ var bx = mk(sun); var rx = coreBookConfirm(hid, bx.id, ME_NAME); ST.ok(!rx.ok && bx.status==='pending', '休诊日约不上，占位仍待确认'); ST.ok(rd(function(c){ return rebookWaitItems(c).length>=1 && !(c.subItems||[]).some(function(s){ return s.date===sun && s.surgUse; }); }), '约不上时项目没动'); }
+    var b = mk(day);
+    var ro = coreBookReselect(hid, b.id, 'reject', '测试', null, ME_NAME); ST.ok(ro.ok && rd(function(c){ return rebookWaitItems(c).length>=1; }), 'KR 无法安排 → 项目仍是待重新预约'); b.status = 'pending';
+    var res = coreBookConfirm(hid, b.id, ME_NAME, {dir:'KD1 院长'}); ST.ok(res.ok && b.linked && b.status==='confirmed', '确认成功：'+(res.err||''));
+    ST.ok(rd(function(){ return CASE_ITEMS.length; })===nCases, '不另建「在韩管理」案件');
+    rd(function(c){
+      ST.ok(rebookWaitItems(c).length===0, '待重新预约的施术约上后不再是待重新预约');
+      ST.ok((c.subItems||[]).some(function(s){ return s.surgUse==='T219右眼修复' && s.date===day && s.time===tm; }), '施术行在那一天');
+      ST.ok((c.subItems||[]).some(function(s){ return s.holdUseOf && /热玛吉/.test(s.holdUseOf) && s.date===day; }), '持有管理项目约在那一天');
+      var h = (c.subItems||[]).filter(function(s){ return s.holdUseOf && /热玛吉/.test(s.holdUseOf) && s.date===day; })[0]; ST.ok(h && h.dirOp && h.director==='KD1 院长', '院长操作的管理项目用了所选院长');
+      var sg = (c.subItems||[]).filter(function(s){ return s.surgUse==='T219右眼修复'; })[0]; ST.ok(sg && (!sg.director || sg.director===c.director), '施术固定用案件的对接院长');
+      var g2 = krbGroups(c.id); ST.ok(!g2.surg.length && !g2.hold.some(function(x){ return /热玛吉/.test(x.label) && false; }) && g2.care.length===Math.max(0, g.care.length-1), '勾的项目从可约列表消失');
+    });
+    ST.ok(!(HOSPITAL_DATA[hid].directorSchedule[KRB_HOSP]||[]).some(function(x){ return x.bookingId===b.id; }), '不再另画占位块');
+    ST.ok(!krTodoItems(krAllCases()).some(function(it){ return it.kind==='today' && /预约/.test(it.text||'') && b.date===td; }), '不进「今天到店」旧待办');
+    var cn = coreBookCancel(hid, b.id, 'cancel', ME_NAME); ST.ok(cn.ok && b.status==='cancelled', 'KR 取消占位：'+(cn.err||''));
+    rd(function(c){ ST.ok(rebookWaitItems(c).length>=1 && !(c.subItems||[]).some(function(s){ return s.date===day && (s.surgUse || s.holdUseOf); }), '取消后施术回到待重新预约、持有项目回到未预约'); });
+  });
+  ST.def('R219b','CMD-1103-05（A1，pcStage + stageC 夹具）：占位弹窗顺序 客人 → 来访目的 → 关联的案件 → 日期 + 行程 → 备注；没有可约项目灰掉 / 默认新增访问；只有一个案件自动选上',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\',\'stageC\'])')) return;
+    var hid = clinicHospital(CURRENT_CLINIC_ID), td = todayStr();
+    c.krBalancePaid = true; c.stay = {in:ymdAdd(td,1), inTime:'09:00', out:ymdAdd(td,20), outTime:'17:30'}; delete c.krTripEnded;
+    KRB = {hid:hid, date:ymdAdd(td,3), time:'11:00', director:'', client:'', purpose:'linkcase', linkCaseId:'', items:[], sub:'术后复诊', note:'', replaceId:null, info:'', err:''};
+    krbRender(); krbClientPick(c.name); var ov = document.getElementById('krb-overlay'), t = ov.innerText;
+    var pos = ['客人（只列赴韩行程中的）','来访目的','关联的案件','日期（韩国）','备注'].map(function(x){ return t.indexOf(x); });
+    ST.ok(pos.every(function(p){ return p>-1; }) && pos.every(function(p, i){ return i===0 || p>pos[i-1]; }), '顺序：客人 → 来访目的 → 关联的案件 → 日期 → 备注：'+pos.join(','));
+    ST.ok(KRB.purpose==='linkcase' && KRB.linkCaseId===c.id, '只有一个案件时自动选上');
+    ST.ok(/客人行程：入境 \d\d\/\d\d 09:00 ～ 离境 \d\d\/\d\d 17:30（韩国时间）/.test(t), '日期下面标示客人行程：'+t.replace(/\s+/g,' ').slice(t.indexOf('客人行程'), t.indexOf('客人行程')+60));
+    c.stay = null; krbRender(); ov = document.getElementById('krb-overlay'); ST.ok(/还没确认客人行程（入境～离境），请先确认/.test(ov.innerText) && ov.querySelector('input[type=date][disabled]'), '没有行程：日期灰掉 + 红字');
+    var c2 = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0];
+    if(c2 && !krbClientHasItems(c2.name)){ krbClientPick(c2.name); ov = document.getElementById('krb-overlay'); var opt = Array.prototype.filter.call(ov.querySelectorAll('option'), function(o){ return o.value==='linkcase'; })[0]; ST.ok(KRB.purpose==='newvisit' && opt && opt.disabled && /关联之前案件（目前没有可约的项目）/.test(opt.textContent), '没有可约项目：关联之前案件灰掉、默认新增访问'); }
+    krbOverlay('krb-overlay').classList.remove('open'); KRB = null;
+  });
+  ST.def('R219c','CMD-1103-05（KM1，stageC 夹具）：隔天确认前一天——还有施术没做弹原因窗（评估没做的也一样），没选完不能确认；身体不适 → 待重新预约、案件不结案；客人放弃 → 取消项目',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var mut = function(fn){ var out; Store.mutateClinic(r.clinicId, function(){ out = fn(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]); return true; }); return out; };
+    var td = todayStr(), yd = ymdAdd(td, -1);
+    mut(function(c){ c.krSchedule.confirmedDate = td; c.krSchedule.simDay = true; if(!c.hasArrived) coreMarkArrived(c, ST.krBy); c.krJudge = null; c.krArrivedDay = yd; c.krSchedule.confirmedDate = yd; c.stay = {in:ymdAdd(td,-3), out:ymdAdd(td,30)}; return true; });
+    ST.ok(mut(function(c){ return dayLockedKR(c, 'main'); }), '前一天没按离院 → 已关账');
+    krDayConfirmOpen(r.clinicId, r.id, 'main'); var rows = mut(function(c){ return krDayConfirmRows(c, 'main').filter(function(x){ return x.kind==='surg'; }); }); ST.ok(rows.length>=1, '有没做的施术');
+    rows.forEach(function(x){ krDayConfirmChoose(x.key, 'skip'); });
+    mut(function(c){ krDayConfirmRows(c, 'main').forEach(function(x){ if(x.kind!=='surg') KDC.ch[x.key] = 'skip'; }); return true; }); krDayConfirmChoose(rows[0].key, 'skip');
+    krDayConfirmGo(); var lv = document.getElementById('kr-leave-overlay'); ST.ok(lv && lv.classList.contains('open') && /确认结束 · 那一天还有施术没做/.test(lv.innerText), '评估没做的：弹出和离院一样的原因窗');
+    krLeaveWhyGo(); ST.ok(/请选择没做的原因/.test(document.getElementById('kr-lv-err').textContent) && mut(function(c){ return rebookWaitItems(c).length===0 && !c.krProcedureDone; }), '没选完不能确认，什么都没动');
+    KR_LV.rows.forEach(function(x){ x.reason = LEAVE_REASONS[0]; x.when = 'later'; }); krLeaveWhyGo();
+    mut(function(c){ ST.ok(rebookWaitItems(c).length===rows.length && !isEnded(c) && c.stage!=='closed', '身体不适 + 之后再约 → 待重新预约、案件不结案'); ST.ok((c.logEntries||[]).filter(function(e){ return /待重新预约/.test(e.action) && /客人已离院|确认结束/.test(e.action); }).length>=1, 'Timeline 记了待重新预约'); return true; });
+    ST.ok(krTodoItems(krAllCases()).some(function(it){ return it.kind==='rebookwait'; }), 'KR 待办「待重新预约」');
+    /* ④ 客人放弃：另一个案件 */
+    var r2 = krAllCases().filter(function(x){ return x.name==='T-待到院' && x.id!==r.id; })[0];
+    if(r2){
+      var mut2 = function(fn){ var out; Store.mutateClinic(r2.clinicId, function(){ out = fn(CASE_ITEMS.filter(function(x){ return x.id===r2.id; })[0]); return true; }); return out; };
+      mut2(function(c){ c.krSchedule.confirmedDate = td; c.krSchedule.simDay = true; if(!c.hasArrived) coreMarkArrived(c, ST.krBy); coreJudge(c, 'ok', ST.krBy, ''); c.krArrivedDay = yd; c.krSchedule.confirmedDate = yd; return true; });
+      krDayConfirmOpen(r2.clinicId, r2.id, 'main'); mut2(function(c){ krDayConfirmRows(c, 'main').forEach(function(x){ KDC.ch[x.key] = 'skip'; }); return true; });
+      krDayConfirmGo(); KR_LV.rows.forEach(function(x){ x.reason = LEAVE_REASONS[1]; x.dec = 'swap'; }); krLeaveWhyGo();
+      mut2(function(c){ ST.ok((c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !krIsMgmtItemC(it) && it.cancelled; }).length>=1, '评估做了、施术没做、客人放弃 → 取消项目'); return true; });
+    }
+  });
 })();
