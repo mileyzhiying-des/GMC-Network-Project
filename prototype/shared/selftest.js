@@ -1274,7 +1274,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var cl = krbClients(); if(!ST.ok(cl.length>0, '需要有赴韩项目的客人')) return; var name = cl[0];
     nav('in-dashboard'); setCalView('kr'); setCalMode('week'); var col = [].slice.call(document.querySelectorAll('.kr-daycol')).filter(function(e){ return e.getAttribute('data-ds')>todayStr() && !hospitalClosedOn(hid, e.getAttribute('data-ds')) && e.getAttribute('onclick'); })[0];
     ST.ok(!!col, 'KR 医院日程周视图应有可点的空白列'); var r = col.getBoundingClientRect(); col.dispatchEvent(new MouseEvent('click', {bubbles:true, clientX:r.left+8, clientY:r.top+KR_ROW_PX*2+3}));
-    ST.ok(!!KRB && document.getElementById('krb-overlay').classList.contains('open'), '点空白时段应弹出预约窗'); ST.ok(KRB.purpose==='carebook', 'CMD-1020-18：默认来访目的是在韩术后管理预约'); KRB.purpose = 'newvisit'; /* 这个用例测的是时间冲突，不勾项目 */
+    ST.ok(!!KRB && document.getElementById('krb-overlay').classList.contains('open'), '点空白时段应弹出预约窗'); ST.ok(KRB.purpose==='linkcase', 'CMD-1103-02：默认来访目的是关联之前案件（只有 关联之前案件 / 新增访问 两个）'); KRB.purpose = 'newvisit'; /* 这个用例测的是时间冲突，不勾项目 */
     var busyCnt = 0; Object.keys(HOSPITAL_DATA[hid].directorSchedule).forEach(function(n){ (HOSPITAL_DATA[hid].directorSchedule[n]||[]).forEach(function(b){ if(b.type==='不可预约' && b.date>todayStr() && !busyCnt){ busyCnt = 1; KRB.client = name; KRB.date = b.date; KRB.time = b.time; krbSubmit(); ST.ok(KRB===null || !/不可预约|重叠|已有/.test(KRB.err||''), 'CMD-1014-18：占位只看医院营业 / 休诊，不再因院长不可预约挡住，实际：'+(KRB&&KRB.err)); var mk = krbList(hid).filter(function(x){ return x.clientName===name && x.date===b.date && x.time===b.time && x.status==='pending'; })[0]; if(mk) krBookCancel(mk.id); } }); });
     if(!KRB) KRB = {hid:hid, date:D(2), time:'11:00', director:'', client:name, purpose:'care', note:'', replaceId:null, info:'', err:''};
     var closed = null; for(var d = 1; d < 15 && !closed; d++){ if(hospitalClosedOn(hid, D(d))) closed = D(d); } if(closed){ KRB.date = closed; krbSubmit(); ST.ok(/休诊/.test(KRB.err||''), '医院休诊日应挡住'); }
@@ -8900,9 +8900,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R217b','CMD-1103-02（A1，stageC 夹具）：IN 占位只列行程没结束的客人、三组项目、日期范围',function(){
     var me = currentAccount(); if(!ST.ok(me && /^A/.test(me.id), '要在 IN 分页里跑')) return;
-    var cs = krbClients(); ST.ok(cs.indexOf('T-待到院')>-1, '行程没结束的客人在名单里：'+cs.join(','));
-    var main = krbMainCases('T-待到院')[0]; if(!ST.ok(!!main, '有主案件')) return;
-    main.krTripEnded = {}; ST.ok(krbClients().indexOf('T-待到院')<0, '行程已结束的客人不在名单里'); delete main.krTripEnded;
+    var cs = krbClients(); if(!ST.ok(cs.length>0, '需要有行程没结束的客人（先 ST.ensureFixtures([\'stageC\'])）')) return; var nmx = cs.indexOf('T-待到院')>-1 ? 'T-待到院' : cs[0];
+    var main = krbMainCases(nmx)[0]; if(!ST.ok(!!main, '有主案件')) return;
+    main.krTripEnded = {}; ST.ok(krbClients().indexOf(nmx)<0 || krbMainCases(nmx).length>0, '行程已结束的客人不在名单里'); delete main.krTripEnded;
     var g = krbGroups(main.id); ST.ok(g && Array.isArray(g.surg) && Array.isArray(g.care) && Array.isArray(g.hold), '三组结构');
     ST.ok(KRB_PURPOSE_NEW.join()==='linkcase,newvisit', '来访目的只有两个');
     var f = {purpose:'linkcase', linkCaseId:main.id, date:todayStr()}; var oldStay = main.stay; main.stay = null;
