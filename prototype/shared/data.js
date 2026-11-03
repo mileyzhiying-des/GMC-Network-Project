@@ -12194,7 +12194,7 @@ function fuTripHoldOnly(c){ var any = false; try{ any = clientCareLeftAll(c.name
 
 /* ================= CMD-1103-04：메타뷰 改成人工记录（是 / 否 必选，选「是」弹确认窗，记时间 + 操作人员，室长不能撤销）=================
    c.meta = {v:'yes'|'no', at:UTC 时间（记到分钟）, by:账号使用人名字, byId, fixes:[{at,by,reason,from,to}]}；旧资料没有 c.meta：metaviewStatus==='ready' 当作「是 · 旧资料」。
-   c.metaviewStatus 继续同步（yes → 'ready'，no → 'no'，没选 → 'idle'），别处还在读它。IN 管理者可更正（撤销 / 改时间），原因必填，记操作日志 + Timeline。 */
+   c.metaviewStatus 继续同步（yes → 'ready'，no → 'no'，没选 → 'idle'），别处还在读它。IN 管理者可更正（是 / 否 / 时间，没有撤销），原因必填，记操作日志 + Timeline。 */
 function metaState(c){ if(!c) return ''; if(c.meta && (c.meta.v==='yes' || c.meta.v==='no')) return c.meta.v; return c.metaviewStatus==='ready' ? 'yes' : ''; }
 function metaCanFix(){ return nikCanEdit(); }
 function metaEnded(c){ return !!(c.visitClosed || c.leftStore || (typeof isEnded==='function' && isEnded(c))); }
@@ -12207,8 +12207,10 @@ function metaFieldHtml(c){
   if(s===''){
     return '<span style="display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center;"><button class="btn-outline" onclick="metaPick(\'yes\')">是（本次已检测）</button><button class="btn-outline" onclick="metaPick(\'no\')">否（本次没做）</button></span>';
   }
-  if(s==='yes') return '<span style="'+sty+'"><b style="color:var(--sage);">已检测</b> · '+metaStampText(c)+'</span>'+(metaCanFix() ? '　<a href="#" class="info-link" onclick="metaFixOpen();return false;">更正（管理者）</a>' : '');
-  return '<span style="'+sty+'"><b style="color:var(--slate2);">未检测</b> · '+metaStampText(c)+'</span>'+(metaEnded(c) ? '' : '　<a href="#" class="info-link" onclick="metaPick(\'yes\');return false;">改成「是」</a>');
+  var tag = metaFixesOf(c).length ? '　<a href="#" class="info-link" style="font-size:12px;" onclick="metaFixLogOpen();return false;">已更正</a>' : '';
+  var fixBtn = metaCanFix() ? '　<a href="#" class="info-link" onclick="metaFixOpen();return false;">更正</a>' : '';
+  if(s==='yes') return '<span style="'+sty+'"><b style="color:var(--sage);">已检测</b> · '+metaStampText(c)+'</span>'+tag+fixBtn;
+  return '<span style="'+sty+'"><b style="color:var(--slate2);">未检测</b> · '+metaStampText(c)+'</span>'+tag+(metaEnded(c) ? '' : '　<a href="#" class="info-link" onclick="metaPick(\'yes\');return false;">改成「是」</a>')+fixBtn;
 }
 function metaOverlay(id){ var ov = document.getElementById(id); if(!ov){ ov = document.createElement('div'); ov.id = id; ov.className = 'modal-overlay'; ov.style.zIndex = 100200; document.body.appendChild(ov); } return ov; }
 function metaPick(v){
@@ -12217,7 +12219,7 @@ function metaPick(v){
   if(s==='yes'){ return; } /* 已确认「是」：室长不能撤销 / 改回「否」 */
   if(v==='no'){
     if(s==='no') return;
-    c.meta = {v:'no', at:nowFullDt(), by:actingName(), byId:currentAccountId()}; c.metaviewStatus = 'no'; c.materialsError = '';
+    c.meta = {v:'no', at:nowFullDt(), by:actingName(), byId:currentAccountId(), fixes:metaFixesOf(c)}; c.metaviewStatus = 'no'; c.materialsError = '';
     logCaseEvent(c, actingName(), '记录 MetaView：本次未检测（'+tkU(c.meta.at)+'）');
     buildCaseLog(c); renderCaseBody(c); return;
   }
@@ -12231,40 +12233,56 @@ function metaConfirmClose(){ var ov = document.getElementById('meta-confirm-over
 function metaConfirmYes(){
   metaConfirmClose();
   var c = getCurrentCase(); if(!c || metaState(c)==='yes') return;
-  c.meta = {v:'yes', at:nowFullDt(), by:actingName(), byId:currentAccountId()}; c.metaviewStatus = 'ready'; c.materialsError = '';
+  c.meta = {v:'yes', at:nowFullDt(), by:actingName(), byId:currentAccountId(), fixes:metaFixesOf(c)}; c.metaviewStatus = 'ready'; c.materialsError = '';
   logCaseEvent(c, actingName(), '确认已完成 MetaView 检测（'+tkU(c.meta.at)+'，操作人员 '+actingName()+'）');
   buildCaseLog(c); renderCaseBody(c);
 }
-/* IN 管理者更正：撤销（回到没选）/ 改检测时间；原因必填，错误红字写在弹窗里 */
+/* IN 管理者更正（CMD-1103-06）：只有一个［更正］——直接选正确的结果 是 / 否，选「是」可改检测时间；原因必填；
+   客人离店 / 案件结束后也能改；记录 fixes（原值 + 新值 + 谁 + 何时 + 原因）、Timeline、操作日志。没有「撤销」，结果选过后不会回到没选。 */
 function metaFixOpen(){
-  var c = getCurrentCase(); if(!c || !metaCanFix() || metaState(c)!=='yes') return;
-  var cur = c.meta && c.meta.at ? fmtUtc(c.meta.at) : '', dv = cur ? cur.slice(0,10)+'T'+cur.slice(11,16) : '';
+  var c = getCurrentCase(); if(!c || !metaCanFix() || metaState(c)==='') return;
+  var s = metaState(c), at = (s==='yes' && c.meta && c.meta.at) ? c.meta.at : nowFullDt();
+  var cur = fmtUtc(at), dv = cur.slice(0,10)+'T'+cur.slice(11,16);
   var ov = metaOverlay('meta-fix-overlay');
-  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-weight:700;font-size:16px;margin-bottom:10px;">更正 MetaView 检测记录</div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-weight:700;font-size:16px;margin-bottom:10px;">更正 MetaView 记录</div>'+
     '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">现在：'+metaPlainText(c)+'</div>'+
-    '<label style="display:block;font-size:13px;margin-bottom:6px;"><input type="radio" name="meta-fix-act" value="undo" checked onchange="document.getElementById(\'meta-fix-dt\').disabled=true"> 撤销（回到「没选」，室长之后重新选）</label>'+
-    '<label style="display:block;font-size:13px;margin-bottom:6px;"><input type="radio" name="meta-fix-act" value="time" onchange="document.getElementById(\'meta-fix-dt\').disabled=false"> 更正检测时间　<input type="datetime-local" id="meta-fix-dt" disabled value="'+dv+'" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;"></label>'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">正确的结果</div>'+
+    '<label style="display:block;font-size:13px;margin-bottom:6px;"><input type="radio" name="meta-fix-v" value="yes"'+(s==='yes'?' checked':'')+' onchange="metaFixSync()"> 是（本次已检测）</label>'+
+    '<label style="display:block;font-size:13px;margin-bottom:6px;"><input type="radio" name="meta-fix-v" value="no"'+(s==='no'?' checked':'')+' onchange="metaFixSync()"> 否（本次没做）</label>'+
+    '<div id="meta-fix-dtrow" style="font-size:13px;margin:6px 0;">检测时间　<input type="datetime-local" id="meta-fix-dt" value="'+dv+'" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;"></div>'+
     '<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">更正原因 <span style="color:#B3261E;">*</span></div><textarea id="meta-fix-why" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>'+
     '<div id="meta-fix-err" style="font-size:12px;color:#B3261E;min-height:18px;margin-top:4px;"></div>'+
     '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px;"><button class="btn-outline" onclick="document.getElementById(\'meta-fix-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" onclick="metaFixSave()">确认更正</button></div></div>';
-  ov.classList.add('open');
+  ov.classList.add('open'); metaFixSync();
 }
+function metaFixSync(){ var r = document.querySelector('input[name="meta-fix-v"]:checked'), row = document.getElementById('meta-fix-dtrow'); if(row) row.style.display = (r && r.value==='yes') ? '' : 'none'; }
 function metaFixSave(){
-  var c = getCurrentCase(); if(!c || !metaCanFix() || metaState(c)!=='yes') return;
+  var c = getCurrentCase(); if(!c || !metaCanFix() || metaState(c)==='') return;
   var err = function(t){ var e = document.getElementById('meta-fix-err'); if(e) e.textContent = t; };
   var why = (document.getElementById('meta-fix-why').value||'').trim(); if(!why){ err('请填写更正原因'); return; }
-  var act = (document.querySelector('input[name="meta-fix-act"]:checked')||{}).value || 'undo', old = c.meta ? c.meta.at : '', from = metaPlainText(c), to = '';
-  c.meta = c.meta || {v:'yes', at:'', by:'（旧资料）'}; c.meta.fixes = c.meta.fixes || [];
-  if(act==='time'){
-    var dv = (document.getElementById('meta-fix-dt').value||''); if(!dv){ err('请选择新的检测时间'); return; }
-    var nu = localToUtc(dv.slice(0,10), dv.slice(11,16), pageTz());
-    c.meta.at = nu; to = '检测时间改为 '+fmtUtc(nu);
-  } else {
-    to = '撤销（回到没选）'; c.meta = {v:'', fixes:c.meta.fixes}; c.metaviewStatus = 'idle';
-  }
-  c.meta.fixes.push({at:nowFullDt(), by:actingName(), reason:why, from:from, to:to});
-  logCaseEvent(c, actingName(), '管理者更正 MetaView 记录：'+to+'；原因：'+why+'（原：'+from.replace(/<[^>]+>/g,'')+'）');
-  try{ logOp('其他', '更正 MetaView 检测记录（'+c.name+' '+(c.caseNo||'')+'）：'+to+'；原因：'+why, 'MetaView'); }catch(e){}
+  var vEl = document.querySelector('input[name="meta-fix-v"]:checked'); if(!vEl){ err('请选择正确的结果'); return; }
+  var nv = vEl.value, ov0 = metaState(c), oldAt = (c.meta && c.meta.at) || '', oldBy = (c.meta && c.meta.by) || '（旧资料）';
+  var from = metaPlainText(c).replace(/<[^>]+>/g,''), nu = oldAt;
+  if(nv==='yes'){
+    var dv = (document.getElementById('meta-fix-dt').value||''); if(!dv){ err('请选择检测时间'); return; }
+    nu = localToUtc(dv.slice(0,10), dv.slice(11,16), pageTz());
+    if(ov0==='yes' && nu===oldAt){ err('没有任何改动：请改结果或检测时间'); return; }
+  } else if(ov0==='no'){ err('没有任何改动：请改结果或检测时间'); return; }
+  c.meta = c.meta || {v:ov0, at:'', by:oldBy}; c.meta.fixes = c.meta.fixes || [];
+  var to = nv==='yes' ? (ov0==='yes' ? '检测时间改为 '+fmtUtc(nu) : '改成「是（已检测）」，检测时间 '+fmtUtc(nu)) : '改成「否（未检测）」';
+  c.meta.fixes.push({at:nowFullDt(), by:actingName(), byId:currentAccountId(), reason:why, from:from, to:to, fromV:ov0, fromAt:oldAt, fromBy:oldBy, toV:nv, toAt:nu});
+  c.meta.v = nv; c.meta.at = nu || c.meta.at || nowFullDt(); c.metaviewStatus = nv==='yes' ? 'ready' : 'no';
+  logCaseEvent(c, actingName(), '管理者更正 MetaView 记录：'+to+'；原因：'+why+'（原：'+from+'）');
+  try{ logOp('其他', '更正 MetaView 记录（'+c.name+' '+(c.caseNo||'')+'）：'+to+'；原因：'+why+'（原：'+from+'）', 'MetaView'); }catch(e){}
   document.getElementById('meta-fix-overlay').classList.remove('open');
   buildCaseLog(c); renderCaseBody(c);
+}
+function metaFixesOf(c){ return (c && c.meta && c.meta.fixes) || []; }
+function metaFixLogOpen(){
+  var c = getCurrentCase(); if(!c) return;
+  var rows = metaFixesOf(c).slice().reverse().map(function(f){ return '<div style="font-size:13px;padding:8px 0;border-bottom:1px solid var(--border);"><b>'+fmtUtc(f.at)+' · '+cesc(f.by)+'</b><br>原：'+cesc(f.from)+'<br>改：'+cesc(f.to)+'<br>原因：'+cesc(f.reason)+'</div>'; }).join('');
+  var ov = metaOverlay('meta-fixlog-overlay');
+  ov.innerHTML = '<div class="modal-box" style="width:460px;"><div style="font-weight:700;font-size:16px;margin-bottom:8px;">MetaView 更正记录</div>'+(rows||'<div style="color:var(--muted);">没有更正记录</div>')+
+    '<div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn-outline" onclick="document.getElementById(\'meta-fixlog-overlay\').classList.remove(\'open\')">关闭</button></div></div>';
+  ov.classList.add('open');
 }

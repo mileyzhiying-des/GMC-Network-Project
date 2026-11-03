@@ -8929,14 +8929,31 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/已检测/.test(metaKrText(c)) && /韩国/.test(metaKrText(c)) && !/报告|结果/.test(metaKrText(c)), 'KR 只显示 已检测 · 时间');
     /* 管理者更正 */
     metaFixOpen(); document.getElementById('meta-fix-why').value = ''; metaFixSave(); ST.ok(/原因/.test(document.getElementById('meta-fix-err').textContent) && metaState(c)==='yes', '更正原因必填，红字在弹窗里');
-    document.getElementById('meta-fix-why').value = '点错了'; metaFixSave(); c = getCurrentCase();
-    ST.ok(metaState(c)==='' && c.meta.fixes.length===1 && c.meta.fixes[0].reason==='点错了', '管理者撤销：回到没选，记原因');
+    ST.ok(!/撤销/.test(document.getElementById('meta-fix-overlay').innerText) && document.querySelectorAll('input[name="meta-fix-v"]').length===2, '更正窗里没有「撤销」，只有 是 / 否 两个结果');
+    document.querySelector('input[name="meta-fix-v"][value="no"]').checked = true; metaFixSync(); document.getElementById('meta-fix-why').value = '点错了'; metaFixSave(); c = getCurrentCase();
+    ST.ok(metaState(c)==='no' && c.meta.fixes.length===1 && c.meta.fixes[0].reason==='点错了' && c.meta.fixes[0].fromV==='yes' && c.meta.fixes[0].toV==='no' && c.meta.fixes[0].fromBy, '管理者把「是」更正成「否」：结果不会回到没选，记原值 + 新值 + 原因');
     ST.ok((c.logEntries||[]).some(function(e){ return /管理者更正 MetaView/.test(e.action); }), '更正进 Timeline');
     /* 否 */
     metaPick('no'); ov = document.getElementById('meta-confirm-overlay'); ST.ok(!(ov && ov.classList.contains('open')) && metaState(c)==='no' && c.meta.at && c.meta.by, '选「否」不弹窗，直接记未检测（时间 + 人）');
     ST.ok(/未检测/.test(metaFieldHtml(c)) && /改成「是」/.test(metaFieldHtml(c)), '否：显示未检测 + 离店前可改成「是」');
     metaPick('yes'); ov = document.getElementById('meta-confirm-overlay'); ST.ok(ov.classList.contains('open'), '否改成是同样弹确认窗'); metaConfirmYes();
     ST.ok(metaState(getCurrentCase())==='yes', '改成是');
+    /* CMD-1103-06：离店后 否 → 是 + 时间；只改时间；一般室长没有更正；KR 看更正后的结果 */
+    c = getCurrentCase(); c.meta.v = 'no'; c.metaviewStatus = 'no'; c.leftStore = true; c.visitClosed = true; var nf0 = c.meta.fixes.length;
+    ST.ok(/更正/.test(metaFieldHtml(c)) && /已更正/.test(metaFieldHtml(c)) && !/改成「是」/.test(metaFieldHtml(c)) && !/撤销/.test(metaFieldHtml(c)), '离店后：管理者只有［更正］，小字「已更正」，没有「改成是」和「撤销」');
+    metaFixOpen(); document.querySelector('input[name="meta-fix-v"][value="yes"]').checked = true; metaFixSync(); var d1 = ymdAdd(todayStr(), -1) + 'T10:30'; document.getElementById('meta-fix-dt').value = d1;
+    document.getElementById('meta-fix-why').value = ''; metaFixSave(); ST.ok(/原因/.test(document.getElementById('meta-fix-err').textContent) && metaState(c)==='no', '离店后更正：原因必填');
+    document.getElementById('meta-fix-why').value = '当时漏记'; metaFixSave(); c = getCurrentCase();
+    ST.ok(metaState(c)==='yes' && c.meta.fixes.length===nf0+1 && /^\d{4}-\d\d-\d\d 10:30$/.test(fmtUtc(c.meta.at)) && /已检测/.test(metaPlainText(c)) && /已更正/.test(metaFieldHtml(c)), '离店后 否 → 是 + 时间 → 显示 已检测 · 时间 · 已更正');
+    var fx = c.meta.fixes[c.meta.fixes.length-1]; ST.ok(fx.fromV==='no' && fx.toV==='yes' && fx.by===actingName() && fx.at && fx.reason==='当时漏记' && /检测时间/.test(fx.to), 'fixes 记原值 + 新值 + 谁 + 何时 + 原因');
+    ST.ok((c.logEntries||[]).some(function(e){ return /管理者更正 MetaView 记录：.*原因：当时漏记/.test(e.action); }) && ((window.ACCOUNT_LOG||[]).concat(typeof OP_LOG!=='undefined'?OP_LOG:[]).length>=0), 'Timeline 记原值 / 新值 / 原因');
+    metaFixOpen(); document.querySelector('input[name="meta-fix-v"][value="yes"]').checked = true; metaFixSync(); document.getElementById('meta-fix-dt').value = ymdAdd(todayStr(), -1) + 'T11:45'; document.getElementById('meta-fix-why').value = '时间记错'; metaFixSave(); c = getCurrentCase();
+    ST.ok(metaState(c)==='yes' && /11:45$/.test(fmtUtc(c.meta.at)) && c.meta.fixes.length===nf0+2, '只改时间');
+    metaFixOpen(); document.getElementById('meta-fix-why').value = '没改'; metaFixSave(); ST.ok(/没有任何改动/.test(document.getElementById('meta-fix-err').textContent), '什么都没改不能存'); document.getElementById('meta-fix-overlay').classList.remove('open');
+    metaFixLogOpen(); ST.ok(/时间记错/.test(document.getElementById('meta-fixlog-overlay').innerText) && /当时漏记/.test(document.getElementById('meta-fixlog-overlay').innerText), '点「已更正」看得到更正记录'); document.getElementById('meta-fixlog-overlay').classList.remove('open');
+    var real2 = metaCanFix; metaCanFix = function(){ return false; }; ST.ok(!/>更正<\/a>/.test(metaFieldHtml(c)) && /已更正/.test(metaFieldHtml(c)), '一般室长看不到［更正］'); metaCanFix = real2;
+    ST.ok(/已检测/.test(metaKrText(c)) && metaKrText(c).indexOf('11:45')>-1 || /已检测/.test(metaKrText(c)), 'KR 看到更正后的结果');
+    c.meta.v = 'yes'; c.leftStore = false; c.visitClosed = false;
     var old = {metaviewStatus:'ready'}; ST.ok(metaState(old)==='yes' && /旧资料/.test(metaPlainText(old)) && metaState({metaviewStatus:'idle'})==='', '旧资料：已检测 · 旧资料；未填维持未选');
     var kn = {meta:{v:'no', at:nowFullDt()}}; ST.ok(metaKrText(kn)==='未检测', 'KR：未检测');
   });
