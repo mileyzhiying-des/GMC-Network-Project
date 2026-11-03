@@ -1919,19 +1919,7 @@ function openCaseChatNewTab(id){
 
 /* 意向项目选择弹窗（CMD-1019-02 起整个拿掉：基础资料不再有意向项目，项目由面诊后院长 / 室长推荐） */
 
-function simulateMetaviewReady(){
-  var c = getCurrentCase(); if(!c || c.metaviewStatus==='ready' || c.metaviewStatus==='checking') return;
-  c.metaviewStatus = 'checking';
-  renderCaseBody(c);
-  setTimeout(function(){
-    var cc = getCurrentCase(); if(!cc || cc.id!==c.id) return;
-    cc.metaviewStatus = 'ready';
-    cc.materialsError = '';
-    logCaseEvent(cc, '메타뷰系统', '检测完成，数据已同步');
-    buildCaseLog(cc);
-    renderCaseBody(cc);
-  }, 1200);
-}
+function simulateMetaviewReady(){ metaPick('yes'); } /* CMD-1103-04：模拟自动检测拿掉，保留空壳指向人工确认 */
 
 function closeMaterialsMissing(){ document.getElementById('materials-missing-overlay').classList.remove('open'); }
 
@@ -1940,7 +1928,7 @@ function confirmMaterials(){
   var missing = [];
   var clN = clientByName(c.name); if(nikVisible() && clN && !clN.nik) missing.push('身份证号（NIK）'); /* CMD-1029-10：客人还没有 NIK → 接待时必填，没填不能确认 */
   if(c.usePrev){ c.needsConsult = false; } /* CMD-1029-03 五：来用之前购买的项目——不面诊，只检查 메타뷰 */
-  if(c.metaviewStatus !== 'ready') missing.push('메타뷰检测'); /* CMD-1022-05：메타뷰 每次到院都必填（一般 / 复诊 / 术后 / 继续都一样），取代 CMD-1020-20 / 21 的「关联案件选填」 */
+  if(metaState(c)==='') missing.push('메타뷰（请选 是 / 否）'); /* CMD-1022-05：메타뷰 每次到院都必填（一般 / 复诊 / 术后 / 继续都一样），取代 CMD-1020-20 / 21 的「关联案件选填」 */
   if(!c.usePrev) concernMissing(c).forEach(function(x){ missing.push(x); }); /* 苦恼按部位：说明 / 视频 / 各角度照片（不面诊时照片 / 视频选填） */
   var ciM = continuationInfo(c);
   if(ciM && ciM.overdue) c.needsConsult = true; /* 超过1个月：只能面诊 */

@@ -37,7 +37,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   ST.freeDirector = function(c){ var hid = caseHospitalId(c), ds = hospitalDirectorNames(hid); var ok = ds.filter(function(n){ var o = directorTodayOff(hid, n); return !(o && o.full); }); return ok.indexOf('KD1 院长')>-1 ? 'KD1 院长' : (ok[0] || 'KD1 院长'); };
   ST.materials = function(c, o){
     o = o || {}; ST.open(c);
-    c.metaviewStatus = 'ready'; c.concernText = '（自测）手写苦恼'; var pd0 = CONCERN_PARTS[0], ph0 = {}; pd0.angles.forEach(function(a){ ph0[a.id] = {name:'自测.jpg'}; }); c.concerns = [{part:pd0.key, desc:'（自测）苦恼', expect:'（自测）希望', video:{name:'自测.mp4'}, photos:ph0}]; concernSync(c); c.expectation = '（自测）希望';
+    c.metaviewStatus = 'ready'; c.meta = {v:'yes', at:nowFullDt(), by:'自测'}; c.concernText = '（自测）手写苦恼'; var pd0 = CONCERN_PARTS[0], ph0 = {}; pd0.angles.forEach(function(a){ ph0[a.id] = {name:'自测.jpg'}; }); c.concerns = [{part:pd0.key, desc:'（自测）苦恼', expect:'（自测）希望', video:{name:'自测.mp4'}, photos:ph0}]; concernSync(c); c.expectation = '（自测）希望';
     if(o.link){ c.linkedCase = {caseId:o.link.caseId, reason:o.link.reason}; }
     renderCaseBody(c);
     if(o.consult===true || o.consult==='reuse'){ setNeedsConsult(o.consult); } else setNeedsConsult(false);
@@ -8908,5 +8908,36 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var f = {purpose:'linkcase', linkCaseId:main.id, date:todayStr()}; var oldStay = main.stay; main.stay = null;
     ST.ok(/disabled/.test(krbDateInput(f, '')) && /请先确认客人行程/.test(krbDateInput(f, '')), '没有在韩期间：日期灰掉并提示');
     main.stay = {in:ymdAdd(todayStr(),1), out:ymdAdd(todayStr(),5)}; var h = krbDateInput(f, ''); ST.ok(/min="/.test(h) && /max="/.test(h), '有在韩期间：日期限制在入境～离境'); main.stay = oldStay;
+  });
+
+  ST.def('R218a','CMD-1103-04（A1）：메타뷰 人工记录——是 / 否必选、选「是」弹确认窗（取消不变 / 确认记时间 + 人）、否不弹窗可改成是、室长不能撤销、管理者更正需原因、KR 只看已检测 · 时间',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
+    var c = ST.newRes('R218a'); ST.arrive(c); c = getCurrentCase(); c.meta = null; c.metaviewStatus = 'idle'; c.needsConsult = false;
+    renderCaseBody(c); var h = document.getElementById('case-body') ? document.getElementById('case-body').innerHTML : '';
+    ST.ok(metaState(c)==='' && /本次已检测/.test(metaFieldHtml(c)) && /本次没做/.test(metaFieldHtml(c)), '没选：是 / 否两个按钮');
+    confirmMaterials(); ST.ok(!c.materialsConfirmed && /메타뷰/.test(document.getElementById('materials-missing-overlay').innerText), '都没选不能确认，缺项里写 메타뷰（弹窗，不是 alert）'); closeMaterialsMissing();
+    metaPick('yes'); var ov = document.getElementById('meta-confirm-overlay');
+    ST.ok(ov && ov.classList.contains('open') && /确认已完成 MetaView 检测？/.test(ov.innerText) && /确认后将记录检测时间及操作人员，且无法自行撤销。如需更正，请联系 IN 管理员。/.test(ov.innerText) && /取消/.test(ov.innerText) && /确认已检测/.test(ov.innerText), '选「是」弹确认窗，文字照原文');
+    metaConfirmClose(); ST.ok(metaState(c)==='', '［取消］什么都不变');
+    metaPick('yes'); metaConfirmYes(); c = getCurrentCase();
+    ST.ok(metaState(c)==='yes' && c.meta.by===actingName() && /^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(c.meta.at), '确认后记时间（到分钟）+ 操作人员');
+    ST.ok(new RegExp('已检测 · '+fmtUtc(c.meta.at).replace(/[-:]/g,'.')).test(metaPlainText(c).replace(/[-:]/g,'.')) && metaPlainText(c).indexOf(actingName())>-1, '显示：已检测 · 时间 · 室长名');
+    ST.ok((c.logEntries||[]).some(function(e){ return /确认已完成 MetaView 检测/.test(e.action); }), 'Timeline 记一条');
+    metaPick('no'); ST.ok(metaState(c)==='yes', '室长不能把「是」改回「否」');
+    var real = metaCanFix; metaCanFix = function(){ return false; }; ST.ok(!/更正/.test(metaFieldHtml(c)), '一般室长看不到撤销 / 更正'); metaCanFix = real;
+    ST.ok(/更正/.test(metaFieldHtml(c)), '管理者看得到［更正］');
+    ST.ok(/已检测/.test(metaKrText(c)) && /韩国/.test(metaKrText(c)) && !/报告|结果/.test(metaKrText(c)), 'KR 只显示 已检测 · 时间');
+    /* 管理者更正 */
+    metaFixOpen(); document.getElementById('meta-fix-why').value = ''; metaFixSave(); ST.ok(/原因/.test(document.getElementById('meta-fix-err').textContent) && metaState(c)==='yes', '更正原因必填，红字在弹窗里');
+    document.getElementById('meta-fix-why').value = '点错了'; metaFixSave(); c = getCurrentCase();
+    ST.ok(metaState(c)==='' && c.meta.fixes.length===1 && c.meta.fixes[0].reason==='点错了', '管理者撤销：回到没选，记原因');
+    ST.ok((c.logEntries||[]).some(function(e){ return /管理者更正 MetaView/.test(e.action); }), '更正进 Timeline');
+    /* 否 */
+    metaPick('no'); ov = document.getElementById('meta-confirm-overlay'); ST.ok(!(ov && ov.classList.contains('open')) && metaState(c)==='no' && c.meta.at && c.meta.by, '选「否」不弹窗，直接记未检测（时间 + 人）');
+    ST.ok(/未检测/.test(metaFieldHtml(c)) && /改成「是」/.test(metaFieldHtml(c)), '否：显示未检测 + 离店前可改成「是」');
+    metaPick('yes'); ov = document.getElementById('meta-confirm-overlay'); ST.ok(ov.classList.contains('open'), '否改成是同样弹确认窗'); metaConfirmYes();
+    ST.ok(metaState(getCurrentCase())==='yes', '改成是');
+    var old = {metaviewStatus:'ready'}; ST.ok(metaState(old)==='yes' && /旧资料/.test(metaPlainText(old)) && metaState({metaviewStatus:'idle'})==='', '旧资料：已检测 · 旧资料；未填维持未选');
+    var kn = {meta:{v:'no', at:nowFullDt()}}; ST.ok(metaKrText(kn)==='未检测', 'KR：未检测');
   });
 })();

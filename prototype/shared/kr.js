@@ -535,7 +535,7 @@ function krRelBodyHtml(o, vis){
       '<div style="margin-top:8px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krShowCase(\''+KR_CASE.clinicId+'\',\''+o.id+'\')">查看案件</button></div>';
   } else {
     var att = caseAttachments(o).map(function(f){ return krEsc(f.label); });
-    html += row('基础资料', krEsc((o.concern||'—')+'　· 面诊需求：'+(o.needsConsult===true ? '面诊' : '不面诊')+'　· 메타뷰：'+(o.metaviewStatus==='ready' ? '已检测' : '待检测')))+
+    html += row('基础资料', krEsc((o.concern||'—')+'　· 面诊需求：'+(o.needsConsult===true ? '面诊' : '不面诊')+'　· 메타뷰：'+metaKrText(o)))+
       row('做了什么项目', krEsc(caseProjectNames(o))+' <span style="color:var(--muted);">（不显示价格）</span>')+row('附件', att.length ? att.join('<br>') : '—');
   }
   return html;
@@ -879,7 +879,7 @@ function krVisitPurposeCard(c){
   var dir = krIsDirector(), col = krVpCollapsible(c), open = krVpIsOpen(c);
   var title = '到访目的'+(col ? '<span style="float:right;font-weight:400;font-size:12px;"><a href="#" class="info-link" onclick="krVpToggle(\''+c.id+'\');return false;">'+(open ? '折叠' : '展开')+'</a></span>' : '');
   if(!open) return krCardBox(title, '');
-  return krCardBox(title, krUploadRow(c, '메타뷰 检测', '메타뷰 检测报告', c.metaviewStatus==='ready', '已检测到')+concernBlockHtml(c, {budgetLast:true, fold:!dir, foldKey:c.id}));
+  return krCardBox(title, krKV('메타뷰 检测', metaKrText(c))+concernBlockHtml(c, {budgetLast:true, fold:!dir, foldKey:c.id}));
 }
 /* 面诊卡（一般面诊，CMD-1025-01 四～七）：标题「面诊｜院长：KD1 院长」（院长账号只写「面诊」），最右［开始面诊］；预约面诊时间（韩国）+ 距离预定时间；预约报告时间（韩国）只有 KR 室长看；开始后改成 预约面诊时间 + 录入面诊内容 */
 function krCdText(ms){ var neg = ms<0, m = Math.floor(Math.abs(ms)/60000), h = Math.floor(m/60); return (neg ? '已超过预定时间 ' : '距离预定时间 ')+(h<10 ? '0' : '')+h+':'+('0'+(m%60)).slice(-2); }
@@ -912,7 +912,7 @@ function krRptVpToggle(id){ KR_RPTVP_OPEN[id] = !KR_RPTVP_OPEN[id]; krRenderCase
 function krConsultDoneCard(c){
   var open = !!KR_RPTVP_OPEN[c.id], rt = c.reportEta ? fmtUtc(c.reportEta) : (c.reportDate||'—');
   var vp = '<div style="margin-top:10px;border-top:1px solid var(--border2);padding-top:10px;"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:13px;font-weight:700;flex:1;">到访目的</span><a href="#" class="info-link" style="font-size:12px;" onclick="krRptVpToggle(\''+c.id+'\');return false;">'+(open ? '折叠' : '展开')+'</a></div>'+
-    (open ? '<div style="margin-top:8px;">'+krUploadRow(c, '메타뷰 检测', '메타뷰 检测报告', c.metaviewStatus==='ready', '已检测到')+concernBlockHtml(c, {budgetLast:true, fold:false})+'</div>' : '')+'</div>';
+    (open ? '<div style="margin-top:8px;">'+krKV('메타뷰 检测', metaKrText(c))+concernBlockHtml(c, {budgetLast:true, fold:false})+'</div>' : '')+'</div>';
   return krCardBox('面诊', krDirLine(c)+krKV('面诊报告时间（韩国）', krEsc(rt))+vp);
 }
 function krTabConsult(c){ if(!isRevEval(c) && !isRevisitConsult(c) && !c.reuseReport && !isContinuationConsult(c) && c.consultStatus==='report_ready') return krConsultDoneCard(c)+krCardBoxR('报告', krKV('提交', krEsc(c.reportDate||'—')+'，'+krEsc(krCoordText(c.reportUploadedBy)||'—'))+krKV('面诊摘要', krEsc(c.videoSummary||'—')), krReportBtn(c))+(typeof krAfterBlock==='function' ? krAfterBlock(c) : '');

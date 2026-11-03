@@ -2454,7 +2454,7 @@ function clearResumeState(c){
 /* 退回待访问的核心（不碰界面）：手动取消接待、页面内离开确认、关分页兜底、心跳过期扫描共用 */
 function revertIntakeToWaiting(c, logText, actor){
   c.subState = 'waiting';
-  c.metaviewStatus = 'idle'; c.photoUploaded = false; c.videoUploaded = false;
+  c.metaviewStatus = 'idle'; c.meta = null; c.photoUploaded = false; c.videoUploaded = false;
   c.concern = ''; c.concerns = []; c.concernText = undefined; clearResumeState(c); c.expectation = ''; c.intentionProjects = []; c.intentionNote = '';
   c.budgetMin = null; c.budgetMax = null; c.needsConsult = null; c.materialsError = '';
   updateCaseStage(c);
@@ -2482,7 +2482,7 @@ function confirmCancelIntake(){
   var c = getCurrentCase(); if(!c) return;
   closeCancelIntakeModal();
   c.subState = 'waiting';
-  c.metaviewStatus = 'idle';
+  c.metaviewStatus = 'idle'; c.meta = null;
   c.photoUploaded = false;
   c.videoUploaded = false;
   c.concern = '';
@@ -2773,7 +2773,7 @@ function followupCardsHtml(c){
   var src = followSrc(c), btn = function(val, label){ var on = (c.needsConsult===val); return '<button class="'+(on?'btn-primary':'btn-outline')+'" onclick="setNeedsConsult('+val+')">'+(on?'✅ ':'')+label+'</button>'; };
   var cl = clientByName(c.name), brief = cl ? aEscC(cl.name)+' · '+aEscC(cl.gender||'—')+' · '+dobAgeText(cl.dob) : '';
   var basic = (c.basicOpen || (nikVisible() && cl && !cl.nik)) ? clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin:8px 0 0;') : '<div style="font-size:12px;color:var(--muted);margin-top:6px;">'+brief+'</div>';
-  var metaviewText = c.metaviewStatus==='ready' ? '<span style="font-weight:700;color:var(--sage);">已检测到</span>' : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>';
+  var metaviewText = metaFieldHtml(c);
   var body = '';
   if(c.needsConsult===true){
     var done = followDoneItems(src), sel = c.followProjects || [];
@@ -3246,16 +3246,14 @@ function resumeConsultCardsHtml(c, confirmed){
   var src = followSrc(c), rc = c.resumeCheck || {}, row = function(k, v){ return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk">'+k+'</span><div style="flex-grow:1;font-size:13px;">'+v+'</div></div>'; };
   var ok = '<b style="color:var(--sage);">✅</b> ';
   var basic = '<div class="card" style="padding:22px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>';
-  var metaCell = c.metaviewStatus==='ready'
-    ? '<span style="font-weight:700;color:var(--sage);">已检测到</span>'
-    : (c.metaviewStatus==='checking' ? '<span style="color:var(--terracotta);">检测中…</span>' : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>');
+  var metaCell = metaFieldHtml(c);
   var card = '<div class="card" style="padding:22px 24px;margin-top:14px;"><div class="info-heading" style="margin-bottom:4px;">到访目的 <span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">继续 '+cesc(src ? src.caseNo : '')+' · 继续面诊</span></div>'+
     guestConcernRowHtml(c)+
     row('继续案件', src ? cesc(src.caseNo)+' · 院长实际面诊日 '+cesc(rc.consultDay || resumeConsultDay(src))+' · 院长 '+cesc(src.director||'—')+' · '+cesc(src.reportReady ? (src.videoSummary||'已出诊疗方案') : '没有诊疗方案') : '—')+
     row('① 面诊日起 3 个月内', ok+'距面诊日 '+(rc.days!=null ? rc.days : (src ? resumeDaysSince(src) : '—'))+' 天，没超过 3 个月')+
     row('② 医美史新增', ok+(rc.hist && rc.hist.changed ? '有新增，不影响原方案：'+cesc(rc.hist.text) : '没有新增')+(rc.by ? '　<span style="font-size:12px;color:var(--muted);">判断人 '+cesc(rc.by)+'</span>' : ''))+
     row('③ 项目变化', ok+(rc.proj && rc.proj.changed ? '有变化，已和 KR 室长确认：'+cesc(rc.proj.note) : '没有变化')+(rc.by ? '　<span style="font-size:12px;color:var(--muted);">判断人 '+cesc(rc.by)+'</span>' : ''))+
-    (confirmed ? suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready') : row('메타뷰 <span style="color:var(--terracotta);">*</span>', metaCell))+
+    row('메타뷰 <span style="color:var(--terracotta);">*</span>', metaCell)+
     '<div style="font-size:12px;color:var(--muted);padding:8px 0;">确认后：不收面诊费、不用确认面诊时间、不重新面诊；直接进「项目」选项目（价格以结算时的最新价格为准），KR 可以在这份方案里加项目；原案件不变。</div>'+
     (confirmed ? '' : (MAT_SPLIT ? (MAT_FOOT = matFootHtml(c), '') : matFootHtml(c)))+'</div>';
   return (MAT_SPLIT ? '' : basic)+card;
@@ -3476,11 +3474,7 @@ function materialsCardHtml(c){
   if(isResumeConsult(c)) return resumeConsultCardsHtml(c, false); /* CMD-1022-06：继续面诊 */
   if(followupOn(c)) return followupCardsHtml(c); /* CMD-1021-18：术后来访 / 复诊来访流程 */
   if(c.usePrev) return usePrevCardsHtml(c); /* CMD-1029-03 五：来用之前购买的项目——到访目的只有四栏 */
-  var metaviewText = c.metaviewStatus==='ready'
-    ? '<span style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><span style="font-weight:700;color:var(--sage);">已检测到</span><a href="#" class="info-link" onclick="return false;">查看检测结果 ↗</a></span>'
-    : c.metaviewStatus==='checking'
-      ? '<span style="color:var(--terracotta);">检测中…</span>'
-      : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>';
+  var metaviewText = metaFieldHtml(c);
   var photoText = c.photoUploaded ? '<span style="font-weight:700;color:var(--sage);">✓ 已上传</span>' : '<button class="btn-ghost" onclick="mockUpload(\'photo\')">上传照片</button>';
   var videoText = c.videoUploaded ? '<span style="font-weight:700;color:var(--sage);">✓ 已上传</span>' : '<button class="btn-ghost" onclick="mockUpload(\'video\')">上传视频</button>';
   var ci0 = continuationInfo(c);
@@ -3826,7 +3820,6 @@ function retentionLabel(f){
 
 function caseAttachments(c){
   var base = caseBaseDate(c), list = [];
-  if(c.metaviewStatus==='ready') list.push({src:'基础资料', label:'메타뷰 检测报告', date:base});
   if((c.concerns||[]).length){ c.concerns.slice().sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }).forEach(function(x){ var nm = concernCardFull(x), np = Object.keys(x.photos||{}).length; if(x.video) list.push({src:'基础资料', label:nm+'视频', date:base, grp:concernGroupOf(x)}); if(np) list.push({src:'基础资料', label:nm+'照片（'+np+' 张）', date:base, grp:concernGroupOf(x)}); }); }
   else { if(c.photoUploaded) list.push({src:'基础资料', label:'照片', date:base});
   if(c.videoUploaded) list.push({src:'基础资料', label:'视频', date:base}); }
@@ -4032,12 +4025,12 @@ function supplementUpload(kind){
 function basicTabHtml(c){
   if(isResumeConsult(c)) return resumeConsultCardsHtml(c, true); /* CMD-1022-06 */
   if(contResume(c)) return ''; /* CMD-1026-01：继续的案件基础资料只留基本信息和医美史（到访目的卡拿掉，内容在弹窗和对应 tab 里） */
-  var metaviewText = c.metaviewStatus==='ready' ? '已检测到' : '待检测';
+  var metaviewText = metaFieldHtml(c);
   var consultLabel = c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult===true ? '面诊' : '不需要面诊');
   return (MAT_SPLIT ? '' : '<div class="card" style="padding:18px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>')+ /* CMD-1021-17：基本信息 / 到访目的 两张卡 */
     '<div class="card" style="padding:4px 24px;margin-top:14px;"><div class="info-heading" style="margin:14px 0 4px;">到访目的</div>'+
     guestConcernRowHtml(c)+
-    suppRowHtml(c,'metaview','메타뷰 检测',c.metaviewStatus==='ready')+ /* CMD-1021-20：메타뷰 面诊 / 不面诊都显示 */
+    '<div class="case-field-row"><span class="fk">메타뷰</span><div style="flex-grow:1;font-size:13px;">'+metaFieldHtml(c)+'</div></div>'+ /* CMD-1021-20：메타뷰 面诊 / 不面诊都显示 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼</span><div style="flex-grow:1;padding-bottom:10px;">'+concernCardsHtml(c, {supp:c.needsConsult!==false})+'</div></div>'+
     intentionInfoHtml(c)+
     (c.usePrev ? '' : '<div class="case-field-row" style="border-top:1px solid var(--border2);border-bottom:none;"><span class="fk">面诊</span><span style="flex-grow:1;font-size:13px;">'+consultLabel+(c.consultRequested?'（已申请）':'')+'</span></div>')+
@@ -11122,7 +11115,7 @@ function subHeaderHtml(c){
 function subVisitTabHtml(c){
   var ctx = subCtxOf(c), m = ctx.m, rec = ctx.isRec ? c : m, iv = inVisitOf(rec), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   var row = function(k, v){ return '<div class="case-field-row"><span class="fk">'+k+'</span><div style="flex-grow:1;font-size:13px;">'+v+'</div></div>'; };
-  var meta = rec.metaviewStatus==='ready' ? '已检测到' : (rec.metaviewStatus ? e(rec.metaviewStatus) : '—');
+  var meta = metaPlainText(rec);
   var photos = (rec.recovery||[]).reduce(function(n, x){ return n+Object.keys(x.photos||{}).length; }, 0)+(rec.revisitMedia||[]).reduce(function(n, x){ return n+Object.keys(x.photos||{}).length; }, 0);
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:10px;">到访</div>'+
     row('来访目的', e(rec.visitPurpose||'—')+(isChildVisit(rec) && hasResumeType(rec, '术后管理') ? '　<label style="font-size:12px;margin-left:8px;"><input type="checkbox" checked disabled> 术后管理</label><label style="font-size:12px;margin-left:8px;'+(revAddPossible(rec) ? 'cursor:pointer;' : 'color:var(--muted);')+'"><input type="checkbox" '+(hasResumeType(rec, '复诊评估') ? 'checked disabled' : (revAddPossible(rec) ? 'onchange="this.checked=false;addRevisitToDay()"' : 'disabled'))+'> 复诊评估'+(!hasResumeType(rec, '复诊评估') && revAddPossible(rec) ? ' <span style="color:var(--muted);">（客人当场想加：勾选后填写，送 KR 评估）</span>' : '')+'</label>' : ''))+row('到店状态', e(visitStateText(m, ctx.v))+(iv.arrivedDay ? '（'+e(iv.arrivedDay)+' 到店）' : ''))+row('메타뷰', meta)+row('当天照片', photos ? photos+' 张（复诊 / 术后恢复）' : '—')+
@@ -11282,7 +11275,7 @@ function contRender(){
   if(!contResume(c) || c.id!==m.caseId){ contClose(); return; } /* 换了案件 / 继续资料已清掉：弹窗跟着关 */
   var old = ov.querySelector('.cont-scroll'), top = old ? old.scrollTop : 0, e = cesc, src = followSrcById(c.resumeFrom.caseId) || followSrc(c);
   var types = resumeTypesOf(c), has = function(t){ return types.indexOf(t)>-1; };
-  var metaviewText = c.metaviewStatus==='ready' ? '<span style="font-weight:700;color:var(--sage);">已检测到</span>' : (c.metaviewStatus==='checking' ? '<span style="color:var(--terracotta);">检测中…</span>' : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>');
+  var metaviewText = metaFieldHtml(c);
   var careRows = contTodayCareRows(c);
   var careRows = contTodayCareRows(c);
   var clN2 = clientByName(c.name), nikRow = (nikVisible() && clN2 && !clN2.nik) ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk">身份证号（NIK） <span style="color:#B3261E;">*</span></span><div style="flex-grow:1;font-size:13px;">'+nikInputRowHtml(clN2, true, 'cont')+'</div></div>' : ''; /* CMD-1029-10：继续的来访也要补 NIK */
@@ -12147,10 +12140,7 @@ function holdSrcTag(h){
 }
 /* 到访目的只放四栏：메타뷰（必填）｜苦恼（选填）｜预算（选填）｜上传附件（选填）；没有面诊需求 / 院长 / 部位卡片 */
 function usePrevCardsHtml(c){
-  var metaviewText = c.metaviewStatus==='ready'
-    ? '<span style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><span style="font-weight:700;color:var(--sage);">已检测到</span><a href="#" class="info-link" onclick="return false;">查看检测结果 ↗</a></span>'
-    : c.metaviewStatus==='checking' ? '<span style="color:var(--terracotta);">检测中…</span>'
-    : '<span style="color:var(--slate2);cursor:pointer;border-bottom:1px dashed var(--dim);" onclick="simulateMetaviewReady()" title="原型演示：点击模拟메타뷰设备完成检测并推送数据">待检测</span>';
+  var metaviewText = metaFieldHtml(c);
   var metaRow = '<div class="case-field-row"><span class="fk">메타뷰 <span style="color:var(--terracotta);">*</span></span><div style="flex-grow:1;font-size:13px;">'+metaviewText+'</div></div>';
   var concernRow = '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼（选填）</span><div style="flex-grow:1;"><textarea placeholder="客人的苦恼…（可不填）" oninput="saveConcernText(this.value)" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(concernTextOf(c))+'</textarea></div></div>';
   var att = '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return cesc(f.label); }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>';
@@ -12199,3 +12189,80 @@ function reuseHandOffToMain(c){
 
 /* CMD-1029-06 一：客人只有赴韩疗程的持有（在韩持有 / 转到印尼的术后管理）、没有 IN 本地持有 */
 function fuTripHoldOnly(c){ var any = false; try{ any = clientCareLeftAll(c.name).some(function(x){ return x.c.id!==c.id; }) || localMainsWithLeft(c).length>0; }catch(e){} return any; }
+
+/* ================= CMD-1103-04：메타뷰 改成人工记录（是 / 否 必选，选「是」弹确认窗，记时间 + 操作人员，室长不能撤销）=================
+   c.meta = {v:'yes'|'no', at:UTC 时间（记到分钟）, by:账号使用人名字, byId, fixes:[{at,by,reason,from,to}]}；旧资料没有 c.meta：metaviewStatus==='ready' 当作「是 · 旧资料」。
+   c.metaviewStatus 继续同步（yes → 'ready'，no → 'no'，没选 → 'idle'），别处还在读它。IN 管理者可更正（撤销 / 改时间），原因必填，记操作日志 + Timeline。 */
+function metaState(c){ if(!c) return ''; if(c.meta && (c.meta.v==='yes' || c.meta.v==='no')) return c.meta.v; return c.metaviewStatus==='ready' ? 'yes' : ''; }
+function metaCanFix(){ return nikCanEdit(); }
+function metaEnded(c){ return !!(c.visitClosed || c.leftStore || (typeof isEnded==='function' && isEnded(c))); }
+function metaStampText(c){ var m = c.meta; if(!m || !m.at) return '旧资料'; return fmtUtc(m.at)+(m.by ? ' · '+cesc(m.by) : ''); }
+function metaPlainText(c){ var s = metaState(c); return s==='yes' ? '已检测 · '+metaStampText(c) : s==='no' ? '未检测 · '+metaStampText(c) : '—'; }
+/* KR / 对方看到的：只有「已检测 · 时间」或「未检测」，不显示检测结果 */
+function metaKrText(c){ var s = metaState(c); if(s==='yes') return '已检测'+(c.meta && c.meta.at ? ' · '+fmtUtc(c.meta.at, 'Asia/Seoul')+'（韩国）' : ' · 旧资料'); return s==='no' ? '未检测' : '—'; }
+function metaFieldHtml(c){
+  var s = metaState(c), sty = 'font-size:13px;';
+  if(s===''){
+    return '<span style="display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center;"><button class="btn-outline" onclick="metaPick(\'yes\')">是（本次已检测）</button><button class="btn-outline" onclick="metaPick(\'no\')">否（本次没做）</button></span>';
+  }
+  if(s==='yes') return '<span style="'+sty+'"><b style="color:var(--sage);">已检测</b> · '+metaStampText(c)+'</span>'+(metaCanFix() ? '　<a href="#" class="info-link" onclick="metaFixOpen();return false;">更正（管理者）</a>' : '');
+  return '<span style="'+sty+'"><b style="color:var(--slate2);">未检测</b> · '+metaStampText(c)+'</span>'+(metaEnded(c) ? '' : '　<a href="#" class="info-link" onclick="metaPick(\'yes\');return false;">改成「是」</a>');
+}
+function metaOverlay(id){ var ov = document.getElementById(id); if(!ov){ ov = document.createElement('div'); ov.id = id; ov.className = 'modal-overlay'; ov.style.zIndex = 100200; document.body.appendChild(ov); } return ov; }
+function metaPick(v){
+  var c = getCurrentCase(); if(!c) return;
+  var s = metaState(c);
+  if(s==='yes'){ return; } /* 已确认「是」：室长不能撤销 / 改回「否」 */
+  if(v==='no'){
+    if(s==='no') return;
+    c.meta = {v:'no', at:nowFullDt(), by:actingName(), byId:currentAccountId()}; c.metaviewStatus = 'no'; c.materialsError = '';
+    logCaseEvent(c, actingName(), '记录 MetaView：本次未检测（'+tkU(c.meta.at)+'）');
+    buildCaseLog(c); renderCaseBody(c); return;
+  }
+  var ov = metaOverlay('meta-confirm-overlay');
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-weight:700;font-size:16px;margin-bottom:10px;">确认已完成 MetaView 检测？</div>'+
+    '<div style="font-size:13px;line-height:1.7;color:var(--slate2);">请确认本次来访已完成 MetaView 检测。确认后将记录检测时间及操作人员，且无法自行撤销。如需更正，请联系 IN 管理员。</div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;"><button class="btn-outline" onclick="metaConfirmClose()">取消</button><button class="btn-primary" onclick="metaConfirmYes()">确认已检测</button></div></div>';
+  ov.classList.add('open');
+}
+function metaConfirmClose(){ var ov = document.getElementById('meta-confirm-overlay'); if(ov) ov.classList.remove('open'); }
+function metaConfirmYes(){
+  metaConfirmClose();
+  var c = getCurrentCase(); if(!c || metaState(c)==='yes') return;
+  c.meta = {v:'yes', at:nowFullDt(), by:actingName(), byId:currentAccountId()}; c.metaviewStatus = 'ready'; c.materialsError = '';
+  logCaseEvent(c, actingName(), '确认已完成 MetaView 检测（'+tkU(c.meta.at)+'，操作人员 '+actingName()+'）');
+  buildCaseLog(c); renderCaseBody(c);
+}
+/* IN 管理者更正：撤销（回到没选）/ 改检测时间；原因必填，错误红字写在弹窗里 */
+function metaFixOpen(){
+  var c = getCurrentCase(); if(!c || !metaCanFix() || metaState(c)!=='yes') return;
+  var cur = c.meta && c.meta.at ? fmtUtc(c.meta.at) : '', dv = cur ? cur.slice(0,10)+'T'+cur.slice(11,16) : '';
+  var ov = metaOverlay('meta-fix-overlay');
+  ov.innerHTML = '<div class="modal-box" style="width:440px;"><div style="font-weight:700;font-size:16px;margin-bottom:10px;">更正 MetaView 检测记录</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">现在：'+metaPlainText(c)+'</div>'+
+    '<label style="display:block;font-size:13px;margin-bottom:6px;"><input type="radio" name="meta-fix-act" value="undo" checked onchange="document.getElementById(\'meta-fix-dt\').disabled=true"> 撤销（回到「没选」，室长之后重新选）</label>'+
+    '<label style="display:block;font-size:13px;margin-bottom:6px;"><input type="radio" name="meta-fix-act" value="time" onchange="document.getElementById(\'meta-fix-dt\').disabled=false"> 更正检测时间　<input type="datetime-local" id="meta-fix-dt" disabled value="'+dv+'" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;"></label>'+
+    '<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">更正原因 <span style="color:#B3261E;">*</span></div><textarea id="meta-fix-why" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></textarea>'+
+    '<div id="meta-fix-err" style="font-size:12px;color:#B3261E;min-height:18px;margin-top:4px;"></div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px;"><button class="btn-outline" onclick="document.getElementById(\'meta-fix-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" onclick="metaFixSave()">确认更正</button></div></div>';
+  ov.classList.add('open');
+}
+function metaFixSave(){
+  var c = getCurrentCase(); if(!c || !metaCanFix() || metaState(c)!=='yes') return;
+  var err = function(t){ var e = document.getElementById('meta-fix-err'); if(e) e.textContent = t; };
+  var why = (document.getElementById('meta-fix-why').value||'').trim(); if(!why){ err('请填写更正原因'); return; }
+  var act = (document.querySelector('input[name="meta-fix-act"]:checked')||{}).value || 'undo', old = c.meta ? c.meta.at : '', from = metaPlainText(c), to = '';
+  c.meta = c.meta || {v:'yes', at:'', by:'（旧资料）'}; c.meta.fixes = c.meta.fixes || [];
+  if(act==='time'){
+    var dv = (document.getElementById('meta-fix-dt').value||''); if(!dv){ err('请选择新的检测时间'); return; }
+    var nu = localToUtc(dv.slice(0,10), dv.slice(11,16), pageTz());
+    c.meta.at = nu; to = '检测时间改为 '+fmtUtc(nu);
+  } else {
+    to = '撤销（回到没选）'; c.meta = {v:'', fixes:c.meta.fixes}; c.metaviewStatus = 'idle';
+  }
+  c.meta.fixes.push({at:nowFullDt(), by:actingName(), reason:why, from:from, to:to});
+  logCaseEvent(c, actingName(), '管理者更正 MetaView 记录：'+to+'；原因：'+why+'（原：'+from.replace(/<[^>]+>/g,'')+'）');
+  try{ logOp('其他', '更正 MetaView 检测记录（'+c.name+' '+(c.caseNo||'')+'）：'+to+'；原因：'+why, 'MetaView'); }catch(e){}
+  document.getElementById('meta-fix-overlay').classList.remove('open');
+  buildCaseLog(c); renderCaseBody(c);
+}
