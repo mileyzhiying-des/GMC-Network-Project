@@ -4235,7 +4235,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.open(ch); renderCaseBody(ch);
       var M = inContModel(ch), t1 = inContTodayHtml(ch, M), t2 = inContRestHtml(ch, M);
       ST.ok(/项目类型/.test(t1) && /对应施术/.test(t1) && /预约时间/.test(t1) && /术后管理/.test(t1) && /操作完成/.test(t1) && /本次不做/.test(t1) && t1.indexOf('R138 热玛吉')<0, '今日项目卡：栏位 + 术后管理一行［操作完成］［本次不做］，本地项目还没用不在这里');
-      ST.ok(/剩余项目/.test(t2) && /＋ 添加本地管理项目/.test(t2) && />本次使用</.test(t2) && /术后项目 \d/.test(t2) && /本地管理 \d/.test(t2), '剩余项目卡：标题行右边［＋ 添加本地管理项目］［本次使用］，胶囊 术后项目 / 本地管理');
+      ST.ok(/剩余项目/.test(t2) && /＋ 添加本地管理项目/.test(t2) && />本次使用</.test(t2) && /术后管理 \d/.test(t2) && /本地管理 \d/.test(t2), '剩余项目卡：标题行右边［＋ 添加本地管理项目］［本次使用］，胶囊 术后管理 / 本地管理');
       ST.ok(/预约项目/.test(t2) && /修改时间/.test(t2), '术后项目：预约项目（拆线，另一天）+［修改时间］');
       IN_CONT_TAB[ch.id] = 'local'; t2 = inContRestHtml(ch, inContModel(ch)); ST.ok(/未预约项目/.test(t2) && /R138 热玛吉/.test(t2) && t2.indexOf('使用持有项目')<0, '本地管理：未使用项目，没有［使用持有项目］');
       /* 本次不做：术后退回未预约 */
@@ -4693,7 +4693,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       var c = ST.newRes('R107p', {phone:ph}); ST.arrive(c); c = getCurrentCase(); c.metaviewStatus = 'ready'; setLinkedCase(prior.id); setNeedsConsult(false);
       var h = inContCardHtml(c);
-      ST.ok(/剩余项目/.test(h) && /术后项目 2/.test(h), '（CMD-1026-12）剩余项目卡 胶囊：术后项目 2');
+      ST.ok(/剩余项目/.test(h) && /术后管理 2/.test(h), '（CMD-1026-12 / CMD-1103-07）剩余项目卡 胶囊：术后管理 2');
       ST.ok(!/本地管理 \d/.test(h) && !/已完成 \d/.test(h), '（CMD-1026-09）本地管理 0 不显示，没有「已完成」tab');
       ST.ok(/今日项目/.test(h) && /未预约项目/.test(h) && /来自主案件/.test(h), '今日项目卡 + 剩余项目里 未预约项目（没有项目的分段不显示）+ 来自主案件');
       ST.ok(/>对应施术</.test(h) && />次数</.test(h) && />使用参考</.test(h) && />建议时间</.test(h) && />预约时间</.test(h) && />操作</.test(h), '（CMD-1026-09）栏位：项目｜对应施术｜次数｜使用参考｜建议时间｜预约时间｜操作');
@@ -8956,6 +8956,24 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     c.meta.v = 'yes'; c.leftStore = false; c.visitClosed = false;
     var old = {metaviewStatus:'ready'}; ST.ok(metaState(old)==='yes' && /旧资料/.test(metaPlainText(old)) && metaState({metaviewStatus:'idle'})==='', '旧资料：已检测 · 旧资料；未填维持未选');
     var kn = {meta:{v:'no', at:nowFullDt()}}; ST.ok(metaKrText(kn)==='未检测', 'KR：未检测');
+  });
+
+  ST.def('R220a','CMD-1103-07（A1）：IN 继续案件「剩余项目」= 项目卡——两个 tab［术后管理］［本地管理］只出现有项目的、两个都没有整张卡不出现（含［本次使用］）、今日项目里项目类型标签不换行',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='A1', '要在 A1 分页里跑')) return;
+    var c = ST.newRes('R220a'); ST.arrive(c); c = getCurrentCase(); var old = IN_CONT_TAB[c.id]; delete IN_CONT_TAB[c.id];
+    var careRow = {c:c, s:{id:'s220', suggest:ymdAdd(todayStr(), 5), content:'拆线'}, bk:null};
+    var loc = {h:{itemName:'R220 本地项'}, b:{spec:'', bought:3, used:1, date:todayStr()}, left:2};
+    var mk = function(care, local){ return {src:null, ro:false, grp:{today:[], booked:[], none:care ? [careRow] : []}, uses:[], unused:local ? [loc] : []}; };
+    var both = inContRestHtml(c, mk(1,1), 'care');
+    ST.ok(/>术后管理 1</.test(both) && />本地管理 1</.test(both) && />本次使用</.test(both) && /剩余项目/.test(both), '① 术后管理 + 本地管理都有：两个 tab 都在，［本次使用］可用');
+    ST.ok(/来自主案件|免费 · 不能退款/.test(both) && !/margin:2px 0 4px;">来自主案件/.test(both), '说明缩成标题旁一行小字');
+    var onlyL = inContRestHtml(c, mk(0,1), 'care'); ST.ok(/>本地管理 1</.test(onlyL) && !/>术后管理 \d</.test(onlyL) && /R220 本地项/.test(onlyL), '② 只有本地管理（术后管理页里）：只出现［本地管理］tab，内容也是本地管理');
+    var onlyC = inContRestHtml(c, mk(1,0), 'local'); ST.ok(/>术后管理 1</.test(onlyC) && !/>本地管理 \d</.test(onlyC), '② 只有术后管理（本地管理页里）：只出现［术后管理］tab');
+    var none = inContRestHtml(c, mk(0,0), 'care'); ST.ok(none==='' , '③ 术后管理页：都没有 → 整张卡不出现（没有［本次使用］）');
+    var none2 = inContRestHtml(c, mk(0,0), 'local'); ST.ok(!/本次使用|剩余项目/.test(none2), '③ 本地管理页：都没有 → 没有项目卡、没有［本次使用］（最多只留一行［＋ 添加本地管理项目］）');
+    var T = inContTodayHtml(c, (function(){ var M = mk(0,0); M.grp.today = [Object.assign({}, careRow, {bk:{date:todayStr(), time:'', caseId:c.id}})]; return M; })());
+    ST.ok(/status-pill[^>]*white-space:nowrap[^>]*>术后管理</.test(T), '④ 今天做的术后管理：项目类型标签 nowrap 不换行');
+    if(old) IN_CONT_TAB[c.id] = old;
   });
 
   ST.def('R219a','CMD-1103-05（KM1，pcStage 夹具）：关联之前案件的占位 KR 确认后真的约上（待重新预约施术 + 术后管理 + 持有管理项目）；KR 取消 → 回原状态；约不上整笔回滚',function(){
