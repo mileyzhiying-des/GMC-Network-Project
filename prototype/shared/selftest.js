@@ -8906,7 +8906,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var g = krbGroups(main.id); ST.ok(g && Array.isArray(g.surg) && Array.isArray(g.care) && Array.isArray(g.hold), '三组结构');
     ST.ok(KRB_PURPOSE_NEW.join()==='linkcase,newvisit', '来访目的只有两个');
     var f = {purpose:'linkcase', linkCaseId:main.id, date:todayStr()}; var oldStay = main.stay; main.stay = null;
-    ST.ok(/disabled/.test(krbDateInput(f, '')) && /请先确认客人行程/.test(krbDateInput(f, '')), '没有在韩期间：日期灰掉并提示');
+    ST.ok(/disabled/.test(krbDateInput(f, '')) && /还没确认客人行程（入境～离境），请先确认/.test(krbDateInput(f, '')), '没有在韩期间：日期灰掉并提示');
     main.stay = {in:ymdAdd(todayStr(),1), out:ymdAdd(todayStr(),5)}; var h = krbDateInput(f, ''); ST.ok(/min="/.test(h) && /max="/.test(h), '有在韩期间：日期限制在入境～离境'); main.stay = oldStay;
   });
 
