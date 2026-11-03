@@ -437,6 +437,9 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:57, fn:function(c, ctx){ /* CMD-1103-02：离院后回到「未预约」的赴韩施术 → 待重新预约（新字段 rebookWait）；个数记进迁移备注 */
+      var n = oldLeaveToRebookWait(c); if(n){ window.GMC_REBOOK_CONV = (window.GMC_REBOOK_CONV||0) + n; ctx.note('案件 '+(c.caseNo||c.id)+'：'+n+' 个离院后回到「未预约」的施术项目转成「待重新预约」'); }
+    }},
     {to:56, fn:function(c, ctx){ /* CMD-1023-01 S1：案件结构 v2——补 mainId（没有 = 自己是主案件）；旧的接续案件不转换，各自保持独立主案件 */
       if(!c.mainId) c.mainId = c.id;
     }},

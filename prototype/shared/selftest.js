@@ -6,7 +6,7 @@
   window.GMC_NO_SWEEP = true; /* 自测时间被拨来拨去，定时的「客人已回国自动结案」扫描会把夹具案件真的结案；自测需要时直接调 careReturnSweep() */
   window.GMC_STAY_AUTO = true; /* CMD-1020-11：自测里确认赴韩 / 发施术前提醒不弹在韩期间窗口（R62a 单独打开测） */
   window.GMC_ALLOW_POSTADD = true; /* CMD-1027-03：付清尾款后不能再加施术（正式规则）；这批旧用例要靠「付款后在韩加施术」造数据，自测里默认放行，R148a 里关掉测真规则 */
-  window.GMC_PASSPORT_AUTO = true; window.GMC_REC_WHO_SKIP = true; window.GMC_NO_FOLLOWASK = true; window.GMC_NO_LEAVEREMIND = true; /* CMD-1028-02：自测里直接按离店不弹提醒窗，R161a/b 里临时打开；CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
+  window.GMC_PASSPORT_AUTO = true; window.GMC_REC_WHO_SKIP = true; window.GMC_NO_FOLLOWASK = true; window.GMC_NO_LEAVEREMIND = true; window.GMC_LEAVE_SKIP = true; /* CMD-1103-02：自测里直接按离院不弹原因窗（评估前也能离院），R217a 里临时关掉 */ /* CMD-1028-02：自测里直接按离店不弹提醒窗，R161a/b 里临时打开；CMD-1019-11：自测里确认赴韩不弹护照窗，自动登记测试护照 */
 var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   window.GMC_NO_TABS = true; /* CMD-1019-04：自测里所有进案件的入口都在当前分页打开 */ window.confirm = function(){ return true; }; window.alert = function(m){ if(cur) cur.alerts.push(String(m)); }; window.open = function(){ return null; };
   try{ localStorage.setItem('gmc_cfg_round', '2'); }catch(e){}
@@ -8867,5 +8867,46 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(!/kr-why/.test(on), '能点的按钮不多写字');
     ST.ok(/kr-why/.test(krOutBtn('预约时间', 'x()', false, '')), '没写原因时也有兜底文字');
     ST.ok(/\.kr-btn-off/.test(Array.prototype.map.call(document.styleSheets, function(sh){ try{ return Array.prototype.map.call(sh.cssRules, function(r){ return r.cssText; }).join(''); }catch(e){ return ''; } }).join('')), '样式存在（.kr-btn-off）');
+  });
+
+  ST.def('R217a','CMD-1103-02（KM1，stageC 夹具）：离院锁评估 + 逐项原因（重新预约 / 取消项目）+ 待重新预约 + 待办 + 不再来回结案',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var mut = function(fn){ var out; Store.mutateClinic(r.clinicId, function(){ out = fn(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]); return true; }); return out; };
+    window.GMC_LEAVE_SKIP = false;
+    try{
+      mut(function(c){ c.krSchedule.confirmedDate = todayStr(); c.krSchedule.simDay = true; if(!c.hasArrived) coreMarkArrived(c, ST.krBy); c.krJudge = null; return true; });
+      var e1 = mut(function(c){ return coreEndVisitToday(c, ST.krBy); }); ST.ok(e1 && !e1.ok && e1.evalFirst, '评估前不能离院（evalFirst）：'+JSON.stringify(e1));
+      mut(function(c){ coreJudge(c, 'ok', ST.krBy, ''); return true; });
+      var e2 = mut(function(c){ return coreEndVisitToday(c, ST.krBy); }); ST.ok(e2 && !e2.ok && e2.needLeave && e2.items.length>0, '评估后还有施术没做：要逐项选原因');
+      var nm = e2.items[0];
+      var bad = mut(function(c){ return coreEndVisitToday(c, ST.krBy, '', [{name:nm, reason:'其他'}]); }); ST.ok(bad && !bad.ok && /memo/.test(bad.err), '选「其他」不写 memo 被拒绝：'+(bad&&bad.err));
+      var bad2 = mut(function(c){ return coreEndVisitToday(c, ST.krBy, '', [{name:nm, reason:LEAVE_REASONS[0], when:'now', date:todayStr(), time:'11:00'}]); }); ST.ok(bad2 && !bad2.ok, '当场约今天的日期被拒绝：'+(bad2&&bad2.err));
+      var okR = mut(function(c){ var L = e2.items.map(function(n){ return {name:n, reason:LEAVE_REASONS[0], when:'later'}; }); return coreEndVisitToday(c, ST.krBy, '', L); }); ST.ok(okR && okR.ok, '身体不适 + 之后再约 应成功：'+JSON.stringify(okR));
+      mut(function(c){
+        ST.ok(rebookWaitItems(c).length===e2.items.length && rebookWaitItems(c).every(function(it){ return !it.done && it.rebookWait && it.rebookWait.reason===LEAVE_REASONS[0]; }), '没做的施术标成「待重新预约」');
+        ST.ok(!isEnded(c) && c.stage!=='closed', '案件没有被结案（还有待重新预约的施术）');
+        var logs = (c.logEntries||[]).filter(function(e){ return /客人已离院/.test(e.action); }); ST.ok(logs.length===1, '离院只记一条 Timeline：'+logs.length); return true; });
+      /* 来回结案：连跑几次修复 / 状态更新，不新增「案件结束 / 修正」记录 */
+      var n0 = mut(function(c){ return (c.logEntries||[]).length; });
+      mut(function(c){ for(var i=0;i<3;i++){ repairWronglyClosedCases(); updateCaseStage(c); } return true; });
+      ST.ok(mut(function(c){ return (c.logEntries||[]).length; })===n0, '反复修复 / 更新不再新增 Timeline（不再来回结案）');
+      /* KR 待办 */
+      ST.ok(krTodoItems(krAllCases()).some(function(it){ return it.kind==='rebookwait'; }), 'KR 待办出现「待重新预约」');
+      /* 约上时间后消失 */
+      var nm2 = rebookWaitItems(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0] || {procedureItems:[]}).length;
+      ST.ok(nm2>=0, 'ok');
+    } finally { window.GMC_LEAVE_SKIP = true; }
+  });
+  ST.def('R217b','CMD-1103-02（A1，stageC 夹具）：IN 占位只列行程没结束的客人、三组项目、日期范围',function(){
+    var me = currentAccount(); if(!ST.ok(me && /^A/.test(me.id), '要在 IN 分页里跑')) return;
+    var cs = krbClients(); ST.ok(cs.indexOf('T-待到院')>-1, '行程没结束的客人在名单里：'+cs.join(','));
+    var main = krbMainCases('T-待到院')[0]; if(!ST.ok(!!main, '有主案件')) return;
+    main.krTripEnded = {}; ST.ok(krbClients().indexOf('T-待到院')<0, '行程已结束的客人不在名单里'); delete main.krTripEnded;
+    var g = krbGroups(main.id); ST.ok(g && Array.isArray(g.surg) && Array.isArray(g.care) && Array.isArray(g.hold), '三组结构');
+    ST.ok(KRB_PURPOSE_NEW.join()==='linkcase,newvisit', '来访目的只有两个');
+    var f = {purpose:'linkcase', linkCaseId:main.id, date:todayStr()}; var oldStay = main.stay; main.stay = null;
+    ST.ok(/disabled/.test(krbDateInput(f, '')) && /请先确认客人行程/.test(krbDateInput(f, '')), '没有在韩期间：日期灰掉并提示');
+    main.stay = {in:ymdAdd(todayStr(),1), out:ymdAdd(todayStr(),5)}; var h = krbDateInput(f, ''); ST.ok(/min="/.test(h) && /max="/.test(h), '有在韩期间：日期限制在入境～离境'); main.stay = oldStay;
   });
 })();

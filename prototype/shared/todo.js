@@ -20,7 +20,7 @@ function todoIsKr(){ try{ return isKrAccount(); }catch(e){ return false; } }
 var TODO_CAT = {dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', reconfirm:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'dconsult', recover:'drecover', recoverwait:'drecover', dsurg:'dsurg', dirop:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
 /* CMD-1015-05 九：第一栏「阶段｜待办事项」——阶段读案件的阶段（同案件列表），没有案件的按类型 */
-var TODO_STAGE_BY_KIND = {tripend:'术后管理', tripover:'术后管理', earlyask:'术后管理', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
+var TODO_STAGE_BY_KIND = {tripend:'术后管理', tripover:'术后管理', earlyask:'术后管理', rebookwait:'赴韩施术', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
 function todoStageOf(kind, c){ if(c && isRevEval(c) && ['eta','waitdir','send','recover','recoverwait'].indexOf(kind)>-1) return '待评估'; /* CMD-1022-07：复诊评估的待办标「待评估」 */ if(TODO_STAGE_BY_KIND[kind]) return TODO_STAGE_BY_KIND[kind]; try{ if(c) return caseStageInfo(c).stage || ''; }catch(e){} return ''; }
 /* 红点：新进来的待办亮红点，打开那个案件后灭（每个账号各自记；第一次打开先把现有的都当已看过） */
 function todoSeenKey(){ var id = ''; try{ id = currentAccountId() || ''; }catch(e){} return 'gmc_cfg_todoseen_'+id; }
@@ -177,6 +177,10 @@ function krTodoItems(rows){
     }
     /* CMD-1021-16：每天早上问「韩国行程是否结束？」（到院都做完、没有未来预约；暂不结束 → 第二天再问；离境日过了照样问） */
     if(work && tripAskDue(c)) push(todoMk('tripend', '韩国行程是否结束？（离开日期没填）', c, tripLastVisitDay(c), false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ try{ krStayFixOpen(); }catch(e){} }, 250); })); /* CMD-1027-04 一：离开日期没填才问，点了打开［行程修正］弹窗 */
+    if(work && !c.visitClosed && !c.krVisit){
+      var rws = rebookWaitItems(c); /* CMD-1103-02：离院时没做的施术 → 待重新预约 */
+      if(rws.length) push(todoMk('rebookwait', '待重新预约：'+rws.map(function(it){ return it.name; }).join('、')+'（客人离院时没做，需重新排日期；IN 可帮忙占位）', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); }));
+    }
     /* CMD-1027-12 四：离开日期已过、但还有离开之后的韩国预约（或到院没结束）→ 不自动结束，问「客人是否已离境」，点了打开［行程修正］（走处理弹窗） */
     if(work && c.stay && c.stay.out && !c.krTripEnded && !c.visitClosed && !isEnded(c) && !c.krVisit){ /* CMD-1027-14：IN 改离开日期时选了「请 KR 提前做」——KR 没改之前一直挂着（改到离开前或取消后自动消失） */
       var eas = (c.subItems||[]).filter(function(s0){ return s0.earlyAsk && !s0.done && !s0.skipped && !s0.arrived && s0.place!=='IN' && s0.date && s0.date >= c.stay.out; });
