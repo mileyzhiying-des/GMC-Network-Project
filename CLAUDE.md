@@ -1933,3 +1933,10 @@ prototype/shared/app.css  共用样式
 - 修：① `shootDemoSeed` 再补一次（`h._shootDemo2`）：每个苦恼部位（除旧资料 `b_all`）没设过的就补一份演示参考（默认角度各一张占位图 `参考_部位_角度.jpg`，需要视频），KR 自己设的不动；真实示范图仍由 KR 在项目库「部位拍摄要求」上传。② `shootSpec`：项目另设（`p.shoot`）里没传的参考图 / 说明退回部位的（原来整个换成项目的，项目没传图就灰）。③ 灰按钮悬停写原因「KR 还没有为「眼睛」设定视角参考（KR 项目库 → 部位拍摄要求）」。
 - 上传卡入口清单：一般面诊 / 增加面诊（`concernFormHtml` 的部位卡）、复诊评估每项目卡（`revisitMediaCardsHtml`，部位取 `followItemPart`）、术后恢复卡（`recoveryCardHtml`）、复诊评估结果里的项目卡（`revProjCardsHtml`）、KR 术前照片（`krPreOpBlock`）全部走同一个 `shootRefBtn`；继续面诊没有上传卡（沿用原资料）；主案件页 / 客人页进入复诊评估是同一个弹窗 / 页面。
 - 测试：新增 R215a；R90a 的悬停文字断言改成新的原因文字。
+
+## CMD-1103-01 补充（2026-11-03，追加；取代开发交接 02「院长 / 代表院长看不到项目库」，旧文字保留作历史）
+- 分支 **V4**，基准 1ba3861；提交见 git log（`CMD-1103-01: KR directors…`）；不推送不合并，**数据版本不变（56）**，没有新字段。
+- **权限**（rules.js `ROLE_PERMS`）：新权限 `krlibview`，四个 KR 角色（kr_owner / kr_manager / kr_general / kr_director）都有；`ADMIN_PAGES` 里「项目库」(`krsrvc`) 的 perm 从 `krlib` 改成 `krlibview`，所以院长 / 代表院长侧栏出现「项目库」。`krlib`（维护）仍只有 KR 管理者、室长。IN 本地项目库不变（KR 的「管理项目」是 KR 自己的管理项目库）。
+- **只读**：`ADMIN_RENDER.krsrvc` 本来就用 `can = canDo('krlib')` 决定新增 / 编辑 / 停用 / 删除按钮（没权限是不出现，不是灰掉）；本次在函数入口再挡：`krpOpen` / `krpDelete` / `krlOpen` 没有 `krlib` 直接返回（`krpToggleActive` / `krlToggleActive` / `krpSave` / `krlSave` / `krShoot*` 原来就判断）。价格是项目库本身的定价（韩元），案件里的定金 / 尾款 / 在韩加项金额院长仍看不到（`viewerTextFilter` 等没改）。
+- **面诊内容录入**：`krRecordBlock` 上方一行［查看项目库］，录入侧边栏（`krRecModalRender`）标题行也有；点开 = 右侧只读侧边栏 `#kr-lib-side`（`krLibSideOpen` / `krLibSideSet` / `krLibSideRender`，状态 `KRLIB_SIDE`）：施术项目｜术后管理｜管理项目三个 tab、按分类 / 部位胶囊、搜索、价格；不能在里面选项目；关掉不影响录入内容（录入文字在 `KR_REC`，是另一个元素）；离开案件页自动收起（`krRecSideSync`）；录入侧边栏展开 / 收起时位置跟着让位。
+- 测试：新增 R216a（KR 分页，KD1 / KO1 / KM1 各跑）；roletest 院长对项目库的旧断言「项目库（维护）院长 ❌」改成「所有 KR 角色可看 ✅」，新增「新增 / 编辑 / 停用按钮（院长 / 代表院长不出现）」「显示价格」两格。
