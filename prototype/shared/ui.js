@@ -2414,7 +2414,7 @@ function settleProjects(batchId){
     rows += '<div><div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:6px;">赴韩项目（收预付金，尾款赴韩后支付）</div>'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>赴韩项目小计（施术 + 管理；术后管理含在套餐内，不另收费）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-top:4px;"><span>定金（诊所收，'+Math.round(KR_DEPOSIT_RATE*100)+'%）</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后在医院支付，医院收）</span><span>'+formatCurrency(Math.max(0,(batch.krTotal||0)-(batch.krDeposit||0)),'KRW')+'</span></div></div>';
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>尾款（赴韩后在医院支付，医院收）</span><span>'+formatCurrency(Math.max(0,(batch.krTotal||0)-(batch.krDeposit||0)-(batch.heldCredit||0)),'KRW')+'</span></div>'+(batch.heldCredit ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:#8F6F0C;"><span>韩国持有已付抵扣（来自原案件，不用再付）</span><span>−'+formatCurrency(batch.heldCredit,'KRW')+'</span></div>' : '')+'</div>';
     var pa = passportAlert(c); rows += '<div style="font-size:12px;margin-top:6px;'+(pa.level==='none' || pa.level==='expired' || pa.level==='before' ? 'color:#B3261E;' : 'color:var(--slate2);')+'">'+(pa.level==='ok' ? '护照：'+aEscC(pa.text) : '⚠ '+aEscC(pa.text))+'（护照不是付定金的必填项）　签证和入境由客人自行负责，请提醒客人。</div>'; /* CMD-1029-09 一 */
   }
   if(batch.inTotal){
@@ -2423,6 +2423,7 @@ function settleProjects(batchId){
       '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;"><span>应付金额</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div></div>';
   }
   var payLines = [];
+  if(!batch.krDeposit && batch.heldCredit) payLines.push('<div style="display:flex;justify-content:space-between;"><span>赴韩本次应付（已用韩国持有抵扣）</span><span>'+formatCurrency(0,'KRW')+'</span></div>');
   if(batch.krDeposit) payLines.push('<div style="display:flex;justify-content:space-between;"><span>赴韩本次应付</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>');
   if(batch.inTotal) payLines.push('<div style="display:flex;justify-content:space-between;"><span>本地本次应付'+(batch.compCredit ? '（已扣置换）' : '')+'</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div>');
   rows += '<div style="border-top:1px solid var(--border);padding-top:14px;font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:6px;"><span style="font-size:13px;color:var(--muted);font-weight:400;">本次合计应付（两种币种分开支付，不合并）</span>'+payLines.join('')+'</div>';

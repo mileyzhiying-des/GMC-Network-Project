@@ -979,7 +979,7 @@ function krBuyTime(c, it){ var b = (c.settlementBatches||[]).filter(function(x){
 var KR_SRC_W = '76px', KR_OPS_W = '190px', KR_OTH_W = '76px';
 /* CMD-1025-01 八：术后管理是免费的、随施术方案内含，来源不写「印尼购买」；施术项目是在韩增加的才写「在韩增加」 */
 function krCareSrc(it){ var kr = !!(it && (it.krAddOn || it.preBalanceAdd)); return '<span class="status-pill kr-srctag" style="display:inline-block;white-space:nowrap;font-size:12px;'+(kr ? 'background:#E2F3E6;color:#2E7D4F;' : 'background:var(--border2);color:var(--slate2);')+'">'+(kr ? '在韩增加' : '方案内含')+'</span>'; }
-function krSrcTag(it){ var kr = !!(it && (it.krAddOn || it.preBalanceAdd)); return '<span class="status-pill kr-srctag" style="display:inline-block;white-space:nowrap;font-size:12px;'+(kr ? 'background:#E2F3E6;color:#2E7D4F;' : 'background:#E3EEFB;color:#2F5FA8;')+'">'+(kr ? '在韩购买' : '印尼购买')+'</span>'; }
+function krSrcTag(it){ if(it && it.heldFrom) return '<span class="status-pill kr-srctag" style="display:inline-block;white-space:nowrap;font-size:12px;background:#FBF0C9;color:#8F6F0C;">来自 '+aEscC(it.heldFrom.caseNo||'')+' 韩国持有</span>'; var kr = !!(it && (it.krAddOn || it.preBalanceAdd)); return '<span class="status-pill kr-srctag" style="display:inline-block;white-space:nowrap;font-size:12px;'+(kr ? 'background:#E2F3E6;color:#2E7D4F;' : 'background:#E3EEFB;color:#2F5FA8;')+'">'+(kr ? '在韩购买' : '印尼购买')+'</span>'; }
 /* CMD-1025-04 C：「来源」栏一律放最后——网格第一栏是来源栏宽（KR_SRC_W）时，把第一格挪到最后 */
 function krSrcLast(grid, cells){
   var pre = 'grid-template-columns:'+KR_SRC_W+' ';

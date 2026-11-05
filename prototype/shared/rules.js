@@ -417,7 +417,7 @@ function settlementCardHtml(c, b){
   if(b.addOn) amounts.push('韩国加做（KR 新增，另开结算单）：客人在韩国单独付款，医院收款（不进尾款应付额，算 KR 收入）；金额由医院收，这里不显示');
   else if(b.preAdd) amounts.push('到院后增加项目（KR 新增）：与尾款一次结算（不收定金，计入尾款，医院收）');
   else if(b.noDeposit) amounts.push('更换项目（'+(b.swapOf||'')+'→）：不收定金，直接计入尾款（医院收）');
-  else if(b.krDeposit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit,'KRW')+'（诊所收）；尾款 '+formatCurrency(Math.max(0,(b.krTotal||0)-(b.krDeposit||0)),'KRW')+'（'+(c.krBalancePaid ? '已付清' : '未付')+'，赴韩后医院收）');
+  else if(b.krDeposit || b.heldCredit) amounts.push('赴韩定金 '+formatCurrency(b.krDeposit||0,'KRW')+'（诊所收）'+(b.heldCredit ? '；韩国持有抵扣 '+formatCurrency(b.heldCredit,'KRW') : '')+'；尾款 '+formatCurrency(Math.max(0,(b.krTotal||0)-(b.krDeposit||0)-(b.heldCredit||0)),'KRW')+'（'+(c.krBalancePaid ? '已付清' : '未付')+'，赴韩后医院收）');
   if(b.inTotal) amounts.push('本地全款 '+formatCurrency(b.inTotal,'IDR'));
   var refunds = (c.refunds||[]).filter(function(r){ return (r.batchIds||[]).indexOf(b.id)>-1; }).map(function(r){
     return '<div style="font-size:12px;color:'+(r.comp ? '#8F6F0C' : 'var(--terracotta)')+';margin-top:4px;">'+(r.comp ? '转本地置换 ' : '退款 ')+formatCurrency(r.amount,'KRW')+'（'+r.items.join('、')+'；原因：'+r.reason+(r.comp ? '' : '；方式：'+(r.method ? r.method+(r.method==='其他' && r.methodNote ? '（'+r.methodNote+'）' : '') : '未记录'))+(r.note ? '；备注：'+r.note : '')+'）</div>';
@@ -486,10 +486,10 @@ function settlementBigCardHtml(c, items, removable){
     var bd = computeBatchBreakdown(krItems), krTotal = bd.krTotal, krDeposit = bd.krDeposit;
     krCard = '<div style="border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:8px;">赴韩项目</div>'+
-      krItems.map(function(it){ return settlementItemRow(c, it, removable)+itemArrangeHtml(it, false)+pcLinesHtml(c, it); }).join('')+
+      krItems.map(function(it){ return settlementItemRow(c, it, removable)+(it.heldFrom ? '<div style="font-size:12px;color:#8F6F0C;margin:-2px 0 4px;">已付 · 韩国持有（来自 '+aEscC(it.heldFrom.caseNo||'')+'，已付 '+formatCurrency(it.heldFrom.paid||0,'KRW')+'）</div>' : '')+itemArrangeHtml(it, false)+pcLinesHtml(c, it); }).join('')+
       '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;"><span>合计</span><span style="font-weight:700;">'+formatCurrency(krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（诊所收；'+Math.round(KR_DEPOSIT_RATE*100)+'% × 全部赴韩项目（施术 + 管理），术后管理含在套餐内，比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--slate2);"><span>尾款（赴韩后由医院收；赴韩项目的其余部分）</span><span>'+formatCurrency(krTotal-krDeposit,'KRW')+'</span></div>'+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--slate2);"><span>尾款（赴韩后由医院收；赴韩项目的其余部分）</span><span>'+formatCurrency(bd.krBalance,'KRW')+'</span></div>'+(bd.heldCredit ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:#8F6F0C;"><span>韩国持有已付抵扣（来自原案件，不用再付）</span><span>−'+formatCurrency(bd.heldCredit,'KRW')+'</span></div>' : '')+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
       noteFieldHtml('备注（KR + IN 可见）','noteKR',c.noteKR)+
       '</div>';
   }
@@ -516,7 +516,7 @@ function settlementBigCardHtml(c, items, removable){
    到医院前在结算单［取消项目］退过的金额（refunds 里 afterArrival 不为真）从定金里扣掉一次，且被取消的项目不在"实际项目合计"里——不重复扣减。 */
 function krBalanceInfo(c){
   var deposit = 0;
-  (c.settlementBatches||[]).forEach(function(b){ if(b.status==='active') deposit += b.krDeposit||0; });
+  (c.settlementBatches||[]).forEach(function(b){ if(b.status==='active') deposit += (b.krDeposit||0)+(b.heldCredit||0); });
   var preRefund = (c.refunds||[]).filter(function(r){ return !r.afterArrival && (r.currency||'KRW')==='KRW'; }).reduce(function(sum,r){ return sum + (r.amount||0); }, 0);
   var effDeposit = deposit - preRefund; /* 仍留在诊所、可抵尾款的定金 */
   var total = krActiveItems(c).filter(function(it){ return !it.krAddOn; }).reduce(function(sum,it){ return sum + itemKrAmount(it); }, 0); /* 回诊加做的项目在韩国单独付款，不进尾款 */ /* 实际要做的项目合计（不含已取消/已更换） */
@@ -556,7 +556,10 @@ function computeBatchBreakdown(items){
     }
   });
   var krDeposit = Math.round(krFixed * KR_DEPOSIT_RATE);
-  return {krItems:krItems, krTotal:krTotal, krDeposit:krDeposit, krBalance:krTotal-krDeposit, krFixed:krFixed, krProvisional:krProvisional, inItems:inItems, inTotal:inTotal};
+  /* CMD-1105-04：用韩国持有的施术抵钱（it.heldFrom.paid = 原案件已付）：先抵定金，剩下的抵尾款；只收差额 */
+  var heldCredit = 0; krItems.forEach(function(it){ if(it.heldFrom) heldCredit += Math.min(it.heldFrom.paid||0, itemKrAmount(it)); });
+  var heldDep = Math.min(heldCredit, krDeposit); krDeposit -= heldDep;
+  return {heldCredit:heldCredit, krItems:krItems, krTotal:krTotal, krDeposit:krDeposit, krBalance:krTotal-krDeposit-heldCredit, krFixed:krFixed, krProvisional:krProvisional, inItems:inItems, inTotal:inTotal};
 }
  /* 会被 nearestOpenMonth()/修改日期时的原定月份实时覆盖，这里只是初值 */
 function fmtDateYMD(y,m,d){

@@ -9131,6 +9131,58 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(mg && itx){ delete itx.heldSurg; itx.rebookWait = {at:'x', by:'t', reason:'t', memo:''}; c2.krTripEnded = {at:'x'}; var notes = []; mg.fn(c2, {note:function(t){ notes.push(t); }}); ST.ok(!!itx.heldSurg && notes.length===1, '迁移：转了 1 个案件的施术：'+notes.join('|')); var nL = (c2.logEntries||[]).length; mg.fn(c2, {note:function(t){ notes.push(t); }}); ST.ok((c2.logEntries||[]).length===nL && notes.length===1, '迁移幂等（不重复写 Timeline）'); }
     } finally { window.GMC_LEAVE_SKIP = true; }
   });
+  ST.def('R225a','CMD-1105-04（A1，stageC 夹具）：新面诊后选项目——列出客人名下韩国持有的施术（方案里有才能勾）、抵钱（补差额 / 差额转置换额度 / 只勾持有 ₩0 升级）、持有转进新主案件',async function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    await ST.ensureFixtures(['stageC']);
+    var src = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!src, '要有 stageC 夹具')) return;
+    window.GMC_NO_TABS = true; window.GMC_NO_HELD_AUTO = false;
+    var its = (src.procedureItems||[]).filter(function(i){ return i.origin==='KR' && !i.cancelled && !krIsMgmtItemC(i); }); if(!ST.ok(its.length>=2, '夹具里有两项施术')) return;
+    its.forEach(function(i){ i.heldSurg = {at:nowFullDt(), by:'系统', why:'没做', rw:null}; delete i.deferUse; delete i.rebookWait; });
+    ensureItemIids(src); var i0 = its[0], i1 = its[1], iid0 = itemIid(i0), iid1 = itemIid(i1), pd0 = heldPaidOf(src, i0), pd1 = heldPaidOf(src, i1);
+    ST.ok(pd0>0 && pd0<=itemKrAmount(i0), '已付金额算得出来：'+pd0);
+    function mkNew(nm, scopeItems){
+      var r = ST.newRes(nm); ST.materials(r, {consult:true}); r = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0];
+      r.name = src.name; r.consultRequested = true; r.reportReady = true; r.consultStatus = 'report_ready'; r.needsConsult = true; r.materialsConfirmed = true; r.krScope = {items:scopeItems, overallNote:'', updatedAt:nowFullDt()};
+      openCaseDetail(r.id); return r;
+    }
+    var p0 = PROJECT_LIBRARY.filter(function(p){ return p.name===i0.name; })[0], p1 = PROJECT_LIBRARY.filter(function(p){ return p.name===i1.name; })[0];
+    if(!ST.ok(!!p0 && !!p1, '项目库里有这两项（夹具项目）')) return;
+    /* ① 方案里只有 i0（价格比已付高）→ i0 可勾、i1 灰掉有原因 */
+    var hi = itemKrAmount(i0) + 1000000;
+    var r1 = mkNew('R225-1', [{name:i0.name, price:hi, note:''}]);
+    var html = projectPickerHtml(r1, false);
+    ST.ok(/已付 · 韩国持有（来自 /.test(html) && html.indexOf(src.caseNo)>-1, '选项目列出「已付 · 韩国持有（来自 '+src.caseNo+'）」');
+    ST.ok(/这次院长的方案里没有这一项；不做的话请从客人页取消 \/ 退款/.test(html), '方案里没有的那项灰掉并写原因');
+    ST.ok(/比已付高，补差额/.test(html), '价格比已付高：提示补差额');
+    toggleHeldSurg(src.id, iid1); ST.ok(!(r1.recommended||[]).length, '灰掉的那项勾不上');
+    toggleHeldSurg(src.id, iid0); var sel = (r1.recommended||[])[0]; ST.ok(sel && sel.heldFrom && sel.heldFrom.iid===iid0 && sel.heldFrom.paid===pd0, '勾上：带 heldFrom（已付 '+pd0+'）');
+    confirmProjectSelectionGo(); var b1 = r1.settlementBatches[r1.settlementBatches.length-1];
+    var D = Math.round(hi*KR_DEPOSIT_RATE), heldC = Math.min(pd0, hi);
+    ST.ok(b1.heldCredit===heldC && b1.krDeposit===Math.max(0, D-heldC) && b1.krBalance===hi-b1.krDeposit-heldC, '只收差额：定金 '+b1.krDeposit+'（30% '+D+' − 抵 '+heldC+'），尾款 '+b1.krBalance);
+    ST.ok(i0.heldSurg && !i0.swapped, '付款前原案件的持有不动（取消结算单不会丢）');
+    SETTLE_MODAL_BATCH_ID = b1.id; SETTLE_ANES_SIGNED = true; confirmSettlementPayment();
+    ST.ok(b1.status==='active' && r1.settlementDone && krActiveItems(r1).length===1 && isUpgraded(r1), '付款后新案件升级成赴韩案件');
+    ST.ok(i0.swapped && !i0.heldSurg && i0.heldTransferred && i0.heldTransferred.toId===r1.id, '原案件那一笔标「已转到 '+r1.caseNo+'」、不再是持有');
+    ST.ok(heldSurgItems(src).length===1 && heldSurgItems(src)[0]===i1, '没勾的那项留在原案件，仍是持有');
+    ST.ok((src.logEntries||[]).some(function(e){ return /已转到/.test(e.action) && e.action.indexOf(r1.caseNo)>-1; }) && (r1.logEntries||[]).some(function(e){ return /使用韩国持有的施术/.test(e.action) && e.action.indexOf(src.caseNo)>-1; }), '两边 Timeline 各记一条');
+    var bi = krBalanceInfo(r1); ST.ok(bi.effDeposit===b1.krDeposit+heldC && bi.diff===hi-bi.effDeposit, '尾款 = 项目合计 − 定金 − 持有抵扣：'+bi.diff);
+    ST.ok(financePaid(r1).kr===b1.krDeposit && financePaid(src).kr===financePaid(src).kr, '新案件只计这次实收的定金，不重复计入（持有已付的钱留在原案件）');
+    ST.ok(/来自 /.test(krSrcTag(r1.procedureItems.filter(function(i){ return i.heldFrom; })[0])), 'KR 项目卡来源标「来自 … 韩国持有」');
+    /* ② 价格比已付低：差额转置换额度；只勾持有、没有别的钱 → 确认窗 ₩0，确认后升级 */
+    var lo = Math.max(1000, Math.floor(pd1/2)), cl = clientByName(src.name), cc0 = (cl.compCredits||[]).length;
+    var r2 = mkNew('R225-2', [{name:i1.name, price:lo, note:''}]);
+    toggleHeldSurg(src.id, iid1); ST.ok((r2.recommended||[]).length===1, '② 勾上第二项持有');
+    confirmProjectSelectionGo(); var b2 = r2.settlementBatches[r2.settlementBatches.length-1];
+    ST.ok(b2.krDeposit===0 && b2.heldCredit===lo && !b2.inTotal, '② 不用再付：定金 0');
+    ST.ok(document.getElementById('settle-overlay').classList.contains('open') && SETTLE_MODAL_BATCH_ID===b2.id && /已用韩国持有抵扣/.test(document.getElementById('settle-breakdown').textContent), '② 只勾持有：弹出「本次应付 ₩0」确认窗');
+    SETTLE_ANES_SIGNED = true; confirmSettlementPayment();
+    ST.ok(r2.settlementDone && isUpgraded(r2) && krDepositPaid(r2), '② 确认后升级成赴韩案件');
+    ST.ok((cl.compCredits||[]).length===cc0+1 && cl.compCredits[cl.compCredits.length-1].kwr===pd1-lo, '② 差额 '+(pd1-lo)+' 转置换额度');
+    ST.ok(heldSurgItems(src).length===0 && i1.swapped && i1.heldTransferred.toId===r2.id, '② 原案件两项都转出了');
+    /* ③ 「继续之前的服务」里没有直接赴韩的入口 */
+    var fu = String(fuRender) + String(followupAsk); ST.ok(!/使用韩国持有|直接赴韩|赴韩（使用/.test(fu), '③ 继续之前的服务没有跳过面诊的赴韩入口');
+    window.GMC_NO_HELD_AUTO = false;
+  });
   ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;

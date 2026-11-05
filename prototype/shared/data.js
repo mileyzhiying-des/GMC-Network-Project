@@ -1730,6 +1730,72 @@ function coreHeldSurgCancel(c, iid, dec, o, by){
   logCaseEvent(c, by, '客人页取消持有的施术「'+buyName(it.name)+'」：'+(dec==='all' ? '全部退回 '+formatCurrency(refund,'KRW') : (dec==='part' ? '部分退回 '+formatCurrency(refund,'KRW')+'，剩下 '+formatCurrency(rec.comp,'KRW')+' 转置换额度' : '更换项目，'+formatCurrency(rec.comp,'KRW')+' 转置换额度'))+(refund>0 ? '；退款方式：'+method+(method==='其他' ? '（'+mnote+'）' : '') : ''), '赴韩施术');
   updateCaseStage(c); return {ok:true, refund:refund, comp:rec.comp||0};
 }
+/* ===== CMD-1105-04：下次赴韩先面诊；院长出方案后 IN 选项目时，用这位客人名下「韩国持有」的施术抵钱 =====
+   「同一项目」= 这次方案里有同名的施术项目（同一项目库项目；施术项目没有规格，所以不分规格）；方案里没有的灰掉，留在原案件，从客人页取消 / 退款。
+   勾了：该项目的价格用原案件已付的钱抵——先抵定金、再抵尾款；这次价格比已付高 → 只付差额；比已付低 → 差额转置换额度。
+   付款（含本次应付 ₩0）确认时：原案件那一笔标「已转到 A00xxxx」（swapped + heldTransferred），新案件的赴韩项目带 heldFrom。 */
+function heldPaidOf(c, it){
+  var price = itemKrAmount(it), b = (c.settlementBatches||[]).filter(function(x){ return x.id===it.batchId; })[0];
+  if(!b || c.krBalancePaid || b.noDeposit || !(b.krTotal>0) || b.krDeposit==null) return price;
+  return Math.min(price, Math.round(((b.krDeposit||0)+(b.heldCredit||0)) * price / b.krTotal));
+}
+function clientHeldSurgPool(c){
+  var out = [];
+  CASE_ITEMS.forEach(function(x){
+    if(x.id===c.id || x.name!==c.name || isChildVisit(x)) return;
+    ensureItemIids(x);
+    heldSurgItems(x).forEach(function(it){ out.push({from:x, it:it, iid:itemIid(it), paid:heldPaidOf(x, it)}); });
+  });
+  return out;
+}
+function heldMatchScope(c, h){
+  var p0 = h.it.projectId ? projById(h.it.projectId) : null, nm = p0 ? p0.name : h.it.name;
+  return ((c.krScope && c.krScope.items) || []).filter(function(si){ return !si.mgmt && (si.name===h.it.name || si.name===nm); })[0] || null;
+}
+function toggleHeldSurg(fromId, iid){
+  var c = getCurrentCase(); if(!c) return;
+  var h = clientHeldSurgPool(c).filter(function(x){ return x.from.id===fromId && x.iid===iid; })[0]; if(!h) return;
+  var si = heldMatchScope(c, h); if(!si) return;
+  c.recommended = c.recommended || [];
+  var cur = c.recommended.filter(function(it){ return it.heldFrom && it.heldFrom.iid===iid; })[0];
+  if(cur){ c.recommended.splice(c.recommended.indexOf(cur), 1); renderCaseBody(c); return; }
+  var p = PROJECT_LIBRARY.filter(function(x){ return x.name===si.name && x.origin==='KR'; })[0]; if(!p) return;
+  var ex = c.recommended.filter(function(it){ return it.projectId===p.id; })[0];
+  if(!ex){ toggleProject(p.id); ex = (c.recommended||[]).filter(function(it){ return it.projectId===p.id; })[0]; }
+  if(ex) ex.heldFrom = {caseId:h.from.id, caseNo:h.from.caseNo, iid:iid, paid:h.paid, origName:h.it.name};
+  renderCaseBody(c);
+}
+function heldPickerHtml(c, selected, ccy){
+  var pool = clientHeldSurgPool(c); if(!pool.length) return '';
+  var rows = pool.map(function(h){
+    var si = heldMatchScope(c, h), cur = selected.filter(function(it){ return it.heldFrom && it.heldFrom.iid===h.iid; })[0];
+    var other = si && !cur && selected.some(function(it){ return it.name===si.name && it.heldFrom; });
+    var ok = !!si && !other, why = !si ? '这次院长的方案里没有这一项；不做的话请从客人页取消 / 退款' : (other ? '这个项目已经用另一笔持有抵扣了' : '');
+    var diff = '';
+    if(ok){ var price = si.price||0; diff = price>h.paid ? '这次价格 '+krPickAmount(price,'KR',ccy)+'，比已付高，补差额 '+krPickAmount(price-h.paid,'KR',ccy) : (price<h.paid ? '这次价格 '+krPickAmount(price,'KR',ccy)+'，比已付低，差额 '+krPickAmount(h.paid-price,'KR',ccy)+' 转置换额度' : '这次价格 '+krPickAmount(price,'KR',ccy)+'，和已付一样，不用再付'); }
+    return '<label title="'+aEscC(why)+'" style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;'+(ok ? 'cursor:pointer;' : 'cursor:not-allowed;opacity:.5;')+'">'+
+      '<input type="checkbox" '+(ok ? 'onchange="toggleHeldSurg(\''+h.from.id+'\',\''+h.iid+'\')"' : 'disabled')+(cur ? ' checked' : '')+' style="margin-top:2px;">'+
+      '<span style="flex-grow:1;">'+aEscC(buyName(h.it.name))+'<div style="font-size:12px;color:#8F6F0C;margin-top:2px;">已付 · 韩国持有（来自 '+aEscC(h.from.caseNo)+'）</div>'+(ok ? '<div style="font-size:12px;color:var(--slate2);margin-top:2px;">'+diff+'</div>' : '<div style="font-size:12px;color:var(--muted);margin-top:2px;">'+aEscC(why)+'</div>')+'</span>'+
+      '<span style="color:var(--slate2);">已付 '+krPickAmount(h.paid,'KR',ccy)+'</span></label>';
+  }).join('');
+  return '<div class="held-pick" style="background:#FBF6EA;border-radius:8px;padding:2px 10px 6px;margin-bottom:10px;"><div style="font-size:12px;font-weight:700;color:#8F6F0C;margin:8px 0 2px;">已付 · 韩国持有的施术（用已付的钱抵）</div>'+rows+'</div>';
+}
+function applyHeldTransfer(c, batch){
+  var its = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.heldFrom && !it.heldFrom.done; }), by = actingName();
+  its.forEach(function(it){
+    var hf = it.heldFrom, src = CASE_ITEMS.filter(function(x){ return x.id===hf.caseId; })[0];
+    var o = src && (src.procedureItems||[]).filter(function(x){ return itemIid(x)===hf.iid; })[0];
+    if(o){
+      delete o.heldSurg; o.swapped = true; o.heldTransferred = {toId:c.id, toNo:c.caseNo, at:nowFullDt(), by:by, paid:hf.paid};
+      logCaseEvent(src, by, '韩国持有的施术「'+buyName(o.name)+'」已转到 '+c.caseNo+'（用于抵扣新案件的项目，已付 '+formatCurrency(hf.paid,'KRW')+'）', '赴韩施术');
+      updateCaseStage(src);
+    }
+    var price = itemKrAmount(it), excess = hf.paid - price;
+    logCaseEvent(c, by, '使用韩国持有的施术「'+buyName(it.name)+'」（来自 '+hf.caseNo+'，已付 '+formatCurrency(hf.paid,'KRW')+'）抵扣：这次价格 '+formatCurrency(price,'KRW')+(excess>0 ? '，差额 '+formatCurrency(excess,'KRW')+' 转置换额度' : (excess<0 ? '，补差额 '+formatCurrency(-excess,'KRW') : '，不用再付')), '项目确认 / 结算');
+    if(excess>0) coreCompCreate(c, excess, '韩国持有的施术转入新案件，价格较低的差额（来自 '+hf.caseNo+'）', by);
+    hf.done = true;
+  });
+}
 function surgItemBooked(c, it){ return (c.subItems||[]).some(function(s){ return s.surgUse===it.name && !s.done && !s.skipped; }); }
 /* 修复专用的旧判断：只给 repairWronglyClosedCases 用（避免新规则把已结案的老案件重新打开） */
 function mainlineOngoingRepair(c){
@@ -1777,7 +1843,7 @@ function localAddAllowed(c){
   return t===c.localMgmtDay || t===(c.arrivedDay || c.visitDate);
 }
 /* 手动［结束案件］：只在付定金之前；IN 一般室长 / 管理者 */
-function krDepositPaid(c){ return !!c.hasArrived || !!c.krProcedureDone || (c.settlementBatches||[]).some(function(b){ return b.status==='active' && (b.krDeposit||0)>0; }); }
+function krDepositPaid(c){ return !!c.hasArrived || !!c.krProcedureDone || (c.settlementBatches||[]).some(function(b){ return b.status==='active' && ((b.krDeposit||0)>0 || (b.heldCredit||0)>0); }); }
 /* 赴韩项目全部取消（定金已退 / 转置换）且没到院：回到面诊级，仍可手动结束 */
 function compAllKrGone(c){ return !c.hasArrived && !c.krProcedureDone && krAllItems(c).length>0 && krActiveItems(c).length===0; }
 function canEndCase(c){
@@ -5327,6 +5393,8 @@ function confirmProjectSelectionGo(){
   renderCaseStatusBar(c);
   buildCaseLog(c);
   renderCaseBody(c);
+  var lb2 = c.settlementBatches[c.settlementBatches.length-1]; /* CMD-1105-04：只勾了韩国持有、没有别的要付的钱 → 直接打开「本次应付 ₩0」的确认窗，确认后升级成赴韩案件 */
+  if(lb2 && lb2.status==='unpaid' && !lb2.krDeposit && !lb2.inTotal && lb2.heldCredit>0 && !window.GMC_NO_HELD_AUTO) settleProjects(lb2.id);
 }
 
 /* 生成结算单：把 c.recommended 的快照搬进 procedureItems + 新开一个 settlementBatches 记录，
@@ -5351,7 +5419,7 @@ function generateSettlementBatch(c){
   var newItems = c.recommended.map(function(it){ return Object.assign({}, it, {done:false, batchId:batchId}); });
   c.settlementBatches = c.settlementBatches || [];
   c.settlementBatches.push({id:batchId, afterReport:!!c.reportReady, orderedBy:actingName(), settledBy:'客人', time:nowFullDt(), status:'unpaid',
-    krTotal:b.krTotal, krDeposit:b.krDeposit, krBalance:b.krBalance, krProvisional:b.krProvisional||0, inTotal:b.inTotal});
+    krTotal:b.krTotal, krDeposit:b.krDeposit, krBalance:b.krBalance, krProvisional:b.krProvisional||0, heldCredit:b.heldCredit||0, inTotal:b.inTotal});
   c.procedureItems = (c.procedureItems||[]).concat(newItems);
   c.settleTab = null; /* 新结算单：默认打开最新一张 */
   c.recommended = [];
@@ -5429,7 +5497,7 @@ function projectPickerHtml(c, isAddition){
         return p ? Object.assign({}, p, {krNote:si.note, krMeta:itemMetaText(si)}) : null;
       }).filter(function(p){ return p && p.origin==='KR'; }); /* 赴韩tab只取krScope里origin=KR的，术后管理(IN)另在本地tab处理 */
       if(q) catalog = catalog.filter(function(p){ return p.name.toLowerCase().indexOf(q)>-1; });
-      leftRows = scopeNote + (catalog.map(function(p){
+      leftRows = scopeNote + heldPickerHtml(c, selected, pickerCcy) + (catalog.map(function(p){
         var checked = selected.some(function(it){ return it.projectId===p.id; });
         var noteHtml = (p.krNote ? '<div style="font-size:12px;color:var(--muted);margin-top:2px;">'+p.krNote+'</div>' : '')+((p.krMeta||[]).length ? '<div style="font-size:12px;color:var(--slate2);margin-top:2px;line-height:1.6;">'+p.krMeta.join('<br>')+'</div>' : '');
         return '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border2);font-size:13px;cursor:pointer;">'+
@@ -5554,7 +5622,7 @@ function latestUnpaidBatch(c){
 function recomputeBatch(c, batchId){
   var b = (c.settlementBatches||[]).filter(function(x){ return x.id===batchId; })[0]; if(!b) return;
   var bd = computeBatchBreakdown((c.procedureItems||[]).filter(function(it){ return it.batchId===batchId && it.origin==='KR' && !it.cancelled && !it.swapped; }));
-  b.krTotal = bd.krTotal; b.krBalance = bd.krTotal - (b.noDeposit ? 0 : b.krDeposit); b.krProvisional = bd.krProvisional;
+  b.krTotal = bd.krTotal; b.heldCredit = bd.heldCredit||0; b.krBalance = bd.krTotal - (b.noDeposit ? 0 : b.krDeposit) - (b.heldCredit||0); b.krProvisional = bd.krProvisional;
 }
 /* 术后管理分配（IN 室长在项目选择/赴韩项目 tab 改；KR 在付尾款确认行程时也能改）：x.inTimes = 分给印尼的次数 */
 function corePcAlloc(c, projectId, batchId, i, v, by){
@@ -5586,6 +5654,7 @@ function confirmSettlementPayment(){
     logCaseEvent(c, actingName(), '客人签署麻醉同意书（'+ANES_CONSENT_VERSION+'）：'+need.map(function(a){ return a.name+'：'+a.label; }).join('、'));
   }
   batch.status = 'active';
+  applyHeldTransfer(c, batch); /* CMD-1105-04：勾了韩国持有的施术 → 原案件那一笔转进这个案件 */
   c.settlementDone = true; /* 一旦付过一次款就一直是 true；加项后新批次单独走 unpaid→active，不影响这个总开关 */
   var today = todayStr();
   var batchInItems = (c.procedureItems||[]).filter(function(it){ return it.batchId===batch.id && it.origin==='IN'; });
