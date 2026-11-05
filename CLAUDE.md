@@ -2020,3 +2020,13 @@ prototype/shared/app.css  共用样式
 - **迁移 58**（store.js）：行程已结束的案件调 `coreHoldSurgOnTripEnd`（迁移按列表顺序跑，58 在 57 前面，所以先补跑 `oldLeaveToRebookWait`）；用 11/02 07:58 备份在隔离端口验证：56 → 58，25 个案件迁移、0 失败；Fanny A000010 的两项待重新预约先转 57 的 rebookWait；备份里 Fanny 离境日是 2027-01-19、行程还没结束，所以把离境日改到昨天再跑自动结束：2 项转持有、案件结案「赴韩结束 · 有持有项目」、Timeline 只写一次、之后重算不再写。
 - **没做 / 现在的处理（⑤）**：「继续之前的案件」对有韩国持有施术的案件**现在选不到**（B27 规则不变）：面诊只列仅出报告的案件；复诊评估要求做过施术（followDoneItems）且 3 个月内；术后管理要求今天有约好的印尼术后管理——一个只有持有施术的主案件三个条件都不满足。下次赴韩用持有施术（递交日期 → KR 确认 → 到院评估）这条路这次没做，等用户定。
 - 测试：selftest 新增 R224a（A1，stageC）、R224b（KM1，stageC）；回归对照 CMD-1105-02：A1 全套 / KM1 / KD1 / roletest 失败集合一致。
+
+## CMD-1105-04 补充（2026-11-05，追加；取代 CMD-1105-03 的「下次赴韩用持有施术没有入口」，旧文字保留作历史）
+- 分支 **V4**，代码提交见 git log（`CMD-1105-04`），文档另一个提交；不推送不合并；**数据版本不变（58）**（新增可空字段：项目 `heldFrom={caseId,caseNo,iid,paid,origName}`、原案件项目 `heldTransferred={toId,toNo,at,by,paid}`、结算单 `heldCredit`；旧资料不用迁移）。会动「选项目 → 付定金 → 升级主案件」的结算，用户已确认。
+- **流程不变、没有新入口**：下次赴韩仍从面诊开始（一般面诊，或复诊评估「建议赴韩」开新主案件）；「继续之前的服务」里没有直接赴韩的入口（R225a 锁住）。
+- **IN 选项目**（data.js `heldPickerHtml` / `clientHeldSurgPool` / `heldMatchScope` / `toggleHeldSurg`，挂在 `projectPickerHtml` 赴韩项目最上面）：列出这位客人名下**其他主案件**的韩国持有施术，标「已付 · 韩国持有（来自 A00xxxx）」+ 已付金额。**「同一项目」= 这次院长方案（`krScope.items`）里有同名的施术项目**（同一项目库项目；施术项目没有规格，所以不分规格；管理项目不参与）；方案里没有 → 灰掉，悬停和行内写「这次院长的方案里没有这一项；不做的话请从客人页取消 / 退款」；同一项目已用另一笔持有抵扣 → 灰掉。勾了 = 该项目进已选并带 `heldFrom`，行内写比已付高 / 低 / 一样。
+- **抵钱**（rules.js `computeBatchBreakdown`）：这一项按这次价格计入赴韩合计；`heldCredit = Σ min(已付, 这次价格)` **先抵定金、剩下的抵尾款**：结算单 `krDeposit`（IN 这次收的定金）= 30% × 合计 − 抵定金部分，`krBalance` = 合计 − 定金 − heldCredit，`b.heldCredit` 另存；`krBalanceInfo` 的可抵定金 = krDeposit + heldCredit，所以 KR 尾款 = 项目合计 − 定金 − 持有抵扣；`krDepositPaid` 认 heldCredit；`financePaid` 只算 krDeposit（持有已付的钱留在原案件，不重复计入）。这次价格比已付高 → 只付差额；比已付低 → 差额（已付 − 这次价格）付款确认时 `coreCompCreate` 转置换额度。**已付** = `heldPaidOf`：尾款已付清 / 找不到结算单 = 项目价格，否则 = 该项目的定金份额（批次 krDeposit × 项目价 ÷ 批次 krTotal）。（注意：CMD-1105-03 的客人页取消 / 退款仍把「已付」当项目价格，这次没改。）
+- **只勾持有、没有别的要付的钱**：`confirmProjectSelectionGo` 生成结算单后，发现 `krDeposit=0 且无本地款且 heldCredit>0` → 自动打开确认付款窗（显示「本次应付 ₩0（已用韩国持有抵扣）」，需要麻醉同意书的照旧要勾），点［确认付款］就升级成赴韩案件（`settlementDone`、`isUpgraded`）——也就是「确认赴韩项目那天升级」只限这种情况，做法是同一个付款确认窗，不是另一套流程。自测钩子 `window.GMC_NO_HELD_AUTO`。
+- **持有转进新主案件**（`applyHeldTransfer`，在 `confirmSettlementPayment` 里 `batch.status='active'` 后）：原案件那一笔 `delete heldSurg; swapped=true; heldTransferred={…}`（不再是持有、不再算进行中项目，原案件重算状态），原案件 Timeline 记「已转到 A00xxxx」、新案件 Timeline 记「使用韩国持有的施术…抵扣」（都是人为记录）；新案件的赴韩项目带 `heldFrom`，之后照新案件流程（递交施术日期 → KR 确认 → 到院评估）。**付款前不动原案件**（取消结算单不会丢持有）。没勾的持有留在原案件，仍可从客人页取消 / 退款。
+- **KR**：项目卡来源标签写「来自 A00xxxx 韩国持有」（`krSrcTag`）；不显示 IN 的金额细节（照旧）。
+- 测试：selftest 新增 R225a（A1，stageC 夹具）。
