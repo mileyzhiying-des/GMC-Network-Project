@@ -9018,6 +9018,82 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var tg = presTag(r.clinicId, r.id); ST.ok(!tg.includes(ME_NAME) && /A2 室长正在处理/.test(tg), '只提醒别人：'+tg); delete all[key]; presWrite(all);
     var pr = krFindCase(r.clinicId, r.id); if(pr) ST.ok(typeof krRebTag==='function', 'krRebTag 存在');
   });
+
+  ST.def('R223a','CMD-1105-02（KM1，stageC 夹具）：重新约那天接回主到院一套——调整方案（补付 / 差额转置换额度）、取消项目三选一、更换时间当场约、离院 / 隔天确认原因窗',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var mut = function(fn){ var out; Store.mutateClinic(r.clinicId, function(){ out = fn(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]); return true; }); return out; };
+    var BY = ST.krBy; window.GMC_LEAVE_SKIP = false; window.GMC_ALLOW_POSTADD = false;
+    try{
+      var days = [], hid = null; var CC = function(c){ var cl0 = clientByName(c.name); return cl0 ? (cl0.compCredits = cl0.compCredits||[]) : []; };
+      mut(function(c){ hid = caseKrHospital(c); c.krBalancePaid = true; c.hasArrived = true; c.krProcedureDone = true;
+        for(var i = 3; i < 90 && days.length<12; i++){ var d = ymdAdd(todayStr(), i); if(hospitalClosedOn(hid, d)) continue; if(!krSurgerySlotError(hid, c.director, d, '11:00', 120, c.clinicId+':'+c.id, {allowOffHours:true})) days.push(d); } return true; });
+      ST.ok(days.length>=12, '找到可约日：'+days.length); if(days.length<12) return;
+      var lib = PROJECT_LIBRARY.filter(function(x){ return x.origin==='KR' && x.active && x.hospitalId===caseKrHospital(CASE_ITEMS.filter(function(y){ return y.id===r.id; })[0] || {}) && x.price>0; }).sort(function(a, b){ return a.price-b.price; });
+      var haveN = function(c){ return (c.procedureItems||[]).map(function(it){ return it.name; }); };
+      var mkItem = function(c, price){ var p = lib.filter(function(x){ return haveN(c).indexOf(x.name)<0; })[0]; if(!p) return null; var it = {projectId:p.id, name:p.name, price:price||p.price, currency:'KRW', origin:'KR', categoryId:p.categoryId, done:false, batchId:'B1', anesthesia:{type:'local', label:'局部麻醉', note:''}, rebookWait:{at:'x', by:'t', reason:'t', memo:''}}; c.procedureItems.push(it); itemIid(it); return it; };
+      var arrive = function(day, price){ var nm = ''; mut(function(c){ var it = mkItem(c, price); nm = it.name; ST.ok(coreUnitBookUse(c, itemIid(it), day, '11:00', BY, c.director), '约 '+day); coreVisitSim(c, 'KR|'+day, BY); coreVisitArrive(c, 'KR|'+day, BY); return true; }); return nm; };
+      /* ① 需要调整方案 · 换成更贵的：补付差额，付清后才能做 */
+      var n1 = arrive(days[0], 1000000), k1 = 'KR|'+days[0], priceHi = 0;
+      mut(function(c){ ST.ok(coreVisitEval(c, k1, 'changed', '想换大项目', BY).ok, '评估：需要调整方案'); ST.ok(visitEvalPhase(c, k1)==='adjust' && /调整/.test(visitEvalLockText(c, k1)), '评估后还锁着：'+visitEvalLockText(c, k1));
+        var bad = coreVisitAdjust(c, k1, {drops:[n1], adds:[], locals:[]}, BY); ST.ok(!bad.ok && /至少要保留或增加/.test(bad.err), '全换掉又什么都不加被拒绝：'+bad.err);
+        var big = lib[lib.length-1]; priceHi = big.price; ST.ok(big.price > 1000000, '演示库里有比 100 万更贵的施术项目：'+big.price);
+        var res = coreVisitAdjust(c, k1, {drops:[n1], adds:[{name:big.name, detail:undefined, anesthesia:{type:'local', label:'局部麻醉', note:''}, ext:0}], locals:[]}, BY); ST.ok(res.ok && res.pay===big.price-1000000, '换成更贵的：需补付差额 '+(big.price-1000000)+'：'+JSON.stringify(res));
+        ST.ok(visitEvalPhase(c, k1)==='pay', '进入补付阶段'); var row = coreVisitRows(c, k1).filter(function(s){ return s.surgUse; })[0]; ST.ok(!!row && row.surgUse===big.name, '新项目挂在这天');
+        window.KR_DENY_MSG = ''; ST.ok(coreSubDone(c, row.id, BY)===false, '补付前不能操作完成');
+        ST.ok(itemByKey(c, n1, function(){ return true; }).cancelled === true, '被更换的项目取消'); return true; });
+      mut(function(c){ var nb = (c.settlementBatches||[]).length, pr = coreVisitAdjustPay(c, k1, BY); ST.ok(pr.ok && (c.settlementBatches||[]).length===nb+1, '确认补付：新结算单（addOn 差额）'); var b = c.settlementBatches[c.settlementBatches.length-1]; ST.ok(b.krTotal===priceHi-1000000 && b.visitAdj===k1, '结算单金额 = 差额');
+        var row = coreVisitRows(c, k1).filter(function(s){ return s.surgUse; })[0]; ST.ok(coreSubDone(c, row.id, BY)===true, '付清后能操作完成'); return true; });
+      /* ② 需要调整方案 · 换成更便宜的：差额转置换额度 */
+      var n2 = arrive(days[1], 3000000), k2 = 'KR|'+days[1], c0 = mut(function(c){ return CC(c).length; });
+      mut(function(c){ coreVisitEval(c, k2, 'changed', '换小一点', BY); var small = lib.filter(function(x){ return haveN(c).indexOf(x.name)<0; })[0];
+        var res = coreVisitAdjust(c, k2, {drops:[n2], adds:[{name:small.name, anesthesia:{type:'local', label:'局部麻醉', note:''}, ext:0}], locals:[]}, BY); ST.ok(res.ok && !res.pay, '换成更便宜的：不用补付');
+        ST.ok(CC(c).length===c0+1 && CC(c)[CC(c).length-1].kwr===3000000-small.price, '差额转置换额度：'+(CC(c)[CC(c).length-1]||{}).kwr); ST.ok(visitEvalPhase(c, k2)==='done', '直接可以做');
+        var row = coreVisitRows(c, k2).filter(function(s){ return s.surgUse; })[0]; ST.ok(coreSubDone(c, row.id, BY)===true, '能操作完成'); return true; });
+      /* ③ 不建议手术 → 取消项目：全部退回 / 部分退回 / 更换项目 */
+      var n3 = arrive(days[2], 1200000), k3 = 'KR|'+days[2];
+      mut(function(c){ ST.ok(coreVisitEval(c, k3, 'cannot', '不适合', BY, 'cancel').ok, '不建议手术 · 取消项目'); ST.ok(visitEvalPhase(c, k3)==='cancel', '等款项去向');
+        var bad = coreVisitCancelDecide(c, k3, 'part', {amt:2000000, memo:'x'}, BY); ST.ok(!bad.ok && /小于/.test(bad.err), '部分退回金额不能超过已付：'+bad.err);
+        var bad2 = coreVisitCancelDecide(c, k3, 'part', {amt:500000, memo:''}, BY); ST.ok(!bad2.ok && /memo/.test(bad2.err), '部分退回要 memo');
+        var nN = (typeof NOTIFS!=='undefined' ? NOTIFS.length : 0), ok = coreVisitCancelDecide(c, k3, 'all', {}, BY); ST.ok(ok.ok, '全部退回'); ST.ok(itemByKey(c, n3, function(){ return true; }).cancelled, '项目取消'); ST.ok(!coreVisitRows(c, k3).some(function(s){ return s.surgUse; }), '施术时间段放掉（行拿掉）');
+        ST.ok(!visitEvalNeed(c, k3), '处理完不再锁'); ST.ok((c.logEntries||[]).some(function(e){ return /取消项目/.test(e.action) && /全部退回/.test(e.action); }), 'Timeline 记'); return true; });
+      var n4 = arrive(days[3], 1200000), k4 = 'KR|'+days[3], c1 = mut(function(c){ return CC(c).length; });
+      mut(function(c){ coreVisitEval(c, k4, 'cannot', '不适合', BY, 'cancel'); var ok = coreVisitCancelDecide(c, k4, 'part', {amt:400000, memo:'退一部分'}, BY); ST.ok(ok.ok, '部分退回'); ST.ok(CC(c).length===c1+1 && CC(c)[CC(c).length-1].kwr===800000, '没退的 80 万转置换额度'); return true; });
+      var n5 = arrive(days[4], 1500000), k5 = 'KR|'+days[4];
+      mut(function(c){ coreVisitEval(c, k5, 'cannot', '不适合', BY, 'cancel'); var lp = krLocalLib(caseKrHospital(c)).filter(function(p){ return p.specs && p.specs[0] && !p.specs[0].neg && p.specs[0].price>0 && (p.active!==false); })[0];
+        var bad = coreVisitCancelDecide(c, k5, 'swap', {locals:[]}, BY); ST.ok(!bad.ok, '更换项目要先选管理项目');
+        if(!lp){ ST.ok(false, '演示库没有管理项目'); return true; } var sp = lp.specs[0], x = {name:lp.name, specLabel:sp.label, price:sp.price, projectId:lp.id, qty:sp.times||1, copies:1, specTimes:sp.times||1};
+        var ok = coreVisitCancelDecide(c, k5, 'swap', {locals:[x]}, BY); ST.ok(ok.ok, '更换项目：'+JSON.stringify(ok)); var ev = visitEvalOf(c, k5);
+        ST.ok(ev.phase==='pay' ? ev.payDue===x.price-1500000 : (ev.compKrw===1500000-x.price || x.price===1500000), '新项目比 150 万'+(x.price>1500000 ? '贵 → 补付差额' : '便宜 → 差额转置换额度')+'：'+JSON.stringify({phase:ev.phase, due:ev.payDue, comp:ev.compKrw}));
+        return true; });
+      /* ④ 不建议手术 → 更换时间：当场约 / 之后再约 */
+      var n6 = arrive(days[5], 1000000), k6 = 'KR|'+days[5];
+      mut(function(c){ var bad = coreVisitEval(c, k6, 'cannot', 'x', BY, 'rebook', {when:'now', date:todayStr(), time:'11:00'}); ST.ok(!bad.ok && /明天/.test(bad.err), '当场约今天被拒绝：'+bad.err); ST.ok(!visitEvalOf(c, k6), '被拒绝时什么都没改');
+        var ok = coreVisitEval(c, k6, 'cannot', 'x', BY, 'rebook', {when:'now', date:days[11], time:'11:00'}); ST.ok(ok.ok, '更换时间 · 当场约：'+JSON.stringify(ok)); ST.ok(surgItemBooked(c, itemByKey(c, n6, function(){ return true; })), '新时间约上了'); return true; });
+      var n7 = arrive(days[6], 1000000), k7 = 'KR|'+days[6];
+      mut(function(c){ ST.ok(coreVisitEval(c, k7, 'cannot', 'x', BY, 'rebook').ok, '更换时间 · 之后再约'); ST.ok(!!itemByKey(c, n7, function(){ return true; }).rebookWait, '回到待重新预约'); return true; });
+      /* ⑤ 评估 ok 后没做就离院：弹原因窗（needLeave）；选原因后处理；系统结束标待重新预约 */
+      var n8 = arrive(days[7], 1000000), k8 = 'KR|'+days[7];
+      mut(function(c){ coreVisitEval(c, k8, 'ok', '', BY);
+        var e1 = coreEndSubVisit(c, k8, BY, ''); ST.ok(!e1.ok && e1.needLeave && e1.items.length===1, '没做就离院：要逐项选原因（needLeave）');
+        var e2 = coreEndSubVisit(c, k8, BY, '', [{name:n8, reason:'其他'}]); ST.ok(!e2.ok && /memo/.test(e2.err), '选「其他」不写 memo 被拒绝：'+e2.err);
+        var e3 = coreEndSubVisit(c, k8, BY, '', [{name:n8, reason:LEAVE_REASONS[0], when:'later'}]); ST.ok(e3.ok, '身体不适 + 之后再约通过：'+JSON.stringify(e3)); ST.ok(!!itemByKey(c, n8, function(){ return true; }).rebookWait, '待重新预约'); ST.ok(!!(c.visitEndedKeys||{})[k8], '这次到院结束'); return true; });
+      var n9 = arrive(days[8], 1000000), k9 = 'KR|'+days[8];
+      mut(function(c){ coreVisitEval(c, k9, 'ok', '', BY); var e = coreEndSubVisit(c, k9, BY, '', [{name:n9, reason:LEAVE_REASONS[1], dec:'all'}]); ST.ok(e.ok, '客人放弃 → 取消项目 · 全部退回：'+JSON.stringify(e)); var it9 = itemByKey(c, n9, function(){ return true; }); ST.ok(it9.cancelled, '项目取消'); return true; });
+      /* 系统自己结束（不经室长）：待重新预约 + 写「未选原因」 */
+      var n10 = arrive(days[9], 1000000), k10 = 'KR|'+days[9];
+      mut(function(c){ var e = coreEndSubVisit(c, k10, '系统', ''); ST.ok(e.ok, '系统结束不弹窗'); var it = itemByKey(c, n10, function(){ return true; }); ST.ok(it.rebookWait && /未选原因|系统/.test(it.rebookWait.reason), '待重新预约，写明未选原因：'+(it.rebookWait||{}).reason); return true; });
+      /* 隔天确认带原因：leaveValidate 校验没选完不能确认 */
+      var n11 = arrive(days[10], 1000000), k11 = 'KR|'+days[10];
+      mut(function(c){ var un = visitUndoneItems(c, k11); ST.ok(un.length===1, '隔天确认前一天还有重新预约的施术没做'); ST.ok(!!leaveValidate(c, [], null, un), '原因没选完 → 校验不通过');
+        window.DAYCONFIRM_BYPASS = true; try{ var e = coreEndSubVisit(c, k11, BY, '', [{name:n11, reason:LEAVE_REASONS[0], when:'later'}]); ST.ok(e.ok, '选完原因才能确认'); } finally { window.DAYCONFIRM_BYPASS = false; } return true; });
+    } finally { window.GMC_LEAVE_SKIP = true; }
+  });
+  ST.def('R223b','CMD-1105-02 四（任意分页）：KR 预约弹窗的院长时间改成同一位院长合计查；入口清单都接了 dirSeqCheck',function(){
+    ST.ok(/dirSeqCheck/.test(String(krCbCheck)), 'KR 预约弹窗 krCbCheck 用 dirSeqCheck');
+    ST.ok(/dirSeqCheck/.test(String(coreBookConfirmLinked)) && /dirSeqCheck/.test(String(krbSubmit)) && /dirSeqCheck/.test(String(leaveValidate)), '占位确认 / 占位提交 / 离院当场约都用 dirSeqCheck');
+    ST.ok(/dirSeqCheck/.test(String(visitAdjConflict)) && /dirSeqCheck/.test(String(visitRebookErr)), '重新约那天的调整方案 / 当场约也用 dirSeqCheck');
+  });
   ST.def('R217b','CMD-1103-02（A1，stageC 夹具）：IN 占位只列行程没结束的客人、三组项目、日期范围',function(){
     var me = currentAccount(); if(!ST.ok(me && /^A/.test(me.id), '要在 IN 分页里跑')) return;
     var cs = krbClients(); if(!ST.ok(cs.length>0, '需要有行程没结束的客人（先 ST.ensureFixtures([\'stageC\'])）')) return; var nmx = cs.indexOf('T-待到院')>-1 ? 'T-待到院' : cs[0];
