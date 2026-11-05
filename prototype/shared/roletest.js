@@ -291,7 +291,7 @@ RT.runKr = function(){
   var b2 = T(function(){ return btnsOf('paid_waiting_kr','consult'); }), b3 = T(function(){ return btnsOf('awaiting_report','consult'); }), b6 = T(function(){ return btnsOf('report_ready','consult'); });
   function inList(b, x){ return Array.isArray(b) && b.indexOf(x)>-1; }
   RT.cell('面诊：［确认］预计出报告时间', coord ? '✅' : (b2 ? '❌' : '—'), b2 ? RT.yn(inList(b2,'确认')) : '（该账号名下没有这个状态的案件）', '案件 '+(b2&&b2.caseNo)+' 的按钮：'+JSON.stringify(b2));
-  RT.cell('面诊：［开始面诊］', '✅', b3 ? RT.yn(inList(b3,'开始面诊')) : '（该账号名下没有「等待报告」状态的案件）', '室长 / 院长都能按（规格 2026-10-12：谁先按都算）；A000003 的按钮：'+JSON.stringify(b3));
+  RT.cell('面诊：［开始面诊］', dirLike ? '✅' : '❌', b3 ? RT.yn(inList(b3,'开始面诊')) : '（该账号名下没有「等待报告」状态的案件）', 'CMD-1105-11：只有院长能按；室长要先勾「已得到院长授意」再代录，没有［开始面诊］；A000003 的按钮：'+JSON.stringify(b3));
   RT.cell('面诊：［修改预计时间］', coord ? '—' : '—', b3 ? RT.yn(inList(b3,'修改预计时间')) : '（看不到）', '规格没写院长能不能改预计出报告时间');
   RT.cell('面诊：［补加可选项目］ / 发送诊疗方案（调整并提交最终报告）', coord ? '✅' : '❌', b6 ? RT.yn(Array.isArray(b6) && b6.some(function(x){ return /补加可选项目/.test(x); })) /* CMD-1015-05：按钮改成「＋ 补加可选项目」 */ : '（该账号名下没有「已出报告」状态的案件）', '案件 '+(b6&&b6.caseNo)+' 的按钮：'+JSON.stringify(b6));
   var sub = T(function(){ var hit = null; krClinics().forEach(function(cl){ if(hit) return; Store.withClinic(cl.id, function(){ CASE_ITEMS.forEach(function(c){ if(!hit && krCaseVisible(c, hid) && c.stage==='travel' && c.consultRequested && (c.subItems||[]).some(function(x){ return x.kind==='施术'; })) hit = {cid:cl.id, id:c.id, old:c.director, no:c.caseNo}; }); }); });

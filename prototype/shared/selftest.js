@@ -3237,19 +3237,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(t.indexOf('到访目的') < t.indexOf('确认面诊时间'), '到访目的卡在预约 / 确认时间卡上面');
     KR_CN_OPEN[cid+'|'+(r.id)+'|f_nose'] = true; KR_CN_OPEN[r.id+'|f_nose'] = true; h = krTabConsult(gc()); ST.ok(/p1\.jpg|v\.mp4/.test(txt(h)), '点［展开］后显示视频、照片');
     KR_CN_OPEN = {}; mut(function(c){ ST.krEta(c); }); var c1 = gc(); h = krTabConsult(c1); t = txt(h);
-    ST.ok(c1.consultStatus==='awaiting_report' && t.indexOf('面诊｜院长：') > -1 && t.indexOf('面诊｜院长：') < t.indexOf('到访目的'), '时间已确认、面诊前：面诊卡在最上面，标题「面诊｜院长：…」');
-    ST.ok(/开始面诊/.test(h) && (h.match(/开始面诊/g)||[]).length===1 && /预约面诊时间（韩国）\d{4}-\d{2}-\d{2} \d{2}:\d{2}（(距离|已超过)预定时间 \d+:\d{2}）/.test(t) && /预约报告时间（韩国）/.test(t) && /（(距离|已超过)预定时间 \d+:\d{2}）/.test(t.slice(t.indexOf('预约报告时间'))), '标题行右边［开始面诊］只一个；预约面诊时间 / 预约报告时间带「距离预定时间 HH:mm」');
-    ST.ok(!/倒计时|当前小状态|院长日程|负责院长/.test(t), '拿掉：负责院长一行 + 院长日程、倒计时行、当前小状态行');
+    /* CMD-1105-11：资料卡 + 评估卡框架——室长 ①（院长还没开始） */
+    ST.ok(c1.consultStatus==='awaiting_report' && t.indexOf('面诊资料')>-1 && t.indexOf('面诊资料') < t.indexOf('评估内容') && /面诊资料\s*等待院长评估/.test(t) && /评估内容\s*等待院长评估/.test(t), '室长 ①：上面「面诊资料」（右上等待院长评估），下面「评估内容 · 等待院长评估」');
+    ST.ok(!/开始面诊/.test(h) && /预约面诊时间（韩国）\d{4}-\d{2}-\d{2} \d{2}:\d{2}（(距离|已超过)预定时间 \d+:\d{2}）/.test(t) && /预约报告时间（韩国）/.test(t) && />修改</.test(h) && /已得到院长授意/.test(t), '室长 ①：两行时间（报告时间旁［修改］）+ 授意勾选，没有［开始面诊］');
     ST.ok(c1.reportEta && !!c1.consultAt, '预约报告时间的资料照旧保存');
-    var old = window.krIsDirector; window.krIsDirector = function(){ return true; }; h = krTabConsult(gc()); t = txt(h); window.krIsDirector = old;
-    ST.ok(/^\s*面诊(开始面诊)?预约面诊时间/.test(t) && t.indexOf('面诊｜院长')<0 && t.indexOf('预约报告时间')<0 && /预约面诊时间（韩国）/.test(t) && !/展开|折叠/.test(t) && /p1\.jpg|v\.mp4/.test(t), '院长：标题只写「面诊」、不显示预约报告时间、部位卡全部展开没有折叠按钮');
-    mut(function(c){ c.consultStartedAt = nowFullDt(); var v = krVault(cid, r.id, true); v.transcripts.push({id:'t9', ts:nowFullDt(), by:'KD1 院长', mode:'voice', text:'鼻梁需要垫高'}); Store.touch(); });
-    window.krIsDirector = function(){ return true; }; h = krTabConsult(gc()); t = txt(h); window.krIsDirector = old;
-    ST.ok(/录入面诊内容/.test(t) && /增加内容（语音）/.test(t) && /增加内容（手动）/.test(t) && /KD1 院长 · 语音录入/.test(t) && /鼻梁需要垫高/.test(t) && !/已上传并锁住|KR 专用附件|待整理诊疗方案/.test(t) && t.indexOf('预约报告时间')<0, '院长开始面诊后：预约面诊时间 + 录入面诊内容（［增加内容］两个按钮 + 一笔笔记录），没有摘要卡 / 锁住 / 附件说明');
+    ST.ok(/苦恼说明 鼻梁低/.test(t) && /展开/.test(t) && !/p1\.jpg|v\.mp4/.test(t), '室长：资料卡里部位卡默认折叠，有［展开］');
+    mut(function(c){ c.consultStartedAt = nowFullDt(); c.consultStartedBy = 'KD1 院长'; });
     h = krTabConsult(gc()); t = txt(h);
-    ST.ok(/面诊｜院长：/.test(t) && /录入面诊内容/.test(t) && /到访目的\s*展开/.test(t) && !/苦恼说明/.test(t), '室长开始面诊后：面诊卡同院长，到访目的整张默认折叠（标题行最右［展开］）');
-    krVpToggle(r.id); t = txt(krTabConsult(gc())); ST.ok(/苦恼说明 鼻梁低/.test(t) && /折叠/.test(t), '点［展开］后显示到访目的');
-    KR_VP_OPEN = {}; window.krIsDirector = old;
+    ST.ok(/评估内容\s*院长正在评估/.test(t) && !/已得到院长授意/.test(t) && !/<textarea|<select/.test(h.slice(h.indexOf('评估内容'))), '室长 ②：院长正在评估，授意勾选消失、没有输入栏位');
     Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap122); }); var v9 = krVault(cid, r.id, true); v9.transcripts = v9.transcripts.filter(function(x){ return x.id!=='t9'; }); Store.touch(); /* 复原夹具，不影响后面的用例 */
   });
   ST.def('R123a','CMD-1025-01 八～十（KM1 分页，stageC 夹具）：KR 术后管理 tab 列出全部（不套固定高度）、来源不再写「印尼购买」；付清尾款前［预约时间］［全部预约］灰 + 提示，付清后可按；备注卡空时一行、有备注每则长高（不限 3 则、卡里滚动）',function(){
@@ -4799,10 +4794,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var allN = HOSPITAL_DATA[caseKrHospital(c1)].notifs||[], nt = allN.slice(0, allN.length-nN).filter(function(n){ return n.caseId===c1.id && /评估完成/.test(n.text) && n.to==='coord'; });
       ST.ok(nt.length===1 && /请发送复诊评估结果/.test(nt[0].text), 'KR 室长收到通知「评估完成 → 请发送复诊评估结果」（新增 '+(allN.length-nN)+' 条）');
       ST.ok(/评估完成（院长）/.test(JSON.stringify(c1.logEntries||[])), 'Timeline 记「评估完成（院长）」');
-      var h2 = krTabConsult(gc()); ST.ok(/已上传评估 · 待室长发送/.test(h2) && /发送前你还可以修改/.test(h2) && !/krSubmitReport\(\)|krRvProxySend\(\)/.test(h2), '完成后：状态「评估完成 · 待室长发送」，院长没有发送按钮');
+      var h2 = krTabConsult(gc()); ST.ok(/评估完了/.test(h2) && !/发送前你还可以修改/.test(h2) && !/krSubmitReport\(\)|krRvProxySend\(\)|id="rvta-|id="rvmic-|>上传评估</.test(h2), '完成后（CMD-1105-11）：状态「评估完了」，全部只读，没有输入框 / 语音 / 上传 / 发送按钮');
       /* 完成后院长还能改，室长那边更新 */
-      krRvSetIdx('op', 0, '恢复良好，左眼稍微肿，已改'); ST.ok(rvEff(gc(), 'op', '埋线双眼皮')==='恢复良好，左眼稍微肿，已改' && gc().revEval.log.some(function(x){ return x.kind==='author'; }), '完成后院长还能改（记一笔，室长那边读到的是新的）');
-      krSetRecoveryResult('treat'); ST.ok(gc().recoveryResult.result==='treat', '完成后院长也能改整体结论'); krRvPick('ok');
+      krRvSetIdx('op', 0, '恢复良好，左眼稍微肿，已改'); ST.ok(rvEff(gc(), 'op', '埋线双眼皮')==='恢复良好，左眼稍微肿' && rvMode(gc())==='locked', '上传后院长改不了（CMD-1105-11 取代「完成后院长还能改」）');
+      krSetRecoveryResult('treat'); ST.ok(gc().recoveryResult.result==='ok', '上传后院长也改不了整体结论（CMD-1105-11）');
       /* 院长发送不了 */
       al.length = 0; krSubmitReport(); ST.ok(!gc().reportReady, '院长按不了发送（krSubmitReport 直接返回）');
       /* 待办：院长这边不再有「上传评估」，室长那边有发送 */
@@ -4820,7 +4815,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.rvSetup(r0, function(c){ var r = rvEvalOf(c, true); r.op = {'埋线双眼皮':'恢复良好，左眼稍微肿', '开内眼角':'内眼角轻微发红'}; r.text = '整体不错'; r.nextType = '1m'; r.note = '两周内避免桑拿'; c.recoveryResult = {result:'ok', by:'KD1 院长', at:nowFullDt()}; r.by = 'KD1 院长'; coreRvFinish(c, 'KD1 院长', 'doctor'); });
       showTab(); ST.ok(rvMode(gc())==='editor', '室长（院长已完成）= 编辑者');
       var h = krTabConsult(gc());
-      ST.ok(/院长已上传 · 待发送 IN/.test(h) && /KD1 院长/.test(h) && /恢复良好，左眼稍微肿/.test(h) && /内眼角轻微发红/.test(h), '室长看到院长写的内容，标明评估人 KD1 院长');
+      ST.ok(/评估完了/.test(h) && /KD1 院长/.test(h) && /恢复良好，左眼稍微肿/.test(h) && /内眼角轻微发红/.test(h), '室长看到院长写的内容，标明评估人 KD1 院长（状态「评估完了」）');
       ST.ok(/退回院长/.test(h) && />发送给 IN</.test(h) && !/>上传评估</.test(h), '室长有［退回院长］［发送给 IN］（原［发送复诊评估结果］），没有［上传评估］');
       ST.ok(/医疗判断，只有院长能改/.test(h) && !/krRvPick\(/.test(h) && !/krRvNextSet\(/.test(h), '整体结论 / 下次复诊只显示，不能改（没有按钮 / 下拉）');
       al.length = 0; krSetRecoveryResult('treat'); ST.ok(gc().recoveryResult.result==='ok' && al.some(function(m){ return /只有院长能改/.test(m); }), '硬改整体结论被拒绝');
@@ -7425,7 +7420,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       KR_CASE.clinicId = cid; KR_CASE.id = r0.id; KR_SUB = krSubBlank(''); krSubReset(gc());
       var h = Store.withClinic(cid, function(){ return krSubmitBlock(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); }); /* CMD-1028-03：旧资料（评估内容已上传、没有 revEval）= 室长代录，表单还是全套 */
       ST.ok(/逐项评估意见/.test(h) && /埋线双眼皮/.test(h) && /开内眼角/.test(h) && /下次复诊时间/.test(h) && /注意事项/.test(h), '一：发送块有 逐项评估意见（每个项目一栏）/ 下次复诊时间 / 注意事项');
-      ST.ok(/增加内容（语音）/.test(h) && /增加内容（手动）/.test(h) && /AI 整理/.test(h), '一：录入方式和面诊一样（增加内容 语音 / 手动）+ AI 整理');
+      ST.ok(/语音输入/.test(h) && !/增加内容（手动）/.test(h) && /AI 整理/.test(h), '一：录入方式 = ［语音输入］+ 输入框 + AI 整理（CMD-1105-10 取代［增加内容］两个按钮）');
       ST.ok(/'2w'|2 周后/.test(h) && /1 个月后/.test(h) && /3 个月后/.test(h) && /不需要再复诊|无需复诊/.test(h) && /指定日期/.test(h), '一：下次复诊时间选项 不需要再复诊 / 2 周后 / 1 个月后 / 3 个月后 / 指定日期');
       /* 必填检查 */
       krSubmitReport(); ST.ok(!gc().reportReady && al.some(function(m){ return /还缺/.test(m) && /下次复诊时间/.test(m) && !/埋线双眼皮/.test(m); }), '一（CMD-1105-09）：下次复诊时间没填 → 发送被拦下；逐项意见改选填，不再提示');
@@ -9296,6 +9291,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       ST.rvSetup(r0, function(c){ delete c.consultStartedAt; c.revisitQuestion = '右眼还有点肿，正常吗？'; });
       KR_CASE = {clinicId:cid, id:r0.id, tab:'consult'}; krShowCase(cid, r0.id, {tab:'consult', here:true});
+      var h0 = krTabConsult(gc()); ST.ok(/开始复诊/.test(h0) && !/id="rvta-/.test(h0) && /评估时间（韩国）/.test(h0) && /结果时间（韩国）/.test(h0) && />修改</.test(h0) && /等待院长评估/.test(h0), '① 院长还没开始：评估卡「复诊｜院长」+ 两行时间（结果时间旁［修改］）+［开始复诊］，还没有输入栏位（CMD-1105-11）');
+      krStartConsult(); krShowCase(cid, r0.id, {tab:'consult', here:true});
       v0 = krVault(cid, r0.id, true); v0.transcripts = [];
       var h = krTabConsult(gc()), ix = function(k){ return h.indexOf(k); };
       ST.ok(!/krConsultToggle/.test(h), '① 没有重复的摘要卡（「复诊评估 · 院长 · 评估中［展开］」）');
@@ -9339,7 +9336,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/院长评估中/.test(krRevChildStage(gc())), 'B 页头状态：'+krRevChildStage(gc()));
       /* C 院长已上传 */
       ST.rvSetup(r0, function(c){ c.consultStartedBy = 'KD1 院长'; c.revisitQuestion = '右眼还有点肿'; var r = rvEvalOf(c, true); r.op = {'埋线双眼皮':'恢复良好'}; r.text = ''; r.nextType = '1m'; r.ans = KR_RV_DEMO_OP; r.role = 'doctor'; r.doneBy = 'KD1 院长'; r.doneAt = nowFullDt(); c.consultContentAt = nowFullDt(); c.recoveryResult = {result:'ok', by:'KD1 院长', at:nowFullDt()}; });
-      var hC = show(); ST.ok(rvMode(gc())==='editor' && /院长已上传 · 待发送 IN/.test(strip(hC)) && />发送给 IN</.test(hC) && /退回院长/.test(hC) && !/>上传评估</.test(hC), 'C 院长已上传：1～6 只读（文字可整理），有［退回院长］［发送给 IN］');
+      var hC = show(); ST.ok(rvMode(gc())==='editor' && /评估完了/.test(strip(hC)) && />发送给 IN</.test(hC) && /退回院长/.test(hC) && !/>上传评估</.test(hC), 'C 院长已上传：1～6 只读（文字可整理），有［退回院长］［发送给 IN］');
       ST.ok(/回答疑问/.test(hC) && /결과|경과/.test(hC), 'C 回答疑问显示（韩文原文）');
       ST.ok(/院长已上传 · 待发送 IN/.test(krRevChildStage(gc())), 'C 页头状态：'+krRevChildStage(gc()));
       al.length = 0; krSubmitReport(); var c9 = gc();
@@ -9361,6 +9358,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       v0 = krVault(cid, r0.id, true); var t0 = Date.now();
       v0.transcripts = [{id:'m1', ts:ymdAdd(todayStr(), -1)+' 10:00:00', by:'KD1 院长', rec:'KD1 院长', who:'', mode:'voice', text:'第一笔：肿胀正常', tgt:''}, {id:'m3', ts:ymdAdd(todayStr(), -1)+' 10:20:00', by:'KD1 院长', rec:'KD1 院长', who:'', mode:'manual', text:'第三笔：注意防晒', tgt:''}, {id:'m2', ts:ymdAdd(todayStr(), -1)+' 10:10:00', by:'KD1 院长', rec:'KD1 院长', who:'', mode:'manual', text:'第二笔：左眼已消肿', tgt:''}, {id:'a1', ts:ymdAdd(todayStr(), -1)+' 10:30:00', by:'KD1 院长', rec:'KD1 院长', who:'', mode:'manual', text:'回答：属于正常范围', tgt:'ans'}];
       KR_CASE = {clinicId:cid, id:r0.id, tab:'consult'}; krShowCase(cid, r0.id, {tab:'consult', here:true});
+      krStartConsult(); krShowCase(cid, r0.id, {tab:'consult', here:true}); /* CMD-1105-11：院长要先按［开始复诊］才有输入栏位 */
       var r1 = gc().revEval; ST.ok(r1 && r1.rec==='第一笔：肿胀正常\n第二笔：左眼已消肿\n第三笔：注意防晒' && r1.ans==='回答：属于正常范围' && r1.migrated && r1.migrated.n===3 && r1.migrated.na===1, '④ 旧的 3 笔 + 回答疑问 1 笔按时间旧到新、换行分隔，合并进对应输入框：'+JSON.stringify(r1 && [r1.rec, r1.ans]));
       krShowCase(cid, r0.id, {tab:'consult', here:true}); ST.ok(gc().revEval.rec.split('\n').length===3 && v0.transcripts.length===4, '④ 只合并一次，不重复；原始记录还在仓库里没丢');
       var body = document.getElementById('krcase-body'); ST.ok(/第二笔：左眼已消肿/.test(body.querySelector('#rvta-rec').value) && !/增加内容（手动）|一笔一笔/.test(body.innerText), '④ 输入框里能看到合并后的文字，页面没有录入卡片');
@@ -9402,6 +9400,74 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(q(n)===0, '⑦ 复诊评估子案件不再挂「项目确认中超过 3 天」');
       ST.ok(q(p)===1, '⑦ 真的在项目确认中的（一般面诊出方案没选项目）照旧提醒');
     } finally { window.alert = oa; window.confirm = oc; try{ closeAddSlotModal(); }catch(e){} }
+  });
+  ST.def('R230a','CMD-1105-11（KD1 分页，stagePay 夹具）：一般面诊院长三种状态——① 资料卡 + 评估卡（两行时间 +［修改］+［开始面诊］）→ ② 录入内容（语音进输入框）+ 推荐项目 +［上传评估］灰掉写缺什么 → ③ 上传后全部只读',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KD1', '要在 KD1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc()), sr = window.SpeechRecognition, wsr = window.webkitSpeechRecognition, oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    try{
+      window.SpeechRecognition = undefined; window.webkitSpeechRecognition = undefined;
+      mut(function(c){ c.needsConsult = true; c.consultKind = ''; c.director = 'KD1 院长'; c.metaviewStatus = 'ready'; c.concerns = [{part:'f_nose', sub:'', desc:'鼻梁低', expect:'自然', video:{name:'v.mp4'}, photos:{front:{name:'p1.jpg'}}}]; ST.krEta(c); delete c.consultStartedAt; delete c.consultStartedBy; delete c.consultContentAt; delete c.consultEval; delete c.revAuth; });
+      var v0 = krVault(cid, r.id, true); v0.transcripts = [];
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_SUB = krSubBlank(''); krShowCase(cid, r.id, {tab:'consult', here:true});
+      var body = document.getElementById('krcase-body'), h = krTabConsult(gc()), t = txt(h);
+      ST.ok(/面诊资料\s*等待院长评估/.test(t) && t.indexOf('面诊资料')<t.indexOf('面诊｜院长：') && /面诊｜院长：KD1 院长\s*等待院长评估/.test(t), '院长 ①：上「面诊资料」（等待院长评估）+ 下评估卡「面诊｜院长：KD1 院长」「等待院长评估」');
+      ST.ok((h.match(/开始面诊/g)||[]).length===1 && /预约面诊时间（韩国）/.test(t) && /预约报告时间（韩国）/.test(t) && />修改</.test(h) && !/已得到院长授意/.test(t), '院长 ①：两行时间（报告时间旁［修改］）+ 最右一个［开始面诊］，没有授意勾选');
+      krStartConsult(); var c1 = gc(); ST.ok(!!c1.consultStartedAt && /院长/.test(c1.consultStartedBy) && !KR_REC_OPEN, '院长按［开始面诊］直接开始（不弹选择录入方式、不开侧栏）');
+      h = krTabConsult(gc()); t = txt(h);
+      ST.ok(/面诊资料\s*院长正在评估/.test(t) && /id="rvmic-gcrec"/.test(h) && /id="rvta-gcrec"/.test(h) && !/增加内容（手动）|krRecOpenModal/.test(h), '院长 ②：录入内容 = ［语音输入］+ 输入框，没有「增加内容（手动）」/ 侧栏');
+      ST.ok(/推荐项目/.test(t) && /还缺：录入内容、推荐项目/.test(t) && /<button class="btn-primary" disabled[^>]*>上传评估/.test(h), '院长 ②：推荐项目（从项目库选）；［上传评估］灰掉，旁边写还缺 录入内容、推荐项目');
+      /* 语音进输入框 */
+      krShowCase(cid, r.id, {tab:'consult', here:true}); document.getElementById('rvmic-gcrec').click(); ST.ok(RVMIC && RVMIC.key==='gcrec', '按［语音输入］开始录'); krRvMicStop(true);
+      ST.ok(String(gc().consultEval && gc().consultEval.rec).length>5 && (gc().logEntries||[]).some(function(e){ return /语音输入：录入内容/.test(e.action); }), '转写进输入框并存好，Timeline 记「语音输入：录入内容」');
+      /* 选推荐项目 */
+      var cand = krScopeCandidates(cid).kr[0]; ST.ok(!!cand, '项目库有项目'); krPickToggle(cand.name, true);
+      ST.ok(gc().consultEval.sub && gc().consultEval.sub.pick[cand.name], '选的推荐项目存成快照（换分页 / 刷新不丢）');
+      h = krTabConsult(gc()); ST.ok(!/还缺：/.test(txt(h)) && /<button class="btn-primary" onclick="krGcUpload\(\)">上传评估/.test(h), '都选了 → ［上传评估］可按');
+      krGcUpload(); var c2 = gc();
+      ST.ok(!!c2.consultContentAt && c2.consultEval.role==='doctor' && c2.consultEval.doneBy==='KD1 院长', '［上传评估］→ 评估结束，评估人 = 院长');
+      h = krTabConsult(gc()); t = txt(h);
+      ST.ok(/面诊资料\s*评估完了/.test(t) && /评估完了/.test(t) && !/id="rvmic-|id="rvta-|krPickToggle|krGcUpload|上传评估<|开始面诊/.test(h) && !/发送前你还可以修改/.test(t), '院长 ③：全部只读（没有输入框 / 语音 / 选项目 / 按钮），状态「评估完了」');
+      ST.ok(t.indexOf(cand.name)>-1, '③ 推荐项目显示为文字');
+      var before = String(gc().consultEval.rec); krGcSetQ('改动'); ST.ok(String(gc().consultEval.rec)===before, '③ 硬改也改不了');
+    } finally { window.SpeechRecognition = sr; window.webkitSpeechRecognition = wsr; try{ krRvMicStop(false); }catch(e){} window.alert = oa; window.confirm = oc; try{ krVault(cid, r.id, true).transcripts = []; }catch(e){} Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+  ST.def('R230b','CMD-1105-11（KM1 分页，stagePay 夹具）：一般面诊室长——② 院长评估中无输入；③ 资料收起 + 评估完了 + 发送诊疗方案 + 退回院长；⑤ ① 勾授意代录 → 上传记「室长代录 · 院长授意」',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc()), sr = window.SpeechRecognition, wsr = window.webkitSpeechRecognition, oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    try{
+      window.SpeechRecognition = undefined; window.webkitSpeechRecognition = undefined;
+      mut(function(c){ c.needsConsult = true; c.consultKind = ''; c.director = 'KD1 院长'; c.metaviewStatus = 'ready'; c.concerns = [{part:'f_nose', sub:'', desc:'鼻梁低', expect:'自然', video:{name:'v.mp4'}, photos:{front:{name:'p1.jpg'}}}]; ST.krEta(c); delete c.consultStartedAt; delete c.consultStartedBy; delete c.consultContentAt; delete c.consultEval; delete c.revAuth; });
+      krVault(cid, r.id, true).transcripts = [];
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_SUB = krSubBlank(''); krShowCase(cid, r.id, {tab:'consult', here:true});
+      var cand = krScopeCandidates(cid).kr[0];
+      /* ⑤ ① 勾授意 → 代录 */
+      var h = krTabConsult(gc()), t = txt(h); ST.ok(krGcMode(gc())==='view' && /已得到院长授意/.test(t) && !/开始面诊/.test(h), '室长 ①：授意勾选，没有［开始面诊］');
+      krRvAuth(true); krShowCase(cid, r.id, {tab:'consult', here:true}); h = krTabConsult(gc()); t = txt(h);
+      ST.ok(krGcMode(gc())==='author' && /室长代录 · 院长授意/.test(t) && /id="rvta-gcrec"/.test(h), '⑤ 勾了授意 → 出现和院长 ② 一样的输入画面，标「室长代录 · 院长授意」');
+      krGcSetQ('室长代录的内容'); krPickToggle(cand.name, true); krGcUpload(); var c1 = gc();
+      ST.ok(!!c1.consultContentAt && c1.consultEval.role==='proxy' && /室长代录 · 院长授意/.test(JSON.stringify(c1.logEntries||[])), '⑤ 上传记「室长代录 · 院长授意」');
+      /* ② 院长已开始（室长之前勾过授意也一样） */
+      mut(function(c){ delete c.consultContentAt; delete c.consultEval; c.consultStartedAt = nowFullDt(); c.consultStartedBy = 'KD1 院长'; });
+      krShowCase(cid, r.id, {tab:'consult', here:true}); h = krTabConsult(gc()); t = txt(h);
+      ST.ok(krGcMode(gc())==='view' && /评估内容\s*院长正在评估/.test(t) && !/已得到院长授意/.test(t) && !/id="rvta-|<textarea/.test(h.slice(h.indexOf('评估内容'))), '室长 ②：院长正在评估，授意勾选消失、没有输入栏位');
+      /* ③ 院长已上传 */
+      mut(function(c){ var e = gcEvalOf(c, true); e.rec = '院长录入的内容'; e.role = 'doctor'; e.sub = {pick:{}, notes:{}, detail:{}, tab:'surg', mg:{}, mgq:'', overall:'', files:[]}; e.sub.pick[cand.name] = true; e.doneBy = 'KD1 院长'; e.doneAt = nowFullDt(); c.consultContentAt = nowFullDt(); });
+      KR_SUB = krSubBlank(''); krShowCase(cid, r.id, {tab:'consult', here:true}); h = krTabConsult(gc()); t = txt(h);
+      ST.ok(krGcMode(gc())==='sender' && /面诊资料\s*评估完了/.test(t) && !/苦恼说明/.test(t) && /展开/.test(t), '室长 ③：资料卡收起（［展开］），状态评估完了');
+      ST.ok(/面诊评估\s*评估完了/.test(t) && /院长录入的内容/.test(t) && !/id="rvta-/.test(h), '③ 评估卡「面诊评估」只读');
+      ST.ok(/发送诊疗方案/.test(t) && KR_SUB.pick[cand.name], '③ 下面「发送诊疗方案」，院长选的推荐项目已带入');
+      ST.ok(/退回院长/.test(h), '③ 有［退回院长］');
+      krDataToggle(r.id); t = txt(krTabConsult(gc())); ST.ok(/苦恼说明 鼻梁低/.test(t), '③ 点［展开］能看资料');
+      /* 退回 */
+      krRvReturnOpen(); document.getElementById('kr-rvret-why').value = '请补充推荐项目'; krRvReturnGo(); var c2 = gc();
+      ST.ok(!c2.consultContentAt && c2.consultEval.retPending && c2.consultEval.retPending.reason==='请补充推荐项目', '⑥ 室长［退回院长］→ 回到院长评估中，可以再改');
+    } finally { window.SpeechRecognition = sr; window.webkitSpeechRecognition = wsr; try{ krRvMicStop(false); }catch(e){} window.alert = oa; window.confirm = oc; try{ krVault(cid, r.id, true).transcripts = []; }catch(e){} Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
   ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

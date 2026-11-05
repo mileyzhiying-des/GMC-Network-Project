@@ -2388,6 +2388,7 @@ function rvAutoStart(c, by){ if(c && isRevEval(c) && !c.consultStartedAt && !c.c
 function coreRvSet(c, f, name, val, by, role){ /* 作者（院长；或室长代录）写内容 */
   if(!isRevEval(c) || c.reportReady) return false;
   var r = rvEvalOf(c, true), v = (f==='sugKr') ? !!val : String(val==null ? '' : val);
+  if(c.consultContentAt && r.role==='doctor') return false; /* CMD-1105-11：院长上传后全部只读，不能再改（要改请室长［退回院长］） */
   if(f==='op'){ if((c.followProjects||[]).indexOf(name) < 0) return false; if((r.op[name]||'')===v) return false; r.op[name] = v; delete r.ed.op[name]; }
   else { if(!(f in {text:1, note:1, recLocal:1, sugKrNote:1, nextType:1, nextDate:1, sugKr:1, ans:1, rec:1})) return false; if(r[f]===v) return false; r[f] = v; delete r.ed[f]; if(f==='nextType' && v!=='date'){ r.nextDate = ''; delete r.ed.nextDate; } }
   r.at = nowFullDt(); r.by = by; if(!r.role) r.role = role || '';
@@ -2424,6 +2425,48 @@ function coreRvFinish(c, by, role){
     updateCaseStage(c);
   }
   return {ok:true};
+}
+/* ===== CMD-1105-11：一般面诊也用「资料卡 + 评估卡」同一套框架（和复诊评估一样）：院长 ② 写录入内容（语音进输入框）+ 选推荐项目 →［上传评估］→ 全部只读；室长 ③ 发送诊疗方案 / 退回院长 =====
+   c.consultEval = {rec 录入内容, sub 推荐项目的选择快照（KR_SUB 的 pick/notes/detail/tab/mg/mgq/overall/files）, role 'doctor'|'proxy', by, at, doneBy, doneAt, ret[], retPending}；
+   上传 = 写 c.consultContentAt（沿用原来「面诊内容已上传 → 室长可发送」的判断），旧案件没有 consultEval 照旧当「已上传」。 */
+function gcEvalOf(c, create){ if(!c) return null; if(!c.consultEval && create) c.consultEval = {rec:'', sub:null, role:'', by:'', at:'', doneBy:'', doneAt:'', ret:[], retPending:null}; var r = c.consultEval; if(r){ r.ret = r.ret||[]; } return r||null; }
+function isGcGeneral(c){ return !!c && !isRevEval(c) && !isRevisitConsult(c) && !c.reuseReport && !isContinuationConsult(c) && c.consultStatus==='awaiting_report'; }
+function coreGcSetRec(c, val, by, role){
+  if(!isGcGeneral(c) || c.consultContentAt) return false;
+  var r = gcEvalOf(c, true), v = String(val==null ? '' : val); if(r.rec===v) return false;
+  r.rec = v; r.at = nowFullDt(); r.by = by; if(!r.role) r.role = role||'';
+  if(!c.consultStartedAt && v.trim()) coreStartConsult(c, by); /* 第一次动作 = 开始面诊（没有单独的开始也行） */
+  return true;
+}
+function coreGcSnap(c, sub){ if(!isGcGeneral(c) || c.consultContentAt) return false; var r = gcEvalOf(c, true); r.sub = sub; return true; }
+function gcMissing(c, sub){
+  var out = [], r = gcEvalOf(c); if(!String(r ? r.rec : '').trim()) out.push('录入内容');
+  var sb = sub || (r && r.sub) || {}, picked = Object.keys(sb.pick||{}).some(function(k){ return sb.pick[k]; }) || Object.keys(sb.mg||{}).some(function(k){ return sb.mg[k] && sb.mg[k].on; });
+  if(!picked) out.push('推荐项目');
+  return out;
+}
+function coreGcUpload(c, by, role, sub){
+  if(!isGcGeneral(c) || c.consultContentAt) return {ok:false, err:'这个案件现在不能上传评估'};
+  var r = gcEvalOf(c, true); if(sub) r.sub = sub;
+  var miss = gcMissing(c, r.sub); if(miss.length) return {ok:false, err:'还缺：'+miss.join('、')};
+  var now = nowFullDt(); r.role = role||r.role||'doctor'; r.doneBy = by; r.doneAt = now; r.at = now; r.retPending = null;
+  if(!c.consultStartedAt){ c.consultStartedAt = now; c.consultStartedBy = by; }
+  c.consultContentAt = now;
+  logCaseEvent(c, by, '上传评估（面诊，'+(r.role==='proxy' ? '室长代录 · 院长授意' : '院长')+'）：面诊结束');
+  updateCaseStage(c);
+  pushKrNotif(caseKrHospital(c), by+' 上传了面诊评估，面诊结束：'+c.name+'（'+(c.caseNo||'')+'）→ 请发送诊疗方案', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
+  pushNotif('面诊', '面诊结束：'+c.name+'（'+(c.caseNo||'')+'），等待诊疗方案', {caseId:c.id, level:'info'});
+  return {ok:true};
+}
+/* 室长［退回院长］（一般面诊）：回到「院长评估中」，院长可以再改 */
+function coreGcReturn(c, reason, by){
+  var r = gcEvalOf(c), why = String(reason||'').trim();
+  if(!isGcGeneral(c) || !c.consultContentAt || !why) return false;
+  r = gcEvalOf(c, true); if(r.role==='proxy') return false;
+  r.ret.push({at:nowFullDt(), by:by, reason:why}); r.retPending = {at:nowFullDt(), by:by, reason:why}; r.doneAt = ''; r.doneBy = ''; c.consultContentAt = '';
+  logCaseEvent(c, by, '退回院长重新评估（面诊）：'+why);
+  pushKrNotif(caseKrHospital(c), by+' 把面诊评估退回：'+c.name+'（'+(c.caseNo||'')+'）：'+why, {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
+  updateCaseStage(c); return true;
 }
 /* ［退回院长］：室长觉得有问题 → 填原因，回到「待院长评估」，院长待办出现 */
 function coreRvReturn(c, reason, by){
