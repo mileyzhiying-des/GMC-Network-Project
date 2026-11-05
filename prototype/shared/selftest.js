@@ -5485,7 +5485,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!!ov && ov.classList.contains('open') && /购买本地项目/.test(ov.textContent) && /使用持有项目/.test(ov.textContent), '点［增加项目］弹出「购买本地项目 / 使用持有项目」');
       inAddItemClose();
       /* 到访 tab：来访目的里勾复诊评估 */
-      var vh = subVisitTabHtml(cur); ST.ok(/复诊评估/.test(vh) && /addRevisitToDay/.test(vh), '到访 tab 的来访目的里有［复诊评估］可勾');
+      var vh = subVisitTabHtml(cur); ST.ok(!/addRevisitToDay/.test(vh), '到访 tab 的来访目的里不再有可勾的［复诊评估］（CMD-1105-06 改后：入口只剩页头［加复诊评估］）'); var hb = document.getElementById('this-visit-banner'); ST.ok(!!hb && /加复诊评估/.test(hb.textContent), '页头有［加复诊评估］');
       addRevisitToDay(); var cov = document.getElementById('cont-overlay');
       ST.ok(!!cov && cov.classList.contains('open') && /增加复诊评估/.test(cov.textContent) && /询问问题/.test(cov.textContent) && /确认增加复诊评估/.test(cov.textContent), '弹出「增加复诊评估」窗（这次要看的项目 / 询问问题）');
       contConfirm(); var er = (document.getElementById('cont-error')||{}).textContent||''; ST.ok(/还缺/.test(er) && !cur.revisitEval, '什么都没填就确认：提示还缺什么，不送出');
@@ -9220,9 +9220,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var fo = document.getElementById('followup-overlay');
       ST.ok(!(fo && fo.classList.contains('open')), '③ 到店不弹「请选择本次服务类型」');
       ST.ok(kid.resumeFrom && kid.resumeFrom.caseId===m.id && resumeTypesOf(kid).indexOf('术后管理')>-1, '③ 直接带上主案件和术后管理');
-      var bn = document.getElementById('this-visit-banner'); ST.ok(!!bn && /本次：术后管理 · /.test(bn.textContent) && bn.textContent.indexOf(m.caseNo)>-1 && /R226 拆线/.test(bn.textContent) && /增加本次服务/.test(bn.textContent), '③ 页面顶部「本次：术后管理 · '+m.caseNo+' · 拆线」+［增加本次服务］：'+(bn&&bn.textContent));
+      var bn = document.getElementById('this-visit-banner'); ST.ok(!!bn && /本次：术后管理 · /.test(bn.textContent) && bn.textContent.indexOf(m.caseNo)>-1 && /R226 拆线/.test(bn.textContent) && /加复诊评估/.test(bn.textContent), '③ 页面顶部「本次：术后管理 · '+m.caseNo+' · 拆线」+［增加本次服务］：'+(bn&&bn.textContent));
       ST.ok(revAddPossible(kid), '③ 术后管理的来访可以加做复诊评估（该案件做过施术）');
-      addServiceOpen(); var as = document.getElementById('addsvc-overlay'); ST.ok(as && as.classList.contains('open') && /复诊评估/.test(as.textContent) && /购买本地项目/.test(as.textContent), '③ 增加本次服务弹窗'); addServiceClose();
+      ST.ok(typeof addServiceOpen==='undefined' && !/增加本次服务/.test(bn.textContent) && /加复诊评估/.test(bn.textContent), '③（CMD-1105-06 改后）没有［增加本次服务］，术后管理来访有［加复诊评估］');
       var cov = document.getElementById('cont-overlay'); ST.ok(cov && cov.classList.contains('open') && !/面诊需求/.test(cov.textContent), '③ 继续资料窗开着，没有「面诊需求」'); try{ contClose(); }catch(e){}
       /* ④ 复诊评估：选主案件，直接挂主案件 */
       openAddSlotModal(ymdAdd(td, 3), '11:00'); sel = document.getElementById('add-slot-client'); sel.value = m.name; addSlotClientChanged(); addSlotPurposeSet('复诊评估');
@@ -9232,7 +9232,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!!kid2 && (kid2.preTypes||[])[0]==='复诊评估' && kid2.purposeLocked===true, '④ 复诊评估预约挂在主案件的子案件 '+(kid2&&kid2.caseNo));
       kid2.visitDate = td; ST.arrive(kid2);
       fo = document.getElementById('followup-overlay'); ST.ok(!(fo && fo.classList.contains('open')) && resumeTypesOf(kid2).indexOf('复诊评估')>-1, '④ 到店不弹服务类型，直接是复诊评估');
-      ST.ok(/本次：复诊评估 · /.test((document.getElementById('this-visit-banner')||{}).textContent||''), '④ 横幅「本次：复诊评估 · …」'); try{ contClose(); }catch(e){}
+      ST.ok(/本次：复诊评估 · /.test((document.getElementById('this-visit-banner')||{}).textContent||''), '④ 横幅「本次：复诊评估 · …」'); var bt2 = (document.getElementById('this-visit-banner')||{}).textContent||''; ST.ok(!/增加本次服务|加复诊评估/.test(bt2), '④（CMD-1105-06）复诊来访页头没有任何按钮'); try{ contClose(); }catch(e){}
       /* ⑤ 客人自己预约页约的（purposeLocked=false）照旧弹服务类型 */
       var self = createChildReservation(m, td, '19:00', '术后管理', {purposeLocked:false, careFor:{caseId:m.id, keys:[]}}); self.visitDate = td; ST.arrive(self);
       fo = document.getElementById('followup-overlay'); ST.ok(!!fo && fo.classList.contains('open') && /请选择本次服务类型/.test(fo.textContent), '⑤ 客人自己预约的仍弹「请选择本次服务类型」');

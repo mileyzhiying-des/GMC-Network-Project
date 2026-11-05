@@ -3218,26 +3218,18 @@ function followupAutoLink(c){
 }
 /* CMD-1105-05 二：页面顶部「本次：复诊评估 · A000844（院长建议 02/22）」/「本次：术后管理 · A00xxxx · 拆线」+［增加本次服务］ */
 function thisVisitBannerHtml(c){
-  if(!c || !c.preChild || c.purposeLocked===false || !c.resumeFrom || c.leftStore || c.visitClosed || isEnded(c)) return '';
+  if(!c || !c.resumeFrom || c.leftStore || c.visitClosed || isEnded(c) || !isChildVisit(c)) return '';
+  var locked = !!c.preChild && c.purposeLocked!==false;
   var m = followSrcById(c.resumeFrom.caseId) || mainOf(c), no = m ? m.caseNo : '', parts = [], ts = resumeTypesOf(c);
-  if(ts.indexOf('复诊评估')>-1) parts.push('复诊评估 · '+cesc(no)+(c.revisitFor ? '（院长建议 '+cesc(String(c.visitDate||'').slice(5).replace('-', '/'))+'）' : ''));
-  if(ts.indexOf('术后管理')>-1){ var ks = (c.careFor && c.careFor.keys) || [], nm = []; ks.forEach(function(k){ var t = m ? careKeyLabel(m, k) : ''; if(t && nm.indexOf(t)<0) nm.push(t); }); parts.push('术后管理 · '+cesc(no)+(nm.length ? ' · '+nm.map(cesc).join('、') : '')); }
-  if(!parts.length) return '';
-  return '<div id="this-visit-banner" style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:13px;font-weight:700;color:var(--terracotta);">本次：'+parts.join(' ＋ ')+'</span><button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="addServiceOpen()">增加本次服务</button></div>';
+  if(locked){
+    if(ts.indexOf('复诊评估')>-1) parts.push('复诊评估 · '+cesc(no)+(c.revisitFor ? '（院长建议 '+cesc(String(c.visitDate||'').slice(5).replace('-', '/'))+'）' : ''));
+    if(ts.indexOf('术后管理')>-1){ var ks = (c.careFor && c.careFor.keys) || [], nm = []; ks.forEach(function(k){ var t = m ? careKeyLabel(m, k) : ''; if(t && nm.indexOf(t)<0) nm.push(t); }); parts.push('术后管理 · '+cesc(no)+(nm.length ? ' · '+nm.map(cesc).join('、') : '')); }
+  }
+  /* CMD-1105-06：只有术后管理的来访、该案件做过施术、这一天还没有复诊评估时，才有［加复诊评估］（唯一入口）；复诊来访 / 其他都不放按钮 */
+  var btn = (hasResumeType(c, '术后管理') && revAddPossible(c)) ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="addRevisitToDay()">加复诊评估</button>' : '';
+  if(!parts.length && !btn) return '';
+  return '<div id="this-visit-banner" style="margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+(parts.length ? '<span style="font-size:13px;font-weight:700;color:var(--terracotta);">本次：'+parts.join(' ＋ ')+'</span>' : '')+btn+'</div>';
 }
-function addServiceOpen(){
-  var c = getCurrentCase(); if(!c) return;
-  var ov = document.getElementById('addsvc-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'addsvc-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 188; document.body.appendChild(ov); }
-  var btn = function(label, sub, on, ok){ return '<button class="btn-outline" '+(ok ? 'onclick="'+on+'"' : 'disabled style="opacity:.45;cursor:not-allowed;"')+' style="display:block;width:100%;text-align:left;padding:12px 14px;margin-top:10px;"><b style="font-size:14px;">'+label+'</b><div style="font-size:12px;color:var(--muted);margin-top:2px;">'+sub+'</div></button>'; };
-  var M = inContModel(c), held = M.unused.length + M.grp.none.length, rv = revAddPossible(c);
-  ov.innerHTML = '<div class="modal-box" style="width:460px;max-width:94vw;padding:22px 24px;"><div style="font-size:16px;font-weight:700;">增加本次服务 · '+cesc(c.name)+'</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">加在这一天（同一个子案件 '+cesc(c.caseNo||'')+'），不另开案件</div>'+
-    btn('术后管理 / 使用持有项目', held ? '客人还有 '+held+' 项可以现在做 / 使用' : '客人现在没有可以使用的项目', "addServiceClose();inUseOpen()", !!held && !M.ro)+
-    btn('购买本地项目', localAddAllowed(c) ? '选项目、结算，买到的先进「未预约」' : '本地管理只能在到店当天添加', "addServiceClose();inAddLocalProject()", localAddAllowed(c) && !M.ro)+
-    btn('复诊评估', rv ? '客人想顺便让院长看恢复情况（送 KR）' : (hasResumeType(c, '复诊评估') ? '这次已经有复诊评估' : '这个案件还没有做过的施术'), "addServiceClose();addRevisitToDay()", rv)+
-    '<div style="display:flex;justify-content:flex-end;margin-top:16px;"><button class="btn-outline" onclick="addServiceClose()">取消</button></div></div>';
-  ov.classList.add('open');
-}
-function addServiceClose(){ var ov = document.getElementById('addsvc-overlay'); if(ov) ov.classList.remove('open'); }
 function fuSet(k, v){
   if(!FU_ASK) return;
   var c = getCurrentCase(), a = FU_ASK;
@@ -11459,7 +11451,7 @@ function subVisitTabHtml(c){
   var meta = metaPlainText(rec);
   var photos = (rec.recovery||[]).reduce(function(n, x){ return n+Object.keys(x.photos||{}).length; }, 0)+(rec.revisitMedia||[]).reduce(function(n, x){ return n+Object.keys(x.photos||{}).length; }, 0);
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:10px;">到访</div>'+
-    row('来访目的', e(purposeDisp(rec.visitPurpose||'—'))+(isChildVisit(rec) && hasResumeType(rec, '术后管理') ? '　<label style="font-size:12px;margin-left:8px;"><input type="checkbox" checked disabled> 术后管理</label><label style="font-size:12px;margin-left:8px;'+(revAddPossible(rec) ? 'cursor:pointer;' : 'color:var(--muted);')+'"><input type="checkbox" '+(hasResumeType(rec, '复诊评估') ? 'checked disabled' : (revAddPossible(rec) ? 'onchange="this.checked=false;addRevisitToDay()"' : 'disabled'))+'> 复诊评估'+(!hasResumeType(rec, '复诊评估') && revAddPossible(rec) ? ' <span style="color:var(--muted);">（客人当场想加：勾选后填写，送 KR 评估）</span>' : '')+'</label>' : ''))+row('到店状态', e(visitStateText(m, ctx.v))+(iv.arrivedDay ? '（'+e(iv.arrivedDay)+' 到店）' : ''))+row('메타뷰', meta)+row('当天照片', photos ? photos+' 张（复诊 / 术后恢复）' : '—')+
+    row('来访目的', e(purposeDisp(rec.visitPurpose||'—'))+(isChildVisit(rec) && hasResumeType(rec, '术后管理') ? '　<label style="font-size:12px;margin-left:8px;"><input type="checkbox" checked disabled> 术后管理</label>'+(hasResumeType(rec, '复诊评估') ? '<label style="font-size:12px;margin-left:8px;"><input type="checkbox" checked disabled> 复诊评估</label>' : '')+'' : ''))+row('到店状态', e(visitStateText(m, ctx.v))+(iv.arrivedDay ? '（'+e(iv.arrivedDay)+' 到店）' : ''))+row('메타뷰', meta)+row('当天照片', photos ? photos+' 张（复诊 / 术后恢复）' : '—')+
     '</div>';
 }
 function subGoMain(id, tab){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; var m = mainOf(c); delete SUBVIEW[m.id]; m.activeCaseTab = tab; if(isChildVisit(c)) openCaseDetail(m.id, false, {tab:tab}); else { renderCaseSubtitle(m); renderCaseStatusBar(m); renderCaseBody(m); } }
@@ -11610,7 +11602,7 @@ function revAddConfirm(c, m){
   c.photoUploaded = (c.revisitMedia||[]).some(function(x){ return Object.keys(x.photos||{}).length>0; }); c.videoUploaded = (c.revisitMedia||[]).some(function(x){ return !!x.video; });
   c.resumeFrom.type = resumePrimaryType(resumeTypesOf(c));
   logCaseEvent(c, actingName(), '到访里增加复诊评估：'+((c.followProjects||[]).join('、')||'—')+'；问：'+String(c.revisitQuestion||'').trim().slice(0, 40), '复诊评估');
-  contClose(); startRevisitEval(c); renderCaseBody(c);
+  contClose(); startRevisitEval(c); try{ renderCaseSubtitle(c); }catch(e){} renderCaseBody(c);
 }
 function contHasType(c, t){ return resumeTypesOf(c).indexOf(t)>-1; }
 function contSetTypes(c, ts){
