@@ -154,6 +154,12 @@ function krbSubmit(){
   if((f.purpose==='carebook' || f.purpose==='holdbook') && !(f.items||[]).length){ fail('请至少勾选一项要做的'+(f.purpose==='carebook' ? '术后管理' : '管理项目')); return; }
   if(krbInPast(f.date, f.time)){ fail('不能约过去的时间'); return; }
   var old = f.replaceId ? krbFind(f.hid, f.replaceId) : null; if(old) krbBlockRemove(f.hid, old.id); /* 重选：先拿掉旧占位再检查冲突 */
+  if(f.purpose==='linkcase'){ /* CMD-1103-08 二：IN 提交时就把同一位院长的几项合起来查一遍（KR 确认时再查一次） */
+    var lc0 = CASE_ITEMS.filter(function(x){ return x.id===f.linkCaseId; })[0], sl = [];
+    (f.items||[]).forEach(function(it){ if(!lc0) return; if(it.kind==='surg'){ sl.push({dir:lc0.director, min:itemDurMin(lc0, it.name), label:it.label}); } else if(it.kind==='hold'){ var di0 = dirOpInfo(f.hid, it.name||it.label); if(di0.on) sl.push({dir:lc0.director, min:di0.min, label:it.label}); } });
+    var seq0 = dirSeqCheck(f.hid, sl, f.date, f.time, f.clinicId ? f.clinicId+':'+f.linkCaseId : (CURRENT_CLINIC_ID+':'+f.linkCaseId));
+    if(seq0){ if(old) krbBlockSync(f.hid, old); fail(seq0); return; }
+  }
   var bad = krbClosedText(f.hid, f.date, f.time);
   if(bad){ if(old) krbBlockSync(f.hid, old); fail(bad); return; }
   var off = krbOffText(f.hid, f.date, f.time);
@@ -216,11 +222,12 @@ function coreBookConfirmLinked(hid, b, by, opts){
   opts = opts || {}; var err = '', cid = '';
   Store.mutateClinic(b.clinicId, function(){
     var c = CASE_ITEMS.filter(function(x){ return x.id===b.linkCaseId; })[0]; if(!c){ err = '找不到关联的案件'; return false; }
-    var dir = opts.dir || c.director, key0 = b.clinicId+':'+c.id, bad = '';
+    var dir = opts.dir || c.director, key0 = b.clinicId+':'+c.id, bad = '', seqList = [];
     (b.items||[]).forEach(function(it){ if(bad) return;
-      if(it.kind==='surg'){ var si = itemByKey(c, it.iid||it.name); if(!si || si.done || si.cancelled || si.swapped){ bad = '「'+it.label+'」已经不在待预约状态'; return; } var e1 = krSurgerySlotError(hid, c.director, b.date, b.time, itemDurMin(c, si.name), key0, {allowOffHours:true}); if(e1) bad = '「'+it.label+'」'+e1; }
-      if(it.kind==='hold'){ var hi = itemByKey(c, it.iid||it.name); if(!hi){ bad = '「'+it.label+'」找不到'; return; } var di = dirOpInfo(hid, hi.name); if(di.on){ var e2 = krSurgerySlotError(hid, dir, b.date, b.time, di.min, key0, {allowOffHours:true}); if(e2) bad = '「'+it.label+'」（院长 '+dir+'）'+e2; } }
+      if(it.kind==='surg'){ var si = itemByKey(c, it.iid||it.name); if(!si || si.done || si.cancelled || si.swapped){ bad = '「'+it.label+'」已经不在待预约状态'; return; } seqList.push({dir:c.director, min:itemDurMin(c, si.name), label:it.label}); }
+      if(it.kind==='hold'){ var hi = itemByKey(c, it.iid||it.name); if(!hi){ bad = '「'+it.label+'」找不到'; return; } var di = dirOpInfo(hid, hi.name); if(di.on){ seqList.push({dir:dir, min:di.min, label:it.label}); } }
     });
+    if(!bad) bad = dirSeqCheck(hid, seqList, b.date, b.time, key0); /* CMD-1103-08 二：同一位院长的几项合起来查 */
     if(bad){ err = bad; return false; }
     var snapS = JSON.stringify(c.subItems||[]), snapP = JSON.stringify(c.procedureItems||[]), before = {}, wasRebook = [];
     (c.subItems||[]).forEach(function(s){ before[s.id] = 1; });

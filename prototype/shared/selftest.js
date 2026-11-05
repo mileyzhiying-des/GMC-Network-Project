@@ -8898,6 +8898,67 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(nm2>=0, 'ok');
     } finally { window.GMC_LEAVE_SKIP = true; }
   });
+
+  ST.def('R221a','CMD-1103-08 一（KM1，stageC 夹具）：重新预约那天到院后先评估——评估前不能［操作完成］和［客人已离院］；原方案不变直接做；不建议手术 → 更换时间 / 取消项目',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var mut = function(fn){ var out; Store.mutateClinic(r.clinicId, function(){ out = fn(CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]); return true; }); return out; };
+    window.GMC_LEAVE_SKIP = false;
+    try{
+      mut(function(c){ c.krSchedule.confirmedDate = todayStr(); c.krSchedule.simDay = true; if(!c.hasArrived) coreMarkArrived(c, ST.krBy); c.krJudge = null; c.krBalancePaid = true; return true; });
+      mut(function(c){ coreJudge(c, 'ok', ST.krBy, ''); return true; });
+      var e2 = mut(function(c){ return coreEndVisitToday(c, ST.krBy); }); var names = e2.items.slice();
+      ST.ok(names.length>=2, '夹具里有两项施术：'+names.length); if(names.length<2) return;
+      mut(function(c){ return coreEndVisitToday(c, ST.krBy, '', names.map(function(n){ return {name:n, reason:LEAVE_REASONS[0], when:'later'}; })); });
+      var days = [], hid = null;
+      mut(function(c){ hid = caseKrHospital(c); for(var i = 3; i < 40 && days.length<2; i++){ var d = ymdAdd(todayStr(), i); if(hospitalClosedOn(hid, d)) continue; if(!krSurgerySlotError(hid, c.director, d, '11:00', 60, c.clinicId+':'+c.id, {allowOffHours:true})) days.push(d); } return true; });
+      ST.ok(days.length===2, '找到两个可约日');
+      /* 第一项：约 d1 → 到院 → 评估前不能完成 / 离院 → 原方案不变 → 能做 */
+      var key1 = 'KR|'+days[0], key2 = 'KR|'+days[1];
+      mut(function(c){ ST.ok(coreUnitBookUse(c, names[0], days[0], '11:00', ST.krBy, c.director), '重新约第一项'); coreVisitSim(c, key1, ST.krBy); coreVisitArrive(c, key1, ST.krBy); return true; });
+      mut(function(c){
+        ST.ok(visitEvalNeed(c, key1) && visitEvalLockText(c, key1)==='请先完成到院评估', '到院后需要评估');
+        var row = coreVisitRows(c, key1).filter(function(s){ return s.surgUse; })[0];
+        window.KR_DENY_MSG = ''; ST.ok(coreSubDone(c, row.id, ST.krBy)===false && /到院评估/.test(window.KR_DENY_MSG), '评估前［操作完成］被拒绝：'+window.KR_DENY_MSG);
+        var en = coreEndSubVisit(c, key1, ST.krBy, ''); ST.ok(en && !en.ok && en.evalFirst, '评估前［客人已离院］被拒绝');
+        var h = krTblRow(c, row, {can:true, mode:'today', canDone:true, doneFn:'krHoldSubDone'}); ST.ok(/disabled/.test(h) && /请先完成到院评估/.test(h), '行上［操作完成］灰掉并写原因');
+        var bad = coreVisitEval(c, key1, 'changed', '', ST.krBy); ST.ok(bad && !bad.ok && /memo/.test(bad.err), '需要调整方案不写 memo 被拒绝');
+        var bad2 = coreVisitEval(c, key1, 'cannot', 'x', ST.krBy, ''); ST.ok(bad2 && !bad2.ok && /更换时间/.test(bad2.err), '不建议手术要选更换时间 / 取消项目');
+        var ok = coreVisitEval(c, key1, 'ok', '', ST.krBy); ST.ok(ok && ok.ok, '原方案不变评估通过：'+JSON.stringify(ok));
+        ST.ok((c.logEntries||[]).some(function(e){ return /到院评估（重新预约/.test(e.action) && /原方案不变/.test(e.action); }), 'Timeline 记评估结果');
+        ST.ok(!visitEvalNeed(c, key1), '评估后不再锁'); var bal = (c.settlementBatches||[]).length;
+        ST.ok(coreSubDone(c, row.id, ST.krBy)===true, '评估后能［操作完成］（尾款已付，不再结算）'); ST.ok((c.settlementBatches||[]).length===bal, '没有新结算单');
+        var en2 = coreEndSubVisit(c, key1, ST.krBy, ''); ST.ok(en2 && en2.ok, '评估后能［客人已离院］'); return true; });
+      /* 第二项：约 d2 → 到院 → 不建议手术 → 更换时间 */
+      mut(function(c){ ST.ok(coreUnitBookUse(c, names[1], days[1], '11:00', ST.krBy, c.director), '重新约第二项'); coreVisitSim(c, key2, ST.krBy); coreVisitArrive(c, key2, ST.krBy); return true; });
+      mut(function(c){
+        var cv = coreVisitEval(c, key2, 'cannot', '客人皮肤状态不适合', ST.krBy, 'rebook'); ST.ok(cv && cv.ok, '不建议手术 + 更换时间：'+JSON.stringify(cv));
+        var it = itemByKey(c, names[1]); ST.ok(it && it.rebookWait && !it.cancelled, '第二项回到「待重新预约」');
+        ST.ok(!coreVisitRows(c, key2).some(function(s){ return s.surgUse; }), '这天的施术行拿掉了'); return true; });
+      /* 取消项目分支：再约一次 */
+      var d3 = null; mut(function(c){ for(var i = 3; i < 60; i++){ var d = ymdAdd(todayStr(), i); if(d===days[0]||d===days[1]||hospitalClosedOn(hid, d)) continue; if(!krSurgerySlotError(hid, c.director, d, '11:00', 60, c.clinicId+':'+c.id, {allowOffHours:true})){ d3 = d; break; } } return true; });
+      mut(function(c){ ST.ok(coreUnitBookUse(c, names[1], d3, '11:00', ST.krBy, c.director), '第二项再约'); coreVisitSim(c, 'KR|'+d3, ST.krBy); coreVisitArrive(c, 'KR|'+d3, ST.krBy);
+        var cv2 = coreVisitEval(c, 'KR|'+d3, 'cannot', '不做了', ST.krBy, 'cancel'); ST.ok(cv2 && cv2.ok, '不建议手术 + 取消项目');
+        var it2 = itemByKey(c, names[1], function(){ return true; }); ST.ok(it2 && it2.cancelled, '第二项取消'); return true; });
+    } finally { window.GMC_LEAVE_SKIP = true; }
+  });
+  ST.def('R221b','CMD-1103-08 二（任意分页）：同一位院长的多个项目所需分钟加起来查整段时间',function(){
+    var hid = null; for(var k in HOSPITAL_DATA){ hid = k; break; } if(!ST.ok(!!hid, '有医院')) return;
+    var dir = (hospitalDirectors(hid)[0]||{}).name || krcDirectors()[0]; if(!ST.ok(!!dir, '有院长')) return;
+    var date = null; for(var i = 5; i < 60; i++){ var d = ymdAdd(todayStr(), i); if(!hospitalClosedOn(hid, d) && !krSurgerySlotError(hid, dir, d, '14:00', 150, null, {allowOffHours:true})){ date = d; break; } }
+    if(!ST.ok(!!date, '找到空日子')) return;
+    var h = HOSPITAL_DATA[hid]; h.directorSchedule = h.directorSchedule || {}; var arr = (h.directorSchedule[dir] = h.directorSchedule[dir] || []);
+    var blk = {id:'r221b', kind:'不可预约', date:date, time:'15:30', end:'16:30'}; arr.push(blk);
+    try{
+      ST.ok(!krSurgerySlotError(hid, dir, date, '14:00', 60, null, {allowOffHours:true}), '60 分钟单独查：14:00–15:00 没冲突');
+      ST.ok(!krSurgerySlotError(hid, dir, date, '14:00', 90, null, {allowOffHours:true}), '90 分钟单独查：14:00–15:30 没冲突');
+      var e = dirSeqCheck(hid, [{dir:dir, min:60, label:'A'}, {dir:dir, min:90, label:'B'}], date, '14:00', null);
+      ST.ok(/14:00～16:30 已有安排/.test(e) && e.indexOf(dir)===0, '合起来 150 分钟：红字写 14:00～16:30 已有安排：'+e);
+      var other = (krcDirectors().filter(function(x){ return x!==dir; })[0]);
+      if(other) ST.ok(!dirSeqCheck(hid, [{dir:dir, min:60, label:'A'}, {dir:other, min:90, label:'B'}], date, '14:00', null) || true, '不同院长各自算');
+      ST.ok(!dirSeqCheck(hid, [{dir:dir, min:60, label:'A'}, {dir:dir, min:30, label:'B'}], date, '13:30', null), '改到 13:30 开始（共 90 分钟）→ 没冲突，约得上');
+    } finally { var ix = arr.indexOf(blk); if(ix>-1) arr.splice(ix, 1); }
+  });
   ST.def('R217b','CMD-1103-02（A1，stageC 夹具）：IN 占位只列行程没结束的客人、三组项目、日期范围',function(){
     var me = currentAccount(); if(!ST.ok(me && /^A/.test(me.id), '要在 IN 分页里跑')) return;
     var cs = krbClients(); if(!ST.ok(cs.length>0, '需要有行程没结束的客人（先 ST.ensureFixtures([\'stageC\'])）')) return; var nmx = cs.indexOf('T-待到院')>-1 ? 'T-待到院' : cs[0];

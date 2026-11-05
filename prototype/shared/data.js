@@ -380,6 +380,16 @@ function doneDayInfo(c, date){
   return key ? {date:date, key:key, locked:date!==todayStr()} : null;
 }
 var KR_HARD_ERR = /医院定期休诊|休诊时段|营业时间内|午休时段|医院休诊日|到院已完成/;
+/* ===== CMD-1103-08 二：同一位院长的多个项目合起来查时间 =====
+   list = [{dir, min, label}]；同一位院长的项目所需分钟加起来，从开始时间起整段检查有没有空（不同院长各自算）。冲突 / 休诊都整笔不成立，返回红字文字；空 = 通过。 */
+function dirSeqCheck(hid, list, date, time, exceptKey, opts){
+  var by = {}, order = []; (list||[]).forEach(function(x){ if(!x.dir || !(x.min>0)) return; if(!by[x.dir]){ by[x.dir] = {min:0, labels:[]}; order.push(x.dir); } by[x.dir].min += x.min; by[x.dir].labels.push(x.label); });
+  for(var i = 0; i < order.length; i++){
+    var d = order[i], g = by[d], er = krSurgerySlotError(hid, d, date, time, g.min, exceptKey, Object.assign({allowOffHours:true}, opts||{}));
+    if(er){ var end = minToTime(timeToMin(time)+g.min), multi = g.labels.length>1; return d+' '+time+'～'+end+' 已有安排'+(multi ? '（'+g.labels.join('、')+' 合计 '+g.min+' 分钟）' : '')+'：'+er; }
+  }
+  return '';
+}
 function krSurgerySlotError(hid, director, date, time, durMin, exceptCaseKey, opts){ var e = krSurgerySlotErrorRaw(hid, director, date, time, durMin, exceptCaseKey, opts); return (e && KR_FORCE_CLASH && !KR_HARD_ERR.test(e)) ? '' : e; } /* CMD-1015-22：冲突改成询问，［仍然进行］时跳过冲突类（休诊 / 营业时间类仍挡） */
 /* CMD-1028-14 一：冲突说明的开头照这件事的类型写——面诊 / 复诊评估写「面诊 18:00～18:30，和 …」（不出现「到院」「施术」），使用 / 院长操作写「使用 …」，只有真的排施术才写「到院，施术约 N 小时」 */
 function krClashHead(opts, time, e, durMin){
@@ -6304,6 +6314,7 @@ function coreSubDoneBlock(c, id){
 }
 function coreSubDone(c, id, by, itemNames, noClose){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(krDayDeny(c, (s ? ((s.kind==='施术' || (s.kind==='增加项目' && !s.visitKey)) ? 'main' : subCaseKey(s)) : 'main'))) return false; /* CMD-1026-20：关账后锁住 */
+  if(s && s.surgUse && !evalBypass(by) && visitEvalNeed(c, subCaseKey(s))){ window.KR_DENY_MSG = '请先完成到院评估（重新预约的施术要先做到院评估）'; return false; } /* CMD-1103-08 一 */
   if(!s || s.done || !c.krBalancePaid || s.place==='IN') return false; /* 付清尾款（开始施术）之后才能逐个标完成；回印尼做的术后管理由 IN 做（coreCareVisit） */
   if(s.kind==='增加项目' && (c.procedureItems||[]).some(function(it){ return it.name===s.projectName && it.consentPending; })) return false; /* 麻醉同意书还没确认 */
   var picked = [];
@@ -6555,6 +6566,7 @@ function leaveValidate(c, leave, names){ /* CMD-1103-05：names = 只检查这�
         var er = krSurgerySlotError(hid, dir, d, t, itemDurMin(c, it.name), (c.clinicId||CURRENT_CLINIC_ID)+':'+c.id, {allowOffHours:true}); if(er) return '「'+nm+'」'+er;
         for(var k = 0; k < booked.length; k++){ if(booked[k].dir===dir && booked[k].d===d && timeToMin(t) < timeToMin(booked[k].t)+booked[k].m && timeToMin(booked[k].t) < timeToMin(t)+itemDurMin(c, it.name)) return '「'+nm+'」和同时选的「'+buyName(booked[k].n)+'」时间重叠'; }
         booked.push({n:it.name, d:d, t:t, m:itemDurMin(c, it.name), dir:dir});
+        var grp = booked.filter(function(x){ return x.dir===dir && x.d===d; }); if(grp.length>1){ var seq = dirSeqCheck(hid, grp.map(function(x){ return {dir:x.dir, min:x.m, label:buyName(x.n)}; }), d, grp.reduce(function(a, x){ return timeToMin(x.t) < timeToMin(a) ? x.t : a; }, grp[0].t), (c.clinicId||CURRENT_CLINIC_ID)+':'+c.id); if(seq) return '「'+nm+'」'+seq; } /* CMD-1103-08 二：同一位院长同一天当场约的几项合起来查 */
       }
     } else {
       if(['all','part','swap'].indexOf(r.dec)<0) return '「'+nm+'」取消项目后请选怎么处理款项（更换项目 / 全部退回 / 部分退回）';
@@ -6652,11 +6664,51 @@ function subVisitAskEnd(c){ /* 有已到店、行都做完但还没人工结束�
   c.visitEndedKeys = c.visitEndedKeys || {};
   return subCaseList(c).some(function(r){ var k = subCaseKey(r); return r.place==='KR' && coreVisitState(c, k)==='arrived' && coreVisitRows(c, k).concat(coreVisitExtra(c, k)).every(function(s){ return s.done; }); });
 }
+
+/* ===== CMD-1103-08 一：重新预约那天的到院评估 =====
+   重新预约的施术（surgUse 行）走子到院，评估向导原来只属于主到院；现在客人在这一天到院后，这几项施术先做到院评估（同样三种判断），
+   评估前不能［操作完成］、不能［客人已离院］。同一天另外约的术后管理 / 管理项目不需要评估。c.visitEval[key] = {result, memo, by, at, names, act} */
+function evalBypass(by){ return by==='系统' || !!window.DAYCONFIRM_BYPASS; } /* 到院评估不跟 GMC_LEAVE_SKIP（那只是离院原因窗的测试开关） */
+function visitEvalNames(c, key){ if(!key || key==='main') return []; return coreVisitRows(c, key).filter(function(s){ return s.surgUse && !s.done && !s.skipped; }).map(function(s){ return s.surgUse; }); }
+function visitEvalOf(c, key){ return (c.visitEval||{})[key] || null; }
+function visitEvalArrived(c, key){ return coreVisitRows(c, key).some(function(s){ return s.surgUse && s.arrived && !s.skipped; }); }
+function visitEvalNeed(c, key){ return visitEvalNames(c, key).length>0 && !visitEvalOf(c, key); }
+function visitEvalLockText(c, key){ return visitEvalNeed(c, key) ? '请先完成到院评估' : ''; }
+function coreVisitEval(c, key, result, memo, by, act){
+  if(krDayDeny(c, key)) return {ok:false, err:'这一天已过 00:00 关账，请走「确认结束」'};
+  var names = visitEvalNames(c, key); if(!names.length) return {ok:false, err:'这次到院没有需要评估的施术'};
+  if(visitEvalOf(c, key)) return {ok:false, err:'这次到院已经评估过了'};
+  if(!visitEvalArrived(c, key)) return {ok:false, err:'客人还没到院，不能评估'};
+  if(!KR_JUDGE_TEXT[result]) return {ok:false, err:'请选择评估结果'};
+  memo = String(memo||'').trim(); if(result!=='ok' && !memo) return {ok:false, err:'除"原方案不变"外，memo 必填（写明原因 / 调整内容）'};
+  if(result==='cannot' && act!=='rebook' && act!=='cancel') return {ok:false, err:'不建议手术：请选择更换时间还是取消项目'};
+  var rec = {result:result, memo:memo, by:by, at:nowFullDt(), names:names.slice(), act:(result==='cannot' ? act : '')};
+  c.visitEval = c.visitEval || {}; c.visitEval[key] = rec;
+  var day = String(key).split('|')[1]||'';
+  if(result==='cannot'){ /* 这几项今天不做：更换时间 = 待重新预约；取消项目 = 项目取消，款项由 IN 照退款流程办（已付的钱 / 没退的转置换额度沿用现有做法） */
+    coreVisitRows(c, key).filter(function(s){ return s.surgUse && !s.done && !s.skipped; }).forEach(function(s){
+      var it = itemByKey(c, s.surgUse, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; });
+      c.subItems = c.subItems.filter(function(x){ return x!==s; });
+      if(!it) return;
+      if(act==='cancel'){ it.cancelled = true; it.cancelledAt = nowFullDt(); it.cancelBy = by; delete it.deferUse; delete it.rebookWait; }
+      else { it.rebookWait = {at:nowFullDt(), by:by, reason:'到院评估：不建议手术', memo:memo}; }
+    });
+    if(act==='cancel'){ try{ coreAfterItemsRemoved(c, names, by); }catch(e){ console.error(e); } try{ pushNotif('赴韩施术', 'KR 记录：'+c.name+' 重新预约那天评估为不建议手术，取消「'+names.map(buyName).join('、')+'」，请按退款流程处理款项（没退的转置换额度）', {caseId:c.id, level:'action'}); }catch(e){} }
+    subCaseNos(c);
+  }
+  logCaseEvent(c, by, '到院评估（重新预约 '+day.slice(5).replace('-', '/')+'：'+names.map(buyName).join('、')+'）：'+KR_JUDGE_TEXT[result]+(memo ? '；原因：'+memo : '')+(result==='cannot' ? '；'+(act==='cancel' ? '取消项目（款项请 IN 照退款流程办）' : '更换时间（回到「待重新预约」）') : (result==='changed' ? '；后续用项目卡调整（增加项目走加项结算）' : '；尾款已付，直接进施术，不再结算')), '施术');
+  if(result==='ok' || result==='changed') c.preOpReq = c.preOpReq || true;
+  syncSurgerySub(c); syncSurgeryBlock(c); updateCaseStage(c);
+  return {ok:true};
+}
+/* 这天没做的重新预约施术：离院 / 确认结束时标「待重新预约」（原来只静静退回「未使用」） */
+function visitSurgWait(c, s, by, reason){ if(!s || !s.surgUse) return; var it = itemByKey(c, s.surgUse, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(it && !it.done) it.rebookWait = {at:nowFullDt(), by:by, reason:reason||'这天没做', memo:''}; }
 function coreEndSubVisit(c, key, by, reason){ if(krDayDeny(c, key)) return {ok:false, err:'这一天已过 00:00 关账，请走「确认结束」'};
   c.visitEndedKeys = c.visitEndedKeys || {};
   var rows = coreVisitRows(c, key).concat(coreVisitExtra(c, key)); if(!rows.length) return {ok:false, err:'找不到这次到院'};
   var pb = endBlockPending(c); if(pb) return pb; /* 有待付款项目不能结束（CMD-1021-10） */
-  if(rows.some(function(s){ return !s.done; })) { rows.filter(function(s){ return !s.done; }).forEach(function(s){ coreRowCancel(c, s.id, by); }); }
+  var sysEnd = leaveBypass(by); if(!evalBypass(by) && visitEvalNeed(c, key)) return {ok:false, evalFirst:true, err:'请先完成到院评估（重新预约的施术要先做到院评估）'}; /* CMD-1103-08 一 */
+  if(rows.some(function(s){ return !s.done; })) { rows.filter(function(s){ return !s.done; }).forEach(function(s){ if(s.surgUse) visitSurgWait(c, s, by, sysEnd ? '确认结束 / 系统结束时没做' : (reason||'')); coreRowCancel(c, s.id, by); }); }
   c.visitEndedKeys[key] = true; c.endAsk = false; coreVisitNoteCommit(c, key, by);
   logCaseEvent(c, by, '客人已离院（'+String(key).split('|')[1]+'）'+(reason ? '，没做完的项目回到「未预约」；原因：'+reason : ''));
   updateCaseStage(c);
