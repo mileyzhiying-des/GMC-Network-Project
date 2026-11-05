@@ -669,10 +669,10 @@ function renderAddSlotBody(){
     '</div>';
   var body;
   if(ADD_SLOT_MODE==='existing'){
-    var clientOptions = CLIENTS.map(function(c){ return '<option>'+c.name+'</option>'; }).join('');
+    var clientOptions = '<option value="" selected>选择客人</option>'+CLIENTS.map(function(c){ return '<option>'+c.name+'</option>'; }).join(''); /* CMD-1105-10：不预先选客人 */
     body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client" onchange="addSlotClientChanged()">'+clientOptions+'</select></div><div id="add-slot-minor"></div><div id="add-slot-pbox"></div>'+'<div class="field" style="margin-bottom:12px;"><label>想咨询的内容（选填）</label><textarea id="add-slot-note" rows="2" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;"></textarea></div>'+
       '<div id="add-slot-hint" style="font-size:12px;color:var(--muted);margin-bottom:14px;"></div>'+
-      '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
+      '<button class="btn-primary" id="add-slot-confirm" disabled style="width:100%;opacity:.45;cursor:not-allowed;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
     var link = bookingUrl({ph:'ph'+PLACEHOLDER_SEQ});
     body = '<div class="field" style="margin-bottom:12px;"><label>客人手机号</label><input type="text" id="add-slot-phone" placeholder="+62 812-xxxx-xxxx"></div>'+
@@ -691,6 +691,7 @@ function renderAddSlotBody(){
 var ADD_SLOT_PUR = {purpose:'面诊商谈', main:'', keys:{}};
 function addSlotPurposeRefresh(){
   var box = document.getElementById('add-slot-pbox'), sel = document.getElementById('add-slot-client'); if(!box || !sel) return;
+  if(!sel.value){ box.innerHTML = '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">请先选择客人，再选来访目的。</div>'; var h0 = document.getElementById('add-slot-hint'); if(h0) h0.textContent = ''; return; } /* CMD-1105-10：没选客人前，和客人有关的内容不显示 */
   var cd = addSlotCands(sel.value), P = ADD_SLOT_PUR, e = cesc;
   var opt = function(v, off, why){ return '<option value="'+v+'"'+(off ? ' disabled' : '')+(P.purpose===v ? ' selected' : '')+'>'+v+(off ? '（'+why+'）' : '')+'</option>'; };
   var h = '<div class="field" style="margin-bottom:12px;"><label>来访目的</label><select id="add-slot-purpose" onchange="addSlotPurposeSet(this.value)">'+opt('面诊商谈', false)+opt('术后管理', !cd.care.length, cd.careWhy)+opt('复诊评估', !cd.rev.length, cd.revWhy)+'</select></div>';
@@ -707,7 +708,7 @@ function addSlotPurposeRefresh(){
   box.innerHTML = h;
   var hint = document.getElementById('add-slot-hint'); if(hint){ var mm = list.filter(function(m){ return m.id===P.main; })[0]; hint.textContent = (P.purpose!=='面诊商谈' && mm) ? '确认后挂在 '+mm.caseNo+'（新开一个子案件，不另开 Case ID），进入"待访问"' : '老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"'; }
 }
-function addSlotClientChanged(){ ADD_MINOR = {}; ADD_SLOT_PUR = {purpose:'面诊商谈', main:'', keys:{}}; addSlotMinorRefresh(); addSlotPurposeRefresh(); }
+function addSlotClientChanged(){ ADD_MINOR = {}; ADD_SLOT_PUR = {purpose:'面诊商谈', main:'', keys:{}}; addSlotMinorRefresh(); addSlotPurposeRefresh(); var sel = document.getElementById('add-slot-client'), b = document.getElementById('add-slot-confirm'); if(b){ var ok = !!(sel && sel.value); b.disabled = !ok; b.style.opacity = ok ? '' : '.45'; b.style.cursor = ok ? '' : 'not-allowed'; } }
 function addSlotPurposeSet(v){ ADD_SLOT_PUR = {purpose:v, main:'', keys:{}}; addSlotPurposeRefresh(); }
 function addSlotMainSet(id){ ADD_SLOT_PUR.main = id; ADD_SLOT_PUR.keys = {}; addSlotPurposeRefresh(); }
 function addSlotKeySet(k, on){ if(on) ADD_SLOT_PUR.keys[k] = 1; else delete ADD_SLOT_PUR.keys[k]; }
@@ -742,7 +743,7 @@ function calOverbookAsk(ds, hr){
 }
 function overbookNote(){ var o = ADD_SLOT_CONTEXT && ADD_SLOT_CONTEXT.overbook; return o ? '超额加约：'+ADD_SLOT_CONTEXT.date+' '+ADD_SLOT_CONTEXT.time+' 时段已满（'+o.n+'/'+o.cap+'），'+actingName()+' 加约' : ''; }
 function confirmAddSlotExisting(){
-  var name = document.getElementById('add-slot-client').value;
+  var name = document.getElementById('add-slot-client').value; if(!name){ alert('请先选择客人'); return; }
   var purpose = document.getElementById('add-slot-purpose').value;
   var P = ADD_SLOT_PUR, attach = (purpose==='术后管理' || purpose==='复诊评估') ? mainOf(CASE_ITEMS.filter(function(x){ return x.id===P.main; })[0] || {}) : null, attachKeys = Object.keys(P.keys||{});
   if(purpose==='术后管理' || purpose==='复诊评估'){

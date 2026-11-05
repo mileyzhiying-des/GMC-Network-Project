@@ -3614,7 +3614,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       CAL_MODE = 'week'; try{ buildWeekGrid(); }catch(e){}
       var g = document.getElementById('wk-grid').innerHTML; ST.ok(/＋加约/.test(g) && (g.match(/＋加约/g)||[]).length<=3, '周视图满的格子有［＋加约］（默认 1 小时范围，最多 3 格）：'+(g.match(/＋加约/g)||[]).length);
       calOverbookAsk(td, cur.time); ST.ok(document.getElementById('add-slot-overlay').classList.contains('open') && /预约空档/.test(document.getElementById('add-slot-title').textContent) && document.getElementById('add-slot-title').textContent.indexOf(cur.time)>-1, '确认后进入预约表单，时段已带好');
-      var n0 = slotBookingCount(td, cur.time); var cn = CLIENTS.filter(function(x){ return !pendingResvSameDay(x.name, td); })[0]; document.getElementById('add-slot-client').value = cn.name; var nm1 = cn.name; confirmAddSlotExisting();
+      var n0 = slotBookingCount(td, cur.time); var cn = CLIENTS.filter(function(x){ return !pendingResvSameDay(x.name, td); })[0]; document.getElementById('add-slot-client').value = cn.name; addSlotClientChanged(); var nm1 = cn.name; confirmAddSlotExisting();
       ST.ok(slotBookingCount(td, cur.time)===n0+1 && n0+1>1, '加约后这个时段多 1 位（超过上限 1）');
       CAL_MODE = 'week'; try{ buildWeekGrid(); }catch(e){} g = document.getElementById('wk-grid').innerHTML; ST.ok(new RegExp((n0+1)+'/1').test(g.replace(/<[^>]+>/g, '')), '超额后格子左边出现「'+(n0+1)+'/1」');
       var nc = CASE_ITEMS.filter(function(x){ return x.name===nm1 && x.visitDate===td && x.visitTime===cur.time; }).pop(); ST.ok(!!nc && (nc.logEntries||[]).some(function(l){ return /超额加约/.test(l.action||''); }), 'Timeline 记了「超额加约」');
@@ -4786,7 +4786,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(rvMode(gc())==='author', '院长（自己负责的案件）= 作者');
       var h = krTabConsult(gc());
       ST.ok(/评估内容/.test(h) && /逐项评估意见/.test(h) && /埋线双眼皮/.test(h) && /开内眼角/.test(h) && /整体结论/.test(h) && /下次复诊时间/.test(h) && /注意事项/.test(h), '院长看到：逐项评估意见 / 整体结论 / 下次复诊时间 / 注意事项');
-      ST.ok(/增加内容（语音）/.test(h) && /增加内容（手动）/.test(h) && /AI 整理/.test(h), '［增加内容（语音）］［增加内容（手动）］［AI 整理］');
+      ST.ok(/语音输入/.test(h) && !/增加内容（手动）/.test(h) && /AI 整理/.test(h), '［语音输入］+ 输入框、［AI 整理］（CMD-1105-10 取代［增加内容（语音）］［增加内容（手动）］）');
       ST.ok(/>上传评估</.test(h) && !/发送复诊评估结果/.test(h) && !/krSubmitReport\(\)/.test(h) && !/退回院长/.test(h), '最下面是［上传评估］（CMD-1105-09 由［完成评估］改名）；没有［发送复诊评估结果］、没有［退回院长］');
       ST.ok(/class="kr-why"[^>]*>还缺：[^<]*整体结论/.test(h) && /<button class="btn-primary" disabled[^>]*>上传评估/.test(h), '必填没填：［上传评估］灰掉，原因写在按钮旁边');
       al.length = 0; krRvFinish(); ST.ok(!gc().consultContentAt && al.some(function(m){ return /还缺/.test(m); }), '硬按也不能完成');
@@ -8214,15 +8214,15 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var d2 = mkOld('d2', '', null); var rd2 = book(d2, {dob:(y-17)+'-01-01', marital:'已婚'}); ST.ok(rd2 && rd2.ok && d2.minorInfo && d2.minorInfo.marital==='已婚', '补了生日（未满 21 岁）→ 接着问婚姻状况');
     /* ⑤ IN 代约老客 */
     var e = mkOld('e', (y-18)+'-03-03', oldMi), sl = nextSlot(); openAddSlotModal(sl.date, sl.time);
-    var sel = document.getElementById('add-slot-client'); sel.value = e.name; ADD_MINOR = {}; addSlotMinorRefresh();
+    var sel = document.getElementById('add-slot-client'); sel.value = e.name; addSlotClientChanged();
     var bx = document.getElementById('add-slot-minor').innerHTML; ST.ok(/未满 21 岁/.test(bx) && /name="add-slot-marital"/.test(bx) && /name="add-slot-marital" checked/.test(bx.replace(/\s+/g,' ').replace(/checked onchange/,'checked onchange')) , '代约老客：出现确认，婚姻状况带入上次');
     ST.ok(!/add-slot-guardian/.test(bx) ? false : /add-slot-guardian"\s*onchange/.test(bx), '未婚：监护人没勾（每次重新勾）');
     var al = [], al0 = window.alert; window.alert = function(m){ al.push(m); }; var n0 = CASE_ITEMS.length; confirmAddSlotExisting();
     ST.ok(al.some(function(m){ return /监护人/.test(m); }) && CASE_ITEMS.length===n0, '代约：未婚没勾监护人 → 不能预约');
     ADD_MINOR.guardianOk = true; confirmAddSlotExisting(); window.alert = al0;
     var ce = CASE_ITEMS.filter(function(x){ return x.name===e.name; })[0]; ST.ok(ce && e.minorInfo.bookedOn===td && e.minorInfo.guardianNotified && ce.logEntries.some(function(x){ return /未满 21 岁（18 岁）再确认/.test(x.action); }), '代约：勾了 → 预约成功、记录更新、预约 Timeline 记一笔');
-    var f = mkOld('f', (y-30)+'-01-01', null), sl2 = nextSlot(); openAddSlotModal(sl2.date, sl2.time); document.getElementById('add-slot-client').value = f.name; ADD_MINOR = {}; addSlotMinorRefresh(); ST.ok(document.getElementById('add-slot-minor').innerHTML==='', '代约满 21 岁：不出现');
-    var g = mkOld('g', '', null), sl3 = nextSlot(); openAddSlotModal(sl3.date, sl3.time); document.getElementById('add-slot-client').value = g.name; ADD_MINOR = {}; addSlotMinorRefresh(); ST.ok(!!document.getElementById('add-slot-dob'), '代约没有生日：先补生日');
+    var f = mkOld('f', (y-30)+'-01-01', null), sl2 = nextSlot(); openAddSlotModal(sl2.date, sl2.time); document.getElementById('add-slot-client').value = f.name; addSlotClientChanged(); ST.ok(document.getElementById('add-slot-minor').innerHTML==='', '代约满 21 岁：不出现');
+    var g = mkOld('g', '', null), sl3 = nextSlot(); openAddSlotModal(sl3.date, sl3.time); document.getElementById('add-slot-client').value = g.name; addSlotClientChanged(); ST.ok(!!document.getElementById('add-slot-dob'), '代约没有生日：先补生日');
     closeAddSlotModal();
   });
   ST.def('R193a','CMD-1029-10（IN 分页）：NIK 格式 / 预约页选填 / 接待必填 / 查重 / 只显示后 4 码 / 只有管理者能改 / KR 各角色看不到',function(){
@@ -9303,15 +9303,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/逐项评估意见 <span[^>]*>（选填）/.test(h) && /下次复诊时间 <span[^>]*>\*</.test(h) && /整体结论 <span[^>]*>\*</.test(h) && /注意事项 <span[^>]*>（选填）/.test(h), '① 逐项评估意见选填；整体结论 / 下次复诊时间必填');
       ST.ok(/请选择/.test(h) && /不需要再复诊/.test(h), '① 下次复诊时间下拉有「请选择」和「不需要再复诊」');
       ST.ok(/class="kr-why"[^>]*>还缺：[^<]*整体结论[^<]*下次复诊时间/.test(h) && /<button class="btn-primary" disabled[^>]*>上传评估/.test(h), '③ 整体结论 / 下次复诊时间没填：［上传评估］灰掉，旁边写还缺什么');
-      /* ② 录入内容直接列出；AI 整理 */
-      v0.transcripts.push({id:'t1', ts:nowFullDt(), by:'KD1 院长', rec:'KD1 院长', who:'', mode:'manual', text:'埋线双眼皮 경과 양호합니다. 주의 사항: 샤워는 가볍게 하세요.', tgt:''});
-      v0.transcripts.push({id:'t2', ts:nowFullDt(), by:'KD1 院长', rec:'KD1 院长', who:'', mode:'manual', text:'오른쪽 눈 붓기는 정상입니다.', tgt:'ans'});
-      krRvSetIdx('op', 1, '内眼角自己先写的字');
-      var h2 = krTabConsult(gc()); ST.ok(h2.indexOf('埋线双眼皮 경과 양호합니다')>-1 && !/<details/.test(h2.slice(h2.indexOf('录入内容'), h2.indexOf('逐项评估意见'))), '② 录入的内容直接列出、不收起');
-      var cnt = h2.indexOf('오른쪽 눈 붓기는 정상입니다'); ST.ok(cnt>h2.indexOf('回答疑问'), '② 回答疑问的录入内容列在回答疑问里（不混进上面的录入内容）');
-      krRvAiOrganize(''); var c1 = gc();
-      ST.ok(!c1.recoveryResult && String(rvEff(c1, 'op', '埋线双眼皮')).trim() && rvEff(c1, 'op', '开内眼角')==='内眼角自己先写的字' && String(rvEff(c1, 'note')).trim() && rvEff(c1, 'nextType')==='1m' && !String(rvEff(c1, 'ans')).trim(), '② AI 整理：填逐项意见 / 注意事项 / 建议下次复诊时间；不选结论、已写的字不覆盖、不碰回答疑问');
-      krRvAiOrganize('ans'); ST.ok(/붓기/.test(String(rvEff(gc(), 'ans'))) && !gc().recoveryResult, '② 回答疑问的 AI 整理：只填回答疑问');
+      /* ② 录入内容 = ［语音输入］+ 输入框；AI 整理 */
+      krRvTaSave('rec', '埋线双眼皮 경과 양호합니다. 주의 사항: 샤워는 가볍게 하세요.'); krRvSetIdx('op', 1, '内眼角自己先写的字');
+      var h2 = krTabConsult(gc()); ST.ok(/id="rvta-rec"[^>]*>[^<]*埋线双眼皮 경과/.test(h2) && /id="rvmic-rec"/.test(h2) && !/增加内容（手动）|krRecOpenModal|<details/.test(h2), '② 录入内容是［🎤 语音输入］+ 输入框（直接打字就存），没有「增加内容（手动）」、没有录入卡片');
+      ST.ok(/id="rvmic-ans"/.test(h2) && /id="rvta-ans"/.test(h2) && /id="rvmic-note"/.test(h2) && /id="rvmic-op0"/.test(h2) && /id="rvmic-op1"/.test(h2), '② 回答疑问 / 注意事项 / 逐项意见每一栏都是［语音输入］+ 输入框');
+      var secAns = h2.slice(h2.indexOf('回答疑问'), h2.indexOf('注意事项')); ST.ok(!/AI 整理/.test(secAns), '③ 回答疑问没有 AI 整理');
+      krRvAiOrganize(); var c1 = gc();
+      ST.ok(!c1.recoveryResult && String(rvEff(c1, 'op', '埋线双眼皮')).trim() && rvEff(c1, 'op', '开内眼角')==='内眼角自己先写的字' && String(rvEff(c1, 'note')).trim() && rvEff(c1, 'nextType')==='1m' && !String(rvEff(c1, 'ans')).trim(), '③ AI 整理（整理「录入内容」框）：填逐项意见 / 注意事项 / 建议下次复诊时间；不选结论、已写的字不覆盖、不碰回答疑问');
       ST.ok(gc().consultStartedAt && /院长/.test(gc().consultStartedBy), '② 第一次动作 = 开始评估（记院长）');
       /* ③ 选结论后上传 */
       var h3 = krTabConsult(gc()); ST.ok(/还缺：整体结论/.test(h3.replace(/<[^>]+>/g, '')) && !/还缺：[^<]*下次复诊时间/.test(h3), '③ 下次复诊时间有了，只缺整体结论');
@@ -9350,6 +9348,60 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/回答疑问/.test(doc) && /恢复良好，目前肿胀属于正常范围/.test(doc), '⑥ IN 收到的复诊评估报告里有回答疑问（中文）');
       var sm = Store.withClinic(cid, function(){ return revSummaryText(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); }); ST.ok(/回答疑问：恢复良好，目前肿胀属于正常范围/.test(sm), '⑥ IN 的评估摘要里也有回答疑问');
     } finally { window.alert = oa; window.confirm = oc; var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
+  ST.def('R229a','CMD-1105-10（KD1 分页，pcStage 夹具）：复诊评估每个文字栏 = ［语音输入］+ 输入框（不弹侧栏、同一时间只有一个在录、转写进框、可混着打字）、旧的录入记录合并进对应输入框不丢、每次语音输入记 Timeline、面诊内容录入不变',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KD1', '要在 KD1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])（案件院长要是 KD1）')) return;
+    var cid = r0.clinicId, gc = function(){ return krFindCase(cid, r0.id).c; };
+    var snap = JSON.stringify(krFindCase(cid, r0.id).c), oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var sr = window.SpeechRecognition, wsr = window.webkitSpeechRecognition, v0 = null;
+    try{
+      window.SpeechRecognition = undefined; window.webkitSpeechRecognition = undefined; /* 强制走演示文字，不依赖麦克风 */
+      ST.rvSetup(r0, function(c){ delete c.consultStartedAt; c.revisitQuestion = '右眼还有点肿'; });
+      v0 = krVault(cid, r0.id, true); var t0 = Date.now();
+      v0.transcripts = [{id:'m1', ts:ymdAdd(todayStr(), -1)+' 10:00:00', by:'KD1 院长', rec:'KD1 院长', who:'', mode:'voice', text:'第一笔：肿胀正常', tgt:''}, {id:'m3', ts:ymdAdd(todayStr(), -1)+' 10:20:00', by:'KD1 院长', rec:'KD1 院长', who:'', mode:'manual', text:'第三笔：注意防晒', tgt:''}, {id:'m2', ts:ymdAdd(todayStr(), -1)+' 10:10:00', by:'KD1 院长', rec:'KD1 院长', who:'', mode:'manual', text:'第二笔：左眼已消肿', tgt:''}, {id:'a1', ts:ymdAdd(todayStr(), -1)+' 10:30:00', by:'KD1 院长', rec:'KD1 院长', who:'', mode:'manual', text:'回答：属于正常范围', tgt:'ans'}];
+      KR_CASE = {clinicId:cid, id:r0.id, tab:'consult'}; krShowCase(cid, r0.id, {tab:'consult', here:true});
+      var r1 = gc().revEval; ST.ok(r1 && r1.rec==='第一笔：肿胀正常\n第二笔：左眼已消肿\n第三笔：注意防晒' && r1.ans==='回答：属于正常范围' && r1.migrated && r1.migrated.n===3 && r1.migrated.na===1, '④ 旧的 3 笔 + 回答疑问 1 笔按时间旧到新、换行分隔，合并进对应输入框：'+JSON.stringify(r1 && [r1.rec, r1.ans]));
+      krShowCase(cid, r0.id, {tab:'consult', here:true}); ST.ok(gc().revEval.rec.split('\n').length===3 && v0.transcripts.length===4, '④ 只合并一次，不重复；原始记录还在仓库里没丢');
+      var body = document.getElementById('krcase-body'); ST.ok(/第二笔：左眼已消肿/.test(body.querySelector('#rvta-rec').value) && !/增加内容（手动）|一笔一笔/.test(body.innerText), '④ 输入框里能看到合并后的文字，页面没有录入卡片');
+      /* ② 语音输入 */
+      var ta = document.getElementById('rvta-rec'), mic = document.getElementById('rvmic-rec'), sideShown = function(){ var el = document.getElementById('kr-rec-side'); return !!(el && el.style.display!=='none'); };
+      mic.click(); ST.ok(RVMIC && RVMIC.key==='rec' && /停止/.test(document.getElementById('rvmic-rec').textContent) && !sideShown() && !KR_REC_OPEN, '② 按［语音输入］→ 按钮变［■ 停止］，不弹右侧栏');
+      ST.ok(ta.value.indexOf('第三笔：注意防晒')>-1 && ta.value.length>'第一笔：肿胀正常\n第二笔：左眼已消肿\n第三笔：注意防晒'.length, '② 转写的文字直接出现在这个输入框（接在后面）');
+      var nLog = (gc().logEntries||[]).length; document.getElementById('rvmic-ans').click();
+      ST.ok(RVMIC && RVMIC.key==='ans' && /语音输入/.test(document.getElementById('rvmic-rec').textContent) && !/停止/.test(document.getElementById('rvmic-rec').textContent), '② 开另一个框的语音时，前一个先停掉');
+      ST.ok(String(rvEff(gc(), 'rec')).length>40 && (gc().logEntries||[]).slice(nLog).some(function(e){ return /语音输入：录入内容/.test(e.action); }), '② 前一个停下时文字存好，并记一条 Timeline「语音输入：录入内容」');
+      var ta2 = document.getElementById('rvta-ans'); ta2.value = ta2.value+' 再手打一句'; krRvMicStop(true);
+      var ans = String(rvEff(gc(), 'ans')); ST.ok(/再手打一句/.test(ans) && ans.indexOf('回答：属于正常范围')>-1 && (gc().logEntries||[]).some(function(e){ return /语音输入：回答疑问/.test(e.action) && !/再手打一句|回答：属于/.test(e.action); }), '② 语音和打字混着用；Timeline 只记谁 / 哪一栏，不记整段内容');
+      ST.ok(!RVMIC, '② 停止后没有在录的框');
+      /* ⑤ 面诊内容录入照旧 */
+      ST.ok(typeof krRecOpenModal==='function' && /增加内容（手动）/.test(String(krRecordBlock)) && /krRecOpenModal/.test(String(krRecordBlock)), '⑤ 面诊内容录入（侧栏 krRecordBlock / krRecOpenModal）没有动');
+    } finally { window.SpeechRecognition = sr; window.webkitSpeechRecognition = wsr; try{ krRvMicStop(false); }catch(e){} window.alert = oa; window.confirm = oc; try{ if(v0) v0.transcripts = []; }catch(e){} var s0 = JSON.parse(snap); Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
+  ST.def('R229b','CMD-1105-10 七 / 八（A1 分页）：预约空档不预选客人（没选前没有未满 21 岁提醒 / 来访目的 / 确认预约灰）；复诊评估子案件不再有「项目确认中超过 3 天」提醒，真正在项目确认中的照旧',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var oa = window.alert, oc = window.confirm, td = todayStr(); window.alert = function(){}; window.confirm = function(){ return true; }; window.GMC_NO_TABS = true;
+    try{
+      var u = ST.newRes('R229u'); ST.materials(u, {consult:false}); clientByName(u.name).dob = ymdAdd(td, -365*15); /* 未满 21 岁的客人，排在列表里 */
+      openAddSlotModal(td, '18:30'); var sel = document.getElementById('add-slot-client');
+      ST.ok(sel && sel.value==='' && /选择客人/.test(sel.options[0].text), '⑥ 一打开「选择客人」是空的（灰字「选择客人」），没有自动选第一位');
+      ST.ok(document.getElementById('add-slot-minor').innerHTML==='' && !document.getElementById('add-slot-purpose'), '⑥ 没选客人：没有未满 21 岁提醒、没有来访目的 / 选主案件');
+      var cb = document.getElementById('add-slot-confirm'); ST.ok(cb && cb.disabled, '⑥ ［确认预约］灰掉');
+      sel.value = u.name; addSlotClientChanged();
+      ST.ok(/未满 21 岁/.test(document.getElementById('add-slot-minor').innerText) && document.getElementById('add-slot-purpose') && !document.getElementById('add-slot-confirm').disabled, '⑥ 选了客人才出现提醒 / 来访目的，［确认预约］可按');
+      closeAddSlotModal();
+      /* ⑦ 提醒 */
+      var src = ST.newRes('R229s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
+      src.procedureItems = [{origin:'KR', name:'隆鼻', price:1, done:true, doneAt:ymdAdd(td, -20)+' 10:00'}]; src.krTripEnded = true; src.krProcedureDone = true; src.stage = 'closed';
+      var n = ST.mkRevEval('R229k', src); n = CASE_ITEMS.filter(function(x){ return x.id===n.id; })[0];
+      var old = ymdAdd(td, -6)+' 10:00:00';
+      Object.assign(n, {consultStatus:'report_ready', reportReady:true, projectsEnabled:true}); n.logEntries = (n.logEntries||[]).concat([{dt:old, actor:'系统', action:'x', stage:'复诊评估'}]);
+      var p = ST.newRes('R229p'); ST.materials(p, {consult:true}); p = CASE_ITEMS.filter(function(x){ return x.id===p.id; })[0];
+      Object.assign(p, {consultStatus:'report_ready', reportReady:true, projectsEnabled:true, consultRequested:true}); p.logEntries = (p.logEntries||[]).concat([{dt:old, actor:'系统', action:'x', stage:'面诊'}]);
+      var items = inTodoItems(); var q = function(c){ return items.filter(function(i){ return i.caseId===c.id && i.kind==='quiet'; }).length; };
+      ST.ok(q(n)===0, '⑦ 复诊评估子案件不再挂「项目确认中超过 3 天」');
+      ST.ok(q(p)===1, '⑦ 真的在项目确认中的（一般面诊出方案没选项目）照旧提醒');
+    } finally { window.alert = oa; window.confirm = oc; try{ closeAddSlotModal(); }catch(e){} }
   });
   ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

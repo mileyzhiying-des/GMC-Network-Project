@@ -112,7 +112,7 @@ function inTodoItems(){
     if(uses.length && (c.arrivedDay===today || c.visitDate===today || c.localMgmtDay===today) && nowMin >= todoCloseMinusHour())
       push(todoMk('local', '当天本地项目还没标完成（'+uses.length+' 项）：营业结束前补标', c, today+' '+(CLINIC_SETTINGS.closeTime||'21:00'), false, todoInGo(c, 'localmgmt')));
     /* 项目确认中超过 3 天没动静 → 等客人决定 */
-    if(c.consultStatus==='report_ready' && c.projectsEnabled && !c.endNote && !(c.settlementBatches||[]).length && !c.paidOnMain){ /* CMD-1105-01：继续面诊的定金已交给主案件（paidOnMain）→ 子记录自己没有结算单，但项目早就选好了，不再催 */
+    if(c.consultStatus==='report_ready' && c.projectsEnabled && !c.endNote && !(c.settlementBatches||[]).length && !c.paidOnMain && !isRevEval(c) && !(isRevisitConsult(c) && !(((c.krScope||{}).items)||[]).length)){ /* CMD-1105-10：复诊评估（以及没附项目方案的复诊面诊）本来就没有「项目确认」这一步，不催 */ /* CMD-1105-01：继续面诊的定金已交给主案件（paidOnMain）→ 子记录自己没有结算单，但项目早就选好了，不再催 */
       var last = (c.logEntries||[]).length ? utcStrParse(c.logEntries[c.logEntries.length-1].dt) : null;
       if(last && (now - last) > 3*86400000) push(todoMk('quiet', '项目确认中超过 3 天没动静：问问客人决定了吗', c, '', true, todoInGo(c, 'kr')));
     }
