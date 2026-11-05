@@ -2001,3 +2001,13 @@ prototype/shared/app.css  共用样式
 - **操作锁**：presTag（列表客人名后「XX 室长正在处理」）排除自己账号（同账号别的分页也不算别人）。
 - **Fanny A000010 过期提醒原因**：todo.js 的「项目确认中超过 3 天没动静」条件是「面诊报告已出 + projectsEnabled + 没有结算单」，继续面诊的子记录（A000010-02）选项目付定金后，赴韩项目和结算单整体交给主案件（paidOnMain），子记录自己没有结算单 → 一直满足条件。现在加 !c.paidOnMain。
 - 测试：selftest 新增 R222a（A1）、R222b（KM1，stageC）；R121a 断言「其他进行中」→「下一个日程」；回归对照 7633c89：A1 全套 / KM1 / KD1 / roletest 失败集合一致。
+
+## CMD-1105-02 补充（2026-11-05，追加；取代 CMD-1103-08 里重新约那天的简化做法——调整方案只记 memo、取消项目只通知 IN、隔天确认不弹原因窗，旧文字保留作历史）
+- 分支 **V4**，代码提交 b874c19，文档另一个提交；不推送不合并；**数据版本不变（57）**（新增可空字段：`c.visitEval[key].phase/adj/dec/payDue/paid/newTotal/compKrw`）。用户确认过的「到院当天」主线改动。
+- **原则**：重新约那天（子到院 / surgUse 行）不另写简化版，接回主到院那一套既有积木，只是范围限定在「这次到院重新约的这几项施术」：接回的有——选择器 krAddChooser（施术 / 管理项目）、krDetailOf、coreAddOnItem、coreUnitBookUse、coreAfterItemsRemoved、coreCompCreate（置换额度）、coreLeaveCancel / leaveValidate / krLeaveWhyOpen（原因窗）、krExtOpen（问延长）。**接不回去的**：主到院那套的核心（coreJudge / coreSettleBalance / coreRefundDecision / coreCannotReplace / coreMarkUnable）全部绑在 `c.krJudge`、整案件的 `krBalancePaid` 和整案件的定金 / 尾款计算上，重新约那天尾款早就付清、范围只是几项，所以这几个核心没法直接调，用 `visit*` 版本（同样的三步 / 三选一，钱按「这几项已付的」算）。
+- **评估状态机**（data.js）：`visitEvalPhase` = ''（还没评估）/ `adjust`（需要调整方案，向导中）/ `pay`（等补付差额）/ `cancel`（不建议手术 · 取消项目，等款项去向）/ `done`；`visitEvalNeed` 在前四个阶段都为真（锁［操作完成］和［客人已离院］），`visitEvalLockText` 写对应原因。
+- **需要调整方案**（`coreVisitAdjust`）：① 选要更换的项目（只列这次到院重新约的施术；什么都不勾 = 只增加项目）② 重新选择（krAddChooser，一换多多换一不限，选施术问延长 → `visitAdjConflict` 把保留的 + 要加的 + 延长合起来查院长时间）③ 结算 `visitMoneyStep`：新合计 − 被更换项目已付：多 → `pay` 阶段，`coreVisitAdjustPay` 生成 addOn 结算单（差额，`visitAdj` 记这天）；少 → 差额 `coreCompCreate` 转置换额度；没差额直接 done。新加的施术直接挂在这天（已到院）。
+- **不建议手术 → 取消项目**（`coreVisitCancelDecide`）：更换项目（只选管理项目，不问延长，同钱的算法）/ 全部退回 / 部分退回（金额 > 0 且小于这几项已付、memo 必填）；没退的钱转置换额度；KR 只记判断，IN 收 action 级通知「请按此操作退款（退款方式必填）」；取消的施术时间段放掉、对应术后管理一起取消。**更换时间**除「之后再约」外可「当场约」（`visitRebookErr`：日期从明天起、在在韩期间内、避开休诊、院长固定对接院长、同一位院长合计查），校验不过整笔不改。
+- **离院 / 隔天确认**：`coreEndSubVisit(c, key, by, reason, leave)` 在评估之后、还有重新约的施术没做 → 返回 `needLeave`；kr.js `krEndAskOpen` 对子到院弹 `krLeaveWhyOpen(items, {sub:key})`，选完才结束（身体不适 → 当场约 / 之后再约；客人放弃 → 取消项目三选一；其他 memo 必填，`visitLeaveApply`）；隔天确认 `krDayConfirmGo` 对子到院选了「没做」的施术同样先弹这个窗，`krDayConfirmRun` 校验并处理。系统结束（`by==='系统'`）不弹、标待重新预约、写「未选原因」。**离院在评估之前仍锁住**（1103-08 / 1103-02 的规则），所以「评估也没做」的只出现在隔天确认路径。
+- **四 KR 预约弹窗**：`krCbCheck` 同一天同一位院长勾了几项院长操作项目 → `dirSeqCheck` 合计（并进已有到院时加上那次到院自己的时长）。一次约多项同一位院长的入口清单（都已用 dirSeqCheck）：KR 预约弹窗 krCbCheck、KR 确认占位 coreBookConfirmLinked、IN 占位提交 krbSubmit、离院当场约 leaveValidate、重新约那天调整方案 visitAdjConflict、更换时间当场约 visitRebookErr。没接的：到院 Step 2 添加项目（coreProjectedConflict，按主到院的施术块整体算，本来就是合计）。
+- 测试：selftest 新增 R223a（KM1，stageC）、R223b；回归对照 CMD-1105-01：A1 全套 / KM1 / KD1 批次 / roletest 失败集合一致。
