@@ -954,6 +954,9 @@ function clientUpdatedText(cl){ return updatedTextOfKey(clientUpdatedKey(cl)); }
 /* 案件开始时间（CMD-1015-17）：Timeline 里最早的一条（UTC），没有就用预约来访时间；列表显示按页面时区换算 */
 function caseStartKey(c){ var m = ''; ((c && c.logEntries)||[]).forEach(function(e){ if(e.dt && (!m || e.dt < m)) m = e.dt; }); return m || ((c && c.visitDate) ? c.visitDate+' '+(c.visitTime||'00:00') : ''); }
 function caseStartText(c){ var k0 = caseStartKey(c); return k0 ? (fmtUtc(k0) || k0) : '—'; }
+/* CMD-1105-01 二：案件管理列表专用——开始时间 YY-MM-DD；更新时间 YY-MM-DD HH:mm（页面时区），不再用「02/08」「刚刚」；其他地方的 caseStartText / caseUpdatedText 不动 */
+function caseStartYmd(c){ var k0 = caseStartKey(c); if(!k0) return '—'; var f = fmtUtc(k0) || k0; return String(f).slice(2, 10); }
+function caseUpdatedFull(c){ var k0 = caseUpdatedKey(c); if(!k0) return '—'; var f = fmtUtc(k0) || k0; return String(f).slice(2, 16); }
 function caseUpdatedDesc(a, b){ return caseUpdatedKey(b).localeCompare(caseUpdatedKey(a)); }
 
 /* CMD-1022-19：案件管理列表的 tab 归属：复诊评估案件（还没结束）单独一个「复诊评估」tab；结束的按结局进已结案 / 仅出报告 / 已取消 */

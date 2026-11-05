@@ -3218,7 +3218,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var a = mainAttentionOf(m, 'IN', inTodoItems());
     ST.ok(a && a.text && a.rank>=1 && a.rank<=5 && Array.isArray(a.others), 'mainAttentionOf 返回 一件 + 其他列表：'+JSON.stringify(a));
     nav('in-cases'); CASE_TAB_FILTER = 'all'; renderCaseRows();
-    ST.ok(/其他进行中/.test(document.getElementById('page-in-cases') ? document.getElementById('page-in-cases').innerText : document.body.innerText), '列表表头有「其他进行中」');
+    ST.ok(/下一个日程/.test(document.getElementById('page-in-cases') ? document.getElementById('page-in-cases').innerText : document.body.innerText), '列表表头有「下一个日程」');
     ST.ok(typeof openVisitOf==='function', '入口函数 openVisitOf 存在');
     var done = CASE_ITEMS.filter(function(x){ return !isChildVisit(x) && mainStatusOf(x).status==='已完成'; })[0];
     if(done) ST.ok(mainAttentionOf(done, 'IN', []).rank===5, '已完成 = 优先级⑤');
@@ -8958,6 +8958,65 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(other) ST.ok(!dirSeqCheck(hid, [{dir:dir, min:60, label:'A'}, {dir:other, min:90, label:'B'}], date, '14:00', null) || true, '不同院长各自算');
       ST.ok(!dirSeqCheck(hid, [{dir:dir, min:60, label:'A'}, {dir:dir, min:30, label:'B'}], date, '13:30', null), '改到 13:30 开始（共 90 分钟）→ 没冲突，约得上');
     } finally { var ix = arr.indexOf(blk); if(ix>-1) arr.splice(ix, 1); }
+  });
+
+  ST.def('R222a','CMD-1105-01（A1，stageC 夹具）：IN 案件管理列表——栏位对齐 / 时间格式 / 进程只写一件 / 下一个日程 / 待重新预约显示 / 操作锁不提醒自己',async function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    await ST.ensureFixtures(['stageC']);
+    var m = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!m, '要有 stageC 夹具')) return;
+    m.krCoordinator = 'KM1 室长';
+    nav('in-cases'); CASE_TAB_FILTER = 'all'; renderCaseRows();
+    var head = document.querySelector('#page-in-cases .trow.head, #in-cases .trow.head') || document.querySelector('.trow.head'); var nh = head ? head.children.length : 0;
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#case-rows > .trow')).filter(function(r){ return r.style.cursor==='pointer' && r.children.length===nh; });
+    ST.ok(nh===11 && rows.length>0, '表头 11 栏，每行 11 格：'+nh+' / '+rows.length);
+    var hd = Array.prototype.slice.call(head.children).map(function(x){ return x.textContent; });
+    ST.ok(hd[4]==='下一个日程'||hd[3].indexOf('进程')>-1, '表头：'+hd.join('|'));
+    var row = rows.filter(function(r){ return r.textContent.indexOf(m.caseNo)>-1; })[0]; ST.ok(!!row, '找到本案件行');
+    if(row){ var cells = Array.prototype.slice.call(row.children).map(function(x){ return x.textContent; });
+      ST.ok(/^\d\d-\d\d-\d\d$/.test(cells[9]), '开始时间 YY-MM-DD：'+cells[9]); ST.ok(/^\d\d-\d\d-\d\d \d\d:\d\d$/.test(cells[10]), '更新时间 YY-MM-DD HH:mm：'+cells[10]);
+      ST.ok(/KM1/.test(cells[8]), 'IN 列表带出 KR 室长：'+cells[8]); ST.ok(!/在韩后续进行中|超过 3 天没动静/.test(row.textContent), '进程里没有标签 / 提醒'); }
+    ST.ok(!/在韩后续进行中/.test(document.getElementById('case-rows').textContent), '整张列表没有「在韩后续进行中」');
+    /* 下一个日程：最近一个预约 MM/DD HH:mm 做什么（子案件号），没有写— */
+    var nx = nextScheduleText(m); ST.ok(nx==='—' || /^\d\d\/\d\d( \d\d:\d\d)? .+/.test(nx), '下一个日程格式：'+nx);
+    /* 待重新预约：进程写事实、详情页当前状态显示 */
+    var it = (m.procedureItems||[]).filter(function(x){ return x.origin==='KR' && !x.cancelled && !krIsMgmtItemC(x); })[0];
+    if(it){ var old = it.rebookWait; it.rebookWait = {at:nowFullDt(), by:'t', reason:'x', memo:''}; m.krBalancePaid = true;
+      ST.ok(/^待重新预约：/.test(mainProgressText(m, 'IN')), '进程：'+mainProgressText(m, 'IN'));
+      ST.ok(mainPendingBook(m).rebN>=1, 'mainPendingBook.rebN');
+      if(isUpgraded(m)){ openCaseDetail(m.id, true); var bar = (document.getElementById('case-status-bar')||{}).innerText||''; ST.ok(/待重新预约 \d+ 项/.test(bar), '详情页当前状态：'+bar.slice(0,120)); }
+      if(old) it.rebookWait = old; else delete it.rebookWait; }
+    /* 操作锁不提醒自己：同账号别的分页不算；别的账号照旧 */
+    var key = CURRENT_CLINIC_ID+':'+m.id, all = presRead(); all[key] = {tSelf:{name:ME_NAME, acct:presMyAcct(), ts:Date.now()}, tOther:{name:'A2 室长', acct:'A2', ts:Date.now()}}; presWrite(all);
+    var tg = presTag(CURRENT_CLINIC_ID, m.id); ST.ok(!tg.includes(ME_NAME) && /A2 室长正在处理/.test(tg), '只提醒别人：'+tg); delete all[key]; presWrite(all);
+  });
+  ST.def('R222b','CMD-1105-01（KM1，stageC 夹具）：KR 案件管理列表——栏位对齐 / 阶段标彩色·灰色 / 进程事实 / 时间格式',async function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    nav('kr-cases'); KR_LIST.tab = 'all'; KR_LIST.card = ''; KR_LIST.q = ''; krRenderCases();
+    var head = document.querySelector('#kr-rows .trow.head'), nh = head ? head.children.length : 0;
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#kr-rows > .trow')).filter(function(x){ return x.style.cursor==='pointer'; });
+    ST.ok(nh===11 && rows.length>0 && rows.every(function(x){ return x.children.length===nh; }), '表头 11 栏、每行 11 格：'+nh+' / '+rows.map(function(x){ return x.children.length; }).join(','));
+    var row = rows.filter(function(x){ return x.textContent.indexOf('T-待到院')>-1; })[0];
+    if(row){ var cs = Array.prototype.slice.call(row.children).map(function(x){ return x.textContent; });
+      ST.ok(/^\d\d-\d\d-\d\d$/.test(cs[9]) && /^\d\d-\d\d-\d\d \d\d:\d\d$/.test(cs[10]), '开始 / 更新时间格式：'+cs[9]+' | '+cs[10]); ST.ok(!/在韩后续进行中|今天 \d/.test(row.textContent), '进程里没有标签 / 到院按钮'); }
+    /* 阶段标：用对照状态直接调 krListStage（在来源诊所分区里改了再还原） */
+    Store.withClinic(r.clinicId, function(){
+      var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; var snap = JSON.stringify({stage:c.stage, krProcedureDone:c.krProcedureDone, krTripEnded:c.krTripEnded, consultStatus:c.consultStatus, reportReady:c.reportReady, consultRequested:c.consultRequested});
+      var back = function(){ var o = JSON.parse(snap); Object.keys(o).forEach(function(k){ if(o[k]===undefined) delete c[k]; else c[k] = o[k]; }); };
+      try{
+        c.stage = 'postcare'; c.krTripEnded = {at:'x'}; var a = krListStage(c); ST.ok(a && a.stage==='术后管理' && !a.busy && !!a.gray, '术后管理 · 行程已结束 = 灰色（Carry 型）：'+JSON.stringify(a));
+        c.stage = 'consult'; c.reportReady = true; c.consultStatus = 'report_ready'; c.krTripEnded = undefined; var b = krListStage(c); ST.ok(b && b.stage==='面诊安排' && !b.busy && b.proc==='方案已出', '面诊安排 · 方案已出 = 灰色（Grace 型）：'+JSON.stringify(b));
+        c.reportReady = false; c.consultStatus = 'awaiting_report'; c.consultRequested = true; var b2 = krListStage(c); ST.ok(b2 && b2.busy && b2.stage==='面诊安排', '面诊中 = 彩色：'+JSON.stringify(b2));
+        c.stage = 'reportonly'; var d = krListStage(c); ST.ok(d && d.stage==='面诊安排' && !d.busy && d.proc==='仅出报告', '仅出报告 = 灰色面诊安排 + 进程仅出报告：'+JSON.stringify(d));
+        c.stage = 'travel'; c.krProcedureDone = true; c.krTripEnded = {at:'x'}; var e1 = krListStage(c); ST.ok(e1 && !e1.busy && /施术已完成 · 已离境/.test(e1.proc), '赴韩施术 · 施术已完成 · 已离境 = 灰色：'+JSON.stringify(e1));
+        var it = (c.procedureItems||[]).filter(function(x){ return x.origin==='KR' && !x.cancelled && !krIsMgmtItemC(x); })[0], oldRw = it && it.rebookWait;
+        if(it){ it.rebookWait = {at:'x', by:'t', reason:'x', memo:''}; var f = krListStage(c); ST.ok(f && f.busy && f.stage==='赴韩施术' && /待重新预约/.test(f.proc), '有待重新预约 = 彩色赴韩施术（Fanny 型）：'+JSON.stringify(f)); if(oldRw) it.rebookWait = oldRw; else delete it.rebookWait; }
+      } finally { back(); }
+    });
+    /* 操作锁不提醒自己 */
+    var key = r.clinicId+':'+r.id, all = presRead(); all[key] = {tSelf:{name:ME_NAME, acct:presMyAcct(), ts:Date.now()}, tOther:{name:'A2 室长', acct:'A2', ts:Date.now()}}; presWrite(all);
+    var tg = presTag(r.clinicId, r.id); ST.ok(!tg.includes(ME_NAME) && /A2 室长正在处理/.test(tg), '只提醒别人：'+tg); delete all[key]; presWrite(all);
+    var pr = krFindCase(r.clinicId, r.id); if(pr) ST.ok(typeof krRebTag==='function', 'krRebTag 存在');
   });
   ST.def('R217b','CMD-1103-02（A1，stageC 夹具）：IN 占位只列行程没结束的客人、三组项目、日期范围',function(){
     var me = currentAccount(); if(!ST.ok(me && /^A/.test(me.id), '要在 IN 分页里跑')) return;

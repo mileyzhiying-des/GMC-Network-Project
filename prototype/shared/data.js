@@ -12051,7 +12051,8 @@ function coreStayResolve(c, picks, outD, outT, by){
 /* ================= CMD-1027-14 五：主案件「当前状态」两行状态卡的共用取数（IN / KR）+ 待预约 =================
    待预约 = 没有今日 / 下次到访，但还有未预约的术后管理：IN 看印尼的（todoUbGroupsIn），KR 看韩国的（careSlotList）；两边各自带对方的数量，好写「后续由 IN 安排 …」 */
 function mainPendingBook(c){
-  var o = {inN:0, krN:0, mgN:0, inEarly:'', krEarly:'', mgEarly:''};
+  var o = {inN:0, krN:0, mgN:0, inEarly:'', krEarly:'', mgEarly:'', rebN:0, rebNames:[]};
+  try{ var rw0 = rebookWaitItems(c); o.rebN = rw0.length; o.rebNames = rw0.map(function(it){ return buyName(it.name); }); }catch(e){} /* CMD-1105-01 六：待重新预约 N 项（详情页当前状态也要显示） */
   try{
     if(!c || !c.krBalancePaid || c.stage==='cancelled') return o;
     var closed = !!(c.visitClosed || isEnded(c));
@@ -12060,6 +12061,33 @@ function mainPendingBook(c){
     if(!closed && !c.krTripEnded){ krCbMgItems(c).forEach(function(m0){ var it0 = itemByKey(c, m0.iid||m0.name) || {}; if(it0.iid && pickedMgmt(c, it0)) return; o.mgN++; var sg0 = (m0.sugs||[])[0]||''; if(sg0 && (!o.mgEarly || sg0 < o.mgEarly)) o.mgEarly = sg0; }); } /* CMD-1028-09：在韩管理的未预约也算待预约 */
   }catch(e){ console.error(e); }
   return o;
+}
+/* ===== CMD-1105-01：案件管理列表（IN / KR）===== */
+/* 进程只写一件事：进行中 = 现在停在哪一步（事实，不是提醒 / 待办 / 通知）；提醒与待办只在工作台，通知记录只在 Timeline */
+function mainProgressText(m0, side){
+  var m = mainOf(m0), si = caseStageInfo(m);
+  var rw = rebookWaitItems(m); if(rw.length) return '待重新预约：'+rw.map(function(it){ return buyName(it.name); }).join('、');
+  var kid = childVisitsOf(m).filter(function(x){ return isRevEval(x) && !isEnded(x) && x.subState!=='cancelled' && x.stage!=='cancelled'; })[0];
+  if(kid) return '复诊评估：'+revEvalProcText(kid);
+  var pb = mainPendingBook(m), n = (side==='KR' ? pb.krN : pb.inN);
+  if(n) return '术后管理未预约 '+n+' 项';
+  if(pb.mgN && side==='KR') return '在韩管理未预约 '+pb.mgN+' 项';
+  var hold = krHoldList(m).length;
+  if(hold && (m.stage==='krmgmt' || !si.proc)) return '在韩持有 '+hold+' 项';
+  return si.proc || '进行中';
+}
+function mainEndProgressText(m){ /* 已结束：结束方式；还有在韩持有的写「在韩持有 N 项」 */
+  var t = caseEndTypeText(m), hold = krHoldList(m).length;
+  if(hold) return t+' · 在韩持有 '+hold+' 项';
+  return t+((m.stage==='closed' && !isChildVisit(m) && mainHoldOf(m).length) ? ' · 有持有项目' : '');
+}
+/* IN 列表「下一个日程」：最近一个还没到的预约 / 来访，MM/DD HH:mm 做什么（子案件号）；没有写「—」 */
+function nextScheduleText(m0){
+  var m = mainOf(m0), today = todayStr();
+  if(isEnded(m)) return '—';
+  var ds = daysOf(m).filter(function(v){ return v.state==='waiting' && v.date>=today; }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); });
+  var v = ds[0]; if(!v) return '—';
+  return String(v.date).slice(5).replace('-', '/')+(v.time ? ' '+v.time : '')+' '+mainDayBiz(v)+(v.no ? '（'+v.no+'）' : '');
 }
 function mainDayBiz(v){ return (v.types||[]).filter(function(t0){ return t0!=='本地管理'; }).map(function(t0){ return t0==='赴韩施术' ? '赴韩项目' : t0; }).join('、') || '—'; }
 function mainStatusModel(c){

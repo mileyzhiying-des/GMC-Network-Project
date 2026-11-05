@@ -1166,6 +1166,7 @@ function setDoneRange(k, v){ var r = CASE_DONE_RANGE; if(k==='recent'){ r.from =
 function caseLastVisitDay(c){ var vs = visitsOf(mainOf(c)), last = vs.length ? vs[vs.length-1].date : ''; return last || String(c.visitDate||'') || String((c.logEntries&&c.logEntries.length ? c.logEntries[c.logEntries.length-1].dt : '')||'').slice(0, 10); }
 var CASE_ROW_OPEN = {}, CASE_GRID = '1.0fr 1.0fr 0.85fr 1.5fr 1.2fr 1.0fr 0.8fr 0.8fr 0.8fr 0.8fr 0.7fr';
 function caseRowToggle(id){ CASE_ROW_OPEN[id] = !CASE_ROW_OPEN[id]; renderCaseRows(); }
+function e0(x){ return String(x==null ? '' : x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function renderCaseRows(){
   var items = CASE_TAB_FILTER==='all' ? CASE_ITEMS : CASE_ITEMS.filter(function(c){ return caseTabKey(c)===CASE_TAB_FILTER; });
   items = items.filter(function(c){ return !isChildVisit(c); }); /* CMD-1023-01 S3：列表只列主案件，子案件展开看 */
@@ -1185,18 +1186,18 @@ function renderCaseRows(){
   }
   var attTodo = []; try{ attTodo = inTodoItems(); }catch(e){}
   document.getElementById('case-rows').innerHTML = doneBar+items.map(function(c){
-    var si = caseStageInfo(c), att = isEnded(c) ? null : mainAttentionOf(c, 'IN', attTodo);
-    var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '')+(krHoldOpen(c) ? ' <span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:12px;">在韩后续进行中</span>' : '');
+    var si = caseStageInfo(c), progTxt = isEnded(c) ? mainEndProgressText(c) : mainProgressText(c, 'IN'), nextTxt = nextScheduleText(c); /* CMD-1105-01 三、四 */
+    var lmTag = (localMgmtTagOn(c) ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">本地管理进行中</span>' : '');
     var ops = caseOperators(c, true); /* IN 室长 / KR 室长：按操作记录自动标注（所有操作过的室长） */
     var vsAll = visitsOf(c), subs = vsAll.length>1 ? vsAll : [], open = !!CASE_ROW_OPEN[c.id];
     /* CMD-1015-17：Case ID ｜ 客户姓名 ｜ 阶段 ｜ 进程 ｜ 财务 ｜ 对接院长 ｜ IN 室长 ｜ KR 室长 ｜ 开始时间 ｜ 更新时间；有子案件的 Case ID 前加 ▼，展开列出子案件（客户姓名留空、开始时间 = 到院时间） */
     var main = '<div class="trow case-row-click" onclick="openCaseNewTab(\''+c.id+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;"><span style="font-size:12px;color:var(--slate2);">'+(subs.length ? '<span onclick="event.stopPropagation();caseRowToggle(\''+c.id+'\')" title="展开到院记录" style="cursor:pointer;display:inline-block;width:16px;">'+(open ? '▲' : '▼')+'</span>' : '<span style="display:inline-block;width:16px;"></span>')+c.caseNo+'</span>'+
       '<span><b style="font-size:13px;">'+c.name+'</b>'+presTag(CURRENT_CLINIC_ID, c.id)+'</span>'+
       '<span><span class="status-pill" style="background:'+si.bg+';color:'+si.fg+';white-space:nowrap;">'+si.stage+'</span></span>'+
-      '<span style="font-size:12px;'+(att && att.over ? 'color:var(--feedback-error,#B3402E);' : '')+'" title="进程只写最该注意的一件">'+(isEnded(c) ? caseEndTypeText(c)+((c.stage==='closed' && !isChildVisit(c) && mainHoldOf(c).length) ? ' · 有持有项目' : '') : att.text)+lmTag+'</span>'+
-      '<span style="font-size:12px;color:var(--slate2);">'+(att && att.others.length ? att.others.join('<br>') : '—')+'</span>'+
+      '<span style="font-size:12px;" title="进程只写现在停在哪一步（提醒 / 待办在工作台，通知记录在 Timeline）">'+e0(progTxt)+lmTag+'</span>'+
+      '<span style="font-size:12px;color:var(--slate2);">'+e0(nextTxt)+'</span>'+
       '<span>'+financeCellHtml(c)+'</span>'+
-      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+(ops.kr.join('、')||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartText(c)+'</span><span style="font-size:12px;color:var(--muted);">'+caseUpdatedText(c)+'</span></div>';
+      '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+((ops.kr.length ? ops.kr.join('、') : (c.krCoordinator ? krCoordText(c.krCoordinator) : ''))||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartYmd(c)+'</span><span style="font-size:12px;color:var(--muted);">'+caseUpdatedFull(c)+'</span></div>';
     var subHtml = open ? subs.map(function(v){
       var ch = v.caseId!==c.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, tags = v.types.map(function(t0){ return '<span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);font-size:12px;margin-right:4px;">'+t0+'</span>'; }).join('');
       return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+(ch ? ch.id : c.id)+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+v.no+'</span><span style="font-size:12px;">'+String(v.date).slice(5).replace('-','/')+(v.time ? ' '+v.time : '')+'</span><span style="font-size:12px;">'+(v.place==='KR' ? '韩国' : '印尼')+'</span><span style="grid-column:span 3;">'+tags+'</span></div>';
@@ -1367,7 +1368,7 @@ function renderCaseStatusBar0(c){
     else if(P.inN){ row2 = '<b>待预约</b>：'+cesc(pdTxt)+(P.krN ? '<span style="font-size:12px;color:var(--muted);margin-left:8px;">韩国 '+P.krN+' 项由 KR 安排</span>' : '')+'<span style="flex:1;"></span>'+(careBookBlock(m3) ? '' : bt('预约', 'todoCbOpen(\''+m3.id+'\',\'*\')', true)); }
     else if(P.krN){ row2 = '<b>待预约</b>：韩国术后管理 '+P.krN+' 项（由 KR 安排）'; }
     else row2 = '<b>后续日程：无</b>';
-    document.getElementById('case-status-bar').innerHTML = '<div class="card" style="padding:12px 20px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+M.nLive+'｜预约中 '+M.nBook+'）</span><span style="flex:1;"></span>'+bt('查看', 'switchCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:10px;flex-wrap:wrap;">'+row2+'</div></div>'+(actionBtn ? '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">'+actionBtn+'</div>' : '');
+    document.getElementById('case-status-bar').innerHTML = '<div class="card" style="padding:12px 20px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+M.nLive+'｜预约中 '+M.nBook+'）</span>'+(P.rebN ? '<span style="font-size:13px;color:#B3261E;font-weight:600;">待重新预约 '+P.rebN+' 项：'+cesc((P.rebNames||[]).join('、'))+'</span>' : '')+'<span style="flex:1;"></span>'+bt('查看', 'switchCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:10px;flex-wrap:wrap;">'+row2+'</div></div>'+(actionBtn ? '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">'+actionBtn+'</div>' : '');
     renderCaseHeaderActions(c); return;
   }
   document.getElementById('case-status-bar').innerHTML =
@@ -3938,7 +3939,10 @@ function presViewers(key){
   return names.sort();
 }
 function presTag(clinicId, caseId){
-  var n = presViewers(clinicId+':'+caseId); if(!n.length) return '';
+  /* CMD-1105-01 六：不提醒自己（同一账号的别的分页也不算「别人正在处理」） */
+  var o0 = presRead()[clinicId+':'+caseId] || {}, me0 = presMyAcct(), n = [];
+  Object.keys(o0).forEach(function(t){ var e = o0[t]; if(presFresh(e) && e.acct!==me0 && n.indexOf(e.name)<0) n.push(e.name); }); n.sort();
+  if(!n.length) return '';
   return ' <span class="pres-tag" style="font-size:12px;font-weight:400;color:#C26A1B;">'+n.join('、')+'正在处理</span>';
 }
 function presBeat(){
