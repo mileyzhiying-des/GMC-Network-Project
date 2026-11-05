@@ -2030,3 +2030,12 @@ prototype/shared/app.css  共用样式
 - **持有转进新主案件**（`applyHeldTransfer`，在 `confirmSettlementPayment` 里 `batch.status='active'` 后）：原案件那一笔 `delete heldSurg; swapped=true; heldTransferred={…}`（不再是持有、不再算进行中项目，原案件重算状态），原案件 Timeline 记「已转到 A00xxxx」、新案件 Timeline 记「使用韩国持有的施术…抵扣」（都是人为记录）；新案件的赴韩项目带 `heldFrom`，之后照新案件流程（递交施术日期 → KR 确认 → 到院评估）。**付款前不动原案件**（取消结算单不会丢持有）。没勾的持有留在原案件，仍可从客人页取消 / 退款。
 - **KR**：项目卡来源标签写「来自 A00xxxx 韩国持有」（`krSrcTag`）；不显示 IN 的金额细节（照旧）。
 - 测试：selftest 新增 R225a（A1，stageC 夹具）。
+
+## CMD-1105-05 补充（2026-11-05，追加；取代 CMD-1022-15 / 1028-01 里 IN 预约空档来访目的四个、CMD-1028-01 里「从主案件约的预约到店默认选好服务类型」仍弹对话框，旧文字保留作历史）
+- 分支 **V4**，代码提交 ea0ab41，文档另一个提交；不推送不合并；**数据版本不变（58）**（新增可空字段 `purposeLocked`，旧资料不用迁移）。会动预约和到店归属，用户已确认。
+- **一 IN「预约空档」来访目的三个**（ui.js `renderAddSlotBody` / `addSlotPurposeRefresh` / `confirmAddSlotExisting`，data.js `purposeSelectHtml` / `addSlotCands`）：老客人 = 面诊商谈 / 术后管理 / 复诊评估，新客人 tab 只有面诊商谈。面诊商谈照旧（独立 Case ID，到店弹服务类型）。术后管理 / 复诊评估多一个「选择主案件」下拉，写法 `mainPickLabel`：「A000844 · 切开双眼皮（01/15 施术）」（没做过施术写面诊日期），术后管理再列出该主案件未预约的印尼术后管理（`todoUbGroupsIn`，标「对应施术 · 术后第 N 天」）勾要做的（至少一项）；确认后 `createChildReservation` 直接挂在主案件下新开子案件（不占新 Case ID），勾的项目 `careFor.keys` → 变已预约、从未安排预约消失（取消 / 未到店回未预约，沿用 inCareBooking）；同一天已有该主案件的预约就并进去。没有可选主案件 → 选项灰掉并写原因（「没有未预约的术后管理」「没有做过施术的案件」「距施术完成日超过 3 个月」）；弹窗底下的说明按目的改写（「确认后挂在 A00xxxx，进入待访问」）。`mainForBookingPurpose`（客人自己预约页、旧入口）保留。
+- **旧数据**：已约的「皮肤管理」预约照旧有效，画面显示成「面诊商谈」（`purposeDisp`：日历、日历格子、待办、来访目的行）；已约的「术后管理 / 复诊评估」但没挂案件的（独立预约，没有 `mainId`）到店时照旧弹服务类型，不自动猜案件（本地存档里的数量要用户那边的数据才知道，我这边隔离数据里没有这类）。
+- **二 带着目的的预约到店不再弹「请选择本次服务类型」**（data.js `followupAsk` → `followupAutoLink`）：条件 = `c.preChild && c.purposeLocked!==false`（`createChildReservation` 默认 `purposeLocked=true`，所以［预约复诊］、术后管理预约、IN 空档选术后管理 / 复诊评估、KR 占位关联案件建的都算；旧的 preChild 没有这个字段也算）；客人自己在预约页约的（`submitSelfBooking` 传 `purposeLocked:false`）、面诊商谈、临时到店仍弹。到店后自动按预约的类型继续主案件（等于原来对话框默认值一键确认），然后弹原来的继续资料窗（메타뷰 + 复诊的项目 / 视频照片 / 询问问题，术后管理项目只读列出；没有「面诊需求」）。`contTodayCareRows` 补了按名额（`unit|项目|第几条`）预约的术后管理（原来只认现成的行）。
+- **页头横幅**（`thisVisitBannerHtml`，`renderCaseSubtitle`）：「本次：复诊评估 · A000844（院长建议 02/22）」/「本次：术后管理 · A00xxxx · 拆线」，旁边［增加本次服务］（`addServiceOpen`：术后管理 / 使用持有项目 → `inUseOpen`、购买本地项目 → `inAddLocalProject`、复诊评估 → `addRevisitToDay`）；术后管理的来访加做复诊评估只在该案件做过施术时出现（`revAddPossible` 加了 followDoneItems 判断）。**没有放「面诊」**：1028-14 已特意拿掉子案件页的［增加面诊］，这次沿用（见汇报）。
+- **三 案件下拉写法**：「继续之前的服务」弹窗的案件下拉改 `mainPickLabel`（取代「A000844 · 术后管理 · 术后管理（印尼）· 等 IN 结案」）；预约弹窗的「选择主案件」同一写法。
+- 测试：selftest 新增 R226a；R151a / R152a 的断言按新规则改（改前：到店 `FU_ASK` 默认选复诊评估 + 主案件；改后：不弹窗，`resumeFrom` 直接是复诊评估 + 主案件，测试里要先 `ST.open(rc)`）。
