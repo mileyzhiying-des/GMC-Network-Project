@@ -1437,11 +1437,13 @@ function renderCaseHeaderActions(c){
   }
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
   var lmBtn = '';
-  if(notEnded && !c.localMgmt && !isLocalCase(c) && (c.consultRequested || c.needsConsult===true) && localAddAllowed(c) ){ /* CMD-1026-17：项目卡拆进各 tab 后，没有本地管理时入口回到页头；有了本地管理 tab 后入口在 tab 里 */
-    lmBtn = '<button class="btn-outline" onclick="'+(isChildVisit(c) && (isRevEval(c) || isContCase(c)) ? 'inAddLocalProject()' : 'addLocalMgmt()')+'">+ 添加本地管理</button>';
+  /* CMD-1105-07：来访进行中，页头的［+ 添加本地管理］一直都在（原来 CMD-1026-17 只在「还没有本地管理」时显示，加过之后就消失了）；先分「使用持有 / 购买新项目」；离店 / 锁住 / 结束后不出现；纯本地案件有自己的选购流程 */
+  var lmOkCase = isChildVisit(c) ? true : (!isLocalCase(c) && (c.consultRequested || c.needsConsult===true));
+  if(notEnded && lmOkCase && !c.leftStore && !c.visitClosed && !inDayLocked(c) && localAddAllowed(c)){
+    lmBtn = '<button class="btn-outline" onclick="inLocalEntry()">+ 添加本地管理</button>';
   }
   var leaveBtn = (canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) ? '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>' : ''; /* CMD-1026-11 二：右上角依序 发起对话 · 添加本地管理 · 客人离店（只在客人在店时有） */
-  var itemBtn = (careDay && notEnded && !c.leftStore) ? '<button class="btn-outline" onclick="inAddItemOpen()">增加项目</button>' : ''; /* 对话｜增加项目｜客人离店 */
+  var itemBtn = ''; /* CMD-1105-07：术后管理那天的［增加项目］并进页头统一的［+ 添加本地管理］ */
   el.innerHTML = (caseRoomEligible(c) ? '<button class="btn-primary" onclick="openCaseRoom(CURRENT_CASE_ID)">对话</button>' : '') + lmBtn + stageBtn + itemBtn + leaveBtn; /* 2026-10-02：不满足建房条件时完全不显示 */
 }
 

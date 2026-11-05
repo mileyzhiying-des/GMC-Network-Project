@@ -2975,7 +2975,7 @@ function inContRestHtml(c, M, kind){
   /* CMD-1103-07：「剩余项目」= 一张项目卡（两个 tab［术后管理］［本地管理］，哪个没有项目就不出现哪个 tab，两个都没有整张卡不出现，［本次使用］也不出现）；
      例外：本地管理页且还能添加本地项目时，只留一行［＋ 添加本地管理项目］（免得没入口），不画项目卡 */
   if(!counts.care && !counts.local){
-    if(kind==='local' && !ro && localAddAllowed(c)) return '<div style="display:flex;justify-content:flex-end;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="inAddLocalProject()">＋ 添加本地管理项目</button></div>';
+    if(kind==='local' && !ro && localAddAllowed(c)) return '<div style="display:flex;justify-content:flex-end;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="inLocalEntry()">＋ 添加本地管理项目</button></div>';
     return '';
   }
   var cur = IN_CONT_TAB[c.id]; if(!cur || !counts[cur]) cur = (kind && counts[kind]>0) ? kind : (['care','local'].filter(function(k){ return counts[k]>0; })[0] || '');
@@ -2997,7 +2997,7 @@ function inContRestHtml(c, M, kind){
     var h2 = '<div style="'+g2+'font-size:12px;color:var(--muted);padding:4px 0;"><span>项目</span><span>次数</span><span>购买时间</span></div>';
     body = sec('未预约项目', M.unused, h2, function(x){ return '<div style="'+g2+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+e(x.h.itemName)+(x.b.spec ? '（'+e(buyName(x.b.spec))+'）' : '')+'</span><span style="font-size:12px;">剩 '+x.left+' / 共 '+(x.b.bought||0)+' 次</span><span style="font-size:12px;">'+md(x.b.date||x.b.boughtAt||'')+'</span></div>'; });
   }
-  var topBtns = ro ? '' : ((kind!=='care' && localAddAllowed(c)) ? '<button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="inAddLocalProject()">＋ 添加本地管理项目</button>' : '')+'<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="inUseOpen()">本次使用</button>';
+  var topBtns = ro ? '' : ((kind!=='care' && localAddAllowed(c)) ? '<button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="inLocalEntry(\'buy\')">＋ 添加本地管理项目</button>' : '')+'<button class="btn-primary" style="padding:4px 14px;font-size:12px;" onclick="inUseOpen()">本次使用</button>';
   var pills = tabBtn('care','术后管理')+tabBtn('local','本地管理');
   var careNote = cur==='care' ? '来自主案件'+(M.src ? ' '+e(M.src.caseNo) : '')+' · 免费 · 不能退款 · 做完记在原案件，扣原案件次数' : '';
   return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;">剩余项目</div><div style="flex:1;font-size:12px;color:var(--muted);min-width:0;">'+careNote+'</div>'+topBtns+'</div>'+(pills ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+pills+'</div>' : '')+
@@ -3025,6 +3025,21 @@ function inAddLocalProject(){
   else carriedContinue('buy');
   lmBuyModalRender();
 }
+/* ===== CMD-1105-07：［+ 添加本地管理］先分「使用持有 / 购买新项目」，按钮一直都在 =====
+   客人没有任何可用的持有 → 直接进「购买新项目」（现有选购画面，不多一步）；有 → 小窗两块：使用持有（现有项目卡，勾选 →［本次使用］→ 移进今天做的）/ 购买新项目（点了关掉小窗，进现有选购画面）。只改入口和画面，规则不变。 */
+function inLocalBuyGo(){ var c = getCurrentCase(); if(!c) return; if(isChildVisit(c) || c.localMgmt) inAddLocalProject(); else addLocalMgmt(); }
+function inLocalEntry(tab){
+  var c = getCurrentCase(); if(!c || isEnded(c)) return; if(inLockGuard(c)) return;
+  var M = inContModel(c), held = M.unused.length + M.grp.none.length;
+  if(tab==='buy' || !held || M.ro){ inLocalClose(); inLocalBuyGo(); return; }
+  var ov = document.getElementById('in-localentry-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'in-localentry-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 188; document.body.appendChild(ov); }
+  var seg = function(on, label, sub, fn){ return '<button onclick="'+fn+'" style="flex:1;text-align:left;padding:10px 14px;border-radius:10px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--bg-sidebar,#f3efe6)' : '#fff')+';cursor:pointer;"><b style="font-size:14px;">'+label+'</b><div style="font-size:12px;color:var(--muted);margin-top:2px;">'+sub+'</div></button>'; };
+  ov.innerHTML = '<div class="modal-box" style="width:820px;max-width:94vw;max-height:88vh;overflow:auto;padding:22px 24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理 · '+cesc(c.name)+'</div><button class="btn-ghost" onclick="inLocalClose()" title="关闭">✕</button></div>'+
+    '<div style="display:flex;gap:10px;margin-bottom:14px;">'+seg(true, '使用持有', '客人还有 '+held+' 项可以现在做 / 使用：勾选后按［本次使用］', "inLocalEntry('use')")+seg(false, '购买新项目', '本月活动 / 套餐 / 全部项目、서비스、结算', "inLocalClose();inLocalBuyGo()")+'</div>'+
+    inContRestHtml(c, M)+'<div style="display:flex;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="inLocalClose()">关闭</button></div></div>';
+  ov.classList.add('open');
+}
+function inLocalClose(){ var ov = document.getElementById('in-localentry-overlay'); if(ov) ov.classList.remove('open'); }
 /* CMD-1028-14 七：IN 术后管理那一天的子案件页头［增加项目］——小窗选「购买本地项目」或「使用持有项目」；买的钱记在这一天的子案件上（主案件「管理项目 · 本地管理」里看得到），用持有项目走原来的［本次使用］ */
 function inAddItemOpen(){
   var c = getCurrentCase(); if(!c || isEnded(c)) return; if(inLockGuard(c)) return;
@@ -3090,7 +3105,7 @@ function inUseConfirm(){
     picks.forEach(function(p){ var actual = useHolding(c.name, p.h.itemName, c.id, today, p.qty, scope, p.opt); if(actual>0){ ctx.mgmtUses = ctx.mgmtUses || []; ctx.mgmtUses.push({itemName:p.h.itemName, qty:actual, date:today, opt:p.opt||undefined}); logCaseEvent(c, ME_NAME, '本地管理：本次使用了'+p.h.itemName+(p.opt ? '（'+p.opt+'）' : '')+' '+actual+'次，剩余'+holdingRemaining(p.h)+'次'); } });
     ctx.mgmtActive = true; ctx.mgmtDone = false; ctx.mgmtStatus = null; ctx.addUse = false; if(scope==='lm'){ ctx.step = 'active'; ctx.ended = false; ctx.active = true; }
   }
-  inUseClose(); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  inUseClose(); inLocalClose(); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
 }
 function followupCareCardHtml(c){
   var rows = [];

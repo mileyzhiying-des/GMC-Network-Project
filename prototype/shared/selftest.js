@@ -9240,6 +9240,41 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       FU_ASK = null; if(fo) fo.classList.remove('open');
     } finally { window.alert = oa; window.confirm = oc; window.GMC_NO_FOLLOWASK = oo; }
   });
+  ST.def('R227a','CMD-1105-07（A1 分页）：［+ 添加本地管理］先分「使用持有 / 购买新项目」、页头按钮一直都在、没有持有直接进购买、本地管理 tab 空时有入口',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    window.GMC_NO_CONFIRM = true; var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }; var nm = 'R227', td = todayStr();
+    try{
+      var p0 = ST.newRes(nm); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20);
+      p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true; p0.hasArrived = true; p0.stage = 'travel'; p0.krDepositPaid = true;
+      p0.subItems = [{id:'r227a', kind:'术后管理记录', place:'IN', content:'术后复诊', date:td, done:false, projectName:'隆鼻'}, {id:'r227b', kind:'术后管理记录', place:'IN', content:'拆线', date:ymdAdd(td, 3), done:false, projectName:'隆鼻'}, {id:'r227c', kind:'术后管理记录', place:'IN', content:'消肿', date:ymdAdd(td, 6), done:false, projectName:'隆鼻'}];
+      CLIENT_HOLDINGS[p0.name] = (CLIENT_HOLDINGS[p0.name]||[]).concat([{itemName:'R227 热玛吉', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -9), bought:3, used:0, usages:[]}]}]);
+      var ch = ST.newRes(nm+'c', {phone:clientPhoneOf(p0.name), purpose:'复诊'}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.name = p0.name; ch.visitDate = td; ch.visitTime = '11:00'; ch.materialsConfirmed = true; ch.subState = 'arrived'; ch.arrivedDay = td; ch.needsConsult = true;
+      joinMain(ch, p0); ch.revisitEval = {at:nowFullDt()}; ch.consultRequested = true; ch.consultStatus = 'paid_waiting_kr'; ch.resumeFrom = {caseId:p0.id, type:'复诊评估', types:['复诊评估','术后管理']}; ch.careToday = ['r227a']; var bk = ST.newRes(nm+'b', {phone:clientPhoneOf(p0.name), purpose:'术后管理'}); bk = CASE_ITEMS.filter(function(x){ return x.id===bk.id; })[0]; bk.name = p0.name; bk.visitDate = ymdAdd(td, 3); bk.visitTime = '14:00'; bk.careFor = {caseId:p0.id, keys:['r227b']};
+      ST.open(ch); renderCaseBody(ch);
+      var hdr = function(){ renderCaseHeaderActions(ch); return document.getElementById('case-chat-actions').innerText; };
+      ST.ok(/\+ 添加本地管理/.test(hdr()), '① 复诊来访页头有［+ 添加本地管理］');
+      inLocalEntry(); var eo = document.getElementById('in-localentry-overlay');
+      ST.ok(eo && eo.classList.contains('open') && /使用持有/.test(eo.innerText) && /购买新项目/.test(eo.innerText) && /剩余项目/.test(eo.innerText), '① 有持有：先看到「使用持有」和「购买新项目」+ 剩余项目卡'); inContTab(ch.id, 'local'); inLocalEntry(); ST.ok(document.getElementById('in-localentry-overlay').innerText.indexOf('R227 热玛吉')>-1, '① 本地管理 tab 里有持有项目');
+      ST.ok(!LM_BUY_OPEN, '① 还没进选购画面');
+      /* 勾一项持有 → ［本次使用］ → 移进今天做的 */
+      inUseOpen(); var ov = document.getElementById('in-use-overlay'), boxes = [].slice.call(ov.querySelectorAll('input[id^=iu-hold-]')); ST.ok(boxes.length>=1, '① 使用窗里有持有项目');
+      boxes[0].checked = true; inUseConfirm();
+      ST.ok(!eo.classList.contains('open') && ((ch.localMgmt||{}).mgmtUses||[]).some(function(u){ return /R227 热玛吉/.test(u.itemName); }), '① 勾持有 → 本次使用 → 移进今天做的，入口窗关掉');
+      ST.ok(/\+ 添加本地管理/.test(hdr()), '② 加过 / 用过本地管理（有了本地管理）之后，页头按钮仍然在');
+      /* 购买新项目 */
+      inLocalEntry('buy'); ST.ok(LM_BUY_OPEN===ch.id && document.getElementById('lm-buy-overlay') && document.getElementById('lm-buy-overlay').classList.contains('open'), '② 购买新项目 → 进现有选购画面');
+      lmNoBuy(); LM_BUY_OPEN = '';
+      /* 空的本地管理 tab 有入口 */
+      var empty = inContRestHtml(ch, {grp:{booked:[], none:[]}, unused:[], ro:false, src:null}, 'local'); ST.ok(/inLocalEntry/.test(empty) && /添加本地管理项目/.test(empty), '④ 本地管理 tab 没有项目时留一行［+ 添加本地管理项目］');
+      /* ③ 没有持有的客人：直接进购买 */
+      CLIENT_HOLDINGS[ch.name] = []; ch.careToday = []; ch.subItems = (ch.subItems||[]).concat([]); p0.subItems = []; if(ch.localMgmt){ ch.localMgmt = null; }
+      ST.ok(inContModel(ch).unused.length+inContModel(ch).grp.none.length===0, '③ 准备：客人没有可用持有');
+      inLocalEntry(); ST.ok(!document.getElementById('in-localentry-overlay').classList.contains('open') && LM_BUY_OPEN===ch.id, '③ 没有持有：直接打开购买，不多一步');
+      lmNoBuy(); LM_BUY_OPEN = '';
+      /* ⑤ 离店后不出现 */
+      ch.leftStore = {at:nowFullDt(), by:'系统'}; ST.ok(!/\+ 添加本地管理/.test(hdr()), '⑤ 客人已离店：页头不出现');
+    } finally { window.alert = al; window.confirm = cf; }
+  });
   ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
