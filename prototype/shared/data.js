@@ -2357,10 +2357,10 @@ function coreAddScopeItem(c, item, by){
    整体结论 / 下次复诊 / 是否建议赴韩是医疗判断，室长不能改）→ ［退回院长］（revEval.ret，写原因）→ 室长［发送复诊评估结果］。院长当天没用系统时，室长勾「已得到院长授意」可代录全部（revEval.role='proxy'，标注「室长代录（院长口述）」）。
    旧资料：评估内容已上传（consultContentAt）但没有 revEval = 室长当时直接填的，当成代录处理（室长可填全部并发送），不报错。 */
 var RV_TEXT_FIELDS = {op:1, text:1, note:1, recLocal:1, sugKrNote:1, ans:1};
-var RV_FIELD_LABEL = {op:'逐项评估意见', text:'评估说明', note:'注意事项', recLocal:'推荐的本地项目', sugKrNote:'建议赴韩的补充说明', nextType:'下次复诊', nextDate:'下次复诊日期', sugKr:'建议赴韩处理', ans:'回答疑问'};
+var RV_FIELD_LABEL = {op:'逐项评估意见', text:'评估说明', note:'注意事项', recLocal:'推荐的本地项目', sugKrNote:'建议赴韩的补充说明', nextType:'下次复诊', nextDate:'下次复诊日期', sugKr:'建议赴韩处理', ans:'回答疑问', rec:'录入内容'};
 function rvEvalOf(c, create){
   if(!c) return null;
-  if(!c.revEval && create) c.revEval = {op:{}, text:'', nextType:'', nextDate:'', note:'', recLocal:'', sugKr:false, sugKrNote:'', role:'', by:'', at:'', doneBy:'', doneAt:'', ed:{op:{}}, log:[], ret:[], retPending:null};
+  if(!c.revEval && create) c.revEval = {rec:'', ans:'', op:{}, text:'', nextType:'', nextDate:'', note:'', recLocal:'', sugKr:false, sugKrNote:'', role:'', by:'', at:'', doneBy:'', doneAt:'', ed:{op:{}}, log:[], ret:[], retPending:null};
   var r = c.revEval; if(!r) return null;
   r.op = r.op || {}; r.ed = r.ed || {op:{}}; r.ed.op = r.ed.op || {}; r.log = r.log || []; r.ret = r.ret || [];
   return r;
@@ -2389,7 +2389,7 @@ function coreRvSet(c, f, name, val, by, role){ /* 作者（院长；或室长代
   if(!isRevEval(c) || c.reportReady) return false;
   var r = rvEvalOf(c, true), v = (f==='sugKr') ? !!val : String(val==null ? '' : val);
   if(f==='op'){ if((c.followProjects||[]).indexOf(name) < 0) return false; if((r.op[name]||'')===v) return false; r.op[name] = v; delete r.ed.op[name]; }
-  else { if(!(f in {text:1, note:1, recLocal:1, sugKrNote:1, nextType:1, nextDate:1, sugKr:1, ans:1})) return false; if(r[f]===v) return false; r[f] = v; delete r.ed[f]; if(f==='nextType' && v!=='date'){ r.nextDate = ''; delete r.ed.nextDate; } }
+  else { if(!(f in {text:1, note:1, recLocal:1, sugKrNote:1, nextType:1, nextDate:1, sugKr:1, ans:1, rec:1})) return false; if(r[f]===v) return false; r[f] = v; delete r.ed[f]; if(f==='nextType' && v!=='date'){ r.nextDate = ''; delete r.ed.nextDate; } }
   r.at = nowFullDt(); r.by = by; if(!r.role) r.role = role || '';
   rvAutoStart(c, by); /* CMD-1105-09：院长第一次动作 = 开始评估 */
   if(c.consultContentAt){ r.log.push({at:r.at, by:by, kind:'author', field:f, name:name||''}); logCaseEvent(c, by, '评估完成后修改了「'+RV_FIELD_LABEL[f]+(name ? '：'+buyName(name) : '')+'」（'+(r.role==='proxy' ? '室长代录' : '院长')+'）'); }
