@@ -670,9 +670,8 @@ function renderAddSlotBody(){
   var body;
   if(ADD_SLOT_MODE==='existing'){
     var clientOptions = CLIENTS.map(function(c){ return '<option>'+c.name+'</option>'; }).join('');
-    body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client" onchange="ADD_MINOR={};addSlotMinorRefresh()">'+clientOptions+'</select></div><div id="add-slot-minor"></div>'+
-      purposeSelectHtml('add-slot-purpose', true)+'<div class="field" style="margin-bottom:12px;"><label>想咨询的内容（选填）</label><textarea id="add-slot-note" rows="2" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;"></textarea></div>'+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"</div>'+
+    body = '<div class="field" style="margin-bottom:12px;"><label>选择客人</label><select id="add-slot-client" onchange="addSlotClientChanged()">'+clientOptions+'</select></div><div id="add-slot-minor"></div><div id="add-slot-pbox"></div>'+'<div class="field" style="margin-bottom:12px;"><label>想咨询的内容（选填）</label><textarea id="add-slot-note" rows="2" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box;"></textarea></div>'+
+      '<div id="add-slot-hint" style="font-size:12px;color:var(--muted);margin-bottom:14px;"></div>'+
       '<button class="btn-primary" style="width:100%;" onclick="confirmAddSlotExisting()">确认预约</button>';
   } else {
     var link = bookingUrl({ph:'ph'+PLACEHOLDER_SEQ});
@@ -686,8 +685,32 @@ function renderAddSlotBody(){
       '<button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="openGuestFormFromSlot()">演示：客人到店自己填资料（打开预约页，时间 = 现在）</button>';
   }
   document.getElementById('add-slot-body').innerHTML = modeTabs + body;
-  if(ADD_SLOT_MODE==='existing'){ ADD_MINOR = {}; addSlotMinorRefresh(); }
+  if(ADD_SLOT_MODE==='existing'){ ADD_MINOR = {}; ADD_SLOT_PUR = {purpose:'面诊商谈', main:'', keys:{}}; addSlotMinorRefresh(); addSlotPurposeRefresh(); }
 }
+/* CMD-1105-05 一：老客人的来访目的 = 面诊商谈 / 术后管理 / 复诊评估；后两种要选主案件（术后管理再勾要做的项目），预约直接挂在那个主案件下面 */
+var ADD_SLOT_PUR = {purpose:'面诊商谈', main:'', keys:{}};
+function addSlotPurposeRefresh(){
+  var box = document.getElementById('add-slot-pbox'), sel = document.getElementById('add-slot-client'); if(!box || !sel) return;
+  var cd = addSlotCands(sel.value), P = ADD_SLOT_PUR, e = cesc;
+  var opt = function(v, off, why){ return '<option value="'+v+'"'+(off ? ' disabled' : '')+(P.purpose===v ? ' selected' : '')+'>'+v+(off ? '（'+why+'）' : '')+'</option>'; };
+  var h = '<div class="field" style="margin-bottom:12px;"><label>来访目的</label><select id="add-slot-purpose" onchange="addSlotPurposeSet(this.value)">'+opt('面诊商谈', false)+opt('术后管理', !cd.care.length, cd.careWhy)+opt('复诊评估', !cd.rev.length, cd.revWhy)+'</select></div>';
+  var list = P.purpose==='术后管理' ? cd.care.map(function(x){ return x.m; }) : (P.purpose==='复诊评估' ? cd.rev : []);
+  if(list.length){
+    if(!list.some(function(m){ return m.id===P.main; })){ P.main = list[list.length-1].id; P.keys = {}; }
+    h += '<div class="field" style="margin-bottom:12px;"><label>选择主案件</label><select id="add-slot-main" onchange="addSlotMainSet(this.value)">'+list.map(function(m){ return '<option value="'+m.id+'"'+(m.id===P.main ? ' selected' : '')+'>'+e(mainPickLabel(m))+'</option>'; }).join('')+'</select></div>';
+    if(P.purpose==='术后管理'){
+      var g = cd.care.filter(function(x){ return x.m.id===P.main; })[0];
+      h += '<div class="field" style="margin-bottom:12px;"><label>这次要做的术后管理（至少一项）</label>'+(g ? g.groups.map(function(gr){ return gr.items.map(function(it){ var ck = !!P.keys[it.bk];
+        return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;cursor:pointer;"><input type="checkbox" '+(ck ? 'checked ' : '')+'onchange="addSlotKeySet(\''+String(it.bk).replace(/'/g, "\\'")+'\',this.checked)"><span>'+e(gr.name)+(gr.surg ? ' <span style="font-size:12px;color:var(--muted);">对应施术 · '+e(buyName(gr.surg))+(it.sug ? ' · '+e(careDayText(g.m, gr.surg, it.sug)||'') : '')+'</span>' : '')+'</span></label>'; }).join(''); }).join('') : '')+'</div>';
+    }
+  }
+  box.innerHTML = h;
+  var hint = document.getElementById('add-slot-hint'); if(hint){ var mm = list.filter(function(m){ return m.id===P.main; })[0]; hint.textContent = (P.purpose!=='面诊商谈' && mm) ? '确认后挂在 '+mm.caseNo+'（新开一个子案件，不另开 Case ID），进入"待访问"' : '老客人不经过预约占位，确认后直接生成 Case ID，进入"待访问"'; }
+}
+function addSlotClientChanged(){ ADD_MINOR = {}; ADD_SLOT_PUR = {purpose:'面诊商谈', main:'', keys:{}}; addSlotMinorRefresh(); addSlotPurposeRefresh(); }
+function addSlotPurposeSet(v){ ADD_SLOT_PUR = {purpose:v, main:'', keys:{}}; addSlotPurposeRefresh(); }
+function addSlotMainSet(id){ ADD_SLOT_PUR.main = id; ADD_SLOT_PUR.keys = {}; addSlotPurposeRefresh(); }
+function addSlotKeySet(k, on){ if(on) ADD_SLOT_PUR.keys[k] = 1; else delete ADD_SLOT_PUR.keys[k]; }
 /* CMD-1029-11：代约老客人——以建立预约当天（今天）算，没有生日要先补；未满 21 岁要再确认婚姻状况（带入上次）、未婚每次重新勾已通知监护人 */
 var ADD_MINOR = {};
 function addSlotMinorRefresh(){
@@ -721,10 +744,27 @@ function overbookNote(){ var o = ADD_SLOT_CONTEXT && ADD_SLOT_CONTEXT.overbook; 
 function confirmAddSlotExisting(){
   var name = document.getElementById('add-slot-client').value;
   var purpose = document.getElementById('add-slot-purpose').value;
+  var P = ADD_SLOT_PUR, attach = (purpose==='术后管理' || purpose==='复诊评估') ? mainOf(CASE_ITEMS.filter(function(x){ return x.id===P.main; })[0] || {}) : null, attachKeys = Object.keys(P.keys||{});
+  if(purpose==='术后管理' || purpose==='复诊评估'){
+    if(!attach || !attach.id){ alert('请先选择主案件'); return; }
+    if(purpose==='术后管理' && !attachKeys.length){ alert('请至少勾选一项要做的术后管理'); return; }
+  }
   var mnCl = clientByName(name), mn = applyMinorConfirm(mnCl, {dob:ADD_MINOR.dob, marital:ADD_MINOR.marital, guardianOk:!!ADD_MINOR.guardianOk, by:actingName()}); /* CMD-1029-11：老客人未满 21 岁每次预约都再确认 */
   if(!mn.ok){ alert(mn.err); return; }
   closeAddSlotModal();
   var exm = pendingResvSameDay(name, ADD_SLOT_CONTEXT.date); /* CMD-1021-16 三：同一客人那天已有还没到的预约 → 合并，不再建第二个 */
+  if(attach && attach.id){ /* CMD-1105-05：术后管理 / 复诊评估直接挂在所选主案件下（同一天已有这个主案件的预约就并进去） */
+    var exc = childResvOf(attach, ADD_SLOT_CONTEXT.date), nc2;
+    if(exm && !exc){ alert('这位客人 '+dateLabel(ADD_SLOT_CONTEXT.date)+' 已有一个预约（'+(exm.caseNo||'')+'），请到那个预约里处理'); return; }
+    if(exc){ nc2 = exc; if(purpose==='术后管理'){ nc2.careFor = {caseId:attach.id, keys:((nc2.careFor && nc2.careFor.keys) || []).concat(attachKeys.filter(function(k){ return ((nc2.careFor && nc2.careFor.keys) || []).indexOf(k)<0; }))}; } if((nc2.preTypes||[]).indexOf(purpose)<0) nc2.preTypes = (nc2.preTypes||[]).concat([purpose]); logCaseEvent(nc2, actingName(), '室长代约同一天：'+purpose+'并入这次预约'); }
+    else { nc2 = createChildReservation(attach, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, purpose, purpose==='术后管理' ? {careFor:{caseId:attach.id, keys:attachKeys}} : {}); }
+    if(mn.text) logCaseEvent(nc2, actingName(), mn.text);
+    if(overbookNote()) logCaseEvent(nc2, actingName(), overbookNote());
+    if(purpose==='术后管理'){ var nms = attachKeys.map(function(k){ return careKeyLabel(attach, k); }).filter(Boolean); logCaseEvent(attach, actingName(), '预约术后管理（子案件 '+nc2.caseNo+'）：'+nms.join('、')+'，'+ADD_SLOT_CONTEXT.date+' '+ADD_SLOT_CONTEXT.time, '术后管理'); } else logCaseEvent(attach, actingName(), '预约复诊评估（子案件 '+nc2.caseNo+'），'+ADD_SLOT_CONTEXT.date+' '+ADD_SLOT_CONTEXT.time, '复诊评估');
+    renderCalendar(); try{ todoRefresh(); }catch(e){}
+    showToast('预约已生成', name+' · '+dateLabel(ADD_SLOT_CONTEXT.date)+' '+ADD_SLOT_CONTEXT.time+'，已挂在主案件 '+attach.caseNo+'（子案件 '+nc2.caseNo+'）', null);
+    return;
+  }
   if(exm && mn.text) logCaseEvent(exm, actingName(), mn.text);
   if(exm){ logCaseEvent(exm, actingName(), '室长代约同一天：'+ADD_SLOT_CONTEXT.time+'（'+purpose+'）已合并到这次预约（时间以原预约 '+exm.visitTime+' 为准）'); renderCalendar(); showToast('已合并', name+' · '+mergeNoteText(exm), null); return; }
   var pmain = mainForBookingPurpose(name, purpose), nc = pmain ? createChildReservation(pmain, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, purpose) : createReservationCase(name, null, ADD_SLOT_CONTEXT.date, ADD_SLOT_CONTEXT.time, null, purpose); /* CMD-1028-05：术后管理 / 复诊评估且对得上唯一的主案件 → 直接是它的子案件 */ if(nc && overbookNote()) logCaseEvent(nc, actingName(), overbookNote(), '预约到店'); var nt = (document.getElementById('add-slot-note')||{}).value; if(nc && nt && nt.trim()) nc.visitNote = nt.trim(); /* CMD-1022-15：代约也能写想咨询的内容 */
@@ -1896,6 +1936,7 @@ function renderCaseSubtitle(c){
     html += (html ? ' · ' : '')+(rel0.followup ? ((rel0.type==='复诊评估') || rel0.revisit ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+rel0.linkedId+'\');return false;">'+(src&&src.caseNo?src.caseNo:rel0.linkedId)+'</a>'+((rel0.reason||rel0.auto) ? '（'+(rel0.reason||'')+(rel0.auto?(rel0.reason?'，':'')+'自动关联':'')+'）' : '');
   }
   if(c.materialsConfirmed && !isChildVisit(c) && !mainPageV2(c)){ try{ html += '<div style="margin-top:2px;">'+mainHeadLine(c)+'</div>'; }catch(e){} } /* CMD-1023-01 补 2：页头一行 从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
+  try{ html += thisVisitBannerHtml(c); }catch(e){ console.error('[本次横幅]', e); }
   el.innerHTML = html;
 }
 

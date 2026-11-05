@@ -80,7 +80,7 @@ function inTodoItems(){
 
       if(c.stage==='booked' && c.subState==='waiting' && c.visitDate===today && !c.krVisit){ /* CMD-1015-08：没到预约时间 = 参考名单（不进待办）；过了预约时间还没按已到店 / 未到店 = 待办「客人还没到：联络客人」 */
         var vdue = today+' '+(c.visitTime||''), vover = !!c.visitTime && todoNowStr() >= vdue;
-        var vIt0 = todoMk('visit', vover ? '客人还没到：联络客人' : (c.visitTime||'')+' '+c.name+' · '+(c.visitPurpose||'到店'), c, vdue, vover, function(){ openVisitOf(c.id); });
+        var vIt0 = todoMk('visit', vover ? '客人还没到：联络客人' : (c.visitTime||'')+' '+c.name+' · '+purposeDisp(c.visitPurpose||'到店'), c, vdue, vover, function(){ openVisitOf(c.id); });
         push(vIt0); /* CMD-1028-14 五：今天要来的预约，谁都该看到——还没人接待过（没有操作记录）、或所属主案件是我的，都算「我的」；原来只认「我操作过这个预约」，代约出来的预约没人操作过，「只看我的」时今天来访就是 0 */
         try{ var vMain = c.mainId ? mainOf(c) : null; if(!mine && (!caseOperators(c, true).inn.length || (vMain && todoInMine(vMain)))) vIt0.mine = true; }catch(e0){}
       }
