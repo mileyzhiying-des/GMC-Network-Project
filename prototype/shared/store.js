@@ -437,6 +437,10 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:58, fn:function(c, ctx){ /* CMD-1105-03：行程已结束、还挂着「待重新预约」或没做的赴韩施术 → 转韩国持有（该结案的由主案件自动判断结案）；只写一次 Timeline */
+      if(typeof oldLeaveToRebookWait==='function'){ var n57 = oldLeaveToRebookWait(c); if(n57){ window.GMC_REBOOK_CONV = (window.GMC_REBOOK_CONV||0) + n57; ctx.note('案件 '+(c.caseNo||c.id)+'：'+n57+' 个离院后回到「未预约」的施术项目转成「待重新预约」'); } } /* 迁移按列表顺序跑（58 在 57 前面）：先把 57 的转换补上，幂等 */
+      if(!c.krTripEnded) return; var n = coreHoldSurgOnTripEnd(c, '系统'); if(n){ window.GMC_HELD_CONV = (window.GMC_HELD_CONV||0) + n; (window.GMC_HELD_CASES = window.GMC_HELD_CASES||[]).push(c.caseNo||c.id); ctx.note('案件 '+(c.caseNo||c.id)+'：行程已结束，'+n+' 项没做的施术转成韩国持有'); }
+    }},
     {to:57, fn:function(c, ctx){ /* CMD-1103-02：离院后回到「未预约」的赴韩施术 → 待重新预约（新字段 rebookWait）；个数记进迁移备注 */
       var n = oldLeaveToRebookWait(c); if(n){ window.GMC_REBOOK_CONV = (window.GMC_REBOOK_CONV||0) + n; ctx.note('案件 '+(c.caseNo||c.id)+'：'+n+' 个离院后回到「未预约」的施术项目转成「待重新预约」'); }
     }},

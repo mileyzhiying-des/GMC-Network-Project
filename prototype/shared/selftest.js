@@ -9094,6 +9094,59 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/dirSeqCheck/.test(String(coreBookConfirmLinked)) && /dirSeqCheck/.test(String(krbSubmit)) && /dirSeqCheck/.test(String(leaveValidate)), '占位确认 / 占位提交 / 离院当场约都用 dirSeqCheck');
     ST.ok(/dirSeqCheck/.test(String(visitAdjConflict)) && /dirSeqCheck/.test(String(visitRebookErr)), '重新约那天的调整方案 / 当场约也用 dirSeqCheck');
   });
+
+  ST.def('R224a','CMD-1105-03（A1，stageC 夹具）：行程结束时没做的施术转韩国持有、不挡结案；IN 提醒待办；客人页取消 / 退款；行程重新打开；迁移 58',async function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    await ST.ensureFixtures(['stageC']);
+    var c = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c, '要有 stageC 夹具')) return;
+    var BY = '系统'; window.GMC_LEAVE_SKIP = false;
+    try{
+      var its = (c.procedureItems||[]).filter(function(i){ return i.origin==='KR' && !i.cancelled && !krIsMgmtItemC(i); }); ST.ok(its.length>=2, '夹具里有两项施术');
+      its[0].rebookWait = {at:'x', by:'t', reason:'t', memo:''}; c.hasArrived = true; c.krProcedureDone = true; c.krBalancePaid = true; c.materialsConfirmed = true; delete c.krTripEnded;
+      ST.ok(rebookWaitItems(c).length===1 && surgUndone(c).length>=2, '行程没结束时：待重新预约 + 没做的施术都算没做完（挡结案）');
+      ST.ok(!mainAutoComplete(c), '行程没结束 → 不结案');
+      var r = coreTripEnd(c, BY, {}, {auto:true, byDate:true}); ST.ok(r.ok, '行程自动结束');
+      ST.ok(heldSurgItems(c).length>=2 && !rebookWaitItems(c).length && its.every(function(i){ return !i.rebookWait; }), '没做的施术（含待重新预约）全部转韩国持有');
+      ST.ok((c.logEntries||[]).filter(function(e){ return /行程结束：.*转成韩国持有/.test(e.action); }).length===1, 'Timeline 只写一条');
+      ST.ok(surgUndone(c).length===0 && (c.stage==='closed' || mainAutoComplete(c)), '持有的施术不挡结案：'+c.stage);
+      ST.ok(caseEndTypeText(c)==='赴韩结束' && /赴韩结束 · 有持有项目/.test(mainEndProgressText(c)), '结束方式「赴韩结束 · 有持有项目」：'+mainEndProgressText(c));
+      ST.ok(heldSurgItems(c).length>0 && mainHoldOf(c).some(function(h){ return h.kind==='KR'; }), '主案件的持有里有这几项');
+      var n1 = (c.logEntries||[]).length; mainAutoComplete(c); repairWronglyClosedCases(); updateCaseStage(c); ST.ok((c.logEntries||[]).length===n1, '之后打开 / 重算不再写 Timeline');
+      var todo = inTodoItems().filter(function(i){ return i.kind==='heldsurg' && i.caseId===c.id; })[0]; ST.ok(!!todo && /没做的施术/.test(todo.text) && todo.ack, 'IN 提醒待办（只提醒）：'+(todo && todo.text));
+      ST.ok(!(closeBlockers(c)||[]).some(function(b){ return /施术|持有/.test(b); }), '待办不挡结案');
+      var rows = cliHoldKrRows({cases:[c], mode:'IN', name:c.name}); ST.ok(rows.filter(function(x){ return x.heldIid; }).length===heldSurgItems(c).length, '客人页「韩国持有 · 施术项目」列出');
+      /* 客人页取消 / 退款 */
+      var it0 = heldSurgItems(c)[0], iid0 = itemIid(it0), cl = clientByName(c.name), cc0 = (cl.compCredits||[]).length, paid = itemKrAmount(it0);
+      var b1 = coreHeldSurgCancel(c, iid0, 'part', {amt:paid+1, memo:'x', method:'现金'}, 'A1'); ST.ok(!b1.ok && /小于/.test(b1.err), '部分退回金额不能超过已付：'+b1.err);
+      var b2 = coreHeldSurgCancel(c, iid0, 'part', {amt:100000, memo:'', method:'现金'}, 'A1'); ST.ok(!b2.ok && /memo/.test(b2.err), '部分退回要 memo');
+      var b3 = coreHeldSurgCancel(c, iid0, 'part', {amt:100000, memo:'退一点', method:''}, 'A1'); ST.ok(!b3.ok && /退款方式/.test(b3.err), '退款方式必填');
+      var ok = coreHeldSurgCancel(c, iid0, 'part', {amt:100000, memo:'退一点', method:'转账'}, 'A1'); ST.ok(ok.ok && ok.refund===100000 && ok.comp===paid-100000, '部分退回：'+JSON.stringify(ok));
+      ST.ok(((c.refunds||[]).slice(-1)[0]||{}).method==='转账' && (cl.compCredits||[]).length===cc0+1 && !it0.heldSurg && it0.cancelled, '退款记在原主案件（带退款方式）+ 剩下的进置换额度 + 持有标记拿掉');
+      var it1 = heldSurgItems(c)[0]; if(it1){ var ok2 = coreHeldSurgCancel(c, itemIid(it1), 'all', {method:'其他', methodNote:'现金转交'}, 'A1'); ST.ok(ok2.ok && ok2.refund===itemKrAmount(it1), '全部退回'); }
+      /* 行程重新打开：转持有的回到待重新预约 */
+      var c2 = c, itx = (c2.procedureItems||[]).filter(function(i){ return i.origin==='KR' && !i.cancelled && !krIsMgmtItemC(i) && !i.done; })[0];
+      if(itx){ itx.heldSurg = {at:'x', by:'t', why:'没做', rw:null}; c2.krTripEnded = {at:'x'}; c2.stay = {in:ymdAdd(todayStr(),-5), out:ymdAdd(todayStr(),5)}; reopenTripIfNeeded(c2, 'KM1'); ST.ok(!itx.heldSurg && !!itx.rebookWait, '行程重新打开：持有的施术回到待重新预约'); }
+      /* 迁移 58：行程已结束、还挂着待重新预约 → 转持有；再跑一次不重复 */
+      var mg = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===58; })[0]; ST.ok(!!mg, '迁移 58 存在');
+      if(mg && itx){ delete itx.heldSurg; itx.rebookWait = {at:'x', by:'t', reason:'t', memo:''}; c2.krTripEnded = {at:'x'}; var notes = []; mg.fn(c2, {note:function(t){ notes.push(t); }}); ST.ok(!!itx.heldSurg && notes.length===1, '迁移：转了 1 个案件的施术：'+notes.join('|')); var nL = (c2.logEntries||[]).length; mg.fn(c2, {note:function(t){ notes.push(t); }}); ST.ok((c2.logEntries||[]).length===nL && notes.length===1, '迁移幂等（不重复写 Timeline）'); }
+    } finally { window.GMC_LEAVE_SKIP = true; }
+  });
+  ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    Store.withClinic(r.clinicId, function(){
+      var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], snap = JSON.stringify({stage:c.stage, krTripEnded:c.krTripEnded, krProcedureDone:c.krProcedureDone, visitClosed:c.visitClosed});
+      var held = (c.procedureItems||[]).filter(function(i){ return i.origin==='KR' && !i.cancelled && !krIsMgmtItemC(i); }), hs = held.map(function(i){ return i.heldSurg; });
+      try{
+        held.forEach(function(i){ i.heldSurg = {at:'x', by:'t', why:'没做', rw:null}; }); c.krTripEnded = {at:'x'}; c.stage = 'travel'; c.krProcedureDone = true;
+        var a = krListStage(c); ST.ok(a && a.stage==='赴韩施术' && !a.busy && /行程结束 · 施术未做 \d+ 项（转持有）/.test(a.proc), '行程结束有持有 = 灰色赴韩施术 + 进程写转持有：'+JSON.stringify(a));
+        c.stage = 'closed'; c.visitClosed = true; var b = krListStage(c); ST.ok(b && b.stage==='赴韩施术' && !b.busy && !!b.gray && /赴韩结束 · 有持有项目/.test(b.proc), '已结案的赴韩案件 = 灰色赴韩施术（不写已完成）+ 赴韩结束 · 有持有项目：'+JSON.stringify(b));
+        c.stage = 'reportonly'; var d = krListStage(c); ST.ok(d && d.stage==='面诊安排' && d.proc==='仅出报告', '仅出报告仍是灰色面诊安排');
+      } finally { held.forEach(function(i, k){ if(hs[k]) i.heldSurg = hs[k]; else delete i.heldSurg; }); var o = JSON.parse(snap); Object.keys(o).forEach(function(k){ if(o[k]===undefined) delete c[k]; else c[k] = o[k]; }); }
+    });
+    nav('kr-cases'); KR_LIST.tab = 'all'; KR_LIST.card = ''; KR_LIST.q = ''; krRenderCases();
+    ST.ok(!/>已完成</.test(document.getElementById('kr-rows').innerHTML.replace(/<span style="font-size:12px;"[^>]*>[^<]*<\/span>/g, '')), 'KR 列表阶段标没有「已完成」');
+  });
   ST.def('R217b','CMD-1103-02（A1，stageC 夹具）：IN 占位只列行程没结束的客人、三组项目、日期范围',function(){
     var me = currentAccount(); if(!ST.ok(me && /^A/.test(me.id), '要在 IN 分页里跑')) return;
     var cs = krbClients(); if(!ST.ok(cs.length>0, '需要有行程没结束的客人（先 ST.ensureFixtures([\'stageC\'])）')) return; var nmx = cs.indexOf('T-待到院')>-1 ? 'T-待到院' : cs[0];

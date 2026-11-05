@@ -156,6 +156,7 @@ function caseProcessText0(c){
   if(c.stage==='cancelled') return endReasonText(c);
   if(c.stage==='closed' && isRevEval(c)) return '复诊评估结束'; /* CMD-1022-19：复诊案件结案一律写「复诊评估结束」（IN 在这个案件里做了本地项目也一样，不再显示「本地完成」） */ /* CMD-1022-09 / 12：页头［结束案件］结束的复诊评估案件也写「复诊评估结束」 */
   if(c.stage==='closed'){ /* 赴韩完成 / 本地完成 / 本地项目保留（取消赴韩后保留本地项目、本次没使用；CMD-1012-12 二） */
+    if(typeof heldSurgItems==='function' && heldSurgItems(c).length) return '赴韩结束'; /* CMD-1105-03：行程结束、还有施术转了韩国持有 */
     if(c.krProcedureDone || krAllItems(c).some(function(it){ return it.done; })) return '赴韩完成';
     var kept = localPurchasedBatches(c);
     if(krAllItems(c).length && !c.localMgmt && kept.length && kept.every(function(x){ return !(x.b.used>0); })) return '本地项目保留';

@@ -42,7 +42,11 @@ function krKidsOf(m, hid){
    在韩管理 = 韩国行程没结束且还有在韩持有项目没做完（或 KR 到院预约没完成）；术后管理 = 韩国这边的术后管理还有没约 / 没做的；复诊评估 = 复诊评估待确认时间 / 待发送结果。仅出报告 = 灰色「面诊安排」+ 进程「仅出报告」 */
 function krListStage(c){
   var GRAY = {bg:'#EDEAE2', fg:'#6E665E'}, si = caseStageInfo(c);
-  if(isEnded(c)){ if(c.stage==='reportonly') return {stage:'面诊安排', busy:false, gray:GRAY, proc:'仅出报告'}; return null; }
+  if(isEnded(c)){ /* CMD-1105-03 七：KR 列表不用「已完成」标——已结案的赴韩案件一律是灰色「赴韩施术」，进程写结束方式；仅出报告仍是灰色「面诊安排」 */
+    if(c.stage==='reportonly') return {stage:'面诊安排', busy:false, gray:GRAY, proc:'仅出报告'};
+    if(c.stage==='closed' && !isChildVisit(c) && (c.krProcedureDone || krAllItems(c).length || heldSurgItems(c).length)) return {stage:'赴韩施术', busy:false, gray:GRAY, proc:mainEndProgressText(c)};
+    return null;
+  }
   var kt = krTaskStageOf(c); if(kt) return {stage:'复诊评估', busy:true, proc:mainProgressText(c, 'KR'), bg:kt.bg, fg:kt.fg};
   var hold = krHoldList(c).length, hid = caseKrHospital(c), pendBook = false;
   try{ pendBook = (krbList(hid)||[]).some(function(b){ return b.status==='pending' && b.linkCaseId===c.id; }); }catch(e){}
@@ -51,8 +55,8 @@ function krListStage(c){
     name = '面诊安排'; busy = !!(c.consultRequested && !c.reportReady && ['paid_waiting_kr', 'awaiting_report'].indexOf(c.consultStatus)>-1); grayProc = '方案已出';
   } else if(st==='travel'){
     name = '赴韩施术'; var sch = scheduleState(c);
-    busy = rebookWaitItems(c).length>0 || pendBook || ['Pending', 'Changing'].indexOf(sch)>-1 || !c.krProcedureDone;
-    grayProc = c.krTripEnded ? '施术已完成 · 已离境' : '施术已完成';
+    busy = !c.krTripEnded && (rebookWaitItems(c).length>0 || pendBook || ['Pending', 'Changing'].indexOf(sch)>-1 || !c.krProcedureDone); /* CMD-1105-03：行程结束 = KR 这边没事了 */
+    var hsN = heldSurgItems(c).length; grayProc = hsN ? '行程结束 · 施术未做 '+hsN+' 项（转持有）' : (c.krTripEnded ? '施术已完成 · 已离境' : '施术已完成');
   } else if(st==='krmgmt'){
     name = '在韩管理'; busy = !c.krTripEnded && (hold>0 || pendBook || !!(c.krVisit && !c.krVisit.done)); grayProc = '在韩管理已结束'+(hold ? ' · 在韩持有 '+hold+' 项' : '');
   } else if(st==='postcare'){

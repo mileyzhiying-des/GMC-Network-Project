@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 57; /* 57（CMD-1103-02）：离院后没做、回到「未预约」的赴韩施术项目转成「待重新预约」（新字段 rebookWait）。56（CMD-1023-01 S1）：案件结构 v2 数据层——每个案件补 mainId（指向主案件，自己 = 主案件）；旧的继续案件不转换，用户案件保留 */ /* 55 55（CMD-1020-08）：IN 备注改成备注记录（c.inNotes），旧「印尼室长备注」迁成第一则；*/ /* 54（CMD-1019-23）：已使用 / 剩余次数只从到院卡的完成行算，去掉没有完成行的假使用记录（A000004 的 ONDA ×2）；旧案件迁移并保留 */ /* 53 */ /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 58; /* 58（CMD-1105-03）：行程已结束、还挂着「待重新预约」或没做的赴韩施术转成韩国持有（新字段 heldSurg）；57（CMD-1103-02）： 57（CMD-1103-02）：离院后没做、回到「未预约」的赴韩施术项目转成「待重新预约」（新字段 rebookWait）。56（CMD-1023-01 S1）：案件结构 v2 数据层——每个案件补 mainId（指向主案件，自己 = 主案件）；旧的继续案件不转换，用户案件保留 */ /* 55 55（CMD-1020-08）：IN 备注改成备注记录（c.inNotes），旧「印尼室长备注」迁成第一则；*/ /* 54（CMD-1019-23）：已使用 / 剩余次数只从到院卡的完成行算，去掉没有完成行的假使用记录（A000004 的 ONDA ×2）；旧案件迁移并保留 */ /* 53 */ /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -1696,7 +1696,7 @@ function mainlineOngoing(c){
   return !!c.reuseReport && !!c.reportReady && c.needsConsult!==false;
 }
 /* CMD-1103-02 三：「赴韩施术没做完」只有一个判断（repairWronglyClosedCases 和 mainAutoComplete 共用）：没取消 / 没换掉、没做完的施术项目（含离院后「待重新预约」、回到未预约的、没约时间的）；持有的管理项目不算 */
-function surgUndone(c){ return krActiveItems(c).filter(function(it){ return !it.done && !it.heldOver && !krIsMgmtItemC(it); }); }
+function surgUndone(c){ return krActiveItems(c).filter(function(it){ return !it.done && !it.heldOver && !it.heldSurg && !krIsMgmtItemC(it); }); } /* CMD-1105-03：行程结束后转「韩国持有」的施术（heldSurg）不算没做完，不挡主案件结案 */
 /* CMD-1103-02 迁移 57：离院（krProcedureDone）后回到「未预约」的赴韩施术（done=false, deferUse=true，没有预约行）→ 待重新预约；返回转换个数。幂等 */
 function oldLeaveToRebookWait(c){
   if(!c || !c.krProcedureDone) return 0; var names = [];
@@ -1705,7 +1705,31 @@ function oldLeaveToRebookWait(c){
   return names.length;
 }
 /* 待重新预约的施术：离院时没做（身体不适等）、还没重新约时间 */
-function rebookWaitItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.rebookWait && !it.done && !it.cancelled && !it.swapped && !krIsMgmtItemC(it) && !surgItemBooked(c, it); }); }
+function rebookWaitItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.rebookWait && !it.heldSurg && !it.done && !it.cancelled && !it.swapped && !krIsMgmtItemC(it) && !surgItemBooked(c, it); }); }
+/* ===== CMD-1105-03：行程结束时没做的赴韩施术自动转「韩国持有」（含待重新预约；钱留着不退不扣），不挡主案件结案 =====
+   标记 it.heldSurg = {at, by, why}；surgUndone / rebookWaitItems 不再算它；mainHoldOf / 客人页「韩国持有 · 施术项目」会列出；客人之后不做了，从客人页走取消 / 退款（coreHeldSurgCancel）。 */
+function heldSurgItems(c){ return (c.procedureItems||[]).filter(function(it){ return it.heldSurg && !it.done && !it.cancelled && !it.swapped; }); }
+function coreHoldSurgOnTripEnd(c, by){
+  var its = (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !it.done && !it.cancelled && !it.swapped && !it.heldOver && !it.heldSurg && !it.service && !it.pendingPay && !krIsMgmtItemC(it) && !surgItemBooked(c, it); });
+  if(!its.length) return 0;
+  its.forEach(function(it){ it.heldSurg = {at:nowFullDt(), by:by, why:it.rebookWait ? '待重新预约' : '没做', rw:it.rebookWait||null}; delete it.rebookWait; delete it.deferUse; });
+  logCaseEvent(c, by, '行程结束：'+its.length+' 项施术没做，转成韩国持有（钱留着，不退不扣）：'+its.map(function(it){ return buyName(it.name); }).join('、'), '赴韩施术');
+  return its.length;
+}
+/* 行程结束后客人不做了：从客人页取消 / 退款。dec 'swap' 更换项目（全额转置换额度，之后在本地管理换项目）/ 'all' 全部退回 / 'part' 部分退回（金额 > 0 且不超过这项已付、memo 必填）；没退的钱转置换额度；退款方式必填；记回原主案件 */
+function coreHeldSurgCancel(c, iid, dec, o, by){
+  o = o||{}; var it = (c.procedureItems||[]).filter(function(x){ return x.heldSurg && !x.cancelled && !x.done && itemIid(x)===iid; })[0]; if(!it) return {ok:false, err:'找不到这项持有的施术'};
+  if(['swap', 'all', 'part'].indexOf(dec)<0) return {ok:false, err:'请选择：更换项目 / 全部退回 / 部分退回'};
+  var paid = itemKrAmount(it), amt = Math.round(parseFloat(o.amt)||0), memo = String(o.memo||'').trim(), method = o.method||'', mnote = String(o.methodNote||'').trim();
+  if(dec==='part'){ if(!(amt>0 && amt<paid)) return {ok:false, err:'部分退回的金额要大于 0 且小于这项已付的 '+formatCurrency(paid,'KRW')}; if(!memo) return {ok:false, err:'部分退回要写 memo'}; }
+  if(dec!=='swap'){ if(REFUND_PAY_METHODS.indexOf(method)<0) return {ok:false, err:'请选择退款方式'}; if(method==='其他' && !mnote) return {ok:false, err:'选「其他」要说明退款方式'}; }
+  var rec = coreLeaveCancel(c, it, {dec:dec, amt:amt, dmemo:memo, reason:'行程结束后客人不做了', memo:memo, silent:true}, by);
+  var refund = rec.refund||0; c.refunds = c.refunds || [];
+  if(refund>0) c.refunds.push({amount:refund, currency:'KRW', reason:'行程结束后客人不做了（持有施术）', date:todayStr(), items:[it.name], batchIds:[it.batchId].filter(Boolean), afterArrival:true, note:memo, comp:false, method:method, methodNote:(method==='其他' ? mnote : '')});
+  delete it.heldSurg; it.heldSurgCancelled = {at:nowFullDt(), by:by, dec:dec};
+  logCaseEvent(c, by, '客人页取消持有的施术「'+buyName(it.name)+'」：'+(dec==='all' ? '全部退回 '+formatCurrency(refund,'KRW') : (dec==='part' ? '部分退回 '+formatCurrency(refund,'KRW')+'，剩下 '+formatCurrency(rec.comp,'KRW')+' 转置换额度' : '更换项目，'+formatCurrency(rec.comp,'KRW')+' 转置换额度'))+(refund>0 ? '；退款方式：'+method+(method==='其他' ? '（'+mnote+'）' : '') : ''), '赴韩施术');
+  updateCaseStage(c); return {ok:true, refund:refund, comp:rec.comp||0};
+}
 function surgItemBooked(c, it){ return (c.subItems||[]).some(function(s){ return s.surgUse===it.name && !s.done && !s.skipped; }); }
 /* 修复专用的旧判断：只给 repairWronglyClosedCases 用（避免新规则把已结案的老案件重新打开） */
 function mainlineOngoingRepair(c){
@@ -4840,7 +4864,8 @@ function coreTripEnd(c, by, choices, opts){
   choices = choices || {}; var L = tripLeftList(c), toIn = 0, hold = [];
   L.care.forEach(function(x){ var to = x.canIn ? (choices[x.k] || 'IN') : 'KR'; if(to==='IN'){ if(coreCareBook(c, x.item, x.i, x.sug || todayStr(), '', 'IN', x.reuse, by)) toIn++; else hold.push(x.name); } else hold.push(x.name); });
   L.mgmt.forEach(function(m){ hold.push(m.name+'（剩 '+m.left+' 次）'); });
-  c.krTripEnded = {at:nowFullDt(), by:by, toIn:toIn, hold:hold, inPending:toIn + L.inRows}; if(opts.auto) c.krTripEnded.auto = opts.byDate ? 'DATE' : (opts.manual ? 'MANUAL' : 'IN'); delete c.tripSnooze;
+  var heldN = coreHoldSurgOnTripEnd(c, by); /* CMD-1105-03：没做的赴韩施术（含待重新预约）转韩国持有，不挡结案 */
+  c.krTripEnded = {at:nowFullDt(), by:by, toIn:toIn, hold:hold, inPending:toIn + L.inRows, heldSurg:heldN}; if(opts.auto) c.krTripEnded.auto = opts.byDate ? 'DATE' : (opts.manual ? 'MANUAL' : 'IN'); delete c.tripSnooze;
   var stillOpen = opts.auto && (ov.length || pendingPayItems(c).length || carePendingRows(c).some(function(x){ return x.place==='KR' && !x.skipped; })); /* 自动结束：韩国还有没到的预约 / 没做完的，案件不结案，等 KR 室长处理 */
   logCaseEvent(c, by, (opts.manual ? '行程修正：客人已离境，结束韩国行程；原因：'+(opts.reason||'')+(opts.left ? '；韩国那边还有：'+opts.left+'（没有自动取消，请 KR 室长处理）' : '') : opts.byDate ? '已过离开日期（'+((c.stay&&c.stay.out)||'')+'），韩国行程自动算结束'+(opts.left ? '；韩国那边还有：'+opts.left+'（没有自动取消，请 KR 室长处理）' : '') : opts.auto ? '客人已到 IN 店（'+(opts.caseNo||'')+' 到店），韩国行程自动算结束'+(opts.left ? '；韩国那边还有：'+opts.left+'（没有自动取消，请 KR 室长处理）' : '') : '韩国行程结束')+(toIn ? '：'+toIn+' 项术后管理转去印尼' : '')+(hold.length ? '；留在韩国持有：'+hold.join('、') : '')+((toIn + L.inRows) ? '；案件进入「术后管理（印尼）」' : (stillOpen ? '；案件继续（韩国那边还没处理完）' : '；案件结案')), '术后管理');
   if(toIn || L.inRows || stillOpen){ updateCaseStage(c); if(toIn + L.inRows>0){ try{ pushNotif('术后管理', '韩国行程已结束：'+c.name+'（'+(c.caseNo||'')+'），'+(toIn + L.inRows)+' 项术后管理转到印尼，请在「未安排预约」里预约', {caseId:c.id, level:'action'}); }catch(e){} } }
@@ -6586,7 +6611,7 @@ function coreLeaveCancel(c, it, r, by){
   c.leaveCancels.push(rec);
   var nCare = 0; try{ nCare = coreAfterItemsRemoved(c, [nm], by); }catch(e){ console.error(e); }
   logCaseEvent(c, by, '离院时取消项目：'+buyName(nm)+'（原因：'+r.reason+(rec.memo ? '，'+rec.memo : '')+'）——'+(r.dec==='all' ? '全部退回 '+formatCurrency(refund,'KRW') : (r.dec==='part' ? '部分退回 '+formatCurrency(refund,'KRW')+'，剩下 '+formatCurrency(comp,'KRW')+' 转置换额度' : '更换项目，'+formatCurrency(comp,'KRW')+' 转置换额度'))+note+(nCare ? '；对应术后管理一起取消' : '')+'（请 IN 室长按此判断操作退款，退款方式必填）');
-  if(refund>0) pushNotif('赴韩施术', 'KR 记录：'+c.name+' 离院时取消「'+buyName(nm)+'」，退回 '+formatCurrency(refund,'KRW')+'，请按此操作退款', {caseId:c.id, level:'action'});
+  if(refund>0 && !r.silent) pushNotif('赴韩施术', 'KR 记录：'+c.name+' 离院时取消「'+buyName(nm)+'」，退回 '+formatCurrency(refund,'KRW')+'，请按此操作退款', {caseId:c.id, level:'action'});
   return rec;
 }
 function coreEndVisitToday(c, by, reason, leave){ if(rebookActive(c)){ coreRebookEndDay(c, by, false); return {ok:true}; } /* CMD-1102-06：改期当天结束 = 只结束今天，不动项目、不进术后管理 */
@@ -9970,6 +9995,7 @@ function cliHoldKrRows(model){
   model.cases.forEach(function(c){
     if(isChildVisit(c)) return; /* 子案件没有自己的项目 */
     (c.procedureItems||[]).forEach(function(it){
+      if(it.heldSurg && !it.done && !it.cancelled && !it.swapped){ rows.push({c:c, name:buyName(it.name), tag:'施术项目', type:'surg', left:'行程结束时没做，转持有（已付 '+formatCurrency(itemKrAmount(it),'KRW')+'）', times:[], heldIid:itemIid(it)}); return; } /* CMD-1105-03 */
       if(!krIsMgmtItemC(it) && it.origin==='KR' && it.deferUse && !it.done && !it.cancelled && !it.swapped && !it.pendingPay){ rows.push({c:c, name:buyName(it.name), tag:'施术项目', type:'surg', left:'已购买，还没做', times:[]}); return; } /* CMD-1021-16 二：施术项目（已买还没用的） */
       if(!it.heldOver || it.holdDone || it.cancelled || !krIsMgmtItemC(it)) return;
       var left = holdItemLeft(c, it), booked = (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
@@ -9987,13 +10013,40 @@ function cliHoldKrHtml(model){ /* CMD-1021-16 二：韩国持有分三组：施�
   var rows = cliHoldKrRows(model);
   if(!rows.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有韩国持有项目</div>';
   var one = function(r){
+    var heldBtn = (r.heldIid && model.mode==='IN' && typeof canDo==='function' && canDo('work')) ? ' <button class="btn-outline" style="padding:3px 10px;font-size:12px;margin-left:8px;" onclick="openHeldSurgCancel(\''+r.c.id+'\',\''+aEscC(r.heldIid)+'\')">取消 / 退款</button>' : ''; /* CMD-1105-03：客人不做了 → 从客人页取消 / 退款 */
     var tm = r.times.length ? r.times.map(aEscC).join('<br>') : (r.sug ? '<span style="color:var(--muted);">建议 '+aEscC(String(r.sug).slice(5).replace('-', '/'))+'</span>' : '<span style="color:var(--muted);">–</span>');
-    return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:flex-start;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+aEscC(r.name)+'<div style="font-size:12px;color:var(--muted);font-weight:400;">来自 '+aEscC(r.c.caseNo)+(r.left ? ' · '+aEscC(r.left) : '')+'</div></span><span style="font-size:12px;color:var(--slate2);text-align:right;min-width:92px;">'+tm+'</span></div>';
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:flex-start;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+aEscC(r.name)+heldBtn+'<div style="font-size:12px;color:var(--muted);font-weight:400;">来自 '+aEscC(r.c.caseNo)+(r.left ? ' · '+aEscC(r.left) : '')+'</div></span><span style="font-size:12px;color:var(--slate2);text-align:right;min-width:92px;">'+tm+'</span></div>';
   };
   return [['surg', '施术项目'], ['care', '术后管理'], ['mgmt', '管理项目']].map(function(g){
     var l = rows.filter(function(r){ return (r.type||'mgmt')===g[0]; }); if(!l.length) return '';
     return '<div style="margin-top:6px;"><div style="font-size:12px;font-weight:700;padding:8px 0 2px;">'+g[1]+' <span style="font-weight:400;color:var(--muted);">'+l.length+'</span></div>'+l.map(one).join('')+'</div>';
   }).join('');
+}
+var HSC = null;
+function openHeldSurgCancel(caseId, iid){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
+  var it = (c.procedureItems||[]).filter(function(x){ return x.heldSurg && itemIid(x)===iid; })[0]; if(!it) return;
+  HSC = {caseId:caseId, iid:iid, dec:'', amt:'', memo:'', method:'', mnote:'', err:''}; hscRender();
+}
+function hscRender(){
+  var h = HSC; if(!h) return; var c = CASE_ITEMS.filter(function(x){ return x.id===h.caseId; })[0], it = c && (c.procedureItems||[]).filter(function(x){ return itemIid(x)===h.iid; })[0]; if(!it) return;
+  var ov = document.getElementById('hsc-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'hsc-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var paid = itemKrAmount(it), sel = 'padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;';
+  var rd = function(v, t){ return '<label style="margin-right:14px;font-size:13px;"><input type="radio" name="hsc-dec" '+(h.dec===v ? 'checked' : '')+' onchange="HSC.dec=\''+v+'\';hscRender()"> '+t+'</label>'; };
+  var money = h.dec==='all' || h.dec==='part';
+  ov.innerHTML = '<div class="modal-box" style="width:480px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:4px;">取消持有的施术 · '+cesc(buyName(it.name))+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:10px;">来自 '+cesc(c.caseNo)+'；这项已付 '+formatCurrency(paid,'KRW')+'。没退的钱一律转置换额度；记回原主案件。</div>'+
+    '<div style="margin-bottom:8px;">'+rd('swap','更换项目（全额转置换额度）')+rd('all','全部退回')+rd('part','部分退回')+'</div>'+
+    (h.dec==='part' ? '<div style="display:flex;gap:8px;margin-bottom:8px;"><input type="number" min="1" placeholder="退回金额（韩元，小于 '+paid+'）" value="'+cesc(h.amt)+'" oninput="HSC.amt=this.value" style="'+sel+'width:210px;"><input type="text" placeholder="memo（必填）" value="'+cesc(h.memo)+'" oninput="HSC.memo=this.value" style="'+sel+'flex:1;"></div>' : '')+
+    (money ? '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">退款方式 <span style="color:#C1454A;">*</span></div><div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-bottom:6px;">'+REFUND_PAY_METHODS.map(function(m){ return '<label><input type="radio" name="hsc-m" '+(h.method===m ? 'checked' : '')+' onchange="HSC.method=\''+m+'\';hscRender()"> '+m+'</label>'; }).join('')+'</div>'+(h.method==='其他' ? '<input value="'+cesc(h.mnote)+'" oninput="HSC.mnote=this.value" placeholder="选「其他」时请说明（必填）" style="'+sel+'width:100%;box-sizing:border-box;margin-bottom:6px;">' : '') : '')+
+    '<div id="hsc-err" style="color:#B3261E;font-size:12px;'+(h.err ? '' : 'display:none;')+'">'+cesc(h.err)+'</div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;"><button class="btn-ghost" onclick="hscClose()">取消</button><button class="btn-primary" onclick="hscGo()">确认</button></div></div>';
+  ov.style.zIndex = 100000; ov.classList.add('open');
+}
+function hscClose(){ var ov = document.getElementById('hsc-overlay'); if(ov) ov.classList.remove('open'); HSC = null; }
+function hscGo(){
+  var h = HSC; if(!h) return; var c = CASE_ITEMS.filter(function(x){ return x.id===h.caseId; })[0]; if(!c) return;
+  var r = coreHeldSurgCancel(c, h.iid, h.dec, {amt:h.amt, memo:h.memo, method:h.method, methodNote:h.mnote}, actingName());
+  if(!r.ok){ h.err = r.err; hscRender(); return; }
+  hscClose(); try{ refreshView(); }catch(e){}
 }
 function cliHoldCount(model){
   var n = cliHoldKrRows(model).length;
@@ -11106,6 +11159,7 @@ function mainHoldOf(m){
   var ids = [m.id].concat(childVisitsOf(m).map(function(x){ return x.id; })), out = [];
   localPurchasedBatchesOf(m, ids).forEach(function(e){ var left = (e.b.bought||0)-(e.b.used||0); if(left>0 && !e.b.voided && !e.b.refund) out.push({kind:'IN', name:e.h.itemName, left:left}); });
   (m.procedureItems||[]).forEach(function(it){ if(it.heldOver && !it.holdDone && !it.cancelled && holdItemLeft(m, it)>0) out.push({kind:'KR', name:it.name, left:holdItemLeft(m, it)}); });
+  heldSurgItems(m).forEach(function(it){ out.push({kind:'KR', name:it.name, left:1}); }); /* CMD-1105-03：行程结束转持有的施术 */
   return out;
 }
 function mainStatusOf(m0){
@@ -11824,6 +11878,7 @@ function coreTripEndManual(c, reason, by){
 function reopenTripIfNeeded(c, by){
   if(!c.krTripEnded) return false; var out = (c.stay && c.stay.out) || ''; if(out && out < todayStr()) return false;
   var info = c.krTripEnded; delete c.krTripEnded; delete c.tripSnooze;
+  (c.procedureItems||[]).forEach(function(it){ if(it.heldSurg && !it.cancelled){ it.rebookWait = it.heldSurg.rw || {at:nowFullDt(), by:by, reason:'行程重新打开', memo:''}; delete it.heldSurg; } }); /* CMD-1105-03：行程重新打开 → 转持有的施术回到待重新预约 */
   logCaseEvent(c, by, '重新打开韩国行程（离开日期改到 '+(out || '（空）')+'）：KR 可以再建到院 / 增加项目；案件阶段按现状重算；原来转去印尼的术后管理（'+(info.toIn||0)+' 项）保持在印尼，没有收回', '赴韩施术');
   if(isEnded(c) || c.stage==='closed'){ try{ reopenMain(c, '韩国行程重新打开'); }catch(e){} } else updateCaseStage(c);
   return true;
