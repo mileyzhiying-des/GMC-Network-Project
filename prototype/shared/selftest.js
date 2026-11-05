@@ -9253,24 +9253,36 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.open(ch); renderCaseBody(ch);
       var hdr = function(){ renderCaseHeaderActions(ch); return document.getElementById('case-chat-actions').innerText; };
       ST.ok(/\+ 添加本地管理/.test(hdr()), '① 复诊来访页头有［+ 添加本地管理］');
-      inLocalEntry(); var eo = document.getElementById('in-localentry-overlay');
-      ST.ok(eo && eo.classList.contains('open') && /使用持有/.test(eo.innerText) && /购买新项目/.test(eo.innerText) && /剩余项目/.test(eo.innerText), '① 有持有：先看到「使用持有」和「购买新项目」+ 剩余项目卡'); inContTab(ch.id, 'local'); inLocalEntry(); ST.ok(document.getElementById('in-localentry-overlay').innerText.indexOf('R227 热玛吉')>-1, '① 本地管理 tab 里有持有项目');
-      ST.ok(!LM_BUY_OPEN, '① 还没进选购画面');
-      /* 勾一项持有 → ［本次使用］ → 移进今天做的 */
-      inUseOpen(); var ov = document.getElementById('in-use-overlay'), boxes = [].slice.call(ov.querySelectorAll('input[id^=iu-hold-]')); ST.ok(boxes.length>=1, '① 使用窗里有持有项目');
-      boxes[0].checked = true; inUseConfirm();
-      ST.ok(!eo.classList.contains('open') && ((ch.localMgmt||{}).mgmtUses||[]).some(function(u){ return /R227 热玛吉/.test(u.itemName); }), '① 勾持有 → 本次使用 → 移进今天做的，入口窗关掉');
-      ST.ok(/\+ 添加本地管理/.test(hdr()), '② 加过 / 用过本地管理（有了本地管理）之后，页头按钮仍然在');
-      /* 购买新项目 */
-      inLocalEntry('buy'); ST.ok(LM_BUY_OPEN===ch.id && document.getElementById('lm-buy-overlay') && document.getElementById('lm-buy-overlay').classList.contains('open'), '② 购买新项目 → 进现有选购画面');
-      lmNoBuy(); LM_BUY_OPEN = '';
+      var eo = null, host = function(){ return document.getElementById('in-localentry-overlay'); };
+      inLocalEntry(); eo = host();
+      ST.ok(eo && eo.classList.contains('open') && /使用持有/.test(eo.innerText) && /购买新项目/.test(eo.innerText), '① 有持有：先看到「使用持有」「购买新项目」两个 tab');
+      var rows = [].slice.call(eo.querySelectorAll('input[id^=iu-care-], input[id^=iu-hold-]')); ST.ok(rows.length>=2, '① 使用持有：每一行项目前面有勾选框（'+rows.length+'）');
+      var go = eo.querySelector('#iu-go'); ST.ok(go && go.disabled && /本次使用/.test(go.textContent) && !/关闭/.test(eo.querySelector('.modal-box').innerText.split('\n').slice(-3).join('')), '① 右下角是［本次使用］，没勾时灰');
+      ST.ok(!/＋ 添加本地管理项目/.test(eo.innerText), '① 卡里没有重复的［+ 添加本地管理项目］');
+      /* ② 切到购买：tab 还在；切回使用持有；再去购买 */
+      inleTab('buy'); eo = host(); ST.ok(LM_BUY_OPEN===ch.id && /使用持有/.test(eo.innerText) && /购买新项目/.test(eo.innerText) && /结算/.test(eo.innerText) && !(document.getElementById('lm-buy-overlay') && document.getElementById('lm-buy-overlay').classList.contains('open')), '② 购买新项目：留在同一个弹窗，tab 还在，选购画面嵌在下面');
+      inleTab('use'); eo = host(); ST.ok(INLE && INLE.tab==='use' && eo.querySelector('#iu-go') && !LM_BUY_OPEN, '② 切回使用持有');
+      inleTab('buy'); ST.ok(INLE.tab==='buy', '② 再去购买');
+      lmNoBuy(); eo = host(); ST.ok(INLE && INLE.tab==='use' && eo.classList.contains('open'), '② 本次不购买 → 回到使用持有');
+      var hb = [].slice.call(host().querySelectorAll('input[id^=iu-hold-]')); ST.ok(hb.length>=1, '② 使用持有里有本地持有行');
+      hb[0].checked = true; inUseSync(); go = host().querySelector('#iu-go'); ST.ok(!go.disabled, '① 勾了才能按［本次使用］');
+      inUseConfirm();
+      ST.ok(!host().classList.contains('open') && ((ch.localMgmt||{}).mgmtUses||[]).some(function(u){ return /R227 热玛吉/.test(u.itemName); }), '① 勾持有 →［本次使用］→ 移进今天做的、弹窗关掉');
+      ST.ok(/\+ 添加本地管理/.test(hdr()), '② 用过本地管理之后，页头按钮仍然在');
+      /* 买一项 → 结算 → 回到使用持有，新项目在列表里 */
+      var pj2 = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active!==false; })[0];
+      inLocalEntry(); inleTab('buy'); var lm2 = ch.localMgmt; ST.ok(lm2 && (lm2.step==='buy' || lm2.addBuy), '② 再打开 → 购买新项目');
+      lm2.cart = [{kind:'project', key:pj2.id, projectId:pj2.id, name:pj2.name, price:100000, unitPrice:100000, qty:1, discountPct:100}]; lmSettle();
+      var eo2 = host(); ST.ok(eo2 && eo2.classList.contains('open') && INLE.tab==='use' && eo2.innerText.indexOf(pj2.name)>-1, '② 购买完成 → 回到「使用持有」，刚买的项目在列表里');
+      inLocalClose();
       /* 空的本地管理 tab 有入口 */
       var empty = inContRestHtml(ch, {grp:{booked:[], none:[]}, unused:[], ro:false, src:null}, 'local'); ST.ok(/inLocalEntry/.test(empty) && /添加本地管理项目/.test(empty), '④ 本地管理 tab 没有项目时留一行［+ 添加本地管理项目］');
-      /* ③ 没有持有的客人：直接进购买 */
-      CLIENT_HOLDINGS[ch.name] = []; ch.careToday = []; ch.subItems = (ch.subItems||[]).concat([]); p0.subItems = []; if(ch.localMgmt){ ch.localMgmt = null; }
+      /* ③ 没有持有的客人：打开就在购买，使用持有 tab 灰掉 */
+      CLIENT_HOLDINGS[ch.name] = []; ch.careToday = []; p0.subItems = []; if(ch.localMgmt){ ch.localMgmt = null; }
       ST.ok(inContModel(ch).unused.length+inContModel(ch).grp.none.length===0, '③ 准备：客人没有可用持有');
-      inLocalEntry(); ST.ok(!document.getElementById('in-localentry-overlay').classList.contains('open') && LM_BUY_OPEN===ch.id, '③ 没有持有：直接打开购买，不多一步');
-      lmNoBuy(); LM_BUY_OPEN = '';
+      inLocalEntry(); eo = host(); var tb = [].slice.call(eo.querySelectorAll('button')).filter(function(b0){ return /使用持有/.test(b0.innerText) && /没有持有项目/.test(b0.innerText); })[0];
+      ST.ok(eo.classList.contains('open') && INLE.tab==='buy' && tb && tb.disabled, '③ 没有持有：打开就在购买，「使用持有」tab 灰掉并写「没有持有项目」');
+      lmNoBuy(); ST.ok(!host().classList.contains('open'), '③ 没有持有时「本次不购买」→ 关掉弹窗');
       /* ⑤ 离店后不出现 */
       ch.leftStore = {at:nowFullDt(), by:'系统'}; ST.ok(!/\+ 添加本地管理/.test(hdr()), '⑤ 客人已离店：页头不出现');
     } finally { window.alert = al; window.confirm = cf; }
