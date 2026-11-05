@@ -1982,3 +1982,10 @@ prototype/shared/app.css  共用样式
 - **今天做的术后管理表格**：项目类型标签 `white-space:nowrap`，第一栏 70px → 88px，不再换成两行。
 - **同类画面检查**：用 `inContRestHtml` / `inContCardHtml` 的只有 ① 子案件页「术后管理」「本地管理」tab（`subTabBodyHtml`）② 术后来访（followup 本地案件）的本地管理 tab ③ 复诊评估 + 术后管理的案件 tab（3986–3991 行那几处），都走同一个函数，一起改了。「使用之前购买的项目」（`holdingsUseHtml` 的「是否使用持有项目？」）是另一块清单，不是「剩余项目」，没改。KR 在韩术后管理子案件（`krDayCareCardHtml` / `krProjCards`）没有「剩余项目」独立区块，且 1028-11 起没有未做术后管理就不显示，没改。
 - 测试：新增 R220a；R107a / R138a 的断言「术后项目」→「术后管理」。回归对照 acda653（b1103f）：A1 全套只有这两条因标签文字不同而失败（已改），KM1 / KD1 批次一致，roletest 8 个账号 0 不符。
+
+## CMD-1103-08 补充（2026-11-05，追加；补 CMD-1103-05 判断 ②④，旧文字保留作历史）
+- 分支 **V4**，基准 8e4bc4f；代码提交见 git log（`CMD-1103-08`），文档另一个提交；不推送不合并；**数据版本不变（57）**（新增可空字段 `c.visitEval[到院key]`）。会动「到院当天」主线，用户已确认。
+- **一 重新预约那天的到院评估**（data.js `visitEvalNames/visitEvalOf/visitEvalNeed/visitEvalLockText/coreVisitEval/visitSurgWait/evalBypass`；kr.js `krVisitEvalCard/krVEvSet/krVEvGo`）：子到院（`KR|日期`）里有重新预约的施术（`surgUse` 行）→ 客人到院后先评估（同 5-6 第 2 步的三种判断：原方案不变 / 需要调整方案 / 不建议手术；后两种 memo 必填）。评估前 `coreSubDone`（surgUse 行）拒绝（`KR_DENY_MSG`）、`coreEndSubVisit` 返回 `evalFirst`，界面［操作完成］灰掉写「请先完成到院评估」，［客人已离院］（`krEndBtnHtml`）灰掉同。评估卡显示在这次到院卡里（到院后、评估前），评估后只留一行结果；Timeline 记「到院评估（重新预约 MM/DD：项目）：结果」。同一天另外约的术后管理 / 管理项目不需要评估。系统 / 确认结束（`by==='系统'` 或 `DAYCONFIRM_BYPASS`）不拦。**不建议手术**：必选「更换时间」（这天的施术行拿掉，项目回到「待重新预约」）或「取消项目」（项目取消、术后管理一起取消，款项通知 IN 照退款流程办）；**原方案不变**：尾款已付，直接做、不产生结算单。
+- **离院 / 隔天确认时没做的重新预约施术**：`coreEndSubVisit`（离院）和 `krDayConfirmRun` 子到院分支（隔天确认「没做」）现在把对应项目标成「待重新预约」（`visitSurgWait`），原来静静退回「未使用」。
+- **二 同一位院长的多个项目合起来查**（data.js `dirSeqCheck(hid, [{dir,min,label}], date, time, exceptKey)`）：同一位院长的项目所需分钟加起来，从开始时间起整段检查；冲突红字「KD1 院长 14:00～16:30 已有安排（A、B 合计 150 分钟）：…」。接入：KR 确认占位 `coreBookConfirmLinked`（原来按单项各查一次）、IN 占位提交 `krbSubmit`（关联之前案件时，提交就查一遍）、离院「当场约」`leaveValidate`（同院长同一天几项合起来查）。**其他一次约多项的地方（预约弹窗 `krCbGo` 等）原本就按“同一天一次到院”各自查，这次没改，待确认要不要一起合并算。**
+- 测试：selftest 新增 R221a（KM1，stageC 夹具）、R221b（任意分页）；回归对照 8e4bc4f：A1 全套 / KM1 / KD1 批次 / roletest 失败集合一致（只有日期·时刻相关的偶发项 CAL8/CAL6/R144b/R107a/R131b/R132b/R138a 两边互有出入，今天 07:30 不在营业时间）。
