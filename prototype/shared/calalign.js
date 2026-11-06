@@ -551,7 +551,8 @@ function openStayModal(caseId, o){
   var pno0 = passportOf(clientByName(c.name)).no;
   var pass = o.trip ? '<div style="margin-top:12px;font-size:12px;font-weight:700;">护照号码 '+(pno0 ? '<span style="font-weight:400;color:var(--sage);">已登记，可核对 / 修改</span>' : '<span style="color:#C1454A;">*</span> <span style="font-weight:400;color:var(--muted);">还没填，必填</span>')+'</div><input id="stay-pno" value="'+aEscC(pno0)+'" autocomplete="off" placeholder="护照号码" style="'+inp+'width:240px;margin-top:4px;"> <span style="font-size:12px;color:var(--muted);">签证和入境由客人自行负责，请提醒客人</span>' : '';
   var title = o.trip ? '确认行程' : '在韩期间', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式，护照号码还没填的话必填。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定，可以点［出发前再确认］，之后随时能改。' : '行程有变可以修改，修改后 KR 会收到通知。');
-  ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>'+row('in', '入境')+row('out', '离境')+methods+pass+
+  var ts0 = (c.krSchedule && c.krSchedule.tripState) || '', tsBox = (!o.trip && !o.initial && c.krSchedule) ? '<div style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span> <span style="font-weight:400;font-size:12px;color:var(--muted);">改成「已定」要填到达 / 离开的日期和时间；「暂定」不用填</span></div><div style="display:flex;gap:18px;font-size:13px;"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" value="booked"'+(ts0==='booked' ? ' checked' : '')+'> 已定（机票已订）</label><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" value="tentative"'+(ts0==='tentative' ? ' checked' : '')+'> 暂定（客人还没订机票 / 办签证）</label></div></div>' : ''; /* CMD-1106-18 */
+  ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>'+tsBox+row('in', '入境')+row('out', '离境')+methods+pass+
     '<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '出发前再确认' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
   ov.classList.add('open'); stayWarnRefresh();
@@ -578,6 +579,9 @@ function staySave(){
     if(!methods.length) return bad('请至少勾一个确认方式');
     var pn = g('stay-pno').trim(); if(!pn) return bad('护照号码还没填，请填写'); d.pno = pn;
   }
+  var tsSel = (document.querySelector('#stay-overlay input[name=stay-ts]:checked')||{}).value||'', ts0 = (c.krSchedule && c.krSchedule.tripState) || '';
+  if(tsSel==='booked' && ts0!=='booked' && (!d.inD || !d.outD || !d.ex.inTime || !d.ex.outTime)) return bad('改成「已定」：到达日、到达时间、离开日、离开时间都要填（机场选填）'); /* CMD-1106-18：暂定改已定，同一套必填检查 */
+  if(tsSel==='tentative' && ts0!=='tentative'){ if(c.krSchedule) c.krSchedule.tripState = 'tentative'; logCaseEvent(c, actingName(), '行程状态改成暂定', '赴韩施术'); var ov1 = document.getElementById('stay-overlay'); if(ov1) ov1.classList.remove('open'); STAY_CTX = null; try{ renderCaseBody(c); }catch(er){} return; }
   if(d.inD && d.outD && d.outD < d.inD) return bad('离境日不能早于入境日');
   var ye = stayDateErr('入境日', d.inD) || stayDateErr('离境日', d.outD); if(ye) return bad(ye);
   /* CMD-1106-07：存行程时，首选 / 备选 / KR 确认的施术日期不能跑到范围外（暂定的行程只是预估，不挡） */
@@ -591,6 +595,7 @@ function staySave(){
 function stayGoEditDate(){ var x = STAY_CTX; var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null; try{ if(x){ var c = calCaseById(x.id); if(c) switchCaseTab('kr'); } }catch(er){} }
 function staySaveDo(x, c, d, methods, other, bad){
   var r = coreSetStay(c, d.inD, d.outD, actingName(), {initial:!!x.o.initial, ex:d.ex}); if(!r.ok) return bad(r.err);
+  var tsSel2 = (document.querySelector('#stay-overlay input[name=stay-ts]:checked')||{}).value||''; if(tsSel2==='booked' && c.krSchedule && c.krSchedule.tripState!=='booked'){ c.krSchedule.tripState = 'booked'; logCaseEvent(c, actingName(), '行程状态改成已定', '赴韩施术'); } /* CMD-1106-18 */
   if(x.o.trip && d.pno){ var cl0 = clientByName(c.name); if(cl0 && passportOf(cl0).no!==d.pno){ var p0 = passportOf(cl0); cl0.passport = {text:'已登记', date:todayStr(), no:d.pno, issue:p0.issue, expiry:p0.expiry}; cl0.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'登记护照号码（确认行程）', dt:nowFullDt(), kind:'plain'}); } }
   if(x.o.trip){ if(c.krSchedule) c.krSchedule.tripState = 'booked'; c.tripConfirm = {at:nowFullDt(), by:actingName(), methods:methods, other:other}; logCaseEvent(c, actingName(), '已确认行程（'+methods.join('、')+'）：入境 '+stayMDT(c, 'in')+' / 离境 '+stayMDT(c, 'out'), '赴韩施术'); }
   var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null;

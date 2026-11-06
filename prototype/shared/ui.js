@@ -2491,10 +2491,15 @@ function submitKrScheduleDate(){
   var c = getCurrentCase(); if(!c) return;
   var ks = ensureKrScheduleDraft(c);
   if(!ks.primary){ alert('至少选择首选日期'); return; }
-  /* CMD-1029-09 四：约的施术日本来就不到 7 天 → 递交日期时一起填完「已确认行程」那一组必填（入境 / 离境 + 韩国时间、确认方式、护照号码），行程自然是「已定」 */
-  var minD = (ks.backup && ks.backup < ks.primary) ? ks.backup : ks.primary, dLeft = Math.round((new Date(minD+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/86400000);
-  if(dLeft < TRIP_CONFIRM_DAYS && !c.tripConfirm && !window.GMC_TRIP_NO7){ openStayModal(c.id, {trip:true, then:function(){ submitKrScheduleDate(); }}); return; }
-  if(!ks.tripState){ alert('请选择行程状态（已定 / 暂定）'); return; } /* CMD-1029-09 二 */
+  /* CMD-1106-18：行程直接在卡片上填（选「已定」才有到达 / 离开，日期、时间必填；「暂定」不填日期）；不再弹「确认行程」窗口 */
+  var te = tripDraftCheck(c, ks); if(te){ ks.tripErr = te; renderCaseBody(c); if(!ks.tripState) alert(te); return; }
+  if(ks.tripState==='booked'){
+    var t = ks.tripDraft, r = coreSetStay(c, t.in, t.out, actingName(), {initial:true, ex:{inTime:t.inTime, outTime:t.outTime, inAirport:t.inAirport, outAirport:t.outAirport}});
+    if(!r.ok){ ks.tripErr = r.err; renderCaseBody(c); return; }
+    var bad = tripMismatchList(Object.assign({}, c, {krSchedule:Object.assign({}, ks, {status:'pending', primary:ks.primary, backup:ks.backup})})).filter(function(z){ return !z.soft && z.kind!=='short'; })[0];
+    if(bad){ ks.tripErr = bad.label+' '+stayMD(bad.date)+'：'+bad.msg; renderCaseBody(c); return; }
+  }
+  ks.tripErr = ''; delete ks.tripDraft;
   ks.status = 'pending'; ks.rejectNote = '';
   logCaseEvent(c, ME_NAME, '递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'；行程'+(ks.tripState==='booked' ? '已定（机票已订）' : '暂定')+'），等待KR 室长确认');
   try{ if(c.settlementDone) pushKrNotif(caseKrHospital(c), '施术日期待确认：'+c.name+'（'+(c.caseNo||'')+'）已递交施术日期（首选 '+ks.primary+(ks.backup?'，备选 '+ks.backup:'')+'；行程'+(ks.tripState==='booked' ? '已定' : '暂定')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){} /* 通知 KR 室长（CMD-1013-02 九） */

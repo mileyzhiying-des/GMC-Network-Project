@@ -5967,10 +5967,27 @@ function nearestOpenMonth(fromDate, dates){
 /* CMD-1029-09 二：递交施术日期时选「行程状态」：已定（机票已订）/ 暂定；只是给 KR 看的标记，不影响流程。已定可顺便填入境 / 离境 */
 function tripStateOf(c){ return (c && c.krSchedule && c.krSchedule.tripState) || ''; }
 function tripStateTagHtml(c){ var t = tripStateOf(c); return t==='tentative' ? ' <span style="font-size:12px;font-weight:700;color:#8F6F0C;background:#FBF0C9;border-radius:4px;padding:1px 6px;">暂定</span>' : (t==='booked' ? ' <span style="font-size:12px;color:var(--sage);">行程已定</span>' : ''); }
-function setTripState(v){ var c = getCurrentCase(); if(!c) return; var ks = ensureKrScheduleDraft(c); ks.tripState = v; renderCaseBody(c); }
-function tripStateBlockHtml(c, ks){ /* CMD-1106-17：只留「行程状态 *」+ 两个单选（拿掉「给 KR 看的标记…」和「入境 / 离境在确认行程窗口里填…」两句说明） */
+function setTripState(v){ var c = getCurrentCase(); if(!c) return; var ks = ensureKrScheduleDraft(c); ks.tripState = v; ks.tripErr = ''; if(v==='booked' && !ks.tripDraft){ var s0 = c.stay || {}; ks.tripDraft = {in:s0.in||'', inTime:s0.inTime||'', inAirport:s0.inAirport||'', out:s0.out||'', outTime:s0.outTime||'', outAirport:s0.outAirport||''}; } renderCaseBody(c); }
+/* CMD-1106-18：选「已定」才在卡片上直接填到达 / 离开（日期、时间必填，机场选填）；选「暂定」不填日期。草稿存在 ks.tripDraft，按［递交施术日期］时一起存进 c.stay */
+function tripDraftSet(k, v){ var c = getCurrentCase(); if(!c) return; var ks = ensureKrScheduleDraft(c); ks.tripDraft = ks.tripDraft || {in:'', inTime:'', inAirport:'', out:'', outTime:'', outAirport:''}; ks.tripDraft[k] = String(v||'').trim(); ks.tripErr = ''; renderCaseBody(c); }
+function tripDraftCheck(c, ks){ /* 返回错误文字，没问题返回 '' */
+  if(!ks.tripState) return '请选择行程状态（已定 / 暂定）';
+  if(ks.tripState!=='booked') return '';
+  var t = ks.tripDraft || {};
+  if(!t.in || !t.inTime || !t.out || !t.outTime) return '选了「已定」：到达日、到达时间、离开日、离开时间都要填（机场选填）';
+  if(t.out < t.in || (t.out===t.in && t.outTime <= t.inTime)) return '离开不能早于到达';
+  return stayDateErr('到达日', t.in) || stayDateErr('离开日', t.out) || '';
+}
+function tripDraftFieldsHtml(c, ks){
+  var t = ks.tripDraft || {}, inp = 'padding:7px 10px;border:1px solid var(--border-strong,#B9B1A6);border-radius:8px;background:#fff;font-size:13px;box-sizing:border-box;min-width:0;';
+  var row = function(k, lab){ return '<div style="display:grid;grid-template-columns:52px 1.2fr 0.8fr 1.2fr;gap:8px;align-items:center;margin-top:8px;"><b style="font-size:13px;">'+lab+'日：</b><input type="date" value="'+aEscC(t[k]||'')+'"'+stayRangeAttr()+' onchange="tripDraftSet(\''+k+'\',this.value)" style="'+inp+'width:100%;"><input type="time" value="'+aEscC(t[k+'Time']||'')+'" onchange="tripDraftSet(\''+k+'Time\',this.value)" style="'+inp+'width:100%;"><input value="'+aEscC(t[k+'Airport']||'')+'" onchange="tripDraftSet(\''+k+'Airport\',this.value)" placeholder="机场（选填）例：仁川 ICN" style="'+inp+'width:100%;"></div>'; };
+  var live = (t.in && t.out && (t.out < t.in)) ? '<div style="color:#B3261E;font-size:12px;margin-top:6px;font-weight:700;">离开不能早于到达</div>' : '';
+  return row('in', '到达')+row('out', '离开')+live+(ks.tripErr ? '<div style="color:#B3261E;font-size:12px;margin-top:6px;font-weight:700;">'+aEscC(ks.tripErr)+'</div>' : '');
+}
+function tripStateBlockHtml(c, ks){ /* CMD-1106-18：「行程状态 *」后面小字写建议在韩停留；已定 / 暂定单选；选已定才出现到达 / 离开输入 */
   var radio = function(v, lab){ return '<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-right:18px;cursor:pointer;"><input type="radio" name="trip-state" '+(ks.tripState===v ? 'checked ' : '')+'onchange="setTripState(\''+v+'\')"> '+lab+'</label>'; };
-  return '<div style="margin-bottom:8px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span></div><div style="display:flex;flex-wrap:wrap;">'+radio('booked','已定（机票已订）')+radio('tentative','暂定（客人还没订机票 / 办签证）')+'</div></div>';
+  var hint = ''; try{ hint = krStayHint(c).replace(/ · 施术日 = 第 0 天/, ''); }catch(e){}
+  return '<div style="margin-bottom:8px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span> '+(hint && !/：—$/.test(hint) ? '<span style="font-weight:400;font-size:12px;color:var(--muted);">'+aEscC(hint)+'</span>' : '')+'</div><div style="display:flex;flex-wrap:wrap;">'+radio('booked','已定（机票已订）')+radio('tentative','暂定（客人还没订机票 / 办签证）')+'</div>'+(ks.tripState==='tentative' && stayText(c) ? '<div style="font-size:12px;color:var(--muted);margin-top:6px;">到达 / 离开（预估）：'+aEscC(stayText(c))+'</div>' : '')+(ks.tripState==='booked' ? tripDraftFieldsHtml(c, ks) : (ks.tripErr ? '<div style="color:#B3261E;font-size:12px;margin-top:6px;font-weight:700;">'+aEscC(ks.tripErr)+'</div>' : ''))+'</div>';
 }
 function ensureKrScheduleDraft(c){
   if(!c.krSchedule) c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false};
@@ -5994,7 +6011,7 @@ function krSchedMonthNavHtml(c, ks, pf){
   KR_SCHED_VIEW_MONTH = new Date(y, m-1, 1);
   var yo = '', mo = ''; [q.y0, q.y0+1].forEach(function(yy){ yo += '<option value="'+yy+'"'+(yy===y ? ' selected' : '')+'>'+yy+'</option>'; });
   for(var mm = (y===q.y0 ? q.m0 : 1); mm <= 12; mm++) mo += '<option value="'+mm+'"'+(mm===m ? ' selected' : '')+'>'+mm+'</option>';
-  return '<div style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;"><select class="kr-time-sel" style="min-width:84px;" onchange="krScheduleSetYM(this.value, '+m+')">'+yo+'</select>年<select class="kr-time-sel" style="min-width:72px;" onchange="krScheduleSetYM('+y+', this.value)">'+mo+'</select>月</div>';
+  return '<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:8px 0;font-size:13px;"><select class="kr-time-sel" style="min-width:84px;" onchange="krScheduleSetYM(this.value, '+m+')">'+yo+'</select>年<select class="kr-time-sel" style="min-width:72px;" onchange="krScheduleSetYM('+y+', this.value)">'+mo+'</select>月</div>';
 }
 function krScheduleMonthShift(dir){
   KR_SCHED_VIEW_MONTH = new Date(KR_SCHED_VIEW_MONTH.getFullYear(), KR_SCHED_VIEW_MONTH.getMonth()+dir, 1);
@@ -7520,7 +7537,7 @@ function krProcedureTabMain(c, tabsHtml){
   /* CMD-1106-17：行程（状态 + 到达 / 离开 + 建议停留）移到施术日期上面，三段之间分隔线；待递交时行程状态单选在最上面；已递交 / KR 已确认之后行程块同样在上面、有分隔线 */
   var tripTop = '', hrLine = '<div style="border-top:1px solid var(--border2);margin:12px 0;"></div>';
   var tripRadios = (st==='Draft' && hasActive && ks) ? tripStateBlockHtml(c, ensureKrScheduleDraft(c)) : '';
-  if(tripRadios || stayIn) tripTop = hrLine+tripRadios+(stayIn || '')+hrLine;
+  if(tripRadios || stayIn) tripTop = hrLine+tripRadios+(st==='Draft' ? '' : (stayIn || ''))+hrLine; /* CMD-1106-18：待递交时到达 / 离开直接在卡片上填，不再显示只读的那两行 */
   var stayBtn = stayIn ? '<a href="#" class="btn-outline" style="padding:4px 12px;font-size:12px;text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">修改</a>' : '';
   return '<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;position:relative;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-size:14px;font-weight:700;flex:1;">赴韩日程</div>'+(tabsHtml||'')+stayBtn+'</div>'+tripTop+(st==='Draft' ? '' : subStatusRowHtml(caseSubStatusItems(c)))+body+'</div>'+recCard+
     inProjectCardHtml(c)+'</div>'; /* CMD-1025-04 B：施术日期 → 客人赴韩日程 → 项目卡；CMD-1020-09：三张大卡（项目卡 / 术后管理 / 管理项目），在韩持有项目大卡拿掉；备注框、结束术后管理都拿掉 */
@@ -10601,7 +10618,8 @@ function tripStayDays(c){
   return d;
 }
 function tripWin(c){
-  var s = c && c.stay; if(!s || (!s.in && !s.out)) return null;
+  var ks0 = c && c.krSchedule, s = (ks0 && !ks0.status && ks0.tripDraft && tripStateOf(c)==='booked') ? ks0.tripDraft : (c && c.stay); /* CMD-1106-18：待递交时，卡片上正在填的到达 / 离开（草稿）马上参与日历检查 */
+  if(!s || (!s.in && !s.out)) return null;
   var days = tripStayDays(c);
   return {in:s.in||'', inTime:s.inTime||'', out:s.out||'', outTime:s.outTime||'', days:days, soft:tripStateOf(c)==='tentative' && !c.tripConfirm};
 }

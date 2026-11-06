@@ -8318,12 +8318,12 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/行程状态/.test(document.getElementById('case-body').innerText) && /已定（机票已订）/.test(document.getElementById('case-body').innerText) && /暂定/.test(document.getElementById('case-body').innerText), '日期卡里有「行程状态」已定 / 暂定');
       var ks = ensureKrScheduleDraft(c), td = todayStr(), dt = caseOpenDates(c).filter(function(x){ return x >= ymdAdd(td, 10); })[0]; ks.primary = dt;
       msgs.length = 0; submitKrScheduleDate(); ST.ok(msgs.some(function(m){ return /行程状态/.test(m); }) && ks.status!=='pending', '没选行程状态不能递交');
-      setTripState('booked'); ST.ok(!/入境日期/.test(document.getElementById('case-body').innerText), 'CMD-1102-07：行程状态下面没有入境 / 离境日期栏');
+      setTripState('booked'); ST.ok(/到达日：/.test(document.getElementById('case-body').innerText) && /离开日：/.test(document.getElementById('case-body').innerText), 'CMD-1106-18（改前：行程状态下面没有入境 / 离境日期栏）：选已定才出现到达 / 离开输入');
       setTripState('tentative'); submitKrScheduleDate(); ST.ok(ks.status==='pending' && ks.tripState==='tentative' && ST.hasLog(c, /行程暂定/), '选暂定可以递交，Timeline 记行程暂定');
       ST.ok(/暂定/.test(document.getElementById('case-body').innerText), '递交后日期卡写「暂定」');
       localStorage.setItem('__R189', JSON.stringify({id:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, date:dt}));
-      var d = ST.newRes('R189b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻']); ST.open(d); d.activeCaseTab = 'kr'; var k2 = ensureKrScheduleDraft(d); k2.primary = dt; setTripState('booked'); window.GMC_TRIP_NO7 = true; submitKrScheduleDate(); window.GMC_TRIP_NO7 = false;
-      ST.ok(d.krSchedule.status==='pending' && d.krSchedule.tripState==='booked' && !d.stay, '已定：递交时不填入境 / 离境（7 天以上）');
+      var d = ST.newRes('R189b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻']); ST.open(d); d.activeCaseTab = 'kr'; var k2 = ensureKrScheduleDraft(d); k2.primary = dt; setTripState('booked'); submitKrScheduleDate(); ST.ok(d.krSchedule.status!=='pending' && !!d.krSchedule.tripErr, 'CMD-1106-18（改前：已定递交时不填入境 / 离境）：已定没填到达 / 离开递交不了');
+      tripDraftSet('in', ymdAdd(dt, -1)); tripDraftSet('inTime', '10:00'); tripDraftSet('out', ymdAdd(dt, 9)); tripDraftSet('outTime', '18:00'); submitKrScheduleDate(); ST.ok(d.krSchedule.status==='pending' && d.krSchedule.tripState==='booked' && !!d.stay && d.stay.in===ymdAdd(dt, -1), '填好到达 / 离开：递交成功，行程存了');
     } finally { window.alert = al; window.GMC_TRIP_MANUAL = false; }
   });
   ST.def('R189b','CMD-1029-09 二（KM1 分页，先在 A1 跑 R189a）：KR 看得到「暂定」（页头 / 日期卡 / 日历块）',function(){
@@ -8373,9 +8373,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var d = ST.newRes('R191b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻']); ST.open(d); d.activeCaseTab = 'kr'; var k2 = ensureKrScheduleDraft(d), near = caseOpenDates(d).filter(function(x){ return x >= base && x < ymdAdd(base, 7); })[0];
       if(ST.ok(!!near, '找得到 7 天内的开放日期')){
         clientByName(d.name).passport = {text:'未登记', date:'', no:'', issue:'', expiry:''}; k2.primary = near; k2.tripState = 'tentative';
-        submitKrScheduleDate(); ST.ok(g('stay-overlay').classList.contains('open') && /确认行程/.test(g('stay-overlay').innerText) && k2.status!=='pending', '施术日不到 7 天：递交时先弹整组必填（日期 / 时间 / 确认方式 / 护照号码）');
-        g('stay-in').value = ymdAdd(near, -1); g('stay-out').value = ymdAdd(near, 9); g('stay-int').value = '10:00'; g('stay-outt').value = '18:00'; document.querySelector('#stay-overlay .stay-m').checked = true; g('stay-pno').value = 'Q1234567';
-        staySave(); ST.ok(k2.status==='pending' && !!d.tripConfirm && k2.tripState==='booked' && clientByName(d.name).passport.no==='Q1234567', '填完才递交成功，行程已定');
+        k2.tripState = ''; setTripState('booked'); tripDraftSet('in', ymdAdd(near, -1)); tripDraftSet('out', ymdAdd(near, 9)); tripDraftSet('inTime', '10:00'); tripDraftSet('outTime', '18:00');
+        submitKrScheduleDate(); ST.ok(!(g('stay-overlay')||{classList:{contains:function(){return false;}}}).classList.contains('open') && k2.status==='pending' && k2.tripState==='booked' && !!d.stay, 'CMD-1106-18（改前：施术日不到 7 天递交时先弹确认行程窗口）：在卡片上直接填，不弹窗，递交成功，行程已定');
       }
     } finally { window.alert = al; window.GMC_TRIP_MANUAL = false; }
   });
@@ -10341,7 +10340,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krScheduleSetYM(q.y0+1, 1); h = krProcedureTabMain(c, ''); d.innerHTML = h; ss = d.querySelectorAll('select.kr-time-sel'); ms = [].map.call(ss[1].options, function(o){ return +o.value; }); ST.ok(ms.length===12 && ms[0]===1 && KR_SCHED_VIEW_MONTH.getFullYear()===q.y0+1, '选明年 → 1～12 月，日历换到明年 1 月');
       krScheduleSetYM(q.y0, 1); ST.ok(KR_SCHED_VIEW_MONTH.getFullYear()===q.y0 && KR_SCHED_VIEW_MONTH.getMonth()+1===q.m0, '从明年切回今年、月比这个月早 → 自动变成这个月');
       /* 顺序 + 说明文字不见了 */
-      KR_SCHED_NAV_CASE = ''; h = krProcedureTabMain(c, ''); t = txt(h);
+      KR_SCHED_NAV_CASE = ''; setTripState('booked'); h = krProcedureTabMain(c, ''); t = txt(h); /* CMD-1106-18：选已定才出现到达 / 离开 */
       var iT = t.indexOf('赴韩日程'), iS = t.indexOf('行程状态'), iA = t.indexOf('到达'), iD = t.indexOf('施术日期'), iB = t.indexOf('递交施术日期');
       ST.ok(iT>-1 && iT<iS && iS<iA && iA<iD && iD<iB, '顺序：标题 → 行程状态 → 到达 / 离开 → 施术日期 → 按钮');
       ST.ok(!/待递交施术日期/.test(t) && !/只能选择KR室长可接待/.test(t) && !/给 KR 看的标记/.test(t) && !/确认行程」窗口里填/.test(t), '那几句说明 / 状态行不见了');
@@ -10354,5 +10353,39 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.krSchedule = {status:'confirmed', primary:pd, backup:'', confirmedDate:pd, confirmedTime:'10:00', address:'x', changePrimary:'', changeBackup:'', changeSubmitted:false}; h = krProcedureTabMain(c, ''); t = txt(h);
       ST.ok(t.indexOf('到达')>-1 && t.indexOf('到达')<t.indexOf('施术日期 '+pd), 'KR 已确认：行程在施术日期上面');
     } finally { window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); KR_SCHED_NAV_CASE = ''; }
+  });
+
+  /* CMD-1106-18：选已定才在卡片上填到达 / 离开；暂定不填；年 / 月置中 */
+  ST.def('R248a','CMD-1106-18（A1 分页，stageC 夹具）：选「已定」出现到达 / 离开输入（日期、时间必填、机场选填）；只填日期递交不了；填好日历马上检查（早于到达灰）；递交后 c.stay + 已定都存了；选「暂定」没有输入、可直接递交；已递交后［修改］暂定改已定要填日期时间；年 / 月置中',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), gc0 = window.getCurrentCase, oa = window.alert; window.getCurrentCase = function(){ return c; }; window.alert = function(){};
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    try{
+      var open1 = caseOpenDates(c).filter(function(x){ return x > ymdAdd(todayStr(), 40); }); var base = ymdAdd(todayStr(), 41);
+      c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; c.hasArrived = false; c.stay = null; delete c.tripConfirm; c.stayAsked = false; KR_SCHED_NAV_CASE = '';
+      var h = krProcedureTabMain(c, ''); ST.ok(/行程状态/.test(txt(h)) && !/type="date"/.test(h.replace(/<select[\s\S]*?<\/select>/g, '')) , '没选行程状态：没有到达 / 离开输入');
+      ST.ok(/justify-content:center/.test(h.slice(h.indexOf('kr-time-sel')-200, h.indexOf('kr-time-sel'))), '年 / 月下拉那一行置中');
+      setTripState('booked'); h = krProcedureTabMain(c, ''); var dd = document.createElement('div'); dd.innerHTML = h;
+      ST.ok(dd.querySelectorAll('input[type=date]').length===2 && dd.querySelectorAll('input[type=time]').length===2 && /机场（选填）/.test(h) && /建议在韩停留/.test(txt(h)), '选已定：到达 / 离开（日期、时间、机场）出现，「建议在韩停留」在行程状态后面');
+      var days = tripStayDays(c), inD = base, outD = ymdAdd(base, days+3), early = ymdAdd(base, -1);
+      tripDraftSet('in', inD); tripDraftSet('out', outD);
+      var ks = ensureKrScheduleDraft(c); ks.primary = ymdAdd(inD, 1);
+      submitKrScheduleDate(); ST.ok(ks.status!=='pending' && /都要填/.test(ks.tripErr||''), '只填日期不填时间：递交不了 + 红字：'+(ks.tripErr||''));
+      tripDraftSet('inTime', '11:20'); tripDraftSet('outTime', '12:30'); ST.ok(!ks.tripErr, '填好后红字消失');
+      ST.ok(!!tripDateIssue(c, early) && tripDateIssue(c, early).kind==='early', '填好到达 → 日历马上检查：早于到达 → 灰');
+      tripDraftSet('out', ymdAdd(inD, -2)); submitKrScheduleDate(); ST.ok(ks.status!=='pending' && /离开不能早于到达/.test(ks.tripErr||''), '离开早于到达：红字、递交不了'); tripDraftSet('out', outD);
+      ks.primary = ymdAdd(inD, 1); submitKrScheduleDate();
+      ST.ok(ks.status==='pending' && c.stay && c.stay.in===inD && c.stay.inTime==='11:20' && c.stay.out===outD && c.stay.outTime==='12:30' && ks.tripState==='booked' && !ks.tripDraft, '递交后：行程（c.stay）、已定、施术日期都存了');
+      /* 暂定：不填日期，直接递交 */
+      c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; c.stay = null; ks = c.krSchedule;
+      setTripState('tentative'); h = krProcedureTabMain(c, ''); dd.innerHTML = h; ST.ok(dd.querySelectorAll('input[type=date]').length===0, '选暂定：没有到达 / 离开输入');
+      ks.primary = ymdAdd(todayStr(), 41); submitKrScheduleDate(); ST.ok(ks.status==='pending' && ks.tripState==='tentative' && !c.stay, '暂定：可以直接递交，不存日期');
+      /* 修改：暂定改已定要填 */
+      openStayModal(c.id, {}); var set = function(i, v){ var el = document.getElementById(i); if(el) el.value = v; }; var r1 = document.querySelector('#stay-overlay input[name=stay-ts][value=booked]'); ST.ok(!!r1, '［修改］窗口里有行程状态单选'); r1.checked = true; staySave();
+      var er = document.getElementById('stay-err'); ST.ok(er && er.style.display==='block' && /都要填/.test(er.textContent) && c.krSchedule.tripState==='tentative', '暂定改已定：没填日期时间 → 红字、存不了');
+      set('stay-in', inD); set('stay-out', outD); set('stay-int', '11:20'); set('stay-outt', '12:30'); staySave();
+      ST.ok(c.krSchedule.tripState==='booked' && c.stay && c.stay.in===inD, '填好 → 暂定改成已定，行程存了'); var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null;
+    } finally { window.getCurrentCase = gc0; window.alert = oa; CASE_ITEMS[idx] = JSON.parse(snap); KR_SCHED_NAV_CASE = ''; var ov2 = document.getElementById('stay-overlay'); if(ov2) ov2.classList.remove('open'); STAY_CTX = null; }
   });
 })();
