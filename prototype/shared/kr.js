@@ -1139,7 +1139,7 @@ function krProjCards(c, opts){
     var todayHas = !!(unbooked && itU && mgTodayQty(c, itU)>0), okUse = active && !pend && !anesU && leftU>0 && !todayHas, okBook = paid && !pend && !payU && !c.visitClosed && bkU>0, tip = anesU ? '未签麻醉同意书' : todayHas ? '今天已排了这个项目；要改次数请先在「已预约」里［本次不做］' : leftU<=0 ? '次数用完（剩余次数都已安排）' : '';
     var nq = krEsc(name).replace(/'/g,'');
     var doneTip = '今天的到院已完成，请先在到院卡按［增加项目］';
-    return (isSurgU ? '' : (active ? krOutBtn('本次使用', 'krUnitUseNow(\''+nq+'\')', okUse, tip)+' ' : (anyVisitCompletedToday(c) && !pend ? krOutBtn('本次使用', '', false, doneTip)+' ' : '')))+krOutBtn('预约时间', (itU && krIsMgmtItemC(itU) ? 'krCbOpen({mgmtOne:\''+nq+'\'})' : 'krBkdOpen(\'use\',\''+nq+'\')'), okBook, (pend || payU) ? '待付款，付款后才能预约' : (bkU<=0 ? '剩余次数都已安排（含今天）' : '付清尾款后才能预约'));
+    return (isSurgU ? '' : (active ? krOutBtn('本次使用', 'krUnitUseNow(\''+nq+'\')', okUse, tip)+' ' : (anyVisitCompletedToday(c) && !pend ? krOutBtn('本次使用', '', false, doneTip)+' ' : '')))+((pend || payU || !paid) ? krPayWait() : krOutBtn('预约时间', (itU && krIsMgmtItemC(itU) ? 'krCbOpen({mgmtOne:\''+nq+'\'})' : 'krBkdOpen(\'use\',\''+nq+'\')'), okBook, (bkU<=0 ? '剩余次数都已安排（含今天）' : '暂时不能预约')));
   };
   /* ---- 施术项目 ---- */
   var sU = [], sW = [], sB = [], sD = [], sC = [], dS = [], dC = [], dM = [];
@@ -1189,7 +1189,7 @@ function krProjCards(c, opts){
     var g = groups[k]; if(g.left<=0) return; var x = g.x, days = pcDays(x), nextIdx = Math.min(Math.max(0, g.total-g.left), Math.max(0, days.length-1)), sdt = itemSurgDate(c, g.it), sug = days.length && sdt ? careAdd(sdt, days[nextIdx]) : ''; if(lastDone[g.it.name+'|'+g.i]) sug = careAdd(lastDone[g.it.name+'|'+g.i], Math.max(1, parseInt(x.interval, 10)||1));
     var gKn = Math.min(stayKeepN(c, 'care|'+g.it.name+'|'+g.i), g.left), gVis = g.left-gKn; /* CMD-1028-10 四：保留的（离开日期之后选了保留）不进未预约，另放「保留」组 */
     var cnt = g.total>1 ? '剩 '+gVis+' / 共 '+g.total+' 次' : '1 次', nmEsc = krEsc(g.it.name).replace(/'/g,'');
-    var op = can && paid && !c.visitClosed ? krOutBtn('预约时间', 'krCbOpen({one:{item:\''+nmEsc+'\',i:'+g.i+(g.reuse.length ? ',reuse:\''+g.reuse[0]+'\'' : '')+'}})', true, '') : krOutBtn('预约时间', '', false, paid ? '暂时不能预约' : '付清尾款后才能预约');
+    var op = can && paid && !c.visitClosed ? krOutBtn('预约时间', 'krCbOpen({one:{item:\''+nmEsc+'\',i:'+g.i+(g.reuse.length ? ',reuse:\''+g.reuse[0]+'\'' : '')+'}})', true, '') : (paid ? krOutBtn('预约时间', '', false, '暂时不能预约') : krPayWait());
     var keepKey = 'care|'+g.it.name+'|'+g.i, kBtn = (can && !c.visitClosed) ? krKeepBtn(keepKey, true) : '';
     if(gVis>0) pU.push({key:sug || '9999', surg:g.it.name, sdate:sdt, html:krCareRow(nameOf(x), sug && sdt ? '术后第 '+ymdDiff(sdt, sug)+' 天' : (days.length ? '术后第 '+days[nextIdx]+' 天' : '—'), placeOf(x, null), cnt, sug ? krEsc(sug.slice(2)) : '—', op+kBtn, '', krCareSrc(g.it))});
     if(gKn>0){ var kIdx = Math.min(Math.max(0, g.total-gKn), Math.max(0, days.length-1)), kSug = days.length && sdt ? careAdd(sdt, days[kIdx]) : '';
@@ -1199,7 +1199,7 @@ function krProjCards(c, opts){
     if(!arr.length) return '';
     var gs = {}, ord = []; arr.forEach(function(e){ var k = e.surg||'其他术后管理'; if(!gs[k]){ gs[k] = {surg:k, sdate:e.sdate||'', rows:[]}; ord.push(k); } gs[k].rows.push(e); });
     ord.sort(function(a, b){ return (gs[a].sdate||'9999') < (gs[b].sdate||'9999') ? -1 : 1; });
-    var allB = (withAll && can && !c.visitClosed) ? krOutBtn('全部预约', 'krCbOpen({all:true, tab:\'care\'})', paid, paid ? '' : (c.krTripEnded ? '暂时不能预约' : '付清尾款后才能预约'), true) : ''; /* CMD-1025-01 九：付清尾款前灰掉 + 提示 */ /* ［全部预约］线框 + 日历图标；行内按钮不加图标（CMD-1020-03）*/
+    var allB = (withAll && can && !c.visitClosed && (paid || c.krTripEnded)) ? krOutBtn('全部预约', 'krCbOpen({all:true, tab:\'care\'})', paid, paid ? '' : (c.krTripEnded ? '暂时不能预约' : '付清尾款后才能预约'), true) : ''; /* CMD-1025-01 九：付清尾款前灰掉 + 提示 */ /* ［全部预约］线框 + 日历图标；行内按钮不加图标（CMD-1020-03）*/
     var cardsHtml = ord.map(function(k){
       var gg = gs[k]; gg.rows.sort(function(a, b){ return a.key < b.key ? -1 : a.key > b.key ? 1 : 0; });
       /* 每个施术一张独立的卡：标题（施术名加粗放大 + 浅色标签「10/31 施术」）+ 自己的表头（CMD-1020-02） */

@@ -3255,7 +3255,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     box.innerHTML = krTabPostcare(gc()); var tx = box.textContent.replace(/\s+/g, ' ');
     ST.ok(!box.querySelector('.kr-pc-scroll') && box.querySelectorAll('.kr-srctag').length >= 4 && /术后复诊检查/.test(tx) && /术后消肿管理/.test(tx) && (tx.match(/拆线/g)||[]).length >= 2, '术后管理 tab 不套固定高度，全部项目（两个施术的所有术后管理）都列出来：'+box.querySelectorAll('.kr-srctag').length+' 行');
     ST.ok(!/印尼购买/.test(tx) && /方案内含/.test(tx), '来源不再写「印尼购买」，写「方案内含」');
-    var bs = [].slice.call(box.querySelectorAll('button')).filter(function(b){ return /预约时间|全部预约/.test(b.textContent); });
+    ST.ok(!box.querySelector('button[disabled]') && !/付清尾款后才能预约/.test(box.innerHTML) && /待付款/.test(tx) && ![].slice.call(box.querySelectorAll('button')).some(function(b){ return /预约时间|全部预约/.test(b.textContent); }), '1106-20 改：尾款没付清：不画灰色［预约时间］［全部预约］，只写「待付款」（原：灰按钮 + 提示「付清尾款后才能预约」）');
     ST.ok(bs.length >= 3 && bs.every(function(b){ return b.disabled || /not-allowed|opacity/.test(b.getAttribute('style')||'') || /disabled/.test(b.outerHTML); }) && /付清尾款后才能预约/.test(box.innerHTML), '尾款没付清：［预约时间］［全部预约］灰掉，提示「付清尾款后才能预约」');
     mut(function(c){ c.krBalancePaid = true; }); box.innerHTML = krTabPostcare(gc()); var bs2 = [].slice.call(box.querySelectorAll('button')).filter(function(b){ return /预约时间|全部预约/.test(b.textContent); });
     ST.ok(bs2.length >= 3 && bs2.every(function(b){ return !b.disabled; }), '付清尾款后自动可以按');
@@ -4692,7 +4692,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/本地管理 \d/.test(h) && !/已完成 \d/.test(h), '（CMD-1026-09）本地管理 0 不显示，没有「已完成」tab');
       ST.ok(/今日项目/.test(h) && /未预约项目/.test(h) && /来自主案件/.test(h), '今日项目卡 + 剩余项目里 未预约项目（没有项目的分段不显示）+ 来自主案件');
       ST.ok(/>对应施术</.test(h) && />次数</.test(h) && />使用参考</.test(h) && />建议时间</.test(h) && />预约时间</.test(h) && />操作</.test(h), '（CMD-1026-09）栏位：项目｜对应施术｜次数｜使用参考｜建议时间｜预约时间｜操作');
-      ST.ok(/>预约</.test(h), '未预约行有［预约］');
+      ST.ok(/>预约</.test(h) || /待付款/.test(h), '1106-20 改：未预约行有［预约］（尾款没付清时改成状态文字「待付款」，原：灰按钮）');
       ST.ok(/kr-pc-scroll/.test(h), '固定高度内部滚动');
       /* 本地管理 tab：有购买批次时列出 */
       var hh = getClientHoldings(c.name); if(hh && hh[0]) hh[0].batches.push({caseId:c.id, date:todayStr(), bought:3, used:1, usages:[]}); else CLIENT_HOLDINGS[c.name] = (CLIENT_HOLDINGS[c.name]||[]).concat([{itemName:'R107 本地', category:'本地项目', batches:[{caseId:c.id, date:todayStr(), bought:3, used:1, usages:[]}]}]);
@@ -6072,7 +6072,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var tags = [].slice.call(box.querySelectorAll('.kr-srctag')); ST.ok(tags.some(function(t){ return t.textContent==='印尼购买'; }) && tags.some(function(t){ return t.textContent==='在韩购买'; }) && !/在韩增加/.test(box.textContent), '第一栏购买来源标签：印尼购买 / 在韩购买，名称后面没有「在韩增加」');
       ST.ok(/#E3EEFB/i.test(html) && /#E2F3E6/i.test(html), '印尼购买浅蓝底、在韩购买浅绿底');
       ST.ok(!!box.querySelector('.kr-why'), '灰按钮旁边写说明文字（CMD-1102-11 四，取代 1021-06「只放 tooltip」）');
-      var gb = [].slice.call(box.querySelectorAll('button[disabled]')).filter(function(b){ return /待付款，付款后才能预约/.test(b.title); })[0]; ST.ok(gb && /待付款，付款后才能预约/.test(gb.title) && gb.parentElement.title===gb.title, '灰按钮 tooltip 写原因：'+(gb&&gb.title));
+      var gb = [].slice.call(box.querySelectorAll('button[disabled]')).filter(function(b){ return /待付款，付款后才能预约/.test(b.title); })[0]; ST.ok(!gb && /待付款/.test(box.textContent), '1106-20 改：待付款项目不画灰按钮，操作栏只写「待付款」（原：灰按钮 tooltip 写原因）');
       var ul = [].slice.call(box.querySelectorAll('a')).filter(function(a){ return /^(取消购买|查看案件)$/.test(a.textContent); }); ST.ok(ul.length>=2 && ul.every(function(a){ return /underline/.test(a.getAttribute('style')); }), '取消购买 / 查看案件都是带下划线的文字链接：'+ul.length);
       ST.ok(!/>取消<\/button>/.test(html) && /预约时间/.test(html) && /修改时间/.test(html), '没有行内［取消］按钮；已预约行有［修改时间］');
       /* 已预约行已到店 → ［修改时间］灰 + tooltip，不是消失 */
@@ -10390,6 +10390,23 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1106-19：KR 施术日期卡未递交只写一行 + IN 图例搬到标题行右边 */
+  ST.def('R250a','CMD-1106-20（KM1 分页，stageC 夹具）：在韩管理没付款时操作栏只写「待付款」，没有灰色［预约时间］；付款后有［预约时间］',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var c = JSON.parse(JSON.stringify(krFindCase(r.clinicId, r.id).c));
+    c.hasArrived = true; c.krBalancePaid = false; c.visitClosed = false;
+    var base = {origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:3, firstDay:1, interval:2, local:true, mgmtPlan:true, batchId:'B1'};
+    c.procedureItems = (c.procedureItems||[]).concat([Object.assign({}, base, {name:'钛提升 · 40kj·3次'})]); ensureItemIids(c);
+    var opsOf = function(){ KR_PROJ_PAGE = 'mgmt'; var box = document.createElement('div'); box.innerHTML = krProjCards(c); return box; };
+    var box = opsOf(), txt = box.textContent.replace(/\s+/g, ' ');
+    ST.ok(/待付款/.test(txt), '没付款：写「待付款」');
+    ST.ok(!box.querySelector('button[disabled]') || ![].slice.call(box.querySelectorAll('button')).some(function(b){ return /预约时间/.test(b.textContent) && b.disabled; }), '没有灰色［预约时间］');
+    ST.ok(!/付清尾款后才能预约|待付款，付款后才能预约/.test(txt), '长句拿掉');
+    c.krBalancePaid = true; box = opsOf();
+    ST.ok([].slice.call(box.querySelectorAll('button')).some(function(b){ return /预约时间/.test(b.textContent) && !b.disabled; }), '付款后出现可点的［预约时间］');
+    ST.ok(!/付清尾款后才能预约/.test(careBookBtn({krBalancePaid:true}, '预约时间', 'x()', '')), 'IN 术后管理：付款后正常按钮');
+    ST.ok(/待付款/.test(careBookBtn({krBalancePaid:false}, '预约时间', 'x()', '')) && !/<button/.test(careBookBtn({krBalancePaid:false}, '预约时间', 'x()', '')), 'IN 术后管理：没付款只写待付款');
+  });
   ST.def('R249a','CMD-1106-19（A1 分页，stageC 夹具）：IN 施术日期标题行最右边是图例「首选日 / 备选日」、没有「点选 1～2 天…」那句、年 / 月在中间；KR 施术日期卡（未递交）只有「施术日期 [待印尼室长递交]」一行标签，没有括号 / 说明',function(){
     var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
     if(typeof isKrAccount==='function' && !isKrAccount()){

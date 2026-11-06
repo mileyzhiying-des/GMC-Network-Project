@@ -9666,7 +9666,9 @@ function krIsMgmtItemC(it){ return !!(it.mgmtPlan || it.service || isLocalKrItem
 /* 术后管理单元：已有的行（含取消本次后退回的 skipped）+ 还没预约的名额（按施术项目的「所需术后管理」次数算） */
 /* CMD-1025-01 九：付清尾款后才能预约术后管理（KR 约韩国的、IN 约印尼的都一样）；客人还没到店，不知道会不会做、也还没付尾款，没必要先约。已结案的案件不受限 */
 function careBookBlock(c){ return (c && !c.krBalancePaid && !isEnded(c)) ? '付清尾款后才能预约' : ''; }
-function careBookBtn(c, label, code, style){ var blk = careBookBlock(c); return blk ? '<button class="btn-outline" disabled title="'+blk+'" style="'+style+'opacity:.45;cursor:not-allowed;">'+label+'</button>' : '<button class="btn-outline" style="'+style+'" onclick="'+code+'">'+label+'</button>'; }
+/* CMD-1106-20：灰按钮改成状态文字 */
+function krPayWait(){ return '<span style="font-size:12px;color:var(--text-secondary,#6E665E);">待付款</span>'; }
+function careBookBtn(c, label, code, style){ var blk = careBookBlock(c); return blk ? krPayWait() : '<button class="btn-outline" style="'+style+'" onclick="'+code+'">'+label+'</button>'; }
 function careUnits(c){
   var rows = careRows(c).filter(function(s){ return !s.surgUse; }), pool = rows.filter(function(s){ return !s.projectName; }), res = {rows:[], unbooked:[]};
   var items = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); });
@@ -12668,7 +12670,7 @@ function pcmHtml(c, side){
     var cnt = r.total>1 ? '剩 '+r.n+' / 共 '+r.total : '1 次', sg = r.sug ? e(md(r.sug)) : '—', op = '';
     if(r.place===mine && canAct && !locked){
       if(inTab) op = careBookBtn(c, '预约时间', 'todoCareBookOpen(\''+c.id+'\',\''+r.firstKey+'\')', 'padding:3px 12px;font-size:12px;');
-      else op = krOutBtn('预约时间', 'krCbOpen({one:{item:\''+e(r.item).replace(/'/g, '')+'\',i:'+r.i+(r.reuse ? ',reuse:\''+r.reuse+'\'' : '')+'}})', paid, paid ? '' : '付清尾款后才能预约')+krKeepBtn('care|'+e(r.item).replace(/'/g, '')+'|'+r.i, true); /* CMD-1028-12 四：每个未预约的行加［保留］ */
+      else op = (paid ? krOutBtn('预约时间', 'krCbOpen({one:{item:\''+e(r.item).replace(/'/g, '')+'\',i:'+r.i+(r.reuse ? ',reuse:\''+r.reuse+'\'' : '')+'}})', paid, '') : krPayWait())+krKeepBtn('care|'+e(r.item).replace(/'/g, '')+'|'+r.i, true); /* CMD-1028-12 四：每个未预约的行加［保留］ */
     }
     return tr([nmCell(r), surgCell(r), e(r.rec), e(cnt), sg, op], g6);
   });
