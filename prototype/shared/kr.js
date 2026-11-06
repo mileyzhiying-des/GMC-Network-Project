@@ -4965,18 +4965,32 @@ function krMainStatusBar(r, c){ /* CMD-1027-02 二：两行——当前状态（
   }
   return '<div class="card" style="padding:12px 20px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+nLive+'｜预约中 '+nBook+'）</span>'+krRebTag(c)+'<span style="flex:1;"></span>'+btn('查看', 'krSetCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:10px;">'+row2+'</div></div>';
 }
+/* CMD-1106-13：KR 案件页头三行——① 客人名 · 案件号 + 面诊 / 施术次数，［对话］最右 ② 在韩行程（预估）：MM/DD HH:mm ～ MM/DD HH:mm +［行程修正］（真的错——施术日期早于到达——只在后面放一个小红字，不放长句；天数不够的提醒不在页头，在施术日期卡里）③ 来源诊所 · 院长 · KR 室长 */
+function krTripRowHtml(c){
+  var has = !!stayText(c), need = c.settlementDone && !c.krVisit;
+  if(!has && !need) return '';
+  var est = tripStateOf(c)==='tentative', lab = est ? '在韩行程（预估）' : '在韩行程';
+  var bad = ''; try{ var hard = tripMismatchList(c).filter(function(x){ return !x.soft && x.kind!=='short'; })[0]; if(hard) bad = hard.kind==='time' ? '⚠️ 到院时间早于到达时间' : '⚠️ 施术日期早于到达'; }catch(e){}
+  var sus = staySuspect(c);
+  return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-8px 0 0;font-size:13px;">'+
+    (has ? '<b style="color:var(--slate2);"'+(stayAirportTip(c) ? ' title="'+krEsc(stayAirportTip(c))+'"' : '')+'>'+lab+'：'+krEsc(stayText(c))+'</b>' : '<b style="color:var(--muted);">'+lab+'：未定</b>')+
+    (c.krTripEnded ? '<span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;">韩国行程已结束</span>' : '')+
+    (krCan() ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krStayFixOpen()">行程修正</button>' : '')+
+    (bad ? '<b style="font-size:12px;color:#B3261E;">'+bad+'</b>' : '')+
+    (sus ? '<b style="font-size:12px;color:#B3261E;" title="'+krEsc(sus)+'">⚠ 日期可能存错：'+krEsc(sus)+'</b>' : '')+'</div>';
+}
 function krMainHeader(r, c){
   var cnt = krSdCounts(c);
   return '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><button class="btn-ghost" onclick="goBack()">← 返回</button>'+
     '<div style="font-size:18px;font-weight:700;">'+(krClientDetailAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+' <span style="font-weight:400;color:var(--slate2);">· '+krEsc(c.caseNo)+'</span></div>'+krResumeTag(c)+
-    '<span style="font-size:13px;color:var(--slate2);">面诊：'+cnt.consult+' 次｜施术：'+cnt.surg+' 次</span>'+krStayHeadHtml(c)+(c.krTripEnded ? '<span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;">韩国行程已结束</span>' : '')+((stayText(c) || (c.settlementDone && !c.krVisit)) && krCan() ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krStayFixOpen()">行程修正</button>' : '')+'<span style="flex:1;"></span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'+
+    '<span style="font-size:13px;color:var(--slate2);">面诊：'+cnt.consult+' 次｜施术：'+cnt.surg+' 次</span><span style="flex:1;"></span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'+krTripRowHtml(c)+
     '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.6;">来源诊所：'+krEsc(r.clinicName)+' · 院长：'+krEsc(r.director||'—')+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+'</div>';
 }
 function krSurgDayHeader(r, c){
   var cnt = krSdCounts(c), nC = cnt.consult, nS = cnt.surg;
   return '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><button class="btn-ghost" onclick="goBack()">← 返回</button>'+
     '<div style="font-size:18px;font-weight:700;">'+(krClientDetailAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+'</div>'+
-    '<span style="font-size:13px;color:var(--slate2);">面诊：'+nC+' 次｜施术：'+nS+' 次</span>'+krStayHeadHtml(c)+(c.krTripEnded ? '<span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;">韩国行程已结束</span>' : '')+((stayText(c) || (c.settlementDone && !c.krVisit)) && krCan() ? '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krStayFixOpen()">行程修正</button>' : '')+'<span style="flex:1;"></span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'+
+    '<span style="font-size:13px;color:var(--slate2);">面诊：'+nC+' 次｜施术：'+nS+' 次</span><span style="flex:1;"></span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'+krTripRowHtml(c)+
     '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.6;">来源诊所：'+krEsc(r.clinicName)+' · 院长：'+krEsc(r.director||'—')+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+'<br><a href="#" onclick="krCloseDay();return false;" style="color:var(--navy);text-decoration:underline;">主案件 '+krEsc(c.caseNo)+'</a></div>';
 }
 /* CMD-1027-01 A：非施术日子案件页的项目卡默认收起，按［增加今日项目］才展开；本次使用成功后自动收起 */

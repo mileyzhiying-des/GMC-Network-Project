@@ -2389,7 +2389,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.confirmedDate = todayStr(); cc.stay = {in:ymdAdd(todayStr(), 0), out:ymdAdd(todayStr(), 9), inTime:'15:00', outTime:'18:00', inAirport:'仁川 ICN', outAirport:'', by:'A1', at:nowFullDt()}; });
     try{
       krRenderCaseDetail(); var first = document.getElementById('krcase-body').firstElementChild; var ftxt = first.textContent, sub = first.nextElementSibling.textContent;
-      ST.ok(/在韩 /.test(ftxt) && !/在韩 /.test(sub), '在韩期间在第一行（名字 + 状态标签右边），第二行不再重复'); ST.ok(/仁川/.test((first.querySelector('b[title]')||{getAttribute:function(){return '';}}).getAttribute('title')||''), '悬停显示机场');
+      ST.ok(!/在韩行程/.test(ftxt) && /在韩行程：/.test(sub), '在韩行程在第二行（CMD-1106-13 三行页头；改前：第一行）'); ST.ok(/仁川/.test((first.nextElementSibling.querySelector('b[title]')||{getAttribute:function(){return '';}}).getAttribute('title')||''), '悬停显示机场');
       krArriveMain(); krOpenDay(r.clinicId, r.id, Store.withClinic(r.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], v0 = visitsOf(c0).filter(function(x){ return x.place==='KR' && x.date===todayStr(); })[0]; return v0 ? v0.key : ''; })); /* 1023-03 补：Step 1～4 在子案件页 */ ST.ok(document.querySelectorAll('.kr-l2').length>=2 && document.querySelectorAll('.kr-l3').length>=2, 'Step 1：已付定金项目、院长评估结果 = 2 级卡，施术 / 管理项目 = 3 级卡');
       var l2 = [].slice.call(document.querySelectorAll('.kr-l2')); ST.ok(l2.length>=2 && l2[1].getBoundingClientRect().top - l2[0].getBoundingClientRect().bottom >= 10, '2 级卡之间留间距（>= 10px）'); ST.ok(/已付定金项目/.test(l2[0].querySelector('.kr-l2-title').textContent) && l2[0].querySelectorAll('.kr-l3').length===2, '「已付定金项目」标题在 2 级卡里，下面两张 3 级卡');
       var rows = l2[0].querySelectorAll('.kr-l3 .kr-row'); ST.ok(rows.length>=2 && getComputedStyle(rows[0]).paddingTop==='6px', '行与行之间有间距');
@@ -2978,7 +2978,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
     var out0 = ymdAdd(todayStr(), 3), snap = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return JSON.stringify(c.stay||null); });
     Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.stay = {in:ymdAdd(todayStr(), -5), out:out0, by:'A1 室长', at:nowFullDt()}; return true; });
-    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); ST.ok(new RegExp('在韩 '+stayMD(ymdAdd(todayStr(), -5))+' ～ '+stayMD(out0)).test(document.getElementById('krcase-body').textContent), 'KR 案件页头：「在韩 MM/DD ～ MM/DD」');
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); ST.ok(new RegExp('在韩行程：'+stayMD(ymdAdd(todayStr(), -5))+'[^～]*～ '+stayMD(out0)).test(document.getElementById('krcase-body').textContent), 'KR 案件页头：「在韩 MM/DD ～ MM/DD」');
     krSetCaseTab('postcare'); krCbOpen({all:true}); ST.ok(KR_CB.stayOut===true && KR_CB.earliest===out0, '预约弹窗用离境日（不是最早可回国日）'); var late = KR_CB.rows.filter(function(r){ return r.kind==='care'; })[0];
     if(late){ late.date = ymdAdd(out0, 2); var chk = krCbCheck ? krCbCheck(late) : null; ST.ok(!chk || !!chk.err || /客人已离境/.test(chk.warn||''), '日期晚于离境日 → 橙字「客人已离境」（只提醒不拦）'); }
     var cb = document.getElementById('kr-cb-overlay'); if(cb) cb.classList.remove('open');
@@ -7145,7 +7145,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(function(c){ c.stay = {in:ymdAdd(td, -3), out:ymdAdd(td, 9), inTime:'10:00', outTime:'18:00'}; (c.subItems||[]).forEach(function(x){ if(x.place==='KR' && x.date && x.date > ymdAdd(td, 4)) x.date = ymdAdd(td, 4); }); /* 1027-12 三：离开之后有预约会先弹处理窗，这里先把预约都挪到新离开日期之前，只测行程修正本身 */ });
       krShowCase(cid, r0.id, {here:true, tab:'items'});
       var host = document.getElementById('kr-casedetail');
-      ST.ok(/行程修正/.test(host.innerText) && /在韩 /.test(host.innerText), '页头「在韩 …」后面有［行程修正］');
+      ST.ok(/行程修正/.test(host.innerText) && /在韩行程/.test(host.innerText), '页头「在韩行程：…」后面有［行程修正］');
       krStayFixOpen(); var ov = document.getElementById('kr-stayfix-overlay'); ST.ok(ov && ov.classList.contains('open'), '行程修正弹窗打开');
       document.getElementById('sf-out-d').value = ymdAdd(td, 5); document.getElementById('sf-why').value = ''; krStayFixSave();
       ST.ok(/更正原因/.test(document.getElementById('sf-err').textContent) && gc().stay.out===ymdAdd(td, 9), '原因没填 → 不能确认，日期不变');
@@ -7601,7 +7601,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       hd = Store.withClinic(r1.clinicId, function(){ return krStayHeadHtml(CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]); }); ST.ok(/在韩 \d\d\/\d\d 10:20 ～ \d\d\/\d\d 11:02/.test(hd), '五：填了 → 「在韩 MM/DD 10:20 ～ MM/DD 11:02」');
       KR_CASE.day = Store.withClinic(r1.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]; var v = visitsOf(c).filter(function(x){ return x.place==='KR'; })[0]; return v ? v.key : ''; });
       var dh = ''; try{ dh = Store.withClinic(r1.clinicId, function(){ return krSurgDayHeader ? krSurgDayHeader(CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]) : ''; }); }catch(e){}
-      ST.ok(!dh || /在韩 \d\d\/\d\d/.test(dh) && /行程修正/.test(dh), '五：施术当天页头同样显示在韩期间 + ［行程修正］'); KR_CASE.day = '';
+      ST.ok(!dh || /在韩行程：\d\d\/\d\d/.test(dh) && /行程修正/.test(dh), '五：施术当天页头同样显示在韩期间 + ［行程修正］'); KR_CASE.day = '';
       /* 六：没填在韩期间，按客人已到院被拦 */
       mut(r1, function(c){ delete c.stay; c.hasArrived = false; if(c.krSchedule) c.krSchedule.simDay = true; });
       mut(r1, function(c){ var cl0 = clientByName(c.name); if(cl0) cl0.passport = {text:'已登记', date:'', no:'K153001', issue:'2020-01-01', expiry:'2040-01-01'}; }); /* CMD-1029-09 五：护照号码已有 → 只测补填在韩期间 */
@@ -10220,6 +10220,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.status = 'change_pending'; cc.krSchedule.confirmedDate = p; cc.krSchedule.confirmedTime = '15:30'; cc.krSchedule.changeSubmitted = true; cc.krSchedule.changePrimary = q; cc.krSchedule.changeBackup = ''; });
       KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
       ST.ok(KR_SCH.time==='15:30', '改期带入原来的时间：'+KR_SCH.time);
+    } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+
+  /* CMD-1106-13：KR 案件页头三行 */
+  ST.def('R243a','CMD-1106-13（KM1 分页，stageC 夹具）：页头三行（名字 · 案件号 + 次数 + 对话最右 / 在韩行程 +［行程修正］/ 来源诊所 · 院长 · 室长）；页头没有拆线天数提醒；施术日期早于到达 → ［行程修正］后小红字；预估 / 没填写法',function(){
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, oa = window.alert; window.alert = function(){};
+    try{
+      var base = ymdAdd(todayStr(), 40), days = 0, out = '';
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(cc); days = tripStayDays(cc); out = ymdAdd(base, days+3);
+        cc.stay = {in:base, inTime:'11:20', out:out, outTime:'12:30', by:'A1'}; cc.krSchedule = {status:'pending', primary:ymdAdd(out, -1), backup:'', confirmedDate:null, tripState:'booked', tripSubmitted:true}; cc.hasArrived = false; });
+      krShowCase(r.clinicId, r.id); krSetCaseTab('items'); krRenderCaseDetail();
+      var body = document.getElementById('krcase-body'), rows = [body.children[0], body.children[1], body.children[2]];
+      var t = function(el){ return el ? el.textContent : ''; };
+      ST.ok(/· A\d+/.test(t(rows[0])) && /面诊：\d+ 次｜施术：\d+ 次/.test(t(rows[0])), '第一行：客人名 · 案件号 + 面诊 / 施术次数');
+      var btns = [].slice.call(rows[0].querySelectorAll('button')); ST.ok(btns[btns.length-1].textContent.trim()==='对话', '［对话］在第一行最右');
+      ST.ok(/^在韩行程：\d\d\/\d\d 11:20 ～ \d\d\/\d\d 12:30/.test(t(rows[1]).trim()) && /行程修正/.test(t(rows[1])), '第二行：在韩行程 + ［行程修正］');
+      ST.ok(/来源诊所：.+ · 院长：.+ · KR 室长：/.test(t(rows[2])), '第三行：来源诊所 · 院长 · KR 室长');
+      ST.ok(!/建议预留|拆线安排在/.test(t(rows[0])+t(rows[1])+t(rows[2])), '页头没有拆线天数提醒');
+      ST.ok(!/早于到达/.test(t(rows[1])), '日期没问题：没有小红字');
+      /* 早于到达 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.primary = ymdAdd(base, -1); });
+      krRenderCaseDetail(); body = document.getElementById('krcase-body'); ST.ok(/行程修正.*⚠️ 施术日期早于到达/.test(t(body.children[1])) && !/才到达/.test(t(body.children[1])), '施术日期早于到达：［行程修正］后面小红字，不放长句');
+      /* 预估 / 没填 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.tripState = 'tentative'; cc.krSchedule.primary = ymdAdd(base, 2); });
+      krRenderCaseDetail(); body = document.getElementById('krcase-body'); ST.ok(/^在韩行程（预估）：/.test(t(body.children[1]).trim()), '行程预估：在韩行程（预估）：…');
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.stay = null; });
+      krRenderCaseDetail(); body = document.getElementById('krcase-body'); ST.ok(/在韩行程（预估）：未定|在韩行程：未定/.test(t(body.children[1])), '没填：写「未定」：'+t(body.children[1]).slice(0, 30));
     } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
 })();
