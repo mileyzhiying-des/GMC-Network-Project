@@ -10273,4 +10273,33 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krSchSet('time', '22:00'); krSchDur('h', '5'); ST.ok(/～ 隔天 03:00/.test(endTxt()), '跨到隔天写「隔天 03:00」：'+endTxt());
     } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
+
+  /* CMD-1106-15：院长选推荐项目只勾 + 备注 */
+  ST.def('R245a','CMD-1106-15（KD1 分页，stagePay 夹具）：推荐项目标题「推荐项目（选择勾选）」没有红色 *、没有「赴韩项目可选范围」小标题；勾施术 / 管理项目不展开细节、没有推荐项目整理；备注可填；细节先带项目库默认；上传后只读显示项目 + 备注，室长发送画面保留',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KD1', '要在 KD1 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc()), sr = window.SpeechRecognition, wsr = window.webkitSpeechRecognition, oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    try{
+      window.SpeechRecognition = undefined; window.webkitSpeechRecognition = undefined;
+      mut(function(c){ c.needsConsult = true; c.consultKind = ''; c.director = 'KD1 院长'; c.metaviewStatus = 'ready'; c.concerns = [{part:'f_nose', sub:'', desc:'鼻梁低', expect:'自然', video:{name:'v.mp4'}, photos:{front:{name:'p1.jpg'}}}]; ST.krEta(c); delete c.consultStartedAt; delete c.consultStartedBy; delete c.consultContentAt; delete c.consultEval; delete c.revAuth; });
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_SUB = krSubBlank(''); krShowCase(cid, r.id, {tab:'consult', here:true}); krStartConsult();
+      var h = krTabConsult(gc()), t = txt(h);
+      ST.ok(/推荐项目（选择勾选）/.test(t) && !/推荐项目（从项目库选/.test(t), '标题改成「推荐项目（选择勾选）」'); var secHead = h.slice(h.indexOf('推荐项目（选择勾选）'), h.indexOf('推荐项目（选择勾选）')+160); ST.ok(!/B3261E/.test(secHead.split('</div>')[0]), '标题后没有红色 *');
+      ST.ok(!/赴韩项目可选范围/.test(t) && /施术项目/.test(t) && /管理项目/.test(t), '没有「赴韩项目可选范围」小标题，施术项目 / 管理项目分页还在');
+      var cand = krScopeCandidates(cid), p0 = cand.kr[0]; if(!ST.ok(!!p0, '项目库有施术项目')) return;
+      krPickToggle(p0.name, true); h = krTabConsult(gc()); t = txt(h);
+      ST.ok(!/建议在韩|所需术后管理|麻醉/.test(t.slice(t.indexOf('推荐项目（选择勾选）'))), '勾了施术项目：不展开建议在韩天数 / 麻醉 / 所需术后管理');
+      ST.ok(!/推荐项目整理|推荐在韩/.test(t), '没有推荐项目整理');
+      ST.ok(!!KR_SUB.detail[p0.name] && !!KR_SUB.detail[p0.name].anes, '细节先带项目库默认存起来：'+JSON.stringify(KR_SUB.detail[p0.name]).slice(0, 80));
+      krNoteSet(p0.name, '重点看鼻尖'); krSubSet('overall', '整体备注X');
+      krSubTab('mgmt'); var mg0 = krLocalLibOn(krHospitalIdOfMe())[0]; if(mg0){ krMgPick(mg0.id, true); h = krTabConsult(gc()); t = txt(h); ST.ok(!/份数|第一次使用/.test(t), '勾了管理项目：不展开份数 / 第一次使用'); ST.ok(/id="kr-mg-sub-list"/.test(h) && /placeholder="备注"/.test(h.slice(h.indexOf('kr-mg-sub-list'))), '管理项目一行也有备注框'); krNoteSet('mg:'+mg0.id, '管理备注'); }
+      krSubTab('surg');
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; krRvSetQ ? 0 : 0; gcEvalOf(c, true).rec = '面诊内容'; });
+      var up = null; krMut(function(c){ up = coreGcUpload(c, 'KD1 院长', 'doctor', krGcSubNow()); return !!(up && up.ok); }); ST.ok(up && up.ok, '可以上传（只有录入内容必填）');
+      h = krTabConsult(gc()); t = txt(h); ST.ok(/重点看鼻尖/.test(t) && (!mg0 || /管理备注/.test(t)) && !/建议在韩|所需术后管理/.test(t.slice(t.indexOf('推荐项目'))), '③ 上传后只读：项目 + 备注，没有细节');
+      var sub = gc().consultEval.sub; ST.ok(sub.notes[p0.name]==='重点看鼻尖' && sub.pick[p0.name] && sub.detail[p0.name], 'consultEval.sub 里存了勾选、备注和默认细节');
+    } finally { window.SpeechRecognition = sr; window.webkitSpeechRecognition = wsr; try{ krRvMicStop(false); }catch(e){} window.alert = oa; window.confirm = oc; try{ krVault(cid, r.id, true).transcripts = []; }catch(e){} Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
 })();
