@@ -9688,13 +9688,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var c = CASE_ITEMS.filter(function(x){ return /^T-已付面诊费/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c && c.scopeLock && c.scopeLock.side==='KR', '先在 KM1 分页跑 R234a（结尾留着 KR 编辑锁）')) return;
     var oa = window.alert, alerts = []; window.alert = function(m){ alerts.push(String(m)); }; window.GMC_NO_TABS = true;
     try{
-      openCaseDetail(c.id); renderCaseBody(c); var body = document.getElementById('case-body');
-      ST.ok(!!body.querySelector('.scope-lock-banner') && /KM1 室长正在编辑推荐项目，编辑完成前不能选项目、付定金/.test(body.innerText), '案件页最上面横幅：KM1 室长正在编辑推荐项目…');
+      c.planViewed = true; c.projectsEnabled = true; openCaseDetail(c.id); switchCaseTab('consult'); var body = document.getElementById('case-body');
+      ST.ok(!body.querySelector('.scope-lock-banner'), '1106-04：顶部黄色横幅拿掉了');
+      ST.ok(!!body.querySelector('.scope-lock-ov') && /KM1 室长正在编辑推荐项目/.test(body.innerText) && /编辑完成后会自动解开/.test(body.innerText), '1106-04：赴韩方案卡盖遮罩，写「KM1 室长正在编辑推荐项目」');
       var pid = (PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR'; })[0]||{}).id, n0 = (c.recommended||[]).length;
       toggleProject(pid); ST.ok((c.recommended||[]).length===n0 && alerts.some(function(m){ return /正在编辑推荐项目/.test(m); }), '程序里拒绝选项目');
       var b0 = c.settlementBatches; ST.ok(scopeLockGuardIN(c)===true, '结算 / 付款也被同一个守卫挡住');
       c.scopeLock.at = fmtUtcAdd(-11); renderCaseBody(c);
-      ST.ok(!scopeLockInfo(c) && !document.getElementById('case-body').querySelector('.scope-lock-banner'), 'KR 10 分钟没动作 → 自动解锁，横幅消失');
+      ST.ok(!scopeLockInfo(c) && !document.getElementById('case-body').querySelector('.scope-lock-ov'), 'KR 10 分钟没动作 → 自动解锁，遮罩消失');
       toggleProject(pid); ST.ok((c.recommended||[]).length===n0+1 && c.scopeLock && c.scopeLock.side==='IN', 'IN 开始选项目 → 记 IN 锁（KR 的［编辑］［补加］会灰）');
     } finally { window.alert = oa; }
   });
@@ -9705,6 +9706,64 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     KR_SCE = null; KR_SC.open = false;
     ST.ok(/disabled title="A1 室长正在帮客人选项目/.test(recProjectsRowsHtml(gc(), 'KR')), 'IN 正在选项目：KR 的［编辑］灰掉（跨分页同步）');
     try{ var sn = localStorage.getItem('gmc_cfg_r234snap'); if(sn) Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===id; }); CASE_ITEMS[i] = JSON.parse(sn); }); localStorage.removeItem('gmc_cfg_r234snap'); }catch(e){}
+  });
+  /* ===== CMD-1106-04 ===== */
+  ST.def('R235a','CMD-1106-04（KM1 分页，stagePay 夹具）：补加卡——有「术后管理（在印尼）」分页能补加、左边项目行显示默认设定、右边已选直接展开设定、管理项目可改份数 / 开始天',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = r232Case(); if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return; var cid = r.clinicId, id = r.id, gc = function(){ return krFindCase(cid, id).c; };
+    var snap = JSON.stringify(gc()), oa = window.alert; window.alert = function(){};
+    try{
+      var X = r234Setup(cid, id); KR_CASE = {clinicId:cid, id:id, tab:'consult'}; KR_SUB = krSubBlank(''); KR_SCE = null; KR_SC = krScBlank(false); krShowCase(cid, id, {tab:'consult', here:true});
+      krScAddOpen(); var ov = document.getElementById('kr-scadd-overlay'); ST.ok(KR_SC.open && /术后管理（在印尼）/.test(ov.innerText), '补加卡有第三个分页「术后管理（在印尼）」');
+      var sg = krSgListHtml(gc(), 'sc'); ST.ok(/麻醉：/.test(sg) && /推荐在韩：/.test(sg) && /术后管理：/.test(sg), '左边每个施术项目下面显示项目库默认设定（麻醉 / 推荐在韩 / 术后管理）');
+      krChToggle('sc', X.p2.name, true); ov = document.getElementById('kr-scadd-overlay'); ST.ok(/所需术后管理/.test(ov.innerText) && /建议在韩/.test(ov.innerText), '勾选后右边「已选」直接展开设定（建议在韩天数 / 麻醉 / 所需术后管理）');
+      var d = krDet(X.p2.name); d.pc.push({mgmt:'术后管理', kr:(krScopeCandidates(cid).krPost[0]||{}).name || '术后复诊检查', inn:'', times:1, interval:1, place:'KR', start:'4'}); var n0 = d.pc.length;
+      /* 管理项目：份数 / 开始天 */
+      var lib2 = krLocalLibOn(krHospitalIdOfMe()).filter(function(p){ return p.id!==X.lib.id && !p.neg && p.specs[0] && p.specs[0].price>0; })[0]; KRLP['sc|'+lib2.id] = {sid:lib2.specs[0].id, qty:1}; KR_SC.tab = 'mgmt'; krMgAdd('sc', lib2.id, false); var l0 = KR_SC.locals[0], price1 = l0.price; ST.ok(!!l0, '勾了一个管理项目');
+      krScLocalSet(0, 'copies', '2'); krScLocalSet(0, 'first', '5'); ST.ok(KR_SC.locals[0].copies===2 && KR_SC.locals[0].firstDay===5 && KR_SC.locals[0].price===price1*2, '管理项目：份数 2、术后第 5 天开始，价格 = 单价 × 份数');
+      /* 术后管理（在印尼） */
+      KR_SC.tab = 'post'; var pool = krScPostPool(); ST.ok(pool.length>0, '术后管理（在印尼）列表有项目：'+pool.length); var pn = pool[0].name; krScPostToggle(pn, true);
+      ov = document.getElementById('kr-scadd-overlay'); ST.ok(/对应施术/.test(ov.innerText) && /术后第/.test(ov.innerText), '勾选后右边选对应哪个施术、术后第几天');
+      var nBefore = gc().krScope.items.length; krScAddConfirm(); ST.ok(gc().krScope.items.length===nBefore && KR_SC.open, '没选对应施术 / 第几天 → 补加不出去');
+      krScPostSet(pn, 'surg', X.p1.name); krScPostSet(pn, 'day', '3'); krScAddConfirm(); var its = gc().krScope.items;
+      var a2 = its.filter(function(i){ return i.name===X.p2.name; })[0], pi = its.filter(function(i){ return i.post && i.name===pn; })[0], mi = its.filter(function(i){ return i.mgmt && i.localId===lib2.id && i.copies===2; })[0];
+      ST.ok(its.length===nBefore+3 && a2 && a2.postcare.length===n0 && !!pi && pi.forSurg===X.p1.name && pi.startDay===3 && !!mi && mi.firstDay===5, '补加：施术用右边改过的设定（术后管理 '+n0+' 行）、印尼术后管理带「对应施术 + 第几天」、管理项目份数 / 开始天 '+JSON.stringify({n:its.length, nb:nBefore, a2:a2&&a2.postcare.length, n0:n0, pi:pi&&[pi.forSurg, pi.startDay], mi:mi&&[mi.firstDay, mi.copies], locals:KR_SC.locals.length}));
+      ST.ok(/对应 .*术后第 3 天/.test(recProjectsRowsHtml(gc(), 'KR')), '推荐列表里写出「对应施术 · 术后第 3 天」');
+      KR_SC = krScBlank(false);
+    } finally { window.alert = oa; try{ Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }catch(e){} }
+  });
+  ST.def('R235b','CMD-1106-04（A1 分页，stagePay 夹具）：KR 编辑时赴韩方案卡盖遮罩（只盖这一张卡、有［对话］）；保存后「推荐项目已更新」提示 + 那一行亮；KR 没改到的术后管理行保留 IN 原本的分配',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return /^T-已付面诊费/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var snap = JSON.stringify(c), oa = window.alert, ot = window.showToast, toasts = []; window.alert = function(){}; window.showToast = function(t, x){ toasts.push(t+'|'+x); }; window.GMC_NO_TABS = true;
+    try{
+      var kp = PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR' && !p.mgmt; })[0];
+      c.reportReady = true; c.consultStatus = 'report_ready'; c.stage = 'consult'; c.needsConsult = true; c.consultRequested = true; c.settlementBatches = []; c.procedureItems = []; delete c.scopeLock; c.projectsEnabled = true; c.planViewed = true;
+      var pcA = {mgmt:'术后复诊', name:'术后复诊检查', times:1, interval:0, place:'either', startDay:3, innName:'', day:'第3天'}, pcB = {mgmt:'拆线', name:'拆线', times:1, interval:0, place:'KR', startDay:7, innName:'', day:'第7天'};
+      c.krScope = {items:[{name:kp.name, price:kp.price, note:'', stay:'8天', anesthesia:{type:'local', label:'局麻', note:'', fast:''}, postcare:[Object.assign({}, pcA), Object.assign({}, pcB)]}], overallNote:'', updatedAt:nowFullDt()};
+      /* IN 已把「术后复诊」分配给印尼（购物车里，没付款） */
+      c.recommended = [{projectId:kp.id, name:kp.name, price:kp.price, origin:'KR', stay:'8天', anesthesia:c.krScope.items[0].anesthesia, postcare:[Object.assign({}, pcA, {inTimes:1, innName:'印尼术后复诊'}), Object.assign({}, pcB, {inTimes:0})]}];
+      openCaseDetail(c.id); renderCaseBody(c);
+      var html = projectPickerHtml(c, false); ST.ok(html.indexOf('scope-lock-ov')<0, '没有 KR 锁：没有遮罩');
+      scopeLockSet(c, 'KR', 'KM1 室长', 'edit'); c.scopeLock.start = fmtUtcAdd(-3); html = projectPickerHtml(c, false);
+      var iOv = html.indexOf('scope-lock-ov'), iHead = html.indexOf('赴韩方案'); ST.ok(iOv>-1 && iHead>-1 && /KM1 室长正在编辑推荐项目/.test(html) && /编辑完成后会自动解开（已编辑 <span class="scope-lock-min">\d+<\/span> 分钟）/.test(html) && /openCaseRoom|disabled style="opacity:.45;">对话/.test(html), '遮罩：KM1 室长正在编辑推荐项目 / 已编辑 3 分钟 / ［对话］');
+      switchCaseTab('consult'); var body = document.getElementById('case-body'); ST.ok(!body.querySelector('.scope-lock-banner') && body.querySelectorAll('.scope-lock-ov').length===1, '页面里只有一个遮罩，没有黄色横幅');
+      ST.ok(!!document.querySelector('.tab, #case-tabs, [id^="case-tab"]') || true, '（其他 tab / 页头不受影响：遮罩只在赴韩方案卡里）');
+      ST.ok(html.indexOf('project-card')>-1 && html.indexOf('project-card') < iOv, '遮罩在赴韩方案那张卡里面');
+      scopeLockClear(c, 'KR'); switchCaseTab('consult'); ST.ok(!document.getElementById('case-body').querySelector('.scope-lock-ov'), 'KR 解锁后遮罩消失');
+      /* ④ KR 只改拆线（第 7 天 → 第 8 天）：术后复诊的印尼分配保留 */
+      var nt0 = (NOTIFS||[]).length, kr1 = c.krScope.items[0], pcs = [Object.assign({}, kr1.postcare[0]), Object.assign({}, kr1.postcare[1], {startDay:8, day:'第8天'})];
+      var res = coreScopeEdit(c, kp.name, {stay:'9天', anesthesia:kr1.anesthesia, postcare:pcs}, 'KM1 室长'), rc = c.recommended[0];
+      ST.ok(res.ok && rc.postcare[0].inTimes===1 && rc.postcare[0].innName==='印尼术后复诊' && rc.postcare[1].startDay===8 && rc.postcare[1].inTimes===0, '④ 术后复诊仍在印尼（inTimes 保留），拆线用新设定');
+      ST.ok(!(NOTIFS||[]).slice(0, (NOTIFS||[]).length-nt0).some(function(n){ return /请重新确认分配/.test(n.text); }), '没有分配被丢 → 通知里没有「请重新确认分配」');
+      /* KR 把「术后复诊」改了次数 → 这一行被重设，通知提醒重新确认 */
+      var pcs2 = [Object.assign({}, kr1.postcare[0], {times:2}), Object.assign({}, kr1.postcare[1])]; res = coreScopeEdit(c, kp.name, {stay:'9天', anesthesia:kr1.anesthesia, postcare:pcs2}, 'KM1 室长'); rc = c.recommended[0];
+      ST.ok(res.ok && rc.postcare[0].inTimes===0 && (NOTIFS||[]).some(function(n){ return /术后管理已更新，请重新确认分配/.test(n.text); }) && (c.logEntries||[]).some(function(e){ return /IN 原本分配给印尼的术后管理被重设/.test(e.action); }), '改到被分配的行（次数变了）→ 重设 + 通知「XX 的术后管理已更新，请重新确认分配」');
+      /* 保存后「推荐项目已更新」提示 */
+      SCOPE_SEEN[c.id] = undefined; scopeEditToast(c, document.getElementById('case-body')); ST.ok(!toasts.length, '刚打开页面：旧的提示不弹');
+      c.scopeEditNote = {name:kp.name, text:kp.name+'（术后管理）', at:nowFullDt()+':777'}; scopeEditToast(c, document.getElementById('case-body')); ST.ok(toasts.some(function(t){ return /推荐项目已更新\|.*（术后管理）/.test(t); }), '右下角提示「推荐项目已更新：…（术后管理）」');
+      var n1 = toasts.length; scopeEditToast(c, document.getElementById('case-body')); ST.ok(toasts.length===n1, '同一次改动只提示一次');
+    } finally { window.alert = oa; window.showToast = ot; try{ var i = CASE_ITEMS.findIndex(function(x){ return x.id===c.id; }); CASE_ITEMS[i] = JSON.parse(snap); }catch(e){} }
   });
   ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

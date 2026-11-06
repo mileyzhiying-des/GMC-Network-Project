@@ -567,3 +567,6 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 /* CMD-1102-11 四：灰按钮旁边写原因 */
 .kr-btn-off{display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;vertical-align:top;max-width:100%;}
 .kr-btn-off .kr-why{font-size:12px;line-height:1.3;color:var(--muted);white-space:normal;max-width:190px;}
+/* CMD-1106-04：KR 保存编辑后，IN 选项目画面里被改到的那一行短暂亮一下 */
+@keyframes scopeFlash { 0%,60% { background:#FBF0C9; box-shadow:0 0 0 4px #FBF0C9; } 100% { background:transparent; box-shadow:0 0 0 0 transparent; } }
+.scope-flash { animation:scopeFlash 3s ease-out; border-radius:6px; }
