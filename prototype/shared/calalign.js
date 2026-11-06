@@ -578,10 +578,15 @@ function staySave(){
   }
   if(d.inD && d.outD && d.outD < d.inD) return bad('离境日不能早于入境日');
   var ye = stayDateErr('入境日', d.inD) || stayDateErr('离境日', d.outD); if(ye) return bad(ye);
+  /* CMD-1106-07：存行程时，首选 / 备选 / KR 确认的施术日期不能跑到范围外（暂定的行程只是预估，不挡） */
+  var tmp = Object.assign({}, c, {stay:{in:d.inD, out:d.outD, inTime:d.ex.inTime, outTime:d.ex.outTime}, krSchedule:Object.assign({}, c.krSchedule||{}, x.o.trip ? {tripState:'booked'} : {}), tripConfirm:x.o.trip ? {} : c.tripConfirm});
+  var tm = tripMismatchList(tmp).filter(function(z){ return !z.soft; });
+  if(tm.length){ e.innerHTML = tm.map(function(z){ var wrongIn = d.inD && z.date < d.inD; return aEscC(z.label+' '+stayMD(z.date)+(wrongIn ? ' 早于到达日 '+stayMD(d.inD) : '')+'：'+z.msg); }).join('<br>')+'<br>要先改施术日期，才能存这个行程。 <a href="#" class="info-link" onclick="stayGoEditDate();return false;">去修改施术日期</a>'; e.style.display = 'block'; return; }
   var finish = function(){ staySaveDo(x, c, d, methods, other, bad); };
   if(d.outD && stayConflictInfo(c, d.outD, (d.ex||{}).outTime).length){ inStayResGate(c, d, finish); return; } /* CMD-1027-14：离开日期之后还有韩国预约 → 先弹处理窗（和 KR 的行程修正同一套规则） */
   finish();
 }
+function stayGoEditDate(){ var x = STAY_CTX; var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null; try{ if(x){ var c = calCaseById(x.id); if(c) switchCaseTab('kr'); } }catch(er){} }
 function staySaveDo(x, c, d, methods, other, bad){
   var r = coreSetStay(c, d.inD, d.outD, actingName(), {initial:!!x.o.initial, ex:d.ex}); if(!r.ok) return bad(r.err);
   if(x.o.trip && d.pno){ var cl0 = clientByName(c.name); if(cl0 && passportOf(cl0).no!==d.pno){ var p0 = passportOf(cl0); cl0.passport = {text:'已登记', date:todayStr(), no:d.pno, issue:p0.issue, expiry:p0.expiry}; cl0.timeline.push({stage:'基础信息修改', actor:ME_NAME, actorId:currentAccountId(), action:'登记护照号码（确认行程）', dt:nowFullDt(), kind:'plain'}); } }

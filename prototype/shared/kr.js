@@ -1293,7 +1293,7 @@ function krSchReset(c, defaults){
   if(KR_SCH.caseKey !== krRecKey()+':'+(c.krSchedule ? c.krSchedule.status : '')) KR_SCH = {caseKey:krRecKey()+':'+(c.krSchedule ? c.krSchedule.status : ''), pick:defaults.pick||'', time:defaults.time||'10:00', address:null, reason:''};
   if(KR_SCH.address===null) KR_SCH.address = defaults.address||'';
 }
-function krSchSet(k, v){ KR_SCH[k] = v; if(k==='pick') krRenderCaseDetail(); }
+function krSchSet(k, v){ KR_SCH[k] = v; if(k==='pick' || k==='time') krRenderCaseDetail(); }
 /* CMD-1019-14：KR 确认施术时间的到院地址默认带医院英文地址（可改）；发给客人的短信用这一栏 */
 function krDefaultAddress(){ return hospitalEn(krHospitalIdOfMe()).address; }
 /* 施术时长 = 本案件未取消项目在 KR 项目库「默认资料」里的 durMin 合计（surgeryMinutes，没有资料按 60 分钟）；到院时间 + 时长与院长「不可预约」/ 其他施术重叠就挡住（CMD-1013-11 一·1） */
@@ -1302,6 +1302,7 @@ function krTimeOptionsFor(sel, c, date){
   var hid = krHospitalIdOfMe(), hr = hospitalHours(hid), dur = surgeryMinutes(c), key = KR_CASE.clinicId+':'+KR_CASE.id, o = '';
   for(var m = 6*60; m <= 23*60+30; m += 30){
     var tt = minToTime(m), er = date ? krSurgerySlotError(hid, c.director, date, tt, dur, key, {allowOffHours:true}) : '';
+    var tI = date ? tripDateIssue(c, date, tt) : null; if(tI && !tI.soft && !er){ o += '<option value="'+tt+'" disabled>'+tt+'　✕ '+tI.msg+'</option>'; continue; } /* CMD-1106-07 */
     o += '<option value="'+tt+'"'+(tt===sel?' selected':'')+(er ? ' disabled' : '')+'>'+tt+(er ? '　✕ 需约 '+krHoursText(dur)+'，'+er.replace(/^.*?，和 /, '会撞到 ').replace(/ 重叠$/, '') : '')+'</option>';
   }
   return o;
@@ -1315,7 +1316,8 @@ function krDayFullNote(c, date){
 function krSchForm(c, dates, labels, confirmFn, rejectFn, confirmLabel){
   var opts = dates.map(function(d, i){ return '<label style="display:block;margin:6px 0;font-size:13px;cursor:pointer;"><input type="radio" name="kr-sch-pick" '+(KR_SCH.pick===d?'checked':'')+' onchange="krSchSet(\'pick\',\''+d+'\')"> '+labels[i]+' <b>'+d+'</b></label>'+krSchedDayHtml(c, d); }).join('');
   var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
-  return krSurgeryHoursNote(c)+opts+krDayFullNote(c, KR_SCH.pick)+'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;"><span style="font-size:12px;">到院时间</span><select onchange="krSchSet(\'time\',this.value)" style="'+inp+'">'+krTimeOptionsFor(KR_SCH.time, c, KR_SCH.pick)+'</select>'+
+  var __ti = tripDateIssue(c, KR_SCH.pick, KR_SCH.time), tripNote = __ti ? '<div style="font-size:12px;margin:4px 0;color:'+(__ti.soft ? 'var(--muted)' : '#B3261E')+';'+(__ti.soft ? '' : 'font-weight:700;')+'">'+(__ti.soft ? '提醒（行程暂定）：' : '')+krEsc(tripDateIssueText(c, KR_SCH.pick, KR_SCH.time))+(__ti.soft ? '' : '，不能确认')+'</div>' : ''; /* CMD-1106-07 */
+  return krSurgeryHoursNote(c)+opts+krDayFullNote(c, KR_SCH.pick)+tripNote+'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;"><span style="font-size:12px;">到院时间</span><select onchange="krSchSet(\'time\',this.value)" style="'+inp+'">'+krTimeOptionsFor(KR_SCH.time, c, KR_SCH.pick)+'</select>'+
     '<input value="'+krEsc(KR_SCH.address)+'" oninput="krSchSet(\'address\',this.value)" placeholder="地址" style="'+inp+'flex:1;min-width:260px;"></div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;"><button class="btn-primary" onclick="'+confirmFn+'()">'+confirmLabel+'</button>'+
     '<input value="'+krEsc(KR_SCH.reason)+'" oninput="krSchSet(\'reason\',this.value)" placeholder="无法安排的原因" style="'+inp+'min-width:200px;"><button class="btn-outline" onclick="'+rejectFn+'()">无法安排</button></div>';
@@ -5089,7 +5091,7 @@ function krStayHeadHtml(c){
   var __r = krStayHeadHtml0(c); return (__r || __tt) ? (__tt + (__tt && __r ? ' ' : '') + __r) : '';
 }
 function krStayHeadHtml0(c){
-  if(stayText(c)) return '<b style="font-size:13px;color:var(--slate2);"'+(stayAirportTip(c) ? ' title="'+krEsc(stayAirportTip(c))+'"' : '')+'>在韩 '+krEsc(stayText(c))+'</b>'+(staySuspect(c) ? ' <b style="font-size:12px;color:#B3261E;" title="'+krEsc(staySuspect(c))+'">⚠ 日期可能存错：'+krEsc(staySuspect(c))+'</b>' : '');
+  if(stayText(c)) return '<b style="font-size:13px;color:var(--slate2);"'+(stayAirportTip(c) ? ' title="'+krEsc(stayAirportTip(c))+'"' : '')+'>在韩 '+krEsc(stayText(c))+'</b>'+(tripMismatchList(c).length ? ' '+tripMismatchHtml(c, true) : '')+(staySuspect(c) ? ' <b style="font-size:12px;color:#B3261E;" title="'+krEsc(staySuspect(c))+'">⚠ 日期可能存错：'+krEsc(staySuspect(c))+'</b>' : '');
   if(c.settlementDone && !c.krVisit) return '<b style="font-size:13px;color:var(--muted);">在韩：未填写</b>';
   return '';
 }

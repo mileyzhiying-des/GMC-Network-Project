@@ -5989,6 +5989,7 @@ function pickKrDate(pf, bf, y, m, d){
   var dateStr = fmtDateYMD(y,m,d);
   var c = getCurrentCase(); if(!c) return;
   if(dateStr <= todayStr()) return; /* CMD-1102-07 二：从明天开始 */
+  var __ti = tripDateIssue(c, dateStr); if(__ti && !__ti.soft) return; /* CMD-1106-07 */
   if(caseOpenDates(c).indexOf(dateStr)===-1) return; /* 未开放的日期不可选（只看该案件所选院长开放的日期） */
   var ks = ensureKrScheduleDraft(c);
   /* CMD-1015-05 五：先点选 1～2 天；再点已选的日期取消；已选 2 天时点别的日期 = 替换备选；只选 1 天 = 自动首选；哪一天是首选用格子左上角的「✅ 首选日」勾选 */
@@ -6005,6 +6006,7 @@ function setKrPrimaryDate(pf, bf, dateStr){
 }
 
 function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
+  var __c0 = getCurrentCase(), __w = tripWin(__c0), tripAdv = __w ? '<div style="font-size:12px;margin-bottom:6px;color:'+(__w.soft ? 'var(--muted)' : 'var(--slate2)')+';">'+(__w.soft ? '行程暂定，仅供提醒：' : '客人行程：')+'到达 '+stayMD(__w.in)+(__w.inTime ? ' '+__w.inTime : '')+(__w.out ? ' ～ 离开 '+stayMD(__w.out)+(__w.outTime ? ' '+__w.outTime : '') : '')+(__w.days ? '；做完需在韩 '+__w.days+' 天' : '')+(__w.soft ? '' : '，范围外的日期已灰掉')+'</div>' : '';
   var openDatesNow = caseOpenDates(getCurrentCase());
   var y = KR_SCHED_VIEW_MONTH.getFullYear(), m = KR_SCHED_VIEW_MONTH.getMonth();
   var firstDow = new Date(y,m,1).getDay();
@@ -6014,19 +6016,20 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
   for(var d=1; d<=daysInMonth; d++) cells.push(d);
   var dowLabels = ['日','一','二','三','四','五','六'];
   var legend = '<div style="display:flex;gap:16px;font-size:12px;color:var(--slate2);margin-bottom:8px;flex-wrap:wrap;"><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#F6C9CF;border:1px solid #E5A3AC;margin-right:4px;vertical-align:-2px;"></span>首选日 ✅'+(primaryVal?'：'+primaryVal:'')+'</span><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--action-primary,#9A6A4B);margin-right:4px;vertical-align:-2px;"></span>备选（选填）'+(backupVal?'：'+backupVal:'')+'</span><span style="color:var(--muted);">点选 1～2 天；选了两天时，在其中一天格子左上角勾选「首选日」；只选一天就是首选日</span></div>';
-  return legend+'<div style="width:100%;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:13px;">'+
+  return tripAdv+legend+'<div style="width:100%;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:13px;">'+
     dowLabels.map(function(w){ return '<div style="color:var(--muted);padding:4px 0;font-size:12px;">'+w+'</div>'; }).join('')+
     cells.map(function(d){
       if(!d) return '<div></div>';
       var dateStr = fmtDateYMD(y,m,d);
-      var open = openDatesNow.indexOf(dateStr)>-1 && dateStr > todayStr(); /* 今天及以前的日期置灰不可选（CMD-1012-05 三·1；CMD-1102-07 二：从明天开始） */
+      var open = openDatesNow.indexOf(dateStr)>-1 && dateStr > todayStr();
+      var tripI = open ? tripDateIssue(getCurrentCase(), dateStr) : null, tripBlock = !!(tripI && !tripI.soft); if(tripBlock) open = false; /* CMD-1106-07：行程已定 → 范围外灰掉 + 原因 */ /* 今天及以前的日期置灰不可选（CMD-1012-05 三·1；CMD-1102-07 二：从明天开始） */
       var style = 'position:relative;min-height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;', lab = '';
       if(!open) style += 'color:var(--dim);background:var(--bg-sidebar,#F7F4F0);';
       else if(dateStr===primaryVal){ style += 'background:#F6C9CF;border:1px solid #E5A3AC;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;color:#A8323F;">✅ 首选日</span>'; }
       else if(dateStr===backupVal){ style += 'background:var(--action-primary,#9A6A4B);color:#fff;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();setKrPrimaryDate(\''+pf+'\',\''+bf+'\',\''+dateStr+'\')" title="设为首选日">☐ 首选日</span>'; }
       else style += 'color:var(--navy);cursor:pointer;background:#fff;border:1px solid var(--border2);';
       var onclick = open ? ' onclick="pickKrDate(\''+pf+'\',\''+bf+'\','+y+','+m+','+d+')"' : '';
-      return '<div style="'+style+'"'+onclick+'>'+lab+d+'</div>';
+      return '<div style="'+style+'"'+onclick+(tripBlock ? ' title="'+aEscC(tripI.msg)+'"' : '')+'>'+lab+d+(tripBlock ? '<span style="position:absolute;left:4px;right:4px;bottom:3px;font-size:11px;line-height:1.2;color:#B3261E;">'+aEscC(tripI.msg)+'</span>' : '')+'</div>';
     }).join('')+
     '</div>';
 }
@@ -6143,6 +6146,7 @@ function syncSurgeryBlock(c){
 }
 function coreScheduleConfirm(c, date, time, address, by){
   var ks = c.krSchedule; if(!ks || ks.status!=='pending') return false;
+  var ti = tripDateIssue(c, date, time); if(ti && !ti.soft){ window.KR_DENY_MSG = tripDateIssueText(c, date, time); return false; } /* CMD-1106-07 */
   ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||''; ks.rejectNote = ''; ks.confirmedOn = todayStr(); ks.reconfirm = null; /* CMD-1029-09 三：KR 确认那天；施术日离这天不到 30 天的，不跳「施术前 1 个月确认行程」 */
   logCaseEvent(c, by, 'KR确认施术时间：'+date+' '+time+'（韩国时间）到院'+(address?'，地址：'+address:''));
   pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+tkK(date, time)+(address?'（'+address+'）':''), {caseId:c.id});
@@ -6171,6 +6175,7 @@ function coreScheduleAdjust(c, time, address, by){
 /* 改期待确认：确认新时间 */
 function coreChangeConfirm(c, date, time, address, by){
   var ks = c.krSchedule; if(!ks || ks.status!=='change_pending' || !ks.changeSubmitted) return false;
+  var ti = tripDateIssue(c, date, time); if(ti && !ti.soft){ window.KR_DENY_MSG = tripDateIssueText(c, date, time); return false; } /* CMD-1106-07 */
   var oldD = ks.confirmedDate;
   ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||ks.address||'';
   ks.changePrimary = ''; ks.changeBackup = ''; ks.changeSubmitted = false; ks.rejectNote = '';
@@ -9828,7 +9833,7 @@ function inStayInnerHtml(c){
   var line = function(lab, d, t, ap){ return '<div style="display:flex;gap:14px;font-size:13px;padding:3px 0;"><span style="width:76px;color:var(--muted);">'+lab+'</span><span>'+(d ? '<b>'+e(d+(t ? ' '+t : ''))+'</b>' : '<span style="color:var(--muted);">未填写</span>')+'</span><span style="color:var(--slate2);">机场：'+(ap ? e(ap) : '—')+'</span></div>'; };
   var short = stayShortDays(c);
   return line('到达', s.in, s.inTime, s.inAirport)+line('离开', s.out, s.outTime, s.outAirport)+
-    (staySuspect(c) ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ '+e(staySuspect(c))+'</div>' : '')+(short ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ 离境日比建议少 '+short+' 天</div>' : '')+
+    (staySuspect(c) ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ '+e(staySuspect(c))+'</div>' : '')+tripMismatchHtml(c)+(short ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ 离境日比建议少 '+short+' 天</div>' : '')+
     '<div style="font-size:12px;color:var(--muted);margin-top:6px;">'+e(krStayHint(c).replace(/ · 施术日 = 第 0 天/, ''))+'</div>';
 }
 function inStayCardHtml(c){ /* 旧的单独一张卡（已不用，留给兼容） */
@@ -10494,6 +10499,46 @@ function staySuspect(c){ /* 已存的在韩期间看起来存错了（年份不�
   return '';
 }
 function stayFilled(c){ return !!(c && c.stay && c.stay.in && c.stay.out); }
+/* ===== CMD-1106-07：施术日期和客人行程互相检查 =====
+   合法范围：施术日 ≥ 到达日；施术日 + 推荐在韩天数 ≤ 离开日；到达当天，到院时间要晚于到达时间（韩国时间）。
+   「推荐在韩天数」= 这个案件的建议在韩停留天数（画面上「建议在韩停留 N 天」，含「第 N 天需在韩国拆线」的最少天数）= 各施术项目建议天数的最大值（stayPlanOf 的 days）；
+   行程「暂定」（tripState==='tentative'）只算预估：不挡，只显示灰字提醒；没填到达日 / 离开日：不挡。 */
+function tripStayDays(c){
+  var its = []; try{ its = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); }); }catch(e){}
+  if(!its.length) its = (c.recommended||[]).filter(function(it){ return it.origin==='KR' && !it.mgmt && !it.local; });
+  var d = 0; its.forEach(function(it){ if(it.stay) d = Math.max(d, recStayDays(it)); });
+  return d;
+}
+function tripWin(c){
+  var s = c && c.stay; if(!s || (!s.in && !s.out)) return null;
+  var days = tripStayDays(c);
+  return {in:s.in||'', inTime:s.inTime||'', out:s.out||'', outTime:s.outTime||'', days:days, soft:tripStateOf(c)==='tentative' && !c.tripConfirm};
+}
+/* 返回 {msg, soft} 或 null（合法）；date 必填，time 选填（到达当天才比时间） */
+function tripDateIssue(c, date, time){
+  var w = tripWin(c); if(!w || !date) return null;
+  var md = function(d){ return stayMD(d); };
+  if(w.in && date < w.in) return {soft:w.soft, msg:'客人 '+md(w.in)+(w.inTime ? ' '+w.inTime : '')+' 才到达'};
+  if(w.in && date===w.in && time && w.inTime && time <= w.inTime) return {soft:w.soft, msg:'到院时间 '+time+' 要晚于客人到达时间 '+w.inTime};
+  if(w.out && w.days && ymdAdd(date, w.days) > w.out) return {soft:w.soft, msg:'做完需要在韩 '+w.days+' 天，客人 '+md(w.out)+' 离开'};
+  return null;
+}
+function tripDateIssueText(c, date, time){ var i = tripDateIssue(c, date, time); return i ? '施术日期 '+stayMD(date)+(time ? ' '+time : '')+'：'+i.msg : ''; }
+/* 已存的日期（首选 / 备选 / KR 确认 / 改期）和行程对不上的清单：[{label,date,issue}] */
+function tripMismatchList(c){
+  var ks = c && c.krSchedule; if(!ks || !tripWin(c)) return [];
+  var out = [], add = function(label, d, t){ if(!d) return; var i = tripDateIssue(c, d, t); if(i) out.push({label:label, date:d, msg:i.msg, soft:i.soft}); };
+  if(ks.status==='confirmed' || ks.confirmedDate){ if(ks.confirmedDate && !c.hasArrived) add('施术日期', ks.confirmedDate, ks.confirmedTime); }
+  else if(ks.status==='pending'){ add('首选日期', ks.primary); add('备选日期', ks.backup); }
+  if(ks.changeSubmitted){ add('新首选日期', ks.changePrimary); add('新备选日期', ks.changeBackup); }
+  return out;
+}
+function tripMismatchHtml(c, inline){
+  var l = tripMismatchList(c); if(!l.length) return '';
+  var hard = l.some(function(x){ return !x.soft; }), txt = l.map(function(x){ return x.label+' '+stayMD(x.date)+'：'+x.msg; }).join('；');
+  var col = hard ? '#B3261E' : 'var(--muted)', head = hard ? '⚠ 施术日期和行程不合，请修改' : '提醒：施术日期和（预估）行程不合';
+  return inline ? '<b style="font-size:12px;color:'+col+';" title="'+aEscC(txt)+'">'+head+'</b>' : '<div style="color:'+col+';font-weight:'+(hard ? '700' : '400')+';font-size:12px;margin-top:4px;">'+head+'：'+aEscC(txt)+'</div>';
+}
 function stayMD(d){ return d ? String(d).slice(5).replace('-', '/') : ''; }
 function stayMDT(c, k){ var s = c && c.stay || {}; return stayMD(s[k]) + (s[k+'Time'] ? ' '+s[k+'Time'] : ''); }
 function stayText(c){ var s = c && c.stay; if(!s || (!s.in && !s.out)) return ''; return (stayMDT(c, 'in')||'（未定）')+' ～ '+(stayMDT(c, 'out')||'（未定）'); } /* 有时间就带时间：10/29 15:00 ～ 11/08 18:00 */
@@ -12329,12 +12374,16 @@ function recProjectsRowsHtml(c, viewer){
   if(!items.length) return '<div style="font-size:12px;color:var(--muted);padding:8px 0;">院长没有建议项目</div>';
   var tagOf = function(st){ return st==='bought' ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">已购买</span>' : (st==='cancelled' ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;">已取消</span>' : '<span class="status-pill" style="background:var(--border2);color:var(--slate2);font-size:12px;">未购买</span>'); };
   var head = '<div style="'+G+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);"><span>购买情况</span><span>项目名</span><span>术后管理</span><span style="text-align:right;">价格</span>'+(canEdit ? '<span></span>' : '')+'</div>';
-  return head+items.map(function(x){
+  var frozenFold = scopeFrozen(c); /* CMD-1106-07：付完定金、推荐项目冻结后，先列已购买 / 已取消的，未购买的收成一行「未购买 N 项 ▸ 展开」 */
+  var rowFn = function(x){
     var st = recBuyState(c, x), meta = []; try{ meta = itemMetaText(x).filter(function(t){ return t.indexOf('术后管理：')!==0; }); }catch(er){} if(x.post) meta.push('术后管理（印尼）：对应 '+(x.forSurg||'—')+'，术后第 '+(x.startDay||'—')+' 天');
     var pcs = (x.postcare||[]).map(function(p){ return e((p.name||p.mgmt||'术后管理')+' × '+(p.times||1)+(pcDayText(p) ? '（'+pcDayText(p)+'）' : '')); });
     var price = !(x.price>0) ? '' : (viewer==='KR' ? (typeof isLocalProjectName==='function' && isLocalProjectName(x.name) ? '' : formatCurrency(x.price,'KRW')) : krIdrText(x.price));
     return '<div style="'+G+'padding:10px 0;border-bottom:1px solid var(--border2);'+(st==='cancelled' ? 'color:var(--muted);' : '')+'"><span>'+tagOf(st)+'</span><div style="min-width:0;"><div style="font-size:13px;font-weight:700;'+(st==='cancelled' ? 'text-decoration:line-through;' : '')+'">'+e(buyName(x.name))+(x.note ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+e(x.note)+'</span>' : '')+'</div>'+(meta.length ? '<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.7;">'+meta.map(e).join('<br>')+'</div>' : '')+'</div><div style="font-size:13px;line-height:1.7;">'+(pcs.length ? pcs.join('<br>') : '<span style="color:var(--muted);">无</span>')+'</div><div style="font-size:13px;text-align:right;">'+e(price)+'</div>'+(canEdit ? recEditBtn(c, x, st) : '')+'</div>';
-  }).join('');
+  };
+  if(!frozenFold) return head+items.map(rowFn).join('');
+  var none = items.filter(function(x){ return recBuyState(c, x)==='none'; }), rest = items.filter(function(x){ return recBuyState(c, x)!=='none'; });
+  return head+rest.map(rowFn).join('')+(none.length ? '<details class="rec-unbought" style="border-bottom:1px solid var(--border2);"><summary style="cursor:pointer;padding:10px 0;font-size:13px;color:var(--slate2);">未购买 '+none.length+' 项（点开查看）</summary>'+none.map(rowFn).join('')+'</details>' : '');
 }
 
 

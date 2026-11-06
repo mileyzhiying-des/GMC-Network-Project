@@ -9992,4 +9992,43 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       Object.keys(post).forEach(function(k){ delete post[k]; }); Object.assign(post, JSON.parse(keep));
     } finally { window.alert = oa; }
   });
+
+  /* CMD-1106-07：推荐项目冻结后未购买折叠 + 施术日期和客人行程互相检查 */
+  ST.def('R237a','CMD-1106-07（A1 分页，stageC 夹具）：行程范围检查（到达日 / 离开日 + 推荐在韩天数 / 到达当天时间）、日历灰掉、存行程被拦、暂定只提醒、冻结后未购买折叠、旧数据红字',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), oa = window.alert, gc0 = window.getCurrentCase; window.alert = function(){};
+    try{
+      var days = tripStayDays(c); ST.ok(days>0, '推荐在韩天数 > 0：'+days);
+      var base = ymdAdd(todayStr(), 40); c.stay = {in:base, inTime:'11:20', out:ymdAdd(base, days+3), outTime:'12:30'}; c.krSchedule = c.krSchedule || {}; c.krSchedule.tripState = 'booked'; delete c.tripConfirm;
+      var early = ymdAdd(base,-1), okD = ymdAdd(base,1), late = ymdAdd(base, 5);
+      ST.ok(tripDateIssue(c, early) && /才到达/.test(tripDateIssue(c, early).msg), '早于到达日：不合法 + 原因「客人 … 才到达」');
+      ST.ok(!tripDateIssue(c, base, '14:00') && tripDateIssue(c, base, '10:00') && /晚于客人到达时间/.test(tripDateIssue(c, base, '10:00').msg), '到达当天：14:00 可以，10:00 不行');
+      ST.ok(!tripDateIssue(c, okD), '范围内可选'); ST.ok(tripDateIssue(c, late) && /做完需要在韩 \d+ 天，客人 .* 离开/.test(tripDateIssue(c, late).msg), '离开日前留不够：不合法 + 原因');
+      /* 日历：范围外灰掉（不能点） */
+      var ks = ensureKrScheduleDraft ? ensureKrScheduleDraft(c) : c.krSchedule; ks.primary = ''; ks.backup = '';
+      var pre = JSON.stringify([ks.primary, ks.backup]); window.getCurrentCase = function(){ return c; }; 
+      pickKrDate('primary','backup', +early.slice(0,4), +early.slice(5,7)-1, +early.slice(8)); ST.ok(!ks.primary, '行程已定：范围外的日期点不进去');
+      /* KR 确认：核心拒绝 */
+      ks.status = 'pending'; ks.primary = early; ks.confirmedDate = ''; window.KR_DENY_MSG = '';
+      ST.ok(coreScheduleConfirm(c, early, '10:00', '', 'KM1')===false && /才到达/.test(window.KR_DENY_MSG||''), 'KR 确认范围外的日期：拒绝 + 原因'); window.KR_DENY_MSG = '';
+      ST.ok(coreScheduleConfirm(c, base, '10:00', '', 'KM1')===false, '到达当天 10:00 < 11:20：拒绝'); window.KR_DENY_MSG = '';
+      /* 存行程：已递交的首选日跑到范围外 → 存不了 */
+      ks.status = 'pending'; ks.primary = early; ks.backup = ''; openStayModal(c.id, {trip:false});
+      var set = function(id, v){ var el = document.getElementById(id); if(el) el.value = v; };
+      set('stay-in', base); set('stay-out', ymdAdd(base, days+3)); set('stay-int', '11:20'); set('stay-outt', '12:30'); staySave();
+      var er = document.getElementById('stay-err'); ST.ok(er && er.style.display==='block' && /早于到达日/.test(er.textContent) && /去修改施术日期/.test(er.textContent), '存行程被拦 + 红字 + ［去修改施术日期］');
+      document.getElementById('stay-overlay').classList.remove('open'); STAY_CTX = null;
+      /* 暂定：只提醒不挡 */
+      c.krSchedule.tripState = 'tentative'; delete c.tripConfirm;
+      ST.ok(tripDateIssue(c, early) && tripDateIssue(c, early).soft, '暂定：soft'); var html = krDateCalendarGridHtml('primary','backup','',''); ST.ok(/行程暂定，仅供提醒/.test(html), '暂定：日历上方灰字提醒');
+      ST.ok(/提醒：施术日期和（预估）行程不合/.test(tripMismatchHtml(c)) , '暂定：旧数据只有灰字提醒');
+      c.krSchedule.tripState = 'booked'; ST.ok(/请修改/.test(tripMismatchHtml(c)) && /color:#B3261E/.test(tripMismatchHtml(c)), '已定：旧数据红字「施术日期和行程不合，请修改」');
+      c.stay = {}; ST.ok(!tripDateIssue(c, early), '行程没填：不挡');
+      /* 冻结后未购买折叠 */
+      c.krScope = {items:[{name:'A项目', price:1000000},{name:'B项目', price:2000000}], overallNote:''}; c.procedureItems = [{origin:'KR', name:'A项目', batchId:'BX1'}]; c.settlementBatches = [{id:'BX1', status:'active'}];
+      var rows = recProjectsRowsHtml(c, 'KR'); ST.ok(scopeFrozen(c) && /rec-unbought/.test(rows) && /未购买 1 项/.test(rows), '冻结后：未购买收成一行「未购买 1 项」');
+      c.settlementBatches = [{id:'BX1', status:'unpaid'}]; rows = recProjectsRowsHtml(c, 'KR'); ST.ok(!/rec-unbought/.test(rows), '冻结前：全部显示');
+    } finally { window.alert = oa; window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); }
+  });
 })();
