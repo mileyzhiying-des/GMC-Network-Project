@@ -2942,6 +2942,8 @@ function setProjLibHospital(h){ PROJLIB_HOSPITAL = h; PROJLIB_CAT_FILTER = 'all'
 var PROJLIB_CAT_FILTER = 'all';
 
 var PROJLIB_Q = '';
+var PROJLIB_USE = 'all'; /* CMD-1106-06：本地项目库用途筛选 all / mgmt / post */
+function setProjLibUse(u){ PROJLIB_USE = u; renderProjLibFilters(); renderProjLibGrid(); }
 
 /* ---- CMD-1019-06：入口页（居中两张大卡：图标 + 标题 + 一句说明 + 标签）---- */
 function projLibEntryHtml(){
@@ -3013,7 +3015,7 @@ function ensurePromoOverlay(id){
   return ov;
 }
 function closePromoOverlay(id){ var ov = document.getElementById(id); if(ov) ov.classList.remove('open'); }
-function localProjectOptions(selId){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && (p.active || p.id===selId); }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===selId?' selected':'')+'>'+p.name+'</option>'; }).join(''); }
+function localProjectOptions(selId){ return PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && ((p.active && hasUse(p,'mgmt')) || p.id===selId); }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===selId?' selected':'')+'>'+p.name+'</option>'; }).join(''); }
 function specOptions(projectId, selSpecId){ var p = projById(projectId); return ((p && p.specs) || []).map(function(sp){ return '<option value="'+sp.id+'"'+(sp.id===selSpecId?' selected':'')+'>'+sp.label+'（'+fmtRp(sp.price)+'）</option>'; }).join(''); }
 function defaultSpecIdOf(projectId){ var sp = defaultSpec(projById(projectId)); return sp ? sp.id : ''; }
 var PROMO_EDIT = null, PKG_EDIT = null;
@@ -3021,7 +3023,7 @@ var PM_INPUT = 'width:100%;padding:8px 10px;border:1px solid var(--border);borde
 function openPromoModal(id){
   if(!canDo('promo')) return;
   var ex = id ? PROMOS.filter(function(p){ return p.id===id; })[0] : null;
-  PROMO_EDIT = ex ? Object.assign({}, ex) : {id:null, projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]||{}).id, specId:'', price:'', from:todayStr(), to:'', ended:false};
+  PROMO_EDIT = ex ? Object.assign({}, ex) : {id:null, projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && hasUse(p,'mgmt'); })[0]||{}).id, specId:'', price:'', from:todayStr(), to:'', ended:false};
   if(!PROMO_EDIT.specId) PROMO_EDIT.specId = defaultSpecIdOf(PROMO_EDIT.projectId);
   renderPromoModal();
 }
@@ -3064,7 +3066,7 @@ function doCopyLastMonthPromos(){
 function openPkgModal(id){
   if(!canDo('promo')) return;
   var ex = id ? PACKAGES.filter(function(k){ return k.id===id; })[0] : null;
-  PKG_EDIT = ex ? JSON.parse(JSON.stringify(ex)) : {id:null, name:'', items:[{projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]||{}).id, specId:'', qty:1}], price:'', from:todayStr(), to:'', ended:false};
+  PKG_EDIT = ex ? JSON.parse(JSON.stringify(ex)) : {id:null, name:'', items:[{projectId:(PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && hasUse(p,'mgmt'); })[0]||{}).id, specId:'', qty:1}], price:'', from:todayStr(), to:'', ended:false};
   PKG_EDIT.items.forEach(function(it){ if(!it.specId) it.specId = defaultSpecIdOf(it.projectId); });
   renderPkgModal();
 }
@@ -3146,7 +3148,7 @@ function renderProjLibFilters(){
     }).join('')+'</select>';
   var hospSwitch = ''; /* 一诊所一医院：不切换医院 */
   el.innerHTML = (hospSwitch ? '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'+hospSwitch+'</div>' : '')+'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+search+chips+'</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+search+chips+(origin==='IN' ? '<span style="color:var(--muted);font-size:12px;">用途</span>'+[['all','全部'],['mgmt','管理项目'],['post','术后管理']].map(function(u){ return '<span class="chip'+(PROJLIB_USE===u[0]?' active':'')+'" onclick="setProjLibUse(\''+u[0]+'\')">'+u[1]+'</span>'; }).join('') : '')+'</div>'+
     '<div style="display:flex;gap:10px;align-items:center;">'+ccySwitch+
     '<button class="btn-outline" style="padding:6px 12px;font-size:12px;'+(canEdit?'':'opacity:.4;cursor:not-allowed;')+'" '+(canEdit?'':'disabled title="这一组的分类由 '+(origin==='KR'?'KR 室长':'IN 室长')+' 管理"')+' onclick="openProjCatModal(\''+origin+'\')">管理分类</button></div></div>';
 }
@@ -3212,7 +3214,7 @@ function renderProjLibGrid(){
   if(PROJLIB_TAB==='pkg'){ el.innerHTML = pkgGridHtml(match); return; }
   if(PROJLIB_TAB==='KR'){ el.innerHTML = krReadonlyLibHtml(match); return; }
   var origin = PROJLIB_TAB;
-  var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active && match(p) && (origin!=='KR' || (p.hospitalId===projLibHospital() && !isKrPostcareCat(p.categoryId))); }); /* 赴韩项目：只看所选医院的 */
+  var items = PROJECT_LIBRARY.filter(function(p){ return p.origin===origin && p.active && match(p) && (origin!=='IN' || PROJLIB_USE==='all' || hasUse(p,PROJLIB_USE)) && (origin!=='KR' || (p.hospitalId===projLibHospital() && !isKrPostcareCat(p.categoryId))); }); /* 赴韩项目：只看所选医院的 */
   if(PROJLIB_CAT_FILTER!=='all') items = items.filter(function(p){ return p.categoryId===PROJLIB_CAT_FILTER; });
   /* 按类别分组，一个项目一行（CMD-1012-04） */
   var catIds = []; items.forEach(function(p){ if(catIds.indexOf(p.categoryId)<0) catIds.push(p.categoryId); });
@@ -3263,7 +3265,7 @@ var PROJ_EDIT = null;
 
 function openProjNewModal(){
   var origin = DEMO_ROLE==='kr' ? 'KR' : 'IN';
-  PROJ_EDIT = {id:null, name:'', names:{zh:'',ko:'',id:''}, price:'', origin:origin, categoryId:(projLibCategories(origin)[0]||{}).id||'', specs:origin==='IN' ? [{id:'sp'+(LOCAL_SPEC_SEQ++), label:'1次', price:'', times:1}] : undefined, neg:false, opt:null};
+  PROJ_EDIT = {id:null, name:'', names:{zh:'',ko:'',id:''}, price:'', origin:origin, categoryId:(projLibCategories(origin)[0]||{}).id||'', specs:origin==='IN' ? [{id:'sp'+(LOCAL_SPEC_SEQ++), label:'1次', price:'', times:1}] : undefined, neg:false, opt:null, uses:['mgmt']};
   renderProjEditModal();
   document.getElementById('proj-edit-overlay').classList.add('open');
 }
@@ -3298,6 +3300,7 @@ function renderProjEditModal(){
     '<div style="margin:6px 0 10px;"><button class="btn-ghost" style="font-size:12px;" onclick="projAiFillNames()">AI 翻译补全（演示）</button></div>'+
     specEdHtml('PROJ_EDIT', 'renderProjEditModal()', currencyOf(p.origin), p)+
     (p.origin==='KR' && !p.local ? '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:6px;">对应苦恼部位</span><div style="flex-grow:1;">'+CONCERN_GROUPS.map(function(g){ return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px;"><b style="font-size:12px;min-width:34px;">'+g.label+'</b>'+CONCERN_PARTS.filter(function(pt){ return pt.group===g.key && !pt.hidden; }).map(function(pt){ var cur = projectPartsOf(p), on = cur.some(function(k){ return partBase(k)===pt.key; }); return '<button class="'+(on ? 'chip active' : 'chip')+'" style="cursor:pointer;" onclick="projPartsToggle(\''+pt.key+'\')">'+(on ? '✓ ' : '')+pt.label+'</button>'; }).join('')+'</div>'; }).join('')+'<div style="font-size:12px;color:var(--muted);">IN 选院长时，擅长项目对到客人苦恼部位的院长排前面（同一大类下别的细部位算对到一半；没勾过的按项目名自动对应）</div></div></div>' : '')+
+    (p.origin==='IN' && !p.local ? projUsesEditHtml(p) : '')+
     '<div class="case-field-row"><span class="fk">分类</span><select style="flex-grow:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" onchange="PROJ_EDIT.categoryId=this.value">'+
       cats.map(function(c){ return '<option value="'+c.id+'"'+(p.categoryId===c.id?' selected':'')+'>'+c.label+'</option>'; }).join('')+
     '</select></div>'+

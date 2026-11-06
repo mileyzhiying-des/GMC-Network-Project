@@ -1,7 +1,7 @@
 /* shared/data.js —— 数据层：案件/客户/预约占位/对话/通知/项目库/案例库等全部演示数据 + 读写函数 + 种子数据
    由 gmc-network-prototype.html 拆分而来（2026-10-05 结构拆分）。classic script，全局函数/变量，不使用 ES module。 */
 /* ---- 演示数据版本号：版本不符时，localStorage 里所有 gmc_ 开头的数据自动清空并重新生成演示数据（2026-10-05·一，由 3 升到 4；二加入账号数据升到 5；三加购管理者 A5、字段改名，升到 6） ---- */
-var DEMO_DATA_VERSION = 59; /* 59（CMD-1105-12）：只付定金没做的施术退回「等 IN 三选一」（tripWait）；韩国持有价差抵扣取消（heldFrom.balance）。 58（CMD-1105-03）：行程已结束、还挂着「待重新预约」或没做的赴韩施术转成韩国持有（新字段 heldSurg）；57（CMD-1103-02）： 57（CMD-1103-02）：离院后没做、回到「未预约」的赴韩施术项目转成「待重新预约」（新字段 rebookWait）。56（CMD-1023-01 S1）：案件结构 v2 数据层——每个案件补 mainId（指向主案件，自己 = 主案件）；旧的继续案件不转换，用户案件保留 */ /* 55 55（CMD-1020-08）：IN 备注改成备注记录（c.inNotes），旧「印尼室长备注」迁成第一则；*/ /* 54（CMD-1019-23）：已使用 / 剩余次数只从到院卡的完成行算，去掉没有完成行的假使用记录（A000004 的 ONDA ×2）；旧案件迁移并保留 */ /* 53 */ /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
+var DEMO_DATA_VERSION = 60; /* 60（CMD-1106-06）：项目库加「用途」uses（管理项目 / 术后管理）；旧资料：KR 术后管理库 → 术后管理，KR 管理项目库 / IN 本地项目 → 管理项目；案件里的项目行 / 持有 / 结算单不动。 59（CMD-1105-12）：只付定金没做的施术退回「等 IN 三选一」（tripWait）；韩国持有价差抵扣取消（heldFrom.balance）。 58（CMD-1105-03）：行程已结束、还挂着「待重新预约」或没做的赴韩施术转成韩国持有（新字段 heldSurg）；57（CMD-1103-02）： 57（CMD-1103-02）：离院后没做、回到「未预约」的赴韩施术项目转成「待重新预约」（新字段 rebookWait）。56（CMD-1023-01 S1）：案件结构 v2 数据层——每个案件补 mainId（指向主案件，自己 = 主案件）；旧的继续案件不转换，用户案件保留 */ /* 55 55（CMD-1020-08）：IN 备注改成备注记录（c.inNotes），旧「印尼室长备注」迁成第一则；*/ /* 54（CMD-1019-23）：已使用 / 剩余次数只从到院卡的完成行算，去掉没有完成行的假使用记录（A000004 的 ONDA ×2）；旧案件迁移并保留 */ /* 53 */ /* 53（CMD-1019-17）：建议在韩天数不少于最少天数、新增停留原因 stayReason；旧案件天数不够的提到最少天数 */ /* 52（CMD-1019-14）：麻醉新增「需空腹（小时）」an.fast，旧数据从备注「空腹 N 小时」迁移 */ /* 51 */ /* 51（CMD-1019-10）：KR 管理项目数量改「份」，带「N次」规格的总次数 = 规格次数 × 份数（旧案件迁移） */ /* 50（CMD-1019-06）：赴韩项目分类改成苦恼部位（旧分类拿掉）、「下颌角整形」改「下颚角整形」 */ /* 49（CMD-1019-04）：希望预期进每张部位卡片、苦恼总 memo；旧案件的希望预期放进未分部位卡 / 总 memo */ /* 48（CMD-1019-03）：苦恼部位加一层面部 / 身体 + 细部位，旧五个部位迁到新部位 */ /* 47（CMD-1019-01）：苦恼按部位（c.concerns）；旧案件的整体苦恼 / 照片 / 视频转成一张「未分部位」卡片 */ /* 46（CMD-1015-17）：术后管理阶段 / 在韩管理阶段 / 子案件并入案件详情（旧的术后管理持有批次转回原案件、管理项目转在韩持有，用户案件保留并迁移）；45（CMD-1015-16）：诊疗方案拿掉共同术后管理 + 可选范围加管理项目（旧案件的共同术后管理转成各项目自己的，用户案件保留并迁移）；44（CMD-1015-06）：一次性清空所有客人与案件（演示客人 / 用户自建 / T- 客人及其预约、待办、通知、对话、Timeline），演示数据以后不再带任何客人，不保留案件；保留账号、院长与日程、项目库、诊所设定； 43（CMD-1014-16 四）：补演示缺口——C2 / C3 老板账号 OWN2 / OWN3、C2 可退批次、H2 的「待确认出报告时间」「已出报告」案件； 39（CMD-1012-14）：演示案件的赴韩项目补上推荐在韩 / 麻醉 / 术后管理；38（CMD-1012-04 补）：「使用时选」选项按规格分组（opt.rules）；37（CMD-1012-04/05）：本地管理项目库换成清单 12 类（类别→项目→规格→价格）、KR 术后管理免费、旧项目的种子替换；A1 的演示 OFF 改成每隔 7 天，避免测试当天 A1 在 OFF 收不到通知（升级前自动备份旧数据）。以下为 05 的说明：：A1 的演示 OFF 改成每隔 7 天、从今天 +3 天算起，避免测试当天 A1 在 OFF 收不到通知；36（CMD-1012-02）：术后管理设定加管理项目/间隔/第N天起，附件标签改称诊疗方案；35（CMD-1012-01 后续）：待访问的演示预约按「现在」往后排，避免一打开就被自动判定未到店；34（CMD-1008-12）：KR 面诊块、施术子项自动产生；33（CMD-1008-09）：加本月活动 / 套餐 / 套餐批次 / 서비스批次演示数据；32（CMD-1008-05）：演示营业时间改为 IN 10:00–21:00 / KR 11:00–21:30，诊所设定里的营业时间在版本重置时被强制改写 */
 /* 账号 / 诊所设定自己的结构版本：只有它变了，版本号重置时才连账号和设定一起清掉（2026-10-06；3 = 多诊所多医院：账号加 clinicId、设定按诊所分区） */
 var ACCOUNT_STRUCT_VERSION = 5;
 /* 存档分三种键：gmc_state = 全局部分（账号、医院、诊所、对接关系、医院资料…）；gmc_clinic_C1 / gmc_clinic_C2 … = 每家诊所一个分区（客户、案件、对话、通知、诊所设定…） */
@@ -4764,7 +4764,7 @@ function setLocalPickTab(tab){ var c = getCurrentCase(); if(!c) return; c.localP
 /* 服务（赠送）：本地选购 / 赴韩方案里的本地项目清单下方；金额 Rp 0（小字附原价）；付款后转持有，批次标「서비스」，不显示退款，不计入收入；必须搭配至少一个付费项目才能结算 */
 function openSvcAdd(scope){
   var c = getCurrentCase(); if(!c) return;
-  var first = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; })[0];
+  var first = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && hasUse(p,'mgmt') && p.categoryId!==POST_CARE_CAT_ID; })[0];
   c.svcDraft = {scope:scope, projectId:first ? first.id : '', qty:1};
   renderCaseBody(c);
 }
@@ -4781,7 +4781,7 @@ function serviceBlockHtml(c, scope){
   var cart = cartOf(c, scope), svcs = cart.filter(function(it){ return it.kind==='service'; });
   var draft = (c.svcDraft && c.svcDraft.scope===scope) ? c.svcDraft : null, adder;
   if(draft){
-    var opts = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && p.categoryId!==POST_CARE_CAT_ID; }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===draft.projectId?' selected':'')+'>'+p.name+'（'+fmtRp(p.price)+'）</option>'; }).join('');
+    var opts = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && hasUse(p,'mgmt') && p.categoryId!==POST_CARE_CAT_ID; }).map(function(p){ return '<option value="'+p.id+'"'+(p.id===draft.projectId?' selected':'')+'>'+p.name+'（'+fmtRp(p.price)+'）</option>'; }).join('');
     adder = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;"><select onchange="setSvcDraft(\'projectId\',this.value)" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;">'+opts+'</select>'+
       qtyInputHtml({value:draft.qty, min:1, max:LOCAL_QTY_MAX, unit:'份', onchange:"setSvcDraft('qty',this.value)"})+
       '<button class="btn-primary" style="padding:5px 12px;font-size:12px;" onclick="confirmSvcAdd()">添加</button><button class="btn-ghost" style="padding:5px 10px;font-size:12px;" onclick="cancelSvcAdd()">取消</button></div>';
@@ -4840,7 +4840,7 @@ function setLocalCat(cat){ var c = getCurrentCase(); if(!c) return; c.localCatFi
 function localCatalogHtml(c, scope, tab, q, ccy){
   var cart = cartOf(c, scope), has = function(key){ return cart.some(function(it){ return cartKey(it)===key; }); };
   var match = function(name){ return !q || name.toLowerCase().indexOf(q)>-1; };
-  var locals = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; });
+  var locals = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active && hasUse(p,'mgmt'); }); /* CMD-1106-06：只卖用途含「管理项目」的 */
   if(tab==='promo'){
     var rows = PROMOS.filter(function(pm){ return promoStatusOf(pm)==='进行中'; }).map(function(pm){ var p = projById(pm.projectId); return p && p.active && match(p.name) ? localProjRowHtml(c, scope, p, ccy, pm.specId || null) : ''; }).join('');
     return rows || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">本月暂无活动价</div>';
@@ -8512,6 +8512,7 @@ function saveProj(){
   if(!(p.specs && p.specs.length) && (!p.price || isNaN(price) || price<0)) missing.push('价格');
   if(specErr) missing.push(specErr);
   if(!p.categoryId) missing.push('分类');
+  if(p.origin==='IN' && !p.local && !(p.uses||projUses(p)).length) missing.push('用途（至少选一个）');
   if(missing.length){
     p.errorMsg = '还差 '+missing.join('、')+' 未完成';
     renderProjEditModal();
@@ -9303,6 +9304,7 @@ function normalizeSeeds(){
   CLIENTS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; });
   CASE_ITEMS.forEach(function(c){ if(!c.clinicId) c.clinicId = 'C1'; if(c.director && !c.hospitalId) c.hospitalId = 'H1'; });
   krPartsNormalize(); /* CMD-1019-06：赴韩项目分类改成苦恼部位 */
+  try{ usesNormalize(); }catch(e){ console.error(e); } /* CMD-1106-06：旧资料补用途 */
   var inP = [], inC = [];
   PROJECT_LIBRARY.forEach(function(p){ if(p.origin==='KR'){ var h = HOSPITAL_DATA[p.hospitalId||'H1']; (h.projects = h.projects || []).push(p); } else { if(!p.clinicId) p.clinicId = 'C1'; inP.push(p); } });
   LIB_CASES.forEach(function(c){ if(c.source==='travel'){ var h = HOSPITAL_DATA[c.hospitalId||'H1']; (h.libCases = h.libCases || []).push(c); } else { if(!c.clinicId) c.clinicId = 'C1'; inC.push(c); } });
@@ -9433,15 +9435,49 @@ function mgIntervalOf(p, sp){ if(!p || p.intNa) return null; var v = parseInt(p.
 function mgSchedOf(p, sp, total){ var f = mgFirstOf(p, sp), iv = mgIntervalOf(p, sp); return {firstDay:f===null ? '' : f, interval:(total>1 && iv!==null) ? iv : 0, intNa:iv===null}; }
 var DEMO_MGSCHED = {'ONDA 提升':{first:{all:14}, int:{all:14}}, '热玛吉':{first:{na:true}, int:{spec:{'300发':180, '600发':240, '眼部 225发':180, '眼部 450发':240}}}, '钛提升':{first:{all:7}, int:{na:true}}};
 var DEMO_DIROP = {'热玛吉':{min:30, specs:{'300发':30, '600发':45, '眼部 225发':30, '眼部 450发':45}}, 'ONDA 提升':{min:30, specs:{}}};
-function krLocalLib(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; if(!h.localLib){ h.localLib = buildLocalProjects('KR', hid); gmcStamp(h.localLib); }
+function krLocalLibRaw(hid){ var h = HOSPITAL_DATA[hid]; if(!h) return []; if(!h.localLib){ h.localLib = buildLocalProjects('KR', hid); gmcStamp(h.localLib); }
   if(!h._mgDemo){ h._mgDemo = 1; h.localLib.forEach(function(p){ if(p.firstMode!==undefined || p.firstNa!==undefined || p.intMode!==undefined || p.intNa!==undefined) return; var df = DEMO_MGSCHED[p.name] || {first:{all:7}, int:{all:7}};
     if(df.first.na) p.firstNa = true; else { p.firstNa = false; p.firstMode = 'all'; p.firstAll = df.first.all; }
     if(df.int.na) p.intNa = true; else if(df.int.spec){ p.intNa = false; p.intMode = 'spec'; (p.specs||[]).forEach(function(sp){ sp.interval = df.int.spec[sp.label] || 180; }); } else { p.intNa = false; p.intMode = 'all'; p.intAll = df.int.all; } }); }
   if(!h._dirDemo){ h._dirDemo = 1; h.localLib.forEach(function(p){ var df = DEMO_DIROP[p.name]; if(df && p.dirOp===undefined){ p.dirOp = true; p.dirMin = df.min; (p.specs||[]).forEach(function(sp){ if(df.specs[sp.label]) sp.dirMin = df.specs[sp.label]; }); } }); }
   return h.localLib; }
-/* 选择 / 新增时用的管理项目清单：不含非活性化的（按 id / 名字查已有项目仍用 krLocalLib） */
-function krLocalLibOn(hid){ return krLocalLib(hid).filter(function(p){ return p.active!==false; }); }
+/* ===== CMD-1106-06：项目库「用途」——管理项目 / 术后管理，至少选一个，可以都选 =====
+   p.uses = ['mgmt'?, 'post'?]。没有 uses 的旧资料按来源算：KR 术后管理库（韩国术后管理分类）= 术后管理；KR 管理项目库（localLib）= 管理项目；IN 本地项目 = 管理项目（IN 自己去勾术后管理）。
+   资料层：KR 两个库仍是两份存放（术后管理库 = HOSPITAL_DATA[h].projects 里韩国术后管理分类的项目，管理项目库 = HOSPITAL_DATA[h].localLib），用途决定出现在哪些入口；
+   术后管理库的项目勾了「管理项目」→ 在 p.mg = {cat, specs:[{id,label,price,times}]} 里多填类别 / 规格 / 价格，管理项目入口看到的是它的“管理项目视图”（krPostAsMgmt，id 同一个）；
+   管理项目库的项目勾了「术后管理」→ 出现在所需术后管理的「具体项目」下拉，地点 / 次数 / 第几天在施术项目的设定里填（当术后管理用时照施术里的设定，通常免费）。 */
+function projUses(p){
+  if(p && Array.isArray(p.uses) && p.uses.length) return p.uses.slice();
+  if(p && p.origin==='KR' && !p.specs && typeof isKrPostcareCat==='function' && isKrPostcareCat(p.categoryId)) return ['post'];
+  return ['mgmt'];
+}
+function hasUse(p, u){ return projUses(p).indexOf(u)>-1; }
+function usesText(p){ return projUses(p).map(function(u){ return u==='post' ? '术后管理' : '管理项目'; }).join(' + '); }
+function krPostAsMgmt(p){ /* 术后管理库项目 + 勾了管理项目 → 管理项目视图（和 localLib 项目同形状） */
+  var mg = p.mg || {}, specs = (mg.specs||[]).map(function(s){ return Object.assign({}, s); });
+  return {id:p.id, name:p.name, price:specs.length ? specs[0].price : 0, origin:'KR', active:p.active, specs:specs, neg:false, catLabel:mg.cat || '术后管理', uses:projUses(p), fromPost:true, hospitalId:p.hospitalId, durMin:mg.durMin || 30, dirOp:p.dirOp, dirMin:p.dirMin, firstNa:true, intNa:true, names:p.names};
+}
+function krLocalLib(hid){ /* 管理项目库全部（含非活性化、含只当术后管理用的）+ 术后管理库里勾了管理项目的视图；按 id / 名字查已有项目用这个 */
+  var raw = krLocalLibRaw(hid), h = HOSPITAL_DATA[hid]; if(!h) return raw;
+  var views = (h.projects||[]).filter(function(p){ return isKrPostcareCat(p.categoryId) && hasUse(p, 'mgmt') && p.mg && (p.mg.specs||[]).length; }).map(krPostAsMgmt);
+  return views.length ? raw.concat(views) : raw;
+}
+/* 选择 / 新增时用的管理项目清单：活性化 + 用途含「管理项目」（按 id / 名字查已有项目仍用 krLocalLib） */
+function krLocalLibOn(hid){ return krLocalLib(hid).filter(function(p){ return p.active!==false && hasUse(p, 'mgmt'); }); }
 Object.keys(HOSPITAL_DATA).forEach(function(h){ krLocalLib(h); });
+/* 旧资料补 uses（升级时；幂等）：KR 术后管理库 → 术后管理，KR 管理项目库 → 管理项目，IN 本地项目 → 管理项目；返回转换个数 */
+/* IN 本地项目编辑：用途勾选（至少一个）。管理项目 = 可以单独卖；术后管理 = 出现在 KR「所需术后管理」的印尼对应项目里 */
+function projUsesEditHtml(p){ var u = p.uses ? p.uses.slice() : projUses(p); return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:2px;">用途 <span style="color:#C1454A;">*</span></span><div style="flex-grow:1;font-size:13px;">'+[['mgmt','管理项目','可以单独卖'],['post','术后管理','出现在 KR 写「所需术后管理」的印尼对应项目里']].map(function(x){ return '<label style="display:block;cursor:pointer;margin-bottom:3px;"><input type="checkbox" '+(u.indexOf(x[0])>-1?'checked ':'')+'onchange="projUseTog(\''+x[0]+'\',this.checked)"> '+x[1]+' <span style="color:var(--muted);font-size:12px;">'+x[2]+'</span></label>'; }).join('')+'<div style="font-size:12px;color:var(--muted);">至少选一个，可以都选</div></div></div>'; }
+function projUseTog(u,on){ var p = PROJ_EDIT; if(!p) return; var a = (p.uses||projUses(p)).slice(), i = a.indexOf(u); if(on && i<0) a.push(u); if(!on && i>-1) a.splice(i,1); p.uses = a; renderProjEditModal(); }
+function usesNormalize(){
+  var n = {post:0, mgmt:0, inn:0};
+  Object.keys(HOSPITAL_DATA).forEach(function(hid){ var h = HOSPITAL_DATA[hid];
+    (h.projects||[]).forEach(function(p){ if(isKrPostcareCat(p.categoryId) && !Array.isArray(p.uses)){ p.uses = ['post']; n.post++; } });
+    (krLocalLibRaw(hid)||[]).forEach(function(p){ if(!Array.isArray(p.uses)){ p.uses = ['mgmt']; n.mgmt++; } }); });
+  (PROJECT_LIBRARY||[]).forEach(function(p){ if(p.origin==='IN' && !Array.isArray(p.uses)){ p.uses = ['mgmt']; n.inn++; } });
+  if(n.post+n.mgmt+n.inn){ window.GMC_USES_CONV = window.GMC_USES_CONV || {post:0, mgmt:0, inn:0}; window.GMC_USES_CONV.post += n.post; window.GMC_USES_CONV.mgmt += n.mgmt; window.GMC_USES_CONV.inn += n.inn; }
+  return n;
+}
 
 /* 演示案件标记（CMD-1012-06 补）：种子里建立的案件都带 demo:true；用户自己新建的案件（id 为 r+时间戳）没有这个标记，测试覆盖页只计算后者。
    旧存档里没有标记的演示案件，按 id 补上（用户新建的案件 id 一律是 r 加 9 位以上数字）。 */
@@ -12896,7 +12932,7 @@ function scopeLockGuardIN(c){
    ③ IN 重新选项目（reselectProjects：撤销这张未付款结算单）→ 又可以按 ④ IN 确认付款完成 → KR 的［编辑］［补加］直接消失（推荐项目冻结）。 */
 function scopeLockInStart(c, kind){ /* 空函数（保留名字给旧调用） */ }
 function scopeInLock(c){
-  var b = (c && c.settlementBatches || []).filter(function(x){ return x.status==='unpaid'; })[0]; if(!b) return null;
+  var b = (c && c.settlementBatches || []).filter(function(x){ return x.status==='unpaid' && (c.procedureItems||[]).some(function(it){ return it.batchId===x.id && it.origin==='KR'; }); })[0]; if(!b) return null; /* CMD-1106-06：只有含赴韩项目的结算单才锁 KR；只买本地项目的不锁 */
   return {side:'IN', by:b.orderedBy || 'IN 室长', kind:'settle', batchId:b.id};
 }
 function scopeFrozen(c){ /* 已付定金（有赴韩项目的结算单已付款，哪怕之后部分退款也一直冻结）→ 整个推荐项目冻结：没买的也不能再编辑 / 补加；之后要加项目走项目卡［增加项目］ */

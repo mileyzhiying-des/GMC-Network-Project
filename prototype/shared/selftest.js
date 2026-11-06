@@ -9733,7 +9733,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var lib2 = krLocalLibOn(krHospitalIdOfMe()).filter(function(p){ return p.id!==X.lib.id && !p.neg && p.specs[0] && p.specs[0].price>0; })[0]; KRLP['sc|'+lib2.id] = {sid:lib2.specs[0].id, qty:1}; KR_SC.tab = 'mgmt'; krMgAdd('sc', lib2.id, false); var l0 = KR_SC.locals[0], price1 = l0.price; ST.ok(!!l0, '勾了一个管理项目');
       krScLocalSet(0, 'copies', '2'); krScLocalSet(0, 'first', '5'); ST.ok(KR_SC.locals[0].copies===2 && KR_SC.locals[0].firstDay===5 && KR_SC.locals[0].price===price1*2, '管理项目：份数 2、术后第 5 天开始，价格 = 单价 × 份数');
       /* 术后管理（在印尼） */
-      KR_SC.tab = 'post'; var pool = krScPostPool(); ST.ok(pool.length>0, '术后管理（在印尼）列表有项目：'+pool.length); var pn = pool[0].name; krScPostToggle(pn, true);
+      var v0 = ST.clinicVars ? null : null, inAll = (function(){ var cid = KR_CASE && KR_CASE.clinicId, r = []; try{ Store.withClinic(cid, function(){ r = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; }).map(function(p){ return p.id; }); }); }catch(e){} return r; })();
+      var poolEmpty = krScPostPool().length; /* CMD-1106-06：没有任何本地项目勾「术后管理」用途时，下拉是空的 */
+      Store.mutateClinic(KR_CASE.clinicId, function(){ var p0 = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]; if(p0) p0.uses = ['mgmt','post']; });
+      KR_SC.tab = 'post'; var pool = krScPostPool(); ST.ok(poolEmpty===0 || poolEmpty<=pool.length, '没勾用途时不列'); ST.ok(pool.length>0, '术后管理（在印尼）列表有项目：'+pool.length); var pn = pool[0].name; krScPostToggle(pn, true);
       ov = document.getElementById('kr-scadd-overlay'); ST.ok(/对应施术/.test(ov.innerText) && /术后第/.test(ov.innerText), '勾选后右边选对应哪个施术、术后第几天');
       var nBefore = gc().krScope.items.length; krScAddConfirm(); ST.ok(gc().krScope.items.length===nBefore && KR_SC.open, '没选对应施术 / 第几天 → 补加不出去');
       krScPostSet(pn, 'surg', X.p1.name); krScPostSet(pn, 'day', '3'); krScAddConfirm(); var its = gc().krScope.items;
@@ -9946,5 +9949,47 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krDayConfirmGo(); KR_LV.rows.forEach(function(x){ x.reason = LEAVE_REASONS[1]; x.dec = 'swap'; }); krLeaveWhyGo();
       mut2(function(c){ ST.ok((c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && !krIsMgmtItemC(it) && it.cancelled; }).length>=1, '评估做了、施术没做、客人放弃 → 取消项目'); return true; });
     }
+  });
+
+  /* CMD-1106-06：项目库「用途」 */
+  ST.def('R236a','CMD-1106-06（IN 分页）：本地项目用途默认管理项目 / 编辑器必选 / 只卖管理项目用途的 / 筛选 / 只买本地项目的结算单不锁 KR',function(){
+    if(!ST.ok(typeof projUses==='function', '没有 projUses')) return;
+    var lp = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active; })[0]; if(!ST.ok(!!lp, '没有 IN 本地项目')) return;
+    var oa = window.alert; window.alert = function(){};
+    try{
+      ST.ok(projUses(lp).indexOf('mgmt')>-1, '旧项目默认用途 = 管理项目');
+      var saved = lp.uses ? lp.uses.slice() : null;
+      lp.uses = ['post']; ST.ok(localCatalogHtml && localCatalogHtml.toString().indexOf("hasUse(p,'mgmt')")>-1, '本地选购只列管理项目用途');
+      ST.ok(localProjectOptions('').indexOf('value="'+lp.id+'"')<0, '仅术后管理用途：活动价 / 套餐下拉不列');
+      lp.uses = ['mgmt','post']; ST.ok(localProjectOptions('').indexOf('value="'+lp.id+'"')>-1, '两个都勾：下拉里有');
+      openProjEditModal(lp.id); ST.ok(/用途/.test(document.getElementById('proj-edit-body').innerHTML), '编辑器有用途');
+      PROJ_EDIT.uses = []; saveProj(); ST.ok(/用途/.test(PROJ_EDIT.errorMsg||''), '一个都没选：保存被拦并写「用途」'); closeProjEditModal();
+      if(saved) lp.uses = saved; else delete lp.uses;
+      PROJLIB_USE = 'post'; PROJLIB_TAB = 'IN'; try{ renderProjLibGrid(); }catch(e){} PROJLIB_USE = 'all';
+      /* 只买本地项目的未付款结算单不锁 KR */
+      var c = CASE_ITEMS[0]; var sb = c.settlementBatches, pi = c.procedureItems; c.settlementBatches = [{id:'BZ1', status:'unpaid'}]; c.procedureItems = [{batchId:'BZ1', origin:'IN', name:'x'}];
+      ST.ok(!scopeInLock(c), '只有本地项目的未付款结算单：不锁 KR');
+      c.procedureItems = [{batchId:'BZ1', origin:'KR', name:'x'}]; ST.ok(!!scopeInLock(c), '含赴韩项目：锁 KR');
+      c.settlementBatches = sb; c.procedureItems = pi;
+    } finally { window.alert = oa; }
+  });
+  ST.def('R236b','CMD-1106-06（KM1 分页）：KR 库用途——术后管理库项目勾管理项目会出现在管理项目库、管理项目库项目勾术后管理会出现在所需术后管理的下拉、仅术后管理的不能单独卖、保存必选',function(){
+    if(!ST.ok(typeof isKrAccount==='function' && isKrAccount(), '要在 KR 分页里跑')) return;
+    var hid = krHospitalIdOfMe(), h = HOSPITAL_DATA[hid], oa = window.alert; window.alert = function(){};
+    try{
+      var post = (h.projects||[]).filter(function(p){ return isKrPostcareCat(p.categoryId); })[0]; if(!ST.ok(!!post, '没有术后管理库项目')) return;
+      var keep = JSON.stringify(post);
+      ST.ok(projUses(post).join()==='post', '术后管理库项目默认用途 = 术后管理'); ST.ok(krLocalLib(hid).every(function(p){ return p.id!==post.id; }), '仅术后管理：不在管理项目库里');
+      post.uses = ['post','mgmt']; post.mg = {cat:'术后管理', specs:[{id:'spz', label:'1次', price:50000, times:1}], durMin:30};
+      var v = krLocalLib(hid).filter(function(p){ return p.id===post.id; })[0]; ST.ok(!!v && v.fromPost && v.specs[0].price===50000, '勾了管理项目：以管理项目视图出现');
+      ST.ok(krLocalLibOn(hid).some(function(p){ return p.id===post.id; }), '可以单独卖');
+      var loc = krLocalLibRaw(hid)[0]; var lu = loc.uses; loc.uses = ['mgmt'];
+      var c0 = krScopeCandidates(KR_CASE && KR_CASE.clinicId || Object.keys(CLINIC_HOSPITALS||{})[0]);
+      ST.ok(c0 && c0.krLocal.every(function(p){ return hasUse(p,'post'); }), '所需术后管理候选只含用途含术后管理的');
+      loc.uses = ['mgmt','post']; var c1 = krScopeCandidates(KR_CASE && KR_CASE.clinicId || Object.keys(CLINIC_HOSPITALS||{})[0]); ST.ok(c1.krLocal.some(function(p){ return p.id===loc.id; }), '管理项目库里勾了术后管理：进下拉');
+      loc.uses = lu; KRP.tab = 'post'; KRP.draft = null; ST.ok(true, '术后管理 tab 可设'); 
+      krpOpen(post.id); KRP.draft.uses = []; krpSave(); ST.ok(/用途/.test(KRP.draft.err||''), '一个都没选：保存被拦'); KRP.draft = null;
+      Object.keys(post).forEach(function(k){ delete post[k]; }); Object.assign(post, JSON.parse(keep));
+    } finally { window.alert = oa; }
   });
 })();

@@ -149,6 +149,7 @@ var Store = (function(){
   function afterLoad(){
     if(typeof ensureSeedAccounts === 'function') ensureSeedAccounts(); /* 新增的种子账号补进保留下来的账号里 */
     if(typeof krPartsNormalize === 'function') try{ krPartsNormalize(); }catch(e){ console.warn('[存档] 赴韩项目分类整理失败', e); } /* CMD-1019-06：赴韩项目分类 = 苦恼部位（幂等） */
+    if(typeof usesNormalize === 'function') try{ usesNormalize(); }catch(e){ console.warn('[存档] 项目库用途补齐失败', e); } /* CMD-1106-06：旧资料补用途（幂等） */
     if(typeof normClientNames === 'function') try{ normClientNames(); }catch(e){} /* 旧客户资料补上名 / 姓两栏 */
     ME_NAME = (currentAccount() || {name:''}).name || ''; /* 账号改过名字（个人设定/激活）后，名字要跟存档走 */
     if(typeof syncInCoordinators === 'function') syncInCoordinators(); /* IN 室长名单由账号算出，不存档 */
@@ -437,6 +438,7 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:60, fn:function(c, ctx){ /* CMD-1106-06：项目库加「用途」——只动项目库（usesNormalize，读档 / 种子时跑），案件里的项目行是快照，不动 */ }},
     {to:59, fn:function(c, ctx){ /* CMD-1105-12：① 1105-03 自动转了「韩国持有」、但其实只付了定金的施术 → 退回「等 IN 三选一」（tripWait），案件重新变成未结案；② 1105-04 按价差生成的韩国持有抵扣：未付款的结算单按新规则重算（不抵算），已付款的只记数量不动 */
       var no = c.caseNo||c.id, back = [];
       (c.procedureItems||[]).forEach(function(it){
