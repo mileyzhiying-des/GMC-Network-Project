@@ -109,7 +109,7 @@ function krbRender(){
     row('来访目的', '<select style="'+inp+'" onchange="KRB.purpose=this.value;KRB.items=[];KRB.linkCaseId=\'\';krbRender()">'+(KRB_PURPOSE_NEW.indexOf(f.purpose)<0 ? [f.purpose].concat(KRB_PURPOSE_NEW) : KRB_PURPOSE_NEW).map(function(k){ var off = k==='linkcase' && f.client && !krbClientHasItems(f.client); return '<option value="'+k+'"'+(f.purpose===k ? ' selected' : '')+(off ? ' disabled' : '')+'>'+KRB_PURPOSE[k]+(off ? '（目前没有可约的项目）' : '')+'</option>'; }).join('')+'</select>')+
     krbPurposeExtra(f, inp, row)+
     '<div style="display:flex;gap:10px;">'+row('日期（韩国）', krbDateInput(f, inp)).replace('<div style="margin-bottom:10px;">','<div style="margin-bottom:10px;flex:1;">')+row('时间（韩国）', '<select style="'+inp+'" onchange="KRB.time=this.value">'+krbTimeOptions(f.hid, f.time)+'</select>').replace('<div style="margin-bottom:10px;">','<div style="margin-bottom:10px;flex:1;">')+'</div>'+
-    row('备注', '<textarea style="'+inp+'height:60px;" oninput="KRB.note=this.value">'+krbEsc(f.note)+'</textarea>')+
+    row('备注', '<textarea placeholder="备注（选填）" style="'+inp+'height:60px;" oninput="KRB.note=this.value">'+krbEsc(f.note)+'</textarea>')+
     '<div id="krb-err" style="font-size:12px;color:#C1454A;min-height:18px;">'+krbEsc(f.err)+'</div>'+
     '<div style="display:flex;gap:10px;margin-top:6px;"><button class="btn-outline" style="flex:1;" onclick="document.getElementById(\'krb-overlay\').classList.remove(\'open\')">取消</button><button class="btn-primary" style="flex:1;" onclick="krbSubmit()">提交占位</button></div></div>';
 }

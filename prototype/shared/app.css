@@ -2,7 +2,11 @@
   --ivory:#FAF7F2; --white:#FFFFFF; --navy:#1B2635; --slate:#6B7A8D; --slate2:#3B4A5A;
   --terracotta:#C1694F; --terracotta-bg:#F3E4DD; --sage:#6E8B67; --sage-bg:#DCE8D9;
   --border:#E4DED2; --border2:#F0ECE2; --muted:#9AA6B2; --dim:#C7BFAF; --purple:#8B6BA8; --purple-bg:#E9E2F3; --blue:#5B84B1; --blue-bg:#DEE7F0;
---neutral-25:rgba(142,133,124,.14);}
+--neutral-25:rgba(142,133,124,.14);
+  --line:var(--border); /* CMD-1106-23：代码里 68+ 处写的 border:1px solid var(--line) 一直没有这个变量，输入框 / 下拉 / 文字区的框因此整个消失（无法安排原因等）；补上就都有框 */}
+/* CMD-1106-23：所有文字区默认带框（行内 style 写了自己的边框就以它为准）；placeholder 灰色 */
+textarea{border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--white);color:inherit;font-size:13px;}
+textarea::placeholder{color:var(--muted);}
 *{box-sizing:border-box;}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR','Noto Sans SC',sans-serif;background:var(--ivory);color:var(--navy);}
 a{color:inherit;text-decoration:none;}

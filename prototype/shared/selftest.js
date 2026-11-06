@@ -10410,6 +10410,17 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.stay = {in:ymdAdd(a,-1), inTime:'09:00', out:ymdAdd(a,60), outTime:'18:00'}; ST.ok(tripSubmitYellowHtml(c, a, b)==='', '天数够：没有黄字');
     } finally { window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); }
   });
+  ST.def('R253a','CMD-1106-23（KM1 分页）：弹窗里的多行输入有看得见的框 + 提示字（无法安排原因等）；var(--line) 有定义',function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount(), '要在 KR 分页里跑')) return;
+    var root = getComputedStyle(document.documentElement).getPropertyValue('--line').trim(); ST.ok(!!root, '--line 有定义：'+root);
+    var boxed = function(el){ var cs = getComputedStyle(el); return cs.borderTopStyle==='solid' && parseFloat(cs.borderTopWidth)>0; };
+    krSchRejectOpen('krDoSchReject'); var ta = document.getElementById('kr-sch-rej-why');
+    ST.ok(!!ta && boxed(ta), '「无法安排」原因输入有框'); ST.ok(!!ta && /请写无法安排的原因/.test(ta.getAttribute('placeholder')||''), '有提示字「请写无法安排的原因」');
+    krSchRejectClose();
+    var probe = document.createElement('div'); probe.innerHTML = '<textarea id="__t1"></textarea><textarea id="__t2" style="border:1px solid var(--line);"></textarea><input id="__t3" style="border:1px solid var(--line);"><select id="__t4" style="border:1px solid var(--line);"></select>'; document.body.appendChild(probe);
+    ST.ok(['__t1','__t2','__t3','__t4'].every(function(id){ return boxed(document.getElementById(id)); }), '没写边框的文字区默认有框；写 var(--line) 的文字区 / 输入 / 下拉都有框'); probe.remove();
+    var bare = [].slice.call(document.querySelectorAll('textarea')).filter(function(x){ return !boxed(x) && x.offsetParent!==null; }); ST.ok(bare.length===0, '页面上可见的文字区都有框：'+bare.length);
+  });
   ST.def('R250a','CMD-1106-20（KM1 分页，stageC 夹具）：在韩管理没付款时操作栏只写「待付款」，没有灰色［预约时间］；付款后有［预约时间］',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
