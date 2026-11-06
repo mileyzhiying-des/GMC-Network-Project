@@ -10079,7 +10079,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krShowCase(r.clinicId, r.id); krSetCaseTab('items'); KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
       var txt = function(){ return document.getElementById('krcase-body').textContent; };
       ST.ok(/行程状态：已定（\d\d-\d\d 11:20 ～ \d\d-\d\d 12:30）/.test(txt()), '行程状态写到达 ～ 离开');
-      ST.ok(/施术时间预计约/.test(txt()) && /估算时间 /.test(txt()) && /首选施术日期：/.test(txt()) && /备选施术日期：/.test(txt()), '预计时长 + 首选 / 备选单选');
+      ST.ok(/施术时间：预计约/.test(txt()) && /估算时间 /.test(txt()) && /首选施术日期：/.test(txt()) && /备选施术日期：/.test(txt()), '预计时长 + 首选 / 备选单选');
       ST.ok(!/到院地址：/.test(txt()) && !document.querySelector('#krcase-body input[placeholder="地址"]'), '卡上不显示到院地址（CMD-1106-11 补；改前：一行 + ［修改］）');
       ST.ok(!document.querySelector('#krcase-body input[placeholder="无法安排的原因"]'), '页面上的「无法安排的原因」输入框拿掉');
       var est = krEstDur(krFindCase(r.clinicId, r.id).c); ST.ok(est%10===0 && KR_SCH.dur===est, '带入估算（10 分钟取整）：'+krHM(est));
@@ -10164,8 +10164,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var body = function(){ return document.getElementById('krcase-body'); }, txt = function(){ return body().textContent; }, confirmBtn = function(){ return [].slice.call(body().querySelectorAll('button.btn-primary')).filter(function(b){ return b.textContent.trim()==='确认'; })[0]; };
       var c = krFindCase(r.clinicId, r.id).c, line = tripShortLine(c, tripCurItems(c));
       ST.ok(/^⚠️ .+安排在第 \d+ 天，建议预留 \d+ 天行程（首选 \d\d\/\d\d～\d\d\/\d\d，共 \d+ 天(；备选 .*)?）$/.test(line), '短版一行：'+line);
-      ST.ok(txt().indexOf(line)>-1 && !/之后预约术后管理时/.test(txt()), 'KR 施术日期卡显示这一行，不写「之后预约术后管理时…」');
-      var sel = body().querySelector('select.kr-time-sel'); ST.ok(!!sel && getComputedStyle(sel).appearance==='none' && /url\(/.test(getComputedStyle(sel).backgroundImage) && parseFloat(getComputedStyle(sel).borderTopWidth)>=1, '时间是带框带 ▾ 的下拉框');
+      ST.ok(txt().indexOf(tripShortLine(c, [{label:'', date:KR_SCH.pick}]))>-1 && !/之后预约术后管理时/.test(txt()), 'KR 施术日期卡显示这一行，不写「之后预约术后管理时…」');
+      var sel = [].slice.call(body().querySelectorAll('select.kr-time-sel')).pop(); ST.ok(!!sel && getComputedStyle(sel).appearance==='none' && /url\(/.test(getComputedStyle(sel).backgroundImage) && parseFloat(getComputedStyle(sel).borderTopWidth)>=1, '时间是带框带 ▾ 的下拉框');
       var opts = [].slice.call(sel.options); ST.ok(!opts.some(function(o){ return /✕|需约|\d\.\d 小时/.test(o.text); }), '选项里没有「✕需约…」「5.3 小时」');
       ST.ok(/^\d\d:\d\d$/.test(sel.options[sel.selectedIndex].text), '框里只显示时间：'+sel.options[sel.selectedIndex].text);
       ST.ok(!/\d\.\d 小时/.test(txt()), '页面上没有小数小时');
@@ -10173,14 +10173,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 早于到达那天 + 到达当天早于 11:20 */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.primary = base; cc.krSchedule.backup = ''; });
       KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail(); krSchSet('time', '10:00');
-      sel = body().querySelector('select.kr-time-sel'); var early = [].slice.call(sel.options).filter(function(o){ return o.value==='10:00'; })[0], ok14 = [].slice.call(sel.options).filter(function(o){ return o.value==='14:00'; })[0];
+      sel = [].slice.call(body().querySelectorAll('select.kr-time-sel')).pop(); var early = [].slice.call(sel.options).filter(function(o){ return o.value==='10:00'; })[0], ok14 = [].slice.call(sel.options).filter(function(o){ return o.value==='14:00'; })[0];
       ST.ok(early.disabled && sel.options[sel.selectedIndex].text==='10:00', '10:00 灰掉，选中时框里仍只显示时间'); var other = [].slice.call(sel.options).filter(function(o){ return o.value==='09:00'; })[0]; ST.ok(/（早于到达时间）/.test(other.text), '没选中的灰掉时间后面写短原因：'+other.text);
       ST.ok(/到院时间 10:00 要晚于客人到达时间 11:20/.test(txt()) && /不能确认/.test(txt()) && /disabled/.test(confirmBtn().outerHTML), '选到不能用的：红字一行 + 确认灰');
       krSchSet('time', '14:00'); ST.ok(!/不能确认/.test(txt()) && !/disabled/.test(confirmBtn().outerHTML), '14:00：可以确认'); ST.ok(!ok14.disabled, '14:00 没灰');
       /* 预计时长改了，灰掉的时间跟着变：造一个 12:00～13:00 的不可预约 */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], h = HOSPITAL_DATA[caseKrHospital(cc)], dn = cc.director; h.directorSchedule = h.directorSchedule || {}; (h.directorSchedule[dn] = h.directorSchedule[dn] || []).push({id:'t11x', who:dn, date:cc.krSchedule.primary, time:'15:00', end:'16:00', type:'不可预约', title:'t'}); });
-      KR_SCH.dur = 60; krRenderCaseDetail(); var o1 = [].slice.call(body().querySelector('select.kr-time-sel').options).filter(function(o){ return o.value==='14:00'; })[0]; var d60 = o1.disabled;
-      KR_SCH.dur = 300; krRenderCaseDetail(); var o2 = [].slice.call(body().querySelector('select.kr-time-sel').options).filter(function(o){ return o.value==='14:00'; })[0];
+      KR_SCH.dur = 60; krRenderCaseDetail(); var o1 = [].slice.call([].slice.call(body().querySelectorAll('select.kr-time-sel')).pop().options).filter(function(o){ return o.value==='14:00'; })[0]; var d60 = o1.disabled;
+      KR_SCH.dur = 300; krRenderCaseDetail(); var o2 = [].slice.call([].slice.call(body().querySelectorAll('select.kr-time-sel')).pop().options).filter(function(o){ return o.value==='14:00'; })[0];
       ST.ok(d60===false && o2.disabled===true && /撞到不可预约/.test(o2.text || '') || (o2.disabled && true), '预计时长改长后 14:00 撞到 15:00 的不可预约而灰掉（1 小时不撞）：'+d60+'/'+o2.disabled);
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], h = HOSPITAL_DATA[caseKrHospital(cc)]; h.directorSchedule[cc.director] = (h.directorSchedule[cc.director]||[]).filter(function(b){ return b.id!=='t11x'; }); });
       ST.ok(krHoursText(318)==='5 小时 18 分钟' && krHM(320)==='5 小时 20 分钟', 'krHoursText 不再有小数写法');
@@ -10200,7 +10200,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(cc); cc.stay = {in:base, inTime:'11:20', out:out, outTime:'12:30', by:'A1'}; cc.krSchedule = {status:'pending', primary:p, backup:q, confirmedDate:null, tripState:'booked', tripSubmitted:true}; cc.hasArrived = false; });
       krShowCase(r.clinicId, r.id); krSetCaseTab('items'); KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
       var body = function(){ return document.getElementById('krcase-body'); }, txt = function(){ return body().textContent; }, confirmBtn = function(){ return [].slice.call(body().querySelectorAll('button.btn-primary')).filter(function(b){ return b.textContent.trim()==='确认'; })[0]; };
-      var sel = function(){ return body().querySelector('select.kr-time-sel'); };
+      var sel = function(){ return [].slice.call(body().querySelectorAll('select.kr-time-sel')).pop(); };
       ST.ok(!KR_SCH.time && sel().options[sel().selectedIndex].text==='选择时间' && sel().classList.contains('is-empty'), '时间显示灰字「选择时间」'); ST.ok(confirmBtn().disabled, '没选时间：确认灰'); ST.ok(!/不能确认/.test(txt()), '没选时间：没有红字');
       var yellows = function(){ return [].slice.call(body().querySelectorAll('div')).filter(function(d){ return /^⚠️ .+建议预留/.test(d.textContent.trim()) && d.children.length===0; }); };
       var yl = yellows(); ST.ok(yl.length===1 && yl[0].textContent.indexOf(stayMD(p))>-1 && yl[0].textContent.indexOf('首选')<0, '选首选：只有一行黄字，写首选那天（没有「首选」字样）');
@@ -10248,6 +10248,29 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krRenderCaseDetail(); body = document.getElementById('krcase-body'); ST.ok(/^在韩行程（预估）：/.test(t(body.children[1]).trim()), '行程预估：在韩行程（预估）：…');
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.stay = null; });
       krRenderCaseDetail(); body = document.getElementById('krcase-body'); ST.ok(/在韩行程（预估）：未定|在韩行程：未定/.test(t(body.children[1])), '没填：写「未定」：'+t(body.children[1]).slice(0, 30));
+    } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+
+  /* CMD-1106-14：KR 施术日期卡重新整理 */
+  ST.def('R244a','CMD-1106-14（KM1 分页，stageC 夹具）：两条分隔线、顺序（行程 → 首选 / 备选 → 施术时间 → 施术日期 + 时间 + 结束时间 → 按钮）、小时 / 分钟下拉和时间下拉同一个样式、结束时间随开始时间 / 预计时长变、跨日写隔天',function(){
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, oa = window.alert; window.alert = function(){};
+    try{
+      var base = ymdAdd(todayStr(), 40), days = 0, out = '';
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(cc); days = tripStayDays(cc); out = ymdAdd(base, days+3);
+        cc.stay = {in:base, inTime:'11:20', out:out, outTime:'12:30', by:'A1'}; cc.krSchedule = {status:'pending', primary:ymdAdd(out, -1), backup:ymdAdd(out, -2), confirmedDate:null, tripState:'booked', tripSubmitted:true}; cc.hasArrived = false; });
+      krShowCase(r.clinicId, r.id); krSetCaseTab('items'); KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
+      var body = document.getElementById('krcase-body'), html = body.innerHTML, txt = function(){ return document.getElementById('krcase-body').textContent; };
+      var card = [].slice.call(body.querySelectorAll('select.kr-time-sel')).map(function(x){ return x.parentElement; })[0]; var cardEl = body.querySelector('select.kr-time-sel').closest('.card, div[style*="padding"]') || body;
+      ST.ok((html.match(/border-top:1px solid var\(--border2\);margin:10px 0;/g)||[]).length>=2, '卡里有两条分隔线');
+      var iTrip = txt().indexOf('行程状态：'), iPick = txt().indexOf('首选施术日期'), iBk = txt().indexOf('备选施术日期'), iDur = txt().indexOf('施术时间：预计约'), iDate = txt().indexOf('施术日期 '+stayMD(ymdAdd(out,-1))), iBtn = txt().lastIndexOf('无法安排');
+      ST.ok(iTrip>-1 && iTrip<iPick && iPick<iBk && iBk<iDur && iDur<iDate && iDate<iBtn, '顺序：行程 → 首选 / 备选 → 施术时间 → 施术日期 → 按钮');
+      var sels = [].slice.call(body.querySelectorAll('select.kr-time-sel')); ST.ok(sels.length>=3 && sels.every(function(x){ var cs = getComputedStyle(x); return cs.appearance==='none' && parseFloat(cs.borderTopWidth)>=1 && /url\(/.test(cs.backgroundImage); }), '小时 / 分钟 / 时间三个下拉同一个样式（有框有 ▾）：'+sels.length);
+      var endTxt = function(){ return document.querySelector('#krcase-body .kr-sch-end').textContent.trim(); };
+      ST.ok(endTxt()==='～ --:--', '没选时间：～ --:--');
+      KR_SCH.dur = 320; krSchSet('time', '10:00'); ST.ok(endTxt()==='～ 15:20', '10:00 + 5 小时 20 分 → ～ 15:20：'+endTxt());
+      krSchDur('h', '4'); krSchDur('m', '0'); ST.ok(endTxt()==='～ 14:00', '预计时长改成 4 小时 → ～ 14:00：'+endTxt());
+      krSchSet('time', '22:00'); krSchDur('h', '5'); ST.ok(/～ 隔天 03:00/.test(endTxt()), '跨到隔天写「隔天 03:00」：'+endTxt());
     } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
 })();

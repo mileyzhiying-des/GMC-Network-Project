@@ -1329,7 +1329,9 @@ function krSchForm(c, dates, labels, confirmFn, rejectFn, confirmLabel){
   var opts = dates.map(function(d, i){ return '<label style="display:block;margin:6px 0;font-size:13px;cursor:pointer;"><input type="radio" name="kr-sch-pick" '+(KR_SCH.pick===d?'checked':'')+' onchange="krSchSet(\'pick\',\''+d+'\')"> '+labels[i]+'施术日期：<b>'+d+'</b></label>'+krSchedDayHtml(c, d)+(d===KR_SCH.pick && (function(){ var l = tripShortLine(c, [{label:'', date:d}]); return l ? '<div style="font-size:12px;margin:0 0 8px 22px;color:#8F6F0C;">'+krEsc(l)+'</div>' : ''; })() || ''); }).join('');
   var hOpts = ''; for(var h = 0; h <= 12; h++) hOpts += '<option value="'+h+'"'+(h===Math.min(12,hh)?' selected':'')+'>'+h+'</option>';
   var mOpts = ''; [0,10,20,30,40,50].forEach(function(m){ mOpts += '<option value="'+m+'"'+(m===mm?' selected':'')+'>'+m+'</option>'; });
-  var durRow = '<div style="font-size:13px;margin:8px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">施术时间预计约 <select onchange="krSchDur(\'h\',this.value)" style="'+sel+'">'+hOpts+'</select> 小时 <select onchange="krSchDur(\'m\',this.value)" style="'+sel+'">'+mOpts+'</select> 分钟 <span style="font-size:12px;color:var(--muted);">（估算时间 '+krEsc(krHM(est))+(dur!==est ? '，已改为 '+krEsc(krHM(dur)) : '')+'）</span></div>';
+  var durRow = '<div style="font-size:13px;margin:8px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">施术时间：预计约 <select class="kr-time-sel" onchange="krSchDur(\'h\',this.value)" style="min-width:72px;">'+hOpts+'</select> 小时 <select class="kr-time-sel" onchange="krSchDur(\'m\',this.value)" style="min-width:72px;">'+mOpts+'</select> 分钟 <span style="font-size:12px;color:var(--muted);">（估算时间 '+krEsc(krHM(est))+(dur!==est ? '，已改为 '+krEsc(krHM(dur)) : '')+'）</span></div>';
+  var endTxt = '--:--'; if(KR_SCH.time){ var em = timeToMin(KR_SCH.time) + dur; endTxt = em >= 1440 ? '隔天 '+minToTime(em - 1440) : minToTime(em); } /* CMD-1106-14：结束时间 = 开始时间 + 预计时长 */
+  var hrLine = '<div style="border-top:1px solid var(--border2);margin:10px 0;"></div>';
   var noTime = !KR_SCH.time, ti = noTime ? null : tripDateIssue(c, KR_SCH.pick, KR_SCH.time), red = '', yellow = '';
   if(ti && !ti.soft && ti.kind!=='short') red = tripDateIssueText(c, KR_SCH.pick, KR_SCH.time);
   else if(ti && ti.soft) yellow = tripDateIssueText(c, KR_SCH.pick, KR_SCH.time)+'（行程暂定，仅供提醒）';
@@ -1340,8 +1342,8 @@ function krSchForm(c, dates, labels, confirmFn, rejectFn, confirmLabel){
   var selSty = '';
   var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
   /* CMD-1106-11 补：卡上不显示到院地址；确认时自动用医院设定里的地址（KR_SCH.address，已确认的沿用原地址）存进去，IN 赴韩日程 / 打印 / 给客人的通知照旧显示 */
-  return '<div style="font-size:13px;margin-bottom:6px;">'+krTripLine(c)+'</div>'+durRow+opts+krDayFullNote(c, KR_SCH.pick)+
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;"><span style="font-size:13px;">施术日期 <b>'+krEsc(KR_SCH.pick ? String(KR_SCH.pick).slice(5).replace('-', '/') : '—')+'</b></span><select class="kr-time-sel'+(KR_SCH.time ? '' : ' is-empty')+'" onchange="krSchSet(\'time\',this.value)">'+krTimeOptionsFor(KR_SCH.time, c, KR_SCH.pick)+'</select></div>'+noteRow+
+  return '<div style="font-size:13px;margin-bottom:6px;">'+krTripLine(c)+'</div>'+hrLine+opts+krDayFullNote(c, KR_SCH.pick)+hrLine+durRow+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;"><span style="font-size:13px;">施术日期 <b>'+krEsc(KR_SCH.pick ? String(KR_SCH.pick).slice(5).replace('-', '/') : '—')+'</b></span><select class="kr-time-sel'+(KR_SCH.time ? '' : ' is-empty')+'" onchange="krSchSet(\'time\',this.value)">'+krTimeOptionsFor(KR_SCH.time, c, KR_SCH.pick)+'</select><span class="kr-sch-end" style="font-size:13px;color:var(--slate2);">～ '+endTxt+'</span></div>'+noteRow+
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;"><button class="btn-primary" '+((red || noTime) ? 'disabled style="opacity:.45;cursor:not-allowed;" title="'+krEsc(red || '请先选择时间')+'"' : '')+' onclick="'+confirmFn+'()">'+confirmLabel+'</button><button class="btn-outline" onclick="krSchRejectOpen(\''+rejectFn.replace(/'/g, "\\'")+'\')">无法安排</button></div>';
 }
 function krSchRejectOpen(fn){
