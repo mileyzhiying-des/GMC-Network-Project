@@ -8723,7 +8723,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var ids = {}; [].forEach.call(host.querySelectorAll('[id]'), function(e){ ids[e.id] = (ids[e.id]||0)+1; });
       ST.ok(Object.keys(ids).every(function(k){ return ids[k]===1; }) && ids['nik-in-cont']===1 && ids['nik-in-p']===1, '两处输入框 / 错误行 id 都不重复（弹窗和基础资料同时在页面上）');
       var inp = document.getElementById('nik-in-cont'), err = function(){ return (document.getElementById('nik-err-cont')||{}).textContent||''; }, cnt = function(){ return (document.getElementById('nik-cnt-cont')||{}).textContent||''; };
-      inp.value = '00000000000000023'; nikLive('cont'); ST.ok(cnt()==='17 / 16' && /17 位/.test(err()), '输入 17 位：即时显示「17 / 16」并红字（现在是 17 位）');
+      inp.value = '00000000000000023'; nikLive('cont'); ST.ok(inp.value.length===16 && cnt()==='16/16' && !err(), '输入 17 位（1106-02 改）：第 17 位进不去，只留 16 位，显示「16/16」，没有红字');
+      inp.value = '00000000000000023'; /* 绕过输入框限制（程序直接赋值）：保存仍然要拦 */
       nikSaveInline(cl1.name, 'cont'); ST.ok(!cl1.nik && /正好 16 位数字（现在是 17 位）/.test(err()) && document.getElementById('nik-err-cont').style.display!=='none', '按保存：不存，输入框下面红字写原因');
       inp.value = '123456789012345'; nikLive('cont'); nikSaveInline(cl1.name, 'cont'); ST.ok(!cl1.nik && /现在是 15 位/.test(err()), '15 位：红字 现在是 15 位');
       inp.value = '12345678901234ab'; nikSaveInline(cl1.name, 'cont'); ST.ok(!cl1.nik && /只能是数字/.test(err()), '含字母：只能是数字');
@@ -9611,6 +9612,19 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     sd = todos().filter(function(x){ return x.kind==='send'; })[0]; ST.ok(res && res.ok && !!sd && /^院长已重新上传 · 待发送 IN · A\d+ · 复诊/.test(sd.text) && r232Notifs(cid, /KD1 院长 已重新上传 A\d+ 的复诊评估/).length===1, '复诊：重新上传 → 室长待办 + 通知：'+(sd && sd.text));
     /* 还原 */
     try{ var sn = localStorage.getItem('gmc_cfg_r232snap'); if(sn) Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===id; }); CASE_ITEMS[i] = JSON.parse(sn); }); localStorage.removeItem('gmc_cfg_r232snap'); }catch(e){}
+  });
+  ST.def('R233a','CMD-1106-02（A1 分页）：IN 端 NIK 输入框——只能数字、最多 16 位、右侧「N/16」没满灰色 / 16 位绿色（接待 / 继续弹窗 / 管理者更正）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var cl = {name:'R233', nik:''}; var host = document.createElement('div'); host.innerHTML = nikInputRowHtml(cl, true, 'r233'); document.body.appendChild(host);
+    try{
+      var el = document.getElementById('nik-in-r233'), cnt = document.getElementById('nik-cnt-r233');
+      ST.ok(!!el && el.getAttribute('maxlength')==='16' && cnt && /0\/16/.test(cnt.textContent), '输入框 maxlength=16，右侧显示 0/16');
+      el.value = '1234 5678-9012a3456789'; nikLive('r233'); ST.ok(el.value==='1234567890123456' && cnt.textContent==='16/16' && /46, 125, 79|#2E7D4F/i.test(cnt.style.color), '贴上带空格 / 横线 / 字母 → 只留数字、最多 16 位；16 位绿色');
+      el.value = '123456789012345'; nikLive('r233'); ST.ok(cnt.textContent==='15/16' && !/46, 125, 79|#2E7D4F/i.test(cnt.style.color), '15 位：15/16 灰色');
+      el.value = '12345678901234567'; nikLive('r233'); ST.ok(el.value.length===16, '第 17 位进不去');
+    } finally { host.remove(); }
+    var f = document.createElement('div'); f.innerHTML = '<input id="ce-nik" maxlength="16" oninput="nikCeLive(this)"><div id="ce-nikc"></div>'; document.body.appendChild(f);
+    try{ var e2 = document.getElementById('ce-nik'); e2.value = '9999-9999'; nikCeLive(e2); ST.ok(e2.value==='99999999' && document.getElementById('ce-nikc').textContent==='8/16', '管理者更正框：只留数字，N/16'); e2.value = '1234567890123456789'; nikCeLive(e2); ST.ok(e2.value.length===16 && document.getElementById('ce-nikc').textContent==='16/16', '更正框最多 16 位'); } finally { f.remove(); }
   });
   ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

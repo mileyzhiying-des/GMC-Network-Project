@@ -869,17 +869,19 @@ function nikInputRowHtml(cl, ed, uid){
   if(!ed) return '<span style="color:#B3261E;">⚠ 未登记</span>';
   /* CMD-1102-08 四：输入框 / 错误行的 id 带 uid——「继续之前的服务」弹窗和后面的基础资料页同时在页面上，原来两处都叫 nik-in / nik-err，保存读到的是弹窗后面那一个（空的），错误也写到被盖住的那个里，所以弹窗里按保存没反应 */
   uid = uid || 'p'; var nm = String(cl.name).replace(/'/g, "\\'");
-  return '<span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;"><input id="nik-in-'+uid+'" type="text" inputmode="numeric" maxlength="19" placeholder="16 位数字" autocomplete="off" style="width:190px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;" oninput="nikLive(\''+uid+'\')" onkeydown="if(event.key===\'Enter\'){nikSaveInline(\''+nm+'\',\''+uid+'\');}">'+
-    '<span id="nik-cnt-'+uid+'" style="font-size:12px;color:var(--muted);min-width:46px;">0 / 16</span>'+
+  return '<span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;"><input id="nik-in-'+uid+'" type="text" inputmode="numeric" maxlength="16" placeholder="16 位数字" autocomplete="off" style="width:190px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;" oninput="nikLive(\''+uid+'\')" onkeydown="if(event.key===\'Enter\'){nikSaveInline(\''+nm+'\',\''+uid+'\');}">'+
+    '<span id="nik-cnt-'+uid+'" style="font-size:12px;color:var(--muted);min-width:46px;text-align:right;">0/16</span>'+
     '<button class="btn-outline" onclick="nikSaveInline(\''+nm+'\',\''+uid+'\')">保存</button></span><div id="nik-err-'+uid+'" class="error-text" style="display:none;margin-top:4px;"></div><div style="font-size:12px;color:var(--muted);margin-top:3px;">请看着客人的 KTP / KIA 当场输入（必填，保存后才能确认基础资料）</div>';
 }
 /* 输入时即时显示位数；不足 / 超过时马上提示（红字） */
 function nikLive(uid){
   var el = document.getElementById('nik-in-'+uid), cnt = document.getElementById('nik-cnt-'+uid), er = document.getElementById('nik-err-'+uid); if(!el) return;
-  var v = nikClean(el.value), n = v.length, bad = n>0 && (n!==16 || /\D/.test(v));
-  if(cnt){ cnt.textContent = n+' / 16'; cnt.style.color = bad && n>16 ? '#B3261E' : 'var(--muted)'; }
-  if(er){ if(n>16 || /\D/.test(v)){ er.textContent = nikCheck(v, null, false); er.style.display = 'block'; } else { er.textContent = ''; er.style.display = 'none'; } }
+  var v = String(el.value||'').replace(/\D/g, '').slice(0, 16); if(el.value!==v) el.value = v; /* CMD-1106-02：只能数字、最多 16 位（贴上时去掉空格 / 非数字） */
+  var n = v.length;
+  if(cnt){ cnt.textContent = n+'/16'; cnt.style.color = n===16 ? '#2E7D4F' : 'var(--muted)'; cnt.style.fontWeight = '600'; } /* 没满灰色，刚好 16 位绿色 */
+  if(er){ er.textContent = ''; er.style.display = 'none'; }
 }
+function nikCeLive(el){ var v = String(el.value||'').replace(/\D/g, '').slice(0, 16); if(el.value!==v) el.value = v; var c = document.getElementById('ce-nikc'); if(c){ c.textContent = v.length+'/16'; c.style.color = v.length===16 ? '#2E7D4F' : 'var(--muted)'; } } /* 管理者更正的新号码输入框 */
 function nikSaveInline(name, uid){
   uid = uid || 'p'; var cl = clientByName(name), el = document.getElementById('nik-in-'+uid), er = document.getElementById('nik-err-'+uid); if(!cl || !el) return;
   var r = setClientNik(cl, el.value, {});
