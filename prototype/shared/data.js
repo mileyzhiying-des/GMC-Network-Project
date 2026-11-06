@@ -12466,6 +12466,17 @@ function recEditBtn(c, x, st){
   var q = String(x.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'), lk = scopeInLock(c), why = st==='bought' ? '已购买，不能编辑' : (st==='cancelled' ? '已取消，不能编辑' : (lk ? lk.by+'正在结算，请稍后' : ''));
   return '<span style="text-align:right;"><button class="btn-outline" style="padding:3px 10px;font-size:12px;'+(why ? 'opacity:.45;cursor:not-allowed;' : '')+'" '+(why ? 'disabled title="'+esc0(why)+'"' : 'onclick="krScopeEditOpen(\''+q+'\')"')+'>编辑</button></span>';
 }
+/* CMD-1106-16：推荐项目的术后管理标「在哪做」：照项目设定写「必须在韩国 / 韩国或印尼」；「韩国或印尼」的如果 IN 已经分配好（购物车 / 结算单 / 已买里同一项目同一行），改写分配结果（在印尼做 / 在韩国做 / 印尼 N 次 · 韩国 M 次） */
+function recPcPlace(c, item, p){
+  if(p.place==='KR') return '必须在韩国';
+  var m = (typeof mainOf==='function' && mainOf(c)) || c, key = typeof pcRowKey==='function' ? pcRowKey(p) : '';
+  var find = function(list){ var it = (list||[]).filter(function(y){ return y.origin==='KR' && y.name===item.name && !y.cancelled && !y.swapped && (y.postcare||[]).length; })[0]; return it ? (it.postcare||[]).filter(function(r){ return pcRowKey(r)===key; })[0] : null; };
+  var bought = find(m.procedureItems), row = bought || find(m.recommended);
+  if(!row) return '韩国或印尼';
+  var sp = pcSplit(row), n = row.times || 1;
+  if(sp.inn>0) return sp.inn>=n ? '在印尼做' : '印尼 '+sp.inn+' 次 · 韩国 '+sp.kr+' 次';
+  return bought ? '在韩国做' : '韩国或印尼';
+}
 function recProjectsRowsHtml(c, viewer){
   var items = (c.krScope && c.krScope.items) || [], e = esc0, canEdit = viewer==='KR' && typeof krCan==='function' && krCan() && !!c.reportReady && c.stage==='consult' && !scopeFrozen(c), G = 'display:grid;grid-template-columns:84px minmax(0,1.5fr) minmax(0,1.6fr) '+(viewer==='KR' ? '120px' : '220px')+(canEdit ? ' 64px' : '')+';gap:10px;align-items:start;'; /* CMD-1106-03：KR 室长每行［编辑］（未购买才能改） */
   if(!items.length) return '<div style="font-size:12px;color:var(--muted);padding:8px 0;">院长没有建议项目</div>';
@@ -12474,7 +12485,7 @@ function recProjectsRowsHtml(c, viewer){
   var frozenFold = scopeFrozen(c); /* CMD-1106-07：付完定金、推荐项目冻结后，先列已购买 / 已取消的，未购买的收成一行「未购买 N 项 ▸ 展开」 */
   var rowFn = function(x){
     var st = recBuyState(c, x), meta = []; try{ meta = itemMetaText(x).filter(function(t){ return t.indexOf('术后管理：')!==0; }); }catch(er){} if(x.post) meta.push('术后管理（印尼）：对应 '+(x.forSurg||'—')+'，术后第 '+(x.startDay||'—')+' 天');
-    var pcs = (x.postcare||[]).map(function(p){ return e((p.name||p.mgmt||'术后管理')+' × '+(p.times||1)+(pcDayText(p) ? '（'+pcDayText(p)+'）' : '')); });
+    var pcs = (x.postcare||[]).map(function(p){ var dt = (pcDayText(p)||'').replace(/第(\d[\d、]*)天/g, '第 $1 天'), wh = recPcPlace(c, x, p); return e((p.name||p.mgmt||'术后管理')+' × '+(p.times||1)+(dt || wh ? '（'+dt+(dt && wh ? ' · ' : '')+wh+'）' : '')); }); /* CMD-1106-16：每行术后管理后面标在哪做 */
     var price = !(x.price>0) ? '' : (viewer==='KR' ? (typeof isLocalProjectName==='function' && isLocalProjectName(x.name) ? '' : formatCurrency(x.price,'KRW')) : krIdrText(x.price));
     return '<div style="'+G+'padding:10px 0;border-bottom:1px solid var(--border2);'+(st==='cancelled' ? 'color:var(--muted);' : '')+'"><span>'+tagOf(st)+'</span><div style="min-width:0;"><div style="font-size:13px;font-weight:700;'+(st==='cancelled' ? 'text-decoration:line-through;' : '')+'">'+e(buyName(x.name))+(x.note ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+e(x.note)+'</span>' : '')+'</div>'+(meta.length ? '<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.7;">'+meta.map(e).join('<br>')+'</div>' : '')+'</div><div style="font-size:13px;line-height:1.7;">'+(pcs.length ? pcs.join('<br>') : '<span style="color:var(--muted);">无</span>')+'</div><div style="font-size:13px;text-align:right;">'+e(price)+'</div>'+(canEdit ? recEditBtn(c, x, st) : '')+'</div>';
   };

@@ -785,18 +785,22 @@ function itemMetaText(it){
    最少天数 = 这个施术「必须在韩国」（place 不是 either）的术后管理里最后一次的第 N 天 + 1；没有 = 1 天。
    entries 可以是表单行（start）或项目快照里的行（startDay / day）。KR 可以往上加、不能少于最少天数；比最少多要写「停留原因」。 */
 var STAY_REASON_TAGS = ['术后需静养', '不宜搭飞机', '消肿观察', '其他'];
+/* CMD-1106-16：建议在韩天数 = 最晚一项「必须在韩国」的术后管理是第几天 + 1（施术日 = 第 0 天）；没有「必须在韩国」的 = 1 天；「韩国或印尼」和「在印尼」的不算。
+   画面一行、不能填：「建议在韩：8 天（第 7 天在韩国拆线）」——autoWhy / name / last 给这一行用（why 是旧写法，旧资料的显示还在读） */
 function stayMinOf(entries){
-  var best = {min:1, why:''};
+  var best = {min:1, why:'', autoWhy:'', name:'', last:0};
   (entries||[]).forEach(function(x){
-    if(!x || x.place==='either') return;
+    if(!x || x.place==='either' || x.place==='IN') return;
     var st = x.startDay!==undefined && x.startDay!==null && x.startDay!=='' ? x.startDay : x.start;
     var days = pcDays({startDay:st, day:x.day, times:x.times, interval:x.interval}); if(!days.length) return;
     var last = days[days.length-1];
-    if(last+1 > best.min) best = {min:last+1, why:'第 '+last+' 天需在韩国'+(x.mgmt||x.name||'做术后管理')};
+    if(last+1 > best.min) best = {min:last+1, why:'第 '+last+' 天需在韩国'+(x.mgmt||x.name||'做术后管理'), autoWhy:'第 '+last+' 天在韩国'+(x.mgmt||x.name||'做术后管理'), name:(x.mgmt||x.name||'术后管理'), last:last};
   });
   return best;
 }
 /* 停留原因 {tags:[], fly:'', note:''} → 文字：术后需静养、7 天内不宜搭飞机、…；其他 + 补充 */
+/* CMD-1106-16：一行文字 */
+function stayAutoLine(mi){ return '建议在韩：'+mi.min+' 天'+(mi.autoWhy ? '（'+mi.autoWhy+'）' : '（没有必须在韩国的术后管理）'); }
 function stayReasonText(r){
   if(!r) return ''; var out = [];
   (r.tags||[]).forEach(function(t){ if(t==='不宜搭飞机') out.push((parseInt(r.fly,10)>0 ? parseInt(r.fly,10)+' 天内' : '')+'不宜搭飞机'); else if(t!=='其他') out.push(t); });

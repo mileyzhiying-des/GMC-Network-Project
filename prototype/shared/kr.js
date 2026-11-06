@@ -2129,27 +2129,18 @@ function krPcNameSelect(sel, onchange, inp){
 }
 function krDet(name){ return KR_SUB.detail[name] || (KR_SUB.detail[name] = {stay:'', stayTouched:false, stayReason:{tags:[], fly:'', note:''}, anes:'local', anesNote:'', anesFast:'', pc:[]}); }
 /* ---- CMD-1019-17：建议在韩天数（施术日 = 第 0 天）：自动带最少天数，不能少，比最少多要写停留原因 ---- */
-function krStayState(name){ var d = krDet(name); d.stayReason = d.stayReason || {tags:[], fly:'', note:''}; var mi = stayMinOf(d.pc), eff = d.stayTouched ? (parseInt(d.stay,10)||0) : mi.min; return {d:d, mi:mi, eff:eff}; }
+function krStayState(name){ var d = krDet(name); var mi = stayMinOf(d.pc), eff = mi.min; /* CMD-1106-16：一律自动算，不能填、没有停留原因 */ return {d:d, mi:mi, eff:eff}; }
 function krStaySet(name, v){ var d = krDet(name); d.stay = v; d.stayTouched = String(v).trim()!==''; krRenderCaseDetail(); }
 function krStayTag(name, tag){ var r = krDet(name).stayReason, i = r.tags.indexOf(tag); if(i>-1) r.tags.splice(i, 1); else r.tags.push(tag); krRenderCaseDetail(); }
 function krStayR(name, k, v){ krDet(name).stayReason[k] = v; krSumRefresh(); }
 /* 提交时：{err} 或 {stay:'8天', stayReason}；name = 表单里的项目名 / '__add' 等，label = 提示里写的项目名 */
 function krStayCommit(name, label){
-  var s = krStayState(name), d = s.d;
-  if(s.eff < s.mi.min) return {err:'「'+label+'」建议在韩天数不能少于 '+s.mi.min+' 天'+(s.mi.why ? '（'+s.mi.why+'，至少 '+s.mi.min+' 天）' : '')};
-  if(s.eff > s.mi.min && !stayReasonOk(d.stayReason)) return {err:'「'+label+'」建议在韩 '+s.eff+' 天，比最少天数 '+s.mi.min+' 天多，请填写停留原因（含「其他」时要写文字）'};
-  return {stay:s.eff+'天', stayReason:s.eff > s.mi.min ? JSON.parse(JSON.stringify(d.stayReason)) : undefined};
+  var s = krStayState(name); /* CMD-1106-16：自动算，不会出错；新存的条目不带停留原因 */
+  return {stay:s.eff+'天', stayReason:undefined};
 }
-function krStayBlockHtml(name, inp){
-  var q = function(x){ return String(x).replace(/'/g, "\\'"); }, s = krStayState(name), r = s.d.stayReason, nm = q(name);
-  var out = '<div style="margin:0 0 8px;font-size:12px;"><span style="color:var(--slate2);">施术日 = 第 0 天；最少 <b>'+s.mi.min+'</b> 天'+(s.mi.why ? '（'+krEsc(s.mi.why)+'，至少 '+s.mi.min+' 天）' : '（没有必须在韩国的术后管理）')+'</span>';
-  if(s.eff < s.mi.min) out += '<div style="color:#B3261E;font-weight:700;margin-top:3px;">⚠ 不能少于 '+s.mi.min+' 天'+(s.mi.why ? '：'+krEsc(s.mi.why) : '')+'</div>';
-  if(s.eff > s.mi.min){
-    out += '<div style="margin-top:6px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;"><b>停留原因 <span style="color:#B3261E;">*</span></b> <span style="color:var(--muted);">（比最少天数多 '+(s.eff-s.mi.min)+' 天，可多选）</span><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px;">'+
-      STAY_REASON_TAGS.map(function(t){ var on = r.tags.indexOf(t)>-1; return '<label style="cursor:pointer;"><input type="checkbox"'+(on?' checked':'')+' onchange="krStayTag(\''+nm+'\',\''+t+'\')"> '+t+'</label>'+(t==='不宜搭飞机' && on ? ' <input type="number" min="1" max="60" placeholder="X" value="'+krEsc(r.fly)+'" oninput="krStayR(\''+nm+'\',\'fly\',this.value)" style="'+inp+'width:56px;"> 天内' : ''); }).join('')+
-      '<input placeholder="补充说明（选「其他」时必填）" value="'+krEsc(r.note)+'" oninput="krStayR(\''+nm+'\',\'note\',this.value)" style="'+inp+'min-width:220px;"></div></div>';
-  }
-  return out+'</div>';
+function krStayBlockHtml(name, inp){ /* CMD-1106-16：只显示一行，不能填 */
+  var s = krStayState(name);
+  return '<div style="margin:0 0 8px;font-size:12px;color:var(--slate2);"><b>'+krEsc(stayAutoLine(s.mi))+'</b></div>';
 }
 /* 麻醉方式换了：局麻清掉空腹小时数，睡眠 / 全麻才出现「需空腹（小时）」栏（要重画表单） */
 function krAnesSet(name, v){ var d = krDet(name); d.anes = v; if(v==='local') d.anesFast = ''; krRenderCaseDetail(); }
@@ -2238,7 +2229,7 @@ function krProjDetailHtml(p, cand){
       '<div style="margin-left:auto;"><a href="#" onclick="krPcDel('+ph+');return false;" style="white-space:nowrap;font-size:12px;color:#B3261E;">移除</a></div></div>';
   }).join('');
   return '<div style="margin:4px 0 10px 22px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;">'+
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px;"><span>建议在韩天数</span><input type="number" min="1" max="90" value="'+krStayState(p.name).eff+'" onchange="krStaySet(\''+q(p.name)+'\',this.value)" style="'+inp+'width:70px;"><span>天</span>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">'+
     '<span>麻醉</span><select onchange="krAnesSet(\''+q(p.name)+'\',this.value)" style="'+inp+'">'+Object.keys(KR_ANES).map(function(k2){ return '<option value="'+k2+'"'+(d.anes===k2?' selected':'')+'>'+KR_ANES[k2]+'</option>'; }).join('')+'</select>'+
     (d.anes!=='local' ? '<span>需空腹（小时）</span><input type="number" min="1" max="48" placeholder="选填" value="'+krEsc(d.anesFast)+'" oninput="krDetSet(\''+q(p.name)+'\',\'anesFast\',this.value)" style="'+inp+'width:80px;">' : '')+
     '<input placeholder="麻醉备注（选填）" value="'+krEsc(d.anesNote)+'" oninput="krDetSet(\''+q(p.name)+'\',\'anesNote\',this.value)" style="'+inp+'min-width:200px;"></div>'+
@@ -2381,7 +2372,7 @@ function krScopeEditOpen(name){
 }
 function krDetailFromItem(it){ /* 推荐项目 → 表单状态（krDefaultsDetail 的反向） */
   var an = it.anesthesia || {}, pcs = (it.postcare||[]).map(function(x){ return {mgmt:x.mgmt||'', kr:x.name, inn:x.innName||'', times:x.times||1, interval:x.interval||1, place:x.place||'KR', start:x.startDay||(String(x.day||'').match(/(\d+)/)||[])[1]||''}; });
-  return {stay:String(parseInt(it.stay,10)||''), stayTouched:true, stayReason:it.stayReason ? JSON.parse(JSON.stringify(it.stayReason)) : {tags:[], fly:'', note:''}, anes:an.type||'local', anesNote:an.note||'', anesFast:an.fast==null ? '' : an.fast, pc:pcs};
+  return {stay:'', stayTouched:false, stayReason:{tags:[], fly:'', note:''}, anes:an.type||'local', anesNote:an.note||'', anesFast:an.fast==null ? '' : an.fast, pc:pcs};
 }
 function krScEditSync(c){
   var ov = document.getElementById('kr-scedit-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-scedit-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100000; ov.addEventListener('click', function(){ krScLockTouch(); }); ov.addEventListener('input', function(){ krScLockTouch(); }); document.body.appendChild(ov); }
@@ -3945,14 +3936,8 @@ function krpAnes(v){ var df = KRP.draft.defaults; df.anes = v; if(v==='local') d
 function krpStay(v){ var df = KRP.draft.defaults; df.stay = String(v).trim()==='' ? '' : (parseInt(v,10)||1)+'天'; krpRender(); }
 function krpStayTag(tag){ var r = KRP.draft.defaults.stayReason, i = r.tags.indexOf(tag); if(i>-1) r.tags.splice(i, 1); else r.tags.push(tag); krpRender(); }
 function krpStayR(k, v){ KRP.draft.defaults.stayReason[k] = v; }
-function krpStayHtml(df, inp){
-  var days = parseInt(df.stay,10)||0, mi = stayMinOf(df.postcare), r = df.stayReason || {tags:[], fly:'', note:''};
-  var out = '<div style="margin:6px 0;font-size:12px;"><span style="color:var(--slate2);">施术日 = 第 0 天；最少 <b>'+mi.min+'</b> 天'+(mi.why ? '（'+krEsc(mi.why)+'，至少 '+mi.min+' 天）' : '（没有必须在韩国的术后管理）')+'；不填天数 = 发诊疗方案时自动带最少天数</span>';
-  if(days && days < mi.min) out += '<div style="color:#B3261E;font-weight:700;margin-top:3px;">⚠ 不能少于 '+mi.min+' 天'+(mi.why ? '：'+krEsc(mi.why) : '')+'</div>';
-  if(days > mi.min) out += '<div style="margin-top:6px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;"><b>停留原因 <span style="color:#B3261E;">*</span></b><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px;">'+
-    STAY_REASON_TAGS.map(function(t){ var on = r.tags.indexOf(t)>-1; return '<label style="cursor:pointer;"><input type="checkbox"'+(on?' checked':'')+' onchange="krpStayTag(\''+t+'\')"> '+t+'</label>'+(t==='不宜搭飞机' && on ? ' <input type="number" min="1" max="60" placeholder="X" value="'+krEsc(r.fly)+'" oninput="krpStayR(\'fly\',this.value)" style="'+inp+'width:56px;"> 天内' : ''); }).join('')+
-    '<input placeholder="补充说明（选「其他」时必填）" value="'+krEsc(r.note)+'" oninput="krpStayR(\'note\',this.value)" style="'+inp+'min-width:220px;"></div></div>';
-  return out+'</div>';
+function krpStayHtml(df, inp){ /* CMD-1106-16：库的默认资料也不填天数 / 停留原因，保存时按「所需术后管理」自动算 */
+  return '<div style="margin:6px 0;font-size:12px;color:var(--slate2);"><b>'+krEsc(stayAutoLine(stayMinOf((df.postcare||[]).filter(function(x){ return x.kr; }))))+'</b></div>';
 }
 function krpPcAdd(){ KRP.draft.defaults.postcare.push({mgmt:'', kr:'', times:1, interval:1, place:'KR', start:''}); krpRender(); }
 function krpPcDel(i){ KRP.draft.defaults.postcare.splice(i, 1); krpRender(); }
@@ -3973,10 +3958,7 @@ function krpSave(){
   if(!isKrPostcareCat(d0.categoryId)){ d0.categoryId = krEnsurePartCat(partBase(d0.parts[0])); }
   if(!isKrPostcareCat(d0.categoryId) && !(Number(d0.defaults.durMin) > 0)){ alert('请填施术时长（分钟，必填）'); return; } /* 赴韩项目时长必填（CMD-1013-12 三） */
   if(!isKrPostcareCat(d0.categoryId)){ /* CMD-1019-17：默认资料的建议在韩天数不能少于最少天数，比最少多要写停留原因 */
-    var sd = d0.defaults, sdays = parseInt(sd.stay,10)||0, smi = stayMinOf((sd.postcare||[]).filter(function(x){ return x.kr; }));
-    if(sdays && sdays < smi.min){ alert('建议在韩天数不能少于 '+smi.min+' 天'+(smi.why ? '（'+smi.why+'，至少 '+smi.min+' 天）' : '')); return; }
-    if(sdays > smi.min && !stayReasonOk(sd.stayReason)){ alert('建议在韩 '+sdays+' 天，比最少天数 '+smi.min+' 天多，请填写停留原因（含「其他」时要写文字）'); return; }
-    if(sdays > smi.min) sd.stayReason = {tags:(sd.stayReason.tags||[]).slice(), fly:sd.stayReason.fly||'', note:sd.stayReason.note||''}; else delete sd.stayReason;
+    var sd = d0.defaults, smi = stayMinOf((sd.postcare||[]).filter(function(x){ return x.kr; })); sd.stay = smi.min+'天'; delete sd.stayReason; /* CMD-1106-16：按所需术后管理自动算，拿掉停留原因 */
     sd.anesFast = sd.anes==='local' ? '' : (parseInt(sd.anesFast,10) > 0 ? parseInt(sd.anesFast,10) : '');
   }
   d0.price = price; d0.defaults.durMin = Number(d0.defaults.durMin)||0;
@@ -4017,7 +3999,7 @@ function krpEditor(){
     (isPost ? krpUsesHtml(d0, inp)+'<div style="font-size:12px;color:var(--muted);margin-top:6px;">「韩国术后管理」分类：在韩国做的术后管理，只在 KR 写诊疗方案选"所需术后管理"时用，不用填默认资料。</div>'+dirOpEditHtml(d0, 'krpDirOp', 'krpDirMin', inp) :
     krpShootBlockHtml(d0)+
     '<div style="margin-top:10px;padding:10px 12px;background:var(--surface2,#faf6ef);border-radius:8px;font-size:12px;"><div style="font-weight:700;margin-bottom:6px;">项目默认资料（KR 写诊疗方案 / 更换项目 / 补加时自动带入，可按客人调整）</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">建议在韩天数 <input type="number" min="1" max="90" value="'+krEsc(parseInt(df.stay,10)||'')+'" onchange="krpStay(this.value)" placeholder="自动" style="'+inp+'width:70px;"> 天 施术时长 <span style="color:#C1454A;">*</span> <input type="number" min="15" step="15" placeholder="必填" value="'+krEsc(df.durMin)+'" oninput="krpDef(\'durMin\',this.value)" style="'+inp+'width:80px;"> 分钟 麻醉 <select onchange="krpAnes(this.value)" style="'+inp+'">'+Object.keys(KR_ANES).map(function(k){ return '<option value="'+k+'"'+(df.anes===k?' selected':'')+'>'+KR_ANES[k]+'</option>'; }).join('')+'</select>'+(df.anes!=='local' ? '需空腹 <input type="number" min="1" max="48" placeholder="选填" value="'+krEsc(df.anesFast)+'" oninput="krpDef(\'anesFast\',this.value)" style="'+inp+'width:70px;"> 小时 ' : '')+'<input placeholder="麻醉备注" value="'+krEsc(df.anesNote)+'" oninput="krpDef(\'anesNote\',this.value)" style="'+inp+'min-width:180px;"></div>'+krpStayHtml(df, inp)+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><b>'+krEsc(stayAutoLine(stayMinOf((df.postcare||[]).filter(function(x){ return x.kr; }))))+'</b> 施术时长 <span style="color:#C1454A;">*</span> <input type="number" min="15" step="15" placeholder="必填" value="'+krEsc(df.durMin)+'" oninput="krpDef(\'durMin\',this.value)" style="'+inp+'width:80px;"> 分钟 麻醉 <select onchange="krpAnes(this.value)" style="'+inp+'">'+Object.keys(KR_ANES).map(function(k){ return '<option value="'+k+'"'+(df.anes===k?' selected':'')+'>'+KR_ANES[k]+'</option>'; }).join('')+'</select>'+(df.anes!=='local' ? '需空腹 <input type="number" min="1" max="48" placeholder="选填" value="'+krEsc(df.anesFast)+'" oninput="krpDef(\'anesFast\',this.value)" style="'+inp+'width:70px;"> 小时 ' : '')+'<input placeholder="麻醉备注" value="'+krEsc(df.anesNote)+'" oninput="krpDef(\'anesNote\',this.value)" style="'+inp+'min-width:180px;"></div>'+krpStayHtml(df, inp)+
       '<div style="margin-top:8px;font-weight:700;">所需术后管理</div>'+df.postcare.map(function(x, i){ var dt = pcDayText({startDay:x.start, times:x.times, interval:x.interval}); return '<div style="display:grid;grid-template-columns:130px 92px 104px minmax(0,1fr) auto;gap:6px;align-items:center;margin:4px 0;">'+krPcNameSelect(x.mgmt, 'krpPcSet('+i+',\'mgmt\',this.value)', inp)+'<span style="white-space:nowrap;"><input type="number" min="1" value="'+x.times+'" onchange="krpPcSet('+i+',\'times\',Math.max(1,parseInt(this.value,10)||1))" style="'+inp+'width:44px;"> 次</span>'+(x.times>1 ? '<select onchange="krpPcSet('+i+',\'interval\',parseInt(this.value,10))" style="'+inp+'">'+[1,2,3,4,5,6,7,10,14].map(function(n){ return '<option value="'+n+'"'+((x.interval||1)===n?' selected':'')+'>隔 '+n+' 天</option>'; }).join('')+'</select>' : '<span></span>')+'<select onchange="krpPcSet('+i+',\'kr\',this.value)" style="'+inp+'min-width:0;"><option value="">具体项目</option>'+post.map(function(o){ return '<option'+(x.kr===o.name?' selected':'')+'>'+krEsc(o.name)+'</option>'; }).join('')+'</select><a href="#" onclick="krpPcDel('+i+');return false;" style="white-space:nowrap;font-size:12px;">移除</a><select onchange="krpPcSet('+i+',\'place\',this.value)" style="'+inp+'"><option value="KR"'+(x.place==='KR'?' selected':'')+'>必须在韩国</option><option value="either"'+(x.place==='either'?' selected':'')+'>韩国或印尼</option></select><span>第 <input type="number" min="1" value="'+krEsc(x.start||'')+'" onchange="krpPcSet('+i+',\'start\',this.value)" style="'+inp+'width:40px;"> 天起</span><span style="color:var(--sage);font-size:12px;grid-column:3 / -1;">'+krEsc(dt)+'</span></div>'; }).join('')+'<button class="btn-ghost" style="padding:3px 10px;font-size:12px;" onclick="krpPcAdd()">+ 添加所需术后管理</button></div>')+
     '<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn-primary" onclick="krpSave()">保存</button><button class="btn-ghost" onclick="krpClose()">取消</button></div>');
 }

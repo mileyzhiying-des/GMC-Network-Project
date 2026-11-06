@@ -5833,17 +5833,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/建议在韩停留 8 天（最早 .* 可回国）：第 7 天需在韩国拆线/.test(recSummaryHtml(krActiveItems(c), '', {base:ks.confirmedDate}).replace(/<[^>]+>/g,'')), '推荐项目整理也写同样一行');
     } else {
       var nm = '__t46', d = krDet(nm); d.pc = [{mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}]; d.stay = ''; d.stayTouched = false; d.stayReason = {tags:[], fly:'', note:''};
-      var s0 = krStayCommit(nm, 'T'); ST.ok(!s0.err && s0.stay==='8天' && !s0.stayReason, '没填 = 自动带最少 8 天，不用写原因');
-      d.stay = '5'; d.stayTouched = true; var s1 = krStayCommit(nm, 'T'); ST.ok(/不能少于 8 天/.test(s1.err||'') && /第 7 天需在韩国拆线，至少 8 天/.test(s1.err||''), '填 5 被挡并写原因');
-      d.pc = [{mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'3'}]; d.stay = '8'; var s2 = krStayCommit(nm, 'T'); ST.ok(/请填写停留原因/.test(s2.err||''), '第 3 天拆线、天数填 8 → 必须写停留原因');
-      d.stayReason = {tags:['其他'], fly:'', note:''}; ST.ok(/停留原因/.test(krStayCommit(nm, 'T').err||''), '只选「其他」要写文字');
-      d.stayReason = {tags:['术后需静养','不宜搭飞机'], fly:'7', note:''}; var s3 = krStayCommit(nm, 'T'); ST.ok(!s3.err && s3.stay==='8天' && stayReasonText(s3.stayReason)==='术后需静养、7 天内不宜搭飞机', '写了原因就能提交');
-      var hh = krStayBlockHtml(nm, ''); ST.ok(/停留原因/.test(hh) && /不宜搭飞机/.test(hh) && /最少 <b>4<\/b> 天/.test(hh), '表单：多于最少天数时出现停留原因（快速选项 + 文字）');
-      krpOpen('new'); KRP.draft.defaults.anes = 'sleep'; var eh = krpEditor(); ST.ok(/需空腹 <input/.test(eh) && /建议在韩天数/.test(eh), '项目库默认资料有「需空腹（小时）」和「建议在韩天数」');
+      var s0 = krStayCommit(nm, 'T'); ST.ok(!s0.err && s0.stay==='8天' && !s0.stayReason, '自动带最少 8 天，不用写原因');
+      d.stay = '5'; d.stayTouched = true; var s1 = krStayCommit(nm, 'T'); ST.ok(!s1.err && s1.stay==='8天', 'CMD-1106-16（改前：填 5 被挡）：手填的天数被忽略，一律自动算 8 天');
+      d.pc = [{mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'3'}]; d.stay = '8'; var s2 = krStayCommit(nm, 'T'); ST.ok(!s2.err && s2.stay==='4天', '（改前：第 3 天拆线、填 8 要写停留原因）：第 3 天拆线 = 4 天，不再有停留原因');
+      var hh = krStayBlockHtml(nm, ''); ST.ok(!/停留原因|type="number"/.test(hh) && /建议在韩：4 天（第 3 天在韩国拆线）/.test(hh), '（改前：多于最少出现停留原因）：表单只显示一行');
+      krpOpen('new'); KRP.draft.defaults.anes = 'sleep'; var eh = krpEditor(); ST.ok(/需空腹 <input/.test(eh) && /建议在韩：/.test(eh) && !/建议在韩天数 <input/.test(eh), '项目库默认资料有「需空腹（小时）」、建议在韩一行（不能填）');
       KRP.draft.defaults.anes = 'local'; ST.ok(!/需空腹 <input/.test(krpEditor()), '局麻没有空腹栏');
-      KRP.draft.defaults.postcare = [{mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}]; KRP.draft.defaults.stay = '5天'; ST.ok(/不能少于 8 天/.test(krpStayHtml(KRP.draft.defaults, '')), '默认资料天数少于最少 → 红字');
-      KRP.draft.defaults.stay = '9天'; ST.ok(/停留原因/.test(krpStayHtml(KRP.draft.defaults, '')), '默认资料天数多于最少 → 要写停留原因'); krpClose && krpClose();
-      var dd = krDefaultsDetail('假体隆鼻'); ST.ok(dd && 'stayReason' in dd && 'stayTouched' in dd, '默认资料带出时带上停留原因');
+      KRP.draft.defaults.postcare = [{mgmt:'拆线', kr:'拆线', times:1, interval:1, place:'KR', start:'7'}]; ST.ok(/建议在韩：8 天（第 7 天在韩国拆线）/.test(krpStayHtml(KRP.draft.defaults, '')), '默认资料：自动算 8 天'); krpClose && krpClose();
+      var dd = krDefaultsDetail('假体隆鼻'); ST.ok(!!dd, '默认资料带出');
     }
   });
   ST.def('R45a','CMD-1019-16：施术前提醒发完卡片消失；施术日期发过不再［再发一次］；发过后 KR 改时间 → 红字 + ［已电话通知］（备注、Timeline、待办），没发过照旧发送；提醒发过后改时间同样走电话（A1 分页）',function(){
@@ -7305,7 +7302,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/推荐项目/.test(h4) && !/可选范围/.test(h4) && !/项目确认中/.test(h4), '四：IN 卡片叫「推荐项目」，没有「可选范围 / 项目确认中」');
       ST.ok(/购买情况/.test(h4) && /项目名/.test(h4) && /术后管理/.test(h4) && /价格/.test(h4) && h4.indexOf('购买情况')<h4.indexOf('项目名') && h4.indexOf('项目名')<h4.indexOf('术后管理') && h4.indexOf('术后管理')<h4.lastIndexOf('价格'), '四：栏位顺序 购买情况｜项目名｜术后管理｜价格（最右）');
       ST.ok(/已购买/.test(h4) && /未购买/.test(h4) && /已取消/.test(h4), '四：购买情况 已购买 / 未购买 / 已取消 都出现');
-      ST.ok(/拆线×1（第7天）/.test(h4.replace(/\s/g, '')) && />无</.test(h4), '四：术后管理写「拆线 × 1（第7天）」，没有术后管理的写「无」');
+      ST.ok(/拆线×1（第7天·必须在韩国）/.test(h4.replace(/\s/g, '')) && />无</.test(h4), '四：术后管理写「拆线 × 1（第 7 天 · 必须在韩国）」，没有术后管理的写「无」');
       ST.ok(/Rp/.test(h4) && /₩/.test(h4), '四：IN 价格 印尼盾为主、韩元放括号');
       ST.ok(/看进度 → 赴韩施术/.test(h4), '四：「看进度 → 赴韩施术」小链接保留');
       src.procedureItems = []; var h4b = consultReportV2Html(src, ''); ST.ok(!/已购买/.test(h4b) && (h4b.match(/未购买/g)||[]).length===3, '四：还没买之前全部「未购买」');
@@ -9651,9 +9648,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var d = krDet('__edit'); d.stay = '9'; d.stayTouched = true; d.stayReason = {tags:['术后需静养'], fly:'', note:''}; var ak = Object.keys(KR_ANES).filter(function(k){ return k!=='local'; })[0]; d.anes = ak; d.anesFast = '8';
       d.pc.push({mgmt:'术后管理', kr:(krScopeCandidates(cid).krPost[0]||{}).name || '术后复诊检查', inn:'', times:1, interval:1, place:'KR', start:'3'});
       krScopeEditSave(); var it0 = gc().krScope.items[0];
-      ST.ok(!KR_SCE && it0.stay==='9天' && it0.anesthesia.type===ak && it0.price===price0 && it0.postcare.length===2, '保存：在韩天数 / 麻醉 / 术后管理更新，价格不动 '+JSON.stringify([it0.stay, it0.anesthesia.type, it0.postcare.length]));
+      ST.ok(!KR_SCE && it0.stay===(stayMinOf(it0.postcare).min+'天') && it0.anesthesia.type===ak && it0.price===price0 && it0.postcare.length===2, '保存：在韩天数 / 麻醉 / 术后管理更新，价格不动 '+JSON.stringify([it0.stay, it0.anesthesia.type, it0.postcare.length]));
       ST.ok(!gc().scopeLock, '保存后 KR 锁解开');
-      ST.ok((gc().logEntries||[]).some(function(e){ return /^KR 编辑推荐项目「/.test(e.action) && /建议在韩 7天 → 9天/.test(e.action) && /麻醉 局麻 → /.test(e.action) && /术后管理 /.test(e.action); }), 'Timeline 记改前 → 改后');
+      ST.ok((gc().logEntries||[]).some(function(e){ return /^KR 编辑推荐项目「/.test(e.action) && /建议在韩 7天 → \d+天/.test(e.action) && /麻醉 局麻 → /.test(e.action) && /术后管理 /.test(e.action); }), 'Timeline 记改前 → 改后');
       ST.ok((Store.readClinic(cid).NOTIFS||[]).some(function(n){ return /KM1 室长 更新了 A\d+ 的推荐项目：/.test(n.text); }), 'IN 收到通知「KM1 室长 更新了 A… 的推荐项目：…」');
       /* 管理项目编辑：份数 / 术后第几天开始；价格 = 单价 × 份数 */
       var mg = gc().krScope.items[1], mp0 = mg.price, unit = mg.unit || mp0; krScopeEditOpen(mg.name); KR_SCE.copies = '2'; KR_SCE.first = '3'; krScopeEditSave(); mg = gc().krScope.items[1];
@@ -10301,5 +10298,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       h = krTabConsult(gc()); t = txt(h); ST.ok(/重点看鼻尖/.test(t) && (!mg0 || /管理备注/.test(t)) && !/建议在韩|所需术后管理/.test(t.slice(t.indexOf('推荐项目'))), '③ 上传后只读：项目 + 备注，没有细节');
       var sub = gc().consultEval.sub; ST.ok(sub.notes[p0.name]==='重点看鼻尖' && sub.pick[p0.name] && sub.detail[p0.name], 'consultEval.sub 里存了勾选、备注和默认细节');
     } finally { window.SpeechRecognition = sr; window.webkitSpeechRecognition = wsr; try{ krRvMicStop(false); }catch(e){} window.alert = oa; window.confirm = oc; try{ krVault(cid, r.id, true).transcripts = []; }catch(e){} Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+
+  /* CMD-1106-16：推荐项目术后管理标在哪做 + 建议在韩天数自动算 */
+  ST.def('R246a','CMD-1106-16（任意分页）：建议在韩天数 = 最晚「必须在韩国」术后管理第几天 + 1（韩国或印尼不算、没有 = 1 天）；表单只显示一行、没有输入框和停留原因；提交不再因天数 / 原因报错；推荐项目列表术后管理标地点（IN 分配后写分配结果）',function(){
+    var mk = function(arr){ return arr.map(function(a){ return {mgmt:a[0], name:a[0], times:1, interval:1, place:a[2], startDay:a[1]}; }); };
+    var m1 = stayMinOf(mk([['拆线', 7, 'KR'], ['术后消肿管理', 7, 'either']])); ST.ok(m1.min===8 && /第 7 天在韩国拆线/.test(m1.autoWhy) && stayAutoLine(m1)==='建议在韩：8 天（第 7 天在韩国拆线）', '拆线第 7 天必须在韩国 → 8 天：'+stayAutoLine(m1));
+    ST.ok(stayMinOf(mk([['拆线', 10, 'KR']])).min===11, '拆线改第 10 天 → 11 天');
+    ST.ok(stayMinOf(mk([['拆线', 7, 'either'], ['术后复诊', 2, 'KR']])).min===3, '拆线改韩国或印尼 → 3 天（术后复诊第 2 天必须在韩）');
+    ST.ok(stayMinOf(mk([['拆线', 7, 'either']])).min===1 && /没有必须在韩国/.test(stayAutoLine(stayMinOf(mk([['拆线', 7, 'either']])))), '没有必须在韩国的 → 1 天');
+    ST.ok(stayMinOf(mk([['拆线', 7, 'IN']])).min===1, '「在印尼」的不算');
+    if(typeof isKrAccount==='function' && isKrAccount()){
+      var inp = 'x', cand = krScopeCandidates(KR_CASE && KR_CASE.clinicId), p0 = cand.kr[0]; if(!ST.ok(!!p0, '项目库有施术项目')) return;
+      var d = krDet('__t16'); d.pc = [{mgmt:'拆线', kr:'拆线', inn:'', times:1, interval:1, place:'KR', start:'7'}, {mgmt:'术后消肿管理', kr:'消肿', inn:'', times:1, interval:1, place:'either', start:'7'}]; d.stay = '15'; d.stayTouched = true; d.stayReason = {tags:['其他'], fly:'', note:''};
+      var h = krStayBlockHtml('__t16', inp); ST.ok(/建议在韩：8 天（第 7 天在韩国拆线）/.test(h) && !/type="number"|停留原因|checkbox/.test(h), '表单只显示一行，没有输入框 / 停留原因');
+      var sc = krStayCommit('__t16', '测试'); ST.ok(!sc.err && sc.stay==='8天' && !sc.stayReason, '提交：8 天、不带停留原因、手填的 15 天被忽略');
+      d.pc[0].start = '10'; ST.ok(krStayCommit('__t16', 't').stay==='11天', '改了第几天马上变 11 天'); d.pc[0].place = 'either'; ST.ok(krStayCommit('__t16', 't').stay==='1天', '改成韩国或印尼 → 1 天');
+      var df = krDetailFromItem({name:'X', stay:'10天', stayReason:{tags:['术后需静养'], fly:'', note:''}, postcare:[{mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7}]}); ST.ok(krStayCommit('__edit', 'X') && df.stayTouched===false, '旧资料手填 10 天 + 原因：编辑时换成自动算');
+      delete KR_SUB.detail['__t16'];
+    }
+    /* 推荐项目列表地点 */
+    var c = {id:'c', stage:'consult', reportReady:true, krScope:{items:[{name:'假体隆鼻', price:2500000, postcare:[{mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7}, {mgmt:'术后消肿管理', name:'术后消肿管理', times:1, place:'either', startDay:7, innName:'印尼消肿'}]}]}, settlementBatches:[], procedureItems:[], recommended:[]};
+    var rows = recProjectsRowsHtml(c, 'KR').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    ST.ok(/拆线 × 1（第 7 天 · 必须在韩国）/.test(rows) && /术后消肿管理 × 1（第 7 天 · 韩国或印尼）/.test(rows), '推荐项目列表术后管理后面有地点：'+rows.slice(rows.indexOf('拆线'), rows.indexOf('拆线')+90));
+    c.recommended = [{origin:'KR', name:'假体隆鼻', postcare:[{mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7}, {mgmt:'术后消肿管理', name:'术后消肿管理', times:1, place:'either', startDay:7, innName:'印尼消肿', inTimes:1}]}];
+    rows = recProjectsRowsHtml(c, 'IN').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); ST.ok(/第 7 天 · 在印尼做/.test(rows), 'IN 分配到印尼 → 写「在印尼做」');
   });
 })();
