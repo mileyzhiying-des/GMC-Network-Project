@@ -438,6 +438,24 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:61, fn:function(c, ctx){ /* CMD-1106-22（5-18）：拿掉韩国持有的施术——已转韩国持有 / 等 IN 三选一的施术 → 改成「等 IN 处理退定金 / 置换」（有原因）或「无故不来 · 等 IN 院长决定」（没原因）；已被新案件使用的持有施术（heldTransferred / heldFrom）和已付款的结算单不动，只记数量 */
+      var no = c.caseNo||c.id, rs = [], ns = [], dep1 = 0, tail1 = 0, dep2 = 0, tail2 = 0, nm = function(a){ return a.map(function(it){ return buyName(it.name); }).join('、'); };
+      (c.procedureItems||[]).forEach(function(it){
+        if(it.heldTransferred){ (window.GMC_HELD61_USED = window.GMC_HELD61_USED||[]).push(no+'：'+buyName(it.name)+' 已转到 '+(it.heldTransferred.toNo||'新案件')); return; }
+        if(it.heldFrom){ (window.GMC_HELD61_FROM = window.GMC_HELD61_FROM||[]).push(no+'：'+buyName(it.name)+' 用了韩国持有（来自 '+(it.heldFrom.caseNo||'')+'）'); }
+        var st = it.heldSurg || it.tripWait; if(!st || it.done || it.cancelled || it.swapped) return;
+        var sp = itemPaidSplit(c, it), rw = st.rw || (st.reason ? {reason:st.reason} : null); delete it.heldSurg; delete it.tripWait; delete it.rebookWait; delete it.deferUse;
+        it.cancelled = true; it.cancelledAt = nowFullDt(); it.cancelBy = '系统'; it.tripEndUndone = {at:nowFullDt(), by:'系统', rw:rw, dep:sp.dep, tail:sp.tail, migrated:61};
+        if(rw){ rs.push(it); dep1 += sp.dep; tail1 += sp.tail; } else { ns.push(it); dep2 += sp.dep; tail2 += sp.tail; }
+      });
+      if(!rs.length && !ns.length) return;
+      if(rs.length){ if(dep1>0) c.depositDue = {status:'pending', amount:dep1, at:nowFullDt(), by:'系统', reason:'旧数据：行程结束没做（有原因）：'+nm(rs), src:'migrate61', items:rs.map(function(i){ return i.name; })}; if(tail1>0) addKrRefundDue(c, tail1, '旧数据：行程结束没做：'+nm(rs), '系统'); }
+      if(ns.length){ c.noShowDue = {status:'pending', at:nowFullDt(), by:'系统', items:ns.map(function(i){ return i.name; }), dep:dep2, tail:tail2, migrated:61}; if(tail2>0) addKrRefundDue(c, tail2, '旧数据：无故不来：'+nm(ns), '系统'); }
+      logCaseEvent(c, '系统', '修正旧数据：不再有「韩国持有的施术」——'+(rs.length ? rs.length+' 项（'+nm(rs)+'）改成等 IN 处理退定金 / 置换' : '')+(rs.length && ns.length ? '；' : '')+(ns.length ? ns.length+' 项（'+nm(ns)+'）改成无故不来，等 IN 院长决定定金退 / 不退' : ''));
+      window.GMC_HELD61_CONV = (window.GMC_HELD61_CONV||0) + rs.length + ns.length; (window.GMC_HELD61_CASES = window.GMC_HELD61_CASES||[]).push(no+'（'+(rs.length ? '退定金 '+rs.length : '')+(rs.length && ns.length ? '，' : '')+(ns.length ? '无故不来 '+ns.length : '')+'）');
+      ctx.note('案件 '+no+'：持有的施术改成待 IN 处理（退定金 / 置换 '+rs.length+' 项，无故不来 '+ns.length+' 项）');
+      try{ if(c.stage==='closed' || c.stage==='reportonly'){ c.krTripEnded = c.krTripEnded||{at:nowFullDt(), by:'系统'}; reopenMain(c, '有施术等 IN 处理退定金 / 无故不来'); } else updateCaseStage(c); }catch(e){ console.error(e); }
+    }},
     {to:60, fn:function(c, ctx){ /* CMD-1106-06：项目库加「用途」——只动项目库（usesNormalize，读档 / 种子时跑），案件里的项目行是快照，不动 */ }},
     {to:59, fn:function(c, ctx){ /* CMD-1105-12：① 1105-03 自动转了「韩国持有」、但其实只付了定金的施术 → 退回「等 IN 三选一」（tripWait），案件重新变成未结案；② 1105-04 按价差生成的韩国持有抵扣：未付款的结算单按新规则重算（不抵算），已付款的只记数量不动 */
       var no = c.caseNo||c.id, back = [];
@@ -466,7 +484,7 @@ var Store = (function(){
     }},
     {to:58, fn:function(c, ctx){ /* CMD-1105-03：行程已结束、还挂着「待重新预约」或没做的赴韩施术 → 转韩国持有（该结案的由主案件自动判断结案）；只写一次 Timeline */
       if(typeof oldLeaveToRebookWait==='function'){ var n57 = oldLeaveToRebookWait(c); if(n57){ window.GMC_REBOOK_CONV = (window.GMC_REBOOK_CONV||0) + n57; ctx.note('案件 '+(c.caseNo||c.id)+'：'+n57+' 个离院后回到「未预约」的施术项目转成「待重新预约」'); } } /* 迁移按列表顺序跑（58 在 57 前面）：先把 57 的转换补上，幂等 */
-      if(!c.krTripEnded) return; var n = coreHoldSurgOnTripEnd(c, '系统'); if(n){ window.GMC_HELD_CONV = (window.GMC_HELD_CONV||0) + n; (window.GMC_HELD_CASES = window.GMC_HELD_CASES||[]).push(c.caseNo||c.id); ctx.note('案件 '+(c.caseNo||c.id)+'：行程已结束，'+n+' 项没做的施术转成韩国持有'); }
+      if(!c.krTripEnded) return; var n = coreTripEndUndone(c, '系统'); if(n){ window.GMC_HELD_CONV = (window.GMC_HELD_CONV||0) + n; (window.GMC_HELD_CASES = window.GMC_HELD_CASES||[]).push(c.caseNo||c.id); ctx.note('案件 '+(c.caseNo||c.id)+'：行程已结束，'+n+' 项没做的施术转成韩国持有'); }
     }},
     {to:57, fn:function(c, ctx){ /* CMD-1103-02：离院后回到「未预约」的赴韩施术 → 待重新预约（新字段 rebookWait）；个数记进迁移备注 */
       var n = oldLeaveToRebookWait(c); if(n){ window.GMC_REBOOK_CONV = (window.GMC_REBOOK_CONV||0) + n; ctx.note('案件 '+(c.caseNo||c.id)+'：'+n+' 个离院后回到「未预约」的施术项目转成「待重新预约」'); }

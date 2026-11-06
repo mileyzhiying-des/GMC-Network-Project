@@ -519,6 +519,7 @@ function krBalanceInfo(c){
   (c.settlementBatches||[]).forEach(function(b){ if(b.status==='active') deposit += (b.krDeposit||0)+(b.heldCredit||0); });
   var preRefund = (c.refunds||[]).filter(function(r){ return !r.afterArrival && (r.currency||'KRW')==='KRW'; }).reduce(function(sum,r){ return sum + (r.amount||0); }, 0);
   var effDeposit = deposit - preRefund; /* 仍留在诊所、可抵尾款的定金 */
+  if(c.depositDue) effDeposit = 0; /* CMD-1106-22：项目有变动走退定金路线——定金由印尼退（或置换），韩国照实际做的全额收 */
   var total = krActiveItems(c).filter(function(it){ return !it.krAddOn; }).reduce(function(sum,it){ return sum + itemKrAmount(it); }, 0); /* 回诊加做的项目在韩国单独付款，不进尾款 */ /* 实际要做的项目合计（不含已取消/已更换） */
   return {deposit:deposit, preRefund:preRefund, effDeposit:effDeposit, total:total, diff:total-effDeposit}; /* diff>0 补尾款；diff<0 退差额 */
 }
