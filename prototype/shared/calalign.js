@@ -559,7 +559,9 @@ function openStayModal(caseId, o){
 function stayWarnRefresh(){
   var w = document.getElementById('stay-warn'), c = STAY_CTX && calCaseById(STAY_CTX.id); if(!w || !c) return;
   var n = stayShortDays(c, (document.getElementById('stay-out')||{}).value||'');
-  w.innerHTML = n ? '<span style="color:#B3261E;font-weight:700;">⚠ 离境日比建议少 '+n+' 天（最早可回国日 '+stayMD(krCbEarliest(c))+'）</span>' : '';
+  var g = function(i){ return (document.getElementById(i)||{}).value||''; }, tmp = Object.assign({}, c, {stay:{in:g('stay-in'), out:g('stay-out'), inTime:g('stay-int'), outTime:g('stay-outt')}});
+  var yl = ''; try{ yl = (g('stay-in') && g('stay-out')) ? tripShortLine(tmp, tripCurItems(tmp)) : ''; }catch(e){} /* CMD-1106-11：存行程弹窗里也显示短版黄字 */
+  w.innerHTML = (n ? '<span style="color:#B3261E;font-weight:700;">⚠ 离境日比建议少 '+n+' 天（最早可回国日 '+stayMD(krCbEarliest(c))+'）</span>' : '')+(yl ? '<div style="color:#8F6F0C;margin-top:4px;">'+aEscC(yl)+'</div>' : '');
 }
 function stayCancel(){
   var x = STAY_CTX, ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null; if(!x) return;

@@ -570,3 +570,8 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 /* CMD-1106-04：KR 保存编辑后，IN 选项目画面里被改到的那一行短暂亮一下 */
 @keyframes scopeFlash { 0%,60% { background:#FBF0C9; box-shadow:0 0 0 4px #FBF0C9; } 100% { background:transparent; box-shadow:0 0 0 0 transparent; } }
 .scope-flash { animation:scopeFlash 3s ease-out; border-radius:6px; }
+
+/* CMD-1106-11：KR 施术日期卡的时间下拉框——明显的框 + ▾ */
+.kr-time-sel{padding:7px 30px 7px 12px;min-width:110px;border:1px solid var(--border-strong,#B9B1A6);border-radius:8px;background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' fill='none' stroke='%236E665E' stroke-width='1.6'/></svg>") no-repeat right 10px center;appearance:none;-webkit-appearance:none;font-size:13px;cursor:pointer;}
+.kr-time-sel:hover,.kr-time-sel:focus{border-color:var(--terracotta,#9A6A4B);outline:none;}
+.kr-time-sel option:disabled{color:#A9A39A;}
