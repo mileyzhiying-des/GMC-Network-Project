@@ -371,6 +371,7 @@ function dirFullOff(hid, ds, name){ var h = HOSPITAL_DATA[hid]; if(!h || !name) 
 function dirOffText(o){ return 'OFF'+(o && String(o.note||'').trim() ? ' · '+String(o.note).trim() : ''); }
 function offApplies(o, ds){ return o.weekly ? (o.dow === new Date(ds+'T00:00:00').getDay()) : o.date===ds; }
 /* KR 排施术时间的检查：整天休诊 / 休诊时段 / 院长 OFF 不能排；返回错误文字，'' = 可以（KR 端确认、调整、重新预约施术时间前调用） */
+function krHM(min){ min = Math.round(min||0); var h = Math.floor(min/60), m = min%60; return (h ? h+' 小时' : '')+(m || !h ? (h ? ' ' : '')+m+' 分钟' : ''); }
 function krHoursText(min){ var h = Math.round(min/6)/10; return (h===Math.floor(h) ? String(h) : h.toFixed(1))+' 小时'; }
 /* CMD-1021-15：这一天有已完成的到院吗？（主到院 key 'main'：krProcedureDone 且到院日 = 这天；其他到院 key 'KR|日期' 在 visitEndedKeys）。locked = 不是今天（当天 00:00 之后不能再重开）
    原来排进已完成到院日时核心函数只设 KR_LAST_CONFLICT「那天的到院已完成…」，被 krMut 当成时间冲突弹出［仍然进行］［不在这个时段］；按［仍然进行］只是重跑一次、核心函数再拒绝一次（不会塞进已完成的到院），于是又弹一次同样的窗。 */
@@ -6074,10 +6075,18 @@ function krBackfillDurations(){
 }
 /* 院长的施术块只算施术项目（CMD-1015-21）：管理项目（含 서비스、在韩加的本地管理项目）不占院长时间；extra / drop = 预估「再加 / 去掉」哪些项目 */
 function itemDurMin(c, name){ var h = HOSPITAL_DATA[caseKrHospital(c)] || {projects:[]}, p = (h.projects||[]).filter(function(x){ return x.name===name; })[0]; return p && p.defaults && p.defaults.durMin ? p.defaults.durMin : 0; }
+/* CMD-1106-09：施术预计时长。估算 = 这次赴韩项目所需分钟合计，以 10 分钟为单位往上取整；KR 确认时可以改（小时 + 分钟），存在 ks.durMin，院长时间占用 / 冲突检查 / 院长日程长度都用它（在韩加项的延长另加） */
+function krEstDur(c){ window.__NO_DUR_OV = true; var m; try{ m = surgeryMinutes(c); }finally{ window.__NO_DUR_OV = false; } return Math.ceil(m/10)*10; }
+function coreSetSurgDur(c, dur, by){
+  dur = parseInt(dur, 10); if(!(dur > 0) || !c.krSchedule) return; var est = krEstDur(c), old = c.krSchedule.durMin || est;
+  if(dur === est){ delete c.krSchedule.durMin; } else c.krSchedule.durMin = dur;
+  if(dur !== old){ logCaseEvent(c, by, '施术时间预计从 '+krHM(old)+' 改成 '+krHM(dur)+'（估算 '+krHM(est)+'）'); }
+}
 function surgeryMinutes(c, extra, drop){
-  var tot = 0;
-  krActiveItems(c).forEach(function(it){ if(krIsMgmtItemC(it) || it.deferUse || (drop||[]).indexOf(it.name)>-1) return; tot += ((it.krAddOn || it.preBalanceAdd) && typeof it.extendMin==='number') ? it.extendMin : itemDurMin(c, it.name); }); /* 在韩增加的施术项目：延长多久由 KR 室长选（CMD-1015-24），不按项目时长自动相加 */
+  var tot = 0, durOv = (!window.__NO_DUR_OV && c.krSchedule && c.krSchedule.durMin) || 0;
+  krActiveItems(c).forEach(function(it){ if(krIsMgmtItemC(it) || it.deferUse || (drop||[]).indexOf(it.name)>-1) return; if(durOv && !(it.krAddOn || it.preBalanceAdd)) return; tot += ((it.krAddOn || it.preBalanceAdd) && typeof it.extendMin==='number') ? it.extendMin : itemDurMin(c, it.name); }); /* 在韩增加的施术项目：延长多久由 KR 室长选（CMD-1015-24），不按项目时长自动相加 */
   krActiveItems(c).forEach(function(it){ if(!krIsMgmtItemC(it) && !it.deferUse && !it.krAddOn && !it.preBalanceAdd && typeof it.extraMin==='number' && (drop||[]).indexOf(it.name)<0) tot += it.extraMin; }); /* 本次使用时给计划内施术项目选的延长（CMD-1015-30） */
+  if(durOv) tot += durOv; /* CMD-1106-09 */
   (extra||[]).forEach(function(n){ tot += itemDurMin(c, n); });
   Object.keys(c.todayDirOp||{}).forEach(function(k){ tot += (parseInt(c.todayDirOp[k].ext,10) || 0); }); /* 今天［本次使用］加进主到院的院长操作项目（CMD-1020-05） */
   var md = (c.krSchedule||{}).confirmedDate; if(md) (c.subItems||[]).forEach(function(r){ if(r.dirOp && !r.surgUse && !r.skipped && r.date===md && r.place==='KR') tot += (parseInt(r.extendMin,10) || 0); }); /* CMD-1020-05：并进施术日到院的院长操作项目，室长选的延长 */
@@ -6144,10 +6153,11 @@ function syncSurgeryBlock(c){
     arr.push({id:'sb'+(SCHED_SEQ++)+Math.floor(Math.random()*1000), who:c.director, date:ks.confirmedDate, time:st, end:en, type:'施术', title:'施术', note:'', kind:'施术', caseId:c.id, clinicId:c.clinicId, name:c.name});
   }
 }
-function coreScheduleConfirm(c, date, time, address, by){
+function coreScheduleConfirm(c, date, time, address, by, durMin){
   var ks = c.krSchedule; if(!ks || ks.status!=='pending') return false;
-  var ti = tripDateIssue(c, date, time); if(ti && !ti.soft){ window.KR_DENY_MSG = tripDateIssueText(c, date, time); return false; } /* CMD-1106-07 */
+  var ti = tripDateIssue(c, date, time); if(ti && !ti.soft && ti.kind!=='short'){ window.KR_DENY_MSG = tripDateIssueText(c, date, time); return false; } /* CMD-1106-07；CMD-1106-09：天数不够只提醒不挡 */
   ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||''; ks.rejectNote = ''; ks.confirmedOn = todayStr(); ks.reconfirm = null; /* CMD-1029-09 三：KR 确认那天；施术日离这天不到 30 天的，不跳「施术前 1 个月确认行程」 */
+  coreSetSurgDur(c, durMin, by);
   logCaseEvent(c, by, 'KR确认施术时间：'+date+' '+time+'（韩国时间）到院'+(address?'，地址：'+address:''));
   pushNotif('赴韩施术','KR 确认施术时间：'+c.name+' '+tkK(date, time)+(address?'（'+address+'）':''), {caseId:c.id});
   syncSurgeryBlock(c); updateCaseStage(c);
@@ -6173,12 +6183,13 @@ function coreScheduleAdjust(c, time, address, by){
   return true;
 }
 /* 改期待确认：确认新时间 */
-function coreChangeConfirm(c, date, time, address, by){
+function coreChangeConfirm(c, date, time, address, by, durMin){
   var ks = c.krSchedule; if(!ks || ks.status!=='change_pending' || !ks.changeSubmitted) return false;
-  var ti = tripDateIssue(c, date, time); if(ti && !ti.soft){ window.KR_DENY_MSG = tripDateIssueText(c, date, time); return false; } /* CMD-1106-07 */
+  var ti = tripDateIssue(c, date, time); if(ti && !ti.soft && ti.kind!=='short'){ window.KR_DENY_MSG = tripDateIssueText(c, date, time); return false; } /* CMD-1106-07；CMD-1106-09：天数不够只提醒 */
   var oldD = ks.confirmedDate;
   ks.status = 'confirmed'; ks.confirmedDate = date; ks.confirmedTime = time; ks.address = address||ks.address||'';
   ks.changePrimary = ''; ks.changeBackup = ''; ks.changeSubmitted = false; ks.rejectNote = '';
+  coreSetSurgDur(c, durMin, by);
   logCaseEvent(c, by, 'KR确认新施术时间（韩国时间）：'+oldD+' → '+date+' '+time);
   coreShiftCareOnResched(c, oldD, date, by);
   pushNotif('赴韩施术','KR 确认新施术时间：'+c.name+' '+tkK(date, time), {caseId:c.id});
@@ -10576,10 +10587,17 @@ function tripWin(c){
 function tripDateIssue(c, date, time){
   var w = tripWin(c); if(!w || !date) return null;
   var md = function(d){ return stayMD(d); };
-  if(w.in && date < w.in) return {soft:w.soft, msg:'客人 '+md(w.in)+(w.inTime ? ' '+w.inTime : '')+' 才到达'};
-  if(w.in && date===w.in && time && w.inTime && time <= w.inTime) return {soft:w.soft, msg:'到院时间 '+time+' 要晚于客人到达时间 '+w.inTime};
-  if(w.out && w.days && ymdAdd(date, w.days) > w.out) return {soft:w.soft, msg:'做完需要在韩 '+w.days+' 天，客人 '+md(w.out)+' 离开'};
+  if(w.in && date < w.in) return {kind:'early', soft:w.soft, msg:'客人 '+md(w.in)+(w.inTime ? ' '+w.inTime : '')+' 才到达'};
+  if(w.in && date===w.in && time && w.inTime && time <= w.inTime) return {kind:'time', soft:w.soft, msg:'到院时间 '+time+' 要晚于客人到达时间 '+w.inTime};
+  if(w.out && w.days && ymdAdd(date, w.days) > w.out) return {kind:'short', soft:w.soft, msg:'做完需要在韩 '+w.days+' 天，客人 '+md(w.out)+' 离开'};
   return null;
+}
+/* CMD-1106-09：做完在韩天数不够 → 黄字（不挡）：列出排不进行程的术后管理，「必须在韩国」的写「只能提前做」 */
+function tripShortText(c, date){
+  var w = tripWin(c); if(!w || !w.out || !date || !w.days) return '';
+  var room = ymdDiff(date, w.out), miss = [];
+  try{ krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); }).forEach(function(it){ (it.postcare||[]).forEach(function(x){ var ds = pcDays(x), last = ds.length ? ds[ds.length-1] : 0; if(last > room - 1 && last>0){ miss.push('第 '+last+' 天的'+(x.name||x.mgmt||'术后管理')+(x.place==='KR' ? '（只能提前做）' : '')); } }); }); }catch(e){}
+  return '做完需要在韩 '+w.days+' 天，客人 '+stayMD(w.out)+' 离开'+(miss.length ? '，'+miss.filter(function(t, i){ return miss.indexOf(t)===i; }).join('、')+'不在行程内' : '')+'；之后预约术后管理时，再决定提前做或回印尼做';
 }
 function tripDateIssueText(c, date, time){ var i = tripDateIssue(c, date, time); return i ? '施术日期 '+stayMD(date)+(time ? ' '+time : '')+'：'+i.msg : ''; }
 /* 已存的日期（首选 / 备选 / KR 确认 / 改期）和行程对不上的清单：[{label,date,issue}] */

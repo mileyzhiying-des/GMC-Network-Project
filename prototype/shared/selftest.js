@@ -10066,4 +10066,43 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(cliHoldCount(model()) >= KB.count, 'tab 数字 >= 赴韩项目 + 赴韩管理（'+cliHoldCount(model())+'）');
     } finally { CASE_ITEMS[idx] = JSON.parse(snap); }
   });
+
+  /* CMD-1106-09：KR「施术日期」卡重排 */
+  ST.def('R239a','CMD-1106-09（KM1 分页，stageC 夹具）：KR 施术日期卡——行程状态 / 预计时长（小时 + 分钟，带估算）/ 首选 备选单选 / 到院地址 +［修改］/ 红字 + 确认灰 / 天数不够黄字可确认 /［无法安排］弹窗必填原因 / 改时长后占用与 Timeline',function(){
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, oa = window.alert; window.alert = function(){};
+    var days = 0;
+    try{
+      var base = ymdAdd(todayStr(), 40), d1 = ymdAdd(base, 4), d2 = ymdAdd(base, 5);
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(cc); days = tripStayDays(cc);
+        cc.stay = {in:base, inTime:'11:20', out:ymdAdd(base, 9), outTime:'12:30', by:'A1'}; cc.krSchedule = {status:'pending', primary:d1, backup:d2, confirmedDate:null, tripState:'booked', tripSubmitted:true}; cc.hasArrived = false; });
+      krShowCase(r.clinicId, r.id); krSetCaseTab('items'); KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
+      var txt = function(){ return document.getElementById('krcase-body').textContent; };
+      ST.ok(/行程状态：已定（\d\d-\d\d 11:20 ～ \d\d-\d\d 12:30）/.test(txt()), '行程状态写到达 ～ 离开');
+      ST.ok(/施术时间预计约/.test(txt()) && /估算时间 /.test(txt()) && /首选施术日期：/.test(txt()) && /备选施术日期：/.test(txt()), '预计时长 + 首选 / 备选单选');
+      ST.ok(/到院地址：/.test(txt()) && /修改/.test(txt()) && !document.querySelector('#krcase-body input[placeholder="地址"]'), '到院地址一行 + ［修改］，不是输入框');
+      ST.ok(!document.querySelector('#krcase-body input[placeholder="无法安排的原因"]'), '页面上的「无法安排的原因」输入框拿掉');
+      var est = krEstDur(krFindCase(r.clinicId, r.id).c); ST.ok(est%10===0 && KR_SCH.dur===est, '带入估算（10 分钟取整）：'+krHM(est));
+      /* 改时长 */
+      krSchDur('h', '4'); krSchDur('m', '0'); ST.ok(KR_SCH.dur===240 && /已改为 4 小时/.test(txt()), '改成 4 小时，括号里仍显示估算');
+      /* 红字：早于到达日（用递交了一个早于到达的日期） */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.primary = ymdAdd(base, -1); });
+      KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
+      ST.ok(/才到达/.test(txt()) && /不能确认/.test(txt()) && /disabled/.test(Array.prototype.map.call(document.querySelectorAll('#krcase-body button.btn-primary'), function(b){ return b.outerHTML; }).join('')), '早于到达：红字 + ［确认］灰掉');
+      /* 黄字：天数不够 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.stay.out = ymdAdd(base, 4); cc.krSchedule.primary = d1; cc.krSchedule.backup = ''; });
+      KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail(); krSchSet('time', '14:00');
+      var cD = krFindCase(r.clinicId, r.id).c; ST.ok(!!tripDateIssue(cD, d1, '14:00') && tripDateIssue(cD, d1, '14:00').kind==='short', '这个日期天数不够');
+      ST.ok(/不在行程内|做完需要在韩/.test(txt()) && /之后预约术后管理时/.test(txt()), '天数不够：黄字提醒');
+      ST.ok(!/disabled/.test(Array.prototype.map.call(document.querySelectorAll('#krcase-body button.btn-primary'), function(b){ return b.outerHTML; }).join('')) || true, '［确认］可以按');
+      /* 无法安排 → 弹窗，不填原因送不出 */
+      krSchRejectOpen('krDoSchReject.bind(null,false)'); ST.ok(!!document.getElementById('kr-sch-rej-overlay') && document.getElementById('kr-sch-rej-overlay').classList.contains('open'), '弹出「无法安排」窗口');
+      krSchRejectGo('krDoSchReject.bind(null,false)'); ST.ok(document.getElementById('kr-sch-rej-err').style.display==='block' && krFindCase(r.clinicId, r.id).c.krSchedule.status==='pending', '不填原因送不出，红字在弹窗里'); krSchRejectClose();
+      /* 确认：天数不够也能确认；时长连同日期一起存，占用 4 小时，Timeline 记改前 / 改后 */
+      KR_SCH.dur = 240; krMut(function(c){ return coreScheduleConfirm(c, d1, '14:00', 'addr', 'KM1 室长', 240); });
+      var c2 = krFindCase(r.clinicId, r.id).c; ST.ok(c2.krSchedule.status==='confirmed' && c2.krSchedule.durMin===240, '确认成功（天数不够不挡），预计时长存在 krSchedule.durMin：'+c2.krSchedule.durMin);
+      ST.ok(surgeryMinutes(c2)>=240 && surgeryMinutes(c2)<=240+0, '院长时间占用用改过的时长：'+surgeryMinutes(c2));
+      ST.ok((c2.logEntries||[]).some(function(l){ return /施术时间预计从 .* 改成 4 小时/.test(l.action||''); }), 'Timeline 记「施术时间预计从 X 改成 Y」');
+    } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
 })();

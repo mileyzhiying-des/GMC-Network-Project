@@ -1288,47 +1288,74 @@ function krSchedDayHtml(c, date){
   var txt = u.whole ? '<span style="color:#C1454A;">整天不行（'+krEsc(u.whole)+'）</span>' : (u.ranges.length ? u.ranges.map(function(r){ return '<span style="color:#C1454A;">'+krEsc(r.a+'～'+r.b+' 不行')+'</span><span style="color:var(--muted);">（'+krEsc(r.tag)+'）</span>'; }).join('　') : '<span style="color:var(--sage);">当天没有不行的时段</span>');
   return '<div style="font-size:12px;margin:4px 0 8px 22px;color:var(--slate2);">院长 '+krEsc(c.director||'—')+' 当天：'+txt+(open ? '' : ' <span style="color:#C26A1B;">（这天不是开放施术日期）</span>')+'</div>';
 }
-var KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:''};
+var KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false};
 function krSchReset(c, defaults){
-  if(KR_SCH.caseKey !== krRecKey()+':'+(c.krSchedule ? c.krSchedule.status : '')) KR_SCH = {caseKey:krRecKey()+':'+(c.krSchedule ? c.krSchedule.status : ''), pick:defaults.pick||'', time:defaults.time||'10:00', address:null, reason:''};
+  if(KR_SCH.caseKey !== krRecKey()+':'+(c.krSchedule ? c.krSchedule.status : '')) KR_SCH = {caseKey:krRecKey()+':'+(c.krSchedule ? c.krSchedule.status : ''), pick:defaults.pick||'', time:defaults.time||'10:00', address:null, reason:'', dur:(c.krSchedule && c.krSchedule.durMin) || krEstDur(c), addrEdit:false};
   if(KR_SCH.address===null) KR_SCH.address = defaults.address||'';
 }
-function krSchSet(k, v){ KR_SCH[k] = v; if(k==='pick' || k==='time') krRenderCaseDetail(); }
+function krSchSet(k, v){ KR_SCH[k] = v; if(k==='pick' || k==='time' || k==='dur' || k==='addrEdit') krRenderCaseDetail(); }
+function krSchDur(part, v){ var h = Math.floor((KR_SCH.dur||0)/60), m = (KR_SCH.dur||0)%60; if(part==='h') h = Math.max(0, Math.min(12, parseInt(v,10)||0)); else m = parseInt(v,10)||0; krSchSet('dur', Math.max(10, h*60+m)); }
 /* CMD-1019-14：KR 确认施术时间的到院地址默认带医院英文地址（可改）；发给客人的短信用这一栏 */
 function krDefaultAddress(){ return hospitalEn(krHospitalIdOfMe()).address; }
 /* 施术时长 = 本案件未取消项目在 KR 项目库「默认资料」里的 durMin 合计（surgeryMinutes，没有资料按 60 分钟）；到院时间 + 时长与院长「不可预约」/ 其他施术重叠就挡住（CMD-1013-11 一·1） */
 function krSurgeryHoursNote(c){ return '<div style="font-size:12px;color:var(--slate2);margin:4px 0 6px;">这次赴韩项目合计预计约 <b>'+krHoursText(surgeryMinutes(c))+'</b>（按项目合计）</div>'; }
 function krTimeOptionsFor(sel, c, date){
-  var hid = krHospitalIdOfMe(), hr = hospitalHours(hid), dur = surgeryMinutes(c), key = KR_CASE.clinicId+':'+KR_CASE.id, o = '';
+  var hid = krHospitalIdOfMe(), hr = hospitalHours(hid), dur = KR_SCH.dur || surgeryMinutes(c), key = KR_CASE.clinicId+':'+KR_CASE.id, o = '';
   for(var m = 6*60; m <= 23*60+30; m += 30){
     var tt = minToTime(m), er = date ? krSurgerySlotError(hid, c.director, date, tt, dur, key, {allowOffHours:true}) : '';
-    var tI = date ? tripDateIssue(c, date, tt) : null; if(tI && !tI.soft && !er){ o += '<option value="'+tt+'" disabled>'+tt+'　✕ '+tI.msg+'</option>'; continue; } /* CMD-1106-07 */
+    var tI = date ? tripDateIssue(c, date, tt) : null; if(tI && !tI.soft && tI.kind!=='short' && !er){ o += '<option value="'+tt+'" disabled>'+tt+'　✕ '+tI.msg+'</option>'; continue; } /* CMD-1106-07 */
     o += '<option value="'+tt+'"'+(tt===sel?' selected':'')+(er ? ' disabled' : '')+'>'+tt+(er ? '　✕ 需约 '+krHoursText(dur)+'，'+er.replace(/^.*?，和 /, '会撞到 ').replace(/ 重叠$/, '') : '')+'</option>';
   }
   return o;
 }
 function krDayFullNote(c, date){
   if(!date) return '';
-  var hid = krHospitalIdOfMe(), hr = hospitalHours(hid), dur = surgeryMinutes(c), key = KR_CASE.clinicId+':'+KR_CASE.id;
+  var hid = krHospitalIdOfMe(), hr = hospitalHours(hid), dur = KR_SCH.dur || surgeryMinutes(c), key = KR_CASE.clinicId+':'+KR_CASE.id;
   for(var m = timeToMin(hr.open); m + dur <= timeToMin(hr.close) + 60; m += 30){ if(!krSurgerySlotError(hid, c.director, date, minToTime(m), dur, key, {allowOffHours:true})) return ''; }
-  return '<div style="background:#FDECEA;border:1px solid #E5A19B;border-radius:8px;padding:6px 10px;font-size:12px;color:#B3261E;margin:4px 0;">这天院长排不进（施术约 '+krHoursText(dur)+'）：建议改选备选日期，或点［无法安排］。</div>';
+  return '<div style="background:#FDECEA;border:1px solid #E5A19B;border-radius:8px;padding:6px 10px;font-size:12px;color:#B3261E;margin:4px 0;">这天院长排不进（施术约 '+krHM(dur)+'）：建议改选备选日期，或点［无法安排］。</div>';
 }
+function krTripLine(c){
+  var s = c.stay || {}, rng = (s.in || s.out) ? '（'+(s.in ? stayMD(s.in).replace('/', '-')+(s.inTime ? ' '+s.inTime : '') : '未定')+' ～ '+(s.out ? stayMD(s.out).replace('/', '-')+(s.outTime ? ' '+s.outTime : '') : '未定')+'）' : '', ts = tripStateOf(c);
+  if(!rng && !ts) return '行程状态：未定';
+  return '行程状态：'+(ts==='tentative' ? '<b style="color:#8F6F0C;">预估</b>' : '已定')+krEsc(rng);
+}
+/* CMD-1106-09：KR「施术日期」卡——行程状态 / 施术预计时长（小时 + 分钟，带估算对照）/ 首选 备选单选 / 施术日期 + 时间 / 到院地址 / ［确认］［无法安排］放右边 */
 function krSchForm(c, dates, labels, confirmFn, rejectFn, confirmLabel){
-  var opts = dates.map(function(d, i){ return '<label style="display:block;margin:6px 0;font-size:13px;cursor:pointer;"><input type="radio" name="kr-sch-pick" '+(KR_SCH.pick===d?'checked':'')+' onchange="krSchSet(\'pick\',\''+d+'\')"> '+labels[i]+' <b>'+d+'</b></label>'+krSchedDayHtml(c, d); }).join('');
+  var est = krEstDur(c), dur = KR_SCH.dur || est, hh = Math.floor(dur/60), mm = dur%60, sel = 'padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:13px;';
+  var opts = dates.map(function(d, i){ return '<label style="display:block;margin:6px 0;font-size:13px;cursor:pointer;"><input type="radio" name="kr-sch-pick" '+(KR_SCH.pick===d?'checked':'')+' onchange="krSchSet(\'pick\',\''+d+'\')"> '+labels[i]+'施术日期：<b>'+d+'</b></label>'+krSchedDayHtml(c, d); }).join('');
+  var hOpts = ''; for(var h = 0; h <= 12; h++) hOpts += '<option value="'+h+'"'+(h===Math.min(12,hh)?' selected':'')+'>'+h+'</option>';
+  var mOpts = ''; [0,10,20,30,40,50].forEach(function(m){ mOpts += '<option value="'+m+'"'+(m===mm?' selected':'')+'>'+m+'</option>'; });
+  var durRow = '<div style="font-size:13px;margin:8px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">施术时间预计约 <select onchange="krSchDur(\'h\',this.value)" style="'+sel+'">'+hOpts+'</select> 小时 <select onchange="krSchDur(\'m\',this.value)" style="'+sel+'">'+mOpts+'</select> 分钟 <span style="font-size:12px;color:var(--muted);">（估算时间 '+krEsc(krHM(est))+(dur!==est ? '，已改为 '+krEsc(krHM(dur)) : '')+'）</span></div>';
+  var ti = tripDateIssue(c, KR_SCH.pick, KR_SCH.time), red = '', yellow = '';
+  if(ti && !ti.soft && ti.kind!=='short') red = tripDateIssueText(c, KR_SCH.pick, KR_SCH.time);
+  else if(ti && ti.kind==='short') yellow = tripShortText(c, KR_SCH.pick);
+  else if(ti && ti.soft) yellow = tripDateIssueText(c, KR_SCH.pick, KR_SCH.time)+'（行程暂定，仅供提醒）';
+  var er = ''; try{ er = KR_SCH.pick && KR_SCH.time ? krSurgerySlotError(krHospitalIdOfMe(), c.director, KR_SCH.pick, KR_SCH.time, dur, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true}) : ''; }catch(e){}
+  if(er && !red) red = String(er).replace(/^.*?，和 /, '会撞到 ').replace(/ 重叠$/, '');
+  var noteRow = (red ? '<div style="font-size:12px;margin:2px 0 4px;color:#B3261E;font-weight:700;">'+krEsc(red)+'，不能确认</div>' : '')+(yellow ? '<div style="font-size:12px;margin:2px 0 4px;color:#8F6F0C;">'+krEsc(yellow)+'</div>' : '');
   var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
-  var __ti = tripDateIssue(c, KR_SCH.pick, KR_SCH.time), tripNote = __ti ? '<div style="font-size:12px;margin:4px 0;color:'+(__ti.soft ? 'var(--muted)' : '#B3261E')+';'+(__ti.soft ? '' : 'font-weight:700;')+'">'+(__ti.soft ? '提醒（行程暂定）：' : '')+krEsc(tripDateIssueText(c, KR_SCH.pick, KR_SCH.time))+(__ti.soft ? '' : '，不能确认')+'</div>' : ''; /* CMD-1106-07 */
-  return krSurgeryHoursNote(c)+opts+krDayFullNote(c, KR_SCH.pick)+tripNote+'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;"><span style="font-size:12px;">到院时间</span><select onchange="krSchSet(\'time\',this.value)" style="'+inp+'">'+krTimeOptionsFor(KR_SCH.time, c, KR_SCH.pick)+'</select>'+
-    '<input value="'+krEsc(KR_SCH.address)+'" oninput="krSchSet(\'address\',this.value)" placeholder="地址" style="'+inp+'flex:1;min-width:260px;"></div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;"><button class="btn-primary" onclick="'+confirmFn+'()">'+confirmLabel+'</button>'+
-    '<input value="'+krEsc(KR_SCH.reason)+'" oninput="krSchSet(\'reason\',this.value)" placeholder="无法安排的原因" style="'+inp+'min-width:200px;"><button class="btn-outline" onclick="'+rejectFn+'()">无法安排</button></div>';
+  var addr = KR_SCH.addrEdit ? '<input value="'+krEsc(KR_SCH.address)+'" oninput="KR_SCH.address=this.value" onchange="krSchSet(\'addrEdit\',false)" placeholder="地址" style="'+inp+'width:min(520px,100%);margin-top:4px;">' : '<span>到院地址：'+krEsc(KR_SCH.address||'—')+'</span> <a href="#" class="info-link" onclick="krSchSet(\'addrEdit\',true);return false;">修改</a>';
+  return '<div style="font-size:13px;margin-bottom:6px;">'+krTripLine(c)+'</div>'+durRow+opts+krDayFullNote(c, KR_SCH.pick)+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;"><span style="font-size:13px;">施术日期 <b>'+krEsc(KR_SCH.pick ? String(KR_SCH.pick).slice(5).replace('-', '/') : '—')+'</b></span><select onchange="krSchSet(\'time\',this.value)" style="'+inp+'">'+krTimeOptionsFor(KR_SCH.time, c, KR_SCH.pick)+'</select></div>'+noteRow+
+    '<div style="font-size:12px;color:var(--slate2);margin-top:4px;">'+addr+'</div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;"><button class="btn-primary" '+(red ? 'disabled style="opacity:.45;cursor:not-allowed;" title="'+krEsc(red)+'"' : '')+' onclick="'+confirmFn+'()">'+confirmLabel+'</button><button class="btn-outline" onclick="krSchRejectOpen(\''+rejectFn.replace(/'/g, "\\'")+'\')">无法安排</button></div>';
+}
+function krSchRejectOpen(fn){
+  var ov = document.getElementById('kr-sch-rej-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-sch-rej-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100100; document.body.appendChild(ov); }
+  KR_SCH.reason = ''; ov.innerHTML = '<div class="modal-box" style="width:440px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:8px;">无法安排</div><div style="font-size:13px;margin-bottom:4px;">无法安排的原因 <span style="color:#C1454A;">*</span></div><textarea id="kr-sch-rej-why" rows="3" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;" oninput="KR_SCH.reason=this.value"></textarea><div id="kr-sch-rej-err" style="color:#B3261E;font-size:12px;margin-top:4px;display:none;">请填写无法安排的原因</div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;"><button class="btn-ghost" onclick="krSchRejectClose()">取消</button><button class="btn-primary" onclick="krSchRejectGo(\''+fn.replace(/'/g, "\\'")+'\')">送出</button></div></div>'; ov.classList.add('open');
+}
+function krSchRejectClose(){ var ov = document.getElementById('kr-sch-rej-overlay'); if(ov) ov.classList.remove('open'); }
+function krSchRejectGo(fn){
+  if(!(KR_SCH.reason||'').trim()){ var e = document.getElementById('kr-sch-rej-err'); if(e) e.style.display = 'block'; return; }
+  krSchRejectClose(); (new Function('return '+fn))()();
 }
 function krDoSchConfirm(isChange){
   if(!krCan()) return;
   if(!KR_SCH.pick){ alert('请先选一个日期'); return; }
   if(!KR_SCH.time){ alert('请填到院时间'); return; }
   var d = KR_SCH.pick, t0 = KR_SCH.time, a = (KR_SCH.address||'').trim();
-  var rr = krFindCase(KR_CASE.clinicId, KR_CASE.id), dur0 = rr ? surgeryMinutes(rr.c) : 60, er = rr ? krSurgerySlotError(krHospitalIdOfMe(), rr.c.director, d, t0, dur0, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true}) : ''; if(er){ krSlotAsk(er, function(){ krDoSchConfirm(isChange); }); return; }
-  var go = function(){ krMut(function(c){ return isChange ? coreChangeConfirm(c, d, t0, a, ME_NAME) : coreScheduleConfirm(c, d, t0, a, ME_NAME); }); };
+  var rr = krFindCase(KR_CASE.clinicId, KR_CASE.id), dur0 = KR_SCH.dur || (rr ? surgeryMinutes(rr.c) : 60), er = rr ? krSurgerySlotError(krHospitalIdOfMe(), rr.c.director, d, t0, dur0, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true}) : ''; if(er){ krSlotAsk(er, function(){ krDoSchConfirm(isChange); }); return; }
+  var go = function(){ krMut(function(c){ return isChange ? coreChangeConfirm(c, d, t0, a, ME_NAME, dur0) : coreScheduleConfirm(c, d, t0, a, ME_NAME, dur0); }); };
   var off = krOffHoursText(krHospitalIdOfMe(), d, t0, dur0); if(off) krOffConfirm(off+'（施术 '+d+' '+t0+'，韩国时间）', go); else go();
 }
 function krDoSchReject(isChange){
@@ -1461,7 +1488,7 @@ function krTabProc(c){
   } else if(st==='Pending'){
     var dates = [ks.primary].concat(ks.backup ? [ks.backup] : []);
     krSchReset(c, {pick:ks.primary, time:'10:00', address:krDefaultAddress()});
-    body = '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">IN 递交的日期（首选 / 备选）：选一个并填到院时间和地址，或回复无法安排。行程状态：'+(tripStateOf(c)==='tentative' ? '<b style="color:#8F6F0C;">暂定</b>（客人还没订机票 / 办签证）' : tripStateOf(c)==='booked' ? '已定（机票已订）' : '—')+'</div>'+(can ? krSchForm(c, dates, dates.map(function(d, i){ return i===0 ? '首选' : '备选'; }), 'krDoSchConfirm.bind(null,false)', 'krDoSchReject.bind(null,false)', '确认') : krEmpty('首选 '+krEsc(ks.primary)+(ks.backup?'，备选 '+krEsc(ks.backup):'')+'（院长账号不能确认）'));
+    body = (can ? krSchForm(c, dates, dates.map(function(d, i){ return i===0 ? '首选' : '备选'; }), 'krDoSchConfirm.bind(null,false)', 'krDoSchReject.bind(null,false)', '确认') : krEmpty('首选 '+krEsc(ks.primary)+(ks.backup?'，备选 '+krEsc(ks.backup):'')+'（院长账号不能确认）'));
   } else if(st==='Changing'){
     if(ks.changeSubmitted){
       var nd = [ks.changePrimary].concat(ks.changeBackup ? [ks.changeBackup] : []);
