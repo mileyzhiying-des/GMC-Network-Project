@@ -5968,17 +5968,34 @@ function nearestOpenMonth(fromDate, dates){
 function tripStateOf(c){ return (c && c.krSchedule && c.krSchedule.tripState) || ''; }
 function tripStateTagHtml(c){ var t = tripStateOf(c); return t==='tentative' ? ' <span style="font-size:12px;font-weight:700;color:#8F6F0C;background:#FBF0C9;border-radius:4px;padding:1px 6px;">暂定</span>' : (t==='booked' ? ' <span style="font-size:12px;color:var(--sage);">行程已定</span>' : ''); }
 function setTripState(v){ var c = getCurrentCase(); if(!c) return; var ks = ensureKrScheduleDraft(c); ks.tripState = v; renderCaseBody(c); }
-function tripStateBlockHtml(c, ks){
+function tripStateBlockHtml(c, ks){ /* CMD-1106-17：只留「行程状态 *」+ 两个单选（拿掉「给 KR 看的标记…」和「入境 / 离境在确认行程窗口里填…」两句说明） */
   var radio = function(v, lab){ return '<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-right:18px;cursor:pointer;"><input type="radio" name="trip-state" '+(ks.tripState===v ? 'checked ' : '')+'onchange="setTripState(\''+v+'\')"> '+lab+'</label>'; };
-  var inp = 'padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;';
-  return '<div style="margin-top:14px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">行程状态 <span style="color:#C1454A;">*</span> <span style="font-weight:400;font-size:12px;color:var(--muted);">给 KR 看的标记，不影响流程</span></div><div style="display:flex;flex-wrap:wrap;">'+radio('booked','已定（机票已订）')+radio('tentative','暂定（客人还没订机票 / 办签证）')+'</div>'+
-    '<div style="font-size:12px;color:var(--muted);margin-top:8px;">入境 / 离境日期和时间在「确认行程」窗口里填（施术日不到 7 天，递交时会弹出；7 天以上到时再确认）</div></div>';
+  return '<div style="margin-bottom:8px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span></div><div style="display:flex;flex-wrap:wrap;">'+radio('booked','已定（机票已订）')+radio('tentative','暂定（客人还没订机票 / 办签证）')+'</div></div>';
 }
 function ensureKrScheduleDraft(c){
   if(!c.krSchedule) c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false};
   return c.krSchedule;
 }
 
+/* CMD-1106-17：日历拿掉左右箭头，改成 年 / 月 下拉：年 = 今年（演示时间）～明年；月 = 今年从这个月起、明年 1～12 月；
+   一打开停在这个月，已经选了首选日的停在首选日那个月（用户自己改过下拉之后不再自动跳）。IN 递交施术日期和 IN 改期用同一个日历（krProcedureTabMain 的 monthNav） */
+var KR_SCHED_NAV_CASE = '';
+function krSchedYM(){ var t = todayStr(), y0 = +t.slice(0, 4), m0 = +t.slice(5, 7); return {y0:y0, m0:m0}; }
+function krScheduleSetYM(y, m, fromYear){
+  var q = krSchedYM(); y = Math.max(q.y0, Math.min(q.y0+1, +y)); m = +m;
+  if(y===q.y0 && m < q.m0) m = q.m0; /* 从明年切回今年、月比这个月早 → 自动变成这个月 */
+  KR_SCHED_VIEW_MONTH = new Date(y, m-1, 1); var c = getCurrentCase(); if(c){ KR_SCHED_NAV_CASE = c.id; renderCaseBody(c); }
+}
+function krSchedMonthNavHtml(c, ks, pf){
+  var q = krSchedYM();
+  if(KR_SCHED_NAV_CASE!==c.id && ks && ks[pf]){ KR_SCHED_VIEW_MONTH = new Date(+ks[pf].slice(0, 4), +ks[pf].slice(5, 7)-1, 1); } /* 已经选了日期的，停在首选日那个月 */
+  var y = KR_SCHED_VIEW_MONTH.getFullYear(), m = KR_SCHED_VIEW_MONTH.getMonth()+1;
+  if(y < q.y0 || (y===q.y0 && m < q.m0)){ y = q.y0; m = q.m0; } if(y > q.y0+1){ y = q.y0+1; m = 12; }
+  KR_SCHED_VIEW_MONTH = new Date(y, m-1, 1);
+  var yo = '', mo = ''; [q.y0, q.y0+1].forEach(function(yy){ yo += '<option value="'+yy+'"'+(yy===y ? ' selected' : '')+'>'+yy+'</option>'; });
+  for(var mm = (y===q.y0 ? q.m0 : 1); mm <= 12; mm++) mo += '<option value="'+mm+'"'+(mm===m ? ' selected' : '')+'>'+mm+'</option>';
+  return '<div style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;"><select class="kr-time-sel" style="min-width:84px;" onchange="krScheduleSetYM(this.value, '+m+')">'+yo+'</select>年<select class="kr-time-sel" style="min-width:72px;" onchange="krScheduleSetYM('+y+', this.value)">'+mo+'</select>月</div>';
+}
 function krScheduleMonthShift(dir){
   KR_SCHED_VIEW_MONTH = new Date(KR_SCHED_VIEW_MONTH.getFullYear(), KR_SCHED_VIEW_MONTH.getMonth()+dir, 1);
   var c = getCurrentCase(); if(c) renderCaseBody(c);
@@ -7417,7 +7434,7 @@ function krProcedureTabMain(c, tabsHtml){
   var ks = c.krSchedule;
   var st = scheduleState(c);
   var monthLabel = KR_SCHED_VIEW_MONTH.getFullYear()+'年'+(KR_SCHED_VIEW_MONTH.getMonth()+1)+'月';
-  var monthNav = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><span style="cursor:pointer;" onclick="krScheduleMonthShift(-1)">‹</span><b>'+monthLabel+'</b><span style="cursor:pointer;" onclick="krScheduleMonthShift(1)">›</span></div>';
+  var monthNav = krSchedMonthNavHtml(c, ks, st==='Changing' ? 'changePrimary' : 'primary'); /* CMD-1106-17：年 / 月下拉 */
   var hasActive = krActiveItems(c).length>0;
   var body = '';
   if(hasActive && c.krBalancePaid && st==='Arrived'){ body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div><div style="font-size:15px;font-weight:700;">'+ksTimeText(ks)+'</div><div style="font-size:12px;color:var(--sage);margin-top:4px;">✓ 已到院、尾款已付清；详细记录见「Timeline」。</div>'; } /* CMD-1025-04 B：施术日期放最上面，日期时间写大 */
@@ -7427,11 +7444,10 @@ function krProcedureTabMain(c, tabsHtml){
     var canModify = ks && ks.status==='confirmed' && !c.hasArrived; /* 到医院前都可改日期（CMD-1012-13，拿掉施术前 2 周限制） */
     if(st==='Draft'){
       ks = ensureKrScheduleDraft(c);
-      body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">只能选择KR室长可接待的日期（浅色 = 休诊 / 约满 / 已过）</div>'+
+      body = '<div class="info-heading" style="margin-bottom:4px;">施术日期</div>'+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         monthNav+
-        krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripStateBlockHtml(c, ks)+
-        '<div style="display:flex;gap:12px;margin-top:16px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">'+krBtn+'</button></div>'; /* ［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现 */
+        krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+
+        '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">'+krBtn+'</button></div>'; /* ［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
     } else if(st==='Pending'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
         '<div style="font-size:13px;color:var(--slate2);margin-bottom:14px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待KR 室长确认'+tripStateTagHtml(c)+'</div>'+
@@ -7500,8 +7516,13 @@ function krProcedureTabMain(c, tabsHtml){
   var recOpen = !!KR_PLAN_REC_OPEN[c.id];
   var recCard = ''; /* CMD-1020-13 六：「推荐项目整理」整块折叠区拿掉（建议在韩天数放在页面左上角；每个项目的安排在项目卡里看） */
   var noteBox = hasActive ? '<div style="margin-top:14px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">印尼室长备注</div><textarea rows="3" placeholder="印尼室长备注（选填，打印时一起印出）" onchange="setRecInNote(this.value)" style="width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box;resize:vertical;">'+String(c.recInNote||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea></div>' : '';
-  var stayIn = inStayInnerHtml(c), stayBtn = stayIn ? '<a href="#" class="btn-outline" style="padding:4px 12px;font-size:12px;text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">修改</a>' : '';
-  return '<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;position:relative;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-size:14px;font-weight:700;flex:1;">赴韩日程</div>'+(tabsHtml||'')+stayBtn+'</div>'+subStatusRowHtml(caseSubStatusItems(c))+body+(stayIn ? '<div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:12px;">'+stayIn+'</div>' : '')+'</div>'+recCard+
+  var stayIn = inStayInnerHtml(c);
+  /* CMD-1106-17：行程（状态 + 到达 / 离开 + 建议停留）移到施术日期上面，三段之间分隔线；待递交时行程状态单选在最上面；已递交 / KR 已确认之后行程块同样在上面、有分隔线 */
+  var tripTop = '', hrLine = '<div style="border-top:1px solid var(--border2);margin:12px 0;"></div>';
+  var tripRadios = (st==='Draft' && hasActive && ks) ? tripStateBlockHtml(c, ensureKrScheduleDraft(c)) : '';
+  if(tripRadios || stayIn) tripTop = hrLine+tripRadios+(stayIn || '')+hrLine;
+  var stayBtn = stayIn ? '<a href="#" class="btn-outline" style="padding:4px 12px;font-size:12px;text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">修改</a>' : '';
+  return '<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;position:relative;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-size:14px;font-weight:700;flex:1;">赴韩日程</div>'+(tabsHtml||'')+stayBtn+'</div>'+tripTop+(st==='Draft' ? '' : subStatusRowHtml(caseSubStatusItems(c)))+body+'</div>'+recCard+
     inProjectCardHtml(c)+'</div>'; /* CMD-1025-04 B：施术日期 → 客人赴韩日程 → 项目卡；CMD-1020-09：三张大卡（项目卡 / 术后管理 / 管理项目），在韩持有项目大卡拿掉；备注框、结束术后管理都拿掉 */
 }
 

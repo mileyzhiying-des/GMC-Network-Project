@@ -5951,7 +5951,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     window.confirm = function(){ return true; };
     var c = ST.newRes('R41a'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); c.activeCaseTab = 'kr';
     var h = krProcedureTabHtml(c);
-    ST.ok(/递交施术日期/.test(h) && />取消赴韩</.test(h) && !/>无法协调</.test(h) && /浅色 = 休诊 \/ 约满 \/ 已过/.test(h) && !/浅色为未开放/.test(h), '待递交日期卡：［递交施术日期］［取消赴韩］，没有［无法协调］，提示改成「浅色 = 休诊 / 约满 / 已过」');
+    ST.ok(/递交施术日期/.test(h) && />取消赴韩</.test(h) && !/>无法协调</.test(h) && !/浅色 = 休诊 \/ 约满 \/ 已过/.test(h) && !/浅色为未开放/.test(h), '待递交日期卡（CMD-1106-17：「浅色 = 休诊…」那句说明拿掉）：［递交施术日期］［取消赴韩］，没有［无法协调］，提示改成「浅色 = 休诊 / 约满 / 已过」');
     c.krSchedule.rejectNote = 'KR 无法安排（自测）'; h = krProcedureTabHtml(c); ST.ok(/>无法协调</.test(h) && !/>取消赴韩</.test(h), 'KR 回过「无法安排」之后才出现［无法协调］'); c.krSchedule.rejectNote = '';
     requestCannotCoordinate(); document.getElementById('refund-reason').value = '（自测）客人不去了'; confirmRefund();
     ST.ok(ST.hasLog(c, /点［取消赴韩］/) && !ST.hasLog(c, /点［无法协调］/), 'Timeline 用词「取消赴韩」');
@@ -10323,5 +10323,36 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/拆线 × 1（第 7 天 · 必须在韩国）/.test(rows) && /术后消肿管理 × 1（第 7 天 · 韩国或印尼）/.test(rows), '推荐项目列表术后管理后面有地点：'+rows.slice(rows.indexOf('拆线'), rows.indexOf('拆线')+90));
     c.recommended = [{origin:'KR', name:'假体隆鼻', postcare:[{mgmt:'拆线', name:'拆线', times:1, place:'KR', startDay:7}, {mgmt:'术后消肿管理', name:'术后消肿管理', times:1, place:'either', startDay:7, innName:'印尼消肿', inTimes:1}]}];
     rows = recProjectsRowsHtml(c, 'IN').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); ST.ok(/第 7 天 · 在印尼做/.test(rows), 'IN 分配到印尼 → 写「在印尼做」');
+  });
+
+  /* CMD-1106-17：日历年 / 月下拉 + IN 赴韩日程卡重排 */
+  ST.def('R247a','CMD-1106-17（A1 分页，stageC 夹具）：日历没有 ‹ ›、年 / 月下拉（今年 ~ 明年；今年只有这个月起；切回今年月自动变）；已选首选日的停在首选日那个月；赴韩日程卡顺序 标题 → 行程 → 施术日期 → 按钮，说明文字不见了；已递交 / 已确认行程也在上面',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), gc0 = window.getCurrentCase; window.getCurrentCase = function(){ return c; };
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    try{
+      var q = krSchedYM();
+      c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; c.hasArrived = false; c.stay = {in:ymdAdd(todayStr(), 30), inTime:'11:20', out:ymdAdd(todayStr(), 45), outTime:'12:30'}; KR_SCHED_NAV_CASE = '';
+      var h = krProcedureTabMain(c, ''), t = txt(h);
+      ST.ok(!/‹|›/.test(h) && (h.match(/class="kr-time-sel"/g)||[]).length>=2, '日历没有 ‹ ›，有年 / 月下拉');
+      var d = document.createElement('div'); d.innerHTML = h; var ss = d.querySelectorAll('select.kr-time-sel'), ys = [].map.call(ss[0].options, function(o){ return +o.value; }), ms = [].map.call(ss[1].options, function(o){ return +o.value; });
+      ST.ok(ys.join()===[q.y0, q.y0+1].join(), '年 = 今年 ~ 明年：'+ys); ST.ok(ms[0]===q.m0 && ms[ms.length-1]===12, '今年的月从这个月起：'+ms[0]+'～'+ms[ms.length-1]);
+      krScheduleSetYM(q.y0+1, 1); h = krProcedureTabMain(c, ''); d.innerHTML = h; ss = d.querySelectorAll('select.kr-time-sel'); ms = [].map.call(ss[1].options, function(o){ return +o.value; }); ST.ok(ms.length===12 && ms[0]===1 && KR_SCHED_VIEW_MONTH.getFullYear()===q.y0+1, '选明年 → 1～12 月，日历换到明年 1 月');
+      krScheduleSetYM(q.y0, 1); ST.ok(KR_SCHED_VIEW_MONTH.getFullYear()===q.y0 && KR_SCHED_VIEW_MONTH.getMonth()+1===q.m0, '从明年切回今年、月比这个月早 → 自动变成这个月');
+      /* 顺序 + 说明文字不见了 */
+      KR_SCHED_NAV_CASE = ''; h = krProcedureTabMain(c, ''); t = txt(h);
+      var iT = t.indexOf('赴韩日程'), iS = t.indexOf('行程状态'), iA = t.indexOf('到达'), iD = t.indexOf('施术日期'), iB = t.indexOf('递交施术日期');
+      ST.ok(iT>-1 && iT<iS && iS<iA && iA<iD && iD<iB, '顺序：标题 → 行程状态 → 到达 / 离开 → 施术日期 → 按钮');
+      ST.ok(!/待递交施术日期/.test(t) && !/只能选择KR室长可接待/.test(t) && !/给 KR 看的标记/.test(t) && !/确认行程」窗口里填/.test(t), '那几句说明 / 状态行不见了');
+      ST.ok((h.match(/border-top:1px solid var\(--border2\)/g)||[]).length>=3 && /首选日/.test(t), '三段之间有分隔线，日历图例保留');
+      /* 已选首选日 → 停在首选日那个月 */
+      var pd = ymdAdd(todayStr(), 50); c.krSchedule.primary = pd; KR_SCHED_NAV_CASE = ''; krProcedureTabMain(c, ''); ST.ok(KR_SCHED_VIEW_MONTH.getFullYear()===+pd.slice(0, 4) && KR_SCHED_VIEW_MONTH.getMonth()+1===+pd.slice(5, 7), '已经选了首选日：停在首选日那个月');
+      /* 已递交：行程在上面 */
+      c.krSchedule = {status:'pending', primary:pd, backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; h = krProcedureTabMain(c, ''); t = txt(h);
+      ST.ok(t.indexOf('到达')>-1 && t.indexOf('到达')<t.indexOf('已提交首选'), '已递交：行程在施术日期上面');
+      c.krSchedule = {status:'confirmed', primary:pd, backup:'', confirmedDate:pd, confirmedTime:'10:00', address:'x', changePrimary:'', changeBackup:'', changeSubmitted:false}; h = krProcedureTabMain(c, ''); t = txt(h);
+      ST.ok(t.indexOf('到达')>-1 && t.indexOf('到达')<t.indexOf('施术日期 '+pd), 'KR 已确认：行程在施术日期上面');
+    } finally { window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); KR_SCHED_NAV_CASE = ''; }
   });
 })();
