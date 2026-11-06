@@ -2528,9 +2528,7 @@ function coreGcSetRec(c, val, by, role){
 function coreGcSnap(c, sub){ if(!isGcGeneral(c) || c.consultContentAt) return false; var r = gcEvalOf(c, true); r.sub = sub; return true; }
 function gcMissing(c, sub){
   var out = [], r = gcEvalOf(c); if(!String(r ? r.rec : '').trim()) out.push('录入内容');
-  var sb = sub || (r && r.sub) || {}, picked = Object.keys(sb.pick||{}).some(function(k){ return sb.pick[k]; }) || Object.keys(sb.mg||{}).some(function(k){ return sb.mg[k] && sb.mg[k].on; });
-  if(!picked) out.push('推荐项目');
-  return out;
+  return out; /* CMD-1105-13：推荐项目可选可不选，只要「录入内容」有字就能上传；室长 ③ 发送诊疗方案时再加项目（照现规则至少勾 1 项） */
 }
 function coreGcUpload(c, by, role, sub){
   if(!isGcGeneral(c) || c.consultContentAt) return {ok:false, err:'这个案件现在不能上传评估'};
@@ -7552,6 +7550,7 @@ function coreSetReportEta(c, eta, by, isChange){
   if(!c) return false;
   if(isChange){
     if(c.consultStatus!=='awaiting_report') return false;
+    var me0 = (typeof currentAccount==='function') ? currentAccount() : null; if(me0 && isKrDirectorLike(me0)) return false; /* CMD-1105-13：院长角色不能改预计出报告 / 结果时间 */
     var old = c.reportEta || '—';
     c.reportEta = eta; c.reportOverdue = false; c.overdueNotified = false;
     if(c.director && c.consultAt) pushKrNotif(caseKrHospital(c), '需要处理：'+(isRevEval(c) ? '复诊评估 ' : '面诊 ')+c.name+'（'+(c.caseNo||'')+'）的时间有变动（'+(isRevEval(c) ? '评估 ' : '面诊 ')+c.consultAt.date+' '+c.consultAt.time+'，预计出'+(isRevEval(c) ? '评估结果 ' : '诊疗方案 ')+tkU(eta)+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); /* 修改时间也通知院长 */

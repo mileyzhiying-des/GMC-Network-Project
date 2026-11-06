@@ -754,7 +754,7 @@ function krDoConfirmTimes(){
   var off = krOffHoursText(krHospitalIdOfMe(), cd, ct, dur); if(off) krOffConfirm(off+'（面诊 '+cd+' '+ct+'，韩国时间）', go); else go();
 }
 function krDoEta(change){
-  if(!krCan() && !(krIsDirector() && krIsMyCase(KR_CASEOBJ()||{}))) return; /* CMD-1105-11：院长也可以改自己案件的报告 / 结果时间（取代「院长不能改」） */
+  if(!krCan()) return; /* CMD-1105-13：院长不能改预计出报告 / 结果时间（取代 1105-11 的「院长也可以改」）；室长保留 */
   var d = document.getElementById('kr-eta-d').value, tm = document.getElementById('kr-eta-t').value;
   if(!d || !tm){ alert('请填日期和时间'); return; }
   var eta = localToUtc(d, tm, KR_TZ); /* KR 输入的是韩国当地时间，存 UTC */
@@ -766,14 +766,14 @@ function krDoEta(change){
 /* 修改预计出报告时间（等待报告中，只改这一个时间；面诊时间不动） */
 function krEtaBlock(c, change){
   var base = c.reportEta ? fmtUtc(c.reportEta, KR_TZ).split(' ') : [krDateAdd(1), '14:00'], inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
-  return krCardBox('修改预计出报告时间（院长 '+krEsc(c.director||'—')+'）', (krCan() || (krIsDirector() && krIsMyCase(c))) ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;"><input type="date" id="kr-eta-d" value="'+base[0]+'" min="'+krToday()+'" style="'+inp+'"><select id="kr-eta-t" style="'+inp+'">'+krHourOptions(base[1], '00:00', '23:30')+'</select><button class="btn-primary" onclick="krDoEta(true)">确认修改</button><button class="btn-ghost" onclick="krSetEtaEdit(false)">取消</button></div>' : '<div style="font-size:12px;color:var(--muted);">预计出报告时间由 KR 室长修改，院长账号不能改。</div>');
+  return krCardBox('修改预计出报告时间（院长 '+krEsc(c.director||'—')+'）', krCan() ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;"><input type="date" id="kr-eta-d" value="'+base[0]+'" min="'+krToday()+'" style="'+inp+'"><select id="kr-eta-t" style="'+inp+'">'+krHourOptions(base[1], '00:00', '23:30')+'</select><button class="btn-primary" onclick="krDoEta(true)">确认修改</button><button class="btn-ghost" onclick="krSetEtaEdit(false)">取消</button></div>' : '<div style="font-size:12px;color:var(--muted);">预计出报告时间由 KR 室长修改，院长账号不能改。</div>');
 }
 var KR_ETA_EDIT = false;
 var KR_CONSULT_OPEN = {}; /* 面诊卡片折叠状态（界面状态，不存档）*/
 function krConsultToggle(id){ KR_CONSULT_OPEN[id] = !KR_CONSULT_OPEN[id]; krRenderCaseDetail(); }
 function krSetEtaEdit(v){ KR_ETA_EDIT = v; krRenderCaseDetail(); }
 function krEtaStatusBlock(c){
-  var over = reportOverdueNow(c), started = !!c.consultStartedAt, ended = !!c.consultContentAt, canStart = krCanRecord(c) && !started && !ended;
+  var over = reportOverdueNow(c), started = !!c.consultStartedAt, ended = !!c.consultContentAt, canStart = krIsDirector() && krCanRecord(c) && !started && !ended; /* CMD-1105-13：只有院长能开始 */
   /* CMD-1019-08：开始面诊之后 / 已上传面诊内容 → 折叠成一行「负责院长 · 当前小状态」+［展开］；面诊时间、预计出报告时间、倒计时、［修改预计时间］收进展开区 */
   if((started || ended) && !KR_CONSULT_OPEN[c.id]) return krCardBox(isRevEval(c) ? '复诊评估' : '面诊', '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:13px;"><b>'+krEsc(c.director||'—')+'</b> · '+(ended ? (isRevEval(c) ? '已上传评估内容，待传结果' : '已上传面诊内容，待整理诊疗方案') : (isRevEval(c) ? '评估中' : '面诊中'))+(over ? ' <span style="color:#C26A1B;">（已超过预计出报告时间）</span>' : '')+'</span><a href="#" class="info-link" onclick="krConsultToggle(\''+c.id+'\');return false;">展开</a></div>');
   /* 一张卡片：面诊时间 / 预计出报告时间 / 倒计时 / 当前小状态 /［开始面诊］/［修改预计时间］ */
@@ -784,6 +784,7 @@ function krEtaStatusBlock(c){
 }
 function krStartConsult(){
   if(krRvNow()){ krMut(function(c){ if(!krCanRecord(c)) return false; if(!krIsDirector() && !c.revAuth){ alert('室长代院长操作，必须先勾选「已得到院长授意」'); return false; } return coreStartConsult(c, ME_NAME); }); return; } /* CMD-1022-19：复诊评估 = 按［开始评估］只开始；先选评估结论，选「需要处理」才弹录入方式，页面一直停在复诊评估 tab */
+  if(!krIsDirector()) return; /* CMD-1105-13：室长没有［开始面诊 / 复诊］（只能勾授意后代录，第一次录入才算开始） */
   if(krIsDirector()){ krMut(function(c){ return krCanRecord(c) ? coreStartConsult(c, ME_NAME) : false; }); return; } /* CMD-1105-11：院长按［开始面诊］直接开始（语音进输入框，不再弹选择录入方式 / 不开侧栏） */
   krMut(function(c){ return krCanRecord(c) ? coreStartConsult(c, ME_NAME) : false; });
 }
@@ -917,7 +918,7 @@ function krCdText(ms){ var neg = ms<0, m = Math.floor(Math.abs(ms)/60000), h = M
 function krConsultAtDate(c){ if(!c.consultAt || !c.consultAt.date || !c.consultAt.time) return null; return utcStrParse(localToUtc(c.consultAt.date, c.consultAt.time, KR_TZ)); }
 function krConsultCardGen(c){
   var dir = krIsDirector(), started = !!c.consultStartedAt, ended = !!c.consultContentAt, now = nowDateObj(), at = krConsultAtDate(c), eta = reportEtaParse(c.reportEta), canRec = krCanRecord(c);
-  var canStart = canRec && !started && !ended;
+  var canStart = dir && canRec && !started && !ended; /* CMD-1105-13：室长没有开始入口 */
   var title = '面诊'+(dir ? '' : '｜院长：'+krEsc(c.director||'—'));
   var startBtn = canStart ? '<button class="btn-primary" style="padding:6px 18px;" onclick="krStartConsult()">开始面诊</button>' : '';
   var head = '<div class="info-heading" style="margin-bottom:6px;display:flex;align-items:center;gap:10px;"><span style="flex:1;">'+title+'</span>'+startBtn+'</div>';
@@ -5152,7 +5153,7 @@ function krDataCard(c, kind, body){
   return krCardBox(title, open ? body : '');
 }
 function krEvTimes(c, kind){
-  var now = nowDateObj(), at = krConsultAtDate(c), eta = reportEtaParse(c.reportEta), canEdit = (krCan() || (krIsDirector() && krIsMyCase(c))) && !KR_ETA_EDIT;
+  var now = nowDateObj(), at = krConsultAtDate(c), eta = reportEtaParse(c.reportEta), canEdit = krCan() && !KR_ETA_EDIT; /* CMD-1105-13：院长只显示，不能改 */
   var l1 = kind==='rv' ? '评估时间（韩国）' : '预约面诊时间（韩国）', l2 = kind==='rv' ? '结果时间（韩国）' : '预约报告时间（韩国）';
   return krKV(l1, c.consultAt ? krEsc(c.consultAt.date+' '+c.consultAt.time)+(at ? '（'+krCdText(at-now)+'）' : '') : '—')+
     krKV(l2, (eta ? krEsc(fmtUtc(c.reportEta))+'（'+krCdText(eta-now)+'）' : '—')+(canEdit ? ' <button class="btn-outline" style="padding:2px 12px;font-size:12px;margin-left:8px;" onclick="krSetEtaEdit(true)">修改</button>' : ''));
@@ -5236,7 +5237,7 @@ function krGcEvalBlock(c){
     var who = (!dir) ? '<div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:8px;">室长代录 · 院长授意'+(c.revAuth ? '：'+krEsc(c.revAuth.by)+' '+krEsc(fmtUtc(c.revAuth.at).slice(5)) : '')+'</div>' : '';
     var ret = (r && r.retPending) ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;"><b>室长已退回</b>（'+krEsc(r.retPending.by)+' · '+krEsc(fmtUtc(r.retPending.at).slice(5))+'）：'+krEsc(r.retPending.reason)+'</div>' : '';
     body = who+ret+sec('录入内容', true, krRvField('gcrec', r ? r.rec : '', '面诊时说的内容（可以语音输入，也可以直接打字）', 130))+
-      sec('推荐项目（从项目库选）', true, '<div id="kr-gc-pick">'+krGcPickColumn(c)+'</div>');
+      sec('推荐项目（从项目库选，可选可不选）', true, '<div id="kr-gc-pick">'+krGcPickColumn(c)+'</div>');
     return krCardBox((dir ? '面诊｜院长：'+krEsc(c.director||'—') : '评估内容')+' '+pill, body+'<div id="kr-rv-foot" style="margin-top:16px;">'+krGcFootHtml(c)+'</div>');
   }
   /* 已上传：全部只读 */

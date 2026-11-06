@@ -9479,14 +9479,16 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_SUB = krSubBlank(''); krShowCase(cid, r.id, {tab:'consult', here:true});
       var body = document.getElementById('krcase-body'), h = krTabConsult(gc()), t = txt(h);
       ST.ok(/面诊资料\s*等待院长评估/.test(t) && t.indexOf('面诊资料')<t.indexOf('面诊｜院长：') && /面诊｜院长：KD1 院长\s*等待院长评估/.test(t), '院长 ①：上「面诊资料」（等待院长评估）+ 下评估卡「面诊｜院长：KD1 院长」「等待院长评估」');
-      ST.ok((h.match(/开始面诊/g)||[]).length===1 && /预约面诊时间（韩国）/.test(t) && /预约报告时间（韩国）/.test(t) && />修改</.test(h) && !/已得到院长授意/.test(t), '院长 ①：两行时间（报告时间旁［修改］）+ 最右一个［开始面诊］，没有授意勾选');
+      ST.ok((h.match(/开始面诊/g)||[]).length===1 && /预约面诊时间（韩国）/.test(t) && /预约报告时间（韩国）/.test(t) && !/>修改</.test(h) && !/已得到院长授意/.test(t), '院长 ①（1105-13 改）：两行时间只显示，没有［修改］；最右一个［开始面诊］，没有授意勾选');
+      var eta0 = gc().reportEta, eres = null; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; eres = coreSetReportEta(c, ymdAdd(todayStr(), 3)+' 09:00:00', 'KD1 院长', true); }); ST.ok(eres===false && gc().reportEta===eta0, '院长角色在程序里也改不了预计出报告 / 结果时间');
       krStartConsult(); var c1 = gc(); ST.ok(!!c1.consultStartedAt && /院长/.test(c1.consultStartedBy) && !KR_REC_OPEN, '院长按［开始面诊］直接开始（不弹选择录入方式、不开侧栏）');
       h = krTabConsult(gc()); t = txt(h);
       ST.ok(/面诊资料\s*院长正在评估/.test(t) && /id="rvmic-gcrec"/.test(h) && /id="rvta-gcrec"/.test(h) && !/增加内容（手动）|krRecOpenModal/.test(h), '院长 ②：录入内容 = ［语音输入］+ 输入框，没有「增加内容（手动）」/ 侧栏');
-      ST.ok(/推荐项目/.test(t) && /还缺：录入内容、推荐项目/.test(t) && /<button class="btn-primary" disabled[^>]*>上传评估/.test(h), '院长 ②：推荐项目（从项目库选）；［上传评估］灰掉，旁边写还缺 录入内容、推荐项目');
+      ST.ok(/推荐项目/.test(t) && /还缺：录入内容/.test(t) && !/还缺：[^ ]*推荐项目/.test(t) && /<button class="btn-primary" disabled[^>]*>上传评估/.test(h), '院长 ②（1105-13 改）：推荐项目可选可不选；［上传评估］灰掉，旁边只写还缺 录入内容');
       /* 语音进输入框 */
       krShowCase(cid, r.id, {tab:'consult', here:true}); document.getElementById('rvmic-gcrec').click(); ST.ok(RVMIC && RVMIC.key==='gcrec', '按［语音输入］开始录'); krRvMicStop(true);
       ST.ok(String(gc().consultEval && gc().consultEval.rec).length>5 && (gc().logEntries||[]).some(function(e){ return /语音输入：录入内容/.test(e.action); }), '转写进输入框并存好，Timeline 记「语音输入：录入内容」');
+      h = krTabConsult(gc()); ST.ok(!/还缺：/.test(txt(h)) && /<button class="btn-primary" onclick="krGcUpload\(\)">上传评估/.test(h) && gcMissing(gc()).length===0, '1105-13：只有录入内容、没选推荐项目 → ［上传评估］就可以按');
       /* 选推荐项目 */
       var cand = krScopeCandidates(cid).kr[0]; ST.ok(!!cand, '项目库有项目'); krPickToggle(cand.name, true);
       ST.ok(gc().consultEval.sub && gc().consultEval.sub.pick[cand.name], '选的推荐项目存成快照（换分页 / 刷新不丢）');
@@ -9512,10 +9514,11 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_SUB = krSubBlank(''); krShowCase(cid, r.id, {tab:'consult', here:true});
       var cand = krScopeCandidates(cid).kr[0];
       /* ⑤ ① 勾授意 → 代录 */
-      var h = krTabConsult(gc()), t = txt(h); ST.ok(krGcMode(gc())==='view' && /已得到院长授意/.test(t) && !/开始面诊/.test(h), '室长 ①：授意勾选，没有［开始面诊］');
+      var h = krTabConsult(gc()), t = txt(h); ST.ok(krGcMode(gc())==='view' && /已得到院长授意/.test(t) && !/开始面诊|开始复诊/.test(h) && />修改</.test(h), '室长 ①：授意勾选，没有［开始面诊］，两行时间旁还有［修改］');
+      krStartConsult(); ST.ok(!gc().consultStartedAt, '1105-13：室长调用开始入口也开始不了（只有院长能开始）');
       krRvAuth(true); krShowCase(cid, r.id, {tab:'consult', here:true}); h = krTabConsult(gc()); t = txt(h);
       ST.ok(krGcMode(gc())==='author' && /室长代录 · 院长授意/.test(t) && /id="rvta-gcrec"/.test(h), '⑤ 勾了授意 → 出现和院长 ② 一样的输入画面，标「室长代录 · 院长授意」');
-      krGcSetQ('室长代录的内容'); krPickToggle(cand.name, true); krGcUpload(); var c1 = gc();
+      krGcSetQ('室长代录的内容'); krGcUpload(); var c1 = gc(); /* 1105-13：没选推荐项目也能上传 */
       ST.ok(!!c1.consultContentAt && c1.consultEval.role==='proxy' && /室长代录 · 院长授意/.test(JSON.stringify(c1.logEntries||[])), '⑤ 上传记「室长代录 · 院长授意」');
       /* ② 院长已开始（室长之前勾过授意也一样） */
       mut(function(c){ delete c.consultContentAt; delete c.consultEval; c.consultStartedAt = nowFullDt(); c.consultStartedBy = 'KD1 院长'; });
