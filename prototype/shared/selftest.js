@@ -7012,7 +7012,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var oa = window.alert, oc = window.confirm, onf = window.GMC_NO_FOLLOWASK; window.alert = function(){}; window.confirm = function(){ return true; };
     try{
       /* 1 来访目的 */
-      ST.ok(VISIT_PURPOSES.indexOf('皮肤商谈')<0 && VISIT_PURPOSES.indexOf('复诊评估')>-1 && visitPurposesFor(false).join('|')==='面诊商谈|皮肤管理' && visitPurposesFor(true).join('|')==='面诊商谈|皮肤管理|术后管理|复诊评估', '来访目的：第一次来 2 个，来过的 4 个，没有皮肤商谈');
+      ST.ok(VISIT_PURPOSES.indexOf('皮肤商谈')<0 && VISIT_PURPOSES.indexOf('复诊评估')>-1 && visitPurposesFor(false).join('|')==='面诊商谈' && visitPurposesFor(true).join('|')==='面诊商谈|术后管理|复诊评估', '来访目的（1105-12 改）：第一次来 1 个，来过的 3 个（面诊商谈已含皮肤管理），没有皮肤商谈');
       ST.ok(!/皮肤商谈/.test(purposeSelectHtml('x', true)) && /复诊评估/.test(purposeSelectHtml('x', true)) && !/术后管理/.test(purposeSelectHtml('x', false)), 'IN 代约选项同规则');
       /* 夹具：原案件（赴韩已结束，还有印尼术后管理没做）+ 新到店 */
       var src = ST.newRes('R102s'); ST.materials(src, {consult:false}); src = CASE_ITEMS.filter(function(x){ return x.id===src.id; })[0];
@@ -9126,7 +9126,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(mg && itx){ delete itx.heldSurg; itx.rebookWait = {at:'x', by:'t', reason:'t', memo:''}; c2.krTripEnded = {at:'x'}; var notes = []; mg.fn(c2, {note:function(t){ notes.push(t); }}); ST.ok(!!itx.heldSurg && notes.length===1, '迁移：转了 1 个案件的施术：'+notes.join('|')); var nL = (c2.logEntries||[]).length; mg.fn(c2, {note:function(t){ notes.push(t); }}); ST.ok((c2.logEntries||[]).length===nL && notes.length===1, '迁移幂等（不重复写 Timeline）'); }
     } finally { window.GMC_LEAVE_SKIP = true; }
   });
-  ST.def('R225a','CMD-1105-04（A1，stageC 夹具）：新面诊后选项目——列出客人名下韩国持有的施术（方案里有才能勾）、抵钱（补差额 / 差额转置换额度 / 只勾持有 ₩0 升级）、持有转进新主案件',async function(){
+  ST.def('R225a','CMD-1105-04 / 1105-12（A1，stageC 夹具）：新面诊后选项目——列出客人名下韩国持有的施术（方案里有才能勾）、直接用这个项目不重算价格（没有差额 / 置换额度，heldCredit 不再产生）、只勾持有 ₩0 升级、持有转进新主案件',async function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     await ST.ensureFixtures(['stageC']);
     var src = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!src, '要有 stageC 夹具')) return;
@@ -9148,19 +9148,19 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var html = projectPickerHtml(r1, false);
     ST.ok(/已付 · 韩国持有（来自 /.test(html) && html.indexOf(src.caseNo)>-1, '选项目列出「已付 · 韩国持有（来自 '+src.caseNo+'）」');
     ST.ok(/这次院长的方案里没有这一项；不做的话请从客人页取消 \/ 退款/.test(html), '方案里没有的那项灰掉并写原因');
-    ST.ok(/比已付高，补差额/.test(html), '价格比已付高：提示补差额');
+    ST.ok(/直接用这个项目，不重新算价格/.test(html) && !/补差额|转置换额度/.test(html), '1105-12：提示「直接用，不重新算价格」，没有补差额 / 置换额度');
     toggleHeldSurg(src.id, iid1); ST.ok(!(r1.recommended||[]).length, '灰掉的那项勾不上');
-    toggleHeldSurg(src.id, iid0); var sel = (r1.recommended||[])[0]; ST.ok(sel && sel.heldFrom && sel.heldFrom.iid===iid0 && sel.heldFrom.paid===pd0, '勾上：带 heldFrom（已付 '+pd0+'）');
+    toggleHeldSurg(src.id, iid0); var sel = (r1.recommended||[])[0]; ST.ok(sel && sel.heldFrom && sel.heldFrom.iid===iid0 && sel.heldFrom.paid===pd0 && sel.heldFrom.balance===heldBalanceOf(src, i0), '勾上：带 heldFrom（已付 '+pd0+'，原来没付的尾款 '+heldBalanceOf(src, i0)+'）');
     confirmProjectSelectionGo(); var b1 = r1.settlementBatches[r1.settlementBatches.length-1];
-    var D = Math.round(hi*KR_DEPOSIT_RATE), heldC = Math.min(pd0, hi);
-    ST.ok(b1.heldCredit===heldC && b1.krDeposit===Math.max(0, D-heldC) && b1.krBalance===hi-b1.krDeposit-heldC, '只收差额：定金 '+b1.krDeposit+'（30% '+D+' − 抵 '+heldC+'），尾款 '+b1.krBalance);
+    var hb0 = heldBalanceOf(src, i0), heldC = 0;
+    ST.ok(!b1.heldCredit && b1.krDeposit===0 && b1.krTotal===hb0 && b1.krBalance===hb0, '1105-12：不重算价格、不计入定金：定金 '+b1.krDeposit+'，只带原来没付的尾款 '+b1.krBalance+'（原案件尾款 '+hb0+'）');
     ST.ok(i0.heldSurg && !i0.swapped, '付款前原案件的持有不动（取消结算单不会丢）');
     SETTLE_MODAL_BATCH_ID = b1.id; SETTLE_ANES_SIGNED = true; confirmSettlementPayment();
     ST.ok(b1.status==='active' && r1.settlementDone && krActiveItems(r1).length===1 && isUpgraded(r1), '付款后新案件升级成赴韩案件');
     ST.ok(i0.swapped && !i0.heldSurg && i0.heldTransferred && i0.heldTransferred.toId===r1.id, '原案件那一笔标「已转到 '+r1.caseNo+'」、不再是持有');
     ST.ok(heldSurgItems(src).length===1 && heldSurgItems(src)[0]===i1, '没勾的那项留在原案件，仍是持有');
     ST.ok((src.logEntries||[]).some(function(e){ return /已转到/.test(e.action) && e.action.indexOf(r1.caseNo)>-1; }) && (r1.logEntries||[]).some(function(e){ return /使用韩国持有的施术/.test(e.action) && e.action.indexOf(src.caseNo)>-1; }), '两边 Timeline 各记一条');
-    var bi = krBalanceInfo(r1); ST.ok(bi.effDeposit===b1.krDeposit+heldC && bi.diff===hi-bi.effDeposit, '尾款 = 项目合计 − 定金 − 持有抵扣：'+bi.diff);
+    var bi = krBalanceInfo(r1); ST.ok(bi.effDeposit===b1.krDeposit && bi.total===hb0 && bi.diff===hb0, '施术那天 KR 照原尾款金额收：'+bi.diff);
     ST.ok(financePaid(r1).kr===b1.krDeposit && financePaid(src).kr===financePaid(src).kr, '新案件只计这次实收的定金，不重复计入（持有已付的钱留在原案件）');
     ST.ok(/来自 /.test(krSrcTag(r1.procedureItems.filter(function(i){ return i.heldFrom; })[0])), 'KR 项目卡来源标「来自 … 韩国持有」');
     /* ② 价格比已付低：差额转置换额度；只勾持有、没有别的钱 → 确认窗 ₩0，确认后升级 */
@@ -9168,15 +9168,80 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var r2 = mkNew('R225-2', [{name:i1.name, price:lo, note:''}]);
     toggleHeldSurg(src.id, iid1); ST.ok((r2.recommended||[]).length===1, '② 勾上第二项持有');
     confirmProjectSelectionGo(); var b2 = r2.settlementBatches[r2.settlementBatches.length-1];
-    ST.ok(b2.krDeposit===0 && b2.heldCredit===lo && !b2.inTotal, '② 不用再付：定金 0');
-    ST.ok(document.getElementById('settle-overlay').classList.contains('open') && SETTLE_MODAL_BATCH_ID===b2.id && /已用韩国持有抵扣/.test(document.getElementById('settle-breakdown').textContent), '② 只勾持有：弹出「本次应付 ₩0」确认窗');
+    ST.ok(b2.krDeposit===0 && !b2.heldCredit && !b2.inTotal, '② 不用再付：定金 0');
+    ST.ok(document.getElementById('settle-overlay').classList.contains('open') && SETTLE_MODAL_BATCH_ID===b2.id && /不用付钱|不另收钱/.test(document.getElementById('settle-breakdown').textContent), '② 只勾持有：弹出「本次应付 ₩0」确认窗');
     SETTLE_ANES_SIGNED = true; confirmSettlementPayment();
     ST.ok(r2.settlementDone && isUpgraded(r2) && krDepositPaid(r2), '② 确认后升级成赴韩案件');
-    ST.ok((cl.compCredits||[]).length===cc0+1 && cl.compCredits[cl.compCredits.length-1].kwr===pd1-lo, '② 差额 '+(pd1-lo)+' 转置换额度');
+    ST.ok((cl.compCredits||[]).length===cc0, '② 价格比已付低也没有置换额度（不重算价格）');
     ST.ok(heldSurgItems(src).length===0 && i1.swapped && i1.heldTransferred.toId===r2.id, '② 原案件两项都转出了');
     /* ③ 「继续之前的服务」里没有直接赴韩的入口 */
     var fu = String(fuRender) + String(followupAsk); ST.ok(!/使用韩国持有|直接赴韩|赴韩（使用/.test(fu), '③ 继续之前的服务没有跳过面诊的赴韩入口');
     window.GMC_NO_HELD_AUTO = false;
+  });
+  ST.def('R231a','CMD-1105-12（A1，stageC 夹具）：只付了定金没做、行程结束 → 不自动转持有，IN 三选一待办（无故未到 · 定金不退 / 改日 / 退款）、案件未结案；客人页「已付」按实际付过的钱、被勾选未付款时灰掉；迁移 59',async function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    await ST.ensureFixtures(['stageC']);
+    var c = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c, '要有 stageC 夹具')) return;
+    window.GMC_NO_TABS = true; window.GMC_LEAVE_SKIP = false;
+    try{
+      ensureItemIids(c);
+      var its = (c.procedureItems||[]).filter(function(i){ return i.origin==='KR' && !i.cancelled && !krIsMgmtItemC(i); }); if(!ST.ok(its.length>=2, '夹具里有两项施术')) return;
+      c.hasArrived = true; c.krProcedureDone = true; c.krBalancePaid = false; c.materialsConfirmed = true; delete c.krTripEnded; its[0].rebookWait = {at:'x', by:'t', reason:'t', memo:''};
+      var i0 = its[0], i1 = its[1], iid0 = itemIid(i0), iid1 = itemIid(i1), sh0 = heldPaidOf(c, i0), sh1 = heldPaidOf(c, i1);
+      ST.ok(sh0>0 && sh0<itemFullPrice(i0) && heldBalanceOf(c, i0)===itemFullPrice(i0)-sh0, '只付定金：已付 = 定金份额 '+sh0+'（项目价 '+itemFullPrice(i0)+'），尾款 '+heldBalanceOf(c, i0)+' 未付');
+      var r = coreTripEnd(c, '系统', {}, {auto:true, byDate:true}); ST.ok(r.ok, '行程自动结束');
+      ST.ok(tripWaitItems(c).length>=2 && !heldSurgItems(c).length && !i0.rebookWait && !rebookWaitItems(c).length, '只付定金：不自动转持有，进「等 IN 决定」（tripWait）');
+      ST.ok(surgUndone(c).length>=2 && !mainAutoComplete(c) && c.stage!=='closed', '处理完之前案件不结案：'+c.stage);
+      ST.ok((c.logEntries||[]).filter(function(e){ return /只付了定金、没做，不自动转持有/.test(e.action); }).length===1, 'Timeline 只写一条');
+      var todo = inTodoItems().filter(function(i){ return i.kind==='tripdecide' && i.caseId===c.id; })[0]; ST.ok(!!todo && !todo.ack && /只付了定金/.test(todo.text), 'IN 待办「三选一」，没有［已处理］：'+(todo && todo.text));
+      ST.ok(/等你决定/.test(mainProgressText(c, 'IN')) && /等 IN 决定/.test(mainProgressText(c, 'KR')), '进程文字：IN「等你决定」/ KR「等 IN 决定」');
+      var kl = krListStage(c); ST.ok(!kl || !kl.busy, 'KR 这边没有事（灰色）');
+      var rows = cliHoldKrRows({cases:[c], mode:'IN', name:c.name}); ST.ok(rows.filter(function(x){ return x.tripWaitCase; }).length>=2, '客人页列出「等 IN 室长决定」');
+      /* 校验 */
+      ST.ok(!coreTripDecide(c, iid0, 'rebook', {reason:''}, 'A1').ok && !coreTripDecide(c, iid0, 'refund', {reason:'x', method:''}, 'A1').ok && !coreTripDecide(c, iid0, 'refund', {reason:'', method:'现金'}, 'A1').ok && !coreTripDecide(c, iid0, 'refund', {reason:'x', method:'其他', methodNote:''}, 'A1').ok, '改日 / 退款要原因，退款要方式（其他要说明）');
+      /* 无故未到 · 定金不退 */
+      var n0 = (c.refunds||[]).length, ns = coreTripDecide(c, iid0, 'noshow', {}, 'A1'); ST.ok(ns.ok && i0.cancelled && i0.noShowForfeit.amount===sh0 && !i0.tripWait && !i0.heldSurg && (c.refunds||[]).length===n0, '无故未到：这一项结束，不转持有、不退');
+      ST.ok((c.logEntries||[]).some(function(e){ return /客人无故未到 · 定金不退/.test(e.action); }), 'Timeline 记「客人无故未到 · 定金不退」');
+      /* 改日 */
+      var rb = coreTripDecide(c, iid1, 'rebook', {reason:'客人生病'}, 'A1'); ST.ok(rb.ok && i1.heldSurg && i1.heldSurg.unpaid && i1.heldSurg.reason==='客人生病' && !i1.tripWait, '改日：转韩国持有，标「已付定金 · 尾款未付」');
+      ST.ok(heldBalanceOf(c, i1)===itemFullPrice(i1)-sh1 && /已付定金 · 尾款/.test(cliHoldKrRows({cases:[c], mode:'IN', name:c.name}).map(function(x){ return x.left; }).join('|')), '尾款未付的金额带着：'+heldBalanceOf(c, i1));
+      ST.ok(!tripWaitItems(c).length && surgUndone(c).length===0, '都处理完：不再挡结案');
+      /* 客人页取消 / 退款 = 实际付过的钱；被勾选未付款时灰掉 */
+      var other = CASE_ITEMS.filter(function(x){ return x.id!==c.id && x.name===c.name; })[0] || ST.newRes('R231-勾选');
+      other.name = c.name; other.recommended = [{name:i1.name, origin:'KR', price:1, heldFrom:{caseId:c.id, caseNo:c.caseNo, iid:iid1, paid:sh1, balance:0}}];
+      ST.ok(heldSurgLockedBy(c, iid1)===other.caseNo && !coreHeldSurgCancel(c, iid1, 'all', {method:'现金'}, 'A1').ok, '已被别的案件勾选、未付款：取消 / 退款被拒绝（'+other.caseNo+'）');
+      ST.ok(cliHoldKrRows({cases:[c], mode:'IN', name:c.name}).some(function(x){ return x.heldIid && x.locked===other.caseNo; }), '客人页的［取消 / 退款］灰掉并写原因');
+      other.recommended = [];
+      var cc = coreHeldSurgCancel(c, iid1, 'all', {method:'现金'}, 'A1'); ST.ok(cc.ok && cc.refund===sh1 && sh1<itemFullPrice(i1), '取消 / 退款 = 实际付过的钱 '+sh1+'（不是项目价格 '+itemFullPrice(i1)+'）');
+      /* 退款（IN 三选一）：退定金份额，记在原案件 */
+      var j = (c.procedureItems||[]).filter(function(i){ return i.origin==='KR' && !krIsMgmtItemC(i) && !i.cancelled && !i.done && !i.heldSurg && !i.tripWait && i!==i0 && i!==i1; })[0] || null;
+      var i2 = {name:'R231 退款项', origin:'KR', price:3000000, batchId:i0.batchId, projectId:'', done:false}; c.procedureItems.push(i2); ensureItemIids(c); i2.tripWait = {at:nowFullDt(), by:'t', why:'没做', rw:null};
+      var sh2 = heldPaidOf(c, i2), nrf = (c.refunds||[]).length, rf = coreTripDecide(c, itemIid(i2), 'refund', {reason:'客人不做了', method:'转账'}, 'A1');
+      ST.ok(rf.ok && i2.cancelled && (c.refunds||[]).length===nrf+1 && c.refunds[nrf].amount===sh2 && c.refunds[nrf].method==='转账' && sh2<3000000, '退款：退定金份额 '+sh2+'，记在原案件，带退款方式');
+      /* 迁移 59：1105-03 自动转持有、其实只付了定金的 → 退回等 IN 三选一，案件重新未结案 */
+      var mg = (window.GMC_MIGRATIONS||[]).filter(function(m){ return m.to===59; })[0]; ST.ok(!!mg, '迁移 59 存在');
+      if(mg){
+        var i3 = {name:'R231 迁移项', origin:'KR', price:2000000, batchId:i0.batchId, projectId:'', done:false, heldSurg:{at:'x', by:'系统', why:'没做', rw:null}}; c.procedureItems.push(i3); ensureItemIids(c);
+        c.krBalancePaid = false; c.krTripEnded = {at:'x'}; c.stage = 'closed'; c.visitClosed = true; var notes = []; mg.fn(c, {note:function(t){ notes.push(t); }});
+        ST.ok(!i3.heldSurg && !!i3.tripWait && notes.length>=1 && c.stage!=='closed', '迁移：退回等 IN 三选一，案件重新变成未结案：'+c.stage);
+        var nl = (c.logEntries||[]).length; mg.fn(c, {note:function(){}}); ST.ok((c.logEntries||[]).length===nl, '再跑一次不重复写 Timeline');
+        var fx = {name:'R231 全款项', origin:'KR', price:2000000, batchId:i0.batchId, done:false, heldSurg:{at:'x', by:'系统', why:'没做', rw:null}}; c.procedureItems.push(fx); c.krBalancePaid = true; mg.fn(c, {note:function(){}}); ST.ok(!!fx.heldSurg && !fx.tripWait, '尾款付清的自动转持有不动');
+      }
+    } finally { window.GMC_LEAVE_SKIP = true; }
+  });
+  ST.def('R231b','CMD-1105-12（A1，stageC 夹具）：客人预约页来访目的三个、旧「皮肤管理」显示成面诊商谈；子案件剩余项目卡勾选框 + 底下一个［本次使用］、［+ 添加本地管理项目］开同一个弹窗',async function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    ST.ok(visitPurposesFor(true).join('|')==='面诊商谈|术后管理|复诊评估' && visitPurposesFor(false).join('|')==='面诊商谈', '预约页来访目的：老客人三个，新客人只有面诊商谈');
+    ST.ok(purposeDisp('皮肤管理')==='面诊商谈', '旧「皮肤管理」显示成面诊商谈');
+    ST.ok(!/mainForBookingPurpose\(cl\.name/.test(String(submitSelfBooking)), '客人自助预约不再挂主案件（独立预约，到店弹服务类型）');
+    await ST.ensureFixtures(['stageC']);
+    var c = CASE_ITEMS.filter(function(x){ return /待到院/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c, '要有 stageC 夹具')) return;
+    var M = {ro:false, src:null, grp:{booked:[], none:[]}, unused:[{h:{itemName:'R231 本地项目'}, b:{bought:2, used:0, date:'2026-01-01'}, left:2}]};
+    var html = inContRestHtml(c, M, 'local');
+    ST.ok(/class="inrest-ck"/.test(html) && /data-name="R231 本地项目"/.test(html), '剩余项目卡的行有勾选框');
+    ST.ok((html.match(/inrest-go/g)||[]).length===1 && /inrest-go[^>]*disabled/.test(html) && /onclick="inRestUse\(/.test(html), '底下一个［本次使用］，没勾时灰');
+    ST.ok(/onclick="inLocalEntry\(\)"/.test(html) || !localAddAllowed(c), '［＋ 添加本地管理项目］打开同一个「添加本地管理」弹窗（inLocalEntry）');
+    ST.ok(!/onclick="inUseOpen\(\)">本次使用/.test(html), '顶部不再有单独的［本次使用］');
   });
   ST.def('R226a','CMD-1105-05（A1 分页）：IN 预约空档来访目的三个（新客人只有面诊商谈）、术后管理 / 复诊评估选主案件直接挂主案件子案件、带着目的的预约到店不弹服务类型 + 本次横幅 + 增加本次服务、客人自己预约的仍弹、案件下拉新写法',async function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;

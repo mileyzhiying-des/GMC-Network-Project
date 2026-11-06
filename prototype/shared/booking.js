@@ -356,7 +356,7 @@ function bkRenderView(){
   var color = {waiting:'#8A7650', arrived:'var(--sage)', cancelled:'var(--muted)', noshow:'#C1454A'}[key];
   var row = function(k, val){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(val)+'</span></div>'; };
   var info = '<div style="margin-bottom:8px;"><span style="font-weight:700;color:'+color+';">● '+bt('view.status.'+key)+'</span></div>'+
-    row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+row('sum.purpose', bt('purpose.'+(c.visitPurpose||'面诊商谈')))+(c.visitNote ? row('sum.note', c.visitNote) : '')+
+    row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+row('sum.purpose', bt('purpose.'+purposeDisp(c.visitPurpose||'面诊商谈')))+(c.visitNote ? row('sum.note', c.visitNote) : '')+
     row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone);
   if(v.stage==='confirmCancel'){
     return bkViewFrame(info+'<div class="bk-info" style="margin-top:12px;font-size:14px;color:var(--navy);"><b>'+bt('view.cancelQ')+'</b><br><span style="font-size:12px;">'+bt('view.cancelT')+'</span></div>'+
@@ -395,7 +395,7 @@ function bkRebook(id){
   var cl = clientByName(c.name);
   BK.entry = 'web'; BK.view = null; BK.mode = 'wizard'; BK.verified = true; BK.otp = null; BK.err = ''; BK.step = 0; BK.dayPick = null; BK.done = null; BK.mismatchOk = true;
   BK.f.phone = cl ? cl.phone : BK.f.phone; bkLoadClient();
-  BK.f.date = ''; BK.f.time = ''; BK.f.phId = null; BK.f.purpose = c.visitPurpose || '面诊商谈'; BK.f.note = c.visitNote || ''; BK.f.c1 = false; BK.f.c2 = false; BK.f.rebookFrom = c.id;
+  BK.f.date = ''; BK.f.time = ''; BK.f.phId = null; BK.f.purpose = purposeDisp(c.visitPurpose || '面诊商谈'); BK.f.note = c.visitNote || ''; BK.f.c1 = false; BK.f.c2 = false; BK.f.rebookFrom = c.id;
   bkRender();
 }
 
@@ -456,7 +456,7 @@ function bkRenderMe(){
   /* 一、目前的预约 */
   var cur = clientCurrentCases(cl), canc = me.cancelled.map(function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; }).filter(Boolean);
   var caseCard = function(c, cancelled){
-    var inner = row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+(bkCasePaidText(c) ? row('me.paidNow', bkCasePaidText(c)) : '')+row('sum.purpose', bt('purpose.'+(c.visitPurpose||'面诊商谈')))+row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone);
+    var inner = row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+(bkCasePaidText(c) ? row('me.paidNow', bkCasePaidText(c)) : '')+row('sum.purpose', bt('purpose.'+purposeDisp(c.visitPurpose||'面诊商谈')))+row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone);
     if(cancelled) return '<div class="bk-info" style="margin-bottom:10px;opacity:.85;"><div style="font-weight:700;color:var(--muted);margin-bottom:4px;">● '+bt('view.status.cancelled')+'</div>'+inner+'<button class="bk-btn" style="margin-top:10px;" onclick="bkRebook(\''+c.id+'\')">'+bt('view.rebook')+'</button></div>';
     var btn = me.confirm===c.id
       ? '<div class="bk-info" style="margin-top:10px;font-size:14px;color:var(--navy);"><b>'+bt('view.cancelQ')+'</b><br><span style="font-size:12px;">'+bt('view.cancelT')+'</span></div><button class="bk-btn danger" onclick="bkMeCancel(\''+c.id+'\')">'+bt('view.cancelYes')+'</button><button class="bk-btn ghost" onclick="BK.me.confirm=null;bkRender(true)">'+bt('view.cancelNo')+'</button>'

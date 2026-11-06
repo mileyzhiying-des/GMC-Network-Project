@@ -2454,6 +2454,7 @@ function settleProjects(batchId){
   if(batchNeedsPassport(c, batch)) passportGate(c, function(){}, {missingOnly:true});
   SETTLE_MODAL_BATCH_ID = batch.id;
   var rows = '';
+  if(!batch.krTotal && !batch.krDeposit && batchHasHeld(c, batch)) rows += '<div style="font-size:13px;color:var(--slate2);">这次只用了韩国持有的施术，直接用原来的项目，不重新算价格，这次不用付钱。</div>';
   if(batch.krTotal){
     rows += '<div><div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:6px;">赴韩项目（收预付金，尾款赴韩后支付）</div>'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--slate2);"><span>赴韩项目小计（施术 + 管理；术后管理含在套餐内，不另收费）</span><span>'+formatCurrency(batch.krTotal,'KRW')+'</span></div>'+
@@ -2467,7 +2468,7 @@ function settleProjects(batchId){
       '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;"><span>应付金额</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div></div>';
   }
   var payLines = [];
-  if(!batch.krDeposit && batch.heldCredit) payLines.push('<div style="display:flex;justify-content:space-between;"><span>赴韩本次应付（已用韩国持有抵扣）</span><span>'+formatCurrency(0,'KRW')+'</span></div>');
+  if(!batch.krDeposit && (batch.heldCredit || batchHasHeld(c, batch))) payLines.push('<div style="display:flex;justify-content:space-between;"><span>赴韩本次应付（用韩国持有的施术，不另收钱）</span><span>'+formatCurrency(0,'KRW')+'</span></div>');
   if(batch.krDeposit) payLines.push('<div style="display:flex;justify-content:space-between;"><span>赴韩本次应付</span><span>'+formatCurrency(batch.krDeposit,'KRW')+'</span></div>');
   if(batch.inTotal) payLines.push('<div style="display:flex;justify-content:space-between;"><span>本地本次应付'+(batch.compCredit ? '（已扣置换）' : '')+'</span><span>'+formatCurrency(Math.max(0, batch.inTotal-(batch.compCredit||0)),'IDR')+'</span></div>');
   rows += '<div style="border-top:1px solid var(--border);padding-top:14px;font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:6px;"><span style="font-size:13px;color:var(--muted);font-weight:400;">本次合计应付（两种币种分开支付，不合并）</span>'+payLines.join('')+'</div>';

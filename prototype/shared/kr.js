@@ -56,7 +56,7 @@ function krListStage(c){
   } else if(st==='travel'){
     name = '赴韩施术'; var sch = scheduleState(c);
     busy = !c.krTripEnded && (rebookWaitItems(c).length>0 || pendBook || ['Pending', 'Changing'].indexOf(sch)>-1 || !c.krProcedureDone); /* CMD-1105-03：行程结束 = KR 这边没事了 */
-    var hsN = heldSurgItems(c).length; grayProc = hsN ? '行程结束 · 施术未做 '+hsN+' 项（转持有）' : (c.krTripEnded ? '施术已完成 · 已离境' : '施术已完成');
+    var hsN = heldSurgItems(c).length, twN = tripWaitItems(c).length; grayProc = twN ? '行程结束 · 施术只付了定金，等 IN 决定 '+twN+' 项'+(hsN ? '；另 '+hsN+' 项转持有' : '') : hsN ? '行程结束 · 施术未做 '+hsN+' 项（转持有）' : (c.krTripEnded ? '施术已完成 · 已离境' : '施术已完成');
   } else if(st==='krmgmt'){
     name = '在韩管理'; busy = !c.krTripEnded && (hold>0 || pendBook || !!(c.krVisit && !c.krVisit.done)); grayProc = '在韩管理已结束'+(hold ? ' · 在韩持有 '+hold+' 项' : '');
   } else if(st==='postcare'){

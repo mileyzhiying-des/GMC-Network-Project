@@ -437,6 +437,31 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
+    {to:59, fn:function(c, ctx){ /* CMD-1105-12：① 1105-03 自动转了「韩国持有」、但其实只付了定金的施术 → 退回「等 IN 三选一」（tripWait），案件重新变成未结案；② 1105-04 按价差生成的韩国持有抵扣：未付款的结算单按新规则重算（不抵算），已付款的只记数量不动 */
+      var no = c.caseNo||c.id, back = [];
+      (c.procedureItems||[]).forEach(function(it){
+        if(it.heldSurg && !it.heldSurg.reason && !it.done && !it.cancelled && !it.swapped && !itemPaidInFull(c, it)){ it.tripWait = {at:nowFullDt(), by:'系统', why:it.heldSurg.why||'没做', rw:it.heldSurg.rw||null, migrated:true}; delete it.heldSurg; back.push(it); }
+      });
+      if(back.length){
+        logCaseEvent(c, '系统', '修正旧数据：行程结束时只付了定金的施术不应自动转韩国持有，退回等 IN 室长三选一（无故未到 · 定金不退 / 改日 / 退款）：'+back.map(function(it){ return buyName(it.name); }).join('、')+'；已付定金 '+back.map(function(it){ return buyName(it.name)+' '+formatCurrency(heldPaidOf(c, it),'KRW'); }).join('、'), '赴韩施术');
+        window.GMC_TRIPWAIT_CONV = (window.GMC_TRIPWAIT_CONV||0) + back.length; (window.GMC_TRIPWAIT_CASES = window.GMC_TRIPWAIT_CASES||[]).push(no+'（'+back.map(function(it){ return buyName(it.name); }).join('、')+'）');
+        ctx.note('案件 '+no+'：'+back.length+' 项只付了定金的施术退回「等 IN 三选一」');
+        try{ if(c.stage==='closed' || c.stage==='reportonly'){ c.krTripEnded = c.krTripEnded||{at:nowFullDt(), by:'系统'}; reopenMain(c, '有施术只付了定金、等 IN 室长决定'); } else updateCaseStage(c); }catch(e){ console.error(e); }
+      }
+      var hf = (c.procedureItems||[]).filter(function(it){ return it.heldFrom; });
+      if(hf.length){
+        hf.forEach(function(it){
+          var f = it.heldFrom, src = CASE_ITEMS.filter(function(x){ return x.id===f.caseId; })[0], o = src && (src.procedureItems||[]).filter(function(x){ return x.heldTransferred && x.heldTransferred.toId===c.id && itemIid(x)===f.iid; })[0] || (src && (src.procedureItems||[]).filter(function(x){ return itemIid(x)===f.iid; })[0]);
+          if(f.balance==null){ f.balance = o ? Math.max(0, (o.price||0) - (f.paid||0)) : 0; if(o && o.heldTransferred && o.heldTransferred.balance==null) o.heldTransferred.balance = f.balance; }
+        });
+        (c.settlementBatches||[]).forEach(function(b){
+          if(!(b.heldCredit>0) && !batchHasHeld(c, b)) return;
+          if(b.status==='unpaid'){ var bd = computeBatchBreakdown((c.procedureItems||[]).filter(function(it){ return it.batchId===b.id && it.origin==='KR' && !it.cancelled && !it.swapped; })); b.krTotal = bd.krTotal; b.krDeposit = bd.krDeposit; b.krBalance = bd.krBalance; b.heldCredit = 0; (window.GMC_HELDCREDIT_RECALC = window.GMC_HELDCREDIT_RECALC||[]).push(no+' '+b.id); ctx.note('案件 '+no+' 结算单 '+b.id+'：韩国持有按价差抵扣的旧结算单，按新规则重算（不抵算）'); }
+          else if(b.heldCredit>0){ (window.GMC_HELDCREDIT_PAID = window.GMC_HELDCREDIT_PAID||[]).push(no+' '+b.id+'（抵扣 '+b.heldCredit+'）'); ctx.note('案件 '+no+' 结算单 '+b.id+'：已付款、带韩国持有价差抵扣 '+b.heldCredit+'，没有改动（需要人工看）'); }
+        });
+      }
+      try{ (CLIENTS||[]).forEach(function(cl){ if(cl.name!==c.name) return; (cl.compCredits||[]).forEach(function(k){ if(/韩国持有的施术转入新案件/.test(k.reason||'') && !k._n59){ k._n59 = 1; (window.GMC_HELDCOMP = window.GMC_HELDCOMP||[]).push(cl.name+' '+(k.amount||'')); } }); }); }catch(e){}
+    }},
     {to:58, fn:function(c, ctx){ /* CMD-1105-03：行程已结束、还挂着「待重新预约」或没做的赴韩施术 → 转韩国持有（该结案的由主案件自动判断结案）；只写一次 Timeline */
       if(typeof oldLeaveToRebookWait==='function'){ var n57 = oldLeaveToRebookWait(c); if(n57){ window.GMC_REBOOK_CONV = (window.GMC_REBOOK_CONV||0) + n57; ctx.note('案件 '+(c.caseNo||c.id)+'：'+n57+' 个离院后回到「未预约」的施术项目转成「待重新预约」'); } } /* 迁移按列表顺序跑（58 在 57 前面）：先把 57 的转换补上，幂等 */
       if(!c.krTripEnded) return; var n = coreHoldSurgOnTripEnd(c, '系统'); if(n){ window.GMC_HELD_CONV = (window.GMC_HELD_CONV||0) + n; (window.GMC_HELD_CASES = window.GMC_HELD_CASES||[]).push(c.caseNo||c.id); ctx.note('案件 '+(c.caseNo||c.id)+'：行程已结束，'+n+' 项没做的施术转成韩国持有'); }

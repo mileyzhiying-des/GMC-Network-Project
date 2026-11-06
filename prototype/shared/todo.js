@@ -17,10 +17,10 @@ function todoIsKr(){ try{ return isKrAccount(); }catch(e){ return false; } }
 /* ---------------- 待办条目 ----------------
    it = {kind, text, name, no, due('YYYY-MM-DD' 或 'YYYY-MM-DD HH:mm'，页面时区), over, pin, mine, go()} */
 /* CMD-1014-02：4 张卡 = 待办 4 类。每条待办恰好属于一类（待办总数 = 4 类加总，卡片数字 = 点下去筛出的条数） */
-var TODO_CAT = {heldsurg:'todo', dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', reconfirm:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
+var TODO_CAT = {heldsurg:'todo', tripdecide:'todo', dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', reconfirm:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'dconsult', recover:'drecover', recoverwait:'drecover', dsurg:'dsurg', dirop:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
 /* CMD-1015-05 九：第一栏「阶段｜待办事项」——阶段读案件的阶段（同案件列表），没有案件的按类型 */
-var TODO_STAGE_BY_KIND = {heldsurg:'赴韩施术', tripend:'术后管理', tripover:'术后管理', earlyask:'术后管理', rebookwait:'赴韩施术', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
+var TODO_STAGE_BY_KIND = {heldsurg:'赴韩施术', tripdecide:'赴韩施术', tripend:'术后管理', tripover:'术后管理', earlyask:'术后管理', rebookwait:'赴韩施术', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
 function todoStageOf(kind, c){ if(c && isRevEval(c) && ['eta','waitdir','send','recover','recoverwait'].indexOf(kind)>-1) return '待评估'; /* CMD-1022-07：复诊评估的待办标「待评估」 */ if(TODO_STAGE_BY_KIND[kind]) return TODO_STAGE_BY_KIND[kind]; try{ if(c) return caseStageInfo(c).stage || ''; }catch(e){} return ''; }
 /* 红点：新进来的待办亮红点，打开那个案件后灭（每个账号各自记；第一次打开先把现有的都当已看过） */
 function todoSeenKey(){ var id = ''; try{ id = currentAccountId() || ''; }catch(e){} return 'gmc_cfg_todoseen_'+id; }
@@ -65,6 +65,8 @@ function inTodoItems(){
       var itP = todoMk('plan', '面诊资料已到：联络客人选项目（客人离店前方案还没出）', c, '', false, todoInGo(c, 'consult'));
       itP.mine = todoInMine(c); itP.ack = true; itP.ackKey = 'plandecl'; itP.ackLabel = '客人不做'; out.push(itP);
     }
+    /* CMD-1105-12：行程结束，只付了定金没做的施术——IN 室长逐项三选一（无故未到 · 定金不退 / 改日 / 退款）；处理完之前案件不结案，没有［已处理］按钮 */
+    if(!c.mainId && c.krTripEnded){ var twI = tripWaitItems(c); if(twI.length){ var twT = todoMk('tripdecide', '客人行程已结束，这几项施术只付了定金、没做，请逐项决定（无故未到 · 定金不退 / 改日 / 退款）：'+twI.map(function(i){ return buyName(i.name); }).join('、'), c, '', false, function(){ openTripDecide(c.id); }); twT.mine = todoInMine(c); out.push(twT); } }
     /* CMD-1105-03：客人行程已结束，还有没做的施术（已转韩国持有）——只提醒、不挡结案；点开去客人页；［标记已联系］关掉（客人下次还要来 = 不用处理；不做了 = 客人页取消 / 退款） */
     if(!c.mainId && c.krTripEnded && !(c.todoAcks||{})['heldsurg']){ var hsI = heldSurgItems(c); if(hsI.length){ var hsT = todoMk('heldsurg', '客人行程已结束，还有没做的施术（已转韩国持有）：'+hsI.map(function(i){ return buyName(i.name); }).join('、'), c, '', false, function(){ openClientDetail(c.name); }); hsT.mine = todoInMine(c); hsT.ack = true; hsT.ackKey = 'heldsurg'; hsT.ackLabel = '标记已联系'; out.push(hsT); } }
     if(c.subState==='cancelled' || c.visitClosed || isEnded(c)) return;

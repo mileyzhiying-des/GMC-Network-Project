@@ -486,7 +486,7 @@ function settlementBigCardHtml(c, items, removable){
     var bd = computeBatchBreakdown(krItems), krTotal = bd.krTotal, krDeposit = bd.krDeposit;
     krCard = '<div style="border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:700;color:var(--terracotta);margin-bottom:8px;">赴韩项目</div>'+
-      krItems.map(function(it){ return settlementItemRow(c, it, removable)+(it.heldFrom ? '<div style="font-size:12px;color:#8F6F0C;margin:-2px 0 4px;">已付 · 韩国持有（来自 '+aEscC(it.heldFrom.caseNo||'')+'，已付 '+formatCurrency(it.heldFrom.paid||0,'KRW')+'）</div>' : '')+itemArrangeHtml(it, false)+pcLinesHtml(c, it); }).join('')+
+      krItems.map(function(it){ return settlementItemRow(c, it, removable)+(it.heldFrom ? '<div style="font-size:12px;color:#8F6F0C;margin:-2px 0 4px;">韩国持有（来自 '+aEscC(it.heldFrom.caseNo||'')+'），直接用这个项目，这次不另收钱'+(it.heldFrom.balance>0 ? '；原来的尾款 '+formatCurrency(it.heldFrom.balance,'KRW')+' 还没付，施术那天由 KR 照原金额收' : '')+'</div>' : '')+itemArrangeHtml(it, false)+pcLinesHtml(c, it); }).join('')+
       '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;"><span>合计</span><span style="font-weight:700;">'+formatCurrency(krTotal,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--terracotta);"><span>定金（诊所收；'+Math.round(KR_DEPOSIT_RATE*100)+'% × 全部赴韩项目（施术 + 管理），术后管理含在套餐内，比例待业务确认）</span><span>'+formatCurrency(krDeposit,'KRW')+'</span></div>'+
       '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--slate2);"><span>尾款（赴韩后由医院收；赴韩项目的其余部分）</span><span>'+formatCurrency(bd.krBalance,'KRW')+'</span></div>'+(bd.heldCredit ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:#8F6F0C;"><span>韩国持有已付抵扣（来自原案件，不用再付）</span><span>−'+formatCurrency(bd.heldCredit,'KRW')+'</span></div>' : '')+(bd.krProvisional ? '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);"><span>可弹性术后管理（暂定，不算进定金，付尾款时确定）</span><span>'+formatCurrency(bd.krProvisional,'KRW')+'</span></div>' : '')+
@@ -545,20 +545,21 @@ function pcDayText(x){ var d = pcDays(x); return d.length ? '第'+d.join('、')+
 function pcLabel(x){ return x.mgmt || x.name; }
 function pcSplit(x){ var inn = (x.place==='either' && x.innName) ? Math.min(x.times, Math.max(0, x.inTimes||0)) : 0; return {kr:x.times-inn, inn:inn}; }
 function itemKrParts(it){ return {base:it.price||0, must:0, elastic:0}; }
-function itemKrAmount(it){ return it.price||0; } /* 这个赴韩项目在韩国要付的合计 = 施术项目价格 */
+function itemKrAmount(it){ if(it && it.heldFrom) return it.heldFrom.balance||0; return it.price||0; } /* CMD-1105-12：用韩国持有的施术 = 直接用这个项目，不重新算价格；这次只有「原来没付的尾款」（heldFrom.balance，0 = 已付清）要收，施术那天 KR 照原金额收 */
+function itemFullPrice(it){ return (it && it.price) || 0; } /* 这个赴韩项目在韩国要付的合计 = 施术项目价格 */
 function computeBatchBreakdown(items){
   var krItems = [], inItems = [], krTotal = 0, inTotal = 0, krFixed = 0, krProvisional = 0;
   items.forEach(function(it){
-    if(it.origin==='KR'){ krItems.push(it); var pp = itemKrParts(it); krTotal += pp.base + pp.must + pp.elastic; krFixed += pp.base + pp.must; krProvisional += pp.elastic; }
+    if(it.origin==='KR' && it.heldFrom){ krItems.push(it); krTotal += itemKrAmount(it); } /* CMD-1105-12：韩国持有的施术不算这次的钱，不计入定金；只带过来原来没付的尾款 */
+    else if(it.origin==='KR'){ krItems.push(it); var pp = itemKrParts(it); krTotal += pp.base + pp.must + pp.elastic; krFixed += pp.base + pp.must; krProvisional += pp.elastic; }
     else {
       inItems.push(it);
       inTotal += inLineTotal(it); /* 成交单价（活动价 / 套餐价 / 原价）× 个数 × 实付比例；서비스 = 0 */
     }
   });
   var krDeposit = Math.round(krFixed * KR_DEPOSIT_RATE);
-  /* CMD-1105-04：用韩国持有的施术抵钱（it.heldFrom.paid = 原案件已付）：先抵定金，剩下的抵尾款；只收差额 */
-  var heldCredit = 0; krItems.forEach(function(it){ if(it.heldFrom) heldCredit += Math.min(it.heldFrom.paid||0, itemKrAmount(it)); });
-  var heldDep = Math.min(heldCredit, krDeposit); krDeposit -= heldDep;
+  /* CMD-1105-12：取消 CMD-1105-04 的价差抵算（heldCredit 不再产生，只有旧结算单还带这个字段） */
+  var heldCredit = 0;
   return {heldCredit:heldCredit, krItems:krItems, krTotal:krTotal, krDeposit:krDeposit, krBalance:krTotal-krDeposit-heldCredit, krFixed:krFixed, krProvisional:krProvisional, inItems:inItems, inTotal:inTotal};
 }
  /* 会被 nearestOpenMonth()/修改日期时的原定月份实时覆盖，这里只是初值 */
