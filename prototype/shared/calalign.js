@@ -580,7 +580,7 @@ function staySave(){
   var ye = stayDateErr('入境日', d.inD) || stayDateErr('离境日', d.outD); if(ye) return bad(ye);
   /* CMD-1106-07：存行程时，首选 / 备选 / KR 确认的施术日期不能跑到范围外（暂定的行程只是预估，不挡） */
   var tmp = Object.assign({}, c, {stay:{in:d.inD, out:d.outD, inTime:d.ex.inTime, outTime:d.ex.outTime}, krSchedule:Object.assign({}, c.krSchedule||{}, x.o.trip ? {tripState:'booked'} : {}), tripConfirm:x.o.trip ? {} : c.tripConfirm});
-  var tm = tripMismatchList(tmp).filter(function(z){ return !z.soft; });
+  var tm = tripMismatchList(tmp).filter(function(z){ return !z.soft && z.kind!=='short'; }); /* CMD-1106-10：只有早于到达（含到达当天时间）才存不了；天数不够可以存，保存后在赴韩日程卡显示黄字 */
   if(tm.length){ e.innerHTML = tm.map(function(z){ var wrongIn = d.inD && z.date < d.inD; return aEscC(z.label+' '+stayMD(z.date)+(wrongIn ? ' 早于到达日 '+stayMD(d.inD) : '')+'：'+z.msg); }).join('<br>')+'<br>要先改施术日期，才能存这个行程。 <a href="#" class="info-link" onclick="stayGoEditDate();return false;">去修改施术日期</a>'; e.style.display = 'block'; return; }
   var finish = function(){ staySaveDo(x, c, d, methods, other, bad); };
   if(d.outD && stayConflictInfo(c, d.outD, (d.ex||{}).outTime).length){ inStayResGate(c, d, finish); return; } /* CMD-1027-14：离开日期之后还有韩国预约 → 先弹处理窗（和 KR 的行程修正同一套规则） */

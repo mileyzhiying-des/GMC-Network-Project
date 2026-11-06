@@ -10105,4 +10105,48 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok((c2.logEntries||[]).some(function(l){ return /施术时间预计从 .* 改成 4 小时/.test(l.action||''); }), 'Timeline 记「施术时间预计从 X 改成 Y」');
     } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
+
+  /* CMD-1106-10：天数不够不挡、只黄字（IN 日历 / 存行程 / 旧数据）；只有早于到达才挡；预约术后管理时排不进的走离境冲突处理 */
+  ST.def('R240a','CMD-1106-10（A1 分页，stageC 夹具）：IN 日历天数不够不灰掉 + 黄字、早于到达才灰；存行程天数不够可以存、早于到达存不了；旧数据天数不够黄字、早于到达红字',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), oa = window.alert, gc0 = window.getCurrentCase; window.alert = function(){}; window.getCurrentCase = function(){ return c; };
+    try{
+      var days = tripStayDays(c), base = ymdAdd(todayStr(), 40), out = ymdAdd(base, days+3); ST.ok(days>=2, '推荐在韩天数：'+days);
+      c.stay = {in:base, inTime:'11:20', out:out, outTime:'12:30'}; c.krSchedule = c.krSchedule || {}; c.krSchedule.tripState = 'booked'; delete c.tripConfirm; c.krSchedule.status = null; c.krSchedule.primary = ''; c.krSchedule.backup = ''; c.krSchedule.confirmedDate = ''; c.krSchedule.confirmedTime = ''; c.hasArrived = false;
+      var early = ymdAdd(base, -1), shortD = ymdAdd(out, -1), okD = ymdAdd(base, 1);
+      ST.ok(tripDateIssue(c, shortD) && tripDateIssue(c, shortD).kind==='short', '天数不够的日子：kind = short');
+      ST.ok(tripDateIssue(c, early).kind==='early', '早于到达：kind = early');
+      var ks = ensureKrScheduleDraft(c); ks.primary = ''; ks.backup = '';
+      pickKrDate('primary','backup', +shortD.slice(0,4), +shortD.slice(5,7)-1, +shortD.slice(8)); ST.ok(ks.primary===shortD || caseOpenDates(c).indexOf(shortD)<0, '天数不够的日子可以选（开放日期之外才选不进）');
+      pickKrDate('primary','backup', +early.slice(0,4), +early.slice(5,7)-1, +early.slice(8)); ST.ok(ks.primary!==early && ks.backup!==early, '早于到达的日子选不进');
+      ks.primary = shortD; KR_SCHED_VIEW_MONTH = new Date(+shortD.slice(0,4), +shortD.slice(5,7)-1, 1); var html = krDateCalendarGridHtml('primary','backup', shortD, ''); ST.ok(/在韩天数不够/.test(html) || caseOpenDates(c).indexOf(shortD)<0, '日历格子黄字「在韩天数不够」'); ST.ok(new RegExp('首选 '+stayMD(shortD)+'：做完需要在韩').test(html) , '选了之后下面显示黄字');
+      /* 存行程：天数不够可以存 */
+      c.krSchedule.status = 'pending'; c.krSchedule.primary = shortD; c.krSchedule.backup = '';
+      openStayModal(c.id, {trip:false}); var set = function(id, v){ var el = document.getElementById(id); if(el) el.value = v; };
+      set('stay-in', base); set('stay-out', out); set('stay-int', '11:20'); set('stay-outt', '12:30'); staySave();
+      var er = document.getElementById('stay-err'); ST.ok(!(er && er.style.display==='block'), '天数不够：存行程不被拦'); var ov0 = document.getElementById('stay-overlay'); if(ov0) ov0.classList.remove('open'); STAY_CTX = null;
+      /* 早于到达：存不了 */
+      c.krSchedule.primary = early; openStayModal(c.id, {trip:false}); set('stay-in', base); set('stay-out', out); set('stay-int', '11:20'); set('stay-outt', '12:30'); staySave();
+      er = document.getElementById('stay-err'); ST.ok(er && er.style.display==='block' && /早于到达日/.test(er.textContent), '早于到达：存不了 + 红字'); ov0 = document.getElementById('stay-overlay'); if(ov0) ov0.classList.remove('open'); STAY_CTX = null;
+      /* 旧数据提醒：天数不够黄字、早于到达红字 */
+      c.krSchedule.primary = shortD; var h1 = tripMismatchHtml(c); ST.ok(/排不进行程/.test(h1) && /#8F6F0C/.test(h1) && !/B3261E/.test(h1), '天数不够：黄字「拆线等术后管理排不进行程，预约时请决定提前或回印尼」');
+      c.krSchedule.primary = early; var h2 = tripMismatchHtml(c); ST.ok(/请修改/.test(h2) && /B3261E/.test(h2), '早于到达：红字「施术日期和行程不合，请修改」');
+    } finally { window.alert = oa; window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); }
+  });
+  ST.def('R240b','CMD-1106-10（KM1 分页，stageC 夹具）：KR 确认天数不够的日子后，预约术后管理时排不进离开日的项目走离境冲突处理（必须在韩国的只能提前做 / 保留，韩国或印尼可回印尼）',function(){
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, oa = window.alert; window.alert = function(){};
+    try{
+      var base = ymdAdd(todayStr(), 40);
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(cc); var days = tripStayDays(cc);
+        cc.stay = {in:base, inTime:'09:00', out:ymdAdd(base, 3), outTime:'12:30', by:'A1'}; cc.krSchedule.tripState = 'booked'; cc.krSchedule.status = 'confirmed'; cc.krSchedule.confirmedDate = ymdAdd(base, 1); cc.krSchedule.confirmedTime = '10:00'; cc.krBalancePaid = true; });
+      krShowCase(r.clinicId, r.id); krSetCaseTab('postcare'); krCbOpen({all:true, tab:'care'});
+      var rows = (KR_CB && KR_CB.rows) || []; ST.ok(rows.length>0, '预约弹窗有术后管理项目：'+rows.length);
+      var gone = rows.filter(function(x){ return krCbGone(x); }); ST.ok(gone.length>0, '排不进离开日的项目被识别（客人已离境，不能约在离开之后）：'+gone.length);
+      var ov = document.getElementById('kr-cb-overlay'); var txt = ov ? ov.textContent : '';
+      ST.ok(/离开|离境/.test(txt), '弹窗里写客人几号离开'); ST.ok(/保留/.test(txt), '有［保留］选项（之后再决定）');
+      ST.ok(gone.every(function(x){ return x.place==='IN' || /请改|不能约|离境/.test(txt); }), '「韩国或印尼」的自动转回印尼，必须在韩国的只能改到离开前或保留');
+    } finally { window.alert = oa; try{ krCbClose && krCbClose(); }catch(e){} if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
 })();
