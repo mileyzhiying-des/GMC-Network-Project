@@ -10080,7 +10080,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var txt = function(){ return document.getElementById('krcase-body').textContent; };
       ST.ok(/行程状态：已定（\d\d-\d\d 11:20 ～ \d\d-\d\d 12:30）/.test(txt()), '行程状态写到达 ～ 离开');
       ST.ok(/施术时间预计约/.test(txt()) && /估算时间 /.test(txt()) && /首选施术日期：/.test(txt()) && /备选施术日期：/.test(txt()), '预计时长 + 首选 / 备选单选');
-      ST.ok(/到院地址：/.test(txt()) && /修改/.test(txt()) && !document.querySelector('#krcase-body input[placeholder="地址"]'), '到院地址一行 + ［修改］，不是输入框');
+      ST.ok(!/到院地址：/.test(txt()) && !document.querySelector('#krcase-body input[placeholder="地址"]'), '卡上不显示到院地址（CMD-1106-11 补；改前：一行 + ［修改］）');
       ST.ok(!document.querySelector('#krcase-body input[placeholder="无法安排的原因"]'), '页面上的「无法安排的原因」输入框拿掉');
       var est = krEstDur(krFindCase(r.clinicId, r.id).c); ST.ok(est%10===0 && KR_SCH.dur===est, '带入估算（10 分钟取整）：'+krHM(est));
       /* 改时长 */
@@ -10168,6 +10168,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var opts = [].slice.call(sel.options); ST.ok(!opts.some(function(o){ return /✕|需约|\d\.\d 小时/.test(o.text); }), '选项里没有「✕需约…」「5.3 小时」');
       ST.ok(/^\d\d:\d\d$/.test(sel.options[sel.selectedIndex].text), '框里只显示时间：'+sel.options[sel.selectedIndex].text);
       ST.ok(!/\d\.\d 小时/.test(txt()), '页面上没有小数小时');
+      ST.ok(!/到院地址/.test(txt()), '卡上没有到院地址');
       /* 早于到达那天 + 到达当天早于 11:20 */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.primary = base; cc.krSchedule.backup = ''; });
       KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail(); krSchSet('time', '10:00');
@@ -10182,6 +10183,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(d60===false && o2.disabled===true && /撞到不可预约/.test(o2.text || '') || (o2.disabled && true), '预计时长改长后 14:00 撞到 15:00 的不可预约而灰掉（1 小时不撞）：'+d60+'/'+o2.disabled);
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], h = HOSPITAL_DATA[caseKrHospital(cc)]; h.directorSchedule[cc.director] = (h.directorSchedule[cc.director]||[]).filter(function(b){ return b.id!=='t11x'; }); });
       ST.ok(krHoursText(318)==='5 小时 18 分钟' && krHM(320)==='5 小时 20 分钟', 'krHoursText 不再有小数写法');
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.status = 'pending'; cc.krSchedule.primary = ymdAdd(todayStr(), 41); cc.krSchedule.address = ''; cc.stay = null; });
+      krMut(function(cx){ return coreScheduleConfirm(cx, cx.krSchedule.primary, '14:00', krDefaultAddress(), 'KM1 室长', 240); }); var cA = krFindCase(r.clinicId, r.id).c; ST.ok(cA.krSchedule.status==='confirmed' && !!cA.krSchedule.address && cA.krSchedule.address===krDefaultAddress(), '确认时自动用医院设定里的地址存进去：'+cA.krSchedule.address);
     } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
 })();

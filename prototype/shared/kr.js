@@ -1340,9 +1340,9 @@ function krSchForm(c, dates, labels, confirmFn, rejectFn, confirmLabel){
   var noteRow = (red ? '<div style="font-size:12px;margin:2px 0 4px;color:#B3261E;font-weight:700;">'+krEsc(red)+'，不能确认</div>' : '')+(yellow ? '<div style="font-size:12px;margin:2px 0 4px;color:#8F6F0C;">'+krEsc(yellow)+'</div>' : '');
   var selSty = '';
   var inp = 'padding:7px 10px;border:1px solid var(--line);border-radius:8px;';
-  var addr = KR_SCH.addrEdit ? '<input value="'+krEsc(KR_SCH.address)+'" oninput="KR_SCH.address=this.value" onchange="krSchSet(\'addrEdit\',false)" placeholder="地址" style="'+inp+'width:min(520px,100%);margin-top:4px;">' : '<span>到院地址：'+krEsc(KR_SCH.address||'—')+'</span> <a href="#" class="info-link" onclick="krSchSet(\'addrEdit\',true);return false;">修改</a>';
+  /* CMD-1106-11 补：卡上不显示到院地址；确认时自动用医院设定里的地址（KR_SCH.address，已确认的沿用原地址）存进去，IN 赴韩日程 / 打印 / 给客人的通知照旧显示 */
   return '<div style="font-size:13px;margin-bottom:6px;">'+krTripLine(c)+'</div>'+durRow+opts+krDayFullNote(c, KR_SCH.pick)+
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;"><span style="font-size:13px;">施术日期 <b>'+krEsc(KR_SCH.pick ? String(KR_SCH.pick).slice(5).replace('-', '/') : '—')+'</b></span><select class="kr-time-sel" onchange="krSchSet(\'time\',this.value)">'+krTimeOptionsFor(KR_SCH.time, c, KR_SCH.pick)+'</select><span style="font-size:12px;color:var(--slate2);">'+addr+'</span></div>'+noteRow+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;"><span style="font-size:13px;">施术日期 <b>'+krEsc(KR_SCH.pick ? String(KR_SCH.pick).slice(5).replace('-', '/') : '—')+'</b></span><select class="kr-time-sel" onchange="krSchSet(\'time\',this.value)">'+krTimeOptionsFor(KR_SCH.time, c, KR_SCH.pick)+'</select></div>'+noteRow+
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;"><button class="btn-primary" '+(red ? 'disabled style="opacity:.45;cursor:not-allowed;" title="'+krEsc(red)+'"' : '')+' onclick="'+confirmFn+'()">'+confirmLabel+'</button><button class="btn-outline" onclick="krSchRejectOpen(\''+rejectFn.replace(/'/g, "\\'")+'\')">无法安排</button></div>';
 }
 function krSchRejectOpen(fn){
