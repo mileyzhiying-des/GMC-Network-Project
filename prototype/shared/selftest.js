@@ -10088,6 +10088,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 红字：早于到达日（用递交了一个早于到达的日期） */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.primary = ymdAdd(base, -1); });
       KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
+      krSchSet('time', '14:00'); /* CMD-1106-12：没选时间前不显示红字，先选一个时间 */
       ST.ok(/才到达/.test(txt()) && /不能确认/.test(txt()) && /disabled/.test(Array.prototype.map.call(document.querySelectorAll('#krcase-body button.btn-primary'), function(b){ return b.outerHTML; }).join('')), '早于到达：红字 + ［确认］灰掉');
       /* 黄字：天数不够 */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.stay.out = ymdAdd(base, 4); cc.krSchedule.primary = d1; cc.krSchedule.backup = ''; });
@@ -10185,6 +10186,40 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(krHoursText(318)==='5 小时 18 分钟' && krHM(320)==='5 小时 20 分钟', 'krHoursText 不再有小数写法');
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.status = 'pending'; cc.krSchedule.primary = ymdAdd(todayStr(), 41); cc.krSchedule.address = ''; cc.stay = null; });
       krMut(function(cx){ return coreScheduleConfirm(cx, cx.krSchedule.primary, '14:00', krDefaultAddress(), 'KM1 室长', 240); }); var cA = krFindCase(r.clinicId, r.id).c; ST.ok(cA.krSchedule.status==='confirmed' && !!cA.krSchedule.address && cA.krSchedule.address===krDefaultAddress(), '确认时自动用医院设定里的地址存进去：'+cA.krSchedule.address);
+    } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+
+  /* CMD-1106-12：KR 施术日期卡时间不预选 + 黄字只写选中那天 */
+  ST.def('R242a','CMD-1106-12（KM1 分页，stageC 夹具）：时间显示「选择时间」、确认灰、没有红字；黄字只在选中的那天（院长行下面）；切换首选 / 备选时间清空；选 10:00 红字确认灰、选 14:00 可确认；下拉框下面没有黄字；已确认改时间带入原时间',function(){
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, oa = window.alert; window.alert = function(){};
+    try{
+      var cc0 = krFindCase(r.clinicId, r.id).c, hid0 = krHospitalIdOfMe(), base = ymdAdd(todayStr(), 40), days = tripStayDays(cc0);
+      for(var k0 = 40; k0 < 100; k0++){ var b0 = ymdAdd(todayStr(), k0), free = true; [0,1].forEach(function(n){ var dd = ymdAdd(b0, n); if(krSurgerySlotError(hid0, cc0.director, dd, '14:00', 300, r.clinicId+':'+r.id, {allowOffHours:true})) free = false; }); if(free){ base = b0; break; } }
+      var out = ymdAdd(base, days+3), p = ymdAdd(out, -1), q = ymdAdd(out, -2);
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(cc); cc.stay = {in:base, inTime:'11:20', out:out, outTime:'12:30', by:'A1'}; cc.krSchedule = {status:'pending', primary:p, backup:q, confirmedDate:null, tripState:'booked', tripSubmitted:true}; cc.hasArrived = false; });
+      krShowCase(r.clinicId, r.id); krSetCaseTab('items'); KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
+      var body = function(){ return document.getElementById('krcase-body'); }, txt = function(){ return body().textContent; }, confirmBtn = function(){ return [].slice.call(body().querySelectorAll('button.btn-primary')).filter(function(b){ return b.textContent.trim()==='确认'; })[0]; };
+      var sel = function(){ return body().querySelector('select.kr-time-sel'); };
+      ST.ok(!KR_SCH.time && sel().options[sel().selectedIndex].text==='选择时间' && sel().classList.contains('is-empty'), '时间显示灰字「选择时间」'); ST.ok(confirmBtn().disabled, '没选时间：确认灰'); ST.ok(!/不能确认/.test(txt()), '没选时间：没有红字');
+      var yellows = function(){ return [].slice.call(body().querySelectorAll('div')).filter(function(d){ return /^⚠️ .+建议预留/.test(d.textContent.trim()) && d.children.length===0; }); };
+      var yl = yellows(); ST.ok(yl.length===1 && yl[0].textContent.indexOf(stayMD(p))>-1 && yl[0].textContent.indexOf('首选')<0, '选首选：只有一行黄字，写首选那天（没有「首选」字样）');
+      var labels = [].slice.call(body().querySelectorAll('label')).filter(function(l){ return /施术日期：/.test(l.textContent); }); var firstLabelBlockText = function(i){ var out = '', n = labels[i].nextElementSibling; while(n && n.tagName!=='LABEL' && n.nextElementSibling !== null && !/施术日期 <b>/.test(n.innerHTML)){ out += n.textContent; n = n.nextElementSibling; if(n && n.tagName==='LABEL') break; } return out; };
+      ST.ok(labels[0].nextElementSibling.nextElementSibling && /建议预留/.test(labels[0].nextElementSibling.nextElementSibling.textContent), '黄字在首选的院长行下面');
+      krSchSet('time', '14:00'); ST.ok(KR_SCH.time==='14:00'); krSchSet('pick', q);
+      ST.ok(KR_SCH.time==='' && sel().options[sel().selectedIndex].text==='选择时间', '切到备选：时间清空回「选择时间」');
+      yl = yellows(); ST.ok(yl.length===1 && yl[0].textContent.indexOf(stayMD(q))>-1, '黄字移到备选下面、只写备选那天'); labels = [].slice.call(body().querySelectorAll('label')).filter(function(l){ return /施术日期：/.test(l.textContent); });
+      ST.ok(/建议预留/.test(labels[1].nextElementSibling.nextElementSibling.textContent) && !/建议预留/.test(labels[0].nextElementSibling.nextElementSibling ? labels[0].nextElementSibling.nextElementSibling.textContent : ''), '备选下面有、首选下面没有');
+      ST.ok(confirmBtn().disabled, '切换后没选时间：确认灰');
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.primary = base; cc.krSchedule.backup = ''; });
+      KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
+      krSchSet('time', '10:00'); ST.ok(/到院时间 10:00 要晚于客人到达时间 11:20/.test(txt()) && /不能确认/.test(txt()) && confirmBtn().disabled, '到达当天选 10:00：红字 + 确认灰');
+      krSchSet('time', '14:00'); ST.ok(!/不能确认/.test(txt()) && !confirmBtn().disabled, '选 14:00：可以确认');
+      ST.ok(!/下拉.*⚠️/.test(txt()) && body().querySelectorAll('select.kr-time-sel ~ div').length>=0, '下拉框下面没有黄字行'); var after = sel().parentElement.nextElementSibling; ST.ok(!after || !/建议预留/.test(after.textContent), '下拉框这一行下面没有黄字');
+      /* 已确认改时间：带入原时间 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.status = 'change_pending'; cc.krSchedule.confirmedDate = p; cc.krSchedule.confirmedTime = '15:30'; cc.krSchedule.changeSubmitted = true; cc.krSchedule.changePrimary = q; cc.krSchedule.changeBackup = ''; });
+      KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
+      ST.ok(KR_SCH.time==='15:30', '改期带入原来的时间：'+KR_SCH.time);
     } finally { window.alert = oa; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
 })();
