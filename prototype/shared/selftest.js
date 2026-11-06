@@ -10388,4 +10388,32 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(c.krSchedule.tripState==='booked' && c.stay && c.stay.in===inD, '填好 → 暂定改成已定，行程存了'); var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null;
     } finally { window.getCurrentCase = gc0; window.alert = oa; CASE_ITEMS[idx] = JSON.parse(snap); KR_SCHED_NAV_CASE = ''; var ov2 = document.getElementById('stay-overlay'); if(ov2) ov2.classList.remove('open'); STAY_CTX = null; }
   });
+
+  /* CMD-1106-19：KR 施术日期卡未递交只写一行 + IN 图例搬到标题行右边 */
+  ST.def('R249a','CMD-1106-19（A1 分页，stageC 夹具）：IN 施术日期标题行最右边是图例「首选日 / 备选日」、没有「点选 1～2 天…」那句、年 / 月在中间；KR 施术日期卡（未递交）只有「施术日期 [待印尼室长递交]」一行标签，没有括号 / 说明',function(){
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    if(typeof isKrAccount==='function' && !isKrAccount()){
+      var c = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+      var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), gc0 = window.getCurrentCase; window.getCurrentCase = function(){ return c; };
+      try{
+        c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; c.hasArrived = false; KR_SCHED_NAV_CASE = '';
+        var h = krProcedureTabMain(c, ''), t = txt(h), i0 = h.indexOf('施术日期</span>');
+        ST.ok(i0>-1 && /首选日/.test(h.slice(i0, i0+700)) && /备选日/.test(h.slice(i0, i0+900)), '图例「首选日 / 备选日」和「施术日期」在同一行（标题行右边）');
+        ST.ok(!/点选 1～2 天/.test(t) && !/只选一天就是首选日/.test(t), '拿掉「点选 1～2 天…」那句');
+        ST.ok(!/备选（选填）/.test(t), '图例文字改成「备选日」');
+        ST.ok(/justify-content:center/.test(h.slice(h.indexOf('kr-time-sel')-200, h.indexOf('kr-time-sel'))), '年 / 月在中间');
+        ST.ok(/首选日/.test(krDateCalendarGridHtml('primary','backup','','')) === false, '日历函数本身不再带图例');
+      } finally { window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); KR_SCHED_NAV_CASE = ''; }
+    } else {
+      var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+      window.GMC_NO_TABS = true; var snap2 = null;
+      try{
+        Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap2 = JSON.stringify(cc); cc.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; cc.hasArrived = false; });
+        krShowCase(r.clinicId, r.id); krSetCaseTab('items'); krRenderCaseDetail();
+        var b = document.getElementById('krcase-body'), card = [].slice.call(b.querySelectorAll('.card')).filter(function(x){ return /施术日期/.test((x.querySelector('.info-heading')||{}).textContent||''); })[0];
+        ST.ok(!!card && txt(card.innerHTML)==='施术日期 待印尼室长递交', 'KR 施术日期卡只有一行：「施术日期 待印尼室长递交」：'+(card ? txt(card.innerHTML) : ''));
+        ST.ok(!!card.querySelector('.status-pill') && !/待 IN 递交|IN 还没有递交/.test(card.textContent), '「待印尼室长递交」是状态标签，括号和说明拿掉了');
+      } finally { if(snap2) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap2); }); }
+    }
+  });
 })();

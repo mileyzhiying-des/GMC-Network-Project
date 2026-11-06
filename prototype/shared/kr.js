@@ -1490,7 +1490,7 @@ function krTabProc(c){
   }
   var body = '';
   if(st==='Draft'){
-    body = krEmpty('IN 还没有递交施术日期（IN 室长付定金后在月历里选首选 / 备选日期）。')+(ks && ks.rejectNote ? '<div style="font-size:12px;color:#C26A1B;">上次回复"无法安排"：'+krEsc(ks.rejectNote)+'</div>' : '');
+    body = (ks && ks.rejectNote ? '<div style="font-size:12px;color:#C26A1B;">上次回复"无法安排"：'+krEsc(ks.rejectNote)+'</div>' : '');
   } else if(st==='Pending'){
     var dates = [ks.primary].concat(ks.backup ? [ks.backup] : []);
     krSchReset(c, {pick:ks.primary, time:'', address:krDefaultAddress()}); /* CMD-1106-12：时间不预选 */
@@ -1502,7 +1502,8 @@ function krTabProc(c){
       body = '<div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">原日期 '+krEsc(ks.confirmedDate+' '+(ks.confirmedTime||''))+' 继续有效。IN 提出的新日期：</div>'+(can ? krSchForm(c, nd, nd.map(function(d, i){ return i===0 ? '新首选' : '新备选'; }), 'krDoSchConfirm.bind(null,true)', 'krDoSchReject.bind(null,true)', '确认新时间') : krEmpty('新首选 '+krEsc(ks.changePrimary)+(ks.changeBackup?'，新备选 '+krEsc(ks.changeBackup):'')));
     } else body = krEmpty('IN 正在选新日期（原日期 '+krEsc(ks.confirmedDate)+' 继续有效）');
   }
-  return ub+krCardBox('施术日期（'+{Draft:'待 IN 递交', Pending:'待确认施术时间', Changing:'改期待确认'}[st]+'）', body)+(st==='Changing' ? krSubCasesCard(c) : '');
+  var __pill = function(t, bg, fg){ return ' <span class="status-pill" style="background:'+bg+';color:'+fg+';font-weight:600;white-space:nowrap;">'+t+'</span>'; }; /* CMD-1106-19：未递交时只写一行「施术日期 [待印尼室长递交]」，状态做成标签 */
+  return ub+krCardBox(st==='Draft' ? '施术日期'+__pill('待印尼室长递交', 'var(--terracotta-bg)', 'var(--terracotta)') : '施术日期（'+{Pending:'待确认施术时间', Changing:'改期待确认'}[st]+'）', body)+(st==='Changing' ? krSubCasesCard(c) : '');
 }
 /* 检测与上传：已有内容的行可以点开直接查看（院长也能，CMD-1013-02 三） */
 function krUploadRow(c, label, fileLabel, has, okText){

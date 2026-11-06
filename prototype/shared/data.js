@@ -6040,6 +6040,9 @@ function setKrPrimaryDate(pf, bf, dateStr){
   renderCaseBody(c);
 }
 
+/* CMD-1106-19：「■ 首选日  ■ 备选日」图例，放在「施术日期」标题行最右边；拿掉「点选 1～2 天…」那句（格子左上角的勾选照旧） */
+function krSchedLegendHtml(){ return '<span style="display:flex;gap:14px;font-size:12px;color:var(--slate2);font-weight:400;white-space:nowrap;"><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#F6C9CF;border:1px solid #E5A3AC;margin-right:4px;vertical-align:-2px;"></span>首选日</span><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--action-primary,#9A6A4B);margin-right:4px;vertical-align:-2px;"></span>备选日</span></span>'; }
+function krSchedHeadRowHtml(title){ return '<div class="info-heading" style="margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><span>'+title+'</span>'+krSchedLegendHtml()+'</div>'; }
 function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
   var __c0 = getCurrentCase(), __w = tripWin(__c0), tripAdv = __w ? '<div style="font-size:12px;margin-bottom:6px;color:'+(__w.soft ? 'var(--muted)' : 'var(--slate2)')+';">'+(__w.soft ? '行程暂定，仅供提醒：' : '客人行程：')+'到达 '+stayMD(__w.in)+(__w.inTime ? ' '+__w.inTime : '')+(__w.out ? ' ～ 离开 '+stayMD(__w.out)+(__w.outTime ? ' '+__w.outTime : '') : '')+(__w.days ? '；做完需在韩 '+__w.days+' 天' : '')+(__w.soft ? '' : '，范围外的日期已灰掉')+'</div>' : '';
   var openDatesNow = caseOpenDates(getCurrentCase());
@@ -6050,7 +6053,7 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
   for(var i=0;i<firstDow;i++) cells.push(null);
   for(var d=1; d<=daysInMonth; d++) cells.push(d);
   var dowLabels = ['日','一','二','三','四','五','六'];
-  var legend = '<div style="display:flex;gap:16px;font-size:12px;color:var(--slate2);margin-bottom:8px;flex-wrap:wrap;"><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#F6C9CF;border:1px solid #E5A3AC;margin-right:4px;vertical-align:-2px;"></span>首选日 ✅'+(primaryVal?'：'+primaryVal:'')+'</span><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--action-primary,#9A6A4B);margin-right:4px;vertical-align:-2px;"></span>备选（选填）'+(backupVal?'：'+backupVal:'')+'</span><span style="color:var(--muted);">点选 1～2 天；选了两天时，在其中一天格子左上角勾选「首选日」；只选一天就是首选日</span></div>';
+  var legend = ''; /* CMD-1106-19：图例移到「施术日期」标题行最右边（krSchedLegendHtml） */
   var tripYelLine = tripShortLine(__c0, [{label:'首选', date:primaryVal}, {label:'备选', date:backupVal}]), tripYel = tripYelLine ? '<div style="font-size:12px;color:#8F6F0C;margin:4px 0;">'+aEscC(tripYelLine)+'</div>' : '';
   return tripAdv+legend+tripYel+'<div style="width:100%;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:13px;">'+
     dowLabels.map(function(w){ return '<div style="color:var(--muted);padding:4px 0;font-size:12px;">'+w+'</div>'; }).join('')+
@@ -7461,7 +7464,7 @@ function krProcedureTabMain(c, tabsHtml){
     var canModify = ks && ks.status==='confirmed' && !c.hasArrived; /* 到医院前都可改日期（CMD-1012-13，拿掉施术前 2 周限制） */
     if(st==='Draft'){
       ks = ensureKrScheduleDraft(c);
-      body = '<div class="info-heading" style="margin-bottom:4px;">施术日期</div>'+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
+      body = krSchedHeadRowHtml('施术日期')+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         monthNav+
         krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+
         '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">'+krBtn+'</button></div>'; /* ［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
@@ -7483,7 +7486,7 @@ function krProcedureTabMain(c, tabsHtml){
         '<div style="border-top:1px solid var(--border2);padding-top:14px;font-size:12px;color:var(--muted);">已到院 / 付清尾款 / 子项完成均由 KR 端操作，这里只显示状态；KR 同一天内可调整到院时间和地址（会通知你）</div>';
     } else if(st==='Changing'){
       if(!ks.changeSubmitted){
-        body = '<div class="info-heading" style="margin-bottom:8px;">修改施术日期</div>'+
+        body = krSchedHeadRowHtml('修改施术日期')+
           '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">原定 '+ksTimeText(ks)+'，请选择新的日期</div>'+
           monthNav+
           krDateCalendarGridHtml('changePrimary','changeBackup', ks.changePrimary, ks.changeBackup)+
