@@ -2495,10 +2495,15 @@ function coreRvEdit(c, f, name, val, by){ /* 室长整理文字：只改文字�
   return true;
 }
 /* ［完成评估］：role = 'doctor' | 'proxy'；失败返回 {ok:false, err} */
+/* ===== CMD-1105-14：面诊 / 复诊 退回和重新上传的待办 + 通知 =====
+   退回待修改 = c.consultEval.retPending（面诊）/ c.revEval.retPending（复诊）；原因必填（旧资料没有原因 → 显示「（旧资料，未填原因）」）；
+   院长待办「退回待修改 · A… · 面诊 / 复诊」，上传后消失；室长待办「院长已（重新）上传 · 待发送 IN · A…」，发送后消失（consultStatus 变 report_ready） */
+function retPendingOf(c){ var r = isRevEval(c) ? (c.revEval||null) : (c.consultEval||null); return (r && r.retPending) ? r.retPending : null; }
+function retReasonText(rp){ return (rp && String(rp.reason||'').trim()) || '（旧资料，未填原因）'; }
 function coreRvFinish(c, by, role){
   if(!isRevEval(c) || c.reportReady) return {ok:false, err:'这个案件现在不能完成评估'};
   var miss = rvMissing(c); if(miss.length) return {ok:false, err:'还缺：'+miss.join('、')};
-  var r = rvEvalOf(c, true), now = nowFullDt(), first = !c.consultContentAt;
+  var r = rvEvalOf(c, true), now = nowFullDt(), first = !c.consultContentAt, again = (r.ret||[]).length>0;
   r.role = r.role==='proxy' ? 'proxy' : (role || 'doctor'); if(role==='proxy') r.role = 'proxy';
   r.doneBy = by; r.doneAt = now; r.at = now; r.retPending = null;
   if(c.recoveryResult && c.recoveryResult.result==='ok') c.recoveryResult.memo = r.text || '';
@@ -2506,8 +2511,8 @@ function coreRvFinish(c, by, role){
   c.consultContentAt = c.consultContentAt || now;
   if(first){
     var treat = c.recoveryResult.result==='treat';
-    logCaseEvent(c, by, '评估完成（'+(r.role==='proxy' ? '室长代录（院长口述）' : '院长')+'）：'+(treat ? '需要处理' : '恢复正常')+'；待室长发送');
-    pushKrNotif(caseKrHospital(c), by+' 评估完成：'+c.name+'（'+(c.caseNo||'')+'）→ 请发送复诊评估结果', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
+    logCaseEvent(c, by, (again ? '重新上传评估（复诊' : '评估完成（')+(again ? '，' : '')+(r.role==='proxy' ? '室长代录（院长口述）' : '院长')+'）：'+(treat ? '需要处理' : '恢复正常')+'；待室长发送');
+    pushKrNotif(caseKrHospital(c), (again ? by+' 已重新上传 '+(c.caseNo||'')+' 的复诊评估：' : by+' 评估完成：')+c.name+'（'+(c.caseNo||'')+'）→ 请发送复诊评估结果', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
     pushNotif('复诊评估', '评估完成：'+c.name+'（'+(c.caseNo||'')+'），等待复诊评估结果', {caseId:c.id, level:'info'});
     updateCaseStage(c);
   }
@@ -2534,12 +2539,12 @@ function coreGcUpload(c, by, role, sub){
   if(!isGcGeneral(c) || c.consultContentAt) return {ok:false, err:'这个案件现在不能上传评估'};
   var r = gcEvalOf(c, true); if(sub) r.sub = sub;
   var miss = gcMissing(c, r.sub); if(miss.length) return {ok:false, err:'还缺：'+miss.join('、')};
-  var now = nowFullDt(); r.role = role||r.role||'doctor'; r.doneBy = by; r.doneAt = now; r.at = now; r.retPending = null;
+  var now = nowFullDt(), again = (r.ret||[]).length>0; r.role = role||r.role||'doctor'; r.doneBy = by; r.doneAt = now; r.at = now; r.retPending = null;
   if(!c.consultStartedAt){ c.consultStartedAt = now; c.consultStartedBy = by; }
   c.consultContentAt = now;
-  logCaseEvent(c, by, '上传评估（面诊，'+(r.role==='proxy' ? '室长代录 · 院长授意' : '院长')+'）：面诊结束');
+  logCaseEvent(c, by, (again ? '重新上传评估（面诊，' : '上传评估（面诊，')+(r.role==='proxy' ? '室长代录 · 院长授意' : '院长')+'）：面诊结束');
   updateCaseStage(c);
-  pushKrNotif(caseKrHospital(c), by+' 上传了面诊评估，面诊结束：'+c.name+'（'+(c.caseNo||'')+'）→ 请发送诊疗方案', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
+  pushKrNotif(caseKrHospital(c), (again ? by+' 已重新上传 '+(c.caseNo||'')+' 的面诊评估：' : by+' 上传了面诊评估，面诊结束：')+c.name+'（'+(c.caseNo||'')+'）→ 请发送诊疗方案', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
   pushNotif('面诊', '面诊结束：'+c.name+'（'+(c.caseNo||'')+'），等待诊疗方案', {caseId:c.id, level:'info'});
   return {ok:true};
 }
@@ -2550,7 +2555,7 @@ function coreGcReturn(c, reason, by){
   r = gcEvalOf(c, true); if(r.role==='proxy') return false;
   r.ret.push({at:nowFullDt(), by:by, reason:why}); r.retPending = {at:nowFullDt(), by:by, reason:why}; r.doneAt = ''; r.doneBy = ''; c.consultContentAt = '';
   logCaseEvent(c, by, '退回院长重新评估（面诊）：'+why);
-  pushKrNotif(caseKrHospital(c), by+' 把面诊评估退回：'+c.name+'（'+(c.caseNo||'')+'）：'+why, {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
+  pushKrNotif(caseKrHospital(c), by+' 退回了 '+(c.caseNo||'')+' 的面诊评估：原因：'+why+'（'+c.name+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
   updateCaseStage(c); return true;
 }
 /* ［退回院长］：室长觉得有问题 → 填原因，回到「待院长评估」，院长待办出现 */
@@ -2561,7 +2566,7 @@ function coreRvReturn(c, reason, by){
   r.ret.push({at:nowFullDt(), by:by, reason:why}); r.retPending = {at:nowFullDt(), by:by, reason:why}; r.doneAt = ''; r.doneBy = '';
   c.consultContentAt = '';
   logCaseEvent(c, by, '退回院长重新评估：'+why);
-  pushKrNotif(caseKrHospital(c), by+' 把复诊评估退回：'+c.name+'（'+(c.caseNo||'')+'）：'+why, {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
+  pushKrNotif(caseKrHospital(c), by+' 退回了 '+(c.caseNo||'')+' 的复诊评估：原因：'+why+'（'+c.name+'）', {to:'director', director:c.director, caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'});
   updateCaseStage(c); return true;
 }
 function coreSubmitReport(c, rep, by){

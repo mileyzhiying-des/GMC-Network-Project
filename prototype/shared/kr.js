@@ -5235,7 +5235,7 @@ function krGcEvalBlock(c){
   var body = '';
   if(!ro){
     var who = (!dir) ? '<div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:8px;">室长代录 · 院长授意'+(c.revAuth ? '：'+krEsc(c.revAuth.by)+' '+krEsc(fmtUtc(c.revAuth.at).slice(5)) : '')+'</div>' : '';
-    var ret = (r && r.retPending) ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;"><b>室长已退回</b>（'+krEsc(r.retPending.by)+' · '+krEsc(fmtUtc(r.retPending.at).slice(5))+'）：'+krEsc(r.retPending.reason)+'</div>' : '';
+    var ret = (r && r.retPending) ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;"><b>室长已退回</b>（'+krEsc(r.retPending.by)+' · '+krEsc(fmtUtc(r.retPending.at).slice(5))+'）：'+krEsc(retReasonText(r.retPending))+'</div>' : '';
     body = who+ret+sec('录入内容', true, krRvField('gcrec', r ? r.rec : '', '面诊时说的内容（可以语音输入，也可以直接打字）', 130))+
       sec('推荐项目（从项目库选，可选可不选）', true, '<div id="kr-gc-pick">'+krGcPickColumn(c)+'</div>');
     return krCardBox((dir ? '面诊｜院长：'+krEsc(c.director||'—') : '评估内容')+' '+pill, body+'<div id="kr-rv-foot" style="margin-top:16px;">'+krGcFootHtml(c)+'</div>');
@@ -5329,7 +5329,7 @@ function krRvWorkBlock(c){
     return '<div class="card" style="padding:16px 22px;"><div class="info-heading" style="margin-bottom:6px;display:flex;align-items:center;gap:10px;"><span style="flex:1;">复诊｜院长：'+krEsc(c.director||'—')+' '+pill+'</span><button class="btn-primary" style="padding:6px 18px;" onclick="krStartConsult()">开始复诊</button></div>'+timesH+'</div>';
   }
   var who = (!dir && mode==='author') ? '<div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:8px;">室长代录 · 院长授意'+(c.revAuth ? '：'+krEsc(c.revAuth.by)+' '+krEsc(fmtUtc(c.revAuth.at).slice(5)) : (r && r.role==='proxy' ? '' : '（旧资料：室长直接填写）'))+'</div>' : '';
-  var ret = (r && r.retPending) ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;"><b>室长已退回</b>（'+krEsc(r.retPending.by)+' · '+krEsc(fmtUtc(r.retPending.at).slice(5))+'）：'+krEsc(r.retPending.reason)+'</div>' : '';
+  var ret = (r && r.retPending) ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;"><b>室长已退回</b>（'+krEsc(r.retPending.by)+' · '+krEsc(fmtUtc(r.retPending.at).slice(5))+'）：'+krEsc(retReasonText(r.retPending))+'</div>' : '';
   var doneLine = done ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">评估人：'+krRvAuthorWho(c)+' · '+krEsc(fmtUtc(r ? (r.doneAt||c.consultContentAt) : c.consultContentAt).slice(5))+'</div>' : '';
   var sec = function(label, req, inner){ return '<div style="margin-top:14px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+label+(req==='req' ? ' <span style="color:#B3261E;">*</span>' : (req==='opt' ? ' <span style="font-size:12px;font-weight:400;color:var(--muted);">（选填）</span>' : ''))+'</div>'+inner+'</div>'; };
   var body = '';

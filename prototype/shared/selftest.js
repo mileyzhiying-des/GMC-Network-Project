@@ -9356,7 +9356,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       ST.rvSetup(r0, function(c){ delete c.consultStartedAt; c.revisitQuestion = '右眼还有点肿，正常吗？'; });
       KR_CASE = {clinicId:cid, id:r0.id, tab:'consult'}; krShowCase(cid, r0.id, {tab:'consult', here:true});
-      var h0 = krTabConsult(gc()); ST.ok(/开始复诊/.test(h0) && !/id="rvta-/.test(h0) && /评估时间（韩国）/.test(h0) && /结果时间（韩国）/.test(h0) && />修改</.test(h0) && /等待院长评估/.test(h0), '① 院长还没开始：评估卡「复诊｜院长」+ 两行时间（结果时间旁［修改］）+［开始复诊］，还没有输入栏位（CMD-1105-11）');
+      var h0 = krTabConsult(gc()); ST.ok(/开始复诊/.test(h0) && !/id="rvta-/.test(h0) && /评估时间（韩国）/.test(h0) && /结果时间（韩国）/.test(h0) && !/>修改</.test(h0) && /等待院长评估/.test(h0), '① 院长还没开始：评估卡「复诊｜院长」+ 两行时间只显示（1105-13：没有［修改］）+［开始复诊］，还没有输入栏位');
       krStartConsult(); krShowCase(cid, r0.id, {tab:'consult', here:true});
       v0 = krVault(cid, r0.id, true); v0.transcripts = [];
       var h = krTabConsult(gc()), ix = function(k){ return h.indexOf(k); };
@@ -9536,6 +9536,81 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krRvReturnOpen(); document.getElementById('kr-rvret-why').value = '请补充推荐项目'; krRvReturnGo(); var c2 = gc();
       ST.ok(!c2.consultContentAt && c2.consultEval.retPending && c2.consultEval.retPending.reason==='请补充推荐项目', '⑥ 室长［退回院长］→ 回到院长评估中，可以再改');
     } finally { window.SpeechRecognition = sr; window.webkitSpeechRecognition = wsr; try{ krRvMicStop(false); }catch(e){} window.alert = oa; window.confirm = oc; try{ krVault(cid, r.id, true).transcripts = []; }catch(e){} Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+  /* ===== CMD-1105-14：面诊 / 复诊 退回和重新上传的待办 + 通知（KM1 → KD1 → KM1 三段，stagePay 夹具；R232a 先跑） ===== */
+  function r232Case(){ var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; return r; }
+  function r232Setup(cid, id, rev){ Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.needsConsult = true; c.consultKind = rev ? '复诊' : ''; c.director = 'KD1 院长'; c.metaviewStatus = 'ready'; c.concerns = [{part:'f_nose', sub:'', desc:'鼻梁低', expect:'自然', video:{name:'v.mp4'}, photos:{front:{name:'p1.jpg'}}}]; ST.krEta(c); delete c.consultStartedAt; delete c.consultStartedBy; delete c.consultContentAt; delete c.consultEval; delete c.revEval; delete c.revAuth; c.consultStatus = 'awaiting_report'; c.reportReady = false; c.recoveryResult = rev ? {result:'ok', by:'KD1 院长', at:nowFullDt()} : null; c.followProjects = rev ? [] : c.followProjects; if(rev){ c.revisitEval = true; } else { delete c.revisitEval; } }); }
+  function r232Notifs(cid, re){ return (HOSPITAL_DATA[caseKrHospital(Store.readClinic(cid).CASE_ITEMS[0])] || {notifs:[]}).notifs.filter(function(n){ return re.test(n.text); }); }
+  ST.def('R232a','CMD-1105-14（KM1 分页，stagePay 夹具）：面诊——院长上传 → 室长待办「院长已上传 · 待发送 IN」+ 通知；退回原因必填；退回后院长有通知和原因',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = r232Case(); if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return; var cid = r.clinicId, id = r.id, gc = function(){ return krFindCase(cid, id).c; };
+    var snap = JSON.stringify(gc()); try{ localStorage.setItem('gmc_cfg_r232snap', snap); }catch(e){}
+    var oa = window.alert; window.alert = function(){};
+    try{
+      r232Setup(cid, id, false);
+      var hid = caseKrHospital(gc()), n0 = (HOSPITAL_DATA[hid].notifs||[]).length, res = null;
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; gcEvalOf(c, true).rec = '院长录入的内容'; res = coreGcUpload(c, 'KD1 院长', 'doctor', null); });
+      ST.ok(res && res.ok, '院长不选推荐项目也能上传');
+      var todos = function(){ return krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+id; }); };
+      var sd = todos().filter(function(x){ return x.kind==='send'; })[0]; ST.ok(!!sd && /^院长已上传 · 待发送 IN · A\d+ · 面诊/.test(sd.text), '室长待办：'+(sd && sd.text));
+      ST.ok(r232Notifs(cid, /KD1 院长 上传了面诊评估，面诊结束/).length===1, '室长收到通知「院长上传了面诊评估」（第一次上传也有）');
+      ST.ok((gc().logEntries||[]).some(function(e){ return /^上传评估（面诊，院长）/.test(e.action); }), 'Timeline 记「上传评估」');
+      /* 退回：原因必填 */
+      krShowCase(cid, id, {tab:'consult', here:true}); krRvReturnOpen(); document.getElementById('kr-rvret-why').value = ''; krRvReturnGo();
+      ST.ok(!!gc().consultContentAt && /请填写退回原因/.test(document.getElementById('kr-rvret-err').textContent), '退回不填原因 → 红字提示、送不出去');
+      ST.ok(coreGcReturn(gc(), '', 'KM1 室长')===false, '程序里也拒绝没有原因的退回');
+      document.getElementById('kr-rvret-why').value = '请补充鼻子的描述'; krRvReturnGo();
+      var c1 = gc(); ST.ok(!c1.consultContentAt && c1.consultEval.retPending && c1.consultEval.retPending.reason==='请补充鼻子的描述', '退回后回到院长评估中，retPending 带原因');
+      ST.ok(!todos().some(function(x){ return x.kind==='send'; }), '室长的「待发送 IN」待办消失');
+      ST.ok(r232Notifs(cid, /KM1 室长 退回了 A\d+ 的面诊评估：原因：请补充鼻子的描述/).length===1, '院长通知「KM1 室长 退回了 A… 的面诊评估：原因：…」');
+      ST.ok((c1.logEntries||[]).some(function(e){ return /^退回院长重新评估（面诊）：请补充鼻子的描述/.test(e.action); }), 'Timeline 记退回 + 原因');
+    } finally { window.alert = oa; }
+  });
+  ST.def('R232b','CMD-1105-14（KD1 分页，接 R232a）：院长待办「退回待修改」+ 铃铛通知 + 评估卡原因；重新上传后待办消失',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KD1', '要在 KD1 分页里跑')) return;
+    var r = r232Case(); if(!ST.ok(!!r, '先 R232a')) return; var cid = r.clinicId, id = r.id, gc = function(){ return krFindCase(cid, id).c; };
+    if(!ST.ok(!!(gc().consultEval && gc().consultEval.retPending), '先在 KM1 分页跑 R232a（退回）')) return;
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    var todos = function(){ return krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+id; }); };
+    var up = todos().filter(function(x){ return x.kind==='upload'; })[0]; ST.ok(!!up && /^退回待修改 · A\d+ · 面诊/.test(up.text), '院长待办「退回待修改 · A… · 面诊」：'+(up && up.text));
+    ST.ok(krNotifsForMe().some(function(n){ return /KM1 室长 退回了 A\d+ 的面诊评估：原因：请补充鼻子的描述/.test(n.text); }), '院长铃铛有退回通知（带原因）');
+    KR_CASE = {clinicId:cid, id:id, tab:'consult'}; KR_SUB = krSubBlank(''); krShowCase(cid, id, {tab:'consult', here:true});
+    var t = txt(krTabConsult(gc())); ST.ok(/室长已退回/.test(t) && /请补充鼻子的描述/.test(t) && t.indexOf('室长已退回')<t.indexOf('录入内容'), '评估卡最上面一行：谁 / 时间 / 原因');
+    krRvMicStop(true); krGcSetQ('补充后的内容'); krGcUpload(); var c2 = gc();
+    ST.ok(!!c2.consultContentAt && !c2.consultEval.retPending && (c2.consultEval.ret||[]).length===1, '院长重新上传');
+    ST.ok(!todos().some(function(x){ return x.kind==='upload'; }), '院长的「退回待修改」待办自动消失');
+    ST.ok((c2.logEntries||[]).some(function(e){ return /^重新上传评估（面诊，院长）/.test(e.action); }), 'Timeline 记「重新上传评估」');
+    /* 旧资料：退回状态但没有原因 */
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.consultContentAt = ''; c.consultEval.retPending = {at:nowFullDt(), by:'KM1 室长', reason:''}; });
+    up = todos().filter(function(x){ return x.kind==='upload'; })[0]; ST.ok(!!up && /退回待修改/.test(up.text) && /旧资料，未填原因/.test(up.text), '旧资料（没有原因）：院长仍有待办，原因显示（旧资料，未填原因）');
+    krShowCase(cid, id, {tab:'consult', here:true}); ST.ok(/旧资料，未填原因/.test(txt(krTabConsult(gc()))), '评估卡也写（旧资料，未填原因）');
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.consultEval.retPending = null; c.consultContentAt = nowFullDt(); c.consultEval.doneAt = nowFullDt(); });
+  });
+  ST.def('R232c','CMD-1105-14（KM1 分页，接 R232b）：重新上传 → 室长待办「院长已重新上传 · 待发送 IN」+ 通知；室长代录不通知自己；发送后待办消失；复诊同样；还原',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = r232Case(); if(!ST.ok(!!r, '先 R232a')) return; var cid = r.clinicId, id = r.id, gc = function(){ return krFindCase(cid, id).c; };
+    var todos = function(){ return krTodoItems(krAllCases()).filter(function(x){ return x.rowKey===cid+':'+id; }); };
+    var sd = todos().filter(function(x){ return x.kind==='send'; })[0]; ST.ok(!!sd && /^院长已重新上传 · 待发送 IN · A\d+ · 面诊/.test(sd.text), '室长待办「院长已重新上传 · 待发送 IN」：'+(sd && sd.text));
+    ST.ok(r232Notifs(cid, /KD1 院长 已重新上传 A\d+ 的面诊评估/).length>=1, '室长通知「KD1 院长 已重新上传 A… 的面诊评估」');
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.consultStatus = 'report_ready'; });
+    ST.ok(!todos().some(function(x){ return x.kind==='send'; }), '室长发送后待办自动消失');
+    /* 室长代录：不通知自己，待办「室长代录 · 待发送 IN」 */
+    r232Setup(cid, id, false); var hid = caseKrHospital(gc()), res = null;
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.revAuth = {by:'KM1 室长', at:nowFullDt()}; gcEvalOf(c, true).rec = '室长代录'; res = coreGcUpload(c, 'KM1 室长', 'proxy', null); });
+    var mine = krNotifsForMe().filter(function(n){ return /KM1 室长 上传了面诊评估/.test(n.text); });
+    ST.ok(res && res.ok && !mine.length, '室长代录上传：KM1 自己的铃铛没有通知');
+    sd = todos().filter(function(x){ return x.kind==='send'; })[0]; ST.ok(!!sd && /^室长代录 · 待发送 IN · A\d+ · 面诊/.test(sd.text), '待办留「室长代录 · 待发送 IN」：'+(sd && sd.text));
+    /* 复诊：完成 → 退回（原因必填）→ 重新上传 */
+    r232Setup(cid, id, true);
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; var e = rvEvalOf(c, true); e.nextType = 'none'; e.text = '恢复良好'; c.recoveryResult = {result:'ok'}; var f1 = coreRvFinish(c, 'KD1 院长', 'doctor'); res = f1; });
+    ST.ok(res && res.ok, '复诊：院长完成评估'); sd = todos().filter(function(x){ return x.kind==='send'; })[0]; ST.ok(!!sd && /^院长已上传 · 待发送 IN · A\d+ · 复诊/.test(sd.text), '复诊室长待办：'+(sd && sd.text));
+    ST.ok(coreRvReturn(gc(), '', 'KM1 室长')===false, '复诊：没有原因的退回被拒绝');
+    Store.mutateClinic(cid, function(){ res = coreRvReturn(CASE_ITEMS.filter(function(x){ return x.id===id; })[0], '意见太简单', 'KM1 室长'); });
+    ST.ok(res===true && r232Notifs(cid, /KM1 室长 退回了 A\d+ 的复诊评估：原因：意见太简单/).length===1, '复诊：退回 → 院长通知（带原因）');
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; res = coreRvFinish(c, 'KD1 院长', 'doctor'); });
+    sd = todos().filter(function(x){ return x.kind==='send'; })[0]; ST.ok(res && res.ok && !!sd && /^院长已重新上传 · 待发送 IN · A\d+ · 复诊/.test(sd.text) && r232Notifs(cid, /KD1 院长 已重新上传 A\d+ 的复诊评估/).length===1, '复诊：重新上传 → 室长待办 + 通知：'+(sd && sd.text));
+    /* 还原 */
+    try{ var sn = localStorage.getItem('gmc_cfg_r232snap'); if(sn) Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===id; }); CASE_ITEMS[i] = JSON.parse(sn); }); localStorage.removeItem('gmc_cfg_r232snap'); }catch(e){}
   });
   ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
