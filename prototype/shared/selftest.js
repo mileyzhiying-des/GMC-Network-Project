@@ -10031,4 +10031,39 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.settlementBatches = [{id:'BX1', status:'unpaid'}]; rows = recProjectsRowsHtml(c, 'KR'); ST.ok(!/rec-unbought/.test(rows), '冻结前：全部显示');
     } finally { window.alert = oa; window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); }
   });
+
+  /* CMD-1106-08：客人页「持有项目」重做 */
+  ST.def('R238a','CMD-1106-08（A1 分页，stageC 夹具）：韩国持有分「赴韩项目」（施术 + 底下没做完的术后管理）/「赴韩管理」；施术做完只剩术后管理；全做完消失；取消不列；行程结束转持有；tab 数字；在印尼做的术后管理跟着施术',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c);
+    try{
+      var model = function(){ return {mode:'IN', cases:[c], name:c.name}; };
+      var surgs = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); }); ST.ok(surgs.length>=1, '夹具有施术项目');
+      var B = cliHoldKrBlocks(model()); ST.ok(B.surg.length===surgs.length, '每个已买施术一格：'+B.surg.length+'/'+surgs.length);
+      ST.ok(B.surg.every(function(b){ return /待确认|已预约|待递交|已购买|已到院/.test(b.state) && b.c.caseNo; }), '每格有「来自 案件号」+ 状态：'+B.surg.map(function(b){ return b.state; }).join('/'));
+      var withCare = B.surg.filter(function(b){ return b.care.length; })[0]; ST.ok(!!withCare, '术后管理收在施术底下');
+      var html = cliHoldKrHtml(model()); ST.ok(/赴韩项目/.test(html) && /来自/.test(html) && /术后管理|拆线|复诊/.test(html), '画面有「赴韩项目」+ 底下的术后管理');
+      /* 赴韩管理：加一个已买的管理项目 */
+      var mg = {name:'ONDA 提升 · 脸部 40kj', origin:'KR', mgmtPlan:true, mgmt:true, price:1000000, qty:1, batchId:(surgs[0]||{}).batchId, heldOver:false}; c.procedureItems.push(mg);
+      var B2 = cliHoldKrBlocks(model()); ST.ok(B2.mgmt.length===1 && /剩 1 \/ 共 1 次|待付尾款/.test(JSON.stringify(B2.mgmt[0])) && B2.mgmt[0].state==='待付尾款', '赴韩管理一项一格，写剩余次数；没付尾款 =「待付尾款」：'+(B2.mgmt[0]||{}).state);
+      ST.ok(/赴韩管理/.test(cliHoldKrHtml(model())), '画面有「赴韩管理」'); var n0 = cliHoldCount(model());
+      mg.cancelled = true; ST.ok(cliHoldKrBlocks(model()).mgmt.length===0, '已取消的管理项目不列'); delete mg.cancelled;
+      /* 施术做完：这一格只剩没做完的术后管理 */
+      var s0 = withCare.it; s0.done = true; var B3 = cliHoldKrBlocks(model()).surg.filter(function(b){ return b.it===s0; })[0]; ST.ok(!!B3 && B3.state==='施术已完成' && B3.care.length, '施术做完：这一格只剩没做完的术后管理');
+      /* 术后管理全做完 → 这一格消失：把对应行标完成，未预约的也清掉 */
+      s0.postcare = []; (c.subItems||[]).filter(function(r){ return r.projectName===s0.name; }).forEach(function(r){ r.done = true; });
+      ST.ok(!cliHoldKrBlocks(model()).surg.some(function(b){ return b.it===s0; }), '全部做完：这一格消失'); s0.done = false;
+      /* 取消的施术不列 */
+      var s1 = surgs[surgs.length-1]; s1.cancelled = true; ST.ok(!cliHoldKrBlocks(model()).surg.some(function(b){ return b.it===s1; }), '已取消的施术不列'); delete s1.cancelled;
+      /* 行程结束转持有 */
+      s1.heldSurg = {at:nowFullDt(), by:'t', why:'', rw:false}; var hb = cliHoldKrBlocks(model()).surg.filter(function(b){ return b.it===s1; })[0]; ST.ok(!!hb && hb.state==='韩国持有（行程已结束）' && hb.heldIid, '行程结束转持有：状态「韩国持有（行程已结束）」+ 有取消 / 退款入口'); ST.ok(/取消 \/ 退款/.test(cliHoldKrHtml(model())), '画面上有［取消 / 退款］'); delete s1.heldSurg;
+      /* 在印尼做的术后管理跟着施术 */
+      var any = cliHoldKrBlocks(model()).surg.filter(function(b){ return b.care.some(function(g){ return g.place==='IN'; }); })[0];
+      if(!any){ var s2 = surgs[0]; (s2.postcare||[]).push({mgmt:'术后复诊', name:'印尼复诊', times:1, place:'IN', startDay:5, day:'第5天'}); any = cliHoldKrBlocks(model()).surg.filter(function(b){ return b.care.some(function(g){ return g.place==='IN'; }); })[0]; }
+      ST.ok(!!any && /在印尼/.test(cliHoldKrHtml(model())), '在印尼做的术后管理放在施术底下并标「在印尼」');
+      var KB = cliHoldKrBlocks(model()); ST.ok(Object.keys(KB.inIds).length>=1, '这些印尼术后管理不再单独列在印尼持有');
+      ST.ok(cliHoldCount(model()) >= KB.count, 'tab 数字 >= 赴韩项目 + 赴韩管理（'+cliHoldCount(model())+'）');
+    } finally { CASE_ITEMS[idx] = JSON.parse(snap); }
+  });
 })();

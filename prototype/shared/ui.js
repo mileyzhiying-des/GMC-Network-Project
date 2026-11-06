@@ -1029,7 +1029,8 @@ function renderClientHoldings(name){
   if(!block || !el) return;
   var all = holdingsAllSorted(name).filter(function(h){ return holdingRemaining(h)>0; }); /* 项目层只列剩余>0；全部用完/已退款的项目去"本院项目记录"看 */
   /* CMD-1015-17：IN 也看得到在韩持有（付费管理项目，项目 + 剩余次数，不显示金额）；已结案案件剩下的术后管理标「术后管理」（免费、不能退款，再来做开本地管理新案件） */
-  var careLeft = clientCareLeftAll(name);
+  var __kb = cliHoldKrBlocks({cases:CASE_ITEMS.filter(function(x){ return x.name===name; }), mode:'IN', name:name}); /* CMD-1106-08：在印尼做的术后管理跟着施术放在韩国持有里 */
+  var careLeft = clientCareLeftAll(name).filter(function(x){ return !__kb.inIds[x.s.id]; });
   var extraHtml = careLeft.map(function(e){ var late = pcDaysLate(e.s.date); return '<div style="padding:10px 0;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:12px;"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;">'+e.s.content+' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">术后管理</span>'+(late>0 ? ' <span class="status-pill" style="background:#FBE3E1;color:#C1454A;font-size:12px;">已过建议日期 '+late+' 天</span>' : '')+'</span><span style="font-size:12px;color:var(--slate2);white-space:nowrap;">术后管理 · 来自 '+e.c.caseNo+' · 建议 '+pcMD(e.s.date)+' · 免费，不能退款</span></div>'; }).join('');
   block.style.display = 'block';
   if(!all.length && !extraHtml){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">没有印尼本地持有</div>'; return; }
