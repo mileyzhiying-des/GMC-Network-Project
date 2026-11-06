@@ -6044,7 +6044,7 @@ function setKrPrimaryDate(pf, bf, dateStr){
 function krSchedLegendHtml(){ return '<span style="display:flex;gap:14px;font-size:12px;color:var(--slate2);font-weight:400;white-space:nowrap;"><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#F6C9CF;border:1px solid #E5A3AC;margin-right:4px;vertical-align:-2px;"></span>首选日</span><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--action-primary,#9A6A4B);margin-right:4px;vertical-align:-2px;"></span>备选日</span></span>'; }
 function krSchedHeadRowHtml(title){ return '<div class="info-heading" style="margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><span>'+title+'</span>'+krSchedLegendHtml()+'</div>'; }
 function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
-  var __c0 = getCurrentCase(), __w = tripWin(__c0), tripAdv = __w ? '<div style="font-size:12px;margin-bottom:6px;color:'+(__w.soft ? 'var(--muted)' : 'var(--slate2)')+';">'+(__w.soft ? '行程暂定，仅供提醒：' : '客人行程：')+'到达 '+stayMD(__w.in)+(__w.inTime ? ' '+__w.inTime : '')+(__w.out ? ' ～ 离开 '+stayMD(__w.out)+(__w.outTime ? ' '+__w.outTime : '') : '')+(__w.days ? '；做完需在韩 '+__w.days+' 天' : '')+(__w.soft ? '' : '，范围外的日期已灰掉')+'</div>' : '';
+  var __c0 = getCurrentCase(); /* CMD-1106-21：日历上面不再写「客人行程…」和黄字 */
   var openDatesNow = caseOpenDates(getCurrentCase());
   var y = KR_SCHED_VIEW_MONTH.getFullYear(), m = KR_SCHED_VIEW_MONTH.getMonth();
   var firstDow = new Date(y,m,1).getDay();
@@ -6054,8 +6054,7 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
   for(var d=1; d<=daysInMonth; d++) cells.push(d);
   var dowLabels = ['日','一','二','三','四','五','六'];
   var legend = ''; /* CMD-1106-19：图例移到「施术日期」标题行最右边（krSchedLegendHtml） */
-  var tripYelLine = tripShortLine(__c0, [{label:'首选', date:primaryVal}, {label:'备选', date:backupVal}]), tripYel = tripYelLine ? '<div style="font-size:12px;color:#8F6F0C;margin:4px 0;">'+aEscC(tripYelLine)+'</div>' : '';
-  return tripAdv+legend+tripYel+'<div style="width:100%;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:13px;">'+
+  return legend+'<div style="width:100%;display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:13px;">'+
     dowLabels.map(function(w){ return '<div style="color:var(--muted);padding:4px 0;font-size:12px;">'+w+'</div>'; }).join('')+
     cells.map(function(d){
       if(!d) return '<div></div>';
@@ -6064,11 +6063,11 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
       var tripI = open ? tripDateIssue(getCurrentCase(), dateStr) : null, tripBlock = !!(tripI && !tripI.soft && tripI.kind!=='short'), tripWarn = !!(tripI && tripI.kind==='short' && !tripI.soft); if(tripBlock) open = false; /* CMD-1106-10：只有早于到达才灰掉；天数不够可以选，格子里小字黄色提醒 */ /* CMD-1106-07：行程已定 → 范围外灰掉 + 原因 */ /* 今天及以前的日期置灰不可选（CMD-1012-05 三·1；CMD-1102-07 二：从明天开始） */
       var style = 'position:relative;min-height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;', lab = '';
       if(!open) style += 'color:var(--dim);background:var(--bg-sidebar,#F7F4F0);';
-      else if(dateStr===primaryVal){ style += 'background:#F6C9CF;border:1px solid #E5A3AC;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;color:#A8323F;">✅ 首选日</span>'; }
-      else if(dateStr===backupVal){ style += 'background:var(--action-primary,#9A6A4B);color:#fff;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();setKrPrimaryDate(\''+pf+'\',\''+bf+'\',\''+dateStr+'\')" title="设为首选日">☐ 首选日</span>'; }
+      else if(dateStr===primaryVal){ style += 'background:#F6C9CF;border:1px solid #E5A3AC;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;color:#A8323F;">首选日</span>'; }
+      else if(dateStr===backupVal){ style += 'background:var(--action-primary,#9A6A4B);color:#fff;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;">备选日</span><span style="position:absolute;right:4px;top:3px;font-size:12px;font-weight:400;cursor:pointer;text-decoration:underline;" onclick="event.stopPropagation();setKrPrimaryDate(\''+pf+'\',\''+bf+'\',\''+dateStr+'\')" title="设为首选日（两天互换）">设为首选</span>'; }
       else style += 'color:var(--navy);cursor:pointer;background:#fff;border:1px solid var(--border2);';
       var onclick = open ? ' onclick="pickKrDate(\''+pf+'\',\''+bf+'\','+y+','+m+','+d+')"' : '';
-      return '<div style="'+style+'"'+onclick+(tripBlock ? ' title="'+aEscC(tripI.msg)+'"' : '')+'>'+lab+d+(tripBlock ? '<span style="position:absolute;left:4px;right:4px;bottom:3px;font-size:12px;line-height:1.2;color:#B3261E;">'+aEscC(tripI.msg)+'</span>' : (tripWarn ? '<span style="position:absolute;left:4px;right:4px;bottom:3px;font-size:12px;line-height:1.2;color:#8F6F0C;" title="'+aEscC(tripShortLine(__c0, [{label:'', date:dateStr}]))+'">⚠️ 共 '+ymdDiff(dateStr, __w.out)+' 天，建议 '+__w.days+' 天</span>' : ''))+'</div>';
+      return '<div style="'+style+'"'+onclick+(tripBlock ? ' title="'+aEscC(tripI.msg)+'"' : '')+'>'+lab+d+'</div>';
     }).join('')+
     '</div>';
 }
@@ -7466,7 +7465,7 @@ function krProcedureTabMain(c, tabsHtml){
       ks = ensureKrScheduleDraft(c);
       body = krSchedHeadRowHtml('施术日期')+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         monthNav+
-        krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+
+        krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripSubmitYellowHtml(c, ks.primary, ks.backup)+
         '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">'+krBtn+'</button></div>'; /* ［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
     } else if(st==='Pending'){
       body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div>'+
@@ -7489,7 +7488,7 @@ function krProcedureTabMain(c, tabsHtml){
         body = krSchedHeadRowHtml('修改施术日期')+
           '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">原定 '+ksTimeText(ks)+'，请选择新的日期</div>'+
           monthNav+
-          krDateCalendarGridHtml('changePrimary','changeBackup', ks.changePrimary, ks.changeBackup)+
+          krDateCalendarGridHtml('changePrimary','changeBackup', ks.changePrimary, ks.changeBackup)+tripSubmitYellowHtml(c, ks.changePrimary, ks.changeBackup)+
           '<div style="display:flex;gap:10px;margin-top:16px;">'+
           '<button class="btn-primary" style="flex-grow:1;" onclick="submitKrScheduleChangeDate()">提交新日期</button>'+
           '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button>'+
@@ -10646,6 +10645,13 @@ function tripShortText(c, date){
 }
 /* CMD-1106-11：天数不够的短版提醒，一行：「⚠️ 拆线安排在第 7 天，建议预留 8 天行程（首选 03/16～03/22，共 6 天；备选 03/17～03/22，共 5 天）」
    「拆线」= 最晚一项「必须在韩国」的术后管理（没有就取最晚的术后管理）；items = [{label, date}]，只写天数不够的；KR 已确认的 label 为空 */
+/* CMD-1106-21：［递交施术日期］上面一行黄字（选好日期后才出现；天数够不显示；只有一天不够只写那天）+ 最右［咨询韩国室长］ */
+function tripSubmitYellowHtml(c, pri, bak){
+  var w = tripWin(c); if(!w || !w.out || !w.days) return '';
+  var parts = [['首选日', pri], ['备选日', bak]].filter(function(x){ var i = x[1] ? tripDateIssue(c, x[1]) : null; return i && i.kind==='short' && !i.soft; }).map(function(x){ return x[0]+' '+stayMD(x[1])+'～'+stayMD(w.out)+'，共 '+ymdDiff(x[1], w.out)+' 天'; });
+  if(!parts.length) return '';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 8px;"><span style="font-size:12px;color:#8F6F0C;">'+aEscC('⚠️ 建议在韩停留 '+w.days+' 天：'+parts.join('；')+'。')+'</span><button class="btn-outline" style="padding:3px 12px;font-size:12px;white-space:nowrap;" onclick="openCaseRoom(\''+c.id+'\')">咨询韩国室长</button></div>';
+}
 function tripShortLine(c, items){
   var w = tripWin(c); if(!w || !w.out || !w.days) return '';
   var parts = (items||[]).filter(function(x){ var i = x.date ? tripDateIssue(c, x.date) : null; return i && i.kind==='short' && !i.soft; }).map(function(x){ return (x.label ? x.label+' ' : '')+stayMD(x.date)+'～'+stayMD(w.out)+'，共 '+ymdDiff(x.date, w.out)+' 天'; });

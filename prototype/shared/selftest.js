@@ -10017,7 +10017,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       document.getElementById('stay-overlay').classList.remove('open'); STAY_CTX = null;
       /* 暂定：只提醒不挡 */
       c.krSchedule.tripState = 'tentative'; delete c.tripConfirm;
-      ST.ok(tripDateIssue(c, early) && tripDateIssue(c, early).soft, '暂定：soft'); var html = krDateCalendarGridHtml('primary','backup','',''); ST.ok(/行程暂定，仅供提醒/.test(html), '暂定：日历上方灰字提醒');
+      ST.ok(tripDateIssue(c, early) && tripDateIssue(c, early).soft, '暂定：soft'); var html = krDateCalendarGridHtml('primary','backup','',''); ST.ok(!/行程暂定，仅供提醒|客人行程：/.test(html), '1106-21 改：日历上方不再有「客人行程…」/ 暂定灰字（原：暂定时日历上方灰字提醒）');
       ST.ok(/提醒：施术日期和（预估）行程不合/.test(tripMismatchHtml(c)) , '暂定：旧数据只有灰字提醒');
       c.krSchedule.tripState = 'booked'; ST.ok(/请修改/.test(tripMismatchHtml(c)) && /color:#B3261E/.test(tripMismatchHtml(c)), '已定：旧数据红字「施术日期和行程不合，请修改」');
       c.stay = {}; ST.ok(!tripDateIssue(c, early), '行程没填：不挡');
@@ -10117,7 +10117,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var ks = ensureKrScheduleDraft(c); ks.primary = ''; ks.backup = '';
       pickKrDate('primary','backup', +shortD.slice(0,4), +shortD.slice(5,7)-1, +shortD.slice(8)); ST.ok(ks.primary===shortD || caseOpenDates(c).indexOf(shortD)<0, '天数不够的日子可以选（开放日期之外才选不进）');
       pickKrDate('primary','backup', +early.slice(0,4), +early.slice(5,7)-1, +early.slice(8)); ST.ok(ks.primary!==early && ks.backup!==early, '早于到达的日子选不进');
-      ks.primary = shortD; KR_SCHED_VIEW_MONTH = new Date(+shortD.slice(0,4), +shortD.slice(5,7)-1, 1); var html = krDateCalendarGridHtml('primary','backup', shortD, ''); ST.ok(/共 \d+ 天，建议 \d+ 天/.test(html) || caseOpenDates(c).indexOf(shortD)<0, '日历格子「⚠️ 共 X 天，建议 M 天」'); ST.ok(new RegExp('建议预留 \\d+ 天行程（首选 '+stayMD(shortD)).test(html) , '选了之后下面显示短版黄字');
+      ks.primary = shortD; KR_SCHED_VIEW_MONTH = new Date(+shortD.slice(0,4), +shortD.slice(5,7)-1, 1); var html = krDateCalendarGridHtml('primary','backup', shortD, ''); ST.ok(!/共 \d+ 天，建议/.test(html) && !/行程（首选/.test(html), '1106-21 改：格子里和日历上方都不再写「共 X 天，建议 M 天」/ 黄字（原：格子里写、日历下面写短版黄字）'); ST.ok(new RegExp('建议在韩停留 \\d+ 天：首选日 '+stayMD(shortD)).test(tripSubmitYellowHtml(c, shortD, '')) || caseOpenDates(c).indexOf(shortD)<0, '黄字改在［递交］上面一行：建议在韩停留 N 天：首选日 …');
       /* 存行程：天数不够可以存 */
       c.krSchedule.status = 'pending'; c.krSchedule.primary = shortD; c.krSchedule.backup = '';
       openStayModal(c.id, {trip:false}); var set = function(id, v){ var el = document.getElementById(id); if(el) el.value = v; };
@@ -10390,6 +10390,26 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1106-19：KR 施术日期卡未递交只写一行 + IN 图例搬到标题行右边 */
+  ST.def('R251a','CMD-1106-21（A1 分页，stageC 夹具）：IN 日历整理——灰格子不写字、格子里没有天数、首选日 / 备选日标签 + 设为首选互换、日历上面没有行程和黄字、递交上面一行黄字 + 咨询韩国室长',function(){
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var gc0 = window.getCurrentCase; window.getCurrentCase = function(){ return c; }; var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c);
+    try{
+      c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; c.hasArrived = false;
+      var open = caseOpenDates(c).filter(function(x){ return x > todayStr(); }); if(!ST.ok(open.length>=2, '要有两个开放日')) return;
+      var a = open[0], b = open[1]; KR_SCHED_VIEW_MONTH = new Date(+a.slice(0,4), +a.slice(5,7)-1, 1);
+      var ks = ensureKrScheduleDraft(c); ks.primary = a; ks.backup = b;
+      var h = krDateCalendarGridHtml('primary','backup', a, b), box = document.createElement('div'); box.innerHTML = h;
+      ST.ok(!/才到达|共 \d+ 天|建议 \d+ 天|客人行程/.test(box.textContent), '日历里没有「才到达」「共 X 天」和客人行程');
+      ST.ok(/首选日/.test(box.textContent) && /备选日/.test(box.textContent) && /设为首选/.test(box.textContent) && !/✅|☐/.test(box.textContent), '首选日 / 备选日标签；备选日右上角「设为首选」，没有勾选框');
+      var gray = [].slice.call(box.querySelectorAll('div[style*="grid-template-columns"] > div')).filter(function(d){ return /bg-sidebar/.test(d.getAttribute('style')||'') && /^\d+$/.test(d.textContent.trim()); });
+      ST.ok(gray.length>0 && gray.every(function(d){ return /^\d+$/.test(d.textContent.trim()); }), '灰格子只有日期数字，没有字');
+      setKrPrimaryDate('primary','backup', b); ST.ok(ks.primary===b && ks.backup===a, '按「设为首选」两天互换');
+      var yel = tripSubmitYellowHtml(c, ks.primary, ks.backup); ST.ok(yel==='' || (/建议在韩停留 \d+ 天：/.test(yel) && /咨询韩国室长/.test(yel) && /openCaseRoom/.test(yel)), '黄字 + ［咨询韩国室长］（天数不够才出现）：'+yel.length);
+      var w = tripWin(c); c.stay = {in:ymdAdd(a,-1), inTime:'09:00', out:ymdAdd(a,2), outTime:'18:00'}; c.tripState = 'booked';
+      var yel2 = tripSubmitYellowHtml(c, a, ''); if(tripWin(c) && tripWin(c).days>3) ST.ok(/建议在韩停留 \d+ 天：首选日/.test(yel2) && !/备选日/.test(yel2) && /咨询韩国室长/.test(yel2), '天数不够：只写够不到的那天 + 咨询按钮'); 
+      c.stay = {in:ymdAdd(a,-1), inTime:'09:00', out:ymdAdd(a,60), outTime:'18:00'}; ST.ok(tripSubmitYellowHtml(c, a, b)==='', '天数够：没有黄字');
+    } finally { window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); }
+  });
   ST.def('R250a','CMD-1106-20（KM1 分页，stageC 夹具）：在韩管理没付款时操作栏只写「待付款」，没有灰色［预约时间］；付款后有［预约时间］',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
