@@ -2301,7 +2301,8 @@ function krJudge(changed){
 function krAfterBlock(c){
   var list = recProjectsRowsHtml(c, 'KR'); /* CMD-1027-05 四：购买情况｜项目名｜术后管理｜价格；CMD-1106-03：KR 室长每行［编辑］ */
   var addable = '';
-  if(krCan() && c.stage==='consult' && c.reportReady){ krSubReset(c); addable = krScAddBtnHtml(c); krScEditSync(c); krScAddSync(c); }
+  if(krCan() && c.reportReady && scopeFrozen(c)){ addable = krScAddBtnHtml(c); } /* CMD-1106-05：付款后（阶段已不是面诊）也写「已冻结」 */
+  else if(krCan() && c.stage==='consult' && c.reportReady){ krSubReset(c); addable = krScAddBtnHtml(c); krScEditSync(c); krScAddSync(c); }
   return krCardBox('推荐项目', list+addable);
 }
 /* ===== CMD-1106-03：推荐项目发出后 KR 编辑 / 补加 + KR ↔ IN 编辑锁 =====
@@ -2311,22 +2312,25 @@ function krAfterBlock(c){
 function krScBlank(open){ return {adds:{}, signed:{}, locals:[], care:{}, posts:{}, open:!!open, tab:'surg', q:''}; }
 var KR_SC = krScBlank(false); /* 补加 */
 var KR_SCE = null; /* 编辑 {name, kind:'surg'|'mgmt', copies, first, err} */
-function krScLockHolder(c){ return scopeLockBy(c, 'IN'); }
+function krScLockHolder(c){ return scopeInLock(c); } /* CMD-1106-05：IN 按了［结算］（结算单没付款）才锁 */
 function krScLockTouch(){ if(!KR_SCE && !KR_SC.open) return; var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r) return; Store.mutateClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(c && scopeLockBy(c, 'KR')) c.scopeLock.at = nowFullDt(); }); }
 function krScLockStart(kind){ /* 返回 false = IN 正在选项目 / 付款，不能开始 */
-  var holder = null, ok = false;
-  Store.mutateClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c) return; holder = scopeLockBy(c, 'IN'); if(holder) return; scopeLockSet(c, 'KR', ME_NAME, kind); ok = true; });
-  if(holder){ alert(holder.by+'正在帮客人选项目，请稍后'); return false; } return ok;
+  var holder = null, ok = false, frozen = false;
+  Store.mutateClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c) return; if(scopeFrozen(c)){ frozen = true; return; } holder = scopeInLock(c); if(holder) return; scopeLockSet(c, 'KR', ME_NAME, kind); ok = true; });
+  if(frozen){ alert('已付定金，推荐项目已冻结；要加项目请用项目卡［增加项目］'); return false; }
+  if(holder){ alert(holder.by+'正在结算，请稍后'); return false; } return ok;
 }
 function krScLockEnd(){ Store.mutateClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(c) scopeLockClear(c, 'KR'); }); }
 function krScAddBtnHtml(c){
+  if(scopeFrozen(c)) return '<div style="margin-top:12px;font-size:12px;color:var(--muted);">已付定金，推荐项目已冻结；要加项目请用项目卡［增加项目］。</div>'; /* CMD-1106-05：付款后两个按钮都消失 */
   var lk = krScLockHolder(c);
-  return '<div style="margin-top:12px;"><button class="btn-outline" '+(lk ? 'disabled title="'+krEsc(lk.by)+'正在帮客人选项目，请稍后" style="opacity:.45;cursor:not-allowed;"' : 'onclick="krScAddOpen()"')+'>＋ 补加可选项目</button> <span style="font-size:12px;color:var(--muted);">只能新增，不能删除；要拿掉某个项目，请在对话里和 IN 室长商量。</span></div>';
+  return '<div style="margin-top:12px;"><button class="btn-outline" '+(lk ? 'disabled title="'+krEsc(lk.by)+'正在结算，请稍后" style="opacity:.45;cursor:not-allowed;"' : 'onclick="krScAddOpen()"')+'>＋ 补加可选项目</button> <span style="font-size:12px;color:var(--muted);">只能新增，不能删除；要拿掉某个项目，请在对话里和 IN 室长商量。</span></div>';
 }
 /* ---- 编辑 ---- */
 function krScopeEditOpen(name){
   if(!krCan()) return; var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r) return; var c = r.c;
   var it = ((c.krScope||{}).items||[]).filter(function(x){ return x.name===name; })[0]; if(!it) return;
+  if(scopeFrozen(c)){ alert('已付定金，推荐项目已冻结；要加项目请用项目卡［增加项目］'); return; }
   if(recBuyState(c, it)!=='none'){ alert('已购买，不能编辑'); return; }
   if(!krScLockStart('edit')) return;
   KR_SCE = {name:name, kind:it.mgmt ? 'mgmt' : 'surg', copies:it.copies||1, first:(it.firstDay==null ? '' : it.firstDay), err:''};

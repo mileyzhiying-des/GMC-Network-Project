@@ -9660,8 +9660,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(mg.copies===2 && mg.firstDay===3 && mg.qty===(mg.specTimes||1)*2 && mg.price===unit*2, '管理项目：份数 2、术后第 3 天开始，价格 = 项目库单价 × 份数（不能手改）');
       /* 已购买：灰掉、拒绝 */
       Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.procedureItems = [{name:X.p1.name, origin:'KR', batchId:'B1', price:X.p1.price}]; c.settlementBatches = [{id:'B1', status:'active', krDeposit:1, krTotal:X.p1.price}]; });
-      rows = recProjectsRowsHtml(gc(), 'KR'); ST.ok(/disabled title="已购买，不能编辑"/.test(rows), '已购买的［编辑］灰掉，滑过「已购买，不能编辑」');
-      krScopeEditOpen(X.p1.name); ST.ok(!KR_SCE, '已购买的点不开'); ST.ok(!coreScopeEdit(gc(), X.p1.name, {stay:'1天', anesthesia:{type:'local'}, postcare:[]}, 'KM1 室长').ok, '程序里也拒绝');
+      rows = recProjectsRowsHtml(gc(), 'KR'); ST.ok(scopeFrozen(gc()) && !/krScopeEditOpen|>编辑</.test(rows), '1106-05：已付定金 = 冻结，已购买的和没买的都没有［编辑］列');
+      krScopeEditOpen(X.p1.name); ST.ok(!KR_SCE, '点不开'); ST.ok(!coreScopeEdit(gc(), X.p1.name, {stay:'1天', anesthesia:{type:'local'}, postcare:[]}, 'KM1 室长').ok, '程序里也拒绝');
       Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.procedureItems = []; c.settlementBatches = []; });
       /* 补加 */
       krScAddOpen(); ST.ok(KR_SC.open && !!scopeLockBy(gc(), 'KR'), '按［补加］：打开项目购买卡 + KR 锁');
@@ -9672,12 +9672,22 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var n0 = gc().krScope.items.length; krScAddConfirm(); var its = gc().krScope.items, added = its[its.length-1];
       ST.ok(its.length===n0+1 && added.name===X.p2.name && !!added.stay && !!added.anesthesia, '补加：推荐列表多一行，带项目库默认设定（在韩天数 / 麻醉 / 术后管理）');
       ST.ok(!gc().scopeLock && (gc().logEntries||[]).some(function(e){ return /补加可选项目/.test(e.action); }) && (Store.readClinic(cid).NOTIFS||[]).some(function(n){ return /补加了/.test(n.text); }), '补加后锁解开、Timeline + IN 通知');
-      /* IN 锁住时灰掉 */
-      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; scopeLockSet(c, 'IN', 'A1 室长', 'select'); });
-      rows = recProjectsRowsHtml(gc(), 'KR'); ST.ok(/disabled title="A1 室长正在帮客人选项目，请稍后"/.test(rows) && /disabled title="A1 室长/.test(krScAddBtnHtml(gc())), 'IN 正在选项目：［编辑］［补加］灰掉，滑过「A1 室长正在帮客人选项目，请稍后」');
-      krScopeEditOpen(X.p1.name); krScAddOpen(); ST.ok(!KR_SCE && !KR_SC.open && alerts.some(function(m){ return /正在帮客人选项目/.test(m); }), '程序里也拒绝');
-      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.scopeLock.at = fmtUtcAdd(-11); });
-      ST.ok(!scopeLockInfo(gc()) && !/disabled title="A1/.test(recProjectsRowsHtml(gc(), 'KR')), 'IN 锁 11 分钟没动作 → 自动解锁，按钮恢复');
+      /* 1106-05：IN 只勾项目、还没结算 → 不锁 KR */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.recommended = [{projectId:'p', name:X.p1.name, origin:'KR', price:1}]; c.settlementBatches = []; });
+      ST.ok(!scopeInLock(gc()) && !/disabled title="A1/.test(recProjectsRowsHtml(gc(), 'KR')) && !/disabled title="[^"]*正在结算/.test(krScAddBtnHtml(gc())), '1106-05：IN 勾了项目但没按结算 → KR 的［编辑］［补加］可以按');
+      /* IN 按了［结算］：结算单生成、没付款 → 灰掉，没有 10 分钟自动解开 */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.recommended = []; c.settlementBatches = [{id:'B9', status:'unpaid', orderedBy:'A1 室长', krTotal:1, krDeposit:1}]; c.procedureItems = [{name:X.p1.name, origin:'KR', batchId:'B9', price:1}]; c.scopeEditNote = null; });
+      rows = recProjectsRowsHtml(gc(), 'KR'); ST.ok(/disabled title="A1 室长正在结算，请稍后"/.test(rows) && /disabled title="A1 室长正在结算，请稍后"/.test(krScAddBtnHtml(gc())), 'IN 按了结算：［编辑］［补加］灰掉，滑过「A1 室长正在结算，请稍后」');
+      krScopeEditOpen(X.p1.name); krScAddOpen(); ST.ok(!KR_SCE && !KR_SC.open && alerts.some(function(m){ return /正在结算/.test(m); }) && !coreScopeEdit(gc(), X.p1.name, {stay:'1天', anesthesia:{type:'local'}, postcare:[]}, 'KM1 室长').ok, '程序里也拒绝');
+      ST.ok(!!scopeInLock(gc()) && !!recProjectsRowsHtml(gc(), 'KR'), '过了 10 分钟（演示时间）仍然灰：结算单还在就一直锁');
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.settlementBatches = []; c.procedureItems = []; });
+      ST.ok(!scopeInLock(gc()) && !/disabled title="A1/.test(recProjectsRowsHtml(gc(), 'KR')), 'IN 重新选项目（撤销这张结算单）→ 又可以按');
+      /* IN 确认付款完成 → 两个按钮消失，冻结 */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.settlementBatches = [{id:'B9', status:'active', krTotal:1, krDeposit:1}]; c.procedureItems = [{name:X.p1.name, origin:'KR', batchId:'B9', price:1}]; });
+      rows = recProjectsRowsHtml(gc(), 'KR'); var fz = krScAddBtnHtml(gc());
+      ST.ok(scopeFrozen(gc()) && !/krScopeEditOpen|>编辑</.test(rows) && !/krScAddOpen|补加可选项目/.test(fz) && /已付定金，推荐项目已冻结；要加项目请用项目卡［增加项目］/.test(fz), '付款完成：没有［编辑］、没有［补加］，说明改成「已冻结」（没买的项目也没有）');
+      ST.ok(!coreScopeEdit(gc(), X.p2.name, {stay:'1天', anesthesia:{type:'local'}, postcare:[]}, 'KM1 室长').ok && !coreAddScopeItem(gc(), {name:'zz', price:1}, 'KM1 室长'), '程序里也拒绝（编辑 / 补加）');
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.settlementBatches = []; c.procedureItems = []; });
       /* 结尾：KR 开着编辑，留给 R234b */
       krScopeEditOpen(X.p1.name); ST.ok(!!KR_SCE && !!scopeLockBy(gc(), 'KR'), '（留着 KR 编辑锁给 IN 分页看）');
     } finally { window.alert = oa; }
@@ -9696,15 +9706,16 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var b0 = c.settlementBatches; ST.ok(scopeLockGuardIN(c)===true, '结算 / 付款也被同一个守卫挡住');
       c.scopeLock.at = fmtUtcAdd(-11); renderCaseBody(c);
       ST.ok(!scopeLockInfo(c) && !document.getElementById('case-body').querySelector('.scope-lock-ov'), 'KR 10 分钟没动作 → 自动解锁，遮罩消失');
-      toggleProject(pid); ST.ok((c.recommended||[]).length===n0+1 && c.scopeLock && c.scopeLock.side==='IN', 'IN 开始选项目 → 记 IN 锁（KR 的［编辑］［补加］会灰）');
+      toggleProject(pid); ST.ok((c.recommended||[]).length===n0+1 && !scopeLockInfo(c), '1106-05：IN 勾选项目不再记锁（只有按［结算］才锁 KR）');
+      c.settlementBatches = [{id:'B9', status:'unpaid', orderedBy:'A1 室长', krTotal:1, krDeposit:1}]; c.procedureItems = [{name:'x', origin:'KR', batchId:'B9', price:1}]; /* 模拟 IN 按了［结算］，留给 R234c */
     } finally { window.alert = oa; }
   });
-  ST.def('R234c','CMD-1106-03（KM1 分页，接 R234b）：IN 的锁 → KR 灰掉；还原',function(){
+  ST.def('R234c','CMD-1106-03 / 1106-05（KM1 分页，接 R234b）：IN 按了结算 → KR 灰掉；还原',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = r232Case(); if(!ST.ok(!!r, '先 R234a')) return; var cid = r.clinicId, id = r.id, gc = function(){ return krFindCase(cid, id).c; };
-    ST.ok(!!(gc().scopeLock && gc().scopeLock.side==='IN'), '先在 A1 分页跑 R234b（IN 开始选项目）');
+    ST.ok(!!scopeInLock(gc()), '先在 A1 分页跑 R234b（IN 按了结算）');
     KR_SCE = null; KR_SC.open = false;
-    ST.ok(/disabled title="A1 室长正在帮客人选项目/.test(recProjectsRowsHtml(gc(), 'KR')), 'IN 正在选项目：KR 的［编辑］灰掉（跨分页同步）');
+    ST.ok(/disabled title="A1 室长正在结算，请稍后"/.test(recProjectsRowsHtml(gc(), 'KR')), 'IN 按了结算：KR 的［编辑］灰掉（跨分页同步）');
     try{ var sn = localStorage.getItem('gmc_cfg_r234snap'); if(sn) Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===id; }); CASE_ITEMS[i] = JSON.parse(sn); }); localStorage.removeItem('gmc_cfg_r234snap'); }catch(e){}
   });
   /* ===== CMD-1106-04 ===== */

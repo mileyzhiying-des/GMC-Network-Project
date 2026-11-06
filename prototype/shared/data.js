@@ -2431,6 +2431,7 @@ function coreJudgeContinuation(c, changed, by){
 /* 项目确认中：KR 室长补加可选项目（只能新增，不能删除；要拿掉在对话里和 IN 室长商量）。item = {name, price, note} */
 function coreAddScopeItem(c, item, by){
   if(!c || !c.reportReady || c.stage!=='consult' || !c.krScope) return false;
+  if(scopeFrozen(c) || scopeInLock(c)) return false; /* CMD-1106-05 */
   if(c.krScope.items.some(function(it){ return it.name===item.name; })) return false;
   c.krScope.items.push(Object.assign({}, item, {note:item.note||''}));
   c.krScope.updatedAt = nowFullDt();
@@ -12284,11 +12285,11 @@ function recBuyState(c, x){
 }
 /* CMD-1106-03：［编辑］——未购买才能改；已购买 / 已取消灰掉；IN 正在选项目 / 付款时也灰掉 */
 function recEditBtn(c, x, st){
-  var q = String(x.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'), lk = scopeLockBy(c, 'IN'), why = st==='bought' ? '已购买，不能编辑' : (st==='cancelled' ? '已取消，不能编辑' : (lk ? lk.by+'正在帮客人选项目，请稍后' : ''));
+  var q = String(x.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'), lk = scopeInLock(c), why = st==='bought' ? '已购买，不能编辑' : (st==='cancelled' ? '已取消，不能编辑' : (lk ? lk.by+'正在结算，请稍后' : ''));
   return '<span style="text-align:right;"><button class="btn-outline" style="padding:3px 10px;font-size:12px;'+(why ? 'opacity:.45;cursor:not-allowed;' : '')+'" '+(why ? 'disabled title="'+esc0(why)+'"' : 'onclick="krScopeEditOpen(\''+q+'\')"')+'>编辑</button></span>';
 }
 function recProjectsRowsHtml(c, viewer){
-  var items = (c.krScope && c.krScope.items) || [], e = esc0, canEdit = viewer==='KR' && typeof krCan==='function' && krCan() && !!c.reportReady && c.stage==='consult', G = 'display:grid;grid-template-columns:84px minmax(0,1.5fr) minmax(0,1.6fr) '+(viewer==='KR' ? '120px' : '220px')+(canEdit ? ' 64px' : '')+';gap:10px;align-items:start;'; /* CMD-1106-03：KR 室长每行［编辑］（未购买才能改） */
+  var items = (c.krScope && c.krScope.items) || [], e = esc0, canEdit = viewer==='KR' && typeof krCan==='function' && krCan() && !!c.reportReady && c.stage==='consult' && !scopeFrozen(c), G = 'display:grid;grid-template-columns:84px minmax(0,1.5fr) minmax(0,1.6fr) '+(viewer==='KR' ? '120px' : '220px')+(canEdit ? ' 64px' : '')+';gap:10px;align-items:start;'; /* CMD-1106-03：KR 室长每行［编辑］（未购买才能改） */
   if(!items.length) return '<div style="font-size:12px;color:var(--muted);padding:8px 0;">院长没有建议项目</div>';
   var tagOf = function(st){ return st==='bought' ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">已购买</span>' : (st==='cancelled' ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;">已取消</span>' : '<span class="status-pill" style="background:var(--border2);color:var(--slate2);font-size:12px;">未购买</span>'); };
   var head = '<div style="'+G+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);"><span>购买情况</span><span>项目名</span><span>术后管理</span><span style="text-align:right;">价格</span>'+(canEdit ? '<span></span>' : '')+'</div>';
@@ -12890,7 +12891,17 @@ function scopeLockGuardIN(c){
   return true;
 }
 /* IN 开始帮客人选项目 / 付款 → 记 IN 锁（KR 的［编辑］［补加］灰掉）；只对已有诊疗方案的案件 */
-function scopeLockInStart(c, kind){ if(c && c.krScope && c.reportReady && !scopeLockBy(c, 'KR')) scopeLockSet(c, 'IN', actingName(), kind); }
+/* CMD-1106-05：IN 的锁不再存、也不再因为“勾选项目 / 打开结算窗”而记（scopeLockInStart 变成空函数）；改成按 IN 的进度现算：
+   ① 还没结算 → KR 可以编辑 / 补加 ② IN 按了［结算］，结算单已生成、没付款 → KR 灰掉「A1 室长正在结算，请稍后」（没有 10 分钟自动解开：结算单还在就一直锁；关掉结算弹窗但结算单还在，仍锁）
+   ③ IN 重新选项目（reselectProjects：撤销这张未付款结算单）→ 又可以按 ④ IN 确认付款完成 → KR 的［编辑］［补加］直接消失（推荐项目冻结）。 */
+function scopeLockInStart(c, kind){ /* 空函数（保留名字给旧调用） */ }
+function scopeInLock(c){
+  var b = (c && c.settlementBatches || []).filter(function(x){ return x.status==='unpaid'; })[0]; if(!b) return null;
+  return {side:'IN', by:b.orderedBy || 'IN 室长', kind:'settle', batchId:b.id};
+}
+function scopeFrozen(c){ /* 已付定金（有赴韩项目的结算单已付款，哪怕之后部分退款也一直冻结）→ 整个推荐项目冻结：没买的也不能再编辑 / 补加；之后要加项目走项目卡［增加项目］ */
+  return !!c && (c.settlementBatches||[]).some(function(b){ return b.status!=='unpaid' && (c.procedureItems||[]).some(function(it){ return it.batchId===b.id && it.origin==='KR'; }); });
+}
 /* CMD-1106-04：KR 锁着时，IN「赴韩方案」整张卡盖灰色半透明遮罩（只盖这一张卡；其他 tab / 报告 / 页头照常）。1106-03 的顶部黄色横幅拿掉 */
 function scopeLockMinutes(l){ var t = utcStrParse(l.start || l.at); return t ? Math.max(0, Math.round((realNow().getTime() - t.getTime())/60000)) : 0; }
 function scopeLockOverlayHtml(c){
@@ -12931,7 +12942,8 @@ function coreScopeEdit(c, name, p, by){
   if(!c || !c.reportReady || !c.krScope) return {ok:false, err:'这个案件现在不能编辑推荐项目'};
   var it = (c.krScope.items||[]).filter(function(x){ return x.name===name; })[0]; if(!it) return {ok:false, err:'找不到这个推荐项目'};
   var st = recBuyState(c, it); if(st!=='none') return {ok:false, err:st==='bought' ? '已购买，不能编辑' : '已取消，不能编辑'};
-  var lk = scopeLockBy(c, 'IN'); if(lk) return {ok:false, err:lk.by+'正在帮客人选项目，请稍后'};
+  if(scopeFrozen(c)) return {ok:false, err:'已付定金，推荐项目已冻结'};
+  var lk = scopeInLock(c); if(lk) return {ok:false, err:lk.by+'正在结算，请稍后'};
   var ch = [];
   if(it.mgmt){
     var copies = Math.max(1, parseInt(p.copies,10) || 1), unit = it.unit || Math.round((it.price||0)/Math.max(1, it.copies||1)), first = (p.first===''||p.first==null) ? it.firstDay : Math.max(0, parseInt(p.first,10) || 0);
