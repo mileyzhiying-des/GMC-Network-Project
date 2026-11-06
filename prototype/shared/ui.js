@@ -2418,7 +2418,7 @@ function confirmLocalRefundAll(){
 /* 选中/取消项目时把项目库当时的名字/价格/来源复制一份存进案件（快照）；
    之后项目库改价、改名、非活性化、删除都不会影响已经选进案件的这份拷贝（要求7） */
 function toggleProject(projectId){
-  var c = getCurrentCase(); if(!c) return;
+  var c = getCurrentCase(); if(!c) return; if(scopeLockGuardIN(c)) return; scopeLockInStart(c, 'select'); /* CMD-1106-03：KR 正在编辑 → 不能选；IN 开始选 → 记 IN 锁 */
   c.recommended = c.recommended || [];
   var idx = c.recommended.findIndex(function(it){ return it.projectId===projectId; });
   if(idx>-1){
@@ -2447,7 +2447,7 @@ function toggleProjectsExpand(){
 var SETTLE_MODAL_BATCH_ID = null;
 
 function settleProjects(batchId){
-  var c = getCurrentCase(); if(!c) return;
+  var c = getCurrentCase(); if(!c) return; if(scopeLockGuardIN(c)) return; scopeLockInStart(c, 'pay');
   var batch = batchId ? (c.settlementBatches||[]).filter(function(b){ return b.id===batchId; })[0] : latestUnpaidBatch(c);
   if(!batch) return;
   if(batchNeedsPassport(c, batch) && !window.GMC_PASSPORT_AUTO){ passportGate(c, function(){ settleProjects(batch.id); }, {missingOnly:true}); return; } /* CMD-1019-12：旧案件有定金结算单但没护照 → 先登记 */
@@ -2484,7 +2484,7 @@ function settleProjects(batchId){
   document.getElementById('settle-overlay').classList.add('open');
 }
 
-function closeSettleModal(){ var so = document.getElementById('settle-overlay'); so.classList.remove('open'); so.style.zIndex = ''; }
+function closeSettleModal(){ try{ var c0 = getCurrentCase(); if(c0 && scopeLockBy(c0, 'IN')){ scopeLockClear(c0, 'IN'); } }catch(e){} var so = document.getElementById('settle-overlay'); so.classList.remove('open'); so.style.zIndex = ''; }
 
 function submitKrScheduleDate(){
   var c = getCurrentCase(); if(!c) return;

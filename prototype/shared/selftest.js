@@ -9626,6 +9626,86 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var f = document.createElement('div'); f.innerHTML = '<input id="ce-nik" maxlength="16" oninput="nikCeLive(this)"><div id="ce-nikc"></div>'; document.body.appendChild(f);
     try{ var e2 = document.getElementById('ce-nik'); e2.value = '9999-9999'; nikCeLive(e2); ST.ok(e2.value==='99999999' && document.getElementById('ce-nikc').textContent==='8/16', '管理者更正框：只留数字，N/16'); e2.value = '1234567890123456789'; nikCeLive(e2); ST.ok(e2.value.length===16 && document.getElementById('ce-nikc').textContent==='16/16', '更正框最多 16 位'); } finally { f.remove(); }
   });
+  /* ===== CMD-1106-03：推荐项目发出后 KR 编辑 / 补加 + 编辑锁（R234a KM1 → R234b A1 → R234c KM1；stagePay 夹具） ===== */
+  function r234Setup(cid, id){
+    var cand = krScopeCandidates(cid), p1 = cand.kr[0], p2 = cand.kr[1], lib = krLocalLibOn(krHospitalIdOfMe()).filter(function(p){ return !p.neg && p.specs[0] && p.specs[0].price>0; })[0];
+    Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0];
+      c.needsConsult = true; c.consultRequested = true; c.reportReady = true; c.consultStatus = 'report_ready'; c.stage = 'consult'; c.director = 'KD1 院长'; c.settlementBatches = []; c.procedureItems = []; c.recommended = []; delete c.scopeLock;
+      c.krScope = {items:[{name:p1.name, price:p1.price, note:'', stay:'7天', anesthesia:{type:'local', label:'局麻', note:'', fast:''}, postcare:[{mgmt:'拆线', name:'拆线', times:1, interval:0, place:'KR', startDay:7, innName:'', day:'第7天'}]}, krMgScopeItem(lib, {sid:lib.specs[0].id, qty:1}, '')], overallNote:'', updatedAt:nowFullDt()}; });
+    return {p1:p1, p2:p2, lib:lib};
+  }
+  ST.def('R234a','CMD-1106-03（KM1 分页，stagePay 夹具）：推荐项目［编辑］（施术 / 管理项目、价格不动、未购买才能改、通知 + Timeline）、［补加］项目购买卡（已在推荐里的灰掉、带默认设定）、IN 锁住时灰掉；结尾留着 KR 编辑锁给 R234b',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = r232Case(); if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return; var cid = r.clinicId, id = r.id, gc = function(){ return krFindCase(cid, id).c; };
+    try{ localStorage.setItem('gmc_cfg_r234snap', JSON.stringify(gc())); }catch(e){}
+    var oa = window.alert, alerts = []; window.alert = function(m){ alerts.push(String(m)); };
+    try{
+      var X = r234Setup(cid, id); KR_CASE = {clinicId:cid, id:id, tab:'consult'}; KR_SUB = krSubBlank(''); KR_SCE = null; KR_SC = {adds:{}, signed:{}, locals:[], care:{}, open:false, tab:'surg', q:''}; krShowCase(cid, id, {tab:'consult', here:true});
+      var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+      var rows = recProjectsRowsHtml(gc(), 'KR'); ST.ok((rows.match(/krScopeEditOpen/g)||[]).length===2 && /补加|编辑/.test(rows), '1：每个未购买的推荐项目一行［编辑］（2 行）');
+      ST.ok(!/krScopeEditOpen/.test(recProjectsRowsHtml(gc(), 'IN')), 'IN 看的推荐项目没有［编辑］');
+      /* 施术编辑 */
+      var price0 = gc().krScope.items[0].price; krScopeEditOpen(X.p1.name);
+      ST.ok(!!KR_SCE && KR_SCE.kind==='surg' && !!scopeLockBy(gc(), 'KR'), '按［编辑］：记 KR 锁');
+      var ov = document.getElementById('kr-scedit-overlay'); ST.ok(ov && ov.classList.contains('open') && /编辑推荐项目/.test(ov.innerText) && /价格.*不能改/.test(ov.innerText), '编辑弹窗打开，价格写明不能改');
+      var d = krDet('__edit'); d.stay = '9'; d.stayTouched = true; d.stayReason = {tags:['术后需静养'], fly:'', note:''}; var ak = Object.keys(KR_ANES).filter(function(k){ return k!=='local'; })[0]; d.anes = ak; d.anesFast = '8';
+      d.pc.push({mgmt:'术后管理', kr:(krScopeCandidates(cid).krPost[0]||{}).name || '术后复诊检查', inn:'', times:1, interval:1, place:'KR', start:'3'});
+      krScopeEditSave(); var it0 = gc().krScope.items[0];
+      ST.ok(!KR_SCE && it0.stay==='9天' && it0.anesthesia.type===ak && it0.price===price0 && it0.postcare.length===2, '保存：在韩天数 / 麻醉 / 术后管理更新，价格不动 '+JSON.stringify([it0.stay, it0.anesthesia.type, it0.postcare.length]));
+      ST.ok(!gc().scopeLock, '保存后 KR 锁解开');
+      ST.ok((gc().logEntries||[]).some(function(e){ return /^KR 编辑推荐项目「/.test(e.action) && /建议在韩 7天 → 9天/.test(e.action) && /麻醉 局麻 → /.test(e.action) && /术后管理 /.test(e.action); }), 'Timeline 记改前 → 改后');
+      ST.ok((Store.readClinic(cid).NOTIFS||[]).some(function(n){ return /KM1 室长 更新了 A\d+ 的推荐项目：/.test(n.text); }), 'IN 收到通知「KM1 室长 更新了 A… 的推荐项目：…」');
+      /* 管理项目编辑：份数 / 术后第几天开始；价格 = 单价 × 份数 */
+      var mg = gc().krScope.items[1], mp0 = mg.price, unit = mg.unit || mp0; krScopeEditOpen(mg.name); KR_SCE.copies = '2'; KR_SCE.first = '3'; krScopeEditSave(); mg = gc().krScope.items[1];
+      ST.ok(mg.copies===2 && mg.firstDay===3 && mg.qty===(mg.specTimes||1)*2 && mg.price===unit*2, '管理项目：份数 2、术后第 3 天开始，价格 = 项目库单价 × 份数（不能手改）');
+      /* 已购买：灰掉、拒绝 */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.procedureItems = [{name:X.p1.name, origin:'KR', batchId:'B1', price:X.p1.price}]; c.settlementBatches = [{id:'B1', status:'active', krDeposit:1, krTotal:X.p1.price}]; });
+      rows = recProjectsRowsHtml(gc(), 'KR'); ST.ok(/disabled title="已购买，不能编辑"/.test(rows), '已购买的［编辑］灰掉，滑过「已购买，不能编辑」');
+      krScopeEditOpen(X.p1.name); ST.ok(!KR_SCE, '已购买的点不开'); ST.ok(!coreScopeEdit(gc(), X.p1.name, {stay:'1天', anesthesia:{type:'local'}, postcare:[]}, 'KM1 室长').ok, '程序里也拒绝');
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.procedureItems = []; c.settlementBatches = []; });
+      /* 补加 */
+      krScAddOpen(); ST.ok(KR_SC.open && !!scopeLockBy(gc(), 'KR'), '按［补加］：打开项目购买卡 + KR 锁');
+      var sg = txt(krSgListHtml(gc(), 'sc')); ST.ok(sg.indexOf(X.p1.name)>-1 && /已在推荐里/.test(sg) && new RegExp(X.p1.name.replace(/[()]/g, '.')+'[^]*?已在推荐里').test(sg), '已经在推荐里的灰掉并标「已在推荐里」');
+      ST.ok(/disabled/.test(krSgListHtml(gc(), 'sc')), '灰掉的勾不了');
+      var ovA = document.getElementById('kr-scadd-overlay'); ST.ok(ovA && ovA.classList.contains('open') && /补加推荐项目/.test(ovA.innerText) && !/结算|确认付款|서비스/.test(ovA.innerText.replace(/不收费，不付款/g, '')), '补加卡：没有结算 / 付款 / 赠送');
+      krChToggle('sc', X.p2.name, true); ST.ok(!!KR_SC.adds[X.p2.name], '勾上另一个施术项目');
+      var n0 = gc().krScope.items.length; krScAddConfirm(); var its = gc().krScope.items, added = its[its.length-1];
+      ST.ok(its.length===n0+1 && added.name===X.p2.name && !!added.stay && !!added.anesthesia, '补加：推荐列表多一行，带项目库默认设定（在韩天数 / 麻醉 / 术后管理）');
+      ST.ok(!gc().scopeLock && (gc().logEntries||[]).some(function(e){ return /补加可选项目/.test(e.action); }) && (Store.readClinic(cid).NOTIFS||[]).some(function(n){ return /补加了/.test(n.text); }), '补加后锁解开、Timeline + IN 通知');
+      /* IN 锁住时灰掉 */
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; scopeLockSet(c, 'IN', 'A1 室长', 'select'); });
+      rows = recProjectsRowsHtml(gc(), 'KR'); ST.ok(/disabled title="A1 室长正在帮客人选项目，请稍后"/.test(rows) && /disabled title="A1 室长/.test(krScAddBtnHtml(gc())), 'IN 正在选项目：［编辑］［补加］灰掉，滑过「A1 室长正在帮客人选项目，请稍后」');
+      krScopeEditOpen(X.p1.name); krScAddOpen(); ST.ok(!KR_SCE && !KR_SC.open && alerts.some(function(m){ return /正在帮客人选项目/.test(m); }), '程序里也拒绝');
+      Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; c.scopeLock.at = fmtUtcAdd(-11); });
+      ST.ok(!scopeLockInfo(gc()) && !/disabled title="A1/.test(recProjectsRowsHtml(gc(), 'KR')), 'IN 锁 11 分钟没动作 → 自动解锁，按钮恢复');
+      /* 结尾：KR 开着编辑，留给 R234b */
+      krScopeEditOpen(X.p1.name); ST.ok(!!KR_SCE && !!scopeLockBy(gc(), 'KR'), '（留着 KR 编辑锁给 IN 分页看）');
+    } finally { window.alert = oa; }
+  });
+  function fmtUtcAdd(min){ var d = new Date(realNow().getTime() + min*60000); return d.toISOString().slice(0, 10)+' '+d.toISOString().slice(11, 16); }
+  ST.def('R234b','CMD-1106-03（A1 分页，接 R234a）：KR 在编辑 → IN 看到「KM1 室长正在编辑推荐项目」、选项目 / 结算 / 付定金灰掉且程序拒绝；10 分钟后自动解锁；IN 开始选项目 → 记 IN 锁',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return /^T-已付面诊费/.test(x.name) && !isChildVisit(x); })[0]; if(!ST.ok(!!c && c.scopeLock && c.scopeLock.side==='KR', '先在 KM1 分页跑 R234a（结尾留着 KR 编辑锁）')) return;
+    var oa = window.alert, alerts = []; window.alert = function(m){ alerts.push(String(m)); }; window.GMC_NO_TABS = true;
+    try{
+      openCaseDetail(c.id); renderCaseBody(c); var body = document.getElementById('case-body');
+      ST.ok(!!body.querySelector('.scope-lock-banner') && /KM1 室长正在编辑推荐项目，编辑完成前不能选项目、付定金/.test(body.innerText), '案件页最上面横幅：KM1 室长正在编辑推荐项目…');
+      var pid = (PROJECT_LIBRARY.filter(function(p){ return p.origin==='KR'; })[0]||{}).id, n0 = (c.recommended||[]).length;
+      toggleProject(pid); ST.ok((c.recommended||[]).length===n0 && alerts.some(function(m){ return /正在编辑推荐项目/.test(m); }), '程序里拒绝选项目');
+      var b0 = c.settlementBatches; ST.ok(scopeLockGuardIN(c)===true, '结算 / 付款也被同一个守卫挡住');
+      c.scopeLock.at = fmtUtcAdd(-11); renderCaseBody(c);
+      ST.ok(!scopeLockInfo(c) && !document.getElementById('case-body').querySelector('.scope-lock-banner'), 'KR 10 分钟没动作 → 自动解锁，横幅消失');
+      toggleProject(pid); ST.ok((c.recommended||[]).length===n0+1 && c.scopeLock && c.scopeLock.side==='IN', 'IN 开始选项目 → 记 IN 锁（KR 的［编辑］［补加］会灰）');
+    } finally { window.alert = oa; }
+  });
+  ST.def('R234c','CMD-1106-03（KM1 分页，接 R234b）：IN 的锁 → KR 灰掉；还原',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r = r232Case(); if(!ST.ok(!!r, '先 R234a')) return; var cid = r.clinicId, id = r.id, gc = function(){ return krFindCase(cid, id).c; };
+    ST.ok(!!(gc().scopeLock && gc().scopeLock.side==='IN'), '先在 A1 分页跑 R234b（IN 开始选项目）');
+    KR_SCE = null; KR_SC.open = false;
+    ST.ok(/disabled title="A1 室长正在帮客人选项目/.test(recProjectsRowsHtml(gc(), 'KR')), 'IN 正在选项目：KR 的［编辑］灰掉（跨分页同步）');
+    try{ var sn = localStorage.getItem('gmc_cfg_r234snap'); if(sn) Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===id; }); CASE_ITEMS[i] = JSON.parse(sn); }); localStorage.removeItem('gmc_cfg_r234snap'); }catch(e){}
+  });
   ST.def('R224b','CMD-1105-03 七（KM1，stageC 夹具）：KR 列表——已结案的赴韩案件灰色「赴韩施术」、仅出报告灰色「面诊安排」、行程结束有持有写「行程结束 · 施术未做 N 项（转持有）」',async function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;

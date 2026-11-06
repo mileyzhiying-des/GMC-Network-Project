@@ -1873,7 +1873,7 @@ function heldMatchScope(c, h){
   return ((c.krScope && c.krScope.items) || []).filter(function(si){ return !si.mgmt && (si.name===h.it.name || si.name===nm); })[0] || null;
 }
 function toggleHeldSurg(fromId, iid){
-  var c = getCurrentCase(); if(!c) return;
+  var c = getCurrentCase(); if(!c) return; if(scopeLockGuardIN(c)) return; scopeLockInStart(c, 'select');
   var h = clientHeldSurgPool(c).filter(function(x){ return x.from.id===fromId && x.iid===iid; })[0]; if(!h) return;
   var si = heldMatchScope(c, h); if(!si) return;
   c.recommended = c.recommended || [];
@@ -5630,7 +5630,7 @@ function lmSettleDo(){
 /* 项目确认中（2026-09-29 重写）：确认后不管有没有赴韩项目，都直接生成结算单进入"待付款"；
    施术日期改到付款之后才走（见 krProcedureTabHtml），不再是结算前的门槛 */
 function confirmProjectSelection(){
-  var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return;
+  var c = getCurrentCase(); if(!c || !(c.recommended||[]).length) return; if(scopeLockGuardIN(c)) return;
   if(cartTotals(c.recommended).onlyService){ alert('서비스需搭配付费项目'); return; }
   var cp0 = compPending(c, 'main'); if(cp0 && cartTotals(c.recommended).total < cp0.credit){ alert('置换额度不退钱：还剩 '+formatCurrency(cp0.credit-cartTotals(c.recommended).total,'IDR')+'，请再加项目'); return; }
   /* CMD-1019-11：确认赴韩（选了赴韩项目、生成定金结算单）时要有护照：没有必须填，已有的带出来确认 */
@@ -5897,7 +5897,7 @@ function setPcAlloc(projectId, batchId, i, v){
 var SETTLE_ANES_SIGNED = false;
 function toggleAnesSign(on){ SETTLE_ANES_SIGNED = !!on; var b = document.getElementById('settle-pay-btn'); if(b){ b.disabled = !on; b.style.opacity = on ? '' : '.5'; } }
 function confirmSettlementPayment(){
-  var c = getCurrentCase(); if(!c) return;
+  var c = getCurrentCase(); if(!c) return; if(scopeLockGuardIN(c)) return;
   var batch = (c.settlementBatches||[]).filter(function(b){ return b.id===SETTLE_MODAL_BATCH_ID; })[0]; if(!batch) return;
   if(batchNeedsPassport(c, batch)){ alert('护照未登记：请先登记护照再付款'); return; } /* CMD-1019-12：所有付款路径都生效 */
   /* 付定金前必须签署麻醉同意书（没签不能付） */
@@ -12282,16 +12282,21 @@ function recBuyState(c, x){
   if(mine.some(function(p){ return p.cancelled || p.swapped; })) return 'cancelled';
   return 'none';
 }
+/* CMD-1106-03：［编辑］——未购买才能改；已购买 / 已取消灰掉；IN 正在选项目 / 付款时也灰掉 */
+function recEditBtn(c, x, st){
+  var q = String(x.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'), lk = scopeLockBy(c, 'IN'), why = st==='bought' ? '已购买，不能编辑' : (st==='cancelled' ? '已取消，不能编辑' : (lk ? lk.by+'正在帮客人选项目，请稍后' : ''));
+  return '<span style="text-align:right;"><button class="btn-outline" style="padding:3px 10px;font-size:12px;'+(why ? 'opacity:.45;cursor:not-allowed;' : '')+'" '+(why ? 'disabled title="'+esc0(why)+'"' : 'onclick="krScopeEditOpen(\''+q+'\')"')+'>编辑</button></span>';
+}
 function recProjectsRowsHtml(c, viewer){
-  var items = (c.krScope && c.krScope.items) || [], e = esc0, G = 'display:grid;grid-template-columns:84px minmax(0,1.5fr) minmax(0,1.6fr) '+(viewer==='KR' ? '120px' : '220px')+';gap:10px;align-items:start;';
+  var items = (c.krScope && c.krScope.items) || [], e = esc0, canEdit = viewer==='KR' && typeof krCan==='function' && krCan() && !!c.reportReady && c.stage==='consult', G = 'display:grid;grid-template-columns:84px minmax(0,1.5fr) minmax(0,1.6fr) '+(viewer==='KR' ? '120px' : '220px')+(canEdit ? ' 64px' : '')+';gap:10px;align-items:start;'; /* CMD-1106-03：KR 室长每行［编辑］（未购买才能改） */
   if(!items.length) return '<div style="font-size:12px;color:var(--muted);padding:8px 0;">院长没有建议项目</div>';
   var tagOf = function(st){ return st==='bought' ? '<span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">已购买</span>' : (st==='cancelled' ? '<span class="status-pill" style="background:#EDEAE2;color:var(--slate2);font-size:12px;">已取消</span>' : '<span class="status-pill" style="background:var(--border2);color:var(--slate2);font-size:12px;">未购买</span>'); };
-  var head = '<div style="'+G+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);"><span>购买情况</span><span>项目名</span><span>术后管理</span><span style="text-align:right;">价格</span></div>';
+  var head = '<div style="'+G+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);"><span>购买情况</span><span>项目名</span><span>术后管理</span><span style="text-align:right;">价格</span>'+(canEdit ? '<span></span>' : '')+'</div>';
   return head+items.map(function(x){
     var st = recBuyState(c, x), meta = []; try{ meta = itemMetaText(x).filter(function(t){ return t.indexOf('术后管理：')!==0; }); }catch(er){}
     var pcs = (x.postcare||[]).map(function(p){ return e((p.name||p.mgmt||'术后管理')+' × '+(p.times||1)+(pcDayText(p) ? '（'+pcDayText(p)+'）' : '')); });
     var price = !(x.price>0) ? '' : (viewer==='KR' ? (typeof isLocalProjectName==='function' && isLocalProjectName(x.name) ? '' : formatCurrency(x.price,'KRW')) : krIdrText(x.price));
-    return '<div style="'+G+'padding:10px 0;border-bottom:1px solid var(--border2);'+(st==='cancelled' ? 'color:var(--muted);' : '')+'"><span>'+tagOf(st)+'</span><div style="min-width:0;"><div style="font-size:13px;font-weight:700;'+(st==='cancelled' ? 'text-decoration:line-through;' : '')+'">'+e(buyName(x.name))+(x.note ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+e(x.note)+'</span>' : '')+'</div>'+(meta.length ? '<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.7;">'+meta.map(e).join('<br>')+'</div>' : '')+'</div><div style="font-size:13px;line-height:1.7;">'+(pcs.length ? pcs.join('<br>') : '<span style="color:var(--muted);">无</span>')+'</div><div style="font-size:13px;text-align:right;">'+e(price)+'</div></div>';
+    return '<div style="'+G+'padding:10px 0;border-bottom:1px solid var(--border2);'+(st==='cancelled' ? 'color:var(--muted);' : '')+'"><span>'+tagOf(st)+'</span><div style="min-width:0;"><div style="font-size:13px;font-weight:700;'+(st==='cancelled' ? 'text-decoration:line-through;' : '')+'">'+e(buyName(x.name))+(x.note ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+e(x.note)+'</span>' : '')+'</div>'+(meta.length ? '<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.7;">'+meta.map(e).join('<br>')+'</div>' : '')+'</div><div style="font-size:13px;line-height:1.7;">'+(pcs.length ? pcs.join('<br>') : '<span style="color:var(--muted);">无</span>')+'</div><div style="font-size:13px;text-align:right;">'+e(price)+'</div>'+(canEdit ? recEditBtn(c, x, st) : '')+'</div>';
   }).join('');
 }
 
@@ -12865,3 +12870,75 @@ function metaFixLogOpen(){
     '<div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn-outline" onclick="document.getElementById(\'meta-fixlog-overlay\').classList.remove(\'open\')">关闭</button></div></div>';
   ov.classList.add('open');
 }
+
+/* ===== CMD-1106-03：推荐项目发出后 KR 可编辑（未购买才能改、价格不动）+ 补加改用项目购买卡 + KR ↔ IN 编辑锁 =====
+   锁：c.scopeLock = {side:'KR'|'IN', by, kind, at}，存在案件对象上（IN / KR 页面读写的是同一份诊所分区，跨分页靠存档同步）；谁先开始谁先锁；
+   存好 / 取消 / 关掉画面 / 10 分钟没有动作（at 超过 10 分钟）→ 自动解锁（没存的不保留）。正式版后端建议见 CLAUDE.md。 */
+var SCOPE_LOCK_MS = 10*60000;
+function scopeLockInfo(c){
+  var l = c && c.scopeLock; if(!l || !l.at) return null;
+  var t = utcStrParse(l.at); if(!t || realNow().getTime() - t.getTime() > SCOPE_LOCK_MS) return null; /* 过期 = 没有锁 */
+  return l;
+}
+function scopeLockSet(c, side, by, kind){ if(!c) return; var l = scopeLockInfo(c); if(l && l.side!==side) return; c.scopeLock = {side:side, by:by, kind:kind||'', at:nowFullDt()}; }
+function scopeLockClear(c, side){ if(c && c.scopeLock && (!side || c.scopeLock.side===side)) delete c.scopeLock; }
+function scopeLockBy(c, side){ var l = scopeLockInfo(c); return (l && l.side===side) ? l : null; }
+/* IN 页面：KR 正在编辑 → 不能选项目 / 付定金；返回 true = 被挡住（已提示） */
+function scopeLockGuardIN(c){
+  var l = scopeLockBy(c, 'KR'); if(!l) return false;
+  try{ alert(l.by+'正在编辑推荐项目，编辑完成前不能选项目、付定金'); }catch(e){}
+  return true;
+}
+/* IN 开始帮客人选项目 / 付款 → 记 IN 锁（KR 的［编辑］［补加］灰掉）；只对已有诊疗方案的案件 */
+function scopeLockInStart(c, kind){ if(c && c.krScope && c.reportReady && !scopeLockBy(c, 'KR')) scopeLockSet(c, 'IN', actingName(), kind); }
+function scopeLockBannerHtml(c){
+  var l = scopeLockBy(c, 'KR'); if(!l) return '';
+  return '<div class="scope-lock-banner" style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:10px;"><b>'+esc0(l.by)+'正在编辑推荐项目</b>，编辑完成前不能选项目、付定金</div>';
+}
+/* 渲染案件页后：有 KR 锁时加横幅 + 把选项目 / 结算 / 付款按钮灰掉（程序里也拒绝，见 scopeLockGuardIN） */
+function scopeLockApply(c){
+  var el = document.getElementById('case-body'); if(!el || !c) return;
+  var old = el.querySelector('.scope-lock-banner'); if(old) old.remove();
+  var l = scopeLockBy(c, 'KR'); if(!l) return;
+  el.insertAdjacentHTML('afterbegin', scopeLockBannerHtml(c));
+  var sel = 'button[onclick*="confirmProjectSelection"],button[onclick*="settleProjects"],button[onclick*="confirmSettlementPayment"],button[onclick*="reselectProjects"],input[onchange*="toggleProject("],input[onchange*="toggleHeldSurg("]';
+  Array.prototype.forEach.call(el.querySelectorAll(sel), function(b){ b.disabled = true; b.style.opacity = '.45'; b.style.cursor = 'not-allowed'; b.title = l.by+'正在编辑推荐项目'; });
+}
+(function(){ var r0 = (typeof renderCaseBody==='function') ? renderCaseBody : null; if(!r0) return; renderCaseBody = function(c){ var r = r0.apply(this, arguments); try{ scopeLockApply(c); }catch(e){ console.error('[编辑锁横幅]', e); } return r; }; })();
+/* 编辑 / 选项目动作 */
+function itemPcSummary(it){ return (it.postcare||[]).map(function(x){ return (x.name||x.mgmt||'术后管理')+'×'+(x.times||1)+(pcDayText(x) ? '（'+pcDayText(x)+'）' : '')+(x.place==='either' ? '·韩国或印尼' : ''); }).join('、') || '无'; }
+function coreScopeEdit(c, name, p, by){
+  if(!c || !c.reportReady || !c.krScope) return {ok:false, err:'这个案件现在不能编辑推荐项目'};
+  var it = (c.krScope.items||[]).filter(function(x){ return x.name===name; })[0]; if(!it) return {ok:false, err:'找不到这个推荐项目'};
+  var st = recBuyState(c, it); if(st!=='none') return {ok:false, err:st==='bought' ? '已购买，不能编辑' : '已取消，不能编辑'};
+  var lk = scopeLockBy(c, 'IN'); if(lk) return {ok:false, err:lk.by+'正在帮客人选项目，请稍后'};
+  var ch = [];
+  if(it.mgmt){
+    var copies = Math.max(1, parseInt(p.copies,10) || 1), unit = it.unit || Math.round((it.price||0)/Math.max(1, it.copies||1)), first = (p.first===''||p.first==null) ? it.firstDay : Math.max(0, parseInt(p.first,10) || 0);
+    if(copies!==(it.copies||1)) ch.push('份数 '+(it.copies||1)+' → '+copies); if(first!==it.firstDay) ch.push('术后第 '+(it.firstDay==null ? '—' : it.firstDay)+' 天开始 → 第 '+first+' 天开始');
+    it.unit = unit; it.copies = copies; it.qty = (it.specTimes||1)*copies; it.price = unit*copies; it.firstDay = first; /* 价格 = 项目库单价 × 份数，不能手改 */
+  } else {
+    if((it.stay||'')!==(p.stay||'')) ch.push('建议在韩 '+(it.stay||'—')+' → '+(p.stay||'—'));
+    var a0 = it.anesthesia || {}, a1 = p.anesthesia || {}; if((a0.type||'local')!==(a1.type||'local') || (a0.note||'')!==(a1.note||'') || String(a0.fast==null ? '' : a0.fast)!==String(a1.fast==null ? '' : a1.fast)) ch.push('麻醉 '+(a0.label||'局麻')+(a0.note ? '（'+a0.note+'）' : '')+' → '+(a1.label||'局麻')+(a1.note ? '（'+a1.note+'）' : ''));
+    var pc0 = itemPcSummary(it); it.stay = p.stay||''; if(p.stayReason) it.stayReason = p.stayReason; else delete it.stayReason; it.anesthesia = p.anesthesia; it.postcare = p.postcare;
+    var pc1 = itemPcSummary(it); if(pc0!==pc1) ch.push('术后管理 '+pc0+' → '+pc1);
+  }
+  if(!ch.length) return {ok:true, same:true};
+  /* 同步到 IN 已经勾选但还没付款的购物车 / 未付款结算单里的同名项目（已购买的本来就不能编辑） */
+  var tg = (c.recommended||[]).concat((c.procedureItems||[]).filter(function(x){ var b = (c.settlementBatches||[]).filter(function(y){ return y.id===x.batchId; })[0]; return b && b.status==='unpaid'; }));
+  tg.forEach(function(t){ if(t.name!==it.name) return;
+    if(it.mgmt){ t.copies = it.copies; t.qty = it.qty; t.price = it.price; t.firstDay = it.firstDay; }
+    else { t.stay = it.stay; if(it.stayReason) t.stayReason = it.stayReason; else delete t.stayReason; t.anesthesia = it.anesthesia; t.postcare = (it.postcare||[]).map(function(x){ return Object.assign({}, x, {inTimes:0}); }); } });
+  c.krScope.updatedAt = nowFullDt();
+  logCaseEvent(c, by, 'KR 编辑推荐项目「'+buyName(name)+'」：'+ch.join('；'));
+  pushNotif('面诊', by+' 更新了 '+(c.caseNo||'')+' 的推荐项目：'+buyName(name)+(it.mgmt ? '' : '（'+(ch.some(function(t){ return /^术后管理/.test(t); }) ? '术后管理' : ch.some(function(t){ return /^麻醉/.test(t); }) ? '麻醉' : '在韩天数')+'）'), {caseId:c.id, level:'info'});
+  return {ok:true, changes:ch};
+}
+/* 锁到期后的清理 + 画面刷新（每 20 秒看一次；没有锁的页面什么都不做） */
+setInterval(function(){
+  try{
+    var c = (typeof getCurrentCase==='function' && document.getElementById('case-body')) ? getCurrentCase() : null;
+    if(c && c.scopeLock && !scopeLockInfo(c)){ delete c.scopeLock; renderCaseBody(c); }
+    if(typeof krScopeLockTick==='function') krScopeLockTick();
+  }catch(e){}
+}, 20000);
