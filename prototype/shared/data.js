@@ -6757,6 +6757,7 @@ function holdUseRecord(c, it, rec){ (it.uses = it.uses||[]).push({at:rec.at||now
 function holdUseUndo(c, it, pred){ var before = it.holdUsed||0; it.uses = (it.uses||[]).filter(function(u){ return !pred(u); }); holdRecalc(it); return before-(it.holdUsed||0); }
 /* 撤回到院卡里已完成的持有管理项目（主到院）：次数退回，这一行回到待做 */
 function coreMgmtUseUndo(c, name, by){
+  if(undoDeny(c, 'main')) return false; /* CMD-1109-23：离院 / 关账后不能撤回 */
   var it = itemByKey(c, name, function(x){ return x.heldOver; }); if(!it || !mgmtDoneToday(c, it)) return false;
   var back = holdUseUndo(c, it, function(u){ return (u.key||'main')==='main'; }); delete c.todayMgmtDone[tmdKeyOf(c, it)];
   c.endAsk = false;
@@ -6765,6 +6766,7 @@ function coreMgmtUseUndo(c, name, by){
 /* 撤回子到院里已完成的使用行（持有管理项目）：次数退回，行回到待做 */
 function coreUseRowUndo(c, id, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || !s.done || !s.holdUseOf) return false;
+  if(undoDeny(c, subCaseKey(s))) return false; /* CMD-1109-23 */
   var it = rowItem(c, s);
   s.done = false; s.doneAt = ''; s.doneBy = ''; var back = it ? holdUseUndo(c, it, function(u){ return u.rowId===id; }) : 0;
   logCaseEvent(c, by, '撤回完成：'+buyName(s.holdUseOf)+'，退回 '+back+' 次'); updateCaseStage(c); return true;
@@ -13451,4 +13453,26 @@ function in21Time(date, time, o){
   if(time){ try{ var r = krToClinic(date, time); tag = ' <span class="sd-tag" style="font-size:12px;font-weight:400;color:var(--muted);">印尼 '+(r.date!==date ? aEscC(r.date.slice(5))+' ' : '')+aEscC(r.time)+'</span>'; }catch(e){} }
   var inner = main+tag;
   return (o.today && date===todayStr()) ? '今日（'+inner+'）' : inner;
+}
+
+/* ===== CMD-1109-23：进行项目「撤回完成」——所有类型一样，只在客人离院之前 =====
+   施术项目做完时只改了：项目 / 行的 done + doneAt、c.endAsk（「今天的项目都做完了吗」提示）、Timeline；不碰钱、不生成术后管理预约 / 待办（术后管理预约是另外按预约时间约的，不依赖施术有没有标完成；
+   进入术后管理阶段是按［客人已离院］才开始的）。所以撤回 = 把这几样退回，没有要另外清的东西；离院 / 关账之后拒绝。 */
+function undoDeny(c, key){ return !!(c.visitClosed || c.krProcedureDone && key==='main' || noteVisitEnded(c, key) || (!window.DAYCONFIRM_BYPASS && dayLockedKR(c, key))); }
+function coreSurgItemUndo(c, rowId, name, by){ /* 施术一行里的一个项目：撤回完成 */
+  if(undoDeny(c, 'main')) return false;
+  var s = (c.subItems||[]).filter(function(x){ return x.id===rowId; })[0], it = (c.procedureItems||[]).filter(function(x){ return x.name===name && !x.cancelled && !x.swapped && x.done && !krIsMgmtItemC(x); })[0];
+  if(!it) return false;
+  it.done = false; it.doneAt = '';
+  if(s && s.kind==='施术' && s.done){ s.done = false; s.doneAt = ''; s.doneBy = ''; s.doneItems = []; }
+  c.endAsk = false; logCaseEvent(c, by, '撤回完成：'+buyName(name)+'（回到待做）', '赴韩施术'); updateCaseStage(c); return true;
+}
+function coreRowUndo(c, id, by){ /* 其他行（在韩加的施术项目、术后管理记录、重新预约的施术）：撤回完成 */
+  var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s || !s.done) return false;
+  if(s.holdUseOf) return coreUseRowUndo(c, id, by);
+  var key = (s.kind==='施术' || (s.kind==='增加项目' && !s.visitKey)) ? 'main' : subCaseKey(s); if(undoDeny(c, key)) return false;
+  (s.doneItems||[]).forEach(function(nm){ var it = (c.procedureItems||[]).filter(function(x){ return x.name===nm && !krIsMgmtItemC(x); })[0]; if(it){ it.done = false; it.doneAt = ''; } });
+  if(s.surgUse){ var it2 = (c.procedureItems||[]).filter(function(x){ return x.name===s.surgUse; })[0]; if(it2){ it2.done = false; it2.doneAt = ''; } }
+  s.done = false; s.doneAt = ''; s.doneBy = ''; s.doneItems = [];
+  c.endAsk = false; logCaseEvent(c, by, '撤回完成：'+rowLogName(c, s)+'（回到待做）', rowStageLabel(c, s)); updateCaseStage(c); return true;
 }
