@@ -5881,16 +5881,19 @@ function tripDraftCheck(c, ks){ /* 返回错误文字，没问题返回 '' */
   if(t.out < t.in || (t.out===t.in && t.outTime <= t.inTime)) return '离开不能早于到达';
   return stayDateErr('到达日', t.in) || stayDateErr('离开日', t.out) || '';
 }
-function tripDraftFieldsHtml(c, ks){
+function tripDraftFieldsHtml(c, ks, dis){
   var t = ks.tripDraft || {}, inp = 'padding:7px 10px;border:1px solid var(--border-strong,#B9B1A6);border-radius:8px;background:#fff;font-size:13px;box-sizing:border-box;min-width:0;';
   var row = function(k, lab){ return '<div style="display:grid;grid-template-columns:52px 1.2fr 0.8fr 1.2fr;gap:8px;align-items:center;margin-top:8px;"><b style="font-size:13px;">'+lab+'日：</b><input type="date" value="'+aEscC(t[k]||'')+'"'+stayRangeAttr()+' onchange="tripDraftSet(\''+k+'\',this.value)" style="'+inp+'width:100%;"><input type="time" value="'+aEscC(t[k+'Time']||'')+'" onchange="tripDraftSet(\''+k+'Time\',this.value)" style="'+inp+'width:100%;"><input value="'+aEscC(t[k+'Airport']||'')+'" onchange="tripDraftSet(\''+k+'Airport\',this.value)" placeholder="机场（选填）例：仁川 ICN" style="'+inp+'width:100%;"></div>'; };
   var live = (t.in && t.out && (t.out < t.in)) ? '<div style="color:#B3261E;font-size:12px;margin-top:6px;font-weight:700;">离开不能早于到达</div>' : '';
+  if(dis) return row('in', '到达')+row('out', '离开');
   return row('in', '到达')+row('out', '离开')+live+(ks.tripErr ? '<div style="color:#B3261E;font-size:12px;margin-top:6px;font-weight:700;">'+aEscC(ks.tripErr)+'</div>' : '');
 }
-function tripStateBlockHtml(c, ks){ /* CMD-1106-18：「行程状态 *」后面小字写建议在韩停留；已定 / 暂定单选；选已定才出现到达 / 离开输入 */
+function tripHintLine(c){ var n = 0; try{ n = tripStayDays(c); }catch(e){} return n>0 ? '<div style="font-size:12px;color:var(--muted);margin:0 0 8px;">ℹ️ 考虑到术后管理及拆线安排，建议预留 '+n+' 天以上的行程。</div>' : ''; } /* CMD-1109-05：灰色小字提示，不是警告色；已定 / 暂定都显示 */
+function tripStateBlockHtml(c, ks){ /* CMD-1106-18；CMD-1109-05：ℹ️ 提示一行 → 行程状态 * → 已定 / 暂定单选 → 到达 / 离开两行一直显示，选「暂定」（或还没选）时灰掉不能填 */
   var radio = function(v, lab){ return '<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-right:18px;cursor:pointer;"><input type="radio" name="trip-state" '+(ks.tripState===v ? 'checked ' : '')+'onchange="setTripState(\''+v+'\')"> '+lab+'</label>'; };
-  var hint = ''; try{ hint = krStayHint(c).replace(/ · 施术日 = 第 0 天/, ''); }catch(e){}
-  return '<div style="margin-bottom:8px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span> '+(hint && !/：—$/.test(hint) ? '<span style="font-weight:400;font-size:12px;color:var(--muted);">'+aEscC(hint)+'</span>' : '')+'</div><div style="display:flex;flex-wrap:wrap;">'+radio('booked','已定（机票已订）')+radio('tentative','暂定（客人还没订机票 / 办签证）')+'</div>'+(ks.tripState==='tentative' && stayText(c) ? '<div style="font-size:12px;color:var(--muted);margin-top:6px;">到达 / 离开（预估）：'+aEscC(stayText(c))+'</div>' : '')+(ks.tripState==='booked' ? tripDraftFieldsHtml(c, ks) : (ks.tripErr ? '<div style="color:#B3261E;font-size:12px;margin-top:6px;font-weight:700;">'+aEscC(ks.tripErr)+'</div>' : ''))+'</div>';
+  var on = ks.tripState==='booked';
+  return '<div style="margin-bottom:8px;">'+tripHintLine(c)+'<div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span></div><div style="display:flex;flex-wrap:wrap;">'+radio('booked','已定（机票已订）')+radio('tentative','暂定（客人还没订机票 / 办签证）')+'</div>'+
+    '<fieldset '+(on ? '' : 'disabled ')+'style="border:0;padding:0;margin:0;min-width:0;'+(on ? '' : 'opacity:.5;')+'">'+tripDraftFieldsHtml(c, ks, !on)+'</fieldset>'+(!on && ks.tripErr ? '<div style="color:#B3261E;font-size:12px;margin-top:6px;font-weight:700;">'+aEscC(ks.tripErr)+'</div>' : '')+'</div>';
 }
 function ensureKrScheduleDraft(c){
   if(!c.krSchedule) c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false};
@@ -5966,7 +5969,7 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
       var style = 'position:relative;min-height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;', lab = '';
       if(!open) style += 'color:var(--dim);background:var(--bg-sidebar,#F7F4F0);';
       else if(dateStr===primaryVal){ style += 'background:#F6C9CF;border:1px solid #E5A3AC;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;color:#A8323F;">首选日</span>'; }
-      else if(dateStr===backupVal){ style += 'background:var(--action-primary,#9A6A4B);color:#fff;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;">备选日</span><span style="position:absolute;right:4px;top:3px;font-size:12px;font-weight:400;cursor:pointer;text-decoration:underline;" onclick="event.stopPropagation();setKrPrimaryDate(\''+pf+'\',\''+bf+'\',\''+dateStr+'\')" title="设为首选日（两天互换）">设为首选</span>'; }
+      else if(dateStr===backupVal){ style += 'background:var(--action-primary,#9A6A4B);color:#fff;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;">备选日</span>'; }
       else style += 'color:var(--navy);cursor:pointer;background:#fff;border:1px solid var(--border2);';
       if(tripRed && open) style += 'color:#B3261E;'; var onclick = open ? ' onclick="pickKrDate(\''+pf+'\',\''+bf+'\','+y+','+m+','+d+')"' : '';
       return '<div style="'+style+'"'+onclick+(tripRed ? ' title="'+aEscC(tripI.msg)+'"' : '')+'>'+lab+d+'</div>';
@@ -7407,7 +7410,7 @@ function krProcedureTabMain(c, tabsHtml){
       body = krSchedHeadRowHtml('施术日期', krNotStartedItems(c).length ? '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>' : '')+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         monthNav+
         krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripRedHtml(c, [ks.primary, ks.backup])+tripSubmitYellowHtml(c, ks.primary, ks.backup)+
-        '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button></div>'; /* CMD-1109-03：取消赴韩 / 无法协调收进［施术变动］；原注释：［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
+        '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;'+(sdSubmitOff(c, ks.primary, ks.backup) ? 'opacity:.5;cursor:not-allowed;" disabled' : '"')+' onclick="submitKrScheduleDate()">递交施术日期</button></div>'; /* CMD-1109-03：取消赴韩 / 无法协调收进［施术变动］；原注释：［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
     } else if(st==='Pending'){
       var rbn = ksRebookNeeded(c); body = sdHead(rbn ? '需重新预约' : '待 KR 确认', '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>')+(rbn ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-bottom:8px;">'+aEscC(rbn.msg)+'</div>' : '')+
         '<div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待 KR 室长确认'+tripStateTagHtml(c)+'</div>'+
@@ -7424,7 +7427,7 @@ function krProcedureTabMain(c, tabsHtml){
           monthNav+
           krDateCalendarGridHtml('changePrimary','changeBackup', ks.changePrimary, ks.changeBackup)+tripRedHtml(c, [ks.changePrimary, ks.changeBackup])+tripSubmitYellowHtml(c, ks.changePrimary, ks.changeBackup)+
           '<div style="display:flex;gap:10px;margin-top:16px;">'+
-          '<button class="btn-primary" style="flex-grow:1;" onclick="submitKrScheduleChangeDate()">提交新日期</button>'+
+          '<button class="btn-primary" style="flex-grow:1;'+(sdSubmitOff(c, ks.changePrimary, ks.changeBackup) ? 'opacity:.5;cursor:not-allowed;" disabled' : '"')+' onclick="submitKrScheduleChangeDate()">提交新日期</button>'+
           '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button>'+
           '</div>';
       } else {
@@ -10585,6 +10588,7 @@ function tripCurItems(c){
    「碰到」= 施术日不在行程内（早于到达日 / 晚于离境日 / 到达当天到院时间早于到达时间）；天数不够照旧只黄字。暂定行程（soft）只是预估，不算。
    ① 行程变动碰到施术日期（行程是事实）：可以存（存之前提醒），存好后施术日期标红、状态「需重新预约」，KR 收通知 + 待办，旧时段从院长日程释放；
    ② 施术变动 / 递交日历选到行程外的日子（施术是计划）：日子可以点，选了红字 + ［行程变动］，送不出。 */
+function sdSubmitOff(c, pri, bak){ return !pri || !!(tripRedText(c, pri) || tripRedText(c, bak||'')); } /* CMD-1109-05：没选首选 / 碰到行程（有「请先修改行程」红字）→ 送出按钮灰掉 */
 function tripHardIssue(c, date, time){ var i = date ? tripDateIssue(c, date, time) : null; return (i && !i.soft && i.kind!=='short') ? i : null; }
 function tripRedText(c, date, time){ var i = tripHardIssue(c, date, time); if(!i) return ''; return '⚠️ '+stayMD(date)+(i.kind==='late' ? ' 在客人离境之后' : (i.kind==='time' ? ' 的到院时间早于客人到达时间' : ' 在客人到达之前'))+'，请先修改行程'; }
 function tripRedHtml(c, dates){ /* 红字（每个有问题的日子一行）+ 一个［行程变动］ */
@@ -13227,7 +13231,7 @@ function svbOpen(pre){
 }
 function svbClose(){ var c = SVB && CASE_ITEMS.filter(function(x){ return x.id===SVB.caseId; })[0]; if(c && c.krSchedule){ delete c.krSchedule.svbPrimary; delete c.krSchedule.svbBackup; } SVB = null; var ov = document.getElementById('svb-overlay'); if(ov) ov.classList.remove('open'); }
 function svbSet(k, v){ if(!SVB) return; SVB[k] = v; if(k==='refundOn' && v && SVB.refundAmt==='') SVB.refundAmt = String(svbPaid(CASE_ITEMS.filter(function(x){ return x.id===SVB.caseId; })[0])); SVB.err = ''; svbRender(); }
-function svbInput(k, v){ if(!SVB) return; SVB[k] = v; SVB.err = ''; if(k==='refundAmt') svbMoneyRefresh(); }
+function svbInput(k, v){ if(!SVB) return; SVB[k] = v; SVB.err = ''; if(k==='refundAmt') svbMoneyRefresh(); if(k==='reasonT') svbBtnRefresh(); }
 function svbCompAmt(c){ var paid = svbPaid(c); if(!SVB.compOn) return 0; return Math.max(0, paid - (SVB.refundOn ? (Number(SVB.refundAmt)||0) : 0)); }
 function svbMoneyRefresh(){ var c = CASE_ITEMS.filter(function(x){ return x.id===SVB.caseId; })[0]; if(!c) return; var el = document.getElementById('svb-comp-amt'); if(el) el.textContent = formatCurrency(svbCompAmt(c), 'KRW'); var h = document.getElementById('svb-money-hint'); if(h) h.innerHTML = svbMoneyHint(c); }
 function svbMoneyHint(c){
@@ -13267,9 +13271,11 @@ function svbRender(){
     body += '</div>';
   }
   ov.innerHTML = '<div class="modal-box" style="width:580px;max-width:96vw;max-height:92vh;overflow:auto;"><div style="font-size:16px;font-weight:700;">施术变动 · '+aEscC(c.name)+'（'+aEscC(c.caseNo||'')+'）</div><div style="border-top:1px solid var(--border2);margin:10px 0 4px;"></div>'+body+
-    '<div style="color:#B3261E;font-size:12px;margin-top:8px;'+(h.err ? '' : 'display:none;')+'">'+aEscC(h.err)+'</div><div style="border-top:1px solid var(--border2);margin-top:12px;padding-top:12px;display:flex;justify-content:flex-end;gap:10px;"><button class="btn-outline" onclick="svbClose()">取消</button><button class="btn-primary" onclick="svbGo()">送出</button></div></div>';
+    '<div style="color:#B3261E;font-size:12px;margin-top:8px;'+(h.err ? '' : 'display:none;')+'">'+aEscC(h.err)+'</div><div style="border-top:1px solid var(--border2);margin-top:12px;padding-top:12px;display:flex;justify-content:flex-end;gap:10px;"><button class="btn-outline" onclick="svbClose()">取消</button><button class="btn-primary" id="svb-go" '+(svbSendOff(c) ? 'disabled style="opacity:.5;cursor:not-allowed;" ' : '')+'onclick="svbGo()">送出</button></div></div>';
   ov.style.zIndex = 100020; ov.classList.add('open');
 }
+function svbSendOff(c){ var h = SVB; if(!h || h.mode!=='time') return false; var ks = c.krSchedule || {}; return !String(h.reasonT||'').trim() || sdSubmitOff(c, ks.svbPrimary, ks.svbBackup); } /* CMD-1109-05：更改时间——理由没填 / 没选首选 / 碰到行程都灰 */
+function svbBtnRefresh(){ var h = SVB; if(!h) return; var c = CASE_ITEMS.filter(function(x){ return x.id===h.caseId; })[0], b = document.getElementById('svb-go'); if(!c || !b) return; var off = svbSendOff(c); b.disabled = off; b.style.opacity = off ? '.5' : ''; b.style.cursor = off ? 'not-allowed' : ''; }
 function svbGo(){
   var h = SVB; if(!h) return; var c = CASE_ITEMS.filter(function(x){ return x.id===h.caseId; })[0]; if(!c){ svbClose(); return; }
   var fail = function(m){ h.err = m; svbRender(); };

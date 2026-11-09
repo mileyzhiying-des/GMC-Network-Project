@@ -10138,6 +10138,47 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var m61 = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===61; })[0]; ST.ok(!!m61, '有迁移 61');
     if(m61){ m61.fn(g, {note:function(){}}); ST.ok(!heldSurgItems(g).length && !tripWaitItems(g).length && g.depositDue && g.noShowDue && g.noShowDue.status==='pending', '迁移后：持有 → 等 IN 退定金 / 置换，等三选一（无原因）→ 无故不做项目'); }
   });
+  ST.def('R260a','CMD-1109-05（A1 分页，stageC 夹具）：备选日只写「备选日」没有「设为首选」；碰到行程 / 理由没填 / 没选首选时送出灰掉；在韩行程弹窗改名 + ℹ️ 提示 + 暂定两行灰掉；待递交卡片同样',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var host = function(html){ var h = document.createElement('div'); h.innerHTML = html; return h; };
+    /* ① 日历：第一个点的 = 首选日，第二个 = 备选日，没有「设为首选」；取消首选 → 备选变首选 */
+    var c = ST.toConfirmed('R260a'); var ks = c.krSchedule; var avail = []; for(var k=3; k<90 && avail.length<2; k++){ var d = ymdAdd(todayStr(), k); if(caseOpenDates(c).indexOf(d)>-1) avail.push(d); }
+    ST.open(c); var d1 = avail[0], d2 = avail[1]; ks.tripState = 'tentative'; c.stay = null;
+    var y1 = +d1.slice(0,4), m1 = +d1.slice(5,7)-1; KR_SCHED_VIEW_MONTH = new Date(y1, m1, 1);
+    ks.svbPrimary = ''; ks.svbBackup = ''; pickKrDate('svbPrimary', 'svbBackup', y1, m1, +d1.slice(8)); if(d2.slice(0,7)!==d1.slice(0,7)) KR_SCHED_VIEW_MONTH = new Date(+d2.slice(0,4), +d2.slice(5,7)-1, 1); pickKrDate('svbPrimary', 'svbBackup', +d2.slice(0,4), +d2.slice(5,7)-1, +d2.slice(8));
+    ST.ok(ks.svbPrimary===d1 && ks.svbBackup===d2, '第一天首选、第二天备选');
+    var gh = krDateCalendarGridHtml('svbPrimary', 'svbBackup', ks.svbPrimary, ks.svbBackup), gt = gh.replace(/<[^>]+>/g, ' ');
+    KR_SCHED_VIEW_MONTH = new Date(+d1.slice(0,4), +d1.slice(5,7)-1, 1); gh = krDateCalendarGridHtml('svbPrimary', 'svbBackup', ks.svbPrimary, ks.svbBackup); var gh2 = (d2.slice(0,7)===d1.slice(0,7)) ? gh : krDateCalendarGridHtml('svbPrimary', 'svbBackup', ks.svbPrimary, ks.svbBackup);
+    ST.ok(/首选日/.test(gh) && !/设为首选/.test(gh) && !/设为首选/.test(gh2), '格子里只写「首选日」「备选日」，没有「设为首选」');
+    pickKrDate('svbPrimary', 'svbBackup', +d1.slice(0,4), +d1.slice(5,7)-1, +d1.slice(8)); ST.ok(ks.svbPrimary===d2 && ks.svbBackup==='', '取消首选 → 备选自动变首选');
+    ks.svbPrimary = ''; ks.svbBackup = '';
+    /* ② 施术变动弹窗：送出灰掉 */
+    c.tripConfirm = c.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; ks.tripState = 'booked'; var cd = ks.confirmedDate; c.stay = {in:ymdAdd(cd, -3), out:ymdAdd(cd, 8), inTime:'10:00', outTime:'12:00'};
+    ST.open(c); SVB = null; svbOpen('time'); var go = function(){ return document.getElementById('svb-go'); };
+    ST.ok(go().disabled, '没填理由 / 没选首选：送出灰掉'); SVB.reasonT = '想晚一点'; svbBtnRefresh(); ST.ok(go().disabled, '理由填了但没选首选：还是灰');
+    var inD = null, outD = null; for(var j=10; j<120; j++){ var dd = ymdAdd(cd, j); if(caseOpenDates(c).indexOf(dd)>-1){ outD = dd; break; } } for(var j2=-1; j2>-60; j2--){ var d3 = ymdAdd(cd, j2); if(d3>todayStr() && caseOpenDates(c).indexOf(d3)>-1){ inD = d3; break; } }
+    ks.svbPrimary = outD; renderCaseBody(c); ST.ok(go().disabled && /请先修改行程/.test(document.getElementById('svb-overlay').textContent), '选离境之后的日子：红字 + 送出灰掉');
+    c.stay.out = ymdAdd(outD, 3); SVB.err = ''; renderCaseBody(c); ST.ok(!go().disabled, '行程改好、红字消失 → 送出恢复');
+    SVB.reasonT = ''; svbBtnRefresh(); ST.ok(go().disabled, '理由清空又灰'); svbClose();
+    /* ③ 待递交：递交按钮 */
+    var e = ST.toConfirmed('R260a2'); e.krSchedule.status = null; e.krSchedule.primary = ''; e.krSchedule.backup = ''; e.krSchedule.tripState = 'booked'; e.krSchedule.tripDraft = {in:ymdAdd(cd, -3), inTime:'10:00', out:ymdAdd(cd, 8), outTime:'12:00'}; ST.open(e);
+    var h0 = krProcedureTabMain(e, ''); ST.ok(/递交施术日期<\/button>/.test(h0) && /disabled[^>]*onclick="submitKrScheduleDate/.test(h0), '待递交没选首选：［递交施术日期］灰');
+    var oD = null; for(var j3=10; j3<120; j3++){ var dd3 = ymdAdd(cd, j3); if(caseOpenDates(e).indexOf(dd3)>-1){ oD = dd3; break; } }
+    e.krSchedule.primary = oD; var h1 = krProcedureTabMain(e, ''); ST.ok(/disabled[^>]*onclick="submitKrScheduleDate/.test(h1) && /请先修改行程/.test(h1), '选行程外的日子：红字 + ［递交施术日期］灰');
+    e.krSchedule.primary = ymdAdd(cd, 1); while(caseOpenDates(e).indexOf(e.krSchedule.primary)<0) e.krSchedule.primary = ymdAdd(e.krSchedule.primary, 1); var h2 = krProcedureTabMain(e, ''); ST.ok(!/disabled[^>]*onclick="submitKrScheduleDate/.test(h2) || tripRedText(e, e.krSchedule.primary), '行程内的日子：不灰（除非该日期碰到行程）');
+    /* ④ 待递交卡片行程区：暂定灰掉 + ℹ️ 提示 */
+    e.krSchedule.primary = ''; e.krSchedule.tripState = 'tentative'; var hT = krProcedureTabMain(e, ''), box = host(hT), fs = box.querySelector('fieldset'); ST.ok(!!fs && fs.disabled && box.querySelectorAll('fieldset input').length>=4, '暂定：到达 / 离开两行灰掉不能填（没有隐藏）');
+    ST.ok(/ℹ️ 考虑到术后管理及拆线安排，建议预留 \d+ 天以上的行程。/.test(hT) && !/建议在韩停留/.test(hT.replace(/<[^>]+>/g,'')) , '有 ℹ️ 提示一行');
+    e.krSchedule.tripState = 'booked'; box = host(krProcedureTabMain(e, '')); ST.ok(!box.querySelector('fieldset').disabled, '已定：可以填');
+    /* ⑤ 在韩行程弹窗 */
+    var f = ST.toConfirmed('R260a3'); f.krSchedule.tripState = 'booked'; f.tripConfirm = f.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; var fd = f.krSchedule.confirmedDate; f.stay = {in:ymdAdd(fd, -1), out:ymdAdd(fd, 2), inTime:'10:00', outTime:'12:00'}; ST.open(f); openStayModal(f.id);
+    var ovs = document.getElementById('stay-overlay'), tx = ovs.textContent; ST.ok(/^在韩行程/.test(tx.trim()) && !/在韩期间/.test(tx) && !/行程有变可以修改/.test(tx) && !/改成「已定」要填/.test(tx), '标题「在韩行程」，两句说明拿掉');
+    ST.ok(/ℹ️ 考虑到术后管理及拆线安排，建议预留 \d+ 天以上的行程。/.test(tx), 'ℹ️ 提示');
+    ST.ok(!document.getElementById('stay-rows').disabled && /离境日比建议少|^(?![\s\S]*拆线安排在第)/.test(document.getElementById('stay-warn').textContent), '已定：可填；没有「拆线安排在第 7 天」黄字');
+    document.querySelector('#stay-overlay input[name=stay-ts][value=tentative]').click(); ST.ok(document.getElementById('stay-rows').disabled && document.getElementById('stay-warn').textContent==='' && document.querySelectorAll('#stay-rows input').length>=4, '选暂定：两行灰掉不能填、红黄字消失');
+    document.querySelector('#stay-overlay input[name=stay-ts][value=booked]').click(); ST.ok(!document.getElementById('stay-rows').disabled, '再选已定：恢复');
+    var so = f.stay.in; document.querySelector('#stay-overlay input[name=stay-ts][value=tentative]').click(); staySave(); ST.ok(f.krSchedule.tripState==='tentative' && f.stay.in===so, '暂定保存：只改状态，不动日期');
+  });
   ST.def('R259a','CMD-1109-04（A1 分页，stageC 夹具）：行程和施术日期互相检查——行程变动碰到施术日期可存（提醒）、施术日期变红 + 需重新预约 + KR 通知 / 待办 + 院长日程释放、重新约后红字消失；施术变动选行程外的日子红字 + ［行程变动］送不出；天数不够只黄字；按钮叫［行程变动］',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.toConfirmed('R259a'); var ks = c.krSchedule, d0 = ks.confirmedDate, hid = caseKrHospital(c);

@@ -552,19 +552,23 @@ function openStayModal(caseId, o){
   var methods = o.trip ? '<div style="margin-top:4px;"><div style="font-size:12px;font-weight:700;margin-bottom:6px;">确认方式（必选，可多选）</div><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px;">'+TRIP_METHODS.map(function(m, i){ return '<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" class="stay-m" value="'+m+'"'+((tc.methods||[]).indexOf(m)>-1 ? ' checked' : '')+'> '+m+'</label>'; }).join('')+'<label style="display:flex;gap:5px;align-items:center;"><input type="checkbox" id="stay-mo"'+(tc.other ? ' checked' : '')+'> 其他：<input id="stay-mot" value="'+aEscC(tc.other||'')+'" style="'+inp+'width:120px;padding:5px 8px;"></label></div></div>' : '';
   var pno0 = passportOf(clientByName(c.name)).no;
   var pass = o.trip ? '<div style="margin-top:12px;font-size:12px;font-weight:700;">护照号码 '+(pno0 ? '<span style="font-weight:400;color:var(--sage);">已登记，可核对 / 修改</span>' : '<span style="color:#C1454A;">*</span> <span style="font-weight:400;color:var(--muted);">还没填，必填</span>')+'</div><input id="stay-pno" value="'+aEscC(pno0)+'" autocomplete="off" placeholder="护照号码" style="'+inp+'width:240px;margin-top:4px;"> <span style="font-size:12px;color:var(--muted);">签证和入境由客人自行负责，请提醒客人</span>' : '';
-  var title = o.trip ? '确认行程' : '在韩期间', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式，护照号码还没填的话必填。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定，可以点［出发前再确认］，之后随时能改。' : '行程有变可以修改，修改后 KR 会收到通知。');
-  var ts0 = (c.krSchedule && c.krSchedule.tripState) || '', tsBox = (!o.trip && !o.initial && c.krSchedule) ? '<div style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span> <span style="font-weight:400;font-size:12px;color:var(--muted);">改成「已定」要填到达 / 离开的日期和时间；「暂定」不用填</span></div><div style="display:flex;gap:18px;font-size:13px;"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" value="booked"'+(ts0==='booked' ? ' checked' : '')+'> 已定（机票已订）</label><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" value="tentative"'+(ts0==='tentative' ? ' checked' : '')+'> 暂定（客人还没订机票 / 办签证）</label></div></div>' : ''; /* CMD-1106-18 */
-  ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>'+tsBox+row('in', '入境')+row('out', '离境')+methods+pass+
+  var title = o.trip ? '确认行程' : '在韩行程', tip = o.trip ? '联络客人确认行程（入境 / 离境）；日期、时间必填，机场选填，至少勾一个确认方式，护照号码还没填的话必填。' : (o.initial ? '客人在韩国的入境 / 离境。航班还没定，可以点［出发前再确认］，之后随时能改。' : ''), hintN = 0; try{ hintN = tripStayDays(c); }catch(er0){}
+  var hintLine = (!o.trip && hintN>0) ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">ℹ️ 考虑到术后管理及拆线安排，建议预留 '+hintN+' 天以上的行程。</div>' : ''; /* CMD-1109-05：标题改「在韩行程」，拿掉“行程有变可以修改…”说明，加灰色 ℹ️ 提示（已定 / 暂定都显示） */
+  var ts0 = (c.krSchedule && c.krSchedule.tripState) || '', tsBox = (!o.trip && !o.initial && c.krSchedule) ? '<div style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span></div><div style="display:flex;gap:18px;font-size:13px;"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" onchange="stayTsToggle()" value="booked"'+(ts0==='booked' ? ' checked' : '')+'> 已定（机票已订）</label><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" onchange="stayTsToggle()" value="tentative"'+(ts0==='tentative' ? ' checked' : '')+'> 暂定（客人还没订机票 / 办签证）</label></div></div>' : ''; /* CMD-1106-18 */
+  ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div>'+hintLine+(tip ? '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>' : '')+tsBox+'<fieldset id="stay-rows" style="border:0;padding:0;margin:0;min-width:0;">'+row('in', '入境')+row('out', '离境')+'</fieldset>'+methods+pass+
     '<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '出发前再确认' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
-  ov.classList.add('open'); stayWarnRefresh();
+  ov.classList.add('open'); stayTsToggle(); stayWarnRefresh();
 }
+function stayTsOff(){ var r = document.querySelector('#stay-overlay input[name=stay-ts]:checked'); return !!r && r.value==='tentative'; } /* 选「暂定」：入境 / 离境两行灰掉不能填（不隐藏） */
+function stayTsToggle(){ var f = document.getElementById('stay-rows'); if(!f) return; var off = stayTsOff(); f.disabled = off; f.style.opacity = off ? '.5' : ''; stayWarnRefresh(); }
 function stayWarnRefresh(){
   var w = document.getElementById('stay-warn'), c = STAY_CTX && calCaseById(STAY_CTX.id); if(!w || !c) return;
+  if(stayTsOff()){ w.innerHTML = ''; return; } /* 暂定：红字 / 黄字都不显示 */
   var n = stayShortDays(c, (document.getElementById('stay-out')||{}).value||'');
   var g = function(i){ return (document.getElementById(i)||{}).value||''; }, tmp = Object.assign({}, c, {stay:{in:g('stay-in'), out:g('stay-out'), inTime:g('stay-int'), outTime:g('stay-outt')}});
   var yl = ''; try{ yl = (g('stay-in') && g('stay-out')) ? tripShortLine(tmp, tripCurItems(tmp)) : ''; }catch(e){} /* CMD-1106-11：存行程弹窗里也显示短版黄字 */
-  w.innerHTML = (n ? '<span style="color:#B3261E;font-weight:700;">⚠ 离境日比建议少 '+n+' 天（最早可回国日 '+stayMD(krCbEarliest(c))+'）</span>' : '')+(yl ? '<div style="color:#8F6F0C;margin-top:4px;">'+aEscC(yl)+'</div>' : '');
+  w.innerHTML = (n ? '<span style="color:#B3261E;font-weight:700;">⚠ 离境日比建议少 '+n+' 天（最早可回国日 '+stayMD(krCbEarliest(c))+'）</span>' : ''); /* CMD-1109-05：拿掉“拆线安排在第 7 天…”黄字，只留一行红字 */
 }
 function stayCancel(){
   var x = STAY_CTX, ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null; if(!x) return;
@@ -583,7 +587,7 @@ function staySave(){
   }
   var tsSel = (document.querySelector('#stay-overlay input[name=stay-ts]:checked')||{}).value||'', ts0 = (c.krSchedule && c.krSchedule.tripState) || '';
   if(tsSel==='booked' && ts0!=='booked' && (!d.inD || !d.outD || !d.ex.inTime || !d.ex.outTime)) return bad('改成「已定」：到达日、到达时间、离开日、离开时间都要填（机场选填）'); /* CMD-1106-18：暂定改已定，同一套必填检查 */
-  if(tsSel==='tentative' && ts0!=='tentative'){ if(c.krSchedule) c.krSchedule.tripState = 'tentative'; logCaseEvent(c, actingName(), '行程状态改成暂定', '赴韩施术'); var ov1 = document.getElementById('stay-overlay'); if(ov1) ov1.classList.remove('open'); STAY_CTX = null; try{ renderCaseBody(c); }catch(er){} return; }
+  if(tsSel==='tentative'){ if(c.krSchedule && ts0!=='tentative'){ c.krSchedule.tripState = 'tentative'; logCaseEvent(c, actingName(), '行程状态改成暂定', '赴韩施术'); } /* 暂定不存日期 */ var ov1 = document.getElementById('stay-overlay'); if(ov1) ov1.classList.remove('open'); STAY_CTX = null; try{ renderCaseBody(c); }catch(er){} return; }
   if(d.inD && d.outD && d.outD < d.inD) return bad('离境日不能早于入境日');
   var ye = stayDateErr('入境日', d.inD) || stayDateErr('离境日', d.outD); if(ye) return bad(ye);
   /* CMD-1106-07：存行程时，首选 / 备选 / KR 确认的施术日期不能跑到范围外（暂定的行程只是预估，不挡） */
