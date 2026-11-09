@@ -1096,12 +1096,13 @@ function krUnitUseNow(name, qty){
 var KR_PICK = {}, KR_PICK_BACK = false;
 function krTpToggle(kind, name, on){ if(on) KR_PICK[kind+':'+name] = true; else delete KR_PICK[kind+':'+name]; krRenderCaseDetail(); }
 function krTodayPickBar(c){ /* CMD-1109-12：不再是独立的「今日进行项目」卡——汇总放在项目卡底部（krProjCards pickMode），两个分页勾的项目都写出名字，名字后面 × 取消勾选 */
-  var keys = Object.keys(KR_PICK), n = keys.length, can = krCan(); if(!n) return '';
+  var keys = Object.keys(KR_PICK), n = keys.length, can = krCan(); /* CMD-1109-13：到院进行中汇总区一直显示；没勾 = 「今日进行（0）」+ 居中灰字提示 + 按钮灰掉 */
   var q = function(x){ return String(x).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
   var mk = function(kind){ return keys.filter(function(x){ return x.indexOf(kind+':')===0; }).map(function(x){ var nm0 = x.replace(/^(surg|mg):/,''), it0 = kind==='mg' ? itemByKey(c, nm0, function(y){ return y.heldOver && !y.holdDone; }) : null;
     return '<span style="white-space:nowrap;">'+krEsc(buyName(it0 ? it0.name : nm0))+(it0 ? krQtyStepper(c, it0)+krEarlyHint(c, it0) : '')+(can ? ' <a href="#" title="取消勾选" style="text-decoration:none;color:var(--muted);font-weight:700;" onclick="krTpToggle(\''+kind+'\',\''+krEsc(q(nm0))+'\',false);return false;">×</a>' : '')+'</span>'; }).join('、'); };
   var sg = mk('surg'), mg = mk('mg');
-  return '<div class="kr-today-sum" style="border-top:1px solid var(--border2);margin-top:12px;padding-top:10px;display:flex;align-items:flex-end;gap:12px;"><div style="flex:1;font-size:13px;line-height:1.9;"><div style="font-weight:700;">今日进行（'+n+'）</div>'+(sg ? '<div>施术：'+sg+'</div>' : '')+(mg ? '<div>管理：'+mg+'</div>' : '')+'</div>'+(can ? '<button class="btn-primary sd-btn" onclick="krPickGo()">今日进行</button>' : '')+'</div>';
+  var btn = can ? '<button class="btn-primary sd-btn"'+(n ? '' : ' disabled style="opacity:.45;cursor:not-allowed;" title="请先勾选今日进行项目"')+' onclick="krPickGo()">今日进行</button>' : '';
+  return '<div class="kr-today-sum" style="border-top:1px solid var(--border2);margin-top:12px;padding-top:10px;"><div style="display:flex;align-items:center;gap:12px;"><div style="flex:1;font-weight:700;font-size:13px;">今日进行（'+n+'）</div>'+btn+'</div>'+(n ? '<div style="font-size:13px;line-height:1.9;">'+(sg ? '<div>施术：'+sg+'</div>' : '')+(mg ? '<div>管理：'+mg+'</div>' : '')+'</div>' : '<div style="text-align:center;font-size:13px;color:var(--muted);padding:6px 0 2px;">请勾选今日进行项目</div>')+'</div>';
 }
 function krPickGo(){
   if(!krCan()) return; var surg = [], mg = []; Object.keys(KR_PICK).forEach(function(x){ var m = /^(surg|mg):(.*)$/.exec(x); if(m){ (m[1]==='surg' ? surg : mg).push(m[2]); } });

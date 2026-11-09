@@ -10058,7 +10058,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1109-12：今日进行汇总放回项目卡底部 */
-  ST.def('R267a','CMD-1109-12（KM1 分页，stageC 夹具）：选今日进行项目的项目卡——没有独立的「今日进行项目」卡、标题旁没有「本次使用」说明；底部「今日进行（N）」写出施术 / 管理两行名字，× 取消勾选；切换分页勾还在；全部取消汇总区不见；［今日进行］在汇总里',function(){
+  ST.def('R267a','CMD-1109-12（KM1 分页，stageC 夹具）：选今日进行项目的项目卡——没有独立的「今日进行项目」卡、标题旁没有「本次使用」说明；底部「今日进行（N）」写出施术 / 管理两行名字，× 取消勾选；切换分页勾还在；全部取消汇总区仍在（0 + 居中提示 + 按钮灰）；［今日进行］在汇总里',function(){
     var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
     window.GMC_NO_TABS = true; var oa = window.alert; window.alert = function(){}; var host = document.createElement('div'); document.body.appendChild(host);
     try{
@@ -10078,7 +10078,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krProjPage('mgmt'); krProjPage('surg'); ST.ok(Object.keys(KR_PICK).length===n0, '切换分页已勾的不清掉');
       var x = sum.querySelector('a[onclick*="krTpToggle"]'); ST.ok(!!x, '名字后面有 ×');
       (new Function(x.getAttribute('onclick').replace(/;return false;?$/, '')))(); ST.ok(Object.keys(KR_PICK).length===n0-1, '点 × → 勾选被拿掉');
-      KR_PICK = {}; ST.ok(!draw(), '全部取消 → 汇总区不出现');
+      KR_PICK = {}; sum = draw(); ST.ok(!!sum && /今日进行（0）/.test(sum.textContent) && /请勾选今日进行项目/.test(sum.textContent) && !/施术：|管理：/.test(sum.textContent), '全部取消 → 汇总区还在：「今日进行（0）」+ 居中提示（CMD-1109-13；改前：汇总区不出现）');
+      var b0 = sum.querySelector('button'); ST.ok(!!b0 && b0.disabled, '没勾：［今日进行］灰掉不能按'); ST.ok(!!sum.querySelector('div[style*="text-align:center"]'), '提示居中');
+      KR_PICK['surg:'+surgNames[0]] = true; sum = draw(); ST.ok(!/请勾选今日进行项目/.test(sum.textContent) && /施术：/.test(sum.textContent) && !sum.querySelector('button').disabled, '勾一项：提示消失、出现名字、按钮可按');
     } finally { window.alert = oa; KR_PICK = {}; host.remove(); }
   });
 
