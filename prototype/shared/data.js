@@ -9917,10 +9917,12 @@ function coreUnitUseNow0(c, name, by, opt){ if(krDayDeny(c, 'main')) return fals
   var tg = coreUseTarget(c); if(!tg) return {ok:false, err:'没有客人已到店的案件'};
   var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped; }); if(!it) return {ok:false, err:'找不到项目'}; var ik = itemIid(it); name = it.name;
   if(krIsMgmtItemC(it)){
+    var wasPicked = (tg.key==='main' && pickedMgmt(c, it) && !tmdGet(c, it)); /* CMD-1109-18：按之前就已经排进今天 → 这次是加倍 */
     if(tg.key==='main' && it.heldOver && !it.holdDone) absorbItemRows(c, it, by); /* CMD-1102-11 二：这一项已有约在今天的预约行 → 先转成今天的进行项目，不再拒绝「没有可用次数」 */
     if(!it.heldOver || it.holdDone || holdItemLeft(c, it) - holdItemPlanned(c, it) <= 0) return {ok:false, err:'没有可用次数'};
-    var qmax = Math.max(1, holdItemLeft(c, it) - holdItemPlanned(c, it)), qn = Math.max(1, Math.min(parseInt(opt && opt.qty, 10)||1, qmax)); /* CMD-1021-14 四：本次使用选 N 次 */
-    if(tg.key==='main'){ mainDayAddMgmt(c, it, qn, opt); logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+((opt && opt.dirOp) ? '（院长操作'+(opt.ext ? '，延长 '+opt.ext+' 分钟' : '')+'）' : '')); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
+    var tdN = wasPicked ? Math.max(1, parseInt(it.todayQty, 10)||1) : 0; if(holdItemLeft(c, it) - holdItemPlanned(c, it) - tdN <= 0) return {ok:false, err:'没有可用次数'}; /* CMD-1109-18：今天已排的次数不能再用 */
+    var qmax = Math.max(1, holdItemLeft(c, it) - holdItemPlanned(c, it) - tdN), qn = Math.max(1, Math.min(parseInt(opt && opt.qty, 10)||1, qmax)); /* CMD-1021-14 四：本次使用选 N 次 */
+    if(tg.key==='main'){ mainDayAddMgmt(c, it, qn, Object.assign({}, opt||{}, {additive:wasPicked})); logCaseEvent(c, by, '本次使用：'+name+' 加进今日案件'+((opt && opt.dirOp) ? '（院长操作'+(opt.ext ? '，延长 '+opt.ext+' 分钟' : '')+'）' : '')); return {ok:true, key:'main'}; } /* 主案件：加进今日案件一行，完成时扣 1 次（CMD-1015-30） */
     var rep = coreVisitRows(c, tg.key)[0], s = coreSubAdd(c, {kind:'术后管理记录', date:rep.date, time:rep.time||'', content:name+'（持有项目使用）', place:'KR', projectName:name, silent:true}, by); if(!s) return {ok:false};
     s.holdUseOf = name; s.holdIid = ik; s.arrived = true; s.simDay = true; s.src = 'use'; s.useNow = true; if(qn>1) s.useQty = qn; /* useNow = 本次使用加进来的行（项目卡写「今天使用 N 次」，不算已预约） */ if(opt && opt.dirOp){ s.dirOp = true; s.director = opt.dir || c.director; s.dirMin = opt.min || 30; s.extendMin = opt.ext || 0; } subCaseNos(c); logCaseEvent(c, by, '本次使用：'+buyName(name)+' 加进这次到院'+((opt && opt.dirOp) ? '（院长操作）' : ''), '管理项目'); return {ok:true, key:tg.key};
   }
@@ -9934,7 +9936,7 @@ function coreUnitUseNow0(c, name, by, opt){ if(krDayDeny(c, 'main')) return fals
 }
 /* ===== CMD-1102-11 二：约在主到院那一天的管理 / 施术项目并进主到院的进行项目 ===== */
 function mainDayAddMgmt(c, it, qn, opt){ /* 持有的管理项目加进今日案件（= ［本次使用］的主到院分支）；按［操作完成］才扣次数 */
-  var ik = itemIid(it), name = it.name; it.todayQty = qn; var dn0 = tmdGet(c, it); if(dn0) dn0.again = true;
+  var ik = itemIid(it), name = it.name, prevQ = (opt && opt.additive) ? Math.max(1, parseInt(it.todayQty, 10)||1) : 0, roomQ = Math.max(1, holdItemLeft(c, it) - holdItemPlanned(c, it)); it.todayQty = prevQ ? Math.min(prevQ+qn, roomQ) : qn; /* CMD-1109-18：今天已经排了同一项，再按［今日进行］= 加倍（同一天做两次） */ var dn0 = tmdGet(c, it); if(dn0) dn0.again = true;
   var all0 = (c.procedureItems||[]).filter(function(x){ return x.heldOver && !x.holdDone; }).map(function(x){ return itemIid(x); });
   c.todayPickMgmt = (c.todayPicked ? (c.todayPickMgmt||[]) : all0).filter(function(n){ return n!==ik && n!==name; }).concat([ik]); c.todayPicked = true;
   if(opt && opt.dirOp){ (c.todayDirOp = c.todayDirOp || {})[name] = {ext:opt.ext||0, min:opt.min||30, dir:opt.dir||c.director}; syncSurgeryBlock(c); }
@@ -10240,6 +10242,18 @@ function coreTodayCancel(c, kind, key, by, internal){
   return true;
 }
 
+/* CMD-1109-18 二：施术项目今天不做了（项目卡［今日取消］，原因必填）：从今天拿掉、标「待重新预约」；不退款、不动定金 / 尾款（要退款走到院评估「项目有变动」） */
+function coreSurgTodayCancel(c, name, reason, by){
+  if(krDayDeny(c, 'main')) return false; reason = String(reason||'').trim(); if(!reason) return false;
+  var it = itemByKey(c, name, function(x){ return x.origin==='KR' && !x.cancelled && !x.swapped && !x.done && !krIsMgmtItemC(x); }); if(!it || !c.krBalancePaid) return false;
+  var key = it.name, open = (c.subItems||[]).filter(function(s){ return !s.skipped && !s.done && s.surgUse===key && s.date===todayStr(); })[0];
+  if(open){ c.subItems = c.subItems.filter(function(s){ return s!==open; }); it.deferUse = true; }
+  else if(!coreTodayCancel(c, 'item', key, by, true)) return false;
+  it.deferUse = true; it.rebookWait = {reason:'今日取消', memo:reason, at:nowFullDt(), by:by};
+  syncSurgerySub(c); syncSurgeryBlock(c); updateCaseStage(c);
+  logCaseEvent(c, by, '今日取消施术：'+key+'；原因：'+reason+'（退回待重新预约，不退款、不动定金 / 尾款）', '施术');
+  return true;
+}
 /* ============ CMD-1015-26 Step 4：付清尾款后勾选今日进行的项目 ============
    勾的施术 / 管理项目进今日案件（施术行写「施术：勾的项目」，管理项目一行一个）；没勾的留在项目卡「未使用」（施术项目标 deferUse：不占今日时段、不随施术行完成） */
 function coreTodayPick(c, surgNames, mgmtNames, by){ if(krDayDeny(c, 'main')) return {ok:false, err:'这一天已过 00:00 关账，请先确认结束'};
