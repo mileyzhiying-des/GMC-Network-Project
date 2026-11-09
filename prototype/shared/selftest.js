@@ -9822,7 +9822,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], h = HOSPITAL_DATA[caseKrHospital(cc)], dn = cc.director; h.directorSchedule = h.directorSchedule || {}; (h.directorSchedule[dn] = h.directorSchedule[dn] || []).push({id:'t11x', who:dn, date:cc.krSchedule.primary, time:'15:00', end:'16:00', type:'不可预约', title:'t'}); });
       KR_SCH.dur = 60; krRenderCaseDetail(); var o1 = [].slice.call([].slice.call(body().querySelectorAll('select.kr-time-sel')).pop().options).filter(function(o){ return o.value==='14:00'; })[0]; var d60 = o1.disabled;
       KR_SCH.dur = 300; krRenderCaseDetail(); var o2 = [].slice.call([].slice.call(body().querySelectorAll('select.kr-time-sel')).pop().options).filter(function(o){ return o.value==='14:00'; })[0];
-      var o3 = [].slice.call([].slice.call(body().querySelectorAll('select.kr-time-sel')).pop().options).filter(function(o){ return o.value==='14:30'; })[0]; ST.ok(d60===false && o2.disabled===false && o3 && /有预约/.test(o3.text || ''), '预计时长改长后 14:00 撞到 15:00 的不可预约：不灰掉，后面小字（有预约）（CMD-1109-08；改前：灰掉）：'+d60+'/'+o2.disabled);
+      var o3 = [].slice.call([].slice.call(body().querySelectorAll('select.kr-time-sel')).pop().options).filter(function(o){ return o.value==='15:00'; })[0]; ST.ok(d60===false && o2.disabled===false && o3 && /有预约/.test(o3.text || ''), '预计时长改长后 14:00 撞到 15:00 的不可预约：不灰掉，后面小字（有预约）（CMD-1109-08；改前：灰掉）：'+d60+'/'+o2.disabled);
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], h = HOSPITAL_DATA[caseKrHospital(cc)]; h.directorSchedule[cc.director] = (h.directorSchedule[cc.director]||[]).filter(function(b){ return b.id!=='t11x'; }); });
       ST.ok(krHoursText(318)==='5 小时 18 分钟' && krHM(320)==='5 小时 20 分钟', 'krHoursText 不再有小数写法');
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.status = 'pending'; cc.krSchedule.primary = ymdAdd(todayStr(), 41); cc.krSchedule.address = ''; cc.stay = null; });
@@ -9985,6 +9985,43 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.stay.out = ymdAdd(d0, -2); switchCaseTab('kr'); t = txt();
       ST.ok(/（已不在行程内）/.test(t) && !/原日期继续有效/.test(t), '行程变动导致的改期：原定行加红字（已不在行程内），不写继续有效');
     } finally { window.confirm = oc; var i = CASE_ITEMS.findIndex(function(x){ return x.id===c.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); Store.touch(); }
+  });
+
+  /* CMD-1109-09：开始时间下拉范围与标注 */
+  ST.def('R264a','CMD-1109-09（KM1 分页，stageC 夹具）：开始时间下拉从营业开始前 2 小时到营业结束后 2 小时；按开始时间本身标（营业外 / 已有预约 / 午休时间）；这些都可选并在框里黄字按整个时长列重叠段；院长 OFF / 休诊灰掉；首选下面列午休',function(){
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+      var hid = krHospitalIdOfMe(), base = ymdAdd(todayStr(), 40), prim = '', dn = '';
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(cc); dn = cc.director;
+        for(var k = 0; k < 20; k++){ var d = ymdAdd(base, k); if(hospitalOpenOn(hid, dn, d) && !hospitalClosedFrom(hid, d) && !hospitalClosedBefore(hid, d)){ prim = d; break; } }
+        cc.stay = {in:ymdAdd(base,-1), inTime:'06:00', out:ymdAdd(base, 30), outTime:'12:30', by:'A1'}; cc.krSchedule = {status:'pending', primary:prim, backup:'', confirmedDate:null, tripState:'booked', tripSubmitted:true}; cc.hasArrived = false;
+        var h = HOSPITAL_DATA[hid]; h.directorSchedule = h.directorSchedule || {}; h.directorSchedule[dn] = (h.directorSchedule[dn]||[]).filter(function(b){ return !/^t264/.test(String(b.id)); }).concat([{id:'t264a', who:dn, date:prim, time:'11:00', end:'13:00', type:'不可预约', title:'不可预约', note:'', kind:'不可预约'}]); });
+      krShowCase(r.clinicId, r.id); krSetCaseTab('items'); KR_SCH = {caseKey:'', pick:'', time:'', address:null, reason:'', dur:0, addrEdit:false}; krRenderCaseDetail();
+      var body = function(){ return document.getElementById('krcase-body'); }, txt = function(){ return body().textContent.replace(/\s+/g,' '); };
+      var opts = function(){ return [].slice.call([].slice.call(body().querySelectorAll('select.kr-time-sel')).pop().options).filter(function(o){ return o.value; }); };
+      var eh = hospitalHours(hid), lu = hospitalLunch(hid), first = minToTime(Math.floor(Math.max(0, timeToMin(eh.open)-120)/30)*30), last = minToTime(Math.min(23*60+30, timeToMin(eh.close)+120));
+      var os = opts(); ST.ok(os[0].value===first && os[os.length-1].value===last, '范围：营业开始前 2 小时 ～ 营业结束后 2 小时：'+os[0].value+' ～ '+os[os.length-1].value+'（预期 '+first+' ～ '+last+'）');
+      var by = function(v){ return os.filter(function(o){ return o.value===v; })[0]; };
+      ST.ok(/营业外/.test(by(first).text) && !by(first).disabled, first+' 标营业外且可选');
+      ST.ok(/已有预约/.test(by('11:00').text) && /已有预约/.test(by('12:30').text) && !by('12:30').disabled, '11:00 ～ 12:30 标已有预约（按开始时间本身，不看整个时长）');
+      if(lu) ST.ok(/午休时间/.test(by(lu.from).text) && !by(lu.from).disabled, lu.from+' 标午休时间且可选');
+      ST.ok(by('14:00') && by('14:00').text.trim()==='14:00', '14:00 只写时间：'+(by('14:00')||{}).text);
+      ST.ok(!by('10:30') || /营业外|已有预约/.test(by('10:30').text) || timeToMin(eh.open) <= 630, '营业开始前的时间标营业外');
+      var lastIn = minToTime(timeToMin(eh.close)); ST.ok(by(lastIn) && /营业外/.test(by(lastIn).text), eh.close+' 起标营业外');
+      /* 选 11:00：黄字按整个时长列重叠段，可确认 */
+      krSchSet('time', '11:00'); var t = txt();
+      ST.ok(/11:00 开始：/.test(t) && /11:00–13:00 有预约/.test(t) && (!lu || /午休/.test(t)) && /请确认重叠的情况下是否可以预约/.test(t), '选 11:00：黄字列重叠段：'+t.slice(t.indexOf('11:00 开始'), t.indexOf('11:00 开始')+90));
+      var btn = function(){ return [].slice.call(body().querySelectorAll('button')).filter(function(b){ return /确认施术时间/.test(b.textContent); })[0]; };
+      ST.ok(btn() && !btn().disabled, '可以确认');
+      krSchDur('h', '1'); krSchDur('m', '0'); krSchSet('time', '14:00'); ST.ok(!/请确认重叠的情况下是否可以预约/.test(txt()) && btn() && !btn().disabled, '选 14:00（1 小时）：没有提醒');
+      /* 首选下面列午休 */
+      if(lu) ST.ok(new RegExp(lu.from+'–'+lu.to+'（午休时间）').test(txt()) && /11:00–13:00（不可预约）/.test(txt()), '首选下面列午休和不可预约');
+      /* 院长 OFF 的天：灰掉 */
+      Store.mutateClinic(r.clinicId, function(){ var h = HOSPITAL_DATA[hid]; h.offs = h.offs || []; h.offs.push({id:'t264off', kind:'director', who:dn, date:prim, part:'全天', name:'t'}); });
+      krSchSet('time', ''); krRenderCaseDetail(); os = opts();
+      ST.ok(os.length && os.every(function(o){ return o.disabled || !o.value; }) , '院长整天 OFF：所有时间灰掉不能选');
+    } finally { window.alert = oa; window.confirm = oc; if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); var h = HOSPITAL_DATA[krHospitalIdOfMe()]; if(h){ Object.keys(h.directorSchedule||{}).forEach(function(k){ h.directorSchedule[k] = h.directorSchedule[k].filter(function(b){ return !/^t264/.test(String(b.id)); }); }); h.offs = (h.offs||[]).filter(function(o){ return o.id!=='t264off'; }); } }); }
   });
 
   /* CMD-1106-15：院长选推荐项目只勾 + 备注 */

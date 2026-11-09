@@ -1309,14 +1309,32 @@ function krSchOverlaps(c, date, time, dur){ /* 返回和院长已有预约 / 不
   return directorClashList(hid, c.director, date, s0, s0 + dur, {exceptCaseKey:key, rows:rows}).filter(function(x){ return x.what!=='OFF'; });
 }
 function krSchOverlapText(c, list){ return list.map(function(x){ return (c.director||'院长')+' '+x.time+(x.end ? '–'+x.end : '')+' 有预约'; }).join('；'); }
+/* CMD-1109-09：开始时间下拉——列「医院那天营业开始前 2 小时 ～ 营业结束后 2 小时」每 30 分钟一个；标注只看「这个开始时间本身」落在哪一段：
+   营业外 →（营业外）；医院午休 →（午休时间）；院长不可预约 / 已有其他预约 →（已有预约）；都不是只写时间；
+   院长 OFF / 医院整天休诊 → 灰掉不能选；营业外 / 午休 / 已有预约都可以选（选了框里黄字提醒，krSchForm） */
+function krSchEffHours(hid, date){ var hr = hospitalHours(hid), cb = hospitalClosedBefore(hid, date), cf = hospitalClosedFrom(hid, date); return {open:cb || hr.open, close:cf || hr.close}; } /* 当天实际营业时间：半天营业按设定收窄 */
+function krSchStartTag(c, hid, date, tt, key, rows){
+  var m = timeToMin(tt), eh = krSchEffHours(hid, date), lu = hospitalLunch(hid);
+  if(m < timeToMin(eh.open) || m >= timeToMin(eh.close)) return '营业外';
+  if(lu && m >= timeToMin(lu.from) && m < timeToMin(lu.to)) return '午休时间';
+  var cl = directorClashList(hid, c.director, date, m, m+1, {exceptCaseKey:key, rows:rows}).filter(function(x){ return x.what!=='OFF'; });
+  return cl.length ? '已有预约' : '';
+}
 function krTimeOptionsFor(sel, c, date){
-  var hid = krHospitalIdOfMe(), hr = hospitalHours(hid), dur = KR_SCH.dur || surgeryMinutes(c), key = KR_CASE.clinicId+':'+KR_CASE.id, o = sel ? '' : '<option value="" selected disabled hidden>选择时间</option>'; /* CMD-1106-12：不预选 */
-  for(var m = 6*60; m <= 23*60+30; m += 30){
+  var hid = krHospitalIdOfMe(), dur = KR_SCH.dur || surgeryMinutes(c), key = KR_CASE.clinicId+':'+KR_CASE.id, o = sel ? '' : '<option value="" selected disabled hidden>选择时间</option>'; /* CMD-1106-12：不预选 */
+  var rows = []; try{ rows = krDirectorRowsAll(c.director); }catch(e){}
+  var eh = date ? krSchEffHours(hid, date) : krSchEffHours(hid, todayStr()), whole = (date && hospitalClosedOn(hid, date)) ? '休诊' : '';
+  var from = Math.max(0, timeToMin(eh.open) - 120), to = Math.min(23*60+30, timeToMin(eh.close) + 120);
+  from = Math.floor(from/30)*30;
+  for(var m = from; m <= to; m += 30){
     var tt = minToTime(m), er = date ? krSurgerySlotError(hid, c.director, date, tt, dur, key, {allowOffHours:true}) : '';
-    var tI = date ? tripDateIssue(c, date, tt) : null, why = '', soft = '';
-    if(tI && !tI.soft && tI.kind!=='short') why = tI.kind==='early' ? '早于到达' : (tI.kind==='late' ? '晚于离境' : '早于到达时间'); else if(er){ if(krSchHard(er)) why = krTimeShortWhy(er); else soft = '有预约'; } /* CMD-1109-08：有预约不灰掉，后面小字「（有预约）」 */
-    var isSel = tt===sel;
-    o += '<option value="'+tt+'"'+(isSel ? ' selected' : '')+(why ? ' disabled' : '')+'>'+tt+((why || soft) && !isSel ? '（'+(why || soft)+'）' : '')+'</option>';
+    var tI = date ? tripDateIssue(c, date, tt) : null, why = '', tag = '';
+    if(whole) why = '休诊';
+    else if(tI && !tI.soft && tI.kind!=='short') why = tI.kind==='early' ? '早于到达' : (tI.kind==='late' ? '晚于离境' : '早于到达时间');
+    else if(er && krSchHard(er)) why = /OFF/.test(er) ? '院长 OFF' : '休诊';
+    else if(date) tag = krSchStartTag(c, hid, date, tt, key, rows);
+    var isSel = tt===sel, lab = why || tag;
+    o += '<option value="'+tt+'"'+(isSel ? ' selected' : '')+(why ? ' disabled' : '')+'>'+tt+(lab && !isSel ? '（'+lab+'）' : '')+'</option>';
   }
   return o;
 }
@@ -1333,10 +1351,11 @@ function krTripLine(c){
 }
 /* CMD-1109-08：KR「施术日期确认」卡（初次确认 / 改期确认共用）
    标题行在 krTabProc 里画（标题 + 状态标签 +［行程修正］，右边赴韩日程）；这里是内容：首选 / 备选（只列选中那天院长的不可约时段，每段一行）→ 强调框（施术时间 / 施术日期 + 时间 / 提醒）→ 按钮 */
-function krSchWhyOf(tag){ return /OFF/.test(tag) ? '院长 OFF' : (/休诊/.test(tag) ? '医院休诊' : (/施术|面诊/.test(tag) ? '已有预约' : '不可预约')); }
+function krSchWhyOf(tag){ return /午休/.test(tag) ? '午休时间' : /OFF/.test(tag) ? '院长 OFF' : (/休诊/.test(tag) ? '医院休诊' : (/施术|面诊/.test(tag) ? '已有预约' : '不可预约')); }
 function krSchDayLines(c, date){ /* 选中那天院长不能预约的时段：HH:mm–HH:mm（原因），每段一行；没有就「X 院长：全天可预约」 */
   var hid = krHospitalIdOfMe(), u = krDirUnavail(hid, c.director, date), nm = c.director || '院长', ind = 'margin-left:22px;font-size:12px;color:var(--slate2);line-height:1.7;';
   if(u.whole) return '<div style="'+ind+'">'+krEsc(nm)+'：全天不可预约（'+krEsc(u.whole)+'）</div>';
+  var lu = hospitalLunch(hid), rg = u.ranges.slice(); if(lu) rg.push({a:lu.from, b:lu.to, tag:'午休时间'}); rg.sort(function(x, y){ return timeToMin(x.a) - timeToMin(y.a); }); u = {whole:'', ranges:rg}; /* CMD-1109-09：午休也列（营业外不列） */
   if(!u.ranges.length) return '<div style="'+ind+'">'+krEsc(nm)+'：全天可预约</div>';
   return u.ranges.map(function(r, i){ return '<div style="'+ind+'">'+(i===0 ? krEsc(nm)+'：' : '<span style="display:inline-block;width:'+(String(nm).length*12+12)+'px;"></span>')+krEsc(r.a+'–'+r.b)+'（'+krEsc(krSchWhyOf(r.tag))+'）</div>'; }).join('');
 }
@@ -1351,7 +1370,15 @@ function krSchForm(c, dates, labels, confirmFn, rejectFn, confirmLabel){
   if(ti && !ti.soft && ti.kind!=='short') red = tripDateIssueText(c, KR_SCH.pick, KR_SCH.time);
   else if(ti && ti.soft) yellow = tripDateIssueText(c, KR_SCH.pick, KR_SCH.time)+'（行程暂定，仅供提醒）';
   var er = ''; try{ er = KR_SCH.pick && KR_SCH.time ? krSurgerySlotError(krHospitalIdOfMe(), c.director, KR_SCH.pick, KR_SCH.time, dur, KR_CASE.clinicId+':'+KR_CASE.id, {allowOffHours:true}) : ''; }catch(e){}
-  if(er && !red){ if(krSchHard(er)) red = String(er).replace(/^.*?，和 /, '会撞到 ').replace(/ 重叠$/, ''); else { var ovl = krSchOverlaps(c, KR_SCH.pick, KR_SCH.time, dur); ovTxt = ovl.length ? krSchOverlapText(c, ovl) : ''; } } /* 有预约 / 不可预约重叠：只提醒，可以确认 */
+  if(er && !red && krSchHard(er)) red = String(er).replace(/^.*?，和 /, '会撞到 ').replace(/ 重叠$/, '');
+  if(!red && KR_SCH.pick && KR_SCH.time){ /* CMD-1109-09：重叠只提醒——按整个施术时长列出碰到的段（已有预约 / 午休 / 营业外），可以确认 */
+    var hid9 = krHospitalIdOfMe(), s9 = timeToMin(KR_SCH.time), e9 = s9 + dur, parts = [], lu9 = hospitalLunch(hid9), eh9 = krSchEffHours(hid9, KR_SCH.pick);
+    krSchOverlaps(c, KR_SCH.pick, KR_SCH.time, dur).forEach(function(x){ parts.push((c.director||'院长')+' '+x.time+(x.end ? '–'+x.end : '')+' 有预约'); });
+    if(lu9 && s9 < timeToMin(lu9.to) && e9 > timeToMin(lu9.from)) parts.push(lu9.from+'–'+lu9.to+' 午休');
+    if(s9 < timeToMin(eh9.open)) parts.push(KR_SCH.time+'–'+(e9 < timeToMin(eh9.open) ? minToTime(e9) : eh9.open)+' 营业时间外');
+    if(e9 > timeToMin(eh9.close)) parts.push((s9 > timeToMin(eh9.close) ? KR_SCH.time : eh9.close)+'–'+(e9 >= 1440 ? '24:00' : minToTime(e9))+' 营业时间外');
+    ovTxt = parts.length ? KR_SCH.time+' 开始：'+parts.join('、') : '';
+  }
   var noteRow = (red ? '<div style="font-size:12px;margin:6px 0 0;color:#B3261E;font-weight:700;">⚠️ '+krEsc(red)+'，不能确认</div>' : '')+(ovTxt ? '<div style="font-size:12px;margin:6px 0 0;color:#8F6F0C;">⚠️ '+krEsc(ovTxt)+'，请确认重叠的情况下是否可以预约。</div>' : '')+(yellow ? '<div style="font-size:12px;margin:6px 0 0;color:#8F6F0C;">'+krEsc(yellow)+'</div>' : '');
   var hrLine = '<div style="border-top:1px solid var(--border2);margin:10px 0;"></div>';
   /* 强调框：浅底 + 边框，字号同上下（13px）：施术时间、施术日期 + 时间 ～ 结束时间、提醒行 */
