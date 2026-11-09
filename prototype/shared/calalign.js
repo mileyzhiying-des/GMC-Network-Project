@@ -594,7 +594,7 @@ function staySave(){
   /* CMD-1106-07：存行程时，首选 / 备选 / KR 确认的施术日期不能跑到范围外（暂定的行程只是预估，不挡） */
   var tmp = Object.assign({}, c, {stay:{in:d.inD, out:d.outD, inTime:d.ex.inTime, outTime:d.ex.outTime}, krSchedule:Object.assign({}, c.krSchedule||{}, x.o.trip ? {tripState:'booked'} : {}), tripConfirm:x.o.trip ? {} : c.tripConfirm});
   var tm = tripMismatchList(tmp).filter(function(z){ return !z.soft && z.kind!=='short'; }); /* CMD-1109-04：行程是事实——碰到施术日期也可以存，存之前提醒一句；存好后施术日期变红、状态「需重新预约」（取代 CMD-1106-07 的「要先改施术日期才能存」） */
-  if(tm.length){ var msg = tm.map(function(z){ return z.label+' '+stayMD(z.date); }).join('、')+' 不在新行程内，存好后需要重新预约施术时间。仍要保存吗？'; if(!window.confirm(msg)) return; }
+  /* CMD-1109-07：不再弹浏览器确认框「仍要保存吗？」——直接存；存好后施术标红「需重新预约」，并自动打开施术变动（svbAutoOpen） */
   var finish = function(){ staySaveDo(x, c, d, methods, other, bad); };
   if(d.outD && stayConflictInfo(c, d.outD, (d.ex||{}).outTime).length){ inStayResGate(c, d, finish); return; } /* CMD-1027-14：离开日期之后还有韩国预约 → 先弹处理窗（和 KR 的行程修正同一套规则） */
   finish();

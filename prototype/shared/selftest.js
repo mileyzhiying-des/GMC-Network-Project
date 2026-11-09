@@ -10138,6 +10138,23 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var m61 = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===61; })[0]; ST.ok(!!m61, '有迁移 61');
     if(m61){ m61.fn(g, {note:function(){}}); ST.ok(!heldSurgItems(g).length && !tripWaitItems(g).length && g.depositDue && g.noShowDue && g.noShowDue.status==='pending', '迁移后：持有 → 等 IN 退定金 / 置换，等三选一（无原因）→ 无故不做项目'); }
   });
+  ST.def('R262a','CMD-1109-07（A1 分页，stageC 夹具）：在韩行程保存没有确认框；施术变动标题行右边标行程（已定 / 暂定 / 未定，改了行程回来马上更新）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var oldC = window.confirm, oldA = window.alert, asked = 0; window.confirm = function(){ asked++; return true; }; window.alert = function(){ asked++; };
+    try{
+      var c = ST.toConfirmed('R262a'); var ks = c.krSchedule, cd = ks.confirmedDate; c.tripConfirm = c.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; ks.tripState = 'booked'; c.stay = {in:ymdAdd(cd, -3), out:ymdAdd(cd, 8), inTime:'10:00', outTime:'12:00'};
+      ST.open(c); SVB = null; openStayModal(c.id); document.getElementById('stay-in').value = ymdAdd(cd, 5); document.getElementById('stay-out').value = ymdAdd(cd, 15); document.getElementById('stay-int').value = '09:00'; document.getElementById('stay-outt').value = '12:00'; staySave();
+      ST.ok(asked===0 && !!ksRebookNeeded(c) && !!SVB && document.getElementById('svb-overlay').classList.contains('open'), '碰到施术日期：没有任何 confirm / alert，直接存 + 自动打开施术变动');
+      var tt = document.getElementById('svb-trip').textContent; var md = function(d){ return d.slice(5); };
+      ST.ok(tt==='行程 '+md(ymdAdd(cd, 5))+' 09:00 ～ '+md(ymdAdd(cd, 15))+' 12:00', '标题行右边：行程 MM-DD HH:mm ～ MM-DD HH:mm：'+tt);
+      ST.ok(/^施术变动/.test(document.getElementById('svb-overlay').textContent.trim()), '标题还是「施术变动 · 客人（案件号）」');
+      /* 从弹窗里改了行程回来马上更新 */
+      var far = ymdAdd(cd, 5); ks.svbPrimary = far; tripOpenStayFromCal(); document.getElementById('stay-out').value = ymdAdd(cd, 30); document.getElementById('stay-in').value = ymdAdd(cd, 4); document.getElementById('stay-int').value = '08:30'; staySave();
+      ST.ok(document.getElementById('svb-trip').textContent==='行程 '+md(ymdAdd(cd, 4))+' 08:30 ～ '+md(ymdAdd(cd, 30))+' 12:00', '改了行程回来：标题行马上更新：'+document.getElementById('svb-trip').textContent);
+      ks.tripState = 'tentative'; svbResume(); ST.ok(document.getElementById('svb-trip').textContent==='行程 暂定', '暂定写「行程 暂定」');
+      ks.tripState = 'booked'; c.stay = null; svbResume(); ST.ok(document.getElementById('svb-trip').textContent==='行程 未定', '没填写「行程 未定」'); svbClose();
+    } finally { window.confirm = oldC; window.alert = oldA; try{ svbClose(); }catch(e){} }
+  });
   ST.def('R261a','CMD-1109-06（A1 分页，stageC 夹具）：从［施术变动］红字旁的［行程变动］打开在韩行程，保存 / 取消后回到施术变动（理由和日期保留）；卡片［行程变动］保存后碰到施术日期 → 自动打开施术变动（更改时间 + 理由「行程变动」+ 日历停在到达月），不碰到只关掉',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var oldConfirm = window.confirm; window.confirm = function(){ return true; };
@@ -10219,7 +10236,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* ① 行程变动（新行程不含施术日期） */
       c.stay = null; ST.open(c); openStayModal(c.id); document.getElementById('stay-in').value = ymdAdd(d0, 2); document.getElementById('stay-out').value = ymdAdd(d0, 12); document.getElementById('stay-int').value = '09:00'; document.getElementById('stay-outt').value = '12:00';
       var kn = 0; staySave();
-      ST.ok(/不在新行程内，存好后需要重新预约施术时间/.test(asked), '存之前提醒一句：'+asked);
+      ST.ok(asked==='', 'CMD-1109-07：保存没有浏览器确认框（原：存之前提醒一句）'); ST.ok(!!SVB && SVB.mode==='time' && SVB.reasonT==='行程变动', '存好后自动打开施术变动（理由「行程变动」）'); svbClose();
       var rb = ksRebookNeeded(c); ST.ok(!!rb && c.stay && c.stay.in===ymdAdd(d0, 2), '可以存，施术日期标红：'+(rb&&rb.msg));
       var h = krProcedureTabMain(c, ''); ST.ok(/需重新预约/.test(h) && /不在新行程内/.test(h) && /请重新预约施术时间/.test(h), '日期那段：状态「需重新预约」+ 红字');
       ST.ok(blocks()===0, '院长日程里的旧时段释放了');

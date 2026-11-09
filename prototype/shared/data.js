@@ -13280,9 +13280,15 @@ function svbRender(){
     } else body += '<div style="font-size:12px;color:var(--muted);margin-top:10px;">这个案件没有已付的定金，直接取消，不涉及退款 / 置换。</div>';
     body += '</div>';
   }
-  ov.innerHTML = '<div class="modal-box" style="width:580px;max-width:96vw;max-height:92vh;overflow:auto;"><div style="font-size:16px;font-weight:700;">施术变动 · '+aEscC(c.name)+'（'+aEscC(c.caseNo||'')+'）</div><div style="border-top:1px solid var(--border2);margin:10px 0 4px;"></div>'+body+
+  ov.innerHTML = '<div class="modal-box" style="width:580px;max-width:96vw;max-height:92vh;overflow:auto;"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;"><span style="font-size:16px;font-weight:700;">施术变动 · '+aEscC(c.name)+'（'+aEscC(c.caseNo||'')+'）</span><span id="svb-trip" style="font-size:12px;color:var(--slate2);white-space:nowrap;">'+aEscC(svbTripText(c))+'</span></div><div style="border-top:1px solid var(--border2);margin:10px 0 4px;"></div>'+body+
     '<div style="color:#B3261E;font-size:12px;margin-top:8px;'+(h.err ? '' : 'display:none;')+'">'+aEscC(h.err)+'</div><div style="border-top:1px solid var(--border2);margin-top:12px;padding-top:12px;display:flex;justify-content:flex-end;gap:10px;"><button class="btn-outline" onclick="svbClose()">取消</button><button class="btn-primary" id="svb-go" '+(svbSendOff(c) ? 'disabled style="opacity:.5;cursor:not-allowed;" ' : '')+'onclick="svbGo()">送出</button></div></div>';
   ov.style.zIndex = 100020; ov.classList.add('open');
+}
+function svbTripText(c){ /* CMD-1109-07：施术变动标题行右边：行程 MM-DD HH:mm ～ MM-DD HH:mm（韩国当地时间）；暂定写「暂定」，没填写「未定」 */
+  var st = c.stay || {}, f = function(d, t){ return d ? String(d).slice(5)+(t ? ' '+t : '') : '?'; };
+  if(typeof tripStateOf==='function' && tripStateOf(c)==='tentative') return '行程 暂定';
+  if(!st.in && !st.out) return '行程 未定';
+  return '行程 '+f(st.in, st.inTime)+' ～ '+f(st.out, st.outTime);
 }
 function svbSendOff(c){ var h = SVB; if(!h || h.mode!=='time') return false; var ks = c.krSchedule || {}; return !String(h.reasonT||'').trim() || sdSubmitOff(c, ks.svbPrimary, ks.svbBackup); } /* CMD-1109-05：更改时间——理由没填 / 没选首选 / 碰到行程都灰 */
 function svbBtnRefresh(){ var h = SVB; if(!h) return; var c = CASE_ITEMS.filter(function(x){ return x.id===h.caseId; })[0], b = document.getElementById('svb-go'); if(!c || !b) return; var off = svbSendOff(c); b.disabled = off; b.style.opacity = off ? '.5' : ''; b.style.cursor = off ? 'not-allowed' : ''; }
