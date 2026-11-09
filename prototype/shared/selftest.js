@@ -10109,6 +10109,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.alert = oa; KR_AD = {adds:{}, signed:{}, locals:[], care:{}, open:false}; krRenderCaseDetail(); }
   });
 
+  /* CMD-1109-16：今日进行项目——次数加减放到那一行最右 */
+  ST.def('R269a','CMD-1109-16（KM1 分页，pcStage 夹具）：今日进行项目里剩余 > 1 次的管理项目——勾选框 → 标签 → 名字 → （说明）→ 最右「− N + 次」；最多 = 剩余、最少 1；剩 1 次的没有加减；各行名字起始位置一致',function(){
+    var r = krAllCases().filter(function(x){ return /^T-术后管理/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, i3 = '', i1 = '', host = document.createElement('div'); document.body.appendChild(host);
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c); c.krBalancePaid = true;
+      var base = {origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:3, local:true, mgmtPlan:true, batchId:'B1', firstDay:0, interval:0};
+      c.procedureItems.push(Object.assign({}, base, {name:'T-多次项目 · 4cc'}), Object.assign({}, base, {name:'T-单次项目 · 1cc', qty:1, specTimes:1})); ensureItemIids(c);
+      i3 = itemIid(c.procedureItems.filter(function(x){ return /T-多次/.test(x.name); })[0]); i1 = itemIid(c.procedureItems.filter(function(x){ return /T-单次/.test(x.name); })[0]); });
+    try{
+      krShowCase(r.clinicId, r.id, {here:true, tab:'items'}); KR_PICK = {}; KR_PICK['mg:'+i3] = true; KR_PICK['mg:'+i1] = true;
+      var cc = krFindCase(r.clinicId, r.id).c; host.innerHTML = krProjCards(cc, {pick:true}); var sum = host.querySelector('.kr-today-sum');
+      var rows = [].slice.call(sum.querySelectorAll('label')); ST.ok(rows.length===2, '两行');
+      var r3 = rows.filter(function(x){ return /T-多次/.test(x.textContent); })[0], r1 = rows.filter(function(x){ return /T-单次/.test(x.textContent); })[0];
+      var kids = [].slice.call(r3.children); ST.ok(kids[0].tagName==='INPUT' && /status-pill/.test(kids[1].className) && /T-多次/.test(kids[2].textContent) && /kr-qty/.test(kids[kids.length-1].className), '顺序：勾选框 → 标签 → 名字 → … → 最右次数加减');
+      var q = r3.querySelector('.kr-qty'); ST.ok(/−/.test(q.textContent) && /\+/.test(q.textContent) && /次$/.test(q.textContent.trim()) && getComputedStyle(q).marginLeft!=='6px', '加减带单位「次」，靠右：'+q.textContent.trim());
+      ST.ok(!r1.querySelector('.kr-qty'), '剩 1 次的没有加减');
+      var left = function(el){ return el.children[2].getBoundingClientRect().left; }; ST.ok(Math.abs(left(r3)-left(r1))<2, '各行名字起始位置一致');
+      var rb = q.getBoundingClientRect().right, rr = r3.getBoundingClientRect().right; ST.ok(rr-rb < 8, '加减在那一行最右：'+(rr-rb));
+      var btns = q.querySelectorAll('button'); ST.ok(btns[0].disabled && !btns[1].disabled, '下限 1：− 灰');
+      btns[1].click(); btns[1].click(); var it = itemByKey(krFindCase(r.clinicId, r.id).c, i3); ST.ok((it.todayQty||1)===3, '加到 3');
+      host.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c, {pick:true}); var q2 = host.querySelector('.kr-today-sum .kr-qty'); ST.ok(q2.querySelectorAll('button')[1].disabled, '上限 = 剩余次数 3：+ 灰');
+    } finally { KR_PICK = {}; host.remove(); if(snap) Store.mutateClinic(r.clinicId, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i>-1) CASE_ITEMS[i] = JSON.parse(snap); }); }
+  });
+
   /* CMD-1106-15：院长选推荐项目只勾 + 备注 */
   ST.def('R245a','CMD-1106-15（KD1 分页，stagePay 夹具）：推荐项目标题「推荐项目（选择勾选）」没有红色 *、没有「赴韩项目可选范围」小标题；勾施术 / 管理项目不展开细节、没有推荐项目整理；备注可填；细节先带项目库默认；上传后只读显示项目 + 备注，室长发送画面保留',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KD1', '要在 KD1 分页里跑')) return;
