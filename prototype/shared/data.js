@@ -5945,7 +5945,7 @@ function setKrPrimaryDate(pf, bf, dateStr){
 
 /* CMD-1106-19：「■ 首选日  ■ 备选日」图例，放在「施术日期」标题行最右边；拿掉「点选 1～2 天…」那句（格子左上角的勾选照旧） */
 function krSchedLegendHtml(){ return '<span style="display:flex;gap:14px;font-size:12px;color:var(--slate2);font-weight:400;white-space:nowrap;"><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#F6C9CF;border:1px solid #E5A3AC;margin-right:4px;vertical-align:-2px;"></span>首选日</span><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--action-primary,#9A6A4B);margin-right:4px;vertical-align:-2px;"></span>备选日</span></span>'; }
-function krSchedHeadRowHtml(title){ return '<div class="info-heading" style="margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><span>'+title+'</span>'+krSchedLegendHtml()+'</div>'; }
+function krSchedHeadRowHtml(title, extra){ return '<div class="info-heading" style="margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><span>'+title+'</span><span style="display:flex;align-items:center;gap:12px;">'+krSchedLegendHtml()+(extra||'')+'</span></div>'; }
 function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
   var __c0 = getCurrentCase(); /* CMD-1106-21：日历上面不再写「客人行程…」和黄字 */
   var openDatesNow = caseOpenDates(getCurrentCase());
@@ -7404,16 +7404,16 @@ function krProcedureTabMain(c, tabsHtml){
     var canModify = ks && ks.status==='confirmed' && !c.hasArrived; /* 到医院前都可改日期（CMD-1012-13，拿掉施术前 2 周限制） */
     if(st==='Draft'){
       ks = ensureKrScheduleDraft(c);
-      body = krSchedHeadRowHtml('施术日期')+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
+      body = krSchedHeadRowHtml('施术日期', krNotStartedItems(c).length ? '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>' : '')+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         monthNav+
         krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripSubmitYellowHtml(c, ks.primary, ks.backup)+
-        '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">'+krBtn+'</button></div>'; /* ［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
+        '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button></div>'; /* CMD-1109-03：取消赴韩 / 无法协调收进［施术变动］；原注释：［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
     } else if(st==='Pending'){
-      body = sdHead('待 KR 确认', '<button class="btn-outline sd-btn" onclick="requestCannotCoordinate()">'+krBtn+'</button>')+
+      body = sdHead('待 KR 确认', '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>')+
         '<div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待 KR 室长确认'+tripStateTagHtml(c)+'</div>'+
         '<div style="font-size:12px;color:var(--muted);">等待 KR 室长选定日期、填到院时间和地址（或回复无法安排）</div>';
     } else if(st==='Confirmed'){
-      var btnsC = c.hasArrived ? '' : (canModify ? '<button class="btn-outline sd-btn" onclick="startKrScheduleChange()">修改施术日期</button>' : '<button class="btn-outline sd-btn" style="opacity:.5;cursor:not-allowed;" disabled>修改施术日期</button>')+'<button class="btn-outline sd-btn" onclick="openCancelItems()">取消施术计划</button>'; /* 时间确认后：［无法协调］拿掉，同一位置改为［取消施术计划］（CMD-1012-12；CMD-1109-01 改名） */
+      var btnsC = c.hasArrived ? '' : '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>'; /* CMD-1109-03：［修改施术日期］［取消施术计划］合成［施术变动］ */
       body = sdHead('已确认', btnsC)+
         '<div class="sd-box" id="surg-send-row"><div style="display:flex;align-items:flex-start;gap:12px;"><div style="flex:1;">'+sdTimeLine(ks)+'<div style="margin-top:6px;">地址：'+aEsc(addrBoth(c.hospitalId||clinicHospital(CURRENT_CLINIC_ID), ks.address))+'</div>'+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+surgSendHtml(c)+'</div></div>'+
         (c.hasArrived ? '<div style="font-size:12px;color:var(--terracotta);margin-top:10px;">KR 已在韩国重新预约施术时间；到过医院之后 IN 端不能再修改日期或取消项目，客人再到医院时由 KR 重新标记"已到医院"</div>' : '');
@@ -7428,7 +7428,7 @@ function krProcedureTabMain(c, tabsHtml){
           '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button>'+
           '</div>';
       } else {
-        body = sdHead('改期待确认', '<button class="btn-outline sd-btn" onclick="cancelKrScheduleChange()">取消修改</button><button class="btn-outline sd-btn" onclick="openCancelItems()">取消施术计划</button>')+
+        body = sdHead('改期待确认', '<button class="btn-outline sd-btn" onclick="cancelKrScheduleChange()">取消修改</button><button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>')+
           '<div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">原定 '+ksTimeText(ks)+'，已提交新首选 '+ks.changePrimary+(ks.changeBackup?'　新备选 '+ks.changeBackup:'')+'，等待 KR 室长确认（原日期继续有效）</div>'+
           '<div style="font-size:12px;color:var(--muted);">等待 KR 室长确认新时间（或回复无法安排，原日期继续有效）</div>';
       }
@@ -13174,3 +13174,110 @@ function ddmGo(){
   if(!r.ok){ h.err = r.err; ddmRender(); return; }
   ddmClose(); try{ renderCaseBody(c); }catch(e){} try{ todoRefresh && todoRefresh(); }catch(e){}
 }
+
+
+/* ===== CMD-1109-03：IN［施术变动］弹窗——合并原来的［修改施术日期］［取消施术计划］（及待递交 / 待确认里的［取消赴韩］［无法协调］）
+   ○ 更改时间：理由必填 + 首选（必选）/ 备选（选填）日历（和递交同一个日历），送出后走改期流程（KR 室长确认到院时间）
+   ○ 取消施术（整个施术计划）：理由必填；已付定金可以「退款」「不退款，置换项目」一起勾（两笔加起来 = 已付）；置换额度记在客人资料，只能抵印尼本地项目 ===== */
+var SVB = null;
+function svbPaid(c){ try{ return Math.max(0, Math.round(krBalanceInfo(c).effDeposit||0)); }catch(e){ return 0; } }
+function svbCanTime(c){ var st = scheduleState(c); return st==='Pending' || st==='Confirmed' || st==='Changing'; }
+function svbOpen(pre){
+  var c = getCurrentCase(); if(!c || c.hasArrived || c.visitClosed) return; if(!krNotStartedItems(c).length) return;
+  var canT = svbCanTime(c), ks = canT ? c.krSchedule : null;
+  SVB = {caseId:c.id, mode:(pre==='cancel' || !canT) ? 'cancel' : (pre==='time' ? 'time' : (canT ? 'time' : 'cancel')), reasonT:'', reasonC:'', refundOn:false, refundAmt:'', compOn:false, method:'', mnote:'', err:''};
+  if(ks){ ks.svbPrimary = ''; ks.svbBackup = ''; }
+  var t = todayStr(); KR_SCHED_VIEW_MONTH = new Date(+t.slice(0,4), +t.slice(5,7)-1, 1); KR_SCHED_NAV_CASE = '';
+  svbRender();
+}
+function svbClose(){ var c = SVB && CASE_ITEMS.filter(function(x){ return x.id===SVB.caseId; })[0]; if(c && c.krSchedule){ delete c.krSchedule.svbPrimary; delete c.krSchedule.svbBackup; } SVB = null; var ov = document.getElementById('svb-overlay'); if(ov) ov.classList.remove('open'); }
+function svbSet(k, v){ if(!SVB) return; SVB[k] = v; if(k==='refundOn' && v && SVB.refundAmt==='') SVB.refundAmt = String(svbPaid(CASE_ITEMS.filter(function(x){ return x.id===SVB.caseId; })[0])); SVB.err = ''; svbRender(); }
+function svbInput(k, v){ if(!SVB) return; SVB[k] = v; SVB.err = ''; if(k==='refundAmt') svbMoneyRefresh(); }
+function svbCompAmt(c){ var paid = svbPaid(c); if(!SVB.compOn) return 0; return Math.max(0, paid - (SVB.refundOn ? (Number(SVB.refundAmt)||0) : 0)); }
+function svbMoneyRefresh(){ var c = CASE_ITEMS.filter(function(x){ return x.id===SVB.caseId; })[0]; if(!c) return; var el = document.getElementById('svb-comp-amt'); if(el) el.textContent = formatCurrency(svbCompAmt(c), 'KRW'); var h = document.getElementById('svb-money-hint'); if(h) h.innerHTML = svbMoneyHint(c); }
+function svbMoneyHint(c){
+  var paid = svbPaid(c), r = SVB.refundOn ? (Number(SVB.refundAmt)||0) : 0, comp = SVB.compOn ? Math.max(0, paid - r) : 0;
+  if(!SVB.refundOn && !SVB.compOn) return '<span style="color:#B3261E;">请至少勾一项：退款 或 置换（两笔加起来 = 已付 '+formatCurrency(paid,'KRW')+'）</span>';
+  if(SVB.refundOn && (r<=0 || r>paid)) return '<span style="color:#B3261E;">退款金额要大于 0 且不超过已付 '+formatCurrency(paid,'KRW')+'</span>';
+  if(SVB.refundOn && !SVB.compOn && r<paid) return '<span style="color:#B3261E;">还剩 '+formatCurrency(paid-r,'KRW')+' 没处理：请同时勾「不退款，置换项目」，或把退款金额改成全额</span>';
+  if(SVB.refundOn && SVB.compOn && comp<=0) return '<span style="color:#B3261E;">退款已是全额，置换金额为 0：请取消勾选置换，或调低退款金额</span>';
+  return '<span style="color:var(--sage);">退款 '+formatCurrency(r,'KRW')+' + 置换 '+formatCurrency(comp,'KRW')+' = 已付 '+formatCurrency(paid,'KRW')+'</span>';
+}
+function svbRender(){
+  var h = SVB; if(!h) return; var c = CASE_ITEMS.filter(function(x){ return x.id===h.caseId; })[0]; if(!c){ svbClose(); return; }
+  var ov = document.getElementById('svb-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'svb-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  var canT = svbCanTime(c), ks = c.krSchedule, paid = svbPaid(c), inp = 'width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;';
+  var rd = function(v, t){ return '<label style="display:block;font-size:14px;font-weight:700;margin:10px 0 4px;cursor:pointer;"><input type="radio" name="svb-m" '+(h.mode===v ? 'checked' : '')+' onchange="svbSet(\'mode\',\''+v+'\')"> '+t+'</label>'; };
+  var body = '';
+  if(canT) body += rd('time', '更改时间');
+  if(canT && h.mode==='time'){
+    var pf = 'svbPrimary', bf = 'svbBackup', pri = ks[pf]||'', bak = ks[bf]||'';
+    body += '<div style="margin:0 0 6px 22px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">理由 <span style="color:#C1454A;">*</span></div><input style="'+inp+'" value="'+aEscC(h.reasonT)+'" oninput="svbInput(\'reasonT\',this.value)" placeholder="为什么要改时间（必填）">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 2px;font-size:12px;font-weight:700;"><span>选新的施术日期（首选必选，备选选填）</span>'+krSchedLegendHtml()+'</div>'+
+      krSchedMonthNavHtml(c, ks, pf)+krDateCalendarGridHtml(pf, bf, pri, bak)+tripSubmitYellowHtml(c, pri, bak)+
+      '<div style="font-size:12px;color:var(--slate2);margin-top:6px;">首选 '+(pri||'<span style="color:var(--muted);">未选</span>')+'　备选 '+(bak||'<span style="color:var(--muted);">（选填）</span>')+(scheduleState(c)==='Confirmed' ? '　<span style="color:var(--muted);">原定 '+ks.confirmedDate+'；送出后等 KR 室长确认到院时间，原日期继续有效</span>' : '')+'</div></div>';
+  }
+  body += rd('cancel', '取消施术');
+  if(h.mode==='cancel'){
+    body += '<div style="margin:0 0 6px 22px;"><div style="font-size:12px;color:var(--slate2);margin-bottom:6px;">整个施术计划都取消（只取消其中几项，请在项目卡操作）</div><div style="font-size:12px;font-weight:700;margin-bottom:4px;">理由 <span style="color:#C1454A;">*</span></div><input style="'+inp+'" value="'+aEscC(h.reasonC)+'" oninput="svbInput(\'reasonC\',this.value)" placeholder="为什么要取消（必填）">';
+    if(paid>0){
+      var comp = svbCompAmt(c);
+      body += '<div style="font-size:13px;font-weight:700;margin:12px 0 6px;">已付定金 '+formatCurrency(paid,'KRW')+'</div>'+
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0;cursor:pointer;"><input type="checkbox" '+(h.refundOn ? 'checked' : '')+' onchange="svbSet(\'refundOn\',this.checked)"> 退款　金额 <input type="number" min="0" value="'+aEscC(h.refundAmt)+'" '+(h.refundOn ? '' : 'disabled')+' oninput="svbInput(\'refundAmt\',this.value)" style="width:140px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></label>'+
+        (h.refundOn ? '<div style="margin:2px 0 6px 24px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">退款方式 <span style="color:#C1454A;">*</span></div><div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;">'+REFUND_PAY_METHODS.map(function(m){ return '<label style="cursor:pointer;"><input type="radio" name="svb-pay" '+(h.method===m ? 'checked' : '')+' onchange="svbSet(\'method\',\''+m+'\')"> '+m+'</label>'; }).join('')+'</div>'+(h.method==='其他' ? '<input style="'+inp+'margin-top:6px;" value="'+aEscC(h.mnote)+'" oninput="svbInput(\'mnote\',this.value)" placeholder="选「其他」时请说明（必填）">' : '')+'</div>' : '')+
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0;cursor:pointer;"><input type="checkbox" '+(h.compOn ? 'checked' : '')+' onchange="svbSet(\'compOn\',this.checked)"> 不退款，置换项目　金额 <b id="svb-comp-amt">'+formatCurrency(comp,'KRW')+'</b><span style="font-size:12px;color:var(--muted);">（自动 = 已付 − 退款）</span></label>'+
+        '<div style="font-size:12px;color:#8F6F0C;margin:2px 0 0 24px;">置换额度记在客人资料，下次来只能抵印尼本地项目（≈ '+formatCurrency(Math.round((h.compOn ? comp : 0)*FX_RATES.KRW_IDR),'IDR')+'），不能退款</div>'+
+        '<div id="svb-money-hint" style="font-size:12px;margin-top:8px;">'+svbMoneyHint(c)+'</div>';
+    } else body += '<div style="font-size:12px;color:var(--muted);margin-top:10px;">这个案件没有已付的定金，直接取消，不涉及退款 / 置换。</div>';
+    body += '</div>';
+  }
+  ov.innerHTML = '<div class="modal-box" style="width:580px;max-width:96vw;max-height:92vh;overflow:auto;"><div style="font-size:16px;font-weight:700;">施术变动 · '+aEscC(c.name)+'（'+aEscC(c.caseNo||'')+'）</div><div style="border-top:1px solid var(--border2);margin:10px 0 4px;"></div>'+body+
+    '<div style="color:#B3261E;font-size:12px;margin-top:8px;'+(h.err ? '' : 'display:none;')+'">'+aEscC(h.err)+'</div><div style="border-top:1px solid var(--border2);margin-top:12px;padding-top:12px;display:flex;justify-content:flex-end;gap:10px;"><button class="btn-outline" onclick="svbClose()">取消</button><button class="btn-primary" onclick="svbGo()">送出</button></div></div>';
+  ov.style.zIndex = 100020; ov.classList.add('open');
+}
+function svbGo(){
+  var h = SVB; if(!h) return; var c = CASE_ITEMS.filter(function(x){ return x.id===h.caseId; })[0]; if(!c){ svbClose(); return; }
+  var fail = function(m){ h.err = m; svbRender(); };
+  if(h.mode==='time'){
+    var ks = c.krSchedule, reason = String(h.reasonT||'').trim(); if(!reason) return fail('请填写更改时间的理由');
+    if(!ks || !ks.svbPrimary) return fail('请选择新的首选日期');
+    return svbDoTime(c, reason, ks.svbPrimary, ks.svbBackup||'');
+  }
+  var reasonC = String(h.reasonC||'').trim(); if(!reasonC) return fail('请填写取消施术的理由');
+  var paid = svbPaid(c), r = h.refundOn ? (Number(h.refundAmt)||0) : 0, comp = paid>0 && h.compOn ? Math.max(0, paid - r) : 0;
+  if(paid>0){
+    if(!h.refundOn && !h.compOn) return fail('请至少勾一项：退款 或 置换（两笔加起来 = 已付）');
+    if(h.refundOn){ if(!(r>0) || r>paid) return fail('退款金额要大于 0 且不超过已付 '+formatCurrency(paid,'KRW')); if(!h.method) return fail('请选择退款方式'); if(h.method==='其他' && !String(h.mnote||'').trim()) return fail('退款方式选「其他」时请填写说明'); }
+    if(h.refundOn && !h.compOn && r<paid) return fail('还剩 '+formatCurrency(paid-r,'KRW')+' 没处理：请同时勾「不退款，置换项目」，或把退款金额改成全额');
+    if(h.compOn && comp<=0) return fail('置换金额为 0：请取消勾选置换，或调低退款金额');
+  }
+  svbDoCancel(c, reasonC, paid>0 && h.refundOn ? r : 0, comp, h.method, String(h.mnote||'').trim());
+}
+function svbDoTime(c, reason, pri, bak){
+  var ks = c.krSchedule, st = scheduleState(c), who = actingName(), dtxt = '首选 '+pri+(bak ? '，备选 '+bak : '');
+  if(st==='Pending'){
+    ks.primary = pri; ks.backup = bak; ks.changeReason = reason;
+    logCaseEvent(c, who, '更改施术日期（等 KR 确认中）：'+dtxt+'；理由：'+reason);
+    try{ pushKrNotif(caseKrHospital(c), '施术日期有更改：'+c.name+'（'+(c.caseNo||'')+'）IN 更改了待确认的施术日期（'+dtxt+'；理由：'+reason+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){}
+  } else {
+    if(st==='Confirmed'){ ks.status = 'change_pending'; logCaseEvent(c, who, '申请修改施术日期（理由：'+reason+'）'); }
+    ks.changePrimary = pri; ks.changeBackup = bak; ks.changeSubmitted = true; ks.changeReason = reason;
+    logCaseEvent(c, who, '提交新施术日期（'+dtxt+'；理由：'+reason+'），等待KR 室长确认');
+    try{ pushKrNotif(caseKrHospital(c), '改期待确认：'+c.name+'（'+(c.caseNo||'')+'）提交了新的施术日期（'+dtxt+'；理由：'+reason+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){}
+  }
+  svbClose(); updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+}
+function svbDoCancel(c, reason, refundAmt, compAmt, method, mnote){
+  var items = krNotStartedItems(c).filter(function(it){ return !it.cancelled; }); if(!items.length){ svbClose(); return; }
+  var before = scheduleState(c), replied = krScheduleReplied(c), names = [], batchIds = [], who = actingName(); c.refunds = c.refunds || [];
+  items.forEach(function(it){ it.cancelled = true; it.cancelledAt = nowFullDt(); names.push(it.name); if(it.batchId && batchIds.indexOf(it.batchId)<0) batchIds.push(it.batchId); });
+  if(refundAmt>0) c.refunds.push({amount:refundAmt, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:false, note:'', comp:false, method:method, methodNote:(method==='其他' ? mnote : '')});
+  if(compAmt>0) c.refunds.push({amount:compAmt, currency:'KRW', reason:reason, date:todayStr(), items:names, batchIds:batchIds, afterArrival:false, note:'转成置换额度', comp:true, method:'', methodNote:''}); /* 定金按「退款」入账（带 comp:true），所以财务净额里置换那笔也是退出去的；置换额度本身记在客人资料 */
+  try{ coreAfterItemsRemoved(c, names, who); }catch(e){ console.error(e); }
+  var cr = compAmt>0 ? coreCompCreate(c, compAmt, '取消施术：'+reason, who) : null;
+  var lead = (before==='Draft' || before==='Pending') && !replied ? '室长点［取消赴韩］：客人决定不赴韩（KR 还没回过日期）' : ((before==='Draft' || before==='Pending') ? '室长点［无法协调］：施术日期始终无法协调' : '取消施术计划');
+  logCaseEvent(c, who, lead+'——［施术变动］取消施术，取消全部未完成赴韩项目"'+names.join('、')+'"；理由：'+reason+'；'+(refundAmt>0 ? '退款 '+formatCurrency(refundAmt,'KRW')+'（方式：'+refundMethodText({method:method, methodNote:mnote})+'）' : '不退款')+(compAmt>0 ? '；置换 '+formatCurrency(compAmt,'KRW')+'（≈ '+formatCurrency(cr ? cr.amount : 0,'IDR')+'，记在客人资料，只能抵印尼本地项目）' : '')+'（后续照取消赴韩处理）');
+  try{ pushKrNotif(caseKrHospital(c), '施术已取消：'+c.name+'（'+(c.caseNo||'')+'）IN 取消了施术计划（理由：'+reason+'；退款 '+formatCurrency(refundAmt,'KRW')+'，置换 '+formatCurrency(compAmt,'KRW')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){}
+  svbClose(); afterKrItemsChanged(c);
+}
+(function(){ var r0 = renderCaseBody; renderCaseBody = function(c){ var r = r0.apply(this, arguments); try{ if(SVB && c && SVB.caseId===c.id) svbRender(); }catch(e){} return r; }; })();

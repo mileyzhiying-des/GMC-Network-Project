@@ -205,8 +205,8 @@ function reconfirmPick(id, k){
   var c = calCaseById(id); if(!c || !c.krSchedule) return;
   if(k==='same'){ openReconfirmSame(id); return; }
   if(k==='undecided'){ reconfirmDone(c, 'undecided', '客人还没定，先维持原日期（7 天前再问）'); updateCaseStage(c); try{ buildCaseLog(c); renderCaseBody(c); }catch(e){} return; }
-  if(k==='change'){ reconfirmDone(c, 'change', '客人要改期（走改期流程）'); if(getCurrentCase() && getCurrentCase().id===id){ startKrScheduleChange(); } return; }
-  if(k==='cancel'){ reconfirmDone(c, 'cancel', '客人要取消赴韩（走取消项目流程）'); if(getCurrentCase() && getCurrentCase().id===id){ openCancelItems(); } return; }
+  if(k==='change'){ reconfirmDone(c, 'change', '客人要改期（走改期流程）'); if(getCurrentCase() && getCurrentCase().id===id){ svbOpen('time'); } return; }
+  if(k==='cancel'){ reconfirmDone(c, 'cancel', '客人要取消赴韩（走取消项目流程）'); if(getCurrentCase() && getCurrentCase().id===id){ svbOpen('cancel'); } return; }
 }
 /* 照原日期：可顺便填入境 / 离境和护照号码（都不是必填） */
 function openReconfirmSame(id){

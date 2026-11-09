@@ -5952,8 +5952,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     window.confirm = function(){ return true; };
     var c = ST.newRes('R41a'); ST.consultToReport(c); ST.selectAndPay(c, ['假体隆鼻']); ST.open(c); c.activeCaseTab = 'kr';
     var h = krProcedureTabHtml(c);
-    ST.ok(/递交施术日期/.test(h) && />取消赴韩</.test(h) && !/>无法协调</.test(h) && !/浅色 = 休诊 \/ 约满 \/ 已过/.test(h) && !/浅色为未开放/.test(h), '待递交日期卡（CMD-1106-17：「浅色 = 休诊…」那句说明拿掉）：［递交施术日期］［取消赴韩］，没有［无法协调］，提示改成「浅色 = 休诊 / 约满 / 已过」');
-    c.krSchedule.rejectNote = 'KR 无法安排（自测）'; h = krProcedureTabHtml(c); ST.ok(/>无法协调</.test(h) && !/>取消赴韩</.test(h), 'KR 回过「无法安排」之后才出现［无法协调］'); c.krSchedule.rejectNote = '';
+    ST.ok(/递交施术日期/.test(h) && />施术变动</.test(h) && !/>取消赴韩</.test(h) && !/>无法协调</.test(h) && !/浅色 = 休诊 \/ 约满 \/ 已过/.test(h) && !/浅色为未开放/.test(h), '待递交日期卡（CMD-1106-17：「浅色 = 休诊…」那句说明拿掉）：［递交施术日期］［取消赴韩］，没有［无法协调］，提示改成「浅色 = 休诊 / 约满 / 已过」');
+    c.krSchedule.rejectNote = 'KR 无法安排（自测）'; h = krProcedureTabHtml(c); ST.ok(/>施术变动</.test(h) && !/>无法协调</.test(h), 'CMD-1109-03：待递交里［取消赴韩］/［无法协调］都收进［施术变动］（弹窗里的 Timeline 用词仍按 KR 有没有回过日期区分）'); c.krSchedule.rejectNote = '';
     requestCannotCoordinate(); document.getElementById('refund-reason').value = '（自测）客人不去了'; confirmRefund();
     ST.ok(ST.hasLog(c, /点［取消赴韩］/) && !ST.hasLog(c, /点［无法协调］/), 'Timeline 用词「取消赴韩」');
     /* 护照：已有护照不弹窗；旧案件没护照不能付款 */
@@ -10138,13 +10138,50 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var m61 = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===61; })[0]; ST.ok(!!m61, '有迁移 61');
     if(m61){ m61.fn(g, {note:function(){}}); ST.ok(!heldSurgItems(g).length && !tripWaitItems(g).length && g.depositDue && g.noShowDue && g.noShowDue.status==='pending', '迁移后：持有 → 等 IN 退定金 / 置换，等三选一（无原因）→ 无故不做项目'); }
   });
+  ST.def('R258a','CMD-1109-03（A1 分页，stageC 夹具）：IN［施术变动］弹窗——更改时间（理由必填、首选必选）/ 取消施术（退款 + 置换可分两笔，加起来 = 已付）；置换额度记客人资料、下次抵印尼本地项目；按钮只剩［施术变动］',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var openM = function(c, pre){ ST.open(c); SVB = null; svbOpen(pre); return document.getElementById('svb-overlay'); };
+    var go = function(){ svbGo(); return SVB ? SVB.err : ''; };
+    var pickDate = function(c, off){ var d = ymdAdd(todayStr(), off); while(caseOpenDates(c).indexOf(d)<0 && off<200){ off++; d = ymdAdd(todayStr(), off); } return d; };
+    /* ① 更改时间（已确认） */
+    var a = ST.toConfirmed('R258a1'); a.stay = null; var ov = openM(a); ST.ok(!!ov && ov.classList.contains('open') && /更改时间/.test(ov.textContent) && /取消施术/.test(ov.textContent), '弹窗有两个选项：更改时间 / 取消施术');
+    ST.ok(/理由/.test(ov.textContent) && go()==='请填写更改时间的理由', '更改时间：理由必填');
+    SVB.reasonT = '客人那天有事'; ST.ok(go()==='请选择新的首选日期', '首选必选');
+    var d1 = pickDate(a, 20), d2 = pickDate(a, 30); a.krSchedule.svbPrimary = d1; a.krSchedule.svbBackup = d2; var od = a.krSchedule.confirmedDate;
+    svbGo(); ST.ok(scheduleState(a)==='Changing' && a.krSchedule.changeSubmitted && a.krSchedule.changePrimary===d1 && a.krSchedule.changeBackup===d2 && a.krSchedule.confirmedDate===od, '送出 → 改期待确认（首选 / 备选，原日期继续有效）');
+    ST.ok(ST.hasLog(a, /提交新施术日期（首选 .*备选 .*；理由：客人那天有事）/) && (HOSPITAL_DATA[caseKrHospital(a)].notifs||[]).some(function(n){ return /改期待确认/.test(n.text||'') && (n.text||'').indexOf(a.caseNo)>-1 && /客人那天有事/.test(n.text||''); }) && !document.getElementById('svb-overlay').classList.contains('open'), 'Timeline 有理由、KR 收到通知、弹窗关闭');
+    /* ② 取消施术：只勾退款（全退 / 少退要提示置换） */
+    var paidOf = function(c){ return svbPaid(c); };
+    var b = ST.toConfirmed('R258a2'); var paid = paidOf(b); ST.ok(paid>0, '前置：有已付定金 '+paid); openM(b, 'cancel');
+    ST.ok(go()==='请填写取消施术的理由', '取消：理由必填'); SVB.reasonC = '客人不去了';
+    ST.ok(/不能超过|请至少勾一项/.test(go()), '都不勾送不出：'+SVB.err);
+    SVB.refundOn = true; SVB.refundAmt = String(paid-100000); SVB.method = '现金'; ST.ok(/还剩 .*没处理/.test(go()), '只勾退款但金额小于已付 → 提示勾置换：'+SVB.err);
+    SVB.refundAmt = String(paid); SVB.method = ''; ST.ok(go()==='请选择退款方式', '退款方式必填'); SVB.method = '现金';
+    var cl = clientByName(b.name), cc0 = ((cl.compCredits)||[]).length; svbGo();
+    ST.ok(krNotStartedItems(b).length===0 && (b.refunds||[]).length===1 && b.refunds[0].amount===paid && !b.refunds[0].comp && b.refunds[0].method==='现金' && ((cl.compCredits)||[]).length===cc0, '全退：一笔退款记录（方式 现金），没有置换额度');
+    ST.ok(ST.hasLog(b, /［施术变动］取消施术.*理由：客人不去了；退款 .*（方式：现金）/) && ST.hasLog(b, /点［取消赴韩］|点［无法协调］|取消施术计划/), 'Timeline 记理由 + 退款');
+    /* ③ 只勾置换（全置换）→ 客人资料有置换额度 */
+    var d = ST.toConfirmed('R258a3'); var paid3 = paidOf(d); openM(d, 'cancel'); SVB.reasonC = '换项目'; SVB.compOn = true; var cd0 = (clientByName(d.name).compCredits||[]).length; svbGo();
+    var cr = (clientByName(d.name).compCredits||[]).slice(-1)[0]; ST.ok((clientByName(d.name).compCredits||[]).length===cd0+1 && cr.kwr===paid3 && !cr.used && (d.refunds||[]).length===1 && d.refunds[0].comp && d.refunds[0].amount===paid3, '全置换：置换额度 ₩'+paid3+' 记在客人资料，退款记录只有一笔 comp');
+    /* ④ 两个都勾：退 + 置换 = 已付 */
+    var e = ST.toConfirmed('R258a4'); var paid4 = paidOf(e); openM(e, 'cancel'); SVB.reasonC = '一部分换项目'; SVB.refundOn = true; SVB.refundAmt = String(Math.round(paid4*0.55)); SVB.method = '转账'; SVB.compOn = true;
+    var refund4 = Math.round(paid4*0.55), comp4 = paid4 - refund4; ST.ok(svbCompAmt(e)===comp4, '置换金额自动 = 已付 − 退款：'+comp4); svbGo();
+    var cr4 = (clientByName(e.name).compCredits||[]).slice(-1)[0], rf4 = e.refunds||[];
+    ST.ok(rf4.length===2 && rf4.filter(function(x){ return !x.comp; })[0].amount===refund4 && rf4.filter(function(x){ return x.comp; })[0].amount===comp4 && refund4+comp4===paid4 && cr4 && cr4.kwr===comp4, '退 '+refund4+' + 置换 '+comp4+' = 已付 '+paid4+'；客人置换额度对');
+    /* ⑤ 置换额度客人页可见、下次在印尼选购可抵 */
+    var tmpH = []; ['detail-holdings-block','detail-holdings'].forEach(function(i){ if(!document.getElementById(i)){ var x = document.createElement('div'); x.id = i; document.body.appendChild(x); tmpH.push(x); } }); renderClientHoldings(e.name); var hold = (document.getElementById('detail-holdings')||{}).textContent||''; tmpH.forEach(function(x){ x.remove(); }); ST.ok(/置换额度/.test(hold) && hold.indexOf(e.caseNo)>-1, '客人页「置换额度」显示（来自 '+e.caseNo+'）');
+    var n = ST.newRes('R258a5'); n.name = e.name; ST.ok(clientCompCredits(e.name).length>=1 && /用置换额度换项目/.test(compUseBarHtml(n, 'lm')+compUseBarHtml(n, 'main')), '下次选购本地项目时有［用置换额度换项目］');
+    /* ⑥ 待确认 / 待递交也有［施术变动］（待递交只有取消施术） */
+    var f = ST.toConfirmed('R258a6'); f.krSchedule.status = 'pending'; f.krSchedule.primary = pickDate(f, 15); var hP = krProcedureTabMain(f, ''); ST.ok(/>施术变动</.test(hP) && !/>取消赴韩</.test(hP), '待 KR 确认：只有［施术变动］'); var ovP = openM(f); ST.ok(/更改时间/.test(ovP.textContent), '待确认有「更改时间」');
+    f.krSchedule.status = null; ST.ok(!svbCanTime(f), '待递交没有更改时间'); var ovD = openM(f); ST.ok(!/name="svb-m"[^>]*>\s*更改时间/.test(ovD.innerHTML) && /取消施术/.test(ovD.textContent), '待递交的弹窗只有「取消施术」'); svbClose();
+  });
   ST.def('R257a','CMD-1109-02（A1 分页，stageC 夹具）：赴韩日程卡五个按钮同尺寸；框里韩国时间为主 + 印尼时间小标签 + 地址英文（韩文）+ 字体和上下一样；医院设定韩文地址；「也在查看」提示很淡、不挡点击、靠近变清楚',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.toConfirmed('R257a'); var hid = c.hospitalId || clinicHospital(CURRENT_CLINIC_ID);
     var ks = c.krSchedule; ks.address = hospitalEn(hid).address; c.stay = {in:ks.confirmedDate, inTime:'11:20', out:ymdAdd(ks.confirmedDate, 2), outTime:'12:30'};
     ST.open(c); var host = document.createElement('div'); host.id = 'r257-host'; host.style.cssText = 'position:fixed;left:0;top:0;width:900px;opacity:0;z-index:-1;'; host.innerHTML = krProcedureTabMain(c, '<button class="btn-outline sd-btn" onclick="printKrPlan()">打印</button>'); document.body.appendChild(host);
-    var btns = {}; Array.prototype.forEach.call(host.querySelectorAll('button,a.btn-outline'), function(b){ var k = b.textContent.trim(); if(/^(打印|日程变动|修改施术日期|取消施术计划|发送信息给客人)$/.test(k)) btns[k] = b; });
-    ST.ok(Object.keys(btns).length===5, '五个按钮都在：'+Object.keys(btns).join('、'));
+    var btns = {}; Array.prototype.forEach.call(host.querySelectorAll('button,a.btn-outline'), function(b){ var k = b.textContent.trim(); if(/^(打印|日程变动|施术变动|发送信息给客人)$/.test(k)) btns[k] = b; });
+    ST.ok(Object.keys(btns).length===4, '四个按钮都在（CMD-1109-03：修改施术日期 / 取消施术计划合成施术变动）：'+Object.keys(btns).join('、'));
     var sig = function(b){ var cs = getComputedStyle(b); return cs.fontSize+'|'+cs.paddingTop+'|'+cs.paddingLeft; }, sigs = Object.keys(btns).map(function(k){ return sig(btns[k]); });
     ST.ok(sigs.every(function(x){ return x===sigs[0]; }) && /^12px/.test(sigs[0]), '五个按钮同一个尺寸：'+sigs.join(' / '));
     ST.ok(getComputedStyle(btns['发送信息给客人']).backgroundColor !== getComputedStyle(btns['打印']).backgroundColor, '［发送信息给客人］保留深色主按钮');
@@ -10173,13 +10210,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var iT = t.indexOf('赴韩日程'), iS = t.indexOf('行程 '), iD = t.indexOf('到达日'), iL = t.indexOf('离境日'), iA = t.indexOf('施术日期 已确认');
     ST.ok(iT>-1 && iS>iT && iD>iS && iL>iD && iA>iL, '三段顺序：赴韩日程 → 行程（到达日 / 离境日）→ 施术日期 已确认：'+t.slice(0,160));
     ST.ok(/日程变动/.test(h) && !/>修改</.test(h), '［日程变动］在行程那行，标题行没有［修改］');
-    ST.ok(/修改施术日期/.test(h) && /取消施术计划/.test(h) && !/>修改日期</.test(h) && !/>取消项目</.test(h), '按钮改名：修改施术日期 / 取消施术计划');
+    ST.ok(/>施术变动</.test(h) && !/>修改施术日期</.test(h) && !/>取消施术计划</.test(h) && !/>修改日期</.test(h) && !/>取消项目</.test(h), 'CMD-1109-03：按钮只剩［施术变动］');
     ST.ok(/施术日期 \d{4}-\d\d-\d\d \d\d:\d\d（韩国时间）\s*印尼时间 (\d\d-\d\d )?\d\d:\d\d/.test(t) && /地址：/.test(t) && /发送信息给客人/.test(h), '框里：施术日期 + 韩国时间 + 印尼时间小标签 + 地址 + ［发送信息给客人］（CMD-1109-02）');
     ST.ok(!/施术时间已确认 /.test(t) && !/均由 KR 端操作/.test(t) && !/✓ 已发送/.test(t), '拿掉绿字行 / 说明 / 框右边的已发送');
     ST.ok((h.match(/⚠️ 离境日比建议少/g)||[]).length===1 && !/拆线安排在第/.test(h) && !/建议在韩停留 \d+ 天/.test(t), '提醒只有一行「离境日比建议少 N 天」，没有拆线黄字');
     openSurgMsg(c.id); confirmSurgMsg(); var h2 = krProcedureTabMain(c, ''); ST.ok(/发送信息给客人/.test(h2) && /已发送 \d\d\/\d\d \d\d:\d\d/.test(h2), '发送后按钮还在，下面小字「已发送 MM/DD HH:mm」');
     var ks2 = c.krSchedule; ks2.status = 'change_pending'; ks2.changeSubmitted = true; ks2.changePrimary = ymdAdd(ks2.confirmedDate, 3);
-    var h3 = krProcedureTabMain(c, ''); ST.ok(scheduleState(c)==='Changing' && /改期待确认/.test(h3) && /取消修改/.test(h3) && /取消施术计划/.test(h3), '改期待确认：标签 + ［取消修改］［取消施术计划］');
+    var h3 = krProcedureTabMain(c, ''); ST.ok(scheduleState(c)==='Changing' && /改期待确认/.test(h3) && /取消修改/.test(h3) && />施术变动</.test(h3), '改期待确认：标签 + ［取消修改］［施术变动］');
     ks2.status = 'arrived'; var h4 = krProcedureTabMain(c, ''); ST.ok(scheduleState(c)==='Arrived' && /已到院/.test(h4), '已到院状态：标签 + 文字');
     ks2.status = 'pending'; var h5 = krProcedureTabMain(c, ''); ST.ok(scheduleState(c)==='Pending' && /待 KR 确认/.test(h5), '已递交：待 KR 确认标签');
     ks2.status = 'confirmed';
