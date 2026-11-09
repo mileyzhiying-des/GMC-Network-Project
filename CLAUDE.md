@@ -2284,3 +2284,10 @@ prototype/shared/app.css  共用样式
 - **拿掉**：不建议手术（更换时间 / 取消项目三选一 / 部分退回 / 差额转置换额度的评估入口）、调整方案三步、`coreTripDecide` / `openTripDecide`（IN 三选一）、`coreHeldSurgCancel` / 客人页持有施术［取消 / 退款］、`toggleHeldSurg` / `heldPickerHtml`（下次赴韩勾持有施术）、`applyHeldTransfer`、`coreVisitCancelDecide`、改日 / 保留项目 / 保留金额。`heldSurgItems / tripWaitItems / clientHeldSurgPool / heldPickerHtml / applyHeldTransfer / heldSurgLockedBy` 留着空壳（恒为空 / 空操作），旧代码里读它们的地方（客人页、列表、进程文字）因此自动不再出现。**不动**：管理项目的韩国持有。
 - **迁移 61**（store.js）：案件里的 `heldSurg` / `tripWait` 的施术（没做、没取消、没转走）→ 项目取消 + 有原因的开 `depositDue`（定金份额）+ `krRefundDue`（尾款部分），没原因的开 `noShowDue`；已被新案件使用的（`heldTransferred` / `heldFrom`）和已付款的结算单**不动，只记数量**（`window.GMC_HELD61_USED / FROM / CONV / CASES`，写进迁移备注）；已结案的案件重新打开；幂等。用 11/02 备份（隔离端口）验证：56 → 61，25 个案件迁移、0 失败、核对数 25 = 25；备份里没有持有施术，Fanny A000010 用模拟的旧状态（2 项持有，1 有原因 / 1 没原因）跑迁移：退定金 ₩300,000、无故不来定金 ₩360,000，再跑一次不重复。
 - 测试：新增 R252a（A1）、R254a（KM1，重新约那天）；R198b 改成新的单卡画面；F3 / F4 改新文字，F5 / D24 / D25 / R198a 按新规则重写；**删除**已无对象的旧用例 R198c、R200a、R221a、R223a、R224a、R224b、R225a、R231a，R238a 去掉「行程结束转持有」一段。回归对照 V4 基线 2565b7e：A1 只少了被删的用例、多了 R252a（通过）；KM1 / KD1 批次里被牵动的旧用例用同样夹具单跑与基线一致；roletest 8 个账号 0 不符。
+
+## CMD-1106-24 补充（2026-11-09，追加；取代 CMD-1106-22 里「无故不来 · IN 管理者（nikCanEdit）决定」，旧文字保留作历史）
+- 分支 **V4**，代码提交 e9b8eae，文档另一个提交；不推送不合并；**数据版本不变（61）**，没有新字段。
+- 「无故不来」全部改名「无故不做项目」（待办、通知、Timeline、决定窗、迁移备注；字段名 `noShowDue` / `coreNoShowDecide` 不改）；「IN 院长」写法一律改「IN 室长」。待办 `noshowdue` 和退定金待办一样给这个案件的 IN 室长（`todoInMine`），不再要求 `nikCanEdit()`，`openNoShowDue` 的管理者拦截拿掉；二选一照旧（退：方式必填 / 不退：原因必填）。
+- 来了（已到院）但没做、也没选原因：系统 / 确认结束标的「未选原因」待重新预约（`rwNoReason(rw)`）在行程结束时按「无故不做项目」处理，不再当作「有原因 → 退定金」。
+- `git stash list` 为空（1106-22 的 WIP 早已并入 c17d2df），没有需要 drop 的 stash。
+- 测试：selftest 新增 R255a；A1 全套对照基线失败集合一致，KM1 全套一致（R255a 在 KM1 里失败属预期，要在 IN 分页跑）。roletest 这次没重跑。
