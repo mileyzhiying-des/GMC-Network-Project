@@ -10138,6 +10138,33 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var m61 = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===61; })[0]; ST.ok(!!m61, '有迁移 61');
     if(m61){ m61.fn(g, {note:function(){}}); ST.ok(!heldSurgItems(g).length && !tripWaitItems(g).length && g.depositDue && g.noShowDue && g.noShowDue.status==='pending', '迁移后：持有 → 等 IN 退定金 / 置换，等三选一（无原因）→ 无故不做项目'); }
   });
+  ST.def('R257a','CMD-1109-02（A1 分页，stageC 夹具）：赴韩日程卡五个按钮同尺寸；框里韩国时间为主 + 印尼时间小标签 + 地址英文（韩文）+ 字体和上下一样；医院设定韩文地址；「也在查看」提示很淡、不挡点击、靠近变清楚',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.toConfirmed('R257a'); var hid = c.hospitalId || clinicHospital(CURRENT_CLINIC_ID);
+    var ks = c.krSchedule; ks.address = hospitalEn(hid).address; c.stay = {in:ks.confirmedDate, inTime:'11:20', out:ymdAdd(ks.confirmedDate, 2), outTime:'12:30'};
+    ST.open(c); var host = document.createElement('div'); host.id = 'r257-host'; host.style.cssText = 'position:fixed;left:0;top:0;width:900px;opacity:0;z-index:-1;'; host.innerHTML = krProcedureTabMain(c, '<button class="btn-outline sd-btn" onclick="printKrPlan()">打印</button>'); document.body.appendChild(host);
+    var btns = {}; Array.prototype.forEach.call(host.querySelectorAll('button,a.btn-outline'), function(b){ var k = b.textContent.trim(); if(/^(打印|日程变动|修改施术日期|取消施术计划|发送信息给客人)$/.test(k)) btns[k] = b; });
+    ST.ok(Object.keys(btns).length===5, '五个按钮都在：'+Object.keys(btns).join('、'));
+    var sig = function(b){ var cs = getComputedStyle(b); return cs.fontSize+'|'+cs.paddingTop+'|'+cs.paddingLeft; }, sigs = Object.keys(btns).map(function(k){ return sig(btns[k]); });
+    ST.ok(sigs.every(function(x){ return x===sigs[0]; }) && /^12px/.test(sigs[0]), '五个按钮同一个尺寸：'+sigs.join(' / '));
+    ST.ok(getComputedStyle(btns['发送信息给客人']).backgroundColor !== getComputedStyle(btns['打印']).backgroundColor, '［发送信息给客人］保留深色主按钮');
+    var box = host.querySelector('#surg-send-row'), tx = box.textContent.replace(/\s+/g, ' ');
+    ST.ok(/施术日期 \d{4}-\d\d-\d\d \d\d:\d\d（韩国时间）/.test(tx) && /印尼时间 (\d\d-\d\d )?\d\d:\d\d/.test(tx) && tx.indexOf('韩国时间') < tx.indexOf('印尼时间'), '韩国时间在前，印尼时间是小标签：'+tx.slice(0,80));
+    ST.ok(/地址：.+（.+）/.test(tx) && /Apgujeong|Nonhyeon/.test(tx) && /[\uAC00-\uD7AF]/.test(tx), '地址 英文（韩文）：'+tx.slice(tx.indexOf('地址')));
+    var fs = function(el){ return getComputedStyle(el).fontSize; }; ST.ok(fs(box)===fs(host.querySelector('.card')) || fs(box)==='13px', '框里字体 13px（和上下一样大，没有放大）：'+fs(box));
+    var tag = box.querySelector('.sd-tag'); ST.ok(!!tag && fs(tag)==='12px', '印尼时间是小标签');
+    host.remove();
+    var hd = HOSPITAL_DATA[hid], old = hd.addressKo; hd.addressKo = ''; ST.ok(!/（[\uAC00-\uD7AF]/.test(addrBoth(hid, ks.address)), '韩文地址清空 → 只显示英文'); hd.addressKo = '서울 테스트 1'; ST.ok(/（서울 테스트 1）/.test(addrBoth(hid, ks.address)), '填了韩文地址 → 英文（韩文）'); ST.ok(/서울 테스트 1/.test(surgMsgText(c, 'notice')), '给客人的信息也用 英文（韩文）'); if(old===undefined) delete hd.addressKo; else hd.addressKo = old;
+    /* 「也在查看」提示 */
+    var pk = window.presCaseKey, pv = window.presViewers; window.presCaseKey = function(){ return 'r257|key'; }; window.presViewers = function(){ return ['KM1 室长']; };
+    try{ presRender(); var pb = document.getElementById('case-pres-bar'); ST.ok(!!pb && /也在查看/.test(pb.textContent), '提示出现');
+      ST.ok(getComputedStyle(pb).opacity==='0.2' && getComputedStyle(pb).pointerEvents==='none', '平时 opacity 0.2 + pointer-events:none');
+      var r = pb.getBoundingClientRect(), mv = function(x, y){ document.dispatchEvent(new MouseEvent('mousemove', {clientX:x, clientY:y, bubbles:true})); };
+      mv(r.left + 5, r.top + 5); ST.ok(pb.style.opacity==='0.7', '鼠标靠近变 0.7');
+      mv(r.left - 200, r.top + 400); ST.ok(pb.style.opacity==='0.2', '鼠标走开变回 0.2');
+      var el = document.elementFromPoint(r.left + r.width/2, r.top + r.height/2); ST.ok(!el || el.id!=='case-pres-bar', '提示下面的元素照样接得到点击（提示不接收鼠标）');
+    } finally { window.presCaseKey = pk; window.presViewers = pv; presRender(); }
+  });
   ST.def('R256a','CMD-1109-01（A1 分页，stageC 夹具）：IN 赴韩日程卡（KR 已确认后）三段排版——标题 +［打印］｜行程 +［日程变动］｜施术日期 + 状态标签 + ［修改施术日期］［取消施术计划］；框里两行 +［发送信息给客人］；只一行离境日提醒；发送后按钮下小字「已发送 MM/DD HH:mm」',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.toConfirmed('R256a'); ST.ok(scheduleState(c)==='Confirmed', '前置：施术时间已确认');
@@ -10147,7 +10174,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(iT>-1 && iS>iT && iD>iS && iL>iD && iA>iL, '三段顺序：赴韩日程 → 行程（到达日 / 离境日）→ 施术日期 已确认：'+t.slice(0,160));
     ST.ok(/日程变动/.test(h) && !/>修改</.test(h), '［日程变动］在行程那行，标题行没有［修改］');
     ST.ok(/修改施术日期/.test(h) && /取消施术计划/.test(h) && !/>修改日期</.test(h) && !/>取消项目</.test(h), '按钮改名：修改施术日期 / 取消施术计划');
-    ST.ok(/施术日期 \d{4}-\d\d-\d\d，到院时间 \d\d:\d\d（印尼）（韩国 \d\d:\d\d）/.test(t) && /地址：/.test(t) && /发送信息给客人/.test(h), '框里：施术日期 + 到院时间（印尼）（韩国）+ 地址 + ［发送信息给客人］');
+    ST.ok(/施术日期 \d{4}-\d\d-\d\d \d\d:\d\d（韩国时间）\s*印尼时间 (\d\d-\d\d )?\d\d:\d\d/.test(t) && /地址：/.test(t) && /发送信息给客人/.test(h), '框里：施术日期 + 韩国时间 + 印尼时间小标签 + 地址 + ［发送信息给客人］（CMD-1109-02）');
     ST.ok(!/施术时间已确认 /.test(t) && !/均由 KR 端操作/.test(t) && !/✓ 已发送/.test(t), '拿掉绿字行 / 说明 / 框右边的已发送');
     ST.ok((h.match(/⚠️ 离境日比建议少/g)||[]).length===1 && !/拆线安排在第/.test(h) && !/建议在韩停留 \d+ 天/.test(t), '提醒只有一行「离境日比建议少 N 天」，没有拆线黄字');
     openSurgMsg(c.id); confirmSurgMsg(); var h2 = krProcedureTabMain(c, ''); ST.ok(/发送信息给客人/.test(h2) && /已发送 \d\d\/\d\d \d\d:\d\d/.test(h2), '发送后按钮还在，下面小字「已发送 MM/DD HH:mm」');

@@ -335,6 +335,9 @@ function hospitalEn(id){
   var nm = hd.nameEn!==undefined ? hd.nameEn : dm.name, ad = hd.addressEn!==undefined ? hd.addressEn : dm.address;
   return {name:String(nm||'').trim() || (h.name && h.name.ko) || '—', address:String(ad||'').trim() || h.address || '—'};
 }
+/* CMD-1109-02：医院地址「英文（韩文）」——韩文地址 = HOSPITAL_DATA[h].addressKo（医院设定里选填；从没填过读医院基本资料里的韩文地址；清空 = 不显示）；ks.address 是 KR 确认时存的（默认 = 英文地址，KR 可改成别的文字，改过的原样显示） */
+function hospitalKoAddr(id){ var h = hospitalById(id) || {}, hd = (typeof HOSPITAL_DATA!=='undefined' && HOSPITAL_DATA[id]) || {}; return String(hd.addressKo!==undefined ? hd.addressKo : (h.address||'')).trim(); }
+function addrBoth(id, stored){ var en = hospitalEn(id).address, ko = hospitalKoAddr(id), a = String(stored||'').trim(); if(a && a!==en && a!==ko) return a; var base = a || en; return ko && ko!==base ? base+'（'+ko+'）' : base; }
 function hospitalName(id, lang){ var h = hospitalById(id); return h ? (h.name[lang||'ko'] || h.name.ko) : '—'; }
 function linkedHospitalIds(clinicId){ return CLINIC_HOSPITALS.filter(function(r){ return r.clinicId===(clinicId||CURRENT_CLINIC_ID); }).map(function(r){ return r.hospitalId; }); }
 function linkedHospitals(clinicId){ return linkedHospitalIds(clinicId).map(hospitalById).filter(Boolean); }
@@ -7372,7 +7375,7 @@ function krProcedureTabHtml(c){
   var sub = c.krSubTab || 'main', st0 = scheduleState(c), kConfirmed = ['Confirmed','Changing','Arrived'].indexOf(st0)>-1 && !!(c.krSchedule && c.krSchedule.confirmedDate);
   if(sub==='timeline' && !kConfirmed) sub = 'main'; /* 在韩 timeline 要等 KR 确认施术时间后才出现 */
   var hasItems = krActiveItems(c).length>0;
-  var tabsHtml = (c.settlementDone && hasItems) ? '<button class="btn-outline" style="padding:5px 12px;font-size:12px;" onclick="printKrPlan()">打印</button>' : ''; /* CMD-1025-04 B：拿掉「建议在韩停留」胶囊（搬进赴韩日程卡）和「在韩 timeline」胶囊（整体 Timeline 里已有）；只留［打印］ */
+  var tabsHtml = (c.settlementDone && hasItems) ? '<button class="btn-outline sd-btn" onclick="printKrPlan()">打印</button>' : ''; /* CMD-1025-04 B：拿掉「建议在韩停留」胶囊（搬进赴韩日程卡）和「在韩 timeline」胶囊（整体 Timeline 里已有）；只留［打印］ */
   return krProcedureTabMain(c, tabsHtml);
 }
 /* CMD-1015-15：赴韩施术计划里 IN 也看得到定金 / 尾款（在韩加项的金额仍只有 KR 看得到：加项不计入） */
@@ -7392,6 +7395,7 @@ function krProcedureTabMain(c, tabsHtml){
   var monthNav = krSchedMonthNavHtml(c, ks, st==='Changing' ? 'changePrimary' : 'primary'); /* CMD-1106-17：年 / 月下拉 */
   var hasActive = krActiveItems(c).length>0;
   var body = '';
+  var sdTimeLine = function(k){ /* CMD-1109-02：韩国时间为主，印尼时间做小标签（跨天带日期） */ if(!k || !k.confirmedDate) return '施术日期 —'; if(!k.confirmedTime) return '施术日期 '+aEsc(k.confirmedDate); var r = krToClinic(k.confirmedDate, k.confirmedTime); return '施术日期 '+aEsc(k.confirmedDate+' '+k.confirmedTime)+'（韩国时间）<span class="sd-tag">印尼时间 '+aEsc((r.date!==k.confirmedDate ? r.date.slice(5)+' ' : '')+r.time)+'</span>'; };
   var sdHead = function(tag, btns){ return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;"><span class="info-heading" style="margin:0;">施术日期</span>'+(tag ? '<span class="status-pill" style="background:var(--bg-brand-faint,#F6EFE6);color:var(--terracotta);">'+tag+'</span>' : '')+'<span style="flex:1;"></span>'+(btns ? '<span style="display:flex;gap:8px;">'+btns+'</span>' : '')+'</div>'; }; /* CMD-1109-01：施术日期 + 状态标签 + 右边按钮 */
   if(hasActive && c.krBalancePaid && st==='Arrived'){ body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div><div style="font-size:15px;font-weight:700;">'+ksTimeText(ks)+'</div><div style="font-size:12px;color:var(--sage);margin-top:4px;">✓ 已到院、尾款已付清；详细记录见「Timeline」。</div>'; } /* CMD-1025-04 B：施术日期放最上面，日期时间写大 */
   else if(hasActive){
@@ -7405,13 +7409,13 @@ function krProcedureTabMain(c, tabsHtml){
         krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripSubmitYellowHtml(c, ks.primary, ks.backup)+
         '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button><button class="btn-outline" style="flex:1;" onclick="requestCannotCoordinate()">'+krBtn+'</button></div>'; /* ［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
     } else if(st==='Pending'){
-      body = sdHead('待 KR 确认', '<button class="btn-outline" onclick="requestCannotCoordinate()">'+krBtn+'</button>')+
+      body = sdHead('待 KR 确认', '<button class="btn-outline sd-btn" onclick="requestCannotCoordinate()">'+krBtn+'</button>')+
         '<div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待 KR 室长确认'+tripStateTagHtml(c)+'</div>'+
         '<div style="font-size:12px;color:var(--muted);">等待 KR 室长选定日期、填到院时间和地址（或回复无法安排）</div>';
     } else if(st==='Confirmed'){
-      var btnsC = c.hasArrived ? '' : (canModify ? '<button class="btn-outline" onclick="startKrScheduleChange()">修改施术日期</button>' : '<button class="btn-outline" style="opacity:.5;cursor:not-allowed;" disabled>修改施术日期</button>')+'<button class="btn-outline" onclick="openCancelItems()">取消施术计划</button>'; /* 时间确认后：［无法协调］拿掉，同一位置改为［取消施术计划］（CMD-1012-12；CMD-1109-01 改名） */
+      var btnsC = c.hasArrived ? '' : (canModify ? '<button class="btn-outline sd-btn" onclick="startKrScheduleChange()">修改施术日期</button>' : '<button class="btn-outline sd-btn" style="opacity:.5;cursor:not-allowed;" disabled>修改施术日期</button>')+'<button class="btn-outline sd-btn" onclick="openCancelItems()">取消施术计划</button>'; /* 时间确认后：［无法协调］拿掉，同一位置改为［取消施术计划］（CMD-1012-12；CMD-1109-01 改名） */
       body = sdHead('已确认', btnsC)+
-        '<div class="card" id="surg-send-row" style="padding:14px 16px;"><div style="display:flex;align-items:flex-start;gap:12px;"><div style="flex:1;"><div>施术日期 '+ks.confirmedDate+'，到院时间 '+ksTimeText({confirmedDate:ks.confirmedDate, confirmedTime:ks.confirmedTime}).replace(ks.confirmedDate+' ','')+'</div>'+(ks.address?'<div style="font-size:13px;color:var(--slate2);margin-top:6px;">地址：'+ks.address+'</div>':'')+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+surgSendHtml(c)+'</div></div>'+
+        '<div class="sd-box" id="surg-send-row"><div style="display:flex;align-items:flex-start;gap:12px;"><div style="flex:1;">'+sdTimeLine(ks)+'<div style="margin-top:6px;">地址：'+aEsc(addrBoth(c.hospitalId||clinicHospital(CURRENT_CLINIC_ID), ks.address))+'</div>'+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+surgSendHtml(c)+'</div></div>'+
         (c.hasArrived ? '<div style="font-size:12px;color:var(--terracotta);margin-top:10px;">KR 已在韩国重新预约施术时间；到过医院之后 IN 端不能再修改日期或取消项目，客人再到医院时由 KR 重新标记"已到医院"</div>' : '');
     } else if(st==='Changing'){
       if(!ks.changeSubmitted){
@@ -7424,13 +7428,13 @@ function krProcedureTabMain(c, tabsHtml){
           '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button>'+
           '</div>';
       } else {
-        body = sdHead('改期待确认', '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button><button class="btn-outline" onclick="openCancelItems()">取消施术计划</button>')+
+        body = sdHead('改期待确认', '<button class="btn-outline sd-btn" onclick="cancelKrScheduleChange()">取消修改</button><button class="btn-outline sd-btn" onclick="openCancelItems()">取消施术计划</button>')+
           '<div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">原定 '+ksTimeText(ks)+'，已提交新首选 '+ks.changePrimary+(ks.changeBackup?'　新备选 '+ks.changeBackup:'')+'，等待 KR 室长确认（原日期继续有效）</div>'+
           '<div style="font-size:12px;color:var(--muted);">等待 KR 室长确认新时间（或回复无法安排，原日期继续有效）</div>';
       }
     } else { /* Arrived：之后IN不能再操作，只显示状态，KR端用演示按钮模拟 */
       body = sdHead('已到院', '')+
-        '<div class="card" style="padding:14px 16px;margin-bottom:14px;"><div>施术日期 '+ksTimeText(ks)+'</div>'+(ks.address?'<div style="font-size:13px;color:var(--slate2);margin-top:6px;">地址：'+ks.address+'</div>':'')+'<div style="font-size:12px;color:var(--muted);margin-top:6px;">KR 已标记已到院，IN 端不能再修改日期、无法协调或取消项目</div></div>'+
+        '<div class="sd-box" style="margin-bottom:14px;"><div>'+sdTimeLine(ks)+'</div><div style="margin-top:6px;">地址：'+aEsc(addrBoth(c.hospitalId||clinicHospital(CURRENT_CLINIC_ID), ks.address))+'</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">KR 已标记已到院，IN 端不能再修改日期、无法协调或取消项目</div></div>'+
         krArrivedOpsHtml(c);
     }
   } else {
@@ -7465,7 +7469,7 @@ function krProcedureTabMain(c, tabsHtml){
   /* CMD-1106-17：待递交时行程状态单选在最上面；CMD-1109-01：KR 已确认之后（已递交 / 已确认 / 改期 / 已到院）三段排版——标题 +［打印］｜行程 +［日程变动］｜施术日期 + 状态 + 按钮，三段之间分隔线 */
   var tripTop = '', hrLine = '<div style="border-top:1px solid var(--border2);margin:12px 0;"></div>';
   var tripRadios = (draftStay && hasActive && ks) ? tripStateBlockHtml(c, ensureKrScheduleDraft(c)) : '';
-  var stayBtn = stayIn ? '<a href="#" class="btn-outline" style="padding:4px 12px;font-size:12px;text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">'+(draftStay ? '修改' : '日程变动')+'</a>' : '';
+  var stayBtn = stayIn ? '<a href="#" class="btn-outline sd-btn" style="text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">'+(draftStay ? '修改' : '日程变动')+'</a>' : '';
   if(draftStay){ if(tripRadios || stayIn) tripTop = hrLine+tripRadios+hrLine; }
   else if(stayIn) tripTop = hrLine+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span class="info-heading" style="margin:0;flex:1;">行程</span>'+stayBtn+'</div>'+stayIn+hrLine;
   var subRow = ''; if(!draftStay){ subRow = subStatusRowHtml(caseSubStatusItems(c).filter(function(x){ return !/^(施术时间已确认|待确认施术时间|已到院$)/.test(x.text); })); } /* CMD-1109-01：拿掉「✓ 施术时间已确认…」绿字行（状态改放施术日期标题的标签） */
@@ -9558,7 +9562,7 @@ function printKrPlan(){
   var stayP = stayPlanOf(surg, ks.confirmedDate||'', function(it){ return itemSurgDate(c, it); }); /* CMD-1019-17：建议在韩天数 = 各施术项目最大值，最早回国日 = 施术日 + 天数，写原因 */
   var sum = [];
   sum.push(['到院日期时间', ks.confirmedDate ? e(ks.confirmedDate+' '+(ks.confirmedTime||'')+'（韩国时间）')+(local && ks.confirmedTime ? ' ／ '+e(local.date+' '+local.time)+'（印尼时间）' : '') : '（施术日期还没确认）']);
-  sum.push(['医院', e(en.name)]); sum.push(['到院地址', e(ks.address || en.address)]);
+  sum.push(['医院', e(en.name)]); sum.push(['到院地址', e(addrBoth(hid, ks.address))]);
   if(stayText(c)) sum.push(['在韩期间', e(stayText(c).replace(/ ～ /, ' ～ '))+(c.stay && c.stay.in && c.stay.out ? '（入境日 ～ 离境日）' : '')]);
   sum.push(['建议在韩停留', stayP.days ? e(stayLineText(stayP).replace(/^建议在韩停留 /, '')) : '—']);
   /* 2 施术项目：施术写麻醉方式，管理项目写 N 份（共 M 次） */

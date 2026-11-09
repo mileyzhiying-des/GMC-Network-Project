@@ -580,3 +580,8 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .kr-time-sel:hover,.kr-time-sel:focus{border-color:var(--terracotta,#9A6A4B);outline:none;}
 .kr-time-sel option:disabled{color:#A9A39A;}
 .kr-time-sel.is-empty{color:#8E857C;}
+
+/* CMD-1109-02：赴韩日程卡的按钮统一用［打印］那个小尺寸；施术日期框和上下一样大的字，用浅棕底 + 棕色边框强调 */
+.btn-outline.sd-btn,.btn-primary.sd-btn{padding:5px 12px;font-size:12px;border-radius:8px;width:auto;white-space:nowrap;}
+.sd-box{padding:12px 14px;border-radius:10px;border:1px solid var(--terracotta,#9A6A4B);background:var(--bg-brand-faint,#F6EFE6);font-size:13px;line-height:1.6;}
+.sd-tag{display:inline-block;margin-left:8px;padding:0 8px;border-radius:999px;background:#fff;border:1px solid var(--border);color:var(--slate2);font-size:12px;}

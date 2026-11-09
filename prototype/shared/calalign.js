@@ -272,20 +272,20 @@ function surgAnesText(c){
 /* 读诊所设定里的模板（版本 ver = notice / remind，语言 lang 先只有 zh），填入变量；医院名 / 地址用英文（没填退回原文） */
 function surgMsgText(c, ver, lang){
   var ks = c.krSchedule || {}, hid = c.hospitalId || clinicHospital(CURRENT_CLINIC_ID), en = hospitalEn(hid);
-  var text = smsFill(surgTplOf(ver||'notice', lang||'zh'), {clinic:CLINIC_SETTINGS.name, name:c.name, coordinator:actingName(), date:ks.confirmedDate, time:surgAmPm(ks.confirmedTime), hospital:en.name, address:ks.address || en.address, anes:surgAnesText(c), phone:CLINIC_SETTINGS.phone});
+  var text = smsFill(surgTplOf(ver||'notice', lang||'zh'), {clinic:CLINIC_SETTINGS.name, name:c.name, coordinator:actingName(), date:ks.confirmedDate, time:surgAmPm(ks.confirmedTime), hospital:en.name, address:addrBoth(hid, ks.address), anes:surgAnesText(c), phone:CLINIC_SETTINGS.phone});
   return text.replace(/\n{3,}/g, '\n\n').replace(/\n\n$/,'');
 }
 function surgSendHtml(c){
   if(c.hasArrived) return '';
   var tag = '<span style="font-size:12px;color:var(--muted);">演示</span>', box = function(x){ return '<div style="text-align:right;max-width:340px;">'+x+'</div>'; };
   var md = function(t){ var f = fmtUtc(t); return f.length>=16 ? f.slice(5,10).replace('-','/')+' '+f.slice(11,16) : f; }; /* CMD-1109-01：已发送 MM/DD HH:mm */
-  if(surgChanged(c)) return box('<div style="font-size:12px;color:#B3261E;font-weight:700;margin-bottom:6px;text-align:left;">⚠ '+aEsc(surgChangeText(c))+'，请电话通知客人</div><button class="btn-primary" onclick="openSurgPhone(\''+c.id+'\')">已电话通知</button>');
+  if(surgChanged(c)) return box('<div style="font-size:12px;color:#B3261E;font-weight:700;margin-bottom:6px;text-align:left;">⚠ '+aEsc(surgChangeText(c))+'，请电话通知客人</div><button class="btn-primary sd-btn" onclick="openSurgPhone(\''+c.id+'\')">已电话通知</button>');
   var small = '';
   if(surgMsgSent(c)){ /* CMD-1109-01：发过之后按钮还在（可以再发），按钮下面小字写「已发送 MM/DD HH:mm」 */
     var ph = c.surgPhone && c.surgPhone.key===surgMsgKey(c) ? c.surgPhone : null, m = surgMsgOfKey(c);
     small = '<div style="font-size:12px;color:var(--sage);margin-top:4px;white-space:nowrap;">'+(ph ? '已电话通知 '+aEsc(md(ph.at)) : '已发送 '+aEsc(md(m.at)))+'</div>'+(ph && ph.note ? '<div style="font-size:12px;color:var(--muted);">备注：'+aEsc(ph.note)+'</div>' : '');
   }
-  return box('<button class="btn-primary" onclick="openSurgMsg(\''+c.id+'\')">发送信息给客人</button> '+(surgMsgSent(c) ? '' : tag)+small);
+  return box('<button class="btn-primary sd-btn" onclick="openSurgMsg(\''+c.id+'\')">发送信息给客人</button> '+(surgMsgSent(c) ? '' : tag)+small);
 }
 /* 当前这一版是用哪次发送通知的（施术日期通知 / 施术前提醒） */
 function surgMsgOfKey(c){ var k = surgMsgKey(c); return [c.surgeryMsg, c.reminderMsg].filter(function(m){ return m && m.key===k; }).sort(function(a, b){ return (b.at||'') > (a.at||'') ? 1 : -1; })[0] || {method:'—', at:''}; }

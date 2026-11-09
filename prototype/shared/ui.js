@@ -4046,10 +4046,16 @@ function presRender(){
   } else if(ban) ban.remove();
   var pb = document.getElementById('case-pres-bar'), others = key ? presViewers(key).filter(function(n){ return n!==ME_NAME; }) : [];
   if(others.length && !blocked){
-    if(!pb){ pb = document.createElement('div'); pb.id = 'case-pres-bar'; pb.style.cssText = 'position:fixed;top:64px;right:24px;z-index:85;background:#FFF4E0;border:1px solid #F0D9A8;color:#8A5A10;padding:6px 12px;border-radius:10px;font-size:12px;'+(ro?'display:none;':''); document.body.appendChild(pb); }
+    if(!pb){ pb = document.createElement('div'); pb.id = 'case-pres-bar'; pb.style.cssText = 'position:fixed;top:64px;right:24px;z-index:85;background:#FFF4E0;border:1px solid #F0D9A8;color:#8A5A10;padding:6px 12px;border-radius:10px;font-size:12px;opacity:.2;pointer-events:none;transition:opacity .15s;'+(ro?'display:none;':''); document.body.appendChild(pb); }
     pb.textContent = others.join('、')+'也在查看这个案件';
   } else if(pb) pb.remove();
 }
+/* CMD-1109-02：「XX 也在查看这个案件」平时很淡（opacity .2）、不挡点击（pointer-events:none）；鼠标靠近（40px 内）变清楚（opacity .7）——靠页面鼠标位置判断 */
+document.addEventListener('mousemove', function(ev){
+  var pb = document.getElementById('case-pres-bar'); if(!pb) return;
+  var r = pb.getBoundingClientRect(), near = ev.clientX>=r.left-40 && ev.clientX<=r.right+40 && ev.clientY>=r.top-40 && ev.clientY<=r.bottom+40;
+  pb.style.opacity = near ? '.7' : '.2';
+});
 function presRefreshLists(){
   try{ if(isKrAccount()){ if(CURRENT_PAGE_ID==='kr-cases' && typeof krRenderCaseRows==='function') krRenderCaseRows(); } else if(CURRENT_PAGE_ID==='in-cases' && typeof renderCaseRows==='function') renderCaseRows(); }catch(e){}
 }

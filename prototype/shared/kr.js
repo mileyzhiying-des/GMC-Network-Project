@@ -287,16 +287,16 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
     var hid = krHospitalIdOfMe(), en = hospitalEn(hid), hd = krHData() || {}, can = canDo('clinic');
     var inp = function(id, v, ph){ return '<input id="'+id+'" type="text" value="'+aEsc(v)+'" placeholder="'+aEsc(ph)+'"'+(can ? '' : ' disabled')+' style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'; };
     var h0 = hospitalById(hid) || {name:{}, address:''};
-    return '<div class="card" style="padding:14px 20px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">英文名称 / 英文地址 <span style="font-weight:400;font-size:12px;color:var(--muted);">发给客人的短信里用；没填就退回韩文原文</span></div>'+
-      '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px 12px;align-items:center;font-size:13px;"><span>英文名称</span>'+inp('hosp-en-name', hd.nameEn!==undefined ? hd.nameEn : en.name, h0.name.ko||'')+'<span>英文地址</span>'+inp('hosp-en-addr', hd.addressEn!==undefined ? hd.addressEn : en.address, h0.address||'')+'</div>'+
+    return '<div class="card" style="padding:14px 20px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">英文名称 / 英文地址 / 韩文地址 <span style="font-weight:400;font-size:12px;color:var(--muted);">发给客人的短信里用；没填就退回韩文原文</span></div>'+
+      '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px 12px;align-items:center;font-size:13px;"><span>英文名称</span>'+inp('hosp-en-name', hd.nameEn!==undefined ? hd.nameEn : en.name, h0.name.ko||'')+'<span>英文地址</span>'+inp('hosp-en-addr', hd.addressEn!==undefined ? hd.addressEn : en.address, h0.address||'')+'<span>韩文地址</span>'+inp('hosp-ko-addr', hospitalKoAddr(hid), '选填；施术日期框里显示成「英文（韩文）」')+'</div>'+
       (can ? '<div style="margin-top:10px;"><button class="btn-primary" onclick="saveHospEn()">'+t('保存')+'</button></div>' : '')+'</div>';
   };
   window.saveHospEn = function(){
     if(!canDo('clinic')) return; var h = krHData(); if(!h) return;
-    var nm = (document.getElementById('hosp-en-name').value||'').trim(), ad = (document.getElementById('hosp-en-addr').value||'').trim(), old = hospitalEn(krHospitalIdOfMe());
-    if(nm===old.name && ad===old.address){ showToast('没有修改', '设定和之前一样', null); return; }
-    h.nameEn = nm; h.addressEn = ad;
-    var txt = '英文名称：'+old.name+' → '+(nm||'（空，退回原文）')+'；英文地址：'+old.address+' → '+(ad||'（空，退回原文）');
+    var nm = (document.getElementById('hosp-en-name').value||'').trim(), ad = (document.getElementById('hosp-en-addr').value||'').trim(), ko = ((document.getElementById('hosp-ko-addr')||{}).value||'').trim(), old = hospitalEn(krHospitalIdOfMe()), oldKo = hospitalKoAddr(krHospitalIdOfMe());
+    if(nm===old.name && ad===old.address && ko===oldKo){ showToast('没有修改', '设定和之前一样', null); return; }
+    h.nameEn = nm; h.addressEn = ad; h.addressKo = ko;
+    var txt = '英文名称：'+old.name+' → '+(nm||'（空，退回原文）')+'；英文地址：'+old.address+' → '+(ad||'（空，退回原文）')+(ko!==oldKo ? '；韩文地址：'+(oldKo||'（空）')+' → '+(ko||'（空，不显示）') : '');
     logOp('设定变更', '医院设定：'+txt); krSettingsNotif('医院设定：'+txt); Store.touch(); openAdminPage('clinic', true); showToast('已保存', txt, null);
   };
   var HOSP_DRAFT = null; /* 医院设定草稿：{openTime, closeTime, closedRules, lunch} */
@@ -1597,7 +1597,7 @@ function krRefundSkip(){ var h = KR_RFD; if(!h) return; if(!String(h.reason||'')
 function krTabLog(c){
   var ks = c.krSchedule, j = c.krJudge, arrCard = '';
   if(c.krBalancePaid && ks){ /* 付清尾款后收进来的「施术日期 / 到院」记录 */
-    arrCard = krCardBox('施术日期与到院（已付清尾款）', krKV('施术日期', krEsc(ks.confirmedDate||'—'))+krKV('到院时间', krEsc(ks.confirmedTime ? ks.confirmedTime+'（韩国）' : '—'))+krKV('地址', krEsc(ks.address||'—'))+(j ? krKV('院长评估结果', krEsc(KR_JUDGE_TEXT[j.result]||''))+(j.memo ? krKV('memo', krEsc(j.memo)) : '') : ''));
+    arrCard = krCardBox('施术日期与到院（已付清尾款）', krKV('施术日期', krEsc(ks.confirmedDate||'—'))+krKV('到院时间', krEsc(ks.confirmedTime ? ks.confirmedTime+'（韩国）' : '—'))+krKV('地址', krEsc(ks.address ? addrBoth(c.hospitalId||clinicHospital(CURRENT_CLINIC_ID), ks.address) : '—'))+(j ? krKV('院长评估结果', krEsc(KR_JUDGE_TEXT[j.result]||''))+(j.memo ? krKV('memo', krEsc(j.memo)) : '') : ''));
   }
   return arrCard+krCardBox('Timeline', caseTimelineBlockHtml(c));
 }
@@ -4594,7 +4594,7 @@ function krRebookCards(c, days, form, can){
   var arrive = (can && !rebookActive(c) && !mainArriveBlock(c)) ? krArriveMainBtn(c, 'btn-primary', '6px 16px') : '';
   var btns = can ? '<div style="display:flex;gap:8px;align-items:center;"><button class="btn-outline" onclick="krWzSet(\'edit\','+(!KR_WZ.edit)+')">再次修改</button>'+arrive+'</div>' : '';
   var row = function(k0, v0){ return '<div style="display:flex;gap:18px;align-items:baseline;margin-top:6px;"><span style="min-width:96px;font-size:13px;color:var(--muted);">'+k0+'</span><span style="font-size:15px;font-weight:700;">'+v0+'</span></div>'; };
-  var body = row('已重新预约', krEsc(ks.confirmedDate||rb.newDate)+'（'+rel+'）　'+krEsc(ks.confirmedTime||rb.newTime||''))+'<div style="font-size:12px;color:var(--slate2);margin:2px 0 0 114px;">'+krEsc(ks.address||'')+'</div>'+row('原预约时间', krEsc(rb.oldDate||'')+'　'+krEsc(rb.oldTime||''))+(can ? form : '');
+  var body = row('已重新预约', krEsc(ks.confirmedDate||rb.newDate)+'（'+rel+'）　'+krEsc(ks.confirmedTime||rb.newTime||''))+'<div style="font-size:12px;color:var(--slate2);margin:2px 0 0 114px;">'+krEsc(addrBoth(c.hospitalId||krHospitalIdOfMe(), ks.address))+'</div>'+row('原预约时间', krEsc(rb.oldDate||'')+'　'+krEsc(rb.oldTime||''))+(can ? form : '');
   return krOrigCard(c, rb.judge, null)+krL2Box('施术日期', body, btns);
 }
 function krWizard(c){
@@ -4605,7 +4605,7 @@ function krWizard(c){
     var days = Math.round((new Date(ks.confirmedDate+'T00:00:00') - new Date(krToday()+'T00:00:00'))/86400000);
     var form = (can && KR_WZ.edit) ? '<div style="margin-top:10px;font-size:12px;color:var(--slate2);">同一天之内可调整到院时间和地址（IN 会收到通知）；日期要改请和 IN 室长沟通，由 IN 改。</div>'+krSurgeryHoursNote(c)+'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;"><select onchange="krSchSet(\'time\',this.value)" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;">'+krTimeOptionsFor(KR_SCH.time, c, ks.confirmedDate)+'</select><input value="'+krEsc(KR_SCH.address)+'" oninput="krSchSet(\'address\',this.value)" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;flex:1;min-width:260px;"><button class="btn-outline" onclick="krDoSchAdjust();KR_WZ.edit=false;">保存调整</button></div>' : '';
     if(c.krRebook && c.krRebook.judge) return krRebookCards(c, days, form, can); /* CMD-1102-06：不建议手术 · 更换时间之后 */
-    out = krL2Box('施术日期', '<div style="font-size:16px;font-weight:700;">'+krEsc(ks.confirmedDate)+'（'+(days>0 ? '还有 '+days+' 天' : days===0 ? '就是今天' : '已过 '+(-days)+' 天')+'）　'+krEsc(ks.confirmedTime||'')+'</div><div style="font-size:12px;color:var(--slate2);margin-top:4px;">'+krEsc(ks.address||'')+'</div>'+
+    out = krL2Box('施术日期', '<div style="font-size:16px;font-weight:700;">'+krEsc(ks.confirmedDate)+'（'+(days>0 ? '还有 '+days+' 天' : days===0 ? '就是今天' : '已过 '+(-days)+' 天')+'）　'+krEsc(ks.confirmedTime||'')+'</div><div style="font-size:12px;color:var(--slate2);margin-top:4px;">'+krEsc(ks.address ? addrBoth(c.hospitalId||krHospitalIdOfMe(), ks.address) : '')+'</div>'+
       (c.hasArrived ? '<div style="font-size:12px;color:var(--terracotta);margin-top:6px;">已在韩国重新预约施术时间；客人再到医院时重新标记「已到院」。</div>' : '')+
       (can ? '<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn-outline" onclick="krWzSet(\'edit\','+(!KR_WZ.edit)+')">修改</button><button class="btn-primary" onclick="krMarkArrived()">客人已到院</button></div>' : krEmpty('客人到院后由 KR 室长标记'))+form);
     return out+items;
