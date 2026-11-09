@@ -10595,7 +10595,17 @@ function tripRedHtml(c, dates){ /* 红字（每个有问题的日子一行）+ �
   var lines = (dates||[]).filter(Boolean).map(function(d){ return tripRedText(c, d); }).filter(Boolean); if(!lines.length) return '';
   return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 6px;"><span style="font-size:12px;color:#B3261E;font-weight:700;">'+lines.map(aEscC).join('<br>')+'</span><button class="btn-outline sd-btn" onclick="tripOpenStayFromCal()">行程变动</button></div>';
 }
-function tripOpenStayFromCal(){ var c = getCurrentCase(); if(!c) return; openStayModal(c.id); var so = document.getElementById('stay-overlay'); if(so) so.style.zIndex = 100050; }
+function tripOpenStayFromCal(){ /* CMD-1109-06：从红字旁的［行程变动］打开在韩行程；从［施术变动］里打开的，保存 / 取消后回到施术变动（fromSvb）；待递交的卡片上到达 / 离开本来就在卡片里，直接定位过去 */
+  var c = getCurrentCase(); if(!c) return;
+  if(scheduleState(c)==='Draft'){ var inp = document.querySelector('#case-body fieldset input[type=date]'); if(inp){ try{ inp.scrollIntoView({block:'center'}); inp.focus(); }catch(e){} } return; }
+  openStayModal(c.id, {fromSvb:!!SVB}); var so = document.getElementById('stay-overlay'); if(so) so.style.zIndex = 100050;
+}
+function svbResume(){ var h = SVB; if(!h) return; var c = CASE_ITEMS.filter(function(x){ return x.id===h.caseId; })[0]; if(!c){ svbClose(); return; } h.err = ''; svbRender(); } /* 回到施术变动：理由 / 首选 / 备选 / 年月都还在，用新行程重新检查 */
+function svbAutoOpen(c){ /* CMD-1109-06：卡片［行程变动］保存后碰到施术日期（需重新预约）→ 自动打开施术变动：更改时间 + 理由「行程变动」+ 日历停在新行程的到达月 */
+  if(!c || !ksRebookNeeded(c)) return; SVB = null; svbOpen('time'); if(!SVB) return;
+  var t = todayStr(), a = c.stay && c.stay.in && c.stay.in > t ? c.stay.in : ymdAdd(t, 1);
+  KR_SCHED_VIEW_MONTH = new Date(+a.slice(0, 4), +a.slice(5, 7)-1, 1); KR_SCHED_NAV_CASE = c.id; svbRender();
+}
 function ksRebookNeeded(c){ /* 现在案件上的施术日期不在行程内、而且 IN 还没重新约 → {date,time,msg,kind}；否则 null */
   var ks = c && c.krSchedule; if(!ks || !c.settlementDone || c.hasArrived || c.visitClosed || !tripWin(c)) return null;
   var w = tripWin(c), win = (w.in ? stayMD(w.in) : '?')+'～'+(w.out ? stayMD(w.out) : '?');

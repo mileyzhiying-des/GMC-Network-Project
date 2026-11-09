@@ -572,6 +572,7 @@ function stayWarnRefresh(){
 }
 function stayCancel(){
   var x = STAY_CTX, ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null; if(!x) return;
+  if(x.o.fromSvb){ try{ svbResume(); }catch(er){} return; } /* CMD-1109-06：从施术变动里打开的，取消也回到施术变动（行程不改） */
   var c = calCaseById(x.id); if(x.o.initial && c){ c.stayAsked = true; if(x.o.then) x.o.then(); } /* 出发前再确认（原「先空着」）：只记「问过了」 */
 }
 function staySave(){
@@ -587,7 +588,7 @@ function staySave(){
   }
   var tsSel = (document.querySelector('#stay-overlay input[name=stay-ts]:checked')||{}).value||'', ts0 = (c.krSchedule && c.krSchedule.tripState) || '';
   if(tsSel==='booked' && ts0!=='booked' && (!d.inD || !d.outD || !d.ex.inTime || !d.ex.outTime)) return bad('改成「已定」：到达日、到达时间、离开日、离开时间都要填（机场选填）'); /* CMD-1106-18：暂定改已定，同一套必填检查 */
-  if(tsSel==='tentative'){ if(c.krSchedule && ts0!=='tentative'){ c.krSchedule.tripState = 'tentative'; logCaseEvent(c, actingName(), '行程状态改成暂定', '赴韩施术'); } /* 暂定不存日期 */ var ov1 = document.getElementById('stay-overlay'); if(ov1) ov1.classList.remove('open'); STAY_CTX = null; try{ renderCaseBody(c); }catch(er){} return; }
+  if(tsSel==='tentative'){ if(c.krSchedule && ts0!=='tentative'){ c.krSchedule.tripState = 'tentative'; logCaseEvent(c, actingName(), '行程状态改成暂定', '赴韩施术'); } /* 暂定不存日期 */ var ov1 = document.getElementById('stay-overlay'); if(ov1) ov1.classList.remove('open'); STAY_CTX = null; try{ renderCaseBody(c); if(x.o.fromSvb) svbResume(); }catch(er){} return; }
   if(d.inD && d.outD && d.outD < d.inD) return bad('离境日不能早于入境日');
   var ye = stayDateErr('入境日', d.inD) || stayDateErr('离境日', d.outD); if(ye) return bad(ye);
   /* CMD-1106-07：存行程时，首选 / 备选 / KR 确认的施术日期不能跑到范围外（暂定的行程只是预估，不挡） */
@@ -606,6 +607,7 @@ function staySaveDo(x, c, d, methods, other, bad){
   if(x.o.trip){ if(c.krSchedule) c.krSchedule.tripState = 'booked'; c.tripConfirm = {at:nowFullDt(), by:actingName(), methods:methods, other:other}; logCaseEvent(c, actingName(), '已确认行程（'+methods.join('、')+'）：入境 '+stayMDT(c, 'in')+' / 离境 '+stayMDT(c, 'out'), '赴韩施术'); }
   var ov = document.getElementById('stay-overlay'); if(ov) ov.classList.remove('open'); STAY_CTX = null;
   if(x.o.then) x.o.then(); else { try{ renderCaseBody(c); }catch(er){} }
+  try{ if(x.o.fromSvb) svbResume(); else if(!x.o.trip && !x.o.initial && !x.o.then) svbAutoOpen(c); }catch(er){ console.error(er); } /* CMD-1109-06 */
 }
 
 

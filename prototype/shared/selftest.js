@@ -10138,6 +10138,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var m61 = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===61; })[0]; ST.ok(!!m61, '有迁移 61');
     if(m61){ m61.fn(g, {note:function(){}}); ST.ok(!heldSurgItems(g).length && !tripWaitItems(g).length && g.depositDue && g.noShowDue && g.noShowDue.status==='pending', '迁移后：持有 → 等 IN 退定金 / 置换，等三选一（无原因）→ 无故不做项目'); }
   });
+  ST.def('R261a','CMD-1109-06（A1 分页，stageC 夹具）：从［施术变动］红字旁的［行程变动］打开在韩行程，保存 / 取消后回到施术变动（理由和日期保留）；卡片［行程变动］保存后碰到施术日期 → 自动打开施术变动（更改时间 + 理由「行程变动」+ 日历停在到达月），不碰到只关掉',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var oldConfirm = window.confirm; window.confirm = function(){ return true; };
+    var openDate = function(c, from){ for(var j=from; j<140; j++){ var d = ymdAdd(todayStr(), j); if(caseOpenDates(c).indexOf(d)>-1) return d; } return null; };
+    var setStay = function(inD, outD){ document.getElementById('stay-in').value = inD; document.getElementById('stay-out').value = outD; document.getElementById('stay-int').value = '09:00'; document.getElementById('stay-outt').value = '12:00'; };
+    try{
+      /* ① 施术变动 → 红字旁［行程变动］→ 改离境日 → 保存 → 回到施术变动 */
+      var c = ST.toConfirmed('R261a'); var ks = c.krSchedule, cd = ks.confirmedDate; c.tripConfirm = c.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; ks.tripState = 'booked'; c.stay = {in:ymdAdd(cd, -3), out:ymdAdd(cd, 8), inTime:'10:00', outTime:'12:00'};
+      ST.open(c); SVB = null; svbOpen('time'); SVB.reasonT = '想晚一点'; var far = openDate(c, +ymdDiff(todayStr(), ymdAdd(cd, 12))); ks.svbPrimary = far; krScheduleSetYM(+far.slice(0,4), +far.slice(5,7)); renderCaseBody(c);
+      ST.ok(/请先修改行程/.test(document.getElementById('svb-overlay').textContent) && document.getElementById('svb-go').disabled, '前置：红字 + 送出灰掉'); var ymBefore = KR_SCHED_VIEW_MONTH.getTime();
+      tripOpenStayFromCal(); ST.ok(document.getElementById('stay-overlay').classList.contains('open'), '打开了在韩行程'); setStay(ymdAdd(cd, -3), ymdAdd(far, 4)); staySave();
+      var ovs = document.getElementById('svb-overlay'); ST.ok(!!SVB && ovs.classList.contains('open') && !document.getElementById('stay-overlay').classList.contains('open'), '保存后回到施术变动（在韩行程关了）');
+      ST.ok(SVB.reasonT==='想晚一点' && c.krSchedule.svbPrimary===far && KR_SCHED_VIEW_MONTH.getTime()===ymBefore, '理由、首选、年月都保留');
+      ST.ok(!/请先修改行程/.test(ovs.textContent) && !document.getElementById('svb-go').disabled, '用新行程重新检查：红字消失，送出能按');
+      /* ② 同上，按［取消］ */
+      c.stay = {in:ymdAdd(cd, -3), out:ymdAdd(cd, 8), inTime:'10:00', outTime:'12:00'}; renderCaseBody(c); ST.ok(/请先修改行程/.test(document.getElementById('svb-overlay').textContent), '前置：红字回来'); var stay0 = JSON.stringify(c.stay);
+      tripOpenStayFromCal(); stayCancel(); ST.ok(!!SVB && document.getElementById('svb-overlay').classList.contains('open') && JSON.stringify(c.stay)===stay0 && /请先修改行程/.test(document.getElementById('svb-overlay').textContent) && SVB.reasonT==='想晚一点', '取消：回到施术变动、行程没改、红字还在、理由还在'); svbClose();
+      /* ③ 卡片［行程变动］ */
+      var e = ST.toConfirmed('R261a2'); var ke = e.krSchedule, ed = ke.confirmedDate; e.tripConfirm = e.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; ke.tripState = 'booked'; e.stay = {in:ymdAdd(ed, -3), out:ymdAdd(ed, 8), inTime:'10:00', outTime:'12:00'}; ST.open(e); SVB = null;
+      openStayModal(e.id); setStay(ymdAdd(ed, -2), ymdAdd(ed, 9)); staySave(); ST.ok(!SVB && !document.getElementById('stay-overlay').classList.contains('open'), '不碰到施术日期：只关掉，不打开施术变动');
+      openStayModal(e.id); var newIn = ymdAdd(ed, 5), newOut = ymdAdd(ed, 15); setStay(newIn, newOut); staySave();
+      ST.ok(!!ksRebookNeeded(e) && !!SVB && SVB.mode==='time' && document.getElementById('svb-overlay').classList.contains('open'), '碰到施术日期：自动打开施术变动（更改时间）');
+      ST.ok(SVB.reasonT==='行程变动' && KR_SCHED_VIEW_MONTH.getFullYear()===+newIn.slice(0,4) && KR_SCHED_VIEW_MONTH.getMonth()+1===+newIn.slice(5,7), '理由带「行程变动」、日历停在新行程的到达月');
+      svbClose();
+      /* ④ 待递交：红字旁［行程变动］定位到卡片上的到达 / 离开，不开弹窗 */
+      var f = ST.toConfirmed('R261a3'); f.krSchedule.status = null; f.krSchedule.tripState = 'booked'; f.krSchedule.tripDraft = {in:ymdAdd(ed, 1), inTime:'10:00', out:ymdAdd(ed, 3), outTime:'12:00'}; ST.open(f); f.activeCaseTab = 'kr'; renderCaseBody(f);
+      var so0 = document.getElementById('stay-overlay'); if(so0) so0.classList.remove('open'); tripOpenStayFromCal(); ST.ok(!(document.getElementById('stay-overlay')||{classList:{contains:function(){return false;}}}).classList.contains('open'), '待递交：不开弹窗（到达 / 离开就在卡片上）');
+    } finally { window.confirm = oldConfirm; try{ svbClose(); }catch(e){} }
+  });
   ST.def('R260a','CMD-1109-05（A1 分页，stageC 夹具）：备选日只写「备选日」没有「设为首选」；碰到行程 / 理由没填 / 没选首选时送出灰掉；在韩行程弹窗改名 + ℹ️ 提示 + 暂定两行灰掉；待递交卡片同样',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var host = function(html){ var h = document.createElement('div'); h.innerHTML = html; return h; };
