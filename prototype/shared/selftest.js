@@ -10199,6 +10199,29 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/flex-direction:column;gap:12px/.test(krProcedureTabHtml(c)), '赴韩施术 tab 卡片间距 12px');
     } finally { var o = JSON.parse(sv); c.procedureItems = o.items; c.subItems = o.subs; c.stayKeep = o.keep; delete IN_PC_TAB[c.id]; }
   });
+  ST.def('R274a','CMD-1109-21（A1 分页，pcStage 夹具）：IN 项目卡术后管理分页只放在韩国处理的（印尼的不显示，数字只算显示的，未预约地点未定写「-」、韩国未约写「韩国」）；施术项目预约时间 / 术后管理标题 / 管理项目预约时间写韩国时间 +（韩国），今天写「今日」；赴韩日程卡到达日 / 离境日 / 已到院施术日期写「日期 时间（韩国） 印尼 HH:mm」',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return /术后管理/.test(x.name) && x.settlementDone; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
+    var sv = JSON.stringify({stay:c.stay, ks:c.krSchedule, subs:c.subItems, ha:c.hasArrived, bp:c.krBalancePaid});
+    try{
+      /* 术后管理分页：印尼的不显示、「-」/「韩国」 */
+      var M = pcmModel(c), nKR = M.booked.concat(M.unbooked, M.kept, M.done).filter(function(r){ return r.place==='KR'; }).length;
+      IN_PC_TAB[c.id] = 'care'; var cp = in19CareCardPage(c), ct = t(cp.html); delete IN_PC_TAB[c.id];
+      ST.ok(cp.n>0 && cp.n===nKR, '术后管理分页的数字只算在韩国处理的：'+cp.n+' / 韩国行 '+nKR);
+      var innRows = M.booked.concat(M.unbooked, M.kept, M.done).filter(function(r){ return r.place==='IN'; }); ST.ok(innRows.every(function(r){ return !r.nm || ct.indexOf(r.nm.replace(/\s+/g, ''))<0 || M.booked.concat(M.unbooked, M.kept, M.done).some(function(k){ return k.place==='KR' && k.nm===r.nm; }); }), '分配到印尼的行不出现在赴韩总览里（同名的韩国行除外）');
+      var unb = cp.html.indexOf('未预约') >-1 ? t(cp.html.slice(cp.html.indexOf('未预约'))) : ''; ST.ok(!unb || /韩国|-/.test(unb), '未预约 card 地点栏写「韩国」或「-」');
+      /* 时间写法 */
+      var ks = c.krSchedule = Object.assign(c.krSchedule||{}, {status:'confirmed', confirmedDate:ymdAdd(todayStr(), 5), confirmedTime:'14:00'});
+      c.stay = {in:ymdAdd(todayStr(), 4), inTime:'11:20', inAirport:'仁川', out:ymdAdd(todayStr(), 12), outTime:'12:30', outAirport:'金浦'};
+      var inn = t(inStayInnerHtml(c, true)); ST.ok(/到达日\d{4}-\d\d-\d\d11:20（韩国）印尼09:20机场：仁川/.test(inn) && /离境日\d{4}-\d\d-\d\d12:30（韩国）印尼10:30机场：金浦/.test(inn), '到达日 / 离境日：日期 时间（韩国） 印尼 HH:mm，机场接在后面：'+inn.slice(0, 100));
+      ks.confirmedDate = todayStr(); c.hasArrived = true; c.krBalancePaid = true; ks.status = 'arrived';
+      var td = t(in21Time(todayStr(), '14:00', {today:true})); ST.ok(td===('今日（'+todayStr()+'14:00（韩国）印尼12:00）'), '今天：今日（YYYY-MM-DD 14:00（韩国） 印尼 12:00）：'+td);
+      var nd = t(in21Time(ymdAdd(todayStr(), 3), '14:00', {today:true})); ST.ok(nd===(ymdAdd(todayStr(), 3)+'14:00（韩国）印尼12:00'), '不是今天：YYYY-MM-DD 14:00（韩国） 印尼 12:00');
+      ST.ok(in19When(todayStr(), '14:00')==='今日 14:00（韩国）' && /^\d\d\/\d\d 14:00（韩国）$/.test(in19When(ymdAdd(todayStr(), 3), '14:00')), '项目卡时间：今日 14:00（韩国） / MM/DD 14:00（韩国）');
+      var body = t(krProcedureTabMain(c, '')); ST.ok(!/（印尼）（韩国/.test(body), '赴韩日程卡没有旧写法「（印尼）（韩国 HH:mm）」');
+    } finally { var o = JSON.parse(sv); c.stay = o.stay; c.krSchedule = o.ks; c.subItems = o.subs; c.hasArrived = o.ha; c.krBalancePaid = o.bp; delete IN_PC_TAB[c.id]; }
+  });
   ST.def('R273a','CMD-1109-20：KR 管理项目今天那行按钮叫［今日取消］（描边、同施术分页的尺寸）、弹窗标题「今日取消」；IN 管理项目 tab 在韩管理预约中有「其他：查看案件」、赴韩施术项目卡施术项目有「其他：查看案件」（A1 分页，pcStage 夹具；KR 部分在 KM1 分页）',function(){
     var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
     if(isKrAccount()){
@@ -10679,7 +10702,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(sigs.every(function(x){ return x===sigs[0]; }) && /^12px/.test(sigs[0]), '五个按钮同一个尺寸：'+sigs.join(' / '));
     ST.ok(getComputedStyle(btns['发送信息给客人']).backgroundColor !== getComputedStyle(btns['打印']).backgroundColor, '［发送信息给客人］保留深色主按钮');
     var box = host.querySelector('#surg-send-row'), tx = box.textContent.replace(/\s+/g, ' ');
-    ST.ok(/施术日期 \d{4}-\d\d-\d\d \d\d:\d\d（韩国时间）/.test(tx) && /印尼时间 (\d\d-\d\d )?\d\d:\d\d/.test(tx) && tx.indexOf('韩国时间') < tx.indexOf('印尼时间'), '韩国时间在前，印尼时间是小标签：'+tx.slice(0,80));
+    ST.ok(/施术日期 (今日（)?\d{4}-\d\d-\d\d \d\d:\d\d（韩国）/.test(tx) && /印尼 (\d\d-\d\d )?\d\d:\d\d/.test(tx) && tx.indexOf('（韩国）') < tx.indexOf('印尼 '), '韩国时间在前，印尼时间是小标签（CMD-1109-21 新写法；原：（韩国时间）…印尼时间 HH:mm）：'+tx.slice(0,80));
     ST.ok(/地址：.+（.+）/.test(tx) && /Apgujeong|Nonhyeon/.test(tx) && /[\uAC00-\uD7AF]/.test(tx), '地址 英文（韩文）：'+tx.slice(tx.indexOf('地址')));
     var fs = function(el){ return getComputedStyle(el).fontSize; }; ST.ok(fs(box)===fs(host.querySelector('.card')) || fs(box)==='13px', '框里字体 13px（和上下一样大，没有放大）：'+fs(box));
     var tag = box.querySelector('.sd-tag'); ST.ok(!!tag && fs(tag)==='12px', '印尼时间是小标签');
@@ -10704,7 +10727,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(iT>-1 && iS>iT && iD>iS && iL>iD && iA>iL, '三段顺序：赴韩日程 → 行程（到达日 / 离境日）→ 施术日期 已确认：'+t.slice(0,160));
     ST.ok(/行程变动/.test(h) && !/>修改</.test(h), '［行程变动］在行程那行，标题行没有［修改］');
     ST.ok(/>施术变动</.test(h) && !/>修改施术日期</.test(h) && !/>取消施术计划</.test(h) && !/>修改日期</.test(h) && !/>取消项目</.test(h), 'CMD-1109-03：按钮只剩［施术变动］');
-    ST.ok(/施术日期 \d{4}-\d\d-\d\d \d\d:\d\d（韩国时间）\s*印尼时间 (\d\d-\d\d )?\d\d:\d\d/.test(t) && /地址：/.test(t) && /发送信息给客人/.test(h), '框里：施术日期 + 韩国时间 + 印尼时间小标签 + 地址 + ［发送信息给客人］（CMD-1109-02）');
+    ST.ok(/施术日期 (今日（)?\d{4}-\d\d-\d\d \d\d:\d\d（韩国）\s*印尼 (\d\d-\d\d )?\d\d:\d\d/.test(t) && /地址：/.test(t) && /发送信息给客人/.test(h), '框里：施术日期 + 韩国时间 + 印尼时间小标签 + 地址 + ［发送信息给客人］（CMD-1109-02）');
     ST.ok(!/施术时间已确认 /.test(t) && !/均由 KR 端操作/.test(t) && !/✓ 已发送/.test(t), '拿掉绿字行 / 说明 / 框右边的已发送');
     ST.ok((h.match(/⚠️ 离境日比建议少/g)||[]).length===1 && !/拆线安排在第/.test(h) && !/建议在韩停留 \d+ 天/.test(t), '提醒只有一行「离境日比建议少 N 天」，没有拆线黄字');
     openSurgMsg(c.id); confirmSurgMsg(); var h2 = krProcedureTabMain(c, ''); ST.ok(!/发送信息给客人/.test(h2) && /再次发送/.test(h2) && /\d\d\/\d\d \d\d:\d\d 已发送/.test(h2), '发送后（CMD-1109-11）：「MM/DD HH:mm 已发送」+「再次发送」，没有深色按钮（改前：按钮还在，下面小字）');

@@ -7400,9 +7400,9 @@ function krProcedureTabMain(c, tabsHtml){
   var monthNav = krSchedMonthNavHtml(c, ks, st==='Changing' ? 'changePrimary' : 'primary'); /* CMD-1106-17：年 / 月下拉 */
   var hasActive = krActiveItems(c).length>0;
   var body = '';
-  var sdTimeLine = function(k){ /* CMD-1109-02：韩国时间为主，印尼时间做小标签（跨天带日期） */ if(!k || !k.confirmedDate) return '施术日期 —'; if(!k.confirmedTime) return '施术日期 '+aEsc(k.confirmedDate); var r = krToClinic(k.confirmedDate, k.confirmedTime); return '施术日期 '+aEsc(k.confirmedDate+' '+k.confirmedTime)+'（韩国时间）<span class="sd-tag">印尼时间 '+aEsc((r.date!==k.confirmedDate ? r.date.slice(5)+' ' : '')+r.time)+'</span>'; };
+  var sdTimeLine = function(k){ /* CMD-1109-02：韩国时间为主，印尼时间做小标签（跨天带日期） */ if(!k || !k.confirmedDate) return '施术日期 —'; if(!k.confirmedTime) return '施术日期 '+aEsc(k.confirmedDate); var r = krToClinic(k.confirmedDate, k.confirmedTime); return '施术日期 '+in21Time(k.confirmedDate, k.confirmedTime, {today:true}); };
   var sdHead = function(tag, btns){ return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;"><span class="info-heading" style="margin:0;">施术日期</span>'+(tag ? '<span class="status-pill" style="background:var(--bg-brand-faint,#F6EFE6);color:var(--terracotta);">'+tag+'</span>' : '')+'<span style="flex:1;"></span>'+(btns ? '<span style="display:flex;gap:8px;">'+btns+'</span>' : '')+'</div>'; }; /* CMD-1109-01：施术日期 + 状态标签 + 右边按钮 */
-  if(hasActive && c.krBalancePaid && st==='Arrived'){ body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div><div style="font-size:15px;font-weight:700;">'+ksTimeText(ks)+'</div><div style="font-size:12px;color:var(--sage);margin-top:4px;">✓ 已到院、尾款已付清；详细记录见「Timeline」。</div>'; } /* CMD-1025-04 B：施术日期放最上面，日期时间写大 */
+  if(hasActive && c.krBalancePaid && st==='Arrived'){ body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div><div style="font-size:13px;">'+in21Time(ks.confirmedDate, ks.confirmedTime, {today:true})+'</div><div style="font-size:12px;color:var(--sage);margin-top:4px;">✓ 已到院、尾款已付清；详细记录见「Timeline」。</div>'; } /* CMD-1025-04 B：施术日期放最上面，日期时间写大 */
   else if(hasActive){
     /* 施术日期卡片（Schedule）：Draft / Pending / Confirmed / Changing / Arrived，案件主状态直接读这里 */
     var krBtn = krScheduleReplied(c) ? '无法协调' : '取消赴韩'; /* CMD-1019-12：KR 还没回过日期 = 客人决定不去了 → ［取消赴韩］；KR 回过日期 / 无法安排之后才是［无法协调］ */
@@ -7425,7 +7425,7 @@ function krProcedureTabMain(c, tabsHtml){
     } else if(st==='Changing'){
       if(!ks.changeSubmitted){
         body = krSchedHeadRowHtml('修改施术日期')+
-          '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">原定 '+ksTimeText(ks)+'，请选择新的日期</div>'+
+          '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">原定 '+in21Time(ks.confirmedDate, ks.confirmedTime, {today:true})+'，请选择新的日期</div>'+
           monthNav+
           krDateCalendarGridHtml('changePrimary','changeBackup', ks.changePrimary, ks.changeBackup)+tripRedHtml(c, [ks.changePrimary, ks.changeBackup])+tripSubmitYellowHtml(c, ks.changePrimary, ks.changeBackup)+
           '<div style="display:flex;gap:10px;margin-top:16px;">'+
@@ -9792,7 +9792,7 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
   var buyT = function(it){ var b = (c.settlementBatches||[]).filter(function(x){ return x.id===it.batchId; })[0]; return b && b.time ? e(fmtUtc(b.time).slice(5, 10).replace('-', '/')) : '—'; };
   var srcT = function(it){ var kr = !!(it && (it.krAddOn || it.preBalanceAdd)); return '<span class="status-pill" style="display:inline-block;white-space:nowrap;font-size:12px;'+(kr ? 'background:#E2F3E6;color:#2E7D4F;' : 'background:#E3EEFB;color:#2F5FA8;')+'">'+(kr ? '在韩购买' : '印尼购买')+'</span>'; };
   var nm = function(it){ return (it.cancelled || it.replacedBy) ? '<span style="text-decoration:line-through;color:var(--muted);">'+e(buyName(it.name))+'</span>'+(it.replacedBy ? ' → <b>'+e(it.replacedBy)+'</b>' : ' '+gray('已取消')) : e(buyName(it.name)); };
-  var mainT = function(it){ var d = itemSurgDate(c, it); if(!d) return '—'; var t = (d===ks0.confirmedDate) ? (ks0.confirmedTime||'') : ''; if(t){ try{ var cl = krToClinic(d, t); return md2(cl.date, cl.time); }catch(x){} } return md2(d, t); };
+  var mainT = function(it){ var d = itemSurgDate(c, it); if(!d) return '—'; var t = (d===ks0.confirmedDate) ? (ks0.confirmedTime||'') : ''; return in19When(d, t); }; /* CMD-1109-21：韩国时间 + （韩国）；今天写「今日」 */
   var body = '';
   if(cur==='surg'){
     var C1 = 'minmax(0,1fr) minmax(0,1.6fr) 56px minmax(0,1.2fr) 84px 84px';
@@ -9829,7 +9829,7 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
 function inStayInnerHtml(c, compact){
   if(!c.settlementDone || !krActiveItems(c).length) return '';
   var s = c.stay || {}, e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
-  var line = function(lab, d, t, ap){ return '<div style="display:flex;gap:14px;font-size:13px;padding:3px 0;"><span style="width:76px;color:var(--muted);">'+lab+'</span><span>'+(d ? '<b>'+e(d+(t ? ' '+t : ''))+'</b>' : '<span style="color:var(--muted);">未填写</span>')+'</span><span style="color:var(--slate2);">机场：'+(ap ? e(ap) : '—')+'</span></div>'; };
+  var line = function(lab, d, t, ap){ return '<div style="display:flex;gap:14px;font-size:13px;padding:3px 0;"><span style="width:76px;color:var(--muted);">'+lab+'</span><span>'+(d ? '<b>'+in21Time(d, t)+'</b>' : '<span style="color:var(--muted);">未填写</span>')+'</span><span style="color:var(--slate2);">机场：'+(ap ? e(ap) : '—')+'</span></div>'; };
   var short = stayShortDays(c);
   if(compact){ /* CMD-1109-01：已确认后的排版——到达日 / 离境日两行 + 只留一行「离境日比建议少 N 天」（拿掉拆线天数那行黄字和建议在韩停留小字） */
     return line('到达日', s.in, s.inTime, s.inAirport)+line('离境日', s.out, s.outTime, s.outAirport)+
@@ -9843,7 +9843,7 @@ function inStayInnerHtml(c, compact){
 function inStayCardHtml(c){ /* 旧的单独一张卡（已不用，留给兼容） */
   if(!c.settlementDone || !krActiveItems(c).length) return '';
   var s = c.stay || {}, e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
-  var line = function(lab, d, t, ap){ return '<div style="display:flex;gap:14px;font-size:13px;padding:3px 0;"><span style="width:76px;color:var(--muted);">'+lab+'</span><span>'+(d ? '<b>'+e(d+(t ? ' '+t : ''))+'</b>' : '<span style="color:var(--muted);">未填写</span>')+'</span><span style="color:var(--slate2);">机场：'+(ap ? e(ap) : '—')+'</span></div>'; };
+  var line = function(lab, d, t, ap){ return '<div style="display:flex;gap:14px;font-size:13px;padding:3px 0;"><span style="width:76px;color:var(--muted);">'+lab+'</span><span>'+(d ? '<b>'+in21Time(d, t)+'</b>' : '<span style="color:var(--muted);">未填写</span>')+'</span><span style="color:var(--slate2);">机场：'+(ap ? e(ap) : '—')+'</span></div>'; };
   var short = stayShortDays(c);
   return '<div class="card" style="padding:18px 24px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><div style="font-size:14px;font-weight:700;flex:1;">客人赴韩日程</div><a href="#" class="info-link" onclick="openStayModal(\''+c.id+'\');return false;">'+(stayFilled(c) ? '修改' : '填写')+'</a></div>'+
     line('到达日期', s.in, s.inTime, s.inAirport)+line('离开日期', s.out, s.outTime, s.outAirport)+
@@ -12577,7 +12577,7 @@ function pcmModel(c){
   var m = mainOf(c) || c, vs = visitsOf(m), out = {booked:[], unbooked:[], done:[], kept:[]}, cu = careUnits(c);
   var vOf = function(place, date){ return vs.filter(function(v){ return v.date===date && v.place===place; })[0] || null; };
   var placeTag = function(x){ return !x ? '' : (x.place==='either' ? '韩国或印尼都可' : (x.place==='IN' ? '印尼' : '必须在韩国')); };
-  var base = function(r, x, it, sug){ var d = careDayText(c, r.item || (it && it.name), sug || ''); return {surg:buyName(r.item || (it && it.name) || '') || '其他术后管理', nm:x ? (x.name||x.mgmt) : '', rec:[d, placeTag(x)].filter(Boolean).join(' · '), sug:sug||'', src:(it && (it.krAddOn || it.preBalanceAdd)) ? '在韩增加' : '方案内含'}; };
+  var base = function(r, x, it, sug){ var d = careDayText(c, r.item || (it && it.name), sug || ''); return {surg:buyName(r.item || (it && it.name) || '') || '其他术后管理', nm:x ? (x.name||x.mgmt) : '', rec:[d, placeTag(x)].filter(Boolean).join(' · '), sug:sug||'', src:(it && (it.krAddOn || it.preBalanceAdd)) ? '在韩增加' : '方案内含', pl:x ? x.place : ''}; };
   cu.rows.forEach(function(r){
     var s0 = r.s; if(s0.skipped) return;
     var en = careEntryOfRow(c, s0), x = en && en.x, it = (c.procedureItems||[]).filter(function(y){ return y.name===r.item; })[0], sug = s0.suggest || s0.date || '', b = base(r, x, it, sug);
@@ -13364,7 +13364,7 @@ function in19Tr(cells, grid){ return '<div style="display:grid;grid-template-col
 function inL2(title, n, right, inner){ return '<div style="border:1px solid var(--border2);border-radius:12px;padding:4px 18px 8px;margin-top:10px;background:#fff;"><div style="display:flex;align-items:center;gap:10px;padding:8px 0 4px;"><b style="font-size:13px;">'+title+'</b>'+(n!=null ? '<span style="font-size:12px;color:var(--muted);">（'+n+'）</span>' : '')+'<span style="flex:1;"></span>'+(right||'')+'</div>'+inner+'</div>'; }
 function in19Pill(t, bg, fg){ return '<span class="status-pill" style="background:'+bg+';color:'+fg+';white-space:nowrap;">'+t+'</span>'; }
 function in19Src(it){ var kr = !!(it && (it.krAddOn || it.preBalanceAdd)); return '<span class="status-pill" style="display:inline-block;white-space:nowrap;font-size:12px;'+(kr ? 'background:#E2F3E6;color:#2E7D4F;' : 'background:#E3EEFB;color:#2F5FA8;')+'">'+(kr ? '在韩购买' : '印尼购买')+'</span>'; }
-function in19When(d, t){ if(!d) return '—'; return (d===todayStr() ? '今天' : in19Esc(String(d).slice(5, 10).replace('-', '/')))+(t ? ' '+in19Esc(t) : ''); }
+function in19When(d, t, tz){ if(!d) return '—'; return (d===todayStr() ? '今日' : in19Esc(String(d).slice(5, 10).replace('-', '/')))+(t ? ' '+in19Esc(t)+(tz===undefined ? '（韩国）' : tz) : ''); } /* CMD-1109-21：默认写（韩国），今天写「今日」 */
 /* 管理项目的行（预约中 / 未预约 / 保留 / 已使用）：次数 = 这一行的次数，不写「剩 3 / 共 3」 */
 function inMgmtModel(c, items){
   var out = {booked:[], unbooked:[], kept:[], used:[]}, ks0 = c.krSchedule || {};
@@ -13401,18 +13401,19 @@ function in19CareGroupCard(c, g, o){
   var mainId = (mainOf(c)||c).id, G = o.place ? 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr) 64px 84px' : 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr) 84px', btns = '';
   if(g.v) btns += '<button class="btn-outline sd-btn" onclick="openSubcase(\''+mainId+'\',\''+g.v.key+'\')">查看案件</button>';
   if(o.edit && g.place==='IN' && !o.done && g.rows[0] && g.rows[0].key) btns += '<button class="btn-outline sd-btn" style="margin-left:6px;" onclick="todoCareBookOpen(\''+c.id+'\',\''+g.rows[0].key+'\',\''+(g.bkCase||'')+'\')">修改时间</button>';
-  var ttl = in19When(g.date, g.time)+(o.done ? ' '+in19Pill('已完成', 'var(--sage-bg)', 'var(--sage)') : '');
+  var ttl = in19When(g.date, g.time, g.place==='IN' ? '（印尼）' : '（韩国）')+(o.done ? ' '+in19Pill('已完成', 'var(--sage-bg)', 'var(--sage)') : '');
   var head = o.place ? ['项目', '施术项目', '推荐内容', '地点', '来源'] : ['项目', '施术项目', '推荐内容', '来源'];
   return inL2(ttl, null, btns, in19Th(head, G)+g.rows.map(function(r){ var cells = [in19Esc(r.nm), in19Esc(r.surg), in19Esc(r.rec)]; if(o.place) cells.push(g.place==='IN' ? '印尼' : '韩国'); cells.push(in19Esc(in19CareSrc(r))); return in19Tr(cells, G); }).join(''));
 }
 /* 项目卡里的「术后管理」分页：韩国 + 印尼放一起（有「地点」栏），每个预约时间一张二级 card，没预约的放最后一张「未预约」 */
-function in19CareCardPage(c){
-  var M = pcmModel(c), html = '', G = 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr) 64px 84px';
-  pcmGroups(M.booked, false).forEach(function(g){ html += in19CareGroupCard(c, g, {place:true}); });
-  var rest = M.unbooked.concat(M.kept.map(function(r){ return Object.assign({}, r, {_kept:1}); }));
-  if(rest.length) html += inL2('未预约', rest.length, '', in19Th(['项目', '施术项目', '推荐内容', '地点', '来源'], G)+rest.map(function(r){ return in19Tr([in19Esc(r.nm)+(r.total>1 ? ' <span style="font-size:12px;color:var(--muted);">剩 '+r.n+' / 共 '+r.total+'</span>' : '')+(r._kept ? ' '+in19Pill('保留', '#EFEBE4', 'var(--slate2)') : ''), in19Esc(r.surg), in19Esc(r.rec), r.place==='IN' ? '印尼' : '韩国', in19Esc(in19CareSrc(r))], G); }).join(''));
-  pcmGroups(M.done, true).forEach(function(g){ html += in19CareGroupCard(c, g, {place:true, done:true}); });
-  return {html:html, n:M.booked.length+M.unbooked.length+M.kept.length+M.done.length};
+function in19CareCardPage(c){ /* CMD-1109-21：赴韩总览，只放在韩国处理的术后管理；分配到印尼的不显示（在「术后管理」tab 的印尼卡里看）；未预约只放 地点未定（「-」）和 韩国没约的 */
+  var M = pcmModel(c), html = '', G = 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr) 64px 84px', kr = function(r){ return r.place==='KR'; };
+  var B = M.booked.filter(kr), D = M.done.filter(kr);
+  pcmGroups(B, false).forEach(function(g){ html += in19CareGroupCard(c, g, {place:true}); });
+  var rest = M.unbooked.filter(kr).concat(M.kept.filter(kr).map(function(r){ return Object.assign({}, r, {_kept:1}); }));
+  if(rest.length) html += inL2('未预约', rest.length, '', in19Th(['项目', '施术项目', '推荐内容', '地点', '来源'], G)+rest.map(function(r){ return in19Tr([in19Esc(r.nm)+(r.total>1 ? ' <span style="font-size:12px;color:var(--muted);">剩 '+r.n+' / 共 '+r.total+'</span>' : '')+(r._kept ? ' '+in19Pill('保留', '#EFEBE4', 'var(--slate2)') : ''), in19Esc(r.surg), in19Esc(r.rec), r.pl==='either' ? '-' : '韩国', in19Esc(in19CareSrc(r))], G); }).join(''));
+  pcmGroups(D, true).forEach(function(g){ html += in19CareGroupCard(c, g, {place:true, done:true}); });
+  return {html:html, n:B.length+rest.length+D.length};
 }
 /* IN「术后管理」tab：韩国 / 印尼两张一级 card */
 function pcmInHtml(c, M){
@@ -13441,4 +13442,13 @@ function pcmInHtml(c, M){
 function in19ViewLink(c, date){
   var m = mainOf(c) || c, v = date ? visitsOf(m).filter(function(x){ return x.date===date && x.place==='KR'; })[0] : null;
   return v ? '<a href="#" onclick="openSubcase(\''+m.id+'\',\''+v.key+'\');return false;" style="font-size:12px;text-decoration:underline;white-space:nowrap;">查看案件</a>' : '<span style="color:var(--muted);">—</span>';
+}
+
+/* CMD-1109-21：IN 端的韩国时间写法——韩国时间为主，印尼时间灰色小字（跨天带日期）；today = 是今天就写「今日（…）」 */
+function in21Time(date, time, o){
+  o = o || {}; if(!date) return '';
+  var main = aEscC(date)+(time ? ' '+aEscC(time)+'（韩国）' : ''), tag = '';
+  if(time){ try{ var r = krToClinic(date, time); tag = ' <span class="sd-tag" style="font-size:12px;font-weight:400;color:var(--muted);">印尼 '+(r.date!==date ? aEscC(r.date.slice(5))+' ' : '')+aEscC(r.time)+'</span>'; }catch(e){} }
+  var inner = main+tag;
+  return (o.today && date===todayStr()) ? '今日（'+inner+'）' : inner;
 }
