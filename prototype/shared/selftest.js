@@ -2417,7 +2417,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var c = krFindCase(r.clinicId, r.id).c, a = c.procedureItems[c.procedureItems.length-2], b = c.procedureItems[c.procedureItems.length-1], ia = itemIid(a), ib = itemIid(b);
       ST.ok(ia && ib && ia!==ib && a.name===b.name, '两笔同名同规格，各有唯一 id');
       /* 勾选：只勾一个 */
-      KR_PICK = {}; KR_PROJ_PAGE = 'mgmt'; krTpToggle('mg', ia, true); var pk = krProjCards(c, {pick:true}); ST.ok((pk.match(/<input type="checkbox" checked/g)||[]).length===1 && (pk.match(/<input type="checkbox"/g)||[]).length>=2, '只勾其中一笔：两个勾选框里只有一个被勾上');
+      KR_PICK = {}; KR_PROJ_PAGE = 'mgmt'; krTpToggle('mg', ia, true); var pk = krProjCards(c, {pick:true}).split('kr-today-sum')[0]; /* CMD-1109-15：汇总区的勾选框不算（只数项目列表里的） */ ST.ok((pk.match(/<input type="checkbox" checked/g)||[]).length===1 && (pk.match(/<input type="checkbox"/g)||[]).length>=2, '只勾其中一笔：两个勾选框里只有一个被勾上');
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], it1 = cc.procedureItems.filter(function(x){ return x.iid===ia; })[0], it2 = cc.procedureItems.filter(function(x){ return x.iid===ib; })[0];
         ST.ok(coreTodayPick(cc, [], [ia], 'KM1 室长').ok && pickedMgmt(cc, it1) && !pickedMgmt(cc, it2) && todayMgmtPicked(cc).length===1 && todayMgmtPicked(cc)[0]===it1, '今日进行：只有被勾的那一笔进今日案件');
         ST.ok(coreUnitUseNow(cc, ib, 'KM1 室长').ok && pickedMgmt(cc, it2) && pickedMgmt(cc, it1), '本次使用另一笔：加进今日案件，不影响第一笔');
@@ -10058,7 +10058,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1109-12：今日进行汇总放回项目卡底部 */
-  ST.def('R267a','CMD-1109-12 / 13 / 14（KM1 分页，stageC 夹具）：选今日进行项目的项目卡——没有独立卡、标题旁没有「本次使用」说明；底部「今日进行项目（N）」+ 同一行最右［今日进行］；一项一行【施术项目】/【管理项目】、没有 ×；提前使用说明下一行灰字加括号；切换分页勾还在；没勾 = （0）+ 居中提示 + 按钮灰',function(){
+  ST.def('R267a','CMD-1109-12 / 13 / 14 / 15（KM1 分页，stageC 夹具）：选今日进行项目的项目卡——没有独立卡、标题旁没有「本次使用」说明；底部「今日进行项目（N）」+ 同一行最右［今日进行］；一项一行：勾选框 + 小标签［施术项目］/［管理项目］、没有 ×；取消勾 = 这一行消失；切换分页勾还在；没勾 = （0）+ 居中提示 + 按钮灰；行距不挤',function(){
     var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
     window.GMC_NO_TABS = true; var oa = window.alert; window.alert = function(){}; var host = document.createElement('div'); document.body.appendChild(host);
     try{
@@ -10068,24 +10068,45 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var draw = function(){ host.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c, {pick:true}); return host.querySelector('.kr-today-sum'); };
       KR_PICK = {}; surgNames.slice(0, 2).forEach(function(n){ KR_PICK['surg:'+n] = true; }); var sum = draw();
       var title = sum && sum.firstChild; ST.ok(!!sum && /今日进行项目（\d+）/.test(title.textContent) && !!title.querySelector('button') && /今日进行<\/button>/.test(title.innerHTML), '标题「今日进行项目（N）」+ 同一行最右［今日进行］');
-      var rows = [].slice.call(sum.querySelectorAll('div[style*="display:flex;gap:8px"]')); ST.ok(rows.length===Math.min(2, surgNames.length) && rows.every(function(x){ return /^【施术项目】/.test(x.textContent); }), '一项一行，前缀【施术项目】');
+      var rows = [].slice.call(sum.querySelectorAll('label')); ST.ok(rows.length===Math.min(2, surgNames.length) && rows.every(function(x){ var ck = x.querySelector('input[type=checkbox]'); return ck && ck.checked && x.querySelector('.status-pill') && /^施术项目/.test(x.querySelector('.status-pill').textContent); }), '一项一行：勾着的勾选框 + 小标签［施术项目］');
       ST.ok(!sum.querySelector('a[onclick*="krTpToggle"]') && !/×/.test(sum.textContent), '没有 ×');
+      ST.ok(rows.length>0 && parseFloat(getComputedStyle(rows[0]).paddingTop)>=6, '行距不挤（每行上下 ≥ 6px）');
       var t = host.textContent.replace(/\s+/g,' ');
       ST.ok(!/今日进行项目卡|已勾选：/.test(t) && !/本次使用/.test(t) && !/施术：|管理：/.test(sum.textContent), '没有独立卡 / 说明 / 「施术：…」挤一行');
       ST.ok(!!sum.closest('.card') && !!sum.closest('.card').querySelector('.kr-pc-scroll'), '汇总在项目卡这张卡里面');
       KR_PICK['mg:T-管理项目'] = true; sum = draw();
       var n0 = Object.keys(KR_PICK).length; ST.ok(new RegExp('今日进行项目（'+n0+'）').test(sum.textContent), '数字 = 两个分页勾的总数');
-      var mgRows = [].slice.call(sum.querySelectorAll('div[style*="display:flex;gap:8px"]')).filter(function(x){ return /^【管理项目】/.test(x.textContent); }); ST.ok(mgRows.length===1 && sum.textContent.indexOf('【管理项目】')>sum.textContent.indexOf('【施术项目】'), '管理项目一行、排在施术后面');
+      var pills = [].slice.call(sum.querySelectorAll('.status-pill')).map(function(x){ return x.textContent; }); ST.ok(pills.lastIndexOf('施术项目') < pills.indexOf('管理项目'), '施术在前、管理在后');
       krProjPage('mgmt'); krProjPage('surg'); ST.ok(Object.keys(KR_PICK).length===n0, '切换分页已勾的不清掉');
+      var ck0 = sum.querySelector('input[type=checkbox]'); ck0.checked = false; (new Function(ck0.getAttribute('onchange').replace(/this\.checked/, 'false')))(); ST.ok(Object.keys(KR_PICK).length===n0-1, '拿掉勾 → 这一项取消（上面列表的勾也同步）');
       KR_PICK = {}; sum = draw(); ST.ok(!!sum && /今日进行项目（0）/.test(sum.textContent) && /请勾选今日进行项目/.test(sum.textContent), '全部取消 → 汇总区还在：（0）+ 提示');
       var b0 = sum.querySelector('button'); ST.ok(!!b0 && b0.disabled, '没勾：［今日进行］灰掉'); ST.ok(!!sum.querySelector('div[style*="text-align:center"]'), '提示居中');
       KR_PICK['surg:'+surgNames[0]] = true; sum = draw(); ST.ok(!/请勾选今日进行项目/.test(sum.textContent) && !sum.querySelector('button').disabled, '勾一项：提示消失、按钮可按');
-      /* 提前使用说明：下一行灰字加括号 */
-      var fake = {name:'x'}; var h = String(krEarlyHint.toString()); ST.ok(/今天提前使用/.test(h), '提前使用说明函数在');
       var tmp = krEarlyHint; window.krEarlyHint = function(){ return '<span class="kr-early" style="display:block;font-size:12px;color:var(--muted);font-weight:400;">建议 04/13 起，今天提前使用</span>'; };
-      try{ var mi = krActiveItems(c)[0]; KR_PICK = {}; KR_PICK['surg:'+surgNames[0]] = true; sum = draw(); /* 施术不带说明；管理走 itemByKey，这里只验证替换逻辑 */
-        var html = String(window.krEarlyHint()).replace(/>(建议[^<]*)</, '>（$1）<'); ST.ok(/>（建议 04\/13 起，今天提前使用）</.test(html), '说明加括号'); } finally { window.krEarlyHint = tmp; }
+      try{ var html = String(window.krEarlyHint()).replace(/display:block;/, '').replace(/>(建议[^<]*)</, '>（$1）<'); ST.ok(/>（建议 04\/13 起，今天提前使用）</.test(html) && !/display:block/.test(html), '提前使用说明：括号、不再 display:block（同一行）'); } finally { window.krEarlyHint = tmp; }
     } finally { window.alert = oa; KR_PICK = {}; host.remove(); }
+  });
+  /* CMD-1109-15 6 / 7：「增加项目」弹窗重排 + 卷动位置保留 */
+  ST.def('R268a','CMD-1109-15（KM1 分页，stageC 夹具）：「增加项目」弹窗——左边每项两行（名字 + ［加入］［赠送］ / 规格｜份数 + 价格）；右边「增加项目（N）」「赠送项目（N）」、没有就居中灰字、没有韩文、没有「已选（和结算一起）」；× 移除；改规格 / 份数 / 加入后左边列表卷动位置不变',function(){
+    var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    window.GMC_NO_TABS = true; var oa = window.alert; window.alert = function(){};
+    try{
+      krShowCase(r.clinicId, r.id, {here:true, tab:'items'});
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.hasArrived = true; cc.krBalancePaid = true; cc.krProcedureDone = false; cc.krTripEnded = false; });
+      KR_AD = {adds:{}, signed:{}, locals:[], care:{}, open:true}; krRenderCaseDetail();
+      var ov = document.getElementById('kr-addmodal-overlay'); if(!ST.ok(ov && ov.classList.contains('open'), '弹窗打开（stageC 夹具补成已到院 + 尾款已付）')) return;
+      var txt = function(){ return ov.textContent.replace(/\s+/g,' '); };
+      ST.ok(!/已选（和结算一起）|还没有选项目|서비스|管理（收费）/.test(txt()), '没有旧文字 / 韩文');
+      ST.ok(/增加项目（0）/.test(txt()) && /目前没有增加项目/.test(txt()) && /赠送项目（0）/.test(txt()) && /目前没有赠送项目/.test(txt()), '右边两块 + 没有就居中灰字');
+      var item = ov.querySelector('.kr-ch-left .kr-ch-scroll > div > div[style*="padding:8px 0"]'); ST.ok(!!item && item.children.length===2, '左边每项两行');
+      ST.ok(!!item && /加入/.test(item.children[0].textContent) && /赠送/.test(item.children[0].textContent) && !!item.children[1].querySelector('select') && /份数：/.test(item.children[1].textContent) && /价格：/.test(item.children[1].textContent), '第一行名字 + ［加入］［赠送］，第二行规格｜份数｜价格');
+      /* 卷动位置：滚到中间，改份数后不回顶 */
+      var sc = ov.querySelector('.kr-ch-left .kr-ch-scroll'); sc.scrollTop = 120; var st0 = sc.scrollTop;
+      if(st0>0){ var inputs = sc.querySelectorAll('input[type=number]'); var inp = inputs[inputs.length-1]; inp.value = 2; inp.dispatchEvent(new Event('change')); sc = document.querySelector('#kr-addmodal-overlay .kr-ch-left .kr-ch-scroll'); ST.ok(sc.scrollTop===st0, '改份数后左边列表卷动位置不变：'+sc.scrollTop+' / '+st0); } else ST.ok(true, '（列表不够长，无法滚动；跳过位置检查）');
+      var btn = [].slice.call(document.querySelectorAll('#kr-addmodal-overlay .kr-ch-left button')).filter(function(b){ return b.textContent.trim()==='加入'; })[0]; btn.click();
+      ov = document.getElementById('kr-addmodal-overlay'); ST.ok(/增加项目（1）/.test(ov.textContent) && !!ov.querySelector('.kr-ch-right a[title="移除"]') && /（.*管理）/.test(ov.querySelector('.kr-ch-right').textContent), '加入后：右边「增加项目（1）」+ × + 第二行灰字（…管理）');
+      ov.querySelector('.kr-ch-right a[title="移除"]').click(); ST.ok(KR_AD.locals.length===0, '× 移除');
+    } finally { window.alert = oa; KR_AD = {adds:{}, signed:{}, locals:[], care:{}, open:false}; krRenderCaseDetail(); }
   });
 
   /* CMD-1106-15：院长选推荐项目只勾 + 备注 */

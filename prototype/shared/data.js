@@ -13344,3 +13344,13 @@ function svbDoCancel(c, reason, refundAmt, compAmt, method, mnote){
   svbClose(); afterKrItemsChanged(c);
 }
 (function(){ var r0 = renderCaseBody; renderCaseBody = function(c){ var r = r0.apply(this, arguments); try{ if(SVB && c && SVB.caseId===c.id) svbRender(); }catch(e){} return r; }; })();
+
+/* CMD-1109-15 6：IN 的本地选购弹窗（单独的 #lm-buy-overlay、嵌在「添加本地管理」里的 #in-localentry-overlay）改规格 / 数量 / 加入 / 移除都会整块重画，
+   弹窗里的卷动位置会回到最上面——重画前记下 .modal-box 的 scrollTop，重画后还原 */
+(function(){
+  var ids = ['lm-buy-overlay', 'in-localentry-overlay'], boxTop = function(id){ var e = document.querySelector('#'+id+' .modal-box'); return e ? e.scrollTop : 0; };
+  ['lmBuyModalRender', 'inleRender'].forEach(function(fn){
+    var o = window[fn]; if(typeof o!=='function') return;
+    window[fn] = function(){ var sv = ids.map(boxTop), r = o.apply(this, arguments); ids.forEach(function(id, i){ var e = document.querySelector('#'+id+' .modal-box'); if(e && sv[i]) e.scrollTop = sv[i]; }); return r; };
+  });
+})();

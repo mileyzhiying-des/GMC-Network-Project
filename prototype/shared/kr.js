@@ -1095,12 +1095,13 @@ function krUnitUseNow(name, qty){
 /* Step 4：勾选今日进行项目；"今日进行项目"纵向列出已勾项、"已勾选：N 个项目"、只有［今日进行］（CMD-1015-27） */
 var KR_PICK = {}, KR_PICK_BACK = false;
 function krTpToggle(kind, name, on){ if(on) KR_PICK[kind+':'+name] = true; else delete KR_PICK[kind+':'+name]; krRenderCaseDetail(); }
-function krTodayPickBar(c){ /* CMD-1109-14（取代 1109-12 / 13 的排法）：标题「今日进行项目（N）」+ 同一行最右［今日进行］；一项一行，前面标【施术项目】/【管理项目】（施术在前），没有 ×；
-   「建议 MM/DD 起，今天提前使用」放在那一项下一行、灰色小字加括号、和名字对齐；没勾 = 标题（0）+ 居中灰字提示 + 按钮灰掉（CMD-1109-13） */
+function krTodayPickBar(c){ /* CMD-1109-14 / 15：标题「今日进行项目（N）」+ 同一行最右［今日进行］；一项一行：勾选框（默认勾着，拿掉勾 = 取消这一项，上面列表同步）+ 小标签［施术项目］/［管理项目］（施术在前）+ 名字 +
+   同一行的「（建议 MM/DD 起，今天提前使用）」灰色小字加括号；行间距 7px；没勾 = 标题（0）+ 居中灰字提示 + 按钮灰掉；没有 × */
   var keys = Object.keys(KR_PICK), n = keys.length, can = krCan();
   var row = function(kind, x){ var nm0 = x.replace(/^(surg|mg):/,''), it0 = kind==='mg' ? itemByKey(c, nm0, function(y){ return y.heldOver && !y.holdDone; }) : null;
-    var hint = it0 ? String(krEarlyHint(c, it0)||'').replace(/>(建议[^<]*)</, '>（$1）<') : '';
-    return '<div style="display:flex;gap:8px;align-items:flex-start;line-height:1.7;"><span style="flex:0 0 auto;white-space:nowrap;color:var(--slate2);">'+(kind==='surg' ? '【施术项目】' : '【管理项目】')+'</span><span style="flex:1;min-width:0;">'+krEsc(buyName(it0 ? it0.name : nm0))+(it0 ? krQtyStepper(c, it0) : '')+hint+'</span></div>'; };
+    var hint = it0 ? String(krEarlyHint(c, it0)||'').replace(/display:block;/, '').replace(/>(建议[^<]*)</, '>（$1）<') : '';
+    var q = String(nm0).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<label style="display:flex;gap:8px;align-items:center;padding:7px 0;cursor:'+(can ? 'pointer' : 'default')+';"><input type="checkbox" checked '+(can ? '' : 'disabled ')+'onchange="krTpToggle(\''+kind+'\',\''+krEsc(q)+'\',this.checked)"><span class="status-pill" style="background:'+(kind==='surg' ? 'var(--terracotta-bg)' : 'var(--sage-bg)')+';color:'+(kind==='surg' ? 'var(--terracotta)' : 'var(--sage)')+';font-size:12px;white-space:nowrap;">'+(kind==='surg' ? '施术项目' : '管理项目')+'</span><span style="min-width:0;">'+krEsc(buyName(it0 ? it0.name : nm0))+(it0 ? krQtyStepper(c, it0) : '')+(hint ? ' '+hint : '')+'</span></label>'; };
   var list = keys.filter(function(x){ return x.indexOf('surg:')===0; }).map(function(x){ return row('surg', x); }).concat(keys.filter(function(x){ return x.indexOf('mg:')===0; }).map(function(x){ return row('mg', x); })).join('');
   var btn = can ? '<button class="btn-primary sd-btn"'+(n ? '' : ' disabled style="opacity:.45;cursor:not-allowed;" title="请先勾选今日进行项目"')+' onclick="krPickGo()">今日进行</button>' : '';
   return '<div class="kr-today-sum" style="border-top:1px solid var(--border2);margin-top:12px;padding-top:10px;"><div style="display:flex;align-items:center;gap:12px;"><div style="flex:1;font-weight:700;font-size:13px;">今日进行项目（'+n+'）</div>'+btn+'</div>'+(n ? '<div style="font-size:13px;margin-top:4px;">'+list+'</div>' : '<div style="text-align:center;font-size:13px;color:var(--muted);padding:6px 0 2px;">请勾选今日进行项目</div>')+'</div>';
@@ -4488,6 +4489,11 @@ function krMgRowsHtml(sk){
     return '<div style="font-size:12px;font-weight:700;color:var(--muted);margin:8px 0 2px;">'+krEsc(cl)+'</div>'+l.filter(function(p){ return p.catLabel===cl; }).map(function(p){
       var st = Object.assign({sid:'', qty:1, first:1, interval:1, manual:''}, KRLP[sk+'|'+p.id] || {}); if(!st.sid && p.specs[0]) st.sid = p.specs[0].id;
       var fn = function(k, v){ return 'krMgField(\''+sk+'\',\''+p.id+'\',\''+k+'\','+v+')'; };
+      if(sk!=='sc'){ /* CMD-1109-15 7：每项两行——第一行项目名 + 最右［加入］［赠送］；第二行规格下拉｜份数 + 最右「价格：₩X」；项目之间分隔线 */
+        var sp = p.specs.filter(function(x){ return x.id===st.sid; })[0] || p.specs[0], copies = Math.max(1, parseInt(st.qty,10) || 1), unit = p.neg ? Math.round(Number(st.manual)) : (sp ? sp.price : 0), price = unit>0 ? unit*copies : 0;
+        return '<div style="padding:8px 0;border-bottom:1px solid var(--border2);font-size:13px;"><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;font-weight:600;">'+krEsc(p.name)+'</div><button class="btn-outline" style="padding:2px 10px;font-size:12px;" onclick="krMgAdd(\''+sk+'\',\''+p.id+'\',false)">加入</button><button class="btn-outline" style="padding:2px 10px;font-size:12px;" title="赠送，0 元" onclick="krMgAdd(\''+sk+'\',\''+p.id+'\',true)">赠送</button></div>'+
+          '<div style="display:flex;gap:10px;align-items:center;margin-top:6px;font-size:12px;"><select onchange="krMgSpec(\''+sk+'\',\''+p.id+'\',this.value)" style="'+inp+'">'+p.specs.map(function(x){ return '<option value="'+x.id+'"'+((sp && x.id===sp.id)?' selected':'')+'>'+krEsc(x.label)+'</option>'; }).join('')+'</select>'+(p.neg ? '<input type="number" min="1" placeholder="面议：单价 ₩" value="'+krEsc(st.manual||'')+'" onchange="krMgManual(\''+sk+'\',\''+p.id+'\',this.value)" style="'+inp+'width:104px;">' : '')+'<span style="white-space:nowrap;">份数：<input type="number" min="1" value="'+copies+'" onchange="'+fn('qty','Math.max(1,parseInt(this.value,10)||1)')+'" style="'+inp+'width:46px;"> 份</span><span style="flex:1;"></span><span style="color:var(--sage);font-weight:600;white-space:nowrap;">价格：'+(price>0 ? formatCurrency(price,'KRW') : '—')+'</span></div></div>';
+      }
       return '<div style="padding:4px 0;border-bottom:1px solid var(--border2);font-size:13px;"><div style="font-weight:600;margin-bottom:4px;">'+krEsc(p.name)+'</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;">'+
         krMgRowFields(p, st, {sid:'krMgSpec(\''+sk+'\',\''+p.id+'\',this.value)', manual:'krMgManual(\''+sk+'\',\''+p.id+'\',this.value)', qty:fn('qty','Math.max(1,parseInt(this.value,10)||1)'), first:fn('first','Math.max(0,parseInt(this.value,10)||0)'), interval:fn('interval','parseInt(this.value,10)')}, inp)+
         (sk==='sc' ? krScMgBtn(p, st) : '<button class="btn-outline" style="padding:2px 10px;font-size:12px;" onclick="krMgAdd(\''+sk+'\',\''+p.id+'\',false)">加入</button><button class="btn-ghost" style="padding:2px 8px;font-size:12px;" title="서비스：赠送，0 元" onclick="krMgAdd(\''+sk+'\',\''+p.id+'\',true)">赠送</button>')+'</div></div>';
@@ -4504,6 +4510,11 @@ function krSgListHtml(c, sk){
   var avail = cand.kr.filter(function(p){ return have.indexOf(p.name)<0 && (!q0 || p.name.toLowerCase().indexOf(q0)>-1); });
   return avail.map(function(p){ var on = !!S.adds[p.name]; return '<label style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:13px;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="krChToggle(\''+sk+'\',\''+q(p.name)+'\',this.checked)"> <span style="flex:1;">'+krEsc(p.name)+'</span><span style="color:var(--muted);">'+formatCurrency(p.price,'KRW')+'</span></label>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">'+(q0 ? '没有匹配的施术项目' : '项目库里没有可加的施术项目')+'</div>';
 }
+/* CMD-1109-15 7：「增加项目」右边已选行——第一行「名字｜规格 × 份数（共 N 次）」+ 最右金额 + ×（移除）；第二行灰色小字（开始时间 · 间隔 · 类型）；赠送项目金额写 ₩0 */
+function krChSelRow(sk, i, x, svc){
+  var sched = mgSugText(x);
+  return '<div style="border-bottom:1px solid var(--border2);padding:7px 0;"><div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;"><span style="flex:1;min-width:0;">'+krEsc(x.name)+'｜'+krEsc(x.specLabel||'')+' <span style="font-weight:400;color:var(--slate2);">× '+mgmtQtyText(x)+'</span></span><span style="white-space:nowrap;">'+formatCurrency(svc ? 0 : (x.price||0),'KRW')+'</span><a href="#" title="移除" style="text-decoration:none;color:var(--muted);font-weight:700;" onclick="krChDelLocal(\''+sk+'\','+i+');return false;">×</a></div><div style="font-size:12px;color:var(--muted);margin-top:2px;">（'+(sched && sched!=='—' ? krEsc(sched)+' · ' : '')+'管理）</div></div>';
+}
 function krAddChooser(c, sk, footer, opt){
   sk = sk || 'adj'; var S = krChS(sk), tab = S.tab || 'surg', onlyMgmt = (sk==='ad') || !!(opt && opt.onlyMgmt); /* CMD-1102-03：原方案不变 / 不建议手术更换项目 = 只能选管理项目 */ if(onlyMgmt){ tab = 'mgmt'; S.tab = 'mgmt'; } /* CMD-1027-03 二：项目卡的［增加项目］弹窗只增加管理项目；施术的增减只在施术当天的项目方案阶段（到院卡 Step 2 / 3-2 / 3-3） */
   var cand = krScopeCandidates(KR_CASE.clinicId), have = krAllItems(c).filter(function(it){ return !it.cancelled && !it.swapped; }).map(function(it){ return it.name; });
@@ -4515,10 +4526,11 @@ function krAddChooser(c, sk, footer, opt){
   var right = names.map(function(n){ var p = cand.kr.filter(function(x){ return x.name===n; })[0]; if(!p) return ''; var d = krDet(n);
     return '<div style="border-bottom:1px solid var(--border2);padding:6px 0;"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;"><span>'+krEsc(n)+' <span class="status-pill" style="background:var(--terracotta-bg);color:var(--terracotta);font-size:12px;">手术</span></span><span>'+formatCurrency(p.price,'KRW')+'</span></div>'+krProjDetailHtml(p, cand)+
       (d.anes!=='local' && sk!=='sc' ? '<div style="margin:0 0 6px 22px;font-size:12px;color:#A85A10;">'+KR_ANES[d.anes]+'：结算（确认付款）时勾选麻醉同意书</div>' : '')+'</div>'; }).join('')+
-    paid.map(function(e){ var x = e.x; if(sk==='sc') return krScPaidRow(x, e.i); return '<div style="border-bottom:1px solid var(--border2);padding:6px 0;display:flex;justify-content:space-between;font-size:13px;font-weight:600;"><span>'+krEsc(x.name+' · '+x.specLabel)+' <span style="font-weight:400;color:var(--slate2);font-size:12px;">× '+mgmtQtyText(x)+mgmtScheduleText(x)+'</span> <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);font-size:12px;">管理（收费）</span> <a href="#" onclick="krChDelLocal(\''+sk+'\','+e.i+');return false;" style="font-weight:400;font-size:12px;">移除</a></span><span>'+formatCurrency(x.price,'KRW')+'</span></div>'; }).join('')+(sk==='sc' ? krScPostRight(c) : '');
-  var svcHtml = sk==='sc' ? '' : '<div style="margin-top:12px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">서비스（赠送） <span style="font-weight:400;color:var(--muted);">0 元，不计收入，不可退；在左侧「管理项目」点［赠送］</span></div>'+(svcs.map(function(e){ var x = e.x; return '<div style="border-bottom:1px solid var(--border2);padding:5px 0;display:flex;justify-content:space-between;font-size:13px;"><span>'+krEsc(x.name+' · '+x.specLabel)+' <span class="status-pill" style="background:#FBF0C9;color:#8F6F0C;font-size:12px;">서비스</span> <a href="#" onclick="krChDelLocal(\''+sk+'\','+e.i+');return false;" style="font-size:12px;">移除</a></span><span>'+formatCurrency(0,'KRW')+'</span></div>'; }).join('') || '<div style="font-size:12px;color:var(--muted);">没有</div>')+'</div>';
+    paid.map(function(e){ var x = e.x; if(sk==='sc') return krScPaidRow(x, e.i); return krChSelRow(sk, e.i, x, false); }).join('')+(sk==='sc' ? krScPostRight(c) : '');
+  var plusN = names.length + paid.length, nm9 = function(n0){ return '<div style="text-align:center;font-size:12px;color:var(--muted);padding:10px 0;">'+n0+'</div>'; };
+  var svcHtml = sk==='sc' ? '' : '<div style="margin-top:14px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">赠送项目（'+svcs.length+'）</div>'+(svcs.map(function(e){ return krChSelRow(sk, e.i, e.x, true); }).join('') || nm9('目前没有赠送项目'))+'</div>';
   return '<div class="kr-chooser"><div class="kr-ch-left"><div style="display:flex;gap:6px;margin-bottom:8px;">'+(onlyMgmt ? ((opt && opt.hint) ? tabBtn('mgmt','管理项目') : '<span style="font-size:13px;font-weight:700;">管理项目 <span style="font-weight:400;font-size:12px;color:var(--muted);">施术项目只能在施术当天的项目方案里增减</span></span>') : tabBtn('surg','施术项目')+tabBtn('mgmt','管理项目')+(sk==='sc' ? tabBtn('post','术后管理（在印尼）') : ''))+'</div>'+search+((opt && opt.hint) ? '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">'+opt.hint+'</div>' : '')+'<div class="kr-ch-scroll">'+left+'</div></div>'+
-    '<div class="kr-ch-right"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">'+(sk==='sc' ? '已选' : '已选（和结算一起）')+'</div><div class="kr-ch-scroll">'+(right || '<div style="font-size:12px;color:var(--muted);">还没有选项目（可以不加）</div>')+svcHtml+'</div>'+(footer ? '<div class="kr-ch-foot">'+footer+'</div>' : '')+'</div></div>';
+    '<div class="kr-ch-right"><div class="kr-ch-scroll"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">'+(sk==='sc' ? '已选' : '增加项目（'+plusN+'）')+'</div>'+(right || (sk==='sc' ? '<div style="font-size:12px;color:var(--muted);">还没有选项目（可以不加）</div>' : '<div style="text-align:center;font-size:12px;color:var(--muted);padding:10px 0;">目前没有增加项目</div>'))+svcHtml+'</div>'+(footer ? '<div class="kr-ch-foot">'+footer+'</div>' : '')+'</div></div>';
 }
 /* 施术中「增加项目」：独立一张卡（项目进程卡下方），左选右结；尾款付清后加的 → 待付款 + ［修正］（CMD-1013-06 三·4） */
 function krAddModalOpen(){ KR_AD.open = true; krRenderCaseDetail(); }
@@ -5853,3 +5865,16 @@ function krLeaveWhyGo(){
   if(res && !res.ok){ KR_LV.err = res.err || '不能结束'; if(res.pending){ krLeaveWhyClose(); krEndBlockModal(res.err); } else krLeaveWhyRender(); return; }
   krLeaveWhyClose();
 }
+
+/* CMD-1109-15 6：重画整页前记下选择区（左右两栏 .kr-ch-scroll）和「增加项目」弹窗的卷动位置，重画后还原；改规格 / 份数 / 加入 / 移除 都会重画，不能让列表卷回最上面 */
+(function(){
+  var orig = krRenderCaseDetail;
+  krRenderCaseDetail = function(){
+    var keep = [].slice.call(document.querySelectorAll('.kr-ch-scroll')).map(function(el){ return el.scrollTop; });
+    var ovb = document.querySelector('#kr-addmodal-overlay .modal-box'), ovTop = ovb ? ovb.scrollTop : 0;
+    var r = orig.apply(this, arguments);
+    var after = [].slice.call(document.querySelectorAll('.kr-ch-scroll')); after.forEach(function(el, i){ if(keep[i]) el.scrollTop = keep[i]; });
+    var ovb2 = document.querySelector('#kr-addmodal-overlay .modal-box'); if(ovb2 && ovTop) ovb2.scrollTop = ovTop;
+    return r;
+  };
+})();
