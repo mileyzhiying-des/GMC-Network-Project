@@ -9781,7 +9781,7 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
     if(kn0>0) mgKept.push({it:it, bk:kn0, left:left0});
   });
   var mgShown = {}; mgBooked.concat(mgUnbooked, mgKept).forEach(function(x){ mgShown[itemIid(x.it)||x.it.name] = 1; });
-  var care19 = (kind==='mgmt') ? null : in19CareCardPage(c), mg19 = (kind==='mgmt') ? null : inMgmtL2Cards(c, mgList, false);
+  var care19 = (kind==='mgmt') ? null : in19CareCardPage(c), mg19 = (kind==='mgmt') ? null : inMgmtL2Cards(c, mgList, false, true); /* CMD-1109-22：项目卡管理项目分页的预约中也有「其他：查看案件」 */
   var counts = (kind==='mgmt') ? {mg:Object.keys(mgShown).length} : {surg:surgList.length+surgDone.length, care:care19.n, mg:mg19.n}; /* CMD-1109-19：三个分页 施术项目｜术后管理｜管理项目（施术做完的并进施术项目） */ /* CMD-1028-09：赴韩施术 tab 的项目卡只有施术 */
   var cur = (kind==='mgmt') ? 'mg' : IN_PC_TAB[c.id]; if(kind!=='mgmt' && (!cur || !counts[cur])) cur = ['surg','care','mg'].filter(function(k){ return counts[k]>0; })[0] || '';
   var tabBtn = function(k, label){ var n = counts[k]; if(!n) return ''; var on = cur===k; return '<button onclick="inPcTab(\''+c.id+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;font-weight:700;cursor:pointer;">'+label+'（'+n+'）</button>'; };

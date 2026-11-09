@@ -10248,7 +10248,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var pc = inProjectCardHtml(c), pt = t(pc);
       if(/施术项目（\d+）/.test(pt)) ST.ok(/预约时间项目次数备注其他来源/.test(pt), '赴韩施术项目卡·施术项目栏位 预约时间｜项目｜次数｜备注｜其他｜来源');
       IN_PC_TAB[c.id] = 'mg'; var mp = t(inProjectCardHtml(c)); delete IN_PC_TAB[c.id];
-      ST.ok(!/其他/.test(mp) || !/项目次数状态预约时间其他/.test(mp), '项目卡的管理项目分页不动（没有「其他」栏）');
+      ST.ok(/项目次数状态预约时间其他来源/.test(mp) && (/查看案件/.test(mp) || !visitsOf(m).some(function(v){ return v.date===ymdAdd(todayStr(), 3) && v.place==='KR'; })), 'CMD-1109-22 改：项目卡的管理项目分页预约中也有「其他：查看案件」（原：不动）');
     } finally { var o = JSON.parse(sv); c.procedureItems = o.items; c.subItems = o.subs; delete IN_PC_TAB[c.id]; }
   });
   ST.def('R271a','CMD-1109-18（KM1 分页，pcStage 夹具）：进行项目表四栏（项目类型｜项目｜备注｜操作，没有地点 / 状态，管理项目只写「（N 次）」，没有加减 / 剩余 / 建议 / ［今日取消］）；项目卡：预约中在最上面、今日写「今日」且排最前；施术今天那行［今日取消］弹窗原因必填、退回待重新预约、不动钱；术后管理其他栏「查看方案」；管理保留行 N 次 + ［今日进行］［预约时间］、没有［取消保留］；今天已排同一项可再按［今日进行］（加倍）',function(){
