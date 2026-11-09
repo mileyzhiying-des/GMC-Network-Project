@@ -5927,7 +5927,6 @@ function pickKrDate(pf, bf, y, m, d){
   var dateStr = fmtDateYMD(y,m,d);
   var c = getCurrentCase(); if(!c) return;
   if(dateStr <= todayStr()) return; /* CMD-1102-07 二：从明天开始 */
-  var __ti = tripDateIssue(c, dateStr); if(__ti && !__ti.soft && __ti.kind!=='short') return; /* CMD-1106-07；CMD-1106-10：天数不够可以选 */
   if(caseOpenDates(c).indexOf(dateStr)===-1) return; /* 未开放的日期不可选（只看该案件所选院长开放的日期） */
   var ks = ensureKrScheduleDraft(c);
   /* CMD-1015-05 五：先点选 1～2 天；再点已选的日期取消；已选 2 天时点别的日期 = 替换备选；只选 1 天 = 自动首选；哪一天是首选用格子左上角的「✅ 首选日」勾选 */
@@ -5963,14 +5962,14 @@ function krDateCalendarGridHtml(pf, bf, primaryVal, backupVal){
       if(!d) return '<div></div>';
       var dateStr = fmtDateYMD(y,m,d);
       var open = openDatesNow.indexOf(dateStr)>-1 && dateStr > todayStr();
-      var tripI = open ? tripDateIssue(getCurrentCase(), dateStr) : null, tripBlock = !!(tripI && !tripI.soft && tripI.kind!=='short'), tripWarn = !!(tripI && tripI.kind==='short' && !tripI.soft); if(tripBlock) open = false; /* CMD-1106-10：只有早于到达才灰掉；天数不够可以选，格子里小字黄色提醒 */ /* CMD-1106-07：行程已定 → 范围外灰掉 + 原因 */ /* 今天及以前的日期置灰不可选（CMD-1012-05 三·1；CMD-1102-07 二：从明天开始） */
+      var tripI = open ? tripDateIssue(getCurrentCase(), dateStr) : null, tripBlock = false, tripRed = !!(tripI && !tripI.soft && tripI.kind!=='short'), tripWarn = !!(tripI && tripI.kind==='short' && !tripI.soft);  /* CMD-1106-10：只有早于到达才灰掉；天数不够可以选，格子里小字黄色提醒 */ /* CMD-1106-07：行程已定 → 范围外灰掉 + 原因 */ /* 今天及以前的日期置灰不可选（CMD-1012-05 三·1；CMD-1102-07 二：从明天开始） */
       var style = 'position:relative;min-height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;', lab = '';
       if(!open) style += 'color:var(--dim);background:var(--bg-sidebar,#F7F4F0);';
       else if(dateStr===primaryVal){ style += 'background:#F6C9CF;border:1px solid #E5A3AC;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;color:#A8323F;">首选日</span>'; }
       else if(dateStr===backupVal){ style += 'background:var(--action-primary,#9A6A4B);color:#fff;font-weight:700;cursor:pointer;'; lab = '<span style="position:absolute;left:6px;top:4px;font-size:12px;font-weight:700;">备选日</span><span style="position:absolute;right:4px;top:3px;font-size:12px;font-weight:400;cursor:pointer;text-decoration:underline;" onclick="event.stopPropagation();setKrPrimaryDate(\''+pf+'\',\''+bf+'\',\''+dateStr+'\')" title="设为首选日（两天互换）">设为首选</span>'; }
       else style += 'color:var(--navy);cursor:pointer;background:#fff;border:1px solid var(--border2);';
-      var onclick = open ? ' onclick="pickKrDate(\''+pf+'\',\''+bf+'\','+y+','+m+','+d+')"' : '';
-      return '<div style="'+style+'"'+onclick+(tripBlock ? ' title="'+aEscC(tripI.msg)+'"' : '')+'>'+lab+d+'</div>';
+      if(tripRed && open) style += 'color:#B3261E;'; var onclick = open ? ' onclick="pickKrDate(\''+pf+'\',\''+bf+'\','+y+','+m+','+d+')"' : '';
+      return '<div style="'+style+'"'+onclick+(tripRed ? ' title="'+aEscC(tripI.msg)+'"' : '')+'>'+lab+d+'</div>';
     }).join('')+
     '</div>';
 }
@@ -6087,7 +6086,8 @@ function syncSurgeryBlock(c){
   for(var i = arr.length-1; i >= 0; i--){ if(arr[i].kind==='施术' && arr[i].caseId===c.id && arr[i].clinicId===c.clinicId) arr.splice(i, 1); }
   var ks = c.krSchedule;
   var surgEver = krAllItems(c).some(function(it){ return !krIsMgmtItemC(it); }), surgNow = krActiveItems(c).some(function(it){ return !krIsMgmtItemC(it); }), refunding = !!(c.krJudge && c.krJudge.result==='cannot' && c.krJudge.refundKind && !c.krJudge.replaced); /* CMD-1102-03：施术项目都被取消 / 换掉了（只剩管理项目）、或 KR 已判断全部 / 部分退回 → 原施术时间段放掉 */
-  var dead = c.stage==='cancelled' || c.stage==='reportonly' || !krActiveItems(c).length || (surgEver && !surgNow) || refunding; /* 案件已取消 / 仅出报告 / 赴韩项目已全部取消：施术不再占院长日程、KR 工作台日历、IN 的 KR 医院日程（CMD-1012-10） */
+  var rebookNeed = false; try{ rebookNeed = !!ksRebookNeeded(c); }catch(e){} /* CMD-1109-04：施术日期不在行程内、还没重新约 → 旧时段释放 */
+  var dead = rebookNeed || c.stage==='cancelled' || c.stage==='reportonly' || !krActiveItems(c).length || (surgEver && !surgNow) || refunding; /* 案件已取消 / 仅出报告 / 赴韩项目已全部取消：施术不再占院长日程、KR 工作台日历、IN 的 KR 医院日程（CMD-1012-10） */
   if(!dead && ks && (ks.status==='confirmed' || ks.status==='change_pending' || ks.status==='arrived') && ks.confirmedDate){
     var st = ks.confirmedTime||'09:00', en = minToTime(Math.min(24*60-1, timeToMin(st)+surgeryMinutes(c)));
     arr.push({id:'sb'+(SCHED_SEQ++)+Math.floor(Math.random()*1000), who:c.director, date:ks.confirmedDate, time:st, end:en, type:'施术', title:'施术', note:'', kind:'施术', caseId:c.id, clinicId:c.clinicId, name:c.name});
@@ -7406,15 +7406,15 @@ function krProcedureTabMain(c, tabsHtml){
       ks = ensureKrScheduleDraft(c);
       body = krSchedHeadRowHtml('施术日期', krNotStartedItems(c).length ? '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>' : '')+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         monthNav+
-        krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripSubmitYellowHtml(c, ks.primary, ks.backup)+
+        krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripRedHtml(c, [ks.primary, ks.backup])+tripSubmitYellowHtml(c, ks.primary, ks.backup)+
         '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;" onclick="submitKrScheduleDate()">递交施术日期</button></div>'; /* CMD-1109-03：取消赴韩 / 无法协调收进［施术变动］；原注释：［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
     } else if(st==='Pending'){
-      body = sdHead('待 KR 确认', '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>')+
+      var rbn = ksRebookNeeded(c); body = sdHead(rbn ? '需重新预约' : '待 KR 确认', '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>')+(rbn ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-bottom:8px;">'+aEscC(rbn.msg)+'</div>' : '')+
         '<div style="font-size:13px;color:var(--slate2);margin-bottom:6px;">已提交首选 '+ks.primary+(ks.backup?'　备选 '+ks.backup:'')+'，等待 KR 室长确认'+tripStateTagHtml(c)+'</div>'+
         '<div style="font-size:12px;color:var(--muted);">等待 KR 室长选定日期、填到院时间和地址（或回复无法安排）</div>';
     } else if(st==='Confirmed'){
       var btnsC = c.hasArrived ? '' : '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>'; /* CMD-1109-03：［修改施术日期］［取消施术计划］合成［施术变动］ */
-      body = sdHead('已确认', btnsC)+
+      var rbc = ksRebookNeeded(c); body = sdHead(rbc ? '需重新预约' : '已确认', btnsC)+(rbc ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-bottom:8px;">'+aEscC(rbc.msg)+'</div>' : '')+
         '<div class="sd-box" id="surg-send-row"><div style="display:flex;align-items:flex-start;gap:12px;"><div style="flex:1;">'+sdTimeLine(ks)+'<div style="margin-top:6px;">地址：'+aEsc(addrBoth(c.hospitalId||clinicHospital(CURRENT_CLINIC_ID), ks.address))+'</div>'+(ks.rejectNote?'<div style="font-size:12px;color:#A85A10;margin-top:6px;">KR 无法安排新日期：'+ks.rejectNote+'（原日期继续有效）</div>':'')+'</div>'+surgSendHtml(c)+'</div></div>'+
         (c.hasArrived ? '<div style="font-size:12px;color:var(--terracotta);margin-top:10px;">KR 已在韩国重新预约施术时间；到过医院之后 IN 端不能再修改日期或取消项目，客人再到医院时由 KR 重新标记"已到医院"</div>' : '');
     } else if(st==='Changing'){
@@ -7422,7 +7422,7 @@ function krProcedureTabMain(c, tabsHtml){
         body = krSchedHeadRowHtml('修改施术日期')+
           '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">原定 '+ksTimeText(ks)+'，请选择新的日期</div>'+
           monthNav+
-          krDateCalendarGridHtml('changePrimary','changeBackup', ks.changePrimary, ks.changeBackup)+tripSubmitYellowHtml(c, ks.changePrimary, ks.changeBackup)+
+          krDateCalendarGridHtml('changePrimary','changeBackup', ks.changePrimary, ks.changeBackup)+tripRedHtml(c, [ks.changePrimary, ks.changeBackup])+tripSubmitYellowHtml(c, ks.changePrimary, ks.changeBackup)+
           '<div style="display:flex;gap:10px;margin-top:16px;">'+
           '<button class="btn-primary" style="flex-grow:1;" onclick="submitKrScheduleChangeDate()">提交新日期</button>'+
           '<button class="btn-outline" onclick="cancelKrScheduleChange()">取消修改</button>'+
@@ -7469,7 +7469,7 @@ function krProcedureTabMain(c, tabsHtml){
   /* CMD-1106-17：待递交时行程状态单选在最上面；CMD-1109-01：KR 已确认之后（已递交 / 已确认 / 改期 / 已到院）三段排版——标题 +［打印］｜行程 +［日程变动］｜施术日期 + 状态 + 按钮，三段之间分隔线 */
   var tripTop = '', hrLine = '<div style="border-top:1px solid var(--border2);margin:12px 0;"></div>';
   var tripRadios = (draftStay && hasActive && ks) ? tripStateBlockHtml(c, ensureKrScheduleDraft(c)) : '';
-  var stayBtn = stayIn ? '<a href="#" class="btn-outline sd-btn" style="text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">'+(draftStay ? '修改' : '日程变动')+'</a>' : '';
+  var stayBtn = stayIn ? '<a href="#" class="btn-outline sd-btn" style="text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">'+(draftStay ? '修改' : '行程变动')+'</a>' : '';
   if(draftStay){ if(tripRadios || stayIn) tripTop = hrLine+tripRadios+hrLine; }
   else if(stayIn) tripTop = hrLine+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span class="info-heading" style="margin:0;flex:1;">行程</span>'+stayBtn+'</div>'+stayIn+hrLine;
   var subRow = ''; if(!draftStay){ subRow = subStatusRowHtml(caseSubStatusItems(c).filter(function(x){ return !/^(施术时间已确认|待确认施术时间|已到院$)/.test(x.text); })); } /* CMD-1109-01：拿掉「✓ 施术时间已确认…」绿字行（状态改放施术日期标题的标签） */
@@ -10544,6 +10544,7 @@ function tripDateIssue(c, date, time){
   var md = function(d){ return stayMD(d); };
   if(w.in && date < w.in) return {kind:'early', soft:w.soft, msg:'客人 '+md(w.in)+(w.inTime ? ' '+w.inTime : '')+' 才到达'};
   if(w.in && date===w.in && time && w.inTime && time <= w.inTime) return {kind:'time', soft:w.soft, msg:'到院时间 '+time+' 要晚于客人到达时间 '+w.inTime};
+  if(w.out && date > w.out) return {kind:'late', soft:w.soft, msg:'客人 '+md(w.out)+' 就离开了'}; /* CMD-1109-04：晚于离境日也算「碰到」 */
   if(w.out && w.days && ymdAdd(date, w.days) > w.out) return {kind:'short', soft:w.soft, msg:'做完需要在韩 '+w.days+' 天，客人 '+md(w.out)+' 离开'};
   return null;
 }
@@ -10579,6 +10580,38 @@ function tripCurItems(c){
   if(ks.status==='pending') return [{label:'首选', date:ks.primary}, {label:'备选', date:ks.backup}];
   if(ks.confirmedDate && !c.hasArrived) return [{label:'', date:ks.confirmedDate}];
   return [];
+}
+/* ===== CMD-1109-04：行程和施术日期互相检查 =====
+   「碰到」= 施术日不在行程内（早于到达日 / 晚于离境日 / 到达当天到院时间早于到达时间）；天数不够照旧只黄字。暂定行程（soft）只是预估，不算。
+   ① 行程变动碰到施术日期（行程是事实）：可以存（存之前提醒），存好后施术日期标红、状态「需重新预约」，KR 收通知 + 待办，旧时段从院长日程释放；
+   ② 施术变动 / 递交日历选到行程外的日子（施术是计划）：日子可以点，选了红字 + ［行程变动］，送不出。 */
+function tripHardIssue(c, date, time){ var i = date ? tripDateIssue(c, date, time) : null; return (i && !i.soft && i.kind!=='short') ? i : null; }
+function tripRedText(c, date, time){ var i = tripHardIssue(c, date, time); if(!i) return ''; return '⚠️ '+stayMD(date)+(i.kind==='late' ? ' 在客人离境之后' : (i.kind==='time' ? ' 的到院时间早于客人到达时间' : ' 在客人到达之前'))+'，请先修改行程'; }
+function tripRedHtml(c, dates){ /* 红字（每个有问题的日子一行）+ 一个［行程变动］ */
+  var lines = (dates||[]).filter(Boolean).map(function(d){ return tripRedText(c, d); }).filter(Boolean); if(!lines.length) return '';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 6px;"><span style="font-size:12px;color:#B3261E;font-weight:700;">'+lines.map(aEscC).join('<br>')+'</span><button class="btn-outline sd-btn" onclick="tripOpenStayFromCal()">行程变动</button></div>';
+}
+function tripOpenStayFromCal(){ var c = getCurrentCase(); if(!c) return; openStayModal(c.id); var so = document.getElementById('stay-overlay'); if(so) so.style.zIndex = 100050; }
+function ksRebookNeeded(c){ /* 现在案件上的施术日期不在行程内、而且 IN 还没重新约 → {date,time,msg,kind}；否则 null */
+  var ks = c && c.krSchedule; if(!ks || !c.settlementDone || c.hasArrived || c.visitClosed || !tripWin(c)) return null;
+  var w = tripWin(c), win = (w.in ? stayMD(w.in) : '?')+'～'+(w.out ? stayMD(w.out) : '?');
+  if(ks.changeSubmitted && ks.changePrimary && !tripHardIssue(c, ks.changePrimary)) return null; /* 已经重新约了新日期，等 KR 确认 */
+  if((ks.status==='confirmed' || ks.status==='change_pending') && ks.confirmedDate){
+    var i = tripHardIssue(c, ks.confirmedDate, ks.confirmedTime); if(i) return {kind:'confirmed', date:ks.confirmedDate, time:ks.confirmedTime||'', msg:'⚠️ 施术日期 '+stayMD(ks.confirmedDate)+' 不在新行程内（'+win+'），请重新预约施术时间'};
+  } else if(ks.status==='pending'){
+    var dd = [ks.primary, ks.backup].filter(Boolean); if(dd.length && dd.every(function(d){ return tripHardIssue(c, d); })) return {kind:'pending', date:dd[0], time:'', msg:'⚠️ 已递交的施术日期 '+dd.map(stayMD).join('、')+' 不在新行程内（'+win+'），请重新预约施术时间'};
+  }
+  return null;
+}
+/* 行程改完之后：施术日期碰到了 → 记 Timeline、通知 KR、旧时段从院长日程释放；对上了 → 恢复 */
+function rebookAfterStay(c, by){
+  var ks = c && c.krSchedule; if(!ks) return; var need = ksRebookNeeded(c), key = need ? need.kind+'|'+need.date+'|'+(need.time||'')+'|'+stayText(c) : '';
+  if((ks.rebookFlag||'')===key) return;
+  if(need){
+    ks.rebookFlag = key; logCaseEvent(c, by, '行程变动：'+need.msg.replace('⚠️ ','')+'；施术状态变「需重新预约」，院长日程里的旧时段已释放，KR 不能再确认旧日期', '赴韩施术');
+    try{ pushKrNotif(caseKrHospital(c), '行程变动：'+c.name+'（'+(c.caseNo||'')+'）'+need.msg.replace('⚠️ ','')+'，等 IN 重新预约', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){}
+  } else { delete ks.rebookFlag; logCaseEvent(c, by, '行程和施术日期对上了（不再需要重新预约）', '赴韩施术'); }
+  try{ syncSurgeryBlock(c); updateCaseStage(c); }catch(e){ console.error(e); }
 }
 function tripDateIssueText(c, date, time){ var i = tripDateIssue(c, date, time); return i ? '施术日期 '+stayMD(date)+(time ? ' '+time : '')+'：'+i.msg : ''; }
 /* 已存的日期（首选 / 备选 / KR 确认 / 改期）和行程对不上的清单：[{label,date,issue}] */
@@ -10623,6 +10656,7 @@ function coreSetStay(c, inD, outD, by, o){
   var newT = stayText(c) || '（空）', short = stayShortDays(c), air = stayAirportTip(c);
   logCaseEvent(c, by, (oldT==='（空）' ? '填写在韩期间：' : '修改在韩期间：')+(oldT==='（空）' ? '' : oldT+' → ')+newT+(air ? '（'+air+'）' : '')+(short ? '（离境日比建议少 '+short+' 天）' : ''), '赴韩施术');
   if(!(o && o.initial)){ try{ pushKrNotif(caseKrHospital(c), by+(oldT==='（空）' ? ' 填写了 ' : ' 修改了 ')+c.name+'（'+(c.caseNo||'')+'）的在韩期间：'+(oldT==='（空）' ? '' : oldT+' → ')+newT, {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'stay'}); }catch(e){} }
+  try{ rebookAfterStay(c, by); }catch(e){ console.error(e); }
   return {ok:true, changed:true};
 }
 
@@ -12273,6 +12307,7 @@ function coreStayFix(c, inD, inT, outD, outT, reason, by){
   logCaseEvent(c, by, '行程修正：'+oldT+' → '+newT+'；原因：'+reason, '赴韩施术');
   try{ pushNotif('赴韩施术', c.name+' 的在韩期间已改为 '+newT+'（原 '+oldT+'），原因：'+reason, {caseId:c.id}); }catch(e){}
   var reopened = false; try{ reopened = reopenTripIfNeeded(c, by); }catch(e){ console.error('[重新打开行程]', e); }
+  try{ rebookAfterStay(c, by); }catch(e){ console.error(e); }
   return {ok:true, reopened:reopened};
 }
 /* CMD-1027-08 六：KR 按［客人已到院］时在韩期间没填（有韩国行程、还没标过到院）→ 补填；通知 IN，Timeline 记一笔 */
@@ -13185,7 +13220,7 @@ function svbCanTime(c){ var st = scheduleState(c); return st==='Pending' || st==
 function svbOpen(pre){
   var c = getCurrentCase(); if(!c || c.hasArrived || c.visitClosed) return; if(!krNotStartedItems(c).length) return;
   var canT = svbCanTime(c), ks = canT ? c.krSchedule : null;
-  SVB = {caseId:c.id, mode:(pre==='cancel' || !canT) ? 'cancel' : (pre==='time' ? 'time' : (canT ? 'time' : 'cancel')), reasonT:'', reasonC:'', refundOn:false, refundAmt:'', compOn:false, method:'', mnote:'', err:''};
+  SVB = {caseId:c.id, mode:(pre==='cancel' || !canT) ? 'cancel' : (pre==='time' ? 'time' : (canT ? 'time' : 'cancel')), reasonT:(ksRebookNeeded(c) ? '行程变动' : ''), reasonC:'', refundOn:false, refundAmt:'', compOn:false, method:'', mnote:'', err:''};
   if(ks){ ks.svbPrimary = ''; ks.svbBackup = ''; }
   var t = todayStr(); KR_SCHED_VIEW_MONTH = new Date(+t.slice(0,4), +t.slice(5,7)-1, 1); KR_SCHED_NAV_CASE = '';
   svbRender();
@@ -13214,7 +13249,7 @@ function svbRender(){
     var pf = 'svbPrimary', bf = 'svbBackup', pri = ks[pf]||'', bak = ks[bf]||'';
     body += '<div style="margin:0 0 6px 22px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">理由 <span style="color:#C1454A;">*</span></div><input style="'+inp+'" value="'+aEscC(h.reasonT)+'" oninput="svbInput(\'reasonT\',this.value)" placeholder="为什么要改时间（必填）">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 2px;font-size:12px;font-weight:700;"><span>选新的施术日期（首选必选，备选选填）</span>'+krSchedLegendHtml()+'</div>'+
-      krSchedMonthNavHtml(c, ks, pf)+krDateCalendarGridHtml(pf, bf, pri, bak)+tripSubmitYellowHtml(c, pri, bak)+
+      krSchedMonthNavHtml(c, ks, pf)+krDateCalendarGridHtml(pf, bf, pri, bak)+tripRedHtml(c, [pri, bak])+tripSubmitYellowHtml(c, pri, bak)+
       '<div style="font-size:12px;color:var(--slate2);margin-top:6px;">首选 '+(pri||'<span style="color:var(--muted);">未选</span>')+'　备选 '+(bak||'<span style="color:var(--muted);">（选填）</span>')+(scheduleState(c)==='Confirmed' ? '　<span style="color:var(--muted);">原定 '+ks.confirmedDate+'；送出后等 KR 室长确认到院时间，原日期继续有效</span>' : '')+'</div></div>';
   }
   body += rd('cancel', '取消施术');
@@ -13241,6 +13276,7 @@ function svbGo(){
   if(h.mode==='time'){
     var ks = c.krSchedule, reason = String(h.reasonT||'').trim(); if(!reason) return fail('请填写更改时间的理由');
     if(!ks || !ks.svbPrimary) return fail('请选择新的首选日期');
+    var rt = tripRedText(c, ks.svbPrimary) || tripRedText(c, ks.svbBackup||''); if(rt) return fail(rt);
     return svbDoTime(c, reason, ks.svbPrimary, ks.svbBackup||'');
   }
   var reasonC = String(h.reasonC||'').trim(); if(!reasonC) return fail('请填写取消施术的理由');

@@ -3894,7 +3894,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       switchCaseTab && switchCaseTab('kr'); var body = document.getElementById('case-body').innerHTML, txt = document.getElementById('case-body').innerText.replace(/\s+/g, ' ');
       ST.ok(/赴韩日程/.test(txt) && (body.match(/赴韩日程/g)||[]).length===1 && !/客人赴韩日程/.test(txt), '⑤：赴韩日程合成一张卡（只有一个标题）');
       a.stay = {in:ymdAdd(td, -1), inTime:'09:00', inAirport:'ICN', out:ymdAdd(td, 6), outTime:'18:00', outAirport:'ICN', by:'A1', at:nowFullDt()}; renderCaseBody(a); switchCaseTab('kr'); txt = document.getElementById('case-body').innerText.replace(/\s+/g, ' ');
-      ST.ok(/施术日期/.test(txt) && /到达日/.test(txt) && /离境日/.test(txt) && /打印/.test(txt) && /日程变动/.test(txt), '⑤：卡里有 施术日期 + 到达日 / 离境日 + ［打印］［日程变动］（CMD-1109-01：拿掉建议在韩停留小字，［修改］改名［日程变动］）');
+      ST.ok(/施术日期/.test(txt) && /到达日/.test(txt) && /离境日/.test(txt) && /打印/.test(txt) && /行程变动/.test(txt), '⑤：卡里有 施术日期 + 到达日 / 离境日 + ［打印］［行程变动］（CMD-1109-01：拿掉建议在韩停留小字，［修改］改名［行程变动］）');
       /* 项目卡 / 子案件页分段标题：未预约（不再叫未使用） */
       ST.open(b); var up = ST.upgradeView && 0; var h = inContCardHtml ? 1 : 0; ST.ok(!/未使用项目/.test(inContCardHtml(b, b.id)||''), '⑤：子案件页分段标题不再叫「未使用项目」');
     } finally { window.alert = al; window.confirm = cf; }
@@ -9883,7 +9883,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/早于到达/.test(t(rows[1])), '日期没问题：没有小红字');
       /* 早于到达 */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.primary = ymdAdd(base, -1); });
-      krRenderCaseDetail(); body = document.getElementById('krcase-body'); ST.ok(/行程修正.*⚠️ 施术日期早于到达/.test(t(body.children[1])) && !/才到达/.test(t(body.children[1])), '施术日期早于到达：［行程修正］后面小红字，不放长句');
+      krRenderCaseDetail(); body = document.getElementById('krcase-body'); ST.ok(/行程修正.*⚠️ 施术日期 \S+ 不在行程内，等 IN 重新预约/.test(t(body.children[1])) && !/才到达/.test(t(body.children[1])), '施术日期不在行程内（CMD-1109-04：改用「需重新预约」的判断）：［行程修正］后面小红字，不放长句');
       /* 预估 / 没填 */
       Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krSchedule.tripState = 'tentative'; cc.krSchedule.primary = ymdAdd(base, 2); });
       krRenderCaseDetail(); body = document.getElementById('krcase-body'); ST.ok(/^在韩行程（预估）：/.test(t(body.children[1]).trim()), '行程预估：在韩行程（预估）：…');
@@ -10138,6 +10138,45 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var m61 = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===61; })[0]; ST.ok(!!m61, '有迁移 61');
     if(m61){ m61.fn(g, {note:function(){}}); ST.ok(!heldSurgItems(g).length && !tripWaitItems(g).length && g.depositDue && g.noShowDue && g.noShowDue.status==='pending', '迁移后：持有 → 等 IN 退定金 / 置换，等三选一（无原因）→ 无故不做项目'); }
   });
+  ST.def('R259a','CMD-1109-04（A1 分页，stageC 夹具）：行程和施术日期互相检查——行程变动碰到施术日期可存（提醒）、施术日期变红 + 需重新预约 + KR 通知 / 待办 + 院长日程释放、重新约后红字消失；施术变动选行程外的日子红字 + ［行程变动］送不出；天数不够只黄字；按钮叫［行程变动］',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.toConfirmed('R259a'); var ks = c.krSchedule, d0 = ks.confirmedDate, hid = caseKrHospital(c);
+    var oldConfirm = window.confirm, asked = ''; window.confirm = function(m){ asked = m; return true; };
+    try{
+      c.tripConfirm = c.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; ks.tripState = 'booked';
+      var okS = coreSetStay(c, ymdAdd(d0, -3), ymdAdd(d0, 6), 'A1', {ex:{inTime:'10:00', outTime:'12:00'}}); ST.ok(okS.ok && !ksRebookNeeded(c), '行程包着施术日期：不需要重新预约');
+      var blocks = function(){ return ((HOSPITAL_DATA[hid].directorSchedule||{})[c.director]||[]).filter(function(b){ return b.kind==='施术' && b.caseId===c.id; }).length; }; syncSurgeryBlock(c); var b0 = blocks(); ST.ok(b0===1, '前置：院长日程有这次施术块');
+      /* ① 行程变动（新行程不含施术日期） */
+      c.stay = null; ST.open(c); openStayModal(c.id); document.getElementById('stay-in').value = ymdAdd(d0, 2); document.getElementById('stay-out').value = ymdAdd(d0, 12); document.getElementById('stay-int').value = '09:00'; document.getElementById('stay-outt').value = '12:00';
+      var kn = 0; staySave();
+      ST.ok(/不在新行程内，存好后需要重新预约施术时间/.test(asked), '存之前提醒一句：'+asked);
+      var rb = ksRebookNeeded(c); ST.ok(!!rb && c.stay && c.stay.in===ymdAdd(d0, 2), '可以存，施术日期标红：'+(rb&&rb.msg));
+      var h = krProcedureTabMain(c, ''); ST.ok(/需重新预约/.test(h) && /不在新行程内/.test(h) && /请重新预约施术时间/.test(h), '日期那段：状态「需重新预约」+ 红字');
+      ST.ok(blocks()===0, '院长日程里的旧时段释放了');
+      ST.ok(ST.hasLog(c, /行程变动：施术日期 .* 不在新行程内/) && (HOSPITAL_DATA[hid].notifs||[]).some(function(n){ return /行程变动/.test(n.text||'') && (n.text||'').indexOf(c.caseNo)>-1; }), 'Timeline + KR 通知');
+      ST.ok(inTodoItems(c).some(function(x){ return x.kind==='rebooktrip'; }), 'IN 有待办');
+      ST.ok(!coreChangeConfirm(Object.assign(c, {}), d0, '10:00', '', 'KM1') || true, '（KR 不确认旧日期：下面检查）');
+      ks.status = 'pending'; ks.primary = d0; ks.backup = ''; window.KR_DENY_MSG = ''; var rc = coreScheduleConfirm(c, d0, '10:00', '', 'KM1'); ST.ok(rc===false && /客人/.test(window.KR_DENY_MSG||''), 'KR 确认旧日期被拒：'+(window.KR_DENY_MSG||'')); ks.status = 'confirmed'; ks.primary = ''; 
+      /* 施术变动 → 重新约 */
+      openM = null; svbOpen('time'); ST.ok(SVB && SVB.reasonT==='行程变动', '更改时间的理由自动带「行程变动」');
+      ks.svbPrimary = ymdAdd(d0, 5); var okDates = caseOpenDates(c).indexOf(ks.svbPrimary)>-1; if(!okDates){ var k = 5; while(k<60 && caseOpenDates(c).indexOf(ymdAdd(d0, k))<0) k++; ks.svbPrimary = ymdAdd(d0, k); }
+      ST.ok(!tripRedText(c, ks.svbPrimary), '新日期在行程内：'+ks.svbPrimary+' '+JSON.stringify(c.stay)); svbGo();
+      ST.ok(scheduleState(c)==='Changing' && !ksRebookNeeded(c), '重新约后：改期待确认，红字消失'); svbClose();
+      /* ② 施术变动选行程外的日子 */
+      var e = ST.toConfirmed('R259a2'); e.tripConfirm = e.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; e.krSchedule.tripState = 'booked'; var ed = e.krSchedule.confirmedDate; e.stay = {in:ymdAdd(ed, -3), out:ymdAdd(ed, 8), inTime:'10:00', outTime:'12:00'};
+      ST.open(e); svbOpen('time'); SVB.reasonT = '想晚一点'; var late = ymdAdd(ed, 12); var kk = 12; while(kk<80 && caseOpenDates(e).indexOf(ymdAdd(ed, kk))<0) kk++; late = ymdAdd(ed, kk);
+      e.krSchedule.svbPrimary = late; krScheduleSetYM(+late.slice(0,4), +late.slice(5,7)); renderCaseBody(e); var ovh = document.getElementById('svb-overlay').innerHTML; ST.ok(/在客人离境之后，请先修改行程/.test(ovh) && />行程变动</.test(ovh), '选离境之后：红字 +［行程变动］');
+      var cell = Array.prototype.filter.call(document.querySelectorAll('#svb-overlay div[onclick^="pickKrDate"]'), function(x){ return new RegExp('(^|\\D)'+(+late.slice(8))+'$').test(x.textContent.trim()); }); ST.ok(cell.length>0 && /pickKrDate/.test(cell[0].getAttribute('onclick')||''), '行程外的日子在日历里可以点');
+      svbGo(); ST.ok(SVB && /在客人离境之后/.test(SVB.err) && scheduleState(e)==='Confirmed', '送不出（状态没变）');
+      e.stay.out = ymdAdd(late, 3); SVB.err = ''; renderCaseBody(e); ST.ok(!/在客人离境之后/.test(document.getElementById('svb-overlay').innerHTML), '行程改好后红字消失'); svbGo(); ST.ok(scheduleState(e)==='Changing', '能送出');
+      var earlyD = ymdAdd(ed, -9); ST.ok(/在客人到达之前|在客人离境之后/.test(tripRedText(e, earlyD)) && /在客人到达之前/.test(tripRedText(e, ymdAdd(e.stay.in, -1))), '早于到达写「在客人到达之前」');
+      /* ③ 天数不够只黄字 */
+      var f = ST.toConfirmed('R259a3'); f.tripConfirm = f.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; f.krSchedule.tripState = 'booked'; var fd = f.krSchedule.confirmedDate; f.stay = {in:ymdAdd(fd, -2), out:fd, inTime:'10:00', outTime:'20:00'};
+      ST.ok(!tripRedText(f, fd) && !ksRebookNeeded(f), '天数不够（施术日 = 离境日）只黄字，不算碰到');
+      /* ④ 按钮名 */
+      var hh = krProcedureTabMain(f, ''); ST.ok(/>行程变动</.test(hh) && !/>'+'日程变动</.test(hh), '按钮叫［行程变动］');
+    } finally { window.confirm = oldConfirm; svbClose(); }
+  });
   ST.def('R258a','CMD-1109-03（A1 分页，stageC 夹具）：IN［施术变动］弹窗——更改时间（理由必填、首选必选）/ 取消施术（退款 + 置换可分两笔，加起来 = 已付）；置换额度记客人资料、下次抵印尼本地项目；按钮只剩［施术变动］',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var openM = function(c, pre){ ST.open(c); SVB = null; svbOpen(pre); return document.getElementById('svb-overlay'); };
@@ -10178,9 +10217,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R257a','CMD-1109-02（A1 分页，stageC 夹具）：赴韩日程卡五个按钮同尺寸；框里韩国时间为主 + 印尼时间小标签 + 地址英文（韩文）+ 字体和上下一样；医院设定韩文地址；「也在查看」提示很淡、不挡点击、靠近变清楚',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.toConfirmed('R257a'); var hid = c.hospitalId || clinicHospital(CURRENT_CLINIC_ID);
-    var ks = c.krSchedule; ks.address = hospitalEn(hid).address; c.stay = {in:ks.confirmedDate, inTime:'11:20', out:ymdAdd(ks.confirmedDate, 2), outTime:'12:30'};
+    var ks = c.krSchedule; ks.address = hospitalEn(hid).address; c.stay = {in:ymdAdd(ks.confirmedDate, -1), inTime:'11:20', out:ymdAdd(ks.confirmedDate, 2), outTime:'12:30'};
     ST.open(c); var host = document.createElement('div'); host.id = 'r257-host'; host.style.cssText = 'position:fixed;left:0;top:0;width:900px;opacity:0;z-index:-1;'; host.innerHTML = krProcedureTabMain(c, '<button class="btn-outline sd-btn" onclick="printKrPlan()">打印</button>'); document.body.appendChild(host);
-    var btns = {}; Array.prototype.forEach.call(host.querySelectorAll('button,a.btn-outline'), function(b){ var k = b.textContent.trim(); if(/^(打印|日程变动|施术变动|发送信息给客人)$/.test(k)) btns[k] = b; });
+    var btns = {}; Array.prototype.forEach.call(host.querySelectorAll('button,a.btn-outline'), function(b){ var k = b.textContent.trim(); if(/^(打印|行程变动|施术变动|发送信息给客人)$/.test(k)) btns[k] = b; });
     ST.ok(Object.keys(btns).length===4, '四个按钮都在（CMD-1109-03：修改施术日期 / 取消施术计划合成施术变动）：'+Object.keys(btns).join('、'));
     var sig = function(b){ var cs = getComputedStyle(b); return cs.fontSize+'|'+cs.paddingTop+'|'+cs.paddingLeft; }, sigs = Object.keys(btns).map(function(k){ return sig(btns[k]); });
     ST.ok(sigs.every(function(x){ return x===sigs[0]; }) && /^12px/.test(sigs[0]), '五个按钮同一个尺寸：'+sigs.join(' / '));
@@ -10202,14 +10241,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var el = document.elementFromPoint(r.left + r.width/2, r.top + r.height/2); ST.ok(!el || el.id!=='case-pres-bar', '提示下面的元素照样接得到点击（提示不接收鼠标）');
     } finally { window.presCaseKey = pk; window.presViewers = pv; presRender(); }
   });
-  ST.def('R256a','CMD-1109-01（A1 分页，stageC 夹具）：IN 赴韩日程卡（KR 已确认后）三段排版——标题 +［打印］｜行程 +［日程变动］｜施术日期 + 状态标签 + ［修改施术日期］［取消施术计划］；框里两行 +［发送信息给客人］；只一行离境日提醒；发送后按钮下小字「已发送 MM/DD HH:mm」',function(){
+  ST.def('R256a','CMD-1109-01（A1 分页，stageC 夹具）：IN 赴韩日程卡（KR 已确认后）三段排版——标题 +［打印］｜行程 +［行程变动］｜施术日期 + 状态标签 + ［修改施术日期］［取消施术计划］；框里两行 +［发送信息给客人］；只一行离境日提醒；发送后按钮下小字「已发送 MM/DD HH:mm」',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = ST.toConfirmed('R256a'); ST.ok(scheduleState(c)==='Confirmed', '前置：施术时间已确认');
-    var ks = c.krSchedule; c.stay = {in:ks.confirmedDate, inTime:'11:20', out:ymdAdd(ks.confirmedDate, 2), outTime:'12:30'}; c.tripConfirm = c.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']};
+    var ks = c.krSchedule; c.stay = {in:ymdAdd(ks.confirmedDate, -1), inTime:'11:20', out:ymdAdd(ks.confirmedDate, 2), outTime:'12:30'}; c.tripConfirm = c.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']};
     ST.open(c); c.activeCaseTab = 'kr'; var h = krProcedureTabMain(c, ''), t = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     var iT = t.indexOf('赴韩日程'), iS = t.indexOf('行程 '), iD = t.indexOf('到达日'), iL = t.indexOf('离境日'), iA = t.indexOf('施术日期 已确认');
     ST.ok(iT>-1 && iS>iT && iD>iS && iL>iD && iA>iL, '三段顺序：赴韩日程 → 行程（到达日 / 离境日）→ 施术日期 已确认：'+t.slice(0,160));
-    ST.ok(/日程变动/.test(h) && !/>修改</.test(h), '［日程变动］在行程那行，标题行没有［修改］');
+    ST.ok(/行程变动/.test(h) && !/>修改</.test(h), '［行程变动］在行程那行，标题行没有［修改］');
     ST.ok(/>施术变动</.test(h) && !/>修改施术日期</.test(h) && !/>取消施术计划</.test(h) && !/>修改日期</.test(h) && !/>取消项目</.test(h), 'CMD-1109-03：按钮只剩［施术变动］');
     ST.ok(/施术日期 \d{4}-\d\d-\d\d \d\d:\d\d（韩国时间）\s*印尼时间 (\d\d-\d\d )?\d\d:\d\d/.test(t) && /地址：/.test(t) && /发送信息给客人/.test(h), '框里：施术日期 + 韩国时间 + 印尼时间小标签 + 地址 + ［发送信息给客人］（CMD-1109-02）');
     ST.ok(!/施术时间已确认 /.test(t) && !/均由 KR 端操作/.test(t) && !/✓ 已发送/.test(t), '拿掉绿字行 / 说明 / 框右边的已发送');

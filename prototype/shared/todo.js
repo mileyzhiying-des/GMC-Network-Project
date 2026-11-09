@@ -17,10 +17,10 @@ function todoIsKr(){ try{ return isKrAccount(); }catch(e){ return false; } }
 /* ---------------- 待办条目 ----------------
    it = {kind, text, name, no, due('YYYY-MM-DD' 或 'YYYY-MM-DD HH:mm'，页面时区), over, pin, mine, go()} */
 /* CMD-1014-02：4 张卡 = 待办 4 类。每条待办恰好属于一类（待办总数 = 4 类加总，卡片数字 = 点下去筛出的条数） */
-var TODO_CAT = {depositdue:'todo', noshowdue:'todo', krrefund:'todo', heldsurg:'todo', tripdecide:'todo', dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', reconfirm:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
+var TODO_CAT = {rebooktrip:'todo', depositdue:'todo', noshowdue:'todo', krrefund:'todo', heldsurg:'todo', tripdecide:'todo', dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', reconfirm:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'dconsult', recover:'drecover', recoverwait:'drecover', dsurg:'dsurg', dirop:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
 /* CMD-1015-05 九：第一栏「阶段｜待办事项」——阶段读案件的阶段（同案件列表），没有案件的按类型 */
-var TODO_STAGE_BY_KIND = {depositdue:'赴韩施术', noshowdue:'赴韩施术', krrefund:'赴韩施术', heldsurg:'赴韩施术', tripdecide:'赴韩施术', tripend:'术后管理', tripover:'术后管理', earlyask:'术后管理', rebookwait:'赴韩施术', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
+var TODO_STAGE_BY_KIND = {rebooktrip:'赴韩施术', depositdue:'赴韩施术', noshowdue:'赴韩施术', krrefund:'赴韩施术', heldsurg:'赴韩施术', tripdecide:'赴韩施术', tripend:'术后管理', tripover:'术后管理', earlyask:'术后管理', rebookwait:'赴韩施术', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
 function todoStageOf(kind, c){ if(c && isRevEval(c) && ['eta','waitdir','send','recover','recoverwait'].indexOf(kind)>-1) return '待评估'; /* CMD-1022-07：复诊评估的待办标「待评估」 */ if(TODO_STAGE_BY_KIND[kind]) return TODO_STAGE_BY_KIND[kind]; try{ if(c) return caseStageInfo(c).stage || ''; }catch(e){} return ''; }
 /* 红点：新进来的待办亮红点，打开那个案件后灭（每个账号各自记；第一次打开先把现有的都当已看过） */
 function todoSeenKey(){ var id = ''; try{ id = currentAccountId() || ''; }catch(e){} return 'gmc_cfg_todoseen_'+id; }
@@ -67,6 +67,7 @@ function inTodoItems(){
     }
     /* CMD-1106-22（5-18）：项目有变动 / 行程结束没做（有原因）→ 印尼退定金（退款 / 置换二选一）；没来 = 无故不做项目，IN 室长决定退 / 不退。处理完之前案件不结案，没有［已处理］按钮 */
     if(!c.mainId){
+      var rbT = ksRebookNeeded(c); if(rbT){ var t0 = todoMk('rebooktrip', '施术日期 '+stayMD(rbT.date)+' 不在新行程内：请重新预约施术时间（［施术变动］→ 更改时间）', c, '', false, function(){ openCaseDetail(c.id, false, {tab:'kr'}); }); t0.mine = todoInMine(c); out.push(t0); } /* CMD-1109-04 */
       var ddT = depositDueOf(c); if(ddT){ var t1 = todoMk('depositdue', '退定金 '+formatCurrency(ddT.amount,'KRW')+' · '+(c.caseNo||'')+'（退款 / 置换印尼项目二选一）', c, '', false, function(){ openDepositDue(c.id); }); t1.mine = todoInMine(c); out.push(t1); }
       var nsT = noShowDueOf(c); if(nsT){ var t2 = todoMk('noshowdue', '无故不做项目 · '+(c.caseNo||'')+'：定金 '+formatCurrency(nsT.dep,'KRW')+' 退 / 不退，请 IN 室长决定（原因必填）', c, '', false, function(){ openNoShowDue(c.id); }); t2.mine = todoInMine(c); out.push(t2); }
     }
@@ -184,6 +185,7 @@ function krTodoItems(rows){
     /* CMD-1021-16：每天早上问「韩国行程是否结束？」（到院都做完、没有未来预约；暂不结束 → 第二天再问；离境日过了照样问） */
     if(work && tripAskDue(c)) push(todoMk('tripend', '韩国行程是否结束？（离开日期没填）', c, tripLastVisitDay(c), false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); setTimeout(function(){ try{ krStayFixOpen(); }catch(e){} }, 250); })); /* CMD-1027-04 一：离开日期没填才问，点了打开［行程修正］弹窗 */
     if(work && c.krRefundDue && c.krRefundDue.status==='pending') push(todoMk('krrefund', '韩国退款（尾款）：'+c.krRefundDue.why+'（韩国收的尾款里可退 '+formatCurrency(c.krRefundDue.amount,'KRW')+'）', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'settle'}); setTimeout(function(){ try{ krRefundOpen(); }catch(e){} }, 250); })); /* CMD-1106-22：谁收的谁退 */
+    if(work && !c.visitClosed && !c.krVisit && ksRebookNeeded(c)){ var rbK = ksRebookNeeded(c); push(todoMk('rebooktrip', '行程变动：施术日期 '+stayMD(rbK.date)+' 不在新行程内，等 IN 重新预约（旧日期不能确认）', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); })); } /* CMD-1109-04 */
     if(work && !c.visitClosed && !c.krVisit){
       var rws = rebookWaitItems(c); /* CMD-1103-02：离院时没做的施术 → 待重新预约 */
       if(rws.length) push(todoMk('rebookwait', '待重新预约：'+rws.map(function(it){ return it.name; }).join('、')+'（客人离院时没做，需重新排日期；IN 可帮忙占位）', c, '', false, function(){ krShowCase(r.clinicId, r.id, {tab:'items'}); }));

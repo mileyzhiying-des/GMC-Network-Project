@@ -2491,6 +2491,7 @@ function submitKrScheduleDate(){
   var c = getCurrentCase(); if(!c) return;
   var ks = ensureKrScheduleDraft(c);
   if(!ks.primary){ alert('至少选择首选日期'); return; }
+  var rtS = tripRedText(c, ks.primary) || tripRedText(c, ks.backup||''); if(rtS){ alert(rtS); return; } /* CMD-1109-04：选到行程外的日子，送不出（红字 + ［行程变动］） */
   /* CMD-1106-18：行程直接在卡片上填（选「已定」才有到达 / 离开，日期、时间必填；「暂定」不填日期）；不再弹「确认行程」窗口 */
   var te = tripDraftCheck(c, ks); if(te){ ks.tripErr = te; renderCaseBody(c); if(!ks.tripState) alert(te); return; }
   if(ks.tripState==='booked'){
@@ -2512,6 +2513,7 @@ function submitKrScheduleDate(){
 function submitKrScheduleChangeDate(){
   var c = getCurrentCase(); if(!c || !c.krSchedule || c.krSchedule.status!=='change_pending') return;
   if(!c.krSchedule.changePrimary){ alert('至少选择新的首选日期'); return; }
+  var rtC = tripRedText(c, c.krSchedule.changePrimary) || tripRedText(c, c.krSchedule.changeBackup||''); if(rtC){ alert(rtC); return; }
   c.krSchedule.changeSubmitted = true;
   logCaseEvent(c, ME_NAME, '提交新施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'），等待KR 室长确认');
   try{ pushKrNotif(caseKrHospital(c), '改期待确认：'+c.name+'（'+(c.caseNo||'')+'）提交了新的施术日期（首选 '+c.krSchedule.changePrimary+(c.krSchedule.changeBackup?'，备选 '+c.krSchedule.changeBackup:'')+'）', {to:'coord', caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, level:'action'}); }catch(e){}

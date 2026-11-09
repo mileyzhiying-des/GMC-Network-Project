@@ -1306,7 +1306,7 @@ function krTimeOptionsFor(sel, c, date){
   for(var m = 6*60; m <= 23*60+30; m += 30){
     var tt = minToTime(m), er = date ? krSurgerySlotError(hid, c.director, date, tt, dur, key, {allowOffHours:true}) : '';
     var tI = date ? tripDateIssue(c, date, tt) : null, why = '';
-    if(tI && !tI.soft && tI.kind!=='short') why = tI.kind==='early' ? '早于到达' : '早于到达时间'; else if(er) why = krTimeShortWhy(er);
+    if(tI && !tI.soft && tI.kind!=='short') why = tI.kind==='early' ? '早于到达' : (tI.kind==='late' ? '晚于离境' : '早于到达时间'); else if(er) why = krTimeShortWhy(er);
     var isSel = tt===sel;
     o += '<option value="'+tt+'"'+(isSel ? ' selected' : '')+(why ? ' disabled' : '')+'>'+tt+(why && !isSel ? '（'+why+'）' : '')+'</option>';
   }
@@ -4972,7 +4972,7 @@ function krTripRowHtml(c){
   var has = !!stayText(c), need = c.settlementDone && !c.krVisit;
   if(!has && !need) return '';
   var est = tripStateOf(c)==='tentative', lab = est ? '在韩行程（预估）' : '在韩行程';
-  var bad = ''; try{ var hard = tripMismatchList(c).filter(function(x){ return !x.soft && x.kind!=='short'; })[0]; if(hard) bad = hard.kind==='time' ? '⚠️ 到院时间早于到达时间' : '⚠️ 施术日期早于到达'; }catch(e){}
+  var bad = ''; try{ var rbk = ksRebookNeeded(c); if(rbk) bad = '⚠️ 施术日期 '+stayMD(rbk.date)+' 不在行程内，等 IN 重新预约'; else { var hard = tripMismatchList(c).filter(function(x){ return !x.soft && x.kind!=='short'; })[0]; if(hard) bad = hard.kind==='time' ? '⚠️ 到院时间早于到达时间' : (hard.kind==='late' ? '⚠️ 施术日期晚于离境日' : '⚠️ 施术日期早于到达'); } }catch(e){} /* CMD-1109-04：也用「需重新预约」的判断 */
   var sus = staySuspect(c);
   return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-8px 0 0;font-size:13px;">'+
     (has ? '<b style="color:var(--slate2);"'+(stayAirportTip(c) ? ' title="'+krEsc(stayAirportTip(c))+'"' : '')+'>'+lab+'：'+krEsc(stayText(c))+'</b>' : '<b style="color:var(--muted);">'+lab+'：未定</b>')+
