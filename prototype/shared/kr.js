@@ -1095,14 +1095,15 @@ function krUnitUseNow(name, qty){
 /* Step 4：勾选今日进行项目；"今日进行项目"纵向列出已勾项、"已勾选：N 个项目"、只有［今日进行］（CMD-1015-27） */
 var KR_PICK = {}, KR_PICK_BACK = false;
 function krTpToggle(kind, name, on){ if(on) KR_PICK[kind+':'+name] = true; else delete KR_PICK[kind+':'+name]; krRenderCaseDetail(); }
-function krTodayPickBar(c){ /* CMD-1109-12：不再是独立的「今日进行项目」卡——汇总放在项目卡底部（krProjCards pickMode），两个分页勾的项目都写出名字，名字后面 × 取消勾选 */
-  var keys = Object.keys(KR_PICK), n = keys.length, can = krCan(); /* CMD-1109-13：到院进行中汇总区一直显示；没勾 = 「今日进行（0）」+ 居中灰字提示 + 按钮灰掉 */
-  var q = function(x){ return String(x).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
-  var mk = function(kind){ return keys.filter(function(x){ return x.indexOf(kind+':')===0; }).map(function(x){ var nm0 = x.replace(/^(surg|mg):/,''), it0 = kind==='mg' ? itemByKey(c, nm0, function(y){ return y.heldOver && !y.holdDone; }) : null;
-    return '<span style="white-space:nowrap;">'+krEsc(buyName(it0 ? it0.name : nm0))+(it0 ? krQtyStepper(c, it0)+krEarlyHint(c, it0) : '')+(can ? ' <a href="#" title="取消勾选" style="text-decoration:none;color:var(--muted);font-weight:700;" onclick="krTpToggle(\''+kind+'\',\''+krEsc(q(nm0))+'\',false);return false;">×</a>' : '')+'</span>'; }).join('、'); };
-  var sg = mk('surg'), mg = mk('mg');
+function krTodayPickBar(c){ /* CMD-1109-14（取代 1109-12 / 13 的排法）：标题「今日进行项目（N）」+ 同一行最右［今日进行］；一项一行，前面标【施术项目】/【管理项目】（施术在前），没有 ×；
+   「建议 MM/DD 起，今天提前使用」放在那一项下一行、灰色小字加括号、和名字对齐；没勾 = 标题（0）+ 居中灰字提示 + 按钮灰掉（CMD-1109-13） */
+  var keys = Object.keys(KR_PICK), n = keys.length, can = krCan();
+  var row = function(kind, x){ var nm0 = x.replace(/^(surg|mg):/,''), it0 = kind==='mg' ? itemByKey(c, nm0, function(y){ return y.heldOver && !y.holdDone; }) : null;
+    var hint = it0 ? String(krEarlyHint(c, it0)||'').replace(/>(建议[^<]*)</, '>（$1）<') : '';
+    return '<div style="display:flex;gap:8px;align-items:flex-start;line-height:1.7;"><span style="flex:0 0 auto;white-space:nowrap;color:var(--slate2);">'+(kind==='surg' ? '【施术项目】' : '【管理项目】')+'</span><span style="flex:1;min-width:0;">'+krEsc(buyName(it0 ? it0.name : nm0))+(it0 ? krQtyStepper(c, it0) : '')+hint+'</span></div>'; };
+  var list = keys.filter(function(x){ return x.indexOf('surg:')===0; }).map(function(x){ return row('surg', x); }).concat(keys.filter(function(x){ return x.indexOf('mg:')===0; }).map(function(x){ return row('mg', x); })).join('');
   var btn = can ? '<button class="btn-primary sd-btn"'+(n ? '' : ' disabled style="opacity:.45;cursor:not-allowed;" title="请先勾选今日进行项目"')+' onclick="krPickGo()">今日进行</button>' : '';
-  return '<div class="kr-today-sum" style="border-top:1px solid var(--border2);margin-top:12px;padding-top:10px;"><div style="display:flex;align-items:center;gap:12px;"><div style="flex:1;font-weight:700;font-size:13px;">今日进行（'+n+'）</div>'+btn+'</div>'+(n ? '<div style="font-size:13px;line-height:1.9;">'+(sg ? '<div>施术：'+sg+'</div>' : '')+(mg ? '<div>管理：'+mg+'</div>' : '')+'</div>' : '<div style="text-align:center;font-size:13px;color:var(--muted);padding:6px 0 2px;">请勾选今日进行项目</div>')+'</div>';
+  return '<div class="kr-today-sum" style="border-top:1px solid var(--border2);margin-top:12px;padding-top:10px;"><div style="display:flex;align-items:center;gap:12px;"><div style="flex:1;font-weight:700;font-size:13px;">今日进行项目（'+n+'）</div>'+btn+'</div>'+(n ? '<div style="font-size:13px;margin-top:4px;">'+list+'</div>' : '<div style="text-align:center;font-size:13px;color:var(--muted);padding:6px 0 2px;">请勾选今日进行项目</div>')+'</div>';
 }
 function krPickGo(){
   if(!krCan()) return; var surg = [], mg = []; Object.keys(KR_PICK).forEach(function(x){ var m = /^(surg|mg):(.*)$/.exec(x); if(m){ (m[1]==='surg' ? surg : mg).push(m[2]); } });

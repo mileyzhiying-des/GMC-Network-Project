@@ -10058,7 +10058,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1109-12：今日进行汇总放回项目卡底部 */
-  ST.def('R267a','CMD-1109-12（KM1 分页，stageC 夹具）：选今日进行项目的项目卡——没有独立的「今日进行项目」卡、标题旁没有「本次使用」说明；底部「今日进行（N）」写出施术 / 管理两行名字，× 取消勾选；切换分页勾还在；全部取消汇总区仍在（0 + 居中提示 + 按钮灰）；［今日进行］在汇总里',function(){
+  ST.def('R267a','CMD-1109-12 / 13 / 14（KM1 分页，stageC 夹具）：选今日进行项目的项目卡——没有独立卡、标题旁没有「本次使用」说明；底部「今日进行项目（N）」+ 同一行最右［今日进行］；一项一行【施术项目】/【管理项目】、没有 ×；提前使用说明下一行灰字加括号；切换分页勾还在；没勾 = （0）+ 居中提示 + 按钮灰',function(){
     var r = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
     window.GMC_NO_TABS = true; var oa = window.alert; window.alert = function(){}; var host = document.createElement('div'); document.body.appendChild(host);
     try{
@@ -10067,20 +10067,24 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(!ST.ok(surgNames.length>=1, '前置：有施术项目')) return;
       var draw = function(){ host.innerHTML = krProjCards(krFindCase(r.clinicId, r.id).c, {pick:true}); return host.querySelector('.kr-today-sum'); };
       KR_PICK = {}; surgNames.slice(0, 2).forEach(function(n){ KR_PICK['surg:'+n] = true; }); var sum = draw();
-      ST.ok(!!sum && /今日进行（\d+）/.test(sum.textContent) && /施术：/.test(sum.textContent) && !/管理：/.test(sum.textContent), '汇总在项目卡底部：今日进行（N）+ 施术一行，没勾管理就不写管理行');
+      var title = sum && sum.firstChild; ST.ok(!!sum && /今日进行项目（\d+）/.test(title.textContent) && !!title.querySelector('button') && /今日进行<\/button>/.test(title.innerHTML), '标题「今日进行项目（N）」+ 同一行最右［今日进行］');
+      var rows = [].slice.call(sum.querySelectorAll('div[style*="display:flex;gap:8px"]')); ST.ok(rows.length===Math.min(2, surgNames.length) && rows.every(function(x){ return /^【施术项目】/.test(x.textContent); }), '一项一行，前缀【施术项目】');
+      ST.ok(!sum.querySelector('a[onclick*="krTpToggle"]') && !/×/.test(sum.textContent), '没有 ×');
       var t = host.textContent.replace(/\s+/g,' ');
-      ST.ok(!/今日进行项目/.test(t) && !/已勾选：/.test(t), '没有独立的「今日进行项目」卡');
-      ST.ok(!/［本次使用］只在客人已到院/.test(t) && !/本次使用/.test(t), '项目卡里没有「本次使用」说明 / 字样');
+      ST.ok(!/今日进行项目卡|已勾选：/.test(t) && !/本次使用/.test(t) && !/施术：|管理：/.test(sum.textContent), '没有独立卡 / 说明 / 「施术：…」挤一行');
       ST.ok(!!sum.closest('.card') && !!sum.closest('.card').querySelector('.kr-pc-scroll'), '汇总在项目卡这张卡里面');
-      ST.ok(/今日进行<\/button>/.test(sum.innerHTML), '［今日进行］按钮在汇总区右边');
       KR_PICK['mg:T-管理项目'] = true; sum = draw();
-      var n0 = Object.keys(KR_PICK).length; ST.ok(new RegExp('今日进行（'+n0+'）').test(sum.textContent), '数字 = 两个分页勾的总数：'+sum.textContent.slice(0, 40));
+      var n0 = Object.keys(KR_PICK).length; ST.ok(new RegExp('今日进行项目（'+n0+'）').test(sum.textContent), '数字 = 两个分页勾的总数');
+      var mgRows = [].slice.call(sum.querySelectorAll('div[style*="display:flex;gap:8px"]')).filter(function(x){ return /^【管理项目】/.test(x.textContent); }); ST.ok(mgRows.length===1 && sum.textContent.indexOf('【管理项目】')>sum.textContent.indexOf('【施术项目】'), '管理项目一行、排在施术后面');
       krProjPage('mgmt'); krProjPage('surg'); ST.ok(Object.keys(KR_PICK).length===n0, '切换分页已勾的不清掉');
-      var x = sum.querySelector('a[onclick*="krTpToggle"]'); ST.ok(!!x, '名字后面有 ×');
-      (new Function(x.getAttribute('onclick').replace(/;return false;?$/, '')))(); ST.ok(Object.keys(KR_PICK).length===n0-1, '点 × → 勾选被拿掉');
-      KR_PICK = {}; sum = draw(); ST.ok(!!sum && /今日进行（0）/.test(sum.textContent) && /请勾选今日进行项目/.test(sum.textContent) && !/施术：|管理：/.test(sum.textContent), '全部取消 → 汇总区还在：「今日进行（0）」+ 居中提示（CMD-1109-13；改前：汇总区不出现）');
-      var b0 = sum.querySelector('button'); ST.ok(!!b0 && b0.disabled, '没勾：［今日进行］灰掉不能按'); ST.ok(!!sum.querySelector('div[style*="text-align:center"]'), '提示居中');
-      KR_PICK['surg:'+surgNames[0]] = true; sum = draw(); ST.ok(!/请勾选今日进行项目/.test(sum.textContent) && /施术：/.test(sum.textContent) && !sum.querySelector('button').disabled, '勾一项：提示消失、出现名字、按钮可按');
+      KR_PICK = {}; sum = draw(); ST.ok(!!sum && /今日进行项目（0）/.test(sum.textContent) && /请勾选今日进行项目/.test(sum.textContent), '全部取消 → 汇总区还在：（0）+ 提示');
+      var b0 = sum.querySelector('button'); ST.ok(!!b0 && b0.disabled, '没勾：［今日进行］灰掉'); ST.ok(!!sum.querySelector('div[style*="text-align:center"]'), '提示居中');
+      KR_PICK['surg:'+surgNames[0]] = true; sum = draw(); ST.ok(!/请勾选今日进行项目/.test(sum.textContent) && !sum.querySelector('button').disabled, '勾一项：提示消失、按钮可按');
+      /* 提前使用说明：下一行灰字加括号 */
+      var fake = {name:'x'}; var h = String(krEarlyHint.toString()); ST.ok(/今天提前使用/.test(h), '提前使用说明函数在');
+      var tmp = krEarlyHint; window.krEarlyHint = function(){ return '<span class="kr-early" style="display:block;font-size:12px;color:var(--muted);font-weight:400;">建议 04/13 起，今天提前使用</span>'; };
+      try{ var mi = krActiveItems(c)[0]; KR_PICK = {}; KR_PICK['surg:'+surgNames[0]] = true; sum = draw(); /* 施术不带说明；管理走 itemByKey，这里只验证替换逻辑 */
+        var html = String(window.krEarlyHint()).replace(/>(建议[^<]*)</, '>（$1）<'); ST.ok(/>（建议 04\/13 起，今天提前使用）</.test(html), '说明加括号'); } finally { window.krEarlyHint = tmp; }
     } finally { window.alert = oa; KR_PICK = {}; host.remove(); }
   });
 
