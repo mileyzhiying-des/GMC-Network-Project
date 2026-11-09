@@ -6211,12 +6211,12 @@ function krCbEarliest(c){
 }
 function krCbMgItems(c, opts){ /* 默认只给没保留的次数；opts.all = 全部；opts.kept = 只给保留的次数（CMD-1028-10） */
   var raw = (c.procedureItems||[]).filter(function(it){ return it.origin==='KR' && krIsMgmtItemC(it) && !it.cancelled && !it.swapped && it.heldOver && !it.holdDone && !it.pendingPay && holdItemBookable(c, it) > 0; }).map(function(it){
-    return {name:it.name, iid:itemIid(it), max:holdItemBookable(c, it), iv:((it.qty||1)>1 ? (it.interval||1) : 0), sugs:(function(){ var o = [], nth0 = (it.holdUsed||0)+holdItemPlanned(c, it)+holdItemTodayPicked(c, it); for(var k = 0; k < holdItemBookable(c, it); k++){ var sg = krMgSuggest(c, it, nth0+k); o.push(sg ? '20'+sg : ''); } return o; })()};
+    return {name:it.name, iid:itemIid(it), max:holdItemBookable(c, it), total:(it.qty||1), sched:mgSugText(it), nth0:(it.holdUsed||0)+holdItemPlanned(c, it)+holdItemTodayPicked(c, it), iv:((it.qty||1)>1 ? (it.interval||1) : 0), sugs:(function(){ var o = [], nth0 = (it.holdUsed||0)+holdItemPlanned(c, it)+holdItemTodayPicked(c, it); for(var k = 0; k < holdItemBookable(c, it); k++){ var sg = krMgSuggest(c, it, nth0+k); o.push(sg ? '20'+sg : ''); } return o; })()};
   });
   if(opts && opts.all) return raw;
   var out = [];
   raw.forEach(function(m){ var kn = Math.min(stayKeepN(c, 'mg|'+m.iid), m.max), n = (opts && opts.kept) ? kn : m.max-kn; if(n<=0) return;
-    out.push(Object.assign({}, m, {max:n, sugs:(opts && opts.kept) ? m.sugs.slice(m.max-kn) : m.sugs.slice(0, n)})); });
+    out.push(Object.assign({}, m, {max:n, nth0:(opts && opts.kept) ? m.nth0+(m.max-kn) : m.nth0, sugs:(opts && opts.kept) ? m.sugs.slice(m.max-kn) : m.sugs.slice(0, n)})); });
   return out;
 }
 
@@ -12683,7 +12683,7 @@ function stayConflictInfo(c, outD, outT){
     try{ var cnt = {}; careSlotList(c).forEach(function(sl){ if(sl.x.place==='IN') return; if(!atOut(sl.sug)) return; var n0 = cnt[sl.item+'|'+sl.i] = (cnt[sl.item+'|'+sl.i]||0)+1;
       unb.push({id:'u|care|'+sl.item+'|'+sl.i+'|'+n0, vkind:'care', item:sl.item, i:sl.i, reuse:sl.reuse||'', name:sl.x.name||sl.x.mgmt||'', surg:buyName(sl.item), type:'术后管理', date:sl.sug||'', time:'', unbooked:true, canIn:sl.x.place==='either'}); }); }catch(e){ console.error(e); }
     try{ krCbMgItems(c).forEach(function(m){ var it = itemByKey(c, m.iid||m.name) || {}; if(it.iid && pickedMgmt(c, it)) return;
-      m.sugs.forEach(function(sg, n0){ if(!atOut(sg)) return; unb.push({id:'u|mg|'+m.iid+'|'+n0, vkind:'mg', iid:m.iid, name:buyName(m.name)+(m.sugs.length>1 ? '（第 '+(n0+1)+' 次）' : ''), surg:'', type:'管理项目', date:sg, time:'', unbooked:true, canIn:false}); }); }); }catch(e){ console.error(e); }
+      m.sugs.forEach(function(sg, n0){ if(!atOut(sg)) return; unb.push({id:'u|mg|'+m.iid+'|'+n0, vkind:'mg', iid:m.iid, name:buyName(m.name)+(m.total>1 ? '（第 '+((m.nth0||0)+n0+1)+' 次）' : ''), surg:'', type:'管理项目', date:sg, time:'', unbooked:true, canIn:false}); }); }); }catch(e){ console.error(e); }
   }
   return booked.sort(function(a, b){ return (a.date+a.time).localeCompare(b.date+b.time); }).concat(unb.sort(function(a, b){ return (a.date||'9999').localeCompare(b.date||'9999'); }));
 }
