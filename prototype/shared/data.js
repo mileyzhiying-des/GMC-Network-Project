@@ -9795,8 +9795,8 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
   var mainT = function(it){ var d = itemSurgDate(c, it); if(!d) return '—'; var t = (d===ks0.confirmedDate) ? (ks0.confirmedTime||'') : ''; if(t){ try{ var cl = krToClinic(d, t); return md2(cl.date, cl.time); }catch(x){} } return md2(d, t); };
   var body = '';
   if(cur==='surg'){
-    var C1 = 'minmax(0,1fr) minmax(0,1.6fr) 56px minmax(0,1.2fr) 84px';
-    body = inSmallCard(hd(C1, ['预约时间','项目','次数','备注','来源'])+surgList.concat(surgDone).map(function(it){ return rw(C1, [mainT(it), nm(it)+krItemFlags(c, it).map(function(f){ return ' <span class="status-pill" style="background:#FBF0C9;color:#A8740A;font-size:12px;">⚠ '+f+'</span>'; }).join(''), (it.qty||1)+'', e(it.todayNote||it.itemNote||''), srcT(it)]); }).join(''));
+    var C1 = 'minmax(0,1fr) minmax(0,1.6fr) 56px minmax(0,1.2fr) 84px 84px';
+    body = inSmallCard(hd(C1, ['预约时间','项目','次数','备注','其他','来源'])+surgList.concat(surgDone).map(function(it){ return rw(C1, [mainT(it), nm(it)+krItemFlags(c, it).map(function(f){ return ' <span class="status-pill" style="background:#FBF0C9;color:#A8740A;font-size:12px;">⚠ '+f+'</span>'; }).join(''), (it.qty||1)+'', e(it.todayNote||it.itemNote||''), in19ViewLink(c, itemSurgDate(c, it)), srcT(it)]); }).join(''));
   } else if(cur==='care' && kind!=='mgmt'){
     body = care19.html;
   } else if(cur==='mg' && kind!=='mgmt'){
@@ -11284,7 +11284,7 @@ function localBatchSrc(b){ return b.comp ? '置换' : b.service ? '서비스' : 
 function inMgmtTabHtml(c){ /* CMD-1109-19 五：一级 card「在韩管理」（预约中 / 未预约 / 保留 / 已使用 四张二级 card）+ 一级 card「印尼本地管理」（持有中 / 已完成） */
   var e = in19Esc, md = function(d){ return e(String(d||'').slice(5, 10).replace('-', '/')); }, cards = [];
   var kr = mgmtFlowItems(c);
-  if(kr.length){ var r = inMgmtL2Cards(c, kr, true); if(r.html) cards.push('<div class="card" style="padding:18px 22px;"><div class="info-heading" style="margin-bottom:2px;">在韩管理</div>'+r.html+'</div>'); }
+  if(kr.length){ var r = inMgmtL2Cards(c, kr, true, true); if(r.html) cards.push('<div class="card" style="padding:18px 22px;"><div class="info-heading" style="margin-bottom:2px;">在韩管理</div>'+r.html+'</div>'); }
   var lb = []; try{ lb = localMgmtBatchesOf(c); }catch(er){}
   if(lb.length){
     var C2 = 'minmax(0,1.6fr) 110px 90px 90px', held = [], fin = [];
@@ -13371,8 +13371,8 @@ function inMgmtModel(c, items){
   items.forEach(function(it){
     if(it.cancelled) return;
     var left = holdItemLeft(c, it), bk = Math.max(0, holdItemBookable(c, it)), iid = itemIid(it);
-    (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).forEach(function(s){ out.booked.push({k:(s.date||'')+(s.time||''), it:it, n:Math.max(1, parseInt(s.useQty, 10)||1), at:in19When(s.date, s.time)}); });
-    var tp = holdItemTodayPicked(c, it); if(tp>0) out.booked.push({k:(mainVisitDay(c)||'')+(ks0.confirmedTime||''), it:it, n:tp, at:in19When(mainVisitDay(c), ks0.confirmedTime)});
+    (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).forEach(function(s){ out.booked.push({k:(s.date||'')+(s.time||''), it:it, n:Math.max(1, parseInt(s.useQty, 10)||1), at:in19When(s.date, s.time), date:s.date||''}); });
+    var tp = holdItemTodayPicked(c, it); if(tp>0) out.booked.push({k:(mainVisitDay(c)||'')+(ks0.confirmedTime||''), it:it, n:tp, at:in19When(mainVisitDay(c), ks0.confirmedTime), date:mainVisitDay(c)||''});
     var kn = it.heldOver ? Math.min(stayKeepN(c, 'mg|'+iid), bk) : 0, un = bk-kn;
     if(!it.heldOver || it.pendingPay){ if(left>0) out.unbooked.push({it:it, n:Math.max(1, un>0 ? un : left), st:it.pendingPay ? 'pay' : 'tail'}); }
     else if(un>0) out.unbooked.push({it:it, n:un, st:'open'});
@@ -13383,10 +13383,13 @@ function inMgmtModel(c, items){
   return out;
 }
 /* 预约中 / 未预约 / 保留 / 已使用 四张二级 card；withUsed = 要不要「已使用」（项目卡里不放）。返回 {html, n}（n = 预约中 + 未预约 + 保留的行数） */
-function inMgmtL2Cards(c, items, withUsed){
+function inMgmtL2Cards(c, items, withUsed, withOther){
   var M = inMgmtModel(c, items), G = 'minmax(0,1.6fr) 56px 84px minmax(0,1fr) 84px', GU = 'minmax(0,1.6fr) 56px 84px minmax(0,1fr)', nm = function(it){ return in19Esc(buyName(it.name))+(it.service ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">서비스</span>' : ''); }, html = '';
   var H = ['项目', '次数', '状态', '预约时间', '来源'];
-  if(M.booked.length) html += inL2('预约中', M.booked.length, '', in19Th(H, G)+M.booked.map(function(x){ return in19Tr([nm(x.it), x.n+' 次', in19Pill('预约中', '#E8EEF6', '#2F5F86'), x.at, in19Src(x.it)], G); }).join(''));
+  if(M.booked.length){
+    if(withOther){ var GO = 'minmax(0,1.6fr) 56px 84px minmax(0,1fr) 84px 84px'; html += inL2('预约中', M.booked.length, '', in19Th(['项目', '次数', '状态', '预约时间', '其他', '来源'], GO)+M.booked.map(function(x){ return in19Tr([nm(x.it), x.n+' 次', in19Pill('预约中', '#E8EEF6', '#2F5F86'), x.at, in19ViewLink(c, x.date), in19Src(x.it)], GO); }).join('')); }
+    else html += inL2('预约中', M.booked.length, '', in19Th(H, G)+M.booked.map(function(x){ return in19Tr([nm(x.it), x.n+' 次', in19Pill('预约中', '#E8EEF6', '#2F5F86'), x.at, in19Src(x.it)], G); }).join(''));
+  }
   if(M.unbooked.length) html += inL2('未预约', M.unbooked.length, '', in19Th(H, G)+M.unbooked.map(function(x){ var st = x.st==='pay' ? in19Pill('待付款', '#FDECEA', '#B3261E') : (x.st==='tail' ? in19Pill('待付尾款', '#FDECEA', '#B3261E') : in19Pill('未预约', '#EFEBE4', 'var(--slate2)')); return in19Tr([nm(x.it), x.n+' 次', st, '—', in19Src(x.it)], G); }).join(''));
   if(M.kept.length) html += inL2('保留', M.kept.length, '', in19Th(H, G)+M.kept.map(function(x){ return in19Tr([nm(x.it), x.n+' 次', in19Pill('保留', '#EFEBE4', 'var(--slate2)'), '—', in19Src(x.it)], G); }).join(''));
   if(withUsed && M.used.length) html += inL2('已使用', M.used.length, '', in19Th(['项目', '次数', '状态', '使用时间'], GU)+M.used.map(function(x){ return in19Tr([nm(x.it), x.n+' 次', in19Pill('已完成', 'var(--sage-bg)', 'var(--sage)'), x.at], GU); }).join(''));
@@ -13432,4 +13435,10 @@ function pcmInHtml(c, M){
     return '<div class="card" style="padding:18px 22px;"><div class="info-heading" style="margin-bottom:2px;">'+title+'</div>'+(body || '<div style="text-align:center;color:var(--muted);font-size:13px;padding:22px 0;">目前没有'+(inn ? '印尼' : '韩国')+'术后管理</div>')+'</div>';
   };
   return '<div style="display:flex;flex-direction:column;gap:12px;">'+side('KR', '术后管理 · 韩国')+side('IN', '术后管理 · 印尼')+'</div>';
+}
+
+/* CMD-1109-20：IN「查看案件」小链接（其他栏）——打开这个日期挂的韩国子案件；找不到就写「—」 */
+function in19ViewLink(c, date){
+  var m = mainOf(c) || c, v = date ? visitsOf(m).filter(function(x){ return x.date===date && x.place==='KR'; })[0] : null;
+  return v ? '<a href="#" onclick="openSubcase(\''+m.id+'\',\''+v.key+'\');return false;" style="font-size:12px;text-decoration:underline;white-space:nowrap;">查看案件</a>' : '<span style="color:var(--muted);">—</span>';
 }
