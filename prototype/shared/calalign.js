@@ -280,12 +280,12 @@ function surgSendHtml(c){
   var tag = '<span style="font-size:12px;color:var(--muted);">演示</span>', box = function(x){ return '<div style="text-align:right;max-width:340px;">'+x+'</div>'; };
   var md = function(t){ var f = fmtUtc(t); return f.length>=16 ? f.slice(5,10).replace('-','/')+' '+f.slice(11,16) : f; }; /* CMD-1109-01：已发送 MM/DD HH:mm */
   /* CMD-1109-10：KR 改了时间后框和第一次确认一样——新时间还没发送就是［发送信息给客人］（不写旧的「已发送」，不再有「请电话通知客人」+［已电话通知］） */
-  var small = '';
-  if(surgMsgSent(c)){ /* CMD-1109-01：发过之后按钮还在（可以再发），按钮下面小字写「已发送 MM/DD HH:mm」 */
+  /* CMD-1109-11：已发送时不再显示深色按钮——第一行「MM/DD HH:mm 已发送」（绿色小字），第二行下划线文字「再次发送」（走现有发送流程，发完时间更新）；还没发送（含改期确认后新时间还没发）→ 深色［发送信息给客人］ */
+  if(surgMsgSent(c)){
     var ph = c.surgPhone && c.surgPhone.key===surgMsgKey(c) ? c.surgPhone : null, m = surgMsgOfKey(c);
-    small = '<div style="font-size:12px;color:var(--sage);margin-top:4px;white-space:nowrap;">'+(ph ? '已电话通知 '+aEsc(md(ph.at)) : '已发送 '+aEsc(md(m.at)))+'</div>'+(ph && ph.note ? '<div style="font-size:12px;color:var(--muted);">备注：'+aEsc(ph.note)+'</div>' : '');
+    return box('<div style="font-size:12px;color:var(--sage);white-space:nowrap;">'+(ph ? aEsc(md(ph.at))+' 已电话通知' : aEsc(md(m.at))+' 已发送')+'</div>'+(ph && ph.note ? '<div style="font-size:12px;color:var(--muted);">备注：'+aEsc(ph.note)+'</div>' : '')+'<a href="#" style="font-size:12px;text-decoration:underline;color:var(--slate2);" onclick="openSurgMsg(\''+c.id+'\');return false;">再次发送</a>');
   }
-  return box('<button class="btn-primary sd-btn" onclick="openSurgMsg(\''+c.id+'\')">发送信息给客人</button> '+(surgMsgSent(c) ? '' : tag)+small);
+  return box('<button class="btn-primary sd-btn" onclick="openSurgMsg(\''+c.id+'\')">发送信息给客人</button> '+tag);
 }
 /* 当前这一版是用哪次发送通知的（施术日期通知 / 施术前提醒） */
 function surgMsgOfKey(c){ var k = surgMsgKey(c); return [c.surgeryMsg, c.reminderMsg].filter(function(m){ return m && m.key===k; }).sort(function(a, b){ return (b.at||'') > (a.at||'') ? 1 : -1; })[0] || {method:'—', at:''}; }
