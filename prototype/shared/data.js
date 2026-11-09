@@ -7481,7 +7481,7 @@ function krProcedureTabMain(c, tabsHtml){
   if(draftStay){ if(tripRadios || stayIn) tripTop = hrLine+tripRadios+hrLine; }
   else if(stayIn) tripTop = hrLine+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span class="info-heading" style="margin:0;flex:1;">行程</span>'+stayBtn+'</div>'+stayIn+hrLine;
   var subRow = ''; if(!draftStay){ subRow = subStatusRowHtml(caseSubStatusItems(c).filter(function(x){ return !/^(施术时间已确认|待确认施术时间|已到院$|施术时间变更待确认)/.test(x.text); })); } /* CMD-1109-01：拿掉「✓ 施术时间已确认…」绿字行（状态改放施术日期标题的标签） */
-  return '<div style="display:flex;flex-direction:column;gap:14px;"><div class="card" style="padding:22px 24px;position:relative;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-size:14px;font-weight:700;flex:1;">赴韩日程</div>'+(tabsHtml||'')+(draftStay ? stayBtn : '')+'</div>'+tripTop+subRow+body+'</div>'+recCard+
+  return '<div style="display:flex;flex-direction:column;gap:12px;"><div class="card" style="padding:22px 24px;position:relative;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-size:14px;font-weight:700;flex:1;">赴韩日程</div>'+(tabsHtml||'')+(draftStay ? stayBtn : '')+'</div>'+tripTop+subRow+body+'</div>'+recCard+
     inProjectCardHtml(c)+'</div>'; /* CMD-1025-04 B：施术日期 → 客人赴韩日程 → 项目卡；CMD-1020-09：三张大卡（项目卡 / 术后管理 / 管理项目），在韩持有项目大卡拿掉；备注框、结束术后管理都拿掉 */
 }
 
@@ -9781,8 +9781,9 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
     if(kn0>0) mgKept.push({it:it, bk:kn0, left:left0});
   });
   var mgShown = {}; mgBooked.concat(mgUnbooked, mgKept).forEach(function(x){ mgShown[itemIid(x.it)||x.it.name] = 1; });
-  var counts = (kind==='mgmt') ? {mg:Object.keys(mgShown).length} : {surg:surgList.length, done:surgDone.length}; /* CMD-1028-09：赴韩施术 tab 的项目卡只有施术 */
-  var cur = (kind==='mgmt') ? 'mg' : IN_PC_TAB[c.id]; if(kind!=='mgmt' && (!cur || !counts[cur])) cur = ['surg','done'].filter(function(k){ return counts[k]>0; })[0] || '';
+  var care19 = (kind==='mgmt') ? null : in19CareCardPage(c), mg19 = (kind==='mgmt') ? null : inMgmtL2Cards(c, mgList, false);
+  var counts = (kind==='mgmt') ? {mg:Object.keys(mgShown).length} : {surg:surgList.length+surgDone.length, care:care19.n, mg:mg19.n}; /* CMD-1109-19：三个分页 施术项目｜术后管理｜管理项目（施术做完的并进施术项目） */ /* CMD-1028-09：赴韩施术 tab 的项目卡只有施术 */
+  var cur = (kind==='mgmt') ? 'mg' : IN_PC_TAB[c.id]; if(kind!=='mgmt' && (!cur || !counts[cur])) cur = ['surg','care','mg'].filter(function(k){ return counts[k]>0; })[0] || '';
   var tabBtn = function(k, label){ var n = counts[k]; if(!n) return ''; var on = cur===k; return '<button onclick="inPcTab(\''+c.id+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;font-weight:700;cursor:pointer;">'+label+'（'+n+'）</button>'; };
   var G = function(cols){ return 'display:grid;grid-template-columns:'+cols+';gap:8px;align-items:center;'; };
   var hd = function(cols, names){ return '<div style="'+G(cols)+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+names.map(function(n){ return '<span>'+n+'</span>'; }).join('')+'</div>'; };
@@ -9795,7 +9796,11 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
   var body = '';
   if(cur==='surg'){
     var C1 = 'minmax(0,1fr) minmax(0,1.6fr) 56px minmax(0,1.2fr) 84px';
-    body = inSmallCard(hd(C1, ['预约时间','项目','次数','备注','来源'])+surgList.map(function(it){ return rw(C1, [mainT(it), nm(it)+krItemFlags(c, it).map(function(f){ return ' <span class="status-pill" style="background:#FBF0C9;color:#A8740A;font-size:12px;">⚠ '+f+'</span>'; }).join(''), (it.qty||1)+'', e(it.todayNote||it.itemNote||''), srcT(it)]); }).join(''));
+    body = inSmallCard(hd(C1, ['预约时间','项目','次数','备注','来源'])+surgList.concat(surgDone).map(function(it){ return rw(C1, [mainT(it), nm(it)+krItemFlags(c, it).map(function(f){ return ' <span class="status-pill" style="background:#FBF0C9;color:#A8740A;font-size:12px;">⚠ '+f+'</span>'; }).join(''), (it.qty||1)+'', e(it.todayNote||it.itemNote||''), srcT(it)]); }).join(''));
+  } else if(cur==='care' && kind!=='mgmt'){
+    body = care19.html;
+  } else if(cur==='mg' && kind!=='mgmt'){
+    body = mg19.html;
   } else if(cur==='mg'){
     var booked = mgBooked, unbooked = mgUnbooked;
     booked.sort(function(a, b){ return a.k < b.k ? -1 : 1; });
@@ -9815,7 +9820,7 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
     return card('<div class="info-heading" style="margin-bottom:4px;">在韩管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">管理项目只在韩国做，由 KR 预约（这里只读）；行程结束时没用完的转韩国持有</span></div>'+((body || doneM) ? body+doneM : '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有管理项目</div>'));
   }
   var c1 = card('<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">项目卡</div></div>'+
-    (cur ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+tabBtn('surg','施术项目')+tabBtn('done','已完成')+'</div><div class="kr-pc-scroll">'+body+'</div>' : '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有项目</div>'));
+    (cur ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+tabBtn('surg','施术项目')+tabBtn('care','术后管理')+tabBtn('mg','管理项目')+'</div><div>'+body+'</div>' : '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有项目</div>'));
   var cN = card(inNotesAreaHtml(c)); /* 备注独立成一张卡（CMD-1022-16） */
   return c1+cN;
 }
@@ -11276,45 +11281,26 @@ function hasMgmtFlow(c){ return mgmtFlowItems(c).length>0; }
 function localMgmtBatchesOf(m){ var ids = [m.id].concat(childVisitsOf(m).map(function(x){ return x.id; })); return localPurchasedBatchesOf(m, ids); }
 function hasLocalMgmt(m){ try{ return localMgmtBatchesOf(m).length>0; }catch(e){ return false; } }
 function localBatchSrc(b){ return b.comp ? '置换' : b.service ? '서비스' : (b.pkg || b.pkgPaid) ? '套餐' : b.promo ? '活动价' : '单品'; }
-function inMgmtTabHtml(c){
-  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, md = function(d){ return e(String(d||'').slice(5, 10).replace('-', '/')); };
-  var G = function(cols){ return 'display:grid;grid-template-columns:'+cols+';gap:8px;align-items:center;'; };
-  var hd = function(cols, names){ return '<div style="'+G(cols)+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+names.map(function(n){ return '<span>'+n+'</span>'; }).join('')+'</div>'; };
-  var rw = function(cols, cells){ return '<div style="'+G(cols)+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;">'+cells.map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; };
-  var pill = function(t, bg, fg){ return '<span class="status-pill" style="background:'+bg+';color:'+fg+';white-space:nowrap;">'+t+'</span>'; };
-  var out = '', kr = mgmtFlowItems(c);
-  if(kr.length){
-    var C1 = 'minmax(0,1.6fr) 96px 96px minmax(0,1.3fr) 84px', ks = c.krSchedule || {};
-    var rows = kr.map(function(it){
-      var total = it.qty||1, left = Math.max(0, holdItemLeft(c, it)), iid = itemIid(it);
-      var booked = (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
-      var times = booked.map(function(s){ return md(s.date)+(s.time ? ' '+e(s.time) : ''); });
-      if(holdItemTodayPicked(c, it)>0) times.unshift(md(mainVisitDay(c))+(ks.confirmedTime ? ' '+e(ks.confirmedTime) : ''));
-      var kept = it.heldOver ? Math.min(stayKeepN(c, 'mg|'+iid), Math.max(0, holdItemBookable(c, it))) : 0;
-      var st = it.pendingPay ? pill('待付款', '#FDECEA', '#B3261E') : (!it.heldOver ? pill('待付尾款', '#FDECEA', '#B3261E')
-        : (it.holdDone || left<=0) ? pill('已完成', 'var(--sage-bg)', 'var(--sage)')
-        : times.length ? pill('预约中', '#E8EEF6', '#2F5F86')
-        : kept>0 ? pill('保留', '#EFEBE4', 'var(--slate2)')
-        : c.krTripEnded ? pill('韩国持有', '#EFEBE4', 'var(--slate2)') : pill('在韩持有', '#E4EEE7', '#2F6B4A'));
-      var src = (it.krAddOn || it.preBalanceAdd) ? '在韩购买' : '印尼购买';
-      return rw(C1, [e(buyName(it.name))+(it.service ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">서비스</span>' : ''), '剩 '+left+' / 共 '+total+' 次', st, times.length ? times.join('、') : '<span style="color:var(--muted);">—</span>', src]);
-    }).join('');
-    out += '<div class="info-heading" style="margin:2px 0 4px;">在韩管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">管理项目只在韩国做，由 KR 预约（这里只读）；付定金起就列出来，付清尾款后 KR 才能约</span></div>'+inSmallCard(hd(C1, ['项目', '次数', '状态', '预约时间', '来源'])+rows);
-  }
+function inMgmtTabHtml(c){ /* CMD-1109-19 五：一级 card「在韩管理」（预约中 / 未预约 / 保留 / 已使用 四张二级 card）+ 一级 card「印尼本地管理」（持有中 / 已完成） */
+  var e = in19Esc, md = function(d){ return e(String(d||'').slice(5, 10).replace('-', '/')); }, cards = [];
+  var kr = mgmtFlowItems(c);
+  if(kr.length){ var r = inMgmtL2Cards(c, kr, true); if(r.html) cards.push('<div class="card" style="padding:18px 22px;"><div class="info-heading" style="margin-bottom:2px;">在韩管理</div>'+r.html+'</div>'); }
   var lb = []; try{ lb = localMgmtBatchesOf(c); }catch(er){}
   if(lb.length){
-    var C2 = 'minmax(0,1.6fr) 96px 84px 84px', held = [], fin = [];
+    var C2 = 'minmax(0,1.6fr) 110px 90px 90px', held = [], fin = [];
     lb.forEach(function(x){ var b = x.b, left = (b.bought||0)-(b.used||0); ((b.refund || b.voided || left<=0) ? fin : held).push(x); });
     var one = function(x){
       var b = x.b, nm = x.h.itemName+(b.spec ? '（'+buyName(b.spec)+'）' : ''), left = (b.bought||0)-(b.used||0), us = (b.usages||[]).slice().sort(function(a, z){ return String(a.date||'').localeCompare(String(z.date||'')); });
-      var tag = (b.refund || b.voided) ? ' '+pill('已退款', '#EDEAE2', 'var(--muted)') : '';
+      var tag = (b.refund || b.voided) ? ' '+in19Pill('已退款', '#EDEAE2', 'var(--muted)') : '';
+      var rowCells = function(arrow){ return '<span>'+(arrow ? '<span style="color:var(--muted);">▸</span> ' : '')+e(nm)+tag+'</span><span>'+Math.max(0, left)+' / '+(b.bought||0)+'</span><span>'+md(b.date)+'</span><span>'+localBatchSrc(b)+'</span>'; };
+      if((b.bought||0)<=1) return '<div style="border-top:1px solid var(--border2);padding:8px 0;display:grid;grid-template-columns:'+C2+';gap:10px;align-items:center;font-size:13px;">'+rowCells(false)+'</div>'; /* 总次数只有 1 次：没什么可展开的，不放箭头 */
       var inner = us.length ? us.map(function(u){ return '<div style="display:flex;gap:12px;align-items:center;padding:4px 0;font-size:12px;"><span>'+md(u.date)+'</span><span>'+(u.qty||1)+' 次</span><a href="#" onclick="sumGoCase(\''+c.id+'\',\''+e(u.date)+'\');return false;" style="text-decoration:underline;">查看案件</a></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);padding:4px 0;">还没使用</div>';
-      return '<details style="border-top:1px solid var(--border2);padding:6px 0;"><summary style="cursor:pointer;list-style:none;'+G(C2)+'font-size:13px;"><span><span style="color:var(--muted);">▸</span> '+e(nm)+tag+'</span><span>剩 '+Math.max(0, left)+' / 共 '+(b.bought||0)+' 次</span><span>'+md(b.date)+'</span><span>'+localBatchSrc(b)+'</span></summary><div style="margin:4px 0 2px 18px;">'+inner+'</div></details>';
+      return '<details style="border-top:1px solid var(--border2);padding:6px 0;"><summary style="cursor:pointer;list-style:none;display:grid;grid-template-columns:'+C2+';gap:10px;align-items:center;font-size:13px;">'+rowCells(true)+'</summary><div style="margin:4px 0 2px 18px;">'+inner+'</div></details>';
     };
-    var sec = function(t, list){ return list.length ? inSecTitle(t, list.length)+inSmallCard(hd(C2, ['项目', '剩余次数', '购买日期', '来源'])+list.map(one).join('')) : ''; };
-    out += '<div class="info-heading" style="margin:'+(out ? '18px' : '2px')+' 0 4px;">本地管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">这个案件买的本地项目；使用在当天的子案件里按［本次使用］，这里只看（点开看每一次使用）</span></div>'+sec('持有中', held)+sec('已完成', fin);
+    var l2 = function(t, list){ return list.length ? inL2(t, list.length, '', in19Th(['项目', '剩余 / 总次数', '购买日期', '来源'], C2)+list.map(one).join('')) : ''; };
+    cards.push('<div class="card" style="padding:18px 22px;"><div class="info-heading" style="margin-bottom:2px;">印尼本地管理</div>'+l2('持有中', held)+l2('已完成', fin)+'</div>');
   }
-  return '<div class="card" style="padding:22px 24px;">'+(out || '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有管理项目</div>')+'</div>';
+  return cards.length ? '<div style="display:flex;flex-direction:column;gap:12px;">'+cards.join('')+'</div>' : '<div class="card" style="padding:22px 24px;"><div style="font-size:12px;color:var(--muted);padding:12px 0;">没有管理项目</div></div>';
 }
 /* 一个韩国 / 印尼的日子里有哪几种流程的项目（术后管理 / 在韩管理 / 赴韩施术）：每个流程 tab 的「相关子案件」只列有这个流程项目的那几天；同一天有几种就在几个 tab 都出现。业务类型标签（v.types）不变 */
 function dayFlowKinds(m, v){
@@ -11438,11 +11424,11 @@ function inRevisitTabHtml(c){
       var lt0 = ''; if(c.localMgmt || showLocalTab(c) || isContCase(c)){ var sv0 = c.activeCaseTab; c.activeCaseTab = 'localmgmt'; try{ lt0 = c0.call(this, c); }finally{ c.activeCaseTab = sv0; } }
       if(lt0===localBoughtHtml(c)) lt0 = ''; /* 只是只读的「本次购买」卡 = 汇总本身，不重复 */
       return summaryTabHtml(c)+(lt0 ? '<div style="margin-top:14px;">'+lt0+'</div>' : ''); }
-    if(t==='postcare') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('术后管理', function(){ return pcmHtml(c, 'IN'); }); /* CMD-1027-09：IN / KR 同一个组件 */
-    if(t==='kmgmt') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('管理项目', function(){ return inMgmtTabHtml(c); }); /* CMD-1028-09：IN 只读 */
+    if(t==='postcare') return '<div class="in-tabstack">'+gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('术后管理', function(){ return pcmHtml(c, 'IN'); })+'</div>'; /* CMD-1027-09：IN / KR 同一个组件 */
+    if(t==='kmgmt') return '<div class="in-tabstack">'+gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('管理项目', function(){ return inMgmtTabHtml(c); })+'</div>'; /* CMD-1028-09：IN 只读 */
     if(t==='revisit') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('复诊', function(){ return inRevisitTabHtml(c); });
     if(t==='consult') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+(!up && showKrTab(c) && (c.consultStatus!=='report_ready' || consultPlanOpen(c)) ? consultTabHtml(c)+krTabContent(c) : consultTabHtml(c)); /* CMD-1026-01 五：报告刚出来（Step 1）不挂赴韩方案卡，按［查看方案］后才出现 */ /* 没升级：选项目的卡也在面诊 tab（诊疗方案已出 → 客人选项目） */
-    if(t==='kr') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('赴韩施术', function(){ return krTabContent(c); });
+    if(t==='kr') return '<div class="in-tabstack">'+gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('赴韩施术', function(){ return krTabContent(c); })+'</div>';
     return c0.apply(this, arguments);
   };
 })();
@@ -12591,7 +12577,7 @@ function pcmModel(c){
   var m = mainOf(c) || c, vs = visitsOf(m), out = {booked:[], unbooked:[], done:[], kept:[]}, cu = careUnits(c);
   var vOf = function(place, date){ return vs.filter(function(v){ return v.date===date && v.place===place; })[0] || null; };
   var placeTag = function(x){ return !x ? '' : (x.place==='either' ? '韩国或印尼都可' : (x.place==='IN' ? '印尼' : '必须在韩国')); };
-  var base = function(r, x, it, sug){ var d = careDayText(c, r.item || (it && it.name), sug || ''); return {surg:buyName(r.item || (it && it.name) || '') || '其他术后管理', nm:x ? (x.name||x.mgmt) : '', rec:[d, placeTag(x)].filter(Boolean).join(' · '), sug:sug||''}; };
+  var base = function(r, x, it, sug){ var d = careDayText(c, r.item || (it && it.name), sug || ''); return {surg:buyName(r.item || (it && it.name) || '') || '其他术后管理', nm:x ? (x.name||x.mgmt) : '', rec:[d, placeTag(x)].filter(Boolean).join(' · '), sug:sug||'', src:(it && (it.krAddOn || it.preBalanceAdd)) ? '在韩增加' : '方案内含'}; };
   cu.rows.forEach(function(r){
     var s0 = r.s; if(s0.skipped) return;
     var en = careEntryOfRow(c, s0), x = en && en.x, it = (c.procedureItems||[]).filter(function(y){ return y.name===r.item; })[0], sug = s0.suggest || s0.date || '', b = base(r, x, it, sug);
@@ -12624,6 +12610,7 @@ function pcmGroups(rows, desc){
   return ord.map(function(k){ return gs[k]; });
 }
 function pcmHtml(c, side){
+  if(side==='IN') return pcmInHtml(c, pcmModel(c)); /* CMD-1109-19 四：IN 分韩国 / 印尼两张一级 card（KR 页面照旧） */
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, M = pcmModel(c), md = function(d){ return String(d||'').slice(5, 10).replace('-', '/'); }, today = todayStr();
   var inTab = side==='IN', mine = inTab ? 'IN' : 'KR', canAct = inTab ? true : (typeof krCan==='function' && krCan());
   var paid = !!c.krBalancePaid, locked = !!(c.visitClosed || isEnded(c));
@@ -13368,3 +13355,81 @@ function svbDoCancel(c, reason, refundAmt, compAmt, method, mnote){
     window[fn] = function(){ var sv = ids.map(boxTop), r = o.apply(this, arguments); ids.forEach(function(id, i){ var e = document.querySelector('#'+id+' .modal-box'); if(e && sv[i]) e.scrollTop = sv[i]; }); return r; };
   });
 })();
+
+/* ===== CMD-1109-19：IN 主案件「赴韩施术 / 术后管理 / 管理项目」三个 tab 重排（只改画面）=====
+   一级 card = tab 里的大卡；二级 card（inL2）= 大卡里的小框（浅边框、圆角，标题 + 件数 + 最右按钮）。IN 端全部只读（除了印尼术后管理原有的预约入口）。 */
+function in19Esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function in19Th(cols, grid){ return '<div style="display:grid;grid-template-columns:'+grid+';gap:10px;font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+cols.map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; }
+function in19Tr(cells, grid){ return '<div style="display:grid;grid-template-columns:'+grid+';gap:10px;align-items:center;font-size:13px;padding:8px 0;border-top:1px solid var(--border2);">'+cells.map(function(x){ return '<span style="min-width:0;">'+x+'</span>'; }).join('')+'</div>'; }
+function inL2(title, n, right, inner){ return '<div style="border:1px solid var(--border2);border-radius:12px;padding:4px 18px 8px;margin-top:10px;background:#fff;"><div style="display:flex;align-items:center;gap:10px;padding:8px 0 4px;"><b style="font-size:13px;">'+title+'</b>'+(n!=null ? '<span style="font-size:12px;color:var(--muted);">（'+n+'）</span>' : '')+'<span style="flex:1;"></span>'+(right||'')+'</div>'+inner+'</div>'; }
+function in19Pill(t, bg, fg){ return '<span class="status-pill" style="background:'+bg+';color:'+fg+';white-space:nowrap;">'+t+'</span>'; }
+function in19Src(it){ var kr = !!(it && (it.krAddOn || it.preBalanceAdd)); return '<span class="status-pill" style="display:inline-block;white-space:nowrap;font-size:12px;'+(kr ? 'background:#E2F3E6;color:#2E7D4F;' : 'background:#E3EEFB;color:#2F5FA8;')+'">'+(kr ? '在韩购买' : '印尼购买')+'</span>'; }
+function in19When(d, t){ if(!d) return '—'; return (d===todayStr() ? '今天' : in19Esc(String(d).slice(5, 10).replace('-', '/')))+(t ? ' '+in19Esc(t) : ''); }
+/* 管理项目的行（预约中 / 未预约 / 保留 / 已使用）：次数 = 这一行的次数，不写「剩 3 / 共 3」 */
+function inMgmtModel(c, items){
+  var out = {booked:[], unbooked:[], kept:[], used:[]}, ks0 = c.krSchedule || {};
+  items.forEach(function(it){
+    if(it.cancelled) return;
+    var left = holdItemLeft(c, it), bk = Math.max(0, holdItemBookable(c, it)), iid = itemIid(it);
+    (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped; }).forEach(function(s){ out.booked.push({k:(s.date||'')+(s.time||''), it:it, n:Math.max(1, parseInt(s.useQty, 10)||1), at:in19When(s.date, s.time)}); });
+    var tp = holdItemTodayPicked(c, it); if(tp>0) out.booked.push({k:(mainVisitDay(c)||'')+(ks0.confirmedTime||''), it:it, n:tp, at:in19When(mainVisitDay(c), ks0.confirmedTime)});
+    var kn = it.heldOver ? Math.min(stayKeepN(c, 'mg|'+iid), bk) : 0, un = bk-kn;
+    if(!it.heldOver || it.pendingPay){ if(left>0) out.unbooked.push({it:it, n:Math.max(1, un>0 ? un : left), st:it.pendingPay ? 'pay' : 'tail'}); }
+    else if(un>0) out.unbooked.push({it:it, n:un, st:'open'});
+    if(kn>0) out.kept.push({it:it, n:kn});
+    (it.uses||[]).forEach(function(u){ var ud = useVisitDate(c, u); out.used.push({k:ud||'', it:it, n:u.qty||1, at:ud ? in19Esc(String(ud).slice(5, 10).replace('-', '/')) : '—'}); });
+  });
+  out.booked.sort(function(a, b){ return a.k < b.k ? -1 : (a.k > b.k ? 1 : 0); });
+  return out;
+}
+/* 预约中 / 未预约 / 保留 / 已使用 四张二级 card；withUsed = 要不要「已使用」（项目卡里不放）。返回 {html, n}（n = 预约中 + 未预约 + 保留的行数） */
+function inMgmtL2Cards(c, items, withUsed){
+  var M = inMgmtModel(c, items), G = 'minmax(0,1.6fr) 56px 84px minmax(0,1fr) 84px', GU = 'minmax(0,1.6fr) 56px 84px minmax(0,1fr)', nm = function(it){ return in19Esc(buyName(it.name))+(it.service ? ' <span class="status-pill" style="background:var(--sage-bg);color:var(--sage);">서비스</span>' : ''); }, html = '';
+  var H = ['项目', '次数', '状态', '预约时间', '来源'];
+  if(M.booked.length) html += inL2('预约中', M.booked.length, '', in19Th(H, G)+M.booked.map(function(x){ return in19Tr([nm(x.it), x.n+' 次', in19Pill('预约中', '#E8EEF6', '#2F5F86'), x.at, in19Src(x.it)], G); }).join(''));
+  if(M.unbooked.length) html += inL2('未预约', M.unbooked.length, '', in19Th(H, G)+M.unbooked.map(function(x){ var st = x.st==='pay' ? in19Pill('待付款', '#FDECEA', '#B3261E') : (x.st==='tail' ? in19Pill('待付尾款', '#FDECEA', '#B3261E') : in19Pill('未预约', '#EFEBE4', 'var(--slate2)')); return in19Tr([nm(x.it), x.n+' 次', st, '—', in19Src(x.it)], G); }).join(''));
+  if(M.kept.length) html += inL2('保留', M.kept.length, '', in19Th(H, G)+M.kept.map(function(x){ return in19Tr([nm(x.it), x.n+' 次', in19Pill('保留', '#EFEBE4', 'var(--slate2)'), '—', in19Src(x.it)], G); }).join(''));
+  if(withUsed && M.used.length) html += inL2('已使用', M.used.length, '', in19Th(['项目', '次数', '状态', '使用时间'], GU)+M.used.map(function(x){ return in19Tr([nm(x.it), x.n+' 次', in19Pill('已完成', 'var(--sage-bg)', 'var(--sage)'), x.at], GU); }).join(''));
+  return {html:html, n:M.booked.length+M.unbooked.length+M.kept.length, used:M.used.length};
+}
+/* 术后管理的二级 card：一个预约时间一张（标题 = 时间 + 最右［查看案件］）。o = {place:true（栏位带「地点」，项目卡用）, edit:true（印尼的行加［修改时间］）, done:true（已完成组）} */
+function in19CareSrc(r){ return r.src || '方案内含'; }
+function in19CareGroupCard(c, g, o){
+  var mainId = (mainOf(c)||c).id, G = o.place ? 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr) 64px 84px' : 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr) 84px', btns = '';
+  if(g.v) btns += '<button class="btn-outline sd-btn" onclick="openSubcase(\''+mainId+'\',\''+g.v.key+'\')">查看案件</button>';
+  if(o.edit && g.place==='IN' && !o.done && g.rows[0] && g.rows[0].key) btns += '<button class="btn-outline sd-btn" style="margin-left:6px;" onclick="todoCareBookOpen(\''+c.id+'\',\''+g.rows[0].key+'\',\''+(g.bkCase||'')+'\')">修改时间</button>';
+  var ttl = in19When(g.date, g.time)+(o.done ? ' '+in19Pill('已完成', 'var(--sage-bg)', 'var(--sage)') : '');
+  var head = o.place ? ['项目', '施术项目', '推荐内容', '地点', '来源'] : ['项目', '施术项目', '推荐内容', '来源'];
+  return inL2(ttl, null, btns, in19Th(head, G)+g.rows.map(function(r){ var cells = [in19Esc(r.nm), in19Esc(r.surg), in19Esc(r.rec)]; if(o.place) cells.push(g.place==='IN' ? '印尼' : '韩国'); cells.push(in19Esc(in19CareSrc(r))); return in19Tr(cells, G); }).join(''));
+}
+/* 项目卡里的「术后管理」分页：韩国 + 印尼放一起（有「地点」栏），每个预约时间一张二级 card，没预约的放最后一张「未预约」 */
+function in19CareCardPage(c){
+  var M = pcmModel(c), html = '', G = 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr) 64px 84px';
+  pcmGroups(M.booked, false).forEach(function(g){ html += in19CareGroupCard(c, g, {place:true}); });
+  var rest = M.unbooked.concat(M.kept.map(function(r){ return Object.assign({}, r, {_kept:1}); }));
+  if(rest.length) html += inL2('未预约', rest.length, '', in19Th(['项目', '施术项目', '推荐内容', '地点', '来源'], G)+rest.map(function(r){ return in19Tr([in19Esc(r.nm)+(r.total>1 ? ' <span style="font-size:12px;color:var(--muted);">剩 '+r.n+' / 共 '+r.total+'</span>' : '')+(r._kept ? ' '+in19Pill('保留', '#EFEBE4', 'var(--slate2)') : ''), in19Esc(r.surg), in19Esc(r.rec), r.place==='IN' ? '印尼' : '韩国', in19Esc(in19CareSrc(r))], G); }).join(''));
+  pcmGroups(M.done, true).forEach(function(g){ html += in19CareGroupCard(c, g, {place:true, done:true}); });
+  return {html:html, n:M.booked.length+M.unbooked.length+M.kept.length+M.done.length};
+}
+/* IN「术后管理」tab：韩国 / 印尼两张一级 card */
+function pcmInHtml(c, M){
+  var paid = !!c.krBalancePaid, locked = !!(c.visitClosed || isEnded(c)), today = todayStr();
+  var side = function(place, title){
+    var B = M.booked.filter(function(r){ return r.place===place; }), U = M.unbooked.filter(function(r){ return r.place===place; }), K = M.kept.filter(function(r){ return r.place===place; }), D = M.done.filter(function(r){ return r.place===place; }), inn = place==='IN';
+    var body = '';
+    pcmGroups(B, false).forEach(function(g){ body += in19CareGroupCard(c, g, {edit:inn}); });
+    var G6 = inn ? 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr) 84px 96px 72px 110px' : 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr) 84px 96px 72px';
+    var uRow = function(r, kept){
+      var cnt = r.total>1 ? '剩 '+r.n+' / 共 '+r.total : '1 次', sg = r.sug ? in19Esc(String(r.sug).slice(5, 10).replace('-', '/')) : '—';
+      var cells = [in19Esc(r.nm)+(kept ? ' '+in19Pill('保留', '#EFEBE4', 'var(--slate2)') : ''), in19Esc(r.surg), in19Esc(r.rec), in19Esc(in19CareSrc(r)), in19Esc(cnt), sg];
+      if(inn) cells.push(!kept && !locked ? careBookBtn(c, '预约时间', 'todoCareBookOpen(\''+c.id+'\',\''+r.firstKey+'\')', 'padding:5px 12px;font-size:12px;border-radius:8px;') : '');
+      return in19Tr(cells, G6);
+    };
+    var uh = in19Th(inn ? ['项目', '施术项目', '推荐内容', '来源', '次数', '推荐时间', '操作'] : ['项目', '施术项目', '推荐内容', '来源', '次数', '推荐时间'], G6);
+    if(U.length) body += inL2('未预约', U.length, '', uh+U.map(function(r){ return uRow(r, false); }).join(''));
+    if(K.length) body += inL2('保留', K.length, '', uh+K.map(function(r){ return uRow(r, true); }).join(''));
+    pcmGroups(D, true).forEach(function(g){ body += in19CareGroupCard(c, g, {done:true}); });
+    return '<div class="card" style="padding:18px 22px;"><div class="info-heading" style="margin-bottom:2px;">'+title+'</div>'+(body || '<div style="text-align:center;color:var(--muted);font-size:13px;padding:22px 0;">目前没有'+(inn ? '印尼' : '韩国')+'术后管理</div>')+'</div>';
+  };
+  return '<div style="display:flex;flex-direction:column;gap:12px;">'+side('KR', '术后管理 · 韩国')+side('IN', '术后管理 · 印尼')+'</div>';
+}

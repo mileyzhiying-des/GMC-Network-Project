@@ -1040,13 +1040,13 @@ function krUsedRow(c, it, e, nm){
 }
 function krPcSec(title, cols, rows){ return rows.length ? '<div class="kr-pc-block"><div class="kr-pc-sec-title" style="margin:12px 0 0;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+rows.length+'</span></div>'+'<div style="border:1px solid var(--border2);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;">'+krPcHead(cols)+rows.join('')+'</div></div>' : ''; }
 function krBtn(txt, fn, on, tip){ /* 灰按钮旁边写原因（CMD-1019-22 六）：悬停 + 旁边小字 */
-  var b = '<button class="btn-'+(on?'primary':'outline')+'" '+(on ? 'onclick="'+fn+'"' : 'disabled title="'+krEsc(tip||'')+'"')+' style="padding:3px 10px;font-size:12px;'+(on?'':'opacity:.4;cursor:not-allowed;')+'">'+txt+'</button>';
+  var b = '<button class="btn-'+(on?'primary':'outline')+'" '+(on ? 'onclick="'+fn+'"' : 'disabled title="'+krEsc(tip||'')+'"')+' style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;'+(on?'':'opacity:.4;cursor:not-allowed;')+'">'+txt+'</button>';
   return (!on && tip) ? b+' <span class="kr-why" style="font-size:12px;color:var(--muted);">'+krEsc(tip)+'</span>' : b;
 }
 /* CMD-1020-02：项目卡按钮（三个 tab 一致）——线框按钮，比原来大一点；［预约时间］前面带日历图标；不加「…」更多菜单 */
 var KR_ICON_CAL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
 function krOutBtn(txt, fn, on, tip, icon){ /* CMD-1102-11 四：灰按钮旁边直接写一行原因小灰字（悬停 title 保留）；取代 CMD-1021-06「只放 tooltip」 */
-  var st = 'padding:6px 14px;font-size:12px;border-radius:8px;white-space:nowrap;'+(on ? '' : 'opacity:.4;cursor:not-allowed;');
+  var st = 'padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;'+(on ? '' : 'opacity:.4;cursor:not-allowed;');
   var tp = krEsc(tip || '暂时不能操作');
   var b = '<button class="btn-outline" '+(on ? 'onclick="'+fn+'"' : 'disabled title="'+tp+'"')+' style="'+st+'">'+(icon ? KR_ICON_CAL : '')+txt+'</button>';
   return on ? b : '<span class="kr-btn-off" title="'+tp+'">'+b+'<span class="kr-why">'+tp+'</span></span>';
@@ -2684,9 +2684,9 @@ function krMemoTotalHtml(c){
 function krCareActHtml(s, act){
   act = act || function(fn, id){ return fn+'(\''+id+'\')'; };
   var reached = s.simDay || !s.date || s.date <= todayStr();
-  if(!reached) return '<button class="btn-primary" disabled title="未到当天，不能标完成" style="padding:3px 10px;font-size:12px;opacity:.4;cursor:not-allowed;">标记完成</button> <span style="font-size:12px;color:var(--muted);">未到当天</span> <a href="#" onclick="'+act('krSubSim', s.id)+';return false;" title="仅原型：视为已到那天" style="font-size:12px;">模拟到当日</a>';
-  if(!s.arrived) return '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="'+act('krSubArrived', s.id)+'">客人已到院</button>';
-  return '<button class="btn-primary" style="padding:3px 10px;font-size:12px;" onclick="'+act('krHoldSubDone', s.id)+'">标记完成</button>';
+  if(!reached) return '<button class="btn-primary" disabled title="未到当天，不能标完成" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;opacity:.4;cursor:not-allowed;">标记完成</button> <span style="font-size:12px;color:var(--muted);">未到当天</span> <a href="#" onclick="'+act('krSubSim', s.id)+';return false;" title="仅原型：视为已到那天" style="font-size:12px;">模拟到当日</a>';
+  if(!s.arrived) return '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="'+act('krSubArrived', s.id)+'">客人已到院</button>';
+  return '<button class="btn-primary" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="'+act('krHoldSubDone', s.id)+'">标记完成</button>';
 }
 function krSubArrived(id){ if(!krCan()) return; krMut(function(c){ return coreSubArrived(c, id, ME_NAME); }); }
 var KR_HOLD_TAG = '<span class="status-pill" style="background:#E8F0FB;color:#2F5FA8;font-size:12px;">在韩后续进行中</span>';
@@ -2882,11 +2882,11 @@ function krTblRow(c, s, o){
     if(!s.done && s.holdUseOf && mode!=='today') ops += krRowQtyStepper(c, s);
     var surgRow = !!s._item || s.kind==='施术' || (s.kind==='增加项目' && !s.visitKey && (function(){ var it0 = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName; })[0]; return !!it0 && !krIsMgmtItemC(it0); })()); /* CMD-1022-14：施术项目没有［今日取消］，只能改期 */
     var mgRow = type==='管理项目'; /* CMD-1109-18 一：管理项目行没有［本次不做］（次数在今日进行时选好；取消去下面项目卡操作） */
-    if(!s.done && !surgRow && !(mode==='today' && mgRow)) ops += '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krTodayCancel(\''+(s._item || (s.kind==='增加项目' && !s.visitKey) ? 'item' : 'row')+'\',\''+(s._item ? krEsc(s._item).replace(/'/g,'') : (s.kind==='增加项目' && !s.visitKey ? krEsc(s.projectName).replace(/'/g,'') : s.id))+'\',\''+krEsc(s._item || s.content).replace(/'/g,'')+'\')">本次不做</button>';
+    if(!s.done && !surgRow && !(mode==='today' && mgRow)) ops += '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="krTodayCancel(\''+(s._item || (s.kind==='增加项目' && !s.visitKey) ? 'item' : 'row')+'\',\''+(s._item ? krEsc(s._item).replace(/'/g,'') : (s.kind==='增加项目' && !s.visitKey ? krEsc(s.projectName).replace(/'/g,'') : s.id))+'\',\''+krEsc(s._item || s.content).replace(/'/g,'')+'\')">本次不做</button>';
     else if(s.holdUseOf) ops += '<a href="#" onclick="krUseUndo(\''+s.id+'\');return false;" style="font-size:12px;">撤回完成</a>'; /* 撤回：次数退回，行回到待做（CMD-1019-23 二） */
   } else if(o.can && mode==='booked'){
-    if(timeable) ops += '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="'+(s.kind==='施术' ? 'krMainTimeEdit()' : 'krSubTimeOpen(\''+s.id+'\')')+'">修改时间</button> ';
-    ops += '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krSubNote(\''+s.id+'\')">备注</button>';
+    if(timeable) ops += '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="'+(s.kind==='施术' ? 'krMainTimeEdit()' : 'krSubTimeOpen(\''+s.id+'\')')+'">修改时间</button> ';
+    ops += '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="krSubNote(\''+s.id+'\')">备注</button>';
     if(o.cancel && !s.done && (s.kind==='术后管理记录' || (s.kind==='增加项目' && s.visitKey))) ops += ' <a href="#" onclick="krRowCancel(\''+s.id+'\');return false;" style="font-size:12px;">取消本次</a>';
   }
   var noteText = ((s._item ? (((c.procedureItems||[]).filter(function(x){ return x.name===s._item; })[0]||{}).todayNote || s.note) : s.note) ? krEsc(s._item ? (((c.procedureItems||[]).filter(function(x){ return x.name===s._item; })[0]||{}).todayNote || s.note) : s.note) : '')+(s.earlyReason ? ' <span style="color:#C26A1B;">（提前做：'+krEsc(s.earlyReason)+'）</span>' : '');
@@ -3193,7 +3193,7 @@ function krMainRowsHtml(c, mode){
   var held = (c.procedureItems||[]).filter(function(it){ return it.heldOver && (mgmtDoneToday(c, it) || (mode!=='done' && !it.holdDone && (!c.todayPicked || pickedMgmt(c, it)))); }).map(function(it){
     var left = holdItemLeft(c, it), pl = holdItemPlanned(c, it), dn = mgmtDoneToday(c, it), okUse = can && !c.visitClosed && c.krBalancePaid && left-pl>0 && mode==='today', nmq = krEsc(itemIid(it)).replace(/'/g,''), nmn = krEsc(it.name).replace(/'/g,'');
     var stTxt = dn ? '<span style="color:var(--sage);font-weight:600;">已完成</span>' : '<span style="color:var(--slate2);font-weight:600;">剩 '+left+' 次'+(pl ? '（已安排 '+pl+' 次）' : '')+'</span>';
-    var ops = (dn && mode==='today' && can) ? '<a href="#" onclick="krMgmtUndo(\''+nmq+'\');return false;" style="font-size:12px;">撤回完成</a>' : (!dn && mode==='today' && can) ? krBtn('操作完成', 'krMgmtUse(\''+nmq+'\')', okUse, '次数用完（剩余次数都已安排）')+' <button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="krTodayCancel(\'item\',\''+nmq+'\',\''+nmn+'\')">今日取消</button>' : '';
+    var ops = (dn && mode==='today' && can) ? '<a href="#" onclick="krMgmtUndo(\''+nmq+'\');return false;" style="font-size:12px;">撤回完成</a>' : (!dn && mode==='today' && can) ? krBtn('操作完成', 'krMgmtUse(\''+nmq+'\')', okUse, '次数用完（剩余次数都已安排）')+' <button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="krTodayCancel(\'item\',\''+nmq+'\',\''+nmn+'\')">今日取消</button>' : '';
     if(mode==='today'){ /* CMD-1109-18 一：四栏；名字后面只写今天做几次「（N 次）」，没有加减 / 剩余 / 建议 / ［今日取消］ */
       var tq = dn ? Math.max(1, parseInt((tmdGet(c, it)||{}).qty, 10)||1) : Math.max(1, Math.min(parseInt(it.todayQty, 10)||1, Math.max(1, left-pl)));
       var ops4 = dn ? ('<span style="color:var(--sage);font-weight:600;">已完成</span>'+(can ? ' <a href="#" onclick="krMgmtUndo(\''+nmq+'\');return false;" style="font-size:12px;">撤回完成</a>' : '')) : (can ? krBtn('操作完成', 'krMgmtUse(\''+nmq+'\')', okUse, '次数用完（剩余次数都已安排）') : '');

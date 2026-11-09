@@ -585,3 +585,7 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .btn-outline.sd-btn,.btn-primary.sd-btn{padding:5px 12px;font-size:12px;border-radius:8px;width:auto;white-space:nowrap;}
 .sd-box{padding:12px 14px;border-radius:10px;border:1px solid var(--terracotta,#9A6A4B);background:var(--bg-brand-faint,#F6EFE6);font-size:13px;line-height:1.6;}
 .sd-tag{display:inline-block;margin-left:8px;padding:0 8px;border-radius:999px;background:#fff;border:1px solid var(--border);color:var(--slate2);font-size:12px;}
+
+/* CMD-1109-19：IN 赴韩施术 / 术后管理 / 管理项目 tab——相关子案件 + 各张卡之间统一 12px（取最小的那个） */
+.in-tabstack{display:flex;flex-direction:column;gap:12px;}
+.in-tabstack > .card{margin-bottom:0 !important;}
