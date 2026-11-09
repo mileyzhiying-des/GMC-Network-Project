@@ -65,10 +65,10 @@ function inTodoItems(){
       var itP = todoMk('plan', '面诊资料已到：联络客人选项目（客人离店前方案还没出）', c, '', false, todoInGo(c, 'consult'));
       itP.mine = todoInMine(c); itP.ack = true; itP.ackKey = 'plandecl'; itP.ackLabel = '客人不做'; out.push(itP);
     }
-    /* CMD-1106-22（5-18）：项目有变动 / 行程结束没做（有原因）→ 印尼退定金（退款 / 置换二选一）；没来 = 无故不来，IN 院长（管理者）决定退 / 不退。处理完之前案件不结案，没有［已处理］按钮 */
+    /* CMD-1106-22（5-18）：项目有变动 / 行程结束没做（有原因）→ 印尼退定金（退款 / 置换二选一）；没来 = 无故不做项目，IN 室长决定退 / 不退。处理完之前案件不结案，没有［已处理］按钮 */
     if(!c.mainId){
       var ddT = depositDueOf(c); if(ddT){ var t1 = todoMk('depositdue', '退定金 '+formatCurrency(ddT.amount,'KRW')+' · '+(c.caseNo||'')+'（退款 / 置换印尼项目二选一）', c, '', false, function(){ openDepositDue(c.id); }); t1.mine = todoInMine(c); out.push(t1); }
-      var nsT = noShowDueOf(c); if(nsT && nikCanEdit()){ var t2 = todoMk('noshowdue', '无故不来 · '+(c.caseNo||'')+'：定金 '+formatCurrency(nsT.dep,'KRW')+' 退 / 不退，请 IN 院长决定（原因必填）', c, '', false, function(){ openNoShowDue(c.id); }); t2.mine = true; out.push(t2); }
+      var nsT = noShowDueOf(c); if(nsT){ var t2 = todoMk('noshowdue', '无故不做项目 · '+(c.caseNo||'')+'：定金 '+formatCurrency(nsT.dep,'KRW')+' 退 / 不退，请 IN 室长决定（原因必填）', c, '', false, function(){ openNoShowDue(c.id); }); t2.mine = todoInMine(c); out.push(t2); }
     }
     if(c.subState==='cancelled' || c.visitClosed || isEnded(c)) return;
     var mine = todoInMine(c), push = function(it){ it.mine = mine; out.push(it); };

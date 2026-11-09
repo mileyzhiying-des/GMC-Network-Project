@@ -10097,7 +10097,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(['__t1','__t2','__t3','__t4'].every(function(id){ return boxed(document.getElementById(id)); }), '没写边框的文字区默认有框；写 var(--line) 的文字区 / 输入 / 下拉都有框'); probe.remove();
     var bare = [].slice.call(document.querySelectorAll('textarea')).filter(function(x){ return !boxed(x) && x.offsetParent!==null; }); ST.ok(bare.length===0, '页面上可见的文字区都有框：'+bare.length);
   });
-  ST.def('R252a','CMD-1106-22（A1 分页）：到院评估两条路（可以做 / 项目有变动）的钱——≥ 定金定金抵 / < 定金 IN 退定金（待办 + 退款置换二选一）+ 韩国全额新结算 / 一项不做；无故不来；行程结束没做；韩国退款；迁移 61',function(){
+  ST.def('R252a','CMD-1106-22（A1 分页）：到院评估两条路（可以做 / 项目有变动）的钱——≥ 定金定金抵 / < 定金 IN 退定金（待办 + 退款置换二选一）+ 韩国全额新结算 / 一项不做；无故不做项目；行程结束没做；韩国退款；迁移 61',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var credits = function(c){ var cl = clientByName(c.name); return ((cl && cl.compCredits)||[]).filter(function(x){ return !x.used && x.fromCaseId===c.id; }); };
     ST.ok(!KR_JUDGE_TEXT.cannot || /旧/.test(KR_JUDGE_TEXT.cannot), '评估文字只剩「可以做 / 项目有变动」（不建议手术只给旧数据）：'+JSON.stringify(KR_JUDGE_TEXT));
@@ -10125,18 +10125,33 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* ④ 韩国退款（谁收的谁退） */
     ST.ok(krTailPaidOf(a)===540000, '韩国已收尾款 ₩540,000'); ST.ok(!coreKrRefund(a, 600000, '（自测）', '现金', '', ST.krBy).ok, '不能超过已收尾款'); ST.ok(!coreKrRefund(a, 100000, '（自测）', '', '', ST.krBy).ok, '方式必填');
     ST.ok(coreKrRefund(a, 100000, '（自测）多收了', '现金', '', ST.krBy).ok && krTailPaidOf(a)===440000, '登记韩国退款 ₩100,000，上限降到 ₩440,000');
-    /* ⑤ 行程结束没做：有原因 → 退定金；没来 → 无故不来 */
+    /* ⑤ 行程结束没做：有原因 → 退定金；没来 → 无故不做项目 */
     var e = r198Setup('R252a5', ''); var it0 = krActiveItems(e).filter(function(x){ return !krIsMgmtItemC(x); });
     it0[0].rebookWait = {at:nowFullDt(), by:'KM1', reason:'身体不适', memo:''}; var nE = coreTripEndUndone(e, '系统');
-    ST.ok(nE===2 && !heldSurgItems(e).length && e.depositDue && e.depositDue.status==='pending' && e.noShowDue && e.noShowDue.status==='pending', '行程结束：有原因的 → 退定金待办；没原因的 → 无故不来；不再转韩国持有：'+JSON.stringify([!!e.depositDue, !!e.noShowDue]));
-    ST.ok(!coreNoShowDecide(e, 'keep', {}, 'A1').ok, '无故不来：原因必填'); var ns = coreNoShowDecide(e, 'keep', {reason:'（自测）客人无故没来'}, 'A1');
-    ST.ok(ns.ok && e.noShowDue.status==='forfeited' && !(e.refunds||[]).some(function(x){ return /无故不来/.test(x.reason||''); }), '无故不来 · 定金不退');
+    ST.ok(nE===2 && !heldSurgItems(e).length && e.depositDue && e.depositDue.status==='pending' && e.noShowDue && e.noShowDue.status==='pending', '行程结束：有原因的 → 退定金待办；没原因的 → 无故不做项目；不再转韩国持有：'+JSON.stringify([!!e.depositDue, !!e.noShowDue]));
+    ST.ok(!coreNoShowDecide(e, 'keep', {}, 'A1').ok, '无故不做项目：原因必填'); var ns = coreNoShowDecide(e, 'keep', {reason:'（自测）客人无故没来'}, 'A1');
+    ST.ok(ns.ok && e.noShowDue.status==='forfeited' && !(e.refunds||[]).some(function(x){ return /无故不做项目/.test(x.reason||''); }), '无故不做项目 · 定金不退');
     var f = r198Setup('R252a6', ''); krActiveItems(f).filter(function(x){ return !krIsMgmtItemC(x); }).forEach(function(x){ delete x.rebookWait; }); coreTripEndUndone(f, '系统');
-    var nf = coreNoShowDecide(f, 'refund', {reason:'（自测）', method:'现金'}, 'A1'); ST.ok(nf.ok && (f.refunds||[]).some(function(x){ return /无故不来/.test(x.reason||'') && x.method==='现金'; }), '无故不来 · 定金退还（方式必填）');
+    var nf = coreNoShowDecide(f, 'refund', {reason:'（自测）', method:'现金'}, 'A1'); ST.ok(nf.ok && (f.refunds||[]).some(function(x){ return /无故不做项目/.test(x.reason||'') && x.method==='现金'; }), '无故不做项目 · 定金退还（方式必填）');
     /* ⑥ 迁移 61：旧的韩国持有 / 等三选一 → 等 IN 处理 */
     var g = r198Setup('R252a7', ''); var gi = krActiveItems(g).filter(function(x){ return !krIsMgmtItemC(x); }); gi[0].heldSurg = {at:nowFullDt(), by:'系统', why:'没做', rw:{reason:'身体不适'}}; gi[1].tripWait = {at:nowFullDt(), by:'系统', why:'没做', rw:null};
     var m61 = (window.GMC_MIGRATIONS||[]).filter(function(x){ return x.to===61; })[0]; ST.ok(!!m61, '有迁移 61');
-    if(m61){ m61.fn(g, {note:function(){}}); ST.ok(!heldSurgItems(g).length && !tripWaitItems(g).length && g.depositDue && g.noShowDue && g.noShowDue.status==='pending', '迁移后：持有 → 等 IN 退定金 / 置换，等三选一（无原因）→ 无故不来'); }
+    if(m61){ m61.fn(g, {note:function(){}}); ST.ok(!heldSurgItems(g).length && !tripWaitItems(g).length && g.depositDue && g.noShowDue && g.noShowDue.status==='pending', '迁移后：持有 → 等 IN 退定金 / 置换，等三选一（无原因）→ 无故不做项目'); }
+  });
+  ST.def('R255a','CMD-1106-24（A1 分页）：「无故不做项目」——改名、普通 IN 室长（非管理者）看得到待办并能决定；来了没做也没选原因同样算',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var oldNik = window.nikCanEdit; window.nikCanEdit = function(){ return false; }; /* 假装是普通室长 */
+    try{
+      var e = r198Setup('R255a1', ''); krActiveItems(e).filter(function(x){ return !krIsMgmtItemC(x); }).forEach(function(x){ delete x.rebookWait; });
+      coreTripEndUndone(e, '系统'); ST.ok(!!noShowDueOf(e), '①没来：生成「无故不做项目」');
+      var td = inTodoItems(e).filter(function(x){ return x.kind==='noshowdue'; })[0]; ST.ok(!!td && /无故不做项目/.test(td.text) && !/无故不来|IN 院长/.test(td.text), '普通室长看得到待办，文字是无故不做项目：'+(td&&td.text));
+      var cur = CASE_ITEMS.filter(function(x){ return x.id===e.id; })[0]; ST.ok(!!cur, '案件在当前诊所'); openNoShowDue(e.id); ST.ok(!!DDM && DDM.kind==='ns', '普通室长能打开决定窗'); ddmClose();
+      ST.ok(coreNoShowDecide(e, 'keep', {reason:'（自测）'}, 'A2').ok, '普通室长能选不退');
+      var tl = (e.logEntries||[]).map(function(l){ return l.action||''; }).join('\n'); ST.ok(/无故不做项目/.test(tl) && !/无故不来/.test(tl), 'Timeline 用新名字');
+      /* ②来了（已到院）但没做、也没选原因：系统 / 确认结束标的「未选原因」待重新预约，行程结束后一样算无故不做项目 */
+      var f = r198Setup('R255a2', ''); krActiveItems(f).filter(function(x){ return !krIsMgmtItemC(x); }).forEach(function(x){ x.rebookWait = {at:nowFullDt(), by:'系统', reason:'关账后确认：没做（未选原因）', memo:''}; });
+      coreTripEndUndone(f, '系统'); ST.ok(!!noShowDueOf(f) && !depositDueOf(f), '②未选原因 → 无故不做项目（不是退定金）');
+    } finally { window.nikCanEdit = oldNik; }
   });
   ST.def('R250a','CMD-1106-20（KM1 分页，stageC 夹具）：在韩管理没付款时操作栏只写「待付款」，没有灰色［预约时间］；付款后有［预约时间］',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

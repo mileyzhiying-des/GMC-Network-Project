@@ -438,7 +438,7 @@ var Store = (function(){
       run((c.krScope||{}).items); run(c.procedureItems); run(c.recommended);
       if(n) ctx.note('共同术后管理已转成各项目自己的术后管理：案件 '+(c.caseNo||c.id)+' 去掉 '+n+' 条重复副本（只留在第一个适用项目上）');
     }},
-    {to:61, fn:function(c, ctx){ /* CMD-1106-22（5-18）：拿掉韩国持有的施术——已转韩国持有 / 等 IN 三选一的施术 → 改成「等 IN 处理退定金 / 置换」（有原因）或「无故不来 · 等 IN 院长决定」（没原因）；已被新案件使用的持有施术（heldTransferred / heldFrom）和已付款的结算单不动，只记数量 */
+    {to:61, fn:function(c, ctx){ /* CMD-1106-22（5-18）：拿掉韩国持有的施术——已转韩国持有 / 等 IN 三选一的施术 → 改成「等 IN 处理退定金 / 置换」（有原因）或「无故不做项目 · 等 IN 室长决定」（没原因）；已被新案件使用的持有施术（heldTransferred / heldFrom）和已付款的结算单不动，只记数量 */
       var no = c.caseNo||c.id, rs = [], ns = [], dep1 = 0, tail1 = 0, dep2 = 0, tail2 = 0, nm = function(a){ return a.map(function(it){ return buyName(it.name); }).join('、'); };
       (c.procedureItems||[]).forEach(function(it){
         if(it.heldTransferred){ (window.GMC_HELD61_USED = window.GMC_HELD61_USED||[]).push(no+'：'+buyName(it.name)+' 已转到 '+(it.heldTransferred.toNo||'新案件')); return; }
@@ -450,11 +450,11 @@ var Store = (function(){
       });
       if(!rs.length && !ns.length) return;
       if(rs.length){ if(dep1>0) c.depositDue = {status:'pending', amount:dep1, at:nowFullDt(), by:'系统', reason:'旧数据：行程结束没做（有原因）：'+nm(rs), src:'migrate61', items:rs.map(function(i){ return i.name; })}; if(tail1>0) addKrRefundDue(c, tail1, '旧数据：行程结束没做：'+nm(rs), '系统'); }
-      if(ns.length){ c.noShowDue = {status:'pending', at:nowFullDt(), by:'系统', items:ns.map(function(i){ return i.name; }), dep:dep2, tail:tail2, migrated:61}; if(tail2>0) addKrRefundDue(c, tail2, '旧数据：无故不来：'+nm(ns), '系统'); }
-      logCaseEvent(c, '系统', '修正旧数据：不再有「韩国持有的施术」——'+(rs.length ? rs.length+' 项（'+nm(rs)+'）改成等 IN 处理退定金 / 置换' : '')+(rs.length && ns.length ? '；' : '')+(ns.length ? ns.length+' 项（'+nm(ns)+'）改成无故不来，等 IN 院长决定定金退 / 不退' : ''));
-      window.GMC_HELD61_CONV = (window.GMC_HELD61_CONV||0) + rs.length + ns.length; (window.GMC_HELD61_CASES = window.GMC_HELD61_CASES||[]).push(no+'（'+(rs.length ? '退定金 '+rs.length : '')+(rs.length && ns.length ? '，' : '')+(ns.length ? '无故不来 '+ns.length : '')+'）');
-      ctx.note('案件 '+no+'：持有的施术改成待 IN 处理（退定金 / 置换 '+rs.length+' 项，无故不来 '+ns.length+' 项）');
-      try{ if(c.stage==='closed' || c.stage==='reportonly'){ c.krTripEnded = c.krTripEnded||{at:nowFullDt(), by:'系统'}; reopenMain(c, '有施术等 IN 处理退定金 / 无故不来'); } else updateCaseStage(c); }catch(e){ console.error(e); }
+      if(ns.length){ c.noShowDue = {status:'pending', at:nowFullDt(), by:'系统', items:ns.map(function(i){ return i.name; }), dep:dep2, tail:tail2, migrated:61}; if(tail2>0) addKrRefundDue(c, tail2, '旧数据：无故不做项目：'+nm(ns), '系统'); }
+      logCaseEvent(c, '系统', '修正旧数据：不再有「韩国持有的施术」——'+(rs.length ? rs.length+' 项（'+nm(rs)+'）改成等 IN 处理退定金 / 置换' : '')+(rs.length && ns.length ? '；' : '')+(ns.length ? ns.length+' 项（'+nm(ns)+'）改成无故不做项目，等 IN 室长决定定金退 / 不退' : ''));
+      window.GMC_HELD61_CONV = (window.GMC_HELD61_CONV||0) + rs.length + ns.length; (window.GMC_HELD61_CASES = window.GMC_HELD61_CASES||[]).push(no+'（'+(rs.length ? '退定金 '+rs.length : '')+(rs.length && ns.length ? '，' : '')+(ns.length ? '无故不做项目 '+ns.length : '')+'）');
+      ctx.note('案件 '+no+'：持有的施术改成待 IN 处理（退定金 / 置换 '+rs.length+' 项，无故不做项目 '+ns.length+' 项）');
+      try{ if(c.stage==='closed' || c.stage==='reportonly'){ c.krTripEnded = c.krTripEnded||{at:nowFullDt(), by:'系统'}; reopenMain(c, '有施术等 IN 处理退定金 / 无故不做项目'); } else updateCaseStage(c); }catch(e){ console.error(e); }
     }},
     {to:60, fn:function(c, ctx){ /* CMD-1106-06：项目库加「用途」——只动项目库（usesNormalize，读档 / 种子时跑），案件里的项目行是快照，不动 */ }},
     {to:59, fn:function(c, ctx){ /* CMD-1105-12：① 1105-03 自动转了「韩国持有」、但其实只付了定金的施术 → 退回「等 IN 三选一」（tripWait），案件重新变成未结案；② 1105-04 按价差生成的韩国持有抵扣：未付款的结算单按新规则重算（不抵算），已付款的只记数量不动 */
