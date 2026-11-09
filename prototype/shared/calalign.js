@@ -279,7 +279,7 @@ function surgSendHtml(c){
   if(c.hasArrived) return '';
   var tag = '<span style="font-size:12px;color:var(--muted);">演示</span>', box = function(x){ return '<div style="text-align:right;max-width:340px;">'+x+'</div>'; };
   var md = function(t){ var f = fmtUtc(t); return f.length>=16 ? f.slice(5,10).replace('-','/')+' '+f.slice(11,16) : f; }; /* CMD-1109-01：已发送 MM/DD HH:mm */
-  if(surgChanged(c)) return box('<div style="font-size:12px;color:#B3261E;font-weight:700;margin-bottom:6px;text-align:left;">⚠ '+aEsc(surgChangeText(c))+'，请电话通知客人</div><button class="btn-primary sd-btn" onclick="openSurgPhone(\''+c.id+'\')">已电话通知</button>');
+  /* CMD-1109-10：KR 改了时间后框和第一次确认一样——新时间还没发送就是［发送信息给客人］（不写旧的「已发送」，不再有「请电话通知客人」+［已电话通知］） */
   var small = '';
   if(surgMsgSent(c)){ /* CMD-1109-01：发过之后按钮还在（可以再发），按钮下面小字写「已发送 MM/DD HH:mm」 */
     var ph = c.surgPhone && c.surgPhone.key===surgMsgKey(c) ? c.surgPhone : null, m = surgMsgOfKey(c);

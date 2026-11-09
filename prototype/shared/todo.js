@@ -102,7 +102,7 @@ function inTodoItems(){
     /* KR 已确认施术时间 → 转告客人（打开该案件的赴韩施术 tab 即视为已看到，见 todoMarkRelay） */
     if(scheduleState(c)==='Confirmed' && ks && !surgMsgSent(c)){ /* CMD-1019-16：没通知过 =［发送给客人］；通知过之后 KR 又改了 = 电话通知客人时间变更（不重发） */
       var gotoRow = function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-send-row'}); };
-      if(surgChanged(c)) push(todoMk('relay', '电话通知客人时间变更：'+surgChangeText(c), c, ks.confirmedDate, false, gotoRow));
+      if(surgChanged(c)) push(todoMk('relay', '请发送新的施术时间给客人：'+surgChangeText(c), c, ks.confirmedDate, false, gotoRow)); /* CMD-1109-10：不再电话通知，改成发送；按［发送信息给客人］就完成 */
       else push(todoMk('relay', 'KR 已确认施术时间：发送给客人（'+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, gotoRow));
     }
     /* CMD-1029-09 三：施术前约 1 个月（30 天）：联络客人确认行程；只提醒不挡 */
