@@ -495,11 +495,11 @@ var KR_CASE_TABS = [{key:'basic', label:'基础资料'}, {key:'consult', label:'
 /* KR 端 tab 列表（有才显示）：没升级的一般案件页 = 基础资料｜面诊｜附件｜Timeline（KR 的结算只算赴韩定金 / 尾款，没付之前没有）；升级后 = 完整格式 */
 function krTabListOf(r){
   var defs = {}; KR_CASE_TABS.forEach(function(t0){ defs[t0.key] = t0; });
-  var info = Store.withClinic(r.clinicId, function(){ var c = r.c; return {up:isUpgraded(c), child:isChildVisit(c), rev:isRevEval(c), one:visitsOnlyOne(c), post:careRows(c).length>0 || !!c.krProcedureDone || careUnits(c).unbooked.length>0, mgmt:hasMgmtFlow(c), hasRev:flowsOf(c).some(function(f){ return f.kind==='revisit'; }), marks:{consult:flowMarkOf(c, 'consult'), items:flowMarkOf(c, 'kr'), postcare:flowMarkOf(c, 'postcare'), kmgmt:flowMarkOf(c, 'kmgmt'), revisit:flowMarkOf(c, 'revisit')}}; });
+  var info = Store.withClinic(r.clinicId, function(){ var c = r.c; return {up:isUpgraded(c), child:isChildVisit(c), rev:isRevEval(c), one:visitsOnlyOne(c), post:careRows(c).length>0 || !!c.krProcedureDone || careUnits(c).unbooked.length>0, mgmt:hasMgmtFlow(c), hasRev:flowsOf(c).some(function(f){ return f.kind==='revisit'; }), hasNotes:hasNotesFor(c, 'KR'), hasFiles:hasAttachFor(c, 'KR'), marks:{consult:flowMarkOf(c, 'consult'), items:flowMarkOf(c, 'kr'), postcare:flowMarkOf(c, 'postcare'), kmgmt:flowMarkOf(c, 'kmgmt'), revisit:flowMarkOf(c, 'revisit')}}; });
   var keys = ['basic', 'consult'];
   if(info.rev) keys = ['basic', 'consult'];
-  else if(info.up){ keys.push('items'); if(info.post) keys.push('postcare'); if(info.mgmt) keys.push('kmgmt'); if(info.hasRev) keys.push('revisit'); if(!info.child) keys.push('notes', 'visits', 'summary'); keys.push('settle'); }
-  keys.push('files', 'log');
+  else if(info.up){ keys.push('items'); if(info.post) keys.push('postcare'); if(info.mgmt) keys.push('kmgmt'); if(info.hasRev) keys.push('revisit'); if(!info.child){ if(info.hasNotes) keys.push('notes'); keys.push('visits', 'summary'); } keys.push('settle'); }
+  if(info.hasFiles) keys.push('files'); keys.push('log');
   return keys.map(function(kk){ var d = Object.assign({}, defs[kk]); if(info.up && info.marks[kk]) d.mark = info.marks[kk]; return d; });
 } /* 拿掉「KR 专用附件」，只留共用附件（CMD-1013-08 四·1） */
 function krApplyAt(o){ o = o||{}; if(o.flow) FLOW_OPEN[KR_CASE.id+':'+o.flow] = true; if(o.day){ KR_CASE.day = o.day; KR_CASE.subTab = 'today'; } else if(o.tab) KR_CASE.day = ''; if(o.tab) KR_CASE.tab = (o.tab==='proc' ? 'items' : o.tab); if(o.page) KR_PROJ_PAGE = o.page; if(o.sub){ KR_SUB_HL = o.sub; krOpenSubHl(); } krRenderCaseDetail(); if(o.sub) setTimeout(function(){ var el = document.getElementById('kr-subrow-'+o.sub); if(el && el.scrollIntoView) el.scrollIntoView({block:'center'}); }, 80); } /* CMD-1019-08：别的入口再点这个案件 → 本分页跳到那个位置 */
@@ -5038,7 +5038,7 @@ function krRvNow(){ try{ var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); retur
 function krOpenDay(clinicId, id, key){ krShowCase(clinicId, id, {day:key}); }
 function krCloseDay(){ KR_CASE.day = ''; krRenderCaseDetail(); }
 function krDayTab(k){ KR_CASE.subTab = k; krRenderCaseDetail(); }
-function krSubTabsOf(c, v){ var out = [{key:'visit', label:'到访'}, {key:'today', label:'今日项目'}]; if(subDayMoney({m:c, v:v}).length) out.push({key:'settle', label:'结算'}); out.push({key:'files', label:'附件'}, {key:'log', label:'Timeline'}); return out; }
+function krSubTabsOf(c, v){ var out = [{key:'visit', label:'到访'}, {key:'today', label:'今日项目'}]; if(subDayMoney({m:c, v:v}).length) out.push({key:'settle', label:'结算'}); if(hasAttachFor(c, 'KR')) out.push({key:'files', label:'附件'}); out.push({key:'log', label:'Timeline'}); return out; }
 
 /* ===== CMD-1025-02：KR 子案件页（施术当天）重排 =====
    页头（客人名 面诊 N 次｜施术 M 次 在韩… ［对话］ / 来源诊所 · 院长 · KR 室长 / 主案件 A…）+ 状态列（当前状态 + 按钮）+ tab：到访｜项目方案｜术前状态｜进行项目｜结算｜附件｜Timeline（随进度出现）。
@@ -5053,7 +5053,7 @@ function krSdTabs(c){
   if(paid) out.push({key:'pre', label:'术前状态', mark: preOk ? '✓' : '●'});
   if(paid && preOk) out.push({key:'run', label:'进行项目', mark: c.krProcedureDone ? '✓' : '●'});
   if(paid || (j && j.result==='cannot')) out.push({key:'settle', label:'结算'}); /* 不建议手术 / 全部不做 → 不付尾款：没有术前状态和进行项目；结算（定金 / 退款）照现有规则仍显示（我的判断） */
-  if(arrived){ out.push({key:'files', label:'附件'}); out.push({key:'log', label:'Timeline'}); }
+  if(arrived){ if(hasAttachFor(c, 'KR')) out.push({key:'files', label:'附件'}); out.push({key:'log', label:'Timeline'}); }
   return out;
 }
 function krSdVisitStateText(c){ return c.krProcedureDone ? '已完成' : (c.hasArrived ? '已到院' : '待到院'); }

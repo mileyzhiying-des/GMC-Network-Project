@@ -3987,7 +3987,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var p0 = ST.newRes(nm+'p'); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20); p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true; p0.hasArrived = true; p0.krDepositPaid = true;
       p0.subItems = [{id:'r143p', kind:'术后管理记录', place:'IN', content:'术后复诊', date:td, done:false, projectName:'隆鼻'}];
       var ch = ST.newRes(nm+'c', {phone:clientPhoneOf(p0.name), purpose:'复诊'}); ch = CASE_ITEMS.filter(function(x){ return x.id===ch.id; })[0]; ch.name = p0.name; ch.visitDate = td; ch.visitTime = '11:00'; ch.materialsConfirmed = true; ch.subState = 'arrived'; ch.arrivedDay = td; ch.needsConsult = true; joinMain(ch, p0); ch.revisitEval = {at:nowFullDt()}; ch.consultRequested = true; ch.consultStatus = 'paid_waiting_kr'; ch.resumeFrom = {caseId:p0.id, type:'复诊评估', types:['复诊评估','术后管理']}; ch.careToday = ['r143p'];
-      ST.open(ch); renderCaseBody(ch); ST.ok(tabsOf()==='到访|复诊评估|术后管理|附件|Timeline', '④：复诊评估日：到访｜复诊评估｜术后管理｜附件｜Timeline（没有本地管理 / 结算）：'+tabsOf());
+      ST.open(ch); renderCaseBody(ch); ST.ok(tabsOf()==='到访|复诊评估|术后管理|Timeline', '④：复诊评估日：到访｜复诊评估｜术后管理｜Timeline（没有本地管理 / 结算；没附件所以没有附件 tab，CMD-1110-18）：'+tabsOf());
       switchSubTab('care'); ST.ok(/今天做的术后管理/.test(document.getElementById('case-body').innerText) && /操作完成/.test(btns()) && /本次不做/.test(btns()), '④：术后管理 tab：今天做的（［操作完成］［本次不做］）');
       var hdr = document.getElementById('case-chat-actions').innerText; ST.ok(/添加本地管理/.test(hdr), '④：没有本地管理时入口在页头［添加本地管理］（不会有三个入口）');
     } finally { window.alert = al; window.confirm = cf; }
@@ -4407,7 +4407,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var vt = caseTabContentHtml(m); ST.ok(/openSubcase\(/.test(vt), '子案件 tab：点一行 → 那一天的子案件页');
     /* 子记录 = 子案件页 */
     openCaseDetail(ch.id); var c = getCurrentCase(); ST.ok(c.id===ch.id && subPageActive(c), '打开子记录 = 子案件页');
-    var list = subTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); ST.ok(/^到访｜复诊评估｜.*附件｜Timeline$/.test(list) && list.indexOf('今日项目')<0, '子案件页 tab：到访｜复诊评估｜…｜附件｜Timeline，没有「今日项目」（CMD-1026-17；原：到访｜今日项目｜（结算）｜附件｜Timeline）：'+list);
+    var list = subTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); ST.ok(/^到访｜复诊评估｜.*Timeline$/.test(list) && list.indexOf('今日项目')<0, '子案件页 tab：到访｜复诊评估｜…｜Timeline（附件有文件才出现，CMD-1110-18），没有「今日项目」：'+list);
     var h = subHeaderHtml(c); ST.ok(h.indexOf(c.caseNo)>-1 && /回到主案件/.test(h) && /今天做/.test(h) && /复诊评估/.test(h), '页头：子案件号 + 日期（地点）+ 今天做 + ［回到主案件］：'+h.replace(/<[^>]+>/g,' ').slice(0,120));
     var ttl = document.getElementById('case-title'); renderCaseTitle(c); ST.ok(ttl && ttl.textContent.indexOf(c.caseNo)>-1 && /（印尼）/.test(ttl.textContent), '标题「客人 · 子案件号 · 日期（地点）」：'+(ttl&&ttl.textContent));
     c.subTab = 'rev'; var th = subPageHtml(c); ST.ok(th.indexOf('复诊')>-1, '复诊评估 tab 里有复诊评估卡（CMD-1026-17；原：今日项目里有复诊评估 + 流程连结）');
@@ -4425,18 +4425,18 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); }, labels = function(c){ return caseTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); };
     /* 1 只有面诊 */
     var a = ST.newRes('R118a'); ST.materials(a, {consult:true}); a = CASE_ITEMS.filter(function(x){ return x.id===a.id; })[0]; a.consultRequested = true;
-    ST.ok(!isUpgraded(a) && labels(a)==='基础资料｜面诊｜备注内容｜附件｜Timeline', '只有面诊：基础资料｜面诊｜备注内容｜附件｜Timeline（没有结算时；CMD-1110-08 起未升级的一般案件也有备注内容）：'+labels(a));
+    ST.ok(!isUpgraded(a) && /^基础资料｜面诊｜(附件｜)?Timeline$/.test(labels(a)) && labels(a).indexOf('备注内容')<0, '只有面诊：基础资料｜面诊｜(附件｜)Timeline（CMD-1110-18：没备注没有备注内容；上传过照片 / 文件才有附件）：'+labels(a));
     ST.ok(!/从 .* 面诊开始/.test('') && mainHeadLine(a).indexOf('第')<0 && mainHeadLine(a).indexOf('A000')<0, '一般案件页页头不写子案件号');
     /* 2 只做本地 */
     var b = ST.newRes('R118b'); ST.materials(b, {consult:false}); b = CASE_ITEMS.filter(function(x){ return x.id===b.id; })[0];
-    ST.ok(!isUpgraded(b) && labels(b).indexOf('基础资料｜备注内容')===0 && labels(b).indexOf('面诊')<0 && labels(b).indexOf('子案件')<0 && labels(b).indexOf('项目汇总')<0, '只做本地（CMD-1110-14：没用没有本地项目 tab）：基础资料｜备注内容｜…｜附件｜Timeline：'+labels(b));
+    ST.ok(!isUpgraded(b) && labels(b).indexOf('基础资料｜')===0 && labels(b).indexOf('备注内容')<0 && labels(b).indexOf('面诊')<0 && labels(b).indexOf('子案件')<0 && labels(b).indexOf('项目汇总')<0, '只做本地（CMD-1110-14：没用没有本地项目 tab；CMD-1110-18：没备注没有备注内容）：'+labels(b));
     ST.ok(mainHeadLine(b).indexOf('面诊开始')<0 && mainHeadLine(b).indexOf('本案件正在处理')<0, '没有面诊的案件页头不写「从 xx 面诊开始」，进行中写具体内容：'+mainHeadLine(b));
     /* 3 升级：付了赴韩定金 */
     var m = ST.newRes('R118m'); ST.materials(m, {consult:true}); m = CASE_ITEMS.filter(function(x){ return x.id===m.id; })[0]; m.visitDate = dAgo(60); m.consultRequested = true; m.reportReady = true; m.reportDate = dAgo(58);
     m.settlementDone = true; m.krDepositPaid = true; m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:dAgo(30)+' 10:00'}]; m.krProcedureDone = true; m.hasArrived = true; m.krArrivedDay = dAgo(30); m.krSchedule = {status:'arrived', confirmedDate:dAgo(30), confirmedTime:'10:00'};
     m.subItems = [{id:'s118', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false, projectName:'隆鼻', suggest:todayStr()}];
     ST.ok(isUpgraded(m), '付了赴韩定金 → 升级');
-    var lb = labels(m); ST.ok(lb.indexOf('流程')<0 && /基础资料｜面诊｜施术项目｜术后管理｜(管理项目[^｜]*｜)?备注内容｜子案件｜项目汇总/.test(lb) && /附件｜Timeline$/.test(lb), '完整格式没有「流程」tab；1110-02 起 管理项目｜备注内容 在子案件之前：'+lb);
+    var lb = labels(m); ST.ok(lb.indexOf('流程')<0 && /基础资料｜面诊｜施术项目｜术后管理｜(管理项目[^｜]*｜)?(备注内容｜)?子案件｜项目汇总/.test(lb) && /Timeline$/.test(lb), '完整格式没有「流程」tab；备注内容 / 附件 有内容才出现：'+lb);
     var tl = caseTabListOf(m); ST.ok(tl.filter(function(t0){ return t0.key==='consult'; })[0].mark==='✓' && tl.filter(function(t0){ return t0.key==='kr'; })[0].mark===(krAllItems(m).filter(function(it){ return !krIsMgmtItemC(it); }).every(function(it){ return it.done || it.cancelled || it.replacedBy; }) ? '✓' : '●') && tl.filter(function(t0){ return t0.key==='postcare'; })[0].mark==='●', '面诊 ✓ 已结束，赴韩 / 术后管理 ● 还有事');
     m.krTripEnded = {at:dAgo(25)+' 10:00'};
     ST.ok(flowMarkOf(m, 'kr')==='✓' && flowMarkOf(m, 'postcare')==='●', '韩国行程结束 → 赴韩 ✓，术后管理没做完 ●');
@@ -8451,10 +8451,12 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R278b','CMD-1110-02（KM1 分页，stageC 夹具）：KR 主案件页（升级后）有「备注内容」tab，位置在 在韩管理 / 复诊 之后、子案件之前；KR 客人详情有「备注内容」tab',function(){
     var r = krAllCases().filter(function(x){ return /^T-待到院/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var tabs0 = krTabListOf(r).map(function(t0){ return t0.key; }); ST.ok(tabs0.indexOf('notes')<0, '没有备注 → KR 没有备注内容 tab（CMD-1110-18）');
+    Store.mutateClinic(r.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c0.krProgressMemos = (c0.krProgressMemos||[]).concat([{id:'m278', at:nowFullDt(), by:'KM1 室长', text:'R278 备注', vk:'main', auto:true}]); return true; }); r = krAllCases().filter(function(x){ return x.id===r.id; })[0];
     var tabs = krTabListOf(r).map(function(t0){ return t0.key; }); ST.ok(tabs.indexOf('notes')>-1 && tabs.indexOf('notes')<tabs.indexOf('visits') && tabs.indexOf('notes')>tabs.indexOf('items'), 'KR tab 顺序里有 notes，在子案件前：'+tabs.join(','));
     ST.ok(typeof KR_TAB_FN.notes==='function' && /项目备注（\d+）/.test(Store.withClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; KR_CASE = Object.assign({}, KR_CASE||{}, {clinicId:r.clinicId, id:r.id}); return KR_TAB_FN.notes(c); })), 'KR 备注内容 tab 内容（CMD-1110-09：左右分页）');
     var m = {mode:'KR', name:r.name, cases:[r.c], openCase:function(c){ return "krShowCase('"+r.clinicId+"','"+c.id+"')"; }}; ST.ok(/项目备注（\d+）/.test(cliNotesHtml(m)), 'KR 客人详情「备注内容」（左右分页）');
-    ST.ok(/备注内容/.test(clientDetailBodyHtml(Object.assign({cl:null, cases:[], mode:'IN', name:'x', openCase:function(){ return ''; }}, {}))), '客户详情 tab 栏有「备注内容」');
+    ST.ok(/备注内容/.test(clientDetailBodyHtml(m)) && !/cliSetTab\('notes'\)/.test(clientDetailBodyHtml(Object.assign({cl:null, cases:[], mode:'IN', name:'x', openCase:function(){ return ''; }}, {}))), '客户详情：有备注才有「备注内容」tab（CMD-1110-18）');
   });
   ST.def('R279a','CMD-1110-03（A1 分页）：子案件按当天做的事命名（施术项目 · 在韩管理）；主案件 / 子案件 tab 叫「施术项目」，子案件状态「施术项目 · 已结束」；施术那天的子案件页三张卡（赴韩日程卡 + 项目表含管理项目、没有操作栏 + 来访备注卡）；案件管理列表 tab 和阶段标仍叫「赴韩施术」',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
@@ -10677,7 +10679,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       renderCaseHeaderActions(p); var ha = document.getElementById('case-chat-actions'); ST.ok(!!ha && /添加本地管理/.test(ha.innerText), '页头［+ 添加本地管理］');
       var h = mgmtActiveHtml(p, 'main'), t = h.replace(/<[^>]+>/g, ' ');
       ST.ok(!/继续使用持有项目|继续选购项目|同一次到店里还可以|全部完成/.test(t), '本地管理卡没有「继续」行（原：纯本地案件保留，1110-05 的例外）');
-      planModalOpen(); var ov = document.getElementById('local-plan-overlay'); ST.ok(ov.classList.contains('open') && /今天如何安排项目/.test(ov.innerText) && /使用持有项目/.test(ov.innerText) && /购买新项目/.test(ov.innerText) && /今天不使用/.test(ov.innerText), '「今天如何安排项目？」弹窗：使用持有项目 / 购买新项目 / 今天不使用（CMD-1110-16）'); planClose();
+      planModalOpen(); var ov = document.getElementById('local-plan-overlay'); ST.ok(ov.classList.contains('open') && /今日如何安排项目/.test(ov.innerText) && /使用持有项目/.test(ov.innerText) && /购买新项目/.test(ov.innerText) && !/今天不使用/.test(ov.innerText), '「今日如何安排项目？」弹窗：使用持有项目 / 购买新项目，× 就是今天不使用（CMD-1110-18）'); planClose();
       ST.ok(!p.localMgmt, '纯本地案件不另建 localMgmt（不会有两套清单）');
       inLocalEntryMainGo('buy'); p = cur(p); ST.ok(!!p.localMgmt && p.localMgmt.fromUsePrev && document.getElementById('lm-buy-overlay').classList.contains('open'), '购买新项目 → 弹窗（CMD-1110-14：购买一律用弹窗，记在 localMgmt）');
       /* 未升级一般案件的备注内容 tab */
@@ -10781,6 +10783,41 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/今天 [0-9:]+ · (施术项目 · )?(术后管理 · 在韩管理|术后管理)/.test(host.replace(/\s+/g, ' ')) || /在韩管理/.test(host), '标题写子案件名称（术后管理 · 在韩管理）：'+(host.replace(/\s+/g, ' ').match(/今天 [0-9:]+ ·[^|]{0,40}/)||[''])[0]);
     } finally { window.alert = al; krDayAddClose(); var s0 = JSON.parse(snap); Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
   });
+  /* ===== CMD-1110-18 ===== */
+  ST.def('R293a','CMD-1110-18（A1 分页）：今日如何安排项目弹窗精简 + × 无底色 + 备注内容 / 附件 tab 没内容不显示 + 基础资料附件上传',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var cur = function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; }, tabs = function(c){ return caseTabListOf(c).map(function(t0){ return t0.key; }).join(','); }, pov = function(){ return document.getElementById('local-plan-overlay'); };
+    window.GMC_LOCAL_LEAVE_MANUAL = true; window.GMC_NO_PLAN_AUTO = false;
+    try{
+      var c = ST.newRes('R293w1'), id = c.id; ST.arrive(c); ST.open(cur(id)); ST.materials(cur(id), {consult:false}); c = cur(id);
+      var ov = pov(), txt = ov ? ov.innerText : '';
+      ST.ok(ov && ov.classList.contains('open') && /今日如何安排项目/.test(txt), '弹窗标题「今日如何安排项目？」');
+      ST.ok(txt.indexOf(c.name)<0 && !/今天不使用/.test(txt), '没有客人名那一行，没有「今天不使用」');
+      var bs = ov.querySelectorAll('.modal-box button:not(.modal-x)'); ST.ok(bs.length===2 && bs[0].textContent.trim()==='使用持有项目' && bs[1].textContent.trim()==='购买新项目', '两个按钮：使用持有项目 / 购买新项目');
+      ST.ok(bs[0].disabled && /width:100%/.test(bs[0].getAttribute('style')) && /width:100%/.test(bs[1].getAttribute('style')) && bs[0].parentNode.style.flexDirection==='column', '没有持有 → 使用持有灰；两个按钮上下排、同宽');
+      var x = ov.querySelector('.modal-x'), xs = getComputedStyle(x); ST.ok(!!x && (xs.backgroundColor==='rgba(0, 0, 0, 0)' || xs.backgroundColor==='transparent') && xs.borderTopWidth==='0px', '× 没有底色没有边框');
+      /* × = 今天不使用 → 客人准备离店了吗？ */
+      x.click(); var lv = document.getElementById('local-leave-overlay');
+      ST.ok(!pov().classList.contains('open') && lv && lv.classList.contains('open') && /客人准备离店了吗/.test(lv.innerText), '点 × → 弹「客人准备离店了吗？」');
+      lv.classList.remove('open');
+      /* tab：没备注 / 没附件 → 不出现；基础资料 / Timeline 永远在 */
+      c = cur(id); c.concerns = []; c.photoUploaded = false; c.videoUploaded = false; var t = tabs(c);
+      ST.ok(t.indexOf('notes')<0 && t.indexOf('attachments')<0 && /^basic/.test(t) && /timeline$/.test(t), '没有备注 / 附件 → 没有这两个 tab：'+t);
+      /* 基础资料最下面一行附件 → 上传 → 附件 tab 出现 */
+      ST.open(c); c = cur(id); var bh = basicFourHtml(c, true);
+      ST.ok(/附件<\/span>[\s\S]*mockUploadAttachment\(\)[\s\S]*\+ 上传/.test(bh) && bh.lastIndexOf('mockUploadAttachment')>bh.lastIndexOf('医美史'), '基础资料最下面有「附件：［+ 上传］」');
+      mockUploadAttachment(); c = cur(id);
+      ST.ok((c.manualAttachments||[]).length===1 && tabs(c).indexOf('attachments')>-1, '上传后附件 tab 出现：'+tabs(c));
+      ST.ok(attachmentsTabHtml(c).indexOf('补充附件 1.pdf')>-1, '附件 tab 里有这个文件');
+      /* 有备注 → 备注内容 tab 出现 */
+      c.inNotes = [{id:'n1', text:'自测备注', by:'A1', at:nowFullDt()}]; ST.ok(tabs(c).indexOf('notes')>-1, '有备注 → 备注内容 tab 出现');
+      /* 客户页：没备注不显示 */
+      var m0 = {mode:'IN', name:c.name, cl:clientByName(c.name), cases:[cur(id)], openCase:function(o){ return "openCaseDetail('"+o.id+"')"; }};
+      var cb = clientDetailBodyHtml(m0); ST.ok(cb.indexOf('备注内容')>-1, '客户页：有备注显示备注内容 tab');
+      c.inNotes = []; cb = clientDetailBodyHtml(m0); ST.ok(cb.indexOf('onclick="cliSetTab(\'notes\')"')<0 && cb.indexOf('Timeline')>-1, '客户页：没备注不显示备注内容 tab');
+    } finally { window.alert = al; window.confirm = cf; window.GMC_LOCAL_LEAVE_MANUAL = false; window.GMC_NO_PLAN_AUTO = true; }
+  });
   ST.def('R292a','CMD-1110-16（A1 分页）：弹窗四档尺寸 + 购买弹窗（XL、没有内层框、60/40、标签不换行）+「今天如何安排项目？」弹窗（自动弹 / 页头同一个 / 买完回来 / 没持有灰 / 今天不使用 / 使用持有后才有本地项目 tab）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
@@ -10794,15 +10831,15 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* ② 不面诊本地：确认基础资料 → 自动弹 */
       var c = ST.newRes('R292w1'), id = c.id, p = ST.localProj('LHALa peel'); ST.arrive(c); ST.open(cur(id)); ST.materials(cur(id), {consult:false});
       c = cur(id); ST.ok(c.materialsConfirmed, '前置：基础资料已确认');
-      ST.ok(popen() && /今天如何安排项目/.test(pov().innerText), '确认基础资料（本地）→ 自动弹「今天如何安排项目？」');
+      ST.ok(popen() && /今日如何安排项目/.test(pov().innerText), '确认基础资料（本地）→ 自动弹「今天如何安排项目？」');
       var hasHold = planHeld(c); ST.ok(!hasHold && !!pov().querySelector('button[disabled]'), '客人没有持有：［使用持有项目］灰');
-      var bx = pov().querySelector('.modal-box'); ST.ok(bx.classList.contains('msz-M') && /今天不使用/.test(pov().innerText), '弹窗 M 档 + 左下角「今天不使用」');
+      var bx = pov().querySelector('.modal-box'); ST.ok(bx.classList.contains('msz-M') && !/今天不使用/.test(pov().innerText) && !!pov().querySelector('.modal-x'), '弹窗 M 档；没有「今天不使用」链接，× 就是今天不使用（CMD-1110-18）');
       /* ③ 购买新项目 → XL 购买弹窗 */
       planBuy(); var lb = document.getElementById('lm-buy-overlay'), lbx = lb && lb.querySelector('.modal-box');
       ST.ok(lb && lb.classList.contains('open') && !popen() && lbx.classList.contains('msz-XL') && !/本地选购/.test(lbx.querySelector('.lm-buy-body') ? lbx.querySelector('.lm-buy-body').innerText.slice(0, 20) : '本地选购') , '购买新项目 → 购买弹窗（XL，没有内层「本地选购」卡）');
       ST.ok(!!lbx.querySelector('.lm-buy-body') && !lbx.querySelector('.project-card') && /minmax\(0,3fr\) minmax\(0,2fr\)/.test(lbx.querySelector('.lm-buy-body').innerHTML), '购买弹窗：没有带框内层卡片；左 60% / 右 40% 两栏');
       toggleLocalProject('lm', p.id); lmSettle(); c = cur(id); ST.open(c);
-      ST.ok(popen() && /今天如何安排项目/.test(pov().innerText), '付完款 → 回到「今天如何安排项目？」');
+      ST.ok(popen() && /今日如何安排项目/.test(pov().innerText), '付完款 → 回到「今天如何安排项目？」');
       ST.ok(/settle/.test(tabs(c)) && !/localmgmt/.test(tabs(c)), '结算单进「结算」tab；还没使用 → 没有本地项目 tab：'+tabs(c));
       ST.ok(!pov().querySelector('button[disabled]'), '刚买的已是持有 → ［使用持有项目］可点');
       /* ④ 使用持有 → 勾选 → 出现本地项目 tab */
@@ -10831,7 +10868,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/localmgmt|settle/.test(tabs(c)), '还没买没用：没有本地项目 / 结算 tab：'+tabs(c));
       usePrevBuy(); toggleLocalProject('lm', p.id); lmSettle(); c = cur(id); ST.open(c);
       ST.ok(/settle/.test(tabs(c)) && !/localmgmt/.test(tabs(c)), '买了：有结算 tab；还没使用 → 没有本地项目 tab（CMD-1110-16）：'+tabs(c));
-      var pov = document.getElementById('local-plan-overlay'); ST.ok(!!pov && pov.classList.contains('open') && /今天如何安排项目/.test(pov.innerText), '买完付完款：回到「今天如何安排项目？」');
+      var pov = document.getElementById('local-plan-overlay'); ST.ok(!!pov && pov.classList.contains('open') && /今日如何安排项目/.test(pov.innerText), '买完付完款：回到「今天如何安排项目？」');
       planNotUse(); c = cur(id);
       ST.ok(ovOpen() && /客人准备离店了吗？/.test(document.getElementById('local-leave-overlay').innerText) && /还有项目/.test(document.getElementById('local-leave-overlay').innerText) && /客人已离店/.test(document.getElementById('local-leave-overlay').innerText), '［不使用］弹「客人准备离店了吗？」［还有项目］［客人已离店］');
       localLeaveNo(); c = cur(id); ST.open(c);

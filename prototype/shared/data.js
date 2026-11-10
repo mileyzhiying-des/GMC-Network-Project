@@ -3110,10 +3110,8 @@ function planRender(){
   if(PLAN.state==='use' && pure){
     ov.innerHTML = '<div class="modal-box msz-L" style="padding:24px;max-height:88vh;overflow:auto;"><div style="display:flex;align-items:center;margin-bottom:10px;"><div style="font-size:16px;font-weight:700;flex:1;">勾选今天要使用的持有项目 · '+cesc(c.name)+'</div><button class="btn-ghost" onclick="planBack()" title="返回">‹ 返回</button></div>'+holdingsUseHtml(c, 'main')+'</div>';
   } else {
-    ov.innerHTML = '<div class="modal-box msz-M" style="padding:24px;"><div style="display:flex;align-items:center;margin-bottom:6px;"><div style="font-size:16px;font-weight:700;flex:1;">今天如何安排项目？</div><button class="btn-ghost" onclick="planNotUse()" title="今天不使用">✕</button></div>'+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:16px;">'+cesc(c.name)+'</div>'+
-      '<div style="display:flex;gap:12px;justify-content:flex-end;"><button class="btn-outline" '+(held ? '' : 'disabled style="opacity:.5;cursor:not-allowed;" title="客人没有可用的持有项目" ')+'onclick="planUse()">使用持有项目</button><button class="btn-primary" onclick="planBuy()">购买新项目</button></div>'+
-      '<div style="margin-top:18px;"><a href="#" onclick="planNotUse();return false;" style="font-size:12px;color:var(--muted);text-decoration:underline;">今天不使用</a></div></div>';
+    ov.innerHTML = '<div class="modal-box msz-M" style="padding:24px;"><div style="display:flex;align-items:center;margin-bottom:18px;"><div style="font-size:16px;font-weight:700;flex:1;">今日如何安排项目？</div><button class="modal-x" onclick="planNotUse()" title="今天不使用" aria-label="关闭">✕</button></div>'+
+      '<div style="display:flex;flex-direction:column;gap:12px;"><button class="btn-outline" style="width:100%;padding:10px 14px;'+(held ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+(held ? '' : 'disabled title="客人没有可用的持有项目" ')+'onclick="planUse()">使用持有项目</button><button class="btn-primary" style="width:100%;padding:10px 14px;" onclick="planBuy()">购买新项目</button></div></div>';
   }
   ov.classList.add('open');
 }
@@ -3175,7 +3173,7 @@ function inleRender(){
     try{ body = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">勾选今天要做的项目，按［本次使用］移到「今日项目」。已经约在别天的术后项目不在这里选，改日子请在预约项目里按［修改时间］。</div>'+inUseOpen()+'<div id="iu-err" style="display:none;color:#B3261E;font-size:13px;margin-top:12px;"></div>'; } finally { IN_USE_EMBED = false; }
     foot = '<div style="display:flex;justify-content:flex-end;margin-top:14px;"><button class="btn-primary" id="iu-go" disabled style="opacity:.45;cursor:not-allowed;" onclick="inUseConfirm()">本次使用</button></div>';
   }
-  ov.innerHTML = '<div class="modal-box msz-'+(tab==='buy' ? 'XL' : 'L')+'" style="max-height:88vh;overflow:auto;padding:24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理 · '+e(c.name)+'</div><button class="btn-ghost" onclick="'+(tab==='buy' ? 'lmNoBuy()' : 'inLocalClose()')+'" title="关闭">✕</button></div>'+tabs+'<div id="inle-body">'+body+'</div>'+foot+'</div>';
+  ov.innerHTML = '<div class="modal-box msz-'+(tab==='buy' ? 'XL' : 'L')+'" style="max-height:88vh;overflow:auto;padding:24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理 · '+e(c.name)+'</div><button class="modal-x" onclick="'+(tab==='buy' ? 'lmNoBuy()' : 'inLocalClose()')+'" title="关闭" aria-label="关闭">✕</button></div>'+tabs+'<div id="inle-body">'+body+'</div>'+foot+'</div>';
   ov.classList.add('open');
 }
 function inLocalClose(){ var ov = document.getElementById('in-localentry-overlay'); if(ov) ov.classList.remove('open'); INLE = null; }
@@ -3202,7 +3200,7 @@ function lmBuyModalRender(){
   }
   if(!keep){ LM_BUY_OPEN = ''; if(ov) ov.classList.remove('open'); return; }
   if(!ov){ ov = document.createElement('div'); ov.id = 'lm-buy-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 190; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box msz-XL" style="max-height:88vh;overflow:auto;padding:24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理项目 · '+cesc(c.name)+'</div><button class="btn-ghost" onclick="lmNoBuy()" title="关闭">✕</button></div>'+lmBuyHtml(c)+'</div>';
+  ov.innerHTML = '<div class="modal-box msz-XL" style="max-height:88vh;overflow:auto;padding:24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理项目 · '+cesc(c.name)+'</div><button class="modal-x" onclick="lmNoBuy()" title="关闭" aria-label="关闭">✕</button></div>'+lmBuyHtml(c)+'</div>';
   ov.classList.add('open');
 }
 (function(){ var r0 = renderCaseBody; renderCaseBody = function(c){ var r = r0.apply(this, arguments); try{ if(LM_BUY_OPEN) lmBuyModalRender(); }catch(e){ console.error('[本地选购弹窗重画]', e); } return r; }; })();
@@ -10655,7 +10653,8 @@ function cliTimelineHtml(model){
 }
 function clientDetailBodyHtml(model){
   var isKr = model.mode==='KR', nHold = cliHoldCount(model), nCases = model.cases.length;
-  var tabs = [['basic', '基础信息'], ['hold', '持有项目 '+nHold], ['cases', '本院案件记录 '+nCases], ['notes', '备注内容'], ['tl', 'Timeline']];
+  var hasN = false; try{ hasN = notesRecordsOfCases(model.cases, isKr ? 'KR' : 'IN').length>0; }catch(e){}
+  var tabs = [['basic', '基础信息'], ['hold', '持有项目 '+nHold], ['cases', '本院案件记录 '+nCases]]; if(hasN) tabs.push(['notes', '备注内容']); tabs.push(['tl', 'Timeline']); if(!hasN && CLI_TAB==='notes') CLI_TAB = 'basic';
   var tabbar = '<div class="tabs" style="margin-top:18px;">'+tabs.map(function(t0){ return '<span class="tab'+(CLI_TAB===t0[0] ? ' active' : '')+'" onclick="cliSetTab(\''+t0[0]+'\')">'+t0[1]+'</span>'; }).join('')+'</div>';
   var pane = function(k, html){ return '<div id="cli-pane-'+k+'" style="'+(CLI_TAB===k ? '' : 'display:none;')+'margin-top:14px;">'+html+'</div>'; };
   var holdHtml = isKr ? '<div class="card" style="padding:4px 20px;"><div class="info-heading" style="margin:12px 0 4px;">韩国持有</div>'+cliHoldKrHtml(model)+'</div>'
@@ -10919,13 +10918,17 @@ function beautyCardHtml(c){
   var model = {mode:'IN', name:c.name, cl:cl, cases:CASE_ITEMS.filter(function(x){ return x.name===c.name; }), openCase:function(o){ return "openCaseDetail('"+o.id+"')"; }, addOnclick:isEnded(c) ? '' : "BEAUTY_ADD_KR=null;openBeautyAdd('"+c.id+"')"};
   return '<div class="card" style="padding:18px 24px;margin-top:14px;">'+cliHistoryHtml(model)+'</div>';
 }
+function basicAttachRowHtml(c){
+  var n = 0; try{ n = caseAttachments(c).length; }catch(e){}
+  return '<div class="card" style="padding:12px 24px;margin-top:14px;"><div class="case-field-row" style="border:none;"><span class="fk">附件</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+(n ? '已有 '+n+' 个文件（在「附件」tab 查看）' : '还没有附件')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div></div>';
+}
 function basicFourHtml(c, confirmed){
   var core = '', foot = '';
   MAT_SPLIT = true; MAT_FOOT = '';
   try{ core = confirmed ? basicTabHtml(c) : materialsCardHtml(c); foot = MAT_FOOT; }finally{ MAT_SPLIT = false; MAT_FOOT = ''; }
   var basic = '<div class="card" style="padding:22px 24px;">'+clientBasicBlockHtml(c).replace('margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border2);','margin-bottom:0;')+'</div>';
   var careNote = (c.careFor && c.careFor.caseId) ? '<div style="font-size:12px;color:var(--slate2);padding:8px 14px;background:var(--surface2,#faf6ef);border-radius:10px;margin:10px 0;">原预约目的：术后管理（从「未安排预约」预约，来自 '+cesc((followSrcById(c.careFor.caseId)||{}).caseNo||'')+'）</div>' : '';
-  return relatedBlockHtml(c)+careNote+basic+core+foot+beautyCardHtml(c); /* CMD-1022-15：［确认］［取消接待］放在医美史上面 */ /* CMD-1022-12 B7：旧「继续到原案件」黄条不再出现（到店弹窗已取代它） */
+  return relatedBlockHtml(c)+careNote+basic+core+foot+beautyCardHtml(c)+(confirmed ? basicAttachRowHtml(c) : ''); /* CMD-1110-18：确认后的基础资料最下面一行「附件：［+ 上传］」（和附件 tab 同一个上传函数）；*/ /* CMD-1022-15：［确认］［取消接待］放在医美史上面 */ /* CMD-1022-12 B7：旧「继续到原案件」黄条不再出现（到店弹窗已取代它） */
 }
 
 /* CMD-1022-06：继续面诊「价格已更新」提示（价格以结算时的最新价格为准，和原诊疗方案不同才显示） */
@@ -11478,23 +11481,26 @@ function flowMarkOf(m, kind, side){
   else if(kind==='revisit'){ var rv = childVisitsOf(m).filter(function(x){ return isRevEval(x); }); done = rv.length>0 && rv.every(function(x){ return !!(x.reportReady || x.consultStatus==='report_ready') || isEnded(x); }); }
   return done ? '✓' : '●';
 }
+/* CMD-1110-18：「备注内容」「附件」tab 没内容就不出现（基础资料 / Timeline 永远有）；上传一次附件后附件 tab 才出现 */
+function hasAttachFor(c, viewer){ try{ var l = caseAttachments(c); if(viewer==='KR') l = l.filter(function(f){ return !f.chatLog; }); return l.length>0; }catch(e){ return false; } }
+function hasNotesFor(m, viewer){ try{ return notesRecordsOfCases(mainNotesCases(m), viewer||'IN').length>0; }catch(e){ return false; } }
 /* IN 端 tab 列表：[{key,label,mark}]（有才显示） */
 function caseTabListOf(c){
   var up = isUpgraded(c), out = [{key:'basic', label:'基础资料'}];
   if(!up){
     if(c.consultRequested) out.push({key:'consult', label:'面诊'});
     if(showLocalTab(c)) out.push({key:'localmgmt', label:'本地项目'});
-    if(c.materialsConfirmed) out.push({key:'notes', label:'备注内容'}); /* CMD-1110-08：未升级的一般案件也有「备注内容」tab——顺序 基础资料｜面诊｜本地项目｜备注内容｜结算｜附件｜Timeline（升级后：…｜备注内容｜子案件｜项目汇总｜结算…） */
+    if(c.materialsConfirmed && hasNotesFor(c, 'IN')) out.push({key:'notes', label:'备注内容'}); /* CMD-1110-08：未升级的一般案件也有「备注内容」tab——顺序 基础资料｜面诊｜本地项目｜备注内容｜结算｜附件｜Timeline（升级后：…｜备注内容｜子案件｜项目汇总｜结算…） */
   } else {
     if(c.consultRequested) out.push({key:'consult', label:'面诊', mark:flowMarkOf(c, 'consult')});
     if(showKrTab(c) || (c.procedureItems||[]).some(function(it){ return it.origin==='KR'; })) out.push({key:'kr', label:'施术项目', mark:flowMarkOf(c, 'kr')});
     if(careRows(c).length || c.krProcedureDone || careUnits(c).unbooked.length) out.push({key:'postcare', label:'术后管理', mark:flowMarkOf(c, 'postcare')});
     if(hasMgmtFlow(c) || hasLocalMgmt(c)) out.push({key:'kmgmt', label:'管理项目', mark:flowMarkOf(c, 'kmgmt', 'IN')}); /* CMD-1028-13 三：IN 的「在韩管理」tab 改叫「管理项目」，里面分在韩管理 / 本地管理两段；KR 的 tab 仍叫「在韩管理」 */
     if(flowsOf(c).some(function(f){ return f.kind==='revisit'; })) out.push({key:'revisit', label:'复诊', mark:flowMarkOf(c, 'revisit')});
-    out.push({key:'notes', label:'备注内容'}, {key:'visits', label:'子案件'}, {key:'summary', label:'项目汇总'}); /* CMD-1110-02：基础资料｜面诊｜施术项目｜术后管理｜管理项目｜备注内容｜子案件｜项目汇总… */
+    if(hasNotesFor(c, 'IN')) out.push({key:'notes', label:'备注内容'}); out.push({key:'visits', label:'子案件'}, {key:'summary', label:'项目汇总'}); /* CMD-1110-02：基础资料｜面诊｜施术项目｜术后管理｜管理项目｜备注内容｜子案件｜项目汇总… */
   }
   if(showSettleTab(c)) out.push({key:'settle', label:'结算'});
-  out.push({key:'attachments', label:'附件'}, {key:'timeline', label:'Timeline'});
+  if(hasAttachFor(c, 'IN')) out.push({key:'attachments', label:'附件'}); out.push({key:'timeline', label:'Timeline'});
   return out;
 }
 /* 旧的 tab 名 / 链接 → 现在有的 tab（待办、通知、测试里很多 switchCaseTab('kr' / 'consult' / 'localmgmt' / 'flow')） */
@@ -11982,7 +11988,7 @@ function subDayTabs(c){
   }
   var money = ctx.isRec ? (showSettleTab(c) || dayPaidBatches(c).length>0) : (subDayMoney(ctx).length>0 || (!isKr && !!(rec.localMgmt && (rec.localMgmt.batches||[]).length)));
   if(money) out.push({key:'settle', label:'结算'});
-  out.push({key:'attachments', label:'附件'}, {key:'timeline', label:'Timeline'});
+  if(hasAttachFor(rec, 'IN')) out.push({key:'attachments', label:'附件'}); out.push({key:'timeline', label:'Timeline'});
   return out;
 }
 function subTabListOf(c){ return subDayTabs(c); }

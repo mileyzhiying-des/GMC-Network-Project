@@ -594,3 +594,7 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 .modal-box.msz-S{width:min(400px,92vw)} .modal-box.msz-M{width:min(560px,92vw)} .modal-box.msz-L{width:min(800px,92vw)} .modal-box.msz-XL{width:min(1120px,92vw)}
 #lm-buy-overlay .status-pill, #in-localentry-overlay .status-pill, #local-plan-overlay .status-pill, #kr-dayadd-overlay .status-pill, #kr-addmodal-overlay .status-pill{white-space:nowrap;}
 #lm-buy-overlay .lm-buy-body .chip{white-space:nowrap;}
+
+/* CMD-1110-18：弹窗右上角 × —— 只有图标，没有底色 / 边框 */
+.modal-x{background:none;border:none;box-shadow:none;padding:2px 6px;margin:0;font-size:18px;line-height:1;color:var(--muted);cursor:pointer;}
+.modal-x:hover{background:none;color:var(--ink,#2b2622);}
