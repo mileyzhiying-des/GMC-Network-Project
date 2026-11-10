@@ -7108,9 +7108,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var iid = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return itemIid(c.procedureItems.filter(function(x){ return /^R146管理/.test(x.name); })[0]); });
       /* CMD-1110-13：［增加今日项目］改成弹窗（勾选 → 确认 → 出现在今日项目表）；弹窗里有［+ 购买新项目］ */
       krDayAddToggle(r0.id+'|'+dk); var ov = document.getElementById('kr-dayadd-overlay');
-      ST.ok(!!ov && ov.classList.contains('open') && /增加今日项目 · /.test(ov.textContent) && /\+ 购买新项目/.test(ov.textContent), '按［增加今日项目］打开弹窗，里面有项目卡和［+ 购买新项目］');
-      ST.ok(/确认（0）/.test(ov.textContent) && !!ov.querySelector('button[disabled]'), '没勾选前［确认］灰掉');
-      KR_CASE.id = r0.id; krTpToggle('mg', iid, true); ov = document.getElementById('kr-dayadd-overlay'); ST.ok(/确认（1）/.test(ov.textContent), '勾选后［确认（1）］：'+ov.textContent.slice(-40));
+      ST.ok(!!ov && ov.classList.contains('open') && /增加今日项目/.test(ov.textContent) && /\+ 购买新项目/.test(ov.textContent), '按［增加今日项目］打开弹窗，里面有项目列表和［+ 购买新项目］');
+      ST.ok(!!ov.querySelector('button[disabled]') && !/确认（/.test(ov.textContent), '没勾选前［确认］灰掉（按钮上不写数字，CMD-1110-22）');
+      KR_CASE.id = r0.id; krTpToggle('mg', iid, true); ov = document.getElementById('kr-dayadd-overlay'); ST.ok(!ov.querySelector('button.btn-primary[disabled]'), '勾选后［确认］可点');
       krDayAddConfirm();
       ST.ok(!ov.classList.contains('open'), '确认后弹窗关闭');
       ST.ok(/R146管理项目/.test(txt()) && Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return (c.subItems||[]).some(function(x){ return x.holdUseOf && !x.done && x.date===day; }) || mgTodayQty(c, c.procedureItems.filter(function(x){ return /^R146管理/.test(x.name); })[0])>0; }), '勾选的项目出现在今日项目里');
@@ -10786,6 +10786,40 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   /* ===== CMD-1110-18 ===== */
   /* ===== CMD-1110-19 ===== */
+  /* ===== CMD-1110-22 ===== */
+  ST.def('R297a','CMD-1110-22（KM1 分页，pcStage 夹具）：增加今日项目弹窗重排——标题只写「增加今日项目」+ ×、［+ 购买新项目］在分页行最右、栏位顺序、没勾「-」/ 勾了加减器默认 1 最多到剩余次数、确认次数一致、没勾时确认灰且不写数字',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var day = todayStr(), nm = 'R297管理项目';
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.subItems = c.subItems.filter(function(x){ return !/^q297/.test(x.id); });
+      c.subItems.push({id:'q297a', no:c.caseNo+'-94', kind:'术后管理记录', place:'KR', date:day, time:'17:00', content:'术后管理（术后复诊检查，在韩国）', projectName:'假体隆鼻', arrived:true, simDay:true});
+      c.procedureItems = c.procedureItems.filter(function(x){ return x.name!==nm; }); var it0 = {name:nm, origin:'KR', mgmtPlan:true, heldOver:true, qty:3, holdUsed:0, price:0, batchId:'r297', krAddOn:true}; c.procedureItems.push(it0); itemIid(it0); subCaseNos(c); return true; });
+    var dk = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var v0 = visitsOf(c).filter(function(x){ return x.place==='KR' && x.date===day; })[0]; return v0 ? v0.key : ''; });
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krOpenDay(r0.clinicId, r0.id, dk); KR_CASE.id = r0.id;
+    var iid = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return itemIid(c.procedureItems.filter(function(x){ return x.name===nm; })[0]); });
+    krDayAddToggle(r0.id+'|'+dk); var ov = document.getElementById('kr-dayadd-overlay'), box = ov.querySelector('.modal-box'), head = box.firstElementChild;
+    ST.ok(head.innerText.replace(/\s+/g, '')==='增加今日项目✕' && !!head.querySelector('.modal-x'), '标题只写「增加今日项目」（没有客人名、没有说明文字）+ ×：'+head.innerText.trim());
+    ST.ok(box.innerText.indexOf('勾选今天要做的项目')<0, '拿掉标题下的说明文字');
+    var pillRow = head.nextElementSibling, kids = [].slice.call(pillRow.children); var buy = pillRow.querySelector('button');
+    ST.ok(/管理项目（\d+）/.test(pillRow.innerText) && !!buy && /\+ 购买新项目/.test(buy.innerText) && pillRow.lastElementChild===buy, '分页行：管理项目（N）…最右［+ 购买新项目］');
+    ST.ok(box.innerText.indexOf('未预约')<0 && !box.querySelector('.card'), '没有「未预约 N」小标题和外层框');
+    var th = pillRow.nextElementSibling; ST.ok(th.innerText.replace(/\s+/g, '')==='项目次数使用次数建议时间建议日期购买时间来源', '栏位顺序：勾选框｜项目｜次数｜使用次数｜建议时间｜建议日期｜购买时间｜来源：'+th.innerText.replace(/\s+/g, '|'));
+    var rowOf = function(){ return [].slice.call(ov.querySelectorAll('.modal-box > div')).filter(function(d){ return d.querySelector('input[type=checkbox]') && d.innerText.indexOf(nm)>-1; })[0]; };
+    var rw = rowOf(); ST.ok(!!rw && /剩 3 次/.test(rw.innerText) && !/共 3/.test(rw.innerText), '次数只写「剩 3 次」（不写 / 共 3 次）：'+(rw&&rw.innerText.replace(/\s+/g, ' ')));
+    var cells = rw.children; ST.ok(cells[3].innerText.trim()==='-', '没勾：使用次数「-」：'+cells[3].innerText);
+    var cf = [].slice.call(box.querySelectorAll('button')).filter(function(b){ return /^确认$/.test(b.innerText.trim()); })[0]; ST.ok(!!cf && cf.disabled, '没勾时［确认］灰，按钮上没有数字');
+    krTpToggle('mg', iid, true); ov = document.getElementById('kr-dayadd-overlay'); rw = rowOf();
+    ST.ok(/− *1 *\+/.test(rw.children[3].innerText.replace(/\s+/g, ' ')) && rw.children[3].querySelectorAll('button').length===2, '勾了：加减器「− 1 +」默认 1：'+rw.children[3].innerText);
+    ST.ok(rw.children[3].querySelectorAll('button')[0].disabled && !rw.children[3].querySelectorAll('button')[1].disabled, '1 时 − 灰、+ 可点');
+    krDamQty('mg', iid, 1); krDamQty('mg', iid, 1); krDamQty('mg', iid, 1); rw = rowOf(); ST.ok(/3/.test(rw.children[3].innerText) && rw.children[3].querySelectorAll('button')[1].disabled, '最多到剩余次数 3，到顶 + 灰：'+rw.children[3].innerText);
+    krDamQty('mg', iid, -1); rw = rowOf(); ST.ok(/2/.test(rw.children[3].innerText), '− 一次 → 2');
+    cf = [].slice.call(ov.querySelectorAll('.modal-box button')).filter(function(b){ return /^确认$/.test(b.innerText.trim()); })[0]; ST.ok(!cf.disabled, '勾了之后［确认］可点');
+    krTpToggle('mg', iid, false); rw = rowOf(); ST.ok(rw.children[3].innerText.trim()==='-', '取消勾选回到「-」');
+    krTpToggle('mg', iid, true); krDamQty('mg', iid, 1); krDayAddConfirm();
+    var q = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var it = itemByKey(c, iid); return {today:mgTodayQty(c, it), tq:it.todayQty, rows:(c.subItems||[]).filter(function(s){ return s.useNow && s.useQty; }).map(function(s){ return s.useQty; })}; });
+    ST.ok(q.today===2, '确认后今日项目里这一项次数 = 2（和今日进行的加减同一套数据）：'+JSON.stringify(q));
+    var t = document.getElementById('kr-casedetail').innerText; ST.ok(t.indexOf(nm)>-1, '今日项目表里有这一项');
+  });
   /* ===== CMD-1110-21 ===== */
   ST.def('R296a','CMD-1110-21（A1 分页）：买完付完款弹「使用持有项目吗？」（S，×=不使用）；［使用］刚买的已勾；［不使用］/ × → 离店确认；页头［+ 添加本地管理］买完同样；取消购买不弹；今日如何安排项目只在确认后 / 页头出现',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
@@ -10890,13 +10924,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     krDayAddToggle(r0.id+'|'+dk); var ov = document.getElementById('kr-dayadd-overlay'), box = ov.querySelector('.modal-box');
     ST.ok(ov.classList.contains('open') && !/项目卡/.test(box.innerText.replace(/增加今日项目/, '')), '弹窗里没有「项目卡」标题');
     ST.ok(!box.querySelector('.card') && box.querySelectorAll('[style*="border:1px solid var(--border2)"]').length<=box.querySelectorAll('.kr-pc-block').length+1, '弹窗没有内层带框的卡片');
-    var head = box.firstElementChild; ST.ok(/\+ 购买新项目/.test(head.innerText) && !!head.querySelector('.modal-x'), '［+ 购买新项目］在标题行（× 左边）');
+    var head = box.firstElementChild, prow = head.nextElementSibling; ST.ok(/\+ 购买新项目/.test(prow.innerText) && !!head.querySelector('.modal-x'), '［+ 购买新项目］在分页行最右（CMD-1110-22；原：标题行），× 在标题行');
     /* 购买 */
-    var buy = Array.prototype.slice.call(head.querySelectorAll('button')).filter(function(b){ return /购买新项目/.test(b.innerText); })[0]; buy.click();
+    var buy = Array.prototype.slice.call(prow.querySelectorAll('button')).filter(function(b){ return /购买新项目/.test(b.innerText); })[0]; buy.click();
     var pov = document.getElementById('kr-addmodal-overlay');
     ST.ok(!ov.classList.contains('open') && pov && pov.classList.contains('open') && /购买新项目 · /.test(pov.innerText), '点［+ 购买新项目］：增加今日项目弹窗关掉，购买弹窗打开');
     krAdCancel(); ov = document.getElementById('kr-dayadd-overlay');
-    ST.ok(!pov.classList.contains('open') && ov.classList.contains('open') && /增加今日项目 · /.test(ov.innerText), '取消购买 → 回到增加今日项目弹窗');
+    ST.ok(!pov.classList.contains('open') && ov.classList.contains('open') && /增加今日项目/.test(ov.innerText), '取消购买 → 回到增加今日项目弹窗');
     /* 付款后回来 */
     krAddModalOpen(); krPayLater(); ST.ok(document.getElementById('kr-dayadd-overlay').classList.contains('open'), '稍后付款 / 付完款也回到增加今日项目弹窗');
     krDayAddClose();

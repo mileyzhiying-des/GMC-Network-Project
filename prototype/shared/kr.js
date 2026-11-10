@@ -1003,7 +1003,7 @@ function krHeadDiv(grid, cols){ var t0 = krModalTrim(grid, cols); grid = t0[0]; 
 function krOpsCell(h){ return '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+(h||'')+'</span>'; }
 function krPcGrid(){ return 'grid-template-columns:'+KR_SRC_W+' minmax(0,1.6fr) minmax(0,.9fr) minmax(0,1.4fr) '+KR_OPS_W+' '+KR_OTH_W+';'; } /* CMD-1109-18 二：三个分页「项目｜次数｜预约时间｜操作｜其他｜来源」同一套列宽（和 krMgGridB 一致） */ /* CMD-1015-30：分页本身就是类型，拿掉「项目类型」栏 */
 function krPcHead(cols){ var cs = cols.filter(function(x){ return x!=='项目类型'; }); cs.pop(); return krHeadDiv(krPcGrid(), ['来源'].concat(cs, ['操作', '其他'])); }
-function krPcRow(name, type, cnt, time, ops, sub, pk, oth, src){ return krRowDiv(krPcGrid(), [src||'', '<span style="font-size:13px;">'+(pk ? '<input type="checkbox" '+(KR_PICK[pk.kind+':'+pk.name] ? 'checked ' : '')+'onchange="krTpToggle(\''+pk.kind+'\',\''+pk.name.replace(/\'/g,'')+'\',this.checked)" style="margin-right:6px;"> ' : '')+name+(sub ? '<div style="font-size:12px;color:var(--slate2);">'+sub+'</div>' : '')+'</span>', '<span>'+cnt+'</span>', '<span style="color:var(--slate2);">'+time+'</span>', krOpsCell(ops), '<span>'+(oth||'-')+'</span>']); }
+function krPcRow(name, type, cnt, time, ops, sub, pk, oth, src){ if(pk && window.KR_DAM_COLLECT) window.KR_DAM_COLLECT.push({kind:pk.kind, name:pk.name, label:name, cnt:cnt, time:time, src:src||''}); return krRowDiv(krPcGrid(), [src||'', '<span style="font-size:13px;">'+(pk ? '<input type="checkbox" '+(KR_PICK[pk.kind+':'+pk.name] ? 'checked ' : '')+'onchange="krTpToggle(\''+pk.kind+'\',\''+pk.name.replace(/\'/g,'')+'\',this.checked)" style="margin-right:6px;"> ' : '')+name+(sub ? '<div style="font-size:12px;color:var(--slate2);">'+sub+'</div>' : '')+'</span>', '<span>'+cnt+'</span>', '<span style="color:var(--slate2);">'+time+'</span>', krOpsCell(ops), '<span>'+(oth||'-')+'</span>']); }
 /* 术后管理分页专用栏位（CMD-1015-28）：项目｜对应施术｜项目类型｜次数｜管理间隔｜建议日期（已预约 / 已完成换成预约时间 / 使用时间）｜Action */
 function krCareGrid(){ return 'grid-template-columns:'+KR_SRC_W+' minmax(0,1.5fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,.9fr) minmax(0,1fr) '+KR_OPS_W+' '+KR_OTH_W+';'; }
 function krCareHead(third){ return krHeadDiv(krCareGrid(), ['来源', '项目', '术后第 N 天', '地点', '次数', third, '操作', '其他']); }
@@ -1011,7 +1011,7 @@ function krCareRow(nm, dayTxt, plc, cnt, dt, ops, oth, src){ return krRowDiv(krC
 /* 管理项目分页栏位（CMD-1019-10）：项目｜次数｜管理间隔｜建议日期（已预约 / 已使用换成预约时间 / 使用时间）｜购买 / 预约 / 使用时间｜Action；建议日期 = 施术日（只有管理项目、没有施术的案件 = 到院当天）+ 第一次使用天数 + 已用 / 已约次数 × 间隔 */
 function krMgGrid(){ return 'grid-template-columns:'+KR_SRC_W+' minmax(0,1.5fr) minmax(0,.9fr) minmax(0,1.2fr) minmax(0,.9fr) minmax(0,1.2fr) '+KR_OPS_W+' '+KR_OTH_W+';'; } /* 未使用 / 已预约 / 已使用三张小卡同一套栏位，列宽对齐（CMD-1021-06） */
 function krMgHead(timeLabel){ return krHeadDiv(krMgGrid(), ['来源', '项目', '次数', '建议时间', '建议日期', timeLabel, '操作', '其他']); }
-function krMgRow(name, cnt, iv, sug, time, ops, pk, oth, src){ return krRowDiv(krMgGrid(), [src||'', '<span style="font-size:13px;">'+(pk ? '<input type="checkbox" '+(KR_PICK[pk.kind+':'+pk.name] ? 'checked ' : '')+'onchange="krTpToggle(\''+pk.kind+'\',\''+pk.name.replace(/\'/g,'')+'\',this.checked)" style="margin-right:6px;"> ' : '')+name+'</span>', '<span>'+cnt+'</span>', '<span style="color:var(--slate2);">'+iv+'</span>', '<span style="color:var(--slate2);">'+sug+'</span>', '<span style="color:var(--slate2);">'+time+'</span>', krOpsCell(ops), '<span>'+(oth||'')+'</span>']); }
+function krMgRow(name, cnt, iv, sug, time, ops, pk, oth, src){ if(pk && window.KR_DAM_COLLECT) window.KR_DAM_COLLECT.push({kind:pk.kind, name:pk.name, label:name, cnt:cnt, iv:iv, sug:sug, time:time, src:src||''}); return krRowDiv(krMgGrid(), [src||'', '<span style="font-size:13px;">'+(pk ? '<input type="checkbox" '+(KR_PICK[pk.kind+':'+pk.name] ? 'checked ' : '')+'onchange="krTpToggle(\''+pk.kind+'\',\''+pk.name.replace(/\'/g,'')+'\',this.checked)" style="margin-right:6px;"> ' : '')+name+'</span>', '<span>'+cnt+'</span>', '<span style="color:var(--slate2);">'+iv+'</span>', '<span style="color:var(--slate2);">'+sug+'</span>', '<span style="color:var(--slate2);">'+time+'</span>', krOpsCell(ops), '<span>'+(oth||'')+'</span>']); }
 /* CMD-1025-03 二：管理项目「已预约」表 = 来源｜项目｜次数｜预约时间｜操作｜其他（没有建议时间 / 建议日期；已经约了就不再显示建议） */
 function krMgGridB(){ return 'grid-template-columns:'+KR_SRC_W+' minmax(0,1.6fr) minmax(0,.9fr) minmax(0,1.4fr) '+KR_OPS_W+' '+KR_OTH_W+';'; }
 function krMgRowB(name, cnt, time, ops, oth, src){ return krRowDiv(krMgGridB(), [src||'', '<span style="font-size:13px;">'+name+'</span>', '<span>'+cnt+'</span>', '<span style="color:var(--slate2);">'+time+'</span>', krOpsCell(ops), '<span>'+(oth||'-')+'</span>']); }
@@ -1108,7 +1108,8 @@ function krUnitUseNow(name, qty){
   var r = null; krMut(function(c){ r = coreUnitUseNow(c, name, ME_NAME, {qty:qty}); if(!r.ok){ alert(r.err||'不能使用'); return false; } return true; }); }
 /* Step 4：勾选今日进行项目；"今日进行项目"纵向列出已勾项、"已勾选：N 个项目"、只有［今日进行］（CMD-1015-27） */
 var KR_PICK = {}, KR_PICK_BACK = false;
-function krTpToggle(kind, name, on){ if(on) KR_PICK[kind+':'+name] = true; else delete KR_PICK[kind+':'+name]; if(window.KR_DAM){ krDayAddRender(); return; } krRenderCaseDetail(); }
+var KR_PICKQ = {};
+function krTpToggle(kind, name, on){ if(on){ KR_PICK[kind+':'+name] = true; if(!KR_PICKQ[kind+':'+name]) KR_PICKQ[kind+':'+name] = 1; } else { delete KR_PICK[kind+':'+name]; delete KR_PICKQ[kind+':'+name]; } if(window.KR_DAM){ krDayAddRender(); return; } krRenderCaseDetail(); }
 function krTodayPickBar(c){ /* CMD-1109-14 / 15：标题「今日进行项目（N）」+ 同一行最右［今日进行］；一项一行：勾选框（默认勾着，拿掉勾 = 取消这一项，上面列表同步）+ 小标签［施术项目］/［管理项目］（施术在前）+ 名字 +
    同一行的「（建议 MM/DD 起，今天提前使用）」灰色小字加括号；行间距 7px；没勾 = 标题（0）+ 居中灰字提示 + 按钮灰掉；没有 × */
   var keys = Object.keys(KR_PICK), n = keys.length, can = krCan();
@@ -5233,22 +5234,44 @@ function krAllItemsLinkHtml(c, v){
   return '<div style="padding:2px 4px;"><a href="#" onclick="krShowCase(\''+KR_CASE.clinicId+'\',\''+KR_CASE.id+'\',{tab:\''+tab+'\'});return false;" style="font-size:12px;text-decoration:underline;color:var(--terracotta);">查看全部项目（主案件）</a></div>';
 }
 function krDayAddToggle(k){ krDayAddOpen(k); }
-function krDayAddOpen(k){ KR_PICK = {}; window.KR_DAM = {dk:k}; krDayAddRender(); }
-function krDayAddClose(){ window.KR_DAM = null; KR_PICK = {}; var ov = document.getElementById('kr-dayadd-overlay'); if(ov){ ov.classList.remove('open'); ov.innerHTML = ''; } }
+function krDayAddOpen(k){ KR_PICK = {}; KR_PICKQ = {}; window.KR_DAM = {dk:k, page:''}; krDayAddRender(); }
+function krDayAddClose(){ window.KR_DAM = null; KR_PICK = {}; KR_PICKQ = {}; var ov = document.getElementById('kr-dayadd-overlay'); if(ov){ ov.classList.remove('open'); ov.innerHTML = ''; } }
+/* CMD-1110-22：弹窗重排——标题「增加今日项目」+ ×；分页行（施术项目 N｜管理项目 N）最右［+ 购买新项目］；一张表：勾选框｜项目｜次数｜使用次数｜建议时间｜建议日期｜购买时间｜来源；没勾「-」，勾了「− 1 +」（默认 1、最多 = 剩余次数）；右下［取消］［确认］，一项都没勾［确认］灰、不写数字 */
+function krDamRows(c){ /* 复用项目卡「选今日项目」的行判断，收集成清单 */
+  window.KR_DAM_COLLECT = []; try{ krProjCards(c, {pick:true, noCare:true, modal:true}); } catch(e){ console.error(e); } var out = window.KR_DAM_COLLECT; window.KR_DAM_COLLECT = null; return out;
+}
+function krDamMax(c, r){ if(r.kind!=='mg') return 1; var it = itemByKey(c, r.name, function(x){ return !x.cancelled && !x.swapped; }); return it ? Math.max(1, holdItemLeft(c, it)-holdItemPlanned(c, it)-mgTodayQty(c, it)) : 1; }
+function krDamQty(kind, name, d){ var k = kind+':'+name, r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r || !KR_PICK[k]) return; var mx = krDamMax(r.c, {kind:kind, name:name}); KR_PICKQ[k] = Math.max(1, Math.min(mx, (KR_PICKQ[k]||1)+d)); krDayAddRender(); }
+function krDamPage(pg){ if(window.KR_DAM){ window.KR_DAM.page = pg; krDayAddRender(); } }
 function krDayAddRender(){
   var dam = window.KR_DAM, ov = document.getElementById('kr-dayadd-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-dayadd-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 99990; document.body.appendChild(ov); }
   if(!dam){ ov.classList.remove('open'); ov.innerHTML = ''; return; }
   var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r){ krDayAddClose(); return; }
   var c = r.c, n = Object.keys(KR_PICK).length, scrollTop = (ov.querySelector('.modal-box') || {}).scrollTop || 0;
-  ov.innerHTML = '<div class="modal-box msz-XL" style="max-height:88vh;overflow:auto;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><div style="font-size:16px;font-weight:700;flex:1;">增加今日项目 · '+krEsc(c.name)+'</div>'+((krCan() && canAddOnNow(c)) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="krAddModalOpen()">+ 购买新项目</button>' : '')+'<button class="modal-x" onclick="krDayAddClose()" title="关闭" aria-label="关闭">✕</button></div>'+
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">勾选今天要做的项目，确认后出现在「今日项目」表里；没有想做的项目请用右上角［+ 购买新项目］。</div>'+
-    krProjCards(c, {pick:true, noCare:true, modal:true})+
+  var rows = krDamRows(c), surg = rows.filter(function(x){ return x.kind==='surg'; }), mg = rows.filter(function(x){ return x.kind==='mg'; });
+  var pg = dam.page || ''; if(pg!=='surg' && pg!=='mg') pg = mg.length ? 'mg' : 'surg'; if(pg==='surg' && !surg.length && mg.length) pg = 'mg'; if(pg==='mg' && !mg.length && surg.length) pg = 'surg';
+  var pill = function(k, label, cnt){ if(!cnt) return ''; var on = pg===k; return '<span onclick="krDamPage(\''+k+'\')" style="cursor:pointer;padding:7px 18px;border-radius:999px;font-size:13px;font-weight:600;'+(on ? 'background:var(--navy,#3B2F2A);color:#fff;' : 'background:var(--bg-sidebar,#EFEBE4);color:var(--slate2);')+'">'+label+'（'+cnt+'）</span>'; };
+  var grid = 'display:grid;grid-template-columns:24px minmax(0,1.7fr) 70px 104px minmax(0,1.3fr) 84px 76px '+KR_SRC_W+';gap:8px;align-items:center;';
+  var th = function(t){ return '<span>'+t+'</span>'; };
+  var head = '<div style="'+grid+'font-size:12px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border2);"><span></span>'+['项目', '次数', '使用次数', '建议时间', '建议日期', '购买时间', '来源'].map(th).join('')+'</div>';
+  var plain = function(h){ return String(h==null ? '' : h).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); };
+  var list = pg==='surg' ? surg : mg;
+  var body = list.map(function(x){
+    var k = x.kind+':'+x.name, on = !!KR_PICK[k], mx = krDamMax(c, x), q = Math.max(1, Math.min(mx, KR_PICKQ[k]||1)), nm = String(x.name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var useCell = !on ? '<span style="color:var(--muted);">-</span>' : (mx>1 ? '<span style="display:inline-flex;align-items:center;gap:4px;"><button class="btn-outline" style="padding:0 7px;font-size:13px;" '+(q<=1 ? 'disabled ' : '')+'onclick="krDamQty(\''+x.kind+'\',\''+nm+'\',-1)">−</button><b style="min-width:16px;text-align:center;">'+q+'</b><button class="btn-outline" style="padding:0 7px;font-size:13px;" '+(q>=mx ? 'disabled ' : '')+'onclick="krDamQty(\''+x.kind+'\',\''+nm+'\',1)">+</button></span>' : '<b>1</b>');
+    var left = x.kind==='mg' ? '剩 '+mx+' 次' : plain(x.cnt);
+    return '<div style="'+grid+'padding:9px 0;border-top:1px solid var(--border2);font-size:13px;"><input type="checkbox" '+(on ? 'checked ' : '')+'onchange="krTpToggle(\''+x.kind+'\',\''+nm+'\',this.checked)"><span>'+x.label+'</span><span>'+krEsc(left)+'</span>'+useCell+'<span style="font-size:12px;color:var(--slate2);">'+(x.iv ? x.iv : '—')+'</span><span style="font-size:12px;">'+(x.sug ? krEsc(String(x.sug)) : '—')+'</span><span style="font-size:12px;">'+(x.kind==='mg' ? krEsc(plain(x.time)||'—') : '—')+'</span><span>'+(x.src||'')+'</span></div>';
+  }).join('') || '<div style="padding:22px 0;text-align:center;font-size:13px;color:var(--muted);">今天没有还能再加的项目</div>';
+  var canBuy = krCan() && canAddOnNow(c);
+  ov.innerHTML = '<div class="modal-box msz-XL" style="max-height:88vh;overflow:auto;"><div style="display:flex;align-items:center;margin-bottom:10px;"><div style="font-size:16px;font-weight:700;flex:1;">增加今日项目</div><button class="modal-x" onclick="krDayAddClose()" title="关闭" aria-label="关闭">✕</button></div>'+
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">'+pill('surg', '施术项目', surg.length)+pill('mg', '管理项目', mg.length)+'<span style="flex:1;"></span>'+(canBuy ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="krAddModalOpen()">+ 购买新项目</button>' : '')+'</div>'+
+    head+body+
     '<div id="kr-dayadd-err" style="color:#B3261E;font-size:12px;margin-top:6px;"></div>'+
-    '<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:12px;"><button class="btn-ghost" onclick="krDayAddClose()">取消</button><button class="btn-primary" '+(n ? '' : 'disabled style="opacity:.5;cursor:not-allowed;" title="请先勾选项目" ')+'onclick="krDayAddConfirm()">确认（'+n+'）</button></div></div>';
+    '<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:12px;"><button class="btn-ghost" onclick="krDayAddClose()">取消</button><button class="btn-primary" '+(n ? '' : 'disabled style="opacity:.5;cursor:not-allowed;" title="请先勾选项目" ')+'onclick="krDayAddConfirm()">确认</button></div></div>';
   ov.classList.add('open'); var mb = ov.querySelector('.modal-box'); if(mb && scrollTop) mb.scrollTop = scrollTop;
 }
 function krDayAddConfirm(){
-  if(!krCan()) return; var picks = Object.keys(KR_PICK).map(function(x){ var m = /^(surg|mg):(.*)$/.exec(x); return m ? {kind:m[1], name:m[2]} : null; }).filter(Boolean); if(!picks.length) return;
+  if(!krCan()) return; var picks = Object.keys(KR_PICK).map(function(x){ var m = /^(surg|mg):(.*)$/.exec(x); return m ? {kind:m[1], name:m[2], q:Math.max(1, KR_PICKQ[x]||1)} : null; }).filter(Boolean); if(!picks.length) return;
   var errs = [];
   krDayAddClose();
   krMut(function(c){
@@ -5256,7 +5279,7 @@ function krDayAddConfirm(){
     picks.forEach(function(pk){
       var it = itemByKey(c, pk.name, function(x){ return !x.cancelled && !x.swapped; }), opt = {};
       if(it && krIsMgmtItemC(it)){ var di = dirOpInfo(krHospitalIdOfMe(), it.name); if(di.on) opt = {dirOp:true, dir:c.director, min:di.min, ext:0}; }
-      var r = coreUnitUseNow(c, pk.name, ME_NAME, opt); if(r && r.ok) any = true; else errs.push((it ? it.name : pk.name)+'：'+((r && r.err) || '不能加进今天'));
+      if(pk.kind==='mg') opt.qty = pk.q; var r = coreUnitUseNow(c, pk.name, ME_NAME, opt); if(r && r.ok) any = true; else errs.push((it ? it.name : pk.name)+'：'+((r && r.err) || '不能加进今天'));
     });
     return any;
   });
