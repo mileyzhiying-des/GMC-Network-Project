@@ -7503,7 +7503,7 @@ function krProcedureTabMain(c, tabsHtml, opt){
   /* CMD-1106-17：待递交时行程状态单选在最上面；CMD-1109-01：KR 已确认之后（已递交 / 已确认 / 改期 / 已到院）三段排版——标题 +［打印］｜行程 +［日程变动］｜施术日期 + 状态 + 按钮，三段之间分隔线 */
   var tripTop = '', hrLine = '<div style="border-top:1px solid var(--border2);margin:12px 0;"></div>';
   var tripRadios = (draftStay && hasActive && ks) ? tripStateBlockHtml(c, ensureKrScheduleDraft(c)) : '';
-  var stayBtn = stayIn ? '<a href="#" class="btn-outline sd-btn" style="text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">'+(draftStay ? '修改' : '行程变动')+'</a>' : '';
+  var stayBtn = stayIn ? '<a href="#" class="btn-outline sd-btn" style="text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">'+(draftStay ? '修改' : '行程修正')+'</a>' : '';
   if(draftStay){ if(tripRadios || stayIn) tripTop = hrLine+tripRadios+hrLine; }
   /* CMD-1110-06：已递交之后「行程」整段搬到页头（在韩行程 +［行程变动］）；待递交时行程状态 / 到达离开的填写保留在这张卡上 */
   var subRow = ''; if(!draftStay){ subRow = subStatusRowHtml(caseSubStatusItems(c).filter(function(x){ return !/^(施术时间已确认|待确认施术时间|已到院$|施术时间变更待确认)/.test(x.text); })); } /* CMD-1109-01：拿掉「✓ 施术时间已确认…」绿字行（状态改放施术日期标题的标签） */
@@ -9879,7 +9879,7 @@ function inTripHeaderRowHtml(c){
   else if(!s.in && !s.out) body = '<span style="color:var(--muted);">未填写</span>';
   else body = one(s.in, s.inTime, s.inAirport)+' ～ '+one(s.out, s.outTime, s.outAirport);
   var bad = ''; try{ var sus = staySuspect(c); if(sus) bad = ' <b style="font-size:12px;color:#B3261E;">⚠ '+aEscC(sus)+'</b>'; var sh = stayShortDays(c); if(sh) bad += ' <b style="font-size:12px;color:#B3261E;">⚠️ 离境日比建议少 '+sh+' 天</b>'; }catch(e){} /* 原在赴韩日程卡「行程」段里的这行红字随行程一起搬到页头 */
-  return '<div id="in-trip-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;font-size:13px;"><b style="color:var(--slate2);">在韩行程：'+body+'</b><button class="btn-outline sd-btn" onclick="openStayModal(\''+c.id+'\')">行程变动</button>'+bad+'</div>'; /* CMD-1110-07：［行程变动］紧贴在行程后面（和 KR 页头「在韩行程：… ［行程修正］」同样间距），红字在按钮后面 */
+  return '<div id="in-trip-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;font-size:13px;"><b style="color:var(--slate2);">在韩行程：'+body+'</b><button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="openStayModal(\''+c.id+'\')">行程修正</button>'+bad+'</div>'; /* CMD-1110-09：改名［行程修正］，尺寸和 KR 页头的［行程修正］一样（同一个 padding / 字号） */ /* CMD-1110-07：［行程变动］紧贴在行程后面（和 KR 页头「在韩行程：… ［行程修正］」同样间距），红字在按钮后面 */
 }
 function inStayCardHtml(c){ /* 旧的单独一张卡（已不用，留给兼容） */
   if(!c.settlementDone || !krActiveItems(c).length) return '';
@@ -10201,9 +10201,9 @@ function caseNotesListHtml(c, viewerRole, o){
   var l = caseNotesAll(c, viewerRole); if(!l.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;'+(o.limit ? 'text-align:center;margin-top:60px;' : '')+'">还没有备注</div>';
   if(o.limit) l = l.slice(0, o.limit);
   return l.map(function(n){
-    var at = n.at ? fmtUtc(n.at).slice(5, 16).replace('-', '/') : '—', who = n.by+'（'+n.role+'）';
+    var at = n.at ? noteTimeHtml(n.at, n.role) : '—', who = n.by+'（'+n.role+'）'; /* CMD-1110-09：KR 写的在 IN 以韩国时间为主（html，不再转义） */
     var rd = n.role==='IN' ? (n.unread ? ' <span class="status-pill" style="background:#FFF1D6;color:#C26A1B;">KR 未读</span>' : ' <span style="color:var(--sage);font-size:12px;">KR 已读'+(n.readBy ? '（'+e(String(n.readBy).replace(/\s*室长$/, ''))+'）' : '')+'</span>') : '';
-    return '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+e(at)+'｜'+e(n.scope)+' —— '+e(who)+rd+'</div>'+(o.clamp ? '<div class="note-clamp">'+noteTextHtml(n, viewerRole)+'</div>' : noteTextHtml(n, viewerRole))+'</div>';
+    return '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+at+'｜'+e(n.scope)+' —— '+e(who)+rd+'</div>'+(o.clamp ? '<div class="note-clamp">'+noteTextHtml(n, viewerRole)+'</div>' : noteTextHtml(n, viewerRole))+'</div>';
   }).join('');
 }
 function coreItemNote(c, name, text, by){
@@ -10677,7 +10677,7 @@ function tripHardIssue(c, date, time){ var i = date ? tripDateIssue(c, date, tim
 function tripRedText(c, date, time){ var i = tripHardIssue(c, date, time); if(!i) return ''; return '⚠️ '+stayMD(date)+(i.kind==='late' ? ' 在客人离境之后' : (i.kind==='time' ? ' 的到院时间早于客人到达时间' : ' 在客人到达之前'))+'，请先修改行程'; }
 function tripRedHtml(c, dates){ /* 红字（每个有问题的日子一行）+ 一个［行程变动］ */
   var lines = (dates||[]).filter(Boolean).map(function(d){ return tripRedText(c, d); }).filter(Boolean); if(!lines.length) return '';
-  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 6px;"><span style="font-size:12px;color:#B3261E;font-weight:700;">'+lines.map(aEscC).join('<br>')+'</span><button class="btn-outline sd-btn" onclick="tripOpenStayFromCal()">行程变动</button></div>';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 6px;"><span style="font-size:12px;color:#B3261E;font-weight:700;">'+lines.map(aEscC).join('<br>')+'</span><button class="btn-outline sd-btn" onclick="tripOpenStayFromCal()">行程修正</button></div>';
 }
 function tripOpenStayFromCal(){ /* CMD-1109-06：从红字旁的［行程变动］打开在韩行程；从［施术变动］里打开的，保存 / 取消后回到施术变动（fromSvb）；待递交的卡片上到达 / 离开本来就在卡片里，直接定位过去 */
   var c = getCurrentCase(); if(!c) return;
@@ -11959,7 +11959,7 @@ function dayProjectTableHtml(m, v){
 function dayVisitNoteCardHtml(m, v){
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, vk = (mainVisitDay(m)===v.date && (v.types||[]).indexOf('赴韩施术')>-1) ? 'main' : 'KR|'+v.date, mm = visitNoteAuto(m, vk);
   return '<div class="card" style="padding:18px 24px;"><div style="font-size:14px;font-weight:700;margin-bottom:8px;">来访备注</div>'+(mm && String(mm.text||'').trim()
-    ? '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+e(noteDayText(mm.at))+'｜'+e(mm.by||'KR')+'（KR）</div>'+noteTextHtml({id:'vn:'+m.id+':'+vk, role:'KR', text:mm.text}, 'IN')+'</div>'
+    ? '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+noteTimeHtml(mm.at, 'KR')+'｜'+e(mm.by||'KR')+'（KR）</div>'+noteTextHtml({id:'vn:'+m.id+':'+vk, role:'KR', text:mm.text}, 'IN')+'</div>'
     : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:14px 0;">没有来访备注</div>')+'</div>';
 }
 function subKrSurgHtml(m, v){
@@ -13582,6 +13582,15 @@ function coreRowUndo(c, id, by){ /* 其他行（在韩加的施术项目、术�
    两种备注：① 项目备注——跟着那一次的项目使用记录（管理项目 = procedureItems[].uses[].note；施术项目 / 术后管理行 = 项目 / 行自己的 todayNote / note，施术只用一次所以就是那一次的使用；IN 本地项目 = 使用记录 mgmtUses[].note）；
    ② 来访备注——跟着当天的到院 / 来访（KR 的 krProgressMemos 里 auto 的那一笔，vk = 当天；IN 的备注记录 c.inNotes）。
    旧资料不搬：读取时兼容（项目身上的 todayNote、行 note 照样读到）；新写的管理项目备注同时写在使用记录上。 */
+/* CMD-1110-09：备注时间照 5-19——KR 写的备注（项目 / 来访）在 IN 页面也以韩国时间为主：「04/06 15:08（韩国） 印尼 13:08」（日期不同时印尼那边带日期）；IN 自己写的 / KR 页面看的照旧（页面时区） */
+function noteTimeHtml(at, role){
+  if(!at) return '—'; var plain = noteDayText(at);
+  var inIn = true; try{ inIn = !isKrAccount(); }catch(e){}
+  if(role!=='KR' || !inIn) return plain.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  var k = fmtUtc(at, 'Asia/Seoul'), i = fmtUtc(at); if(k.length<16 || i.length<16) return plain;
+  var kd = k.slice(5, 10).replace('-', '/'), id = i.slice(5, 10).replace('-', '/');
+  return kd+' '+k.slice(11, 16)+'（韩国） <span class="sd-tag" style="font-size:12px;font-weight:400;color:var(--muted);">印尼 '+(id!==kd ? id+' ' : '')+i.slice(11, 16)+'</span>';
+}
 function noteDayText(at){ var f = at ? fmtUtc(at) : ''; return f.length>=16 ? f.slice(5, 10).replace('-', '/')+' '+f.slice(11, 16) : '—'; }
 /* 一个案件里的全部备注记录（项目 + 来访），不分页面；role = 谁写的（KR / IN）；local = IN 本地项目的备注（KR 看不到） */
 function caseNoteRecords(c){
@@ -13607,15 +13616,20 @@ function notesRecordsOfCases(cases, viewer){
 /* 「备注内容」tab 的内容（客户管理 / 主案件共用）：a. 项目备注｜b. 来访备注，新 → 旧；openFn(c) 返回点「来自」跳转的 onclick */
 function notesTabHtml(recs, viewer, openFn){
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
-  var sec = function(title, list, isProj){
-    var rows = list.length ? list.map(function(r){
+  var NP = (notesTabHtml.pg = notesTabHtml.pg || {}), pgKey = viewer+':'+((typeof CURRENT_PAGE_ID!=='undefined' && /clientdetail|in-client/.test(CURRENT_PAGE_ID)) ? 'cli'+(typeof CLI_NAME!=='undefined' ? CLI_NAME : '') : 'case'+(viewer==='KR' ? (window.KR_CASE && KR_CASE.id || '') : (typeof CURRENT_CASE_ID!=='undefined' ? CURRENT_CASE_ID : ''))); pgKey = pgKey.replace(/[^\w:]/g, '_');
+  var rowsOf = function(list, isProj){
+    return list.map(function(r){
       var link = '<a href="#" class="info-link" onclick="'+(openFn ? openFn(r.c) : '')+';return false;" style="font-size:12px;">'+e(r.caseNo || '—')+'</a>';
-      return '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+e(noteDayText(r.at))+'｜'+(isProj ? '<b style="color:var(--ink);">'+e(r.project)+'</b>　' : '')+e(r.by)+'（'+r.role+'）　来自 '+link+'</div>'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</div>';
-    }).join('') : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">还没有</div>';
-    return '<div class="card" style="padding:14px 20px;margin-bottom:12px;"><div class="info-heading" style="margin-bottom:2px;">'+title+' <span style="font-weight:400;font-size:12px;color:var(--muted);">'+list.length+'</span></div>'+rows+'</div>';
+      return '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+noteTimeHtml(r.at, r.role)+'｜'+(isProj ? '<b style="color:var(--ink);">'+e(r.project)+'</b>　' : '')+e(r.by)+'（'+r.role+'）　来自 '+link+'</div>'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</div>';
+    }).join('');
   };
-  return sec('a. 项目备注', recs.filter(function(r){ return r.kind==='proj'; }), true)+sec('b. 来访备注', recs.filter(function(r){ return r.kind==='visit'; }), false);
+  /* CMD-1110-09：「备注内容」改左右分页——分页按钮「项目备注（N）｜来访备注（N）」（样式同项目卡的分页胶囊），默认项目备注；0 条的分页照样可点，里面居中灰字 */
+  var proj = recs.filter(function(r){ return r.kind==='proj'; }), vis = recs.filter(function(r){ return r.kind==='visit'; }), cur = NP[pgKey] || 'proj';
+  var btn = function(k, label, n){ var on = cur===k; return '<button onclick="notesPage(\''+pgKey+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;font-weight:700;cursor:pointer;">'+label+'（'+n+'）</button>'; };
+  var list = cur==='proj' ? proj : vis, empty = cur==='proj' ? '没有项目备注' : '没有来访备注';
+  return '<div class="card" style="padding:14px 20px;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+btn('proj', '项目备注', proj.length)+btn('visit', '来访备注', vis.length)+'</div>'+(list.length ? rowsOf(list, cur==='proj') : '<div style="text-align:center;color:var(--muted);font-size:13px;padding:26px 0;">'+empty+'</div>')+'</div>';
 }
+function notesPage(key, k){ (notesTabHtml.pg = notesTabHtml.pg || {})[key] = k; if(typeof CURRENT_PAGE_ID!=='undefined' && CURRENT_PAGE_ID==='kr-clientdetail' && typeof krRenderClientDetail==='function'){ krRenderClientDetail(); return; } if(typeof CURRENT_PAGE_ID!=='undefined' && /clientdetail|in-client/.test(CURRENT_PAGE_ID) && typeof renderClientDetailIn==='function'){ renderClientDetailIn(); return; } if(typeof isKrAccount==='function' && isKrAccount()){ if(typeof krRenderCaseDetail==='function') krRenderCaseDetail(); return; } var c = getCurrentCase(); if(c) renderCaseBody(c); }
 function cliNotesHtml(model){ return notesTabHtml(notesRecordsOfCases(model.cases, model.mode==='KR' ? 'KR' : 'IN'), model.mode==='KR' ? 'KR' : 'IN', function(c){ return model.openCase(c); }); }
 function mainNotesCases(m){ return [m].concat(childVisitsOf(m)); }
 function mainNotesTabHtml(m, viewer){ return notesTabHtml(notesRecordsOfCases(mainNotesCases(m), viewer), viewer, function(c){ return viewer==='KR' ? "krShowCase('"+(KR_CASE && KR_CASE.clinicId || '')+"','"+c.id+"')" : "openCaseDetail('"+c.id+"')"; }); }
@@ -13635,7 +13649,7 @@ function viewNotesPanelHtml(clientName, project, uid){
   var u = String(uid).replace(/[^\w]/g, '_'); if(!VIEW_NOTES_OPEN[u]) return '';
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, viewer = isKrAccount() ? 'KR' : 'IN';
   return '<div class="vn-panel" style="margin:4px 0 8px 22px;padding:6px 10px;background:var(--bg-sidebar,#F5F1EA);border-radius:8px;font-size:12px;">'+clientProjectNotes(clientName, project).map(function(r){
-    return '<div style="padding:3px 0;display:flex;gap:10px;align-items:baseline;"><span style="color:var(--muted);white-space:nowrap;">'+e(noteDayText(r.at).slice(0, 5).replace('/', '-'))+'</span><span style="flex:1;">'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</span><a href="#" class="info-link" style="text-decoration:underline;white-space:nowrap;" onclick="viewNotesGo(\''+r.c.id+'\');return false;">查看案件</a></div>';
+    return '<div style="padding:3px 0;display:flex;gap:10px;align-items:baseline;"><span style="color:var(--muted);white-space:nowrap;">'+(r.role==='KR' && !isKrAccount() ? noteTimeHtml(r.at, 'KR') : e(noteDayText(r.at).slice(0, 5).replace('/', '-')))+'</span><span style="flex:1;">'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</span><a href="#" class="info-link" style="text-decoration:underline;white-space:nowrap;" onclick="viewNotesGo(\''+r.c.id+'\');return false;">查看案件</a></div>';
   }).join('')+'</div>';
 }
 function toggleViewNotes(u){ VIEW_NOTES_OPEN[u] = !VIEW_NOTES_OPEN[u]; try{ var c = getCurrentCase(); if(c) renderCaseBody(c); }catch(er){} try{ if(typeof krRefreshAll==='function') krRefreshAll(); }catch(er2){} }

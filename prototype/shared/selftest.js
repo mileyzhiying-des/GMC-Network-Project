@@ -3894,7 +3894,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       switchCaseTab && switchCaseTab('kr'); var body = document.getElementById('case-body').innerHTML, txt = document.getElementById('case-body').innerText.replace(/\s+/g, ' ');
       ST.ok(/施术日期/.test(txt) && !/赴韩日程/.test(txt) && !/客人赴韩日程/.test(txt), '⑤：卡片标题「施术日期」（CMD-1110-06：原「赴韩日程」）');
       a.stay = {in:ymdAdd(td, -1), inTime:'09:00', inAirport:'ICN', out:ymdAdd(td, 6), outTime:'18:00', outAirport:'ICN', by:'A1', at:nowFullDt()}; renderCaseBody(a); switchCaseTab('kr'); txt = document.getElementById('case-body').innerText.replace(/\s+/g, ' ');
-      var tr1 = document.getElementById('in-trip-row'); ST.ok(/施术日期/.test(txt) && /打印/.test(txt) && !/到达日|离境日/.test(txt) && !!tr1 && /在韩行程/.test(tr1.innerText) && /行程变动/.test(tr1.innerText), '⑤：卡里有 施术日期 +［打印］，行程搬到页头第三行（在韩行程 +［行程变动］）（CMD-1110-06）');
+      var tr1 = document.getElementById('in-trip-row'); ST.ok(/施术日期/.test(txt) && /打印/.test(txt) && !/到达日|离境日/.test(txt) && !!tr1 && /在韩行程/.test(tr1.innerText) && /行程修正/.test(tr1.innerText), '⑤：卡里有 施术日期 +［打印］，行程搬到页头第三行（在韩行程 +［行程修正］，CMD-1110-09 改名）（CMD-1110-06）');
       /* 项目卡 / 子案件页分段标题：未预约（不再叫未使用） */
       ST.open(b); var up = ST.upgradeView && 0; var h = inContCardHtml ? 1 : 0; ST.ok(!/未使用项目/.test(inContCardHtml(b, b.id)||''), '⑤：子案件页分段标题不再叫「未使用项目」');
     } finally { window.alert = al; window.confirm = cf; }
@@ -8423,7 +8423,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(recs[0].at >= recs[1].at && recs[1].at >= recs[2].at, '新 → 旧');
       ST.ok(proj.filter(function(r){ return /钛提升/.test(r.project); }).length===2 && proj.some(function(r){ return r.text==='第一次：很怕痛'; }) && proj.some(function(r){ return r.text==='第二次：状态好'; }), '管理项目两次使用各有自己的备注（跟着使用记录）');
       var kr = notesRecordsOfCases([A], 'KR'); ST.ok(!kr.some(function(r){ return r.local; }) && kr.length===recs.length-1, 'KR 看不到 IN 本地项目的备注');
-      var h = notesTabHtml(recs, 'IN', function(c){ return "openCaseDetail('"+c.id+"')"; }); ST.ok(/a\. 项目备注/.test(h) && /b\. 来访备注/.test(h) && /ZR278A/.test(h) && /openCaseDetail\('zr278a'\)/.test(h) && /KM1 室长（KR）/.test(h) && /A1 室长（IN）/.test(h), '备注内容 tab：a/b 两段、日期、写的人（IN/KR）、项目名、来自案件可点');
+      var h = notesTabHtml(recs, 'IN', function(c){ return "openCaseDetail('"+c.id+"')"; }); ST.ok(/项目备注（4）/.test(h) && /来访备注（2）/.test(h) && !/a\. 项目备注/.test(h) && /ZR278A/.test(h) && /openCaseDetail\('zr278a'\)/.test(h) && /（KR）|（IN）/.test(h), '备注内容 tab（CMD-1110-09：左右分页，默认项目备注）：分页按钮带数字、日期、写的人（IN/KR）、项目名、来自案件可点');
       var hk = notesTabHtml(recs, 'IN', null); ST.ok(/查看原文/.test(hk), 'KR 写的显示译文 +［查看原文］');
       var card = caseNotesAll(A, 'IN'); ST.ok(card.length===2 && card.every(function(n){ return n.scope==='来访备注' || n.role==='IN'; }), 'IN 备注卡只放来访备注（不含项目备注）');
       ST.ok(caseNotesAll(A).length>card.length, 'KR 备注卡照旧全放');
@@ -8431,7 +8431,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(clientProjectNotes(A.name, '钛提升 · 40kj').length===2 && clientProjectNotes(B.name, '钛提升 · 40kj').length===1 && clientProjectNotes(A.name, '没做过的项目').length===0, '查看备注：同一客人只看到自己的（甲 2 条 / 乙 1 条 / 没做过 0 条）');
       ST.ok(viewNotesBtnHtml(A.name, '钛提升 · 40kj', 'x')!=='' && viewNotesBtnHtml(A.name, '没做过的项目', 'x')==='', '有备注才有按钮：查看备注（2）');
       ST.ok(/查看备注（2）/.test(viewNotesBtnHtml(A.name, '钛提升 · 40kj', 'x')), '按钮文字');
-      VIEW_NOTES_OPEN.x = true; var pn = viewNotesPanelHtml(A.name, '钛提升 · 40kj', 'x'); ST.ok(/11-0[89]/.test(pn) && /查看案件/.test(pn) && /第一次：很怕痛/.test(pn), '点开：每行「MM-DD 备注内容 查看案件」'); VIEW_NOTES_OPEN.x = false;
+      VIEW_NOTES_OPEN.x = true; var pn = viewNotesPanelHtml(A.name, '钛提升 · 40kj', 'x'); ST.ok(/11[-\/]0[89]/.test(pn) && /查看案件/.test(pn) && /第一次：很怕痛/.test(pn), '点开：每行「日期 备注内容 查看案件」（CMD-1110-09：KR 写的备注带韩国时间为主）'); VIEW_NOTES_OPEN.x = false;
       /* IN 本地项目备注：完成时存、取消不存 */
       var u1 = {itemName:'热玛吉 · 300发', qty:1, status:''}, u2 = {itemName:'LDM', qty:1, status:''}; A.mgmtUses = [u1, u2];
       IN_LN[A.id+'|main|0'] = '完成时的备注'; IN_LN[A.id+'|main|1'] = '取消的不存';
@@ -8449,8 +8449,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R278b','CMD-1110-02（KM1 分页，stageC 夹具）：KR 主案件页（升级后）有「备注内容」tab，位置在 在韩管理 / 复诊 之后、子案件之前；KR 客人详情有「备注内容」tab',function(){
     var r = krAllCases().filter(function(x){ return /^T-待到院/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
     var tabs = krTabListOf(r).map(function(t0){ return t0.key; }); ST.ok(tabs.indexOf('notes')>-1 && tabs.indexOf('notes')<tabs.indexOf('visits') && tabs.indexOf('notes')>tabs.indexOf('items'), 'KR tab 顺序里有 notes，在子案件前：'+tabs.join(','));
-    ST.ok(typeof KR_TAB_FN.notes==='function' && /a\. 项目备注/.test(Store.withClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; KR_CASE = Object.assign({}, KR_CASE||{}, {clinicId:r.clinicId, id:r.id}); return KR_TAB_FN.notes(c); })), 'KR 备注内容 tab 内容');
-    var m = {mode:'KR', name:r.name, cases:[r.c], openCase:function(c){ return "krShowCase('"+r.clinicId+"','"+c.id+"')"; }}; ST.ok(/a\. 项目备注/.test(cliNotesHtml(m)), 'KR 客人详情「备注内容」');
+    ST.ok(typeof KR_TAB_FN.notes==='function' && /项目备注（\d+）/.test(Store.withClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; KR_CASE = Object.assign({}, KR_CASE||{}, {clinicId:r.clinicId, id:r.id}); return KR_TAB_FN.notes(c); })), 'KR 备注内容 tab 内容（CMD-1110-09：左右分页）');
+    var m = {mode:'KR', name:r.name, cases:[r.c], openCase:function(c){ return "krShowCase('"+r.clinicId+"','"+c.id+"')"; }}; ST.ok(/项目备注（\d+）/.test(cliNotesHtml(m)), 'KR 客人详情「备注内容」（左右分页）');
     ST.ok(/备注内容/.test(clientDetailBodyHtml(Object.assign({cl:null, cases:[], mode:'IN', name:'x', openCase:function(){ return ''; }}, {}))), '客户详情 tab 栏有「备注内容」');
   });
   ST.def('R279a','CMD-1110-03（A1 分页）：子案件按当天做的事命名（施术项目 · 在韩管理）；主案件 / 子案件 tab 叫「施术项目」，子案件状态「施术项目 · 已结束」；施术那天的子案件页三张卡（赴韩日程卡 + 项目表含管理项目、没有操作栏 + 来访备注卡）；案件管理列表 tab 和阶段标仍叫「赴韩施术」',function(){
@@ -10589,7 +10589,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.stay = {in:ymdAdd(td, 3), inTime:'11:20', inAirport:'ICN', out:ymdAdd(td, 12), outTime:'12:30', outAirport:'', by:'A1', at:nowFullDt()}; c.tripConfirm = c.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']};
       var has = function(k){ return inTodoItems().some(function(i){ return i.caseId===c.id && i.kind===k; }); };
       ST.open(c); renderCaseSubtitle(c);
-      var row = document.getElementById('in-trip-row'); ST.ok(!!row && /在韩行程：/.test(row.innerText) && /（ICN）/.test(row.innerText) && /印尼/.test(row.innerText) && /行程变动/.test(row.innerText), '① 页头第三行：在韩行程 + 机场 + 印尼灰字 +［行程变动］：'+(row && row.innerText.replace(/\s+/g, ' ')));
+      var row = document.getElementById('in-trip-row'); ST.ok(!!row && /在韩行程：/.test(row.innerText) && /（ICN）/.test(row.innerText) && /印尼/.test(row.innerText) && /行程修正/.test(row.innerText), '① 页头第三行：在韩行程 + 机场 + 印尼灰字 +［行程修正］（CMD-1110-09 改名）：'+(row && row.innerText.replace(/\s+/g, ' ')));
       ST.ok(!/（）/.test(row.innerText), '没填机场不显示括号'); c.krSchedule.tripState = 'tentative'; var sv = c.stay; c.stay = null; ST.ok(/在韩行程：暂定/.test(inTripHeaderRowHtml(c).replace(/<[^>]+>/g, '')), '暂定写「在韩行程：暂定」'); c.stay = sv; c.krSchedule.tripState = 'booked';
       var h = krProcedureTabMain(c, '<button class="btn-outline sd-btn" onclick="printKrPlan()">打印</button>'), t = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
       ST.ok(/>施术日期<\/div>\s*<button[^>]*printKrPlan/.test(h) && !/到达日|离境日|赴韩日程/.test(t), '② 施术日期卡：标题 + 打印；没有行程段');
@@ -10656,7 +10656,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var ca = document.getElementById('case-chat-actions'); ST.ok(ca.style.alignSelf==='flex-start', '［对话］align-self:flex-start（和页头第一行齐平，靠最右）');
       var tr = function(stay, tripState){ c.stay = stay; c.krSchedule = c.krSchedule || {}; c.krSchedule.tripState = tripState; return inTripHeaderRowHtml(c); };
       var h1 = tr({in:ymdAdd(todayStr(), 2), inTime:'11:20', inAirport:'ICN', out:ymdAdd(todayStr(), 9), outTime:'12:30', outAirport:'ICN'}, 'booked'), h2 = tr({in:ymdAdd(todayStr(), 2), inTime:'11:20', out:ymdAdd(todayStr(), 9), outTime:'12:30'}, 'booked'), h3 = tr(null, 'tentative');
-      [h1, h2, h3].forEach(function(h, i){ var ok = h && /<\/b><button[^>]*openStayModal[^>]*>行程变动<\/button>/.test(h) && !/<span style="flex:1;"><\/span><button/.test(h); ST.ok(ok, '［行程变动］紧贴在行程后面（'+['有机场', '没机场', '暂定'][i]+'）'); });
+      [h1, h2, h3].forEach(function(h, i){ var ok = h && /<\/b><button[^>]*openStayModal[^>]*">行程修正<\/button>/.test(h) && !/<span style="flex:1;"><\/span><button/.test(h); ST.ok(ok, '［行程修正］紧贴在行程后面（CMD-1110-09 改名）（'+['有机场', '没机场', '暂定'][i]+'）'); });
       ST.ok(/在韩行程：暂定/.test(h3.replace(/<[^>]+>/g, '')), '暂定写「在韩行程：暂定」');
     } finally { window.alert = oa; var o = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.keys(o).forEach(function(k){ c[k] = o[k]; }); }
   });
@@ -10689,6 +10689,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var tx = tripRemindText(c2, c2.stay); ST.ok(/釜山天气预报/.test(tx), '医院设定城市改成釜山 → 提醒天气「釜山天气预报」：'+tx.slice(0, 60)); hd.city = ''; tx = tripRemindText(c2, c2.stay); ST.ok(/首尔天气预报/.test(tx), '城市留空 → 退回时区对应的城市（首尔）');
       hd.city = old;
     } finally { window.alert = al; window.confirm = cf; }
+  });
+
+  /* CMD-1110-09：备注内容左右分页 + ［行程修正］+ KR 备注时间 + 状态卡链接 */
+  ST.def('R285a','CMD-1110-09（A1 分页，stageC 夹具）：「备注内容」是左右分页（项目备注（N）｜来访备注（N），默认项目备注，0 条也可点且居中灰字）；页头按钮叫［行程修正］、和 KR 同尺寸；KR 写的备注在 IN 以韩国时间为主 + 印尼灰字、IN 写的照旧；当前状态卡链接 12px 棕色下划线',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert; window.alert = function(){};
+    try{
+      var c = ST.toConfirmed('R285a'); ST.open(c);
+      var at = '2026-11-06 06:08:00'; /* UTC 06:08 = 韩国 15:08 = 印尼 13:08 */
+      c.krProgressMemos = [{id:'m1', at:at, by:'KM1 室长', text:'KR 来访备注', vk:'main', auto:true}]; c.inNotes = [{id:'n1', at:at, by:'A1 室长', text:'IN 来访备注'}];
+      var it = krAllItems(c).filter(function(x){ return !krIsMgmtItemC(x); })[0]; it.todayNote = 'KR 项目备注'; it.todayNoteAt = at; it.todayNoteBy = 'KM1 室长';
+      c.mgmtUses = [{itemName:'本地项X', qty:1, status:'active', note:'IN 项目备注', noteBy:'A1 室长', noteAt:at}];
+      var t0 = mainNotesTabHtml(c, 'IN'), tx = t0.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      ST.ok(/项目备注（\d+）/.test(tx) && /来访备注（\d+）/.test(tx) && !/a\. 项目备注|b\. 来访备注/.test(tx), '分页按钮「项目备注（N）｜来访备注（N）」，拿掉上下两块');
+      ST.ok(/KR 项目备注/.test(tx) && !/KR 来访备注/.test(tx), '默认打开项目备注');
+      ST.ok(/11\/06 15:08（韩国）\s*印尼 13:08/.test(tx), 'KR 写的备注：「11/06 15:08（韩国） 印尼 13:08」：'+tx.slice(0, 160));
+      ST.ok(/11\/06 13:08\s*｜[^｜]*本地项X/.test(tx) && !/13:08（韩国）/.test(tx.slice(tx.indexOf('本地项X')-30, tx.indexOf('本地项X'))), 'IN 写的本地项目备注照旧印尼时间为主');
+      var key = (t0.match(/notesPage\('([^']+)'/)||[])[1]; notesPage(key, 'visit'); var t1 = mainNotesTabHtml(c, 'IN').replace(/<[^>]+>/g, ' ');
+      ST.ok(/KR 来访备注/.test(t1) && /IN 来访备注/.test(t1) && !/KR 项目备注/.test(t1), '切到来访备注');
+      c.krProgressMemos = []; c.inNotes = []; var t2 = mainNotesTabHtml(c, 'IN').replace(/<[^>]+>/g, ' ');
+      ST.ok(/项目备注（\d+）/.test(t2) && /来访备注（0）/.test(t2) && /没有来访备注/.test(t2), '0 条的分页照样可点，居中灰字「没有来访备注」');
+      notesPage(key, 'proj');
+      /* 页头按钮 */
+      c.stay = {in:ymdAdd(todayStr(), 2), inTime:'11:20', out:ymdAdd(todayStr(), 9), outTime:'12:30'}; c.krSchedule.tripState = 'booked'; var hh = inTripHeaderRowHtml(c);
+      ST.ok(/>行程修正</.test(hh) && !/行程变动/.test(hh) && /padding:3px 10px;font-size:12px/.test(hh) && /openStayModal/.test(hh), '页头按钮叫［行程修正］、尺寸和 KR 一样（padding:3px 10px;font-size:12px），照旧打开在韩行程弹窗');
+      ST.ok(/行程修正/.test(tripRedHtml(Object.assign({}, c, {krSchedule:Object.assign({}, c.krSchedule)}), [ymdAdd(todayStr(), 40)]) || '行程修正') , '');
+      /* 状态卡链接 */
+      renderCaseSubtitle(c); renderCaseStatusBar(c); var a = document.querySelector('#case-status-bar a[onclick]'); ST.ok(!a || (/font-size:12px/.test(a.getAttribute('style')) && /terracotta/.test(a.getAttribute('style')) && /underline/.test(a.getAttribute('style'))), '状态卡［查看］链接：12px、品牌棕、下划线：'+(a && a.getAttribute('style')));
+    } finally { window.alert = al; }
   });
 
   /* CMD-1106-16：推荐项目术后管理标在哪做 + 建议在韩天数自动算 */
@@ -10999,7 +11028,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* ② 施术变动选行程外的日子 */
       var e = ST.toConfirmed('R259a2'); e.tripConfirm = e.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; e.krSchedule.tripState = 'booked'; var ed = e.krSchedule.confirmedDate; e.stay = {in:ymdAdd(ed, -3), out:ymdAdd(ed, 8), inTime:'10:00', outTime:'12:00'};
       ST.open(e); svbOpen('time'); SVB.reasonT = '想晚一点'; var late = ymdAdd(ed, 12); var kk = 12; while(kk<80 && caseOpenDates(e).indexOf(ymdAdd(ed, kk))<0) kk++; late = ymdAdd(ed, kk);
-      e.krSchedule.svbPrimary = late; krScheduleSetYM(+late.slice(0,4), +late.slice(5,7)); renderCaseBody(e); var ovh = document.getElementById('svb-overlay').innerHTML; ST.ok(/在客人离境之后，请先修改行程/.test(ovh) && />行程变动</.test(ovh), '选离境之后：红字 +［行程变动］');
+      e.krSchedule.svbPrimary = late; krScheduleSetYM(+late.slice(0,4), +late.slice(5,7)); renderCaseBody(e); var ovh = document.getElementById('svb-overlay').innerHTML; ST.ok(/在客人离境之后，请先修改行程/.test(ovh) && />行程修正</.test(ovh), '选离境之后：红字 +［行程修正］（CMD-1110-09 改名）');
       var cell = Array.prototype.filter.call(document.querySelectorAll('#svb-overlay div[onclick^="pickKrDate"]'), function(x){ return new RegExp('(^|\\D)'+(+late.slice(8))+'$').test(x.textContent.trim()); }); ST.ok(cell.length>0 && /pickKrDate/.test(cell[0].getAttribute('onclick')||''), '行程外的日子在日历里可以点');
       svbGo(); ST.ok(SVB && /在客人离境之后/.test(SVB.err) && scheduleState(e)==='Confirmed', '送不出（状态没变）');
       e.stay.out = ymdAdd(late, 3); SVB.err = ''; renderCaseBody(e); ST.ok(!/在客人离境之后/.test(document.getElementById('svb-overlay').innerHTML), '行程改好后红字消失'); svbGo(); ST.ok(scheduleState(e)==='Changing', '能送出');
@@ -11008,7 +11037,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var f = ST.toConfirmed('R259a3'); f.tripConfirm = f.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']}; f.krSchedule.tripState = 'booked'; var fd = f.krSchedule.confirmedDate; f.stay = {in:ymdAdd(fd, -2), out:fd, inTime:'10:00', outTime:'20:00'};
       ST.ok(!tripRedText(f, fd) && !ksRebookNeeded(f), '天数不够（施术日 = 离境日）只黄字，不算碰到');
       /* ④ 按钮名 */
-      var hh = krProcedureTabMain(f, ''); ST.ok(/行程变动/.test(inTripHeaderRowHtml(f)) && !/日程变动/.test(hh), '按钮叫［行程变动］（CMD-1110-06：在页头第三行）');
+      var hh = krProcedureTabMain(f, ''); ST.ok(/行程修正/.test(inTripHeaderRowHtml(f)) && !/日程变动/.test(hh), '按钮叫［行程修正］（CMD-1110-09 改名；原［行程变动］）（CMD-1110-06：在页头第三行）');
     } finally { window.confirm = oldConfirm; svbClose(); }
   });
   ST.def('R258a','CMD-1109-03（A1 分页，stageC 夹具）：IN［施术变动］弹窗——更改时间（理由必填、首选必选）/ 取消施术（退款 + 置换可分两笔，加起来 = 已付）；置换额度记客人资料、下次抵印尼本地项目；按钮只剩［施术变动］',function(){
@@ -11081,8 +11110,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var ks = c.krSchedule; c.stay = {in:ymdAdd(ks.confirmedDate, -1), inTime:'11:20', out:ymdAdd(ks.confirmedDate, 2), outTime:'12:30'}; c.tripConfirm = c.tripConfirm || {at:nowFullDt(), by:'A1', methods:['电话']};
     ST.open(c); c.activeCaseTab = 'kr'; var h = krProcedureTabMain(c, ''), t = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     var iT = t.indexOf('施术日期'), iS = 1, iD = 2, iL = 3, iA = t.indexOf('已确认'); var trh = inTripHeaderRowHtml(c).replace(/<[^>]+>/g, ' ');
-    ST.ok(iT>-1 && iA>iT && !/到达日|离境日/.test(t) && /在韩行程/.test(trh) && /行程变动/.test(trh), 'CMD-1110-06：卡里只剩 施术日期 + 状态标签（行程搬到页头第三行）：'+t.slice(0,160));
-    ST.ok(!/>修改</.test(h) && /行程变动/.test(inTripHeaderRowHtml(c)), '［行程变动］在页头第三行（CMD-1110-06），施术日期卡标题行没有［修改］');
+    ST.ok(iT>-1 && iA>iT && !/到达日|离境日/.test(t) && /在韩行程/.test(trh) && /行程修正/.test(trh), 'CMD-1110-06：卡里只剩 施术日期 + 状态标签（行程搬到页头第三行）：'+t.slice(0,160));
+    ST.ok(!/>修改</.test(h) && /行程修正/.test(inTripHeaderRowHtml(c)), '［行程修正］在页头第三行（CMD-1110-06），施术日期卡标题行没有［修改］');
     ST.ok(/>施术变动</.test(h) && !/>修改施术日期</.test(h) && !/>取消施术计划</.test(h) && !/>修改日期</.test(h) && !/>取消项目</.test(h), 'CMD-1109-03：按钮只剩［施术变动］');
     ST.ok(/施术日期 (今日（)?\d{4}-\d\d-\d\d \d\d:\d\d（韩国）\s*印尼 (\d\d-\d\d )?\d\d:\d\d/.test(t) && /地址：/.test(t) && /发送信息给客人/.test(h), '框里：施术日期 + 韩国时间 + 印尼时间小标签 + 地址 + ［发送信息给客人］（CMD-1109-02）');
     ST.ok(!/施术时间已确认 /.test(t) && !/均由 KR 端操作/.test(t) && !/✓ 已发送/.test(t), '拿掉绿字行 / 说明 / 框右边的已发送');

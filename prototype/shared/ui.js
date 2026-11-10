@@ -1399,7 +1399,7 @@ function renderCaseStatusBar0(c){
     if(SUBVIEW[m3.id] && (prog || ds3.some(function(v){ return v.state==='unconfirmed'; }))){ /* CMD-1027-08 三：子案件页上待确认结束只留红色条，不重复第三行；子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
     /* CMD-1027-14 五：IN 主案件「当前状态」改成和 KR 一样的两行状态卡（共用取数 mainStatusModel）：当前状态（进行中｜预约中）［查看］/ 待确认结束 · 今日到访 · 下次到访 · 待预约 · 后续日程：无 */
     var M = mainStatusModel(m3), bt = function(label, on, pri){ return '<button class="'+(pri ? 'btn-primary' : 'btn-outline')+'" style="padding:6px 16px;font-size:13px;" onclick="'+on+'">'+label+'</button>'; };
-    var lk = function(label, on){ return '<a href="#" style="font-size:13px;text-decoration:underline;color:var(--slate2);" onclick="'+on+';return false;">'+label+'</a>'; }; /* CMD-1110-06：［查看］［查看内容］= 下划线文字按钮 */
+    var lk = function(label, on){ return '<a href="#" style="font-size:12px;text-decoration:underline;color:var(--terracotta);" onclick="'+on+';return false;">'+label+'</a>'; }; /* CMD-1110-06：［查看］［查看内容］= 下划线文字按钮（CMD-1110-09：小一号 12px、品牌棕） */
     var viewDay = function(v){ return lk('查看内容', ((v.rec||v.caseId)===m3.id || v.place==='KR') ? 'openSubcase(\''+m3.id+'\',\''+v.key+'\')' : 'openVisitOf(\''+(v.rec||v.caseId)+'\')'); };
     var row2 = '', pdTxt = '', P = M.pend;
     if(P.inN) pdTxt = '印尼术后管理 '+P.inN+' 项待预约'+(P.inEarly ? '（最早建议 '+cesc(P.inEarly.slice(5).replace('-', '/'))+'）' : '')+(P.krN ? '；韩国 '+P.krN+' 项由 KR 安排' : '');

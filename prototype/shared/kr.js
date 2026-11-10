@@ -5141,7 +5141,7 @@ function krRebTag(c){ var P = krPendWrap(c); return P.rebN ? '<span style="font-
 function krMainStatusBar(r, c){ /* CMD-1027-02 二：两行——当前状态（进行中｜预约中）+ 今日到访 / 下次到访 / 后续日程：无；不再放原来的状态标签 */
   var today = todayStr(), cid = KR_CASE.clinicId, id = KR_CASE.id, days = daysOf(c).filter(function(v){ return v.state!=='cancelled' && v.state!=='noShow'; });
   var nLive = days.filter(function(v){ return v.state==='arrived' || v.state==='unconfirmed'; }).length, nBook = days.filter(function(v){ return v.state==='waiting' && v.date>=today; }).length;
-  var btn = function(label, on){ return '<a href="#" style="font-size:13px;text-decoration:underline;color:var(--slate2);" onclick="'+on+';return false;">'+label+'</a>'; }; /* CMD-1110-06：［查看］［查看内容］= 下划线文字按钮 */
+  var btn = function(label, on){ return '<a href="#" style="font-size:12px;text-decoration:underline;color:var(--terracotta);" onclick="'+on+';return false;">'+label+'</a>'; }; /* CMD-1110-06：［查看］［查看内容］= 下划线文字按钮（CMD-1110-09：小一号 12px、品牌棕） */
   var view = function(v){ return btn('查看内容', 'krOpenDay(\''+cid+'\',\''+id+'\',\''+krMainDayKey(v)+'\')'); };
   var biz = function(v){ return krMainDayTypes(v); };
   var row2 = '', tdy = days.filter(function(v){ return v.date===today; }).sort(function(a, b){ return (a.time||'').localeCompare(b.time||''); });
