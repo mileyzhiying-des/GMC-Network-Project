@@ -3356,7 +3356,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       KR_CASE = {clinicId:cid, id:r.id, tab:'items'};
       var hd = txt(krMainHeader(r, gc()));
-      ST.ok(/· A\d+/.test(hd) && /面诊：\d+ 次｜施术：\d+ 次/.test(hd) && /来源诊所：.*院长：.*KR 室长：/.test(hd) && /对话/.test(hd) && !/赴韩施术 ·|从 \d+\/\d+ 面诊开始|进行中：/.test(hd), '页头：客人名 · 案件号　面诊 N 次｜施术 M 次　…［对话］/ 来源诊所 · 院长 · KR 室长；没有状态标签和「从…面诊开始」：'+hd.slice(0, 100));
+      ST.ok(/· A\d+/.test(hd) && /面诊：\d+ 次｜施术：\d+ 次/.test(hd) && /来源诊所：.*院长：.*KR 室长：/.test(hd) && /对话/.test(hd) && !/从 \d+\/\d+ 面诊开始|进行中：/.test(hd) && krMainHeader(r, gc()).indexOf('status-pill')>-1, '页头：客人名 · 案件号　状态标签（CMD-1110-23 补回）　面诊 N 次｜施术 M 次　…［对话］/ 来源诊所 · 院长 · KR 室长；没有「从…面诊开始」：'+hd.slice(0, 100));
       ST.ok(KR_CASE_TABS.some(function(t0){ return t0.key==='items' && t0.label==='施术项目'; }), 'tab 叫「施术项目」（1110-03 起）');
       var nx = krMainNextInfo(gc()); ST.ok(/预约到院 · 赴韩项目/.test(nx.text) && /查看内容/.test(nx.btn), '赴韩施术的日子还没到：「MM-DD 预约到院 · 赴韩项目」+［查看内容］：'+nx.text);
       var bar = txt(krMainStatusBar(r, gc())); ST.ok(/^当前状态/.test(bar) && /（进行中 \d+｜预约中 \d+）/.test(bar) && /今日到访|下次到访|下一个预约/.test(bar), '1027-02 改（CMD-1110-11：下次到访 → 下一个预约）：状态卡两行——当前状态（进行中｜预约中）+ 今日到访 / 下次到访（原：左 当前状态 + 状态标签，右 一句话 + 按钮）：'+bar.slice(0, 80));
@@ -10786,6 +10786,30 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   /* ===== CMD-1110-18 ===== */
   /* ===== CMD-1110-19 ===== */
+  /* ===== CMD-1110-23 ===== */
+  ST.def('R298a','CMD-1110-23（KM1 分页，pcStage 夹具）：今日项目表操作栏——没做的行「今日取消」（下划线）在［操作完成］左边；做完「已完成」+［撤回完成］、没有「今日取消」；KR 子案件页头 = 主案件页头（同一个函数，第一行有状态标签 + 面诊 / 施术次数）',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var day = todayStr();
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.subItems = c.subItems.filter(function(x){ return !/^q298/.test(x.id); });
+      c.subItems.push({id:'q298a', no:c.caseNo+'-93', kind:'术后管理记录', place:'KR', date:day, time:'17:00', content:'术后管理（术后复诊检查，在韩国）', projectName:'假体隆鼻', arrived:true, simDay:true, done:false}); subCaseNos(c); return true; });
+    var dk = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var v0 = visitsOf(c).filter(function(x){ return x.place==='KR' && x.date===day; })[0]; return v0 ? v0.key : ''; });
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krOpenDay(r0.clinicId, r0.id, dk);
+    var host = document.getElementById('kr-casedetail');
+    var rowEl = function(){ return [].slice.call(host.querySelectorAll('div')).filter(function(d){ return d.style && /grid/.test(d.style.display||'') && /术后复诊检查/.test(d.innerText) && d.querySelectorAll('button, a').length>0 && d.children.length===4; })[0]; };
+    var rw = rowEl(); ST.ok(!!rw, '找到没做的行');
+    var ops = rw.lastElementChild, kids = [].slice.call(ops.children).filter(function(x){ return /今日取消|操作完成/.test(x.innerText); });
+    ST.ok(kids.length===2 && kids[0].tagName==='A' && /今日取消/.test(kids[0].innerText) && /underline/.test(kids[0].getAttribute('style')) && kids[1].tagName==='BUTTON' && /操作完成/.test(kids[1].innerText), '没做：下划线「今日取消」在左、［操作完成］在右：'+ops.innerText.replace(/\s+/g, ' '));
+    /* 做完 */
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var s0 = c.subItems.filter(function(x){ return x.id==='q298a'; })[0]; s0.done = true; s0.doneAt = nowFullDt(); s0.doneBy = 'KM1 室长'; return true; });
+    krOpenDay(r0.clinicId, r0.id, dk); host = document.getElementById('kr-casedetail'); rw = rowEl(); ops = rw.lastElementChild;
+    ST.ok(/已完成/.test(ops.innerText) && !/今日取消/.test(ops.innerText) && !/操作完成/.test(ops.innerText), '做完：已完成（绿字）' + (/撤回完成/.test(ops.innerText) ? '+［撤回完成］' : '（撤回按钮在客人离院 / 关账前才有）') + '，没有今日取消：'+ops.innerText.replace(/\s+/g, ' '));
+    /* 页头 */
+    var hd = [].slice.call(document.getElementById('krcase-body').children).filter(function(d){ return d.innerText.indexOf('面诊：')>-1; })[0], ht = hd.innerText.replace(/\s+/g, '');
+    var r = krFindCase(r0.clinicId, r0.id); var mainHd = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var el = document.createElement('div'); el.innerHTML = krMainHeader(r, c); return el.firstElementChild.innerText.replace(/\s+/g, ''); });
+    ST.ok(mainHd===ht && /面诊：\d+次｜施术：\d+次/.test(ht) && /·/.test(ht) && hd.querySelector('.status-pill'), '子案件页头第一行 = 主案件页头（同一个函数）：有状态标签「阶段 · 进程」+ 面诊 / 施术次数：'+ht);
+    ST.ok(host.innerHTML.indexOf('class="status-pill"')>-1 && /krStayFixOpen|行程修正|在韩行程/.test(host.innerHTML), '页头第二行在韩行程 / ［行程修正］仍在');
+  });
   /* ===== CMD-1110-22 ===== */
   ST.def('R297a','CMD-1110-22（KM1 分页，pcStage 夹具）：增加今日项目弹窗重排——标题只写「增加今日项目」+ ×、［+ 购买新项目］在分页行最右、栏位顺序、没勾「-」/ 勾了加减器默认 1 最多到剩余次数、确认次数一致、没勾时确认灰且不写数字',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

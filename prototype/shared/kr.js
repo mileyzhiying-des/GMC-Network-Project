@@ -2980,7 +2980,7 @@ function krTblRow(c, s, o){
     if(!s.done && s.holdUseOf && mode!=='today') ops += krRowQtyStepper(c, s);
     var surgRow = !!s._item || s.kind==='施术' || (s.kind==='增加项目' && !s.visitKey && (function(){ var it0 = (c.procedureItems||[]).filter(function(x){ return x.name===s.projectName; })[0]; return !!it0 && !krIsMgmtItemC(it0); })()); /* CMD-1022-14：施术项目没有［今日取消］，只能改期 */
     var mgRow = type==='管理项目'; /* CMD-1109-18 一：管理项目行没有［本次不做］（次数在今日进行时选好；取消去下面项目卡操作） */
-    if(!s.done && !surgRow && !(mode==='today' && mgRow)) ops += '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="krTodayCancel(\''+(s._item || (s.kind==='增加项目' && !s.visitKey) ? 'item' : 'row')+'\',\''+(s._item ? krEsc(s._item).replace(/'/g,'') : (s.kind==='增加项目' && !s.visitKey ? krEsc(s.projectName).replace(/'/g,'') : s.id))+'\',\''+krEsc(s._item || s.content).replace(/'/g,'')+'\')">今日取消</button>';
+    if(!s.done && !surgRow && !(mode==='today' && mgRow)) ops = '<a href="#" style="font-size:12px;text-decoration:underline;white-space:nowrap;" onclick="krTodayCancel(\''+(s._item || (s.kind==='增加项目' && !s.visitKey) ? 'item' : 'row')+'\',\''+(s._item ? krEsc(s._item).replace(/'/g,'') : (s.kind==='增加项目' && !s.visitKey ? krEsc(s.projectName).replace(/'/g,'') : s.id))+'\',\''+krEsc(s._item || s.content).replace(/'/g,'')+'\');return false;">今日取消</a> '+ops; /* CMD-1110-23：下划线文字按钮放在［操作完成］左边 */
   } else if(o.can && mode==='booked'){
     if(timeable) ops += '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="'+(s.kind==='施术' ? 'krMainTimeEdit()' : 'krSubTimeOpen(\''+s.id+'\')')+'">修改时间</button> ';
     ops += '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="krSubNote(\''+s.id+'\')">备注</button>';
@@ -5199,10 +5199,16 @@ function krTripRowHtml(c){
     (bad ? '<b style="font-size:12px;color:#B3261E;">'+bad+'</b>' : '')+
     (sus ? '<b style="font-size:12px;color:#B3261E;" title="'+krEsc(sus)+'">⚠ 日期可能存错：'+krEsc(sus)+'</b>' : '')+'</div>';
 }
+/* CMD-1110-23：页头第一行的状态标签「阶段 · 进程」（主案件页和子案件页同一个 krMainHeader，所以两边一样）；1106-13 拿掉名字旁标签时把它一起去掉了 */
+function krHeadStageTag(r, c){
+  var st = (r.krStage && !isEnded(c)) ? r.krStage : null; if(!st && !(r.stageText || r.label)) return '';
+  var bg = st ? st.bg : (r.badge && r.badge[0]), fg = st ? st.fg : (r.badge && r.badge[1]);
+  return '<span class="status-pill" style="background:'+(bg||'var(--border2)')+';color:'+(fg||'var(--slate2)')+';">'+krEsc(st ? st.stage+' · '+st.proc : (r.stageText || r.label))+'</span>';
+}
 function krMainHeader(r, c){
   var cnt = krSdCounts(c);
   return '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><button class="btn-ghost" onclick="goBack()">← 返回</button>'+
-    '<div style="font-size:18px;font-weight:700;">'+(krClientDetailAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+' <span style="font-weight:400;color:var(--slate2);">· '+krEsc(c.caseNo)+'</span></div>'+krResumeTag(c)+
+    '<div style="font-size:18px;font-weight:700;">'+(krClientDetailAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+' <span style="font-weight:400;color:var(--slate2);">· '+krEsc(c.caseNo)+'</span></div>'+krResumeTag(c)+krHeadStageTag(r, c)+
     '<span style="font-size:13px;color:var(--slate2);">面诊：'+cnt.consult+' 次｜施术：'+cnt.surg+' 次</span><span style="flex:1;"></span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'+krTripRowHtml(c)+
     '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.6;">来源诊所：'+krEsc(r.clinicName)+' · 院长：'+krEsc(r.director||'—')+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+'</div>';
 }
