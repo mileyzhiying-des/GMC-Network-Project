@@ -6100,7 +6100,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     pills.forEach(function(p){ var blue = /已到店|已到院/.test(p.textContent), inHeadLeft = !!p.previousElementSibling && p.parentElement.style.flex==='1 1 0%' || p.closest('span[style*="flex:1"]'); ST.ok(blue ? !!inHeadLeft : !inHeadLeft, '「'+p.textContent+'」位置：'+(blue ? '蓝色留标题旁' : '靠右')); });
     var done = pills.filter(function(p){ return p.textContent==='已完成'; })[0]; if(done) ST.ok(/var\(--sage\)/.test(done.getAttribute('style')||'') || /#/.test(done.getAttribute('style')||''), '已完成有颜色'); 
     var wait = pills.filter(function(p){ return /待到/.test(p.textContent); })[0]; if(wait) ST.ok(/#E3F4E8/i.test(wait.getAttribute('style')||''), '待到店 / 待到院 = 浅绿');
-    ST.ok(/备注：(\d+|无)/.test(box.textContent) || !pills.some(function(p){ return /已完成|已到/.test(p.textContent); }), '已完成 / 已到的卡右边有「备注：N / 无」');
+    ST.ok(!/备注：(\d+|无)/.test(box.textContent.replace(/整体备注：|来访备注：/g, '')), '（CMD-1110-12）卡片右上不再有「备注：N / 无」');
   });
 
   /* CMD-1021-08 四（KM1 分页）：管理项目「第一次使用 / 建议间隔」存在项目库里，建议日期按它算 */
@@ -10750,6 +10750,38 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1110-11：状态卡今日到访用子案件名称 + 查看备注 MM-DD + 所有本地管理行都用表格 */
+  ST.def('R288a','CMD-1110-12（任意分页）：「查看案件」目标在渲染时算好（点击不再依赖当前分页里的 CASE_ITEMS）；看不到的案件只显示案件号；KR 今日项目按钮并排 / 没有灰色说明 / 没有「备注：无」；预约中按时间排；「今天做」用 dayNameOf',function(){
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+      /* 1 查看案件 */
+      var fake = {id:'x1', caseNo:'A000999'};
+      if(!isKrAccount()){
+        ST.ok(/viewNotesGo\('[^']+','x1'\)/.test(noteCaseOnclick(fake)), 'IN：有 onclick（带诊所 id）');
+        var h = noteCaseLinkHtml(fake, '查看案件', ''); ST.ok(/<a [^>]*onclick="viewNotesGo/.test(h), 'IN：链接');
+      }
+      var oc0 = window.isKrAccount; window.isKrAccount = function(){ return true; };
+      var kf = window.krFindCase; window.krFindCase = function(cid, id){ return id==='seen' ? {id:id} : null; };
+      try{
+        ST.ok(noteCaseOnclick({id:'seen', caseNo:'A1'}, 'C1')==="viewNotesGo('C1','seen')", 'KR：看得到的案件有链接');
+        var hh = noteCaseLinkHtml({id:'hid', caseNo:'A000777'}, '查看案件', ''); ST.ok(!/<a /.test(hh) && /A000777/.test(hh), 'KR：看不到的案件只显示案件号：'+hh);
+        var seen = {}, ks = window.krShowCase; window.krShowCase = function(cid, id){ seen.cid = cid; seen.id = id; };
+        viewNotesGo('C2', 'seen'); window.krShowCase = ks; ST.ok(seen.cid==='C2' && seen.id==='seen', 'KR：点击走 krShowCase(诊所, 案件)——不再在当前分页里查 CASE_ITEMS');
+      } finally { window.isKrAccount = oc0; window.krFindCase = kf; }
+      /* 2 KR 今日项目（只在 KR 分页里有这些函数） */
+      if(typeof KR_TBL_COLS4!=='undefined'){
+      ST.ok(/minmax\(200px,auto\)/.test(KR_TBL_COLS4), '操作栏加宽');
+      var vm = String(krVisitMemoHtml); ST.ok(vm.indexOf('记录今天来访情况、客人个人情况或特殊安排</div>')<0 && /placeholder="记录今天来访情况/.test(vm), '来访备注：只留输入框提示，没有灰色说明行');
+      ST.ok(String(krCaseCardHtml).indexOf("'备注：'+(mN || '无')")<0, '卡片右上没有「备注：无」');
+      var rowSrc = String(krTblRow); ST.ok(/flex-wrap:nowrap/.test(rowSrc), '操作按钮不折行');
+
+      }
+      /* 3 预约中按时间排：卡片按最早预约、卡内按时间 */
+      var gs = pcmGroups([{place:'KR',date:'2027-04-13',time:'11:00',nm:'a',rows:[]},{place:'KR',date:'2027-04-08',time:'10:00',nm:'b'},{place:'KR',date:'2027-04-13',time:'09:00',nm:'c'}], false);
+      ST.ok(gs.length===2 && gs[0].date==='2027-04-08' && gs[1].rows[0].nm==='c', '术后管理预约中：04/08 的卡在前，卡内按时间');
+      /* 4 今天做 */
+      ST.ok(dayNameOf({types:['术后管理','在韩管理']})==='术后管理 · 在韩管理', '今天做：用 dayNameOf（顿号换成 · ）');
+    } finally { window.alert = al; window.confirm = cf; }
+  });
   ST.def('R287a','CMD-1110-11（A1 分页，stageC 夹具）：当前状态卡「今日到访（…）」括号里是 dayNameOf 的子案件名称（不再写赴韩项目 / · 韩国）；「查看备注（N）」展开每行只写 MM-DD（KR 写的用韩国日期）；子案件页合并「今日项目」卡、已完成的本地项目列表也是本地管理表格',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }, td = todayStr();

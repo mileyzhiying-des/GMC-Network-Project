@@ -9821,7 +9821,7 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
   var mkRows = function(list){ var gs = surg.filter(function(g){ return g.all.some(function(x){ return list.indexOf(x)>-1; }); }); return gs.map(function(g){ return surgRowOf(g); }).join(''); };
   var careDoneHtml = careDone.map(function(s){ var lb = visitRowLabel(c, s); return '<div style="padding:8px 0;font-size:13px;border-top:1px solid var(--border2);"><span style="color:var(--muted);font-size:12px;">术后管理</span>　'+e(lb.sub ? (s.projectName ? buyName(s.projectName)+' · ' : '')+lb.name : lb.name)+' <span style="font-size:12px;color:var(--muted);">· 完成 '+e(String(s.doneAt||s.date||'').slice(0,10))+'</span></div>'; }).join('');
   /* CMD-1025-04 B/C：分类 tab 施术项目 N｜在韩管理 N｜已完成 N，没有项目的分类整个不显示；栏位按各分类定（来源放最后一栏）；IN 只看，没有操作按钮 */
-  var surgList = items.filter(function(it){ return !krIsMgmtItemC(it) && !it.done; }), mgList = mg.filter(function(it){ return !it.cancelled; });
+  var surgList = items.filter(function(it){ return !krIsMgmtItemC(it) && !it.done; }).sort(function(a, b){ var da = itemSurgDate(c, a) || '9999', db = itemSurgDate(c, b) || '9999'; return da < db ? -1 : da > db ? 1 : 0; }) /* CMD-1110-12：预约时间早的在上 */, mgList = mg.filter(function(it){ return !it.cancelled; });
   var mgUses = []; mgList.forEach(function(it){ (it.uses||[]).forEach(function(u){ mgUses.push({it:it, u:u}); }); });
   /* CMD-1027-04 三：「在韩管理」胶囊数字原来是全部没取消的管理项目（含次数全用完的），列表只放预约中 / 未预约的 → 用完的项目有数字没内容；改成数字 = 列表里实际出现的项目数（先算好两段，再数） */
   /* CMD-1027-11：md2 / ks0 必须在下面 forEach 之前定义（原来定义在后面，var 提升成 undefined → md2 is not a function） */
@@ -11938,7 +11938,7 @@ function dayPaidBatches(c){
 function subDayMoney(ctx){ var m = ctx.m, d = ctx.v.date, out = []; (m.settlementBatches||[]).forEach(function(b){ if(String(b.time||'').slice(0, 10)===d) out.push(b); }); return out; }
 function subHeaderHtml(c){
   var ctx = subCtxOf(c), v = ctx.v, st = visitStateText(ctx.m, v), today = todayStr();
-  return '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="closeSubcase(\''+c.id+'\')">← 回到主案件 '+cesc(ctx.m.caseNo)+'</button><span style="font-size:13px;"><b>'+cesc(v.no||c.caseNo||'')+'</b> · '+(v.date ? String(v.date).slice(5).replace('-', '/') : '')+'（'+(v.place==='KR' ? '韩国' : '印尼')+'）</span><span style="font-size:12px;color:var(--slate2);">'+(v.date===today ? '今天做：' : '这天做：')+cesc((v.types||[]).join('、')||'—')+'</span><span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);">'+cesc(st)+'</span></div>';
+  return '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="closeSubcase(\''+c.id+'\')">← 回到主案件 '+cesc(ctx.m.caseNo)+'</button><span style="font-size:13px;"><b>'+cesc(v.no||c.caseNo||'')+'</b> · '+(v.date ? String(v.date).slice(5).replace('-', '/') : '')+'（'+(v.place==='KR' ? '韩国' : '印尼')+'）</span><span style="font-size:12px;color:var(--slate2);">'+(v.date===today ? '今天做：' : '这天做：')+cesc((v.types||[]).length ? dayNameOf(v) : '—')+'</span><span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);">'+cesc(st)+'</span></div>';
 }
 function subVisitTabHtml(c){
   var ctx = subCtxOf(c), m = ctx.m, rec = ctx.isRec ? c : m, iv = inVisitOf(rec), e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
@@ -12731,7 +12731,7 @@ function pcmModel(c){
 function pcmGroups(rows, desc){
   var gs = {}, ord = []; rows.forEach(function(r){ var k = r.place+'|'+r.date; /* 同一天同地点 = 一次到院 = 一组 */ if(!gs[k]){ gs[k] = {place:r.place, date:r.date, time:r.time||'', rows:[], v:r.v, bkCase:r.bkCase||''}; ord.push(k); } else if(r.time && (!gs[k].time || r.time < gs[k].time)) gs[k].time = r.time; gs[k].rows.push(r); if(!gs[k].v && r.v) gs[k].v = r.v; });
   ord.sort(function(a, b){ var x = gs[a], y = gs[b], ka = x.date+(x.time||''), kb = y.date+(y.time||''); return (ka < kb ? -1 : ka > kb ? 1 : 0) * (desc ? -1 : 1); });
-  return ord.map(function(k){ return gs[k]; });
+  return ord.map(function(k){ gs[k].rows.sort(function(a, b){ var ta = String(a.time||''), tb = String(b.time||''); return ta < tb ? -1 : ta > tb ? 1 : 0; }); /* CMD-1110-12：卡内按时间 */ return gs[k]; });
 }
 function pcmHtml(c, side){
   if(side==='IN') return pcmInHtml(c, pcmModel(c)); /* 不传 part = 待预约 + 韩国 + 印尼连在一起（案件页自己分开调：part='pending' / 'main'） */ /* CMD-1109-19 四：IN 分韩国 / 印尼两张一级 card（KR 页面照旧） */
@@ -13649,7 +13649,7 @@ function notesTabHtml(recs, viewer, openFn){
   var NP = (notesTabHtml.pg = notesTabHtml.pg || {}), pgKey = viewer+':'+((typeof CURRENT_PAGE_ID!=='undefined' && /clientdetail|in-client/.test(CURRENT_PAGE_ID)) ? 'cli'+(typeof CLI_NAME!=='undefined' ? CLI_NAME : '') : 'case'+(viewer==='KR' ? (window.KR_CASE && KR_CASE.id || '') : (typeof CURRENT_CASE_ID!=='undefined' ? CURRENT_CASE_ID : ''))); pgKey = pgKey.replace(/[^\w:]/g, '_');
   var rowsOf = function(list, isProj){
     return list.map(function(r){
-      var link = '<a href="#" class="info-link" onclick="'+(openFn ? openFn(r.c) : '')+';return false;" style="font-size:12px;">'+e(r.caseNo || '—')+'</a>';
+      var ofn = openFn ? String(openFn(r.c)||'') : '', om = ofn.match(/krShowCase\('([^']*)'/), oc = noteCaseOnclick(r.c, om ? om[1] : ''), link = oc ? '<a href="#" class="info-link" onclick="'+oc+';return false;" style="font-size:12px;">'+e(r.caseNo || '—')+'</a>' : '<span style="font-size:12px;">'+e(r.caseNo || '—')+'</span>';
       return '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+noteTimeHtml(r.at, r.role)+'｜'+(isProj ? '<b style="color:var(--ink);">'+e(r.project)+'</b>　' : '')+e(r.by)+'（'+r.role+'）　来自 '+link+'</div>'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</div>';
     }).join('');
   };
@@ -13679,11 +13679,30 @@ function viewNotesPanelHtml(clientName, project, uid){
   var u = String(uid).replace(/[^\w]/g, '_'); if(!VIEW_NOTES_OPEN[u]) return '';
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, viewer = isKrAccount() ? 'KR' : 'IN';
   return '<div class="vn-panel" style="margin:4px 0 8px 22px;padding:6px 10px;background:var(--bg-sidebar,#F5F1EA);border-radius:8px;font-size:12px;">'+clientProjectNotes(clientName, project).map(function(r){
-    return '<div style="padding:3px 0;display:flex;gap:10px;align-items:baseline;"><span style="color:var(--muted);white-space:nowrap;">'+e(noteMDText(r.at, r.role))+'</span><span style="flex:1;">'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</span><a href="#" class="info-link" style="text-decoration:underline;white-space:nowrap;" onclick="viewNotesGo(\''+r.c.id+'\');return false;">查看案件</a></div>';
+    return '<div style="padding:3px 0;display:flex;gap:10px;align-items:baseline;"><span style="color:var(--muted);white-space:nowrap;">'+e(noteMDText(r.at, r.role))+'</span><span style="flex:1;">'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</span>'+noteCaseLinkHtml(r.c, '查看案件', 'text-decoration:underline;white-space:nowrap;')+'</div>';
   }).join('')+'</div>';
 }
 function toggleViewNotes(u){ VIEW_NOTES_OPEN[u] = !VIEW_NOTES_OPEN[u]; try{ var c = getCurrentCase(); if(c) renderCaseBody(c); }catch(er){} try{ if(typeof krRefreshAll==='function') krRefreshAll(); }catch(er2){} }
-function viewNotesGo(caseId){ var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return; try{ if(isKrAccount()) krShowCase(KR_CASE.clinicId, caseId); else openCaseDetail(caseId); }catch(er){} }
+/* CMD-1110-12：「查看案件」目标在渲染时算好（点击时已不在来源诊所分区里，KR 页面按 id 查 CASE_ITEMS 会查不到、静默什么都不做）。
+   noteCaseOnclick(c) 返回 onclick 文字，这一端看不到的案件返回 ''（只显示案件号，不做链接） */
+function noteCaseClinic(){ try{ if(isKrAccount()) return (window.KR_CASE && KR_CASE.clinicId) || CURRENT_CLINIC_ID; }catch(e){} return CURRENT_CLINIC_ID; }
+function noteCaseOnclick(c, cid0){
+  if(!c || !c.id) return '';
+  var cid = cid0 || noteCaseClinic(), kr = false; try{ kr = isKrAccount(); }catch(e){}
+  if(kr){ var ok = false; try{ ok = !!(typeof krFindCase==='function' && krFindCase(cid, c.id)); }catch(e){ ok = false; } return ok ? "viewNotesGo('"+cid+"','"+c.id+"')" : ''; }
+  return "viewNotesGo('"+cid+"','"+c.id+"')";
+}
+function noteCaseLinkHtml(c, text, style){
+  var oc = noteCaseOnclick(c), t = String(text==null ? '' : text);
+  return oc ? '<a href="#" class="info-link" style="'+(style||'')+'" onclick="'+oc+';return false;">'+t+'</a>' : '<span style="color:var(--muted);white-space:nowrap;">'+(t==='查看案件' ? (c && c.caseNo || '—') : t)+'</span>';
+}
+function viewNotesGo(clinicId, caseId){
+  if(caseId===undefined){ caseId = clinicId; clinicId = noteCaseClinic(); }
+  try{
+    if(isKrAccount()) krShowCase(clinicId, caseId);
+    else { var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(c) openCaseDetail(caseId); } /* IN：子记录的 openCaseDetail 就是子案件页 */
+  }catch(er){ console.error('[查看案件]', er); }
+}
 
 /* IN 本地项目备注：每一行一个输入框「请输入备注内容」，按［完成］时存进这次使用记录；［取消］不存；完成后显示成文字，点一下回输入框，离开输入框就存 */
 var IN_LN = {};
