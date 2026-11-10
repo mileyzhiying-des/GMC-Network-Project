@@ -2679,7 +2679,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(P.inN>0){ ST.ok(/待预约/.test(t2) && /印尼术后管理 \d+ 项待预约/.test(t2) && /onclick="todoCbOpen/.test(document.getElementById('case-status-bar').innerHTML), '只剩未预约 → 「待预约：印尼术后管理 N 项（最早建议 MM/DD）」+［预约］：'+t2.slice(0, 100));
         todoCbOpen(c.id, '*'); ST.ok(!!TODO_CB2 && document.getElementById('todo-cb-overlay').classList.contains('open'), '［预约］打开 13 的预约弹窗'); todoCbClose(); }
       else ST.ok(false, '夹具里没有印尼未预约项目（inN=0）');
-      c.krBalancePaid = false; var t3 = cardOf(); ST.ok(/后续日程：无/.test(t3), '没有预约也没有待预约 → 才写「后续日程：无」：'+t3.slice(0, 80));
+      c.krBalancePaid = false; var t3 = cardOf(); ST.ok(/下一个预约：—/.test(t3), '没有预约也没有待预约 → 写「下一个预约：—」（CMD-1110-06 改名）：'+t3.slice(0, 80));
     }finally{ window.alert = oa; window.confirm = oc; }
   });
   ST.def('R159b','CMD-1027-14（KM1 分页，pcStage 夹具，接 R159a 之后）：KR 待办「IN 请 XX 改到离开前」+ 待预约 / 后续由 IN 安排',function(){
@@ -3037,7 +3037,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
     var snap59 = JSON.stringify(c), idx59 = CASE_ITEMS.indexOf(c); /* 这个用例会让夹具案件结案、改备注，最后还原，免得影响后面的用例 */
     var html = inProjectCardHtml(c), txt = html.replace(/<[^>]+>/g, ' ');
-    ST.ok(/项目卡/.test(txt) && /增加备注/.test(txt), '项目卡有［增加备注］'); ST.ok(/施术项目/.test(txt) && !/术后管理\s*[（(]?\d/.test(txt) && /已完成\s*[（(]?\d/.test(txt), '（CMD-1026-04：术后管理 1023-03 起搬到自己的 tab）项目卡 tab：施术项目｜在韩管理｜已完成，没有术后管理 tab'); ST.ok(!/ONDA|Tune/.test(html.split('管理项目')[0]) , '管理项目不混在施术里');
+    ST.ok(/项目卡/.test(txt) && /增加备注/.test(txt), '项目卡有［增加备注］'); ST.ok(/施术项目\s*[（(]?\d/.test(txt) && !/术后管理\s*[（(]?\d/.test(txt), '（CMD-1110-06：项目卡只有「施术项目（N）」，没有分页）术后管理 / 管理项目有自己的 tab'); ST.ok(!/ONDA|Tune/.test(html.split('管理项目')[0]) , '管理项目不混在施术里');
     var ptxt59 = inPostcareTabHtml(c).replace(/<[^>]+>/g, ' '); ST.ok(/术后管理/.test(ptxt59) && /韩国/.test(ptxt59) && /印尼/.test(ptxt59) && /预约中/.test(ptxt59), '（CMD-1026-04）术后管理 tab：地点列有韩国 / 印尼，分段名「预约中」'); ST.ok(!/<span>到院<\/span>/.test(html) && !/做术后管理/.test(html) && !/结束术后管理/.test(html), '拿掉第一栏「到院」、［做术后管理］、［结束术后管理］');
     /* 备注记录 */
     c.inNotes = []; c.recInNote = ''; ST.ok(coreAddInNote(c, '第一则：客人带轮椅', 'A1 室长') && coreAddInNote(c, '第二则：需要接送', 'A1 室长') && c.inNotes.length===2, '可以写好几则备注'); ST.ok(c.recInNote==='第一则：客人带轮椅\n第二则：需要接送', '打印用的 recInNote = 全部备注拼起来');
@@ -4440,7 +4440,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(flowMarkOf(m, 'kr')==='✓' && flowMarkOf(m, 'postcare')==='●', '韩国行程结束 → 赴韩 ✓，术后管理没做完 ●');
     /* 4 tab 映射 + 术后管理 tab */
     ST.open(m); m = getCurrentCase(); m.activeCaseTab = 'flow'; ST.ok(canonTabKey(m, 'flow')==='consult' && canonTabKey(m, 'localmgmt')==='summary', '旧的流程 / 本地管理链接落在对的 tab');
-    m.activeCaseTab = 'postcare'; var ph = caseTabContentHtml(m); ST.ok(/未预约/.test(ph) && /术后复诊/.test(ph) && /施术项目/.test(ph) && /推荐内容/.test(ph) && /推荐时间/.test(ph) && /术后第/.test(ph), '术后管理 tab（CMD-1027-09 新栏位；原：地点 + 建议日期栏）：未预约分组 + 项目｜施术项目｜推荐内容｜次数｜推荐时间｜操作：'+ph.replace(/<[^>]+>/g,' ').slice(0,160));
+    m.activeCaseTab = 'postcare'; var ph = caseTabContentHtml(m); ST.ok(/待预约（\d+）/.test(ph) && /术后复诊/.test(ph) && /施术项目/.test(ph) && /推荐内容/.test(ph) && /推荐时间/.test(ph) && /术后第/.test(ph), '术后管理 tab（CMD-1027-09 新栏位；原：地点 + 建议日期栏；CMD-1110-07：印尼没约的移到最上面的红色「待预约（N）」）：待预约分组 + 项目｜施术项目｜推荐内容｜次数｜推荐时间｜操作：'+ph.replace(/<[^>]+>/g,' ').slice(0,160));
     RESUMED_VISITS.push({name:m.name, date:dAgo(-3), time:'10:00', purpose:'术后管理', caseId:m.id, careKey:'s118'}); m.subItems[0].careFor = {keys:['s118']}; ph = caseTabContentHtml(m); ST.ok(/修改时间/.test(ph), '没约的在「未预约」二级 card / 约了的变成一张按预约时间的二级 card（标题时间 + 印尼的有［修改时间］）（CMD-1109-19；原：预约中分组标题）'); RESUMED_VISITS.pop();
     m.subItems[0].done = true; m.subItems[0].doneAt = nowFullDt(); ph = caseTabContentHtml(m); ST.ok(/已完成/.test(ph), '做完进已完成');
     var kh = caseTabContentHtml(Object.assign(m, {activeCaseTab:'kr'})); ST.ok(kh.indexOf('术后管理')<0 || !/inCareCardsHtml/.test(kh) , '赴韩 tab 里的项目卡没有术后管理小 tab');
@@ -10274,12 +10274,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.subItems.push({id:'r272x', kind:'术后管理记录', holdUseOf:'T-管理丙 · 3次', place:'KR', date:ymdAdd(todayStr(), 3), time:'11:00', content:'T-管理丙', done:false});
       /* ① 项目卡三个分页 */
       var pc = inProjectCardHtml(c), pt = t(pc);
-      ST.ok(/施术项目（\d+）/.test(pt) && /术后管理（\d+）/.test(pt) && /管理项目（\d+）/.test(pt) && !/已完成（\d+）/.test(pt), '分页 施术项目｜术后管理｜管理项目（没有「已完成」分页）：'+(pt.match(/(施术项目|术后管理|管理项目|已完成)（\d+）/g)||[]).join(' '));
+      ST.ok(/施术项目（\d+）/.test(pt) && !/inPcTab/.test(pc) && !/术后管理（\d+）/.test(pt) && !/管理项目（\d+）/.test(pt), 'CMD-1110-06：施术项目（N）没有分页（术后管理 / 管理项目有自己的 tab）：'+(pt.match(/(施术项目|术后管理|管理项目|已完成)（\d+）/g)||[]).join(' '));
       ST.ok(!/kr-pc-scroll/.test(pc), '项目卡没有固定高度（没有多余空白）');
-      IN_PC_TAB[c.id] = 'mg'; var mt = t(inProjectCardHtml(c));
-      ST.ok(/预约中（\d+）/.test(mt) && /保留（\d+）/.test(mt) && /项目次数状态预约时间来源/.test(mt) && /1次/.test(mt) && !/剩\d+\/共/.test(mt), '管理项目：预约中（N）、保留（N），栏位 项目｜次数｜状态｜预约时间｜来源，次数写这一行的次数');
-      IN_PC_TAB[c.id] = 'care'; var ch = inProjectCardHtml(c), cht = t(ch);
-      ST.ok(/项目施术项目推荐内容地点来源/.test(cht) && /查看案件/.test(cht), '术后管理分页：每个预约时间一张二级 card，栏位 项目｜施术项目｜推荐内容｜地点｜来源，标题行［查看案件］');
+      ST.ok(!/inPcTab/.test(inProjectCardHtml(c)), 'CMD-1110-06：没有管理项目 / 术后管理分页（它们有自己的 tab；原：这里测分页栏位）');
       delete IN_PC_TAB[c.id];
       /* ② 术后管理 tab */
       var pm = pcmHtml(c, 'IN'), pmt = t(pm);
@@ -10342,8 +10339,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var kept = mt.slice(mt.indexOf('保留（')); ST.ok(!/其他/.test(kept.slice(0, 80)), '保留 / 已使用没有「其他」栏');
       var pc = inProjectCardHtml(c), pt = t(pc);
       if(/施术项目（\d+）/.test(pt)) ST.ok(/预约时间项目次数备注其他来源/.test(pt), '赴韩施术项目卡·施术项目栏位 预约时间｜项目｜次数｜备注｜其他｜来源');
-      IN_PC_TAB[c.id] = 'mg'; var mp = t(inProjectCardHtml(c)); delete IN_PC_TAB[c.id];
-      ST.ok(/项目次数状态预约时间其他来源/.test(mp) && (/查看案件/.test(mp) || !visitsOf(m).some(function(v){ return v.date===ymdAdd(todayStr(), 3) && v.place==='KR'; })), 'CMD-1109-22 改：项目卡的管理项目分页预约中也有「其他：查看案件」（原：不动）');
+      ST.ok(!/inPcTab/.test(inProjectCardHtml(c)), 'CMD-1110-06 改：项目卡没有管理项目分页（管理项目在自己的 tab，原：分页预约中有「其他：查看案件」）');
     } finally { var o = JSON.parse(sv); c.procedureItems = o.items; c.subItems = o.subs; delete IN_PC_TAB[c.id]; }
   });
   ST.def('R275a','CMD-1109-23（KM1 分页，pcStage 夹具）：进行项目表所有类型做完都是「已完成」+［撤回完成］按钮（描边小按钮，没有灰掉的［操作完成］和文字链接）；施术撤回只退回完成状态（不碰钱、不动术后管理预约）；离院后没有［撤回完成］；管理项目行有备注输入框（做完后还能改，离院后只读）',function(){
@@ -10633,6 +10629,38 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(/<a [^>]*text-decoration:underline[^>]*>查看<\/a>/.test(hh) && !/<button[^>]*>查看<\/button>/.test(hh), '［查看］是下划线文字');
   });
 
+  /* CMD-1110-07：术后管理 tab 最上面的红色「待预约」+ ［对话］对齐 + ［行程变动］紧贴行程 */
+  ST.def('R283a','CMD-1110-07（A1 分页，pcStage 夹具）：术后管理 tab 顺序 = 待预约（红字 + 红框，印尼没约的）→ 相关子案件 → 术后管理 · 韩国 → 术后管理 · 印尼（没有未预约）；都约完整块消失；［对话］靠上和第一行齐平；［行程变动］紧贴在行程后面（有机场 / 没机场 / 暂定）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var snap = JSON.stringify(c), oa = window.alert; window.alert = function(){};
+    try{
+      c.krBalancePaid = true; var M = pcmModel(c), inU = M.unbooked.filter(function(r){ return r.place==='IN'; });
+      if(!inU.length){ var cu = careUnits(c); ST.ok(false, '夹具里没有印尼没预约的术后管理（pcStage 应有 2 项）'); return; }
+      ST.open(c); var t = caseTabListOf(c).filter(function(x){ return x.key==='postcare'; })[0]; ST.ok(!!t, '有术后管理 tab'); switchCaseTab('postcare');
+      var host = document.getElementById('case-body'), html = host.innerHTML, txt = host.innerText.replace(/\s+/g, ' ');
+      var iP = html.indexOf('id="in-care-pending"'), iV = html.indexOf('相关子案件'), iK = html.indexOf('术后管理 · 韩国'), iI = html.indexOf('术后管理 · 印尼');
+      ST.ok(iP>-1 && iV>iP && iK>iV, '顺序：待预约 → 相关子案件 → 术后管理 · 韩国：'+[iP, iV, iK, iI].join('/'));
+      var pend = document.getElementById('in-care-pending'); ST.ok(!!pend && /待预约（\d+）/.test(pend.innerText) && /预约时间/.test(pend.innerText), '待预约卡：标题「待预约（N）」+ 每行［预约时间］');
+      ST.ok(/var\(--feedback-error-fg/.test(pend.outerHTML.slice(0, 260)) && pend.querySelector('.info-heading').style.color.indexOf('feedback-error')>-1, '红字 + 红框用设计系统状态红 --feedback-error-fg（没有自己调色）');
+      ST.ok((pend.innerText.match(/预约时间/g)||[]).length>=inU.length, '每行都有［预约时间］：'+inU.length+' 行');
+      ST.ok(!(iI>-1 && /未预约/.test(html.slice(iI))), '术后管理 · 印尼卡里没有「未预约」');
+      /* 都约完 → 整块消失，进入「术后管理 · 印尼」 */
+      var d = ymdAdd(todayStr(), 6); window.alert = oa;
+      inU.forEach(function(r){ createChildReservation(c, d, '11:00', '术后管理', {careFor:{caseId:c.id, keys:[r.firstKey]}}); });
+      switchCaseTab('postcare'); renderCaseBody(c); html = document.getElementById('case-body').innerHTML;
+      ST.ok(html.indexOf('id="in-care-pending"')<0, '都约完：待预约整块不显示');
+      ST.ok(html.indexOf('术后管理 · 印尼')>-1, '约好的进入「术后管理 · 印尼」');
+      /* 页头：［对话］靠上 + ［行程变动］紧贴 */
+      ST.open(c); renderCaseSubtitle(c); renderCaseHeaderActions(c);
+      var ca = document.getElementById('case-chat-actions'); ST.ok(ca.style.alignSelf==='flex-start', '［对话］align-self:flex-start（和页头第一行齐平，靠最右）');
+      var tr = function(stay, tripState){ c.stay = stay; c.krSchedule = c.krSchedule || {}; c.krSchedule.tripState = tripState; return inTripHeaderRowHtml(c); };
+      var h1 = tr({in:ymdAdd(todayStr(), 2), inTime:'11:20', inAirport:'ICN', out:ymdAdd(todayStr(), 9), outTime:'12:30', outAirport:'ICN'}, 'booked'), h2 = tr({in:ymdAdd(todayStr(), 2), inTime:'11:20', out:ymdAdd(todayStr(), 9), outTime:'12:30'}, 'booked'), h3 = tr(null, 'tentative');
+      [h1, h2, h3].forEach(function(h, i){ var ok = h && /<\/b><button[^>]*openStayModal[^>]*>行程变动<\/button>/.test(h) && !/<span style="flex:1;"><\/span><button/.test(h); ST.ok(ok, '［行程变动］紧贴在行程后面（'+['有机场', '没机场', '暂定'][i]+'）'); });
+      ST.ok(/在韩行程：暂定/.test(h3.replace(/<[^>]+>/g, '')), '暂定写「在韩行程：暂定」');
+    } finally { window.alert = oa; var o = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.keys(o).forEach(function(k){ c[k] = o[k]; }); }
+  });
+
   /* CMD-1106-16：推荐项目术后管理标在哪做 + 建议在韩天数自动算 */
   ST.def('R246a','CMD-1106-16（任意分页）：建议在韩天数 = 最晚「必须在韩国」术后管理第几天 + 1（韩国或印尼不算、没有 = 1 天）；表单只显示一行、没有输入框和停留原因；提交不再因天数 / 原因报错；推荐项目列表术后管理标地点（IN 分配后写分配结果）',function(){
     var mk = function(arr){ return arr.map(function(a){ return {mgmt:a[0], name:a[0], times:1, interval:1, place:a[2], startDay:a[1]}; }); };
@@ -10675,17 +10703,17 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       krScheduleSetYM(q.y0, 1); ST.ok(KR_SCHED_VIEW_MONTH.getFullYear()===q.y0 && KR_SCHED_VIEW_MONTH.getMonth()+1===q.m0, '从明年切回今年、月比这个月早 → 自动变成这个月');
       /* 顺序 + 说明文字不见了 */
       KR_SCHED_NAV_CASE = ''; setTripState('booked'); h = krProcedureTabMain(c, ''); t = txt(h); /* CMD-1106-18：选已定才出现到达 / 离开 */
-      var iT = t.indexOf('赴韩日程'), iS = t.indexOf('行程状态'), iA = t.indexOf('到达'), iD = t.indexOf('施术日期'), iB = t.indexOf('递交施术日期');
-      ST.ok(iT>-1 && iT<iS && iS<iA && iA<iD && iD<iB, '顺序：标题 → 行程状态 → 到达 / 离开 → 施术日期 → 按钮');
+      var iT = t.indexOf('施术日期'), iS = t.indexOf('行程状态'), iA = t.indexOf('到达'), iD = iA+1, iB = t.indexOf('递交施术日期');
+      ST.ok(iT>-1 && iT<iS && iS<iA && iA<iD && iD<iB, '顺序：标题「施术日期」→ 行程状态 → 到达 / 离开 → 按钮（CMD-1110-06：标题改名）');
       ST.ok(!/待递交施术日期/.test(t) && !/只能选择KR室长可接待/.test(t) && !/给 KR 看的标记/.test(t) && !/确认行程」窗口里填/.test(t), '那几句说明 / 状态行不见了');
       ST.ok((h.match(/border-top:1px solid var\(--border2\)/g)||[]).length>=3 && /首选日/.test(t), '三段之间有分隔线，日历图例保留');
       /* 已选首选日 → 停在首选日那个月 */
       var pd = ymdAdd(todayStr(), 50); c.krSchedule.primary = pd; KR_SCHED_NAV_CASE = ''; krProcedureTabMain(c, ''); ST.ok(KR_SCHED_VIEW_MONTH.getFullYear()===+pd.slice(0, 4) && KR_SCHED_VIEW_MONTH.getMonth()+1===+pd.slice(5, 7), '已经选了首选日：停在首选日那个月');
       /* 已递交：行程在上面 */
       c.krSchedule = {status:'pending', primary:pd, backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; h = krProcedureTabMain(c, ''); t = txt(h);
-      ST.ok(t.indexOf('到达')>-1 && t.indexOf('到达')<t.indexOf('已提交首选'), '已递交：行程在施术日期上面');
+      ST.ok(t.indexOf('到达')<0 && t.indexOf('已提交首选')>-1, '已递交：卡里没有行程段（CMD-1110-06：行程搬到页头第三行）');
       c.krSchedule = {status:'confirmed', primary:pd, backup:'', confirmedDate:pd, confirmedTime:'10:00', address:'x', changePrimary:'', changeBackup:'', changeSubmitted:false}; h = krProcedureTabMain(c, ''); t = txt(h);
-      ST.ok(t.indexOf('到达')>-1 && t.indexOf('到达')<t.indexOf('施术日期 '+pd), 'KR 已确认：行程在施术日期上面');
+      ST.ok(t.indexOf('到达')<0 && t.indexOf('施术日期 '+pd)>-1, 'KR 已确认：卡里没有行程段、施术日期照旧（CMD-1110-06）');
     } finally { window.getCurrentCase = gc0; CASE_ITEMS[idx] = JSON.parse(snap); KR_SCHED_NAV_CASE = ''; }
   });
 
@@ -11075,8 +11103,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var snap = JSON.stringify(c), idx = CASE_ITEMS.indexOf(c), gc0 = window.getCurrentCase; window.getCurrentCase = function(){ return c; };
       try{
         c.krSchedule = {status:null, primary:'', backup:'', confirmedDate:'', confirmedTime:'', changePrimary:'', changeBackup:'', changeSubmitted:false}; c.hasArrived = false; KR_SCHED_NAV_CASE = '';
-        var h = krProcedureTabMain(c, ''), t = txt(h), i0 = h.indexOf('施术日期</span>');
-        ST.ok(i0>-1 && /首选日/.test(h.slice(i0, i0+700)) && /备选日/.test(h.slice(i0, i0+900)), '图例「首选日 / 备选日」和「施术日期」在同一行（标题行右边）');
+        var h = krProcedureTabMain(c, ''), t = txt(h), i0 = h.indexOf('施术日期</div>');
+        ST.ok(i0>-1 && /首选日/.test(h.slice(i0, i0+9000)) && /备选日/.test(h.slice(i0, i0+9000)), '图例「首选日 / 备选日」在卡片标题「施术日期」下面的日历标题行右边（CMD-1110-06：标题搬到卡片标题行）');
         ST.ok(!/点选 1～2 天/.test(t) && !/只选一天就是首选日/.test(t), '拿掉「点选 1～2 天…」那句');
         ST.ok(!/备选（选填）/.test(t), '图例文字改成「备选日」');
         ST.ok(/justify-content:center/.test(h.slice(h.indexOf('kr-time-sel')-200, h.indexOf('kr-time-sel'))), '年 / 月在中间');

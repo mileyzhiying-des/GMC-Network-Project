@@ -1430,7 +1430,7 @@ function renderCaseStatusBar0(c){
 function renderCaseHeaderActions(c){
   var el = document.getElementById('case-chat-actions'); if(!el) return;
   el.style.display = c.materialsConfirmed ? 'flex' : 'none';
-  el.style.alignSelf = mainPageV2(c) ? 'flex-end' : ''; /* B1：［发起对话］放在第二行最右 */
+  el.style.alignSelf = mainPageV2(c) ? 'flex-start' : ''; /* CMD-1110-07：［对话］往上移，和页头第一行（客人名 + 状态标签 + 访问 / 面诊 / 施术次数）齐平，靠最右（原：B1 放第二行最右 flex-end） */
   if(!c.materialsConfirmed){ el.innerHTML=''; return; }
   var stageBtn = '';
   var notEnded = !isEnded(c);

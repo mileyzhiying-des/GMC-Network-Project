@@ -9861,7 +9861,7 @@ function inTripHeaderRowHtml(c){
   else if(!s.in && !s.out) body = '<span style="color:var(--muted);">未填写</span>';
   else body = one(s.in, s.inTime, s.inAirport)+' ～ '+one(s.out, s.outTime, s.outAirport);
   var bad = ''; try{ var sus = staySuspect(c); if(sus) bad = ' <b style="font-size:12px;color:#B3261E;">⚠ '+aEscC(sus)+'</b>'; var sh = stayShortDays(c); if(sh) bad += ' <b style="font-size:12px;color:#B3261E;">⚠️ 离境日比建议少 '+sh+' 天</b>'; }catch(e){} /* 原在赴韩日程卡「行程」段里的这行红字随行程一起搬到页头 */
-  return '<div id="in-trip-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;font-size:13px;"><b style="color:var(--slate2);">在韩行程：'+body+'</b>'+bad+'<span style="flex:1;"></span><button class="btn-outline sd-btn" onclick="openStayModal(\''+c.id+'\')">行程变动</button></div>';
+  return '<div id="in-trip-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;font-size:13px;"><b style="color:var(--slate2);">在韩行程：'+body+'</b><button class="btn-outline sd-btn" onclick="openStayModal(\''+c.id+'\')">行程变动</button>'+bad+'</div>'; /* CMD-1110-07：［行程变动］紧贴在行程后面（和 KR 页头「在韩行程：… ［行程修正］」同样间距），红字在按钮后面 */
 }
 function inStayCardHtml(c){ /* 旧的单独一张卡（已不用，留给兼容） */
   if(!c.settlementDone || !krActiveItems(c).length) return '';
@@ -11470,7 +11470,7 @@ function inRevisitTabHtml(c){
       var lt0 = ''; if(c.localMgmt || showLocalTab(c) || isContCase(c)){ var sv0 = c.activeCaseTab; c.activeCaseTab = 'localmgmt'; try{ lt0 = c0.call(this, c); }finally{ c.activeCaseTab = sv0; } }
       if(lt0===localBoughtHtml(c)) lt0 = ''; /* 只是只读的「本次购买」卡 = 汇总本身，不重复 */
       return summaryTabHtml(c)+(lt0 ? '<div style="margin-top:14px;">'+lt0+'</div>' : ''); }
-    if(t==='postcare') return '<div class="in-tabstack">'+gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('术后管理', function(){ return pcmHtml(c, 'IN'); })+'</div>'; /* CMD-1027-09：IN / KR 同一个组件 */
+    if(t==='postcare') return '<div class="in-tabstack">'+gmcSafe('待预约', function(){ return pcmInHtml(c, pcmModel(c), 'pending'); })+gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('术后管理', function(){ return pcmInHtml(c, pcmModel(c), 'main'); })+'</div>'; /* CMD-1027-09：IN / KR 同一个组件 */
     if(t==='kmgmt') return '<div class="in-tabstack">'+gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('管理项目', function(){ return inMgmtTabHtml(c); })+'</div>'; /* CMD-1028-09：IN 只读 */
     if(t==='revisit') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+gmcSafe('复诊', function(){ return inRevisitTabHtml(c); });
     if(t==='consult') return gmcSafe('相关子案件', function(){ return tabVisitsHtml(c, t); })+(!up && showKrTab(c) && (c.consultStatus!=='report_ready' || consultPlanOpen(c)) ? consultTabHtml(c)+krTabContent(c) : consultTabHtml(c)); /* CMD-1026-01 五：报告刚出来（Step 1）不挂赴韩方案卡，按［查看方案］后才出现 */ /* 没升级：选项目的卡也在面诊 tab（诊疗方案已出 → 客人选项目） */
@@ -12687,7 +12687,7 @@ function pcmGroups(rows, desc){
   return ord.map(function(k){ return gs[k]; });
 }
 function pcmHtml(c, side){
-  if(side==='IN') return pcmInHtml(c, pcmModel(c)); /* CMD-1109-19 四：IN 分韩国 / 印尼两张一级 card（KR 页面照旧） */
+  if(side==='IN') return pcmInHtml(c, pcmModel(c)); /* 不传 part = 待预约 + 韩国 + 印尼连在一起（案件页自己分开调：part='pending' / 'main'） */ /* CMD-1109-19 四：IN 分韩国 / 印尼两张一级 card（KR 页面照旧） */
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, M = pcmModel(c), md = function(d){ return String(d||'').slice(5, 10).replace('-', '/'); }, today = todayStr();
   var inTab = side==='IN', mine = inTab ? 'IN' : 'KR', canAct = inTab ? true : (typeof krCan==='function' && krCan());
   var paid = !!c.krBalancePaid, locked = !!(c.visitClosed || isEnded(c));
@@ -13493,8 +13493,9 @@ function in19CareCardPage(c){ /* CMD-1109-21：赴韩总览，只放在韩国处
   return {html:html, n:B.length+rest.length+D.length};
 }
 /* IN「术后管理」tab：韩国 / 印尼两张一级 card */
-function pcmInHtml(c, M){
-  var paid = !!c.krBalancePaid, locked = !!(c.visitClosed || isEnded(c)), today = todayStr();
+/* CMD-1110-07：part='pending' = 只返回最上面红框的「待预约（N）」（印尼没预约的术后管理，每行照旧［预约时间］，都约完就整块不显示）；part='main' = 韩国 + 印尼两张卡（印尼卡只剩保留 / 已预约 / 已完成；韩国未预约留在韩国卡、不标红）；不传 = 两块连在一起（旧写法） */
+function pcmInHtml(c, M, part){
+  var paid = !!c.krBalancePaid, locked = !!(c.visitClosed || isEnded(c)), today = todayStr(), pendHtml = '';
   var side = function(place, title){
     var B = M.booked.filter(function(r){ return r.place===place; }), U = M.unbooked.filter(function(r){ return r.place===place; }), K = M.kept.filter(function(r){ return r.place===place; }), D = M.done.filter(function(r){ return r.place===place; }), inn = place==='IN';
     var body = '';
@@ -13507,12 +13508,17 @@ function pcmInHtml(c, M){
       return in19Tr(cells, G6);
     };
     var uh = in19Th(inn ? ['项目', '施术项目', '推荐内容', '来源', '次数', '推荐时间', '操作'] : ['项目', '施术项目', '推荐内容', '来源', '次数', '推荐时间'], G6);
-    if(U.length) body += inL2('未预约', U.length, '', uh+U.map(function(r){ return uRow(r, false); }).join(''));
+    if(U.length && inn){ pendHtml = '<div class="card" id="in-care-pending" style="padding:14px 22px 18px;border:1px solid var(--feedback-error-fg,#B83A2E);"><div class="info-heading" style="margin-bottom:2px;color:var(--feedback-error-fg,#B83A2E);">待预约（'+U.length+'）</div>'+uh+U.map(function(r){ return uRow(r, false); }).join('')+'</div>'; }
+    else if(U.length) body += inL2('未预约', U.length, '', uh+U.map(function(r){ return uRow(r, false); }).join(''));
     if(K.length) body += inL2('保留', K.length, '', uh+K.map(function(r){ return uRow(r, true); }).join(''));
     pcmGroups(D, true).forEach(function(g){ body += in19CareGroupCard(c, g, {done:true}); });
-    return '<div class="card" style="padding:18px 22px;"><div class="info-heading" style="margin-bottom:2px;">'+title+'</div>'+(body || '<div style="text-align:center;color:var(--muted);font-size:13px;padding:22px 0;">目前没有'+(inn ? '印尼' : '韩国')+'术后管理</div>')+'</div>';
+    if(!body && inn && pendHtml) return ''; /* 印尼只有待预约、没有已预约 / 已完成：这张卡先不画（待预约在最上面） */
+    return '<div class="card" style="padding:18px 22px;"><div class="info-heading" style="margin-bottom:2px;">'+title+'</div>'+(body || (inn && pendHtml ? '' : '<div style="text-align:center;color:var(--muted);font-size:13px;padding:22px 0;">目前没有'+(inn ? '印尼' : '韩国')+'术后管理</div>'))+'</div>';
   };
-  return '<div style="display:flex;flex-direction:column;gap:12px;">'+side('KR', '术后管理 · 韩国')+side('IN', '术后管理 · 印尼')+'</div>';
+  var kr = side('KR', '术后管理 · 韩国'), inH = side('IN', '术后管理 · 印尼');
+  if(part==='pending') return pendHtml;
+  if(part==='main') return '<div style="display:flex;flex-direction:column;gap:12px;">'+kr+inH+'</div>';
+  return '<div style="display:flex;flex-direction:column;gap:12px;">'+pendHtml+kr+inH+'</div>';
 }
 
 /* CMD-1109-20：IN「查看案件」小链接（其他栏）——打开这个日期挂的韩国子案件；找不到就写「—」 */
