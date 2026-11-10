@@ -2028,7 +2028,15 @@ function showKrTab(c){ return (!!c.projectsEnabled && !!c.reportReady && !isRevE
 function showProjectsTab(c){ return showKrTab(c); } /* 旧名称，指向赴韩施术 */
 function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.localMgmt && (c.localMgmt.batches||[]).length); }
 
-function showLocalTab(c){ return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0 || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理')); } /* CMD-1022-15：选了术后管理 → 本地管理 tab 出现（术后管理，来自原案件） */
+function showLocalTab(c){
+  /* CMD-1110-14：「本地项目」tab 跟着实际发生的事出现——纯本地案件：有持有要用 / 正在使用 / 今天用过；没用就没有（买了 →「结算」tab）。其他案件照旧 */
+  if(pureLocalMain(c)){
+    if(isEnded(c)) return (c.mgmtUses||[]).length>0;
+    var heldNow = (getClientHoldings(c.name)||[]).some(function(h){ return (h.batches||[]).some(function(b){ return !b.refund && !b.voided && (b.bought||0)-(b.used||0)>0; }); });
+    return !!((typeof followupOn==='function' && followupOn(c)) || c.mgmtActive || c.localAsk || c.addUse || c.addingMore || c.comp || (c.entryChoicePending && c.projectEntryMode==='new') || (c.mgmtUses||[]).length || (c.localMgmt && (c.localMgmt.mgmtActive || (c.localMgmt.mgmtUses||[]).length)) || c.usePrev || (c.entryChoicePending && (c.projectEntryMode==='holdings' || (!c.projectEntryMode && heldNow))) || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理')));
+  }
+  return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0 || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理'));
+}
 
 function showRelatedTab(c){ return false; /* CMD-1022-05：独立的「关联案件」tab 拿掉，改成基础资料第一块（relatedBlockHtml） */ } /* 只有往前关联的案件才有关联案件 tab */
 
@@ -4268,8 +4276,13 @@ function localLeaveAsk(c, reason){
   if(!c || isEnded(c)) return;
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
   var ov = document.getElementById('local-leave-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'local-leave-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100050; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:420px;max-width:94vw;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:8px;">'+(reason==='notuse' ? '客人要离开了吗？' : '今天的项目都做完了')+'</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;">客人是否已离店？<br><span style="font-size:12px;color:var(--muted);">还没离店可以继续购买其他项目；客人走的时候按页头［客人离店］。</span></div>'+
-    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;"><button class="btn-outline" onclick="localLeaveNo()">还没离店</button><button class="btn-primary" onclick="localLeaveYes()">已离店</button></div></div>';
+  if(reason==='notuse'){ /* CMD-1110-14：「是否使用持有项目？」选［不使用］——样式同 KR「今天的项目都做完了吗？」 */
+    ov.innerHTML = '<div class="modal-box" style="width:440px;max-width:94vw;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:8px;">客人准备离店了吗？</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;">今天没有要使用的持有项目。选［还有项目］可以继续增加面诊或添加本地管理；选［客人已离店］这次来访就结束。</div>'+
+      '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;"><button class="btn-outline" onclick="localLeaveNo()">还有项目</button><button class="btn-primary" onclick="localLeaveYes()">客人已离店</button></div></div>';
+  } else {
+    ov.innerHTML = '<div class="modal-box" style="width:420px;max-width:94vw;padding:22px 24px;"><div style="font-size:16px;font-weight:700;margin-bottom:8px;">今天的项目都做完了</div><div style="font-size:13px;color:var(--slate2);line-height:1.7;">客人是否已离店？<br><span style="font-size:12px;color:var(--muted);">还没离店可以继续购买其他项目；客人走的时候按页头［客人离店］。</span></div>'+
+      '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;"><button class="btn-outline" onclick="localLeaveNo()">还没离店</button><button class="btn-primary" onclick="localLeaveYes()">已离店</button></div></div>';
+  }
   ov.classList.add('open'); LOCAL_LEAVE_CID = c.id;
 }
 var LOCAL_LEAVE_CID = '';

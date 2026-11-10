@@ -3104,6 +3104,7 @@ function inLocalEntryMainGo(what){
   var c = getCurrentCase(); inLocalEntryMainClose(); if(!c || isEnded(c)) return;
   if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; }
   if(what==='buy' && usePrevBuyOk(c, 'main')) { usePrevBuy(); return; }
+  if(what==='use' && pureLocalMain(c) && !c.mgmtActive){ c.entryChoicePending = true; c.projectEntryMode = 'holdings'; c.projectsLocked = false; c.addingMore = false; logCaseEvent(c, actingName(), '本地管理：使用持有项目'); buildCaseLog(c); c.activeCaseTab = 'localmgmt'; try{ switchCaseTab('localmgmt'); }catch(e){ renderCaseBody(c); } return; } /* CMD-1110-14：回到「是否使用持有项目？」卡（旧资料卡在选购画面的也从这里回来） */
   setMgmtAdd('main', what);
 }
 function inleTab(t){
@@ -4873,7 +4874,7 @@ function unpaidBatchesHtml(c){
 }
 
 /* CMD-1110-13：本地「已选择 / 结算」卡的［+ 购买新项目］——打开本地选购（同页头［+ 添加本地管理］里的购买） */
-function localBuyNew(){ var c = getCurrentCase(); if(!c || isEnded(c)) return; if(typeof inLockGuard==='function' && inLockGuard(c)) return; c.addingMore = true; try{ logCaseEvent(c, actingName(), '本地项目：购买新项目'); buildCaseLog(c); }catch(e){} renderCaseBody(c); }
+function localBuyNew(){ var c = getCurrentCase(); if(!c || isEnded(c)) return; if(typeof inLockGuard==='function' && inLockGuard(c)) return; if(modalBuyOk(c) && usePrevBuyOk(c, 'main')){ usePrevBuy(); return; } c.addingMore = true; try{ logCaseEvent(c, actingName(), '本地项目：购买新项目'); buildCaseLog(c); }catch(e){} renderCaseBody(c); }
 /* ---- 项目列表 tab ---- */
 function projectListTabHtml(c, inLocalTab){
   /* CMD-1012-01：终态案件（已结案 / 仅出报告 / 已取消）不能再编辑——只看结算单，没有［+ 追加项目］［添加서비스］［客人不做项目］等入口；持有项目退款在客户详情，不受影响 */
@@ -4896,6 +4897,7 @@ function projectListTabHtml(c, inLocalTab){
   if(c.projectsLocked){
     /* 待付款（已结算、未确认付款）：没有［+ 追加项目］，改为［重新选择项目］回上一步（CMD-1012-02 C3） */
     var unpaidB = latestUnpaidBatch(c);
+    if(inLocalTab && !unpaidB && !c.addingMore && !isEnded(c) && !c.localAsk){ return holdingsUseHtml(c, 'main'); } /* CMD-1110-14：付完款选购就结束——结算单 / 合计 / 结算备注只在「结算」tab，本地项目 tab 放「是否使用持有项目？」（旧资料卡在这张结算卡 / 选购画面的也回到这里） */
     /* CMD-1110-13：买新的一律叫［+ 购买新项目］——放在标题行右边（原来在卡片最下面叫［+ 追加项目］，而 addMoreProjects 在 CMD-1015-16 拿掉赴韩追加时被删了，按钮点了调用一个不存在的函数，所以没反应）；
        顺序：标题 + 按钮 → 结算单 → 合计 → 结算备注；本地项目 tab 不放面诊进度（只放「面诊」tab） */
     var buyBtn = (inLocalTab && !c.addingMore && !unpaidB) ? '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="localBuyNew()">+ 购买新项目</button>' : '';
@@ -4990,6 +4992,7 @@ function localEntryChoiceHtml(c){
 
 function chooseProjectEntryMode(mode){
   var c = getCurrentCase(); if(!c) return;
+  if(mode==='new' && modalBuyOk(c) && usePrevBuyOk(c, 'main')){ usePrevBuy(); return; } /* CMD-1110-14：购买一律用弹窗 */
   c.projectEntryMode = mode;
   logCaseEvent(c, actingName(), mode==='holdings' ? '选择"持有项目使用"' : '选择"新增项目"');
   buildCaseLog(c);
@@ -5209,7 +5212,7 @@ function holdingsUseHtml(c, scope){
 /* ［新增项目］：和没有持有项目的客人一样的本地选购画面（不另做一套）；付清后变成持有，当天可接着用 */
 function holdingsAddNew(scope){
   var c = getCurrentCase(); if(!c || isEnded(c)) return; if(inLockGuard(c)) return;
-  if(c.usePrev && scope==='main'){ usePrevBuy(); return; }
+  if(modalBuyOk(c) && scope==='main'){ usePrevBuy(); return; }
   if(scope==='lm'){ var lm = c.localMgmt; if(!lm) return; lm.step = 'buy'; lm.ended = false; lm.active = true; logCaseEvent(c, actingName(), '本地管理：新增项目'); buildCaseLog(c); renderCaseBody(c); return; }
   c.projectEntryMode = 'new'; logCaseEvent(c, actingName(), '本地项目：新增项目'); buildCaseLog(c); renderCaseBody(c);
 }
@@ -5307,7 +5310,8 @@ function notUseThisTime(scope){
   if(ctx0 && ctx0.mgmtActive){ ctx0.addUse = false; renderCaseBody(c); return; } /* 本地管理进行中：只是不再追加使用 */
   if(scope==='lm') return lmNotUse(c);
   logCaseEvent(c, actingName(), '本次不使用任何持有项目');
-  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; } localLeaveAsk(c); return; }
+  if(pureLocalMain(c)){ c.entryChoicePending = false; c.projectEntryMode = null; } /* CMD-1110-14：卡片收起（本地项目 tab 随之消失，买了的在「结算」tab）；还要用持有就按页头［+ 添加本地管理］ */
+  if(caseHasPurchase(c) || (c.postcareUses||[]).length){ if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; } localLeaveAsk(c, 'notuse'); return; }
   if(mainlineOngoing(c)){ updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c); return; }
   localLeaveAsk(c, 'notuse'); /* CMD-1102-09 一：［本次不使用］= 客人要离开 → 问是否已离店；还没离店可以按［新增项目］ */
 }
@@ -5322,7 +5326,7 @@ function localItemStatus(u){ return u.status==='done' ? '已完成' : u.status==
 
 /* CMD-1110-05：页头会出现［+ 添加本地管理］的案件（和 renderCaseHeaderActions 的 lmOkCase 同一个判断）= 子记录，或不是纯本地的面诊 / 赴韩案件 */
 /* CMD-1110-08：纯本地案件（只做本地项目的一般案件）在「本地管理进行中」（有逐行完成的卡片，c.mgmtActive）时页头也有［+ 添加本地管理］；还没开始（「是否使用持有项目？」清单自带［新增项目］［使用项目］）或已结束时不放，免得和清单里的按钮重复 */
-function inHeaderLocalOk(c){ return isChildVisit(c) ? true : (!isLocalCase(c) ? (c.consultRequested || c.needsConsult===true) : !!(c.mgmtActive && !isEnded(c))); }
+function inHeaderLocalOk(c){ return isChildVisit(c) ? true : (!isLocalCase(c) ? !!(c.consultRequested || c.needsConsult===true) : !isEnded(c)); } /* CMD-1110-14：来访进行中就一直有，不管在哪一步、买了没、用了没、是不是纯本地案件（取代 1110-08「只在本地管理进行中」） */
 function pureLocalMain(c){ return !!c && !isChildVisit(c) && isLocalCase(c); }
 /* ===== CMD-1110-10：IN「本地管理」卡改表格（排法同「在韩管理」：标题行 + 外框 + 行间分隔线）：项目｜历史施术次数｜备注｜状态｜操作 =====
    历史施术次数 = 这位客人以前做过这个项目几次 = 全部案件（含子记录）里这个项目「已完成」的使用记录次数（mgmtUses / localMgmt.mgmtUses 里 status==='done' 的 qty 合计），
@@ -5578,7 +5582,7 @@ function lmSettleDo(){
   lm.batches.push({id:'L'+(lm.batches.length+1), items:items, inTotal:total, time:nowFullDt(), note:lm.noteIN||''});
   if(cpL) compFinalize(c, cpL, beforeB, total, lm.batches[lm.batches.length-1]);
   lm.cart = []; lm.noteIN = '';
-  if(lm.fromUsePrev){ lm.step = 'usePrevDone'; lm.addBuy = false; lm.active = false; } /* CMD-1029-04：使用之前购买的项目的案件——买完弹窗关掉，回到「是否使用持有项目？」清单，新买的就在里面 */
+  if(lm.fromUsePrev){ lm.step = 'usePrevDone'; lm.addBuy = false; lm.active = false; if(!c.usePrev && pureLocalMain(c) && !c.mgmtActive){ c.entryChoicePending = true; c.projectEntryMode = 'holdings'; c.projectsLocked = false; } /* CMD-1110-14：纯本地案件买完 → 本地项目 tab 里放「是否使用持有项目？」卡，结算单只在「结算」tab */ } /* CMD-1029-04：使用之前购买的项目的案件——买完弹窗关掉，回到「是否使用持有项目？」清单，新买的就在里面 */
   else if(lm.mgmtActive){ lm.addBuy = false; lm.addUse = true; } /* 本地管理进行中追加购买：付款后问是否继续使用 */
   else lm.step = 'afterBuyUse'; /* 结算后：是否使用？ */
   logCaseEvent(c, actingName(), '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+(i.kind==='service' ? '（서비스）' : '')+' ×'+i.qty+(discountText(i.discountPct)?'（'+discountText(i.discountPct)+'）':''); }).join('、')+'），已转客户持有');
@@ -13079,9 +13083,10 @@ function usePrevCardsHtml(c){
 /* ================= CMD-1029-04：「使用之前购买的项目」开的独立案件——本地项目 tab 的［购买其他项目］ ================= */
 /* 只给 usePrev 案件（主案件级的本地案件，scope main）；买东西用和一般本地选购同一个画面（localPurchaseHtml(c,'lm') 的弹窗，单品 / 活动价 / 套餐 / 서비스），
    结算 = lmSettle（确认付款 → 变成客人持有 + 记在本案件的结算 tab），买完回到「是否使用持有项目？」清单里就能当天接着用 */
-function usePrevBuyOk(c, scope){ return !!c && !!c.usePrev && scope==='main' && !isEnded(c) && !c.visitClosed && c.subState!=='cancelled'; }
+function modalBuyOk(c){ return !!c && (!!c.usePrev || pureLocalMain(c)); } /* CMD-1110-14：纯本地案件的购买也走弹窗（和「使用之前购买的项目」同一套，买的记在 c.localMgmt.batches） */
+function usePrevBuyOk(c, scope){ return !!c && modalBuyOk(c) && scope==='main' && !isEnded(c) && !c.visitClosed && c.subState!=='cancelled'; }
 function usePrevBuy(){
-  var c = getCurrentCase(); if(!c || !c.usePrev || isEnded(c)) return; if(inLockGuard(c)) return;
+  var c = getCurrentCase(); if(!c || !modalBuyOk(c) || isEnded(c)) return; if(inLockGuard(c)) return;
   if(c.localMgmt && c.localMgmt.ended){ c.localMgmt.ended = false; c.localMgmt.active = true; }
   if(!c.localMgmt) c.localMgmt = {active:true, ended:false, step:'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
   c.localMgmt.step = 'buy'; c.localMgmt.addBuy = false; c.localMgmt.fromUsePrev = true;
