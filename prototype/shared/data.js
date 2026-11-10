@@ -3080,7 +3080,7 @@ function inAddLocalProject(){
 function inLocalBuyGo(){ var c = getCurrentCase(); if(!c) return; inAddLocalProject(); } /* CMD-1105-08：购买一律走 inAddLocalProject（已有本地管理 → 继续选购；没有 → 建本地管理并进选购），画面嵌在同一个弹窗里 */
 var INLE = null; /* {caseId, tab:'use'|'buy'} */
 /* 买完 / 本次不购买之后：选购画面已收起 → 回到「使用持有」tab（没有持有就关掉弹窗）；lmBackOut 等路径不经过 renderCaseBody 的选购重画，这里兜底 */
-(function(){ ['lmNoBuy','lmSettleDo'].forEach(function(n){ var f0 = window[n]; if(typeof f0!=='function') return; window[n] = function(){ var r = f0.apply(this, arguments); try{ if(INLE && INLE.tab==='buy'){ var c2 = getCurrentCase(); if(!c2 || LM_BUY_OPEN!==c2.id){ INLE.tab = 'use'; inleRender(); } } }catch(e){ console.error('[添加本地管理弹窗回到使用持有]', e); } return r; }; }); })();
+(function(){ ['lmNoBuy','lmSettleDo'].forEach(function(n){ var f0 = window[n]; if(typeof f0!=='function') return; window[n] = function(){ var r = f0.apply(this, arguments); try{ if(INLE && INLE.tab==='buy' && n==='lmNoBuy'){ var c2 = getCurrentCase(); if(!c2 || LM_BUY_OPEN!==c2.id){ INLE.tab = 'use'; inleRender(); } } }catch(e){ console.error('[添加本地管理弹窗回到使用持有]', e); } return r; }; }); })();
 function inleHeld(c){ var M = inContModel(c); return {M:M, n:M.unused.length + M.grp.none.length}; }
 function inLocalEntry(tab){
   var c = getCurrentCase(); if(!c || isEnded(c)) return; if(inLockGuard(c)) return;
@@ -3134,8 +3134,43 @@ function planNotUse(){
 /* 点了勾选清单里的按钮 / 买完 → 关掉这个弹窗；买完付完款（或取消购买）回到这个弹窗 */
 (function(){
   ['submitHoldingsUse', 'notUseThisTime', 'holdingsAddNew'].forEach(function(n){ var f0 = window[n]; if(typeof f0!=='function') return; window[n] = function(){ if(n==='holdingsAddNew' && PLAN){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===PLAN.caseId; })[0]; if(c0) PLAN_RETURN = c0.id; } var had = !!PLAN; if(had){ var ov0 = document.getElementById('local-plan-overlay'); if(ov0) ov0.classList.remove('open'); PLAN = null; } /* 先只收起，函数跑完再清内容（submitHoldingsUse 要读里面的勾选框） */ var r0 = f0.apply(this, arguments); if(had){ var ov1 = document.getElementById('local-plan-overlay'); if(ov1 && !ov1.classList.contains('open')) ov1.innerHTML = ''; } return r0; }; });
-  ['lmNoBuy', 'lmSettleDo'].forEach(function(n){ var f1 = window[n]; if(typeof f1!=='function') return; window[n] = function(){ var r = f1.apply(this, arguments); try{ var c2 = getCurrentCase(); if(c2 && PLAN_RETURN===c2.id && pureLocalMain(c2) && !isEnded(c2) && !(c2.localMgmt && LM_BUY_OPEN===c2.id)){ PLAN_RETURN = ''; planModalOpen(c2); } }catch(e){ console.error('[回到今天如何安排项目]', e); } return r; }; });
+  /* CMD-1110-21：买完付完款 → 弹「使用持有项目吗？」（取代 1110-16 / 18 的「回到今日如何安排项目？」）；取消购买 / 关掉 = 什么都不弹。「今日如何安排项目？」只在 ① 基础资料确认完（本地服务）② 页头［+ 添加本地管理］出现 */
+  ['lmNoBuy', 'lmSettleDo'].forEach(function(n){ var f1 = window[n]; if(typeof f1!=='function') return; window[n] = function(){
+    var c0 = getCurrentCase(), snap = (n==='lmSettleDo' && c0) ? holdSnap(c0) : null, fromPlan = !!(c0 && PLAN_RETURN===c0.id), fromInle = !!(INLE && INLE.tab==='buy');
+    var r = f1.apply(this, arguments);
+    try{ var c2 = getCurrentCase();
+      if(c2 && (fromPlan || fromInle) && !(c2.localMgmt && LM_BUY_OPEN===c2.id)){ PLAN_RETURN = ''; if(n==='lmSettleDo' && snap && !isEnded(c2)){ if(fromInle) inLocalClose(); useAskOpen(c2, snap); } }
+    }catch(e){ console.error('[买完弹使用持有项目吗]', e); }
+    return r; }; });
 })();
+/* ===== CMD-1110-21：买完新项目、付完款后弹「使用持有项目吗？」（S 400）=====
+   ［使用］（主按钮）→ 打开使用持有的选择，刚买的先勾好（其他持有也列出来可加勾）；［不使用］或 × → 「客人准备离店了吗？」（来访还有别的事在进行时不弹）。KR 的购买（在韩加项）不套这个窗 */
+var USEASK = null;
+function holdSnap(c){ var o = {}; (clientHoldingsSorted(c.name)||[]).forEach(function(h){ o[h.itemName] = (o[h.itemName]||0)+holdingRemaining(h); }); return o; }
+function useAskOpen(c, before){
+  var now = holdSnap(c), fresh = Object.keys(now).filter(function(nm){ return now[nm]>(before[nm]||0); });
+  if(!Object.keys(now).some(function(nm){ return now[nm]>0; })) return; /* 买的是只能当场做完的东西 / 没有持有 → 不问 */
+  USEASK = {caseId:c.id, fresh:fresh};
+  var ov = document.getElementById('use-ask-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'use-ask-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 188; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box msz-S" style="padding:24px;"><div style="display:flex;align-items:center;margin-bottom:20px;"><div style="font-size:16px;font-weight:700;flex:1;">使用持有项目吗？</div><button class="modal-x" onclick="useAskNo()" title="不使用" aria-label="关闭">✕</button></div><div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-outline" onclick="useAskNo()">不使用</button><button class="btn-primary" onclick="useAskYes()">使用</button></div></div>';
+  ov.classList.add('open');
+}
+function useAskClose(){ var ov = document.getElementById('use-ask-overlay'); if(ov){ ov.classList.remove('open'); ov.innerHTML = ''; } }
+function useAskNo(){
+  var u = USEASK; USEASK = null; useAskClose(); var c = u && CASE_ITEMS.filter(function(x){ return x.id===u.caseId; })[0]; if(!c) return;
+  if(pureLocalMain(c)) notUseThisTime('main'); /* 来访还有别的事在进行时 notUseThisTime 只关掉、不弹离店确认 */
+}
+function useAskYes(){
+  var u = USEASK; USEASK = null; useAskClose(); var c = u && CASE_ITEMS.filter(function(x){ return x.id===u.caseId; })[0]; if(!c) return;
+  var holds = clientHoldingsSorted(c.name), idxOf = function(){ var out = []; holds.forEach(function(h, i){ if(u.fresh.indexOf(h.itemName)>-1) out.push(i); }); return out; };
+  if(pureLocalMain(c)){
+    PLAN = {caseId:c.id, state:'use'}; planRender();
+    idxOf().forEach(function(i){ var ck = document.getElementById('hold-check-main-'+i); if(ck) ck.checked = true; });
+  } else {
+    inLocalEntry('use');
+    setTimeout(function(){ var names = u.fresh; [].slice.call(document.querySelectorAll('#in-localentry-overlay input[id^="iu-hold-"]')).forEach(function(ck){ if(names.indexOf(ck.getAttribute('data-name'))>-1) ck.checked = true; }); try{ inUseSync(); }catch(e){} }, 0);
+  }
+}
 /* CMD-1110-08：纯本地案件的［+ 添加本地管理］——弹窗分「使用持有项目 / 购买新项目」，点了回到案件页里原来的「是否使用持有项目？」清单（main）/ 本地选购画面（main）；没有可用持有时［使用持有项目］灰掉 */
 function inLocalEntryMain(c){
   var held = (getClientHoldings(c.name)||[]).some(function(h){ return (h.batches||[]).some(function(b){ return !b.refund && !b.voided && (b.bought||0)-(b.used||0)>0; }); });

@@ -8007,7 +8007,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/购买于 /.test(holdingsUseHtml(c, 'main')) && holdingsUseHtml(c, 'main').indexOf('购买于 '+c.caseNo)>-1, '①：新买的项目写「购买于 '+c.caseNo+'」');
       ST.ok(/Timeline|新增项目/.test('') || (c.logEntries||[]).some(function(e){ return /本地项目：新增项目/.test(e.action); }) && (c.logEntries||[]).some(function(e){ return /结算付款/.test(e.action); }), '①：Timeline 有「新增项目」和「结算付款」');
       /* ② 先购买，再一起使用 */
-      var B = mk('R182b'); c = B.c0; chooseProjectEntryMode('holdings'); buy(); c = cur(c); planUse();
+      var B = mk('R182b'); c = B.c0; chooseProjectEntryMode('holdings'); buy(); c = cur(c); ST.ok(!!document.getElementById('use-ask-overlay') && document.getElementById('use-ask-overlay').classList.contains('open'), '②：买完付款先弹「使用持有项目吗？」（CMD-1110-21）'); useAskYes();
       var tx = document.getElementById('local-plan-overlay').innerText;
       ST.ok(/婴儿针/.test(tx) && /LHALa peel/.test(tx) && /购买新项目/.test(btns()), '②：买完回到「是否使用持有项目？」，新旧项目一起在清单里，［新增项目］还在');
       for(var i = 0; document.getElementById('hold-check-main-'+i); i++) document.getElementById('hold-check-main-'+i).checked = true; submitHoldingsUse('main'); c = cur(c);
@@ -9092,7 +9092,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var pj2 = PROJECT_LIBRARY.filter(function(p){ return p.origin==='IN' && p.active!==false; })[0];
       inLocalEntry(); inleTab('buy'); var lm2 = ch.localMgmt; ST.ok(lm2 && (lm2.step==='buy' || lm2.addBuy), '② 再打开 → 购买新项目');
       lm2.cart = [{kind:'project', key:pj2.id, projectId:pj2.id, name:pj2.name, price:100000, unitPrice:100000, qty:1, discountPct:100}]; lmSettle();
-      var eo2 = host(); ST.ok(eo2 && eo2.classList.contains('open') && INLE.tab==='use' && eo2.innerText.indexOf(pj2.name)>-1, '② 购买完成 → 回到「使用持有」，刚买的项目在列表里');
+      var ua = document.getElementById('use-ask-overlay'); ST.ok(ua && ua.classList.contains('open') && /使用持有项目吗/.test(ua.innerText), '② 购买完成 → 弹「使用持有项目吗？」（CMD-1110-21，取代回到使用持有）'); useAskYes(); var eo2 = host(); ST.ok(eo2 && eo2.classList.contains('open') && INLE && INLE.tab==='use' && eo2.innerText.indexOf(pj2.name)>-1, '② 点［使用］→ 使用持有的选择，刚买的项目在列表里');
       inLocalClose();
       /* 空的本地管理 tab 有入口 */
       var empty = inContRestHtml(ch, {grp:{booked:[], none:[]}, unused:[], ro:false, src:null}, 'local'); ST.ok(/inLocalEntry/.test(empty) && /添加本地管理项目/.test(empty), '④ 本地管理 tab 没有项目时留一行［+ 添加本地管理项目］');
@@ -10786,6 +10786,31 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   /* ===== CMD-1110-18 ===== */
   /* ===== CMD-1110-19 ===== */
+  /* ===== CMD-1110-21 ===== */
+  ST.def('R296a','CMD-1110-21（A1 分页）：买完付完款弹「使用持有项目吗？」（S，×=不使用）；［使用］刚买的已勾；［不使用］/ × → 离店确认；页头［+ 添加本地管理］买完同样；取消购买不弹；今日如何安排项目只在确认后 / 页头出现',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var cur = function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; }, uov = function(){ return document.getElementById('use-ask-overlay'); }, uo = function(){ return !!uov() && uov().classList.contains('open'); }, po = function(){ var o = document.getElementById('local-plan-overlay'); return !!o && o.classList.contains('open'); };
+    window.GMC_LOCAL_LEAVE_MANUAL = true; window.GMC_NO_PLAN_AUTO = false;
+    try{
+      var c = ST.newRes('R296w1'), id = c.id, p = ST.localProj('LHALa peel'); ST.arrive(c); ST.open(cur(id)); ST.materials(cur(id), {consult:false});
+      ST.ok(po(), '基础资料确认后 → 「今日如何安排项目？」（保留）');
+      planBuy(); toggleLocalProject('lm', p.id); lmSettle(); c = cur(id); ST.open(c);
+      ST.ok(uo() && !po() && /使用持有项目吗/.test(uov().innerText) && uov().querySelector('.modal-box').classList.contains('msz-S'), '买完付完款 → 弹「使用持有项目吗？」S 档，不回「今日如何安排项目？」');
+      var bs = uov().querySelectorAll('button:not(.modal-x)'); ST.ok(bs.length===2 && bs[0].textContent.trim()==='不使用' && bs[1].textContent.trim()==='使用' && bs[1].classList.contains('btn-primary') && !!uov().querySelector('.modal-x'), '［不使用］［使用］（主按钮最右）+ ×');
+      useAskYes(); var ck = document.getElementById('hold-check-main-0'); ST.ok(!uo() && !!ck && ck.checked, '［使用］→ 选择清单，刚买的已勾好');
+      submitHoldingsUse('main'); c = cur(id); ST.open(c); ST.ok(c.mgmtActive && caseTabListOf(c).some(function(t0){ return t0.key==='localmgmt'; }), '确认后出现「本地项目」tab + 本地管理');
+      /* 不使用 / × → 离店确认 */
+      var c2 = ST.localCase('R296w2'), id2 = c2.id, p2 = ST.localProj('LHALa peel'); ST.open(cur(id2));
+      planModalOpen(cur(id2)); planBuy(); toggleLocalProject('lm', p2.id); lmSettle(); ST.ok(uo(), '页头 / 计划弹窗 → 购买 → 付款 → 同样弹');
+      uov().querySelector('.modal-x').click(); var lv = document.getElementById('local-leave-overlay'); ST.ok(!uo() && lv && lv.classList.contains('open') && /客人准备离店了吗/.test(lv.innerText), '× = 不使用 → 「客人准备离店了吗？」'); localLeaveNo();
+      /* 取消购买不弹 */
+      var c3 = ST.localCase('R296w3'), id3 = c3.id; ST.open(cur(id3)); planModalOpen(cur(id3)); planBuy(); lmNoBuy();
+      ST.ok(!uo() && !po(), '取消购买：不弹「使用持有项目吗？」，也不回「今日如何安排项目？」');
+      /* 页头［+ 添加本地管理］仍出现今日如何安排项目 */
+      planModalOpen(cur(id3)); ST.ok(po(), '页头［+ 添加本地管理］仍打开「今日如何安排项目？」'); planClose();
+    } finally { window.alert = al; window.confirm = cf; window.GMC_LOCAL_LEAVE_MANUAL = false; window.GMC_NO_PLAN_AUTO = true; }
+  });
   /* ===== CMD-1110-20 ===== */
   ST.def('R295a','CMD-1110-20（A1 分页）：备注未读（对方写的才算、旧备注算已读、打开 tab 看过）+ 来访备注铃铛（KR 收）/ 项目备注不发 + IN［增加备注］记在今天子案件 / 主案件备注 + 备注分页先来访 + tab 标记数字 + 项目卡没有备注卡',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
@@ -10931,11 +10956,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(lb && lb.classList.contains('open') && !popen() && lbx.classList.contains('msz-XL') && !/本地选购/.test(lbx.querySelector('.lm-buy-body') ? lbx.querySelector('.lm-buy-body').innerText.slice(0, 20) : '本地选购') , '购买新项目 → 购买弹窗（XL，没有内层「本地选购」卡）');
       ST.ok(!!lbx.querySelector('.lm-buy-body') && !lbx.querySelector('.project-card') && /minmax\(0,3fr\) minmax\(0,2fr\)/.test(lbx.querySelector('.lm-buy-body').innerHTML), '购买弹窗：没有带框内层卡片；左 60% / 右 40% 两栏');
       toggleLocalProject('lm', p.id); lmSettle(); c = cur(id); ST.open(c);
-      ST.ok(popen() && /今日如何安排项目/.test(pov().innerText), '付完款 → 回到「今天如何安排项目？」');
+      var uov = document.getElementById('use-ask-overlay'); ST.ok(!popen() && uov && uov.classList.contains('open') && /使用持有项目吗/.test(uov.innerText), '付完款 → 弹「使用持有项目吗？」，不再回到「今日如何安排项目？」（CMD-1110-21）');
       ST.ok(/settle/.test(tabs(c)) && !/localmgmt/.test(tabs(c)), '结算单进「结算」tab；还没使用 → 没有本地项目 tab：'+tabs(c));
-      ST.ok(!pov().querySelector('button[disabled]'), '刚买的已是持有 → ［使用持有项目］可点');
-      /* ④ 使用持有 → 勾选 → 出现本地项目 tab */
-      planUse(); ST.ok(!!document.getElementById('hold-check-main-0'), '使用持有项目 → 勾选清单');
+      /* ④ 使用持有 → 勾选（刚买的已勾好）→ 出现本地项目 tab */
+      useAskYes(); ST.ok(!!document.getElementById('hold-check-main-0') && document.getElementById('hold-check-main-0').checked, '［使用］→ 勾选清单，刚买的已勾好');
       document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); c = cur(id); ST.open(c);
       ST.ok(!popen() && /localmgmt/.test(tabs(c)) && c.mgmtActive, '使用后：弹窗关闭，出现本地项目 tab（本地管理表格）：'+tabs(c));
       /* ⑤ 页头同一个弹窗；今天不使用 → 离店确认 */
@@ -10960,8 +10984,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/localmgmt|settle/.test(tabs(c)), '还没买没用：没有本地项目 / 结算 tab：'+tabs(c));
       usePrevBuy(); toggleLocalProject('lm', p.id); lmSettle(); c = cur(id); ST.open(c);
       ST.ok(/settle/.test(tabs(c)) && !/localmgmt/.test(tabs(c)), '买了：有结算 tab；还没使用 → 没有本地项目 tab（CMD-1110-16）：'+tabs(c));
-      var pov = document.getElementById('local-plan-overlay'); ST.ok(!!pov && pov.classList.contains('open') && /今日如何安排项目/.test(pov.innerText), '买完付完款：回到「今天如何安排项目？」');
-      planNotUse(); c = cur(id);
+      var uov = document.getElementById('use-ask-overlay'); ST.ok(!!uov && uov.classList.contains('open') && /使用持有项目吗/.test(uov.innerText) && !(document.getElementById('local-plan-overlay')||{classList:{contains:function(){ return false; }}}).classList.contains('open'), '买完付完款：弹「使用持有项目吗？」（CMD-1110-21），不是「今日如何安排项目？」');
+      useAskNo(); c = cur(id);
       ST.ok(ovOpen() && /客人准备离店了吗？/.test(document.getElementById('local-leave-overlay').innerText) && /还有项目/.test(document.getElementById('local-leave-overlay').innerText) && /客人已离店/.test(document.getElementById('local-leave-overlay').innerText), '［不使用］弹「客人准备离店了吗？」［还有项目］［客人已离店］');
       localLeaveNo(); c = cur(id); ST.open(c);
       ST.ok(!isEnded(c) && /settle/.test(tabs(c)) && !/localmgmt/.test(tabs(c)), '［还有项目］：来访继续，tab 只剩结算（没用就没有本地项目 tab）：'+tabs(c));
