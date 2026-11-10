@@ -2510,3 +2510,10 @@ prototype/shared/app.css  共用样式
 - **本地管理卡改表格**（data.js `localMgmtTableHtml(c, rows, ro)`，排法同「在韩管理」：标题行 + 外框 `inSmallCard` + 行间分隔线，复用 `in19Th` / `in19Tr`）：项目｜历史施术次数｜备注｜状态｜操作。项目名后面灰字「· 本次 N 次」（原「使用 N 次」）；备注沿用 1110-02 的 `inLocalNoteCell`（按［完成］时存，完成后变文字、点一下回输入框）；状态沿用 `LOCAL_ITEM_COLORS` 标签（进行中 / 已完成 / 已取消）；操作 = 进行中［完成］［取消］（`padding:5px 12px;font-size:12px;border-radius:8px`，和在韩管理同尺寸），已完成 / 已取消空着。用在：`mgmtActiveHtml`（本地项目 tab 的本地管理卡）和子案件页「本地管理」tab 今天用的本地项目（`inContTodayHtml` kind='local'，含已取消的行）。`inContTodayHtml` 不传 kind 的旧写法（今日项目合并卡）没动。
 - **历史施术次数怎么算**（`localHistCount(clientName, itemName, exceptRow)`）：数据来源 = 这位客人的全部案件（`CASE_ITEMS` 里同名，含子记录）的 `mgmtUses` / `localMgmt.mgmtUses` 里 `status==='done'` 的 `qty` 合计；**不算今天这一次**（这一行自己，以及 `date` 是今天的使用记录）；项目名按 `clientProjectKey`（去掉「· 规格 / 次数」后缀，和 1110-02「查看备注」同一个匹配）对；已取消的不算；没做过 = 0 次。**正式版后端**：按「客人 + 项目名（去后缀；有项目 id 就按 id）」在本地项目使用记录里查 状态=已完成 且 使用日期 < 今天 的次数合计，一次聚合查询。
 - 测试：新增 R286a；R143a（今天用的本地项目的按钮）、R281a（「使用 N 次」）的旧断言跟着改。
+
+## CMD-1110-11 补充（2026-11-10，追加；取代 CMD-1110-06 判断③「今日到访沿用赴韩项目写法」、CMD-1110-09 判断②「查看备注里 KR 写的带完整时间」、CMD-1110-10 判断③「旧合并今日项目卡不改」，旧文字保留作历史）
+- 分支 **V5**，数据版本不变（61），只改画面。
+- **当前状态卡「今日到访（…）」**（IN `renderCaseStatusBar0`、KR `krMainStatusBar`）：括号里用 `dayNameOf`（和「下一个预约」同一个名称函数，例「施术项目 · 在韩管理」），不再写「赴韩项目」「· 韩国」；IN 的「待确认结束」行也改用 `dayNameOf`（保留「· 韩国」位置标记）。`mainDayBiz` / `krMainDayTypes` 留着，只剩列表里「下一个日程」文字（`nextScheduleText`）等少数地方还在用旧写法。
+- **「查看备注（N）」展开**（`viewNotesPanelHtml`）：每行一律「MM-DD 备注内容 查看案件」（`noteMDText(at, role)`：KR 写的用韩国日期 `Asia/Seoul`，IN 写的用诊所时区）；完整时间只留在备注卡和「备注内容」。
+- **所有本地管理行都用 `localMgmtTableHtml` 表格**：① 子案件页旧的合并「今日项目」卡（`inContTodayHtml` 不传 kind）——术后管理行仍是原来的「项目类型｜项目｜…」表，本地行拆成下面单独一张「本地管理」表（项目｜历史施术次数｜备注｜状态｜操作）；② 本地管理 tab 的已完成项目列表（`localMgmtTabHtml` 的 `lm.ended`，含增加面诊的本地案件之前做过的）；③ 增加面诊的本地案件的已完成列表（`localCarriedDoneHtml`）；之前 1110-10 已改的：本地管理卡（`mgmtActiveHtml`）和子案件页「本地管理」tab 今天用的本地项目。已搜过、没有同类旧样式的：剩余项目卡（是持有项目清单，不是使用行）、管理项目 tab 的本地管理段（是购买批次表）、项目汇总（汇总表）、结算 tab（结算单）。购买记录行（「购买 … 金额」）不是管理行，没改。
+- 测试：新增 R287a；R141a / R144a / R47a 的旧断言（今日到访括号里的名称）跟着改。
