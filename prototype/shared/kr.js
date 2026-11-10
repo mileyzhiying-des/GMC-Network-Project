@@ -1284,6 +1284,7 @@ function krProjCards0(c, opts){
   if(opts.only==='mgmt') return krCardBox('在韩管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">管理项目只在韩国做，由 KR 预约；行程结束时没用完的转韩国持有</span>', '<div class="kr-pc-scroll">'+((mgBody || dM.length) ? mgBody+(dM.length ? '<div class="kr-pc-block"><div class="kr-pc-sec-title" style="margin:12px 0 0;font-size:12px;font-weight:700;">已完成 <span style="font-weight:400;color:var(--muted);">'+dM.length+'</span></div><div style="border:1px solid var(--border2);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;">'+krUsedHead()+dM.join('')+'</div></div>' : '') : krEmpty('这个案件没有管理项目'))+'</div>')+krAddOnCard(c); /* CMD-1028-09 */
   var addBtn = (can && canAddOnNow(c)) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="krAddModalOpen()">+ 购买新项目</button>' : ''; /* CMD-1021-14 二：改成 Modal */
   var body = pg==='surg' ? (surgBody || krEmpty('这个案件没有施术项目')) : pg==='care' ? (careBody || krEmpty('这个案件没有术后管理')) : pg==='mgmt' ? (mgBody || krEmpty('这个案件没有管理项目')) : (opts.modal ? krEmpty('今天没有还能再加的项目') : (doneBody || krEmpty('还没有已完成的项目')));
+  if(opts.modal) return '<div><div style="margin-bottom:6px;">'+seg+'</div><div class="kr-pc-scroll">'+body+'</div></div>'; /* CMD-1110-19 三：弹窗里不再套「项目卡」标题和外层框 */
   return krCardBox('<div style="display:flex;align-items:center;gap:12px;"><span>项目卡</span><span style="flex:1;"></span>'+addBtn+'</div>', '<div style="margin-bottom:6px;">'+seg+'</div><div class="kr-pc-scroll">'+body+'</div>'+((pickMode && !opts.modal) ? krTodayPickBar(c) : ''))+(opts.modal ? '' : krAddOnCard(c));
 }
 /* CMD-1023-03 补：「赴韩」tab 不再放到院卡，改成「相关的日子」列表——一行一天（日期、地点、这天做了什么、状态），点了进那一天的子案件页；到院操作只在子案件页做 */
@@ -1499,12 +1500,13 @@ function krPayOpen(){
   ov.style.zIndex = 100004; ov.classList.add('open'); KR_PAY_NEED = needConsent.length>0;
 }
 var KR_PAY_NEED = false;
-function krPayLater(){ var ov = document.getElementById('kr-pay-overlay'); if(ov) ov.classList.remove('open'); KR_PAY_SVC = []; }
+function krPayLater(){ var ov = document.getElementById('kr-pay-overlay'); if(ov) ov.classList.remove('open'); KR_PAY_SVC = []; krDayAddBack(); }
 function krPayFix(idx){ var ov = document.getElementById('kr-pay-overlay'); if(ov) ov.classList.remove('open'); krFixOpen(idx); }
 function krPayConfirm(){
   if(KR_PAY_NEED){ var cb = document.getElementById('kr-pay-consent'); if(!cb || !cb.checked){ alert('请先勾选「客人已签署麻醉同意书」'); return; } }
   var ov = document.getElementById('kr-pay-overlay'); if(ov) ov.classList.remove('open'); KR_PAY_SVC = [];
   krMut(function(c){ var names = pendingPayItems(c).filter(function(it){ return it.consentPending; }).map(function(it){ return it.name; }); var ok = coreAddOnPaid(c, ME_NAME); if(ok && names.length) coreAnesConfirm(c, names, ME_NAME); return ok; });
+  krDayAddBack(); /* CMD-1110-19 二：从「增加今日项目」弹窗买的 → 付完款回到那个弹窗，刚买的项目在列表里（不自动勾） */
 }
 /* 待付款项目［修正］弹窗（CMD-1013-01）：只有 KR 室长（不含院长）；改项目 / 数量 / 金额 / 删除 */
 var KR_FIX = null;
@@ -1741,10 +1743,12 @@ function krRenderCaseDetail0(){
       var ch = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0], mc = ch && CASE_ITEMS.filter(function(x){ return x.id===ch.mainId; })[0]; if(!ch || !mc) return '';
       var vv = visitsOf(mc).filter(function(x){ return x.caseId===ch.id; })[0], types = vv ? (vv.types||[]).filter(function(t0){ return t0!=='本地管理'; }) : ['复诊评估'];
       var dt = String(ch.visitDate||'').slice(5).replace('-', '/'), flow = ''; try{ flow = todoKidFlowKey({clinicId:r.clinicId, kidOf:mc.id, id:ch.id}); }catch(e){}
-      return '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krShowCase(\''+r.clinicId+'\',\''+mc.id+'\',{tab:\'revisit\'+\'\',flow:\''+flow+'\'})">← 回到主案件 '+krEsc(mc.caseNo)+'</button><span style="font-size:13px;"><b>'+krEsc(vv ? vv.no : ch.caseNo)+'</b> · '+krEsc(dt)+(ch.visitTime ? ' '+krEsc(ch.visitTime) : '')+'（印尼）· 今天做：'+krEsc(types.map(dayTypeLabel).join(' · ')||'复诊评估')+'</span><span style="flex:1;"></span><span class="status-pill" style="background:'+((r.krStage && !isEnded(ch)) ? r.krStage.bg : r.badge[0])+';color:'+((r.krStage && !isEnded(ch)) ? r.krStage.fg : r.badge[1])+';">'+krEsc(krRevChildStage(ch))+'</span><span style="font-size:13px;">'+krEsc(r.name)+'</span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'; }); }catch(e){ console.error(e); }
+      var rmH = krFindCase(r.clinicId, mc.id), mainH = rmH ? krMainHeader(rmH, mc) : ''; /* CMD-1110-19 一：复诊子案件页头也先放主案件同一个三行页头，下面再是子案件条 */
+      return mainH+'<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krShowCase(\''+r.clinicId+'\',\''+mc.id+'\',{tab:\'revisit\'+\'\',flow:\''+flow+'\'})">← 回到主案件 '+krEsc(mc.caseNo)+'</button><span style="font-size:13px;"><b>'+krEsc(vv ? vv.no : ch.caseNo)+'</b> · '+krEsc(dt)+(ch.visitTime ? ' '+krEsc(ch.visitTime) : '')+'（印尼）· 今天做：'+krEsc(types.map(dayTypeLabel).join(' · ')||'复诊评估')+'</span><span style="flex:1;"></span><span class="status-pill" style="background:'+((r.krStage && !isEnded(ch)) ? r.krStage.bg : r.badge[0])+';color:'+((r.krStage && !isEnded(ch)) ? r.krStage.fg : r.badge[1])+';">'+krEsc(krRevChildStage(ch))+'</span></div>'; }); }catch(e){ console.error(e); }
     if(hd){ el.innerHTML = hd+alerts+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;margin-top:6px;">'+tabs+'</div><div style="display:flex;flex-direction:column;gap:14px;margin-top:10px;">'+(body||'')+'</div>'; setTimeout(krEndAskCheck, 60); return; }
   }
-  var c = r.c; /* CMD-1026-14 一：旧页头（子记录 / 复诊评估页）里引用了没定义的 c，打开子记录页直接报错 */
+  var c = r.c; if(dayHtml){ var hdrN = krWC('子案件页头', 'str', function(){ var c9 = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c9 ? krMainHeader(r, c9) : ''; }); if(hdrN){ el.innerHTML = hdrN+alerts+dayHtml; setTimeout(krEndAskCheck, 60); return; } } /* CMD-1110-19 一：非施术日的子案件页头 = 主案件同一个三行页头（拿掉「从…面诊开始 · 进行中 · 今天：…」那行，子案件条下面已经有） */
+  /* CMD-1026-14 一：旧页头（子记录 / 复诊评估页）里引用了没定义的 c，打开子记录页直接报错 */
   el.innerHTML = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'+
       '<button class="btn-ghost" onclick="goBack()">← 返回</button>'+
       '<div style="font-size:18px;font-weight:700;">'+(krClientDetailAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+'</div>'+
@@ -4674,7 +4678,13 @@ function krAddChooser(c, sk, footer, opt){
     '<div class="kr-ch-right"><div class="kr-ch-scroll"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">'+(sk==='sc' ? '已选' : '增加项目（'+plusN+'）')+'</div>'+(right || (sk==='sc' ? '<div style="font-size:12px;color:var(--muted);">还没有选项目（可以不加）</div>' : '<div style="text-align:center;font-size:12px;color:var(--muted);padding:10px 0;">目前没有增加项目</div>'))+svcHtml+'</div>'+(footer ? '<div class="kr-ch-foot">'+footer+'</div>' : '')+'</div></div>';
 }
 /* 施术中「增加项目」：独立一张卡（项目进程卡下方），左选右结；尾款付清后加的 → 待付款 + ［修正］（CMD-1013-06 三·4） */
-function krAddModalOpen(){ KR_AD.open = true; krRenderCaseDetail(); }
+function krAddModalOpen(){
+  /* CMD-1110-19 二：从「增加今日项目」弹窗点［+ 购买新项目］——先关掉那个弹窗（记下回来的位置），再开购买弹窗；原来点了没反应，是因为购买弹窗只在「项目卡」整页重画时才建（krAddOnCard），弹窗里的项目卡不调它，子案件页又没有项目卡 */
+  if(window.KR_DAM){ window.KR_DAM_RETURN = window.KR_DAM.dk; krDayAddClose(); }
+  KR_AD.open = true; krRenderCaseDetail();
+  var rr = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(rr) krAddOnCard(rr.c);
+}
+function krDayAddBack(){ var dk = window.KR_DAM_RETURN; window.KR_DAM_RETURN = null; if(dk) krDayAddOpen(dk); }
 function krAddOnCard(c){ /* CMD-1021-14 二：项目卡右上［增加项目］改成 DS Modal（标题「增加项目 · 客人名」，左选右结，底部［取消］［确认添加（N）］）；到院卡 Step 2 / 3-2 / 3-3 的选择区不动 */
   var ov = document.getElementById('kr-addmodal-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-addmodal-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100000; document.body.appendChild(ov); }
   if(!krCan() || !canAddOnNow(c) || !KR_AD.open){ ov.classList.remove('open'); ov.innerHTML = ''; return ''; }
@@ -4684,7 +4694,7 @@ function krAddOnCard(c){ /* CMD-1021-14 二：项目卡右上［增加项目］�
     '<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:12px;"><span style="flex:1;font-size:13px;color:var(--slate2);">合计 <b>'+formatCurrency(total, 'KRW')+'</b></span><button class="btn-ghost" onclick="krAdCancel()">取消</button><button class="btn-primary" onclick="krDoAddonCommit()"'+(n ? '' : ' disabled style="opacity:.5;cursor:not-allowed;"')+'>确认添加（'+n+'）</button></div></div>';
   ov.classList.add('open'); return '';
 }
-function krAdCancel(){ KR_AD.adds = {}; KR_AD.locals = []; KR_AD.ext = {}; KR_AD.open = false; krRenderCaseDetail(); }
+function krAdCancel(){ KR_AD.adds = {}; KR_AD.locals = []; KR_AD.ext = {}; KR_AD.open = false; krRenderCaseDetail(); krDayAddBack(); }
 function krAdCare(name, on){ if(on) KR_AD.care[name] = true; else delete KR_AD.care[name]; krRenderCaseDetail(); }
 /* 增加项目：选项目 → ［增加］→（施术项目先问延长多久 →）（延长压到院长下一个安排 → 冲突询问）→ 确认付款 Modal（金额 + 麻醉同意书）（CMD-1015-24）
    施术时长不能直接相加（麻醉等时间可以重叠），延长多久由 KR 室长决定，系统只提醒、不替室长算 */
@@ -5193,12 +5203,8 @@ function krMainHeader(r, c){
     '<span style="font-size:13px;color:var(--slate2);">面诊：'+cnt.consult+' 次｜施术：'+cnt.surg+' 次</span><span style="flex:1;"></span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'+krTripRowHtml(c)+
     '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.6;">来源诊所：'+krEsc(r.clinicName)+' · 院长：'+krEsc(r.director||'—')+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+'</div>';
 }
-function krSurgDayHeader(r, c){
-  var cnt = krSdCounts(c), nC = cnt.consult, nS = cnt.surg;
-  return '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><button class="btn-ghost" onclick="goBack()">← 返回</button>'+
-    '<div style="font-size:18px;font-weight:700;">'+(krClientDetailAllowed() ? '<a href="#" onclick="krOpenClient(krClientKeyFor(\''+r.clinicId+'\',\''+krEsc(r.name).replace(/'/g,'')+'\'));return false;" style="color:inherit;text-decoration:underline dotted;">'+krEsc(r.name)+'</a>' : krEsc(r.name))+'</div>'+
-    '<span style="font-size:13px;color:var(--slate2);">面诊：'+nC+' 次｜施术：'+nS+' 次</span><span style="flex:1;"></span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'+krTripRowHtml(c)+
-    '<div style="font-size:12px;color:var(--muted);margin:-18px 0 0;line-height:1.6;">来源诊所：'+krEsc(r.clinicName)+' · 院长：'+krEsc(r.director||'—')+' · KR 室长：'+krEsc(krCoordText(r.krCoordinator)||'—')+'<br><a href="#" onclick="krCloseDay();return false;" style="color:var(--navy);text-decoration:underline;">主案件 '+krEsc(c.caseNo)+'</a></div>';
+function krSurgDayHeader(r, c){ /* CMD-1110-19 一：和主案件同一个三行页头，下面多一个回主案件的链接 */
+  return krMainHeader(r, c)+'<div style="font-size:12px;margin:-12px 0 0;"><a href="#" onclick="krCloseDay();return false;" style="color:var(--navy);text-decoration:underline;">← 回到主案件 '+krEsc(c.caseNo)+'</a></div>';
 }
 /* CMD-1027-01 A：非施术日子案件页的项目卡默认收起，按［增加今日项目］才展开；本次使用成功后自动收起 */
 var KR_DAYADD = {};
@@ -5232,7 +5238,7 @@ function krDayAddRender(){
   if(!dam){ ov.classList.remove('open'); ov.innerHTML = ''; return; }
   var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r){ krDayAddClose(); return; }
   var c = r.c, n = Object.keys(KR_PICK).length, scrollTop = (ov.querySelector('.modal-box') || {}).scrollTop || 0;
-  ov.innerHTML = '<div class="modal-box msz-XL" style="max-height:88vh;overflow:auto;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">增加今日项目 · '+krEsc(c.name)+'</div>'+
+  ov.innerHTML = '<div class="modal-box msz-XL" style="max-height:88vh;overflow:auto;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><div style="font-size:16px;font-weight:700;flex:1;">增加今日项目 · '+krEsc(c.name)+'</div>'+((krCan() && canAddOnNow(c)) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="krAddModalOpen()">+ 购买新项目</button>' : '')+'<button class="modal-x" onclick="krDayAddClose()" title="关闭" aria-label="关闭">✕</button></div>'+
     '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">勾选今天要做的项目，确认后出现在「今日项目」表里；没有想做的项目请用右上角［+ 购买新项目］。</div>'+
     krProjCards(c, {pick:true, noCare:true, modal:true})+
     '<div id="kr-dayadd-err" style="color:#B3261E;font-size:12px;margin-top:6px;"></div>'+
@@ -6071,6 +6077,7 @@ function krLeaveWhyGo(){
     var keep = [].slice.call(document.querySelectorAll('.kr-ch-scroll')).map(function(el){ return el.scrollTop; });
     var ovb = document.querySelector('#kr-addmodal-overlay .modal-box'), ovTop = ovb ? ovb.scrollTop : 0;
     var r = orig.apply(this, arguments);
+    var ao9 = document.getElementById('kr-addmodal-overlay'); if(KR_AD.open || (ao9 && ao9.classList.contains('open'))){ try{ var rr9 = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(rr9) krAddOnCard(rr9.c); }catch(e){} } /* CMD-1110-19 二：购买弹窗跟着重画（子案件页没有项目卡，原来没人建它） */
     var after = [].slice.call(document.querySelectorAll('.kr-ch-scroll')); after.forEach(function(el, i){ if(keep[i]) el.scrollTop = keep[i]; });
     var ovb2 = document.querySelector('#kr-addmodal-overlay .modal-box'); if(ovb2 && ovTop) ovb2.scrollTop = ovTop;
     return r;

@@ -10784,6 +10784,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     } finally { window.alert = al; krDayAddClose(); var s0 = JSON.parse(snap); Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
   });
   /* ===== CMD-1110-18 ===== */
+  /* ===== CMD-1110-19 ===== */
+  ST.def('R294a','CMD-1110-19（KM1 分页，需要 pcStage 夹具）：KR 子案件页头 = 主案件三行页头（没有「从…面诊开始」那行，［行程修正］可用）；增加今日项目弹窗没有内层框、［+ 购买新项目］在标题行并能打开购买弹窗（XL）→ 取消 / 付款后回到弹窗',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var day = todayStr();
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.subItems = c.subItems.filter(function(x){ return !/^q294/.test(x.id); });
+      c.subItems.push({id:'q294a', no:c.caseNo+'-95', kind:'术后管理记录', place:'KR', date:day, time:'17:00', content:'术后管理（术后复诊检查，在韩国）', projectName:'假体隆鼻', arrived:true, simDay:true});
+      if(!c.stay) c.stay = {in:ymdAdd(day, -3), out:ymdAdd(day, 9), inTime:'10:00', outTime:'12:00'}; subCaseNos(c); return true; });
+    var dk = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var v0 = visitsOf(c).filter(function(x){ return x.place==='KR' && x.date===day; })[0]; return v0 ? v0.key : ''; });
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krOpenDay(r0.clinicId, r0.id, dk);
+    var host = document.getElementById('kr-casedetail'), t = host.innerText;
+    ST.ok(t.indexOf(r0.caseNo)>-1 && /面诊：\d+ 次｜施术：\d+ 次/.test(t) && /来源诊所：/.test(t) && /在韩行程/.test(t), '子案件页头：名字 · 案件号、面诊 / 施术次数、在韩行程、来源诊所 · 院长 · KR 室长');
+    ST.ok(!/面诊开始/.test(t) && !/进行中：/.test(t.slice(0, 300)), '没有「从…面诊开始 · 进行中…」那行');
+    ST.ok(/行程修正/.test(host.innerHTML) && /krStayFixOpen/.test(host.innerHTML), '页头有［行程修正］');
+    /* 弹窗 */
+    krDayAddToggle(r0.id+'|'+dk); var ov = document.getElementById('kr-dayadd-overlay'), box = ov.querySelector('.modal-box');
+    ST.ok(ov.classList.contains('open') && !/项目卡/.test(box.innerText.replace(/增加今日项目/, '')), '弹窗里没有「项目卡」标题');
+    ST.ok(!box.querySelector('.card') && box.querySelectorAll('[style*="border:1px solid var(--border2)"]').length<=box.querySelectorAll('.kr-pc-block').length+1, '弹窗没有内层带框的卡片');
+    var head = box.firstElementChild; ST.ok(/\+ 购买新项目/.test(head.innerText) && !!head.querySelector('.modal-x'), '［+ 购买新项目］在标题行（× 左边）');
+    /* 购买 */
+    var buy = Array.prototype.slice.call(head.querySelectorAll('button')).filter(function(b){ return /购买新项目/.test(b.innerText); })[0]; buy.click();
+    var pov = document.getElementById('kr-addmodal-overlay');
+    ST.ok(!ov.classList.contains('open') && pov && pov.classList.contains('open') && /购买新项目 · /.test(pov.innerText), '点［+ 购买新项目］：增加今日项目弹窗关掉，购买弹窗打开');
+    krAdCancel(); ov = document.getElementById('kr-dayadd-overlay');
+    ST.ok(!pov.classList.contains('open') && ov.classList.contains('open') && /增加今日项目 · /.test(ov.innerText), '取消购买 → 回到增加今日项目弹窗');
+    /* 付款后回来 */
+    krAddModalOpen(); krPayLater(); ST.ok(document.getElementById('kr-dayadd-overlay').classList.contains('open'), '稍后付款 / 付完款也回到增加今日项目弹窗');
+    krDayAddClose();
+  });
   ST.def('R293a','CMD-1110-18（A1 分页）：今日如何安排项目弹窗精简 + × 无底色 + 备注内容 / 附件 tab 没内容不显示 + 基础资料附件上传',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
