@@ -4098,6 +4098,7 @@ function applyReuseReport(c){
 /* ---- 确认后：两个tab ---- */
 function switchCaseTab(tab){
   var c = getCurrentCase(); if(!c) return;
+  if(tab==='notes'){ try{ notesMarkSeen(mainOf(c), 'IN'); }catch(e){} } /* CMD-1110-20：打开「备注内容」tab 就算看过 */
   c.activeCaseTab = tab;
   renderCaseBody(c);
 }
@@ -8656,7 +8657,7 @@ var NOTIF_SEQ = 0;
 
 var NOTIF_CATS = ['预约','面诊','复诊评估','赴韩施术','视频','对话','系统']; /* CMD-1022-12：复诊评估的通知另立类别（不再叫「面诊」） */
 
-var NOTIF_ICON = {'预约':'📅','面诊':'🩺','复诊评估':'🩺','赴韩施术':'✈️','视频':'🎥','对话':'💬','系统':'⚙️'};
+var NOTIF_ICON = {'备注':'📝','预约':'📅','面诊':'🩺','复诊评估':'🩺','赴韩施术':'✈️','视频':'🎥','对话':'💬','系统':'⚙️'};
 
 var NOTIFS = [];
 
@@ -9756,12 +9757,13 @@ function coreCareBook(c, itemName, pcIdx, date, time, place, reuseId, by, opt){
 }
 /* ===== CMD-1020-08：IN 备注记录 + KR 已读 =====
    c.inNotes = [{id, text, by, at(UTC), readAt, readBy}]；c.recInNote 保持 = 全部备注拼起来（打印 / 其他地方沿用）；IN 新增 → KR 收通知；KR 结算前（尾款 / 在韩加项）必须读过 */
-function coreAddInNote(c, text, by){
-  text = String(text||'').trim(); if(!text) return false;
-  (c.inNotes = c.inNotes || []).push({id:'n'+Date.now()+Math.floor(Math.random()*1000), text:text, by:by, at:nowFullDt(), readAt:'', readBy:''});
+function coreAddInNote(c, text, by, o){
+  o = o || {}; text = String(text||'').trim(); if(!text) return false;
+  var rec = {id:'n'+Date.now()+Math.floor(Math.random()*1000), text:text, by:by, at:nowFullDt(), readAt:'', readBy:''}; if(o.mainNote) rec.scope = 'main'; /* CMD-1110-20：今天没有来访 → 记在主案件、标「主案件备注」 */
+  (c.inNotes = c.inNotes || []).push(rec);
   c.recInNote = c.inNotes.map(function(n){ return n.text; }).join('\n');
   logCaseEvent(c, by, '增加备注：'+(text.length>40 ? text.slice(0, 40)+'…' : text), '赴韩施术');
-  try{ pushKrNotif(caseKrHospital(c), 'IN 备注：'+c.name+'（'+(c.caseNo||'')+'）'+(text.length>30 ? text.slice(0, 30)+'…' : text), {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'innote', level:'action'}); }catch(e){}
+  try{ pushKrNotif(caseKrHospital(c), by+'新增来访备注（'+c.name+' '+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'visitnote', level:'info'}); }catch(e){} /* CMD-1110-20：只有来访备注发铃铛通知（项目备注不发）；点了跳到那个子案件 */
   return true;
 }
 function krUnreadNotes(c){ return (c.inNotes||[]).filter(function(n){ return !n.readAt; }); }
@@ -9784,15 +9786,22 @@ function notesClose(){ var ov = document.getElementById('notes-overlay'); if(ov)
 function notesAddOpen(role){
   var c = notesCtxCase(role); if(!c) return; if(role==='KR' && !(typeof krCanMemo==='function' && krCanMemo())) return;
   var ov = notesOverlay(); NOTES_ALL_ROLE = '';
-  ov.innerHTML = '<div class="modal-box" style="width:520px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">增加备注 · '+aEscC(c.name)+'</div><textarea id="notes-add-text" rows="5" placeholder="备注内容（整体备注，不属于任何一次到院）" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;font-size:13px;font-family:inherit;"></textarea><div id="notes-add-err" style="font-size:12px;color:#B3261E;min-height:18px;margin-top:4px;"></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;"><button class="btn-ghost" onclick="notesClose()">取消</button><button class="btn-primary" onclick="notesAddSave(\''+role+'\')">保存</button></div></div>';
+  ov.innerHTML = '<div class="modal-box" style="width:520px;max-width:94vw;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">增加备注 · '+aEscC(c.name)+'</div><textarea id="notes-add-text" rows="5" placeholder="来访备注内容（今天有来访记在今天的子案件，没有就记在主案件）" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;font-size:13px;font-family:inherit;"></textarea><div id="notes-add-err" style="font-size:12px;color:#B3261E;min-height:18px;margin-top:4px;"></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;"><button class="btn-ghost" onclick="notesClose()">取消</button><button class="btn-primary" onclick="notesAddSave(\''+role+'\')">保存</button></div></div>';
   ov.classList.add('open'); var t = document.getElementById('notes-add-text'); if(t) t.focus();
 }
 function notesAddSave(role){
   var el = document.getElementById('notes-add-text'), err = document.getElementById('notes-add-err'); if(!el) return; var v = String(el.value||'').trim();
   if(!v){ if(err) err.textContent = '请填写备注内容'; return; }
   notesClose();
-  if(role==='KR'){ krMut(function(c){ return coreAddProgressMemo(c, v, ME_NAME, ''); }); }
-  else { var c = getCurrentCase(); if(c){ coreAddInNote(c, v, actingName()); renderCaseBody(c); } }
+  if(role==='KR'){ krMut(function(c){ var ok = coreAddProgressMemo(c, v, ME_NAME, ''); if(ok) c.krProgressMemos[c.krProgressMemos.length-1].scope = 'main'; return ok; }); }
+  else { var c = getCurrentCase(); if(c){ var tg = notesInTarget(c); coreAddInNote(tg.c, v, actingName(), {mainNote:tg.mainNote}); renderCaseBody(c); } }
+}
+/* CMD-1110-20 二：IN［增加备注］记在哪——今天有来访 → 今天的子案件（主案件自己的这一天就是主案件）；今天没有来访 → 主案件，标「主案件备注」 */
+function notesInTarget(c){
+  var m = mainOf(c), td = todayStr(), v = null;
+  try{ v = daysOf(m).filter(function(x){ return x.place==='IN' && x.date===td && x.state!=='cancelled' && x.state!=='noShow'; })[0] || null; }catch(e){}
+  var rec = v ? CASE_ITEMS.filter(function(x){ return x.id===(v.rec||v.caseId); })[0] : null;
+  return rec ? {c:rec, mainNote:false} : {c:m, mainNote:true};
 }
 function notesAllOpen(role){
   var c = notesCtxCase(role); if(!c) return; var ov = notesOverlay(); NOTES_ALL_ROLE = role;
@@ -9934,7 +9943,7 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
   }
   var c1 = card('<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">施术项目（'+counts.surg+'）</div></div>'+
     (cur ? '<div style="margin-top:8px;">'+body+'</div>' : '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有项目</div>')); /* CMD-1110-06：原「项目卡」改名「施术项目（N）」，拿掉三个分页 */
-  var cN = card(inNotesAreaHtml(c)); /* 备注独立成一张卡（CMD-1022-16） */
+  var cN = ''; /* CMD-1110-20 一：来访备注只放「备注内容」tab 和那一天的子案件页，项目卡下面不再有备注卡（项目备注在项目表的备注栏） */
   return c1+cN;
 }
 /* CMD-1025-04 B：客人赴韩日程卡（到达 / 离开 日期时间 + 机场、［修改］、离境日比建议少的红字、建议在韩停留 N 天） */
@@ -10197,7 +10206,9 @@ function krMemoList(c, vk){ var l = (c.krProgressMemos||[]).slice().reverse(); i
 function coreAddProgressMemo(c, text, by, vk){
   text = String(text||'').trim(); if(!text) return false; migrateProgressMemo(c);
   (c.krProgressMemos = c.krProgressMemos||[]).push({id:'pm'+Date.now()+Math.floor(Math.random()*1000), at:nowFullDt(), by:by||'', text:text, vk:vk||''});
-  logCaseEvent(c, by, '项目进程 memo：'+text); return true;
+  logCaseEvent(c, by, '项目进程 memo：'+text);
+  try{ pushNotif('备注', by+'新增来访备注（'+c.name+' '+(c.caseNo||'')+'）', {caseId:c.id, names:workingIN(), level:'info'}); }catch(e){} /* CMD-1110-20：KR 存来访备注 → IN 铃铛通知，点了跳到那个子案件 */
+  return true;
 }
 /* 这则 memo 写入时在哪一次到院：按写入日期对上施术日 / 到院日；判断不了 = ''（放案件层） */
 function memoVisitGuess(c, m){
@@ -10231,7 +10242,8 @@ function coreVisitNoteSaveNow(c, vk, text, by, touch){
   c.krProgressMemos = (c.krProgressMemos||[]).filter(function(m){ return !(m.auto && (m.vk||'')===vk); });
   if(c.visitNoteDraft) delete c.visitNoteDraft[vk];
   if(t){ c.krProgressMemos.push({id:(old && old.id) || ('pm'+Date.now()+Math.floor(Math.random()*1000)), at:nowFullDt(), by:by||'', text:t, vk:vk, auto:true});
-    if(!touch || !old || old.text!==t) logCaseEvent(c, by, '到院来访备注：'+(t.length>40 ? t.slice(0, 40)+'…' : t)); }
+    if(!touch || !old || old.text!==t) logCaseEvent(c, by, '到院来访备注：'+(t.length>40 ? t.slice(0, 40)+'…' : t));
+    if(!old || old.text!==t){ try{ pushNotif('备注', by+(old ? '更新了来访备注（' : '新增来访备注（')+c.name+' '+(c.caseNo||'')+'）', {caseId:c.id, names:workingIN(), level:'info'}); }catch(e){} } } /* CMD-1110-20：整体备注新存 → 「新增来访备注」；改了再存 → 「更新了来访备注」；只刷新时间 / 文字没变不发 */
   else if(old) logCaseEvent(c, by, '清空到院来访备注');
   return true;
 }
@@ -10428,7 +10440,7 @@ function coreTodayPick(c, surgNames, mgmtNames, by){ if(krDayDeny(c, 'main')) re
    IN（renderClientDetailIn）和 KR（kr.js krRenderClientDetail）用同一套 clientDetailBodyHtml(model)；model.mode 'IN' | 'KR'：
    KR 看不到的藏起来不留空栏：联系方式 / 特别备注 / 隐私协议 / IN 本地项目和「印尼本地持有」小卡 / 客户档案修改记录；护照只有 KR 室长看得到（passportVisible），院长看不到。 */
 var CLI_TAB = 'basic', CLI_NAME = '';
-function cliSetTab(k){ CLI_TAB = k; if(typeof CURRENT_PAGE_ID!=='undefined' && CURRENT_PAGE_ID==='kr-clientdetail' && typeof krRenderClientDetail==='function') krRenderClientDetail(); else renderClientDetailIn(); }
+function cliSetTab(k){ CLI_TAB = k; if(k==='notes') cliNotesSeen(); if(typeof CURRENT_PAGE_ID!=='undefined' && CURRENT_PAGE_ID==='kr-clientdetail' && typeof krRenderClientDetail==='function') krRenderClientDetail(); else renderClientDetailIn(); }
 /* 没结案的印尼术后管理（已结案案件交给印尼的 + 还没结案、预约时选了回印尼的 + 地点只能在印尼的未预约名额）；IN 持有项目左卡用 */
 function clientCareLeftAll(name){
   var out = [];
@@ -10654,7 +10666,8 @@ function cliTimelineHtml(model){
 function clientDetailBodyHtml(model){
   var isKr = model.mode==='KR', nHold = cliHoldCount(model), nCases = model.cases.length;
   var hasN = false; try{ hasN = notesRecordsOfCases(model.cases, isKr ? 'KR' : 'IN').length>0; }catch(e){}
-  var tabs = [['basic', '基础信息'], ['hold', '持有项目 '+nHold], ['cases', '本院案件记录 '+nCases]]; if(hasN) tabs.push(['notes', '备注内容']); tabs.push(['tl', 'Timeline']); if(!hasN && CLI_TAB==='notes') CLI_TAB = 'basic';
+  CLI_MODEL = model; var nUn = hasN ? cliNotesUnreadN(model) : 0;
+  var tabs = [['basic', '基础信息'], ['hold', '持有项目 '+nHold], ['cases', '本院案件记录 '+nCases]]; if(hasN) tabs.push(['notes', '备注内容'+(nUn ? ' <b style="color:#C1454A;font-size:12px;">'+nUn+'</b>' : '')]); tabs.push(['tl', 'Timeline']); if(!hasN && CLI_TAB==='notes') CLI_TAB = 'basic';
   var tabbar = '<div class="tabs" style="margin-top:18px;">'+tabs.map(function(t0){ return '<span class="tab'+(CLI_TAB===t0[0] ? ' active' : '')+'" onclick="cliSetTab(\''+t0[0]+'\')">'+t0[1]+'</span>'; }).join('')+'</div>';
   var pane = function(k, html){ return '<div id="cli-pane-'+k+'" style="'+(CLI_TAB===k ? '' : 'display:none;')+'margin-top:14px;">'+html+'</div>'; };
   var holdHtml = isKr ? '<div class="card" style="padding:4px 20px;"><div class="info-heading" style="margin:12px 0 4px;">韩国持有</div>'+cliHoldKrHtml(model)+'</div>'
@@ -11473,13 +11486,17 @@ function dayFlowKinds(m, v){
 }
 /* 流程 tab 上的标记：✓ 已结束 / ● 还有事 */
 function flowMarkOf(m, kind, side){
-  var done = false;
-  if(kind==='consult') done = !!(m.reportReady || m.consultStatus==='report_ready');
-  else if(kind==='kr'){ var sg = krAllItems(m).filter(function(it){ return !krIsMgmtItemC(it); }); done = sg.length>0 && sg.every(function(it){ return !!(it.done || it.cancelled || it.replacedBy); }); } /* CMD-1110-06：施术项目都做完或取消 → ✓，还有没做完的 → ●（原：韩国行程结束才 ✓） */
-  else if(kind==='kmgmt'){ done = !!m.krTripEnded || mgmtFlowItems(m).every(function(it){ return !!it.holdDone || holdItemLeft(m, it)<=0; }); if(side==='IN' && done){ try{ done = localMgmtBatchesOf(m).every(function(x){ return !!x.b.refund || !!x.b.voided || (x.b.bought||0)-(x.b.used||0)<=0; }); }catch(er){} } } /* CMD-1028-13：IN 的「管理项目」tab 另含本地管理，本地项目没用完也算 ● */ /* CMD-1028-09：全部用完，或按了韩国行程结束（没用完的转韩国持有） */
-  else if(kind==='postcare') done = !pendingCareOf(m).length && !careUnits(m).unbooked.length; /* CMD-1026-19 B6：韩国和印尼的术后管理都做完（或过一个月转成管理项目）才 ✓，不再要求韩国行程已结束；IN / KR 两端同一个函数 */
-  else if(kind==='revisit'){ var rv = childVisitsOf(m).filter(function(x){ return isRevEval(x); }); done = rv.length>0 && rv.every(function(x){ return !!(x.reportReady || x.consultStatus==='report_ready') || isEnded(x); }); }
-  return done ? '✓' : '●';
+  /* CMD-1110-20 五：tab 标记 = 这一类还有几项没做完（已约 + 未约合起来），灰色数字；全部做完 / 取消 → ✓；取代 CMD-1110-06 的 ●。红色数字只给「备注内容」（未读） */
+  var n = 0;
+  if(kind==='consult') n = (m.reportReady || m.consultStatus==='report_ready') ? 0 : 1;
+  else if(kind==='kr'){ n = krAllItems(m).filter(function(it){ return !krIsMgmtItemC(it) && !(it.done || it.cancelled || it.replacedBy); }).length; }
+  else if(kind==='kmgmt'){
+    if(!m.krTripEnded) n = mgmtFlowItems(m).filter(function(it){ return !it.holdDone && holdItemLeft(m, it)>0; }).length;
+    if(side==='IN'){ try{ n += localMgmtBatchesOf(m).filter(function(x){ return !x.b.refund && !x.b.voided && (x.b.bought||0)-(x.b.used||0)>0; }).length; }catch(er){} }
+  }
+  else if(kind==='postcare') n = pendingCareOf(m).length + careUnits(m).unbooked.length; /* 已约没做 + 还没约；韩国和印尼合起来（CMD-1026-19 B6） */
+  else if(kind==='revisit'){ var rv = childVisitsOf(m).filter(function(x){ return isRevEval(x); }); n = rv.filter(function(x){ return !(x.reportReady || x.consultStatus==='report_ready' || isEnded(x)); }).length; }
+  return n>0 ? String(n) : '✓';
 }
 /* CMD-1110-18：「备注内容」「附件」tab 没内容就不出现（基础资料 / Timeline 永远有）；上传一次附件后附件 tab 才出现 */
 function hasAttachFor(c, viewer){ try{ var l = caseAttachments(c); if(viewer==='KR') l = l.filter(function(f){ return !f.chatLog; }); return l.length>0; }catch(e){ return false; } }
@@ -11490,14 +11507,14 @@ function caseTabListOf(c){
   if(!up){
     if(c.consultRequested) out.push({key:'consult', label:'面诊'});
     if(showLocalTab(c)) out.push({key:'localmgmt', label:'本地项目'});
-    if(c.materialsConfirmed && hasNotesFor(c, 'IN')) out.push({key:'notes', label:'备注内容'}); /* CMD-1110-08：未升级的一般案件也有「备注内容」tab——顺序 基础资料｜面诊｜本地项目｜备注内容｜结算｜附件｜Timeline（升级后：…｜备注内容｜子案件｜项目汇总｜结算…） */
+    if(c.materialsConfirmed && hasNotesFor(c, 'IN')) out.push({key:'notes', label:'备注内容', unread:notesUnreadN(c, 'IN')}); /* CMD-1110-08：未升级的一般案件也有「备注内容」tab——顺序 基础资料｜面诊｜本地项目｜备注内容｜结算｜附件｜Timeline（升级后：…｜备注内容｜子案件｜项目汇总｜结算…） */
   } else {
     if(c.consultRequested) out.push({key:'consult', label:'面诊', mark:flowMarkOf(c, 'consult')});
     if(showKrTab(c) || (c.procedureItems||[]).some(function(it){ return it.origin==='KR'; })) out.push({key:'kr', label:'施术项目', mark:flowMarkOf(c, 'kr')});
     if(careRows(c).length || c.krProcedureDone || careUnits(c).unbooked.length) out.push({key:'postcare', label:'术后管理', mark:flowMarkOf(c, 'postcare')});
     if(hasMgmtFlow(c) || hasLocalMgmt(c)) out.push({key:'kmgmt', label:'管理项目', mark:flowMarkOf(c, 'kmgmt', 'IN')}); /* CMD-1028-13 三：IN 的「在韩管理」tab 改叫「管理项目」，里面分在韩管理 / 本地管理两段；KR 的 tab 仍叫「在韩管理」 */
     if(flowsOf(c).some(function(f){ return f.kind==='revisit'; })) out.push({key:'revisit', label:'复诊', mark:flowMarkOf(c, 'revisit')});
-    if(hasNotesFor(c, 'IN')) out.push({key:'notes', label:'备注内容'}); out.push({key:'visits', label:'子案件'}, {key:'summary', label:'项目汇总'}); /* CMD-1110-02：基础资料｜面诊｜施术项目｜术后管理｜管理项目｜备注内容｜子案件｜项目汇总… */
+    if(hasNotesFor(c, 'IN')) out.push({key:'notes', label:'备注内容', unread:notesUnreadN(c, 'IN')}); out.push({key:'visits', label:'子案件'}, {key:'summary', label:'项目汇总'}); /* CMD-1110-02：基础资料｜面诊｜施术项目｜术后管理｜管理项目｜备注内容｜子案件｜项目汇总… */
   }
   if(showSettleTab(c)) out.push({key:'settle', label:'结算'});
   if(hasAttachFor(c, 'IN')) out.push({key:'attachments', label:'附件'}); out.push({key:'timeline', label:'Timeline'});
@@ -11569,7 +11586,7 @@ function inRevisitTabHtml(c){
     if(!useV2Tabs(c)) return t0.apply(this, arguments);
     normalizeCaseTab(c); c.activeCaseTab = canonTabKey(c, c.activeCaseTab);
     var at = c.activeCaseTab;
-    var tabs = caseTabListOf(c).map(function(t1){ return '<span class="tab'+(t1.key===at ? ' active' : '')+'" onclick="switchCaseTab(\''+t1.key+'\')">'+t1.label+(t1.mark ? ' <span style="font-size:12px;color:'+(t1.mark==='✓' ? 'var(--sage)' : 'var(--terracotta)')+';">'+t1.mark+'</span>' : '')+'</span>'; }).join('');
+    var tabs = caseTabListOf(c).map(function(t1){ return '<span class="tab'+(t1.key===at ? ' active' : '')+'" onclick="switchCaseTab(\''+t1.key+'\')">'+t1.label+(t1.mark ? ' <span style="font-size:12px;color:'+(t1.mark==='✓' ? 'var(--sage)' : 'var(--muted)')+';">'+t1.mark+'</span>' : '')+(t1.unread ? ' <span style="font-size:12px;font-weight:700;color:#C1454A;">'+t1.unread+'</span>' : '')+'</span>'; }).join('');
     return '<div class="tabs" style="margin-bottom:4px;">'+tabs+'</div>';
   };
   caseTabContentHtml = function(c){
@@ -12012,7 +12029,12 @@ function subVisitTabHtml(c){
   var photos = (rec.recovery||[]).reduce(function(n, x){ return n+Object.keys(x.photos||{}).length; }, 0)+(rec.revisitMedia||[]).reduce(function(n, x){ return n+Object.keys(x.photos||{}).length; }, 0);
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:10px;">到访</div>'+
     row('来访目的', e(purposeDisp(rec.visitPurpose||'—'))+(isChildVisit(rec) && hasResumeType(rec, '术后管理') ? '　<label style="font-size:12px;margin-left:8px;"><input type="checkbox" checked disabled> 术后管理</label>'+(hasResumeType(rec, '复诊评估') ? '<label style="font-size:12px;margin-left:8px;"><input type="checkbox" checked disabled> 复诊评估</label>' : '')+'' : ''))+row('到店状态', e(visitStateText(m, ctx.v))+(iv.arrivedDay ? '（'+e(iv.arrivedDay)+' 到店）' : ''))+row('메타뷰', meta)+row('当天照片', photos ? photos+' 张（复诊 / 术后恢复）' : '—')+
-    '</div>';
+    '</div>'+inVisitNotesCardHtml(rec);
+}
+/* CMD-1110-20 一：这一天（印尼来访）的来访备注——IN 在「备注内容」里［增加备注］记在今天的子案件，这里和备注内容里同一份 */
+function inVisitNotesCardHtml(rec){
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, list = (rec.inNotes||[]).filter(function(n){ return n.scope!=='main'; }).slice().reverse();
+  return '<div class="card" style="padding:18px 24px;margin-top:12px;"><div style="font-size:14px;font-weight:700;margin-bottom:8px;">来访备注</div>'+(list.length ? list.map(function(n){ return '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;margin-top:6px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+noteTimeHtml(n.at, 'IN')+'｜'+e(n.by||'IN')+'（IN）</div>'+noteTextHtml({id:n.id, role:'IN', text:n.text}, 'IN')+'</div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:14px 0;">没有来访备注</div>')+'</div>';
 }
 function subGoMain(id, tab){ var c = CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; if(!c) return; var m = mainOf(c); delete SUBVIEW[m.id]; m.activeCaseTab = tab; if(isChildVisit(c)) openCaseDetail(m.id, false, {tab:tab}); else { renderCaseSubtitle(m); renderCaseStatusBar(m); renderCaseBody(m); } }
 /* 业务 tab 内容（CMD-1026-17；原来 12 / 16 的「今日项目 / 今日确定的赴韩项目 / 剩余项目」卡拆到对应 tab，功能都保留） */
@@ -13676,6 +13698,29 @@ function coreRowUndo(c, id, by){ /* 其他行（在韩加的施术项目、术�
    两种备注：① 项目备注——跟着那一次的项目使用记录（管理项目 = procedureItems[].uses[].note；施术项目 / 术后管理行 = 项目 / 行自己的 todayNote / note，施术只用一次所以就是那一次的使用；IN 本地项目 = 使用记录 mgmtUses[].note）；
    ② 来访备注——跟着当天的到院 / 来访（KR 的 krProgressMemos 里 auto 的那一笔，vk = 当天；IN 的备注记录 c.inNotes）。
    旧资料不搬：读取时兼容（项目身上的 todayNote、行 note 照样读到）；新写的管理项目备注同时写在使用记录上。 */
+/* ===== CMD-1110-20：备注未读 =====
+   未读 = 对方（IN 写的 KR 算、KR 写的 IN 算）新写、自己这个账号还没看过的备注条数（来访备注 + 项目备注）。
+   记在主案件上：m.notesSeen = {'IN:A1': 'UTC 时间', 'KR:KM1': …}（每个账号最后一次打开「备注内容」tab 的时间）；没有记录 = 以 NOTES_EPOCH 为界，
+   所以升级前写的旧备注一律算已读、不会一打开冒出红数字（没有升数据版本，也不用迁移）。
+   正式版后端：做成「备注 × 账号」的已读表（note_id, user_id, read_at）或每个账号一条 last_seen_at；未读数 = 对方写的、at > last_seen_at 的条数，打开 tab 时写入。 */
+var NOTES_EPOCH = '2026-11-10 08:30:00';
+function notesViewerKey(viewer){ var a = null; try{ a = currentAccount(); }catch(e){} return viewer+':'+(a && a.id || ''); }
+function notesSeenAt(m, viewer){ return (m.notesSeen || {})[notesViewerKey(viewer)] || NOTES_EPOCH; }
+function notesUnreadN(m, viewer){
+  try{ var seen = notesSeenAt(m, viewer); return notesRecordsOfCases(mainNotesCases(m), viewer).filter(function(r){ return r.role!==viewer && String(r.at||'')>seen; }).length; }catch(e){ return 0; }
+}
+function notesMarkSeen(m, viewer){ if(!m) return; m.notesSeen = m.notesSeen || {}; m.notesSeen[notesViewerKey(viewer)] = nowFullDt(); }
+var CLI_MODEL = null;
+function cliNotesSeen(){
+  var md = CLI_MODEL; if(!md) return; var viewer = md.mode==='KR' ? 'KR' : 'IN';
+  var ids = (md.cases||[]).filter(function(c){ return !c.mainId || c.mainId===c.id; }).map(function(c){ return c.id; });
+  if(viewer==='KR' && md.clinicId && typeof Store!=='undefined'){ Store.mutateClinic(md.clinicId, function(){ CASE_ITEMS.filter(function(c){ return ids.indexOf(c.id)>-1; }).forEach(function(c){ notesMarkSeen(c, 'KR'); }); return true; }); }
+  else { (md.cases||[]).filter(function(c){ return ids.indexOf(c.id)>-1; }).forEach(function(c){ notesMarkSeen(c, 'IN'); }); try{ Store.touch(); }catch(e){} }
+}
+function cliNotesUnreadN(md){
+  var viewer = md.mode==='KR' ? 'KR' : 'IN';
+  return (md.cases||[]).filter(function(c){ return !c.mainId || c.mainId===c.id; }).reduce(function(n, c){ return n+notesUnreadN(c, viewer); }, 0);
+}
 /* CMD-1110-09：备注时间照 5-19——KR 写的备注（项目 / 来访）在 IN 页面也以韩国时间为主：「04/06 15:08（韩国） 印尼 13:08」（日期不同时印尼那边带日期）；IN 自己写的 / KR 页面看的照旧（页面时区） */
 function noteTimeHtml(at, role){
   if(!at) return '—'; var plain = noteDayText(at);
@@ -13692,8 +13737,8 @@ function noteDayText(at){ var f = at ? fmtUtc(at) : ''; return f.length>=16 ? f.
 function caseNoteRecords(c){
   var out = [], seen = {}, cno = c.caseNo || '';
   var add = function(kind, id, at, by, role, project, text, extra){ text = String(text||'').trim(); if(!text) return; var k = kind+'|'+project+'|'+text+'|'+String(at||'').slice(0, 16); if(seen[k]) return; seen[k] = 1; out.push(Object.assign({kind:kind, id:id, at:at||'', by:by||(role==='IN' ? 'IN' : 'KR'), role:role, project:project||'', text:text, c:c, caseNo:cno}, extra||{})); };
-  (c.krProgressMemos||[]).forEach(function(m){ add('visit', 'v:'+m.id, m.at, m.by, 'KR', '', m.text, {vk:m.vk||''}); });
-  (c.inNotes||[]).forEach(function(n){ add('visit', 'v:'+n.id, n.at, n.by, 'IN', '', n.text); });
+  (c.krProgressMemos||[]).forEach(function(m){ add('visit', 'v:'+m.id, m.at, m.by, 'KR', '', m.text, {vk:m.vk||'', mainNote:(m.vk==='' && m.scope==='main')}); });
+  (c.inNotes||[]).forEach(function(n){ add('visit', 'v:'+n.id, n.at, n.by, 'IN', '', n.text, n.scope==='main' ? {mainNote:true} : undefined); });
   (c.procedureItems||[]).forEach(function(it){
     var nm = buyName(it.name), iid = itemIid(it);
     (it.uses||[]).forEach(function(u, i){ add('proj', 'p:'+iid+':'+i, u.noteAt||u.at, u.noteBy, 'KR', nm, u.note); });
@@ -13710,25 +13755,27 @@ function notesRecordsOfCases(cases, viewer){
   return all.sort(function(a, b){ return String(b.at).localeCompare(String(a.at)) || (b._i - a._i); });
 }
 /* 「备注内容」tab 的内容（客户管理 / 主案件共用）：a. 项目备注｜b. 来访备注，新 → 旧；openFn(c) 返回点「来自」跳转的 onclick */
-function notesTabHtml(recs, viewer, openFn){
+function notesTabHtml(recs, viewer, openFn, o){
+  o = o || {};
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
   var NP = (notesTabHtml.pg = notesTabHtml.pg || {}), pgKey = viewer+':'+((typeof CURRENT_PAGE_ID!=='undefined' && /clientdetail|in-client/.test(CURRENT_PAGE_ID)) ? 'cli'+(typeof CLI_NAME!=='undefined' ? CLI_NAME : '') : 'case'+(viewer==='KR' ? (window.KR_CASE && KR_CASE.id || '') : (typeof CURRENT_CASE_ID!=='undefined' ? CURRENT_CASE_ID : ''))); pgKey = pgKey.replace(/[^\w:]/g, '_');
   var rowsOf = function(list, isProj){
     return list.map(function(r){
       var ofn = openFn ? String(openFn(r.c)||'') : '', om = ofn.match(/krShowCase\('([^']*)'/), oc = noteCaseOnclick(r.c, om ? om[1] : ''), link = oc ? '<a href="#" class="info-link" onclick="'+oc+';return false;" style="font-size:12px;">'+e(r.caseNo || '—')+'</a>' : '<span style="font-size:12px;">'+e(r.caseNo || '—')+'</span>';
-      return '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+noteTimeHtml(r.at, r.role)+'｜'+(isProj ? '<b style="color:var(--ink);">'+e(r.project)+'</b>　' : '')+e(r.by)+'（'+r.role+'）　来自 '+link+'</div>'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</div>';
+      return '<div style="background:var(--bg-sidebar,#F5F1EA);border-radius:8px;padding:8px 12px;margin-top:8px;"><div style="font-size:12px;color:var(--muted);margin-bottom:3px;">'+noteTimeHtml(r.at, r.role)+'｜'+(isProj ? '<b style="color:var(--ink);">'+e(r.project)+'</b>　' : '')+e(r.by)+'（'+r.role+'）'+(r.mainNote ? ' <span class="status-pill" style="background:#EFEBE4;color:var(--slate2);font-size:12px;">主案件备注</span>' : '')+'　来自 '+link+'</div>'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</div>';
     }).join('');
   };
   /* CMD-1110-09：「备注内容」改左右分页——分页按钮「项目备注（N）｜来访备注（N）」（样式同项目卡的分页胶囊），默认项目备注；0 条的分页照样可点，里面居中灰字 */
-  var proj = recs.filter(function(r){ return r.kind==='proj'; }), vis = recs.filter(function(r){ return r.kind==='visit'; }), cur = NP[pgKey] || 'proj';
+  var proj = recs.filter(function(r){ return r.kind==='proj'; }), vis = recs.filter(function(r){ return r.kind==='visit'; }), cur = NP[pgKey] || 'visit';
   var btn = function(k, label, n){ var on = cur===k; return '<button onclick="notesPage(\''+pgKey+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;font-weight:700;cursor:pointer;">'+label+'（'+n+'）</button>'; };
   var list = cur==='proj' ? proj : vis, empty = cur==='proj' ? '没有项目备注' : '没有来访备注';
-  return '<div class="card" style="padding:14px 20px;"><div style="display:flex;gap:8px;flex-wrap:wrap;">'+btn('proj', '项目备注', proj.length)+btn('visit', '来访备注', vis.length)+'</div>'+(list.length ? rowsOf(list, cur==='proj') : '<div style="text-align:center;color:var(--muted);font-size:13px;padding:26px 0;">'+empty+'</div>')+'</div>';
+  var addBtn = (o.add && cur==='visit' && (viewer==='IN' || (typeof krCanMemo==='function' && krCanMemo()))) ? '<button class="btn-outline" style="margin-left:auto;padding:5px 16px;font-size:12px;" onclick="notesAddOpen(\''+viewer+'\')">增加备注</button>' : '';
+  return '<div class="card" style="padding:14px 20px;"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+btn('visit', '来访备注', vis.length)+btn('proj', '项目备注', proj.length)+addBtn+'</div>'+(list.length ? rowsOf(list, cur==='proj') : '<div style="text-align:center;color:var(--muted);font-size:13px;padding:26px 0;">'+empty+'</div>')+'</div>';
 }
 function notesPage(key, k){ (notesTabHtml.pg = notesTabHtml.pg || {})[key] = k; if(typeof CURRENT_PAGE_ID!=='undefined' && CURRENT_PAGE_ID==='kr-clientdetail' && typeof krRenderClientDetail==='function'){ krRenderClientDetail(); return; } if(typeof CURRENT_PAGE_ID!=='undefined' && /clientdetail|in-client/.test(CURRENT_PAGE_ID) && typeof renderClientDetailIn==='function'){ renderClientDetailIn(); return; } if(typeof isKrAccount==='function' && isKrAccount()){ if(typeof krRenderCaseDetail==='function') krRenderCaseDetail(); return; } var c = getCurrentCase(); if(c) renderCaseBody(c); }
 function cliNotesHtml(model){ return notesTabHtml(notesRecordsOfCases(model.cases, model.mode==='KR' ? 'KR' : 'IN'), model.mode==='KR' ? 'KR' : 'IN', function(c){ return model.openCase(c); }); }
 function mainNotesCases(m){ return [m].concat(childVisitsOf(m)); }
-function mainNotesTabHtml(m, viewer){ return notesTabHtml(notesRecordsOfCases(mainNotesCases(m), viewer), viewer, function(c){ return viewer==='KR' ? "krShowCase('"+(KR_CASE && KR_CASE.clinicId || '')+"','"+c.id+"')" : "openCaseDetail('"+c.id+"')"; }); }
+function mainNotesTabHtml(m, viewer){ return notesTabHtml(notesRecordsOfCases(mainNotesCases(m), viewer), viewer, function(c){ return viewer==='KR' ? "krShowCase('"+(KR_CASE && KR_CASE.clinicId || '')+"','"+c.id+"')" : "openCaseDetail('"+c.id+"')"; }, {add:true}); }
 
 /* 「查看备注（N）」：这位客人自己以前这个项目的项目备注（不同客人互相看不到）；点开往下展开每行「MM-DD 备注内容 查看案件」 */
 function clientProjectNotes(clientName, project, exceptCaseId){
