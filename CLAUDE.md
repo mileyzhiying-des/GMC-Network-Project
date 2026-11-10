@@ -2517,3 +2517,11 @@ prototype/shared/app.css  共用样式
 - **「查看备注（N）」展开**（`viewNotesPanelHtml`）：每行一律「MM-DD 备注内容 查看案件」（`noteMDText(at, role)`：KR 写的用韩国日期 `Asia/Seoul`，IN 写的用诊所时区）；完整时间只留在备注卡和「备注内容」。
 - **所有本地管理行都用 `localMgmtTableHtml` 表格**：① 子案件页旧的合并「今日项目」卡（`inContTodayHtml` 不传 kind）——术后管理行仍是原来的「项目类型｜项目｜…」表，本地行拆成下面单独一张「本地管理」表（项目｜历史施术次数｜备注｜状态｜操作）；② 本地管理 tab 的已完成项目列表（`localMgmtTabHtml` 的 `lm.ended`，含增加面诊的本地案件之前做过的）；③ 增加面诊的本地案件的已完成列表（`localCarriedDoneHtml`）；之前 1110-10 已改的：本地管理卡（`mgmtActiveHtml`）和子案件页「本地管理」tab 今天用的本地项目。已搜过、没有同类旧样式的：剩余项目卡（是持有项目清单，不是使用行）、管理项目 tab 的本地管理段（是购买批次表）、项目汇总（汇总表）、结算 tab（结算单）。购买记录行（「购买 … 金额」）不是管理行，没改。
 - 测试：新增 R287a；R141a / R144a / R47a 的旧断言（今日到访括号里的名称）跟着改。
+
+## CMD-1110-12 补充（2026-11-10，追加；取代 CMD-1021-07 里到院卡右上「备注：N / 无」、CMD-1021-04 里来访备注标题下的灰色说明行，旧文字保留作历史）
+- 分支 **V5**，代码提交 09799c6，文档另一个提交；不推送不合并；**数据版本不变（61）**，只改画面和读取，没有新字段。
+- **「查看案件」点了没反应的原因**：`viewNotesGo(caseId)` 点击时用 `CASE_ITEMS` 按 id 找案件，找不到就静默 return；KR 页面的案件数组不是来源诊所分区（只有渲染时包在 `Store.withClinic` 里才对），点击时早已不在分区里，所以什么都不发生。现在渲染时就算好：`noteCaseOnclick(c, 诊所)`（data.js）KR 用 `krFindCase(诊所, id)` 判断这一端看不看得到，看得到 → `viewNotesGo('诊所','id')`（KR → `krShowCase`，IN → `openCaseDetail`，子记录的 `openCaseDetail` 就是子案件页），看不到 → `noteCaseLinkHtml` 只显示案件号、不做链接。用在「查看备注（N）」展开（`viewNotesPanelHtml`）和「备注内容」tab 的「来自 A00xxxx」（`notesTabHtml`，KR 客人页从 `openCase` 里取诊所 id）。其他「查看案件 / 来自 A…」链接（`in19ViewLink`、`krViewBtn`、持有项目「来自」、关联案件）原来就带诊所 / 主案件 id，没有同样的问题，未改。
+- **KR 今日项目**（`krTblRow`）：操作栏 `KR_TBL_COLS4` 末列 `minmax(200px,auto)` + `flex-wrap:nowrap`，［操作完成］［今日取消］并排；`krVisitMemoHtml` 拿掉标题下的灰色说明行（只留输入框 placeholder，主到院「进行项目」同一个函数）；到院卡右上「备注：N / 无」（`krCaseCardHtml` 的 `noteH`、`krSdStatusBar` 的 `note`）拿掉。
+- **预约中按时间排**：已经排好的——KR 项目卡施术 / 管理项目预约中（`sBk` / `mBk`）、KR 到院卡「预约中」组、IN 管理项目预约中（`inMgmtModel`）、IN 术后管理（`pcmGroups`，卡片按日期 + 时间）、项目汇总、子案件 tab。**这次改的**：① KR 项目卡术后管理「预约中」（`careSec`）原来按施术日期排卡，改成按卡里最早预约时间排（卡内本来按时间）；② `pcmGroups` 卡内行按时间排；③ IN 项目卡施术项目列表（`surgList`）按预约日期排。
+- **「今天做」**：KR 子案件页头（`kr.js`）和 IN 子案件页头（`data.js`）都改用 `dayNameOf`（「术后管理 · 在韩管理」，空写「—」），不再用「、」连。
+- 测试：selftest 新增 R288a（任意分页；KR 部分在 KR 分页里才跑）；R75a 的「备注：N / 无」断言改成「没有」。A1 / KM1 批次对照基线 2781a89：R73a / R75a / R271a 在基线上同样失败（夹具状态相关），其余一致。
