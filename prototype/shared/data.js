@@ -3010,6 +3010,10 @@ function inContTodayHtml(c, M, kind){ /* CMD-1026-17：kind = 'care' | 'local' �
     var u = x.u, ops = x.st==='已完成' ? '<span style="font-size:12px;color:var(--sage);">已完成</span>' : (ro ? '<span style="font-size:12px;color:var(--muted);">只读</span>' : '<button class="btn-outline" style="'+bt+'" onclick="markMgmtRows(\''+x.scope+'\',\'done\',false,'+x.i+')">操作完成</button> <button class="btn-outline" style="'+bt+'" onclick="markMgmtRows(\''+x.scope+'\',\'cancelled\',false,'+x.i+')">本次不做</button>');
     out.push('<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+pillT('本地管理', 'var(--sage-bg)', 'var(--sage)')+'</span><span>'+e(u.itemName)+(u.opt ? ' <span style="font-size:12px;color:var(--muted);">'+e(u.opt)+'</span>' : '')+'</span><span>'+inLocalNoteCell(c, x.scope, x.i, u, ro)+'</span><span style="font-size:12px;">'+(u.qty||1)+' 次</span><span style="font-size:12px;">今天</span><span style="display:flex;gap:6px;flex-wrap:wrap;">'+ops+'</span></div>');
   });
+  if(kind==='local'){ /* CMD-1110-10：子案件页「本地管理」tab 今天用的本地项目 = 同一个表格（项目｜历史施术次数｜备注｜状态｜操作，含已取消的行） */
+    var lr = []; [['lm', c.localMgmt], ['main', localCarried(c) ? c : null]].forEach(function(p0){ var ctx0 = p0[1]; if(!ctx0) return; (ctx0.mgmtUses||[]).forEach(function(u0, i0){ lr.push({u:u0, scope:p0[0], i:i0}); }); });
+    return '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;margin-bottom:6px;">今天用的本地项目'+(M.src ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">（继续 '+e(M.src.caseNo)+'）</span>' : '')+'</div>'+(lr.length ? localMgmtTableHtml(c, lr, ro) : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">今天还没有要做的项目（到下面按［本次使用］勾选）</div>')+'</div>';
+  }
   return '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;margin-bottom:6px;">'+(kind ? '今天' + (kind==='care' ? '做的术后管理' : '用的本地项目') : '今日项目')+(M.src ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">（继续 '+e(M.src.caseNo)+'）</span>' : '')+'</div>'+(out.length ? inSmallCard(head+out.join('')) : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">'+(kind ? '今天还没有要做的项目' : '今天还没有要做的项目')+'（到下面按［本次使用］勾选）</div>')+'</div>';
 }
 function inContRestHtml(c, M, kind){
@@ -5316,15 +5320,37 @@ function localItemStatus(u){ return u.status==='done' ? '已完成' : u.status==
 /* CMD-1110-08：纯本地案件（只做本地项目的一般案件）在「本地管理进行中」（有逐行完成的卡片，c.mgmtActive）时页头也有［+ 添加本地管理］；还没开始（「是否使用持有项目？」清单自带［新增项目］［使用项目］）或已结束时不放，免得和清单里的按钮重复 */
 function inHeaderLocalOk(c){ return isChildVisit(c) ? true : (!isLocalCase(c) ? (c.consultRequested || c.needsConsult===true) : !!(c.mgmtActive && !isEnded(c))); }
 function pureLocalMain(c){ return !!c && !isChildVisit(c) && isLocalCase(c); }
+/* ===== CMD-1110-10：IN「本地管理」卡改表格（排法同「在韩管理」：标题行 + 外框 + 行间分隔线）：项目｜历史施术次数｜备注｜状态｜操作 =====
+   历史施术次数 = 这位客人以前做过这个项目几次 = 全部案件（含子记录）里这个项目「已完成」的使用记录次数（mgmtUses / localMgmt.mgmtUses 里 status==='done' 的 qty 合计），
+   **不算今天这一次**（这一行自己、以及今天建立的使用记录都不算）；按项目名对（去掉「· 规格 / 次数」后缀，和 1110-02「查看备注」同一个匹配 clientProjectKey）；没做过 = 0 次。
+   正式版后端：按 客人 + 项目名（去后缀）在「本地项目使用记录」里查 status=已完成 且 使用日期 < 今天 的次数合计，一次聚合查询（有项目 id 的话按项目 id）。 */
+function clientProjectKey(name){ return String(name||'').replace(/\s*[·・].*$/, '').trim(); }
+function localHistCount(clientName, itemName, exceptRow){
+  var key = clientProjectKey(itemName), today = todayStr(), n = 0;
+  CASE_ITEMS.filter(function(x){ return x.name===clientName; }).forEach(function(x){
+    [x.mgmtUses, x.localMgmt && x.localMgmt.mgmtUses].forEach(function(arr){ (arr||[]).forEach(function(u){
+      if(u===exceptRow || u.status!=='done' || clientProjectKey(u.itemName)!==key) return;
+      if(u.date && String(u.date).slice(0, 10)>=today) return; /* 今天这一次不算 */
+      n += (u.qty||1);
+    }); });
+  });
+  return n;
+}
+/* rows = [{u, scope, i}]；ro = 只读（离店 / 锁住）；共用在「本地管理」卡（mgmtActiveHtml）和子案件页「本地管理」tab 的今天用的本地项目（inContTodayHtml kind='local'） */
+function localMgmtTableHtml(c, rows, ro){
+  var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+  var G = 'minmax(0,1.6fr) 96px minmax(0,1.5fr) 76px 128px', bt = 'padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;';
+  var body = rows.map(function(r){
+    var u = r.u, st = localItemStatus(u), col = LOCAL_ITEM_COLORS[st], scope = r.scope, i = r.i;
+    var ops = (st==='进行中' && !ro) ? '<span style="display:flex;gap:6px;"><button class="btn-outline" style="'+bt+'" onclick="markMgmtRows(\''+scope+'\',\'done\',false,'+i+')">完成</button><button class="btn-outline" style="'+bt+'" onclick="markMgmtRows(\''+scope+'\',\'cancelled\',false,'+i+')">取消</button></span>' : '';
+    var nm = '<span style="'+(st==='已取消' ? 'text-decoration:line-through;color:var(--muted);' : '')+'">'+e(u.itemName)+(u.opt ? ' <span style="font-size:12px;color:var(--muted);">'+e(u.opt)+'</span>' : '')+'</span><span style="font-size:12px;color:var(--muted);"> · 本次 '+(u.qty||1)+' 次</span>';
+    return in19Tr([nm, localHistCount(c.name, u.itemName, u)+' 次', inLocalNoteCell(c, scope, i, u, ro), '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+st+'</span>', ops], G);
+  }).join('');
+  return inSmallCard(in19Th(['项目', '历史施术次数', '备注', '状态', '操作'], G)+body);
+}
 function mgmtActiveHtml(c, scope){
   var ctx = ctxOf(c, scope);
-  var rows = (ctx.mgmtUses||[]).map(function(u,i){
-    var st = localItemStatus(u), col = LOCAL_ITEM_COLORS[st];
-    var rowBtns = st==='进行中' ? '<span style="display:flex;gap:6px;margin-left:10px;"><button class="btn-outline" style="padding:2px 10px;font-size:12px;" onclick="markMgmtRows(\''+scope+'\',\'done\',false,'+i+')">完成</button><button class="btn-outline" style="padding:2px 10px;font-size:12px;" onclick="markMgmtRows(\''+scope+'\',\'cancelled\',false,'+i+')">取消</button></span>' : '';
-    return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;'+(st==='已取消'?'text-decoration:line-through;color:var(--muted);':'')+'">'+u.itemName+'</span><span style="width:200px;margin-right:10px;">'+inLocalNoteCell(c, scope, i, u, false)+'</span>'+
-      '<span style="font-size:12px;color:var(--slate2);margin-right:10px;">使用 '+u.qty+' 次</span>'+
-      '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+st+'</span>'+rowBtns+'</div>';
-  }).join('');
+  var rows = localMgmtTableHtml(c, (ctx.mgmtUses||[]).map(function(u, i){ return {u:u, scope:scope, i:i}; }), false); /* CMD-1110-10：改表格 */
   /* CMD-1110-05：本地管理卡只能一行一行按［完成］/［取消］——没有［全部完成］、没有说明文字；来访进行中的案件统一用页头的［+ 添加本地管理］（使用持有 / 购买新项目），这里不再有两个「继续」按钮。页头没有那个按钮的案件（纯本地案件）才保留这一行入口 */
   var btns = inHeaderLocalOk(c) ? '' : '<div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--slate2);">同一次到店里还可以：</span>'+
     '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'use\')">继续使用持有项目</button>'+

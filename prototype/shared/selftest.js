@@ -3966,7 +3966,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var cur = document.querySelector('#case-body .tabs .tab.active').innerText.trim(); ST.ok(cur==='面诊' || cur==='本地管理', '①：默认打开：'+cur);
       switchSubTab('local'); var lt = document.getElementById('case-body').innerText; ST.ok(/今天用的本地项目/.test(lt) && /剩余项目/.test(lt) && lt.indexOf(nm+'热玛吉')>-1 && /本次使用/.test(btns()) && /添加本地管理项目/.test(btns()), '①：本地管理 tab：今天用的 + 剩余项目 + ［本次使用］［＋添加本地管理项目］');
       switchSubTab('krproj'); ST.ok(/今日确定的赴韩项目/.test(document.getElementById('case-body').innerText) && document.getElementById('case-body').innerText.indexOf(nm+'埋线双眼皮')>-1, '①：赴韩项目 tab：确定的施术项目 + 定金已付 + 施术日期');
-      inUseOpen(); var ck = document.querySelector('#in-use-overlay [id^="iu-hold-"]'); ST.ok(!!ck, '①：［本次使用］仍可用'); if(ck){ ck.checked = true; inUseConfirm(); ST.ok((m.localMgmt.mgmtUses||[]).length>0, '①：本次使用确认后进「今天用的」'); switchSubTab('local'); ST.ok(/操作完成/.test(btns()) && /本次不做/.test(btns()), '①：今天用的有［操作完成］［本次不做］'); } else inUseClose();
+      inUseOpen(); var ck = document.querySelector('#in-use-overlay [id^="iu-hold-"]'); ST.ok(!!ck, '①：［本次使用］仍可用'); if(ck){ ck.checked = true; inUseConfirm(); ST.ok((m.localMgmt.mgmtUses||[]).length>0, '①：本次使用确认后进「今天用的」'); switchSubTab('local'); ST.ok(/(^|,|\|)完成(,|\||$)/.test(btns()) && /(^|,|\|)取消(,|\||$)/.test(btns()), '①：今天用的本地项目有［完成］［取消］（CMD-1110-10：本地管理表格；原：［操作完成］［本次不做］）'); } else inUseClose();
       m.leftStore = true; renderCaseBody(m); switchSubTab('local'); ST.ok(!/本次使用|添加本地管理项目|操作完成/.test(btns()) && tabsOf().indexOf('本地管理')>-1, '①：客人离店后内容仍在、只读'); m.leftStore = false;
       /* ② B 线：-01 只面诊、-02 面诊 + 赴韩项目 */
       var b = ST.newRes(nm+'b', {purpose:'面诊商谈'}); ST.materials(b, {consult:true}); b = CASE_ITEMS.filter(function(x){ return x.id===b.id; })[0]; b.subState = 'arrived'; b.arrivedDay = ymdAdd(td, -3); b.visitDate = ymdAdd(td, -3); b.visitTime = '10:00'; b.stage = 'consult'; b.consultRequested = true; b.consultStatus = 'report_ready'; b.reportReady = true; b.materialsConfirmed = true;
@@ -10565,7 +10565,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/每一行点/.test(t) && !/不是退款/.test(t), '没有说明文字');
       ST.ok(!/继续使用持有项目|继续选购项目|同一次到店里还可以/.test(t), '没有两个「继续」按钮那一行');
       ST.ok((h.match(/>完成</g)||[]).length===2 && (h.match(/>取消</g)||[]).length===2, '每行［完成］［取消］都在（2 行）');
-      ST.ok(/使用 1 次/.test(t) && /使用 2 次/.test(t) && /进行中/.test(t), '使用次数、状态还在');
+      ST.ok(/本次 1 次/.test(t) && /本次 2 次/.test(t) && /进行中/.test(t), '本次次数、状态还在（CMD-1110-10：「使用 N 次」改写成「· 本次 N 次」）');
       c.materialsConfirmed = true; renderCaseHeaderActions(c); var ha = document.getElementById('case-chat-actions'); ST.ok(!!ha && /添加本地管理/.test(ha.innerText), '页头［+ 添加本地管理］一直在');
       inLocalEntry(); var ov = document.getElementById('in-localentry-overlay'); ST.ok(!!ov && ov.classList.contains('open') && /购买新项目/.test(ov.innerText), '［+ 添加本地管理］打开：有「购买新项目」分页');
       inleTab('buy'); ST.ok(/本地选购|选择|项目/.test(ov.innerText), '购买新项目进入选购画面'); if(typeof lmNoBuy==='function') lmNoBuy(); ov.classList.remove('open');
@@ -10718,6 +10718,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 状态卡链接 */
       renderCaseSubtitle(c); renderCaseStatusBar(c); var a = document.querySelector('#case-status-bar a[onclick]'); ST.ok(!a || (/font-size:12px/.test(a.getAttribute('style')) && /terracotta/.test(a.getAttribute('style')) && /underline/.test(a.getAttribute('style'))), '状态卡［查看］链接：12px、品牌棕、下划线：'+(a && a.getAttribute('style')));
     } finally { window.alert = al; }
+  });
+
+  /* CMD-1110-10：IN 本地管理改表格 */
+  ST.def('R286a','CMD-1110-10（A1 分页）：本地管理卡是表格（项目｜历史施术次数｜备注｜状态｜操作）；历史次数 = 这位客人以前已完成的使用记录次数（按项目名去后缀对，不算今天这一次）；「本次 N 次」写在项目名后面；进行中有［完成］［取消］，完成 / 取消后操作栏空着；子案件页今天用的本地项目同一个表格',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var cur = function(c){ return CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; }, td = todayStr();
+    try{
+      var p0 = ST.newRes('R286a'); p0 = cur(p0);
+      p0.mgmtUses = [{itemName:'ONDA 提升 · 60kj', qty:1, status:'done', date:ymdAdd(td, -5)}, {itemName:'ONDA 提升 · 60kj', qty:2, status:'done', date:ymdAdd(td, -3)}, {itemName:'ONDA 提升', qty:1, status:'cancelled', date:ymdAdd(td, -3)}];
+      var c = ST.newRes('R286aB', {phone:clientPhoneOf(p0.name)}); c = cur(c); c.name = p0.name; ST.materials(c, {consult:false}); c = cur(c); ST.open(c);
+      c.mgmtActive = true; c.mgmtUses = [{itemName:'ONDA 提升', qty:2, status:'active', date:td}, {itemName:'美版超声刀二代', qty:1, status:'active', date:td}, {itemName:'ONDA 提升', qty:1, status:'done', date:td}];
+      ST.ok(localHistCount(c.name, 'ONDA 提升')===3, '历史次数：按项目名去后缀对，只数以前已完成的（1 + 2 = 3，取消的和今天的不算）：'+localHistCount(c.name, 'ONDA 提升'));
+      ST.ok(localHistCount(c.name, '美版超声刀二代')===0, '没做过 = 0 次');
+      var h = mgmtActiveHtml(c, 'main'), t = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      ST.ok(/项目 历史施术次数 备注 状态 操作/.test(t), '表头：项目｜历史施术次数｜备注｜状态｜操作：'+t.slice(0, 80));
+      ST.ok(/ONDA 提升 · 本次 2 次/.test(t) && /3 次/.test(t) && /美版超声刀二代 · 本次 1 次/.test(t) && /0 次/.test(t), '「使用 N 次」改写成项目名后面灰字「· 本次 N 次」；历史次数 3 次 / 0 次');
+      ST.ok(!/使用 \d+ 次/.test(t), '不再有「使用 N 次」');
+      ST.ok((h.match(/>完成</g)||[]).length===2 && (h.match(/>取消</g)||[]).length===2, '进行中的两行有［完成］［取消］，已完成的行操作栏空着');
+      ST.ok(/请输入备注内容/.test(h), '备注沿用 1110-02 的输入框');
+      markMgmtRows('mgmt' && 'main', 'done', false, 0); c = cur(c);
+      ST.ok(c.mgmtUses[0].status==='done' && localHistCount(c.name, 'ONDA 提升')===3, '今天完成后历史次数不会变成 4（不算今天这一次）');
+      h = mgmtActiveHtml(c, 'main'); ST.ok((h.match(/>完成</g)||[]).length===1, '完成后这一行操作栏空着');
+      markMgmtRows('main', 'cancelled', false, 1); c = cur(c); ST.ok(c.mgmtUses[1].status==='cancelled', '取消 → 状态已取消');
+      /* 子案件页 / 本地管理 tab 今天用的本地项目 */
+      c.localMgmt = null; var M = inContModel(c); var th = inContTodayHtml(c, M, 'local'); ST.ok(/今天用的本地项目/.test(th.replace(/<[^>]+>/g, ' ')), '子案件页今天用的本地项目卡仍在');
+      c.localMgmt = {active:true, ended:false, step:'use', mgmtActive:true, batches:[], mgmtUses:[{itemName:'ONDA 提升', qty:1, status:'active', date:td}]}; M = inContModel(c); th = inContTodayHtml(c, M, 'local').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      ST.ok(/项目 历史施术次数 备注 状态 操作/.test(th) && /ONDA 提升 · 本次 1 次/.test(th), '子案件页今天用的本地项目 = 同一个表格：'+th.slice(0, 120));
+    } finally { window.alert = al; window.confirm = cf; }
   });
 
   /* CMD-1106-16：推荐项目术后管理标在哪做 + 建议在韩天数自动算 */
