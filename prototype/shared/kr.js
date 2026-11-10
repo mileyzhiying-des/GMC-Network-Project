@@ -1099,7 +1099,7 @@ function krUnitUseNow(name, qty){
   var r = null; krMut(function(c){ r = coreUnitUseNow(c, name, ME_NAME, {qty:qty}); if(!r.ok){ alert(r.err||'不能使用'); return false; } return true; }); }
 /* Step 4：勾选今日进行项目；"今日进行项目"纵向列出已勾项、"已勾选：N 个项目"、只有［今日进行］（CMD-1015-27） */
 var KR_PICK = {}, KR_PICK_BACK = false;
-function krTpToggle(kind, name, on){ if(on) KR_PICK[kind+':'+name] = true; else delete KR_PICK[kind+':'+name]; krRenderCaseDetail(); }
+function krTpToggle(kind, name, on){ if(on) KR_PICK[kind+':'+name] = true; else delete KR_PICK[kind+':'+name]; if(window.KR_DAM){ krDayAddRender(); return; } krRenderCaseDetail(); }
 function krTodayPickBar(c){ /* CMD-1109-14 / 15：标题「今日进行项目（N）」+ 同一行最右［今日进行］；一项一行：勾选框（默认勾着，拿掉勾 = 取消这一项，上面列表同步）+ 小标签［施术项目］/［管理项目］（施术在前）+ 名字 +
    同一行的「（建议 MM/DD 起，今天提前使用）」灰色小字加括号；行间距 7px；没勾 = 标题（0）+ 居中灰字提示 + 按钮灰掉；没有 × */
   var keys = Object.keys(KR_PICK), n = keys.length, can = krCan();
@@ -1270,9 +1270,9 @@ function krProjCards(c, opts){
   var doneSec = function(title, head, rows){ return rows.length ? '<div class="kr-pc-block"><div class="kr-pc-sec-title" style="margin:12px 0 0;font-size:12px;font-weight:700;">'+title+' <span style="font-weight:400;color:var(--muted);">'+rows.length+'</span></div><div style="border:1px solid var(--border2);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;">'+head+rows.join('')+'</div></div>' : ''; };
   var doneBody = doneSec('施术项目', krUsedHead(), dS)+doneSec('术后管理', krUsedHead(), dC.map(function(e){ return e.html; }))+(opts.noMgmt ? '' : doneSec('管理项目', krUsedHead(), dM))+cancelSec;
   if(opts.only==='mgmt') return krCardBox('在韩管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">管理项目只在韩国做，由 KR 预约；行程结束时没用完的转韩国持有</span>', '<div class="kr-pc-scroll">'+((mgBody || dM.length) ? mgBody+(dM.length ? '<div class="kr-pc-block"><div class="kr-pc-sec-title" style="margin:12px 0 0;font-size:12px;font-weight:700;">已完成 <span style="font-weight:400;color:var(--muted);">'+dM.length+'</span></div><div style="border:1px solid var(--border2);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;">'+krUsedHead()+dM.join('')+'</div></div>' : '') : krEmpty('这个案件没有管理项目'))+'</div>')+krAddOnCard(c); /* CMD-1028-09 */
-  var addBtn = (can && canAddOnNow(c)) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="krAddModalOpen()">增加项目</button>' : ''; /* CMD-1021-14 二：改成 Modal */
+  var addBtn = (can && canAddOnNow(c)) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="krAddModalOpen()">+ 购买新项目</button>' : ''; /* CMD-1021-14 二：改成 Modal */
   var body = pg==='surg' ? (surgBody || krEmpty('这个案件没有施术项目')) : pg==='care' ? (careBody || krEmpty('这个案件没有术后管理')) : pg==='mgmt' ? (mgBody || krEmpty('这个案件没有管理项目')) : (doneBody || krEmpty('还没有已完成的项目'));
-  return krCardBox('<div style="display:flex;align-items:center;gap:12px;"><span>项目卡</span><span style="flex:1;"></span>'+addBtn+'</div>', '<div style="margin-bottom:6px;">'+seg+'</div><div class="kr-pc-scroll">'+body+'</div>'+(pickMode ? krTodayPickBar(c) : ''))+krAddOnCard(c);
+  return krCardBox('<div style="display:flex;align-items:center;gap:12px;"><span>项目卡</span><span style="flex:1;"></span>'+addBtn+'</div>', '<div style="margin-bottom:6px;">'+seg+'</div><div class="kr-pc-scroll">'+body+'</div>'+((pickMode && !opts.modal) ? krTodayPickBar(c) : ''))+(opts.modal ? '' : krAddOnCard(c));
 }
 /* CMD-1023-03 补：「赴韩」tab 不再放到院卡，改成「相关的日子」列表——一行一天（日期、地点、这天做了什么、状态），点了进那一天的子案件页；到院操作只在子案件页做 */
 function krDayItemsText(c, v){
@@ -4665,7 +4665,7 @@ function krAddOnCard(c){ /* CMD-1021-14 二：项目卡右上［增加项目］�
   var ov = document.getElementById('kr-addmodal-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-addmodal-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100000; document.body.appendChild(ov); }
   if(!krCan() || !canAddOnNow(c) || !KR_AD.open){ ov.classList.remove('open'); ov.innerHTML = ''; return ''; }
   var cand = krScopeCandidates(KR_CASE.clinicId), n = Object.keys(KR_AD.adds).length + KR_AD.locals.length, total = Object.keys(KR_AD.adds).reduce(function(s, nm){ var p = cand.kr.filter(function(x){ return x.name===nm; })[0]; return s+(p ? p.price : 0); }, 0) + KR_AD.locals.filter(function(x){ return !x.service; }).reduce(function(s, x){ return s+(x.price||0); }, 0);
-  ov.innerHTML = '<div class="modal-box" style="width:1040px;max-width:96vw;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">增加项目 · '+krEsc(c.name)+'</div>'+krAddChooser(c, 'ad', '')+
+  ov.innerHTML = '<div class="modal-box" style="width:1040px;max-width:96vw;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">购买新项目 · '+krEsc(c.name)+'</div>'+krAddChooser(c, 'ad', '')+
     '<div style="margin-top:8px;font-size:12px;color:var(--muted);">手术 / 管理项目标「待付款」，确认后先问延长 / 冲突，再弹确认付款；免费术后管理直接进项目进程。</div>'+
     '<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:12px;"><span style="flex:1;font-size:13px;color:var(--slate2);">合计 <b>'+formatCurrency(total, 'KRW')+'</b></span><button class="btn-ghost" onclick="krAdCancel()">取消</button><button class="btn-primary" onclick="krDoAddonCommit()"'+(n ? '' : ' disabled style="opacity:.5;cursor:not-allowed;"')+'>确认添加（'+n+'）</button></div></div>';
   ov.classList.add('open'); return '';
@@ -5197,7 +5197,38 @@ function krDayCareCardHtml(c){
 /* CMD-1028-12 四：手动［保留］／［取消保留］（KR 才有；IN 只读）——整行（这个项目还没预约的全部次数）一起保留 / 取消保留 */
 function krKeepToggle(key, on){ if(!krCan()) return; krMut(function(c){ return coreKeepSet(c, key, !!on, ME_NAME); }); }
 function krKeepBtn(key, on){ return krOutBtn(on ? '保留' : '取消保留', 'krKeepToggle(\''+String(key).replace(/'/g, '')+'\','+(on ? 'true' : 'false')+')', true, on ? '不进未安排预约、不生成待办；之后随时可手动预约' : '回到未预约'); }
-function krDayAddToggle(k){ KR_DAYADD[k] = !KR_DAYADD[k]; krRenderCaseDetail(); }
+/* CMD-1110-13：子案件「今日项目」的［增加今日项目］改成弹窗（不再跳到页面最下面的项目卡）：内容 = 项目卡里可以今日进行的项目（已约 / 保留 / 持有，分页同项目卡），勾选后［确认］→ 出现在上面「今日项目」表；弹窗里也有［+ 购买新项目］（和项目卡同一个购买入口） */
+function krDayAddToggle(k){ krDayAddOpen(k); }
+function krDayAddOpen(k){ KR_PICK = {}; window.KR_DAM = {dk:k}; krDayAddRender(); }
+function krDayAddClose(){ window.KR_DAM = null; KR_PICK = {}; var ov = document.getElementById('kr-dayadd-overlay'); if(ov){ ov.classList.remove('open'); ov.innerHTML = ''; } }
+function krDayAddRender(){
+  var dam = window.KR_DAM, ov = document.getElementById('kr-dayadd-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-dayadd-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 99990; document.body.appendChild(ov); }
+  if(!dam){ ov.classList.remove('open'); ov.innerHTML = ''; return; }
+  var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r){ krDayAddClose(); return; }
+  var c = r.c, n = Object.keys(KR_PICK).length, scrollTop = (ov.querySelector('.modal-box') || {}).scrollTop || 0;
+  ov.innerHTML = '<div class="modal-box" style="width:860px;max-width:96vw;max-height:88vh;overflow:auto;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">增加今日项目 · '+krEsc(c.name)+'</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">勾选今天要做的项目，确认后出现在「今日项目」表里；没有想做的项目请用右上角［+ 购买新项目］。</div>'+
+    krProjCards(c, {pick:true, noCare:true, modal:true})+
+    '<div id="kr-dayadd-err" style="color:#B3261E;font-size:12px;margin-top:6px;"></div>'+
+    '<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:12px;"><button class="btn-ghost" onclick="krDayAddClose()">取消</button><button class="btn-primary" '+(n ? '' : 'disabled style="opacity:.5;cursor:not-allowed;" title="请先勾选项目" ')+'onclick="krDayAddConfirm()">确认（'+n+'）</button></div></div>';
+  ov.classList.add('open'); var mb = ov.querySelector('.modal-box'); if(mb && scrollTop) mb.scrollTop = scrollTop;
+}
+function krDayAddConfirm(){
+  if(!krCan()) return; var picks = Object.keys(KR_PICK).map(function(x){ var m = /^(surg|mg):(.*)$/.exec(x); return m ? {kind:m[1], name:m[2]} : null; }).filter(Boolean); if(!picks.length) return;
+  var errs = [];
+  krDayAddClose();
+  krMut(function(c){
+    var any = false;
+    picks.forEach(function(pk){
+      var it = itemByKey(c, pk.name, function(x){ return !x.cancelled && !x.swapped; }), opt = {};
+      if(it && krIsMgmtItemC(it)){ var di = dirOpInfo(krHospitalIdOfMe(), it.name); if(di.on) opt = {dirOp:true, dir:c.director, min:di.min, ext:0}; }
+      var r = coreUnitUseNow(c, pk.name, ME_NAME, opt); if(r && r.ok) any = true; else errs.push((it ? it.name : pk.name)+'：'+((r && r.err) || '不能加进今天'));
+    });
+    return any;
+  });
+  window.KR_USED_NOW = true;
+  if(errs.length) alert('有项目没能加进今天：\n'+errs.join('\n'));
+}
 function krSubPageHtml(c){ return krRoWrap(c, krSubPageHtml0(c)); }
 function krSubPageHtml0(c){
   var v = visitsOf(c).filter(function(x){ return x.key===KR_CASE.day; })[0];
@@ -5221,7 +5252,7 @@ function krSubPageHtml0(c){
       /* CMD-1027-01 A：非施术日——［客人已离院］在页头那一条最右边；今日项目卡右上放［增加今日项目］，项目卡平常不显示，按了才展开（本次使用后自动收起） */
       var dk = c.id+'|'+v.key, addOpen = !!KR_DAYADD[dk], canAdd = krCan() && v.date===today && cards.some(function(cd){ return cd.group==='today' && cd.vs==='arrived'; });
       cards = cards.map(function(cd){ return Object.assign({}, cd, {noEnd:true, extraBtn:(canAdd && cd.kind==='sub' ? '<button class="'+(addOpen ? 'btn-primary' : 'btn-outline')+'" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krDayAddToggle(\''+dk.replace(/'/g, '')+'\')">增加今日项目</button>' : '')}); });
-      body = (pick ? krProjCards(c, {pick:true}) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick ? krDayCareCardHtml(c) : '')+(!pick && v.date===today && addOpen ? krProjCards(c, {care:true, noCare:true}) : ''); /* CMD-1028-11：非施术日术后管理一直显示（不用先点［增加今日项目］）；展开的项目卡里不再重复术后管理 tab */
+      body = (pick ? krProjCards(c, {pick:true}) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick ? krDayCareCardHtml(c) : '')+(!pick && v.date===today ? krProjCards(c, {care:true, noCare:true}) : ''); /* CMD-1028-11：非施术日术后管理一直显示（不用先点［增加今日项目］）；展开的项目卡里不再重复术后管理 tab */
     }
   } else if(cur==='settle'){
     body = KR_TAB_FN.settle(c);

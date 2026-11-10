@@ -6372,8 +6372,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var sc = box.querySelector('.kr-pc-scroll'); ST.ok(!!sc && getComputedStyle(sc).overflowY==='auto' && sc.clientHeight>=250 && sc.clientHeight<=330, '项目卡固定高度、内部滚动（CMD-1022-16：原来的 2/3）：'+(sc && sc.clientHeight));
       KR_PROJ_PAGE = 'done'; krRenderCaseDetail(); box = document.getElementById('kr-casedetail'); ST.ok(/施术项目 \d/.test(box.querySelector('.kr-pc-scroll').innerText) || /术后管理 \d|管理项目 \d|还没有已完成/.test(box.querySelector('.kr-pc-scroll').innerText), '已完成 tab 按施术项目 / 术后管理 / 管理项目分组');
       /* 二：增加项目 Modal */
-      var ab = [].slice.call(box.querySelectorAll('button')).filter(function(b){ return b.textContent==='增加项目' && /krAddModalOpen/.test(b.getAttribute('onclick')||''); })[0]; ST.ok(!!ab, '项目卡右上有［增加项目］');
-      krAddModalOpen(); var ov = document.getElementById('kr-addmodal-overlay'); ST.ok(ov && ov.classList.contains('open') && /增加项目 · /.test(ov.textContent) && !!ov.querySelector('.kr-chooser') && /取消/.test(ov.textContent) && /确认添加（0）/.test(ov.textContent), '点开是 Modal：标题 + 左选右结 + 底部［取消］［确认添加（N）］');
+      var ab = [].slice.call(box.querySelectorAll('button')).filter(function(b){ return b.textContent==='+ 购买新项目' && /krAddModalOpen/.test(b.getAttribute('onclick')||''); })[0]; ST.ok(!!ab, '项目卡右上有［增加项目］');
+      krAddModalOpen(); var ov = document.getElementById('kr-addmodal-overlay'); ST.ok(ov && ov.classList.contains('open') && /购买新项目 · /.test(ov.textContent) && !!ov.querySelector('.kr-chooser') && /取消/.test(ov.textContent) && /确认添加（0）/.test(ov.textContent), '点开是 Modal：标题 + 左选右结 + 底部［取消］［确认添加（N）］');
       ST.ok(!document.querySelector('#kr-casedetail .kr-chooser'), '页面里不再内联展开选择区');
       krAdCancel(); ST.ok(!document.getElementById('kr-addmodal-overlay').classList.contains('open'), '［取消］关闭 Modal');
       /* 三：建议时间写法 */
@@ -7106,11 +7106,15 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var cardBtns = Array.prototype.slice.call(host.querySelectorAll('button')).filter(function(b){ return /客人已离院/.test(b.innerText); });
       ST.ok(cardBtns.length===1, '［客人已离院］只有一个（今日卡里没有）：'+cardBtns.length);
       ST.ok(/增加今日项目/.test(txt()), '今日项目卡右上有［增加今日项目］');
-      ST.ok(!/未预约|预约中/.test(txt().split('增加今日项目')[1]||'') || !host.querySelector('.kr-pc-scroll'), '项目卡默认收起');
-      krDayAddToggle(r0.id+'|'+dk); ST.ok(!!host.querySelector('.kr-pc-scroll') || /管理项目/.test(txt()), '按［增加今日项目］后项目卡展开');
       var iid = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return itemIid(c.procedureItems.filter(function(x){ return /^R146管理/.test(x.name); })[0]); });
-      KR_CASE.id = r0.id; var ur = null; krMut(function(c){ ur = coreUnitUseNow(c, iid, ST.krBy, {qty:1}); return ur; });
-      ST.ok(!KR_DAYADD[r0.id+'|'+dk], '本次使用成功后项目卡自动收起 '+JSON.stringify(ur));
+      /* CMD-1110-13：［增加今日项目］改成弹窗（勾选 → 确认 → 出现在今日项目表）；弹窗里有［+ 购买新项目］ */
+      krDayAddToggle(r0.id+'|'+dk); var ov = document.getElementById('kr-dayadd-overlay');
+      ST.ok(!!ov && ov.classList.contains('open') && /增加今日项目 · /.test(ov.textContent) && /\+ 购买新项目/.test(ov.textContent), '按［增加今日项目］打开弹窗，里面有项目卡和［+ 购买新项目］');
+      ST.ok(/确认（0）/.test(ov.textContent) && !!ov.querySelector('button[disabled]'), '没勾选前［确认］灰掉');
+      KR_CASE.id = r0.id; krTpToggle('mg', iid, true); ov = document.getElementById('kr-dayadd-overlay'); ST.ok(/确认（1）/.test(ov.textContent), '勾选后［确认（1）］：'+ov.textContent.slice(-40));
+      krDayAddConfirm();
+      ST.ok(!ov.classList.contains('open'), '确认后弹窗关闭');
+      ST.ok(/R146管理项目/.test(txt()) && Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return (c.subItems||[]).some(function(x){ return x.holdUseOf && !x.done && x.date===day; }) || mgTodayQty(c, c.procedureItems.filter(function(x){ return /^R146管理/.test(x.name); })[0])>0; }), '勾选的项目出现在今日项目里');
       ST.ok(!/本次不做/.test(txt()), 'CMD-1109-20 改：画面上没有「本次不做」字样（原：没有「今日取消」）');
     } finally { var s0 = JSON.parse(snap); Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
   });
@@ -7994,7 +7998,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     try{
       /* ① 先使用，再购买 */
       var A = mk('R182a'), c = A.c0; chooseProjectEntryMode('holdings');
-      ST.ok(/新增项目\|本次不使用\|使用项目$/.test(btns()), '①：按钮同一排，顺序［新增项目］［本次不使用］［使用项目］（主操作最右）：'+btns());
+      ST.ok((function(b){ var i1 = b.indexOf('+ 购买新项目'), i2 = b.indexOf('|不使用'), i3 = b.lastIndexOf('|使用'); return i1>-1 && i2>i1 && i3>i2; })(btns()), '①：按钮同一排，顺序［+ 购买新项目］（标题行）［不使用］［使用］（主操作最右）：'+btns());
       document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); c = cur(c);
       ST.ok(c.mgmtActive && inHeaderLocalOk(c) && !/新增项目|继续使用持有项目/.test(btns()), '①：先使用后，使用中的面板不再有「继续」行 / ［新增项目］，页头［+ 添加本地管理］是入口（CMD-1110-08；原：面板里有［新增项目］）');
       var op = buy(); c = cur(c);
@@ -8006,13 +8010,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* ② 先购买，再一起使用 */
       var B = mk('R182b'); c = B.c0; chooseProjectEntryMode('holdings'); buy(); c = cur(c);
       var tx = document.getElementById('case-body').innerText;
-      ST.ok(/婴儿针/.test(tx) && /LHALa peel/.test(tx) && /新增项目/.test(btns()), '②：买完回到「是否使用持有项目？」，新旧项目一起在清单里，［新增项目］还在');
+      ST.ok(/婴儿针/.test(tx) && /LHALa peel/.test(tx) && /购买新项目/.test(btns()), '②：买完回到「是否使用持有项目？」，新旧项目一起在清单里，［新增项目］还在');
       for(var i = 0; document.getElementById('hold-check-main-'+i); i++) document.getElementById('hold-check-main-'+i).checked = true; submitHoldingsUse('main'); c = cur(c);
       ST.ok((c.mgmtUses||[]).length===2 && /LHALa peel:0\/1@本案/.test(hold(c)) && /婴儿针:1\/3@旧/.test(hold(c)), '②：新旧一起使用，持有次数对：'+hold(c));
       /* ③ 本次不使用，只购买（走一般本地选购画面） */
       var C = mk('R182c'); c = C.c0; chooseProjectEntryMode('holdings'); window.GMC_LOCAL_LEAVE_MANUAL = true; notUseThisTime('main'); c = cur(c);
       var lov = document.getElementById('local-leave-overlay'); ST.ok(!isEnded(c) && lov && lov.classList.contains('open') && /客人要离开了吗/.test(lov.innerText), '③ CMD-1102-09：本次不使用 = 客人要离开 → 先问「客人是否已离店？」，案件没结束');
-      localLeaveNo(); window.GMC_LOCAL_LEAVE_MANUAL = false; c = cur(c); ST.ok(!isEnded(c), '③：还没离店 → 案件继续，可以按［新增项目］');
+      localLeaveNo(); window.GMC_LOCAL_LEAVE_MANUAL = false; c = cur(c); ST.ok(!isEnded(c), '③：还没离店 → 案件继续，可以按［+ 购买新项目］');
       /* 不买就关弹窗：案件原样 */
       var D = mk('R182d'); c = D.c0; chooseProjectEntryMode('holdings'); usePrevBuy(); lmNoBuy(); c = cur(c);
       ST.ok(!c.localMgmt && !document.getElementById('lm-buy-overlay').classList.contains('open') && !isEnded(c), '关掉弹窗不购买：案件原样、没有留下本地管理记录');
@@ -8744,7 +8748,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var p = ST.localProj('LHALa peel'), c0 = ST.localCase('R208a'); ST.localPay(c0, function(){ toggleLocalProject('main', p.id); }); ST.open(c0);
     var c = ST.localCase('R208b'); c.name = c0.name; ST.open(c); c.entryChoicePending = true; c.projectEntryMode = 'holdings'; c.projectsLocked = false; c.recommended = [];
     var h = holdingsUseHtml(c, 'main'), txt = h.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
-    ST.ok(/新增项目\|本次不使用\|使用项目/.test(txt) && h.indexOf('btn-primary')>h.indexOf('本次不使用'), '三个按钮，顺序［新增项目］［本次不使用］［使用项目］，主操作最右');
+    ST.ok(/购买新项目\|不使用\|使用/.test(txt) && h.indexOf('btn-primary')>h.indexOf('不使用'), '三个按钮，顺序［新增项目］［本次不使用］［使用项目］，主操作最右');
     holdingsAddNew('main'); ST.ok(c.projectEntryMode==='new' && !isEnded(c), '［新增项目］：进入本地选购画面（projectEntryMode=new）');
     c.projectEntryMode = 'holdings'; window.GMC_LOCAL_LEAVE_MANUAL = true; notUseThisTime('main');
     var lov = document.getElementById('local-leave-overlay'); ST.ok(lov && lov.classList.contains('open') && !isEnded(c), '［本次不使用］：先问「客人是否已离店？」，案件还没结束');
@@ -10750,6 +10754,16 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1110-11：状态卡今日到访用子案件名称 + 查看备注 MM-DD + 所有本地管理行都用表格 */
+  ST.def('R289a','CMD-1110-13（A1 分页）：买新的一律叫［+ 购买新项目］；IN「是否使用持有项目？」标题行右边［+ 购买新项目］、下面［不使用］［使用］；本地「已选择 / 结算」卡的［+ 购买新项目］能打开本地选购（addMoreProjects 已不存在，原［+ 追加项目］点了没反应）；没有赴韩项目时合计只有项目合计 / 已付',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    ST.ok(typeof addMoreProjects==='undefined' && typeof localBuyNew==='function', '旧的 addMoreProjects 不存在，新入口 localBuyNew 存在');
+    var src = String(projectListTabHtml); ST.ok(/localBuyNew\(\)/.test(src) && !/onclick="addMoreProjects/.test(src) && src.indexOf('localBuyNew()')<src.indexOf('settlementCardsHtml(c, {sumLast:true})'), '已选择 / 结算卡：标题行按钮 → 结算单');
+    var hu = String(holdingsUseHtml); ST.ok(/\+ 购买新项目/.test(hu) && />不使用</.test(hu) && />使用</.test(hu) && !/>新增项目</.test(hu) && !/>本次不使用</.test(hu), '是否使用持有项目？：标题行 + 购买新项目；［不使用］［使用］');
+    var fake = {id:'f289', name:'T-289', settlementBatches:[{id:'B1', status:'paid', inTotal:500000, krTotal:0}], procedureItems:[], recommended:[]};
+    var h = ''; try{ h = settlementSummaryHtml(fake); }catch(e){ h = 'ERR '+e; }
+    ST.ok(/项目合计/.test(h) && /已付/.test(h) && !/已收定金|已退金额|应付尾款/.test(h), '没有赴韩项目：合计只显示项目合计 / 已付：'+h.replace(/<[^>]+>/g, ' ').slice(0, 100));
+    var both = settlementCardsHtml; ST.ok(/sumLast/.test(String(both)), '结算单在合计前（sumLast）');
+  });
   ST.def('R288a','CMD-1110-12（任意分页）：「查看案件」目标在渲染时算好（点击不再依赖当前分页里的 CASE_ITEMS）；看不到的案件只显示案件号；KR 今日项目按钮并排 / 没有灰色说明 / 没有「备注：无」；预约中按时间排；「今天做」用 dayNameOf',function(){
     var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
     try{

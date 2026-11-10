@@ -439,11 +439,15 @@ function settlementSummaryHtml(c){
   var totalTxt = (hasKr ? formatCurrency(info.total,'KRW') : '') + ((hasKr && pd.inn>0) ? ' ＋ ' : '') + (pd.inn>0 ? formatCurrency(pd.inn,'IDR') : '') || '—';
   var balTxt = !krActiveItems(c).length ? '—' : (info.diff>=0 ? formatCurrency(info.diff,'KRW')+'（'+(c.krBalancePaid ? '已付清' : '未付')+'）' : (c.krBalancePaid ? '已退差额 ' : '应退 ')+formatCurrency(-info.diff,'KRW')); /* CMD-1015-15：尾款金额 IN 看得到 */
   var cell = function(k, v){ return '<div style="flex:1;min-width:120px;"><div style="font-size:12px;color:var(--muted);margin-bottom:2px;">'+k+'</div><div style="font-size:14px;font-weight:700;">'+v+'</div></div>'; };
+  if(!hasKr){ /* CMD-1110-13：没有赴韩项目只显示「项目合计」「已付」，不显示定金 / 已退 / 尾款 */
+    var inTot = (c.settlementBatches||[]).reduce(function(t0, b0){ return t0+(b0.status==='cancelled' ? 0 : (b0.inTotal||0)); }, 0) || pd.inn;
+    return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+cell('项目合计', inTot>0 ? formatCurrency(inTot,'IDR') : '—')+cell('已付', pd.inn>0 ? formatCurrency(pd.inn,'IDR') : '—')+'</div>';
+  }
   return '<div style="display:flex;gap:14px;flex-wrap:wrap;background:var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
     cell('项目合计', totalTxt)+cell('已收定金（诊所收）', hasKr ? formatCurrency(info.deposit,'KRW') : '—')+cell('已退金额', ref>0 ? formatCurrency(ref,'KRW') : '—')+(compK>0 ? cell('已转置换', formatCurrency(compK,'KRW')) : '')+cell('应付尾款（医院收）', balTxt)+'</div>';
 }
 
-function settlementCardsHtml(c){
+function settlementCardsHtml(c, o){
   var bs = c.settlementBatches || [];
   if(!bs.length) return '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">尚无结算单</div>';
   var idx = c.settleTab; if(idx===null || idx===undefined || idx<0 || idx>=bs.length) idx = bs.length-1; /* 默认打开最新一张 */
@@ -451,6 +455,7 @@ function settlementCardsHtml(c){
     ? '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'+bs.map(function(b,i){
         return '<span class="chip'+(i===idx?' active':'')+'" onclick="setSettleTab('+i+')">第'+(i+1)+'张</span>';
       }).join('')+'</div>' : '';
+  if(o && o.sumLast) return tabs+settlementCardHtml(c, bs[idx])+'<div style="margin-top:12px;">'+settlementSummaryHtml(c)+'</div>';
   return settlementSummaryHtml(c)+tabs+settlementCardHtml(c, bs[idx]);
 }
 

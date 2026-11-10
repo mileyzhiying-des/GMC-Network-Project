@@ -4872,6 +4872,8 @@ function unpaidBatchesHtml(c){
   }).join('')+'</div>';
 }
 
+/* CMD-1110-13：本地「已选择 / 结算」卡的［+ 购买新项目］——打开本地选购（同页头［+ 添加本地管理］里的购买） */
+function localBuyNew(){ var c = getCurrentCase(); if(!c || isEnded(c)) return; if(typeof inLockGuard==='function' && inLockGuard(c)) return; c.addingMore = true; try{ logCaseEvent(c, actingName(), '本地项目：购买新项目'); buildCaseLog(c); }catch(e){} renderCaseBody(c); }
 /* ---- 项目列表 tab ---- */
 function projectListTabHtml(c, inLocalTab){
   /* CMD-1012-01：终态案件（已结案 / 仅出报告 / 已取消）不能再编辑——只看结算单，没有［+ 追加项目］［添加서비스］［客人不做项目］等入口；持有项目退款在客户详情，不受影响 */
@@ -4894,12 +4896,15 @@ function projectListTabHtml(c, inLocalTab){
   if(c.projectsLocked){
     /* 待付款（已结算、未确认付款）：没有［+ 追加项目］，改为［重新选择项目］回上一步（CMD-1012-02 C3） */
     var unpaidB = latestUnpaidBatch(c);
-    var addPicker = c.addingMore ? projectPickerHtml(c, true) : (unpaidB ? '<button class="btn-outline" style="width:100%;margin-top:14px;" onclick="reselectProjects()">重新选择项目</button><div style="font-size:12px;color:var(--muted);margin-top:4px;">回到上一步可以加项目或取消项目；确认付款后 KR 才看得到赴韩项目</div>' : '<button class="btn-outline" style="width:100%;margin-top:14px;" onclick="addMoreProjects()">+ 追加项目</button>');
+    /* CMD-1110-13：买新的一律叫［+ 购买新项目］——放在标题行右边（原来在卡片最下面叫［+ 追加项目］，而 addMoreProjects 在 CMD-1015-16 拿掉赴韩追加时被删了，按钮点了调用一个不存在的函数，所以没反应）；
+       顺序：标题 + 按钮 → 结算单 → 合计 → 结算备注；本地项目 tab 不放面诊进度（只放「面诊」tab） */
+    var buyBtn = (inLocalTab && !c.addingMore && !unpaidB) ? '<button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="localBuyNew()">+ 购买新项目</button>' : '';
+    var addPicker = c.addingMore ? (inLocalTab ? localPurchaseHtml(c, 'main', true) : projectPickerHtml(c, true)) : (unpaidB ? '<button class="btn-outline" style="width:100%;margin-top:14px;" onclick="reselectProjects()">重新选择项目</button><div style="font-size:12px;color:var(--muted);margin-top:4px;">回到上一步可以加项目或取消项目；确认付款后 KR 才看得到赴韩项目</div>' : '');
     return '<div class="card" style="padding:22px 24px;">'+
-      '<div class="info-heading" style="margin-bottom:14px;">已选择 / 结算</div>'+
-      subStatusRowHtml(caseSubStatusItems(c))+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><div class="info-heading" style="margin:0;flex:1;">已选择 / 结算</div>'+buyBtn+'</div>'+
+      (inLocalTab ? '' : subStatusRowHtml(caseSubStatusItems(c)))+
+      '<div style="margin-top:12px;">'+settlementCardsHtml(c, {sumLast:true})+'</div>'+
       noteFieldHtml('结算备注（KR + IN 可见）','noteOverall',c.noteOverall)+
-      '<div style="margin-top:12px;">'+settlementCardsHtml(c)+'</div>'+
       addPicker+
       '</div>';
   }
@@ -4979,7 +4984,7 @@ function localEntryChoiceHtml(c){
     '<div class="info-heading" style="margin-bottom:14px;">这次到店要做什么？</div>'+
     '<div style="display:flex;flex-direction:column;gap:12px;">'+
     '<button class="'+(hasHoldings?'btn-primary':'btn-outline')+'" style="width:100%;"'+(hasHoldings?'':' disabled') +' onclick="chooseProjectEntryMode(\'holdings\')">持有项目使用'+(hasHoldings?'':'（暂无持有项目）')+'</button>'+
-    '<button class="btn-outline" style="width:100%;" onclick="chooseProjectEntryMode(\'new\')">新增项目</button>'+
+    '<button class="btn-outline" style="width:100%;" onclick="chooseProjectEntryMode(\'new\')">购买新项目</button>'+
     '</div></div>';
 }
 
@@ -5197,9 +5202,9 @@ function holdingsUseHtml(c, scope){
   }).join('');
   rows = (rows + careRowsHtml) || '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">暂无持有项目</div>';
   return '<div class="card" style="padding:22px 24px;">'+
-    '<div class="info-heading" style="margin-bottom:14px;">是否使用持有项目？</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><div class="info-heading" style="margin:0;flex:1;">是否使用持有项目？</div><button class="btn-outline" style="padding:5px 12px;font-size:12px;border-radius:8px;white-space:nowrap;" onclick="holdingsAddNew(\''+scope+'\')">+ 购买新项目</button></div>'+ /* CMD-1110-13：买新的一律叫［+ 购买新项目］，放标题行右边 */
     rows+
-    '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;"><button class="btn-outline" onclick="holdingsAddNew(\''+scope+'\')">新增项目</button><button class="btn-outline" onclick="notUseThisTime(\''+scope+'\')">本次不使用</button>'+(holdings.some(function(h0){ return h0.category!=='术后管理'; }) ? '<button class="btn-primary" onclick="submitHoldingsUse(\''+scope+'\')">使用项目</button>' : '')+'</div></div>'; /* CMD-1102-09 一：所有「是否使用持有项目？」都是［新增项目］［本次不使用］［使用项目］，主操作最右 */
+    '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;"><button class="btn-outline" onclick="notUseThisTime(\''+scope+'\')">不使用</button>'+(holdings.some(function(h0){ return h0.category!=='术后管理'; }) ? '<button class="btn-primary" onclick="submitHoldingsUse(\''+scope+'\')">使用</button>' : '')+'</div></div>'; /* CMD-1102-09 一：所有「是否使用持有项目？」都是［新增项目］［本次不使用］［使用项目］，主操作最右 */
 }
 /* ［新增项目］：和没有持有项目的客人一样的本地选购画面（不另做一套）；付清后变成持有，当天可接着用 */
 function holdingsAddNew(scope){
@@ -5353,7 +5358,7 @@ function mgmtActiveHtml(c, scope){
   /* CMD-1110-05：本地管理卡只能一行一行按［完成］/［取消］——没有［全部完成］、没有说明文字；来访进行中的案件统一用页头的［+ 添加本地管理］（使用持有 / 购买新项目），这里不再有两个「继续」按钮。页头没有那个按钮的案件（纯本地案件）才保留这一行入口 */
   var btns = inHeaderLocalOk(c) ? '' : '<div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--slate2);">同一次到店里还可以：</span>'+
     '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'use\')">继续使用持有项目</button>'+
-    (usePrevBuyOk(c, scope) ? '<button class="btn-ghost" onclick="usePrevBuy()">新增项目</button>' : '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'buy\')">继续选购项目</button>')+'</div>';
+    (usePrevBuyOk(c, scope) ? '<button class="btn-ghost" onclick="usePrevBuy()">+ 购买新项目</button>' : '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'buy\')">继续选购项目</button>')+'</div>';
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理</div>'+rows+btns+'</div>';
 }
 
@@ -5451,7 +5456,7 @@ function localMgmtTabHtml(c){
   if(!hasHoldings){ lm.step = 'buy'; return lmBuyHtml(c); }
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理：客人要做什么？</div>'+
     '<div style="display:flex;flex-direction:column;gap:12px;"><button class="btn-primary" style="width:100%;" onclick="lmSetStep(\'use\')">持有项目使用</button>'+
-    '<button class="btn-outline" style="width:100%;" onclick="lmSetStep(\'buy\')">新增项目</button></div></div>';
+    '<button class="btn-outline" style="width:100%;" onclick="lmSetStep(\'buy\')">购买新项目</button></div></div>';
 }
 
 /* 本地管理里的选购（2026-10-08 起和不面诊案件共用「本地选购」画面 localPurchaseHtml，购物车 = c.localMgmt.cart，结算 = lmSettle 直接转客户持有） */
