@@ -5081,7 +5081,7 @@ function krSdRun(c){
   if(pick) return krProjCards(c, {pick:true});
   var done = !!c.krProcedureDone, g = done ? 'done' : 'today';
   var card = function(h){ return '<div class="card" style="padding:14px 18px;background:#fff;">'+h+'</div>'; }; /* CMD-1025-03 一：今日项目表格 + 整体备注包进一张白底卡，和下面的项目卡上下分开 */
-  return card((done ? '<div style="margin:0 0 8px;">'+krMainRowsHtml(c, 'done')+'</div>' : krUnpaidBanner(c)+krProgressBlock(c))+krVisitMemoHtml(c, 'main', g)+(done ? krReopenFooter(c, {kind:'main'}, 'done') : ''))+krProjCards(c, {care:true});
+  return card((done ? '<div style="margin:0 0 8px;">'+krMainRowsHtml(c, 'done')+'</div>' : krUnpaidBanner(c)+krProgressBlock(c))+krVisitMemoHtml(c, 'main', g)+(done ? krReopenFooter(c, {kind:'main'}, 'done') : ''))+(done || !c.hasArrived || !krCan() ? '' : '<div style="display:flex;align-items:center;gap:12px;"><button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="krDayAddToggle(\''+String(c.id).replace(/'/g, '')+'|main\')">增加今日项目</button></div>')+krAllItemsLinkHtml(c, krSdVisit(c)); /* CMD-1110-17：进行项目卡下面不再放项目卡；加今天的项目用［增加今日项目］弹窗 */
 }
 function krSdAutoTab(c, keys){
   var sig = KR_CASE.id+'|'+KR_CASE.day, prev = KR_CASE.sdSeen, content = ['visit', 'plan', 'pre', 'run'].filter(function(k){ return keys.indexOf(k)>-1; });
@@ -5212,6 +5212,18 @@ function krDayCareCardHtml(c){
 function krKeepToggle(key, on){ if(!krCan()) return; krMut(function(c){ return coreKeepSet(c, key, !!on, ME_NAME); }); }
 function krKeepBtn(key, on){ return krOutBtn(on ? '保留' : '取消保留', 'krKeepToggle(\''+String(key).replace(/'/g, '')+'\','+(on ? 'true' : 'false')+')', true, on ? '不进未安排预约、不生成待办；之后随时可手动预约' : '回到未预约'); }
 /* CMD-1110-13：子案件「今日项目」的［增加今日项目］改成弹窗（不再跳到页面最下面的项目卡）：内容 = 项目卡里可以今日进行的项目（已约 / 保留 / 持有，分页同项目卡），勾选后［确认］→ 出现在上面「今日项目」表；弹窗里也有［+ 购买新项目］（和项目卡同一个购买入口） */
+/* CMD-1110-17：今日项目卡 / 进行项目卡下面一行下划线文字「查看全部项目（主案件）」——跳到 KR 主案件「术后管理」或「管理项目」tab（今天有的类型；都有就跳术后管理；都没有就跳术后管理，没有术后管理时跳施术项目） */
+function krSdVisit(c){ try{ return visitsOf(c).filter(function(x){ return x.key===KR_CASE.day; })[0] || null; }catch(e){ return null; } }
+function krAllItemsTab(c, v){
+  var ts = (v && v.types) || [], hasPost = ts.indexOf('术后管理')>-1, hasMg = ts.indexOf('在韩管理')>-1;
+  if(hasPost) return 'postcare'; if(hasMg) return 'kmgmt';
+  var rows = []; try{ rows = careRows(c); }catch(e){} var hasCare = rows.length>0 || (function(){ try{ return careUnits(c).unbooked.length>0; }catch(e){ return false; } })();
+  return hasCare ? 'postcare' : (hasMgmtFlow(c) ? 'kmgmt' : 'items');
+}
+function krAllItemsLinkHtml(c, v){
+  var tab = krAllItemsTab(c, v);
+  return '<div style="padding:2px 4px;"><a href="#" onclick="krShowCase(\''+KR_CASE.clinicId+'\',\''+KR_CASE.id+'\',{tab:\''+tab+'\'});return false;" style="font-size:12px;text-decoration:underline;color:var(--terracotta);">查看全部项目（主案件）</a></div>';
+}
 function krDayAddToggle(k){ krDayAddOpen(k); }
 function krDayAddOpen(k){ KR_PICK = {}; window.KR_DAM = {dk:k}; krDayAddRender(); }
 function krDayAddClose(){ window.KR_DAM = null; KR_PICK = {}; var ov = document.getElementById('kr-dayadd-overlay'); if(ov){ ov.classList.remove('open'); ov.innerHTML = ''; } }
@@ -5266,7 +5278,7 @@ function krSubPageHtml0(c){
       /* CMD-1027-01 A：非施术日——［客人已离院］在页头那一条最右边；今日项目卡右上放［增加今日项目］，项目卡平常不显示，按了才展开（本次使用后自动收起） */
       var dk = c.id+'|'+v.key, addOpen = !!KR_DAYADD[dk], canAdd = krCan() && v.date===today && cards.some(function(cd){ return cd.group==='today' && cd.vs==='arrived'; });
       cards = cards.map(function(cd){ return Object.assign({}, cd, {noEnd:true, extraBtn:(canAdd && cd.kind==='sub' ? '<button class="'+(addOpen ? 'btn-primary' : 'btn-outline')+'" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krDayAddToggle(\''+dk.replace(/'/g, '')+'\')">增加今日项目</button>' : '')}); });
-      body = (pick ? krProjCards(c, {pick:true}) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick ? krDayCareCardHtml(c) : '')+(!pick && v.date===today ? krProjCards(c, {care:true, noCare:true}) : ''); /* CMD-1028-11：非施术日术后管理一直显示（不用先点［增加今日项目］）；展开的项目卡里不再重复术后管理 tab */
+      body = (pick ? krProjCards(c, {pick:true}) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick ? krAllItemsLinkHtml(c, v) : ''); /* CMD-1110-17：这一页只放今天的事——拿掉下面的「术后管理」总览卡和「项目卡」（加今天的项目用［增加今日项目］弹窗；预约 / 修改时间 / 保留在主案件 tab），改成一行「查看全部项目（主案件）」 */
     }
   } else if(cur==='settle'){
     body = KR_TAB_FN.settle(c);

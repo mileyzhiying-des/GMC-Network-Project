@@ -3311,7 +3311,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); });
       h = page(); t = txt(h);
       ST.ok(tabNames(h)==='到访|项目方案|术前状态|进行项目|结算|附件|Timeline' && KR_CASE.subTab==='run', '术前照片传完：＋进行项目，自动到进行项目：'+tabNames(h)+' / '+KR_CASE.subTab);
-      ST.ok(/操作完成/.test(t) && /项目卡/.test(t), '进行项目 = 今天要做的项目（［操作完成］）+ 项目卡（本次使用、预约时间）');
+      ST.ok(/操作完成/.test(t) && !/项目卡/.test(t.replace(/查看全部项目（主案件）/, '')) && /增加今日项目/.test(t) && /查看全部项目（主案件）/.test(t), '进行项目 = 今天要做的项目（［操作完成］）；CMD-1110-17：下面没有项目卡，有［增加今日项目］和「查看全部项目（主案件）」');
       mut(function(c){ preOpItems(c).forEach(function(it){ it.preOp = {video:null, photos:{}}; }); }); h = page(); ST.ok(tabNames(h).indexOf('进行项目')<0 || true, '（重传 / 清空只影响提示，进行项目是否显示按当前是否传完）');
       mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); });
       mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); sp.angles.slice(0, 1).forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); }); h = page();
@@ -5362,21 +5362,18 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
         coreCareBook(c, sgName, 0, dCare, '12:00', 'KR', '', 'KM1 室长', null); });
       var c = gc(), v = visitsOf(c).filter(function(x){ return x.date===dCare && x.place==='KR'; })[0]; if(!ST.ok(!!v && !krIsSurgDay(c, v), '造出一个非施术日的术后管理日')) return;
       KR_DAYADD = {}; var h = dayHtml(v.key), t0 = txt(h);
-      ST.ok(/术后管理/.test(t0) && /R169拆线/.test(t0) && /未预约/.test(t0) && /预约中/.test(t0), '不点任何按钮就看得到术后管理（预约中 + 未预约）');
-      ST.ok(/krCbOpen\(\{all:true, tab:'care'\}\)/.test(h) || /全部预约/.test(t0), '有［全部预约］');
-      ST.ok(/krCbOpen\(\{one:/.test(h) && /修改时间/.test(t0), '每行［预约时间］，已约的［修改时间］');
+      /* CMD-1110-17：这一页只放今天的事——没有「术后管理」总览卡、没有项目卡；预约 / 修改时间 / 保留在主案件 tab */
+      ST.ok(!/krCbOpen\(\{all:true, tab:'care'\}\)/.test(h) && !/class="kr-pc-scroll"/.test(h) && !/术后管理 <span style="font-weight:400/.test(h) && !/保留 \d/.test(t0.replace(/备注：\d+/g, '')), '没有术后管理总览卡、没有项目卡（没有［全部预约］、没有项目卡滚动区）');
+      ST.ok(/查看全部项目（主案件）/.test(t0), '有一行「查看全部项目（主案件）」');
+      var mt = Store.withClinic(cid, function(){ var c3 = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return krAllItemsTab(c3, visitsOf(c3).filter(function(x){ return x.key===v.key; })[0]); }); ST.ok(mt==='postcare', '今天有术后管理 → 跳主案件「术后管理」tab：'+mt);
+      var lk = (h.match(/krShowCase\('([^']*)','([^']*)',\{tab:'(\w+)'\}\)/)||[]); ST.ok(lk[3]===mt && lk[2]===r0.id, '链接的 onclick 跳主案件 '+mt+' tab：'+lk[0]); KR_CASE = {clinicId:cid, id:r0.id, tab:'items', day:v.key}; krShowCase(cid, r0.id, {tab:mt}); ST.ok(KR_CASE.tab===mt && !KR_CASE.day, '点了之后在主案件 '+mt+' tab（不在子案件页）');
+      var mainTab = pcmHtml(gc(), 'KR'), mtx = txt(mainTab); ST.ok(/R169拆线/.test(mtx) && /全部预约|预约时间/.test(mtx), '主案件「术后管理」tab 里有这些项目，可预约（［预约时间］［全部预约］）');
       /* 约一个未预约的 → 主案件术后管理 tab、子案件 tab 看得到 */
       set(function(c2){ coreCareBook(c2, sgName, 0, okDay(14), '12:00', 'KR', '', 'KM1 室长', null); });
-      c = gc(); ST.ok(/R169拆线/.test(txt(pcmHtml(c, 'KR'))) && daysOf(c).some(function(x){ return x.date===okDay(14) && x.place==='KR'; }) && /预约中/.test(txt(pcmHtml(c, 'KR'))), '约好后主案件术后管理 tab、子案件 tab 看得到');
-      /* 点开［增加今日项目］不重复出术后管理 tab */
-      var tdv = visitsOf(c).filter(function(x){ return x.date===td; })[0]; var key = v.key; KR_DAYADD[c.id+'|'+key] = true; var h2 = dayHtml(key);
-      ST.ok((h2.match(/术后管理 <span style="font-weight:400/g)||[]).length<=1, '展开项目卡时术后管理不重复显示');
-      /* 保留 N 组一起显示 */
-      set(function(c2){ stayKeepAdd(c2, 'care|'+sgName+'|0', 1); }); c = gc(); ST.ok(/保留/.test(txt(dayHtml(key))), '「保留 N」组一起显示');
+      c = gc(); ST.ok(/R169拆线/.test(txt(pcmHtml(c, 'KR'))) && daysOf(c).some(function(x){ return x.date===okDay(14) && x.place==='KR'; }) && /预约中/.test(txt(pcmHtml(c, 'KR'))) && /修改时间/.test(txt(pcmHtml(c, 'KR'))), '约好后主案件术后管理 tab、子案件 tab 看得到；已约的［修改时间］在主案件 tab');
+      /* 保留 N 组在主案件术后管理 tab 里 */
+      var key = v.key; set(function(c2){ stayKeepAdd(c2, 'care|'+sgName+'|0', 1); }); c = gc(); ST.ok(/保留/.test(txt(pcmHtml(c, 'KR'))), '「保留 N」组在主案件术后管理 tab');
       set(function(c2){ c2.stayKeep = {}; });
-      /* 没有未做的术后管理 → 不显示 */
-      set(function(c2){ c2.subItems.forEach(function(x){ if(x.kind==='术后管理记录'){ x.done = true; x.skipped = false; } }); c2.procedureItems.forEach(function(it){ if(it.postcare) it.postcare = []; }); });
-      c = gc(); var v2 = visitsOf(c).filter(function(x){ return x.date===dCare && x.place==='KR'; })[0]; ST.ok(Store.withClinic(cid, function(){ return krDayCareCardHtml(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); })==='', '没有未做的术后管理 → 这块不显示');
     } finally { window.alert = oa; window.confirm = oc; KR_DAYADD = {}; Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r0.id; }); CASE_ITEMS[i] = JSON.parse(snap); return true; }); }
   });
   /* CMD-1028-13：麻醉同意书可点开 + 到店 / 到院块变灰 + IN「管理项目」tab / KR「在韩管理」一买就出现 */
