@@ -1377,7 +1377,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   ST.def('R15d','IN 五项小修：案例链接在行尾 / 赴韩默认韩币 / 转告·确认卡片按完消失 / 打印先预览 / 尾款 IN 看得到（A1 分页）',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
-    var src = String(localProjRowHtml); ST.ok(src.indexOf('min-width:96px')>-1 && src.lastIndexOf('projCasesLinkHtml')>src.indexOf('min-width:96px'), '「查看相关案例」在价格后面（行尾）');
+    var src = String(localProjRowHtml); ST.ok(src.indexOf('min-width:96px')>-1 && src.lastIndexOf('viewNotesBtnHtml')>src.indexOf('min-width:96px'), '1110-02：「查看备注（N）」代替「查看相关案例」，仍在价格后面（行尾）');
     var sp = String(projectPickerHtml); ST.ok(sp.indexOf("krPickAmount(p.price, p.origin, pickerCcy)+'</span>'+projCasesLinkHtml")>-1, '赴韩项目行同样在行尾（CMD-1020-13：价格显示换成 krPickAmount）');
     var c = CASE_ITEMS.filter(function(x){ return x.krSchedule && x.krSchedule.status==='confirmed'; })[0] || CASE_ITEMS[0]; if(!ST.ok(!!c, '没有案件')) return; var old = CURRENT_CASE_ID; CURRENT_CASE_ID = c.id;
     try{
@@ -4434,7 +4434,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     m.settlementDone = true; m.krDepositPaid = true; m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:dAgo(30)+' 10:00'}]; m.krProcedureDone = true; m.hasArrived = true; m.krArrivedDay = dAgo(30); m.krSchedule = {status:'arrived', confirmedDate:dAgo(30), confirmedTime:'10:00'};
     m.subItems = [{id:'s118', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false, projectName:'隆鼻', suggest:todayStr()}];
     ST.ok(isUpgraded(m), '付了赴韩定金 → 升级');
-    var lb = labels(m); ST.ok(lb.indexOf('流程')<0 && /基础资料｜面诊｜赴韩施术｜术后管理｜子案件｜项目汇总/.test(lb) && /附件｜Timeline$/.test(lb), '完整格式没有「流程」tab：'+lb);
+    var lb = labels(m); ST.ok(lb.indexOf('流程')<0 && /基础资料｜面诊｜赴韩施术｜术后管理｜(管理项目[^｜]*｜)?备注内容｜子案件｜项目汇总/.test(lb) && /附件｜Timeline$/.test(lb), '完整格式没有「流程」tab；1110-02 起 管理项目｜备注内容 在子案件之前：'+lb);
     var tl = caseTabListOf(m); ST.ok(tl.filter(function(t0){ return t0.key==='consult'; })[0].mark==='✓' && tl.filter(function(t0){ return t0.key==='kr'; })[0].mark==='●' && tl.filter(function(t0){ return t0.key==='postcare'; })[0].mark==='●', '面诊 ✓ 已结束，赴韩 / 术后管理 ● 还有事');
     m.krTripEnded = {at:dAgo(25)+' 10:00'};
     ST.ok(flowMarkOf(m, 'kr')==='✓' && flowMarkOf(m, 'postcare')==='●', '韩国行程结束 → 赴韩 ✓，术后管理没做完 ●');
@@ -6232,7 +6232,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       /* 付款后可以结束；备注随结束存 */
       mut(function(c){ ST.ok(coreAddOnPaid(c, 'KM1 室长') || true, ''); });
       ST.ok(pendingPayItems(gc()).length===0, '付款后不再待付款');
-      var re; mut(function(c){ re = coreEndSubVisit(c, key, 'KM1 室长'); }); ST.ok(re.ok && gc().visitEndedKeys[key] && visitNoteAuto(gc(), key) && visitNoteAuto(gc(), key).text==='整体备注：别丢', '付款后可以结束，整体备注随结束存成一则');
+      var re; mut(function(c){ re = coreEndSubVisit(c, key, 'KM1 室长'); }); ST.ok(re.ok && gc().visitEndedKeys[key] && !visitNoteAuto(gc(), key) && gc().visitNoteDraft[key]==='整体备注：别丢', '付款后可以结束；1110-02：没保存的草稿不会被系统转成备注（旧：随结束存成一则，署名「系统」）');
       /* CMD-1021-11：结束后再约进今天 → 不成功（不再隐性重开）；已完成卡［增加项目］才重开 */
       var bk; mut(function(c){ var h2 = c.procedureItems.filter(function(x){ return /热拉提/.test(x.name); })[0]; bk = coreUnitBookUse(c, itemIid(h2), todayStr(), '11:00', 'KM1 室长', '', null); });
       ST.ok(bk===false && !!(gc().visitEndedKeys||{})[key], '已完成的到院：再约进今天被拒绝，到院保持已完成');
@@ -8407,6 +8407,52 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     openReconfirmSame(c.id); ST.ok(!/发送行程提醒/.test((g('reconfirm-overlay')||{innerText:''}).innerText), '施术前 30 天「照原日期」窗口没有');
     var ro = g('reconfirm-overlay'); if(ro) ro.classList.remove('open');
   });
+  ST.def('R278a','CMD-1110-02（任意分页）：备注重新定位——caseNoteRecords/备注内容 tab 分项目备注 / 来访备注、新 → 旧、点来自跳案件；管理项目备注跟着使用记录；IN 备注卡不放项目备注；IN 本地项目备注（完成时存、取消不存、完成后点文字改）；查看备注（N）只列这位客人自己；KR 看不到 IN 本地项目备注；署名问题（离院 / 关账不再把草稿转成「系统」备注）',function(){
+    var tag = 'T-R278', mk = function(nm, id, extra){ return Object.assign({id:id, name:nm, caseNo:id.toUpperCase(), procedureItems:[], subItems:[], krProgressMemos:[], inNotes:[], logEntries:[]}, extra||{}); };
+    var A = mk(tag+'客人甲', 'zr278a'), B = mk(tag+'客人乙', 'zr278b');
+    A.procedureItems.push({name:'钛提升 · 40kj·3次', origin:'KR', iid:'i1', heldOver:true, mgmtPlan:true, uses:[{at:'2026-11-08 02:00:00', key:'main', qty:1, note:'第一次：很怕痛', noteBy:'KM1 室长', noteAt:'2026-11-08 02:10:00'}, {at:'2026-11-09 02:00:00', key:'main', qty:1, note:'第二次：状态好', noteBy:'KM1 室长', noteAt:'2026-11-09 02:10:00'}]});
+    A.procedureItems.push({name:'埋线双眼皮', origin:'KR', iid:'i2', todayNote:'术前再确认', todayNoteBy:'KD1 院长', todayNoteAt:'2026-11-09 03:00:00'});
+    A.krProgressMemos.push({id:'m1', at:'2026-11-09 05:00:00', by:'KM1 室长', text:'客人住酒店', vk:'main', auto:true});
+    A.inNotes.push({id:'n1', at:'2026-11-09 06:00:00', by:'A1 室长', text:'IN 提醒：怕痛'});
+    A.mgmtUses = [{itemName:'热玛吉 · 300发', qty:1, status:'done', note:'本地：做完了', noteBy:'A1 室长', noteAt:'2026-11-09 04:00:00'}];
+    B.procedureItems.push({name:'钛提升 · 40kj·3次', origin:'KR', iid:'i3', todayNote:'乙的备注', todayNoteBy:'KM1 室长', todayNoteAt:'2026-11-09 02:00:00'});
+    CASE_ITEMS.push(A, B);
+    try{
+      var recs = notesRecordsOfCases([A], 'IN'), proj = recs.filter(function(r){ return r.kind==='proj'; }), vis = recs.filter(function(r){ return r.kind==='visit'; });
+      ST.ok(proj.length===4 && vis.length===2, '项目备注 4（管理项目 2 次使用 + 施术 1 + 本地 1）、来访备注 2：'+proj.length+'/'+vis.length);
+      ST.ok(recs[0].at >= recs[1].at && recs[1].at >= recs[2].at, '新 → 旧');
+      ST.ok(proj.filter(function(r){ return /钛提升/.test(r.project); }).length===2 && proj.some(function(r){ return r.text==='第一次：很怕痛'; }) && proj.some(function(r){ return r.text==='第二次：状态好'; }), '管理项目两次使用各有自己的备注（跟着使用记录）');
+      var kr = notesRecordsOfCases([A], 'KR'); ST.ok(!kr.some(function(r){ return r.local; }) && kr.length===recs.length-1, 'KR 看不到 IN 本地项目的备注');
+      var h = notesTabHtml(recs, 'IN', function(c){ return "openCaseDetail('"+c.id+"')"; }); ST.ok(/a\. 项目备注/.test(h) && /b\. 来访备注/.test(h) && /ZR278A/.test(h) && /openCaseDetail\('zr278a'\)/.test(h) && /KM1 室长（KR）/.test(h) && /A1 室长（IN）/.test(h), '备注内容 tab：a/b 两段、日期、写的人（IN/KR）、项目名、来自案件可点');
+      var hk = notesTabHtml(recs, 'IN', null); ST.ok(/查看原文/.test(hk), 'KR 写的显示译文 +［查看原文］');
+      var card = caseNotesAll(A, 'IN'); ST.ok(card.length===2 && card.every(function(n){ return n.scope==='来访备注' || n.role==='IN'; }), 'IN 备注卡只放来访备注（不含项目备注）');
+      ST.ok(caseNotesAll(A).length>card.length, 'KR 备注卡照旧全放');
+      /* 查看备注（N）：只列这位客人自己 */
+      ST.ok(clientProjectNotes(A.name, '钛提升 · 40kj').length===2 && clientProjectNotes(B.name, '钛提升 · 40kj').length===1 && clientProjectNotes(A.name, '没做过的项目').length===0, '查看备注：同一客人只看到自己的（甲 2 条 / 乙 1 条 / 没做过 0 条）');
+      ST.ok(viewNotesBtnHtml(A.name, '钛提升 · 40kj', 'x')!=='' && viewNotesBtnHtml(A.name, '没做过的项目', 'x')==='', '有备注才有按钮：查看备注（2）');
+      ST.ok(/查看备注（2）/.test(viewNotesBtnHtml(A.name, '钛提升 · 40kj', 'x')), '按钮文字');
+      VIEW_NOTES_OPEN.x = true; var pn = viewNotesPanelHtml(A.name, '钛提升 · 40kj', 'x'); ST.ok(/11-0[89]/.test(pn) && /查看案件/.test(pn) && /第一次：很怕痛/.test(pn), '点开：每行「MM-DD 备注内容 查看案件」'); VIEW_NOTES_OPEN.x = false;
+      /* IN 本地项目备注：完成时存、取消不存 */
+      var u1 = {itemName:'热玛吉 · 300发', qty:1, status:''}, u2 = {itemName:'LDM', qty:1, status:''}; A.mgmtUses = [u1, u2];
+      IN_LN[A.id+'|main|0'] = '完成时的备注'; IN_LN[A.id+'|main|1'] = '取消的不存';
+      u1.status = 'done'; inLocalNoteCommit(A, 'main', u1, 0); ST.ok(u1.note==='完成时的备注' && u1.noteBy, '按［完成］：备注存进这次使用记录');
+      u2.status = 'cancelled'; ST.ok(!u2.note, '按［取消］：不存');
+      var cell = inLocalNoteCell(A, 'main', 0, u1, false); ST.ok(/备注：完成时的备注/.test(cell) && !/<input/.test(cell), '完成后显示成文字');
+      ST.ok(/请输入备注内容/.test(inLocalNoteCell(A, 'main', 1, {itemName:'x', qty:1, status:''}, false)), '进行中的行有输入框「请输入备注内容」');
+      inLocalNoteEdit(A.id+'|main|0'); ST.ok(/<input/.test(inLocalNoteCell(A, 'main', 0, u1, false)), '点一下文字回到输入框'); delete IN_LN[A.id+'|main|0|edit'];
+      inLocalNoteSave(A, u1, '改过了'); ST.ok(u1.note==='改过了', '离开输入框就存（已完成）');
+      /* 署名：离院 / 关账不再把草稿转成系统备注 */
+      A.visitNoteDraft = {main:'没保存的草稿'}; coreVisitNoteCommit(A, 'main', '系统'); ST.ok(!(A.krProgressMemos||[]).some(function(m){ return /没保存/.test(m.text); }), '系统离院 / 关账不再把没保存的草稿转成备注（旧版署名「系统」）');
+      coreVisitNoteSaveNow(A, 'main', '真正保存的', 'KM1 室长'); var sv = visitNoteAuto(A, 'main'); ST.ok(sv && sv.by==='KM1 室长' && sv.text==='真正保存的', '按［保存］：署名 = 真正按的人');
+    } finally { CASE_ITEMS.splice(CASE_ITEMS.indexOf(A), 1); CASE_ITEMS.splice(CASE_ITEMS.indexOf(B), 1); IN_LN = {}; }
+  });
+  ST.def('R278b','CMD-1110-02（KM1 分页，stageC 夹具）：KR 主案件页（升级后）有「备注内容」tab，位置在 在韩管理 / 复诊 之后、子案件之前；KR 客人详情有「备注内容」tab',function(){
+    var r = krAllCases().filter(function(x){ return /^T-待到院/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stageC\'])')) return;
+    var tabs = krTabListOf(r).map(function(t0){ return t0.key; }); ST.ok(tabs.indexOf('notes')>-1 && tabs.indexOf('notes')<tabs.indexOf('visits') && tabs.indexOf('notes')>tabs.indexOf('items'), 'KR tab 顺序里有 notes，在子案件前：'+tabs.join(','));
+    ST.ok(typeof KR_TAB_FN.notes==='function' && /a\. 项目备注/.test(Store.withClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; KR_CASE = Object.assign({}, KR_CASE||{}, {clinicId:r.clinicId, id:r.id}); return KR_TAB_FN.notes(c); })), 'KR 备注内容 tab 内容');
+    var m = {mode:'KR', name:r.name, cases:[r.c], openCase:function(c){ return "krShowCase('"+r.clinicId+"','"+c.id+"')"; }}; ST.ok(/a\. 项目备注/.test(cliNotesHtml(m)), 'KR 客人详情「备注内容」');
+    ST.ok(/备注内容/.test(clientDetailBodyHtml(Object.assign({cl:null, cases:[], mode:'IN', name:'x', openCase:function(){ return ''; }}, {}))), '客户详情 tab 栏有「备注内容」');
+  });
   ST.def('R192b','CMD-1029-09 五（KM1 分页，stageC 夹具）：KR 按［客人已到院］时护照号码没填 → 必填（号码 + 效期）；已有的显示出来核对、不强制',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r1 = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r1, '先 ST.ensureFixtures([\'stageC\'])')) return;
@@ -10348,8 +10394,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       itS = c1().procedureItems.filter(function(x){ return x.name===surgNm; })[0];
       var itM = c1().procedureItems.filter(function(x){ return x.iid===iidA; })[0], memo = visitNoteAuto(c1(), 'main');
       ST.ok(itS.todayNote==='施术备注草稿' && itM.todayNote==='管理备注草稿' && !!memo && memo.text==='整体备注567', '按［保存］一起存：每行 + 整体');
-      var all = caseNotesAll(c1()), top = all[0];
-      ST.ok(!!top && top.scope==='整体备注' && top.text==='整体备注567' && all.some(function(n){ return n.text==='施术备注草稿'; }), 'IN 备注卡：整体备注一笔，排在各项备注最上面');
+      var all = caseNotesAll(c1(), 'IN'), top = all[0], allKr = caseNotesAll(c1());
+      ST.ok(!!top && top.scope==='来访备注' && top.text==='整体备注567' && !all.some(function(n){ return n.text==='施术备注草稿'; }) && allKr.some(function(n){ return n.text==='施术备注草稿'; }), '1110-02：IN 备注卡只放来访备注（项目备注不在这里）；KR 备注卡仍全放');
       ST.ok(krNdAnyDirty().length===0, '保存后没有未保存');
       var h = rows(), tx = h.textContent;
       ST.ok(/备注：施术备注草稿/.test(tx) && /备注：管理备注草稿/.test(tx) && !h.querySelector('[data-ndid]'), '保存后每行变成「备注：内容」文字，没有输入框');

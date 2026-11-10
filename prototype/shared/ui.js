@@ -2171,7 +2171,7 @@ function markMgmtRows(scope, action, all, oneIdx){
   idxs.forEach(function(i){
     var u = uses[i]; if(!u || localItemStatus(u)!=='进行中') return;
     names.push(u.itemName);
-    if(action==='done'){ u.status = 'done'; }
+    if(action==='done'){ u.status = 'done'; try{ inLocalNoteCommit(c, scope, u, i); }catch(er){ console.error(er); } /* CMD-1110-02：按［完成］时把备注存进这次使用记录 */ }
     else { u.status = 'cancelled'; u.cancelQty = u.qty; returnHolding(c.name, u.itemName, c.id, u.qty, scope); returned += u.qty; } /* 次数归还持有，不是退款 */
   });
   logCaseEvent(c, ME_NAME, (scope==='lm'?'本地管理：':'')+(action==='done'?'标记完成：':'标记取消（次数已归还持有，不是退款）：')+names.join('、'));
