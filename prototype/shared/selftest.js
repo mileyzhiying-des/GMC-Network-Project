@@ -10554,6 +10554,35 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   ST.def('R280a','CMD-1110-04（KD1 分页，stagePay 夹具）：面诊录入内容有［AI 整理］；推荐项目备注提示「请输入备注内容」；叫「方案备注」',function(){ r280(false); });
   ST.def('R280b','CMD-1110-04（KM1 分页，stagePay 夹具）：室长代录同样有［AI 整理］且能用',function(){ r280(true); });
 
+  /* CMD-1110-05：IN 本地管理卡清理 */
+  ST.def('R281a','CMD-1110-05（A1 分页）：本地管理卡没有［全部完成］、说明文字、两个「继续」按钮；逐行［完成］［取消］还在；页头［+ 添加本地管理］一直在（使用持有 / 购买新项目）；纯本地案件（页头没有该按钮）保留原来的继续入口；逐行完成最后一项 → 「客人是否已离店？」照旧',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var cur = function(c){ return CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; };
+    try{
+      var c = ST.newRes('R281a'); ST.materials(c, {consult:true}); c = cur(c); ST.open(c);
+      c.needsConsult = true; c.consultRequested = true; c.subState = 'arrived'; c.arrivedDay = todayStr(); c.stage = 'booked';
+      c.localMgmt = {active:true, ended:false, step:'use', mgmtActive:true, batches:[], mgmtUses:[{itemName:'R281a 婴儿针', qty:1, status:'active'},{itemName:'R281a 水光', qty:2, status:'active'}]};
+      ST.ok(inHeaderLocalOk(c), '面诊案件：页头会有［+ 添加本地管理］');
+      var h = mgmtActiveHtml(c, 'lm'), t = (function(x){ var d = document.createElement('div'); d.innerHTML = x; return d.textContent; })(h);
+      ST.ok(!/全部完成/.test(t), '没有［全部完成］');
+      ST.ok(!/每一行点/.test(t) && !/不是退款/.test(t), '没有说明文字');
+      ST.ok(!/继续使用持有项目|继续选购项目|同一次到店里还可以/.test(t), '没有两个「继续」按钮那一行');
+      ST.ok((h.match(/>完成</g)||[]).length===2 && (h.match(/>取消</g)||[]).length===2, '每行［完成］［取消］都在（2 行）');
+      ST.ok(/使用 1 次/.test(t) && /使用 2 次/.test(t) && /进行中/.test(t), '使用次数、状态还在');
+      c.materialsConfirmed = true; renderCaseHeaderActions(c); var ha = document.getElementById('case-chat-actions'); ST.ok(!!ha && /添加本地管理/.test(ha.innerText), '页头［+ 添加本地管理］一直在');
+      inLocalEntry(); var ov = document.getElementById('in-localentry-overlay'); ST.ok(!!ov && ov.classList.contains('open') && /购买新项目/.test(ov.innerText), '［+ 添加本地管理］打开：有「购买新项目」分页');
+      inleTab('buy'); ST.ok(/本地选购|选择|项目/.test(ov.innerText), '购买新项目进入选购画面'); if(typeof lmNoBuy==='function') lmNoBuy(); ov.classList.remove('open');
+      /* 纯本地案件：页头没有该按钮，这一行入口保留 */
+      var p = ST.newRes('R281aP'); ST.materials(p, {consult:false}); p = cur(p); p.mgmtActive = true; p.mgmtUses = [{itemName:'R281aP 婴儿针', qty:1, status:'active'}];
+      ST.ok(!inHeaderLocalOk(p), '纯本地案件：页头没有［+ 添加本地管理］');
+      var hp = mgmtActiveHtml(p, 'main'); ST.ok(!/全部完成/.test(hp) && /继续使用持有项目/.test(hp), '纯本地案件：没有［全部完成］，但保留「继续」入口（页头没有别的入口）');
+      /* 逐行完成最后一项 → 客人是否已离店？ */
+      ST.open(p); window.GMC_LOCAL_LEAVE_MANUAL = true; markMgmtRows('main', 'done', false, 0);
+      var lo = document.getElementById('local-leave-overlay'); ST.ok(!!lo && lo.classList.contains('open') && /客人是否已离店/.test(lo.innerText), '逐行完成最后一项 →「客人是否已离店？」照旧'); if(typeof localLeaveNo==='function') localLeaveNo();
+    } finally { window.alert = al; window.confirm = cf; window.GMC_LOCAL_LEAVE_MANUAL = false; }
+  });
+
   /* CMD-1106-16：推荐项目术后管理标在哪做 + 建议在韩天数自动算 */
   ST.def('R246a','CMD-1106-16（任意分页）：建议在韩天数 = 最晚「必须在韩国」术后管理第几天 + 1（韩国或印尼不算、没有 = 1 天）；表单只显示一行、没有输入框和停留原因；提交不再因天数 / 原因报错；推荐项目列表术后管理标地点（IN 分配后写分配结果）',function(){
     var mk = function(arr){ return arr.map(function(a){ return {mgmt:a[0], name:a[0], times:1, interval:1, place:a[2], startDay:a[1]}; }); };

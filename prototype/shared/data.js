@@ -5296,6 +5296,8 @@ var LOCAL_ITEM_COLORS = {'进行中':['#FBF0C9','#8F6F0C'], '已完成':['var(--
 
 function localItemStatus(u){ return u.status==='done' ? '已完成' : u.status==='cancelled' ? '已取消' : '进行中'; }
 
+/* CMD-1110-05：页头会出现［+ 添加本地管理］的案件（和 renderCaseHeaderActions 的 lmOkCase 同一个判断）= 子记录，或不是纯本地的面诊 / 赴韩案件 */
+function inHeaderLocalOk(c){ return isChildVisit(c) ? true : (!isLocalCase(c) && (c.consultRequested || c.needsConsult===true)); }
 function mgmtActiveHtml(c, scope){
   var ctx = ctxOf(c, scope);
   var rows = (ctx.mgmtUses||[]).map(function(u,i){
@@ -5305,10 +5307,8 @@ function mgmtActiveHtml(c, scope){
       '<span style="font-size:12px;color:var(--slate2);margin-right:10px;">使用 '+u.qty+' 次</span>'+
       '<span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+st+'</span>'+rowBtns+'</div>';
   }).join('');
-  var btns = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">'+
-    '<button class="btn-primary" style="margin-left:auto;" onclick="mgmtComplete(\''+scope+'\')">全部完成</button></div>'+
-    '<div style="font-size:12px;color:var(--muted);margin-top:8px;">每一行点［完成］或［取消］；［全部完成］把所有进行中的项目一次标完成。取消的次数归还到客户持有项目，<b>不是退款</b>。</div>'+
-    '<div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--slate2);">同一次到店里还可以：</span>'+
+  /* CMD-1110-05：本地管理卡只能一行一行按［完成］/［取消］——没有［全部完成］、没有说明文字；来访进行中的案件统一用页头的［+ 添加本地管理］（使用持有 / 购买新项目），这里不再有两个「继续」按钮。页头没有那个按钮的案件（纯本地案件）才保留这一行入口 */
+  var btns = inHeaderLocalOk(c) ? '' : '<div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;color:var(--slate2);">同一次到店里还可以：</span>'+
     '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'use\')">继续使用持有项目</button>'+
     (usePrevBuyOk(c, scope) ? '<button class="btn-ghost" onclick="usePrevBuy()">新增项目</button>' : '<button class="btn-ghost" onclick="setMgmtAdd(\''+scope+'\',\'buy\')">继续选购项目</button>')+'</div>';
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">本地管理</div>'+rows+btns+'</div>';
@@ -5379,7 +5379,7 @@ function localCarriedDoneHtml(c){
   var uses = (c.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
   var buys = (c.settlementBatches||[]).filter(function(b){ return (b.inItems||[]).length; }).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.inItems.map(function(i){ return i.name+(i.qty>1 ? ' ×'+i.qty : ''); }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">本地管理（已完成的项目）</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">没有记录</div>')+
-    (localAddAllowed(c) ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="carriedContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="carriedContinue(\'use\')">继续使用持有项目</button></div>' : '<div style="font-size:12px;color:var(--muted);margin-top:12px;">本地管理只能在到店当天添加，今天不能再继续选购 / 使用。</div>')+'</div>';
+    ((localAddAllowed(c) && !inHeaderLocalOk(c)) ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="carriedContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="carriedContinue(\'use\')">继续使用持有项目</button></div>' : '<div style="font-size:12px;color:var(--muted);margin-top:12px;">本地管理只能在到店当天添加，今天不能再继续选购 / 使用。</div>')+'</div>';
 }
 function carriedContinue(what){
   var c = getCurrentCase(); if(!c || c.localMgmt || isEnded(c)) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */ 
@@ -5394,7 +5394,7 @@ function localMgmtTabHtml(c){
     var uses = (lm.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
     var buys = (lm.batches||[]).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.items.map(function(i){ return i.name+' ×'+i.qty; }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
     if(localCarried(c)){ uses = (c.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次</span></div>'; }).join('')+uses; } /* 增加面诊的本地案件：把之前做过的也列出来 */
-    var open = !isEnded(c) && !c.visitClosed && localAddAllowed(c), more = open ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="lmContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="lmContinue(\'use\')">继续使用持有项目</button></div>' : '';
+    var open = !isEnded(c) && !c.visitClosed && localAddAllowed(c), more = (open && !inHeaderLocalOk(c)) ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="lmContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="lmContinue(\'use\')">继续使用持有项目</button></div>' : '';
     return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">'+(open ? '本地管理（已完成的项目）' : '本地管理（本次购买与使用记录）')+'</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">本次本地管理没有购买也没有使用</div>')+more+'</div>';
   }
   if(lm.mgmtActive) return mgmtActiveHtml(c, 'lm')+(lm.addUse ? '<div style="margin-top:12px;">'+holdingsUseHtml(c,'lm')+'</div>' : '')+(lm.addBuy ? '<div style="margin-top:12px;">'+lmBuyHtml(c)+'</div>' : '');
