@@ -10786,6 +10786,44 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   /* ===== CMD-1110-18 ===== */
   /* ===== CMD-1110-19 ===== */
+  /* ===== CMD-1110-24 ===== */
+  ST.def('R299a','CMD-1110-24（KM1 分页，pcStage + stageC 夹具）：今日项目 / 进行项目表里管理项目行、施术行也有下划线「今日取消」（在［操作完成］左边）；管理项目取消 = 次数退回、行拿掉；施术取消 = 原因必填、退回待重新预约、不动钱；术后管理行照旧',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0], r1 = krAllCases().filter(function(x){ return /^T-待到院/.test(x.name); })[0]; if(!ST.ok(!!r0 && !!r1, '先 ST.ensureFixtures([\'pcStage\',\'stageC\'])')) return;
+    var day = todayStr(), nm = 'R299管理项目', al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    try{
+    /* 管理项目：非施术日子案件页 */
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.subItems = c.subItems.filter(function(x){ return !/^q299/.test(x.id); });
+      c.subItems.push({id:'q299a', no:c.caseNo+'-92', kind:'术后管理记录', place:'KR', date:day, time:'17:00', content:'术后管理（术后复诊检查，在韩国）', projectName:'假体隆鼻', arrived:true, simDay:true});
+      c.procedureItems = c.procedureItems.filter(function(x){ return x.name!==nm; }); var it0 = {name:nm, origin:'KR', mgmtPlan:true, heldOver:true, qty:3, holdUsed:0, price:0, batchId:'r299', krAddOn:true}; c.procedureItems.push(it0); itemIid(it0); subCaseNos(c); return true; });
+    var dk = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var v0 = visitsOf(c).filter(function(x){ return x.place==='KR' && x.date===day; })[0]; return v0 ? v0.key : ''; });
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krOpenDay(r0.clinicId, r0.id, dk); KR_CASE.id = r0.id;
+    var iid = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return itemIid(c.procedureItems.filter(function(x){ return x.name===nm; })[0]); });
+    krTpToggle('mg', iid, true); krDayAddToggle(r0.id+'|'+dk); krTpToggle('mg', iid, true); krDamQty('mg', iid, 1); krDayAddConfirm();
+    var rowOf = function(txt){ return [].slice.call(document.getElementById('krcase-body').querySelectorAll('div')).filter(function(d){ return d.style && /grid/.test(d.style.display||'') && d.children.length===4 && d.innerText.indexOf(txt)>-1; })[0]; };
+    var rw = rowOf(nm); ST.ok(!!rw, '管理项目行在今日项目表里：'+!!rw);
+    var ops = rw.lastElementChild, kids = [].slice.call(ops.children).filter(function(x){ return /今日取消|操作完成/.test(x.innerText); });
+    ST.ok(kids.length===2 && kids[0].tagName==='A' && /今日取消/.test(kids[0].innerText) && kids[1].tagName==='BUTTON', '管理项目行：下划线「今日取消」在左、［操作完成］在右：'+ops.innerText.replace(/\s+/g, ' '));
+    var qBefore = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return {left:holdItemLeft(c, itemByKey(c, iid)), today:mgTodayQty(c, itemByKey(c, iid))}; });
+    krTodayCancel('row', (Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return (c.subItems||[]).filter(function(s){ return s.holdUseOf && s.useNow && !s.done; })[0].id; })), nm); window.__krTcGo();
+    var qAfter = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return {left:holdItemLeft(c, itemByKey(c, iid)), today:mgTodayQty(c, itemByKey(c, iid))}; });
+    ST.ok(qBefore.today===2 && qAfter.today===0 && qAfter.left===qBefore.left && !rowOf(nm), '今日取消：这一项从今日项目拿掉，持有次数不变（没扣）：'+JSON.stringify([qBefore, qAfter]));
+    /* 术后管理行照旧 */
+    var care = rowOf('术后复诊检查'); ST.ok(!!care && /今日取消/.test(care.lastElementChild.innerText) && /操作完成/.test(care.lastElementChild.innerText), '术后管理行：今日取消 + 操作完成（和以前一样）');
+    /* 施术：施术当天 */
+    var td = day; Store.mutateClinic(r1.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]; var ks = c.krSchedule; ks.confirmedDate = td; ks.confirmedTime = '11:00'; ks.status = 'arrived'; c.hasArrived = true; c.krArrivedDay = td; c.krBalancePaid = true; c.krJudge = {result:'ok'}; c.krProcedureDone = false; c.visitClosed = false; c.stay = c.stay || {in:ymdAdd(td, -1), out:ymdAdd(td, 9), inTime:'10:00', outTime:'12:00'}; c.todayPicked = true; syncSurgerySub(c); subCaseNos(c); return true; });
+    var sk = Store.withClinic(r1.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]; var v0 = visitsOf(c).filter(function(x){ return x.place==='KR' && krIsSurgDay(c, x); })[0]; return v0 ? v0.key : ''; });
+    krShowCase(r1.clinicId, r1.id, {here:true, tab:'items'}); krOpenDay(r1.clinicId, r1.id, sk); KR_CASE.sdFor = ''; KR_CASE.subTab = 'run'; krRenderCaseDetail();
+    var sw = rowOf('施术'), money0 = Store.withClinic(r1.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]; return JSON.stringify([c.settlementBatches.map(function(b){ return [b.status, b.krDeposit]; }), c.refunds||[], c.depositDue||null]); });
+    var lnk = sw && [].slice.call(sw.lastElementChild.children).filter(function(x){ return /今日取消/.test(x.innerText); })[0];
+    ST.ok(!!sw && !!lnk && lnk.tagName==='A' && /krSurgTodayCancelOpen/.test(lnk.getAttribute('onclick')), '施术行：有下划线「今日取消」（调 krSurgTodayCancelOpen）：'+(sw ? sw.lastElementChild.innerText.replace(/\s+/g, ' ') : '无施术行'));
+    if(lnk){ var snm = (lnk.getAttribute('onclick').match(/krSurgTodayCancelOpen\('([^']*)'/)||[])[1]; lnk.click(); var so = document.getElementById('kr-stc-overlay'); ST.ok(so && so.classList.contains('open') && /原因/.test(so.innerText) && /不退款/.test(so.innerText), '弹原因必填的窗，写明不退款 / 不动钱');
+      krSurgTodayCancelGo(); ST.ok(so.classList.contains('open') || document.getElementById('kr-stc-err').style.display==='block', '不填原因不能确认');
+      document.getElementById('kr-stc-why').value = 'R299 身体不适'; krSurgTodayCancelGo();
+      var st = Store.withClinic(r1.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]; var it = c.procedureItems.filter(function(x){ return buyName(x.name)===buyName(decodeURIComponent(snm)) || x.name===snm; })[0]; return {rw:!!(it && it.rebookWait), defer:!!(it && it.deferUse), money:JSON.stringify([c.settlementBatches.map(function(b){ return [b.status, b.krDeposit]; }), c.refunds||[], c.depositDue||null])}; });
+      ST.ok(st.rw && st.defer && st.money===money0, '施术取消：退回待重新预约，钱没动（结算单 / 退款 / 退定金待办都没变）：'+JSON.stringify(st).slice(0, 120)); }
+    } finally { window.alert = al; window.confirm = cf; }
+  });
   /* ===== CMD-1110-23 ===== */
   ST.def('R298a','CMD-1110-23（KM1 分页，pcStage 夹具）：今日项目表操作栏——没做的行「今日取消」（下划线）在［操作完成］左边；做完「已完成」+［撤回完成］、没有「今日取消」；KR 子案件页头 = 主案件页头（同一个函数，第一行有状态标签 + 面诊 / 施术次数）',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
