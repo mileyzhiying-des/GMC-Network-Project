@@ -989,8 +989,16 @@ function krSrcLast(grid, cells){
   var rest = grid.slice(pre.length), k = rest.indexOf(';');
   return ['grid-template-columns:'+rest.slice(0, k)+' '+KR_SRC_W+rest.slice(k), cells.slice(1).concat([cells[0]])];
 }
-function krRowDiv(grid, cells, align){ var r0 = krSrcLast(grid, cells); grid = r0[0]; cells = r0[1]; return '<div style="display:grid;'+grid+'gap:8px;align-items:'+(align||'center')+';padding:7px 0;border-top:1px solid var(--border2);font-size:12px;">'+cells.join('')+'</div>'; }
-function krHeadDiv(grid, cols){ var r0 = krSrcLast(grid, cols); grid = r0[0]; cols = r0[1]; return '<div class="kr-pc-head" style="display:grid;'+grid+'gap:8px;font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+cols.map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; }
+/* CMD-1110-15：［增加今日项目］弹窗里的表格没有「操作」「其他」两栏（里面是空的）——在把「来源」挪到最后之前先把这两栏（来源后面的最后两栏）去掉 */
+var KR_PC_MODAL = false;
+function krModalTrim(grid, cells){
+  if(!KR_PC_MODAL) return [grid, cells];
+  var pre = 'grid-template-columns:'+KR_SRC_W+' ', g = String(grid); if(g.indexOf(pre)!==0 || cells.length<4) return [grid, cells];
+  var body = g.slice('grid-template-columns:'.length), k = body.indexOf(';'), toks = body.slice(0, k).split(' ');
+  return ['grid-template-columns:'+toks.slice(0, -2).join(' ')+body.slice(k), cells.slice(0, -2)];
+}
+function krRowDiv(grid, cells, align){ var t0 = krModalTrim(grid, cells); grid = t0[0]; cells = t0[1]; var r0 = krSrcLast(grid, cells); grid = r0[0]; cells = r0[1]; return '<div style="display:grid;'+grid+'gap:8px;align-items:'+(align||'center')+';padding:7px 0;border-top:1px solid var(--border2);font-size:12px;">'+cells.join('')+'</div>'; }
+function krHeadDiv(grid, cols){ var t0 = krModalTrim(grid, cols); grid = t0[0]; cols = t0[1]; var r0 = krSrcLast(grid, cols); grid = r0[0]; cols = r0[1]; return '<div class="kr-pc-head" style="display:grid;'+grid+'gap:8px;font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+cols.map(function(x){ return '<span>'+x+'</span>'; }).join('')+'</div>'; }
 function krOpsCell(h){ return '<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+(h||'')+'</span>'; }
 function krPcGrid(){ return 'grid-template-columns:'+KR_SRC_W+' minmax(0,1.6fr) minmax(0,.9fr) minmax(0,1.4fr) '+KR_OPS_W+' '+KR_OTH_W+';'; } /* CMD-1109-18 二：三个分页「项目｜次数｜预约时间｜操作｜其他｜来源」同一套列宽（和 krMgGridB 一致） */ /* CMD-1015-30：分页本身就是类型，拿掉「项目类型」栏 */
 function krPcHead(cols){ var cs = cols.filter(function(x){ return x!=='项目类型'; }); cs.pop(); return krHeadDiv(krPcGrid(), ['来源'].concat(cs, ['操作', '其他'])); }
@@ -1125,7 +1133,8 @@ function mgTodayQty(c, it){
   (c.subItems||[]).forEach(function(s){ if(rowOwnedBy(it, s) && !s.done && !s.skipped && s.useNow && s.date===td) n += Math.max(1, parseInt(s.useQty, 10)||1); });
   return n;
 }
-function krProjCards(c, opts){
+function krProjCards(c, opts){ var prevM = KR_PC_MODAL; KR_PC_MODAL = !!(opts && opts.modal); try{ return krProjCards0(c, opts); } finally { KR_PC_MODAL = prevM; } }
+function krProjCards0(c, opts){
   opts = opts || {}; var pickMode = !!opts.pick, can = krCan(), tg = coreUseTarget(c), paid = !!c.krBalancePaid && !c.krTripEnded, ks = c.krSchedule || {}; /* 韩国行程结束后不能再建到院（CMD-1021-16） */
   var allItems = krAllItems(c), surg = allItems.filter(function(it){ return !krIsMgmtItemC(it); }), mgItems = allItems.filter(krIsMgmtItemC);
   var itOf = function(name){ return allItems.filter(function(x){ return x.iid && x.iid===name; })[0] || allItems.filter(function(x){ return x.name===name; })[0]; };
@@ -1243,7 +1252,8 @@ function krProjCards(c, opts){
     if(!it.heldOver && !it.service){ mU.push(krMgRow(nm, (it.heldOver ? '' : mgmtQtyText(it)+' ')+'<span style="color:#B3261E;">'+(it.pendingPay ? '待付款' : '待付尾款')+'</span>', ivT, krMgSuggest(c, it, 0) || '—', krBuyTime(c, it), useBtns(ik, true), null, delBtn(ik), SG)); return; }
     var planned = (c.subItems||[]).filter(function(s){ return rowOwnedBy(it, s) && !s.done && !s.skipped && !s.useNow; }), plannedN = planned.reduce(function(n, s){ return n+Math.max(1, parseInt(s.useQty, 10)||1); }, 0), left = holdItemLeft(c, it) - plannedN, used = (it.holdUsed||0), todayN = mgTodayQty(c, it); /* 本次使用加进今天的行不算已预约：项目卡写「剩 3 / 共 3 次 · 今天使用 2 次」，做完（操作完成）才扣（CMD-1021-14 四） */
     if(pickMode){ /* 选今日进行项目的勾选画面：照旧一行 */
-      if((left>0 || todayN>0) && !it.holdDone) mU.push(krMgRow(nm, '剩 '+left+' / 共 '+qty+' 次'+(todayN ? ' · 今天使用 '+todayN+' 次' : '')+(it.pendingPay ? ' <span style="color:#B3261E;">待付款</span>' : ''), ivT, krMgSuggest(c, it, used+plannedN) || '—', krBuyTime(c, it), useBtns(ik, false), {kind:'mg', name:ik}, delBtn(ik), SG));
+      var availN = left-todayN; /* CMD-1110-15：可选次数 = 剩余 − 今天已经加进「今日项目」表的次数（不管做完没）；扣完 = 0 的不列 */
+      if(availN>0 && !it.holdDone) mU.push(krMgRow(nm, '剩 '+availN+' / 共 '+qty+' 次'+(it.pendingPay ? ' <span style="color:#B3261E;">待付款</span>' : ''), ivT, krMgSuggest(c, it, used+plannedN) || '—', krBuyTime(c, it), useBtns(ik, false), {kind:'mg', name:ik}, delBtn(ik), SG));
     } else {
       /* CMD-1025-03 二：未预约 = 还没排日子的次数（剩余 − 已排的预约行 − 今天已选进到院的），照旧显示建议时间 / 建议日期；已预约 = 预约行 + 今天要用的（预约时间 = 今天到院的时间，操作［本次取消］），不显示建议 */
       var bk = holdItemBookable(c, it), kn = it.heldOver ? Math.min(stayKeepN(c, 'mg|'+ik), Math.max(0, bk)) : 0; /* CMD-1028-10 四：保留的次数不进未预约，另放「保留」组 */
@@ -1257,13 +1267,15 @@ function krProjCards(c, opts){
     krUseEntries(it).forEach(function(e){ dM.push(krUsedRow(c, it, e, nm)); });
   });
   mB = mBk.sort(function(a, b){ return a.k < b.k ? -1 : a.k > b.k ? 1 : 0; }).map(function(x){ return x.h; });
+  if(opts.modal){ mB = []; } /* CMD-1110-15：［增加今日项目］弹窗只留还能做的（不列预约中、已完成） */
   var mgBody = (pickMode ? '' : krMgSecB('预约中', mB))+krMgSec('未预约', '购买时间', mU, (can && paid && !c.visitClosed && !pickMode && krCbMgItems(c).length>0) ? krOutBtn('全部预约', 'krCbOpen({all:true, tab:\'mgmt\'})', true, '', true) : '')+(pickMode ? krMgSec('预约中', '预约时间', mB) : '')+(pickMode ? '' : krMgSecK('保留', mK)); /* CMD-1020-07：已使用也装进圆角卡 */
   /* CMD-1021-14 一：四个 tab：施术｜术后管理｜管理｜已完成；N = 0 的灰掉不能点；默认第一个还有内容的；前三个只放未使用 / 已预约；已完成按三组、每次实际使用一行 */
   dC.sort(function(a, b){ return a.key < b.key ? 1 : -1; });
   var nCnt = {surg:sU.length+sW.length+sB.length, care:pU.length+pB.length+pI.length+pK.length, mgmt:mU.length+mB.length+mK.length, done:dS.length+dC.length+dM.length};
   if(opts.only==='care') return krCardBox('术后管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">韩国 + 印尼都在这里；韩国的由 KR 预约，印尼的由 IN 预约（这里只读）</span>', '<div>'+(careBody || krEmpty('这个案件没有术后管理'))+'</div>'); /* CMD-1023-03 P2；CMD-1025-01 八：独立 tab 不再套固定高度滚动区（原来只露出前 2 项） */
   /* CMD-1028-08 二：子案件的项目卡加回术后管理（主案件的赴韩施术 tab 不加，主案件有自己的术后管理 tab） */
-  if(opts.noMgmt){ nCnt.mgmt = 0; nCnt.done = dS.length+dC.length; } /* CMD-1028-09：主案件「赴韩施术」tab 的项目卡只有施术项目（和已完成的施术）；管理项目搬到「在韩管理」tab */
+  if(opts.noMgmt){ nCnt.mgmt = 0; nCnt.done = dS.length+dC.length; }
+  if(opts.modal){ nCnt.done = 0; } /* CMD-1028-09：主案件「赴韩施术」tab 的项目卡只有施术项目（和已完成的施术）；管理项目搬到「在韩管理」tab */
   var order4 = (opts.care ? (opts.noCare ? ['surg', 'mgmt', 'done'] : ['surg', 'care', 'mgmt', 'done']) : (opts.noMgmt ? ['surg', 'done'] : ['surg', 'mgmt', 'done'])), pg = (order4.indexOf(KR_PROJ_PAGE)>-1 && nCnt[KR_PROJ_PAGE]>0) ? KR_PROJ_PAGE : (order4.filter(function(x){ return nCnt[x]>0; })[0] || 'done');
   var pill = function(kk, label){ var on = pg===kk, off = nCnt[kk]===0; if(off) return ''; /* CMD-1025-04 C：没有项目的分类整个不显示 */ return '<span '+(off ? 'title="没有内容" ' : 'onclick="krProjPage(\''+kk+'\')" ')+'style="'+(off ? 'cursor:not-allowed;opacity:.4;' : 'cursor:pointer;')+'padding:7px 18px;border-radius:999px;font-size:13px;font-weight:600;'+(on ? 'background:var(--navy,#3B2F2A);color:#fff;' : 'background:var(--bg-sidebar,#EFEBE4);color:var(--slate2);')+'">'+label+'（'+nCnt[kk]+'）</span>'; };
   var seg = '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+pill('surg', '施术项目')+(opts.care ? pill('care', '术后管理') : '')+pill('mgmt', '管理项目')+pill('done', '已完成')+'</div>';
@@ -1271,7 +1283,7 @@ function krProjCards(c, opts){
   var doneBody = doneSec('施术项目', krUsedHead(), dS)+doneSec('术后管理', krUsedHead(), dC.map(function(e){ return e.html; }))+(opts.noMgmt ? '' : doneSec('管理项目', krUsedHead(), dM))+cancelSec;
   if(opts.only==='mgmt') return krCardBox('在韩管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">管理项目只在韩国做，由 KR 预约；行程结束时没用完的转韩国持有</span>', '<div class="kr-pc-scroll">'+((mgBody || dM.length) ? mgBody+(dM.length ? '<div class="kr-pc-block"><div class="kr-pc-sec-title" style="margin:12px 0 0;font-size:12px;font-weight:700;">已完成 <span style="font-weight:400;color:var(--muted);">'+dM.length+'</span></div><div style="border:1px solid var(--border2);border-radius:12px;padding:6px 18px 8px;margin-top:6px;background:#fff;">'+krUsedHead()+dM.join('')+'</div></div>' : '') : krEmpty('这个案件没有管理项目'))+'</div>')+krAddOnCard(c); /* CMD-1028-09 */
   var addBtn = (can && canAddOnNow(c)) ? '<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="krAddModalOpen()">+ 购买新项目</button>' : ''; /* CMD-1021-14 二：改成 Modal */
-  var body = pg==='surg' ? (surgBody || krEmpty('这个案件没有施术项目')) : pg==='care' ? (careBody || krEmpty('这个案件没有术后管理')) : pg==='mgmt' ? (mgBody || krEmpty('这个案件没有管理项目')) : (doneBody || krEmpty('还没有已完成的项目'));
+  var body = pg==='surg' ? (surgBody || krEmpty('这个案件没有施术项目')) : pg==='care' ? (careBody || krEmpty('这个案件没有术后管理')) : pg==='mgmt' ? (mgBody || krEmpty('这个案件没有管理项目')) : (opts.modal ? krEmpty('今天没有还能再加的项目') : (doneBody || krEmpty('还没有已完成的项目')));
   return krCardBox('<div style="display:flex;align-items:center;gap:12px;"><span>项目卡</span><span style="flex:1;"></span>'+addBtn+'</div>', '<div style="margin-bottom:6px;">'+seg+'</div><div class="kr-pc-scroll">'+body+'</div>'+((pickMode && !opts.modal) ? krTodayPickBar(c) : ''))+(opts.modal ? '' : krAddOnCard(c));
 }
 /* CMD-1023-03 补：「赴韩」tab 不再放到院卡，改成「相关的日子」列表——一行一天（日期、地点、这天做了什么、状态），点了进那一天的子案件页；到院操作只在子案件页做 */
@@ -3047,7 +3059,9 @@ function krVisitWhat(c, cd){
   var out = []; rows.forEach(function(s){ var t = krRowType(c, s); if(out.indexOf(t)<0) out.push(t); });
   if(cd.kind==='main' && out.indexOf('施术')<0) out.unshift('施术');
   var ordT = ['施术', '术后管理', '管理项目']; out.sort(function(a, b){ return ordT.indexOf(a)-ordT.indexOf(b); }); /* 施术 → 术后管理 → 管理项目（CMD-1019-21） */
-  return out.join('、') || (cd.kind==='main' ? '施术' : '术后管理');
+  /* CMD-1110-15：和子案件名称（dayNameOf）同一个写法——施术项目 · 术后管理 · 在韩管理，用「 · 」连 */
+  var nm = {'施术':'施术项目', '管理项目':'在韩管理'};
+  return out.map(function(t){ return nm[t] || t; }).join(' · ') || (cd.kind==='main' ? '施术项目' : '术后管理');
 }
 /* CMD-1020-06：这次到院有施术（或院长操作项目）→ 标题行写「院长：KD1」；没有就不写 */
 function krVisitDirTag(c, cd){

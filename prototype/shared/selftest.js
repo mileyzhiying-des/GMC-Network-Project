@@ -10754,6 +10754,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1110-11：状态卡今日到访用子案件名称 + 查看备注 MM-DD + 所有本地管理行都用表格 */
+  ST.def('R291a','CMD-1110-15（KM1 分页，pcStage 夹具）：［增加今日项目］弹窗——可选次数 = 剩余 − 今天已加的次数（扣完不列）、没有「已完成」分页、没有「操作」「其他」空栏；今日项目卡标题用「 · 」',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0]; if(!ST.ok(!!r0, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var day = todayStr(), snap = null, al = window.alert; window.alert = function(){};
+    Store.withClinic(r0.clinicId, function(){ snap = JSON.stringify(CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]); });
+    var gc = function(){ return krFindCase(r0.clinicId, r0.id).c; }, ov = function(){ return document.getElementById('kr-dayadd-overlay'); }, otx = function(){ return ov().innerText.replace(/\s+/g, ' '); };
+    try{
+      Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.subItems = c.subItems.filter(function(x){ return !/^q291/.test(x.id); });
+        c.subItems.push({id:'q291a', no:c.caseNo+'-95', kind:'术后管理记录', place:'KR', date:day, time:'17:00', content:'术后管理（术后复诊检查，在韩国）', projectName:'假体隆鼻', arrived:true, simDay:true});
+        [['R291单次', 1], ['R291三次', 3]].forEach(function(a){ if(!c.procedureItems.some(function(x){ return x.name===a[0]; })){ var it0 = {name:a[0], origin:'KR', mgmtPlan:true, heldOver:true, qty:a[1], holdUsed:0, price:0, batchId:'r291', krAddOn:true}; c.procedureItems.push(it0); itemIid(it0); } }); subCaseNos(c); return true; });
+      var dk = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var v0 = visitsOf(c).filter(function(x){ return x.place==='KR' && x.date===day; })[0]; return v0 ? v0.key : ''; });
+      krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krOpenDay(r0.clinicId, r0.id, dk); KR_CASE.id = r0.id;
+      var iidOf = function(n){ return Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return itemIid(c.procedureItems.filter(function(x){ return x.name===n; })[0]); }); };
+      var a = iidOf('R291单次'), b = iidOf('R291三次');
+      krDayAddToggle(r0.id+'|'+dk); ST.ok(/R291单次/.test(otx()) && /R291三次/.test(otx()) && /剩 1 \/ 共 1 次/.test(otx()) && /剩 3 \/ 共 3 次/.test(otx()), '没加过：两个都列，写剩 1 / 共 1 和 剩 3 / 共 3：'+otx().slice(0, 220));
+      ST.ok(!/已完成（\d+）/.test(otx()), '弹窗没有「已完成」分页');
+      var heads = [].slice.call(ov().querySelectorAll('.kr-pc-head')).map(function(h){ return h.innerText.replace(/\s+/g, ' '); }).join('|'); ST.ok(heads && !/操作|其他/.test(heads), '弹窗表头没有「操作」「其他」：'+heads);
+      var row = ov().querySelector('input[type=checkbox]'); var cells = row ? row.closest('div[style*="grid"]').children.length : 0, hc = ov().querySelector('.kr-pc-head') ? ov().querySelector('.kr-pc-head').children.length : 0; ST.ok(cells===hc && hc>0, '表头 / 数据行栏数一致：'+hc+'/'+cells);
+      krTpToggle('mg', a, true); krTpToggle('mg', b, true); krDayAddConfirm();
+      ST.ok(!ov().classList.contains('open'), '确认后弹窗关闭');
+      krDayAddToggle(r0.id+'|'+dk);
+      ST.ok(!/R291单次/.test(otx()), '只剩 1 次的、今天已加 1 次 → 不列：'+otx().slice(0, 200));
+      ST.ok(/R291三次/.test(otx()) && /剩 2 \/ 共 3 次/.test(otx()), '剩 3 次加了 1 次 → 写剩 2 / 共 3 次：'+otx().slice(0, 200));
+      krDayAddClose();
+      var host = document.getElementById('kr-casedetail').innerText; ST.ok(!/术后管理、管理项目|管理项目、术后管理|施术、术后管理/.test(host), '今日项目卡标题没有顿号');
+      ST.ok(/今天 [0-9:]+ · (施术项目 · )?(术后管理 · 在韩管理|术后管理)/.test(host.replace(/\s+/g, ' ')) || /在韩管理/.test(host), '标题写子案件名称（术后管理 · 在韩管理）：'+(host.replace(/\s+/g, ' ').match(/今天 [0-9:]+ ·[^|]{0,40}/)||[''])[0]);
+    } finally { window.alert = al; krDayAddClose(); var s0 = JSON.parse(snap); Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
+  });
   ST.def('R290a','CMD-1110-14（A1 分页）：页头按钮固定（对话 / 增加面诊只在没有面诊时 / 添加本地管理 + 客人离店一直有，含纯本地）；tab 跟着实际发生的事（没用没有本地项目 tab；买了才有结算）；购买走弹窗、付完款本地项目 tab 没有结算单；［不使用］弹「客人准备离店了吗？」（有面诊在进行时不弹）；旧资料卡在选购画面可回到使用持有',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
