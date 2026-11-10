@@ -5143,7 +5143,7 @@ function krMainStatusBar(r, c){ /* CMD-1027-02 二：两行——当前状态（
   var nLive = days.filter(function(v){ return v.state==='arrived' || v.state==='unconfirmed'; }).length, nBook = days.filter(function(v){ return v.state==='waiting' && v.date>=today; }).length;
   var btn = function(label, on){ return '<a href="#" style="font-size:12px;text-decoration:underline;color:var(--terracotta);" onclick="'+on+';return false;">'+label+'</a>'; }; /* CMD-1110-06：［查看］［查看内容］= 下划线文字按钮（CMD-1110-09：小一号 12px、品牌棕） */
   var view = function(v){ return btn('查看内容', 'krOpenDay(\''+cid+'\',\''+id+'\',\''+krMainDayKey(v)+'\')'); };
-  var biz = function(v){ return krMainDayTypes(v); };
+  var biz = function(v){ return dayNameOf(v); }; /* CMD-1110-11：今日到访用子案件名称（和「下一个预约」同一个 dayNameOf），不再写「赴韩项目」 */
   var row2 = '', tdy = days.filter(function(v){ return v.date===today; }).sort(function(a, b){ return (a.time||'').localeCompare(b.time||''); });
   var tdyOpen = tdy.filter(function(v){ return v.state!=='left' && v.state!=='ended'; }); /* CMD-1110-06：今天的到访已结束就切成「下一个预约」 */
   if(tdyOpen.length){

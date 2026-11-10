@@ -3006,15 +3006,14 @@ function inContTodayHtml(c, M, kind){ /* CMD-1026-17：kind = 'care' | 'local' �
     else ops = '<button class="btn-outline" style="'+bt+'" onclick="openCareUse(\'main\',\''+r.c.id+'\',\''+s.id+'\')">操作完成</button> <button class="btn-outline" style="'+bt+'" onclick="careNotToday(\''+c.id+'\',\''+s.id+'\')">本次不做</button>';
     out.push('<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+pillT('术后管理', 'var(--terracotta-bg)', 'var(--terracotta)')+'</span><span>'+e(nm)+'</span><span style="font-size:12px;">'+e(surgName||'—')+'</span><span style="font-size:12px;">1 次</span><span style="font-size:12px;">今天'+(r.bk && r.bk.time ? ' '+e(r.bk.time) : '')+'</span><span style="display:flex;gap:6px;flex-wrap:wrap;">'+ops+'</span></div>');
   });
-  (kind==='care' ? [] : M.uses).forEach(function(x){
-    var u = x.u, ops = x.st==='已完成' ? '<span style="font-size:12px;color:var(--sage);">已完成</span>' : (ro ? '<span style="font-size:12px;color:var(--muted);">只读</span>' : '<button class="btn-outline" style="'+bt+'" onclick="markMgmtRows(\''+x.scope+'\',\'done\',false,'+x.i+')">操作完成</button> <button class="btn-outline" style="'+bt+'" onclick="markMgmtRows(\''+x.scope+'\',\'cancelled\',false,'+x.i+')">本次不做</button>');
-    out.push('<div style="'+grid+'padding:8px 0;border-top:1px solid var(--border2);font-size:13px;"><span>'+pillT('本地管理', 'var(--sage-bg)', 'var(--sage)')+'</span><span>'+e(u.itemName)+(u.opt ? ' <span style="font-size:12px;color:var(--muted);">'+e(u.opt)+'</span>' : '')+'</span><span>'+inLocalNoteCell(c, x.scope, x.i, u, ro)+'</span><span style="font-size:12px;">'+(u.qty||1)+' 次</span><span style="font-size:12px;">今天</span><span style="display:flex;gap:6px;flex-wrap:wrap;">'+ops+'</span></div>');
-  });
+  /* CMD-1110-11：本地项目行不再混在这张「项目类型｜项目｜…」表里，改成下面一张本地管理表格（项目｜历史施术次数｜备注｜状态｜操作） */
   if(kind==='local'){ /* CMD-1110-10：子案件页「本地管理」tab 今天用的本地项目 = 同一个表格（项目｜历史施术次数｜备注｜状态｜操作，含已取消的行） */
     var lr = []; [['lm', c.localMgmt], ['main', localCarried(c) ? c : null]].forEach(function(p0){ var ctx0 = p0[1]; if(!ctx0) return; (ctx0.mgmtUses||[]).forEach(function(u0, i0){ lr.push({u:u0, scope:p0[0], i:i0}); }); });
     return '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;margin-bottom:6px;">今天用的本地项目'+(M.src ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">（继续 '+e(M.src.caseNo)+'）</span>' : '')+'</div>'+(lr.length ? localMgmtTableHtml(c, lr, ro) : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">今天还没有要做的项目（到下面按［本次使用］勾选）</div>')+'</div>';
   }
-  return '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;margin-bottom:6px;">'+(kind ? '今天' + (kind==='care' ? '做的术后管理' : '用的本地项目') : '今日项目')+(M.src ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">（继续 '+e(M.src.caseNo)+'）</span>' : '')+'</div>'+(out.length ? inSmallCard(head+out.join('')) : '<div style="font-size:12px;color:var(--muted);padding:8px 0;">'+(kind ? '今天还没有要做的项目' : '今天还没有要做的项目')+'（到下面按［本次使用］勾选）</div>')+'</div>';
+  var lr2 = []; if(!kind){ [['lm', c.localMgmt], ['main', localCarried(c) ? c : null]].forEach(function(p0){ var ctx0 = p0[1]; if(!ctx0) return; (ctx0.mgmtUses||[]).forEach(function(u0, i0){ lr2.push({u:u0, scope:p0[0], i:i0}); }); }); }
+  var empty2 = '<div style="font-size:12px;color:var(--muted);padding:8px 0;">今天还没有要做的项目（到下面按［本次使用］勾选）</div>';
+  return '<div class="card" style="padding:22px 24px;"><div style="font-size:14px;font-weight:700;margin-bottom:6px;">'+(kind ? '今天' + (kind==='care' ? '做的术后管理' : '用的本地项目') : '今日项目')+(M.src ? ' <span style="font-weight:400;font-size:12px;color:var(--muted);">（继续 '+e(M.src.caseNo)+'）</span>' : '')+'</div>'+(out.length ? inSmallCard(head+out.join('')) : (lr2.length ? '' : empty2))+(lr2.length ? '<div style="font-size:12px;font-weight:700;margin:12px 0 0;">本地管理</div>'+localMgmtTableHtml(c, lr2, ro) : '')+'</div>';
 }
 function inContRestHtml(c, M, kind){
   M = M || inContModel(c);
@@ -5420,7 +5419,8 @@ function lmContinue(what){ var c = getCurrentCase(); if(!c || !c.localMgmt) retu
 function lmSetStep(step){ var c=getCurrentCase(); if(!c||!c.localMgmt) return; c.localMgmt.step = step; renderCaseBody(c); }
 
 function localCarriedDoneHtml(c){
-  var uses = (c.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
+  var uses = localMgmtTableHtml(c, (c.mgmtUses||[]).map(function(u, i){ return {u:u, scope:'main', i:i}; }), true); /* CMD-1110-11：已完成的项目列表也用本地管理表格 */
+  if(!(c.mgmtUses||[]).length) uses = '';
   var buys = (c.settlementBatches||[]).filter(function(b){ return (b.inItems||[]).length; }).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.inItems.map(function(i){ return i.name+(i.qty>1 ? ' ×'+i.qty : ''); }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
   return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">本地管理（已完成的项目）</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">没有记录</div>')+
     ((localAddAllowed(c) && !inHeaderLocalOk(c)) ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="carriedContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="carriedContinue(\'use\')">继续使用持有项目</button></div>' : '<div style="font-size:12px;color:var(--muted);margin-top:12px;">本地管理只能在到店当天添加，今天不能再继续选购 / 使用。</div>')+'</div>';
@@ -5435,9 +5435,11 @@ function carriedContinue(what){
 function localMgmtTabHtml(c){
   var lm = c.localMgmt;
   if(lm.ended){ /* 到结案前都可继续加：项目都完成后仍显示已完成列表 + 继续选购 / 使用持有的入口（CMD-1013-06 二·2）；结案后只读 */
-    var uses = (lm.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次'+(u.cancelQty?'（取消 '+u.cancelQty+' 次，已归还持有）':'')+'</span></div>'; }).join('');
+    var uRows = (lm.mgmtUses||[]).map(function(u, i){ return {u:u, scope:'lm', i:i}; }); /* CMD-1110-11：已完成的项目列表也用本地管理表格（和下面增加面诊的本地案件里之前做过的合在同一张表） */
+    var uses = '';
     var buys = (lm.batches||[]).map(function(b){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">购买 '+b.items.map(function(i){ return i.name+' ×'+i.qty; }).join('、')+'</span><span style="font-size:13px;font-weight:700;">'+formatCurrency(b.inTotal,'IDR')+'</span></div>'; }).join('');
-    if(localCarried(c)){ uses = (c.mgmtUses||[]).map(function(u){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+u.itemName+'</span><span style="font-size:12px;color:var(--slate2);">使用 '+u.qty+' 次</span></div>'; }).join('')+uses; } /* 增加面诊的本地案件：把之前做过的也列出来 */
+    if(localCarried(c)){ uRows = (c.mgmtUses||[]).map(function(u, i){ return {u:u, scope:'main', i:i}; }).concat(uRows); } /* 增加面诊的本地案件：把之前做过的也列出来 */
+    if(uRows.length) uses = localMgmtTableHtml(c, uRows, true);
     var open = !isEnded(c) && !c.visitClosed && localAddAllowed(c), more = (open && !inHeaderLocalOk(c)) ? '<div style="display:flex;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="lmContinue(\'buy\')">继续选购</button><button class="btn-outline" onclick="lmContinue(\'use\')">继续使用持有项目</button></div>' : '';
     return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:12px;">'+(open ? '本地管理（已完成的项目）' : '本地管理（本次购买与使用记录）')+'</div>'+(buys+uses || '<div style="font-size:12px;color:var(--muted);">本次本地管理没有购买也没有使用</div>')+more+'</div>';
   }
@@ -13617,6 +13619,8 @@ function noteTimeHtml(at, role){
   var kd = k.slice(5, 10).replace('-', '/'), id = i.slice(5, 10).replace('-', '/');
   return kd+' '+k.slice(11, 16)+'（韩国） <span class="sd-tag" style="font-size:12px;font-weight:400;color:var(--muted);">印尼 '+(id!==kd ? id+' ' : '')+i.slice(11, 16)+'</span>';
 }
+/* CMD-1110-11：「查看备注（N）」展开一律只写 MM-DD；日期照发生地——KR 写的用韩国日期，IN 写的用页面（印尼）日期 */
+function noteMDText(at, role){ if(!at) return '—'; var f = fmtUtc(at, role==='KR' ? 'Asia/Seoul' : ((typeof CLINIC_TZ==='string' && CLINIC_TZ) || undefined)); return f.length>=10 ? f.slice(5, 10) : '—'; }
 function noteDayText(at){ var f = at ? fmtUtc(at) : ''; return f.length>=16 ? f.slice(5, 10).replace('-', '/')+' '+f.slice(11, 16) : '—'; }
 /* 一个案件里的全部备注记录（项目 + 来访），不分页面；role = 谁写的（KR / IN）；local = IN 本地项目的备注（KR 看不到） */
 function caseNoteRecords(c){
@@ -13675,7 +13679,7 @@ function viewNotesPanelHtml(clientName, project, uid){
   var u = String(uid).replace(/[^\w]/g, '_'); if(!VIEW_NOTES_OPEN[u]) return '';
   var e = function(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }, viewer = isKrAccount() ? 'KR' : 'IN';
   return '<div class="vn-panel" style="margin:4px 0 8px 22px;padding:6px 10px;background:var(--bg-sidebar,#F5F1EA);border-radius:8px;font-size:12px;">'+clientProjectNotes(clientName, project).map(function(r){
-    return '<div style="padding:3px 0;display:flex;gap:10px;align-items:baseline;"><span style="color:var(--muted);white-space:nowrap;">'+(r.role==='KR' && !isKrAccount() ? noteTimeHtml(r.at, 'KR') : e(noteDayText(r.at).slice(0, 5).replace('/', '-')))+'</span><span style="flex:1;">'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</span><a href="#" class="info-link" style="text-decoration:underline;white-space:nowrap;" onclick="viewNotesGo(\''+r.c.id+'\');return false;">查看案件</a></div>';
+    return '<div style="padding:3px 0;display:flex;gap:10px;align-items:baseline;"><span style="color:var(--muted);white-space:nowrap;">'+e(noteMDText(r.at, r.role))+'</span><span style="flex:1;">'+noteTextHtml({id:r.id, role:r.role, text:r.text}, viewer)+'</span><a href="#" class="info-link" style="text-decoration:underline;white-space:nowrap;" onclick="viewNotesGo(\''+r.c.id+'\');return false;">查看案件</a></div>';
   }).join('')+'</div>';
 }
 function toggleViewNotes(u){ VIEW_NOTES_OPEN[u] = !VIEW_NOTES_OPEN[u]; try{ var c = getCurrentCase(); if(c) renderCaseBody(c); }catch(er){} try{ if(typeof krRefreshAll==='function') krRefreshAll(); }catch(er2){} }

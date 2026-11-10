@@ -3357,7 +3357,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/· A\d+/.test(hd) && /面诊：\d+ 次｜施术：\d+ 次/.test(hd) && /来源诊所：.*院长：.*KR 室长：/.test(hd) && /对话/.test(hd) && !/赴韩施术 ·|从 \d+\/\d+ 面诊开始|进行中：/.test(hd), '页头：客人名 · 案件号　面诊 N 次｜施术 M 次　…［对话］/ 来源诊所 · 院长 · KR 室长；没有状态标签和「从…面诊开始」：'+hd.slice(0, 100));
       ST.ok(KR_CASE_TABS.some(function(t0){ return t0.key==='items' && t0.label==='施术项目'; }), 'tab 叫「施术项目」（1110-03 起）');
       var nx = krMainNextInfo(gc()); ST.ok(/预约到院 · 赴韩项目/.test(nx.text) && /查看内容/.test(nx.btn), '赴韩施术的日子还没到：「MM-DD 预约到院 · 赴韩项目」+［查看内容］：'+nx.text);
-      var bar = txt(krMainStatusBar(r, gc())); ST.ok(/^当前状态/.test(bar) && /（进行中 \d+｜预约中 \d+）/.test(bar) && /今日到访|下次到访/.test(bar), '1027-02 改：状态卡两行——当前状态（进行中｜预约中）+ 今日到访 / 下次到访（原：左 当前状态 + 状态标签，右 一句话 + 按钮）：'+bar.slice(0, 80));
+      var bar = txt(krMainStatusBar(r, gc())); ST.ok(/^当前状态/.test(bar) && /（进行中 \d+｜预约中 \d+）/.test(bar) && /今日到访|下次到访|下一个预约/.test(bar), '1027-02 改（CMD-1110-11：下次到访 → 下一个预约）：状态卡两行——当前状态（进行中｜预约中）+ 今日到访 / 下次到访（原：左 当前状态 + 状态标签，右 一句话 + 按钮）：'+bar.slice(0, 80));
       mut(function(c){ ST.krArrive(c); }); nx = krMainNextInfo(gc()); ST.ok(nx.text==='已到医院' && /查看内容/.test(nx.btn), '客人已到院：「已到医院」+［查看内容］');
       mut(function(c){ ST.krJudge(c, 'ok'); ST.krPay(c); }); mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); });
       mut(function(c){ (c.subItems||[]).forEach(function(s){ if(s.kind==='施术' && !s.done){ coreSubDone(c, s.id, ST.krBy, {items:krNotStartedItems(c).map(function(it){ return it.name; })}); } }); coreEndVisitToday(c, ST.krBy, '自测'); });
@@ -3861,7 +3861,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var dk = daysOf(a).filter(function(v){ return v.place==='KR' && v.date===td; })[0]; ST.ok(!!dk && dk.state==='arrived' && dk.inProgress && dk.kind==='KR', '①：daysOf：韩国那天 = arrived / inProgress：'+JSON.stringify(dk&&{s:dk.state,k:dk.kind,p:dk.inProgress}));
       ST.ok(activeVisitsOf(a).some(function(v){ return v.place==='KR' && v.date===td; }), '①：activeVisitsOf 认得韩国到院日');
       ST.open(a); renderCaseSubtitle(a); renderCaseStatusBar(a);
-      ST.ok(/今日到访.*赴韩项目 · 韩国.*进行中/.test(bar()) && /查看内容/.test(bar()) && !/下次预约/.test(bar()), '①：状态卡：今日到访（赴韩项目 · 韩国）进行中［查看内容］：'+bar());
+      ST.ok(/今日到访.*（施术项目[^）]*）.*进行中/.test(bar()) && !/赴韩项目/.test(bar()) && /查看内容/.test(bar()) && !/下次预约/.test(bar()), '①：状态卡：今日到访（施术项目）进行中［查看内容］（CMD-1110-11：用子案件名称，原「赴韩项目 · 韩国」）：'+bar());
       ST.ok(visitStateText(a, dk)==='进行中', '①：visitStateText = 进行中（原：只按日期）：'+visitStateText(a, dk));
       /* 术后管理 tab 的 ✓：不再要求韩国行程已结束 */
       a.subItems = [{id:'p1', no:'x#1', kind:'术后管理记录', place:'KR', content:'拆线', date:ymdAdd(td, 3), time:'10:00', done:true, doneAt:nowFullDt(), projectName:nm+'隆鼻a'}];
@@ -4023,7 +4023,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       m.localMgmt = {active:true, ended:false, step:'afterBuyUse', mgmtUses:[], mgmtActive:false, batches:[{id:'L1', items:[{name:nm+'热玛吉', qty:1}], inTotal:100000, time:nowFullDt()}], cart:[]};
       CLIENT_HOLDINGS[m.name] = (CLIENT_HOLDINGS[m.name]||[]).concat([{itemName:nm+'热玛吉', category:'本地项目', batches:[{caseId:m.id, date:td, bought:3, used:0, usages:[], paid:100000}]}]);
       updateCaseStage(m); ST.open(m); renderCaseSubtitle(m); renderCaseStatusBar(m);
-      var sb = document.getElementById('case-status-bar').innerText; ST.ok(/今日到访\s*（面诊安排）/.test(sb) && /进行中/.test(sb) && sb.indexOf('下次预约')<0 && sb.indexOf('查看内容')>-1, '1：升级当天状态卡「今日到访（面诊安排）进行中」+［查看内容］：'+sb.replace(/\n/g, ' '));
+      var sb = document.getElementById('case-status-bar').innerText; ST.ok(/今日到访\s*（面诊安排( · 本地管理)?）/.test(sb) && /进行中/.test(sb) && sb.indexOf('下次预约')<0 && sb.indexOf('查看内容')>-1, '1：升级当天状态卡「今日到访（子案件名称）进行中」+［查看内容］（CMD-1110-11：dayNameOf，可能带「· 本地管理」）：'+sb.replace(/\n/g, ' '));
       var no = visitsOf(m)[0].no; ST.ok(/-01$/.test(no), '1：升级当天 = -01：'+no);
       openSubcase(m.id, visitsOf(m)[0].key); switchSubTab('local'); var bd = document.getElementById('case-body').innerText;
       ST.ok(/剩余项目/.test(bd) && /未预约项目/.test(bd) && bd.indexOf(nm+'热玛吉')>-1 && /本次使用/.test(bd), '1：-01 子案件页：今天买的本地项目在本地管理 tab 的「剩余项目 · 未预约项目」，有［本次使用］（CMD-1026-19 B3；原：未使用项目）');
@@ -5796,7 +5796,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; old = c.krSchedule.confirmedDate; c.krSchedule.confirmedDate = today; return true; });
     krShowCase(r.clinicId, r.id, {here:true, tab:'items'});
     var h = document.getElementById('krcase-body').innerHTML, tx = document.getElementById('krcase-body').innerText;
-    ST.ok(/当前状态/.test(tx) && /（进行中 \d+｜预约中 \d+）/.test(tx) && /今日到访\s*（赴韩项目）/.test(tx), '1027-02 改：状态卡：第一行 当前状态（进行中｜预约中），第二行「今日到访（赴韩项目）待到院」（原：状态标签 + HH:mm 预约到院 · 赴韩项目）：'+tx.slice(tx.indexOf('当前状态'), tx.indexOf('当前状态')+80).replace(/\n/g,' '));
+    ST.ok(/当前状态/.test(tx) && /（进行中 \d+｜预约中 \d+）/.test(tx) && /今日到访\s*（[^）]*施术项目[^）]*）/.test(tx) && !/赴韩项目）/.test(tx.slice(tx.indexOf('今日到访'), tx.indexOf('今日到访')+30)), '1027-02 改 / CMD-1110-11：状态卡第二行「今日到访（子案件名称）待到院」（原：赴韩项目）：'+tx.slice(tx.indexOf('当前状态'), tx.indexOf('当前状态')+80).replace(/\n/g,' '));
     ST.ok(h.indexOf('当前状态') < h.indexOf('krSetCaseTab'), '状态卡在 tab 上面');
     ST.ok(/krSetCaseTab\('basic'\)/.test(h) && /项目卡|施术项目/.test(tx), 'tab 和项目卡照常展开');
     if(!director){
@@ -10746,6 +10746,32 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       c.localMgmt = null; var M = inContModel(c); var th = inContTodayHtml(c, M, 'local'); ST.ok(/今天用的本地项目/.test(th.replace(/<[^>]+>/g, ' ')), '子案件页今天用的本地项目卡仍在');
       c.localMgmt = {active:true, ended:false, step:'use', mgmtActive:true, batches:[], mgmtUses:[{itemName:'ONDA 提升', qty:1, status:'active', date:td}]}; M = inContModel(c); th = inContTodayHtml(c, M, 'local').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
       ST.ok(/项目 历史施术次数 备注 状态 操作/.test(th) && /ONDA 提升 · 本次 1 次/.test(th), '子案件页今天用的本地项目 = 同一个表格：'+th.slice(0, 120));
+    } finally { window.alert = al; window.confirm = cf; }
+  });
+
+  /* CMD-1110-11：状态卡今日到访用子案件名称 + 查看备注 MM-DD + 所有本地管理行都用表格 */
+  ST.def('R287a','CMD-1110-11（A1 分页，stageC 夹具）：当前状态卡「今日到访（…）」括号里是 dayNameOf 的子案件名称（不再写赴韩项目 / · 韩国）；「查看备注（N）」展开每行只写 MM-DD（KR 写的用韩国日期）；子案件页合并「今日项目」卡、已完成的本地项目列表也是本地管理表格',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; }, td = todayStr();
+    try{
+      var c = ST.toConfirmed('R287a'); ST.open(c); c.visitDate = td; c.subState = 'arrived'; c.arrivedDay = td; c.stage = 'booked';
+      renderCaseSubtitle(c); renderCaseStatusBar(c); var bar = document.getElementById('case-status-bar').innerText.replace(/\s+/g, ' ');
+      var M = mainStatusModel(c), v0 = M.tdy.filter(function(v){ return v.state!=='left' && v.state!=='ended'; })[0];
+      ST.ok(!!v0 && bar.replace(/\s+/g, '').indexOf('今日到访（'+dayNameOf(v0).replace(/\s+/g, '')+'）')>-1 && !/赴韩项目/.test(bar), '今日到访括号里 = dayNameOf：'+bar.slice(0, 120));
+      /* 查看备注展开 */
+      var at = '2026-11-06 16:30:00'; /* UTC：韩国 11-07 01:30，印尼 11-06 23:30 */
+      var it = krAllItems(c).filter(function(x){ return !krIsMgmtItemC(x); })[0]; it.todayNote = '备注K'; it.todayNoteAt = at; it.todayNoteBy = 'KM1 室长';
+      c.mgmtUses = [{itemName:it.name+' · 5cc', qty:1, status:'done', date:ymdAdd(td, -9), note:'备注I', noteBy:'A1 室长', noteAt:at}];
+      VIEW_NOTES_OPEN.zz = true; var pn = viewNotesPanelHtml(c.name, it.name, 'zz').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); VIEW_NOTES_OPEN.zz = false;
+      ST.ok(/11-07 (译：\s*)?备注K/.test(pn) && /11-06 备注I/.test(pn) && !/\d\d:\d\d|（韩国）/.test(pn), '展开：KR 写的 11-07（韩国日期）、IN 写的 11-06，只写 MM-DD：'+pn.slice(0, 140));
+      /* 表格 */
+      c.mgmtUses = [{itemName:'表格项A', qty:1, status:'done', date:td}, {itemName:'表格项B', qty:1, status:'cancelled', date:td}]; c.localMgmt = {active:true, ended:true, step:'use', mgmtActive:false, batches:[], mgmtUses:[{itemName:'表格项C', qty:1, status:'done', date:td}]};
+      var th = inContTodayHtml(c, inContModel(c)).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      ST.ok(/项目 历史施术次数 备注 状态 操作/.test(th) && /表格项C · 本次 1 次/.test(th) && !/使用 \d+ 次/.test(th), '合并「今日项目」卡里的本地行 = 本地管理表格：'+th.slice(0, 120));
+      var dh = localMgmtTabHtml(c).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      ST.ok(/项目 历史施术次数 备注 状态 操作/.test(dh) && /表格项C · 本次 1 次/.test(dh) && !/使用 \d+ 次/.test(dh), '本地管理 tab 已完成的项目列表 = 表格：'+dh.slice(0, 100));
+      var ch = localCarriedDoneHtml(c).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+      ST.ok(/项目 历史施术次数 备注 状态 操作/.test(ch) && /表格项A · 本次 1 次/.test(ch) && !/使用 \d+ 次/.test(ch), '增加面诊的本地案件已完成列表 = 表格：'+ch.slice(0, 100));
     } finally { window.alert = al; window.confirm = cf; }
   });
 
