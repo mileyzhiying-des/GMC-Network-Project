@@ -1399,18 +1399,19 @@ function renderCaseStatusBar0(c){
     if(SUBVIEW[m3.id] && (prog || ds3.some(function(v){ return v.state==='unconfirmed'; }))){ /* CMD-1027-08 三：子案件页上待确认结束只留红色条，不重复第三行；子案件页本身就是今天那一天，不显示「今日进行中」（只放主案件页） */ document.getElementById('case-status-bar').innerHTML = ''; renderCaseHeaderActions(c); return; }
     /* CMD-1027-14 五：IN 主案件「当前状态」改成和 KR 一样的两行状态卡（共用取数 mainStatusModel）：当前状态（进行中｜预约中）［查看］/ 待确认结束 · 今日到访 · 下次到访 · 待预约 · 后续日程：无 */
     var M = mainStatusModel(m3), bt = function(label, on, pri){ return '<button class="'+(pri ? 'btn-primary' : 'btn-outline')+'" style="padding:6px 16px;font-size:13px;" onclick="'+on+'">'+label+'</button>'; };
-    var viewDay = function(v){ return bt('查看内容', ((v.rec||v.caseId)===m3.id || v.place==='KR') ? 'openSubcase(\''+m3.id+'\',\''+v.key+'\')' : 'openVisitOf(\''+(v.rec||v.caseId)+'\')'); };
+    var lk = function(label, on){ return '<a href="#" style="font-size:13px;text-decoration:underline;color:var(--slate2);" onclick="'+on+';return false;">'+label+'</a>'; }; /* CMD-1110-06：［查看］［查看内容］= 下划线文字按钮 */
+    var viewDay = function(v){ return lk('查看内容', ((v.rec||v.caseId)===m3.id || v.place==='KR') ? 'openSubcase(\''+m3.id+'\',\''+v.key+'\')' : 'openVisitOf(\''+(v.rec||v.caseId)+'\')'); };
     var row2 = '', pdTxt = '', P = M.pend;
-    if(P.inN) pdTxt = '印尼术后管理 '+P.inN+' 项待预约'+(P.inEarly ? '（最早建议 '+cesc(P.inEarly.slice(5).replace('-', '/'))+'）' : '');
-    var pdSmall = pdTxt ? '<span style="font-size:12px;color:var(--muted);margin-left:8px;">待预约：'+pdTxt+(P.krN ? '；韩国 '+P.krN+' 项由 KR 安排' : '')+'</span>' : '';
+    if(P.inN) pdTxt = '印尼术后管理 '+P.inN+' 项待预约'+(P.inEarly ? '（最早建议 '+cesc(P.inEarly.slice(5).replace('-', '/'))+'）' : '')+(P.krN ? '；韩国 '+P.krN+' 项由 KR 安排' : '');
+    else if(P.krN) pdTxt = '韩国术后管理 '+P.krN+' 项（由 KR 安排）';
+    var pdSmall = pdTxt ? '<span style="font-size:12px;color:var(--muted);margin-left:8px;">待预约：'+pdTxt+'</span>'+((P.inN && !careBookBlock(m3)) ? ' '+lk('预约', 'todoCbOpen(\''+m3.id+'\',\'*\')') : '') : '';
+    var tdyOpen = M.tdy.filter(function(v){ return v.state!=='left' && v.state!=='ended'; }); /* CMD-1110-06：今天的到访已结束就切成「下一个预约」 */
     if(M.unc){ var unc = M.unc; row2 = '<b style="color:#B3261E;">待确认结束</b>：'+cesc(String(unc.date).slice(5).replace('-', '/'))+' '+cesc(unc.no||'')+'（'+cesc(mainDayBiz(unc))+(unc.place==='KR' ? ' · 韩国' : '')+'）<span style="flex:1;"></span>'+(unc.kind==='IN' ? bt('确认结束', 'openDayConfirm(\''+(unc.rec||unc.caseId)+'\')', true) : viewDay(unc)); }
-    else if(M.tdy.length){ var v0 = M.tdy[0], allDone = M.tdy.every(function(v){ return v.state==='left' || v.state==='ended'; }), anyLive = M.tdy.some(function(v){ return v.state==='arrived'; });
-      row2 = '<b>今日到访</b>（'+cesc(Array.from(new Set(M.tdy.map(mainDayBiz))).join(' · '))+(M.tdy.some(function(v){ return v.place==='KR'; }) ? ' · 韩国' : '')+'）<span style="margin-left:6px;">'+(anyLive ? '进行中' : (allDone ? '已完成' : (v0.place==='KR' ? '待到院' : '待到店')))+'</span>'+pdSmall+'<span style="flex:1;"></span>'+viewDay(v0); }
-    else if(M.nx){ row2 = '<b>下次到访</b>（'+cesc(mainDayBiz(M.nx))+'）'+cesc(String(M.nx.date).slice(5).replace('-', '/'))+pdSmall+'<span style="flex:1;"></span>'+viewDay(M.nx); }
-    else if(P.inN){ row2 = '<b>待预约</b>：'+cesc(pdTxt)+(P.krN ? '<span style="font-size:12px;color:var(--muted);margin-left:8px;">韩国 '+P.krN+' 项由 KR 安排</span>' : '')+'<span style="flex:1;"></span>'+(careBookBlock(m3) ? '' : bt('预约', 'todoCbOpen(\''+m3.id+'\',\'*\')', true)); }
-    else if(P.krN){ row2 = '<b>待预约</b>：韩国术后管理 '+P.krN+' 项（由 KR 安排）'; }
-    else row2 = '<b>后续日程：无</b>';
-    document.getElementById('case-status-bar').innerHTML = '<div class="card" style="padding:12px 20px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+M.nLive+'｜预约中 '+M.nBook+'）</span>'+(P.rebN ? '<span style="font-size:13px;color:#B3261E;font-weight:600;">待重新预约 '+P.rebN+' 项：'+cesc((P.rebNames||[]).join('、'))+'</span>' : '')+'<span style="flex:1;"></span>'+bt('查看', 'switchCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:10px;flex-wrap:wrap;">'+row2+'</div></div>'+(actionBtn ? '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">'+actionBtn+'</div>' : '');
+    else if(tdyOpen.length){ var v0 = tdyOpen[0], anyLive = tdyOpen.some(function(v){ return v.state==='arrived'; });
+      row2 = '<b>今日到访</b>（'+cesc(Array.from(new Set(tdyOpen.map(mainDayBiz))).join(' · '))+(tdyOpen.some(function(v){ return v.place==='KR'; }) ? ' · 韩国' : '')+'）<span style="margin-left:6px;">'+(anyLive ? '进行中' : (v0.place==='KR' ? '待到院' : '待到店'))+'</span>'+pdSmall+'<span style="flex:1;"></span>'+viewDay(v0); }
+    else if(M.nx){ var nx = M.nx; row2 = '<b>下一个预约：</b>'+cesc(String(nx.date).slice(5).replace('-', '/'))+(nx.time ? ' '+cesc(nx.time) : '')+'（'+(nx.place==='KR' ? '韩国' : '印尼')+'）· '+cesc(dayNameOf(nx))+(nx.no ? ' '+cesc(nx.no) : '')+pdSmall+'<span style="flex:1;"></span>'+viewDay(nx); }
+    else row2 = '<b>下一个预约：—</b>'+pdSmall;
+    document.getElementById('case-status-bar').innerHTML = '<div class="card" style="padding:10px 20px;display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+M.nLive+'｜预约中 '+M.nBook+'）</span>'+(P.rebN ? '<span style="font-size:13px;color:#B3261E;font-weight:600;">待重新预约 '+P.rebN+' 项：'+cesc((P.rebNames||[]).join('、'))+'</span>' : '')+'<span style="flex:1;"></span>'+lk('查看', 'switchCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:6px;flex-wrap:wrap;">'+row2+'</div></div>'+(actionBtn ? '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">'+actionBtn+'</div>' : '');
     renderCaseHeaderActions(c); return;
   }
   document.getElementById('case-status-bar').innerHTML =
@@ -1940,6 +1941,7 @@ function renderCaseSubtitle(c){
     html += (html ? ' · ' : '')+(rel0.followup ? ((rel0.type==='复诊评估') || rel0.revisit ? '复诊评估 · 关联：' : '术后来访 · 关联：') : '关联：')+'<a href="#" class="info-link" onclick="openCaseDetail(\''+rel0.linkedId+'\');return false;">'+(src&&src.caseNo?src.caseNo:rel0.linkedId)+'</a>'+((rel0.reason||rel0.auto) ? '（'+(rel0.reason||'')+(rel0.auto?(rel0.reason?'，':'')+'自动关联':'')+'）' : '');
   }
   if(c.materialsConfirmed && !isChildVisit(c) && !mainPageV2(c)){ try{ html += '<div style="margin-top:2px;">'+mainHeadLine(c)+'</div>'; }catch(e){} } /* CMD-1023-01 补 2：页头一行 从哪天面诊开始 · 当前进行中的流程 · 今天的子案件 */
+  try{ if(mainPageV2(c) && !isChildVisit(c) && !subPageActive(c)) html += inTripHeaderRowHtml(c); }catch(e){ console.error('[在韩行程]', e); } /* CMD-1110-06：页头第三行 */
   try{ html += thisVisitBannerHtml(c); }catch(e){ console.error('[本次横幅]', e); }
   el.innerHTML = html;
 }

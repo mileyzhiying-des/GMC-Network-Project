@@ -17,7 +17,7 @@ function todoIsKr(){ try{ return isKrAccount(); }catch(e){ return false; } }
 /* ---------------- 待办条目 ----------------
    it = {kind, text, name, no, due('YYYY-MM-DD' 或 'YYYY-MM-DD HH:mm'，页面时区), over, pin, mine, go()} */
 /* CMD-1014-02：4 张卡 = 待办 4 类。每条待办恰好属于一类（待办总数 = 4 类加总，卡片数字 = 点下去筛出的条数） */
-var TODO_CAT = {rebooktrip:'todo', depositdue:'todo', noshowdue:'todo', krrefund:'todo', heldsurg:'todo', tripdecide:'todo', dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', recheck:'todo', reconfirm:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
+var TODO_CAT = {rebooktrip:'todo', depositdue:'todo', noshowdue:'todo', krrefund:'todo', heldsurg:'todo', tripdecide:'todo', dayconfirm:'todo', bkconf:'todo', rebook:'todo', plan:'todo', resched:'todo', relay:'todo', tripremind:'todo', recheck:'todo', reconfirm:'todo', pay:'todo', local:'todo', quiet:'todo', ph:'todo', subbook:'todo', pcdue:'todo', urge:'kr', waitkr:'kr', visit:'visit',
   eta:'todo', send:'todo', urged:'todo', sched:'todo', change:'todo', pcb:'todo', dayconf:'todo', upload:'dconsult', recover:'drecover', recoverwait:'drecover', dsurg:'dsurg', dirop:'todo', today:'today2', waitdir:'waiting', stay:'msg'};
 /* CMD-1015-05 九：第一栏「阶段｜待办事项」——阶段读案件的阶段（同案件列表），没有案件的按类型 */
 var TODO_STAGE_BY_KIND = {rebooktrip:'赴韩施术', depositdue:'赴韩施术', noshowdue:'赴韩施术', krrefund:'赴韩施术', heldsurg:'赴韩施术', tripdecide:'赴韩施术', tripend:'术后管理', tripover:'术后管理', earlyask:'术后管理', rebookwait:'赴韩施术', inclose:'术后管理', dirop:'术后管理', bkconf:'预约', rebook:'预约', visit:'预约', ph:'预约', pcdue:'术后管理', subbook:'术后管理', pcb:'术后管理', stay:'消息', eta:'面诊', waitdir:'面诊', upload:'面诊', dsurg:'赴韩施术', send:'面诊', plan:'项目确认'};
@@ -101,10 +101,13 @@ function inTodoItems(){
       push(todoMk('resched', 'KR 无法安排所选日期：重选施术日期', c, '', false, todoInGo(c, 'kr')));
     /* KR 已确认施术时间 → 转告客人（打开该案件的赴韩施术 tab 即视为已看到，见 todoMarkRelay） */
     if(scheduleState(c)==='Confirmed' && ks && !surgMsgSent(c)){ /* CMD-1019-16：没通知过 =［发送给客人］；通知过之后 KR 又改了 = 电话通知客人时间变更（不重发） */
-      var gotoRow = function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-send-row'}); };
+      var gotoRow = function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-send-row'}); try{ openSurgMsg(c.id, 'date'); }catch(e){} }; /* CMD-1110-06：点待办 = 打开同一个发送弹窗，「施术日期与到院地址」先勾好 */
       if(surgChanged(c)) push(todoMk('relay', '请发送新的施术时间给客人：'+surgChangeText(c), c, ks.confirmedDate, false, gotoRow)); /* CMD-1109-10：不再电话通知，改成发送；按［发送信息给客人］就完成 */
       else push(todoMk('relay', 'KR 已确认施术时间：发送给客人（'+ks.confirmedDate+' '+ks.confirmedTime+'）', c, ks.confirmedDate, false, gotoRow));
     }
+    /* CMD-1110-06：待办②「发送行程提醒给客人」——施术前 7 天（含当天）、行程已定；发出含行程的信息 → 消失；之后改了行程（key 变了）→ 再出现，写「行程已改，请重新通知客人」；点待办 = 同一个弹窗，「行程与天气」先勾好 */
+    if(ks && scheduleState(c)==='Confirmed' && !c.hasArrived && surgCanTrip(c) && calDaysToSurgery(c)<=TRIP_CONFIRM_DAYS && !tripInformed(c))
+      push(todoMk('tripremind', c.tripRemindMsg ? '行程已改，请重新通知客人（行程与天气）' : '发送行程提醒给客人（施术 '+ks.confirmedDate+'，行程与天气）', c, ks.confirmedDate, calDaysToSurgery(c)<=0, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-send-row'}); try{ openSurgMsg(c.id, 'trip'); }catch(e){} }));
     /* CMD-1029-09 三：施术前约 1 个月（30 天）：联络客人确认行程；只提醒不挡 */
     if(calNeedsReconfirm(c)) push(todoMk('reconfirm', '施术前约 1 个月：联络客人确认行程（施术 '+ks.confirmedDate+'，还有 '+calDaysToSurgery(c)+' 天）', c, ks.confirmedDate, false, function(){ openCaseDetail(c.id, false, {tab:'kr', scroll:'surg-reconfirm-row'}); }));
     /* 确认客人日程有无变化：赴韩施术前 7 天出现（CMD-1014-01 二·3；CMD-1029-09 四：2 天 → 7 天） */
@@ -256,7 +259,7 @@ function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || ((b.over?1:0)-(a.over
 var TODO_FILTERS = {
   todo:   {label:'待我处理', fn:function(it){ return todoIsKr() ? it.kind!=='today' : true; }},
   visit:  {label:'今天来访', fn:function(it){ return (it.due||'').slice(0,10)===todayStr(); }},
-  kr:     {label:'等 KR 回复', fn:function(it){ return ['urge','resched','relay','recheck','reconfirm'].indexOf(it.kind)>-1; }},
+  kr:     {label:'等 KR 回复', fn:function(it){ return ['urge','resched','relay','tripremind','recheck','reconfirm'].indexOf(it.kind)>-1; }},
   today2: {label:'今天到院', fn:function(it){ return it.kind==='today'; }},
   dconsult:{label:'待面诊', fn:function(it){ return it.kind==='upload'; }},
   drecover:{label:'待复诊', fn:function(it){ return it.kind==='recover'; }},

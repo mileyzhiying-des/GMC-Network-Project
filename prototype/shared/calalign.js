@@ -275,15 +275,27 @@ function surgMsgText(c, ver, lang){
   var text = smsFill(surgTplOf(ver||'notice', lang||'zh'), {clinic:CLINIC_SETTINGS.name, name:c.name, coordinator:actingName(), date:ks.confirmedDate, time:surgAmPm(ks.confirmedTime), hospital:en.name, address:addrBoth(hid, ks.address), anes:surgAnesText(c), phone:CLINIC_SETTINGS.phone});
   return text.replace(/\n{3,}/g, '\n\n').replace(/\n\n$/,'');
 }
+/* ===== CMD-1110-06：［发送信息给客人］两项合成一则 =====
+   「施术日期与到院地址」（KR 确认施术时间后才能勾）+「行程与天气」（行程已定才能勾；内容和天气沿用 1109-25 的 tripRemindText / weatherFetch）；都勾合成一则；预览可改，短信 / WhatsApp。
+   发送状态显示最近一次「MM/DD 已通知客人（施术日期 · 行程）」+ 下划线「再次发送」；记短信发送记录 + Timeline。 */
+function surgCanNotice(c){ var ks = c && c.krSchedule; return !!(ks && ks.confirmedDate && ['Confirmed','Changing','Arrived'].indexOf(scheduleState(c))>-1); }
+function surgCanTrip(c){ var ks = c && c.krSchedule; return !!(ks && ks.tripState!=='tentative' && stayFilled(c) && c.stay.inTime && c.stay.outTime); }
+function tripInformed(c){ return !!(c && c.tripRemindMsg && c.tripRemindMsg.key===tripRemindKey(c.stay||{})); } /* 行程这一版已通知客人 */
+function informLastOf(c){
+  var l = c.informLast; if(l && l.at) return l;
+  var cand = [c.surgeryMsg && {at:c.surgeryMsg.at, kinds:['施术日期'], method:c.surgeryMsg.method}, c.tripRemindMsg && {at:c.tripRemindMsg.at, kinds:['行程'], method:c.tripRemindMsg.method}].filter(Boolean).sort(function(a, b){ return (b.at||'') > (a.at||'') ? 1 : -1; });
+  return cand[0] || null;
+}
 function surgSendHtml(c){
   if(c.hasArrived) return '';
   var tag = '<span style="font-size:12px;color:var(--muted);">演示</span>', box = function(x){ return '<div style="text-align:right;max-width:340px;">'+x+'</div>'; };
-  var md = function(t){ var f = fmtUtc(t); return f.length>=16 ? f.slice(5,10).replace('-','/')+' '+f.slice(11,16) : f; }; /* CMD-1109-01：已发送 MM/DD HH:mm */
-  /* CMD-1109-10：KR 改了时间后框和第一次确认一样——新时间还没发送就是［发送信息给客人］（不写旧的「已发送」，不再有「请电话通知客人」+［已电话通知］） */
-  /* CMD-1109-11：已发送时不再显示深色按钮——第一行「MM/DD HH:mm 已发送」（绿色小字），第二行下划线文字「再次发送」（走现有发送流程，发完时间更新）；还没发送（含改期确认后新时间还没发）→ 深色［发送信息给客人］ */
-  if(surgMsgSent(c)){
-    var ph = c.surgPhone && c.surgPhone.key===surgMsgKey(c) ? c.surgPhone : null, m = surgMsgOfKey(c);
-    return box('<div style="font-size:12px;color:var(--sage);white-space:nowrap;">'+(ph ? aEsc(md(ph.at))+' 已电话通知' : aEsc(md(m.at))+' 已发送')+'</div>'+(ph && ph.note ? '<div style="font-size:12px;color:var(--muted);">备注：'+aEsc(ph.note)+'</div>' : '')+'<a href="#" style="font-size:12px;text-decoration:underline;color:var(--slate2);" onclick="openSurgMsg(\''+c.id+'\');return false;">再次发送</a>');
+  var md = function(t){ var f = fmtUtc(t); return f.length>=16 ? f.slice(5,10).replace('-','/') : f; };
+  var last = informLastOf(c);
+  if(last){
+    var ph = c.surgPhone && c.surgPhone.key===surgMsgKey(c) ? c.surgPhone : null;
+    var kinds = (last.kinds||[]).join(' · ');
+    var again = '<a href="#" style="font-size:12px;text-decoration:underline;color:var(--slate2);" onclick="openSurgMsg(\''+c.id+'\');return false;">再次发送</a>';
+    if(surgMsgSent(c) || !surgCanNotice(c)) return box('<div style="font-size:12px;color:var(--sage);white-space:nowrap;">'+(ph ? aEsc(md(ph.at))+' 已电话通知' : aEsc(md(last.at))+' 已通知客人（'+aEsc(kinds)+'）')+'</div>'+(ph && ph.note ? '<div style="font-size:12px;color:var(--muted);">备注：'+aEsc(ph.note)+'</div>' : '')+again);
   }
   return box('<button class="btn-primary sd-btn" onclick="openSurgMsg(\''+c.id+'\')">发送信息给客人</button> '+tag);
 }
@@ -349,53 +361,68 @@ function openTripRemind(id){
   var c = calCaseById(id); if(!c) return; var st = tripRemindStayFromForm(), e = document.getElementById('stay-err');
   if(!st.in || !st.out || !st.inTime || !st.outTime){ if(e){ e.textContent = '先填好入境、离境的日期和时间，再发送行程提醒'; e.style.display = 'block'; } return; }
   if(e) e.style.display = 'none';
-  SURGMSG = {id:id, ver:'trip', lang:'zh', method:(c.tripRemindMsg && c.tripRemindMsg.method) || '短信', text:tripRemindText(c, st), stay:st};
+  SURGMSG = {id:id, ver:'trip', lang:'zh', notice:false, trip:true, method:(c.tripRemindMsg && c.tripRemindMsg.method) || '短信', text:tripRemindText(c, st), stay:st};
   var ov = document.getElementById('surgmsg-overlay');
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'surgmsg-overlay'; document.body.appendChild(ov); }
   ov.style.zIndex = 98; /* 盖在「确认行程」窗口（97）上面 */ surgMsgRender(); ov.classList.add('open');
 }
 var SURGMSG = null;
-function openSurgMsg(id, ver){
+/* pre = 'date' | 'trip'：从待办点进来时先勾对应那一项；没指定 = 勾还没通知过（且能勾）的项目，都通知过就都勾 */
+function surgComboText(c, notice, trip){
+  var parts = []; if(notice) parts.push(surgMsgText(c, 'notice', 'zh')); if(trip) parts.push(tripRemindText(c, c.stay||{}));
+  return parts.join('\n\n');
+}
+function openSurgMsg(id, pre){
   var c = calCaseById(id); if(!c || !c.krSchedule) return;
-  if(ver==='remind') return; /* CMD-1020-13 七：施术前提醒讯息已取消（改成［已确认行程］），只留施术日期确认后那一次［发送给客人］ */
-  ver = ver || 'notice'; var prev = ver==='remind' ? c.reminderMsg : c.surgeryMsg;
-  SURGMSG = {id:id, ver:ver, lang:'zh', method:(prev && prev.method) || '短信', text:surgMsgText(c, ver, 'zh')};
+  if(pre==='remind') return; /* CMD-1020-13 七：施术前提醒讯息已取消 */
+  var cn = surgCanNotice(c), ct = surgCanTrip(c); if(!cn && !ct) return;
+  var n = cn && (pre==='date' || (pre!=='trip' && !surgMsgSent(c))), t = ct && (pre==='trip' || (pre!=='date' && !tripInformed(c)));
+  if(!n && !t){ n = cn; t = ct; }
+  var prev = informLastOf(c);
+  SURGMSG = {id:id, ver:n ? 'notice' : 'trip', lang:'zh', method:(prev && prev.method) || '短信', notice:n, trip:t, text:surgComboText(c, n, t)};
   var ov = document.getElementById('surgmsg-overlay');
   if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'surgmsg-overlay'; ov.style.zIndex = 95; document.body.appendChild(ov); }
-  surgMsgRender(); ov.classList.add('open');
+  ov.style.zIndex = 95; surgMsgRender(); ov.classList.add('open');
 }
 function surgMsgRender(){
   var ov = document.getElementById('surgmsg-overlay'), s = SURGMSG; if(!ov || !s) return;
   var c = calCaseById(s.id), cl = clientByName(c.name), to = (cl && cl.phone) || '—';
   var seg = function(k){ return '<button class="'+(s.method===k ? 'btn-primary' : 'btn-outline')+'" onclick="surgMsgMethod(\''+k+'\')">'+k+'</button>'; };
-  ov.innerHTML = '<div class="modal-box" style="width:520px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">'+SURG_TPLS[s.ver].label+' <span style="font-size:12px;font-weight:400;color:var(--muted);">演示：不会真的发出</span></div>'+
+  var cn = surgCanNotice(c), ct = surgCanTrip(c);
+  var ck = function(key, label, on, can, why, done){ return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0;'+(can ? 'cursor:pointer;' : 'opacity:.55;cursor:not-allowed;')+'"><input type="checkbox" id="smg-'+key+'" '+(on ? 'checked ' : '')+(can ? '' : 'disabled ')+'onchange="surgMsgToggle(\''+key+'\',this.checked)"><b>'+label+'</b>'+(!can ? '<span style="font-size:12px;color:var(--muted);">（'+why+'）</span>' : (done ? '<span style="font-size:12px;color:var(--sage);">（已通知过，可再发）</span>' : ''))+'</label>'; };
+  ov.innerHTML = '<div class="modal-box" style="width:540px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">发送信息给客人 <span style="font-size:12px;font-weight:400;color:var(--muted);">演示：不会真的发出</span></div>'+
+    '<div style="margin-bottom:10px;">'+ck('notice', '施术日期与到院地址', s.notice, cn, 'KR 确认施术时间后才能勾', cn && surgMsgSent(c))+ck('trip', '行程与天气', s.trip, ct, '行程还没定，先在页头［行程变动］里填好', ct && tripInformed(c))+'</div>'+
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">'+seg('短信')+seg('WhatsApp')+'<span style="font-size:12px;color:var(--slate2);margin-left:6px;">发给 '+aEsc(to)+'</span></div>'+
     '<div style="font-size:12px;color:var(--slate2);margin-bottom:4px;">预览（可以修改；模板在「诊所设定」里）</div>'+
     '<textarea id="surgmsg-text" rows="14" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;" oninput="SURGMSG.text=this.value">'+aEsc(s.text)+'</textarea>'+
-    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="closeSurgMsg()">取消</button><button class="btn-primary" onclick="confirmSurgMsg()">发送</button></div></div>';
+    '<div id="surgmsg-err" style="font-size:12px;color:#B3261E;min-height:16px;margin-top:4px;"></div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;"><button class="btn-outline" onclick="closeSurgMsg()">取消</button><button class="btn-primary" onclick="confirmSurgMsg()">发送</button></div></div>';
+}
+function surgMsgToggle(k, on){
+  var s = SURGMSG; if(!s) return; var c = calCaseById(s.id); if(!c) return;
+  s[k] = !!on; s.ver = s.notice ? 'notice' : 'trip'; s.text = surgComboText(c, s.notice, s.trip); surgMsgRender();
 }
 function surgMsgMethod(k){ if(SURGMSG){ var t = document.getElementById('surgmsg-text'); if(t) SURGMSG.text = t.value; SURGMSG.method = k; surgMsgRender(); } }
 function closeSurgMsg(){ var ov = document.getElementById('surgmsg-overlay'); if(ov) ov.classList.remove('open'); SURGMSG = null; }
 function confirmSurgMsg(){
   var s = SURGMSG; if(!s) return; var c = calCaseById(s.id); if(!c) return;
   var t = document.getElementById('surgmsg-text'); if(t) s.text = t.value;
+  if(!s.notice && !s.trip){ var er = document.getElementById('surgmsg-err'); if(er) er.textContent = '请至少勾选一项再发送'; return; }
   if(!String(s.text||'').trim()) return;
-  if(s.ver==='trip'){ /* CMD-1109-25：行程提醒——记短信发送记录 + Timeline，窗口里显示「已发送」；不动施术日期通知 / 施术前提醒的记录 */
-    var clT = clientByName(c.name), toT = (clT && clT.phone) || '', prevT = c.tripRemindMsg;
-    logSms('tripRemind', (s.method==='WhatsApp' ? 'WhatsApp ' : '')+toT, s.text, c.id);
-    c.tripRemindMsg = {key:tripRemindKey(s.stay||{}), method:s.method, at:nowFullDt(), count:(prevT ? (prevT.count||1)+1 : 1)};
-    logCaseEvent(c, actingName(), '已发送行程提醒给客人（'+s.method+'，演示'+(/天气预报/.test(s.text) ? '，含天气预报' : '，无天气') +'）'+(prevT ? '，再次发送' : ''), '赴韩施术');
-    closeSurgMsg(); Store.touch(); try{ buildCaseLog(c); }catch(er){} var rb = document.getElementById('stay-remind'); if(rb) rb.innerHTML = stayRemindHtml(c); return;
+  var cl = clientByName(c.name), to = (cl && cl.phone) || '', at = nowFullDt(), kinds = [];
+  logSms(s.notice ? SURG_TPLS.notice.kind : 'tripRemind', (s.method==='WhatsApp' ? 'WhatsApp ' : '')+to, s.text, c.id); /* 短信发送记录：含施术日期的记「施术日期通知」，只有行程的记「行程提醒」 */
+  if(s.notice){
+    var prev = c.surgeryMsg, rec = {key:surgMsgKey(c), method:s.method, at:at, count:(prev ? (prev.count||1)+1 : 1)};
+    c.surgInformKey = rec.key; c.surgeryMsg = rec; c.relayTold = calKey(c); c.relayAt = at; kinds.push('施术日期');
   }
-  var cl = clientByName(c.name), to = (cl && cl.phone) || '', remind = s.ver==='remind', tp = SURG_TPLS[s.ver];
-  logSms(tp.kind, (s.method==='WhatsApp' ? 'WhatsApp ' : '')+to, s.text, c.id); /* 短信发送记录页：类型「施术日期通知 / 施术前提醒」 */
-  var prev = remind ? c.reminderMsg : c.surgeryMsg, rec = {key:surgMsgKey(c), method:s.method, at:nowFullDt(), count:(prev ? (prev.count||1)+1 : 1)};
-  c.surgInformKey = rec.key; /* CMD-1019-16：这一版已通知客人；之后 KR 再改 = 电话通知 */
-  if(remind){ c.reminderMsg = rec; c.recheck = {key:calKey(c), by:actingName(), at:rec.at, via:'施术前提醒'}; }
-  else { c.surgeryMsg = rec; c.relayTold = calKey(c); c.relayAt = rec.at; } /* 通知发送 = 已转告：待办「转告客人」消失 */
-  logCaseEvent(c, actingName(), '已发送'+tp.label+'给客人（'+s.method+'，演示）：'+calKey(c)+'（韩国时间）'+(prev ? '，再次发送' : ''));
-  closeSurgMsg(); Store.touch(); buildCaseLog(c); renderCaseBody(c); try{ todoRefresh(); renderCalendar(); }catch(e){}
-  showToast('已发送'+tp.label+'（演示）', s.method+' → '+(to||'客人'), null);
+  if(s.trip){
+    var st = c.stay || s.stay || {}, prevT = c.tripRemindMsg;
+    c.tripRemindMsg = {key:tripRemindKey(st), method:s.method, at:at, count:(prevT ? (prevT.count||1)+1 : 1)}; kinds.push('行程');
+  }
+  c.informLast = {at:at, method:s.method, kinds:kinds};
+  logCaseEvent(c, actingName(), '已发送信息给客人（'+s.method+'，演示）：'+kinds.join(' · ')+(s.notice ? '——'+calKey(c)+'（韩国时间）' : '')+(s.trip ? (/天气预报/.test(s.text) ? '，含天气预报' : '，无天气') : ''), s.trip && !s.notice ? '赴韩施术' : undefined);
+  closeSurgMsg(); Store.touch(); try{ buildCaseLog(c); renderCaseBody(c); }catch(e){} try{ todoRefresh(); renderCalendar(); }catch(e){}
+  showToast('已发送信息给客人（演示）', s.method+' → '+(to||'客人')+'：'+kinds.join(' · '), null);
 }
 (function(){
   if(typeof krTabContent==='function'){
@@ -608,7 +635,7 @@ function openStayModal(caseId, o){
   var hintLine = (!o.trip && hintN>0) ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">ℹ️ 考虑到术后管理及拆线安排，建议预留 '+hintN+' 天以上的行程。</div>' : ''; /* CMD-1109-05：标题改「在韩行程」，拿掉“行程有变可以修改…”说明，加灰色 ℹ️ 提示（已定 / 暂定都显示） */
   var ts0 = (c.krSchedule && c.krSchedule.tripState) || '', tsBox = (!o.trip && !o.initial && c.krSchedule) ? '<div style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span></div><div style="display:flex;gap:18px;font-size:13px;"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" onchange="stayTsToggle()" value="booked"'+(ts0==='booked' ? ' checked' : '')+'> 已定（机票已订）</label><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" onchange="stayTsToggle()" value="tentative"'+(ts0==='tentative' ? ' checked' : '')+'> 暂定（客人还没订机票 / 办签证）</label></div></div>' : ''; /* CMD-1106-18 */
   ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div>'+hintLine+(tip ? '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>' : '')+tsBox+'<fieldset id="stay-rows" style="border:0;padding:0;margin:0;min-width:0;">'+row('in', '入境')+row('out', '离境')+'</fieldset>'+methods+pass+
-    (o.trip ? '<div id="stay-remind" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);">'+stayRemindHtml(c)+'</div>' : '')+'<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
+    '<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '出发前再确认' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
   ov.classList.add('open'); stayTsToggle(); stayWarnRefresh();
 }

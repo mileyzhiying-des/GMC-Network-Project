@@ -7409,15 +7409,15 @@ function krProcedureTabMain(c, tabsHtml, opt){
   var hasActive = krActiveItems(c).length>0;
   var body = '';
   var sdTimeLine = function(k){ /* CMD-1109-02：韩国时间为主，印尼时间做小标签（跨天带日期） */ if(!k || !k.confirmedDate) return '施术日期 —'; if(!k.confirmedTime) return '施术日期 '+aEsc(k.confirmedDate); var r = krToClinic(k.confirmedDate, k.confirmedTime); return '施术日期 '+in21Time(k.confirmedDate, k.confirmedTime, {today:true}); };
-  var sdHead = function(tag, btns){ return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;"><span class="info-heading" style="margin:0;">施术日期</span>'+(tag ? '<span class="status-pill" style="background:var(--bg-brand-faint,#F6EFE6);color:var(--terracotta);">'+tag+'</span>' : '')+'<span style="flex:1;"></span>'+(btns ? '<span style="display:flex;gap:8px;">'+btns+'</span>' : '')+'</div>'; }; /* CMD-1109-01：施术日期 + 状态标签 + 右边按钮 */
-  if(hasActive && c.krBalancePaid && st==='Arrived'){ var jtx = (opt && opt.subPage) ? '✓ 已到院 · 院长评估：'+((c.krJudge && typeof KR_JUDGE_TEXT!=='undefined' && KR_JUDGE_TEXT[c.krJudge.result]) || (c.krJudge ? c.krJudge.result : '评估中'))+' · 尾款已付清' : '✓ 已到院、尾款已付清；详细记录见「Timeline」。'; body = '<div class="info-heading" style="margin-bottom:8px;">施术日期</div><div style="font-size:13px;">'+in21Time(ks.confirmedDate, ks.confirmedTime, {today:true})+'</div><div style="font-size:12px;color:var(--sage);margin-top:4px;">'+jtx+'</div>'; } /* CMD-1110-03：子案件页里绿字改成一行「已到院 · 院长评估：… · 尾款已付清」 */ /* CMD-1025-04 B：施术日期放最上面，日期时间写大 */
+  var sdHead = function(tag, btns){ return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">'+(tag ? '<span class="status-pill" style="background:var(--bg-brand-faint,#F6EFE6);color:var(--terracotta);">'+tag+'</span>' : '')+'<span style="flex:1;"></span>'+(btns ? '<span style="display:flex;gap:8px;">'+btns+'</span>' : '')+'</div>'; }; /* CMD-1109-01：施术日期 + 状态标签 + 右边按钮 */
+  if(hasActive && c.krBalancePaid && st==='Arrived'){ var jtx = (opt && opt.subPage) ? '✓ 已到院 · 院长评估：'+((c.krJudge && typeof KR_JUDGE_TEXT!=='undefined' && KR_JUDGE_TEXT[c.krJudge.result]) || (c.krJudge ? c.krJudge.result : '评估中'))+' · 尾款已付清' : '✓ 已到院、尾款已付清；详细记录见「Timeline」。'; body = '<div style="font-size:13px;">'+in21Time(ks.confirmedDate, ks.confirmedTime, {today:true})+'</div><div style="font-size:12px;color:var(--sage);margin-top:4px;">'+jtx+'</div>'; } /* CMD-1110-03：子案件页里绿字改成一行「已到院 · 院长评估：… · 尾款已付清」 */ /* CMD-1025-04 B：施术日期放最上面，日期时间写大 */
   else if(hasActive){
     /* 施术日期卡片（Schedule）：Draft / Pending / Confirmed / Changing / Arrived，案件主状态直接读这里 */
     var krBtn = krScheduleReplied(c) ? '无法协调' : '取消赴韩'; /* CMD-1019-12：KR 还没回过日期 = 客人决定不去了 → ［取消赴韩］；KR 回过日期 / 无法安排之后才是［无法协调］ */
     var canModify = ks && ks.status==='confirmed' && !c.hasArrived; /* 到医院前都可改日期（CMD-1012-13，拿掉施术前 2 周限制） */
     if(st==='Draft'){
       ks = ensureKrScheduleDraft(c);
-      body = krSchedHeadRowHtml('施术日期', krNotStartedItems(c).length ? '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>' : '')+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
+      body = krSchedHeadRowHtml('', krNotStartedItems(c).length ? '<button class="btn-outline sd-btn" onclick="svbOpen()">施术变动</button>' : '')+(ks.rejectNote ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;">KR 无法安排所选日期：'+ks.rejectNote+'。请在对话里沟通后重新选日期。</div>' : '')+
         monthNav+
         krDateCalendarGridHtml('primary','backup', ks.primary, ks.backup)+tripRedHtml(c, [ks.primary, ks.backup])+tripSubmitYellowHtml(c, ks.primary, ks.backup)+
         '<div style="border-top:1px solid var(--border2);margin:16px 0 14px;"></div><div style="display:flex;gap:12px;"><button class="btn-primary" style="flex:1;'+(sdSubmitOff(c, ks.primary, ks.backup) ? 'opacity:.5;cursor:not-allowed;" disabled' : '"')+' onclick="submitKrScheduleDate()">递交施术日期</button></div>'; /* CMD-1109-03：取消赴韩 / 无法协调收进［施术变动］；原注释：［取消赴韩］/［无法协调］只在时间确认前（待递交 / 待确认）出现；CMD-1106-17：行程搬到上面，这里只剩日历 + 按钮 */
@@ -7487,9 +7487,9 @@ function krProcedureTabMain(c, tabsHtml, opt){
   var tripRadios = (draftStay && hasActive && ks) ? tripStateBlockHtml(c, ensureKrScheduleDraft(c)) : '';
   var stayBtn = stayIn ? '<a href="#" class="btn-outline sd-btn" style="text-decoration:none;" onclick="openStayModal(\''+c.id+'\');return false;">'+(draftStay ? '修改' : '行程变动')+'</a>' : '';
   if(draftStay){ if(tripRadios || stayIn) tripTop = hrLine+tripRadios+hrLine; }
-  else if(stayIn) tripTop = hrLine+'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span class="info-heading" style="margin:0;flex:1;">行程</span>'+stayBtn+'</div>'+stayIn+hrLine;
+  /* CMD-1110-06：已递交之后「行程」整段搬到页头（在韩行程 +［行程变动］）；待递交时行程状态 / 到达离开的填写保留在这张卡上 */
   var subRow = ''; if(!draftStay){ subRow = subStatusRowHtml(caseSubStatusItems(c).filter(function(x){ return !/^(施术时间已确认|待确认施术时间|已到院$|施术时间变更待确认)/.test(x.text); })); } /* CMD-1109-01：拿掉「✓ 施术时间已确认…」绿字行（状态改放施术日期标题的标签） */
-  var schedCard = '<div class="card" style="padding:22px 24px;position:relative;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-size:14px;font-weight:700;flex:1;">赴韩日程</div>'+(tabsHtml||'')+(draftStay ? stayBtn : '')+'</div>'+tripTop+subRow+body+'</div>';
+  var schedCard = '<div class="card" style="padding:22px 24px;position:relative;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-size:14px;font-weight:700;flex:1;">施术日期</div>'+(tabsHtml||'')+'</div>'+tripTop+subRow+body+'</div>';
   if(opt && opt.cardOnly) return schedCard;
   return '<div style="display:flex;flex-direction:column;gap:12px;">'+schedCard+recCard+
     inProjectCardHtml(c)+'</div>'; /* CMD-1025-04 B：施术日期 → 客人赴韩日程 → 项目卡；CMD-1020-09：三张大卡（项目卡 / 术后管理 / 管理项目），在韩持有项目大卡拿掉；备注框、结束术后管理都拿掉 */
@@ -9791,9 +9791,9 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
     if(kn0>0) mgKept.push({it:it, bk:kn0, left:left0});
   });
   var mgShown = {}; mgBooked.concat(mgUnbooked, mgKept).forEach(function(x){ mgShown[itemIid(x.it)||x.it.name] = 1; });
-  var care19 = (kind==='mgmt') ? null : in19CareCardPage(c), mg19 = (kind==='mgmt') ? null : inMgmtL2Cards(c, mgList, false, true); /* CMD-1109-22：项目卡管理项目分页的预约中也有「其他：查看案件」 */
-  var counts = (kind==='mgmt') ? {mg:Object.keys(mgShown).length} : {surg:surgList.length+surgDone.length, care:care19.n, mg:mg19.n}; /* CMD-1109-19：三个分页 施术项目｜术后管理｜管理项目（施术做完的并进施术项目） */ /* CMD-1028-09：赴韩施术 tab 的项目卡只有施术 */
-  var cur = (kind==='mgmt') ? 'mg' : IN_PC_TAB[c.id]; if(kind!=='mgmt' && (!cur || !counts[cur])) cur = ['surg','care','mg'].filter(function(k){ return counts[k]>0; })[0] || '';
+  var care19 = null, mg19 = null; /* CMD-1110-06：「施术项目」tab 只列施术，不再有术后管理 / 管理项目分页（它们有自己的 tab） */ /* 原：in19CareCardPage / inMgmtL2Cards */ /* CMD-1109-22：项目卡管理项目分页的预约中也有「其他：查看案件」 */
+  var counts = (kind==='mgmt') ? {mg:Object.keys(mgShown).length} : {surg:surgList.length+surgDone.length}; /* CMD-1109-19：三个分页 施术项目｜术后管理｜管理项目（施术做完的并进施术项目） */ /* CMD-1028-09：赴韩施术 tab 的项目卡只有施术 */
+  var cur = (kind==='mgmt') ? 'mg' : (counts.surg ? 'surg' : '');
   var tabBtn = function(k, label){ var n = counts[k]; if(!n) return ''; var on = cur===k; return '<button onclick="inPcTab(\''+c.id+'\',\''+k+'\')" style="padding:6px 16px;border-radius:999px;border:1px solid '+(on ? 'var(--navy)' : 'var(--border2)')+';background:'+(on ? 'var(--navy)' : 'var(--bg-sidebar,#f3efe6)')+';color:'+(on ? '#fff' : 'var(--slate2)')+';font-size:12px;font-weight:700;cursor:pointer;">'+label+'（'+n+'）</button>'; };
   var G = function(cols){ return 'display:grid;grid-template-columns:'+cols+';gap:8px;align-items:center;'; };
   var hd = function(cols, names){ return '<div style="'+G(cols)+'font-size:12px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">'+names.map(function(n){ return '<span>'+n+'</span>'; }).join('')+'</div>'; };
@@ -9829,8 +9829,8 @@ function inProjectCardHtml(c, kind){ /* CMD-1028-09：kind==='mgmt' = 「在韩�
     var doneM = mgUses.length ? inSecTitle('已完成', mgUses.length)+inSmallCard(hd(C4m, ['项目','次数','使用时间','购买时间','备注','来源'])+mgUses.map(function(x){ var ud = useVisitDate(c, x.u); return rw(C4m, [nm(x.it), (x.u.qty||1)+'', md2(ud, ''), buyT(x.it), e(x.it.todayNote||''), srcT(x.it)]); }).join('')) : '';
     return card('<div class="info-heading" style="margin-bottom:4px;">在韩管理 <span style="font-weight:400;font-size:12px;color:var(--muted);">管理项目只在韩国做，由 KR 预约（这里只读）；行程结束时没用完的转韩国持有</span></div>'+((body || doneM) ? body+doneM : '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有管理项目</div>'));
   }
-  var c1 = card('<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">项目卡</div></div>'+
-    (cur ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px;">'+tabBtn('surg','施术项目')+tabBtn('care','术后管理')+tabBtn('mg','管理项目')+'</div><div>'+body+'</div>' : '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有项目</div>'));
+  var c1 = card('<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:14px;font-weight:700;flex:1;">施术项目（'+counts.surg+'）</div></div>'+
+    (cur ? '<div style="margin-top:8px;">'+body+'</div>' : '<div style="font-size:12px;color:var(--muted);padding:12px 0;">没有项目</div>')); /* CMD-1110-06：原「项目卡」改名「施术项目（N）」，拿掉三个分页 */
   var cN = card(inNotesAreaHtml(c)); /* 备注独立成一张卡（CMD-1022-16） */
   return c1+cN;
 }
@@ -9849,6 +9849,19 @@ function inStayInnerHtml(c, compact){
   return line('到达', s.in, s.inTime, s.inAirport)+line('离开', s.out, s.outTime, s.outAirport)+
     (staySuspect(c) ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ '+e(staySuspect(c))+'</div>' : '')+tripMismatchHtml(c)+(short ? '<div style="color:#B3261E;font-weight:700;font-size:12px;margin-top:4px;">⚠ 离境日比建议少 '+short+' 天</div>' : '')+
     (tripMismatchList(c).some(function(x){ return x.kind==='short' && !x.soft; }) ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:6px;">'+e(krStayHint(c).replace(/ · 施术日 = 第 0 天/, ''))+'</div>');
+}
+/* ===== CMD-1110-06：IN 主案件页头第三行「在韩行程」+［行程变动］（只有赴韩案件有；行程已定 / 暂定、到达 / 离开的填写入口 = 这个弹窗 openStayModal；待递交时递交画面里直接填的写法保留） =====
+   时间照 5-19：韩国为主、印尼灰色小字；没填机场就不显示括号；行程暂定写「在韩行程：暂定」 */
+function inTripHeaderRowHtml(c){
+  if(!c || !c.settlementDone || !krActiveItems(c).length) return '';
+  var s = c.stay || {}, ks = c.krSchedule || {};
+  var one = function(d, t, ap){ if(!d) return '<span style="color:var(--muted);">未填</span>'; var r = null; if(t){ try{ r = krToClinic(d, t); }catch(e){} } return aEscC(stayMD(d)+(t ? ' '+t : ''))+(ap ? '（'+aEscC(ap)+'）' : '')+(r ? ' <span class="sd-tag" style="font-size:12px;font-weight:400;color:var(--muted);">印尼 '+(r.date!==d ? aEscC(r.date.slice(5).replace('-', '/'))+' ' : '')+aEscC(r.time)+'</span>' : ''); };
+  var body;
+  if(ks.tripState==='tentative' && !stayFilled(c)) body = '暂定';
+  else if(!s.in && !s.out) body = '<span style="color:var(--muted);">未填写</span>';
+  else body = one(s.in, s.inTime, s.inAirport)+' ～ '+one(s.out, s.outTime, s.outAirport);
+  var bad = ''; try{ var sus = staySuspect(c); if(sus) bad = ' <b style="font-size:12px;color:#B3261E;">⚠ '+aEscC(sus)+'</b>'; var sh = stayShortDays(c); if(sh) bad += ' <b style="font-size:12px;color:#B3261E;">⚠️ 离境日比建议少 '+sh+' 天</b>'; }catch(e){} /* 原在赴韩日程卡「行程」段里的这行红字随行程一起搬到页头 */
+  return '<div id="in-trip-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px;font-size:13px;"><b style="color:var(--slate2);">在韩行程：'+body+'</b>'+bad+'<span style="flex:1;"></span><button class="btn-outline sd-btn" onclick="openStayModal(\''+c.id+'\')">行程变动</button></div>';
 }
 function inStayCardHtml(c){ /* 旧的单独一张卡（已不用，留给兼容） */
   if(!c.settlementDone || !krActiveItems(c).length) return '';
@@ -11354,7 +11367,7 @@ function dayFlowKinds(m, v){
 function flowMarkOf(m, kind, side){
   var done = false;
   if(kind==='consult') done = !!(m.reportReady || m.consultStatus==='report_ready');
-  else if(kind==='kr') done = !!m.krTripEnded;
+  else if(kind==='kr'){ var sg = krAllItems(m).filter(function(it){ return !krIsMgmtItemC(it); }); done = sg.length>0 && sg.every(function(it){ return !!(it.done || it.cancelled || it.replacedBy); }); } /* CMD-1110-06：施术项目都做完或取消 → ✓，还有没做完的 → ●（原：韩国行程结束才 ✓） */
   else if(kind==='kmgmt'){ done = !!m.krTripEnded || mgmtFlowItems(m).every(function(it){ return !!it.holdDone || holdItemLeft(m, it)<=0; }); if(side==='IN' && done){ try{ done = localMgmtBatchesOf(m).every(function(x){ return !!x.b.refund || !!x.b.voided || (x.b.bought||0)-(x.b.used||0)<=0; }); }catch(er){} } } /* CMD-1028-13：IN 的「管理项目」tab 另含本地管理，本地项目没用完也算 ● */ /* CMD-1028-09：全部用完，或按了韩国行程结束（没用完的转韩国持有） */
   else if(kind==='postcare') done = !pendingCareOf(m).length && !careUnits(m).unbooked.length; /* CMD-1026-19 B6：韩国和印尼的术后管理都做完（或过一个月转成管理项目）才 ✓，不再要求韩国行程已结束；IN / KR 两端同一个函数 */
   else if(kind==='revisit'){ var rv = childVisitsOf(m).filter(function(x){ return isRevEval(x); }); done = rv.length>0 && rv.every(function(x){ return !!(x.reportReady || x.consultStatus==='report_ready') || isEnded(x); }); }

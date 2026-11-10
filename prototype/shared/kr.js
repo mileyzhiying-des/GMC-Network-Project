@@ -5141,20 +5141,20 @@ function krRebTag(c){ var P = krPendWrap(c); return P.rebN ? '<span style="font-
 function krMainStatusBar(r, c){ /* CMD-1027-02 二：两行——当前状态（进行中｜预约中）+ 今日到访 / 下次到访 / 后续日程：无；不再放原来的状态标签 */
   var today = todayStr(), cid = KR_CASE.clinicId, id = KR_CASE.id, days = daysOf(c).filter(function(v){ return v.state!=='cancelled' && v.state!=='noShow'; });
   var nLive = days.filter(function(v){ return v.state==='arrived' || v.state==='unconfirmed'; }).length, nBook = days.filter(function(v){ return v.state==='waiting' && v.date>=today; }).length;
-  var btn = function(label, on){ return '<button class="btn-outline" style="padding:6px 16px;font-size:13px;" onclick="'+on+'">'+label+'</button>'; };
+  var btn = function(label, on){ return '<a href="#" style="font-size:13px;text-decoration:underline;color:var(--slate2);" onclick="'+on+';return false;">'+label+'</a>'; }; /* CMD-1110-06：［查看］［查看内容］= 下划线文字按钮 */
   var view = function(v){ return btn('查看内容', 'krOpenDay(\''+cid+'\',\''+id+'\',\''+krMainDayKey(v)+'\')'); };
   var biz = function(v){ return krMainDayTypes(v); };
   var row2 = '', tdy = days.filter(function(v){ return v.date===today; }).sort(function(a, b){ return (a.time||'').localeCompare(b.time||''); });
-  if(tdy.length){
-    var v0 = tdy[0], allDone = tdy.every(function(v){ return v.state==='left' || v.state==='ended'; }), anyLive = tdy.some(function(v){ return v.state==='arrived' || v.state==='unconfirmed'; });
-    row2 = '<b>今日到访</b>（'+krEsc(Array.from(new Set(tdy.map(biz))).join(' · '))+'）<span style="margin-left:6px;">'+(anyLive ? '进行中' : (allDone ? '已完成' : '待到院'))+'</span>'+krPendSmall(c)+'<span style="flex:1;"></span>'+view(v0);
-  } else {
+  var tdyOpen = tdy.filter(function(v){ return v.state!=='left' && v.state!=='ended'; }); /* CMD-1110-06：今天的到访已结束就切成「下一个预约」 */
+  if(tdyOpen.length){
+    var v0 = tdyOpen[0], anyLive = tdyOpen.some(function(v){ return v.state==='arrived' || v.state==='unconfirmed'; });
+    row2 = '<b>今日到访</b>（'+krEsc(Array.from(new Set(tdyOpen.map(biz))).join(' · '))+'）<span style="margin-left:6px;">'+(anyLive ? '进行中' : '待到院')+'</span>'+krPendSmall(c)+'<span style="flex:1;"></span>'+view(v0);
+  } else if(days.length){
     var nx = days.filter(function(v){ return v.state==='waiting' && v.date>today; }).sort(function(a, b){ return (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')); })[0];
-    if(nx) row2 = '<b>下次到访</b>（'+krEsc(biz(nx))+'）'+krEsc(String(nx.date).slice(5).replace('-', '/'))+krPendSmall(c)+'<span style="flex:1;"></span>'+view(nx);
-    else if(days.length) row2 = krPendRow(c, btn) || '<b>后续日程：无</b>';
-    else { var ni = krMainNextInfo(c); row2 = ni.text ? '<span>'+krEsc(ni.text)+'</span><span style="flex:1;"></span>'+(ni.btn||'') : '<b>后续日程：无</b>'; } /* 还没有任何到访（面诊 / 付定金阶段）：沿用 1025-03 的阶段句子 */
-  }
-  return '<div class="card" style="padding:12px 20px;display:flex;flex-direction:column;gap:10px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+nLive+'｜预约中 '+nBook+'）</span>'+krRebTag(c)+'<span style="flex:1;"></span>'+btn('查看', 'krSetCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:10px;">'+row2+'</div></div>';
+    if(nx) row2 = '<b>下一个预约：</b>'+krEsc(String(nx.date).slice(5).replace('-', '/'))+(nx.time ? ' '+krEsc(nx.time) : '')+'（'+(nx.place==='KR' ? '韩国' : '印尼')+'）· '+krEsc(dayNameOf(nx))+(nx.no ? ' '+krEsc(nx.no) : '')+krPendSmall(c)+'<span style="flex:1;"></span>'+(nx.place==='KR' ? view(nx) : '');
+    else { var P2 = krPendWrap(c); row2 = '<b>下一个预约：—</b>'+krPendSmall(c)+((P2.krN || P2.mgN) && krCan() ? '<span style="flex:1;"></span>'+btn('预约时间', (P2.krN && P2.mgN) ? 'krCbOpen({all:true})' : (P2.mgN ? 'krCbOpen({all:true, tab:\'mgmt\'})' : 'krCbOpen({all:true, tab:\'care\'})')) : ''); } /* 待预约的［预约时间］入口保留（原 krPendRow） */
+  } else { var ni = krMainNextInfo(c); row2 = ni.text ? '<span>'+krEsc(ni.text)+'</span><span style="flex:1;"></span>'+(ni.btn||'') : '<b>下一个预约：—</b>'; } /* 还没有任何到访（面诊 / 付定金阶段）：沿用 1025-03 的阶段句子 */
+  return '<div class="card" style="padding:10px 20px;display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:14px;font-size:13px;"><b>当前状态</b><span style="color:var(--slate2);">（进行中 '+nLive+'｜预约中 '+nBook+'）</span>'+krRebTag(c)+'<span style="flex:1;"></span>'+btn('查看', 'krSetCaseTab(\'visits\')')+'</div><div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate2);border-top:1px solid var(--border2);padding-top:6px;">'+row2+'</div></div>';
 }
 /* CMD-1106-13：KR 案件页头三行——① 客人名 · 案件号 + 面诊 / 施术次数，［对话］最右 ② 在韩行程（预估）：MM/DD HH:mm ～ MM/DD HH:mm +［行程修正］（真的错——施术日期早于到达——只在后面放一个小红字，不放长句；天数不够的提醒不在页头，在施术日期卡里）③ 来源诊所 · 院长 · KR 室长 */
 function krTripRowHtml(c){
