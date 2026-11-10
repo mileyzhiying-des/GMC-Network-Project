@@ -1441,7 +1441,7 @@ function renderCaseHeaderActions(c){
   /* 2026-09-30：面诊/赴韩案件从生成 Case ID 到结案前，可点"+添加本地管理"插做本地项目；不面诊案件不显示 */
   var lmBtn = '';
   /* CMD-1105-07：来访进行中，页头的［+ 添加本地管理］一直都在（原来 CMD-1026-17 只在「还没有本地管理」时显示，加过之后就消失了）；先分「使用持有 / 购买新项目」；离店 / 锁住 / 结束后不出现；纯本地案件有自己的选购流程 */
-  var lmOkCase = isChildVisit(c) ? true : (!isLocalCase(c) && (c.consultRequested || c.needsConsult===true));
+  var lmOkCase = inHeaderLocalOk(c); /* CMD-1110-08：和 mgmtActiveHtml 同一个判断（含「本地管理进行中」的纯本地案件） */
   if(notEnded && lmOkCase && !c.leftStore && !c.visitClosed && !inDayLocked(c) && localAddAllowed(c)){
     lmBtn = '<button class="btn-outline" onclick="inLocalEntry()">+ 添加本地管理</button>';
   }

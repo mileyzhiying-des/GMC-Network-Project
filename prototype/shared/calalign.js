@@ -325,7 +325,7 @@ function confirmSurgPhone(){
    天气接入位置（正式版换真实天气 API 的地方）：weatherFetch(city, startYmd, endYmd) —— 现在是模拟数据（同城市同日期永远同一结果，和 KR 工作台天气同一套“演示”性质）；
    失败开关：window.GMC_WEATHER_FAIL = true 或 localStorage gmc_cfg_weatherfail = '1'（模拟天气服务拿不到）→ 提醒里不放天气段，其他照发。
    城市 = 医院设定的城市（HOSPITAL_DATA[h].city；没填 = 医院所在时区的城市，首尔）。 */
-function hospitalCity(hid){ var hd = (typeof HOSPITAL_DATA!=='undefined' && HOSPITAL_DATA[hid]) || {}, h = hospitalById(hid) || {}; return String(hd.city || (TZ_INFO[h.tz||'Asia/Seoul']||{}).city || '首尔').split('（')[0]; }
+function hospitalCity(hid){ var hd = (typeof HOSPITAL_DATA!=='undefined' && HOSPITAL_DATA[hid]) || {}, h = hospitalById(hid) || {}; if(hd && hd.city===undefined && !hd._cityDemo){ hd.city = '首尔'; hd._cityDemo = 1; } /* CMD-1110-08：演示医院先填「首尔」（首次读取补一次；用户清空 / 改过的不再动）；没填（空）就照旧用时区对应的城市 */ return String(hd.city || (TZ_INFO[h.tz||'Asia/Seoul']||{}).city || '首尔').split('（')[0]; }
 function weatherFetch(city, startYmd, endYmd){
   var fail = !!window.GMC_WEATHER_FAIL; try{ if(localStorage.getItem('gmc_cfg_weatherfail')==='1') fail = true; }catch(e){}
   if(fail) return {ok:false, days:[]};

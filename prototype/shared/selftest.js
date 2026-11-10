@@ -4423,7 +4423,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var dAgo = function(n){ return dateStr(new Date(demoNow().getTime()-n*86400000)); }, labels = function(c){ return caseTabListOf(c).map(function(t0){ return t0.label; }).join('｜'); };
     /* 1 只有面诊 */
     var a = ST.newRes('R118a'); ST.materials(a, {consult:true}); a = CASE_ITEMS.filter(function(x){ return x.id===a.id; })[0]; a.consultRequested = true;
-    ST.ok(!isUpgraded(a) && labels(a)==='基础资料｜面诊｜附件｜Timeline', '只有面诊：基础资料｜面诊｜附件｜Timeline（没有结算时）：'+labels(a));
+    ST.ok(!isUpgraded(a) && labels(a)==='基础资料｜面诊｜备注内容｜附件｜Timeline', '只有面诊：基础资料｜面诊｜备注内容｜附件｜Timeline（没有结算时；CMD-1110-08 起未升级的一般案件也有备注内容）：'+labels(a));
     ST.ok(!/从 .* 面诊开始/.test('') && mainHeadLine(a).indexOf('第')<0 && mainHeadLine(a).indexOf('A000')<0, '一般案件页页头不写子案件号');
     /* 2 只做本地 */
     var b = ST.newRes('R118b'); ST.materials(b, {consult:false}); b = CASE_ITEMS.filter(function(x){ return x.id===b.id; })[0];
@@ -7996,7 +7996,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var A = mk('R182a'), c = A.c0; chooseProjectEntryMode('holdings');
       ST.ok(/新增项目\|本次不使用\|使用项目$/.test(btns()), '①：按钮同一排，顺序［新增项目］［本次不使用］［使用项目］（主操作最右）：'+btns());
       document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); c = cur(c);
-      ST.ok(c.mgmtActive && /新增项目/.test(btns()), '①：先使用后，使用中的面板仍有［新增项目］');
+      ST.ok(c.mgmtActive && inHeaderLocalOk(c) && !/新增项目|继续使用持有项目/.test(btns()), '①：先使用后，使用中的面板不再有「继续」行 / ［新增项目］，页头［+ 添加本地管理］是入口（CMD-1110-08；原：面板里有［新增项目］）');
       var op = buy(); c = cur(c);
       ST.ok(op, '①：弹出和一般本地选购同一个选项目画面（lm-buy-overlay）'); ST.ok(!document.getElementById('lm-buy-overlay').classList.contains('open') && !isEnded(c), '①：付款后弹窗关掉，案件没有结束');
       ST.ok(/婴儿针:1\/3@旧/.test(hold(c)) && /LHALa peel:1\/1@本案/.test(hold(c)), '①：旧的剩 1 次（用掉 1 次），新买的 1 次记在本案件：'+hold(c));
@@ -10571,8 +10571,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       inleTab('buy'); ST.ok(/本地选购|选择|项目/.test(ov.innerText), '购买新项目进入选购画面'); if(typeof lmNoBuy==='function') lmNoBuy(); ov.classList.remove('open');
       /* 纯本地案件：页头没有该按钮，这一行入口保留 */
       var p = ST.newRes('R281aP'); ST.materials(p, {consult:false}); p = cur(p); p.mgmtActive = true; p.mgmtUses = [{itemName:'R281aP 婴儿针', qty:1, status:'active'}];
-      ST.ok(!inHeaderLocalOk(p), '纯本地案件：页头没有［+ 添加本地管理］');
-      var hp = mgmtActiveHtml(p, 'main'); ST.ok(!/全部完成/.test(hp) && /继续使用持有项目/.test(hp), '纯本地案件：没有［全部完成］，但保留「继续」入口（页头没有别的入口）');
+      ST.ok(inHeaderLocalOk(p), '纯本地案件「本地管理进行中」：页头有［+ 添加本地管理］（CMD-1110-08；原 1110-05：页头没有、保留「继续」行）');
+      var hp = mgmtActiveHtml(p, 'main'); ST.ok(!/全部完成/.test(hp) && !/继续使用持有项目/.test(hp), '纯本地案件：没有［全部完成］，「继续」行也拿掉（CMD-1110-08）');
       /* 逐行完成最后一项 → 客人是否已离店？ */
       ST.open(p); window.GMC_LOCAL_LEAVE_MANUAL = true; markMgmtRows('main', 'done', false, 0);
       var lo = document.getElementById('local-leave-overlay'); ST.ok(!!lo && lo.classList.contains('open') && /客人是否已离店/.test(lo.innerText), '逐行完成最后一项 →「客人是否已离店？」照旧'); if(typeof localLeaveNo==='function') localLeaveNo();
@@ -10659,6 +10659,36 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       [h1, h2, h3].forEach(function(h, i){ var ok = h && /<\/b><button[^>]*openStayModal[^>]*>行程变动<\/button>/.test(h) && !/<span style="flex:1;"><\/span><button/.test(h); ST.ok(ok, '［行程变动］紧贴在行程后面（'+['有机场', '没机场', '暂定'][i]+'）'); });
       ST.ok(/在韩行程：暂定/.test(h3.replace(/<[^>]+>/g, '')), '暂定写「在韩行程：暂定」');
     } finally { window.alert = oa; var o = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.keys(o).forEach(function(k){ c[k] = o[k]; }); }
+  });
+
+  /* CMD-1110-08：纯本地案件页头按钮 + 一般案件备注内容 tab + 结算备注 + 医院城市 */
+  ST.def('R284a','CMD-1110-08（A1 分页）：纯本地案件「本地管理进行中」时页头有［+ 添加本地管理］、本地管理卡没有「继续」行、点开分「使用持有 / 购买新项目」且不另建 localMgmt；还没开始时页头没有该按钮（清单自带）；未升级的一般案件有「备注内容」tab（本地项目备注看得到、顺序在结算之前）；结算区叫「结算备注」；医院设定「城市」改了 → 行程提醒天气城市跟着变',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var cur = function(c){ return CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; };
+    try{
+      var p = ST.newRes('R284a'); ST.materials(p, {consult:false}); p = cur(p); ST.open(p); p.subState = 'arrived'; p.arrivedDay = todayStr(); p.stage = 'local';
+      ST.ok(pureLocalMain(p) && !inHeaderLocalOk(p), '前置：纯本地案件，还没开始本地管理 → 页头没有按钮（清单自带［新增项目］［使用项目］）');
+      p.mgmtActive = true; p.mgmtUses = [{itemName:'R284a 婴儿针', qty:1, status:'active', note:'纯本地备注X', noteBy:'A1', noteAt:nowFullDt()}];
+      ST.ok(inHeaderLocalOk(p), '本地管理进行中 → 页头有按钮');
+      renderCaseHeaderActions(p); var ha = document.getElementById('case-chat-actions'); ST.ok(!!ha && /添加本地管理/.test(ha.innerText), '页头［+ 添加本地管理］');
+      var h = mgmtActiveHtml(p, 'main'), t = h.replace(/<[^>]+>/g, ' ');
+      ST.ok(!/继续使用持有项目|继续选购项目|同一次到店里还可以|全部完成/.test(t), '本地管理卡没有「继续」行（原：纯本地案件保留，1110-05 的例外）');
+      inLocalEntry(); var ov = document.getElementById('in-localentry-overlay'); ST.ok(ov.classList.contains('open') && /使用持有项目/.test(ov.innerText) && /购买新项目/.test(ov.innerText), '弹窗分「使用持有项目 / 购买新项目」');
+      ST.ok(!p.localMgmt, '纯本地案件不另建 localMgmt（不会有两套清单）');
+      inLocalEntryMainGo('buy'); p = cur(p); ST.ok(p.addingMore===true && !p.localMgmt, '购买新项目 → 回到本案件自己的选购画面（main），没有 localMgmt');
+      /* 未升级一般案件的备注内容 tab */
+      p.addingMore = false; var tl = caseTabListOf(p).map(function(x){ return x.key; }); ST.ok(tl.indexOf('notes')>-1 && !isUpgraded(p), '未升级的一般案件有「备注内容」tab：'+tl.join('｜'));
+      ST.ok(tl.indexOf('notes') < (tl.indexOf('settle')>-1 ? tl.indexOf('settle') : tl.indexOf('attachments')), '顺序在结算 / 附件之前');
+      p.activeCaseTab = 'notes'; var nh = caseTabContentHtml(p).replace(/<[^>]+>/g, ' '); ST.ok(/纯本地备注X/.test(nh), '本地项目备注在「备注内容」tab 里看得到');
+      /* 结算备注 */
+      ST.ok(/结算备注（KR \+ IN 可见）/.test(settlementBigCardHtml.toString()) && !/整体备注（KR \+ IN 可见）/.test(settlementBigCardHtml.toString()), '结算区叫「结算备注」');
+      /* 医院城市 */
+      var hid = clinicHospital(CURRENT_CLINIC_ID), hd = HOSPITAL_DATA[hid], old = hd.city;
+      hd.city = '釜山'; var c2 = ST.toConfirmed('R284aW'); c2.stay = {in:ymdAdd(todayStr(), 1), inTime:'10:00', out:ymdAdd(todayStr(), 4), outTime:'12:00'}; c2.krSchedule.tripState = 'booked';
+      var tx = tripRemindText(c2, c2.stay); ST.ok(/釜山天气预报/.test(tx), '医院设定城市改成釜山 → 提醒天气「釜山天气预报」：'+tx.slice(0, 60)); hd.city = ''; tx = tripRemindText(c2, c2.stay); ST.ok(/首尔天气预报/.test(tx), '城市留空 → 退回时区对应的城市（首尔）');
+      hd.city = old;
+    } finally { window.alert = al; window.confirm = cf; }
   });
 
   /* CMD-1106-16：推荐项目术后管理标在哪做 + 建议在韩天数自动算 */

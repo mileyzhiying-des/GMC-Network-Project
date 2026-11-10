@@ -287,16 +287,16 @@ function krAccountStatusPill(a){ var s = STATUS_STYLE[a.status]; return '<span c
     var hid = krHospitalIdOfMe(), en = hospitalEn(hid), hd = krHData() || {}, can = canDo('clinic');
     var inp = function(id, v, ph){ return '<input id="'+id+'" type="text" value="'+aEsc(v)+'" placeholder="'+aEsc(ph)+'"'+(can ? '' : ' disabled')+' style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">'; };
     var h0 = hospitalById(hid) || {name:{}, address:''};
-    return '<div class="card" style="padding:14px 20px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">英文名称 / 英文地址 / 韩文地址 <span style="font-weight:400;font-size:12px;color:var(--muted);">发给客人的短信里用；没填就退回韩文原文</span></div>'+
-      '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px 12px;align-items:center;font-size:13px;"><span>英文名称</span>'+inp('hosp-en-name', hd.nameEn!==undefined ? hd.nameEn : en.name, h0.name.ko||'')+'<span>英文地址</span>'+inp('hosp-en-addr', hd.addressEn!==undefined ? hd.addressEn : en.address, h0.address||'')+'<span>韩文地址</span>'+inp('hosp-ko-addr', hospitalKoAddr(hid), '选填；施术日期框里显示成「英文（韩文）」')+'</div>'+
+    return '<div class="card" style="padding:14px 20px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">英文名称 / 英文地址 / 韩文地址 / 城市 <span style="font-weight:400;font-size:12px;color:var(--muted);">发给客人的短信里用；没填就退回韩文原文；城市用来读行程提醒里的天气，没填就用医院所在时区的城市（首尔）</span></div>'+
+      '<div style="display:grid;grid-template-columns:90px 1fr;gap:8px 12px;align-items:center;font-size:13px;"><span>英文名称</span>'+inp('hosp-en-name', hd.nameEn!==undefined ? hd.nameEn : en.name, h0.name.ko||'')+'<span>英文地址</span>'+inp('hosp-en-addr', hd.addressEn!==undefined ? hd.addressEn : en.address, h0.address||'')+'<span>韩文地址</span>'+inp('hosp-ko-addr', hospitalKoAddr(hid), '选填；施术日期框里显示成「英文（韩文）」')+'<span>城市</span>'+inp('hosp-city', hospitalCity(hid), '例如：首尔；行程提醒里的天气读这个城市')+'</div>'+
       (can ? '<div style="margin-top:10px;"><button class="btn-primary" onclick="saveHospEn()">'+t('保存')+'</button></div>' : '')+'</div>';
   };
   window.saveHospEn = function(){
     if(!canDo('clinic')) return; var h = krHData(); if(!h) return;
-    var nm = (document.getElementById('hosp-en-name').value||'').trim(), ad = (document.getElementById('hosp-en-addr').value||'').trim(), ko = ((document.getElementById('hosp-ko-addr')||{}).value||'').trim(), old = hospitalEn(krHospitalIdOfMe()), oldKo = hospitalKoAddr(krHospitalIdOfMe());
-    if(nm===old.name && ad===old.address && ko===oldKo){ showToast('没有修改', '设定和之前一样', null); return; }
-    h.nameEn = nm; h.addressEn = ad; h.addressKo = ko;
-    var txt = '英文名称：'+old.name+' → '+(nm||'（空，退回原文）')+'；英文地址：'+old.address+' → '+(ad||'（空，退回原文）')+(ko!==oldKo ? '；韩文地址：'+(oldKo||'（空）')+' → '+(ko||'（空，不显示）') : '');
+    var nm = (document.getElementById('hosp-en-name').value||'').trim(), ad = (document.getElementById('hosp-en-addr').value||'').trim(), ko = ((document.getElementById('hosp-ko-addr')||{}).value||'').trim(), ct = ((document.getElementById('hosp-city')||{}).value||'').trim(), old = hospitalEn(krHospitalIdOfMe()), oldKo = hospitalKoAddr(krHospitalIdOfMe()), oldCt = hospitalCity(krHospitalIdOfMe());
+    if(nm===old.name && ad===old.address && ko===oldKo && ct===oldCt){ showToast('没有修改', '设定和之前一样', null); return; }
+    h.nameEn = nm; h.addressEn = ad; h.addressKo = ko; h.city = ct; h._cityDemo = 1;
+    var txt = '英文名称：'+old.name+' → '+(nm||'（空，退回原文）')+'；英文地址：'+old.address+' → '+(ad||'（空，退回原文）')+(ko!==oldKo ? '；韩文地址：'+(oldKo||'（空）')+' → '+(ko||'（空，不显示）') : '')+(ct!==oldCt ? '；城市：'+(oldCt||'（空）')+' → '+(ct||'（空，用时区对应的城市）') : '');
     logOp('设定变更', '医院设定：'+txt); krSettingsNotif('医院设定：'+txt); Store.touch(); openAdminPage('clinic', true); showToast('已保存', txt, null);
   };
   var HOSP_DRAFT = null; /* 医院设定草稿：{openTime, closeTime, closedRules, lunch} */

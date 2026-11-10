@@ -503,7 +503,7 @@ function settlementBigCardHtml(c, items, removable){
       noteFieldHtml('备注（仅 IN 可见）','noteIN',c.noteIN)+
       '</div>';
   }
-  return noteFieldHtml('整体备注（KR + IN 可见）','noteOverall',c.noteOverall)+
+  return noteFieldHtml('结算备注（KR + IN 可见）','noteOverall',c.noteOverall)+
     '<div style="margin-top:12px;">'+krCard+inCard+'</div>';
 }
 

@@ -3081,11 +3081,27 @@ var INLE = null; /* {caseId, tab:'use'|'buy'} */
 function inleHeld(c){ var M = inContModel(c); return {M:M, n:M.unused.length + M.grp.none.length}; }
 function inLocalEntry(tab){
   var c = getCurrentCase(); if(!c || isEnded(c)) return; if(inLockGuard(c)) return;
+  if(pureLocalMain(c)){ inLocalEntryMain(c); return; } /* CMD-1110-08：纯本地案件走自己的「本案件」流程（main），不另建 localMgmt，避免同一案件里出现两套购买 / 使用清单 */
   var h = inleHeld(c), want = (tab==='buy' || !h.n || h.M.ro) ? 'buy' : 'use';
   INLE = {caseId:c.id, tab:'use'};
   var ov = document.getElementById('in-localentry-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'in-localentry-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 188; document.body.appendChild(ov); }
   ov.classList.add('open');
   if(want==='buy') inleTab('buy'); else inleRender();
+}
+/* CMD-1110-08：纯本地案件的［+ 添加本地管理］——弹窗分「使用持有项目 / 购买新项目」，点了回到案件页里原来的「是否使用持有项目？」清单（main）/ 本地选购画面（main）；没有可用持有时［使用持有项目］灰掉 */
+function inLocalEntryMain(c){
+  var held = (getClientHoldings(c.name)||[]).some(function(h){ return (h.batches||[]).some(function(b){ return !b.refund && !b.voided && (b.bought||0)-(b.used||0)>0; }); });
+  var ov = document.getElementById('in-localentry-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'in-localentry-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 188; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:420px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:15px;font-weight:700;flex:1;">添加本地管理 · '+aEscC(c.name)+'</div><a href="#" onclick="inLocalEntryMainClose();return false;" style="font-size:18px;color:var(--muted);text-decoration:none;">✕</a></div>'+
+    '<div style="display:flex;flex-direction:column;gap:10px;"><button class="btn-outline" '+(held ? '' : 'disabled style="opacity:.5;cursor:not-allowed;" title="客人没有可用的持有项目" ')+'onclick="inLocalEntryMainGo(\'use\')">使用持有项目'+(held ? '' : '（没有持有项目）')+'</button><button class="btn-primary" onclick="inLocalEntryMainGo(\'buy\')">购买新项目</button></div></div>';
+  ov.classList.add('open');
+}
+function inLocalEntryMainClose(){ var ov = document.getElementById('in-localentry-overlay'); if(ov) ov.classList.remove('open'); }
+function inLocalEntryMainGo(what){
+  var c = getCurrentCase(); inLocalEntryMainClose(); if(!c || isEnded(c)) return;
+  if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; }
+  if(what==='buy' && usePrevBuyOk(c, 'main')) { usePrevBuy(); return; }
+  setMgmtAdd('main', what);
 }
 function inleTab(t){
   var c = getCurrentCase(); if(!c || !INLE) return; var h = inleHeld(c);
@@ -4859,7 +4875,7 @@ function projectListTabHtml(c, inLocalTab){
   if(isEnded(c)){
     return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">已选择项目</div>'+
       '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">案件已结束（'+terminalBadge(c)[2]+'），不能再选择或追加项目；客人再来请新建预约。结算单在「结算」tab。</div>'+
-      (c.noteOverall ? '<div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">整体备注：'+String(c.noteOverall).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '')+'</div>';
+      (c.noteOverall ? '<div style="font-size:12px;color:var(--slate2);margin-bottom:10px;">结算备注：'+String(c.noteOverall).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '')+'</div>';
   }
   /* 面诊案件只买本地项目后，本地流程（是否使用/本地管理）在"本地管理"tab里进行，这里只看结算单 */
   if(!inLocalTab && isLocalCase(c) && c.reportReady){
@@ -4879,7 +4895,7 @@ function projectListTabHtml(c, inLocalTab){
     return '<div class="card" style="padding:22px 24px;">'+
       '<div class="info-heading" style="margin-bottom:14px;">已选择 / 结算</div>'+
       subStatusRowHtml(caseSubStatusItems(c))+
-      noteFieldHtml('整体备注（KR + IN 可见）','noteOverall',c.noteOverall)+
+      noteFieldHtml('结算备注（KR + IN 可见）','noteOverall',c.noteOverall)+
       '<div style="margin-top:12px;">'+settlementCardsHtml(c)+'</div>'+
       addPicker+
       '</div>';
@@ -5297,7 +5313,9 @@ var LOCAL_ITEM_COLORS = {'进行中':['#FBF0C9','#8F6F0C'], '已完成':['var(--
 function localItemStatus(u){ return u.status==='done' ? '已完成' : u.status==='cancelled' ? '已取消' : '进行中'; }
 
 /* CMD-1110-05：页头会出现［+ 添加本地管理］的案件（和 renderCaseHeaderActions 的 lmOkCase 同一个判断）= 子记录，或不是纯本地的面诊 / 赴韩案件 */
-function inHeaderLocalOk(c){ return isChildVisit(c) ? true : (!isLocalCase(c) && (c.consultRequested || c.needsConsult===true)); }
+/* CMD-1110-08：纯本地案件（只做本地项目的一般案件）在「本地管理进行中」（有逐行完成的卡片，c.mgmtActive）时页头也有［+ 添加本地管理］；还没开始（「是否使用持有项目？」清单自带［新增项目］［使用项目］）或已结束时不放，免得和清单里的按钮重复 */
+function inHeaderLocalOk(c){ return isChildVisit(c) ? true : (!isLocalCase(c) ? (c.consultRequested || c.needsConsult===true) : !!(c.mgmtActive && !isEnded(c))); }
+function pureLocalMain(c){ return !!c && !isChildVisit(c) && isLocalCase(c); }
 function mgmtActiveHtml(c, scope){
   var ctx = ctxOf(c, scope);
   var rows = (ctx.mgmtUses||[]).map(function(u,i){
@@ -11379,6 +11397,7 @@ function caseTabListOf(c){
   if(!up){
     if(c.consultRequested) out.push({key:'consult', label:'面诊'});
     if(showLocalTab(c)) out.push({key:'localmgmt', label:'本地项目'});
+    if(c.materialsConfirmed) out.push({key:'notes', label:'备注内容'}); /* CMD-1110-08：未升级的一般案件也有「备注内容」tab——顺序 基础资料｜面诊｜本地项目｜备注内容｜结算｜附件｜Timeline（升级后：…｜备注内容｜子案件｜项目汇总｜结算…） */
   } else {
     if(c.consultRequested) out.push({key:'consult', label:'面诊', mark:flowMarkOf(c, 'consult')});
     if(showKrTab(c) || (c.procedureItems||[]).some(function(it){ return it.origin==='KR'; })) out.push({key:'kr', label:'施术项目', mark:flowMarkOf(c, 'kr')});
