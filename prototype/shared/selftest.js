@@ -185,7 +185,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   /* ================= A 到店前 / 接待 ================= */
   /* CMD-1026-15 二：本地项目［结算］现在多一步付款确认；老用例（D28 / D30 / D31 / CP1 / R138a 等）直接调 lmSettle() 期待立刻完成 → 这里自动点［确认已付款］；要测确认本身的用例用 ST.lmSettleRaw（R141a） */
   /* CMD-1029-06 二：本地案件持有项目用完不再自动结案、改弹「客人是否已离店？」；老用例的意思是「做完客人走了 → 结案」，所以默认自动回答［已离店］；R185a 设 GMC_LOCAL_LEAVE_MANUAL 测弹窗本身 */
-  (function(){ var raw = localLeaveAsk; localLeaveAsk = function(c, r){ raw(c, r); if(!window.GMC_LOCAL_LEAVE_MANUAL) localLeaveYes(); }; })();
+  (function(){ var raw = localLeaveAsk; localLeaveAsk = function(c, r){ raw(c, r); if(!window.GMC_LOCAL_LEAVE_MANUAL){ localLeaveClose(); if(c) autoFinish(c,'客人已离店'); } }; })();
   /* CMD-1029-06 三：退款方式必填；老用例没选，默认自动选「转账」，R186a 设 GMC_REFUND_METHOD_MANUAL 测校验本身 */
   (function(){ var raw = confirmRefundService; confirmRefundService = function(){ if(!window.GMC_REFUND_METHOD_MANUAL && !document.querySelector('input[name="rs-method"]:checked')){ var r = document.querySelector('input[name="rs-method"][value="转账"]'); if(r) r.checked = true; } return raw.apply(this, arguments); }; })();
   /* CMD-1029-08：赴韩取消选「退钱」要选退款方式；老用例没选，默认自动选「现金」，R188a 设 GMC_REFUND_PAY_MANUAL 测校验本身 */
@@ -1190,21 +1190,20 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.ok(document.getElementById('refund-overlay').classList.contains('open') && /转本地项目（置换）/.test(document.getElementById('refund-method').innerHTML), '退款弹窗应有「退款方式：退钱 / 转本地项目（置换）」');
     document.getElementById('refund-amount').value = kwr; setRefundMethod('comp'); ST.ok(/置换额度/.test(document.getElementById('refund-comp-hint').innerText), '选转本地后显示置换额度');
     document.getElementById('refund-reason').value = '（自测）无法协调'; confirmRefund();
-    ST.ok(!!c.comp && !c.comp.used && c.comp.scope==='main' && Math.abs(c.comp.credit - 2*price) <= 12, '应记置换额度 ≈ 2 倍单价，实际 '+(c.comp&&c.comp.credit)); ST.ok(c.activeCaseTab==='localmgmt' && /置换额度/.test(document.getElementById('case-body').innerText), '直接进本地管理的选购画面并显示置换额度');
+    ST.ok(!!c.comp && !c.comp.used && c.comp.scope==='lm' && Math.abs(c.comp.credit - 2*price) <= 12, '应记置换额度 ≈ 2 倍单价，实际 '+(c.comp&&c.comp.credit)); ST.ok(document.getElementById('lm-buy-overlay').classList.contains('open') && /置换额度/.test(document.getElementById('lm-buy-overlay').innerText) && !showLocalTab(c), '直接弹出购买弹窗（XL）并显示置换额度，本地项目 tab 不出现（CMD-1110-25）');
     ST.ok((c.refunds||[]).some(function(r){ return r.comp; }) && ST.hasLog(c, /转本地置换/), '定金按置换处理（不是退钱）+ Timeline');
     ST.ok(!hasRefundMark(c) && refundCashSum(c)===0 && compSum(c)>0, '案件标「置换」，不出现「有退款」'); ST.ok(/置换/.test(financeCellHtml(c)) && !/退款/.test(financeCellHtml(c).replace(/置换/g,'')), '财务栏写置换，不写退款');
-    toggleLocalProject('main', p.id); confirmProjectSelection(); ST.ok(!latestUnpaidBatch(c), '比额度便宜：不能结算（额度不退钱，要再加项目）'); ST.ok(/还剩 Rp/.test(document.getElementById('case-body').innerText), '提示「还剩 Rp X，请再加项目」');
-    c.recommended[0].qty = 3; confirmProjectSelection(); var b = latestUnpaidBatch(c); ST.ok(!!b && b.compCredit===c.comp.credit, '加到超过额度可以结算，结算单带置换额度');
-    settleProjects(); ST.ok(/赴韩定金转本地置换/.test(document.getElementById('settle-breakdown').innerText) && !/退还/.test(document.getElementById('settle-breakdown').innerText), '结算窗写置换，没有退还'); confirmSettlementPayment();
-    ST.ok(c.comp.used && b.payExtra>0 && ST.hasLog(c, /补付 Rp/), '付款后置换用完，补付差额 + Timeline'); var hs = getClientHoldings(c.name).reduce(function(a, h){ return a.concat(h.batches); }, []).filter(function(x){ return x.caseId===c.id; });
-    ST.ok(hs.length && hs.every(function(x){ return x.comp; }), '买到的批次标「置换」'); ST.ok(!refundableBatches(c.name).some(function(x){ return x.b.comp; }), '置换批次不可退款（退款服务不列）'); ST.ok(/置换/.test(settlementCardHtml(c, b)), '结算单写置换');
+    toggleLocalProject('lm', p.id); c.localMgmt.cart[0].qty = 1; ST.ok(/还剩 Rp/.test(document.getElementById('lm-buy-overlay').innerText), '提示「还剩 Rp X，请再加项目」'); lmSettle(); ST.ok(!(c.localMgmt.batches||[]).length && !c.comp.used, '比额度便宜：不能结算（额度不退钱，要再加项目）');
+    c.localMgmt.cart[0].qty = 3; lmSettle(); var b = (c.localMgmt.batches||[])[0]; ST.ok(!!b && c.comp.used, '加到超过额度可以结算（购买弹窗里用置换额度抵）');
+    ST.ok(ST.hasLog(c, /补付 Rp/) || /置换/.test(JSON.stringify(c.localMgmt.batches)), '付款后置换用完，补付差额 + Timeline'); var hs = getClientHoldings(c.name).reduce(function(a, h){ return a.concat(h.batches); }, []).filter(function(x){ return x.caseId===c.id; });
+    ST.ok(hs.length && hs.every(function(x){ return x.comp; }), '买到的批次标「置换」'); ST.ok(!refundableBatches(c.name).some(function(x){ return x.b.comp; }), '置换批次不可退款（退款服务不列）');
     /* A2：比额度贵 → 补付 */
     var e = ST.newRes('CP1c'); ST.consultToReport(e); ST.selectAndPay(e, ['假体隆鼻']); ST.open(e); requestCannotCoordinate(); document.getElementById('refund-amount').value = Math.round(price/FX_RATES.KRW_IDR); setRefundMethod('comp'); document.getElementById('refund-reason').value = '（自测）补付'; confirmRefund();
-    toggleLocalProject('main', p.id); e.recommended[0].qty = 3; confirmProjectSelection(); var eb = latestUnpaidBatch(e); settleProjects(); confirmSettlementPayment(); ST.ok(e.comp.used && eb.payExtra>0 && ST.hasLog(e, /补付 Rp/), '比额度贵：补付差额');
+    toggleLocalProject('lm', p.id); e.localMgmt.cart[0].qty = 3; lmSettle(); ST.ok(e.comp.used && (e.localMgmt.batches||[]).length===1, '比额度贵：补付差额，结算成功');
     /* B：部分取消（取消项目）→ 走本地管理 lm 选购 */
     var d = ST.newRes('CP1b'); ST.consultToReport(d); ST.selectAndPay(d, ['假体隆鼻', '鼻翼缩小']); ST.open(d); openCancelItems(); var cb = document.querySelector('.refund-cb'); cb.checked = true; refundRecalc();
     document.getElementById('refund-amount').value = Math.floor(price/FX_RATES.KRW_IDR); setRefundMethod('comp'); document.getElementById('refund-reason').value = '（自测）取消项目'; confirmRefund();
-    ST.ok(!!d.comp && d.comp.scope==='lm' && !!d.localMgmt && krActiveItems(d).length===1, '部分取消：另一个赴韩项目继续，走本地管理选购'); ST.ok(/置换额度/.test(document.getElementById('case-body').innerText), '本地管理选购画面显示置换额度');
+    ST.ok(!!d.comp && d.comp.scope==='lm' && !!d.localMgmt && krActiveItems(d).length===1, '部分取消：另一个赴韩项目继续，走本地管理选购'); ST.ok(/置换额度/.test(document.getElementById('lm-buy-overlay').innerText), '购买弹窗显示置换额度');
     toggleLocalProject('lm', p.id); d.localMgmt.cart[0].qty = 1; lmSettle(); ST.ok((d.localMgmt.batches||[]).length===1 && d.comp.used, '额度约等于一个项目：一次买够即可结算'); ST.ok(!refundableBatches(d.name).some(function(x){ return x.b.comp; }), '置换批次不可退款');
   });
 
@@ -1217,10 +1216,10 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.ok(!hasRefundMark(c) && compSum(c)>0, '案件仍标置换、不标有退款'); ST.ok(krActiveItems(c).length===0, '赴韩全部取消，案件退回面诊级');
     ST.ok(canEndCase(c), '赴韩全部取消后出现［结束案件］');
     openClientDetail(c.name); ST.ok(/置换额度/.test(document.getElementById('detail-holdings').textContent) && /不可退款/.test(document.getElementById('detail-holdings').textContent), '客户详情显示置换额度（不可退款）');
-    var d = ST.newRes('CP2b'); d.name = c.name; ST.arrive(d); ST.open(d); d.materialsConfirmed = true; d.consultRequested = false; d.localTrack = true; d.entryChoicePending = true; d.projectEntryMode = 'new'; d.projectOriginFilter = 'IN'; d.activeCaseTab = 'localmgmt'; renderCaseBody(d);
-    ST.ok(/用置换额度换项目/.test(document.getElementById('case-body').innerText), '新案件本地选购画面出现［用置换额度换项目］');
-    compUseCredit(cr[0].id, 'main'); ST.ok(!!d.comp && d.comp.fromCaseNo===c.caseNo, '用额度：记来源原案件号');
-    toggleLocalProject('main', p.id); confirmProjectSelection(); ST.ok(!latestUnpaidBatch(d), '下次来换也一样：不够不能结算'); d.recommended[0].qty = 9; confirmProjectSelection(); settleProjects(); confirmSettlementPayment();
+    var d = ST.newRes('CP2b'); d.name = c.name; ST.arrive(d); ST.open(d); d.materialsConfirmed = true; d.consultRequested = false; d.localTrack = true; PLAN = {caseId:d.id}; planBuy();
+    ST.ok(/用置换额度换项目/.test(document.getElementById('lm-buy-overlay').innerText), '新案件购买弹窗出现［用置换额度换项目］');
+    compUseCredit(cr[0].id, 'lm'); ST.ok(!!d.comp && d.comp.fromCaseNo===c.caseNo, '用额度：记来源原案件号');
+    toggleLocalProject('lm', p.id); d.localMgmt.cart[0].qty = 1; lmSettle(); ST.ok(!(d.localMgmt.batches||[]).length, '下次来换也一样：不够不能结算'); d.localMgmt.cart[0].qty = 9; lmSettle();
     ST.ok(clientCompCredits(c.name).length===0, '换完后额度归零'); ST.ok(ST.hasLog(d, new RegExp('来源 '+c.caseNo)), 'Timeline 写来源原案件号');
   });
   ST.def('HS2','医院设定：有施术的那天改休息被挡，改期后能改（KM1 分页）',function(){

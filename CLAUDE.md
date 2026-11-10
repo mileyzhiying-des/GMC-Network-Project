@@ -2625,4 +2625,5 @@ prototype/shared/app.css  共用样式
 - 4 置换额度（`startCompPurchase`）改走 XL 购买弹窗（`c.comp.scope='lm'` + `c.localMgmt` + `LM_BUY_OPEN`，`COMP_BUY` 标记），付完款走 1110-21 的「使用持有项目吗？」（`lmNoBuy` / `lmSettleDo` 包装认 `COMP_BUY`）；纯本地案件的 `showLocalTab` 不再因 `addingMore` / `comp` / `entryChoicePending+new` 出现。页内选购旧分支（`localBuyNew` 的 addingMore、`chooseProjectEntryMode('new')` / `holdingsAddNew`、`projectListTabHtml` 的 main 选购）现在只有旧资料 / 非纯本地案件会走到。
 - 5 KR 基础资料最下面「附件：［+ 上传］」（`krBasicAttachRow`，同一个 `krUploadFile`，上传后附件 tab 出现）。6 KR 今日项目上方「IN 室长备注：…」一行（`krInNoteLine`：最新一条、译文 + 查看原文、「全部（N）」跳备注内容、没有就不显示）；结算前已读检查（`krUnreadNotes` / `coreNoteRead`）只算 IN 的来访备注（主案件 + 全部子案件，`inVisitNotesAll`），不算项目备注。7 KR 施术当天页签标记（`krSdTabs`）改灰色数字 / ✓（项目方案、术前状态、进行项目）。
 - 回归（隔离端口，对照 5ac10c4 / 862f357）：KM1 全套 862f357 为 494 项 95 通过，本次 496 项 93 通过（新增失败 R124a / R125a 是上面 1、7 的有意改动，断言已更新并单跑通过；R300a 是 IN 专用用例，R300b 单跑通过）；KD1（67 个相关用例）本次与 862f357 完全一致（58 失败 / 9 通过），5ac10c4 为 61 失败；A1 全套本次 496 项 247 通过，862f357 为 494 项 251 通过。
+- A1 全套对照 862f357 的新增失败 B7 / D28b / D31b / CP1 / CP2 也是这次的有意改动（离店弹窗自动应答改直接 autoFinish；置换额度改走购买弹窗、scope 'lm'），断言已改并单跑通过。
 - 我的判断（未经确认）：项目方案页签在已到院未付尾款时标 1；KR 结算前已读检查把子案件上的 IN 来访备注也算进去。
