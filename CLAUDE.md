@@ -19,7 +19,7 @@
    **【Notion 写入规则】（2026-10-07，CMD-1007-00）**
    - 你对 Notion 原则上只读
    - 唯一例外：Dashboard 下的「Code 任务」数据库，只能做两件事：① 修改任务的「状态」栏位；② 在任务正文的「📥 汇报」区写入内容
-   - 不能改「📤 指令」区，不能新建或删除任务，不能改其他任何 Notion 页面（**2026-11-02 起 Code 任务行多可改「影响后端」「影响的动作」两栏**，见下面「固定规则：写汇报时要填…」）
+   - 不能改「📤 指令」区，不能新建或删除任务，不能改其他任何 Notion 页面（**2026-11-02 起 Code 任务行多可改「影响后端」「影响的动作」两栏；2026-11-10 起再多可改「影响流程」栏**，见下面「固定规则：写汇报时要填…」和「影响流程」）
    - 收到"去看 Code 任务"时，按编号顺序执行所有「待执行」任务；跳过「已作废」
    - 开始做时把状态改成「执行中」；动手前需要确认的事项写在汇报区，状态改成「待确认」后停下；做完改成「完成」
    - 若任务有「取代」栏位，以新任务为准
@@ -40,6 +40,14 @@
   - **动作名称**以 Notion「开发交接」05 的动作卡为准；05 还没写到的，写动作描述（例：「KR 按［客人已到院］」）。/ Use the action names from the action cards in Notion "开发交接" 05; if 05 does not cover it yet, write a short description of the action (e.g. "KR 按［客人已到院］").
   - 如果任务建立时这两栏**已经填了**，照实际做的结果**核对**，不对就改正，并在汇报里写一句。/ If the task row already has them filled, check against what was actually done; correct them if wrong and say so in one line of the report.
   - **启用前（2026-11-02 之前）的任务不补填。** / Tasks before 2026-11-02 are not back-filled.
+
+**【固定规则：写汇报时要核对并填「影响流程」栏】（2026-11-10，CMD-1110-01，用户要求，和上一条同级）/ Rule: check and fill the "影响流程" (affected flow) column in every report (2026-11-10, CMD-1110-01)**
+- Notion「Code 任务」新增栏位「影响流程」（多选：否 / F1 / F2 / F3 / F4 / F5-1 / F5-2 / F5-3 / F6 / F7 / F8 / F9），对应 FigJam「GMC Flow」1110 版流程图。Code 除了「状态」「影响后端」「影响的动作」「📥 汇报」区以外，**还可以改这一栏**（其他栏位和「📤 指令」区仍然不能改）。/ The new multi-select column "影响流程" maps to the FigJam "GMC Flow" 1110 diagram; Code may edit it in addition to status, 影响后端, 影响的动作 and the report section.
+- 建任务时 Claude（聊天）已先填。Code 做完后**核对**：实际改动和填的不一样，就改这一栏，并在汇报写「影响流程：原填 X → 改成 Y，原因…」。/ The task creator (Claude chat) fills it first. After finishing, check it against what was really changed; if it differs, correct it and write "影响流程: was X → now Y, because …" in the report.
+- **算流程变动**：多一步或少一步、分支或判断条件变了让人走到不同的路、原本挡的不挡了（或反过来）、状态或走向变了、换人做。/ Counts as a flow change: a step added or removed; a branch or condition changed so people take a different path; something that used to block no longer blocks (or the reverse); a status or direction changed; a different person does it.
+- **不算**：只改画面、文字、显示方式、提醒文案 → 影响流程 = 「否」。/ Does not count: UI, copy, display or reminder wording only → 影响流程 = No.
+- 图的范围：F1 完整旅程 / F2 来访归属 / F3 一天的子案件 / F4 面诊 / F5-1 定金到施术日期 / F5-2 施术变动和行程变动 / F5-3 韩国行程结束 / F6 施术当天 / F7 术后管理 / F8 复诊评估 / F9 本地项目。/ Diagram scope: F1 full journey · F2 visit ownership · F3 one-day sub-case · F4 consultation · F5-1 deposit to surgery date · F5-2 surgery change and trip change · F5-3 Korea trip end · F6 surgery day · F7 aftercare · F8 revisit evaluation · F9 local items.
+- 改到流程的任务，汇报里**另外写一句「流程上改了什么」**（哪一步、从什么变成什么），方便更新流程图。/ For tasks that change a flow, add one extra line in the report, "what changed in the flow" (which step, from what to what), so the diagram can be updated.
 
 > 以上规则和下面文档里其他部分有冲突时，以这一节为准（2026-09-29 用户要求置顶）。下面正文里的"项目运行、构建、代码结构"等技术设定原样保留（本来就是简体中文写的），历史沿革内容不删除，仅供参照。
 
