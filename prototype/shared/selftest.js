@@ -10517,7 +10517,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!/推荐项目整理|推荐在韩/.test(t), '没有推荐项目整理');
       ST.ok(!!KR_SUB.detail[p0.name] && !!KR_SUB.detail[p0.name].anes, '细节先带项目库默认存起来：'+JSON.stringify(KR_SUB.detail[p0.name]).slice(0, 80));
       krNoteSet(p0.name, '重点看鼻尖'); krSubSet('overall', '整体备注X');
-      krSubTab('mgmt'); var mg0 = krLocalLibOn(krHospitalIdOfMe())[0]; if(mg0){ krMgPick(mg0.id, true); h = krTabConsult(gc()); t = txt(h); ST.ok(!/份数|第一次使用/.test(t), '勾了管理项目：不展开份数 / 第一次使用'); ST.ok(/id="kr-mg-sub-list"/.test(h) && /placeholder="备注"/.test(h.slice(h.indexOf('kr-mg-sub-list'))), '管理项目一行也有备注框'); var mgRow = document.createElement('div'); mgRow.innerHTML = h; var mrow = mgRow.querySelector('#kr-mg-sub-list input[type=checkbox]'); mrow = mrow && mrow.closest('div'); ST.ok(!!mrow && getComputedStyle(mrow).display==='flex' || /display:flex;gap:8px;align-items:center;padding:6px 0/.test(h.slice(h.indexOf('kr-mg-sub-list'), h.indexOf('kr-mg-sub-list')+900)), '管理项目一行 = 勾选框 + 项目名 + 价格（左）+ 备注（右）同一行'); ST.ok(/₩|面议/.test(txt(h.slice(h.indexOf('kr-mg-sub-list'), h.indexOf('kr-mg-sub-list')+1200))), '管理项目行有价格'); krNoteSet('mg:'+mg0.id, '管理备注'); }
+      krSubTab('mgmt'); var mg0 = krLocalLibOn(krHospitalIdOfMe())[0]; if(mg0){ krMgPick(mg0.id, true); h = krTabConsult(gc()); t = txt(h); ST.ok(!/份数|第一次使用/.test(t), '勾了管理项目：不展开份数 / 第一次使用'); ST.ok(/id="kr-mg-sub-list"/.test(h) && /placeholder="请输入备注内容"/.test(h.slice(h.indexOf('kr-mg-sub-list'))), '管理项目一行也有备注框'); var mgRow = document.createElement('div'); mgRow.innerHTML = h; var mrow = mgRow.querySelector('#kr-mg-sub-list input[type=checkbox]'); mrow = mrow && mrow.closest('div'); ST.ok(!!mrow && getComputedStyle(mrow).display==='flex' || /display:flex;gap:8px;align-items:center;padding:6px 0/.test(h.slice(h.indexOf('kr-mg-sub-list'), h.indexOf('kr-mg-sub-list')+900)), '管理项目一行 = 勾选框 + 项目名 + 价格（左）+ 备注（右）同一行'); ST.ok(/₩|面议/.test(txt(h.slice(h.indexOf('kr-mg-sub-list'), h.indexOf('kr-mg-sub-list')+1200))), '管理项目行有价格'); krNoteSet('mg:'+mg0.id, '管理备注'); }
       krSubTab('surg');
       Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; krRvSetQ ? 0 : 0; gcEvalOf(c, true).rec = '面诊内容'; });
       var up = null; krMut(function(c){ up = coreGcUpload(c, 'KD1 院长', 'doctor', krGcSubNow()); return !!(up && up.ok); }); ST.ok(up && up.ok, '可以上传（只有录入内容必填）');
@@ -10525,6 +10525,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var sub = gc().consultEval.sub; ST.ok(sub.notes[p0.name]==='重点看鼻尖' && sub.pick[p0.name] && sub.detail[p0.name], 'consultEval.sub 里存了勾选、备注和默认细节');
     } finally { window.SpeechRecognition = sr; window.webkitSpeechRecognition = wsr; try{ krRvMicStop(false); }catch(e){} window.alert = oa; window.confirm = oc; try{ krVault(cid, r.id, true).transcripts = []; }catch(e){} Store.mutateClinic(cid, function(){ var i = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); CASE_ITEMS[i] = JSON.parse(snap); }); }
   });
+
+  /* CMD-1110-04：面诊录入［AI 整理］（院长 / 室长代录）+ 推荐项目备注提示字 + 方案备注改名 */
+  var r280 = function(proxy){
+    var me = currentAccount(); if(!ST.ok(me && me.id===(proxy ? 'KM1' : 'KD1'), '要在 '+(proxy ? 'KM1' : 'KD1')+' 分页里跑')) return;
+    var r = krAllCases().filter(function(x){ return /^T-已付面诊费/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'stagePay\'])')) return;
+    var cid = r.clinicId, gc = function(){ return krFindCase(cid, r.id).c; }, mut = function(f){ var out; Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; out = f(c); }); return out; };
+    var snap = JSON.stringify(gc()), oa = window.alert, oc = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var txt = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' '); };
+    try{
+      mut(function(c){ c.needsConsult = true; c.consultKind = ''; c.director = 'KD1 院长'; c.metaviewStatus = 'ready'; c.concerns = [{part:'f_nose', sub:'', desc:'鼻梁低', expect:'自然', video:{name:'v.mp4'}, photos:{front:{name:'p1.jpg'}}}]; ST.krEta(c); });
+      KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_SUB = krSubBlank(''); krShowCase(cid, r.id, {tab:'consult', here:true});
+      if(proxy){ krRvAuth(true); } else { krStartConsult(); }
+      var h = krTabConsult(gc()), t = txt(h);
+      ST.ok(/AI 整理（演示）/.test(h), (proxy ? '室长代录' : '院长')+'：录入内容下面有［AI 整理］');
+      ST.ok(/请输入备注内容/.test(h) && !/placeholder="备注"/.test(h), '推荐项目备注是输入框，提示「请输入备注内容」');
+      ST.ok(/方案备注/.test(t) && !/整体备注/.test(t), '推荐项目下面叫「方案备注」，没有「整体备注」');
+      ST.ok(h.indexOf('AI 整理（演示）') > h.indexOf('rvta-gcrec'), '按钮在录入内容输入框下面');
+      mut(function(c){ gcEvalOf(c, true).rec = '鼻梁低。想要自然的效果\n需要看鼻尖'; });
+      var ta280 = document.getElementById('rvta-gcrec'); if(ta280) ta280.value = '鼻梁低。想要自然的效果\n需要看鼻尖';
+      krGcAiOrganize();
+      var rec = gc().consultEval.rec; ST.ok(/^· /.test(rec) && rec.split('\n').length>=3, '整理成条目：'+rec.replace(/\n/g, ' | '));
+      ST.ok(!!gc().consultEval.recRaw, '原文留了一份');
+      ST.ok((gc().logEntries||[]).some(function(e){ return /AI 整理：面诊录入内容/.test(e.action||''); }), 'Timeline 记了一笔');
+      var before = gc().consultEval.rec; krGcAiOrganize(); ST.ok(gc().consultEval.rec===before, '再按一次不重复整理');
+    } finally { window.alert = oa; window.confirm = oc; try{ krRvMicStop(false); }catch(e){} try{ krVault(cid, r.id, true).transcripts = []; }catch(e){} Store.mutateClinic(cid, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; var o = JSON.parse(snap); Object.keys(c).forEach(function(k){ delete c[k]; }); Object.keys(o).forEach(function(k){ c[k] = o[k]; }); }); }
+  };
+  ST.def('R280a','CMD-1110-04（KD1 分页，stagePay 夹具）：面诊录入内容有［AI 整理］；推荐项目备注提示「请输入备注内容」；叫「方案备注」',function(){ r280(false); });
+  ST.def('R280b','CMD-1110-04（KM1 分页，stagePay 夹具）：室长代录同样有［AI 整理］且能用',function(){ r280(true); });
 
   /* CMD-1106-16：推荐项目术后管理标在哪做 + 建议在韩天数自动算 */
   ST.def('R246a','CMD-1106-16（任意分页）：建议在韩天数 = 最晚「必须在韩国」术后管理第几天 + 1（韩国或印尼不算、没有 = 1 天）；表单只显示一行、没有输入框和停留原因；提交不再因天数 / 原因报错；推荐项目列表术后管理标地点（IN 分配后写分配结果）',function(){

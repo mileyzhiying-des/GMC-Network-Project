@@ -5654,7 +5654,7 @@ function projectPickerHtml(c, isAddition){
       leftRows = (c.reportReady ? '<div style="font-size:12px;color:var(--slate2);padding:14px 4px;line-height:1.7;">这份诊疗方案里没有可选的赴韩项目（旧数据）。可以改选本地项目，或点「客人不做项目」。</div>' : '<div style="font-size:12px;color:var(--muted);padding:14px 4px;">需先完成面诊，由韩国室长给出可选项目</div>')+addConsultBtn;
     } else {
 
-      var scopeNote = reusePriceNoteHtml(c)+(scope.overallNote ? '<div style="font-size:12px;color:var(--slate2);background:var(--terracotta-bg);border-radius:8px;padding:10px 12px;margin-bottom:12px;">KR室长整体备注：'+scope.overallNote+'</div>' : '');
+      var scopeNote = reusePriceNoteHtml(c)+(scope.overallNote ? '<div style="font-size:12px;color:var(--slate2);background:var(--terracotta-bg);border-radius:8px;padding:10px 12px;margin-bottom:12px;">KR室长方案备注：'+scope.overallNote+'</div>' : '');
       var catalog = scope.items.map(function(si){
         var p = PROJECT_LIBRARY.filter(function(x){ return x.name===si.name; })[0];
         return p ? Object.assign({}, p, {krNote:si.note, krMeta:itemMetaText(si)}) : null;

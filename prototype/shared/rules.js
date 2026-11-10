@@ -858,7 +858,7 @@ function recSummaryHtml(items, overall, opt){
     '<div style="font-size:13px;margin:6px 0;">'+(d.stay.days ? '<b>'+e(stayLineText(d.stay))+'</b>' : '推荐在韩天数：<b>—</b>')+' <span style="color:var(--muted);font-size:12px;">（各项目最大值；施术日 = 第 0 天）</span></div>'+
     d.rows.map(function(r){ return '<div style="font-size:12px;padding:6px 0;border-top:1px solid var(--border2);"><b>'+e(r.name)+'</b>｜推荐在韩 '+e(r.stay)+(r.stayWhy ? '（'+e(r.stayWhy)+'）' : '')+'｜麻醉：'+e(r.anes)+(r.note ? '｜备注：'+e(r.note) : '')+(r.pc.length ? '<div style="color:var(--slate2);margin-top:2px;">术后管理：'+r.pc.map(e).join('；')+'</div>' : '<div style="color:var(--muted);margin-top:2px;">术后管理：无</div>')+'</div>'; }).join('')+
     (d.mgmt.length ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding:6px 0;"><b>管理项目</b>（付费，只在韩国做）'+d.mgmt.map(function(m){ return '<div style="color:var(--slate2);margin-top:2px;">'+e(m.name)+' × '+mgmtQtyText(m)+mgmtScheduleText(m)+(m.note ? '｜'+e(m.note) : '')+'</div>'; }).join('')+'</div>' : '')+
-    (d.overall ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding-top:6px;margin-top:2px;">整体备注：'+e(d.overall)+'</div>' : '')+
+    (d.overall ? '<div style="font-size:12px;border-top:1px solid var(--border2);padding-top:6px;margin-top:2px;">方案备注：'+e(d.overall)+'</div>' : '')+
     (opt.inNote ? '<div style="font-size:12px;padding-top:6px;margin-top:2px;">IN 室长备注：'+e(opt.inNote)+'</div>' : '')+'</div>';
 }
 /* 打印推荐项目整理（给客人）：只打印这一块 */

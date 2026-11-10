@@ -2281,9 +2281,9 @@ function krMgListHtml(S, mode){
       var on = !!S.mg[p.id] && !!S.mg[p.id].on, st = on ? S.mg[p.id] : null, got = have.indexOf(p.id)>-1;
       if(window.KR_PICK_SIMPLE){ /* CMD-1106-15 补：和施术项目一样一行 = 勾选框 + 项目名 + 价格（左）+ 备注（右，同一行） */
         var ps = (p.specs||[]).map(function(x){ return x.price; }).filter(function(x){ return x>0; }), pr = p.neg || !ps.length ? '面议' : (ps.length>1 && Math.min.apply(null, ps)!==Math.max.apply(null, ps) ? formatCurrency(Math.min.apply(null, ps),'KRW')+' 起' : formatCurrency(ps[0],'KRW'));
-        return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px;"><label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="'+tg+'(\''+p.id+'\',this.checked)"> '+krEsc(p.name)+' <span style="color:var(--muted);font-size:12px;">'+pr+'</span></label><input placeholder="备注" value="'+krEsc(KR_SUB.notes['mg:'+p.id]||'')+'" oninput="krNoteSet(\'mg:'+p.id+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'+viewNotesBtnHtml(krCurCaseName(), p.name, 'krm'+p.id)+'</div>'+viewNotesPanelHtml(krCurCaseName(), p.name, 'krm'+p.id);
+        return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px;"><label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="'+tg+'(\''+p.id+'\',this.checked)"> '+krEsc(p.name)+' <span style="color:var(--muted);font-size:12px;">'+pr+'</span></label><input placeholder="请输入备注内容" value="'+krEsc(KR_SUB.notes['mg:'+p.id]||'')+'" oninput="krNoteSet(\'mg:'+p.id+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'+viewNotesBtnHtml(krCurCaseName(), p.name, 'krm'+p.id)+'</div>'+viewNotesPanelHtml(krCurCaseName(), p.name, 'krm'+p.id);
       }
-      return '<div style="border-bottom:1px solid var(--border2);padding:4px 0;font-size:13px;"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="'+tg+'(\''+p.id+'\',this.checked)"> <span style="flex:1;font-weight:600;">'+krEsc(p.name)+'</span>'+(got ? '<span style="color:var(--muted);font-size:12px;">已在可选范围内（可再补加其他规格）</span>' : '')+'</label>'+(window.KR_PICK_SIMPLE ? '<input placeholder="备注" value="'+krEsc(KR_SUB.notes['mg:'+p.id]||'')+'" oninput="krNoteSet(\'mg:'+p.id+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-left:8px;">' : '')+(on && !window.KR_PICK_SIMPLE ? krMgFormHtml(p, st, mode) : '')+'</div>';
+      return '<div style="border-bottom:1px solid var(--border2);padding:4px 0;font-size:13px;"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="'+tg+'(\''+p.id+'\',this.checked)"> <span style="flex:1;font-weight:600;">'+krEsc(p.name)+'</span>'+(got ? '<span style="color:var(--muted);font-size:12px;">已在可选范围内（可再补加其他规格）</span>' : '')+'</label>'+(window.KR_PICK_SIMPLE ? '<input placeholder="请输入备注内容" value="'+krEsc(KR_SUB.notes['mg:'+p.id]||'')+'" oninput="krNoteSet(\'mg:'+p.id+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-left:8px;">' : '')+(on && !window.KR_PICK_SIMPLE ? krMgFormHtml(p, st, mode) : '')+'</div>';
     }).join('');
   }).join('') || '<div style="font-size:12px;color:var(--muted);">没有匹配的管理项目</div>';
 }
@@ -2351,14 +2351,14 @@ function krSubmitBlock(c){
   krSubReset(c);
   if(isRevEval(c)) return krRvWorkBlock(c); /* CMD-1022-08：复诊评估结果——不能附赴韩项目，只写推荐的本地项目（文字）/ 建议赴韩处理 */
   var cand = krScopeCandidates(KR_CASE.clinicId);
-  var row = function(p, kind){ var on = !!KR_SUB.pick[p.name]; return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px;"><label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="krPickToggle(\''+krEsc(p.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(p.name)+' <span style="color:var(--muted);font-size:12px;">'+(kind==='kr' ? formatCurrency(p.price,'KRW') : '（在印尼，不显示价格）')+'</span></label><input placeholder="备注" value="'+krEsc(KR_SUB.notes[p.name]||'')+'" oninput="krNoteSet(\''+krEsc(p.name).replace(/'/g,'')+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'+viewNotesBtnHtml(krCurCaseName(), p.name, 'krs'+p.name)+'</div>'+viewNotesPanelHtml(krCurCaseName(), p.name, 'krs'+p.name)+(on && kind==='kr' ? krProjDetailHtml(p, cand) : ''); };
+  var row = function(p, kind){ var on = !!KR_SUB.pick[p.name]; return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px;"><label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="krPickToggle(\''+krEsc(p.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(p.name)+' <span style="color:var(--muted);font-size:12px;">'+(kind==='kr' ? formatCurrency(p.price,'KRW') : '（在印尼，不显示价格）')+'</span></label><input placeholder="请输入备注内容" value="'+krEsc(KR_SUB.notes[p.name]||'')+'" oninput="krNoteSet(\''+krEsc(p.name).replace(/'/g,'')+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;">'+viewNotesBtnHtml(krCurCaseName(), p.name, 'krs'+p.name)+'</div>'+viewNotesPanelHtml(krCurCaseName(), p.name, 'krs'+p.name)+(on && kind==='kr' ? krProjDetailHtml(p, cand) : ''); };
   return krCardBox(isRevEval(c) ? '发送复诊评估结果（KR 室长整理，院长不能发送）' : isRevisitConsult(c) ? '发送恢复评估（KR 室长整理，院长不能发送；项目方案可以不附）' : '发送诊疗方案（KR 室长整理，院长不能发送）',
     '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;"><div style="flex:1 1 200px;min-width:200px;">'+'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;flex-wrap:wrap;"><div style="font-size:12px;color:var(--slate2);">报告内容（韩文原文；AI 整理出重点后，请室长修改必要内容）</div><button class="btn-outline" onclick="krAiOrganize()">✨ AI 整理报告（演示）</button></div>'+
     '<textarea oninput="krSubSet(\'text\',this.value)" placeholder="还没有内容：先在上面录入面诊，点［AI 整理报告］整理出重点，再在这里修改；也可以直接写" style="width:100%;min-height:380px;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+krEsc(KR_SUB.text)+'</textarea>'+
     '</div><div style="flex:2 1 400px;min-width:300px;">'+
     krScopeTabsHtml(cand)+((KR_SUB.tab||'surg')==='mgmt' ? '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">管理项目 = KR 本地管理项目（付费、只在韩国做）；到院后和施术项目一样标完成，没做完的转在韩持有</div><input placeholder="搜索管理项目" value="'+krEsc(KR_SUB.mgq||'')+'" oninput="krMgSearch(this.value)" style="width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:4px;"><div id="kr-mg-sub-list">'+krMgListHtml(KR_SUB, 'sub')+'</div>' : (cand.kr.map(function(p){ return row(p,'kr'); }).join('') || krEmpty('本医院项目库没有项目')))+
     '<div id="kr-rec-sum">'+krRecSummaryBlock(cand)+'</div>'+
-    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">整体备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" onchange="krRenderCaseDetail()" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;">'+
+    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">方案备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" onchange="krRenderCaseDetail()" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;">'+
     '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">附件</div>'+KR_SUB.files.map(function(f,i){ return '<div style="font-size:12px;padding:3px 0;">📎 '+krEsc(f)+' <a href="#" onclick="krDelFile('+i+');return false;">移除</a></div>'; }).join('')+
     '<div style="display:flex;gap:8px;margin-top:4px;"><input id="kr-file-name" placeholder="附件名称（演示：只记名称，不上传真实文件）" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;"><button class="btn-outline" onclick="krAddFile()">添加</button></div>'+
     '</div></div><div style="margin-top:16px;">'+(isRevisitConsult(c) ? (c.recoveryResult ? '<button class="btn-primary" onclick="krSubmitReport()">'+(isRevEval(c) ? '发送复诊评估结果' : '发送恢复评估')+'</button>' : '<span class="kr-why" style="font-size:12px;color:var(--terracotta);margin-right:10px;">请先在上面「恢复确认」卡选评估结论</span><button class="btn-primary" disabled title="请先在上面「恢复确认」卡选评估结论" style="background:#C9C5BD;border-color:#C9C5BD;cursor:not-allowed;">发送恢复评估</button>') : '')+(isRevisitConsult(c) ? '' : cand.kr.concat(cand.postCat).some(function(p){ return KR_SUB.pick[p.name]; }) || krMgPicked().length ? '<button class="btn-primary" onclick="krSubmitReport()">发送诊疗方案</button>' : '<span class="kr-why" style="font-size:12px;color:var(--terracotta);margin-right:10px;">请选择院长推荐的项目</span><button class="btn-primary" disabled title="请选择院长推荐的项目" style="background:#C9C5BD;color:#fff;cursor:not-allowed;opacity:1;">发送诊疗方案</button>')+'</div>');
@@ -2592,13 +2592,13 @@ function krAddCardHtml(c, items){
   var can = false;
   if(tab==='mgmt'){
     body += '<input placeholder="搜索管理项目" value="'+krEsc(KR_ADD.mgq||'')+'" oninput="krAddMgSearch(this.value)" style="width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;margin-bottom:4px;"><div id="kr-mg-add-list">'+krMgListHtml(KR_ADD, 'add')+'</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;margin-top:8px;"><input placeholder="备注" value="'+krEsc(KR_ADD.note)+'" oninput="KR_ADD.note=this.value" style="'+inp+'min-width:220px;"></div>';
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;margin-top:8px;"><input placeholder="请输入备注内容" value="'+krEsc(KR_ADD.note)+'" oninput="KR_ADD.note=this.value" style="'+inp+'min-width:220px;"></div>';
     can = Object.keys(KR_ADD.mg).some(function(id){ return KR_ADD.mg[id].on; });
   } else {
     if(!optsArr.length) body += krEmpty('项目库里的项目都已经在可选范围内了');
     else {
       var selOpts = '<option value="">请选择要补加的项目</option>'+optsArr.map(function(o){ return '<option value="'+q(o[0])+'"'+(KR_ADD.sel===o[0]?' selected':'')+'>'+krEsc(o[1])+'</option>'; }).join('');
-      body += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;"><select onchange="krAddSelChg(this.value)" style="'+inp+'min-width:260px;">'+selOpts+'</select><input placeholder="备注" value="'+krEsc(KR_ADD.note)+'" oninput="KR_ADD.note=this.value" style="'+inp+'min-width:220px;"></div>';
+      body += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;"><select onchange="krAddSelChg(this.value)" style="'+inp+'min-width:260px;">'+selOpts+'</select><input placeholder="请输入备注内容" value="'+krEsc(KR_ADD.note)+'" oninput="KR_ADD.note=this.value" style="'+inp+'min-width:220px;"></div>';
       if(KR_ADD.sel && KR_ADD.sel.split('|')[0]==='kr') body += krProjDetailHtml({name:'__add'}, cand).replace('margin:4px 0 10px 22px;','margin:10px 0;');
     }
     can = !!KR_ADD.sel;
@@ -2684,7 +2684,7 @@ function krNdView(c, vk){ var v = KR_NDVIEW[c.id+'|'+vk]; if(v!==undefined) retu
 function krNdCell(c, kind, key, vk, saved){
   var id = c.id+'|'+kind+key, cur = krNdCur(c, kind, key), q = String(key).replace(/'/g,''), v = String(vk).replace(/'/g,'');
   if(krNdView(c, vk) && !KR_NDEDIT[id]) return '<span onclick="krNdEdit(\''+v+'\',\''+kind+'\',\''+q+'\')" title="点一下修改" style="cursor:text;color:var(--slate2);">'+(cur.trim() ? '备注：'+krEsc(cur) : '<span style="color:var(--muted);">—</span>')+'</span>';
-  return '<input data-ndid="'+krEsc(id)+'" value="'+krEsc(cur)+'" placeholder="备注" oninput="krNdIn(\''+kind+'\',\''+q+'\',\''+v+'\',this.value)" onkeydown="if(event.key===\'Enter\'){this.blur();}" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">';
+  return '<input data-ndid="'+krEsc(id)+'" value="'+krEsc(cur)+'" placeholder="请输入备注内容" oninput="krNdIn(\''+kind+'\',\''+q+'\',\''+v+'\',this.value)" onkeydown="if(event.key===\'Enter\'){this.blur();}" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">';
 }
 function krNdIn(kind, key, vk, val){
   krNdLoad(); var cid = KR_CASE && KR_CASE.id; if(!cid) return; (KR_ND[cid] = KR_ND[cid]||{})[kind+key] = {kind:kind, key:key, vk:vk, val:String(val)}; krNdPersist();
@@ -5623,10 +5623,10 @@ function krGcPickNames(c){
 function krGcPickColumn(c){ window.KR_PICK_SIMPLE = true; try{ return krGcPickColumn0(c); } finally { window.KR_PICK_SIMPLE = false; } }
 function krGcPickColumn0(c){
   var cand = krScopeCandidates(KR_CASE.clinicId);
-  var row = function(p, kind){ var on = !!KR_SUB.pick[p.name]; return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px;"><label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="krPickToggle(\''+krEsc(p.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(p.name)+' <span style="color:var(--muted);font-size:12px;">'+(kind==='kr' ? formatCurrency(p.price,'KRW') : '（在印尼，不显示价格）')+'</span></label><input placeholder="备注" value="'+krEsc(KR_SUB.notes[p.name]||'')+'" oninput="krNoteSet(\''+krEsc(p.name).replace(/'/g,'')+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></div>'+(on && kind==='kr' && !window.KR_PICK_SIMPLE ? krProjDetailHtml(p, cand) : ''); };
+  var row = function(p, kind){ var on = !!KR_SUB.pick[p.name]; return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px;"><label style="flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;"><input type="checkbox" '+(on?'checked':'')+' onchange="krPickToggle(\''+krEsc(p.name).replace(/'/g,'')+'\',this.checked)"> '+krEsc(p.name)+' <span style="color:var(--muted);font-size:12px;">'+(kind==='kr' ? formatCurrency(p.price,'KRW') : '（在印尼，不显示价格）')+'</span></label><input placeholder="请输入备注内容" value="'+krEsc(KR_SUB.notes[p.name]||'')+'" oninput="krNoteSet(\''+krEsc(p.name).replace(/'/g,'')+'\',this.value)" style="width:42%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></div>'+(on && kind==='kr' && !window.KR_PICK_SIMPLE ? krProjDetailHtml(p, cand) : ''); };
   return krScopeTabsHtml(cand)+((KR_SUB.tab||'surg')==='mgmt' ? '<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">管理项目 = KR 本地管理项目（付费、只在韩国做）；到院后和施术项目一样标完成，没做完的转在韩持有</div><input placeholder="搜索管理项目" value="'+krEsc(KR_SUB.mgq||'')+'" oninput="krMgSearch(this.value)" style="width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:4px;"><div id="kr-mg-sub-list">'+krMgListHtml(KR_SUB, 'sub')+'</div>' : (cand.kr.map(function(p){ return row(p,'kr'); }).join('') || krEmpty('本医院项目库没有项目')))+
     (window.KR_PICK_SIMPLE ? '' : '<div id="kr-rec-sum">'+krRecSummaryBlock(cand)+'</div>')+
-    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">整体备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" onchange="krRenderCaseDetail()" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;">';
+    '<div style="font-size:12px;font-weight:700;margin:14px 0 4px;">方案备注</div><input value="'+krEsc(KR_SUB.overall)+'" oninput="krSubSet(\'overall\',this.value)" onchange="krRenderCaseDetail()" placeholder="例如：具体术式以到院评估为准" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;">';
 }
 /* 一般面诊的评估卡 */
 function krGcEvalBlock(c){
@@ -5649,7 +5649,7 @@ function krGcEvalBlock(c){
   if(!ro){
     var who = (!dir) ? '<div style="font-size:12px;color:var(--terracotta);font-weight:700;margin-bottom:8px;">室长代录 · 院长授意'+(c.revAuth ? '：'+krEsc(c.revAuth.by)+' '+krEsc(fmtUtc(c.revAuth.at).slice(5)) : '')+'</div>' : '';
     var ret = (r && r.retPending) ? '<div style="background:#FDEBD3;color:#A85A10;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px;"><b>室长已退回</b>（'+krEsc(r.retPending.by)+' · '+krEsc(fmtUtc(r.retPending.at).slice(5))+'）：'+krEsc(retReasonText(r.retPending))+'</div>' : '';
-    body = who+ret+sec('录入内容', true, krRvField('gcrec', r ? r.rec : '', '面诊时说的内容（可以语音输入，也可以直接打字）', 130))+
+    body = who+ret+sec('录入内容', true, krRvField('gcrec', r ? r.rec : '', '面诊时说的内容（可以语音输入，也可以直接打字）', 130)+'<div style="margin-top:6px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krGcAiOrganize()">✨ AI 整理（演示）</button> <span style="font-size:12px;color:var(--muted);">把上面录入的内容整理成条目（院长和室长代录都可用）</span></div>')+
       sec('推荐项目（选择勾选）', false, '<div id="kr-gc-pick">'+krGcPickColumn(c)+'</div>');
     return krCardBox((dir ? '面诊｜院长：'+krEsc(c.director||'—') : '评估内容')+' '+pill, body+'<div id="kr-rv-foot" style="margin-top:16px;">'+krGcFootHtml(c)+'</div>');
   }
@@ -5660,6 +5660,20 @@ function krGcEvalBlock(c){
     sec('推荐项目', false, names.length ? '<div style="font-size:13px;line-height:1.9;">'+names.map(function(n){ return '· '+krEsc(n); }).join('<br>')+'</div>' : '<div style="font-size:12px;color:var(--muted);">（由室长在下面发送时选择）</div>');
   var retBtn = (mode==='sender' && !(r && r.role==='proxy')) ? '<button class="btn-outline" style="padding:4px 14px;" onclick="krRvReturnOpen()">退回院长</button>' : '';
   return krCardBoxR((dir ? '面诊｜院长：'+krEsc(c.director||'—') : '面诊评估')+' '+pill, body+'<div id="kr-rv-foot" style="margin-top:12px;">'+krGcFootHtml(c)+'</div>', retBtn);
+}
+/* CMD-1110-04：面诊「录入内容」的［AI 整理］——院长和室长代录同一套；演示：把录入的字按行整理成条目（正式版接 LLM）；原文留在 r.recRaw 一份，Timeline 记一笔 */
+function krGcAiOrganize(){
+  if(RVMIC) krRvMicStop(true);
+  var rc = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!rc || krGcMode(rc.c)!=='author') return;
+  var ta = document.getElementById('rvta-gcrec'), raw = ta ? ta.value : String((gcEvalOf(rc.c)||{}).rec||'');
+  if(!String(raw||'').trim()){ alert('还没有录入内容：请先语音输入或打字，再按 AI 整理'); return; }
+  var lines = String(raw).split(/\n+|(?<=[。！？])\s*|(?<=[.!?])\s+/).map(function(x){ return x.replace(/^[·\-\s]+/, '').trim(); }).filter(Boolean);
+  var out = lines.map(function(x){ return '· '+x; }).join('\n');
+  if(out===String(raw).trim()) return; /* 已经整理过 */
+  krNoteQuiet(function(c){ var r = gcEvalOf(c, true); if(!r.recRaw) r.recRaw = raw; logCaseEvent(c, ME_NAME, 'AI 整理：面诊录入内容（演示）', '面诊'); return true; });
+  krGcSetQ(out);
+  if(ta) ta.value = out;
+  Store.touch();
 }
 function krGcScreen(c){
   krRecReset();
