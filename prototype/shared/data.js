@@ -3710,7 +3710,7 @@ function toggleConcernPart(key, sub){
   var c = getCurrentCase(); if(!c) return; c.concerns = c.concerns || []; sub = sub || '';
   var cid = key+(sub ? '|'+sub : ''), i = c.concerns.findIndex(function(x){ return concernCid(x)===cid; });
   if(i>-1){ var x0 = c.concerns[i]; if((x0.desc||x0.video||Object.keys(x0.photos||{}).length) && !confirm('取消「'+concernCardTitle(x0)+'」？已填的说明和上传的照片 / 视频会清掉')) return; c.concerns.splice(i, 1); }
-  else { c.concerns.push({part:key, sub:sub, desc:(!c.concerns.length && c.addConsultRef) ? c.addConsultRef : '', expect:'', video:null, photos:{}}); c.concerns.sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }); }
+  else { c.concerns.push({part:key, sub:sub, desc:'', expect:'', video:null, photos:{}}); c.concerns.sort(function(a, b){ return concernSortKey(a)-concernSortKey(b); }); }
   var g = concernPartDef(key).group; if(g) CONCERN_OPEN[g] = true;
   concernSync(c); c.materialsError = ''; renderCaseBody(c);
 }
@@ -3865,7 +3865,7 @@ function materialsCardHtml(c){
     (c.needsConsult===true ? wantDraftRowHtml(c) : '')+ /* CMD-1021-23：选了面诊才有「客人希望的面诊时间」 */
     concernExpectHtml(c)+
     directorRowHtml(c)+
-    budgetRowHtml(c)+
+    budgetRowHtml(c)+(c.needsConsult===true ? visitNoteRowHtml(c) : '')+
     '<div class="case-field-row"><span class="fk">上传附件（选填）</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+((c.manualAttachments||[]).length ? (c.manualAttachments||[]).map(function(f){ return f.label; }).join('、') : '外部文件（选填）')+'</span><button class="btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="mockUploadAttachment()">+ 上传</button></div></div>'+
     (MAT_SPLIT ? '' : caseBeautyRowHtml(c).replace('<div class="case-field-row"', '<div class="case-field-row" style="border-bottom:none;"', 1))+
     (MAT_SPLIT ? (MAT_FOOT = matFootHtml(c), '') : matFootHtml(c))+
@@ -4402,7 +4402,7 @@ function basicTabHtml(c){
     guestConcernRowHtml(c)+
     '<div class="case-field-row"><span class="fk">메타뷰</span><div style="flex-grow:1;font-size:13px;">'+metaFieldHtml(c)+'</div></div>'+ /* CMD-1021-20：메타뷰 面诊 / 不面诊都显示 */
     '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">苦恼</span><div style="flex-grow:1;padding-bottom:10px;">'+concernCardsHtml(c, {supp:c.needsConsult!==false})+'</div></div>'+
-    intentionInfoHtml(c)+
+    intentionInfoHtml(c)+(c.needsConsult===true ? visitNoteRowHtml(c) : '')+
     (c.usePrev ? '' : '<div class="case-field-row" style="border-top:1px solid var(--border2);border-bottom:none;"><span class="fk">面诊</span><span style="flex-grow:1;font-size:13px;">'+consultLabel+(c.consultRequested?'（已申请）':'')+'</span></div>')+
     '</div>';
 }
@@ -4413,7 +4413,6 @@ function addConsult(){
   var c = getCurrentCase(); if(!c) return;
   c.visibleToKR = true; /* 点了增加面诊，案件对韩国侧从此可见 */
   if(c.settlementDone || c.mgmtActive) c.addedConsultAfterLocal = true; /* 付款后增加面诊：已买的本地项目照常使用 */
-  if(c.needsConsult===false){ var ref0 = String(concernTextOf(c)||'').trim(); if(ref0) c.addConsultRef = ref0; } /* CMD-1102-08 二：不面诊时填的苦恼文字当第一张部位卡的参考带进来（可改） */
   c.concerns = c.concerns || [];
   c.needsConsult = true;
   c.consultRequested = true;
@@ -4552,21 +4551,8 @@ function consultDirectorPickHtml(c){
 }
 
 function consultFeeFormHtml(c, noDirPick){
-  var d = feeDraft(c);
-  var reasons = WAIVE_REASONS;
-  var waiveBlock = d.mode==='waive'
-    ? '<div style="margin:8px 0 4px 24px;"><select onchange="setFeeReason(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">选择免除原因 *</option>'+
-      reasons.map(function(r){ return '<option'+(d.reason===r?' selected':'')+'>'+r+'</option>'; }).join('')+'</select>'+
-      (d.reason==='其他' ? ' <input type="text" placeholder="请注明" value="'+(d.note||'').replace(/"/g,'&quot;')+'" oninput="setFeeNote(this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">' : '')+
-      (d.preset ? '<div style="font-size:12px;color:var(--muted);margin-top:4px;">已按关联原因"'+d.preset+'"预选，可修改；原因必填</div>' : '')+'</div>'
-    : '';
-  var waiveRadio = d.locked
-    ? '<div style="font-size:12px;color:#C1454A;padding:4px 0;">'+d.hint+'</div>'
-    : '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;"><input type="radio" name="fee-mode" '+(d.mode==='waive'?'checked':'')+' onchange="setFeeMode(\'waive\')"> 免除面诊费</label>'+waiveBlock;
-  return (noDirPick ? '' : consultDirectorPickHtml(c))+'<div style="margin-bottom:12px;">'+
-    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;"><input type="radio" name="fee-mode" '+(d.mode==='paid'?'checked':'')+' onchange="setFeeMode(\'paid\')"> 已缴费</label>'+waiveRadio+
-    ((!d.locked && d.hint) ? '<div style="font-size:12px;color:var(--terracotta);margin:2px 0 4px 24px;">'+d.hint+'</div>' : '')+
-    '<div style="display:flex;gap:10px;margin-top:10px;"><button class="btn-primary" onclick="confirmConsultFee()">确认</button><button class="btn-outline" onclick="cancelConsult()">面诊取消</button></div></div>';
+  /* CMD-1110-26 五：表单最下面只留［确认］；已缴费 / 免除 / 面诊取消 都在点［确认］后的弹窗里选 */
+  return (noDirPick ? '' : consultDirectorPickHtml(c))+'<div style="display:flex;justify-content:flex-end;margin-bottom:12px;"><button class="btn-primary" onclick="feeModalOpen()">确认</button></div>';
 }
 
 function setFeeMode(m){ var c=getCurrentCase(); if(!c) return; var d=feeDraft(c); d.mode=m; renderCaseBody(c); }
@@ -4595,12 +4581,12 @@ function consultTabHtml(c){
   var wrap = function(body){ return '<div class="card" style="padding:22px 24px;">'+body+'</div>'; };
   if(c.consultStatus==='awaiting_payment'){
     if(c.addConsultMode){ /* 本地案件［增加面诊］：同基础资料选面诊的顺序和组件 */
-      var refBox = c.addConsultRef ? '<div style="font-size:12px;color:var(--muted);background:var(--bg-sidebar,#F3EFE6);border-radius:8px;padding:8px 10px;margin-bottom:8px;">不面诊时填的苦恼（参考，选好第一个部位后会带进部位卡，可以改）：'+cesc(c.addConsultRef)+'</div>' : '';
-      return wrap(consultFeeCardHtml(fee, '', '', c)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先选苦恼部位并填说明 / 希望预期 / 上传照片和视频（必填，和一般面诊同一套），再填预算（选填）、选院长，再缴费或免除面诊费，最后点确认</div>'+
+      var refBox = ''; /* CMD-1110-26 三：不再带入不面诊时的苦恼，也不显示参考那行 */
+      return wrap(wantConsultRowHtml(c, fee)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先选苦恼部位并填说明 / 希望预期 / 上传照片和视频（必填，和一般面诊同一套），再填预算（选填）、选院长，再缴费或免除面诊费，最后点确认</div>'+
         '<div style="margin-bottom:10px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">苦恼 / 期望部位 <span style="color:var(--terracotta);">*</span></div>'+refBox+concernFormHtml(c)+'</div>'+
-        budgetRowHtml(c)+directorRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true)+sub);
+        budgetRowHtml(c)+visitNoteRowHtml(c)+directorRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true));
     }
-    return wrap(consultFeeCardHtml(fee, '', '', c)+consultFeeFormHtml(c)+sub);
+    return wrap(wantConsultRowHtml(c, fee)+consultFeeFormHtml(c)); /* CMD-1110-26 五：下面「待缴费」那行（sub）拿掉 */
   }
   if(c.consultStatus==='cancelled'){
     /* 2026-10-02：面诊取消（只在待缴费时）→ 面诊费已取消 → 主状态"选择项目"，本地管理tab已自动打开；这里只留记录 */
@@ -13882,3 +13868,72 @@ function inLocalNoteSave(c, u, v){
 }
 /* 按［完成］时把输入框里的草稿存进这次使用记录（markMgmtRows 里调用） */
 function inLocalNoteCommit(c, scope, u, i){ var id = c.id+'|'+scope+'|'+i, d = IN_LN[id]; if(d===undefined){ var el = document.getElementById('ln-'+id.replace(/[^\w]/g, '_')); if(el) d = el.value; } if(d!==undefined) inLocalNoteSave(c, u, d); delete IN_LN[id]; delete IN_LN[id+'|edit']; }
+
+
+/* ===== CMD-1110-26 四：面诊内容里的「来访备注」——存成这一天的 IN 来访备注（c.inNotes 里 src:'face'，和 1110-20 的来访备注同一种数据：发铃铛给 KR、计入备注内容和未读数）；
+   确认前只是草稿 c.visitNoteDraftIn，确认（一般面诊的［确认］/ 增加面诊缴费或免除）时存；之后在到访目的里可以改（改了更新同一条并再通知一次） ===== */
+function visitNoteInRec(c){ return (c.inNotes||[]).filter(function(n){ return n.src==='face'; })[0]; }
+function visitNoteLive(c){ return !!visitNoteInRec(c) || (c.addConsultMode ? c.consultStatus!=='awaiting_payment' : !!c.materialsConfirmed); }
+function visitNoteRowHtml(c){
+  var rec = visitNoteInRec(c), v = rec ? rec.text : (c.visitNoteDraftIn||'');
+  return '<div class="case-field-row" style="align-items:flex-start;"><span class="fk" style="padding-top:9px;">来访备注（选填）</span><div style="flex-grow:1;"><textarea id="visit-note-in" placeholder="记录今天来访情况、客人个人情况或特殊安排" oninput="visitNoteDraftSet(this.value)" onchange="visitNoteChange(this.value)" style="width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;">'+cesc(v)+'</textarea></div></div>';
+}
+function visitNoteDraftSet(v){ var c = getCurrentCase(); if(c) c.visitNoteDraftIn = v; }
+function visitNoteChange(v){ var c = getCurrentCase(); if(!c) return; c.visitNoteDraftIn = v; if(visitNoteLive(c)) visitNoteCommit(c); }
+function visitNoteCommit(c){
+  var t = String(c.visitNoteDraftIn||'').trim(), rec = visitNoteInRec(c); if(!t) return false;
+  if(rec){
+    if(rec.text===t) return false;
+    rec.text = t; rec.at = nowFullDt(); rec.readAt = ''; rec.readBy = '';
+    c.recInNote = (c.inNotes||[]).map(function(n){ return n.text; }).join('\n');
+    logCaseEvent(c, actingName(), '修改来访备注：'+(t.length>40 ? t.slice(0, 40)+'…' : t), '面诊');
+    try{ pushKrNotif(caseKrHospital(c), actingName()+'更新了来访备注（'+c.name+' '+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'visitnote', level:'info'}); }catch(e){}
+    return true;
+  }
+  if(!coreAddInNote(c, t, actingName())) return false;
+  var last = c.inNotes[c.inNotes.length-1]; last.src = 'face'; c.visitNoteDraftIn = '';
+  return true;
+}
+/* KR 面诊画面「到访目的」预算下面一行「来访备注（IN）：…」（译文 + 查看原文） */
+function faceVisitNoteKrHtml(c){
+  var rec = visitNoteInRec(c); if(!rec) return '';
+  return '<div style="font-size:13px;margin-top:6px;"><span style="color:var(--muted);font-size:12px;">来访备注（IN）　</span>'+noteTextHtml({id:rec.id, role:'IN', text:rec.text}, 'KR')+'</div>';
+}
+var concernBlockHtml0 = concernBlockHtml;
+concernBlockHtml = function(c, o){ var h = concernBlockHtml0(c, o); return (o && o.budgetLast) ? h+faceVisitNoteKrHtml(c) : h; };
+
+/* ===== CMD-1110-26 五：面诊费弹窗（M 560）——表单最下面只留［确认］，按了先检查（部位卡 / 院长），再弹这个窗选 已缴费 / 免除面诊费（原因必填）；
+   ［面诊取消］（红色线框）照现有规则转不面诊；× = 先不缴，面诊费维持「未缴费」，之后从面诊 tab 再按［确认］打开 ===== */
+var FEEM = null;
+function feeModalOpen(){
+  var c = getCurrentCase(); if(!c) return;
+  if(c.addConsultMode){ var cm = concernMissing(c); if(cm.length){ alert('增加面诊的资料还没填完（部位卡和照片 / 视频必填）：\n· '+cm.join('\n· ')); return; } }
+  if(!c.hospitalId || !c.director){ alert('请先选择院长'); return; }
+  var d = feeDraft(c);
+  FEEM = {caseId:c.id, mode:(d.preset && d.mode==='waive') ? 'waive' : '', reason:(d.preset && d.mode==='waive') ? d.reason : '', note:''};
+  var ov = document.getElementById('fee-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'fee-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 189; document.body.appendChild(ov); }
+  ov.classList.add('open'); feeModalRender();
+}
+function feeModalClose(){ var ov = document.getElementById('fee-overlay'); if(ov){ ov.classList.remove('open'); ov.innerHTML = ''; } FEEM = null; }
+function feeModalOk(){ var F = FEEM; return !!F && (F.mode==='paid' || (F.mode==='waive' && !!F.reason && (F.reason!=='其他' || !!String(F.note||'').trim()))); }
+function feeModalRender(){
+  var ov = document.getElementById('fee-overlay'), c = FEEM && CASE_ITEMS.filter(function(x){ return x.id===FEEM.caseId; })[0]; if(!ov || !c) return;
+  var d = feeDraft(c), col = CONSULT_FEE_COLORS['待缴费'], F = FEEM;
+  var waiveBlk = F.mode==='waive' ? '<div style="margin:6px 0 4px 24px;"><select onchange="feeModalSet(\'reason\',this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">选择免除原因 *</option>'+WAIVE_REASONS.map(function(r){ return '<option'+(F.reason===r?' selected':'')+'>'+r+'</option>'; }).join('')+'</select>'+(F.reason==='其他' ? ' <input type="text" placeholder="请注明" value="'+cesc(F.note||'')+'" oninput="feeModalSet(\'note\',this.value,true)" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">' : '')+'</div>' : '';
+  var waiveRow = d.locked ? '<div style="font-size:12px;color:#C1454A;padding:4px 0;">'+d.hint+'</div>' : '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;cursor:pointer;"><input type="radio" name="fee-m" '+(F.mode==='waive'?'checked':'')+' onchange="feeModalSet(\'mode\',\'waive\')"> 免除面诊费</label>'+waiveBlk;
+  var ok = feeModalOk();
+  ov.innerHTML = '<div class="modal-box msz-M" style="padding:24px;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;"><span style="font-size:16px;font-weight:700;">面诊费</span><span style="font-size:14px;color:var(--slate2);">'+fmtRp(consultFeeOf(c))+'</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">未缴费</span><span style="flex:1;"></span><button class="modal-x" onclick="feeModalClose()" title="先不缴" aria-label="关闭">✕</button></div>'+
+    '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;cursor:pointer;"><input type="radio" name="fee-m" '+(F.mode==='paid'?'checked':'')+' onchange="feeModalSet(\'mode\',\'paid\')"> 已缴费</label>'+waiveRow+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">'+(canCancelConsult(c) ? '<button class="btn-outline" style="border-color:#C1454A;color:#C1454A;" onclick="feeModalCancelConsult()">面诊取消</button>' : '')+'<button class="btn-primary" id="fee-m-ok" onclick="feeModalGo()" '+(ok ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"')+'>确认</button></div></div>';
+}
+function feeModalSet(k, v, quiet){
+  if(!FEEM) return; FEEM[k] = v; if(k==='mode' && v!=='waive'){ FEEM.reason = ''; FEEM.note = ''; } if(k==='reason' && v!=='其他') FEEM.note = '';
+  if(quiet){ var b = document.getElementById('fee-m-ok'), ok = feeModalOk(); if(b){ b.disabled = !ok; b.style.opacity = ok ? '' : '.5'; b.style.cursor = ok ? '' : 'not-allowed'; } return; }
+  feeModalRender();
+}
+function feeModalGo(){
+  var F = FEEM, c = F && CASE_ITEMS.filter(function(x){ return x.id===F.caseId; })[0]; if(!c || !feeModalOk()) return;
+  var d = feeDraft(c); d.mode = F.mode; d.reason = F.reason; d.note = F.note;
+  feeModalClose(); confirmConsultFee();
+}
+function feeModalCancelConsult(){ var F = FEEM, c = F && CASE_ITEMS.filter(function(x){ return x.id===F.caseId; })[0]; if(!c) return; feeModalClose(); cancelConsult(); }

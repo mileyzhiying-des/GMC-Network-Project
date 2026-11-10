@@ -6543,7 +6543,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(concernMissing(c).length===0, '复诊想问的内容 + 项目的视频 / 照片填完就够：'+concernMissing(c).join('；'));
       c.metaviewStatus = 'ready'; confirmMaterials(); c = getCurrentCase();
       ST.ok(c.materialsConfirmed && c.needsConsult===true && c.director==='KD1 院长' && c.consultStatus==='awaiting_payment' && c.consultKind==='复诊' && /【复诊/.test(c.concern) && /右边还肿/.test(c.concern), '复诊确认：院长沿用原案件、进面诊缴费、标复诊、面诊内容带项目：'+c.director+'/'+c.consultStatus);
-      ST.ok(/复诊/.test(consultFeeFormHtml(c)), '面诊费免除原因有「复诊」');
+      feeModalOpen(); ST.ok(/复诊/.test(document.getElementById('fee-overlay').innerHTML), '面诊费免除原因有「复诊」（在弹窗里）'); feeModalClose();
       /* 3 不面诊：术后恢复卡 + 本地管理两类 + 扣原案件 */
       window.GMC_NO_FOLLOWASK = true;
       var c2 = ST.newRes('R86p', {phone:ph}); ST.arrive(c2); c2 = getCurrentCase(); c2.metaviewStatus = 'ready'; setLinkedCase(prior.id); setNeedsConsult(false); h = materialsCardHtml(c2);
@@ -8696,15 +8696,15 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var c = ST.localCase('R205'); c.concerns = []; c.concernText = '（自测）不面诊时写的苦恼'; var al = window.alert, msgs = []; window.alert = function(m){ msgs.push(String(m)); };
     try{
       addConsult(); var t = consultTabHtml(c);
-      ST.ok(/苦恼 \/ 期望部位/.test(t) && /不面诊时填的苦恼/.test(t) && /预算/.test(t), '增加面诊页有部位卡区 + 参考文字 + 预算');
-      ST.ok(t.indexOf('苦恼 / 期望部位') < t.lastIndexOf('预算') && t.lastIndexOf('预算') < t.lastIndexOf('面诊取消'), '顺序：部位卡 → 预算 → … → 确认');
-      c.hospitalId = c.hospitalId || caseHospitalId(c); setCaseDirector(ST.freeDirector(c)); msgs.length = 0; confirmConsultFee();
+      ST.ok(/苦恼 \/ 期望部位/.test(t) && !/不面诊时填的苦恼/.test(t) && /预算/.test(t), '增加面诊页有部位卡区 + 预算，没有「不面诊时填的苦恼」参考那行（CMD-1110-26）');
+      ST.ok(t.indexOf('苦恼 / 期望部位') < t.lastIndexOf('预算') && t.indexOf('预算（选填）') < t.indexOf('来访备注（选填）') && t.indexOf('来访备注（选填）') < t.lastIndexOf('确认'), '顺序：部位卡 → 预算 → 来访备注 → … → 确认（面诊取消在弹窗里）');
+      c.hospitalId = c.hospitalId || caseHospitalId(c); setCaseDirector(ST.freeDirector(c)); msgs.length = 0; feeModalOpen();
       ST.ok(msgs.some(function(m){ return /部位卡和照片/.test(m); }) && c.consultStatus==='awaiting_payment', '没填部位卡：不能确认，提示缺项');
       var pd = CONCERN_PARTS.filter(function(p){ return !p.hidden && !p.subs; })[0]; toggleConcernPart(pd.key);
-      ST.ok(c.concerns.length===1 && c.concerns[0].desc==='（自测）不面诊时写的苦恼', '第一张部位卡的说明带入不面诊时的苦恼文字');
-      msgs.length = 0; confirmConsultFee(); ST.ok(msgs.length && c.consultStatus==='awaiting_payment', '只有说明、没有希望预期 / 照片：仍不能确认');
-      var x = c.concerns[0]; x.expect = '（自测）希望'; x.video = {name:'v.mp4'}; var sp = shootSpec(x.part); x.photos = {}; sp.angles.forEach(function(a){ x.photos[a.id] = {name:'p.jpg'}; }); if(!sp.video) x.video = null; concernSync(c);
-      msgs.length = 0; confirmConsultFee(); ST.ok(!msgs.length && c.consultStatus!=='awaiting_payment', '部位卡 + 照片都填好：可以确认（'+c.consultStatus+'）');
+      ST.ok(c.concerns.length===1 && c.concerns[0].desc==='', '第一张部位卡的苦恼说明保持空白（不再带入不面诊时的苦恼）');
+      msgs.length = 0; feeModalOpen(); ST.ok(msgs.length && c.consultStatus==='awaiting_payment', '只有说明、没有希望预期 / 照片：仍不能确认');
+      var x = c.concerns[0]; x.desc = '（自测）说明'; x.expect = '（自测）希望'; x.video = {name:'v.mp4'}; var sp = shootSpec(x.part); x.photos = {}; sp.angles.forEach(function(a){ x.photos[a.id] = {name:'p.jpg'}; }); if(!sp.video) x.video = null; concernSync(c);
+      msgs.length = 0; feeModalOpen(); ST.ok(!msgs.length && !!document.getElementById('fee-overlay').classList.contains('open'), '部位卡 + 照片都填好：弹出面诊费弹窗'); feeModalSet('mode','paid'); feeModalGo(); ST.ok(c.consultStatus!=='awaiting_payment', '选已缴费后确认（'+c.consultStatus+'）');
       ST.ok(c.visibleToKR && (c.concerns||[]).length===1 && Object.keys(c.concerns[0].photos).length>0, 'KR 能读到的资料里有部位卡和照片');
     } finally { window.alert = al; }
   });
@@ -10539,7 +10539,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       if(proxy){ krRvAuth(true); } else { krStartConsult(); }
       var h = krTabConsult(gc()), t = txt(h);
       ST.ok(/AI 整理（演示）/.test(h), (proxy ? '室长代录' : '院长')+'：录入内容下面有［AI 整理］');
-      ST.ok(/请输入备注内容/.test(h) && !/placeholder="备注"/.test(h), '推荐项目备注是输入框，提示「请输入备注内容」');
+      var pk0 = krScopeCandidates(cid).kr[0]; if(pk0){ krPickToggle(pk0.name, true); h = krTabConsult(gc()); }
+      ST.ok(/请输入备注内容/.test(h) && !/placeholder="备注"/.test(h), '推荐项目勾了以后备注是输入框，提示「请输入备注内容」');
       ST.ok(/方案备注/.test(t) && !/整体备注/.test(t), '推荐项目下面叫「方案备注」，没有「整体备注」');
       ST.ok(h.indexOf('AI 整理（演示）') > h.indexOf('rvta-gcrec'), '按钮在录入内容输入框下面');
       mut(function(c){ gcEvalOf(c, true).rec = '鼻梁低。想要自然的效果\n需要看鼻尖'; });
@@ -10810,6 +10811,50 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(c3.comp && c3.comp.used, '置换额度已用掉'); useAskClose();
     } finally { window.alert = al; window.confirm = cf; window.GMC_LOCAL_LEAVE_MANUAL = false; }
   });
+  ST.def('R301a','CMD-1110-26（A1 分页）：面诊费弹窗（四种结果）/ 来访备注存成 IN 来访备注 / 增加面诊不带入苦恼',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm, msgs = []; window.alert = function(m){ msgs.push(String(m)); }; window.confirm = function(){ return true; };
+    var cur = function(c){ return CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; }, ov = function(){ return document.getElementById('fee-overlay'); };
+    var fill = function(c){ var pd = CONCERN_PARTS.filter(function(p){ return !p.hidden && !p.subs; })[0]; toggleConcernPart(pd.key); var x = c.concerns[0]; x.desc = '说明'; x.expect = '希望'; x.video = {name:'v.mp4'}; var sp = shootSpec(x.part); x.photos = {}; sp.angles.forEach(function(a){ x.photos[a.id] = {name:'p.jpg'}; }); if(!sp.video) x.video = null; concernSync(c); c.hospitalId = c.hospitalId || caseHospitalId(c); c.director = ST.freeDirector(c); };
+    try{
+      var c = ST.localCase('R301'); c.concerns = []; c.concernText = '（自测）不面诊时写的苦恼'; addConsult(); c = cur(c);
+      var t = consultTabHtml(c); ST.ok(!/不面诊时填的苦恼/.test(t) && !c.addConsultRef, '增加面诊页没有「不面诊时填的苦恼」参考那行');
+      var iN = t.indexOf('来访备注（选填）'); ST.ok(t.indexOf('预算（选填）') < iN && iN > -1 && t.indexOf('院长', iN) > iN, '来访备注在预算下面、院长上面');
+      ST.ok(/记录今天来访情况、客人个人情况或特殊安排/.test(t), '提示字');
+      fill(c); ST.ok(c.concerns[0].desc==='说明', '填过说明'); 
+      var c0 = ST.localCase('R301z'); c0.concerns = []; addConsult(); c0 = cur(c0); var pd0 = CONCERN_PARTS.filter(function(p){ return !p.hidden && !p.subs; })[0]; toggleConcernPart(pd0.key); ST.ok(cur(c0).concerns[0].desc==='', '选部位后苦恼说明是空白');
+      ST.open(c); t = consultTabHtml(c); ST.ok(!/name="fee-mode"/.test(t) && !/面诊取消/.test(t) && !/待缴费/.test(t) && /feeModalOpen\(\)/.test(t), '表单里没有 radio / 面诊取消 / 待缴费，只有［确认］');
+      c.visitNoteDraftIn = '（自测）客人带了朋友，下午要赶飞机';
+      feeModalOpen(); ST.ok(ov().classList.contains('open') && /面诊费/.test(ov().innerText) && /未缴费/.test(ov().innerText) && !!ov().querySelector('.msz-M'), '弹出面诊费弹窗（M），标「未缴费」');
+      ST.ok(ov().querySelector('#fee-m-ok').disabled && !!ov().querySelector('.modal-x') && /面诊取消/.test(ov().innerText), '都没选时［确认］灰；有 × 和［面诊取消］');
+      feeModalClose(); ST.ok(!ov().classList.contains('open') && c.consultStatus==='awaiting_payment' && !visitNoteInRec(c), '×：面诊费仍是未缴费，来访备注还只是草稿');
+      feeModalOpen(); feeModalSet('mode','waive'); ST.ok(ov().querySelector('#fee-m-ok').disabled, '选免除但没原因：［确认］灰'); feeModalSet('reason','其他'); ST.ok(ov().querySelector('#fee-m-ok').disabled, '原因是「其他」没写说明：灰'); feeModalSet('note','测试', true); ST.ok(!ov().querySelector('#fee-m-ok').disabled, '写了说明：可确认');
+      feeModalGo(); c = cur(c); ST.ok(c.consultStatus!=='awaiting_payment' && !!c.consultFeeWaived, '免除面诊费成功'); var rec = visitNoteInRec(c);
+      ST.ok(!!rec && rec.text==='（自测）客人带了朋友，下午要赶飞机' && ST.hasLog(c, /增加备注/), '来访备注存成 IN 来访备注（src face）+ Timeline');
+      ST.ok(notesRecordsOfCases(mainNotesCases(c), 'KR').some(function(r){ return r.kind==='visit' && r.id==='v:'+rec.id; }), '计入备注内容（来访备注）');
+      var n0 = (c.inNotes||[]).length; c.visitNoteDraftIn = '（自测）改了'; visitNoteChange('（自测）改了'); ST.ok((c.inNotes||[]).length===n0 && visitNoteInRec(c).text==='（自测）改了', '之后修改：更新同一条，不新增');
+      ST.ok(/来访备注（IN）/.test(faceVisitNoteKrHtml(c)) && /改了/.test(faceVisitNoteKrHtml(c)), 'KR 到访目的预算下面有「来访备注（IN）」');
+      var d = ST.localCase('R301b'); d.concerns = []; addConsult(); d = cur(d); fill(d);
+      feeModalOpen(); feeModalSet('mode','paid'); ST.ok(!ov().querySelector('#fee-m-ok').disabled, '选已缴费：［确认］可按'); feeModalGo(); d = cur(d); ST.ok(d.consultStatus==='paid_waiting_kr', '已缴费 → 待 KR 确认时间');
+      var e = ST.localCase('R301c'); e.concerns = []; addConsult(); e = cur(e); fill(e);
+      feeModalOpen(); ST.ok(!!ov().querySelector('button[onclick="feeModalCancelConsult()"]'), '待缴费时有［面诊取消］'); feeModalCancelConsult(); e = cur(e); ST.ok(e.consultStatus==='cancelled' && !ov().classList.contains('open'), '面诊取消：照现有规则转不面诊');
+    } finally { window.alert = al; window.confirm = cf; try{ feeModalClose(); }catch(e){} }
+  });
+  ST.def('R301b','CMD-1110-26（KM1 / KD1 分页，stagePay 夹具）：推荐项目勾了才有备注输入框（取消再勾字还在）/ 室长发送画面上下排',function(){
+    var me = currentAccount(); if(!ST.ok(me && isKrAccount(), '要在 KR 分页里跑')) return;
+    var cid = null, r = null; krClinics().forEach(function(cl){ if(r) return; Store.withClinic(cl.id, function(){ CASE_ITEMS.forEach(function(c){ if(!r && c.consultStatus==='awaiting_report' && !c.mainId && krCaseVisible(c, krHospitalIdOfMe())){ r = c; cid = cl.id; } }); }); });
+    if(!ST.ok(!!r, '需要一个等待报告的面诊案件')) return;
+    KR_CASE = {clinicId:cid, id:r.id, tab:'consult'}; KR_SUB = krSubBlank(''); krShowCase(cid, r.id, {tab:'consult', here:true});
+    var gc = function(){ return krFindCase(cid, r.id).c; }, cand = krScopeCandidates(cid), p0 = cand.kr[0]; if(!ST.ok(!!p0, '项目库有项目')) return;
+    var n = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.querySelectorAll('input[placeholder="请输入备注内容"]').length; };
+    KR_SUB.pick = {}; ST.ok(n(krGcPickColumn(gc()))===0, '没勾的行右边没有备注输入框'); krPickToggle(p0.name, true); ST.ok(n(krGcPickColumn(gc()))===1, '勾了出现「请输入备注内容」');
+    krNoteSet(p0.name, '（自测）备注'); krPickToggle(p0.name, false); ST.ok(n(krGcPickColumn(gc()))===0 && KR_SUB.notes[p0.name]==='（自测）备注', '取消勾选：输入框收起，已打的字暂存'); krPickToggle(p0.name, true); ST.ok(/（自测）备注/.test(krGcPickColumn(gc())), '再勾回来字还在');
+    var sb = krSubmitBlock(gc()), ix = function(a){ return sb.indexOf(a); };
+    ST.ok(ix('报告内容')>-1 && ix('报告内容') < ix('kr-rec-sum'), '诊疗方案在上、项目在下');
+    ST.ok(ix('方案备注') > ix('kr-rec-sum') && sb.lastIndexOf('发送诊疗方案') > ix('方案备注'), '最下面：方案备注 + 发送按钮'); ST.ok(!/flex:2 1 400px/.test(sb) && !/flex:1 1 200px/.test(sb), '不再左右两栏');
+    var mg0 = krLocalLibOn(krHospitalIdOfMe())[0]; if(mg0){ krSubTab('mgmt'); KR_SUB.mg = {}; ST.ok(n(krGcPickColumn(gc()))===0, '管理项目没勾：没有备注框'); krMgPick(mg0.id, true); ST.ok(n(krGcPickColumn(gc()))>=1, '管理项目勾了：出现备注框'); }
+  });
+
   ST.def('R300b','CMD-1110-25（KM1 分页，pcStage + stageC 夹具）：到院已完成卡没有［增加项目］ / KR 基础资料有［+ 上传］（传了附件 tab 出现）/ 今日项目上方「IN 室长备注」一行 / 结算前已读检查含子案件 / 施术当天 tab 标记是数字',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0], r1 = krAllCases().filter(function(x){ return /^T-待到院/.test(x.name); })[0]; if(!ST.ok(!!r0 && !!r1, '先 ST.ensureFixtures([\'pcStage\',\'stageC\'])')) return;

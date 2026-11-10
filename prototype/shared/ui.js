@@ -1996,6 +1996,7 @@ function confirmMaterials(){
   if(c.needsConsult!==true){ c.wantConsult = ''; } else { c.wantConsult = String(c.wantConsult||'').trim(); if(c.wantConsult) logCaseEvent(c, actingName(), '填写客人希望的面诊时间：'+c.wantConsult+'（随面诊资料送 KR）', '面诊'); } /* CMD-1021-23：不面诊没有；面诊 / 复诊的值随资料送 KR */
   c.materialsConfirmed = true;
   c.materialsDate = todayStr();
+  if(c.needsConsult===true) visitNoteCommit(c); /* CMD-1110-26 四：面诊内容里的来访备注存成这一天的 IN 来访备注 */
   applyCaseLink(c); /* Case ID 已在预约时生成，这里不再生成 */
   renderCaseSubtitle(c);
   document.getElementById('case-chat-actions').style.display = 'flex';
@@ -2092,10 +2093,10 @@ function confirmConsultFee(){
   if(!c.hospitalId || !c.director){ alert('请先选择院长'); return; }
   var d = feeDraft(c);
   if(d.locked && d.mode==='waive'){ alert('距原案件报告日期已超过1个月，不能免除面诊费'); return; }
-  if(d.mode==='paid'){ markConsultPaid(); return; }
+  if(d.mode==='paid'){ visitNoteCommit(c); markConsultPaid(); return; }
   if(!d.reason){ alert('请选择免除原因'); return; }
   if(d.reason==='其他' && !(d.note||'').trim()){ alert('请注明原因'); return; }
-  applyWaiveFee(c, d.reason, (d.note||'').trim());
+  visitNoteCommit(c); applyWaiveFee(c, d.reason, (d.note||'').trim());
 }
 
 function localAskAnswer(yes){
