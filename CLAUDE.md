@@ -2504,3 +2504,9 @@ prototype/shared/app.css  共用样式
 - **备注时间照 5-19**（`noteTimeHtml(at, role)`）：IN 页面上 KR 写的备注（项目备注 / 来访备注）以韩国时间为主「MM/DD HH:mm（韩国） 印尼 hh:mm」（日期不同时印尼带日期）；IN 自己写的、以及 KR 页面看的照旧（页面时区）。用在：备注卡 / 查看全部（`caseNotesListHtml`）、备注内容 tab、「查看备注（N）」展开（KR 写的带时间，IN 写的仍是 MM-DD）、施术那天子案件页的来访备注卡。
 - **当前状态卡**（IN `renderCaseStatusBar0` 的 `lk`、KR `krMainStatusBar` 的 `btn`）：［查看］［查看内容］和「待预约 … 预约」改 12px（小一号）、品牌棕 `var(--terracotta)`、仍下划线。
 - 测试：新增 R285a；10 个旧断言跟着改（行程变动 → 行程修正、a/b 两段 → 分页、MM-DD → 日期）。
+
+## CMD-1110-10 补充（2026-11-10，追加；取代 CMD-1105-07 / 1110-02 里本地管理卡「一行一行：名称 + 备注框 + 使用 N 次 + 状态 + 按钮」的排法，旧文字保留作历史）
+- 分支 **V5**，数据版本不变（61），只改画面 + 一个读取函数。
+- **本地管理卡改表格**（data.js `localMgmtTableHtml(c, rows, ro)`，排法同「在韩管理」：标题行 + 外框 `inSmallCard` + 行间分隔线，复用 `in19Th` / `in19Tr`）：项目｜历史施术次数｜备注｜状态｜操作。项目名后面灰字「· 本次 N 次」（原「使用 N 次」）；备注沿用 1110-02 的 `inLocalNoteCell`（按［完成］时存，完成后变文字、点一下回输入框）；状态沿用 `LOCAL_ITEM_COLORS` 标签（进行中 / 已完成 / 已取消）；操作 = 进行中［完成］［取消］（`padding:5px 12px;font-size:12px;border-radius:8px`，和在韩管理同尺寸），已完成 / 已取消空着。用在：`mgmtActiveHtml`（本地项目 tab 的本地管理卡）和子案件页「本地管理」tab 今天用的本地项目（`inContTodayHtml` kind='local'，含已取消的行）。`inContTodayHtml` 不传 kind 的旧写法（今日项目合并卡）没动。
+- **历史施术次数怎么算**（`localHistCount(clientName, itemName, exceptRow)`）：数据来源 = 这位客人的全部案件（`CASE_ITEMS` 里同名，含子记录）的 `mgmtUses` / `localMgmt.mgmtUses` 里 `status==='done'` 的 `qty` 合计；**不算今天这一次**（这一行自己，以及 `date` 是今天的使用记录）；项目名按 `clientProjectKey`（去掉「· 规格 / 次数」后缀，和 1110-02「查看备注」同一个匹配）对；已取消的不算；没做过 = 0 次。**正式版后端**：按「客人 + 项目名（去后缀；有项目 id 就按 id）」在本地项目使用记录里查 状态=已完成 且 使用日期 < 今天 的次数合计，一次聚合查询。
+- 测试：新增 R286a；R143a（今天用的本地项目的按钮）、R281a（「使用 N 次」）的旧断言跟着改。
