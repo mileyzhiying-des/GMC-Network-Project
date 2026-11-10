@@ -271,7 +271,9 @@ var PRINT_CONFIRM_DEFAULT = '我们会在施术前 2～3 天再次与您确认�
 var SMS_SURGERY_NOTICE_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术时间已确认。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
 var SMS_SURGERY_REMIND_ZH = '【{clinic}】\n您好 {name}，\n这里是 {coordinator}。\n您预约的赴韩施术项目将在七天后进行。\n\n到院日期：{date} ｜ 韩国时间：{time}\n医院：{hospital}\n地址：{address}\n\n{anes}\n\n如有任何疑问和变动，请联络我。\n联系方式：{phone}';
 /* 模板版本：key = 诊所设定 sms 里的键；语言先只做中文（之后加印尼文 = 增加 zh 以外的键，如 surgeryNotice_id） */
-var SURG_TPLS = {notice:{label:'施术日期通知', key:'surgeryNotice', kind:'surgery', defaults:{zh:SMS_SURGERY_NOTICE_ZH}}, remind:{label:'施术前提醒', key:'surgeryRemind', kind:'surgeryRemind', defaults:{zh:SMS_SURGERY_REMIND_ZH}}};
+/* CMD-1109-25：施术前 7 天「确认行程」窗口里的［发送行程提醒给客人］（短信 / WhatsApp，一期中文）；变量 {name} {arrive} {surg} {leave} {weather} {clinic} {phone}；{weather} 为空 = 不放天气段 */
+var SMS_TRIP_REMIND_ZH = '【GMC】{name} 您好，您的赴韩行程提醒：\n到达：{arrive}（韩国）\n{surg}离境：{leave}（韩国）\n{weather}\n如有问题请联系 {clinic}：{phone}';
+var SURG_TPLS = {trip:{label:'行程提醒', key:'tripRemind', kind:'tripRemind', defaults:{zh:SMS_TRIP_REMIND_ZH}}, notice:{label:'施术日期通知', key:'surgeryNotice', kind:'surgery', defaults:{zh:SMS_SURGERY_NOTICE_ZH}}, remind:{label:'施术前提醒', key:'surgeryRemind', kind:'surgeryRemind', defaults:{zh:SMS_SURGERY_REMIND_ZH}}};
 function surgTplOf(ver, lang){ var t = SURG_TPLS[ver]; lang = lang || 'zh'; var k = t.key + (lang==='zh' ? '' : '_'+lang); return (CLINIC_SETTINGS.sms && CLINIC_SETTINGS.sms[k]) || t.defaults[lang] || t.defaults.zh; }
 function defaultClinicSettings(o){ /* 每家诊所一份设定（存在诊所分区里）；o 可覆盖名称、地址等 */
  var s = {
@@ -936,7 +938,7 @@ function projectNameOptions(){ return PROJECT_LIBRARY.filter(function(p){ return
 /* ---- 短信（演示：不真的发，全部记在 SMS_LOG；模板读诊所设定，验证码格式固定） ---- */
 var SMS_LOG = [];   /* {id, ts, to, kind, text, caseId} */
 var SMS_SEQ = 1;
-var SMS_KIND_NAMES = {code:'验证码', link:'预约链接', confirm:'预约确认', remind:'预约提醒', cancel:'预约取消', surgery:'施术日期通知', surgeryRemind:'施术前提醒'};
+var SMS_KIND_NAMES = {code:'验证码', link:'预约链接', confirm:'预约确认', remind:'预约提醒', cancel:'预约取消', surgery:'施术日期通知', surgeryRemind:'施术前提醒', tripRemind:'行程提醒'};
 var SMS_CODE_FORMAT = '【GMC Network】Kode verifikasi / 验证码：{code}（5 menit / 5 分钟内有效）。Jangan beritahu siapa pun / 请勿告诉他人。';
 function bookingUrl(params){ return location.origin + '/booking.html?' + new URLSearchParams(Object.assign({clinic:CURRENT_CLINIC_ID}, params)).toString(); } /* 链接必须带诊所（?clinic=）；原型不带默认 C1，正式版没带应显示错误 */
 function caseViewUrl(c){ return bookingUrl({view:c.caseNo}); }

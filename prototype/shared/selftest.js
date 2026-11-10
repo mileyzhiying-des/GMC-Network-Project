@@ -8379,6 +8379,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       }
     } finally { window.alert = al; window.GMC_TRIP_MANUAL = false; }
   });
+  ST.def('R277a','CMD-1109-25（A1 分页）：施术前 7 天「确认行程」窗口加［发送行程提醒给客人］——短信 / WhatsApp、预览有行程 + 天气可改；发送后短信发送记录 + Timeline、窗口显示「MM/DD HH:mm 已发送」+「再次发送」；行程超过 7 天天气只列 7 天；天气失败开关 → 没有天气段照发；30 天窗口没有这个按钮',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = toConfirmed('R277'), ks = c.krSchedule, base = todayStr(), g = function(i){ return document.getElementById(i); };
+    ks.confirmedDate = ymdAdd(base, 5); ks.confirmedTime = '14:00'; c.tripConfirm = null; c.tripRemindMsg = null; c.stay = null; window.GMC_WEATHER_FAIL = false;
+    openStayModal(c.id, {trip:true});
+    ST.ok(!!g('stay-remind') && /发送行程提醒给客人/.test(g('stay-remind').innerText), '施术前 7 天确认行程窗口有［发送行程提醒给客人］');
+    openTripRemind(c.id); var so0 = document.getElementById('surgmsg-overlay'); ST.ok(!(so0 && so0.classList.contains('open')) && /先填好/.test(g('stay-err').textContent), '行程没填好：不弹预览，红字提示');
+    g('stay-in').value = ymdAdd(base, 2); g('stay-out').value = ymdAdd(base, 12); g('stay-int').value = '11:20'; g('stay-outt').value = '12:30';
+    openTripRemind(c.id); var ta = g('surgmsg-text'), ov = g('surgmsg-overlay'); ST.ok(ov.classList.contains('open') && !!ta, '预览弹出');
+    var tx = ta.value; ST.ok(/行程提醒/.test(ov.innerText) && /到达：.*11:20（韩国）/.test(tx) && /施术：.*14:00（韩国）/.test(tx) && /离境：.*12:30（韩国）/.test(tx) && /天气预报/.test(tx) && /天气以出发前最新预报为准/.test(tx) && /GMC/.test(tx), '预览有到达 / 施术 / 离境 + 天气：'+tx.slice(0, 160));
+    var wl = (tx.match(/（[日一二三四五六]）/g)||[]).length; ST.ok(wl===7, '行程 11 天 → 天气最多列 7 天：'+wl);
+    ta.value = tx+'\n（室长补一句）'; ta.oninput.call(ta); var smsN = SMS_LOG.length, logN = ST.logs(c).length;
+    confirmSurgMsg(); ST.ok(SMS_LOG.length===smsN+1 && SMS_LOG[0].kind==='tripRemind' && /室长补一句/.test(SMS_LOG[0].text), '短信发送记录多一条（可改过的内容）');
+    ST.ok(ST.hasLog(c, /已发送行程提醒给客人（短信.*含天气预报）/), 'Timeline 记一笔');
+    ST.ok(/已发送/.test(g('stay-remind').innerText) && /再次发送/.test(g('stay-remind').innerText) && !/发送行程提醒给客人/.test(g('stay-remind').innerText), '窗口显示「MM/DD HH:mm 已发送」+「再次发送」');
+    ST.ok(c.surgeryMsg===undefined || true, '');
+    /* 行程只有 3 天：天气只列 3 天 */
+    g('stay-out').value = ymdAdd(base, 4); openTripRemind(c.id); var t3 = g('surgmsg-text').value; ST.ok((t3.match(/（[日一二三四五六]）/g)||[]).length===3, '行程 3 天 → 只列 3 天');
+    /* 天气失败：没有天气段，其他照发 */
+    closeSurgMsg(); window.GMC_WEATHER_FAIL = true; openTripRemind(c.id); var tf = g('surgmsg-text').value;
+    ST.ok(!/天气/.test(tf) && /到达：/.test(tf) && /离境：/.test(tf) && /如有问题请联系/.test(tf), '天气拿不到：没有天气段，行程照常');
+    var n0 = SMS_LOG.length; confirmSurgMsg(); ST.ok(SMS_LOG.length===n0+1 && ST.hasLog(c, /无天气/), '天气失败照发，Timeline 写无天气');
+    window.GMC_WEATHER_FAIL = false; closeSurgMsg(); stayCancel();
+    /* 30 天窗口没有这个按钮 */
+    openStayModal(c.id, {}); ST.ok(!g('stay-remind'), '非 7 天确认窗口（30 天 / 一般行程窗口）没有这个按钮'); stayCancel();
+    openReconfirmSame(c.id); ST.ok(!/发送行程提醒/.test((g('reconfirm-overlay')||{innerText:''}).innerText), '施术前 30 天「照原日期」窗口没有');
+    var ro = g('reconfirm-overlay'); if(ro) ro.classList.remove('open');
+  });
   ST.def('R192b','CMD-1029-09 五（KM1 分页，stageC 夹具）：KR 按［客人已到院］时护照号码没填 → 必填（号码 + 效期）；已有的显示出来核对、不强制',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
     var r1 = krAllCases().filter(function(x){ return x.name==='T-待到院'; })[0]; if(!ST.ok(!!r1, '先 ST.ensureFixtures([\'stageC\'])')) return;

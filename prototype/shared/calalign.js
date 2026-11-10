@@ -309,6 +309,51 @@ function confirmSurgPhone(){
   logCaseEvent(c, actingName(), '已电话通知客人：'+txt+(c.surgPhone.note ? '；备注：'+c.surgPhone.note : ''));
   closeSurgPhone(); Store.touch(); buildCaseLog(c); renderCaseBody(c); try{ todoRefresh(); renderCalendar(); }catch(e){}
 }
+/* ===== CMD-1109-25：施术前 7 天确认行程窗口的［发送行程提醒给客人］ =====
+   天气接入位置（正式版换真实天气 API 的地方）：weatherFetch(city, startYmd, endYmd) —— 现在是模拟数据（同城市同日期永远同一结果，和 KR 工作台天气同一套“演示”性质）；
+   失败开关：window.GMC_WEATHER_FAIL = true 或 localStorage gmc_cfg_weatherfail = '1'（模拟天气服务拿不到）→ 提醒里不放天气段，其他照发。
+   城市 = 医院设定的城市（HOSPITAL_DATA[h].city；没填 = 医院所在时区的城市，首尔）。 */
+function hospitalCity(hid){ var hd = (typeof HOSPITAL_DATA!=='undefined' && HOSPITAL_DATA[hid]) || {}, h = hospitalById(hid) || {}; return String(hd.city || (TZ_INFO[h.tz||'Asia/Seoul']||{}).city || '首尔').split('（')[0]; }
+function weatherFetch(city, startYmd, endYmd){
+  var fail = !!window.GMC_WEATHER_FAIL; try{ if(localStorage.getItem('gmc_cfg_weatherfail')==='1') fail = true; }catch(e){}
+  if(fail) return {ok:false, days:[]};
+  var conds = ['晴', '多云', '阴', '小雨', '晴', '多云'], out = [], d0 = new Date(startYmd+'T00:00:00'), d1 = new Date(endYmd+'T00:00:00');
+  for(var d = d0, n = 0; d <= d1 && n < 7; d = new Date(d.getFullYear(), d.getMonth(), d.getDate()+1), n++){
+    var ymd = d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2), h = 0; String(city+ymd).split('').forEach(function(ch){ h = (h*31 + ch.charCodeAt(0)) % 9973; });
+    var hi = 12 + h%12, lo = Math.max(1, hi - 6 - h%4);
+    out.push({ymd:ymd, wd:'日一二三四五六'[d.getDay()], cond:conds[h%conds.length], hi:hi, lo:lo});
+  }
+  return {ok:true, days:out};
+}
+/* 天气段：从到达日开始，只列拿得到预报的天数（模拟最多 7 天，也不超过离境日）；拿不到 → 空字符串 */
+function tripWeatherBlock(c, stay){
+  var city = hospitalCity(c.hospitalId || clinicHospital(CURRENT_CLINIC_ID)), inD = stay.in || '', outD = stay.out || inD; if(!inD) return '';
+  var start = inD < todayStr() ? todayStr() : inD; if(start > outD) return '';
+  var w = weatherFetch(city, start, outD); if(!w.ok || !w.days.length) return '';
+  return '\n'+city+'天气预报：\n'+w.days.map(function(x){ return x.ymd.slice(5).replace('-', '/')+'（'+x.wd+'）'+x.cond+' '+x.hi+'° / '+x.lo+'°'; }).join('\n')+'\n* 天气以出发前最新预报为准。\n';
+}
+function tripRemindText(c, stay){
+  var ks = c.krSchedule || {}, hid = c.hospitalId || clinicHospital(CURRENT_CLINIC_ID), md = function(d, t){ return d ? stayMD(d)+(t ? ' '+t : '') : '—'; };
+  var surg = (ks.confirmedDate && (ks.status==='confirmed' || ks.status==='change_pending' || ks.status==='arrived')) ? '施术：'+md(ks.confirmedDate, ks.confirmedTime)+'（韩国） '+addrBoth(hid, ks.address)+'\n' : '';
+  return smsFill(surgTplOf('trip', 'zh'), {name:c.name, arrive:md(stay.in, stay.inTime), surg:surg, leave:md(stay.out, stay.outTime), weather:tripWeatherBlock(c, stay), clinic:CLINIC_SETTINGS.name, phone:CLINIC_SETTINGS.phone}).replace(/\n{3,}/g, '\n\n');
+}
+function tripRemindKey(stay){ return [stay.in, stay.inTime, stay.out, stay.outTime].join('|'); }
+function tripRemindStayFromForm(){ var g = function(i){ return (document.getElementById(i)||{}).value||''; }; return {in:g('stay-in'), inTime:g('stay-int'), out:g('stay-out'), outTime:g('stay-outt')}; }
+/* 窗口里那一块：没发过 =［发送行程提醒给客人］；发过 = 「MM/DD HH:mm 已发送」+ 下划线「再次发送」（和 1109-11 同样样式） */
+function stayRemindHtml(c){
+  var m = c.tripRemindMsg, md = function(t){ var f = fmtUtc(t); return f.length>=16 ? f.slice(5,10).replace('-','/')+' '+f.slice(11,16) : f; };
+  if(m) return '<div style="font-size:12px;color:var(--sage);">'+aEsc(md(m.at))+' 已发送（'+aEsc(m.method)+'）</div><a href="#" style="font-size:12px;text-decoration:underline;color:var(--slate2);" onclick="openTripRemind(\''+c.id+'\');return false;">再次发送</a>';
+  return '<button class="btn-outline" onclick="openTripRemind(\''+c.id+'\')">发送行程提醒给客人</button> <span style="font-size:12px;color:var(--muted);">演示</span>';
+}
+function openTripRemind(id){
+  var c = calCaseById(id); if(!c) return; var st = tripRemindStayFromForm(), e = document.getElementById('stay-err');
+  if(!st.in || !st.out || !st.inTime || !st.outTime){ if(e){ e.textContent = '先填好入境、离境的日期和时间，再发送行程提醒'; e.style.display = 'block'; } return; }
+  if(e) e.style.display = 'none';
+  SURGMSG = {id:id, ver:'trip', lang:'zh', method:(c.tripRemindMsg && c.tripRemindMsg.method) || '短信', text:tripRemindText(c, st), stay:st};
+  var ov = document.getElementById('surgmsg-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.className = 'modal-overlay'; ov.id = 'surgmsg-overlay'; document.body.appendChild(ov); }
+  ov.style.zIndex = 98; /* 盖在「确认行程」窗口（97）上面 */ surgMsgRender(); ov.classList.add('open');
+}
 var SURGMSG = null;
 function openSurgMsg(id, ver){
   var c = calCaseById(id); if(!c || !c.krSchedule) return;
@@ -335,6 +380,13 @@ function confirmSurgMsg(){
   var s = SURGMSG; if(!s) return; var c = calCaseById(s.id); if(!c) return;
   var t = document.getElementById('surgmsg-text'); if(t) s.text = t.value;
   if(!String(s.text||'').trim()) return;
+  if(s.ver==='trip'){ /* CMD-1109-25：行程提醒——记短信发送记录 + Timeline，窗口里显示「已发送」；不动施术日期通知 / 施术前提醒的记录 */
+    var clT = clientByName(c.name), toT = (clT && clT.phone) || '', prevT = c.tripRemindMsg;
+    logSms('tripRemind', (s.method==='WhatsApp' ? 'WhatsApp ' : '')+toT, s.text, c.id);
+    c.tripRemindMsg = {key:tripRemindKey(s.stay||{}), method:s.method, at:nowFullDt(), count:(prevT ? (prevT.count||1)+1 : 1)};
+    logCaseEvent(c, actingName(), '已发送行程提醒给客人（'+s.method+'，演示'+(/天气预报/.test(s.text) ? '，含天气预报' : '，无天气') +'）'+(prevT ? '，再次发送' : ''), '赴韩施术');
+    closeSurgMsg(); Store.touch(); try{ buildCaseLog(c); }catch(er){} var rb = document.getElementById('stay-remind'); if(rb) rb.innerHTML = stayRemindHtml(c); return;
+  }
   var cl = clientByName(c.name), to = (cl && cl.phone) || '', remind = s.ver==='remind', tp = SURG_TPLS[s.ver];
   logSms(tp.kind, (s.method==='WhatsApp' ? 'WhatsApp ' : '')+to, s.text, c.id); /* 短信发送记录页：类型「施术日期通知 / 施术前提醒」 */
   var prev = remind ? c.reminderMsg : c.surgeryMsg, rec = {key:surgMsgKey(c), method:s.method, at:nowFullDt(), count:(prev ? (prev.count||1)+1 : 1)};
@@ -556,7 +608,7 @@ function openStayModal(caseId, o){
   var hintLine = (!o.trip && hintN>0) ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">ℹ️ 考虑到术后管理及拆线安排，建议预留 '+hintN+' 天以上的行程。</div>' : ''; /* CMD-1109-05：标题改「在韩行程」，拿掉“行程有变可以修改…”说明，加灰色 ℹ️ 提示（已定 / 暂定都显示） */
   var ts0 = (c.krSchedule && c.krSchedule.tripState) || '', tsBox = (!o.trip && !o.initial && c.krSchedule) ? '<div style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">行程状态 <span style="color:#C1454A;">*</span></div><div style="display:flex;gap:18px;font-size:13px;"><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" onchange="stayTsToggle()" value="booked"'+(ts0==='booked' ? ' checked' : '')+'> 已定（机票已订）</label><label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="stay-ts" onchange="stayTsToggle()" value="tentative"'+(ts0==='tentative' ? ' checked' : '')+'> 暂定（客人还没订机票 / 办签证）</label></div></div>' : ''; /* CMD-1106-18 */
   ov.innerHTML = '<div class="modal-box" style="width:560px;"><div style="font-size:15px;font-weight:700;margin-bottom:6px;">'+title+'</div>'+hintLine+(tip ? '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">'+tip+'</div>' : '')+tsBox+'<fieldset id="stay-rows" style="border:0;padding:0;margin:0;min-width:0;">'+row('in', '入境')+row('out', '离境')+'</fieldset>'+methods+pass+
-    '<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
+    (o.trip ? '<div id="stay-remind" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);">'+stayRemindHtml(c)+'</div>' : '')+'<div id="stay-warn" style="font-size:12px;margin-top:8px;"></div><div id="stay-err" class="error-text" style="display:none;margin-top:8px;"></div>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;"><button class="btn-outline" onclick="stayCancel()">'+(o.initial ? '出发前再确认' : '取消')+'</button><button class="btn-primary" onclick="staySave()">保存</button></div></div>';
   ov.classList.add('open'); stayTsToggle(); stayWarnRefresh();
 }
