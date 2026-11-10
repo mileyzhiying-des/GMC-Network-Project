@@ -4,8 +4,8 @@
 2. 绝对不要把分支合并到其他分支。 / Never merge a branch into another branch.
 3. 每完成一项大的工作就提交，提交说明用清楚易懂的英文写。 / Commit after each major piece of work, with a clear English commit message.
 4. 没被告知也要自己提交；每完成一项大的工作后，告诉用户已提交（提交号 + 说明）。 / If not told to commit, auto-commit after each major piece of work and notify the user (hash + message).
-5. 只在 `V4` 分支上工作；用户转达「开发说可以推了」时，只推送 `V4` 到远端。 / Work only on branch `V4`; push only `V4`, and only when the user relays the developer's instruction to push.
-6. 开始任何任务前先确认当前分支是 `V4`，不是就停下来问。 / Before any task, confirm the current branch is `V4`; if not, stop and ask.
+5. 只在 `V5` 分支上工作；用户转达「开发说可以推了」时，只推送 `V5` 到远端。 / Work only on branch `V5`; push only `V5`, and only when the user relays the developer's instruction to push.
+6. 开始任何任务前先确认当前分支是 `V5`，不是就停下来问。 / Before any task, confirm the current branch is `V5`; if not, stop and ask.
 
 > 以上和下面所有旧规则冲突时，以这一节为准。旧的「develop / feature 分支、合并到 develop / main、用户说推送才推送 develop、提交说明用中文」等做法已作废。
 
@@ -23,7 +23,7 @@
    - 收到"去看 Code 任务"时，按编号顺序执行所有「待执行」任务；跳过「已作废」
    - 开始做时把状态改成「执行中」；动手前需要确认的事项写在汇报区，状态改成「待确认」后停下；做完改成「完成」
    - 若任务有「取代」栏位，以新任务为准
-3. 一次只做一个任务：动手前，先列出会改动的文件，以及相关函数和字段的所有引用位置，给用户确认；完成后在 `V4` 分支上 git commit（英文说明写清楚改了什么，不推送、不合并，见上面「Git 规则」）。
+3. 一次只做一个任务：动手前，先列出会改动的文件，以及相关函数和字段的所有引用位置，给用户确认；完成后在 `V5` 分支上 git commit（英文说明写清楚改了什么，不推送、不合并，见上面「Git 规则」）。
 4. 不扩大范围：任务里没写的功能、文案、逻辑不要顺手修改。觉得有必要改，先提出来问用户。
 5. 完成后汇报：改了哪些文件、怎么自测的、哪里偏离了要求以及原因。
 
