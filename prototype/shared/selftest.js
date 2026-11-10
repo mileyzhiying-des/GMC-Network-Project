@@ -6271,8 +6271,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       mut(function(c){ c.visitEndedKeys['KR|'+ymdAdd(todayStr(), -1)] = true; });
       ST.ok(!visitCompletedToday(gc(), 'KR|'+ymdAdd(todayStr(), -1)) && !coreReopenVisitAt(gc(), 'KR|'+ymdAdd(todayStr(), -1), 'KM1 室长').ok, '过了当天（韩国时间 00:00）：不再可以重开');
       var sh = DEMO_SHIFT_MS; DEMO_SHIFT_MS = sh + 26*3600*1000; try{ ST.ok(!visitCompletedToday(gc(), key) , '演示时钟拨过 00:00：已完成卡不再显示［增加项目］'); } finally { DEMO_SHIFT_MS = sh; }
-      /* 院长看不到可按的按钮由 krCan() 控制（krReopenFooter 对非室长灰掉） */
-      ST.ok(/krOutBtn/.test(String(krReopenFooter)) && /只有 KR 室长可以增加项目/.test(String(krReopenFooter)), '院长 / 代表院长：［增加项目］灰掉 + 悬停写原因（代码路径）');
+      ST.ok(typeof krReopenFooter==='undefined' && typeof krReopenAdd==='undefined', '旧函数 krReopenFooter / krReopenAdd 已删除（CMD-1110-27）');
       /* 主到院：已完成后不能加项目 */
       mut(function(c){ c.hasArrived = true; c.krProcedureDone = true; var ra = coreAddOnItem(c, '不存在的项目', 'KM1 室长', {}); ST.ok(ra===false, '主到院已完成：不能直接加项目'); });
       ST.ok(typeof coreReopenVisit==='undefined', '旧的自动重开入口 coreReopenVisit 已删除');

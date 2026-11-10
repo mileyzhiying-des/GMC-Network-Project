@@ -3090,21 +3090,6 @@ function krVisitDirTag(c, cd){
   else if(cd.kind==='sub'){ var v = visitCalBlocks(c).filter(function(x){ return x.key===cd.key; })[0]; dir = (v && v.occupies) ? (v.director || c.director) : ''; }
   return dir ? ' <span style="color:var(--slate2);font-size:12px;">· 院长：'+krEsc(String(dir).replace(/\s*院长$/, ''))+'</span>' : '';
 }
-/* CMD-1021-11：今天已完成的到院卡右下角［增加项目］（线框）；只有 KR 室长能按（院长 / 代表院长灰掉 + 悬停写原因）；当天 00:00（韩国时间）之后 / 案件已结案不再显示 */
-function krReopenFooter(c, cd, g){
-  if(g!=='done' || (cd.kind!=='main' && cd.kind!=='sub')) return '';
-  var key = cd.kind==='main' ? 'main' : cd.key; if(!visitCompletedToday(c, key)) return '';
-  var btn = krCan() ? krOutBtn('增加项目', 'event.stopPropagation();krReopenAdd(\''+String(key).replace(/'/g,'')+'\')', true) : krOutBtn('增加项目', '', false, '只有 KR 室长可以增加项目');
-  return '<div style="display:flex;justify-content:flex-end;margin-top:8px;">'+btn+'</div>';
-}
-function krReopenAdd(key){
-  if(!krCan()) return;
-  krMut(function(c){ var r = coreReopenVisitAt(c, key, ME_NAME); if(!r.ok){ setTimeout(function(){ krBlock(r.err); }, 0); return false; } return true; });
-  /* 重开后行都已完成，不要马上又弹「都做完了吗」：登记当前完成签名，之后有新的完成才再问 */
-  Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(c && key!=='main') KR_ENDASK_SHOWN[KR_CASE.id+'|'+key] = krVisitDoneSig(c, key); });
-  KR_PROJ_PAGE = 'surg'; if(key==='main') KR_AD.open = true; krSetCaseTab('items');
-  setTimeout(function(){ var el = document.querySelector('#kr-casedetail .kr-addon, #kr-casedetail .card'); if(el && el.scrollIntoView) el.scrollIntoView({block:'start'}); }, 80);
-}
 function krCaseCardHtml(c, cd){
   var can = krCan(), g = cd.group, mode = g, key = cd.key, skey = String(key).replace(/'/g,''), st = scheduleState(c), today = todayStr();
   var when = krEsc(krShortDt(cd.date, cd.time)), visitWhen = krEsc(krVisitWhenText(cd, today)), src = cd.kind==='sub' ? '<span class="status-pill" style="background:#F3EFE7;color:var(--slate2);margin-left:6px;" title="预约来源">预约来源：'+visitSource(c, key)+'</span>' : '';
@@ -5109,7 +5094,7 @@ function krSdRun0(c){
   if(pick) return krProjCards(c, {pick:true});
   var done = !!c.krProcedureDone, g = done ? 'done' : 'today';
   var card = function(h){ return '<div class="card" style="padding:14px 18px;background:#fff;">'+h+'</div>'; }; /* CMD-1025-03 一：今日项目表格 + 整体备注包进一张白底卡，和下面的项目卡上下分开 */
-  return card((done ? '<div style="margin:0 0 8px;">'+krMainRowsHtml(c, 'done')+'</div>' : krUnpaidBanner(c)+krProgressBlock(c))+krVisitMemoHtml(c, 'main', g)+''/* CMD-1110-25：到院已完成卡的［增加项目］拿掉（客人还没离院时加项目用［增加今日项目］）；krReopenFooter / krReopenAdd 函数留着没入口 */)+(done || !c.hasArrived || !krCan() ? '' : '<div style="display:flex;align-items:center;gap:12px;"><button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="krDayAddToggle(\''+String(c.id).replace(/'/g, '')+'|main\')">增加今日项目</button></div>')+krAllItemsLinkHtml(c, krSdVisit(c)); /* CMD-1110-17：进行项目卡下面不再放项目卡；加今天的项目用［增加今日项目］弹窗 */
+  return card((done ? '<div style="margin:0 0 8px;">'+krMainRowsHtml(c, 'done')+'</div>' : krUnpaidBanner(c)+krProgressBlock(c))+krVisitMemoHtml(c, 'main', g)+''/* CMD-1110-25：到院已完成卡的［增加项目］拿掉（客人还没离院时加项目用［增加今日项目］）；krReopenFooter / krReopenAdd 函数已在 CMD-1110-27 删除 */)+(done || !c.hasArrived || !krCan() ? '' : '<div style="display:flex;align-items:center;gap:12px;"><button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="krDayAddToggle(\''+String(c.id).replace(/'/g, '')+'|main\')">增加今日项目</button></div>')+krAllItemsLinkHtml(c, krSdVisit(c)); /* CMD-1110-17：进行项目卡下面不再放项目卡；加今天的项目用［增加今日项目］弹窗 */
 }
 function krSdAutoTab(c, keys){
   var sig = KR_CASE.id+'|'+KR_CASE.day, prev = KR_CASE.sdSeen, content = ['visit', 'plan', 'pre', 'run'].filter(function(k){ return keys.indexOf(k)>-1; });
@@ -5515,11 +5500,9 @@ var KR_RO_OK = /^\s*(krSetCaseTab|krOpenClient|krOpenDay|krOpenCaseChat|krCloseD
 function krRoWrap(c, html, v){
   var st = ''; try{ st = krDayRoState(c, v); }catch(e){}
   if(!st || !html) return html;
-  var vv = v || visitsOf(c).filter(function(x){ return x.key===KR_CASE.day; })[0] || {};
-  var reopenOk = (st==='ended' || st==='left') && vv.date===todayStr() && !isEnded(c); /* 21-11：今天刚结束的到院还能在卡上按［增加项目］重开（当天 00:00 前） */
   var box = document.createElement('div'); box.innerHTML = html;
   box.querySelectorAll('button,a[onclick]').forEach(function(b){
-    var oc = b.getAttribute('onclick')||''; if(!oc || KR_RO_OK.test(oc) || (reopenOk && /^\s*krReopenAdd\(/.test(oc))) return;
+    var oc = b.getAttribute('onclick')||''; if(!oc || KR_RO_OK.test(oc)) return;
     if(b.tagName==='A'){ b.removeAttribute('onclick'); b.style.opacity = '.45'; b.style.pointerEvents = 'none'; }
     else { b.disabled = true; b.removeAttribute('onclick'); b.style.opacity = '.4'; b.style.cursor = 'not-allowed'; b.title = '这一天已结束，只能看'; }
   });
