@@ -10100,12 +10100,25 @@ function visitNoteAuto(c, vk){ return (c.krProgressMemos||[]).filter(function(m)
 function visitNoteText(c, vk){ var m = visitNoteAuto(c, vk); return m ? m.text : String((c.visitNoteDraft||{})[vk]||''); }
 function coreVisitNoteDraft(c, vk, text){ if(noteVisitEnded(c, vk) || (!window.DAYCONFIRM_BYPASS && dayLockedKR(c, vk))) return false; /* CMD-1027-02 四：客人已离院 / 00:00 关账后不能再改 */
   (c.visitNoteDraft = c.visitNoteDraft || {})[vk] = String(text||''); return true; }
+/* CMD-1109-24：整体备注按［保存］就直接存成一笔 auto 备注（IN 的备注卡马上看得到）；再存 = 更新同一笔；touch=true 时只刷新时间（让它排在这次到院各项备注最上面） */
+function coreVisitNoteSaveNow(c, vk, text, by, touch){
+  if(noteVisitEnded(c, vk) || (!window.DAYCONFIRM_BYPASS && dayLockedKR(c, vk))) return false;
+  var old = visitNoteAuto(c, vk), t = String(text==null ? (old ? old.text : '') : text).trim();
+  c.krProgressMemos = (c.krProgressMemos||[]).filter(function(m){ return !(m.auto && (m.vk||'')===vk); });
+  if(c.visitNoteDraft) delete c.visitNoteDraft[vk];
+  if(t){ c.krProgressMemos.push({id:(old && old.id) || ('pm'+Date.now()+Math.floor(Math.random()*1000)), at:nowFullDt(), by:by||'', text:t, vk:vk, auto:true});
+    if(!touch || !old || old.text!==t) logCaseEvent(c, by, '到院整体备注：'+(t.length>40 ? t.slice(0, 40)+'…' : t)); }
+  else if(old) logCaseEvent(c, by, '清空到院整体备注');
+  return true;
+}
 function coreVisitNoteCommit(c, vk, by){
-  var t = String((c.visitNoteDraft||{})[vk]||'').trim(); if(c.visitNoteDraft) delete c.visitNoteDraft[vk];
+  if(!c.visitNoteDraft || c.visitNoteDraft[vk]===undefined) return; /* CMD-1109-24：已按［保存］存过的整体备注留着，不被空草稿清掉 */
+  var t =String((c.visitNoteDraft||{})[vk]||'').trim(); if(c.visitNoteDraft) delete c.visitNoteDraft[vk];
   c.krProgressMemos = (c.krProgressMemos||[]).filter(function(m){ return !(m.auto && (m.vk||'')===vk); });
   if(t){ c.krProgressMemos.push({id:'pm'+Date.now()+Math.floor(Math.random()*1000), at:nowFullDt(), by:by||'', text:t, vk:vk, auto:true}); logCaseEvent(c, by, '到院整体备注：'+(t.length>40 ? t.slice(0, 40)+'…' : t)); }
 }
-function coreVisitNoteReopen(c, vk){ var m = visitNoteAuto(c, vk); if(!m) return; c.krProgressMemos = c.krProgressMemos.filter(function(x){ return x!==m; }); (c.visitNoteDraft = c.visitNoteDraft || {})[vk] = m.text; }
+function coreVisitNoteReopen(c, vk){ return; /* CMD-1109-24：保存过的整体备注直接是 IN 看得到的备注，重新打开不再变回草稿 */
+  var m = visitNoteAuto(c, vk); if(!m) return; c.krProgressMemos = c.krProgressMemos.filter(function(x){ return x!==m; }); (c.visitNoteDraft = c.visitNoteDraft || {})[vk] = m.text; }
 /* 这次到院里写了备注的项目 / 行 */
 function visitProjectNotes(c, vk){
   var out = [], seen = {};
@@ -10122,12 +10135,12 @@ function visitNoteCount(c, vk){ return (visitNoteText(c, vk).trim() ? 1 : 0)+vis
 /* 备注卡里的全部备注（最新在上）：role = 'KR' | 'IN'（谁写的） */
 function caseNotesAll(c){
   var out = [], seen = {};
-  (c.krProgressMemos||[]).forEach(function(m){ out.push({id:m.id, at:m.at||'', scope:'整体', by:m.by||'KR', role:'KR', text:m.text, vk:m.vk||''}); });
+  (c.krProgressMemos||[]).forEach(function(m){ out.push({id:m.id, at:m.at||'', scope:(m.auto ? '整体备注' : '整体'), by:m.by||'KR', role:'KR', text:m.text, vk:m.vk||'', _top:m.auto ? 1 : 0}); });
   (c.inNotes||[]).forEach(function(n){ out.push({id:n.id, at:n.at||'', scope:'整体', by:n.by||'IN', role:'IN', text:n.text, unread:!n.readAt, readBy:n.readBy||'', readAt:n.readAt||''}); });
   var add = function(id, scope, text, at, by, fallbackAt){ text = String(text||'').trim(); if(!text) return; var k = scope+'|'+text; if(seen[k]) return; seen[k] = 1; out.push({id:id, at:at||fallbackAt||'', scope:scope, by:by||'KR', role:'KR', text:text}); };
   (c.procedureItems||[]).forEach(function(it){ add('it:'+itemIid(it), buyName(it.name), it.todayNote, it.todayNoteAt, it.todayNoteBy, ''); });
   (c.subItems||[]).forEach(function(s){ add('s:'+s.id, visitRowLabel(c, s).name, s.note, s.noteAt, s.noteBy, s.date ? s.date+' 00:00:00' : ''); });
-  out.forEach(function(x, i){ x._i = i; }); return out.sort(function(a, b){ return String(b.at).localeCompare(String(a.at)) || (b._i - a._i); }); /* 同一秒写的：后写的在上 */
+  out.forEach(function(x, i){ x._i = i; }); return out.sort(function(a, b){ return String(b.at).localeCompare(String(a.at)) || ((b._top||0) - (a._top||0)) || (b._i - a._i); }); /* 同一秒写的：后写的在上 */
 }
 /* 模拟翻译（原型）：真正的翻译 API 接在这里（交给开发时加进 Integrations & APIs）：mockTranslate(text, fromLang, toLang) */
 function mockTranslate(text, fromLang, toLang){ return text; }

@@ -515,7 +515,8 @@ function krShowCase(clinicId, id, o){
 function krOpenSubHl(){ try{ var r = krFindCase(KR_CASE.clinicId, KR_CASE.id), rep = r && subCaseList(r.c).filter(function(x){ return x.id===KR_SUB_HL; })[0]; if(rep) KR_SUB_OPEN[subCaseKey(rep)] = true; }catch(e){} }
 var KR_FLOW_HL = '';
 function krShowCaseHere(clinicId, id, o){
-  o = o||{}; if(CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id && (KR_CASE.id!==id || KR_CASE.clinicId!==clinicId) && !krRecLeaveOk()) return; /* 同分页换案件 = 离开：录音中先确认（CMD-1019-08）*/ KR_SUB_HL = null; KR_CASE = {clinicId:clinicId, id:id, tab:krDefaultCaseTab(clinicId, id)};
+  o = o||{}; if(CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id && (KR_CASE.id!==id || KR_CASE.clinicId!==clinicId) && !krRecLeaveOk()) return;
+  if(CURRENT_PAGE_ID==='kr-casedetail' && KR_CASE && KR_CASE.id && (KR_CASE.id!==id || KR_CASE.clinicId!==clinicId) && !krNdLeaveOk(function(){ krShowCaseHere(clinicId, id, o); })) return; /* 同分页换案件 = 离开：录音中先确认（CMD-1019-08）*/ KR_SUB_HL = null; KR_CASE = {clinicId:clinicId, id:id, tab:krDefaultCaseTab(clinicId, id)};
   if(o.tab) KR_CASE.tab = (o.tab==='proc' ? 'items' : o.tab);
   if(o.page) KR_PROJ_PAGE = o.page;
   if(o.flow){ FLOW_OPEN[id+':'+o.flow] = true; KR_FLOW_HL = o.flow; } /* CMD-1026-14：展开 + 定位到那一笔（复诊评估 #n） */
@@ -2656,18 +2657,89 @@ function krVisitMemoHtml(c, vk, g){
   var ended = g==='done' || noteVisitEnded(c, vk) || (!window.DAYCONFIRM_BYPASS && dayLockedKR(c, vk)), txt = visitNoteText(c, vk); /* CMD-1027-02 四：关账后也只读 */
   if(g==='booked') return '';
   if(ended || !krCanMemo()){ if(!txt.trim()) return ''; return '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);font-size:12px;"><b>整体备注</b>'+noteTextHtml({id:'vn:'+vk+':'+c.id, role:'KR', text:txt}, 'KR')+'</div>'; }
-  /* CMD-1027-02 四：整体备注 + ［保存］；存了之后还能改、再存；客人已离院 / 00:00 关账后不能再改；离开输入框时也会先存一份草稿，所以离院时没按［保存］的内容不会丢 */
-  var vq = String(vk).replace(/'/g,''), sv = KR_NOTE_SAVED[c.id+'|'+vk];
-  return '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">整体备注：</div><textarea id="kr-vnote-'+vq.replace(/[^\w]/g,'_')+'" placeholder="这次到院整体的备注…" onchange="krVisitNoteSave(\''+vq+'\',this.value)" style="width:100%;min-height:48px;padding:8px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;font-size:12px;font-family:inherit;">'+krEsc(txt)+'</textarea><div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:6px;">'+(sv ? '<span style="font-size:12px;color:var(--sage);">✓ 已保存 '+krEsc(sv)+'</span>' : '')+'<button class="btn-outline" style="padding:4px 14px;font-size:12px;" onclick="krVisitNoteSaveBtn(\''+vq+'\')">保存</button></div></div>'; /* CMD-1109-18 一：「整体备注：」→ 输入框 →［保存］在最右；拿掉「存了之后还可以再改…」说明（离院 / 关账后不能改的规则照旧） */
+  /* CMD-1109-24：每行备注 + 整体备注用这一个［保存］一起存；没存之前是 KR 草稿，IN 看不到；存了变文字，点一下回输入框 */
+  krNdSeed(c, vk);
+  var vq = String(vk).replace(/'/g,''), sv = KR_NOTE_SAVED[c.id+'|'+vk], dirty = krNdDirtyC(c, vk), cur = krNdCur(c, 'v', vk), vid = c.id+'|v'+vk;
+  var body = (krNdView(c, vk) && !KR_NDEDIT[vid])
+    ? '<div onclick="krNdEdit(\''+vq+'\',\'v\',\''+vq+'\')" style="cursor:text;min-height:30px;padding:8px;border:1px dashed transparent;border-radius:8px;font-size:13px;white-space:pre-wrap;">'+(cur.trim() ? krEsc(cur) : '<span style="color:var(--muted);">—</span>')+'</div>'
+    : '<textarea id="kr-vnote-'+vq.replace(/[^\w]/g,'_')+'" placeholder="这次到院整体的备注…" oninput="krNdIn(\'v\',\''+vq+'\',\''+vq+'\',this.value)" style="width:100%;min-height:48px;padding:8px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box;font-size:12px;font-family:inherit;">'+krEsc(cur)+'</textarea>';
+  return '<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">整体备注：</div>'+body+'<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:6px;">'+(sv && !dirty ? '<span style="font-size:12px;color:var(--sage);">✓ 已保存 '+krEsc(sv)+'</span>' : '')+'<button id="kr-ndsave-'+vq.replace(/[^\w]/g,'_')+'" class="'+(dirty ? 'btn-primary' : 'btn-outline')+'" '+(dirty ? '' : 'disabled ')+'style="padding:4px 14px;font-size:12px;'+(dirty ? '' : 'opacity:.5;cursor:not-allowed;')+'" onclick="krNdSave(\''+vq+'\')">保存</button></div></div>';
 }
 var KR_NOTE_SAVED = {};
-function krVisitNoteSaveBtn(vk){
-  if(!krCanMemo()) return; var el = document.getElementById('kr-vnote-'+String(vk).replace(/[^\w]/g,'_')); if(!el) return;
-  var ok = true; krNoteQuiet(function(c){ ok = coreVisitNoteDraft(c, vk, el.value); KR_NOTE_SAVED[c.id+'|'+vk] = ok ? (todayStr().slice(5)+' '+nowFullDt().slice(11, 16)) : ''; return ok; });
-  if(!ok){ krBlock('已经离院 / 已关账，不能再改整体备注。'); }
-  krRefreshAll();
+/* ===== CMD-1109-24：KR 进行项目备注草稿 =====
+   草稿存在 KR 页面内存 KR_ND[案件id][类型+key] = {kind:'i'项目|'r'行|'v'整体, key, vk, val}，同时镜像到 localStorage gmc_cfg_ndraft_<账号>（刷新不丢，不进诊所分区，所以 IN 看不到）；
+   按最下面［保存］才写进案件（coreItemNote / coreSubNote / coreVisitNoteSaveNow）；KR_NDVIEW 记这次到院是不是「文字模式」，KR_NDEDIT 记点开编辑的那一格 */
+var KR_ND = null, KR_NDVIEW = {}, KR_NDEDIT = {}, KR_NDFOCUS = '';
+function krNdLoad(){ if(KR_ND) return; try{ KR_ND = JSON.parse(localStorage.getItem('gmc_cfg_ndraft_'+ME_NAME)||'{}') || {}; }catch(e){ KR_ND = {}; } }
+function krNdPersist(){ try{ localStorage.setItem('gmc_cfg_ndraft_'+ME_NAME, JSON.stringify(KR_ND||{})); }catch(e){} }
+function krNdSaved(c, kind, key){
+  if(kind==='i'){ var it = itemByKey(c, key, function(x){ return !x.cancelled && !x.swapped; }); return it ? String(it.todayNote||'').trim() : ''; }
+  if(kind==='r'){ var s = (c.subItems||[]).filter(function(x){ return x.id===key; })[0]; return s ? String(s.note||'').trim() : ''; }
+  var m = visitNoteAuto(c, key); return m ? String(m.text||'').trim() : '';
 }
-function krVisitNoteSave(vk, v){ if(!krCanMemo()) return; krNoteQuiet(function(c){ return coreVisitNoteDraft(c, vk, v); }); }
+function krNdCur(c, kind, key){ krNdLoad(); var e = (KR_ND[c.id]||{})[kind+key]; if(e) return e.val; return kind==='v' ? krNdSaved(c, 'v', key) : krNdSaved(c, kind, key); }
+function krNdSeed(c, vk){ krNdLoad(); var d = c.visitNoteDraft && c.visitNoteDraft[vk]; if(d!==undefined && !((KR_ND[c.id]||{})['v'+vk])){ (KR_ND[c.id] = KR_ND[c.id]||{})['v'+vk] = {kind:'v', key:vk, vk:vk, val:String(d)}; krNdPersist(); } } /* 旧版本留在案件里的整体备注草稿 = 还没保存 */
+function krNdDirtyC(c, vk){ krNdLoad(); var m = KR_ND[c.id]||{}; return Object.keys(m).some(function(k){ var e = m[k]; return e.vk===vk && String(e.val).trim()!==krNdSaved(c, e.kind, e.key); }); }
+function krNdView(c, vk){ var v = KR_NDVIEW[c.id+'|'+vk]; if(v!==undefined) return v; return visitNoteCount(c, vk)>0 && !krNdDirtyC(c, vk); }
+function krNdCell(c, kind, key, vk, saved){
+  var id = c.id+'|'+kind+key, cur = krNdCur(c, kind, key), q = String(key).replace(/'/g,''), v = String(vk).replace(/'/g,'');
+  if(krNdView(c, vk) && !KR_NDEDIT[id]) return '<span onclick="krNdEdit(\''+v+'\',\''+kind+'\',\''+q+'\')" title="点一下修改" style="cursor:text;color:var(--slate2);">'+(cur.trim() ? '备注：'+krEsc(cur) : '<span style="color:var(--muted);">—</span>')+'</span>';
+  return '<input data-ndid="'+krEsc(id)+'" value="'+krEsc(cur)+'" placeholder="备注" oninput="krNdIn(\''+kind+'\',\''+q+'\',\''+v+'\',this.value)" onkeydown="if(event.key===\'Enter\'){this.blur();}" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">';
+}
+function krNdIn(kind, key, vk, val){
+  krNdLoad(); var cid = KR_CASE && KR_CASE.id; if(!cid) return; (KR_ND[cid] = KR_ND[cid]||{})[kind+key] = {kind:kind, key:key, vk:vk, val:String(val)}; krNdPersist();
+  var d = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===cid; })[0]; return c ? krNdDirtyC(c, vk) : false; });
+  var b = document.getElementById('kr-ndsave-'+String(vk).replace(/[^\w]/g,'_')); if(b){ b.disabled = !d; b.className = d ? 'btn-primary' : 'btn-outline'; b.style.opacity = d ? '' : '.5'; b.style.cursor = d ? '' : 'not-allowed'; }
+}
+function krNdEdit(vk, kind, key){
+  if(!krCanMemo()) return; var cid = KR_CASE && KR_CASE.id; if(!cid) return;
+  var ended = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===cid; })[0]; return !c || noteVisitEnded(c, vk) || (!window.DAYCONFIRM_BYPASS && dayLockedKR(c, vk)); });
+  if(ended) return; /* 客人离院 / 关账后只读，点了不会变输入框 */
+  var id = cid+'|'+kind+key; KR_NDEDIT[id] = true; krRefreshAll();
+  setTimeout(function(){ var el = kind==='v' ? document.getElementById('kr-vnote-'+String(vk).replace(/[^\w]/g,'_')) : document.querySelector('[data-ndid="'+id.replace(/"/g,'')+'"]'); if(el){ el.focus(); try{ el.setSelectionRange(el.value.length, el.value.length); }catch(e){} } }, 30);
+}
+function krNdSave(vk){
+  if(!krCanMemo()) return; krNdLoad(); var ok = true, any = false;
+  krNoteQuiet(function(c){
+    var m = KR_ND[c.id]||{}, touched = false;
+    Object.keys(m).forEach(function(k){ var e = m[k]; if(e.vk!==vk) return;
+      if(String(e.val).trim()===krNdSaved(c, e.kind, e.key)){ delete m[k]; return; }
+      var r = e.kind==='i' ? coreItemNote(c, e.key, e.val, ME_NAME) : e.kind==='r' ? coreSubNote(c, e.key, e.val, ME_NAME) : coreVisitNoteSaveNow(c, vk, e.val, ME_NAME);
+      if(r===false) ok = false; else { delete m[k]; any = true; if(e.kind!=='v') touched = true; }
+    });
+    if(ok && touched && visitNoteAuto(c, vk)) coreVisitNoteSaveNow(c, vk, null, ME_NAME, true); /* 整体备注排在这次到院各项备注的最上面 */
+    if(ok && c.visitNoteDraft) delete c.visitNoteDraft[vk];
+    KR_NOTE_SAVED[c.id+'|'+vk] = ok ? (todayStr().slice(5)+' '+nowFullDt().slice(11, 16)) : '';
+    if(ok) KR_NDVIEW[c.id+'|'+vk] = true;
+    return ok;
+  });
+  if(!ok){ krBlock('已经离院 / 已关账，不能再改备注。'); }
+  else Object.keys(KR_NDEDIT).forEach(function(k){ if(k.indexOf((KR_CASE.id||'')+'|')===0) delete KR_NDEDIT[k]; });
+  krNdPersist(); krRefreshAll();
+}
+/* 有未保存的备注 → 提醒（先保存 / 不保存），用弹窗；cont = 选完后要继续做的事 */
+function krNdAnyDirty(){
+  if(typeof CURRENT_PAGE_ID==='undefined' || CURRENT_PAGE_ID!=='kr-casedetail' || !KR_CASE || !KR_CASE.id) return [];
+  krNdLoad(); var m = KR_ND[KR_CASE.id]||{}, vks = {};
+  Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; if(!c) return; Object.keys(m).forEach(function(k){ var e = m[k]; if(String(e.val).trim()!==krNdSaved(c, e.kind, e.key)) vks[e.vk] = 1; }); });
+  return Object.keys(vks);
+}
+function krNdGuard(vks, cont){
+  vks = vks.filter(function(v){ return !!v; }); if(!vks.length) return true;
+  window.__krNdCont = cont; window.__krNdVks = vks;
+  var ov = document.getElementById('kr-nd-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'kr-nd-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
+  ov.innerHTML = '<div class="modal-box" style="width:400px;"><div style="font-size:15px;font-weight:700;margin-bottom:8px;">备注还没保存</div><div style="font-size:13px;line-height:1.7;margin-bottom:14px;">有备注写了还没按［保存］，IN 现在看不到。要先保存吗？</div><div style="display:flex;justify-content:flex-end;gap:10px;"><button class="btn-ghost" onclick="krNdGuardGo(false)">不保存</button><button class="btn-primary" onclick="krNdGuardGo(true)">先保存</button></div></div>';
+  ov.style.zIndex = 100020; ov.classList.add('open'); return false;
+}
+function krNdGuardGo(save){
+  var ov = document.getElementById('kr-nd-overlay'); if(ov) ov.classList.remove('open');
+  var vks = window.__krNdVks||[], cont = window.__krNdCont; window.__krNdCont = null;
+  if(save){ vks.forEach(function(v){ krNdSave(v); }); }
+  else { krNdLoad(); delete KR_ND[KR_CASE.id]; krNdPersist(); krNoteQuiet(function(c){ vks.forEach(function(v){ if(c.visitNoteDraft) delete c.visitNoteDraft[v]; }); return true; }); }
+  if(cont) setTimeout(cont, 0);
+}
+function krNdLeaveOk(cont){ return krNdGuard(krNdAnyDirty(), cont); }
+function krVisitNoteSaveBtn(vk){ krNdSave(vk); }
 /* 备注卡（项目卡和案件之间）：全部备注只读 + 底部［增加备注］ */
 var KR_NOTE_ADD = {open:false};
 function krNotesCardHtml(c){ /* CMD-1021-14 五；CMD-1025-01 十：空时只剩一行，有备注每多一则长高一行（最多 3 则，超过卡里滚动） */
@@ -2895,7 +2967,7 @@ function krTblRow(c, s, o){
   }
   var noteText = ((s._item ? (((c.procedureItems||[]).filter(function(x){ return x.name===s._item; })[0]||{}).todayNote || s.note) : s.note) ? krEsc(s._item ? (((c.procedureItems||[]).filter(function(x){ return x.name===s._item; })[0]||{}).todayNote || s.note) : s.note) : '')+(s.earlyReason ? ' <span style="color:#C26A1B;">（提前做：'+krEsc(s.earlyReason)+'）</span>' : '');
   var noteVal = s._item ? (((c.procedureItems||[]).filter(function(x){ return x.name===s._item; })[0]||{}).todayNote || s.note || '') : (s.note||''), noteFn = s._item ? 'krItemNote(\''+krEsc(s._item).replace(/'/g,'')+'\',this.value)' : 'krRowNote(\''+s.id+'\',this.value)';
-  var noteCell = ((o.can || krCanMemo()) && mode==='today' && !(function(){ try{ var nk = s._item ? 'main' : rowVisitKey(c, s); return noteVisitEnded(c, nk) || (!window.DAYCONFIRM_BYPASS && dayLockedKR(c, nk)); }catch(e){ return false; } })()) ?  '<input value="'+krEsc(noteVal)+'" placeholder="备注" onchange="'+noteFn+'" onkeydown="if(event.key===\'Enter\'){this.blur();}" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">' : '<span style="color:var(--slate2);">'+(noteText || '—')+'</span>';
+  var noteCell = ((o.can || krCanMemo()) && mode==='today' && !(function(){ try{ var nk = s._item ? 'main' : rowVisitKey(c, s); return noteVisitEnded(c, nk) || (!window.DAYCONFIRM_BYPASS && dayLockedKR(c, nk)); }catch(e){ return false; } })()) ?  (s._item ? krNdCell(c, 'i', s._item, 'main', noteVal) : krNdCell(c, 'r', s.id, rowVisitKey(c, s), noteVal)) : '<span style="color:var(--slate2);">'+(noteText || '—')+'</span>';
   if(mode==='today'){ /* CMD-1109-18 一：四栏——项目类型｜项目｜备注｜操作；管理项目名后面只写今天做几次「（N 次）」；完成 / 待付款 / 待确认写在操作栏前面 */
     var stCell = (s.done || pend || anes) ? '<span style="color:'+stColor+';font-weight:600;white-space:nowrap;">'+stText+'</span> ' : '';
     var lab = (type==='管理项目') ? (function(){ var l0 = visitRowLabel(c, s), n0 = Math.max(1, parseInt(s.useQty, 10)||1); return krEsc(l0.name)+'（'+n0+' 次）'; })() : visitRowLabelHtml(c, s);
@@ -3078,6 +3150,7 @@ function krLeaveAfterRemind(key, hasProj, txt){
 }
 function krEndAskOpen(key, manual, skipRemind){
   if(!krCan()) return;
+  if(!window.__krNdPass){ var nv = krNdAnyDirty().filter(function(v){ return v===key; }); if(nv.length){ krNdGuard(nv, function(){ window.__krNdPass = true; try{ krEndAskOpen(key, manual, skipRemind); }finally{ window.__krNdPass = false; } }); return; } } /* CMD-1109-24：备注还没保存 */
   var rbAct = Store.withClinic(KR_CASE.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return !!(c0 && rebookActive(c0)); });
   if(manual && !skipRemind && !window.GMC_NO_LEAVEREMIND && !rbAct){ var lr = Store.withClinic(KR_CASE.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c0 ? krLeaveReminders(c0, key) : []; }) || []; if(lr.length){ var pb0 = Store.withClinic(KR_CASE.clinicId, function(){ var c1 = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c1 ? endBlockPending(c1) : null; }); if(!pb0){ leaveRemindOpen('KR', KR_CASE.id, lr, String(key).replace(/'/g,'')); return; } } } /* 有待付款的在韩加买仍走原来的拦截提示 */
   var pb = Store.withClinic(KR_CASE.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0]; return c ? endBlockPending(c) : null; });
@@ -3201,9 +3274,9 @@ function krMainRowsHtml(c, mode){
     if(mode==='today'){ /* CMD-1109-18 一：四栏；名字后面只写今天做几次「（N 次）」，没有加减 / 剩余 / 建议 / ［今日取消］ */
       var tq = dn ? Math.max(1, parseInt((tmdGet(c, it)||{}).qty, 10)||1) : Math.max(1, Math.min(parseInt(it.todayQty, 10)||1, Math.max(1, left-pl)));
       var ops4 = dn ? ('<span style="color:var(--sage);font-weight:600;">已完成</span>'+(krUndoOk(c, 'main') ? ' '+krOutBtn('撤回完成', 'krMgmtUndo(\''+nmq+'\')', true) : '')) : (can ? krBtn('操作完成', 'krMgmtUse(\''+nmq+'\')', okUse, '次数用完（剩余次数都已安排）') : '');
-      return '<div style="display:grid;grid-template-columns:'+KR_TBL_COLS4+';gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span>'+krTypeTag('管理项目')+'</span><span style="font-size:13px;">'+krEsc(buyName(it.name))+'（'+tq+' 次）</span><span>'+(((can || krCanMemo()) && !c.krProcedureDone && !dayLockedKR(c, 'main')) ? '<input value="'+krEsc(it.todayNote||'')+'" placeholder="备注" onchange="krItemNote(\''+nmq+'\',this.value)" onkeydown="if(event.key===\'Enter\'){this.blur();}" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">' : '<span style="color:var(--slate2);">'+(it.todayNote ? krEsc(it.todayNote) : '—')+'</span>')+'</span><span style="text-align:right;white-space:nowrap;">'+ops4+'</span></div>';
+      return '<div style="display:grid;grid-template-columns:'+KR_TBL_COLS4+';gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span>'+krTypeTag('管理项目')+'</span><span style="font-size:13px;">'+krEsc(buyName(it.name))+'（'+tq+' 次）</span><span>'+(((can || krCanMemo()) && !c.krProcedureDone && !dayLockedKR(c, 'main')) ? krNdCell(c, 'i', itemIid(it), 'main', it.todayNote||'') : '<span style="color:var(--slate2);">'+(it.todayNote ? krEsc(it.todayNote) : '—')+'</span>')+'</span><span style="text-align:right;white-space:nowrap;">'+ops4+'</span></div>';
     }
-    return '<div style="display:grid;grid-template-columns:'+KR_TBL_COLS+';gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span>'+krTypeTag('管理项目')+'</span><span style="font-size:13px;">'+krEsc(buyName(it.name))+'<div style="font-size:12px;color:var(--muted);font-weight:400;">剩 '+left+' / 共 '+(it.qty||1)+' 次</div>'+((!dn && mode==='today') ? krQtyStepper(c, it)+krEarlyHint(c, it) : '')+'</span><span>'+((!dn && can && mode==='today') ? '<input value="'+krEsc(it.todayNote||'')+'" placeholder="备注" onchange="krItemNote(\''+nmq+'\',this.value)" onkeydown="if(event.key===\'Enter\'){this.blur();}" style="width:100%;box-sizing:border-box;padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;">' : '<span style="color:var(--slate2);">'+(it.todayNote ? krEsc(it.todayNote) : '—')+'</span>')+'</span><span>韩国</span>'+stTxt+'<span style="text-align:right;white-space:nowrap;">'+ops+'</span></div>'; }).join('');
+    return '<div style="display:grid;grid-template-columns:'+KR_TBL_COLS+';gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--border2);font-size:12px;"><span>'+krTypeTag('管理项目')+'</span><span style="font-size:13px;">'+krEsc(buyName(it.name))+'<div style="font-size:12px;color:var(--muted);font-weight:400;">剩 '+left+' / 共 '+(it.qty||1)+' 次</div>'+((!dn && mode==='today') ? krQtyStepper(c, it)+krEarlyHint(c, it) : '')+'</span><span>'+((!dn && can && mode==='today') ? krNdCell(c, 'i', itemIid(it), 'main', it.todayNote||'') : '<span style="color:var(--slate2);">'+(it.todayNote ? krEsc(it.todayNote) : '—')+'</span>')+'</span><span>韩国</span>'+stTxt+'<span style="text-align:right;white-space:nowrap;">'+ops+'</span></div>'; }).join('');
   if(!subs.length && !held) return krEmpty('施术一行会在施术时间确认后自动产生；增加项目在项目卡右上角［增加项目］');
   var rowsHtml = [];
   subs.forEach(function(s){

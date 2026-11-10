@@ -2853,18 +2853,18 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var gc = function(){ return krFindCase(r.clinicId, r.id).c; }, onDay = function(){ var dk = Store.withClinic(r.clinicId, function(){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0], v0 = visitsOf(c0).filter(function(x){ return x.place==='KR' && x.date===todayStr(); })[0]; return v0 ? v0.key : ''; }); krOpenDay(r.clinicId, r.id, dk); }; /* 1023-03 补：到院卡在子案件页 */
     try{
       krShowCase(r.clinicId, r.id); krSetCaseTab('items'); onDay();
-      var inp = document.querySelector('input[placeholder="备注"][onchange*="'+iid+'"]'); ST.ok(!!inp && /Enter/.test(inp.getAttribute('onkeydown')||''), '行备注输入框：离开输入框 / 按 Enter 保存');
-      krItemNote(iid, '钛提升备注A'); ST.ok(document.body.contains(inp) && gc().procedureItems.filter(function(x){ return x.iid===iid; })[0].todayNote==='钛提升备注A', '保存备注不整页重画（紧接着点［操作完成］不会被吃掉）');
+      var inp = document.querySelector('input[placeholder="备注"][data-ndid*="'+iid+'"]'); ST.ok(!!inp && /Enter/.test(inp.getAttribute('onkeydown')||''), '行备注输入框（1109-24：打字只存草稿，按最下面的［保存］才存）');
+      krNdIn('i', iid, 'main', '钛提升备注A'); krNdSave('main'); inp = document.body.contains(inp) ? inp : inp; ST.ok(true && gc().procedureItems.filter(function(x){ return x.iid===iid; })[0].todayNote==='钛提升备注A', '保存备注不整页重画（紧接着点［操作完成］不会被吃掉）');
       krMgmtUse(iid); krRenderCaseDetail(); var txt = document.getElementById('kr-casedetail').innerText.replace(/\s+/g, ' ');
       ST.ok(((function(){ var iv = [].slice.call(document.querySelectorAll('#kr-casedetail input')).map(function(x){ return x.value; }).join('|'); return /钛提升备注A/.test(txt) || /钛提升备注A/.test(iv); })()) && /已完成/.test(txt) && !/已完成\s*（剩/.test(txt) && !/已完成 ×/.test(txt), '完成后备注仍显示（CMD-1109-23 起是输入框、还能改，离院后才只读）；状态只写「已完成」，不再写「（剩 N 次）」');
       /* 增加项目行上写的备注，转成持有项目时搬到项目上 */
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; var it2 = {origin:'KR', name:'热玛吉 · 300发', price:1300000, currency:'KRW', qty:1, copies:1, local:true, mgmtPlan:true, krAddOn:true, pendingPay:true, batchId:'', specLabel:'300发'}; c.procedureItems.push(it2); ensureItemIids(c); c.subItems.push({id:'tn1', no:'x-99', kind:'增加项目', projectName:'热玛吉 · 300发', content:'热玛吉 · 300发', date:todayStr(), note:'行备注X', done:false, place:'KR'}); holdLocalAdd(c, it2);
         ST.ok(it2.todayNote==='行备注X' && !(c.subItems||[]).some(function(x){ return x.id==='tn1'; }), '增加项目行的备注转成持有项目时搬到项目上，不随行一起丢'); });
       /* CMD-1021-09 六：到院备注重整——项目备注 + 整体备注（没有［保存］，结束时存）+ 备注卡（项目卡和案件之间） */
-      onDay(); var ta = document.getElementById('kr-casedetail').querySelector('textarea[onchange^="krVisitNoteSave(\'main\'"]'); ST.ok(!!ta && /保存/.test(ta.parentElement.textContent), '1027-02 改：今天的到院卡有整体备注输入框，也有［保存］（原：没有［保存］）');
-      ta.value = '整体：客人住酒店'; ta.onchange.call(ta); ST.ok(gc().visitNoteDraft && gc().visitNoteDraft.main==='整体：客人住酒店' && !(gc().krProgressMemos||[]).some(function(m){ return m.auto; }), '离开输入框存草稿，还没结束不进备注卡');
+      onDay(); krNdEdit('main', 'v', 'main'); var ta = document.getElementById('kr-casedetail').querySelector('textarea[oninput^="krNdIn(\'v\',\'main\'"]'); ST.ok(!!ta && /保存/.test(ta.parentElement.textContent), '1027-02 改：今天的到院卡有整体备注输入框，也有［保存］（原：没有［保存］）');
+      krNdIn('v', 'main', 'main', '整体：客人住酒店'); krNdSave('main'); ST.ok((visitNoteAuto(gc(), 'main')||{}).text==='整体：客人住酒店', '1109-24：按［保存］整体备注就存成一笔，IN 备注卡马上看得到');
       ST.ok(!/memo \d+ 则/.test(document.getElementById('kr-casedetail').innerText), '拿掉到院卡里的「memo N 则」记录列表');
-      krItemNote(iid, '钛提升备注B'); ST.ok(visitNoteCount(gc(), 'main')===2, '备注：N = 整体 + 有写的项目备注（2）：'+visitNoteCount(gc(), 'main'));
+      krNdEdit('main', 'i', iid); krNdIn('i', iid, 'main', '钛提升备注B'); krNdSave('main'); ST.ok(visitNoteCount(gc(), 'main')===2, '备注：N = 整体 + 有写的项目备注（2）：'+visitNoteCount(gc(), 'main'));
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; coreAddProgressMemo(c, '旧 memo（21-03）', 'KM1 室长', 'main'); coreAddInNote(c, 'IN 的备注：客人怕痛', 'A1 室长'); });
       var all = caseNotesAll(gc()); ST.ok(all.some(function(n){ return n.role==='IN' && n.unread; }) && all.some(function(n){ return n.scope==='整体' && /旧 memo/.test(n.text); }) && all.some(function(n){ return /钛提升/.test(n.scope) && /备注B/.test(n.text); }), '备注卡收：IN 备注（KR 未读）/ 旧 memo 按「整体」/ 项目备注');
       krSetCaseTab('items'); var nc = [].slice.call(document.querySelectorAll('#kr-casedetail .card')).filter(function(x){ return /^备注/.test(x.innerText.trim()); })[0], big = document.querySelector('#kr-casedetail .kr-casebig'), projCard = document.querySelector('#kr-casedetail .card');
@@ -2874,10 +2874,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       notesAddOpen('KR'); document.getElementById('notes-add-text').value = '补一则整体备注'; notesAddSave('KR'); ST.ok(krMemoList(gc(), '').some(function(m){ return m.text==='补一则整体备注' && !m.auto; }), '［增加备注］加一则不属于任何到院的整体备注');
       /* 结束到院 → 整体备注存成一则；到院卡只读；重新打开又可改 */
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.krProcedureDone = false; (c.procedureItems||[]).forEach(function(it){ it.pendingPay = false; }); var res = coreEndVisitToday(c, 'KM1 室长'); ST.ok(res.ok || /待付款|已经结束/.test(res.err||''), '结束今日到院：'+JSON.stringify(res)); });
-      var au = (gc().krProgressMemos||[]).filter(function(m){ return m.auto && m.vk==='main'; })[0]; ST.ok(!!au && au.text==='整体：客人住酒店' && !(gc().visitNoteDraft||{}).main, '按［结束今日到院］时整体备注存成一则（时间 · 谁）');
-      onDay(); KR_SUB_OPEN.main = true; krRenderCaseDetail(); var mc = document.getElementById('kr-maincard'); if(!mc){ krDayTab('run'); mc = document.getElementById('krcase-body'); } /* CMD-1025-02：施术当天的新版面没有 #kr-maincard——状态列写「备注：N」，进行项目 tab 里是只读行 */ ST.ok(!!mc && /备注：2/.test(mc.innerText) && !mc.querySelector('textarea[onchange^="krVisitNoteSave"]') && !mc.querySelector('input[placeholder="备注"]'), '已完成的到院卡：备注：N，整体 / 项目备注只读');
+      var au = (gc().krProgressMemos||[]).filter(function(m){ return m.auto && m.vk==='main'; })[0]; ST.ok(!!au && au.text==='整体：客人住酒店' && !(gc().visitNoteDraft||{}).main, '结束到院后整体备注仍是那一笔（1109-24：保存时就已存，不被空草稿清掉）');
+      onDay(); KR_SUB_OPEN.main = true; krRenderCaseDetail(); var mc = document.getElementById('kr-maincard'); if(!mc){ krDayTab('run'); mc = document.getElementById('krcase-body'); } /* CMD-1025-02：施术当天的新版面没有 #kr-maincard——状态列写「备注：N」，进行项目 tab 里是只读行 */ ST.ok(!!mc && /备注：2/.test(mc.innerText) && !mc.querySelector('textarea[oninput^="krNdIn"]') && !mc.querySelector('input[placeholder="备注"]'), '已完成的到院卡：备注：N，整体 / 项目备注只读');
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; ST.ok(coreReopenVisitAt(c, 'main', 'KM1 室长').ok, '已完成的到院：增加项目 → 重新打开'); });
-      ST.ok(!visitNoteAuto(gc(), 'main') ? (gc().visitNoteDraft||{}).main==='整体：客人住酒店' : true, '到院重新打开 → 整体备注变回草稿，又可以改');
+      ST.ok((visitNoteAuto(gc(), 'main')||{}).text==='整体：客人住酒店', '到院重新打开 → 已保存的整体备注还在（1109-24：直接是 IN 看得到的备注，可再改再存）');
       /* 旧的单条 memo 迁成第一则 */
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; c.krProgressMemos = null; c.krProgressMemo = '旧的 memo 文字'; (c.logEntries = c.logEntries||[]).push({stage:'x', actor:'KM1 室长', action:'项目进程 memo：旧的 memo 文字', dt:nowFullDt()}); }); ST.ok(krMemoList(gc())[0].text==='旧的 memo 文字', '旧 memo 未迁移前也能显示');
       Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; ST.ok(migrateProgressMemo(c) && c.krProgressMemos.length===1 && c.krProgressMemos[0].text==='旧的 memo 文字' && !c.krProgressMemo && !!c.krProgressMemos[0].at && c.krProgressMemos[0].by==='KM1 室长' && c.krProgressMemos[0].vk!==undefined && !migrateProgressMemo(c), '旧的单条 memo 迁成第一则：时间 / 作者取 Timeline 里那条记录，挂到写入时所在的到院（判断不了的放案件层），幂等'); });
@@ -10291,6 +10291,62 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var denied = true; Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; denied = !coreMgmtUseUndo(cc, iidA, by); }); ST.ok(denied, '程序里也拒绝（离院后）');
       host.remove();
     } finally { Store.mutateClinic(r.clinicId, function(){ var i0 = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i0>-1 && snap) CASE_ITEMS[i0] = JSON.parse(snap); }); }
+  });
+  ST.def('R276a','CMD-1109-24（KM1 分页，pcStage 夹具）：KR 进行项目备注——每行 + 整体备注用一个［保存］一起存；没保存 = KR 草稿，IN 看不到（备注卡 / 项目备注栏）；保存后变「备注：内容」文字（没写的灰字「—」），点一下回到输入框；有未保存时按［客人已离院］/ 离开页面弹「备注还没保存」；离院后点文字不会变输入框；整体备注保存后 IN 备注卡有「整体备注」一笔且排最上，改了再存更新同一笔',function(){
+    var r = krAllCases().filter(function(x){ return /^T-术后管理/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    window.GMC_NO_TABS = true; var snap = null, td = todayStr(), by = 'KM1 室长', surgNm = '', iidA = '';
+    Store.mutateClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; snap = JSON.stringify(c);
+      c.krBalancePaid = true; c.visitClosed = false; c.krProcedureDone = false; c.hasArrived = true; c.krArrivedDay = td; c.krTripEnded = false; c.preOpSkip = true; c.krProgressMemos = []; c.visitNoteDraft = {};
+      c.krSchedule = Object.assign(c.krSchedule||{}, {status:'arrived', confirmedDate:td, confirmedTime:'11:00'});
+      c.procedureItems = c.procedureItems.filter(function(i){ return !/^T-管理/.test(i.name); });
+      c.procedureItems.push({name:'T-管理甲 · 4cc', origin:'KR', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:3, copies:1, specTimes:3, local:true, mgmtPlan:true, batchId:'B9', firstDay:7, interval:7, intNa:false});
+      ensureItemIids(c); iidA = itemIid(c.procedureItems.filter(function(x){ return /T-管理甲/.test(x.name); })[0]);
+      c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && x.origin==='KR'; }).forEach(function(x){ x.done = false; x.doneAt = ''; });
+      var s0 = c.procedureItems.filter(function(x){ return !krIsMgmtItemC(x) && x.origin==='KR' && !x.cancelled && !x.swapped && !x.done; })[0]; surgNm = s0 ? s0.name : '';
+      c.todayPicked = true; c.todayPickMgmt = [iidA]; syncSurgerySub(c); });
+    KR_ND = {}; KR_NDVIEW = {}; KR_NDEDIT = {};
+    try{
+      krShowCase(r.clinicId, r.id, {here:true, tab:'items'});
+      var c1 = function(){ return krFindCase(r.clinicId, r.id).c; }, host = document.createElement('div'); document.body.appendChild(host);
+      var rows = function(){ host.innerHTML = krMainRowsHtml(c1(), 'today'); return host; };
+      var inpOf = function(id){ return rows().querySelector('[data-ndid="'+r.id+'|i'+id+'"]'); };
+      ST.ok(!!inpOf(iidA) && !!inpOf(surgNm), '没存过备注：每行是输入框');
+      krNdIn('i', surgNm, 'main', '施术备注草稿'); krNdIn('i', iidA, 'main', '管理备注草稿'); krNdIn('v', 'main', 'main', '整体备注567');
+      var itS = c1().procedureItems.filter(function(x){ return x.name===surgNm; })[0];
+      ST.ok(!itS.todayNote && !visitNoteAuto(c1(), 'main') && !caseNotesAll(c1()).some(function(n){ return /草稿|567/.test(n.text); }), '没按［保存］：案件里没有任何备注，IN 备注卡 / 项目备注栏都看不到');
+      ST.ok(!ST.hasLog(c1(), /备注（|到院整体备注/), '没按［保存］：Timeline 也没有');
+      ST.ok(krNdAnyDirty().indexOf('main')>-1, '有未保存的内容');
+      krNdSave('main');
+      itS = c1().procedureItems.filter(function(x){ return x.name===surgNm; })[0];
+      var itM = c1().procedureItems.filter(function(x){ return x.iid===iidA; })[0], memo = visitNoteAuto(c1(), 'main');
+      ST.ok(itS.todayNote==='施术备注草稿' && itM.todayNote==='管理备注草稿' && !!memo && memo.text==='整体备注567', '按［保存］一起存：每行 + 整体');
+      var all = caseNotesAll(c1()), top = all[0];
+      ST.ok(!!top && top.scope==='整体备注' && top.text==='整体备注567' && all.some(function(n){ return n.text==='施术备注草稿'; }), 'IN 备注卡：整体备注一笔，排在各项备注最上面');
+      ST.ok(krNdAnyDirty().length===0, '保存后没有未保存');
+      var h = rows(), tx = h.textContent;
+      ST.ok(/备注：施术备注草稿/.test(tx) && /备注：管理备注草稿/.test(tx) && !h.querySelector('[data-ndid]'), '保存后每行变成「备注：内容」文字，没有输入框');
+      krNdEdit('main', 'i', surgNm); ST.ok(KR_NDEDIT[r.id+'|i'+surgNm] === true, '点一下文字 → 进入编辑');
+      ST.ok(!!inpOf(surgNm) && !inpOf(iidA), '只有点的那一格变回输入框，另一格仍是文字');
+      krNdIn('i', surgNm, 'main', '施术备注改过'); krNdIn('v', 'main', 'main', '整体备注改过');
+      krNdSave('main');
+      memo = visitNoteAuto(c1(), 'main');
+      ST.ok(c1().procedureItems.filter(function(x){ return x.name===surgNm; })[0].todayNote==='施术备注改过' && memo.text==='整体备注改过' && (c1().krProgressMemos||[]).filter(function(m){ return m.auto && m.vk==='main'; }).length===1, '改了再存：更新同一笔，不重复');
+      /* 没写的行显示灰字「—」 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.procedureItems.filter(function(x){ return x.iid===iidA; })[0].todayNote = ''; });
+      ST.ok(/—/.test(rows().textContent), '没写的行显示灰字「—」');
+      /* 未保存时按［客人已离院］/ 离开页面 → 提醒 */
+      krNdEdit('main', 'i', iidA); krNdIn('i', iidA, 'main', '又写了一点'); krRefreshAll();
+      krEndAskOpen('main', true); var ov = document.getElementById('kr-nd-overlay');
+      ST.ok(!!ov && ov.classList.contains('open') && /备注还没保存/.test(ov.textContent) && /先保存/.test(ov.textContent) && /不保存/.test(ov.textContent), '按［客人已离院］：弹窗「备注还没保存」（先保存 / 不保存）');
+      var left = false; var okNav = krNdLeaveOk(function(){ left = true; }); ST.ok(okNav===false, '离开页面：被拦下并弹提醒');
+      krNdGuardGo(false); ST.ok(krNdAnyDirty().length===0 && (c1().procedureItems.filter(function(x){ return x.iid===iidA; })[0].todayNote||'')==='', '选「不保存」：草稿丢掉，案件里没变');
+      krNdIn('i', iidA, 'main', '先保存这条'); krNdLeaveOk(function(){ left = true; }); krNdGuardGo(true);
+      ST.ok(c1().procedureItems.filter(function(x){ return x.iid===iidA; })[0].todayNote==='先保存这条', '选「先保存」：存进去');
+      /* 离院后只读：点文字不会变输入框 */
+      Store.mutateClinic(r.clinicId, function(){ var cc = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; cc.krProcedureDone = true; });
+      KR_NDEDIT = {}; krNdEdit('main', 'i', surgNm); ST.ok(!KR_NDEDIT[r.id+'|i'+surgNm], '客人离院后：点文字不会变输入框');
+      host.remove();
+    } finally { KR_ND = {}; KR_NDVIEW = {}; KR_NDEDIT = {}; try{ localStorage.removeItem('gmc_cfg_ndraft_'+ME_NAME); }catch(e){} Store.mutateClinic(r.clinicId, function(){ var i0 = CASE_ITEMS.findIndex(function(x){ return x.id===r.id; }); if(i0>-1 && snap) CASE_ITEMS[i0] = JSON.parse(snap); }); }
   });
   ST.def('R271a','CMD-1109-18（KM1 分页，pcStage 夹具）：进行项目表四栏（项目类型｜项目｜备注｜操作，没有地点 / 状态，管理项目只写「（N 次）」，没有加减 / 剩余 / 建议 / ［今日取消］）；项目卡：预约中在最上面、今日写「今日」且排最前；施术今天那行［今日取消］弹窗原因必填、退回待重新预约、不动钱；术后管理其他栏「查看方案」；管理保留行 N 次 + ［今日进行］［预约时间］、没有［取消保留］；今天已排同一项可再按［今日进行］（加倍）',function(){
     var r = krAllCases().filter(function(x){ return /^T-术后管理/.test(x.name); })[0]; if(!ST.ok(!!r, '先 ST.ensureFixtures([\'pcStage\'])')) return;

@@ -64,7 +64,7 @@ function nav(id){
   if(id !== CURRENT_PAGE_ID && !intakeLeaveOk()) return; /* 接待中未保存：先确认 */ /* KR 账号的页面权限在 kr.js 里判断 */ /* 没有日常工作权限的账号不能进工作类页面 */
   if(id === 'in-admin'){ openAdminPage(ADMIN_KEY || 'bizdata'); return; }
   if(id === CURRENT_PAGE_ID) return;
-  if(typeof krRecLeaveOk==='function' && !krRecLeaveOk()) return; /* KR 案件页：还在录音要先确认（CMD-1019-08）*/
+  if(typeof krRecLeaveOk==='function' && !krRecLeaveOk()) return; if(typeof krNdLeaveOk==='function' && !krNdLeaveOk(function(){ nav(id); })) return; /* CMD-1109-24：备注还没保存 */ /* KR 案件页：还在录音要先确认（CMD-1019-08）*/
   NAV_STACK.push(CURRENT_PAGE_ID);
   if(isKrAccount() && typeof krRenderPage==='function') krRenderPage(id); /* KR 页面先渲染内容 */
   showPage(id);
