@@ -491,7 +491,7 @@ function krRenderCaseRows(){
 
 /* ---------- 五、KR 案件详情骨架（KR-CASE-01 第 1 节）：现在全部只读，面诊/项目/施术的操作在后面几份指令里做 ---------- */
 var KR_CASE = {clinicId:'', id:'', tab:'basic'};
-var KR_CASE_TABS = [{key:'basic', label:'基础资料'}, {key:'consult', label:'面诊'}, {key:'items', label:'赴韩施术'}, {key:'postcare', label:'术后管理'}, {key:'kmgmt', label:'在韩管理'}, {key:'revisit', label:'复诊'}, {key:'notes', label:'备注内容'}, {key:'visits', label:'子案件'}, {key:'summary', label:'项目汇总'}, {key:'settle', label:'结算'}, {key:'files', label:'附件'}, {key:'log', label:'Timeline'}]; /* CMD-1023-03：拿掉「流程」tab；项目 → 赴韩 */
+var KR_CASE_TABS = [{key:'basic', label:'基础资料'}, {key:'consult', label:'面诊'}, {key:'items', label:'施术项目'}, {key:'postcare', label:'术后管理'}, {key:'kmgmt', label:'在韩管理'}, {key:'revisit', label:'复诊'}, {key:'notes', label:'备注内容'}, {key:'visits', label:'子案件'}, {key:'summary', label:'项目汇总'}, {key:'settle', label:'结算'}, {key:'files', label:'附件'}, {key:'log', label:'Timeline'}]; /* CMD-1023-03：拿掉「流程」tab；项目 → 赴韩 */
 /* KR 端 tab 列表（有才显示）：没升级的一般案件页 = 基础资料｜面诊｜附件｜Timeline（KR 的结算只算赴韩定金 / 尾款，没付之前没有）；升级后 = 完整格式 */
 function krTabListOf(r){
   var defs = {}; KR_CASE_TABS.forEach(function(t0){ defs[t0.key] = t0; });
@@ -1287,7 +1287,7 @@ function krDayItemsText(c, v){
 function krDaysListHtml(c){
   var vs = visitsOf(c).filter(function(v){ return v.place==='KR' && dayFlowKinds(c, v).surg; }), today = todayStr(), g = 'display:grid;grid-template-columns:110px 56px minmax(0,2fr) 90px 60px;gap:8px;align-items:center;';
   var rows = vs.map(function(v){
-    var items = krDayItemsText(c, v) || (v.types||[]).filter(function(t0){ return t0!=='本地管理'; }).join('、') || '—';
+    var items = krDayItemsText(c, v) || dayNameOf(v, {noLocal:true}).replace(/^到访$/, '—');
     return '<div class="case-row-click kr-day-row" onclick="krOpenDay(\''+KR_CASE.clinicId+'\',\''+KR_CASE.id+'\',\''+String(v.key).replace(/'/g, '')+'\')" style="'+g+'padding:9px 0;border-top:1px solid var(--border2);font-size:13px;cursor:pointer;"><span style="font-size:13px;">'+krEsc(visitWhenLabel(v.date, v.time, today))+'</span><span style="font-size:12px;">韩国</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+krEsc(items)+'">'+krEsc(items)+'</span><span style="font-size:12px;">'+krEsc(visitStateText(c, v))+'</span><span style="font-size:12px;color:var(--brand,#9A6A4B);">查看 ›</span></div>';
   }).join('') || '<div style="font-size:12px;color:var(--muted);padding:8px 0;">还没有韩国的日子。</div>';
   return '<div class="card kr-casebig" style="padding:14px 18px 8px;margin-top:12px;"><div class="info-heading" style="margin:2px 2px 4px;">相关日程</div><div style="'+g+'font-size:12px;color:var(--muted);padding:6px 0;"><span>日期</span><span>地点</span><span>项目</span><span>状态</span><span></span></div>'+rows+'</div>';
@@ -1727,7 +1727,7 @@ function krRenderCaseDetail0(){
       var ch = CASE_ITEMS.filter(function(x){ return x.id===KR_CASE.id; })[0], mc = ch && CASE_ITEMS.filter(function(x){ return x.id===ch.mainId; })[0]; if(!ch || !mc) return '';
       var vv = visitsOf(mc).filter(function(x){ return x.caseId===ch.id; })[0], types = vv ? (vv.types||[]).filter(function(t0){ return t0!=='本地管理'; }) : ['复诊评估'];
       var dt = String(ch.visitDate||'').slice(5).replace('-', '/'), flow = ''; try{ flow = todoKidFlowKey({clinicId:r.clinicId, kidOf:mc.id, id:ch.id}); }catch(e){}
-      return '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krShowCase(\''+r.clinicId+'\',\''+mc.id+'\',{tab:\'revisit\'+\'\',flow:\''+flow+'\'})">← 回到主案件 '+krEsc(mc.caseNo)+'</button><span style="font-size:13px;"><b>'+krEsc(vv ? vv.no : ch.caseNo)+'</b> · '+krEsc(dt)+(ch.visitTime ? ' '+krEsc(ch.visitTime) : '')+'（印尼）· 今天做：'+krEsc(types.join('、')||'复诊评估')+'</span><span style="flex:1;"></span><span class="status-pill" style="background:'+((r.krStage && !isEnded(ch)) ? r.krStage.bg : r.badge[0])+';color:'+((r.krStage && !isEnded(ch)) ? r.krStage.fg : r.badge[1])+';">'+krEsc(krRevChildStage(ch))+'</span><span style="font-size:13px;">'+krEsc(r.name)+'</span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'; }); }catch(e){ console.error(e); }
+      return '<div class="card" style="padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krShowCase(\''+r.clinicId+'\',\''+mc.id+'\',{tab:\'revisit\'+\'\',flow:\''+flow+'\'})">← 回到主案件 '+krEsc(mc.caseNo)+'</button><span style="font-size:13px;"><b>'+krEsc(vv ? vv.no : ch.caseNo)+'</b> · '+krEsc(dt)+(ch.visitTime ? ' '+krEsc(ch.visitTime) : '')+'（印尼）· 今天做：'+krEsc(types.map(dayTypeLabel).join(' · ')||'复诊评估')+'</span><span style="flex:1;"></span><span class="status-pill" style="background:'+((r.krStage && !isEnded(ch)) ? r.krStage.bg : r.badge[0])+';color:'+((r.krStage && !isEnded(ch)) ? r.krStage.fg : r.badge[1])+';">'+krEsc(krRevChildStage(ch))+'</span><span style="font-size:13px;">'+krEsc(r.name)+'</span><button class="btn-primary" onclick="krOpenCaseChat()">对话</button></div>'; }); }catch(e){ console.error(e); }
     if(hd){ el.innerHTML = hd+alerts+'<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;margin-top:6px;">'+tabs+'</div><div style="display:flex;flex-direction:column;gap:14px;margin-top:10px;">'+(body||'')+'</div>'; setTimeout(krEndAskCheck, 60); return; }
   }
   var c = r.c; /* CMD-1026-14 一：旧页头（子记录 / 复诊评估页）里引用了没定义的 c，打开子记录页直接报错 */
@@ -3320,7 +3320,7 @@ function krArriveCardsHtml(c){
     var main = cd.kind==='main', key = String(cd.key).replace(/'/g,''), line, pill, btns = '';
     if(main){
       var names = (krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); }).map(function(it){ return it.name; }).join('、')) || '—';
-      line = krVNo(c, cd.date)+krEsc(visitWhenLabel(cd.date||todayStr(), cd.time, todayStr()))+'（韩国）· 施术：'+krEsc(names); pill = '赴韩施术 · 待到院';
+      line = krVNo(c, cd.date)+krEsc(visitWhenLabel(cd.date||todayStr(), cd.time, todayStr()))+'（韩国）· 施术：'+krEsc(names); pill = '施术项目 · 待到院';
       if(can) btns = krDayGoBtn(c, cd.date) || (''+krArriveMainBtn(c, 'btn-primary', '6px 18px', 'krArriveMain()')+'<button class="btn-outline" style="padding:6px 14px;font-size:13px;" onclick="krMainTimeEdit()">修改时间</button>');
     } else {
       var grp = coreVisitRows(c, cd.key).concat(coreVisitExtra(c, cd.key)).sort(function(a, b){ return (a.time||'').localeCompare(b.time||'') || String(a.no).localeCompare(String(b.no)); }), today = todayStr();
@@ -3387,7 +3387,7 @@ function krSurgHead(c, onlyEdit){
 
 function krSubStatusText(c, s){
   if(s.done) return '已完成';
-  if(s.kind==='施术'){ var st = scheduleState(c); return st==='Arrived' ? '已到院' : (isEnded(c) ? '已完成' : '赴韩施术 · 待到院'); }
+  if(s.kind==='施术'){ var st = scheduleState(c); return st==='Arrived' ? '已到院' : (isEnded(c) ? '已完成' : '施术项目 · 待到院'); }
   return s.arrived ? '已到院' : '待到院';
 }
 function krSurgSub(c){ return (c.subItems||[]).filter(function(s){ return s.kind==='施术'; })[0] || null; }
@@ -5082,7 +5082,7 @@ function krSurgDayPage0(c, v){
   var tabsHtml = '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;margin-top:6px;">'+tabs.map(function(t0){ var on = cur===t0.key; return '<button onclick="krDayTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t0.label+(t0.mark ? ' <span style="font-size:12px;color:'+(t0.mark==='✓' ? 'var(--sage)' : 'var(--terracotta)')+';">'+t0.mark+'</span>' : '')+'</button>'; }).join('')+'</div>';
   if(cur==='visit'){
     var row = function(k0, v0){ return '<div class="field-row"><span class="fk">'+k0+'</span><span class="fv" style="font-weight:400;">'+v0+'</span><span class="fa"></span></div>'; };
-    body = krCardBox('到访 <span style="font-weight:400;font-size:12px;color:var(--muted);">基础资料、面诊内容在主案件</span>', row('日期', krEsc(v.date)+(v.time ? ' '+krEsc(v.time) : '')+'（韩国）')+row('这天做', krEsc((v.types||[]).filter(function(t0){ return t0!=='本地管理'; }).join('、')||'—'))+row('状态', krSdVisitStateText(c))+row('院长', krEsc(c.director||'—'))+'<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krCloseDay();krSetCaseTab(\'basic\')">基础资料 →</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krCloseDay();krSetCaseTab(\'consult\')">面诊 →</button></div>');
+    body = krCardBox('到访 <span style="font-weight:400;font-size:12px;color:var(--muted);">基础资料、面诊内容在主案件</span>', row('日期', krEsc(v.date)+(v.time ? ' '+krEsc(v.time) : '')+'（韩国）')+row('这天做', krEsc(dayNameOf(v, {noLocal:true}).replace(/^到访$/, '—')))+row('状态', krSdVisitStateText(c))+row('院长', krEsc(c.director||'—'))+'<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krCloseDay();krSetCaseTab(\'basic\')">基础资料 →</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krCloseDay();krSetCaseTab(\'consult\')">面诊 →</button></div>');
   } else if(cur==='plan') body = krSdPlan(c);
   else if(cur==='pre') body = krPreOpBlock(c, true) || krCardBox('术前状态', krEmpty('这个案件不要求术前照片 / 视频。'));
   else if(cur==='run') body = krSdRun(c);
@@ -5209,7 +5209,7 @@ function krSubPageHtml0(c){
   var body = '';
   if(cur==='visit'){
     var row = function(k0, v0){ return '<div class="field-row"><span class="fk">'+k0+'</span><span class="fv" style="font-weight:400;">'+v0+'</span><span class="fa"></span></div>'; };
-    body = krCardBox('到访 <span style="font-weight:400;font-size:12px;color:var(--muted);">基础资料、面诊内容在主案件</span>', row('日期', krEsc(v.date)+(v.time ? ' '+krEsc(v.time) : '')+'（'+(isKr ? '韩国' : '印尼')+'）')+row('这天做', krEsc((v.types||[]).filter(function(t0){ return t0!=='本地管理'; }).join('、')||'—'))+row('状态', krEsc(st))+row('院长', krEsc(c.director||'—'))+'<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krSetCaseTab(\'basic\')">基础资料 →</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krSetCaseTab(\'consult\')">面诊 →</button></div>');
+    body = krCardBox('到访 <span style="font-weight:400;font-size:12px;color:var(--muted);">基础资料、面诊内容在主案件</span>', row('日期', krEsc(v.date)+(v.time ? ' '+krEsc(v.time) : '')+'（'+(isKr ? '韩国' : '印尼')+'）')+row('这天做', krEsc(dayNameOf(v, {noLocal:true}).replace(/^到访$/, '—')))+row('状态', krEsc(st))+row('院长', krEsc(c.director||'—'))+'<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krSetCaseTab(\'basic\')">基础资料 →</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krSetCaseTab(\'consult\')">面诊 →</button></div>');
   } else if(cur==='today'){
     if(!isKr){
       body = krCardBox('今日项目', krEmpty('印尼的天：KR 只读，没有到院操作。'));

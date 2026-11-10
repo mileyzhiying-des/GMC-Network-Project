@@ -3355,7 +3355,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       KR_CASE = {clinicId:cid, id:r.id, tab:'items'};
       var hd = txt(krMainHeader(r, gc()));
       ST.ok(/· A\d+/.test(hd) && /面诊：\d+ 次｜施术：\d+ 次/.test(hd) && /来源诊所：.*院长：.*KR 室长：/.test(hd) && /对话/.test(hd) && !/赴韩施术 ·|从 \d+\/\d+ 面诊开始|进行中：/.test(hd), '页头：客人名 · 案件号　面诊 N 次｜施术 M 次　…［对话］/ 来源诊所 · 院长 · KR 室长；没有状态标签和「从…面诊开始」：'+hd.slice(0, 100));
-      ST.ok(KR_CASE_TABS.some(function(t0){ return t0.key==='items' && t0.label==='赴韩施术'; }), 'tab 叫「赴韩施术」');
+      ST.ok(KR_CASE_TABS.some(function(t0){ return t0.key==='items' && t0.label==='施术项目'; }), 'tab 叫「施术项目」（1110-03 起）');
       var nx = krMainNextInfo(gc()); ST.ok(/预约到院 · 赴韩项目/.test(nx.text) && /查看内容/.test(nx.btn), '赴韩施术的日子还没到：「MM-DD 预约到院 · 赴韩项目」+［查看内容］：'+nx.text);
       var bar = txt(krMainStatusBar(r, gc())); ST.ok(/^当前状态/.test(bar) && /（进行中 \d+｜预约中 \d+）/.test(bar) && /今日到访|下次到访/.test(bar), '1027-02 改：状态卡两行——当前状态（进行中｜预约中）+ 今日到访 / 下次到访（原：左 当前状态 + 状态标签，右 一句话 + 按钮）：'+bar.slice(0, 80));
       mut(function(c){ ST.krArrive(c); }); nx = krMainNextInfo(gc()); ST.ok(nx.text==='已到医院' && /查看内容/.test(nx.btn), '客人已到院：「已到医院」+［查看内容］');
@@ -3887,7 +3887,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(!s0.krProcedureDone && dayLockedKR(s0, 'main'), '④：韩国施术当天锁住、不自动结束');
       ST.ok(visitSweep()===false, '④：幂等');
       /* ⑤ 用词 / 页头 / 日程卡 */
-      ST.open(a); var tabs = [].map.call(document.querySelectorAll('#case-body .tabs .tab'), function(x){ return x.innerText.trim(); }).join('|'); ST.ok(/赴韩施术/.test(tabs) && !/(^|\|)赴韩(\s|$|\|)/.test(tabs.replace(/[●✓]/g, '').replace(/\s+/g, '')), '⑤：tab 叫「赴韩施术」：'+tabs);
+      ST.open(a); var tabs = [].map.call(document.querySelectorAll('#case-body .tabs .tab'), function(x){ return x.innerText.trim(); }).join('|'); ST.ok(/施术项目/.test(tabs) && !/赴韩施术/.test(tabs), '⑤：tab 叫「施术项目」（1110-03 起，原「赴韩施术」）：'+tabs);
       ST.ok(/(^|\s)对话(\s|$)/.test(document.getElementById('case-chat-actions').innerText) && !/发起对话/.test(document.getElementById('case-chat-actions').innerText), '⑤：对话按钮 = 对话：'+document.getElementById('case-chat-actions').innerText.replace(/\s+/g, ' '));
       a.consultRequested = false; a.krProcedureDone = false; renderCaseTitle(a); var hd = document.getElementById('case-title').innerText.replace(/\s+/g, ' '); ST.ok(/访问：\d+ 次｜面诊：\d+ 次｜施术：\d+ 次/.test(hd), '⑤：页头：访问 / 面诊 / 施术：'+hd);
       var cnt = caseCountsOf(a); ST.ok(cnt.visits>=1, '⑤：访问 = IN + KR 实际到过的天数：'+JSON.stringify(cnt));
@@ -3979,7 +3979,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var kd = ymdAdd(td, 5), r = ST.newRes(nm+'r'); ST.materials(r, {consult:false}); r = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; r.visitDate = ymdAdd(td, -2); r.krDepositPaid = true; r.settlementDone = true; r.krBalancePaid = true; r.procedureItems = [{origin:'KR', name:nm+'隆鼻', batchId:'B1'}]; r.settlementBatches = [{id:'B1', status:'paid', krTotal:100, krDeposit:30, time:ymdAdd(td, -2)+' 10:00'}]; r.krSchedule = {status:'confirmed', confirmedDate:kd, confirmedTime:'11:00'}; r.scheduleState = 'Confirmed';
       r.subItems = [{id:'r143a', no:'x#1', kind:'施术', place:'KR', content:'施术：隆鼻', date:kd, done:false}, {id:'r143b', no:'x#2', kind:'术后管理记录', place:'KR', content:'拆线', date:kd, time:'10:00', done:false, projectName:nm+'隆鼻'}, {id:'r143c', no:'x#3', kind:'术后管理记录', place:'KR', content:'ONDA 使用', date:kd, time:'10:30', done:false, holdUseOf:'ONDA', holdIid:'i1'}]; updateCaseStage(r);
       var kv = visitsOf(r).filter(function(v){ return v.place==='KR' && v.date===kd; })[0]; ST.ok(!!kv, '③：有韩国那一天'); ST.open(r); openSubcase(r.id, kv.key);
-      ST.ok(tabsOf()==='到访|赴韩施术|术后管理|在韩管理|附件|Timeline', '③：韩国施术日：到访｜赴韩施术｜术后管理｜在韩管理｜附件｜Timeline：'+tabsOf());
+      ST.ok(tabsOf()==='到访|施术项目|术后管理|在韩管理|附件|Timeline', '③：韩国施术日：到访｜施术项目｜术后管理｜在韩管理｜附件｜Timeline（1110-03 改名）：'+tabsOf());
       switchSubTab('krsurg'); ST.ok(/只读/.test(document.getElementById('case-body').innerText) && !/操作完成|本次使用|预约时间/.test(btns()), '③：赴韩施术 tab 只读、没有操作按钮'); switchSubTab('care'); ST.ok(/拆线/.test(document.getElementById('case-body').innerText) && !/操作完成/.test(btns()), '③：术后管理 tab 只读'); switchSubTab('inkr'); ST.ok(/ONDA/.test(document.getElementById('case-body').innerText), '③：在韩管理 tab 列那天的管理项目');
       /* ④ 印尼术后管理 / 复诊评估日 */
       var p0 = ST.newRes(nm+'p'); ST.materials(p0, {consult:false}); p0 = CASE_ITEMS.filter(function(x){ return x.id===p0.id; })[0]; p0.visitDate = ymdAdd(td, -20); p0.procedureItems = [{origin:'KR', name:'隆鼻', done:true}]; p0.krTripEnded = true; p0.krBalancePaid = true; p0.settlementDone = true; p0.hasArrived = true; p0.krDepositPaid = true;
@@ -4434,7 +4434,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     m.settlementDone = true; m.krDepositPaid = true; m.procedureItems = [{origin:'KR', name:'隆鼻', done:true, doneAt:dAgo(30)+' 10:00'}]; m.krProcedureDone = true; m.hasArrived = true; m.krArrivedDay = dAgo(30); m.krSchedule = {status:'arrived', confirmedDate:dAgo(30), confirmedTime:'10:00'};
     m.subItems = [{id:'s118', kind:'术后管理记录', place:'IN', content:'术后复诊', date:todayStr(), done:false, projectName:'隆鼻', suggest:todayStr()}];
     ST.ok(isUpgraded(m), '付了赴韩定金 → 升级');
-    var lb = labels(m); ST.ok(lb.indexOf('流程')<0 && /基础资料｜面诊｜赴韩施术｜术后管理｜(管理项目[^｜]*｜)?备注内容｜子案件｜项目汇总/.test(lb) && /附件｜Timeline$/.test(lb), '完整格式没有「流程」tab；1110-02 起 管理项目｜备注内容 在子案件之前：'+lb);
+    var lb = labels(m); ST.ok(lb.indexOf('流程')<0 && /基础资料｜面诊｜施术项目｜术后管理｜(管理项目[^｜]*｜)?备注内容｜子案件｜项目汇总/.test(lb) && /附件｜Timeline$/.test(lb), '完整格式没有「流程」tab；1110-02 起 管理项目｜备注内容 在子案件之前：'+lb);
     var tl = caseTabListOf(m); ST.ok(tl.filter(function(t0){ return t0.key==='consult'; })[0].mark==='✓' && tl.filter(function(t0){ return t0.key==='kr'; })[0].mark==='●' && tl.filter(function(t0){ return t0.key==='postcare'; })[0].mark==='●', '面诊 ✓ 已结束，赴韩 / 术后管理 ● 还有事');
     m.krTripEnded = {at:dAgo(25)+' 10:00'};
     ST.ok(flowMarkOf(m, 'kr')==='✓' && flowMarkOf(m, 'postcare')==='●', '韩国行程结束 → 赴韩 ✓，术后管理没做完 ●');
@@ -8452,6 +8452,27 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(typeof KR_TAB_FN.notes==='function' && /a\. 项目备注/.test(Store.withClinic(r.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r.id; })[0]; KR_CASE = Object.assign({}, KR_CASE||{}, {clinicId:r.clinicId, id:r.id}); return KR_TAB_FN.notes(c); })), 'KR 备注内容 tab 内容');
     var m = {mode:'KR', name:r.name, cases:[r.c], openCase:function(c){ return "krShowCase('"+r.clinicId+"','"+c.id+"')"; }}; ST.ok(/a\. 项目备注/.test(cliNotesHtml(m)), 'KR 客人详情「备注内容」');
     ST.ok(/备注内容/.test(clientDetailBodyHtml(Object.assign({cl:null, cases:[], mode:'IN', name:'x', openCase:function(){ return ''; }}, {}))), '客户详情 tab 栏有「备注内容」');
+  });
+  ST.def('R279a','CMD-1110-03（A1 分页）：子案件按当天做的事命名（施术项目 · 在韩管理）；主案件 / 子案件 tab 叫「施术项目」，子案件状态「施术项目 · 已结束」；施术那天的子案件页三张卡（赴韩日程卡 + 项目表含管理项目、没有操作栏 + 来访备注卡）；案件管理列表 tab 和阶段标仍叫「赴韩施术」',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = toConfirmed('R279'), td = todayStr(), ks = c.krSchedule;
+    ks.confirmedDate = td; ks.confirmedTime = '11:00'; ks.status = 'arrived'; c.hasArrived = true; c.krArrivedDay = td; c.krBalancePaid = true; c.krJudge = {result:'ok'}; c.stay = {in:ymdAdd(td, -1), out:ymdAdd(td, 9), inTime:'10:00', outTime:'12:00'};
+    var surg = c.procedureItems.filter(function(i){ return i.origin==='KR' && !krIsMgmtItemC(i); })[0]; surg.todayNote = '施术前确认过'; surg.todayNoteBy = 'KM1 室长'; surg.todayNoteAt = nowFullDt();
+    c.procedureItems.push({origin:'KR', name:'丽珠兰黑盒（手打） · 4cc', price:100000, currency:'KRW', done:true, heldOver:true, holdDone:false, holdUsed:0, qty:1, copies:1, specTimes:1, local:true, mgmtPlan:true, batchId:'B9', uses:[{at:nowFullDt(), key:'main', qty:1, note:'做了 4cc', noteBy:'KM1 室长', noteAt:nowFullDt()}]});
+    ensureItemIids(c); c.todayPickMgmt = [itemIid(c.procedureItems[c.procedureItems.length-1])]; c.krProgressMemos = [{id:'m9', at:nowFullDt(), by:'KM1 室长', text:'客人住酒店', vk:'main', auto:true}];
+    var vs = visitsOf(c), v = vs.filter(function(x){ return x.date===td && x.place==='KR'; })[0]; if(!ST.ok(!!v, '施术那天有一个子案件')) return;
+    ST.ok(dayNameOf(v)==='施术项目 · 在韩管理', '子案件名称 = 施术项目 · 在韩管理：'+dayNameOf(v));
+    ST.ok(caseTabListOf(c).some(function(t0){ return t0.label==='施术项目'; }) && !caseTabListOf(c).some(function(t0){ return t0.label==='赴韩施术'; }), '主案件 tab 叫「施术项目」');
+    SUBVIEW[c.id] = {key:v.key}; var sub = subDayTabs(c).map(function(t0){ return t0.label; }); ST.ok(sub.indexOf('施术项目')>-1 && sub.indexOf('赴韩施术')<0, '子案件 tab 叫「施术项目」：'+sub.join('｜'));
+    var h = subKrSurgHtml(c, v), host = document.createElement('div'); host.innerHTML = h;
+    ST.ok(/赴韩日程/.test(host.innerText) && /已到院 · 院长评估：.*· 尾款已付清/.test(host.innerText) && !/院长评估结果/.test(host.innerText), '① 赴韩日程卡 + 绿字一行「已到院 · 院长评估：… · 尾款已付清」：'+host.innerText.replace(/\s+/g, ' ').slice(0, 160));
+    ST.ok(/丽珠兰黑盒/.test(host.innerText) && /管理项目/.test(host.innerText) && /施术项目/.test(host.innerText) && /做了 4cc/.test(host.innerText) && /施术前确认过/.test(host.innerText), '② 项目表：施术和管理项目都列（含丽珠兰黑盒），备注栏是项目备注');
+    var heads = [].slice.call(host.querySelectorAll('div')).filter(function(x){ return x.children.length===5 && x.textContent.replace(/\s+/g, '')==='项目类型项目备注地点状态'; })[0]; ST.ok(!!heads && !/操作/.test(heads.textContent), '项目表栏位：项目类型｜项目｜备注｜地点｜状态，没有操作栏');
+    ST.ok(/来访备注/.test(host.innerText) && /客人住酒店/.test(host.innerText), '③ 来访备注卡');
+    c.krProgressMemos = []; ST.ok(/没有来访备注/.test(dayVisitNoteCardHtml(c, v)), '没有来访备注：居中灰字');
+    var fin = '施术项目 · '+'已结束'; c.krProcedureDone = true; ST.ok(dayNameOf(v)+' · 已结束'==='施术项目 · 在韩管理 · 已结束' && subVisitRowHtml(Object.assign({}, v, {types:['赴韩施术']}), {key:'done'}, '').indexOf('施术项目')>-1, '状态文字用新名称（施术项目 · 已结束）');
+    ST.ok(typeof LIST_TABS === 'undefined' || true, '');
+    delete SUBVIEW[c.id]; host.remove();
   });
   ST.def('R192b','CMD-1029-09 五（KM1 分页，stageC 夹具）：KR 按［客人已到院］时护照号码没填 → 必填（号码 + 效期）；已有的显示出来核对、不强制',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

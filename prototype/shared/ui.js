@@ -1241,7 +1241,7 @@ function renderCaseRows(){
       '<span>'+financeCellHtml(c)+'</span>'+
       '<span style="font-size:12px;">'+(c.director||'')+'</span><span style="font-size:12px;">'+(ops.inn.map(function(n){ return ops.innIds[n] ? nameWithId(n, ops.innIds[n]) : staffLabel(n); }).join('、')||'—')+'</span><span style="font-size:12px;">'+((ops.kr.length ? ops.kr.join('、') : (c.krCoordinator ? krCoordText(c.krCoordinator) : ''))||'—')+'</span><span style="font-size:12px;color:var(--muted);">'+caseStartYmd(c)+'</span><span style="font-size:12px;color:var(--muted);">'+caseUpdatedFull(c)+'</span></div>';
     var subHtml = open ? subs.map(function(v){
-      var ch = v.caseId!==c.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, tags = v.types.map(function(t0){ return '<span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);font-size:12px;margin-right:4px;">'+t0+'</span>'; }).join('');
+      var ch = v.caseId!==c.id ? CASE_ITEMS.filter(function(x){ return x.id===v.caseId; })[0] : null, tags = v.types.map(function(t0){ t0 = dayTypeLabel(t0); return '<span class="status-pill" style="background:var(--bg-sidebar,#f3efe6);color:var(--slate2);font-size:12px;margin-right:4px;">'+t0+'</span>'; }).join('');
       return '<div class="trow case-row-click" onclick="openCaseNewTab(\''+(ch ? ch.id : c.id)+'\')" style="grid-template-columns:'+CASE_GRID+';cursor:pointer;background:var(--bg-sidebar,#faf6ef);"><span style="font-size:12px;color:var(--slate2);padding-left:22px;">'+v.no+'</span><span style="font-size:12px;">'+String(v.date).slice(5).replace('-','/')+(v.time ? ' '+v.time : '')+'</span><span style="font-size:12px;">'+(v.place==='KR' ? '韩国' : '印尼')+'</span><span style="grid-column:span 3;">'+tags+'</span></div>';
     }).join('') : '';
     return main+subHtml;
@@ -1379,7 +1379,7 @@ function renderCaseStatusBar(c){
 function renderCaseStatusBar0(c){
   var b = caseStageBadge(c), subDayOn = false;
   /* CMD-1028-14 六：子案件页的「当前状态」写这一天实际在做的事（术后管理 · 进行中），不是主案件当前停在哪个阶段（原来显示「本地管理 · 选择项目」） */
-  try{ if(typeof subPageActive==='function' && subPageActive(c)){ var cx0 = subCtxOf(c), st0 = visitStateText(cx0.m, cx0.v), tone0 = {'进行中':['#E8F0FB','#2F5FA8'], '待确认结束':['#FDECEA','#B3261E'], '待到店':['#E3F4E8','#2E7D4F'], '已预约':['#E3F4E8','#2E7D4F']}[st0] || ['var(--border2)','var(--slate2)']; b = [tone0[0], tone0[1], ((cx0.v.types||[]).join('、') || '到访')+' · '+st0]; subDayOn = true; } }catch(e0){ console.error(e0); }
+  try{ if(typeof subPageActive==='function' && subPageActive(c)){ var cx0 = subCtxOf(c), st0 = visitStateText(cx0.m, cx0.v), tone0 = {'进行中':['#E8F0FB','#2F5FA8'], '待确认结束':['#FDECEA','#B3261E'], '待到店':['#E3F4E8','#2E7D4F'], '已预约':['#E3F4E8','#2E7D4F']}[st0] || ['var(--border2)','var(--slate2)']; b = [tone0[0], tone0[1], dayNameOf(cx0.v)+' · '+st0]; subDayOn = true; } }catch(e0){ console.error(e0); }
   var actionBtn = '';
   if(c.krVisit && c.stage==='booked'){ /* CMD-1014-16：在韩到店案件（KR 医院）：到店 / 完成由 KR 标记，IN 不接待、不判未到店 */
     actionBtn = '<span style="font-size:12px;color:var(--slate2);">在韩到院预约（KR 医院）：'+(c.krVisit.arrived ? '客人已到院，等 KR 标记完成' : (c.visitDate+' '+c.visitTime+'（韩国）等 KR 标记客人到店'))+'</span>';
