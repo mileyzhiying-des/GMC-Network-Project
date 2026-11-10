@@ -2472,3 +2472,13 @@ prototype/shared/app.css  共用样式
 - 分支 **V5**，数据版本不变（61），只改画面。IN 本地管理卡（`mgmtActiveHtml`）：拿掉［全部完成］、说明文字「每一行点…不是退款」、「同一次到店里还可以：［继续使用持有项目］［继续选购项目］」整行，只剩逐行［完成］［取消］（备注框、使用次数、状态、按钮同一行）；`mgmtComplete` 函数留着（旧测试直接调用），界面没有入口。
 - 页头［+ 添加本地管理］（`inLocalEntry`：使用持有 / 购买新项目）是统一入口，出现条件 = `inHeaderLocalOk(c)`（和 `renderCaseHeaderActions` 的 `lmOkCase` 同一个判断：子记录，或不是纯本地的面诊 / 赴韩案件）；这类案件的已完成项目列表（`localCarriedDoneHtml` / `localMgmtBody`）里的［继续选购］［继续使用持有项目］也一起拿掉。**纯本地案件（页头没有该按钮）保留「继续」那一行**，免得没有入口。持有项目都完成 →「客人是否已离店？」不变。
 - 测试：新增 R281a；A1 全套对照基准失败集合完全一致。
+
+## CMD-1110-06 补充（2026-11-10，追加；取代 CMD-1109-01 / 1106-17 里「赴韩日程」卡里的「行程」段、CMD-1109-25 在施术前 7 天确认行程窗口里的［发送行程提醒给客人］、CMD-1109-11 的发送状态写法，旧文字保留作历史）
+- 分支 **V5**，代码提交 9a73dc2；不推送不合并；**数据版本不变（61）**，没有新字段（新增可空字段 `c.informLast`，旧资料按 `surgeryMsg` / `tripRemindMsg` 推算）。
+- **页头第三行**（data.js `inTripHeaderRowHtml`，ui.js `renderCaseSubtitle` 调用；只有赴韩案件、主案件页）：「在韩行程：MM/DD HH:mm（机场）印尼灰字 ～ …」+ 离境日不够 / 年份存错的红字 + ［行程变动］（= `openStayModal`，弹窗里有行程状态已定 / 暂定和到达 / 离开）。待递交时递交画面（`tripStateBlockHtml`）里直接填行程的写法**保留**，页头也同步显示。
+- **施术日期卡**（`krProcedureTabMain`）：标题「施术日期」，［打印］在标题最右；已递交之后不再有「行程」段（待递交时仍有行程状态单选 + 到达 / 离开输入）。**「施术项目（N）」**（`inProjectCardHtml` 默认 kind）：只列施术，拿掉三个分页；术后管理 / 管理项目只在自己的 tab。tab 标记 `flowMarkOf(c,'kr')`：施术项目都做完或取消 → ✓，否则 ●（原：韩国行程结束才 ✓）。
+- **［发送信息给客人］**（calalign.js `openSurgMsg(id, pre)` / `surgMsgRender` / `surgMsgToggle` / `confirmSurgMsg`）：两项可勾——「施术日期与到院地址」（`surgCanNotice`：KR 确认施术时间后）、「行程与天气」（`surgCanTrip`：行程已定且到达 / 离开日期时间填全；内容和天气 = 1109-25 的 `tripRemindText` / `weatherFetch`）；都勾合成一则，预览可改，短信 / WhatsApp；`pre='date'|'trip'` 从待办进来先勾对应项；发送后写 `c.surgeryMsg`（含施术日期）/ `c.tripRemindMsg`（含行程，key = `tripRemindKey(c.stay)`）/ `c.informLast = {at, method, kinds}`；状态显示「MM/DD 已通知客人（施术日期 · 行程）」+ 下划线「再次发送」；记短信发送记录（含施术日期 = 施术日期通知，只有行程 = 行程提醒）+ Timeline。**确认行程窗口里的［发送行程提醒给客人］整块拿掉**（`stayRemindHtml` / `openTripRemind` 函数留着没入口）。
+- **两个 IN 待办**（todo.js `inTodoItems`）：① `relay`「发送施术日期信息给客人」——`scheduleState==='Confirmed' && !surgMsgSent(c)`（KR 确认含改期确认后；再改时间 `surgInformKey` 对不上就再出现）；② `tripremind`「发送行程提醒给客人」——Confirmed、没到院、`surgCanTrip`、离施术日 ≤ `TRIP_CONFIRM_DAYS`（7 天）、`!tripInformed(c)`（发出含行程的信息后 key 对上就消失；之后改行程 key 变了 → 再出现，写「行程已改，请重新通知客人」）。点待办 = 打开同一个弹窗，对应项先勾好。旧资料：已有发送记录且 key 对得上的不补出待办。
+- **当前状态卡**（IN `renderCaseStatusBar0`，KR `krMainStatusBar`）：上下间距缩小；［查看］［查看内容］= 下划线文字；第二行：今天有到访且还没结束 →「今日到访（…）状态」；今天的到访已结束或今天没有 →「下一个预约：MM/DD HH:mm（韩国）· 名称 编号」（［查看内容］跳到那个子案件；KR 看不到印尼的天就没有按钮），没有写「下一个预约：—」；右边灰字「待预约：…」照旧（IN 另有下划线［预约］，KR 无下一个预约时仍有［预约时间］）。今日到访的名称沿用原 `mainDayBiz` / `krMainDayTypes`（「赴韩项目」写法），只有「下一个预约」用 `dayNameOf`（子案件名称）。
+- 测试：新增 R282a（IN）/ R282b（KR）；14 个旧断言跟着改（发送状态文字「已通知客人（施术日期）」、tab 标记、「下一个预约」、卡片标题「施术日期」、行程搬到页头）。
+- **测试工具提示**：在同一个隔离端口反复跑很多 KR 用例后，该端口的 KR 页面可能一打开就卡死（用 git stash 退回基准代码一样卡，所以不是这次改动；原因是某个用例留下的存档状态）；换新端口 + 新分页即可，不要在卡住的分页里重载。
