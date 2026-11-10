@@ -295,7 +295,7 @@ div.phone-row input{flex:1 1 auto;width:auto;min-width:0;}
 /* ---- small centered choice modal (发起视频 target picker) ---- */
 .modal-overlay{position:fixed;inset:0;background:rgba(27,38,53,.25);z-index:65;display:none;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex;}
-.modal-box{width:320px;background:var(--white);border-radius:14px;padding:22px;box-shadow:var(--shadow-modal);}
+.modal-box{width:min(400px,92vw);background:var(--white);border-radius:14px;padding:22px;box-shadow:var(--shadow-modal);}
 
 /* 数量输入框（CMD-1008-07）：窄版（约 3 位数宽）带 ±，使用持有项目数量 / 项目列表个数 / 本地管理选购个数共用 */
 .qty-box{display:inline-flex;align-items:stretch;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#fff;flex:0 0 auto;}
@@ -589,3 +589,8 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 /* CMD-1109-19：IN 赴韩施术 / 术后管理 / 管理项目 tab——相关子案件 + 各张卡之间统一 12px（取最小的那个） */
 .in-tabstack{display:flex;flex-direction:column;gap:12px;}
 .in-tabstack > .card{margin-bottom:0 !important;}
+
+/* CMD-1110-16：弹窗尺寸四档（全站共用）：S 400（确认）/ M 560（小表单）/ L 800（大表单、列表）/ XL 1120（左右两栏挑项目）；宽度都是 min(尺寸, 92vw)。写死宽度的老弹窗由 ui.js modalSizeApply 自动吸附到最近一档 */
+.modal-box.msz-S{width:min(400px,92vw)} .modal-box.msz-M{width:min(560px,92vw)} .modal-box.msz-L{width:min(800px,92vw)} .modal-box.msz-XL{width:min(1120px,92vw)}
+#lm-buy-overlay .status-pill, #in-localentry-overlay .status-pill, #local-plan-overlay .status-pill, #kr-dayadd-overlay .status-pill, #kr-addmodal-overlay .status-pill{white-space:nowrap;}
+#lm-buy-overlay .lm-buy-body .chip{white-space:nowrap;}

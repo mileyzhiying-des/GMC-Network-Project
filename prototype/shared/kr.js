@@ -5220,7 +5220,7 @@ function krDayAddRender(){
   if(!dam){ ov.classList.remove('open'); ov.innerHTML = ''; return; }
   var r = krFindCase(KR_CASE.clinicId, KR_CASE.id); if(!r){ krDayAddClose(); return; }
   var c = r.c, n = Object.keys(KR_PICK).length, scrollTop = (ov.querySelector('.modal-box') || {}).scrollTop || 0;
-  ov.innerHTML = '<div class="modal-box" style="width:860px;max-width:96vw;max-height:88vh;overflow:auto;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">增加今日项目 · '+krEsc(c.name)+'</div>'+
+  ov.innerHTML = '<div class="modal-box msz-XL" style="max-height:88vh;overflow:auto;"><div style="font-size:16px;font-weight:700;margin-bottom:10px;">增加今日项目 · '+krEsc(c.name)+'</div>'+
     '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">勾选今天要做的项目，确认后出现在「今日项目」表里；没有想做的项目请用右上角［+ 购买新项目］。</div>'+
     krProjCards(c, {pick:true, noCare:true, modal:true})+
     '<div id="kr-dayadd-err" style="color:#B3261E;font-size:12px;margin-top:6px;"></div>'+

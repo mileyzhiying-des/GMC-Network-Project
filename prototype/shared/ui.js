@@ -1443,7 +1443,7 @@ function renderCaseHeaderActions(c){
   /* CMD-1105-07：来访进行中，页头的［+ 添加本地管理］一直都在（原来 CMD-1026-17 只在「还没有本地管理」时显示，加过之后就消失了）；先分「使用持有 / 购买新项目」；离店 / 锁住 / 结束后不出现；纯本地案件有自己的选购流程 */
   var lmOkCase = inHeaderLocalOk(c); /* CMD-1110-08：和 mgmtActiveHtml 同一个判断（含「本地管理进行中」的纯本地案件） */
   if(notEnded && lmOkCase && !c.leftStore && !c.visitClosed && !inDayLocked(c) && localAddAllowed(c)){
-    lmBtn = '<button class="btn-outline" onclick="inLocalEntry()">+ 添加本地管理</button>';
+    lmBtn = '<button class="btn-outline" onclick="planModalOpen()">+ 添加本地管理</button>';
   }
   var leaveBtn = (canEndCase(c) && !(isRevEval(c) && c.leftStore && !c.reportReady)) ? '<button class="btn-outline" onclick="openEndCase()">'+((isRevEval(c) && c.leftStore) ? '确认结案' : '客人离店')+'</button>' : ''; /* CMD-1026-11 二：右上角依序 发起对话 · 添加本地管理 · 客人离店（只在客人在店时有） */
   var itemBtn = ''; /* CMD-1105-07：术后管理那天的［增加项目］并进页头统一的［+ 添加本地管理］ */
@@ -2020,6 +2020,7 @@ function confirmMaterials(){
   logCaseEvent(c, ME_NAME, '确认了메타뷰/照片/视频/苦恼/希望预期，'+(c.revisitEval ? '' : '面诊需求：')+(c.revisitEval ? '复诊评估' : (c.reuseReport ? '沿用之前诊疗方案（'+c.reuseReport.caseNo+'）' : (c.needsConsult?'面诊':'不面诊'))));
   buildCaseLog(c);
   renderCaseBody(c);
+  try{ if(!window.GMC_NO_PLAN_AUTO && c.needsConsult===false && !c.consultRequested && pureLocalMain(c) && !isEnded(c)) planModalOpen(c); }catch(e){ console.error('[今天如何安排项目]', e); } /* CMD-1110-16：基础资料确认完、服务类型是本地 → 自动弹「今天如何安排项目？」 */
 }
 
 /* Tab 出现时机（IN-CASE-01）：项目列表=面诊案件报告出来后；本地管理=本地案件确认后，或面诊/赴韩案件点"+添加本地管理"后 */
@@ -2032,8 +2033,7 @@ function showLocalTab(c){
   /* CMD-1110-14：「本地项目」tab 跟着实际发生的事出现——纯本地案件：有持有要用 / 正在使用 / 今天用过；没用就没有（买了 →「结算」tab）。其他案件照旧 */
   if(pureLocalMain(c)){
     if(isEnded(c)) return (c.mgmtUses||[]).length>0;
-    var heldNow = (getClientHoldings(c.name)||[]).some(function(h){ return (h.batches||[]).some(function(b){ return !b.refund && !b.voided && (b.bought||0)-(b.used||0)>0; }); });
-    return !!((typeof followupOn==='function' && followupOn(c)) || c.mgmtActive || c.localAsk || c.addUse || c.addingMore || c.comp || (c.entryChoicePending && c.projectEntryMode==='new') || (c.mgmtUses||[]).length || (c.localMgmt && (c.localMgmt.mgmtActive || (c.localMgmt.mgmtUses||[]).length)) || c.usePrev || (c.entryChoicePending && (c.projectEntryMode==='holdings' || (!c.projectEntryMode && heldNow))) || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理')));
+    return !!((typeof followupOn==='function' && followupOn(c)) || c.mgmtActive || c.localAsk || c.addUse || c.addingMore || c.comp || (c.entryChoicePending && c.projectEntryMode==='new') || (c.mgmtUses||[]).length || (c.localMgmt && (c.localMgmt.mgmtActive || (c.localMgmt.mgmtUses||[]).length)) || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理'))); /* CMD-1110-16：只在使用持有之后才出现（不再因为有持有要用 / 入口卡在等）；置换额度页内选购（comp / addingMore / 模式 new）仍需要 tab */
   }
   return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0 || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理'));
 }
@@ -4289,3 +4289,25 @@ var LOCAL_LEAVE_CID = '';
 function localLeaveClose(){ var ov = document.getElementById('local-leave-overlay'); if(ov) ov.classList.remove('open'); }
 function localLeaveNo(){ var c = CASE_ITEMS.filter(function(x){ return x.id===LOCAL_LEAVE_CID; })[0]; localLeaveClose(); if(c) logCaseEvent(c, actingName(), '持有项目都做完了；客人还没离店，案件继续（可继续购买，客人走时按［客人离店］）'); if(c){ buildCaseLog(c); renderCaseBody(c); } }
 function localLeaveYes(){ var c = CASE_ITEMS.filter(function(x){ return x.id===LOCAL_LEAVE_CID; })[0]; localLeaveClose(); if(!c) return; autoFinish(c, '客人已离店'); }
+
+
+/* ===== CMD-1110-16：弹窗尺寸四档——S 400 / M 560 / L 800 / XL 1120，宽度 min(尺寸, 92vw) =====
+   新弹窗直接写 class msz-S/M/L/XL；老弹窗里写死的宽度（行内 width:NNNpx）这里自动吸附到最近一档：≤440 → S，≤640 → M，≤900 → L，更大 → XL（只调宽度，不改内容）。
+   XL（左右两栏挑项目）：本地选购购买弹窗、KR［增加今日项目］/［购买新项目］弹窗、补加推荐项目弹窗；其余按类型套 S / M / L */
+var MODAL_SIZES = {S:400, M:560, L:800, XL:1120};
+function modalSizeApply(box){
+  if(!box || box.getAttribute('data-sz')) return;
+  var cls = ['S', 'M', 'L', 'XL'].filter(function(k){ return box.classList.contains('msz-'+k); })[0];
+  if(!cls){
+    var st = box.getAttribute('style') || '', m = /(?:^|;)\s*width:\s*(?:min\()?(\d+)px/.exec(st);
+    if(/width:\s*(?:100%|auto)|!important/.test(st) || (!m && /width:/.test(st))) { box.setAttribute('data-sz', 'skip'); return; }
+    var w = m ? parseInt(m[1], 10) : 320; cls = w<=440 ? 'S' : w<=640 ? 'M' : w<=900 ? 'L' : 'XL';
+    box.style.width = 'min('+MODAL_SIZES[cls]+'px,92vw)'; box.style.maxWidth = '';
+  }
+  box.setAttribute('data-sz', cls);
+}
+function modalSizeScan(root){ try{ [].forEach.call((root || document).querySelectorAll('.modal-box'), modalSizeApply); }catch(e){} }
+(function(){
+  var run = function(){ modalSizeScan(); try{ new MutationObserver(function(muts){ muts.forEach(function(m){ [].forEach.call(m.addedNodes || [], function(n){ if(n.nodeType!==1) return; if(n.classList && n.classList.contains('modal-box')) modalSizeApply(n); modalSizeScan(n); }); }); }).observe(document.body, {childList:true, subtree:true}); }catch(e){} };
+  if(document.body) run(); else document.addEventListener('DOMContentLoaded', run);
+})();

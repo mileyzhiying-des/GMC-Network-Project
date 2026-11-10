@@ -3084,13 +3084,60 @@ var INLE = null; /* {caseId, tab:'use'|'buy'} */
 function inleHeld(c){ var M = inContModel(c); return {M:M, n:M.unused.length + M.grp.none.length}; }
 function inLocalEntry(tab){
   var c = getCurrentCase(); if(!c || isEnded(c)) return; if(inLockGuard(c)) return;
-  if(pureLocalMain(c)){ inLocalEntryMain(c); return; } /* CMD-1110-08：纯本地案件走自己的「本案件」流程（main），不另建 localMgmt，避免同一案件里出现两套购买 / 使用清单 */
+  if(pureLocalMain(c)){ planModalOpen(c); return; } /* CMD-1110-08：纯本地案件走自己的「本案件」流程（main），不另建 localMgmt，避免同一案件里出现两套购买 / 使用清单 */
   var h = inleHeld(c), want = (tab==='buy' || !h.n || h.M.ro) ? 'buy' : 'use';
   INLE = {caseId:c.id, tab:'use'};
   var ov = document.getElementById('in-localentry-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'in-localentry-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 188; document.body.appendChild(ov); }
   ov.classList.add('open');
   if(want==='buy') inleTab('buy'); else inleRender();
 }
+/* ===== CMD-1110-16：「今天如何安排项目？」弹窗（M）——取代本地项目 tab 里的入口卡 / 「是否使用持有项目？」卡，也取代页头［+ 添加本地管理］原来的「使用持有 / 购买新项目」小弹窗 =====
+   ［使用持有项目］（没持有灰掉）［购买新项目］；左下角灰字「今天不使用」（或 ✕）→ 照 1110-14 的「客人准备离店了吗？」（来访还有别的事在进行时不弹，只关掉）。
+   自动弹：基础资料确认完、服务类型是本地；买完付完款后回到这个弹窗。纯本地案件：使用持有 = 勾选清单（原「是否使用持有项目？」卡）→ 出现「本地项目」tab；其他案件：转到原来的「使用持有 / 购买新项目」弹窗（INLE） */
+var PLAN = null, PLAN_RETURN = '';
+function planHeld(c){ return (getClientHoldings(c.name)||[]).some(function(h){ return (h.batches||[]).some(function(b){ return !b.refund && !b.voided && (b.bought||0)-(b.used||0)>0; }); }); }
+function planModalOpen(c){
+  c = c || getCurrentCase(); if(!c || isEnded(c)) return; if(typeof inLockGuard==='function' && inLockGuard(c)) return;
+  if(!localAddAllowed(c)){ alert('本地管理只能在到店当天添加'); return; }
+  PLAN = {caseId:c.id, state:'ask'}; planRender();
+}
+function planClose(){ var ov = document.getElementById('local-plan-overlay'); if(ov){ ov.classList.remove('open'); ov.innerHTML = ''; } PLAN = null; }
+function planRender(){
+  var c = PLAN && CASE_ITEMS.filter(function(x){ return x.id===PLAN.caseId; })[0], ov = document.getElementById('local-plan-overlay');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'local-plan-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 188; document.body.appendChild(ov); }
+  if(!c || isEnded(c)){ ov.classList.remove('open'); PLAN = null; return; }
+  var pure = pureLocalMain(c), held = pure ? planHeld(c) : (inleHeld(c).n>0);
+  if(PLAN.state==='use' && pure){
+    ov.innerHTML = '<div class="modal-box msz-L" style="padding:24px;max-height:88vh;overflow:auto;"><div style="display:flex;align-items:center;margin-bottom:10px;"><div style="font-size:16px;font-weight:700;flex:1;">勾选今天要使用的持有项目 · '+cesc(c.name)+'</div><button class="btn-ghost" onclick="planBack()" title="返回">‹ 返回</button></div>'+holdingsUseHtml(c, 'main')+'</div>';
+  } else {
+    ov.innerHTML = '<div class="modal-box msz-M" style="padding:24px;"><div style="display:flex;align-items:center;margin-bottom:6px;"><div style="font-size:16px;font-weight:700;flex:1;">今天如何安排项目？</div><button class="btn-ghost" onclick="planNotUse()" title="今天不使用">✕</button></div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:16px;">'+cesc(c.name)+'</div>'+
+      '<div style="display:flex;gap:12px;justify-content:flex-end;"><button class="btn-outline" '+(held ? '' : 'disabled style="opacity:.5;cursor:not-allowed;" title="客人没有可用的持有项目" ')+'onclick="planUse()">使用持有项目</button><button class="btn-primary" onclick="planBuy()">购买新项目</button></div>'+
+      '<div style="margin-top:18px;"><a href="#" onclick="planNotUse();return false;" style="font-size:12px;color:var(--muted);text-decoration:underline;">今天不使用</a></div></div>';
+  }
+  ov.classList.add('open');
+}
+function planBack(){ if(PLAN){ PLAN.state = 'ask'; planRender(); } }
+function planUse(){
+  var c = PLAN && CASE_ITEMS.filter(function(x){ return x.id===PLAN.caseId; })[0]; if(!c) return;
+  if(pureLocalMain(c)){ PLAN.state = 'use'; planRender(); return; }
+  planClose(); inLocalEntry('use');
+}
+function planBuy(){
+  var c = PLAN && CASE_ITEMS.filter(function(x){ return x.id===PLAN.caseId; })[0]; if(!c) return;
+  planClose();
+  if(pureLocalMain(c) && usePrevBuyOk(c, 'main')){ PLAN_RETURN = c.id; usePrevBuy(); return; }
+  inLocalEntry('buy');
+}
+function planNotUse(){
+  var c = PLAN && CASE_ITEMS.filter(function(x){ return x.id===PLAN.caseId; })[0]; planClose(); if(!c) return;
+  if(pureLocalMain(c)){ notUseThisTime('main'); return; } /* 来访还有别的事在进行时 notUseThisTime 只关掉、不弹 */
+}
+/* 点了勾选清单里的按钮 / 买完 → 关掉这个弹窗；买完付完款（或取消购买）回到这个弹窗 */
+(function(){
+  ['submitHoldingsUse', 'notUseThisTime', 'holdingsAddNew'].forEach(function(n){ var f0 = window[n]; if(typeof f0!=='function') return; window[n] = function(){ if(n==='holdingsAddNew' && PLAN){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===PLAN.caseId; })[0]; if(c0) PLAN_RETURN = c0.id; } var had = !!PLAN; if(had){ var ov0 = document.getElementById('local-plan-overlay'); if(ov0) ov0.classList.remove('open'); PLAN = null; } /* 先只收起，函数跑完再清内容（submitHoldingsUse 要读里面的勾选框） */ var r0 = f0.apply(this, arguments); if(had){ var ov1 = document.getElementById('local-plan-overlay'); if(ov1 && !ov1.classList.contains('open')) ov1.innerHTML = ''; } return r0; }; });
+  ['lmNoBuy', 'lmSettleDo'].forEach(function(n){ var f1 = window[n]; if(typeof f1!=='function') return; window[n] = function(){ var r = f1.apply(this, arguments); try{ var c2 = getCurrentCase(); if(c2 && PLAN_RETURN===c2.id && pureLocalMain(c2) && !isEnded(c2) && !(c2.localMgmt && LM_BUY_OPEN===c2.id)){ PLAN_RETURN = ''; planModalOpen(c2); } }catch(e){ console.error('[回到今天如何安排项目]', e); } return r; }; });
+})();
 /* CMD-1110-08：纯本地案件的［+ 添加本地管理］——弹窗分「使用持有项目 / 购买新项目」，点了回到案件页里原来的「是否使用持有项目？」清单（main）/ 本地选购画面（main）；没有可用持有时［使用持有项目］灰掉 */
 function inLocalEntryMain(c){
   var held = (getClientHoldings(c.name)||[]).some(function(h){ return (h.batches||[]).some(function(b){ return !b.refund && !b.voided && (b.bought||0)-(b.used||0)>0; }); });
@@ -3128,7 +3175,7 @@ function inleRender(){
     try{ body = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">勾选今天要做的项目，按［本次使用］移到「今日项目」。已经约在别天的术后项目不在这里选，改日子请在预约项目里按［修改时间］。</div>'+inUseOpen()+'<div id="iu-err" style="display:none;color:#B3261E;font-size:13px;margin-top:12px;"></div>'; } finally { IN_USE_EMBED = false; }
     foot = '<div style="display:flex;justify-content:flex-end;margin-top:14px;"><button class="btn-primary" id="iu-go" disabled style="opacity:.45;cursor:not-allowed;" onclick="inUseConfirm()">本次使用</button></div>';
   }
-  ov.innerHTML = '<div class="modal-box" style="width:820px;max-width:94vw;max-height:88vh;overflow:auto;padding:22px 24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理 · '+e(c.name)+'</div><button class="btn-ghost" onclick="'+(tab==='buy' ? 'lmNoBuy()' : 'inLocalClose()')+'" title="关闭">✕</button></div>'+tabs+'<div id="inle-body">'+body+'</div>'+foot+'</div>';
+  ov.innerHTML = '<div class="modal-box msz-'+(tab==='buy' ? 'XL' : 'L')+'" style="max-height:88vh;overflow:auto;padding:24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理 · '+e(c.name)+'</div><button class="btn-ghost" onclick="'+(tab==='buy' ? 'lmNoBuy()' : 'inLocalClose()')+'" title="关闭">✕</button></div>'+tabs+'<div id="inle-body">'+body+'</div>'+foot+'</div>';
   ov.classList.add('open');
 }
 function inLocalClose(){ var ov = document.getElementById('in-localentry-overlay'); if(ov) ov.classList.remove('open'); INLE = null; }
@@ -3155,7 +3202,7 @@ function lmBuyModalRender(){
   }
   if(!keep){ LM_BUY_OPEN = ''; if(ov) ov.classList.remove('open'); return; }
   if(!ov){ ov = document.createElement('div'); ov.id = 'lm-buy-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 190; document.body.appendChild(ov); }
-  ov.innerHTML = '<div class="modal-box" style="width:820px;max-width:94vw;max-height:88vh;overflow:auto;padding:22px 24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理项目 · '+cesc(c.name)+'</div><button class="btn-ghost" onclick="lmNoBuy()" title="关闭">✕</button></div>'+lmBuyHtml(c)+'</div>';
+  ov.innerHTML = '<div class="modal-box msz-XL" style="max-height:88vh;overflow:auto;padding:24px;"><div style="display:flex;align-items:center;margin-bottom:12px;"><div style="font-size:16px;font-weight:700;flex:1;">添加本地管理项目 · '+cesc(c.name)+'</div><button class="btn-ghost" onclick="lmNoBuy()" title="关闭">✕</button></div>'+lmBuyHtml(c)+'</div>';
   ov.classList.add('open');
 }
 (function(){ var r0 = renderCaseBody; renderCaseBody = function(c){ var r = r0.apply(this, arguments); try{ if(LM_BUY_OPEN) lmBuyModalRender(); }catch(e){ console.error('[本地选购弹窗重画]', e); } return r; }; })();
@@ -4819,6 +4866,9 @@ function localPurchaseHtml(c, scope, isAddition){
   var head = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div class="info-heading">本地选购</div>'+
     (scope==='main' ? '<span style="cursor:pointer;font-size:12px;color:var(--slate);" onclick="toggleProjectsExpand()">'+(c.projectsExpanded?'⮡ 收起':'⮢ 展开满屏')+'</span>' : '')+
     (isAddition ? '<span style="cursor:pointer;font-size:12px;color:var(--slate);margin-left:10px;" onclick="cancelAddMore()">取消追加</span>' : '')+'</div>';
+  if(scope==='lm'){ /* CMD-1110-16：购买弹窗（XL）里拿掉那层「本地选购」带框卡片和标题；左边项目列表约 60%、右边「已选择 / 合计」约 40% */
+    return '<div class="lm-buy-body">'+(compBanner ? compBanner : '')+'<div style="display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:24px;"><div style="min-width:0;">'+left+'</div><div style="min-width:0;">'+right+'</div></div></div>';
+  }
   return wrapOpen+head+(compBanner ? compBanner : '')+'<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px;"><div>'+left+'</div><div>'+right+'</div></div></div>';
 }
 
@@ -5582,7 +5632,7 @@ function lmSettleDo(){
   lm.batches.push({id:'L'+(lm.batches.length+1), items:items, inTotal:total, time:nowFullDt(), note:lm.noteIN||''});
   if(cpL) compFinalize(c, cpL, beforeB, total, lm.batches[lm.batches.length-1]);
   lm.cart = []; lm.noteIN = '';
-  if(lm.fromUsePrev){ lm.step = 'usePrevDone'; lm.addBuy = false; lm.active = false; if(!c.usePrev && pureLocalMain(c) && !c.mgmtActive){ c.entryChoicePending = true; c.projectEntryMode = 'holdings'; c.projectsLocked = false; } /* CMD-1110-14：纯本地案件买完 → 本地项目 tab 里放「是否使用持有项目？」卡，结算单只在「结算」tab */ } /* CMD-1029-04：使用之前购买的项目的案件——买完弹窗关掉，回到「是否使用持有项目？」清单，新买的就在里面 */
+  if(lm.fromUsePrev){ lm.step = 'usePrevDone'; lm.addBuy = false; lm.active = false; if(pureLocalMain(c)){ c.projectsLocked = false; } /* CMD-1110-14：纯本地案件买完 → 本地项目 tab 里放「是否使用持有项目？」卡，结算单只在「结算」tab */ } /* CMD-1029-04：使用之前购买的项目的案件——买完弹窗关掉，回到「是否使用持有项目？」清单，新买的就在里面 */
   else if(lm.mgmtActive){ lm.addBuy = false; lm.addUse = true; } /* 本地管理进行中追加购买：付款后问是否继续使用 */
   else lm.step = 'afterBuyUse'; /* 结算后：是否使用？ */
   logCaseEvent(c, actingName(), '本地管理：结算付款 '+formatCurrency(total,'IDR')+'（'+items.map(function(i){ return i.name+(i.kind==='service' ? '（서비스）' : '')+' ×'+i.qty+(discountText(i.discountPct)?'（'+discountText(i.discountPct)+'）':''); }).join('、')+'），已转客户持有');
@@ -13089,7 +13139,7 @@ function usePrevBuy(){
   var c = getCurrentCase(); if(!c || !modalBuyOk(c) || isEnded(c)) return; if(inLockGuard(c)) return;
   if(c.localMgmt && c.localMgmt.ended){ c.localMgmt.ended = false; c.localMgmt.active = true; }
   if(!c.localMgmt) c.localMgmt = {active:true, ended:false, step:'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}};
-  c.localMgmt.step = 'buy'; c.localMgmt.addBuy = false; c.localMgmt.fromUsePrev = true;
+  c.localMgmt.step = 'buy'; c.localMgmt.addBuy = false; c.localMgmt.fromUsePrev = true; if(pureLocalMain(c)) PLAN_RETURN = c.id; /* CMD-1110-16：买完付完款（或取消购买）回到「今天如何安排项目？」 */
   LM_BUY_OPEN = c.id; logCaseEvent(c, actingName(), '本地项目：新增项目');
   lmBuyModalRender();
 }

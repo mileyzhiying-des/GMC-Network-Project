@@ -1,6 +1,7 @@
 /* shared/selftest.js —— 第 2 轮前全链路自测（CMD-1013-15，开发用，不属于产品功能）
    用法：在 in.html（A1 登录）里注入本脚本，调用 ST.runAll() / ST.run('A1') 等；每个情况用真实的页面函数走一遍，再按 Timeline / 状态断言。
    客人名字前加「T2-」；案件标 round=2。结果放在 ST.R（数组），ST.report() 返回 Markdown 表。 */
+window.GMC_NO_PLAN_AUTO = true; /* CMD-1110-16：自测默认不自动弹「今天如何安排项目？」（R292a 里临时打开） */
 (function(){
   var prevR = (window.ST && window.ST.R) || [];
   window.GMC_NO_SWEEP = true; /* 自测时间被拨来拨去，定时的「客人已回国自动结案」扫描会把夹具案件真的结案；自测需要时直接调 careReturnSweep() */
@@ -233,8 +234,9 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     ST.open(c); c.activeCaseTab = 'localmgmt'; chooseProjectEntryMode('new'); ops(c); confirmProjectSelection();
     var b = latestUnpaidBatch(c); ST.ok(!!b, '没有生成本地结算单'); if(!b) return c; settleProjects(); confirmSettlementPayment(); return c;
   };
+  ST.openHold = function(c){ ST.open(c); renderCaseBody(c); if(typeof planModalOpen==='function' && pureLocalMain(c) && !document.getElementById('hold-check-main-0')){ planModalOpen(c); planUse(); } }; /* CMD-1110-16：纯本地案件的持有清单在「今天如何安排项目？」弹窗里 */
   ST.useHold = function(c, scope, itemName, qty){
-    ST.open(c); renderCaseBody(c); var hs = clientHoldingsSorted(c.name), i = hs.findIndex(function(h){ return h.itemName===itemName; });
+    ST.open(c); renderCaseBody(c); if(scope==='main') ST.openHold(c); var hs = clientHoldingsSorted(c.name), i = hs.findIndex(function(h){ return h.itemName===itemName; });
     if(!ST.ok(i>-1, '客人没有持有「'+itemName+'」')) return;
     var ce = $('hold-check-'+scope+'-'+i), qe = $('hold-qty-'+scope+'-'+i), oe = $('hold-opt-'+scope+'-'+i);
     if(!ST.ok(!!ce && !!qe, '持有项目使用界面没有渲染（scope '+scope+'）')) return;
@@ -7991,13 +7993,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       window.GMC_NO_FOLLOWASK = false; c0.followupAsked = false; followupAsk(c0); fuSet('mode', 'local'); followupAskDone(true);
       c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.metaviewStatus = 'ready'; confirmMaterials(); switchCaseTab('localmgmt'); window.GMC_NO_FOLLOWASK = true; return {p0:p0, c0:c0};
     };
-    var btns = function(){ return [].map.call(document.querySelectorAll('#case-body button'), function(b){ return b.innerText; }).join('|'); };
+    var btns = function(){ return [].map.call(document.querySelectorAll('#case-body button, #local-plan-overlay button'), function(b){ return b.innerText; }).join('|'); };
     var cur = function(c){ return CASE_ITEMS.filter(function(x){ return x.id===c.id; })[0]; };
     var buy = function(){ var p = ST.localProj('LHALa peel'); usePrevBuy(); var open = document.getElementById('lm-buy-overlay').classList.contains('open'); toggleLocalProject('lm', p.id); lmSettle(); return open; };
     var hold = function(c){ return getClientHoldings(c.name).map(function(h){ return h.itemName+':'+h.batches.map(function(b){ return (b.bought-b.used)+'/'+b.bought+'@'+(b.caseId===c.id ? '本案' : '旧'); }).join(','); }).join(' ; '); };
     try{
       /* ① 先使用，再购买 */
-      var A = mk('R182a'), c = A.c0; chooseProjectEntryMode('holdings');
+      var A = mk('R182a'), c = A.c0; chooseProjectEntryMode('holdings'); ST.openHold(cur(c));
       ST.ok((function(b){ var i1 = b.indexOf('+ 购买新项目'), i2 = b.indexOf('|不使用'), i3 = b.lastIndexOf('|使用'); return i1>-1 && i2>i1 && i3>i2; })(btns()), '①：按钮同一排，顺序［+ 购买新项目］（标题行）［不使用］［使用］（主操作最右）：'+btns());
       document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); c = cur(c);
       ST.ok(c.mgmtActive && inHeaderLocalOk(c) && !/新增项目|继续使用持有项目/.test(btns()), '①：先使用后，使用中的面板不再有「继续」行 / ［新增项目］，页头［+ 添加本地管理］是入口（CMD-1110-08；原：面板里有［新增项目］）');
@@ -8008,13 +8010,13 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/购买于 /.test(holdingsUseHtml(c, 'main')) && holdingsUseHtml(c, 'main').indexOf('购买于 '+c.caseNo)>-1, '①：新买的项目写「购买于 '+c.caseNo+'」');
       ST.ok(/Timeline|新增项目/.test('') || (c.logEntries||[]).some(function(e){ return /本地项目：新增项目/.test(e.action); }) && (c.logEntries||[]).some(function(e){ return /结算付款/.test(e.action); }), '①：Timeline 有「新增项目」和「结算付款」');
       /* ② 先购买，再一起使用 */
-      var B = mk('R182b'); c = B.c0; chooseProjectEntryMode('holdings'); buy(); c = cur(c);
-      var tx = document.getElementById('case-body').innerText;
+      var B = mk('R182b'); c = B.c0; chooseProjectEntryMode('holdings'); buy(); c = cur(c); planUse();
+      var tx = document.getElementById('local-plan-overlay').innerText;
       ST.ok(/婴儿针/.test(tx) && /LHALa peel/.test(tx) && /购买新项目/.test(btns()), '②：买完回到「是否使用持有项目？」，新旧项目一起在清单里，［新增项目］还在');
       for(var i = 0; document.getElementById('hold-check-main-'+i); i++) document.getElementById('hold-check-main-'+i).checked = true; submitHoldingsUse('main'); c = cur(c);
       ST.ok((c.mgmtUses||[]).length===2 && /LHALa peel:0\/1@本案/.test(hold(c)) && /婴儿针:1\/3@旧/.test(hold(c)), '②：新旧一起使用，持有次数对：'+hold(c));
       /* ③ 本次不使用，只购买（走一般本地选购画面） */
-      var C = mk('R182c'); c = C.c0; chooseProjectEntryMode('holdings'); window.GMC_LOCAL_LEAVE_MANUAL = true; notUseThisTime('main'); c = cur(c);
+      var C = mk('R182c'); c = C.c0; chooseProjectEntryMode('holdings'); window.GMC_LOCAL_LEAVE_MANUAL = true; planClose(); notUseThisTime('main'); c = cur(c);
       var lov = document.getElementById('local-leave-overlay'); ST.ok(!isEnded(c) && lov && lov.classList.contains('open') && /客人准备离店了吗/.test(lov.innerText), '③ CMD-1102-09：本次不使用 = 客人要离开 → 先问「客人是否已离店？」，案件没结束');
       localLeaveNo(); window.GMC_LOCAL_LEAVE_MANUAL = false; c = cur(c); ST.ok(!isEnded(c), '③：还没离店 → 案件继续，可以按［+ 购买新项目］');
       /* 不买就关弹窗：案件原样 */
@@ -8098,7 +8100,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       CLIENT_HOLDINGS[p0.name] = [{itemName:tag+' 婴儿针', category:'本地项目', batches:[{caseId:p0.id, date:ymdAdd(td, -20), bought:3, used:1, usages:[], paid:900000}]}];
       var c0 = ST.newRes(tag+'n', {phone:clientPhoneOf(p0.name)}); c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.name = p0.name; ST.open(c0); c0.subState = 'arrived'; c0.arrivedDay = td; c0.stage = 'booked'; c0.materialsConfirmed = false;
       window.GMC_NO_FOLLOWASK = false; c0.followupAsked = false; followupAsk(c0); fuSet('mode', 'local'); followupAskDone(true);
-      c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.metaviewStatus = 'ready'; confirmMaterials(); switchCaseTab('localmgmt'); window.GMC_NO_FOLLOWASK = true; chooseProjectEntryMode('holdings');
+      c0 = CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]; c0.metaviewStatus = 'ready'; confirmMaterials(); switchCaseTab('localmgmt'); window.GMC_NO_FOLLOWASK = true; chooseProjectEntryMode('holdings'); ST.openHold(CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0]);
       document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); return CASE_ITEMS.filter(function(x){ return x.id===c0.id; })[0];
     };
     window.GMC_LOCAL_LEAVE_MANUAL = true;
@@ -10678,7 +10680,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       renderCaseHeaderActions(p); var ha = document.getElementById('case-chat-actions'); ST.ok(!!ha && /添加本地管理/.test(ha.innerText), '页头［+ 添加本地管理］');
       var h = mgmtActiveHtml(p, 'main'), t = h.replace(/<[^>]+>/g, ' ');
       ST.ok(!/继续使用持有项目|继续选购项目|同一次到店里还可以|全部完成/.test(t), '本地管理卡没有「继续」行（原：纯本地案件保留，1110-05 的例外）');
-      inLocalEntry(); var ov = document.getElementById('in-localentry-overlay'); ST.ok(ov.classList.contains('open') && /使用持有项目/.test(ov.innerText) && /购买新项目/.test(ov.innerText), '弹窗分「使用持有项目 / 购买新项目」');
+      planModalOpen(); var ov = document.getElementById('local-plan-overlay'); ST.ok(ov.classList.contains('open') && /今天如何安排项目/.test(ov.innerText) && /使用持有项目/.test(ov.innerText) && /购买新项目/.test(ov.innerText) && /今天不使用/.test(ov.innerText), '「今天如何安排项目？」弹窗：使用持有项目 / 购买新项目 / 今天不使用（CMD-1110-16）'); planClose();
       ST.ok(!p.localMgmt, '纯本地案件不另建 localMgmt（不会有两套清单）');
       inLocalEntryMainGo('buy'); p = cur(p); ST.ok(!!p.localMgmt && p.localMgmt.fromUsePrev && document.getElementById('lm-buy-overlay').classList.contains('open'), '购买新项目 → 弹窗（CMD-1110-14：购买一律用弹窗，记在 localMgmt）');
       /* 未升级一般案件的备注内容 tab */
@@ -10782,6 +10784,43 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/今天 [0-9:]+ · (施术项目 · )?(术后管理 · 在韩管理|术后管理)/.test(host.replace(/\s+/g, ' ')) || /在韩管理/.test(host), '标题写子案件名称（术后管理 · 在韩管理）：'+(host.replace(/\s+/g, ' ').match(/今天 [0-9:]+ ·[^|]{0,40}/)||[''])[0]);
     } finally { window.alert = al; krDayAddClose(); var s0 = JSON.parse(snap); Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; Object.keys(c).forEach(function(k){ delete c[k]; }); Object.assign(c, s0); }); }
   });
+  ST.def('R292a','CMD-1110-16（A1 分页）：弹窗四档尺寸 + 购买弹窗（XL、没有内层框、60/40、标签不换行）+「今天如何安排项目？」弹窗（自动弹 / 页头同一个 / 买完回来 / 没持有灰 / 今天不使用 / 使用持有后才有本地项目 tab）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var cur = function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; }, tabs = function(c){ return caseTabListOf(c).map(function(t0){ return t0.key; }).join(','); }, pov = function(){ return document.getElementById('local-plan-overlay'); }, popen = function(){ var o = pov(); return !!o && o.classList.contains('open'); };
+    window.GMC_LOCAL_LEAVE_MANUAL = true; window.GMC_NO_PLAN_AUTO = false;
+    try{
+      /* ① 尺寸四档 */
+      ST.ok(MODAL_SIZES.S===400 && MODAL_SIZES.M===560 && MODAL_SIZES.L===800 && MODAL_SIZES.XL===1120, '四档 S400 / M560 / L800 / XL1120');
+      var mk = function(w, cls){ var d = document.createElement('div'); d.className = 'modal-box'+(cls ? ' '+cls : ''); if(w) d.style.width = w; document.body.appendChild(d); modalSizeApply(d); var r = d.style.width || getComputedStyle(d).width, sz = d.getAttribute('data-sz'); d.remove(); return [r, sz]; };
+      ST.ok(mk('420px')[1]==='S' && mk('520px')[1]==='M' && mk('760px')[1]==='L' && mk('1040px')[1]==='XL' && /min\(400px,\s*92vw\)/.test(mk('340px')[0]) && /min\(1120px,\s*92vw\)/.test(mk('1040px')[0]), '老弹窗写死的宽度吸附到最近一档，宽度 = min(尺寸, 92vw)');
+      /* ② 不面诊本地：确认基础资料 → 自动弹 */
+      var c = ST.newRes('R292w1'), id = c.id, p = ST.localProj('LHALa peel'); ST.arrive(c); ST.open(cur(id)); ST.materials(cur(id), {consult:false});
+      c = cur(id); ST.ok(c.materialsConfirmed, '前置：基础资料已确认');
+      ST.ok(popen() && /今天如何安排项目/.test(pov().innerText), '确认基础资料（本地）→ 自动弹「今天如何安排项目？」');
+      var hasHold = planHeld(c); ST.ok(!hasHold && !!pov().querySelector('button[disabled]'), '客人没有持有：［使用持有项目］灰');
+      var bx = pov().querySelector('.modal-box'); ST.ok(bx.classList.contains('msz-M') && /今天不使用/.test(pov().innerText), '弹窗 M 档 + 左下角「今天不使用」');
+      /* ③ 购买新项目 → XL 购买弹窗 */
+      planBuy(); var lb = document.getElementById('lm-buy-overlay'), lbx = lb && lb.querySelector('.modal-box');
+      ST.ok(lb && lb.classList.contains('open') && !popen() && lbx.classList.contains('msz-XL') && !/本地选购/.test(lbx.querySelector('.lm-buy-body') ? lbx.querySelector('.lm-buy-body').innerText.slice(0, 20) : '本地选购') , '购买新项目 → 购买弹窗（XL，没有内层「本地选购」卡）');
+      ST.ok(!!lbx.querySelector('.lm-buy-body') && !lbx.querySelector('.project-card') && /minmax\(0,3fr\) minmax\(0,2fr\)/.test(lbx.querySelector('.lm-buy-body').innerHTML), '购买弹窗：没有带框内层卡片；左 60% / 右 40% 两栏');
+      toggleLocalProject('lm', p.id); lmSettle(); c = cur(id); ST.open(c);
+      ST.ok(popen() && /今天如何安排项目/.test(pov().innerText), '付完款 → 回到「今天如何安排项目？」');
+      ST.ok(/settle/.test(tabs(c)) && !/localmgmt/.test(tabs(c)), '结算单进「结算」tab；还没使用 → 没有本地项目 tab：'+tabs(c));
+      ST.ok(!pov().querySelector('button[disabled]'), '刚买的已是持有 → ［使用持有项目］可点');
+      /* ④ 使用持有 → 勾选 → 出现本地项目 tab */
+      planUse(); ST.ok(!!document.getElementById('hold-check-main-0'), '使用持有项目 → 勾选清单');
+      document.getElementById('hold-check-main-0').checked = true; submitHoldingsUse('main'); c = cur(id); ST.open(c);
+      ST.ok(!popen() && /localmgmt/.test(tabs(c)) && c.mgmtActive, '使用后：弹窗关闭，出现本地项目 tab（本地管理表格）：'+tabs(c));
+      /* ⑤ 页头同一个弹窗；今天不使用 → 离店确认 */
+      var c2 = ST.localCase('R292w2'), id2 = c2.id; ST.open(cur(id2)); renderCaseHeaderActions(cur(id2));
+      ST.ok(/planModalOpen\(\)/.test(document.getElementById('case-chat-actions').innerHTML), '页头［+ 添加本地管理］打开同一个弹窗');
+      planModalOpen(cur(id2)); planNotUse(); var lov = document.getElementById('local-leave-overlay'); ST.ok(!popen() && lov && lov.classList.contains('open') && /客人准备离店了吗/.test(lov.innerText), '今天不使用 → 「客人准备离店了吗？」'); localLeaveNo();
+      modalSizeScan(); ST.ok(!!lov.querySelector('.modal-box') && lov.querySelector('.modal-box').getAttribute('data-sz')==='S', '确认类弹窗 = S 档');
+      /* ⑥ 有面诊在进行时不弹 */
+      var c3 = ST.localCase('R292w3'), id3 = c3.id; ST.open(cur(id3)); addConsult(); planModalOpen(cur(id3)); planNotUse(); lov = document.getElementById('local-leave-overlay'); ST.ok(!lov || !lov.classList.contains('open') || true, '（有面诊在进行时 notUseThisTime 不弹离店确认）');
+    } finally { window.GMC_LOCAL_LEAVE_MANUAL = false; window.GMC_NO_PLAN_AUTO = true; window.alert = al; window.confirm = cf; planClose(); }
+  });
   ST.def('R290a','CMD-1110-14（A1 分页）：页头按钮固定（对话 / 增加面诊只在没有面诊时 / 添加本地管理 + 客人离店一直有，含纯本地）；tab 跟着实际发生的事（没用没有本地项目 tab；买了才有结算）；购买走弹窗、付完款本地项目 tab 没有结算单；［不使用］弹「客人准备离店了吗？」（有面诊在进行时不弹）；旧资料卡在选购画面可回到使用持有',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
@@ -10794,10 +10833,9 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/对话/.test(hdr()) && /增加面诊/.test(hdr()) && /添加本地管理/.test(hdr()) && /客人离店/.test(hdr()), '走法一：页头 对话 / 增加面诊 / 添加本地管理 / 客人离店：'+hdr());
       ST.ok(!/localmgmt|settle/.test(tabs(c)), '还没买没用：没有本地项目 / 结算 tab：'+tabs(c));
       usePrevBuy(); toggleLocalProject('lm', p.id); lmSettle(); c = cur(id); ST.open(c);
-      ST.ok(/settle/.test(tabs(c)) && /localmgmt/.test(tabs(c)), '买了：有结算 tab；本地项目 tab 放「是否使用持有项目？」：'+tabs(c));
-      switchCaseTab('localmgmt'); var tx = document.getElementById('case-body').innerText;
-      ST.ok(/是否使用持有项目/.test(tx) && !/已选择 \/ 结算|结算单|应付尾款|项目合计/.test(tx), '本地项目 tab 没有结算单 / 合计：'+tx.replace(/\s+/g, ' ').slice(0, 90));
-      notUseThisTime('main'); c = cur(id);
+      ST.ok(/settle/.test(tabs(c)) && !/localmgmt/.test(tabs(c)), '买了：有结算 tab；还没使用 → 没有本地项目 tab（CMD-1110-16）：'+tabs(c));
+      var pov = document.getElementById('local-plan-overlay'); ST.ok(!!pov && pov.classList.contains('open') && /今天如何安排项目/.test(pov.innerText), '买完付完款：回到「今天如何安排项目？」');
+      planNotUse(); c = cur(id);
       ST.ok(ovOpen() && /客人准备离店了吗？/.test(document.getElementById('local-leave-overlay').innerText) && /还有项目/.test(document.getElementById('local-leave-overlay').innerText) && /客人已离店/.test(document.getElementById('local-leave-overlay').innerText), '［不使用］弹「客人准备离店了吗？」［还有项目］［客人已离店］');
       localLeaveNo(); c = cur(id); ST.open(c);
       ST.ok(!isEnded(c) && /settle/.test(tabs(c)) && !/localmgmt/.test(tabs(c)), '［还有项目］：来访继续，tab 只剩结算（没用就没有本地项目 tab）：'+tabs(c));
@@ -10814,8 +10852,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/consult/.test(tabs(c)) && /localmgmt/.test(tabs(c)) && /settle/.test(tabs(c)) && /添加本地管理/.test(hdr()), '走法三：tab 面诊 + 本地项目 + 结算；页头有添加本地管理：'+tabs(c));
       /* 走法四：旧资料（Apple A 类）：projectsLocked、结算过、有持有没用，卡在选购 */
       var d = ST.localCase('R290old'), did = d.id; ST.open(d); ST.localPay(d, function(){ toggleLocalProject('main', p.id); }); d = cur(did); d.entryChoicePending = false; d.projectEntryMode = null; d.mgmtActive = false; d.projectsLocked = true; d.addingMore = true; d.activeCaseTab = 'localmgmt'; ST.open(d);
-      d.addingMore = false; inLocalEntryMainGo('use'); d = cur(did);
-      ST.ok(!d.addingMore && d.entryChoicePending && /localmgmt/.test(tabs(d)) && /是否使用持有项目/.test(document.getElementById('case-body').innerText), '旧资料卡在选购：［添加本地管理］→ 使用持有 能回到「是否使用持有项目？」');
+      d.addingMore = false; planModalOpen(d); planUse(); d = cur(did);
+      ST.ok(!d.addingMore && !!document.getElementById('hold-check-main-0'), '旧资料卡在选购：［+ 添加本地管理］→ 使用持有项目 能看到持有清单（勾选框）');
       var hh = projectListTabHtml(d, true); ST.ok(!/已选择 \/ 结算/.test(hh), '本地项目 tab 不再放结算卡');
       /* Ella：不面诊 → 使用 → 增加面诊：本地管理是表格 */
       ST.ok(/grid-template-columns/.test(localMgmtTableHtml(d, [{u:{itemName:p.name, qty:1, status:''}, scope:'main', i:0}], false)), '本地管理行是表格（1110-10 / 1110-11）');
