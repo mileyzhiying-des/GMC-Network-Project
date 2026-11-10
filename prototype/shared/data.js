@@ -3136,10 +3136,10 @@ function planNotUse(){
   ['submitHoldingsUse', 'notUseThisTime', 'holdingsAddNew'].forEach(function(n){ var f0 = window[n]; if(typeof f0!=='function') return; window[n] = function(){ if(n==='holdingsAddNew' && PLAN){ var c0 = CASE_ITEMS.filter(function(x){ return x.id===PLAN.caseId; })[0]; if(c0) PLAN_RETURN = c0.id; } var had = !!PLAN; if(had){ var ov0 = document.getElementById('local-plan-overlay'); if(ov0) ov0.classList.remove('open'); PLAN = null; } /* 先只收起，函数跑完再清内容（submitHoldingsUse 要读里面的勾选框） */ var r0 = f0.apply(this, arguments); if(had){ var ov1 = document.getElementById('local-plan-overlay'); if(ov1 && !ov1.classList.contains('open')) ov1.innerHTML = ''; } return r0; }; });
   /* CMD-1110-21：买完付完款 → 弹「使用持有项目吗？」（取代 1110-16 / 18 的「回到今日如何安排项目？」）；取消购买 / 关掉 = 什么都不弹。「今日如何安排项目？」只在 ① 基础资料确认完（本地服务）② 页头［+ 添加本地管理］出现 */
   ['lmNoBuy', 'lmSettleDo'].forEach(function(n){ var f1 = window[n]; if(typeof f1!=='function') return; window[n] = function(){
-    var c0 = getCurrentCase(), snap = (n==='lmSettleDo' && c0) ? holdSnap(c0) : null, fromPlan = !!(c0 && PLAN_RETURN===c0.id), fromInle = !!(INLE && INLE.tab==='buy');
+    var c0 = getCurrentCase(), snap = (n==='lmSettleDo' && c0) ? holdSnap(c0) : null, fromPlan = !!(c0 && PLAN_RETURN===c0.id), fromInle = !!(INLE && INLE.tab==='buy'), fromComp = !!(c0 && COMP_BUY===c0.id);
     var r = f1.apply(this, arguments);
     try{ var c2 = getCurrentCase();
-      if(c2 && (fromPlan || fromInle) && !(c2.localMgmt && LM_BUY_OPEN===c2.id)){ PLAN_RETURN = ''; if(n==='lmSettleDo' && snap && !isEnded(c2)){ if(fromInle) inLocalClose(); useAskOpen(c2, snap); } }
+      if(c2 && (fromPlan || fromInle || fromComp) && !(c2.localMgmt && LM_BUY_OPEN===c2.id)){ PLAN_RETURN = ''; if(fromComp) COMP_BUY = ''; if(n==='lmSettleDo' && snap && !isEnded(c2)){ if(fromInle) inLocalClose(); useAskOpen(c2, snap); } }
     }catch(e){ console.error('[买完弹使用持有项目吗]', e); }
     return r; }; });
 })();
@@ -5622,18 +5622,23 @@ function compUseCredit(creditId, scope){
 })();
 /* 退款弹窗选了「转本地项目（置换）」之后：直接进本地管理 tab 的选购画面 */
 function startCompPurchase(c, kwr, reason, names){
+  /* CMD-1110-25：置换额度的购买也走购买弹窗（XL，可以用置换额度抵）；买完照 1110-21 弹「使用持有项目吗？」。原来是页内旧选购画面（scope main / lm） */
   var credit = Math.round(kwr * FX_RATES.KRW_IDR), partial = krActiveItems(c).length>0;
-  c.comp = {kwr:kwr, credit:credit, reason:reason, date:todayStr(), items:names, scope:partial ? 'lm' : 'main', used:false};
+  c.comp = {kwr:kwr, credit:credit, reason:reason, date:todayStr(), items:names, scope:'lm', used:false};
+  c.localMgmt = {active:true, ended:false, step:'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}, cart:[]};
   if(partial){
-    c.localMgmt = {active:true, ended:false, step:'buy', mgmtUses:[], mgmtActive:false, mgmtDone:false, mgmtStatus:null, mgmtCancelling:false, batches:[], pick:{}, cart:[]};
     c.localMgmtDay = c.localMgmtDay || todayStr();
   } else {
-    c.krSchedule = null; c.localAsk = false; c.localTrack = true; c.entryChoicePending = true; c.projectEntryMode = 'new'; c.projectsLocked = false; c.recommended = []; c.projectOriginFilter = 'IN'; /* 赴韩项目都取消了：同一案件转本地案件，直接是选购画面（和「增加本地项目」同一套重置） */
+    c.krSchedule = null; c.localAsk = false; c.localTrack = true; c.entryChoicePending = false; c.projectEntryMode = ''; c.projectsLocked = false; c.recommended = []; c.projectOriginFilter = 'IN'; /* 赴韩项目都取消了：同一案件转本地案件；购买用弹窗，买的记在 localMgmt.batches（和「使用之前购买的项目」同一套） */
+    c.localMgmt.fromUsePrev = true;
   }
-  c.activeCaseTab = 'localmgmt';
-  logCaseEvent(c, actingName(), '退款方式选「转本地项目（置换）」：置换额度 '+formatCurrency(credit,'IDR')+'（'+formatCurrency(kwr,'KRW')+' × '+FX_RATES.KRW_IDR+'），进入本地管理选购画面');
+  c.activeCaseTab = partial ? (showKrTab(c) ? 'kr' : (c.consultRequested ? 'consult' : 'basic')) : 'basic';
+  COMP_BUY = c.id; LM_BUY_OPEN = c.id;
+  logCaseEvent(c, actingName(), '退款方式选「转本地项目（置换）」：置换额度 '+formatCurrency(credit,'IDR')+'（'+formatCurrency(kwr,'KRW')+' × '+FX_RATES.KRW_IDR+'），打开购买弹窗');
   updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  lmBuyModalRender();
 }
+var COMP_BUY = '';
 function lmSettle(){
   var c = getCurrentCase(); if(!c||!c.localMgmt) return; if(inLockGuard(c)) return; /* CMD-1026-20：关账后锁住 */ 
   var lm = c.localMgmt, cart = lm.cart||[], today = todayStr();
@@ -9801,10 +9806,13 @@ function coreAddInNote(c, text, by, o){
   try{ pushKrNotif(caseKrHospital(c), by+'新增来访备注（'+c.name+' '+(c.caseNo||'')+'）', {caseId:c.id, clinicId:c.clinicId||CURRENT_CLINIC_ID, kind:'visitnote', level:'info'}); }catch(e){} /* CMD-1110-20：只有来访备注发铃铛通知（项目备注不发）；点了跳到那个子案件 */
   return true;
 }
-function krUnreadNotes(c){ return (c.inNotes||[]).filter(function(n){ return !n.readAt; }); }
+/* CMD-1110-25：IN 的来访备注（主案件 + 记在子案件上的）一起算；项目备注不算。结算前要先看过的检查、案件页最上面的「IN 备注」卡都用它 */
+function inVisitNotesAll(c){ var out = []; try{ mainNotesCases(c).forEach(function(x){ (x.inNotes||[]).forEach(function(n){ out.push(n); }); }); }catch(e){ out = (c.inNotes||[]).slice(); } return out.sort(function(a, b){ return String(a.at||'').localeCompare(String(b.at||'')); }); }
+function krUnreadNotes(c){ return inVisitNotesAll(c).filter(function(n){ return !n.readAt; }); }
 function coreNoteRead(c, id, by){
-  var n = (c.inNotes||[]).filter(function(x){ return x.id===id; })[0]; if(!n || n.readAt) return false;
-  n.readAt = nowFullDt(); n.readBy = by; logCaseEvent(c, by, '已读 IN 备注：'+(n.text.length>30 ? n.text.slice(0, 30)+'…' : n.text), '赴韩施术'); return true;
+  var owner = null, n = null; try{ mainNotesCases(c).forEach(function(x){ if(!n){ var h = (x.inNotes||[]).filter(function(y){ return y.id===id; })[0]; if(h){ n = h; owner = x; } } }); }catch(e){}
+  if(!n){ n = (c.inNotes||[]).filter(function(x){ return x.id===id; })[0]; owner = c; } if(!n || n.readAt) return false;
+  n.readAt = nowFullDt(); n.readBy = by; logCaseEvent(owner || c, by, '已读 IN 备注：'+(n.text.length>30 ? n.text.slice(0, 30)+'…' : n.text), '赴韩施术'); return true;
 }
 function inNotesAreaHtml(c){ return notesCompactHtml(c, 'IN'); } /* CMD-1021-14 五：和 KR 同一张备注卡（最新 3 条 + 固定高度 + 两个按钮开 Modal） */
 /* ===== CMD-1021-14 五：备注卡（IN / KR 共用）：最新的在最上面只显示 3 条（每条最多 2 行 + 省略号）、高度固定（= 3 条 + 底部按钮行）；底部［增加备注］［查看全部（N）］（≤ 3 条不显示查看全部）都开 DS Modal ===== */
@@ -13044,7 +13052,7 @@ function nextScheduleText(m0){
   var v = ds[0]; if(!v) return '—';
   return String(v.date).slice(5).replace('-', '/')+(v.time ? ' '+v.time : '')+' '+mainDayBiz(v)+(v.no ? '（'+v.no+'）' : '');
 }
-function mainDayBiz(v){ return (v.types||[]).filter(function(t0){ return t0!=='本地管理'; }).map(function(t0){ return t0==='赴韩施术' ? '赴韩项目' : t0; }).join('、') || '—'; } /* 状态卡第二行的写法（5-14 的用词，1110-03 不动） */
+function mainDayBiz(v){ var n = dayNameOf(v, {noLocal:true}); return (n==='到访' && !((v&&v.types)||[]).length) ? '—' : n; } /* CMD-1110-25：用子案件名称（dayNameOf：施术项目 · 在韩管理 …），不再把「赴韩施术」写成「赴韩项目」 */
 function mainStatusModel(c){
   var today = todayStr(), days = daysOf(c).filter(function(v){ return v.state!=='cancelled' && v.state!=='noShow'; });
   var m = {days:days, nLive:days.filter(function(v){ return v.state==='arrived' || v.state==='unconfirmed'; }).length, nBook:days.filter(function(v){ return v.state==='waiting' && v.date>=today; }).length};

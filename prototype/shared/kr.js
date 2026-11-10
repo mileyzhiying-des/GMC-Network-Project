@@ -554,7 +554,7 @@ function krTabBasic(c){
     krCardBox('基本信息',
       krKV('客户姓名', krEsc(c.name))+krKV('性别', krEsc(b.gender))+krKV('生日（年龄）', krEsc(dobAgeText(cl ? cl.dob : '')))+krKV('病史 / 过敏史', historyMarkHtml(b.history))+
       (passportVisible() ? krKV('护照（号｜有效期至）', passportKrHtml(c, cl)) : ''))+
-    krCardBox('', hist); /* CMD-1022-16：到访目的搬进面诊 tab 最上面（KR 室长 / 院长 / 代表院长），基础资料不再放 */
+    krCardBox('', hist)+krBasicAttachRow(c); /* CMD-1110-25：基础资料最下面一行「附件：［+ 上传］」（附件 tab 没内容会隐藏，KR 要有上传入口）；CMD-1022-16：到访目的搬进面诊 tab 最上面（KR 室长 / 院长 / 代表院长），基础资料不再放 */
 }
 function krCaseBeautyAdd(){ BEAUTY_ADD_KR = {clinicId:KR_CASE.clinicId, name:(krFindCase(KR_CASE.clinicId, KR_CASE.id)||{}).name}; openBeautyAdd(null); }
 /* CMD-1022-05：关联案件块（KR 只读）。原案件是 KR 案件 → 直接看（摘要 + ［查看案件］）；原案件只在 IN 端 → 本案件送到韩国后，KR 看得到它的基础资料 + 做了什么项目（不显示价格）+ 附件。被关联 / 后续继续的案件只列一行 */
@@ -1469,7 +1469,7 @@ function krTopAlerts(c){
    ［稍后付款］= 关掉，顶部「待付款」条留着，［去付款］打开同一个 Modal；［确认付款］= 付款 + 同意书一次记录（CMD-1015-24） */
 /* ===== CMD-1020-08：KR 案件页看 IN 备注、按［已读］；结算（到院 Step 2 尾款 / 在韩加项付款）之前有未读备注 → 先列出来，读过才能继续 ===== */
 function krInNotesHtml(c){
-  var notes = (c.inNotes||[]).slice().reverse(); if(!notes.length) return '';
+  var notes = inVisitNotesAll(c).slice().reverse(); if(!notes.length) return ''; /* CMD-1110-25：含记在子案件上的 */
   var un = krUnreadNotes(c), can = krCan(), e = krEsc;
   return '<div class="card" style="padding:12px 18px;margin:12px 0;border:1px solid '+(un.length ? '#F0C98A' : 'var(--border2)')+';'+(un.length ? 'background:#FFF9EE;' : '')+'"><div style="font-size:13px;font-weight:700;margin-bottom:4px;">IN 备注 <span style="font-weight:400;color:var(--muted);font-size:12px;">'+notes.length+(un.length ? ' · <span style="color:#C26A1B;">未读 '+un.length+'</span>' : '')+'</span></div>'+notes.map(function(n){
     return '<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--border2);font-size:13px;"><div style="flex:1;"><div style="font-size:12px;color:var(--muted);">'+e(fmtUtc(n.at).slice(5))+' · '+e(n.by||'')+'</div><div style="white-space:pre-wrap;">'+e(n.text)+'</div></div>'+(n.readAt ? '<span style="font-size:12px;color:var(--sage);white-space:nowrap;">已读（'+e(String(n.readBy||'').replace(/\s*室长$/, ''))+'）</span>' : (can ? '<button class="btn-primary" style="padding:3px 12px;font-size:12px;" onclick="krNoteRead(\''+n.id+'\')">已读</button>' : '<span style="font-size:12px;color:#C26A1B;">未读</span>'))+'</div>';
@@ -1596,6 +1596,16 @@ function krUploadRow(c, label, fileLabel, has, okText){
 function krUploadFile(inp){
   if(!krCan() || !inp.files || !inp.files[0]) return; var nm = inp.files[0].name; inp.value = '';
   krMut(function(c){ c.manualAttachments = c.manualAttachments || []; c.manualAttachments.push({label:nm, src:'KR · '+ME_NAME, date:nowFullDt()}); logCaseEvent(c, ME_NAME, '上传附件：'+nm); return true; });
+}
+/* CMD-1110-25 六：KR 到院当天页 / 子案件页今日项目卡上方一行「IN 室长备注：…」——这个主案件里 IN 写的最新一条来访备注（含记在子案件上的）；译文 +［查看原文］；多条显示「全部（N）」跳备注内容；没有就不显示 */
+function krInNoteLine(c){
+  var list = []; try{ list = notesRecordsOfCases(mainNotesCases(c), 'KR').filter(function(r){ return r.kind==='visit' && r.role==='IN'; }); }catch(e){} if(!list.length) return '';
+  var r = list[0]; /* notesRecordsOfCases 已按时间新 → 旧 */
+  return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:10px;background:#FFF9EE;border:1px solid #F0C98A;font-size:13px;"><div style="flex:1;min-width:0;"><b>IN 室长备注：</b>'+noteTextHtml({id:r.id, role:'IN', text:r.text}, 'KR')+'<span style="font-size:12px;color:var(--muted);">　'+noteTimeHtml(r.at, 'IN')+' · '+krEsc(r.by||'')+(r.caseNo ? ' · '+krEsc(r.caseNo) : '')+'</span></div>'+(list.length>1 ? '<a href="#" onclick="krSetCaseTab(\'notes\');return false;" style="font-size:12px;text-decoration:underline;white-space:nowrap;">全部（'+list.length+'）</a>' : '')+'</div>';
+}
+function krBasicAttachRow(c){ /* CMD-1110-25：和附件 tab 里的［+ 上传附件］同一个函数 krUploadFile；传了第一份后附件 tab 出现 */
+  var n = 0; try{ n = caseAttachments(c).filter(function(f){ return !f.chatLog; }).length; }catch(e){}
+  return '<div class="card" style="padding:12px 22px;margin-top:12px;"><div class="case-field-row" style="border:none;"><span class="fk">附件</span><div style="flex-grow:1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--slate2);">'+(n ? '已有 '+n+' 个文件（在「附件」tab 查看）' : '还没有附件')+'</span>'+(krCan() ? '<label class="btn-outline" style="display:inline-block;padding:4px 12px;cursor:pointer;font-size:12px;">+ 上传<input type="file" style="display:none;" onchange="krUploadFile(this)"></label>' : '')+'</div></div></div>';
 }
 function krTabFiles(c){
   var files = caseAttachments(c).filter(function(f){ return !f.chatLog; });
@@ -3130,7 +3140,7 @@ function krCaseCardHtml(c, cd){
   if(stLeft) head += ' '+stPill;
   btn = noteH+(stLeft ? '' : ' '+stPill)+(btn ? ' '+btn : '')+(cd.extraBtn ? ' '+cd.extraBtn : '');
   if(open && mvk!==null && !(cd.kind==='main' && g==='today' && st==='Confirmed' && !c.hasArrived && !c.visitClosed) && !(cd.kind==='sub' && g==='today' && cd.vs==='pending')) body += krVisitMemoHtml(c, mvk, g);
-  return '<div id="'+(cd.rep ? 'kr-subrow-'+cd.rep.id : (cd.kind==='main' ? 'kr-maincard' : 'kr-endrow-'+skey))+'" class="card" style="padding:12px 18px;margin-bottom:10px;background:#fff;"><div class="case-row-click" onclick="krSubToggle(\''+skey+'\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '8' : '0')+'px;"><span style="width:14px;">'+(open ? '▾' : '▸')+'</span><span style="flex:1;">'+head+'</span>'+btn+'</div>'+body+krReopenFooter(c, cd, g)+'</div>';
+  return '<div id="'+(cd.rep ? 'kr-subrow-'+cd.rep.id : (cd.kind==='main' ? 'kr-maincard' : 'kr-endrow-'+skey))+'" class="card" style="padding:12px 18px;margin-bottom:10px;background:#fff;"><div class="case-row-click" onclick="krSubToggle(\''+skey+'\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(open ? '8' : '0')+'px;"><span style="width:14px;">'+(open ? '▾' : '▸')+'</span><span style="flex:1;">'+head+'</span>'+btn+'</div>'+body+'</div>'; /* CMD-1110-25：到院已完成卡的［增加项目］拿掉 */
 }
 function krCaseGroupsHtml(c, withMain){
   subCaseNos(c); var today0 = todayStr(), cards = krCaseCards(c, withMain).filter(function(cd){ return cd.kind!=='end'; }), out = ''; /* CMD-1021-16 四：只隐藏「被清空」的到院卡（里面的项目全部保留 / 改到别天，kind:'end'）；客人取消预约、客人未到院的卡照旧显示（恢复 CMD-1021-15 之前）；数字不算被隐藏的；记录留在 Timeline */
@@ -5065,9 +5075,10 @@ function krIsSurgDay(c, v){ /* 只有主案件的施术日（预定日或实际�
 }
 function krSdPreOk(c){ return !!c.krBalancePaid && preOpItems(c).every(function(it){ return !preOpMissing(c, it).length; }); }
 function krSdTabs(c){
-  var arrived = !!c.hasArrived, paid = !!c.krBalancePaid, j = c.krJudge, preOk = krSdPreOk(c), out = [{key:'visit', label:'到访'}, {key:'plan', label:'项目方案', mark: paid ? '✓' : (arrived ? '●' : '')}];
-  if(paid) out.push({key:'pre', label:'术前状态', mark: preOk ? '✓' : '●'});
-  if(paid && preOk) out.push({key:'run', label:'进行项目', mark: c.krProcedureDone ? '✓' : '●'});
+  var arrived = !!c.hasArrived, paid = !!c.krBalancePaid, j = c.krJudge, preOk = krSdPreOk(c), out = [{key:'visit', label:'到访'}, {key:'plan', label:'项目方案', mark: paid ? '✓' : (arrived ? '1' : '')}]; /* CMD-1110-25 七：标记 = 灰色数字（还有几项没做完），做完 ✓（取代 ●） */
+  var nPre = 0, nRun = 0; try{ nPre = preOpItems(c).filter(function(it){ return preOpMissing(c, it).length>0; }).length; nRun = todayOpenRows(c).length; }catch(e){}
+  if(paid) out.push({key:'pre', label:'术前状态', mark: preOk ? '✓' : String(Math.max(1, nPre))});
+  if(paid && preOk) out.push({key:'run', label:'进行项目', mark: (c.krProcedureDone || nRun<=0) ? '✓' : String(nRun)});
   if(paid || (j && j.result==='cannot')) out.push({key:'settle', label:'结算'}); /* 不建议手术 / 全部不做 → 不付尾款：没有术前状态和进行项目；结算（定金 / 退款）照现有规则仍显示（我的判断） */
   if(arrived){ if(hasAttachFor(c, 'KR')) out.push({key:'files', label:'附件'}); out.push({key:'log', label:'Timeline'}); }
   return out;
@@ -5092,12 +5103,13 @@ function krSdPlan(c){
   var j = c.krJudge;
   return items+krL2Box('项目方案已确认', krKV('院长评估结果', j ? krEsc(KR_JUDGE_TEXT[j.result]) : '—')+(j && j.memo ? krKV('memo', krEsc(j.memo)) : '')+krKV('尾款', '已付清'));
 }
-function krSdRun(c){
+function krSdRun(c){ return krInNoteLine(c)+krSdRun0(c); } /* CMD-1110-25 六：进行项目上方一行「IN 室长备注」 */
+function krSdRun0(c){
   var pick = (scheduleState(c)==='Arrived' && c.needTodayPick && !c.todayPicked && !c.krProcedureDone);
   if(pick) return krProjCards(c, {pick:true});
   var done = !!c.krProcedureDone, g = done ? 'done' : 'today';
   var card = function(h){ return '<div class="card" style="padding:14px 18px;background:#fff;">'+h+'</div>'; }; /* CMD-1025-03 一：今日项目表格 + 整体备注包进一张白底卡，和下面的项目卡上下分开 */
-  return card((done ? '<div style="margin:0 0 8px;">'+krMainRowsHtml(c, 'done')+'</div>' : krUnpaidBanner(c)+krProgressBlock(c))+krVisitMemoHtml(c, 'main', g)+(done ? krReopenFooter(c, {kind:'main'}, 'done') : ''))+(done || !c.hasArrived || !krCan() ? '' : '<div style="display:flex;align-items:center;gap:12px;"><button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="krDayAddToggle(\''+String(c.id).replace(/'/g, '')+'|main\')">增加今日项目</button></div>')+krAllItemsLinkHtml(c, krSdVisit(c)); /* CMD-1110-17：进行项目卡下面不再放项目卡；加今天的项目用［增加今日项目］弹窗 */
+  return card((done ? '<div style="margin:0 0 8px;">'+krMainRowsHtml(c, 'done')+'</div>' : krUnpaidBanner(c)+krProgressBlock(c))+krVisitMemoHtml(c, 'main', g)+''/* CMD-1110-25：到院已完成卡的［增加项目］拿掉（客人还没离院时加项目用［增加今日项目］）；krReopenFooter / krReopenAdd 函数留着没入口 */)+(done || !c.hasArrived || !krCan() ? '' : '<div style="display:flex;align-items:center;gap:12px;"><button class="btn-outline" style="padding:5px 16px;font-size:13px;" onclick="krDayAddToggle(\''+String(c.id).replace(/'/g, '')+'|main\')">增加今日项目</button></div>')+krAllItemsLinkHtml(c, krSdVisit(c)); /* CMD-1110-17：进行项目卡下面不再放项目卡；加今天的项目用［增加今日项目］弹窗 */
 }
 function krSdAutoTab(c, keys){
   var sig = KR_CASE.id+'|'+KR_CASE.day, prev = KR_CASE.sdSeen, content = ['visit', 'plan', 'pre', 'run'].filter(function(k){ return keys.indexOf(k)>-1; });
@@ -5111,7 +5123,7 @@ function krSdAutoTab(c, keys){
 function krSurgDayPage(c, v){ return krRoWrap(c, krSurgDayPage0(c, v), v); }
 function krSurgDayPage0(c, v){
   var tabs = krSdTabs(c), keys = tabs.map(function(t0){ return t0.key; }); krSdAutoTab(c, keys); var cur = KR_CASE.subTab, body = '';
-  var tabsHtml = '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;margin-top:6px;">'+tabs.map(function(t0){ var on = cur===t0.key; return '<button onclick="krDayTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t0.label+(t0.mark ? ' <span style="font-size:12px;color:'+(t0.mark==='✓' ? 'var(--sage)' : 'var(--terracotta)')+';">'+t0.mark+'</span>' : '')+'</button>'; }).join('')+'</div>';
+  var tabsHtml = '<div style="display:flex;gap:4px;border-bottom:1px solid var(--border);flex-wrap:wrap;margin-top:6px;">'+tabs.map(function(t0){ var on = cur===t0.key; return '<button onclick="krDayTab(\''+t0.key+'\')" style="padding:8px 16px;border:none;border-bottom:2px solid '+(on?'var(--navy)':'transparent')+';background:none;color:'+(on?'var(--navy)':'var(--slate2)')+';font-weight:'+(on?'700':'400')+';cursor:pointer;font-size:14px;">'+t0.label+(t0.mark ? ' <span style="font-size:12px;color:'+(t0.mark==='✓' ? 'var(--sage)' : 'var(--muted)')+';">'+t0.mark+'</span>' : '')+'</button>'; }).join('')+'</div>';
   if(cur==='visit'){
     var row = function(k0, v0){ return '<div class="field-row"><span class="fk">'+k0+'</span><span class="fv" style="font-weight:400;">'+v0+'</span><span class="fa"></span></div>'; };
     body = krCardBox('到访 <span style="font-weight:400;font-size:12px;color:var(--muted);">基础资料、面诊内容在主案件</span>', row('日期', krEsc(v.date)+(v.time ? ' '+krEsc(v.time) : '')+'（韩国）')+row('这天做', krEsc(dayNameOf(v, {noLocal:true}).replace(/^到访$/, '—')))+row('状态', krSdVisitStateText(c))+row('院长', krEsc(c.director||'—'))+'<div style="margin-top:10px;display:flex;gap:8px;"><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krCloseDay();krSetCaseTab(\'basic\')">基础资料 →</button><button class="btn-outline" style="padding:4px 12px;font-size:12px;" onclick="krCloseDay();krSetCaseTab(\'consult\')">面诊 →</button></div>');
@@ -5129,7 +5141,7 @@ function krSdCounts(c){ return caseCountsOf(c); } /* CMD-1026-19 B4：算法搬�
    页头：第一行「客人名 · A000011　面诊：N 次｜施术：M 次　在韩…　［对话］」，第二行「来源诊所 · 院长 · KR 室长」（拿掉名字旁的状态标签和「从…面诊开始」那行）；
    状态列（照 IN「当前状态」条）：左边 当前状态 + 主案件状态，右边 一句话 + 一个按钮（查看内容 = 进那一天的子案件页；术后管理「预约时间」= 打开预约弹窗）。 */
 function krMainDayKey(v){ return String(v.key).replace(/'/g, ''); }
-function krMainDayTypes(v){ return (v.types||[]).filter(function(t0){ return t0!=='本地管理'; }).map(function(t0){ return t0==='赴韩施术' ? '赴韩项目' : t0; }).join('、') || '—'; }
+function krMainDayTypes(v){ var n = dayNameOf(v, {noLocal:true}); return (n==='到访' && !((v&&v.types)||[]).length) ? '—' : n; } /* CMD-1110-25：用子案件名称（dayNameOf：施术项目 · 在韩管理 …），不再把「赴韩施术」写成「赴韩项目」 */
 function krMainDayState(c, v){
   if(krIsSurgDay(c, v)) return c.krProcedureDone ? 'done' : (c.hasArrived ? 'arrived' : 'pending');
   var rep = subCaseList(c).filter(function(x){ return x.place==='KR' && x.date===v.date; })[0];
@@ -5318,7 +5330,7 @@ function krSubPageHtml0(c){
       /* CMD-1027-01 A：非施术日——［客人已离院］在页头那一条最右边；今日项目卡右上放［增加今日项目］，项目卡平常不显示，按了才展开（本次使用后自动收起） */
       var dk = c.id+'|'+v.key, addOpen = !!KR_DAYADD[dk], canAdd = krCan() && v.date===today && cards.some(function(cd){ return cd.group==='today' && cd.vs==='arrived'; });
       cards = cards.map(function(cd){ return Object.assign({}, cd, {noEnd:true, extraBtn:(canAdd && cd.kind==='sub' ? '<button class="'+(addOpen ? 'btn-primary' : 'btn-outline')+'" style="padding:5px 16px;font-size:13px;" onclick="event.stopPropagation();krDayAddToggle(\''+dk.replace(/'/g, '')+'\')">增加今日项目</button>' : '')}); });
-      body = (pick ? krProjCards(c, {pick:true}) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick ? krAllItemsLinkHtml(c, v) : ''); /* CMD-1110-17：这一页只放今天的事——拿掉下面的「术后管理」总览卡和「项目卡」（加今天的项目用［增加今日项目］弹窗；预约 / 修改时间 / 保留在主案件 tab），改成一行「查看全部项目（主案件）」 */
+      body = krInNoteLine(c)+(pick ? krProjCards(c, {pick:true}) : (cards.length ? cards.map(function(cd){ return krCaseCardHtml(c, cd); }).join('') : krCardBox('今日项目', krEmpty('这天没有到院项目'))))+(!pick ? krAllItemsLinkHtml(c, v) : ''); /* CMD-1110-17：这一页只放今天的事——拿掉下面的「术后管理」总览卡和「项目卡」（加今天的项目用［增加今日项目］弹窗；预约 / 修改时间 / 保留在主案件 tab），改成一行「查看全部项目（主案件）」 */
     }
   } else if(cur==='settle'){
     body = KR_TAB_FN.settle(c);

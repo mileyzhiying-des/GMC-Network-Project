@@ -3303,14 +3303,14 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/面诊：\d+ 次｜施术：\d+ 次/.test(hd) && /来源诊所：.*院长：.*KR 室长：/.test(hd) && /主案件 A\d+/.test(hd) && /对话/.test(hd), '页头：客人名 面诊：N 次｜施术：M 次 … ［对话］/ 来源诊所 · 院长 · KR 室长 / 主案件 A…：'+hd.slice(0, 120));
       ST.ok(krSdVisitStateText(gc())==='待到院', '状态文字');
       mut(function(c){ ST.krArrive(c); }); h = page(); t = txt(h);
-      ST.ok(tabNames(h)==='到访|项目方案|附件|Timeline' && /当前状态\s*已到院/.test(t) && /客人已离院/.test(t) && KR_CASE.subTab==='plan', '按了［客人已到院］：＋附件｜Timeline，状态「已到院」＋［客人已离院］，默认到项目方案：'+tabNames(h)+' / '+KR_CASE.subTab);
+      ST.ok(tabNames(h)==='到访|项目方案1|附件|Timeline' && /当前状态\s*已到院/.test(t) && /客人已离院/.test(t) && KR_CASE.subTab==='plan', '按了［客人已到院］：＋附件｜Timeline，状态「已到院」＋［客人已离院］，默认到项目方案：'+tabNames(h)+' / '+KR_CASE.subTab);
       ST.ok(/院长评估结果/.test(t), '项目方案 = 院长评估 → 确认 / 增加项目 → 付尾款（现在是评估这一步）');
       mut(function(c){ ST.krJudge(c, 'ok'); }); mut(function(c){ ST.krPay(c); }); h = page(); t = txt(h);
-      ST.ok(tabNames(h)==='到访|项目方案|术前状态|结算|附件|Timeline' && KR_CASE.subTab==='pre', '尾款付清：＋术前状态｜结算，自动到术前状态；进行项目还没出现：'+tabNames(h)+' / '+KR_CASE.subTab);
+      ST.ok(tabNames(h)==='到访|项目方案|术前状态2|结算|附件|Timeline' && KR_CASE.subTab==='pre', '尾款付清：＋术前状态｜结算，自动到术前状态；进行项目还没出现：'+tabNames(h)+' / '+KR_CASE.subTab);
       ST.ok(/术前照片/.test(t), '术前状态 = 术前照片 / 视频上传');
       mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); });
       h = page(); t = txt(h);
-      ST.ok(tabNames(h)==='到访|项目方案|术前状态|进行项目|结算|附件|Timeline' && KR_CASE.subTab==='run', '术前照片传完：＋进行项目，自动到进行项目：'+tabNames(h)+' / '+KR_CASE.subTab);
+      ST.ok(tabNames(h)==='到访|项目方案|术前状态|进行项目2|结算|附件|Timeline' && KR_CASE.subTab==='run', '术前照片传完：＋进行项目，自动到进行项目：'+tabNames(h)+' / '+KR_CASE.subTab);
       ST.ok(/操作完成/.test(t) && !/项目卡/.test(t.replace(/查看全部项目（主案件）/, '')) && /增加今日项目/.test(t) && /查看全部项目（主案件）/.test(t), '进行项目 = 今天要做的项目（［操作完成］）；CMD-1110-17：下面没有项目卡，有［增加今日项目］和「查看全部项目（主案件）」');
       mut(function(c){ preOpItems(c).forEach(function(it){ it.preOp = {video:null, photos:{}}; }); }); h = page(); ST.ok(tabNames(h).indexOf('进行项目')<0 || true, '（重传 / 清空只影响提示，进行项目是否显示按当前是否传完）');
       mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); });
@@ -3358,7 +3358,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var hd = txt(krMainHeader(r, gc()));
       ST.ok(/· A\d+/.test(hd) && /面诊：\d+ 次｜施术：\d+ 次/.test(hd) && /来源诊所：.*院长：.*KR 室长：/.test(hd) && /对话/.test(hd) && !/从 \d+\/\d+ 面诊开始|进行中：/.test(hd) && krMainHeader(r, gc()).indexOf('status-pill')>-1, '页头：客人名 · 案件号　状态标签（CMD-1110-23 补回）　面诊 N 次｜施术 M 次　…［对话］/ 来源诊所 · 院长 · KR 室长；没有「从…面诊开始」：'+hd.slice(0, 100));
       ST.ok(KR_CASE_TABS.some(function(t0){ return t0.key==='items' && t0.label==='施术项目'; }), 'tab 叫「施术项目」（1110-03 起）');
-      var nx = krMainNextInfo(gc()); ST.ok(/预约到院 · 赴韩项目/.test(nx.text) && /查看内容/.test(nx.btn), '赴韩施术的日子还没到：「MM-DD 预约到院 · 赴韩项目」+［查看内容］：'+nx.text);
+      var nx = krMainNextInfo(gc()); ST.ok(/预约到院 · 施术项目/.test(nx.text) && /查看内容/.test(nx.btn), '赴韩施术的日子还没到：「MM-DD 预约到院 · 赴韩项目」+［查看内容］：'+nx.text);
       var bar = txt(krMainStatusBar(r, gc())); ST.ok(/^当前状态/.test(bar) && /（进行中 \d+｜预约中 \d+）/.test(bar) && /今日到访|下次到访|下一个预约/.test(bar), '1027-02 改（CMD-1110-11：下次到访 → 下一个预约）：状态卡两行——当前状态（进行中｜预约中）+ 今日到访 / 下次到访（原：左 当前状态 + 状态标签，右 一句话 + 按钮）：'+bar.slice(0, 80));
       mut(function(c){ ST.krArrive(c); }); nx = krMainNextInfo(gc()); ST.ok(nx.text==='已到医院' && /查看内容/.test(nx.btn), '客人已到院：「已到医院」+［查看内容］');
       mut(function(c){ ST.krJudge(c, 'ok'); ST.krPay(c); }); mut(function(c){ preOpItems(c).forEach(function(it){ var sp = preOpSpecOf(it); if(sp.video) coreSetPreOp(c, it.name, 'video', ST.krBy); sp.angles.forEach(function(a){ coreSetPreOp(c, it.name, a.id, ST.krBy); }); }); });
@@ -10786,6 +10786,60 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
   /* ===== CMD-1110-18 ===== */
   /* ===== CMD-1110-19 ===== */
+  /* ===== CMD-1110-25 ===== */
+  ST.def('R300a','CMD-1110-25（A1 分页）：下一个日程用子案件名称 / ［客人已离店］走页头离店那套 / 置换额度选购走购买弹窗（XL）+ 买完弹「使用持有项目吗？」+ 本地项目 tab 不因页内选购出现',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
+    var cur = function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; };
+    try{
+      var v = {types:['赴韩施术', '术后管理'], date:todayStr()}; ST.ok(mainDayBiz(v)===dayNameOf(v, {noLocal:true}) && !/赴韩项目/.test(mainDayBiz(v)), '下一个日程的名称 = 子案件名称（不写「赴韩项目」）：'+mainDayBiz(v));
+      /* ［客人已离店］ → 页头离店那套 */
+      window.GMC_LOCAL_LEAVE_MANUAL = true;
+      var c = ST.localCase('R300w1'), id = c.id; ST.open(cur(id)); var called = 0, oe = window.openEndCase; window.openEndCase = function(){ called++; };
+      try{ LOCAL_LEAVE_CID = id; localLeaveYes(); } finally { window.openEndCase = oe; }
+      ST.ok(called===1 || !canEndCase(cur(id)), '「客人准备离店了吗？」［客人已离店］走页头［客人离店］的 openEndCase（离店提醒清单 / 钱没清不结束）');
+      /* 置换额度走购买弹窗 */
+      var c2 = ST.localCase('R300w2'), id2 = c2.id, p = ST.localProj('LHALa peel'); ST.open(cur(id2)); window.GMC_NO_PLAN_AUTO = true;
+      startCompPurchase(cur(id2), 300000, 'R300 测试', ['x']);
+      var lb = document.getElementById('lm-buy-overlay'), c3 = cur(id2);
+      ST.ok(lb && lb.classList.contains('open') && lb.querySelector('.modal-box').classList.contains('msz-XL'), '置换额度购买 → 购买弹窗（XL）');
+      ST.ok(c3.comp && c3.comp.scope==='lm' && !c3.entryChoicePending && c3.projectEntryMode!=='new' && !c3.addingMore, '置换额度走弹窗的 lm 购买，没有页内旧选购状态');
+      ST.ok(/置换额度/.test(lb.innerText), '购买弹窗里有置换额度横幅');
+      ST.ok(!showLocalTab(c3), '本地项目 tab 不因页内选购 / 置换额度出现');
+      c3.localMgmt.cart = [{kind:'project', key:p.id, projectId:p.id, name:p.name, price:6000000, unitPrice:6000000, qty:1, discountPct:100}]; lmSettle(); c3 = cur(id2);
+      var ua = document.getElementById('use-ask-overlay'); ST.ok(ua && ua.classList.contains('open') && /使用持有项目吗/.test(ua.innerText), '买完弹「使用持有项目吗？」');
+      ST.ok(c3.comp && c3.comp.used, '置换额度已用掉'); useAskClose();
+    } finally { window.alert = al; window.confirm = cf; window.GMC_LOCAL_LEAVE_MANUAL = false; }
+  });
+  ST.def('R300b','CMD-1110-25（KM1 分页，pcStage + stageC 夹具）：到院已完成卡没有［增加项目］ / KR 基础资料有［+ 上传］（传了附件 tab 出现）/ 今日项目上方「IN 室长备注」一行 / 结算前已读检查含子案件 / 施术当天 tab 标记是数字',function(){
+    var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;
+    var r0 = krAllCases().filter(function(x){ return x.name==='T-术后管理'; })[0], r1 = krAllCases().filter(function(x){ return /^T-待到院/.test(x.name); })[0]; if(!ST.ok(!!r0 && !!r1, '先 ST.ensureFixtures([\'pcStage\',\'stageC\'])')) return;
+    ST.ok(String(krCaseCardHtml).indexOf('krReopenFooter(')<0 && String(krSdRun0).indexOf('krReopenFooter(')<0, '到院已完成卡不再调 krReopenFooter（［增加项目］入口拿掉）');
+    var vk = (krMainDayTypes({types:['赴韩施术']})); ST.ok(!/赴韩项目/.test(vk), 'KR 阶段句子里的类型名用子案件名称：'+vk);
+    /* 基础资料附件上传 */
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.manualAttachments = []; c.concerns = []; c.photoUploaded = false; c.videoUploaded = false; c.linkedFiles = []; c.consultFiles = []; return true; });
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'basic'}); var body = document.getElementById('krcase-body');
+    ST.ok(/附件/.test(body.innerText) && !!body.querySelector('input[type=file]') && /krUploadFile/.test(body.innerHTML), '基础资料最下面有「附件：［+ 上传］」，用 krUploadFile');
+    var has = function(){ var r = krAllCases().filter(function(x){ return x.id===r0.id; })[0]; return krTabListOf(r).some(function(t0){ return t0.key==='files'; }); };
+    ST.ok(!has(), '没有附件时附件 tab 不出现');
+    krUploadFile({files:[{name:'r300.pdf'}], value:'x'}); ST.ok(has(), '传了第一份后附件 tab 出现');
+    /* IN 室长备注一行 + 已读检查含子案件 */
+    var day = todayStr();
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.inNotes = [{id:'r300n1', text:'R300 主案件 IN 备注', by:'A1 室长', at:nowFullDt(), readAt:'', readBy:''}];
+      CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!=='r300kid'; }); CASE_ITEMS.push({id:'r300kid', mainId:c.id, name:c.name, caseNo:c.caseNo+'-77', inNotes:[{id:'r300n2', text:'R300 子案件 IN 备注', by:'A1 室长', at:nowFullDt(), readAt:'', readBy:''}], procedureItems:[], subItems:[], logEntries:[]});
+      c.subItems = c.subItems.filter(function(x){ return !/^q300/.test(x.id); }); c.subItems.push({id:'q300a', no:c.caseNo+'-91', kind:'术后管理记录', place:'KR', date:day, time:'17:00', content:'术后管理（术后复诊检查，在韩国）', projectName:'假体隆鼻', arrived:true, simDay:true}); subCaseNos(c); return true; });
+    var dk = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; var v0 = visitsOf(c).filter(function(x){ return x.place==='KR' && x.date===day; })[0]; return v0 ? v0.key : ''; });
+    krShowCase(r0.clinicId, r0.id, {here:true, tab:'items'}); krOpenDay(r0.clinicId, r0.id, dk); body = document.getElementById('krcase-body');
+    ST.ok(/IN 室长备注：/.test(body.innerText) && /R300 子案件 IN 备注|R300 主案件 IN 备注/.test(body.innerText) && /全部（2）/.test(body.innerText), '子案件页今日项目上方：「IN 室长备注：…」最新一条 +「全部（2）」：'+(body.innerText.match(/IN 室长备注：[^\n]*/)||[''])[0]);
+    var un = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return krUnreadNotes(c).map(function(n){ return n.id; }).sort().join(','); });
+    ST.ok(un==='r300n1,r300n2', '结算前已读检查含记在子案件上的 IN 来访备注：'+un);
+    Store.mutateClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; coreNoteRead(c, 'r300n2', 'KM1 室长'); return true; });
+    var un2 = Store.withClinic(r0.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; return krUnreadNotes(c).length; }); ST.ok(un2===1, '读了子案件上的那条 → 只剩主案件那条未读：'+un2);
+    Store.mutateClinic(r0.clinicId, function(){ CASE_ITEMS = CASE_ITEMS.filter(function(x){ return x.id!=='r300kid'; }); var c = CASE_ITEMS.filter(function(x){ return x.id===r0.id; })[0]; c.inNotes = []; return true; });
+    /* 施术当天 tab 标记 */
+    var sd = Store.withClinic(r1.clinicId, function(){ var c = CASE_ITEMS.filter(function(x){ return x.id===r1.id; })[0]; c.hasArrived = true; c.krBalancePaid = true; return krSdTabs(c).map(function(t0){ return t0.mark||''; }); });
+    ST.ok(sd.every(function(m0){ return m0==='' || m0==='✓' || /^\d+$/.test(m0); }), '施术当天页 tab 标记是数字或 ✓（没有 ●）：'+sd.join(','));
+  });
   /* ===== CMD-1110-24 ===== */
   ST.def('R299a','CMD-1110-24（KM1 分页，pcStage + stageC 夹具）：今日项目 / 进行项目表里管理项目行、施术行也有下划线「今日取消」（在［操作完成］左边）；管理项目取消 = 次数退回、行拿掉；施术取消 = 原因必填、退回待重新预约、不动钱；术后管理行照旧',function(){
     var me = currentAccount(); if(!ST.ok(me && me.id==='KM1', '要在 KM1 分页里跑')) return;

@@ -2618,3 +2618,11 @@ prototype/shared/app.css  共用样式
 - **所有类型的行都有「今日取消」**（kr.js `krTblRow` today 模式 + `krMainRowsHtml` 的持有管理项目行；排法同 1110-23：下划线「今日取消」在［操作完成］左边）：施术行（`_item` 一项一行 / 在韩加的施术）→ `krSurgTodayCancelOpen`（= `coreSurgTodayCancel`：原因必填、`deferUse` + `rebookWait` 退回待重新预约、**不退款、不动定金 / 尾款**；条件同项目卡：已到院 + 尾款已付 + 今天没结束 / 没关账）；管理项目行 → `krTodayCancel`（持有行 / 在韩加项行走 `item`：从 `todayPickMgmt` 拿掉；使用行 `holdUseOf` 走 `row`：`coreRowCancel` 直接删掉这一行，持有次数本来就没扣，退回持有）；术后管理行照旧（`row` → `coreRowCancel`，退回未预约）。做完的行没有。
 - **任务页「默认走『项目有变动』」**：施术今日取消没有走到院评估的「项目有变动」（那条会动钱：退定金 / 补尾款），用的是 1109-18 的现有函数，所以**不会动到钱**，没有触发“先停下来问”。
 - 测试：新增 R299a（KM1，pcStage + stageC 夹具）；回归（隔离端口，对照改动前 V5）：KM1 全套失败集合一致（仅 R299a 在全套里缺夹具失败，单跑通过）；A1 不加载 kr.js，没有重跑。
+
+## CMD-1110-25 补充（2026-11-10，追加；取代 CMD-1110-16 里「置换额度走页内选购」、CMD-1110-06 / 1109 里 KR 已完成到院卡的［增加项目］、CMD-1110-17 里 KR 施术当天页签的 ●，旧文字保留作历史）
+- 分支 **V5**，基准 862f357；代码提交 + 本文档提交；不推送不合并；**数据版本不变（61）**，没有新字段。
+- 1 「下一个预约 / KR 阶段进程」里的名称统一用 `dayNameOf`（`mainDayBiz` / `krMainDayTypes`），不再写「赴韩项目 / · 韩国」。2 KR 已完成到院卡的［增加项目］拿掉（`krCaseCardHtml` / `krSdRun0` 不再调用 `krReopenFooter`；`krReopenFooter` / `krReopenAdd` 函数留在文件里没有入口，是否删除待你决定）。3 「客人准备离店了吗？」→［客人已离店］（`localLeaveYes`）：当前案件能走页头［客人离店］就直接打开 `openEndCase`，和页头同一条流程；否则才 `autoFinish`。
+- 4 置换额度（`startCompPurchase`）改走 XL 购买弹窗（`c.comp.scope='lm'` + `c.localMgmt` + `LM_BUY_OPEN`，`COMP_BUY` 标记），付完款走 1110-21 的「使用持有项目吗？」（`lmNoBuy` / `lmSettleDo` 包装认 `COMP_BUY`）；纯本地案件的 `showLocalTab` 不再因 `addingMore` / `comp` / `entryChoicePending+new` 出现。页内选购旧分支（`localBuyNew` 的 addingMore、`chooseProjectEntryMode('new')` / `holdingsAddNew`、`projectListTabHtml` 的 main 选购）现在只有旧资料 / 非纯本地案件会走到。
+- 5 KR 基础资料最下面「附件：［+ 上传］」（`krBasicAttachRow`，同一个 `krUploadFile`，上传后附件 tab 出现）。6 KR 今日项目上方「IN 室长备注：…」一行（`krInNoteLine`：最新一条、译文 + 查看原文、「全部（N）」跳备注内容、没有就不显示）；结算前已读检查（`krUnreadNotes` / `coreNoteRead`）只算 IN 的来访备注（主案件 + 全部子案件，`inVisitNotesAll`），不算项目备注。7 KR 施术当天页签标记（`krSdTabs`）改灰色数字 / ✓（项目方案、术前状态、进行项目）。
+- 回归（隔离端口，对照 5ac10c4 / 862f357）：KM1 全套 862f357 为 494 项 95 通过，本次 496 项 93 通过（新增失败 R124a / R125a 是上面 1、7 的有意改动，断言已更新并单跑通过；R300a 是 IN 专用用例，R300b 单跑通过）；KD1（67 个相关用例）本次与 862f357 完全一致（58 失败 / 9 通过），5ac10c4 为 61 失败；A1 全套本次 496 项 247 通过，862f357 为 494 项 251 通过。
+- 我的判断（未经确认）：项目方案页签在已到院未付尾款时标 1；KR 结算前已读检查把子案件上的 IN 来访备注也算进去。

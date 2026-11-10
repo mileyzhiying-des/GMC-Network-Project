@@ -2033,7 +2033,7 @@ function showLocalTab(c){
   /* CMD-1110-14：「本地项目」tab 跟着实际发生的事出现——纯本地案件：有持有要用 / 正在使用 / 今天用过；没用就没有（买了 →「结算」tab）。其他案件照旧 */
   if(pureLocalMain(c)){
     if(isEnded(c)) return (c.mgmtUses||[]).length>0;
-    return !!((typeof followupOn==='function' && followupOn(c)) || c.mgmtActive || c.localAsk || c.addUse || c.addingMore || c.comp || (c.entryChoicePending && c.projectEntryMode==='new') || (c.mgmtUses||[]).length || (c.localMgmt && (c.localMgmt.mgmtActive || (c.localMgmt.mgmtUses||[]).length)) || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理'))); /* CMD-1110-16：只在使用持有之后才出现（不再因为有持有要用 / 入口卡在等）；置换额度页内选购（comp / addingMore / 模式 new）仍需要 tab */
+    return !!((typeof followupOn==='function' && followupOn(c)) || c.mgmtActive || c.localAsk || c.addUse || (c.mgmtUses||[]).length || (c.localMgmt && (c.localMgmt.mgmtActive || (c.localMgmt.mgmtUses||[]).length)) || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理'))); /* CMD-1110-16：只在使用持有之后才出现（不再因为有持有要用 / 入口卡在等）；置换额度页内选购（comp / addingMore / 模式 new）仍需要 tab */
   }
   return isLocalCase(c) || !!c.localMgmt || localCarried(c) || localPurchasedBatches(c).length>0 || (!!c.materialsConfirmed && isRevEval(c) && hasResumeType(c, '术后管理'));
 }
@@ -4288,7 +4288,12 @@ function localLeaveAsk(c, reason){
 var LOCAL_LEAVE_CID = '';
 function localLeaveClose(){ var ov = document.getElementById('local-leave-overlay'); if(ov) ov.classList.remove('open'); }
 function localLeaveNo(){ var c = CASE_ITEMS.filter(function(x){ return x.id===LOCAL_LEAVE_CID; })[0]; localLeaveClose(); if(c) logCaseEvent(c, actingName(), '持有项目都做完了；客人还没离店，案件继续（可继续购买，客人走时按［客人离店］）'); if(c){ buildCaseLog(c); renderCaseBody(c); } }
-function localLeaveYes(){ var c = CASE_ITEMS.filter(function(x){ return x.id===LOCAL_LEAVE_CID; })[0]; localLeaveClose(); if(!c) return; autoFinish(c, '客人已离店'); }
+function localLeaveYes(){
+  var c = CASE_ITEMS.filter(function(x){ return x.id===LOCAL_LEAVE_CID; })[0]; localLeaveClose(); if(!c) return;
+  /* CMD-1110-25：和页头［客人离店］走同一套（离店提醒清单、钱没清不结束、没做完的项目逐项处理），不再直接 autoFinish */
+  var cur = getCurrentCase(); if(cur && cur.id===c.id && canEndCase(c)){ openEndCase(); return; }
+  autoFinish(c, '客人已离店');
+}
 
 
 /* ===== CMD-1110-16：弹窗尺寸四档——S 400 / M 560 / L 800 / XL 1120，宽度 min(尺寸, 92vw) =====
