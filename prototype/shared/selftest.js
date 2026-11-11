@@ -914,7 +914,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     /* KR 之后仍可发送诊疗方案 */
     coreStartConsult(c, 'KD1 院长'); c.consultContentAt = nowFullDt(); var ok = coreSubmitReport(c, {original:'（自测）', zh:'（自测）', items:ST.krReportItems(['假体隆鼻']), overallNote:'', files:[]}, ST.krBy);
     ST.ok(ok && c.reportReady && c.stage==='reportonly', '结束后 KR 仍应能发诊疗方案且案件保持仅出报告；ok='+ok+' stage='+c.stage);
-    ST.ok(/诊疗方案/.test(consultTabHtml(c)), '已结束案件的面诊 tab 应能看到诊疗方案');
+    ST.ok(/面诊诊疗报告/.test(consultTabHtml(c)), '已结束案件的面诊 tab 应能看到诊疗方案（报告卡；CMD-1111-02：看过方案前报告不展开）');
   });
   ST.def('G2','项目确认中手动结束',function(){
     var c = ST.newRes('G2'); ST.consultToReport(c); ST.open(c); ST.ok(canEndCase(c), '项目确认中应可结束');
@@ -3429,8 +3429,10 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var c = ST.newRes('R126a'); ST.consultToReport(c); ST.open(c); c = getCurrentCase(); c.activeCaseTab = 'consult'; renderCaseBody(c);
     var h = consultTabHtml(c), tx = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    ST.ok(/已出方案/.test(tx) && /邀请室长商谈/.test(tx) && /面诊诊疗报告/.test(tx) && />下载</.test(h) && />查看方案</.test(h), '两张卡：已出方案 + 邀请室长商谈 / 面诊诊疗报告 + 下载 + 查看方案');
-    ST.ok(/尊敬的|GMC NETWORK/.test(tx) && /主诊院长/.test(tx) && !/openReportModal/.test(h), '报告整张直接显示在 tab 里（抬头 / 客人信息 / 正文），没有跳页入口');
+    ST.ok(/已出方案/.test(tx) && /邀请室长商谈/.test(tx) && /面诊诊疗报告/.test(tx) && />下载</.test(h) && />查看方案</.test(h), '一张卡（CMD-1111-02）：已出方案 + 邀请室长商谈 / 面诊诊疗报告 + 下载 + 查看方案');
+    ST.ok(!/尊敬的|GMC NETWORK/.test(tx), '还没看方案：报告不展开');
+    reportViewPlan(); planClose(); c = getCurrentCase(); h = consultTabHtml(c); tx = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    ST.ok(/尊敬的|GMC NETWORK/.test(tx) && /主诊院长/.test(tx) && !/openReportModal/.test(h), '按［查看方案］后报告整张显示在 tab 里（抬头 / 客人信息 / 正文），没有跳页入口');
     ST.ok(!/面诊费|诊疗方案已到|查看诊疗方案|面诊阶段产生的文件/.test(tx), '拿掉：面诊费一行、诊疗方案已到、查看诊疗方案、附件说明');
     var tv = function(){ return consultTalkVisible(c); }; ST.ok(tv(), '没买项目、面诊那天还没过、客人没离店：显示');
     c.consultAt = {date:ymdAdd(todayStr(), -2), time:'11:00'}; ST.ok(!tv(), '面诊那天过了午夜：不显示'); c.consultAt = {date:todayStr(), time:'11:00'}; ST.ok(tv(), '面诊就在今天：还显示');
@@ -4396,19 +4398,38 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(typeof sumUnitsOf==='function' && Array.isArray(sumUnitsOf(m)), '汇总来源 sumUnitsOf 可用');
   });
 
-  ST.def('R127c','CMD-1026-01 五（A1 分页）：一般面诊——方案刚出来（Step 1）报告展开、没有赴韩方案卡；按［查看方案］（Step 2）报告折叠、出现赴韩方案卡、［查看方案］拿掉；离开再回来仍是 Step 2',function(){
+  ST.def('R127c','CMD-1111-02 取代 CMD-1026-01 五（A1 分页）：一般面诊——方案刚出来（Step 1）报告不展开、没有［收起］、只有［下载］［查看方案］；按［查看方案］（Step 2）报告展开、按钮换成［收起］、弹「今日如何安排项目？」；之后［展开］［收起］切换',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var c = ST.newRes('R127c'); ST.consultToReport(c); ST.open(c); c = getCurrentCase(); c.activeCaseTab = 'consult'; delete c.planViewed; delete c.reportOpen; c.recommended = []; renderCaseBody(c);
     var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
     var h1 = caseTabContentHtml(c), t1 = t(h1);
-    ST.ok(/已出方案/.test(t1) && /面诊诊疗报告/.test(t1) && /尊敬的|GMC NETWORK/.test(t1) && /下载/.test(t1) && /查看方案/.test(t1) && /收起/.test(t1), 'Step 1：已出方案 + 报告默认展开 + 右上［下载］［查看方案］');
-    ST.ok(!/赴韩方案|客人不做项目|结算/.test(t1), 'Step 1：赴韩方案卡不出现');
+    ST.ok(/已出方案/.test(t1) && /面诊诊疗报告/.test(t1) && /下载/.test(t1) && /查看方案/.test(t1) && !/收起|展开/.test(t1) && !/尊敬的|GMC NETWORK/.test(t1), 'Step 1：已出方案 + 报告不展开 + 只有［下载］［查看方案］，没有［收起］');
+    ST.ok(!/赴韩方案|客人不做项目|结算/.test(t1) && !/这次到店要做什么/.test(t1), 'Step 1：赴韩方案卡不出现，也没有旧的「这次到店要做什么？」卡');
+    ST.ok((h1.match(/class="card"/g)||[]).length===1, '面诊卡和报告卡合成一张');
     reportViewPlan(); c = getCurrentCase(); var h2 = caseTabContentHtml(c), t2 = t(h2);
-    ST.ok(c.planViewed && !/尊敬的/.test(t2) && /展开/.test(t2) && /面诊诊疗报告/.test(t2), 'Step 2：报告折叠（标题行留［展开］）');
-    ST.ok(/赴韩方案|客人不做项目|本地项目/.test(t2) && !/>查看方案</.test(h2), 'Step 2：出现赴韩方案卡，［查看方案］拿掉');
-    toggleReportOpen(); c = getCurrentCase(); ST.ok(/尊敬的/.test(t(caseTabContentHtml(c))), '随时可以再展开看报告');
-    c.reportOpen = undefined; ST.ok(consultPlanOpen(c) && !/尊敬的/.test(t(caseTabContentHtml(c))), '离开再回来（planViewed 已记）：仍是 Step 2');
+    ST.ok(c.planViewed && /尊敬的|GMC NETWORK/.test(t2) && /收起/.test(t2) && !/>查看方案</.test(h2), 'Step 2：报告展开，按钮换成［收起］，［查看方案］拿掉');
+    ST.ok(/赴韩方案|客人不做项目|本地项目/.test(t2) && !/这次到店要做什么/.test(t2), 'Step 2：出现选项目画面，没有旧入口卡');
+    ST.ok(!!PLAN && document.getElementById('local-plan-overlay').classList.contains('open') && /今日如何安排项目/.test(document.getElementById('local-plan-overlay').textContent), '按［查看方案］弹「今日如何安排项目？」'); planClose();
+    toggleReportOpen(); c = getCurrentCase(); ST.ok(!/尊敬的/.test(t(caseTabContentHtml(c))) && /展开/.test(t(caseTabContentHtml(c))), '［收起］后变［展开］');
+    toggleReportOpen(); c = getCurrentCase(); ST.ok(/尊敬的/.test(t(caseTabContentHtml(c))), '再展开看报告');
+    c.reportOpen = undefined; ST.ok(consultPlanOpen(c) && /尊敬的/.test(t(caseTabContentHtml(c))), '离开再回来（planViewed 已记）：仍是 Step 2，默认展开');
     var c2 = ST.newRes('R127c2'); ST.consultToReport(c2); ST.open(c2); c2 = getCurrentCase(); c2.activeCaseTab = 'consult'; c2.recommended = [{name:'隆鼻', origin:'KR'}]; ST.ok(consultPlanOpen(c2) && /赴韩方案|客人不做项目|本地项目/.test(t(caseTabContentHtml(c2))), '已经勾了项目：直接是 Step 2');
+  });
+  ST.def('R303a','CMD-1111-02（A1 分页）：面诊卡第一行 面诊 + 状态 + 面诊时间；等报告时只有第一行状态；弹窗［购买新项目］= 照方案选项目；旧入口卡换成弹窗入口',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
+    var c = ST.newRes('R303a'); ST.consultToReport(c); ST.open(c); c = getCurrentCase(); c.activeCaseTab = 'consult'; delete c.planViewed; delete c.reportOpen; c.recommended = []; c.consultAt = {date:'2027-04-08', time:'13:00'}; renderCaseBody(c);
+    var h = caseTabContentHtml(c), x = t(h);
+    ST.ok(/面诊已出方案(邀请室长商谈)?面诊时间：27-04-0813:00（韩国）印尼11:00/.test(x), '第一行：面诊 + 已出方案；最右「面诊时间：27-04-08 13:00（韩国） 印尼 11:00」（实际 '+x.slice(0, 60)+'）');
+    ST.ok(x.indexOf('面诊诊疗报告') > x.indexOf('面诊时间'), '第二行：📄 面诊诊疗报告 在面诊时间之后');
+    c.consultAt = null; ST.ok(/面诊时间：待确认/.test(t(caseTabContentHtml(c))), '还没定时间写「面诊时间：待确认」');
+    c.consultStatus = 'awaiting_report'; var ha = caseTabContentHtml(c); ST.ok(/面诊/.test(t(ha)) && /等待报告/.test(t(ha)) && !/面诊诊疗报告/.test(t(ha)), '等报告中：只有第一行状态，没有第二行报告');
+    c.consultStatus = 'report_ready';
+    reportViewPlan(); planClose();
+    PLAN = {caseId:c.id, state:'ask'}; planBuy(); c = getCurrentCase();
+    ST.ok(!document.getElementById('in-localentry-overlay') || !document.getElementById('in-localentry-overlay').classList.contains('open'), '［购买新项目］不是只开本地购买弹窗');
+    ST.ok(/赴韩方案|客人不做项目|本地项目/.test(t(caseTabContentHtml(c))), '［购买新项目］= 面诊 tab 里照诊疗方案选项目的画面');
+    var oc = localEntryChoiceHtml(c); ST.ok(!/这次到店要做什么|持有项目使用/.test(oc) && /安排今日项目/.test(oc), '旧入口卡换成弹窗入口');
   });
   ST.def('R120b','CMD-1023-03 P4（KM1 分页，stageC 夹具）：KR 子案件页——页头 / tab / 韩国那天的到院卡在这页 / 客人已到院 → 院长评估（Step 1）在这页做 / 子案件 tab 点一行进入 / 回到主案件 / 印尼的天只读',async function(){
     var me = currentAccount(); if(!ST.ok(me && isKrAccount() && me.role==='kr_manager', '要在 KM1 分页里跑')) return;
