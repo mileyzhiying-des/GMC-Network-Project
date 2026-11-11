@@ -1017,7 +1017,7 @@ function submitSelfBooking(f){
     var mnOld = applyMinorConfirm(cl, {dob:f.dob, marital:f.marital, guardianOk:!!f.guardianOk, by:'客人自助'}); if(!mnOld.ok) return {ok:false, reason:mnOld.err}; /* CMD-1029-11：老客人未满 21 岁每次预约都再确认 */
     var minorTxtOld = mnOld.text;
   }
-  var exSelf = pendingResvSameDay(cl.name, f.date), selfMain = null, /* CMD-1105-12：客人自己约的一律是独立预约（不挂案件），到店照旧弹服务类型 */ c = exSelf || (selfMain ? createChildReservation(selfMain, f.date, f.time, f.purpose, {phone:f.phone, purposeLocked:false}) : createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose)); /* CMD-1021-16 三：客人自助预约同一天已有还没到的预约 → 合并 */
+  var exSelf = pendingResvSameDay(cl.name, f.date, null, true), selfMain = null, /* CMD-1105-12：客人自己约的一律是独立预约（不挂案件），到店照旧弹服务类型 */ c = exSelf || (selfMain ? createChildReservation(selfMain, f.date, f.time, f.purpose, {phone:f.phone, purposeLocked:false}) : createReservationCase(cl.name, null, f.date, f.time, f.phone, f.purpose)); /* CMD-1021-16 三：客人自助预约同一天已有还没到的预约 → 合并 */
   if(exSelf){ f.time = exSelf.visitTime; logCaseEvent(exSelf, '客人', '客人自助预约同一天（'+f.purpose+'）已合并到这次预约（时间以原预约 '+exSelf.visitTime+' 为准）'); }
   c.visitNote = (f.note||'').trim() || c.visitNote || ''; c.bookEntry = f.entry; c.remindSent = false;
   /* 占位转预约：按占位 id，或同手机号 + 同一时段的占位一起收掉；预约历史里这行记为「已转预约」 */
@@ -1115,12 +1115,12 @@ var DIRECTOR_LIST = DIRECTOR_INFO.filter(function(d){ return d.active; }).map(fu
    不经过占位；这里只做"开新案件"的预约来访——术后到院/使用持有项目也一律走这条开新案件（第十轮已确认） */
 /* ===== CMD-1021-16 三：同一客人没到店时一天只能有一个预约：约到某天时，那天已有「还没到」（待访问）或「已到店进行中」的预约 → 合并进去（一次到店，时间以原预约为准），提示「已合并到 X:XX 的预约」；
    那天已完成 → 照 15「今天的到院已完成」（KR 到院）。用户已有的重复预约不动（只管之后新建的）。 */
-function pendingResvSameDay(name, date, exceptId){ /* CMD-1023-01 补 2：经 visitsOnDate（S1）读那一天的来访 */
+function pendingResvSameDay(name, date, exceptId, waitingOnly){ /* CMD-1023-01 补 2：经 visitsOnDate（S1）读那一天的来访 */
   var cl = null; try{ cl = clientByName(name); }catch(e){} var nm = cl ? cl.name : name, hit = null;
   visitsOnDate(date, {place:'IN'}).forEach(function(v){
     if(hit || v.name!==nm) return;
     var r = CASE_ITEMS.filter(function(x){ return x.id===(v.rec||v.caseId); })[0]; if(!r || r.id===exceptId || r.krVisit) return;
-    var iv = inVisitOf(r); if(iv.left || (iv.state!=='waiting' && iv.state!=='arrived')) return; hit = r;
+    var iv = inVisitOf(r); if(iv.left || (iv.state!=='waiting' && iv.state!=='arrived')) return; if(waitingOnly && iv.state!=='waiting') return; hit = r; /* CMD-1111-09：客人自助预约只并进「还没到店」的预约；已到店的那次到访不能吞掉新预约（原来客人当天到店后再约晚一点的时段，新预约被并进已到店的案件，「目前的预约」看不到） */
   });
   return hit;
 }

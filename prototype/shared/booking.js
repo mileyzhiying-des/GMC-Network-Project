@@ -344,7 +344,7 @@ function bkRenderDone(){
 }
 
 /* ================= 客人端：查看 / 取消 / 重新预约（确认/提醒短信里的网址 booking.html?view=Case编号，需要手机验证） ================= */
-function bkViewCase(){ return CASE_ITEMS.filter(function(c){ return c.caseNo===BK.view.caseNo; })[0] || null; }
+function bkViewCase(){ var n = BK.view.caseNo; return CASE_ITEMS.filter(function(c){ return c.caseNo===n; })[0] || CASE_ITEMS.filter(function(c){ return (c.formerCaseNos||[]).indexOf(n)>=0; })[0] || null; } /* CMD-1111-09：确认短信里的旧案件号（预约后被并进主案件、改成子案件号）也找得到 */
 function bkViewFrame(bodyHtml){ return '<div class="bk-card"><div class="bk-title">'+bt('view.title')+'</div>'+bodyHtml+'</div>'; }
 function bkRenderView(){
   var v = BK.view, c = bkViewCase();

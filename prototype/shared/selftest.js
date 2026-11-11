@@ -2808,6 +2808,22 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     c2.consultFeeWaived = {reason:'复诊'}; sh = t(settleTabHtml(c2)); ST.ok(/面诊费[\s\S]*已免除/.test(sh) && /原因：复诊/.test(sh) && !/已免除/.test(t(consultTabHtml(c2))), '④免除：面诊卡没有，结算 tab 写已免除 + 原因'); c2.consultFeeWaived = null;
     c2.addConsultMode = true; c2.consultStatus = 'awaiting_payment'; ST.ok(/面诊费Rp[\d.,]+未缴费/.test(t(consultTabHtml(c2))), '④增加面诊（未缴费）：面诊卡上有'); c2.addConsultMode = false;
   });
+  ST.def('R308a','CMD-1111-09（任意 IN 分页）：客人自助预约提交后「目前的预约」看得到——当天已到店再约晚一点的时段不被并进已到店的案件；还没到店的同一天预约仍合并；旧案件号（formerCaseNos）也找得到',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var d = todayStr(), k = 0; while(k++ < 20 && (slotBlockReason(d,'15:00') || slotBlockReason(d,'15:30') || slotBlockReason(d,'16:00'))){ var dd = new Date(d+'T00:00:00'); dd.setDate(dd.getDate()+1); d = dateStr(dd); } var r1 = ST.newRes('R308a', {date:d, time:'10:00'}); var c0 = r1; c0.subState = 'arrived'; c0.arrivedDay = d; c0.materialsConfirmed = true; updateCaseStage(c0);
+    var cl = clientByName(c0.name); if(!ST.ok(!!cl, '找得到客户档案')) return;
+    var r2 = submitSelfBooking({consentGiven:false, entry:'web', date:d, time:'15:30', phone:cl.phone, name:cl.name, dob:cl.dob||'1990-01-01', purpose:'面诊商谈', note:'', beauty:[]});
+    ST.track(r2.c);
+    if(!ST.ok(r2.ok, '①当天已到店后再约：提交成功')) { return; }
+    ST.ok(r2.c.id !== c0.id, '①新预约是自己的一笔，没有被并进已到店的案件');
+    var cur = clientCurrentCases(cl);
+    ST.ok(cur.some(function(c){ return c.id===r2.c.id; }), '①「目前的预约」有这一笔');
+    ST.ok(clientPastRecords(cl).every(function(r){ return r.id!==r2.c.id; }), '①不在「过去的记录」里');
+    var r3 = submitSelfBooking({consentGiven:false, entry:'web', date:d, time:'16:00', phone:cl.phone, name:cl.name, dob:cl.dob||'1990-01-01', purpose:'面诊商谈', note:'', beauty:[]});
+    ST.track(r3.c);
+    ST.ok(r3.c.id === r2.c.id, '②还没到店的同一天预约仍合并（沿用原时间 '+r2.c.visitTime+'）');
+    /* ③ 旧案件号（formerCaseNos）也找得到：bkViewCase 只在 booking.html 里，用 booking 页脚本另测 */
+  });
   ST.def('R306a','CMD-1111-05（A1 分页）：待办列表五栏 / 新的在上 / 短写 / 没有案件号和截止时间 / 催办在状态下；面诊 tab 看得到面诊费；看完方案没选项目就离店弹窗（还在考虑 / 客人不做）；［客人不做项目］按钮拿掉',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
