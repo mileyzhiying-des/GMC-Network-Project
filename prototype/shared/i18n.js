@@ -240,6 +240,7 @@ var BOOK_DICT = {
   'me.holdIN':  {id:'Paket di Indonesia', zh:'印尼持有项目'},
   'me.holdKR':  {id:'Paket di Korea', zh:'韩国持有项目'},
   'me.none':    {id:'Tidak ada', zh:'没有'},
+  'me.logout':  {id:'Keluar', zh:'退出登录'},
   'me.left':    {id:'sisa {n}x', zh:'剩余 {n} 次'},
   /* 首页 + 查看我的预约（CMD-1012-03） */
   'home.hello': {id:'Selamat datang', zh:'欢迎'},

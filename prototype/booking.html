@@ -72,6 +72,12 @@
   .bk-demo{background:#FBF0C9;color:#8F6F0C;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.7;margin-bottom:12px;}
   .bk-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border2);font-size:13px;}
   .bk-row span:first-child{color:var(--muted);flex-shrink:0;}
+  /* CMD-1111-07：清单行（左边文字自动换行，右边状态 / 次数固定宽度、不换行、靠右） */
+  .bk-row.bk-list{align-items:flex-start;}
+  .bk-row.bk-list span:first-child{color:inherit;flex:1 1 auto;min-width:0;overflow-wrap:anywhere;word-break:break-word;}
+  .bk-row.bk-list span:last-child{flex:0 0 auto;white-space:nowrap;text-align:right;}
+  .bk-row.bk-cal span:first-child{white-space:nowrap;}
+  .bk-row.bk-cal span:last-child{flex:1 1 auto;min-width:0;overflow-wrap:anywhere;text-align:right;}
   .bk-radio{display:flex;align-items:center;gap:10px;min-height:52px;padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;font-size:14px;cursor:pointer;background:#fff;}
   .bk-radio.on{border-color:var(--navy);background:#F1F4F8;font-weight:700;}
   .bk-check{display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.6;margin-bottom:12px;padding:10px 4px;cursor:pointer;}
