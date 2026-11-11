@@ -254,7 +254,7 @@ function todoFmtTime(s){ if(!s) return '—'; var d = s.slice(0,10), hm = s.leng
 /* CMD-1020-14 三：时间栏窄，日期和钟点上下两行（今天只写钟点），每行不换行 */
 function todoFmtTimeHtml(s){ if(!s) return '—'; var d = s.slice(0,10), hm = s.length>=16 ? s.slice(11,16) : ''; if(d===todayStr()) return todoEsc(hm || '今天'); return '<span class="tt-d">'+todoEsc(s.slice(5,10))+'</span>'+(hm ? '<span class="tt-t">'+todoEsc(hm)+'</span>' : ''); }
 function todoGroupOf(it){ var d = (todoShownAt(it)||'').slice(0,10) || todayStr(); if(it.cat==='dsurg') return d > todayStr() ? 2 : (d < todayStr() ? 0 : 1); return d < todayStr() ? 0 : 1; } /* CMD-1015-08：只留 昨日及更早 / 今天 */
-function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || ((b.over?1:0)-(a.over?1:0)) || (todoShownAt(a)||'9999').localeCompare(todoShownAt(b)||'9999'); }
+function todoSort(a, b){ return (b.pin?1:0)-(a.pin?1:0) || (todoShownAt(b)||'').localeCompare(todoShownAt(a)||''); } /* CMD-1111-05：置顶在前，其余按出现时间由新到旧 */
 /* CMD-1014-01 二·1：点卡片 = 筛选待办栏（标题后出现「· 待我处理 ✕」，✕ 回到全部）；开关关闭时仍是 10/13 的 kind 相等判断 */
 var TODO_FILTERS = {
   todo:   {label:'待我处理', fn:function(it){ return todoIsKr() ? it.kind!=='today' : true; }},
@@ -284,6 +284,33 @@ function todoUrge(id){ var c = calCaseById(id); if(!c) return; var old = CURRENT
 
 /* ---------------- 待办栏 ---------------- */
 /* CMD-1014-15 三：待办每行四栏对齐：事项｜预计时间｜状态｜客人名 + Case ID；状态 = 等待中（灰）/ 待处理 / 待接待 / 已超时（红 +［催办］）；事项文字统一正文色；没有期限写「—」 */
+
+/* CMD-1111-05：待办列表短写——阶段写短名，进程写短句（只显示一行，全文放悬停）。按文字开头匹配，没匹配到的取第一个「：（·」之前那一段 */
+var TODO_STAGE_SHORT = {'面诊安排':'面诊', '赴韩施术':'赴韩', '复诊评估':'复诊', '待评估':'复诊', '项目确认':'选项目', '在韩管理':'在韩', '预约到店':'预约', '术后管理（印尼）':'术后管理'};
+function todoStageShort(s){ s = String(s||'').trim(); return TODO_STAGE_SHORT[s] || s; }
+var TODO_SHORT_RULES = [
+  [/^退回待修改/, '被退回，重做'], [/^客人还没到/, '客人还没到'], [/^今天到(院|店)/, '今天到院'],
+  [/^等 KR 出诊疗方案/, '等待诊疗方案'], [/^等 KR 确认出报告时间/, '等待确认面诊时间'], [/^等 KR 确认施术时间/, '等待确认施术时间'], [/^等 KR 确认改期/, '等待确认改期'],
+  [/^面诊资料已到/, '联络客人选项目'], [/^复诊评估(结果已到|已出)/, '联络客人（评估结果）'],
+  [/^复诊评估：确认评估时间/, '确认评估时间'], [/^复诊面诊：确认面诊时间/, '确认面诊时间'], [/^确认预计出报告时间/, '确认面诊时间'],
+  [/^复诊评估：等 KR 室长确认评估时间|^复诊面诊：等 KR/, '等确认评估时间'],
+  [/^等院长上传面诊/, '等院长上传'], [/^等院长评估/, '等院长评估'],
+  [/^KR 已确认施术时间：发送/, '发送施术信息'], [/^请发送新的施术时间/, '发送新施术时间'], [/^(发送行程提醒|行程已改)/, '发送行程提醒'],
+  [/^待收款/, '待收款'], [/^在韩加项待付款/, '待付款'], [/^IN 请把/, '请提前预约'], [/昨天已自动结束/, '确认已结束'], [/还没结束，请确认/, '确认结束'], [/昨天的到院还没标客人已离院|还没标客人已离院/, '确认离院'],
+  [/^无故不做项目/, '无故不做项目'], [/^退定金/, '退定金'], [/^韩国退款/, '韩国退款'],
+  [/^联络客人：术后管理已过/, '术后过期，联络客人'], [/^联络 IN 确认客人行程：术后管理已过/, '术后过期，联络 IN'], [/^当天本地项目还没标完成/, '补标本地项目'],
+  [/^预约占位快过期/, '占位快过期'], [/^项目确认中超过 3 天/, '问客人决定'], [/^重选时间/, '重选时间'], [/不在新行程内/, '重新预约施术'], [/^待重新预约/, '待重新预约'],
+  [/^施术前 7 天：联络客人确认行程|^施术前约 1 个月/, '确认行程'], [/^KR 无法安排所选日期/, '重选施术日期'], [/^被催办/, '被催办'],
+  [/^韩国行程是否结束/, '韩国行程结束？'], [/^客人离开日期已过/, '确认客人离境'], [/^术后管理（印尼）是否结案/, '是否结案'], [/^确认预约时间/, '确认预约时间'], [/^施术：/, '待施术'],
+  [/^室长代录 · 待发送|^院长已(重新)?上传 · 待发送/, '发送给 IN'], [/发送复诊评估结果/, '发送评估结果'], [/发送诊疗方案/, '发送诊疗方案']
+];
+function todoShortText(it){
+  var t = String(it.text||'').replace(/（已超时）|\(已超时\)/g, '').trim();
+  for(var i = 0; i < TODO_SHORT_RULES.length; i++){ if(TODO_SHORT_RULES[i][0].test(t)) return TODO_SHORT_RULES[i][1]; }
+  var h = t.split(/[：（(·]/)[0].trim() || t; return h.length > 14 ? h.slice(0, 14) : h;
+}
+/* 出现时间两行：MM-DD 换行 HH:MM（今天也写日期） */
+function todoFmtTime2(s){ if(!s) return '—'; var d = s.slice(5, 10), hm = s.length>=16 ? s.slice(11, 16) : ''; return '<span class="tt-d">'+todoEsc(d)+'</span>'+(hm ? '<span class="tt-t">'+todoEsc(hm)+'</span>' : ''); }
 function todoStatusOf(it){
   if(it.over) return {t:'已超时', cls:'over'};
   if(it.kind==='pay') return {t:'待付款', cls:'todo'}; /* CMD-1021-09：KR 待办「在韩加项待付款」状态写待付款 */
@@ -294,16 +321,16 @@ function todoStatusOf(it){
 }
 function todoRowHtml(it){
   var i = TODO_ACTS.push(it.go) - 1, st = todoStatusOf(it); TODO_ACT_CASE[i] = it.caseId||'';
-  var urgeBtn = it.urge ? '<button class="btn-primary todo-urge" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</button>' : '';
-  var proc = String(it.text||'').replace(/（已超时）|\(已超时\)/g, '').trim();
+  /* CMD-1111-05：催办改成下划线小字放在状态下面（只有能催办的几条） */
+  var urgeBtn = it.urge ? '<a class="todo-urge-link" onclick="event.stopPropagation();todoUrge(\''+it.caseId+'\')">'+((calCaseById(it.caseId)||{}).urgedAt ? '再次催办' : '催办')+'</a>' : '';
+  var proc = String(it.text||'').replace(/（已超时）|\(已超时\)/g, '').trim(), short = todoShortText(it);
   var ackBtn = (TODO_ANYACK ? '<div class="todo-ack">'+(it.ack ? '<button class="btn-outline" onclick="event.stopPropagation();todoAckOpen('+i+')">'+todoEsc(it.ackLabel||'已处理')+'</button>' : '')+'</div>' : '');
   return '<div class="todo-row'+(TODO_ANYACK ? ' has-ack' : '')+(it.pin?' pin':'')+(it.over?' is-over':'')+((it.ref || (todoRefMode() && !it.over && it.kind!=='recover'))?' is-ref':'')+'" '+(it.go ? 'onclick="todoGo('+i+')" style="cursor:pointer;"' : '')+'>'+
-    '<div class="todo-at">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+todoFmtTimeHtml(todoShownAt(it))+'</div>'+
-    '<div class="todo-stage" title="'+todoEsc(it.stage||'')+'">'+(it.pin?'📌 ':'')+todoEsc(it.stage||'—')+'</div>'+
-    '<div class="todo-text" title="'+todoEsc(proc)+'">'+todoEsc(proc)+'</div>'+
-    '<div class="todo-due'+(it.over?' over':'')+'">'+(it.due ? todoFmtTimeHtml(it.due) : '—')+'</div>'+
+    '<div class="todo-at">'+(todoIsNew(it) ? '<span class="todo-newdot" title="新的待办"></span>' : '')+todoFmtTime2(todoShownAt(it))+'</div>'+
+    '<div class="todo-stage" title="'+todoEsc(it.stage||'')+'">'+(it.pin?'📌 ':'')+todoEsc(todoStageShort(it.stage)||'—')+'</div>'+
+    '<div class="todo-text" title="'+todoEsc(proc)+'">'+todoEsc(short)+'</div>'+
     '<div class="todo-st '+st.cls+'">'+st.t+urgeBtn+'</div>'+
-    '<div class="todo-who">'+(it.name ? '<b>'+todoEsc(it.name)+'</b>' : '<span style="color:var(--muted);">—</span>')+(it.no ? '<span>'+todoEsc(it.no)+'</span>' : '')+'</div>'+ackBtn+'</div>';
+    '<div class="todo-who">'+(it.name ? '<b title="'+todoEsc(it.name)+'">'+todoEsc(it.name)+'</b>' : '<span style="color:var(--muted);">—</span>')+'</div>'+ackBtn+'</div>';
 }
 var TODO_ANYACK = false, TODO_ACK_CTX = null;
 /* CMD-1026-14 三：提醒联络类待办的［已处理］——可选填备注，确认后待办消失，记进案件 Timeline（谁 / 什么时候 / 备注）；记在案件 todoAcks 里按「这一件事」的 key，只压这一件，新的事（日期 / 行不同）不受影响 */
@@ -330,7 +357,7 @@ function todoPaneHtml(all){
   if(!noUb) try{ ubAll = todoUbItems(); }catch(e){ console.error('[未安排预约]', e); } var ubVis = ubAll.filter(function(it){ return !TODO_UI.mine || it.mine; }), ubTab = TODO_UI.tab==='unbooked' && !noUb && !todoRefMode();
   if(TODO_UI.collapsed) return '<button class="btn-outline todo-mini" onclick="todoToggle()">待办 '+n+((todoUbDot(ubAll) || todoTabDot(vis)) ? ' <span class="todo-newdot"></span>' : '')+'</button>';
   var boxStyle = ' style="width:auto;"';
-  var groups = [[0,'昨日及更早'],[1,'今天'],[2,'之后']];
+  var groups = [[2,'之后'],[1,'今天'],[0,'昨日及更早']]; /* CMD-1111-05：新的在最上面 */
   var body = groups.map(function(g){
     var list = vis.filter(function(it){ return todoGroupOf(it)===g[0]; }).sort(todoSort);
     if(!list.length) return '';
@@ -342,7 +369,7 @@ function todoPaneHtml(all){
   var tabs = '<span class="todo-tabs"><span class="todo-tab'+(ubTab ? '' : ' on')+'" onclick="todoSetTab(\'todo\')">待办 '+n+(todoTabDot(vis) ? '<span class="todo-newdot" title="有新的或已逾期的待办"></span>' : '')+'</span>'+(noUb ? '' : '<span class="todo-tab'+(ubTab ? ' on' : '')+'" onclick="todoSetTab(\'unbooked\')">未安排预约 '+todoUbCount(ubVis)+(todoUbDot(ubAll) ? '<span class="todo-newdot" title="有新的或已逾期的"></span>' : '')+'</span>')+'</span>';
   var headTitle = refMode ? '<b>'+todoEsc(TODO_FILTERS[TODO_UI.kind].label)+' '+n+'（参考）</b> <span onclick="todoSetKind(\'\')" title="回到待办" style="cursor:pointer;">✕</span>' : tabs+(ubTab ? '' : tag); /* CMD-1015-08：参考名单标题「今天来访 4（参考）✕」 */
   var inner = ubTab ? todoUbListHtml(ubVis) : ((TODO_UI.kind && !tag) ? '<div class="todo-filter">筛选：'+todoEsc(TODO_KIND_LABEL[TODO_UI.kind]||TODO_UI.kind)+' <span onclick="todoSetKind(\'\')" style="cursor:pointer;">✕</span></div>' : '')+
-    (vis.length ? '<div class="todo-row todo-headrow"><div>出现时间</div><div>阶段</div><div>进程</div><div>截止时间</div><div>状态</div><div>客人</div>'+(TODO_ANYACK ? '<div></div>' : '')+'</div>' : '')+'<div class="todo-list">'+body+'</div>';
+    (vis.length ? '<div class="todo-row todo-headrow"><div>出现时间</div><div>阶段</div><div>进程</div><div>状态</div><div>客人</div>'+(TODO_ANYACK ? '<div></div>' : '')+'</div>' : '')+'<div class="todo-list">'+body+'</div>';
   return '<div class="todo-box'+(refMode?' is-refmode':'')+'"'+boxStyle+'><div class="todo-head">'+headTitle+
     '<span class="todo-seg"><span class="'+(TODO_UI.mine?'':'on')+'" onclick="todoSetMine(false)">全部</span><span class="'+(TODO_UI.mine?'on':'')+'" onclick="todoSetMine(true)">只看我的</span></span>'+
     '<span class="todo-fold" onclick="todoToggle()" title="收起">⟩</span></div>'+inner+'</div>';

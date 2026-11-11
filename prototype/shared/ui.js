@@ -2151,9 +2151,9 @@ function submitHoldingsUse(scope){
 }
 
 /* 已出诊疗方案后，客人决定不做项目（不赴韩也不做本地）：二次确认 → 按结局推算（没买本地项目 → 仅出报告） */
-function noProjectForClient(){
+function noProjectForClient(skipConfirm){
   var c = getCurrentCase(); if(!c) return;
-  if(!confirm('确认客人不做任何项目？案件将按结局结束（仅出报告）。')) return;
+  if(!skipConfirm && !confirm('确认客人不做任何项目？案件将按结局结束（仅出报告）。')) return; /* CMD-1111-05：现在只从「客人这次没有选项目」弹窗的［客人不做］进（已在弹窗里确认过，skipConfirm） */
   logCaseEvent(c, ME_NAME, '客人不做项目');
   c.endNote = '客人不做项目'; /* 仅出报告的原因（列表进程栏显示） */
   autoFinish(c, '未购买未使用');
@@ -2590,8 +2590,42 @@ function leaveRemindConfirm(){
   if(R.side==='IN'){ var c = CASE_ITEMS.filter(function(x){ return x.id===R.id; })[0]; if(!c) return; logCaseEvent(c, actingName(), '客人离店时仍有：'+txt); LEAVE_OK[c.id] = true; try{ openEndCase(); }finally{ delete LEAVE_OK[c.id]; } }
   else krLeaveAfterRemind(R.key, R.list.some(function(x){ return x.projects; }), txt);
 }
+/* ===== CMD-1111-05：看完方案没选项目就离店 =====
+   已出方案、这次没选项目也没买东西 → 按［客人离店］（或「客人准备离店了吗？」的［客人已离店］）先弹「客人这次没有选项目」：
+   ○ 客人还在考虑（案件保留在「项目确认中」，来访结束，之后跟进；不设自动结束期限）○ 客人不做（案件以「仅出报告」结束，面诊费照收、方案保留，Timeline 记「客人不做项目」）；已选项目 / 已买东西不弹 */
+function leaveNoProjectNeeded(c){
+  if(!c || c.consultStatus!=='report_ready' || !c.reportReady || c.leaveConsider || isEnded(c)) return false;
+  try{ if(isUpgraded(mainOf(c))) return false; }catch(e){}
+  if((c.recommended||[]).length || (c.settlementBatches||[]).length || c.projectsLocked || c.mgmtActive || (c.mgmtUses||[]).length || (c.postcareUses||[]).length) return false;
+  if(c.localMgmt && ((c.localMgmt.batches||[]).length || (c.localMgmt.mgmtUses||[]).length)) return false;
+  return true;
+}
+var NOPJ = null;
+function leaveNoProjectOpen(c){
+  NOPJ = {caseId:c.id, choice:''};
+  var ov = document.getElementById('nopj-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'nopj-overlay'; ov.className = 'modal-overlay'; ov.style.zIndex = 100045; document.body.appendChild(ov); }
+  nopjRender(); ov.classList.add('open');
+}
+function nopjRender(){
+  var ov = document.getElementById('nopj-overlay'); if(!ov || !NOPJ) return; var ch = NOPJ.choice;
+  var opt = function(k, t, sub){ return '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;font-size:13px;cursor:pointer;"><input type="radio" name="nopj" '+(ch===k ? 'checked ' : '')+'onchange="nopjSet(\''+k+'\')" style="margin-top:3px;"><span><b>'+t+'</b><br><span style="font-size:12px;color:var(--muted);">'+sub+'</span></span></label>'; };
+  ov.innerHTML = '<div class="modal-box msz-S" style="padding:22px 24px;"><div style="display:flex;align-items:center;margin-bottom:10px;"><div style="font-size:16px;font-weight:700;flex:1;">客人这次没有选项目</div><button class="modal-x" onclick="nopjClose()" aria-label="关闭">✕</button></div>'+
+    opt('think', '客人还在考虑', '案件保留，之后跟进')+opt('decline', '客人不做', '案件以「仅出报告」结束')+
+    '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;"><button class="btn-outline" onclick="nopjClose()">取消</button><button class="btn-primary" '+(ch ? '' : 'disabled style="opacity:.4;" ')+'onclick="nopjOk()">确认</button></div></div>';
+}
+function nopjSet(k){ if(NOPJ){ NOPJ.choice = k; nopjRender(); } }
+function nopjClose(){ var ov = document.getElementById('nopj-overlay'); if(ov){ ov.classList.remove('open'); ov.innerHTML = ''; } NOPJ = null; }
+function nopjOk(){
+  var N = NOPJ; if(!N || !N.choice) return; var c = CASE_ITEMS.filter(function(x){ return x.id===N.caseId; })[0]; var ch = N.choice; nopjClose(); if(!c) return;
+  if(ch==='decline'){ noProjectForClient(true); return; } /* 原「客人不做」的结果：仅出报告，Timeline 记「客人不做项目」 */
+  c.leaveConsider = {at:nowFullDt(), by:actingName()}; c.leftStore = {at:nowFullDt(), by:actingName()};
+  logCaseEvent(c, actingName(), '客人离店（客人还在考虑，案件保留在项目确认中，之后跟进）');
+  updateCaseStage(c); buildCaseLog(c); renderCaseStatusBar(c); renderCaseBody(c);
+  showToast('客人已离店', c.name+' · 客人还在考虑，案件保留，之后跟进', null);
+}
 function openEndCase(){
   var c = getCurrentCase(); if(!c || !canEndCase(c)) return;
+  if(leaveNoProjectNeeded(c) && !window.GMC_NO_NOPJ){ leaveNoProjectOpen(c); return; }
   if(!LEAVE_OK[c.id] && !window.GMC_NO_LEAVEREMIND){ var lr = leaveRemindersIN(c); if(lr.length){ leaveRemindOpen('IN', c.id, lr); return; } }
   END_CASE = {caseId:c.id, choice:{}, amt:{}, reason:'', note:''};
   /* CMD-1022-15：［客人离店］——系统先判断：没有剩下的项目（都做完、都付清）→ 直接离店并结束案件，不跳弹窗；还有没做完 / 没付款的 → 弹窗（列出剩下的项目、要选原因） */

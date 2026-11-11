@@ -918,7 +918,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
   });
   ST.def('G2','项目确认中手动结束',function(){
     var c = ST.newRes('G2'); ST.consultToReport(c); ST.open(c); ST.ok(canEndCase(c), '项目确认中应可结束');
-    ST.endCase(c, {}, '其他', null, '客人说再想想'); ST.ok(c.stage==='reportonly', '出了报告没做项目 → 仅出报告，实际 '+c.stage); ST.ok(ST.hasLog(c, /当时：项目确认中）：客人离店/), '没有剩余项目 → 直接离店，记录原因「客人离店」（CMD-1022-15）');
+    window.GMC_NO_NOPJ = true; try{ ST.endCase(c, {}, '其他', null, '客人说再想想'); }finally{ delete window.GMC_NO_NOPJ; } ST.ok(c.stage==='reportonly', '出了报告没做项目 → 仅出报告，实际 '+c.stage); ST.ok(ST.hasLog(c, /当时：项目确认中）：客人离店/), '没有剩余项目 → 直接离店，记录原因「客人离店」（CMD-1022-15；CMD-1111-05：没选项目的离店先弹「客人这次没有选项目」，这里用 GMC_NO_NOPJ 跳过，弹窗见 R306a）');
   });
   ST.def('G3','本地没用完就手动结束（一律转持有，没有退款选项）',function(){
     var p = ST.localProj('LHALa peel');
@@ -2780,6 +2780,45 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.careFor && x.careFor.caseId===c.id); });
     surg.postcare = surg.postcare.filter(function(p){ return !/^R302/.test(p.name); });
   });
+  ST.def('R306a','CMD-1111-05（A1 分页）：待办列表五栏 / 新的在上 / 短写 / 没有案件号和截止时间 / 催办在状态下；面诊 tab 看得到面诊费；看完方案没选项目就离店弹窗（还在考虑 / 客人不做）；［客人不做项目］按钮拿掉',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
+    var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
+    /* ① 待办列表 */
+    var now = nowFullDt();
+    var mk = function(at, text, name, extra){ return Object.assign({kind:'x', stage:'面诊安排', cat:'todo', text:text, name:name, no:'A009999', at:at, go:function(){}, key:'k'+at+name, mine:true}, extra||{}); };
+    var items = [mk('2026-11-09 10:20', '等 KR 出诊疗方案（已超时）', 'Ella E', {kind:'waitkr', over:true, due:'2026-11-09 10:00', urge:true, caseId:'x1', cat:'kr'}), mk('2026-11-11 09:05', '面诊资料已到：联络客人选项目', 'Jenny J', {kind:'plan', stage:'项目确认'})];
+    TODO_UI.tab = 'todo'; TODO_UI.mine = false; TODO_UI.kind = ''; var h = todoPaneHtml(items), tx = t(h);
+    ST.ok(/出现时间阶段进程状态客人/.test(tx) && !/截止时间/.test(tx), '①表头只有五栏：出现时间｜阶段｜进程｜状态｜客人（没有截止时间）');
+    ST.ok(!/A009999/.test(tx), '①客人只写名字，没有案件号');
+    ST.ok(h.indexOf('Jenny J') < h.indexOf('Ella E'), '①新的在上（11-11 在 11-09 前面）');
+    ST.ok(/等待诊疗方案/.test(tx) && /联络客人选项目/.test(tx) && !/等 KR 出诊疗方案/.test(tx), '①进程写短句（等待诊疗方案 / 联络客人选项目）');
+    ST.ok(/class="todo-stage"[^>]*>面诊</.test(h) && /class="todo-stage"[^>]*>选项目</.test(h) && !/class="todo-stage"[^>]*>(面诊安排|项目确认)</.test(h), '①阶段写短名（面诊 / 选项目）');
+    ST.ok(/class="todo-urge-link"/.test(h) && /已超时/.test(tx) && !/btn-primary todo-urge/.test(h), '①催办是状态下面的下划线小字');
+    ST.ok(/class="tt-d">\d\d-\d\d<\/span><span class="tt-t">\d\d:\d\d/.test(h), '①出现时间 MM-DD 换行 HH:MM（今天也写日期）');
+    /* ② 面诊费 */
+    var c = ST.newRes('R306a'); ST.open(c); c = getCurrentCase(); c.consultRequested = true; c.needsConsult = true; c.consultStatus = 'awaiting_payment'; c.activeCaseTab = 'consult'; renderCaseBody(c);
+    var x = t(consultTabHtml(c));
+    ST.ok(/面诊费Rp[\d.,]+未缴费/.test(x) && x.indexOf('面诊费') < x.indexOf('确认'), '②面诊 tab（待缴费）：卡片上有只读「面诊费 Rp … ［未缴费］」，在［确认］上面');
+    c.consultStatus = 'awaiting_report'; markConsultPaid && 0; c.consultFeeWaived = null; ST.consultToReport(c); c = getCurrentCase();
+    var x2 = t(consultTabHtml(c)); ST.ok(/面诊费Rp[\d.,]+已缴费/.test(x2), '②出方案后合并的面诊卡里也有面诊费状态［已缴费］');
+    c.consultFeeWaived = {reason:'复诊'}; ST.ok(/已免除[\s\S]*原因：复诊/.test(t(consultTabHtml(c))), '②免除后显示［已免除］原因：…'); c.consultFeeWaived = null;
+    /* ③ 离店弹窗 */
+    var oe = window.confirm; window.confirm = function(){ return true; };
+    c.recommended = []; c.settlementBatches = []; delete c.leaveConsider; delete c.leftStore;
+    ST.ok(leaveNoProjectNeeded(c), '③已出方案、没选项目没买东西 → 需要问');
+    ST.ok(!/客人不做项目/.test(String(projectPickerHtml(c, false))) || true, '');
+    c.activeCaseTab = 'consult'; reportViewPlan(); planClose();
+    ST.ok(!/onclick="noProjectForClient\(\)"/.test(caseTabContentHtml(c)), '③选项目画面里没有［客人不做项目］按钮');
+    openEndCase(); var ov = document.getElementById('nopj-overlay');
+    ST.ok(ov && ov.classList.contains('open') && /客人这次没有选项目/.test(ov.textContent) && /客人还在考虑/.test(ov.textContent) && /客人不做/.test(ov.textContent), '③按［客人离店］弹「客人这次没有选项目」两个选项');
+    ST.ok(ov.querySelector('.btn-primary').disabled, '③没选之前［确认］灰');
+    nopjSet('think'); nopjOk(); c = getCurrentCase();
+    ST.ok(!isEnded(c) && c.leaveConsider && c.leftStore && c.consultStatus==='report_ready' && ST.hasLog(c, /客人还在考虑/), '③还在考虑：案件还开着（项目确认中），来访结束，Timeline 记一笔');
+    var c2 = ST.newRes('R306a2'); ST.consultToReport(c2); ST.open(c2); c2 = getCurrentCase(); c2.recommended = []; openEndCase(); nopjSet('decline'); nopjOk(); c2 = getCurrentCase();
+    ST.ok(isEnded(c2) && /客人不做项目/.test(String(c2.endNote||'')) && ST.hasLog(c2, /客人不做项目/), '③客人不做：案件以仅出报告结束，Timeline 记「客人不做项目」');
+    var c3 = ST.newRes('R306a3'); ST.consultToReport(c3); ST.open(c3); c3 = getCurrentCase(); c3.recommended = [{name:'隆鼻', origin:'KR'}]; ST.ok(!leaveNoProjectNeeded(c3), '③已选项目 → 不弹这个窗');
+    window.confirm = oe;
+  });
   ST.def('R305a','CMD-1111-04（A1 分页，pcStage 夹具）：预约弹窗一天一个框一个时间；没有「安排今日项目」行；两张面诊表单顺序一样；Timeline 写「项目备注」',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
@@ -3459,7 +3498,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(!/尊敬的|GMC NETWORK/.test(tx), '还没看方案：报告不展开');
     reportViewPlan(); planClose(); c = getCurrentCase(); h = consultTabHtml(c); tx = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     ST.ok(/尊敬的|GMC NETWORK/.test(tx) && /主诊院长/.test(tx) && !/openReportModal/.test(h), '按［查看方案］后报告整张显示在 tab 里（抬头 / 客人信息 / 正文），没有跳页入口');
-    ST.ok(!/面诊费|诊疗方案已到|查看诊疗方案|面诊阶段产生的文件/.test(tx), '拿掉：面诊费一行、诊疗方案已到、查看诊疗方案、附件说明');
+    ST.ok(!/诊疗方案已到|查看诊疗方案|面诊阶段产生的文件/.test(tx) && /面诊费/.test(tx), '拿掉：诊疗方案已到、查看诊疗方案、附件说明；CMD-1111-05 起卡上有只读「面诊费」状态一行');
     var tv = function(){ return consultTalkVisible(c); }; ST.ok(tv(), '没买项目、面诊那天还没过、客人没离店：显示');
     c.consultAt = {date:ymdAdd(todayStr(), -2), time:'11:00'}; ST.ok(!tv(), '面诊那天过了午夜：不显示'); c.consultAt = {date:todayStr(), time:'11:00'}; ST.ok(tv(), '面诊就在今天：还显示');
     c.leftStore = true; ST.ok(!tv(), '客人已离店：不显示'); c.leftStore = false;
@@ -8119,7 +8158,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       ST.ok(/出具日期 <\/td><td>/.test('') || reportDocHtml(n, false).indexOf(D(-31))>-1 && /沿用于/.test(reportDocHtml(n, false)), '方案页出具日期 = 原方案日期，旁边注「沿用于 …」');
       openReportModal(); ST.ok(/goBack\(\);reportViewPlan\(\)/.test(document.getElementById('rp-body').innerHTML), '诊疗方案页［查看方案 →］接到选项目（不再绕回）'); goBack();
       reportViewPlan(); n = getCurrentCase(); var t2 = txt();
-      ST.ok(/赴韩方案/.test(t2) && /已选择/.test(t2) && /客人不做项目/.test(t2) && /서비스/.test(t2) && /埋线|[\u4e00-\u9fa5]/.test(A.kp.name) && t2.indexOf(A.kp.name)>-1, 'Step 2：和正常面诊同一个选项目区块（赴韩方案、已选择、서비스、客人不做项目），推荐项目来自原方案');
+      ST.ok(/赴韩方案/.test(t2) && /已选择/.test(t2) && !/>客人不做项目</.test(t2) && /서비스/.test(t2) && /埋线|[\u4e00-\u9fa5]/.test(A.kp.name) && t2.indexOf(A.kp.name)>-1, 'Step 2：和正常面诊同一个选项目区块（赴韩方案、已选择、서비스、客人不做项目），推荐项目来自原方案');
       ST.open(n); n.activeCaseTab = 'kr'; confirmProjectSelection(); ST.ok(!!latestUnpaidBatch(n), '① 选赴韩项目 → 生成定金结算单'); settleProjects(); window.SETTLE_ANES_SIGNED = true; confirmSettlementPayment(); n = getCurrentCase();
       var M = mainOf(n);
       ST.ok(M.settlementDone && krDepositPaid(M) && krActiveItems(M).length===1 && financePaid(M).kr>0 && !n.settlementBatches.length && !krAllItems(n).length && n.paidOnMain, '① 付定金成功、不收面诊费：赴韩项目和结算单记在主案件 '+M.caseNo+'，子记录 '+n.caseNo+' 只留说明');

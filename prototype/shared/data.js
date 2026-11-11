@@ -1871,7 +1871,7 @@ function krDepositPaid(c){ return !!c.hasArrived || !!c.krProcedureDone || (c.se
 /* 赴韩项目全部取消（定金已退 / 转置换）且没到院：回到面诊级，仍可手动结束 */
 function compAllKrGone(c){ return !c.hasArrived && !c.krProcedureDone && krAllItems(c).length>0 && krActiveItems(c).length===0; }
 function canEndCase(c){
-  if(!c || isEnded(c) || c.visitClosed || c.subState!=='arrived' || (krDepositPaid(c) && !compAllKrGone(c))) return false;
+  if(!c || isEnded(c) || c.visitClosed || c.leaveConsider || c.subState!=='arrived' || (krDepositPaid(c) && !compAllKrGone(c))) return false;
   var a = currentAccount(); return !!a && a.role.indexOf('kr_')!==0 && a.role!=='owner' && canDo('work');
 }
 function caseWorkDone(c){ return !!c.krProcedureDone || (c.postcareUses||[]).length>0 || isLocalCtxWorkDone(c) || isLocalCtxWorkDone(c.localMgmt); }
@@ -4450,6 +4450,12 @@ function addConsult(){
 /* ---- 面诊资料 tab（总览第3、4节，2026-09-30）：一个案件只面诊一次，一张面诊费卡（待缴费/已缴费/已免除/已取消）+ 小状态行 ---- */
 var CONSULT_FEE_COLORS = {'待缴费':['#FBF0C9','#8F6F0C'], '已缴费':['var(--sage-bg)','var(--sage)'], '已免除':['var(--blue-bg)','var(--blue)'], '已取消':['#EDEAE2','var(--muted)']};
 
+/* CMD-1111-05：面诊 tab 卡片上的只读「面诊费 Rp 300,000［未缴费］」一行（1110-26 把面诊费改成弹窗后卡上完全看不到）；缴完 / 免除后显示［已缴费］或［已免除］原因：… */
+function consultFeeLineHtml(c, noBorder){
+  var st = consultFeeStatusMain(c), label = st==='待缴费' ? '未缴费' : st, col = CONSULT_FEE_COLORS[st] || CONSULT_FEE_COLORS['待缴费'];
+  var why = (st==='已免除' && c.consultFeeWaived && c.consultFeeWaived.reason) ? '<span style="font-size:12px;color:var(--muted);">原因：'+cesc(c.consultFeeWaived.reason)+'</span>' : '';
+  return '<div class="consult-fee-line" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;'+(noBorder ? '' : 'padding-bottom:12px;border-bottom:1px solid var(--border2);')+'"><span style="font-size:13px;font-weight:700;">面诊费</span><span style="font-size:13px;">'+fmtRp(consultFeeOf(c))+'</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+label+'</span>'+why+'</div>';
+}
 function consultFeeStatusMain(c){
   if(c.consultStatus==='awaiting_payment') return '待缴费';
   if(c.consultStatus==='cancelled') return '已取消';
@@ -4598,11 +4604,11 @@ function consultTabHtml(c){
   if(c.consultStatus==='awaiting_payment'){
     if(c.addConsultMode){ /* 本地案件［增加面诊］：同基础资料选面诊的顺序和组件 */
       var refBox = ''; /* CMD-1110-26 三：不再带入不面诊时的苦恼，也不显示参考那行 */
-      return wrap(wantConsultRowHtml(c, fee)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先选苦恼部位并填说明 / 希望预期 / 上传照片和视频（必填，和一般面诊同一套），再选院长、填预算和来访备注（选填），再缴费或免除面诊费，最后点确认</div>'+
+      return wrap(consultFeeLineHtml(c)+wantConsultRowHtml(c, fee)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先选苦恼部位并填说明 / 希望预期 / 上传照片和视频（必填，和一般面诊同一套），再选院长、填预算和来访备注（选填），再缴费或免除面诊费，最后点确认</div>'+
         '<div style="margin-bottom:10px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">苦恼 / 期望部位 <span style="color:var(--terracotta);">*</span></div>'+refBox+concernFormHtml(c)+'</div>'+
         directorRowHtml(c)+budgetRowHtml(c)+visitNoteRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true)); /* CMD-1111-04：顺序照一般面诊 苦恼部位 → 院长 → 预算 → 来访备注 */
     }
-    return wrap(wantConsultRowHtml(c, fee)+consultFeeFormHtml(c)); /* CMD-1110-26 五：下面「待缴费」那行（sub）拿掉 */
+    return wrap(consultFeeLineHtml(c)+wantConsultRowHtml(c, fee)+consultFeeFormHtml(c)); /* CMD-1111-05：最上面只读面诊费一行；CMD-1110-26 五：下面「待缴费」那行（sub）拿掉 */
   }
   if(c.consultStatus==='cancelled'){
     /* 2026-10-02：面诊取消（只在待缴费时）→ 面诊费已取消 → 主状态"选择项目"，本地管理tab已自动打开；这里只留记录 */
@@ -4639,7 +4645,7 @@ function consultTabHtml(c){
     var ru = c.reuseReport, ruNote = ru ? '<span class="status-pill" style="background:var(--blue-bg);color:var(--blue);">沿用自 '+cesc(ru.caseNo)+'</span><span style="font-size:12px;color:var(--muted);">原方案 '+cesc(String(ru.date||'').slice(5).replace('-', '/'))+(c.reuseAfterConsult ? ' · 面诊后院长判断无变动' : ' · 不收面诊费')+'</span>' : ''; /* CMD-1029-05：继续面诊（沿用原方案）旁边加注 */
     var ruLink = ru ? '<a href="#" class="info-link" style="font-size:12px;" onclick="openCaseDetail(\''+ru.fromId+'\');return false;">查看原案件</a>' : '';
     /* CMD-1111-02 五：面诊卡和报告卡合成一张——第一行 面诊 + 已出方案 + 面诊时间；第二行 📄 面诊诊疗报告 + 按钮；展开的报告在分隔线下面 */
-    return '<div class="card" style="padding:16px 22px;margin-bottom:14px;">'+consultHeadRowHtml(c, '已出方案', '', ruNote+(talk ? '<span style="margin-left:8px;">'+talk+'</span>' : ''))+
+    return '<div class="card" style="padding:16px 22px;margin-bottom:14px;">'+consultHeadRowHtml(c, '已出方案', '', ruNote+(talk ? '<span style="margin-left:8px;">'+talk+'</span>' : ''))+'<div style="height:10px;"></div>'+consultFeeLineHtml(c, true).replace('margin-bottom:12px;', 'margin-bottom:0;')+
       '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border2);"><span style="font-size:14px;font-weight:700;">📄 面诊诊疗报告</span>'+ruLink+'<span style="margin-left:auto;display:flex;gap:8px;align-items:center;">'+btns+'</span></div>'+(ru ? reusePriceNoteHtml(c) : '')+
       (open ? '<div style="max-width:820px;margin-top:12px;">'+reportDocHtml(c, REPORT_SHOW_ORIG, true)+'</div>' : '')+'</div><div id="consult-after-report"></div>';
   }
@@ -5823,7 +5829,7 @@ function projectPickerHtml(c, isAddition){
   var tot = cartTotals(selected);
   var settleOn = isAddition ? 'confirmAddition()' : 'confirmProjectSelection()';
   var settleBtn = '<button class="btn-primary" style="flex:1;'+((tot.paidCount && !tot.missingPrice) ? '' : 'opacity:.5;cursor:not-allowed;')+'" '+((tot.paidCount && !tot.missingPrice) ? 'onclick="'+settleOn+'"' : 'disabled')+'>'+(isAddition ? '结算追加项目 / 交定金' : '结算')+'</button>';
-  var noProjectBtn = (!isAddition && c.reportReady && !c.entryChoicePending && !c.settlementDone) ? '<button class="btn-outline" style="flex:1;" onclick="noProjectForClient()">客人不做项目</button>' : '';
+  var noProjectBtn = ''; /* CMD-1111-05：拿掉面诊后的［客人不做项目］按钮——没选项目就离店时由［客人离店］弹「客人这次没有选项目」选 还在考虑 / 客人不做（noProjectForClient 从那里进） */
   var wrapOpen = isAddition
     ? '<div class="project-card'+(c.projectsExpanded?' expanded':'')+'" style="border-top:1px dashed var(--border);padding-top:18px;margin-top:4px;">'
     : '<div class="card project-card'+(c.projectsExpanded?' expanded':'')+'" style="padding:22px 24px;position:relative;">'; /* CMD-1106-04：KR 编辑时整张卡盖遮罩 */
