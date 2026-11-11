@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>G-Booking-01-H01 顶栏（诊所名 + 语言切换）</title>
+<link rel="stylesheet" href="base.css">
+<style>/* 本元素没有额外样式；下面两个 frame 只是把「印尼文选中」「中文选中」并排演示，正式页面里只有一个 */
+.demo{display:flex;gap:24px;flex-wrap:wrap;padding:16px;background:#999}
+.frame{width:390px;background:var(--bk-page) url('booking-bg.jpg') center top/cover no-repeat}
+.cap{font:12px sans-serif;color:#fff;margin:0 0 4px}</style>
+</head>
+<body style="background:#999">
+<div class="demo">
+  <div><p class="cap">语言 = Bahasa Indonesia（选中）</p>
+    <div class="frame"><div class="bk-wrap" style="padding-bottom:16px">
+      <!-- G-Booking-01-H01 -->
+      <div class="bk-head">
+        <span class="logo">GMC 合作诊所（雅加达）</span><!-- 诊所名：来自诊所设定，这里是演示值 -->
+        <div class="bk-lang"><button class="on">Bahasa Indonesia</button><button>中文</button></div>
+      </div>
+    </div></div></div>
+  <div><p class="cap">语言 = 中文（选中）</p>
+    <div class="frame"><div class="bk-wrap" style="padding-bottom:16px">
+      <div class="bk-head">
+        <span class="logo">GMC 合作诊所（雅加达）</span>
+        <div class="bk-lang"><button>Bahasa Indonesia</button><button class="on">中文</button></div>
+      </div>
+    </div></div></div>
+</div>
+</body></html>

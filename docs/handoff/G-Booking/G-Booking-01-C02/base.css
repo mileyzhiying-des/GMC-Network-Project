@@ -1,0 +1,31 @@
+/* 取自原型 booking.html + app.css + dstyle.js 在浏览器里算出来的实际值（首页 G-Booking-01） */
+:root{
+  --navy:#221E1B; --border:#E3DCD4; --border2:#EFEAE4; --slate2:#3A342F; --muted:#8E857C; --dim:#CFC6BC;
+  --bk-brand:#8A6446;          /* 主卡背景 / 边框 */
+  --bk-brand-text:#9A6A4B;     /* 语言切换「选中」文字 */
+  --bk-brand-subtle:#F6E9DE;   /* 语言切换「选中」底色 */
+  --bk-ink:#3B2A1E;            /* 诊所名文字 */
+  --bk-ink-strong:#2E2118;     /* 大标题 */
+  --bk-ink-soft:#5A4A3C;       /* 欢迎语 */
+  --bk-page:#EFE6D8;           /* 页面底色（图片没载入时） */
+  --font:Pretendard,"Noto Sans SC",-apple-system,"system-ui","Noto Sans KR",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font);color:#3A342F;background:var(--bk-page) url('booking-bg.jpg') center top/cover no-repeat;min-height:100vh}
+.bk-wrap{max-width:480px;margin:0 auto;padding:16px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.bk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:nowrap}
+.logo{display:block;font-size:14px;font-weight:700;color:var(--bk-ink);line-height:1.3}
+.bk-lang{flex-shrink:0;display:inline-flex;border:1px solid rgba(255,255,255,.9);border-radius:999px;overflow:hidden;background:rgba(255,255,255,.7);backdrop-filter:blur(6px)}
+.bk-lang button{white-space:nowrap;border:0;background:transparent;padding:6px 9px;font-size:12px;cursor:pointer;color:#3A342F;font-family:inherit}
+.bk-lang button.on{background:var(--bk-brand-subtle);color:var(--bk-brand-text);font-weight:700}
+.bk-home{margin-top:11vh;display:flex;flex-direction:column;gap:14px}
+.bk-home-title{font-size:30px;line-height:1.3;font-weight:700;color:var(--bk-ink-strong);margin:0}
+.bk-home-intro{font-size:14px;line-height:1.75;color:var(--bk-ink-soft);margin:0 0 10px}
+.bk-home-card{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:20px 18px;border-radius:18px;border:1px solid rgba(255,255,255,.85);background:rgba(255,255,255,.62);backdrop-filter:blur(8px);color:var(--bk-ink);cursor:pointer;font-family:inherit;box-shadow:0 4px 18px rgba(80,60,40,.10)}
+.bk-home-card.primary{background:var(--bk-brand);border-color:var(--bk-brand);color:#fff}
+.bk-home-ico{flex-shrink:0;width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(138,100,70,.12)}
+.bk-home-card.primary .bk-home-ico{background:rgba(255,255,255,.2)}
+.bk-home-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.bk-home-txt b{font-size:17px;font-weight:700}
+.bk-home-txt small{font-size:12.5px;opacity:.8}
+.bk-home-arrow{flex-shrink:0;opacity:.85;display:flex}
