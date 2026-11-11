@@ -280,6 +280,13 @@ function surgMsgText(c, ver, lang){
    发送状态显示最近一次「MM/DD 已通知客人（施术日期 · 行程）」+ 下划线「再次发送」；记短信发送记录 + Timeline。 */
 function surgCanNotice(c){ var ks = c && c.krSchedule; return !!(ks && ks.confirmedDate && ['Confirmed','Changing','Arrived'].indexOf(scheduleState(c))>-1); }
 function surgCanTrip(c){ var ks = c && c.krSchedule; return !!(ks && ks.tripState!=='tentative' && stayFilled(c) && c.stay.inTime && c.stay.outTime); }
+/* CMD-1111-03：「行程与天气」可勾 = 施术前 7 天内（演示时间距施术日 ≤ 7 天）且行程已定；不满足时灰掉不隐藏，灰字写原因（两个都不满足时写前者） */
+function surgTripWhy(c){
+  if(calDaysToSurgery(c) > TRIP_CONFIRM_DAYS) return '施术前 '+TRIP_CONFIRM_DAYS+' 天内才能发';
+  if(!surgCanTrip(c)) return '行程确定后才能发';
+  return '';
+}
+function surgTripOk(c){ return !surgTripWhy(c); }
 function tripInformed(c){ return !!(c && c.tripRemindMsg && c.tripRemindMsg.key===tripRemindKey(c.stay||{})); } /* 行程这一版已通知客人 */
 function informLastOf(c){
   var l = c.informLast; if(l && l.at) return l;
@@ -375,7 +382,7 @@ function surgComboText(c, notice, trip){
 function openSurgMsg(id, pre){
   var c = calCaseById(id); if(!c || !c.krSchedule) return;
   if(pre==='remind') return; /* CMD-1020-13 七：施术前提醒讯息已取消 */
-  var cn = surgCanNotice(c), ct = surgCanTrip(c); if(!cn && !ct) return;
+  var cn = surgCanNotice(c), ct = surgTripOk(c); if(!cn && !ct) return;
   var n = cn && (pre==='date' || (pre!=='trip' && !surgMsgSent(c))), t = ct && (pre==='trip' || (pre!=='date' && !tripInformed(c)));
   if(!n && !t){ n = cn; t = ct; }
   var prev = informLastOf(c);
@@ -388,10 +395,10 @@ function surgMsgRender(){
   var ov = document.getElementById('surgmsg-overlay'), s = SURGMSG; if(!ov || !s) return;
   var c = calCaseById(s.id), cl = clientByName(c.name), to = (cl && cl.phone) || '—';
   var seg = function(k){ return '<button class="'+(s.method===k ? 'btn-primary' : 'btn-outline')+'" onclick="surgMsgMethod(\''+k+'\')">'+k+'</button>'; };
-  var cn = surgCanNotice(c), ct = surgCanTrip(c);
+  var cn = surgCanNotice(c), ct = surgTripOk(c), tw = surgTripWhy(c);
   var ck = function(key, label, on, can, why, done){ return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0;'+(can ? 'cursor:pointer;' : 'opacity:.55;cursor:not-allowed;')+'"><input type="checkbox" id="smg-'+key+'" '+(on ? 'checked ' : '')+(can ? '' : 'disabled ')+'onchange="surgMsgToggle(\''+key+'\',this.checked)"><b>'+label+'</b>'+(!can ? '<span style="font-size:12px;color:var(--muted);">（'+why+'）</span>' : (done ? '<span style="font-size:12px;color:var(--sage);">（已通知过，可再发）</span>' : ''))+'</label>'; };
-  ov.innerHTML = '<div class="modal-box" style="width:540px;"><div style="font-size:15px;font-weight:700;margin-bottom:10px;">发送信息给客人 <span style="font-size:12px;font-weight:400;color:var(--muted);">演示：不会真的发出</span></div>'+
-    '<div style="margin-bottom:10px;">'+ck('notice', '施术日期与到院地址', s.notice, cn, 'KR 确认施术时间后才能勾', cn && surgMsgSent(c))+ck('trip', '行程与天气', s.trip, ct, '行程还没定，先在页头［行程修正］里填好', ct && tripInformed(c))+'</div>'+
+  ov.innerHTML = '<div class="modal-box" style="width:540px;"><div style="display:flex;align-items:center;margin-bottom:10px;"><div style="font-size:15px;font-weight:700;flex:1;">发送信息给客人 <span style="font-size:12px;font-weight:400;color:var(--muted);">演示：不会真的发出</span></div><button class="modal-x" onclick="closeSurgMsg()" title="关闭" aria-label="关闭">✕</button></div>'+
+    '<div style="margin-bottom:10px;">'+ck('notice', '施术日期与到院地址', s.notice, cn, 'KR 确认施术时间后才能勾', cn && surgMsgSent(c))+ck('trip', '行程与天气', s.trip && ct, ct, tw, ct && tripInformed(c))+'</div>'+
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">'+seg('短信')+seg('WhatsApp')+'<span style="font-size:12px;color:var(--slate2);margin-left:6px;">发给 '+aEsc(to)+'</span></div>'+
     '<div style="font-size:12px;color:var(--slate2);margin-bottom:4px;">预览（可以修改；模板在「诊所设定」里）</div>'+
     '<textarea id="surgmsg-text" rows="14" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;" oninput="SURGMSG.text=this.value">'+aEsc(s.text)+'</textarea>'+

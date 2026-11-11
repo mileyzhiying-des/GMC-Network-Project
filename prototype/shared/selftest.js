@@ -10636,6 +10636,25 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
   });
 
   /* CMD-1110-06：IN 主案件页结构 */
+  ST.def('R304a','CMD-1111-03（A1 分页，stageC 夹具）：发送信息给客人——「行程与天气」只有施术前 7 天内且行程已定才能勾（否则灰 + 原因，不隐藏）；施术日期与到院地址不受影响；弹窗右上 ×',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = ST.toConfirmed('R304a'), td = todayStr(), ks = c.krSchedule;
+    ks.confirmedTime = '11:00'; ks.tripState = 'booked'; ks.confirmedDate = ymdAdd(td, 15);
+    c.stay = {in:ymdAdd(td, 13), inTime:'11:20', inAirport:'ICN', out:ymdAdd(td, 22), outTime:'12:30', outAirport:'', by:'A1', at:nowFullDt()};
+    var ov = function(){ return document.getElementById('surgmsg-overlay'); }, tripBox = function(){ return ov().querySelector('#smg-trip'); };
+    ST.open(c); c.informLast = null; c.surgeryMsg = null; c.tripRemindMsg = null;
+    openSurgMsg(c.id); var tb = tripBox();
+    ST.ok(!!tb && tb.disabled && /施术前 7 天内才能发/.test(ov().innerText), '①距施术 15 天：行程与天气灰掉（不隐藏），灰字「施术前 7 天内才能发」');
+    ST.ok(SURGMSG.notice && !SURGMSG.trip && !!ov().querySelector('#smg-notice') && !ov().querySelector('#smg-notice').disabled, '①只能发施术日期与地址（可勾）');
+    ST.ok(!!ov().querySelector('.modal-x'), '③弹窗右上有 ×'); closeSurgMsg();
+    ks.confirmedDate = ymdAdd(td, 5); openSurgMsg(c.id, 'trip'); tb = tripBox();
+    ST.ok(tb && !tb.disabled && SURGMSG.trip, '②距施术 5 天 + 行程已定：可以勾；从待办进来先勾好'); closeSurgMsg();
+    ks.tripState = 'tentative'; openSurgMsg(c.id); tb = tripBox();
+    ST.ok(tb && tb.disabled && /行程确定后才能发/.test(ov().innerText) && !/施术前 7 天内才能发/.test(ov().innerText), '②行程暂定：灰 +「行程确定后才能发」'); closeSurgMsg();
+    ks.confirmedDate = ymdAdd(td, 15); openSurgMsg(c.id); ST.ok(/施术前 7 天内才能发/.test(ov().innerText) && !/行程确定后才能发/.test(ov().innerText), '两个条件都不满足时写「施术前 7 天内才能发」'); closeSurgMsg();
+    ks.tripState = 'booked'; ks.confirmedDate = ymdAdd(td, 5); todoRefresh();
+    ST.ok(inTodoItems().some(function(i){ return i.caseId===c.id && i.kind==='tripremind'; }), '④待办「发送行程提醒给客人」仍在施术前 7 天内出现');
+  });
   ST.def('R282a','CMD-1110-06（A1 分页，stageC 夹具）：页头第三行「在韩行程」+［行程变动］；施术日期卡标题 +［打印］、没有行程段；「施术项目（N）」没有分页；tab 标记 ✓ / ●；［发送信息给客人］两项（施术日期与到院地址 / 行程与天气）合成一则；待办①②的出现 / 消失 / 再出现；当前状态卡第二行「下一个预约」',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
     var al = window.alert, cf = window.confirm; window.alert = function(){}; window.confirm = function(){ return true; };
