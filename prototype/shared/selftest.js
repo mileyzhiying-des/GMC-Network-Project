@@ -2210,8 +2210,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var ub = todoUbItems().filter(function(u){ return u.caseId===c.id; }); ST.ok(ub.length>=1 && ub.every(function(u){ return u.source==='KR 交给印尼' && !!u.label && !!u.sug && u.n>=1; }), 'IN 未安排预约里有 KR 交给印尼的术后管理：来源「KR 交给印尼」、灰字、建议日期（'+ub.length+' 条）');
     ST.ok(todoUbDot(ub), '新进来的亮红点'); TODO_UB_LAST = ub; todoUbSeenAll(); ST.ok(!todoUbDot(ub), '点开看过红点消失');
     ub[0].sug = ymdAdd(today, -1); ub[0].over = true; ST.ok(todoUbDot(ub), '过了建议日期（逾期）再亮红点'); ST.ok(/class="ub-sug over"/.test(todoUbListHtml(ub)), '逾期的建议日期标红');
-    TODO_UI.tab = 'unbooked'; TODO_UI.mine = false; var html = todoPaneHtml(todoItems()); ST.ok(/待办 \d+[\s\S]*未安排预约 \d+/.test(html.replace(/<[^>]+>/g, '')) && /ub-grp/.test(html), '标题行是两个并排分页，点未安排预约显示列表'); TODO_UI.tab = 'todo'; var h2 = todoPaneHtml(todoItems()); ST.ok(!/ub-grp/.test(h2) && /todo-list/.test(h2), '默认 / 切回待办显示待办列表（未安排预约不进待办）'); ST.ok(!todoItems().some(function(it){ return /交给印尼|未安排/.test(it.text||''); }), '未安排预约不混进待办');
-    var gs = todoUbGroupsIn(c, false), g0 = gs[0], bk0 = g0.items[0].bk; todoCbOpen(c.id, g0.gid); TODO_CB2.groups[0].lines[0].date = (function(){ var d = ymdAdd(today, 3); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; })(); todoCbNormalize(); todoCbRender();
+    TODO_UI.tab = 'unbooked'; TODO_UI.mine = false; var html = todoPaneHtml(todoItems()); ST.ok(/待办 \d+[\s\S]*未安排预约 \d+/.test(html.replace(/<[^>]+>/g, '')) && /ub-grp|ub-row/.test(html), '标题行是两个并排分页，点未安排预约显示列表'); TODO_UI.tab = 'todo'; var h2 = todoPaneHtml(todoItems()); ST.ok(!/ub-grp|ub-row/.test(h2) && /todo-list/.test(h2), '默认 / 切回待办显示待办列表（未安排预约不进待办）'); ST.ok(!todoItems().some(function(it){ return /交给印尼|未安排/.test(it.text||''); }), '未安排预约不混进待办');
+    var gs = todoUbGroupsIn(c, false), g0 = gs[0], bk0 = g0.items[0].bk; todoCbOpen(c.id, g0.gid); TODO_CB2.rows[0].date = (function(){ var d = ymdAdd(today, 3); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; })(); todoCbNormalize(); TODO_CB2.rows[0].time = todoCbTimes(TODO_CB2.rows[0].date)[0]; todoCbRender();
     ST.ok(/术后管理/.test(document.getElementById('todo-cb-overlay').innerText) && /A000/.test(document.getElementById('todo-cb-overlay').innerText), '［预约］打开代约：来访目的术后管理、带出原案件和项目');
     todoCbGo(); var rc = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; })[0]; ST.ok(!!rc && rc.visitPurpose==='术后管理' && rc.careFor.keys.indexOf(bk0)>-1, '生成继续原案件的预约（careFor）');
     var after = todoUbGroupsIn(c, false); ST.ok(!after.some(function(g){ return g.items.some(function(x){ return x.bk===bk0; }); }), '约好的这一次从未安排预约里消失');
@@ -2576,7 +2576,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
       var sg = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); }); sg[0].postcare = (sg[0].postcare||[]).concat([{mgmt:'术后管理', name:'R160 消肿', times:1, interval:1, place:'IN', startDay:5}, {mgmt:'术后管理', name:'R160 拆线', times:1, interval:1, place:'IN', startDay:7}]);
       var gs = todoUbGroupsIn(c, false); if(!ST.ok(gs.length>=2, '夹具里有至少两个印尼未预约项目（'+gs.length+'）')) return;
       todoCbOpen(c.id, '*'); var B = TODO_CB2;
-      B.groups.forEach(function(g, i){ g.lines.forEach(function(l){ l.date = (i % 2===0) ? d1 : d2; }); }); todoCbNormalize(); todoCbRender();
+      B.rows.forEach(function(l, i){ l.date = (i % 2===0) ? d1 : d2; }); todoCbNormalize(); B.rows.forEach(function(l){ if(l.on && !todoCbDateErr(l.date)) l.time = todoCbTimes(l.date)[0]||''; }); todoCbRender();
       todoCbGo();
       var kids = CASE_ITEMS.filter(function(x){ return x.mainId===c.id && x.preChild; });
       ST.ok(kids.length===2, '两个日子 → 两个子案件（实际 '+kids.length+'）');
@@ -2716,39 +2716,69 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var surgs = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); });
     surgs[0].postcare = (surgs[0].postcare||[]).concat([{mgmt:'术后管理', name:'R158 消肿', times:1, interval:1, place:'IN', startDay:5}, {mgmt:'术后管理', name:'R158 拆线', times:1, interval:1, place:'IN', startDay:7}]);
     var s1 = surgs[1] || surgs[0]; s1.postcare = (s1.postcare||[]).concat([{mgmt:'术后管理', name:'R158 复查', times:1, interval:1, place:'IN', startDay:6}]);
-    todoCbOpen(c.id, '*'); var B = TODO_CB2, names = B.groups.map(function(g){ return g.name; });
-    ST.ok(['R158 消肿','R158 拆线','R158 复查'].every(function(n){ return names.indexOf(n)>-1; }), '弹窗里有三个印尼术后管理项目');
-    var d1 = wk(3), d2 = wk(5), mine = B.groups.filter(function(g){ return /^R158/.test(g.name); }); /* 其余原有行先取消勾选，只看这三个 */
-    B.groups.forEach(function(g){ if(!/^R158/.test(g.name)) g.lines.forEach(function(l){ l.on = false; l.userOff = true; }); });
-    mine[0].lines[0].date = d1; mine[1].lines[0].date = d2; mine[2].lines[0].date = d1; todoCbNormalize(); todoCbRender();
-    var ov = document.getElementById('todo-cb-overlay'), grps = [].slice.call(ov.querySelectorAll('.krcb-grp')).filter(function(g){ return g.querySelectorAll('input[type=checkbox]:checked').length; });
-    ST.ok(grps.length===2, '三个项目分在两个日期 → 两张小卡（实际 '+grps.length+' 张）');
-    ST.ok(grps.every(function(g){ return g.querySelectorAll('select').length===1; }), '每张卡只有一个时间下拉（同一天只选一次）');
-    var g1 = ov.querySelector('.krcb-grp[data-date="'+d1+'"]'), txt1 = g1 ? g1.textContent : '';
-    ST.ok(g1 && /预约时间：/.test(txt1) && /R158 消肿/.test(txt1) && /R158 复查/.test(txt1) && !/R158 拆线/.test(txt1), '卡片标题「预约时间：MM/DD（周几）」，同一天的两个项目在同一张卡');
-    ST.ok(/项目[\s\S]*施术项目[\s\S]*推荐内容[\s\S]*推荐时间[\s\S]*次数[\s\S]*预约日期/.test(txt1) && /术后第 \d+ 天/.test(txt1), '栏位 项目｜施术项目｜推荐内容（术后第 N 天）｜推荐时间｜次数｜预约日期');
-    /* 改日期自动移卡 */
-    var gi2 = B.groups.indexOf(mine[1]); todoCbSet(gi2, 0, 'date', d1);
-    ov = document.getElementById('todo-cb-overlay'); var cards = [].slice.call(ov.querySelectorAll('.krcb-grp')).filter(function(g){ return g.querySelectorAll('input[type=checkbox]:checked').length; });
-    ST.ok(cards.length===1 && /R158 拆线/.test(cards[0].textContent), '把拆线改到 d1 → 自动移到 d1 的卡，d2 的卡消失');
-    todoCbSet(gi2, 0, 'date', d2); ov = document.getElementById('todo-cb-overlay'); ST.ok([].slice.call(ov.querySelectorAll('.krcb-grp')).filter(function(g){ return g.querySelectorAll('input[type=checkbox]:checked').length; }).length===2, '改回 d2 → 新增 d2 的卡');
-    /* 休诊日进红框 */
-    todoCbSet(gi2, 0, 'date', sun); ov = document.getElementById('todo-cb-overlay'); var pr = ov.querySelector('.krcb-prob');
-    ST.ok(!!pr && /需要处理 1 项/.test(pr.textContent) && /休诊日/.test(pr.textContent) && !B.groups[gi2].lines[0].on, '休诊日（周日）→ 红框「需要处理 1 项」，红字写休诊日，自动取消勾选');
-    todoCbSet(gi2, 0, 'date', d2); ov = document.getElementById('todo-cb-overlay'); ST.ok(!ov.querySelector('.krcb-prob') && B.groups[gi2].lines[0].on, '改回正常日期 → 红框消失并自动勾回');
-    /* 时间下拉：只列营业时间内；午休可选 */
-    var opts = [].slice.call(ov.querySelectorAll('.krcb-grp[data-date="'+d1+'"] select option')).map(function(o){ return o.value; });
-    ST.ok(opts.length>0 && opts.every(function(t){ return WK_HOURS.indexOf(t)>-1; }) && opts.some(function(t){ return slotIsLunch(t); }) && opts.indexOf('03:00')<0, '时间下拉只列营业时间内，午休也列（标午休）');
-    var lunchT = opts.filter(function(t){ return slotIsLunch(t); })[0]; todoCbSetDay(d1, lunchT);
-    var before = CASE_ITEMS.length, asked = 0, oc = window.confirm; window.confirm = function(m){ asked++; return false; };
-    todoCbGo(); ST.ok(asked===1 && CASE_ITEMS.length===before && !!TODO_CB2, '选午休时间 → 确认预约时跳「午休」确认，取消则不约');
-    window.confirm = function(m){ asked++; return true; };
-    todoCbGo(); window.confirm = oc;
+    todoCbOpen(c.id, '*'); var B = TODO_CB2, names = B.rows.map(function(l){ return l.name; });
+    ST.ok(['R158 消肿','R158 拆线','R158 复查'].every(function(n){ return names.indexOf(n)>-1; }), '弹窗里有三个印尼术后管理项目（一次一行）');
+    var d1 = wk(3), d2 = wk(5), mine = B.rows.filter(function(l){ return /^R158/.test(l.name); }); /* 其余原有行先取消勾选，只看这三个 */
+    B.rows.forEach(function(l){ if(!/^R158/.test(l.name)){ l.on = false; l.userOff = true; } });
+    mine[0].date = d1; mine[1].date = d2; mine[2].date = d1; todoCbNormalize(); todoCbRender();
+    var ov = document.getElementById('todo-cb-overlay'), txt0 = ov.textContent;
+    ST.ok(/项目[\s\S]*施术项目[\s\S]*推荐内容[\s\S]*推荐时间[\s\S]*预约日期/.test(txt0) && !/次数/.test(txt0) && /术后第 \d+ 天/.test(txt0), '栏位 项目｜施术项目｜推荐内容（术后第 N 天）｜推荐时间｜预约日期，没有次数栏');
+    ST.ok(!/继续原案件|来访目的|同一天的项目一起约/.test(txt0) && !ov.querySelector('.krcb-grp') && /客人：/.test(txt0) && /查看案件/.test(txt0), '没有「继续原案件 / 来访目的」行、说明文字、共用时间卡；有「客人」行和［查看案件］');
+    ST.ok(ov.querySelectorAll('tbody tr').length===B.rows.length && ov.querySelectorAll('tbody select').length===B.rows.length, '每一行自己有日期框和时间下拉');
+    var okBtn = [].slice.call(ov.querySelectorAll('button')).filter(function(b){ return /确认预约/.test(b.textContent); })[0];
+    ST.ok(okBtn && okBtn.disabled && !/（\d+）/.test(okBtn.textContent), '勾了但都没选时间 → N = 0，［确认预约］灰');
+    var t1 = todoCbTimes(d1), lunchT = t1.filter(function(t){ return slotIsLunch(t); })[0], plain = t1.filter(function(t){ return !slotIsLunch(t); });
+    var iA = B.rows.indexOf(mine[0]), iB = B.rows.indexOf(mine[1]), iC = B.rows.indexOf(mine[2]);
+    todoCbSet(iA, 'time', plain[0]); ov = document.getElementById('todo-cb-overlay'); okBtn = [].slice.call(ov.querySelectorAll('button')).filter(function(b){ return /确认预约/.test(b.textContent); })[0];
+    ST.ok(todoCbN()===1 && okBtn && !okBtn.disabled && /（1）/.test(okBtn.textContent), '只选了一行的时间 → N = 1（另外两行没填时间不算）');
+    /* 休诊日进红字、自动取消勾选；改回自动勾回 */
+    todoCbSet(iB, 'date', sun); ov = document.getElementById('todo-cb-overlay');
+    ST.ok(!B.rows[iB].on && /休诊日/.test(ov.textContent), '休诊日（周日）→ 红字写休诊日，自动取消勾选');
+    todoCbSet(iB, 'date', d2); ST.ok(B.rows[iB].on && !B.rows[iB].time, '改回正常日期 → 自动勾回，时间要重新选');
+    var opts = [].slice.call(document.getElementById('todo-cb-overlay').querySelectorAll('tbody tr')[iA].querySelectorAll('select option')).map(function(o){ return o.value; }).filter(Boolean);
+    ST.ok(opts.length>0 && opts.every(function(t){ return WK_HOURS.indexOf(t)>-1; }) && opts.indexOf('03:00')<0, '时间下拉只列营业时间内');
+    todoCbSet(iB, 'time', plain[plain.length-1]); todoCbSet(iC, 'time', plain[1] || plain[0]);
+    ST.ok(todoCbN()===3, '三行都选了时间 → N = 3');
+    /* 同一天不同时间：归到同一个到访，时间用最早的 */
+    var before = CASE_ITEMS.length;
+    if(lunchT){ todoCbSet(iC, 'time', lunchT); var asked = 0, oc = window.confirm; window.confirm = function(){ asked++; return false; }; todoCbGo(); ST.ok(asked===1 && CASE_ITEMS.length===before && !!TODO_CB2, '选了午休时间 → 确认预约时跳「午休」确认，取消则不约'); window.confirm = function(){ asked++; return true; }; todoCbSet(iC, 'time', plain[1] || plain[0]); }
+    todoCbGo(); if(typeof oc!=='undefined') window.confirm = oc;
     var made = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; });
-    ST.ok(made.length===2, '确认后两个日期各合成一次到店（实际 '+made.length+' 张）');
+    ST.ok(made.length===2, '确认后按日期归并：d1 一个到访、d2 一个到访（实际 '+made.length+' 张）');
     var m1 = made.filter(function(x){ return x.visitDate===d1; })[0], m2 = made.filter(function(x){ return x.visitDate===d2; })[0];
-    ST.ok(m1 && m1.careFor.keys.length===2 && m1.visitTime===lunchT && m2 && m2.careFor.keys.length===1, 'd1 一次到店带 2 个项目、时间 = 卡里选的；d2 带 1 个');
+    var tmin = [B.rows[iA].time, B.rows[iC].time].sort()[0];
+    ST.ok(m1 && m1.careFor.keys.length===2 && m1.visitTime===tmin && m2 && m2.careFor.keys.length===1 && m2.visitTime===B.rows[iB].time, 'd1 带 2 个项目、到访时间 = 两行里最早的时间；d2 带 1 个、时间 = 那一行选的');
     CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.careFor && x.careFor.caseId===c.id); }); surgs[0].postcare = surgs[0].postcare.filter(function(p){ return !/^R158/.test(p.name); }); s1.postcare = s1.postcare.filter(function(p){ return !/^R158/.test(p.name); });
+  });
+  ST.def('R302a','CMD-1111-01（A1 分页，pcStage 夹具）：工作台未安排预约一行一个客人；预约弹窗每行自己日期时间、多次拆行、N 只算填好时间的行；同一天不同时间归一个到访',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var c = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0]; if(!ST.ok(!!c, '先 ST.ensureFixtures([\'pcStage\'])')) return;
+    var today = todayStr(), wk = function(n){ var d = ymdAdd(today, n); while(visitWeekday(d)==='周日') d = ymdAdd(d, 1); return d; };
+    CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !x.careFor; }); c.krBalancePaid = true;
+    c.procedureItems.forEach(function(i){ i.postcare = (i.postcare||[]).filter(function(p){ return !/^R302/.test(p.name||''); }); });
+    var surg = krActiveItems(c).filter(function(it){ return !krIsMgmtItemC(it); })[0];
+    surg.postcare = (surg.postcare||[]).concat([{mgmt:'术后管理', name:'R302 消肿', times:3, interval:2, place:'IN', startDay:3}, {mgmt:'术后管理', name:'R302 拆线', times:1, interval:1, place:'IN', startDay:7}]);
+    TODO_UI.tab = 'unbooked'; TODO_UI.mine = false; var html = todoPaneHtml(todoItems()), txt = html.replace(/<[^>]+>/g, ' ');
+    ST.ok((html.match(/ub-row/g)||[]).length >= 1 && !/ub6|全部预约/.test(html) && /未预约 \d+/.test(txt), '①工作台一行一个客人：没有展开的项目表和［全部预约］');
+    var mine = todoUbItems().filter(function(u){ return u.caseId===c.id; }), early = mine.map(function(u){ return u.sug; }).filter(Boolean).sort()[0];
+    ST.ok(!early || txt.indexOf(early.slice(5).replace('-', '/'))>-1, '①行首日期 = 最早建议日期 '+early); TODO_UI.tab = 'todo';
+    todoCbOpen(c.id, '*'); var B = TODO_CB2, rs = B.rows.filter(function(l){ return /^R302/.test(l.name); });
+    ST.ok(rs.filter(function(l){ return l.name==='R302 消肿'; }).length===3 && rs.length===4, '②多次项目拆成多行（消肿 ×3 = 3 行，拆线 1 行）');
+    var ov = document.getElementById('todo-cb-overlay');
+    ST.ok(/客人：/.test(ov.textContent) && /查看案件/.test(ov.textContent) && !/继续原案件|次数|来访目的/.test(ov.textContent), '②弹窗头：客人 + ［查看案件］；没有次数栏 / 继续原案件 / 来访目的');
+    var okBtn = function(){ return [].slice.call(document.getElementById('todo-cb-overlay').querySelectorAll('button')).filter(function(b){ return /确认预约/.test(b.textContent); })[0]; };
+    ST.ok(okBtn().disabled && todoCbN()===0, '②勾了但都没选时间 → N = 0，按钮灰');
+    var d1 = wk(4), d2 = wk(6), tt = todoCbTimes(d1).filter(function(t){ return !slotIsLunch(t); });
+    B.rows.forEach(function(l){ if(!/^R302/.test(l.name)){ l.on = false; l.userOff = true; } });
+    rs.forEach(function(l, i){ l.date = i<3 ? d1 : d2; }); todoCbNormalize(); todoCbRender();
+    todoCbSet(B.rows.indexOf(rs[0]), 'time', tt[2]); todoCbSet(B.rows.indexOf(rs[1]), 'time', tt[0]);
+    ST.ok(todoCbN()===2 && /（2）/.test(okBtn().textContent), '②只选了两行的时间 → N = 2（没填时间的两行不算）');
+    todoCbSet(B.rows.indexOf(rs[2]), 'time', tt[1]); todoCbSet(B.rows.indexOf(rs[3]), 'time', tt[0]);
+    todoCbGo(); var made = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; });
+    var m1 = made.filter(function(x){ return x.visitDate===d1; })[0], m2 = made.filter(function(x){ return x.visitDate===d2; })[0];
+    ST.ok(made.length===2 && m1 && m1.careFor.keys.length===3 && m1.visitTime===tt[0] && m2 && m2.careFor.keys.length===1 && m2.visitTime===tt[0], '②确认后各建在对的日期：同一天三行（不同时间）归一个到访、时间取最早；另一天一个');
+    CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.careFor && x.careFor.caseId===c.id); });
+    surg.postcare = surg.postcare.filter(function(p){ return !/^R302/.test(p.name); });
   });
   ST.def('R71a','CMD-1020-18（A1 分页，需要 pcStage 夹具）：IN 未安排预约只放印尼术后管理、按客人折叠；多次项目分行预约；占位预约 3 个来访目的 + 勾选项目',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
@@ -2764,18 +2794,19 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(ub.length>=1 && ub.every(function(u){ return u.place==='印尼' && !/钛提升/.test(u.label); }), 'IN 未安排预约只有印尼术后管理，韩国持有的管理项目（钛提升 ×2）不在里面（'+ub.length+' 组）');
     var multi = ub.filter(function(u){ return u.label==='IN 多次测试'; })[0]; ST.ok(!!multi && multi.n===3 && !!multi.surg, '同一个项目多次：一行写次数 3 + 施术名称');
     TODO_UI.tab = 'unbooked'; TODO_UI.mine = false; var html = todoPaneHtml(todoItems()), txt = html.replace(/<[^>]+>/g, ' ');
-    ST.ok(/ub-grp/.test(html) && new RegExp('T-术后管理（'+c.caseNo+'）').test(txt) && /未预约 \d+/.test(txt) && /全部预约/.test(txt), '按客人折叠：标题「客人名（Case ID）｜未预约 N ［全部预约］」');
-    ST.ok(/施术名称[\s\S]*术后管理项目[\s\S]*次数[\s\S]*建议时间[\s\S]*地点/.test(txt), '展开后栏位 施术名称｜术后管理项目｜次数｜建议时间｜地点'); TODO_UB_OPEN[c.id] = false; ST.ok(!/ub6-head/.test(todoPaneHtml(todoItems())), '点标题收起'); delete TODO_UB_OPEN[c.id]; TODO_UI.tab = 'todo';
-    /* 弹窗：全部预约 = 全勾；多次项目自动生成下一行 */
-    todoCbOpen(c.id, '*'); var gi = TODO_CB2.groups.findIndex(function(g){ return g.name==='IN 多次测试'; }), G = TODO_CB2.groups[gi];
-    ST.ok(TODO_CB2.groups.every(function(g){ return g.lines[0].on; }) && G.lines.length===2, '全部预约：全勾；多次项目选 1 次后自动生成下一行（'+G.lines.length+' 行）');
-    todoCbSet(gi, 0, 'qty', 1); G = TODO_CB2.groups[gi]; ST.ok(G.lines[0].qty===2 && G.lines.length===2 && G.lines[1].qty===1 && G.acc===3, '第一行改成 2 次 → 第二行自动剩 1 次，分完（共 3 次）');
-    todoCbSet(gi, 1, 'on', false); G = TODO_CB2.groups[gi]; ST.ok(G.acc===2 && G.lines.length===2, '取消勾选第二行 → 只算 2 次，不再生成新行');
-    todoCbSet(gi, 1, 'on', true); G = TODO_CB2.groups[gi];
-    /* 只勾这一个项目：同一天合成一次到店 */
-    todoCbOpen(c.id, G.gid); TODO_CB2.groups.forEach(function(g){ if(g.gid!==G.gid) g.lines.forEach(function(l){ l.on = false; }); }); G = TODO_CB2.groups.filter(function(g){ return g.gid===G.gid; })[0]; G.lines[0].qty = 2; todoCbNormalize(); G.lines[0].date = wk(4); G.lines[1].date = wk(4); todoCbNormalize();
+    ST.ok(/ub-row/.test(html) && !/ub-grp|ub6/.test(html) && new RegExp('T-术后管理').test(txt) && /未预约 \d+/.test(txt) && /预约/.test(txt) && !/全部预约/.test(txt), '工作台一行一个客人：日期｜客人名｜未预约 N｜［预约］，没有展开的项目表和［全部预约］');
+    ST.ok((html.match(/ub-row/g)||[]).length===(new Set(ub.map(function(u){ return u.caseId; })).size), '每个案件只有一行（不管项目有几个）');
+    var earliest = ub.filter(function(u){ return u.caseId===c.id; }).map(function(u){ return u.sug; }).filter(Boolean).sort()[0]; ST.ok(!earliest || txt.indexOf(earliest.slice(5).replace('-', '/'))>-1, '行首日期 = 这位客人还没约的项目里最早的建议日期（MM/DD）');
+    TODO_UI.tab = 'todo';
+    /* 弹窗：全部预约 = 全勾；多次项目拆成多行，每行自己的推荐时间 */
+    todoCbOpen(c.id, '*'); var rowsM = TODO_CB2.rows.filter(function(l){ return l.name==='IN 多次测试'; });
+    ST.ok(TODO_CB2.rows.every(function(l){ return l.on; }) && rowsM.length===3, '全部预约：全勾；多次项目（共 3 次）拆成 3 行（实际 '+rowsM.length+' 行）');
+    ST.ok(rowsM[0].sug && rowsM[1].sug && rowsM[2].sug && rowsM[0].sug<rowsM[1].sug && rowsM[1].sug<rowsM[2].sug, '三行各有自己的推荐时间，按次往后（'+rowsM.map(function(l){ return l.sug; }).join(' / ')+'）');
+    /* 只勾这一个项目：同一天不同时间归到同一个到访 */
+    todoCbOpen(c.id, '*'); TODO_CB2.rows.forEach(function(l){ if(l.name!=='IN 多次测试') l.on = false; }); TODO_CB2.rows.filter(function(l){ return l.name==='IN 多次测试'; }).forEach(function(l, i){ l.date = wk(4); }); todoCbNormalize();
+    var rs = TODO_CB2.rows.filter(function(l){ return l.name==='IN 多次测试'; }), tt = todoCbTimes(wk(4)).filter(function(t){ return !slotIsLunch(t); }); rs[0].time = tt[2]; rs[1].time = tt[0]; rs[2].time = tt[1];
     CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.careFor && x.careFor.caseId===c.id); }); todoCbGo(); var made = CASE_ITEMS.filter(function(x){ return x.careFor && x.careFor.caseId===c.id; });
-    ST.ok(made.length===1 && made[0].careFor.keys.length===3 && made[0].visitPurpose==='术后管理', '同一天的两行合成一次到店：1 张预约，继续原案件，带 3 个 key（实际 '+made.length+' 张，keys '+(made[0] ? made[0].careFor.keys.length : '-')+'，行 '+G.lines.map(function(l){ return l.qty+(l.on?"+":"-")+l.date; }).join(',')+'）');
+    ST.ok(made.length===1 && made[0].careFor.keys.length===3 && made[0].visitPurpose==='术后管理' && made[0].visitTime===tt[0], '同一天三行（不同时间）归到 1 个到访，带 3 个 key，到访时间 = 最早的时间（实际 '+made.length+' 张，时间 '+(made[0] ? made[0].visitTime : '-')+'）');
     ST.ok(!todoUbGroupsIn(c, false).some(function(g){ return g.name==='IN 多次测试'; }), '3 次都约了 → 这个项目从未安排预约消失');
     /* 占位预约：3 个来访目的 */
     ST.ok(JSON.stringify(KRB_PURPOSE_NEW)==='["carebook","holdbook","newvisit"]' && KRB_NEWVISIT.join()==='术后复诊,皮肤管理,面诊商谈', '来访目的 3 个；新增访问下一层 术后复诊 / 皮肤管理 / 面诊商谈');
@@ -8531,7 +8562,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     /* ① 未安排预约客人名 */
     var cin = CASE_ITEMS.filter(function(x){ return x.name==='T-术后管理' && !x.careFor; })[0];
     if(cin){ cin.krBalancePaid = true; var html = todoUbListInHtml([{caseId:cin.id, gid:'g', name:cin.name, no:cin.caseNo, label:'拆线', surg:'隆鼻', n:1, sug:todayStr(), place:'印尼'}]);
-      ST.ok(/class="ub-name"/.test(html) && /openCaseDetail\('/.test(html), 'IN：客人名是可点的链接（打开案件）'); var m = html.match(/<a class="ub-name"[^>]*onclick="([^"]*)"/); ST.ok(!!m && /stopPropagation/.test(m[1]) && !/todoUbToggle/.test(m[1]), '点名字不触发展开 / 收起');
+      ST.ok(/class="ub-name"/.test(html) && /openCaseDetail\('/.test(html), 'IN：客人名是可点的链接（打开案件）'); var m = html.match(/<a class="ub-name"[^>]*onclick="([^"]*)"/); ST.ok(!!m && !/todoUbToggle/.test(m[1]), '点名字只打开案件（一行一个客人，没有展开 / 收起）');
       ST.ok(/tab:\\?'postcare/.test(html), '停在术后管理 tab'); }
   });
   ST.def('R197b','CMD-1102-02（KM1 分页，需要 pcStage 夹具）：KR 未安排预约客人名可点进主案件（只有术后管理 → 术后管理 tab；只有管理项目 → 在韩管理 tab；两种都有 → 第一个）；KR 列表更新时间不是「刚刚」',function(){

@@ -383,15 +383,13 @@ function todoUbListKrHtml(list){
 }
 /* CMD-1020-18：IN 的未安排预约（只放 KR 交给印尼 / 只能在印尼做的术后管理）按客人（案件）折叠：标题「客人名（Case ID）｜未预约 N ……［全部预约］」，展开每行 施术名称｜术后管理项目｜次数｜建议时间｜操作地点｜［预约］ */
 function todoUbListInHtml(list){
+  /* CMD-1111-01：一行一个客人（一个主案件一行）：日期（最早建议日）｜客人名｜未预约 N｜［预约］；预约弹窗里列出这位客人所有没约的 IN 项目 */
   if(!list.length) return '<div class="todo-empty">现在没有未安排的预约</div>';
   var order = [], by = {}; list.slice().sort(function(a, b){ return (a.sug||'9999').localeCompare(b.sug||'9999'); }).forEach(function(it){ if(!by[it.caseId]){ by[it.caseId] = []; order.push(it.caseId); } by[it.caseId].push(it); });
   return '<div class="todo-list">'+order.map(function(cid){
-    var arr = by[cid], open = TODO_UB_OPEN[cid]!==false, anyOver = arr.some(function(x){ return x.over; });
-    var head = '<div class="ub-grp" onclick="todoUbToggle(\''+cid+'\')"><span class="ub-arrow">'+(open ? '▾' : '▸')+'</span><b><a class="ub-name" title="打开案件" onclick="event.stopPropagation();openCaseDetail(\''+cid+'\',false,{tab:\'postcare\'})">'+todoEsc(arr[0].name)+'（'+todoEsc(arr[0].no||'')+'）</a></b><span class="ub-n'+(anyOver ? ' over' : '')+'">未预约 '+todoUbCount(arr)+'</span><span style="flex:1;"></span>'+(function(){ var c9 = CASE_ITEMS.filter(function(x){ return x.id===cid; })[0], b9 = careBookBlock(c9); return b9 ? '<button class="btn-outline" disabled title="'+b9+'" style="padding:3px 10px;font-size:12px;opacity:.45;cursor:not-allowed;" onclick="event.stopPropagation()">全部预约</button>' : '<button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="event.stopPropagation();todoCbOpen(\''+cid+'\',\'*\')">全部预约</button>'; })()+'</div>';
-    var rows = !open ? '' : '<div class="ub6 ub6-head"><div>施术名称</div><div>术后管理项目</div><div>次数</div><div>建议时间</div><div>地点</div><div></div></div>'+arr.map(function(it){
-      return '<div class="ub6"><div title="'+todoEsc(it.surg||'')+'">'+todoEsc(it.surg||'—')+'</div><div title="'+todoEsc(it.label)+'">'+todoEsc(it.label)+'</div><div>'+(it.n||1)+'</div><div class="ub-sug'+(it.over ? ' over' : '')+'">'+todoUbMd(it.sug)+'</div><div>'+todoEsc(it.place||'印尼')+'</div><div>'+careBookBtn(CASE_ITEMS.filter(function(x){ return x.id===cid; })[0], '预约', 'todoCbOpen(\''+cid+'\',\''+String(it.gid).replace(/'/g,'')+'\')', 'padding:3px 8px;font-size:12px;')+'</div></div>';
-    }).join('');
-    return '<div class="ub-card">'+head+rows+'</div>';
+    var arr = by[cid], anyOver = arr.some(function(x){ return x.over; }), c9 = CASE_ITEMS.filter(function(x){ return x.id===cid; })[0], sug = arr[0].sug;
+    var btn = c9 ? careBookBtn(c9, '预约', 'todoCbOpen(\''+cid+'\',\'*\')', 'padding:3px 10px;font-size:12px;') : '';
+    return '<div class="ub-row"><span class="ub-d'+(anyOver ? ' over' : '')+'">'+(sug ? todoUbMd(sug) : '—')+'</span><b class="ub-nm"><a class="ub-name" title="打开案件 '+todoEsc(arr[0].no||'')+'" onclick="openCaseDetail(\''+cid+'\',false,{tab:\'postcare\'})">'+todoEsc(arr[0].name)+'（'+todoEsc(arr[0].no||'')+'）</a></b><span class="ub-n'+(anyOver ? ' over' : '')+'">未预约 '+todoUbCount(arr)+'</span><span style="flex:1;"></span>'+btn+'</div>';
   }).join('')+'</div>';
 }
 function todoUbItems(){
@@ -518,77 +516,63 @@ function todoCbOpen(caseId, gid, onlyKey){
   var c = CASE_ITEMS.filter(function(x){ return x.id===caseId; })[0]; if(!c) return;
   if(careBookBlock(c)){ showToast('不能预约', careBookBlock(c)); return; } /* CMD-1025-01 九 */
   var gs = todoUbGroupsIn(c, !!(c.visitClosed || isEnded(c))); if(!gs.length) return;
-  TODO_CB2 = {caseId:caseId, dayTime:{}, groups:gs.map(function(g){ var on = gid==='*' || g.gid===gid; return {gid:g.gid, surg:g.surg, name:g.name, keys:g.items, lines:[{on:on, qty:1, date:todoCbDefDate(g.items[0].sug)}]}; })};
+  /* CMD-1111-01：一行一次（多次项目拆成多行），每行自己选日期和时间；日期默认带推荐时间，时间自己选 */
+  var rows = [];
+  gs.forEach(function(g){ g.items.forEach(function(it){
+    var on = onlyKey ? it.bk===onlyKey : (gid==='*' || g.gid===gid);
+    rows.push({bk:it.bk, name:g.name, surg:g.surg, sug:it.sug||'', on:on, date:todoCbDefDate(it.sug), time:''});
+  }); });
+  rows.sort(function(a, b){ return (a.sug||'9999').localeCompare(b.sug||'9999'); });
+  TODO_CB2 = {caseId:caseId, rows:rows};
   todoCbNormalize(); todoCbRender();
 }
 function todoCbNormalize(){
-  var B = TODO_CB2; B.dayTime = B.dayTime || {};
-  (B.groups||[]).forEach(function(g){
-    var total = g.keys.length, acc = 0, out = [];
-    for(var i = 0; i < g.lines.length; i++){ var l = g.lines[i]; if(acc>=total) break; l.p = acc; if(l.on){ l.qty = Math.max(1, Math.min(parseInt(l.qty,10)||1, total-acc)); acc += l.qty; } out.push(l); }
-    g.lines = out; g.acc = acc;
-    var last = out[out.length-1]; if(last && last.on && acc<total) g.lines.push({on:true, qty:1, date:todoCbDefDate((g.keys[acc]||{}).sug), p:acc}); /* 还有剩 → 自动生成下一行 */
-    g.lines.forEach(function(l){ var bad = !!todoCbDateErr(l.date); if(bad){ if(l.on){ l.on = false; l.autoOff = true; } } else if(l.autoOff && !l.userOff){ l.on = true; l.autoOff = false; } /* 日期有问题自动取消勾选；改对后自动勾上（自己取消的除外） */ });
+  (TODO_CB2.rows||[]).forEach(function(l){
+    var bad = !!todoCbDateErr(l.date);
+    if(bad){ if(l.on){ l.on = false; l.autoOff = true; } l.time = ''; } /* 日期有问题自动取消勾选；改对后自动勾上（自己取消的除外） */
+    else { if(l.autoOff && !l.userOff){ l.on = true; l.autoOff = false; } if(l.time && todoCbTimes(l.date).indexOf(l.time)<0) l.time = ''; }
   });
-  /* 每个日期一个时间（默认当天第一个可约时间；原来的时间在这天不可约 → 带到最近的） */
-  (B.groups||[]).forEach(function(g){ g.lines.forEach(function(l){ if(todoCbDateErr(l.date)) return; if(B.dayTime[l.date]===undefined) B.dayTime[l.date] = (todoCbTimes(l.date)[0]||''); B.dayTime[l.date] = todoCbSnap(l.date, B.dayTime[l.date]); }); });
 }
-function todoCbSet(gi, li, k, v){
-  var l = TODO_CB2.groups[gi].lines[li];
+function todoCbSet(ri, k, v){
+  var l = TODO_CB2.rows[ri];
   if(k==='on'){ l.on = !!v; l.userOff = !v; l.autoOff = false; }
-  else if(k==='qty') l.qty = (parseInt(l.qty,10)||1)+v;
   else l[k] = v;
   todoCbNormalize(); todoCbRender();
 }
-function todoCbSetDay(date, v){ TODO_CB2.dayTime[date] = v; todoCbRender(); }
 function todoCbOptsHtml(date, sel){
   var v = todoCbTimes(date); if(!v.length) return '<option value="">没有可约时间</option>';
-  return v.map(function(t){ return '<option value="'+t+'"'+(t===sel ? ' selected' : '')+'>'+t+(todoCbIsLunch(t) ? '（午休）' : '')+'</option>'; }).join('');
+  return '<option value=""'+(sel ? '' : ' selected')+'>选择时间</option>'+v.map(function(t){ return '<option value="'+t+'"'+(t===sel ? ' selected' : '')+'>'+t+(todoCbIsLunch(t) ? '（午休）' : '')+'</option>'; }).join('');
 }
+function todoCbN(){ return (TODO_CB2.rows||[]).filter(function(l){ return l.on && l.date && l.time && !todoCbDateErr(l.date); }).length; } /* 勾了、且日期和时间都填好的行数 */
+function todoCbViewCase(){ var B = TODO_CB2; if(!B) return; var id = B.caseId; try{ openCaseNewTab(id); }catch(e){} } /* 新分页打开主案件，不关弹窗（浏览器拦截新分页时退回当前分页，弹窗会被页面切换盖住） */
 function todoCbRender(){
   var B = TODO_CB2; if(!B) return; var c = CASE_ITEMS.filter(function(x){ return x.id===B.caseId; })[0]; if(!c){ TODO_CB2 = null; return; }
   var ov = document.getElementById('todo-cb-overlay'); if(!ov){ ov = document.createElement('div'); ov.id = 'todo-cb-overlay'; ov.className = 'modal-overlay'; document.body.appendChild(ov); }
-  var dateFld = function(gi, li, val){ return '<label class="kr-fld" style="padding:3px 8px;"><input type="date" value="'+val+'" min="'+todayStr()+'" onchange="todoCbSet('+gi+','+li+',\'date\',this.value)" style="border:0;background:transparent;font-size:12px;"></label>'; };
-  var qtyHtml = function(gi, li, l){ var dis = l.on ? '' : 'disabled '; return '<span style="white-space:nowrap;"><button class="btn-outline" style="padding:1px 8px;font-size:13px;" '+dis+'onclick="todoCbSet('+gi+','+li+',\'qty\',-1)">−</button> <b style="display:inline-block;min-width:18px;text-align:center;">'+l.qty+'</b> <button class="btn-outline" style="padding:1px 8px;font-size:13px;" '+dis+'onclick="todoCbSet('+gi+','+li+',\'qty\',1)">+</button></span>'; };
-  var rowHtml = function(x, prob){
-    var g = x.g, l = x.l, err = todoCbDateErr(l.date), sug = (g.keys[l.p]||{}).sug || '', rec = (g.surg && sug) ? (careDayText(c, g.surg, sug) || '') : '';
-    return '<tr style="'+(l.on ? '' : 'opacity:.6;')+'"><td style="width:26px;"><input type="checkbox" '+(l.on ? 'checked ' : '')+(err ? 'disabled ' : '')+'onchange="todoCbSet('+x.gi+','+x.li+',\'on\',this.checked)"></td>'+
-      '<td><b>'+todoEsc(g.name)+'</b></td><td>'+(g.surg ? todoEsc(buyName(g.surg)) : '—')+'</td><td>'+(rec ? todoEsc(rec) : '—')+'</td><td>'+(sug ? todoEsc(sug.slice(5).replace('-', '/')) : '—')+'</td><td>'+qtyHtml(x.gi, x.li, l)+'</td>'+
-      '<td>'+dateFld(x.gi, x.li, l.date)+(prob ? '<div style="color:#B3261E;font-size:12px;margin-top:3px;max-width:200px;">'+todoEsc(err)+'</div>' : '')+'</td></tr>';
-  };
-  var thead = '<thead><tr style="font-size:12px;color:var(--muted);text-align:left;"><th></th><th>项目</th><th>施术项目</th><th>推荐内容</th><th>推荐时间</th><th>次数</th><th>预约日期</th></tr></thead>';
-  var all = []; B.groups.forEach(function(g, gi){ g.lines.forEach(function(l, li){ all.push({g:g, gi:gi, l:l, li:li}); }); });
-  var probs = all.filter(function(x){ return !!todoCbDateErr(x.l.date); }), good = all.filter(function(x){ return !todoCbDateErr(x.l.date); });
-  var by = {}, days = []; good.forEach(function(x){ if(!by[x.l.date]){ by[x.l.date] = []; days.push(x.l.date); } by[x.l.date].push(x); }); days.sort();
-  var tbl = 'width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;';
-  var body = '';
-  if(probs.length) body += '<div class="krcb-prob" style="border:2px solid #C1454A;background:#FDF3F2;border-radius:10px;padding:10px 14px;margin-top:10px;"><b style="font-size:14px;color:#B3261E;">需要处理 '+probs.length+' 项</b><div style="font-size:12px;color:var(--slate2);margin-top:2px;">按红字改日期；改好后会自动回到对应日期的卡并勾上</div><table style="'+tbl+'">'+thead+'<tbody>'+probs.map(function(x){ return rowHtml(x, true); }).join('')+'</tbody></table></div>';
-  body += days.map(function(ds){
-    var tm = B.dayTime[ds];
-    return '<div class="krcb-grp" data-date="'+ds+'" style="border:1px solid var(--border2);background:#fff;border-radius:10px;padding:10px 14px;margin-top:10px;"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><b style="font-size:14px;">预约时间：'+todoEsc(visitWhenLabel(ds, '', ''))+'</b>'+
-      '<label class="kr-fld">'+(typeof KR_ICO_CLOCK!=='undefined' ? KR_ICO_CLOCK : '')+'<select onchange="todoCbSetDay(\''+ds+'\',this.value)" style="border:0;background:transparent;font-size:13px;">'+todoCbOptsHtml(ds, tm)+'</select></label></div>'+
-      '<table style="'+tbl+'">'+thead+'<tbody>'+by[ds].map(function(x){ return rowHtml(x, false); }).join('')+'</tbody></table></div>';
+  var rowsHtml = B.rows.map(function(l, i){
+    var err = todoCbDateErr(l.date), rec = (l.surg && l.sug) ? (careDayText(c, l.surg, l.sug) || '') : '';
+    return '<tr style="'+(l.on ? '' : 'opacity:.6;')+'"><td style="width:26px;"><input type="checkbox" '+(l.on ? 'checked ' : '')+(err ? 'disabled ' : '')+'onchange="todoCbSet('+i+',\'on\',this.checked)"></td>'+
+      '<td><b>'+todoEsc(l.name)+'</b></td><td>'+(l.surg ? todoEsc(buyName(l.surg)) : '—')+'</td><td>'+(rec ? todoEsc(rec) : '—')+'</td><td>'+(l.sug ? todoEsc(l.sug.slice(5).replace('-', '/')) : '—')+'</td>'+
+      '<td style="white-space:nowrap;"><label class="kr-fld" style="padding:3px 8px;"><input type="date" value="'+l.date+'" min="'+todayStr()+'" onchange="todoCbSet('+i+',\'date\',this.value)" style="border:0;background:transparent;font-size:12px;"></label> '+
+      '<label class="kr-fld"><select onchange="todoCbSet('+i+',\'time\',this.value)" style="border:0;background:transparent;font-size:12px;"'+(err ? ' disabled' : '')+'>'+todoCbOptsHtml(l.date, l.time)+'</select></label>'+
+      (err ? '<div style="color:#B3261E;font-size:12px;margin-top:3px;white-space:normal;max-width:240px;">'+todoEsc(err)+'</div>' : '')+'</td></tr>';
   }).join('');
-  var nOn = all.filter(function(x){ return x.l.on; }).length, nItems = 0; all.forEach(function(x){ if(x.l.on) nItems += x.l.qty; });
-  var pvDays = days.filter(function(ds){ return by[ds].some(function(x){ return x.l.on; }); });
-  var pv = pvDays.length ? '<div style="margin-top:12px;padding:10px 12px;background:var(--bg-sidebar,#faf6ef);border-radius:8px;font-size:12px;line-height:1.7;">'+pvDays.map(function(ds){ var nm = []; by[ds].forEach(function(x){ if(x.l.on){ var s0 = x.g.name+(x.l.qty>1 ? ' ×'+x.l.qty : ''); if(nm.indexOf(s0)<0) nm.push(s0); } }); var ex = pendingResvSameDay(c.name, ds); return '<div>'+todoEsc(visitWhenLabel(ds, B.dayTime[ds], ''))+' · 术后管理：'+nm.map(todoEsc).join('、')+(ex ? '（并入当天已有预约）' : '')+'</div>'; }).join('')+'</div>' : '';
-  ov.innerHTML = '<div class="modal-box" style="width:760px;max-width:96vw;max-height:86vh;display:flex;flex-direction:column;padding:0;overflow:hidden;"><div style="display:flex;justify-content:space-between;align-items:center;padding:16px 22px 6px;"><b style="font-size:15px;">预约印尼术后管理</b><span style="cursor:pointer;" onclick="todoCbClose()">✕</span></div>'+
-    '<div style="flex:1;min-height:0;overflow-y:auto;padding:0 22px 8px;"><div style="font-size:13px;line-height:1.8;">客人 <b>'+todoEsc(c.name)+'</b>　继续原案件 <b>'+todoEsc(c.caseNo)+'</b>　来访目的 <b>术后管理</b></div>'+
-    '<div style="font-size:12px;color:var(--slate2);margin-top:2px;">同一天的项目一起约：一天只选一次时间；改某一行的预约日期，这行会移到那一天的卡；一个项目有多次时，选好这一次做几次，下面会自动生成下一次的行。</div>'+body+pv+'</div>'+
-    '<div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 22px;border-top:1px solid var(--border2);background:#fff;"><button class="btn-outline" onclick="todoCbClose()">取消</button><button class="btn-primary" '+(nOn ? '' : 'disabled style="opacity:.4;"')+' onclick="todoCbGo()">确认预约'+(nOn ? '（'+nItems+'）' : '')+'</button></div></div>';
+  var N = todoCbN();
+  ov.innerHTML = '<div class="modal-box msz-L" style="max-height:86vh;display:flex;flex-direction:column;padding:0;overflow:hidden;"><div style="display:flex;justify-content:space-between;align-items:center;padding:16px 22px 6px;"><b style="font-size:15px;">预约印尼术后管理</b><span class="modal-x" style="cursor:pointer;" onclick="todoCbClose()">✕</span></div>'+
+    '<div style="flex:1;min-height:0;overflow-y:auto;padding:0 22px 8px;"><div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:6px;"><span>客人：<b>'+todoEsc(c.name)+'</b></span><button class="btn-outline" style="padding:3px 10px;font-size:12px;" onclick="todoCbViewCase()">查看案件</button></div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:13px;border-top:1px solid var(--border2);"><thead><tr style="font-size:12px;color:var(--muted);text-align:left;"><th></th><th>项目</th><th>施术项目</th><th>推荐内容</th><th>推荐时间</th><th>预约日期</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div>'+
+    '<div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 22px;border-top:1px solid var(--border2);background:#fff;"><button class="btn-outline" onclick="todoCbClose()">取消</button><button class="btn-primary" '+(N ? '' : 'disabled style="opacity:.4;"')+' onclick="todoCbGo()">确认预约'+(N ? '（'+N+'）' : '')+'</button></div></div>';
   ov.classList.add('open');
 }
 function todoCbClose(){ var ov = document.getElementById('todo-cb-overlay'); if(ov) ov.classList.remove('open'); TODO_CB2 = null; }
 function todoCbGo(){
   var B = TODO_CB2; if(!B) return; var c = CASE_ITEMS.filter(function(x){ return x.id===B.caseId; })[0]; if(!c) return;
   var buckets = {}, order = [], err = '', lunch = false;
-  B.groups.forEach(function(g){ var p = 0; g.lines.forEach(function(l){ if(!l.on) return;
-    var tm = B.dayTime[l.date];
-    if(!l.date || !tm || todoCbDateErr(l.date) || todoCbTimes(l.date).indexOf(tm)<0){ err = '「'+g.name+'」'+(l.date||'')+' 这个时间不能约，请换一个'; return; }
-    if(todoCbIsLunch(tm)) lunch = true;
-    var ks = g.keys.slice(p, p+l.qty).map(function(x){ return x.bk; }); p += l.qty;
-    if(!buckets[l.date]){ buckets[l.date] = {date:l.date, time:tm, keys:[], labels:[]}; order.push(l.date); }
-    var bk = buckets[l.date]; ks.forEach(function(k){ bk.keys.push(k); }); bk.labels.push(g.name+(l.qty>1 ? ' ×'+l.qty : '')); }); });
+  B.rows.forEach(function(l){ if(!l.on || !l.time) return;
+    if(!l.date || todoCbDateErr(l.date) || todoCbTimes(l.date).indexOf(l.time)<0){ err = '「'+l.name+'」'+(l.date||'')+' '+l.time+' 这个时间不能约，请换一个'; return; }
+    if(todoCbIsLunch(l.time)) lunch = true;
+    if(!buckets[l.date]){ buckets[l.date] = {date:l.date, time:l.time, keys:[], labels:[]}; order.push(l.date); }
+    var bk = buckets[l.date]; if(l.time < bk.time) bk.time = l.time; /* 同一天不同时间：归到同一个到访，到访时间用最早的那个，各行自己的时间写进记录 */
+    bk.keys.push(l.bk); bk.labels.push(l.name+' '+l.time); });
   if(err){ alert(err); return; }
   if(!order.length) return;
   if(lunch && !window.GMC_NO_CONFIRM && !confirm('这是午休时间，确定预约吗？')) return; /* CMD-1026-20：午休可强约，先确认 */
@@ -598,7 +582,7 @@ function todoCbGo(){
     if(exm && exm.mainId && exm.mainId!==m.id) exm = null; /* 同一天已有别的主案件的预约 → 各自挂在自己的主案件下，不合并 */
     if(exm && (exm.mainId===m.id || !exm.careFor || exm.careFor.caseId===c.id)){ rc = exm; rc.careFor = {caseId:c.id, keys:((rc.careFor && rc.careFor.keys) || []).concat(bk.keys)}; logCaseEvent(c, actingName(), '预约术后管理（合并到当天已有的预约 '+exm.visitTime+'）：'+bk.labels.join('、')+'，'+bk.date, '术后管理'); logCaseEvent(rc, actingName(), '术后管理并入这次预约，继续原案件 '+c.caseNo+'：'+bk.labels.join('、')); done.push(bk.date+' '+exm.visitTime+'（'+mergeNoteText(exm)+'）'); mergedAny = true; }
     else { rc = createChildReservation(m, bk.date, bk.time, '术后管理', {careFor:{caseId:c.id, keys:bk.keys}});
-    logCaseEvent(c, actingName(), '预约术后管理（子案件 '+rc.caseNo+'）：'+bk.labels.join('、')+'，'+bk.date+' '+bk.time, '术后管理'); logCaseEvent(rc, actingName(), '预约术后管理，主案件 '+c.caseNo+'：'+bk.labels.join('、'));
+    logCaseEvent(c, actingName(), '预约术后管理（子案件 '+rc.caseNo+'）：'+bk.labels.join('、')+'，'+bk.date, '术后管理'); logCaseEvent(rc, actingName(), '预约术后管理，主案件 '+c.caseNo+'：'+bk.labels.join('、'));
     done.push(bk.date+' '+bk.time+' '+rc.caseNo); } });
   todoCbClose(); try{ renderCalendar(); }catch(e){} todoRefresh(); try{ if(getCurrentCase() && getCurrentCase().id===c.id) renderCaseBody(c); }catch(e){}
   showToast(mergedAny ? '已合并' : '预约已生成', c.name+' · '+done.join('、')+'（术后管理，继续 '+c.caseNo+'）', null);

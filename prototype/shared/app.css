@@ -598,3 +598,8 @@ body.kr-rec-open.kr-rec-mini .main-col{padding-right:52px;}
 /* CMD-1110-18：弹窗右上角 × —— 只有图标，没有底色 / 边框 */
 .modal-x{background:none;border:none;box-shadow:none;padding:2px 6px;margin:0;font-size:18px;line-height:1;color:var(--muted);cursor:pointer;}
 .modal-x:hover{background:none;color:var(--ink,#2b2622);}
+
+/* CMD-1111-01：IN 未安排预约一行一个客人 */
+.ub-row{display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid var(--border2);font-size:13px;}
+.ub-row .ub-d{width:48px;color:var(--slate2);font-size:12px;}.ub-row .ub-d.over{color:#B3261E;font-weight:700;}
+.ub-row .ub-n{font-size:12px;color:var(--slate2);}.ub-row .ub-n.over{color:#B3261E;font-weight:700;}
