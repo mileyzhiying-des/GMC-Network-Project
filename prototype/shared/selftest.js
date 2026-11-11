@@ -1215,7 +1215,7 @@ var ST = window.ST = {R:prevR, __v:1}, cur = null, PH = (window.ST_PH||0);
     var cr = clientCompCredits(c.name); ST.ok(cr.length===1 && cr[0].amount===credit && cr[0].fromCaseNo===c.caseNo, '先不换：额度存成客人的置换额度（来源原案件）');
     ST.ok(!hasRefundMark(c) && compSum(c)>0, '案件仍标置换、不标有退款'); ST.ok(krActiveItems(c).length===0, '赴韩全部取消，案件退回面诊级');
     ST.ok(canEndCase(c), '赴韩全部取消后出现［结束案件］');
-    openClientDetail(c.name); ST.ok(/置换额度/.test(document.getElementById('detail-holdings').textContent) && /不可退款/.test(document.getElementById('detail-holdings').textContent), '客户详情显示置换额度（不可退款）');
+    openClientDetail(c.name); ST.ok(!/置换额度/.test(document.getElementById('detail-holdings').textContent) && /持有金额/.test(document.getElementById('cli-root').textContent) && /置换额度不退款/.test(document.getElementById('cli-pane-comp').textContent), '客户详情：置换额度在「持有金额」tab（不可退款），持有项目里没有（CMD-1111-06）');
     var d = ST.newRes('CP2b'); d.name = c.name; ST.arrive(d); ST.open(d); d.materialsConfirmed = true; d.consultRequested = false; d.localTrack = true; PLAN = {caseId:d.id}; planBuy();
     ST.ok(/用置换额度换项目/.test(document.getElementById('lm-buy-overlay').innerText), '新案件购买弹窗出现［用置换额度换项目］');
     compUseCredit(cr[0].id, 'lm'); ST.ok(!!d.comp && d.comp.fromCaseNo===c.caseNo, '用额度：记来源原案件号');
@@ -2780,6 +2780,34 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     CASE_ITEMS = CASE_ITEMS.filter(function(x){ return !(x.careFor && x.careFor.caseId===c.id); });
     surg.postcare = surg.postcare.filter(function(p){ return !/^R302/.test(p.name); });
   });
+  ST.def('R307a','CMD-1111-06（A1 分页）：客户页「持有金额」tab（列表 / 剩余合计 / 展开使用记录 / 来源可点）；持有项目没有置换额度；没额度没有 tab；KR 客人页不加；面诊费未缴在面诊卡、缴完 / 免除后搬到结算 tab（一般面诊、增加面诊）',function(){
+    var me = currentAccount(); if(!ST.ok(me && !isKrAccount(), '要在 IN 分页里跑')) return;
+    var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
+    /* ① 持有金额 */
+    var c = ST.newRes('R307a'); var cl = clientByName(c.name); if(!ST.ok(!!cl, '找得到客户档案')) return;
+    var m0 = {mode:'IN', name:c.name, cl:cl, cases:CASE_ITEMS.filter(function(k){ return k.name===c.name; }), openCase:function(k){ return "openCaseDetail('"+k.id+"')"; }};
+    ST.ok(!/cliSetTab\('comp'\)/.test(clientDetailBodyHtml(m0)), '②没有额度：没有「持有金额」tab');
+    cl.compCredits = [{id:'cc7a', amount:4000000, kwr:339000, fromCaseId:c.id, fromCaseNo:c.caseNo, reason:'赴韩定金转置换额度', date:'2026-04-02', used:true, usedCaseNo:'A002939', usedAt:'2026-04-08 10:00'}, {id:'cc7b', amount:500000, kwr:42000, fromCaseId:c.id, fromCaseNo:c.caseNo, reason:'', date:'2026-05-01', used:false}];
+    var h = clientDetailBodyHtml(m0), tx = t(h);
+    ST.ok(/cliSetTab\('comp'\)/.test(h) && h.indexOf("cliSetTab('hold')") < h.indexOf("cliSetTab('comp')") && h.indexOf("cliSetTab('comp')") < h.indexOf("cliSetTab('cases')"), '①「持有金额」tab 放在「持有项目」旁边');
+    ST.ok(/剩余合计Rp500,000/.test(tx), '①剩余合计 = 没用掉的额度（Rp 500,000）');
+    ST.ok(/日期来源案件原因金额已使用剩余/.test(tx) && /Rp4,000,000/.test(tx) && /赴韩定金转置换额度/.test(tx), '①列：日期 / 来源案件 / 原因 / 金额 / 已使用 / 剩余');
+    ST.ok(h.indexOf('comp-use-cc7a')>-1 && /A002939/.test(t(document.createElement('div').innerHTML = h)) || h.indexOf('A002939')>-1, '①展开区有使用记录（A002939）');
+    ST.ok(h.indexOf("onclick=\"openCaseDetail('"+c.id+"')")>-1, '①来源案件可点进案件');
+    ST.ok(!/₩/.test(cliCompHtml(m0)), '①金额一律 Rp');
+    ST.ok(!/置换额度/.test(cliHoldKrHtml(m0)) && cliHoldCount(m0) === cliHoldCount(Object.assign({}, m0, {cl:Object.assign({}, cl, {compCredits:[]})})), '②「持有项目」里没有置换额度，数字也不算它');
+    ST.ok(!/cliSetTab\('comp'\)/.test(clientDetailBodyHtml(Object.assign({}, m0, {mode:'KR'}))), '③KR 客人页不加这个 tab');
+    cl.compCredits = [];
+    /* ④ 面诊费位置 */
+    var c2 = ST.newRes('R307a2'); ST.open(c2); c2 = getCurrentCase(); c2.consultRequested = true; c2.needsConsult = true; c2.consultStatus = 'awaiting_payment'; renderCaseBody(c2);
+    ST.ok(/面诊费Rp[\d.,]+未缴费/.test(t(consultTabHtml(c2))), '④未缴费：面诊卡上有');
+    ST.ok(consultFeeSettleCardHtml(c2)==='' && !showSettleTab(c2), '④未缴费：结算 tab 没有这一笔');
+    ST.consultToReport(c2); c2 = getCurrentCase();
+    ST.ok(!/面诊费Rp[\d.,]+已缴费/.test(t(consultTabHtml(c2))), '④缴完：面诊卡上没有');
+    var sh = t(settleTabHtml(c2)); ST.ok(showSettleTab(c2) && /面诊费Rp[\d.,]+已缴费/.test(sh), '④缴完：结算 tab 有一笔「面诊费 Rp … 已缴费」+ 日期（'+sh.slice(0,80)+'）');
+    c2.consultFeeWaived = {reason:'复诊'}; sh = t(settleTabHtml(c2)); ST.ok(/面诊费[\s\S]*已免除/.test(sh) && /原因：复诊/.test(sh) && !/已免除/.test(t(consultTabHtml(c2))), '④免除：面诊卡没有，结算 tab 写已免除 + 原因'); c2.consultFeeWaived = null;
+    c2.addConsultMode = true; c2.consultStatus = 'awaiting_payment'; ST.ok(/面诊费Rp[\d.,]+未缴费/.test(t(consultTabHtml(c2))), '④增加面诊（未缴费）：面诊卡上有'); c2.addConsultMode = false;
+  });
   ST.def('R306a','CMD-1111-05（A1 分页）：待办列表五栏 / 新的在上 / 短写 / 没有案件号和截止时间 / 催办在状态下；面诊 tab 看得到面诊费；看完方案没选项目就离店弹窗（还在考虑 / 客人不做）；［客人不做项目］按钮拿掉',function(){
     var me = currentAccount(); if(!ST.ok(me && !isKrAccount() && me.role==='manager', '要在 A1 分页里跑')) return;
     var t = function(h){ var d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ''); };
@@ -2800,8 +2828,8 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var x = t(consultTabHtml(c));
     ST.ok(/面诊费Rp[\d.,]+未缴费/.test(x) && x.indexOf('面诊费') < x.indexOf('确认'), '②面诊 tab（待缴费）：卡片上有只读「面诊费 Rp … ［未缴费］」，在［确认］上面');
     c.consultStatus = 'awaiting_report'; markConsultPaid && 0; c.consultFeeWaived = null; ST.consultToReport(c); c = getCurrentCase();
-    var x2 = t(consultTabHtml(c)); ST.ok(/面诊费Rp[\d.,]+已缴费/.test(x2), '②出方案后合并的面诊卡里也有面诊费状态［已缴费］');
-    c.consultFeeWaived = {reason:'复诊'}; ST.ok(/已免除[\s\S]*原因：复诊/.test(t(consultTabHtml(c))), '②免除后显示［已免除］原因：…'); c.consultFeeWaived = null;
+    var x2 = t(consultTabHtml(c)); ST.ok(!/面诊费Rp[\d.,]+已缴费/.test(x2) && /面诊费/.test(settleTabHtml(c).replace(/\s+/g,'')), '②缴完后面诊卡上没有面诊费行，结算 tab 有一笔（CMD-1111-06）');
+    c.consultFeeWaived = {reason:'复诊'}; ST.ok(!/已免除/.test(t(consultTabHtml(c))) && /已免除[\s\S]*原因：复诊/.test(settleTabHtml(c)+''.replace(/\s+/g,'')) || /已免除/.test(t(settleTabHtml(c))) && /原因：复诊/.test(t(settleTabHtml(c))), '②免除后面诊卡上没有，结算 tab 写［已免除］原因：…（CMD-1111-06）'); c.consultFeeWaived = null;
     /* ③ 离店弹窗 */
     var oe = window.confirm; window.confirm = function(){ return true; };
     c.recommended = []; c.settlementBatches = []; delete c.leaveConsider; delete c.leftStore;
@@ -3498,7 +3526,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     ST.ok(!/尊敬的|GMC NETWORK/.test(tx), '还没看方案：报告不展开');
     reportViewPlan(); planClose(); c = getCurrentCase(); h = consultTabHtml(c); tx = h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     ST.ok(/尊敬的|GMC NETWORK/.test(tx) && /主诊院长/.test(tx) && !/openReportModal/.test(h), '按［查看方案］后报告整张显示在 tab 里（抬头 / 客人信息 / 正文），没有跳页入口');
-    ST.ok(!/诊疗方案已到|查看诊疗方案|面诊阶段产生的文件/.test(tx) && /面诊费/.test(tx), '拿掉：诊疗方案已到、查看诊疗方案、附件说明；CMD-1111-05 起卡上有只读「面诊费」状态一行');
+    ST.ok(!/诊疗方案已到|查看诊疗方案|面诊阶段产生的文件/.test(tx) && !/面诊费Rp[\d.,]+已缴费/.test(tx), '拿掉：诊疗方案已到、查看诊疗方案、附件说明；CMD-1111-06 起缴完后卡上没有「面诊费」行（改在结算 tab）');
     var tv = function(){ return consultTalkVisible(c); }; ST.ok(tv(), '没买项目、面诊那天还没过、客人没离店：显示');
     c.consultAt = {date:ymdAdd(todayStr(), -2), time:'11:00'}; ST.ok(!tv(), '面诊那天过了午夜：不显示'); c.consultAt = {date:todayStr(), time:'11:00'}; ST.ok(tv(), '面诊就在今天：还显示');
     c.leftStore = true; ST.ok(!tv(), '客人已离店：不显示'); c.leftStore = false;
@@ -11756,7 +11784,7 @@ ST.bkFreeSlot = function(hid, from){ for(var d = from||2; d < 25; d++){ var ds =
     var cr4 = (clientByName(e.name).compCredits||[]).slice(-1)[0], rf4 = e.refunds||[];
     ST.ok(rf4.length===2 && rf4.filter(function(x){ return !x.comp; })[0].amount===refund4 && rf4.filter(function(x){ return x.comp; })[0].amount===comp4 && refund4+comp4===paid4 && cr4 && cr4.kwr===comp4, '退 '+refund4+' + 置换 '+comp4+' = 已付 '+paid4+'；客人置换额度对');
     /* ⑤ 置换额度客人页可见、下次在印尼选购可抵 */
-    var tmpH = []; ['detail-holdings-block','detail-holdings'].forEach(function(i){ if(!document.getElementById(i)){ var x = document.createElement('div'); x.id = i; document.body.appendChild(x); tmpH.push(x); } }); renderClientHoldings(e.name); var hold = (document.getElementById('detail-holdings')||{}).textContent||''; tmpH.forEach(function(x){ x.remove(); }); ST.ok(/置换额度/.test(hold) && hold.indexOf(e.caseNo)>-1, '客人页「置换额度」显示（来自 '+e.caseNo+'）');
+    var hold = cliCompHtml({cl:clientByName(e.name), cases:CASE_ITEMS.filter(function(k){ return k.name===e.name; }), openCase:function(k){ return "openCaseDetail('"+k.id+"')"; }}); ST.ok(/置换额度/.test(hold) && hold.indexOf(e.caseNo)>-1, '客人页「持有金额」显示置换额度（来自 '+e.caseNo+'）');
     var n = ST.newRes('R258a5'); n.name = e.name; ST.ok(clientCompCredits(e.name).length>=1 && /用置换额度换项目/.test(compUseBarHtml(n, 'lm')+compUseBarHtml(n, 'main')), '下次选购本地项目时有［用置换额度换项目］');
     /* ⑥ 待确认 / 待递交也有［施术变动］（待递交只有取消施术） */
     var f = ST.toConfirmed('R258a6'); f.krSchedule.status = 'pending'; f.krSchedule.primary = pickDate(f, 15); var hP = krProcedureTabMain(f, ''); ST.ok(/>施术变动</.test(hP) && !/>取消赴韩</.test(hP), '待 KR 确认：只有［施术变动］'); var ovP = openM(f); ST.ok(/更改时间/.test(ovP.textContent), '待确认有「更改时间」');

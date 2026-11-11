@@ -4452,7 +4452,9 @@ var CONSULT_FEE_COLORS = {'待缴费':['#FBF0C9','#8F6F0C'], '已缴费':['var(-
 
 /* CMD-1111-05：面诊 tab 卡片上的只读「面诊费 Rp 300,000［未缴费］」一行（1110-26 把面诊费改成弹窗后卡上完全看不到）；缴完 / 免除后显示［已缴费］或［已免除］原因：… */
 function consultFeeLineHtml(c, noBorder){
-  var st = consultFeeStatusMain(c), label = st==='待缴费' ? '未缴费' : st, col = CONSULT_FEE_COLORS[st] || CONSULT_FEE_COLORS['待缴费'];
+  var st = consultFeeStatusMain(c);
+  if(st==='已缴费' || st==='已免除') return ''; /* CMD-1111-06：缴了或免除以后，面诊卡上不再显示这一行，改记在「结算」tab */
+  var label = st==='待缴费' ? '未缴费' : st, col = CONSULT_FEE_COLORS[st] || CONSULT_FEE_COLORS['待缴费'];
   var why = (st==='已免除' && c.consultFeeWaived && c.consultFeeWaived.reason) ? '<span style="font-size:12px;color:var(--muted);">原因：'+cesc(c.consultFeeWaived.reason)+'</span>' : '';
   return '<div class="consult-fee-line" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;'+(noBorder ? '' : 'padding-bottom:12px;border-bottom:1px solid var(--border2);')+'"><span style="font-size:13px;font-weight:700;">面诊费</span><span style="font-size:13px;">'+fmtRp(consultFeeOf(c))+'</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+label+'</span>'+why+'</div>';
 }
@@ -5043,8 +5045,19 @@ function settleTabHtml(c){
       '<div style="border:1px solid var(--border2);border-radius:12px;padding:16px 18px;margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">本地购买 <span style="font-weight:400;color:var(--muted);font-size:12px;">'+(b.time||'')+'</span></div>'+
       (b.items||[]).map(function(i){ return '<div class="case-field-row"><span style="flex-grow:1;font-size:13px;">'+i.name+' ×'+i.qty+'</span></div>'; }).join('')+
       '<div style="font-size:12px;color:var(--slate2);margin-top:8px;">'+(b.inTotal!==undefined ? '合计 '+formatCurrency(b.inTotal,'IDR') : '')+'</div></div>';
-  }).join('') || '<div style="font-size:12px;color:var(--muted);">尚无结算单</div>';
-  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">结算</div>'+settleTabTopHtml(c)+cards+'</div>';
+  }).join('');
+  var fee = consultFeeSettleCardHtml(c); if(!cards && !fee) cards = '<div style="font-size:12px;color:var(--muted);">尚无结算单</div>';
+  return '<div class="card" style="padding:22px 24px;"><div class="info-heading" style="margin-bottom:14px;">结算</div>'+settleTabTopHtml(c)+fee+cards+'</div>';
+}
+/* CMD-1111-06：面诊费缴完 / 免除后记在结算 tab（面诊卡上不再显示）；只改显示位置，规则不变 */
+function consultFeeSettleCardHtml(c){
+  if(!c || isRevEval(c) || !c.consultRequested) return '';
+  var st = consultFeeStatusMain(c), dt = c.consultPaidAt ? fmtUtc(c.consultPaidAt).slice(0,10) : '';
+  if(st==='已缴费' && !consultFeePaid(c)) return '';
+  if(st!=='已缴费' && st!=='已免除') return '';
+  var col = CONSULT_FEE_COLORS[st] || CONSULT_FEE_COLORS['已缴费'];
+  var why = (st==='已免除' && c.consultFeeWaived && c.consultFeeWaived.reason) ? ' · 原因：'+cesc(c.consultFeeWaived.reason) : '';
+  return '<div id="settle-consult-fee" style="border:1px solid var(--border2);border-radius:12px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="font-size:13px;font-weight:700;">面诊费</span><span style="font-size:13px;">'+fmtRp(consultFeeOf(c))+'</span><span class="status-pill" style="background:'+col[0]+';color:'+col[1]+';">'+st+'</span><span style="font-size:12px;color:var(--muted);">'+(dt ? dt : '')+why+'</span></div>';
 }
 function hasKrBatch(c, b){ return krAllItems(c).some(function(it){ return it.batchId===b.id; }); }
 /* 顶部一行：项目合计 / 已收 / 已退 / 待收尾款（韩元、印尼盾分开写；金额沿用原汇总行的算法） */
@@ -5614,15 +5627,7 @@ function compUseCredit(creditId, scope){
   logCaseEvent(c, actingName(), '选择用置换额度换项目：'+formatCurrency(cr.amount,'IDR')+'（来源 '+cr.fromCaseNo+'）');
   buildCaseLog(c); renderCaseBody(c);
 }
-(function(){ /* 客户详情持有项目卡上方：置换额度（不可退款） */
-  var r0 = renderClientHoldings;
-  renderClientHoldings = function(name){
-    r0.apply(this, arguments);
-    var cr = clientCompCredits(name), block = document.getElementById('detail-holdings-block'), el = document.getElementById('detail-holdings'); if(!cr.length || !block || !el) return;
-    block.style.display = 'block';
-    el.innerHTML = cr.map(function(x){ return '<div style="border:1px solid #E8D48A;background:#FBF0C9;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:700;">置换额度 '+formatCurrency(x.amount,'IDR')+'</div><div style="font-size:12px;color:#8F6F0C;">来源 '+x.fromCaseNo+'（'+x.date+'，赴韩定金 '+formatCurrency(x.kwr,'KRW')+' 转本地）· 不设期限 · 下次来在本地管理里换项目</div></div><span class="status-pill" style="background:#F3E3B5;color:#8F6F0C;font-size:12px;">不可退款</span></div>'; }).join('')+el.innerHTML;
-  };
-})();
+/* CMD-1111-06：置换额度不再混在「持有项目」里，改在客户页「持有金额」tab（cliCompHtml） */
 /* 退款弹窗选了「转本地项目（置换）」之后：直接进本地管理 tab 的选购画面 */
 function startCompPurchase(c, kwr, reason, names){
   /* CMD-1110-25：置换额度的购买也走购买弹窗（XL，可以用置换额度抵）；买完照 1110-21 弹「使用持有项目吗？」。原来是页内旧选购画面（scope main / lm） */
@@ -10670,9 +10675,28 @@ function cliHoldKrHtml(model){ /* IN 客户详情和 KR 客人管理共用 */
   }).join('');
   return (B.surg.length ? head('赴韩项目', B.surg.length)+surgHtml : '')+(B.mgmt.length ? head('赴韩管理', B.mgmt.length)+mgHtml : '');
 }
+/* CMD-1111-06：持有金额 tab（置换额度，一律 Rp；来源案件可点；每笔可展开看使用记录） */
+var CLI_COMP_OPEN = {};
+function cliCompToggle(id){ CLI_COMP_OPEN[id] = !CLI_COMP_OPEN[id]; var el = document.getElementById('comp-use-'+id); if(el) el.style.display = CLI_COMP_OPEN[id] ? '' : 'none'; var ar = document.getElementById('comp-ar-'+id); if(ar) ar.textContent = CLI_COMP_OPEN[id] ? '▲' : '▼'; }
+function cliCompHtml(model){
+  var cr = ((model.cl && model.cl.compCredits)||[]).slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); });
+  if(!cr.length) return '';
+  var left = cr.reduce(function(s,x){ return s + (x.used ? 0 : (x.amount||0)); }, 0);
+  var caseOf = function(no){ var k = model.cases.filter(function(c){ return c.caseNo===no; })[0]; return k ? '<a href="#" class="info-link" onclick="'+model.openCase(k)+';return false;">'+aEscC(no)+'</a>' : aEscC(no||'—'); };
+  var cols = 'grid-template-columns:78px 96px minmax(0,1.6fr) 130px 130px 130px 24px;';
+  var rows = cr.map(function(x){
+    var used = x.used ? (x.amount||0) : 0, rest = (x.amount||0) - used, why = x.reason || (x.fromCaseNo ? '赴韩定金转置换额度' : '置换额度');
+    var open = !!CLI_COMP_OPEN[x.id];
+    var useRow = x.used ? '<div id="comp-use-'+x.id+'" style="'+(open ? '' : 'display:none;')+'padding:8px 10px 10px 40px;font-size:12px;color:var(--slate2);">└ '+(x.usedAt ? fmtUtc(x.usedAt).slice(0,10) : '')+'　'+(x.usedCaseNo ? caseOf(x.usedCaseNo) : '—')+'　用置换额度换了项目　'+fmtRp(used)+'</div>'
+      : '<div id="comp-use-'+x.id+'" style="'+(open ? '' : 'display:none;')+'padding:8px 10px 10px 40px;font-size:12px;color:var(--muted);">还没有使用记录</div>';
+    return '<div style="border-top:1px solid var(--border2);"><div style="display:grid;'+cols+'gap:8px;align-items:center;padding:10px 10px;font-size:13px;cursor:pointer;" onclick="cliCompToggle(\''+x.id+'\')"><span>'+(x.date ? String(x.date).slice(5).replace('-','/') : '')+'</span><span onclick="event.stopPropagation()">'+caseOf(x.fromCaseNo)+'</span><span>'+aEscC(why)+'</span><span>'+fmtRp(x.amount||0)+'</span><span>'+fmtRp(used)+'</span><span style="font-weight:700;">'+fmtRp(rest)+'</span><span id="comp-ar-'+x.id+'" style="color:var(--muted);">'+(open ? '▲' : '▼')+'</span></div>'+useRow+'</div>';
+  }).join('');
+  return '<div class="card" style="padding:14px 20px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div class="info-heading" style="margin:0;">持有金额</div><div style="font-size:13px;">剩余合计 <b>'+fmtRp(left)+'</b></div></div>'+
+    '<div style="display:grid;'+cols+'gap:8px;font-size:12px;color:var(--muted);padding:0 10px 6px;"><span>日期</span><span>来源案件</span><span>原因</span><span>金额</span><span>已使用</span><span>剩余</span><span></span></div>'+rows+'<div style="font-size:12px;color:var(--muted);margin-top:8px;">置换额度不退款、不设期限，只能抵印尼本地项目。</div></div>';
+}
 function cliHoldCount(model){
   var KB = cliHoldKrBlocks(model), n = KB.count; /* CMD-1106-08：赴韩项目（施术数；施术做完后只剩术后管理的那一格算 1）+ 赴韩管理；术后管理不单独算 */
-  if(model.mode==='IN') n += holdingsAllSorted(model.name).filter(function(h){ return holdingRemaining(h)>0; }).length + clientCompCredits(model.name).length + clientCareLeftAll(model.name).filter(function(x){ return !KB.inIds[x.s.id]; }).length;
+  if(model.mode==='IN') n += holdingsAllSorted(model.name).filter(function(h){ return holdingRemaining(h)>0; }).length + clientCareLeftAll(model.name).filter(function(x){ return !KB.inIds[x.s.id]; }).length;
   return n;
 }
 /* CMD-1028-05 三：KR 客人页能看到的子案件——只有 KR 参与的：送给 KR 的复诊评估、继续面诊（已缴 / 已免面诊费、送到 KR 的）；
@@ -10713,14 +10737,14 @@ function clientDetailBodyHtml(model){
   var isKr = model.mode==='KR', nHold = cliHoldCount(model), nCases = model.cases.length;
   var hasN = false; try{ hasN = notesRecordsOfCases(model.cases, isKr ? 'KR' : 'IN').length>0; }catch(e){}
   CLI_MODEL = model; var nUn = hasN ? cliNotesUnreadN(model) : 0;
-  var tabs = [['basic', '基础信息'], ['hold', '持有项目 '+nHold], ['cases', '本院案件记录 '+nCases]]; if(hasN) tabs.push(['notes', '备注内容'+(nUn ? ' <b style="color:#C1454A;font-size:12px;">'+nUn+'</b>' : '')]); tabs.push(['tl', 'Timeline']); if(!hasN && CLI_TAB==='notes') CLI_TAB = 'basic';
+  var tabs = [['basic', '基础信息'], ['hold', '持有项目 '+nHold]]; var compAll = (!isKr && model.cl) ? (model.cl.compCredits||[]) : []; if(compAll.length) tabs.push(['comp', '持有金额']); tabs.push(['cases', '本院案件记录 '+nCases]); if(hasN) tabs.push(['notes', '备注内容'+(nUn ? ' <b style="color:#C1454A;font-size:12px;">'+nUn+'</b>' : '')]); tabs.push(['tl', 'Timeline']); if(!hasN && CLI_TAB==='notes') CLI_TAB = 'basic'; if(!compAll.length && CLI_TAB==='comp') CLI_TAB = 'basic';
   var tabbar = '<div class="tabs" style="margin-top:18px;">'+tabs.map(function(t0){ return '<span class="tab'+(CLI_TAB===t0[0] ? ' active' : '')+'" onclick="cliSetTab(\''+t0[0]+'\')">'+t0[1]+'</span>'; }).join('')+'</div>';
   var pane = function(k, html){ return '<div id="cli-pane-'+k+'" style="'+(CLI_TAB===k ? '' : 'display:none;')+'margin-top:14px;">'+html+'</div>'; };
   var holdHtml = isKr ? '<div class="card" style="padding:4px 20px;"><div class="info-heading" style="margin:12px 0 4px;">韩国持有</div>'+cliHoldKrHtml(model)+'</div>'
     : '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;"><div id="detail-holdings-block"><div class="info-heading" style="margin-bottom:10px;">印尼本地持有</div><div class="card" style="padding:4px 20px;" id="detail-holdings"></div></div><div><div class="info-heading" style="margin-bottom:10px;">韩国持有</div><div class="card" style="padding:4px 20px;" id="detail-holdings-kr">'+cliHoldKrHtml(model)+'</div></div></div>';
   return '<div><div class="info-heading" style="margin-bottom:10px;margin-top:14px;">正在进行案件</div><div class="card" style="padding:4px 20px;" id="detail-cases">'+cliOngoingHtml(model)+'</div></div>'+tabbar+
     pane('basic', '<div class="card" style="padding:2px 20px;" id="detail-profile">'+cliProfileHtml(model)+'</div><div class="card" style="padding:12px 20px;margin-top:14px;" id="history-list">'+cliHistoryHtml(model)+'</div>')+
-    pane('hold', holdHtml)+pane('cases', '<div id="cli-cases">'+cliCasesHtml(model)+'</div>')+pane('notes', gmcSafe('备注内容', function(){ return cliNotesHtml(model); }))+pane('tl', cliTimelineHtml(model));
+    pane('hold', holdHtml)+(compAll.length ? pane('comp', cliCompHtml(model)) : '')+pane('cases', '<div id="cli-cases">'+cliCasesHtml(model)+'</div>')+pane('notes', gmcSafe('备注内容', function(){ return cliNotesHtml(model); }))+pane('tl', cliTimelineHtml(model));
 }
 function clientTagsHtml(cl){
   if(!cl) return '';

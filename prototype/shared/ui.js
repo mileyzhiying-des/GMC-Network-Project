@@ -2028,7 +2028,7 @@ function confirmMaterials(){
 /* Tab 出现时机（CMD-1012-11）：赴韩施术 = 面诊案件出诊疗方案后（或已有赴韩项目）；本地管理 = 有本地项目；结算 = 有任何一张结算单。「项目列表」tab 已并入赴韩施术 / 本地管理 */
 function showKrTab(c){ return (!!c.projectsEnabled && !!c.reportReady && !isRevEval(c)) || (!!c.settlementDone && krAllItems(c).length>0); }
 function showProjectsTab(c){ return showKrTab(c); } /* 旧名称，指向赴韩施术 */
-function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.localMgmt && (c.localMgmt.batches||[]).length); }
+function showSettleTab(c){ return (c.settlementBatches||[]).length>0 || !!(c.localMgmt && (c.localMgmt.batches||[]).length) || (typeof consultFeeSettleCardHtml==='function' && consultFeeSettleCardHtml(c)!==''); } /* CMD-1111-06：面诊费缴完 / 免除后也要有结算 tab */
 
 function showLocalTab(c){
   /* CMD-1110-14：「本地项目」tab 跟着实际发生的事出现——纯本地案件：有持有要用 / 正在使用 / 今天用过；没用就没有（买了 →「结算」tab）。其他案件照旧 */
