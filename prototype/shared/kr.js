@@ -1554,7 +1554,7 @@ function krDoAddOnPaid(){ if(!krCan()) return; krMut(function(c){ return coreAdd
 function krSubNote(id){
   if(!krCan()) return;
   var c0 = krFindCase(KR_CASE.clinicId, KR_CASE.id).c, s = (c0.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s) return;
-  var v = prompt('施术备注（IN 室长只读可见；留空 = 清空）', s.note || ''); if(v===null) return;
+  var v = prompt('项目备注（IN 室长只读可见；留空 = 清空）', s.note || ''); if(v===null) return;
   krMut(function(c){ return coreSubNote(c, id, v, ME_NAME); });
 }
 function krTabProc(c){

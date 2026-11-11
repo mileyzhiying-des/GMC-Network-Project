@@ -4598,9 +4598,9 @@ function consultTabHtml(c){
   if(c.consultStatus==='awaiting_payment'){
     if(c.addConsultMode){ /* 本地案件［增加面诊］：同基础资料选面诊的顺序和组件 */
       var refBox = ''; /* CMD-1110-26 三：不再带入不面诊时的苦恼，也不显示参考那行 */
-      return wrap(wantConsultRowHtml(c, fee)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先选苦恼部位并填说明 / 希望预期 / 上传照片和视频（必填，和一般面诊同一套），再填预算（选填）、选院长，再缴费或免除面诊费，最后点确认</div>'+
+      return wrap(wantConsultRowHtml(c, fee)+'<div style="margin-bottom:6px;font-size:12px;color:var(--muted);">增加面诊：先选苦恼部位并填说明 / 希望预期 / 上传照片和视频（必填，和一般面诊同一套），再选院长、填预算和来访备注（选填），再缴费或免除面诊费，最后点确认</div>'+
         '<div style="margin-bottom:10px;"><div style="font-size:13px;font-weight:700;margin-bottom:6px;">苦恼 / 期望部位 <span style="color:var(--terracotta);">*</span></div>'+refBox+concernFormHtml(c)+'</div>'+
-        budgetRowHtml(c)+visitNoteRowHtml(c)+directorRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true));
+        directorRowHtml(c)+budgetRowHtml(c)+visitNoteRowHtml(c)+'<div style="height:10px;"></div>'+consultFeeFormHtml(c, true)); /* CMD-1111-04：顺序照一般面诊 苦恼部位 → 院长 → 预算 → 来访备注 */
     }
     return wrap(wantConsultRowHtml(c, fee)+consultFeeFormHtml(c)); /* CMD-1110-26 五：下面「待缴费」那行（sub）拿掉 */
   }
@@ -5069,8 +5069,8 @@ function localAskHtml(c){
 
 /* 不面诊/面诊取消后的入口选择（2026-09-29 第十轮新增，IN-CASE-01） */
 function localEntryChoiceHtml(c){
-  /* CMD-1111-02：旧的「这次到店要做什么？」入口卡换成「今日如何安排项目？」弹窗（5-9）——这里只留一个打开弹窗的按钮，不再并排两个入口按钮 */
-  return '<div class="card" style="padding:22px 24px;"><div style="display:flex;align-items:center;gap:12px;"><div style="font-size:13px;color:var(--slate2);flex:1;">今日要使用持有项目或购买新项目？</div><button class="btn-primary" style="padding:6px 14px;font-size:12px;" onclick="planModalOpen(getCurrentCase())">安排今日项目</button></div></div>';
+  /* CMD-1111-04：拿掉 1111-02 自己加的「今日要使用持有项目或购买新项目？［安排今日项目］」那一行——入口只有页头［+ 添加本地管理］和自动弹出的「今日如何安排项目？」 */
+  return '';
 }
 
 function chooseProjectEntryMode(mode){
@@ -6567,7 +6567,7 @@ function subItemRowHtml(s, cells){
     '<span>'+(cells.date || s.date)+'</span><span class="status-pill" style="background:'+kc[0]+';color:'+kc[1]+';justify-self:start;">'+subKindLabel(s.kind)+'</span>'+
     '<span>'+(s.dno && s.kind!=='增加项目' ? '<b style="font-size:12px;color:var(--slate2);" title="'+s.dno+'">到院</b> ' : '')+(cells.content || s.content)+'</span><span>'+st+'</span>'+
     '<span>'+(cells.place || '<span class="status-pill" style="background:'+pc[0]+';color:'+pc[1]+';">'+SUB_PLACE_LABEL[s.place]+'</span>')+'</span><span>'+(cells.ops || '')+'</span><span style="text-align:right;">'+(cells.done || '')+'</span></div>'+
-    (s.note ? '<div style="font-size:12px;color:var(--slate2);margin:-2px 0 6px 104px;">'+(s.kind==='施术' ? '施术备注' : '备注')+'：'+String(s.note).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '');
+    (s.note ? '<div style="font-size:12px;color:var(--slate2);margin:-2px 0 6px 104px;">'+'项目备注'+'：'+String(s.note).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>' : '');
 }
 function krTimelineTabHtml(c){
   subCaseNos(c);
@@ -7480,7 +7480,7 @@ function coreSubNote(c, id, text, by){
   var s = (c.subItems||[]).filter(function(x){ return x.id===id; })[0]; if(!s) return false; /* 备注：施术行 / 术后管理行 / 在韩持有都能写（KR 写，IN 只读） */
   { var nk = rowVisitKey(c, s); if(!window.DAYCONFIRM_BYPASS && (noteVisitEnded(c, nk) || dayLockedKR(c, nk))) return false; } /* CMD-1027-02 四 */
   s.note = String(text||'').trim(); s.noteBy = by; s.noteAt = nowFullDt();
-  logCaseEvent(c, by, (s.note ? '施术备注：'+s.note : '清空施术备注'));
+  logCaseEvent(c, by, (s.note ? '项目备注：'+s.note : '清空项目备注')); /* CMD-1111-04：统一叫「项目备注」（旧 Timeline 不动） */
   return true;
 }
 /* IN：点「通知预约」的通知 → 预约弹窗（带入客人、来访目的），新案件自动关联原赴韩案件 */
@@ -10346,7 +10346,7 @@ function caseNotesListHtml(c, viewerRole, o){
 function coreItemNote(c, name, text, by){
   var it = itemByKey(c, name, function(x){ return !x.cancelled && !x.swapped; }); if(!it) return false; name = it.name;
   if(!window.DAYCONFIRM_BYPASS && (c.krProcedureDone || dayLockedKR(c, 'main'))) return false; /* CMD-1027-02 四：离院 / 关账后项目备注锁住 */
-  it.todayNote = String(text||'').trim(); it.todayNoteBy = by; it.todayNoteAt = nowFullDt(); logCaseEvent(c, by, '备注（'+name+'）：'+(it.todayNote || '清空'));
+  it.todayNote = String(text||'').trim(); it.todayNoteBy = by; it.todayNoteAt = nowFullDt(); logCaseEvent(c, by, '项目备注（'+name+'）：'+(it.todayNote || '清空'));
   var tu = (it.uses||[]).filter(function(u){ return String(u.at||'').slice(0, 10)===it.todayNoteAt.slice(0, 10); }).slice(-1)[0]; /* CMD-1110-02：今天已经有使用记录 → 备注写在这一次的使用记录上 */
   if(tu){ if(it.todayNote){ tu.note = it.todayNote; tu.noteBy = by; tu.noteAt = it.todayNoteAt; } else { delete tu.note; delete tu.noteBy; delete tu.noteAt; } }
   return true;
