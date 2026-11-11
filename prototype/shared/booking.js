@@ -67,7 +67,7 @@ function bkFrame(titleKey, bodyHtml){
   var list = BK_STEPS.filter(function(x){ return x==='phone' ? !BK.f.rebookFrom : !bkSkipStep(x); }), cur = list.indexOf(BK_STEPS[BK.step]);
   var banner = '';
   if(BK.entry==='walkin') banner = '<div class="bk-info">'+bt('entry.walkin', {time:BK.f.time})+'</div>';
-  else if(BK.entry==='link' && BK.step>0) banner = '<div class="bk-info">'+bt('entry.link', {time:bkTimeText(BK.f.date, BK.f.time)})+' · <a href="#" onclick="bkGo(0);return false;" style="color:var(--navy);font-weight:700;">'+bt('entry.change')+'</a></div>';
+  else if(BK.entry==='link' && BK.step>0) banner = '<div class="bk-info">'+bt('entry.link', {time:bkTimeText(BK.f.date, BK.f.time)})+' · <a href="#" onclick="bkGo(0);return false;" style="color:var(--text-primary);font-weight:500;">'+bt('entry.change')+'</a></div>';
   return '<div class="bk-card"><div class="bk-step">'+bt('step.of', {n:cur+1, total:list.length})+'</div><div class="bk-bar"><span style="width:'+Math.round((cur+1)*100/list.length)+'%;"></span></div>'+
     banner+'<div class="bk-title">'+bt(titleKey)+'</div>'+bodyHtml+'</div>';
 }
@@ -175,13 +175,13 @@ function bkLoadClient(){
 function bkStepProfile(){
   var cl = BK.client, f = BK.f;
   if(BK.mismatch && cl){
-    return bkFrame('s.profile', '<div class="bk-info" style="font-size:14px;color:var(--navy);">'+bt('mismatch.q', {reg:bkH(cl.name)})+'</div>'+
+    return bkFrame('s.profile', '<div class="bk-info" style="font-size:14px;color:var(--text-primary);">'+bt('mismatch.q', {reg:bkH(cl.name)})+'</div>'+
       bkFooter('', '<button class="bk-btn ghost" onclick="bkMismatch(false)">'+bt('mismatch.no')+'</button><button class="bk-btn" onclick="bkMismatch(true)">'+bt('mismatch.yes')+'</button>'));
   }
   var body = (cl ? '<div class="bk-info">'+bt('profile.back')+'</div>' : '')+
-    bkField(bt('profile.first'), bkInput('firstName','text','autocomplete="given-name"'))+bkField(bt('profile.last'), bkInput('lastName','text','autocomplete="family-name"'+(f.noLast ? ' disabled style="background:#EFEDE8;color:#8E857C;"' : ''))+'<label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px;"><input type="checkbox" '+(f.noLast ? 'checked ' : '')+'onchange="bkNoLast(this.checked)"> '+bt('profile.noLast')+'</label>')+
+    bkField(bt('profile.first'), bkInput('firstName','text','autocomplete="given-name"'))+bkField(bt('profile.last'), bkInput('lastName','text','autocomplete="family-name"'+(f.noLast ? ' disabled style="background:var(--bg-disabled);color:var(--text-disabled);"' : ''))+'<label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px;"><input type="checkbox" '+(f.noLast ? 'checked ' : '')+'onchange="bkNoLast(this.checked)"> '+bt('profile.noLast')+'</label>')+
     bkField(bt('profile.gender'), '<select onchange="bkSet(\'gender\',this.value)"><option value="">'+bt('profile.pick')+'</option><option value="女"'+(f.gender==='女'?' selected':'')+'>'+bt('gender.f')+'</option><option value="男"'+(f.gender==='男'?' selected':'')+'>'+bt('gender.m')+'</option></select>')+
-    bkField(bt('profile.dob'), '<input type="date" value="'+bkH(f.dob)+'" max="'+dateStr(demoNow())+'" onchange="bkDobChange(this.value)">')+bkMinorHtml()+(cl ? '' : bkField(bt('nik.label'), '<input type="text" value="'+bkH(f.nik||'')+'" inputmode="numeric" maxlength="16" autocomplete="off" placeholder="'+bkH(bt('nik.ph'))+'" oninput="bkNikLive(this)">'+'<div class="bk-sub" id="bk-nik-live" style="margin-top:4px;text-align:right;font-weight:600;color:'+(nikClean(f.nik).length===16 ? '#2E7D4F' : 'var(--muted)')+';">'+(nikClean(f.nik) ? nikClean(f.nik).length+'/16' : '')+'</div><div class="bk-sub" style="margin-top:6px;">'+bt('nik.hint')+'</div>'));
+    bkField(bt('profile.dob'), '<input type="date" value="'+bkH(f.dob)+'" max="'+dateStr(demoNow())+'" onchange="bkDobChange(this.value)">')+bkMinorHtml()+(cl ? '' : bkField(bt('nik.label'), '<input type="text" value="'+bkH(f.nik||'')+'" inputmode="numeric" maxlength="16" autocomplete="off" placeholder="'+bkH(bt('nik.ph'))+'" oninput="bkNikLive(this)">'+'<div class="bk-sub" id="bk-nik-live" style="margin-top:4px;text-align:right;font-weight:600;color:'+(nikClean(f.nik).length===16 ? 'var(--feedback-success-fg)' : 'var(--text-secondary)')+';">'+(nikClean(f.nik) ? nikClean(f.nik).length+'/16' : '')+'</div><div class="bk-sub" style="margin-top:6px;">'+bt('nik.hint')+'</div>'));
   return bkFrame('s.profile', body+bkNav('bkProfileNext()', true));
 }
 /* CMD-1029-07：未满 21 岁（以预约当天算）→ 婚姻状况；未婚 → 必勾已通知监护人。已登记的老客人不走这一步 */
@@ -283,7 +283,7 @@ function bkBeautyHasInput(){ return bkBeautyRows().some(function(r){ return r.y 
 function bkBeautySkip(){
   if(!bkBeautyHasInput()) return bkBeautySkipNow();
   var ov = document.createElement('div'); ov.id = 'bk-skip-ov'; ov.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(27,38,53,.45);display:flex;align-items:flex-end;justify-content:center;padding:16px;';
-  ov.innerHTML = '<div style="background:#fff;border-radius:16px;padding:20px 18px;width:100%;max-width:448px;box-sizing:border-box;"><div style="font-size:15px;line-height:1.7;margin-bottom:16px;">'+bt('beauty.skipQ')+'</div>'+
+  ov.innerHTML = '<div style="background:var(--bg-surface);border-radius:16px;padding:20px 18px;width:100%;max-width:448px;box-sizing:border-box;"><div style="font-size:16px;line-height:24px;margin-bottom:16px;">'+bt('beauty.skipQ')+'</div>'+
     '<button type="button" class="bk-btn" onclick="bkBeautySkipNow()">'+bt('beauty.skipYes')+'</button><button type="button" class="bk-btn ghost" style="width:100%;flex:none;" onclick="bkCloseSkip()">'+bt('beauty.skipNo')+'</button></div>';
   document.body.appendChild(ov);
 }
@@ -305,7 +305,7 @@ function bkBeautyNext(){
 function bkPolicyText(){ var p = CLINIC_SETTINGS.privacyPolicy || ''; return (/^本诊所仅为办理预约/.test(p)) ? bt('consent.policyText') : p; }
 function bkStepConsent(){
   var f = BK.f;
-  return bkFrame('s.consent', '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+bt('consent.policy', {v:bkH(CLINIC_SETTINGS.privacyVersion)})+'</div>'+
+  return bkFrame('s.consent', '<div style="font-size:13px;font-weight:500;margin-bottom:6px;">'+bt('consent.policy', {v:bkH(CLINIC_SETTINGS.privacyVersion)})+'</div>'+
     (bkLastConsent() ? '<div class="bk-demo">'+bt('consent.updated', {old:bkH(bkLastConsent().version), nw:bkH(CLINIC_SETTINGS.privacyVersion)})+'</div>' : '')+
     '<div class="bk-info" style="max-height:140px;overflow-y:auto;">'+bkH(bkPolicyText())+'</div>'+
     '<label class="bk-check"><input type="checkbox" '+(f.c1?'checked ':'')+'onchange="BK.f.c1=this.checked;bkRefreshNext()"> <span>'+bt('consent.c1')+'</span></label>'+
@@ -320,7 +320,7 @@ function bkConsentNext(){
 /* ---- 第 7 步：确认并提交 ---- */
 function bkStepConfirm(){
   var f = BK.f, row = function(k, v){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(v)+'</span></div>'; };
-  return bkFrame('s.confirm', row('sum.time', bkTimeText(f.date, f.time))+(BK.client ? '<div class="bk-row"><span>'+bt('sum.name')+'</span><span style="text-align:right;">'+bkH(f.name)+'<br><small style="color:var(--muted);">'+bt('sum.nameNote')+'</small></span></div>' : row('sum.name', f.name))+row('sum.phone', f.phone)+row('sum.purpose', bt('purpose.'+f.purpose))+(f.note ? row('sum.note', f.note) : '')+((f.beauty||[]).length ? row('sum.beauty', bt('sum.beautyN', {n:f.beauty.length})) : '')+
+  return bkFrame('s.confirm', row('sum.time', bkTimeText(f.date, f.time))+(BK.client ? '<div class="bk-row"><span>'+bt('sum.name')+'</span><span style="text-align:right;">'+bkH(f.name)+'<br><small style="color:var(--text-secondary);">'+bt('sum.nameNote')+'</small></span></div>' : row('sum.name', f.name))+row('sum.phone', f.phone)+row('sum.purpose', bt('purpose.'+f.purpose))+(f.note ? row('sum.note', f.note) : '')+((f.beauty||[]).length ? row('sum.beauty', bt('sum.beautyN', {n:f.beauty.length})) : '')+
     '<div style="height:12px;"></div>'+bkNav('bkSubmit()', true));
 }
 function bkSubmit(){
@@ -336,10 +336,10 @@ function bkSubmit(){
 function bkRenderDone(){
   var c = BK.done.c, row = function(k, v){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(v)+'</span></div>'; };
   var sms = SMS_LOG.filter(function(s){ return s.caseId===c.id && s.kind==='confirm'; })[0];
-  return '<div class="bk-card"><div style="text-align:center;font-size:36px;">✅</div><div class="bk-title" style="text-align:center;margin-bottom:10px;">'+bt('done.title')+'</div>'+
+  return '<div class="bk-card"><div style="text-align:center;font-size:22px;">✅</div><div class="bk-title" style="text-align:center;margin-bottom:10px;">'+bt('done.title')+'</div>'+
     row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+row('sum.name', c.name)+row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone)+
     (BK.entry==='walkin' ? '<div class="bk-info" style="margin-top:12px;">'+bt('done.walkin')+'</div>' : '')+
-    '<div style="font-size:12px;color:var(--muted);margin:14px 0 6px;">'+bt('done.sms')+'</div><div class="bk-sms">'+bkH(sms ? sms.text : '')+'</div>'+
+    '<div style="font-size:12px;color:var(--text-secondary);margin:14px 0 6px;">'+bt('done.sms')+'</div><div class="bk-sms">'+bkH(sms ? sms.text : '')+'</div>'+
     '<a href="'+caseViewUrl(c)+'" class="bk-btn ghost" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box;margin-top:14px;">'+bt('done.manage')+'</a></div>';
 }
 
@@ -359,13 +359,13 @@ function bkRenderView(){
   }
   /* 已验证：显示预约信息 */
   var vs = visitStateOf(c), key = vs==='预约取消' ? 'cancelled' : vs==='未到店' ? 'noshow' : vs==='已到访' ? 'arrived' : 'waiting';
-  var color = {waiting:'#8A7650', arrived:'var(--sage)', cancelled:'var(--muted)', noshow:'#C1454A'}[key];
+  var color = {waiting:'var(--feedback-warning-fg)', arrived:'var(--feedback-success-fg)', cancelled:'var(--text-secondary)', noshow:'var(--feedback-error-fg)'}[key];
   var row = function(k, val){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(val)+'</span></div>'; };
-  var info = '<div style="margin-bottom:8px;"><span style="font-weight:700;color:'+color+';">● '+bt('view.status.'+key)+'</span></div>'+
+  var info = '<div style="margin-bottom:8px;"><span style="font-weight:500;color:'+color+';">● '+bt('view.status.'+key)+'</span></div>'+
     row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+row('sum.purpose', bt('purpose.'+purposeDisp(c.visitPurpose||'面诊商谈')))+(c.visitNote ? row('sum.note', c.visitNote) : '')+
     row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone);
   if(v.stage==='confirmCancel'){
-    return bkViewFrame(info+'<div class="bk-info" style="margin-top:12px;font-size:14px;color:var(--navy);"><b>'+bt('view.cancelQ')+'</b><br><span style="font-size:12px;">'+bt('view.cancelT')+'</span></div>'+
+    return bkViewFrame(info+'<div class="bk-info" style="margin-top:12px;font-size:14px;color:var(--text-primary);"><b>'+bt('view.cancelQ')+'</b><br><span style="font-size:12px;">'+bt('view.cancelT')+'</span></div>'+
       '<button class="bk-btn danger" onclick="bkDoCancel()">'+bt('view.cancelYes')+'</button><button class="bk-btn ghost" onclick="BK.view.stage=\'card\';bkRender()">'+bt('view.cancelNo')+'</button>');
   }
   var tail = '';
@@ -442,11 +442,11 @@ function bkMeCalHtml(cl, cur){
   var evs = cur.map(function(c){ return {date:c.visitDate, text:bt('me.ev.visit')+' '+c.visitTime, kind:'visit'}; }).concat(bkKrCareEvents(cl).map(function(e){ return {date:e.date, text:bt('me.ev.care')+' '+e.text, kind:'care', done:e.done}; }));
   var first = new Date(y, m-1, 1), days = new Date(y, m, 0).getDate(), lead = first.getDay(), cells = '';
   var mm = pad2(m), dow = BOOK_LANG==='zh' ? ['日','一','二','三','四','五','六'] : ['M','S','S','R','K','J','S'];
-  cells += dow.map(function(d){ return '<div style="text-align:center;font-size:12px;color:var(--muted);">'+d+'</div>'; }).join('');
+  cells += dow.map(function(d){ return '<div style="text-align:center;font-size:12px;color:var(--text-secondary);">'+d+'</div>'; }).join('');
   for(var i=0;i<lead;i++) cells += '<div></div>';
   for(var d=1; d<=days; d++){
     var ds = y+'-'+mm+'-'+pad2(d), es = evs.filter(function(e){ return e.date===ds; });
-    cells += '<div style="min-height:44px;border:1px solid var(--border);border-radius:6px;padding:2px 3px;font-size:12px;'+(ds===todayStr()?'border-color:var(--navy);':'')+'"><div style="color:var(--slate2);">'+d+'</div>'+es.map(function(e){ return '<div style="height:6px;border-radius:3px;margin-top:2px;background:'+(e.kind==='visit'?'#2F6FEB':(e.done?'#B9C4B5':'#C77B4A'))+';"></div>'; }).join('')+'</div>';
+    cells += '<div style="min-height:44px;border:1px solid var(--border-default);border-radius:6px;padding:2px 3px;font-size:12px;'+(ds===todayStr()?'border-color:var(--text-primary);':'')+'"><div style="color:var(--text-body);">'+d+'</div>'+es.map(function(e){ return '<div style="height:6px;border-radius:4px;margin-top:2px;background:'+(e.kind==='visit'?'var(--feedback-info-fg)':(e.done?'var(--border-strong)':'var(--action-primary)'))+';"></div>'; }).join('')+'</div>';
   }
   var nav = function(delta){ var dt = new Date(y, m-1+delta, 1); return dt.getFullYear()+'-'+pad2(dt.getMonth()+1); };
   var list = evs.filter(function(e){ return e.date.slice(0,7)===ym; }).sort(function(a,b){ return a.date.localeCompare(b.date); });
@@ -457,30 +457,30 @@ function bkMeCalHtml(cl, cur){
 function bkRenderMe(){
   var cl = bkMeClient(), me = BK.me; if(!cl) return bkMeFrame('<div class="bk-info">'+bt('view.notfound')+'</div>');
   var row = function(k, v){ return '<div class="bk-row"><span>'+bt(k)+'</span><span style="text-align:right;">'+bkH(v)+'</span></div>'; };
-  var sec = function(t0, inner){ return '<div style="font-size:14px;font-weight:700;margin:20px 0 8px;color:var(--navy);">'+t0+'</div>'+inner; };
+  var sec = function(t0, inner){ return '<div style="font-size:14px;font-weight:500;margin:20px 0 8px;color:var(--text-primary);">'+t0+'</div>'+inner; };
   var banner = me.booked ? '<div class="bk-info" style="margin-bottom:6px;"><b>✅ '+bt('me.ok')+'</b></div>' : '';
   /* 一、目前的预约 */
   var cur = clientCurrentCases(cl), canc = me.cancelled.map(function(id){ return CASE_ITEMS.filter(function(x){ return x.id===id; })[0]; }).filter(Boolean);
   var caseCard = function(c, cancelled){
-    var inner = row('sum.time', bkTimeText(c.visitDate, c.visitTime))+row('done.case', c.caseNo)+(bkCasePaidText(c) ? row('me.paidNow', bkCasePaidText(c)) : '')+row('sum.purpose', bt('purpose.'+purposeDisp(c.visitPurpose||'面诊商谈')))+row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone);
-    if(cancelled) return '<div class="bk-info" style="margin-bottom:10px;opacity:.85;"><div style="font-weight:700;color:var(--muted);margin-bottom:4px;">● '+bt('view.status.cancelled')+'</div>'+inner+'<button class="bk-btn" style="margin-top:10px;" onclick="bkRebook(\''+c.id+'\')">'+bt('view.rebook')+'</button></div>';
+    var inner = '<div class="bk-row bk-time"><span>'+bt('sum.time')+'</span><span>'+bkH(bkTimeText(c.visitDate, c.visitTime))+'</span></div>'+row('done.case', c.caseNo)+(bkCasePaidText(c) ? row('me.paidNow', bkCasePaidText(c)) : '')+row('sum.purpose', bt('purpose.'+purposeDisp(c.visitPurpose||'面诊商谈')))+row('done.addr', CLINIC_SETTINGS.name+' · '+CLINIC_SETTINGS.address)+row('done.tel', CLINIC_SETTINGS.phone);
+    if(cancelled) return '<div class="bk-info bk-bcard" style="margin-bottom:10px;opacity:.85;"><div style="font-weight:500;color:var(--text-secondary);margin-bottom:4px;">● '+bt('view.status.cancelled')+'</div>'+inner+'<button class="bk-btn" style="margin-top:10px;" onclick="bkRebook(\''+c.id+'\')">'+bt('view.rebook')+'</button></div>';
     var btn = me.confirm===c.id
-      ? '<div class="bk-info" style="margin-top:10px;font-size:14px;color:var(--navy);"><b>'+bt('view.cancelQ')+'</b><br><span style="font-size:12px;">'+bt('view.cancelT')+'</span></div><button class="bk-btn danger" onclick="bkMeCancel(\''+c.id+'\')">'+bt('view.cancelYes')+'</button><button class="bk-btn ghost" onclick="BK.me.confirm=null;bkRender(true)">'+bt('view.cancelNo')+'</button>'
+      ? '<div class="bk-info" style="margin-top:10px;font-size:14px;color:var(--text-primary);"><b>'+bt('view.cancelQ')+'</b><br><span style="font-size:12px;">'+bt('view.cancelT')+'</span></div><button class="bk-btn danger" onclick="bkMeCancel(\''+c.id+'\')">'+bt('view.cancelYes')+'</button><button class="bk-btn ghost" onclick="BK.me.confirm=null;bkRender(true)">'+bt('view.cancelNo')+'</button>'
       : (customerCanCancel(c) ? '<button class="bk-btn danger" style="margin-top:10px;" onclick="BK.me.confirm=\''+c.id+'\';bkRender(true)">'+bt('view.cancel')+'</button>' : '<div class="bk-sub" style="margin-top:8px;">'+bt('view.cant')+'</div>');
-    return '<div class="bk-info" style="margin-bottom:10px;"><div style="font-weight:700;color:#8A7650;margin-bottom:4px;">● '+bt('view.status.waiting')+'</div>'+inner+btn+'</div>';
+    return '<div class="bk-info bk-bcard" style="margin-bottom:10px;"><div style="font-weight:500;color:var(--feedback-warning-fg);margin-bottom:4px;">● '+bt('view.status.waiting')+'</div>'+inner+btn+'</div>';
   };
   var curHtml = cur.map(function(c){ return caseCard(c, false); }).join('')+canc.filter(function(c){ return cur.indexOf(c)<0; }).map(function(c){ return caseCard(c, true); }).join('');
   if(!curHtml) curHtml = '<div class="bk-info">'+bt('me.noCurrent')+'</div><button class="bk-btn" style="margin-top:8px;" onclick="bkNewBooking()">'+bt('me.new')+'</button>';
   /* 二、持有项目 */
   var hv = clientHoldingsView(cl), hl = function(list){ return list.length ? list.map(function(x){ return '<div class="bk-row bk-list"><span>'+bkH(x.name)+'</span><span>'+bt('me.left', {n:x.remaining})+'</span></div>'; }).join('') : '<div class="bk-sub">'+bt('me.none')+'</div>'; };
-  var holdHtml = '<div style="font-size:12px;font-weight:700;margin:4px 0;">'+bt('me.holdIN')+'</div>'+hl(hv.IN)+'<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">'+bt('me.holdKR')+'</div>'+hl(hv.KR);
+  var holdHtml = '<div style="font-size:12px;font-weight:500;margin:4px 0;">'+bt('me.holdIN')+'</div>'+hl(hv.IN)+'<div style="font-size:12px;font-weight:500;margin:10px 0 4px;">'+bt('me.holdKR')+'</div>'+hl(hv.KR);
   /* 三、过去的记录（只列有到店的案件；报告只写"已出诊疗方案"） */
   var past = clientPastRecords(cl);
   var pastHtml = past.length ? past.map(function(r){
     return '<div class="bk-info" style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;gap:8px;"><b>'+bkH(r.date)+'</b><span>'+bkH(r.caseNo)+'</span></div>'+
-      '<div style="margin-top:4px;">'+bkH(r.did || '—')+(r.report ? ' <span style="font-size:12px;background:var(--sage-bg);color:var(--sage);border-radius:10px;padding:1px 8px;">'+bt('me.report')+'</span>' : '')+'</div>'+
-      (r.hospital ? '<div style="font-size:12px;color:var(--slate2);margin-top:3px;">'+bt('me.hospital')+'：'+bkH(r.hospital)+'</div>' : '')+
-      '<div style="font-size:12px;color:var(--slate2);margin-top:3px;">'+bt('me.paid')+'：'+bkH(bkMeMoney(r))+'</div></div>';
+      '<div style="margin-top:4px;">'+bkH(r.did || '—')+(r.report ? ' <span style="font-size:12px;background:var(--feedback-success-bg);color:var(--feedback-success-fg);border-radius:8px;padding:1px 8px;">'+bt('me.report')+'</span>' : '')+'</div>'+
+      (r.hospital ? '<div style="font-size:12px;color:var(--text-body);margin-top:3px;">'+bt('me.hospital')+'：'+bkH(r.hospital)+'</div>' : '')+
+      '<div style="font-size:12px;color:var(--text-body);margin-top:3px;">'+bt('me.paid')+'：'+bkH(bkMeMoney(r))+'</div></div>';
   }).join('')+(past.some(function(r){ return r.report; }) ? '<div class="bk-sub">'+bt('me.reportNote')+'</div>' : '') : '<div class="bk-sub">'+bt('me.noPast')+'</div>';
   var tog = '<div style="display:flex;gap:8px;margin:6px 0 2px;">'+['list','cal'].map(function(v){ return '<button class="bk-btn'+((me.view||'list')===v?'':' ghost')+'" style="min-height:40px;padding:8px;margin-top:0;" onclick="BK.me.view=\''+v+'\';bkRender(true)">'+bt(v==='list'?'me.viewList':'me.viewCal')+'</button>'; }).join('')+'</div>';
   var careHtml = sec(bt('me.krCare'), bkKrCareHtml(cl));
@@ -576,6 +576,6 @@ window.addEventListener('storage', function(){ setTimeout(function(){ var typing
 function bkNikLive(el){
   var v = String(el.value||'').replace(/\D/g, '').slice(0, 16); if(el.value!==v) el.value = v;
   BK.f.nik = v; var d = document.getElementById('bk-nik-live'); if(!d) return;
-  d.textContent = v ? v.length+'/16' : ''; d.style.color = v.length===16 ? '#2E7D4F' : 'var(--muted)';
+  d.textContent = v ? v.length+'/16' : ''; d.style.color = v.length===16 ? 'var(--feedback-success-fg)' : 'var(--text-secondary)';
 }
 

@@ -2706,3 +2706,9 @@ prototype/shared/app.css  共用样式
 - 现象 3：演示时间在 2027 年——预约页所有判断（日期条、可约时段、目前 / 过去、能不能取消）都读 `demoNow()` / `todayStr()`，没有用真实日期；用 2027-04-07 的演示时间走了一遍都对。
 - 测试：selftest 新增 R308a（当天已到店再约 → 新预约在「目前的预约」、不在「过去的记录」；还没到店的同一天预约仍合并）；用基准代码跑 R308a 失败 3 条、修复后通过。booking.html 里用脚本验证了新客人 / 老客人 / 2027 演示时间 / 旧案件号链接。
 
+## CMD-1111-10 补充（2026-11-11，追加；取代 CMD-1014-07 / 1014-09 里客人预约页的字体（Pretendard）和写在 booking.html 里的样式，旧文字保留作历史）
+- 分支 **V5**，单个提交（见 git log `CMD-1111-10`），不推送不合并；**数据版本不变（61）**，只改客人预约页画面，不改规则 / 流程 / 文字内容。**以 Figma「GMC Project」Design System（fileKey Mq0rPkOaSo9nWeuh923gWX，page 97:239）为准**，原型去对齐。
+- **新文件 `prototype/shared/booking.css`**（只有 booking.html 加载；`<body class="bk-ds">`）：booking.html 里原来的整块 `<style>` 搬进来重写。字体 Noto Sans SC（booking.html 里用 Google Fonts 加载 400 / 500 / 700，备用字体照常）；字号只用 12 / 13 / 14 / 16 / 22（变量 `--fs-*`）；圆角只用 4 / 6 / 8 / 12 / 16 / 全圆（`--radius-xs/sm/md/lg/xl/full`）；颜色全用 DS 变量（`--text-primary` 等，值由 `dstyle.js` 定义在 :root，和 DS 一致）；勾选框 / 单选框改 DS 样式（20px、勾选色 action/primary，不用浏览器默认蓝 / 灰）。**没改任何 IN / KR 共用样式**（`app.css`、`dstyle.js` 没动；覆盖靠 `body.bk-ds` 前缀 + 必要时 `!important` 盖过 dstyle 里针对 .bk- 的规则）。`booking.js` 里写死的色值 / 字号 / 圆角 / 旧变量名也换成 DS 变量。
+- 新增组件对照：Language Switch（高 34、圆角 6、底 bg/sidebar）、Time Slot（80×48、圆角 6）、Purpose Option（高 56、圆角 8）、Phone Input（高 48、16 Regular）、Bottom Action Bar（内距 12/16/28、上边框）、Home Entry Card（高 88、圆角 16、内距 20、标题 22 Bold）、Booking Card（圆角 16、内距 16、时间 22 Bold）。
+- 测试：用脚本在 booking.html（390 宽，印尼文 / 中文）逐页审计计算样式（字号、圆角、字体、纯黑文字、原生勾选框色）：首页 / 查看我的预约（手机、验证码、没有预约）/ 预约 8 步 / 完成页 / 我的预约（列表、日历、取消确认）/ ?view= 各状态；无横向溢出。
+
